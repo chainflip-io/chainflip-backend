@@ -13,7 +13,8 @@ use utilities::{
 
 use crate::{
 	state_chain_observer::client::{
-		storage_api::StorageApi, StateChainStreamApi, STATE_CHAIN_BEHAVIOUR, STATE_CHAIN_CONNECTION,
+		storage_api::StorageApi, stream_api::StreamApi, STATE_CHAIN_BEHAVIOUR,
+		STATE_CHAIN_CONNECTION,
 	},
 	witness::common::{
 		chain_source::{ChainClient, ChainStream, Header},
@@ -95,7 +96,7 @@ where
 
 	pub async fn new<
 		'env,
-		StateChainStream: StateChainStreamApi<FINALIZED>,
+		StateChainStream: StreamApi<FINALIZED>,
 		StateChainClient: StorageApi + Send + Sync + 'static,
 		GetItemsFut: Future<Output = MonitoredItems> + Send + 'static,
 		GetItemsGenerator: Fn(state_chain_runtime::Hash) -> GetItemsFut + Send + Sync + Clone + 'static,

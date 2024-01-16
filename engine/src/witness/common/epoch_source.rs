@@ -76,7 +76,7 @@ impl EpochSource<(), ()> {
 	pub async fn builder<
 		'a,
 		'env,
-		StateChainStream: client::StateChainStreamApi,
+		StateChainStream: client::stream_api::StreamApi,
 		StateChainClient: client::storage_api::StorageApi + Send + Sync + 'static,
 	>(
 		scope: &'a Scope<'env, anyhow::Error>,

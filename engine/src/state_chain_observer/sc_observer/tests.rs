@@ -5,7 +5,7 @@ use crate::{
 	dot::retry_rpc::mocks::MockDotHttpRpcClient,
 	eth::retry_rpc::mocks::MockEthRetryRpcClient,
 	state_chain_observer::{
-		client::{extrinsic_api, finalized_stream::FinalizedCachedStream},
+		client::{extrinsic_api, stream_api::StateChainStream},
 		test_helpers::test_header,
 	},
 };
@@ -37,7 +37,7 @@ use utilities::task_scope::task_scope;
 use super::crypto_compat::CryptoCompat;
 
 async fn start_sc_observer<
-	BlockStream: crate::state_chain_observer::client::StateChainStreamApi,
+	BlockStream: crate::state_chain_observer::client::stream_api::StreamApi,
 >(
 	state_chain_client: MockStateChainClient,
 	sc_block_stream: BlockStream,
@@ -110,12 +110,8 @@ async fn only_encodes_and_signs_when_specified() {
 	let mut eth_mock_clone = MockEthRetryRpcClient::new();
 	eth_mock_clone.expect_clone().return_once(|| eth_rpc_mock_broadcast);
 
-	start_sc_observer(
-		state_chain_client,
-		FinalizedCachedStream::new(sc_block_stream),
-		eth_mock_clone,
-	)
-	.await;
+	start_sc_observer(state_chain_client, StateChainStream::new(sc_block_stream), eth_mock_clone)
+		.await;
 }
 
 // TODO: Test that when we return None for polkadot vault

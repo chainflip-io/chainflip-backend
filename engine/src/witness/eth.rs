@@ -19,7 +19,7 @@ use crate::{
 	eth::{retry_rpc::EthRetryRpcClient, rpc::EthRpcSigningClient},
 	state_chain_observer::client::{
 		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
-		StateChainStreamApi, STATE_CHAIN_CONNECTION,
+		stream_api::StreamApi, STATE_CHAIN_CONNECTION,
 	},
 	witness::eth::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents},
 };
@@ -42,7 +42,7 @@ pub async fn start<StateChainClient, StateChainStream, ProcessCall, ProcessingFu
 ) -> Result<()>
 where
 	StateChainClient: StorageApi + ChainApi + SignedExtrinsicApi + 'static + Send + Sync,
-	StateChainStream: StateChainStreamApi + Clone,
+	StateChainStream: StreamApi + Clone,
 	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 		+ Send
 		+ Sync

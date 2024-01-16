@@ -2,8 +2,8 @@ pub mod base_rpc_api;
 pub mod chain_api;
 pub mod error_decoder;
 pub mod extrinsic_api;
-pub mod finalized_stream;
 pub mod storage_api;
+pub mod stream_api;
 
 use async_trait::async_trait;
 
@@ -36,8 +36,8 @@ use self::{
 		signed::{signer, SignedExtrinsicApi, WaitFor, WaitForResult},
 		unsigned,
 	},
-	finalized_stream::FinalizedCachedStream,
 	storage_api::StorageApi,
+	stream_api::{StateChainStream, StreamApi},
 };
 
 pub const STATE_CHAIN_CONNECTION: &str = "State Chain client connection failed"; // TODO Replace with infallible SCC requests
@@ -64,18 +64,6 @@ impl From<state_chain_runtime::Header> for BlockInfo {
 	}
 }
 
-pub trait StateChainStreamApi<const FINALIZED: bool = true>:
-	CachedStream<Item = BlockInfo> + Send + Sync + Unpin + 'static
-{
-}
-
-impl<S> StateChainStreamApi<false> for utilities::InnerCachedStream<S> where
-	S: Stream<Item = BlockInfo> + Send + Sync + Unpin + 'static
-{
-}
-
-impl<S: StateChainStreamApi<false>> StateChainStreamApi for FinalizedCachedStream<S> {}
-
 pub type DefaultRpcClient = base_rpc_api::BaseRpcClient<jsonrpsee::ws_client::WsClient>;
 
 impl DefaultRpcClient {
@@ -100,10 +88,9 @@ pub struct StateChainClient<
 	unsigned_extrinsic_client: unsigned::UnsignedExtrinsicClient,
 	pub base_rpc_client: Arc<BaseRpcClient>,
 	finalized_block_stream_request_sender:
-		tokio::sync::mpsc::Sender<tokio::sync::oneshot::Sender<Box<dyn StateChainStreamApi>>>,
-	unfinalized_block_stream_request_sender: tokio::sync::mpsc::Sender<
-		tokio::sync::oneshot::Sender<Box<dyn StateChainStreamApi<false>>>,
-	>,
+		tokio::sync::mpsc::Sender<tokio::sync::oneshot::Sender<Box<dyn StreamApi>>>,
+	unfinalized_block_stream_request_sender:
+		tokio::sync::mpsc::Sender<tokio::sync::oneshot::Sender<Box<dyn StreamApi<false>>>>,
 	latest_finalized_block_watcher: tokio::sync::watch::Receiver<BlockInfo>,
 	latest_unfinalized_block_watcher: tokio::sync::watch::Receiver<BlockInfo>,
 }
@@ -116,11 +103,7 @@ impl StateChainClient<extrinsic_api::signed::SignedExtrinsicClient> {
 		required_role: AccountRole,
 		wait_for_required_role: bool,
 		required_version_and_wait: Option<(SemVer, bool)>,
-	) -> Result<(
-		impl StateChainStreamApi + Clone,
-		impl StateChainStreamApi<false> + Clone,
-		Arc<Self>,
-	)> {
+	) -> Result<(impl StreamApi + Clone, impl StreamApi<false> + Clone, Arc<Self>)> {
 		Self::new_with_account(
 			scope,
 			DefaultRpcClient::connect(ws_endpoint).await?.into(),
@@ -138,11 +121,7 @@ impl StateChainClient<()> {
 		scope: &Scope<'a, anyhow::Error>,
 		ws_endpoint: &str,
 		required_version_and_wait: Option<(SemVer, bool)>,
-	) -> Result<(
-		impl StateChainStreamApi + Clone,
-		impl StateChainStreamApi<false> + Clone,
-		Arc<Self>,
-	)> {
+	) -> Result<(impl StreamApi + Clone, impl StreamApi<false> + Clone, Arc<Self>)> {
 		Self::new_without_account(
 			scope,
 			DefaultRpcClient::connect(ws_endpoint).await?.into(),
@@ -162,11 +141,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		required_role: AccountRole,
 		wait_for_required_role: bool,
 		required_version_and_wait: Option<(SemVer, bool)>,
-	) -> Result<(
-		impl StateChainStreamApi + Clone,
-		impl StateChainStreamApi<false> + Clone,
-		Arc<Self>,
-	)> {
+	) -> Result<(impl StreamApi + Clone, impl StreamApi<false> + Clone, Arc<Self>)> {
 		Self::new(
 			scope,
 			base_rpc_client,
@@ -193,11 +168,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		scope: &Scope<'a, anyhow::Error>,
 		base_rpc_client: Arc<BaseRpcClient>,
 		required_version_and_wait: Option<(SemVer, bool)>,
-	) -> Result<(
-		impl StateChainStreamApi + Clone,
-		impl StateChainStreamApi<false> + Clone,
-		Arc<Self>,
-	)> {
+	) -> Result<(impl StreamApi + Clone, impl StreamApi<false> + Clone, Arc<Self>)> {
 		Self::new(scope, base_rpc_client, (), required_version_and_wait).await
 	}
 }
@@ -212,8 +183,8 @@ async fn create_finalized_block_subscription<
 	required_version_and_wait: Option<(SemVer, bool)>,
 ) -> Result<(
 	watch::Receiver<BlockInfo>,
-	impl StateChainStreamApi + Clone,
-	tokio::sync::mpsc::Sender<tokio::sync::oneshot::Sender<Box<dyn StateChainStreamApi>>>,
+	impl StreamApi + Clone,
+	tokio::sync::mpsc::Sender<tokio::sync::oneshot::Sender<Box<dyn StreamApi>>>,
 )> {
 	let mut finalized_block_stream = {
 		// https://substrate.stackexchange.com/questions/3667/api-rpc-chain-subscribefinalizedheads-missing-blocks
@@ -316,7 +287,7 @@ async fn create_finalized_block_subscription<
 		tokio::sync::watch::channel::<BlockInfo>(latest_block);
 
 	let (block_stream_request_sender, block_stream_request_receiver) =
-		tokio::sync::mpsc::channel::<tokio::sync::oneshot::Sender<Box<dyn StateChainStreamApi>>>(1);
+		tokio::sync::mpsc::channel::<tokio::sync::oneshot::Sender<Box<dyn StreamApi>>>(1);
 
 	scope.spawn({
 		let base_rpc_client = base_rpc_client.clone();
@@ -344,7 +315,7 @@ async fn create_finalized_block_subscription<
 					let _result = latest_block_sender.send(block);
 				},
 				if let Some(block_stream_request) = block_stream_request_receiver.next() => {
-					let _result = block_stream_request.send(Box::new(FinalizedCachedStream::new(block_sender.receiver().make_cached(latest_block))));
+					let _result = block_stream_request.send(Box::new(StateChainStream::new(block_sender.receiver().make_cached(latest_block))));
 				} else break Ok(()),
 			)
 		}
@@ -352,7 +323,7 @@ async fn create_finalized_block_subscription<
 
 	Ok((
 		latest_block_watcher,
-		FinalizedCachedStream::new(block_receiver.make_cached(latest_block)),
+		StateChainStream::new(block_receiver.make_cached(latest_block)),
 		block_stream_request_sender,
 	))
 }
@@ -364,8 +335,8 @@ async fn create_unfinalized_block_subscription<
 	base_rpc_client: Arc<BaseRpcClient>,
 ) -> Result<(
 	watch::Receiver<BlockInfo>,
-	impl StateChainStreamApi<false> + Clone,
-	tokio::sync::mpsc::Sender<tokio::sync::oneshot::Sender<Box<dyn StateChainStreamApi<false>>>>,
+	impl StreamApi<false> + Clone,
+	tokio::sync::mpsc::Sender<tokio::sync::oneshot::Sender<Box<dyn StreamApi<false>>>>,
 )> {
 	let mut sparse_block_stream = base_rpc_client
 		.subscribe_unfinalized_block_headers()
@@ -393,9 +364,8 @@ async fn create_unfinalized_block_subscription<
 	let (latest_block_sender, latest_block_watcher) =
 		tokio::sync::watch::channel::<BlockInfo>(first_block);
 
-	let (block_stream_request_sender, block_stream_request_receiver) = tokio::sync::mpsc::channel::<
-		tokio::sync::oneshot::Sender<Box<dyn StateChainStreamApi<false>>>,
-	>(1);
+	let (block_stream_request_sender, block_stream_request_receiver) =
+		tokio::sync::mpsc::channel::<tokio::sync::oneshot::Sender<Box<dyn StreamApi<false>>>>(1);
 
 	scope.spawn({
 		let mut block_stream_request_receiver: tokio_stream::wrappers::ReceiverStream<_> =
@@ -411,13 +381,17 @@ async fn create_unfinalized_block_subscription<
 					let _result = latest_block_sender.send(block);
 				},
 				if let Some(block_stream_request) = block_stream_request_receiver.next() => {
-					let _result = block_stream_request.send(Box::new(block_sender.receiver().make_cached(latest_block)));
+					let _result = block_stream_request.send(Box::new(StateChainStream::new(block_sender.receiver().make_cached(latest_block))));
 				} else break Ok(()),
 			)
 		}
 	});
 
-	Ok((latest_block_watcher, block_receiver.make_cached(first_block), block_stream_request_sender))
+	Ok((
+		latest_block_watcher,
+		StateChainStream::new(block_receiver.make_cached(first_block)),
+		block_stream_request_sender,
+	))
 }
 
 async fn inject_intervening_headers<
@@ -497,11 +471,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 		base_rpc_client: Arc<BaseRpcClient>,
 		mut signed_extrinsic_client_builder: SignedExtrinsicClientBuilder,
 		required_version_and_wait: Option<(SemVer, bool)>,
-	) -> Result<(
-		impl StateChainStreamApi + Clone,
-		impl StateChainStreamApi<false> + Clone,
-		Arc<Self>,
-	)> {
+	) -> Result<(impl StreamApi + Clone, impl StreamApi<false> + Clone, Arc<Self>)> {
 		{
 			let mut poll_interval = make_periodic_tick(SYNC_POLL_INTERVAL, false);
 			while base_rpc_client.health().await?.is_syncing {
@@ -584,7 +554,7 @@ trait SignedExtrinsicClientBuilderTrait {
 	async fn build<
 		'a,
 		BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
-		BlockStream: StateChainStreamApi + Clone,
+		BlockStream: StreamApi + Clone,
 	>(
 		self,
 		scope: &Scope<'a, anyhow::Error>,
@@ -612,7 +582,7 @@ impl SignedExtrinsicClientBuilderTrait for () {
 	async fn build<
 		'a,
 		BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
-		BlockStream: StateChainStreamApi + Clone,
+		BlockStream: StreamApi + Clone,
 	>(
 		self,
 		_scope: &Scope<'a, anyhow::Error>,
@@ -802,7 +772,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 	async fn build<
 		'b,
 		BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
-		BlockStream: StateChainStreamApi + Clone,
+		BlockStream: StreamApi + Clone,
 	>(
 		self,
 		scope: &Scope<'b, anyhow::Error>,
@@ -942,13 +912,13 @@ impl<
 		*self.latest_unfinalized_block_watcher.borrow()
 	}
 
-	async fn finalized_block_stream(&self) -> Box<dyn StateChainStreamApi> {
+	async fn finalized_block_stream(&self) -> Box<dyn StreamApi> {
 		let (sender, receiver) = tokio::sync::oneshot::channel();
 		self.finalized_block_stream_request_sender.send(sender).unwrap_or_cancel().await;
 		receiver.unwrap_or_cancel().await
 	}
 
-	async fn unfinalized_block_stream(&self) -> Box<dyn StateChainStreamApi<false>> {
+	async fn unfinalized_block_stream(&self) -> Box<dyn StreamApi<false>> {
 		let (sender, receiver) = tokio::sync::oneshot::channel();
 		self.unfinalized_block_stream_request_sender
 			.send(sender)
@@ -982,7 +952,9 @@ pub mod mocks {
 			signed::{WaitFor, WaitForResult},
 			unsigned,
 		},
-		storage_api, BlockInfo, StateChainStreamApi,
+		storage_api,
+		stream_api::StreamApi,
+		BlockInfo,
 	};
 
 	mock! {
@@ -1048,8 +1020,8 @@ pub mod mocks {
 			fn latest_finalized_block(&self) -> BlockInfo;
 			fn latest_unfinalized_block(&self) -> BlockInfo;
 
-			async fn finalized_block_stream(&self) -> Box<dyn StateChainStreamApi>;
-			async fn unfinalized_block_stream(&self) -> Box<dyn StateChainStreamApi<false>>;
+			async fn finalized_block_stream(&self) -> Box<dyn StreamApi>;
+			async fn unfinalized_block_stream(&self) -> Box<dyn StreamApi<false>>;
 
 			async fn block(&self, block_hash: state_chain_runtime::Hash) -> RpcResult<BlockInfo>;
 		}

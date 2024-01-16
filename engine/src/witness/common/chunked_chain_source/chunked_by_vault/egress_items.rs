@@ -6,7 +6,7 @@ use utilities::task_scope::Scope;
 
 use crate::{
 	state_chain_observer::client::{
-		storage_api::StorageApi, StateChainStreamApi, STATE_CHAIN_CONNECTION,
+		storage_api::StorageApi, stream_api::StreamApi, STATE_CHAIN_CONNECTION,
 	},
 	witness::common::{
 		chunked_chain_source::chunked_by_vault::monitored_items::MonitoredSCItems, RuntimeHasChain,
@@ -42,7 +42,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	>
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-		StateChainStream: StateChainStreamApi<FINALIZED>,
+		StateChainStream: StreamApi<FINALIZED>,
 		StateChainClient: StorageApi + Send + Sync + 'static,
 	{
 		let state_chain_client_c = state_chain_client.clone();

@@ -18,7 +18,7 @@ use crate::{
 	},
 	db::PersistentKeyDB,
 	state_chain_observer::client::{
-		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
+		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, stream_api::StreamApi,
 	},
 };
 use btc_source::BtcSource;
@@ -80,13 +80,13 @@ pub async fn start<
 	prewitness_call: PrewitnessCall,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
-	unfinalised_state_chain_stream: impl StateChainStreamApi<false>,
+	unfinalised_state_chain_stream: impl StreamApi<false>,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
 where
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
-	StateChainStream: StateChainStreamApi + Clone + 'static + Send + Sync,
+	StateChainStream: StreamApi + Clone + 'static + Send + Sync,
 	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 		+ Send
 		+ Sync

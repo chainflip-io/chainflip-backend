@@ -8,7 +8,7 @@ use crate::{
 	dot::retry_rpc::DotRetryRpcClient,
 	eth::{retry_rpc::EthRetryRpcClient, rpc::EthRpcSigningClient},
 	state_chain_observer::client::{
-		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
+		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, stream_api::StreamApi,
 	},
 };
 
@@ -29,8 +29,8 @@ pub async fn start<StateChainClient>(
 	btc_client: BtcRetryRpcClient,
 	dot_client: DotRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,
-	state_chain_stream: impl StateChainStreamApi + Clone,
-	unfinalised_state_chain_stream: impl StateChainStreamApi<false> + Clone,
+	state_chain_stream: impl StreamApi + Clone,
+	unfinalised_state_chain_stream: impl StreamApi<false> + Clone,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
 where
