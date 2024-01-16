@@ -39,7 +39,8 @@ async function main(): Promise<void> {
     .option('runtime', {
       describe: 'path to the runtime wasm file. Required when compile is not set.',
       type: 'string',
-      default: './target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm',
+      default:
+        './target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm',
       demandOption: false,
       requiresArg: true,
     })
