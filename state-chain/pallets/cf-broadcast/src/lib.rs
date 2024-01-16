@@ -263,7 +263,7 @@ pub mod pallet {
 	pub type DelayedBroadcastRetryQueue<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BlockNumberFor<T>, BTreeSet<BroadcastId>, ValueQuery>;
 
-	/// A mapping from block number to a list of signing or broadcast attempts that expire at that
+	/// A mapping from block number to a list of broadcasts that expire at that
 	/// block number.
 	#[pallet::storage]
 	pub type Timeouts<T: Config<I>, I: 'static = ()> =
@@ -320,8 +320,7 @@ pub mod pallet {
 		BroadcastRetryScheduled { broadcast_id: BroadcastId, retry_block: BlockNumberFor<T> },
 		/// A broadcast has timed out.
 		BroadcastTimeout { broadcast_id: BroadcastId },
-		/// A broadcast has been aborted after all authorities have attempted to broadcast the
-		/// transaction and failed.
+		/// A broadcast has been aborted after all authorities have failed to broadcast it.
 		BroadcastAborted { broadcast_id: BroadcastId },
 		/// A broadcast has successfully been completed.
 		BroadcastSuccess {
@@ -356,11 +355,9 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
-		/// The `on_initialize` hook for this pallet handles scheduled expiries.
-		///
-		/// /// ## Events
-		///
-		/// - [BroadcastAttemptTimeout](Event::BroadcastAttemptTimeout)
+		/// Process any broadcasts that expired are treated as failed.
+		/// Re-try any broadcasts in the Delayed Retry queue.
+		/// If safe mode prevents retrying, the broadcasts are added to future blocks.
 		fn on_initialize(block_number: BlockNumberFor<T>) -> frame_support::weights::Weight {
 			// We treat a time out here as a Broadcast Failure. This is handled the same way - the
 			// current broadcaster is reported as Failed to broadcast, and a new broadcaster is
@@ -545,11 +542,9 @@ pub mod pallet {
 
 			if let Some(expected_tx_metadata) = TransactionMetadata::<T, I>::take(broadcast_id) {
 				if tx_metadata.verify_metadata(&expected_tx_metadata) {
-					if let Some(signing_attempt) = AwaitingBroadcast::<T, I>::get(broadcast_id) {
-						let to_refund = signing_attempt
-							.broadcast_data
-							.transaction_payload
-							.return_fee_refund(tx_fee);
+					if let Some(broadcast) = AwaitingBroadcast::<T, I>::get(broadcast_id) {
+						let to_refund =
+							broadcast.broadcast_data.transaction_payload.return_fee_refund(tx_fee);
 
 						TransactionFeeDeficit::<T, I>::mutate(signer_id.clone(), |fee_deficit| {
 							*fee_deficit = fee_deficit.saturating_add(to_refund);
@@ -741,13 +736,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return
 		}
 
-		if let Some(broadcast_signing_attempt) = AwaitingBroadcast::<T, I>::get(broadcast_id) {
+		if let Some(broadcast) = AwaitingBroadcast::<T, I>::get(broadcast_id) {
 			// If the broadcast is not pending, we should not retry.
 			if let Some((api_call, _signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id)
 			{
 				if T::TransactionBuilder::requires_signature_refresh(
 					&api_call,
-					&broadcast_signing_attempt.broadcast_data.threshold_signature_payload,
+					&broadcast.broadcast_data.threshold_signature_payload,
 				) {
 					// We update the initiated_at here since as the tx is resigned and broadcast, it
 					// is not possible for it to be successfully broadcasted before this point.
@@ -778,7 +773,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						broadcast_id
 					);
 				} else {
-					Self::start_broadcast_attempt(broadcast_signing_attempt.broadcast_data);
+					Self::start_broadcast_attempt(broadcast.broadcast_data);
 				}
 			} else {
 				log::error!("No threshold signature data are available for broadcast: {:?}. Retry is aborted.", broadcast_id);
@@ -791,7 +786,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	/// Start a broadcast attempt by try to select a nominee.
+	/// Start a broadcast by try to select a nominee.
 	fn start_broadcast_attempt(mut broadcast_data: BroadcastData<T, I>) {
 		let broadcast_id = broadcast_data.broadcast_id;
 		T::TransactionBuilder::refresh_unsigned_data(&mut broadcast_data.transaction_payload);
@@ -869,11 +864,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		broadcast_id: BroadcastId,
 		mut maybe_reporter: Option<T::ValidatorId>,
 	) -> DispatchResult {
-		let signing_attempt = AwaitingBroadcast::<T, I>::get(broadcast_id)
+		let broadcast = AwaitingBroadcast::<T, I>::get(broadcast_id)
 			.ok_or(Error::<T, I>::InvalidBroadcastId)?;
 
 		if maybe_reporter.is_none() {
-			maybe_reporter = signing_attempt.nominee;
+			maybe_reporter = broadcast.nominee;
 		}
 
 		if let Some(failed_broadcaster) = maybe_reporter {
