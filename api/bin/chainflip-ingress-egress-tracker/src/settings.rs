@@ -6,15 +6,6 @@ use config::{Config, ConfigBuilder, ConfigError, Environment, Map, Source, Value
 use serde::Deserialize;
 use std::{collections::HashMap, env};
 
-#[derive(Clone, Deserialize, Debug)]
-pub struct DepositTrackerSettings {
-	pub eth: WsHttpEndpoints,
-	pub dot: WsHttpEndpoints,
-	pub state_chain_ws_endpoint: String,
-	pub btc: HttpBasicAuthEndpoint,
-	pub redis_url: String,
-}
-
 #[derive(Parser, Debug, Clone, Default)]
 #[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"), version_short = 'v')]
 pub struct TrackerOptions {
@@ -36,6 +27,15 @@ pub struct TrackerOptions {
 	btc_password: Option<String>,
 	#[clap(long = "redis_url")]
 	redis_url: Option<String>,
+}
+
+#[derive(Clone, Deserialize, Debug)]
+pub struct DepositTrackerSettings {
+	pub eth: WsHttpEndpoints,
+	pub dot: WsHttpEndpoints,
+	pub state_chain_ws_endpoint: String,
+	pub btc: HttpBasicAuthEndpoint,
+	pub redis_url: String,
 }
 
 impl CfSettings for DepositTrackerSettings {

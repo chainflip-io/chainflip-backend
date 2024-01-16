@@ -17,14 +17,14 @@ configuration is necessary: `./chainflip-ingress-egress-tracker`.
 The default configuration can be overwritten with the following env variables:
 
 ```
-- ETH_WS_ENDPOINT: Ethereum node websocket endpoint. (Default: ws://localhost:8546)
-- ETH_HTTP_ENDPOINT: Ethereum node http endpoint. (Default: http://localhost:8545)
-- DOT_WS_ENDPOINT: Polkadot node websocket endpoint. (Default: ws://localhost:9945)
-- DOT_HTTP_ENDPOINT: Polkadot node http endpoint. (Default: http://localhost:9945)
-- SC_WS_ENDPOINT: Chainflip node websocket endpoint. (Default: ws://localhost:9944)
-- BTC_ENDPOINT: Bitcoin node http endpoint. (Default: http://127.0.0.1:8332)
-- BTC_USERNAME: Bitcoin node username. (Default: flip)
-- BTC_PASSWORD: Bitcoin node password. (Default: flip)
+- ETH__WS_ENDPOINT: Ethereum node websocket endpoint. (Default: ws://localhost:8546)
+- ETH__HTTP_ENDPOINT: Ethereum node http endpoint. (Default: http://localhost:8545)
+- DOT__WS_ENDPOINT: Polkadot node websocket endpoint. (Default: ws://localhost:9945)
+- DOT__HTTP_ENDPOINT: Polkadot node http endpoint. (Default: http://localhost:9945)
+- STATE_CHAIN_WS_ENDPOINT: Chainflip node websocket endpoint. (Default: ws://localhost:9944)
+- BTC__HTTP_ENDPOINT: Bitcoin node http endpoint. (Default: http://127.0.0.1:8332)
+- BTC__BASIC_AUTH_USER: Bitcoin node username. (Default: flip)
+- BTC__BASIC_AUTH_PASSWORD: Bitcoin node password. (Default: flip)
 - REDIS_URL: Redis url. (Default: redis://localhost:6380)
 ```
 
