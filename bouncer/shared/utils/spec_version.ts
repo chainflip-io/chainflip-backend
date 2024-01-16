@@ -44,24 +44,27 @@ export function specVersion(
 
           if (readOrWrite === 'read') {
             return currentSpecVersion;
-          } else {
-            // write
+          }
+          // write
 
-            if (writeSpecVersion) {
-              if (currentSpecVersion >= writeSpecVersion) {
-                console.log("Current spec version is greater than the one you're trying to write. Returning currentSpecVersion.");
-                return currentSpecVersion;
-              } else {
-                // if the version we provided is greater than the current one, then we can bump it to this new version.
-                incrementedVersion = writeSpecVersion;
-              }
-            } else {
-              // If we want to write, but didn't provide a version, we simply increment the current version.
-              incrementedVersion = currentSpecVersion + 1;
+          if (writeSpecVersion) {
+            if (currentSpecVersion >= writeSpecVersion) {
+              console.log(
+                "Current spec version is greater than the one you're trying to write. Returning currentSpecVersion.",
+              );
+              return currentSpecVersion;
             }
+            // if the version we provided is greater than the current one, then we can bump it to this new version.
+            incrementedVersion = writeSpecVersion;
+          } else {
+            // If we want to write, but didn't provide a version, we simply increment the current version.
+            incrementedVersion = currentSpecVersion + 1;
           }
 
-          console.assert(incrementedVersion !== -1, 'incrementedVersion should not be -1. It should be set above.');
+          console.assert(
+            incrementedVersion !== -1,
+            'incrementedVersion should not be -1. It should be set above.',
+          );
           lines[i] = `	spec_version: ${incrementedVersion},`;
           break;
         }
