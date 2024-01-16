@@ -266,9 +266,7 @@ pub struct FundingEnvironment {
 	pub minimum_funding_amount: NumberOrHex,
 }
 
-// XXX: This struct having just one field does not seem to make much sense.
-// XXX: On the other hand this may "rhyme" well with the return results of the whole family of `cf_*_environment` calls.
-// XXX: should [that](https://github.com/chainflip-io/chainflip-sdk-monorepo/blob/04e1f372f89164f42f84fccf4cfe3601d5c843f9/packages/shared/src/rpc/index.ts#L118) be patched?
+
 #[derive(Serialize, Deserialize)]
 pub struct SwappingEnvironment {
 	maximum_swap_amounts: HashMap<ForeignChain, HashMap<Asset, Option<NumberOrHex>>>,
@@ -464,7 +462,6 @@ pub trait CustomApi {
 	#[method(name = "current_compatibility_version")]
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
 
-	/// XXX: the removed `min_swap_amount` is referenced 
 	#[method(name = "max_swap_amount")]
 	fn cf_max_swap_amount(&self, asset: RpcAsset) -> RpcResult<Option<AssetAmount>>;
 	#[subscription(name = "subscribe_pool_price", item = PoolPrice)]
