@@ -42,7 +42,6 @@ fn bitcoin_broadcast_delay_works() {
 			)
 			.unwrap();
 
-			pallet_cf_broadcast::BroadcastIdCounter::<Runtime, BitcoinInstance>::set(10);
 			let broadcast_id =
 				<BitcoinBroadcaster as Broadcaster<Bitcoin>>::threshold_sign_and_broadcast(
 					bitcoin_call,
