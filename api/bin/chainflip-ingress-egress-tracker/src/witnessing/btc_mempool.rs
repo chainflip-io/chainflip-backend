@@ -101,8 +101,15 @@ async fn update_cache<T: BtcRpcApi>(
 		})
 		.collect();
 
+	tracing::debug!(
+		"Number of unknown mempool transactions: {}",
+		unknown_mempool_transactions.len()
+	);
+
 	let transactions: Vec<Transaction> =
 		btc.get_raw_transactions(unknown_mempool_transactions).await?;
+
+	tracing::debug!("Number of raw transactions returned: {}", transactions.len());
 
 	for tx in transactions {
 		let txid = tx.txid();

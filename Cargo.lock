@@ -1196,7 +1196,7 @@ dependencies = [
  "frame-support",
  "hex",
  "hex-literal",
- "itertools 0.10.5",
+ "itertools 0.11.0",
  "libsecp256k1",
  "log",
  "parity-scale-codec",
@@ -6581,7 +6581,7 @@ dependencies = [
  "futures-util",
  "generic-array 0.14.7",
  "hex",
- "itertools 0.10.5",
+ "itertools 0.11.0",
  "lazy_static",
  "mockall",
  "multisig",
@@ -7377,6 +7377,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "itertools 0.11.0",
  "log",
  "parity-scale-codec",
  "scale-info",
@@ -7386,6 +7387,7 @@ dependencies = [
  "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
  "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
+ "utilities",
 ]
 
 [[package]]
