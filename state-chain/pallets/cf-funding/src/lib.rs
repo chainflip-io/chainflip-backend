@@ -44,7 +44,7 @@ use sp_std::{
 pub enum Pending {
 	Pending,
 }
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 #[derive(Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct PendingRedemptionInfo<FlipBalance> {
