@@ -136,7 +136,7 @@ cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
 		system: Default::default(),
-		swapping: SwappingConfig { /* /* XXX: to remove */ minimum_swap_amounts: vec![], */ _phantom: PhantomData },
+		swapping: SwappingConfig { _phantom: PhantomData },
 	},
 	|| {
 		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(&ALICE).unwrap();

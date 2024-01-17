@@ -3,8 +3,7 @@ use cf_chains::{
 	ChainState,
 };
 use cf_primitives::{
-	chains::assets, AccountRole, AssetAmount, AuthorityCount, NetworkEnvironment,
-	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
+	AccountRole, AuthorityCount, NetworkEnvironment, DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 };
 
 use cf_chains::{
@@ -266,7 +265,8 @@ pub fn inner_cf_development_config(
 				devnet::PENALTIES.to_vec(),
 				devnet::KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
 				devnet::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
-				devnet::MINIMUM_SWAP_AMOUNTS.to_vec(),
+				// // XXX: to remove
+				// devnet::MINIMUM_SWAP_AMOUNTS.to_vec(),
 				dot_runtime_version,
 				// Bitcoin block times on localnets are much faster, so we account for that here.
 				devnet::BITCOIN_EXPIRY_BLOCKS,
@@ -397,7 +397,8 @@ macro_rules! network_spec {
 							PENALTIES.to_vec(),
 							KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
 							THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
-							MINIMUM_SWAP_AMOUNTS.to_vec(),
+							// // XXX: to remove
+							// MINIMUM_SWAP_AMOUNTS.to_vec(),
 							dot_runtime_version,
 							BITCOIN_EXPIRY_BLOCKS,
 							ETHEREUM_EXPIRY_BLOCKS,
@@ -459,8 +460,8 @@ fn testnet_genesis(
 	penalties: Vec<(Offence, (i32, BlockNumber))>,
 	keygen_ceremony_timeout_blocks: BlockNumber,
 	threshold_signature_ceremony_timeout_blocks: BlockNumber,
-	// FIXME: unused
-	_minimum_swap_amounts: Vec<(assets::any::Asset, AssetAmount)>,
+	// // FIXME: unused
+	// _minimum_swap_amounts: Vec<(assets::any::Asset, AssetAmount)>,
 	dot_runtime_version: RuntimeVersion,
 	bitcoin_deposit_channel_lifetime: u32,
 	ethereum_deposit_channel_lifetime: u32,
@@ -673,7 +674,7 @@ fn testnet_genesis(
 		},
 		transaction_payment: Default::default(),
 		liquidity_pools: Default::default(),
-		swapping: SwappingConfig { /* minimum_swap_amounts, */ _phantom: PhantomData },
+		swapping: SwappingConfig { _phantom: PhantomData },
 		// Channel lifetimes are set to ~2 hours at average block times.
 		bitcoin_ingress_egress: BitcoinIngressEgressConfig {
 			deposit_channel_lifetime: bitcoin_deposit_channel_lifetime.into(),
