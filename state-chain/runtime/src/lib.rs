@@ -770,7 +770,6 @@ construct_runtime!(
 	{
 		System: frame_system,
 		Timestamp: pallet_timestamp,
-		CfeInterface: pallet_cf_cfe_interface,
 		Environment: pallet_cf_environment,
 		Flip: pallet_cf_flip,
 		Emissions: pallet_cf_emissions,
@@ -813,6 +812,8 @@ construct_runtime!(
 		BitcoinIngressEgress: pallet_cf_ingress_egress::<Instance3>,
 
 		LiquidityPools: pallet_cf_pools,
+
+		CfeInterface: pallet_cf_cfe_interface,
 	}
 );
 
@@ -848,9 +849,49 @@ pub type Executive = frame_executive::Executive<
 	Block,
 	frame_system::ChainContext<Runtime>,
 	Runtime,
-	AllPalletsWithSystem,
+	PalletExecutionOrder,
 	PalletMigrations,
 >;
+
+pub type PalletExecutionOrder = (
+	System,
+	Timestamp,
+	CfeInterface,
+	Environment,
+	Flip,
+	Emissions,
+	Funding,
+	AccountRoles,
+	TransactionPayment,
+	Witnesser,
+	Validator,
+	Session,
+	Historical,
+	Aura,
+	Authorship,
+	Grandpa,
+	Governance,
+	TokenholderGovernance,
+	Reputation,
+	EthereumChainTracking,
+	PolkadotChainTracking,
+	BitcoinChainTracking,
+	EthereumVault,
+	PolkadotVault,
+	BitcoinVault,
+	EthereumThresholdSigner,
+	PolkadotThresholdSigner,
+	BitcoinThresholdSigner,
+	EthereumBroadcaster,
+	PolkadotBroadcaster,
+	BitcoinBroadcaster,
+	Swapping,
+	LiquidityProvider,
+	EthereumIngressEgress,
+	PolkadotIngressEgress,
+	BitcoinIngressEgress,
+	LiquidityPools,
+);
 
 // Pallet Migrations for each pallet.
 // We use the executive pallet because the `pre_upgrade` and `post_upgrade` hooks are noops
