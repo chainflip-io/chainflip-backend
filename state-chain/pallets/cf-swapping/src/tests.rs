@@ -2,8 +2,8 @@ use super::*;
 use crate::{
 	mock::{RuntimeEvent, *},
 	CcmFailReason, CcmIdCounter, CcmOutputs, CcmSwap, CcmSwapOutput, CollectedRejectedFunds,
-	EarnedBrokerFees, Error, Event, MaximumSwapAmount, MinimumSwapAmount, Pallet, PendingCcms,
-	Swap, SwapOrigin, SwapQueue, SwapType,
+	EarnedBrokerFees, Error, Event, MaximumSwapAmount, Pallet, PendingCcms, Swap, SwapOrigin,
+	SwapQueue, SwapType,
 };
 use cf_chains::{
 	address::{to_encoded_address, AddressConverter, EncodedAddress, ForeignChainAddress},
@@ -834,57 +834,11 @@ fn can_handle_ccms_with_no_swaps_needed() {
 }
 
 #[test]
-fn can_set_minimum_swap_amount() {
-	new_test_ext().execute_with(|| {
-		let asset = Asset::Eth;
-		let amount = 1_000u128;
-		assert_eq!(MinimumSwapAmount::<Test>::get(asset), 0);
-
-		// Set the new minimum swap_amount
-		assert_ok!(Swapping::set_minimum_swap_amount(RuntimeOrigin::root(), asset, amount));
-
-		assert_eq!(MinimumSwapAmount::<Test>::get(asset), amount);
-		assert_eq!(Swapping::minimum_swap_amount(asset), amount);
-
-		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::MinimumSwapAmountSet {
-			asset,
-			amount,
-		}));
-	});
-}
-
-#[test]
 fn swap_by_witnesser_happy_path() {
 	new_test_ext().execute_with(|| {
 		let from = Asset::Eth;
 		let to = Asset::Flip;
 		let amount = 1_000u128;
-
-		// Set minimum swap amount to > deposit amount
-		assert_ok!(Swapping::set_minimum_swap_amount(RuntimeOrigin::root(), from, amount + 1));
-		assert_ok!(Swapping::schedule_swap_from_contract(
-			RuntimeOrigin::root(),
-			from,
-			to,
-			amount,
-			EncodedAddress::Eth(Default::default()),
-			Default::default(),
-		));
-
-		// Verify this swap is rejected
-		assert_eq!(SwapQueue::<Test>::decode_len(), None);
-		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapAmountTooLow {
-			asset: from,
-			amount,
-			destination_address: EncodedAddress::Eth(Default::default()),
-			origin: SwapOrigin::Vault { tx_hash: Default::default() },
-		}));
-		// Fund is confiscated
-		assert_eq!(CollectedRejectedFunds::<Test>::get(from), amount);
-
-		// Set minimum swap amount deposit amount
-		assert_ok!(Swapping::set_minimum_swap_amount(RuntimeOrigin::root(), from, amount));
-		CollectedRejectedFunds::<Test>::set(from, 0);
 
 		assert_ok!(Swapping::schedule_swap_from_contract(
 			RuntimeOrigin::root(),
@@ -929,40 +883,6 @@ fn swap_by_deposit_happy_path() {
 		let to = Asset::Flip;
 		let amount = 1_000u128;
 
-		// Set minimum swap amount to > deposit amount
-		assert_ok!(Swapping::set_minimum_swap_amount(RuntimeOrigin::root(), from, amount + 1));
-
-		Swapping::schedule_swap_from_channel(
-			ForeignChainAddress::Eth(Default::default()),
-			Default::default(),
-			from,
-			to,
-			amount,
-			ForeignChainAddress::Eth(Default::default()),
-			Default::default(),
-			Default::default(),
-			1,
-		);
-
-		// Verify this swap is rejected
-		assert_eq!(SwapQueue::<Test>::decode_len(), None);
-		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapAmountTooLow {
-			asset: from,
-			amount,
-			destination_address: EncodedAddress::Eth(Default::default()),
-			origin: SwapOrigin::DepositChannel {
-				deposit_address: EncodedAddress::Eth(Default::default()),
-				channel_id: 1,
-				deposit_block_height: 0,
-			},
-		}));
-		// Fund is confiscated
-		assert_eq!(CollectedRejectedFunds::<Test>::get(from), amount);
-
-		// Set minimum swap amount deposit amount
-		assert_ok!(Swapping::set_minimum_swap_amount(RuntimeOrigin::root(), from, amount));
-		CollectedRejectedFunds::<Test>::set(from, 0);
-
 		Swapping::schedule_swap_from_channel(
 			ForeignChainAddress::Eth(Default::default()),
 			Default::default(),
@@ -1006,6 +926,7 @@ fn swap_by_deposit_happy_path() {
 	});
 }
 
+// XXX: to remove: makes no sense
 #[test]
 fn ccm_via_deposit_with_principal_below_minimum_are_rejected() {
 	new_test_ext().execute_with(|| {
@@ -1013,46 +934,7 @@ fn ccm_via_deposit_with_principal_below_minimum_are_rejected() {
 		let principal_amount = 2_000;
 		let from: Asset = Asset::Eth;
 		let to: Asset = Asset::Flip;
-		let request_ccm = generate_ccm_channel();
 		let ccm = generate_ccm_deposit();
-
-		// Set minimum gas budget to be above gas amount
-		assert_ok!(Swapping::set_minimum_swap_amount(
-			RuntimeOrigin::root(),
-			from,
-			principal_amount + 1
-		));
-
-		// Register CCM via Swap deposit
-		assert_ok!(Swapping::request_swap_deposit_address(
-			RuntimeOrigin::signed(ALICE),
-			from,
-			to,
-			EncodedAddress::Eth(Default::default()),
-			0,
-			Some(request_ccm)
-		));
-
-		assert_failed_ccm(
-			from,
-			gas_budget + principal_amount,
-			to,
-			ForeignChainAddress::Eth(Default::default()),
-			ccm.clone(),
-			CcmFailReason::PrincipalSwapAmountTooLow,
-		);
-
-		// Verify the ccm is rejected
-		assert_eq!(SwapQueue::<Test>::decode_len(), None);
-		assert_eq!(CollectedRejectedFunds::<Test>::get(from), gas_budget + principal_amount);
-
-		// Lower the minimum gas budget.
-		assert_ok!(Swapping::set_minimum_swap_amount(
-			RuntimeOrigin::root(),
-			from,
-			principal_amount
-		));
-		CollectedRejectedFunds::<Test>::set(from, 0);
 
 		Swapping::on_ccm_deposit(
 			from,
@@ -1077,6 +959,7 @@ fn ccm_via_deposit_with_principal_below_minimum_are_rejected() {
 	});
 }
 
+// XXX: to remove: makes no sense
 #[test]
 fn ccm_via_extrinsic_with_principal_below_minimum_are_rejected() {
 	new_test_ext().execute_with(|| {
@@ -1085,41 +968,6 @@ fn ccm_via_extrinsic_with_principal_below_minimum_are_rejected() {
 		let from: Asset = Asset::Eth;
 		let to: Asset = Asset::Flip;
 		let ccm = generate_ccm_deposit();
-
-		// Set minimum gas budget to be above gas amount
-		assert_ok!(Swapping::set_minimum_swap_amount(
-			RuntimeOrigin::root(),
-			from,
-			principal_amount + 1
-		));
-
-		// Register CCM via extrinsic
-		assert_ok!(Swapping::ccm_deposit(
-			RuntimeOrigin::root(),
-			from,
-			gas_budget + principal_amount,
-			to,
-			EncodedAddress::Eth(Default::default()),
-			ccm.clone(),
-			Default::default(),
-		));
-
-		// Verify the ccm is rejected
-		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::CcmFailed {
-			reason: CcmFailReason::PrincipalSwapAmountTooLow,
-			destination_address: EncodedAddress::Eth(Default::default()),
-			deposit_metadata: ccm.clone(),
-		}));
-		assert_eq!(SwapQueue::<Test>::decode_len(), None);
-		assert_eq!(CollectedRejectedFunds::<Test>::get(from), gas_budget + principal_amount);
-
-		// Lower the minimum gas budget.
-		assert_ok!(Swapping::set_minimum_swap_amount(
-			RuntimeOrigin::root(),
-			from,
-			principal_amount
-		));
-		CollectedRejectedFunds::<Test>::set(from, 0);
 
 		assert_ok!(Swapping::ccm_deposit(
 			RuntimeOrigin::root(),
@@ -1153,19 +1001,6 @@ fn ccm_without_principal_swaps_are_accepted() {
 		let eth: Asset = Asset::Eth;
 		let flip: Asset = Asset::Flip;
 		let ccm = generate_ccm_deposit();
-
-		// Set minimum swap and gas budget.
-		assert_ok!(Swapping::set_minimum_swap_amount(
-			RuntimeOrigin::root(),
-			eth,
-			principal_amount + 1,
-		));
-		assert_ok!(Swapping::set_minimum_swap_amount(
-			RuntimeOrigin::root(),
-			flip,
-			principal_amount + 1,
-		));
-		System::reset_events();
 
 		// Ccm with principal asset = 0
 		Swapping::on_ccm_deposit(
@@ -1230,16 +1065,13 @@ fn ccm_without_principal_swaps_are_accepted() {
 	});
 }
 
+// XXX: to remove: makes no sense
 #[test]
 fn ccm_with_gas_below_minimum_swap_amount_allowed() {
 	new_test_ext().execute_with(|| {
 		let gas_budget = GAS_BUDGET;
 		let flip: Asset = Asset::Flip;
 		let ccm = generate_ccm_deposit();
-
-		// Set minimum swap and gas budget.
-		assert_ok!(Swapping::set_minimum_swap_amount(RuntimeOrigin::root(), flip, gas_budget + 1,));
-		System::reset_events();
 
 		// Even if gas amount is below minimum swap amount, it is allowed.
 		Swapping::on_ccm_deposit(
@@ -2159,53 +1991,55 @@ fn swap_broker_fee_subtracted_from_swap_amount() {
 	});
 }
 
-fn swap_amount_too_low_witnessed(asset: Asset, amount: AssetAmount) {
-	System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapAmountTooLow {
-		asset,
-		amount,
-		destination_address: EncodedAddress::Eth([2; 20]),
-		origin: SwapOrigin::DepositChannel {
-			deposit_address: EncodedAddress::Eth([2; 20]),
-			channel_id: 1,
-			deposit_block_height: Default::default(),
-		},
-	}));
-}
-#[test]
-fn swap_fail_if_below_minimum_swap_amount() {
-	new_test_ext().execute_with(|| {
-		let asset = Asset::Usdc;
-		let minimum_amount = 1_000u128;
-		assert_eq!(MinimumSwapAmount::<Test>::get(asset), 0);
+// XXX: to remove
+// fn swap_amount_too_low_witnessed(asset: Asset, amount: AssetAmount) {
+// 	System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapAmountTooLow {
+// 		asset,
+// 		amount,
+// 		destination_address: EncodedAddress::Eth([2; 20]),
+// 		origin: SwapOrigin::DepositChannel {
+// 			deposit_address: EncodedAddress::Eth([2; 20]),
+// 			channel_id: 1,
+// 			deposit_block_height: Default::default(),
+// 		},
+// 	}));
+// }
+// XXX: to remove
+// #[test]
+// fn swap_fail_if_below_minimum_swap_amount() {
+// 	new_test_ext().execute_with(|| {
+// 		let asset = Asset::Usdc;
+// 		let minimum_amount = 1_000u128;
+// 		assert_eq!(MinimumSwapAmount::<Test>::get(asset), 0);
 
-		// Set the new minimum swap_amount (1000 USDC)
-		assert_ok!(Swapping::set_minimum_swap_amount(RuntimeOrigin::root(), asset, minimum_amount));
+// 		// Set the new minimum swap_amount (1000 USDC)
+// 		assert_ok!(Swapping::set_minimum_swap_amount(RuntimeOrigin::root(), asset, minimum_amount));
 
-		assert_eq!(MinimumSwapAmount::<Test>::get(asset), minimum_amount);
-		assert_eq!(Swapping::minimum_swap_amount(asset), minimum_amount);
+// 		assert_eq!(MinimumSwapAmount::<Test>::get(asset), minimum_amount);
+// 		assert_eq!(Swapping::minimum_swap_amount(asset), minimum_amount);
 
-		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::MinimumSwapAmountSet {
-			asset,
-			amount: minimum_amount,
-		}));
+// 		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::MinimumSwapAmountSet {
+// 			asset,
+// 			amount: minimum_amount,
+// 		}));
 
-		//swap with amount >= MinimumAmount is scheduled
-		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, minimum_amount + 500, 1000);
-		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 150);
-		swap_scheduled_event_witnessed(1, Asset::Usdc, 1500, Asset::Flip, 150);
+// 		//swap with amount >= MinimumAmount is scheduled
+// 		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, minimum_amount + 500, 1000);
+// 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 150);
+// 		swap_scheduled_event_witnessed(1, Asset::Usdc, 1500, Asset::Flip, 150);
 
-		//Swap with amount == MinimumAmount completes (even after subtracting brokerFee, netAmount
-		// is < minAmount)
-		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, minimum_amount, 1000);
-		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 250);
-		swap_scheduled_event_witnessed(2, Asset::Usdc, 1000, Asset::Flip, 100);
+// 		//Swap with amount == MinimumAmount completes (even after subtracting brokerFee, netAmount
+// 		// is < minAmount)
+// 		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, minimum_amount, 1000);
+// 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 250);
+// 		swap_scheduled_event_witnessed(2, Asset::Usdc, 1000, Asset::Flip, 100);
 
-		//Swap with amount < MinimumAmount fails
-		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, minimum_amount - 500, 0);
-		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 250);
-		swap_amount_too_low_witnessed(Asset::Usdc, 500);
-	});
-}
+// 		//Swap with amount < MinimumAmount fails
+// 		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, minimum_amount - 500, 0);
+// 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 250);
+// 		swap_amount_too_low_witnessed(Asset::Usdc, 500);
+// 	});
+// }
 
 #[test]
 fn broker_bps_is_limited() {

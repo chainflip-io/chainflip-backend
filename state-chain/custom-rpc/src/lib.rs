@@ -266,7 +266,6 @@ pub struct FundingEnvironment {
 	pub minimum_funding_amount: NumberOrHex,
 }
 
-
 #[derive(Serialize, Deserialize)]
 pub struct SwappingEnvironment {
 	maximum_swap_amounts: HashMap<ForeignChain, HashMap<Asset, Option<NumberOrHex>>>,
