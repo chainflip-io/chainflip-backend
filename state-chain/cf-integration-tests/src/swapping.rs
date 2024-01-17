@@ -28,8 +28,8 @@ use frame_support::{
 	traits::{OnFinalize, OnIdle, OnNewAccount},
 };
 use pallet_cf_broadcast::{
-	AwaitingBroadcast, BroadcastIdCounter, BroadcastWithNominee, RequestFailureCallbacks,
-	RequestSuccessCallbacks, ThresholdSignatureData,
+	AwaitingBroadcast, BroadcastIdCounter, RequestFailureCallbacks, RequestSuccessCallbacks,
+	ThresholdSignatureData,
 };
 use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall};
 use pallet_cf_pools::{OrderId, RangeOrderSize};
@@ -746,10 +746,8 @@ fn can_resign_failed_ccm() {
 				fund_authorities_and_join_auction(MAX_AUTHORITIES);
 
 			testnet.move_to_the_next_epoch();
-			let tx_out_id = AwaitingBroadcast::<Runtime, Instance1>::get(1)
-				.unwrap()
-				.broadcast_data
-				.transaction_out_id;
+			let tx_out_id =
+				AwaitingBroadcast::<Runtime, Instance1>::get(1).unwrap().transaction_out_id;
 
 			for node in Validator::current_authorities() {
 				// Broadcast success for id 1, which is the rotation transaction.
@@ -799,18 +797,18 @@ fn can_resign_failed_ccm() {
 
 			// Fail the broadcast
 			for _ in Validator::current_authorities() {
-				let BroadcastWithNominee { broadcast_data: _attempt, nominee } =
-					AwaitingBroadcast::<Runtime, Instance1>::get(broadcast_id).unwrap_or_else(
-						|| {
-							panic!(
-								"Failed to get the transaction signing attempt for {:?}.",
-								broadcast_id,
-							)
-						},
-					);
+				let nominee = AwaitingBroadcast::<Runtime, Instance1>::get(broadcast_id)
+					.unwrap_or_else(|| {
+						panic!(
+							"Failed to get the transaction signing attempt for {:?}.",
+							broadcast_id,
+						)
+					})
+					.nominee
+					.unwrap();
 
 				assert_ok!(EthereumBroadcaster::transaction_failed(
-					RuntimeOrigin::signed(nominee.unwrap()),
+					RuntimeOrigin::signed(nominee),
 					broadcast_id,
 				));
 				testnet.move_forward_blocks(

@@ -22,13 +22,11 @@ fn insert_transaction_broadcast_attempt<T: pallet::Config<I>, I: 'static>(
 ) {
 	AwaitingBroadcast::<T, I>::insert(
 		broadcast_id,
-		BroadcastWithNominee {
-			broadcast_data: BroadcastData::<T, I> {
-				broadcast_id,
-				transaction_payload: TransactionFor::<T, I>::benchmark_value(),
-				threshold_signature_payload: PayloadFor::<T, I>::benchmark_value(),
-				transaction_out_id: TransactionOutIdFor::<T, I>::benchmark_value(),
-			},
+		BroadcastData::<T, I> {
+			broadcast_id,
+			transaction_payload: TransactionFor::<T, I>::benchmark_value(),
+			threshold_signature_payload: PayloadFor::<T, I>::benchmark_value(),
+			transaction_out_id: TransactionOutIdFor::<T, I>::benchmark_value(),
 			nominee: Some(nominee),
 		},
 	);
@@ -58,12 +56,20 @@ fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T
 // TODO: check if we really reach the expensive parts of the code.
 benchmarks_instance_pallet! {
 	on_initialize {
+		let caller: T::AccountId = whitelisted_caller();
 		// We add one because one is added at genesis
 		let timeout_block = frame_system::Pallet::<T>::block_number() + T::BroadcastTimeout::get() + 1_u32.into();
 		// Complexity parameter for expiry queue.
 		let x in 1 .. 1000u32;
 		for i in 1 .. x {
-			Timeouts::<T, I>::append(timeout_block, i);
+			AwaitingBroadcast::<T, I>::insert(i, BroadcastData::<T, I> {
+				broadcast_id: i,
+				transaction_payload: TransactionFor::<T, I>::benchmark_value(),
+				threshold_signature_payload: PayloadFor::<T, I>::benchmark_value(),
+				transaction_out_id: TransactionOutIdFor::<T, I>::benchmark_value(),
+				nominee: None,
+			});
+			Timeouts::<T, I>::mutate(timeout_block, |timeouts| timeouts.insert((i, caller.clone().into())));
 			ThresholdSignatureData::<T, I>::insert(i, (ApiCallFor::<T, I>::benchmark_value(), ThresholdSignatureFor::<T, I>::benchmark_value()))
 		}
 		let valid_key = AggKeyFor::<T, I>::benchmark_value();
@@ -107,13 +113,11 @@ benchmarks_instance_pallet! {
 			BenchmarkValue::benchmark_value(),
 		);
 		ThresholdSignatureData::<T, I>::insert(broadcast_id, (signed_api_call, ThresholdSignatureFor::<T, I>::benchmark_value()));
-		AwaitingBroadcast::<T, I>::insert(broadcast_id, BroadcastWithNominee{
-			broadcast_data: BroadcastData::<T, I> {
-				broadcast_id,
-				transaction_payload: TransactionFor::<T, I>::benchmark_value(),
-				threshold_signature_payload: PayloadFor::<T, I>::benchmark_value(),
-				transaction_out_id: TransactionOutIdFor::<T, I>::benchmark_value(),
-			},
+		AwaitingBroadcast::<T, I>::insert(broadcast_id, BroadcastData::<T, I> {
+			broadcast_id,
+			transaction_payload: TransactionFor::<T, I>::benchmark_value(),
+			threshold_signature_payload: PayloadFor::<T, I>::benchmark_value(),
+			transaction_out_id: TransactionOutIdFor::<T, I>::benchmark_value(),
 			nominee: None,
 		});
 	} : {
