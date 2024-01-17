@@ -1991,56 +1991,6 @@ fn swap_broker_fee_subtracted_from_swap_amount() {
 	});
 }
 
-// XXX: to remove
-// fn swap_amount_too_low_witnessed(asset: Asset, amount: AssetAmount) {
-// 	System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapAmountTooLow {
-// 		asset,
-// 		amount,
-// 		destination_address: EncodedAddress::Eth([2; 20]),
-// 		origin: SwapOrigin::DepositChannel {
-// 			deposit_address: EncodedAddress::Eth([2; 20]),
-// 			channel_id: 1,
-// 			deposit_block_height: Default::default(),
-// 		},
-// 	}));
-// }
-// XXX: to remove
-// #[test]
-// fn swap_fail_if_below_minimum_swap_amount() {
-// 	new_test_ext().execute_with(|| {
-// 		let asset = Asset::Usdc;
-// 		let minimum_amount = 1_000u128;
-// 		assert_eq!(MinimumSwapAmount::<Test>::get(asset), 0);
-
-// 		// Set the new minimum swap_amount (1000 USDC)
-// 		assert_ok!(Swapping::set_minimum_swap_amount(RuntimeOrigin::root(), asset, minimum_amount));
-
-// 		assert_eq!(MinimumSwapAmount::<Test>::get(asset), minimum_amount);
-// 		assert_eq!(Swapping::minimum_swap_amount(asset), minimum_amount);
-
-// 		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::MinimumSwapAmountSet {
-// 			asset,
-// 			amount: minimum_amount,
-// 		}));
-
-// 		//swap with amount >= MinimumAmount is scheduled
-// 		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, minimum_amount + 500, 1000);
-// 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 150);
-// 		swap_scheduled_event_witnessed(1, Asset::Usdc, 1500, Asset::Flip, 150);
-
-// 		//Swap with amount == MinimumAmount completes (even after subtracting brokerFee, netAmount
-// 		// is < minAmount)
-// 		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, minimum_amount, 1000);
-// 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 250);
-// 		swap_scheduled_event_witnessed(2, Asset::Usdc, 1000, Asset::Flip, 100);
-
-// 		//Swap with amount < MinimumAmount fails
-// 		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, minimum_amount - 500, 0);
-// 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 250);
-// 		swap_amount_too_low_witnessed(Asset::Usdc, 500);
-// 	});
-// }
-
 #[test]
 fn broker_bps_is_limited() {
 	new_test_ext().execute_with(|| {

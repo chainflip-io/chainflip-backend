@@ -70,15 +70,6 @@ pub const BACKUP_NODE_EMISSION_INFLATION_PERBILL: u32 = 0;
 
 pub const SUPPLY_UPDATE_INTERVAL: u32 = 30 * 24 * HOURS;
 
-// // XXX: to remove
-// pub const MINIMUM_SWAP_AMOUNTS: &[(Asset, AssetAmount)] = &[
-// 	(Asset::Eth, 0u128),
-// 	(Asset::Flip, 0u128),
-// 	(Asset::Usdc, 0u128),
-// 	(Asset::Dot, 0u128),
-// 	(Asset::Btc, 0u128),
-// ];
-
 pub const MIN_FUNDING: FlipBalance = 6 * FLIPPERINOS_PER_FLIP;
 pub const GENESIS_AUTHORITY_FUNDING: FlipBalance = 1_000 * FLIPPERINOS_PER_FLIP;
 pub const REDEMPTION_TAX: FlipBalance = 5 * FLIPPERINOS_PER_FLIP;

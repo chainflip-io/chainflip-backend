@@ -110,11 +110,6 @@ impl WeightInfo for MockWeightInfo {
 		Weight::from_parts(100, 0)
 	}
 
-	// XXX: to remove
-	// fn set_minimum_swap_amount() -> Weight {
-	// 	Weight::from_parts(100, 0)
-	// }
-
 	fn set_maximum_swap_amount() -> Weight {
 		Weight::from_parts(100, 0)
 	}

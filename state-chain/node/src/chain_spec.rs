@@ -265,8 +265,6 @@ pub fn inner_cf_development_config(
 				devnet::PENALTIES.to_vec(),
 				devnet::KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
 				devnet::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
-				// // XXX: to remove
-				// devnet::MINIMUM_SWAP_AMOUNTS.to_vec(),
 				dot_runtime_version,
 				// Bitcoin block times on localnets are much faster, so we account for that here.
 				devnet::BITCOIN_EXPIRY_BLOCKS,
@@ -397,8 +395,6 @@ macro_rules! network_spec {
 							PENALTIES.to_vec(),
 							KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
 							THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
-							// // XXX: to remove
-							// MINIMUM_SWAP_AMOUNTS.to_vec(),
 							dot_runtime_version,
 							BITCOIN_EXPIRY_BLOCKS,
 							ETHEREUM_EXPIRY_BLOCKS,
