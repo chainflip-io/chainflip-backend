@@ -15,31 +15,7 @@ use serde::Serialize;
 use utilities::rpc::NumberOrHex;
 
 #[derive(Serialize)]
-pub struct WitnessAsset {
-	pub chain: ForeignChain,
-	pub asset: Asset,
-}
-
-impl From<cf_chains::assets::eth::Asset> for WitnessAsset {
-	fn from(asset: cf_chains::assets::eth::Asset) -> Self {
-		Self { chain: ForeignChain::Ethereum, asset: asset.into() }
-	}
-}
-
-impl From<cf_chains::assets::dot::Asset> for WitnessAsset {
-	fn from(asset: cf_chains::assets::dot::Asset) -> Self {
-		Self { chain: ForeignChain::Polkadot, asset: asset.into() }
-	}
-}
-
-impl From<cf_chains::assets::btc::Asset> for WitnessAsset {
-	fn from(asset: cf_chains::assets::btc::Asset) -> Self {
-		Self { chain: ForeignChain::Bitcoin, asset: asset.into() }
-	}
-}
-
-#[derive(Serialize)]
-#[serde(tag = "deposit_chain")]
+#[serde(untagged)]
 enum TransactionId {
 	Bitcoin { hash: String },
 	Ethereum { signature: SchnorrVerificationComponents },
@@ -47,14 +23,14 @@ enum TransactionId {
 }
 
 #[derive(Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(untagged)]
 enum WitnessInformation {
 	Deposit {
 		deposit_chain_block_height: <AnyChain as Chain>::ChainBlockNumber,
 		#[serde(skip_serializing)]
 		deposit_address: String,
 		amount: NumberOrHex,
-		asset: WitnessAsset,
+		asset: Asset,
 	},
 	Broadcast {
 		#[serde(skip_serializing)]
@@ -66,7 +42,7 @@ enum WitnessInformation {
 impl WitnessInformation {
 	fn to_foreign_chain(&self) -> ForeignChain {
 		match self {
-			Self::Deposit { asset, .. } => asset.chain,
+			Self::Deposit { asset, .. } => (*asset).into(),
 			Self::Broadcast { tx_out_id, .. } => match tx_out_id {
 				TransactionId::Bitcoin { .. } => ForeignChain::Bitcoin,
 				TransactionId::Ethereum { .. } => ForeignChain::Ethereum,

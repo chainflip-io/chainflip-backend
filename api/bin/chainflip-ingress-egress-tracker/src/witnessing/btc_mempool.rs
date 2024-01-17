@@ -1,5 +1,5 @@
 use crate::{Storable, Store};
-use bitcoin::{Amount, BlockHash, Network, ScriptBuf, Transaction, Txid};
+use bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 use cf_chains::btc::BitcoinNetwork;
 use cf_primitives::ForeignChain;
 use chainflip_engine::{
@@ -15,19 +15,30 @@ use std::{
 use tracing::{error, info};
 use utilities::task_scope;
 
-#[derive(Clone, Serialize)]
+#[derive(Clone)]
 pub struct QueryResult {
 	confirmations: u32,
-	#[serde(skip_serializing)]
 	destination: String,
-	value: f64,
+	value: u64,
 	tx_hash: Txid,
+}
+
+impl Serialize for QueryResult {
+	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		use serde::ser::SerializeMap;
+
+		let mut map = serializer.serialize_map(Some(3))?;
+		map.serialize_entry("confirmations", &self.confirmations)?;
+		map.serialize_entry("tx_hash", &self.tx_hash)?;
+		map.serialize_entry("value", &format!("0x{:x}", self.value))?;
+		map.end()
+	}
 }
 
 impl Storable for QueryResult {
 	fn get_key(&self) -> String {
 		let chain = ForeignChain::Bitcoin.to_string();
-		format!("confirmations:{chain}:{}", self.destination)
+		format!("mempool:{chain}:{}", self.destination)
 	}
 
 	fn get_expiry_duration(&self) -> Duration {
@@ -122,7 +133,7 @@ async fn update_cache<T: BtcRpcApi>(
 					QueryResult {
 						destination: addr,
 						confirmations: 0,
-						value: Amount::from_sat(txout.value).to_btc(),
+						value: txout.value,
 						tx_hash: txid,
 					},
 				);
@@ -151,7 +162,7 @@ async fn update_cache<T: BtcRpcApi>(
 							QueryResult {
 								destination: addr,
 								confirmations,
-								value: txout.value.to_btc(),
+								value: txout.value.to_sat(),
 								tx_hash,
 							},
 						);
@@ -207,9 +218,8 @@ pub fn start<S: Store>(
 
 #[cfg(test)]
 mod tests {
+	use super::*;
 	use anyhow::anyhow;
-	use std::collections::BTreeMap;
-
 	use bitcoin::{
 		absolute::{Height, LockTime},
 		address::{self},
@@ -217,13 +227,12 @@ mod tests {
 		hash_types::TxMerkleNode,
 		hashes::Hash,
 		secp256k1::rand::{self, Rng},
-		TxOut,
+		Amount, TxOut,
 	};
 	use chainflip_engine::btc::rpc::{
 		BlockHeader, Difficulty, VerboseBlock, VerboseTransaction, VerboseTxOut,
 	};
-
-	use super::*;
+	use std::collections::BTreeMap;
 
 	#[derive(Clone)]
 	struct MockBtcRpc {
@@ -514,6 +523,6 @@ mod tests {
 		let cache: Cache = Default::default();
 		let cache = update_cache(&btc, cache.clone(), Network::Bitcoin).await.unwrap();
 		assert_eq!(cache.transactions.get(&address1).unwrap().confirmations, 3);
-		assert_eq!(cache.transactions.get(&address1).unwrap().value, tx_value.to_btc());
+		assert_eq!(cache.transactions.get(&address1).unwrap().value, tx_value.to_sat());
 	}
 }
