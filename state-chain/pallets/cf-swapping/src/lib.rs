@@ -164,8 +164,6 @@ pub struct CcmSwapAmounts {
 pub enum CcmFailReason {
 	UnsupportedForTargetChain,
 	InsufficientDepositAmount,
-	// #[deprecated()]
-	// PrincipalSwapAmountTooLow,
 }
 
 impl_pallet_safe_mode! {
@@ -239,13 +237,6 @@ pub mod pallet {
 	/// Tracks the outputs of Ccm swaps.
 	#[pallet::storage]
 	pub(crate) type CcmOutputs<T: Config> = StorageMap<_, Twox64Concat, u64, CcmSwapOutput>;
-
-	// /// Minimum swap amount for each asset.
-	// #[pallet::storage]
-	// #[pallet::getter(fn minimum_swap_amount)]
-	// #[deprecated()]
-	// pub type MinimumSwapAmount<T: Config> =
-	// 	StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
 	/// Fund accrued from rejected swap and CCM calls.
 	#[pallet::storage]
@@ -323,18 +314,6 @@ pub mod pallet {
 			destination_address: EncodedAddress,
 			deposit_metadata: CcmDepositMetadata,
 		},
-		// #[deprecated()]
-		// MinimumSwapAmountSet {
-		// 	asset: Asset,
-		// 	amount: AssetAmount,
-		// },
-		// #[deprecated()]
-		// SwapAmountTooLow {
-		// 	asset: Asset,
-		// 	amount: AssetAmount,
-		// 	destination_address: EncodedAddress,
-		// 	origin: SwapOrigin,
-		// },
 		CcmFailed {
 			reason: CcmFailReason,
 			destination_address: EncodedAddress,
@@ -367,9 +346,6 @@ pub mod pallet {
 		/// The provided address could not be decoded.
 		InvalidDestinationAddress,
 
-		// /// The swap amount is below the minimum required.
-		// #[deprecated()]
-		// SwapAmountTooLow,
 		/// Withdrawals are disabled due to Safe Mode.
 		WithdrawalsDisabled,
 		/// Swap deposits are disabled due to Safe Mode.
@@ -670,28 +646,6 @@ pub mod pallet {
 
 			Ok(())
 		}
-
-		// /// Sets the Minimum swap amount allowed for an asset.
-		// ///
-		// /// Requires Governance.
-		// ///
-		// /// ## Events
-		// ///
-		// /// - [On update](Event::MinimumSwapAmountSet)
-		// #[pallet::call_index(6)]
-		// #[pallet::weight(T::WeightInfo::set_minimum_swap_amount())]
-		// #[deprecated()]
-		// pub fn set_minimum_swap_amount(
-		// 	origin: OriginFor<T>,
-		// 	asset: Asset,
-		// 	amount: AssetAmount,
-		// ) -> DispatchResult {
-		// 	T::EnsureGovernance::ensure_origin(origin)?;
-		// 	MinimumSwapAmount::<T>::insert(asset, amount);
-
-		// 	Self::deposit_event(Event::<T>::MinimumSwapAmountSet { asset, amount });
-		// 	Ok(())
-		// }
 
 		/// Sets the Maximum amount allowed in a single swap for an asset.
 		///

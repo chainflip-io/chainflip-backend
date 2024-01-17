@@ -30,7 +30,7 @@ use state_chain_runtime::{
 	EthereumVaultConfig, FlipBalance, FlipConfig, FundingConfig, GovernanceConfig, GrandpaConfig,
 	PolkadotChainTrackingConfig, PolkadotIngressEgressConfig, PolkadotThresholdSignerConfig,
 	PolkadotVaultConfig, ReputationConfig, RuntimeGenesisConfig, SessionConfig, SetSizeParameters,
-	Signature, SwappingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
+	Signature, SystemConfig, ValidatorConfig, WASM_BINARY,
 };
 
 use std::{
@@ -670,7 +670,7 @@ fn testnet_genesis(
 		},
 		transaction_payment: Default::default(),
 		liquidity_pools: Default::default(),
-		swapping: SwappingConfig { _phantom: PhantomData },
+		swapping: Default::default(),
 		// Channel lifetimes are set to ~2 hours at average block times.
 		bitcoin_ingress_egress: BitcoinIngressEgressConfig {
 			deposit_channel_lifetime: bitcoin_deposit_channel_lifetime.into(),
