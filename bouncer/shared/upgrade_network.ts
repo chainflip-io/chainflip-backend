@@ -5,7 +5,7 @@ import path from 'path';
 import { SemVerLevel, bumpReleaseVersion } from './bump_release_version';
 import { simpleRuntimeUpgrade } from './simple_runtime_upgrade';
 import { compareSemVer, sleep } from './utils';
-import { bumpSpecVersionAgainstNetwork } from './utils/bump_spec_version';
+import { bumpSpecVersionAgainstNetwork } from './utils/spec_version';
 import { compileBinaries } from './utils/compile_binaries';
 import { submitRuntimeUpgradeWithRestrictions } from './submit_runtime_upgrade';
 
