@@ -1,5 +1,3 @@
-use core::marker::PhantomData;
-
 use crate::{self as pallet_cf_swapping, PalletSafeMode, WeightInfo};
 use cf_chains::AnyChain;
 use cf_primitives::{Asset, AssetAmount};
