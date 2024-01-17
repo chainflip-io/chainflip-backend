@@ -1,7 +1,6 @@
 use crate::{
 	mock::*, pallet, ActiveBidder, BoundExecutorAddress, Error, EthereumAddress,
-	PendingRedemptions, PendingRedemptionsRestrictedBalance, RedemptionAmount, RedemptionTax,
-	RestrictedAddresses, RestrictedBalances,
+	PendingRedemptions, RedemptionAmount, RedemptionTax, RestrictedAddresses, RestrictedBalances,
 };
 use cf_primitives::FlipBalance;
 use cf_test_utilities::assert_event_sequence;
@@ -577,7 +576,6 @@ fn redemption_expiry_removes_redemption() {
 			RESTRICTED_ADDRESS,
 			Default::default()
 		));
-		assert!(PendingRedemptionsRestrictedBalance::<Test>::get(&ALICE).is_some());
 		assert_noop!(
 			Funding::redeem(
 				RuntimeOrigin::signed(ALICE),
@@ -596,14 +594,13 @@ fn redemption_expiry_removes_redemption() {
 		);
 
 		assert_ok!(Funding::redemption_expired(RuntimeOrigin::root(), ALICE, Default::default()));
-		assert!(PendingRedemptionsRestrictedBalance::<Test>::get(&ALICE).is_none());
 
 		// Tax was paid, rest is returned.
 		assert_eq!(Flip::total_balance_of(&ALICE), TOTAL_FUNDS - REDEMPTION_TAX);
-		// Restricted funds are restricted again, minus redemption tax.
+		// Restricted funds are restricted again.
 		assert_eq!(
 			*RestrictedBalances::<Test>::get(&ALICE).get(&RESTRICTED_ADDRESS).unwrap(),
-			RESTRICTED_AMOUNT - REDEMPTION_TAX
+			RESTRICTED_AMOUNT
 		);
 
 		assert_noop!(
@@ -650,14 +647,12 @@ fn redeem_more_than_restricted_balance_and_expire_redemption() {
 			RESTRICTED_ADDRESS,
 			Default::default()
 		));
-		assert!(PendingRedemptionsRestrictedBalance::<Test>::get(&ALICE).is_some());
 
 		// Restricted funds and total balance should have been reduced.
 		assert_eq!(Flip::total_balance_of(&ALICE), TOTAL_FUNDS - REDEMPTION_TAX - TO_REDEEM);
 		assert!(RestrictedBalances::<Test>::get(&ALICE).get(&RESTRICTED_ADDRESS).is_none());
 
 		assert_ok!(Funding::redemption_expired(RuntimeOrigin::root(), ALICE, Default::default()));
-		assert!(PendingRedemptionsRestrictedBalance::<Test>::get(&ALICE).is_none());
 		assert_eq!(
 			RestrictedBalances::<Test>::get(&ALICE).get(&RESTRICTED_ADDRESS),
 			Some(&RESTRICTED_AMOUNT)

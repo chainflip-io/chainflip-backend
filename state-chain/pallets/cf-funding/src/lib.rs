@@ -35,12 +35,23 @@ use frame_support::{
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use scale_info::TypeInfo;
-use sp_std::{cmp::max, collections::btree_map::BTreeMap, prelude::*};
+use sp_std::{
+	cmp::{max, min},
+	collections::btree_map::BTreeMap,
+	prelude::*,
+};
 #[derive(Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub enum Pending {
 	Pending,
 }
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+
+#[derive(Encode, Decode, PartialEq, Debug, TypeInfo)]
+pub struct PendingRedemptionInfo<FlipBalance> {
+	pub total: FlipBalance,
+	pub restricted: FlipBalance,
+	pub redeem_address: EthereumAddress,
+}
 
 impl_pallet_safe_mode!(PalletSafeMode; redeem_enabled, start_bidding_enabled, stop_bidding_enabled);
 
@@ -126,16 +137,9 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		AccountId<T>,
-		(FlipBalance<T>, EthereumAddress),
+		PendingRedemptionInfo<FlipBalance<T>>,
 		OptionQuery,
 	>;
-
-	/// The amount of FLIP that is restricted for an account during a redemption if we redeem to an
-	/// restricted address. We need this to recover the restricted balance in case the redemption
-	/// expires.
-	#[pallet::storage]
-	pub type PendingRedemptionsRestrictedBalance<T: Config> =
-		StorageMap<_, Blake2_128Concat, AccountId<T>, FlipBalance<T>, OptionQuery>;
 
 	/// The minimum amount a user can fund their account with, and therefore the minimum balance
 	/// they must have remaining after they redeem.
@@ -411,11 +415,12 @@ pub mod pallet {
 				Error::<T>::InsufficientBalance
 			);
 
+			let mut total_restricted_balance: FlipBalance<T> = T::Amount::zero();
+
 			// If necessary, update account restrictions.
 			if let Some(restricted_balance) = restricted_balances.get_mut(&address) {
-				// We need to keep track of the restricted balance in case the redemption expires.
-				PendingRedemptionsRestrictedBalance::<T>::insert(&account_id, *restricted_balance);
 				// Use the full debit amount here - fees are paid by restricted funds by default.
+				total_restricted_balance = *restricted_balance;
 				restricted_balance.saturating_reduce(debit_amount);
 				if restricted_balance.is_zero() {
 					restricted_balances.remove(&address);
@@ -452,7 +457,14 @@ pub mod pallet {
 					executor,
 				);
 
-				PendingRedemptions::<T>::insert(&account_id, (redeem_amount, address));
+				PendingRedemptions::<T>::insert(
+					&account_id,
+					PendingRedemptionInfo {
+						total: redeem_amount,
+						restricted: min(total_restricted_balance, debit_amount),
+						redeem_address: address,
+					},
+				);
 
 				Self::deposit_event(Event::RedemptionRequested {
 					account_id,
@@ -498,8 +510,6 @@ pub mod pallet {
 			let _ = PendingRedemptions::<T>::take(&account_id)
 				.ok_or(Error::<T>::NoPendingRedemption)?;
 
-			let _ = PendingRedemptionsRestrictedBalance::<T>::take(&account_id);
-
 			T::Flip::finalize_redemption(&account_id)
 				.expect("This should never return an error because we already ensured above that the pending redemption does indeed exist");
 
@@ -531,7 +541,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			let (amount, address) = PendingRedemptions::<T>::take(&account_id)
+			let pending_redemption = PendingRedemptions::<T>::take(&account_id)
 				.ok_or(Error::<T>::NoPendingRedemption)?;
 
 			T::Flip::revert_redemption(&account_id).expect(
@@ -539,21 +549,12 @@ pub mod pallet {
 			);
 
 			// If the address is still restricted, we update the restricted balances again.
-			if RestrictedAddresses::<T>::contains_key(address) {
-				let restricted_balance_for_address =
-					PendingRedemptionsRestrictedBalance::<T>::take(&account_id).unwrap_or_default();
-				// Ensure that the balance we set for the restricted address is not more than the
-				// balance we have recorded during redemption for the address.
-				let restricted_amount = if amount >= restricted_balance_for_address {
-					restricted_balance_for_address
-				} else {
-					amount
-				};
+			if RestrictedAddresses::<T>::contains_key(pending_redemption.redeem_address) {
 				RestrictedBalances::<T>::mutate(&account_id, |restricted_balances| {
 					restricted_balances
-						.entry(address)
-						.and_modify(|balance| *balance += restricted_amount)
-						.or_insert(restricted_amount);
+						.entry(pending_redemption.redeem_address)
+						.and_modify(|balance| *balance += pending_redemption.restricted)
+						.or_insert(pending_redemption.restricted);
 				});
 			}
 
