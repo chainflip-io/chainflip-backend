@@ -24,7 +24,7 @@ use cf_traits::{
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
-	pallet_prelude::DispatchResult,
+	pallet_prelude::{ensure, DispatchResult},
 	sp_runtime::traits::{One, Saturating},
 	traits::{Defensive, Get, OriginTrait, StorageVersion, UnfilteredDispatchable},
 	RuntimeDebug, Twox64Concat,
@@ -357,8 +357,7 @@ pub mod pallet {
 				for (broadcast_id, nominee) in expiries {
 					if pending_broadcasts.contains(&broadcast_id) {
 						Self::deposit_event(Event::<T, I>::BroadcastTimeout { broadcast_id });
-						if let Err(e) = Self::handle_broadcast_failure(broadcast_id, Some(nominee))
-						{
+						if let Err(e) = Self::handle_broadcast_failure(broadcast_id, nominee) {
 							log::warn!("Error when handling broadcast failure: Broadcast ID:{}, Error: {:?}", broadcast_id, e);
 						}
 					}
@@ -622,7 +621,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let reporter = T::AccountRoleRegistry::ensure_validator(origin.clone())?;
 
-			Self::handle_broadcast_failure(broadcast_id, Some(reporter.into()))?;
+			Self::handle_broadcast_failure(broadcast_id, reporter.into())?;
 			Ok(().into())
 		}
 	}
@@ -833,46 +832,34 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// The broadcast will then be retried.
 	fn handle_broadcast_failure(
 		broadcast_id: BroadcastId,
-		mut maybe_reporter: Option<T::ValidatorId>,
+		failed_broadcaster: T::ValidatorId,
 	) -> DispatchResult {
-		let broadcast = AwaitingBroadcast::<T, I>::get(broadcast_id)
-			.ok_or(Error::<T, I>::InvalidBroadcastId)?;
+		ensure!(
+			PendingBroadcasts::<T, I>::get().contains(&broadcast_id),
+			Error::<T, I>::InvalidBroadcastId
+		);
 
-		if maybe_reporter.is_none() {
-			maybe_reporter = broadcast.nominee;
-		}
-
-		if let Some(failed_broadcaster) = maybe_reporter {
-			if let Ok(attempt_count) =
-				FailedBroadcasters::<T, I>::try_mutate(broadcast_id, |failed_broadcasters| {
-					if failed_broadcasters.insert(failed_broadcaster.clone()) {
-						Ok(failed_broadcasters.len())
-					} else {
-						Err(())
-					}
-				}) {
-				// Abort the broadcast if all validators reported failure, Retry otherwise.
-				if attempt_count >= T::EpochInfo::current_authority_count() as usize {
-					Self::abort_broadcast(broadcast_id);
+		if let Ok(attempt_count) =
+			FailedBroadcasters::<T, I>::try_mutate(broadcast_id, |failed_broadcasters| {
+				if failed_broadcasters.insert(failed_broadcaster.clone()) {
+					Ok(failed_broadcasters.len())
 				} else {
-					Self::schedule_for_retry(broadcast_id);
+					Err(())
 				}
+			}) {
+			// Abort the broadcast if all validators reported failure, Retry otherwise.
+			if attempt_count >= T::EpochInfo::current_authority_count() as usize {
+				Self::abort_broadcast(broadcast_id);
 			} else {
-				// Do nothing since this failure has already been reported.
-				log::warn!(
-					"Broadcast failure by {:?} already recorded for Broadcast ID: {}",
-					failed_broadcaster,
-					broadcast_id
-				);
+				Self::schedule_for_retry(broadcast_id);
 			}
 		} else {
-			// This only happens is when no broadcaster is available when a broadcast is signed,
-			// but someone reported this as failed anyways, which should never happen.
+			// Do nothing since this failure has already been reported.
 			log::warn!(
-				"Broadcast reported as failed with no reporter and no nominee. Broadcast ID: {}",
+				"Broadcast failure by {:?} already recorded for Broadcast ID: {}",
+				failed_broadcaster,
 				broadcast_id
 			);
-			Self::schedule_for_retry(broadcast_id);
 		}
 
 		Ok(())
