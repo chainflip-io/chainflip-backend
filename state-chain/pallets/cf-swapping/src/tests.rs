@@ -926,73 +926,6 @@ fn swap_by_deposit_happy_path() {
 	});
 }
 
-// XXX: to remove: makes no sense
-#[test]
-fn ccm_via_deposit_with_principal_below_minimum_are_rejected() {
-	new_test_ext().execute_with(|| {
-		let gas_budget = GAS_BUDGET;
-		let principal_amount = 2_000;
-		let from: Asset = Asset::Eth;
-		let to: Asset = Asset::Flip;
-		let ccm = generate_ccm_deposit();
-
-		Swapping::on_ccm_deposit(
-			from,
-			gas_budget + principal_amount,
-			to,
-			ForeignChainAddress::Eth(Default::default()),
-			ccm.clone(),
-			SwapOrigin::Vault { tx_hash: Default::default() },
-		);
-
-		// Verify the CCM is processed successfully
-		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::CcmDepositReceived {
-			ccm_id: 1,
-			principal_swap_id: Some(1),
-			gas_swap_id: None,
-			deposit_amount: gas_budget + principal_amount,
-			destination_address: EncodedAddress::Eth(Default::default()),
-			deposit_metadata: ccm,
-		}));
-		assert_eq!(SwapQueue::<Test>::decode_len(), Some(1));
-		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0);
-	});
-}
-
-// XXX: to remove: makes no sense
-#[test]
-fn ccm_via_extrinsic_with_principal_below_minimum_are_rejected() {
-	new_test_ext().execute_with(|| {
-		let gas_budget = GAS_BUDGET;
-		let principal_amount = 2_000;
-		let from: Asset = Asset::Eth;
-		let to: Asset = Asset::Flip;
-		let ccm = generate_ccm_deposit();
-
-		assert_ok!(Swapping::ccm_deposit(
-			RuntimeOrigin::root(),
-			from,
-			gas_budget + principal_amount,
-			to,
-			EncodedAddress::Eth(Default::default()),
-			ccm.clone(),
-			Default::default(),
-		));
-
-		// Verify the CCM is processed successfully
-		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::CcmDepositReceived {
-			ccm_id: 1,
-			principal_swap_id: Some(1),
-			gas_swap_id: None,
-			deposit_amount: gas_budget + principal_amount,
-			destination_address: EncodedAddress::Eth(Default::default()),
-			deposit_metadata: ccm,
-		}));
-		assert_eq!(SwapQueue::<Test>::decode_len(), Some(1));
-		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0);
-	});
-}
-
 #[test]
 fn ccm_without_principal_swaps_are_accepted() {
 	new_test_ext().execute_with(|| {
@@ -1061,38 +994,6 @@ fn ccm_without_principal_swaps_are_accepted() {
 		);
 		// No funds are confiscated
 		assert_eq!(CollectedRejectedFunds::<Test>::get(eth), 0);
-		assert_eq!(CollectedRejectedFunds::<Test>::get(flip), 0);
-	});
-}
-
-// XXX: to remove: makes no sense
-#[test]
-fn ccm_with_gas_below_minimum_swap_amount_allowed() {
-	new_test_ext().execute_with(|| {
-		let gas_budget = GAS_BUDGET;
-		let flip: Asset = Asset::Flip;
-		let ccm = generate_ccm_deposit();
-
-		// Even if gas amount is below minimum swap amount, it is allowed.
-		Swapping::on_ccm_deposit(
-			flip,
-			gas_budget,
-			flip,
-			ForeignChainAddress::Eth(Default::default()),
-			ccm.clone(),
-			SwapOrigin::Vault { tx_hash: Default::default() },
-		);
-
-		// Verify the CCM is processed successfully
-		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::CcmDepositReceived {
-			ccm_id: 1,
-			principal_swap_id: None,
-			gas_swap_id: Some(1),
-			deposit_amount: gas_budget,
-			destination_address: EncodedAddress::Eth(Default::default()),
-			deposit_metadata: ccm,
-		}));
-		// No funds are confiscated
 		assert_eq!(CollectedRejectedFunds::<Test>::get(flip), 0);
 	});
 }
