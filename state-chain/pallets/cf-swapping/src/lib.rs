@@ -347,6 +347,10 @@ pub mod pallet {
 			total_amount: AssetAmount,
 			confiscated_amount: AssetAmount,
 		},
+		/// The swap has been executed, but has led to a zero egress amount.
+		EgressAmountZero {
+			swap_id: u64,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -450,6 +454,10 @@ pub mod pallet {
 										asset: swap.to,
 										amount: egress_amount,
 									});
+								} else {
+									Self::deposit_event(Event::<T>::EgressAmountZero {
+										swap_id: swap.swap_id,
+									})
 								},
 							SwapType::CcmPrincipal(ccm_id) => {
 								Self::handle_ccm_swap_result(

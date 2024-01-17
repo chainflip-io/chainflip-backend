@@ -2,11 +2,12 @@ mod btc;
 pub mod btc_mempool;
 mod dot;
 mod eth;
+pub mod state_chain;
 
 use std::{collections::HashMap, sync::Arc};
 
 use cf_chains::dot::PolkadotHash;
-use cf_primitives::chains::assets::eth::Asset;
+use cf_primitives::{chains::assets::eth::Asset, NetworkEnvironment};
 use chainflip_engine::{
 	state_chain_observer::{
 		self,
@@ -19,7 +20,7 @@ use chainflip_engine::{
 use sp_core::H160;
 use utilities::task_scope;
 
-use crate::DepositTrackerSettings;
+use crate::settings::DepositTrackerSettings;
 
 #[derive(Clone)]
 pub(super) struct EnvironmentParameters {
@@ -30,7 +31,7 @@ pub(super) struct EnvironmentParameters {
 	usdc_contract_address: H160,
 	supported_erc20_tokens: HashMap<H160, cf_primitives::Asset>,
 	dot_genesis_hash: PolkadotHash,
-	pub btc_network: cf_chains::btc::BitcoinNetwork,
+	pub chainflip_network: NetworkEnvironment,
 }
 
 async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> EnvironmentParameters {
@@ -82,13 +83,12 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 		.await
 		.expect(STATE_CHAIN_CONNECTION);
 
-	let btc_network = state_chain_client
+	let chainflip_network = state_chain_client
 		.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<state_chain_runtime::Runtime>>(
 			state_chain_client.latest_finalized_block().hash,
 		)
 		.await
-		.expect(STATE_CHAIN_CONNECTION)
-		.into();
+		.expect(STATE_CHAIN_CONNECTION);
 
 	EnvironmentParameters {
 		eth_chain_id,
@@ -98,7 +98,7 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 		eth_address_checker_address,
 		supported_erc20_tokens,
 		dot_genesis_hash,
-		btc_network,
+		chainflip_network,
 	}
 }
 

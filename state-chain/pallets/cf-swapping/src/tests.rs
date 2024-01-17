@@ -1624,12 +1624,14 @@ fn can_handle_swaps_with_zero_outputs() {
 					egress_amount: 0,
 					..
 				}),
+				RuntimeEvent::Swapping(Event::<Test>::EgressAmountZero { swap_id: 1 }),
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					swap_id: 2,
 					destination_asset: Asset::Eth,
 					egress_amount: 0,
 					..
 				}),
+				RuntimeEvent::Swapping(Event::<Test>::EgressAmountZero { swap_id: 2 }),
 			);
 
 			// Swaps are not egressed when output is 0.

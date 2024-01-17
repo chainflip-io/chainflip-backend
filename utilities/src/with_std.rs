@@ -76,8 +76,9 @@ macro_rules! assert_panics {
 #[macro_export]
 macro_rules! assert_future_panics {
 	($future:expr) => {
-		use futures::future::FutureExt;
-		match ::std::panic::AssertUnwindSafe($future).catch_unwind().await {
+		match ::futures::future::FutureExt::catch_unwind(::std::panic::AssertUnwindSafe($future))
+			.await
+		{
 			Ok(_result) => panic!("future didn't panic '{}'", stringify!($future),),
 			Err(panic) => panic,
 		}
