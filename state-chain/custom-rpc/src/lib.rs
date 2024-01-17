@@ -1306,17 +1306,18 @@ mod test {
 	fn test_environment_serialization() {
 		let env = RpcEnvironment {
 			swapping: SwappingEnvironment {
-				minimum_swap_amounts: HashMap::from([
-					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
-					(
-						ForeignChain::Ethereum,
-						HashMap::from([
-							(Asset::Flip, u64::MAX.into()),
-							(Asset::Usdc, (u64::MAX / 2 - 1).into()),
-							(Asset::Eth, 0u32.into()),
-						]),
-					),
-				]),
+				// // XXX: to remove
+				// minimum_swap_amounts: HashMap::from([
+				// 	(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
+				// 	(
+				// 		ForeignChain::Ethereum,
+				// 		HashMap::from([
+				// 			(Asset::Flip, u64::MAX.into()),
+				// 			(Asset::Usdc, (u64::MAX / 2 - 1).into()),
+				// 			(Asset::Eth, 0u32.into()),
+				// 		]),
+				// 	),
+				// ]),
 				maximum_swap_amounts: HashMap::from([
 					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, Some(0u32.into()))])),
 					(
