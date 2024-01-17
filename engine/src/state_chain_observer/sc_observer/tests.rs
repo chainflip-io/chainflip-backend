@@ -14,7 +14,7 @@ use cf_primitives::{AccountRole, GENESIS_EPOCH};
 use futures::FutureExt;
 use mockall::predicate::eq;
 use multisig::{eth::EvmCryptoScheme, ChainSigning, SignatureToThresholdSignature};
-use pallet_cf_cfe_event_emitter::{CfeEvent, TxBroadcastRequest};
+use pallet_cf_cfe_interface::{CfeEvent, TxBroadcastRequest};
 use sp_runtime::AccountId32;
 
 use sp_core::H256;
@@ -81,7 +81,7 @@ async fn only_encodes_and_signs_when_specified() {
 	use state_chain_runtime::Runtime;
 
 	state_chain_client
-		.expect_storage_value::<pallet_cf_cfe_event_emitter::CfeEvents<Runtime>>()
+		.expect_storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
 		.with(eq(block.hash))
 		.once()
 		.return_once(move |_| {

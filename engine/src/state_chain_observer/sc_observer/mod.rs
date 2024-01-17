@@ -10,9 +10,9 @@ use cf_chains::{
 use cf_primitives::{BlockNumber, CeremonyId, EpochIndex};
 use crypto_compat::CryptoCompat;
 use futures::{FutureExt, StreamExt};
-use pallet_cf_cfe_event_emitter::{ThresholdSignatureRequest, TxBroadcastRequest};
+use pallet_cf_cfe_interface::{ThresholdSignatureRequest, TxBroadcastRequest};
 
-type CfeEvent = pallet_cf_cfe_event_emitter::CfeEvent<Runtime>;
+type CfeEvent = pallet_cf_cfe_interface::CfeEvent<Runtime>;
 
 use sp_runtime::AccountId32;
 use state_chain_runtime::{
@@ -297,7 +297,7 @@ where
                     debug!("Processing SC block {} with block hash: {:#x}", current_block.number, current_block.hash);
 
                     match state_chain_client
-                        .storage_value::<pallet_cf_cfe_event_emitter::CfeEvents<Runtime>>(
+                        .storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>(
                             current_block.hash,
                         )
                         .await {

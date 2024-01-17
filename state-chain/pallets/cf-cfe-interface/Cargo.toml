@@ -1,8 +1,8 @@
 [package]
-name = 'pallet-cf-cfe-event-emitter'
+name = 'pallet-cf-cfe-interface'
 version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
-description = 'Pallet for emitting events comsumed by the CFE'
+description = 'Pallet for interfacing with the CFE'
 edition = '2021'
 homepage = 'https://chainflip.io'
 license = '<TODO>'

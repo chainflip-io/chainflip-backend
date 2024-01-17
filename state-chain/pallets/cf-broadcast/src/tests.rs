@@ -18,7 +18,7 @@ use cf_chains::{
 };
 use cf_traits::{
 	mocks::{
-		cfe_event_emitter_mock::{MockCfeEvent, MockCfeEventEmitter},
+		cfe_interface_mock::{MockCfeEvent, MockCfeInterface},
 		signer_nomination::MockNominator,
 		threshold_signer::MockThresholdSigner,
 	},
@@ -68,7 +68,7 @@ impl MockCfe {
 		}
 
 		// Process cfe events
-		let events = MockCfeEventEmitter::take_events();
+		let events = MockCfeInterface::take_events();
 		for event in events {
 			Self::process_cfe_event(event, scenario);
 		}

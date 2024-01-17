@@ -689,7 +689,7 @@ impl Network {
 				.map(|e| e.event)
 				.collect::<Vec<RuntimeEvent>>();
 
-			let cfe_events = state_chain_runtime::CfeEventEmitter::get_cfe_events();
+			let cfe_events = state_chain_runtime::CfeInterface::get_cfe_events();
 
 			for engine in self.engines.values_mut() {
 				engine.handle_state_chain_events(&events, &cfe_events);

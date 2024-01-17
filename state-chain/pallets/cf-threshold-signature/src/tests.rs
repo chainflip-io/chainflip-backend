@@ -7,7 +7,7 @@ use crate::{
 use cf_chains::mocks::{MockAggKey, MockEthereumChainCrypto};
 use cf_traits::{
 	mocks::{
-		cfe_event_emitter_mock::{MockCfeEvent, MockCfeEventEmitter},
+		cfe_interface_mock::{MockCfeEvent, MockCfeInterface},
 		key_provider::MockKeyProvider,
 		signer_nomination::MockNominator,
 	},
@@ -51,7 +51,7 @@ struct MockCfe {
 }
 
 fn run_cfes_on_sc_events(cfes: &[MockCfe]) {
-	let events = MockCfeEventEmitter::take_events();
+	let events = MockCfeInterface::take_events();
 	for event in events {
 		for cfe in cfes {
 			cfe.process_event(event.clone());

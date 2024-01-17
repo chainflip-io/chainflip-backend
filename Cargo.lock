@@ -1554,7 +1554,7 @@ dependencies = [
  "num-traits",
  "pallet-cf-account-roles",
  "pallet-cf-broadcast",
- "pallet-cf-cfe-event-emitter",
+ "pallet-cf-cfe-interface",
  "pallet-cf-chain-tracking",
  "pallet-cf-environment",
  "pallet-cf-flip",
@@ -7188,7 +7188,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-cf-cfe-event-emitter"
+name = "pallet-cf-cfe-interface"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
@@ -12001,7 +12001,7 @@ dependencies = [
  "pallet-authorship",
  "pallet-cf-account-roles",
  "pallet-cf-broadcast",
- "pallet-cf-cfe-event-emitter",
+ "pallet-cf-cfe-interface",
  "pallet-cf-chain-tracking",
  "pallet-cf-emissions",
  "pallet-cf-environment",
