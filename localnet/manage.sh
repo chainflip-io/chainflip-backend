@@ -176,7 +176,9 @@ destroy() {
   echo -n "💣 Destroying network..."
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down $additional_docker_compose_down_args >$DEBUG_OUTPUT 2>&1
   for pid in $(ps -ef | grep chainflip | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
+  for pid in $(ps -ef | grep solana | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
   rm -rf /tmp/chainflip
+  rm -rf /tmp/solana/
   echo "done"
 }
 
