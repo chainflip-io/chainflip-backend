@@ -2,9 +2,11 @@ mod btc;
 pub mod btc_mempool;
 mod dot;
 mod eth;
+pub mod state_chain;
 
-use std::{collections::HashMap, sync::Arc};
-
+use self::state_chain::handle_call;
+use crate::{settings::DepositTrackerSettings, store::RedisStore};
+use anyhow::anyhow;
 use cf_chains::dot::PolkadotHash;
 use cf_primitives::{chains::assets::eth::Asset, NetworkEnvironment};
 use chainflip_engine::{
@@ -17,9 +19,8 @@ use chainflip_engine::{
 	witness::common::epoch_source::EpochSource,
 };
 use sp_core::H160;
+use std::{collections::HashMap, ops::Deref};
 use utilities::task_scope;
-
-use crate::DepositTrackerSettings;
 
 #[derive(Clone)]
 pub(super) struct EnvironmentParameters {
@@ -104,8 +105,8 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 pub(super) async fn start(
 	scope: &task_scope::Scope<'_, anyhow::Error>,
 	settings: DepositTrackerSettings,
-	witness_sender: tokio::sync::broadcast::Sender<state_chain_runtime::RuntimeCall>,
-) -> anyhow::Result<(Arc<StateChainClient<()>>, EnvironmentParameters)> {
+	store: RedisStore,
+) -> anyhow::Result<EnvironmentParameters> {
 	let (state_chain_stream, unfinalized_chain_stream, state_chain_client) = {
 		state_chain_observer::client::StateChainClient::connect_without_account(
 			scope,
@@ -116,20 +117,22 @@ pub(super) async fn start(
 	};
 
 	let env_params = get_env_parameters(&state_chain_client).await;
+	let chainflip_network = env_params.chainflip_network;
 
 	let epoch_source =
 		EpochSource::builder(scope, state_chain_stream.clone(), state_chain_client.clone()).await;
 
 	let witness_call = {
-		let witness_sender = witness_sender.clone();
+		let state_chain_client = state_chain_client.clone();
 		move |call: state_chain_runtime::RuntimeCall, _epoch_index| {
-			let witness_sender = witness_sender.clone();
+			let mut store = store.clone();
+			let state_chain_client = state_chain_client.clone();
+
 			async move {
-				// Send may fail if there aren't any subscribers,
-				// but it is safe to ignore the error.
-				if let Ok(n) = witness_sender.send(call.clone()) {
-					tracing::info!("Broadcasting witnesser call {:?} to {} subscribers", call, n);
-				}
+				handle_call(call, &mut store, chainflip_network, state_chain_client.deref())
+					.await
+					.map_err(|err| anyhow!("failed to handle call: {err:?}"))
+					.unwrap()
 			}
 		}
 	};
@@ -167,5 +170,5 @@ pub(super) async fn start(
 	)
 	.await?;
 
-	Ok((state_chain_client, env_params))
+	Ok(env_params)
 }

@@ -251,6 +251,7 @@ pub enum PreviousOrCurrent {
 	Current,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BitcoinCrypto;
 impl ChainCrypto for BitcoinCrypto {
 	type UtxoChain = ConstBool<true>;

@@ -33,6 +33,8 @@ impl FeeRefundCalculator<NoneChain> for () {
 		unimplemented!()
 	}
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NoneChainCrypto;
 impl ChainCrypto for NoneChainCrypto {
 	type UtxoChain = ConstBool<false>;

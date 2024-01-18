@@ -18,6 +18,7 @@ cf-chains = { path = '../../chains', default-features = false }
 cf-primitives = { path = '../../primitives', default-features = false }
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
 cf-traits = { path = '../../traits', default-features = false }
+cfe-events = { path = '../../cfe-events', default-features = false }
 cf-runtime-utilities = { path = '../../runtime-utilities', default-features = false }
 
 log = { version = '0.4.16', default-features = false }
@@ -45,6 +46,7 @@ cf-test-utilities = { path = '../../test-utilities' }
 default = ['std']
 std = [
   'cf-chains/std',
+  'cfe-events/std',
   'cf-primitives/std',
   'cf-runtime-upgrade-utilities/std',
   'cf-runtime-utilities/std',

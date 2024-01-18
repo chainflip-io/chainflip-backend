@@ -8,9 +8,10 @@ use cf_primitives::{
 };
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AccountRoleRegistry, AsyncResult, Broadcaster, Chainflip,
-	CurrentEpochIndex, EpochKey, GetBlockHeight, KeyProvider, SafeMode, SetSafeMode, Slashing,
-	ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus,
+	offence_reporting::OffenceReporter, AccountRoleRegistry, AsyncResult, Broadcaster,
+	CfeMultisigRequest, Chainflip, CurrentEpochIndex, EpochKey, GetBlockHeight, KeyProvider,
+	SafeMode, SetSafeMode, Slashing, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator,
+	VaultStatus,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -208,6 +209,8 @@ pub mod pallet {
 		type SafeMode: Get<PalletSafeMode<I>> + SafeMode + SetSafeMode<Self::SafeMode>;
 
 		type ChainTracking: GetBlockHeight<Self::Chain>;
+
+		type CfeMultisigRequest: CfeMultisigRequest<Self, <Self::Chain as Chain>::ChainCrypto>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;

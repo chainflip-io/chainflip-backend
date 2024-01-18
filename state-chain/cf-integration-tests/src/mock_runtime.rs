@@ -228,7 +228,6 @@ impl ExtBuilder {
 			polkadot_vault: Default::default(),
 			environment: Default::default(),
 			liquidity_pools: Default::default(),
-			swapping: Default::default(),
 			system: Default::default(),
 			transaction_payment: Default::default(),
 			bitcoin_ingress_egress: Default::default(),

@@ -99,9 +99,75 @@ use futures::{
 };
 use tokio::sync::oneshot;
 
-/// This expresses the idea that another task's failure means this task cannot proceed reasonably
-/// and so we must fail too
-pub const OR_CANCEL: &str = "An error has occurred in another task";
+pub trait Unwrappable {
+	type Item;
+
+	fn __internal_to_option(x: Self) -> Option<Self::Item>;
+}
+impl<T> Unwrappable for Option<T> {
+	type Item = T;
+
+	fn __internal_to_option(x: Self) -> Option<Self::Item> {
+		x
+	}
+}
+impl<T, E> Unwrappable for Result<T, E> {
+	type Item = T;
+
+	fn __internal_to_option(x: Self) -> Option<Self::Item> {
+		x.ok()
+	}
+}
+
+const UNWRAP_OR_CANCEL_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(500u64);
+
+#[pin_project::pin_project]
+pub struct UnwrapOrCancelFuture<F> {
+	#[pin]
+	f: Option<F>,
+	#[pin]
+	timeout: Option<tokio::time::Sleep>,
+}
+impl<T> Future for UnwrapOrCancelFuture<T>
+where
+	T: Future,
+	T::Output: Unwrappable,
+{
+	type Output = <T::Output as Unwrappable>::Item;
+
+	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+		let mut this = self.project();
+		if let Some(f) = this.f.as_mut().as_pin_mut() {
+			if let Some(output) = Unwrappable::__internal_to_option(ready!(f.poll(cx))) {
+				return Poll::Ready(output)
+			} else {
+				// Avoids possible deadlocks during sleep (And avoids polling again after ready)
+				this.f.set(None);
+			}
+		}
+
+		if this.timeout.is_none() {
+			this.timeout.set(Some(tokio::time::sleep(UNWRAP_OR_CANCEL_TIMEOUT)));
+		}
+		ready!(this.timeout.as_pin_mut().unwrap().poll(cx));
+		// We only reach this panic if the sleep is ready/ended
+		panic!("Expected task to be cancelled due to another task's failure, but it was not cancelled within {UNWRAP_OR_CANCEL_TIMEOUT:?}");
+	}
+}
+
+pub trait UnwrapOrCancel {
+	/// This expresses the idea that this unwrap can only fail if another task has failed (errored
+	/// or panicked) thereby causing the task scope to be cancelled, and so we expect this task to
+	/// be cancelled very shortly if this unwrap fails.
+	fn unwrap_or_cancel(self) -> UnwrapOrCancelFuture<Self>
+	where
+		Self: Future + Sized,
+		Self::Output: Unwrappable,
+	{
+		UnwrapOrCancelFuture { f: Some(self), timeout: None }
+	}
+}
+impl<T: ?Sized> UnwrapOrCancel for T where T: Future {}
 
 /// This function allows a top level task to spawn tasks such that if any tasks panic or error,
 /// all other tasks will be cancelled, and the panic or error will be propagated by this function.
@@ -143,7 +209,8 @@ pub fn task_scope<
 							if let Ok(panic) = error.try_into_panic() {
 								std::panic::resume_unwind(panic);
 							} /* else: Can only occur if tokio's runtime is dropped during task
-							  * scope's lifetime, in this we are about to be cancelled ourselves */
+							  * scope's lifetime, in this case we are about to be cancelled
+							  * ourselves */
 						},
 						Ok(future_result) => future_result?,
 					}
@@ -722,5 +789,53 @@ mod tests {
 		})
 		.await
 		.unwrap();
+	}
+
+	#[tokio::test]
+	async fn test_unwrap_or_cancel() {
+		async fn inner<T: Unwrappable + Clone>(some: T, none: T)
+		where
+			T::Item: Debug,
+		{
+			crate::assert_future_panics!(async { none.clone() }.unwrap_or_cancel());
+
+			let shorter_than_timeout: std::time::Duration =
+				UNWRAP_OR_CANCEL_TIMEOUT.mul_f64(0.5f64);
+
+			crate::assert_err!(
+				tokio::time::timeout(
+					shorter_than_timeout,
+					async { none.clone() }.unwrap_or_cancel()
+				)
+				.await
+			);
+
+			let longer_than_timeout: std::time::Duration = UNWRAP_OR_CANCEL_TIMEOUT.mul_f64(2.0f64);
+
+			crate::assert_future_panics!(tokio::time::timeout(
+				longer_than_timeout,
+				async { none.clone() }.unwrap_or_cancel()
+			));
+
+			async { some.clone() }.unwrap_or_cancel().await;
+
+			crate::assert_ok!(
+				tokio::time::timeout(
+					shorter_than_timeout,
+					async { some.clone() }.unwrap_or_cancel()
+				)
+				.await
+			);
+			crate::assert_ok!(
+				tokio::time::timeout(
+					shorter_than_timeout,
+					async { some.clone() }.unwrap_or_cancel()
+				)
+				.await
+			);
+		}
+
+		inner(Some(()), None).await;
+		inner(Ok(()), Err(())).await;
 	}
 }

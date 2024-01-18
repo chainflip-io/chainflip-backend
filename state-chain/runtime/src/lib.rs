@@ -201,6 +201,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type Bonder = Bonder<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type ReputationResetter = Reputation;
+	type CfePeerRegistration = CfeInterface;
 }
 
 parameter_types! {
@@ -246,6 +247,7 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type ChainTracking = EthereumChainTracking;
 	type SafeMode = RuntimeSafeMode;
 	type Slasher = FlipSlasher<Self>;
+	type CfeMultisigRequest = CfeInterface;
 }
 
 impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
@@ -263,6 +265,7 @@ impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
 	type ChainTracking = PolkadotChainTracking;
 	type SafeMode = RuntimeSafeMode;
 	type Slasher = FlipSlasher<Self>;
+	type CfeMultisigRequest = CfeInterface;
 }
 
 impl pallet_cf_vaults::Config<BitcoinInstance> for Runtime {
@@ -280,6 +283,7 @@ impl pallet_cf_vaults::Config<BitcoinInstance> for Runtime {
 	type ChainTracking = BitcoinChainTracking;
 	type SafeMode = RuntimeSafeMode;
 	type Slasher = FlipSlasher<Self>;
+	type CfeMultisigRequest = CfeInterface;
 }
 
 use chainflip::address_derivation::AddressDerivation;
@@ -610,6 +614,10 @@ parameter_types! {
 	pub const MaximumAccruableReputation: pallet_cf_reputation::ReputationPoints = 15;
 }
 
+impl pallet_cf_cfe_interface::Config for Runtime {
+	type WeightInfo = pallet_cf_cfe_interface::PalletWeight<Runtime>;
+}
+
 impl pallet_cf_reputation::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
@@ -633,6 +641,7 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = EthereumVault;
 	type CeremonyRetryDelay = ConstU32<1>;
+	type CfeMultisigRequest = CfeInterface;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
 
@@ -647,6 +656,7 @@ impl pallet_cf_threshold_signature::Config<PolkadotInstance> for Runtime {
 	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = PolkadotVault;
 	type CeremonyRetryDelay = ConstU32<1>;
+	type CfeMultisigRequest = CfeInterface;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
 
@@ -661,6 +671,7 @@ impl pallet_cf_threshold_signature::Config<BitcoinInstance> for Runtime {
 	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = BitcoinVault;
 	type CeremonyRetryDelay = ConstU32<1>;
+	type CfeMultisigRequest = CfeInterface;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
 
@@ -685,6 +696,7 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = EthereumChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
+	type CfeBroadcastRequest = CfeInterface;
 }
 
 impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
@@ -708,6 +720,7 @@ impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = PolkadotChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
+	type CfeBroadcastRequest = CfeInterface;
 }
 
 impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
@@ -731,6 +744,7 @@ impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = BitcoinChainTracking;
 	type RetryPolicy = BitcoinRetryPolicy;
+	type CfeBroadcastRequest = CfeInterface;
 }
 
 impl pallet_cf_chain_tracking::Config<EthereumInstance> for Runtime {
@@ -798,6 +812,8 @@ construct_runtime!(
 		BitcoinIngressEgress: pallet_cf_ingress_egress::<Instance3>,
 
 		LiquidityPools: pallet_cf_pools,
+
+		CfeInterface: pallet_cf_cfe_interface,
 	}
 );
 
@@ -833,9 +849,49 @@ pub type Executive = frame_executive::Executive<
 	Block,
 	frame_system::ChainContext<Runtime>,
 	Runtime,
-	AllPalletsWithSystem,
+	PalletExecutionOrder,
 	PalletMigrations,
 >;
+
+pub type PalletExecutionOrder = (
+	System,
+	Timestamp,
+	CfeInterface,
+	Environment,
+	Flip,
+	Emissions,
+	Funding,
+	AccountRoles,
+	TransactionPayment,
+	Witnesser,
+	Validator,
+	Session,
+	Historical,
+	Aura,
+	Authorship,
+	Grandpa,
+	Governance,
+	TokenholderGovernance,
+	Reputation,
+	EthereumChainTracking,
+	PolkadotChainTracking,
+	BitcoinChainTracking,
+	EthereumVault,
+	PolkadotVault,
+	BitcoinVault,
+	EthereumThresholdSigner,
+	PolkadotThresholdSigner,
+	BitcoinThresholdSigner,
+	EthereumBroadcaster,
+	PolkadotBroadcaster,
+	BitcoinBroadcaster,
+	Swapping,
+	LiquidityProvider,
+	EthereumIngressEgress,
+	PolkadotIngressEgress,
+	BitcoinIngressEgress,
+	LiquidityPools,
+);
 
 // Pallet Migrations for each pallet.
 // We use the executive pallet because the `pre_upgrade` and `post_upgrade` hooks are noops
@@ -896,6 +952,7 @@ mod benches {
 		[pallet_cf_ingress_egress, EthereumIngressEgress]
 		[pallet_cf_lp, LiquidityProvider]
 		[pallet_cf_pools, LiquidityPools]
+		[pallet_cf_cfe_interface, CfeInterface]
 	);
 }
 
@@ -1093,10 +1150,7 @@ impl_runtime_apis! {
 			quote_asset: Asset,
 			lp: Option<AccountId>,
 		) -> Result<PoolOrders<Runtime>, DispatchErrorWithMessage> {
-			match lp {
-				Some(lp) => LiquidityPools::pool_orders(base_asset, quote_asset, &lp),
-				None => LiquidityPools::all_pool_orders(base_asset, quote_asset),
-			}.map_err(Into::into)
+			LiquidityPools::pool_orders(base_asset, quote_asset, lp).map_err(Into::into)
 		}
 
 		fn cf_pool_range_order_liquidity_value(
@@ -1110,10 +1164,6 @@ impl_runtime_apis! {
 
 		fn cf_network_environment() -> NetworkEnvironment {
 			Environment::network_environment()
-		}
-
-		fn cf_min_swap_amount(asset: Asset) -> AssetAmount {
-			Swapping::minimum_swap_amount(asset)
 		}
 
 		fn cf_max_swap_amount(asset: Asset) -> Option<AssetAmount> {

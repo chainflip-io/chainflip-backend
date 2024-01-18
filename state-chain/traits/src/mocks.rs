@@ -12,6 +12,7 @@ pub mod broadcaster;
 pub mod callback;
 pub mod ccm_handler;
 pub mod ceremony_id_provider;
+pub mod cfe_interface_mock;
 pub mod chain_tracking;
 pub mod deposit_handler;
 pub mod egress_handler;
