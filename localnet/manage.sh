@@ -107,7 +107,15 @@ build-localnet() {
   echo "🚦 Waiting for polkadot node to start"
   REPLY=$(check_endpoint_health -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://localhost:9947') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]
 
-  echo "🦑 Starting Arbitrum ..."
+  if which solana-test-validator; then
+    echo "☀️ Waiting for Solana node to start"
+    ./localnet/init/scripts/start-solana.sh
+    until curl -s http://localhost:8899 > /dev/null; do sleep 1; done
+  else
+    echo "☀️ Solana not installed, skipping..."
+  fi
+
+  echo "🦑 Waiting for Arbitrum nodes to start"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS -d $additional_docker_compose_up_args >$DEBUG_OUTPUT 2>&1
 
   DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
@@ -217,7 +225,7 @@ yeet() {
 
 logs() {
   echo "🤖 Which service would you like to tail?"
-  select SERVICE in node engine broker lp polkadot geth bitcoin poster sequencer staker all; do
+  select SERVICE in node engine broker lp polkadot geth bitcoin solana poster sequencer staker all; do
     if [[ $SERVICE == "all" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow
       tail -f /tmp/chainflip/chainflip-*.log
@@ -250,6 +258,9 @@ logs() {
     fi
     if [[ $SERVICE == "lp" ]]; then
       tail -f /tmp/chainflip/chainflip-lp-api.log
+    fi
+    if [[ $SERVICE == "solana" ]]; then
+      tail -f /tmp/solana/solana.log
     fi
     break
   done
