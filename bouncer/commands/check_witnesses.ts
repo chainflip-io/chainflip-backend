@@ -16,70 +16,6 @@
 import { blake2AsHex } from '@polkadot/util-crypto';
 import { runWithTimeout, sleep, getChainflipApi } from '../shared/utils';
 
-// this function is required because passing through integer and then converting to binary is not feasible since the integer obtained is too large
-// to fit into js integer
-function hex2bin(hex0x: string) {
-  const hex = hex0x.replace('0x', '').toLowerCase();
-  let out = '';
-  hex.split('').forEach((c) => {
-    switch (c) {
-      case '0':
-        out += '0000';
-        break;
-      case '1':
-        out += '0001';
-        break;
-      case '2':
-        out += '0010';
-        break;
-      case '3':
-        out += '0011';
-        break;
-      case '4':
-        out += '0100';
-        break;
-      case '5':
-        out += '0101';
-        break;
-      case '6':
-        out += '0110';
-        break;
-      case '7':
-        out += '0111';
-        break;
-      case '8':
-        out += '1000';
-        break;
-      case '9':
-        out += '1001';
-        break;
-      case 'a':
-        out += '1010';
-        break;
-      case 'b':
-        out += '1011';
-        break;
-      case 'c':
-        out += '1100';
-        break;
-      case 'd':
-        out += '1101';
-        break;
-      case 'e':
-        out += '1110';
-        break;
-      case 'f':
-        out += '1111';
-        break;
-      default:
-        return '';
-    }
-    return true;
-  });
-
-  return out;
-}
-
 const witnessHash = new Set<any>();
 function hashCall(extrinsic: SubmittableExtrinsic<'promise', ISubmittableResult>) {
   const blakeHash = blake2AsHex(extrinsic.method.toU8a(), 256);
@@ -105,7 +41,6 @@ async function main(): Promise<void> {
   }
 
   let currentBlockNumber = 0;
-  const validators = (await api.query.validator.currentAuthorities()).toHuman();
   while (witnessHash.size === 0) {
     const signedBlock = await api.rpc.chain.getBlock();
     if (signedBlock.block) {
@@ -174,20 +109,18 @@ async function main(): Promise<void> {
     await sleep(6000);
   }
 
-  const epoch = Number(await api.query.validator.currentEpoch());
-  const vanityNames = (await api.query.validator.vanityNames()).toHuman();
   const unsubscribe = await api.rpc.chain.subscribeNewHeads(async (header) => {
     // waiting at least 2 blocks to be sure that we give all validator enough time to witness something
     if (Number(header.number) - currentBlockNumber > 2) {
       unsubscribe();
 
       for (const elem of witnessHash) {
-        let result = await api.rpc("cf_witness_count", elem);
-        if(result) {
+        const result = await api.rpc('cf_witness_count', elem);
+        if (result) {
           console.log(`Number of nodes who failed to witness: ${result.number}`);
           console.log(`List of validators: ${result.validators}`);
         } else {
-          console.log("The provided hash is not a valid callhash")
+          console.log('The provided hash is not a valid callhash');
         }
       }
       process.exit(0);
