@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use cf_primitives::SemVer;
 use futures::StreamExt;
 use futures_util::FutureExt;
 use serde::{Deserialize, Serialize};
@@ -175,7 +174,6 @@ impl SignedExtrinsicClient {
 		base_rpc_client: Arc<BaseRpcClient>,
 		account_nonce: Nonce,
 		signer: signer::PairSigner<sp_core::sr25519::Pair>,
-		check_unfinalized_version: Option<SemVer>,
 		genesis_hash: H256,
 		state_chain_stream: &mut BlockStream,
 	) -> Result<Self> {
@@ -203,7 +201,6 @@ impl SignedExtrinsicClient {
 							genesis_hash,
 							SIGNED_EXTRINSIC_LIFETIME,
 							base_rpc_client.clone(),
-							check_unfinalized_version
 						);
 
 					utilities::loop_select! {

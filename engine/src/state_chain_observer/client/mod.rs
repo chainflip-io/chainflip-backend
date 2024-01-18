@@ -28,7 +28,9 @@ use utilities::{
 	try_cached_stream::{MakeTryCachedStream, TryCachedStream},
 };
 
-use crate::state_chain_observer::client::base_rpc_api::SubxtInterface;
+use crate::state_chain_observer::client::{
+	base_rpc_api::SubxtInterface, storage_api::CheckBlockCompatibility,
+};
 
 use self::{
 	base_rpc_api::BaseRpcClient,
@@ -52,6 +54,14 @@ const SYNC_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
 /// Enough time for a state chain transaction to make it into a (unfinalised) block
 const CFE_VERSION_SUBMIT_TIMEOUT: Duration = Duration::from_secs(30);
+
+lazy_static::lazy_static! {
+	static ref CFE_VERSION: SemVer = SemVer {
+		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
+		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
+		patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
+	};
+}
 
 #[derive(Copy, Clone)]
 pub struct BlockInfo {
@@ -103,7 +113,8 @@ impl StateChainClient<extrinsic_api::signed::SignedExtrinsicClient> {
 		signing_key_file: &std::path::Path,
 		required_role: AccountRole,
 		wait_for_required_role: bool,
-		required_version_and_wait: Option<(SemVer, bool)>,
+		wait_for_required_version: bool,
+		submit_cfe_version: bool,
 	) -> Result<(impl StreamApi + Clone, impl StreamApi<false> + Clone, Arc<Self>)> {
 		Self::new_with_account(
 			scope,
@@ -111,7 +122,8 @@ impl StateChainClient<extrinsic_api::signed::SignedExtrinsicClient> {
 			signing_key_file,
 			required_role,
 			wait_for_required_role,
-			required_version_and_wait,
+			wait_for_required_version,
+			submit_cfe_version,
 		)
 		.await
 	}
@@ -121,12 +133,12 @@ impl StateChainClient<()> {
 	pub async fn connect_without_account<'a>(
 		scope: &Scope<'a, anyhow::Error>,
 		ws_endpoint: &str,
-		required_version_and_wait: Option<(SemVer, bool)>,
+		wait_for_required_version: bool,
 	) -> Result<(impl StreamApi + Clone, impl StreamApi<false> + Clone, Arc<Self>)> {
 		Self::new_without_account(
 			scope,
 			DefaultRpcClient::connect(ws_endpoint).await?.into(),
-			required_version_and_wait,
+			wait_for_required_version,
 		)
 		.await
 	}
@@ -141,7 +153,8 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		signing_key_file: &std::path::Path,
 		required_role: AccountRole,
 		wait_for_required_role: bool,
-		required_version_and_wait: Option<(SemVer, bool)>,
+		wait_for_version: bool,
+		submit_cfe_version: bool,
 	) -> Result<(impl StreamApi + Clone, impl StreamApi<false> + Clone, Arc<Self>)> {
 		Self::new(
 			scope,
@@ -153,10 +166,9 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				                                                * seems */
 				required_role,
 				wait_for_required_role,
-				check_unfinalized_version: required_version_and_wait.map(|(version, _)| version),
-				update_cfe_version: required_version_and_wait.map(|(version, _)| version),
+				submit_cfe_version,
 			},
-			required_version_and_wait,
+			wait_for_version,
 		)
 		.await
 	}
@@ -168,9 +180,9 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 	pub async fn new_without_account<'a>(
 		scope: &Scope<'a, anyhow::Error>,
 		base_rpc_client: Arc<BaseRpcClient>,
-		required_version_and_wait: Option<(SemVer, bool)>,
+		wait_for_required_version: bool,
 	) -> Result<(impl StreamApi + Clone, impl StreamApi<false> + Clone, Arc<Self>)> {
-		Self::new(scope, base_rpc_client, (), required_version_and_wait).await
+		Self::new(scope, base_rpc_client, (), wait_for_required_version).await
 	}
 }
 
@@ -376,7 +388,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 		scope: &Scope<'a, anyhow::Error>,
 		base_rpc_client: Arc<BaseRpcClient>,
 		mut signed_extrinsic_client_builder: SignedExtrinsicClientBuilder,
-		required_version_and_wait: Option<(SemVer, bool)>,
+		wait_for_required_version: bool,
 	) -> Result<(impl StreamApi + Clone, impl StreamApi<false> + Clone, Arc<Self>)> {
 		{
 			let mut poll_interval = make_periodic_tick(SYNC_POLL_INTERVAL, false);
@@ -430,71 +442,44 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 						.pre_compatibility(base_rpc_client.clone(), &mut finalized_block_stream)
 						.await?;
 
-					if let Some((required_version, wait_for_required_version)) = &required_version_and_wait {
-						let latest_block = *finalized_block_stream.cache();
-						if *wait_for_required_version {
-							let incompatible_blocks =
-								futures::stream::once(futures::future::ready(Ok::<_, anyhow::Error>(latest_block)))
-									.chain(finalized_block_stream.by_ref())
-									.and_then(|block| {
-										let base_rpc_client = &base_rpc_client;
-										async move {
-											Ok::<_, anyhow::Error>((
-												block.number,
-												block.hash,
-												base_rpc_client
-													.storage_value::<pallet_cf_environment::CurrentReleaseVersion<
-														state_chain_runtime::Runtime,
-													>>(block.hash)
-													.await?,
-											))
-										}
-									})
-									.try_take_while(|(_block_number, _block_hash, current_release_version)| {
-										futures::future::ready({
-											Ok::<_, anyhow::Error>(
-												!required_version.is_compatible_with(*current_release_version),
-											)
+					let latest_block = *finalized_block_stream.cache();
+					if wait_for_required_version {
+						let incompatible_blocks =
+							futures::stream::once(futures::future::ready(Ok::<_, anyhow::Error>(latest_block)))
+								.chain(finalized_block_stream.by_ref())
+								.try_take_while(|block_info| {
+									let base_rpc_client = base_rpc_client.clone();
+									let block_info = *block_info;
+									async move {
+										Ok(if let Err(block_version) = base_rpc_client.check_block_compatibility(block_info.hash).await? {
+											info!("This version '{}' is incompatible with the current release '{block_version}' at block {}: {:?}. WAITING for a compatible release version.", *CFE_VERSION, block_info.number, block_info.hash);
+											true
+										} else {
+											false
 										})
-									})
-									.boxed();
+									}
+								})
+								.boxed();
 
-							incompatible_blocks.try_for_each(move |(block_number, block_hash, current_release_version)| futures::future::ready({
-								info!("This version '{required_version}' is incompatible with the current release '{current_release_version}' at block {block_number}: {block_hash:?}. WAITING for a compatible release version.");
-								Ok::<_, anyhow::Error>(())
-							})).await?;
-						} else {
-							let current_release_version = base_rpc_client
-								.storage_value::<pallet_cf_environment::CurrentReleaseVersion<state_chain_runtime::Runtime>>(
-									latest_block.hash,
-								)
-								.await?;
-							if !required_version.is_compatible_with(current_release_version) {
-								bail!(
-									"This version '{required_version}' is incompatible with the current release '{current_release_version}' at block {}: {:?}.",
-									latest_block.number,
-									latest_block.hash,
-								);
-							}
-						}
+						incompatible_blocks.try_for_each(move |_| futures::future::ready(Ok::<_, anyhow::Error>(()))).await?;
+					} else {
+						base_rpc_client.check_block_compatibility(latest_block.hash).await?.map_err(|block_version| {
+							anyhow::anyhow!(
+								"This version '{}' is incompatible with the current release '{block_version}' at block {}: {:?}.",
+								*CFE_VERSION,
+								latest_block.number,
+								latest_block.hash,
+							)
+						})?;
 					}
 
 					Ok(finalized_block_stream)
 				}
 			},
 			move |base_rpc_client, block| Box::pin(async move {
-				if let Some((required_version, _)) = required_version_and_wait {
-					let current_release_version = base_rpc_client
-						.storage_value::<pallet_cf_environment::CurrentReleaseVersion<state_chain_runtime::Runtime>>(
-							block.hash,
-						)
-						.await?;
-					if !required_version.is_compatible_with(current_release_version) {
-						return Err(anyhow!("This version '{required_version}' is no longer compatible with the release version '{current_release_version}' at block {}: {:?}", block.number, block.hash))
-					}
-				}
-
-				Ok(())
+				base_rpc_client.check_block_compatibility(block.hash).await?.map_err(|block_version| {
+					anyhow!("This version '{}' is no longer compatible with the release version '{block_version}' at block {}: {:?}", *CFE_VERSION, block.number, block.hash)
+				})
 			}),
 		)
 		.await?;
@@ -609,8 +594,7 @@ struct SignedExtrinsicClientBuilder {
 	signing_key_file: std::path::PathBuf,
 	required_role: AccountRole,
 	wait_for_required_role: bool,
-	check_unfinalized_version: Option<SemVer>,
-	update_cfe_version: Option<SemVer>,
+	submit_cfe_version: bool,
 }
 #[async_trait]
 impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
@@ -690,7 +674,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 				.nonce
 		};
 
-		if let Some(this_version) = self.update_cfe_version {
+		if self.submit_cfe_version {
 			use subxt::{tx::Signer, PolkadotConfig};
 
 			let subxt_client = subxt::client::OnlineClient::<PolkadotConfig>::from_rpc_client(
@@ -737,10 +721,10 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 			// Note that around CFE upgrade period, the less recent version might still be running
 			// (and can even be *the* "active" instance), so it is important that it doesn't
 			// downgrade the version record:
-			if this_version.is_more_recent_than(recorded_version) {
+			if CFE_VERSION.is_more_recent_than(recorded_version) {
 				info!(
 					"Updating CFE version record from {:?} to {:?}",
-					recorded_version, this_version
+					recorded_version, *CFE_VERSION
 				);
 
 				// Submitting transaction with subxt sometimes gets stuck without returning any
@@ -756,9 +740,9 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 								vec![(
 									"new_version",
 									vec![
-										("major", this_version.major),
-										("minor", this_version.minor),
-										("patch", this_version.patch),
+										("major", CFE_VERSION.major),
+										("minor", CFE_VERSION.minor),
+										("patch", CFE_VERSION.patch),
 									],
 								)],
 							),
@@ -790,16 +774,8 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 		state_chain_stream: &mut BlockStream,
 	) -> Result<Self::Client> {
 		let (nonce, signer) = self.nonce_and_signer.expect("The function pre_compatibility should be run exactly once successfully before build is called");
-		Self::Client::new(
-			scope,
-			base_rpc_client,
-			nonce,
-			signer,
-			self.check_unfinalized_version,
-			genesis_hash,
-			state_chain_stream,
-		)
-		.await
+		Self::Client::new(scope, base_rpc_client, nonce, signer, genesis_hash, state_chain_stream)
+			.await
 	}
 }
 

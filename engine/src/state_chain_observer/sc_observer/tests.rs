@@ -486,7 +486,8 @@ async fn run_the_sc_observer() {
 					&settings.state_chain.signing_key_file,
 					AccountRole::Unregistered,
 					false,
-					None,
+					false,
+					false,
 				)
 				.await
 				.unwrap();
