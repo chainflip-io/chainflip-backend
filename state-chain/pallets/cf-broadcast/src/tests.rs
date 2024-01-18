@@ -50,9 +50,6 @@ thread_local! {
 	pub static ABORTED_BROADCAST: std::cell::RefCell<BroadcastId> = Default::default();
 }
 
-// When calling on_idle, we should broadcast everything with this excess weight.
-const LARGE_EXCESS_WEIGHT: Weight = Weight::from_parts(20_000_000_000, 0);
-
 type ValidatorId = <Test as Chainflip>::ValidatorId;
 
 struct MockCfe;

@@ -797,7 +797,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			T::CfeBroadcastRequest::tx_broadcast_request(TxBroadcastRequest {
 				broadcast_id,
 				nominee: nominated_signer.clone(),
-				payload: broadcast_attempt.transaction_payload.clone(),
+				payload: broadcast_data.transaction_payload.clone(),
 			});
 
 			// TODO: consider removing this
