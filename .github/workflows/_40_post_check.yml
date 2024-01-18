@@ -65,6 +65,11 @@ jobs:
         working-directory: bouncer
         run: pnpm install
 
+      - name: Install solana
+        run: |
+          sh -c "$(curl -sSfL https://release.solana.com/v1.17.16/install)"
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+
       - name: Start a localnet
         env:
           BINARY_ROOT_PATH: .
