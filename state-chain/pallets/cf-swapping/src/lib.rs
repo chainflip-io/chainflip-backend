@@ -680,14 +680,6 @@ pub mod pallet {
 			} else if deposit_amount < gas_budget {
 				return Err(CcmFailReason::InsufficientDepositAmount)
 			}
-			// else if source_asset != destination_asset &&
-			// 	!principal_swap_amount.is_zero() &&
-			// 	principal_swap_amount < MinimumSwapAmount::<T>::get(source_asset)
-			// {
-			// 	// If the CCM's principal requires a swap and is non-zero,
-			// 	// then the principal swap amount must be above minimum swap amount required.
-			// 	return Err(CcmFailReason::PrincipalSwapAmountTooLow)
-			// }
 
 			// if the gas asset is different.
 			let output_gas_asset = ForeignChain::from(destination_asset).gas_asset();
