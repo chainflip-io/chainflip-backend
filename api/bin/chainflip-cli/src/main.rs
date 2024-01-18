@@ -141,6 +141,9 @@ async fn run_cli() -> Result<()> {
 					api.governance_api().force_rotation().await?;
 				},
 				GenerateKeys { .. } => unreachable!("GenerateKeys is handled above"),
+				CountWitnesses { hash } => {
+					count_witnesses(api.query_api(), hash).await?;
+				},
 			};
 			Ok(())
 		}
@@ -280,6 +283,21 @@ async fn pre_update_check(api: QueryApi) -> Result<()> {
 	println!("A rotation is occurring: {}", can_update.rotation);
 	if let Some(blocks) = can_update.next_block_in {
 		println!("Your validator will produce a block in {} blocks", blocks);
+	}
+
+	Ok(())
+}
+
+async fn count_witnesses(api: QueryApi, hash: String) -> Result<()> {
+	let result = api.check_witnesses(None, hash).await?;
+	match result {
+		Some(value) => {
+			println!("Number of validator who failed to witness it: {}", value.number);
+			println!("List of validator: {:?}", value.validators);
+		},
+		None => {
+			println!("The hash you provided lead to no results")
+		},
 	}
 
 	Ok(())

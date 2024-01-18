@@ -187,6 +187,11 @@ pub enum CliCommand {
 		#[clap(short, long, action)]
 		seed_phrase: Option<String>,
 	},
+	#[clap(about = "Count how many validators witnessed a given callhash")]
+	CountWitnesses {
+		#[clap(help = "The hash representing the call to check")]
+		hash: String,
+	},
 }
 
 fn account_role_parser(s: &str) -> Result<AccountRole, String> {

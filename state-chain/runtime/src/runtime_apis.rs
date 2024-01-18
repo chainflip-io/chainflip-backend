@@ -91,7 +91,7 @@ impl From<DispatchError> for DispatchErrorWithMessage {
 		}
 	}
 }
-#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo)]
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
 pub struct FailingWitnessValidators {
 	pub number: u32,
 	pub validators: Vec<(cf_primitives::AccountId, Vec<u8>)>,
