@@ -4,7 +4,7 @@ use super::{MockPallet, MockPalletStorage};
 use cf_chains::ChainCrypto;
 use cf_primitives::{EpochIndex, ThresholdSignatureRequestId};
 use codec::{Decode, Encode};
-use frame_support::{dispatch::UnfilteredDispatchable, traits::OriginTrait};
+use frame_support::traits::{OriginTrait, UnfilteredDispatchable};
 use sp_std::collections::btree_set::BTreeSet;
 use std::marker::PhantomData;
 

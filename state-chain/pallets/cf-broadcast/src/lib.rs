@@ -25,10 +25,10 @@ use cfe_events::TxBroadcastRequest;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
-	pallet_prelude::{ensure, DispatchResult},
+	pallet_prelude::{ensure, DispatchResult, RuntimeDebug},
 	sp_runtime::traits::{One, Saturating},
 	traits::{Defensive, Get, OriginTrait, StorageVersion, UnfilteredDispatchable},
-	RuntimeDebug, Twox64Concat,
+	Twox64Concat,
 };
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;

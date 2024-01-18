@@ -1,6 +1,6 @@
 use cf_chains::address::ForeignChainAddress;
 use cf_primitives::{Asset, AssetAmount, BasisPoints, ChannelId};
-use frame_support::{dispatch::DispatchError, sp_runtime::DispatchResult};
+use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 
 pub trait SwapDepositHandler {
 	type AccountId;

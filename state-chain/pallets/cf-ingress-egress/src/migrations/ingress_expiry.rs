@@ -5,7 +5,7 @@ use sp_std::marker::PhantomData;
 #[cfg(feature = "try-runtime")]
 use codec::{Decode, Encode};
 #[cfg(feature = "try-runtime")]
-use frame_support::dispatch::DispatchError;
+use frame_support::pallet_prelude::DispatchError;
 
 // Copied from state-chain/node/src/chain_spec/testnet.rs:
 // These represent approximately 2 hours on testnet block times

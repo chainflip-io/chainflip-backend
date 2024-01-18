@@ -7,12 +7,14 @@ pub mod migrations;
 use cf_traits::{AuthoritiesCfeVersions, CompatibleCfeVersions};
 use codec::{Codec, Decode, Encode};
 use frame_support::{
-	dispatch::{GetDispatchInfo, UnfilteredDispatchable, Weight},
+	dispatch::GetDispatchInfo,
 	ensure,
-	pallet_prelude::DispatchResultWithPostInfo,
+	pallet_prelude::{DispatchResultWithPostInfo, Weight},
 	sp_runtime::{DispatchError, Percent, TransactionOutcome},
 	storage::with_transaction,
-	traits::{EnsureOrigin, Get, OnRuntimeUpgrade, StorageVersion, UnixTime},
+	traits::{
+		EnsureOrigin, Get, OnRuntimeUpgrade, StorageVersion, UnfilteredDispatchable, UnixTime,
+	},
 };
 pub use pallet::*;
 use sp_std::{boxed::Box, ops::Add, vec::Vec};

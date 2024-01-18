@@ -6,7 +6,7 @@ use super::*;
 use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue};
 use cf_traits::{AccountRoleRegistry, Chainflip};
 use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::{dispatch::UnfilteredDispatchable, traits::OnNewAccount};
+use frame_support::traits::{OnNewAccount, UnfilteredDispatchable};
 use frame_system::RawOrigin;
 
 benchmarks! {

@@ -25,14 +25,13 @@ use cf_primitives::{
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
 	error::BadOrigin,
-	pallet_prelude::Member,
+	pallet_prelude::{DispatchResultWithPostInfo, Member},
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
 		DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
 	},
-	traits::{EnsureOrigin, Get, Imbalance, IsType},
+	traits::{EnsureOrigin, Get, Imbalance, IsType, UnfilteredDispatchable},
 	Hashable, Parameter,
 };
 use scale_info::TypeInfo;

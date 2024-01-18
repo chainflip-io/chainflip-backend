@@ -4,7 +4,7 @@ use crate::*;
 use cf_runtime_upgrade_utilities::VersionedMigration;
 use frame_support::traits::OnRuntimeUpgrade;
 #[cfg(feature = "try-runtime")]
-use frame_support::{dispatch::DispatchError, sp_runtime};
+use frame_support::{pallet_prelude::DispatchError, sp_runtime};
 
 pub struct VersionUpdate<T: Config>(sp_std::marker::PhantomData<T>);
 

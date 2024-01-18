@@ -3,7 +3,7 @@
 use super::*;
 
 use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::dispatch::UnfilteredDispatchable;
+use frame_support::traits::UnfilteredDispatchable;
 
 benchmarks! {
 	enable_swapping {
