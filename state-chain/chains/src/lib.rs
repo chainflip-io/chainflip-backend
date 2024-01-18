@@ -39,6 +39,7 @@ pub mod dot;
 pub mod eth;
 pub mod evm;
 pub mod none;
+pub mod sol;
 
 pub mod address;
 pub mod deposit_channel;
