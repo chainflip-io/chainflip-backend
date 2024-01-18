@@ -456,8 +456,6 @@ fn testnet_genesis(
 	penalties: Vec<(Offence, (i32, BlockNumber))>,
 	keygen_ceremony_timeout_blocks: BlockNumber,
 	threshold_signature_ceremony_timeout_blocks: BlockNumber,
-	// // FIXME: unused
-	// _minimum_swap_amounts: Vec<(assets::any::Asset, AssetAmount)>,
 	dot_runtime_version: RuntimeVersion,
 	bitcoin_deposit_channel_lifetime: u32,
 	ethereum_deposit_channel_lifetime: u32,
@@ -670,7 +668,6 @@ fn testnet_genesis(
 		},
 		transaction_payment: Default::default(),
 		liquidity_pools: Default::default(),
-		swapping: Default::default(),
 		// Channel lifetimes are set to ~2 hours at average block times.
 		bitcoin_ingress_egress: BitcoinIngressEgressConfig {
 			deposit_channel_lifetime: bitcoin_deposit_channel_lifetime.into(),

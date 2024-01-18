@@ -69,14 +69,6 @@ benchmarks! {
 	}
 
 	ccm_deposit {
-		// // reduce minimum swap amount
-		// let gov_origin = T::EnsureGovernance::try_successful_origin().unwrap();
-		// let call = Call::<T>::set_minimum_swap_amount{
-		// 	asset: Asset::Usdc,
-		// 	amount: 1u128,
-		// };
-		// call.dispatch_bypass_filter(gov_origin)?;
-
 		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
 		let deposit_metadata = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,

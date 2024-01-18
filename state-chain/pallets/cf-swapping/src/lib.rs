@@ -360,22 +360,6 @@ pub mod pallet {
 		BrokerCommissionBpsTooHigh,
 	}
 
-	#[pallet::genesis_config]
-	pub struct GenesisConfig<T: Config> {
-		pub _phantom: PhantomData<T>,
-	}
-
-	#[pallet::genesis_build]
-	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
-		fn build(&self) {}
-	}
-
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			Self { _phantom: PhantomData }
-		}
-	}
-
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Execute all swaps in the SwapQueue
