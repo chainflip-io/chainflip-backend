@@ -3,6 +3,22 @@ use futures::Stream;
 pub trait CachedStream: Stream {
 	fn cache(&self) -> &Self::Item;
 }
+impl<St> CachedStream for Box<St>
+where
+	St: CachedStream + Unpin + ?Sized,
+{
+	fn cache(&self) -> &Self::Item {
+		(**self).cache()
+	}
+}
+impl<P: core::ops::DerefMut + Unpin> CachedStream for std::pin::Pin<P>
+where
+	<P as core::ops::Deref>::Target: CachedStream,
+{
+	fn cache(&self) -> &Self::Item {
+		(**self).cache()
+	}
+}
 
 /// Caches the last item of a stream according to some map function `f`.
 #[derive(Clone)]

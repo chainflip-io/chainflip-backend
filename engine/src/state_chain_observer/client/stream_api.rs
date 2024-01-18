@@ -1,5 +1,5 @@
 use futures::Stream;
-use utilities::CachedStream;
+use utilities::cached_stream::CachedStream;
 
 use super::BlockInfo;
 

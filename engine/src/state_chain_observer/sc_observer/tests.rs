@@ -21,7 +21,7 @@ use sp_core::H256;
 use state_chain_runtime::{
 	AccountId, BitcoinInstance, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall,
 };
-use utilities::MakeCachedStream;
+use utilities::cached_stream::MakeCachedStream;
 
 use crate::{
 	settings::Settings,

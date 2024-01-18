@@ -11,7 +11,6 @@ use anyhow::{anyhow, bail, Context, Result};
 use cf_primitives::{AccountRole, SemVer};
 use futures::{StreamExt, TryStreamExt};
 
-use futures_core::Stream;
 use futures_util::FutureExt;
 use jsonrpsee::core::RpcResult;
 use sp_core::{Pair, H256};
@@ -22,9 +21,10 @@ use tokio::sync::watch;
 use tracing::{info, warn};
 
 use utilities::{
+	cached_stream::{CachedStream, MakeCachedStream},
 	loop_select, make_periodic_tick, read_clean_and_decode_hex_str_file, spmc,
 	task_scope::{Scope, UnwrapOrCancel},
-	CachedStream, MakeCachedStream, MakeTryCachedStream, TryCachedStream,
+	try_cached_stream::{MakeTryCachedStream, TryCachedStream},
 };
 
 use crate::state_chain_observer::client::base_rpc_api::SubxtInterface;
@@ -191,7 +191,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 		let mut finalized_block_stream = {
 			// https://substrate.stackexchange.com/questions/3667/api-rpc-chain-subscribefinalizedheads-missing-blocks
 			// https://arxiv.org/abs/2007.01560
-			let sparse_finalized_block_stream = base_rpc_client
+			let mut sparse_finalized_block_stream = base_rpc_client
 				.subscribe_finalized_block_headers()
 				.await?
 				.map_err(Into::into)
@@ -200,17 +200,15 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 					STATE_CHAIN_CONNECTION
 				)))));
 
-			let mut finalized_block_stream = Box::pin(
+			let latest_finalized_block: BlockInfo =
+				sparse_finalized_block_stream.next().await.unwrap()?;
+			Box::pin(
 				Self::inject_intervening_headers(
-					sparse_finalized_block_stream,
+					sparse_finalized_block_stream.make_try_cached(latest_finalized_block),
 					base_rpc_client.clone(),
 				)
-				.await?,
-			);
-
-			let latest_finalized_block: BlockInfo = finalized_block_stream.next().await.unwrap()?;
-
-			finalized_block_stream.make_try_cached(latest_finalized_block)
+				.await,
+			)
 		};
 
 		// Often `finalized_header` returns a significantly newer latest block than the stream
@@ -298,7 +296,6 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 
 		scope.spawn({
 			let base_rpc_client = base_rpc_client.clone();
-			let mut finalized_block_stream = finalized_block_stream.into_inner();
 			let mut block_stream_request_receiver: tokio_stream::wrappers::ReceiverStream<_> =
 				tokio_stream::wrappers::ReceiverStream::new(block_stream_request_receiver);
 			let mut latest_block = latest_block;
@@ -409,16 +406,20 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtrinsicClient>
 	StateChainClient<SignedExtrinsicClient, BaseRpcClient>
 {
-	async fn inject_intervening_headers(
-		sparse_block_stream: impl Stream<Item = Result<BlockInfo>> + Send + 'static,
+	async fn inject_intervening_headers<'a>(
+		sparse_block_stream: impl TryCachedStream<
+				Ok = BlockInfo,
+				Error = anyhow::Error,
+				Item = Result<BlockInfo, anyhow::Error>,
+			> + Send
+			+ 'a,
 		base_rpc_client: Arc<BaseRpcClient>,
-	) -> Result<impl Stream<Item = Result<BlockInfo>> + Send + 'static> {
-		let mut sparse_block_stream = Box::pin(sparse_block_stream);
+	) -> utilities::try_cached_stream::InnerTryCachedStream<
+		impl futures::Stream<Item = Result<BlockInfo, anyhow::Error>> + Send + 'a,
+	> {
+		let latest_finalized_block: BlockInfo = *sparse_block_stream.cache();
 
-		let latest_finalized_block: BlockInfo =
-			sparse_block_stream.next().await.ok_or(anyhow!("initial header missing"))??;
-
-		let stream_rest = utilities::assert_stream_send(
+		utilities::assert_stream_send(
 			sparse_block_stream
 				.and_then({
 					let mut latest_finalized_block = latest_finalized_block;
@@ -471,9 +472,8 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 					}
 				})
 				.try_flatten(),
-		);
-
-		Ok(futures::stream::once(async move { Ok(latest_finalized_block) }).chain(stream_rest))
+		)
+		.make_try_cached(latest_finalized_block)
 	}
 }
 
@@ -1158,18 +1158,24 @@ mod tests {
 		chain: Arc<TestChain>,
 		rpc: Arc<MockBaseRpcApi>,
 	) -> Result<Vec<u32>> {
-		let sparse_stream = tokio_stream::iter(block_numbers).map(move |num| {
-			let hash = &chain.hashes[num as usize];
-			Ok(chain.headers[hash].clone().into())
-		});
+		let headers =
+			block_numbers.map(|block_number| &chain.headers[&chain.hashes[block_number as usize]]);
+
+		let sparse_stream = tokio_stream::iter(
+			(headers[1..]).iter().map(|header| Ok(BlockInfo::from((*header).clone()))),
+		)
+		.make_try_cached(BlockInfo::from(headers[0].clone()));
 
 		let stream =
 			StateChainClient::<(), MockBaseRpcApi>::inject_intervening_headers(sparse_stream, rpc)
-				.await?;
+				.await;
 
 		let headers = stream.collect::<Vec<_>>().await;
 
-		Ok(headers.into_iter().map(|h| h.unwrap().number).collect::<Vec<_>>())
+		Ok(headers
+			.into_iter()
+			.map(|header: Result<BlockInfo, anyhow::Error>| header.unwrap().number)
+			.collect::<Vec<_>>())
 	}
 
 	#[tokio::test]

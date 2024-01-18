@@ -6,6 +6,28 @@ pub trait TryCachedStream: Stream<Item = Result<Self::Ok, Self::Error>> {
 
 	fn cache(&self) -> &<Self as TryStream>::Ok;
 }
+impl<St> TryCachedStream for Box<St>
+where
+	St: TryCachedStream + Unpin + ?Sized,
+{
+	type Ok = St::Ok;
+	type Error = St::Error;
+
+	fn cache(&self) -> &Self::Ok {
+		(**self).cache()
+	}
+}
+impl<P: core::ops::DerefMut + Unpin> TryCachedStream for std::pin::Pin<P>
+where
+	<P as core::ops::Deref>::Target: TryCachedStream,
+{
+	type Ok = <<P as core::ops::Deref>::Target as TryCachedStream>::Ok;
+	type Error = <<P as core::ops::Deref>::Target as TryCachedStream>::Error;
+
+	fn cache(&self) -> &Self::Ok {
+		(**self).cache()
+	}
+}
 
 /// Caches the last mapped last item of a stream according to some map function `f`.
 #[derive(Clone)]

@@ -25,7 +25,7 @@ use std::{
 	sync::{atomic::AtomicBool, Arc},
 	time::Duration,
 };
-use utilities::{metrics, task_scope::task_scope, CachedStream};
+use utilities::{cached_stream::CachedStream, metrics, task_scope::task_scope};
 
 lazy_static::lazy_static! {
 	static ref CFE_VERSION: SemVer = SemVer {
