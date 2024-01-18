@@ -346,12 +346,12 @@ impl<T: Config> LpBalanceApi for Pallet<T> {
 	> {
 		let mut balances = BTreeMap::<_, Vec<_>>::new();
 		T::PoolApi::sweep(who).unwrap();
-		let _ = Asset::all().iter().map(|&asset| {
+		for asset in Asset::all() {
 			balances.entry(ForeignChain::from(asset)).or_default().push(AssetBalance {
 				asset,
 				balance: FreeBalances::<T>::get(who, asset).unwrap_or(0),
 			});
-		});
+		}
 		balances
 	}
 }
