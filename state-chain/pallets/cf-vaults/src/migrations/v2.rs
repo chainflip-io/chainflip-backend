@@ -1,7 +1,7 @@
 use crate::*;
 use cf_primitives::FLIPPERINOS_PER_FLIP;
 #[cfg(feature = "try-runtime")]
-use frame_support::dispatch::DispatchError;
+use frame_support::pallet_prelude::DispatchError;
 use frame_support::traits::OnRuntimeUpgrade;
 use sp_std::marker::PhantomData;
 

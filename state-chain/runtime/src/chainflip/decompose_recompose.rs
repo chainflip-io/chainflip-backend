@@ -217,7 +217,7 @@ mod tests {
 
 	#[test]
 	fn test_priority_fee_witnessing() {
-		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+		sp_io::TestExternalities::new_empty().execute_with(|| {
 			// This would be set at genesis
 			CurrentChainState::<Runtime, EthereumInstance>::put(ChainState {
 				block_height: 0,

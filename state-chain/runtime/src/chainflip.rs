@@ -50,7 +50,8 @@ use cf_traits::{
 };
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
+	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
+	pallet_prelude::DispatchError,
 	sp_runtime::{
 		traits::{BlockNumberProvider, One, UniqueSaturatedFrom, UniqueSaturatedInto},
 		FixedPointNumber, FixedU64,

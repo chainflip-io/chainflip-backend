@@ -3,7 +3,6 @@ use cf_chains::{eth::Address, ForeignChain};
 use cf_traits::{BroadcastAnyChainGovKey, Chainflip, CommKeyBroadcaster, FeePayment, FundingInfo};
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::Weight,
 	pallet_prelude::*,
 	traits::{OnRuntimeUpgrade, StorageVersion},
 	RuntimeDebugNoBound,

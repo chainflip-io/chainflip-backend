@@ -13,7 +13,6 @@ use cf_chains::{
 	Bitcoin, Ethereum, Polkadot,
 };
 use common::FLIPPERINOS_PER_FLIP;
-use frame_benchmarking::sp_std::collections::btree_set::BTreeSet;
 pub use sc_service::{ChainType, Properties};
 use sc_telemetry::serde_json::json;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -34,7 +33,7 @@ use state_chain_runtime::{
 };
 
 use std::{
-	collections::BTreeMap,
+	collections::{BTreeMap, BTreeSet},
 	env,
 	marker::PhantomData,
 	str::FromStr,

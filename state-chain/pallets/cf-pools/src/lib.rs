@@ -12,11 +12,11 @@ use cf_amm::{
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
 use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwappingApi};
 use frame_support::{
-	dispatch::{GetDispatchInfo, UnfilteredDispatchable},
+	dispatch::GetDispatchInfo,
 	pallet_prelude::*,
 	sp_runtime::{Permill, Saturating, TransactionOutcome},
 	storage::{with_storage_layer, with_transaction_unchecked},
-	traits::{Defensive, OriginTrait, StorageVersion},
+	traits::{Defensive, OriginTrait, StorageVersion, UnfilteredDispatchable},
 	transactional,
 };
 

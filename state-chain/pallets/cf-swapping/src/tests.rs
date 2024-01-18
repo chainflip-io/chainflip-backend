@@ -20,9 +20,10 @@ use cf_traits::{
 	},
 	CcmHandler, SetSafeMode, SwapDepositHandler, SwappingApi,
 };
-use frame_support::{assert_noop, assert_ok, sp_std::iter, traits::Hooks};
+use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use itertools::Itertools;
 use sp_arithmetic::Permill;
+use sp_std::iter;
 
 const GAS_BUDGET: AssetAmount = 1_000u128;
 
