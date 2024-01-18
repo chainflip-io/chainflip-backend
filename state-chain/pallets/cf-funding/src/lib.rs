@@ -461,7 +461,10 @@ pub mod pallet {
 					&account_id,
 					PendingRedemptionInfo {
 						total: redeem_amount,
-						restricted: min(total_restricted_balance, debit_amount),
+						restricted: min(
+							total_restricted_balance.saturating_sub(redemption_fee),
+							redeem_amount,
+						),
 						redeem_address: address,
 					},
 				);
