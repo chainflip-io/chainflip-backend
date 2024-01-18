@@ -1,5 +1,3 @@
-use core::marker::PhantomData;
-
 use crate::{self as pallet_cf_swapping, PalletSafeMode, WeightInfo};
 use cf_chains::AnyChain;
 use cf_primitives::{Asset, AssetAmount};
@@ -110,10 +108,6 @@ impl WeightInfo for MockWeightInfo {
 		Weight::from_parts(100, 0)
 	}
 
-	fn set_minimum_swap_amount() -> Weight {
-		Weight::from_parts(100, 0)
-	}
-
 	fn set_maximum_swap_amount() -> Weight {
 		Weight::from_parts(100, 0)
 	}
@@ -135,7 +129,6 @@ cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
 		system: Default::default(),
-		swapping: SwappingConfig { minimum_swap_amounts: vec![], _phantom: PhantomData },
 	},
 	|| {
 		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(&ALICE).unwrap();
