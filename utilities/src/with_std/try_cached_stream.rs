@@ -4,7 +4,7 @@ pub trait TryCachedStream: Stream<Item = Result<Self::Ok, Self::Error>> {
 	type Ok: Clone;
 	type Error;
 
-	fn cache(&self) -> &<Self as TryStream>::Ok;
+	fn cache(&self) -> &Self::Ok;
 }
 impl<St> TryCachedStream for Box<St>
 where
