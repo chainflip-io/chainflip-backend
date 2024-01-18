@@ -30,6 +30,12 @@ The user then needs to execute the redemption on the `StateChainGateway` contrac
 
 A validator can have at most one open redemption at any given time. They must either execute the redemption, or wait for expiry until initiating a new redemption.
 
+#### Redemption Tax
+
+A 'Redemption Tax' is levied to compensate the network for the cost of a redemption (threshold signature, foreign call to the Eth network, etc), and to discourage frequent small redemptions. By default, for restricted addresses, the tax is paid by the redeeming account, meaning: If the account controls restricted balances, and a redemption is made to one of its restricted addresses, the tax is deducted from the restricted balance where possible.
+
+For example: Account `A` controls 150 FLIP, and 100 FLIP are held on behalf of the restricted address `0xB`. If `0xB` requests a redemption of 50 FLIP to their restricted address, then the deduction from the restricted balance would be (50 FLIP + REDEMPTIN_TAX).
+
 ### Redemption Restrictions
 
 Redemptions can be subject to certain rules and restrictions. The following categories apply simultaneously, that is, all of the following restrictions are checked on every redemption request.
