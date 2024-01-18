@@ -14,7 +14,9 @@ pub mod client;
 mod crypto;
 
 /// Maximum number of payloads in a single bitcoin signing ceremony
-pub const MAX_BTC_SIGNING_PAYLOADS: usize = 1000;
+// We choose 20,000 because this is approaching the theoretical maximum number of UTXOs in a single
+// Bitcoin block.
+pub const MAX_BTC_SIGNING_PAYLOADS: usize = 20_000;
 
 pub mod p2p {
 	use cf_primitives::AccountId;

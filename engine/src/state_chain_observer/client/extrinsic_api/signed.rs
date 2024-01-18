@@ -10,7 +10,7 @@ use sp_core::H256;
 use state_chain_runtime::{AccountId, Nonce};
 use tokio::sync::{mpsc, oneshot};
 use tracing::trace;
-use utilities::task_scope::{task_scope, Scope, ScopedJoinHandle, OR_CANCEL};
+use utilities::task_scope::{task_scope, Scope, ScopedJoinHandle, UnwrapOrCancel};
 
 use crate::constants::SIGNED_EXTRINSIC_LIFETIME;
 
@@ -47,7 +47,7 @@ pub struct UntilFinalizedFuture(oneshot::Receiver<submission_watcher::Finalizati
 #[async_trait]
 impl UntilFinalized for UntilFinalizedFuture {
 	async fn until_finalized(self) -> submission_watcher::FinalizationResult {
-		self.0.await.expect(OR_CANCEL)
+		self.0.unwrap_or_cancel().await
 	}
 }
 
@@ -73,7 +73,7 @@ pub struct UntilInBlockFuture(oneshot::Receiver<submission_watcher::InBlockResul
 #[async_trait]
 impl UntilInBlock for UntilInBlockFuture {
 	async fn until_in_block(self) -> submission_watcher::InBlockResult {
-		self.0.await.expect(OR_CANCEL)
+		self.0.unwrap_or_cancel().await
 	}
 }
 
@@ -263,8 +263,8 @@ impl SignedExtrinsicApi for SignedExtrinsicClient {
 				)
 			})
 			.await
-			.await
-			.expect(OR_CANCEL),
+			.unwrap_or_cancel()
+			.await,
 			(
 				UntilInBlockFuture(until_in_block_receiver),
 				UntilFinalizedFuture(until_finalized_receiver),
@@ -316,8 +316,8 @@ impl SignedExtrinsicApi for SignedExtrinsicClient {
 			(call.clone().into(), result_sender)
 		})
 		.await
-		.await
-		.expect(OR_CANCEL)?;
+		.unwrap_or_cancel()
+		.await?;
 
 		Ok(self.submit_signed_extrinsic(call.into()).await)
 	}

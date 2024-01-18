@@ -1196,7 +1196,7 @@ dependencies = [
  "frame-support",
  "hex",
  "hex-literal",
- "itertools 0.10.5",
+ "itertools 0.11.0",
  "libsecp256k1",
  "log",
  "parity-scale-codec",
@@ -1617,15 +1617,20 @@ dependencies = [
  "chainflip-engine",
  "clap 3.2.25",
  "config",
+ "frame-support",
  "futures",
  "hex",
+ "insta",
  "jsonrpsee 0.16.3",
+ "mockall",
  "pallet-cf-broadcast",
  "pallet-cf-environment",
  "pallet-cf-ingress-egress",
  "parity-scale-codec",
+ "redis",
  "reqwest",
  "serde",
+ "serde_json",
  "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
  "state-chain-runtime",
  "substrate-build-script-utils 3.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
@@ -1935,6 +1940,20 @@ name = "colorchoice"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
+
+[[package]]
+name = "combine"
+version = "4.6.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35ed6e9d84f0b51a7f52daf1c7d71dd136fd7a3f41a8462b8cdb8c78d920fad4"
+dependencies = [
+ "bytes",
+ "futures-core",
+ "memchr",
+ "pin-project-lite 0.2.13",
+ "tokio",
+ "tokio-util",
+]
 
 [[package]]
 name = "comfy-table"
@@ -6578,7 +6597,7 @@ dependencies = [
  "futures-util",
  "generic-array 0.14.7",
  "hex",
- "itertools 0.10.5",
+ "itertools 0.11.0",
  "lazy_static",
  "mockall",
  "multisig",
@@ -7392,6 +7411,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "itertools 0.11.0",
  "log",
  "parity-scale-codec",
  "scale-info",
@@ -7401,6 +7421,7 @@ dependencies = [
  "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
  "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
+ "utilities",
 ]
 
 [[package]]
@@ -8694,6 +8715,27 @@ dependencies = [
  "ring 0.16.20",
  "time",
  "yasna",
+]
+
+[[package]]
+name = "redis"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c580d9cbbe1d1b479e8d67cf9daf6a62c957e6846048408b80b43ac3f6af84cd"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "combine",
+ "futures-util",
+ "itoa",
+ "percent-encoding",
+ "pin-project-lite 0.2.13",
+ "ryu",
+ "sha1_smol",
+ "socket2 0.4.10",
+ "tokio",
+ "tokio-util",
+ "url",
 ]
 
 [[package]]
@@ -10599,6 +10641,12 @@ dependencies = [
  "cpufeatures",
  "digest 0.10.7",
 ]
+
+[[package]]
+name = "sha1_smol"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae1a47186c03a32177042e55dbc5fd5aee900b8e0069a8d70fba96a9375cd012"
 
 [[package]]
 name = "sha2"

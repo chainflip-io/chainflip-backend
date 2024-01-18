@@ -1,0 +1,5 @@
+services:
+  redis:
+    image: 'redislabs/redismod'
+    ports:
+      - '6380:6379'

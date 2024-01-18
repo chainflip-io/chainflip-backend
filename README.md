@@ -114,6 +114,8 @@ for this.
 
 You only need to enable the `packages:read` permission.
 
+When creating a new PAT, you need to delete the `.setup_complete` file under `localnet`, which will cause the manage.sh to ask you again for the PAT you created.
+
 ### Creating a Localnet
 
 Localnets use binaries built locally. To create a Localnet for your current branch, you will first need to build.
