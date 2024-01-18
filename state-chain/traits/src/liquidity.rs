@@ -1,6 +1,7 @@
 use cf_chains::{address::ForeignChainAddress, assets::AssetBalance};
 use cf_primitives::{Asset, AssetAmount, BasisPoints, ChannelId, ForeignChain};
-use frame_support::{dispatch::DispatchError, sp_runtime::DispatchResult};
+use frame_support::sp_runtime::DispatchResult;
+use sp_runtime::DispatchError;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 pub trait SwapDepositHandler {

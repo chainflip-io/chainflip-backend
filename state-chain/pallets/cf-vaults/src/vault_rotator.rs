@@ -1,7 +1,8 @@
 use super::*;
 use cf_chains::SetAggKeyWithAggKeyError;
 use cf_runtime_utilities::log_or_panic;
-use cf_traits::{CeremonyIdProvider, GetBlockHeight};
+use cf_traits::{CeremonyIdProvider, CfeMultisigRequest, GetBlockHeight};
+use cfe_events::{KeyHandoverRequest, KeygenRequest};
 use frame_support::sp_runtime::traits::BlockNumberProvider;
 
 impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
@@ -28,6 +29,13 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		// block
 		KeygenResolutionPendingSince::<T, I>::put(frame_system::Pallet::<T>::current_block_number());
 
+		T::CfeMultisigRequest::keygen_request(KeygenRequest {
+			ceremony_id,
+			epoch_index: new_epoch_index,
+			participants: candidates.clone(),
+		});
+
+		// TODO: consider deleting this
 		Pallet::<T, I>::deposit_event(Event::KeygenRequest {
 			ceremony_id,
 			participants: candidates,
@@ -74,6 +82,17 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 							frame_system::Pallet::<T>::current_block_number(),
 						);
 
+						T::CfeMultisigRequest::key_handover_request(KeyHandoverRequest {
+							ceremony_id,
+							from_epoch: epoch_key.epoch_index,
+							to_epoch: new_epoch_index,
+							key_to_share: epoch_key.key,
+							sharing_participants: sharing_participants.clone(),
+							receiving_participants: receiving_participants.clone(),
+							new_key: new_public_key,
+						});
+
+						// TODO: consider removing this
 						Self::deposit_event(Event::KeyHandoverRequest {
 							ceremony_id,
 							// The key we want to share is the key from the *previous/current*

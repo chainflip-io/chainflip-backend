@@ -44,6 +44,8 @@ jobs:
     needs: [build]
     uses: ./.github/workflows/_40_post_check.yml
     secrets: inherit
+    with:
+      full_bouncer: true
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml

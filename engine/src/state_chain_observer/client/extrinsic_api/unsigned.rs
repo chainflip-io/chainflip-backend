@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use sp_core::H256;
 use sp_runtime::{traits::Hash, transaction_validity::InvalidTransaction};
 use tokio::sync::{mpsc, oneshot};
-use utilities::task_scope::{Scope, ScopedJoinHandle, OR_CANCEL};
+use utilities::task_scope::{Scope, ScopedJoinHandle, UnwrapOrCancel};
 
 use crate::state_chain_observer::client::extrinsic_api::common::invalid_err_obj;
 
@@ -121,7 +121,7 @@ impl UnsignedExtrinsicApi for UnsignedExtrinsicClient {
 	{
 		send_request(&self.request_sender, |result_sender| (call.into(), result_sender))
 			.await
+			.unwrap_or_cancel()
 			.await
-			.expect(OR_CANCEL)
 	}
 }

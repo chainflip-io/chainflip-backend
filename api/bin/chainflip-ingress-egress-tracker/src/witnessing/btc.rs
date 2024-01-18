@@ -36,7 +36,7 @@ where
 	let btc_client = BtcRetryRpcClient::new(
 		scope,
 		NodeContainer { primary: settings.btc, backup: None },
-		env_params.btc_network,
+		env_params.chainflip_network.into(),
 	)
 	.await?;
 

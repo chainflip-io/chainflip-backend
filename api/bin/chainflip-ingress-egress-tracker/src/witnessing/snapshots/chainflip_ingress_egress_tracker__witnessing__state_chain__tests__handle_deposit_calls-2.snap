@@ -1,0 +1,5 @@
+---
+source: api/bin/chainflip-ingress-egress-tracker/src/witnessing/state_chain.rs
+expression: "store.storage.get(format!(\"deposit:Polkadot:{}\", format!\n                (\"0x{}\", hex ::\n                encode(polkadot_account_id.aliased_ref()))).as_str()).unwrap()"
+---
+[{"amount":"0x64","asset":"DOT","deposit_chain_block_height":1}]

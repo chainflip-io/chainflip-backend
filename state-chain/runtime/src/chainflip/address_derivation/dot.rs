@@ -75,7 +75,7 @@ mod test {
 
 	#[test]
 	fn single_layer() {
-		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+		sp_io::TestExternalities::new_empty().execute_with(|| {
 			let (account_id, address_format) =
 				sp_runtime::AccountId32::from_ss58check_with_version(
 					"15uPkKV7SsNXxw5VCu3LgnuaR5uSZ4QMyzxnLfDFE9J5nni9",
@@ -102,7 +102,7 @@ mod test {
 
 	#[test]
 	fn four_layers() {
-		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+		sp_io::TestExternalities::new_empty().execute_with(|| {
 			let (alice, address_format) = sp_runtime::AccountId32::from_ss58check_with_version(
 				"15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5",
 			)

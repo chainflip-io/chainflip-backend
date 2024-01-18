@@ -3,7 +3,7 @@ name: Post build checks
 on:
   workflow_call:
     inputs:
-      simple_bouncer:
+      full_bouncer:
         type: boolean
         default: false
       timeout-minutes:
@@ -78,14 +78,14 @@ jobs:
           ./localnet/manage.sh
 
       - name: Run EinfachHeuteLeiderNicht.exe
-        if: inputs.simple_bouncer
+        if: inputs.full_bouncer
         working-directory: bouncer
         run: |
-          ./run_simple.sh
+          ./full_bouncer.sh
 
       - name: Run HeuteLeiderNicht.exe
         id: heuteleidernicht
-        if: ${{ ! inputs.simple_bouncer }}
+        if: ${{ ! inputs.full_bouncer }}
         working-directory: bouncer
         run: |
           ./run.sh
@@ -137,6 +137,5 @@ jobs:
         with:
           args: |
             ❗️❗️❗️❗️ Sorry **${{ github.actor }}**, the Bouncer has rejected you ❗️❗️❗️❗️
-            👾 Link to job: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            👾 Link to job: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>
             #️⃣ Tagging: <@&939151218708709416>
-            https://media.giphy.com/media/wHfwCBZzCMhmE/giphy.gif

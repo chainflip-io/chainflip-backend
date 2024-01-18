@@ -3,11 +3,9 @@ use cf_chains::{
 	btc::{deposit_address::DepositAddress, ScriptPubkey},
 	AllBatch, Bitcoin, TransferAssetParams,
 };
-use cf_primitives::{chains::assets::btc, AuthorityCount};
+use cf_primitives::{chains::assets::btc, AuthorityCount, BroadcastId};
 use cf_traits::{Broadcaster, EpochInfo};
-use pallet_cf_broadcast::{
-	AwaitingBroadcast, BroadcastRetryQueue, DelayedBroadcastRetryQueue, PendingBroadcasts,
-};
+use pallet_cf_broadcast::{AwaitingBroadcast, DelayedBroadcastRetryQueue, PendingBroadcasts};
 use state_chain_runtime::{
 	BitcoinBroadcaster, BitcoinInstance, BitcoinVault, Environment, Runtime, Validator,
 };
@@ -59,38 +57,48 @@ fn bitcoin_broadcast_delay_works() {
 			];
 			// Same as defined in BitcoinRetryPolicy.
 			const DELAY_THRESHOLD: u32 = 25u32;
+
+			let get_nominee = |broadcast_id: BroadcastId| {
+				AwaitingBroadcast::<Runtime, BitcoinInstance>::get(broadcast_id)
+					.unwrap()
+					.nominee
+					.unwrap()
+			};
+
 			// Before hitting the threshold, no slowdown happens and broadcasts are retried per
 			// normal.
-			for i in 1u32..DELAY_THRESHOLD {
-				let account_id = AccountId::from([i as u8; 32]);
+			for _ in 1u32..DELAY_THRESHOLD {
+				let account_id = get_nominee(broadcast_id);
 				assert_ok!(BitcoinBroadcaster::transaction_failed(
 					RuntimeOrigin::signed(account_id),
 					broadcast_id
 				));
-				assert_eq!(
-					BroadcastRetryQueue::<Runtime, BitcoinInstance>::get()[0].broadcast_id,
-					broadcast_id
-				);
+				let next_block = System::block_number() + 1u32;
+				assert!(DelayedBroadcastRetryQueue::<Runtime, BitcoinInstance>::get(next_block)
+					.contains(&broadcast_id));
 				testnet.move_forward_blocks(1);
 				assert!(AwaitingBroadcast::<Runtime, BitcoinInstance>::contains_key(broadcast_id));
 			}
 
 			// Following failed broadcasts are delayed by a increasing sequence.
 			// Delay caps at 1200.
-			for (i, delay) in delay_sequence.into_iter().enumerate() {
-				let account_id = AccountId::from([(DELAY_THRESHOLD + i as u32) as u8; 32]);
+			testnet.set_active_all_nodes(false);
+			for delay in delay_sequence {
+				let account_id = get_nominee(broadcast_id);
 				let target_retry_block = System::block_number() + delay;
+
 				assert_ok!(BitcoinBroadcaster::transaction_failed(
 					RuntimeOrigin::signed(account_id),
 					broadcast_id
 				));
-				assert_eq!(BroadcastRetryQueue::<Runtime, BitcoinInstance>::decode_len(), Some(0));
-				if DelayedBroadcastRetryQueue::<Runtime, BitcoinInstance>::get(target_retry_block)
-					.is_empty()
-				{
-					println!("{}, {}", System::block_number(), target_retry_block);
-				}
+
+				assert!(DelayedBroadcastRetryQueue::<Runtime, BitcoinInstance>::get(
+					target_retry_block
+				)
+				.contains(&broadcast_id));
+
 				testnet.move_forward_blocks(delay);
+
 				assert!(AwaitingBroadcast::<Runtime, BitcoinInstance>::contains_key(broadcast_id));
 				assert_eq!(
 					DelayedBroadcastRetryQueue::<Runtime, BitcoinInstance>::decode_len(
