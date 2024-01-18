@@ -8,9 +8,11 @@ use cf_traits::{
 	EgressApi, PoolApi,
 };
 
+use cf_chains::assets::AssetBalance;
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 mod benchmarking;
 
@@ -334,5 +336,22 @@ impl<T: Config> LpBalanceApi for Pallet<T> {
 			amount_debited: amount,
 		});
 		Ok(())
+	}
+
+	fn asset_balances(
+		who: &Self::AccountId,
+	) -> scale_info::prelude::collections::BTreeMap<
+		ForeignChain,
+		Vec<cf_chains::assets::AssetBalance>,
+	> {
+		let mut balances = BTreeMap::<_, Vec<_>>::new();
+		T::PoolApi::sweep(who).unwrap();
+		let _ = Asset::all().iter().map(|&asset| {
+			balances.entry(ForeignChain::from(asset)).or_default().push(AssetBalance {
+				asset,
+				balance: FreeBalances::<T>::get(who, asset).unwrap_or(0),
+			});
+		});
+		balances
 	}
 }

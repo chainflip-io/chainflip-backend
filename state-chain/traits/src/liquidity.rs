@@ -1,6 +1,7 @@
-use cf_chains::address::ForeignChainAddress;
-use cf_primitives::{Asset, AssetAmount, BasisPoints, ChannelId};
+use cf_chains::{address::ForeignChainAddress, assets::AssetBalance};
+use cf_primitives::{Asset, AssetAmount, BasisPoints, ChannelId, ForeignChain};
 use frame_support::{dispatch::DispatchError, sp_runtime::DispatchResult};
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 pub trait SwapDepositHandler {
 	type AccountId;
@@ -44,6 +45,9 @@ pub trait LpBalanceApi {
 		asset: Asset,
 		amount: AssetAmount,
 	) -> DispatchResult;
+
+	/// Returns the asset balances of the given account.
+	fn asset_balances(who: &Self::AccountId) -> BTreeMap<ForeignChain, Vec<AssetBalance>>;
 }
 
 pub trait PoolApi {

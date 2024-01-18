@@ -29,7 +29,7 @@ use cf_chains::{
 	TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, NetworkEnvironment};
-use cf_traits::GetTrackedData;
+use cf_traits::{GetTrackedData, LpBalanceApi};
 use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
@@ -965,14 +965,7 @@ impl_runtime_apis! {
 				.collect()
 		}
 		fn cf_asset_balances(account_id: AccountId) -> BTreeMap<ForeignChain, Vec<AssetBalance>> {
-			let mut balances = BTreeMap::<_, Vec<_>>::new();
-			LiquidityPools::sweep(&account_id).unwrap();
-			let _ = Asset::all().iter().map(|&asset| {
-				balances.entry(ForeignChain::from(asset))
-				.or_default()
-				.push(AssetBalance { asset, balance: pallet_cf_lp::FreeBalances::<Runtime>::get(&account_id, asset).unwrap_or(0) });
-			});
-			balances
+			LiquidityProvider::asset_balances(&account_id)
 		}
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()

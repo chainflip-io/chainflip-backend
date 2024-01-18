@@ -36,4 +36,13 @@ impl LpBalanceApi for MockBalance {
 	) -> DispatchResult {
 		Ok(())
 	}
+
+	fn asset_balances(
+		_who: &Self::AccountId,
+	) -> scale_info::prelude::collections::BTreeMap<
+		cf_primitives::ForeignChain,
+		Vec<cf_chains::assets::AssetBalance>,
+	> {
+		unreachable!()
+	}
 }
