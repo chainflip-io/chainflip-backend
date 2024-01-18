@@ -119,6 +119,15 @@ impl LpBalanceApi for MockBalance {
 		}
 		Ok(())
 	}
+
+	fn asset_balances(
+		_who: &Self::AccountId,
+	) -> scale_info::prelude::collections::BTreeMap<
+		cf_primitives::ForeignChain,
+		Vec<cf_chains::assets::AssetBalance>,
+	> {
+		unreachable!()
+	}
 }
 
 impl_mock_runtime_safe_mode!(pools: PalletSafeMode);
