@@ -17,8 +17,8 @@ use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 use sp_consensus_aura::SlotDuration;
 use sp_std::collections::btree_set::BTreeSet;
 use state_chain_runtime::{
-	AccountRoles, AllPalletsWithSystem, BitcoinInstance, PolkadotInstance, Runtime, RuntimeCall,
-	RuntimeEvent, RuntimeOrigin, Validator, Weight,
+	AccountRoles, AllPalletsWithSystem, BitcoinInstance, PalletExecutionOrder, PolkadotInstance,
+	Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Validator, Weight,
 };
 use std::{
 	cell::RefCell,
@@ -663,7 +663,7 @@ impl Network {
 
 			// Initialize
 			System::initialize(&block_number, &System::block_hash(block_number), &digest);
-			AllPalletsWithSystem::on_initialize(block_number);
+			PalletExecutionOrder::on_initialize(block_number);
 
 			// Inherents
 			assert_ok!(state_chain_runtime::Timestamp::create_inherent(&inherent_data)
@@ -680,7 +680,7 @@ impl Network {
 			);
 
 			// We must finalise this to clear the previous author which is otherwise cached
-			AllPalletsWithSystem::on_finalize(block_number);
+			PalletExecutionOrder::on_finalize(block_number);
 			AllPalletsWithSystem::integrity_test();
 
 			// Engine reacts to events from the State Chain.
