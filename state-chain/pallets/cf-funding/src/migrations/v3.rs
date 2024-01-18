@@ -3,7 +3,7 @@ use frame_support::traits::OnRuntimeUpgrade;
 use sp_std::marker::PhantomData;
 
 #[cfg(feature = "try-runtime")]
-use frame_support::dispatch::DispatchError;
+use frame_support::pallet_prelude::DispatchError;
 
 /// Runtime Migration for migrating from V2 to V3: updating PendingRedemption to store to also take
 /// the restricted amount into account.
