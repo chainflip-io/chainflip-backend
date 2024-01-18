@@ -182,39 +182,12 @@ async function main(): Promise<void> {
       unsubscribe();
 
       for (const elem of witnessHash) {
-        const failingValidators = [];
-        let votes;
-        try {
-          votes = (await api.query.witnesser.votes(epoch, elem)).toHuman();
-        } catch (e) {
-          console.log('Failed to query the storage item with the provided hash!');
-        }
-        if (votes) {
-          let binary = hex2bin(votes.toString());
-          const witnessNumber = binary.match(/1/g)?.length;
-          let offset = 0;
-          // hashes are stored as 152 bits, the last 2 bits are always 0
-          while ((binary.match(/0/g)?.length || 0) > 2) {
-            const index = binary.indexOf('0');
-            binary = binary.substring(index + 1);
-            failingValidators.push(validators[index + offset]);
-            offset = offset + index + 1;
-          }
-          console.log(
-            `${witnessNumber}/${validators?.length} witnessed ${elem} hash!\nThe extrinsic was in block ${currentBlockNumber}`,
-          );
-          failingValidators.forEach((element) => {
-            if (vanityNames[element] && vanityNames[element].substr(0, 2) === '0x') {
-              const vanity = vanityNames[element].substr(2);
-              const bytes = [];
-              for (let i = 0; i < vanity.length; i += 2) {
-                bytes.push(parseInt(vanity.substr(i, 2), 16));
-              }
-              console.log(element + ' - ' + String.fromCharCode(...bytes));
-            } else {
-              console.log(element + ' - ' + vanityNames[element]);
-            }
-          });
+        let result = await api.rpc("cf_witness_count", elem);
+        if(result) {
+          console.log(`Number of nodes who failed to witness: ${result.number}`);
+          console.log(`List of validators: ${result.validators}`);
+        } else {
+          console.log("The provided hash is not a valid callhash")
         }
       }
       process.exit(0);
