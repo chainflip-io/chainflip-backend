@@ -1221,6 +1221,7 @@ dependencies = [
  "cf-primitives",
  "cf-test-utilities",
  "cf-traits",
+ "cfe-events",
  "chainflip-node",
  "frame-executive",
  "frame-support",
@@ -1352,6 +1353,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
+ "cfe-events",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -1360,6 +1362,19 @@ dependencies = [
  "scale-info",
  "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
  "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
+ "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
+]
+
+[[package]]
+name = "cfe-events"
+version = "0.1.0"
+dependencies = [
+ "cf-chains",
+ "cf-primitives",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
 ]
 
@@ -1539,6 +1554,7 @@ dependencies = [
  "num-traits",
  "pallet-cf-account-roles",
  "pallet-cf-broadcast",
+ "pallet-cf-cfe-interface",
  "pallet-cf-chain-tracking",
  "pallet-cf-environment",
  "pallet-cf-flip",
@@ -7177,6 +7193,7 @@ dependencies = [
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
+ "cfe-events",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -7186,6 +7203,23 @@ dependencies = [
  "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
  "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
  "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
+ "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
+]
+
+[[package]]
+name = "pallet-cf-cfe-interface"
+version = "0.1.0"
+dependencies = [
+ "cf-chains",
+ "cf-primitives",
+ "cf-runtime-upgrade-utilities",
+ "cf-traits",
+ "cfe-events",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
 ]
 
@@ -7447,6 +7481,7 @@ dependencies = [
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
+ "cfe-events",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -7522,6 +7557,7 @@ dependencies = [
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
+ "cfe-events",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -12013,6 +12049,7 @@ dependencies = [
  "pallet-authorship",
  "pallet-cf-account-roles",
  "pallet-cf-broadcast",
+ "pallet-cf-cfe-interface",
  "pallet-cf-chain-tracking",
  "pallet-cf-emissions",
  "pallet-cf-environment",

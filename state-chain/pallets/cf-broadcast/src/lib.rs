@@ -18,9 +18,10 @@ use cf_chains::{
 	TransactionMetadata as _,
 };
 use cf_traits::{
-	offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster, Chainflip, EpochInfo,
-	GetBlockHeight, SafeMode, ThresholdSigner,
+	offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster, CfeBroadcastRequest,
+	Chainflip, EpochInfo, GetBlockHeight, SafeMode, ThresholdSigner,
 };
+use cfe_events::TxBroadcastRequest;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -187,6 +188,8 @@ pub mod pallet {
 			BlockNumber = BlockNumberFor<Self>,
 			AttemptCount = AttemptCount,
 		>;
+
+		type CfeBroadcastRequest: CfeBroadcastRequest<Self, Self::TargetChain>;
 
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
@@ -791,6 +794,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				(broadcast_id, nominated_signer.clone()),
 			);
 
+			T::CfeBroadcastRequest::tx_broadcast_request(TxBroadcastRequest {
+				broadcast_id,
+				nominee: nominated_signer.clone(),
+				payload: broadcast_data.transaction_payload.clone(),
+			});
+
+			// TODO: consider removing this
 			Self::deposit_event(Event::<T, I>::TransactionBroadcastRequest {
 				broadcast_id,
 				nominee: nominated_signer,

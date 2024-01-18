@@ -29,6 +29,7 @@ cf-chains = { path = '../chains', features = ['runtime-integration-tests'] }
 cf-primitives = { path = '../primitives' }
 cf-test-utilities = { path = '../test-utilities' }
 cf-traits = { path = '../traits' }
+cfe-events = { path = '../cfe-events' }
 chainflip-node = { path = '../node' }
 pallet-authorship = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+5" }
 pallet-cf-account-roles = { path = '../pallets/cf-account-roles' }
