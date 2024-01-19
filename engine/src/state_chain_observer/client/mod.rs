@@ -766,6 +766,8 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 			// Note that around CFE upgrade period, the less recent version might still be running
 			// (and can even be *the* "active" instance), so it is important that it doesn't
 			// downgrade the version record:
+
+			tracing::info!("Check that this version is greater than the recorded version");
 			if this_version.is_more_recent_than(recorded_version) {
 				info!(
 					"Updating CFE version record from {:?} to {:?}",
@@ -793,9 +795,17 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 							),
 							&subxt_signer,
 						)
-						.await?
+						.await
+						.map_err(|err| {
+							tracing::error!("Failed to submit CFE version with subxt: {:?}", err);
+							err
+						})?
 						.wait_for_in_block()
 						.await
+						.map_err(|err| {
+							tracing::error!("Failed waiting for transaction to get into a block with subxt: {:?}", err);
+							err
+						})
 				})
 				.await
 				.map_err(|_| anyhow::anyhow!("Timed out trying to submit CFE version"))??;
