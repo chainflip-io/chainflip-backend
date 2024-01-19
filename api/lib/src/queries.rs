@@ -224,7 +224,7 @@ impl QueryApi {
 	pub async fn check_witnesses(
 		&self,
 		_block_hash: Option<state_chain_runtime::Hash>,
-		hash: String,
+		hash: state_chain_runtime::Hash,
 	) -> Result<Option<FailingWitnessValidators>, anyhow::Error> {
 		let result = self
 			.state_chain_client

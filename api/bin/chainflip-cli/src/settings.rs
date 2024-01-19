@@ -1,4 +1,4 @@
-use chainflip_api::primitives::{AccountRole, Asset, ForeignChain};
+use chainflip_api::primitives::{state_chain_runtime, AccountRole, Asset, ForeignChain};
 pub use chainflip_engine::settings::StateChain;
 use chainflip_engine::{
 	constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT},
@@ -190,7 +190,7 @@ pub enum CliCommand {
 	#[clap(about = "Count how many validators witnessed a given callhash")]
 	CountWitnesses {
 		#[clap(help = "The hash representing the call to check")]
-		hash: String,
+		hash: state_chain_runtime::Hash,
 	},
 }
 

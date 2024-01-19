@@ -40,7 +40,7 @@ use pallet_cf_reputation::ExclusionList;
 use pallet_cf_swapping::CcmSwapAmounts;
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
-use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
+use sp_std::collections::btree_map::BTreeMap;
 
 use crate::runtime_apis::RuntimeApiAccountInfoV2;
 
@@ -1346,50 +1346,24 @@ impl_runtime_apis! {
 		}
 
 		fn cf_witness_count(hash: pallet_cf_witnesser::CallHash) -> Option<FailingWitnessValidators> {
-			// helper function to compute the number of bits set and their indices
-			fn count_set_bits_and_indices(bytes: &[u8], size: usize) -> (u32, Vec<usize>) {
-				let mut result = Vec::new();
-				let mut total: u32 = 0;
-				for (byte_index, &byte) in bytes.iter().enumerate() {
-					for bit_index in 0..8 {
-						if (byte & (1 << bit_index)) != 0 {
-							let absolute_bit_index = byte_index * 8 + bit_index;
-							// we have to skip the last 2 bits which are always set to 0,
-							// if the index is >= size we reached the end
-							if absolute_bit_index < size {
-								result.push(absolute_bit_index);
-								total += 1;
-							}
-						}
-					}
-				}
-				(total, result)
-			}
-
 			let mut result: FailingWitnessValidators = FailingWitnessValidators {
-				number: 0,
+				failing_count: 0,
 				validators: vec![],
 			};
-			let epoch = Validator::current_epoch();
-			let vote = pallet_cf_witnesser::Votes::<Runtime>::get(epoch, hash);
-			let validators: BTreeSet<AccountId> = pallet_cf_validator::CurrentAuthorities::<Runtime>::get();
+			let voting_validators = Witnesser::count_votes(hash);
+			let vanity_names: BTreeMap<AccountId, Vec<u8>> = pallet_cf_validator::VanityNames::<Runtime>::get();
+			voting_validators?.iter().for_each(|(val, voted)| {
+				let vanity = match vanity_names.get(val) {
+					Some(vanity_name) => { vanity_name.clone() },
+					None => { vec![] }
+				};
+				if !voted {
+					result.failing_count += 1;
+				}
+				result.validators.push((val.clone(), vanity, *voted));
+			});
 
-			match vote {
-				Some(bytes) => {
-					let (count, indices) = count_set_bits_and_indices(&bytes, validators.len());
-					let vanity_names: BTreeMap<AccountId, Vec<u8>> = pallet_cf_validator::VanityNames::<Runtime>::get();
-					result.number = count;
-					for elem in indices {
-						// we can safely unwrap since it is impossible to retrieve indices greater than the number of elements
-						let validator: &AccountId = validators.iter().nth(elem).unwrap();
-						// we can safely unwrap since it is impossible to not have a vanity record for an authority
-						let vanity: &Vec<u8> = vanity_names.get(validator).unwrap();
-						result.validators.push((validator.clone(), vanity.to_vec()));
-					}
-					Some(result)
-				},
-				None => { None }
-			}
+			Some(result)
 		}
 	}
 

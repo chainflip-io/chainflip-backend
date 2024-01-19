@@ -117,7 +117,7 @@ async function main(): Promise<void> {
       for (const elem of witnessHash) {
         const result = await api.rpc('cf_witness_count', elem);
         if (result) {
-          console.log(`Number of nodes who failed to witness: ${result.number}`);
+          console.log(`Number of nodes who failed to witness: ${result.failing_count}`);
           console.log(`List of validators: ${result.validators}`);
         } else {
           console.log('The provided hash is not a valid callhash');

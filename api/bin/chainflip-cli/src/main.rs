@@ -1,15 +1,9 @@
 #![feature(absolute_path)]
-use anyhow::{Context, Result};
-use clap::Parser;
-use custom_rpc::RpcAsset;
-use futures::FutureExt;
-use serde::Serialize;
-use std::{io::Write, path::PathBuf, sync::Arc};
-
 use crate::settings::{
 	BrokerSubcommands, CLICommandLineOptions, CLISettings, CliCommand::*,
 	LiquidityProviderSubcommands,
 };
+use anyhow::{Context, Result};
 use api::{
 	lp::LpApi,
 	primitives::{RedemptionAmount, FLIP_DECIMALS},
@@ -18,6 +12,12 @@ use api::{
 };
 use cf_chains::eth::Address as EthereumAddress;
 use chainflip_api as api;
+use chainflip_api::primitives::state_chain_runtime;
+use clap::Parser;
+use custom_rpc::RpcAsset;
+use futures::FutureExt;
+use serde::Serialize;
+use std::{io::Write, path::PathBuf, sync::Arc};
 use utilities::{clean_hex_address, round_f64, task_scope::task_scope};
 
 mod settings;
@@ -288,11 +288,11 @@ async fn pre_update_check(api: QueryApi) -> Result<()> {
 	Ok(())
 }
 
-async fn count_witnesses(api: QueryApi, hash: String) -> Result<()> {
+async fn count_witnesses(api: QueryApi, hash: state_chain_runtime::Hash) -> Result<()> {
 	let result = api.check_witnesses(None, hash).await?;
 	match result {
 		Some(value) => {
-			println!("Number of validator who failed to witness it: {}", value.number);
+			println!("Number of validator who failed to witness it: {}", value.failing_count);
 			println!("List of validator: {:?}", value.validators);
 		},
 		None => {

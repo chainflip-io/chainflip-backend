@@ -13,7 +13,6 @@ use cf_primitives::{
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
-use hex::FromHex;
 use jsonrpsee::{
 	core::RpcResult,
 	proc_macros::rpc,
@@ -491,7 +490,10 @@ pub trait CustomApi {
 	) -> RpcResult<Option<<cf_chains::Ethereum as Chain>::Transaction>>;
 
 	#[method(name = "witness_count")]
-	fn cf_witness_count(&self, hash: String) -> RpcResult<Option<FailingWitnessValidators>>;
+	fn cf_witness_count(
+		&self,
+		hash: state_chain_runtime::Hash,
+	) -> RpcResult<Option<FailingWitnessValidators>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1138,16 +1140,14 @@ where
 			.map_err(to_rpc_error)
 	}
 
-	fn cf_witness_count(&self, hash: String) -> RpcResult<Option<FailingWitnessValidators>> {
-		let hex_hash = <[u8; 32]>::from_hex(&hash[2..]).map_err(to_rpc_error);
-		match hex_hash {
-			Ok(val) => self
-				.client
-				.runtime_api()
-				.cf_witness_count(self.unwrap_or_best(None), pallet_cf_witnesser::CallHash(val))
-				.map_err(to_rpc_error),
-			Err(e) => Err(e),
-		}
+	fn cf_witness_count(
+		&self,
+		hash: state_chain_runtime::Hash,
+	) -> RpcResult<Option<FailingWitnessValidators>> {
+		self.client
+			.runtime_api()
+			.cf_witness_count(self.unwrap_or_best(None), pallet_cf_witnesser::CallHash(hash.into()))
+			.map_err(to_rpc_error)
 	}
 }
 
