@@ -113,7 +113,7 @@ mod test_missed_authorship_slots {
 		type AllowMultipleBlocksPerSlot = ConstBool<false>;
 	}
 
-	pub fn new_test_ext(authorities: Vec<u64>) -> frame_support::sp_io::TestExternalities {
+	pub fn new_test_ext(authorities: Vec<u64>) -> sp_io::TestExternalities {
 		RuntimeGenesisConfig {
 			system: Default::default(),
 			aura: AuraConfig {

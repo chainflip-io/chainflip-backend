@@ -14,7 +14,8 @@ use futures_core::Stream;
 use sp_core::H256;
 use std::pin::Pin;
 use subxt::{
-	config::Header as SubxtHeader, events::Events, rpc::types::ChainBlockExtrinsic, PolkadotConfig,
+	backend::legacy::rpc_methods::Bytes, config::Header as SubxtHeader, events::Events,
+	PolkadotConfig,
 };
 use utilities::task_scope::Scope;
 
@@ -92,7 +93,7 @@ impl DotRetryRpcClient {
 pub trait DotRetryRpcApi: Clone {
 	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash>;
 
-	async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<ChainBlockExtrinsic>;
+	async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<Bytes>;
 
 	async fn events<R: RetryLimitReturn>(
 		&self,
@@ -123,7 +124,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 			.await
 	}
 
-	async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<ChainBlockExtrinsic> {
+	async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<Bytes> {
 		self.rpc_retry_client
 			.request(
 				Box::pin(move |client| {
@@ -300,7 +301,7 @@ pub mod mocks {
 		impl DotRetryRpcApi for DotHttpRpcClient {
 			async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash>;
 
-			async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<ChainBlockExtrinsic>;
+			async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<Bytes>;
 
 			async fn events<R: RetryLimitReturn>(&self, block_hash: PolkadotHash, parent_hash: PolkadotHash, retry_limit: R) -> R::ReturnType<Option<Events<PolkadotConfig>>>;
 

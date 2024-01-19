@@ -25,6 +25,7 @@ use sc_rpc_api::{
 use futures::future::BoxFuture;
 use serde_json::value::RawValue;
 use std::sync::Arc;
+use subxt::backend::rpc::RawRpcSubscription;
 
 #[cfg(test)]
 use mockall::automock;
@@ -302,7 +303,9 @@ impl jsonrpsee::core::traits::ToRpcParams for Params {
 
 pub struct SubxtInterface<T>(pub T);
 
-impl<T: BaseRpcApi + Send + Sync + 'static> subxt::rpc::RpcClientT for SubxtInterface<Arc<T>> {
+impl<T: BaseRpcApi + Send + Sync + 'static> subxt::backend::rpc::RpcClientT
+	for SubxtInterface<Arc<T>>
+{
 	fn request_raw<'a>(
 		&'a self,
 		method: &'a str,
@@ -321,7 +324,7 @@ impl<T: BaseRpcApi + Send + Sync + 'static> subxt::rpc::RpcClientT for SubxtInte
 		sub: &'a str,
 		params: Option<Box<RawValue>>,
 		unsub: &'a str,
-	) -> BoxFuture<'a, Result<subxt::rpc::RpcSubscription, subxt::error::RpcError>> {
+	) -> BoxFuture<'a, Result<RawRpcSubscription, subxt::error::RpcError>> {
 		Box::pin(async move {
 			let stream = self
 				.0
@@ -340,7 +343,7 @@ impl<T: BaseRpcApi + Send + Sync + 'static> subxt::rpc::RpcClientT for SubxtInte
 
 			let stream =
 				stream.map_err(|e| subxt::error::RpcError::ClientError(Box::new(e))).boxed();
-			Ok(subxt::rpc::RpcSubscription { stream, id })
+			Ok(RawRpcSubscription { stream, id })
 		})
 	}
 }

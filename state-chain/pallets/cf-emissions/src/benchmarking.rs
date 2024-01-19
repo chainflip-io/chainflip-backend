@@ -4,10 +4,7 @@
 use super::*;
 
 use frame_benchmarking::benchmarks;
-use frame_support::{
-	dispatch::UnfilteredDispatchable,
-	traits::{EnsureOrigin, OnInitialize},
-};
+use frame_support::traits::{EnsureOrigin, OnInitialize, UnfilteredDispatchable};
 
 use codec::Encode;
 use sp_std::vec;

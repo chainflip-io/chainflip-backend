@@ -70,13 +70,13 @@ impl cf_traits::BroadcastNomination for RandomSignerNomination {
 
 	fn nominate_broadcaster<H: Hashable>(
 		seed: H,
-		exclude_ids: &[Self::BroadcasterId],
+		exclude_ids: impl IntoIterator<Item = Self::BroadcasterId>,
 	) -> Option<Self::BroadcasterId> {
 		let mut all_excludes = Reputation::validators_suspended_for(&[
 			Offence::FailedToBroadcastTransaction,
 			Offence::MissedHeartbeat,
 		]);
-		all_excludes.extend(exclude_ids.iter().cloned());
+		all_excludes.extend(exclude_ids);
 		select_one(
 			seed_from_hashable(seed),
 			eligible_authorities(Validator::epoch_index(), &all_excludes),

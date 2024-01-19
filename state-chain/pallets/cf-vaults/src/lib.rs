@@ -8,9 +8,10 @@ use cf_primitives::{
 };
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AccountRoleRegistry, AsyncResult, Broadcaster, Chainflip,
-	CurrentEpochIndex, EpochKey, GetBlockHeight, KeyProvider, SafeMode, SetSafeMode, Slashing,
-	ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus,
+	offence_reporting::OffenceReporter, AccountRoleRegistry, AsyncResult, Broadcaster,
+	CfeMultisigRequest, Chainflip, CurrentEpochIndex, EpochKey, GetBlockHeight, KeyProvider,
+	SafeMode, SetSafeMode, Slashing, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator,
+	VaultStatus,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -209,6 +210,8 @@ pub mod pallet {
 
 		type ChainTracking: GetBlockHeight<Self::Chain>;
 
+		type CfeMultisigRequest: CfeMultisigRequest<Self, <Self::Chain as Chain>::ChainCrypto>;
+
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
 	}
@@ -251,10 +254,7 @@ pub mod pallet {
 							);
 						},
 						|offenders| {
-							Self::terminate_rotation(
-								offenders.into_iter().collect::<Vec<_>>().as_slice(),
-								Event::KeygenFailure(ceremony_id),
-							);
+							Self::terminate_rotation(offenders, Event::KeygenFailure(ceremony_id));
 						},
 					);
 				},
@@ -316,7 +316,7 @@ pub mod pallet {
 						|offenders| {
 							T::OffenceReporter::report_many(
 								PalletOffence::FailedKeyHandover,
-								offenders.iter().cloned().collect::<Vec<_>>().as_slice(),
+								offenders.clone(),
 							);
 							PendingVaultRotation::<T, I>::put(
 								VaultRotationStatus::<T, I>::KeyHandoverFailed {
@@ -883,15 +883,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		request_id
 	}
 
-	fn terminate_rotation(offenders: &[T::ValidatorId], event: Event<T, I>) {
-		T::OffenceReporter::report_many(PalletOffence::FailedKeygen, offenders);
+	fn terminate_rotation(
+		offenders: impl IntoIterator<Item = T::ValidatorId> + Clone,
+		event: Event<T, I>,
+	) {
+		T::OffenceReporter::report_many(PalletOffence::FailedKeygen, offenders.clone());
 		if T::SafeMode::get().slashing_enabled {
-			for offender in offenders {
-				T::Slasher::slash_balance(offender, KeygenSlashAmount::<T, I>::get());
-			}
+			offenders.clone().into_iter().for_each(|offender| {
+				T::Slasher::slash_balance(&offender, KeygenSlashAmount::<T, I>::get());
+			});
 		}
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed {
-			offenders: offenders.iter().cloned().collect(),
+			offenders: offenders.into_iter().collect(),
 		});
 		Self::deposit_event(event);
 	}
@@ -922,7 +925,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// We don't do any more here. We wait for the validator pallet to
 				// let us know when we can proceed.
 			},
-			Err(offenders) => Self::terminate_rotation(&offenders[..], event_on_error),
+			Err(offenders) => Self::terminate_rotation(offenders, event_on_error),
 		};
 		Ok(().into())
 	}

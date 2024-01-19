@@ -5,7 +5,7 @@ use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleRegistry, CallDispatchFilter,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{parameter_types, RuntimeDebug};
+use frame_support::{pallet_prelude::RuntimeDebug, parameter_types};
 use frame_system as system;
 use scale_info::TypeInfo;
 use sp_core::H256;

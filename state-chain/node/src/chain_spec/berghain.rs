@@ -1,9 +1,7 @@
 pub use super::common::*;
 use super::StateChainEnvironment;
 use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_MAINNET};
-use cf_primitives::{
-	AccountId, AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, NetworkEnvironment,
-};
+use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use sc_service::ChainType;
 use sp_core::H256;
 use state_chain_runtime::SetSizeParameters;
@@ -71,14 +69,6 @@ pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 0;
 pub const BACKUP_NODE_EMISSION_INFLATION_PERBILL: u32 = 0;
 
 pub const SUPPLY_UPDATE_INTERVAL: u32 = 30 * 24 * HOURS;
-
-pub const MINIMUM_SWAP_AMOUNTS: &[(Asset, AssetAmount)] = &[
-	(Asset::Eth, 0u128),
-	(Asset::Flip, 0u128),
-	(Asset::Usdc, 0u128),
-	(Asset::Dot, 0u128),
-	(Asset::Btc, 0u128),
-];
 
 pub const MIN_FUNDING: FlipBalance = 6 * FLIPPERINOS_PER_FLIP;
 pub const GENESIS_AUTHORITY_FUNDING: FlipBalance = 1_000 * FLIPPERINOS_PER_FLIP;

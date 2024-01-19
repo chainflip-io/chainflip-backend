@@ -9,8 +9,6 @@ pub mod mock;
 mod tests;
 
 mod benchmarking;
-pub mod migrations;
-
 pub mod weights;
 
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -21,19 +19,19 @@ use cf_primitives::{
 	AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId as RequestId,
 };
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, Chainflip, EpochInfo,
-	EpochKey, KeyProvider, ThresholdSignerNomination,
+	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, CfeMultisigRequest,
+	Chainflip, EpochInfo, EpochKey, KeyProvider, ThresholdSignerNomination,
 };
+use cfe_events::ThresholdSignatureRequest;
 
 use cf_runtime_utilities::log_or_panic;
 use frame_support::{
-	dispatch::UnfilteredDispatchable,
 	ensure,
 	sp_runtime::{
 		traits::{BlockNumberProvider, Saturating},
 		RuntimeDebug,
 	},
-	traits::{DefensiveOption, EnsureOrigin, Get, StorageVersion},
+	traits::{DefensiveOption, EnsureOrigin, Get, StorageVersion, UnfilteredDispatchable},
 };
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
@@ -81,7 +79,8 @@ const THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
 pub mod pallet {
 	use super::*;
 	use cf_traits::{
-		AccountRoleRegistry, AsyncResult, CeremonyIdProvider, ThresholdSignerNomination,
+		AccountRoleRegistry, AsyncResult, CeremonyIdProvider, CfeMultisigRequest,
+		ThresholdSignerNomination,
 	};
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo,
@@ -239,6 +238,8 @@ pub mod pallet {
 		/// number of blocks to wait before retrying with a new set.
 		#[pallet::constant]
 		type CeremonyRetryDelay: Get<BlockNumberFor<Self>>;
+
+		type CfeMultisigRequest: CfeMultisigRequest<Self, Self::TargetChainCrypto>;
 
 		/// Pallet weights
 		type Weights: WeightInfo;
@@ -407,7 +408,7 @@ pub mod pallet {
 						ThresholdCeremonyType::Standard => {
 							T::OffenceReporter::report_many(
 								PalletOffence::ParticipateSigningFailed,
-								&offenders[..],
+								offenders,
 							);
 
 							Self::new_ceremony_attempt(RequestInstruction::new(
@@ -709,6 +710,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					request_id,
 					attempt_count
 				);
+
+				T::CfeMultisigRequest::signature_request(ThresholdSignatureRequest {
+					ceremony_id,
+					epoch_index: epoch,
+					key,
+					signatories: participants.clone(),
+					payload: payload.clone(),
+				});
+
+				// TODO: consider removing this
 				Event::<T, I>::ThresholdSignatureRequest {
 					request_id,
 					ceremony_id,

@@ -21,7 +21,7 @@ use sp_std::marker::PhantomData;
 
 const NO_CHAIN_STATE: &str = "Chain state should be set at genesis and never removed.";
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 #[frame_support::pallet]
 pub mod pallet {

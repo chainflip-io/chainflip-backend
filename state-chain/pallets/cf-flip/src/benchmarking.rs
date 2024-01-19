@@ -2,7 +2,7 @@
 use super::*;
 
 use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::{dispatch::UnfilteredDispatchable, traits::EnsureOrigin};
+use frame_support::traits::{EnsureOrigin, UnfilteredDispatchable};
 
 benchmarks! {
 	set_slashing_rate {

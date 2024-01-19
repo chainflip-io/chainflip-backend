@@ -3,12 +3,13 @@ use crate::{
 	CollectedNetworkFee, Error, Event, FlipBuyInterval, FlipToBurn, LimitOrder, PoolInfo,
 	PoolOrders, Pools, RangeOrder, RangeOrderSize, ScheduledLimitOrderUpdates, STABLE_ASSET,
 };
-use cf_amm::common::{price_at_tick, Order, Tick};
+use cf_amm::common::{price_at_tick, tick_at_price, Order, Tick, PRICE_FRACTIONAL_BITS};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount, SwapOutput};
 use cf_test_utilities::{assert_events_match, assert_has_event, last_event};
 use cf_traits::AssetConverter;
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use frame_system::pallet_prelude::BlockNumberFor;
+use sp_core::U256;
 use sp_runtime::Permill;
 
 #[test]
@@ -187,7 +188,7 @@ fn test_sweeping() {
 fn test_buy_back_flip() {
 	new_test_ext().execute_with(|| {
 		const INTERVAL: BlockNumberFor<Test> = 5;
-		const POSITION: core::ops::Range<Tick> = -100_000..100_000;
+		const FLIP_PRICE_IN_USDC: u128 = 10;
 		const FLIP: Asset = Asset::Flip;
 
 		// Create a new pool.
@@ -198,21 +199,30 @@ fn test_buy_back_flip() {
 			Default::default(),
 			price_at_tick(0).unwrap(),
 		));
-		assert_ok!(LiquidityPools::set_range_order(
-			RuntimeOrigin::signed(ALICE),
-			FLIP,
-			STABLE_ASSET,
-			0,
-			Some(POSITION),
-			RangeOrderSize::Liquidity { liquidity: 1_000_000 },
-		));
+		for side in [Order::Buy, Order::Sell] {
+			assert_ok!(LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(ALICE),
+				FLIP,
+				STABLE_ASSET,
+				side,
+				0,
+				Some(
+					tick_at_price(U256::from(FLIP_PRICE_IN_USDC) << PRICE_FRACTIONAL_BITS).unwrap()
+				),
+				1_000_000_000,
+			));
+		}
 
 		// Swapping should cause the network fee to be collected.
-		LiquidityPools::swap_with_network_fee(FLIP, STABLE_ASSET, 1000).unwrap();
-		LiquidityPools::swap_with_network_fee(STABLE_ASSET, FLIP, 1000).unwrap();
+		// Do two swaps of equivalent value.
+		const USDC_SWAP_VALUE: u128 = 100_000;
+		const FLIP_SWAP_VALUE: u128 = USDC_SWAP_VALUE / FLIP_PRICE_IN_USDC;
+		LiquidityPools::swap_with_network_fee(FLIP, STABLE_ASSET, FLIP_SWAP_VALUE).unwrap();
+		LiquidityPools::swap_with_network_fee(STABLE_ASSET, FLIP, USDC_SWAP_VALUE).unwrap();
 
-		let collected_fee = CollectedNetworkFee::<Test>::get();
-		assert!(collected_fee > 0);
+		// 2 swaps of 100_000 USDC, 0.2% fee
+		const EXPECTED_COLLECTED_FEES: AssetAmount = 400;
+		assert_eq!(CollectedNetworkFee::<Test>::get(), EXPECTED_COLLECTED_FEES);
 
 		// The default buy interval is zero, and this means we don't buy back.
 		assert_eq!(FlipBuyInterval::<Test>::get(), 0);
@@ -225,12 +235,14 @@ fn test_buy_back_flip() {
 		// Nothing is bought if we're not at the interval.
 		LiquidityPools::on_initialize(INTERVAL * 3 - 1);
 		assert_eq!(0, FlipToBurn::<Test>::get());
-		assert_eq!(collected_fee, CollectedNetworkFee::<Test>::get());
+		assert_eq!(EXPECTED_COLLECTED_FEES, CollectedNetworkFee::<Test>::get());
 
 		// If we're at an interval, we should buy flip.
 		LiquidityPools::on_initialize(INTERVAL * 3);
 		assert_eq!(0, CollectedNetworkFee::<Test>::get());
-		assert!(FlipToBurn::<Test>::get() > 0);
+		assert!(
+			FlipToBurn::<Test>::get().abs_diff(EXPECTED_COLLECTED_FEES / FLIP_PRICE_IN_USDC) <= 1
+		);
 	});
 }
 
@@ -318,7 +330,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			10_000,
 		));
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(ALICE)),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap {
 					asks: vec![LimitOrder {
@@ -342,7 +354,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			})
 		);
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &BOB,),
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(BOB)),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap {
 					asks: vec![LimitOrder {
@@ -369,7 +381,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 		// Do some swaps to collect fees.
 		assert_eq!(
 			LiquidityPools::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 10_000).unwrap(),
-			SwapOutput { intermediary: None, output: 5_988u128 }
+			SwapOutput { intermediary: None, output: 5_987u128 }
 		);
 		assert_eq!(
 			LiquidityPools::swap_with_network_fee(Asset::Eth, STABLE_ASSET, 10_000).unwrap(),
@@ -387,9 +399,9 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 		// All Lpers' fees and bought amount are Collected and accredited.
 		// Fee and swaps are calculated proportional to the liquidity amount.
 		assert_eq!(AliceCollectedEth::get(), 908u128);
-		assert_eq!(AliceCollectedUsdc::get(), 3_333u128);
+		assert_eq!(AliceCollectedUsdc::get(), 3_325u128);
 		assert_eq!(BobCollectedEth::get(), 9090u128);
-		assert_eq!(BobCollectedUsdc::get(), 6_666u128);
+		assert_eq!(BobCollectedUsdc::get(), 6_651u128);
 
 		// New pool fee is set and event emitted.
 		assert_eq!(
@@ -409,15 +421,15 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 		// Alice's remaining liquidity = 5_000 - 2_000
 		// Bob's remaining liquidity = 10_000 - 4_000
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(ALICE)),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap {
 					asks: vec![LimitOrder {
 						lp: ALICE,
 						id: 0.into(),
 						tick: 0,
-						sell_amount: 3000.into(),
-						fees_earned: 1333.into(),
+						sell_amount: 3004.into(),
+						fees_earned: 1330.into(),
 						original_sell_amount: 5000.into()
 					}],
 					bids: vec![LimitOrder {
@@ -433,15 +445,15 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			})
 		);
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &BOB,),
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(BOB)),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap {
 					asks: vec![LimitOrder {
 						lp: BOB,
 						id: 0.into(),
 						tick: 0,
-						sell_amount: 6_000u128.into(),
-						fees_earned: 2666.into(),
+						sell_amount: 6_008u128.into(),
+						fees_earned: 2660.into(),
 						original_sell_amount: 10000.into()
 					}],
 					bids: vec![LimitOrder {
@@ -522,7 +534,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 			10_000,
 		));
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(ALICE)),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap {
 					asks: vec![LimitOrder {
@@ -589,9 +601,9 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 			id: 0,
 			tick: 100,
 			sell_amount_change: None,
-			sell_amount_total: 5,
-			collected_fees: 100998,
-			bought_amount: 100998,
+			sell_amount_total: 205,
+			collected_fees: 100796,
+			bought_amount: 100796,
 		}));
 		assert_has_event::<Test>(RuntimeEvent::LiquidityPools(Event::<Test>::LimitOrderUpdated {
 			lp: BOB,
@@ -671,7 +683,7 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 		assert_eq!(BobCollectedUsdc::get(), 0u128);
 
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(ALICE)),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap { asks: vec![], bids: vec![] },
 				range_orders: vec![RangeOrder {
@@ -679,12 +691,12 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 					id: 0.into(),
 					range: range.clone(),
 					liquidity: 1_000_000,
-					fees_earned: AssetsMap { base: 999.into(), quote: 999.into() }
+					fees_earned: AssetsMap { base: 999.into(), quote: 997.into() }
 				}]
 			})
 		);
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &BOB,),
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(BOB)),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap { asks: vec![], bids: vec![] },
 				range_orders: vec![RangeOrder {
@@ -692,7 +704,7 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 					id: 0.into(),
 					range: range.clone(),
 					liquidity: 1_000_000,
-					fees_earned: AssetsMap { base: 999.into(), quote: 999.into() }
+					fees_earned: AssetsMap { base: 999.into(), quote: 997.into() }
 				}]
 			})
 		);
@@ -717,13 +729,13 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 
 		// Earned liquidity pool fees are paid out.
 		// Total of ~ 4_000 fee were paid, evenly split between Alice and Bob.
-		assert_eq!(AliceCollectedEth::get(), 5_988u128);
-		assert_eq!(AliceCollectedUsdc::get(), 5_984u128);
+		assert_eq!(AliceCollectedEth::get(), 5_991u128);
+		assert_eq!(AliceCollectedUsdc::get(), 5_979u128);
 		assert_eq!(AliceDebitedEth::get(), 4_988u128);
 		assert_eq!(AliceDebitedUsdc::get(), 4_988u128);
 
-		assert_eq!(BobCollectedEth::get(), 5_988u128);
-		assert_eq!(BobCollectedUsdc::get(), 5_984u128);
+		assert_eq!(BobCollectedEth::get(), 5_991u128);
+		assert_eq!(BobCollectedUsdc::get(), 5_979u128);
 		assert_eq!(BobDebitedEth::get(), 4_988u128);
 		assert_eq!(BobDebitedUsdc::get(), 4_988u128);
 	});
@@ -903,7 +915,7 @@ fn can_get_all_pool_orders() {
 		));
 
 		assert_eq!(
-			LiquidityPools::all_pool_orders(Asset::Eth, STABLE_ASSET),
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, None),
 			Ok(PoolOrders::<Test> {
 				limit_orders: AskBidMap {
 					asks: vec![

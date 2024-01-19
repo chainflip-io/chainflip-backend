@@ -6,8 +6,8 @@ use crate::PalletSafeMode;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
-		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
-		vault_rotator::MockVaultRotatorA,
+		cfe_interface_mock::MockCfeInterface, qualify_node::QualifyAll,
+		reputation_resetter::MockReputationResetter, vault_rotator::MockVaultRotatorA,
 	},
 	AccountRoleRegistry, Bid,
 };
@@ -196,6 +196,7 @@ impl Config for Test {
 	type KeygenQualification = QualifyAll<ValidatorId>;
 	type SafeMode = MockRuntimeSafeMode;
 	type ValidatorWeightInfo = ();
+	type CfePeerRegistration = MockCfeInterface;
 }
 
 /// Session pallet requires a set of validators at genesis.

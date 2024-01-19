@@ -1,15 +1,20 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-	self as pallet_cf_threshold_signature, mock::*, AttemptCount, CeremonyContext, CeremonyId,
-	Error, PalletOffence, RequestContext, RequestId, ThresholdSignatureResponseTimeout,
+	mock::*, AttemptCount, CeremonyContext, CeremonyId, Error, PalletOffence, RequestContext,
+	RequestId, ThresholdSignatureResponseTimeout,
 };
 use cf_chains::mocks::{MockAggKey, MockEthereumChainCrypto};
 use cf_traits::{
-	mocks::{key_provider::MockKeyProvider, signer_nomination::MockNominator},
+	mocks::{
+		cfe_interface_mock::{MockCfeEvent, MockCfeInterface},
+		key_provider::MockKeyProvider,
+		signer_nomination::MockNominator,
+	},
 	AsyncResult, Chainflip, EpochKey, KeyProvider, ThresholdSigner,
 };
 
+use cfe_events::ThresholdSignatureRequest;
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
 	instances::Instance1,
@@ -46,11 +51,10 @@ struct MockCfe {
 }
 
 fn run_cfes_on_sc_events(cfes: &[MockCfe]) {
-	let events = System::events();
-	System::reset_events();
-	for event_record in events {
+	let events = MockCfeInterface::take_events();
+	for event in events {
 		for cfe in cfes {
-			cfe.process_event(event_record.event.clone());
+			cfe.process_event(event.clone());
 		}
 	}
 }
@@ -59,18 +63,18 @@ fn current_ceremony_id() -> CeremonyId {
 	<Test as crate::Config<Instance1>>::CeremonyIdProvider::get()
 }
 
+type ValidatorId = <Test as Chainflip>::ValidatorId;
+
 impl MockCfe {
-	fn process_event(&self, event: RuntimeEvent) {
+	fn process_event(&self, event: MockCfeEvent<ValidatorId>) {
 		match event {
-			RuntimeEvent::EthereumThresholdSigner(
-				pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
-					ceremony_id,
-					key,
-					signatories,
-					payload,
-					..
-				},
-			) => {
+			MockCfeEvent::EthThresholdSignatureRequest(ThresholdSignatureRequest {
+				ceremony_id,
+				epoch_index: _,
+				key,
+				signatories,
+				payload,
+			}) => {
 				assert_eq!(key, current_agg_key());
 				assert_eq!(signatories, MockNominator::get_nominees().unwrap());
 
@@ -134,8 +138,10 @@ impl MockCfe {
 					},
 				};
 			},
-			_ => panic!("Unexpected event"),
-		};
+			_ => {
+				panic!("Unexpected event");
+			},
+		}
 	}
 }
 

@@ -7,10 +7,9 @@ use cf_traits::{AccountRoleRegistry, SafeMode, SetSafeMode, VaultStatus};
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::{
 	assert_ok,
-	dispatch::UnfilteredDispatchable,
 	sp_runtime::{Digest, DigestItem},
 	storage_alias,
-	traits::OnNewAccount,
+	traits::{OnNewAccount, UnfilteredDispatchable},
 };
 use frame_system::{pallet_prelude::OriginFor, Pallet as SystemPallet, RawOrigin};
 use pallet_cf_funding::Config as FundingConfig;
