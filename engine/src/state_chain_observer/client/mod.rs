@@ -4,6 +4,7 @@ pub mod error_decoder;
 pub mod extrinsic_api;
 pub mod storage_api;
 pub mod stream_api;
+pub mod subxt_state_chain_config;
 
 use async_trait::async_trait;
 
@@ -707,27 +708,25 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 		};
 
 		if self.submit_cfe_version {
-			use subxt::{tx::Signer, PolkadotConfig};
+			use crate::state_chain_observer::client::subxt_state_chain_config::StateChainConfig;
+			use subxt::tx::Signer;
 
-			let subxt_client = subxt::client::OnlineClient::<PolkadotConfig>::from_rpc_client(
+			let subxt_client = subxt::client::OnlineClient::<StateChainConfig>::from_rpc_client(
 				RpcClient::new(SubxtInterface(base_rpc_client.clone())),
 			)
 			.await?;
 			let subxt_signer = {
 				struct SubxtSignerInterface<T>(subxt::utils::AccountId32, T);
-				impl subxt::tx::Signer<PolkadotConfig> for SubxtSignerInterface<sp_core::sr25519::Pair> {
-					fn account_id(&self) -> <subxt::PolkadotConfig as subxt::Config>::AccountId {
+				impl subxt::tx::Signer<StateChainConfig> for SubxtSignerInterface<sp_core::sr25519::Pair> {
+					fn account_id(&self) -> <StateChainConfig as subxt::Config>::AccountId {
 						self.0.clone()
 					}
 
-					fn address(&self) -> <subxt::PolkadotConfig as subxt::Config>::Address {
+					fn address(&self) -> <StateChainConfig as subxt::Config>::Address {
 						subxt::utils::MultiAddress::Id(self.0.clone())
 					}
 
-					fn sign(
-						&self,
-						bytes: &[u8],
-					) -> <subxt::PolkadotConfig as subxt::Config>::Signature {
+					fn sign(&self, bytes: &[u8]) -> <StateChainConfig as subxt::Config>::Signature {
 						use sp_core::Pair;
 						subxt::utils::MultiSignature::Sr25519(self.1.sign(bytes).0)
 					}
