@@ -219,7 +219,7 @@ fn get_asset_balance(who: &AccountId, asset: Asset) -> u128 {
 	LiquidityProvider::asset_balances(who)
 		.get(&ForeignChain::Ethereum)
 		.unwrap()
-		.into_iter()
+		.iter()
 		.filter(|asset_balance| asset_balance.asset == asset)
 		.map(|asset_balance| asset_balance.balance)
 		.sum()

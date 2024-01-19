@@ -47,7 +47,9 @@ async function provideLiquidityAndTestAssetBalances() {
   let ethBalance = 0;
   do {
     const balances = await lpApiRpc(`lp_asset_balances`, []);
-    ethBalance = parseInt(balances.Ethereum.filter(el => el.asset === 'ETH').map(el => el.balance)[0]);
+    ethBalance = parseInt(
+      balances.Ethereum.filter((el) => el.asset === 'ETH').map((el) => el.balance)[0],
+    );
     retryCount++;
     if (retryCount > 14) {
       throw new Error(
