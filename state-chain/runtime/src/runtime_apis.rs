@@ -8,6 +8,7 @@ use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BroadcastId, EpochIndex, ForeignChain, NetworkEnvironment,
 	SemVer, SwapOutput,
 };
+use scale_info::prelude::string::String;
 use codec::{Decode, Encode};
 use core::ops::Range;
 use frame_support::sp_runtime::AccountId32;
@@ -94,7 +95,7 @@ impl From<DispatchError> for DispatchErrorWithMessage {
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
 pub struct FailingWitnessValidators {
 	pub failing_count: u32,
-	pub validators: Vec<(cf_primitives::AccountId, Vec<u8>, bool)>,
+	pub validators: Vec<(cf_primitives::AccountId, String, bool)>,
 }
 
 decl_runtime_apis!(

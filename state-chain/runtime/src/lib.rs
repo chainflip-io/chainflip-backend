@@ -41,7 +41,7 @@ use pallet_cf_swapping::CcmSwapAmounts;
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use sp_std::collections::btree_map::BTreeMap;
-
+use scale_info::prelude::string::String;
 use crate::runtime_apis::RuntimeApiAccountInfoV2;
 
 pub use frame_support::{
@@ -1360,7 +1360,7 @@ impl_runtime_apis! {
 				if !voted {
 					result.failing_count += 1;
 				}
-				result.validators.push((val.clone(), vanity, *voted));
+				result.validators.push((val.clone(), String::from_utf8_lossy(&vanity).into(), *voted));
 			});
 
 			Some(result)
