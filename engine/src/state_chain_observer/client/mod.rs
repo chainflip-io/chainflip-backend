@@ -1138,7 +1138,7 @@ mod tests {
 		block_numbers: [u32; N],
 		chain: Arc<TestChain>,
 		rpc: Arc<MockBaseRpcApi>,
-	) -> Result<Vec<u32>> {
+	) -> Vec<u32> {
 		let headers =
 			block_numbers.map(|block_number| &chain.headers[&chain.hashes[block_number as usize]]);
 
@@ -1151,33 +1151,34 @@ mod tests {
 			StateChainClient::<(), MockBaseRpcApi>::inject_intervening_headers(sparse_stream, rpc)
 				.await;
 
+		let cached_header = *stream.cache();
+
 		let headers = stream.collect::<Vec<_>>().await;
 
-		Ok(headers
-			.into_iter()
+		std::iter::once(Ok(cached_header))
+			.chain(headers)
 			.map(|header: Result<BlockInfo, anyhow::Error>| header.unwrap().number)
-			.collect::<Vec<_>>())
+			.collect::<Vec<_>>()
 	}
 
 	#[tokio::test]
-	async fn test_intervening_headers() -> Result<()> {
+	async fn test_intervening_headers() {
 		let (chain, rpc) = mock_chain_and_rpc(7);
 
 		// Should fill in the gaps:
 		assert_eq!(
-			&inject_intervening_headers_with([0, 1, 3, 6], chain.clone(), rpc.clone()).await?,
+			&inject_intervening_headers_with([0, 1, 3, 6], chain.clone(), rpc.clone()).await,
 			&[0, 1, 2, 3, 4, 5, 6]
 		);
 
 		// Already contiguous stream should be left unchanged:
 		assert_eq!(
-			&inject_intervening_headers_with([1, 2, 3, 4], chain.clone(), rpc.clone()).await?,
+			&inject_intervening_headers_with([1, 2, 3, 4], chain.clone(), rpc.clone()).await,
 			&[1, 2, 3, 4]
 		);
 
-		// Empty stream results in an error (rather than panicking):
-		assert!(&inject_intervening_headers_with([], chain.clone(), rpc.clone()).await.is_err());
-
-		Ok(())
+		// Empty stream doesn't panic (Note pass a single element here, results in an empty stream
+		// being passed)
+		assert_eq!(&inject_intervening_headers_with([0], chain.clone(), rpc.clone()).await, &[0],);
 	}
 }
