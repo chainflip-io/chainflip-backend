@@ -774,41 +774,54 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 					recorded_version, this_version
 				);
 
-				// Submitting transaction with subxt sometimes gets stuck without returning any
-				// error (see https://linear.app/chainflip/issue/PRO-1064/new-cfe-version-gets-stuck-on-startup),
-				// so we use a timeout to ensure we can recover:
-				tokio::time::timeout(CFE_VERSION_SUBMIT_TIMEOUT, async {
-					subxt_client
-						.tx()
-						.sign_and_submit_then_watch_default(
-							&subxt::dynamic::tx(
-								"Validator",
-								"cfe_version",
-								vec![(
-									"new_version",
-									vec![
-										("major", this_version.major),
-										("minor", this_version.minor),
-										("patch", this_version.patch),
-									],
-								)],
-							),
-							&subxt_signer,
-						)
-						.await
-						.map_err(|err| {
-							tracing::error!("Failed to submit CFE version with subxt: {:?}", err);
-							err
-						})?
-						.wait_for_in_block()
-						.await
-						.map_err(|err| {
-							tracing::error!("Failed waiting for transaction to get into a block with subxt: {:?}", err);
-							err
-						})
-				})
-				.await
-				.map_err(|_| anyhow::anyhow!("Timed out trying to submit CFE version"))??;
+				// continue trying until this gets in
+				loop {
+					// Submitting transaction with subxt sometimes gets stuck without returning any
+					// error (see https://linear.app/chainflip/issue/PRO-1064/new-cfe-version-gets-stuck-on-startup),
+					// so we use a timeout to ensure we can recover:
+					match tokio::time::timeout(CFE_VERSION_SUBMIT_TIMEOUT, async {
+						subxt_client
+							.tx()
+							.sign_and_submit_then_watch_default(
+								&subxt::dynamic::tx(
+									"Validator",
+									"cfe_version",
+									vec![(
+										"new_version",
+										vec![
+											("major", this_version.major),
+											("minor", this_version.minor),
+											("patch", this_version.patch),
+										],
+									)],
+								),
+								&subxt_signer,
+							)
+							.await
+							.map_err(|err| {
+								tracing::error!(
+									"Failed to submit CFE version with subxt: {:?}",
+									err
+								);
+								err
+							})?
+							.wait_for_in_block()
+							.await
+							.map_err(|err| {
+								tracing::error!("Failed waiting for transaction to get into a block with subxt: {:?}", err);
+								err
+							})
+					})
+					.await
+					.map_err(|_| anyhow::anyhow!("Timed out trying to submit CFE version"))
+					{
+						Ok(Ok(_)) => break (),
+						_ => {
+							info!("Retrying CFE version submission");
+							tokio::time::sleep(Duration::from_millis(3000)).await;
+						},
+					}
+				}
 			}
 		}
 
