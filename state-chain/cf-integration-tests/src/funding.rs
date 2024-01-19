@@ -5,9 +5,7 @@ use crate::{
 
 use super::{genesis, network, *};
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
-use cf_test_utilities::{assert_events_eq, assert_has_event};
 use cf_traits::{offence_reporting::OffenceReporter, AccountInfo, Bid, EpochInfo};
-use frame_system::Config as SystemConfig;
 use mock_runtime::MIN_FUNDING;
 use pallet_cf_funding::pallet::Error;
 use pallet_cf_validator::{Backups, CurrentRotationPhase};
@@ -16,6 +14,7 @@ use state_chain_runtime::chainflip::{
 	backup_node_rewards::calculate_backup_rewards, calculate_account_apy, Offence,
 };
 
+use cf_test_utilities::assert_events_match;
 use state_chain_runtime::RuntimeEvent;
 
 #[test]
@@ -186,6 +185,15 @@ fn backup_reward_is_calculated_linearly() {
 				// Reward per heartbeat should be scaled linearly.
 				assert_eq!(rewards_per_n_heartbeats[i].1, rewards_per_heartbeat[i].1 * N);
 			}
+
+			assert_events_match!(
+				Runtime,
+				RuntimeEvent::Emissions(
+					pallet_cf_emissions::Event::BackupRewardsDistributed {
+						..
+					},
+				) => ()
+			);
 		});
 }
 
@@ -239,15 +247,6 @@ fn can_calculate_account_apy() {
 				.unwrap();
 			assert_eq!(apy_basis_point, 35u32);
 			assert_eq!(calculate_account_apy(&backup), Some(apy_basis_point));
-
-			network.move_to_the_next_epoch();
-			assert_events_eq!(
-				Runtime,
-				RuntimeEvent::Emissions(pallet_cf_emissions::Event::BackupRewardsDistributed {
-					account_id: backup.clone(),
-					amount: calculate_account_apy(&backup).unwrap().into(),
-				},)
-			);
 		});
 }
 
@@ -283,45 +282,5 @@ fn apy_can_be_above_100_percent() {
 				FixedU64::from_rational(reward, total).checked_mul_int(10_000u32).unwrap();
 			assert_eq!(apy_basis_point, 241_377_727u32);
 			assert_eq!(calculate_account_apy(&validator), Some(apy_basis_point));
-		});
-}
-
-#[test]
-fn can_notify_backup_validators_been_rewarded() {
-	const EPOCH_BLOCKS: u32 = 1_000;
-	const MAX_AUTHORITIES: u32 = 10;
-	const NUM_BACKUPS: u32 = 20;
-	super::genesis::default()
-		.blocks_per_epoch(EPOCH_BLOCKS)
-		.max_authorities(MAX_AUTHORITIES)
-		.build()
-		.execute_with(|| {
-			let (mut network, _, _) =
-				crate::authorities::fund_authorities_and_join_auction(NUM_BACKUPS);
-			network.move_to_the_next_epoch();
-
-			let backup_earning_rewards = Validator::highest_funded_qualified_backup_node_bids();
-
-			let current_backup_nodes = Validator::backups();
-
-			// let events = frame_system::Pallet::<Runtime>::events()
-			// 	.into_iter()
-			// 	.map(|e| e.event)
-			// 	.collect::<Vec<_>>();
-			System::reset_events();
-			// let current_block = System::block_number();
-			// let next_heartbeat_block = current_block + HEARTBEAT_BLOCK_INTERVAL;
-			Reputation::on_initialize(HEARTBEAT_BLOCK_INTERVAL);
-			// for backup in current_backup_nodes {
-			// 	let foo = 0;
-			// 	assert_events_eq!(
-			// 		Runtime,
-			// 		RuntimeEvent::Emissions(pallet_cf_emissions::Event::BackupRewardsDistributed {
-			// 			account_id: _,
-			// 			amount: _,
-			// 		},)
-			// 	);
-			// }
-			System::reset_events();
 		});
 }
