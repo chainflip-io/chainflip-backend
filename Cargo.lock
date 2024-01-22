@@ -2685,6 +2685,7 @@ dependencies = [
  "jsonrpsee 0.16.3",
  "pallet-cf-governance",
  "pallet-cf-pools",
+ "pallet-cf-witnesser",
  "sc-client-api",
  "sc-rpc-api",
  "serde",
