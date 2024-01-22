@@ -379,6 +379,7 @@ pub mod pallet {
 	// Determines the number of block confirmations is required for a block on
 	// an external chain before CFE can submit any witness extrinsics for it.
 	#[pallet::storage]
+	#[pallet::getter(fn witness_safety_margin)]
 	pub type WitnessSafetyMargin<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, TargetChainBlockNumber<T, I>, OptionQuery>;
 
