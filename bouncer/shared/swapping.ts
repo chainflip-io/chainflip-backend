@@ -143,6 +143,7 @@ export async function testSwap(
     messageMetadata,
     undefined,
     amount,
+    undefined,
     log,
   );
 }
