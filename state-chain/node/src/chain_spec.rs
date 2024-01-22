@@ -169,11 +169,18 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 
 /// Start a single node development chain - using bashful as genesis node
 pub fn cf_development_config() -> Result<ChainSpec, String> {
-	inner_cf_development_config(vec![(
-		parse_account(testnet::BASHFUL_ACCOUNT_ID),
-		testnet::BASHFUL_SR25519.unchecked_into(),
-		testnet::BASHFUL_ED25519.unchecked_into(),
-	)])
+	inner_cf_development_config(vec![
+		(
+			parse_account(testnet::BASHFUL_ACCOUNT_ID),
+			testnet::BASHFUL_SR25519.unchecked_into(),
+			testnet::BASHFUL_ED25519.unchecked_into(),
+		),
+		(
+			parse_account(testnet::DOC_ACCOUNT_ID),
+			testnet::DOC_SR25519.unchecked_into(),
+			testnet::DOC_ED25519.unchecked_into(),
+		),
+	])
 }
 
 /// Start a three node development chain - using bashful, doc and dopey as genesis nodes
@@ -274,7 +281,7 @@ pub fn inner_cf_development_config(
 				devnet::AUCTION_BID_CUTOFF_PERCENTAGE,
 			)
 		},
-		// Bootnodes
+		// Boot nodes
 		vec![],
 		// Telemetry
 		None,
@@ -403,7 +410,7 @@ macro_rules! network_spec {
 							AUCTION_BID_CUTOFF_PERCENTAGE,
 						)
 					},
-					// Bootnodes
+					// Boot nodes
 					vec![],
 					// Telemetry
 					None,
@@ -640,7 +647,7 @@ fn testnet_genesis(
 			supply_update_interval,
 			_config: PhantomData,
 		},
-		// !!! These Chain tracking values should be set to reasonable vaules at time of launch !!!
+		// !!! These Chain tracking values should be set to reasonable values at time of launch !!!
 		ethereum_chain_tracking: EthereumChainTrackingConfig {
 			init_chain_state: ChainState::<Ethereum> {
 				block_height: 0,
