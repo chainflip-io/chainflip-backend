@@ -261,6 +261,15 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 				}
 			});
 
+		let incompatible_block_message = |block_version: SemVer, block: BlockInfo| {
+			lazy_format::lazy_format!(
+				"This version '{}' is incompatible with the current release '{block_version}' at block {}: {:?}.",
+				*CFE_VERSION,
+				block.number,
+				block.hash,
+			)
+		};
+
 		let mut processed_stream = {
 			let latest_block: BlockInfo = block_stream.next().await.unwrap()?;
 			let mut block_stream =
@@ -269,21 +278,31 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			let latest_block = *block_stream.cache();
 			if wait_for_required_version {
 				let incompatible_blocks =
-					futures::stream::once(futures::future::ready(Ok::<_, anyhow::Error>(latest_block)))
-						.chain(block_stream.by_ref())
-						.try_take_while(|block_info| {
-							let base_rpc_client = base_rpc_client.clone();
-							let block_info = *block_info;
-							async move {
-								Ok(if let Err(block_version) = base_rpc_client.check_block_compatibility(block_info.hash).await? {
-									info!("This version '{}' is incompatible with the current release '{block_version}' at block {}: {:?}. WAITING for a compatible release version.", *CFE_VERSION, block_info.number, block_info.hash);
+					futures::stream::once(futures::future::ready(Ok::<_, anyhow::Error>(
+						latest_block,
+					)))
+					.chain(block_stream.by_ref())
+					.try_take_while(|block_info| {
+						let base_rpc_client = base_rpc_client.clone();
+						let block_info = *block_info;
+						async move {
+							Ok(
+								if let Err(block_version) = base_rpc_client
+									.check_block_compatibility(block_info.hash)
+									.await?
+								{
+									info!(
+										"{} WAITING for a compatible release version.",
+										incompatible_block_message(block_version, block_info)
+									);
 									true
 								} else {
 									false
-								})
-							}
-						})
-						.boxed();
+								},
+							)
+						}
+					})
+					.boxed();
 
 				// Note underlying stream ends in Error, therefore it is guaranteed try_for_each
 				// will not exit successfully until a compatible block is found
@@ -292,13 +311,11 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 					.await?;
 			} else {
 				base_rpc_client.check_block_compatibility(latest_block.hash).await?.map_err(
-					|block_version| {
+					|latest_block_version| {
 						anyhow::anyhow!(
-						"This version '{}' is incompatible with the current release '{block_version}' at block {}: {:?}.",
-						*CFE_VERSION,
-						latest_block.number,
-						latest_block.hash,
-					)
+							"{}",
+							incompatible_block_message(latest_block_version, latest_block)
+						)
 					},
 				)?;
 			}
@@ -335,7 +352,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 							},
 							Err(block_version) => {
 								if error_on_incompatible_block {
-									break Err(anyhow!("This version '{}' is no longer compatible with the release version '{block_version}' at block {}: {:?}", *CFE_VERSION, block.number, block.hash));
+									break Err(anyhow!("{}", incompatible_block_message(block_version, block)));
 								}
 							}
 						}
