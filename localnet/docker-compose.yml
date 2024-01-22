@@ -1,7 +1,7 @@
 version: "3.9"
 services:
   init:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v0.8.0-1-node
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.0.0-${NODE_COUNT}
     container_name: init
     platform: linux/amd64
     volumes:
@@ -16,7 +16,7 @@ services:
       - "/tmp/chainflip/data/redis-data:/data"
 
   geth:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v0.8.0-1-node
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v1.0.0-${NODE_COUNT}
     container_name: geth
     platform: linux/amd64
     ports:
@@ -103,7 +103,7 @@ services:
       - --max-runtime-instances=256
       - --wasmtime-instantiation-strategy=recreate-instance-copy-on-write
     ports:
-      - 9945:9944
+      - 9947:9944
     healthcheck:
       test:
         [
@@ -111,7 +111,7 @@ services:
           "curl",
           "-H 'Content-Type: application/json;'",
           "-d '{\"id\":1, \"jsonrpc\":\"2.0\", \"method\": \"chain_getBlockHash\", \"params\" : [0]}'",
-          "http://localhost:9944"
+          "http://localhost:9947"
         ]
       interval: 10s
       timeout: 5s

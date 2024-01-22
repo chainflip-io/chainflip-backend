@@ -17,7 +17,7 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Check Format
         run: cargo fmt --all -- --check
@@ -31,9 +31,9 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       - name: cargo audit
-        run: cargo cf-audit -D unmaintained -D unsound
+        run: cargo cf-audit
 
   cargo-clippy:
     runs-on: [hetzner]
@@ -44,7 +44,7 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       - name: Setup sccache
         run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
       - name: Check Linting
@@ -59,10 +59,10 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout chainflip-backend
-        uses: actions/checkout@v3
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Configure NodeJS
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65
         with:
           node-version: 18
           cache: "pnpm"
@@ -91,7 +91,7 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Check workflow files
         run: |
@@ -99,7 +99,7 @@ jobs:
           ./actionlint -color -shellcheck=
         shell: bash
 
-  lint-dev-dockerfiles:
+  lint-dockerfiles:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
@@ -109,33 +109,21 @@ jobs:
           - chainflip-engine
           - chainflip-lp-api
           - chainflip-node
-          - generate-genesis-keys
-          - rust-base
-          - chainflip-ingress-egress-tracker
+        environment:
+          - development
+          - production
+        include:
+          - dockerfile: rust-base
+            environment: development
+          - dockerfile: generate-genesis-keys
+            environment: development
+          - dockerfile: chainflip-ingress-egress-tracker
+            environment: development
     steps:
       - name: Checkout 🏁
-        uses: actions/checkout@v3
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Lint 🐳🔬
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4bfde3cf
         with:
-          dockerfile: ci/docker/dev/${{ matrix.dockerfile }}.Dockerfile
-  lint-prod-dockerfiles:
-    runs-on: ubuntu-20.04
-    strategy:
-      matrix:
-        dockerfile:
-          - chainflip-broker-api
-          - chainflip-cli
-          - chainflip-engine
-          - chainflip-lp-api
-          - chainflip-node
-          - generate-genesis-keys
-    steps:
-      - name: Checkout 🏁
-        uses: actions/checkout@v3
-
-      - name: Lint 🐳🔬
-        uses: hadolint/hadolint-action@v3.1.0
-        with:
-          dockerfile: ci/docker/prod/${{ matrix.dockerfile }}.Dockerfile
+          dockerfile: ci/docker/${{ matrix.environment }}/${{ matrix.dockerfile }}.Dockerfile

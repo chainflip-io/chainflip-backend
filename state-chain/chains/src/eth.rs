@@ -6,7 +6,7 @@ pub mod benchmarking;
 pub mod deposit_address;
 
 use crate::{
-	evm::{DeploymentStatus, EvmFetchId, Transaction},
+	evm::{DeploymentStatus, EvmFetchId, EvmTransactionMetadata, Transaction},
 	*,
 };
 use cf_primitives::chains::assets;
@@ -17,7 +17,7 @@ pub use ethabi::{
 	Address, Hash as TxHash, Token, Uint, Word,
 };
 use evm::api::EvmReplayProtection;
-use frame_support::sp_runtime::{FixedPointNumber, FixedU64, RuntimeDebug};
+use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{cmp::min, convert::TryInto, str};
@@ -30,6 +30,8 @@ pub const CHAIN_ID_KOVAN: u64 = 42;
 
 impl Chain for Ethereum {
 	const NAME: &'static str = "Ethereum";
+	const GAS_ASSET: Self::ChainAsset = assets::eth::Asset::Eth;
+
 	type ChainCrypto = evm::EvmCrypto;
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;
@@ -42,6 +44,7 @@ impl Chain for Ethereum {
 	type DepositChannelState = DeploymentStatus;
 	type DepositDetails = ();
 	type Transaction = Transaction;
+	type TransactionMetadata = EvmTransactionMetadata;
 	type ReplayProtectionParams = Self::ChainAccount;
 	type ReplayProtection = EvmReplayProtection;
 }
@@ -72,6 +75,48 @@ impl EthereumTrackedData {
 		base_fee_multiplier
 			.saturating_mul_int(self.base_fee)
 			.saturating_add(self.priority_fee)
+	}
+}
+
+mod fees {
+	// TODO: refine these constants.
+	pub const BASE_COST_PER_BATCH: u128 = 50_000;
+	pub const GAS_COST_PER_FETCH: u128 = 30_000;
+	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
+	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
+}
+
+impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
+	fn estimate_ingress_fee(
+		&self,
+		asset: <Ethereum as Chain>::ChainAsset,
+	) -> <Ethereum as Chain>::ChainAmount {
+		use fees::*;
+
+		// Note: this is taking the egress cost of the swap in the ingress currency (and basing the
+		// cost on the ingress chain).
+		let gas_cost_per_fetch = BASE_COST_PER_BATCH +
+			match asset {
+				assets::eth::Asset::Eth => Zero::zero(),
+				assets::eth::Asset::Flip | assets::eth::Asset::Usdc => GAS_COST_PER_FETCH,
+			};
+
+		(self.base_fee + self.priority_fee).saturating_mul(gas_cost_per_fetch)
+	}
+
+	fn estimate_egress_fee(
+		&self,
+		asset: <Ethereum as Chain>::ChainAsset,
+	) -> <Ethereum as Chain>::ChainAmount {
+		use fees::*;
+
+		let gas_cost_per_transfer = BASE_COST_PER_BATCH +
+			match asset {
+				assets::eth::Asset::Eth => GAS_COST_PER_TRANSFER_NATIVE,
+				assets::eth::Asset::Flip | assets::eth::Asset::Usdc => GAS_COST_PER_TRANSFER_TOKEN,
+			};
+
+		(self.base_fee + self.priority_fee).saturating_mul(gas_cost_per_transfer)
 	}
 }
 

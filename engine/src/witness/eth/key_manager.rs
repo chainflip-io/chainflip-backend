@@ -1,4 +1,6 @@
-use cf_chains::evm::{EvmCrypto, SchnorrVerificationComponents, TransactionFee};
+use cf_chains::evm::{
+	EvmCrypto, EvmTransactionMetadata, SchnorrVerificationComponents, TransactionFee,
+};
 use cf_primitives::EpochIndex;
 use ethers::{
 	prelude::abigen,
@@ -60,6 +62,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			ChainCrypto = EvmCrypto,
 			ChainAccount = H160,
 			TransactionFee = TransactionFee,
+			TransactionMetadata = EvmTransactionMetadata,
 		>,
 		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 			+ Send
@@ -81,14 +84,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				{
 					info!("Handling event: {event}");
 					let call: state_chain_runtime::RuntimeCall = match event.event_parameters {
-						KeyManagerEvents::AggKeySetByAggKeyFilter(_) => pallet_cf_vaults::Call::<
-							_,
-							<Inner::Chain as PalletInstanceAlias>::Instance,
-						>::vault_key_rotated {
-							block_number: header.index,
-							tx_id: event.tx_hash,
-						}
-						.into(),
 						KeyManagerEvents::AggKeySetByGovKeyFilter(AggKeySetByGovKeyFilter {
 							new_agg_key,
 							..
@@ -107,8 +102,9 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							sig_data,
 							..
 						}) => {
-							let TransactionReceipt { gas_used, effective_gas_price, from, .. } =
-								eth_rpc.transaction_receipt(event.tx_hash).await;
+							let TransactionReceipt {
+								gas_used, effective_gas_price, from, to, ..
+							} = eth_rpc.transaction_receipt(event.tx_hash).await;
 
 							let gas_used = gas_used
 								.ok_or_else(|| {
@@ -127,6 +123,14 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								})?
 								.try_into()
 								.map_err(anyhow::Error::msg)?;
+
+							let transaction = eth_rpc.get_transaction(event.tx_hash).await;
+							let tx_metadata = EvmTransactionMetadata {
+								contract: to.expect("To have a contract"),
+								max_fee_per_gas: transaction.max_fee_per_gas,
+								max_priority_fee_per_gas: transaction.max_priority_fee_per_gas,
+								gas_limit: Some(transaction.gas),
+							};
 							pallet_cf_broadcast::Call::<
 								_,
 								<Inner::Chain as PalletInstanceAlias>::Instance,
@@ -137,6 +141,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								},
 								signer_id: from,
 								tx_fee: TransactionFee { effective_gas_price, gas_used },
+								tx_metadata,
 							}
 							.into()
 						},
@@ -174,8 +179,8 @@ mod tests {
 	use super::super::eth_source::EthSource;
 
 	use crate::{
-		eth::retry_rpc::EthersRetryRpcClient,
-		settings::{self, NodeContainer, WsHttpEndpoints},
+		eth::{retry_rpc::EthRetryRpcClient, rpc::EthRpcClient},
+		settings::{NodeContainer, WsHttpEndpoints},
 		state_chain_observer::client::StateChainClient,
 		witness::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSource},
 	};
@@ -185,32 +190,27 @@ mod tests {
 	async fn test_key_manager_witnesser() {
 		task_scope(|scope| {
 			async {
-				let eth_settings = settings::Eth {
-					nodes: NodeContainer {
+				let retry_client = EthRetryRpcClient::<EthRpcClient>::new(
+					scope,
+					NodeContainer {
 						primary: WsHttpEndpoints {
 							ws_endpoint: "ws://localhost:8546".into(),
 							http_endpoint: "http://localhost:8545".into(),
 						},
 						backup: None,
 					},
-					private_key_file: PathBuf::from_str("/some/key/file").unwrap(),
-				};
-
-				let retry_client = EthersRetryRpcClient::new(
-					scope,
-					eth_settings.private_key_file,
-					eth_settings.nodes,
 					U256::from(1337u64),
 				)
 				.unwrap();
 
-				let (state_chain_stream, state_chain_client) =
+				let (state_chain_stream, _, state_chain_client) =
 					StateChainClient::connect_with_account(
 						scope,
 						"ws://localhost:9944",
 						PathBuf::from_str("/some/sc/key/bashful-key").unwrap().as_path(),
-						AccountRole::None,
+						AccountRole::Unregistered,
 						false,
+						None,
 					)
 					.await
 					.unwrap();
@@ -222,7 +222,7 @@ mod tests {
 						.await;
 
 				EthSource::new(retry_client.clone())
-					.chunk_by_vault(vault_source)
+					.chunk_by_vault(vault_source, scope)
 					.key_manager_witnessing(
 						|call, _| async move {
 							println!("Witnessed call: {:?}", call);

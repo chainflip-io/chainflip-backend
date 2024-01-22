@@ -588,22 +588,39 @@ mod bond_expiry {
 	#[test]
 	fn increasing_bond() {
 		new_test_ext().execute_with(|| {
+			const BOND: u128 = 100;
 			let initial_epoch = ValidatorPallet::current_epoch();
-			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(vec![1, 2], Some(100)));
-			assert_eq!(ValidatorPallet::bond(), 100);
+			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(
+				vec![1, 2],
+				Some(BOND),
+			));
+			assert_eq!(ValidatorPallet::bond(), BOND);
 
-			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(vec![2, 3], Some(101)));
-			assert_eq!(ValidatorPallet::bond(), 101);
+			// Ensure the new bond is set for each authority
+			ValidatorPallet::current_authorities().iter().for_each(|account_id| {
+				assert_eq!(MockBonder::get_bond(account_id), BOND);
+			});
+
+			const NEXT_BOND: u128 = BOND + 1;
+			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(
+				vec![2, 3],
+				Some(NEXT_BOND),
+			));
+			assert_eq!(ValidatorPallet::bond(), NEXT_BOND);
+
+			ValidatorPallet::current_authorities().iter().for_each(|account_id| {
+				assert_eq!(MockBonder::get_bond(account_id), NEXT_BOND);
+			});
 
 			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&1), [initial_epoch + 1]);
-			assert_eq!(EpochHistory::<Test>::active_bond(&1), 100);
+			assert_eq!(EpochHistory::<Test>::active_bond(&1), BOND);
 			assert_eq!(
 				EpochHistory::<Test>::active_epochs_for_authority(&2),
 				[initial_epoch + 1, initial_epoch + 2]
 			);
-			assert_eq!(EpochHistory::<Test>::active_bond(&2), 101);
+			assert_eq!(EpochHistory::<Test>::active_bond(&2), NEXT_BOND);
 			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&3), [initial_epoch + 2]);
-			assert_eq!(EpochHistory::<Test>::active_bond(&3), 101);
+			assert_eq!(EpochHistory::<Test>::active_bond(&3), NEXT_BOND);
 		});
 	}
 
@@ -611,11 +628,27 @@ mod bond_expiry {
 	fn decreasing_bond() {
 		new_test_ext().execute_with(|| {
 			let initial_epoch = ValidatorPallet::current_epoch();
-			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(vec![1, 2], Some(100)));
+			const AUTHORITY_IN_BOTH_EPOCHS: u64 = 2;
+			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(
+				vec![1, AUTHORITY_IN_BOTH_EPOCHS],
+				Some(100),
+			));
 			assert_eq!(ValidatorPallet::bond(), 100);
 
-			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(vec![2, 3], Some(99)));
+			ValidatorPallet::current_authorities().iter().for_each(|account_id| {
+				assert_eq!(MockBonder::get_bond(account_id), 100);
+			});
+
+			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(
+				vec![AUTHORITY_IN_BOTH_EPOCHS, 3],
+				Some(99),
+			));
 			assert_eq!(ValidatorPallet::bond(), 99);
+
+			// Keeps the highest bond of all the epochs it's been active in
+			assert_eq!(MockBonder::get_bond(&AUTHORITY_IN_BOTH_EPOCHS), 100);
+			// Uses the new bond
+			assert_eq!(MockBonder::get_bond(&3), 99);
 
 			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&1), [initial_epoch + 1]);
 			assert_eq!(EpochHistory::<Test>::active_bond(&1), 100);
@@ -715,7 +748,12 @@ const AUTHORITIES: Range<u64> = 0..10;
 
 lazy_static::lazy_static! {
 	/// How many candidates can fail without preventing us from re-trying keygen
-	static ref MAX_ALLOWED_KEYGEN_OFFENDERS: usize = CANDIDATES.count().checked_sub(MIN_AUTHORITY_SIZE as usize).unwrap();
+	static ref MAX_ALLOWED_KEYGEN_OFFENDERS: usize = {
+
+		let min_size = std::cmp::max(MIN_AUTHORITY_SIZE, (Percent::one() - DEFAULT_MAX_AUTHORITY_SET_CONTRACTION) * AUTHORITIES.count() as u32);
+
+		CANDIDATES.count().checked_sub(min_size as usize).unwrap()
+	};
 
 	/// How many current authorities can fail to leave enough healthy ones to handover the key
 	static ref MAX_ALLOWED_SHARING_OFFENDERS: usize = {
@@ -763,6 +801,29 @@ mod keygen {
 		new_test_ext().execute_with(|| {
 			// Not enough unbanned nodes left after this failure, so we should abort
 			failed_keygen_with_offenders(CANDIDATES.take(*MAX_ALLOWED_KEYGEN_OFFENDERS + 1));
+			assert_rotation_aborted();
+		});
+	}
+
+	#[test]
+	fn rotation_aborts_if_candidates_below_min_percentage() {
+		new_test_ext().execute_with(|| {
+			// Ban half of the candidates:
+			let failing_count = CANDIDATES.count() / 2;
+			let remaining_count = CANDIDATES.count() - failing_count;
+
+			// We still have enough candidates according to auction resolver parameters:
+			assert!(remaining_count > MIN_AUTHORITY_SIZE as usize);
+
+			// But the rotation should be aborted since authority count would drop too much
+			// compared to the previous set:
+			assert!(
+				remaining_count <
+					(Percent::one() - DEFAULT_MAX_AUTHORITY_SET_CONTRACTION) *
+						AUTHORITIES.count()
+			);
+
+			failed_keygen_with_offenders(CANDIDATES.take(failing_count));
 			assert_rotation_aborted();
 		});
 	}

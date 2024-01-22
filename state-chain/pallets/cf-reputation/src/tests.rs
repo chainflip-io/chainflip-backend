@@ -19,19 +19,11 @@ fn advance_by_block() {
 }
 
 // Move forward one heartbeat interval sending the heartbeat extrinsic for nodes
-fn submit_heartbeat_and_move_forward_heartbeat_interval(
+fn move_forward_hearbeat_interval_and_submit_heartbeat(
 	node: <Test as frame_system::Config>::AccountId,
 ) {
-	assert_ok!(ReputationPallet::heartbeat(RuntimeOrigin::signed(node)));
 	advance_by_hearbeat_intervals(1);
-}
-
-#[test]
-fn submitting_heartbeat_for_heartbeat_block_interval_should_reward_reputation_points() {
-	new_test_ext().execute_with(|| {
-		ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)).unwrap();
-		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT,);
-	});
+	assert_ok!(ReputationPallet::heartbeat(RuntimeOrigin::signed(node)));
 }
 
 #[test]
@@ -51,20 +43,51 @@ fn offline_nodes_get_slashed_if_reputation_is_negative() {
 	});
 }
 
+macro_rules! assert_reputation {
+	( $id:expr, $rep:expr ) => {
+		assert_eq!(
+			reputation_points(&$id),
+			$rep,
+			"Expected reputation of {}, got {:?}",
+			$rep,
+			ReputationPallet::reputation(&$id)
+		);
+	};
+}
+
 #[test]
-fn only_one_heartbeat_per_interval_earns_reputation() {
+fn number_of_submissions_doesnt_affect_reputation_increase() {
 	new_test_ext().execute_with(|| {
+		// Disable reporting to prevent reputation points from being deducted.
+		<MockRuntimeSafeMode as SetSafeMode<PalletSafeMode>>::set_code_red();
+		assert_reputation!(ALICE, 0);
+
+		// Submit twice per block.
+		for _ in 0..HEARTBEAT_BLOCK_INTERVAL {
+			advance_by_block();
+			ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)).unwrap();
+			ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)).unwrap();
+		}
+		assert_reputation!(ALICE, REPUTATION_PER_HEARTBEAT);
+
+		// Submit every other block.
+		Pallet::<Test>::reset_reputation(&ALICE);
+		for i in 0..HEARTBEAT_BLOCK_INTERVAL {
+			advance_by_block();
+			if i % 2 == 0 {
+				ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)).unwrap();
+			}
+		}
 		ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)).unwrap();
-		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT,);
-		// submit again, then move forward
-		advance_by_block();
-		submit_heartbeat_and_move_forward_heartbeat_interval(ALICE);
-		// no change in reputation, because we were on the same block, therefore we were in the same
-		// heartbeat block interval
-		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT,);
-		// we've moved forward a block interval, so now we should have the extra rep
+		assert_reputation!(ALICE, REPUTATION_PER_HEARTBEAT);
+
+		// Submit after the heartbeat interval has elapsed.
+		Pallet::<Test>::reset_reputation(&ALICE);
+		for _ in 0..(HEARTBEAT_BLOCK_INTERVAL * 2) {
+			advance_by_block();
+		}
 		ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)).unwrap();
-		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT * 2,);
+		assert_reputation!(ALICE, REPUTATION_PER_HEARTBEAT);
 	});
 }
 
@@ -82,6 +105,8 @@ fn update_last_heartbeat_each_submission() {
 #[test]
 fn updating_accrual_rate_should_affect_reputation_points() {
 	new_test_ext().execute_with(|| {
+		// Disable reporting to prevent reputation points from being deducted.
+		<MockRuntimeSafeMode as SetSafeMode<PalletSafeMode>>::set_code_red();
 		// Fails due to too high a reputation points
 		assert_noop!(
 			ReputationPallet::update_accrual_ratio(
@@ -110,8 +135,8 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 
 		assert_eq!(ReputationPallet::accrual_ratio(), ACCRUAL_RATIO);
 
-		submit_heartbeat_and_move_forward_heartbeat_interval(ALICE);
-		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT);
+		move_forward_hearbeat_interval_and_submit_heartbeat(ALICE);
+		assert_reputation!(ALICE, REPUTATION_PER_HEARTBEAT);
 
 		// Double the accrual rate.
 		assert_ok!(ReputationPallet::update_accrual_ratio(
@@ -120,8 +145,8 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 			ACCRUAL_RATIO.1,
 		));
 
-		submit_heartbeat_and_move_forward_heartbeat_interval(ALICE);
-		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT * 3);
+		move_forward_hearbeat_interval_and_submit_heartbeat(ALICE);
+		assert_reputation!(ALICE, REPUTATION_PER_HEARTBEAT * 3);
 
 		// Halve the divisor, equivalent to double the initial rate.
 		assert_ok!(ReputationPallet::update_accrual_ratio(
@@ -130,8 +155,8 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 			ACCRUAL_RATIO.1 / 2,
 		));
 
-		submit_heartbeat_and_move_forward_heartbeat_interval(ALICE);
-		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT * 5);
+		move_forward_hearbeat_interval_and_submit_heartbeat(ALICE);
+		assert_reputation!(ALICE, REPUTATION_PER_HEARTBEAT * 5);
 	});
 }
 
@@ -144,25 +169,25 @@ frame_support::parameter_types! {
 #[test]
 fn reporting_any_offence_should_penalise_reputation_points_and_suspend() {
 	new_test_ext().execute_with(|| {
-		let offline_test = |offence: AllOffences, who: &[u64]| {
+		let offline_test = |offence: AllOffences, who: Vec<u64>| {
 			let penalty = ReputationPallet::resolve_penalty_for(offence);
-			let points_before = who.iter().map(reputation_points).collect::<Vec<_>>();
-			<ReputationPallet as OffenceReporter>::report_many(offence, who);
-			for (id, points) in who.iter().zip(points_before) {
-				assert_eq!(reputation_points(id), points - penalty.reputation,);
+			let points_before = who.clone().iter().map(reputation_points).collect::<Vec<_>>();
+			<ReputationPallet as OffenceReporter>::report_many(offence, who.clone());
+			for (id, points) in who.clone().into_iter().zip(points_before) {
+				assert_reputation!(id, points - penalty.reputation);
 			}
 			assert_eq!(
 				ReputationPallet::validators_suspended_for(&[offence]),
 				if !penalty.suspension.is_zero() {
-					who.iter().cloned().collect::<BTreeSet<_>>()
+					who.into_iter().collect::<BTreeSet<_>>()
 				} else {
 					BTreeSet::default()
 				}
 			);
 		};
-		offline_test(AllOffences::MissedHeartbeat, &[ALICE]);
-		offline_test(AllOffences::ForgettingYourYubiKey, &[ALICE, BOB]);
-		offline_test(AllOffences::NotLockingYourComputer, &[BOB]);
+		offline_test(AllOffences::MissedHeartbeat, vec![ALICE]);
+		offline_test(AllOffences::ForgettingYourYubiKey, vec![ALICE, BOB]);
+		offline_test(AllOffences::NotLockingYourComputer, vec![BOB]);
 
 		// Heartbeats have no explicit suspension.
 		assert_eq!(
@@ -186,7 +211,7 @@ fn suspensions() {
 		const SUSPENSION_DURATION: u64 = 10;
 		let first_suspend = [1, 2, 3];
 		ReputationPallet::suspend_all(
-			&first_suspend,
+			first_suspend,
 			&AllOffences::ForgettingYourYubiKey,
 			SUSPENSION_DURATION,
 		);
@@ -200,7 +225,7 @@ fn suspensions() {
 		// overlapping suspensions, 1 not included
 		let second_suspend = [2, 3, 4, 6];
 		ReputationPallet::suspend_all(
-			&second_suspend,
+			second_suspend,
 			&AllOffences::ForgettingYourYubiKey,
 			SUSPENSION_DURATION,
 		);
@@ -237,9 +262,9 @@ fn forgiveness() {
 	}
 
 	new_test_ext().execute_with(|| {
-		ReputationPallet::suspend_all(&[1, 2, 3], &AllOffences::ForgettingYourYubiKey, 10);
-		ReputationPallet::suspend_all(&[1, 2], &AllOffences::NotLockingYourComputer, u64::MAX);
-		ReputationPallet::suspend_all(&[1], &AllOffences::MissedHeartbeat, 15);
+		ReputationPallet::suspend_all([1, 2, 3], &AllOffences::ForgettingYourYubiKey, 10);
+		ReputationPallet::suspend_all([1, 2], &AllOffences::NotLockingYourComputer, u64::MAX);
+		ReputationPallet::suspend_all([1], &AllOffences::MissedHeartbeat, 15);
 		assert_eq!(
 			Pallet::<Test>::validators_suspended_for(AllOffences::OFFENCES),
 			[1, 2, 3].into_iter().collect(),
@@ -269,12 +294,12 @@ fn dont_report_in_safe_mode() {
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
 			reputation: crate::PalletSafeMode { reporting_enabled: false },
 		});
-		ReputationPallet::report_many(AllOffences::NotLockingYourComputer, &[marcello]);
-		assert_eq!(ReputationPallet::reputation(marcello).reputation_points, 0);
+		ReputationPallet::report(AllOffences::NotLockingYourComputer, marcello);
+		assert_reputation!(marcello, 0);
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
 			reputation: crate::PalletSafeMode { reporting_enabled: true },
 		});
-		ReputationPallet::report_many(AllOffences::NotLockingYourComputer, &[marcello]);
+		ReputationPallet::report(AllOffences::NotLockingYourComputer, marcello);
 		assert!(ReputationPallet::reputation(marcello).reputation_points < 0);
 	});
 }

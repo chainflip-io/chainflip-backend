@@ -1,18 +1,22 @@
 use cf_utilities::{
+	rpc::NumberOrHex,
 	task_scope::{task_scope, Scope},
-	AnyhowRpcError,
 };
 use chainflip_api::{
 	self, clean_foreign_chain_address,
-	primitives::{AccountRole, Asset, BasisPoints, BlockNumber, CcmChannelMetadata, ChannelId},
+	primitives::{AccountRole, BasisPoints, BlockNumber, CcmChannelMetadata, ChannelId},
 	settings::StateChain,
 	BrokerApi, OperatorApi, StateChainApi,
 };
 use clap::Parser;
+use custom_rpc::RpcAsset;
 use futures::FutureExt;
-use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
+use jsonrpsee::{
+	core::{async_trait, RpcResult},
+	proc_macros::rpc,
+	server::ServerBuilder,
+};
 use serde::{Deserialize, Serialize};
-use sp_rpc::number::NumberOrHex;
 use std::path::PathBuf;
 use tracing::log;
 
@@ -41,17 +45,17 @@ impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
 #[rpc(server, client, namespace = "broker")]
 pub trait Rpc {
 	#[method(name = "register_account", aliases = ["broker_registerAccount"])]
-	async fn register_account(&self) -> Result<String, AnyhowRpcError>;
+	async fn register_account(&self) -> RpcResult<String>;
 
 	#[method(name = "request_swap_deposit_address", aliases = ["broker_requestSwapDepositAddress"])]
 	async fn request_swap_deposit_address(
 		&self,
-		source_asset: Asset,
-		destination_asset: Asset,
+		source_asset: RpcAsset,
+		destination_asset: RpcAsset,
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
 		channel_metadata: Option<CcmChannelMetadata>,
-	) -> Result<BrokerSwapDepositAddress, AnyhowRpcError>;
+	) -> RpcResult<BrokerSwapDepositAddress>;
 }
 
 pub struct RpcServerImpl {
@@ -72,7 +76,7 @@ impl RpcServerImpl {
 
 #[async_trait]
 impl RpcServer for RpcServerImpl {
-	async fn register_account(&self) -> Result<String, AnyhowRpcError> {
+	async fn register_account(&self) -> RpcResult<String> {
 		Ok(self
 			.api
 			.operator_api()
@@ -83,17 +87,18 @@ impl RpcServer for RpcServerImpl {
 
 	async fn request_swap_deposit_address(
 		&self,
-		source_asset: Asset,
-		destination_asset: Asset,
+		source_asset: RpcAsset,
+		destination_asset: RpcAsset,
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
 		channel_metadata: Option<CcmChannelMetadata>,
-	) -> Result<BrokerSwapDepositAddress, AnyhowRpcError> {
+	) -> RpcResult<BrokerSwapDepositAddress> {
+		let destination_asset = destination_asset.try_into()?;
 		Ok(self
 			.api
 			.broker_api()
 			.request_swap_deposit_address(
-				source_asset,
+				source_asset.try_into()?,
 				destination_asset,
 				clean_foreign_chain_address(destination_asset.into(), &destination_address)?,
 				broker_commission_bps,
@@ -105,6 +110,7 @@ impl RpcServer for RpcServerImpl {
 }
 
 #[derive(Parser, Debug, Clone, Default)]
+#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"), version_short = 'v')]
 pub struct BrokerOptions {
 	#[clap(
 		long = "port",
@@ -139,7 +145,7 @@ async fn main() -> anyhow::Result<()> {
 		async move {
 			let server = ServerBuilder::default().build(format!("0.0.0.0:{}", opts.port)).await?;
 			let server_addr = server.local_addr()?;
-			let server = server.start(RpcServerImpl::new(scope, opts).await?.into_rpc());
+			let server = server.start(RpcServerImpl::new(scope, opts).await?.into_rpc())?;
 
 			log::info!("🎙 Server is listening on {server_addr}.");
 

@@ -1,6 +1,6 @@
 //! For filtering runtime calls and other related utilities.
 
-use crate::{Runtime, RuntimeCall};
+use crate::{BitcoinInstance, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall};
 use cf_traits::{impl_runtime_safe_mode, CallDispatchFilter};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -15,9 +15,13 @@ impl_runtime_safe_mode! {
 	validator: pallet_cf_validator::PalletSafeMode,
 	pools: pallet_cf_pools::PalletSafeMode,
 	reputation: pallet_cf_reputation::PalletSafeMode,
-	threshold_signature: pallet_cf_threshold_signature::PalletSafeMode,
+	threshold_signature_ethereum: pallet_cf_threshold_signature::PalletSafeMode<EthereumInstance>,
+	threshold_signature_bitcoin: pallet_cf_threshold_signature::PalletSafeMode<BitcoinInstance>,
+	threshold_signature_polkadot: pallet_cf_threshold_signature::PalletSafeMode<PolkadotInstance>,
+	broadcast_ethereum: pallet_cf_broadcast::PalletSafeMode<EthereumInstance>,
+	broadcast_bitcoin: pallet_cf_broadcast::PalletSafeMode<BitcoinInstance>,
+	broadcast_polkadot: pallet_cf_broadcast::PalletSafeMode<PolkadotInstance>,
 	witnesser: pallet_cf_witnesser::PalletSafeMode<WitnesserCallPermission>,
-	broadcast: pallet_cf_broadcast::PalletSafeMode,
 }
 
 /// Contains permissions for different Runtime calls.
@@ -33,7 +37,7 @@ impl_runtime_safe_mode! {
 	Clone,
 	PartialEq,
 	Eq,
-	frame_support::RuntimeDebug,
+	frame_support::pallet_prelude::RuntimeDebug,
 )]
 pub struct WitnesserCallPermission {
 	// Non-instantiable pallets

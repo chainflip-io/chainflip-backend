@@ -26,11 +26,12 @@ export async function getNextEthNonce(
   });
 }
 
-export async function signAndSendTxEthSilent(
+export async function signAndSendTxEth(
   to: string,
   value?: string,
   data?: string,
   gas = 2000000,
+  log = true,
 ) {
   const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
   const web3 = new Web3(ethEndpoint);
@@ -51,23 +52,21 @@ export async function signAndSendTxEthSilent(
       }
     },
   );
+
+  if (log) {
+    console.log(
+      'Transaction complete, tx_hash: ' +
+        receipt.transactionHash +
+        ' blockNumber: ' +
+        receipt.blockNumber +
+        ' blockHash: ' +
+        receipt.blockHash,
+    );
+  }
   return receipt;
 }
 
-export async function signAndSendTxEth(to: string, value?: string, data?: string, gas = 2000000) {
-  const receipt = await signAndSendTxEthSilent(to, value, data, gas);
-  console.log(
-    'Transaction complete, tx_hash: ' +
-      receipt.transactionHash +
-      ' blockNumber: ' +
-      receipt.blockNumber +
-      ' blockHash: ' +
-      receipt.blockHash,
-  );
-  return receipt;
-}
-
-export async function sendEth(ethereumAddress: string, ethAmount: string) {
+export async function sendEth(ethereumAddress: string, ethAmount: string, log = true) {
   const weiAmount = amountToFineAmount(ethAmount, assetDecimals.ETH);
-  await signAndSendTxEth(ethereumAddress, weiAmount);
+  await signAndSendTxEth(ethereumAddress, weiAmount, undefined, undefined, log);
 }

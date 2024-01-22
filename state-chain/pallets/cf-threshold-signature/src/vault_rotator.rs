@@ -1,6 +1,9 @@
 use super::*;
 use cf_runtime_utilities::{log_or_panic, StorageDecodeVariant};
-use cf_traits::{MapAsyncResultTo, VaultActivator, VaultRotationStatusOuter, VaultRotator};
+use cf_traits::{
+	CfeMultisigRequest, MapAsyncResultTo, VaultActivator, VaultRotationStatusOuter, VaultRotator,
+};
+use cfe_events::{KeyHandoverRequest, KeygenRequest};
 use frame_support::{sp_runtime::traits::BlockNumberProvider, traits::PalletInfoAccess};
 
 impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
@@ -27,6 +30,13 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		// block
 		KeygenResolutionPendingSince::<T, I>::put(frame_system::Pallet::<T>::current_block_number());
 
+		T::CfeMultisigRequest::keygen_request(KeygenRequest {
+			ceremony_id,
+			epoch_index: new_epoch_index,
+			participants: candidates.clone(),
+		});
+
+		// TODO: consider deleting this
 		Pallet::<T, I>::deposit_event(Event::KeygenRequest {
 			ceremony_id,
 			participants: candidates,
@@ -71,6 +81,17 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 							frame_system::Pallet::<T>::current_block_number(),
 						);
 
+						T::CfeMultisigRequest::key_handover_request(KeyHandoverRequest {
+							ceremony_id,
+							from_epoch: epoch_key.epoch_index,
+							to_epoch: new_epoch_index,
+							key_to_share: epoch_key.key,
+							sharing_participants: sharing_participants.clone(),
+							receiving_participants: receiving_participants.clone(),
+							new_key: new_public_key,
+						});
+
+						// TODO: consider removing this
 						Self::deposit_event(Event::KeyHandoverRequest {
 							ceremony_id,
 							// The key we want to share is the key from the *previous/current*
@@ -171,33 +192,13 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 			PendingVaultRotation::<T, I>::get()
 		{
 			let maybe_active_epoch_key = Self::active_epoch_key();
-			let optimistic_activation = T::TargetChainCrypto::optimistic_activation();
-			let activation_tx_threshold_request_ids = T::VaultActivator::activate(
+			let _activation_tx_broadcast_ids = T::VaultActivator::activate(
 				new_public_key,
-				maybe_active_epoch_key.clone().map(|EpochKey { key, .. }| key),
-				optimistic_activation,
+				maybe_active_epoch_key.map(|EpochKey { key, .. }| key),
 			);
 
-			if let Some(EpochKey { key_state, .. }) = maybe_active_epoch_key {
-				if optimistic_activation {
-					Self::activate_new_key(new_public_key);
-				} else {
-					debug_assert!(
-						matches!(key_state, KeyState::Unlocked),
-						"Current epoch key must be active to activate next key."
-					);
-					// The key needs to be locked until activation on all chains is complete.
-					CurrentVaultEpochAndState::<T, I>::mutate(|epoch_and_state| {
-						epoch_and_state
-							.as_mut()
-							.expect("Checked above at if let Some")
-							.key_state
-							.lock(activation_tx_threshold_request_ids)
-					});
-					PendingVaultRotation::<T, I>::put(
-						VaultRotationStatus::<T, I>::AwaitingActivation { new_public_key },
-					);
-				}
+			if maybe_active_epoch_key.is_some() {
+				Self::activate_new_key(new_public_key);
 			} else {
 				PendingVaultRotation::<T, I>::put(
 					VaultRotationStatus::<T, I>::AwaitingActivation { new_public_key },

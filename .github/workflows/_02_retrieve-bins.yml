@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-${{ matrix.ubuntu_version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Get branch of tag
         shell: bash
@@ -22,22 +22,22 @@ jobs:
           echo "MAJOR_MINOR=$RAW" >> $GITHUB_ENV
 
       - name: Fetch binaries from release/${{ env.MAJOR_MINOR }}
-        uses: dawidd6/action-download-artifact@v2
+        uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
         with:
           workflow: release-sisyphos.yml
           name: chainflip-backend-bin-ubuntu-${{ matrix.ubuntu_version }}
           branch: release/${{ env.MAJOR_MINOR }}
-          github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
+          github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
           search_artifacts: true
           check_artifacts: true
 
       - name: Fetch Runtime from release/${{ env.MAJOR_MINOR }}
-        uses: dawidd6/action-download-artifact@v2
+        uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
         with:
           workflow: release-sisyphos.yml
-          name: chainflip-node-runtime-ubuntu-${{ matrix.ubuntu_version }}
+          name: chainflip-node-runtime-production
           branch: release/${{ env.MAJOR_MINOR }}
-          github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
+          github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
           search_artifacts: true
           check_artifacts: true
 
@@ -51,7 +51,7 @@ jobs:
           ./ci/scripts/check_binary_version.sh ./chainflip-cli ${{ github.ref_name }}
 
       - name: Re-upload binary artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@c7d193f32edcb7bfad88892161225aeda64e9392
         with:
           name: chainflip-backend-bin-ubuntu-${{ matrix.ubuntu_version }}
           path: |
@@ -64,8 +64,8 @@ jobs:
             generate-genesis-keys
 
       - name: Re-upload runtime artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@c7d193f32edcb7bfad88892161225aeda64e9392
         with:
-          name: chainflip-node-runtime-ubuntu-${{ matrix.ubuntu_version }}
+          name: chainflip-node-runtime-production
           path: |
             ./state_chain_runtime*.wasm

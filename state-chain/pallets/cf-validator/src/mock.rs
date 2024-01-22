@@ -6,8 +6,8 @@ use crate::PalletSafeMode;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
-		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
-		vault_rotator::MockVaultRotatorA,
+		cfe_interface_mock::MockCfeInterface, qualify_node::QualifyAll,
+		reputation_resetter::MockReputationResetter, vault_rotator::MockVaultRotatorA,
 	},
 	AccountRoleRegistry, Bid,
 };
@@ -18,7 +18,7 @@ use sp_runtime::{
 	testing::UintAuthorityId,
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
 };
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashMap};
 
 pub type Amount = u128;
 pub type ValidatorId = u64;
@@ -127,13 +127,27 @@ impl MissedAuthorshipSlots for MockMissedAuthorshipSlots {
 	}
 }
 
+thread_local! {
+	pub static AUTHORITY_BONDS: RefCell<HashMap<ValidatorId, Amount>> = RefCell::new(HashMap::default());
+}
+
 pub struct MockBonder;
+
+impl MockBonder {
+	pub fn get_bond(account_id: &ValidatorId) -> Amount {
+		AUTHORITY_BONDS.with(|cell| cell.borrow().get(account_id).copied().unwrap_or(0))
+	}
+}
 
 impl Bonding for MockBonder {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 
-	fn update_bond(_: &Self::ValidatorId, _: Self::Amount) {}
+	fn update_bond(account_id: &Self::ValidatorId, bond: Self::Amount) {
+		AUTHORITY_BONDS.with(|cell| {
+			cell.borrow_mut().insert(*account_id, bond);
+		})
+	}
 }
 
 pub type MockOffenceReporter =
@@ -182,6 +196,7 @@ impl Config for Test {
 	type KeygenQualification = QualifyAll<ValidatorId>;
 	type SafeMode = MockRuntimeSafeMode;
 	type ValidatorWeightInfo = ();
+	type CfePeerRegistration = MockCfeInterface;
 }
 
 /// Session pallet requires a set of validators at genesis.
@@ -213,9 +228,13 @@ cf_test_utilities::impl_test_helpers! {
 			redemption_period_as_percentage: REDEMPTION_PERCENTAGE_AT_GENESIS,
 			backup_reward_node_percentage: Percent::from_percent(34),
 			authority_set_min_size: MIN_AUTHORITY_SIZE,
-			min_size: MIN_AUTHORITY_SIZE,
-			max_size: MAX_AUTHORITY_SIZE,
-			max_expansion: MAX_AUTHORITY_SET_EXPANSION,
+			auction_parameters: SetSizeParameters {
+				min_size: MIN_AUTHORITY_SIZE,
+				max_size: MAX_AUTHORITY_SIZE,
+				max_expansion: MAX_AUTHORITY_SET_EXPANSION,
+			},
+			auction_bid_cutoff_percentage: Percent::from_percent(0),
+			max_authority_set_contraction_percentage: DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 		},
 	},
 	||{

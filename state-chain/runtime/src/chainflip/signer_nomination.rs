@@ -65,18 +65,18 @@ fn eligible_authorities(
 /// excluded from being nominated.
 pub struct RandomSignerNomination;
 
-impl cf_traits::SingleSignerNomination for RandomSignerNomination {
-	type SignerId = <Runtime as Chainflip>::ValidatorId;
+impl cf_traits::BroadcastNomination for RandomSignerNomination {
+	type BroadcasterId = <Runtime as Chainflip>::ValidatorId;
 
-	fn nomination_with_seed<H: Hashable>(
+	fn nominate_broadcaster<H: Hashable>(
 		seed: H,
-		exclude_ids: &[Self::SignerId],
-	) -> Option<Self::SignerId> {
+		exclude_ids: impl IntoIterator<Item = Self::BroadcasterId>,
+	) -> Option<Self::BroadcasterId> {
 		let mut all_excludes = Reputation::validators_suspended_for(&[
-			Offence::MissedAuthorshipSlot,
+			Offence::FailedToBroadcastTransaction,
 			Offence::MissedHeartbeat,
 		]);
-		all_excludes.extend(exclude_ids.iter().cloned());
+		all_excludes.extend(exclude_ids);
 		select_one(
 			seed_from_hashable(seed),
 			eligible_authorities(Validator::epoch_index(), &all_excludes),
@@ -99,9 +99,10 @@ impl cf_traits::ThresholdSignerNomination for RandomSignerNomination {
 			eligible_authorities(
 				epoch_index,
 				&Reputation::validators_suspended_for(&[
-					Offence::ParticipateSigningFailed,
-					Offence::MissedAuthorshipSlot,
 					Offence::MissedHeartbeat,
+					Offence::ParticipateSigningFailed,
+					Offence::ParticipateKeygenFailed,
+					Offence::ParticipateKeyHandoverFailed,
 				]),
 			),
 		)

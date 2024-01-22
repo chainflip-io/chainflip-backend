@@ -11,7 +11,7 @@
 #
 # For example, assuming a new tag `0.9.3` containing commits `85654cc..HEAD`:
 #
-# `git cliff -o CHANGELOG.md --tag 0.9.3 85654cc..HEAD`
+# `git cliff --prepend CHANGELOG.md --tag 0.9.3 85654cc..HEAD`
 #
 # Then edit and tidy up the CHANGELOG.md file and commit it.
 
@@ -57,7 +57,7 @@ split_commits = false
 # regex for preprocessing the commit messages
 commit_preprocessors = [
   { pattern = '\((\w+\s)?#([0-9]+)\)', replace = "([#${2}](<REPO>/issues/${2}))" },            # Link github refs
-  { pattern = '(WEB|PRO|PLA)-([0-9]+)', replace = "([${2}-${3}](<LINEAR>/issue/${2}-${3}))" }, # Link Linear refs
+  { pattern = '(WEB|PRO|PLA)-([0-9]+)', replace = "([${1}-${2}](<LINEAR>/issue/${1}-${2}))" }, # Link Linear refs
 ]
 # regex for parsing and grouping commits
 commit_parsers = [

@@ -10,10 +10,9 @@ use cf_traits::{AccountRoleRegistry, SafeMode, SetSafeMode, VaultRotationStatusO
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::{
 	assert_ok,
-	dispatch::UnfilteredDispatchable,
 	sp_runtime::{Digest, DigestItem},
 	storage_alias,
-	traits::OnNewAccount,
+	traits::{OnNewAccount, UnfilteredDispatchable},
 };
 use frame_system::{pallet_prelude::OriginFor, Pallet as SystemPallet, RawOrigin};
 use sp_application_crypto::RuntimeAppPublic;
@@ -50,7 +49,7 @@ pub fn init_bidders<T: RuntimeConfig>(n: u32, set_id: u32, flip_funded: u128) {
 		assert_ok!(pallet_cf_funding::Pallet::<T>::funded(
 			T::EnsureWitnessed::try_successful_origin().unwrap(),
 			bidder.clone(),
-			(flip_funded * 10u128.pow(18)).unique_saturated_into(),
+			(flip_funded * FLIPPERINOS_PER_FLIP).unique_saturated_into(),
 			Default::default(),
 			Default::default()
 		));

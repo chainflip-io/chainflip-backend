@@ -10,9 +10,10 @@ use cf_chains::{
 	mocks::{MockAggKey, MockEthereumChainCrypto, MockThresholdSignature},
 	ChainCrypto,
 };
-use cf_primitives::{AuthorityCount, CeremonyId, GENESIS_EPOCH};
+use cf_primitives::{AuthorityCount, CeremonyId, FlipBalance, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH};
 use cf_traits::{
-	impl_mock_chainflip, impl_mock_runtime_safe_mode, mocks::signer_nomination::MockNominator,
+	impl_mock_chainflip, impl_mock_runtime_safe_mode,
+	mocks::{cfe_interface_mock::MockCfeInterface, signer_nomination::MockNominator},
 	AccountRoleRegistry, AsyncResult, KeyProvider, Slashing, ThresholdSigner, VaultActivator,
 };
 use codec::{Decode, Encode};
@@ -178,7 +179,7 @@ parameter_types! {
 pub type MockOffenceReporter =
 	cf_traits::mocks::offence_reporting::MockOffenceReporter<u64, PalletOffence>;
 
-impl_mock_runtime_safe_mode! { threshold_signature: pallet_cf_threshold_signature::PalletSafeMode }
+impl_mock_runtime_safe_mode! { threshold_signature: pallet_cf_threshold_signature::PalletSafeMode<Instance1> }
 
 impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -192,17 +193,14 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type CeremonyRetryDelay = CeremonyRetryDelay;
 	type Slasher = MockSlasher;
 	type SafeMode = MockRuntimeSafeMode;
+	type CfeMultisigRequest = MockCfeInterface;
 	type Weights = ();
 }
 
 pub struct MockVaultActivator;
 impl VaultActivator<MockEthereumChainCrypto> for MockVaultActivator {
 	type ValidatorId = <Test as Chainflip>::ValidatorId;
-	fn activate(
-		_new_key: MockAggKey,
-		_maybe_old_key: Option<MockAggKey>,
-		_maybe_optimistic_activation: bool,
-	) -> Vec<u32> {
+	fn activate(_new_key: MockAggKey, _maybe_old_key: Option<MockAggKey>) -> Vec<u32> {
 		Default::default()
 	}
 
@@ -233,6 +231,7 @@ impl MockSlasher {
 impl Slashing for MockSlasher {
 	type AccountId = ValidatorId;
 	type BlockNumber = u64;
+	type Balance = u128;
 
 	fn slash(validator_id: &Self::AccountId, _blocks: Self::BlockNumber) {
 		// Count those slashes
@@ -241,11 +240,18 @@ impl Slashing for MockSlasher {
 		});
 	}
 
-	fn slash_balance(account_id: &Self::AccountId, _amount: sp_runtime::Percent) {
+	fn slash_balance(account_id: &Self::AccountId, _amount: FlipBalance) {
 		// Count those slashes
 		SLASHES.with(|count| {
 			count.borrow_mut().push(*account_id);
 		});
+	}
+
+	fn calculate_slash_amount(
+		_account_id: &Self::AccountId,
+		_blocks: Self::BlockNumber,
+	) -> Self::Balance {
+		unimplemented!()
 	}
 }
 
@@ -374,6 +380,7 @@ cf_test_utilities::impl_test_helpers! {
 			vault_key: Some(GENESIS_AGG_PUB_KEY),
 			threshold_signature_response_timeout: 1,
 			keygen_response_timeout: MOCK_KEYGEN_RESPONSE_TIMEOUT,
+			amount_to_slash: FLIPPERINOS_PER_FLIP,
 			_instance: PhantomData,
 	} },
 	|| {

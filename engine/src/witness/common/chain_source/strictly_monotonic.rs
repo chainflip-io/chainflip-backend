@@ -74,15 +74,15 @@ mod test {
 		assert!(Iterator::eq(
 			StrictlyMonotonicStream {
 				inner_stream: futures::stream::iter([
-					Header { index: 4, hash: (), parent_hash: Some(()), data: () },
-					Header { index: 3, hash: (), parent_hash: Some(()), data: () },
-					Header { index: 2, hash: (), parent_hash: Some(()), data: () },
-					Header { index: 5, hash: (), parent_hash: Some(()), data: () },
-					Header { index: 6, hash: (), parent_hash: Some(()), data: () },
-					Header { index: 6, hash: (), parent_hash: Some(()), data: () },
-					Header { index: 4, hash: (), parent_hash: Some(()), data: () },
-					Header { index: 3, hash: (), parent_hash: Some(()), data: () },
-					Header { index: 2, hash: (), parent_hash: Some(()), data: () },
+					Header { index: 4u32, hash: (), parent_hash: Some(()), data: () },
+					Header { index: 3u32, hash: (), parent_hash: Some(()), data: () },
+					Header { index: 2u32, hash: (), parent_hash: Some(()), data: () },
+					Header { index: 5u32, hash: (), parent_hash: Some(()), data: () },
+					Header { index: 6u32, hash: (), parent_hash: Some(()), data: () },
+					Header { index: 6u32, hash: (), parent_hash: Some(()), data: () },
+					Header { index: 4u32, hash: (), parent_hash: Some(()), data: () },
+					Header { index: 3u32, hash: (), parent_hash: Some(()), data: () },
+					Header { index: 2u32, hash: (), parent_hash: Some(()), data: () },
 				]),
 				last_output: None
 			}

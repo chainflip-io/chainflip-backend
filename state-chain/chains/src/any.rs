@@ -7,6 +7,8 @@ use cf_primitives::{
 
 impl Chain for AnyChain {
 	const NAME: &'static str = "AnyChain";
+	const GAS_ASSET: Self::ChainAsset = assets::any::Asset::Usdc;
+
 	type ChainCrypto = NoneChainCrypto;
 	type ChainBlockNumber = u64;
 	type ChainAmount = AssetAmount;
@@ -19,6 +21,7 @@ impl Chain for AnyChain {
 	type DepositChannelState = ();
 	type DepositDetails = ();
 	type Transaction = ();
+	type TransactionMetadata = ();
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
 }

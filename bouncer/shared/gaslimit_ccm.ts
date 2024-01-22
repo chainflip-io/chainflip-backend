@@ -12,7 +12,7 @@ import {
 import { requestNewSwap } from './perform_swap';
 import { send } from './send';
 import { BtcAddressType } from './new_btc_address';
-import { signAndSendTxEthSilent } from './send_eth';
+import { signAndSendTxEth } from './send_eth';
 
 // This test uses the CFTester contract as the receiver for a CCM call. The contract will consume approximately
 // the gasLimitBudget amount specified in the CCM message with an error margin. On top of that, the gasLimitBudget overhead of the
@@ -29,6 +29,7 @@ const MAX_TEST_GAS_CONSUMPTION = 4000000;
 // EVM requires 16 gas per calldata byte so a reasonable approximation is 17 to cover hashing and other operations over the data.
 const GAS_PER_BYTE = 17;
 const MIN_PRIORITY_FEE = 1000000000;
+const LOOP_TIMEOUT = 15;
 
 let stopObservingCcmReceived = false;
 
@@ -137,8 +138,7 @@ async function testGasLimitSwap(
     'ethereumBroadcaster:TransactionBroadcastRequest',
     chainflipApi,
     (event) => {
-      broadcastIdToTxPayload[event.data.broadcastAttemptId.broadcastId] =
-        event.data.transactionPayload;
+      broadcastIdToTxPayload[event.data.broadcastId] = event.data.transactionPayload;
       return false;
     },
     () => swapScheduledObserved,
@@ -222,6 +222,7 @@ async function testGasLimitSwap(
     if (ccmReceived?.returnValues.ccmTestGasUsed < gasConsumption) {
       throw new Error(`${tag} CCM event emitted. Gas consumed is less than expected!`);
     }
+
     const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
     const receipt = await web3.eth.getTransactionReceipt(ccmReceived?.txHash as string);
     const tx = await web3.eth.getTransaction(ccmReceived?.txHash as string);
@@ -253,7 +254,13 @@ let spam = true;
 
 async function spamEthereum() {
   while (spam) {
-    signAndSendTxEthSilent('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', '1');
+    signAndSendTxEth(
+      '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+      '1',
+      undefined,
+      undefined,
+      false,
+    );
     await sleep(500);
   }
 }
@@ -271,13 +278,18 @@ function getRandomGasConsumption(): number {
 }
 
 export async function testGasLimitCcmSwaps() {
-  console.log('=== Testing GasLimit CCM swaps ===');
-
   // Spam ethereum with transfers to increase the gasLimitBudget price
   const spamming = spamEthereum();
 
   // Wait for the fees to increase to the stable expected amount
-  while ((await getChainFees()).priorityFee >= MIN_PRIORITY_FEE) {
+  let i = 0;
+  while ((await getChainFees()).priorityFee < MIN_PRIORITY_FEE) {
+    if (++i > LOOP_TIMEOUT) {
+      spam = false;
+      await spamming;
+      console.log("=== Skipping gasLimit CCM test as the priority fee didn't increase enough. ===");
+      return;
+    }
     await sleep(500);
   }
 
@@ -326,6 +338,4 @@ export async function testGasLimitCcmSwaps() {
 
   // Make sure all the spamming has stopped to avoid triggering connectivity issues when running the next test.
   await sleep(10000);
-
-  console.log('=== GasLimit CCM test completed ===');
 }

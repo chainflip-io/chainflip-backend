@@ -4,11 +4,16 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
+use cf_primitives::SemVer;
+use codec::{Decode, Encode};
 use frame_support::{dispatch::DispatchInfo, pallet_prelude::InvalidTransaction};
 use itertools::Itertools;
 use sc_transaction_pool_api::TransactionStatus;
 use sp_core::H256;
-use sp_runtime::{traits::Hash, MultiAddress};
+use sp_runtime::{
+	traits::Hash, transaction_validity::TransactionValidityError, ApplyExtrinsicResult,
+	MultiAddress,
+};
 use state_chain_runtime::{BlockNumber, Nonce, UncheckedExtrinsic};
 use thiserror::Error;
 use tokio::sync::oneshot;
@@ -42,10 +47,22 @@ pub enum ExtrinsicError<OtherError> {
 	Dispatch(DispatchError),
 }
 
-pub type ExtrinsicResult<OtherError> = Result<
-	(H256, Vec<state_chain_runtime::RuntimeEvent>, state_chain_runtime::Header, DispatchInfo),
-	ExtrinsicError<OtherError>,
->;
+#[derive(Error, Debug)]
+pub enum DryRunError {
+	#[error(transparent)]
+	RpcCallError(#[from] jsonrpsee::core::Error),
+	#[error("Unable to decode dry_run RPC result: {0}")]
+	CannotDecodeReply(#[from] codec::Error),
+	#[error("The transaction is invalid: {0}")]
+	InvalidTransaction(#[from] TransactionValidityError),
+	#[error("The transaction failed: {0}")]
+	Dispatch(#[from] DispatchError),
+}
+
+pub type ExtrinsicDetails =
+	(H256, Vec<state_chain_runtime::RuntimeEvent>, state_chain_runtime::Header, DispatchInfo);
+
+pub type ExtrinsicResult<OtherError> = Result<ExtrinsicDetails, ExtrinsicError<OtherError>>;
 
 #[derive(Error, Debug)]
 pub enum FinalizationError {
@@ -110,12 +127,15 @@ pub struct SubmissionWatcher<
 	#[allow(clippy::type_complexity)]
 	block_cache: VecDeque<(
 		state_chain_runtime::Hash,
-		state_chain_runtime::Header,
-		Vec<UncheckedExtrinsic>,
-		Vec<Box<frame_system::EventRecord<state_chain_runtime::RuntimeEvent, H256>>>,
+		Option<(
+			state_chain_runtime::Header,
+			Vec<UncheckedExtrinsic>,
+			Vec<Box<frame_system::EventRecord<state_chain_runtime::RuntimeEvent, H256>>>,
+		)>,
 	)>,
 	base_rpc_client: Arc<BaseRpcClient>,
 	error_decoder: ErrorDecoder,
+	check_unfinalized_version: Option<SemVer>,
 }
 
 pub enum SubmissionLogicError {
@@ -135,6 +155,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		genesis_hash: state_chain_runtime::Hash,
 		extrinsic_lifetime: BlockNumber,
 		base_rpc_client: Arc<BaseRpcClient>,
+		check_unfinalized_version: Option<SemVer>,
 	) -> (Self, BTreeMap<RequestID, Request>) {
 		(
 			Self {
@@ -151,6 +172,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				block_cache: Default::default(),
 				base_rpc_client,
 				error_decoder: Default::default(),
+				check_unfinalized_version,
 			},
 			// Return an empty requests map. This is done so that initial state of the requests
 			// matches the submission watchers state. The requests must be stored outside of
@@ -158,6 +180,24 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			// to the watcher.
 			Default::default(),
 		)
+	}
+
+	fn build_and_sign_extrinsic(
+		&self,
+		call: state_chain_runtime::RuntimeCall,
+		nonce: Nonce,
+	) -> state_chain_runtime::UncheckedExtrinsic {
+		self.signer
+			.new_signed_extrinsic(
+				call.clone(),
+				&self.runtime_version,
+				self.genesis_hash,
+				self.finalized_block_hash,
+				self.finalized_block_number,
+				self.extrinsic_lifetime,
+				nonce,
+			)
+			.0
 	}
 
 	async fn submit_extrinsic_at_nonce(
@@ -178,9 +218,8 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			assert!(lifetime.contains(&(self.finalized_block_number + 1)));
 
 			let tx_hash: H256 = {
-				use sp_core::{blake2_256, Encode};
 				let encoded = signed_extrinsic.encode();
-				blake2_256(&encoded).into()
+				sp_core::blake2_256(&encoded).into()
 			};
 
 			match self.base_rpc_client.submit_and_watch_extrinsic(signed_extrinsic).await {
@@ -265,6 +304,29 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		})
 	}
 
+	pub async fn dry_run_extrinsic(
+		&mut self,
+		call: state_chain_runtime::RuntimeCall,
+	) -> Result<(), DryRunError> {
+		// Use the nonce from the latest unfinalized block.
+		let hash = self.base_rpc_client.latest_unfinalized_block_hash().await?;
+		let nonce = self
+			.base_rpc_client
+			.storage_map_entry::<frame_system::Account<state_chain_runtime::Runtime>>(
+				hash,
+				&self.signer.account_id,
+			)
+			.await?
+			.nonce;
+		let uxt = self.build_and_sign_extrinsic(call.clone(), nonce);
+		let result_bytes = self.base_rpc_client.dry_run(Encode::encode(&uxt).into(), None).await?;
+		let dry_run_result: ApplyExtrinsicResult = Decode::decode(&mut &*result_bytes)?;
+
+		debug!(target: "state_chain_client", "Dry run completed. \nCall:{:?} \nResult: {:?}", call, &dry_run_result);
+
+		Ok(dry_run_result?.map_err(|e| self.error_decoder.decode_dispatch_error(e))?)
+	}
+
 	pub async fn new_request(
 		&mut self,
 		requests: &mut BTreeMap<RequestID, Request>,
@@ -340,34 +402,49 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		requests: &mut BTreeMap<RequestID, Request>,
 		(request_id, submission_id, block_hash, tx_hash): (RequestID, SubmissionID, H256, H256),
 	) -> Result<(), anyhow::Error> {
-		if let Some((header, extrinsics, events)) = {
-			if let Some((_, header, extrinsics, events)) = self
-				.block_cache
-				.iter()
-				.find(|(cached_block_hash, ..)| block_hash == *cached_block_hash)
-			{
-				Some((header, extrinsics, events))
-			} else if let (Some(block), events) = (
-				self.base_rpc_client.block(block_hash).await?,
-				self.base_rpc_client
+		if let Some((header, extrinsics, events)) = if let Some((
+			_,
+			cached_compatbile_block_details,
+		)) = self
+			.block_cache
+			.iter()
+			.find(|(cached_block_hash, ..)| block_hash == *cached_block_hash)
+		{
+			cached_compatbile_block_details.as_ref()
+		} else if let Some(block) = self.base_rpc_client.block(block_hash).await? {
+			let compatible_or_unchecked_version =
+				if let Some(check_unfinalized_version) = self.check_unfinalized_version {
+					check_unfinalized_version.is_compatible_with(
+						self.base_rpc_client
+							.storage_value::<pallet_cf_environment::CurrentReleaseVersion<
+								state_chain_runtime::Runtime,
+							>>(block_hash)
+							.await?,
+					)
+				} else {
+					true
+				};
+
+			let compatible_block_details = if compatible_or_unchecked_version {
+				let events = self
+					.base_rpc_client
 					.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(block_hash)
-					.await?,
-			) {
-				if self.block_cache.len() >= 4 {
-					self.block_cache.pop_front();
-				}
-				self.block_cache.push_back((
-					block_hash,
-					block.block.header,
-					block.block.extrinsics,
-					events,
-				));
-				let (_, header, extrinsics, events) = self.block_cache.back().unwrap();
-				Some((header, extrinsics, events))
+					.await?;
+
+				Some((block.block.header, block.block.extrinsics, events))
 			} else {
-				warn!(target: "state_chain_client", request_id = request_id, submission_id = submission_id, "Block not found with hash {block_hash:?}");
 				None
+			};
+
+			if self.block_cache.len() >= 4 {
+				self.block_cache.pop_front();
 			}
+			self.block_cache.push_back((block_hash, compatible_block_details));
+
+			self.block_cache.back().unwrap().1.as_ref()
+		} else {
+			warn!(target: "state_chain_client", request_id = request_id, submission_id = submission_id, "Block not found with hash {block_hash:?}");
+			None
 		} {
 			let (extrinsic_index, _extrinsic) = extrinsics
 				.iter()

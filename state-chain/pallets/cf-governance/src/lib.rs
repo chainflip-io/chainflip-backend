@@ -2,17 +2,19 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-mod migrations;
+pub mod migrations;
 
 use cf_traits::{AuthoritiesCfeVersions, CompatibleCfeVersions};
 use codec::{Codec, Decode, Encode};
 use frame_support::{
-	dispatch::{GetDispatchInfo, UnfilteredDispatchable, Weight},
+	dispatch::GetDispatchInfo,
 	ensure,
-	pallet_prelude::DispatchResultWithPostInfo,
+	pallet_prelude::{DispatchResultWithPostInfo, Weight},
 	sp_runtime::{DispatchError, Percent, TransactionOutcome},
 	storage::with_transaction,
-	traits::{EnsureOrigin, Get, OnRuntimeUpgrade, StorageVersion, UnixTime},
+	traits::{
+		EnsureOrigin, Get, OnRuntimeUpgrade, StorageVersion, UnfilteredDispatchable, UnixTime,
+	},
 };
 pub use pallet::*;
 use sp_std::{boxed::Box, ops::Add, vec::Vec};
@@ -171,20 +173,6 @@ pub mod pallet {
 			let active_proposal_weight = Self::check_expiry();
 			let execution_weight = Self::execute_pending_proposals();
 			active_proposal_weight + execution_weight
-		}
-
-		fn on_runtime_upgrade() -> Weight {
-			migrations::PalletMigration::<T>::on_runtime_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-			migrations::PalletMigration::<T>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-			migrations::PalletMigration::<T>::post_upgrade(state)
 		}
 	}
 

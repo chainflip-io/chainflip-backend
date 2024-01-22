@@ -2,6 +2,7 @@
 
 mod async_result;
 pub mod liquidity;
+use cfe_events::{KeyHandoverRequest, KeygenRequest, TxBroadcastRequest};
 pub use liquidity::*;
 pub mod safe_mode;
 pub use safe_mode::*;
@@ -19,18 +20,18 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
-	ChannelId, EgressId, EpochIndex, ForeignChain, SemVer, ThresholdSignatureRequestId,
+	ChannelId, Ed25519PublicKey, EgressId, EpochIndex, FlipBalance, ForeignChain, Ipv6Addr,
+	NetworkEnvironment, SemVer, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
 	error::BadOrigin,
-	pallet_prelude::Member,
+	pallet_prelude::{DispatchResultWithPostInfo, Member},
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
 		DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
 	},
-	traits::{EnsureOrigin, Get, Imbalance, IsType},
+	traits::{EnsureOrigin, Get, Imbalance, IsType, UnfilteredDispatchable},
 	Hashable, Parameter,
 };
 use scale_info::TypeInfo;
@@ -188,11 +189,7 @@ pub trait VaultActivator<C: ChainCrypto> {
 
 	/// Activate key/s on particular chain/s. For example, setting the new key
 	/// on the contract for a smart contract chain.
-	fn activate(
-		new_key: C::AggKey,
-		maybe_old_key: Option<C::AggKey>,
-		maybe_optimistic_activation: bool,
-	) -> Vec<u32>;
+	fn activate(new_key: C::AggKey, maybe_old_key: Option<C::AggKey>) -> Vec<u32>;
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(_outcome: AsyncResult<()>);
@@ -204,7 +201,6 @@ pub trait EpochTransitionHandler {
 	fn on_expired_epoch(_expired: EpochIndex) {}
 }
 
-/// Resetter for Reputation Points and Online Credits of a Validator
 pub trait ReputationResetter {
 	type ValidatorId;
 
@@ -339,25 +335,32 @@ impl<ValidatorId> NetworkState<ValidatorId> {
 pub trait Slashing {
 	type AccountId;
 	type BlockNumber;
+	type Balance;
 
 	/// Slashes a validator for the equivalent of some number of blocks offline.
 	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber);
 
-	/// Slahes a percentage of a validator's total balance.
-	fn slash_balance(account_id: &Self::AccountId, amount: Percent);
+	/// Slashes a validator by some fixed amount.
+	fn slash_balance(account_id: &Self::AccountId, slash_amount: FlipBalance);
+
+	/// Calculate the amount of FLIP to slash
+	fn calculate_slash_amount(
+		account_id: &Self::AccountId,
+		blocks: Self::BlockNumber,
+	) -> Self::Balance;
 }
 
-/// Can nominate a single account.
-pub trait SingleSignerNomination {
-	/// The id type of signer
-	type SignerId;
+/// Nominate a single account for transaction broadcasting.
+pub trait BroadcastNomination {
+	/// The id type of the broadcaster.
+	type BroadcasterId;
 
-	/// Returns a random live signer, excluding particular provided signers. The seed value is used
+	/// Returns a random broadcaster id, excluding particular provided ids. The seed value is used
 	/// as a source of randomness. Returns None if no signers are live.
-	fn nomination_with_seed<H: Hashable>(
+	fn nominate_broadcaster<H: Hashable>(
 		seed: H,
-		exclude_ids: &[Self::SignerId],
-	) -> Option<Self::SignerId>;
+		exclude_ids: impl IntoIterator<Item = Self::BroadcasterId>,
+	) -> Option<Self::BroadcasterId>;
 }
 
 pub trait ThresholdSignerNomination {
@@ -372,42 +375,10 @@ pub trait ThresholdSignerNomination {
 	) -> Option<BTreeSet<Self::SignerId>>;
 }
 
-#[derive(Debug, TypeInfo, Decode, Encode, Clone, PartialEq, Eq)]
-pub enum KeyState {
-	Unlocked,
-	/// Key is only available to sign these request ids.
-	Locked(Vec<ThresholdSignatureRequestId>),
-}
-
-impl KeyState {
-	pub fn is_available_for_request(&self, request_id: ThresholdSignatureRequestId) -> bool {
-		match self {
-			KeyState::Unlocked => true,
-			KeyState::Locked(locked_request_ids) =>
-				locked_request_ids.iter().any(|id| *id == request_id),
-		}
-	}
-
-	pub fn unlock(&mut self) {
-		*self = KeyState::Unlocked;
-	}
-
-	pub fn lock(&mut self, request_ids: Vec<ThresholdSignatureRequestId>) {
-		*self = KeyState::Locked(request_ids);
-	}
-}
-
-#[derive(Debug, TypeInfo, Decode, Encode, Clone, PartialEq, Eq)]
+#[derive(Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
 pub struct EpochKey<Key> {
 	pub key: Key,
 	pub epoch_index: EpochIndex,
-	pub key_state: KeyState,
-}
-
-impl<Key> EpochKey<Key> {
-	pub fn lock_for_request(&mut self, request_ids: Vec<ThresholdSignatureRequestId>) {
-		self.key_state = KeyState::Locked(request_ids);
-	}
 }
 
 /// Provides the currently valid key for multisig ceremonies.
@@ -420,7 +391,7 @@ pub trait KeyProvider<C: ChainCrypto> {
 	fn active_epoch_key() -> Option<EpochKey<C::AggKey>>;
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_key(_key: C::AggKey) {
+	fn set_key(_key: C::AggKey, _epoch: EpochIndex) {
 		unimplemented!()
 	}
 }
@@ -480,6 +451,31 @@ where
 	}
 }
 
+pub trait CfeMultisigRequest<T: Chainflip, C: ChainCrypto> {
+	fn keygen_request(req: KeygenRequest<T::ValidatorId>);
+
+	fn signature_request(req: cfe_events::ThresholdSignatureRequest<T::ValidatorId, C>);
+
+	fn key_handover_request(_req: KeyHandoverRequest<T::ValidatorId, C>) {
+		assert!(!C::key_handover_is_required());
+	}
+}
+
+pub trait CfePeerRegistration<T: Chainflip> {
+	fn peer_registered(
+		account_id: T::ValidatorId,
+		pubkey: Ed25519PublicKey,
+		port: u16,
+		ip: Ipv6Addr,
+	);
+
+	fn peer_deregistered(account_id: T::ValidatorId, pubkey: Ed25519PublicKey);
+}
+
+pub trait CfeBroadcastRequest<T: Chainflip, C: Chain> {
+	fn tx_broadcast_request(req: TxBroadcastRequest<T::ValidatorId, C>);
+}
+
 /// Something that is capable of encoding and broadcasting native blockchain api calls to external
 /// chains.
 pub trait Broadcaster<C: Chain> {
@@ -490,16 +486,29 @@ pub trait Broadcaster<C: Chain> {
 	type Callback: UnfilteredDispatchable;
 
 	/// Request a threshold signature and then build and broadcast the outbound api call.
-	fn threshold_sign_and_broadcast(
-		api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId);
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId;
 
 	/// Like `threshold_sign_and_broadcast` but also registers a callback to be dispatched when the
 	/// signature accepted event has been witnessed.
 	fn threshold_sign_and_broadcast_with_callback(
 		api_call: Self::ApiCall,
-		callback: Self::Callback,
-	) -> (BroadcastId, ThresholdSignatureRequestId);
+		success_callback: Option<Self::Callback>,
+		failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
+	) -> BroadcastId;
+
+	/// Request a threshold signature and then build and broadcast the outbound api call
+	/// specifically for a rotation tx..
+	fn threshold_sign_and_broadcast_rotation_tx(api_call: Self::ApiCall) -> BroadcastId;
+
+	/// Resign a call, and update the signature data storage, but do not broadcast.
+	fn threshold_resign(broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId>;
+
+	/// Request a call to be threshold signed, but do not broadcast.
+	/// The caller must manage storage cleanup, so signatures are not stored indefinitely.
+	fn threshold_sign(api_call: Self::ApiCall) -> (BroadcastId, ThresholdSignatureRequestId);
+
+	/// Clean up storage data related to a broadcast ID.
+	fn clean_up_broadcast_storage(broadcast_id: BroadcastId);
 }
 
 /// The heartbeat of the network
@@ -764,6 +773,10 @@ pub trait DepositHandler<C: Chain> {
 	}
 }
 
+pub trait NetworkEnvironmentProvider {
+	fn get_network_environment() -> NetworkEnvironment;
+}
+
 /// Trait for handling cross chain messages.
 pub trait CcmHandler {
 	/// Triggered when a ccm deposit is made.
@@ -802,8 +815,13 @@ pub trait GetBitcoinFeeInfo {
 pub trait GetBlockHeight<C: Chain> {
 	fn get_block_height() -> C::ChainBlockNumber;
 }
+
+pub trait GetTrackedData<C: Chain> {
+	fn get_tracked_data() -> C::TrackedData;
+}
+
 pub trait CompatibleCfeVersions {
-	fn current_compatibility_version() -> SemVer;
+	fn current_release_version() -> SemVer;
 }
 
 pub trait AuthoritiesCfeVersions {
@@ -819,4 +837,15 @@ impl<RuntimeCall> CallDispatchFilter<RuntimeCall> for () {
 	fn should_dispatch(&self, _call: &RuntimeCall) -> bool {
 		true
 	}
+}
+
+pub trait AssetConverter {
+	fn convert_asset_to_approximate_output<
+		Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy,
+	>(
+		input_asset: impl Into<Asset>,
+		available_input_amount: Amount,
+		output_asset: impl Into<Asset>,
+		desired_output_amount: Amount,
+	) -> Option<(Amount, Amount)>;
 }

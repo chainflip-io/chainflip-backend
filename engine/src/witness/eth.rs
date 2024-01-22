@@ -17,36 +17,25 @@ use utilities::task_scope::Scope;
 
 use crate::{
 	db::PersistentKeyDB,
-	eth::retry_rpc::EthersRetryRpcClient,
+	eth::{retry_rpc::EthRetryRpcClient, rpc::EthRpcSigningClient},
 	state_chain_observer::client::{
 		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
-		StateChainStreamApi,
+		StateChainStreamApi, STATE_CHAIN_CONNECTION,
 	},
 	witness::eth::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents},
 };
 
-use super::common::{
-	chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder,
-	STATE_CHAIN_CONNECTION,
-};
+use super::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder};
 pub use eth_source::EthSource;
 
 use anyhow::{Context, Result};
 
-const SAFETY_MARGIN: usize = 7;
+use chainflip_node::chain_spec::berghain::ETHEREUM_SAFETY_MARGIN;
 
-pub async fn start<
-	StateChainClient,
-	StateChainStream,
-	ProcessCall,
-	ProcessingFut,
-	PrewitnessCall,
-	PrewitnessFut,
->(
+pub async fn start<StateChainClient, StateChainStream, ProcessCall, ProcessingFut>(
 	scope: &Scope<'_, anyhow::Error>,
-	eth_client: EthersRetryRpcClient,
+	eth_client: EthRetryRpcClient<EthRpcSigningClient>,
 	process_call: ProcessCall,
-	prewitness_call: PrewitnessCall,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
@@ -61,37 +50,31 @@ where
 		+ Clone
 		+ 'static,
 	ProcessingFut: Future<Output = ()> + Send + 'static,
-	PrewitnessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> PrewitnessFut
-		+ Send
-		+ Sync
-		+ Clone
-		+ 'static,
-	PrewitnessFut: Future<Output = ()> + Send + 'static,
 {
 	let state_chain_gateway_address = state_chain_client
         .storage_value::<pallet_cf_environment::EthereumStateChainGatewayAddress<state_chain_runtime::Runtime>>(
-            state_chain_client.latest_finalized_hash(),
+            state_chain_client.latest_finalized_block().hash,
         )
         .await
         .context("Failed to get StateChainGateway address from SC")?;
 
 	let key_manager_address = state_chain_client
 		.storage_value::<pallet_cf_environment::EthereumKeyManagerAddress<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_hash(),
+			state_chain_client.latest_finalized_block().hash,
 		)
 		.await
 		.context("Failed to get KeyManager address from SC")?;
 
 	let vault_address = state_chain_client
 		.storage_value::<pallet_cf_environment::EthereumVaultAddress<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_hash(),
+			state_chain_client.latest_finalized_block().hash,
 		)
 		.await
 		.context("Failed to get Vault contract address from SC")?;
 
 	let address_checker_address = state_chain_client
 		.storage_value::<pallet_cf_environment::EthereumAddressCheckerAddress<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_hash(),
+			state_chain_client.latest_finalized_block().hash,
 		)
 		.await
 		.expect(STATE_CHAIN_CONNECTION);
@@ -99,7 +82,7 @@ where
 	let supported_erc20_tokens: HashMap<cf_primitives::chains::assets::eth::Asset, H160> =
 		state_chain_client
 			.storage_map::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>, _>(
-				state_chain_client.latest_finalized_hash(),
+				state_chain_client.latest_finalized_block().hash,
 			)
 			.await
 			.context("Failed to fetch Ethereum supported assets")?;
@@ -115,87 +98,34 @@ where
 		.map(|(asset, address)| (address, asset.into()))
 		.collect();
 
-	let eth_source = EthSource::new(eth_client.clone()).shared(scope);
+	let eth_source = EthSource::new(eth_client.clone()).strictly_monotonic().shared(scope);
 
 	eth_source
 		.clone()
-		.shared(scope)
-		.chunk_by_time(epoch_source.clone())
+		.chunk_by_time(epoch_source.clone(), scope)
 		.chain_tracking(state_chain_client.clone(), eth_client.clone())
 		.logging("chain tracking")
 		.spawn(scope);
 
 	let vaults = epoch_source.vaults::<Ethereum>().await;
 
-	// ===== Prewitnessing stream =====
-	let prewitness_source = eth_source
-		.clone()
-		.strictly_monotonic()
-		.shared(scope)
-		.chunk_by_vault(vaults.clone());
-
-	let prewitness_source_deposit_addresses = prewitness_source
-		.clone()
-		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
-		.await;
-
-	prewitness_source_deposit_addresses
-		.clone()
-		.erc20_deposits::<_, _, _, UsdcEvents>(
-			prewitness_call.clone(),
-			eth_client.clone(),
-			cf_primitives::chains::assets::eth::Asset::Usdc,
-			usdc_contract_address,
-		)
-		.await?
-		.logging("pre-witnessing USDCDeposits")
-		.spawn(scope);
-
-	prewitness_source_deposit_addresses
-		.clone()
-		.erc20_deposits::<_, _, _, FlipEvents>(
-			prewitness_call.clone(),
-			eth_client.clone(),
-			cf_primitives::chains::assets::eth::Asset::Flip,
-			flip_contract_address,
-		)
-		.await?
-		.logging("pre-witnessing FlipDeposits")
-		.spawn(scope);
-
-	prewitness_source_deposit_addresses
-		.clone()
-		.ethereum_deposits(
-			prewitness_call.clone(),
-			eth_client.clone(),
-			eth::Asset::Eth,
-			address_checker_address,
-			vault_address,
-		)
-		.await
-		.logging("pre-witnessing EthereumDeposits")
-		.spawn(scope);
-
-	prewitness_source
-		.vault_witnessing(
-			prewitness_call,
-			eth_client.clone(),
-			vault_address,
-			cf_primitives::Asset::Eth,
-			cf_primitives::ForeignChain::Ethereum,
-			supported_erc20_tokens.clone(),
-		)
-		.logging("pre-witnessing Vault")
-		.spawn(scope);
-
 	// ===== Full witnessing stream =====
 
+	let eth_safety_margin = state_chain_client
+		.storage_value::<pallet_cf_ingress_egress::WitnessSafetyMargin<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::EthereumInstance,
+		>>(state_chain_stream.cache().hash)
+		.await?
+		// Default to berghain in case the value is missing (e.g. during initial upgrade)
+		.unwrap_or(ETHEREUM_SAFETY_MARGIN);
+
+	tracing::info!("Safety margin for Ethereum is set to {eth_safety_margin} blocks.",);
+
 	let eth_safe_vault_source = eth_source
-		.strictly_monotonic()
-		.lag_safety(SAFETY_MARGIN)
+		.lag_safety(eth_safety_margin as usize)
 		.logging("safe block produced")
-		.shared(scope)
-		.chunk_by_vault(vaults);
+		.chunk_by_vault(vaults, scope);
 
 	let eth_safe_vault_source_deposit_addresses = eth_safe_vault_source
 		.clone()

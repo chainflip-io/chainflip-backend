@@ -12,21 +12,24 @@ state-chain-runtime = { path = '../runtime' }
 anyhow = "1.0"
 futures = "0.3.14"
 jsonrpsee = { version = "0.16.2", features = ["full"] }
+hex = '0.4.3'
 serde = { version = '1.0', features = ['derive'] }
+thiserror = "1.0"
+
 cf-chains = { path = '../chains' }
 cf-primitives = { path = '../primitives' }
 cf-utilities = { package = 'utilities', path = '../../utilities' }
 cf-amm = { path = '../amm' }
 pallet-cf-governance = { path = "../pallets/cf-governance" }
 pallet-cf-pools = { path = "../pallets/cf-pools" }
-hex = '0.4.3'
 
-sp-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
-sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
-sp-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
-sc-rpc-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
-sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
-sc-client-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
+sp-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3" }
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3" }
+sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3" }
+sc-rpc-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3" }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3" }
+sc-client-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3" }
 
 [dev-dependencies]
-serde_json = "1.0.107"
+insta = { version = "1.34.0", features = ["json"] }
+serde_json = "1.0"

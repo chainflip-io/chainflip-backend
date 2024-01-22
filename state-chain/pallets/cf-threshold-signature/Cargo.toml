@@ -19,6 +19,7 @@ cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', defau
 cf-traits = { path = '../../traits', default-features = false }
 cf-runtime-utilities = { path = '../../runtime-utilities', default-features = false }
 cf-utilities = { package = 'utilities', path = '../../../utilities', default-features = false }
+cfe-events = { path = '../../cfe-events', default-features = false }
 
 log = { version = '0.4.16', default-features = false }
 
@@ -34,23 +35,25 @@ scale-info = { version = '2.5.0', default-features = false, features = [
   'derive',
 ] }
 
-frame-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2", optional = true, default-features = false }
-frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2", default-features = false }
-frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2", default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2", default-features = false }
+frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3", optional = true, default-features = false }
+frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3", default-features = false }
+frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3", default-features = false }
+sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3", default-features = false }
 
 [dev-dependencies]
 hex-literal = { version = '0.4.1' }
 cf-test-utilities = { path = '../../test-utilities' }
-sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
-sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
-sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3" }
+sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3" }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3" }
 
 [features]
 default = ['std']
 std = [
   'cf-chains/std',
+  'cfe-events/std',
   'cf-primitives/std',
+  'cf-runtime-utilities/std',
   'cf-runtime-upgrade-utilities/std',
   'cf-traits/std',
   'codec/std',
@@ -78,4 +81,7 @@ runtime-benchmarks = [
 try-runtime = [
   'cf-runtime-upgrade-utilities/try-runtime',
   'frame-support/try-runtime',
+  'frame-system/try-runtime',
+  'pallet-cf-reputation/try-runtime',
+  'pallet-cf-validator/try-runtime',
 ]

@@ -1,5 +1,5 @@
 use codec::{Decode, Encode};
-use frame_support::RuntimeDebug;
+use frame_support::pallet_prelude::RuntimeDebug;
 use scale_info::TypeInfo;
 
 /// A result type for asynchronous operations.

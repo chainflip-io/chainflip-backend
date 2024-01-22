@@ -5,13 +5,10 @@ use chainflip_engine::{
 	dot::retry_rpc::DotRetryRpcClient,
 	settings::NodeContainer,
 	state_chain_observer::client::{
-		storage_api::StorageApi, StateChainClient, StateChainStreamApi,
+		storage_api::StorageApi, StateChainClient, StateChainStreamApi, STATE_CHAIN_CONNECTION,
 	},
 	witness::{
-		common::{
-			chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder,
-			STATE_CHAIN_CONNECTION,
-		},
+		common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder},
 		dot::{filter_map_events, process_egress, proxy_added_witnessing, DotUnfinalisedSource},
 	},
 };
@@ -28,7 +25,7 @@ pub(super) async fn start<ProcessCall, ProcessingFut>(
 	settings: DepositTrackerSettings,
 	env_params: EnvironmentParameters,
 	state_chain_client: Arc<StateChainClient<()>>,
-	state_chain_stream: impl StateChainStreamApi + Clone,
+	state_chain_stream: impl StateChainStreamApi<false> + Clone,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient<()>, (), ()>,
 ) -> anyhow::Result<()>
 where
@@ -41,7 +38,7 @@ where
 {
 	let dot_client = DotRetryRpcClient::new(
 		scope,
-		NodeContainer { primary: settings.dot_node, backup: None },
+		NodeContainer { primary: settings.dot, backup: None },
 		env_params.dot_genesis_hash,
 	)?;
 
@@ -64,17 +61,13 @@ where
 	DotUnfinalisedSource::new(dot_client.clone())
 		.then(|header| async move { header.data.iter().filter_map(filter_map_events).collect() })
 		.strictly_monotonic()
-		.shared(scope)
-		.chunk_by_vault(vaults.clone())
+		.chunk_by_vault(vaults.clone(), scope)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		// Deposit witnessing
 		.dot_deposits(witness_call.clone())
 		// Proxy added witnessing
-		.then({
-			let witness_call = witness_call.clone();
-			move |epoch, header| proxy_added_witnessing(epoch, header, witness_call.clone())
-		})
+		.then(proxy_added_witnessing)
 		// Broadcast success
 		.egress_items(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await

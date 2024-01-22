@@ -1,45 +1,8 @@
 use crate::{BitcoinInstance, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall};
-use cf_chains::{btc::BitcoinFeeInfo, dot::PolkadotBalance};
-use cf_primitives::EthAmount;
+use cf_chains::btc::BitcoinFeeInfo;
 use codec::{Decode, Encode};
 use pallet_cf_witnesser::WitnessDataExtraction;
 use sp_std::{mem, prelude::*};
-
-fn select_median<T: Ord + Copy>(mut data: Vec<T>) -> Option<T> {
-	if data.is_empty() {
-		return None
-	}
-
-	let len = data.len();
-	let median_index = (len - 1) / 2;
-	let (_, median_value, _) = data.select_nth_unstable(median_index);
-
-	Some(*median_value)
-}
-
-fn decode_many<T: Encode + Decode>(data: &mut [Vec<u8>]) -> Vec<T> {
-	data.iter_mut()
-		.map(|entry| T::decode(&mut entry.as_slice()))
-		.filter_map(Result::ok)
-		.collect()
-}
-
-fn select_median_btc_info(data: Vec<BitcoinFeeInfo>) -> Option<BitcoinFeeInfo> {
-	if data.is_empty() {
-		return None
-	}
-
-	Some(BitcoinFeeInfo {
-		fee_per_input_utxo: select_median(data.iter().map(|x| x.fee_per_input_utxo).collect())
-			.expect("non-empty list"),
-		fee_per_output_utxo: select_median(data.iter().map(|x| x.fee_per_output_utxo).collect())
-			.expect("non-empty list"),
-		min_fee_required_per_tx: select_median(
-			data.iter().map(|x| x.min_fee_required_per_tx).collect(),
-		)
-		.expect("non-empty list"),
-	})
-}
 
 impl WitnessDataExtraction for RuntimeCall {
 	fn extract(&mut self) -> Option<Vec<u8>> {
@@ -82,32 +45,26 @@ impl WitnessDataExtraction for RuntimeCall {
 				EthereumInstance,
 			>::update_chain_state {
 				new_chain_state,
-			}) => {
-				let fee_votes = decode_many::<EthAmount>(data);
-				if let Some(median) = select_median(fee_votes) {
+			}) =>
+				if let Some(median) = decode_and_select(data, select_median) {
 					new_chain_state.tracked_data.priority_fee = median;
-				}
-			},
+				},
 			RuntimeCall::BitcoinChainTracking(pallet_cf_chain_tracking::Call::<
 				Runtime,
 				BitcoinInstance,
 			>::update_chain_state {
 				new_chain_state,
-			}) => {
-				let fee_infos = decode_many::<BitcoinFeeInfo>(data);
-
-				if let Some(median) = select_median_btc_info(fee_infos) {
+			}) =>
+				if let Some(median) = decode_and_select(data, select_median_btc_info) {
 					new_chain_state.tracked_data.btc_fee_info = median;
-				}
-			},
+				},
 			RuntimeCall::PolkadotChainTracking(pallet_cf_chain_tracking::Call::<
 				Runtime,
 				PolkadotInstance,
 			>::update_chain_state {
 				new_chain_state,
 			}) => {
-				let tip_votes = decode_many::<PolkadotBalance>(data);
-				if let Some(median) = select_median(tip_votes) {
+				if let Some(median) = decode_and_select(data, select_median) {
 					new_chain_state.tracked_data.median_tip = median;
 				};
 			},
@@ -115,6 +72,48 @@ impl WitnessDataExtraction for RuntimeCall {
 				log::warn!("No witness data injection for call {:?}", self);
 			},
 		}
+	}
+}
+
+fn select_median<T: Ord + Copy>(mut data: Vec<T>) -> Option<T> {
+	let median_index = data.len().checked_sub(1)? / 2;
+	let (_, median_value, _) = data.select_nth_unstable(median_index);
+
+	Some(*median_value)
+}
+
+fn select_median_btc_info(data: Vec<BitcoinFeeInfo>) -> Option<BitcoinFeeInfo> {
+	select_median(data.iter().map(BitcoinFeeInfo::sats_per_kilobyte).collect())
+		.map(BitcoinFeeInfo::new)
+}
+
+fn decode_and_select<T, F>(data: &mut [Vec<u8>], mut select: F) -> Option<T>
+where
+	T: Decode,
+	F: FnMut(Vec<T>) -> Option<T>,
+{
+	// A failure to decode can be caused by a runtime-upgrade,
+	// when some entries are encoded using the old version, and some — using the new version.
+	//
+	// The older implementation would ignore the entries encoded by the old-runtime.
+	// Now we either decode all entries, or ignore them all.
+	//
+	// Thus we are trying to prevent a situation when the whole vote is swayed
+	// by those who happen to witness their observations after the runtime-update.
+	//
+	// We assume that in order to get into that collection,
+	// an entry should to be a valid data structure at the moment of witnessing.
+	// Therefore it wouldn't be possible to sabotage voting by submitting an invalid entry.
+
+	let decode_all_result: Result<Vec<_>, _> =
+		data.iter_mut().map(|entry| T::decode(&mut entry.as_slice())).collect();
+
+	match decode_all_result {
+		Ok(entries) => select(entries),
+		Err(decode_err) => {
+			log::warn!("Error decoding {}: {}", core::any::type_name::<T>(), decode_err);
+			None
+		},
 	}
 }
 
@@ -218,7 +217,7 @@ mod tests {
 
 	#[test]
 	fn test_priority_fee_witnessing() {
-		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+		sp_io::TestExternalities::new_empty().execute_with(|| {
 			// This would be set at genesis
 			CurrentChainState::<Runtime, EthereumInstance>::put(ChainState {
 				block_height: 0,
@@ -283,36 +282,28 @@ mod tests {
 		assert_eq!(select_median::<u16>(vec![]), None);
 	}
 
-	// For BTC, we witness multiple values, and median should be
-	// selected for each value independently:
 	#[test]
+	// The median for a collection of BTC fee infos is selected based on the order of their
+	// `sats_per_kilobyte` properties.
+	//
+	// Other properties (fee per input utxo, fee per output utxo,
+	// min fee required per tx) are assumed to have the same order.
 	fn select_median_btc_info_test() {
-		let votes = vec![
-			BitcoinFeeInfo {
-				fee_per_input_utxo: 10,
-				fee_per_output_utxo: 55,
-				min_fee_required_per_tx: 100,
-			},
-			BitcoinFeeInfo {
-				fee_per_input_utxo: 45,
-				fee_per_output_utxo: 100,
-				min_fee_required_per_tx: 10,
-			},
-			BitcoinFeeInfo {
-				fee_per_input_utxo: 100,
-				fee_per_output_utxo: 10,
-				min_fee_required_per_tx: 50,
-			},
-		];
+		let mut votes: Vec<_> = (0..10).map(BitcoinFeeInfo::new).collect();
+		votes.sort_unstable_by_key(|info| info.blake2_128());
 
-		assert_eq!(
-			select_median_btc_info(votes),
-			Some(BitcoinFeeInfo {
-				fee_per_input_utxo: 45,
-				fee_per_output_utxo: 55,
-				min_fee_required_per_tx: 50
-			})
-		);
+		let actual =
+			select_median_btc_info(votes).expect("should not happen: the collection is not empty.");
+		let expected = BitcoinFeeInfo::new(5);
+
+		for f in [
+			BitcoinFeeInfo::sats_per_kilobyte,
+			BitcoinFeeInfo::fee_per_input_utxo,
+			BitcoinFeeInfo::fee_per_output_utxo,
+			BitcoinFeeInfo::min_fee_required_per_tx,
+		] {
+			assert_eq!(f(&actual), f(&expected));
+		}
 	}
 
 	#[test]

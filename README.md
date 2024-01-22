@@ -114,6 +114,8 @@ for this.
 
 You only need to enable the `packages:read` permission.
 
+When creating a new PAT, you need to delete the `.setup_complete` file under `localnet`, which will cause the manage.sh to ask you again for the PAT you created.
+
 ### Creating a Localnet
 
 Localnets use binaries built locally. To create a Localnet for your current branch, you will first need to build.
@@ -122,7 +124,7 @@ You can use either release or debug builds.
 From the repo root, run the following:
 
 ```shell
-cargo cf-build # or cargo cf-build-ci
+cargo cf-build # or cargo cf-build-release
 ./localnet/manage.sh
 ```
 
@@ -157,7 +159,7 @@ These commands can be used to control which logs the engine outputs at runtime.
 - `curl -X POST -H 'Content-Type: application/json' -d '"debug,warp=off,hyper=off,jsonrpc=off,web3=off,reqwest=off"' 127.0.0.1:36079/tracing` (Equivalent to the above, but without using the --sjon short-hand)
 
 The `RUST_LOG` environment variable controls the initial filtering directives if specified at engine startup.
-
+[manage.sh](localnet%2Fmanage.sh)
 The syntax for specifying filtering directives is given here: <https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html>
 
 ## Testnet

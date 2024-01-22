@@ -5,12 +5,10 @@ use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
 use cf_primitives::{Asset, AssetAmount, ForeignChain};
 use cf_traits::{
 	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi,
-	EgressApi,
+	EgressApi, PoolApi,
 };
 
-#[cfg(feature = "try-runtime")]
-use frame_support::dispatch::Vec;
-use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult, traits::OnRuntimeUpgrade};
+use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 
@@ -59,28 +57,31 @@ pub mod pallet {
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;
 
+		/// The interface for sweeping funds from pools into free balance
+		type PoolApi: PoolApi<AccountId = <Self as frame_system::Config>::AccountId>;
+
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
-		// The user does not have enough fund.
+		/// The user does not have enough funds.
 		InsufficientBalance,
-		// The user has reached the maximum balance.
+		/// The user has reached the maximum balance.
 		BalanceOverflow,
-		// The caller is not authorized to modify the trading position.
+		/// The caller is not authorized to modify the trading position.
 		UnauthorisedToModify,
-		// The Asset cannot be egressed to the destination chain.
+		/// The Asset cannot be egressed because the destination address is not invalid.
 		InvalidEgressAddress,
-		// Then given encoded address cannot be decoded into a valid ForeignChainAddress.
+		/// Then given encoded address cannot be decoded into a valid ForeignChainAddress.
 		InvalidEncodedAddress,
-		// An liquidity refund address must be set by the user for the chain before
-		// deposit address can be requested.
+		/// A liquidity refund address must be set by the user for the chain before a
+		/// deposit address can be requested.
 		NoLiquidityRefundAddressRegistered,
-		// Liquidity deposit is disabled due to Safe Mode.
+		/// Liquidity deposit is disabled due to Safe Mode.
 		LiquidityDepositDisabled,
-		// Withdrawals are disabled due to Safe Mode.
+		/// Withdrawals are disabled due to Safe Mode.
 		WithdrawalsDisabled,
 	}
 
@@ -139,23 +140,6 @@ pub mod pallet {
 		ForeignChainAddress,
 	>;
 
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_runtime_upgrade() -> Weight {
-			migrations::PalletMigration::<T>::on_runtime_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-			migrations::PalletMigration::<T>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-			migrations::PalletMigration::<T>::post_upgrade(state)
-		}
-	}
-
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// For when the user wants to deposit assets into the Chain.
@@ -205,17 +189,16 @@ pub mod pallet {
 
 				let destination_address_internal =
 					T::AddressConverter::try_from_encoded_address(destination_address.clone())
-						.map_err(|_| {
-							DispatchError::Other(
-								"Invalid Egress Address, cannot decode the address",
-							)
-						})?;
+						.map_err(|_| Error::<T>::InvalidEgressAddress)?;
 
 				// Check validity of Chain and Asset
 				ensure!(
 					destination_address_internal.chain() == ForeignChain::from(asset),
 					Error::<T>::InvalidEgressAddress
 				);
+
+				// Sweep earned fees
+				T::PoolApi::sweep(&account_id)?;
 
 				// Debit the asset from the account.
 				Self::try_debit_account(&account_id, asset, amount)?;
@@ -249,8 +232,9 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Registers an Liquidity Refund Address(LRA) for an account.
-		/// To request deposit address for a chain, an LRA must be registered for that chain.
+		/// Registers a Liquidity Refund Address(LRA) for an account.
+		///
+		/// To request a deposit address for a chain, an LRA must be registered for that chain.
 		///
 		/// ## Events
 		///
@@ -296,13 +280,13 @@ impl<T: Config> LpBalanceApi for Pallet<T> {
 	fn ensure_has_refund_address_for_pair(
 		account_id: &Self::AccountId,
 		base_asset: Asset,
-		pair_asset: Asset,
+		quote_asset: Asset,
 	) -> DispatchResult {
 		ensure!(
 			LiquidityRefundAddress::<T>::contains_key(account_id, ForeignChain::from(base_asset)) &&
 				LiquidityRefundAddress::<T>::contains_key(
 					account_id,
-					ForeignChain::from(pair_asset)
+					ForeignChain::from(quote_asset)
 				),
 			Error::<T>::NoLiquidityRefundAddressRegistered
 		);

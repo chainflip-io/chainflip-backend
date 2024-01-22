@@ -1,10 +1,9 @@
 use anyhow::{anyhow, Context};
 use core::time::Duration;
 use futures::{stream, Stream};
-use jsonrpsee::types::{error::CALL_EXECUTION_FAILED_CODE, ErrorObjectOwned};
 #[doc(hidden)]
 pub use lazy_format::lazy_format as internal_lazy_format;
-use sp_rpc::number::NumberOrHex;
+use rpc::NumberOrHex;
 
 pub mod future_map;
 pub mod loop_select;
@@ -16,28 +15,14 @@ pub mod unending_stream;
 pub use unending_stream::UnendingStream;
 pub mod logging;
 pub mod redact_endpoint_secret;
+pub mod rpc;
 pub mod serde_helpers;
 
 mod cached_stream;
-pub use cached_stream::{CachedStream, MakeCachedStream};
+pub use cached_stream::{CachedStream, InnerCachedStream, MakeCachedStream};
 
-/// A wrapper around `anyhow::Error` to allow conversion to `jsonrpsee::types::ErrorObjectOwned`
-/// including context and source.
-pub struct AnyhowRpcError {
-	pub error: anyhow::Error,
-}
-
-impl From<anyhow::Error> for AnyhowRpcError {
-	fn from(error: anyhow::Error) -> Self {
-		Self { error }
-	}
-}
-
-impl From<AnyhowRpcError> for ErrorObjectOwned {
-	fn from(e: AnyhowRpcError) -> Self {
-		ErrorObjectOwned::owned(CALL_EXECUTION_FAILED_CODE, format!("{:#}", e.error), None::<()>)
-	}
-}
+mod try_cached_stream;
+pub use try_cached_stream::{MakeTryCachedStream, TryCachedStream};
 
 pub fn clean_hex_address<A: TryFrom<Vec<u8>>>(address_str: &str) -> Result<A, anyhow::Error> {
 	let address_hex_str = match address_str.strip_prefix("0x") {
@@ -53,7 +38,7 @@ pub fn clean_hex_address<A: TryFrom<Vec<u8>>>(address_str: &str) -> Result<A, an
 
 pub fn try_parse_number_or_hex(amount: NumberOrHex) -> anyhow::Result<u128> {
 	u128::try_from(amount).map_err(|_| {
-		anyhow!("Error parsing amount. Please use a valid number or hex string as input.")
+		anyhow!("Error parsing amount to u128. Please use a valid number or hex string as input.")
 	})
 }
 
@@ -91,8 +76,9 @@ macro_rules! assert_panics {
 #[macro_export]
 macro_rules! assert_future_panics {
 	($future:expr) => {
-		use futures::future::FutureExt;
-		match ::std::panic::AssertUnwindSafe($future).catch_unwind().await {
+		match ::futures::future::FutureExt::catch_unwind(::std::panic::AssertUnwindSafe($future))
+			.await
+		{
 			Ok(_result) => panic!("future didn't panic '{}'", stringify!($future),),
 			Err(panic) => panic,
 		}
@@ -311,6 +297,21 @@ pub fn read_clean_and_decode_hex_str_file<V, T: FnOnce(&str) -> Result<V, anyhow
 			t(str)
 		})
 		.with_context(|| format!("Failed to decode {} file at {}", context, file.display()))
+}
+
+pub fn round_f64(x: f64, decimals: u32) -> f64 {
+	let y = 10i32.pow(decimals) as f64;
+	(x * y).round() / y
+}
+
+#[test]
+fn test_round_f64() {
+	assert_eq!(round_f64(1.23456789, 0), 1.0);
+	assert_eq!(round_f64(1.23456789, 1), 1.2);
+	assert_eq!(round_f64(1.23456789, 2), 1.23);
+	assert_eq!(round_f64(1.23456789, 6), 1.234568);
+	assert_eq!(round_f64(1.22223333, 6), 1.222233);
+	assert_eq!(round_f64(1.23, 6), 1.23);
 }
 
 #[cfg(test)]

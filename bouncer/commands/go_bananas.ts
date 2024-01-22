@@ -1,14 +1,16 @@
 #!/usr/bin/env -S pnpm tsx
 import axios from 'axios';
-import { Asset, assetDecimals } from '@chainflip-io/cli/.';
+import { Asset, assetDecimals } from '@chainflip-io/cli';
 import bitcoin from 'bitcoinjs-lib';
 import { Tapleaf } from 'bitcoinjs-lib/src/types';
 import { blake2AsHex } from '@polkadot/util-crypto';
+import * as ecc from 'tiny-secp256k1';
 import {
   asciiStringToBytesArray,
   getChainflipApi,
   hexStringToBytesArray,
   sleep,
+  fineAmountToAmount,
 } from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
 import { testSwap } from '../shared/swapping';
@@ -20,7 +22,7 @@ import { provideLiquidity } from '../shared/provide_liquidity';
 async function call(method: string, params: any, id: string) {
   return axios({
     method: 'post',
-    baseURL: 'http://localhost:10589',
+    baseURL: 'http://127.0.0.1:10589',
     headers: { 'Content-Type': 'application/json' },
     data: {
       jsonrpc: '2.0',
@@ -30,6 +32,23 @@ async function call(method: string, params: any, id: string) {
     },
   });
 }
+
+type AmountChange = null | {
+  Decrease?: number;
+  Increase?: number;
+};
+
+type LimitOrderResponse = {
+  base_asset: string;
+  quote_asset: string;
+  side: string;
+  id: number;
+  tick: number;
+  sell_amount_total: number;
+  collected_fees: number;
+  bought_amount: number;
+  sell_amount_change: AmountChange;
+};
 
 function predictBtcAddress(pubkey: string, salt: number): string {
   const saltScript = salt === 0 ? 'OP_0' : bitcoin.script.number.encode(salt).toString('hex');
@@ -72,7 +91,7 @@ function price2tick(price: number): number {
   return Math.round(Math.log(Math.sqrt(price)) / Math.log(Math.sqrt(1.0001)));
 }
 
-async function playLp(asset: string, price: number, liquidity: number) {
+async function playLp(asset: Asset, price: number, liquidity: number) {
   const spread = 0.01 * price;
   const liquidityFine = liquidity * 1e6;
   for (;;) {
@@ -81,33 +100,51 @@ async function playLp(asset: string, price: number, liquidity: number) {
     const sellTick = price2tick(price + offset - spread);
     const result = await Promise.all([
       call(
-        'lp_setLimitOrder',
-        ['Usdc', asset, 1, buyTick, '0x' + BigInt(liquidityFine).toString(16)],
+        'lp_set_limit_order',
+        [asset, 'USDC', 'buy', 1, buyTick, '0x' + BigInt(liquidityFine).toString(16)],
         `Buy ${asset}`,
       ),
       call(
-        'lp_setLimitOrder',
-        [asset, 'Usdc', 1, sellTick, '0x' + BigInt(liquidityFine / price).toString(16)],
+        'lp_set_limit_order',
+        [asset, 'USDC', 'sell', 1, sellTick, '0x' + BigInt(liquidityFine / price).toString(16)],
         `Sell ${asset}`,
       ),
     ]);
     result.forEach((r) => {
       if (r.data.error) {
         console.log(`Error [${r.data.id}]: ${JSON.stringify(r.data.error)}`);
-      }
-      if (r.data.result[0].collected_fees > 0) {
-        console.log(`Collected ${r.data.result[0].collected_fees / 10 ** 6} USDC in fees`);
-      }
-      if (r.data.result[0].bought_amount > 0) {
-        if (r.data.id === `Buy ${asset}`) {
-          console.log(
-            `Bought ${
-              r.data.result[0].bought_amount / 10 ** assetDecimals[asset.toUpperCase() as Asset]
-            } ${asset} for Usdc`,
-          );
-        } else {
-          console.log(`Bought ${r.data.result[0].bought_amount / 10 ** 6} Usdc for ${asset}`);
-        }
+      } else {
+        r.data.result.tx_details.response.forEach((update: LimitOrderResponse) => {
+          if (BigInt(update.collected_fees) > BigInt(0)) {
+            let ccy;
+            if (update.side === 'buy') {
+              ccy = update.base_asset.toUpperCase() as Asset;
+            } else {
+              ccy = update.quote_asset.toUpperCase() as Asset;
+            }
+            const fees = fineAmountToAmount(
+              BigInt(update.collected_fees.toString()).toString(10),
+              assetDecimals[ccy],
+            );
+            console.log(`Collected ${fees} ${ccy} in fees`);
+          }
+          if (BigInt(update.bought_amount) > BigInt(0)) {
+            let buyCcy;
+            let sellCcy;
+            if (update.side === 'buy') {
+              buyCcy = update.base_asset.toUpperCase() as Asset;
+              sellCcy = update.quote_asset.toUpperCase() as Asset;
+            } else {
+              buyCcy = update.quote_asset.toUpperCase() as Asset;
+              sellCcy = update.base_asset.toUpperCase() as Asset;
+            }
+            const amount = fineAmountToAmount(
+              BigInt(update.bought_amount.toString()).toString(10),
+              assetDecimals[buyCcy],
+            );
+            console.log(`Bought ${amount} ${buyCcy} for ${sellCcy}`);
+          }
+        });
       }
     });
     await sleep(12000);
@@ -116,8 +153,7 @@ async function playLp(asset: string, price: number, liquidity: number) {
 
 async function launchTornado() {
   const chainflip = await getChainflipApi();
-  const epoch = (await chainflip.query.bitcoinVault.currentVaultEpochAndState()).toJSON()!
-    .epochIndex as number;
+  const epoch = (await chainflip.query.bitcoinVault.currentVaultEpoch()).toJSON()! as number;
   const pubkey = (
     (await chainflip.query.bitcoinVault.vaults(epoch)).toJSON()!.publicKey.current as string
   ).substring(2);
@@ -158,7 +194,7 @@ async function playSwapper() {
       .filter((x) => x !== src)
       .at(Math.floor(Math.random() * (assets.length - 1)))!;
     testSwap(src, dest, undefined, undefined, undefined, swapAmount.get(src));
-    await sleep(3000);
+    await sleep(5000);
   }
 }
 
@@ -187,15 +223,33 @@ async function bananas() {
     provideLiquidity('BTC', (2 * liquidityUsdc) / price.get('BTC')!),
     provideLiquidity('FLIP', (2 * liquidityUsdc) / price.get('FLIP')!),
   ]);
+
   await Promise.all([
-    playLp('Eth', price.get('ETH')! * 10 ** (6 - 18), liquidityUsdc),
-    playLp('Btc', price.get('BTC')! * 10 ** (6 - 8), liquidityUsdc),
-    playLp('Dot', price.get('DOT')! * 10 ** (6 - 10), liquidityUsdc),
-    playLp('Flip', price.get('FLIP')! * 10 ** (6 - 18), liquidityUsdc),
+    playLp(
+      'ETH',
+      price.get('ETH')! * 10 ** (assetDecimals.USDC - assetDecimals.ETH),
+      liquidityUsdc,
+    ),
+    playLp(
+      'BTC',
+      price.get('BTC')! * 10 ** (assetDecimals.USDC - assetDecimals.BTC),
+      liquidityUsdc,
+    ),
+    playLp(
+      'DOT',
+      price.get('DOT')! * 10 ** (assetDecimals.USDC - assetDecimals.DOT),
+      liquidityUsdc,
+    ),
+    playLp(
+      'FLIP',
+      price.get('FLIP')! * 10 ** (assetDecimals.USDC - assetDecimals.FLIP),
+      liquidityUsdc,
+    ),
     playSwapper(),
     launchTornado(),
   ]);
 }
 
+bitcoin.initEccLib(ecc);
 await bananas();
 process.exit(0);

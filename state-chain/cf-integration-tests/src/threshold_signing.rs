@@ -76,6 +76,7 @@ impl KeyUtils for EthKeyComponents {
 }
 
 pub struct ThresholdSigner<KeyComponents, SigVerification> {
+	previous_key_components: Option<KeyComponents>,
 	key_components: KeyComponents,
 	proposed_key_components: Option<KeyComponents>,
 	_phantom: PhantomData<SigVerification>,
@@ -90,8 +91,14 @@ where
 		if key == current_key {
 			return self.key_components.sign(message)
 		}
-		let next_key = self.proposed_key_components.as_ref().unwrap().agg_key();
-		if key == next_key {
+		if self.previous_key_components.is_some() &&
+			self.previous_key_components.as_ref().unwrap().agg_key() == key
+		{
+			return self.previous_key_components.as_ref().unwrap().sign(message)
+		}
+		if self.proposed_key_components.is_some() &&
+			self.proposed_key_components.as_ref().unwrap().agg_key() == key
+		{
 			self.proposed_key_components.as_ref().unwrap().sign(message)
 		} else {
 			panic!("Unknown key");
@@ -108,9 +115,23 @@ where
 	// Rotate to the current proposed key and clear the proposed key
 	pub fn use_proposed_key(&mut self) {
 		if self.proposed_key_components.is_some() {
+			self.previous_key_components = Some(self.key_components.clone());
 			self.key_components =
 				self.proposed_key_components.as_ref().expect("No key has been proposed").clone();
 			self.proposed_key_components = None;
+		}
+	}
+
+	pub fn is_key_valid(&self, key: &AggKey) -> bool {
+		let current_key = self.key_components.agg_key();
+		if *key != current_key {
+			if let Some(next_key_components) = self.proposed_key_components.as_ref() {
+				*key == next_key_components.agg_key()
+			} else {
+				false
+			}
+		} else {
+			true
 		}
 	}
 }
@@ -120,6 +141,7 @@ pub type EthThresholdSigner = ThresholdSigner<EthKeyComponents, SchnorrVerificat
 impl Default for EthThresholdSigner {
 	fn default() -> Self {
 		ThresholdSigner {
+			previous_key_components: None,
 			key_components: EthKeyComponents::generate(GENESIS_KEY_SEED, GENESIS_EPOCH),
 			proposed_key_components: None,
 			_phantom: PhantomData,
@@ -134,6 +156,7 @@ pub type DotThresholdSigner = ThresholdSigner<DotKeyComponents, PolkadotSignatur
 impl Default for DotThresholdSigner {
 	fn default() -> Self {
 		Self {
+			previous_key_components: None,
 			key_components: DotKeyComponents::generate(GENESIS_KEY_SEED, GENESIS_EPOCH),
 			proposed_key_components: None,
 			_phantom: PhantomData,
@@ -171,6 +194,7 @@ pub type BtcThresholdSigner = ThresholdSigner<BtcKeyComponents, btc::Signature>;
 impl Default for BtcThresholdSigner {
 	fn default() -> Self {
 		Self {
+			previous_key_components: None,
 			key_components: BtcKeyComponents::generate(GENESIS_KEY_SEED, GENESIS_EPOCH),
 			proposed_key_components: None,
 			_phantom: PhantomData,

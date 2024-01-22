@@ -1,17 +1,18 @@
 use super::AddressDerivation;
 use crate::BitcoinThresholdSigner;
 use cf_chains::{
-	address::AddressDerivationApi, btc::deposit_address::DepositAddress, Bitcoin, Chain,
+	address::{AddressDerivationApi, AddressDerivationError},
+	btc::deposit_address::DepositAddress,
+	Bitcoin, Chain,
 };
 use cf_primitives::ChannelId;
 use cf_traits::KeyProvider;
-use frame_support::sp_runtime::DispatchError;
 
 impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 	fn generate_address(
 		source_asset: <Bitcoin as Chain>::ChainAsset,
 		channel_id: ChannelId,
-	) -> Result<<Bitcoin as Chain>::ChainAccount, DispatchError> {
+	) -> Result<<Bitcoin as Chain>::ChainAccount, AddressDerivationError> {
 		<Self as AddressDerivationApi<Bitcoin>>::generate_address_and_state(
 			source_asset,
 			channel_id,
@@ -24,16 +25,16 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 		channel_id: ChannelId,
 	) -> Result<
 		(<Bitcoin as Chain>::ChainAccount, <Bitcoin as Chain>::DepositChannelState),
-		DispatchError,
+		AddressDerivationError,
 	> {
 		let channel_id: u32 = channel_id
 			.try_into()
-			.map_err(|_| "Intent ID is too large for BTC address derivation")?;
+			.map_err(|_| AddressDerivationError::BitcoinChannelIdTooLarge)?;
 
 		let channel_state = DepositAddress::new(
 			// TODO: The key should be passed as an argument (or maybe KeyProvider type arg).
 			BitcoinThresholdSigner::active_epoch_key()
-				.ok_or(DispatchError::Other("No vault for epoch"))?
+				.ok_or(AddressDerivationError::MissingBitcoinVault)?
 				.key
 				.current,
 			channel_id,
@@ -48,12 +49,11 @@ fn test_address_generation() {
 	use crate::Runtime;
 	use cf_chains::Bitcoin;
 	use cf_primitives::chains::assets::btc;
-	use cf_traits::KeyState;
 	use cf_utilities::assert_ok;
-	use pallet_cf_threshold_signature::{CurrentVaultEpochAndState, VaultEpochAndState, VaultKeys};
+	use pallet_cf_threshold_signature::{CurrentVaultEpoch, VaultKeys};
 	use pallet_cf_validator::CurrentEpoch;
 
-	frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+	sp_io::TestExternalities::new_empty().execute_with(|| {
 		CurrentEpoch::<Runtime>::set(1);
 		VaultKeys::<Runtime, crate::BitcoinInstance>::insert(
 			1,
@@ -64,10 +64,7 @@ fn test_address_generation() {
 				),
 			},
 		);
-		CurrentVaultEpochAndState::<Runtime, crate::BitcoinInstance>::put(VaultEpochAndState {
-			epoch_index: 1,
-			key_state: KeyState::Unlocked,
-		});
+		CurrentVaultEpoch::<Runtime, crate::BitcoinInstance>::put(1);
 		assert_ok!(<AddressDerivation as AddressDerivationApi<Bitcoin>>::generate_address(
 			btc::Asset::Btc,
 			1

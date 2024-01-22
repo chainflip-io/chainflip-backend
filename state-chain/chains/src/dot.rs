@@ -252,8 +252,72 @@ impl Default for PolkadotTrackedData {
 	}
 }
 
+/// See https://wiki.polkadot.network/docs/learn-transaction-fees
+///
+/// Fee constants here already include the Multiplier.
+mod fee_constants {
+	// See https://wiki.polkadot.network/docs/learn-DOT.
+	pub const MICRO_DOT: u128 = 10_000;
+	pub const MILLI_DOT: u128 = 1_000 * MICRO_DOT;
+
+	/// Taken from the Polkadot runtime.
+	pub const BASE_FEE: u128 = MILLI_DOT;
+	/// Taken from the Polkadot runtime. Should be 0.1 mDOT
+	pub const LENGTH_FEE: u128 = MILLI_DOT / 10;
+
+	pub mod fetch {
+		pub use super::*;
+
+		/// Estimated from the Polkadot runtime.
+		pub const ADJUSTED_WEIGHT_FEE: u128 = 330 * MICRO_DOT;
+		/// This should be a minor over-estimate. It's the length in bytes of an extrinsic that
+		/// encodes a single fetch operation. In practice, multiple fetches and transfers might be
+		/// encoded in the extrinsic, bringing the per-fetch average down.
+		pub const EXTRINSIC_LENGTH: u128 = 184;
+
+		pub const EXTRINSIC_FEE: u128 =
+			BASE_FEE + LENGTH_FEE * EXTRINSIC_LENGTH + ADJUSTED_WEIGHT_FEE;
+	}
+
+	pub mod transfer {
+		pub use super::*;
+
+		/// Estimated from the Polkadot runtime.
+		pub const ADJUSTED_WEIGHT_FEE: u128 = 245 * MICRO_DOT;
+		/// This should be a minor over-estimate. It's the length in bytes of an extrinsic that
+		/// encodes a single fetch operation. In practice, multiple fetches and transfers might be
+		/// encoded in the extrinsic, bringing the per-fetch average down.
+		pub const EXTRINSIC_LENGTH: u128 = 185;
+
+		pub const EXTRINSIC_FEE: u128 =
+			BASE_FEE + LENGTH_FEE * EXTRINSIC_LENGTH + ADJUSTED_WEIGHT_FEE;
+	}
+}
+
+impl FeeEstimationApi<Polkadot> for PolkadotTrackedData {
+	fn estimate_ingress_fee(
+		&self,
+		_asset: <Polkadot as Chain>::ChainAsset,
+	) -> <Polkadot as Chain>::ChainAmount {
+		use fee_constants::fetch::*;
+
+		self.median_tip + fetch::EXTRINSIC_FEE
+	}
+
+	fn estimate_egress_fee(
+		&self,
+		_asset: <Polkadot as Chain>::ChainAsset,
+	) -> <Polkadot as Chain>::ChainAmount {
+		use fee_constants::transfer::*;
+
+		self.median_tip + transfer::EXTRINSIC_FEE
+	}
+}
+
 impl Chain for Polkadot {
 	const NAME: &'static str = "Polkadot";
+	const GAS_ASSET: Self::ChainAsset = assets::dot::Asset::Dot;
+
 	type ChainCrypto = PolkadotCrypto;
 	type ChainBlockNumber = PolkadotBlockNumber;
 	type ChainAmount = PolkadotBalance;
@@ -266,6 +330,7 @@ impl Chain for Polkadot {
 	type DepositChannelState = PolkadotChannelState;
 	type DepositDetails = ();
 	type Transaction = PolkadotTransactionData;
+	type TransactionMetadata = ();
 	type ReplayProtectionParams = ResetProxyAccountNonce;
 	type ReplayProtection = PolkadotReplayProtection;
 }
@@ -282,6 +347,7 @@ impl ChannelLifecycleHooks for PolkadotChannelState {
 	}
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PolkadotCrypto;
 impl ChainCrypto for PolkadotCrypto {
 	type UtxoChain = ConstBool<false>;
@@ -305,6 +371,14 @@ impl ChainCrypto for PolkadotCrypto {
 
 	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
 		EncodedPolkadotPayload(Blake2_256::hash(&agg_key.aliased_ref()[..]).to_vec())
+	}
+
+	fn maybe_broadcast_barriers_on_rotation(
+		rotation_broadcast_id: BroadcastId,
+	) -> Vec<BroadcastId> {
+		// For polkadot, we need to pause future epoch broadcasts until all the previous epoch
+		// broadcasts (including the rotation tx) has successfully broadcasted.
+		vec![rotation_broadcast_id]
 	}
 }
 
@@ -332,7 +406,7 @@ pub struct CurrentVaultAndProxy {
 pub struct PolkadotExtrinsicBuilder {
 	extrinsic_call: PolkadotRuntimeCall,
 	replay_protection: PolkadotReplayProtection,
-	signer_and_signature: Option<(PolkadotAccountId, PolkadotSignature)>,
+	signature: Option<PolkadotSignature>,
 }
 
 impl PolkadotExtrinsicBuilder {
@@ -340,11 +414,11 @@ impl PolkadotExtrinsicBuilder {
 		replay_protection: PolkadotReplayProtection,
 		extrinsic_call: PolkadotRuntimeCall,
 	) -> Self {
-		Self { extrinsic_call, replay_protection, signer_and_signature: None }
+		Self { extrinsic_call, replay_protection, signature: None }
 	}
 
 	pub fn signature(&self) -> Option<PolkadotSignature> {
-		self.signer_and_signature.as_ref().map(|(_, sig)| sig.clone())
+		self.signature.clone()
 	}
 
 	fn extra(&self) -> PolkadotSignedExtra {
@@ -388,15 +462,15 @@ impl PolkadotExtrinsicBuilder {
 		)
 	}
 
-	pub fn insert_signature(&mut self, signer: PolkadotAccountId, signature: PolkadotSignature) {
-		self.signer_and_signature.replace((signer, signature));
+	pub fn insert_signature(&mut self, signature: PolkadotSignature) {
+		self.signature.replace(signature);
 	}
 
 	pub fn get_signed_unchecked_extrinsic(&self) -> Option<PolkadotUncheckedExtrinsic> {
-		self.signer_and_signature.as_ref().map(|(signer, signature)| {
+		self.signature.as_ref().map(|signature| {
 			PolkadotUncheckedExtrinsic::new_signed(
 				self.extrinsic_call.clone(),
-				*signer,
+				self.replay_protection.signer,
 				signature.clone(),
 				self.extra(),
 			)
@@ -404,7 +478,7 @@ impl PolkadotExtrinsicBuilder {
 	}
 
 	pub fn is_signed(&self) -> bool {
-		self.signer_and_signature.is_some()
+		self.signature.is_some()
 	}
 }
 
@@ -911,6 +985,7 @@ pub type PolkadotPublicKey = PolkadotAccountId;
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
 pub struct PolkadotReplayProtection {
 	pub genesis_hash: PolkadotHash,
+	pub signer: PolkadotAccountId,
 	pub nonce: PolkadotIndex,
 }
 
@@ -921,7 +996,7 @@ impl BenchmarkValueExtended for PolkadotChannelId {
 	}
 }
 
-#[cfg(test)]
+#[cfg(debug_assertions)]
 pub const TEST_RUNTIME_VERSION: RuntimeVersion =
 	RuntimeVersion { spec_version: 9340, transaction_version: 16 };
 
@@ -1037,16 +1112,19 @@ mod test_polkadot_extrinsics {
 		println!("Encoded Call: 0x{}", hex::encode(test_runtime_call.encode()));
 
 		let mut extrinsic_builder = PolkadotExtrinsicBuilder::new(
-			PolkadotReplayProtection { nonce: 12, genesis_hash: Default::default() },
+			PolkadotReplayProtection {
+				nonce: 12,
+				signer: account_id_1,
+				genesis_hash: Default::default(),
+			},
 			test_runtime_call,
 		);
-		extrinsic_builder.insert_signature(
-			account_id_1,
-			keypair_1.sign(&extrinsic_builder.get_signature_payload(
+		extrinsic_builder.insert_signature(keypair_1.sign(
+			&extrinsic_builder.get_signature_payload(
 				TEST_RUNTIME_VERSION.spec_version,
 				TEST_RUNTIME_VERSION.transaction_version,
-			)),
-		);
+			),
+		));
 
 		assert!(extrinsic_builder.is_signed());
 
@@ -1054,5 +1132,26 @@ mod test_polkadot_extrinsics {
 			"encoded extrinsic: {:?}",
 			extrinsic_builder.get_signed_unchecked_extrinsic().unwrap().encode()
 		);
+	}
+
+	#[test]
+	fn fee_estimation_doesnt_overflow() {
+		let ingress_fee = PolkadotTrackedData {
+			median_tip: Default::default(),
+			runtime_version: Default::default(),
+		}
+		.estimate_ingress_fee(assets::dot::Asset::Dot);
+
+		let egress_fee = PolkadotTrackedData {
+			median_tip: Default::default(),
+			runtime_version: Default::default(),
+		}
+		.estimate_egress_fee(assets::dot::Asset::Dot);
+
+		// The values are not important. This test serves more as a sanity check that
+		// the fees are valid, and a reference to compare against the actual fees. These values must
+		// be updated if we update the fee calculation.
+		assert_eq!(ingress_fee, 197_300_000u128);
+		assert_eq!(egress_fee, 197_450_000u128);
 	}
 }

@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use crate::{
 	common::{
 		mul_div, sqrt_price_at_tick, tick_at_sqrt_price, MAX_SQRT_PRICE, MAX_TICK, MIN_SQRT_PRICE,
@@ -290,6 +288,95 @@ fn fee_hundredth_pips() {
 }
 
 #[test]
+fn historics() {
+	{
+		let lp = LiquidityProvider::from([0; 32]);
+		let amount: Amount = 1000.into();
+		let mut pool_state = PoolState::new(MAX_LP_FEE).unwrap();
+		assert_eq!(
+			assert_ok!(pool_state.collect_and_mint::<ZeroToOne>(&lp, 0, amount)),
+			(
+				Collected {
+					fees: Amount::zero(),
+					bought_amount: Amount::zero(),
+					sold_amount: Amount::zero(),
+					accumulative_fees: Amount::zero(),
+					original_amount: Amount::zero()
+				},
+				PositionInfo::new(amount)
+			)
+		);
+
+		let swap_amount = Amount::from(50);
+		let bought_amount = Amount::from(24);
+		let fees = Amount::from(24);
+
+		pool_state.swap::<ZeroToOne>(swap_amount, None);
+
+		assert_eq!(
+			assert_ok!(pool_state.collect::<ZeroToOne>(&lp, 0)),
+			(
+				Collected {
+					fees,
+					bought_amount,
+					sold_amount: bought_amount,
+					accumulative_fees: 24.into(),
+					original_amount: amount
+				},
+				PositionInfo::new(amount - Amount::from(25))
+			)
+		);
+
+		pool_state.swap::<ZeroToOne>(swap_amount, None);
+
+		assert_eq!(
+			assert_ok!(pool_state.collect::<ZeroToOne>(&lp, 0)),
+			(
+				Collected {
+					fees,
+					bought_amount,
+					sold_amount: bought_amount,
+					accumulative_fees: 48.into(),
+					original_amount: amount
+				},
+				PositionInfo::new(amount - Amount::from(50))
+			)
+		);
+
+		pool_state.swap::<ZeroToOne>(swap_amount, None);
+
+		assert_eq!(
+			assert_ok!(pool_state.collect::<ZeroToOne>(&lp, 0)),
+			(
+				Collected {
+					fees,
+					bought_amount,
+					sold_amount: bought_amount,
+					accumulative_fees: 72.into(),
+					original_amount: amount
+				},
+				PositionInfo::new(amount - Amount::from(75))
+			)
+		);
+
+		assert_eq!(
+			assert_ok!(pool_state.collect_and_burn::<ZeroToOne>(&lp, 0, amount)),
+			(
+				amount - Amount::from(75),
+				Collected {
+					fees: Amount::zero(),
+					bought_amount: Amount::zero(),
+					sold_amount: Amount::zero(),
+					accumulative_fees: 72.into(),
+					original_amount: amount
+				},
+				PositionInfo::default()
+			)
+		);
+	}
+}
+
+#[test]
 fn mint() {
 	fn inner<SD: SwapDirection + limit_orders::SwapDirection + range_orders::SwapDirection>() {
 		for good in [MIN_TICK, MAX_TICK] {
@@ -392,7 +479,11 @@ fn burn() {
 					tick,
 					amount
 				)),
-				(amount, Collected::default(), PositionInfo::default())
+				(
+					amount,
+					Collected { original_amount: amount, ..Default::default() },
+					PositionInfo::default()
+				)
 			);
 		}
 		{
@@ -415,7 +506,11 @@ fn burn() {
 					tick,
 					amount
 				)),
-				(amount, Collected::default(), PositionInfo::default())
+				(
+					amount,
+					Collected { original_amount: amount, ..Default::default() },
+					PositionInfo::default()
+				)
 			);
 		}
 		{
@@ -439,7 +534,13 @@ fn burn() {
 				)),
 				(
 					0.into(),
-					Collected { fees: 0.into(), bought_amount: amount },
+					Collected {
+						fees: 0.into(),
+						sold_amount: amount,
+						bought_amount: amount,
+						accumulative_fees: Default::default(),
+						original_amount: amount,
+					},
 					PositionInfo::default()
 				)
 			);
@@ -467,7 +568,13 @@ fn burn() {
 				)),
 				(
 					amount - swap,
-					Collected { fees: 0.into(), bought_amount: expected_output },
+					Collected {
+						fees: 0.into(),
+						sold_amount: swap,
+						bought_amount: expected_output,
+						accumulative_fees: Default::default(),
+						original_amount: amount
+					},
 					PositionInfo::default()
 				)
 			);

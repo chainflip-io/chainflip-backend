@@ -6,8 +6,8 @@ use cf_chains::{Chain, ChainCrypto, SetAggKeyWithAggKey};
 use cf_primitives::EpochIndex;
 use cf_runtime_utilities::EnumVariant;
 use cf_traits::{
-	AsyncResult, Broadcaster, Chainflip, CurrentEpochIndex, GetBlockHeight, SafeMode, SetSafeMode,
-	VaultKeyWitnessedHandler,
+	AsyncResult, Broadcaster, CfeMultisigRequest, Chainflip, CurrentEpochIndex, GetBlockHeight,
+	SafeMode, SetSafeMode, VaultKeyWitnessedHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -27,7 +27,7 @@ pub use weights::WeightInfo;
 mod mock;
 mod tests;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 pub type PayloadFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::Payload;
 
@@ -85,17 +85,15 @@ pub mod pallet {
 
 		type ChainTracking: GetBlockHeight<Self::Chain>;
 
+		type CfeMultisigRequest: CfeMultisigRequest<Self, <Self::Chain as Chain>::ChainCrypto>;
+
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
 	}
 
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
-		fn on_runtime_upgrade() -> Weight {
-			Weight::zero()
-		}
-	}
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {}
 
 	/// A map of starting block number of vaults by epoch.
 	#[pallet::storage]
@@ -133,33 +131,19 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		/// A vault rotation event has been witnessed, we update the vault with the new key.
-		///
-		/// ## Events
-		///
-		/// - [VaultRotationCompleted](Event::VaultRotationCompleted)
-		///
-		/// ## Errors
-		///
-		/// - [NoActiveRotation](Error::NoActiveRotation)
-		/// - [InvalidRotationStatus](Error::InvalidRotationStatus)
-		///
-		/// ## Dependencies
-		///
-		/// - [Epoch Info Trait](EpochInfo)
+		/// Deprecated! This extrinsic does nothing
 		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::vault_key_rotated())]
+		#[pallet::weight(Weight::zero())]
 		pub fn vault_key_rotated(
 			origin: OriginFor<T>,
-			block_number: ChainBlockNumberFor<T, I>,
+			_block_number: ChainBlockNumberFor<T, I>,
 
 			// This field is primarily required to ensure the witness calls are unique per
 			// transaction (on the external chain)
 			_tx_id: TransactionInIdFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
-
-			Self::on_new_key_activated(block_number)
+			Ok(().into())
 		}
 
 		/// The vault's key has been updated externally, outside of the rotation

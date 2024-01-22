@@ -16,12 +16,16 @@ mod benchmarking;
 mod rotation_state;
 
 pub use auction_resolver::*;
-use cf_primitives::{AuthorityCount, EpochIndex, SemVer};
+use cf_primitives::{
+	AuthorityCount, Ed25519PublicKey, EpochIndex, Ipv6Addr, SemVer,
+	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION, FLIPPERINOS_PER_FLIP,
+};
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, AuthoritiesCfeVersions,
-	Bid, BidderProvider, Bonding, Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition,
-	FundingInfo, HistoricalEpoch, MissedAuthorshipSlots, OnAccountFunded, QualifyNode,
-	ReputationResetter, SetSafeMode, VaultRotator,
+	Bid, BidderProvider, Bonding, CfePeerRegistration, Chainflip, EpochInfo,
+	EpochTransitionHandler, ExecutionCondition, FundingInfo, HistoricalEpoch,
+	MissedAuthorshipSlots, OnAccountFunded, QualifyNode, ReputationResetter, SetSafeMode,
+	VaultRotator,
 };
 
 use cf_utilities::Port;
@@ -46,9 +50,8 @@ use crate::rotation_state::RotationState;
 type SessionIndex = u32;
 
 type Version = SemVer;
-type Ed25519PublicKey = ed25519::Public;
+
 type Ed25519Signature = ed25519::Signature;
-pub type Ipv6Addr = u128;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletConfigUpdate {
@@ -60,6 +63,7 @@ pub enum PalletConfigUpdate {
 	AuthoritySetMinSize { min_size: AuthorityCount },
 	AuctionParameters { parameters: SetSizeParameters },
 	MinimumReportedCfeVersion { version: SemVer },
+	MaxAuthoritySetContractionPercentage { percentage: Percent },
 }
 
 type RuntimeRotationState<T> =
@@ -145,6 +149,8 @@ pub mod pallet {
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode> + SetSafeMode<PalletSafeMode>;
 
+		type CfePeerRegistration: CfePeerRegistration<Self>;
+
 		/// Benchmark weights.
 		type ValidatorWeightInfo: WeightInfo;
 	}
@@ -208,7 +214,8 @@ pub mod pallet {
 	pub type AccountPeerMapping<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, (Ed25519PublicKey, Port, Ipv6Addr)>;
 
-	/// Peers that are associated with account ids.
+	/// Ed25519 public keys (aka peer ids) that are associated with account ids. (We keep track
+	/// of them to ensure they don't somehow get reused between different account ids.)
 	#[pallet::storage]
 	#[pallet::getter(fn mapped_peer)]
 	pub type MappedPeers<T: Config> = StorageMap<_, Blake2_128Concat, Ed25519PublicKey, ()>;
@@ -281,6 +288,13 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn minimum_reported_cfe_version)]
 	pub(super) type MinimumReportedCfeVersion<T: Config> = StorageValue<_, SemVer, ValueQuery>;
+
+	/// Determines the maximum allowed reduction of authority set size in percents between two
+	/// consecutive epochs.
+	#[pallet::storage]
+	#[pallet::getter(fn max_authority_set_contraction_percentage)]
+	pub(super) type MaxAuthoritySetContractionPercentage<T: Config> =
+		StorageValue<_, Percent, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -510,6 +524,9 @@ pub mod pallet {
 				PalletConfigUpdate::MinimumReportedCfeVersion { version } => {
 					MinimumReportedCfeVersion::<T>::put(version);
 				},
+				PalletConfigUpdate::MaxAuthoritySetContractionPercentage { percentage } => {
+					MaxAuthoritySetContractionPercentage::<T>::put(percentage);
+				},
 			}
 
 			Self::deposit_event(Event::PalletConfigUpdated { update });
@@ -608,6 +625,8 @@ pub mod pallet {
 
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 
+			// Note: this signature is necessary to prevent "rogue key" attacks (by ensuring
+			// that `account_id` holds the corresponding secret key for `peer_id`)
 			// Note: This signature verify doesn't need replay protection as you need the
 			// account_id's private key to pass the above ensure_validator which has replay
 			// protection. Note: Decode impl for peer_id's type doesn't detect invalid PublicKeys,
@@ -646,6 +665,18 @@ pub mod pallet {
 
 			AccountPeerMapping::<T>::insert(&account_id, (peer_id, port, ip_address));
 
+			let validator_id = <ValidatorIdOf<T> as IsType<
+				<T as frame_system::Config>::AccountId,
+			>>::from_ref(&account_id);
+
+			T::CfePeerRegistration::peer_registered(
+				validator_id.clone(),
+				peer_id,
+				port,
+				ip_address,
+			);
+
+			// TODO: Consider removing this
 			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id, port, ip_address));
 			Ok(().into())
 		}
@@ -747,9 +778,9 @@ pub mod pallet {
 		pub redemption_period_as_percentage: Percent,
 		pub backup_reward_node_percentage: Percent,
 		pub authority_set_min_size: AuthorityCount,
-		pub min_size: AuthorityCount,
-		pub max_size: AuthorityCount,
-		pub max_expansion: AuthorityCount,
+		pub auction_parameters: SetSizeParameters,
+		pub auction_bid_cutoff_percentage: Percent,
+		pub max_authority_set_contraction_percentage: Percent,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
@@ -763,9 +794,13 @@ pub mod pallet {
 				redemption_period_as_percentage: Zero::zero(),
 				backup_reward_node_percentage: Zero::zero(),
 				authority_set_min_size: Zero::zero(),
-				min_size: 3,
-				max_size: 15,
-				max_expansion: 5,
+				auction_parameters: SetSizeParameters {
+					min_size: 3,
+					max_size: 15,
+					max_expansion: 5,
+				},
+				auction_bid_cutoff_percentage: Zero::zero(),
+				max_authority_set_contraction_percentage: DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 			}
 		}
 	}
@@ -781,15 +816,16 @@ pub mod pallet {
 			BackupRewardNodePercentage::<T>::set(self.backup_reward_node_percentage);
 			AuthoritySetMinSize::<T>::set(self.authority_set_min_size);
 			VanityNames::<T>::put(&self.genesis_vanity_names);
+			MaxAuthoritySetContractionPercentage::<T>::set(
+				self.max_authority_set_contraction_percentage,
+			);
 
 			CurrentEpoch::<T>::set(GENESIS_EPOCH);
 
-			Pallet::<T>::try_update_auction_parameters(SetSizeParameters {
-				min_size: self.min_size,
-				max_size: self.max_size,
-				max_expansion: self.max_expansion,
-			})
-			.expect("we should provide valid auction parameters at genesis");
+			Pallet::<T>::try_update_auction_parameters(self.auction_parameters)
+				.expect("we should provide valid auction parameters at genesis");
+
+			AuctionBidCutoffPercentage::<T>::set(self.auction_bid_cutoff_percentage);
 
 			Pallet::<T>::initialise_new_epoch(
 				GENESIS_EPOCH,
@@ -952,6 +988,8 @@ impl<T: Config> Pallet<T> {
 
 		Bond::<T>::set(new_bond);
 
+		HistoricalBonds::<T>::insert(new_epoch, new_bond);
+
 		new_authorities.iter().enumerate().for_each(|(index, account_id)| {
 			AuthorityIndex::<T>::insert(new_epoch, account_id, index as AuthorityCount);
 			EpochHistory::<T>::activate_epoch(account_id, new_epoch);
@@ -959,8 +997,6 @@ impl<T: Config> Pallet<T> {
 		});
 
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
-
-		HistoricalBonds::<T>::insert(new_epoch, new_bond);
 
 		// We've got new authorities, which means the backups may have changed.
 		Backups::<T>::put(backup_map);
@@ -1028,7 +1064,7 @@ impl<T: Config> Pallet<T> {
 					auction_outcome.winners.len(),
 					auction_outcome.losers.len(),
 					UniqueSaturatedInto::<u128>::unique_saturated_into(auction_outcome.bond) /
-						10u128.pow(18),
+					FLIPPERINOS_PER_FLIP,
 				);
 
 				// Without reading the full list of bidders we can't know the real number.
@@ -1061,6 +1097,13 @@ impl<T: Config> Pallet<T> {
 	fn try_start_keygen(rotation_state: RuntimeRotationState<T>) {
 		let candidates = rotation_state.authority_candidates();
 		let SetSizeParameters { min_size, .. } = AuctionParameters::<T>::get();
+
+		let min_size = sp_std::cmp::max(
+			min_size,
+			(Percent::one().saturating_sub(MaxAuthoritySetContractionPercentage::<T>::get())) *
+				Self::current_authority_count(),
+		);
+
 		if (candidates.len() as u32) < min_size {
 			log::warn!(
 				target: "cf-validator",
@@ -1293,6 +1336,14 @@ impl<T: Config> OnKilledAccount<T::AccountId> for DeletePeerMapping<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
 		if let Some((peer_id, _, _)) = AccountPeerMapping::<T>::take(account_id) {
 			MappedPeers::<T>::remove(peer_id);
+
+			let validator_id = <ValidatorIdOf<T> as IsType<
+				<T as frame_system::Config>::AccountId,
+			>>::from_ref(account_id);
+
+			T::CfePeerRegistration::peer_deregistered(validator_id.clone(), peer_id);
+
+			// TODO: consider removing this
 			Pallet::<T>::deposit_event(Event::PeerIdUnregistered(account_id.clone(), peer_id));
 		}
 	}

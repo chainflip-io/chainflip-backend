@@ -12,7 +12,8 @@ use crate::{
 	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress,
 	BitcoinThresholdSigner, BlockNumber, Emissions, Environment, EthereumBroadcaster,
 	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster,
-	PolkadotChainTracking, PolkadotIngressEgress, Runtime, RuntimeCall, System, Validator, YEAR,
+	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
+	System, Validator, YEAR,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -50,12 +51,13 @@ use cf_traits::{
 };
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
+	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
+	pallet_prelude::DispatchError,
 	sp_runtime::{
 		traits::{BlockNumberProvider, One, UniqueSaturatedFrom, UniqueSaturatedInto},
 		FixedPointNumber, FixedU64,
 	},
-	traits::Get,
+	traits::{Defensive, Get},
 };
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
@@ -137,6 +139,8 @@ impl cf_traits::WaivedFees for WaivedFees {
 /// We are willing to pay at most 2x the base fee. This is approximately the theoretical
 /// limit of the rate of increase of the base fee over 6 blocks (12.5% per block).
 const ETHEREUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(2, 1);
+// We arbitrarily set the MAX_GAS_LIMIT we are willing broadcast to 10M.
+const ETHEREUM_MAX_GAS_LIMIT: u128 = 10_000_000;
 
 pub struct EthTransactionBuilder;
 
@@ -163,18 +167,11 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 		}
 	}
 
-	fn is_valid_for_rebroadcast(
-		call: &EthereumApi<EthEnvironment>,
+	fn requires_signature_refresh(
+		_call: &EthereumApi<EthEnvironment>,
 		_payload: &<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::Payload,
-		current_key: &<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-		signature: &<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
 	) -> bool {
-		// Check if signature is valid
-		<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::verify_threshold_signature(
-			current_key,
-			&call.threshold_signature_payload(),
-			signature,
-		)
+		false
 	}
 
 	/// Calculate the gas limit for a Ethereum call, using the current gas price.
@@ -196,7 +193,7 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 				.unwrap_or_else(||{
 					log::warn!("Current gas price for Ethereum is 0. This should never happen. Please check Chain Tracking data.");
 					Default::default()
-				})
+				}).min(ETHEREUM_MAX_GAS_LIMIT)
 				.into())
 		} else {
 			None
@@ -216,20 +213,13 @@ impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactio
 		// TODO: For now this is a noop until we actually have dot chain tracking
 	}
 
-	fn is_valid_for_rebroadcast(
+	fn requires_signature_refresh(
 		call: &PolkadotApi<DotEnvironment>,
 		payload: &<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::Payload,
-		current_key: &<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-		signature: &<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
 	) -> bool {
-		// First check if the payload is still valid. If it is, check if the signature is still
-		// valid
-		(&call.threshold_signature_payload() == payload) &&
-			<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::verify_threshold_signature(
-				current_key,
-				payload,
-				signature,
-			)
+		// Current key and signature are irrelevant. The only thing that can invalidate a polkadot
+		// transaction is if the payload changes due to a runtime version update.
+		&call.threshold_signature_payload() != payload
 	}
 }
 
@@ -247,11 +237,9 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 		// refreshing btc tx is not trivial. We leave it a no-op for now.
 	}
 
-	fn is_valid_for_rebroadcast(
+	fn requires_signature_refresh(
 		_call: &BitcoinApi<BtcEnvironment>,
 		_payload: &<<Bitcoin as Chain>::ChainCrypto as ChainCrypto>::Payload,
-		_current_key: &<<Bitcoin as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-		_signature: &<<Bitcoin as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
 	) -> bool {
 		// The payload for a Bitcoin transaction will never change and so it doesnt need to be
 		// checked here. We also dont need to check for the signature here because even if we are in
@@ -259,7 +247,7 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 		// since its based on those old input UTXOs. In fact, we never have to resign btc txs and
 		// the btc tx is always valid as long as the input UTXOs are valid. Therefore, we don't have
 		// to check anything here and just rebroadcast.
-		true
+		false
 	}
 }
 
@@ -334,6 +322,12 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 	fn replay_protection(reset_nonce: ResetProxyAccountNonce) -> PolkadotReplayProtection {
 		PolkadotReplayProtection {
 			genesis_hash: Environment::polkadot_genesis_hash(),
+			// It should not be possible to get None here, since we never send
+			// any transactions unless we have a vault account and associated
+			// proxy.
+			signer: <PolkadotThresholdSigner as KeyProvider<PolkadotCrypto>>::active_epoch_key()
+				.map(|epoch_key| epoch_key.key)
+				.defensive_unwrap_or_default(),
 			nonce: Environment::next_polkadot_proxy_account_nonce(reset_nonce),
 		}
 	}
@@ -345,15 +339,9 @@ impl Get<RuntimeVersion> for DotEnvironment {
 	}
 }
 
-impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> for DotEnvironment {
-	fn lookup(query: cf_chains::dot::api::SystemAccounts) -> Option<PolkadotAccountId> {
-		use crate::PolkadotThresholdSigner;
-		match query {
-			cf_chains::dot::api::SystemAccounts::Proxy =>
-				<PolkadotThresholdSigner as KeyProvider<PolkadotCrypto>>::active_epoch_key()
-					.map(|epoch_key| epoch_key.key),
-			cf_chains::dot::api::SystemAccounts::Vault => Environment::polkadot_vault_account(),
-		}
+impl ChainEnvironment<cf_chains::dot::api::VaultAccount, PolkadotAccountId> for DotEnvironment {
+	fn lookup(_: cf_chains::dot::api::VaultAccount) -> Option<PolkadotAccountId> {
+		Environment::polkadot_vault_account()
 	}
 }
 
@@ -432,9 +420,8 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 
 impl CommKeyBroadcaster for TokenholderGovernanceBroadcaster {
 	fn broadcast(new_key: <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey) {
-		EthereumBroadcaster::threshold_sign_and_broadcast(
+		<EthereumBroadcaster as Broadcaster<Ethereum>>::threshold_sign_and_broadcast(
 			SetCommKeyWithAggKey::<EvmCrypto>::new_unsigned(new_key),
-			None::<RuntimeCall>,
 		);
 	}
 }

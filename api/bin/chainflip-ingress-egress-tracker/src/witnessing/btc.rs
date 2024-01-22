@@ -22,7 +22,7 @@ pub(super) async fn start<ProcessCall, ProcessingFut>(
 	settings: DepositTrackerSettings,
 	env_params: EnvironmentParameters,
 	state_chain_client: Arc<StateChainClient<()>>,
-	state_chain_stream: impl StateChainStreamApi + Clone,
+	state_chain_stream: impl StateChainStreamApi<false> + Clone,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient<()>, (), ()>,
 ) -> anyhow::Result<()>
 where
@@ -36,7 +36,7 @@ where
 	let btc_client = BtcRetryRpcClient::new(
 		scope,
 		NodeContainer { primary: settings.btc, backup: None },
-		env_params.btc_network,
+		env_params.chainflip_network.into(),
 	)
 	.await?;
 
@@ -54,8 +54,7 @@ where
 				}
 			}
 		})
-		.shared(scope)
-		.chunk_by_vault(vaults)
+		.chunk_by_vault(vaults, scope)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.btc_deposits(witness_call.clone())

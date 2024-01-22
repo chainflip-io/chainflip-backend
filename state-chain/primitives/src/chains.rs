@@ -29,7 +29,7 @@ macro_rules! chains {
 			}
 		)+
 
-		#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy, Hash)]
+		#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo, MaxEncodedLen, Copy, Hash)]
 		#[derive(Serialize, Deserialize)]
 		#[repr(u32)]
 		pub enum ForeignChain {
@@ -63,12 +63,13 @@ macro_rules! chains {
 			type Err = &'static str;
 
 			fn from_str(s: &str) -> Result<Self, Self::Err> {
-				match s {
-					$(
-						stringify!($chain) => Ok(ForeignChain::$chain),
-					)+
-					_ => Err("Unrecognized Chain"),
-				}
+				let s = s.to_lowercase();
+				$(
+					if s == stringify!($chain).to_lowercase() {
+						return Ok(ForeignChain::$chain);
+					}
+				)+
+				Err("Unrecognized Chain")
 			}
 		}
 
@@ -109,7 +110,7 @@ chains! {
 pub struct AnyChain;
 
 impl ForeignChain {
-	pub fn gas_asset(self) -> assets::any::Asset {
+	pub const fn gas_asset(self) -> assets::any::Asset {
 		match self {
 			ForeignChain::Ethereum => assets::any::Asset::Eth,
 			ForeignChain::Polkadot => assets::any::Asset::Dot,

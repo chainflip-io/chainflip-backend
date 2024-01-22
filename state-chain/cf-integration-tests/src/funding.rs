@@ -156,15 +156,7 @@ fn backup_reward_is_calculated_linearly() {
 
 			// 3 backup will split the backup reward.
 			assert_eq!(Validator::highest_funded_qualified_backup_node_bids().count(), 3);
-
-			let rewards_per_block = &calculate_backup_rewards::<AccountId, FlipBalance>(
-				Validator::highest_funded_qualified_backup_node_bids().collect::<Vec<_>>(),
-				Validator::bond(),
-				1u128,
-				Emissions::backup_node_emission_per_block(),
-				Emissions::current_authority_emission_per_block(),
-				Validator::current_authority_count() as u128,
-			);
+			const N: u128 = 100;
 
 			let rewards_per_heartbeat = &calculate_backup_rewards::<AccountId, FlipBalance>(
 				Validator::highest_funded_qualified_backup_node_bids().collect::<Vec<_>>(),
@@ -175,14 +167,20 @@ fn backup_reward_is_calculated_linearly() {
 				Validator::current_authority_count() as u128,
 			);
 
-			for i in 0..rewards_per_block.len() {
+			let rewards_per_n_heartbeats = &calculate_backup_rewards::<AccountId, FlipBalance>(
+				Validator::highest_funded_qualified_backup_node_bids().collect::<Vec<_>>(),
+				Validator::bond(),
+				HEARTBEAT_BLOCK_INTERVAL as u128 * N,
+				Emissions::backup_node_emission_per_block(),
+				Emissions::current_authority_emission_per_block(),
+				Validator::current_authority_count() as u128,
+			);
+
+			for i in 0..rewards_per_heartbeat.len() {
 				// Validator account should match
-				assert_eq!(rewards_per_block[i].0, rewards_per_heartbeat[i].0);
+				assert_eq!(rewards_per_heartbeat[i].0, rewards_per_heartbeat[i].0);
 				// Reward per heartbeat should be scaled linearly.
-				assert_eq!(
-					rewards_per_heartbeat[i].1,
-					rewards_per_block[i].1 * HEARTBEAT_BLOCK_INTERVAL as u128
-				);
+				assert_eq!(rewards_per_n_heartbeats[i].1, rewards_per_heartbeat[i].1 * N);
 			}
 		});
 }
@@ -243,8 +241,8 @@ fn can_calculate_account_apy() {
 #[test]
 fn apy_can_be_above_100_percent() {
 	const EPOCH_BLOCKS: u32 = 1_000;
-	const MAX_AUTHORITIES: u32 = 1;
-	const NUM_BACKUPS: u32 = 1;
+	const MAX_AUTHORITIES: u32 = 2;
+	const NUM_BACKUPS: u32 = 2;
 	super::genesis::default()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
@@ -266,10 +264,11 @@ fn apy_can_be_above_100_percent() {
 
 			// APY rate of > 100% can be calculated correctly.
 			let total = Flip::balance(&validator);
-			let reward = Emissions::current_authority_emission_per_block() * YEAR as u128;
+			let reward = Emissions::current_authority_emission_per_block() * YEAR as u128 /
+				MAX_AUTHORITIES as u128;
 			let apy_basis_point =
 				FixedU64::from_rational(reward, total).checked_mul_int(10_000u32).unwrap();
-			assert_eq!(apy_basis_point, 242_543_802u32);
+			assert_eq!(apy_basis_point, 241_377_727u32);
 			assert_eq!(calculate_account_apy(&validator), Some(apy_basis_point));
 		});
 }

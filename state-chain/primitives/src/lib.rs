@@ -6,7 +6,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::{
 	traits::{IdentifyAccount, Verify},
-	MultiSignature, RuntimeDebug,
+	MultiSignature, Percent, RuntimeDebug,
 };
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -50,14 +50,54 @@ pub type ThresholdSignatureRequestId = u32;
 
 pub type PolkadotBlockNumber = u32;
 
+pub type Ed25519PublicKey = sp_core::ed25519::Public;
+pub type Ipv6Addr = u128;
+pub type Port = u16;
+
+pub const FLIP_DECIMALS: u32 = 18;
+pub const FLIPPERINOS_PER_FLIP: FlipBalance = 10u128.pow(FLIP_DECIMALS);
+
 // Bitcoin default fee, in sats per bytes, to be used if current fee is not available via chain
 // tracking.
-pub const DEFAULT_FEE_SATS_PER_KILO_BYTE: u64 = 102400;
+pub const DEFAULT_FEE_SATS_PER_KILOBYTE: u64 = 102400;
 
-// Approximate values calculated
-pub const INPUT_UTXO_SIZE_IN_BYTES: u64 = 178;
-pub const OUTPUT_UTXO_SIZE_IN_BYTES: u64 = 34;
-pub const MINIMUM_BTC_TX_SIZE_IN_BYTES: u64 = 12;
+// To spend one of our deposit UTXOs, we need:
+// 32 bytes for the TX ID
+// 4 bytes for the output index
+// 1 byte to indicate that this is a segwit input (i.e. unlock script length = 0)
+// 4 bytes for the sequence number
+// In addition to that we need the witness data, which is:
+// 1 byte for the number of witness elements
+// 65 bytes for the signature
+// 1 length byte for the unlock script
+// up to 9 bytes for the salt
+// 1 byte to drop the salt
+// 33 bytes for the pubkey
+// 1 bytes to check the signature
+// 34 bytes for the internal pubkey
+// In Bitcoin, each byte of witness data is counted as only 1/4 of a byte towards
+// the size of the transaction, so assuming the largest possible salt value, we have:
+// utxo size = 41 + (145 / 4) = 77.25 bytes
+// since we may add multiple utxos together, the fractional parts could add up to another byte,
+// so we are rounding up to be on the safe side and set the UTXO size to 78 bytes
+pub const INPUT_UTXO_SIZE_IN_BYTES: u64 = 78;
+
+// An output contains:
+// 8 bytes for the amount
+// between 1 and 9 bytes for the length of the scriptPubKey
+// x bytes for the scriptPubKey
+// Since we only support certain types of destination addresses, we know that the
+// largest supported scriptPubKey is for segwit version 1 and above, which is 42 bytes long
+// so that the maximum output size is 8 + 1 + 42 = 51 bytes
+pub const OUTPUT_UTXO_SIZE_IN_BYTES: u64 = 51;
+
+// Any transaction contains:
+// a 4 byte version number
+// 2 bytes of flags to indicate a segwit transaction
+// between 1 and 9 bytes to count the number of inputs (we assume up to 3 bytes)
+// between 1 and 9 bytes to count the number of outputs (we assume up to 3 bytes)
+// 4 bytes for the locktime
+pub const MINIMUM_BTC_TX_SIZE_IN_BYTES: u64 = 16;
 
 /// This determines the average expected block time that we are targeting.
 /// Blocks will be produced at a minimum duration defined by `SLOT_DURATION`.
@@ -70,6 +110,10 @@ pub const MILLISECONDS_PER_BLOCK: u64 = 6000;
 pub const SECONDS_PER_BLOCK: u64 = MILLISECONDS_PER_BLOCK / 1000;
 
 pub const STABLE_ASSET: Asset = Asset::Usdc;
+
+/// Determines the default (genesis) maximum allowed reduction of authority set size in
+/// between two consecutive epochs.
+pub const DEFAULT_MAX_AUTHORITY_SET_CONTRACTION: Percent = Percent::from_percent(30);
 
 // Polkadot extrinsics are uniquely identified by <block number>-<extrinsic index>
 // https://wiki.polkadot.network/docs/build-protocol-info
@@ -97,7 +141,7 @@ pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::Account
 /// the chain.
 ///
 /// Each account can only be associated with a single role, and the role can only be updated from
-/// the initial [AccountRole::None] state.
+/// the initial [AccountRole::Unregistered] state.
 #[derive(
 	PartialEq,
 	Eq,
@@ -114,10 +158,15 @@ pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::Account
 	Serialize,
 	Deserialize,
 )]
+/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+/// !!!!!!!!!!!!!!!!!!!! IMPORTANT: Care must be taken when changing this !!!!!!!!!!!!!!!!!!!!
+/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! See AccountRoles storage item !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 pub enum AccountRole {
-	/// The default account type - indicates a bare account with no special role or permissions.
+	/// The default account type - account not yet assigned with special role or permissions.
 	#[default]
-	None,
+	Unregistered,
 	/// Validators are responsible for the maintenance and operation of the Chainflip network. This
 	/// role is required for any node that wishes to participate in auctions.
 	Validator,
@@ -186,6 +235,12 @@ impl SemVer {
 		// accidentally reordering the fields, for example (which
 		// would be caught by tests).
 		self > &other
+	}
+}
+#[cfg(feature = "std")]
+impl core::fmt::Display for SemVer {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
 	}
 }
 

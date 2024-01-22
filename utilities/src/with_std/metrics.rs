@@ -423,6 +423,12 @@ build_gauge_vec!(
 	"Gauge keeping track of the number of unauthorized ceremony currently awaiting authorisation",
 	["chain", "type"]
 );
+build_gauge_vec!(
+	CHAIN_TRACKING,
+	"chain_tracking",
+	"Gauge keeping track of the latest block number the engine reported to the state chain",
+	["chain"]
+);
 build_counter_vec!(
 	RPC_RETRIER_REQUESTS,
 	"rpc_requests",

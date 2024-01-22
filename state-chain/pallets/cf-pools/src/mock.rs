@@ -1,5 +1,4 @@
 use crate::{self as pallet_cf_pools, PalletSafeMode};
-use cf_chains::ForeignChainAddress;
 use cf_primitives::{Asset, AssetAmount};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleRegistry, LpBalanceApi,
@@ -77,12 +76,16 @@ impl LpBalanceApi for MockBalance {
 	type AccountId = AccountId;
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn register_liquidity_refund_address(_who: &Self::AccountId, _address: ForeignChainAddress) {}
+	fn register_liquidity_refund_address(
+		_who: &Self::AccountId,
+		_address: cf_chains::ForeignChainAddress,
+	) {
+	}
 
 	fn ensure_has_refund_address_for_pair(
 		_who: &Self::AccountId,
 		_base_asset: Asset,
-		_pair_asset: Asset,
+		_quote_asset: Asset,
 	) -> DispatchResult {
 		Ok(())
 	}

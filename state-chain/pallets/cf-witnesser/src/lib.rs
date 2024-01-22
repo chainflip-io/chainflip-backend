@@ -19,12 +19,12 @@ use cf_traits::{AccountRoleRegistry, CallDispatchFilter, Chainflip, EpochInfo, S
 use cf_utilities::success_threshold_from_share_count;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	dispatch::{DispatchResultWithPostInfo, GetDispatchInfo, UnfilteredDispatchable},
+	dispatch::GetDispatchInfo,
 	ensure,
-	pallet_prelude::Member,
+	pallet_prelude::{DispatchResultWithPostInfo, Member, RuntimeDebug},
 	storage::with_storage_layer,
-	traits::{EnsureOrigin, Get},
-	Hashable, RuntimeDebug,
+	traits::{EnsureOrigin, Get, UnfilteredDispatchable},
+	Hashable,
 };
 use scale_info::TypeInfo;
 use sp_std::prelude::*;
@@ -151,6 +151,8 @@ pub mod pallet {
 
 			let safe_mode = T::SafeMode::get();
 			if safe_mode != SafeMode::CODE_RED {
+				let last_expired_epoch = T::EpochInfo::last_expired_epoch();
+				let current_epoch = T::EpochInfo::epoch_index();
 				WitnessedCallsScheduledForDispatch::<T>::mutate(|witnessed_calls_storage| {
 					witnessed_calls_storage
 						.extract_if(|(_, call, _)| {
@@ -168,12 +170,16 @@ pub mod pallet {
 						.collect::<Vec<_>>()
 						.into_iter()
 						.for_each(|(witnessed_at_epoch, call, call_hash)| {
-							Self::dispatch_call(
-								witnessed_at_epoch,
-								T::EpochInfo::epoch_index(),
-								call,
-								call_hash,
-							);
+							if (last_expired_epoch..=current_epoch)
+								.all(|epoch| CallHashExecuted::<T>::get(epoch, call_hash).is_none())
+							{
+								Self::dispatch_call(
+									witnessed_at_epoch,
+									current_epoch,
+									call,
+									call_hash,
+								);
+							}
 						});
 				});
 			}

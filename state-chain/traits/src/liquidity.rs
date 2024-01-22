@@ -1,6 +1,6 @@
 use cf_chains::address::ForeignChainAddress;
 use cf_primitives::{Asset, AssetAmount, BasisPoints, ChannelId};
-use frame_support::{dispatch::DispatchError, sp_runtime::DispatchResult};
+use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 
 pub trait SwapDepositHandler {
 	type AccountId;
@@ -28,7 +28,7 @@ pub trait LpBalanceApi {
 	fn ensure_has_refund_address_for_pair(
 		who: &Self::AccountId,
 		base_asset: Asset,
-		pair_asset: Asset,
+		quote_asset: Asset,
 	) -> DispatchResult;
 
 	/// Attempt to credit the account with the given asset and amount.
@@ -44,6 +44,22 @@ pub trait LpBalanceApi {
 		asset: Asset,
 		amount: AssetAmount,
 	) -> DispatchResult;
+}
+
+pub trait PoolApi {
+	type AccountId;
+
+	/// Sweep all earnings of an LP into their free balance (Should be called before any assets are
+	/// debited from their free balance)
+	fn sweep(who: &Self::AccountId) -> Result<(), DispatchError>;
+}
+
+impl<T: frame_system::Config> PoolApi for T {
+	type AccountId = T::AccountId;
+
+	fn sweep(_who: &Self::AccountId) -> Result<(), DispatchError> {
+		Ok(())
+	}
 }
 
 pub trait SwappingApi {
@@ -70,41 +86,5 @@ impl<T: frame_system::Config> SwappingApi for T {
 		input_amount: AssetAmount,
 	) -> Result<AssetAmount, DispatchError> {
 		Ok(input_amount)
-	}
-}
-
-impl<T: frame_system::Config> LpBalanceApi for T {
-	type AccountId = T::AccountId;
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn register_liquidity_refund_address(_who: &Self::AccountId, _address: ForeignChainAddress) {
-		// TODO
-	}
-
-	fn ensure_has_refund_address_for_pair(
-		_who: &Self::AccountId,
-		_base_asset: Asset,
-		_pair_asset: Asset,
-	) -> DispatchResult {
-		// TODO
-		Ok(())
-	}
-
-	fn try_credit_account(
-		_who: &Self::AccountId,
-		_asset: Asset,
-		_amount: AssetAmount,
-	) -> DispatchResult {
-		// TODO
-		Ok(())
-	}
-
-	fn try_debit_account(
-		_who: &Self::AccountId,
-		_asset: Asset,
-		_amount: AssetAmount,
-	) -> DispatchResult {
-		// TODO
-		Ok(())
 	}
 }

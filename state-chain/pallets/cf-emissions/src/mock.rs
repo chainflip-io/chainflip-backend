@@ -19,6 +19,7 @@ use frame_support::{
 };
 use frame_system as system;
 use scale_info::TypeInfo;
+use sp_arithmetic::Permill;
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
@@ -27,6 +28,7 @@ pub type AccountId = u64;
 pub const FLIP_TO_BURN: u128 = 10_000;
 pub const SUPPLY_UPDATE_INTERVAL: u32 = 10;
 pub const TOTAL_ISSUANCE: u128 = 1_000_000_000;
+pub const DAILY_SLASHING_RATE: Permill = Permill::from_perthousand(1);
 
 cf_traits::impl_mock_on_account_funded!(AccountId, u128);
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -75,10 +77,6 @@ impl_mock_chainflip!(Test);
 impl_mock_callback!(RuntimeOrigin);
 
 parameter_types! {
-	pub const ExistentialDeposit: u128 = 10;
-}
-
-parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
 
@@ -92,7 +90,6 @@ impl_mock_waived_fees!(AccountId, RuntimeCall);
 impl pallet_cf_flip::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = u128;
-	type ExistentialDeposit = ExistentialDeposit;
 	type BlocksPerDay = BlocksPerDay;
 	type OnAccountFunded = MockOnAccountFunded;
 	type WeightInfo = ();
@@ -176,17 +173,33 @@ impl Broadcaster<MockEthereum> for MockBroadcast {
 	type ApiCall = MockUpdateFlipSupply;
 	type Callback = MockCallback;
 
-	fn threshold_sign_and_broadcast(
-		api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId {
 		Self::call(api_call);
-		(1, 2)
+		1
 	}
 
 	fn threshold_sign_and_broadcast_with_callback(
 		_api_call: Self::ApiCall,
-		_callback: Self::Callback,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
+		_success_callback: Option<Self::Callback>,
+		_failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
+	) -> BroadcastId {
+		unimplemented!()
+	}
+
+	fn threshold_sign_and_broadcast_rotation_tx(_api_call: Self::ApiCall) -> BroadcastId {
+		unimplemented!()
+	}
+
+	fn threshold_resign(_broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId> {
+		unimplemented!()
+	}
+
+	fn threshold_sign(_api_call: Self::ApiCall) -> (BroadcastId, ThresholdSignatureRequestId) {
+		unimplemented!()
+	}
+
+	/// Clean up storage data related to a broadcast ID.
+	fn clean_up_broadcast_storage(_broadcast_id: BroadcastId) {
 		unimplemented!()
 	}
 }
@@ -214,7 +227,7 @@ cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
 		system: Default::default(),
-		flip: FlipConfig { total_issuance: TOTAL_ISSUANCE },
+		flip: FlipConfig { total_issuance: TOTAL_ISSUANCE, daily_slashing_rate: DAILY_SLASHING_RATE },
 		emissions: {
 			EmissionsConfig {
 				current_authority_emission_inflation: 2720,

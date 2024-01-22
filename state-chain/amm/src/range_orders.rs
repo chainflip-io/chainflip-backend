@@ -19,8 +19,11 @@
 //! doesn't exist we use U256 of SqrtPriceQ64F96. It is relatively simply to verify that all
 //! instances of SqrtPriceQ64F96 are <=U160::MAX.
 
+#[cfg(test)]
 mod tests;
+pub mod v1;
 
+use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, convert::Infallible, vec::Vec};
 
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -48,16 +51,18 @@ type FeeGrowthQ128F128 = U256;
 pub const MAX_TICK_GROSS_LIQUIDITY: Liquidity =
 	Liquidity::MAX / ((1 + MAX_TICK - MIN_TICK) as u128);
 
-#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
+#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize)]
 pub struct Position {
 	/// The `depth` of this range order, this value is proportional to the value of the order i.e.
 	/// the amount of assets that make up the order.
 	liquidity: Liquidity,
 	last_fee_growth_inside: SideMap<FeeGrowthQ128F128>,
+	accumulative_fees: SideMap<Amount>,
+	original_sqrt_price: SqrtPriceQ64F96,
 }
 
 impl Position {
-	fn collect_fees<LiquidityProvider>(
+	fn collect_fees<LiquidityProvider: Ord>(
 		&mut self,
 		pool_state: &PoolState<LiquidityProvider>,
 		lower_tick: Tick,
@@ -80,28 +85,34 @@ impl Position {
 
 			pool_state.global_fee_growth[side] - fee_growth_below - fee_growth_above
 		});
-		let collected_fees = Collected {
-			fees: SideMap::default().map(|side, ()| {
-				// DIFF: This behaviour is different than Uniswap's. We use U256 instead of u128 to
-				// calculate fees, therefore it is not possible to overflow the fees here.
+		let fees = SideMap::default().map(|side, ()| {
+			// DIFF: This behaviour is different than Uniswap's. We use U256 instead of u128 to
+			// calculate fees, therefore it is not possible to overflow the fees here.
 
-				/*
-					Proof that `mul_div_floor` does not overflow:
-					Note position.liquidity: u128
-					U512::one() << 128 > u128::MAX
-				*/
-				mul_div_floor(
-					fee_growth_inside[side] - self.last_fee_growth_inside[side],
-					self.liquidity.into(),
-					U512::one() << 128,
-				)
-			}),
+			/*
+				Proof that `mul_div_floor` does not overflow:
+				Note position.liquidity: u128
+				U512::one() << 128 > u128::MAX
+			*/
+			mul_div_floor(
+				fee_growth_inside[side] - self.last_fee_growth_inside[side],
+				self.liquidity.into(),
+				U512::one() << 128,
+			)
+		});
+		self.accumulative_fees = self
+			.accumulative_fees
+			.map(|side, accumulative_fees| accumulative_fees.saturating_add(fees[side]));
+		let collected_fees = Collected {
+			fees,
+			accumulative_fees: self.accumulative_fees,
+			original_sqrt_price: self.original_sqrt_price,
 		};
 		self.last_fee_growth_inside = fee_growth_inside;
 		collected_fees
 	}
 
-	fn set_liquidity<LiquidityProvider>(
+	fn set_liquidity<LiquidityProvider: Ord>(
 		&mut self,
 		pool_state: &PoolState<LiquidityProvider>,
 		new_liquidity: Liquidity,
@@ -115,12 +126,16 @@ impl Position {
 		// meaningful while liquidity is constant.
 		let collected_fees =
 			self.collect_fees(pool_state, lower_tick, lower_delta, upper_tick, upper_delta);
-		self.liquidity = new_liquidity;
+		if self.liquidity != new_liquidity {
+			self.liquidity = new_liquidity;
+			self.original_sqrt_price = pool_state.current_sqrt_price;
+			self.accumulative_fees = Default::default();
+		}
 		(collected_fees, PositionInfo::from(&*self))
 	}
 }
 
-#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
+#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize)]
 pub struct TickDelta {
 	/// This is the change in the total amount of liquidity in the pool at this price, i.e. if the
 	/// price moves from a lower price to a higher one, above this tick (higher/lower in literal
@@ -138,8 +153,8 @@ pub struct TickDelta {
 	fee_growth_outside: SideMap<FeeGrowthQ128F128>,
 }
 
-#[derive(Clone, Debug, TypeInfo, Encode, Decode)]
-pub struct PoolState<LiquidityProvider> {
+#[derive(Clone, Debug, TypeInfo, Encode, Decode, Serialize, Deserialize)]
+pub struct PoolState<LiquidityProvider: Ord> {
 	/// The percentage fee taken from swap inputs and earned by LPs. It is in units of 0.0001%.
 	/// I.e. 5000 means 0.5%.
 	pub(super) fee_hundredth_pips: u32,
@@ -160,6 +175,12 @@ pub struct PoolState<LiquidityProvider> {
 	/// ticks where liquidity_gross is non-zero.
 	liquidity_map: BTreeMap<Tick, TickDelta>,
 	positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
+	/// Total fees earned over all time
+	total_fees_earned: SideMap<Amount>,
+	/// Total of all swap inputs over all time (not including fees)
+	total_swap_inputs: SideMap<Amount>,
+	/// Total of all swap outputs over all time
+	total_swap_outputs: SideMap<Amount>,
 }
 
 pub(super) trait SwapDirection: crate::common::SwapDirection {
@@ -395,6 +416,8 @@ pub enum LiquidityToAmountsError {
 #[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub struct Collected {
 	pub fees: SideMap<Amount>,
+	pub accumulative_fees: SideMap<Amount>,
+	pub original_sqrt_price: SqrtPriceQ64F96,
 }
 
 #[derive(Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
@@ -406,11 +429,6 @@ pub enum Size {
 #[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub struct PositionInfo {
 	pub liquidity: Liquidity,
-}
-impl PositionInfo {
-	pub fn new(liquidity: Liquidity) -> Self {
-		Self { liquidity }
-	}
 }
 impl<'a> From<&'a Position> for PositionInfo {
 	fn from(value: &'a Position) -> Self {
@@ -460,7 +478,23 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			]
 			.into(),
 			positions: Default::default(),
+			total_fees_earned: Default::default(),
+			total_swap_inputs: Default::default(),
+			total_swap_outputs: Default::default(),
 		})
+	}
+
+	pub(super) fn collect_all(
+		&mut self,
+	) -> impl '_ + Iterator<Item = ((LiquidityProvider, Tick, Tick), (Collected, PositionInfo))> {
+		self.positions.keys().cloned().collect::<sp_std::vec::Vec<_>>().into_iter().map(
+			|(lp, lower_tick, upper_tick)| {
+				(
+					(lp.clone(), lower_tick, upper_tick),
+					self.collect(&lp, lower_tick, upper_tick).unwrap(),
+				)
+			},
+		)
 	}
 
 	/// Sets the fee for the pool. This will apply to future swaps. This function will fail if the
@@ -537,6 +571,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			let mut position = option_position.cloned().unwrap_or_else(|| Position {
 				liquidity: 0,
 				last_fee_growth_inside: Default::default(),
+				accumulative_fees: Default::default(),
+				original_sqrt_price: self.current_sqrt_price,
 			});
 
 			let tick_delta_with_updated_gross_liquidity =
@@ -810,6 +846,11 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 					)
 				};
 
+				self.total_swap_inputs[SD::INPUT_SIDE] =
+					self.total_swap_inputs[SD::INPUT_SIDE].saturating_add(amount_swapped);
+				self.total_fees_earned[SD::INPUT_SIDE] =
+					self.total_fees_earned[SD::INPUT_SIDE].saturating_add(fees);
+
 				// TODO: Prove this does not underflow
 				amount -= amount_swapped + fees;
 
@@ -847,6 +888,9 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				self.current_tick = tick_at_sqrt_price(sqrt_price_next);
 			}
 		}
+
+		self.total_swap_outputs[!SD::INPUT_SIDE] =
+			self.total_swap_outputs[!SD::INPUT_SIDE].saturating_add(total_output_amount);
 
 		(total_output_amount, amount)
 	}
@@ -1017,6 +1061,30 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		.try_into()
 		.map(|liquidity| core::cmp::min(liquidity, MAX_TICK_GROSS_LIQUIDITY))
 		.unwrap_or(MAX_TICK_GROSS_LIQUIDITY)
+	}
+
+	/// Returns an iterator over all positions
+	///
+	/// This function never panics.
+	pub(super) fn positions(
+		&self,
+	) -> impl '_ + Iterator<Item = (LiquidityProvider, Tick, Tick, Collected, PositionInfo)> {
+		self.positions.iter().map(|((lp, lower_tick, upper_tick), position)| {
+			let mut position = position.clone();
+			(
+				lp.clone(),
+				*lower_tick,
+				*upper_tick,
+				position.collect_fees(
+					self,
+					*lower_tick,
+					self.liquidity_map.get(lower_tick).unwrap(),
+					*upper_tick,
+					self.liquidity_map.get(upper_tick).unwrap(),
+				),
+				PositionInfo::from(&position),
+			)
+		})
 	}
 
 	/// Returns the current value of a position i.e. the assets you would receive by burning the

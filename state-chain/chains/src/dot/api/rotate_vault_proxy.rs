@@ -59,7 +59,11 @@ mod test_rotate_vault_proxy {
 		let keypair_new_proxy = PolkadotPair::from_seed(&RAW_SEED_3);
 
 		let mut builder = super::extrinsic_builder(
-			PolkadotReplayProtection { nonce: NONCE_2, genesis_hash: Default::default() },
+			PolkadotReplayProtection {
+				nonce: NONCE_2,
+				signer: keypair_old_proxy.public_key(),
+				genesis_hash: Default::default(),
+			},
 			Some(keypair_old_proxy.public_key()),
 			keypair_new_proxy.public_key(),
 			PolkadotAccountId(hex_literal::hex!(
@@ -86,7 +90,7 @@ mod test_rotate_vault_proxy {
 			.split_whitespace()
 			.collect::<String>()
 		);
-		builder.insert_signature(keypair_old_proxy.public_key(), keypair_old_proxy.sign(&payload));
+		builder.insert_signature(keypair_old_proxy.sign(&payload));
 		assert!(builder.is_signed());
 	}
 }

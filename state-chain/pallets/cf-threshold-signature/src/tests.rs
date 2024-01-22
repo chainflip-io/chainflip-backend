@@ -1,26 +1,28 @@
+use core::marker::PhantomData;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-	self as pallet_cf_threshold_signature, mock::*, AttemptCount, AuthorityCount, CeremonyContext,
-	CeremonyId, CurrentVaultEpochAndState, Error, Event as PalletEvent,
-	KeyHandoverResolutionPendingSince, KeygenFailureVoters, KeygenOutcomeFor,
+	mock::*, AttemptCount, AuthorityCount, CeremonyContext, CeremonyId, Error,
+	Event as PalletEvent, KeyHandoverResolutionPendingSince, KeygenFailureVoters, KeygenOutcomeFor,
 	KeygenResolutionPendingSince, KeygenResponseTimeout, KeygenSuccessVoters, PalletOffence,
 	PendingVaultRotation, RequestContext, RequestId, ThresholdSignatureResponseTimeout,
 	VaultRotationStatus,
 };
 
-use cf_chains::mocks::{
-	MockAggKey, MockEthereumChainCrypto, MockFixedKeySigningRequests, MockOptimisticActivation,
-};
+use cf_chains::mocks::{MockAggKey, MockEthereumChainCrypto};
 use cf_primitives::GENESIS_EPOCH;
 use cf_test_utilities::{last_event, maybe_last_event};
 use cf_traits::{
-	mocks::signer_nomination::MockNominator, AccountRoleRegistry, AsyncResult, Chainflip,
-	EpochInfo, EpochKey, KeyProvider, SetSafeMode, ThresholdSigner, VaultRotationStatusOuter,
-	VaultRotator,
+	mocks::{
+		cfe_interface_mock::{MockCfeEvent, MockCfeInterface},
+		signer_nomination::MockNominator,
+	},
+	AccountRoleRegistry, AsyncResult, Chainflip, EpochInfo, EpochKey, KeyProvider, SetSafeMode,
+	VaultRotationStatusOuter, VaultRotator,
 };
 pub use frame_support::traits::Get;
 
+use cfe_events::{KeyHandoverRequest, KeygenRequest, ThresholdSignatureRequest};
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
 	instances::Instance1,
@@ -71,29 +73,28 @@ struct MockCfe {
 }
 
 fn run_cfes_on_sc_events(cfes: &[MockCfe]) {
-	let events = System::events();
-	System::reset_events();
-	for event_record in events {
+	let events = MockCfeInterface::take_events();
+	for event in events {
 		for cfe in cfes {
-			cfe.process_event(event_record.event.clone());
+			cfe.process_event(event.clone());
 		}
 	}
 }
 
+type ValidatorId = <Test as Chainflip>::ValidatorId;
+
 impl MockCfe {
-	fn process_event(&self, event: RuntimeEvent) {
+	fn process_event(&self, event: MockCfeEvent<ValidatorId>) {
 		match event {
-			RuntimeEvent::EthereumThresholdSigner(
-				pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
-					ceremony_id,
-					key,
-					signatories,
-					payload,
-					..
-				},
-			) => {
-				//assert_eq!(key, current_agg_key());
-				//assert_eq!(signatories, MockNominator::get_nominees().unwrap());
+			MockCfeEvent::EthThresholdSignatureRequest(ThresholdSignatureRequest {
+				ceremony_id,
+				epoch_index: _,
+				key,
+				signatories,
+				payload,
+			}) => {
+				assert_eq!(key, current_agg_key());
+				assert_eq!(signatories, MockNominator::get_nominees().unwrap());
 
 				match &self.behaviour {
 					CfeBehaviour::Success => {
@@ -455,7 +456,7 @@ fn test_not_enough_signers_for_threshold_schedules_retry() {
 }
 
 #[test]
-fn test_retries_for_locked_key() {
+fn test_retries() {
 	const NOMINEES: [u64; 4] = [1, 2, 3, 4];
 	const AUTHORITIES: [u64; 5] = [1, 2, 3, 4, 5];
 	new_test_ext()
@@ -468,19 +469,6 @@ fn test_retries_for_locked_key() {
 				request_context: RequestContext { request_id, attempt_count: first_attempt, .. },
 				..
 			} = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
-
-			CurrentVaultEpochAndState::<Test, Instance1>::mutate(|epoch_and_state| {
-				epoch_and_state
-					.as_mut()
-					.expect("key should exist since we injected it at genesis")
-					.key_state
-					.lock(vec![request_id])
-			});
-
-			// Key is now locked and should be unavailable for new requests.
-			<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(*b"SUP?");
-			// Ceremony counter should not have changed.
-			assert_eq!(ceremony_id, current_ceremony_id());
 
 			// Retry should re-use the same key.
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
@@ -513,8 +501,6 @@ fn test_retries_for_immutable_key() {
 				request_context: RequestContext { request_id, attempt_count: first_attempt, .. },
 				..
 			} = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
-
-			MockFixedKeySigningRequests::set(true);
 
 			// Pretend the key has been updated to the next one.
 			EthereumThresholdSigner::activate_new_key(MockAggKey(*b"NEXT"));
@@ -784,6 +770,15 @@ fn keygen_request_emitted() {
 		<EthereumThresholdSigner as VaultRotator>::keygen(btree_candidates.clone(), rotation_epoch);
 		// Confirm we have a new vault rotation process running
 		assert_eq!(<EthereumThresholdSigner as VaultRotator>::status(), AsyncResult::Pending);
+		let events = MockCfeInterface::take_events::<ValidatorId>();
+		assert_eq!(
+			events[0],
+			MockCfeEvent::EthKeygenRequest(KeygenRequest {
+				ceremony_id: current_ceremony_id(),
+				participants: btree_candidates.clone(),
+				epoch_index: rotation_epoch,
+			})
+		);
 		assert_eq!(
 			last_event::<Test>(),
 			PalletEvent::<Test, _>::KeygenRequest {
@@ -817,6 +812,20 @@ fn keygen_handover_request_emitted() {
 		);
 
 		assert_eq!(<EthereumThresholdSigner as VaultRotator>::status(), AsyncResult::Pending);
+		let events = MockCfeInterface::take_events::<ValidatorId>();
+		assert_eq!(
+			events[0],
+			MockCfeEvent::EthKeyHandoverRequest(KeyHandoverRequest {
+				// It should be incremented when the request is made.
+				ceremony_id: ceremony_id + 1,
+				from_epoch: current_epoch,
+				to_epoch: next_epoch,
+				key_to_share: EthereumThresholdSigner::active_epoch_key().unwrap().key,
+				sharing_participants: authorities.clone(),
+				receiving_participants: candidates.clone(),
+				new_key: Default::default()
+			})
+		);
 		assert_eq!(
 			last_event::<Test>(),
 			PalletEvent::<Test, _>::KeyHandoverRequest {
@@ -907,7 +916,9 @@ fn handover_success_triggers_handover_verification() {
 	});
 }
 
-fn keygen_failure(bad_candidates: &[<Test as Chainflip>::ValidatorId]) {
+fn keygen_failure(
+	bad_candidates: impl IntoIterator<Item = <Test as Chainflip>::ValidatorId> + Clone,
+) {
 	EthereumThresholdSigner::keygen(
 		BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
 		GENESIS_EPOCH,
@@ -916,7 +927,7 @@ fn keygen_failure(bad_candidates: &[<Test as Chainflip>::ValidatorId]) {
 	let ceremony_id = current_ceremony_id();
 
 	EthereumThresholdSigner::terminate_rotation(
-		bad_candidates,
+		bad_candidates.clone(),
 		PalletEvent::KeygenFailure(ceremony_id),
 	);
 
@@ -925,20 +936,17 @@ fn keygen_failure(bad_candidates: &[<Test as Chainflip>::ValidatorId]) {
 	assert_eq!(
 		EthereumThresholdSigner::status(),
 		AsyncResult::Ready(VaultRotationStatusOuter::Failed(
-			bad_candidates.iter().cloned().collect()
+			bad_candidates.clone().into_iter().collect()
 		))
 	);
 
-	MockOffenceReporter::assert_reported(
-		PalletOffence::FailedKeygen,
-		bad_candidates.iter().cloned(),
-	);
+	MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, bad_candidates);
 }
 
 #[test]
 fn test_keygen_failure() {
 	new_test_ext().execute_with(|| {
-		keygen_failure(&[BOB, CHARLIE]);
+		keygen_failure([BOB, CHARLIE]);
 	});
 }
 
@@ -949,7 +957,7 @@ fn test_keygen_failure() {
 fn keygen_called_after_keygen_failure_restarts_rotation_at_keygen() {
 	new_test_ext().execute_with(|| {
 		let rotation_epoch = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
-		keygen_failure(&[BOB, CHARLIE]);
+		keygen_failure([BOB, CHARLIE]);
 		EthereumThresholdSigner::keygen(
 			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
 			rotation_epoch,
@@ -1233,8 +1241,6 @@ fn cannot_report_key_handover_outcome_when_awaiting_keygen() {
 }
 
 fn do_full_key_rotation() {
-	assert!(!MockOptimisticActivation::get(), "Test expects non-optimistic activation");
-
 	let rotation_epoch = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
 	<EthereumThresholdSigner as VaultRotator>::keygen(
 		BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
@@ -1619,33 +1625,6 @@ mod vault_key_rotation {
 	}
 
 	#[test]
-	fn non_optimistic_activation() {
-		let ext = setup(Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)).execute_with(|| {
-			let cfes = [CANDIDATES[0]]
-				.iter()
-				.map(|id| MockCfe { id: *id, behaviour: CfeBehaviour::Success })
-				.collect::<Vec<_>>();
-			run_cfes_on_sc_events(&cfes);
-
-			MockOptimisticActivation::set(false);
-			EthereumThresholdSigner::activate_vaults();
-
-			assert!(matches!(
-				PendingVaultRotation::<Test, _>::get().unwrap(),
-				VaultRotationStatus::AwaitingActivation { .. }
-			));
-
-			MockVaultActivator::set_activation_completed();
-			assert_eq!(
-				<EthereumThresholdSigner as VaultRotator>::status(),
-				AsyncResult::Ready(VaultRotationStatusOuter::RotationComplete)
-			);
-		});
-
-		final_checks(ext);
-	}
-
-	#[test]
 	fn optimistic_activation() {
 		const HANDOVER_ACTIVATION_BLOCK: u64 = 420;
 		let ext = setup(Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)).execute_with(|| {
@@ -1656,7 +1635,6 @@ mod vault_key_rotation {
 			run_cfes_on_sc_events(&cfes);
 
 			BlockHeightProvider::<MockEthereum>::set_block_height(HANDOVER_ACTIVATION_BLOCK);
-			MockOptimisticActivation::set(true);
 			EthereumThresholdSigner::activate_vaults();
 
 			assert!(matches!(
@@ -1699,7 +1677,6 @@ mod vault_key_rotation {
 				.collect::<Vec<_>>();
 			run_cfes_on_sc_events(&cfes);
 
-			MockOptimisticActivation::set(true);
 			EthereumThresholdSigner::activate_vaults();
 		});
 
@@ -1791,16 +1768,22 @@ fn set_keygen_response_timeout_works() {
 fn dont_slash_in_safe_mode() {
 	new_test_ext().execute_with(|| {
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
-			threshold_signature: crate::PalletSafeMode { slashing_enabled: false },
+			threshold_signature: crate::PalletSafeMode {
+				slashing_enabled: false,
+				_phantom: PhantomData,
+			},
 		});
-		keygen_failure(&[BOB, CHARLIE]);
+		keygen_failure([BOB, CHARLIE]);
 		assert!(MockSlasher::slash_count(BOB) == 0);
 		assert!(MockSlasher::slash_count(CHARLIE) == 0);
 
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
-			threshold_signature: crate::PalletSafeMode { slashing_enabled: true },
+			threshold_signature: crate::PalletSafeMode {
+				slashing_enabled: true,
+				_phantom: PhantomData,
+			},
 		});
-		keygen_failure(&[BOB, CHARLIE]);
+		keygen_failure([BOB, CHARLIE]);
 		assert!(MockSlasher::slash_count(BOB) == 1);
 		assert!(MockSlasher::slash_count(CHARLIE) == 1);
 	});

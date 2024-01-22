@@ -7,6 +7,7 @@ pub enum NoneChain {}
 
 impl Chain for NoneChain {
 	const NAME: &'static str = "NONE";
+	const GAS_ASSET: Self::ChainAsset = assets::any::Asset::Usdc;
 	type ChainCrypto = NoneChainCrypto;
 	type ChainBlockNumber = u64;
 	type ChainAmount = u64;
@@ -19,6 +20,7 @@ impl Chain for NoneChain {
 	type DepositChannelState = ();
 	type DepositDetails = ();
 	type Transaction = ();
+	type TransactionMetadata = ();
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
 }
@@ -31,6 +33,8 @@ impl FeeRefundCalculator<NoneChain> for () {
 		unimplemented!()
 	}
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NoneChainCrypto;
 impl ChainCrypto for NoneChainCrypto {
 	type UtxoChain = ConstBool<false>;
@@ -51,6 +55,12 @@ impl ChainCrypto for NoneChainCrypto {
 	}
 
 	fn agg_key_to_payload(_agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
+		unimplemented!()
+	}
+
+	fn maybe_broadcast_barriers_on_rotation(
+		_rotation_broadcast_id: BroadcastId,
+	) -> Vec<BroadcastId> {
 		unimplemented!()
 	}
 }

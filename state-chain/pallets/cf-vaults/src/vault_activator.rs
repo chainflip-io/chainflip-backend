@@ -21,7 +21,6 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 	fn activate(
 		new_public_key: AggKeyFor<T, I>,
 		maybe_old_public_key: Option<AggKeyFor<T, I>>,
-		optimistic_activation: bool,
 	) -> Vec<u32> {
 		if let Some(key) = maybe_old_public_key {
 			match <T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
@@ -29,18 +28,10 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 				new_public_key,
 			) {
 				Ok(activation_call) => {
-					let (_, threshold_request_id) =
-						T::Broadcaster::threshold_sign_and_broadcast(activation_call);
-					if optimistic_activation {
-						// Optimistic activation means we don't need to wait for the activation
-						// transaction to succeed before using the new key.
-						Self::activate_new_key_for_chain(T::ChainTracking::get_block_height());
-					} else {
-						PendingVaultActivation::<T, I>::put(
-							VaultActivationStatus::<T, I>::AwaitingActivation { new_public_key },
-						);
-					}
-					return vec![threshold_request_id]
+					let activation_tx_broadcast_id =
+						T::Broadcaster::threshold_sign_and_broadcast_rotation_tx(activation_call);
+					Self::activate_new_key_for_chain(T::ChainTracking::get_block_height());
+					return vec![activation_tx_broadcast_id]
 				},
 				Err(SetAggKeyWithAggKeyError::NotRequired) => {
 					// This can happen if, for example, on a utxo chain there are no funds that

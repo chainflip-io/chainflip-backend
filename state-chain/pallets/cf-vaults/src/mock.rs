@@ -10,7 +10,8 @@ use cf_chains::{
 };
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{
-	impl_mock_callback, impl_mock_chainflip, mocks::block_height_provider::BlockHeightProvider,
+	impl_mock_callback, impl_mock_chainflip,
+	mocks::{block_height_provider::BlockHeightProvider, cfe_interface_mock::MockCfeInterface},
 };
 use frame_support::{
 	construct_runtime, parameter_types, traits::UnfilteredDispatchable, StorageHasher,
@@ -136,17 +137,33 @@ impl Broadcaster<MockEthereum> for MockBroadcaster {
 	type ApiCall = MockSetAggKeyWithAggKey;
 	type Callback = MockCallback;
 
-	fn threshold_sign_and_broadcast(
-		_api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
+	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> BroadcastId {
 		Self::send_broadcast();
-		(1, 2)
+		1
 	}
 
 	fn threshold_sign_and_broadcast_with_callback(
 		_api_call: Self::ApiCall,
-		_callback: Self::Callback,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
+		_success_callback: Option<Self::Callback>,
+		_failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
+	) -> BroadcastId {
+		unimplemented!()
+	}
+
+	fn threshold_sign_and_broadcast_rotation_tx(api_call: Self::ApiCall) -> BroadcastId {
+		Self::threshold_sign_and_broadcast(api_call)
+	}
+
+	fn threshold_resign(_broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId> {
+		unimplemented!()
+	}
+
+	fn threshold_sign(_api_call: Self::ApiCall) -> (BroadcastId, ThresholdSignatureRequestId) {
+		unimplemented!()
+	}
+
+	/// Clean up storage data related to a broadcast ID.
+	fn clean_up_broadcast_storage(_broadcast_id: BroadcastId) {
 		unimplemented!()
 	}
 }
@@ -191,6 +208,7 @@ impl pallet_cf_vaults::Config for Test {
 	type Broadcaster = MockBroadcaster;
 	type SafeMode = MockRuntimeSafeMode;
 	type ChainTracking = BlockHeightProvider<MockEthereum>;
+	type CfeMultisigRequest = MockCfeInterface;
 }
 
 cf_test_utilities::impl_test_helpers! {

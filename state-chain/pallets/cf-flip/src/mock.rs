@@ -63,10 +63,6 @@ impl frame_system::Config for Test {
 impl_mock_chainflip!(Test);
 
 parameter_types! {
-	pub const ExistentialDeposit: FlipBalance = 10;
-}
-
-parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
 
@@ -76,7 +72,6 @@ impl_mock_waived_fees!(AccountId, RuntimeCall);
 impl pallet_cf_flip::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = FlipBalance;
-	type ExistentialDeposit = ExistentialDeposit;
 	type BlocksPerDay = BlocksPerDay;
 	type OnAccountFunded = MockOnAccountFunded;
 	type WeightInfo = ();
@@ -141,7 +136,7 @@ cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
 		system: Default::default(),
-		flip: FlipConfig { total_issuance: 1_000 },
+		flip: FlipConfig { total_issuance: 1_000, daily_slashing_rate: Permill::from_perthousand(1) },
 		transaction_payment: Default::default(),
 	},
 	|| {

@@ -8,7 +8,7 @@ use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_traits::EpochInfo;
 use codec::Decode;
 use frame_benchmarking::benchmarks_instance_pallet;
-use frame_support::dispatch::UnfilteredDispatchable;
+use frame_support::traits::UnfilteredDispatchable;
 
 // Note: Currently we only have one chain (ETH) - as soon we've
 // another chain we've to take this in account in our weight calculation benchmark.

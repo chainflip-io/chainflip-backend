@@ -114,7 +114,7 @@ mod tests {
 
 	#[test]
 	fn status_keygen_complete_when_all_complete() {
-		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+		sp_io::TestExternalities::new_empty().execute_with(|| {
 			MockVaultRotatorA::keygen_success();
 			MockVaultRotatorB::keygen_success();
 			MockVaultRotatorC::keygen_success();
@@ -129,7 +129,7 @@ mod tests {
 
 	#[test]
 	fn status_key_handover_complete_when_all_complete() {
-		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+		sp_io::TestExternalities::new_empty().execute_with(|| {
 			MockVaultRotatorA::key_handover_success();
 			MockVaultRotatorB::key_handover_success();
 			MockVaultRotatorC::key_handover_success();
@@ -144,7 +144,7 @@ mod tests {
 
 	#[test]
 	fn status_rotation_complete_when_all_complete() {
-		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+		sp_io::TestExternalities::new_empty().execute_with(|| {
 			MockVaultRotatorA::keys_activated();
 			MockVaultRotatorB::keys_activated();
 			MockVaultRotatorC::keys_activated();
@@ -162,7 +162,7 @@ mod tests {
 	// the same time - since the validator pallet should do this.
 	#[test]
 	fn all_ready_but_diff_statuses_is_failure() {
-		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+		sp_io::TestExternalities::new_empty().execute_with(|| {
 			MockVaultRotatorA::keys_activated();
 			MockVaultRotatorB::keygen_success();
 			MockVaultRotatorC::keygen_success();
@@ -179,7 +179,7 @@ mod tests {
 	fn all_ready_one_failed_is_failed() {
 		const OFFENDERS: [u64; 4] = [1u64, 2, 3, 4];
 		// Keygen
-		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+		sp_io::TestExternalities::new_empty().execute_with(|| {
 			MockVaultRotatorA::failed(OFFENDERS);
 			MockVaultRotatorB::keygen_success();
 			MockVaultRotatorC::keygen_success();
@@ -192,7 +192,7 @@ mod tests {
 		});
 
 		// Key handover
-		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+		sp_io::TestExternalities::new_empty().execute_with(|| {
 			MockVaultRotatorA::failed(OFFENDERS);
 			MockVaultRotatorB::key_handover_success();
 			MockVaultRotatorC::key_handover_success();
@@ -207,7 +207,7 @@ mod tests {
 
 	#[test]
 	fn failed_statuses_combine_offenders() {
-		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+		sp_io::TestExternalities::new_empty().execute_with(|| {
 			MockVaultRotatorA::failed([1, 2, 3, 4]);
 			MockVaultRotatorB::failed([2, 4, 5]);
 			MockVaultRotatorC::failed([4, 5, 6]);
@@ -224,7 +224,7 @@ mod tests {
 
 	#[test]
 	fn all_pending_is_pending() {
-		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+		sp_io::TestExternalities::new_empty().execute_with(|| {
 			MockVaultRotatorA::pending();
 			MockVaultRotatorB::pending();
 			MockVaultRotatorC::pending();
@@ -239,7 +239,7 @@ mod tests {
 
 	#[test]
 	fn one_pending_is_pending() {
-		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+		sp_io::TestExternalities::new_empty().execute_with(|| {
 			MockVaultRotatorA::keygen_success();
 			MockVaultRotatorB::pending();
 			MockVaultRotatorC::keygen_success();
@@ -257,7 +257,7 @@ mod tests {
 	// too, before we continue.
 	#[test]
 	fn pending_if_one_pending_even_when_failure() {
-		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+		sp_io::TestExternalities::new_empty().execute_with(|| {
 			MockVaultRotatorA::failed([1, 2, 3]);
 			MockVaultRotatorB::pending();
 			MockVaultRotatorC::failed([4, 5, 6]);

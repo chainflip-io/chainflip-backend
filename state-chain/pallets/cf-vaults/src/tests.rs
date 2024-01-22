@@ -39,7 +39,7 @@ fn test_vault_key_rotated_externally_triggers_code_red() {
 #[test]
 fn key_unavailable_on_activate_returns_governance_event() {
 	new_test_ext_no_key().execute_with(|| {
-		VaultsPallet::activate(NEW_AGG_PUBKEY, None, false);
+		VaultsPallet::activate(NEW_AGG_PUBKEY, None);
 
 		assert_last_event!(crate::Event::AwaitingGovernanceActivation { .. });
 
@@ -54,7 +54,7 @@ fn when_set_agg_key_with_agg_key_not_required_we_skip_to_completion() {
 	new_test_ext().execute_with(|| {
 		MockSetAggKeyWithAggKey::set_required(false);
 
-		VaultsPallet::activate(NEW_AGG_PUBKEY, Some(Default::default()), false);
+		VaultsPallet::activate(NEW_AGG_PUBKEY, Some(Default::default()));
 
 		assert!(matches!(
 			PendingVaultActivation::<Test, _>::get().unwrap(),

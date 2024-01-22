@@ -46,10 +46,11 @@ pub mod any {
 		Deserialize,
 	)]
 	#[repr(u32)]
+	#[serde(rename_all = "UPPERCASE")]
 	// !!!!!! IMPORTANT !!!!!!
 	// Do not change these indices.
 	pub enum Asset {
-		// 0 is reservered for particular cross chain messaging scenarios where we want to pass
+		// 0 is reserved for particular cross chain messaging scenarios where we want to pass
 		// through a message without making a swap.
 		Eth = 1u32,
 		Flip = 2u32,
@@ -130,6 +131,12 @@ macro_rules! chain_assets {
 					$asset,
 				)+
 			}
+
+			pub const GAS_ASSET: Asset = [
+				$(
+					Asset::$asset,
+				)+
+			][0];
 
 			impl From<Asset> for any::Asset {
 				fn from(asset: Asset) -> Self {

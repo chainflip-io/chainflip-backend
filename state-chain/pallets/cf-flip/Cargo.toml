@@ -26,18 +26,18 @@ scale-info = { version = '2.5.0', default-features = false, features = [
   'derive',
 ] }
 
-frame-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2", optional = true, default-features = false }
-frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2", default-features = false }
-frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2", default-features = false }
-pallet-transaction-payment = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2", default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2", default-features = false }
-sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2", default-features = false }
+frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3", optional = true, default-features = false }
+frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3", default-features = false }
+frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3", default-features = false }
+pallet-transaction-payment = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3", default-features = false }
+sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3", default-features = false }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3", default-features = false }
 
 [dev-dependencies]
 quickcheck = '1'
 quickcheck_macros = '1'
-sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
-sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
+sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3" }
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3" }
 cf-test-utilities = { path = '../../test-utilities' }
 
 [features]
@@ -60,5 +60,11 @@ runtime-benchmarks = [
   'frame-system/runtime-benchmarks',
   'cf-primitives/runtime-benchmarks',
   'cf-traits/runtime-benchmarks',
+  'sp-runtime/runtime-benchmarks',
 ]
-try-runtime = ['frame-support/try-runtime']
+try-runtime = [
+  'frame-support/try-runtime',
+  'frame-system/try-runtime',
+  'sp-runtime/try-runtime',
+  'pallet-transaction-payment/try-runtime',
+]

@@ -1,6 +1,6 @@
 use super::*;
 use cf_chains::{address::ToHumanreadableAddress, Chain};
-use cf_primitives::{chains::assets::any, AssetAmount};
+use cf_primitives::{chains::assets::any, AssetAmount, FlipBalance};
 use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi,
 };
@@ -39,12 +39,13 @@ impl QueryApi {
 	) -> Result<QueryApi> {
 		log::debug!("Connecting to state chain at: {}", state_chain_settings.ws_endpoint);
 
-		let (_state_chain_stream, state_chain_client) = StateChainClient::connect_with_account(
+		let (.., state_chain_client) = StateChainClient::connect_with_account(
 			scope,
 			&state_chain_settings.ws_endpoint,
 			&state_chain_settings.signing_key_file,
-			AccountRole::None,
+			AccountRole::Unregistered,
 			false,
+			None,
 		)
 		.await?;
 
@@ -60,7 +61,7 @@ impl QueryApi {
 			pallet_cf_ingress_egress::Config<C::Instance, TargetChain = C>,
 	{
 		let block_hash =
-			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
+			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_block().hash);
 
 		let (channel_details, network_environment) = tokio::try_join!(
 			self.state_chain_client
@@ -98,7 +99,7 @@ impl QueryApi {
 		block_hash: Option<state_chain_runtime::Hash>,
 	) -> Result<BTreeMap<Asset, AssetAmount>> {
 		let block_hash =
-			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
+			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_block().hash);
 
 		futures::future::join_all(Asset::all().iter().map(|asset| async {
 			Ok((
@@ -124,7 +125,7 @@ impl QueryApi {
 		account_id: Option<state_chain_runtime::AccountId>,
 	) -> Result<Option<EthereumAddress>, anyhow::Error> {
 		let block_hash =
-			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
+			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_block().hash);
 		let account_id = account_id.unwrap_or_else(|| self.state_chain_client.account_id());
 
 		Ok(self
@@ -142,12 +143,30 @@ impl QueryApi {
 		account_id: Option<state_chain_runtime::AccountId>,
 	) -> Result<Option<EthereumAddress>, anyhow::Error> {
 		let block_hash =
-			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
+			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_block().hash);
 		let account_id = account_id.unwrap_or_else(|| self.state_chain_client.account_id());
 
 		Ok(self
 			.state_chain_client
 			.storage_map_entry::<pallet_cf_funding::BoundExecutorAddress<state_chain_runtime::Runtime>>(
+				block_hash,
+				&account_id,
+			)
+			.await?)
+	}
+
+	pub async fn get_restricted_balances(
+		&self,
+		block_hash: Option<state_chain_runtime::Hash>,
+		account_id: Option<state_chain_runtime::AccountId>,
+	) -> Result<BTreeMap<EthereumAddress, FlipBalance>> {
+		let block_hash =
+			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_block().hash);
+		let account_id = account_id.unwrap_or_else(|| self.state_chain_client.account_id());
+
+		Ok(self
+			.state_chain_client
+			.storage_map_entry::<pallet_cf_funding::RestrictedBalances<state_chain_runtime::Runtime>>(
 				block_hash,
 				&account_id,
 			)
@@ -160,7 +179,7 @@ impl QueryApi {
 		account_id: Option<state_chain_runtime::AccountId>,
 	) -> Result<PreUpdateStatus, anyhow::Error> {
 		let block_hash =
-			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
+			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_block().hash);
 		let account_id = account_id.unwrap_or_else(|| self.state_chain_client.account_id());
 
 		let mut result =
@@ -222,34 +241,43 @@ fn compute_distance(index: usize, slot: usize, len: usize) -> usize {
 	}
 }
 
-#[test]
-fn test_slot_extraction() {
-	let slot = Slot::from(42);
-	assert_eq!(
-		Some(slot),
-		extract_slot_from_digest_item(&DigestItem::PreRuntime(
-			AURA_ENGINE_ID,
-			Encode::encode(&slot)
-		))
-	);
-	assert_eq!(
-		None,
-		extract_slot_from_digest_item(&DigestItem::PreRuntime(*b"BORA", Encode::encode(&slot)))
-	);
-	assert_eq!(None, extract_slot_from_digest_item(&DigestItem::Other(b"SomethingElse".to_vec())));
-}
+#[cfg(test)]
+mod test {
+	use super::*;
+	use codec::Encode;
 
-#[test]
-fn test_compute_distance() {
-	let index: usize = 5;
-	let slot: usize = 7;
-	let len: usize = 15;
+	#[test]
+	fn test_slot_extraction() {
+		let slot = Slot::from(42);
+		assert_eq!(
+			Some(slot),
+			extract_slot_from_digest_item(&DigestItem::PreRuntime(
+				AURA_ENGINE_ID,
+				Encode::encode(&slot)
+			))
+		);
+		assert_eq!(
+			None,
+			extract_slot_from_digest_item(&DigestItem::PreRuntime(*b"BORA", Encode::encode(&slot)))
+		);
+		assert_eq!(
+			None,
+			extract_slot_from_digest_item(&DigestItem::Other(b"SomethingElse".to_vec()))
+		);
+	}
 
-	assert_eq!(compute_distance(index, slot, len), 13);
+	#[test]
+	fn test_compute_distance() {
+		let index: usize = 5;
+		let slot: usize = 7;
+		let len: usize = 15;
 
-	let index: usize = 18;
-	let slot: usize = 7;
-	let len: usize = 24;
+		assert_eq!(compute_distance(index, slot, len), 13);
 
-	assert_eq!(compute_distance(index, slot, len), 11);
+		let index: usize = 18;
+		let slot: usize = 7;
+		let len: usize = 24;
+
+		assert_eq!(compute_distance(index, slot, len), 11);
+	}
 }

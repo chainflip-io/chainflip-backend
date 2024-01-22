@@ -4,7 +4,8 @@ use std::{
 };
 
 use crate::{
-	common::Signal, state_chain_observer::client, witness::common::STATE_CHAIN_CONNECTION,
+	common::Signal,
+	state_chain_observer::client::{self, STATE_CHAIN_CONNECTION},
 };
 use cf_chains::{Chain, ChainCrypto};
 use cf_primitives::{AccountId, EpochIndex};
@@ -84,7 +85,7 @@ impl EpochSource<(), ()> {
 	) -> EpochSourceBuilder<'a, 'env, StateChainClient, (), ()> {
 		let (epoch_update_sender, epoch_update_receiver) = spmc::channel(CHANNEL_BUFFER);
 
-		let initial_block_hash = state_chain_stream.cache().block_hash;
+		let initial_block_hash = state_chain_stream.cache().hash;
 
 		let mut current_epoch = state_chain_client
 			.storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>(
@@ -115,28 +116,28 @@ impl EpochSource<(), ()> {
 			async move {
 				utilities::loop_select! {
 					let _ = epoch_update_sender.closed() => { break Ok(()) },
-					if let Some((block_hash, _block_header)) = state_chain_stream.next() => {
+					if let Some(block) = state_chain_stream.next() => {
 						let old_current_epoch = std::mem::replace(&mut current_epoch, state_chain_client
 							.storage_value::<pallet_cf_validator::CurrentEpoch<
 								state_chain_runtime::Runtime,
-							>>(block_hash)
+							>>(block.hash)
 							.await
 							.expect(STATE_CHAIN_CONNECTION));
 						if old_current_epoch != current_epoch {
-							epoch_update_sender.send((old_current_epoch, block_hash, EpochUpdate::Historic(()))).await;
-							epoch_update_sender.send((current_epoch, block_hash, EpochUpdate::NewCurrent(()))).await;
+							epoch_update_sender.send((old_current_epoch, block.hash, EpochUpdate::Historic(()))).await;
+							epoch_update_sender.send((current_epoch, block.hash, EpochUpdate::NewCurrent(()))).await;
 							historic_epochs.insert(old_current_epoch);
 						}
 
 						let old_historic_epochs = std::mem::replace(&mut historic_epochs, BTreeSet::from_iter(
 							state_chain_client.storage_map::<pallet_cf_validator::EpochExpiries<
 								state_chain_runtime::Runtime,
-							>, Vec<_>>(block_hash).await.expect(STATE_CHAIN_CONNECTION).into_iter().map(|(_, index)| index)
+							>, Vec<_>>(block.hash).await.expect(STATE_CHAIN_CONNECTION).into_iter().map(|(_, index)| index)
 						));
 						assert!(!historic_epochs.contains(&current_epoch));
 						assert!(old_historic_epochs.is_superset(&historic_epochs));
 						for expired_epoch in old_historic_epochs.difference(&historic_epochs) {
-							epoch_update_sender.send((*expired_epoch, block_hash, EpochUpdate::Expired)).await;
+							epoch_update_sender.send((*expired_epoch, block.hash, EpochUpdate::Expired)).await;
 						}
 					} else break Ok(()),
 				}

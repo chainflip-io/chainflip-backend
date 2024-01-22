@@ -14,6 +14,10 @@ on:
         required: false
         type: boolean
         default: false
+      save_tags:
+        description: Save specific tags
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -24,7 +28,7 @@ env:
 
 jobs:
   get-date-time:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     outputs:
       date: ${{ steps.date.outputs.date }}
       time: ${{ steps.date.outputs.time }}
@@ -34,23 +38,39 @@ jobs:
         run: |
           echo "date=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
           echo "time=$(date +'%H:%M:%S')" >> "$GITHUB_OUTPUT"
-
+  get-version-from-branch-name:
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      - name: Get version from branch name
+        id: version
+        run: |
+          version=$(./ci/scripts/extract_version.sh ${{ github.ref }})
+          echo "Extracted version: $version"
+          if [[ "$version" == "" ]]; then
+            echo "version=0.0.0" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$version" >> "$GITHUB_OUTPUT"
+          fi
   set-dockerfile-name:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     outputs:
       dockerfile_path: ${{ steps.dockerfile.outputs.dockerfile_path }}
     steps:
       - name: Set dockerfile name
         id: dockerfile
         run: |
-          if [[ "${{ inputs.environment }}" == "prod" || "${{ inputs.network }}" == "sisyphos" || "${{ inputs.network }}" == "perseverance" ]] ; then
-            echo "dockerfile_path=ci/docker/prod" >> "$GITHUB_OUTPUT"
+          if [[ "${{ inputs.environment }}" == "production" || "${{ inputs.network }}" == "sisyphos" || "${{ inputs.network }}" == "perseverance" ]] ; then
+            echo "dockerfile_path=ci/docker/production" >> "$GITHUB_OUTPUT"
           else
-            echo "dockerfile_path=ci/docker/dev" >> "$GITHUB_OUTPUT"
+            echo "dockerfile_path=ci/docker/development" >> "$GITHUB_OUTPUT"
           fi
 
   private-images:
-    needs: [get-date-time, set-dockerfile-name]
+    needs: [get-date-time, set-dockerfile-name, get-version-from-branch-name]
     strategy:
       fail-fast: false
       matrix:
@@ -65,25 +85,25 @@ jobs:
           - chainflip-engine-databases
         docker-repo:
           - ghcr.io/${{ github.repository }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout 🏁
-        uses: actions/checkout@v3
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Download binaries 📥
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@7a1cd3216ca9260cd8022db641d960b1db4d1be4
         with:
-          name: chainflip-backend-bin-ubuntu-20.04
+          name: chainflip-backend-bin-ubuntu-22.04
 
       - name: Set up QEMU 🧞
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@68827325e0b33c7199eb31dd4e31fbe9023e06e3
 
       - name: Set up Docker Buildx 🪄
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@f95db51fddba0c2d1ec667646a06c2ce06100226
 
       - name: Docker meta 📄
         id: meta
-        uses: docker/metadata-action@v4
+        uses: docker/metadata-action@31cebacef4805868f9ce9a0cb03ee36c32df2ac4
         with:
           images: ${{ matrix.docker-repo }}/${{ matrix.target }}
           flavor: |
@@ -94,27 +114,24 @@ jobs:
             type=raw,value=${{ github.sha }}
             type=raw,value=${{ inputs.network }}
             type=ref,event=branch
-            type=ref,event=tag
-            type=ref,event=pr
+            type=ref,event=tag,prefix=${{ inputs.network }}-
+              type=raw,value=${{ needs.get-version-from-branch-name.outputs.version }},prefix=${{ inputs.network }}-,enable=${{ needs.get-version-from-branch-name.outputs.version != '0.0.0' }}
+              type=ref,event=pr
+              type=raw,value=${{ github.sha }},prefix=iet-,enable=${{ matrix.target == 'chainflip-ingress-egress-tracker' && github.ref_name == 'main' }}
 
       - name: Login to Github Container Registry 🔑
-        uses: docker/login-action@v2
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to DockerHub 🔑
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.CF_DOCKERHUB_USERNAME }}
-          password: ${{ secrets.CF_DOCKERHUB_TOKEN }}
-
       - name: Build and push 🏗️🫸
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@4a13e500e55cf31b7a5d59a38ab2040ab0f42f56
         with:
           context: .
-          push: true
+          push: ${{ inputs.save_tags == '' }}
+          load: ${{ inputs.save_tags != '' }}
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -124,9 +141,24 @@ jobs:
             VCS_REF=${{ github.sha }}
             CHAINSPEC=${{ inputs.network }}
 
+      - name: Save tags to tar 📦
+        if: inputs.save_tags != ''
+        run: |
+          mkdir -p private
+          for tag in ${{ inputs.save_tags }}; do
+            docker save ${{ matrix.docker-repo }}/${{ matrix.target }}:$tag -o private/${{ matrix.target }}.tar
+          done
+
+      - name: Upload image 📤
+        if: inputs.save_tags != ''
+        uses: actions/upload-artifact@c7d193f32edcb7bfad88892161225aeda64e9392
+        with:
+          name: chainflip-backend-private-images
+          path: private
+
   public-images:
-    if: inputs.publish_public_images
-    needs: [get-date-time, set-dockerfile-name]
+    if: inputs.publish_public_images || inputs.save_tags != ''
+    needs: [get-date-time, set-dockerfile-name, get-version-from-branch-name]
     strategy:
       fail-fast: false
       matrix:
@@ -138,25 +170,25 @@ jobs:
           - chainflip-lp-api
         docker-repo:
           - chainfliplabs
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout 🏁
-        uses: actions/checkout@v3
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Download binaries 📥
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@7a1cd3216ca9260cd8022db641d960b1db4d1be4
         with:
-          name: chainflip-backend-bin-ubuntu-20.04
+          name: chainflip-backend-bin-ubuntu-22.04
 
       - name: Set up QEMU 🧞
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@68827325e0b33c7199eb31dd4e31fbe9023e06e3
 
       - name: Set up Docker Buildx 🪄
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@f95db51fddba0c2d1ec667646a06c2ce06100226
 
       - name: Docker meta 📄
         id: meta
-        uses: docker/metadata-action@v4
+        uses: docker/metadata-action@31cebacef4805868f9ce9a0cb03ee36c32df2ac4
         with:
           images: ${{ matrix.docker-repo }}/${{ matrix.target }}
           flavor: |
@@ -167,20 +199,22 @@ jobs:
             type=raw,value=${{ github.sha }}
             type=raw,value=${{ inputs.network }}
             type=ref,event=branch
-            type=ref,event=tag
+            type=ref,event=tag,prefix=${{ inputs.network }}-
+            type=raw,value=${{ needs.get-version-from-branch-name.outputs.version }},prefix=${{ inputs.network }}-,enable=${{ needs.get-version-from-branch-name.outputs.version != '0.0.0' }}
             type=ref,event=pr
 
       - name: Login to DockerHub 🔑
-        uses: docker/login-action@v2
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
         with:
           username: ${{ secrets.CF_DOCKERHUB_USERNAME }}
           password: ${{ secrets.CF_DOCKERHUB_TOKEN }}
 
       - name: Build and push 🏗️🫸
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@4a13e500e55cf31b7a5d59a38ab2040ab0f42f56
         with:
           context: .
-          push: true
+          push: ${{ inputs.publish_public_images }}
+          load: ${{ inputs.save_tags != '' }}
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -189,3 +223,18 @@ jobs:
             BUILD_DATETIME=${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}
             VCS_REF=${{ github.sha }}
             CHAINSPEC=${{ inputs.network }}
+
+      - name: Save image 📦
+        if: inputs.save_tags != ''
+        run: |
+          mkdir -p public
+          for tag in ${{ inputs.save_tags }}; do
+            docker save ${{ matrix.docker-repo }}/${{ matrix.target }}:$tag -o public/${{ matrix.target }}.tar
+          done
+
+      - name: Upload image 📤
+        if: inputs.save_tags != ''
+        uses: actions/upload-artifact@c7d193f32edcb7bfad88892161225aeda64e9392
+        with:
+          name: chainflip-backend-public-images
+          path: public

@@ -4,17 +4,16 @@ use core::{fmt::Display, iter::Step};
 
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 pub use address::ForeignChainAddress;
-use address::{AddressDerivationApi, ToHumanreadableAddress};
-use cf_primitives::{AssetAmount, ChannelId, EgressId, EthAmount, TransactionHash};
+use address::{AddressDerivationApi, AddressDerivationError, ToHumanreadableAddress};
+use cf_primitives::{AssetAmount, BroadcastId, ChannelId, EthAmount, TransactionHash};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
-	pallet_prelude::{MaybeSerializeDeserialize, Member},
+	pallet_prelude::{MaybeSerializeDeserialize, Member, RuntimeDebug},
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, CheckedSub},
 		BoundedVec, DispatchError,
 	},
-	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, RuntimeDebug,
-	StorageHasher,
+	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, StorageHasher,
 };
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -50,6 +49,8 @@ pub mod mocks;
 /// blockchains.
 pub trait Chain: Member + Parameter {
 	const NAME: &'static str;
+
+	const GAS_ASSET: Self::ChainAsset;
 
 	type ChainCrypto: ChainCrypto;
 
@@ -89,7 +90,8 @@ pub trait Chain: Member + Parameter {
 		+ Parameter
 		+ MaxEncodedLen
 		+ Unpin
-		+ BenchmarkValue;
+		+ BenchmarkValue
+		+ FeeEstimationApi<Self>;
 
 	type ChainAsset: Member
 		+ Parameter
@@ -129,6 +131,12 @@ pub trait Chain: Member + Parameter {
 	type DepositDetails: Member + Parameter + BenchmarkValue;
 
 	type Transaction: Member + Parameter + BenchmarkValue + FeeRefundCalculator<Self>;
+
+	type TransactionMetadata: Member
+		+ Parameter
+		+ TransactionMetadata<Self>
+		+ BenchmarkValue
+		+ Default;
 	/// Passed in to construct the replay protection.
 	type ReplayProtectionParams: Member + Parameter;
 	type ReplayProtection: Member + Parameter;
@@ -175,27 +183,17 @@ pub trait ChainCrypto {
 		true
 	}
 
-	/// Determines whether threshold signatures are made with a specific fixed key, or whether the
-	/// key is refreshed if we need to retry the signature.
-	///
-	/// By default, this is true for Utxo-based chains, true otherwise.
-	fn sign_with_specific_key() -> bool {
-		Self::UtxoChain::get()
-	}
-
-	/// Determines whether the chain crypto allows for optimistic activation of new aggregate keys.
-	///
-	/// By default, this is true for Utxo-based chains, false otherwise.
-	fn optimistic_activation() -> bool {
-		Self::UtxoChain::get()
-	}
-
 	/// Determines whether the chain crypto supports key handover.
 	///
 	/// By default, this is true for Utxo-based chains, false otherwise.
 	fn key_handover_is_required() -> bool {
 		Self::UtxoChain::get()
 	}
+
+	/// Provides chain specific functionality for providing the broadcast barriers on rotation tx
+	/// broadcast
+	fn maybe_broadcast_barriers_on_rotation(rotation_broadcast_id: BroadcastId)
+		-> Vec<BroadcastId>;
 }
 
 /// Provides chain-specific replay protection data.
@@ -243,16 +241,28 @@ where
 	fn refresh_unsigned_data(tx: &mut C::Transaction);
 
 	/// Checks if the payload is still valid for the call.
-	fn is_valid_for_rebroadcast(
+	fn requires_signature_refresh(
 		call: &Call,
 		payload: &<<C as Chain>::ChainCrypto as ChainCrypto>::Payload,
-		current_key: &<<C as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-		signature: &<<C as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
 	) -> bool;
 
 	/// Calculate the Units of gas that is allowed to make this call.
 	fn calculate_gas_limit(_call: &Call) -> Option<U256> {
 		Default::default()
+	}
+}
+
+pub trait TransactionMetadata<C: Chain> {
+	fn extract_metadata(transaction: &C::Transaction) -> Self;
+	fn verify_metadata(&self, expected_metadata: &Self) -> bool;
+}
+
+impl<C: Chain> TransactionMetadata<C> for () {
+	fn extract_metadata(_transaction: &C::Transaction) -> Self {
+		Default::default()
+	}
+	fn verify_metadata(&self, _expected_metadata: &Self) -> bool {
+		true
 	}
 }
 
@@ -292,7 +302,6 @@ pub enum SetAggKeyWithAggKeyError {
 }
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
-#[allow(clippy::result_unit_err)]
 pub trait SetAggKeyWithAggKey<C: ChainCrypto>: ApiCall<C> {
 	fn new_unsigned(
 		maybe_old_key: Option<<C as ChainCrypto>::AggKey>,
@@ -336,7 +345,16 @@ pub enum AllBatchError {
 	Other,
 }
 
-#[allow(clippy::result_unit_err)]
+#[derive(Debug)]
+pub enum ConsolidationError {
+	NotRequired,
+	Other,
+}
+
+pub trait ConsolidateCall<C: Chain>: ApiCall<C::ChainCrypto> {
+	fn consolidate_utxos() -> Result<Self, ConsolidationError>;
+}
+
 pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<C>>,
@@ -344,16 +362,18 @@ pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {
 	) -> Result<Self, AllBatchError>;
 }
 
-#[allow(clippy::result_unit_err)]
 pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn new_unsigned(
-		egress_id: EgressId,
 		transfer_param: TransferAssetParams<C>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: C::ChainAmount,
 		message: Vec<u8>,
 	) -> Result<Self, DispatchError>;
+}
+
+pub trait TransferFallback<C: Chain>: ApiCall<C::ChainCrypto> {
+	fn new_unsigned(transfer_param: TransferAssetParams<C>) -> Result<Self, DispatchError>;
 }
 
 pub trait FeeRefundCalculator<C: Chain> {
@@ -452,4 +472,38 @@ pub struct CcmDepositMetadata {
 pub struct ChainState<C: Chain> {
 	pub block_height: C::ChainBlockNumber,
 	pub tracked_data: C::TrackedData,
+}
+
+pub trait FeeEstimationApi<C: Chain> {
+	fn estimate_ingress_fee(&self, asset: C::ChainAsset) -> C::ChainAmount;
+
+	fn estimate_egress_fee(&self, asset: C::ChainAsset) -> C::ChainAmount;
+}
+
+impl<C: Chain> FeeEstimationApi<C> for () {
+	fn estimate_ingress_fee(&self, _asset: C::ChainAsset) -> C::ChainAmount {
+		Default::default()
+	}
+
+	fn estimate_egress_fee(&self, _asset: C::ChainAsset) -> C::ChainAmount {
+		Default::default()
+	}
+}
+
+/// Defines an interface for a retry policy.
+pub trait RetryPolicy {
+	type BlockNumber;
+	type AttemptCount;
+	/// Returns the delay for the given attempt count. If None, no delay is applied.
+	fn next_attempt_delay(retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber>;
+}
+
+pub struct DefaultRetryPolicy;
+impl RetryPolicy for DefaultRetryPolicy {
+	type BlockNumber = u32;
+	type AttemptCount = u32;
+
+	fn next_attempt_delay(_retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber> {
+		Some(10u32)
+	}
 }

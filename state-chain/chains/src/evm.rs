@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use sp_core::ConstBool;
 use sp_std::{convert::TryFrom, str, vec};
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EvmCrypto;
 
 impl ChainCrypto for EvmCrypto {
@@ -30,7 +31,7 @@ impl ChainCrypto for EvmCrypto {
 	type Payload = H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
 	type TransactionInId = H256;
-	// We can't use the hash since we don't know it for the Evm, as we must select an individaul
+	// We can't use the hash since we don't know it for the Evm, as we must select an individual
 	// authority to sign the transaction.
 	type TransactionOutId = Self::ThresholdSignature;
 	type KeyHandoverIsRequired = ConstBool<false>;
@@ -49,6 +50,23 @@ impl ChainCrypto for EvmCrypto {
 
 	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
 		H256(Blake2_256::hash(&agg_key.to_pubkey_compressed()))
+	}
+
+	fn maybe_broadcast_barriers_on_rotation(
+		rotation_broadcast_id: BroadcastId,
+	) -> Vec<BroadcastId> {
+		// For Ethereum, we need to put 2 barriers, the first on the last non-rotation tx of the
+		// previous epoch, the second on the rotation tx itself. This is because before we execute
+		// the rotation tx for eth, we need to make sure all previous tx have successfully
+		// broadcast. Also, we need to pause future new epoch tx from broadcast until the rotation
+		// broadcast has successfully completed.
+		//
+		// If the rotation tx is the first broadcast ever, we dont need the first barrier.
+		if rotation_broadcast_id > 1 {
+			vec![rotation_broadcast_id - 1, rotation_broadcast_id]
+		} else {
+			vec![rotation_broadcast_id]
+		}
 	}
 }
 
@@ -325,7 +343,7 @@ impl Tokenizable for AggKey {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq, Serialize)]
 pub struct SchnorrVerificationComponents {
 	/// Scalar component
 	pub s: [u8; 32],
@@ -349,7 +367,42 @@ pub struct Transaction {
 	pub gas_limit: Option<Uint>,
 	pub contract: Address,
 	pub value: Uint,
+	#[serde(with = "hex::serde")]
 	pub data: Vec<u8>,
+}
+
+#[derive(
+	Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize,
+)]
+pub struct EvmTransactionMetadata {
+	pub max_fee_per_gas: Option<Uint>,
+	pub max_priority_fee_per_gas: Option<Uint>,
+	pub contract: Address,
+	pub gas_limit: Option<Uint>,
+}
+
+impl<C: Chain<Transaction = Transaction>> TransactionMetadata<C> for EvmTransactionMetadata {
+	fn extract_metadata(transaction: &<C as Chain>::Transaction) -> Self {
+		Self {
+			contract: transaction.contract,
+			max_fee_per_gas: transaction.max_fee_per_gas,
+			max_priority_fee_per_gas: transaction.max_priority_fee_per_gas,
+			gas_limit: transaction.gas_limit,
+		}
+	}
+
+	fn verify_metadata(&self, expected_metadata: &Self) -> bool {
+		macro_rules! check_optional {
+			($field:ident) => {
+				(expected_metadata.$field.is_none() || expected_metadata.$field == self.$field)
+			};
+		}
+
+		self.contract == expected_metadata.contract &&
+			check_optional!(max_fee_per_gas) &&
+			check_optional!(max_priority_fee_per_gas) &&
+			check_optional!(gas_limit)
+	}
 }
 
 impl Transaction {
@@ -700,4 +753,50 @@ mod verification_tests {
 			AggKeyVerificationError::NoMatch
 		);
 	}
+}
+
+#[test]
+fn metadata_verification() {
+	let submitted_metadata = EvmTransactionMetadata {
+		max_fee_per_gas: None,
+		max_priority_fee_per_gas: Some(U256::one()),
+		contract: Default::default(),
+		gas_limit: None,
+	};
+
+	// Exact match.
+	assert!(<EvmTransactionMetadata as TransactionMetadata<Ethereum>>::verify_metadata(
+		&submitted_metadata,
+		&submitted_metadata
+	));
+
+	// If we don't expect a value, it's ok if it's set.
+	assert!(<EvmTransactionMetadata as TransactionMetadata<Ethereum>>::verify_metadata(
+		&submitted_metadata,
+		&EvmTransactionMetadata { max_priority_fee_per_gas: None, ..submitted_metadata }
+	));
+
+	// If we expect something else it fails.
+	assert!(!<EvmTransactionMetadata as TransactionMetadata<Ethereum>>::verify_metadata(
+		&submitted_metadata,
+		&EvmTransactionMetadata {
+			max_priority_fee_per_gas: Some(U256::zero()),
+			..submitted_metadata
+		}
+	));
+
+	// If we witness `None` instead of `Some`, it fails.
+	assert!(!<EvmTransactionMetadata as TransactionMetadata<Ethereum>>::verify_metadata(
+		&submitted_metadata,
+		&EvmTransactionMetadata { max_fee_per_gas: Some(U256::zero()), ..submitted_metadata }
+	));
+
+	// Wrong contract address.
+	assert!(!<EvmTransactionMetadata as TransactionMetadata<Ethereum>>::verify_metadata(
+		&submitted_metadata,
+		&EvmTransactionMetadata {
+			contract: ethereum_types::H160::repeat_byte(1u8),
+			..submitted_metadata
+		}
+	));
 }

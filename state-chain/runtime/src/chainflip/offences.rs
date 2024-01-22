@@ -1,6 +1,6 @@
 use crate::Runtime;
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::RuntimeDebug;
+use frame_support::pallet_prelude::RuntimeDebug;
 use pallet_cf_reputation::OffenceList;
 use pallet_grandpa::EquivocationOffence;
 use scale_info::TypeInfo;

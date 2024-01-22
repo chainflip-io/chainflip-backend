@@ -6,18 +6,16 @@ use crate::{self as pallet_cf_broadcast, Instance1, PalletOffence, PalletSafeMod
 use cf_chains::{
 	eth::Ethereum,
 	evm::EvmCrypto,
-	mocks::{
-		MockAggKey, MockApiCall, MockEthereum, MockEthereumChainCrypto, MockTransactionBuilder,
-	},
-	Chain, ChainCrypto,
+	mocks::{MockApiCall, MockEthereum, MockEthereumChainCrypto, MockTransactionBuilder},
+	Chain, ChainCrypto, RetryPolicy,
 };
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
-		block_height_provider::BlockHeightProvider, signer_nomination::MockNominator,
-		threshold_signer::MockThresholdSigner,
+		block_height_provider::BlockHeightProvider, cfe_interface_mock::MockCfeInterface,
+		signer_nomination::MockNominator, threshold_signer::MockThresholdSigner,
 	},
-	AccountRoleRegistry, EpochKey, KeyState, OnBroadcastReady,
+	AccountRoleRegistry, OnBroadcastReady,
 };
 use codec::{Decode, Encode};
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
@@ -79,28 +77,13 @@ parameter_types! {
 pub type MockOffenceReporter =
 	cf_traits::mocks::offence_reporting::MockOffenceReporter<u64, PalletOffence>;
 
-pub const VALID_AGG_KEY: MockAggKey = MockAggKey([0, 0, 0, 0]);
-
-pub const INVALID_AGG_KEY: MockAggKey = MockAggKey([1, 1, 1, 1]);
-
 thread_local! {
 	pub static SIGNATURE_REQUESTS: RefCell<Vec<<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::Payload>> = RefCell::new(vec![]);
 	pub static CALLBACK_CALLED: RefCell<bool> = RefCell::new(false);
+	pub static VALID_METADATA: RefCell<bool> = RefCell::new(true);
 }
 
 pub type EthMockThresholdSigner = MockThresholdSigner<EvmCrypto, crate::mock::RuntimeCall>;
-
-pub struct MockKeyProvider;
-
-impl cf_traits::KeyProvider<MockEthereumChainCrypto> for MockKeyProvider {
-	fn active_epoch_key() -> Option<EpochKey<<MockEthereumChainCrypto as ChainCrypto>::AggKey>> {
-		Some(EpochKey {
-			key: if VALIDKEY.with(|cell| *cell.borrow()) { VALID_AGG_KEY } else { INVALID_AGG_KEY },
-			epoch_index: Default::default(),
-			key_state: KeyState::Unlocked,
-		})
-	}
-}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockCallback;
@@ -123,18 +106,27 @@ impl UnfilteredDispatchable for MockCallback {
 	}
 }
 
-impl MockKeyProvider {
-	pub fn set_valid(valid: bool) {
-		VALIDKEY.with(|cell| *cell.borrow_mut() = valid);
-	}
-}
-
 pub struct MockBroadcastReadyProvider;
 impl OnBroadcastReady<MockEthereum> for MockBroadcastReadyProvider {
 	type ApiCall = MockApiCall<MockEthereumChainCrypto>;
 }
 
-impl_mock_runtime_safe_mode! { broadcast: PalletSafeMode }
+pub struct MockRetryPolicy;
+
+parameter_types! {
+	pub static BroadcastDelay: Option<BlockNumberFor<Test>> = None;
+}
+
+impl RetryPolicy for MockRetryPolicy {
+	type BlockNumber = u64;
+	type AttemptCount = u32;
+
+	fn next_attempt_delay(_retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber> {
+		BroadcastDelay::get()
+	}
+}
+
+impl_mock_runtime_safe_mode! { broadcast: PalletSafeMode<Instance1> }
 
 impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -149,13 +141,14 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type BroadcastTimeout = BroadcastTimeout;
 	type WeightInfo = ();
-	type KeyProvider = MockKeyProvider;
 	type RuntimeOrigin = RuntimeOrigin;
 	type BroadcastCallable = MockCallback;
 	type SafeMode = MockRuntimeSafeMode;
 	type BroadcastReadyProvider = MockBroadcastReadyProvider;
 	type SafeModeBlockMargin = ConstU64<10>;
 	type ChainTracking = BlockHeightProvider<MockEthereum>;
+	type RetryPolicy = MockRetryPolicy;
+	type CfeBroadcastRequest = MockCfeInterface;
 }
 
 impl_mock_chainflip!(Test);
@@ -163,7 +156,7 @@ cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig::default(),
 	|| {
-		MockEpochInfo::next_epoch((0..3).collect());
+		MockEpochInfo::next_epoch((0..151).collect());
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		for id in &MockEpochInfo::current_authorities() {
 			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id).unwrap();
