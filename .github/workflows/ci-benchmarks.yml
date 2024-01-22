@@ -13,7 +13,7 @@ jobs:
         ubuntu_version: [20.04]
         profile: [release, production]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-07-31-ubuntu-${{ matrix.ubuntu_version }}-27"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-10-31-ubuntu-${{ matrix.ubuntu_version }}-27"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
