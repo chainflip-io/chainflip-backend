@@ -169,18 +169,11 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 
 /// Start a single node development chain - using bashful as genesis node
 pub fn cf_development_config() -> Result<ChainSpec, String> {
-	inner_cf_development_config(vec![
-		(
-			parse_account(testnet::BASHFUL_ACCOUNT_ID),
-			testnet::BASHFUL_SR25519.unchecked_into(),
-			testnet::BASHFUL_ED25519.unchecked_into(),
-		),
-		(
-			parse_account(testnet::DOC_ACCOUNT_ID),
-			testnet::DOC_SR25519.unchecked_into(),
-			testnet::DOC_ED25519.unchecked_into(),
-		),
-	])
+	inner_cf_development_config(vec![(
+		parse_account(testnet::BASHFUL_ACCOUNT_ID),
+		testnet::BASHFUL_SR25519.unchecked_into(),
+		testnet::BASHFUL_ED25519.unchecked_into(),
+	)])
 }
 
 /// Start a three node development chain - using bashful, doc and dopey as genesis nodes
