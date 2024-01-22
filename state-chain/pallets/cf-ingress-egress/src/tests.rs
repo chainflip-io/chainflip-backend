@@ -146,6 +146,66 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 }
 
 #[test]
+fn zero_amount_egress_is_skipped() {
+	new_test_ext().execute_with(|| {
+		IngressEgress::schedule_egress(ETH_ETH, 1, ALICE_ETH_ADDRESS, None);
+		System::assert_last_event(RuntimeEvent::IngressEgress(crate::Event::EgressScheduled {
+			id: (ForeignChain::Ethereum, 1),
+			asset: ETH_ETH,
+			amount: 1,
+			destination_address: ALICE_ETH_ADDRESS,
+		}));
+		IngressEgress::schedule_egress(ETH_ETH, 0, ALICE_ETH_ADDRESS, None);
+		System::assert_last_event(RuntimeEvent::IngressEgress(crate::Event::EgressScheduled {
+			id: (ForeignChain::Ethereum, 2),
+			asset: ETH_ETH,
+			amount: 0,
+			destination_address: ALICE_ETH_ADDRESS,
+		}));
+		IngressEgress::schedule_egress(ETH_ETH, 2, ALICE_ETH_ADDRESS, None);
+		System::assert_last_event(RuntimeEvent::IngressEgress(crate::Event::EgressScheduled {
+			id: (ForeignChain::Ethereum, 3),
+			asset: ETH_ETH,
+			amount: 2,
+			destination_address: ALICE_ETH_ADDRESS,
+		}));
+
+		assert_eq!(
+			ScheduledEgressFetchOrTransfer::<Test>::get(),
+			vec![
+				FetchOrTransfer::<Ethereum>::Transfer {
+					asset: ETH_ETH,
+					amount: 1,
+					destination_address: ALICE_ETH_ADDRESS,
+					egress_id: (ForeignChain::Ethereum, 1),
+				},
+				FetchOrTransfer::<Ethereum>::Transfer {
+					asset: ETH_ETH,
+					amount: 0,
+					destination_address: ALICE_ETH_ADDRESS,
+					egress_id: (ForeignChain::Ethereum, 2),
+				},
+				FetchOrTransfer::<Ethereum>::Transfer {
+					asset: ETH_ETH,
+					amount: 2,
+					destination_address: ALICE_ETH_ADDRESS,
+					egress_id: (ForeignChain::Ethereum, 3),
+				},
+			]
+		);
+
+		IngressEgress::on_finalize(1);
+
+		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
+			crate::Event::BatchBroadcastRequested {
+				broadcast_id: 1,
+				egress_ids: vec![(ForeignChain::Ethereum, 1), (ForeignChain::Ethereum, 3)],
+			},
+		))
+	});
+}
+
+#[test]
 fn can_schedule_swap_egress_to_batch() {
 	new_test_ext().execute_with(|| {
 		IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS, None);
