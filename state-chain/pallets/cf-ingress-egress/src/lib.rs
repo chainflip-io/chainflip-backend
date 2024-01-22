@@ -822,7 +822,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 											.unwrap_or(false)
 									},
 								),
-								FetchOrTransfer::Transfer { .. } => true,
+								FetchOrTransfer::Transfer { amount, .. } => !amount.is_zero(),
 							}
 					})
 					.collect()
