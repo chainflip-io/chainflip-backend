@@ -37,7 +37,7 @@ use crate::{
 			unsigned::UnsignedExtrinsicApi,
 		},
 		storage_api::StorageApi,
-		StateChainStreamApi,
+		stream_api::{StreamApi, FINALIZED},
 	},
 };
 use multisig::{
@@ -238,7 +238,7 @@ pub async fn start<
 	peer_update_sender: UnboundedSender<PeerUpdate>,
 ) -> Result<(), anyhow::Error>
 where
-	BlockStream: StateChainStreamApi,
+	BlockStream: StreamApi<FINALIZED>,
 	EthRpc: EthersRetrySigningRpcApi + Send + Sync + 'static,
 	DotRpc: DotRetryRpcApi + Send + Sync + 'static,
 	BtcRpc: BtcRetryRpcApi + Send + Sync + 'static,
