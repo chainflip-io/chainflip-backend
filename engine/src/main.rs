@@ -1,6 +1,6 @@
 use anyhow::Context;
 use cf_chains::dot::PolkadotHash;
-use cf_primitives::{AccountRole, SemVer};
+use cf_primitives::AccountRole;
 use chainflip_engine::{
 	btc::retry_rpc::BtcRetryRpcClient,
 	db::{KeyStore, PersistentKeyDB},
@@ -25,15 +25,7 @@ use std::{
 	sync::{atomic::AtomicBool, Arc},
 	time::Duration,
 };
-use utilities::{metrics, task_scope::task_scope, CachedStream};
-
-lazy_static::lazy_static! {
-	static ref CFE_VERSION: SemVer = SemVer {
-		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
-		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
-		patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
-	};
-}
+use utilities::{cached_stream::CachedStream, metrics, task_scope::task_scope};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -67,7 +59,8 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 					&settings.state_chain.signing_key_file,
 					AccountRole::Validator,
 					true,
-					Some((*CFE_VERSION, true)),
+					true,
+					true,
 				)
 				.await?;
 
