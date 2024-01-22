@@ -385,7 +385,7 @@ export async function newAddress(
     case Assets.FLIP:
     case Assets.ETH:
     case Assets.USDC:
-      rawAddress = newEthAddress(seed).toLowerCase();
+      rawAddress = newEthAddress(seed);
       break;
     case Assets.DOT:
       rawAddress = await newDotAddress(seed);

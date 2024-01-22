@@ -78,7 +78,9 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   const observeSwapScheduledEvent = observeEvent(
     ':SwapScheduled',
     chainflip,
-    (event) => event.data.destinationAddress[destinationChain] === useableDestinationAddress,
+    (event) =>
+      event.data.destinationAddress[destinationChain]?.toLowerCase() ===
+      useableDestinationAddress.toLowerCase(),
   );
   console.log(`Running swap ${asset} -> ${swapAsset}`);
   await performSwap(
@@ -156,7 +158,9 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   const observeWithdrawalRequested = observeEvent(
     'swapping:WithdrawalRequested',
     chainflip,
-    (event) => event.data.destinationAddress[chain] === useableWithdrawalAddress,
+    (event) =>
+      event.data.destinationAddress[chain]?.toLowerCase() ===
+      useableWithdrawalAddress.toLowerCase(),
   );
 
   // Only allow one withdrawal at a time to stop nonce issues
