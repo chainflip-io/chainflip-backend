@@ -1239,6 +1239,15 @@ impl_runtime_apis! {
 			}
 		}
 
+		fn cf_witness_safety_margin(chain: ForeignChain) -> Option<u64> {
+			match chain {
+				ForeignChain::Bitcoin => pallet_cf_ingress_egress::Pallet::<Runtime, BitcoinInstance>::witness_safety_margin(),
+				ForeignChain::Ethereum => pallet_cf_ingress_egress::Pallet::<Runtime, EthereumInstance>::witness_safety_margin(),
+				ForeignChain::Polkadot => pallet_cf_ingress_egress::Pallet::<Runtime, PolkadotInstance>::witness_safety_margin().map(Into::into),
+			}
+		}
+
+
 		fn cf_liquidity_provider_info(
 			account_id: AccountId,
 		) -> Option<LiquidityProviderInfo> {
