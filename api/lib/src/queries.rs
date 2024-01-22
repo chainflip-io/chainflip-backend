@@ -45,7 +45,8 @@ impl QueryApi {
 			&state_chain_settings.signing_key_file,
 			AccountRole::Unregistered,
 			false,
-			None,
+			false,
+			false,
 		)
 		.await?;
 

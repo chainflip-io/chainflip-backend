@@ -1757,6 +1757,7 @@ dependencies = [
  "httparse",
  "itertools 0.11.0",
  "jsonrpsee 0.16.3",
+ "lazy_format",
  "lazy_static",
  "mockall",
  "multisig",
