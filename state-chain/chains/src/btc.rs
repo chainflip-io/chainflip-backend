@@ -163,7 +163,8 @@ pub struct BitcoinFeeInfo {
 	sats_per_kilobyte: BtcAmount,
 }
 
-const BYTES_PER_KILOBYTE: BtcAmount = 1024;
+// See https://github.com/bitcoin/bitcoin/blob/master/src/policy/feerate.h#L35
+const BYTES_PER_BTC_KILOBYTE: BtcAmount = 1000;
 
 impl Default for BitcoinFeeInfo {
 	fn default() -> Self {
@@ -173,7 +174,7 @@ impl Default for BitcoinFeeInfo {
 
 impl BitcoinFeeInfo {
 	pub fn new(sats_per_kilobyte: BtcAmount) -> Self {
-		Self { sats_per_kilobyte: max(sats_per_kilobyte, BYTES_PER_KILOBYTE) }
+		Self { sats_per_kilobyte: max(sats_per_kilobyte, BYTES_PER_BTC_KILOBYTE) }
 	}
 
 	pub fn sats_per_kilobyte(&self) -> BtcAmount {
@@ -183,30 +184,30 @@ impl BitcoinFeeInfo {
 	pub fn fee_per_utxo(&self, utxo: &Utxo) -> BtcAmount {
 		if utxo.deposit_address.tapleaf_hash.is_none() {
 			// Our vault utxos (salt = 0) use VAULT_UTXO_SIZE_IN_BYTES vbytes in a Btc transaction
-			self.sats_per_kilobyte.saturating_mul(VAULT_UTXO_SIZE_IN_BYTES) / BYTES_PER_KILOBYTE
+			self.sats_per_kilobyte.saturating_mul(VAULT_UTXO_SIZE_IN_BYTES) / BYTES_PER_BTC_KILOBYTE
 		} else {
 			// Our input utxos are approximately INPUT_UTXO_SIZE_IN_BYTES vbytes each in the Btc
 			// transaction
-			self.sats_per_kilobyte.saturating_mul(INPUT_UTXO_SIZE_IN_BYTES) / BYTES_PER_KILOBYTE
+			self.sats_per_kilobyte.saturating_mul(INPUT_UTXO_SIZE_IN_BYTES) / BYTES_PER_BTC_KILOBYTE
 		}
 	}
 
 	pub fn fee_per_input_utxo(&self) -> BtcAmount {
 		// Our input utxos are approximately INPUT_UTXO_SIZE_IN_BYTES vbytes each in the Btc
 		// transaction
-		self.sats_per_kilobyte.saturating_mul(INPUT_UTXO_SIZE_IN_BYTES) / BYTES_PER_KILOBYTE
+		self.sats_per_kilobyte.saturating_mul(INPUT_UTXO_SIZE_IN_BYTES) / BYTES_PER_BTC_KILOBYTE
 	}
 
 	pub fn fee_per_output_utxo(&self) -> BtcAmount {
 		// Our output utxos are approximately OUTPUT_UTXO_SIZE_IN_BYTES vbytes each in the Btc
 		// transaction
-		self.sats_per_kilobyte.saturating_mul(OUTPUT_UTXO_SIZE_IN_BYTES) / BYTES_PER_KILOBYTE
+		self.sats_per_kilobyte.saturating_mul(OUTPUT_UTXO_SIZE_IN_BYTES) / BYTES_PER_BTC_KILOBYTE
 	}
 
 	pub fn min_fee_required_per_tx(&self) -> BtcAmount {
 		// Minimum size of tx that does not scale with input and output utxos is
 		// MINIMUM_BTC_TX_SIZE_IN_BYTES bytes
-		self.sats_per_kilobyte.saturating_mul(MINIMUM_BTC_TX_SIZE_IN_BYTES) / BYTES_PER_KILOBYTE
+		self.sats_per_kilobyte.saturating_mul(MINIMUM_BTC_TX_SIZE_IN_BYTES) / BYTES_PER_BTC_KILOBYTE
 	}
 }
 
