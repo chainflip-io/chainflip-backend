@@ -96,11 +96,11 @@ where
 
 	pub async fn new<
 		'env,
-		StateChainStream: StreamApi<FINALIZED>,
+		StateChainStream: StreamApi<IS_FINALIZED>,
 		StateChainClient: StorageApi + Send + Sync + 'static,
 		GetItemsFut: Future<Output = MonitoredItems> + Send + 'static,
 		GetItemsGenerator: Fn(state_chain_runtime::Hash) -> GetItemsFut + Send + Sync + Clone + 'static,
-		const FINALIZED: bool,
+		const IS_FINALIZED: bool,
 	>(
 		inner: Inner,
 		scope: &Scope<'env, anyhow::Error>,

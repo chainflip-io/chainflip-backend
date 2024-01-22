@@ -16,7 +16,10 @@ use crate::constants::SIGNED_EXTRINSIC_LIFETIME;
 use self::submission_watcher::ExtrinsicDetails;
 
 use super::{
-	super::{base_rpc_api, stream_api::StreamApi},
+	super::{
+		base_rpc_api,
+		stream_api::{StreamApi, FINALIZED},
+	},
 	common::send_request,
 };
 
@@ -168,7 +171,7 @@ impl SignedExtrinsicClient {
 	pub async fn new<
 		'a,
 		BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
-		BlockStream: StreamApi + Clone,
+		BlockStream: StreamApi<FINALIZED> + Clone,
 	>(
 		scope: &Scope<'a, anyhow::Error>,
 		base_rpc_client: Arc<BaseRpcClient>,

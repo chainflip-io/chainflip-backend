@@ -258,7 +258,11 @@ mod tests {
 	};
 	use cf_primitives::{BroadcastId, NetworkEnvironment};
 	use chainflip_engine::state_chain_observer::client::{
-		chain_api::ChainApi, storage_api, storage_api::StorageApi, stream_api::StreamApi, BlockInfo,
+		chain_api::ChainApi,
+		storage_api,
+		storage_api::StorageApi,
+		stream_api::{StreamApi, FINALIZED, UNFINALIZED},
+		BlockInfo,
 	};
 	use frame_support::storage::types::QueryKindTrait;
 	use jsonrpsee::core::RpcResult;
@@ -312,8 +316,8 @@ mod tests {
 			fn latest_finalized_block(&self) -> BlockInfo;
 			fn latest_unfinalized_block(&self) -> BlockInfo;
 
-			async fn finalized_block_stream(&self) -> Box<dyn StreamApi>;
-			async fn unfinalized_block_stream(&self) -> Box<dyn StreamApi<false>>;
+			async fn finalized_block_stream(&self) -> Box<dyn StreamApi<FINALIZED>>;
+			async fn unfinalized_block_stream(&self) -> Box<dyn StreamApi<UNFINALIZED>>;
 
 			async fn block(&self, block_hash: state_chain_runtime::Hash) -> RpcResult<BlockInfo>;
 		}

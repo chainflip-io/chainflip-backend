@@ -5,7 +5,10 @@ use crate::{
 	dot::retry_rpc::mocks::MockDotHttpRpcClient,
 	eth::retry_rpc::mocks::MockEthRetryRpcClient,
 	state_chain_observer::{
-		client::{extrinsic_api, stream_api::StateChainStream},
+		client::{
+			extrinsic_api,
+			stream_api::{StateChainStream, FINALIZED},
+		},
 		test_helpers::test_header,
 	},
 };
@@ -37,7 +40,7 @@ use utilities::task_scope::task_scope;
 use super::crypto_compat::CryptoCompat;
 
 async fn start_sc_observer<
-	BlockStream: crate::state_chain_observer::client::stream_api::StreamApi,
+	BlockStream: crate::state_chain_observer::client::stream_api::StreamApi<FINALIZED>,
 >(
 	state_chain_client: MockStateChainClient,
 	sc_block_stream: BlockStream,

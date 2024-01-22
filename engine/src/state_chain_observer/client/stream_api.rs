@@ -3,22 +3,25 @@ use utilities::cached_stream::CachedStream;
 
 use super::BlockInfo;
 
-pub trait StreamApi<const FINALIZED: bool = true>:
+pub const FINALIZED: bool = true;
+pub const UNFINALIZED: bool = true;
+
+pub trait StreamApi<const IS_FINALIZED: bool>:
 	CachedStream<Item = BlockInfo> + Send + Sync + Unpin + 'static
 {
 }
 
 #[derive(Clone)]
 #[pin_project::pin_project]
-pub struct StateChainStream<const FINALIZED: bool, S>(#[pin] S);
+pub struct StateChainStream<const IS_FINALIZED: bool, S>(#[pin] S);
 
-impl<const FINALIZED: bool, S: CachedStream> StateChainStream<FINALIZED, S> {
+impl<const IS_FINALIZED: bool, S: CachedStream> StateChainStream<IS_FINALIZED, S> {
 	pub fn new(inner: S) -> Self {
 		Self(inner)
 	}
 }
 
-impl<const FINALIZED: bool, S: Stream> Stream for StateChainStream<FINALIZED, S> {
+impl<const IS_FINALIZED: bool, S: Stream> Stream for StateChainStream<IS_FINALIZED, S> {
 	type Item = <S as Stream>::Item;
 
 	fn poll_next(
@@ -32,7 +35,7 @@ impl<const FINALIZED: bool, S: Stream> Stream for StateChainStream<FINALIZED, S>
 		self.0.size_hint()
 	}
 }
-impl<const FINALIZED: bool, S> CachedStream for StateChainStream<FINALIZED, S>
+impl<const IS_FINALIZED: bool, S> CachedStream for StateChainStream<IS_FINALIZED, S>
 where
 	S: CachedStream,
 {
@@ -40,7 +43,9 @@ where
 		self.0.cache()
 	}
 }
-impl<const FINALIZED: bool, S: CachedStream<Item = BlockInfo> + Unpin + Send + Sync + 'static>
-	StreamApi<FINALIZED> for StateChainStream<FINALIZED, S>
+impl<
+		const IS_FINALIZED: bool,
+		S: CachedStream<Item = BlockInfo> + Unpin + Send + Sync + 'static,
+	> StreamApi<IS_FINALIZED> for StateChainStream<IS_FINALIZED, S>
 {
 }

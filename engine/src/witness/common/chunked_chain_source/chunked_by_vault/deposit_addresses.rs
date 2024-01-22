@@ -24,7 +24,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		'env,
 		StateChainStream,
 		StateChainClient,
-		const FINALIZED: bool,
+		const IS_FINALIZED: bool,
 	>(
 		self,
 		scope: &Scope<'env, anyhow::Error>,
@@ -39,7 +39,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	>
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-		StateChainStream: StreamApi<FINALIZED>,
+		StateChainStream: StreamApi<IS_FINALIZED>,
 		StateChainClient: StorageApi + Send + Sync + 'static,
 	{
 		let state_chain_client_c = state_chain_client.clone();
