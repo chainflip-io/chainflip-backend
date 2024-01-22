@@ -223,14 +223,14 @@ impl QueryApi {
 
 	pub async fn check_witnesses(
 		&self,
-		_block_hash: Option<state_chain_runtime::Hash>,
+		block_hash: Option<state_chain_runtime::Hash>,
 		hash: state_chain_runtime::Hash,
 	) -> Result<Option<FailingWitnessValidators>, anyhow::Error> {
 		let result = self
 			.state_chain_client
 			.base_rpc_client
 			.raw_rpc_client
-			.cf_witness_count(hash)
+			.cf_witness_count(hash, block_hash)
 			.await?;
 
 		Ok(result)

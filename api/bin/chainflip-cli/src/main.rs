@@ -292,8 +292,8 @@ async fn count_witnesses(api: QueryApi, hash: state_chain_runtime::Hash) -> Resu
 	let result = api.check_witnesses(None, hash).await?;
 	match result {
 		Some(value) => {
-			println!("Number of validator who failed to witness it: {}", value.failing_count);
-			println!("List of validator: {:?}", value.validators);
+			println!("Number of authorities who failed to witness it: {}", value.failing_count);
+			println!("List of witness votes:\n {:?}", value.validators);
 		},
 		None => {
 			println!("The hash you provided lead to no results")

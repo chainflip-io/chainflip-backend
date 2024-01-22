@@ -482,11 +482,7 @@ impl<T: Config> Pallet<T> {
 
 	pub fn count_votes(callhash: CallHash) -> Option<Vec<(<T as Chainflip>::ValidatorId, bool)>> {
 		let current_epoch = T::EpochInfo::epoch_index();
-		let votes: BitVec<u8, Msb0> =
-			BitVec::from_vec(Votes::<T>::get(current_epoch, callhash).unwrap_or(vec![]));
-		if votes.is_empty() {
-			return None
-		}
+		let votes: BitVec<u8, Msb0> = BitVec::from_vec(Votes::<T>::get(current_epoch, callhash)?);
 		let authorities = T::EpochInfo::current_authorities();
 		let result: Vec<_> = votes
 			.iter()
