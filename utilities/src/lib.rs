@@ -9,6 +9,9 @@ mod with_std;
 #[cfg(feature = "std")]
 pub use with_std::*;
 
+mod without_std;
+pub use without_std::*;
+
 #[cfg(any(feature = "test-utils", test))]
 pub mod testing;
 
@@ -28,15 +31,6 @@ macro_rules! assert_err {
 	($result:expr) => {
 		$result.unwrap_err()
 	};
-}
-
-/// Forces compile evaluation of expression
-#[macro_export]
-macro_rules! const_eval {
-	($t:ty, $e:expr) => {{
-		static X: $t = $e;
-		X.clone()
-	}};
 }
 
 /// Note that the resulting `threshold` is the maximum number

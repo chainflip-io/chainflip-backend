@@ -1,4 +1,4 @@
-use cf_primitives::{Asset, AssetAmount, AuthorityCount};
+use cf_primitives::AuthorityCount;
 use sp_runtime::{Percent, Permill};
 pub use state_chain_runtime::constants::common::*;
 use state_chain_runtime::{chainflip::Offence, BlockNumber, FlipBalance, SetSizeParameters};
@@ -61,14 +61,6 @@ pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
 	(Offence::MissedAuthorshipSlot, (REPUTATION_PENALTY_LARGE, HEARTBEAT_BLOCK_INTERVAL)),
 	(Offence::FailedToBroadcastTransaction, (REPUTATION_PENALTY_MEDIUM, HEARTBEAT_BLOCK_INTERVAL)),
 	(Offence::GrandpaEquivocation, (REPUTATION_PENALTY_LARGE, HEARTBEAT_BLOCK_INTERVAL * 5)),
-];
-
-pub const MINIMUM_SWAP_AMOUNTS: &[(Asset, AssetAmount)] = &[
-	(Asset::Eth, 580_000_000_000_000u128), // 1usd worth of Eth = 0.00058 * 18 d.p
-	(Asset::Flip, FLIPPERINOS_PER_FLIP),   // 1 Flip
-	(Asset::Usdc, 1_000_000u128),          // USDC = 6 d.p
-	(Asset::Dot, 2_000_000_000u128),       // 1 USD worth of DOT = 0.2 * 10 d.p
-	(Asset::Btc, 390_000u128),             // 1 USD worth of BTC = 0.000039 * 10 d.p
 ];
 
 /// Daily slashing rate 0.1% (of the bond) for offline authority

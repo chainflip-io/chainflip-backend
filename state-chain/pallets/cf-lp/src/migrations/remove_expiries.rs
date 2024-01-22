@@ -1,6 +1,6 @@
 use crate::*;
-use frame_support::{dispatch::Vec, traits::OnRuntimeUpgrade};
-use sp_std::marker::PhantomData;
+use frame_support::traits::OnRuntimeUpgrade;
+use sp_std::{marker::PhantomData, vec::Vec};
 
 pub struct Migration<T: Config>(PhantomData<T>);
 

@@ -19,12 +19,12 @@ use cf_traits::{AccountRoleRegistry, CallDispatchFilter, Chainflip, EpochInfo, S
 use cf_utilities::success_threshold_from_share_count;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	dispatch::{DispatchResultWithPostInfo, GetDispatchInfo, UnfilteredDispatchable},
+	dispatch::GetDispatchInfo,
 	ensure,
-	pallet_prelude::Member,
+	pallet_prelude::{DispatchResultWithPostInfo, Member, RuntimeDebug},
 	storage::with_storage_layer,
-	traits::{EnsureOrigin, Get},
-	Hashable, RuntimeDebug,
+	traits::{EnsureOrigin, Get, UnfilteredDispatchable},
+	Hashable,
 };
 use scale_info::TypeInfo;
 use sp_std::prelude::*;

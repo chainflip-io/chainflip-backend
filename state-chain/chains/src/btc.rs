@@ -7,28 +7,31 @@ extern crate alloc;
 use core::{cmp::max, mem::size_of};
 
 use self::deposit_address::DepositAddress;
-use crate::{Chain, ChainCrypto, DepositChannel, FeeEstimationApi, FeeRefundCalculator};
+use crate::{
+	Chain, ChainCrypto, DepositChannel, FeeEstimationApi, FeeRefundCalculator, RetryPolicy,
+};
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
 use base58::{FromBase58, ToBase58};
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
 pub use cf_primitives::chains::Bitcoin;
 use cf_primitives::{
-	chains::assets, NetworkEnvironment, DEFAULT_FEE_SATS_PER_KILO_BYTE, INPUT_UTXO_SIZE_IN_BYTES,
+	chains::assets, NetworkEnvironment, DEFAULT_FEE_SATS_PER_KILOBYTE, INPUT_UTXO_SIZE_IN_BYTES,
 	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES,
 };
 use cf_utilities::SliceToArray;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	sp_io::hashing::sha2_256,
+	pallet_prelude::RuntimeDebug,
 	sp_runtime::{FixedPointNumber, FixedU128},
 	traits::{ConstBool, ConstU32},
-	BoundedVec, RuntimeDebug,
+	BoundedVec,
 };
 use itertools;
 use libsecp256k1::{curve::*, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_io::hashing::sha2_256;
 use sp_std::{vec, vec::Vec};
 
 /// This salt is used to derive the change address for every vault. i.e. for every epoch.
@@ -127,23 +130,22 @@ impl FeeEstimationApi<Bitcoin> for BitcoinTrackedData {
 		&self,
 		_asset: <Bitcoin as Chain>::ChainAsset,
 	) -> <Bitcoin as Chain>::ChainAmount {
-		BTC_FEE_MULTIPLIER
-			.checked_mul_int(self.btc_fee_info.fee_per_input_utxo)
-			.expect("fee is a u64, multiplier is 1.5, so this should never overflow")
+		BTC_FEE_MULTIPLIER.saturating_mul_int(self.btc_fee_info.fee_per_input_utxo())
 	}
 
 	fn estimate_egress_fee(
 		&self,
 		_asset: <Bitcoin as Chain>::ChainAsset,
 	) -> <Bitcoin as Chain>::ChainAmount {
-		BTC_FEE_MULTIPLIER
-			.checked_mul_int(
-				self.btc_fee_info.min_fee_required_per_tx + self.btc_fee_info.fee_per_output_utxo,
-			)
-			.expect("fee is a u64, multiplier is 1.5, so this should never overflow")
+		BTC_FEE_MULTIPLIER.saturating_mul_int(
+			self.btc_fee_info
+				.min_fee_required_per_tx()
+				.saturating_add(self.btc_fee_info.fee_per_output_utxo()),
+		)
 	}
 }
 
+/// A record of the Bitcoin transaction fee.
 #[derive(
 	Copy,
 	Clone,
@@ -158,47 +160,42 @@ impl FeeEstimationApi<Bitcoin> for BitcoinTrackedData {
 	Deserialize,
 )]
 pub struct BitcoinFeeInfo {
-	pub fee_per_input_utxo: BtcAmount,
-	pub fee_per_output_utxo: BtcAmount,
-	pub min_fee_required_per_tx: BtcAmount,
+	sats_per_kilobyte: BtcAmount,
 }
 
 const BYTES_PER_KILOBYTE: BtcAmount = 1024;
 
 impl Default for BitcoinFeeInfo {
 	fn default() -> Self {
-		Self {
-			fee_per_input_utxo: DEFAULT_FEE_SATS_PER_KILO_BYTE * INPUT_UTXO_SIZE_IN_BYTES /
-				BYTES_PER_KILOBYTE,
-			fee_per_output_utxo: DEFAULT_FEE_SATS_PER_KILO_BYTE * OUTPUT_UTXO_SIZE_IN_BYTES /
-				BYTES_PER_KILOBYTE,
-			min_fee_required_per_tx: DEFAULT_FEE_SATS_PER_KILO_BYTE * MINIMUM_BTC_TX_SIZE_IN_BYTES /
-				BYTES_PER_KILOBYTE,
-		}
+		Self { sats_per_kilobyte: DEFAULT_FEE_SATS_PER_KILOBYTE }
 	}
 }
 
 impl BitcoinFeeInfo {
-	/// Calculate the fees necessary based on the provided fee rate.
-	/// We ensure that a minimum of 1 sat per vByte is set for each of the fees.
-	pub fn new(sats_per_kilo_byte: BtcAmount) -> Self {
-		Self {
-			// Our input utxos are approximately INPUT_UTXO_SIZE_IN_BYTES vbytes each in the Btc
-			// transaction
-			fee_per_input_utxo: max(sats_per_kilo_byte, BYTES_PER_KILOBYTE)
-				.saturating_mul(INPUT_UTXO_SIZE_IN_BYTES) /
-				BYTES_PER_KILOBYTE,
-			// Our output utxos are approximately OUTPUT_UTXO_SIZE_IN_BYTES vbytes each in the Btc
-			// transaction
-			fee_per_output_utxo: max(BYTES_PER_KILOBYTE, sats_per_kilo_byte)
-				.saturating_mul(OUTPUT_UTXO_SIZE_IN_BYTES) /
-				BYTES_PER_KILOBYTE,
-			// Minimum size of tx that does not scale with input and output utxos is
-			// MINIMUM_BTC_TX_SIZE_IN_BYTES bytes
-			min_fee_required_per_tx: max(BYTES_PER_KILOBYTE, sats_per_kilo_byte)
-				.saturating_mul(MINIMUM_BTC_TX_SIZE_IN_BYTES) /
-				BYTES_PER_KILOBYTE,
-		}
+	pub fn new(sats_per_kilobyte: BtcAmount) -> Self {
+		Self { sats_per_kilobyte: max(sats_per_kilobyte, BYTES_PER_KILOBYTE) }
+	}
+
+	pub fn sats_per_kilobyte(&self) -> BtcAmount {
+		self.sats_per_kilobyte
+	}
+
+	pub fn fee_per_input_utxo(&self) -> BtcAmount {
+		// Our input utxos are approximately INPUT_UTXO_SIZE_IN_BYTES vbytes each in the Btc
+		// transaction
+		self.sats_per_kilobyte.saturating_mul(INPUT_UTXO_SIZE_IN_BYTES) / BYTES_PER_KILOBYTE
+	}
+
+	pub fn fee_per_output_utxo(&self) -> BtcAmount {
+		// Our output utxos are approximately OUTPUT_UTXO_SIZE_IN_BYTES vbytes each in the Btc
+		// transaction
+		self.sats_per_kilobyte.saturating_mul(OUTPUT_UTXO_SIZE_IN_BYTES) / BYTES_PER_KILOBYTE
+	}
+
+	pub fn min_fee_required_per_tx(&self) -> BtcAmount {
+		// Minimum size of tx that does not scale with input and output utxos is
+		// MINIMUM_BTC_TX_SIZE_IN_BYTES bytes
+		self.sats_per_kilobyte.saturating_mul(MINIMUM_BTC_TX_SIZE_IN_BYTES) / BYTES_PER_KILOBYTE
 	}
 }
 
@@ -255,6 +252,7 @@ pub enum PreviousOrCurrent {
 	Current,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BitcoinCrypto;
 impl ChainCrypto for BitcoinCrypto {
 	type UtxoChain = ConstBool<true>;
@@ -1059,6 +1057,23 @@ impl SerializeBtc for BitcoinOp {
 	}
 }
 
+pub struct BitcoinRetryPolicy;
+impl RetryPolicy for BitcoinRetryPolicy {
+	type BlockNumber = u32;
+	type AttemptCount = u32;
+
+	fn next_attempt_delay(retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber> {
+		// 1200 State-chain blocks are 2 hours - the maximum time we want to wait between retries.
+		const MAX_BROADCAST_DELAY: u32 = 1200u32;
+		// 25 * 6 = 150 seconds / 2.5 minutes
+		const DELAY_THRESHOLD: u32 = 25u32;
+
+		retry_attempts.checked_sub(DELAY_THRESHOLD).map(|above_threshold| {
+			sp_std::cmp::min(2u32.saturating_pow(above_threshold), MAX_BROADCAST_DELAY)
+		})
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;
@@ -1387,5 +1402,20 @@ mod test {
 		assert!(!ConsolidationParameters::new(0, 0).are_valid());
 		assert!(!ConsolidationParameters::new(1, 1).are_valid());
 		assert!(!ConsolidationParameters::new(0, 10).are_valid());
+	}
+
+	#[test]
+	fn retry_delay_ramps_up() {
+		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(0), None);
+		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(1), None);
+		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(24), None);
+		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(25), Some(1));
+		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(26), Some(2));
+		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(27), Some(4));
+		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(28), Some(8));
+		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(29), Some(16));
+		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(30), Some(32));
+		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(40), Some(1200));
+		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(150), Some(1200));
 	}
 }

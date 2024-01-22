@@ -48,12 +48,21 @@ fn test_btc_utxo_selection() {
 		// dust amount should be ignored in all cases
 		let dust_amount = {
 			use cf_traits::GetBitcoinFeeInfo;
-			<Test as crate::Config>::BitcoinFeeInfo::bitcoin_fee_info().fee_per_input_utxo
+			<Test as crate::Config>::BitcoinFeeInfo::bitcoin_fee_info().fee_per_input_utxo()
 		};
 		add_utxo_amount(dust_amount);
 
 		// select some utxos for a tx
-		const EXPECTED_CHANGE_AMOUNT: crate::BtcAmount = 24770;
+
+		// the default fee is 10 satoshi per byte.
+		// inputs are 78 bytes
+		// outputs are 51 bytes
+		// transactions have a 12 byte base size
+		// the fee for 3 inputs and 2 outputs is thus:
+		// 10*(16 + 3*78 + 2*51) = 3520 satoshi
+		// the expected change is:
+		// 5000 + 10000 + 25000 - 12000 - 3520 = 24480 satoshi
+		const EXPECTED_CHANGE_AMOUNT: crate::BtcAmount = 24480;
 		assert_eq!(
 			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::Some {
 				output_amount: 12000,
@@ -70,7 +79,7 @@ fn test_btc_utxo_selection() {
 		assert_eq!(
 			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectAllForRotation)
 				.unwrap(),
-			(vec![utxo(5000000), utxo(100000), utxo(EXPECTED_CHANGE_AMOUNT),], 5121970)
+			(vec![utxo(5000000), utxo(100000), utxo(EXPECTED_CHANGE_AMOUNT),], 5121470)
 		);
 
 		// add some more utxos to the list
@@ -88,7 +97,7 @@ fn test_btc_utxo_selection() {
 		assert_eq!(
 			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectAllForRotation)
 				.unwrap(),
-			(vec![utxo(5000), utxo(15000),], 17950)
+			(vec![utxo(5000), utxo(15000),], 17770)
 		);
 	});
 }
@@ -118,7 +127,7 @@ fn test_btc_utxo_consolidation() {
 
 		let dust_amount = {
 			use cf_traits::GetBitcoinFeeInfo;
-			<Test as crate::Config>::BitcoinFeeInfo::bitcoin_fee_info().fee_per_input_utxo
+			<Test as crate::Config>::BitcoinFeeInfo::bitcoin_fee_info().fee_per_input_utxo()
 		};
 
 		add_utxo_amount(10000);
@@ -145,7 +154,7 @@ fn test_btc_utxo_consolidation() {
 		// Should select two UTXOs, with all funds (minus fees) going back to us as change
 		assert_eq!(
 			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
-			Some((vec![utxo(10000), utxo(20000)], 27950))
+			Some((vec![utxo(10000), utxo(20000)], 27770))
 		);
 
 		// Any utxo that didn't get consolidated should still be available:

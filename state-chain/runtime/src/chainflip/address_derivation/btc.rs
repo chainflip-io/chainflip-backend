@@ -53,7 +53,7 @@ fn test_address_generation() {
 	use pallet_cf_validator::CurrentEpoch;
 	use pallet_cf_vaults::{CurrentVaultEpoch, Vault, Vaults};
 
-	frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+	sp_io::TestExternalities::new_empty().execute_with(|| {
 		CurrentEpoch::<Runtime>::set(1);
 		Vaults::<Runtime, crate::BitcoinInstance>::insert(
 			1,

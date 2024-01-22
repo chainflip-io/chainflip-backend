@@ -4,10 +4,7 @@
 use super::*;
 
 use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::{
-	dispatch::UnfilteredDispatchable,
-	traits::{Get, OnInitialize},
-};
+use frame_support::traits::{Get, OnInitialize, UnfilteredDispatchable};
 use frame_system::RawOrigin;
 use sp_std::{boxed::Box, collections::btree_set::BTreeSet, vec};
 

@@ -12,11 +12,11 @@ use cf_amm::{
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
 use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwappingApi};
 use frame_support::{
-	dispatch::{GetDispatchInfo, UnfilteredDispatchable},
+	dispatch::GetDispatchInfo,
 	pallet_prelude::*,
 	sp_runtime::{Permill, Saturating, TransactionOutcome},
 	storage::{with_storage_layer, with_transaction_unchecked},
-	traits::{Defensive, OriginTrait, StorageVersion},
+	traits::{Defensive, OriginTrait, StorageVersion, UnfilteredDispatchable},
 	transactional,
 };
 
@@ -1337,7 +1337,7 @@ impl<T: Config> Pallet<T> {
 							) => Error::<T>::MaximumGrossLiquidity,
 							limit_orders::PositionError::Other(
 								limit_orders::MintError::MaximumPoolInstances,
-							) => Error::<T>::AssetRatioUnachieveable,
+							) => Error::<T>::MaximumPoolInstances,
 						}),
 					}?;
 
@@ -1812,118 +1812,83 @@ impl<T: Config> Pallet<T> {
 	pub fn pool_orders(
 		base_asset: any::Asset,
 		quote_asset: any::Asset,
-		lp: &T::AccountId,
+		option_lp: Option<T::AccountId>,
 	) -> Result<PoolOrders<T>, DispatchError> {
 		let pool = Pools::<T>::get(AssetPair::try_new::<T>(base_asset, quote_asset)?)
 			.ok_or(Error::<T>::PoolDoesNotExist)?;
+		let option_lp = option_lp.as_ref();
 		Ok(PoolOrders {
 			limit_orders: AskBidMap::from_sell_map(
 				pool.limit_orders_cache.as_ref().map_with_asset(|asset, limit_orders_cache| {
-					limit_orders_cache
-						.get(lp)
-						.into_iter()
-						.flat_map(|limit_orders| {
-							limit_orders.iter().map(|(id, tick)| {
-								let (collected, position_info) = pool
-									.pool_state
-									.limit_order(&(lp.clone(), *id), asset.sell_order(), *tick)
-									.unwrap();
-								LimitOrder {
-									lp: lp.clone(),
-									id: (*id).into(),
-									tick: *tick,
-									sell_amount: position_info.amount,
-									fees_earned: collected.accumulative_fees,
-									original_sell_amount: collected.original_amount,
-								}
+					cf_utilities::conditional::conditional(
+						option_lp,
+						|lp| {
+							limit_orders_cache
+								.get(lp)
+								.into_iter()
+								.flatten()
+								.map(|(id, tick)| (lp.clone(), *id, *tick))
+						},
+						|()| {
+							limit_orders_cache.iter().flat_map(move |(lp, orders)| {
+								orders.iter().map({
+									let lp = lp.clone();
+									move |(id, tick)| (lp.clone(), *id, *tick)
+								})
 							})
-						})
-						.collect()
-				}),
-			),
-			range_orders: pool
-				.range_orders_cache
-				.get(lp)
-				.into_iter()
-				.flat_map(|range_orders| {
-					range_orders.iter().map(|(id, tick_range)| {
+						},
+					)
+					.filter_map(|(lp, id, tick)| {
 						let (collected, position_info) = pool
 							.pool_state
-							.range_order(&(lp.clone(), *id), tick_range.clone())
+							.limit_order(&(lp.clone(), id), asset.sell_order(), tick)
 							.unwrap();
-						RangeOrder {
-							lp: lp.clone(),
-							id: (*id).into(),
-							range: tick_range.clone(),
-							liquidity: position_info.liquidity,
-							fees_earned: collected.accumulative_fees.into(),
+						if position_info.amount.is_zero() {
+							None
+						} else {
+							Some(LimitOrder {
+								lp: lp.clone(),
+								id: id.into(),
+								tick,
+								sell_amount: position_info.amount,
+								fees_earned: collected.accumulative_fees,
+								original_sell_amount: collected.original_amount,
+							})
 						}
 					})
-				})
-				.collect(),
-		})
-	}
-
-	/// Returns All limit and range orders within the given pool.
-	pub fn all_pool_orders(
-		base_asset: any::Asset,
-		pair_asset: any::Asset,
-	) -> Result<PoolOrders<T>, DispatchError> {
-		let asset_pair = AssetPair::try_new::<T>(base_asset, pair_asset)?;
-		let pool = Pools::<T>::get(asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?;
-		Ok(PoolOrders {
-			limit_orders: AskBidMap::from_sell_map(
-				pool.limit_orders_cache.as_ref().map_with_asset(|asset, limit_order_cache| {
-					limit_order_cache
-						.iter()
-						.flat_map(|(lp, orders)| {
-							orders
-								.iter()
-								.map(|(order_id, tick)| {
-									let (collected, position_info) = pool
-										.pool_state
-										.limit_order(
-											&(lp.clone(), *order_id),
-											asset.sell_order(),
-											*tick,
-										)
-										.unwrap();
-									LimitOrder {
-										lp: lp.clone(),
-										id: (*order_id).into(),
-										tick: *tick,
-										sell_amount: position_info.amount,
-										fees_earned: collected.accumulative_fees,
-										original_sell_amount: collected.original_amount,
-									}
-								})
-								.collect::<Vec<_>>()
-						})
-						.collect()
+					.collect()
 				}),
 			),
-			range_orders: pool
-				.range_orders_cache
-				.iter()
-				.flat_map(|(lp, range_orders)| {
-					range_orders
-						.iter()
-						.map(|(id, tick_range)| {
-							let (collected, position_info) = pool
-								.pool_state
-								.range_order(&(lp.clone(), *id), tick_range.clone())
-								.unwrap();
-							RangeOrder {
-								lp: lp.clone(),
-								id: (*id).into(),
-								range: tick_range.clone(),
-								liquidity: position_info.liquidity,
-								fees_earned: collected.accumulative_fees.into(),
-							}
+			range_orders: cf_utilities::conditional::conditional(
+				option_lp,
+				|lp| {
+					pool.range_orders_cache
+						.get(lp)
+						.into_iter()
+						.flatten()
+						.map(|(id, range)| (lp.clone(), *id, range.clone()))
+				},
+				|()| {
+					pool.range_orders_cache.iter().flat_map(move |(lp, orders)| {
+						orders.iter().map({
+							let lp = lp.clone();
+							move |(id, range)| (lp.clone(), *id, range.clone())
 						})
-						.collect::<Vec<_>>()
-				})
-				.collect(),
+					})
+				},
+			)
+			.map(|(lp, id, tick_range)| {
+				let (collected, position_info) =
+					pool.pool_state.range_order(&(lp.clone(), id), tick_range.clone()).unwrap();
+				RangeOrder {
+					lp: lp.clone(),
+					id: id.into(),
+					range: tick_range.clone(),
+					liquidity: position_info.liquidity,
+					fees_earned: collected.accumulative_fees.into(),
+				}
+			})
+			.collect(),
 		})
 	}
 

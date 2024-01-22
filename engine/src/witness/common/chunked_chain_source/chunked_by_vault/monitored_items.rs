@@ -2,20 +2,22 @@ use std::sync::Arc;
 
 use cf_chains::ChainState;
 use frame_support::CloneNoBound;
-use futures::{Future, FutureExt};
+use futures::Future;
 use futures_util::{stream, StreamExt};
 use state_chain_runtime::PalletInstanceAlias;
 use tokio::sync::watch;
 use utilities::{
 	loop_select,
-	task_scope::{Scope, OR_CANCEL},
+	task_scope::{Scope, UnwrapOrCancel},
 };
 
 use crate::{
-	state_chain_observer::client::{storage_api::StorageApi, StateChainStreamApi},
+	state_chain_observer::client::{
+		storage_api::StorageApi, StateChainStreamApi, STATE_CHAIN_BEHAVIOUR, STATE_CHAIN_CONNECTION,
+	},
 	witness::common::{
 		chain_source::{ChainClient, ChainStream, Header},
-		RuntimeHasChain, STATE_CHAIN_BEHAVIOUR, STATE_CHAIN_CONNECTION,
+		RuntimeHasChain,
 	},
 };
 
@@ -231,7 +233,7 @@ where
 								if let Some(header) = chain_stream.next() => {
 									state.add_headers(std::iter::once(header));
 								} else disable then if state.pending_headers.is_empty() => break None,
-								let _ = state.receiver.changed().map(|result| result.expect(OR_CANCEL)) => {
+								let _ = state.receiver.changed().unwrap_or_cancel() => {
 									// Headers we weren't yet ready to process might be ready now if the chain tracking has progressed.
 									let pending_headers = std::mem::take(&mut state.pending_headers);
 									state.add_headers(pending_headers);
@@ -298,8 +300,8 @@ where
 		let addresses = {
 			let chain_state_and_addresses = receiver
 				.wait_for(|(chain_state, _addresses)| is_header_ready::<Inner>(index, chain_state))
-				.await
-				.expect(OR_CANCEL);
+				.unwrap_or_cancel()
+				.await;
 			let (_option_chain_state, addresses) = &*chain_state_and_addresses;
 
 			(self.filter_fn)(index, addresses)

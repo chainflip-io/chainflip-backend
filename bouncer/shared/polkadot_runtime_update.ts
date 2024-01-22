@@ -12,7 +12,7 @@ import {
   sleep,
   observeBadEvents,
 } from '../shared/utils';
-import { bumpSpecVersion, getCurrentRuntimeVersion } from '../shared/utils/bump_spec_version';
+import { specVersion, getNetworkRuntimeVersion } from './utils/spec_version';
 import { handleDispatchError, submitAndGetEvent } from '../shared/polkadot_utils';
 import { testSwap } from './swapping';
 
@@ -136,7 +136,7 @@ export async function bumpAndBuildPolkadotRuntime(): Promise<[string, number]> {
   const projectPath = process.cwd();
   // tmp/ is ignored in the bouncer .gitignore file.
   const workspacePath = path.join(projectPath, 'tmp/polkadot');
-  const nextSpecVersion = (await getCurrentRuntimeVersion(polkadotEndpoint)).specVersion + 1;
+  const nextSpecVersion = (await getNetworkRuntimeVersion(polkadotEndpoint)).specVersion + 1;
   console.log('Current polkadot spec_version: ' + nextSpecVersion);
 
   // No need to compile if the version we need is the pre-compiled version.
@@ -170,7 +170,7 @@ export async function bumpAndBuildPolkadotRuntime(): Promise<[string, number]> {
   console.log('Updating polkadot source');
   execSync(`git pull`, { cwd: workspacePath });
 
-  await bumpSpecVersion(`${workspacePath}/runtime/polkadot/src/lib.rs`, false, nextSpecVersion);
+  await specVersion(`${workspacePath}/runtime/polkadot/src/lib.rs`, 'write', nextSpecVersion);
 
   // Compile polkadot runtime
   console.log('Compiling polkadot...');
@@ -246,7 +246,7 @@ export async function testPolkadotRuntimeUpdate(): Promise<void> {
   await pushPolkadotRuntimeUpdate(wasmPath);
 
   // Check the polkadot spec version has changed
-  const postUpgradeSpecVersion = await getCurrentRuntimeVersion(polkadotEndpoint);
+  const postUpgradeSpecVersion = await getNetworkRuntimeVersion(polkadotEndpoint);
   if (postUpgradeSpecVersion.specVersion !== expectedSpecVersion) {
     throw new Error(
       `Polkadot runtime update failed. Currently at version ${postUpgradeSpecVersion.specVersion}, expected to be at ${expectedSpecVersion}`,

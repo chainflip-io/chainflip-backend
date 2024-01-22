@@ -1,7 +1,7 @@
 //! Contains tests related to liquidity, pools and swapping
 use crate::{
 	genesis,
-	network::{setup_account_and_peer_mapping, Cli, Network},
+	network::{fund_authorities_and_join_auction, setup_account_and_peer_mapping, Cli, Network},
 	witness_call,
 };
 use cf_amm::{
@@ -13,8 +13,9 @@ use cf_chains::{
 	assets::eth::Asset as EthAsset,
 	eth::{api::EthereumApi, EthereumTrackedData},
 	evm::TransactionFee,
-	CcmChannelMetadata, CcmDepositMetadata, Chain, ChainState, Ethereum, ExecutexSwapAndCall,
-	ForeignChain, ForeignChainAddress, SwapOrigin, TransactionBuilder, TransferAssetParams,
+	CcmChannelMetadata, CcmDepositMetadata, Chain, ChainState, DefaultRetryPolicy, Ethereum,
+	ExecutexSwapAndCall, ForeignChain, ForeignChainAddress, RetryPolicy, SwapOrigin,
+	TransactionBuilder, TransferAssetParams,
 };
 use cf_primitives::{
 	AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, GENESIS_EPOCH, STABLE_ASSET,
@@ -27,8 +28,8 @@ use frame_support::{
 	traits::{OnFinalize, OnIdle, OnNewAccount},
 };
 use pallet_cf_broadcast::{
-	AwaitingBroadcast, BroadcastAttemptId, BroadcastIdCounter, RequestFailureCallbacks,
-	RequestSuccessCallbacks, ThresholdSignatureData, TransactionSigningAttempt,
+	AwaitingBroadcast, BroadcastIdCounter, RequestFailureCallbacks, RequestSuccessCallbacks,
+	ThresholdSignatureData,
 };
 use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall};
 use pallet_cf_pools::{OrderId, RangeOrderSize};
@@ -741,30 +742,12 @@ fn can_resign_failed_ccm() {
 		.build()
 		.execute_with(|| {
 			// Setup environments, and rotate into the next epoch.
-			let (mut testnet, backup_nodes) =
-				Network::create(10, &Validator::current_authorities());
-			for node in &backup_nodes {
-				testnet.state_chain_gateway_contract.fund_account(
-					node.clone(),
-					genesis::GENESIS_BALANCE,
-					GENESIS_EPOCH,
-				);
-			}
-			testnet.move_forward_blocks(1);
-			for node in backup_nodes.clone() {
-				Cli::register_as_validator(&node);
-				setup_account_and_peer_mapping(&node);
-				Cli::start_bidding(&node);
-			}
+			let (mut testnet, _genesis, _backup_nodes) =
+				fund_authorities_and_join_auction(MAX_AUTHORITIES);
 
 			testnet.move_to_the_next_epoch();
-			let tx_out_id = AwaitingBroadcast::<Runtime, Instance1>::get(BroadcastAttemptId {
-				broadcast_id: 1,
-				attempt_count: 0,
-			})
-			.unwrap()
-			.broadcast_attempt
-			.transaction_out_id;
+			let tx_out_id =
+				AwaitingBroadcast::<Runtime, Instance1>::get(1).unwrap().transaction_out_id;
 
 			for node in Validator::current_authorities() {
 				// Broadcast success for id 1, which is the rotation transaction.
@@ -811,25 +794,29 @@ fn can_resign_failed_ccm() {
 			let starting_epoch = Validator::current_epoch();
 			testnet.move_forward_blocks(3);
 			let broadcast_id = BroadcastIdCounter::<Runtime, Instance1>::get();
-			let mut broadcast_attempt_id = BroadcastAttemptId { broadcast_id, attempt_count: 0 };
 
 			// Fail the broadcast
 			for _ in Validator::current_authorities() {
-				let TransactionSigningAttempt { broadcast_attempt: _attempt, nominee } =
-					AwaitingBroadcast::<Runtime, Instance1>::get(broadcast_attempt_id)
-						.unwrap_or_else(|| {
-							panic!(
-								"Failed to get the transaction signing attempt for {:?}.",
-								broadcast_attempt_id,
-							)
-						});
+				let nominee = AwaitingBroadcast::<Runtime, Instance1>::get(broadcast_id)
+					.unwrap_or_else(|| {
+						panic!(
+							"Failed to get the transaction signing attempt for {:?}.",
+							broadcast_id,
+						)
+					})
+					.nominee
+					.unwrap();
 
-				assert_ok!(EthereumBroadcaster::transaction_signing_failure(
+				assert_ok!(EthereumBroadcaster::transaction_failed(
 					RuntimeOrigin::signed(nominee),
-					broadcast_attempt_id,
+					broadcast_id,
 				));
-				testnet.move_forward_blocks(1);
-				broadcast_attempt_id = broadcast_attempt_id.peek_next();
+				testnet.move_forward_blocks(
+					DefaultRetryPolicy::next_attempt_delay(EthereumBroadcaster::attempt_count(
+						broadcast_id,
+					))
+					.unwrap(),
+				);
 			}
 
 			// Upon broadcast failure, the Failure callback is called, and failed CCM is stored.

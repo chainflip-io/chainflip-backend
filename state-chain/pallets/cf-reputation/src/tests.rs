@@ -169,25 +169,25 @@ frame_support::parameter_types! {
 #[test]
 fn reporting_any_offence_should_penalise_reputation_points_and_suspend() {
 	new_test_ext().execute_with(|| {
-		let offline_test = |offence: AllOffences, who: &[u64]| {
+		let offline_test = |offence: AllOffences, who: Vec<u64>| {
 			let penalty = ReputationPallet::resolve_penalty_for(offence);
-			let points_before = who.iter().map(reputation_points).collect::<Vec<_>>();
-			<ReputationPallet as OffenceReporter>::report_many(offence, who);
-			for (id, points) in who.iter().zip(points_before) {
+			let points_before = who.clone().iter().map(reputation_points).collect::<Vec<_>>();
+			<ReputationPallet as OffenceReporter>::report_many(offence, who.clone());
+			for (id, points) in who.clone().into_iter().zip(points_before) {
 				assert_reputation!(id, points - penalty.reputation);
 			}
 			assert_eq!(
 				ReputationPallet::validators_suspended_for(&[offence]),
 				if !penalty.suspension.is_zero() {
-					who.iter().cloned().collect::<BTreeSet<_>>()
+					who.into_iter().collect::<BTreeSet<_>>()
 				} else {
 					BTreeSet::default()
 				}
 			);
 		};
-		offline_test(AllOffences::MissedHeartbeat, &[ALICE]);
-		offline_test(AllOffences::ForgettingYourYubiKey, &[ALICE, BOB]);
-		offline_test(AllOffences::NotLockingYourComputer, &[BOB]);
+		offline_test(AllOffences::MissedHeartbeat, vec![ALICE]);
+		offline_test(AllOffences::ForgettingYourYubiKey, vec![ALICE, BOB]);
+		offline_test(AllOffences::NotLockingYourComputer, vec![BOB]);
 
 		// Heartbeats have no explicit suspension.
 		assert_eq!(
@@ -211,7 +211,7 @@ fn suspensions() {
 		const SUSPENSION_DURATION: u64 = 10;
 		let first_suspend = [1, 2, 3];
 		ReputationPallet::suspend_all(
-			&first_suspend,
+			first_suspend,
 			&AllOffences::ForgettingYourYubiKey,
 			SUSPENSION_DURATION,
 		);
@@ -225,7 +225,7 @@ fn suspensions() {
 		// overlapping suspensions, 1 not included
 		let second_suspend = [2, 3, 4, 6];
 		ReputationPallet::suspend_all(
-			&second_suspend,
+			second_suspend,
 			&AllOffences::ForgettingYourYubiKey,
 			SUSPENSION_DURATION,
 		);
@@ -262,9 +262,9 @@ fn forgiveness() {
 	}
 
 	new_test_ext().execute_with(|| {
-		ReputationPallet::suspend_all(&[1, 2, 3], &AllOffences::ForgettingYourYubiKey, 10);
-		ReputationPallet::suspend_all(&[1, 2], &AllOffences::NotLockingYourComputer, u64::MAX);
-		ReputationPallet::suspend_all(&[1], &AllOffences::MissedHeartbeat, 15);
+		ReputationPallet::suspend_all([1, 2, 3], &AllOffences::ForgettingYourYubiKey, 10);
+		ReputationPallet::suspend_all([1, 2], &AllOffences::NotLockingYourComputer, u64::MAX);
+		ReputationPallet::suspend_all([1], &AllOffences::MissedHeartbeat, 15);
 		assert_eq!(
 			Pallet::<Test>::validators_suspended_for(AllOffences::OFFENCES),
 			[1, 2, 3].into_iter().collect(),
@@ -294,12 +294,12 @@ fn dont_report_in_safe_mode() {
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
 			reputation: crate::PalletSafeMode { reporting_enabled: false },
 		});
-		ReputationPallet::report_many(AllOffences::NotLockingYourComputer, &[marcello]);
+		ReputationPallet::report(AllOffences::NotLockingYourComputer, marcello);
 		assert_reputation!(marcello, 0);
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
 			reputation: crate::PalletSafeMode { reporting_enabled: true },
 		});
-		ReputationPallet::report_many(AllOffences::NotLockingYourComputer, &[marcello]);
+		ReputationPallet::report(AllOffences::NotLockingYourComputer, marcello);
 		assert!(ReputationPallet::reputation(marcello).reputation_points < 0);
 	});
 }

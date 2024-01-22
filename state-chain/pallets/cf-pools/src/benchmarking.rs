@@ -8,9 +8,8 @@ use cf_traits::{AccountRoleRegistry, LpBalanceApi};
 use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::{
 	assert_ok,
-	dispatch::UnfilteredDispatchable,
 	sp_runtime::traits::One,
-	traits::{EnsureOrigin, OnNewAccount},
+	traits::{EnsureOrigin, OnNewAccount, UnfilteredDispatchable},
 };
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 

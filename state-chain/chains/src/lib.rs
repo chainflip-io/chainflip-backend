@@ -8,13 +8,12 @@ use address::{AddressDerivationApi, AddressDerivationError, ToHumanreadableAddre
 use cf_primitives::{AssetAmount, BroadcastId, ChannelId, EthAmount, TransactionHash};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
-	pallet_prelude::{MaybeSerializeDeserialize, Member},
+	pallet_prelude::{MaybeSerializeDeserialize, Member, RuntimeDebug},
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, CheckedSub},
 		BoundedVec, DispatchError,
 	},
-	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, RuntimeDebug,
-	StorageHasher,
+	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, StorageHasher,
 };
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -486,5 +485,23 @@ impl<C: Chain> FeeEstimationApi<C> for () {
 
 	fn estimate_egress_fee(&self, _asset: C::ChainAsset) -> C::ChainAmount {
 		Default::default()
+	}
+}
+
+/// Defines an interface for a retry policy.
+pub trait RetryPolicy {
+	type BlockNumber;
+	type AttemptCount;
+	/// Returns the delay for the given attempt count. If None, no delay is applied.
+	fn next_attempt_delay(retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber>;
+}
+
+pub struct DefaultRetryPolicy;
+impl RetryPolicy for DefaultRetryPolicy {
+	type BlockNumber = u32;
+	type AttemptCount = u32;
+
+	fn next_attempt_delay(_retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber> {
+		Some(10u32)
 	}
 }

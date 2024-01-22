@@ -4,7 +4,8 @@ use std::{
 };
 
 use crate::{
-	common::Signal, state_chain_observer::client, witness::common::STATE_CHAIN_CONNECTION,
+	common::Signal,
+	state_chain_observer::client::{self, STATE_CHAIN_CONNECTION},
 };
 use cf_chains::Chain;
 use cf_primitives::{AccountId, EpochIndex};

@@ -167,7 +167,7 @@ decl_runtime_apis!(
 			tick_range: Range<Tick>,
 			liquidity: Liquidity,
 		) -> Result<AssetsMap<Amount>, DispatchErrorWithMessage>;
-		fn cf_min_swap_amount(asset: Asset) -> AssetAmount;
+
 		fn cf_max_swap_amount(asset: Asset) -> Option<AssetAmount>;
 		fn cf_min_deposit_amount(asset: Asset) -> AssetAmount;
 		fn cf_prewitness_swaps(from: Asset, to: Asset) -> Option<Vec<AssetAmount>>;

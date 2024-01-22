@@ -11,10 +11,11 @@ function tryRuntimeCommand(runtimePath: string, blockParam: string, networkUrl: 
       `try-runtime --runtime ${runtimePath} on-runtime-upgrade --disable-spec-version-check --disable-idempotency-checks --checks all ${blockParam} --uri ${networkUrl}`,
       { stdio: 'ignore' },
     );
-  } catch (error) {
-    console.log('Error:', error);
-    console.log('Standard Error Output:', error.stderr);
-    console.log('Standard Output:', error.stdout);
+    console.log(`try-runtime success for blockParam ${blockParam}`);
+  } catch (e) {
+    console.error(`try-runtime failed for blockParam ${blockParam}`);
+    console.error(e);
+    process.exit(-1);
   }
 }
 
@@ -39,15 +40,7 @@ export async function tryRuntimeUpgrade(
     let blockHash = await api.rpc.chain.getBlockHash(blockNumber);
     while (!blockHash.eq(latestBlock)) {
       blockHash = await api.rpc.chain.getBlockHash(blockNumber);
-
-      try {
-        tryRuntimeCommand(runtimePath, `live --at ${blockHash}`, networkUrl);
-        console.log(`try-runtime success for block ${blockNumber}, block hash: ${blockHash}`);
-      } catch (e) {
-        console.error(`try-runtime failed for block ${blockNumber}, block hash: ${blockHash}`);
-        console.error(e);
-        process.exit(-1);
-      }
+      tryRuntimeCommand(runtimePath, `live --at ${blockHash}`, networkUrl);
 
       blockNumber++;
     }
@@ -59,14 +52,7 @@ export async function tryRuntimeUpgrade(
     let nextHash = await api.rpc.chain.getBlockHash();
 
     while (blocksProcessed < lastN) {
-      try {
-        tryRuntimeCommand(runtimePath, `live --at ${nextHash}`, networkUrl);
-        console.log(`try-runtime success for block hash: ${nextHash}`);
-      } catch (e) {
-        console.error(`try-runtime failed for block hash: ${nextHash}`);
-        console.error(e);
-        process.exit(-1);
-      }
+      tryRuntimeCommand(runtimePath, `live --at ${nextHash}`, networkUrl);
 
       const currentBlockHeader = await api.rpc.chain.getHeader(nextHash);
       nextHash = currentBlockHeader.parentHash;
