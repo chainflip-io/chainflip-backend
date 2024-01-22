@@ -155,7 +155,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		signing_key_file: &std::path::Path,
 		required_role: AccountRole,
 		wait_for_required_role: bool,
-		wait_for_version: bool,
+		wait_for_required_version: bool,
 		submit_cfe_version: bool,
 	) -> Result<(impl StreamApi<FINALIZED> + Clone, impl StreamApi<UNFINALIZED> + Clone, Arc<Self>)>
 	{
@@ -171,7 +171,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				wait_for_required_role,
 				submit_cfe_version,
 			},
-			wait_for_version,
+			wait_for_required_version,
 		)
 		.await
 	}
