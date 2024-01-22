@@ -5,16 +5,16 @@ use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi,
 };
 use codec::Decode;
+use custom_rpc::CustomApiClient;
 use frame_support::sp_runtime::DigestItem;
 use pallet_cf_ingress_egress::DepositChannelDetails;
 use pallet_cf_validator::RotationPhase;
 use serde::Deserialize;
 use sp_consensus_aura::{Slot, AURA_ENGINE_ID};
-use state_chain_runtime::PalletInstanceAlias;
+use state_chain_runtime::{runtime_apis::FailingWitnessValidators, PalletInstanceAlias};
 use std::{collections::BTreeMap, ops::Deref, sync::Arc};
 use tracing::log;
 use utilities::task_scope;
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwapChannelInfo<C: Chain> {
 	deposit_address: <C::ChainAccount as ToHumanreadableAddress>::Humanreadable,
@@ -45,7 +45,8 @@ impl QueryApi {
 			&state_chain_settings.signing_key_file,
 			AccountRole::Unregistered,
 			false,
-			None,
+			false,
+			false,
 		)
 		.await?;
 
@@ -218,6 +219,21 @@ impl QueryApi {
 		let index = current_validators.iter().position(|account| account == &account_id).unwrap();
 
 		result.next_block_in = Some(compute_distance(index, current_relative_slot, validator_len));
+		Ok(result)
+	}
+
+	pub async fn check_witnesses(
+		&self,
+		block_hash: Option<state_chain_runtime::Hash>,
+		hash: state_chain_runtime::Hash,
+	) -> Result<Option<FailingWitnessValidators>, anyhow::Error> {
+		let result = self
+			.state_chain_client
+			.base_rpc_client
+			.raw_rpc_client
+			.cf_witness_count(hash, block_hash)
+			.await?;
+
 		Ok(result)
 	}
 }

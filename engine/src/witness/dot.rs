@@ -26,7 +26,9 @@ use crate::{
 	db::PersistentKeyDB,
 	dot::retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
 	state_chain_observer::client::{
-		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
+		extrinsic_api::signed::SignedExtrinsicApi,
+		storage_api::StorageApi,
+		stream_api::{StreamApi, FINALIZED},
 		STATE_CHAIN_CONNECTION,
 	},
 	witness::common::chain_source::extension::ChainSourceExt,
@@ -178,7 +180,7 @@ pub async fn start<StateChainClient, ProcessCall, ProcessingFut>(
 	dot_client: DotRetryRpcClient,
 	process_call: ProcessCall,
 	state_chain_client: Arc<StateChainClient>,
-	state_chain_stream: impl StateChainStreamApi + Clone,
+	state_chain_stream: impl StreamApi<FINALIZED> + Clone,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>

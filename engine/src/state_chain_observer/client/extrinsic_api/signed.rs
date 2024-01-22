@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use cf_primitives::SemVer;
 use futures::StreamExt;
 use futures_util::FutureExt;
 use serde::{Deserialize, Serialize};
@@ -17,7 +16,10 @@ use crate::constants::SIGNED_EXTRINSIC_LIFETIME;
 use self::submission_watcher::ExtrinsicDetails;
 
 use super::{
-	super::{base_rpc_api, StateChainStreamApi},
+	super::{
+		base_rpc_api,
+		stream_api::{StreamApi, FINALIZED},
+	},
 	common::send_request,
 };
 
@@ -169,13 +171,12 @@ impl SignedExtrinsicClient {
 	pub async fn new<
 		'a,
 		BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
-		BlockStream: StateChainStreamApi + Clone,
+		BlockStream: StreamApi<FINALIZED> + Clone,
 	>(
 		scope: &Scope<'a, anyhow::Error>,
 		base_rpc_client: Arc<BaseRpcClient>,
 		account_nonce: Nonce,
 		signer: signer::PairSigner<sp_core::sr25519::Pair>,
-		check_unfinalized_version: Option<SemVer>,
 		genesis_hash: H256,
 		state_chain_stream: &mut BlockStream,
 	) -> Result<Self> {
@@ -203,7 +204,6 @@ impl SignedExtrinsicClient {
 							genesis_hash,
 							SIGNED_EXTRINSIC_LIFETIME,
 							base_rpc_client.clone(),
-							check_unfinalized_version
 						);
 
 					utilities::loop_select! {

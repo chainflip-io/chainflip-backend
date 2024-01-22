@@ -30,7 +30,8 @@ use state_chain_runtime::{
 	chainflip::Offence,
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
-		CustomRuntimeApi, DispatchErrorWithMessage, LiquidityProviderInfo, RuntimeApiAccountInfoV2,
+		CustomRuntimeApi, DispatchErrorWithMessage, FailingWitnessValidators,
+		LiquidityProviderInfo, RuntimeApiAccountInfoV2,
 	},
 };
 use std::{
@@ -485,6 +486,13 @@ pub trait CustomApi {
 		&self,
 		broadcast_id: BroadcastId,
 	) -> RpcResult<Option<<cf_chains::Ethereum as Chain>::Transaction>>;
+
+	#[method(name = "witness_count")]
+	fn cf_witness_count(
+		&self,
+		hash: state_chain_runtime::Hash,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<FailingWitnessValidators>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1116,6 +1124,17 @@ where
 		self.client
 			.runtime_api()
 			.cf_failed_call(self.unwrap_or_best(None), broadcast_id)
+			.map_err(to_rpc_error)
+	}
+
+	fn cf_witness_count(
+		&self,
+		hash: state_chain_runtime::Hash,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<FailingWitnessValidators>> {
+		self.client
+			.runtime_api()
+			.cf_witness_count(self.unwrap_or_best(at), pallet_cf_witnesser::CallHash(hash.into()))
 			.map_err(to_rpc_error)
 	}
 }
