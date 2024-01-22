@@ -285,6 +285,8 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 						})
 						.boxed();
 
+				// Note underlying stream ends in Error, therefore it is guaranteed try_for_each
+				// will not exit successfully until a compatible block is found
 				incompatible_blocks
 					.try_for_each(move |_| futures::future::ready(Ok::<_, anyhow::Error>(())))
 					.await?;
