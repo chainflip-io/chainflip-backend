@@ -951,7 +951,7 @@ impl<T: SerializeBtc> SerializeBtc for &[T] {
 ///
 /// For reference see https://en.bitcoin.it/wiki/Script
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
-enum BitcoinOp {
+pub enum BitcoinOp {
 	PushUint { value: u32 },
 	PushBytes { bytes: BoundedVec<u8, ConstU32<MAX_SEGWIT_PROGRAM_BYTES>> },
 	Drop,
@@ -967,7 +967,7 @@ enum BitcoinOp {
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
-struct BitcoinScript {
+pub struct BitcoinScript {
 	bytes: BoundedVec<u8, ConstU32<MAX_BITCOIN_SCRIPT_LENGTH>>,
 }
 

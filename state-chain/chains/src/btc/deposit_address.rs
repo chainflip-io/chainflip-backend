@@ -6,9 +6,9 @@ use super::*;
 pub struct DepositAddress {
 	pub pubkey_x: [u8; 32],
 	pub salt: u32,
-	tweaked_pubkey_bytes: Option<[u8; 33]>,
+	pub tweaked_pubkey_bytes: Option<[u8; 33]>,
 	pub tapleaf_hash: Option<Hash>,
-	unlock_script: Option<BitcoinScript>,
+	pub unlock_script: Option<BitcoinScript>,
 }
 
 fn unlock_script(pubkey_x: [u8; 32], salt: u32) -> BitcoinScript {
