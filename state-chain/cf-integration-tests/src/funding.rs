@@ -5,13 +5,14 @@ use crate::{
 
 use super::{genesis, network, *};
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
-use cf_traits::{offence_reporting::OffenceReporter, AccountInfo, Bid, EpochInfo};
+use cf_traits::{offence_reporting::OffenceReporter, AccountInfo, Bid, EpochInfo, Heartbeat};
 use mock_runtime::MIN_FUNDING;
 use pallet_cf_funding::pallet::Error;
 use pallet_cf_validator::{Backups, CurrentRotationPhase};
 use sp_runtime::{FixedPointNumber, FixedU64};
 use state_chain_runtime::chainflip::{
-	backup_node_rewards::calculate_backup_rewards, calculate_account_apy, Offence,
+	backup_node_rewards::calculate_backup_rewards, calculate_account_apy, ChainflipHeartbeat,
+	Offence,
 };
 
 use cf_test_utilities::assert_events_match;
@@ -185,15 +186,6 @@ fn backup_reward_is_calculated_linearly() {
 				// Reward per heartbeat should be scaled linearly.
 				assert_eq!(rewards_per_n_heartbeats[i].1, rewards_per_heartbeat[i].1 * N);
 			}
-
-			assert_events_match!(
-				Runtime,
-				RuntimeEvent::Emissions(
-					pallet_cf_emissions::Event::BackupRewardsDistributed {
-						..
-					},
-				) => ()
-			);
 		});
 }
 
@@ -282,5 +274,34 @@ fn apy_can_be_above_100_percent() {
 				FixedU64::from_rational(reward, total).checked_mul_int(10_000u32).unwrap();
 			assert_eq!(apy_basis_point, 241_377_727u32);
 			assert_eq!(calculate_account_apy(&validator), Some(apy_basis_point));
+		});
+}
+
+#[test]
+fn backup_rewards_event_gets_emitted_on_heartbeat_interval() {
+	const EPOCH_BLOCKS: u32 = 1_000;
+	const MAX_AUTHORITIES: u32 = 2;
+	const NUM_BACKUPS: u32 = 2;
+	super::genesis::default()
+		.blocks_per_epoch(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.build()
+		.execute_with(|| {
+			let (mut network, _, _) =
+				crate::authorities::fund_authorities_and_join_auction(NUM_BACKUPS);
+			network.move_to_the_next_epoch();
+
+			System::reset_events();
+
+			ChainflipHeartbeat::on_heartbeat_interval();
+
+			assert_events_match!(
+				Runtime,
+				RuntimeEvent::Emissions(
+					pallet_cf_emissions::Event::BackupRewardsDistributed {
+						..
+					},
+				) => ()
+			);
 		});
 }
