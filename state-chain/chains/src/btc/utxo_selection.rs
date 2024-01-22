@@ -133,7 +133,7 @@ fn test_utxo_selection() {
 		}
 	}
 
-	let fee_info = BitcoinFeeInfo { sats_per_kilobyte: 1024 };
+	let fee_info = BitcoinFeeInfo { sats_per_kilobyte: 1000 };
 
 	// Empty utxo list as input should return Option::None.
 	test_case(&Vec::<Utxo>::new(), &fee_info, 0, None);
@@ -182,7 +182,7 @@ fn test_utxo_selection() {
 	// list of available utxos for future use.
 	test_case(
 		&available_utxos,
-		&BitcoinFeeInfo { sats_per_kilobyte: 2048 },
+		&BitcoinFeeInfo { sats_per_kilobyte: 2000 },
 		190,
 		Some((
 			vec![

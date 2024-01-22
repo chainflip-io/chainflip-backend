@@ -59,7 +59,7 @@ pub const FLIPPERINOS_PER_FLIP: FlipBalance = 10u128.pow(FLIP_DECIMALS);
 
 // Bitcoin default fee, in sats per bytes, to be used if current fee is not available via chain
 // tracking.
-pub const DEFAULT_FEE_SATS_PER_KILOBYTE: u64 = 102400;
+pub const DEFAULT_FEE_SATS_PER_KILOBYTE: u64 = 100000;
 
 // To spend one of our deposit UTXOs, we need:
 // 32 bytes for the TX ID
