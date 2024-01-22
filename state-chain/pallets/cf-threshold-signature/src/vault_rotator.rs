@@ -192,7 +192,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 			PendingVaultRotation::<T, I>::get()
 		{
 			let maybe_active_epoch_key = Self::active_epoch_key();
-			let _activation_tx_broadcast_ids = T::VaultActivator::activate(
+			T::VaultActivator::activate(
 				new_public_key,
 				maybe_active_epoch_key.map(|EpochKey { key, .. }| key),
 			);

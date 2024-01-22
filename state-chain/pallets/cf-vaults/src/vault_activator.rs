@@ -18,20 +18,15 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 		}
 	}
 
-	fn activate(
-		new_public_key: AggKeyFor<T, I>,
-		maybe_old_public_key: Option<AggKeyFor<T, I>>,
-	) -> Vec<u32> {
+	fn activate(new_public_key: AggKeyFor<T, I>, maybe_old_public_key: Option<AggKeyFor<T, I>>) {
 		if let Some(key) = maybe_old_public_key {
 			match <T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
 				Some(key),
 				new_public_key,
 			) {
 				Ok(activation_call) => {
-					let activation_tx_broadcast_id =
-						T::Broadcaster::threshold_sign_and_broadcast_rotation_tx(activation_call);
+					T::Broadcaster::threshold_sign_and_broadcast_rotation_tx(activation_call);
 					Self::activate_new_key_for_chain(T::ChainTracking::get_block_height());
-					return vec![activation_tx_broadcast_id]
 				},
 				Err(SetAggKeyWithAggKeyError::NotRequired) => {
 					// This can happen if, for example, on a utxo chain there are no funds that
@@ -52,7 +47,6 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 			);
 			Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation { new_public_key });
 		}
-		vec![]
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

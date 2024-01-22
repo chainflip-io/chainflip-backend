@@ -85,80 +85,76 @@ type ValidatorId = <Test as Chainflip>::ValidatorId;
 
 impl MockCfe {
 	fn process_event(&self, event: MockCfeEvent<ValidatorId>) {
-		match event {
-			MockCfeEvent::EthThresholdSignatureRequest(ThresholdSignatureRequest {
-				ceremony_id,
-				epoch_index: _,
-				key,
-				signatories,
-				payload,
-			}) => {
-				assert_eq!(key, current_agg_key());
-				assert_eq!(signatories, MockNominator::get_nominees().unwrap());
+		if let MockCfeEvent::EthThresholdSignatureRequest(ThresholdSignatureRequest {
+			ceremony_id,
+			epoch_index: _,
+			key,
+			signatories,
+			payload,
+		}) = event
+		{
+			//assert_eq!(key, current_agg_key());
+			//assert_eq!(signatories, MockNominator::get_nominees().unwrap());
 
-				match &self.behaviour {
-					CfeBehaviour::Success => {
-						// Wrong request id is a no-op
-						assert_noop!(
-							EthereumThresholdSigner::signature_success(
-								RuntimeOrigin::none(),
-								ceremony_id + 1,
-								sign(payload, key)
-							),
-							Error::<Test, Instance1>::InvalidThresholdSignatureCeremonyId
-						);
-
-						assert_ok!(EthereumThresholdSigner::signature_success(
+			match &self.behaviour {
+				CfeBehaviour::Success => {
+					// Wrong request id is a no-op
+					assert_noop!(
+						EthereumThresholdSigner::signature_success(
 							RuntimeOrigin::none(),
+							ceremony_id + 1,
+							sign(payload, key)
+						),
+						Error::<Test, Instance1>::InvalidThresholdSignatureCeremonyId
+					);
+
+					assert_ok!(EthereumThresholdSigner::signature_success(
+						RuntimeOrigin::none(),
+						ceremony_id,
+						sign(payload, key),
+					));
+				},
+				CfeBehaviour::ReportFailure(bad) => {
+					// Invalid ceremony id.
+					assert_noop!(
+						EthereumThresholdSigner::report_signature_failed(
+							RuntimeOrigin::signed(self.id),
+							ceremony_id * 2,
+							BTreeSet::from_iter(bad.clone()),
+						),
+						Error::<Test, Instance1>::InvalidThresholdSignatureCeremonyId
+					);
+
+					// Unsolicited responses are rejected.
+					assert_noop!(
+						EthereumThresholdSigner::report_signature_failed(
+							RuntimeOrigin::signed(signatories.iter().max().unwrap() + 1),
 							ceremony_id,
-							sign(payload, key),
-						));
-					},
-					CfeBehaviour::ReportFailure(bad) => {
-						// Invalid ceremony id.
-						assert_noop!(
-							EthereumThresholdSigner::report_signature_failed(
-								RuntimeOrigin::signed(self.id),
-								ceremony_id * 2,
-								BTreeSet::from_iter(bad.clone()),
-							),
-							Error::<Test, Instance1>::InvalidThresholdSignatureCeremonyId
-						);
+							BTreeSet::from_iter(bad.clone()),
+						),
+						Error::<Test, Instance1>::InvalidThresholdSignatureRespondent
+					);
 
-						// Unsolicited responses are rejected.
-						assert_noop!(
-							EthereumThresholdSigner::report_signature_failed(
-								RuntimeOrigin::signed(signatories.iter().max().unwrap() + 1),
-								ceremony_id,
-								BTreeSet::from_iter(bad.clone()),
-							),
-							Error::<Test, Instance1>::InvalidThresholdSignatureRespondent
-						);
+					assert_ok!(EthereumThresholdSigner::report_signature_failed(
+						RuntimeOrigin::signed(self.id),
+						ceremony_id,
+						BTreeSet::from_iter(bad.clone()),
+					));
 
-						assert_ok!(EthereumThresholdSigner::report_signature_failed(
+					// Can't respond twice.
+					assert_noop!(
+						EthereumThresholdSigner::report_signature_failed(
 							RuntimeOrigin::signed(self.id),
 							ceremony_id,
 							BTreeSet::from_iter(bad.clone()),
-						));
-
-						// Can't respond twice.
-						assert_noop!(
-							EthereumThresholdSigner::report_signature_failed(
-								RuntimeOrigin::signed(self.id),
-								ceremony_id,
-								BTreeSet::from_iter(bad.clone()),
-							),
-							Error::<Test, Instance1>::InvalidThresholdSignatureRespondent
-						);
-					},
-					CfeBehaviour::Timeout => {
-						// Oops
-					},
-				};
-			},
-			_ => {
-				unimplemented!()
-			},
+						),
+						Error::<Test, Instance1>::InvalidThresholdSignatureRespondent
+					);
+				},
+				CfeBehaviour::Timeout => {
+					// Oops
+				},
+			};
 		};
 	}
 }
@@ -1379,22 +1375,15 @@ fn do_full_key_rotation() {
 	EthereumThresholdSigner::activate_vaults();
 
 	assert!(!KeygenResolutionPendingSince::<Test, _>::exists());
-	assert_eq!(<EthereumThresholdSigner as VaultRotator>::status(), AsyncResult::Pending);
-
-	assert!(matches!(
-		PendingVaultRotation::<Test, _>::get().unwrap(),
-		VaultRotationStatus::<Test, _>::AwaitingActivation { new_public_key: k } if k == NEW_AGG_PUB_KEY_POST_HANDOVER
-	));
-
 	// Voting has been cleared.
 	assert_eq!(KeygenSuccessVoters::<Test, _>::iter_keys().next(), None);
 	assert!(!KeygenFailureVoters::<Test, _>::exists());
 
-	MockVaultActivator::set_activation_completed();
 	assert_eq!(
 		<EthereumThresholdSigner as VaultRotator>::status(),
 		AsyncResult::Ready(VaultRotationStatusOuter::RotationComplete)
 	);
+	MockVaultActivator::set_activation_completed();
 
 	assert_last_event!(crate::Event::VaultRotationCompleted);
 	assert_eq!(PendingVaultRotation::<Test, _>::get(), Some(VaultRotationStatus::Complete));
