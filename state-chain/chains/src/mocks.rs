@@ -1,4 +1,4 @@
-#![cfg(feature = "std")] // XXX
+#![cfg(feature = "std")]
 
 use crate::{
 	evm::{api::EvmReplayProtection, TransactionFee},
