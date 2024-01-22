@@ -365,61 +365,56 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 	> {
 		let latest_finalized_block: BlockInfo = *sparse_block_stream.cache();
 
-		utilities::assert_stream_send(
-			sparse_block_stream
-				.and_then({
-					let mut latest_finalized_block = latest_finalized_block;
-					move |next_finalized_block| {
-						assert!(
-							latest_finalized_block.number < next_finalized_block.number,
-							"{SUBSTRATE_BEHAVIOUR}",
-						);
+		sparse_block_stream
+			.and_then({
+				let mut latest_finalized_block = latest_finalized_block;
+				move |next_finalized_block| {
+					assert!(
+						latest_finalized_block.number < next_finalized_block.number,
+						"{SUBSTRATE_BEHAVIOUR}",
+					);
 
-						let prev_finalized_block =
-							std::mem::replace(&mut latest_finalized_block, next_finalized_block);
+					let prev_finalized_block =
+						std::mem::replace(&mut latest_finalized_block, next_finalized_block);
 
-						let base_rpc_client = base_rpc_client.clone();
-						async move {
-							let base_rpc_client = &base_rpc_client;
-							let intervening_blocks: Vec<_> = futures::stream::iter(
-								prev_finalized_block.number + 1..next_finalized_block.number,
-							)
-							.then(|block_number| async move {
-								let block_hash = base_rpc_client
-									.block_hash(block_number)
-									.await?
-									.expect(SUBSTRATE_BEHAVIOUR);
-								let block: BlockInfo =
-									base_rpc_client.block_header(block_hash).await?.into();
-								assert_eq!(block.hash, block_hash, "{SUBSTRATE_BEHAVIOUR}");
-								assert_eq!(block.number, block_number, "{SUBSTRATE_BEHAVIOUR}",);
-								Result::<_, anyhow::Error>::Ok(block)
-							})
-							.try_collect()
-							.await?;
+					let base_rpc_client = base_rpc_client.clone();
+					async move {
+						let base_rpc_client = &base_rpc_client;
+						let intervening_blocks: Vec<_> = futures::stream::iter(
+							prev_finalized_block.number + 1..next_finalized_block.number,
+						)
+						.then(|block_number| async move {
+							let block_hash = base_rpc_client
+								.block_hash(block_number)
+								.await?
+								.expect(SUBSTRATE_BEHAVIOUR);
+							let block: BlockInfo =
+								base_rpc_client.block_header(block_hash).await?.into();
+							assert_eq!(block.hash, block_hash, "{SUBSTRATE_BEHAVIOUR}");
+							assert_eq!(block.number, block_number, "{SUBSTRATE_BEHAVIOUR}",);
+							Result::<_, anyhow::Error>::Ok(block)
+						})
+						.try_collect()
+						.await?;
 
-							for (previous_block, next_block) in Iterator::zip(
-								std::iter::once(&prev_finalized_block)
-									.chain(intervening_blocks.iter()),
-								intervening_blocks
-									.iter()
-									.chain(std::iter::once(&next_finalized_block)),
-							) {
-								assert_eq!(previous_block.hash, next_block.parent_hash);
-							}
-
-							Result::<_, anyhow::Error>::Ok(futures::stream::iter(
-								intervening_blocks
-									.into_iter()
-									.chain(std::iter::once(next_finalized_block))
-									.map(Result::<_, anyhow::Error>::Ok),
-							))
+						for (previous_block, next_block) in Iterator::zip(
+							std::iter::once(&prev_finalized_block).chain(intervening_blocks.iter()),
+							intervening_blocks.iter().chain(std::iter::once(&next_finalized_block)),
+						) {
+							assert_eq!(previous_block.hash, next_block.parent_hash);
 						}
+
+						Result::<_, anyhow::Error>::Ok(futures::stream::iter(
+							intervening_blocks
+								.into_iter()
+								.chain(std::iter::once(next_finalized_block))
+								.map(Result::<_, anyhow::Error>::Ok),
+						))
 					}
-				})
-				.try_flatten(),
-		)
-		.make_try_cached(latest_finalized_block)
+				}
+			})
+			.try_flatten()
+			.make_try_cached(latest_finalized_block)
 	}
 }
 
