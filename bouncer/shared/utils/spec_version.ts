@@ -12,16 +12,16 @@ type RuntimeVersion = {
   stateVersion: number;
 };
 
-export async function getCurrentRuntimeVersion(endpoint?: string): Promise<RuntimeVersion> {
+export async function getNetworkRuntimeVersion(endpoint?: string): Promise<RuntimeVersion> {
   return (await jsonRpc('state_getRuntimeVersion', [], endpoint)) as unknown as RuntimeVersion;
 }
 
-// If `onlyReadCurrent` is true, it will only read the current spec version and return it.
-// If `onlyReadCurrent` is false, it will increment the spec version and write it to the file. Returning the newly written version.
-export function bumpSpecVersion(
+export function specVersion(
   filePath: string,
-  onlyReadCurrent?: boolean,
-  nextSpecVersion?: number,
+  readOrWrite: 'read' | 'write',
+  // Will only write this version if the current version is less than this.
+  // If this is not provided it will simply bump the version in the file by 1.
+  writeSpecVersion?: number,
 ): number {
   try {
     const fileContent = fs.readFileSync(filePath, 'utf-8');
@@ -42,15 +42,29 @@ export function bumpSpecVersion(
         if (specVersionLine) {
           const currentSpecVersion = parseInt(specVersionLine[2]);
 
-          if (onlyReadCurrent) {
+          if (readOrWrite === 'read') {
             return currentSpecVersion;
           }
+          // write
 
-          if (nextSpecVersion) {
-            incrementedVersion = nextSpecVersion;
+          if (writeSpecVersion) {
+            if (currentSpecVersion >= writeSpecVersion) {
+              console.log(
+                "Current spec version is greater than the one you're trying to write. Returning currentSpecVersion.",
+              );
+              return currentSpecVersion;
+            }
+            // if the version we provided is greater than the current one, then we can bump it to this new version.
+            incrementedVersion = writeSpecVersion;
           } else {
+            // If we want to write, but didn't provide a version, we simply increment the current version.
             incrementedVersion = currentSpecVersion + 1;
           }
+
+          console.assert(
+            incrementedVersion !== -1,
+            'incrementedVersion should not be -1. It should be set above.',
+          );
           lines[i] = `	spec_version: ${incrementedVersion},`;
           break;
         }
@@ -78,10 +92,10 @@ export async function bumpSpecVersionAgainstNetwork(
   runtimeLibPath: string,
   endpoint?: string,
 ): Promise<number> {
-  const currentSpecVersion = (await getCurrentRuntimeVersion(endpoint)).specVersion;
-  console.log('Current spec_version: ' + currentSpecVersion);
-  const nextSpecVersion = currentSpecVersion + 1;
+  const networkSpecVersion = (await getNetworkRuntimeVersion(endpoint)).specVersion;
+  console.log('Current spec_version: ' + networkSpecVersion);
+  const nextSpecVersion = networkSpecVersion + 1;
   console.log('Bumping the spec version to: ' + nextSpecVersion);
-  bumpSpecVersion(runtimeLibPath, false, nextSpecVersion);
+  specVersion(runtimeLibPath, 'write', nextSpecVersion);
   return nextSpecVersion;
 }

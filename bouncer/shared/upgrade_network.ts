@@ -5,7 +5,7 @@ import path from 'path';
 import { SemVerLevel, bumpReleaseVersion } from './bump_release_version';
 import { simpleRuntimeUpgrade } from './simple_runtime_upgrade';
 import { compareSemVer, sleep } from './utils';
-import { bumpSpecVersionAgainstNetwork } from './utils/bump_spec_version';
+import { bumpSpecVersionAgainstNetwork } from './utils/spec_version';
 import { compileBinaries } from './utils/compile_binaries';
 import { submitRuntimeUpgradeWithRestrictions } from './submit_runtime_upgrade';
 
@@ -79,8 +79,10 @@ async function incompatibleUpgradeNoBuild(
 
   execSync(`kill $(lsof -t -i:10997)`);
   execSync(`kill $(lsof -t -i:10589)`);
-  await sleep(6000);
   console.log('Stopped old broker and lp-api. Starting the new ones.');
+
+  // Wait for the old broker and lp-api to shut down, and ensure the runtime upgrade is finalised.
+  await sleep(22000);
 
   const KEYS_DIR = `${localnetInitPath}/keys`;
   execSync(`KEYS_DIR=${KEYS_DIR} ${localnetInitPath}/scripts/start-broker-api.sh ${binaryPath}`);

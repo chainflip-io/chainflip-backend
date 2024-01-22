@@ -50,6 +50,10 @@ pub type ThresholdSignatureRequestId = u32;
 
 pub type PolkadotBlockNumber = u32;
 
+pub type Ed25519PublicKey = sp_core::ed25519::Public;
+pub type Ipv6Addr = u128;
+pub type Port = u16;
+
 pub const FLIP_DECIMALS: u32 = 18;
 pub const FLIPPERINOS_PER_FLIP: FlipBalance = 10u128.pow(FLIP_DECIMALS);
 

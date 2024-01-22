@@ -41,7 +41,7 @@ fn test_address_generation() {
 	use cf_primitives::chains::assets::eth::Asset;
 	use pallet_cf_environment::EthereumSupportedAssets;
 
-	frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+	sp_io::TestExternalities::new_empty().execute_with(|| {
 		// Expect address generation to be successfully for native ETH
 		assert!(<AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
 			eth::Asset::Eth,

@@ -2,6 +2,7 @@
 
 mod async_result;
 pub mod liquidity;
+use cfe_events::{KeyHandoverRequest, KeygenRequest, TxBroadcastRequest};
 pub use liquidity::*;
 pub mod safe_mode;
 pub use safe_mode::*;
@@ -19,19 +20,18 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
-	CeremonyId, ChannelId, EgressId, EpochIndex, FlipBalance, ForeignChain, NetworkEnvironment,
-	SemVer, ThresholdSignatureRequestId,
+	CeremonyId, ChannelId, Ed25519PublicKey, EgressId, EpochIndex, FlipBalance, ForeignChain,
+	Ipv6Addr, NetworkEnvironment, SemVer, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
 	error::BadOrigin,
-	pallet_prelude::Member,
+	pallet_prelude::{DispatchResultWithPostInfo, Member},
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
 		DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
 	},
-	traits::{EnsureOrigin, Get, Imbalance, IsType},
+	traits::{EnsureOrigin, Get, Imbalance, IsType, UnfilteredDispatchable},
 	Hashable, Parameter,
 };
 use scale_info::TypeInfo;
@@ -444,6 +444,31 @@ where
 	) {
 		unimplemented!();
 	}
+}
+
+pub trait CfeMultisigRequest<T: Chainflip, C: ChainCrypto> {
+	fn keygen_request(req: KeygenRequest<T::ValidatorId>);
+
+	fn signature_request(req: cfe_events::ThresholdSignatureRequest<T::ValidatorId, C>);
+
+	fn key_handover_request(_req: KeyHandoverRequest<T::ValidatorId, C>) {
+		assert!(!C::key_handover_is_required());
+	}
+}
+
+pub trait CfePeerRegistration<T: Chainflip> {
+	fn peer_registered(
+		account_id: T::ValidatorId,
+		pubkey: Ed25519PublicKey,
+		port: u16,
+		ip: Ipv6Addr,
+	);
+
+	fn peer_deregistered(account_id: T::ValidatorId, pubkey: Ed25519PublicKey);
+}
+
+pub trait CfeBroadcastRequest<T: Chainflip, C: Chain> {
+	fn tx_broadcast_request(req: TxBroadcastRequest<T::ValidatorId, C>);
 }
 
 /// Something that is capable of encoding and broadcasting native blockchain api calls to external

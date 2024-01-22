@@ -6,7 +6,7 @@ use super::*;
 use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue};
 use cf_traits::{AccountRoleRegistry, Chainflip};
 use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::{dispatch::UnfilteredDispatchable, traits::OnNewAccount};
+use frame_support::traits::{OnNewAccount, UnfilteredDispatchable};
 use frame_system::RawOrigin;
 
 benchmarks! {
@@ -47,14 +47,6 @@ benchmarks! {
 	schedule_swap_from_contract {
 		let deposit_amount = 1_000;
 
-		// reduce minimum swap amount
-		let gov_origin = T::EnsureGovernance::try_successful_origin().unwrap();
-		let call = Call::<T>::set_minimum_swap_amount{
-			asset: Asset::Usdc,
-			amount: 1u128,
-		};
-		call.dispatch_bypass_filter(gov_origin)?;
-
 		let witness_origin = T::EnsureWitnessed::try_successful_origin().unwrap();
 		let call = Call::<T>::schedule_swap_from_contract{
 			from: Asset::Usdc,
@@ -77,14 +69,6 @@ benchmarks! {
 	}
 
 	ccm_deposit {
-		// reduce minimum swap amount
-		let gov_origin = T::EnsureGovernance::try_successful_origin().unwrap();
-		let call = Call::<T>::set_minimum_swap_amount{
-			asset: Asset::Usdc,
-			amount: 1u128,
-		};
-		call.dispatch_bypass_filter(gov_origin)?;
-
 		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
 		let deposit_metadata = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
@@ -122,20 +106,6 @@ benchmarks! {
 			SwapType::CcmGas(1)
 		)]);
 	}
-
-	set_minimum_swap_amount {
-		let asset = Asset::Eth;
-		let amount = 1_000;
-		let call = Call::<T>::set_minimum_swap_amount {
-			asset,
-			amount,
-		};
-	}: {
-		let _ = call.dispatch_bypass_filter(<T as Chainflip>::EnsureGovernance::try_successful_origin().unwrap());
-	} verify {
-		assert_eq!(crate::MinimumSwapAmount::<T>::get(asset), amount);
-	}
-
 	set_maximum_swap_amount {
 		let asset = Asset::Eth;
 		let amount = 1_000;

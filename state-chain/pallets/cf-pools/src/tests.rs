@@ -330,7 +330,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			10_000,
 		));
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(ALICE)),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap {
 					asks: vec![LimitOrder {
@@ -354,7 +354,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			})
 		);
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &BOB,),
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(BOB)),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap {
 					asks: vec![LimitOrder {
@@ -421,7 +421,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 		// Alice's remaining liquidity = 5_000 - 2_000
 		// Bob's remaining liquidity = 10_000 - 4_000
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(ALICE)),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap {
 					asks: vec![LimitOrder {
@@ -445,7 +445,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			})
 		);
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &BOB,),
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(BOB)),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap {
 					asks: vec![LimitOrder {
@@ -534,7 +534,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 			10_000,
 		));
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(ALICE)),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap {
 					asks: vec![LimitOrder {
@@ -683,7 +683,7 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 		assert_eq!(BobCollectedUsdc::get(), 0u128);
 
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(ALICE)),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap { asks: vec![], bids: vec![] },
 				range_orders: vec![RangeOrder {
@@ -696,7 +696,7 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 			})
 		);
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &BOB,),
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(BOB)),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap { asks: vec![], bids: vec![] },
 				range_orders: vec![RangeOrder {
@@ -915,7 +915,7 @@ fn can_get_all_pool_orders() {
 		));
 
 		assert_eq!(
-			LiquidityPools::all_pool_orders(Asset::Eth, STABLE_ASSET),
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, None),
 			Ok(PoolOrders::<Test> {
 				limit_orders: AskBidMap {
 					asks: vec![

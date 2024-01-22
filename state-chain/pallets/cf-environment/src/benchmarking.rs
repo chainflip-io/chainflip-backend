@@ -4,7 +4,7 @@ use super::*;
 
 use frame_benchmarking::benchmarks;
 
-use frame_support::dispatch::UnfilteredDispatchable;
+use frame_support::traits::UnfilteredDispatchable;
 
 benchmarks! {
 
