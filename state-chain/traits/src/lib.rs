@@ -815,6 +815,8 @@ impl<RuntimeCall> CallDispatchFilter<RuntimeCall> for () {
 }
 
 pub trait AssetConverter {
+	// XXX: should be able to tell difference between unsupported asset-pair and insufficient input
+	// amout.
 	fn convert_asset_to_approximate_output<
 		Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy,
 	>(

@@ -822,7 +822,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 											.unwrap_or(false)
 									},
 								),
-								FetchOrTransfer::Transfer { amount, .. } => !amount.is_zero(),
+								FetchOrTransfer::Transfer { .. } => true,
 							}
 					})
 					.collect()
@@ -860,19 +860,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					destination_address,
 					egress_id,
 				} => {
-					egress_ids.push(egress_id);
-					transfer_params.push(TransferAssetParams {
-						asset,
-						amount: Self::withhold_transaction_fee(
-							IngressOrEgress::Egress,
+					// XXX: The current implementation of `withhold_transaction_fee` does not
+					// signalise about insufficient amount. XXX: This effectively means that the
+					// amount is egressed without fee. (Which is not likely the desired behaviour).
+					let net_egress_amount =
+						Self::withhold_transaction_fee(IngressOrEgress::Egress, asset, amount);
+
+					if !net_egress_amount.is_zero() {
+						egress_ids.push(egress_id);
+						transfer_params.push(TransferAssetParams {
 							asset,
-							amount,
-						),
-						to: destination_address,
-					});
-					DepositBalances::<T, I>::mutate(asset, |tracker| {
-						tracker.register_transfer(amount);
-					});
+							amount: net_egress_amount,
+							to: destination_address,
+						});
+						DepositBalances::<T, I>::mutate(asset, |tracker| {
+							tracker.register_transfer(amount);
+						});
+					}
 				},
 			}
 		}
@@ -1179,6 +1183,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				(available_amount, Zero::zero())
 			});
 
+		// XXX: it is correct not to put the fee if the input amount is insufficient
+		// XXX: but the remaining amount in this case should be zero — so that no free egress would
+		// be performed
 		WithheldTransactionFees::<T, I>::mutate(<T::TargetChain as Chain>::GAS_ASSET, |fees| {
 			fees.saturating_accrue(fee_estimate);
 		});

@@ -136,8 +136,8 @@ impl_test_helpers! {
 	|| {
 		cf_traits::mocks::tracked_data_provider::TrackedDataProvider::<Ethereum>::set_tracked_data(
 			EthereumTrackedData {
-				base_fee: Default::default(),
-				priority_fee: Default::default()
+				base_fee: 1, //Default::default(),
+				priority_fee: 2, // Default::default()
 			}
 		);
 	}

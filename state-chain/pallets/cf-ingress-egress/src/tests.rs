@@ -146,27 +146,34 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 }
 
 #[test]
+// #[ignore]
 fn zero_amount_egress_is_skipped() {
 	new_test_ext().execute_with(|| {
-		IngressEgress::schedule_egress(ETH_ETH, 1, ALICE_ETH_ADDRESS, None);
+		<Test as crate::pallet::Config>::AssetConverter::set_price(
+			cf_primitives::Asset::Eth,
+			cf_primitives::Asset::Eth,
+			1,
+		);
+
+		IngressEgress::schedule_egress(ETH_ETH, 300_000, ALICE_ETH_ADDRESS, None);
 		System::assert_last_event(RuntimeEvent::IngressEgress(crate::Event::EgressScheduled {
 			id: (ForeignChain::Ethereum, 1),
 			asset: ETH_ETH,
-			amount: 1,
+			amount: 300_000,
 			destination_address: ALICE_ETH_ADDRESS,
 		}));
-		IngressEgress::schedule_egress(ETH_ETH, 0, ALICE_ETH_ADDRESS, None);
+		IngressEgress::schedule_egress(ETH_ETH, 200_000, ALICE_ETH_ADDRESS, None);
 		System::assert_last_event(RuntimeEvent::IngressEgress(crate::Event::EgressScheduled {
 			id: (ForeignChain::Ethereum, 2),
 			asset: ETH_ETH,
-			amount: 0,
+			amount: 200_000,
 			destination_address: ALICE_ETH_ADDRESS,
 		}));
-		IngressEgress::schedule_egress(ETH_ETH, 2, ALICE_ETH_ADDRESS, None);
+		IngressEgress::schedule_egress(ETH_ETH, 300_000, ALICE_ETH_ADDRESS, None);
 		System::assert_last_event(RuntimeEvent::IngressEgress(crate::Event::EgressScheduled {
 			id: (ForeignChain::Ethereum, 3),
 			asset: ETH_ETH,
-			amount: 2,
+			amount: 300_000,
 			destination_address: ALICE_ETH_ADDRESS,
 		}));
 
@@ -175,19 +182,19 @@ fn zero_amount_egress_is_skipped() {
 			vec![
 				FetchOrTransfer::<Ethereum>::Transfer {
 					asset: ETH_ETH,
-					amount: 1,
+					amount: 300_000,
 					destination_address: ALICE_ETH_ADDRESS,
 					egress_id: (ForeignChain::Ethereum, 1),
 				},
 				FetchOrTransfer::<Ethereum>::Transfer {
 					asset: ETH_ETH,
-					amount: 0,
+					amount: 200_000,
 					destination_address: ALICE_ETH_ADDRESS,
 					egress_id: (ForeignChain::Ethereum, 2),
 				},
 				FetchOrTransfer::<Ethereum>::Transfer {
 					asset: ETH_ETH,
-					amount: 2,
+					amount: 300_000,
 					destination_address: ALICE_ETH_ADDRESS,
 					egress_id: (ForeignChain::Ethereum, 3),
 				},
@@ -202,6 +209,8 @@ fn zero_amount_egress_is_skipped() {
 				egress_ids: vec![(ForeignChain::Ethereum, 1), (ForeignChain::Ethereum, 3)],
 			},
 		))
+		// XXX: Check the fee is collected correctly.
+		// XXX: Think how the transaction amount is reported (it wasn't collected as a fee, neither it was egressed).
 	});
 }
 

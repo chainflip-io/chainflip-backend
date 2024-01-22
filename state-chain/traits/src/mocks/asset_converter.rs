@@ -33,18 +33,22 @@ impl AssetConverter for MockAssetConverter {
 	) -> Option<(Amount, Amount)> {
 		let input_asset = input_asset.into();
 		let output_asset = output_asset.into();
-		let input = Self::get_price(output_asset, input_asset)
-			.map(|price| price * desired_output_amount.into())?;
 
-		if input > available_input_amount.into() {
+		let available_input_amount = available_input_amount.into();
+		let desired_output_amount = desired_output_amount.into();
+
+		let input = Self::get_price(output_asset, input_asset)
+			.map(|price| price * desired_output_amount)?;
+
+		if input > available_input_amount {
 			return None
 		}
 
+		let fee_estimate = Self::get_price(input_asset, output_asset).map(|price| price * input)?;
+
 		Some((
-			input.unique_saturated_into(),
-			Self::get_price(input_asset, output_asset)
-				.map(|price| price * input)?
-				.unique_saturated_into(),
+			available_input_amount.saturating_sub(fee_estimate).unique_saturated_into(),
+			fee_estimate.unique_saturated_into(),
 		))
 	}
 }
