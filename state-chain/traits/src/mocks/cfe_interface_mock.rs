@@ -1,4 +1,5 @@
-#![cfg(debug_assertions)]
+// XXX: removed `cfg(debug_assertions)` as the whole `crate::mocks` should be guarded rather than
+// this submodule alone.
 
 use cf_chains::mocks::{MockEthereum, MockEthereumChainCrypto};
 use codec::{Decode, Encode};

@@ -996,7 +996,7 @@ impl BenchmarkValueExtended for PolkadotChannelId {
 	}
 }
 
-#[cfg(debug_assertions)]
+#[cfg(feature = "std")] // XXX
 pub const TEST_RUNTIME_VERSION: RuntimeVersion =
 	RuntimeVersion { spec_version: 9340, transaction_version: 16 };
 
