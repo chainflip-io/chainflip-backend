@@ -711,8 +711,10 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 			use crate::state_chain_observer::client::subxt_state_chain_config::StateChainConfig;
 			use subxt::tx::Signer;
 
+			let rpc_client = RpcClient::new(SubxtInterface(base_rpc_client.clone()));
+
 			let subxt_client = subxt::client::OnlineClient::<StateChainConfig>::from_rpc_client(
-				RpcClient::new(SubxtInterface(base_rpc_client.clone())),
+				rpc_client.clone(),
 			)
 			.await?;
 			let subxt_signer = {
@@ -762,9 +764,16 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 				// error (see https://linear.app/chainflip/issue/PRO-1064/new-cfe-version-gets-stuck-on-startup),
 				// so we use a timeout to ensure we can recover:
 				tokio::time::timeout(CFE_VERSION_SUBMIT_TIMEOUT, async {
+					let current_nonce = rpc_client
+						.request::<u64>(
+							"system_accountNextIndex",
+							subxt::rpc_params![&subxt_signer.account_id()],
+						)
+						.await?;
+
 					subxt_client
 						.tx()
-						.sign_and_submit_then_watch_default(
+						.create_signed_with_nonce(
 							&subxt::dynamic::tx(
 								"Validator",
 								"cfe_version",
@@ -778,7 +787,10 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 								)],
 							),
 							&subxt_signer,
-						)
+							current_nonce,
+							Default::default(),
+						)?
+						.submit_and_watch()
 						.await?
 						.wait_for_in_block()
 						.await
