@@ -398,6 +398,7 @@ pub mod pallet {
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
 			deposit_details: <T::TargetChain as Chain>::DepositDetails,
+			ingress_fee: TargetChainAmount<T, I>,
 		},
 		AssetEgressStatusChanged {
 			asset: TargetChainAsset<T, I>,
@@ -408,6 +409,7 @@ pub mod pallet {
 			asset: TargetChainAsset<T, I>,
 			amount: AssetAmount,
 			destination_address: TargetChainAccount<T, I>,
+			egress_fee: TargetChainAmount<T, I>,
 		},
 		CcmBroadcastRequested {
 			broadcast_id: BroadcastId,
@@ -866,15 +868,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					egress_ids.push(egress_id);
 					transfer_params.push(TransferAssetParams {
 						asset,
-						amount: Self::withhold_transaction_fee(
-							IngressOrEgress::Egress,
-							asset,
-							amount,
-						),
+						amount,
 						to: destination_address,
-					});
-					DepositBalances::<T, I>::mutate(asset, |tracker| {
-						tracker.register_transfer(amount);
 					});
 				},
 			}
@@ -994,7 +989,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 		Self::deposit_event(Event::<T, I>::DepositFetchesScheduled { channel_id, asset });
 
-		let net_deposit_amount = Self::withhold_transaction_fee(
+		let (net_deposit_amount, ingress_fee) = Self::withhold_transaction_fee(
 			IngressOrEgress::Ingress,
 			deposit_channel_details.deposit_channel.asset,
 			deposit_amount,
@@ -1073,6 +1068,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				asset,
 				amount: deposit_amount,
 				deposit_details,
+				ingress_fee,
 			});
 		}
 
@@ -1154,12 +1150,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Withholds the fee for a given amount.
 	///
-	/// Returns the remaining amount after the fee has been withheld.
+	/// Returns the remaining amount after the fee has been withheld, and the fee itself
 	fn withhold_transaction_fee(
 		ingress_or_egress: IngressOrEgress,
 		asset: TargetChainAsset<T, I>,
 		available_amount: TargetChainAmount<T, I>,
-	) -> TargetChainAmount<T, I> {
+	) -> (TargetChainAmount<T, I>, TargetChainAmount<T, I>) {
 		let tracked_data = T::ChainTracking::get_tracked_data();
 		let fee_estimate = match ingress_or_egress {
 			IngressOrEgress::Ingress => tracked_data.estimate_ingress_fee(asset),
@@ -1186,7 +1182,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			fees.saturating_accrue(fee_estimate);
 		});
 
-		remaining_amount
+		(remaining_amount, fee_estimate)
 	}
 }
 
@@ -1202,36 +1198,49 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 			*id
 		});
 		let egress_id = (<T as Config<I>>::TargetChain::get(), egress_counter);
-		match maybe_ccm_with_gas_budget {
+		let egress_fee = match maybe_ccm_with_gas_budget {
 			Some((
 				CcmDepositMetadata { source_chain, source_address, channel_metadata },
 				gas_budget,
-			)) => ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
-				egress_id,
-				asset,
-				amount,
-				destination_address: destination_address.clone(),
-				message: channel_metadata.message,
-				cf_parameters: channel_metadata.cf_parameters,
-				source_chain,
-				source_address,
-				gas_budget,
-			}),
-			None => ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<
-				T::TargetChain,
-			>::Transfer {
-				asset,
-				destination_address: destination_address.clone(),
-				amount,
-				egress_id,
-			}),
-		}
+			)) => {
+				ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
+					egress_id,
+					asset,
+					amount,
+					destination_address: destination_address.clone(),
+					message: channel_metadata.message,
+					cf_parameters: channel_metadata.cf_parameters,
+					source_chain,
+					source_address,
+					gas_budget,
+				});
+				gas_budget
+			},
+			None => {
+				let (amount_after_fees, egress_fee) =
+					Self::withhold_transaction_fee(IngressOrEgress::Egress, asset, amount);
+				ScheduledEgressFetchOrTransfer::<T, I>::append({
+					FetchOrTransfer::<T::TargetChain>::Transfer {
+						asset,
+						destination_address: destination_address.clone(),
+						amount: amount_after_fees,
+						egress_id,
+					}
+				});
+				egress_fee
+			},
+		};
+
+		DepositBalances::<T, I>::mutate(asset, |tracker| {
+			tracker.register_transfer(amount);
+		});
 
 		Self::deposit_event(Event::<T, I>::EgressScheduled {
 			id: egress_id,
 			asset,
 			amount: amount.into(),
 			destination_address,
+			egress_fee,
 		});
 
 		egress_id

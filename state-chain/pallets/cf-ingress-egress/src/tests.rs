@@ -156,6 +156,7 @@ fn can_schedule_swap_egress_to_batch() {
 			asset: ETH_ETH,
 			amount: 2_000,
 			destination_address: ALICE_ETH_ADDRESS,
+			egress_fee: 0,
 		}));
 
 		IngressEgress::schedule_egress(ETH_FLIP, 3_000, BOB_ETH_ADDRESS, None);
@@ -165,6 +166,7 @@ fn can_schedule_swap_egress_to_batch() {
 			asset: ETH_FLIP,
 			amount: 4_000,
 			destination_address: BOB_ETH_ADDRESS,
+			egress_fee: 0,
 		}));
 
 		assert_eq!(
@@ -551,6 +553,7 @@ fn can_egress_ccm() {
 				asset: destination_asset,
 				amount,
 				destination_address,
+    			egress_fee: 1000,
 			}
 		));
 
@@ -888,6 +891,7 @@ fn deposits_below_minimum_are_rejected() {
 				asset: flip,
 				amount: default_deposit_amount,
 				deposit_details: Default::default(),
+				ingress_fee: 0,
 			},
 		));
 	});
