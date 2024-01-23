@@ -12,7 +12,7 @@ pub mod offence_reporting;
 
 use core::fmt::Debug;
 
-pub use async_result::{AsyncResult, MapAsyncResultTo};
+pub use async_result::AsyncResult;
 
 use cf_chains::{
 	address::ForeignChainAddress, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain,

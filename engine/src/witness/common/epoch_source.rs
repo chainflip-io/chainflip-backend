@@ -417,7 +417,7 @@ pub type VaultSource<TChain, ExtraInfo, ExtraHistoricInfo> = EpochSource<
 impl<'a, 'env, StateChainClient: StorageApi + Send + Sync + 'static, Info, HistoricInfo>
 	EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>
 {
-	/// Get all the vaults for each each epoch for a particular chain.
+	/// Get all the vaults for each epoch for a particular chain.
 	/// Not all epochs will have all vaults. For example, the first epoch will not have a vault for
 	/// Polkadot or Bitcoin.
 	pub async fn vaults<TChain: ExternalChain>(
@@ -444,7 +444,7 @@ impl<'a, 'env, StateChainClient: StorageApi + Send + Sync + 'static, Info, Histo
 	{
 		self.filter_map(
 			|state_chain_client, epoch, block_hash, info| async move {
-				match state_chain_client
+				 match state_chain_client
 					.storage_map_entry::<pallet_cf_vaults::VaultStartBlockNumbers<
 						state_chain_runtime::Runtime,
 						<TChain as PalletInstanceAlias>::Instance,
@@ -461,7 +461,7 @@ impl<'a, 'env, StateChainClient: StorageApi + Send + Sync + 'static, Info, Histo
 						>>(block_hash, &epoch)
 						.await
 						.expect(STATE_CHAIN_CONNECTION)
-						.expect("since the block start number for this epoch exists, the vaulkt key for this epoch should also exist"),
+						.expect("since the block start number for this epoch exists, the vault key for this epoch should also exist. Both the vault key and the vault start block number are set in the same function (activate_vaults() in vault_rotator.rs"),
 						vault_start_block_number, info))
 					}
 					None => None,

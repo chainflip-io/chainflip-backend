@@ -19,9 +19,9 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 	}
 
 	fn activate(new_public_key: AggKeyFor<T, I>, maybe_old_public_key: Option<AggKeyFor<T, I>>) {
-		if let Some(key) = maybe_old_public_key {
+		if let Some(old_key) = maybe_old_public_key {
 			match <T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
-				Some(key),
+				Some(old_key),
 				new_public_key,
 			) {
 				Ok(activation_call) => {

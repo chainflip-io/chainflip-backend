@@ -33,6 +33,14 @@ impl<R> AsyncResult<R> {
 			_ => panic!("AsyncResult not Ready!"),
 		}
 	}
+
+	pub fn map_to<S>(self, inner: S) -> AsyncResult<S> {
+		match self {
+			AsyncResult::Ready(_) => AsyncResult::Ready(inner),
+			AsyncResult::Pending => AsyncResult::Pending,
+			AsyncResult::Void => AsyncResult::Void,
+		}
+	}
 }
 
 impl<R> Default for AsyncResult<R> {
@@ -44,19 +52,5 @@ impl<R> Default for AsyncResult<R> {
 impl<R> From<R> for AsyncResult<R> {
 	fn from(r: R) -> Self {
 		AsyncResult::Ready(r)
-	}
-}
-
-pub trait MapAsyncResultTo<S> {
-	fn map_to(self, inner: S) -> AsyncResult<S>;
-}
-
-impl<R, S> MapAsyncResultTo<S> for AsyncResult<R> {
-	fn map_to(self, inner: S) -> AsyncResult<S> {
-		match self {
-			AsyncResult::Ready(_) => AsyncResult::Ready(inner),
-			AsyncResult::Pending => AsyncResult::Pending,
-			AsyncResult::Void => AsyncResult::Void,
-		}
 	}
 }

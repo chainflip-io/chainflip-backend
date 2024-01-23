@@ -1,8 +1,6 @@
 use super::*;
 use cf_runtime_utilities::{log_or_panic, StorageDecodeVariant};
-use cf_traits::{
-	CfeMultisigRequest, MapAsyncResultTo, VaultActivator, VaultRotationStatusOuter, VaultRotator,
-};
+use cf_traits::{CfeMultisigRequest, VaultActivator, VaultRotationStatusOuter, VaultRotator};
 use cfe_events::{KeyHandoverRequest, KeygenRequest};
 use frame_support::{sp_runtime::traits::BlockNumberProvider, traits::PalletInfoAccess};
 
