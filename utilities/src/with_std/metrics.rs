@@ -396,67 +396,67 @@ macro_rules! build_counter_vec_struct {
 lazy_static::lazy_static! {
 	static ref REGISTRY: Registry = Registry::new();
 
-	pub static ref P2P_MSG_SENT: IntCounter = register_int_counter_with_registry!(Opts::new("p2p_msg_sent", "Count all the p2p msgs sent by the engine"), REGISTRY).expect("A duplicate metric collector has already been registered.");
-	pub static ref P2P_MSG_RECEIVED: IntCounter = register_int_counter_with_registry!(Opts::new("p2p_msg_received", "Count all the p2p msgs received by the engine (raw before any processing)"), REGISTRY).expect("A duplicate metric collector has already been registered.");
-	pub static ref P2P_RECONNECT_PEERS: IntGaugeWrapper = IntGaugeWrapper::new("p2p_reconnect_peers", "Count the number of peers we need to reconnect to", &REGISTRY);
-	pub static ref P2P_ACTIVE_CONNECTIONS: IntGaugeWrapper = IntGaugeWrapper::new("p2p_active_connections", "Count the number of active connections", &REGISTRY);
-	pub static ref P2P_ALLOWED_PUBKEYS: IntGaugeWrapper = IntGaugeWrapper::new("p2p_allowed_pubkeys", "Count the number of allowed pubkeys", &REGISTRY);
-	pub static ref P2P_DECLINED_CONNECTIONS: IntCounter = register_int_counter_with_registry!(Opts::new("p2p_declined_connections", "Count the number times we decline a connection"), &REGISTRY).expect("A duplicate metric collector has already been registered.");
+	pub static ref P2P_MSG_SENT: IntCounter = register_int_counter_with_registry!(Opts::new("cfe_p2p_msg_sent", "Count all the p2p msgs sent by the engine"), REGISTRY).expect("A duplicate metric collector has already been registered.");
+	pub static ref P2P_MSG_RECEIVED: IntCounter = register_int_counter_with_registry!(Opts::new("cfe_p2p_msg_received", "Count all the p2p msgs received by the engine (raw before any processing)"), REGISTRY).expect("A duplicate metric collector has already been registered.");
+	pub static ref P2P_RECONNECT_PEERS: IntGaugeWrapper = IntGaugeWrapper::new("cfe_p2p_reconnect_peers", "Count the number of peers we need to reconnect to", &REGISTRY);
+	pub static ref P2P_ACTIVE_CONNECTIONS: IntGaugeWrapper = IntGaugeWrapper::new("cfe_p2p_active_connections", "Count the number of active connections", &REGISTRY);
+	pub static ref P2P_ALLOWED_PUBKEYS: IntGaugeWrapper = IntGaugeWrapper::new("cfe_p2p_allowed_pubkeys", "Count the number of allowed pubkeys", &REGISTRY);
+	pub static ref P2P_DECLINED_CONNECTIONS: IntCounter = register_int_counter_with_registry!(Opts::new("cfe_p2p_declined_connections", "Count the number times we decline a connection"), &REGISTRY).expect("A duplicate metric collector has already been registered.");
 }
 
 build_gauge_vec!(
 	UNAUTHORIZED_CEREMONY,
-	"unauthorized_ceremony",
+	"cfe_unauthorized_ceremony",
 	"Gauge keeping track of the number of unauthorized ceremony currently awaiting authorisation",
 	["chain", "type"]
 );
 build_gauge_vec!(
 	CHAIN_TRACKING,
-	"chain_tracking",
+	"cfe_chain_tracking",
 	"Gauge keeping track of the latest block number the engine reported to the state chain",
 	["chain"]
 );
 build_gauge_vec!(
 	PENDING_CEREMONIES,
-	"pending_ceremonies",
+	"cfe_pending_ceremonies",
 	"Gauge keeping track of the number of ceremonies currently running",
 	["chain", "type"]
 );
 build_counter_vec!(
 	RPC_RETRIER_REQUESTS,
-	"rpc_requests",
+	"cfe_rpc_requests",
 	"Count the rpc calls made by the engine, it doesn't keep into account the number of retrials",
 	["client", "rpc_method"]
 );
 build_counter_vec!(
 	RPC_RETRIER_TOTAL_REQUESTS,
-	"rpc_requests_total",
+	"cfe_rpc_requests_total",
 	"Count all the rpc calls made by the retrier, it counts every single call even if it is the same made multiple times",
 	["client","rpc_method"]
 );
 build_counter_vec!(
 	P2P_MONITOR_EVENT,
-	"p2p_monitor_event",
+	"cfe_p2p_monitor_event",
 	"Count the number of events observed by the zmq connection monitor",
 	["event_type"]
 );
 build_counter_vec!(
 	P2P_BAD_MSG,
-	"p2p_bad_msg",
+	"cfe_p2p_bad_msg",
 	"Count all the bad p2p msgs received by the engine and labels them by the reason they got discarded",
 	["reason"]
 );
 build_counter_vec_struct!(
 	CEREMONY_PROCESSED_MSG,
 	CeremonyProcessedMsg,
-	"ceremony_msg",
+	"cfe_ceremony_msg",
 	"Count all the processed messages for a given ceremony",
 	["chain", "ceremony_type"]
 );
 build_counter_vec_struct!(
 	CEREMONY_BAD_MSG,
 	CeremonyBadMsg,
-	"ceremony_bad_msg",
+	"cfe_ceremony_bad_msg",
 	"Count all the bad msgs processed during a ceremony",
 	["chain", "reason"],
 	["chain"] //const labels
@@ -464,7 +464,7 @@ build_counter_vec_struct!(
 build_histogram_vec_struct!(
 	CEREMONY_DURATION,
 	CeremonyDuration,
-	"ceremony_duration",
+	"cfe_ceremony_duration",
 	"Measure the duration of a ceremony in seconds",
 	["chain", "ceremony_type"],
 	(vec![2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0])
@@ -472,7 +472,7 @@ build_histogram_vec_struct!(
 build_gauge_vec_struct!(
 	CEREMONY_TIMEOUT_MISSING_MSG,
 	CeremonyTimeoutMissingMsg,
-	"ceremony_timeout_missing_msg",
+	"cfe_ceremony_timeout_missing_msg",
 	"Measure the number of missing messages when reaching timeout",
 	["chain", "ceremony_type", "stage"],
 	["chain", "ceremony_type"]
@@ -480,7 +480,7 @@ build_gauge_vec_struct!(
 build_histogram_vec_struct!(
 	STAGE_DURATION,
 	StageDuration,
-	"stage_duration",
+	"cfe_stage_duration",
 	"Measure the duration of a stage in seconds",
 	["chain", "stage", "phase"], //phase can be either receiving or processing
 	["chain"],
@@ -489,7 +489,7 @@ build_histogram_vec_struct!(
 build_counter_vec_struct!(
 	STAGE_FAILING,
 	StageFailing,
-	"stage_failing",
+	"cfe_stage_failing",
 	"Count the number of stages which are failing with the cause of the failure attached",
 	["chain", "stage", "reason"],
 	["chain"]
@@ -497,7 +497,7 @@ build_counter_vec_struct!(
 build_counter_vec_struct!(
 	STAGE_COMPLETING,
 	StageCompleting,
-	"stage_completing",
+	"cfe_stage_completing",
 	"Count the number of stages which are completing successfully",
 	["chain", "stage"],
 	["chain"]
@@ -637,63 +637,63 @@ mod test {
 
 					//This request does nothing, the ceremony is still ongoning so there is no deletion
 					request_test("metrics", reqwest::StatusCode::OK, 
-r#"# HELP ceremony_bad_msg Count all the bad msgs processed during a ceremony
-# TYPE ceremony_bad_msg counter
-ceremony_bad_msg{chain="Chain1",reason="AA"} 1
-# HELP ceremony_duration Measure the duration of a ceremony in seconds
-# TYPE ceremony_duration histogram
-ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="2"} 0
-ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="4"} 0
-ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="8"} 0
-ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="16"} 0
-ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="32"} 0
-ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="64"} 0
-ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="128"} 0
-ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="256"} 0
-ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="512"} 0
-ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="1024"} 1
-ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="+Inf"} 1
-ceremony_duration_sum{ceremony_type="Keygen",chain="Chain1"} 999
-ceremony_duration_count{ceremony_type="Keygen",chain="Chain1"} 1
-# HELP ceremony_msg Count all the processed messages for a given ceremony
-# TYPE ceremony_msg counter
-ceremony_msg{ceremony_type="Keygen",chain="Chain1"} 2
-# HELP ceremony_timeout_missing_msg Measure the number of missing messages when reaching timeout
-# TYPE ceremony_timeout_missing_msg gauge
-ceremony_timeout_missing_msg{ceremony_type="Keygen",chain="Chain1",stage="stage1"} 5
-# HELP stage_completing Count the number of stages which are completing successfully
-# TYPE stage_completing counter
-stage_completing{chain="Chain1",stage="stage1"} 2
-stage_completing{chain="Chain1",stage="stage2"} 1
-# HELP stage_duration Measure the duration of a stage in seconds
-# TYPE stage_duration histogram
-stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="2"} 0
-stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="3"} 0
-stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="5"} 0
-stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="8"} 0
-stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="10"} 0
-stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="15"} 0
-stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="20"} 0
-stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="25"} 0
-stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="30"} 0
-stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="+Inf"} 1
-stage_duration_sum{chain="Chain1",phase="processing",stage="stage1"} 78
-stage_duration_count{chain="Chain1",phase="processing",stage="stage1"} 1
-stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="2"} 0
-stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="3"} 0
-stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="5"} 0
-stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="8"} 0
-stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="10"} 0
-stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="15"} 0
-stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="20"} 0
-stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="25"} 0
-stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="30"} 0
-stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="+Inf"} 1
-stage_duration_sum{chain="Chain1",phase="receiving",stage="stage1"} 780
-stage_duration_count{chain="Chain1",phase="receiving",stage="stage1"} 1
-# HELP stage_failing Count the number of stages which are failing with the cause of the failure attached
-# TYPE stage_failing counter
-stage_failing{chain="Chain1",reason="NotEnoughMessages",stage="stage3"} 1
+r#"# HELP cfe_ceremony_bad_msg Count all the bad msgs processed during a ceremony
+# TYPE cfe_ceremony_bad_msg counter
+cfe_ceremony_bad_msg{chain="Chain1",reason="AA"} 1
+# HELP cfe_ceremony_duration Measure the duration of a ceremony in seconds
+# TYPE cfe_ceremony_duration histogram
+cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="2"} 0
+cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="4"} 0
+cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="8"} 0
+cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="16"} 0
+cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="32"} 0
+cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="64"} 0
+cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="128"} 0
+cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="256"} 0
+cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="512"} 0
+cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="1024"} 1
+cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="+Inf"} 1
+cfe_ceremony_duration_sum{ceremony_type="Keygen",chain="Chain1"} 999
+cfe_ceremony_duration_count{ceremony_type="Keygen",chain="Chain1"} 1
+# HELP cfe_ceremony_msg Count all the processed messages for a given ceremony
+# TYPE cfe_ceremony_msg counter
+cfe_ceremony_msg{ceremony_type="Keygen",chain="Chain1"} 2
+# HELP cfe_ceremony_timeout_missing_msg Measure the number of missing messages when reaching timeout
+# TYPE cfe_ceremony_timeout_missing_msg gauge
+cfe_ceremony_timeout_missing_msg{ceremony_type="Keygen",chain="Chain1",stage="stage1"} 5
+# HELP cfe_stage_completing Count the number of stages which are completing successfully
+# TYPE cfe_stage_completing counter
+cfe_stage_completing{chain="Chain1",stage="stage1"} 2
+cfe_stage_completing{chain="Chain1",stage="stage2"} 1
+# HELP cfe_stage_duration Measure the duration of a stage in seconds
+# TYPE cfe_stage_duration histogram
+cfe_stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="2"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="3"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="5"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="8"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="10"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="15"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="20"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="25"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="30"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="+Inf"} 1
+cfe_stage_duration_sum{chain="Chain1",phase="processing",stage="stage1"} 78
+cfe_stage_duration_count{chain="Chain1",phase="processing",stage="stage1"} 1
+cfe_stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="2"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="3"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="5"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="8"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="10"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="15"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="20"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="25"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="30"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="+Inf"} 1
+cfe_stage_duration_sum{chain="Chain1",phase="receiving",stage="stage1"} 780
+cfe_stage_duration_count{chain="Chain1",phase="receiving",stage="stage1"} 1
+# HELP cfe_stage_failing Count the number of stages which are failing with the cause of the failure attached
+# TYPE cfe_stage_failing counter
+cfe_stage_failing{chain="Chain1",reason="NotEnoughMessages",stage="stage3"} 1
 "#).await;
 
 					//End of ceremony
