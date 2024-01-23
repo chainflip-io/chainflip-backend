@@ -797,7 +797,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 							DefaultExtrinsicParamsBuilder::new()
 								.mortal_unchecked(
 									block_number.into(),
-									block_hash.into(),
+									block_hash,
 									SIGNED_EXTRINSIC_LIFETIME.into(),
 								)
 								.build(),
