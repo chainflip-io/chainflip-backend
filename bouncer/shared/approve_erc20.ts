@@ -1,8 +1,8 @@
 import Web3 from 'web3';
-import { Asset } from '@chainflip-io/cli';
+import { Asset, assetChains } from '@chainflip-io/cli';
 import { amountToFineAmount } from '../shared/utils';
-import { getEthContractAddress } from './utils';
-import { signAndSendTxEth } from './send_eth';
+import { getEvmContractAddress } from './utils';
+import { signAndSendTxEvm } from './send_evm';
 import { getErc20abi } from './eth_abis';
 
 const erc20abi = await getErc20abi();
@@ -12,7 +12,7 @@ export async function approveErc20(asset: Asset, toAddress: string, amount: stri
 
   const web3 = new Web3(ethEndpoint);
 
-  const tokenContractAddress = getEthContractAddress(asset);
+  const tokenContractAddress = getEvmContractAddress(assetChains[asset], asset);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tokenContract = new web3.eth.Contract(erc20abi as any, tokenContractAddress);
@@ -23,5 +23,5 @@ export async function approveErc20(asset: Asset, toAddress: string, amount: stri
 
   console.log('Approving ' + amount + ' ' + asset + ' to ' + toAddress);
 
-  await signAndSendTxEth(tokenContractAddress, '0', txData);
+  await signAndSendTxEvm(assetChains[asset], tokenContractAddress, '0', txData);
 }

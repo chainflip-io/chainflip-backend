@@ -1,11 +1,11 @@
 import { randomAsHex, randomAsNumber } from '@polkadot/util-crypto';
-import { Asset, assetDecimals, Assets } from '@chainflip-io/cli';
+import { Asset, assetChains, assetDecimals, Assets } from '@chainflip-io/cli';
 import Web3 from 'web3';
 import { performSwap, SwapParams } from '../shared/perform_swap';
 import {
   newAddress,
   chainFromAsset,
-  getEthContractAddress,
+  getEvmContractAddress,
   amountToFineAmount,
   defaultAssetAmounts,
 } from '../shared/utils';
@@ -108,7 +108,7 @@ export async function prepareSwap(
 
   // For swaps with a message force the address to be the CF Tester address.
   if (messageMetadata && chainFromAsset(destAsset) === chainFromAsset('ETH')) {
-    destAddress = getEthContractAddress('CFTESTER');
+    destAddress = getEvmContractAddress(assetChains[destAsset], 'CFTESTER');
     if (log) console.log(`${tag} Using CF Tester address: ${destAddress}`);
   } else {
     destAddress = await newAddress(destAsset, seed, addressType);
@@ -196,9 +196,14 @@ export async function testAllSwaps() {
     (BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * 9n).toString(),
   );
 
-  Object.values(Assets).forEach((sourceAsset) =>
+  // TODO: Remove this but for now skipping arbitrum swaps as they are not supported yet
+  Object.values(Assets).forEach((sourceAsset) => {
+    if (sourceAsset === 'ARB' || sourceAsset === 'ARBUSDC') return;
+
     Object.values(Assets)
-      .filter((destAsset) => sourceAsset !== destAsset)
+      .filter(
+        (destAsset) => sourceAsset !== destAsset && destAsset !== 'ARB' && destAsset !== 'ARBUSDC',
+      )
       .forEach((destAsset) => {
         // Regular swaps
         appendSwap(sourceAsset, destAsset, testSwap);
@@ -216,8 +221,8 @@ export async function testAllSwaps() {
           // CCM swaps
           appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
         }
-      }),
-  );
+      });
+  });
 
   await Promise.all(allSwaps);
 

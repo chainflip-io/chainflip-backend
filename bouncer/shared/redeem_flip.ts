@@ -3,13 +3,13 @@ import { assetDecimals, executeRedemption, getRedemptionDelay } from '@chainflip
 import { HexString } from '@polkadot/util/types';
 import { Wallet, ethers } from 'ethers';
 import Keyring from '@polkadot/keyring';
-import { getNextEthNonce } from './send_eth';
+import { getNextEvmNonce } from './send_evm';
 import { getGatewayAbi } from './eth_abis';
 import {
   sleep,
   observeEvent,
   handleSubstrateError,
-  getEthContractAddress,
+  getEvmContractAddress,
   getChainflipApi,
   amountToFineAmount,
   observeEVMEvent,
@@ -44,8 +44,8 @@ export async function redeemFlip(
   const networkOptions = {
     signer: ethWallet,
     network: 'localnet',
-    stateChainGatewayContractAddress: getEthContractAddress('GATEWAY'),
-    flipContractAddress: getEthContractAddress('FLIP'),
+    stateChainGatewayContractAddress: getEvmContractAddress('Ethereum', 'GATEWAY'),
+    flipContractAddress: getEvmContractAddress('Ethereum', 'FLIP'),
   } as const;
 
   const pendingRedemption = await chainflip.query.flip.pendingRedemptionsReserve(
@@ -73,14 +73,12 @@ export async function redeemFlip(
 
   console.log('Waiting for redemption to be registered');
   const observeEventAmount = flipperinoRedeemAmount === 'Max' ? '*' : flipperinoRedeemAmount.Exact;
-  await observeEVMEvent(gatewayAbi, getEthContractAddress('GATEWAY'), 'RedemptionRegistered', [
-    accountIdHex,
-    observeEventAmount,
-    ethAddress,
-    '*',
-    '*',
-    '*',
-  ]);
+  await observeEVMEvent(
+    gatewayAbi,
+    getEvmContractAddress('Ethereum', 'GATEWAY'),
+    'RedemptionRegistered',
+    [accountIdHex, observeEventAmount, ethAddress, '*', '*', '*'],
+  );
 
   const delay = await getRedemptionDelay(networkOptions);
   console.log(`Waiting for ${delay}s before we can execute redemption`);
@@ -88,7 +86,7 @@ export async function redeemFlip(
 
   console.log(`Executing redemption`);
 
-  const nonce = await getNextEthNonce();
+  const nonce = await getNextEvmNonce('Ethereum');
 
   const redemptionExecutedHandle = observeEvent(
     'funding:RedemptionSettled',

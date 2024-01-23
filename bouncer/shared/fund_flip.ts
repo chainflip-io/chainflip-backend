@@ -2,9 +2,9 @@ import { HexString } from '@polkadot/util/types';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { assetDecimals, fundStateChainAccount } from '@chainflip-io/cli';
 import { Wallet, ethers } from 'ethers';
-import { getNextEthNonce } from './send_eth';
+import { getNextEvmNonce } from './send_evm';
 import {
-  getEthContractAddress,
+  getEvmContractAddress,
   hexPubkeyToFlipAddress,
   decodeFlipAddressForContract,
 } from './utils';
@@ -15,14 +15,15 @@ export async function fundFlip(scAddress: string, flipAmount: string) {
   const chainflip = await getChainflipApi();
   await cryptoWaitReady();
 
-  await approveErc20('FLIP', getEthContractAddress('GATEWAY'), flipAmount);
+  await approveErc20('FLIP', getEvmContractAddress('Ethereum', 'GATEWAY'), flipAmount);
 
   const flipperinoAmount = amountToFineAmount(flipAmount, assetDecimals.FLIP);
 
-  const flipContractAddress = process.env.ETH_FLIP_ADDRESS ?? getEthContractAddress('FLIP');
+  const flipContractAddress =
+    process.env.ETH_FLIP_ADDRESS ?? getEvmContractAddress('Ethereum', 'FLIP');
 
   const gatewayContractAddress =
-    process.env.ETH_GATEWAY_ADDRESS ?? getEthContractAddress('GATEWAY');
+    process.env.ETH_GATEWAY_ADDRESS ?? getEvmContractAddress('Ethereum', 'GATEWAY');
 
   const whaleKey =
     process.env.ETH_USDC_WHALE ||
@@ -41,7 +42,7 @@ export async function fundFlip(scAddress: string, flipAmount: string) {
     flipContractAddress,
   } as const;
   const txOptions = {
-    nonce: BigInt(await getNextEthNonce()),
+    nonce: BigInt(await getNextEvmNonce('Ethereum')),
   } as const;
 
   console.log('Funding ' + flipAmount + ' FLIP to ' + scAddress);

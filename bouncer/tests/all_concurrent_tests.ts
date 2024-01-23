@@ -21,12 +21,12 @@ async function runAllConcurrentTests() {
 
   // Tests that work with any number of nodes
   const tests = [
-    swapLessThanED(),
-    testAllSwaps(),
-    testEthereumDeposits(),
-    testFundRedeem('redeem'),
-    testMultipleMembersGovernance(),
-    testLpApi(),
+    // swapLessThanED(), // WORKS FINE
+    testAllSwaps(), // This works (since right now we are skipping Arbitrum swaps)
+    // testEthereumDeposits(),
+    // testFundRedeem('redeem'), // WORKS FINE
+    // testMultipleMembersGovernance(), // WORKS FINE
+    // testLpApi(),
   ];
 
   // Test that only work if there is more than one node

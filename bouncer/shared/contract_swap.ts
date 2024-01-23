@@ -11,12 +11,12 @@ import {
   getChainflipApi,
   observeBalanceIncrease,
   observeEvent,
-  getEthContractAddress,
+  getEvmContractAddress,
   observeCcmReceived,
   amountToFineAmount,
   defaultAssetAmounts,
 } from './utils';
-import { getNextEthNonce } from './send_eth';
+import { getNextEvmNonce } from './send_evm';
 import { getBalance } from './get_balance';
 import { CcmDepositMetadata } from '../shared/new_swap';
 
@@ -33,12 +33,12 @@ export async function executeContractSwap(
 
   const destChain = assetChains[destAsset];
 
-  const nonce = await getNextEthNonce();
+  const nonce = await getNextEvmNonce(assetChains[srcAsset]);
   const networkOptions = {
     signer: wallet,
     network: 'localnet',
-    vaultContractAddress: getEthContractAddress('VAULT'),
-    srcTokenContractAddress: getEthContractAddress(srcAsset),
+    vaultContractAddress: getEvmContractAddress(assetChains[srcAsset], 'VAULT'),
+    srcTokenContractAddress: getEvmContractAddress(assetChains[srcAsset], srcAsset),
   } as const;
   const txOptions = {
     nonce,
@@ -145,7 +145,7 @@ export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC', amount: strin
       'test test test test test test test test test test test junk',
   ).connect(getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
 
-  await getNextEthNonce((nextNonce) =>
+  await getNextEvmNonce(assetChains[srcAsset], (nextNonce) =>
     approveVault(
       {
         amount,
@@ -154,8 +154,8 @@ export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC', amount: strin
       {
         signer: wallet,
         network: 'localnet',
-        vaultContractAddress: getEthContractAddress('VAULT'),
-        srcTokenContractAddress: getEthContractAddress(srcAsset),
+        vaultContractAddress: getEvmContractAddress(assetChains[srcAsset], 'VAULT'),
+        srcTokenContractAddress: getEvmContractAddress(assetChains[srcAsset], srcAsset),
       },
       {
         nonce: nextNonce,

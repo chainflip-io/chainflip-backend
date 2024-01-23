@@ -3,13 +3,20 @@ import { setTimeout as sleep } from 'timers/promises';
 import Client from 'bitcoin-core';
 import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
 import { Mutex } from 'async-mutex';
-import { Chain, Asset, assetChains, chainContractIds, assetDecimals } from '@chainflip-io/cli';
+import {
+  Chain,
+  Asset,
+  assetChains,
+  chainContractIds,
+  assetDecimals,
+  Chains,
+} from '@chainflip-io/cli';
 import Web3 from 'web3';
 import { u8aToHex } from '@polkadot/util';
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
-import { newEthAddress } from './new_eth_address';
+import { newEvmAddress } from './new_evm_address';
 import { CcmDepositMetadata } from './new_swap';
 import { getCFTesterAbi } from './eth_abis';
 import { SwapParams } from './perform_swap';
@@ -18,29 +25,51 @@ const cfTesterAbi = await getCFTesterAbi();
 
 export const lpMutex = new Mutex();
 export const ethNonceMutex = new Mutex();
+export const arbNonceMutex = new Mutex();
 export const btcClientMutex = new Mutex();
 export const brokerMutex = new Mutex();
 export const snowWhiteMutex = new Mutex();
 
-export function getEthContractAddress(contract: string): string {
-  switch (contract) {
-    case 'VAULT':
-      return '0xb7a5bd0345ef1cc5e66bf61bdec17d2461fbd968';
-    case 'ETH':
-      return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
-    case 'FLIP':
-      return process.env.ETH_FLIP_ADDRESS ?? '0x10C6E9530F1C1AF873a391030a1D9E8ed0630D26';
-    case 'USDC':
-      return process.env.ETH_USDC_ADDRESS ?? '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
-    case 'CFTESTER':
-      return '0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0';
-    case 'GATEWAY':
-      return process.env.ETH_GATEWAY_ADDRESS ?? '0xeEBe00Ac0756308ac4AaBfD76c05c4F3088B8883';
+export function getEvmContractAddress(chain: Chain, contract: string): string {
+  switch (chain) {
+    case Chains.Ethereum:
+      switch (contract) {
+        case 'VAULT':
+          return '0xb7a5bd0345ef1cc5e66bf61bdec17d2461fbd968';
+        case 'ETH':
+          return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+        case 'FLIP':
+          return process.env.ETH_FLIP_ADDRESS ?? '0x10C6E9530F1C1AF873a391030a1D9E8ed0630D26';
+        case 'USDC':
+          return process.env.ETH_USDC_ADDRESS ?? '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
+        case 'CFTESTER':
+          return '0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0';
+        case 'GATEWAY':
+          return process.env.ETH_GATEWAY_ADDRESS ?? '0xeEBe00Ac0756308ac4AaBfD76c05c4F3088B8883';
+        default:
+          throw new Error(`Unsupported contract: ${contract}`);
+      }
+    // TODO: TO update addresses
+    case Chains.Arbitrum:
+      switch (contract) {
+        case 'VAULT':
+          return '0xb7a5bd0345ef1cc5e66bf61bdec17d2461fbd968';
+        case 'ETH':
+          return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+        case 'USDC':
+          return process.env.ETH_USDC_ADDRESS ?? '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
+        case 'CFTESTER':
+          return '0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0';
+        default:
+          throw new Error(`Unsupported contract: ${contract}`);
+      }
     default:
-      throw new Error(`Unsupported contract: ${contract}`);
+      throw new Error(`Unsupported chain: ${chain}`);
   }
 }
 
+// We use this instead of assetChains[asset] from the SDK because
+// the SC strings are lowercase
 export function assetToChain(asset: Asset): string {
   switch (asset) {
     case 'DOT':
@@ -51,6 +80,9 @@ export function assetToChain(asset: Asset): string {
       return 'Eth';
     case 'BTC':
       return 'Btc';
+    case 'ARBUSDC':
+    case 'ARB':
+      return 'Arb';
     default:
       return '';
   }
@@ -83,10 +115,12 @@ export function defaultAssetAmounts(asset: Asset): string {
     case 'BTC':
       return '0.05';
     case 'ETH':
+    case 'ARB':
       return '5';
     case 'DOT':
       return '50';
     case 'USDC':
+    case 'ARBUSDC':
     case 'FLIP':
       return '500';
     default:
@@ -378,7 +412,7 @@ export async function newAddress(
     case 'FLIP':
     case 'ETH':
     case 'USDC':
-      rawAddress = newEthAddress(seed);
+      rawAddress = newEvmAddress(seed);
       break;
     case 'DOT':
       rawAddress = await newDotAddress(seed);
@@ -422,8 +456,12 @@ export async function observeFetch(asset: Asset, address: string): Promise<void>
   for (let i = 0; i < 120; i++) {
     const balance = Number(await getBalance(asset as Asset, address));
     if (balance === 0) {
-      if (assetToChain(asset) === 'Eth') {
-        const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
+      if (assetChains[asset] === Chains.Ethereum || assetChains[asset] === Chains.Arbitrum) {
+        const web3 = new Web3(
+          assetChains[asset] === Chains.Ethereum
+            ? process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'
+            : process.env.ARB_ENDPOINT ?? 'http://127.0.0.1:8547',
+        );
         if ((await web3.eth.getCode(address)) === '0x') {
           throw new Error('Eth address has no bytecode');
         }
@@ -515,7 +553,7 @@ export async function observeCcmReceived(
       chainContractIds[assetChains[sourceAsset]].toString(),
       sourceAddress ?? null,
       messageMetadata.message,
-      getEthContractAddress(destAsset.toString()),
+      getEvmContractAddress(assetChains[destAsset], destAsset.toString()),
       '*',
       '*',
       '*',
