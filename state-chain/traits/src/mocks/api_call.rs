@@ -2,9 +2,10 @@ use core::marker::PhantomData;
 
 use cf_chains::{
 	evm::EvmCrypto, AllBatch, AllBatchError, ApiCall, Chain, ChainCrypto, ChainEnvironment,
-	Ethereum, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, TransferAssetParams,
+	ConsolidationError, Ethereum, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress,
+	TransferAssetParams, TransferFallback,
 };
-use cf_primitives::{chains::assets, EgressId, ForeignChain};
+use cf_primitives::{chains::assets, ForeignChain};
 use codec::{Decode, Encode};
 use frame_support::{CloneNoBound, DebugNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;
@@ -32,6 +33,7 @@ impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::Chai
 pub enum MockEthereumApiCall<MockEthEnvironment> {
 	AllBatch(MockAllBatch<MockEthEnvironment>),
 	ExecutexSwapAndCall(MockExecutexSwapAndCall<MockEthEnvironment>),
+	TransferFallback(MockTransferFallback<MockEthEnvironment>),
 }
 
 impl ApiCall<EvmCrypto> for MockEthereumApiCall<MockEthEnvironment> {
@@ -72,6 +74,7 @@ impl MockAllBatch<MockEthEnvironment> {
 
 thread_local! {
 	static ALL_BATCH_SUCCESS: std::cell::RefCell<bool> = std::cell::RefCell::new(true);
+	pub static SHOULD_CONSOLIDATE: std::cell::Cell<bool> = std::cell::Cell::new(false);
 }
 
 impl AllBatch<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
@@ -92,10 +95,27 @@ impl AllBatch<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 	}
 }
 
+impl cf_chains::ConsolidateCall<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
+	fn consolidate_utxos() -> Result<Self, cf_chains::ConsolidationError> {
+		// Consolidation isn't necessary for Ethereum, but this implementation
+		// helps in testing some generic behaviour
+
+		if SHOULD_CONSOLIDATE.with(|cell| cell.get()) {
+			Ok(Self::AllBatch(MockAllBatch {
+				nonce: Default::default(),
+				fetch_params: Default::default(),
+				transfer_params: Default::default(),
+				_phantom: PhantomData,
+			}))
+		} else {
+			Err(ConsolidationError::NotRequired)
+		}
+	}
+}
+
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Eq, Encode, Decode, TypeInfo)]
 pub struct MockExecutexSwapAndCall<MockEthEnvironment> {
 	nonce: <Ethereum as Chain>::ReplayProtection,
-	egress_id: EgressId,
 	transfer_param: TransferAssetParams<Ethereum>,
 	source_chain: ForeignChain,
 	source_address: Option<ForeignChainAddress>,
@@ -106,7 +126,6 @@ pub struct MockExecutexSwapAndCall<MockEthEnvironment> {
 
 impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 	fn new_unsigned(
-		egress_id: EgressId,
 		transfer_param: TransferAssetParams<Ethereum>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
@@ -118,12 +137,32 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 		} else {
 			Ok(Self::ExecutexSwapAndCall(MockExecutexSwapAndCall {
 				nonce: Default::default(),
-				egress_id,
 				transfer_param,
 				source_chain,
 				source_address,
 				gas_budget,
 				message,
+				_phantom: PhantomData,
+			}))
+		}
+	}
+}
+
+#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Eq, Encode, Decode, TypeInfo)]
+pub struct MockTransferFallback<MockEthEnvironment> {
+	nonce: <Ethereum as Chain>::ReplayProtection,
+	transfer_param: TransferAssetParams<Ethereum>,
+	_phantom: PhantomData<MockEthEnvironment>,
+}
+
+impl TransferFallback<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
+	fn new_unsigned(transfer_param: TransferAssetParams<Ethereum>) -> Result<Self, DispatchError> {
+		if MockEthEnvironment::lookup(transfer_param.asset).is_none() {
+			Err(DispatchError::CannotLookup)
+		} else {
+			Ok(Self::TransferFallback(MockTransferFallback {
+				nonce: Default::default(),
+				transfer_param,
 				_phantom: PhantomData,
 			}))
 		}

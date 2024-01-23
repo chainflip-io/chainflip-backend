@@ -1,13 +1,15 @@
 use cf_amm::{
-	common::{Amount, Price, Tick},
+	common::{Amount, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
 	address::{ForeignChainAddressHumanreadable, ToHumanreadableAddress},
 	eth::Address as EthereumAddress,
+	Chain,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, ForeignChain, NetworkEnvironment, SemVer, SwapOutput,
+	AccountRole, Asset, AssetAmount, BroadcastId, ForeignChain, NetworkEnvironment, SemVer,
+	SwapOutput,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -18,15 +20,19 @@ use jsonrpsee::{
 	SubscriptionSink,
 };
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_pools::{AssetsMap, PoolInfo, PoolLiquidity, PoolOrders, UnidirectionalPoolDepth};
+use pallet_cf_pools::{
+	AskBidMap, AssetsMap, PoolInfo, PoolLiquidity, PoolPrice, UnidirectionalPoolDepth,
+};
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_api::BlockT;
-use sp_runtime::DispatchError;
 use state_chain_runtime::{
 	chainflip::Offence,
 	constants::common::TX_FEE_MULTIPLIER,
-	runtime_apis::{CustomRuntimeApi, LiquidityProviderInfo, RuntimeApiAccountInfoV2},
+	runtime_apis::{
+		CustomRuntimeApi, DispatchErrorWithMessage, FailingWitnessValidators,
+		LiquidityProviderInfo, RuntimeApiAccountInfoV2,
+	},
 };
 use std::{
 	collections::{BTreeMap, HashMap},
@@ -234,12 +240,12 @@ impl From<Asset> for RpcAsset {
 pub struct RpcPoolInfo {
 	#[serde(flatten)]
 	pub pool_info: PoolInfo,
-	pub pair_asset: RpcAsset,
+	pub quote_asset: RpcAsset,
 }
 
 impl From<PoolInfo> for RpcPoolInfo {
 	fn from(pool_info: PoolInfo) -> Self {
-		Self { pool_info, pair_asset: Asset::Usdc.into() }
+		Self { pool_info, quote_asset: Asset::Usdc.into() }
 	}
 }
 
@@ -251,6 +257,9 @@ pub struct PoolsEnvironment {
 #[derive(Serialize, Deserialize)]
 pub struct IngressEgressEnvironment {
 	pub minimum_deposit_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+	pub ingress_fees: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+	pub egress_fees: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+	pub witness_safety_margins: HashMap<ForeignChain, Option<u64>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -261,7 +270,7 @@ pub struct FundingEnvironment {
 
 #[derive(Serialize, Deserialize)]
 pub struct SwappingEnvironment {
-	minimum_swap_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+	maximum_swap_amounts: HashMap<ForeignChain, HashMap<Asset, Option<NumberOrHex>>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -364,7 +373,7 @@ pub trait CustomApi {
 		from_asset: RpcAsset,
 		to_asset: RpcAsset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Price>>;
+	) -> RpcResult<Option<PoolPrice>>;
 	#[method(name = "swap_rate")]
 	fn cf_pool_swap_rate(
 		&self,
@@ -377,49 +386,57 @@ pub trait CustomApi {
 	fn cf_required_asset_ratio_for_range_order(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<AssetsMap<Amount>>>;
+	) -> RpcResult<AssetsMap<Amount>>;
+	#[method(name = "pool_orderbook")]
+	fn cf_pool_orderbook(
+		&self,
+		base_asset: RpcAsset,
+		quote_asset: RpcAsset,
+		orders: u32,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<pallet_cf_pools::PoolOrderbook>;
 	#[method(name = "pool_info")]
 	fn cf_pool_info(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<PoolInfo>>;
+	) -> RpcResult<PoolInfo>;
 	#[method(name = "pool_depth")]
 	fn cf_pool_depth(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<AssetsMap<UnidirectionalPoolDepth>>>;
+	) -> RpcResult<AskBidMap<UnidirectionalPoolDepth>>;
 	#[method(name = "pool_liquidity")]
 	fn cf_pool_liquidity(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<PoolLiquidity>>;
+	) -> RpcResult<PoolLiquidity>;
 	#[method(name = "pool_orders")]
 	fn cf_pool_orders(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
-		lp: state_chain_runtime::AccountId,
+		quote_asset: RpcAsset,
+		lp: Option<state_chain_runtime::AccountId>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<PoolOrders>>;
+	) -> RpcResult<pallet_cf_pools::PoolOrders<state_chain_runtime::Runtime>>;
 	#[method(name = "pool_range_order_liquidity_value")]
 	fn cf_pool_range_order_liquidity_value(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		tick_range: Range<Tick>,
 		liquidity: Liquidity,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<AssetsMap<Amount>>>;
+	) -> RpcResult<AssetsMap<Amount>>;
 	#[method(name = "funding_environment")]
 	fn cf_funding_environment(
 		&self,
@@ -445,9 +462,10 @@ pub trait CustomApi {
 	#[deprecated(note = "Use direct storage access of `CurrentReleaseVersion` instead.")]
 	#[method(name = "current_compatibility_version")]
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
-	#[method(name = "min_swap_amount")]
-	fn cf_min_swap_amount(&self, asset: RpcAsset) -> RpcResult<AssetAmount>;
-	#[subscription(name = "subscribe_pool_price", item = Price)]
+
+	#[method(name = "max_swap_amount")]
+	fn cf_max_swap_amount(&self, asset: RpcAsset) -> RpcResult<Option<AssetAmount>>;
+	#[subscription(name = "subscribe_pool_price", item = PoolPrice)]
 	fn cf_subscribe_pool_price(&self, from_asset: RpcAsset, to_asset: RpcAsset);
 
 	#[subscription(name = "subscribe_prewitness_swaps", item = Vec<AssetAmount>)]
@@ -463,6 +481,19 @@ pub trait CustomApi {
 
 	#[method(name = "supported_assets")]
 	fn cf_supported_assets(&self) -> RpcResult<HashMap<ForeignChain, Vec<Asset>>>;
+
+	#[method(name = "failed_call")]
+	fn cf_failed_call(
+		&self,
+		broadcast_id: BroadcastId,
+	) -> RpcResult<Option<<cf_chains::Ethereum as Chain>::Transaction>>;
+
+	#[method(name = "witness_count")]
+	fn cf_witness_count(
+		&self,
+		hash: state_chain_runtime::Hash,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<FailingWitnessValidators>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -492,8 +523,16 @@ fn to_rpc_error<E: std::error::Error + Send + Sync + 'static>(e: E) -> jsonrpsee
 	CallError::from_std_error(e).into()
 }
 
-fn map_dispatch_error(e: DispatchError) -> jsonrpsee::core::Error {
-	jsonrpsee::core::Error::from(anyhow::anyhow!("Dispatch error: {}", <&'static str>::from(e)))
+fn map_dispatch_error(e: DispatchErrorWithMessage) -> jsonrpsee::core::Error {
+	jsonrpsee::core::Error::from(match e {
+		DispatchErrorWithMessage::Module(message) => match std::str::from_utf8(&message) {
+			Ok(message) => anyhow::anyhow!("DispatchError: {message}"),
+			Err(error) =>
+				anyhow::anyhow!("DispatchError: Unable to deserialize error message: '{error}'"),
+		},
+		DispatchErrorWithMessage::Other(e) =>
+			anyhow::anyhow!("DispatchError: {}", <&'static str>::from(e)),
+	})
 }
 
 impl<C, B> CustomApiServer for CustomRpc<C, B>
@@ -762,7 +801,7 @@ where
 		from_asset: RpcAsset,
 		to_asset: RpcAsset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Price>> {
+	) -> RpcResult<Option<PoolPrice>> {
 		self.client
 			.runtime_api()
 			.cf_pool_price(self.unwrap_or_best(at), from_asset.try_into()?, to_asset.try_into()?)
@@ -794,118 +833,135 @@ where
 					.map_err(|str| anyhow::anyhow!(str))?,
 			)
 			.map_err(to_rpc_error)
-			.and_then(|r| {
-				r.ok_or(jsonrpsee::core::Error::from(anyhow::anyhow!("Unable to process swap.")))
-			})
+			.and_then(|result| result.map_err(map_dispatch_error))
 			.map(RpcSwapOutput::from)
 	}
 
 	fn cf_pool_info(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<PoolInfo>> {
+	) -> RpcResult<PoolInfo> {
 		self.client
 			.runtime_api()
-			.cf_pool_info(self.unwrap_or_best(at), base_asset.try_into()?, pair_asset.try_into()?)
+			.cf_pool_info(self.unwrap_or_best(at), base_asset.try_into()?, quote_asset.try_into()?)
 			.map_err(to_rpc_error)
+			.and_then(|result| result.map_err(map_dispatch_error))
 	}
 
 	fn cf_pool_depth(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		tick_range: Range<Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<AssetsMap<UnidirectionalPoolDepth>>> {
+	) -> RpcResult<AskBidMap<UnidirectionalPoolDepth>> {
 		self.client
 			.runtime_api()
 			.cf_pool_depth(
 				self.unwrap_or_best(at),
 				base_asset.try_into()?,
-				pair_asset.try_into()?,
+				quote_asset.try_into()?,
 				tick_range,
 			)
-			.map_err(to_rpc_error)?
-			.transpose()
-			.map_err(map_dispatch_error)
+			.map_err(to_rpc_error)
+			.and_then(|result| result.map_err(map_dispatch_error))
 	}
 
 	fn cf_pool_liquidity(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<PoolLiquidity>> {
+	) -> RpcResult<PoolLiquidity> {
 		self.client
 			.runtime_api()
 			.cf_pool_liquidity(
 				self.unwrap_or_best(at),
 				base_asset.try_into()?,
-				pair_asset.try_into()?,
+				quote_asset.try_into()?,
 			)
 			.map_err(to_rpc_error)
+			.and_then(|result| result.map_err(map_dispatch_error))
 	}
 
 	fn cf_required_asset_ratio_for_range_order(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<AssetsMap<Amount>>> {
+	) -> RpcResult<AssetsMap<Amount>> {
 		self.client
 			.runtime_api()
 			.cf_required_asset_ratio_for_range_order(
 				self.unwrap_or_best(at),
 				base_asset.try_into()?,
-				pair_asset.try_into()?,
+				quote_asset.try_into()?,
 				tick_range,
 			)
-			.map_err(to_rpc_error)?
-			.transpose()
-			.map_err(map_dispatch_error)
+			.map_err(to_rpc_error)
+			.and_then(|result| result.map_err(map_dispatch_error))
+	}
+
+	fn cf_pool_orderbook(
+		&self,
+		base_asset: RpcAsset,
+		quote_asset: RpcAsset,
+		orders: u32,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<pallet_cf_pools::PoolOrderbook> {
+		self.client
+			.runtime_api()
+			.cf_pool_orderbook(
+				self.unwrap_or_best(at),
+				base_asset.try_into()?,
+				quote_asset.try_into()?,
+				orders,
+			)
+			.map_err(to_rpc_error)
+			.and_then(|result| result.map(Into::into).map_err(map_dispatch_error))
 	}
 
 	fn cf_pool_orders(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
-		lp: state_chain_runtime::AccountId,
+		quote_asset: RpcAsset,
+		lp: Option<state_chain_runtime::AccountId>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<PoolOrders>> {
+	) -> RpcResult<pallet_cf_pools::PoolOrders<state_chain_runtime::Runtime>> {
 		self.client
 			.runtime_api()
 			.cf_pool_orders(
 				self.unwrap_or_best(at),
 				base_asset.try_into()?,
-				pair_asset.try_into()?,
+				quote_asset.try_into()?,
 				lp,
 			)
 			.map_err(to_rpc_error)
+			.and_then(|result| result.map_err(map_dispatch_error))
 	}
 
 	fn cf_pool_range_order_liquidity_value(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		tick_range: Range<Tick>,
 		liquidity: Liquidity,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<AssetsMap<Amount>>> {
+	) -> RpcResult<AssetsMap<Amount>> {
 		self.client
 			.runtime_api()
 			.cf_pool_range_order_liquidity_value(
 				self.unwrap_or_best(at),
 				base_asset.try_into()?,
-				pair_asset.try_into()?,
+				quote_asset.try_into()?,
 				tick_range,
 				liquidity,
 			)
-			.map_err(to_rpc_error)?
-			.transpose()
-			.map_err(map_dispatch_error)
+			.map_err(to_rpc_error)
+			.and_then(|result| result.map_err(map_dispatch_error))
 	}
 
 	fn cf_ingress_egress_environment(
@@ -915,18 +971,39 @@ where
 		let runtime_api = &self.client.runtime_api();
 		let hash = self.unwrap_or_best(at);
 		let mut minimum_deposit_amounts = HashMap::new();
+		let mut ingress_fees = HashMap::new();
+		let mut egress_fees = HashMap::new();
+		let mut witness_safety_margins = HashMap::new();
 
 		for asset in Asset::all() {
-			minimum_deposit_amounts
-				.entry(ForeignChain::from(asset))
-				.or_insert_with(HashMap::new)
-				.insert(
-					asset,
-					runtime_api.cf_min_deposit_amount(hash, asset).map_err(to_rpc_error)?.into(),
-				);
+			let chain = ForeignChain::from(asset);
+			minimum_deposit_amounts.entry(chain).or_insert_with(HashMap::new).insert(
+				asset,
+				runtime_api.cf_min_deposit_amount(hash, asset).map_err(to_rpc_error)?.into(),
+			);
+			ingress_fees.entry(chain).or_insert_with(HashMap::new).insert(
+				asset,
+				runtime_api.cf_ingress_fee(hash, asset).map_err(to_rpc_error)?.into(),
+			);
+			egress_fees.entry(chain).or_insert_with(HashMap::new).insert(
+				asset,
+				runtime_api.cf_egress_fee(hash, asset).map_err(to_rpc_error)?.into(),
+			);
 		}
 
-		Ok(IngressEgressEnvironment { minimum_deposit_amounts })
+		for chain in ForeignChain::iter() {
+			witness_safety_margins.insert(
+				chain,
+				runtime_api.cf_witness_safety_margin(hash, chain).map_err(to_rpc_error)?,
+			);
+		}
+
+		Ok(IngressEgressEnvironment {
+			minimum_deposit_amounts,
+			ingress_fees,
+			egress_fees,
+			witness_safety_margins,
+		})
 	}
 
 	fn cf_swapping_environment(
@@ -935,17 +1012,18 @@ where
 	) -> RpcResult<SwappingEnvironment> {
 		let runtime_api = &self.client.runtime_api();
 		let hash = self.unwrap_or_best(at);
-		let mut minimum_swap_amounts = HashMap::new();
+
+		let mut maximum_swap_amounts = HashMap::new();
 
 		for asset in Asset::all() {
-			let swap_amount = runtime_api.cf_min_swap_amount(hash, asset).map_err(to_rpc_error)?;
-			minimum_swap_amounts
+			let max_amount = runtime_api.cf_max_swap_amount(hash, asset).map_err(to_rpc_error)?;
+			maximum_swap_amounts
 				.entry(asset.into())
 				.or_insert_with(HashMap::new)
-				.insert(asset, swap_amount.into());
+				.insert(asset, max_amount.map(|amt| amt.into()));
 		}
 
-		Ok(SwappingEnvironment { minimum_swap_amounts })
+		Ok(SwappingEnvironment { maximum_swap_amounts })
 	}
 
 	fn cf_funding_environment(
@@ -972,7 +1050,7 @@ where
 				continue
 			}
 
-			let info = self.cf_pool_info(asset.into(), Asset::Usdc.into(), at)?.map(Into::into);
+			let info = self.cf_pool_info(asset.into(), Asset::Usdc.into(), at).ok().map(Into::into);
 
 			fees.entry(asset.into()).or_insert_with(HashMap::new).insert(asset, info);
 		}
@@ -997,10 +1075,10 @@ where
 			.map_err(to_rpc_error)
 	}
 
-	fn cf_min_swap_amount(&self, asset: RpcAsset) -> RpcResult<AssetAmount> {
+	fn cf_max_swap_amount(&self, asset: RpcAsset) -> RpcResult<Option<AssetAmount>> {
 		self.client
 			.runtime_api()
-			.cf_min_swap_amount(self.unwrap_or_best(None), asset.try_into()?)
+			.cf_max_swap_amount(self.unwrap_or_best(None), asset.try_into()?)
 			.map_err(to_rpc_error)
 	}
 
@@ -1051,6 +1129,27 @@ where
 				.or_insert(vec![*asset]);
 		});
 		Ok(chain_to_asset)
+	}
+
+	fn cf_failed_call(
+		&self,
+		broadcast_id: BroadcastId,
+	) -> RpcResult<Option<<cf_chains::Ethereum as Chain>::Transaction>> {
+		self.client
+			.runtime_api()
+			.cf_failed_call(self.unwrap_or_best(None), broadcast_id)
+			.map_err(to_rpc_error)
+	}
+
+	fn cf_witness_count(
+		&self,
+		hash: state_chain_runtime::Hash,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<FailingWitnessValidators>> {
+		self.client
+			.runtime_api()
+			.cf_witness_count(self.unwrap_or_best(at), pallet_cf_witnesser::CallHash(hash.into()))
+			.map_err(to_rpc_error)
 	}
 }
 
@@ -1240,14 +1339,14 @@ mod test {
 	fn test_environment_serialization() {
 		let env = RpcEnvironment {
 			swapping: SwappingEnvironment {
-				minimum_swap_amounts: HashMap::from([
-					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
+				maximum_swap_amounts: HashMap::from([
+					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, Some(0u32.into()))])),
 					(
 						ForeignChain::Ethereum,
 						HashMap::from([
-							(Asset::Flip, u64::MAX.into()),
-							(Asset::Usdc, (u64::MAX / 2 - 1).into()),
-							(Asset::Eth, 0u32.into()),
+							(Asset::Flip, None),
+							(Asset::Usdc, Some((u64::MAX / 2 - 1).into())),
+							(Asset::Eth, Some(0u32.into())),
 						]),
 					),
 				]),
@@ -1263,6 +1362,33 @@ mod test {
 							(Asset::Eth, 0u32.into()),
 						]),
 					),
+				]),
+				ingress_fees: HashMap::from([
+					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
+					(
+						ForeignChain::Ethereum,
+						HashMap::from([
+							(Asset::Flip, AssetAmount::MAX.into()),
+							(Asset::Usdc, (u64::MAX / 2 - 1).into()),
+							(Asset::Eth, 0u32.into()),
+						]),
+					),
+				]),
+				egress_fees: HashMap::from([
+					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
+					(
+						ForeignChain::Ethereum,
+						HashMap::from([
+							(Asset::Flip, AssetAmount::MAX.into()),
+							(Asset::Usdc, (u64::MAX / 2 - 1).into()),
+							(Asset::Eth, 0u32.into()),
+						]),
+					),
+				]),
+				witness_safety_margins: HashMap::from([
+					(ForeignChain::Bitcoin, Some(3u64)),
+					(ForeignChain::Ethereum, Some(3u64)),
+					(ForeignChain::Polkadot, None),
 				]),
 			},
 			funding: FundingEnvironment {

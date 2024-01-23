@@ -198,8 +198,8 @@ impl ExtBuilder {
 				init_chain_state: ChainState::<Ethereum> {
 					block_height: 0,
 					tracked_data: EthereumTrackedData {
-						base_fee: 1000000u32.into(),
-						priority_fee: 100u32.into(),
+						base_fee: 0u32.into(),
+						priority_fee: 0u32.into(),
 					},
 				},
 			},
@@ -218,7 +218,7 @@ impl ExtBuilder {
 			bitcoin_chain_tracking: BitcoinChainTrackingConfig {
 				init_chain_state: ChainState::<Bitcoin> {
 					block_height: 0,
-					tracked_data: BitcoinTrackedData { btc_fee_info: BitcoinFeeInfo::new(1000) },
+					tracked_data: BitcoinTrackedData { btc_fee_info: BitcoinFeeInfo::new(0) },
 				},
 			},
 			bitcoin_threshold_signer: Default::default(),
@@ -228,7 +228,6 @@ impl ExtBuilder {
 			polkadot_vault: Default::default(),
 			environment: Default::default(),
 			liquidity_pools: Default::default(),
-			swapping: Default::default(),
 			system: Default::default(),
 			transaction_payment: Default::default(),
 			bitcoin_ingress_egress: Default::default(),

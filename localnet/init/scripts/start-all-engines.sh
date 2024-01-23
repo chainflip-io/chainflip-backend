@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Starts all the engines necessary for the network, or for an upgrade.
 
 # These need to match what's in the manage.py script.

@@ -303,10 +303,7 @@ impl<Rpc: EthSigningRpcApi> EthersRetrySigningRpcApi for EthRetryRpcClient<Rpc> 
 								},
 							None => {
 								// increase the estimate by 33% for normal transactions
-								estimated_gas
-									.saturating_mul(U256::from(4u64))
-									.checked_div(U256::from(3u64))
-									.unwrap()
+								estimated_gas.saturating_mul(U256::from(4u64)) / 3u64
 							},
 						});
 

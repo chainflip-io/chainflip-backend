@@ -43,15 +43,15 @@ impl EthRpcClient {
 					Ok(chain_id) if chain_id == expected_chain_id.into() => break client,
 					Ok(chain_id) => {
 						tracing::error!(
-								"Connected to Ethereum node but with incorrect chain_id {chain_id}, expected {expected_chain_id} from {http_endpoint}. Please check your CFE
-								configuration file...",
+								"Connected to Ethereum node but with incorrect chain_id {chain_id}, expected {expected_chain_id} from {http_endpoint}. \
+								Please check your CFE configuration file...",
 							);
 					},
 					Err(e) => tracing::error!(
-							"Cannot connect to an Ethereum node at {http_endpoint} with error: {e}. Please check your CFE
-							configuration file. Retrying in {:?}...",
-							poll_interval.period()
-						),
+						"Cannot connect to an Ethereum node at {http_endpoint} with error: {e}. \
+							Please check your CFE configuration file. Retrying in {:?}...",
+						poll_interval.period()
+					),
 				}
 			}
 		})
@@ -318,14 +318,7 @@ impl ReconnectSubscribeApi for ReconnectSubscriptionClient {
 			bail!("Expected chain id {}, eth ws client returned {client_chain_id}.", self.chain_id)
 		}
 
-		Ok(ConscientiousEthWebsocketBlockHeaderStream {
-			stream: Some(
-				web3.eth_subscribe()
-					.subscribe_new_heads()
-					.await
-					.context("Failed to subscribe to new heads with WS Client")?,
-			),
-		})
+		ConscientiousEthWebsocketBlockHeaderStream::new(web3).await
 	}
 }
 

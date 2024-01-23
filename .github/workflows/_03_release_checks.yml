@@ -1,0 +1,84 @@
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: false
+        default: ${{ github.ref_name }}
+      network:
+        type: string
+        required: false
+        default: perseverance
+
+env:
+  FORCE_COLOR: 1
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        manifest:
+          - state-chain/node/Cargo.toml
+          - engine/Cargo.toml
+          - api/bin/chainflip-cli/Cargo.toml
+          - api/bin/chainflip-broker-api/Cargo.toml
+          - api/bin/chainflip-lp-api/Cargo.toml
+          - state-chain/runtime/Cargo.toml
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Install Rust 🦀
+        uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Extract version from Cargo.toml 🌽
+        id: cargo
+        shell: bash
+        run: |
+          echo "version=$(cargo read-manifest --manifest-path ${{ matrix.manifest }} | jq -r .version)" >> $GITHUB_OUTPUT
+
+      - name: Check tag version matches Cargo.toml 🕵️‍♂️
+        shell: bash
+        run: |
+          if [[ "${{ inputs.tag }}" != "${{ steps.cargo.outputs.version }}" ]]; then
+            echo "Tag version (${{ inputs.tag }}) does not match version (${{ steps.cargo.outputs.version }}) in ${{ matrix.manifest }}"
+            exit 1
+          fi
+
+      - name: Check systemd files and debian package config 👀
+        shell: bash
+        run: ./ci/scripts/check_engine_systemd_config.sh ${{ inputs.tag }}
+
+  check-engine-systemd:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Check systemd files and debian package config 👀
+        shell: bash
+        run: ./ci/scripts/check_engine_systemd_config.sh ${{ inputs.tag }}
+
+  check-changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Check changelog 📝
+        shell: bash
+        run: ./ci/scripts/check_changelog.sh ${{ inputs.tag }}
+
+  check-runtime-spec-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Check changelog 📝
+        shell: bash
+        run: ./ci/scripts/check_runtime_spec_version.sh ${{ inputs.network }}

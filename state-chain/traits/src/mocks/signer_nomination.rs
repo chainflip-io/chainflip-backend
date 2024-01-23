@@ -14,7 +14,7 @@ impl BroadcastNomination for MockNominator {
 
 	fn nominate_broadcaster<S>(
 		_seed: S,
-		_exclude_ids: &[Self::BroadcasterId],
+		_exclude_ids: impl IntoIterator<Item = Self::BroadcasterId>,
 	) -> Option<Self::BroadcasterId> {
 		let next_nomination_index = LAST_NOMINATED_INDEX.with(|cell| {
 			let mut last_nomination = cell.borrow_mut();
@@ -43,6 +43,10 @@ impl ThresholdSignerNomination for MockNominator {
 impl MockNominator {
 	pub fn get_nominees() -> Option<BTreeSet<u64>> {
 		THRESHOLD_NOMINEES.with(|cell| cell.borrow().clone())
+	}
+
+	pub fn reset_last_nominee() {
+		LAST_NOMINATED_INDEX.with(|cell| *cell.borrow_mut() = None);
 	}
 
 	pub fn set_nominees(nominees: Option<BTreeSet<u64>>) {

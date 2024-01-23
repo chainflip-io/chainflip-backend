@@ -1,8 +1,7 @@
 use cf_chains::ChainCrypto;
-use cf_primitives::ThresholdSignatureRequestId;
 
 use super::{MockPallet, MockPalletStorage};
-use crate::{EpochKey, KeyState};
+use crate::EpochKey;
 use std::marker::PhantomData;
 
 #[derive(Default)]
@@ -16,18 +15,7 @@ const EPOCH_KEY: &[u8] = b"EPOCH_KEY";
 
 impl<C: ChainCrypto> MockKeyProvider<C> {
 	pub fn add_key(key: C::AggKey) {
-		Self::put_value(
-			EPOCH_KEY,
-			EpochKey { key, epoch_index: Default::default(), key_state: KeyState::Unlocked },
-		);
-	}
-
-	pub fn lock_key(request_id: ThresholdSignatureRequestId) {
-		Self::mutate_value::<EpochKey<C::AggKey>, _, _>(EPOCH_KEY, |maybe_key| {
-			if let Some(key) = maybe_key.as_mut() {
-				key.lock_for_request(request_id);
-			}
-		});
+		Self::put_value(EPOCH_KEY, EpochKey { key, epoch_index: Default::default() });
 	}
 }
 

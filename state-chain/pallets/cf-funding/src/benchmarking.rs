@@ -5,10 +5,7 @@ use super::*;
 
 use cf_traits::{AccountRoleRegistry, Chainflip};
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
-use frame_support::{
-	dispatch::UnfilteredDispatchable,
-	traits::{EnsureOrigin, OnNewAccount},
-};
+use frame_support::traits::{EnsureOrigin, OnNewAccount, UnfilteredDispatchable};
 use frame_system::RawOrigin;
 
 benchmarks! {

@@ -8,7 +8,7 @@ export async function createLpPool(ccy: Asset, initialPrice: number) {
   if (
     (
       await chainflip.query.liquidityPools.pools({
-        assets: { one: 'usdc', zero: ccy.toLowerCase() },
+        assets: { quote: 'usdc', base: ccy.toLowerCase() },
       })
     ).toJSON()! === null
   ) {
@@ -21,9 +21,9 @@ export async function createLpPool(ccy: Asset, initialPrice: number) {
     const poolCreatedEvent = observeEvent(
       'liquidityPools:NewPoolCreated',
       chainflip,
-      (event) => event.data.pairAsset.toUpperCase() === ccy,
+      (event) => event.data.baseAsset.toUpperCase() === ccy,
     );
-    const extrinsic = chainflip.tx.liquidityPools.newPool('usdc', ccy.toLowerCase(), 20, price);
+    const extrinsic = chainflip.tx.liquidityPools.newPool(ccy.toLowerCase(), 'usdc', 20, price);
     await submitGovernanceExtrinsic(extrinsic);
     await poolCreatedEvent;
   }

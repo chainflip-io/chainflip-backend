@@ -9,10 +9,6 @@ use state_chain_runtime::PalletInstanceAlias;
 
 use chain_source::ChainSource;
 
-pub const STATE_CHAIN_CONNECTION: &str = "State Chain client connection failed"; // TODO Replace with infallible SCC requests
-
-pub const STATE_CHAIN_BEHAVIOUR: &str = "State Chain client behavioural assumption not upheld";
-
 #[derive(Clone)]
 pub struct ActiveAndFuture<It: Iterator, St: Stream<Item = It::Item>> {
 	pub active: It,

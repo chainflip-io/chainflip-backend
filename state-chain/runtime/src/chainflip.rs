@@ -50,7 +50,8 @@ use cf_traits::{
 };
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
+	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
+	pallet_prelude::DispatchError,
 	sp_runtime::{
 		traits::{BlockNumberProvider, One, UniqueSaturatedFrom, UniqueSaturatedInto},
 		FixedPointNumber, FixedU64,
@@ -164,18 +165,11 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 		}
 	}
 
-	fn is_valid_for_rebroadcast(
-		call: &EthereumApi<EthEnvironment>,
+	fn requires_signature_refresh(
+		_call: &EthereumApi<EthEnvironment>,
 		_payload: &<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::Payload,
-		current_key: &<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-		signature: &<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
 	) -> bool {
-		// Check if signature is valid
-		<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::verify_threshold_signature(
-			current_key,
-			&call.threshold_signature_payload(),
-			signature,
-		)
+		false
 	}
 
 	/// Calculate the gas limit for a Ethereum call, using the current gas price.
@@ -217,15 +211,13 @@ impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactio
 		// TODO: For now this is a noop until we actually have dot chain tracking
 	}
 
-	fn is_valid_for_rebroadcast(
+	fn requires_signature_refresh(
 		call: &PolkadotApi<DotEnvironment>,
 		payload: &<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::Payload,
-		_current_key: &<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-		_signature: &<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
 	) -> bool {
 		// Current key and signature are irrelevant. The only thing that can invalidate a polkadot
 		// transaction is if the payload changes due to a runtime version update.
-		&call.threshold_signature_payload() == payload
+		&call.threshold_signature_payload() != payload
 	}
 }
 
@@ -243,11 +235,9 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 		// refreshing btc tx is not trivial. We leave it a no-op for now.
 	}
 
-	fn is_valid_for_rebroadcast(
+	fn requires_signature_refresh(
 		_call: &BitcoinApi<BtcEnvironment>,
 		_payload: &<<Bitcoin as Chain>::ChainCrypto as ChainCrypto>::Payload,
-		_current_key: &<<Bitcoin as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-		_signature: &<<Bitcoin as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
 	) -> bool {
 		// The payload for a Bitcoin transaction will never change and so it doesnt need to be
 		// checked here. We also dont need to check for the signature here because even if we are in
@@ -255,7 +245,7 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 		// since its based on those old input UTXOs. In fact, we never have to resign btc txs and
 		// the btc tx is always valid as long as the input UTXOs are valid. Therefore, we don't have
 		// to check anything here and just rebroadcast.
-		true
+		false
 	}
 }
 
@@ -428,9 +418,8 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 
 impl CommKeyBroadcaster for TokenholderGovernanceBroadcaster {
 	fn broadcast(new_key: <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey) {
-		EthereumBroadcaster::threshold_sign_and_broadcast(
+		<EthereumBroadcaster as Broadcaster<Ethereum>>::threshold_sign_and_broadcast(
 			SetCommKeyWithAggKey::<EvmCrypto>::new_unsigned(new_key),
-			None::<RuntimeCall>,
 		);
 	}
 }

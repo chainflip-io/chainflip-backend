@@ -84,14 +84,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				{
 					info!("Handling event: {event}");
 					let call: state_chain_runtime::RuntimeCall = match event.event_parameters {
-						KeyManagerEvents::AggKeySetByAggKeyFilter(_) => pallet_cf_vaults::Call::<
-							_,
-							<Inner::Chain as PalletInstanceAlias>::Instance,
-						>::vault_key_rotated {
-							block_number: header.index,
-							tx_id: event.tx_hash,
-						}
-						.into(),
 						KeyManagerEvents::AggKeySetByGovKeyFilter(AggKeySetByGovKeyFilter {
 							new_agg_key,
 							..
@@ -217,7 +209,8 @@ mod tests {
 						PathBuf::from_str("/some/sc/key/bashful-key").unwrap().as_path(),
 						AccountRole::Unregistered,
 						false,
-						None,
+						false,
+						false,
 					)
 					.await
 					.unwrap();

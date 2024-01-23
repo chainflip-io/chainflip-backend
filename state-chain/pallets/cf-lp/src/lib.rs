@@ -58,7 +58,7 @@ pub mod pallet {
 		type SafeMode: Get<PalletSafeMode>;
 
 		/// The interface for sweeping funds from pools into free balance
-		type PoolApi: PoolApi;
+		type PoolApi: PoolApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
@@ -66,7 +66,7 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// The user does not have enough fund.
+		/// The user does not have enough funds.
 		InsufficientBalance,
 		/// The user has reached the maximum balance.
 		BalanceOverflow,
@@ -76,7 +76,7 @@ pub mod pallet {
 		InvalidEgressAddress,
 		/// Then given encoded address cannot be decoded into a valid ForeignChainAddress.
 		InvalidEncodedAddress,
-		/// An liquidity refund address must be set by the user for the chain before
+		/// A liquidity refund address must be set by the user for the chain before a
 		/// deposit address can be requested.
 		NoLiquidityRefundAddressRegistered,
 		/// Liquidity deposit is disabled due to Safe Mode.
@@ -197,6 +197,9 @@ pub mod pallet {
 					Error::<T>::InvalidEgressAddress
 				);
 
+				// Sweep earned fees
+				T::PoolApi::sweep(&account_id)?;
+
 				// Debit the asset from the account.
 				Self::try_debit_account(&account_id, asset, amount)?;
 
@@ -229,8 +232,9 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Registers an Liquidity Refund Address(LRA) for an account.
-		/// To request deposit address for a chain, an LRA must be registered for that chain.
+		/// Registers a Liquidity Refund Address(LRA) for an account.
+		///
+		/// To request a deposit address for a chain, an LRA must be registered for that chain.
 		///
 		/// ## Events
 		///
@@ -276,13 +280,13 @@ impl<T: Config> LpBalanceApi for Pallet<T> {
 	fn ensure_has_refund_address_for_pair(
 		account_id: &Self::AccountId,
 		base_asset: Asset,
-		pair_asset: Asset,
+		quote_asset: Asset,
 	) -> DispatchResult {
 		ensure!(
 			LiquidityRefundAddress::<T>::contains_key(account_id, ForeignChain::from(base_asset)) &&
 				LiquidityRefundAddress::<T>::contains_key(
 					account_id,
-					ForeignChain::from(pair_asset)
+					ForeignChain::from(quote_asset)
 				),
 			Error::<T>::NoLiquidityRefundAddressRegistered
 		);

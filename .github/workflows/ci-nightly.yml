@@ -14,6 +14,11 @@ jobs:
   test:
     uses: ./.github/workflows/_10_test.yml
     secrets: inherit
+  coverage:
+    uses: ./.github/workflows/_11_coverage.yml
+    with:
+      test_features: runtime-benchmarks,slow-tests
+    secrets: inherit
   build:
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
@@ -32,10 +37,6 @@ jobs:
     with:
       network: "test"
     secrets: inherit
-  post-check:
-    needs: [build]
-    uses: ./.github/workflows/_40_post_check.yml
-    secrets: inherit
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml
@@ -43,3 +44,9 @@ jobs:
       version: "nightly/"
       environment: "development"
     secrets: inherit
+  post-check:
+    needs: [build]
+    uses: ./.github/workflows/_40_post_check.yml
+    secrets: inherit
+    with:
+      full_bouncer: true

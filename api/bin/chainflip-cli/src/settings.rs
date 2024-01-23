@@ -1,4 +1,4 @@
-use chainflip_api::primitives::{AccountRole, Asset, ForeignChain};
+use chainflip_api::primitives::{state_chain_runtime, AccountRole, Asset, ForeignChain};
 pub use chainflip_engine::settings::StateChain;
 use chainflip_engine::{
 	constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT},
@@ -16,7 +16,7 @@ use std::{
 };
 
 #[derive(Parser, Clone, Debug)]
-#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"))]
+#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"), version_short = 'v')]
 pub struct CLICommandLineOptions {
 	#[clap(short = 'c', long = "config-root", env = CONFIG_ROOT, default_value = DEFAULT_CONFIG_ROOT)]
 	pub config_root: String,
@@ -94,7 +94,7 @@ pub enum LiquidityProviderSubcommands {
 		/// Chain of the deposit asset ("Ethereum"|"Polkadot")
 		chain: Option<ForeignChain>,
 	},
-	/// Register an Liquidity Refund Address for the given chain. An address must be
+	/// Register a Liquidity Refund Address for the given chain. An address must be
 	/// registered to request a deposit address for the given chain.
 	RegisterLiquidityRefundAddress { chain: ForeignChain, address: String },
 }
@@ -112,7 +112,7 @@ pub enum CliCommand {
 	)]
 	Redeem {
 		#[clap(
-			help = "Amount to redeem in FLIP (omit this option to redeem all available FLIP)",
+			help = "Amount to redeem in FLIP (omit this option to redeem all available FLIP). Up to 6 decimal places, any more are rounded.",
 			long = "exact"
 		)]
 		amount: Option<f64>,
@@ -186,6 +186,11 @@ pub enum CliCommand {
 		/// Supply a seed to generate the keys deterministically (restore keys).
 		#[clap(short, long, action)]
 		seed_phrase: Option<String>,
+	},
+	#[clap(about = "Count how many validators witnessed a given callhash")]
+	CountWitnesses {
+		#[clap(help = "The hash representing the call to check")]
+		hash: state_chain_runtime::Hash,
 	},
 }
 

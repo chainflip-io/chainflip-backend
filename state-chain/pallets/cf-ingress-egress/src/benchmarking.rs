@@ -7,6 +7,7 @@ use cf_chains::{
 	DepositChannel,
 };
 use frame_benchmarking::{account, benchmarks_instance_pallet};
+use frame_support::traits::OriginTrait;
 
 pub(crate) type TargetChainBlockNumber<T, I> =
 	<<T as Config<I>>::TargetChain as Chain>::ChainBlockNumber;
@@ -80,16 +81,26 @@ benchmarks_instance_pallet! {
 	}: { let _ = Pallet::<T, I>::finalise_ingress(origin, addresses); }
 
 	vault_transfer_failed {
+		let epoch = T::EpochInfo::epoch_index();
 		let origin = T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap();
 		let asset: TargetChainAsset<T, I> = BenchmarkValue::benchmark_value();
 		let amount: TargetChainAmount<T, I> = BenchmarkValue::benchmark_value();
 		let destination_address: TargetChainAccount<T, I> = BenchmarkValue::benchmark_value();
 	}: { let _ = Pallet::<T, I>::vault_transfer_failed(origin, asset, amount, destination_address.clone()); }
 	verify {
-		assert_eq!(FailedVaultTransfers::<T, I>::get(),
-		vec![VaultTransfer {
-			asset, amount, destination_address,
-		}]);
+		assert_eq!(FailedForeignChainCalls::<T, I>::get(epoch).len(), 1);
+	}
+
+	ccm_broadcast_failed {
+	}: { let _ = Pallet::<T, I>::ccm_broadcast_failed(OriginTrait::root(), Default::default()); }
+	verify {
+		let current_epoch = T::EpochInfo::epoch_index();
+		assert_eq!(
+			FailedForeignChainCalls::<T, I>::get(current_epoch),
+			vec![FailedForeignChainCall {
+				broadcast_id:Default::default(),
+				original_epoch: current_epoch
+			}]);
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

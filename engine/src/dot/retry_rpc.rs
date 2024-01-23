@@ -1,6 +1,6 @@
 use crate::{
 	common::option_inner,
-	retrier::Attempt,
+	retrier::{Attempt, RetryLimitReturn},
 	settings::{NodeContainer, WsHttpEndpoints},
 	witness::common::chain_source::{ChainClient, Header},
 };
@@ -14,13 +14,14 @@ use futures_core::Stream;
 use sp_core::H256;
 use std::pin::Pin;
 use subxt::{
-	config::Header as SubxtHeader, events::Events, rpc::types::ChainBlockExtrinsic, PolkadotConfig,
+	backend::legacy::rpc_methods::Bytes, config::Header as SubxtHeader, events::Events,
+	PolkadotConfig,
 };
 use utilities::task_scope::Scope;
 
 use crate::retrier::{RequestLog, RetrierClient};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 use super::{
 	http_rpc::DotHttpRpcClient,
@@ -92,9 +93,14 @@ impl DotRetryRpcClient {
 pub trait DotRetryRpcApi: Clone {
 	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash>;
 
-	async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<ChainBlockExtrinsic>;
+	async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<Bytes>;
 
-	async fn events(&self, block_hash: PolkadotHash) -> Option<Events<PolkadotConfig>>;
+	async fn events<R: RetryLimitReturn>(
+		&self,
+		block_hash: PolkadotHash,
+		parent_hash: PolkadotHash,
+		retry_limit: R,
+	) -> R::ReturnType<Option<Events<PolkadotConfig>>>;
 
 	async fn runtime_version(&self, block_hash: Option<H256>) -> RuntimeVersion;
 
@@ -118,13 +124,13 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 			.await
 	}
 
-	async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<ChainBlockExtrinsic> {
+	async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<Bytes> {
 		self.rpc_retry_client
 			.request(
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
-						client.extrinsics(block_hash).await?.ok_or(anyhow::anyhow!(
+						client.extrinsics(block_hash).await?.ok_or(anyhow!(
 						"Block not found when querying for extrinsics at block hash {block_hash:?}"
 					))
 					})
@@ -134,14 +140,20 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 			.await
 	}
 
-	async fn events(&self, block_hash: PolkadotHash) -> Option<Events<PolkadotConfig>> {
+	async fn events<R: RetryLimitReturn>(
+		&self,
+		block_hash: PolkadotHash,
+		parent_hash: PolkadotHash,
+		retry_limit: R,
+	) -> R::ReturnType<Option<Events<PolkadotConfig>>> {
 		self.rpc_retry_client
-			.request(
-				Box::pin(move |client| {
+			.request_with_limit(
+				Box::pin(move |client: DotHttpRpcClient| {
 					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.events(block_hash).await })
+					Box::pin(async move { client.events(block_hash, parent_hash).await })
 				}),
 				RequestLog::new("events".to_string(), Some(format!("{block_hash:?}"))),
+				retry_limit,
 			)
 			.await
 	}
@@ -245,19 +257,20 @@ impl ChainClient for DotRetryRpcClient {
 							.block_hash(index)
 							.await?
 							// TODO: Make these just return Result?
-							.ok_or(anyhow::anyhow!("No block hash found for index {index}"))?;
+							.ok_or(anyhow!("No block hash found for index {index}"))?;
 						let header = client
 							.block(block_hash)
 							.await?
-							.ok_or(anyhow::anyhow!("No block found for block hash {block_hash:?}"))?
+							.ok_or(anyhow!("No block found for block hash {block_hash:?}"))?
 							.block
 							.header;
 
 						assert_eq!(index, header.number);
 
-						let events = client.events(block_hash).await?.ok_or(anyhow::anyhow!(
-							"No events found for block hash {block_hash:?}"
-						))?;
+						let events = client
+							.events(block_hash, header.parent_hash)
+							.await?
+							.ok_or(anyhow!("No events found for block hash {block_hash:?}"))?;
 						Ok(Header {
 							index,
 							hash: header.hash(),
@@ -288,9 +301,9 @@ pub mod mocks {
 		impl DotRetryRpcApi for DotHttpRpcClient {
 			async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash>;
 
-			async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<ChainBlockExtrinsic>;
+			async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<Bytes>;
 
-			async fn events(&self, block_hash: PolkadotHash) -> Option<Events<PolkadotConfig>>;
+			async fn events<R: RetryLimitReturn>(&self, block_hash: PolkadotHash, parent_hash: PolkadotHash, retry_limit: R) -> R::ReturnType<Option<Events<PolkadotConfig>>>;
 
 			async fn runtime_version(&self, block_hash: Option<H256>) -> RuntimeVersion;
 
@@ -308,6 +321,8 @@ mod tests {
 	use futures_util::FutureExt;
 
 	use utilities::task_scope::task_scope;
+
+	use crate::retrier::NoRetryLimit;
 
 	use super::*;
 
@@ -335,7 +350,7 @@ mod tests {
 				let extrinsics = dot_retry_rpc_client.extrinsics(hash).await;
 				println!("extrinsics: {:?}", extrinsics);
 
-				let events = dot_retry_rpc_client.events(hash).await;
+				let events = dot_retry_rpc_client.events(hash, hash, NoRetryLimit).await;
 				println!("Events: {:?}", events);
 
 				let runtime_version = dot_retry_rpc_client.runtime_version(None).await;

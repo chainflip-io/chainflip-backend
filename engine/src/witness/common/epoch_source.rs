@@ -4,7 +4,12 @@ use std::{
 };
 
 use crate::{
-	common::Signal, state_chain_observer::client, witness::common::STATE_CHAIN_CONNECTION,
+	common::Signal,
+	state_chain_observer::client::{
+		storage_api::StorageApi,
+		stream_api::{StreamApi, FINALIZED},
+		STATE_CHAIN_CONNECTION,
+	},
 };
 use cf_chains::Chain;
 use cf_primitives::{AccountId, EpochIndex};
@@ -75,8 +80,8 @@ impl EpochSource<(), ()> {
 	pub async fn builder<
 		'a,
 		'env,
-		StateChainStream: client::StateChainStreamApi,
-		StateChainClient: client::storage_api::StorageApi + Send + Sync + 'static,
+		StateChainStream: StreamApi<FINALIZED>,
+		StateChainClient: StorageApi + Send + Sync + 'static,
 	>(
 		scope: &'a Scope<'env, anyhow::Error>,
 		mut state_chain_stream: StateChainStream,
@@ -232,7 +237,7 @@ impl<Info: Clone + Send + Sync + 'static, HistoricInfo: Clone + Send + Sync + 's
 impl<
 		'a,
 		'env,
-		StateChainClient: client::storage_api::StorageApi + Send + Sync + 'static,
+		StateChainClient: StorageApi + Send + Sync + 'static,
 		Info: Clone + Send + Sync + 'static,
 		HistoricInfo: Clone + Send + Sync + 'static,
 	> EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>
@@ -393,13 +398,8 @@ pub type VaultSource<TChain, ExtraInfo, ExtraHistoricInfo> = EpochSource<
 	(<TChain as Chain>::ChainBlockNumber, ExtraHistoricInfo),
 >;
 
-impl<
-		'a,
-		'env,
-		StateChainClient: client::storage_api::StorageApi + Send + Sync + 'static,
-		Info,
-		HistoricInfo,
-	> EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>
+impl<'a, 'env, StateChainClient: StorageApi + Send + Sync + 'static, Info, HistoricInfo>
+	EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>
 {
 	/// Get all the vaults for each each epoch for a particular chain.
 	/// Not all epochs will have all vaults. For example, the first epoch will not have a vault for

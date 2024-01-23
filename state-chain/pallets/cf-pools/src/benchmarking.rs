@@ -8,9 +8,8 @@ use cf_traits::{AccountRoleRegistry, LpBalanceApi};
 use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::{
 	assert_ok,
-	dispatch::UnfilteredDispatchable,
 	sp_runtime::traits::One,
-	traits::{EnsureOrigin, OnNewAccount},
+	traits::{EnsureOrigin, OnNewAccount, UnfilteredDispatchable},
 };
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 
@@ -42,14 +41,14 @@ benchmarks! {
 	new_pool {
 		let call =  Call::<T>::new_pool {
 			base_asset: Asset::Eth,
-			pair_asset: Asset::Usdc,
+			quote_asset: Asset::Usdc,
 			fee_hundredth_pips: 0u32,
 			initial_price: price_at_tick(0).unwrap(),
 		};
 	}: {
 		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
 	} verify {
-		assert!(Pools::<T>::get(CanonicalAssetPair::new(Asset::Eth, STABLE_ASSET).unwrap()).is_some());
+		assert!(Pools::<T>::get(AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap()).is_some());
 	}
 
 	update_range_order {
@@ -75,11 +74,11 @@ benchmarks! {
 			RangeOrderSize::AssetAmounts {
 				maximum: AssetAmounts {
 					base: 1_000_000,
-					pair: 1_000_000,
+					quote: 1_000_000,
 				},
 				minimum: AssetAmounts {
 					base: 500_000,
-					pair: 500_000,
+					quote: 500_000,
 				},
 			}
 		)
@@ -108,11 +107,11 @@ benchmarks! {
 		RangeOrderSize::AssetAmounts {
 			maximum: AssetAmounts {
 				base: 1_000_000,
-				pair: 1_000_000,
+				quote: 1_000_000,
 			},
 			minimum: AssetAmounts {
 				base: 500_000,
-				pair: 500_000,
+				quote: 500_000,
 			},
 		}
 	)
@@ -135,6 +134,7 @@ benchmarks! {
 		RawOrigin::Signed(caller.clone()),
 		Asset::Eth,
 		Asset::Usdc,
+		Order::Sell,
 		0,
 		Some(100),
 		IncreaseOrDecrease::Increase(1_000_000)
@@ -158,6 +158,7 @@ benchmarks! {
 		RawOrigin::Signed(caller.clone()),
 		Asset::Eth,
 		Asset::Usdc,
+		Order::Sell,
 		0,
 		Some(100),
 		1_000
@@ -179,8 +180,9 @@ benchmarks! {
 		));
 		assert_ok!(Pallet::<T>::set_limit_order(
 			RawOrigin::Signed(caller.clone()).into(),
-			Asset::Usdc,
 			Asset::Eth,
+			Asset::Usdc,
+			Order::Buy,
 			0,
 			Some(0),
 			10_000,
@@ -189,6 +191,7 @@ benchmarks! {
 			RawOrigin::Signed(caller.clone()).into(),
 			Asset::Eth,
 			Asset::Usdc,
+			Order::Sell,
 			1,
 			Some(0),
 			10_000,
@@ -197,18 +200,46 @@ benchmarks! {
 		let fee = 1_000;
 		let call = Call::<T>::set_pool_fees {
 			base_asset: Asset::Eth,
-			pair_asset: Asset::Usdc,
+			quote_asset: Asset::Usdc,
 			fee_hundredth_pips: fee,
 		};
 	}: { let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap()); }
 	verify {
 		assert_eq!(
 			Pallet::<T>::pool_info(Asset::Eth, STABLE_ASSET),
-			Some(PoolInfo {
+			Ok(PoolInfo {
 				limit_order_fee_hundredth_pips: fee,
 				range_order_fee_hundredth_pips: fee,
 			})
 		);
+	}
+
+	schedule_limit_order_update {
+		let caller = new_lp_account::<T>();
+		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, Asset::Usdc, 0, price_at_tick(0).unwrap()));
+		assert_ok!(T::LpBalance::try_credit_account(
+			&caller,
+			Asset::Eth,
+			1_000_000,
+		));
+		assert_ok!(T::LpBalance::try_credit_account(
+			&caller,
+			Asset::Usdc,
+			1_000_000,
+		));
+	}: _(
+		RawOrigin::Signed(caller.clone()),
+		Box::new(Call::<T>::set_limit_order {
+			base_asset: Asset::Eth,
+			quote_asset: Asset::Usdc,
+			side: Order::Sell,
+			id: 0,
+			option_tick: Some(0),
+			sell_amount: 100,
+		}),
+		BlockNumberFor::<T>::from(5u32)
+	) verify {
+		assert!(!ScheduledLimitOrderUpdates::<T>::get(BlockNumberFor::<T>::from(5u32)).is_empty());
 	}
 
 	impl_benchmark_test_suite!(

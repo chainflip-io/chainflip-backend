@@ -15,16 +15,16 @@ type PoolState = super::PoolState<LiquidityProvider>;
 
 #[test]
 fn test_basic_swaps() {
-	fn inner(asset: Side) {
+	fn inner(order: Order) {
 		{
 			let mut pool_state = PoolState {
 				limit_orders: limit_orders::PoolState::new(0).unwrap(),
 				range_orders: range_orders::PoolState::new(0, MIN_SQRT_PRICE).unwrap(),
 			};
 
-			assert_eq!(pool_state.swap(asset, Order::Sell, 0.into()), (0.into(), 0.into()));
-			assert_eq!(pool_state.swap(asset, Order::Sell, Amount::MAX), (0.into(), Amount::MAX));
-			assert_eq!(pool_state.swap(asset, Order::Sell, 0.into()), (0.into(), 0.into()));
+			assert_eq!(pool_state.swap(order, 0.into(), None), (0.into(), 0.into()));
+			assert_eq!(pool_state.swap(order, Amount::MAX, None), (0.into(), Amount::MAX));
+			assert_eq!(pool_state.swap(order, 0.into(), None), (0.into(), 0.into()));
 		}
 
 		{
@@ -38,25 +38,21 @@ fn test_basic_swaps() {
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_mint_limit_order(
 					&LiquidityProvider::from([0; 32]),
-					!asset,
-					Order::Sell,
+					!order,
 					0,
 					amount
 				)),
 				(Default::default(), limit_orders::PositionInfo::new(amount))
 			);
 
-			assert_eq!(pool_state.swap(asset, Order::Sell, 0.into()), (0.into(), 0.into()));
-			assert_eq!(
-				pool_state.swap(asset, Order::Sell, Amount::MAX),
-				(amount, Amount::MAX - amount)
-			);
+			assert_eq!(pool_state.swap(order, 0.into(), None), (0.into(), 0.into()));
+			assert_eq!(pool_state.swap(order, Amount::MAX, None), (amount, Amount::MAX - amount));
 		}
 
 		{
-			let initial_sqrt_price = match asset {
-				common::Side::Zero => MAX_SQRT_PRICE - 1,
-				common::Side::One => MIN_SQRT_PRICE,
+			let initial_sqrt_price = match order.to_sold_side() {
+				Side::Zero => MAX_SQRT_PRICE,
+				Side::One => MIN_SQRT_PRICE,
 			};
 			let mut pool_state = PoolState {
 				limit_orders: limit_orders::PoolState::new(0).unwrap(),
@@ -82,19 +78,19 @@ fn test_basic_swaps() {
 			);
 			assert_eq!(position_info.liquidity, liquidity);
 
-			assert_eq!(pool_state.swap(asset, Order::Sell, 0.into()), (0.into(), 0.into()));
+			assert_eq!(pool_state.swap(order, 0.into(), None), (0.into(), 0.into()));
 			assert_eq!(
-				pool_state.swap(asset, Order::Sell, Amount::MAX),
+				pool_state.swap(order, Amount::MAX, None),
 				(
-					minted_amounts[!asset] - 1, /* -1 is due to rounding down */
-					Amount::MAX - minted_amounts[!asset]
+					minted_amounts[!order.to_sold_side()] - 1, /* -1 is due to rounding down */
+					Amount::MAX - minted_amounts[!order.to_sold_side()]
 				)
 			);
 		}
 
 		{
-			let initial_sqrt_price = match asset {
-				Side::Zero => MAX_SQRT_PRICE - 1,
+			let initial_sqrt_price = match order.to_sold_side() {
+				Side::Zero => MAX_SQRT_PRICE,
 				Side::One => MIN_SQRT_PRICE,
 			};
 			let mut pool_state = PoolState {
@@ -126,29 +122,31 @@ fn test_basic_swaps() {
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_mint_limit_order(
 					&LiquidityProvider::from([0; 32]),
-					!asset,
-					Order::Sell,
+					!order,
 					0,
 					limit_order_liquidity
 				)),
 				(Default::default(), limit_orders::PositionInfo::new(limit_order_liquidity))
 			);
 
-			assert_eq!(pool_state.swap(asset, Order::Sell, 0.into()), (0.into(), 0.into()));
+			assert_eq!(pool_state.swap(order, 0.into(), None), (0.into(), 0.into()));
 			assert_eq!(
-				pool_state.swap(asset, Order::Sell, Amount::MAX),
+				pool_state.swap(order, Amount::MAX, None),
 				(
-					limit_order_liquidity + range_order_minted_amounts[!asset] - 1, /* -1 is due
-					                                                                 * to rounding
-					                                                                 * down */
-					Amount::MAX - (limit_order_liquidity + range_order_minted_amounts[!asset]) - 1 /* -1 is due to rounding down */
+					limit_order_liquidity + range_order_minted_amounts[!order.to_sold_side()] - 1, /* -1 is due
+					                                                                                * to rounding
+					                                                                                * down */
+					Amount::MAX -
+						(limit_order_liquidity +
+							range_order_minted_amounts[!order.to_sold_side()]) -
+						1 /* -1 is due to rounding down */
 				)
 			);
 		}
 
 		{
-			let initial_sqrt_price = match asset {
-				Side::Zero => MAX_SQRT_PRICE - 1,
+			let initial_sqrt_price = match order.to_sold_side() {
+				Side::Zero => MAX_SQRT_PRICE,
 				Side::One => MIN_SQRT_PRICE,
 			};
 			let mut pool_state = PoolState {
@@ -184,29 +182,30 @@ fn test_basic_swaps() {
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_mint_limit_order(
 					&LiquidityProvider::from([0; 32]),
-					!asset,
-					Order::Sell,
+					!order,
 					0,
 					limit_order_liquidity
 				)),
 				(Default::default(), limit_orders::PositionInfo::new(limit_order_liquidity))
 			);
 
-			assert_eq!(pool_state.swap(asset, Order::Sell, 0.into()), (0.into(), 0.into()));
+			assert_eq!(pool_state.swap(order, 0.into(), None), (0.into(), 0.into()));
 			assert_eq!(
-				pool_state.swap(asset, Order::Sell, Amount::MAX),
+				pool_state.swap(order, Amount::MAX, None),
 				(
-					limit_order_liquidity + range_order_minted_amounts[!asset] - 2, /* -2 is due
-					                                                                 * to rounding
-					                                                                 * down */
-					Amount::MAX - (limit_order_liquidity + range_order_minted_amounts[!asset])
+					limit_order_liquidity + range_order_minted_amounts[!order.to_sold_side()] - 2, /* -2 is due
+					                                                                                * to rounding
+					                                                                                * down */
+					Amount::MAX -
+						(limit_order_liquidity +
+							range_order_minted_amounts[!order.to_sold_side()])
 				)
 			);
 		}
 	}
 
-	inner(Side::Zero);
-	inner(Side::One);
+	inner(Order::Sell);
+	inner(Order::Buy);
 }
 
 #[test]

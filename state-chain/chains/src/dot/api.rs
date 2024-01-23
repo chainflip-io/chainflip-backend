@@ -45,6 +45,15 @@ impl<T: ChainEnvironment<VaultAccount, PolkadotAccountId> + Get<RuntimeVersion>>
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct VaultAccount;
 
+impl<E> ConsolidateCall<Polkadot> for PolkadotApi<E>
+where
+	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
+{
+	fn consolidate_utxos() -> Result<Self, ConsolidationError> {
+		Err(ConsolidationError::NotRequired)
+	}
+}
+
 impl<E> AllBatch<Polkadot> for PolkadotApi<E>
 where
 	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
@@ -106,7 +115,6 @@ where
 	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
 {
 	fn new_unsigned(
-		_egress_id: EgressId,
 		_transfer_param: TransferAssetParams<Polkadot>,
 		_source_chain: ForeignChain,
 		_source_address: Option<ForeignChainAddress>,
@@ -114,6 +122,15 @@ where
 		_message: Vec<u8>,
 	) -> Result<Self, DispatchError> {
 		Err(DispatchError::Other("Not implemented"))
+	}
+}
+
+impl<E> TransferFallback<Polkadot> for PolkadotApi<E>
+where
+	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
+{
+	fn new_unsigned(_transfer_param: TransferAssetParams<Polkadot>) -> Result<Self, DispatchError> {
+		Err(DispatchError::Other("TransferFallback is not supported for the Polkadot chain."))
 	}
 }
 

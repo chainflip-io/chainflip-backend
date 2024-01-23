@@ -3,7 +3,7 @@ name: Post build checks
 on:
   workflow_call:
     inputs:
-      simple_bouncer:
+      full_bouncer:
         type: boolean
         default: false
       timeout-minutes:
@@ -24,17 +24,17 @@ jobs:
     timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
       - name: Checkout chainflip-backend
-        uses: actions/checkout@v3
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Login to Github Container Registry 🔑
-        uses: docker/login-action@v2
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure NodeJS
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65
         with:
           node-version: 18
           cache: "pnpm"
@@ -57,7 +57,7 @@ jobs:
           npm install -g wscat
 
       - name: Download binaries
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@7a1cd3216ca9260cd8022db641d960b1db4d1be4
         with:
           name: chainflip-backend-bin-ubuntu-22.04
 
@@ -78,14 +78,14 @@ jobs:
           ./localnet/manage.sh
 
       - name: Run EinfachHeuteLeiderNicht.exe
-        if: inputs.simple_bouncer
+        if: inputs.full_bouncer
         working-directory: bouncer
         run: |
-          ./run_simple.sh
+          ./full_bouncer.sh
 
       - name: Run HeuteLeiderNicht.exe
         id: heuteleidernicht
-        if: ${{ ! inputs.simple_bouncer }}
+        if: ${{ ! inputs.full_bouncer }}
         working-directory: bouncer
         run: |
           ./run.sh
@@ -100,14 +100,25 @@ jobs:
         run: |
           cat /tmp/chainflip/*/chainflip-node.log
 
+      - name: Print chainflip-broker-api logs
+        if: failure()
+        run: |
+          cat /tmp/chainflip/chainflip-broker-api.log
+
+      - name: Print chainflip-lp-api logs
+        if: failure()
+        run: |
+          cat /tmp/chainflip/chainflip-lp-api.log
+
       - name: Upload Localnet Logs 💾
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@c7d193f32edcb7bfad88892161225aeda64e9392
         with:
           name: localnet-logs
           path: |
             /tmp/chainflip/*/chainflip-*.log
+            /tmp/chainflip/chainflip-*.log
 
       - name: Clean Up docker containers 🧹
         if: always()
@@ -122,11 +133,9 @@ jobs:
         env:
           DISCORD_USERNAME: "HEUTE LEIDER NICHT"
           DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
-        uses: Ilshidur/action-discord@0.3.2
+        uses: Ilshidur/action-discord@0c4b27844ba47cb1c7bee539c8eead5284ce9fa9
         with:
           args: |
             ❗️❗️❗️❗️ Sorry **${{ github.actor }}**, the Bouncer has rejected you ❗️❗️❗️❗️
-            👾 Link to job: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            👾 Link to job: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>
             #️⃣ Tagging: <@&939151218708709416>
-            https://media.giphy.com/media/wHfwCBZzCMhmE/giphy.gif
-

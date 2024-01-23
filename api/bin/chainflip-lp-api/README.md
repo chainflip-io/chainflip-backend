@@ -33,6 +33,9 @@ OPTIONS:
 
         --state_chain.ws_endpoint <WS_ENDPOINT>
             The state chain nodes RPC endpoint. [default: ws://localhost:9944]
+
+    -v, --version 
+        Print the version of the API
 ```
 
 ## Working Example
@@ -50,7 +53,7 @@ It will print `🎙 Server is listening on 0.0.0.0:80.` and continue to run.
 
 2. In another terminal:
 
-Register as an liquidity provider if you are not already.
+Register as a liquidity provider if you are not already.
 
 ```bash copy
 curl -H "Content-Type: application/json" \

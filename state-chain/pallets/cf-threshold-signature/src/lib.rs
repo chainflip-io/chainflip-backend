@@ -9,8 +9,6 @@ pub mod mock;
 mod tests;
 
 mod benchmarking;
-pub mod migrations;
-
 pub mod weights;
 
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -21,19 +19,19 @@ use cf_primitives::{
 	AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId as RequestId,
 };
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, Chainflip, EpochInfo,
-	EpochKey, KeyProvider, ThresholdSignerNomination,
+	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, CfeMultisigRequest,
+	Chainflip, EpochInfo, EpochKey, KeyProvider, ThresholdSignerNomination,
 };
+use cfe_events::ThresholdSignatureRequest;
 
 use cf_runtime_utilities::log_or_panic;
 use frame_support::{
-	dispatch::UnfilteredDispatchable,
 	ensure,
 	sp_runtime::{
 		traits::{BlockNumberProvider, Saturating},
 		RuntimeDebug,
 	},
-	traits::{DefensiveOption, EnsureOrigin, Get, StorageVersion},
+	traits::{DefensiveOption, EnsureOrigin, Get, StorageVersion, UnfilteredDispatchable},
 };
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
@@ -57,9 +55,6 @@ pub enum PalletOffence {
 
 #[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum RequestType<Key, Participants> {
-	/// Will use the current key and current authority set (which might change between retries).
-	/// This signing request will be retried until success.
-	CurrentKey,
 	/// Uses the provided key and selects new participants from the provided epoch.
 	/// This signing request will be retried until success.
 	SpecificKey(Key, EpochIndex),
@@ -76,7 +71,7 @@ pub enum ThresholdCeremonyType {
 	KeygenVerification,
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
 
 const THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
 
@@ -84,7 +79,8 @@ const THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
 pub mod pallet {
 	use super::*;
 	use cf_traits::{
-		AccountRoleRegistry, AsyncResult, CeremonyIdProvider, ThresholdSignerNomination,
+		AccountRoleRegistry, AsyncResult, CeremonyIdProvider, CfeMultisigRequest,
+		ThresholdSignerNomination,
 	};
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo,
@@ -243,6 +239,8 @@ pub mod pallet {
 		#[pallet::constant]
 		type CeremonyRetryDelay: Get<BlockNumberFor<Self>>;
 
+		type CfeMultisigRequest: CfeMultisigRequest<Self, Self::TargetChainCrypto>;
+
 		/// Pallet weights
 		type Weights: WeightInfo;
 	}
@@ -365,11 +363,6 @@ pub mod pallet {
 			request_id: RequestId,
 			attempt_count: AttemptCount,
 		},
-		/// We cannot sign because the key is unavailable.
-		CurrentKeyUnavailable {
-			request_id: RequestId,
-			attempt_count: AttemptCount,
-		},
 		/// The threshold signature response timeout has been updated
 		ThresholdSignatureResponseTimeoutUpdated {
 			new_timeout: BlockNumberFor<T>,
@@ -415,18 +408,14 @@ pub mod pallet {
 						ThresholdCeremonyType::Standard => {
 							T::OffenceReporter::report_many(
 								PalletOffence::ParticipateSigningFailed,
-								&offenders[..],
+								offenders,
 							);
 
 							Self::new_ceremony_attempt(RequestInstruction::new(
 								request_id,
 								attempt_count.wrapping_add(1),
 								payload,
-								if <T::TargetChainCrypto as ChainCrypto>::sign_with_specific_key() {
-									RequestType::SpecificKey(key, epoch)
-								} else {
-									RequestType::CurrentKey
-								},
+								RequestType::SpecificKey(key, epoch),
 							));
 							Event::<T, I>::RetryRequested { request_id, ceremony_id }
 						},
@@ -675,18 +664,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			} else {
 				(
 					match request_instruction.request_type {
-						RequestType::CurrentKey => T::KeyProvider::active_epoch_key()
-							.and_then(|EpochKey { key_state, key, epoch_index }| {
-								if key_state.is_available_for_request(request_id) {
-									Some((key, epoch_index))
-								} else {
-									None
-								}
-							})
-							.ok_or(Event::<T, I>::CurrentKeyUnavailable {
-								request_id,
-								attempt_count,
-							}),
 						RequestType::SpecificKey(key, epoch_index) => Ok((key, epoch_index)),
 						_ => unreachable!("RequestType::KeygenVerification is handled above"),
 					}
@@ -733,6 +710,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					request_id,
 					attempt_count
 				);
+
+				T::CfeMultisigRequest::signature_request(ThresholdSignatureRequest {
+					ceremony_id,
+					epoch_index: epoch,
+					key,
+					signatories: participants.clone(),
+					payload: payload.clone(),
+				});
+
+				// TODO: consider removing this
 				Event::<T, I>::ThresholdSignatureRequest {
 					request_id,
 					ceremony_id,
@@ -816,14 +803,11 @@ where
 	type ValidatorId = T::ValidatorId;
 
 	fn request_signature(payload: PayloadFor<T, I>) -> RequestId {
-		let request_type = if <T::TargetChainCrypto as ChainCrypto>::sign_with_specific_key() {
-			T::KeyProvider::active_epoch_key().defensive_map_or_else(
-				|| RequestType::CurrentKey,
-				|EpochKey { key, epoch_index, .. }| RequestType::SpecificKey(key, epoch_index),
-			)
-		} else {
-			RequestType::CurrentKey
-		};
+		let request_type = T::KeyProvider::active_epoch_key().defensive_map_or_else(
+			|| RequestType::SpecificKey(Default::default(), Default::default()),
+			|EpochKey { key, epoch_index, .. }| RequestType::SpecificKey(key, epoch_index),
+		);
+
 		Self::inner_request_signature(payload, request_type)
 	}
 

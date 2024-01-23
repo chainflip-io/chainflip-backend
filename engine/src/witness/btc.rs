@@ -4,7 +4,7 @@ pub mod btc_source;
 
 use std::sync::Arc;
 
-use bitcoin::{BlockHash, Transaction};
+use bitcoin::BlockHash;
 use cf_chains::btc::{self, deposit_address::DepositAddress, BlockNumber, CHANGE_ADDRESS_SALT};
 use cf_primitives::{EpochIndex, NetworkEnvironment};
 use futures_core::Future;
@@ -12,10 +12,15 @@ use secp256k1::hashes::Hash;
 use utilities::task_scope::Scope;
 
 use crate::{
-	btc::retry_rpc::{BtcRetryRpcApi, BtcRetryRpcClient},
+	btc::{
+		retry_rpc::{BtcRetryRpcApi, BtcRetryRpcClient},
+		rpc::VerboseTransaction,
+	},
 	db::PersistentKeyDB,
 	state_chain_observer::client::{
-		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
+		extrinsic_api::signed::SignedExtrinsicApi,
+		storage_api::StorageApi,
+		stream_api::{StreamApi, FINALIZED, UNFINALIZED},
 	},
 };
 use btc_source::BtcSource;
@@ -29,7 +34,7 @@ use anyhow::Result;
 
 pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoricInfo>(
 	epoch: Vault<cf_chains::Bitcoin, ExtraInfo, ExtraHistoricInfo>,
-	header: Header<u64, BlockHash, (Vec<Transaction>, Vec<(btc::Hash, BlockNumber)>)>,
+	header: Header<u64, BlockHash, (Vec<VerboseTransaction>, Vec<(btc::Hash, BlockNumber)>)>,
 	process_call: ProcessCall,
 ) where
 	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
@@ -43,7 +48,7 @@ pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoric
 
 	let monitored_tx_hashes = monitored_tx_hashes.iter().map(|(tx_hash, _)| tx_hash);
 
-	for tx_hash in success_witnesses(monitored_tx_hashes, &txs) {
+	for (tx_hash, tx) in success_witnesses(monitored_tx_hashes, txs) {
 		process_call(
 			state_chain_runtime::RuntimeCall::BitcoinBroadcaster(
 				pallet_cf_broadcast::Call::transaction_succeeded {
@@ -53,7 +58,7 @@ pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoric
 						CHANGE_ADDRESS_SALT,
 					)
 					.script_pubkey(),
-					tx_fee: Default::default(),
+					tx_fee: tx.fee.unwrap_or_default().to_sat(),
 					tx_metadata: (),
 				},
 			),
@@ -77,13 +82,13 @@ pub async fn start<
 	prewitness_call: PrewitnessCall,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
-	unfinalised_state_chain_stream: impl StateChainStreamApi<false>,
+	unfinalised_state_chain_stream: impl StreamApi<UNFINALIZED>,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
 where
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
-	StateChainStream: StateChainStreamApi + Clone + 'static + Send + Sync,
+	StateChainStream: StreamApi<FINALIZED> + Clone,
 	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 		+ Send
 		+ Sync
@@ -179,15 +184,16 @@ where
 
 fn success_witnesses<'a>(
 	monitored_tx_hashes: impl Iterator<Item = &'a btc::Hash> + Clone,
-	txs: &Vec<Transaction>,
-) -> Vec<btc::Hash> {
+	txs: Vec<VerboseTransaction>,
+) -> Vec<(btc::Hash, VerboseTransaction)> {
 	let mut successful_witnesses = Vec::new();
 
 	for tx in txs {
 		let mut monitored = monitored_tx_hashes.clone();
-		let tx_hash = tx.txid().as_raw_hash().to_byte_array();
+		let tx_hash = tx.txid.as_raw_hash().to_byte_array();
+
 		if monitored.any(|&monitored_hash| monitored_hash == tx_hash) {
-			successful_witnesses.push(tx_hash);
+			successful_witnesses.push((tx_hash, tx));
 		}
 	}
 	successful_witnesses
@@ -196,49 +202,47 @@ fn success_witnesses<'a>(
 #[cfg(test)]
 mod tests {
 
-	use super::*;
-	use bitcoin::{
-		absolute::{Height, LockTime},
-		ScriptBuf, Transaction, TxOut,
-	};
+	use bitcoin::Amount;
 
-	fn fake_transaction(tx_outs: Vec<TxOut>) -> Transaction {
-		Transaction {
-			version: 2,
-			lock_time: LockTime::Blocks(Height::from_consensus(0).unwrap()),
-			input: vec![],
-			output: tx_outs,
-		}
-	}
+	use super::*;
+	use crate::witness::btc::btc_deposits::tests::{fake_transaction, fake_verbose_vouts};
 
 	#[test]
 	fn witnesses_tx_hash_successfully() {
+		const FEE_0: u64 = 1;
+		const FEE_1: u64 = 111;
+		const FEE_2: u64 = 222;
+		const FEE_3: u64 = 333;
 		let txs = vec![
-			fake_transaction(vec![]),
-			fake_transaction(vec![TxOut {
-				value: 2324,
-				script_pubkey: ScriptBuf::from(vec![0, 32, 121, 9]),
-			}]),
-			fake_transaction(vec![TxOut {
-				value: 232232,
-				script_pubkey: ScriptBuf::from(vec![32, 32, 121, 9]),
-			}]),
-			fake_transaction(vec![TxOut {
-				value: 232232,
-				script_pubkey: ScriptBuf::from(vec![33, 2, 1, 9]),
-			}]),
+			fake_transaction(vec![], Some(Amount::from_sat(FEE_0))),
+			fake_transaction(
+				fake_verbose_vouts(vec![(2324, vec![0, 32, 121, 9])]),
+				Some(Amount::from_sat(FEE_1)),
+			),
+			fake_transaction(
+				fake_verbose_vouts(vec![(232232, vec![32, 32, 121, 9])]),
+				Some(Amount::from_sat(FEE_2)),
+			),
+			fake_transaction(
+				fake_verbose_vouts(vec![(232232, vec![32, 32, 121, 9])]),
+				Some(Amount::from_sat(FEE_3)),
+			),
 		];
 
 		let tx_hashes =
-			txs.iter().map(|tx| tx.txid().to_raw_hash().to_byte_array()).collect::<Vec<_>>();
+			txs.iter().map(|tx| tx.txid.to_raw_hash().to_byte_array()).collect::<Vec<_>>();
 
 		// we're not monitoring for index 2, and they're out of order.
-		let mut monitored_hashes = vec![tx_hashes[3], tx_hashes[0], tx_hashes[1]];
+		let monitored_hashes = [tx_hashes[3], tx_hashes[0], tx_hashes[1]];
 
-		let mut success_witnesses = success_witnesses(monitored_hashes.iter(), &txs);
-		success_witnesses.sort();
-		monitored_hashes.sort();
+		let sorted_monitored_hashes = vec![tx_hashes[0], tx_hashes[1], tx_hashes[3]];
 
-		assert_eq!(success_witnesses, monitored_hashes);
+		let (success_witness_hashes, txs): (Vec<_>, Vec<_>) =
+			success_witnesses(monitored_hashes.iter(), txs).into_iter().unzip();
+		assert_eq!(sorted_monitored_hashes, success_witness_hashes);
+		assert_eq!(txs[0].fee.unwrap().to_sat(), FEE_0);
+		assert_eq!(txs[1].fee.unwrap().to_sat(), FEE_1);
+		// we weren't monitoring for 2, so the last fee should be FEE_3.
+		assert_eq!(txs[2].fee.unwrap().to_sat(), FEE_3);
 	}
 }

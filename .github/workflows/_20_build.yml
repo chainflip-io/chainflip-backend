@@ -5,6 +5,14 @@ on:
         default: release
         description: Profile to build
         type: string
+      upload-name:
+        default: chainflip-backend-bin
+        description: Name of the folder to upload the binaries to
+        type: string
+      binary-subdir:
+        default: release
+        type: string
+        description: Subdirectory of the target folder to upload
 
 env:
   FORCE_COLOR: 1
@@ -27,7 +35,7 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Setup sccache
         run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
@@ -38,21 +46,21 @@ jobs:
           sccache --show-stats
 
       - name: Upload binary artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@c7d193f32edcb7bfad88892161225aeda64e9392
         with:
-          name: chainflip-backend-bin-ubuntu-${{ matrix.ubuntu_version }}
+          name: ${{ inputs.upload-name }}-ubuntu-${{ matrix.ubuntu_version }}
           path: |
-            ./target/${{ inputs.profile }}/chainflip-node
-            ./target/${{ inputs.profile }}/chainflip-engine
-            ./target/${{ inputs.profile }}/chainflip-cli
-            ./target/${{ inputs.profile }}/generate-genesis-keys
-            ./target/${{ inputs.profile }}/chainflip-broker-api
-            ./target/${{ inputs.profile }}/chainflip-lp-api
-            ./target/${{ inputs.profile }}/chainflip-ingress-egress-tracker
+            ./target/${{ inputs.binary-subdir }}/chainflip-node
+            ./target/${{ inputs.binary-subdir }}/chainflip-engine
+            ./target/${{ inputs.binary-subdir }}/chainflip-cli
+            ./target/${{ inputs.binary-subdir }}/generate-genesis-keys
+            ./target/${{ inputs.binary-subdir }}/chainflip-broker-api
+            ./target/${{ inputs.binary-subdir }}/chainflip-lp-api
+            ./target/${{ inputs.binary-subdir }}/chainflip-ingress-egress-tracker
 
       - name: Upload runtime artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@c7d193f32edcb7bfad88892161225aeda64e9392
         with:
-          name: chainflip-node-runtime-${{ inputs.profile }}
+          name: chainflip-node-runtime-${{ inputs.profile }}-ubuntu-${{ matrix.ubuntu_version }}
           path: |
-            ./target/${{ inputs.profile }}/wbuild/state-chain-runtime/state_chain_runtime*.wasm
+            ./target/${{ inputs.binary-subdir }}/wbuild/state-chain-runtime/state_chain_runtime*.wasm

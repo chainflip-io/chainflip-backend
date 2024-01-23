@@ -1,4 +1,4 @@
-use bitcoin::{Block, BlockHash, Txid};
+use bitcoin::{BlockHash, Txid};
 use utilities::task_scope::Scope;
 
 use crate::{
@@ -11,7 +11,7 @@ use core::time::Duration;
 
 use anyhow::Result;
 
-use super::rpc::{BlockHeader, BtcRpcApi, BtcRpcClient};
+use super::rpc::{BlockHeader, BtcRpcApi, BtcRpcClient, VerboseBlock};
 
 #[derive(Clone)]
 pub struct BtcRetryRpcClient {
@@ -51,7 +51,7 @@ impl BtcRetryRpcClient {
 
 #[async_trait::async_trait]
 pub trait BtcRetryRpcApi: Clone {
-	async fn block(&self, block_hash: BlockHash) -> Block;
+	async fn block(&self, block_hash: BlockHash) -> VerboseBlock;
 
 	async fn block_hash(&self, block_number: cf_chains::btc::BlockNumber) -> BlockHash;
 
@@ -66,7 +66,7 @@ pub trait BtcRetryRpcApi: Clone {
 
 #[async_trait::async_trait]
 impl BtcRetryRpcApi for BtcRetryRpcClient {
-	async fn block(&self, block_hash: BlockHash) -> Block {
+	async fn block(&self, block_hash: BlockHash) -> VerboseBlock {
 		self.retry_client
 			.request(
 				Box::pin(move |client| {
@@ -201,7 +201,7 @@ pub mod mocks {
 
 		#[async_trait::async_trait]
 		impl BtcRetryRpcApi for BtcRetryRpcClient {
-			async fn block(&self, block_hash: BlockHash) -> Block;
+			async fn block(&self, block_hash: BlockHash) -> VerboseBlock;
 
 			async fn block_hash(&self, block_number: cf_chains::btc::BlockNumber) -> BlockHash;
 

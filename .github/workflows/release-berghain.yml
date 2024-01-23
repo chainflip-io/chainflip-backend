@@ -8,11 +8,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  release-checks:
+    uses: ./.github/workflows/_03_release_checks.yml
+    with:
+      network: "berghain"
   build:
+    needs: [release-checks]
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
       profile: "production"
+      binary-subdir: "production"
   package:
     needs: [build]
     uses: ./.github/workflows/_25_package.yml

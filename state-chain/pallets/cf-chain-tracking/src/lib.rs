@@ -11,7 +11,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 use cf_chains::{Chain, ChainState};
-use cf_traits::{Chainflip, GetBlockHeight};
+use cf_traits::{Chainflip, GetBlockHeight, GetTrackedData};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo, pallet_prelude::*, traits::OnRuntimeUpgrade,
 };
@@ -21,7 +21,7 @@ use sp_std::marker::PhantomData;
 
 const NO_CHAIN_STATE: &str = "Chain state should be set at genesis and never removed.";
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -131,5 +131,11 @@ pub mod pallet {
 impl<T: Config<I>, I: 'static> GetBlockHeight<T::TargetChain> for Pallet<T, I> {
 	fn get_block_height() -> <T::TargetChain as Chain>::ChainBlockNumber {
 		CurrentChainState::<T, I>::get().expect(NO_CHAIN_STATE).block_height
+	}
+}
+
+impl<T: Config<I>, I: 'static> GetTrackedData<T::TargetChain> for Pallet<T, I> {
+	fn get_tracked_data() -> <T::TargetChain as Chain>::TrackedData {
+		CurrentChainState::<T, I>::get().expect(NO_CHAIN_STATE).tracked_data
 	}
 }

@@ -7,10 +7,9 @@ use cf_traits::{AccountRoleRegistry, SafeMode, SetSafeMode, VaultStatus};
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::{
 	assert_ok,
-	dispatch::UnfilteredDispatchable,
 	sp_runtime::{Digest, DigestItem},
 	storage_alias,
-	traits::OnNewAccount,
+	traits::{OnNewAccount, UnfilteredDispatchable},
 };
 use frame_system::{pallet_prelude::OriginFor, Pallet as SystemPallet, RawOrigin};
 use pallet_cf_funding::Config as FundingConfig;
@@ -126,21 +125,14 @@ benchmarks! {
 		assert_eq!(Pallet::<T>::auction_parameters(), parameters)
 	}
 
-	set_node_cfe_version {
+	cfe_version {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&caller));
-		let version = NodeCFEVersions {
-			node: SemVer {
-				major: 1,
-				minor: 2,
-				patch: 3
-			},
-			cfe: SemVer {
-				major: 2,
-				minor: 3,
-				patch: 4
-			},
+		let version = SemVer {
+			major: 1,
+			minor: 2,
+			patch: 3
 		};
 	}: _(RawOrigin::Signed(caller.clone()), version)
 	verify {

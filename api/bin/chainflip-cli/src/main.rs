@@ -1,22 +1,24 @@
 #![feature(absolute_path)]
+use crate::settings::{
+	BrokerSubcommands, CLICommandLineOptions, CLISettings, CliCommand::*,
+	LiquidityProviderSubcommands,
+};
 use anyhow::{Context, Result};
+use api::{
+	lp::LpApi,
+	primitives::{RedemptionAmount, FLIP_DECIMALS},
+	queries::QueryApi,
+	AccountId32, BrokerApi, GovernanceApi, KeyPair, OperatorApi, StateChainApi, SwapDepositAddress,
+};
+use cf_chains::eth::Address as EthereumAddress;
+use chainflip_api as api;
+use chainflip_api::primitives::state_chain_runtime;
 use clap::Parser;
 use custom_rpc::RpcAsset;
 use futures::FutureExt;
 use serde::Serialize;
 use std::{io::Write, path::PathBuf, sync::Arc};
-
-use crate::settings::{
-	BrokerSubcommands, CLICommandLineOptions, CLISettings, CliCommand::*,
-	LiquidityProviderSubcommands,
-};
-use api::{
-	lp::LpApi, primitives::RedemptionAmount, queries::QueryApi, AccountId32, BrokerApi,
-	GovernanceApi, KeyPair, OperatorApi, StateChainApi, SwapDepositAddress,
-};
-use cf_chains::eth::Address as EthereumAddress;
-use chainflip_api as api;
-use utilities::{clean_hex_address, task_scope::task_scope};
+use utilities::{clean_hex_address, round_f64, task_scope::task_scope};
 
 mod settings;
 
@@ -81,8 +83,11 @@ async fn run_cli() -> Result<()> {
 					LiquidityProviderSubcommands::RequestLiquidityDepositAddress { asset, chain },
 				) => {
 					let asset = RpcAsset::try_from((asset, chain))?;
-					let address =
-						api.lp_api().request_liquidity_deposit_address(asset.try_into()?).await?;
+					let address = api
+						.lp_api()
+						.request_liquidity_deposit_address(asset.try_into()?, api::WaitFor::InBlock)
+						.await?
+						.unwrap_details();
 					println!("Deposit Address: {address}");
 				},
 				LiquidityProvider(
@@ -136,12 +141,30 @@ async fn run_cli() -> Result<()> {
 					api.governance_api().force_rotation().await?;
 				},
 				GenerateKeys { .. } => unreachable!("GenerateKeys is handled above"),
+				CountWitnesses { hash } => {
+					count_witnesses(api.query_api(), hash).await?;
+				},
 			};
 			Ok(())
 		}
 		.boxed()
 	})
 	.await
+}
+
+/// Turns the amount of FLIP into a RedemptionAmount in Flipperinos.
+fn flip_to_redemption_amount(amount: Option<f64>) -> RedemptionAmount {
+	// Using a set number of decimal places of accuracy to avoid floating point rounding errors
+	const MAX_DECIMAL_PLACES: u32 = 6;
+	match amount {
+		Some(amount_float) => {
+			let atomic_amount = ((round_f64(amount_float, MAX_DECIMAL_PLACES) *
+				10_f64.powi(MAX_DECIMAL_PLACES as i32)) as u128) *
+				10_u128.pow(FLIP_DECIMALS - MAX_DECIMAL_PLACES);
+			RedemptionAmount::Exact(atomic_amount)
+		},
+		None => RedemptionAmount::Max,
+	}
 }
 
 async fn request_redemption(
@@ -166,20 +189,15 @@ async fn request_redemption(
 	};
 
 	// Calculate the redemption amount
-	let amount = match amount {
-		Some(amount_float) => {
-			let atomic_amount = (amount_float * 10_f64.powi(18)) as u128;
-
+	let redeem_amount = flip_to_redemption_amount(amount);
+	match redeem_amount {
+		RedemptionAmount::Exact(atomic_amount) => {
 			println!(
-				"Submitting redemption with amount `{amount_float}` FLIP (`{atomic_amount}` Flipperinos) to ETH address `{redeem_address:?}`."
+				"Submitting redemption with amount `{}` FLIP (`{atomic_amount}` Flipperinos) to ETH address `{redeem_address:?}`.", amount.expect("Exact must be some")
 			);
-
-			RedemptionAmount::Exact(atomic_amount)
 		},
-		None => {
+		RedemptionAmount::Max => {
 			println!("Submitting redemption with MAX amount to ETH address `{redeem_address:?}`.");
-
-			RedemptionAmount::Max
 		},
 	};
 
@@ -189,11 +207,12 @@ async fn request_redemption(
 
 	let tx_hash = api
 		.operator_api()
-		.request_redemption(amount, redeem_address, executor_address)
+		.request_redemption(redeem_amount, redeem_address, executor_address)
 		.await?;
 
 	println!(
-		"Your redemption request has transaction hash: `{tx_hash:#x}`. View your redemption's progress on the funding app."
+		"Your redemption request has State Chain transaction hash: `{tx_hash:#x}`.\n
+		View your redemption's progress on the Auctions app."
 	);
 
 	Ok(())
@@ -264,6 +283,21 @@ async fn pre_update_check(api: QueryApi) -> Result<()> {
 	println!("A rotation is occurring: {}", can_update.rotation);
 	if let Some(blocks) = can_update.next_block_in {
 		println!("Your validator will produce a block in {} blocks", blocks);
+	}
+
+	Ok(())
+}
+
+async fn count_witnesses(api: QueryApi, hash: state_chain_runtime::Hash) -> Result<()> {
+	let result = api.check_witnesses(None, hash).await?;
+	match result {
+		Some(value) => {
+			println!("Number of authorities who failed to witness it: {}", value.failing_count);
+			println!("List of witness votes:\n {:?}", value.validators);
+		},
+		None => {
+			println!("The hash you provided lead to no results")
+		},
 	}
 
 	Ok(())
@@ -410,4 +444,35 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 	}
 
 	Ok(())
+}
+
+#[test]
+fn test_flip_to_redemption_amount() {
+	assert_eq!(flip_to_redemption_amount(None), RedemptionAmount::Max);
+	assert_eq!(flip_to_redemption_amount(Some(0.0)), RedemptionAmount::Exact(0));
+	assert_eq!(flip_to_redemption_amount(Some(-1000.0)), RedemptionAmount::Exact(0));
+	assert_eq!(
+		flip_to_redemption_amount(Some(199995.0)),
+		RedemptionAmount::Exact(199995000000000000000000)
+	);
+
+	assert_eq!(
+		flip_to_redemption_amount(Some(123456789.000001)),
+		RedemptionAmount::Exact(123456789000001000000000000)
+	);
+
+	assert_eq!(
+		flip_to_redemption_amount(Some(69420.123456)),
+		RedemptionAmount::Exact(69420123456000000000000)
+	);
+
+	// Specifying more than the allowed precision rounds the result to the allowed precision
+	assert_eq!(
+		flip_to_redemption_amount(Some(6942000.123456789)),
+		RedemptionAmount::Exact(6942000123457000000000000)
+	);
+	assert_eq!(
+		flip_to_redemption_amount(Some(4206900.1234564321)),
+		RedemptionAmount::Exact(4206900123456000000000000)
+	);
 }

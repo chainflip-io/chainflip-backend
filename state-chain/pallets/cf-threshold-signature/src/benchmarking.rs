@@ -4,12 +4,11 @@
 use super::*;
 
 use cf_chains::{benchmarking_value::BenchmarkValue, ChainCrypto};
-use cf_traits::{AccountRoleRegistry, Chainflip, ThresholdSigner};
+use cf_traits::{AccountRoleRegistry, Chainflip, CurrentEpochIndex, ThresholdSigner};
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account};
 use frame_support::{
 	assert_ok,
-	dispatch::UnfilteredDispatchable,
-	traits::{IsType, OnInitialize, OnNewAccount},
+	traits::{IsType, OnInitialize, OnNewAccount, UnfilteredDispatchable},
 };
 use frame_system::RawOrigin;
 use pallet_cf_validator::CurrentAuthorities;
@@ -94,12 +93,14 @@ benchmarks_instance_pallet! {
 		let a in 10..150;
 		// r: number of retries
 		let r in 0..50;
-		T::KeyProvider::set_key(<T::TargetChainCrypto as ChainCrypto>::AggKey::benchmark_value());
+		let key = <T::TargetChainCrypto as ChainCrypto>::AggKey::benchmark_value();
+		let current_epoch = CurrentEpochIndex::<T>::get();
+		T::KeyProvider::set_key(key, current_epoch);
 		CurrentAuthorities::<T>::put(BTreeSet::<<T as Chainflip>::ValidatorId>::new());
 
 		// These attempts will fail because there are no authorities to do the signing.
 		for _ in 0..r {
-			Pallet::<T, I>::new_ceremony_attempt(RequestInstruction::new(1, 1, PayloadFor::<T, I>::benchmark_value(), RequestType::CurrentKey));
+			Pallet::<T, I>::new_ceremony_attempt(RequestInstruction::new(1, 1, PayloadFor::<T, I>::benchmark_value(), RequestType::SpecificKey(key, current_epoch)));
 		}
 
 		assert_eq!(
@@ -129,7 +130,7 @@ benchmarks_instance_pallet! {
 	}: {
 		<T as Config<I>>::OffenceReporter::report_many(
 			PalletOffence::ParticipateSigningFailed,
-			offenders.as_slice(),
+			offenders,
 		);
 	}
 }

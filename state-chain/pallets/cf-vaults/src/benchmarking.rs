@@ -9,7 +9,7 @@ use cf_primitives::GENESIS_EPOCH;
 use cf_traits::{AccountRoleRegistry, EpochInfo};
 use codec::Decode;
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller};
-use frame_support::{dispatch::UnfilteredDispatchable, traits::OnNewAccount};
+use frame_support::traits::{OnNewAccount, UnfilteredDispatchable};
 use frame_system::RawOrigin;
 
 // Note: Currently we only have one chain (ETH) - as soon we've
@@ -146,20 +146,6 @@ benchmarks_instance_pallet! {
 			VaultRotationStatus::KeygenVerificationComplete { new_public_key }
 				if new_public_key == agg_key
 		))
-	}
-	vault_key_rotated {
-		let new_public_key = AggKeyFor::<T, I>::benchmark_value();
-		PendingVaultRotation::<T, I>::put(
-			VaultRotationStatus::<T, I>::AwaitingActivation { new_public_key },
-		);
-		let call = Call::<T, I>::vault_key_rotated {
-			block_number: 5u32.into(),
-			tx_id: Decode::decode(&mut &TX_HASH[..]).unwrap()
-		};
-		let origin = T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap();
-	} : { call.dispatch_bypass_filter(origin)? }
-	verify {
-		assert!(Vaults::<T, I>::contains_key(T::EpochInfo::epoch_index()));
 	}
 	vault_key_rotated_externally {
 		let origin = T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap();

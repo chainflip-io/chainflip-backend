@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use sp_core::ConstBool;
 use sp_std::{convert::TryFrom, str, vec};
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EvmCrypto;
 
 impl ChainCrypto for EvmCrypto {
@@ -30,7 +31,7 @@ impl ChainCrypto for EvmCrypto {
 	type Payload = H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
 	type TransactionInId = H256;
-	// We can't use the hash since we don't know it for the Evm, as we must select an individaul
+	// We can't use the hash since we don't know it for the Evm, as we must select an individual
 	// authority to sign the transaction.
 	type TransactionOutId = Self::ThresholdSignature;
 	type GovKey = Address;
@@ -48,6 +49,23 @@ impl ChainCrypto for EvmCrypto {
 
 	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
 		H256(Blake2_256::hash(&agg_key.to_pubkey_compressed()))
+	}
+
+	fn maybe_broadcast_barriers_on_rotation(
+		rotation_broadcast_id: BroadcastId,
+	) -> Vec<BroadcastId> {
+		// For Ethereum, we need to put 2 barriers, the first on the last non-rotation tx of the
+		// previous epoch, the second on the rotation tx itself. This is because before we execute
+		// the rotation tx for eth, we need to make sure all previous tx have successfully
+		// broadcast. Also, we need to pause future new epoch tx from broadcast until the rotation
+		// broadcast has successfully completed.
+		//
+		// If the rotation tx is the first broadcast ever, we dont need the first barrier.
+		if rotation_broadcast_id > 1 {
+			vec![rotation_broadcast_id - 1, rotation_broadcast_id]
+		} else {
+			vec![rotation_broadcast_id]
+		}
 	}
 }
 
@@ -324,7 +342,7 @@ impl Tokenizable for AggKey {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq, Serialize)]
 pub struct SchnorrVerificationComponents {
 	/// Scalar component
 	pub s: [u8; 32],
@@ -348,6 +366,7 @@ pub struct Transaction {
 	pub gas_limit: Option<Uint>,
 	pub contract: Address,
 	pub value: Uint,
+	#[serde(with = "hex::serde")]
 	pub data: Vec<u8>,
 }
 

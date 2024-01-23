@@ -15,12 +15,18 @@ jobs:
   test:
     uses: ./.github/workflows/_10_test.yml
     secrets: inherit
+  coverage:
+    uses: ./.github/workflows/_11_coverage.yml
+    with:
+      test_features: runtime-benchmarks
+    secrets: inherit
   build:
     needs: [test]
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
-      profile: "release"
+      profile: "production"
+      binary-subdir: "production"
   docker:
     needs: [build]
     uses: ./.github/workflows/_24_docker.yml
@@ -38,6 +44,8 @@ jobs:
     needs: [build]
     uses: ./.github/workflows/_40_post_check.yml
     secrets: inherit
+    with:
+      full_bouncer: true
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml
@@ -45,3 +53,8 @@ jobs:
       version: "sisyphos/"
       environment: "development"
     secrets: inherit
+  invalidate-apt-cache:
+    needs: [publish]
+    uses: ./.github/workflows/_70_post_release.yml
+    with:
+      network: "sisyphos"

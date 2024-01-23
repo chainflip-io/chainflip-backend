@@ -6,18 +6,15 @@ use cf_chains::{
 	btc::{
 		api::{SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		deposit_address::DepositAddress,
-		utxo_selection::select_utxos_from_pool,
-		Bitcoin, BitcoinFeeInfo, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
+		utxo_selection::{select_utxos_for_consolidation, select_utxos_from_pool},
+		Bitcoin, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EthereumAddress,
 };
 use cf_primitives::{chains::assets::eth::Asset as EthAsset, NetworkEnvironment, SemVer};
 use cf_traits::{CompatibleCfeVersions, GetBitcoinFeeInfo, NetworkEnvironmentProvider, SafeMode};
-use frame_support::{
-	pallet_prelude::*,
-	traits::{OnRuntimeUpgrade, StorageVersion},
-};
+use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::{vec, vec::Vec};
@@ -31,7 +28,13 @@ pub mod weights;
 pub use weights::WeightInfo;
 pub mod migrations;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(6);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(7);
+
+const INITIAL_CONSOLIDATION_PARAMETERS: cf_chains::btc::ConsolidationParameters =
+	cf_chains::btc::ConsolidationParameters {
+		consolidation_threshold: 200,
+		consolidation_size: 100,
+	};
 
 type SignatureNonce = u64;
 
@@ -149,6 +152,11 @@ pub mod pallet {
 	/// The set of available UTXOs available in our Bitcoin Vault.
 	pub type BitcoinAvailableUtxos<T> = StorageValue<_, Vec<Utxo>, ValueQuery>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn consolidation_parameters)]
+	pub type ConsolidationParameters<T> =
+		StorageValue<_, cf_chains::btc::ConsolidationParameters, ValueQuery>;
+
 	// OTHER ENVIRONMENT ITEMS
 	#[pallet::storage]
 	#[pallet::getter(fn safe_mode)]
@@ -179,6 +187,8 @@ pub mod pallet {
 		BitcoinBlockNumberSetForVault { block_number: cf_chains::btc::BlockNumber },
 		/// The Safe Mode settings for the chain has been updated
 		RuntimeSafeModeUpdated { safe_mode: SafeModeUpdate<T> },
+		/// UTXO consolidation parameters has been updated
+		UtxoConsolidationParametersUpdated { params: cf_chains::btc::ConsolidationParameters },
 	}
 
 	#[pallet::call]
@@ -279,6 +289,23 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		#[pallet::call_index(4)]
+		#[pallet::weight(T::WeightInfo::update_consolidation_parameters())]
+		pub fn update_consolidation_parameters(
+			origin: OriginFor<T>,
+			params: cf_chains::btc::ConsolidationParameters,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			ensure!(params.are_valid(), DispatchError::Other("Invalid parameters"));
+
+			ConsolidationParameters::<T>::set(params);
+
+			Self::deposit_event(Event::<T>::UtxoConsolidationParametersUpdated { params });
+
+			Ok(())
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -315,6 +342,7 @@ pub mod pallet {
 			PolkadotProxyAccountNonce::<T>::set(0);
 
 			BitcoinAvailableUtxos::<T>::set(vec![]);
+			ConsolidationParameters::<T>::set(INITIAL_CONSOLIDATION_PARAMETERS);
 
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
 
@@ -372,8 +400,11 @@ impl<T: Config> Pallet<T> {
 	pub fn select_and_take_bitcoin_utxos(
 		utxo_selection_type: UtxoSelectionType,
 	) -> Option<SelectedUtxosAndChangeAmount> {
-		let BitcoinFeeInfo { fee_per_input_utxo, fee_per_output_utxo, min_fee_required_per_tx } =
-			T::BitcoinFeeInfo::bitcoin_fee_info();
+		let bitcoin_fee_info = T::BitcoinFeeInfo::bitcoin_fee_info();
+		let fee_per_input_utxo = bitcoin_fee_info.fee_per_input_utxo();
+		let min_fee_required_per_tx = bitcoin_fee_info.min_fee_required_per_tx();
+		let fee_per_output_utxo = bitcoin_fee_info.fee_per_output_utxo();
+
 		match utxo_selection_type {
 			UtxoSelectionType::SelectAllForRotation => {
 				let spendable_utxos: Vec<_> = BitcoinAvailableUtxos::<T>::take()
@@ -395,6 +426,29 @@ impl<T: Config> Pallet<T> {
 					.checked_sub(total_fee)
 					.map(|change_amount| (spendable_utxos, change_amount))
 			},
+			UtxoSelectionType::SelectForConsolidation =>
+				BitcoinAvailableUtxos::<T>::try_mutate(|available_utxos| {
+					let params = Self::consolidation_parameters();
+
+					let utxos_to_consolidate =
+						select_utxos_for_consolidation(available_utxos, fee_per_input_utxo, params);
+
+					if utxos_to_consolidate.is_empty() {
+						Err(())
+					} else {
+						let total_fee = utxos_to_consolidate.len() as u64 * fee_per_input_utxo +
+							fee_per_output_utxo + min_fee_required_per_tx;
+
+						utxos_to_consolidate
+							.iter()
+							.map(|utxo| utxo.amount)
+							.sum::<u64>()
+							.checked_sub(total_fee)
+							.map(|change_amount| (utxos_to_consolidate, change_amount))
+							.ok_or(())
+					}
+				})
+				.ok(),
 			UtxoSelectionType::Some { output_amount, number_of_outputs } =>
 				BitcoinAvailableUtxos::<T>::try_mutate(|available_utxos| {
 					select_utxos_from_pool(

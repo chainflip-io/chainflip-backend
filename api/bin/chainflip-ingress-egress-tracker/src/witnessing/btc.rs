@@ -4,7 +4,10 @@ use cf_primitives::EpochIndex;
 use chainflip_engine::{
 	btc::retry_rpc::{BtcRetryRpcApi, BtcRetryRpcClient},
 	settings::NodeContainer,
-	state_chain_observer::client::{StateChainClient, StateChainStreamApi},
+	state_chain_observer::client::{
+		stream_api::{StreamApi, UNFINALIZED},
+		StateChainClient,
+	},
 	witness::{
 		btc::{btc_source::BtcSource, process_egress},
 		common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder},
@@ -22,7 +25,7 @@ pub(super) async fn start<ProcessCall, ProcessingFut>(
 	settings: DepositTrackerSettings,
 	env_params: EnvironmentParameters,
 	state_chain_client: Arc<StateChainClient<()>>,
-	state_chain_stream: impl StateChainStreamApi<false> + Clone,
+	state_chain_stream: impl StreamApi<UNFINALIZED> + Clone,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient<()>, (), ()>,
 ) -> anyhow::Result<()>
 where
@@ -36,7 +39,7 @@ where
 	let btc_client = BtcRetryRpcClient::new(
 		scope,
 		NodeContainer { primary: settings.btc, backup: None },
-		env_params.btc_network,
+		env_params.chainflip_network.into(),
 	)
 	.await?;
 

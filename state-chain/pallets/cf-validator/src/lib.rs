@@ -13,20 +13,19 @@ pub use weights::WeightInfo;
 
 mod auction_resolver;
 mod benchmarking;
-pub mod migrations;
 mod rotation_state;
+
 pub use auction_resolver::*;
-
 use cf_primitives::{
-	AuthorityCount, EpochIndex, NodeCFEVersions, SemVer, DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
-	FLIPPERINOS_PER_FLIP,
+	AuthorityCount, Ed25519PublicKey, EpochIndex, Ipv6Addr, SemVer,
+	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION, FLIPPERINOS_PER_FLIP,
 };
-
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, AuthoritiesCfeVersions,
-	Bid, BidderProvider, Bonding, Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition,
-	FundingInfo, HistoricalEpoch, MissedAuthorshipSlots, OnAccountFunded, QualifyNode,
-	ReputationResetter, SetSafeMode, VaultRotator,
+	Bid, BidderProvider, Bonding, CfePeerRegistration, Chainflip, EpochInfo,
+	EpochTransitionHandler, ExecutionCondition, FundingInfo, HistoricalEpoch,
+	MissedAuthorshipSlots, OnAccountFunded, QualifyNode, ReputationResetter, SetSafeMode,
+	VaultRotator,
 };
 
 use cf_utilities::Port;
@@ -51,9 +50,8 @@ use crate::rotation_state::RotationState;
 type SessionIndex = u32;
 
 type Version = SemVer;
-type Ed25519PublicKey = ed25519::Public;
+
 type Ed25519Signature = ed25519::Signature;
-pub type Ipv6Addr = u128;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletConfigUpdate {
@@ -97,7 +95,7 @@ pub enum PalletOffence {
 pub const MAX_LENGTH_FOR_VANITY_NAME: usize = 64;
 
 impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled);
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -106,7 +104,6 @@ pub mod pallet {
 	use pallet_session::WeightInfo as SessionWeightInfo;
 
 	#[pallet::pallet]
-	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
@@ -152,6 +149,8 @@ pub mod pallet {
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode> + SetSafeMode<PalletSafeMode>;
 
+		type CfePeerRegistration: CfePeerRegistration<Self>;
+
 		/// Benchmark weights.
 		type ValidatorWeightInfo: WeightInfo;
 	}
@@ -193,7 +192,7 @@ pub mod pallet {
 	#[pallet::getter(fn current_rotation_phase)]
 	pub type CurrentRotationPhase<T: Config> = StorageValue<_, RotationPhase<T>, ValueQuery>;
 
-	/// A set of the current authorites.
+	/// A set of the current authorities.
 	#[pallet::storage]
 	pub type CurrentAuthorities<T: Config> =
 		StorageValue<_, BTreeSet<ValidatorIdOf<T>>, ValueQuery>;
@@ -225,7 +224,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn node_cfe_version)]
 	pub type NodeCFEVersion<T: Config> =
-		StorageMap<_, Blake2_128Concat, ValidatorIdOf<T>, NodeCFEVersions, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, ValidatorIdOf<T>, Version, ValueQuery>;
 
 	/// The last expired epoch index.
 	#[pallet::storage]
@@ -308,11 +307,6 @@ pub mod pallet {
 		RotationPhaseUpdated { new_phase: RotationPhase<T> },
 		/// The CFE version has been updated.
 		CFEVersionUpdated {
-			account_id: ValidatorIdOf<T>,
-			old_version: Version,
-			new_version: Version,
-		},
-		NodeVersionUpdated {
 			account_id: ValidatorIdOf<T>,
 			old_version: Version,
 			new_version: Version,
@@ -671,11 +665,23 @@ pub mod pallet {
 
 			AccountPeerMapping::<T>::insert(&account_id, (peer_id, port, ip_address));
 
+			let validator_id = <ValidatorIdOf<T> as IsType<
+				<T as frame_system::Config>::AccountId,
+			>>::from_ref(&account_id);
+
+			T::CfePeerRegistration::peer_registered(
+				validator_id.clone(),
+				peer_id,
+				port,
+				ip_address,
+			);
+
+			// TODO: Consider removing this
 			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id, port, ip_address));
 			Ok(().into())
 		}
 
-		/// Allow a validator to report their current cfe version. Update storage and emmit event if
+		/// Allow a validator to report their current cfe version. Update storage and emit event if
 		/// version is different from storage.
 		///
 		/// The dispatch origin of this function must be signed.
@@ -692,10 +698,10 @@ pub mod pallet {
 		///
 		/// - None
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::ValidatorWeightInfo::set_node_cfe_version())]
-		pub fn set_node_cfe_version(
+		#[pallet::weight(T::ValidatorWeightInfo::cfe_version())]
+		pub fn cfe_version(
 			origin: OriginFor<T>,
-			new_version: NodeCFEVersions,
+			new_version: Version,
 		) -> DispatchResultWithPostInfo {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 			let validator_id = <ValidatorIdOf<T> as IsType<
@@ -705,13 +711,8 @@ pub mod pallet {
 				if *current_version != new_version {
 					Self::deposit_event(Event::CFEVersionUpdated {
 						account_id: validator_id.clone(),
-						old_version: current_version.cfe,
-						new_version: new_version.cfe,
-					});
-					Self::deposit_event(Event::NodeVersionUpdated {
-						account_id: validator_id.clone(),
-						old_version: current_version.node,
-						new_version: new_version.node,
+						old_version: *current_version,
+						new_version,
 					});
 					*current_version = new_version;
 				}
@@ -987,6 +988,8 @@ impl<T: Config> Pallet<T> {
 
 		Bond::<T>::set(new_bond);
 
+		HistoricalBonds::<T>::insert(new_epoch, new_bond);
+
 		new_authorities.iter().enumerate().for_each(|(index, account_id)| {
 			AuthorityIndex::<T>::insert(new_epoch, account_id, index as AuthorityCount);
 			EpochHistory::<T>::activate_epoch(account_id, new_epoch);
@@ -994,8 +997,6 @@ impl<T: Config> Pallet<T> {
 		});
 
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
-
-		HistoricalBonds::<T>::insert(new_epoch, new_bond);
 
 		// We've got new authorities, which means the backups may have changed.
 		Backups::<T>::put(backup_map);
@@ -1335,6 +1336,14 @@ impl<T: Config> OnKilledAccount<T::AccountId> for DeletePeerMapping<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
 		if let Some((peer_id, _, _)) = AccountPeerMapping::<T>::take(account_id) {
 			MappedPeers::<T>::remove(peer_id);
+
+			let validator_id = <ValidatorIdOf<T> as IsType<
+				<T as frame_system::Config>::AccountId,
+			>>::from_ref(account_id);
+
+			T::CfePeerRegistration::peer_deregistered(validator_id.clone(), peer_id);
+
+			// TODO: consider removing this
 			Pallet::<T>::deposit_event(Event::PeerIdUnregistered(account_id.clone(), peer_id));
 		}
 	}
@@ -1402,7 +1411,7 @@ impl<T: Config> AuthoritiesCfeVersions for Pallet<T> {
 			current_authorities
 				.into_iter()
 				.filter(|validator_id| {
-					NodeCFEVersion::<T>::get(validator_id).cfe.is_compatible_with(version)
+					NodeCFEVersion::<T>::get(validator_id).is_compatible_with(version)
 				})
 				.count() as u32,
 			authorities_count,
@@ -1414,7 +1423,7 @@ pub struct QualifyByCfeVersion<T>(PhantomData<T>);
 
 impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByCfeVersion<T> {
 	fn is_qualified(validator_id: &<T as Chainflip>::ValidatorId) -> bool {
-		NodeCFEVersion::<T>::get(validator_id).cfe >= MinimumReportedCfeVersion::<T>::get()
+		NodeCFEVersion::<T>::get(validator_id) >= MinimumReportedCfeVersion::<T>::get()
 	}
 
 	fn filter_unqualified(
@@ -1423,7 +1432,7 @@ impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByCfeVersi
 		let min_version = MinimumReportedCfeVersion::<T>::get();
 		validators
 			.into_iter()
-			.filter(|id| NodeCFEVersion::<T>::get(id).cfe >= min_version)
+			.filter(|id| NodeCFEVersion::<T>::get(id) >= min_version)
 			.collect()
 	}
 }

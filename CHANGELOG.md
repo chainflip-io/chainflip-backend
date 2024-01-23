@@ -2,6 +2,137 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.1.5] - 2024-01-02
+
+### Fixes
+
+- Ensure all nodes consistently witness Bitcoin deposits ([#4374](https://github.com/chainflip-io/chainflip-backend/issues/4374))
+
+## [1.1.4] - 2023-12-21
+
+### Features
+
+- More accurate btc fees ([#4367](https://github.com/chainflip-io/chainflip-backend/issues/4367))
+
+## [1.1.3] - 2023-12-19
+
+### Fixes
+
+- Remove pre-witnessing functionality ([#4359](https://github.com/chainflip-io/chainflip-backend/issues/4359))
+
+## [1.1.1] - 2023-12-13
+
+### Features
+
+- Track btc fees on success ([#4334](https://github.com/chainflip-io/chainflip-backend/issues/4334))
+- Shave fees on ingress ([#4335](https://github.com/chainflip-io/chainflip-backend/issues/4335))
+
+### Fixes
+
+- CFE Witnessing, use parent block metadata when decoding events ([#4331](https://github.com/chainflip-io/chainflip-backend/issues/4331))
+- Sweeping before withdrawal ([#4337](https://github.com/chainflip-io/chainflip-backend/issues/4337))
+
+### Testing
+
+- Latest_then adapter testing ([#4322](https://github.com/chainflip-io/chainflip-backend/issues/4322))
+
+## [1.1.0] - 2023-12-07
+
+### Features
+
+- Handle failed vault transfers ([#4304](https://github.com/chainflip-io/chainflip-backend/issues/4304))
+- Rpc to get list of supported assets. ([#4222](https://github.com/chainflip-io/chainflip-backend/issues/4222))
+- Try-runtime loop ([#4267](https://github.com/chainflip-io/chainflip-backend/issues/4267))
+- Original order size and accumulative fees ([#4211](https://github.com/chainflip-io/chainflip-backend/issues/4211))
+- Store witness safety margins on SC ([#4260](https://github.com/chainflip-io/chainflip-backend/issues/4260))
+- Simulate order book RPC ([#4269](https://github.com/chainflip-io/chainflip-backend/issues/4269))
+- Upgrade_network command using prebuilt binaries ([#4280](https://github.com/chainflip-io/chainflip-backend/issues/4280))
+- Try runtime in upgrade tool ([#4282](https://github.com/chainflip-io/chainflip-backend/issues/4282))
+- Re-sign failed CCMs ([#4277](https://github.com/chainflip-io/chainflip-backend/issues/4277))
+- ([PRO-932](https://linear.app/chainflip/issue/PRO-932)): add fee info to cf_pool_orders tpc ([#4295](https://github.com/chainflip-io/chainflip-backend/issues/4295))
+- Add max swap amounts to swapping env ([#4306](https://github.com/chainflip-io/chainflip-backend/issues/4306))
+- Broadcast barrier ([#4207](https://github.com/chainflip-io/chainflip-backend/issues/4207))
+- Add redeeming to LP API ([#4292](https://github.com/chainflip-io/chainflip-backend/issues/4292))
+- Try-runtime build to CI ([#4293](https://github.com/chainflip-io/chainflip-backend/issues/4293))
+- New Lp Interfaces ([#4313](https://github.com/chainflip-io/chainflip-backend/issues/4313))
+- Lp_subscribe_order_fills ([#4319](https://github.com/chainflip-io/chainflip-backend/issues/4319))
+
+### Fixes
+
+- Correlate new and old broadcast ids [([WEB-575](https://linear.app/chainflip/issue/WEB-575))] ([#4221](https://github.com/chainflip-io/chainflip-backend/issues/4221))
+- Build sisyphos with production profile ([#4327](https://github.com/chainflip-io/chainflip-backend/issues/4327))
+- Substract broker fee from swap ([#4226](https://github.com/chainflip-io/chainflip-backend/issues/4226))
+- Reduce permissions of backend token ([#4265](https://github.com/chainflip-io/chainflip-backend/issues/4265))
+- No dup chain tracking submissions for reorgs on unsafe stream ([#4268](https://github.com/chainflip-io/chainflip-backend/issues/4268))
+- Disable spec version check for try-runtime ([#4272](https://github.com/chainflip-io/chainflip-backend/issues/4272))
+- Set_fees ([#4255](https://github.com/chainflip-io/chainflip-backend/issues/4255))
+- Add missing migration hook ([#4275](https://github.com/chainflip-io/chainflip-backend/issues/4275))
+- Use current MAB for bond ([#4279](https://github.com/chainflip-io/chainflip-backend/issues/4279))
+- Typos ([#4283](https://github.com/chainflip-io/chainflip-backend/issues/4283))
+- Make restricted address storage optional ([#4285](https://github.com/chainflip-io/chainflip-backend/issues/4285))
+- Bump openssl as per cargo audit ([#4289](https://github.com/chainflip-io/chainflip-backend/issues/4289))
+- Correct amm migration ([#4288](https://github.com/chainflip-io/chainflip-backend/issues/4288))
+- Don't remove awaiting broadcast before retry ([#4291](https://github.com/chainflip-io/chainflip-backend/issues/4291))
+- Lp logs in localnet ([#4297](https://github.com/chainflip-io/chainflip-backend/issues/4297))
+- Ignore extra btc vouts ([#4296](https://github.com/chainflip-io/chainflip-backend/issues/4296))
+- Transaction already in chain reported as success ([#4300](https://github.com/chainflip-io/chainflip-backend/issues/4300))
+- Allow deposits to different addresses in the same tx ([#4299](https://github.com/chainflip-io/chainflip-backend/issues/4299))
+- Don't block unfinalised dot source when can't find events ([#4301](https://github.com/chainflip-io/chainflip-backend/issues/4301))
+- Benchmark ([#4308](https://github.com/chainflip-io/chainflip-backend/issues/4308))
+- Update release version on runtime upgrade ([#4281](https://github.com/chainflip-io/chainflip-backend/issues/4281))
+- CLI redeem amount rounding error ([#4303](https://github.com/chainflip-io/chainflip-backend/issues/4303))
+- Current release version bumped checks ([#4311](https://github.com/chainflip-io/chainflip-backend/issues/4311))
+- Threshold sig migrations ([#4312](https://github.com/chainflip-io/chainflip-backend/issues/4312))
+- Add migration for PendingRequestInstructions ([#4316](https://github.com/chainflip-io/chainflip-backend/issues/4316))
+- Broker endpoint as env var ([#4317](https://github.com/chainflip-io/chainflip-backend/issues/4317))
+
+### Refactor
+
+- Keyless eth rpc client  ([#4256](https://github.com/chainflip-io/chainflip-backend/issues/4256))
+- Remove generic from AssetPair types ([#4290](https://github.com/chainflip-io/chainflip-backend/issues/4290))
+
+## [1.0.3] - 2023-12-07
+
+### Fixes
+
+- Use current MAB to set bond ([#4276](https://github.com/chainflip-io/chainflip-backend/issues/4276))
+
+## [1.0.2] - 2023-11-21
+
+### Features
+
+- Add MAB to current auction state ([#4253](https://github.com/chainflip-io/chainflip-backend/issues/4253))
+- Add SECURITY.md file ([#4263](https://github.com/chainflip-io/chainflip-backend/issues/4263))
+- Get new block streams from scc after creation ([#4217](https://github.com/chainflip-io/chainflip-backend/issues/4217))
+- Prewitnessing uses unfinalised sc stream ([#4220](https://github.com/chainflip-io/chainflip-backend/issues/4220))
+- Improve Dot Existential Deposit Test ([#4195](https://github.com/chainflip-io/chainflip-backend/issues/4195))
+- Dynamic min authority count ([#4224](https://github.com/chainflip-io/chainflip-backend/issues/4224))
+- User friendly error on asset parse failure ([#4229](https://github.com/chainflip-io/chainflip-backend/issues/4229))
+- CLI generate keys outputs peer id ([#4241](https://github.com/chainflip-io/chainflip-backend/issues/4241))
+- Maximum Swap amount ([#4238](https://github.com/chainflip-io/chainflip-backend/issues/4238))
+
+### Fixes
+
+- All lp api return NumberOrHex ([#4247](https://github.com/chainflip-io/chainflip-backend/issues/4247))
+- Revert restricted balances ([#4237](https://github.com/chainflip-io/chainflip-backend/issues/4237))
+- Add missing spans in multisig logs ([#4239](https://github.com/chainflip-io/chainflip-backend/issues/4239))
+- Remove bound addresses on account deletion ([#4244](https://github.com/chainflip-io/chainflip-backend/issues/4244))
+- Remove existential deposit ([#4243](https://github.com/chainflip-io/chainflip-backend/issues/4243))
+- Egress id race condition ([#4235](https://github.com/chainflip-io/chainflip-backend/issues/4235))
+- Remove unwrap when getting tx receipt ([#4231](https://github.com/chainflip-io/chainflip-backend/issues/4231))
+- Protect against double witnessing after safe mode ([#4254](https://github.com/chainflip-io/chainflip-backend/issues/4254))
+- Runtime upgrade utils and migrations ([#4258](https://github.com/chainflip-io/chainflip-backend/issues/4258))
+
+### Documentation
+
+- Deposit channel lifecycle ([#4261](https://github.com/chainflip-io/chainflip-backend/issues/4261))
+
+### Refactor
+
+- Replace latest_finalized_hash with latest_finalized_header ([#4206](https://github.com/chainflip-io/chainflip-backend/issues/4206))
+- Use btc rpc client for mempool tracker ([#4227](https://github.com/chainflip-io/chainflip-backend/issues/4227))
+- Shared source inside chunked_by adapters ([#4232](https://github.com/chainflip-io/chainflip-backend/issues/4232))
+
 ## [1.0.0] - 2023-11-03
 
 ### Features

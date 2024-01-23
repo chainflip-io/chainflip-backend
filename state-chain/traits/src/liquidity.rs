@@ -1,6 +1,6 @@
 use cf_chains::address::ForeignChainAddress;
 use cf_primitives::{Asset, AssetAmount, BasisPoints, ChannelId};
-use frame_support::{dispatch::DispatchError, sp_runtime::DispatchResult};
+use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 
 pub trait SwapDepositHandler {
 	type AccountId;
@@ -28,7 +28,7 @@ pub trait LpBalanceApi {
 	fn ensure_has_refund_address_for_pair(
 		who: &Self::AccountId,
 		base_asset: Asset,
-		pair_asset: Asset,
+		quote_asset: Asset,
 	) -> DispatchResult;
 
 	/// Attempt to credit the account with the given asset and amount.

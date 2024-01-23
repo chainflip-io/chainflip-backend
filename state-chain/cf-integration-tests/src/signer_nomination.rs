@@ -78,7 +78,7 @@ fn test_not_nominated_for_offence<F: Fn(crate::AccountId)>(penalise: F) {
 fn nodes_who_failed_to_sign_excluded_from_threshold_nomination() {
 	super::genesis::default().build().execute_with(|| {
 		test_not_nominated_for_offence(|node_id| {
-			Reputation::report_many(PalletOffence::ParticipateSigningFailed, &[node_id])
+			Reputation::report(PalletOffence::ParticipateSigningFailed, node_id)
 		});
 	});
 }

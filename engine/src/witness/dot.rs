@@ -10,6 +10,7 @@ use cf_primitives::{EpochIndex, PolkadotBlockNumber};
 use futures_core::Future;
 use state_chain_runtime::PolkadotInstance;
 use subxt::{
+	backend::legacy::rpc_methods::Bytes,
 	config::PolkadotConfig,
 	events::{EventDetails, Phase, StaticEvent},
 	utils::AccountId32,
@@ -25,7 +26,10 @@ use crate::{
 	db::PersistentKeyDB,
 	dot::retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
 	state_chain_observer::client::{
-		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
+		extrinsic_api::signed::SignedExtrinsicApi,
+		storage_api::StorageApi,
+		stream_api::{StreamApi, FINALIZED},
+		STATE_CHAIN_CONNECTION,
 	},
 	witness::common::chain_source::extension::ChainSourceExt,
 };
@@ -35,7 +39,6 @@ pub use dot_source::{DotFinalisedSource, DotUnfinalisedSource};
 use super::common::{
 	chain_source::Header,
 	epoch_source::{EpochSourceBuilder, Vault},
-	STATE_CHAIN_CONNECTION,
 };
 
 // To generate the metadata file, use the subxt-cli tool (`cargo install subxt-cli`):
@@ -133,8 +136,7 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 	// To guarantee witnessing egress, we are interested in all extrinsics that were successful
 	extrinsic_indices.extend(extrinsic_success_indices(&events));
 
-	let extrinsics: Vec<subxt::rpc::types::ChainBlockExtrinsic> =
-		dot_client.extrinsics(header.hash).await;
+	let extrinsics: Vec<Bytes> = dot_client.extrinsics(header.hash).await;
 
 	for (extrinsic_index, tx_fee) in transaction_fee_paids(&extrinsic_indices, &events) {
 		let xt = extrinsics.get(extrinsic_index as usize).expect(
@@ -143,41 +145,42 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 		);
 		let mut xt_bytes = xt.0.as_slice();
 
-		let unchecked = PolkadotUncheckedExtrinsic::decode(&mut xt_bytes);
-		if let Ok(unchecked) = unchecked {
-			if let Some(signature) = unchecked.signature() {
-				if monitored_egress_ids.contains(&signature) {
-					tracing::info!("Witnessing transaction_succeeded. signature: {signature:?}");
-					process_call(
-						pallet_cf_broadcast::Call::<_, PolkadotInstance>::transaction_succeeded {
-							tx_out_id: signature,
-							signer_id: epoch.info.1,
-							tx_fee,
-							tx_metadata: (),
-						}
-						.into(),
-						epoch.index,
-					)
-					.await;
-				}
-			}
-		} else {
-			// We expect this to occur when attempting to decode
-			// a transaction that was not sent by us.
-			// We can safely ignore it, but we log it in case.
-			tracing::debug!("Failed to decode UncheckedExtrinsic {unchecked:?}");
+		match PolkadotUncheckedExtrinsic::decode(&mut xt_bytes) {
+			Ok(unchecked) =>
+				if let Some(signature) = unchecked.signature() {
+					if monitored_egress_ids.contains(&signature) {
+						tracing::info!(
+							"Witnessing transaction_succeeded. signature: {signature:?}"
+						);
+						process_call(
+							pallet_cf_broadcast::Call::<_, PolkadotInstance>::transaction_succeeded {
+								tx_out_id: signature,
+								signer_id: epoch.info.1,
+								tx_fee,
+								tx_metadata: (),
+							}
+							.into(),
+							epoch.index,
+						)
+						.await;
+					}
+				},
+			Err(error) => {
+				// We expect this to occur when attempting to decode
+				// a transaction that was not sent by us.
+				// We can safely ignore it, but we log it in case.
+				tracing::debug!("Failed to decode UncheckedExtrinsic {error}");
+			},
 		}
 	}
 }
 
-pub async fn start<StateChainClient, ProcessCall, ProcessingFut, PrewitnessCall, PrewitnessFut>(
+pub async fn start<StateChainClient, ProcessCall, ProcessingFut>(
 	scope: &Scope<'_, anyhow::Error>,
 	dot_client: DotRetryRpcClient,
 	process_call: ProcessCall,
-	prewitness_call: PrewitnessCall,
 	state_chain_client: Arc<StateChainClient>,
-	state_chain_stream: impl StateChainStreamApi + Clone,
-	unfinalized_state_chain_stream: impl StateChainStreamApi<false>,
+	state_chain_stream: impl StreamApi<FINALIZED> + Clone,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
@@ -189,12 +192,6 @@ where
 		+ Clone
 		+ 'static,
 	ProcessingFut: Future<Output = ()> + Send + 'static,
-	PrewitnessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> PrewitnessFut
-		+ Send
-		+ Sync
-		+ Clone
-		+ 'static,
-	PrewitnessFut: Future<Output = ()> + Send + 'static,
 {
 	let unfinalised_source = DotUnfinalisedSource::new(dot_client.clone())
 		.strictly_monotonic()
@@ -224,22 +221,11 @@ where
 
 	let vaults = epoch_source.vaults().await;
 
-	// Pre-witnessing
-	unfinalised_source
-		.chunk_by_vault(vaults.clone(), scope)
-		.deposit_addresses(scope, unfinalized_state_chain_stream, state_chain_client.clone())
-		.await
-		.dot_deposits(prewitness_call)
-		.logging("pre-witnessing")
-		.spawn(scope);
-
 	// Full witnessing
 	DotFinalisedSource::new(dot_client.clone())
 		.strictly_monotonic()
 		.logging("finalised block produced")
-		.then(|header| async move {
-			header.data.iter().filter_map(filter_map_events).collect::<Vec<_>>()
-		})
+		.then(|header| async move { header.data.iter().filter_map(filter_map_events).collect() })
 		.chunk_by_vault(vaults, scope)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await

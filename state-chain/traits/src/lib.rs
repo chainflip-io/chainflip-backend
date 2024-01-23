@@ -2,6 +2,7 @@
 
 mod async_result;
 pub mod liquidity;
+use cfe_events::{KeyHandoverRequest, KeygenRequest, TxBroadcastRequest};
 pub use liquidity::*;
 pub mod safe_mode;
 pub use safe_mode::*;
@@ -19,19 +20,18 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
-	CeremonyId, ChannelId, EgressId, EpochIndex, FlipBalance, ForeignChain, NetworkEnvironment,
-	SemVer, ThresholdSignatureRequestId,
+	CeremonyId, ChannelId, Ed25519PublicKey, EgressId, EpochIndex, FlipBalance, ForeignChain,
+	Ipv6Addr, NetworkEnvironment, SemVer, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
 	error::BadOrigin,
-	pallet_prelude::Member,
+	pallet_prelude::{DispatchResultWithPostInfo, Member},
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
 		DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
 	},
-	traits::{EnsureOrigin, Get, Imbalance, IsType},
+	traits::{EnsureOrigin, Get, Imbalance, IsType, UnfilteredDispatchable},
 	Hashable, Parameter,
 };
 use scale_info::TypeInfo;
@@ -346,7 +346,7 @@ pub trait BroadcastNomination {
 	/// as a source of randomness. Returns None if no signers are live.
 	fn nominate_broadcaster<H: Hashable>(
 		seed: H,
-		exclude_ids: &[Self::BroadcasterId],
+		exclude_ids: impl IntoIterator<Item = Self::BroadcasterId>,
 	) -> Option<Self::BroadcasterId>;
 }
 
@@ -363,40 +363,9 @@ pub trait ThresholdSignerNomination {
 }
 
 #[derive(Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
-pub enum KeyState {
-	Unlocked,
-	/// Key is only available to sign this request id.
-	Locked(ThresholdSignatureRequestId),
-}
-
-impl KeyState {
-	pub fn is_available_for_request(&self, request_id: ThresholdSignatureRequestId) -> bool {
-		match self {
-			KeyState::Unlocked => true,
-			KeyState::Locked(locked_request_id) => request_id == *locked_request_id,
-		}
-	}
-
-	pub fn unlock(&mut self) {
-		*self = KeyState::Unlocked;
-	}
-
-	pub fn lock(&mut self, request_id: ThresholdSignatureRequestId) {
-		*self = KeyState::Locked(request_id);
-	}
-}
-
-#[derive(Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
 pub struct EpochKey<Key> {
 	pub key: Key,
 	pub epoch_index: EpochIndex,
-	pub key_state: KeyState,
-}
-
-impl<Key> EpochKey<Key> {
-	pub fn lock_for_request(&mut self, request_id: ThresholdSignatureRequestId) {
-		self.key_state = KeyState::Locked(request_id);
-	}
 }
 
 /// Provides the currently valid key for multisig ceremonies.
@@ -409,7 +378,7 @@ pub trait KeyProvider<C: ChainCrypto> {
 	fn active_epoch_key() -> Option<EpochKey<C::AggKey>>;
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_key(_key: C::AggKey) {
+	fn set_key(_key: C::AggKey, _epoch: EpochIndex) {
 		unimplemented!()
 	}
 }
@@ -477,6 +446,31 @@ where
 	}
 }
 
+pub trait CfeMultisigRequest<T: Chainflip, C: ChainCrypto> {
+	fn keygen_request(req: KeygenRequest<T::ValidatorId>);
+
+	fn signature_request(req: cfe_events::ThresholdSignatureRequest<T::ValidatorId, C>);
+
+	fn key_handover_request(_req: KeyHandoverRequest<T::ValidatorId, C>) {
+		assert!(!C::key_handover_is_required());
+	}
+}
+
+pub trait CfePeerRegistration<T: Chainflip> {
+	fn peer_registered(
+		account_id: T::ValidatorId,
+		pubkey: Ed25519PublicKey,
+		port: u16,
+		ip: Ipv6Addr,
+	);
+
+	fn peer_deregistered(account_id: T::ValidatorId, pubkey: Ed25519PublicKey);
+}
+
+pub trait CfeBroadcastRequest<T: Chainflip, C: Chain> {
+	fn tx_broadcast_request(req: TxBroadcastRequest<T::ValidatorId, C>);
+}
+
 /// Something that is capable of encoding and broadcasting native blockchain api calls to external
 /// chains.
 pub trait Broadcaster<C: Chain> {
@@ -487,16 +481,29 @@ pub trait Broadcaster<C: Chain> {
 	type Callback: UnfilteredDispatchable;
 
 	/// Request a threshold signature and then build and broadcast the outbound api call.
-	fn threshold_sign_and_broadcast(
-		api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId);
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId;
 
 	/// Like `threshold_sign_and_broadcast` but also registers a callback to be dispatched when the
 	/// signature accepted event has been witnessed.
 	fn threshold_sign_and_broadcast_with_callback(
 		api_call: Self::ApiCall,
-		callback: Self::Callback,
-	) -> (BroadcastId, ThresholdSignatureRequestId);
+		success_callback: Option<Self::Callback>,
+		failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
+	) -> BroadcastId;
+
+	/// Request a threshold signature and then build and broadcast the outbound api call
+	/// specifically for a rotation tx..
+	fn threshold_sign_and_broadcast_rotation_tx(api_call: Self::ApiCall) -> BroadcastId;
+
+	/// Resign a call, and update the signature data storage, but do not broadcast.
+	fn threshold_resign(broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId>;
+
+	/// Request a call to be threshold signed, but do not broadcast.
+	/// The caller must manage storage cleanup, so signatures are not stored indefinitely.
+	fn threshold_sign(api_call: Self::ApiCall) -> (BroadcastId, ThresholdSignatureRequestId);
+
+	/// Clean up storage data related to a broadcast ID.
+	fn clean_up_broadcast_storage(broadcast_id: BroadcastId);
 }
 
 /// The heartbeat of the network
@@ -808,6 +815,11 @@ pub trait GetBitcoinFeeInfo {
 pub trait GetBlockHeight<C: Chain> {
 	fn get_block_height() -> C::ChainBlockNumber;
 }
+
+pub trait GetTrackedData<C: Chain> {
+	fn get_tracked_data() -> C::TrackedData;
+}
+
 pub trait CompatibleCfeVersions {
 	fn current_release_version() -> SemVer;
 }
@@ -825,4 +837,15 @@ impl<RuntimeCall> CallDispatchFilter<RuntimeCall> for () {
 	fn should_dispatch(&self, _call: &RuntimeCall) -> bool {
 		true
 	}
+}
+
+pub trait AssetConverter {
+	fn convert_asset_to_approximate_output<
+		Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy,
+	>(
+		input_asset: impl Into<Asset>,
+		available_input_amount: Amount,
+		output_asset: impl Into<Asset>,
+		desired_output_amount: Amount,
+	) -> Option<(Amount, Amount)>;
 }

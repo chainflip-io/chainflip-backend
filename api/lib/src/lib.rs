@@ -3,12 +3,10 @@ use std::{str::FromStr, sync::Arc};
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use cf_chains::{
-	address::EncodedAddress,
-	dot::PolkadotAccountId,
-	evm::{to_evm_address, Address as EthereumAddress},
-	AnyChain, CcmChannelMetadata, ForeignChain,
+	address::EncodedAddress, dot::PolkadotAccountId, evm::to_evm_address, AnyChain,
+	CcmChannelMetadata, ForeignChain,
 };
-use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId};
+use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId, SemVer};
 use futures::FutureExt;
 use pallet_cf_governance::ExecutionMode;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
@@ -23,16 +21,20 @@ pub use sp_core::crypto::AccountId32;
 pub mod primitives {
 	pub use cf_primitives::*;
 	pub use pallet_cf_governance::ProposalId;
-	pub use state_chain_runtime::Hash;
+	pub use state_chain_runtime::{self, BlockNumber, Hash};
 	pub type RedemptionAmount = pallet_cf_funding::RedemptionAmount<FlipBalance>;
 	pub use cf_chains::{
 		address::{EncodedAddress, ForeignChainAddress},
 		CcmChannelMetadata, CcmDepositMetadata,
 	};
 }
+pub use cf_chains::eth::Address as EthereumAddress;
 pub use chainflip_engine::state_chain_observer::client::{
 	base_rpc_api::{BaseRpcApi, RawRpcApi},
-	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
+	chain_api::ChainApi,
+	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized, WaitFor, WaitForResult},
+	storage_api::StorageApi,
+	BlockInfo,
 };
 
 pub mod lp;
@@ -46,6 +48,14 @@ use chainflip_engine::state_chain_observer::client::{
 	StateChainClient,
 };
 use utilities::{clean_hex_address, task_scope::Scope};
+
+lazy_static::lazy_static! {
+	static ref API_VERSION: SemVer = SemVer {
+		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
+		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
+		patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
+	};
+}
 
 #[async_trait]
 pub trait AuctionPhaseApi {
@@ -111,7 +121,8 @@ impl StateChainApi {
 			&state_chain_settings.signing_key_file,
 			AccountRole::Unregistered,
 			false,
-			None,
+			false,
+			false,
 		)
 		.await?;
 

@@ -1,8 +1,9 @@
 use crate::{
 	mock::*, Call as PalletCall, ChannelAction, ChannelIdCounter, CrossChainMessage,
-	DepositChannelLookup, DepositChannelPool, DepositWitness, DisabledEgressAssets,
-	Event as PalletEvent, FailedVaultTransfers, FetchOrTransfer, MinimumDeposit, Pallet,
-	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount, VaultTransfer,
+	DepositChannelLookup, DepositChannelPool, DepositIgnoredReason, DepositWitness,
+	DisabledEgressAssets, Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls,
+	FetchOrTransfer, MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
+	TargetChainAccount,
 };
 use cf_chains::{
 	address::AddressConverter, evm::EvmFetchId, mocks::MockEthereum, CcmChannelMetadata,
@@ -17,7 +18,7 @@ use cf_traits::{
 		block_height_provider::BlockHeightProvider,
 		ccm_handler::{CcmRequest, MockCcmHandler},
 	},
-	DepositApi, EgressApi, GetBlockHeight,
+	DepositApi, EgressApi, EpochInfo, GetBlockHeight,
 };
 use frame_support::{
 	assert_ok,
@@ -347,7 +348,7 @@ fn addresses_are_getting_reused() {
 			assert!(broadcast_ids.len() == 1);
 			// This would normally be triggered on broadcast success, should finalise the ingress.
 			for id in broadcast_ids {
-				MockEgressBroadcaster::dispatch_callback(id);
+				MockEgressBroadcaster::dispatch_success_callback(id);
 			}
 			channels
 		})
@@ -557,7 +558,6 @@ fn can_egress_ccm() {
 
 		// Check that the CCM should be egressed
 		assert_eq!(MockEgressBroadcaster::get_pending_api_calls(), vec![<MockEthereumApiCall<MockEthEnvironment> as ExecutexSwapAndCall<Ethereum>>::new_unsigned(
-			(ForeignChain::Ethereum, 1),
 			TransferAssetParams {
 				asset: destination_asset,
 				amount,
@@ -762,7 +762,7 @@ fn multi_use_deposit_same_block() {
 			);
 			let scheduled_fetches = ScheduledEgressFetchOrTransfer::<Test, _>::get();
 			let pending_api_calls = MockEgressBroadcaster::get_pending_api_calls();
-			let pending_callbacks = MockEgressBroadcaster::get_pending_callbacks();
+			let pending_callbacks = MockEgressBroadcaster::get_success_pending_callbacks();
 			assert!(scheduled_fetches.len() == 1);
 			assert!(pending_api_calls.len() == 1);
 			assert!(pending_callbacks.len() == 1);
@@ -797,7 +797,7 @@ fn multi_use_deposit_same_block() {
 			));
 		})
 		.then_execute_at_next_block(|ctx| {
-			MockEgressBroadcaster::dispatch_all_callbacks();
+			MockEgressBroadcaster::dispatch_all_success_callbacks();
 			ctx
 		})
 		.inspect_storage(|(_, _, deposit_address)| {
@@ -810,7 +810,7 @@ fn multi_use_deposit_same_block() {
 			);
 			let scheduled_fetches = ScheduledEgressFetchOrTransfer::<Test, _>::get();
 			let pending_api_calls = MockEgressBroadcaster::get_pending_api_calls();
-			let pending_callbacks = MockEgressBroadcaster::get_pending_callbacks();
+			let pending_callbacks = MockEgressBroadcaster::get_success_pending_callbacks();
 			assert!(scheduled_fetches.is_empty());
 			assert!(pending_api_calls.len() == 2);
 			assert!(pending_callbacks.len() == 1);
@@ -875,6 +875,7 @@ fn deposits_below_minimum_are_rejected() {
 				asset: eth,
 				amount: default_deposit_amount,
 				deposit_details: Default::default(),
+				reason: DepositIgnoredReason::BelowMinimumDeposit,
 			},
 		));
 
@@ -966,7 +967,7 @@ fn channel_reuse_with_different_assets() {
 		.map_context(|mut result| result.pop().unwrap())
 		.then_execute_at_next_block(|ctx| {
 			// Dispatch callbacks to finalise the ingress.
-			MockEgressBroadcaster::dispatch_all_callbacks();
+			MockEgressBroadcaster::dispatch_all_success_callbacks();
 			ctx
 		})
 		.inspect_storage(|(request, _, address)| {
@@ -1034,25 +1035,31 @@ fn ingress_finalisation_succeeds_after_channel_expired_but_not_recycled() {
 #[test]
 fn can_store_failed_vault_transfers() {
 	new_test_ext().execute_with(|| {
-		let vault_transfer = VaultTransfer::<Ethereum> {
-			asset: eth::Asset::Eth,
-			amount: 1_000_000u128,
-			destination_address: [0xcf; 20].into(),
-		};
+		let epoch = MockEpochInfo::epoch_index();
+		let asset = eth::Asset::Eth;
+		let amount = 1_000_000u128;
+		let destination_address = [0xcf; 20].into();
 
 		assert_ok!(IngressEgress::vault_transfer_failed(
 			RuntimeOrigin::root(),
-			vault_transfer.asset,
-			vault_transfer.amount,
-			vault_transfer.destination_address,
+			asset,
+			amount,
+			destination_address,
 		));
 
-		assert_has_event::<Test>(RuntimeEvent::IngressEgress(PalletEvent::VaultTransferFailed {
-			asset: vault_transfer.asset,
-			amount: vault_transfer.amount,
-			destination_address: vault_transfer.destination_address,
-		}));
-		assert_eq!(FailedVaultTransfers::<Test>::get(), vec![vault_transfer]);
+		let broadcast_id = 1;
+		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
+			PalletEvent::TransferFallbackRequested {
+				asset,
+				amount,
+				destination_address,
+				broadcast_id,
+			},
+		));
+		assert_eq!(
+			FailedForeignChainCalls::<Test>::get(epoch),
+			vec![FailedForeignChainCall { broadcast_id, original_epoch: epoch }]
+		);
 	});
 }
 
@@ -1212,4 +1219,175 @@ fn all_can_be_recycled() {
 		vec![H160::from([1u8; 20]), H160::from([2; 20]), H160::from([3; 20]), H160::from([4; 20])]
 	);
 	assert!(channel_recycle_blocks.is_empty());
+}
+
+#[test]
+fn failed_ccm_is_stored() {
+	new_test_ext().execute_with(|| {
+		let epoch = MockEpochInfo::epoch_index();
+		let broadcast_id = 1;
+		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch), vec![]);
+
+		assert_ok!(IngressEgress::ccm_broadcast_failed(RuntimeOrigin::root(), broadcast_id,));
+
+		assert_eq!(
+			FailedForeignChainCalls::<Test>::get(epoch),
+			vec![FailedForeignChainCall { broadcast_id, original_epoch: epoch }]
+		);
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::CcmBroadcastFailed { broadcast_id },
+		));
+	});
+}
+
+#[test]
+fn on_finalize_handles_failed_calls() {
+	new_test_ext().execute_with(|| {
+		// Advance to Epoch 1 so the expiry logic start to work.
+		let epoch = 1u32;
+		MockEpochInfo::set_epoch(epoch);
+		let destination_address = [0xcf; 20].into();
+		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch), vec![]);
+
+		assert_ok!(IngressEgress::vault_transfer_failed(
+			RuntimeOrigin::root(),
+			eth::Asset::Eth,
+			1_000_000,
+			destination_address
+		));
+		assert_ok!(IngressEgress::ccm_broadcast_failed(RuntimeOrigin::root(), 12,));
+		assert_ok!(IngressEgress::ccm_broadcast_failed(RuntimeOrigin::root(), 13,));
+
+		assert_eq!(
+			FailedForeignChainCalls::<Test>::get(epoch),
+			vec![
+				FailedForeignChainCall { broadcast_id: 1, original_epoch: epoch },
+				FailedForeignChainCall { broadcast_id: 12, original_epoch: epoch },
+				FailedForeignChainCall { broadcast_id: 13, original_epoch: epoch }
+			]
+		);
+
+		// on-finalize do nothing
+		IngressEgress::on_finalize(0);
+
+		assert_eq!(
+			FailedForeignChainCalls::<Test>::get(epoch),
+			vec![
+				FailedForeignChainCall { broadcast_id: 1, original_epoch: epoch },
+				FailedForeignChainCall { broadcast_id: 12, original_epoch: epoch },
+				FailedForeignChainCall { broadcast_id: 13, original_epoch: epoch }
+			]
+		);
+
+		// Advance into the next epoch
+		MockEpochInfo::set_epoch(epoch + 1);
+
+		// Resign 1 call per block
+		IngressEgress::on_finalize(1);
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::FailedForeignChainCallResigned {
+				broadcast_id: 13,
+				threshold_signature_id: 2,
+			},
+		));
+		assert_eq!(MockEgressBroadcaster::resigned_call(), Some(13u32));
+		assert_eq!(
+			FailedForeignChainCalls::<Test>::get(epoch),
+			vec![
+				FailedForeignChainCall { broadcast_id: 1, original_epoch: epoch },
+				FailedForeignChainCall { broadcast_id: 12, original_epoch: epoch },
+			]
+		);
+		assert_eq!(
+			FailedForeignChainCalls::<Test>::get(epoch + 1),
+			vec![FailedForeignChainCall { broadcast_id: 13, original_epoch: epoch }]
+		);
+
+		// Resign the 2nd call
+		IngressEgress::on_finalize(2);
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::FailedForeignChainCallResigned {
+				broadcast_id: 12,
+				threshold_signature_id: 3,
+			},
+		));
+		assert_eq!(MockEgressBroadcaster::resigned_call(), Some(12u32));
+		assert_eq!(
+			FailedForeignChainCalls::<Test>::get(epoch),
+			vec![FailedForeignChainCall { broadcast_id: 1, original_epoch: epoch }]
+		);
+		assert_eq!(
+			FailedForeignChainCalls::<Test>::get(epoch + 1),
+			vec![
+				FailedForeignChainCall { broadcast_id: 13, original_epoch: epoch },
+				FailedForeignChainCall { broadcast_id: 12, original_epoch: epoch }
+			]
+		);
+		// Resign the last call
+		IngressEgress::on_finalize(3);
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::FailedForeignChainCallResigned {
+				broadcast_id: 1,
+				threshold_signature_id: 4,
+			},
+		));
+		assert_eq!(MockEgressBroadcaster::resigned_call(), Some(1u32));
+		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch), vec![]);
+		assert_eq!(
+			FailedForeignChainCalls::<Test>::get(epoch + 1),
+			vec![
+				FailedForeignChainCall { broadcast_id: 13, original_epoch: epoch },
+				FailedForeignChainCall { broadcast_id: 12, original_epoch: epoch },
+				FailedForeignChainCall { broadcast_id: 1, original_epoch: epoch }
+			]
+		);
+
+		// Failed calls are removed in the next epoch, 1 at a time.
+		MockEpochInfo::set_epoch(epoch + 2);
+		IngressEgress::on_finalize(4);
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::FailedForeignChainCallExpired { broadcast_id: 1 },
+		));
+		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch), vec![]);
+		assert_eq!(
+			FailedForeignChainCalls::<Test>::get(epoch + 1),
+			vec![
+				FailedForeignChainCall { broadcast_id: 13, original_epoch: epoch },
+				FailedForeignChainCall { broadcast_id: 12, original_epoch: epoch }
+			]
+		);
+
+		IngressEgress::on_finalize(5);
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::FailedForeignChainCallExpired { broadcast_id: 12 },
+		));
+		assert_eq!(
+			FailedForeignChainCalls::<Test>::get(epoch + 1),
+			vec![FailedForeignChainCall { broadcast_id: 13, original_epoch: epoch }]
+		);
+
+		IngressEgress::on_finalize(6);
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::FailedForeignChainCallExpired { broadcast_id: 13 },
+		));
+
+		// All calls are culled from storage.
+		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch), vec![]);
+		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch + 1), vec![]);
+		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch + 2), vec![]);
+	});
+}
+
+#[test]
+fn consolidation_tx_gets_broadcasted_on_finalize() {
+	new_test_ext().execute_with(|| {
+		// "Enable" consolidation for this test only to reduce noise in other tests
+		cf_traits::mocks::api_call::SHOULD_CONSOLIDATE.with(|cell| cell.set(true));
+
+		IngressEgress::on_finalize(1);
+
+		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
+			crate::Event::BatchBroadcastRequested { broadcast_id: 1, egress_ids: vec![] },
+		));
+	});
 }
