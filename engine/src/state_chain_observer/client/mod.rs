@@ -730,7 +730,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 
 					fn sign(&self, bytes: &[u8]) -> <StateChainConfig as subxt::Config>::Signature {
 						use sp_core::Pair;
-						subxt::utils::MultiSignature::Sr25519(self.1.sign(bytes).0)
+						state_chain_runtime::Signature::Sr25519(self.1.sign(bytes))
 					}
 				}
 				SubxtSignerInterface(subxt::utils::AccountId32(*signer.account_id.as_ref()), pair)
