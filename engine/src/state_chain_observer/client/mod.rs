@@ -18,7 +18,7 @@ use jsonrpsee::core::RpcResult;
 use sp_core::{Pair, H256};
 use state_chain_runtime::AccountId;
 use std::{pin::Pin, sync::Arc, time::Duration};
-use subxt::backend::rpc::RpcClient;
+use subxt::{backend::rpc::RpcClient, config::DefaultExtrinsicParamsBuilder};
 use tokio::sync::watch;
 use tracing::{info, warn};
 
@@ -29,8 +29,11 @@ use utilities::{
 	try_cached_stream::{MakeTryCachedStream, TryCachedStream},
 };
 
-use crate::state_chain_observer::client::{
-	base_rpc_api::SubxtInterface, storage_api::CheckBlockCompatibility,
+use crate::{
+	constants::SIGNED_EXTRINSIC_LIFETIME,
+	state_chain_observer::client::{
+		base_rpc_api::SubxtInterface, storage_api::CheckBlockCompatibility,
+	},
 };
 
 use self::{
@@ -760,12 +763,15 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 					recorded_version, *CFE_VERSION
 				);
 
+				let block_hash = finalized_block_stream.cache().hash;
+				let block_number = finalized_block_stream.cache().number;
+
 				// Submitting transaction with subxt sometimes gets stuck without returning any
 				// error (see https://linear.app/chainflip/issue/PRO-1064/new-cfe-version-gets-stuck-on-startup),
 				// so we use a timeout to ensure we can recover:
 				tokio::time::timeout(CFE_VERSION_SUBMIT_TIMEOUT, async {
 					let current_nonce = rpc_client
-						.request::<u64>(
+						.request::<u32>(
 							"system_accountNextIndex",
 							subxt::rpc_params![&subxt_signer.account_id()],
 						)
@@ -787,8 +793,14 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 								)],
 							),
 							&subxt_signer,
-							current_nonce,
-							Default::default(),
+							current_nonce.into(),
+							DefaultExtrinsicParamsBuilder::new()
+								.mortal_unchecked(
+									block_number.into(),
+									block_hash.into(),
+									SIGNED_EXTRINSIC_LIFETIME.into(),
+								)
+								.build(),
 						)?
 						.submit_and_watch()
 						.await?
