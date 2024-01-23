@@ -465,7 +465,7 @@ build_histogram_vec_struct!(
 	CEREMONY_DURATION,
 	CeremonyDuration,
 	"ceremony_duration",
-	"Measure the duration of a ceremony in ms",
+	"Measure the duration of a ceremony in seconds",
 	["chain", "ceremony_type"],
 	(vec![2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0])
 );
@@ -481,7 +481,7 @@ build_histogram_vec_struct!(
 	STAGE_DURATION,
 	StageDuration,
 	"stage_duration",
-	"Measure the duration of a stage in ms",
+	"Measure the duration of a stage in seconds",
 	["chain", "stage", "phase"], //phase can be either receiving or processing
 	["chain"],
 	(vec![2.0, 3.0, 5.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0])
