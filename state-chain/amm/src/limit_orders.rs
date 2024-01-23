@@ -390,9 +390,9 @@ pub(super) struct PoolState<LiquidityProvider: Ord> {
 	/// Therefore there can be positions stored here that don't provide any liquidity.
 	positions: SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
 	/// Total fees earned over all time
-	total_fees_earned: SideMap<Amount>,
+	pub(super) total_fees_earned: SideMap<Amount>,
 	/// Total of all swap inputs over all time (not including fees)
-	total_swap_inputs: SideMap<Amount>,
+	pub(super) total_swap_inputs: SideMap<Amount>,
 	/// Total of all swap outputs over all time
 	total_swap_outputs: SideMap<Amount>,
 }

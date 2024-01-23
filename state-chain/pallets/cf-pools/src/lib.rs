@@ -1157,6 +1157,14 @@ pub struct PoolInfo {
 	/// The fee taken, when range orders are used, from swap inputs that contributes to liquidity
 	/// provider earnings
 	pub range_order_fee_hundredth_pips: u32,
+
+	pub range_order_total_fees_earned: SideMap<Amount>,
+
+	pub limit_order_total_fees_earned: SideMap<Amount>,
+
+	pub range_total_swap_inputs: SideMap<Amount>,
+
+	pub limit_total_swap_inputs: SideMap<Amount>,
 }
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
@@ -1782,6 +1790,10 @@ impl<T: Config> Pallet<T> {
 		Ok(PoolInfo {
 			limit_order_fee_hundredth_pips: pool.pool_state.limit_order_fee(),
 			range_order_fee_hundredth_pips: pool.pool_state.range_order_fee(),
+			range_order_total_fees_earned: pool.pool_state.range_order_total_fees_earned(),
+			limit_order_total_fees_earned: pool.pool_state.limit_order_total_fees_earned(),
+			range_total_swap_inputs: pool.pool_state.range_order_swap_inputs(),
+			limit_total_swap_inputs: pool.pool_state.limit_order_swap_inputs(),
 		})
 	}
 

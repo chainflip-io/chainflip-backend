@@ -210,6 +210,10 @@ benchmarks! {
 			Ok(PoolInfo {
 				limit_order_fee_hundredth_pips: fee,
 				range_order_fee_hundredth_pips: fee,
+				range_order_total_fees_earned: Default::default(),
+				limit_order_total_fees_earned: Default::default(),
+				range_total_swap_inputs: Default::default(),
+				limit_total_swap_inputs: Default::default(),
 			})
 		);
 	}

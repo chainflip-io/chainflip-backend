@@ -1404,6 +1404,10 @@ mod test {
 							PoolInfo {
 								limit_order_fee_hundredth_pips: 0,
 								range_order_fee_hundredth_pips: 100,
+								range_order_total_fees_earned: Default::default(),
+								limit_order_total_fees_earned: Default::default(),
+								range_total_swap_inputs: Default::default(),
+								limit_total_swap_inputs: Default::default(),
 							}
 							.into(),
 						),
