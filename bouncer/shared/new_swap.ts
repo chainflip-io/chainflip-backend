@@ -14,7 +14,7 @@ export async function newSwap(
   destAsset: Asset,
   destAddress: string,
   messageMetadata?: CcmDepositMetadata,
-  commissionBps = defaultCommissionBps,
+  brokerCommissionBps = defaultCommissionBps,
 ): Promise<void> {
   const destinationAddress =
     destAsset === 'DOT' ? decodeDotAddressForContract(destAddress) : destAddress;
@@ -33,7 +33,7 @@ export async function newSwap(
     },
     {
       url: brokerUrl,
-      commissionBps,
+      commissionBps: brokerCommissionBps,
     },
   );
 }

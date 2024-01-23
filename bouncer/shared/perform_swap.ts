@@ -39,7 +39,7 @@ export async function requestNewSwap(
   destAddress: string,
   tag = '',
   messageMetadata?: CcmDepositMetadata,
-  commissionBps?: number,
+  brokerCommissionBps?: number,
   log = true,
 ): Promise<SwapParams> {
   const chainflipApi = await getChainflipApi();
@@ -73,7 +73,7 @@ export async function requestNewSwap(
       return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
     },
   );
-  await newSwap(sourceAsset, destAsset, destAddress, messageMetadata, commissionBps);
+  await newSwap(sourceAsset, destAsset, destAddress, messageMetadata, brokerCommissionBps);
 
   const res = (await addressPromise).data;
 
@@ -148,7 +148,7 @@ export async function performSwap(
   messageMetadata?: CcmDepositMetadata,
   senderType = SenderType.Address,
   amount?: string,
-  commissionBps?: number,
+  brokerCommissionBps?: number,
   log = true,
 ) {
   const tag = swapTag ?? '';
@@ -166,7 +166,7 @@ export async function performSwap(
     destAddress,
     tag,
     messageMetadata,
-    commissionBps,
+    brokerCommissionBps,
     log,
   );
   await doPerformSwap(swapParams, tag, messageMetadata, senderType, amount, log);
