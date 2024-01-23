@@ -479,6 +479,21 @@ impl<T: Config> Pallet<T> {
 		});
 		CallHashExecuted::<T>::insert(witnessed_at_epoch, call_hash, ());
 	}
+
+	pub fn count_votes(callhash: CallHash) -> Option<Vec<(<T as Chainflip>::ValidatorId, bool)>> {
+		let current_epoch = T::EpochInfo::epoch_index();
+		let votes: BitVec<u8, Msb0> = BitVec::from_vec(Votes::<T>::get(current_epoch, callhash)?);
+		let authorities = T::EpochInfo::current_authorities();
+		let result: Vec<_> = votes
+			.iter()
+			// by_vals is needed to convert to true/false bool values.
+			.by_vals()
+			// authorities are stored in the same order as the votes
+			.zip(authorities)
+			.map(|(vote, account_id)| (account_id, vote))
+			.collect();
+		Some(result)
+	}
 }
 
 impl<T: pallet::Config> cf_traits::EpochTransitionHandler for Pallet<T> {

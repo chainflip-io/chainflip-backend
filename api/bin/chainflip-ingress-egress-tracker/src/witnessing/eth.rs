@@ -7,7 +7,10 @@ use chainflip_engine::{
 	eth::{retry_rpc::EthRetryRpcClient, rpc::EthRpcClient},
 	settings::NodeContainer,
 	state_chain_observer::client::{
-		chain_api::ChainApi, storage_api::StorageApi, StateChainClient, StateChainStreamApi,
+		chain_api::ChainApi,
+		storage_api::StorageApi,
+		stream_api::{StreamApi, UNFINALIZED},
+		StateChainClient,
 	},
 	witness::{
 		common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder},
@@ -25,7 +28,7 @@ use super::EnvironmentParameters;
 pub(super) async fn start<ProcessCall, ProcessingFut>(
 	scope: &task_scope::Scope<'_, anyhow::Error>,
 	state_chain_client: Arc<StateChainClient<()>>,
-	state_chain_stream: impl StateChainStreamApi<false> + Clone,
+	state_chain_stream: impl StreamApi<UNFINALIZED> + Clone,
 	settings: DepositTrackerSettings,
 	env_params: EnvironmentParameters,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient<()>, (), ()>,

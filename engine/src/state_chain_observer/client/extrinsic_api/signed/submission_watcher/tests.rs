@@ -85,7 +85,6 @@ async fn new_watcher_and_submit_test_extrinsic<'a, 'env>(
 		H256::default(),
 		SIGNED_EXTRINSIC_LIFETIME,
 		Arc::new(mock_rpc_api),
-		None,
 	);
 
 	// Just some dummy call to test with
