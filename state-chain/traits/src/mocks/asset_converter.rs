@@ -41,7 +41,7 @@ impl AssetConverter for MockAssetConverter {
 			.map(|price| price * desired_output_amount)?;
 
 		if input > available_input_amount {
-			return None
+			return Some((Amount::zero(), available_input_amount))
 		}
 
 		let fee_estimate = Self::get_price(input_asset, output_asset).map(|price| price * input)?;
