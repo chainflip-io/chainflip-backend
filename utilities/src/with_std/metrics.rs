@@ -12,7 +12,7 @@ use prometheus::{
 	IntGaugeVec, Opts, Registry,
 };
 use serde::Deserialize;
-use std::net::IpAddr;
+use std::{net::IpAddr, time::Duration};
 use tracing::info;
 use warp::Filter;
 
@@ -43,8 +43,8 @@ impl<const N: usize> HistogramVecWrapper<N> {
 		}
 	}
 
-	pub fn observe(&self, labels: &[&str; N], val: u128) {
-		let sample_value: f64 = val as f64;
+	pub fn observe(&self, labels: &[&str; N], val: Duration) {
+		let sample_value: f64 = val.as_secs_f64();
 		self.prom_metric.with_label_values(labels).observe(sample_value);
 	}
 }
@@ -202,7 +202,7 @@ macro_rules! build_histogram_vec_struct {
 				$struct_ident { metric, labels }
 			}
 
-			pub fn observe(&self, val: u128) {
+			pub fn observe(&self, val: Duration) {
 				let labels = self.labels.each_ref().map(|s| s.as_str());
 				self.metric.observe(&labels, val);
 			}
@@ -227,7 +227,7 @@ macro_rules! build_histogram_vec_struct {
 			pub fn observe(
 				&self,
 				non_const_labels: &[&str; { $labels.len() - $const_labels.len() }],
-				val: u128,
+				val: Duration,
 			) {
 				let labels: [&str; { $labels.len() }] = self
 					.const_labels
@@ -467,7 +467,7 @@ build_histogram_vec_struct!(
 	"ceremony_duration",
 	"Measure the duration of a ceremony in ms",
 	["chain", "ceremony_type"],
-	(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0])
+	(vec![2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0])
 );
 build_gauge_vec_struct!(
 	CEREMONY_TIMEOUT_MISSING_MSG,
@@ -484,7 +484,7 @@ build_histogram_vec_struct!(
 	"Measure the duration of a stage in ms",
 	["chain", "stage", "phase"], //phase can be either receiving or processing
 	["chain"],
-	(vec![1.0, 2.0, 3.0])
+	(vec![2.0, 3.0, 5.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0])
 );
 build_counter_vec_struct!(
 	STAGE_FAILING,
@@ -624,15 +624,15 @@ mod test {
 				{
 					let mut metrics = CeremonyMetrics::new("Chain1", "Keygen");
 					metrics.bad_message.inc(&["AA"]);
-					metrics.ceremony_duration.observe(999);
+					metrics.ceremony_duration.observe(Duration::new(999, 0));
 					metrics.missing_messages.set(&["stage1",], 5);
 					metrics.processed_messages.inc();
 					metrics.processed_messages.inc();
 					metrics.stage_completing.inc(&["stage1"]);
 					metrics.stage_completing.inc(&["stage1"]);
 					metrics.stage_completing.inc(&["stage2"]);
-					metrics.stage_duration.observe(&["stage1", "receiving"], 780);
-					metrics.stage_duration.observe(&["stage1", "processing"], 78);
+					metrics.stage_duration.observe(&["stage1", "receiving"], Duration::new(780, 0));
+					metrics.stage_duration.observe(&["stage1", "processing"], Duration::new(78, 0));
 					metrics.stage_failing.inc(&["stage3", "NotEnoughMessages"]);
 
 					//This request does nothing, the ceremony is still ongoning so there is no deletion

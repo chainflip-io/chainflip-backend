@@ -379,6 +379,10 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 					&[Chain::NAME, KEYGEN_LABEL],
 					self.keygen_states.count_unauthorised_ceremonies(),
 				);
+				PENDING_CEREMONIES.set(
+					&[Chain::NAME, KEYGEN_LABEL],
+					self.keygen_states.count_authorised_ceremonies(),
+				);
 			},
 			Some(CeremonyRequestDetails::Sign(details)) => {
 				self.on_request_to_sign(
@@ -392,6 +396,10 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 				UNAUTHORIZED_CEREMONY.set(
 					&[Chain::NAME, SIGNING_LABEL],
 					self.signing_states.count_unauthorised_ceremonies(),
+				);
+				PENDING_CEREMONIES.set(
+					&[Chain::NAME, SIGNING_LABEL],
+					self.signing_states.count_authorised_ceremonies(),
 				);
 			},
 			None => {
@@ -416,10 +424,6 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 				}
 			},
 		}
-		PENDING_CEREMONIES
-			.set(&[Chain::NAME, SIGNING_LABEL], self.signing_states.count_authorised_ceremonies());
-		PENDING_CEREMONIES
-			.set(&[Chain::NAME, KEYGEN_LABEL], self.keygen_states.count_authorised_ceremonies());
 	}
 
 	pub async fn run(

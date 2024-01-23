@@ -111,9 +111,11 @@ where
 			}
 		};
 		if let Some(start_instant) = ceremony_start {
-			let duration = start_instant.elapsed().as_millis();
+			let duration = start_instant.elapsed();
 			runner.metrics.ceremony_duration.observe(duration);
-			span.in_scope(|| tracing::info!("Ceremony took {}ms to complete", duration));
+			span.in_scope(|| {
+				tracing::info!("Ceremony took {}ms to complete", duration.as_millis())
+			});
 		}
 		let _result = runner.outcome_sender.send((ceremony_id, outcome));
 		Ok(())
