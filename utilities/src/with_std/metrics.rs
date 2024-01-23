@@ -640,17 +640,18 @@ mod test {
 r#"# HELP ceremony_bad_msg Count all the bad msgs processed during a ceremony
 # TYPE ceremony_bad_msg counter
 ceremony_bad_msg{chain="Chain1",reason="AA"} 1
-# HELP ceremony_duration Measure the duration of a ceremony in ms
+# HELP ceremony_duration Measure the duration of a ceremony in seconds
 # TYPE ceremony_duration histogram
-ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="1"} 0
 ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="2"} 0
-ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="3"} 0
 ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="4"} 0
-ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="5"} 0
-ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="6"} 0
-ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="7"} 0
 ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="8"} 0
-ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="9"} 0
+ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="16"} 0
+ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="32"} 0
+ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="64"} 0
+ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="128"} 0
+ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="256"} 0
+ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="512"} 0
+ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="1024"} 1
 ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="+Inf"} 1
 ceremony_duration_sum{ceremony_type="Keygen",chain="Chain1"} 999
 ceremony_duration_count{ceremony_type="Keygen",chain="Chain1"} 1
@@ -664,17 +665,29 @@ ceremony_timeout_missing_msg{ceremony_type="Keygen",chain="Chain1",stage="stage1
 # TYPE stage_completing counter
 stage_completing{chain="Chain1",stage="stage1"} 2
 stage_completing{chain="Chain1",stage="stage2"} 1
-# HELP stage_duration Measure the duration of a stage in ms
+# HELP stage_duration Measure the duration of a stage in seconds
 # TYPE stage_duration histogram
-stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="1"} 0
 stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="2"} 0
 stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="3"} 0
+stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="5"} 0
+stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="8"} 0
+stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="10"} 0
+stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="15"} 0
+stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="20"} 0
+stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="25"} 0
+stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="30"} 0
 stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="+Inf"} 1
 stage_duration_sum{chain="Chain1",phase="processing",stage="stage1"} 78
 stage_duration_count{chain="Chain1",phase="processing",stage="stage1"} 1
-stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="1"} 0
 stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="2"} 0
 stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="3"} 0
+stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="5"} 0
+stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="8"} 0
+stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="10"} 0
+stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="15"} 0
+stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="20"} 0
+stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="25"} 0
+stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="30"} 0
 stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="+Inf"} 1
 stage_duration_sum{chain="Chain1",phase="receiving",stage="stage1"} 780
 stage_duration_count{chain="Chain1",phase="receiving",stage="stage1"} 1
