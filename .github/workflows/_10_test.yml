@@ -23,7 +23,7 @@ jobs:
       - name: Setup sccache
         run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
 
-      - name: cargo cf-test-ci --locked --release
+      - name: cargo cf-test-ci --locked
         run: |
-          cargo cf-test-ci --locked --release
+          cargo cf-test-ci --locked
           sccache --show-stats
