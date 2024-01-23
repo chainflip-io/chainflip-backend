@@ -5,28 +5,26 @@ use crate::{
 	dot::retry_rpc::mocks::MockDotHttpRpcClient,
 	eth::retry_rpc::mocks::MockEthRetryRpcClient,
 	state_chain_observer::{
-		client::{extrinsic_api, finalized_stream::FinalizedCachedStream},
+		client::{
+			extrinsic_api,
+			stream_api::{StateChainStream, FINALIZED},
+		},
 		test_helpers::test_header,
 	},
 };
-use cf_chains::{
-	evm::{SchnorrVerificationComponents, Transaction},
-	Chain, ChainCrypto,
-};
+use cf_chains::{evm::Transaction, Chain, ChainCrypto};
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
-use frame_system::Phase;
 use futures::FutureExt;
 use mockall::predicate::eq;
 use multisig::{eth::EvmCryptoScheme, ChainSigning, SignatureToThresholdSignature};
-use pallet_cf_broadcast::BroadcastAttemptId;
+use pallet_cf_cfe_interface::{CfeEvent, TxBroadcastRequest};
 use sp_runtime::AccountId32;
 
 use sp_core::H256;
 use state_chain_runtime::{
 	AccountId, BitcoinInstance, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall,
-	RuntimeEvent,
 };
-use utilities::MakeCachedStream;
+use utilities::cached_stream::MakeCachedStream;
 
 use crate::{
 	settings::Settings,
@@ -41,11 +39,8 @@ use utilities::task_scope::task_scope;
 
 use super::crypto_compat::CryptoCompat;
 
-const MOCK_ETH_TRANSACTION_OUT_ID: SchnorrVerificationComponents =
-	SchnorrVerificationComponents { s: [0; 32], k_times_g_address: [1; 20] };
-
 async fn start_sc_observer<
-	BlockStream: crate::state_chain_observer::client::StateChainStreamApi,
+	BlockStream: crate::state_chain_observer::client::stream_api::StreamApi<FINALIZED>,
 >(
 	state_chain_client: MockStateChainClient,
 	sc_block_stream: BlockStream,
@@ -83,38 +78,25 @@ async fn only_encodes_and_signs_when_specified() {
 	});
 
 	let block = test_header(21, None);
-	let sc_block_stream =
-		tokio_stream::iter([block]).make_cached(test_header(20, None), |block| *block);
+	let sc_block_stream = tokio_stream::iter([block]).make_cached(test_header(20, None));
+
+	use state_chain_runtime::Runtime;
 
 	state_chain_client
-		.expect_storage_value::<frame_system::Events<Runtime>>()
+		.expect_storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
 		.with(eq(block.hash))
 		.once()
 		.return_once(move |_| {
 			Ok(vec![
-				Box::new(frame_system::EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: RuntimeEvent::EthereumBroadcaster(
-						pallet_cf_broadcast::Event::TransactionBroadcastRequest {
-							broadcast_attempt_id: BroadcastAttemptId::default(),
-							nominee: account_id,
-							transaction_payload: Transaction::default(),
-							transaction_out_id: MOCK_ETH_TRANSACTION_OUT_ID,
-						},
-					),
-					topics: vec![H256::default()],
+				CfeEvent::<Runtime>::EthTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> {
+					broadcast_id: Default::default(),
+					nominee: account_id,
+					payload: Transaction::default(),
 				}),
-				Box::new(frame_system::EventRecord {
-					phase: Phase::ApplyExtrinsic(1),
-					event: RuntimeEvent::EthereumBroadcaster(
-						pallet_cf_broadcast::Event::TransactionBroadcastRequest {
-							broadcast_attempt_id: BroadcastAttemptId::default(),
-							nominee: AccountId32::new([1; 32]), // NOT OUR ACCOUNT ID
-							transaction_payload: Transaction::default(),
-							transaction_out_id: MOCK_ETH_TRANSACTION_OUT_ID,
-						},
-					),
-					topics: vec![H256::default()],
+				CfeEvent::<Runtime>::EthTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> {
+					broadcast_id: Default::default(),
+					nominee: AccountId32::new([1; 32]), // NOT OUR ACCOUNT ID
+					payload: Transaction::default(),
 				}),
 			])
 		});
@@ -131,12 +113,8 @@ async fn only_encodes_and_signs_when_specified() {
 	let mut eth_mock_clone = MockEthRetryRpcClient::new();
 	eth_mock_clone.expect_clone().return_once(|| eth_rpc_mock_broadcast);
 
-	start_sc_observer(
-		state_chain_client,
-		FinalizedCachedStream::new(sc_block_stream),
-		eth_mock_clone,
-	)
-	.await;
+	start_sc_observer(state_chain_client, StateChainStream::new(sc_block_stream), eth_mock_clone)
+		.await;
 }
 
 // TODO: Test that when we return None for polkadot vault
@@ -511,7 +489,8 @@ async fn run_the_sc_observer() {
 					&settings.state_chain.signing_key_file,
 					AccountRole::Unregistered,
 					false,
-					None,
+					false,
+					false,
 				)
 				.await
 				.unwrap();

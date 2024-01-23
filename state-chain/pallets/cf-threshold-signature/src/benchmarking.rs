@@ -8,8 +8,7 @@ use cf_traits::{AccountRoleRegistry, Chainflip, CurrentEpochIndex, ThresholdSign
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account};
 use frame_support::{
 	assert_ok,
-	dispatch::UnfilteredDispatchable,
-	traits::{IsType, OnInitialize, OnNewAccount},
+	traits::{IsType, OnInitialize, OnNewAccount, UnfilteredDispatchable},
 };
 use frame_system::RawOrigin;
 use pallet_cf_validator::CurrentAuthorities;
@@ -131,7 +130,7 @@ benchmarks_instance_pallet! {
 	}: {
 		<T as Config<I>>::OffenceReporter::report_many(
 			PalletOffence::ParticipateSigningFailed,
-			offenders.as_slice(),
+			offenders,
 		);
 	}
 }

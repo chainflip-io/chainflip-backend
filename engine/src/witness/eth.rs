@@ -18,16 +18,16 @@ use crate::{
 	db::PersistentKeyDB,
 	eth::{retry_rpc::EthRetryRpcClient, rpc::EthRpcSigningClient},
 	state_chain_observer::client::{
-		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
-		StateChainStreamApi,
+		chain_api::ChainApi,
+		extrinsic_api::signed::SignedExtrinsicApi,
+		storage_api::StorageApi,
+		stream_api::{StreamApi, FINALIZED},
+		STATE_CHAIN_CONNECTION,
 	},
 	witness::eth::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents},
 };
 
-use super::common::{
-	chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder,
-	STATE_CHAIN_CONNECTION,
-};
+use super::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder};
 pub use eth_source::EthSource;
 
 use anyhow::{Context, Result};
@@ -45,7 +45,7 @@ pub async fn start<StateChainClient, StateChainStream, ProcessCall, ProcessingFu
 ) -> Result<()>
 where
 	StateChainClient: StorageApi + ChainApi + SignedExtrinsicApi + 'static + Send + Sync,
-	StateChainStream: StateChainStreamApi + Clone,
+	StateChainStream: StreamApi<FINALIZED> + Clone,
 	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 		+ Send
 		+ Sync

@@ -619,6 +619,74 @@ fn redemption_expiry_removes_redemption() {
 }
 
 #[test]
+fn restore_restricted_balance_when_redemption_expires() {
+	const TOTAL_FUNDS: u128 = 100;
+	const RESTRICTED_AMOUNT: u128 = 60;
+	const RESTRICTED_ADDRESS: EthereumAddress = EthereumAddress::repeat_byte(0x02);
+
+	#[track_caller]
+	fn do_test(redeem_amount: RedemptionAmount<u128>) {
+		new_test_ext().execute_with(|| {
+			RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS, ());
+			assert_ok!(Funding::funded(
+				RuntimeOrigin::root(),
+				ALICE,
+				RESTRICTED_AMOUNT,
+				RESTRICTED_ADDRESS,
+				TX_HASH
+			));
+			assert_ok!(Funding::funded(
+				RuntimeOrigin::root(),
+				ALICE,
+				TOTAL_FUNDS - RESTRICTED_AMOUNT,
+				ETH_DUMMY_ADDR,
+				TX_HASH
+			));
+			assert_ok!(Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				redeem_amount,
+				RESTRICTED_ADDRESS,
+				Default::default()
+			));
+
+			// Restricted funds and total balance should have been reduced.
+			assert!(Flip::total_balance_of(&ALICE) < TOTAL_FUNDS);
+
+			assert_ok!(Funding::redemption_expired(
+				RuntimeOrigin::root(),
+				ALICE,
+				Default::default()
+			));
+
+			assert_eq!(
+				Flip::total_balance_of(&ALICE),
+				TOTAL_FUNDS - REDEMPTION_TAX,
+				"Expected the full balance, minus redemption tax, to be restored to the account"
+			);
+			let new_restricted_balance = *RestrictedBalances::<Test>::get(&ALICE)
+				.get(&RESTRICTED_ADDRESS)
+				.expect("Expected the restricted balance to be restored to the restricted address");
+			assert_eq!(
+				new_restricted_balance,
+				RESTRICTED_AMOUNT - REDEMPTION_TAX,
+				"Expected the restricted balance to be restored excluding the redemption tax",
+			);
+		});
+	}
+
+	// Redeem all.
+	do_test(RedemptionAmount::Max);
+	// Redeem more than the restricted balance.
+	do_test(RedemptionAmount::Exact(RESTRICTED_AMOUNT + REDEMPTION_TAX * 2));
+	// Redeem exactly the restricted balance.
+	do_test(RedemptionAmount::Exact(RESTRICTED_AMOUNT));
+	// Redeem a little less than the restricted balance.
+	do_test(RedemptionAmount::Exact(RESTRICTED_AMOUNT - 1));
+	// Redeem signficantly less than the restricted balance.
+	do_test(RedemptionAmount::Exact(RESTRICTED_AMOUNT - REDEMPTION_TAX * 2));
+}
+
+#[test]
 fn runtime_safe_mode_blocks_redemption_requests() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Funding::funded(

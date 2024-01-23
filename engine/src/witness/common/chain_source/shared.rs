@@ -2,7 +2,7 @@ use futures_util::StreamExt;
 use tokio::sync::oneshot;
 use utilities::{
 	loop_select, spmc,
-	task_scope::{Scope, OR_CANCEL},
+	task_scope::{Scope, UnwrapOrCancel},
 };
 
 use crate::witness::common::ExternalChainSource;
@@ -86,7 +86,7 @@ where
 		{
 			let _result = self.request_sender.send(sender).await;
 		}
-		let (stream, client) = receiver.await.expect(OR_CANCEL);
+		let (stream, client) = receiver.unwrap_or_cancel().await;
 		(stream.into_box(), client)
 	}
 }

@@ -2,6 +2,7 @@
 
 mod async_result;
 pub mod liquidity;
+use cfe_events::{KeyHandoverRequest, KeygenRequest, TxBroadcastRequest};
 pub use liquidity::*;
 pub mod safe_mode;
 pub use safe_mode::*;
@@ -19,19 +20,18 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
-	CeremonyId, ChannelId, EgressId, EpochIndex, FlipBalance, ForeignChain, NetworkEnvironment,
-	SemVer, ThresholdSignatureRequestId,
+	CeremonyId, ChannelId, Ed25519PublicKey, EgressId, EpochIndex, FlipBalance, ForeignChain,
+	Ipv6Addr, NetworkEnvironment, SemVer, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
 	error::BadOrigin,
-	pallet_prelude::Member,
+	pallet_prelude::{DispatchResultWithPostInfo, Member},
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
 		DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
 	},
-	traits::{EnsureOrigin, Get, Imbalance, IsType},
+	traits::{EnsureOrigin, Get, Imbalance, IsType, UnfilteredDispatchable},
 	Hashable, Parameter,
 };
 use scale_info::TypeInfo;
@@ -346,7 +346,7 @@ pub trait BroadcastNomination {
 	/// as a source of randomness. Returns None if no signers are live.
 	fn nominate_broadcaster<H: Hashable>(
 		seed: H,
-		exclude_ids: &[Self::BroadcasterId],
+		exclude_ids: impl IntoIterator<Item = Self::BroadcasterId>,
 	) -> Option<Self::BroadcasterId>;
 }
 
@@ -446,6 +446,31 @@ where
 	}
 }
 
+pub trait CfeMultisigRequest<T: Chainflip, C: ChainCrypto> {
+	fn keygen_request(req: KeygenRequest<T::ValidatorId>);
+
+	fn signature_request(req: cfe_events::ThresholdSignatureRequest<T::ValidatorId, C>);
+
+	fn key_handover_request(_req: KeyHandoverRequest<T::ValidatorId, C>) {
+		assert!(!C::key_handover_is_required());
+	}
+}
+
+pub trait CfePeerRegistration<T: Chainflip> {
+	fn peer_registered(
+		account_id: T::ValidatorId,
+		pubkey: Ed25519PublicKey,
+		port: u16,
+		ip: Ipv6Addr,
+	);
+
+	fn peer_deregistered(account_id: T::ValidatorId, pubkey: Ed25519PublicKey);
+}
+
+pub trait CfeBroadcastRequest<T: Chainflip, C: Chain> {
+	fn tx_broadcast_request(req: TxBroadcastRequest<T::ValidatorId, C>);
+}
+
 /// Something that is capable of encoding and broadcasting native blockchain api calls to external
 /// chains.
 pub trait Broadcaster<C: Chain> {
@@ -498,6 +523,13 @@ pub trait BlockEmissions {
 	fn update_backup_node_block_emission(emission: Self::Balance);
 	/// Calculate the emissions per block
 	fn calculate_block_emissions();
+}
+
+/// Emits an event when backup rewards are distributed that lives inside the Emissions pallet.
+pub trait BackupRewardsNotifier {
+	type Balance;
+	type AccountId;
+	fn emit_event(account_id: &Self::AccountId, amount: Self::Balance);
 }
 
 /// Checks if the caller can execute free transactions

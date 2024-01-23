@@ -30,7 +30,8 @@ use state_chain_runtime::{
 	chainflip::Offence,
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
-		CustomRuntimeApi, DispatchErrorWithMessage, LiquidityProviderInfo, RuntimeApiAccountInfoV2,
+		CustomRuntimeApi, DispatchErrorWithMessage, FailingWitnessValidators,
+		LiquidityProviderInfo, RuntimeApiAccountInfoV2,
 	},
 };
 use std::{
@@ -258,6 +259,7 @@ pub struct IngressEgressEnvironment {
 	pub minimum_deposit_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
 	pub ingress_fees: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
 	pub egress_fees: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+	pub witness_safety_margins: HashMap<ForeignChain, Option<u64>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -268,7 +270,6 @@ pub struct FundingEnvironment {
 
 #[derive(Serialize, Deserialize)]
 pub struct SwappingEnvironment {
-	minimum_swap_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
 	maximum_swap_amounts: HashMap<ForeignChain, HashMap<Asset, Option<NumberOrHex>>>,
 }
 
@@ -461,8 +462,7 @@ pub trait CustomApi {
 	#[deprecated(note = "Use direct storage access of `CurrentReleaseVersion` instead.")]
 	#[method(name = "current_compatibility_version")]
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
-	#[method(name = "min_swap_amount")]
-	fn cf_min_swap_amount(&self, asset: RpcAsset) -> RpcResult<AssetAmount>;
+
 	#[method(name = "max_swap_amount")]
 	fn cf_max_swap_amount(&self, asset: RpcAsset) -> RpcResult<Option<AssetAmount>>;
 	#[subscription(name = "subscribe_pool_price", item = PoolPrice)]
@@ -487,6 +487,13 @@ pub trait CustomApi {
 		&self,
 		broadcast_id: BroadcastId,
 	) -> RpcResult<Option<<cf_chains::Ethereum as Chain>::Transaction>>;
+
+	#[method(name = "witness_count")]
+	fn cf_witness_count(
+		&self,
+		hash: state_chain_runtime::Hash,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<FailingWitnessValidators>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -966,6 +973,7 @@ where
 		let mut minimum_deposit_amounts = HashMap::new();
 		let mut ingress_fees = HashMap::new();
 		let mut egress_fees = HashMap::new();
+		let mut witness_safety_margins = HashMap::new();
 
 		for asset in Asset::all() {
 			let chain = ForeignChain::from(asset);
@@ -983,7 +991,19 @@ where
 			);
 		}
 
-		Ok(IngressEgressEnvironment { minimum_deposit_amounts, ingress_fees, egress_fees })
+		for chain in ForeignChain::iter() {
+			witness_safety_margins.insert(
+				chain,
+				runtime_api.cf_witness_safety_margin(hash, chain).map_err(to_rpc_error)?,
+			);
+		}
+
+		Ok(IngressEgressEnvironment {
+			minimum_deposit_amounts,
+			ingress_fees,
+			egress_fees,
+			witness_safety_margins,
+		})
 	}
 
 	fn cf_swapping_environment(
@@ -992,23 +1012,18 @@ where
 	) -> RpcResult<SwappingEnvironment> {
 		let runtime_api = &self.client.runtime_api();
 		let hash = self.unwrap_or_best(at);
-		let mut minimum_swap_amounts = HashMap::new();
+
 		let mut maximum_swap_amounts = HashMap::new();
 
 		for asset in Asset::all() {
-			let min_amount = runtime_api.cf_min_swap_amount(hash, asset).map_err(to_rpc_error)?;
 			let max_amount = runtime_api.cf_max_swap_amount(hash, asset).map_err(to_rpc_error)?;
-			minimum_swap_amounts
-				.entry(asset.into())
-				.or_insert_with(HashMap::new)
-				.insert(asset, min_amount.into());
 			maximum_swap_amounts
 				.entry(asset.into())
 				.or_insert_with(HashMap::new)
 				.insert(asset, max_amount.map(|amt| amt.into()));
 		}
 
-		Ok(SwappingEnvironment { minimum_swap_amounts, maximum_swap_amounts })
+		Ok(SwappingEnvironment { maximum_swap_amounts })
 	}
 
 	fn cf_funding_environment(
@@ -1057,13 +1072,6 @@ where
 		self.client
 			.runtime_api()
 			.cf_current_compatibility_version(self.unwrap_or_best(None))
-			.map_err(to_rpc_error)
-	}
-
-	fn cf_min_swap_amount(&self, asset: RpcAsset) -> RpcResult<AssetAmount> {
-		self.client
-			.runtime_api()
-			.cf_min_swap_amount(self.unwrap_or_best(None), asset.try_into()?)
 			.map_err(to_rpc_error)
 	}
 
@@ -1130,6 +1138,17 @@ where
 		self.client
 			.runtime_api()
 			.cf_failed_call(self.unwrap_or_best(None), broadcast_id)
+			.map_err(to_rpc_error)
+	}
+
+	fn cf_witness_count(
+		&self,
+		hash: state_chain_runtime::Hash,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<FailingWitnessValidators>> {
+		self.client
+			.runtime_api()
+			.cf_witness_count(self.unwrap_or_best(at), pallet_cf_witnesser::CallHash(hash.into()))
 			.map_err(to_rpc_error)
 	}
 }
@@ -1320,17 +1339,6 @@ mod test {
 	fn test_environment_serialization() {
 		let env = RpcEnvironment {
 			swapping: SwappingEnvironment {
-				minimum_swap_amounts: HashMap::from([
-					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
-					(
-						ForeignChain::Ethereum,
-						HashMap::from([
-							(Asset::Flip, u64::MAX.into()),
-							(Asset::Usdc, (u64::MAX / 2 - 1).into()),
-							(Asset::Eth, 0u32.into()),
-						]),
-					),
-				]),
 				maximum_swap_amounts: HashMap::from([
 					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, Some(0u32.into()))])),
 					(
@@ -1376,6 +1384,11 @@ mod test {
 							(Asset::Eth, 0u32.into()),
 						]),
 					),
+				]),
+				witness_safety_margins: HashMap::from([
+					(ForeignChain::Bitcoin, Some(3u64)),
+					(ForeignChain::Ethereum, Some(3u64)),
+					(ForeignChain::Polkadot, None),
 				]),
 			},
 			funding: FundingEnvironment {

@@ -20,10 +20,10 @@ services:
     container_name: geth
     platform: linux/amd64
     ports:
-      - "127.0.0.1:8545:8545"
-      - "127.0.0.1:8551:8551"
-      - "127.0.0.1:8546:8546"
-      - "127.0.0.1:30303:30303"
+      - "8545:8545"
+      - "8551:8551"
+      - "8546:8546"
+      - "30303:30303"
     volumes:
       - "/tmp/chainflip/data/l1data:/datadir"
       - "/tmp/chainflip/data/l1keystore:/keystore"

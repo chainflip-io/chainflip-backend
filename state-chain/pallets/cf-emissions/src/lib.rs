@@ -4,11 +4,10 @@
 
 use cf_chains::{address::ForeignChainAddress, evm::api::EthEnvironmentProvider, UpdateFlipSupply};
 use cf_traits::{
-	impl_pallet_safe_mode, BlockEmissions, Broadcaster, EgressApi, FlipBurnInfo, Issuance,
-	RewardsDistribution,
+	impl_pallet_safe_mode, BackupRewardsNotifier, BlockEmissions, Broadcaster, EgressApi,
+	FlipBurnInfo, Issuance, RewardsDistribution,
 };
 use codec::MaxEncodedLen;
-use frame_support::dispatch::Weight;
 use frame_system::pallet_prelude::BlockNumberFor;
 pub use pallet::*;
 
@@ -153,6 +152,8 @@ pub mod pallet {
 		BackupNodeInflationEmissionsUpdated(u32),
 		/// SupplyUpdateInterval has been updated [block_number]
 		SupplyUpdateIntervalUpdated(BlockNumberFor<T>),
+		/// Rewards have been distributed to [account_id] \[amount\]
+		BackupRewardsDistributed { account_id: T::AccountId, amount: T::FlipBalance },
 	}
 
 	// Errors inform users that something went wrong.
@@ -306,6 +307,18 @@ impl<T: Config> Pallet<T> {
 			total_supply.unique_saturated_into(),
 			block_number.saturated_into(),
 		));
+	}
+}
+
+impl<T: Config> BackupRewardsNotifier for Pallet<T> {
+	type Balance = T::FlipBalance;
+	type AccountId = T::AccountId;
+
+	fn emit_event(account_id: &Self::AccountId, amount: Self::Balance) {
+		Self::deposit_event(Event::BackupRewardsDistributed {
+			account_id: account_id.clone(),
+			amount,
+		});
 	}
 }
 

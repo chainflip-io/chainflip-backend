@@ -1,8 +1,9 @@
 use crate::{
 	mock::*, Call as PalletCall, ChannelAction, ChannelIdCounter, CrossChainMessage,
-	DepositChannelLookup, DepositChannelPool, DepositWitness, DisabledEgressAssets,
-	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
-	MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount,
+	DepositChannelLookup, DepositChannelPool, DepositIgnoredReason, DepositWitness,
+	DisabledEgressAssets, Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls,
+	FetchOrTransfer, MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
+	TargetChainAccount,
 };
 use cf_chains::{
 	address::AddressConverter, evm::EvmFetchId, mocks::MockEthereum, CcmChannelMetadata,
@@ -874,6 +875,7 @@ fn deposits_below_minimum_are_rejected() {
 				asset: eth,
 				amount: default_deposit_amount,
 				deposit_details: Default::default(),
+				reason: DepositIgnoredReason::BelowMinimumDeposit,
 			},
 		));
 

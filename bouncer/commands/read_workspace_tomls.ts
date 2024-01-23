@@ -4,7 +4,7 @@ import fs from 'fs';
 import toml from '@iarna/toml';
 import { compareSemVer } from '../shared/utils';
 import { jsonRpc } from '../shared/json_rpc';
-import { bumpSpecVersion } from '../shared/utils/bump_spec_version';
+import { specVersion } from '../shared/utils/spec_version';
 
 const projectRoot = process.argv[2];
 const engineReleaseVersion = process.argv[3];
@@ -36,6 +36,7 @@ const runtimeTomlVersion = await tomlVersion(`${projectRoot}/state-chain/runtime
 const nodeTomlVersion = await tomlVersion(`${projectRoot}/state-chain/node/Cargo.toml`);
 const cliTomlVersion = await tomlVersion(`${projectRoot}/api/bin/chainflip-cli/Cargo.toml`);
 const lpApiTomlVersion = await tomlVersion(`${projectRoot}/api/bin/chainflip-lp-api/Cargo.toml`);
+const apiLibTomlVersion = await tomlVersion(`${projectRoot}/api/lib/Cargo.toml`);
 const brokerTomlVersion = await tomlVersion(
   `${projectRoot}/api/bin/chainflip-broker-api/Cargo.toml`,
 );
@@ -46,7 +47,8 @@ if (
     runtimeTomlVersion === nodeTomlVersion &&
     nodeTomlVersion === cliTomlVersion &&
     cliTomlVersion === lpApiTomlVersion &&
-    lpApiTomlVersion === brokerTomlVersion
+    lpApiTomlVersion === brokerTomlVersion &&
+    apiLibTomlVersion === brokerTomlVersion
   )
 ) {
   throw Error('All versions should be the same');
@@ -66,7 +68,7 @@ const releaseSpecVersion = Number(
 );
 console.log(`Release spec version: ${releaseSpecVersion}`);
 
-const specVersionInToml = bumpSpecVersion(`${projectRoot}/state-chain/runtime/src/lib.rs`, true);
+const specVersionInToml = specVersion(`${projectRoot}/state-chain/runtime/src/lib.rs`, 'read');
 console.log(`Spec version in TOML: ${specVersionInToml}`);
 
 if (specVersionInToml >= releaseSpecVersion) {

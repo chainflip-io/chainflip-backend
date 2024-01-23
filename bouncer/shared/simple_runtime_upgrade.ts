@@ -1,16 +1,18 @@
 import { submitRuntimeUpgrade } from './submit_runtime_upgrade';
-import { bumpSpecVersionAgainstNetwork, getCurrentSpecVersion } from './utils/bump_spec_version';
+import { bumpSpecVersionAgainstNetwork, getNetworkRuntimeVersion } from './utils/spec_version';
 import { compileBinaries } from './utils/compile_binaries';
 
 // Do a runtime upgrade using the code in the projectRoot directory.
 export async function simpleRuntimeUpgrade(projectRoot: string, tryRuntime = false): Promise<void> {
-  const nextSpecVersion = await bumpSpecVersionAgainstNetwork(projectRoot);
+  const nextSpecVersion = await bumpSpecVersionAgainstNetwork(
+    `${projectRoot}/state-chain/runtime/src/lib.rs`,
+  );
 
   await compileBinaries('runtime', projectRoot);
 
   await submitRuntimeUpgrade(projectRoot, tryRuntime);
 
-  const newSpecVersion = await getCurrentSpecVersion();
+  const newSpecVersion = (await getNetworkRuntimeVersion()).specVersion;
   console.log('New spec_version: ' + newSpecVersion);
 
   if (newSpecVersion !== nextSpecVersion) {

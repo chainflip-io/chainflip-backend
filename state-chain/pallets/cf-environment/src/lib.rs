@@ -7,7 +7,7 @@ use cf_chains::{
 		api::{SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		deposit_address::DepositAddress,
 		utxo_selection::{select_utxos_for_consolidation, select_utxos_from_pool},
-		Bitcoin, BitcoinFeeInfo, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
+		Bitcoin, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EthereumAddress,
@@ -400,8 +400,11 @@ impl<T: Config> Pallet<T> {
 	pub fn select_and_take_bitcoin_utxos(
 		utxo_selection_type: UtxoSelectionType,
 	) -> Option<SelectedUtxosAndChangeAmount> {
-		let BitcoinFeeInfo { fee_per_input_utxo, fee_per_output_utxo, min_fee_required_per_tx } =
-			T::BitcoinFeeInfo::bitcoin_fee_info();
+		let bitcoin_fee_info = T::BitcoinFeeInfo::bitcoin_fee_info();
+		let fee_per_input_utxo = bitcoin_fee_info.fee_per_input_utxo();
+		let min_fee_required_per_tx = bitcoin_fee_info.min_fee_required_per_tx();
+		let fee_per_output_utxo = bitcoin_fee_info.fee_per_output_utxo();
+
 		match utxo_selection_type {
 			UtxoSelectionType::SelectAllForRotation => {
 				let spendable_utxos: Vec<_> = BitcoinAvailableUtxos::<T>::take()

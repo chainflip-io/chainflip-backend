@@ -4,7 +4,6 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use cf_primitives::SemVer;
 use codec::{Decode, Encode};
 use frame_support::{dispatch::DispatchInfo, pallet_prelude::InvalidTransaction};
 use itertools::Itertools;
@@ -28,7 +27,7 @@ use crate::state_chain_observer::client::{
 	base_rpc_api,
 	error_decoder::{DispatchError, ErrorDecoder},
 	extrinsic_api::common::invalid_err_obj,
-	storage_api::StorageApi,
+	storage_api::{CheckBlockCompatibility, StorageApi},
 	SUBSTRATE_BEHAVIOUR,
 };
 
@@ -135,7 +134,6 @@ pub struct SubmissionWatcher<
 	)>,
 	base_rpc_client: Arc<BaseRpcClient>,
 	error_decoder: ErrorDecoder,
-	check_unfinalized_version: Option<SemVer>,
 }
 
 pub enum SubmissionLogicError {
@@ -155,7 +153,6 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		genesis_hash: state_chain_runtime::Hash,
 		extrinsic_lifetime: BlockNumber,
 		base_rpc_client: Arc<BaseRpcClient>,
-		check_unfinalized_version: Option<SemVer>,
 	) -> (Self, BTreeMap<RequestID, Request>) {
 		(
 			Self {
@@ -172,7 +169,6 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				block_cache: Default::default(),
 				base_rpc_client,
 				error_decoder: Default::default(),
-				check_unfinalized_version,
 			},
 			// Return an empty requests map. This is done so that initial state of the requests
 			// matches the submission watchers state. The requests must be stored outside of
@@ -404,42 +400,33 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 	) -> Result<(), anyhow::Error> {
 		if let Some((header, extrinsics, events)) = if let Some((
 			_,
-			cached_compatbile_block_details,
+			cached_compatible_block_details,
 		)) = self
 			.block_cache
 			.iter()
 			.find(|(cached_block_hash, ..)| block_hash == *cached_block_hash)
 		{
-			cached_compatbile_block_details.as_ref()
+			cached_compatible_block_details.as_ref()
 		} else if let Some(block) = self.base_rpc_client.block(block_hash).await? {
-			let compatible_or_unchecked_version =
-				if let Some(check_unfinalized_version) = self.check_unfinalized_version {
-					check_unfinalized_version.is_compatible_with(
-						self.base_rpc_client
-							.storage_value::<pallet_cf_environment::CurrentReleaseVersion<
-								state_chain_runtime::Runtime,
-							>>(block_hash)
-							.await?,
-					)
-				} else {
-					true
-				};
-
-			let compatible_block_details = if compatible_or_unchecked_version {
-				let events = self
-					.base_rpc_client
-					.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(block_hash)
-					.await?;
-
-				Some((block.block.header, block.block.extrinsics, events))
-			} else {
-				None
-			};
-
 			if self.block_cache.len() >= 4 {
 				self.block_cache.pop_front();
 			}
-			self.block_cache.push_back((block_hash, compatible_block_details));
+			self.block_cache.push_back((
+				block_hash,
+				if self.base_rpc_client.check_block_compatibility(block_hash).await?.is_ok() {
+					Some((
+						block.block.header,
+						block.block.extrinsics,
+						self.base_rpc_client
+							.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(
+								block_hash,
+							)
+							.await?,
+					))
+				} else {
+					None
+				},
+			));
 
 			self.block_cache.back().unwrap().1.as_ref()
 		} else {

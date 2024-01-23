@@ -16,7 +16,8 @@ use pallet_cf_pools::{
 	AskBidMap, AssetsMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPrice,
 	UnidirectionalPoolDepth,
 };
-use scale_info::TypeInfo;
+use pallet_cf_witnesser::CallHash;
+use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
 use sp_runtime::DispatchError;
@@ -90,6 +91,11 @@ impl From<DispatchError> for DispatchErrorWithMessage {
 		}
 	}
 }
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
+pub struct FailingWitnessValidators {
+	pub failing_count: u32,
+	pub validators: Vec<(cf_primitives::AccountId, String, bool)>,
+}
 
 decl_runtime_apis!(
 	/// Definition for all runtime API interfaces.
@@ -161,7 +167,7 @@ decl_runtime_apis!(
 			tick_range: Range<Tick>,
 			liquidity: Liquidity,
 		) -> Result<AssetsMap<Amount>, DispatchErrorWithMessage>;
-		fn cf_min_swap_amount(asset: Asset) -> AssetAmount;
+
 		fn cf_max_swap_amount(asset: Asset) -> Option<AssetAmount>;
 		fn cf_min_deposit_amount(asset: Asset) -> AssetAmount;
 		fn cf_prewitness_swaps(from: Asset, to: Asset) -> Option<Vec<AssetAmount>>;
@@ -174,5 +180,7 @@ decl_runtime_apis!(
 		) -> Option<<cf_chains::Ethereum as Chain>::Transaction>;
 		fn cf_ingress_fee(asset: Asset) -> AssetAmount;
 		fn cf_egress_fee(asset: Asset) -> AssetAmount;
+		fn cf_witness_count(hash: CallHash) -> Option<FailingWitnessValidators>;
+		fn cf_witness_safety_margin(chain: ForeignChain) -> Option<u64>;
 	}
 );

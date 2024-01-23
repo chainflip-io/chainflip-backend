@@ -34,6 +34,7 @@ pub use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi,
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized, WaitFor, WaitForResult},
 	storage_api::StorageApi,
+	BlockInfo,
 };
 
 pub mod lp;
@@ -120,7 +121,8 @@ impl StateChainApi {
 			&state_chain_settings.signing_key_file,
 			AccountRole::Unregistered,
 			false,
-			Some((*API_VERSION, false)),
+			false,
+			false,
 		)
 		.await?;
 

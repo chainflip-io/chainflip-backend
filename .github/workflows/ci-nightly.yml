@@ -37,10 +37,6 @@ jobs:
     with:
       network: "test"
     secrets: inherit
-  post-check:
-    needs: [build]
-    uses: ./.github/workflows/_40_post_check.yml
-    secrets: inherit
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml
@@ -48,3 +44,9 @@ jobs:
       version: "nightly/"
       environment: "development"
     secrets: inherit
+  post-check:
+    needs: [build]
+    uses: ./.github/workflows/_40_post_check.yml
+    secrets: inherit
+    with:
+      full_bouncer: true

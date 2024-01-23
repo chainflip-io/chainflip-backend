@@ -44,13 +44,15 @@ use cf_chains::{
 };
 use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId};
 use cf_traits::{
-	AccountInfo, AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey, Broadcaster,
-	Chainflip, CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo, Heartbeat,
-	Issuance, KeyProvider, OnBroadcastReady, QualifyNode, RewardsDistribution, RuntimeUpgrade,
+	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
+	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi,
+	DepositHandler, EgressApi, EpochInfo, Heartbeat, Issuance, KeyProvider, OnBroadcastReady,
+	QualifyNode, RewardsDistribution, RuntimeUpgrade,
 };
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
+	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
+	pallet_prelude::DispatchError,
 	sp_runtime::{
 		traits::{BlockNumberProvider, One, UniqueSaturatedFrom, UniqueSaturatedInto},
 		FixedPointNumber, FixedU64,
@@ -102,6 +104,7 @@ impl RewardsDistribution for BackupNodeEmissions {
 			Self::Balance::unique_saturated_from(Validator::current_authority_count()),
 		) {
 			Flip::settle(&validator_id, Self::Issuance::mint(reward).into());
+			<Emissions as BackupRewardsNotifier>::emit_event(&validator_id, reward);
 		}
 	}
 }

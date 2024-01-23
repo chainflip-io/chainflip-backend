@@ -5,13 +5,12 @@ use chainflip_engine::{
 	dot::retry_rpc::DotRetryRpcClient,
 	settings::NodeContainer,
 	state_chain_observer::client::{
-		storage_api::StorageApi, StateChainClient, StateChainStreamApi,
+		storage_api::StorageApi,
+		stream_api::{StreamApi, UNFINALIZED},
+		StateChainClient, STATE_CHAIN_CONNECTION,
 	},
 	witness::{
-		common::{
-			chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder,
-			STATE_CHAIN_CONNECTION,
-		},
+		common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder},
 		dot::{filter_map_events, process_egress, proxy_added_witnessing, DotUnfinalisedSource},
 	},
 };
@@ -28,7 +27,7 @@ pub(super) async fn start<ProcessCall, ProcessingFut>(
 	settings: DepositTrackerSettings,
 	env_params: EnvironmentParameters,
 	state_chain_client: Arc<StateChainClient<()>>,
-	state_chain_stream: impl StateChainStreamApi<false> + Clone,
+	state_chain_stream: impl StreamApi<UNFINALIZED> + Clone,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient<()>, (), ()>,
 ) -> anyhow::Result<()>
 where

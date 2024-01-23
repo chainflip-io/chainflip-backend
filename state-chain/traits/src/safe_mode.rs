@@ -48,7 +48,7 @@ macro_rules! impl_runtime_safe_mode {
 			use frame_support::{
 				storage::StorageValue,
 				traits::Get,
-				RuntimeDebug
+				pallet_prelude::RuntimeDebug,
 			};
 			use scale_info::TypeInfo;
 
@@ -130,7 +130,7 @@ macro_rules! impl_pallet_safe_mode {
 	(
 		$pallet_safe_mode:ident; $($flag:ident),+ $(,)?
 	) => {
-		#[derive(codec::Encode, codec::Decode, codec::MaxEncodedLen, scale_info::TypeInfo, Copy, Clone, PartialEq, Eq, frame_support::RuntimeDebug)]
+		#[derive(codec::Encode, codec::Decode, codec::MaxEncodedLen, scale_info::TypeInfo, Copy, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug)]
 		pub struct $pallet_safe_mode {
 			$(
 				pub $flag: bool,

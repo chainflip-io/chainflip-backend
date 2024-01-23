@@ -4,8 +4,10 @@ use std::sync::Arc;
 use utilities::task_scope::Scope;
 
 use crate::{
-	state_chain_observer::client::{storage_api::StorageApi, StateChainStreamApi},
-	witness::common::{RuntimeHasChain, STATE_CHAIN_CONNECTION},
+	state_chain_observer::client::{
+		storage_api::StorageApi, stream_api::StreamApi, STATE_CHAIN_CONNECTION,
+	},
+	witness::common::RuntimeHasChain,
 };
 
 use super::{builder::ChunkedByVaultBuilder, monitored_items::MonitoredSCItems, ChunkedByVault};
@@ -22,7 +24,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		'env,
 		StateChainStream,
 		StateChainClient,
-		const FINALIZED: bool,
+		const IS_FINALIZED: bool,
 	>(
 		self,
 		scope: &Scope<'env, anyhow::Error>,
@@ -37,7 +39,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	>
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-		StateChainStream: StateChainStreamApi<FINALIZED>,
+		StateChainStream: StreamApi<IS_FINALIZED>,
 		StateChainClient: StorageApi + Send + Sync + 'static,
 	{
 		let state_chain_client_c = state_chain_client.clone();

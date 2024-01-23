@@ -5,10 +5,11 @@ use state_chain_runtime::PalletInstanceAlias;
 use utilities::task_scope::Scope;
 
 use crate::{
-	state_chain_observer::client::{storage_api::StorageApi, StateChainStreamApi},
+	state_chain_observer::client::{
+		storage_api::StorageApi, stream_api::StreamApi, STATE_CHAIN_CONNECTION,
+	},
 	witness::common::{
 		chunked_chain_source::chunked_by_vault::monitored_items::MonitoredSCItems, RuntimeHasChain,
-		STATE_CHAIN_CONNECTION,
 	},
 };
 
@@ -23,7 +24,7 @@ pub type ChainBlockNumber<Inner> = <<Inner as ChunkedByVault>::Chain as Chain>::
 pub type TxOutIdsInitiatedAt<Inner> = Vec<(TxOutId<Inner>, ChainBlockNumber<Inner>)>;
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
-	pub async fn egress_items<'env, StateChainStream, StateChainClient, const FINALIZED: bool>(
+	pub async fn egress_items<'env, StateChainStream, StateChainClient, const IS_FINALIZED: bool>(
 		self,
 		scope: &Scope<'env, anyhow::Error>,
 		state_chain_stream: StateChainStream,
@@ -41,7 +42,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	>
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-		StateChainStream: StateChainStreamApi<FINALIZED>,
+		StateChainStream: StreamApi<IS_FINALIZED>,
 		StateChainClient: StorageApi + Send + Sync + 'static,
 	{
 		let state_chain_client_c = state_chain_client.clone();

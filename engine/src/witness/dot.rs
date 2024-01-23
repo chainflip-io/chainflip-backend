@@ -10,6 +10,7 @@ use cf_primitives::{EpochIndex, PolkadotBlockNumber};
 use futures_core::Future;
 use state_chain_runtime::PolkadotInstance;
 use subxt::{
+	backend::legacy::rpc_methods::Bytes,
 	config::PolkadotConfig,
 	events::{EventDetails, Phase, StaticEvent},
 	utils::AccountId32,
@@ -25,7 +26,10 @@ use crate::{
 	db::PersistentKeyDB,
 	dot::retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
 	state_chain_observer::client::{
-		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
+		extrinsic_api::signed::SignedExtrinsicApi,
+		storage_api::StorageApi,
+		stream_api::{StreamApi, FINALIZED},
+		STATE_CHAIN_CONNECTION,
 	},
 	witness::common::chain_source::extension::ChainSourceExt,
 };
@@ -35,7 +39,6 @@ pub use dot_source::{DotFinalisedSource, DotUnfinalisedSource};
 use super::common::{
 	chain_source::Header,
 	epoch_source::{EpochSourceBuilder, Vault},
-	STATE_CHAIN_CONNECTION,
 };
 
 // To generate the metadata file, use the subxt-cli tool (`cargo install subxt-cli`):
@@ -133,8 +136,7 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 	// To guarantee witnessing egress, we are interested in all extrinsics that were successful
 	extrinsic_indices.extend(extrinsic_success_indices(&events));
 
-	let extrinsics: Vec<subxt::rpc::types::ChainBlockExtrinsic> =
-		dot_client.extrinsics(header.hash).await;
+	let extrinsics: Vec<Bytes> = dot_client.extrinsics(header.hash).await;
 
 	for (extrinsic_index, tx_fee) in transaction_fee_paids(&extrinsic_indices, &events) {
 		let xt = extrinsics.get(extrinsic_index as usize).expect(
@@ -178,7 +180,7 @@ pub async fn start<StateChainClient, ProcessCall, ProcessingFut>(
 	dot_client: DotRetryRpcClient,
 	process_call: ProcessCall,
 	state_chain_client: Arc<StateChainClient>,
-	state_chain_stream: impl StateChainStreamApi + Clone,
+	state_chain_stream: impl StreamApi<FINALIZED> + Clone,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>

@@ -10,16 +10,22 @@ As of yet there is no real structure - this isn't intended to be a document to r
 
 ## Runtime upgrades / Try-runtime
 
-First, build the runtime node with `try-runtime` enabled.
+First, download and install the [`try-runtime-cli`](https://paritytech.github.io/try-runtime-cli/try_runtime/):
+
+```bash copy
+cargo install --git https://github.com/paritytech/try-runtime-cli --locked
+```
+
+You need to build the runtime with `try-runtime` enabled.
 
 ```bash copy
 cargo build --release --features=try-runtime
 ```
 
-Now you can run your tests aginst using an appropriate public rpc node. For example for perseverance:
+Now you can run your tests against a public rpc node. For example for perseverance:
 
 ```bash copy
-./target/release/chainflip-node try-runtime \
+try-runtime \
     --runtime ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm \
     on-runtime-upgrade live --uri wss://perseverance.chainflip.xyz:443
 ```
@@ -39,7 +45,7 @@ If you have trouble connecting to the remote rpc node, you can run a local rpc n
 Once the node has synced, in another terminal window, run the checks as above:
 
 ```bash copy
-./target/release/chainflip-node try-runtime \
+try-runtime \
     --runtime ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm \
     on-runtime-upgrade live --uri ws://localhost:9944
 ```

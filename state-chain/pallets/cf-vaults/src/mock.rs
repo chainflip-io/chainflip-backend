@@ -13,7 +13,10 @@ use cf_chains::{
 use cf_primitives::{BroadcastId, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode,
-	mocks::{block_height_provider::BlockHeightProvider, threshold_signer::MockThresholdSigner},
+	mocks::{
+		block_height_provider::BlockHeightProvider, cfe_interface_mock::MockCfeInterface,
+		threshold_signer::MockThresholdSigner,
+	},
 	AccountRoleRegistry,
 };
 use frame_support::{
@@ -238,6 +241,7 @@ impl pallet_cf_vaults::Config for Test {
 	type SafeMode = MockRuntimeSafeMode;
 	type Slasher = MockSlasher;
 	type ChainTracking = BlockHeightProvider<MockEthereum>;
+	type CfeMultisigRequest = MockCfeInterface;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
