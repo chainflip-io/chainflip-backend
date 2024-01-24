@@ -12,8 +12,10 @@ use crate::{
 	p2p::core::ed25519_secret_key_to_x25519_secret_key,
 	settings::P2P as P2PSettings,
 	state_chain_observer::client::{
-		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
-		StateChainStreamApi,
+		chain_api::ChainApi,
+		extrinsic_api::signed::SignedExtrinsicApi,
+		storage_api::StorageApi,
+		stream_api::{StreamApi, FINALIZED},
 	},
 };
 
@@ -88,7 +90,7 @@ fn pk_to_string(pk: &XPublicKey) -> String {
 	hex::encode(pk.as_bytes())
 }
 
-pub async fn start<StateChainClient, BlockStream: StateChainStreamApi>(
+pub async fn start<StateChainClient, BlockStream: StreamApi<FINALIZED>>(
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
 	settings: P2PSettings,
@@ -219,50 +221,41 @@ where
 	))
 }
 
-async fn monitor_p2p_registration_events<StateChainClient, BlockStream: StateChainStreamApi>(
+async fn monitor_p2p_registration_events<StateChainClient, BlockStream: StreamApi<FINALIZED>>(
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
 ) where
 	StateChainClient: StorageApi + 'static + Send + Sync,
 {
+	use state_chain_runtime::Runtime;
+	type CfeEvent = pallet_cf_cfe_interface::CfeEvent<Runtime>;
+
 	let mut sc_block_stream = Box::pin(sc_block_stream);
 	loop {
 		match sc_block_stream.next().await {
 			Some(current_block) => {
 				if let Ok(events) = state_chain_client
-					.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(
+					.storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>(
 						current_block.hash,
 					)
 					.await
 				{
-					for event_record in events {
-						match event_record.event {
-							state_chain_runtime::RuntimeEvent::Validator(
-								pallet_cf_validator::Event::PeerIdRegistered(
-									account_id,
-									ed25519_pubkey,
-									port,
-									ip_address,
-								),
-							) => {
+					for event in events {
+						match event {
+							CfeEvent::PeerIdRegistered { account_id, pubkey, port, ip } => {
 								peer_update_sender
 									.send(PeerUpdate::Registered(PeerInfo::new(
 										account_id,
-										ed25519_pubkey,
-										ip_address.into(),
+										pubkey,
+										ip.into(),
 										port,
 									)))
 									.unwrap();
 							},
-							state_chain_runtime::RuntimeEvent::Validator(
-								pallet_cf_validator::Event::PeerIdUnregistered(
-									account_id,
-									ed25519_pubkey,
-								),
-							) => {
+							CfeEvent::PeerIdDeregistered { account_id, pubkey } => {
 								peer_update_sender
-									.send(PeerUpdate::Deregistered(account_id, ed25519_pubkey))
+									.send(PeerUpdate::Deregistered(account_id, pubkey))
 									.unwrap();
 							},
 							_ => {

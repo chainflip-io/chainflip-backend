@@ -17,7 +17,9 @@ use cf_primitives::{AccountRole, CeremonyId, GENESIS_EPOCH};
 use futures::FutureExt;
 use mockall::predicate::eq;
 use multisig::{eth::EvmCryptoScheme, ChainSigning, SignatureToThresholdSignature};
-use pallet_cf_cfe_interface::{CfeEvent, TxBroadcastRequest};
+use pallet_cf_cfe_interface::{
+	CfeEvent, KeyHandoverRequest, KeygenRequest, ThresholdSignatureRequest, TxBroadcastRequest,
+};
 use sp_runtime::AccountId32;
 
 use sp_core::H256;
@@ -74,7 +76,7 @@ async fn only_encodes_and_signs_when_specified() {
 	});
 
 	let block = test_header(20, None);
-	let sc_block_stream = tokio_stream::iter([]).make_cached(block, |block| *block);
+	let sc_block_stream = tokio_stream::iter([]).make_cached(block);
 
 	use state_chain_runtime::Runtime;
 
@@ -484,14 +486,13 @@ async fn should_process_initial_block_first() {
 	let next_block = test_header(21, Some(initial_block.hash));
 
 	// Create a stream with only `next_block` in it. The initial block is cached.
-	let sc_block_stream =
-		tokio_stream::iter([next_block]).make_cached(initial_block, |block| *block);
+	let sc_block_stream = tokio_stream::iter([next_block]).make_cached(initial_block);
 
 	let mut seq = mockall::Sequence::new();
 
 	// We expect the SCO to process the initial block first, even though it was not in the stream.
 	state_chain_client
-		.expect_storage_value::<frame_system::Events<Runtime>>()
+		.expect_storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
 		.with(eq(initial_block.hash))
 		.once()
 		.in_sequence(&mut seq)
@@ -499,7 +500,7 @@ async fn should_process_initial_block_first() {
 
 	// Then it should process the block that was in the stream
 	state_chain_client
-		.expect_storage_value::<frame_system::Events<Runtime>>()
+		.expect_storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
 		.with(eq(next_block.hash))
 		.once()
 		.in_sequence(&mut seq)
@@ -519,7 +520,7 @@ async fn should_process_initial_block_first() {
 
 	start_sc_observer(
 		state_chain_client,
-		FinalizedCachedStream::new(sc_block_stream),
+		StateChainStream::<true, _>::new(sc_block_stream),
 		eth_mock_clone,
 	)
 	.await;
@@ -537,108 +538,72 @@ async fn test_get_ceremony_id_counters_with_events() {
 	// Note: The events must be in order (lowest ceremony id per chain first), just like in a real
 	// SC stream.
 	state_chain_client
-		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
+		.expect_storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
 		.with(eq(block_hash))
 		.once()
 		.return_once(|_| {
 			Ok(vec![
-				// TransactionBroadcastRequest should not effect the ceremony id counter
-				Box::new(frame_system::EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: RuntimeEvent::EthereumBroadcaster(
-						pallet_cf_broadcast::Event::TransactionBroadcastRequest {
-							broadcast_attempt_id: BroadcastAttemptId::default(),
-							nominee: AccountId32::new([1; 32]),
-							transaction_payload: Default::default(),
-							transaction_out_id: MOCK_ETH_TRANSACTION_OUT_ID,
-						},
-					),
-					topics: vec![Default::default()],
+				// EthTxBroadcastRequest should not effect the ceremony id counter
+				CfeEvent::<Runtime>::EthTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> {
+					broadcast_id: Default::default(),
+					nominee: AccountId32::new([1; 32]),
+					payload: Default::default(),
 				}),
-				// Next we have 1 keygen and 1 signing ceremony for each chain.
-				Box::new(frame_system::EventRecord {
-					phase: Phase::ApplyExtrinsic(1),
-					event: RuntimeEvent::EthereumVault(pallet_cf_vaults::Event::KeygenRequest {
-						ceremony_id: ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
-						participants: Default::default(),
-						epoch_index: 1,
-					}),
-					topics: vec![Default::default()],
+				// Next we have 1 keygen and 1 signing request for each chain.
+				CfeEvent::<Runtime>::EthThresholdSignatureRequest(ThresholdSignatureRequest::<
+					Runtime,
+					_,
+				> {
+					ceremony_id: ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+					epoch_index: 1,
+					key: Default::default(),
+					signatories: Default::default(),
+					payload: Default::default(),
 				}),
-				Box::new(frame_system::EventRecord {
-					phase: Phase::ApplyExtrinsic(1),
-					event: RuntimeEvent::EthereumThresholdSigner(
-						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
-							request_id: 1,
-							ceremony_id: ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 2,
-							epoch: 1,
-							key: Default::default(),
-							signatories: Default::default(),
-							payload: Default::default(),
-						},
-					),
-					topics: vec![Default::default()],
+				CfeEvent::<Runtime>::EthKeygenRequest(KeygenRequest::<Runtime> {
+					ceremony_id: ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 2,
+					epoch_index: 1,
+					participants: Default::default(),
 				}),
-				Box::new(frame_system::EventRecord {
-					phase: Phase::ApplyExtrinsic(1),
-					event: RuntimeEvent::PolkadotVault(pallet_cf_vaults::Event::KeygenRequest {
-						ceremony_id: DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
-						participants: Default::default(),
-						epoch_index: 1,
-					}),
-					topics: vec![Default::default()],
+				CfeEvent::<Runtime>::DotThresholdSignatureRequest(ThresholdSignatureRequest::<
+					Runtime,
+					_,
+				> {
+					ceremony_id: DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+					epoch_index: 1,
+					key: Default::default(),
+					signatories: Default::default(),
+					payload: cf_chains::dot::EncodedPolkadotPayload(vec![]),
 				}),
-				Box::new(frame_system::EventRecord {
-					phase: Phase::ApplyExtrinsic(1),
-					event: RuntimeEvent::PolkadotThresholdSigner(
-						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
-							request_id: 1,
-							ceremony_id: DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 2,
-							epoch: 1,
-							key: Default::default(),
-							signatories: Default::default(),
-							payload: cf_chains::dot::EncodedPolkadotPayload(vec![]),
-						},
-					),
-					topics: vec![Default::default()],
+				CfeEvent::<Runtime>::DotKeygenRequest(KeygenRequest::<Runtime> {
+					ceremony_id: DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 2,
+					epoch_index: 1,
+					participants: Default::default(),
 				}),
-				Box::new(frame_system::EventRecord {
-					phase: Phase::ApplyExtrinsic(1),
-					event: RuntimeEvent::BitcoinVault(pallet_cf_vaults::Event::KeygenRequest {
-						ceremony_id: BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
-						epoch_index: 1,
-						participants: Default::default(),
-					}),
-					topics: vec![Default::default()],
+				CfeEvent::<Runtime>::BtcThresholdSignatureRequest(ThresholdSignatureRequest::<
+					Runtime,
+					_,
+				> {
+					ceremony_id: BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+					epoch_index: 1,
+					key: Default::default(),
+					signatories: Default::default(),
+					payload: Default::default(),
 				}),
-				Box::new(frame_system::EventRecord {
-					phase: Phase::ApplyExtrinsic(1),
-					event: RuntimeEvent::BitcoinVault(
-						pallet_cf_vaults::Event::KeyHandoverRequest {
-							ceremony_id: BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 2,
-							from_epoch: 1,
-							key_to_share: cf_chains::btc::AggKey::default(),
-							sharing_participants: Default::default(),
-							receiving_participants: Default::default(),
-							new_key: cf_chains::btc::AggKey::default(),
-							to_epoch: 2,
-						},
-					),
-					topics: vec![Default::default()],
+				CfeEvent::<Runtime>::BtcKeygenRequest(KeygenRequest::<Runtime> {
+					ceremony_id: BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 2,
+					epoch_index: 1,
+					participants: Default::default(),
 				}),
-				Box::new(frame_system::EventRecord {
-					phase: Phase::ApplyExtrinsic(1),
-					event: RuntimeEvent::BitcoinThresholdSigner(
-						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
-							request_id: 1,
-							ceremony_id: BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 3,
-							epoch: 1,
-							key: Default::default(),
-							signatories: Default::default(),
-							payload: Default::default(),
-						},
-					),
-					topics: vec![Default::default()],
+				// And one key handover request for BTC
+				CfeEvent::<Runtime>::BtcKeyHandoverRequest(KeyHandoverRequest::<Runtime, _> {
+					ceremony_id: BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 3,
+					from_epoch: 1,
+					to_epoch: 2,
+					key_to_share: cf_chains::btc::AggKey::default(),
+					sharing_participants: Default::default(),
+					receiving_participants: Default::default(),
+					new_key: cf_chains::btc::AggKey::default(),
 				}),
 			])
 		});
@@ -691,23 +656,16 @@ async fn test_get_ceremony_id_counters_without_events() {
 
 	// No events in the stream that would change the ceremony id counters
 	state_chain_client
-		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
+		.expect_storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
 		.with(eq(block_hash))
 		.once()
 		.return_once(|_| {
 			Ok(vec![
-				// TransactionBroadcastRequest should not effect the ceremony id counter
-				Box::new(frame_system::EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: RuntimeEvent::EthereumBroadcaster(
-						pallet_cf_broadcast::Event::TransactionBroadcastRequest {
-							broadcast_attempt_id: BroadcastAttemptId::default(),
-							nominee: AccountId32::new([1; 32]),
-							transaction_payload: Default::default(),
-							transaction_out_id: MOCK_ETH_TRANSACTION_OUT_ID,
-						},
-					),
-					topics: vec![Default::default()],
+				// EthTxBroadcastRequest should not effect the ceremony id counter
+				CfeEvent::<Runtime>::EthTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> {
+					broadcast_id: Default::default(),
+					nominee: AccountId32::new([1; 32]),
+					payload: Default::default(),
 				}),
 			])
 		});

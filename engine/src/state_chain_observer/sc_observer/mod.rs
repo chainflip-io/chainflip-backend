@@ -486,18 +486,10 @@ where
                                             })
                                         }
                                     }
-                                    CfeEvent::PeerIdRegistered { account_id, pubkey, port, ip } => {
-                                        peer_update_sender
-                                            .send(PeerUpdate::Registered(
-                                                    PeerInfo::new(account_id, pubkey, ip.into(), port)
-                                                )
-                                            )
-                                            .unwrap();
-                                    }
-                                    CfeEvent::PeerIdDeregistered { account_id, pubkey } => {
-                                        peer_update_sender
-                                            .send(PeerUpdate::Deregistered(account_id, pubkey))
-                                            .unwrap();
+                                    CfeEvent::PeerIdRegistered { .. } |
+                                    CfeEvent::PeerIdDeregistered { .. } => {
+                                        // p2p registration is handled in the p2p module.
+                                        // Matching here to log the event due to the match_event macro.
                                     }
                                 }}
                             }
@@ -554,26 +546,17 @@ where
 		+ super::client::storage_api::StorageApi,
 {
 	let events: Vec<_> = state_chain_client
-		.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(block_hash)
+		.storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>(block_hash)
 		.await
-		.map_err(|error| anyhow!("Failed to decode events at block hash {block_hash}. {error}"))?
-		.into_iter()
-		.map(|event_record| event_record.event)
-		.collect();
+		.map_err(|error| anyhow!("Failed to decode events at block hash {block_hash}. {error}"))?;
 
 	// Find the first event for each chain that contains a ceremony id and subtract 1 from it. If
 	// none is found, use the ceremony id counter from storage (ceremony id did not change during
 	// this block).
 	Ok(CeremonyIdCounters {
 		ethereum: if let Some(ceremony_id) = events.iter().find_map(|event| match event {
-			state_chain_runtime::RuntimeEvent::EthereumVault(
-				pallet_cf_vaults::Event::KeygenRequest { ceremony_id, .. },
-			) => Some(ceremony_id),
-			state_chain_runtime::RuntimeEvent::EthereumThresholdSigner(
-				pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
-					ceremony_id, ..
-				},
-			) => Some(ceremony_id),
+			CfeEvent::EthThresholdSignatureRequest(req) => Some(req.ceremony_id),
+			CfeEvent::EthKeygenRequest(req) => Some(req.ceremony_id),
 			_ => None,
 		}) {
 			ceremony_id.saturating_sub(1)
@@ -587,14 +570,8 @@ where
 				.context("Failed to get Ethereum CeremonyIdCounter from SC")?
 		},
 		polkadot: if let Some(ceremony_id) = events.iter().find_map(|event| match event {
-			state_chain_runtime::RuntimeEvent::PolkadotVault(
-				pallet_cf_vaults::Event::KeygenRequest { ceremony_id, .. },
-			) => Some(ceremony_id),
-			state_chain_runtime::RuntimeEvent::PolkadotThresholdSigner(
-				pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
-					ceremony_id, ..
-				},
-			) => Some(ceremony_id),
+			CfeEvent::DotThresholdSignatureRequest(req) => Some(req.ceremony_id),
+			CfeEvent::DotKeygenRequest(req) => Some(req.ceremony_id),
 			_ => None,
 		}) {
 			ceremony_id.saturating_sub(1)
@@ -608,17 +585,8 @@ where
 				.context("Failed to get Polkadot CeremonyIdCounter from SC")?
 		},
 		bitcoin: if let Some(ceremony_id) = events.iter().find_map(|event| match event {
-			state_chain_runtime::RuntimeEvent::BitcoinVault(
-				pallet_cf_vaults::Event::KeygenRequest { ceremony_id, .. },
-			) => Some(ceremony_id),
-			state_chain_runtime::RuntimeEvent::BitcoinThresholdSigner(
-				pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
-					ceremony_id, ..
-				},
-			) => Some(ceremony_id),
-			state_chain_runtime::RuntimeEvent::BitcoinVault(
-				pallet_cf_vaults::Event::KeyHandoverRequest { ceremony_id, .. },
-			) => Some(ceremony_id),
+			CfeEvent::BtcThresholdSignatureRequest(req) => Some(req.ceremony_id),
+			CfeEvent::BtcKeygenRequest(req) => Some(req.ceremony_id),
 			_ => None,
 		}) {
 			ceremony_id.saturating_sub(1)
