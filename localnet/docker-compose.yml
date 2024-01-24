@@ -1,5 +1,12 @@
 version: "3.9"
 services:
+  debug-env-vars:
+    image: busybox
+    container_name: debug-env-vars
+    platform: linux/amd64
+    volumes:
+      - "/tmp/chainflip/data:/localnet-initial-state"
+    command: /bin/sh -c "echo $NODE_COUNT"
   init:
     image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.0.0-${NODE_COUNT}
     container_name: init

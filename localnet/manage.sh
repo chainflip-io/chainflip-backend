@@ -5,7 +5,7 @@ WORKFLOW=build-localnet
 GENESIS_NODES=("bashful" "doc" "dopey")
 SELECTED_NODES=("bashful")
 REQUIRED_BINARIES="chainflip-engine chainflip-node"
-INITIAL_CONTAINERS="init"
+INITIAL_CONTAINERS="debug-env-vars init"
 CORE_CONTAINERS="bitcoin geth polkadot redis"
 ARB_CONTAINERS="sequencer staker-unsafe poster"
 export NODE_COUNT=1-node
@@ -90,7 +90,7 @@ build-localnet() {
       exit 1
     fi
   done
-
+  echo "🧟‍♂️ DEBUG: Node Cound value is: $NODE_COUNT"
   echo "🔮 Initializing Network"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args >$DEBUG_OUTPUT 2>&1
 
@@ -129,7 +129,7 @@ build-localnet() {
     echo "💚 $NODE's chainflip-node is running!"
     ((RPC_PORT++))
   done
-  
+
   NODE_COUNT=$NODE_COUNT \
   BINARY_ROOT_PATH=$BINARY_ROOT_PATH \
   SC_RPC_PORT=$INIT_RPC_PORT \
