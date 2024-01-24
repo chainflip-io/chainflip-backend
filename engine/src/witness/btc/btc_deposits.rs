@@ -139,7 +139,6 @@ pub mod tests {
 	use super::*;
 	use bitcoin::{
 		absolute::{Height, LockTime},
-		block::Version,
 		Amount, ScriptBuf, Txid,
 	};
 	use cf_chains::{
@@ -155,7 +154,6 @@ pub mod tests {
 		let txid = Txid::from_byte_array([random_number; 32]);
 		VerboseTransaction {
 			txid,
-			version: Version::from_consensus(2),
 			locktime: LockTime::Blocks(Height::from_consensus(0).unwrap()),
 			vin: vec![],
 			vout: tx_outs,
