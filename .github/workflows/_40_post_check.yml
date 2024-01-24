@@ -25,10 +25,7 @@ jobs:
     steps:
       - name: Checkout chainflip-backend
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-      - name: Upgrade docker compose plugin
-        run: |
-          sudo apt update
-          sudo apt --only-upgrade install docker-compose-plugin
+
       - name: Login to Github Container Registry 🔑
         uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
         with:

@@ -94,12 +94,15 @@ build-localnet() {
   docker version
   echo "🧟‍♂️ DEBUG: docker-compose version"
   docker compose version
-  echo "🧟‍♂️ DEBUG: Node Cound value is: $NODE_COUNT"
+  echo "🧟‍♂️ DEBUG: NODE_COUNT value is: $NODE_COUNT"
+
+  echo "NODE_COUNT=$NODE_COUNT" > ./localnet/.env.localnet
+
   echo "🔮 Initializing Network"
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args >$DEBUG_OUTPUT 2>&1
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args 
 
   echo "🏗 Building network"
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $CORE_CONTAINERS -d $additional_docker_compose_up_args >$DEBUG_OUTPUT 2>&1
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $CORE_CONTAINERS -d $additional_docker_compose_up_args 
 
   echo "🪙 Waiting for Bitcoin node to start"
   check_endpoint_health -s --user flip:flip -H 'Content-Type: text/plain;' --data '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' http://localhost:8332 >$DEBUG_OUTPUT

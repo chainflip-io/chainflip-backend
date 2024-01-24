@@ -48,3 +48,5 @@ tfplan
 .tfvars
 
 *rustc-ice*
+
+.env.localnet

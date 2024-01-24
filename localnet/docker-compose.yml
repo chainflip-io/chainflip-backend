@@ -14,8 +14,9 @@ services:
     volumes:
       - "/tmp/chainflip/data:/localnet-initial-state"
     command: /bin/sh -c "cp -R /initial-state/* /localnet-initial-state"
-    environment:
-      - NODE_COUNT=${NODE_COUNT}
+    env_file:
+      - .env.localnet
+
   redis:
     image: redis:6.2.6
     ports:
@@ -36,8 +37,8 @@ services:
       - "/tmp/chainflip/data/l1data:/datadir"
       - "/tmp/chainflip/data/l1keystore:/keystore"
       - "/tmp/chainflip/data/config:/config"
-    environment:
-      - NODE_COUNT=${NODE_COUNT}
+    env_file:
+      - .env.localnet
 
   sequencer:
     pid: host # allow debugging
