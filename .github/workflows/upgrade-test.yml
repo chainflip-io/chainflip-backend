@@ -3,7 +3,15 @@ name: Test upgrade from latest release to main
 on:
   workflow_dispatch:
     inputs:
-      commit:
+      upgrade-from-release:
+        description: 'This will either by "perseverance" or "berghain"'
+        required: true
+        default: 'perseverance'
+      upgrade-to-workflow-name:
+        description: 'Name of the workflow to pull the upgrade-to artefacts from'
+        required: true
+        default: 'ci-main.yml'
+      upgrade-to-commit:
         description: 'Commit to run the upgrade test against'
         required: false
         default: 'HEAD'
@@ -67,7 +75,7 @@ jobs:
       - name: Download latest release binaries
         uses: dawidd6/action-download-artifact@v2
         with:
-          workflow: release-perseverance.yml
+          workflow: release-${{ github.event.inputs.upgrade-from-release }}.yml
           name: chainflip-backend-bin-ubuntu-22.04
           github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
           path: latest-release-bins
@@ -86,10 +94,10 @@ jobs:
       - name: Download latest main binaries
         uses: dawidd6/action-download-artifact@v2
         with:
-          workflow: ci-main.yml
+          workflow: ${{ github.event.inputs.upgrade-to-workflow-name }}
           name: chainflip-backend-bin-try-runtime-ubuntu-22.04
           path: upgrade-to-bins
-          commit: ${{ github.event.inputs.commit }}
+          commit: ${{ github.event.inputs.upgrade-to-commit }}
 
       - name: Permissions for latest binaries
         run: |
@@ -98,10 +106,10 @@ jobs:
       - name: Download latest main runtime
         uses: dawidd6/action-download-artifact@v2
         with:
-          workflow: ci-main.yml
+          workflow: ${{ github.event.inputs.upgrade-to-workflow-name }}
           name: chainflip-node-runtime-try-runtime-ubuntu-22.04
           path: main-runtime
-          commit: ${{ github.event.inputs.commit }}
+          commit: ${{ github.event.inputs.upgrade-to-commit }}
 
       - name: Version of latest main
         run: |
