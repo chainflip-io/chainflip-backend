@@ -68,8 +68,7 @@ export function getEvmContractAddress(chain: Chain, contract: string): string {
   }
 }
 
-// We use this instead of assetChains[asset] from the SDK because
-// the SC strings are lowercase
+// We use this instead of assetChains[asset] from the SDK because the SC strings are lowercase
 export function assetToChain(asset: Asset): string {
   switch (asset) {
     case 'DOT':
@@ -456,9 +455,10 @@ export async function observeFetch(asset: Asset, address: string): Promise<void>
   for (let i = 0; i < 120; i++) {
     const balance = Number(await getBalance(asset as Asset, address));
     if (balance === 0) {
-      if (assetChains[asset] === Chains.Ethereum || assetChains[asset] === Chains.Arbitrum) {
+      const chain = chainFromAsset(asset);
+      if (chain === Chains.Ethereum || chain === Chains.Arbitrum) {
         const web3 = new Web3(
-          assetChains[asset] === Chains.Ethereum
+          chain === Chains.Ethereum
             ? process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'
             : process.env.ARB_ENDPOINT ?? 'http://127.0.0.1:8547',
         );
@@ -550,10 +550,10 @@ export async function observeCcmReceived(
     address,
     'ReceivedxSwapAndCall',
     [
-      chainContractIds[assetChains[sourceAsset]].toString(),
+      chainContractIds[chainFromAsset(sourceAsset)].toString(),
       sourceAddress ?? null,
       messageMetadata.message,
-      getEvmContractAddress(assetChains[destAsset], destAsset.toString()),
+      getEvmContractAddress(chainFromAsset(destAsset), destAsset.toString()),
       '*',
       '*',
       '*',

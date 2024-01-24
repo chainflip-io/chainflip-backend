@@ -1,10 +1,15 @@
 import Web3 from 'web3';
-import { Asset, assetChains, assetDecimals, Chains } from '@chainflip-io/cli';
+import { Asset, assetDecimals, Chains } from '@chainflip-io/cli';
 import { sendDot } from './send_dot';
 import { sendBtc } from './send_btc';
 import { sendErc20 } from './send_erc20';
 import { sendEvmNative, signAndSendTxEvm } from './send_evm';
-import { getEvmContractAddress, defaultAssetAmounts, amountToFineAmount } from './utils';
+import {
+  getEvmContractAddress,
+  defaultAssetAmounts,
+  amountToFineAmount,
+  chainFromAsset,
+} from './utils';
 import { approveErc20 } from './approve_erc20';
 import { getCFTesterAbi } from './eth_abis';
 
@@ -63,7 +68,7 @@ export async function send(asset: Asset, address: string, amount?: string, log =
 }
 
 export async function sendViaCfTester(asset: Asset, toAddress: string, amount?: string) {
-  const chain = assetChains[asset];
+  const chain = chainFromAsset(asset);
   const evmEndpoint =
     chain === 'Ethereum'
       ? process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'

@@ -3,8 +3,8 @@ import {
   executeSwap,
   ExecuteSwapParams,
   approveVault,
-  assetChains,
   assetDecimals,
+  Chains,
 } from '@chainflip-io/cli';
 import { Wallet, getDefaultProvider } from 'ethers';
 import {
@@ -15,6 +15,7 @@ import {
   observeCcmReceived,
   amountToFineAmount,
   defaultAssetAmounts,
+  chainFromAsset,
 } from './utils';
 import { getNextEvmNonce } from './send_evm';
 import { getBalance } from './get_balance';
@@ -31,14 +32,14 @@ export async function executeContractSwap(
       'test test test test test test test test test test test junk',
   ).connect(getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
 
-  const destChain = assetChains[destAsset];
+  const destChain = chainFromAsset(destAsset);
 
-  const nonce = await getNextEvmNonce(assetChains[srcAsset]);
+  const nonce = await getNextEvmNonce(chainFromAsset(srcAsset));
   const networkOptions = {
     signer: wallet,
     network: 'localnet',
-    vaultContractAddress: getEvmContractAddress(assetChains[srcAsset], 'VAULT'),
-    srcTokenContractAddress: getEvmContractAddress(assetChains[srcAsset], srcAsset),
+    vaultContractAddress: getEvmContractAddress(chainFromAsset(srcAsset), 'VAULT'),
+    srcTokenContractAddress: getEvmContractAddress(chainFromAsset(srcAsset), srcAsset),
   } as const;
   const txOptions = {
     nonce,
@@ -54,7 +55,7 @@ export async function executeContractSwap(
       amount: amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals[srcAsset]),
       destAddress,
       srcAsset,
-      srcChain: assetChains[srcAsset],
+      srcChain: chainFromAsset(srcAsset),
       ccmMetadata: messageMetadata && {
         gasBudget: messageMetadata.gasBudget.toString(),
         message: messageMetadata.message,
@@ -139,13 +140,22 @@ export async function performSwapViaContract(
   }
 }
 
-export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC', amount: string) {
-  const wallet = Wallet.fromPhrase(
-    process.env.ETH_USDC_WHALE_MNEMONIC ??
-      'test test test test test test test test test test test junk',
-  ).connect(getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
+export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC | ARBUSDC', amount: string) {
+  const chain = chainFromAsset(srcAsset as Asset);
+  const evmEndpoint =
+    chain === Chains.Ethereum
+      ? process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'
+      : process.env.ARB_ENDPOINT ?? 'http://127.0.0.1:8547';
 
-  await getNextEvmNonce(assetChains[srcAsset], (nextNonce) =>
+  const wallet = Wallet.fromPhrase(
+    Chains.Ethereum
+      ? process.env.ETH_USDC_WHALE_MNEMONIC ??
+          'test test test test test test test test test test test junk'
+      : process.env.ARB_WHALE_MNEMONIC ??
+          'indoor dish desk flag debris potato excuse depart ticket judge file exit',
+  ).connect(getDefaultProvider(evmEndpoint));
+
+  await getNextEvmNonce(chain, (nextNonce) =>
     approveVault(
       {
         amount,
@@ -154,8 +164,8 @@ export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC', amount: strin
       {
         signer: wallet,
         network: 'localnet',
-        vaultContractAddress: getEvmContractAddress(assetChains[srcAsset], 'VAULT'),
-        srcTokenContractAddress: getEvmContractAddress(assetChains[srcAsset], srcAsset),
+        vaultContractAddress: getEvmContractAddress(chain, 'VAULT'),
+        srcTokenContractAddress: getEvmContractAddress(chain, srcAsset),
       },
       {
         nonce: nextNonce,
