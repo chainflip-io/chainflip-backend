@@ -1,4 +1,4 @@
-import { Asset, Chains } from '@chainflip-io/cli';
+import { Asset } from '@chainflip-io/cli';
 import { getEvmContractAddress } from './utils';
 import { getBtcBalance } from './get_btc_balance';
 import { getDotBalance } from './get_dot_balance';
@@ -12,20 +12,20 @@ export async function getBalance(asset: Asset, address: string): Promise<string>
   switch (asset) {
     case 'FLIP':
     case 'USDC': {
-      const contractAddress = getEvmContractAddress(Chains.Ethereum, asset);
-      result = await getErc20Balance(Chains.Ethereum, address, contractAddress);
+      const contractAddress = getEvmContractAddress('Ethereum', asset);
+      result = await getErc20Balance('Ethereum', address, contractAddress);
       break;
     }
     case 'ARBUSDC': {
-      const contractAddress = getEvmContractAddress(Chains.Arbitrum, asset);
-      result = await getErc20Balance(Chains.Arbitrum, address, contractAddress);
+      const contractAddress = getEvmContractAddress('Arbitrum', asset);
+      result = await getErc20Balance('Arbitrum', address, contractAddress);
       break;
     }
     case 'ETH':
-      result = await getEvmNativeBalance(Chains.Ethereum, address);
+      result = await getEvmNativeBalance('Ethereum', address);
       break;
     case 'ARB':
-      result = await getEvmNativeBalance(Chains.Arbitrum, address);
+      result = await getEvmNativeBalance('Arbitrum', address);
       break;
     case 'DOT':
       result = await getDotBalance(address);

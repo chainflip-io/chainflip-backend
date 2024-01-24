@@ -3,14 +3,7 @@ import { setTimeout as sleep } from 'timers/promises';
 import Client from 'bitcoin-core';
 import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
 import { Mutex } from 'async-mutex';
-import {
-  Chain,
-  Asset,
-  assetChains,
-  chainContractIds,
-  assetDecimals,
-  Chains,
-} from '@chainflip-io/cli';
+import { Chain, Asset, assetChains, chainContractIds, assetDecimals } from '@chainflip-io/cli';
 import Web3 from 'web3';
 import { u8aToHex } from '@polkadot/util';
 import { newDotAddress } from './new_dot_address';
@@ -32,7 +25,7 @@ export const snowWhiteMutex = new Mutex();
 
 export function getEvmContractAddress(chain: Chain, contract: string): string {
   switch (chain) {
-    case Chains.Ethereum:
+    case 'Ethereum':
       switch (contract) {
         case 'VAULT':
           return '0xb7a5bd0345ef1cc5e66bf61bdec17d2461fbd968';
@@ -49,7 +42,7 @@ export function getEvmContractAddress(chain: Chain, contract: string): string {
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
-    case Chains.Arbitrum:
+    case 'Arbitrum':
       switch (contract) {
         case 'VAULT':
           return '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
@@ -435,9 +428,9 @@ export function chainFromAsset(asset: Asset): Chain {
 
 export function getEvmEndpoint(chain: Chain): string {
   switch (chain) {
-    case Chains.Ethereum:
+    case 'Ethereum':
       return process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
-    case Chains.Arbitrum:
+    case 'Arbitrum':
       return process.env.ARB_ENDPOINT ?? 'http://127.0.0.1:8547';
     default:
       throw new Error(`${chain} is not a supported EVM chain`);
@@ -446,12 +439,12 @@ export function getEvmEndpoint(chain: Chain): string {
 
 export function getWhaleMnemonic(chain: Chain): string {
   switch (chain) {
-    case Chains.Ethereum:
+    case 'Ethereum':
       return (
         process.env.ETH_USDC_WHALE_MNEMONIC ??
         'test test test test test test test test test test test junk'
       );
-    case Chains.Arbitrum:
+    case 'Arbitrum':
       return (
         process.env.ARB_WHALE_MNEMONIC ??
         'indoor dish desk flag debris potato excuse depart ticket judge file exit'
@@ -463,12 +456,12 @@ export function getWhaleMnemonic(chain: Chain): string {
 
 export function getWhaleKey(chain: Chain): string {
   switch (chain) {
-    case Chains.Ethereum:
+    case 'Ethereum':
       return (
         process.env.ETH_USDC_WHALE ??
         '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
       );
-    case Chains.Arbitrum:
+    case 'Arbitrum':
       return (
         process.env.ARB_WHALE ??
         '0xb6b15c8cb491557369f3c7d2c287b053eb229daa9c22138887752191c9520659'
@@ -500,7 +493,7 @@ export async function observeFetch(asset: Asset, address: string): Promise<void>
     const balance = Number(await getBalance(asset as Asset, address));
     if (balance === 0) {
       const chain = chainFromAsset(asset);
-      if (chain === Chains.Ethereum || chain === Chains.Arbitrum) {
+      if (chain === 'Ethereum' || chain === 'Arbitrum') {
         const web3 = new Web3(getEvmEndpoint(chain));
         if ((await web3.eth.getCode(address)) === '0x') {
           throw new Error('Eth address has no bytecode');

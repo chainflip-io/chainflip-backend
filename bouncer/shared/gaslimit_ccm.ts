@@ -1,5 +1,5 @@
 import Web3 from 'web3';
-import { Asset, Assets, Chain, Chains } from '@chainflip-io/cli';
+import { Asset, Assets, Chain } from '@chainflip-io/cli';
 import { newCcmMetadata, prepareSwap } from './swapping';
 import {
   chainFromAsset,
@@ -299,7 +299,7 @@ function getRandomGasConsumption(): number {
 
 export async function testGasLimitCcmSwaps() {
   // Spam ethereum with transfers to increase the gasLimitBudget price
-  const spamming = spamEvm(Chains.Ethereum);
+  const spamming = spamEvm('Ethereum');
 
   // Wait for the fees to increase to the stable expected amount
   let i = 0;

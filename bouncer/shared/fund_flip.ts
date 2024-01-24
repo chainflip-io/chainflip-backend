@@ -1,6 +1,6 @@
 import { HexString } from '@polkadot/util/types';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { Chains, assetDecimals, fundStateChainAccount } from '@chainflip-io/cli';
+import { assetDecimals, fundStateChainAccount } from '@chainflip-io/cli';
 import { Wallet, ethers } from 'ethers';
 import { getNextEvmNonce } from './send_evm';
 import {
@@ -17,20 +17,20 @@ export async function fundFlip(scAddress: string, flipAmount: string) {
   const chainflip = await getChainflipApi();
   await cryptoWaitReady();
 
-  await approveErc20('FLIP', getEvmContractAddress(Chains.Ethereum, 'GATEWAY'), flipAmount);
+  await approveErc20('FLIP', getEvmContractAddress('Ethereum', 'GATEWAY'), flipAmount);
 
   const flipperinoAmount = amountToFineAmount(flipAmount, assetDecimals.FLIP);
 
   const flipContractAddress =
-    process.env.ETH_FLIP_ADDRESS ?? getEvmContractAddress(Chains.Ethereum, 'FLIP');
+    process.env.ETH_FLIP_ADDRESS ?? getEvmContractAddress('Ethereum', 'FLIP');
 
   const gatewayContractAddress =
-    process.env.ETH_GATEWAY_ADDRESS ?? getEvmContractAddress(Chains.Ethereum, 'GATEWAY');
+    process.env.ETH_GATEWAY_ADDRESS ?? getEvmContractAddress('Ethereum', 'GATEWAY');
 
-  const whaleKey = getWhaleKey(Chains.Ethereum);
+  const whaleKey = getWhaleKey('Ethereum');
   console.log('Approving ' + flipAmount + ' FLIP to State Chain Gateway');
 
-  const wallet = new Wallet(whaleKey, ethers.getDefaultProvider(getEvmEndpoint(Chains.Ethereum)));
+  const wallet = new Wallet(whaleKey, ethers.getDefaultProvider(getEvmEndpoint('Ethereum')));
 
   const networkOptions = {
     signer: wallet,
@@ -39,7 +39,7 @@ export async function fundFlip(scAddress: string, flipAmount: string) {
     flipContractAddress,
   } as const;
   const txOptions = {
-    nonce: BigInt(await getNextEvmNonce(Chains.Ethereum)),
+    nonce: BigInt(await getNextEvmNonce('Ethereum')),
   } as const;
 
   console.log('Funding ' + flipAmount + ' FLIP to ' + scAddress);

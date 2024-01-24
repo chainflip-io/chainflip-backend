@@ -4,7 +4,6 @@ import {
   ExecuteSwapParams,
   approveVault,
   assetDecimals,
-  Chains,
 } from '@chainflip-io/cli';
 import { Wallet, getDefaultProvider } from 'ethers';
 import {

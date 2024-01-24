@@ -1,5 +1,5 @@
 import Web3 from 'web3';
-import { Asset, assetDecimals, Chains } from '@chainflip-io/cli';
+import { Asset, assetDecimals } from '@chainflip-io/cli';
 import { sendDot } from './send_dot';
 import { sendBtc } from './send_btc';
 import { sendErc20 } from './send_erc20';
@@ -22,18 +22,18 @@ export async function send(asset: Asset, address: string, amount?: string, log =
       await sendBtc(address, amount ?? defaultAssetAmounts(asset));
       break;
     case 'ETH':
-      await sendEvmNative(Chains.Ethereum, address, amount ?? defaultAssetAmounts(asset), log);
+      await sendEvmNative('Ethereum', address, amount ?? defaultAssetAmounts(asset), log);
       break;
     case 'ARB':
-      await sendEvmNative(Chains.Arbitrum, address, amount ?? defaultAssetAmounts(asset), log);
+      await sendEvmNative('Arbitrum', address, amount ?? defaultAssetAmounts(asset), log);
       break;
     case 'DOT':
       await sendDot(address, amount ?? defaultAssetAmounts(asset));
       break;
     case 'USDC': {
-      const contractAddress = getEvmContractAddress(Chains.Ethereum, asset);
+      const contractAddress = getEvmContractAddress('Ethereum', asset);
       await sendErc20(
-        Chains.Ethereum,
+        'Ethereum',
         address,
         contractAddress,
         amount ?? defaultAssetAmounts(asset),
@@ -42,9 +42,9 @@ export async function send(asset: Asset, address: string, amount?: string, log =
       break;
     }
     case 'FLIP': {
-      const contractAddress = getEvmContractAddress(Chains.Ethereum, asset);
+      const contractAddress = getEvmContractAddress('Ethereum', asset);
       await sendErc20(
-        Chains.Ethereum,
+        'Ethereum',
         address,
         contractAddress,
         amount ?? defaultAssetAmounts(asset),
@@ -53,9 +53,9 @@ export async function send(asset: Asset, address: string, amount?: string, log =
       break;
     }
     case 'ARBUSDC': {
-      const contractAddress = getEvmContractAddress(Chains.Arbitrum, asset);
+      const contractAddress = getEvmContractAddress('Arbitrum', asset);
       await sendErc20(
-        Chains.Arbitrum,
+        'Arbitrum',
         address,
         contractAddress,
         amount ?? defaultAssetAmounts(asset),

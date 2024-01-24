@@ -1,5 +1,5 @@
 import Web3 from 'web3';
-import { assetDecimals, approveVault, Chain, Chains } from '@chainflip-io/cli';
+import { assetDecimals, approveVault, Chain } from '@chainflip-io/cli';
 import {
   amountToFineAmount,
   ethNonceMutex,
@@ -19,10 +19,10 @@ export async function getNextEvmNonce(
 ): Promise<number> {
   let mutex;
   switch (chain) {
-    case Chains.Ethereum:
+    case 'Ethereum':
       mutex = ethNonceMutex;
       break;
-    case Chains.Arbitrum:
+    case 'Arbitrum':
       mutex = arbNonceMutex;
       break;
     default:
