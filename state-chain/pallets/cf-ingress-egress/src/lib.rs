@@ -1150,7 +1150,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Withholds the fee for a given amount.
 	///
-	/// Returns the remaining amount after the fee has been withheld, and the fee itself
+	/// Returns the remaining amount after the fee has been withheld, and the fee itself as
+	/// asset's amount
 	fn withhold_transaction_fee(
 		ingress_or_egress: IngressOrEgress,
 		asset: TargetChainAsset<T, I>,
@@ -1182,7 +1183,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			fees.saturating_accrue(fee_estimate);
 		});
 
-		(remaining_amount, fee_estimate)
+		(remaining_amount, available_amount.saturating_sub(remaining_amount))
 	}
 }
 
