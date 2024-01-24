@@ -10,8 +10,7 @@ CORE_CONTAINERS="bitcoin geth polkadot redis"
 ARB_CONTAINERS="sequencer staker-unsafe poster"
 export NODE_COUNT=1-node
 
-# DEBUG_OUTPUT=${DEBUG_OUTPUT:-'/dev/null'}
-DEBUG_OUTPUT=/dev/tty
+DEBUG_OUTPUT=${DEBUG_OUTPUT:-'/dev/null'}
 
 source ./localnet/helper.sh
 
