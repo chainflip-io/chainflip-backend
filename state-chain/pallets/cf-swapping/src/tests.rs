@@ -101,6 +101,7 @@ fn insert_swaps(swaps: &[Swap]) {
 				broker_id as u64,
 				2,
 				1,
+				1,
 			);
 		}
 	}
@@ -178,6 +179,7 @@ fn expect_earned_fees_to_be_recorded() {
 			ALICE,
 			200,
 			1,
+			1,
 		);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 2);
 		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
@@ -189,6 +191,7 @@ fn expect_earned_fees_to_be_recorded() {
 			ForeignChainAddress::Eth([2; 20].into()),
 			ALICE,
 			200,
+			1,
 			1,
 		);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 4);
@@ -209,6 +212,7 @@ fn cannot_swap_with_incorrect_destination_address_type() {
 			ForeignChainAddress::Eth([2; 20].into()),
 			ALICE,
 			2,
+			1,
 			1,
 		);
 		assert_eq!(SwapQueue::<Test>::get(), vec![]);
@@ -238,6 +242,7 @@ fn expect_swap_id_to_be_emitted() {
 			ALICE,
 			0,
 			1,
+			1,
 		);
 		// 3. Process swaps -> SwapExecuted, SwapEgressScheduled
 		Swapping::on_finalize(1);
@@ -263,6 +268,7 @@ fn expect_swap_id_to_be_emitted() {
 					deposit_block_height: 0
 				},
 				swap_type: SwapType::Swap(ForeignChainAddress::Eth(..)),
+				ingress_fee: _,
 				broker_commission: _
 			}),
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
@@ -329,6 +335,7 @@ fn can_swap_using_witness_origin() {
 			origin: SwapOrigin::Vault { tx_hash: Default::default() },
 			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
 			broker_commission: None,
+			ingress_fee: None,
 		}));
 	});
 }
@@ -870,6 +877,7 @@ fn swap_by_witnesser_happy_path() {
 			origin: SwapOrigin::Vault { tx_hash: Default::default() },
 			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
 			broker_commission: None,
+			ingress_fee: None,
 		}));
 
 		// Confiscated fund is unchanged
@@ -883,6 +891,7 @@ fn swap_by_deposit_happy_path() {
 		let from = Asset::Eth;
 		let to = Asset::Flip;
 		let amount = 1_000u128;
+		let ingress_fee = 1u128;
 
 		Swapping::schedule_swap_from_channel(
 			ForeignChainAddress::Eth(Default::default()),
@@ -893,6 +902,7 @@ fn swap_by_deposit_happy_path() {
 			ForeignChainAddress::Eth(Default::default()),
 			Default::default(),
 			Default::default(),
+			ingress_fee,
 			1,
 		);
 
@@ -920,6 +930,7 @@ fn swap_by_deposit_happy_path() {
 			},
 			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
 			broker_commission: Some(0),
+			ingress_fee: Some(ingress_fee),
 		}));
 
 		// Confiscated fund is unchanged
@@ -1182,7 +1193,8 @@ fn ccm_swaps_emits_events() {
 				destination_address: EncodedAddress::Eth(..),
 				origin: ORIGIN,
 				swap_type: SwapType::CcmPrincipal(1),
-				broker_commission: _
+				broker_commission: _,
+				ingress_fee: _
 			}),
 			RuntimeEvent::Swapping(Event::SwapScheduled {
 				swap_type: SwapType::CcmGas(1),
@@ -1330,6 +1342,7 @@ fn can_handle_swaps_with_zero_outputs() {
 				eth_address.clone(),
 				Default::default(),
 				0,
+				1,
 				0,
 			);
 			Swapping::schedule_swap_from_channel(
@@ -1341,6 +1354,7 @@ fn can_handle_swaps_with_zero_outputs() {
 				eth_address,
 				Default::default(),
 				0,
+				1,
 				0,
 			);
 
@@ -1611,6 +1625,7 @@ fn swap_excess_are_confiscated_for_swap_via_deposit() {
 			ForeignChainAddress::Eth(Default::default()),
 			ALICE,
 			0,
+			1,
 			0,
 		);
 
@@ -1802,6 +1817,7 @@ fn swap_with_custom_broker_fee(
 	to: Asset,
 	amount: AssetAmount,
 	broker_fee: BasisPoints,
+	ingress_fee: AssetAmount,
 ) {
 	<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
 		ForeignChainAddress::Eth([2; 20].into()),
@@ -1812,6 +1828,7 @@ fn swap_with_custom_broker_fee(
 		ForeignChainAddress::Eth([2; 20].into()),
 		ALICE,
 		broker_fee,
+		ingress_fee,
 		1,
 	);
 }
@@ -1827,7 +1844,7 @@ fn swap_broker_fee_calculated_correctly() {
 		Asset::all().iter().for_each(|asset| {
 			let total_fees: u128 =
 				fees.iter().fold(0, |total_fees: u128, fee_bps: &BasisPoints| {
-					swap_with_custom_broker_fee(*asset, Asset::Usdc, AMOUNT, *fee_bps);
+					swap_with_custom_broker_fee(*asset, Asset::Usdc, AMOUNT, *fee_bps, 0);
 					total_fees +
 						Permill::from_parts(*fee_bps as u32 * BASIS_POINTS_PER_MILLION) * AMOUNT
 				});
@@ -1839,7 +1856,7 @@ fn swap_broker_fee_calculated_correctly() {
 #[test]
 fn swap_broker_fee_cannot_exceed_amount() {
 	new_test_ext().execute_with(|| {
-		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, 100, 15000);
+		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, 100, 15000, 0);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 100);
 	});
 }
@@ -1850,6 +1867,7 @@ fn swap_scheduled_event_witnessed(
 	deposit_amount: AssetAmount,
 	destination_asset: Asset,
 	broker_commission: AssetAmount,
+	ingress_fee: Option<AssetAmount>,
 ) {
 	System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapScheduled {
 		swap_id,
@@ -1864,6 +1882,7 @@ fn swap_scheduled_event_witnessed(
 		},
 		swap_type: SwapType::Swap(ForeignChainAddress::Eth([2; 20].into())),
 		broker_commission: Some(broker_commission),
+		ingress_fee,
 	}));
 }
 #[test]
@@ -1871,13 +1890,14 @@ fn swap_broker_fee_subtracted_from_swap_amount() {
 	new_test_ext().execute_with(|| {
 		let amounts: [AssetAmount; 6] = [50, 100, 200, 500, 1000, 10000];
 		let fees: [BasisPoints; 4] = [100, 1000, 5000, 10000];
+		let ingress_fee = 0u128;
 
 		let combinations = amounts.iter().cartesian_product(fees);
 		let mut swap_id = 1;
 		Asset::all().iter().for_each(|asset| {
 			let mut total_fees = 0;
 			combinations.clone().for_each(|(amount, fee)| {
-				swap_with_custom_broker_fee(*asset, Asset::Flip, *amount, fee);
+				swap_with_custom_broker_fee(*asset, Asset::Flip, *amount, fee, ingress_fee);
 				let broker_commission =
 					Permill::from_parts(fee as u32 * BASIS_POINTS_PER_MILLION) * *amount;
 				total_fees += broker_commission;
@@ -1888,6 +1908,7 @@ fn swap_broker_fee_subtracted_from_swap_amount() {
 					*amount,
 					Asset::Flip,
 					broker_commission,
+					Some(ingress_fee),
 				);
 				swap_id += 1;
 			})

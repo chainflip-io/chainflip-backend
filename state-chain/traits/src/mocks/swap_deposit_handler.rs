@@ -20,6 +20,7 @@ where
 		destination_address: cf_chains::ForeignChainAddress,
 		_broker_id: Self::AccountId,
 		_broker_commission_bps: cf_primitives::BasisPoints,
+		_ingress_fee: cf_primitives::AssetAmount,
 		_channel_id: cf_primitives::ChannelId,
 	) {
 		E::schedule_egress(

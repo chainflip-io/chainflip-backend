@@ -15,8 +15,22 @@ pub trait SwapDepositHandler {
 		destination_address: ForeignChainAddress,
 		broker_id: Self::AccountId,
 		broker_commission_bps: BasisPoints,
+		ingress_fee: AssetAmount,
 		channel_id: ChannelId,
 	);
+}
+
+pub trait LpDepositHandler {
+	type AccountId;
+
+	/// Attempt to credit the account with the given asset and amount
+	/// as a result of a liquidity deposit.
+	fn add_deposit(
+		who: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+		ingress_fee: AssetAmount,
+	) -> DispatchResult;
 }
 
 pub trait LpBalanceApi {

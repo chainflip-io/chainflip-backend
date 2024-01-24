@@ -28,9 +28,9 @@ use cf_primitives::{
 	ForeignChain, ThresholdSignatureRequestId,
 };
 use cf_traits::{
-	liquidity::LpBalanceApi, AssetConverter, Broadcaster, CcmHandler, Chainflip, DepositApi,
-	DepositHandler, EgressApi, EpochInfo, GetBlockHeight, GetTrackedData,
-	NetworkEnvironmentProvider, SwapDepositHandler,
+	liquidity::{LpBalanceApi, LpDepositHandler},
+	AssetConverter, Broadcaster, CcmHandler, Chainflip, DepositApi, DepositHandler, EgressApi,
+	EpochInfo, GetBlockHeight, GetTrackedData, NetworkEnvironmentProvider, SwapDepositHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -116,6 +116,7 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::{ExecutexSwapAndCall, TransferFallback};
 	use cf_primitives::{BroadcastId, EpochIndex};
+	use cf_traits::LpDepositHandler;
 	use core::marker::PhantomData;
 	use frame_support::{
 		storage::with_transaction,
@@ -275,7 +276,8 @@ pub mod pallet {
 		type AddressConverter: AddressConverter;
 
 		/// Pallet responsible for managing Liquidity Providers.
-		type LpBalance: LpBalanceApi<AccountId = Self::AccountId>;
+		type LpBalance: LpBalanceApi<AccountId = Self::AccountId>
+			+ LpDepositHandler<AccountId = Self::AccountId>;
 
 		/// For scheduling swaps.
 		type SwapDepositHandler: SwapDepositHandler<AccountId = Self::AccountId>;
@@ -1015,12 +1017,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			});
 		} else {
 			match deposit_channel_details.action {
-				ChannelAction::LiquidityProvision { lp_account, .. } =>
-					T::LpBalance::try_credit_account(
-						&lp_account,
-						asset.into(),
-						net_deposit_amount.into(),
-					)?,
+				ChannelAction::LiquidityProvision { lp_account, .. } => T::LpBalance::add_deposit(
+					&lp_account,
+					asset.into(),
+					net_deposit_amount.into(),
+					ingress_fee.into(),
+				)?,
 				ChannelAction::Swap {
 					destination_address,
 					destination_asset,
@@ -1036,6 +1038,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					destination_address,
 					broker_id,
 					broker_commission_bps,
+					ingress_fee.into(),
 					channel_id,
 				),
 				ChannelAction::CcmTransfer {

@@ -1,4 +1,4 @@
-use crate::LpBalanceApi;
+use crate::{LpBalanceApi, LpDepositHandler};
 use cf_chains::assets::any::Asset;
 use cf_primitives::AssetAmount;
 use sp_runtime::DispatchResult;
@@ -7,6 +7,20 @@ use sp_runtime::DispatchResult;
 use cf_chains::ForeignChainAddress;
 
 pub struct MockBalance;
+
+impl LpDepositHandler for MockBalance {
+	type AccountId = u64;
+
+	fn add_deposit(
+		who: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+		_ingress_fee: AssetAmount,
+	) -> frame_support::pallet_prelude::DispatchResult {
+		Self::try_credit_account(who, asset, amount)
+	}
+}
+
 impl LpBalanceApi for MockBalance {
 	type AccountId = u64;
 
