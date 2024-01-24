@@ -27,7 +27,7 @@ enum SolidityType {
 let swapCount = 1;
 
 function newAbiEncodedMessage(types?: SolidityType[]): string {
-  const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
+  const web3 = new Web3();
 
   let typesArray: SolidityType[] = [];
   if (types === undefined) {

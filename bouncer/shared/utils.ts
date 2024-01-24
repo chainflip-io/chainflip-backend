@@ -49,17 +49,16 @@ export function getEvmContractAddress(chain: Chain, contract: string): string {
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
-    // TODO: TO update addresses
     case Chains.Arbitrum:
       switch (contract) {
         case 'VAULT':
-          return '0xb7a5bd0345ef1cc5e66bf61bdec17d2461fbd968';
+          return '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
         case 'ARB':
           return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
         case 'ARBUSDC':
-          return process.env.ARB_USDC_ADDRESS ?? '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
+          return process.env.ARB_USDC_ADDRESS ?? '0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9';
         case 'CFTESTER':
-          return '0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0';
+          return '0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
@@ -434,6 +433,17 @@ export function chainFromAsset(asset: Asset): Chain {
   throw new Error('unexpected asset');
 }
 
+export function getEvmEndpoint(chain: Chain): string {
+  switch (chain) {
+    case Chains.Ethereum:
+      return process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
+    case Chains.Arbitrum:
+      return process.env.ARB_ENDPOINT ?? 'http://127.0.0.1:8547';
+    default:
+      throw new Error(`${chain} is not a supported EVM chain`);
+  }
+}
+
 export async function observeBalanceIncrease(
   dstCcy: string,
   address: string,
@@ -457,11 +467,7 @@ export async function observeFetch(asset: Asset, address: string): Promise<void>
     if (balance === 0) {
       const chain = chainFromAsset(asset);
       if (chain === Chains.Ethereum || chain === Chains.Arbitrum) {
-        const web3 = new Web3(
-          chain === Chains.Ethereum
-            ? process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'
-            : process.env.ARB_ENDPOINT ?? 'http://127.0.0.1:8547',
-        );
+        const web3 = new Web3(getEvmEndpoint(chain));
         if ((await web3.eth.getCode(address)) === '0x') {
           throw new Error('Eth address has no bytecode');
         }
@@ -482,6 +488,7 @@ type EVMEvent = {
   returnValues: any;
 };
 export async function observeEVMEvent(
+  chain: Chain,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contractAbi: any,
   address: string,
@@ -490,7 +497,7 @@ export async function observeEVMEvent(
   stopObserveEvent?: () => boolean,
   initialBlockNumber?: number,
 ): Promise<EVMEvent | undefined> {
-  const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
+  const web3 = new Web3(getEvmEndpoint(chain));
   const contract = new web3.eth.Contract(contractAbi, address);
   let initBlockNumber = initialBlockNumber ?? (await web3.eth.getBlockNumber());
   const stopObserve = stopObserveEvent ?? (() => false);
@@ -546,6 +553,7 @@ export async function observeCcmReceived(
   stopObserveEvent?: () => boolean,
 ): Promise<EVMEvent | undefined> {
   return observeEVMEvent(
+    chainFromAsset(destAsset),
     cfTesterAbi,
     address,
     'ReceivedxSwapAndCall',

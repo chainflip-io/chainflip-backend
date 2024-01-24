@@ -16,6 +16,7 @@ import {
   amountToFineAmount,
   defaultAssetAmounts,
   chainFromAsset,
+  getEvmEndpoint,
 } from './utils';
 import { getNextEvmNonce } from './send_evm';
 import { getBalance } from './get_balance';
@@ -30,7 +31,7 @@ export async function executeContractSwap(
   const wallet = Wallet.fromPhrase(
     process.env.ETH_USDC_WHALE_MNEMONIC ??
       'test test test test test test test test test test test junk',
-  ).connect(getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
+  ).connect(getDefaultProvider(getEvmEndpoint(chainFromAsset(srcAsset))));
 
   const destChain = chainFromAsset(destAsset);
 
@@ -140,12 +141,8 @@ export async function performSwapViaContract(
   }
 }
 
-export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC | ARBUSDC', amount: string) {
+export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC' | 'ARBUSDC', amount: string) {
   const chain = chainFromAsset(srcAsset as Asset);
-  const evmEndpoint =
-    chain === Chains.Ethereum
-      ? process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'
-      : process.env.ARB_ENDPOINT ?? 'http://127.0.0.1:8547';
 
   const wallet = Wallet.fromPhrase(
     Chains.Ethereum
@@ -153,7 +150,7 @@ export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC | ARBUSDC', amo
           'test test test test test test test test test test test junk'
       : process.env.ARB_WHALE_MNEMONIC ??
           'indoor dish desk flag debris potato excuse depart ticket judge file exit',
-  ).connect(getDefaultProvider(evmEndpoint));
+  ).connect(getDefaultProvider(getEvmEndpoint(chain)));
 
   await getNextEvmNonce(chain, (nextNonce) =>
     approveVault(

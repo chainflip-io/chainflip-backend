@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { assetDecimals, executeRedemption, getRedemptionDelay } from '@chainflip-io/cli';
+import { Assets, assetDecimals, executeRedemption, getRedemptionDelay } from '@chainflip-io/cli';
 import { HexString } from '@polkadot/util/types';
 import { Wallet, ethers } from 'ethers';
 import Keyring from '@polkadot/keyring';
@@ -13,6 +13,8 @@ import {
   getChainflipApi,
   amountToFineAmount,
   observeEVMEvent,
+  chainFromAsset,
+  getEvmEndpoint,
 } from './utils';
 
 export type RedeemAmount = 'Max' | { Exact: string };
@@ -40,7 +42,7 @@ export async function redeemFlip(
   const ethWallet = new Wallet(
     process.env.ETH_USDC_WHALE ??
       '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
-  ).connect(ethers.getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
+  ).connect(ethers.getDefaultProvider(getEvmEndpoint('Ethereum')));
   const networkOptions = {
     signer: ethWallet,
     network: 'localnet',
@@ -74,6 +76,7 @@ export async function redeemFlip(
   console.log('Waiting for redemption to be registered');
   const observeEventAmount = flipperinoRedeemAmount === 'Max' ? '*' : flipperinoRedeemAmount.Exact;
   await observeEVMEvent(
+    chainFromAsset(Assets.FLIP),
     gatewayAbi,
     getEvmContractAddress('Ethereum', 'GATEWAY'),
     'RedemptionRegistered',

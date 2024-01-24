@@ -2,7 +2,10 @@ import Web3 from 'web3';
 import { Asset, Assets, Chain, Chains } from '@chainflip-io/cli';
 import { newCcmMetadata, prepareSwap } from './swapping';
 import {
+  chainFromAsset,
   getChainflipApi,
+  getEvmEndpoint,
+  observeBadEvents,
   observeCcmReceived,
   observeEvent,
   observeSwapScheduled,
@@ -34,7 +37,7 @@ const LOOP_TIMEOUT = 15;
 let stopObservingCcmReceived = false;
 
 function gasTestCcmMetadata(sourceAsset: Asset, gasToConsume: number, gasBudgetFraction?: number) {
-  const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
+  const web3 = new Web3();
 
   return newCcmMetadata(
     sourceAsset,
@@ -160,6 +163,9 @@ async function testGasLimitSwap(
   ) {
     await sleep(3000);
   }
+
+  console.log(`${tag} Swap events found`);
+
   swapScheduledObserved = true;
   await Promise.all([
     swapExecutedHandle,
@@ -213,6 +219,15 @@ async function testGasLimitSwap(
   } else if (minGasLimitRequired < gasLimitBudget) {
     console.log(`${tag} Gas budget ${gasLimitBudget}. Expecting successful broadcast.`);
 
+    // Check that broadcast is not aborted
+    let stopObserving = false;
+    const observeBroadcastFailure = observeBadEvents(
+      'ethereumBroadcaster:BroadcastAborted',
+      () => stopObserving,
+      (event) => event.data.broadcastId === egressIdToBroadcastId[swapIdToEgressId[swapId]],
+    );
+
+    // Expecting success
     const ccmReceived = await observeCcmReceived(
       sourceAsset,
       destAsset,
@@ -223,7 +238,11 @@ async function testGasLimitSwap(
       throw new Error(`${tag} CCM event emitted. Gas consumed is less than expected!`);
     }
 
-    const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
+    // Stop listening for broadcast failure
+    stopObserving = true;
+    await observeBroadcastFailure;
+
+    const web3 = new Web3(getEvmEndpoint(chainFromAsset(destAsset)));
     const receipt = await web3.eth.getTransactionReceipt(ccmReceived?.txHash as string);
     const tx = await web3.eth.getTransaction(ccmReceived?.txHash as string);
     const gasUsed = receipt.gasUsed;

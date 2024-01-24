@@ -13,6 +13,7 @@ import {
   defaultAssetAmounts,
   amountToFineAmount,
   chainFromAsset,
+  getEvmEndpoint,
 } from '../shared/utils';
 import { signAndSendTxEvm } from './send_evm';
 import { getCFTesterAbi } from './eth_abis';
@@ -74,12 +75,8 @@ async function testSuccessiveDeposits(destAsset: Asset) {
 // Not supporting BTC to avoid adding more unnecessary complexity with address encoding.
 async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset) {
   const { destAddress, tag } = await prepareSwap(sourceAsset, destAsset);
-  const evmEndpoint =
-    chainFromAsset(sourceAsset) === 'Ethereum'
-      ? process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'
-      : process.env.ARB_ENDPOINT ?? 'http://127.0.0.1:8547';
 
-  const web3 = new Web3(evmEndpoint);
+  const web3 = new Web3(getEvmEndpoint(chainFromAsset(sourceAsset)));
 
   const cfTesterAddress = getEvmContractAddress(chainFromAsset(sourceAsset), 'CFTESTER');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

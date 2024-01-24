@@ -1,6 +1,6 @@
 import Web3 from 'web3';
-import { assetDecimals, approveVault, Chain } from '@chainflip-io/cli';
-import { amountToFineAmount, ethNonceMutex, arbNonceMutex } from './utils';
+import { assetDecimals, approveVault, Chain, Chains } from '@chainflip-io/cli';
+import { amountToFineAmount, ethNonceMutex, arbNonceMutex, getEvmEndpoint } from './utils';
 
 let nextNonce: number | undefined;
 
@@ -12,11 +12,7 @@ export async function getNextEvmNonce(
 
   return mutex.runExclusive(async () => {
     if (nextNonce === undefined) {
-      const evmEndpoint =
-        chain === 'Ethereum'
-          ? process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'
-          : process.env.ARB_ENDPOINT ?? 'http://127.0.0.1:8547';
-      const web3 = new Web3(evmEndpoint);
+      const web3 = new Web3(getEvmEndpoint(chain));
       const whaleKey =
         chain === 'Ethereum'
           ? process.env.ETH_USDC_WHALE ||
@@ -43,15 +39,10 @@ export async function signAndSendTxEvm(
   gas = 2000000,
   log = true,
 ) {
-  const evmEndpoint =
-    chain === 'Ethereum'
-      ? process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'
-      : process.env.ARB_ENDPOINT ?? 'http://127.0.0.1:8547';
-
-  const web3 = new Web3(evmEndpoint);
+  const web3 = new Web3(getEvmEndpoint(chain));
 
   const whaleKey =
-    chain === 'Ethereum'
+    chain === Chains.Ethereum
       ? process.env.ETH_USDC_WHALE ||
         '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
       : process.env.ARB_WHALE ||

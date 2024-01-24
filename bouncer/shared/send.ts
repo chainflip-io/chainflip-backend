@@ -9,6 +9,7 @@ import {
   defaultAssetAmounts,
   amountToFineAmount,
   chainFromAsset,
+  getEvmEndpoint,
 } from './utils';
 import { approveErc20 } from './approve_erc20';
 import { getCFTesterAbi } from './eth_abis';
@@ -69,12 +70,8 @@ export async function send(asset: Asset, address: string, amount?: string, log =
 
 export async function sendViaCfTester(asset: Asset, toAddress: string, amount?: string) {
   const chain = chainFromAsset(asset);
-  const evmEndpoint =
-    chain === 'Ethereum'
-      ? process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'
-      : process.env.ARB_ENDPOINT ?? 'http://127.0.0.1:8547';
 
-  const web3 = new Web3(evmEndpoint);
+  const web3 = new Web3(getEvmEndpoint(chain));
 
   const cfTesterAddress = getEvmContractAddress(chain, 'CFTESTER');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
