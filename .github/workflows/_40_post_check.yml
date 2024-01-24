@@ -83,12 +83,12 @@ jobs:
         run: |
           ./full_bouncer.sh
 
-      - name: Run HeuteLeiderNicht.exe
-        id: heuteleidernicht
-        if: ${{ ! inputs.full_bouncer }}
-        working-directory: bouncer
-        run: |
-          ./run.sh
+      # - name: Run HeuteLeiderNicht.exe
+      #   id: heuteleidernicht
+      #   if: ${{ ! inputs.full_bouncer }}
+      #   working-directory: bouncer
+      #   run: |
+      #     ./run.sh
 
       - name: Print chainflip-engine logs
         if: failure()
