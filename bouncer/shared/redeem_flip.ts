@@ -15,6 +15,7 @@ import {
   observeEVMEvent,
   chainFromAsset,
   getEvmEndpoint,
+  getWhaleKey,
 } from './utils';
 
 export type RedeemAmount = 'Max' | { Exact: string };
@@ -39,10 +40,9 @@ export async function redeemFlip(
   keyring.setSS58Format(2112);
   const flipWallet = keyring.createFromUri('//' + flipSeed);
   const accountIdHex: HexString = `0x${Buffer.from(flipWallet.publicKey).toString('hex')}`;
-  const ethWallet = new Wallet(
-    process.env.ETH_USDC_WHALE ??
-      '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
-  ).connect(ethers.getDefaultProvider(getEvmEndpoint('Ethereum')));
+  const ethWallet = new Wallet(getWhaleKey('Ethereum')).connect(
+    ethers.getDefaultProvider(getEvmEndpoint('Ethereum')),
+  );
   const networkOptions = {
     signer: ethWallet,
     network: 'localnet',

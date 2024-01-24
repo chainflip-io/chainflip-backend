@@ -17,6 +17,7 @@ import {
   defaultAssetAmounts,
   chainFromAsset,
   getEvmEndpoint,
+  getWhaleMnemonic,
 } from './utils';
 import { getNextEvmNonce } from './send_evm';
 import { getBalance } from './get_balance';
@@ -144,13 +145,9 @@ export async function performSwapViaContract(
 export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC' | 'ARBUSDC', amount: string) {
   const chain = chainFromAsset(srcAsset as Asset);
 
-  const wallet = Wallet.fromPhrase(
-    Chains.Ethereum
-      ? process.env.ETH_USDC_WHALE_MNEMONIC ??
-          'test test test test test test test test test test test junk'
-      : process.env.ARB_WHALE_MNEMONIC ??
-          'indoor dish desk flag debris potato excuse depart ticket judge file exit',
-  ).connect(getDefaultProvider(getEvmEndpoint(chain)));
+  const wallet = Wallet.fromPhrase(getWhaleMnemonic(chainFromAsset(srcAsset as Asset))).connect(
+    getDefaultProvider(getEvmEndpoint(chain)),
+  );
 
   await getNextEvmNonce(chain, (nextNonce) =>
     approveVault(

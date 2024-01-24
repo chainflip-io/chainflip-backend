@@ -8,6 +8,7 @@ import {
   hexPubkeyToFlipAddress,
   decodeFlipAddressForContract,
   getEvmEndpoint,
+  getWhaleKey,
 } from './utils';
 import { observeEvent, getChainflipApi, amountToFineAmount } from '../shared/utils';
 import { approveErc20 } from './approve_erc20';
@@ -26,9 +27,7 @@ export async function fundFlip(scAddress: string, flipAmount: string) {
   const gatewayContractAddress =
     process.env.ETH_GATEWAY_ADDRESS ?? getEvmContractAddress(Chains.Ethereum, 'GATEWAY');
 
-  const whaleKey =
-    process.env.ETH_USDC_WHALE ||
-    '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+  const whaleKey = getWhaleKey(Chains.Ethereum);
   console.log('Approving ' + flipAmount + ' FLIP to State Chain Gateway');
 
   const wallet = new Wallet(whaleKey, ethers.getDefaultProvider(getEvmEndpoint(Chains.Ethereum)));

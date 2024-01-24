@@ -1,33 +1,47 @@
 import Web3 from 'web3';
 import { assetDecimals, approveVault, Chain, Chains } from '@chainflip-io/cli';
-import { amountToFineAmount, ethNonceMutex, arbNonceMutex, getEvmEndpoint } from './utils';
+import {
+  amountToFineAmount,
+  ethNonceMutex,
+  arbNonceMutex,
+  getEvmEndpoint,
+  getWhaleKey,
+} from './utils';
 
-let nextNonce: number | undefined;
+const nextEvmNonce: { [key in 'Ethereum' | 'Arbitrum']: number | undefined } = {
+  Ethereum: undefined,
+  Arbitrum: undefined,
+};
 
 export async function getNextEvmNonce(
   chain: Chain,
   callback?: (nextNonce: number) => ReturnType<typeof approveVault>,
 ): Promise<number> {
-  const mutex = chain === 'Ethereum' ? ethNonceMutex : arbNonceMutex;
+  let mutex;
+  switch (chain) {
+    case Chains.Ethereum:
+      mutex = ethNonceMutex;
+      break;
+    case Chains.Arbitrum:
+      mutex = arbNonceMutex;
+      break;
+    default:
+      throw new Error('Invalid chain');
+  }
 
   return mutex.runExclusive(async () => {
-    if (nextNonce === undefined) {
+    if (nextEvmNonce[chain] === undefined) {
       const web3 = new Web3(getEvmEndpoint(chain));
-      const whaleKey =
-        chain === 'Ethereum'
-          ? process.env.ETH_USDC_WHALE ||
-            '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
-          : process.env.ARB_WHALE ||
-            '0xb6b15c8cb491557369f3c7d2c287b053eb229daa9c22138887752191c9520659';
+      const whaleKey = getWhaleKey(chain);
       const address = web3.eth.accounts.privateKeyToAccount(whaleKey).address;
       const txCount = await web3.eth.getTransactionCount(address);
-      nextNonce = txCount;
+      nextEvmNonce[chain] = txCount;
     }
     // The SDK returns null if no transaction is sent
-    if (callback && (await callback(nextNonce)) === null) {
-      return nextNonce;
+    if (callback && (await callback(nextEvmNonce[chain]!)) === null) {
+      return nextEvmNonce[chain]!;
     }
-    return nextNonce++;
+    return nextEvmNonce[chain]!++;
   });
 }
 
@@ -40,13 +54,7 @@ export async function signAndSendTxEvm(
   log = true,
 ) {
   const web3 = new Web3(getEvmEndpoint(chain));
-
-  const whaleKey =
-    chain === Chains.Ethereum
-      ? process.env.ETH_USDC_WHALE ||
-        '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
-      : process.env.ARB_WHALE ||
-        '0xb6b15c8cb491557369f3c7d2c287b053eb229daa9c22138887752191c9520659';
+  const whaleKey = getWhaleKey(chain);
 
   const nonce = await getNextEvmNonce(chain);
   const tx = { to, data, gas, nonce, value };
