@@ -1,4 +1,5 @@
 use crate::{self as pallet_cf_pools, PalletSafeMode};
+use cf_chains::assets::AssetBalance;
 use cf_primitives::{Asset, AssetAmount};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleRegistry, LpBalanceApi,
@@ -120,12 +121,7 @@ impl LpBalanceApi for MockBalance {
 		Ok(())
 	}
 
-	fn asset_balances(
-		_who: &Self::AccountId,
-	) -> scale_info::prelude::collections::BTreeMap<
-		cf_primitives::ForeignChain,
-		Vec<cf_chains::assets::AssetBalance>,
-	> {
+	fn asset_balances(_who: &Self::AccountId) -> Vec<AssetBalance> {
 		unreachable!()
 	}
 }

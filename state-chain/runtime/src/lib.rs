@@ -13,6 +13,7 @@ use crate::{
 	chainflip::{calculate_account_apy, Offence},
 	runtime_apis::{
 		AuctionState, DispatchErrorWithMessage, LiquidityProviderInfo, RuntimeApiPenalty,
+		RuntimeAsset,
 	},
 };
 use cf_amm::{
@@ -20,7 +21,6 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	assets::AssetBalance,
 	btc::{BitcoinCrypto, BitcoinRetryPolicy},
 	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
@@ -74,8 +74,6 @@ use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor, One,
 	OpaqueKeys, UniqueSaturatedInto, Verify,
 };
-
-use sp_std::collections::btree_map::BTreeMap;
 
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
@@ -1021,8 +1019,11 @@ impl_runtime_apis! {
 				})
 				.collect()
 		}
-		fn cf_asset_balances(account_id: AccountId) -> BTreeMap<ForeignChain, Vec<AssetBalance>> {
+		fn cf_asset_balances(account_id: AccountId) -> Vec<(RuntimeAsset, AssetAmount)> {
 			LiquidityProvider::asset_balances(&account_id)
+				.into_iter()
+				.map(|asset_balance| (RuntimeAsset {chain: asset_balance.asset.into(), asset: asset_balance.asset}, asset_balance.balance))
+				.collect::<Vec<(RuntimeAsset, AssetAmount)>>()
 		}
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()

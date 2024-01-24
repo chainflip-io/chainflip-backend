@@ -1,5 +1,5 @@
 use crate::LpBalanceApi;
-use cf_chains::assets::any::Asset;
+use cf_chains::assets::{any::Asset, AssetBalance};
 use cf_primitives::AssetAmount;
 use sp_runtime::DispatchResult;
 
@@ -37,12 +37,7 @@ impl LpBalanceApi for MockBalance {
 		Ok(())
 	}
 
-	fn asset_balances(
-		_who: &Self::AccountId,
-	) -> scale_info::prelude::collections::BTreeMap<
-		cf_primitives::ForeignChain,
-		Vec<cf_chains::assets::AssetBalance>,
-	> {
+	fn asset_balances(_who: &Self::AccountId) -> Vec<AssetBalance> {
 		unreachable!()
 	}
 }

@@ -4,7 +4,6 @@ use cf_amm::{
 };
 use cf_chains::{
 	address::{ForeignChainAddressHumanreadable, ToHumanreadableAddress},
-	assets::AssetBalance,
 	eth::Address as EthereumAddress,
 	Chain,
 };
@@ -32,6 +31,7 @@ use state_chain_runtime::{
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
 		CustomRuntimeApi, DispatchErrorWithMessage, LiquidityProviderInfo, RuntimeApiAccountInfoV2,
+		RuntimeAsset,
 	},
 };
 use std::{
@@ -63,6 +63,12 @@ impl TryInto<Asset> for RpcAsset {
 					Err(AssetConversionError::UnupportedAsset(chain, asset))
 				},
 		}
+	}
+}
+
+impl From<RuntimeAsset> for RpcAsset {
+	fn from(val: RuntimeAsset) -> Self {
+		RpcAsset::ExplicitChain { chain: val.chain, asset: val.asset }
 	}
 }
 
@@ -355,7 +361,7 @@ pub trait CustomApi {
 		&self,
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<BTreeMap<ForeignChain, Vec<AssetBalance>>>;
+	) -> RpcResult<Vec<(RpcAsset, AssetAmount)>>;
 	#[method(name = "penalties")]
 	fn cf_penalties(
 		&self,
@@ -742,11 +748,15 @@ where
 		&self,
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<BTreeMap<ForeignChain, Vec<AssetBalance>>> {
-		self.client
+	) -> RpcResult<Vec<(RpcAsset, AssetAmount)>> {
+		Ok(self
+			.client
 			.runtime_api()
 			.cf_asset_balances(self.unwrap_or_best(at), account_id)
-			.map_err(to_rpc_error)
+			.map_err(to_rpc_error)?
+			.into_iter()
+			.map(|(asset, balance)| (asset.into(), balance))
+			.collect::<Vec<(RpcAsset, AssetAmount)>>())
 	}
 
 	fn cf_penalties(

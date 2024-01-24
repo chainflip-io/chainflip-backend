@@ -3,9 +3,7 @@ use cf_amm::{
 	common::{Amount, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{
-	assets::AssetBalance, eth::Address as EthereumAddress, Chain, ForeignChainAddress,
-};
+use cf_chains::{eth::Address as EthereumAddress, Chain, ForeignChainAddress};
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BroadcastId, EpochIndex, ForeignChain, NetworkEnvironment,
 	SemVer, SwapOutput,
@@ -54,6 +52,12 @@ pub struct RuntimeApiAccountInfoV2 {
 	pub bound_redeem_address: Option<EthereumAddress>,
 	pub apy_bp: Option<u32>, // APY for validator/back only. In Basis points.
 	pub restricted_balances: BTreeMap<EthereumAddress, u128>,
+}
+
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
+pub struct RuntimeAsset {
+	pub chain: ForeignChain,
+	pub asset: Asset,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
@@ -169,7 +173,7 @@ decl_runtime_apis!(
 		fn cf_prewitness_swaps(from: Asset, to: Asset) -> Option<Vec<AssetAmount>>;
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> Option<LiquidityProviderInfo>;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
-		fn cf_asset_balances(account_id: AccountId32) -> BTreeMap<ForeignChain, Vec<AssetBalance>>;
+		fn cf_asset_balances(account_id: AccountId32) -> Vec<(RuntimeAsset, AssetAmount)>;
 		fn cf_redemption_tax() -> AssetAmount;
 		fn cf_network_environment() -> NetworkEnvironment;
 		fn cf_failed_call(

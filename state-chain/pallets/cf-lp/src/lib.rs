@@ -9,10 +9,12 @@ use cf_traits::{
 };
 
 use cf_chains::assets::AssetBalance;
+use sp_std::vec;
+
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+use sp_std::vec::Vec;
 
 mod benchmarking;
 
@@ -338,16 +340,11 @@ impl<T: Config> LpBalanceApi for Pallet<T> {
 		Ok(())
 	}
 
-	fn asset_balances(
-		who: &Self::AccountId,
-	) -> scale_info::prelude::collections::BTreeMap<
-		ForeignChain,
-		Vec<cf_chains::assets::AssetBalance>,
-	> {
-		let mut balances = BTreeMap::<_, Vec<_>>::new();
+	fn asset_balances(who: &Self::AccountId) -> Vec<AssetBalance> {
+		let mut balances: Vec<AssetBalance> = vec![];
 		T::PoolApi::sweep(who).unwrap();
 		for asset in Asset::all() {
-			balances.entry(ForeignChain::from(asset)).or_default().push(AssetBalance {
+			balances.push(AssetBalance {
 				asset,
 				balance: FreeBalances::<T>::get(who, asset).unwrap_or(0),
 			});
