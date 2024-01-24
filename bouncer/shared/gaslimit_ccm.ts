@@ -1,5 +1,5 @@
 import Web3 from 'web3';
-import { Asset, Assets } from '@chainflip-io/cli';
+import { Asset, Assets, Chain, Chains } from '@chainflip-io/cli';
 import { newCcmMetadata, prepareSwap } from './swapping';
 import {
   getChainflipApi,
@@ -12,7 +12,7 @@ import {
 import { requestNewSwap } from './perform_swap';
 import { send } from './send';
 import { BtcAddressType } from './new_btc_address';
-import { signAndSendTxEth } from './send_eth';
+import { signAndSendTxEvm } from './send_evm';
 
 // This test uses the CFTester contract as the receiver for a CCM call. The contract will consume approximately
 // the gasLimitBudget amount specified in the CCM message with an error margin. On top of that, the gasLimitBudget overhead of the
@@ -252,9 +252,10 @@ async function testGasLimitSwap(
 // Spamming to raise Ethereum's fee, otherwise it will get stuck at almost zero fee (~7 wei)
 let spam = true;
 
-async function spamEthereum() {
+async function spamEvm(chain: Chain) {
   while (spam) {
-    signAndSendTxEth(
+    signAndSendTxEvm(
+      chain,
       '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
       '1',
       undefined,
@@ -279,7 +280,7 @@ function getRandomGasConsumption(): number {
 
 export async function testGasLimitCcmSwaps() {
   // Spam ethereum with transfers to increase the gasLimitBudget price
-  const spamming = spamEthereum();
+  const spamming = spamEvm(Chains.Ethereum);
 
   // Wait for the fees to increase to the stable expected amount
   let i = 0;
