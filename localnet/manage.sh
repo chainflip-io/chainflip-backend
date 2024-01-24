@@ -90,6 +90,10 @@ build-localnet() {
       exit 1
     fi
   done
+  echo "🧟‍♂️ DEBUG: docker version"
+  docker version
+  echo "🧟‍♂️ DEBUG: docker-compose version"
+  docker compose version
   echo "🧟‍♂️ DEBUG: Node Cound value is: $NODE_COUNT"
   echo "🔮 Initializing Network"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args >$DEBUG_OUTPUT 2>&1

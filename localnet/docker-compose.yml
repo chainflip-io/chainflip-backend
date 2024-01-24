@@ -8,13 +8,14 @@ services:
       - "/tmp/chainflip/data:/localnet-initial-state"
     command: /bin/sh -c "echo $NODE_COUNT"
   init:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.0.0-$NODE_COUNT
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.0.0-${NODE_COUNT}
     container_name: init
     platform: linux/amd64
     volumes:
       - "/tmp/chainflip/data:/localnet-initial-state"
     command: /bin/sh -c "cp -R /initial-state/* /localnet-initial-state"
-
+    environment:
+      - NODE_COUNT=${NODE_COUNT}
   redis:
     image: redis:6.2.6
     ports:
@@ -23,7 +24,7 @@ services:
       - "/tmp/chainflip/data/redis-data:/data"
 
   geth:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v1.0.0-$NODE_COUNT
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v1.0.0-${NODE_COUNT}
     container_name: geth
     platform: linux/amd64
     ports:
@@ -35,6 +36,8 @@ services:
       - "/tmp/chainflip/data/l1data:/datadir"
       - "/tmp/chainflip/data/l1keystore:/keystore"
       - "/tmp/chainflip/data/config:/config"
+    environment:
+      - NODE_COUNT=${NODE_COUNT}
 
   sequencer:
     pid: host # allow debugging
