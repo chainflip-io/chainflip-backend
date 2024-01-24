@@ -2,6 +2,13 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.1.7] - 2024-01-24
+
+### Fixes
+
+- Allow parsing of BTC transactions with version numbers that cannot be parsed into a
+  signed 32 bit integer. (([PRO-1131](https://linear.app/chainflip/issue/PRO-1131/fix-btc-tx-version-parsing-issue))) ([#4443] (https://github.com/chainflip-io/chainflip-backend/pull/4443))
+
 ## [1.1.6] - 2024-01-09
 
 ### Fixes
