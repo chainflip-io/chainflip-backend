@@ -28,19 +28,19 @@ export async function executeContractSwap(
   destAddress: string,
   messageMetadata?: CcmDepositMetadata,
 ): ReturnType<typeof executeSwap> {
-  const wallet = Wallet.fromPhrase(
-    process.env.ETH_USDC_WHALE_MNEMONIC ??
-      'test test test test test test test test test test test junk',
-  ).connect(getDefaultProvider(getEvmEndpoint(chainFromAsset(srcAsset))));
+  const srcChain = chainFromAsset(srcAsset);
+  const wallet = Wallet.fromPhrase(getWhaleMnemonic(srcChain)).connect(
+    getDefaultProvider(getEvmEndpoint(chainFromAsset(srcAsset))),
+  );
 
   const destChain = chainFromAsset(destAsset);
 
-  const nonce = await getNextEvmNonce(chainFromAsset(srcAsset));
+  const nonce = await getNextEvmNonce(srcChain);
   const networkOptions = {
     signer: wallet,
     network: 'localnet',
-    vaultContractAddress: getEvmContractAddress(chainFromAsset(srcAsset), 'VAULT'),
-    srcTokenContractAddress: getEvmContractAddress(chainFromAsset(srcAsset), srcAsset),
+    vaultContractAddress: getEvmContractAddress(srcChain, 'VAULT'),
+    srcTokenContractAddress: getEvmContractAddress(srcChain, srcAsset),
   } as const;
   const txOptions = {
     nonce,
@@ -56,7 +56,7 @@ export async function executeContractSwap(
       amount: amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals[srcAsset]),
       destAddress,
       srcAsset,
-      srcChain: chainFromAsset(srcAsset),
+      srcChain,
       ccmMetadata: messageMetadata && {
         gasBudget: messageMetadata.gasBudget.toString(),
         message: messageMetadata.message,
@@ -115,8 +115,7 @@ export async function performSwapViaContract(
           destAddress,
           messageMetadata,
           Wallet.fromPhrase(
-            process.env.ETH_USDC_WHALE_MNEMONIC ??
-              'test test test test test test test test test test test junk',
+            getWhaleMnemonic(chainFromAsset(sourceAsset)),
           ).address.toLowerCase(),
         )
       : Promise.resolve();
