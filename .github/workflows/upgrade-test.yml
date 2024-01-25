@@ -2,6 +2,11 @@ name: Test upgrade from latest release to main
 
 on:
   workflow_dispatch:
+    inputs:
+      commit:
+        description: 'Commit to run the upgrade test against'
+        required: false
+        default: 'HEAD'
 
 env:
   FORCE_COLOR: 1
@@ -83,11 +88,12 @@ jobs:
         with:
           workflow: ci-main.yml
           name: chainflip-backend-bin-try-runtime-ubuntu-22.04
-          path: main-bins
+          path: upgrade-to-bins
+          commit: ${{ github.event.inputs.commit }}
 
       - name: Permissions for latest binaries
         run: |
-          chmod +x ./main-bins/chainflip-*
+          chmod +x ./upgrade-to-bins/chainflip-*
 
       - name: Download latest main runtime
         uses: dawidd6/action-download-artifact@v2
@@ -95,11 +101,12 @@ jobs:
           workflow: ci-main.yml
           name: chainflip-node-runtime-try-runtime-ubuntu-22.04
           path: main-runtime
+          commit: ${{ github.event.inputs.commit }}
 
       - name: Version of latest main
         run: |
           set -x
-          MAIN_VERSION=$(./main-bins/chainflip-node --version)
+          MAIN_VERSION=$(./upgrade-to-bins/chainflip-node --version)
           echo $MAIN_VERSION
 
       - name: Install node dependencies
@@ -132,7 +139,7 @@ jobs:
         run: |
           ./commands/upgrade_network.ts prebuilt \
             --runtime ./../main-runtime/state_chain_runtime.compact.compressed.wasm \
-            --bins ./../main-bins \
+            --bins ./../upgrade-to-bins \
             --localnet_init ./../localnet/init \
             --oldVersion "${{ env.RELEASE_VERSION }}"
 
@@ -142,10 +149,15 @@ jobs:
         run: |
           ./tests/all_concurrent_tests.ts
 
-      - name: Print chainflip-engine logs
+      - name: Print old chainflip-engine logs
         if: failure()
         run: |
           cat /tmp/chainflip/*/chainflip-engine.log
+
+      - name: Print new chainflip-engine logs
+        if: failure()
+        run: |
+          cat /tmp/chainflip/*/chainflip-engine-upgrade.log
 
       - name: Print chainflip-node logs
         if: failure()
