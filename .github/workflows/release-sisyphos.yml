@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - 'release/[0-9]+.[0-9]+'
+      - feat/upgrade-test-release
 
 concurrency:
   group: ${{ github.ref }}-release-sisyphos
@@ -27,6 +28,15 @@ jobs:
     with:
       profile: "production"
       binary-subdir: "production"
+  # Used to test upgrades to this version from the latest release
+  build-try-runtime:
+    needs: [test]
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      profile: "try-runtime"
+      upload-name: "chainflip-backend-bin-try-runtime"
+      binary-subdir: release
   docker:
     needs: [build]
     uses: ./.github/workflows/_24_docker.yml
