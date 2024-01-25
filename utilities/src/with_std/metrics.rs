@@ -417,8 +417,8 @@ build_gauge_vec!(
 	["chain"]
 );
 build_gauge_vec!(
-	PENDING_CEREMONIES,
-	"cfe_pending_ceremonies",
+	AUTHORIZED_CEREMONY,
+	"cfe_authorized_ceremonies",
 	"Gauge keeping track of the number of ceremonies currently running",
 	["chain", "type"]
 );
