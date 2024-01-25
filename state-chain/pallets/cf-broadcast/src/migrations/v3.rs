@@ -338,6 +338,10 @@ mod migration_tests {
 				vec![
 					old::BroadcastAttemptId { broadcast_id: 1, attempt_count: 1 },
 					old::BroadcastAttemptId { broadcast_id: 2, attempt_count: 2 },
+					// The following broadcasts already succeeded with calldata removed,
+					// so they are not migrated
+					old::BroadcastAttemptId { broadcast_id: 100, attempt_count: 1 },
+					old::BroadcastAttemptId { broadcast_id: 101, attempt_count: 1 },
 				],
 			);
 			old::Timeouts::<Test, Instance1>::insert(
@@ -348,6 +352,10 @@ mod migration_tests {
 					old::BroadcastAttemptId { broadcast_id: 3, attempt_count: 3 },
 					old::BroadcastAttemptId { broadcast_id: 4, attempt_count: 1 },
 					old::BroadcastAttemptId { broadcast_id: 4, attempt_count: 2 },
+					// The following broadcasts already succeeded with calldata removed,
+					// so they are not migrated
+					old::BroadcastAttemptId { broadcast_id: 102, attempt_count: 1 },
+					old::BroadcastAttemptId { broadcast_id: 103, attempt_count: 1 },
 				],
 			);
 
