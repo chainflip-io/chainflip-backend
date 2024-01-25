@@ -49,4 +49,4 @@ tfplan
 
 *rustc-ice*
 
-.env.localnet
+localnet/docker-compose.yml

@@ -68,6 +68,7 @@ jobs:
       - name: Start a localnet
         env:
           BINARY_ROOT_PATH: .
+          DEBUG_OUTPUT_DESTINATION: /tmp/chainflip/debug.log
         run: |
           set -x
           mkdir -p /tmp/chainflip/bashful
@@ -76,6 +77,10 @@ jobs:
           chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
           touch ./localnet/.setup_complete
           ./localnet/manage.sh
+
+      - name: Test ARB network
+        working-directory: bouncer
+        run: ./commands/send_arb.ts 0x41aD2bc63A2059f9b623533d87fe99887D794847 1
 
       - name: Run EinfachHeuteLeiderNicht.exe
         if: inputs.full_bouncer
@@ -119,13 +124,22 @@ jobs:
           path: |
             /tmp/chainflip/*/chainflip-*.log
             /tmp/chainflip/chainflip-*.log
+            /tmp/chainflip/debug.log
+
+      - name: List /tmp/cainflip
+        if: always()
+        continue-on-error: true
+        run: ls -alR /tmp/chainflip
+
+      - name: Show logs from docker containers
+        if: always()
+        continue-on-error: true
+        run: docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs
 
       - name: Clean Up docker containers 🧹
         if: always()
         continue-on-error: true
         run: |
-          ls -alR /tmp/chainflip
-          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --rmi all --volumes --remove-orphans
 
       - name: Notify on failed bouncer

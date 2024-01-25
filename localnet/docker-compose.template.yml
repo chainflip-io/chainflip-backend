@@ -1,21 +1,12 @@
-version: "3"
+version: "3.9"
 services:
-  debug-env-vars:
-    image: busybox
-    container_name: debug-env-vars
-    platform: linux/amd64
-    volumes:
-      - "/tmp/chainflip/data:/localnet-initial-state"
-    command: /bin/sh -c "echo $NODE_COUNT"
   init:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.0.0-${NODE_COUNT:-1-node}
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.0.0-${NODE_COUNT}
     container_name: init
     platform: linux/amd64
     volumes:
       - "/tmp/chainflip/data:/localnet-initial-state"
-    command: /bin/sh -c "cp -R /initial-state/* /localnet-initial-state"
-    env_file:
-      - .env.localnet
+    command: /bin/sh -c "set -eo pipefail && echo '📠 Copying initial state to /tmp/chainflip/data' && cp -R /initial-state/* /localnet-initial-state"
 
   redis:
     image: redis:6.2.6
@@ -25,7 +16,7 @@ services:
       - "/tmp/chainflip/data/redis-data:/data"
 
   geth:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v1.0.0-${NODE_COUNT:-1-node}
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v1.0.0-${NODE_COUNT}
     container_name: geth
     platform: linux/amd64
     ports:
@@ -37,8 +28,6 @@ services:
       - "/tmp/chainflip/data/l1data:/datadir"
       - "/tmp/chainflip/data/l1keystore:/keystore"
       - "/tmp/chainflip/data/config:/config"
-    env_file:
-      - .env.localnet
 
   sequencer:
     pid: host # allow debugging

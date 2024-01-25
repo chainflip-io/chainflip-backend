@@ -5,12 +5,12 @@ WORKFLOW=build-localnet
 GENESIS_NODES=("bashful" "doc" "dopey")
 SELECTED_NODES=("bashful")
 REQUIRED_BINARIES="chainflip-engine chainflip-node"
-INITIAL_CONTAINERS="debug-env-vars init"
+INITIAL_CONTAINERS="init"
 CORE_CONTAINERS="bitcoin geth polkadot redis"
 ARB_CONTAINERS="sequencer staker-unsafe poster"
-export NODE_COUNT=1-node
+export NODE_COUNT="1-node"
 
-DEBUG_OUTPUT=${DEBUG_OUTPUT:-'/dev/null'}
+DEBUG_OUTPUT_DESTINATION=${DEBUG_OUTPUT_DESTINATION:-'/dev/null'}
 
 source ./localnet/helper.sh
 
@@ -30,13 +30,13 @@ setup() {
   echo "👽 We need to do some quick set up to get you ready!"
   sleep 3
 
-  if ! which op >$DEBUG_OUTPUT 2>&1; then
+  if ! which op >$DEBUG_OUTPUT_DESTINATION 2>&1; then
     echo "❌  OnePassword CLI not installed."
     echo "https://developer.1password.com/docs/cli/get-started/#install"
     exit 1
   fi
 
-  if ! which docker >$DEBUG_OUTPUT 2>&1; then
+  if ! which docker >$DEBUG_OUTPUT_DESTINATION 2>&1; then
     echo "❌  docker CLI not installed."
     echo "https://docs.docker.com/get-docker/"
     exit 1
@@ -90,27 +90,27 @@ build-localnet() {
       exit 1
     fi
   done
-
-  echo "NODE_COUNT=$NODE_COUNT" > ./localnet/.env.localnet
+  echo "🪄 Generating docker-compose.yml"
+  envsubst < ./localnet/docker-compose.template.yml > ./localnet/docker-compose.yml
 
   echo "🔮 Initializing Network"
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args >$DEBUG_OUTPUT 2>&1
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args >$DEBUG_OUTPUT_DESTINATION 2>&1
 
   echo "🏗 Building network"
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $CORE_CONTAINERS -d $additional_docker_compose_up_args >$DEBUG_OUTPUT 2>&1
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $CORE_CONTAINERS -d $additional_docker_compose_up_args >$DEBUG_OUTPUT_DESTINATION 2>&1
 
   echo "🪙 Waiting for Bitcoin node to start"
-  check_endpoint_health -s --user flip:flip -H 'Content-Type: text/plain;' --data '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' http://localhost:8332 >$DEBUG_OUTPUT
+  check_endpoint_health -s --user flip:flip -H 'Content-Type: text/plain;' --data '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' http://localhost:8332 >$DEBUG_OUTPUT_DESTINATION
 
   echo "💎 Waiting for ETH node to start"
-  check_endpoint_health -s -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://localhost:8545 >$DEBUG_OUTPUT
-  wscat -c ws://127.0.0.1:8546 -x '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' >$DEBUG_OUTPUT
+  check_endpoint_health -s -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://localhost:8545 >$DEBUG_OUTPUT_DESTINATION
+  wscat -c ws://127.0.0.1:8546 -x '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' >$DEBUG_OUTPUT_DESTINATION
 
   echo "🚦 Waiting for polkadot node to start"
   REPLY=$(check_endpoint_health -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://localhost:9947') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]
 
   echo "🦑 Starting Arbitrum ..."
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS -d $additional_docker_compose_up_args >$DEBUG_OUTPUT 2>&1
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS -d $additional_docker_compose_up_args
 
   DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
 
@@ -127,7 +127,7 @@ build-localnet() {
 
   RPC_PORT=$INIT_RPC_PORT
   for NODE in "${SELECTED_NODES[@]}"; do
-    check_endpoint_health -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' "http://localhost:$RPC_PORT" >$DEBUG_OUTPUT
+    check_endpoint_health -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' "http://localhost:$RPC_PORT" >$DEBUG_OUTPUT_DESTINATION
     echo "💚 $NODE's chainflip-node is running!"
     ((RPC_PORT++))
   done
@@ -168,9 +168,10 @@ build-localnet() {
 
 destroy() {
   echo -n "💣 Destroying network..."
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down $additional_docker_compose_down_args >$DEBUG_OUTPUT 2>&1
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down $additional_docker_compose_down_args >$DEBUG_OUTPUT_DESTINATION 2>&1
   for pid in $(ps -ef | grep chainflip | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
   rm -rf /tmp/chainflip
+  rm ./localnet/docker-compose.yml
   echo "done"
 }
 
@@ -260,13 +261,13 @@ logs() {
 bouncer() {
   (
     cd ./bouncer
-    pnpm install >$DEBUG_OUTPUT 2>&1
+    pnpm install >$DEBUG_OUTPUT_DESTINATION 2>&1
     ./run.sh $NODE_COUNT
   )
 }
 
 main() {
-    if ! which wscat >$DEBUG_OUTPUT; then
+    if ! which wscat >$DEBUG_OUTPUT_DESTINATION; then
         echo "wscat is not installed. Installing now..."
         npm install -g wscat
     fi
