@@ -24,7 +24,7 @@ export async function getBalance(asset: Asset, address: string): Promise<string>
     case 'ETH':
       result = await getEvmNativeBalance('Ethereum', address);
       break;
-    case 'ARB':
+    case 'ARBETH':
       result = await getEvmNativeBalance('Arbitrum', address);
       break;
     case 'DOT':

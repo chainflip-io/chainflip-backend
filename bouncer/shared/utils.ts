@@ -46,7 +46,7 @@ export function getEvmContractAddress(chain: Chain, contract: string): string {
       switch (contract) {
         case 'VAULT':
           return '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
-        case 'ARB':
+        case 'ARBETH':
           return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
         case 'ARBUSDC':
           return process.env.ARB_USDC_ADDRESS ?? '0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9';
@@ -72,8 +72,8 @@ export function assetToChain(asset: Asset): string {
     case 'BTC':
       return 'Btc';
     case 'ARBUSDC':
-    case 'ARB':
-      return 'Arb';
+    case 'ARBETH':
+      return 'ARBETH';
     default:
       return '';
   }
@@ -106,7 +106,7 @@ export function defaultAssetAmounts(asset: Asset): string {
     case 'BTC':
       return '0.05';
     case 'ETH':
-    case 'ARB':
+    case 'ARBETH':
       return '5';
     case 'DOT':
       return '50';

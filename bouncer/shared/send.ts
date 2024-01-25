@@ -24,7 +24,7 @@ export async function send(asset: Asset, address: string, amount?: string, log =
     case 'ETH':
       await sendEvmNative('Ethereum', address, amount ?? defaultAssetAmounts(asset), log);
       break;
-    case 'ARB':
+    case 'ARBETH':
       await sendEvmNative('Arbitrum', address, amount ?? defaultAssetAmounts(asset), log);
       break;
     case 'DOT':

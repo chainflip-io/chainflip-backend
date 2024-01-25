@@ -198,11 +198,12 @@ export async function testAllSwaps() {
 
   // TODO: Remove this but for now skipping arbitrum swaps as they are not supported yet
   Object.values(Assets).forEach((sourceAsset) => {
-    if (sourceAsset === 'ARB' || sourceAsset === 'ARBUSDC') return;
+    if (sourceAsset === 'ARBETH' || sourceAsset === 'ARBUSDC') return;
 
     Object.values(Assets)
       .filter(
-        (destAsset) => sourceAsset !== destAsset && destAsset !== 'ARB' && destAsset !== 'ARBUSDC',
+        (destAsset) =>
+          sourceAsset !== destAsset && destAsset !== 'ARBETH' && destAsset !== 'ARBUSDC',
       )
       .forEach((destAsset) => {
         // Regular swaps
