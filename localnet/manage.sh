@@ -98,11 +98,10 @@ build-localnet() {
 
   echo "🔮 Initializing Network"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
+  echo "🦺 Updating init state files permissions ..."
   if [[ $CI == true ]]; then
-    echo "🦺 Updating init state ownership ..."
     sudo chmod -R 777 /tmp/chainflip/data
   else
-    echo "🦺 Updating init state ownership ..."
     chmod -R 777 /tmp/chainflip/data
   fi
   echo "🏗 Building network"
