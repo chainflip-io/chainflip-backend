@@ -30,7 +30,7 @@ export async function executeContractSwap(
 ): ReturnType<typeof executeSwap> {
   const srcChain = chainFromAsset(srcAsset);
   const wallet = Wallet.fromPhrase(getWhaleMnemonic(srcChain)).connect(
-    getDefaultProvider(getEvmEndpoint(chainFromAsset(srcAsset))),
+    getDefaultProvider(srcChain),
   );
 
   const destChain = chainFromAsset(destAsset);
@@ -141,7 +141,7 @@ export async function performSwapViaContract(
 export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC' | 'ARBUSDC', amount: string) {
   const chain = chainFromAsset(srcAsset as Asset);
 
-  const wallet = Wallet.fromPhrase(getWhaleMnemonic(chainFromAsset(srcAsset as Asset))).connect(
+  const wallet = Wallet.fromPhrase(getWhaleMnemonic(chain)).connect(
     getDefaultProvider(getEvmEndpoint(chain)),
   );
 
