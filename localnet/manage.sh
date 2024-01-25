@@ -119,12 +119,12 @@ build-localnet() {
 
   echo "🦑 Starting Arbitrum ..."
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
-  if which solana-test-validator > $DEBUG_OUTPUT 2>&1; then
-    echo "☀️ Waiting for Solana node to start" >>$DEBUG_OUTPUT_DESTINATION
+  if which solana-test-validator >>$DEBUG_OUTPUT_DESTINATION 2>&1; then
+    echo "☀️ Waiting for Solana node to start"
     ./localnet/init/scripts/start-solana.sh
-    until curl -s http://localhost:8899 > $DEBUG_OUTPUT 2>&1; do sleep 1; done
+    until curl -s http://localhost:8899 >>$DEBUG_OUTPUT_DESTINATION 2>&1; do sleep 1; done
   else
-    echo "☀️ Solana not installed, skipping..." >>$DEBUG_OUTPUT_DESTINATION
+    echo "☀️ Solana not installed, skipping..."
   fi
 
   echo "🦑 Waiting for Arbitrum nodes to start"
