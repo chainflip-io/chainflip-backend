@@ -129,6 +129,11 @@ pub mod pallet {
 	pub type FreeBalances<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, T::AccountId, Identity, Asset, AssetAmount>;
 
+	#[pallet::storage]
+	/// Historical earned fees for an account. Map: AccountId => AssetAmount
+	pub type HistoricalEarnedFees<T: Config> =
+		StorageMap<_, Twox64Concat, T::AccountId, AssetAmount>;
+
 	/// Stores the registered energency withdrawal address for an Account
 	#[pallet::storage]
 	pub type LiquidityRefundAddress<T: Config> = StorageDoubleMap<
