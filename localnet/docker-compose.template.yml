@@ -6,7 +6,7 @@ services:
     platform: linux/amd64
     volumes:
       - "/tmp/chainflip/data:/localnet-initial-state"
-    command: /bin/sh -c "set -eo pipefail && echo '📠 Copying initial state to /tmp/chainflip/data' && cp -R /initial-state/* /localnet-initial-state"
+    command: /bin/sh -c "cp -R /initial-state/* /localnet-initial-state"
 
   redis:
     image: redis:6.2.6

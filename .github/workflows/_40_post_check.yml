@@ -79,6 +79,8 @@ jobs:
           mkdir -p /tmp/chainflip/bashful
           mkdir -p /tmp/chainflip/doc
           mkdir -p /tmp/chainflip/dopey
+          mkdir -p /tmp/chainflip/
+          touch /tmp/chainflip/debug.log
           chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
           touch ./localnet/.setup_complete
           ./localnet/manage.sh
