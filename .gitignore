@@ -22,6 +22,7 @@ localnet/init/polkadot/docker-compose.yml
 !localnet/init/keyshare/*/*.db
 !localnet/init/keyshare/**/*.log
 !localnet/init/data/**/*.log
+!localnet/init/solana/**/*.log
 
 localnet/init/config/Settings.toml.*.backup
 

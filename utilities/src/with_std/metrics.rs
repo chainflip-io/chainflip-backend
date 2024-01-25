@@ -409,54 +409,54 @@ lazy_static::lazy_static! {
 	static ref REGISTRY: Registry = Registry::new();
 	pub static ref DELETE_METRIC_CHANNEL: (Sender<DeleteMetricCommand>, Receiver<DeleteMetricCommand>) = unbounded::<DeleteMetricCommand>();
 
-	pub static ref P2P_MSG_SENT: IntCounter = register_int_counter_with_registry!(Opts::new("p2p_msg_sent", "Count all the p2p msgs sent by the engine"), REGISTRY).expect("A duplicate metric collector has already been registered.");
-	pub static ref P2P_MSG_RECEIVED: IntCounter = register_int_counter_with_registry!(Opts::new("p2p_msg_received", "Count all the p2p msgs received by the engine (raw before any processing)"), REGISTRY).expect("A duplicate metric collector has already been registered.");
-	pub static ref P2P_RECONNECT_PEERS: IntGaugeWrapper = IntGaugeWrapper::new("p2p_reconnect_peers", "Count the number of peers we need to reconnect to", &REGISTRY);
-	pub static ref P2P_ACTIVE_CONNECTIONS: IntGaugeWrapper = IntGaugeWrapper::new("p2p_active_connections", "Count the number of active connections", &REGISTRY);
-	pub static ref P2P_ALLOWED_PUBKEYS: IntGaugeWrapper = IntGaugeWrapper::new("p2p_allowed_pubkeys", "Count the number of allowed pubkeys", &REGISTRY);
-	pub static ref P2P_DECLINED_CONNECTIONS: IntCounter = register_int_counter_with_registry!(Opts::new("p2p_declined_connections", "Count the number times we decline a connection"), &REGISTRY).expect("A duplicate metric collector has already been registered.");
+	pub static ref P2P_MSG_SENT: IntCounter = register_int_counter_with_registry!(Opts::new("cfe_p2p_msg_sent", "Count all the p2p msgs sent by the engine"), REGISTRY).expect("A duplicate metric collector has already been registered.");
+	pub static ref P2P_MSG_RECEIVED: IntCounter = register_int_counter_with_registry!(Opts::new("cfe_p2p_msg_received", "Count all the p2p msgs received by the engine (raw before any processing)"), REGISTRY).expect("A duplicate metric collector has already been registered.");
+	pub static ref P2P_RECONNECT_PEERS: IntGaugeWrapper = IntGaugeWrapper::new("cfe_p2p_reconnect_peers", "Count the number of peers we need to reconnect to", &REGISTRY);
+	pub static ref P2P_ACTIVE_CONNECTIONS: IntGaugeWrapper = IntGaugeWrapper::new("cfe_p2p_active_connections", "Count the number of active connections", &REGISTRY);
+	pub static ref P2P_ALLOWED_PUBKEYS: IntGaugeWrapper = IntGaugeWrapper::new("cfe_p2p_allowed_pubkeys", "Count the number of allowed pubkeys", &REGISTRY);
+	pub static ref P2P_DECLINED_CONNECTIONS: IntCounter = register_int_counter_with_registry!(Opts::new("cfe_p2p_declined_connections", "Count the number times we decline a connection"), &REGISTRY).expect("A duplicate metric collector has already been registered.");
 }
 
 build_gauge_vec!(
 	UNAUTHORIZED_CEREMONY,
-	"unauthorized_ceremony",
+	"cfe_unauthorized_ceremony",
 	"Gauge keeping track of the number of unauthorized ceremony currently awaiting authorisation",
 	["chain", "type"]
 );
 build_gauge_vec!(
 	CHAIN_TRACKING,
-	"chain_tracking",
+	"cfe_chain_tracking",
 	"Gauge keeping track of the latest block number the engine reported to the state chain",
 	["chain"]
 );
 build_counter_vec!(
 	RPC_RETRIER_REQUESTS,
-	"rpc_requests",
+	"cfe_rpc_requests",
 	"Count the rpc calls made by the engine, it doesn't keep into account the number of retrials",
 	["client", "rpc_method"]
 );
 build_counter_vec!(
 	RPC_RETRIER_TOTAL_REQUESTS,
-	"rpc_requests_total",
+	"cfe_rpc_requests_total",
 	"Count all the rpc calls made by the retrier, it counts every single call even if it is the same made multiple times",
 	["client","rpc_method"]
 );
 build_counter_vec!(
 	P2P_MONITOR_EVENT,
-	"p2p_monitor_event",
+	"cfe_p2p_monitor_event",
 	"Count the number of events observed by the zmq connection monitor",
 	["event_type"]
 );
 build_counter_vec!(
 	P2P_BAD_MSG,
-	"p2p_bad_msg",
+	"cfe_p2p_bad_msg",
 	"Count all the bad p2p msgs received by the engine and labels them by the reason they got discarded",
 	["reason"]
 );
 build_counter_vec_struct!(
 	CEREMONY_PROCESSED_MSG,
 	CeremonyProcessedMsgDrop,
-	"ceremony_msg",
+	"cfe_ceremony_msg",
 	"Count all the processed messages for a given ceremony",
 	true,
 	["chain", "ceremony_id", "ceremony_type"]
@@ -464,7 +464,7 @@ build_counter_vec_struct!(
 build_counter_vec_struct!(
 	CEREMONY_BAD_MSG,
 	CeremonyBadMsgNotDrop,
-	"ceremony_bad_msg",
+	"cfe_ceremony_bad_msg",
 	"Count all the bad msgs processed during a ceremony",
 	false,
 	["chain", "reason"],
@@ -473,7 +473,7 @@ build_counter_vec_struct!(
 build_gauge_vec_struct!(
 	CEREMONY_DURATION,
 	CeremonyDurationDrop,
-	"ceremony_duration",
+	"cfe_ceremony_duration",
 	"Measure the duration of a ceremony in ms",
 	true,
 	["chain", "ceremony_id", "ceremony_type"]
@@ -481,7 +481,7 @@ build_gauge_vec_struct!(
 build_gauge_vec_struct!(
 	CEREMONY_TIMEOUT_MISSING_MSG,
 	CeremonyTimeoutMissingMsgDrop,
-	"ceremony_timeout_missing_msg",
+	"cfe_ceremony_timeout_missing_msg",
 	"Measure the number of missing messages when reaching timeout",
 	true,
 	["chain", "ceremony_id", "ceremony_type", "stage"],
@@ -490,7 +490,7 @@ build_gauge_vec_struct!(
 build_gauge_vec_struct!(
 	STAGE_DURATION,
 	StageDurationDrop,
-	"stage_duration",
+	"cfe_stage_duration",
 	"Measure the duration of a stage in ms",
 	true,
 	["chain", "ceremony_id", "stage", "phase"], //phase can be either receiving or processing
@@ -499,7 +499,7 @@ build_gauge_vec_struct!(
 build_counter_vec_struct!(
 	STAGE_FAILING,
 	StageFailingNotDrop,
-	"stage_failing",
+	"cfe_stage_failing",
 	"Count the number of stages which are failing with the cause of the failure attached",
 	false,
 	["chain", "stage", "reason"],
@@ -508,7 +508,7 @@ build_counter_vec_struct!(
 build_counter_vec_struct!(
 	STAGE_COMPLETING,
 	StageCompletingNotDrop,
-	"stage_completing",
+	"cfe_stage_completing",
 	"Count the number of stages which are completing successfully",
 	false,
 	["chain", "stage"],
@@ -681,29 +681,29 @@ mod test {
 
 					//This request does nothing, the ceremony is still ongoning so there is no deletion
 					request_test("metrics", reqwest::StatusCode::OK, 
-r#"# HELP ceremony_bad_msg Count all the bad msgs processed during a ceremony
-# TYPE ceremony_bad_msg counter
-ceremony_bad_msg{chain="Chain1",reason="AA"} 1
-# HELP ceremony_duration Measure the duration of a ceremony in ms
-# TYPE ceremony_duration gauge
-ceremony_duration{ceremony_id="7",ceremony_type="Keygen",chain="Chain1"} 999
-# HELP ceremony_msg Count all the processed messages for a given ceremony
-# TYPE ceremony_msg counter
-ceremony_msg{ceremony_id="7",ceremony_type="Keygen",chain="Chain1"} 2
-# HELP ceremony_timeout_missing_msg Measure the number of missing messages when reaching timeout
-# TYPE ceremony_timeout_missing_msg gauge
-ceremony_timeout_missing_msg{ceremony_id="7",ceremony_type="Keygen",chain="Chain1",stage="stage1"} 5
-# HELP stage_completing Count the number of stages which are completing successfully
-# TYPE stage_completing counter
-stage_completing{chain="Chain1",stage="stage1"} 2
-stage_completing{chain="Chain1",stage="stage2"} 1
-# HELP stage_duration Measure the duration of a stage in ms
-# TYPE stage_duration gauge
-stage_duration{ceremony_id="7",chain="Chain1",phase="processing",stage="stage1"} 78
-stage_duration{ceremony_id="7",chain="Chain1",phase="receiving",stage="stage1"} 780
-# HELP stage_failing Count the number of stages which are failing with the cause of the failure attached
-# TYPE stage_failing counter
-stage_failing{chain="Chain1",reason="NotEnoughMessages",stage="stage3"} 1
+r#"# HELP cfe_ceremony_bad_msg Count all the bad msgs processed during a ceremony
+# TYPE cfe_ceremony_bad_msg counter
+cfe_ceremony_bad_msg{chain="Chain1",reason="AA"} 1
+# HELP cfe_ceremony_duration Measure the duration of a ceremony in ms
+# TYPE cfe_ceremony_duration gauge
+cfe_ceremony_duration{ceremony_id="7",ceremony_type="Keygen",chain="Chain1"} 999
+# HELP cfe_ceremony_msg Count all the processed messages for a given ceremony
+# TYPE cfe_ceremony_msg counter
+cfe_ceremony_msg{ceremony_id="7",ceremony_type="Keygen",chain="Chain1"} 2
+# HELP cfe_ceremony_timeout_missing_msg Measure the number of missing messages when reaching timeout
+# TYPE cfe_ceremony_timeout_missing_msg gauge
+cfe_ceremony_timeout_missing_msg{ceremony_id="7",ceremony_type="Keygen",chain="Chain1",stage="stage1"} 5
+# HELP cfe_stage_completing Count the number of stages which are completing successfully
+# TYPE cfe_stage_completing counter
+cfe_stage_completing{chain="Chain1",stage="stage1"} 2
+cfe_stage_completing{chain="Chain1",stage="stage2"} 1
+# HELP cfe_stage_duration Measure the duration of a stage in ms
+# TYPE cfe_stage_duration gauge
+cfe_stage_duration{ceremony_id="7",chain="Chain1",phase="processing",stage="stage1"} 78
+cfe_stage_duration{ceremony_id="7",chain="Chain1",phase="receiving",stage="stage1"} 780
+# HELP cfe_stage_failing Count the number of stages which are failing with the cause of the failure attached
+# TYPE cfe_stage_failing counter
+cfe_stage_failing{chain="Chain1",reason="NotEnoughMessages",stage="stage3"} 1
 "#).await;
 
 					//End of ceremony
@@ -712,43 +712,43 @@ stage_failing{chain="Chain1",reason="NotEnoughMessages",stage="stage3"} 1
 
 				//First request after the ceremony ended we get all the metrics (same as the request above), and after we delete the ones that have no more reason to exists
 				request_test("metrics", reqwest::StatusCode::OK, 
-r#"# HELP ceremony_bad_msg Count all the bad msgs processed during a ceremony
-# TYPE ceremony_bad_msg counter
-ceremony_bad_msg{chain="Chain1",reason="AA"} 1
-# HELP ceremony_duration Measure the duration of a ceremony in ms
-# TYPE ceremony_duration gauge
-ceremony_duration{ceremony_id="7",ceremony_type="Keygen",chain="Chain1"} 999
-# HELP ceremony_msg Count all the processed messages for a given ceremony
-# TYPE ceremony_msg counter
-ceremony_msg{ceremony_id="7",ceremony_type="Keygen",chain="Chain1"} 2
-# HELP ceremony_timeout_missing_msg Measure the number of missing messages when reaching timeout
-# TYPE ceremony_timeout_missing_msg gauge
-ceremony_timeout_missing_msg{ceremony_id="7",ceremony_type="Keygen",chain="Chain1",stage="stage1"} 5
-# HELP stage_completing Count the number of stages which are completing successfully
-# TYPE stage_completing counter
-stage_completing{chain="Chain1",stage="stage1"} 2
-stage_completing{chain="Chain1",stage="stage2"} 1
-# HELP stage_duration Measure the duration of a stage in ms
-# TYPE stage_duration gauge
-stage_duration{ceremony_id="7",chain="Chain1",phase="processing",stage="stage1"} 78
-stage_duration{ceremony_id="7",chain="Chain1",phase="receiving",stage="stage1"} 780
-# HELP stage_failing Count the number of stages which are failing with the cause of the failure attached
-# TYPE stage_failing counter
-stage_failing{chain="Chain1",reason="NotEnoughMessages",stage="stage3"} 1
+r#"# HELP cfe_ceremony_bad_msg Count all the bad msgs processed during a ceremony
+# TYPE cfe_ceremony_bad_msg counter
+cfe_ceremony_bad_msg{chain="Chain1",reason="AA"} 1
+# HELP cfe_ceremony_duration Measure the duration of a ceremony in ms
+# TYPE cfe_ceremony_duration gauge
+cfe_ceremony_duration{ceremony_id="7",ceremony_type="Keygen",chain="Chain1"} 999
+# HELP cfe_ceremony_msg Count all the processed messages for a given ceremony
+# TYPE cfe_ceremony_msg counter
+cfe_ceremony_msg{ceremony_id="7",ceremony_type="Keygen",chain="Chain1"} 2
+# HELP cfe_ceremony_timeout_missing_msg Measure the number of missing messages when reaching timeout
+# TYPE cfe_ceremony_timeout_missing_msg gauge
+cfe_ceremony_timeout_missing_msg{ceremony_id="7",ceremony_type="Keygen",chain="Chain1",stage="stage1"} 5
+# HELP cfe_stage_completing Count the number of stages which are completing successfully
+# TYPE cfe_stage_completing counter
+cfe_stage_completing{chain="Chain1",stage="stage1"} 2
+cfe_stage_completing{chain="Chain1",stage="stage2"} 1
+# HELP cfe_stage_duration Measure the duration of a stage in ms
+# TYPE cfe_stage_duration gauge
+cfe_stage_duration{ceremony_id="7",chain="Chain1",phase="processing",stage="stage1"} 78
+cfe_stage_duration{ceremony_id="7",chain="Chain1",phase="receiving",stage="stage1"} 780
+# HELP cfe_stage_failing Count the number of stages which are failing with the cause of the failure attached
+# TYPE cfe_stage_failing counter
+cfe_stage_failing{chain="Chain1",reason="NotEnoughMessages",stage="stage3"} 1
 "#).await;
 
 				//Second request we get only the metrics which don't depend on a specific label like ceremony_id
 				request_test("metrics", reqwest::StatusCode::OK, 
-r#"# HELP ceremony_bad_msg Count all the bad msgs processed during a ceremony
-# TYPE ceremony_bad_msg counter
-ceremony_bad_msg{chain="Chain1",reason="AA"} 1
-# HELP stage_completing Count the number of stages which are completing successfully
-# TYPE stage_completing counter
-stage_completing{chain="Chain1",stage="stage1"} 2
-stage_completing{chain="Chain1",stage="stage2"} 1
-# HELP stage_failing Count the number of stages which are failing with the cause of the failure attached
-# TYPE stage_failing counter
-stage_failing{chain="Chain1",reason="NotEnoughMessages",stage="stage3"} 1
+r#"# HELP cfe_ceremony_bad_msg Count all the bad msgs processed during a ceremony
+# TYPE cfe_ceremony_bad_msg counter
+cfe_ceremony_bad_msg{chain="Chain1",reason="AA"} 1
+# HELP cfe_stage_completing Count the number of stages which are completing successfully
+# TYPE cfe_stage_completing counter
+cfe_stage_completing{chain="Chain1",stage="stage1"} 2
+cfe_stage_completing{chain="Chain1",stage="stage2"} 1
+# HELP cfe_stage_failing Count the number of stages which are failing with the cause of the failure attached
+# TYPE cfe_stage_failing counter
+cfe_stage_failing{chain="Chain1",reason="NotEnoughMessages",stage="stage3"} 1
 "#).await;
 
 				check_deleted_metrics();

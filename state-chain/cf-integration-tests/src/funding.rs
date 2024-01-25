@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use crate::{
 	genesis::GENESIS_BALANCE,
 	network::{create_testnet_with_new_funder, NEW_FUNDING_AMOUNT},
@@ -10,8 +12,9 @@ use mock_runtime::MIN_FUNDING;
 use pallet_cf_funding::pallet::Error;
 use pallet_cf_validator::{Backups, CurrentRotationPhase};
 use sp_runtime::{FixedPointNumber, FixedU64};
-use state_chain_runtime::chainflip::{
-	backup_node_rewards::calculate_backup_rewards, calculate_account_apy, Offence,
+use state_chain_runtime::{
+	chainflip::{backup_node_rewards::calculate_backup_rewards, calculate_account_apy, Offence},
+	RuntimeEvent,
 };
 
 #[test]
@@ -212,8 +215,7 @@ fn can_calculate_account_apy() {
 			assert!(calculate_account_apy(&no_reward).is_none());
 
 			// Backups that are not qualified to earn rewards are returned None
-			let backup_no_reward = AccountId::from([0x01; 32]);
-			assert!(all_backups.contains_key(&backup_no_reward));
+			let backup_no_reward = all_backups.last_key_value().unwrap().0.clone();
 			assert!(!backup_earning_rewards
 				.any(|Bid { bidder_id, amount: _ }| bidder_id == backup_no_reward));
 			assert!(calculate_account_apy(&backup_no_reward).is_none());
@@ -270,5 +272,58 @@ fn apy_can_be_above_100_percent() {
 				FixedU64::from_rational(reward, total).checked_mul_int(10_000u32).unwrap();
 			assert_eq!(apy_basis_point, 241_377_727u32);
 			assert_eq!(calculate_account_apy(&validator), Some(apy_basis_point));
+		});
+}
+
+#[test]
+fn backup_rewards_event_gets_emitted_on_heartbeat_interval() {
+	const EPOCH_BLOCKS: u32 = 1_000;
+	const NUM_BACKUPS: u32 = 20;
+	const MAX_AUTHORITIES: u32 = 100;
+	super::genesis::default()
+		.blocks_per_epoch(EPOCH_BLOCKS)
+		.accounts(
+			(0..MAX_AUTHORITIES as u8)
+				.map(|i| (AccountId32::from([i; 32]), AccountRole::Validator, GENESIS_BALANCE))
+				.collect(),
+		)
+		.max_authorities(MAX_AUTHORITIES)
+		.build()
+		.execute_with(|| {
+			let (mut network, ..) =
+				crate::authorities::fund_authorities_and_join_auction(NUM_BACKUPS);
+
+			network.move_to_the_next_epoch();
+			network.move_to_next_heartbeat_block();
+
+			assert_eq!(Validator::current_authorities().len(), 100,);
+			assert_eq!(Validator::backups().len(), NUM_BACKUPS as usize,);
+
+			assert_eq!(
+				Validator::highest_funded_qualified_backup_nodes_lookup().len(),
+				NUM_BACKUPS as usize,
+				"Expected all {NUM_BACKUPS} backups to be qualified."
+			);
+
+			// Backup rewards should be distributed to all qualified backups.
+			let rewarded_accounts = System::events()
+				.into_iter()
+				.filter_map(|rec| match rec.event {
+					RuntimeEvent::Emissions(
+						pallet_cf_emissions::Event::BackupRewardsDistributed { account_id, .. },
+					) => Some(account_id),
+					_ => None,
+				})
+				.collect::<BTreeSet<_>>();
+
+			assert_eq!(
+				rewarded_accounts.len(),
+				NUM_BACKUPS as usize,
+				"Expected all {NUM_BACKUPS} backups to be rewarded."
+			);
+			assert_eq!(
+				rewarded_accounts,
+				Validator::highest_funded_qualified_backup_nodes_lookup()
+			);
 		});
 }
