@@ -30,7 +30,7 @@ export async function executeContractSwap(
 ): ReturnType<typeof executeSwap> {
   const srcChain = chainFromAsset(srcAsset);
   const wallet = Wallet.fromPhrase(getWhaleMnemonic(srcChain)).connect(
-    getDefaultProvider(srcChain),
+    getDefaultProvider(getEvmEndpoint(srcChain)),
   );
 
   const destChain = chainFromAsset(destAsset);
