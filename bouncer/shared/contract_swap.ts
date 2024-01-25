@@ -114,9 +114,7 @@ export async function performSwapViaContract(
           destAsset,
           destAddress,
           messageMetadata,
-          Wallet.fromPhrase(
-            getWhaleMnemonic(chainFromAsset(sourceAsset)),
-          ).address.toLowerCase(),
+          Wallet.fromPhrase(getWhaleMnemonic(chainFromAsset(sourceAsset))).address.toLowerCase(),
         )
       : Promise.resolve();
 
