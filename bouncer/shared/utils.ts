@@ -73,7 +73,7 @@ export function assetToChain(asset: Asset): string {
       return 'Btc';
     case 'ARBUSDC':
     case 'ARBETH':
-      return 'ARBETH';
+      return 'Arbitrum';
     default:
       return '';
   }
