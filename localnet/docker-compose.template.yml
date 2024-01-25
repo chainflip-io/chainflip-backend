@@ -7,7 +7,6 @@ services:
     volumes:
       - "/tmp/chainflip/data:/localnet-initial-state"
     command: /bin/sh -c "cp -R /initial-state/* /localnet-initial-state"
-    user: "1000"
 
   redis:
     image: redis:6.2.6
