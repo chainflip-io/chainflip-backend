@@ -30,8 +30,8 @@ services:
       - "/tmp/chainflip/data/config:/config"
 
   sequencer:
-    pid: host # allow debugging
     image: offchainlabs/nitro-node:v2.0.14-2baa834-dev
+    user: root
     platform: linux/amd64
     ports:
       - "8547:8547"
@@ -46,8 +46,8 @@ services:
       - redis
 
   staker-unsafe:
-    pid: host # allow debugging
     image: offchainlabs/nitro-node:v2.0.14-2baa834-dev
+    user: root
     platform: linux/amd64
     ports:
       - "8047:8547"
@@ -62,8 +62,8 @@ services:
       - redis
 
   poster:
-    pid: host # allow debugging
     image: offchainlabs/nitro-node:v2.0.14-2baa834-dev
+    user: root
     platform: linux/amd64
     ports:
       - "8147:8547"
