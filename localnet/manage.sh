@@ -111,6 +111,16 @@ build-localnet() {
 
   echo "🦑 Starting Arbitrum ..."
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS -d $additional_docker_compose_up_args
+  if which solana-test-validator > $DEBUG_OUTPUT 2>&1; then
+    echo "☀️ Waiting for Solana node to start"
+    ./localnet/init/scripts/start-solana.sh
+    until curl -s http://localhost:8899 > $DEBUG_OUTPUT 2>&1; do sleep 1; done
+  else
+    echo "☀️ Solana not installed, skipping..."
+  fi
+
+  echo "🦑 Waiting for Arbitrum nodes to start"
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS -d $additional_docker_compose_up_args >$DEBUG_OUTPUT 2>&1
 
   DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
 
@@ -170,8 +180,10 @@ destroy() {
   echo -n "💣 Destroying network..."
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down $additional_docker_compose_down_args >$DEBUG_OUTPUT_DESTINATION 2>&1
   for pid in $(ps -ef | grep chainflip | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
+  for pid in $(ps -ef | grep solana | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
   rm -rf /tmp/chainflip
   rm ./localnet/docker-compose.yml
+  rm -rf /tmp/solana/
   echo "done"
 }
 
@@ -220,7 +232,7 @@ yeet() {
 
 logs() {
   echo "🤖 Which service would you like to tail?"
-  select SERVICE in node engine broker lp polkadot geth bitcoin poster sequencer staker all; do
+  select SERVICE in node engine broker lp polkadot geth bitcoin solana poster sequencer staker all; do
     if [[ $SERVICE == "all" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow
       tail -f /tmp/chainflip/chainflip-*.log
@@ -253,6 +265,9 @@ logs() {
     fi
     if [[ $SERVICE == "lp" ]]; then
       tail -f /tmp/chainflip/chainflip-lp-api.log
+    fi
+    if [[ $SERVICE == "solana" ]]; then
+      tail -f /tmp/solana/solana.log
     fi
     break
   done

@@ -378,6 +378,7 @@ where
 		scope.spawn(async move {
 			utilities::loop_select! {
 				if let Some((response_sender, request_log, closure, retry_limit)) = request_receiver.recv() => {
+					RPC_RETRIER_REQUESTS.inc(&[name, request_log.rpc_method.as_str()]);
 					let request_id = request_holder.next_request_id();
 					let (client, primary_or_secondary) = client_selector.select_client(PrimaryOrSecondary::Primary).await;
 
@@ -389,7 +390,6 @@ where
 					RPC_RETRIER_TOTAL_REQUESTS.inc(&[name, request_log.rpc_method.as_str()]);
 					match result {
 						Ok(value) => {
-							RPC_RETRIER_REQUESTS.inc(&[name, request_log.rpc_method.as_str()]);
 							if let Some((response_sender, _)) = request_holder.remove(&request_id) {
 								let _result = response_sender.send(value);
 							}

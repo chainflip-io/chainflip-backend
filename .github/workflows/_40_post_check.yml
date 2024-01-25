@@ -65,12 +65,17 @@ jobs:
         working-directory: bouncer
         run: pnpm install
 
+      - name: Install solana
+        run: |
+          sh -c "$(curl -sSfL https://release.solana.com/v1.17.16/install)"
+
       - name: Start a localnet
         env:
           BINARY_ROOT_PATH: .
           DEBUG_OUTPUT_DESTINATION: /tmp/chainflip/debug.log
         run: |
           set -x
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           mkdir -p /tmp/chainflip/bashful
           mkdir -p /tmp/chainflip/doc
           mkdir -p /tmp/chainflip/dopey
