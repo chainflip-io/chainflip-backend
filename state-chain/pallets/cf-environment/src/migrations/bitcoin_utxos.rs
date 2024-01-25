@@ -1,4 +1,5 @@
 use crate::*;
+use cf_chains::btc::deposit_address::TapscriptPath;
 use frame_support::traits::OnRuntimeUpgrade;
 
 pub struct Migration<T: Config>(PhantomData<T>);
@@ -37,10 +38,12 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 				amount: utxo.amount,
 				deposit_address: DepositAddress {
 					pubkey_x: utxo.deposit_address.pubkey_x,
-					salt: utxo.deposit_address.salt,
-					tweaked_pubkey_bytes: Some(utxo.deposit_address.tweaked_pubkey_bytes),
-					tapleaf_hash: Some(utxo.deposit_address.tapleaf_hash),
-					unlock_script: Some(utxo.deposit_address.unlock_script.clone()),
+					script_path: Some(TapscriptPath {
+						salt: utxo.deposit_address.salt,
+						tweaked_pubkey_bytes: utxo.deposit_address.tweaked_pubkey_bytes,
+						tapleaf_hash: utxo.deposit_address.tapleaf_hash,
+						unlock_script: utxo.deposit_address.unlock_script.clone(),
+					}),
 				},
 			})
 			.collect();

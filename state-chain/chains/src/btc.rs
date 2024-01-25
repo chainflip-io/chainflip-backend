@@ -182,7 +182,7 @@ impl BitcoinFeeInfo {
 	}
 
 	pub fn fee_per_utxo(&self, utxo: &Utxo) -> BtcAmount {
-		if utxo.deposit_address.tapleaf_hash.is_none() {
+		if utxo.deposit_address.script_path.is_none() {
 			// Our vault utxos (salt = 0) use VAULT_UTXO_SIZE_IN_BYTES vbytes in a Btc transaction
 			self.sats_per_kilobyte.saturating_mul(VAULT_UTXO_SIZE_IN_BYTES) / BYTES_PER_BTC_KILOBYTE
 		} else {
@@ -859,6 +859,40 @@ impl BitcoinTransaction {
 		(0u32..)
 			.zip(&self.inputs)
 			.map(|(input_index, input)| {
+				let mut hash_data = [
+					// Tagged Hash according to BIP 340
+					TAPSIG_HASH,
+					TAPSIG_HASH,
+					// Epoch according to footnote 20 in BIP 341
+					&[EPOCH],
+					// "Common signature message" according to BIP 341
+					&[HASHTYPE],
+					&VERSION,
+					&LOCKTIME,
+					&prevouts,
+					&amounts,
+					&scriptpubkeys,
+					&sequences,
+					&outputs,
+				]
+				.concat();
+				if input.deposit_address.script_path.is_some() {
+					hash_data.append(
+						&mut [
+							&[SPENDTYPE_SCRIPT] as &[u8],
+							&input_index.to_le_bytes(),
+							// "Common signature message extension" according to BIP 342
+							&input.deposit_address.script_path.clone().unwrap().tapleaf_hash[..],
+							&[KEYVERSION],
+							&CODESEPARATOR,
+						]
+						.concat(),
+					);
+				} else {
+					hash_data.append(
+						&mut [&[SPENDTYPE_KEY] as &[u8], &input_index.to_le_bytes()].concat(),
+					);
+				}
 				(
 					if Some(&input_index) == old_utxo_input_indices.front() {
 						old_utxo_input_indices.pop_front();
@@ -866,55 +900,7 @@ impl BitcoinTransaction {
 					} else {
 						PreviousOrCurrent::Current
 					},
-					if input.deposit_address.tapleaf_hash.is_some() {
-						sha2_256(
-							&[
-								// Tagged Hash according to BIP 340
-								TAPSIG_HASH,
-								TAPSIG_HASH,
-								// Epoch according to footnote 20 in BIP 341
-								&[EPOCH],
-								// "Common signature message" according to BIP 341
-								&[HASHTYPE],
-								&VERSION,
-								&LOCKTIME,
-								&prevouts,
-								&amounts,
-								&scriptpubkeys,
-								&sequences,
-								&outputs,
-								&[SPENDTYPE_SCRIPT],
-								&input_index.to_le_bytes(),
-								// "Common signature message extension" according to BIP 342
-								&input.deposit_address.tapleaf_hash.unwrap()[..],
-								&[KEYVERSION],
-								&CODESEPARATOR,
-							]
-							.concat(),
-						)
-					} else {
-						sha2_256(
-							&[
-								// Tagged Hash according to BIP 340
-								TAPSIG_HASH,
-								TAPSIG_HASH,
-								// Epoch according to footnote 20 in BIP 341
-								&[EPOCH],
-								// "Common signature message" according to BIP 341
-								&[HASHTYPE],
-								&VERSION,
-								&LOCKTIME,
-								&prevouts,
-								&amounts,
-								&scriptpubkeys,
-								&sequences,
-								&outputs,
-								&[SPENDTYPE_KEY],
-								&input_index.to_le_bytes(),
-							]
-							.concat(),
-						)
-					},
+					sha2_256(hash_data.as_slice()),
 				)
 			})
 			.collect()
