@@ -27,6 +27,7 @@ echo "Executing benchmarks..."
 
 pallets=$(ls state-chain/pallets | grep -v .md)
 
+# Use dev-3 to run the benchmarks (required by Broadcast pallet
 for pallet in $pallets ; do
   echo "Running benchmark for: $pallet"
   pallet_fmt="pallet_$(echo $pallet|tr "-" "_")"
@@ -37,7 +38,8 @@ for pallet in $pallets ; do
     --execution=wasm \
     --steps="$STEPS" \
     --repeat="$REPEAT" \
-    --template="$TEMPLATE"
+    --template="$TEMPLATE" \
+    --chain=dev-3
 
     if [ $? -eq 0 ]
     then

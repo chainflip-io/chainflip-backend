@@ -342,7 +342,6 @@ mod tests {
 		let txid = Txid::from_byte_array([random_number; 32]);
 		VerboseTransaction {
 			txid,
-			version: Version::from_consensus(2),
 			locktime: LockTime::Blocks(Height::from_consensus(0).unwrap()),
 			vin: vec![],
 			vout: tx_outs,

@@ -259,6 +259,7 @@ pub struct IngressEgressEnvironment {
 	pub minimum_deposit_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
 	pub ingress_fees: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
 	pub egress_fees: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+	pub witness_safety_margins: HashMap<ForeignChain, Option<u64>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -972,6 +973,7 @@ where
 		let mut minimum_deposit_amounts = HashMap::new();
 		let mut ingress_fees = HashMap::new();
 		let mut egress_fees = HashMap::new();
+		let mut witness_safety_margins = HashMap::new();
 
 		for asset in Asset::all() {
 			let chain = ForeignChain::from(asset);
@@ -989,7 +991,19 @@ where
 			);
 		}
 
-		Ok(IngressEgressEnvironment { minimum_deposit_amounts, ingress_fees, egress_fees })
+		for chain in ForeignChain::iter() {
+			witness_safety_margins.insert(
+				chain,
+				runtime_api.cf_witness_safety_margin(hash, chain).map_err(to_rpc_error)?,
+			);
+		}
+
+		Ok(IngressEgressEnvironment {
+			minimum_deposit_amounts,
+			ingress_fees,
+			egress_fees,
+			witness_safety_margins,
+		})
 	}
 
 	fn cf_swapping_environment(
@@ -1370,6 +1384,11 @@ mod test {
 							(Asset::Eth, 0u32.into()),
 						]),
 					),
+				]),
+				witness_safety_margins: HashMap::from([
+					(ForeignChain::Bitcoin, Some(3u64)),
+					(ForeignChain::Ethereum, Some(3u64)),
+					(ForeignChain::Polkadot, None),
 				]),
 			},
 			funding: FundingEnvironment {

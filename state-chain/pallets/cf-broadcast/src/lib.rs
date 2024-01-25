@@ -355,7 +355,8 @@ pub mod pallet {
 			let mut expiries = Timeouts::<T, I>::take(block_number);
 			let pending_broadcasts = PendingBroadcasts::<T, I>::get();
 			let mut delayed_retries = DelayedBroadcastRetryQueue::<T, I>::take(block_number);
-			let num_retries = expiries.len() + delayed_retries.len();
+			let expiry_count = expiries.len();
+			let retries_count = delayed_retries.len();
 			if T::SafeMode::get().retry_enabled {
 				for (broadcast_id, nominee) in expiries {
 					if pending_broadcasts.contains(&broadcast_id) {
@@ -396,7 +397,7 @@ pub mod pallet {
 					|current| current.append(&mut delayed_retries),
 				);
 			}
-			T::WeightInfo::on_initialize(num_retries as u32)
+			T::WeightInfo::on_initialize(expiry_count as u32, retries_count as u32)
 		}
 	}
 

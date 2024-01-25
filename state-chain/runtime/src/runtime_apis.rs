@@ -181,5 +181,6 @@ decl_runtime_apis!(
 		fn cf_ingress_fee(asset: Asset) -> AssetAmount;
 		fn cf_egress_fee(asset: Asset) -> AssetAmount;
 		fn cf_witness_count(hash: CallHash) -> Option<FailingWitnessValidators>;
+		fn cf_witness_safety_margin(chain: ForeignChain) -> Option<u64>;
 	}
 );

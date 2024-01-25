@@ -192,7 +192,7 @@ pub mod pallet {
 	#[pallet::getter(fn current_rotation_phase)]
 	pub type CurrentRotationPhase<T: Config> = StorageValue<_, RotationPhase<T>, ValueQuery>;
 
-	/// A set of the current authorites.
+	/// A set of the current authorities.
 	#[pallet::storage]
 	pub type CurrentAuthorities<T: Config> =
 		StorageValue<_, BTreeSet<ValidatorIdOf<T>>, ValueQuery>;
@@ -681,7 +681,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Allow a validator to report their current cfe version. Update storage and emmit event if
+		/// Allow a validator to report their current cfe version. Update storage and emit event if
 		/// version is different from storage.
 		///
 		/// The dispatch origin of this function must be signed.
