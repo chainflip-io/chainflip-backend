@@ -82,7 +82,7 @@ async fn should_ignore_non_stage_1_messages_while_unauthorised() {
 	let mut unauthorised_ceremony_runner: CeremonyRunner<
 		KeygenCeremony<EvmCryptoScheme>,
 		EthSigning,
-	> = CeremonyRunner::new_unauthorised(mpsc::unbounded_channel().0, DEFAULT_CEREMONY_ID);
+	> = CeremonyRunner::new_unauthorised(mpsc::unbounded_channel().0);
 
 	// Process a stage 2 message
 	assert_eq!(
@@ -106,7 +106,7 @@ async fn should_delay_stage_1_message_while_unauthorised() {
 
 	// Create an unauthorised ceremony
 	let mut ceremony_runner: CeremonyRunner<SigningCeremony<EvmCryptoScheme>, EthSigning> =
-		CeremonyRunner::new_unauthorised(mpsc::unbounded_channel().0, DEFAULT_CEREMONY_ID);
+		CeremonyRunner::new_unauthorised(mpsc::unbounded_channel().0);
 
 	// Process a stage 1 message (It should get delayed)
 	assert_eq!(
@@ -208,10 +208,8 @@ async fn gen_stage_1_signing_state(
 	CeremonyRunner<SigningCeremony<EvmCryptoScheme>, EthSigning>,
 	UnboundedReceiver<OutgoingMultisigStageMessages>,
 ) {
-	let mut ceremony_runner = CeremonyRunner::new_unauthorised(
-		tokio::sync::mpsc::unbounded_channel().0,
-		DEFAULT_CEREMONY_ID,
-	);
+	let mut ceremony_runner =
+		CeremonyRunner::new_unauthorised(tokio::sync::mpsc::unbounded_channel().0);
 
 	let (outgoing_p2p_sender, outgoing_p2p_receiver) = tokio::sync::mpsc::unbounded_channel();
 	let initial_stage = prepare_signing_request(

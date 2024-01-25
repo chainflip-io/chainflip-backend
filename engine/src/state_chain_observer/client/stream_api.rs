@@ -4,7 +4,7 @@ use utilities::cached_stream::CachedStream;
 use super::BlockInfo;
 
 pub const FINALIZED: bool = true;
-pub const UNFINALIZED: bool = true;
+pub const UNFINALIZED: bool = false;
 
 pub trait StreamApi<const IS_FINALIZED: bool>:
 	CachedStream<Item = BlockInfo> + Send + Sync + Unpin + 'static
