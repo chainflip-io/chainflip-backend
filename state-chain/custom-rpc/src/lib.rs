@@ -30,8 +30,8 @@ use state_chain_runtime::{
 	chainflip::Offence,
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
-		CustomRuntimeApi, DispatchErrorWithMessage, LiquidityProviderInfo, RuntimeApiAccountInfoV2,
-		RuntimeAsset,
+		CustomRuntimeApi, DispatchErrorWithMessage, FailingWitnessValidators,
+		LiquidityProviderInfo, RuntimeApiAccountInfoV2, RuntimeAsset,
 	},
 };
 use std::{
@@ -265,6 +265,7 @@ pub struct IngressEgressEnvironment {
 	pub minimum_deposit_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
 	pub ingress_fees: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
 	pub egress_fees: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+	pub witness_safety_margins: HashMap<ForeignChain, Option<u64>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -498,6 +499,13 @@ pub trait CustomApi {
 		&self,
 		broadcast_id: BroadcastId,
 	) -> RpcResult<Option<<cf_chains::Ethereum as Chain>::Transaction>>;
+
+	#[method(name = "witness_count")]
+	fn cf_witness_count(
+		&self,
+		hash: state_chain_runtime::Hash,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<FailingWitnessValidators>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -992,6 +1000,7 @@ where
 		let mut minimum_deposit_amounts = HashMap::new();
 		let mut ingress_fees = HashMap::new();
 		let mut egress_fees = HashMap::new();
+		let mut witness_safety_margins = HashMap::new();
 
 		for asset in Asset::all() {
 			let chain = ForeignChain::from(asset);
@@ -1009,7 +1018,19 @@ where
 			);
 		}
 
-		Ok(IngressEgressEnvironment { minimum_deposit_amounts, ingress_fees, egress_fees })
+		for chain in ForeignChain::iter() {
+			witness_safety_margins.insert(
+				chain,
+				runtime_api.cf_witness_safety_margin(hash, chain).map_err(to_rpc_error)?,
+			);
+		}
+
+		Ok(IngressEgressEnvironment {
+			minimum_deposit_amounts,
+			ingress_fees,
+			egress_fees,
+			witness_safety_margins,
+		})
 	}
 
 	fn cf_swapping_environment(
@@ -1144,6 +1165,17 @@ where
 		self.client
 			.runtime_api()
 			.cf_failed_call(self.unwrap_or_best(None), broadcast_id)
+			.map_err(to_rpc_error)
+	}
+
+	fn cf_witness_count(
+		&self,
+		hash: state_chain_runtime::Hash,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<FailingWitnessValidators>> {
+		self.client
+			.runtime_api()
+			.cf_witness_count(self.unwrap_or_best(at), pallet_cf_witnesser::CallHash(hash.into()))
 			.map_err(to_rpc_error)
 	}
 }
@@ -1379,6 +1411,11 @@ mod test {
 							(Asset::Eth, 0u32.into()),
 						]),
 					),
+				]),
+				witness_safety_margins: HashMap::from([
+					(ForeignChain::Bitcoin, Some(3u64)),
+					(ForeignChain::Ethereum, Some(3u64)),
+					(ForeignChain::Polkadot, None),
 				]),
 			},
 			funding: FundingEnvironment {
