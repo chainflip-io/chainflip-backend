@@ -230,6 +230,12 @@ async function testGasLimitSwap(
     const gasPrice = tx.gasPrice;
     const totalFee = gasUsed * Number(gasPrice);
 
+    const feeDeficitHandle = observeEvent(
+      'ethereumBroadcaster:TransactionFeeDeficitRecorded',
+      await getChainflipApi(),
+      (event) => Number(event.data.amount.replace(/,/g, '')) === totalFee,
+    );
+
     // Priority fee is not fully deterministic so we just log it for now
     if (tx.maxFeePerGas !== maxFeePerGas.toString()) {
       throw new Error(
@@ -244,6 +250,10 @@ async function testGasLimitSwap(
       throw new Error(`${tag} Transaction fee paid is higher than the budget paid by the user!`);
     }
     console.log(`${tag} Swap success! TxHash: ${ccmReceived?.txHash as string}!`);
+
+    console.log(`${tag} Waiting for a fee deficit to be recorded...`);
+    await feeDeficitHandle;
+    console.log(`${tag} Fee deficit recorded!`);
   } else {
     console.log(`${tag} Budget too tight, can't determine if swap should succeed.`);
   }
