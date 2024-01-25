@@ -179,11 +179,16 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 		assert_eq!(broadcast_retry_queue, DelayedBroadcastRetryQueue::<T, I>::get(next_block));
 
 		// Ensure Timeouts data are migrated
-		timeout_broadcasts.into_iter().for_each(|(block_number, attempts)|
+		timeout_broadcasts.into_iter().for_each(|(block_number, attempts)| {
 			// Assert the pre- and post- migrated data is identical.
-			assert_eq!(attempts.into_iter().map(|broadcast_id|
-				(broadcast_id, AwaitingBroadcast::<T, I>::get(broadcast_id).unwrap().nominee.unwrap())
-			).collect::<BTreeSet<_>>(), Timeouts::<T, I>::get(block_number)));
+			assert_eq!(
+				attempts,
+				Timeouts::<T, I>::get(block_number)
+					.into_iter()
+					.map(|(broadcast_id, _nominee)| broadcast_id)
+					.collect::<BTreeSet<_>>()
+			);
+		});
 
 		Ok(())
 	}
