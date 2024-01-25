@@ -30,8 +30,8 @@ use state_chain_runtime::{
 	chainflip::Offence,
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
-		CustomRuntimeApi, DispatchErrorWithMessage, FailingWitnessValidators,
-		LiquidityProviderInfo, RuntimeApiAccountInfoV2, RuntimeAsset,
+		ChainAsset, CustomRuntimeApi, DispatchErrorWithMessage, FailingWitnessValidators,
+		LiquidityProviderInfo, RuntimeApiAccountInfoV2,
 	},
 };
 use std::{
@@ -66,8 +66,8 @@ impl TryInto<Asset> for RpcAsset {
 	}
 }
 
-impl From<RuntimeAsset> for RpcAsset {
-	fn from(val: RuntimeAsset) -> Self {
+impl From<ChainAsset> for RpcAsset {
+	fn from(val: ChainAsset) -> Self {
 		RpcAsset::ExplicitChain { chain: val.chain, asset: val.asset }
 	}
 }

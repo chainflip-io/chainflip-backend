@@ -12,8 +12,8 @@ mod weights;
 use crate::{
 	chainflip::{calculate_account_apy, Offence},
 	runtime_apis::{
-		AuctionState, DispatchErrorWithMessage, FailingWitnessValidators, LiquidityProviderInfo,
-		RuntimeApiAccountInfoV2, RuntimeApiPenalty, RuntimeAsset,
+		AuctionState, ChainAsset, DispatchErrorWithMessage, FailingWitnessValidators,
+		LiquidityProviderInfo, RuntimeApiAccountInfoV2, RuntimeApiPenalty,
 	},
 };
 use cf_amm::{
@@ -1019,11 +1019,11 @@ impl_runtime_apis! {
 				})
 				.collect()
 		}
-		fn cf_asset_balances(account_id: AccountId) -> Vec<(RuntimeAsset, AssetAmount)> {
+		fn cf_asset_balances(account_id: AccountId) -> Vec<(ChainAsset, AssetAmount)> {
 			LiquidityProvider::asset_balances(&account_id)
 				.into_iter()
-				.map(|asset_balance| (RuntimeAsset {chain: asset_balance.asset.into(), asset: asset_balance.asset}, asset_balance.balance))
-				.collect::<Vec<(RuntimeAsset, AssetAmount)>>()
+				.map(|asset_balance| (ChainAsset {chain: asset_balance.asset.into(), asset: asset_balance.asset}, asset_balance.balance))
+				.collect::<Vec<(ChainAsset, AssetAmount)>>()
 		}
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()
