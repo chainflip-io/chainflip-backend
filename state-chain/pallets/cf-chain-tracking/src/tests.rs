@@ -1,7 +1,7 @@
 #![cfg(test)]
 use crate::{mock::*, Call as PalletCall, ChainState, Error, Event as PalletEvent};
 use cf_chains::mocks::MockTrackedData;
-use frame_support::{pallet_prelude::DispatchResult, traits::OriginTrait};
+use frame_support::{instances::Instance1, pallet_prelude::DispatchResult, traits::OriginTrait};
 
 trait TestChainTracking {
 	fn test_chain_tracking_update(
@@ -53,14 +53,32 @@ fn chain_tracking_can_only_advance() {
 
 	new_test_ext()
 		.test_chain_tracking_update(START_BLOCK, Ok(()))
-		.test_chain_tracking_update(START_BLOCK, Err(Error::<Test>::StaleDataSubmitted.into()))
-		.test_chain_tracking_update(START_BLOCK - 1, Err(Error::<Test>::StaleDataSubmitted.into()))
+		.test_chain_tracking_update(
+			START_BLOCK,
+			Err(Error::<Test, Instance1>::StaleDataSubmitted.into()),
+		)
+		.test_chain_tracking_update(
+			START_BLOCK - 1,
+			Err(Error::<Test, Instance1>::StaleDataSubmitted.into()),
+		)
 		.test_chain_tracking_update(START_BLOCK + 1, Ok(()))
-		.test_chain_tracking_update(START_BLOCK, Err(Error::<Test>::StaleDataSubmitted.into()))
-		.test_chain_tracking_update(START_BLOCK + 1, Err(Error::<Test>::StaleDataSubmitted.into()))
+		.test_chain_tracking_update(
+			START_BLOCK,
+			Err(Error::<Test, Instance1>::StaleDataSubmitted.into()),
+		)
+		.test_chain_tracking_update(
+			START_BLOCK + 1,
+			Err(Error::<Test, Instance1>::StaleDataSubmitted.into()),
+		)
 		.test_chain_tracking_update(START_BLOCK + 2, Ok(()))
 		// We can skip ahead but then we can't go back again
 		.test_chain_tracking_update(START_BLOCK + 10, Ok(()))
-		.test_chain_tracking_update(START_BLOCK + 10, Err(Error::<Test>::StaleDataSubmitted.into()))
-		.test_chain_tracking_update(START_BLOCK + 9, Err(Error::<Test>::StaleDataSubmitted.into()));
+		.test_chain_tracking_update(
+			START_BLOCK + 10,
+			Err(Error::<Test, Instance1>::StaleDataSubmitted.into()),
+		)
+		.test_chain_tracking_update(
+			START_BLOCK + 9,
+			Err(Error::<Test, Instance1>::StaleDataSubmitted.into()),
+		);
 }
