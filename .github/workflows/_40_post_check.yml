@@ -84,14 +84,13 @@ jobs:
           touch ./localnet/.setup_complete
           ./localnet/manage.sh
 
-      - name: Run EinfachHeuteLeiderNicht.exe ✋
+      - name: Run HeuteLeiderNicht.voll.exe 🙅‍♂️
         if: inputs.full_bouncer
         working-directory: bouncer
         run: |
           ./full_bouncer.sh
 
-      - name: Run HeuteLeiderNicht.exe 🙅‍♂️
-        id: heuteleidernicht
+      - name: Run HeuteLeiderNicht.einfach.exe 🦺
         if: ${{ ! inputs.full_bouncer }}
         working-directory: bouncer
         run: |
