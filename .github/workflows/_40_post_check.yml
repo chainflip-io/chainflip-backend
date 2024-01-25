@@ -47,21 +47,21 @@ jobs:
           pnpm set @chainflip-io:registry=https://npm.pkg.github.com/
           pnpm set //npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install system packages
+      - name: Install system packages 💿
         run: |
           sudo apt update
           sudo apt install -y bc xxd
 
-      - name: Install wscat
+      - name: Install wscat 🐈
         run: |
           npm install -g wscat
 
-      - name: Download binaries
+      - name: Download binaries 📥
         uses: actions/download-artifact@7a1cd3216ca9260cd8022db641d960b1db4d1be4
         with:
           name: chainflip-backend-bin-ubuntu-22.04
 
-      - name: Install node dependencies
+      - name: Install node dependencies 📦
         working-directory: bouncer
         run: pnpm install
 
@@ -69,7 +69,7 @@ jobs:
         run: |
           sh -c "$(curl -sSfL https://release.solana.com/v1.17.16/install)"
 
-      - name: Start a localnet
+      - name: Start a localnet 🚀
         env:
           BINARY_ROOT_PATH: .
           DEBUG_OUTPUT_DESTINATION: /tmp/chainflip/debug.log
@@ -79,7 +79,6 @@ jobs:
           mkdir -p /tmp/chainflip/bashful
           mkdir -p /tmp/chainflip/doc
           mkdir -p /tmp/chainflip/dopey
-          mkdir -p /tmp/chainflip/
           touch /tmp/chainflip/debug.log
           chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
           touch ./localnet/.setup_complete
@@ -89,38 +88,43 @@ jobs:
         working-directory: bouncer
         run: ./commands/send_arb.ts 0x41aD2bc63A2059f9b623533d87fe99887D794847 1
 
-      - name: Run EinfachHeuteLeiderNicht.exe
+      - name: Run EinfachHeuteLeiderNicht.exe ✋
         if: inputs.full_bouncer
         working-directory: bouncer
         run: |
           ./full_bouncer.sh
 
-      # - name: Run HeuteLeiderNicht.exe
+      # - name: Run HeuteLeiderNicht.exe 🙅‍♂️
       #   id: heuteleidernicht
       #   if: ${{ ! inputs.full_bouncer }}
       #   working-directory: bouncer
       #   run: |
       #     ./run.sh
 
-      - name: Print chainflip-engine logs
+      - name: Print chainflip-engine logs 🚗
         if: failure()
         run: |
           cat /tmp/chainflip/*/chainflip-engine.log
 
-      - name: Print chainflip-node logs
+      - name: Print chainflip-node logs 📡
         if: failure()
         run: |
           cat /tmp/chainflip/*/chainflip-node.log
 
-      - name: Print chainflip-broker-api logs
+      - name: Print chainflip-broker-api logs 💼
         if: failure()
         run: |
           cat /tmp/chainflip/chainflip-broker-api.log
 
-      - name: Print chainflip-lp-api logs
+      - name: Print chainflip-lp-api logs 🤑
         if: failure()
         run: |
           cat /tmp/chainflip/chainflip-lp-api.log
+
+      - name: Print localnet init debug logs 🕵️‍♂️
+        if: failure()
+        run: |
+          cat /tmp/chainflip/debug.log
 
       - name: Upload Localnet Logs 💾
         if: always()
@@ -133,12 +137,12 @@ jobs:
             /tmp/chainflip/chainflip-*.log
             /tmp/chainflip/debug.log
 
-      - name: List /tmp/cainflip
+      - name: List /tmp/cainflip 📂
         if: always()
         continue-on-error: true
         run: ls -alR /tmp/chainflip
 
-      - name: Show logs from docker containers
+      - name: Show logs from docker containers 🐳🕵️‍♂️
         if: always()
         continue-on-error: true
         run: docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs
@@ -149,7 +153,7 @@ jobs:
         run: |
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --rmi all --volumes --remove-orphans
 
-      - name: Notify on failed bouncer
+      - name: Notify on failed bouncer 📢
         if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main'
         env:
           DISCORD_USERNAME: "HEUTE LEIDER NICHT"

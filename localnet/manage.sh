@@ -98,7 +98,10 @@ build-localnet() {
 
   echo "🔮 Initializing Network"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
-
+  if [[ $CI == true ]]; then
+    echo "🦺 Updating init state ownership ..."
+    chown -R runner:runner /tmp/chainflip/data
+  fi
   echo "🏗 Building network"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $CORE_CONTAINERS -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
 
@@ -235,7 +238,7 @@ yeet() {
 
 logs() {
   echo "🤖 Which service would you like to tail?"
-  select SERVICE in node engine broker lp polkadot geth bitcoin solana poster sequencer staker all; do
+  select SERVICE in node engine broker lp polkadot geth bitcoin solana poster sequencer staker debug all; do
     if [[ $SERVICE == "all" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow
       tail -f /tmp/chainflip/chainflip-*.log
@@ -271,6 +274,9 @@ logs() {
     fi
     if [[ $SERVICE == "solana" ]]; then
       tail -f /tmp/solana/solana.log
+    fi
+    if [[ $SERVICE == "debug" ]]; then
+      cat /tmp/chainflip/debug.log
     fi
     break
   done
