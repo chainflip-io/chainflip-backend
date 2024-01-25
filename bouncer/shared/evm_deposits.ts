@@ -20,24 +20,23 @@ import { getCFTesterAbi } from './eth_abis';
 
 const cfTesterAbi = await getCFTesterAbi();
 
-async function testDepositEthereum(sourceAsset: Asset, destAsset: Asset) {
+async function testDepositEvm(sourceAsset: Asset, destAsset: Asset) {
   const swapParams = await testSwap(
     sourceAsset,
     destAsset,
     undefined,
     undefined,
-    ' EthereumDepositTest',
+    ' EvmDepositTest',
   );
 
   // Check the Deposit contract is deployed. It is assumed that the funds are fetched immediately.
   await observeFetch(sourceAsset, swapParams.depositAddress);
 
-  await doPerformSwap(swapParams, `[${sourceAsset}->${destAsset} EthereumDepositTest2]`);
+  await doPerformSwap(swapParams, `[${sourceAsset}->${destAsset} EvmDepositTest2]`);
 }
 
-async function testSuccessiveDeposits(destAsset: Asset) {
+async function testSuccessiveNativeDeposits(sourceAsset: Asset, destAsset: Asset) {
   let stopObserving = false;
-  const sourceAsset = 'ETH';
 
   const swapParams = await testSwap(
     sourceAsset,
@@ -135,19 +134,16 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
   await observingEvent;
 }
 
-export async function testEthereumDeposits() {
-  console.log('=== Testing Ethereum Deposits ===');
+export async function testEvmDeposits() {
+  console.log('=== Testing EVM Deposits ===');
 
-  const depositTests = Promise.all([
-    testDepositEthereum('ETH', 'DOT'),
-    testDepositEthereum('FLIP', 'BTC'),
-  ]);
+  const depositTests = Promise.all([testDepositEvm('ETH', 'DOT'), testDepositEvm('FLIP', 'BTC')]);
 
   const duplicatedDepositTest = Promise.all([
-    testSuccessiveDeposits('DOT'),
-    testSuccessiveDeposits('BTC'),
-    testSuccessiveDeposits('FLIP'),
-    testSuccessiveDeposits('USDC'),
+    testSuccessiveNativeDeposits('ETH', 'DOT'),
+    testSuccessiveNativeDeposits('ETH', 'BTC'),
+    testSuccessiveNativeDeposits('ETH', 'FLIP'),
+    testSuccessiveNativeDeposits('ETH', 'USDC'),
   ]);
 
   const multipleTxSwapsTest = Promise.all([
@@ -157,5 +153,5 @@ export async function testEthereumDeposits() {
 
   await Promise.all([depositTests, duplicatedDepositTest, multipleTxSwapsTest]);
 
-  console.log('=== Ethereum Deposit Test completed ===');
+  console.log('=== EVM Deposit Test completed ===');
 }
