@@ -77,7 +77,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 		// Migrate Timeouts: Map<Block -> Vec<BroadcastAttemptId>> -> Map<Block ->
 		// BTreeSet<(BroadcastId, ValidatorId>>
-		Timeouts::<T, I>::translate(|_, failed_attempts: Vec<old::BroadcastAttemptId>| {
+		Timeouts::<T, I>::translate(|_block, failed_attempts: Vec<old::BroadcastAttemptId>| {
 			Some(
 				failed_attempts
 					.into_iter()
@@ -180,14 +180,10 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 		// Ensure Timeouts data are migrated
 		timeout_broadcasts.into_iter().for_each(|(block_number, attempts)| {
-			// Assert the pre- and post- migrated data is identical.
-			assert_eq!(
-				attempts,
-				Timeouts::<T, I>::get(block_number)
-					.into_iter()
-					.map(|(broadcast_id, _nominee)| broadcast_id)
-					.collect::<BTreeSet<_>>()
-			);
+			// Calls without call data (already succeded) is excluded. New set <= old set
+			Timeouts::<T, I>::get(block_number)
+				.into_iter()
+				.for_each(|(broadcast_id, _nominee)| assert!(attempts.contains(&broadcast_id)))
 		});
 
 		Ok(())
