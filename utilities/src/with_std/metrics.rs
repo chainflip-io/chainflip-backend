@@ -405,8 +405,8 @@ lazy_static::lazy_static! {
 }
 
 build_gauge_vec!(
-	UNAUTHORIZED_CEREMONY,
-	"cfe_unauthorized_ceremony",
+	UNAUTHORIZED_CEREMONIES,
+	"cfe_unauthorized_ceremonies",
 	"Gauge keeping track of the number of unauthorized ceremony currently awaiting authorisation",
 	["chain", "type"]
 );
@@ -417,7 +417,7 @@ build_gauge_vec!(
 	["chain"]
 );
 build_gauge_vec!(
-	AUTHORIZED_CEREMONY,
+	AUTHORIZED_CEREMONIES,
 	"cfe_authorized_ceremonies",
 	"Gauge keeping track of the number of ceremonies currently running",
 	["chain", "type"]
