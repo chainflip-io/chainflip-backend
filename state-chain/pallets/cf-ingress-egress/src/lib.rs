@@ -378,6 +378,7 @@ pub mod pallet {
 	/// Defines the minimum amount for a single egress i.e. *not* of a batch, but the outputs of
 	/// each individual egress within that batch.
 	#[pallet::storage]
+	#[pallet::getter(fn minimum_egress)]
 	pub type MinimumEgress<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, TargetChainAmount<T, I>, ValueQuery>;
 

@@ -1191,6 +1191,26 @@ impl_runtime_apis! {
 			}
 		}
 
+		fn cf_min_egress_amount(asset: Asset) -> AssetAmount {
+			use pallet_cf_ingress_egress::MinimumEgress;
+			use cf_chains::assets::{eth, dot, btc};
+
+			match ForeignChain::from(asset) {
+				ForeignChain::Ethereum => MinimumEgress::<Runtime, EthereumInstance>::get(
+					eth::Asset::try_from(asset)
+						.expect("Conversion must succeed: ForeignChain checked in match clause.")
+				),
+				ForeignChain::Polkadot => MinimumEgress::<Runtime, PolkadotInstance>::get(
+					dot::Asset::try_from(asset)
+						.expect("Conversion must succeed: ForeignChain checked in match clause.")
+				),
+				ForeignChain::Bitcoin => MinimumEgress::<Runtime, BitcoinInstance>::get(
+					btc::Asset::try_from(asset)
+						.expect("Conversion must succeed: ForeignChain checked in match clause.")
+				).into(),
+			}
+		}
+
 		fn cf_ingress_fee(asset: Asset) -> AssetAmount {
 			match ForeignChain::from(asset) {
 				ForeignChain::Ethereum => pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::get_tracked_data()
