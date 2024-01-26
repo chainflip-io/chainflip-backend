@@ -196,6 +196,7 @@ pub mod pallet {
 		Swap { swap_id: SwapId },
 		LiquidityProvision { lp_account: AccountId },
 		CcmTransfer { principal_swap_id: Option<SwapId>, gas_swap_id: Option<SwapId> },
+		NoAction,
 	}
 
 	#[derive(
@@ -1068,7 +1069,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					channel_metadata,
 					..
 				} => {
-					let (principal_swap_id, gas_swap_id) = T::CcmHandler::on_ccm_deposit(
+					if let Ok((principal_swap_id, gas_swap_id)) = T::CcmHandler::on_ccm_deposit(
 						asset.into(),
 						amount_after_fees.into(),
 						destination_asset,
@@ -1085,8 +1086,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							channel_id,
 							deposit_block_height: block_height.into(),
 						},
-					);
-					DepositAction::CcmTransfer { principal_swap_id, gas_swap_id }
+					) {
+						DepositAction::CcmTransfer { principal_swap_id, gas_swap_id }
+					} else {
+						DepositAction::NoAction
+					}
 				},
 			};
 

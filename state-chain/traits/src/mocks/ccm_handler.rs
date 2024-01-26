@@ -37,7 +37,7 @@ impl CcmHandler for MockCcmHandler {
 		destination_address: ForeignChainAddress,
 		deposit_metadata: CcmDepositMetadata,
 		origin: SwapOrigin,
-	) -> (Option<u64>, Option<u64>) {
+	) -> Result<(Option<u64>, Option<u64>), ()> {
 		<Self as MockPalletStorage>::mutate_value(CCM_HANDLER_PREFIX, |ccm_requests| {
 			if ccm_requests.is_none() {
 				*ccm_requests = Some(vec![]);
@@ -55,6 +55,6 @@ impl CcmHandler for MockCcmHandler {
 		});
 
 		// TODO: Return real ids
-		(Some(1), Some(2))
+		Ok((Some(1), Some(2)))
 	}
 }

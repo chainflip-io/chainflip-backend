@@ -787,6 +787,7 @@ pub trait NetworkEnvironmentProvider {
 /// Trait for handling cross chain messages.
 pub trait CcmHandler {
 	/// Triggered when a ccm deposit is made.
+	#[allow(clippy::result_unit_err)]
 	fn on_ccm_deposit(
 		source_asset: Asset,
 		deposit_amount: AssetAmount,
@@ -794,7 +795,7 @@ pub trait CcmHandler {
 		destination_address: ForeignChainAddress,
 		deposit_metadata: CcmDepositMetadata,
 		origin: SwapOrigin,
-	) -> (Option<u64>, Option<u64>);
+	) -> Result<(Option<u64>, Option<u64>), ()>;
 }
 
 impl CcmHandler for () {
@@ -805,8 +806,8 @@ impl CcmHandler for () {
 		_destination_address: ForeignChainAddress,
 		_deposit_metadata: CcmDepositMetadata,
 		_origin: SwapOrigin,
-	) -> (Option<u64>, Option<u64>) {
-		(None, None)
+	) -> Result<(Option<u64>, Option<u64>), ()> {
+		Err(())
 	}
 }
 

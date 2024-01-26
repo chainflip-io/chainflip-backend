@@ -615,7 +615,7 @@ pub mod pallet {
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, destination_asset)?;
 
-			Self::on_ccm_deposit(
+			let _ = Self::on_ccm_deposit(
 				source_asset,
 				deposit_amount,
 				destination_asset,
@@ -961,7 +961,7 @@ pub mod pallet {
 			deposit_metadata: CcmDepositMetadata,
 			origin: SwapOrigin,
 			// TODO: Struct?
-		) -> (Option<u64>, Option<u64>) {
+		) -> Result<(Option<u64>, Option<u64>), ()> {
 			let encoded_destination_address =
 				T::AddressConverter::to_encoded_address(destination_address.clone());
 			// Caller should ensure that assets and addresses are compatible.
@@ -986,8 +986,7 @@ pub mod pallet {
 							destination_address: encoded_destination_address,
 							deposit_metadata,
 						});
-						// TODO: Return error here?
-						return (None, None)
+						return Err(())
 					},
 				};
 
@@ -1071,7 +1070,7 @@ pub mod pallet {
 				CcmOutputs::<T>::insert(ccm_id, swap_output);
 			}
 
-			(principal_swap_id, gas_swap_id)
+			Ok((principal_swap_id, gas_swap_id))
 		}
 	}
 }
