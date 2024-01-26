@@ -76,6 +76,11 @@ pub enum DepositIgnoredReason {
 	NotEnoughToPayFees,
 }
 
+#[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
+pub enum EgressIgnoredReason {
+	BelowMinimumEgress,
+}
+
 /// Cross-chain messaging requests.
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub(crate) struct CrossChainMessage<C: Chain> {
@@ -476,6 +481,7 @@ pub mod pallet {
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
 			destination_address: TargetChainAccount<T, I>,
+			reason: EgressIgnoredReason,
 		},
 		TransferFallbackRequested {
 			asset: TargetChainAsset<T, I>,
@@ -916,6 +922,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							asset,
 							amount,
 							destination_address,
+							reason: EgressIgnoredReason::BelowMinimumEgress,
 						});
 					},
 			}
