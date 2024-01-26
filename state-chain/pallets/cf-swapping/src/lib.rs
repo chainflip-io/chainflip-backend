@@ -336,10 +336,6 @@ pub mod pallet {
 			total_amount: AssetAmount,
 			confiscated_amount: AssetAmount,
 		},
-		/// The swap has been executed, but has led to a zero egress amount.
-		EgressAmountZero {
-			swap_id: SwapId,
-		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -406,26 +402,21 @@ pub mod pallet {
 						});
 						// Handle swap completion logic.
 						match &swap.swap_type {
-							SwapType::Swap(destination_address) =>
-								if !egress_amount.is_zero() {
-									let egress_id = T::EgressHandler::schedule_egress(
-										swap.to,
-										egress_amount,
-										destination_address.clone(),
-										None,
-									);
+							SwapType::Swap(destination_address) => {
+								let egress_id = T::EgressHandler::schedule_egress(
+									swap.to,
+									egress_amount,
+									destination_address.clone(),
+									None,
+								);
 
-									Self::deposit_event(Event::<T>::SwapEgressScheduled {
-										swap_id: swap.swap_id,
-										egress_id,
-										asset: swap.to,
-										amount: egress_amount,
-									});
-								} else {
-									Self::deposit_event(Event::<T>::EgressAmountZero {
-										swap_id: swap.swap_id,
-									})
-								},
+								Self::deposit_event(Event::<T>::SwapEgressScheduled {
+									swap_id: swap.swap_id,
+									egress_id,
+									asset: swap.to,
+									amount: egress_amount,
+								});
+							},
 							SwapType::CcmPrincipal(ccm_id) => {
 								Self::handle_ccm_swap_result(
 									*ccm_id,

@@ -375,6 +375,12 @@ pub mod pallet {
 	pub type MinimumDeposit<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, TargetChainAmount<T, I>, ValueQuery>;
 
+	/// Defines the minimum amount for a single egress i.e. *not* of a batch, but the outputs of
+	/// each individual egress within that batch.
+	#[pallet::storage]
+	pub type MinimumEgress<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, TargetChainAmount<T, I>, ValueQuery>;
+
 	#[pallet::storage]
 	pub type DepositChannelLifetime<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, TargetChainBlockNumber<T, I>, ValueQuery>;
@@ -463,6 +469,12 @@ pub mod pallet {
 			amount: TargetChainAmount<T, I>,
 			deposit_details: <T::TargetChain as Chain>::DepositDetails,
 			reason: DepositIgnoredReason,
+		},
+		EgressIgnored {
+			egress_id: EgressId,
+			asset: TargetChainAsset<T, I>,
+			amount: TargetChainAmount<T, I>,
+			destination_address: TargetChainAccount<T, I>,
 		},
 		TransferFallbackRequested {
 			asset: TargetChainAsset<T, I>,
@@ -864,7 +876,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let mut fetch_params = vec![];
 		let mut transfer_params = vec![];
-		let mut egress_ids = vec![];
+		let mut egress_ids_to_broadcast = vec![];
 		let mut addresses = vec![];
 
 		for request in batch_to_send {
@@ -889,14 +901,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					amount,
 					destination_address,
 					egress_id,
-				} => {
-					egress_ids.push(egress_id);
-					transfer_params.push(TransferAssetParams {
-						asset,
-						amount,
-						to: destination_address,
-					});
-				},
+				} =>
+					if amount > MinimumEgress::<T, I>::get(asset) {
+						egress_ids_to_broadcast.push(egress_id);
+						transfer_params.push(TransferAssetParams {
+							asset,
+							amount,
+							to: destination_address,
+						});
+					} else {
+						Self::deposit_event(Event::<T, I>::EgressIgnored {
+							egress_id,
+							asset,
+							amount,
+							destination_address,
+						});
+					},
 			}
 		}
 
@@ -913,7 +933,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				);
 				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
 					broadcast_id,
-					egress_ids,
+					egress_ids: egress_ids_to_broadcast,
 				});
 				TransactionOutcome::Commit(Ok(()))
 			},

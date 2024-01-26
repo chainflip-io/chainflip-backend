@@ -55,6 +55,8 @@ where
 	}
 }
 
+// NB: A Bitcoin transaction containing a UTXO below the dust limit will fail to be included by a
+// block. Therefore, we do not include UTXOs below the dust limit in the transaction.
 impl<E> AllBatch<Bitcoin> for BitcoinApi<E>
 where
 	E: ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount>
