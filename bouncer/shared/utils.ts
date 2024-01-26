@@ -3,7 +3,14 @@ import { setTimeout as sleep } from 'timers/promises';
 import Client from 'bitcoin-core';
 import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
 import { Mutex } from 'async-mutex';
-import { Chain, Asset, assetChains, chainContractIds, assetDecimals } from '@chainflip-io/cli';
+import {
+  Chain,
+  Asset,
+  assetChains,
+  chainContractIds,
+  assetDecimals,
+  Assets,
+} from '@chainflip-io/cli';
 import Web3 from 'web3';
 import { u8aToHex } from '@polkadot/util';
 import { newDotAddress } from './new_dot_address';
@@ -204,7 +211,7 @@ export async function observeEvent(
   return result as Event;
 }
 
-type EgressId = [Chain, number];
+export type EgressId = [Chain, number];
 type BroadcastId = [Chain, number];
 // Observe multiple events related to the same swap that could be emitted in the same block
 export async function observeSwapEvents(
@@ -375,15 +382,15 @@ export async function newAddress(
   let rawAddress;
 
   switch (asset) {
-    case 'FLIP':
-    case 'ETH':
-    case 'USDC':
+    case Assets.FLIP:
+    case Assets.ETH:
+    case Assets.USDC:
       rawAddress = newEthAddress(seed);
       break;
-    case 'DOT':
+    case Assets.DOT:
       rawAddress = await newDotAddress(seed);
       break;
-    case 'BTC':
+    case Assets.BTC:
       rawAddress = await newBtcAddress(seed, type ?? 'P2PKH');
       break;
     default:
@@ -399,6 +406,21 @@ export function chainFromAsset(asset: Asset): Chain {
   }
 
   throw new Error('unexpected asset');
+}
+
+export function chainShortNameFromAsset(asset: Asset): string {
+  switch (asset) {
+    case Assets.FLIP:
+    case Assets.ETH:
+    case Assets.USDC:
+      return 'Eth';
+    case Assets.DOT:
+      return 'Dot';
+    case Assets.BTC:
+      return 'Btc';
+    default:
+      throw new Error('unexpected asset');
+  }
 }
 
 export async function observeBalanceIncrease(
