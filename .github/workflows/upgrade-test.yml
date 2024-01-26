@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       upgrade-from-release:
-        description: 'This will either by "perseverance" or "berghain"'
+        description: 'The release we want to upgrade *from*: "perseverance" or "berghain"'
         required: true
         default: 'perseverance'
       upgrade-to-workflow-name:
