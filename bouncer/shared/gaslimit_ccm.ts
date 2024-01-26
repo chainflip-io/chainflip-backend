@@ -216,7 +216,7 @@ async function testGasLimitSwap(
         egressIdToBroadcastId[swapIdToEgressId[swapId]]
       }`,
     );
-  } else if (minGasLimitRequired < gasLimitBudget) {
+  } else if (minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER < gasLimitBudget) {
     console.log(`${tag} Gas budget ${gasLimitBudget}. Expecting successful broadcast.`);
 
     // Check that broadcast is not aborted
