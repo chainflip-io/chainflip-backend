@@ -515,7 +515,6 @@ fn can_egress_ccm() {
 	new_test_ext().execute_with(|| {
 		let destination_address: H160 = [0x01; 20].into();
 		let destination_asset = eth::Asset::Eth;
-		
 		const GAS_BUDGET: u128 = 1_000;
 		let ccm = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
@@ -526,6 +525,8 @@ fn can_egress_ccm() {
 				cf_parameters: vec![].try_into().unwrap(),
 			}
 		};
+
+
 		let amount = 5_000;
 		let egress_id = IngressEgress::schedule_egress(
 			destination_asset,
