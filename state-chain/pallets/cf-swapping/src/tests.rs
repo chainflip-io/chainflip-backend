@@ -1361,17 +1361,20 @@ fn can_handle_swaps_with_zero_outputs() {
 					egress_amount: 0,
 					..
 				}),
+				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_id: 1, amount: 0, .. }),
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					swap_id: 2,
 					destination_asset: Asset::Eth,
 					egress_amount: 0,
 					..
 				}),
+				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_id: 2, amount: 0, .. }),
 			);
 
-			// Swaps are not egressed when output is 0.
 			assert_eq!(SwapQueue::<Test>::decode_len(), None);
-			assert_eq!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().len(), 0);
+			// Egress is still scheduled when egress is 0, they are filtered within the
+			// ingress-egress pallet.
+			assert_eq!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().len(), 2);
 		});
 }
 
