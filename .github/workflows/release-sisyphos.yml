@@ -3,7 +3,6 @@ on:
   push:
     branches:
       - 'release/[0-9]+.[0-9]+'
-      - feat/upgrade-test-release
 
 concurrency:
   group: ${{ github.ref }}-release-sisyphos
