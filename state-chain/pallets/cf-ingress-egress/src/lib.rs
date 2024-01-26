@@ -429,6 +429,8 @@ pub mod pallet {
 			// This amount includes the egress fee.
 			amount: AssetAmount,
 			destination_address: TargetChainAccount<T, I>,
+			// In the case of CCM this egress fee is already reserved as the "gas budget" so it's
+			// not taken from the principal amount.
 			egress_fee: TargetChainAmount<T, I>,
 		},
 		CcmBroadcastRequested {
