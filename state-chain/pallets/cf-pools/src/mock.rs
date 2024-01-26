@@ -119,6 +119,8 @@ impl LpBalanceApi for MockBalance {
 		}
 		Ok(())
 	}
+
+	fn record_fees(who: &Self::AccountId, amount: AssetAmount) {}
 }
 
 impl_mock_runtime_safe_mode!(pools: PalletSafeMode);

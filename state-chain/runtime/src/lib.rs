@@ -1266,9 +1266,12 @@ impl_runtime_apis! {
 				(asset, pallet_cf_lp::FreeBalances::<Runtime>::get(&account_id, asset).unwrap_or(0))
 			).collect();
 
+			let earned_fees = pallet_cf_lp::HistoricalEarnedFees::<Runtime>::get(&account_id);
+
 			Some(LiquidityProviderInfo {
 				refund_addresses,
 				balances,
+				earned_fees,
 			})
 		}
 

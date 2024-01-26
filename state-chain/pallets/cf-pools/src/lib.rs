@@ -1515,6 +1515,7 @@ impl<T: Config> Pallet<T> {
 				.try_map(|(asset, collected_fees)| {
 					AssetAmount::try_from(collected_fees).map_err(Into::into).and_then(
 						|collected_fees| {
+							T::LpBalance::record_fees(lp, collected_fees);
 							T::LpBalance::try_credit_account(lp, asset, collected_fees)
 								.map(|()| collected_fees)
 						},
@@ -1943,6 +1944,7 @@ impl<T: Config> Pallet<T> {
 		amount_change: IncreaseOrDecrease<AssetAmount>,
 	) -> DispatchResult {
 		let collected_fees: AssetAmount = collected.fees.try_into()?;
+		T::LpBalance::record_fees(lp, collected_fees);
 		T::LpBalance::try_credit_account(
 			lp,
 			asset_pair.assets()[(!order.to_sold_side()).into()],

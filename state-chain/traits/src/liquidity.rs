@@ -45,7 +45,7 @@ pub trait LpBalanceApi {
 		amount: AssetAmount,
 	) -> DispatchResult;
 
-	fn record_fees(amount: AssetAmount);
+	fn record_fees(who: &Self::AccountId, amount: AssetAmount);
 }
 
 pub trait PoolApi {

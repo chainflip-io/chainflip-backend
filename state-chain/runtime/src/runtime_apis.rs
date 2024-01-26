@@ -75,6 +75,7 @@ pub struct AuctionState {
 pub struct LiquidityProviderInfo {
 	pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
 	pub balances: Vec<(Asset, AssetAmount)>,
+	pub earned_fees: AssetAmount,
 }
 
 #[derive(Debug, Decode, Encode, TypeInfo)]

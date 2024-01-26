@@ -3,7 +3,7 @@ use crate::{
 	CollectedNetworkFee, Error, Event, FlipBuyInterval, FlipToBurn, LimitOrder, PoolInfo,
 	PoolOrders, Pools, RangeOrder, RangeOrderSize, ScheduledLimitOrderUpdates, STABLE_ASSET,
 };
-use cf_amm::common::{price_at_tick, tick_at_price, Order, Tick, PRICE_FRACTIONAL_BITS};
+use cf_amm::common::{price_at_tick, tick_at_price, Order, SideMap, Tick, PRICE_FRACTIONAL_BITS};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount, SwapOutput};
 use cf_test_utilities::{assert_events_match, assert_has_event, last_event};
 use cf_traits::AssetConverter;
@@ -414,11 +414,15 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 				limit_order_fee_hundredth_pips: new_fee,
 				range_order_fee_hundredth_pips: new_fee,
 				range_order_total_fees_earned: Default::default(),
-				limit_order_total_fees_earned: Default::default(),
+				limit_order_total_fees_earned: SideMap {
+					zero: U256::from(4000),
+					one: U256::from(3992)
+				},
 				range_total_swap_inputs: Default::default(),
-				limit_total_swap_inputs: Default::default(),
+				limit_total_swap_inputs: SideMap { zero: U256::from(6000), one: U256::from(5988) },
 			})
 		);
+
 		System::assert_has_event(RuntimeEvent::LiquidityPools(Event::<Test>::PoolFeeSet {
 			base_asset: Asset::Eth,
 			quote_asset: STABLE_ASSET,

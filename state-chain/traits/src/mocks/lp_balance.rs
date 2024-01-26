@@ -36,4 +36,6 @@ impl LpBalanceApi for MockBalance {
 	) -> DispatchResult {
 		Ok(())
 	}
+
+	fn record_fees(who: &Self::AccountId, amount: AssetAmount) {}
 }

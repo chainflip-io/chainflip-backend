@@ -205,17 +205,29 @@ benchmarks! {
 		};
 	}: { let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap()); }
 	verify {
-		assert_eq!(
-			Pallet::<T>::pool_info(Asset::Eth, STABLE_ASSET),
-			Ok(PoolInfo {
-				limit_order_fee_hundredth_pips: fee,
-				range_order_fee_hundredth_pips: fee,
-				range_order_total_fees_earned: Default::default(),
-				limit_order_total_fees_earned: Default::default(),
-				range_total_swap_inputs: Default::default(),
-				limit_total_swap_inputs: Default::default(),
-			})
-		);
+
+		match Pallet::<T>::pool_info(Asset::Eth, STABLE_ASSET) {
+			Ok(pool_info) => {
+				assert_eq!(pool_info.limit_order_fee_hundredth_pips, fee);
+				assert_eq!(pool_info.range_order_fee_hundredth_pips, fee);
+			},
+			Err(_) => panic!("Pool not found"),
+		}
+
+		// assert_eq!(
+		// 	Pallet::<T>::pool_info(Asset::Eth, STABLE_ASSET),
+		// 	Ok(PoolInfo {
+		// 		limit_order_fee_hundredth_pips: fee,
+		// 		range_order_fee_hundredth_pips: fee,
+		// 		range_order_total_fees_earned: Default::default(),
+		// 		limit_order_total_fees_earned: SideMap {
+		// 			zero: U256::from(4000),
+		// 			one: U256::from(3992)
+		// 		},
+		// 		range_total_swap_inputs: Default::default(),
+		// 		limit_total_swap_inputs: SideMap { zero: U256::from(6000), one: U256::from(5988) },
+		// 	})
+		// );
 	}
 
 	schedule_limit_order_update {

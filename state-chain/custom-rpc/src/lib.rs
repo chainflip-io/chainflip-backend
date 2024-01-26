@@ -107,6 +107,7 @@ pub enum RpcAccountInfo {
 		balances: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
 		refund_addresses: HashMap<ForeignChain, Option<ForeignChainAddressHumanreadable>>,
 		flip_balance: NumberOrHex,
+		earned_fees: AssetAmount,
 	},
 	Validator {
 		flip_balance: NumberOrHex,
@@ -152,6 +153,7 @@ impl RpcAccountInfo {
 				.into_iter()
 				.map(|(chain, address)| (chain, address.map(|a| a.to_humanreadable(network))))
 				.collect(),
+			earned_fees: info.earned_fees,
 		}
 	}
 
@@ -1303,6 +1305,7 @@ mod test {
 					(Asset::Btc, 0),
 					(Asset::Flip, u128::MAX / 2),
 				],
+				earned_fees: 0,
 			},
 			cf_primitives::NetworkEnvironment::Mainnet,
 			0,
