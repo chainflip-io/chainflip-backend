@@ -1,4 +1,5 @@
 use cf_chains::Chain;
+use cf_primitives::SwapId;
 
 use crate::{EgressApi, SwapDepositHandler};
 
@@ -21,14 +22,13 @@ where
 		_broker_id: Self::AccountId,
 		_broker_commission_bps: cf_primitives::BasisPoints,
 		_channel_id: cf_primitives::ChannelId,
-	) -> u64 {
+	) -> SwapId {
 		E::schedule_egress(
 			to.try_into().unwrap_or_else(|_| panic!("Unable to convert")),
 			amount.try_into().unwrap_or_else(|_| panic!("Unable to convert")),
 			destination_address.try_into().unwrap_or_else(|_| panic!("Unable to convert")),
 			None,
 		);
-		// TODO: Returna  real id
 		1
 	}
 }

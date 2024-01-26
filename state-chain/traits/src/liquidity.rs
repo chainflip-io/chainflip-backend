@@ -1,5 +1,5 @@
 use cf_chains::address::ForeignChainAddress;
-use cf_primitives::{Asset, AssetAmount, BasisPoints, ChannelId};
+use cf_primitives::{Asset, AssetAmount, BasisPoints, ChannelId, SwapId};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 
 pub trait SwapDepositHandler {
@@ -16,7 +16,7 @@ pub trait SwapDepositHandler {
 		broker_id: Self::AccountId,
 		broker_commission_bps: BasisPoints,
 		channel_id: ChannelId,
-	) -> u64;
+	) -> SwapId;
 }
 
 pub trait LpDepositHandler {

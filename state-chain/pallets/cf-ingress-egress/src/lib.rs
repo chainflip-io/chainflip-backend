@@ -25,7 +25,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex,
-	ForeignChain, ThresholdSignatureRequestId,
+	ForeignChain, SwapId, ThresholdSignatureRequestId,
 };
 use cf_traits::{
 	liquidity::{LpBalanceApi, LpDepositHandler},
@@ -193,10 +193,9 @@ pub mod pallet {
 	/// particular deposit.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub enum DepositAction<AccountId> {
-		// TODO: use a SwapId alias
-		Swap { swap_id: u64 },
+		Swap { swap_id: SwapId },
 		LiquidityProvision { lp_account: AccountId },
-		CcmTransfer { principal_swap_id: Option<u64>, gas_swap_id: Option<u64> },
+		CcmTransfer { principal_swap_id: Option<SwapId>, gas_swap_id: Option<SwapId> },
 	}
 
 	#[derive(
