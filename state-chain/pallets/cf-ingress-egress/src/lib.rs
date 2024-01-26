@@ -165,6 +165,11 @@ pub mod pallet {
 		Egress,
 	}
 
+	pub struct AmountFeesWithheld<T: Config<I>, I: 'static> {
+		pub amount_after_fees: TargetChainAmount<T, I>,
+		pub fees_withheld: TargetChainAmount<T, I>,
+	}
+
 	/// Determines the action to take when a deposit is made to a channel.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub enum ChannelAction<AccountId> {
@@ -1002,11 +1007,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 		Self::deposit_event(Event::<T, I>::DepositFetchesScheduled { channel_id, asset });
 
-		let (net_deposit_amount, ingress_fee) = Self::withhold_transaction_fee(
-			IngressOrEgress::Ingress,
-			deposit_channel_details.deposit_channel.asset,
-			deposit_amount,
-		);
+		let AmountFeesWithheld { amount_after_fees, fees_withheld: ingress_fee } =
+			Self::withhold_transaction_fee(
+				IngressOrEgress::Ingress,
+				deposit_channel_details.deposit_channel.asset,
+				deposit_amount,
+			);
 
 		// Add the deposit to the balance.
 		T::DepositHandler::on_deposit_made(
@@ -1015,10 +1021,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			deposit_channel_details.deposit_channel,
 		);
 		DepositBalances::<T, I>::mutate(asset, |deposits| {
-			deposits.register_deposit(net_deposit_amount)
+			deposits.register_deposit(deposit_amount)
 		});
 
-		if net_deposit_amount.is_zero() {
+		if amount_after_fees.is_zero() {
 			Self::deposit_event(Event::<T, I>::DepositIgnored {
 				deposit_address,
 				asset,
@@ -1032,7 +1038,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					T::LpBalance::add_deposit(
 						&lp_account,
 						asset.into(),
-						net_deposit_amount.into(),
+						amount_after_fees.into(),
 						ingress_fee.into(),
 					)?;
 
@@ -1050,7 +1056,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						block_height.into(),
 						asset.into(),
 						destination_asset,
-						net_deposit_amount.into(),
+						amount_after_fees.into(),
 						destination_address,
 						broker_id,
 						broker_commission_bps,
@@ -1065,7 +1071,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				} => {
 					let (principal_swap_id, gas_swap_id) = T::CcmHandler::on_ccm_deposit(
 						asset.into(),
-						net_deposit_amount.into(),
+						amount_after_fees.into(),
 						destination_asset,
 						destination_address,
 						CcmDepositMetadata {
@@ -1179,7 +1185,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ingress_or_egress: IngressOrEgress,
 		asset: TargetChainAsset<T, I>,
 		available_amount: TargetChainAmount<T, I>,
-	) -> (TargetChainAmount<T, I>, TargetChainAmount<T, I>) {
+	) -> AmountFeesWithheld<T, I> {
 		let tracked_data = T::ChainTracking::get_tracked_data();
 		let fee_estimate = match ingress_or_egress {
 			IngressOrEgress::Ingress => tracked_data.estimate_ingress_fee(asset),
@@ -1206,7 +1212,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			fees.saturating_accrue(fee_estimate);
 		});
 
-		(remaining_amount, available_amount.saturating_sub(remaining_amount))
+		AmountFeesWithheld::<T, I> {
+			amount_after_fees: remaining_amount,
+			fees_withheld: available_amount.saturating_sub(remaining_amount),
+		}
 	}
 }
 
@@ -1241,7 +1250,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 				gas_budget
 			},
 			None => {
-				let (amount_after_fees, egress_fee) =
+				let AmountFeesWithheld { amount_after_fees, fees_withheld: egress_fee } =
 					Self::withhold_transaction_fee(IngressOrEgress::Egress, asset, amount);
 				ScheduledEgressFetchOrTransfer::<T, I>::append({
 					FetchOrTransfer::<T::TargetChain>::Transfer {
