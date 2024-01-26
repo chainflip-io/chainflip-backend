@@ -15,7 +15,6 @@ impl LpDepositHandler for MockBalance {
 		who: &Self::AccountId,
 		asset: Asset,
 		amount: AssetAmount,
-		_ingress_fee: AssetAmount,
 	) -> frame_support::pallet_prelude::DispatchResult {
 		Self::try_credit_account(who, asset, amount)
 	}

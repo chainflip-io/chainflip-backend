@@ -121,7 +121,6 @@ pub mod pallet {
 			account_id: T::AccountId,
 			asset: Asset,
 			amount_credited: AssetAmount,
-			ingress_fee: AssetAmount,
 		},
 	}
 
@@ -279,7 +278,6 @@ impl<T: Config> LpDepositHandler for Pallet<T> {
 		account_id: &Self::AccountId,
 		asset: Asset,
 		amount: AssetAmount,
-		ingress_fee: AssetAmount,
 	) -> frame_support::pallet_prelude::DispatchResult {
 		Self::try_credit_account(account_id, asset, amount)?;
 
@@ -287,7 +285,6 @@ impl<T: Config> LpDepositHandler for Pallet<T> {
 			account_id: account_id.clone(),
 			asset,
 			amount_credited: amount,
-			ingress_fee,
 		});
 
 		Ok(())

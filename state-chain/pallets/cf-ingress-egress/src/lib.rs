@@ -1039,7 +1039,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						&lp_account,
 						asset.into(),
 						amount_after_fees.into(),
-						ingress_fee.into(),
 					)?;
 
 					DepositAction::LiquidityProvision { lp_account }

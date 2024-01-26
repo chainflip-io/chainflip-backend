@@ -24,12 +24,7 @@ pub trait LpDepositHandler {
 
 	/// Attempt to credit the account with the given asset and amount
 	/// as a result of a liquidity deposit.
-	fn add_deposit(
-		who: &Self::AccountId,
-		asset: Asset,
-		amount: AssetAmount,
-		ingress_fee: AssetAmount,
-	) -> DispatchResult;
+	fn add_deposit(who: &Self::AccountId, asset: Asset, amount: AssetAmount) -> DispatchResult;
 }
 
 pub trait LpBalanceApi {
