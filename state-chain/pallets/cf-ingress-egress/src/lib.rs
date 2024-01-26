@@ -415,6 +415,8 @@ pub mod pallet {
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
 			deposit_details: <T::TargetChain as Chain>::DepositDetails,
+			// Ingress fee in the deposit asset. i.e. *NOT* the gas asset, if the deposit asset is
+			// a non-gas asset.
 			ingress_fee: TargetChainAmount<T, I>,
 			action: DepositAction<T::AccountId>,
 		},
@@ -425,6 +427,7 @@ pub mod pallet {
 		EgressScheduled {
 			id: EgressId,
 			asset: TargetChainAsset<T, I>,
+			// This amount includes the egress fee.
 			amount: AssetAmount,
 			destination_address: TargetChainAccount<T, I>,
 			egress_fee: TargetChainAmount<T, I>,
@@ -1035,11 +1038,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		} else {
 			let deposit_action = match deposit_channel_details.action {
 				ChannelAction::LiquidityProvision { lp_account, .. } => {
-					T::LpBalance::add_deposit(
-						&lp_account,
-						asset.into(),
-						amount_after_fees.into(),
-					)?;
+					T::LpBalance::add_deposit(&lp_account, asset.into(), amount_after_fees.into())?;
 
 					DepositAction::LiquidityProvision { lp_account }
 				},
