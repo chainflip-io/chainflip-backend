@@ -15,7 +15,6 @@ pub trait SwapDepositHandler {
 		destination_address: ForeignChainAddress,
 		broker_id: Self::AccountId,
 		broker_commission_bps: BasisPoints,
-		ingress_fee: AssetAmount,
 		channel_id: ChannelId,
 	) -> u64;
 }

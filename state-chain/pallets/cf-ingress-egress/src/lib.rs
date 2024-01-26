@@ -1054,7 +1054,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						destination_address,
 						broker_id,
 						broker_commission_bps,
-						ingress_fee.into(),
 						channel_id,
 					),
 				},

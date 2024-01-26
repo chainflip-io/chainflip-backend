@@ -272,7 +272,6 @@ pub mod pallet {
 			origin: SwapOrigin,
 			swap_type: SwapType,
 			broker_commission: Option<AssetAmount>,
-			ingress_fee: Option<AssetAmount>,
 		},
 		/// A swap has been executed.
 		SwapExecuted {
@@ -588,7 +587,6 @@ pub mod pallet {
 				origin: swap_origin,
 				swap_type: SwapType::Swap(destination_address_internal),
 				broker_commission: None,
-				ingress_fee: None,
 			});
 
 			Ok(())
@@ -907,7 +905,6 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			broker_id: Self::AccountId,
 			broker_commission_bps: BasisPoints,
-			ingress_fee: AssetAmount,
 			channel_id: ChannelId,
 		) -> u64 {
 			// Permill maxes out at 100% so this is safe.
@@ -943,7 +940,6 @@ pub mod pallet {
 				origin: swap_origin,
 				swap_type: SwapType::Swap(destination_address),
 				broker_commission: Some(fee),
-				ingress_fee: Some(ingress_fee),
 			});
 
 			swap_id
@@ -1016,7 +1012,6 @@ pub mod pallet {
 						origin: origin.clone(),
 						swap_type: SwapType::CcmPrincipal(ccm_id),
 						broker_commission: None,
-						ingress_fee: None,
 					});
 					Some(swap_id)
 				};
@@ -1037,7 +1032,6 @@ pub mod pallet {
 					origin,
 					swap_type: SwapType::CcmGas(ccm_id),
 					broker_commission: None,
-					ingress_fee: None,
 				});
 				Some(swap_id)
 			} else {
