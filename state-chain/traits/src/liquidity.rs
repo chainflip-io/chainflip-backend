@@ -17,7 +17,7 @@ pub trait SwapDepositHandler {
 		broker_commission_bps: BasisPoints,
 		ingress_fee: AssetAmount,
 		channel_id: ChannelId,
-	);
+	) -> u64;
 }
 
 pub trait LpDepositHandler {

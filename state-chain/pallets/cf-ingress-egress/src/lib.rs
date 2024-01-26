@@ -184,6 +184,16 @@ pub mod pallet {
 		},
 	}
 
+	/// Contains identifying information about the particular actions that have occurred for a
+	/// particular deposit.
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	pub enum DepositAction<AccountId> {
+		// TODO: use a SwapId alias
+		Swap { swap_id: u64 },
+		LiquidityProvision { lp_account: AccountId },
+		CcmTransfer { principal_swap_id: Option<u64>, gas_swap_id: Option<u64> },
+	}
+
 	#[derive(
 		CloneNoBound,
 		DefaultNoBound,
@@ -401,6 +411,7 @@ pub mod pallet {
 			amount: TargetChainAmount<T, I>,
 			deposit_details: <T::TargetChain as Chain>::DepositDetails,
 			ingress_fee: TargetChainAmount<T, I>,
+			action: DepositAction<T::AccountId>,
 		},
 		AssetEgressStatusChanged {
 			asset: TargetChainAsset<T, I>,
@@ -1016,54 +1027,63 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				reason: DepositIgnoredReason::NotEnoughToPayFees,
 			});
 		} else {
-			match deposit_channel_details.action {
-				ChannelAction::LiquidityProvision { lp_account, .. } => T::LpBalance::add_deposit(
-					&lp_account,
-					asset.into(),
-					net_deposit_amount.into(),
-					ingress_fee.into(),
-				)?,
+			let deposit_action = match deposit_channel_details.action {
+				ChannelAction::LiquidityProvision { lp_account, .. } => {
+					T::LpBalance::add_deposit(
+						&lp_account,
+						asset.into(),
+						net_deposit_amount.into(),
+						ingress_fee.into(),
+					)?;
+
+					DepositAction::LiquidityProvision { lp_account }
+				},
 				ChannelAction::Swap {
 					destination_address,
 					destination_asset,
 					broker_id,
 					broker_commission_bps,
 					..
-				} => T::SwapDepositHandler::schedule_swap_from_channel(
-					deposit_address.clone().into(),
-					block_height.into(),
-					asset.into(),
-					destination_asset,
-					net_deposit_amount.into(),
-					destination_address,
-					broker_id,
-					broker_commission_bps,
-					ingress_fee.into(),
-					channel_id,
-				),
+				} => DepositAction::Swap {
+					swap_id: T::SwapDepositHandler::schedule_swap_from_channel(
+						deposit_address.clone().into(),
+						block_height.into(),
+						asset.into(),
+						destination_asset,
+						net_deposit_amount.into(),
+						destination_address,
+						broker_id,
+						broker_commission_bps,
+						ingress_fee.into(),
+						channel_id,
+					),
+				},
 				ChannelAction::CcmTransfer {
 					destination_asset,
 					destination_address,
 					channel_metadata,
 					..
-				} => T::CcmHandler::on_ccm_deposit(
-					asset.into(),
-					net_deposit_amount.into(),
-					destination_asset,
-					destination_address,
-					CcmDepositMetadata {
-						source_chain: asset.into(),
-						source_address: None,
-						channel_metadata,
-					},
-					SwapOrigin::DepositChannel {
-						deposit_address: T::AddressConverter::to_encoded_address(
-							deposit_address.clone().into(),
-						),
-						channel_id,
-						deposit_block_height: block_height.into(),
-					},
-				),
+				} => {
+					let (principal_swap_id, gas_swap_id) = T::CcmHandler::on_ccm_deposit(
+						asset.into(),
+						net_deposit_amount.into(),
+						destination_asset,
+						destination_address,
+						CcmDepositMetadata {
+							source_chain: asset.into(),
+							source_address: None,
+							channel_metadata,
+						},
+						SwapOrigin::DepositChannel {
+							deposit_address: T::AddressConverter::to_encoded_address(
+								deposit_address.clone().into(),
+							),
+							channel_id,
+							deposit_block_height: block_height.into(),
+						},
+					);
+					DepositAction::CcmTransfer { principal_swap_id, gas_swap_id }
+				},
 			};
 
 			Self::deposit_event(Event::DepositReceived {
@@ -1072,6 +1092,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				amount: deposit_amount,
 				deposit_details,
 				ingress_fee,
+				action: deposit_action,
 			});
 		}
 

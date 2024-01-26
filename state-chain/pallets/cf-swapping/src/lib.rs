@@ -909,7 +909,7 @@ pub mod pallet {
 			broker_commission_bps: BasisPoints,
 			ingress_fee: AssetAmount,
 			channel_id: ChannelId,
-		) {
+		) -> u64 {
 			// Permill maxes out at 100% so this is safe.
 			let fee = Permill::from_parts(broker_commission_bps as u32 * BASIS_POINTS_PER_MILLION) *
 				amount;
@@ -945,6 +945,8 @@ pub mod pallet {
 				broker_commission: Some(fee),
 				ingress_fee: Some(ingress_fee),
 			});
+
+			swap_id
 		}
 	}
 
@@ -956,7 +958,8 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			deposit_metadata: CcmDepositMetadata,
 			origin: SwapOrigin,
-		) {
+			// TODO: Struct?
+		) -> (Option<u64>, Option<u64>) {
 			let encoded_destination_address =
 				T::AddressConverter::to_encoded_address(destination_address.clone());
 			// Caller should ensure that assets and addresses are compatible.
@@ -981,7 +984,8 @@ pub mod pallet {
 							destination_address: encoded_destination_address,
 							deposit_metadata,
 						});
-						return
+						// TODO: Return error here?
+						return (None, None)
 					},
 				};
 
@@ -1066,6 +1070,8 @@ pub mod pallet {
 				PendingCcms::<T>::insert(ccm_id, ccm_swap);
 				CcmOutputs::<T>::insert(ccm_id, swap_output);
 			}
+
+			(principal_swap_id, gas_swap_id)
 		}
 	}
 }

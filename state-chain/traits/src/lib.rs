@@ -794,7 +794,7 @@ pub trait CcmHandler {
 		destination_address: ForeignChainAddress,
 		deposit_metadata: CcmDepositMetadata,
 		origin: SwapOrigin,
-	);
+	) -> (Option<u64>, Option<u64>);
 }
 
 impl CcmHandler for () {
@@ -805,7 +805,8 @@ impl CcmHandler for () {
 		_destination_address: ForeignChainAddress,
 		_deposit_metadata: CcmDepositMetadata,
 		_origin: SwapOrigin,
-	) {
+	) -> (Option<u64>, Option<u64>) {
+		(None, None)
 	}
 }
 

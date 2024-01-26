@@ -1,6 +1,6 @@
 use crate::{
 	mock_eth::*, Call as PalletCall, ChannelAction, ChannelIdCounter, CrossChainMessage,
-	DepositChannelLookup, DepositChannelPool, DepositIgnoredReason, DepositWitness,
+	DepositAction, DepositChannelLookup, DepositChannelPool, DepositIgnoredReason, DepositWitness,
 	DisabledEgressAssets, Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls,
 	FetchOrTransfer, MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
 	TargetChainAccount,
@@ -883,8 +883,9 @@ fn deposits_below_minimum_are_rejected() {
 			},
 		));
 
+		const LP_ACCOUNT: u64 = 0;
 		// Flip deposit should succeed.
-		let (_, deposit_address) = request_address_and_deposit(0, flip);
+		let (_, deposit_address) = request_address_and_deposit(LP_ACCOUNT, flip);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
 			crate::Event::<Test>::DepositReceived {
 				deposit_address,
@@ -892,6 +893,7 @@ fn deposits_below_minimum_are_rejected() {
 				amount: default_deposit_amount,
 				deposit_details: Default::default(),
 				ingress_fee: 0,
+				action: DepositAction::LiquidityProvision { lp_account: LP_ACCOUNT },
 			},
 		));
 	});
