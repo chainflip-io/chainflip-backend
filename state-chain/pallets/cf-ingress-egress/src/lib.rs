@@ -29,8 +29,9 @@ use cf_primitives::{
 };
 use cf_traits::{
 	liquidity::{LpBalanceApi, LpDepositHandler},
-	AssetConverter, Broadcaster, CcmHandler, Chainflip, DepositApi, DepositHandler, EgressApi,
-	EpochInfo, GetBlockHeight, GetTrackedData, NetworkEnvironmentProvider, SwapDepositHandler,
+	AssetConverter, Broadcaster, CcmHandler, CcmSwapIds, Chainflip, DepositApi, DepositHandler,
+	EgressApi, EpochInfo, GetBlockHeight, GetTrackedData, NetworkEnvironmentProvider,
+	SwapDepositHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -1069,24 +1070,25 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					channel_metadata,
 					..
 				} => {
-					if let Ok((principal_swap_id, gas_swap_id)) = T::CcmHandler::on_ccm_deposit(
-						asset.into(),
-						amount_after_fees.into(),
-						destination_asset,
-						destination_address,
-						CcmDepositMetadata {
-							source_chain: asset.into(),
-							source_address: None,
-							channel_metadata,
-						},
-						SwapOrigin::DepositChannel {
-							deposit_address: T::AddressConverter::to_encoded_address(
-								deposit_address.clone().into(),
-							),
-							channel_id,
-							deposit_block_height: block_height.into(),
-						},
-					) {
+					if let Ok(CcmSwapIds { principal_swap_id, gas_swap_id }) =
+						T::CcmHandler::on_ccm_deposit(
+							asset.into(),
+							amount_after_fees.into(),
+							destination_asset,
+							destination_address,
+							CcmDepositMetadata {
+								source_chain: asset.into(),
+								source_address: None,
+								channel_metadata,
+							},
+							SwapOrigin::DepositChannel {
+								deposit_address: T::AddressConverter::to_encoded_address(
+									deposit_address.clone().into(),
+								),
+								channel_id,
+								deposit_block_height: block_height.into(),
+							},
+						) {
 						DepositAction::CcmTransfer { principal_swap_id, gas_swap_id }
 					} else {
 						DepositAction::NoAction

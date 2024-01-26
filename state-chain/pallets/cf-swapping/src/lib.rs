@@ -181,7 +181,7 @@ pub mod pallet {
 
 	use cf_chains::{address::EncodedAddress, AnyChain, Chain};
 	use cf_primitives::{Asset, AssetAmount, BasisPoints, EgressId, SwapId};
-	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, SwapDepositHandler};
+	use cf_traits::{AccountRoleRegistry, CcmSwapIds, Chainflip, EgressApi, SwapDepositHandler};
 
 	use super::*;
 
@@ -960,8 +960,7 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			deposit_metadata: CcmDepositMetadata,
 			origin: SwapOrigin,
-			// TODO: Struct?
-		) -> Result<(Option<u64>, Option<u64>), ()> {
+		) -> Result<CcmSwapIds, ()> {
 			let encoded_destination_address =
 				T::AddressConverter::to_encoded_address(destination_address.clone());
 			// Caller should ensure that assets and addresses are compatible.
@@ -1070,7 +1069,7 @@ pub mod pallet {
 				CcmOutputs::<T>::insert(ccm_id, swap_output);
 			}
 
-			Ok((principal_swap_id, gas_swap_id))
+			Ok(CcmSwapIds { principal_swap_id, gas_swap_id })
 		}
 	}
 }

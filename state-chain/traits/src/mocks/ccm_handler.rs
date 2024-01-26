@@ -1,4 +1,4 @@
-use crate::CcmHandler;
+use crate::{CcmHandler, CcmSwapIds};
 use cf_chains::{address::ForeignChainAddress, CcmDepositMetadata, SwapOrigin};
 
 use cf_primitives::{Asset, AssetAmount};
@@ -37,7 +37,7 @@ impl CcmHandler for MockCcmHandler {
 		destination_address: ForeignChainAddress,
 		deposit_metadata: CcmDepositMetadata,
 		origin: SwapOrigin,
-	) -> Result<(Option<u64>, Option<u64>), ()> {
+	) -> Result<CcmSwapIds, ()> {
 		<Self as MockPalletStorage>::mutate_value(CCM_HANDLER_PREFIX, |ccm_requests| {
 			if ccm_requests.is_none() {
 				*ccm_requests = Some(vec![]);
@@ -55,6 +55,6 @@ impl CcmHandler for MockCcmHandler {
 		});
 
 		// TODO: Return real ids
-		Ok((Some(1), Some(2)))
+		Ok(CcmSwapIds { principal_swap_id: Some(1), gas_swap_id: Some(2) })
 	}
 }

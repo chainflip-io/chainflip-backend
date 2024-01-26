@@ -784,6 +784,12 @@ pub trait NetworkEnvironmentProvider {
 	fn get_network_environment() -> NetworkEnvironment;
 }
 
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug)]
+pub struct CcmSwapIds {
+	pub principal_swap_id: Option<u64>,
+	pub gas_swap_id: Option<u64>,
+}
+
 /// Trait for handling cross chain messages.
 pub trait CcmHandler {
 	/// Triggered when a ccm deposit is made.
@@ -795,7 +801,7 @@ pub trait CcmHandler {
 		destination_address: ForeignChainAddress,
 		deposit_metadata: CcmDepositMetadata,
 		origin: SwapOrigin,
-	) -> Result<(Option<u64>, Option<u64>), ()>;
+	) -> Result<CcmSwapIds, ()>;
 }
 
 impl CcmHandler for () {
@@ -806,7 +812,7 @@ impl CcmHandler for () {
 		_destination_address: ForeignChainAddress,
 		_deposit_metadata: CcmDepositMetadata,
 		_origin: SwapOrigin,
-	) -> Result<(Option<u64>, Option<u64>), ()> {
+	) -> Result<CcmSwapIds, ()> {
 		Err(())
 	}
 }
