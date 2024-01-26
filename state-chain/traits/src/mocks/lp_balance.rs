@@ -37,5 +37,7 @@ impl LpBalanceApi for MockBalance {
 		Ok(())
 	}
 
-	fn record_fees(who: &Self::AccountId, amount: AssetAmount) {}
+	fn record_fees(_who: &Self::AccountId, _amount: AssetAmount) {
+		unreachable!()
+	}
 }

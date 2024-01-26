@@ -1078,3 +1078,42 @@ fn asset_conversion() {
 		);
 	});
 }
+
+#[test]
+fn fees_are_getting_recorded() {
+	new_test_ext().execute_with(|| {
+		let range_1 = -100..100;
+
+		// Create a new pool.
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			Asset::Eth,
+			STABLE_ASSET,
+			Default::default(),
+			price_at_tick(0).unwrap(),
+		));
+
+		assert_ok!(LiquidityPools::set_range_order(
+			RuntimeOrigin::signed(ALICE),
+			Asset::Eth,
+			STABLE_ASSET,
+			0,
+			Some(range_1.clone()),
+			RangeOrderSize::Liquidity { liquidity: 100_000 },
+		));
+
+		MockBalance::assert_fees_recorded(&ALICE);
+
+		assert_ok!(LiquidityPools::set_limit_order(
+			RuntimeOrigin::signed(BOB),
+			Asset::Eth,
+			STABLE_ASSET,
+			Order::Sell,
+			6,
+			Some(100),
+			700_000,
+		));
+
+		MockBalance::assert_fees_recorded(&BOB);
+	});
+}

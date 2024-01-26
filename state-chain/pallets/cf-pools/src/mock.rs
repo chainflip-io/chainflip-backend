@@ -10,6 +10,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	DispatchResult, Permill,
 };
+use sp_std::collections::btree_map::BTreeMap;
 
 type AccountId = u64;
 
@@ -70,6 +71,7 @@ parameter_types! {
 	pub static AliceDebitedUsdc: AssetAmount = Default::default();
 	pub static BobDebitedEth: AssetAmount = Default::default();
 	pub static BobDebitedUsdc: AssetAmount = Default::default();
+	pub static RecordedFees: BTreeMap<AccountId, AssetAmount> = BTreeMap::new();
 }
 pub struct MockBalance;
 impl LpBalanceApi for MockBalance {
@@ -120,7 +122,17 @@ impl LpBalanceApi for MockBalance {
 		Ok(())
 	}
 
-	fn record_fees(who: &Self::AccountId, amount: AssetAmount) {}
+	fn record_fees(who: &Self::AccountId, amount: AssetAmount) {
+		RecordedFees::mutate(|recorded_fees| {
+			recorded_fees.entry(*who).and_modify(|v| *v += amount).or_insert(amount);
+		});
+	}
+}
+
+impl MockBalance {
+	pub fn assert_fees_recorded(who: &AccountId) {
+		assert!(RecordedFees::get().contains_key(who), "Fees not recorded for {:?}", who);
+	}
 }
 
 impl_mock_runtime_safe_mode!(pools: PalletSafeMode);
