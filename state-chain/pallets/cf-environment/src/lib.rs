@@ -408,7 +408,7 @@ impl<T: Config> Pallet<T> {
 			UtxoSelectionType::SelectAllForRotation => {
 				let spendable_utxos: Vec<_> = BitcoinAvailableUtxos::<T>::take()
 					.into_iter()
-					.filter(|utxo| utxo.amount > bitcoin_fee_info.fee_per_utxo(utxo))
+					.filter(|utxo| utxo.amount > bitcoin_fee_info.fee_for_utxo(utxo))
 					.collect();
 
 				if spendable_utxos.is_empty() {
@@ -417,7 +417,7 @@ impl<T: Config> Pallet<T> {
 
 				let total_fee = spendable_utxos
 					.iter()
-					.map(|utxo| bitcoin_fee_info.fee_per_utxo(utxo))
+					.map(|utxo| bitcoin_fee_info.fee_for_utxo(utxo))
 					.sum::<u64>() + fee_per_output_utxo +
 					min_fee_required_per_tx;
 
@@ -440,7 +440,7 @@ impl<T: Config> Pallet<T> {
 					} else {
 						let total_fee = utxos_to_consolidate
 							.iter()
-							.map(|utxo| bitcoin_fee_info.fee_per_utxo(utxo))
+							.map(|utxo| bitcoin_fee_info.fee_for_utxo(utxo))
 							.sum::<u64>() + fee_per_output_utxo +
 							min_fee_required_per_tx;
 

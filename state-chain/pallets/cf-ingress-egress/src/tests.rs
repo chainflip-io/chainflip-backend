@@ -1,5 +1,5 @@
 use crate::{
-	mock::*, Call as PalletCall, ChannelAction, ChannelIdCounter, CrossChainMessage,
+	mock_eth::*, Call as PalletCall, ChannelAction, ChannelIdCounter, CrossChainMessage,
 	DepositChannelLookup, DepositChannelPool, DepositIgnoredReason, DepositWitness,
 	DisabledEgressAssets, Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls,
 	FetchOrTransfer, MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
@@ -14,7 +14,7 @@ use cf_test_utilities::assert_has_event;
 use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
-		api_call::{MockAllBatch, MockEthEnvironment, MockEthereumApiCall},
+		api_call::{MockEthAllBatch, MockEthEnvironment, MockEthereumApiCall},
 		block_height_provider::BlockHeightProvider,
 		ccm_handler::{CcmRequest, MockCcmHandler},
 	},
@@ -309,7 +309,7 @@ fn all_batch_apicall_creation_failure_should_rollback_storage() {
 		IngressEgress::schedule_egress(ETH_FLIP, 8_000, BOB_ETH_ADDRESS, None);
 		request_address_and_deposit(5u64, eth::Asset::Flip);
 
-		MockAllBatch::<MockEthEnvironment>::set_success(false);
+		MockEthAllBatch::<MockEthEnvironment>::set_success(false);
 		request_address_and_deposit(4u64, eth::Asset::Usdc);
 
 		let scheduled_requests = ScheduledEgressFetchOrTransfer::<Test>::get();
@@ -780,7 +780,7 @@ fn multi_use_deposit_same_block() {
 			assert!(
 				matches!(
 					pending_api_calls.last().unwrap(),
-					MockEthereumApiCall::AllBatch(MockAllBatch {
+					MockEthereumApiCall::AllBatch(MockEthAllBatch {
 						fetch_params,
 						..
 					}) if matches!(
@@ -817,7 +817,7 @@ fn multi_use_deposit_same_block() {
 			assert!(
 				matches!(
 					&pending_api_calls[1],
-					MockEthereumApiCall::AllBatch(MockAllBatch {
+					MockEthereumApiCall::AllBatch(MockEthAllBatch {
 						fetch_params,
 						..
 					}) if matches!(

@@ -37,9 +37,9 @@ pub fn select_utxos_from_pool(
 
 	while cumulative_amount < amount_to_be_spent {
 		if let Some(current_smallest_utxo) = available_utxos.pop() {
-			if current_smallest_utxo.amount > fee_info.fee_per_utxo(&current_smallest_utxo) {
+			if current_smallest_utxo.amount > fee_info.fee_for_utxo(&current_smallest_utxo) {
 				cumulative_amount +=
-					current_smallest_utxo.amount - fee_info.fee_per_utxo(&current_smallest_utxo);
+					current_smallest_utxo.amount - fee_info.fee_for_utxo(&current_smallest_utxo);
 				selected_utxos.push(current_smallest_utxo.clone());
 			} else {
 				skipped_utxos.push(current_smallest_utxo.clone());
@@ -50,7 +50,7 @@ pub fn select_utxos_from_pool(
 	}
 
 	if let Some(utxo) = available_utxos.pop() {
-		cumulative_amount += utxo.amount - fee_info.fee_per_utxo(&utxo);
+		cumulative_amount += utxo.amount - fee_info.fee_for_utxo(&utxo);
 		selected_utxos.push(utxo);
 	}
 
@@ -66,7 +66,7 @@ pub fn select_utxos_for_consolidation(
 ) -> Vec<Utxo> {
 	let (mut spendable, mut dust) = available_utxos
 		.drain(..)
-		.partition::<Vec<_>, _>(|utxo| utxo.amount > fee_info.fee_per_utxo(utxo));
+		.partition::<Vec<_>, _>(|utxo| utxo.amount > fee_info.fee_for_utxo(utxo));
 
 	if spendable.len() >= params.consolidation_threshold as usize {
 		let mut remaining = spendable.split_off(params.consolidation_size as usize);
