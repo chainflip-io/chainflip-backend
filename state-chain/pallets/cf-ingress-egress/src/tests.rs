@@ -1,9 +1,9 @@
 use crate::{
 	mock_eth::*, Call as PalletCall, ChannelAction, ChannelIdCounter, CrossChainMessage,
 	DepositAction, DepositChannelLookup, DepositChannelPool, DepositIgnoredReason, DepositWitness,
-	DisabledEgressAssets, Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls,
-	FetchOrTransfer, MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
-	TargetChainAccount,
+	DisabledEgressAssets, EgressIgnoredReason, Event as PalletEvent, FailedForeignChainCall,
+	FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit, MinimumEgress, Pallet,
+	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount,
 };
 use cf_chains::{
 	address::AddressConverter, evm::EvmFetchId, mocks::MockEthereum, CcmChannelMetadata,
@@ -143,6 +143,29 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 
 		// The egress should be sent now
 		assert!(ScheduledEgressCcm::<Test>::get().is_empty());
+	});
+}
+
+#[test]
+fn egress_below_minimum_deposit_ignored() {
+	new_test_ext().execute_with(|| {
+		const MIN_EGRESS: u128 = 1_000;
+		const AMOUNT: u128 = MIN_EGRESS - 1;
+		const ASSET: eth::Asset = ETH_ETH;
+
+		MinimumEgress::<Test>::insert(ETH_ETH, MIN_EGRESS);
+
+		let egress_id = IngressEgress::schedule_egress(ASSET, AMOUNT, ALICE_ETH_ADDRESS, None);
+
+		assert!(ScheduledEgressFetchOrTransfer::<Test>::get().is_empty());
+
+		assert_has_event::<Test>(RuntimeEvent::IngressEgress(crate::Event::EgressIgnored {
+			egress_id,
+			asset: ASSET,
+			amount: AMOUNT,
+			destination_address: ALICE_ETH_ADDRESS,
+			reason: EgressIgnoredReason::BelowMinimumEgress,
+		}));
 	});
 }
 

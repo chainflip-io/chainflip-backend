@@ -909,23 +909,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					amount,
 					destination_address,
 					egress_id,
-				} =>
-					if amount > MinimumEgress::<T, I>::get(asset) {
-						egress_ids_to_broadcast.push(egress_id);
-						transfer_params.push(TransferAssetParams {
-							asset,
-							amount,
-							to: destination_address,
-						});
-					} else {
-						Self::deposit_event(Event::<T, I>::EgressIgnored {
-							egress_id,
-							asset,
-							amount,
-							destination_address,
-							reason: EgressIgnoredReason::BelowMinimumEgress,
-						});
-					},
+				} => {
+					egress_ids_to_broadcast.push(egress_id);
+					transfer_params.push(TransferAssetParams {
+						asset,
+						amount,
+						to: destination_address,
+					});
+				},
 			}
 		}
 
@@ -1287,15 +1278,30 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 			None => {
 				let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
 					Self::withhold_transaction_fee(IngressOrEgress::Egress, asset, amount);
-				ScheduledEgressFetchOrTransfer::<T, I>::append({
-					FetchOrTransfer::<T::TargetChain>::Transfer {
-						asset,
-						destination_address: destination_address.clone(),
-						amount: amount_after_fees,
+
+				if amount > MinimumEgress::<T, I>::get(asset) {
+					ScheduledEgressFetchOrTransfer::<T, I>::append({
+						FetchOrTransfer::<T::TargetChain>::Transfer {
+							asset,
+							destination_address: destination_address.clone(),
+							amount: amount_after_fees,
+							egress_id,
+						}
+					});
+
+					fees_withheld
+				} else {
+					// TODO: track the ignored deposits somewhere, like withheld fees.
+					Self::deposit_event(Event::<T, I>::EgressIgnored {
 						egress_id,
-					}
-				});
-				fees_withheld
+						asset,
+						amount,
+						destination_address,
+						reason: EgressIgnoredReason::BelowMinimumEgress,
+					});
+
+					return egress_id
+				}
 			},
 		};
 
