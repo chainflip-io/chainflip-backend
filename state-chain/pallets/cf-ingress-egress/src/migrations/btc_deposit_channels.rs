@@ -72,7 +72,7 @@ impl<T: Config<Instance3, TargetChain = Bitcoin>> OnRuntimeUpgrade for Migration
 					deposit_channel: DepositChannel {
 						channel_id: old_channel.deposit_channel.channel_id,
 						address: address.clone(),
-						asset: old_channel.deposit_channel.asset.try_into().unwrap(),
+						asset: old_channel.deposit_channel.asset,
 						state: DepositAddress {
 							pubkey_x: old_channel.deposit_channel.state.pubkey_x,
 							script_path: Some(TapscriptPath {
