@@ -1,6 +1,9 @@
 use crate::{Instance1, Instance2, Instance3, *};
 use cf_chains::{
-	btc::deposit_address::{DepositAddress, TapscriptPath},
+	btc::{
+		deposit_address::{DepositAddress, TapscriptPath},
+		ScriptPubkey,
+	},
 	Bitcoin,
 };
 use frame_support::traits::OnRuntimeUpgrade;
@@ -24,7 +27,7 @@ mod old {
 	pub struct DepositChannel {
 		pub channel_id: ChannelId,
 		pub address: ScriptPubkey,
-		pub asset: Asset,
+		pub asset: <Bitcoin as Chain>::ChainAsset,
 		pub state: old::DepositAddress,
 	}
 
@@ -63,34 +66,52 @@ impl<T: Config<Instance2>> OnRuntimeUpgrade for Migration<T, Instance2> {
 
 impl<T: Config<Instance3, TargetChain = Bitcoin>> OnRuntimeUpgrade for Migration<T, Instance3> {
 	fn on_runtime_upgrade() -> Weight {
-		let old_channels = old::DepositChannelLookup::<T, Instance3>::drain().collect::<Vec<_>>();
-		for (address, old_channel) in old_channels {
-			let new_channel = DepositChannelDetails::<T, Instance3> {
-				deposit_channel: DepositChannel {
-					channel_id: old_channel.deposit_channel.channel_id,
-					address: address.clone(),
-					asset: old_channel.deposit_channel.asset.try_into().unwrap(),
-					state: DepositAddress {
-						pubkey_x: old_channel.deposit_channel.state.pubkey_x,
-						script_path: Some(TapscriptPath {
-							salt: old_channel.deposit_channel.state.salt,
-							tweaked_pubkey_bytes: old_channel
-								.deposit_channel
-								.state
-								.tweaked_pubkey_bytes,
-							tapleaf_hash: old_channel.deposit_channel.state.tapleaf_hash,
-							unlock_script: old_channel.deposit_channel.state.unlock_script,
-						}),
+		DepositChannelLookup::<T, Instance3>::translate(
+			|address: ScriptPubkey, old_channel: old::DepositChannelDetails<T, Instance3>| {
+				Some(DepositChannelDetails::<T, Instance3> {
+					deposit_channel: DepositChannel {
+						channel_id: old_channel.deposit_channel.channel_id,
+						address: address.clone(),
+						asset: old_channel.deposit_channel.asset.try_into().unwrap(),
+						state: DepositAddress {
+							pubkey_x: old_channel.deposit_channel.state.pubkey_x,
+							script_path: Some(TapscriptPath {
+								salt: old_channel.deposit_channel.state.salt,
+								tweaked_pubkey_bytes: old_channel
+									.deposit_channel
+									.state
+									.tweaked_pubkey_bytes,
+								tapleaf_hash: old_channel.deposit_channel.state.tapleaf_hash,
+								unlock_script: old_channel.deposit_channel.state.unlock_script,
+							}),
+						},
 					},
-				},
-				opened_at: old_channel.opened_at,
-				expires_at: old_channel.expires_at,
-				action: old_channel.action,
-			};
-			DepositChannelLookup::<T, Instance3>::insert(address, new_channel);
-		}
-
+					opened_at: old_channel.opened_at,
+					expires_at: old_channel.expires_at,
+					action: old_channel.action,
+				})
+			},
+		);
 		Weight::zero()
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+		let number_of_channels_in_lookup =
+			old::DepositChannelLookup::<T, Instance3>::iter_keys().count() as u32;
+
+		Ok(number_of_channels_in_lookup.encode())
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+		let number_of_channels_in_lookup_pre_migration = <u32>::decode(&mut &state[..]).unwrap();
+		ensure!(
+			DepositChannelLookup::<T, Instance3>::iter_keys().count() as u32 ==
+				number_of_channels_in_lookup_pre_migration,
+			"DepositChannelLookup migration failed."
+		);
+		Ok(())
 	}
 }
 
@@ -106,15 +127,37 @@ mod migration_tests {
 	#[test]
 	fn test_migration() {
 		new_test_ext().execute_with(|| {
-			let address = ScriptPubkey::Taproot([0u8; 32]);
+			let address1 = ScriptPubkey::Taproot([0u8; 32]);
+			let address2 = ScriptPubkey::Taproot([1u8; 32]);
+			
 			// Insert mock data into old storage
 			old::DepositChannelLookup::insert(
-				address.clone(),
+				address1.clone(),
 				old::DepositChannelDetails::<Test, _> {
 					deposit_channel: old::DepositChannel {
 						channel_id: 123,
-						address: address.clone(),
-						asset: Asset::Btc,
+						address: address1.clone(),
+						asset: <Bitcoin as Chain>::ChainAsset::Btc,
+						state: old::DepositAddress {
+							pubkey_x: [1u8; 32],
+							salt: 123,
+							tweaked_pubkey_bytes: [2u8; 33],
+							tapleaf_hash: [3u8; 32],
+							unlock_script: BitcoinScript::new(Default::default()),
+						},
+					},
+					opened_at: Default::default(),
+					expires_at: Default::default(),
+					action: ChannelAction::LiquidityProvision { lp_account: Default::default() },
+				},
+			);
+			old::DepositChannelLookup::insert(
+				address2.clone(),
+				old::DepositChannelDetails::<Test, _> {
+					deposit_channel: old::DepositChannel {
+						channel_id: 123,
+						address: address2.clone(),
+						asset: <Bitcoin as Chain>::ChainAsset::Btc,
 						state: old::DepositAddress {
 							pubkey_x: [1u8; 32],
 							salt: 123,
@@ -133,8 +176,12 @@ mod migration_tests {
 			crate::migrations::btc_deposit_channels::Migration::<Test, Instance3>::on_runtime_upgrade();
 
 			// Verify data is correctly migrated into new storage.
-			//assert!(DepositChannelLookup::<Test>::get(address).is_some());
-			assert!(DepositChannelLookup::<Test, Instance3>::get(address).is_some());
+			let channel = DepositChannelLookup::<Test, Instance3>::get(address1);
+			assert!(channel.is_some());
+			assert!(channel.unwrap().deposit_channel.state.script_path.is_some());
+			let channel = DepositChannelLookup::<Test, Instance3>::get(address2);
+			assert!(channel.is_some());
+			assert!(channel.unwrap().deposit_channel.state.script_path.is_some());
 		});
 	}
 }
