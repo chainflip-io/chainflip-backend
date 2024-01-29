@@ -1,8 +1,11 @@
 import Web3 from 'web3';
-import { Asset, Assets } from '@chainflip-io/cli';
+import { Asset, Assets, Chain } from '@chainflip-io/cli';
 import { newCcmMetadata, prepareSwap } from './swapping';
 import {
+  chainFromAsset,
   getChainflipApi,
+  getEvmEndpoint,
+  observeBadEvents,
   observeCcmReceived,
   observeEvent,
   observeSwapScheduled,
@@ -12,7 +15,7 @@ import {
 import { requestNewSwap } from './perform_swap';
 import { send } from './send';
 import { BtcAddressType } from './new_btc_address';
-import { signAndSendTxEth } from './send_eth';
+import { signAndSendTxEvm } from './send_evm';
 
 // This test uses the CFTester contract as the receiver for a CCM call. The contract will consume approximately
 // the gasLimitBudget amount specified in the CCM message with an error margin. On top of that, the gasLimitBudget overhead of the
@@ -34,7 +37,7 @@ const LOOP_TIMEOUT = 15;
 let stopObservingCcmReceived = false;
 
 function gasTestCcmMetadata(sourceAsset: Asset, gasToConsume: number, gasBudgetFraction?: number) {
-  const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
+  const web3 = new Web3();
 
   return newCcmMetadata(
     sourceAsset,
@@ -160,6 +163,9 @@ async function testGasLimitSwap(
   ) {
     await sleep(3000);
   }
+
+  console.log(`${tag} Swap events found`);
+
   swapScheduledObserved = true;
   await Promise.all([
     swapExecutedHandle,
@@ -210,9 +216,18 @@ async function testGasLimitSwap(
         egressIdToBroadcastId[swapIdToEgressId[swapId]]
       }`,
     );
-  } else if (minGasLimitRequired < gasLimitBudget) {
+  } else if (minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER < gasLimitBudget) {
     console.log(`${tag} Gas budget ${gasLimitBudget}. Expecting successful broadcast.`);
 
+    // Check that broadcast is not aborted
+    let stopObserving = false;
+    const observeBroadcastFailure = observeBadEvents(
+      'ethereumBroadcaster:BroadcastAborted',
+      () => stopObserving,
+      (event) => event.data.broadcastId === egressIdToBroadcastId[swapIdToEgressId[swapId]],
+    );
+
+    // Expecting success
     const ccmReceived = await observeCcmReceived(
       sourceAsset,
       destAsset,
@@ -223,7 +238,11 @@ async function testGasLimitSwap(
       throw new Error(`${tag} CCM event emitted. Gas consumed is less than expected!`);
     }
 
-    const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
+    // Stop listening for broadcast failure
+    stopObserving = true;
+    await observeBroadcastFailure;
+
+    const web3 = new Web3(getEvmEndpoint(chainFromAsset(destAsset)));
     const receipt = await web3.eth.getTransactionReceipt(ccmReceived?.txHash as string);
     const tx = await web3.eth.getTransaction(ccmReceived?.txHash as string);
     const gasUsed = receipt.gasUsed;
@@ -262,9 +281,10 @@ async function testGasLimitSwap(
 // Spamming to raise Ethereum's fee, otherwise it will get stuck at almost zero fee (~7 wei)
 let spam = true;
 
-async function spamEthereum() {
+async function spamEvm(chain: Chain) {
   while (spam) {
-    signAndSendTxEth(
+    signAndSendTxEvm(
+      chain,
       '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
       '1',
       undefined,
@@ -289,7 +309,7 @@ function getRandomGasConsumption(): number {
 
 export async function testGasLimitCcmSwaps() {
   // Spam ethereum with transfers to increase the gasLimitBudget price
-  const spamming = spamEthereum();
+  const spamming = spamEvm('Ethereum');
 
   // Wait for the fees to increase to the stable expected amount
   let i = 0;

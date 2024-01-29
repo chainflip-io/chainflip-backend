@@ -49,3 +49,5 @@ tfplan
 .tfvars
 
 *rustc-ice*
+
+localnet/docker-compose.yml

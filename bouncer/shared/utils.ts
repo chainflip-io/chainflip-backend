@@ -16,7 +16,7 @@ import { u8aToHex } from '@polkadot/util';
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
-import { newEthAddress } from './new_eth_address';
+import { newEvmAddress } from './new_evm_address';
 import { CcmDepositMetadata } from './new_swap';
 import { getCFTesterAbi } from './eth_abis';
 import { SwapParams } from './perform_swap';
@@ -25,29 +25,49 @@ const cfTesterAbi = await getCFTesterAbi();
 
 export const lpMutex = new Mutex();
 export const ethNonceMutex = new Mutex();
+export const arbNonceMutex = new Mutex();
 export const btcClientMutex = new Mutex();
 export const brokerMutex = new Mutex();
 export const snowWhiteMutex = new Mutex();
 
-export function getEthContractAddress(contract: string): string {
-  switch (contract) {
-    case 'VAULT':
-      return '0xb7a5bd0345ef1cc5e66bf61bdec17d2461fbd968';
-    case 'ETH':
-      return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
-    case 'FLIP':
-      return process.env.ETH_FLIP_ADDRESS ?? '0x10C6E9530F1C1AF873a391030a1D9E8ed0630D26';
-    case 'USDC':
-      return process.env.ETH_USDC_ADDRESS ?? '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
-    case 'CFTESTER':
-      return '0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0';
-    case 'GATEWAY':
-      return process.env.ETH_GATEWAY_ADDRESS ?? '0xeEBe00Ac0756308ac4AaBfD76c05c4F3088B8883';
+export function getEvmContractAddress(chain: Chain, contract: string): string {
+  switch (chain) {
+    case 'Ethereum':
+      switch (contract) {
+        case 'VAULT':
+          return '0xb7a5bd0345ef1cc5e66bf61bdec17d2461fbd968';
+        case 'ETH':
+          return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+        case 'FLIP':
+          return process.env.ETH_FLIP_ADDRESS ?? '0x10C6E9530F1C1AF873a391030a1D9E8ed0630D26';
+        case 'USDC':
+          return process.env.ETH_USDC_ADDRESS ?? '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
+        case 'CFTESTER':
+          return '0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0';
+        case 'GATEWAY':
+          return process.env.ETH_GATEWAY_ADDRESS ?? '0xeEBe00Ac0756308ac4AaBfD76c05c4F3088B8883';
+        default:
+          throw new Error(`Unsupported contract: ${contract}`);
+      }
+    case 'Arbitrum':
+      switch (contract) {
+        case 'VAULT':
+          return '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
+        case 'ARBETH':
+          return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+        case 'ARBUSDC':
+          return process.env.ARB_USDC_ADDRESS ?? '0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9';
+        case 'CFTESTER':
+          return '0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82';
+        default:
+          throw new Error(`Unsupported contract: ${contract}`);
+      }
     default:
-      throw new Error(`Unsupported contract: ${contract}`);
+      throw new Error(`Unsupported chain: ${chain}`);
   }
 }
 
+// We use this instead of assetChains[asset] from the SDK because the SC strings are lowercase
 export function assetToChain(asset: Asset): string {
   switch (asset) {
     case 'DOT':
@@ -58,6 +78,9 @@ export function assetToChain(asset: Asset): string {
       return 'Eth';
     case 'BTC':
       return 'Btc';
+    case 'ARBUSDC':
+    case 'ARBETH':
+      return 'Arbitrum';
     default:
       return '';
   }
@@ -90,10 +113,12 @@ export function defaultAssetAmounts(asset: Asset): string {
     case 'BTC':
       return '0.05';
     case 'ETH':
+    case 'ARBETH':
       return '5';
     case 'DOT':
       return '50';
     case 'USDC':
+    case 'ARBUSDC':
     case 'FLIP':
       return '500';
     default:
@@ -385,7 +410,9 @@ export async function newAddress(
     case Assets.FLIP:
     case Assets.ETH:
     case Assets.USDC:
-      rawAddress = newEthAddress(seed);
+    case 'ARBETH':
+    case 'ARBUSDC':
+      rawAddress = newEvmAddress(seed);
       break;
     case Assets.DOT:
       rawAddress = await newDotAddress(seed);
@@ -408,6 +435,51 @@ export function chainFromAsset(asset: Asset): Chain {
   throw new Error('unexpected asset');
 }
 
+export function getEvmEndpoint(chain: Chain): string {
+  switch (chain) {
+    case 'Ethereum':
+      return process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
+    case 'Arbitrum':
+      return process.env.ARB_ENDPOINT ?? 'http://127.0.0.1:8547';
+    default:
+      throw new Error(`${chain} is not a supported EVM chain`);
+  }
+}
+
+export function getWhaleMnemonic(chain: Chain): string {
+  switch (chain) {
+    case 'Ethereum':
+      return (
+        process.env.ETH_USDC_WHALE_MNEMONIC ??
+        'test test test test test test test test test test test junk'
+      );
+    case 'Arbitrum':
+      return (
+        process.env.ARB_WHALE_MNEMONIC ??
+        'indoor dish desk flag debris potato excuse depart ticket judge file exit'
+      );
+    default:
+      throw new Error(`${chain} does not have a whale mnemonic`);
+  }
+}
+
+export function getWhaleKey(chain: Chain): string {
+  switch (chain) {
+    case 'Ethereum':
+      return (
+        process.env.ETH_USDC_WHALE ??
+        '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+      );
+    case 'Arbitrum':
+      return (
+        process.env.ARB_WHALE ??
+        '0xb6b15c8cb491557369f3c7d2c287b053eb229daa9c22138887752191c9520659'
+      );
+    default:
+      throw new Error(`${chain} does not have a whale key`);
+  }
+}
+
 export function chainShortNameFromAsset(asset: Asset): string {
   switch (asset) {
     case Assets.FLIP:
@@ -418,6 +490,9 @@ export function chainShortNameFromAsset(asset: Asset): string {
       return 'Dot';
     case Assets.BTC:
       return 'Btc';
+    case 'ARBETH':
+    case 'ARBUSDC':
+      return 'Arb';
     default:
       throw new Error('unexpected asset');
   }
@@ -444,8 +519,9 @@ export async function observeFetch(asset: Asset, address: string): Promise<void>
   for (let i = 0; i < 120; i++) {
     const balance = Number(await getBalance(asset as Asset, address));
     if (balance === 0) {
-      if (assetToChain(asset) === 'Eth') {
-        const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
+      const chain = chainFromAsset(asset);
+      if (chain === 'Ethereum' || chain === 'Arbitrum') {
+        const web3 = new Web3(getEvmEndpoint(chain));
         if ((await web3.eth.getCode(address)) === '0x') {
           throw new Error('Eth address has no bytecode');
         }
@@ -466,6 +542,7 @@ type EVMEvent = {
   returnValues: any;
 };
 export async function observeEVMEvent(
+  chain: Chain,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contractAbi: any,
   address: string,
@@ -474,7 +551,7 @@ export async function observeEVMEvent(
   stopObserveEvent?: () => boolean,
   initialBlockNumber?: number,
 ): Promise<EVMEvent | undefined> {
-  const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
+  const web3 = new Web3(getEvmEndpoint(chain));
   const contract = new web3.eth.Contract(contractAbi, address);
   let initBlockNumber = initialBlockNumber ?? (await web3.eth.getBlockNumber());
   const stopObserve = stopObserveEvent ?? (() => false);
@@ -530,14 +607,15 @@ export async function observeCcmReceived(
   stopObserveEvent?: () => boolean,
 ): Promise<EVMEvent | undefined> {
   return observeEVMEvent(
+    chainFromAsset(destAsset),
     cfTesterAbi,
     address,
     'ReceivedxSwapAndCall',
     [
-      chainContractIds[assetChains[sourceAsset]].toString(),
+      chainContractIds[chainFromAsset(sourceAsset)].toString(),
       sourceAddress ?? null,
       messageMetadata.message,
-      getEthContractAddress(destAsset.toString()),
+      getEvmContractAddress(chainFromAsset(destAsset), destAsset.toString()),
       '*',
       '*',
       '*',

@@ -1,11 +1,5 @@
 import Web3 from 'web3';
-import {
-  Asset,
-  chainContractIds,
-  assetChains,
-  assetContractIds,
-  assetDecimals,
-} from '@chainflip-io/cli';
+import { Asset, chainContractIds, assetContractIds, assetDecimals } from '@chainflip-io/cli';
 import { doPerformSwap } from '../shared/perform_swap';
 import { prepareSwap, testSwap } from '../shared/swapping';
 import {
@@ -14,34 +8,35 @@ import {
   sleep,
   observeEvent,
   getChainflipApi,
-  getEthContractAddress,
+  getEvmContractAddress,
   decodeDotAddressForContract,
   defaultAssetAmounts,
   amountToFineAmount,
+  chainFromAsset,
+  getEvmEndpoint,
 } from '../shared/utils';
-import { signAndSendTxEth } from './send_eth';
+import { signAndSendTxEvm } from './send_evm';
 import { getCFTesterAbi } from './eth_abis';
 
 const cfTesterAbi = await getCFTesterAbi();
 
-async function testDepositEthereum(sourceAsset: Asset, destAsset: Asset) {
+async function testDepositEvm(sourceAsset: Asset, destAsset: Asset) {
   const swapParams = await testSwap(
     sourceAsset,
     destAsset,
     undefined,
     undefined,
-    ' EthereumDepositTest',
+    ' EvmDepositTest',
   );
 
   // Check the Deposit contract is deployed. It is assumed that the funds are fetched immediately.
   await observeFetch(sourceAsset, swapParams.depositAddress);
 
-  await doPerformSwap(swapParams, `[${sourceAsset}->${destAsset} EthereumDepositTest2]`);
+  await doPerformSwap(swapParams, `[${sourceAsset}->${destAsset} EvmDepositTest2]`);
 }
 
-async function testSuccessiveDeposits(destAsset: Asset) {
+async function testSuccessiveNativeDeposits(sourceAsset: Asset, destAsset: Asset) {
   let stopObserving = false;
-  const sourceAsset = 'ETH';
 
   const swapParams = await testSwap(
     sourceAsset,
@@ -79,10 +74,10 @@ async function testSuccessiveDeposits(destAsset: Asset) {
 // Not supporting BTC to avoid adding more unnecessary complexity with address encoding.
 async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset) {
   const { destAddress, tag } = await prepareSwap(sourceAsset, destAsset);
-  const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
-  const web3 = new Web3(ethEndpoint);
 
-  const cfTesterAddress = getEthContractAddress('CFTESTER');
+  const web3 = new Web3(getEvmEndpoint(chainFromAsset(sourceAsset)));
+
+  const cfTesterAddress = getEvmContractAddress(chainFromAsset(sourceAsset), 'CFTESTER');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const cfTesterContract = new web3.eth.Contract(cfTesterAbi as any, cfTesterAddress);
   const amount = BigInt(
@@ -91,16 +86,17 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
   const numSwaps = 2;
   const txData = cfTesterContract.methods
     .multipleContractSwap(
-      chainContractIds[assetChains[destAsset]],
+      chainContractIds[chainFromAsset(destAsset)],
       destAsset === 'DOT' ? decodeDotAddressForContract(destAddress) : destAddress,
       assetContractIds[destAsset],
-      getEthContractAddress(sourceAsset),
+      getEvmContractAddress(chainFromAsset(sourceAsset), sourceAsset),
       amount,
       '0x',
       numSwaps,
     )
     .encodeABI();
-  const receipt = await signAndSendTxEth(
+  const receipt = await signAndSendTxEvm(
+    chainFromAsset(sourceAsset),
     cfTesterAddress,
     (amount * BigInt(numSwaps)).toString(),
     txData,
@@ -138,19 +134,16 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
   await observingEvent;
 }
 
-export async function testEthereumDeposits() {
-  console.log('=== Testing Ethereum Deposits ===');
+export async function testEvmDeposits() {
+  console.log('=== Testing EVM Deposits ===');
 
-  const depositTests = Promise.all([
-    testDepositEthereum('ETH', 'DOT'),
-    testDepositEthereum('FLIP', 'BTC'),
-  ]);
+  const depositTests = Promise.all([testDepositEvm('ETH', 'DOT'), testDepositEvm('FLIP', 'BTC')]);
 
   const duplicatedDepositTest = Promise.all([
-    testSuccessiveDeposits('DOT'),
-    testSuccessiveDeposits('BTC'),
-    testSuccessiveDeposits('FLIP'),
-    testSuccessiveDeposits('USDC'),
+    testSuccessiveNativeDeposits('ETH', 'DOT'),
+    testSuccessiveNativeDeposits('ETH', 'BTC'),
+    testSuccessiveNativeDeposits('ETH', 'FLIP'),
+    testSuccessiveNativeDeposits('ETH', 'USDC'),
   ]);
 
   const multipleTxSwapsTest = Promise.all([
@@ -160,5 +153,5 @@ export async function testEthereumDeposits() {
 
   await Promise.all([depositTests, duplicatedDepositTest, multipleTxSwapsTest]);
 
-  console.log('=== Ethereum Deposit Test completed ===');
+  console.log('=== EVM Deposit Test completed ===');
 }

@@ -11,7 +11,7 @@ services:
   redis:
     image: redis:6.2.6
     ports:
-      - "127.0.0.1:6379:6379"
+      - "6379:6379"
     volumes:
       - "/tmp/chainflip/data/redis-data:/data"
 
@@ -30,13 +30,13 @@ services:
       - "/tmp/chainflip/data/config:/config"
 
   sequencer:
-    pid: host # allow debugging
     image: offchainlabs/nitro-node:v2.0.14-2baa834-dev
+    user: root
     platform: linux/amd64
     ports:
-      - "127.0.0.1:8547:8547"
-      - "127.0.0.1:8548:8548"
-      - "127.0.0.1:9642:9642"
+      - "8547:8547"
+      - "8548:8548"
+      - "9642:9642"
     volumes:
       - "/tmp/chainflip/data/seqdata:/home/user/.arbitrum/local/nitro"
       - "/tmp/chainflip/data/config:/config"
@@ -46,12 +46,12 @@ services:
       - redis
 
   staker-unsafe:
-    pid: host # allow debugging
     image: offchainlabs/nitro-node:v2.0.14-2baa834-dev
+    user: root
     platform: linux/amd64
     ports:
-      - "127.0.0.1:8047:8547"
-      - "127.0.0.1:8048:8548"
+      - "8047:8547"
+      - "8048:8548"
     volumes:
       - "/tmp/chainflip/data/unsafestaker-data:/home/user/.arbitrum/local/nitro"
       - "/tmp/chainflip/data/l1keystore:/home/user/l1keystore"
@@ -62,12 +62,12 @@ services:
       - redis
 
   poster:
-    pid: host # allow debugging
     image: offchainlabs/nitro-node:v2.0.14-2baa834-dev
+    user: root
     platform: linux/amd64
     ports:
-      - "127.0.0.1:8147:8547"
-      - "127.0.0.1:8148:8548"
+      - "8147:8547"
+      - "8148:8548"
     volumes:
       - "/tmp/chainflip/data/poster-data:/home/user/.arbitrum/local/nitro"
       - "/tmp/chainflip/data/l1keystore:/home/user/l1keystore"

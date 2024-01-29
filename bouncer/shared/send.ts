@@ -3,8 +3,14 @@ import { Asset, assetDecimals } from '@chainflip-io/cli';
 import { sendDot } from './send_dot';
 import { sendBtc } from './send_btc';
 import { sendErc20 } from './send_erc20';
-import { sendEth, signAndSendTxEth } from './send_eth';
-import { getEthContractAddress, defaultAssetAmounts, amountToFineAmount } from './utils';
+import { sendEvmNative, signAndSendTxEvm } from './send_evm';
+import {
+  getEvmContractAddress,
+  defaultAssetAmounts,
+  amountToFineAmount,
+  chainFromAsset,
+  getEvmEndpoint,
+} from './utils';
 import { approveErc20 } from './approve_erc20';
 import { getCFTesterAbi } from './eth_abis';
 
@@ -16,19 +22,45 @@ export async function send(asset: Asset, address: string, amount?: string, log =
       await sendBtc(address, amount ?? defaultAssetAmounts(asset));
       break;
     case 'ETH':
-      await sendEth(address, amount ?? defaultAssetAmounts(asset), log);
+      await sendEvmNative('Ethereum', address, amount ?? defaultAssetAmounts(asset), log);
+      break;
+    case 'ARBETH':
+      await sendEvmNative('Arbitrum', address, amount ?? defaultAssetAmounts(asset), log);
       break;
     case 'DOT':
       await sendDot(address, amount ?? defaultAssetAmounts(asset));
       break;
     case 'USDC': {
-      const contractAddress = getEthContractAddress(asset);
-      await sendErc20(address, contractAddress, amount ?? defaultAssetAmounts(asset), log);
+      const contractAddress = getEvmContractAddress('Ethereum', asset);
+      await sendErc20(
+        'Ethereum',
+        address,
+        contractAddress,
+        amount ?? defaultAssetAmounts(asset),
+        log,
+      );
       break;
     }
     case 'FLIP': {
-      const contractAddress = getEthContractAddress(asset);
-      await sendErc20(address, contractAddress, amount ?? defaultAssetAmounts(asset), log);
+      const contractAddress = getEvmContractAddress('Ethereum', asset);
+      await sendErc20(
+        'Ethereum',
+        address,
+        contractAddress,
+        amount ?? defaultAssetAmounts(asset),
+        log,
+      );
+      break;
+    }
+    case 'ARBUSDC': {
+      const contractAddress = getEvmContractAddress('Arbitrum', asset);
+      await sendErc20(
+        'Arbitrum',
+        address,
+        contractAddress,
+        amount ?? defaultAssetAmounts(asset),
+        log,
+      );
       break;
     }
     default:
@@ -37,10 +69,11 @@ export async function send(asset: Asset, address: string, amount?: string, log =
 }
 
 export async function sendViaCfTester(asset: Asset, toAddress: string, amount?: string) {
-  const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
-  const web3 = new Web3(ethEndpoint);
+  const chain = chainFromAsset(asset);
 
-  const cfTesterAddress = getEthContractAddress('CFTESTER');
+  const web3 = new Web3(getEvmEndpoint(chain));
+
+  const cfTesterAddress = getEvmContractAddress(chain, 'CFTESTER');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const cfTesterContract = new web3.eth.Contract(cfTesterAbi as any, cfTesterAddress);
 
@@ -57,7 +90,7 @@ export async function sendViaCfTester(asset: Asset, toAddress: string, amount?: 
       txData = cfTesterContract.methods
         .transferToken(
           toAddress,
-          getEthContractAddress(asset),
+          getEvmContractAddress(chain, asset),
           amountToFineAmount(amount ?? defaultAssetAmounts(asset), assetDecimals[asset]),
         )
         .encodeABI();
@@ -67,5 +100,5 @@ export async function sendViaCfTester(asset: Asset, toAddress: string, amount?: 
       throw new Error(`Unsupported asset type: ${asset}`);
   }
 
-  await signAndSendTxEth(cfTesterAddress, value, txData);
+  await signAndSendTxEvm(chain, cfTesterAddress, value, txData);
 }
