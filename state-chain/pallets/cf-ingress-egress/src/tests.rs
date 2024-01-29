@@ -17,6 +17,7 @@ use cf_traits::{
 		api_call::{MockAllBatch, MockEthEnvironment, MockEthereumApiCall},
 		block_height_provider::BlockHeightProvider,
 		ccm_handler::{CcmRequest, MockCcmHandler},
+		tracked_data_provider::TrackedDataProvider,
 	},
 	DepositApi, EgressApi, EpochInfo, GetBlockHeight,
 };
@@ -887,6 +888,67 @@ fn deposits_below_minimum_are_rejected() {
 				asset: flip,
 				amount: default_deposit_amount,
 				deposit_details: Default::default(),
+			},
+		));
+	});
+}
+
+#[test]
+fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
+	const ASSET: cf_chains::assets::eth::Asset = eth::Asset::Eth;
+	const DEPOSIT_AMOUNT: u128 = 500;
+
+	new_test_ext().execute_with(|| {
+		// Set Eth fees to some arbitrary value, high enough for our test swap
+		TrackedDataProvider::<Ethereum>::set_tracked_data(cf_chains::eth::EthereumTrackedData {
+			base_fee: 100,
+			priority_fee: 0,
+		});
+
+		let (_id, address, ..) =
+			IngressEgress::request_liquidity_deposit_address(ALICE, ASSET).unwrap();
+		let deposit_address = address.try_into().unwrap();
+
+		// Swap a low enough amount such that it gets swallowed by fees
+		let deposit_detail: DepositWitness<Ethereum> = DepositWitness::<Ethereum> {
+			deposit_address,
+			asset: ASSET,
+			amount: DEPOSIT_AMOUNT,
+			deposit_details: (),
+		};
+		assert_ok!(IngressEgress::process_deposits(
+			RuntimeOrigin::root(),
+			vec![deposit_detail.clone()],
+			Default::default()
+		));
+		// Observe the DepositIgnored Event
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::DepositIgnored {
+				deposit_address,
+				asset: ASSET,
+				amount: DEPOSIT_AMOUNT,
+				deposit_details: (),
+				reason: DepositIgnoredReason::NotEnoughToPayFees,
+			},
+		));
+
+		// Set fees back to 0 and try the same swap
+		TrackedDataProvider::<Ethereum>::set_tracked_data(cf_chains::eth::EthereumTrackedData {
+			base_fee: 0,
+			priority_fee: 0,
+		});
+		assert_ok!(IngressEgress::process_deposits(
+			RuntimeOrigin::root(),
+			vec![deposit_detail],
+			Default::default()
+		));
+		// Observe the DepositReceived Event
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::DepositReceived {
+				deposit_address,
+				asset: ASSET,
+				amount: DEPOSIT_AMOUNT,
+				deposit_details: (),
 			},
 		));
 	});
