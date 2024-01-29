@@ -897,7 +897,7 @@ fn deposits_tx_fee_exceeding_deposit_amount_rejected() {
 	let eth = eth::Asset::Eth;
 
 	// We don't have any minimumDeposit limit set (it is 0), hence the first check
-	// (minimumDepositAmount) is satisfied Since we swap 0 our net_deposit_amount after fees is 0
+	// (minimumDepositAmount) is satisfied. Since we swap 0 our net_deposit_amount after fees is 0
 	// and the process_single_deposit function fails emitting a DepositIgnored(NotEnoughToPayFees)
 	// Event
 	new_test_ext().execute_with(|| {
