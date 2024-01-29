@@ -73,7 +73,7 @@ where
 		let mut total_output_amount: u64 = 0;
 		let mut btc_outputs = vec![];
 		for transfer_param in transfer_params {
-			if transfer_param.amount >= BITCOIN_DUST_LIMIT {
+			if transfer_param.amount > BITCOIN_DUST_LIMIT {
 				btc_outputs.push(BitcoinOutput {
 					amount: transfer_param.amount,
 					script_pubkey: transfer_param.to,
@@ -90,7 +90,7 @@ where
 			number_of_outputs: (btc_outputs.len() + 1) as u64, // +1 for the change output
 		})
 		.ok_or(AllBatchError::Other)?;
-		if change_amount >= BITCOIN_DUST_LIMIT {
+		if change_amount > BITCOIN_DUST_LIMIT {
 			btc_outputs.push(BitcoinOutput {
 				amount: change_amount,
 				script_pubkey: bitcoin_change_script,
