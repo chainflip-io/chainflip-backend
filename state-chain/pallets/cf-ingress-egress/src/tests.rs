@@ -894,8 +894,9 @@ fn deposits_below_minimum_are_rejected() {
 }
 
 #[test]
-fn deposits_tx_fee_exceeding_deposit_amount_rejected() {
-	let eth = eth::Asset::Eth;
+fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
+	const ASSET: cf_chains::assets::eth::Asset = eth::Asset::Eth;
+	const DEPOSIT_AMOUNT: u128 = 500;
 
 	new_test_ext().execute_with(|| {
 		// Set Eth fees to some arbitrary value, high enough for our test swap
@@ -905,26 +906,27 @@ fn deposits_tx_fee_exceeding_deposit_amount_rejected() {
 		});
 
 		let (_id, address, ..) =
-			IngressEgress::request_liquidity_deposit_address(ALICE, eth).unwrap();
+			IngressEgress::request_liquidity_deposit_address(ALICE, ASSET).unwrap();
+		let deposit_address = address.try_into().unwrap();
 
 		// Swap a low enough amount such that it gets swallowed by fees
 		let deposit_detail: DepositWitness<Ethereum> = DepositWitness::<Ethereum> {
-			deposit_address: address.clone().try_into().unwrap(),
-			asset: eth,
-			amount: 100,
+			deposit_address,
+			asset: ASSET,
+			amount: DEPOSIT_AMOUNT,
 			deposit_details: (),
 		};
 		assert_ok!(IngressEgress::process_deposits(
 			RuntimeOrigin::root(),
-			vec![deposit_detail],
+			vec![deposit_detail.clone()],
 			Default::default()
 		));
 		// Observe the DepositIgnored Event
 		System::assert_last_event(RuntimeEvent::IngressEgress(
 			crate::Event::<Test>::DepositIgnored {
-				deposit_address: address.clone().try_into().unwrap(),
-				asset: eth,
-				amount: 100,
+				deposit_address,
+				asset: ASSET,
+				amount: DEPOSIT_AMOUNT,
 				deposit_details: (),
 				reason: DepositIgnoredReason::NotEnoughToPayFees,
 			},
@@ -935,12 +937,6 @@ fn deposits_tx_fee_exceeding_deposit_amount_rejected() {
 			base_fee: 0,
 			priority_fee: 0,
 		});
-		let deposit_detail: DepositWitness<Ethereum> = DepositWitness::<Ethereum> {
-			deposit_address: address.clone().try_into().unwrap(),
-			asset: eth,
-			amount: 100,
-			deposit_details: (),
-		};
 		assert_ok!(IngressEgress::process_deposits(
 			RuntimeOrigin::root(),
 			vec![deposit_detail],
@@ -949,9 +945,9 @@ fn deposits_tx_fee_exceeding_deposit_amount_rejected() {
 		// Observe the DepositReceived Event
 		System::assert_last_event(RuntimeEvent::IngressEgress(
 			crate::Event::<Test>::DepositReceived {
-				deposit_address: address.try_into().unwrap(),
-				asset: eth,
-				amount: 100,
+				deposit_address,
+				asset: ASSET,
+				amount: DEPOSIT_AMOUNT,
 				deposit_details: (),
 			},
 		));

@@ -33,6 +33,7 @@ impl AssetConverter for MockAssetConverter {
 	) -> Option<(Amount, Amount)> {
 		let input_asset = input_asset.into();
 		let output_asset = output_asset.into();
+		// the following check is copied from the implementation in the pool pallet
 		if input_asset == output_asset {
 			if desired_output_amount < available_input_amount {
 				return Some((
