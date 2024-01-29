@@ -171,7 +171,7 @@ pub mod pallet {
 		Egress,
 	}
 
-	pub struct AmountFeesWithheld<T: Config<I>, I: 'static> {
+	pub struct AmountAndFeesWithheld<T: Config<I>, I: 'static> {
 		pub amount_after_fees: TargetChainAmount<T, I>,
 		pub fees_withheld: TargetChainAmount<T, I>,
 	}
@@ -1042,7 +1042,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 		Self::deposit_event(Event::<T, I>::DepositFetchesScheduled { channel_id, asset });
 
-		let AmountFeesWithheld { amount_after_fees, fees_withheld } =
+		let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
 			Self::withhold_transaction_fee(
 				IngressOrEgress::Ingress,
 				deposit_channel_details.deposit_channel.asset,
@@ -1219,7 +1219,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ingress_or_egress: IngressOrEgress,
 		asset: TargetChainAsset<T, I>,
 		available_amount: TargetChainAmount<T, I>,
-	) -> AmountFeesWithheld<T, I> {
+	) -> AmountAndFeesWithheld<T, I> {
 		let tracked_data = T::ChainTracking::get_tracked_data();
 		let fee_estimate = match ingress_or_egress {
 			IngressOrEgress::Ingress => tracked_data.estimate_ingress_fee(asset),
@@ -1246,7 +1246,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			fees.saturating_accrue(fee_estimate);
 		});
 
-		AmountFeesWithheld::<T, I> {
+		AmountAndFeesWithheld::<T, I> {
 			amount_after_fees,
 			fees_withheld: available_amount.saturating_sub(amount_after_fees),
 		}
@@ -1284,7 +1284,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 				gas_budget
 			},
 			None => {
-				let AmountFeesWithheld { amount_after_fees, fees_withheld } =
+				let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
 					Self::withhold_transaction_fee(IngressOrEgress::Egress, asset, amount);
 				ScheduledEgressFetchOrTransfer::<T, I>::append({
 					FetchOrTransfer::<T::TargetChain>::Transfer {
