@@ -129,7 +129,7 @@ mod migration_tests {
 		new_test_ext().execute_with(|| {
 			let address1 = ScriptPubkey::Taproot([0u8; 32]);
 			let address2 = ScriptPubkey::Taproot([1u8; 32]);
-			
+
 			// Insert mock data into old storage
 			old::DepositChannelLookup::insert(
 				address1.clone(),
