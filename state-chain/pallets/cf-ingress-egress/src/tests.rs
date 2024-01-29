@@ -893,6 +893,41 @@ fn deposits_below_minimum_are_rejected() {
 }
 
 #[test]
+fn deposits_tx_fee_exceeding_deposit_amount_rejected() {
+	let eth = eth::Asset::Eth;
+
+	// We don't have any minimumDeposit limit set (it is 0), hence the first check
+	// (minimumDepositAmount) is satisfied Since we swap 0 our net_deposit_amount after fees is 0
+	// and the process_single_deposit function fails emitting a DepositIgnored(NotEnoughToPayFees)
+	// Event
+	new_test_ext().execute_with(|| {
+		let (_id, address, ..) =
+			IngressEgress::request_liquidity_deposit_address(ALICE, eth).unwrap();
+
+		let deposit_detail: DepositWitness<Ethereum> = DepositWitness::<Ethereum> {
+			deposit_address: address.clone().try_into().unwrap(),
+			asset: eth,
+			amount: 0,
+			deposit_details: (),
+		};
+		assert_ok!(IngressEgress::process_deposits(
+			RuntimeOrigin::root(),
+			vec![deposit_detail],
+			Default::default()
+		));
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::DepositIgnored {
+				deposit_address: address.try_into().unwrap(),
+				asset: eth,
+				amount: 0,
+				deposit_details: (),
+				reason: DepositIgnoredReason::NotEnoughToPayFees,
+			},
+		));
+	});
+}
+
+#[test]
 fn handle_pending_deployment() {
 	const ETH: eth::Asset = eth::Asset::Eth;
 	new_test_ext().execute_with(|| {
