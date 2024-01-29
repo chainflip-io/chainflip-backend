@@ -17,6 +17,7 @@ use cf_traits::{
 		api_call::{MockAllBatch, MockEthEnvironment, MockEthereumApiCall},
 		block_height_provider::BlockHeightProvider,
 		ccm_handler::{CcmRequest, MockCcmHandler},
+		tracked_data_provider::TrackedDataProvider,
 	},
 	DepositApi, EgressApi, EpochInfo, GetBlockHeight,
 };
@@ -896,18 +897,21 @@ fn deposits_below_minimum_are_rejected() {
 fn deposits_tx_fee_exceeding_deposit_amount_rejected() {
 	let eth = eth::Asset::Eth;
 
-	// We don't have any minimumDeposit limit set (it is 0), hence the first check
-	// (minimumDepositAmount) is satisfied. Since we swap 0 our net_deposit_amount after fees is 0
-	// and the process_single_deposit function fails emitting a DepositIgnored(NotEnoughToPayFees)
-	// Event
 	new_test_ext().execute_with(|| {
+		// Set Eth fees to some arbitrary value, high enough for our test swap
+		TrackedDataProvider::<Ethereum>::set_tracked_data(cf_chains::eth::EthereumTrackedData {
+			base_fee: 100,
+			priority_fee: 0,
+		});
+
 		let (_id, address, ..) =
 			IngressEgress::request_liquidity_deposit_address(ALICE, eth).unwrap();
 
+		// Swap a low enough amount such that it gets swallowed by fees
 		let deposit_detail: DepositWitness<Ethereum> = DepositWitness::<Ethereum> {
 			deposit_address: address.clone().try_into().unwrap(),
 			asset: eth,
-			amount: 0,
+			amount: 100,
 			deposit_details: (),
 		};
 		assert_ok!(IngressEgress::process_deposits(
@@ -915,13 +919,40 @@ fn deposits_tx_fee_exceeding_deposit_amount_rejected() {
 			vec![deposit_detail],
 			Default::default()
 		));
+		// Observe the DepositIgnored Event
 		System::assert_last_event(RuntimeEvent::IngressEgress(
 			crate::Event::<Test>::DepositIgnored {
-				deposit_address: address.try_into().unwrap(),
+				deposit_address: address.clone().try_into().unwrap(),
 				asset: eth,
-				amount: 0,
+				amount: 100,
 				deposit_details: (),
 				reason: DepositIgnoredReason::NotEnoughToPayFees,
+			},
+		));
+
+		// Set fees back to 0 and try the same swap
+		TrackedDataProvider::<Ethereum>::set_tracked_data(cf_chains::eth::EthereumTrackedData {
+			base_fee: 0,
+			priority_fee: 0,
+		});
+		let deposit_detail: DepositWitness<Ethereum> = DepositWitness::<Ethereum> {
+			deposit_address: address.clone().try_into().unwrap(),
+			asset: eth,
+			amount: 100,
+			deposit_details: (),
+		};
+		assert_ok!(IngressEgress::process_deposits(
+			RuntimeOrigin::root(),
+			vec![deposit_detail],
+			Default::default()
+		));
+		// Observe the DepositReceived Event
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::DepositReceived {
+				deposit_address: address.try_into().unwrap(),
+				asset: eth,
+				amount: 100,
+				deposit_details: (),
 			},
 		));
 	});
