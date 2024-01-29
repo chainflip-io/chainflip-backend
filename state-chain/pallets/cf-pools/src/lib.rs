@@ -1157,13 +1157,13 @@ pub struct PoolInfo {
 	/// The fee taken, when range orders are used, from swap inputs that contributes to liquidity
 	/// provider earnings
 	pub range_order_fee_hundredth_pips: u32,
-
+	/// The total fees earned in this pool by range orders.
 	pub range_order_total_fees_earned: SideMap<Amount>,
-
+	/// The total fees earned in this pool by limit orders.
 	pub limit_order_total_fees_earned: SideMap<Amount>,
-
+	/// The total amount of assets that have been bought by range orders in this pool.
 	pub range_total_swap_inputs: SideMap<Amount>,
-
+	/// The total amount of assets that have been bought by limit orders in this pool.
 	pub limit_total_swap_inputs: SideMap<Amount>,
 }
 
