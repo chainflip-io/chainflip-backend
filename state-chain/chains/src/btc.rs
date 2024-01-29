@@ -41,7 +41,7 @@ pub const CHANGE_ADDRESS_SALT: u32 = 0;
 // our construction
 pub const MAX_BITCOIN_SCRIPT_LENGTH: u32 = 128;
 
-// We must send strictly gerat than this amount to avoid hitting the Bitcoin dust
+// We must send strictly greater than this amount to avoid hitting the Bitcoin dust
 // limit
 pub const BITCOIN_DUST_LIMIT: u64 = 599;
 
