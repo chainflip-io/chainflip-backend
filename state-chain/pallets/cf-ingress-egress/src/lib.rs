@@ -256,11 +256,16 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub deposit_channel_lifetime: TargetChainBlockNumber<T, I>,
 		pub witness_safety_margin: Option<TargetChainBlockNumber<T, I>>,
+		pub min_egresses: Vec<(TargetChainAsset<T, I>, TargetChainAmount<T, I>)>,
 	}
 
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
-			Self { deposit_channel_lifetime: Default::default(), witness_safety_margin: None }
+			Self {
+				deposit_channel_lifetime: Default::default(),
+				witness_safety_margin: None,
+				min_egresses: Default::default(),
+			}
 		}
 	}
 
@@ -269,6 +274,10 @@ pub mod pallet {
 		fn build(&self) {
 			DepositChannelLifetime::<T, I>::put(self.deposit_channel_lifetime);
 			WitnessSafetyMargin::<T, I>::set(self.witness_safety_margin);
+
+			for (asset, min_egress) in &self.min_egresses {
+				MinimumEgress::<T, I>::insert(asset, min_egress);
+			}
 		}
 	}
 
