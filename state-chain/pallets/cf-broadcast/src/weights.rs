@@ -114,8 +114,8 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	}
 	/// Storage: `EthereumBroadcaster::ThresholdSignatureData` (r:1 w:0)
 	/// Proof: `EthereumBroadcaster::ThresholdSignatureData` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::CurrentVaultEpochAndState` (r:1 w:0)
-	/// Proof: `EthereumVault::CurrentVaultEpochAndState` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumVault::CurrentKeyEpochAndState` (r:1 w:0)
+	/// Proof: `EthereumVault::CurrentKeyEpochAndState` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// Storage: `EthereumVault::Vaults` (r:1 w:0)
 	/// Proof: `EthereumVault::Vaults` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `EthereumBroadcaster::BroadcastAttemptCount` (r:1 w:1)
@@ -244,8 +244,8 @@ impl WeightInfo for () {
 	}
 	/// Storage: `EthereumBroadcaster::ThresholdSignatureData` (r:1 w:0)
 	/// Proof: `EthereumBroadcaster::ThresholdSignatureData` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::CurrentVaultEpochAndState` (r:1 w:0)
-	/// Proof: `EthereumVault::CurrentVaultEpochAndState` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumVault::CurrentKeyEpochAndState` (r:1 w:0)
+	/// Proof: `EthereumVault::CurrentKeyEpochAndState` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// Storage: `EthereumVault::Vaults` (r:1 w:0)
 	/// Proof: `EthereumVault::Vaults` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `EthereumBroadcaster::BroadcastAttemptCount` (r:1 w:1)

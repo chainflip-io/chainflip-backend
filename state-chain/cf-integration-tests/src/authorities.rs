@@ -8,7 +8,7 @@ use sp_runtime::AccountId32;
 use std::collections::{BTreeSet, HashMap};
 
 use cf_primitives::{AuthorityCount, FlipBalance, GENESIS_EPOCH};
-use cf_traits::{AsyncResult, EpochInfo, KeyRotationStatus, VaultRotator};
+use cf_traits::{AsyncResult, EpochInfo, KeyRotationStatusOuter, KeyRotator};
 use pallet_cf_environment::SafeModeUpdate;
 use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
 use state_chain_runtime::{
@@ -73,7 +73,7 @@ fn authority_rotates_with_correct_sequence() {
 			assert!(matches!(Validator::current_rotation_phase(), RotationPhase::Idle));
 			assert_eq!(
 				AllVaults::status(),
-				AsyncResult::Ready(KeyRotationStatus::RotationComplete)
+				AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete)
 			);
 			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index());
 
@@ -88,7 +88,10 @@ fn authority_rotates_with_correct_sequence() {
 			));
 			// NOTE: This happens due to a bug in `move_forward_blocks`: keygen completes in the
 			// same block in which is was requested.
-			assert_eq!(AllVaults::status(), AsyncResult::Ready(KeyRotationStatus::KeygenComplete));
+			assert_eq!(
+				AllVaults::status(),
+				AsyncResult::Ready(KeyRotationStatusOuter::KeygenComplete)
+			);
 
 			// Key Handover complete.
 			testnet.move_forward_blocks(4);
@@ -99,7 +102,7 @@ fn authority_rotates_with_correct_sequence() {
 			// NOTE: See above, we skip the pending state.
 			assert_eq!(
 				AllVaults::status(),
-				AsyncResult::Ready(KeyRotationStatus::KeyHandoverComplete)
+				AsyncResult::Ready(KeyRotationStatusOuter::KeyHandoverComplete)
 			);
 
 			// Activate new key.
@@ -112,7 +115,7 @@ fn authority_rotates_with_correct_sequence() {
 
 			assert_eq!(
 				AllVaults::status(),
-				AsyncResult::Ready(KeyRotationStatus::RotationComplete),
+				AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete),
 				"Rotation should be complete but vault status is {:?}",
 				AllVaults::status()
 			);
@@ -125,7 +128,7 @@ fn authority_rotates_with_correct_sequence() {
 			));
 			assert_eq!(
 				AllVaults::status(),
-				AsyncResult::Ready(KeyRotationStatus::RotationComplete)
+				AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete)
 			);
 
 			// Rotation Completed.
@@ -133,7 +136,7 @@ fn authority_rotates_with_correct_sequence() {
 			assert!(matches!(Validator::current_rotation_phase(), RotationPhase::Idle));
 			assert_eq!(
 				AllVaults::status(),
-				AsyncResult::Ready(KeyRotationStatus::RotationComplete)
+				AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete)
 			);
 
 			assert_eq!(
@@ -275,7 +278,7 @@ fn authority_rotation_can_succeed_after_aborted_by_safe_mode() {
 			assert!(
 				matches!(
 					AllVaults::status(),
-					AsyncResult::Ready(KeyRotationStatus::KeygenComplete)
+					AsyncResult::Ready(KeyRotationStatusOuter::KeygenComplete)
 				),
 				"Keygen should be complete but is {:?}",
 				AllVaults::status()
@@ -330,7 +333,7 @@ fn authority_rotation_cannot_be_aborted_after_key_handover_and_completes_even_on
 			assert!(
 				matches!(
 					AllVaults::status(),
-					AsyncResult::Ready(KeyRotationStatus::KeyHandoverComplete)
+					AsyncResult::Ready(KeyRotationStatusOuter::KeyHandoverComplete)
 				),
 				"Key handover should be complete but is {:?}",
 				AllVaults::status()
@@ -347,7 +350,7 @@ fn authority_rotation_cannot_be_aborted_after_key_handover_and_completes_even_on
 			// witness extrinsics and so witnessing vault rotation will be stalled.
 			assert!(matches!(
 				AllVaults::status(),
-				AsyncResult::Ready(KeyRotationStatus::RotationComplete)
+				AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete)
 			));
 			testnet.move_forward_blocks(3);
 			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
@@ -456,7 +459,7 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 			));
 			assert_eq!(
 				AllVaults::status(),
-				AsyncResult::Ready(KeyRotationStatus::Failed(BTreeSet::default()))
+				AsyncResult::Ready(KeyRotationStatusOuter::Failed(BTreeSet::default()))
 			);
 
 			// Key handovers are retried after failure.

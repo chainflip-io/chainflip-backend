@@ -6,7 +6,7 @@ use pallet_cf_funding::Config as FundingConfig;
 use pallet_cf_reputation::Config as ReputationConfig;
 use pallet_session::Config as SessionConfig;
 
-use cf_traits::{AccountRoleRegistry, KeyRotationStatus, SafeMode, SetSafeMode};
+use cf_traits::{AccountRoleRegistry, KeyRotationStatusOuter, SafeMode, SetSafeMode};
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::{
 	assert_ok,
@@ -264,7 +264,7 @@ benchmarks! {
 		try_start_keygen::<T>(a, 50, 1);
 
 		// Simulate success.
-		T::VaultRotator::set_status(AsyncResult::Ready(KeyRotationStatus::KeygenComplete));
+		T::KeyRotator::set_status(AsyncResult::Ready(KeyRotationStatusOuter::KeygenComplete));
 
 		// This assertion ensures we are using the correct weight parameter.
 		assert_eq!(
@@ -295,17 +295,17 @@ benchmarks! {
 
 		assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeygensInProgress(..)));
 
-		T::VaultRotator::set_status(AsyncResult::Ready(KeyRotationStatus::KeygenComplete));
+		T::KeyRotator::set_status(AsyncResult::Ready(KeyRotationStatusOuter::KeygenComplete));
 
 		Pallet::<T>::on_initialize(block);
 
 		assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeyHandoversInProgress(..)));
 
-		T::VaultRotator::set_status(AsyncResult::Ready(KeyRotationStatus::KeyHandoverComplete));
+		T::KeyRotator::set_status(AsyncResult::Ready(KeyRotationStatusOuter::KeyHandoverComplete));
 
 		Pallet::<T>::on_initialize(block);
 
-		T::VaultRotator::set_status(AsyncResult::Ready(KeyRotationStatus::RotationComplete));
+		T::KeyRotator::set_status(AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete));
 
 	}: {
 		Pallet::<T>::on_initialize(1u32.into());

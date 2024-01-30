@@ -40,10 +40,10 @@ pub trait WeightInfo {
 pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 
-	// Storage: EthereumVault PendingVaultRotation (r:1 w:1)
+	// Storage: EthereumVault PendingKeyRotation (r:1 w:1)
 	// Storage: Validator CurrentEpoch (r:1 w:0)
 	// Storage: EthereumVault Vaults (r:0 w:1)
-	// Storage: EthereumVault CurrentVaultEpochAndState (r:0 w:1)
+	// Storage: EthereumVault CurrentKeyEpochAndState (r:0 w:1)
 	fn vault_key_rotated() -> Weight {
 		// Minimum execution time: 21_000 nanoseconds.
 		Weight::from_parts(22_000_000, 0)
@@ -53,7 +53,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Validator CurrentEpoch (r:1 w:0)
 	// Storage: Environment CurrentSystemState (r:1 w:1)
 	// Storage: EthereumVault Vaults (r:0 w:1)
-	// Storage: EthereumVault CurrentVaultEpochAndState (r:0 w:1)
+	// Storage: EthereumVault CurrentKeyEpochAndState (r:0 w:1)
 	fn vault_key_rotated_externally() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `339`
@@ -68,10 +68,10 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 // For backwards compatibility and tests
 impl WeightInfo for () {
 
-	// Storage: EthereumVault PendingVaultRotation (r:1 w:1)
+	// Storage: EthereumVault PendingKeyRotation (r:1 w:1)
 	// Storage: Validator CurrentEpoch (r:1 w:0)
 	// Storage: EthereumVault Vaults (r:0 w:1)
-	// Storage: EthereumVault CurrentVaultEpochAndState (r:0 w:1)
+	// Storage: EthereumVault CurrentKeyEpochAndState (r:0 w:1)
 	fn vault_key_rotated() -> Weight {
 		// Minimum execution time: 21_000 nanoseconds.
 		Weight::from_parts(22_000_000, 0)
@@ -81,7 +81,7 @@ impl WeightInfo for () {
 	// Storage: Validator CurrentEpoch (r:1 w:0)
 	// Storage: Environment CurrentSystemState (r:1 w:1)
 	// Storage: EthereumVault Vaults (r:0 w:1)
-	// Storage: EthereumVault CurrentVaultEpochAndState (r:0 w:1)
+	// Storage: EthereumVault CurrentKeyEpochAndState (r:0 w:1)
 	fn vault_key_rotated_externally() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `339`

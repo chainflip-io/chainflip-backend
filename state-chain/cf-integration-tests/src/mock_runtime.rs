@@ -218,7 +218,7 @@ impl ExtBuilder {
 			},
 			bitcoin_threshold_signer: Default::default(),
 			ethereum_threshold_signer: EthereumThresholdSignerConfig {
-				vault_key: Some(ethereum_vault_key),
+				key: Some(ethereum_vault_key),
 				keygen_response_timeout: 4,
 				threshold_signature_response_timeout: 4,
 				amount_to_slash: FLIPPERINOS_PER_FLIP,

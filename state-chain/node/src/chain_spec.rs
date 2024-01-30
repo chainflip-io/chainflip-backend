@@ -608,7 +608,7 @@ fn testnet_genesis(
 		bitcoin_vault: BitcoinVaultConfig { deployment_block: None },
 
 		ethereum_threshold_signer: EthereumThresholdSignerConfig {
-			vault_key: Some(cf_chains::evm::AggKey::from_pubkey_compressed(eth_init_agg_key)),
+			key: Some(cf_chains::evm::AggKey::from_pubkey_compressed(eth_init_agg_key)),
 			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
 			keygen_response_timeout: keygen_ceremony_timeout_blocks,
 			amount_to_slash: FLIPPERINOS_PER_FLIP,
@@ -616,14 +616,14 @@ fn testnet_genesis(
 		},
 
 		polkadot_threshold_signer: PolkadotThresholdSignerConfig {
-			vault_key: None,
+			key: None,
 			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
 			keygen_response_timeout: keygen_ceremony_timeout_blocks,
 			amount_to_slash: FLIPPERINOS_PER_FLIP,
 			_instance: PhantomData,
 		},
 		bitcoin_threshold_signer: BitcoinThresholdSignerConfig {
-			vault_key: None,
+			key: None,
 			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
 			keygen_response_timeout: keygen_ceremony_timeout_blocks,
 			amount_to_slash: FLIPPERINOS_PER_FLIP,

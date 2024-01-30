@@ -1,6 +1,6 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 pub mod address_derivation;
-pub mod all_vaults_rotator;
+pub mod all_keys_rotator;
 pub mod backup_node_rewards;
 pub mod chain_instances;
 pub mod decompose_recompose;

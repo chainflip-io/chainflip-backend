@@ -368,7 +368,7 @@ cf_test_utilities::impl_test_helpers! {
 	RuntimeGenesisConfig {
 		system:Default::default(),
 		ethereum_threshold_signer: EthereumThresholdSignerConfig {
-			vault_key: Some(GENESIS_AGG_PUB_KEY),
+			key: Some(GENESIS_AGG_PUB_KEY),
 			threshold_signature_response_timeout: 1,
 			keygen_response_timeout: MOCK_KEYGEN_RESPONSE_TIMEOUT,
 			amount_to_slash: FLIPPERINOS_PER_FLIP,

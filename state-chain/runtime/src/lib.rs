@@ -100,7 +100,7 @@ pub use pallet_cf_validator::SetSizeParameters;
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
-	all_vaults_rotator::AllVaultRotator, epoch_transition::ChainflipEpochTransitions,
+	all_keys_rotator::AllKeyRotator, epoch_transition::ChainflipEpochTransitions,
 	BroadcastReadyProvider, BtcEnvironment, ChainAddressConverter, ChainflipHeartbeat,
 	DotEnvironment, EthEnvironment, TokenholderGovernanceBroadcaster,
 };
@@ -178,8 +178,8 @@ impl pallet_cf_validator::Config for Runtime {
 	type Offence = chainflip::Offence;
 	type EpochTransitionHandler = ChainflipEpochTransitions;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
-	type VaultRotator =
-		AllVaultRotator<EthereumThresholdSigner, PolkadotThresholdSigner, BitcoinThresholdSigner>;
+	type KeyRotator =
+		AllKeyRotator<EthereumThresholdSigner, PolkadotThresholdSigner, BitcoinThresholdSigner>;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type BidderProvider = pallet_cf_funding::Pallet<Self>;
 	type KeygenQualification = (
@@ -961,7 +961,7 @@ impl_runtime_apis! {
 			let epoch_index = Self::cf_current_epoch();
 			// We should always have a Vault for the current epoch, but in case we do
 			// not, just return an empty Vault.
-			(EthereumThresholdSigner::vault_keys(epoch_index).unwrap_or_default().to_pubkey_compressed(), EthereumVault::vault_start_block_numbers(epoch_index).unwrap().unique_saturated_into())
+			(EthereumThresholdSigner::keys(epoch_index).unwrap_or_default().to_pubkey_compressed(), EthereumVault::vault_start_block_numbers(epoch_index).unwrap().unique_saturated_into())
 		}
 		fn cf_auction_parameters() -> (u32, u32) {
 			let auction_params = Validator::auction_parameters();

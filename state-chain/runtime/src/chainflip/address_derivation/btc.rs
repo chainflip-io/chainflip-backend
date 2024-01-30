@@ -50,12 +50,12 @@ fn test_address_generation() {
 	use cf_chains::Bitcoin;
 	use cf_primitives::chains::assets::btc;
 	use cf_utilities::assert_ok;
-	use pallet_cf_threshold_signature::{CurrentVaultEpoch, VaultKeys};
+	use pallet_cf_threshold_signature::{CurrentKeyEpoch, Keys};
 	use pallet_cf_validator::CurrentEpoch;
 
 	sp_io::TestExternalities::new_empty().execute_with(|| {
 		CurrentEpoch::<Runtime>::set(1);
-		VaultKeys::<Runtime, crate::BitcoinInstance>::insert(
+		Keys::<Runtime, crate::BitcoinInstance>::insert(
 			1,
 			cf_chains::btc::AggKey {
 				previous: None,
@@ -64,7 +64,7 @@ fn test_address_generation() {
 				),
 			},
 		);
-		CurrentVaultEpoch::<Runtime, crate::BitcoinInstance>::put(1);
+		CurrentKeyEpoch::<Runtime, crate::BitcoinInstance>::put(1);
 		assert_ok!(<AddressDerivation as AddressDerivationApi<Bitcoin>>::generate_address(
 			btc::Asset::Btc,
 			1

@@ -455,7 +455,7 @@ impl<'a, 'env, StateChainClient: StorageApi + Send + Sync + 'static, Info, Histo
 					Some(vault_start_block_number) => {
 						Some((
 						state_chain_client
-						.storage_map_entry::<pallet_cf_threshold_signature::VaultKeys<
+						.storage_map_entry::<pallet_cf_threshold_signature::Keys<
 							state_chain_runtime::Runtime,
 							<TChain as PalletInstanceAlias>::Instance,
 						>>(block_hash, &epoch)
@@ -470,7 +470,7 @@ impl<'a, 'env, StateChainClient: StorageApi + Send + Sync + 'static, Info, Histo
 			|state_chain_client, epoch, block_hash, historic_info| async move {
 				(
 					state_chain_client
-						.storage_map_entry::<pallet_cf_threshold_signature::VaultKeys<
+						.storage_map_entry::<pallet_cf_threshold_signature::Keys<
 							state_chain_runtime::Runtime,
 							<TChain as PalletInstanceAlias>::Instance,
 						>>(block_hash, &(epoch + 1))

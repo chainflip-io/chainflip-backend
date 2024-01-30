@@ -24,7 +24,7 @@ fn bitcoin_broadcast_delay_works() {
 			testnet.move_to_the_next_epoch();
 			assert_eq!(Validator::current_authorities().len(), 150);
 			let epoch = Validator::epoch_index();
-			let bitcoin_agg_key = BitcoinThresholdSigner::vault_keys(epoch).unwrap().current;
+			let bitcoin_agg_key = BitcoinThresholdSigner::keys(epoch).unwrap().current;
 			Environment::add_bitcoin_utxo_to_list(
 				1_000_000_000_000u64,
 				Default::default(),

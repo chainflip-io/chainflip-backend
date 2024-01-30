@@ -6,7 +6,7 @@ use super::*;
 use cf_chains::{benchmarking_value::BenchmarkValue, ChainCrypto};
 use cf_primitives::GENESIS_EPOCH;
 use cf_runtime_utilities::StorageDecodeVariant;
-use cf_traits::{AccountRoleRegistry, Chainflip, KeyRotationStatus, ThresholdSigner};
+use cf_traits::{AccountRoleRegistry, Chainflip, KeyRotationStatusOuter, ThresholdSigner};
 use frame_benchmarking::{
 	account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller,
 };
@@ -121,8 +121,8 @@ benchmarks_instance_pallet! {
 			keygen_response_status.add_failure_vote(validator_id, blamed.clone());
 		}
 
-		PendingVaultRotation::<T, I>::put(
-			VaultRotationStatus::<T, I>::AwaitingKeygen {
+		PendingKeyRotation::<T, I>::put(
+			KeyRotationStatus::<T, I>::AwaitingKeygen {
 				ceremony_id: CEREMONY_ID,
 				keygen_participants: keygen_participants.into_iter().collect(),
 				response_status: keygen_response_status,
@@ -137,8 +137,8 @@ benchmarks_instance_pallet! {
 	}
 	verify {
 		assert!(matches!(
-			<Pallet::<T, I> as VaultRotator>::status(),
-			AsyncResult::Ready(KeyRotationStatus::Failed(..))
+			<Pallet::<T, I> as KeyRotator>::status(),
+			AsyncResult::Ready(KeyRotationStatusOuter::Failed(..))
 		));
 	}
 	on_initialize_keygen_success_no_pending_sig_ceremonies {
@@ -155,8 +155,8 @@ benchmarks_instance_pallet! {
 			);
 		}
 
-		PendingVaultRotation::<T, I>::put(
-			VaultRotationStatus::<T, I>::AwaitingKeygen {
+		PendingKeyRotation::<T, I>::put(
+			KeyRotationStatus::<T, I>::AwaitingKeygen {
 				ceremony_id: CEREMONY_ID,
 				keygen_participants: keygen_participants.into_iter().collect(),
 				response_status: keygen_response_status,
@@ -171,8 +171,8 @@ benchmarks_instance_pallet! {
 	}
 	verify {
 		assert_eq!(
-			PendingVaultRotation::<T, I>::decode_variant(),
-			Some(VaultRotationStatusVariant::AwaitingKeygenVerification),
+			PendingKeyRotation::<T, I>::decode_variant(),
+			Some(KeyRotationStatusVariant::AwaitingKeygenVerification),
 		);
 	}
 
@@ -227,8 +227,8 @@ benchmarks_instance_pallet! {
 		T::AccountRoleRegistry::register_as_validator(&caller).unwrap();
 
 		let keygen_participants = generate_authority_set::<T, I>(150, caller.clone().into());
-		PendingVaultRotation::<T, I>::put(
-			VaultRotationStatus::<T, I>::AwaitingKeygen {
+		PendingKeyRotation::<T, I>::put(
+			KeyRotationStatus::<T, I>::AwaitingKeygen {
 				ceremony_id: CEREMONY_ID,
 				keygen_participants: keygen_participants.clone().into_iter().collect(),
 				response_status: KeygenResponseStatus::<T, I>::new(keygen_participants),
@@ -245,8 +245,8 @@ benchmarks_instance_pallet! {
 	} : _(RawOrigin::Signed(caller), CEREMONY_ID, KeygenOutcomeFor::<T, I>::Ok(AggKeyFor::<T, I>::benchmark_value()))
 	verify {
 		assert!(matches!(
-			PendingVaultRotation::<T, I>::get().unwrap(),
-			VaultRotationStatus::AwaitingKeygen { response_status, .. }
+			PendingKeyRotation::<T, I>::get().unwrap(),
+			KeyRotationStatus::AwaitingKeygen { response_status, .. }
 				if response_status.remaining_candidate_count() == 149
 		))
 	}
@@ -268,8 +268,8 @@ benchmarks_instance_pallet! {
 	} : { call.dispatch_bypass_filter(origin.into())? }
 	verify {
 		assert!(matches!(
-			PendingVaultRotation::<T, I>::get().unwrap(),
-			VaultRotationStatus::KeygenVerificationComplete { new_public_key }
+			PendingKeyRotation::<T, I>::get().unwrap(),
+			KeyRotationStatus::KeygenVerificationComplete { new_public_key }
 				if new_public_key == agg_key
 		))
 	}
