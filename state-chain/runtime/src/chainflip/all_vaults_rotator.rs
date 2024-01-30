@@ -3,7 +3,7 @@
 use core::marker::PhantomData;
 
 use cf_primitives::EpochIndex;
-use cf_traits::{AsyncResult, VaultRotationStatusOuter, VaultRotator};
+use cf_traits::{AsyncResult, KeyRotationStatus, VaultRotator};
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 pub struct AllVaultRotator<A, B, C> {
@@ -36,7 +36,7 @@ where
 		C::key_handover(sharing_participants, new_candidates, epoch_index);
 	}
 
-	fn status() -> AsyncResult<VaultRotationStatusOuter<Self::ValidatorId>> {
+	fn status() -> AsyncResult<KeyRotationStatus<Self::ValidatorId>> {
 		let async_results = [A::status(), B::status(), C::status()];
 
 		// if any of the inner rotations are void, then the overall vault rotation result is void.
@@ -48,27 +48,21 @@ where
 		if async_results.iter().all(|item| matches!(item, AsyncResult::Ready(..))) {
 			let statuses = async_results.into_iter().map(AsyncResult::unwrap).collect::<Vec<_>>();
 
-			if statuses.iter().all(|x| matches!(x, VaultRotationStatusOuter::KeygenComplete)) {
-				AsyncResult::Ready(VaultRotationStatusOuter::KeygenComplete)
-			} else if statuses
-				.iter()
-				.all(|x| matches!(x, VaultRotationStatusOuter::KeyHandoverComplete))
-			{
-				AsyncResult::Ready(VaultRotationStatusOuter::KeyHandoverComplete)
-			} else if statuses
-				.iter()
-				.all(|x| matches!(x, VaultRotationStatusOuter::RotationComplete))
-			{
-				AsyncResult::Ready(VaultRotationStatusOuter::RotationComplete)
+			if statuses.iter().all(|x| matches!(x, KeyRotationStatus::KeygenComplete)) {
+				AsyncResult::Ready(KeyRotationStatus::KeygenComplete)
+			} else if statuses.iter().all(|x| matches!(x, KeyRotationStatus::KeyHandoverComplete)) {
+				AsyncResult::Ready(KeyRotationStatus::KeyHandoverComplete)
+			} else if statuses.iter().all(|x| matches!(x, KeyRotationStatus::RotationComplete)) {
+				AsyncResult::Ready(KeyRotationStatus::RotationComplete)
 			} else {
 				// We currently treat an offence in one vault rotation as bad as in all rotations.
 				// We may want to change it, but this is simplest for now.
 
-				AsyncResult::Ready(VaultRotationStatusOuter::Failed(
+				AsyncResult::Ready(KeyRotationStatus::Failed(
 					statuses
 						.into_iter()
 						.filter_map(|r| {
-							if let VaultRotationStatusOuter::Failed(offenders) = r {
+							if let KeyRotationStatus::Failed(offenders) = r {
 								Some(offenders)
 							} else {
 								None
@@ -96,7 +90,7 @@ where
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_status(outcome: AsyncResult<VaultRotationStatusOuter<Self::ValidatorId>>) {
+	fn set_status(outcome: AsyncResult<KeyRotationStatus<Self::ValidatorId>>) {
 		A::set_status(outcome.clone());
 		B::set_status(outcome.clone());
 		C::set_status(outcome);
@@ -122,7 +116,7 @@ mod tests {
 			assert_eq!(
 				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
 				),
-				AsyncResult::Ready(VaultRotationStatusOuter::KeygenComplete)
+				AsyncResult::Ready(KeyRotationStatus::KeygenComplete)
 			);
 		});
 	}
@@ -137,7 +131,7 @@ mod tests {
 			assert_eq!(
 				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
 				),
-				AsyncResult::Ready(VaultRotationStatusOuter::KeyHandoverComplete)
+				AsyncResult::Ready(KeyRotationStatus::KeyHandoverComplete)
 			);
 		});
 	}
@@ -152,7 +146,7 @@ mod tests {
 			assert_eq!(
 				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
 				),
-				AsyncResult::Ready(VaultRotationStatusOuter::RotationComplete)
+				AsyncResult::Ready(KeyRotationStatus::RotationComplete)
 			);
 		});
 	}
@@ -170,7 +164,7 @@ mod tests {
 			assert_eq!(
 				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
 				),
-				AsyncResult::Ready(VaultRotationStatusOuter::Failed(BTreeSet::default()))
+				AsyncResult::Ready(KeyRotationStatus::Failed(BTreeSet::default()))
 			);
 		});
 	}
@@ -187,7 +181,7 @@ mod tests {
 			assert_eq!(
 				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
 				),
-				AsyncResult::Ready(VaultRotationStatusOuter::Failed(BTreeSet::from(OFFENDERS)))
+				AsyncResult::Ready(KeyRotationStatus::Failed(BTreeSet::from(OFFENDERS)))
 			);
 		});
 
@@ -200,7 +194,7 @@ mod tests {
 			assert_eq!(
 				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
 				),
-				AsyncResult::Ready(VaultRotationStatusOuter::Failed(BTreeSet::from(OFFENDERS)))
+				AsyncResult::Ready(KeyRotationStatus::Failed(BTreeSet::from(OFFENDERS)))
 			);
 		});
 	}
@@ -215,9 +209,7 @@ mod tests {
 			assert_eq!(
 				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
 				),
-				AsyncResult::Ready(VaultRotationStatusOuter::Failed(BTreeSet::from([
-					1, 2, 3, 4, 5, 6
-				])))
+				AsyncResult::Ready(KeyRotationStatus::Failed(BTreeSet::from([1, 2, 3, 4, 5, 6])))
 			);
 		});
 	}

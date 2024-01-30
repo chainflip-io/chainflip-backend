@@ -1,4 +1,4 @@
-use crate::{mocks::MockPalletStorage, AsyncResult, VaultRotationStatusOuter, VaultRotator};
+use crate::{mocks::MockPalletStorage, AsyncResult, KeyRotationStatus, VaultRotator};
 use cf_primitives::EpochIndex;
 use sp_std::collections::btree_set::BTreeSet;
 
@@ -18,17 +18,15 @@ macro_rules! mock_vault_rotator {
 			pub fn keygen_success() {
 				Self::put_value(
 					ROTATION_OUTCOME,
-					AsyncResult::<VaultRotationStatusOuter<u64>>::Ready(
-						VaultRotationStatusOuter::KeygenComplete,
-					),
+					AsyncResult::<KeyRotationStatus<u64>>::Ready(KeyRotationStatus::KeygenComplete),
 				);
 			}
 
 			pub fn key_handover_success() {
 				Self::put_value(
 					ROTATION_OUTCOME,
-					AsyncResult::<VaultRotationStatusOuter<u64>>::Ready(
-						VaultRotationStatusOuter::KeyHandoverComplete,
+					AsyncResult::<KeyRotationStatus<u64>>::Ready(
+						KeyRotationStatus::KeyHandoverComplete,
 					),
 				);
 			}
@@ -36,8 +34,8 @@ macro_rules! mock_vault_rotator {
 			pub fn keys_activated() {
 				Self::put_value(
 					ROTATION_OUTCOME,
-					AsyncResult::<VaultRotationStatusOuter<u64>>::Ready(
-						VaultRotationStatusOuter::RotationComplete,
+					AsyncResult::<KeyRotationStatus<u64>>::Ready(
+						KeyRotationStatus::RotationComplete,
 					),
 				);
 			}
@@ -45,17 +43,14 @@ macro_rules! mock_vault_rotator {
 			pub fn failed<O: IntoIterator<Item = u64>>(offenders: O) {
 				Self::put_value(
 					ROTATION_OUTCOME,
-					AsyncResult::<VaultRotationStatusOuter<u64>>::Ready(
-						VaultRotationStatusOuter::Failed(offenders.into_iter().collect()),
-					),
+					AsyncResult::<KeyRotationStatus<u64>>::Ready(KeyRotationStatus::Failed(
+						offenders.into_iter().collect(),
+					)),
 				);
 			}
 
 			pub fn pending() {
-				Self::put_value(
-					ROTATION_OUTCOME,
-					AsyncResult::<VaultRotationStatusOuter<u64>>::Pending,
-				)
+				Self::put_value(ROTATION_OUTCOME, AsyncResult::<KeyRotationStatus<u64>>::Pending)
 			}
 		}
 
@@ -63,10 +58,7 @@ macro_rules! mock_vault_rotator {
 			type ValidatorId = u64;
 
 			fn keygen(_candidates: BTreeSet<Self::ValidatorId>, _new_epoch_index: EpochIndex) {
-				Self::put_value(
-					ROTATION_OUTCOME,
-					AsyncResult::<VaultRotationStatusOuter<u64>>::Pending,
-				);
+				Self::put_value(ROTATION_OUTCOME, AsyncResult::<KeyRotationStatus<u64>>::Pending);
 			}
 
 			fn key_handover(
@@ -74,32 +66,23 @@ macro_rules! mock_vault_rotator {
 				_new_candidates: BTreeSet<Self::ValidatorId>,
 				_epoch_index: EpochIndex,
 			) {
-				Self::put_value(
-					ROTATION_OUTCOME,
-					AsyncResult::<VaultRotationStatusOuter<u64>>::Pending,
-				);
+				Self::put_value(ROTATION_OUTCOME, AsyncResult::<KeyRotationStatus<u64>>::Pending);
 			}
 
-			fn status() -> AsyncResult<VaultRotationStatusOuter<Self::ValidatorId>> {
+			fn status() -> AsyncResult<KeyRotationStatus<Self::ValidatorId>> {
 				Self::get_value(ROTATION_OUTCOME).unwrap_or_default()
 			}
 
 			fn activate_vaults() {
-				Self::put_value(
-					ROTATION_OUTCOME,
-					AsyncResult::<VaultRotationStatusOuter<u64>>::Pending,
-				);
+				Self::put_value(ROTATION_OUTCOME, AsyncResult::<KeyRotationStatus<u64>>::Pending);
 			}
 
 			fn reset_vault_rotation() {
-				Self::put_value(
-					ROTATION_OUTCOME,
-					AsyncResult::<VaultRotationStatusOuter<u64>>::Void,
-				);
+				Self::put_value(ROTATION_OUTCOME, AsyncResult::<KeyRotationStatus<u64>>::Void);
 			}
 
 			#[cfg(feature = "runtime-benchmarks")]
-			fn set_status(_outcome: AsyncResult<VaultRotationStatusOuter<Self::ValidatorId>>) {
+			fn set_status(_outcome: AsyncResult<KeyRotationStatus<Self::ValidatorId>>) {
 				unimplemented!()
 			}
 		}

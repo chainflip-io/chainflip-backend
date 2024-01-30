@@ -17,8 +17,8 @@ use cf_traits::{
 		cfe_interface_mock::{MockCfeEvent, MockCfeInterface},
 		signer_nomination::MockNominator,
 	},
-	AccountRoleRegistry, AsyncResult, Chainflip, EpochInfo, EpochKey, KeyProvider, SetSafeMode,
-	VaultRotationStatusOuter, VaultRotator,
+	AccountRoleRegistry, AsyncResult, Chainflip, EpochInfo, EpochKey, KeyProvider,
+	KeyRotationStatus, SetSafeMode, VaultRotator,
 };
 pub use frame_support::traits::Get;
 
@@ -928,9 +928,7 @@ fn keygen_failure(
 
 	assert_eq!(
 		EthereumThresholdSigner::status(),
-		AsyncResult::Ready(VaultRotationStatusOuter::Failed(
-			bad_candidates.clone().into_iter().collect()
-		))
+		AsyncResult::Ready(KeyRotationStatus::Failed(bad_candidates.clone().into_iter().collect()))
 	);
 
 	MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, bad_candidates);
@@ -1008,7 +1006,7 @@ fn keygen_verification_failure() {
 			MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, blamed.clone());
 			assert_eq!(
 				EthereumThresholdSigner::status(),
-				AsyncResult::Ready(VaultRotationStatusOuter::Failed(blamed.into_iter().collect()))
+				AsyncResult::Ready(KeyRotationStatus::Failed(blamed.into_iter().collect()))
 			)
 		});
 }
@@ -1316,7 +1314,7 @@ fn do_full_key_rotation() {
 
 	assert_eq!(
 		<EthereumThresholdSigner as VaultRotator>::status(),
-		AsyncResult::Ready(VaultRotationStatusOuter::KeygenComplete)
+		AsyncResult::Ready(KeyRotationStatus::KeygenComplete)
 	);
 
 	assert!(matches!(
@@ -1357,7 +1355,7 @@ fn do_full_key_rotation() {
 
 	assert_eq!(
 		<EthereumThresholdSigner as VaultRotator>::status(),
-		AsyncResult::Ready(VaultRotationStatusOuter::KeyHandoverComplete)
+		AsyncResult::Ready(KeyRotationStatus::KeyHandoverComplete)
 	);
 
 	//println!("{:?}", System::events());
@@ -1378,7 +1376,7 @@ fn do_full_key_rotation() {
 
 	assert_eq!(
 		<EthereumThresholdSigner as VaultRotator>::status(),
-		AsyncResult::Ready(VaultRotationStatusOuter::RotationComplete)
+		AsyncResult::Ready(KeyRotationStatus::RotationComplete)
 	);
 	MockVaultActivator::set_activation_completed();
 
@@ -1386,7 +1384,7 @@ fn do_full_key_rotation() {
 	assert_eq!(PendingVaultRotation::<Test, _>::get(), Some(VaultRotationStatus::Complete));
 	assert_eq!(
 		EthereumThresholdSigner::status(),
-		AsyncResult::Ready(VaultRotationStatusOuter::RotationComplete)
+		AsyncResult::Ready(KeyRotationStatus::RotationComplete)
 	);
 }
 
@@ -1445,7 +1443,7 @@ fn keygen_report_failure() {
 		assert!(!KeygenResolutionPendingSince::<Test, _>::exists());
 		assert_eq!(
 			EthereumThresholdSigner::status(),
-			AsyncResult::Ready(VaultRotationStatusOuter::Failed(BTreeSet::from([CHARLIE])))
+			AsyncResult::Ready(KeyRotationStatus::Failed(BTreeSet::from([CHARLIE])))
 		);
 
 		MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, vec![CHARLIE]);
@@ -1716,7 +1714,7 @@ mod vault_key_rotation {
 			let offenders = BTreeSet::from_iter(offenders);
 			assert_eq!(
 				EthereumThresholdSigner::status(),
-				AsyncResult::Ready(VaultRotationStatusOuter::Failed(offenders.clone()))
+				AsyncResult::Ready(KeyRotationStatus::Failed(offenders.clone()))
 			);
 
 			assert_eq!(

@@ -1,6 +1,6 @@
 use super::*;
 use cf_runtime_utilities::{log_or_panic, StorageDecodeVariant};
-use cf_traits::{CfeMultisigRequest, VaultActivator, VaultRotationStatusOuter, VaultRotator};
+use cf_traits::{CfeMultisigRequest, KeyRotationStatus, VaultActivator, VaultRotator};
 use cfe_events::{KeyHandoverRequest, KeygenRequest};
 use frame_support::{sp_runtime::traits::BlockNumberProvider, traits::PalletInfoAccess};
 
@@ -127,7 +127,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	}
 
 	/// Get the status of the current key generation
-	fn status() -> AsyncResult<VaultRotationStatusOuter<T::ValidatorId>> {
+	fn status() -> AsyncResult<KeyRotationStatus<T::ValidatorId>> {
 		if let Some(status_variant) = PendingVaultRotation::<T, I>::decode_variant() {
 			match status_variant {
 				VaultRotationStatusVariant::AwaitingKeygen => AsyncResult::Pending,
@@ -136,14 +136,14 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 				// It's at this point we want the vault to be considered ready to commit to. We
 				// don't want to commit until the other vaults are ready
 				VaultRotationStatusVariant::KeygenVerificationComplete =>
-					AsyncResult::Ready(VaultRotationStatusOuter::KeygenComplete),
+					AsyncResult::Ready(KeyRotationStatus::KeygenComplete),
 				VaultRotationStatusVariant::AwaitingKeyHandover => AsyncResult::Pending,
 				VaultRotationStatusVariant::KeyHandoverComplete =>
-					AsyncResult::Ready(VaultRotationStatusOuter::KeyHandoverComplete),
+					AsyncResult::Ready(KeyRotationStatus::KeyHandoverComplete),
 				VaultRotationStatusVariant::KeyHandoverFailed =>
 					match PendingVaultRotation::<T, I>::get() {
 						Some(VaultRotationStatus::KeyHandoverFailed { offenders, .. }) =>
-							AsyncResult::Ready(VaultRotationStatusOuter::Failed(offenders)),
+							AsyncResult::Ready(KeyRotationStatus::Failed(offenders)),
 						_ => unreachable!(
 							"Unreachable because we are in the branch for the Failed variant."
 						),
@@ -158,7 +158,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 					};
 
 					let status = T::VaultActivator::status()
-						.replace_inner(VaultRotationStatusOuter::RotationComplete);
+						.replace_inner(KeyRotationStatus::RotationComplete);
 					if status.is_ready() {
 						Self::activate_new_key(new_public_key);
 					}
@@ -166,13 +166,13 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 				},
 				VaultRotationStatusVariant::Failed => match PendingVaultRotation::<T, I>::get() {
 					Some(VaultRotationStatus::Failed { offenders }) =>
-						AsyncResult::Ready(VaultRotationStatusOuter::Failed(offenders)),
+						AsyncResult::Ready(KeyRotationStatus::Failed(offenders)),
 					_ => unreachable!(
 						"Unreachable because we are in the branch for the Failed variant."
 					),
 				},
 				VaultRotationStatusVariant::Complete =>
-					AsyncResult::Ready(VaultRotationStatusOuter::RotationComplete),
+					AsyncResult::Ready(KeyRotationStatus::RotationComplete),
 			}
 		} else {
 			AsyncResult::Void
@@ -208,7 +208,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_status(outcome: AsyncResult<VaultRotationStatusOuter<Self::ValidatorId>>) {
+	fn set_status(outcome: AsyncResult<KeyRotationStatus<Self::ValidatorId>>) {
 		match outcome {
 			AsyncResult::Pending => {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingKeygen {
@@ -218,26 +218,26 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 					new_epoch_index: Default::default(),
 				});
 			},
-			AsyncResult::Ready(VaultRotationStatusOuter::KeygenComplete) => {
+			AsyncResult::Ready(KeyRotationStatus::KeygenComplete) => {
 				PendingVaultRotation::<T, I>::put(
 					VaultRotationStatus::<T, I>::KeygenVerificationComplete {
 						new_public_key: Default::default(),
 					},
 				);
 			},
-			AsyncResult::Ready(VaultRotationStatusOuter::KeyHandoverComplete) => {
+			AsyncResult::Ready(KeyRotationStatus::KeyHandoverComplete) => {
 				PendingVaultRotation::<T, I>::put(
 					VaultRotationStatus::<T, I>::KeyHandoverComplete {
 						new_public_key: Default::default(),
 					},
 				);
 			},
-			AsyncResult::Ready(VaultRotationStatusOuter::Failed(offenders)) => {
+			AsyncResult::Ready(KeyRotationStatus::Failed(offenders)) => {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed {
 					offenders,
 				});
 			},
-			AsyncResult::Ready(VaultRotationStatusOuter::RotationComplete) => {
+			AsyncResult::Ready(KeyRotationStatus::RotationComplete) => {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete);
 			},
 			AsyncResult::Void => {

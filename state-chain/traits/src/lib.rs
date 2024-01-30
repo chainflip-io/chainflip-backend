@@ -145,7 +145,7 @@ impl<Id, Amount> From<(Id, Amount)> for Bid<Id, Amount> {
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, Decode, Encode)]
-pub enum VaultRotationStatusOuter<ValidatorId> {
+pub enum KeyRotationStatus<ValidatorId> {
 	KeygenComplete,
 	KeyHandoverComplete,
 	RotationComplete,
@@ -168,7 +168,7 @@ pub trait VaultRotator {
 	);
 
 	/// Get the current rotation status.
-	fn status() -> AsyncResult<VaultRotationStatusOuter<Self::ValidatorId>>;
+	fn status() -> AsyncResult<KeyRotationStatus<Self::ValidatorId>>;
 
 	/// Activate key on for vaults on all chains that use this Key.
 	fn activate_vaults();
@@ -178,7 +178,7 @@ pub trait VaultRotator {
 	fn reset_vault_rotation();
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_status(_outcome: AsyncResult<VaultRotationStatusOuter<Self::ValidatorId>>);
+	fn set_status(_outcome: AsyncResult<KeyRotationStatus<Self::ValidatorId>>);
 }
 
 pub trait VaultActivator<C: ChainCrypto> {

@@ -6,7 +6,7 @@ use super::*;
 use cf_chains::{benchmarking_value::BenchmarkValue, ChainCrypto};
 use cf_primitives::GENESIS_EPOCH;
 use cf_runtime_utilities::StorageDecodeVariant;
-use cf_traits::{AccountRoleRegistry, Chainflip, ThresholdSigner, VaultRotationStatusOuter};
+use cf_traits::{AccountRoleRegistry, Chainflip, KeyRotationStatus, ThresholdSigner};
 use frame_benchmarking::{
 	account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller,
 };
@@ -138,7 +138,7 @@ benchmarks_instance_pallet! {
 	verify {
 		assert!(matches!(
 			<Pallet::<T, I> as VaultRotator>::status(),
-			AsyncResult::Ready(VaultRotationStatusOuter::Failed(..))
+			AsyncResult::Ready(KeyRotationStatus::Failed(..))
 		));
 	}
 	on_initialize_keygen_success_no_pending_sig_ceremonies {
