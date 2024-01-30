@@ -7,7 +7,9 @@ mod benchmarking;
 
 pub mod migrations;
 #[cfg(test)]
-mod mock;
+mod mock_btc;
+#[cfg(test)]
+mod mock_eth;
 #[cfg(test)]
 mod tests;
 pub mod weights;
@@ -95,7 +97,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 /// Calls to the external chains that has failed to be broadcast/accepted by the target chain.
 /// User can use information stored here to query for relevant information to broadcast
