@@ -1,4 +1,4 @@
-use cf_primitives::{AccountId, BlockNumber, EgressId};
+use cf_primitives::{AccountId, BasisPoints, BlockNumber, EgressId};
 use cf_utilities::{
 	rpc::NumberOrHex,
 	task_scope::{task_scope, Scope},
@@ -109,6 +109,7 @@ pub trait Rpc {
 		&self,
 		asset: RpcAsset,
 		wait_for: Option<WaitFor>,
+		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<ApiWaitForResult<String>>;
 
 	#[method(name = "register_liquidity_refund_address")]
@@ -252,11 +253,16 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		asset: RpcAsset,
 		wait_for: Option<WaitFor>,
+		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<ApiWaitForResult<String>> {
 		Ok(self
 			.api
 			.lp_api()
-			.request_liquidity_deposit_address(asset.try_into()?, wait_for.unwrap_or_default())
+			.request_liquidity_deposit_address(
+				asset.try_into()?,
+				wait_for.unwrap_or_default(),
+				boost_fee,
+			)
 			.await
 			.map(|result| result.map_details(|address| address.to_string()))?)
 	}

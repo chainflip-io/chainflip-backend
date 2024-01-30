@@ -267,6 +267,7 @@ pub mod pallet {
 			broker_commission_rate: BasisPoints,
 			channel_metadata: Option<CcmChannelMetadata>,
 			source_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
+			boost_fee: BasisPoints,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
@@ -477,6 +478,7 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
 			broker_commission_bps: BasisPoints,
+			boost_fee: BasisPoints,
 			channel_metadata: Option<CcmChannelMetadata>,
 		) -> DispatchResult {
 			ensure!(T::SafeMode::get().deposits_enabled, Error::<T>::DepositsDisabled);
@@ -513,6 +515,7 @@ pub mod pallet {
 				broker_commission_rate: broker_commission_bps,
 				channel_metadata,
 				source_chain_expiry_block: expiry_height,
+				boost_fee,
 			});
 
 			Ok(())

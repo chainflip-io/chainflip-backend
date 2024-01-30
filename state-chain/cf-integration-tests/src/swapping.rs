@@ -241,6 +241,7 @@ fn basic_pool_setup_provision_and_swap() {
 			Asset::Flip,
 			EncodedAddress::Eth([1u8; 20]),
 			0u16,
+			0u16,
 			None,
 		));
 
@@ -336,6 +337,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 			Asset::Flip,
 			Asset::Usdc,
 			EncodedAddress::Eth([0x02; 20]),
+			0u16,
 			0u16,
 			Some(message),
 		));

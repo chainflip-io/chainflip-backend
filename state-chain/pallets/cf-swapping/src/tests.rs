@@ -133,6 +133,7 @@ fn request_swap_success_with_valid_parameters() {
 			Asset::Usdc,
 			EncodedAddress::Eth(Default::default()),
 			0,
+			0,
 			None
 		));
 	});
@@ -227,6 +228,7 @@ fn expect_swap_id_to_be_emitted() {
 			Asset::Eth,
 			Asset::Usdc,
 			EncodedAddress::Eth(Default::default()),
+			0,
 			0,
 			None
 		));
@@ -408,7 +410,8 @@ fn rejects_invalid_swap_deposit() {
 				Asset::Eth,
 				EncodedAddress::Dot(Default::default()),
 				0,
-				Some(ccm.clone())
+				0,
+				Some(ccm.clone()),
 			),
 			Error::<Test>::IncompatibleAssetAndAddress
 		);
@@ -419,6 +422,7 @@ fn rejects_invalid_swap_deposit() {
 				Asset::Eth,
 				Asset::Dot,
 				EncodedAddress::Dot(Default::default()),
+				0,
 				0,
 				Some(ccm)
 			),
@@ -482,6 +486,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 			Asset::Dot,
 			Asset::Eth,
 			EncodedAddress::Eth(Default::default()),
+			0,
 			0,
 			Some(request_ccm)
 		));
@@ -1425,6 +1430,7 @@ fn swap_excess_are_confiscated_ccm_via_deposit() {
 			to,
 			EncodedAddress::Eth(Default::default()),
 			0,
+			0,
 			Some(request_ccm)
 		));
 
@@ -1908,6 +1914,7 @@ fn broker_bps_is_limited() {
 				Asset::Usdc,
 				EncodedAddress::Eth(Default::default()),
 				1001,
+				0,
 				None,
 			),
 			Error::<Test>::BrokerCommissionBpsTooHigh
