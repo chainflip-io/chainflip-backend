@@ -121,6 +121,11 @@ jobs:
         run: |
           cat /tmp/chainflip/debug.log
 
+      - name: Print solana logs ☀️
+        if: failure()
+        run: |
+          cat /tmp/solana/solana.log
+
       - name: Upload Localnet Logs 💾
         if: always()
         continue-on-error: true
@@ -131,6 +136,7 @@ jobs:
             /tmp/chainflip/*/chainflip-*.log
             /tmp/chainflip/chainflip-*.log
             /tmp/chainflip/debug.log
+            /tmp/solana/*.log
 
       - name: List /tmp/chainflip 📂
         if: always()
