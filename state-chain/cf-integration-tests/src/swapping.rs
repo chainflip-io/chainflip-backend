@@ -32,6 +32,7 @@ use pallet_cf_broadcast::{
 	ThresholdSignatureData,
 };
 use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall};
+use pallet_cf_lp::HistoricalEarnedFees;
 use pallet_cf_pools::{OrderId, RangeOrderSize};
 use pallet_cf_swapping::CcmIdCounter;
 use sp_core::U256;
@@ -226,6 +227,7 @@ fn basic_pool_setup_provision_and_swap() {
 		credit_account(&DORIS, Asset::Eth, 1_000_000);
 		credit_account(&DORIS, Asset::Flip, 1_000_000);
 		credit_account(&DORIS, Asset::Usdc, 1_000_000);
+		assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS));
 
 		set_limit_order(&DORIS, Asset::Eth, Asset::Usdc, 0, Some(0), 500_000);
 		set_range_order(&DORIS, Asset::Eth, Asset::Usdc, 0, Some(-10..10), 1_000_000);
@@ -314,6 +316,8 @@ fn basic_pool_setup_provision_and_swap() {
 				},
 			) if egress_ids.contains(&egress_id) => ()
 		);
+
+		assert!(HistoricalEarnedFees::<Runtime>::contains_key(&DORIS));
 	});
 }
 
