@@ -21,7 +21,7 @@ use cf_chains::{
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
 	CeremonyId, ChannelId, Ed25519PublicKey, EgressId, EpochIndex, FlipBalance, ForeignChain,
-	Ipv6Addr, NetworkEnvironment, SemVer, ThresholdSignatureRequestId,
+	Ipv6Addr, NetworkEnvironment, SemVer, SwapId, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -786,8 +786,8 @@ pub trait NetworkEnvironmentProvider {
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug)]
 pub struct CcmSwapIds {
-	pub principal_swap_id: Option<u64>,
-	pub gas_swap_id: Option<u64>,
+	pub principal_swap_id: Option<SwapId>,
+	pub gas_swap_id: Option<SwapId>,
 }
 
 /// Trait for handling cross chain messages.

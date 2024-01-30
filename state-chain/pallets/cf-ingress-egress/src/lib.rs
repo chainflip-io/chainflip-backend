@@ -200,6 +200,7 @@ pub mod pallet {
 		NoAction,
 	}
 
+	/// Tracks funds that are owned by the vault and available for egress.
 	#[derive(
 		CloneNoBound,
 		DefaultNoBound,
@@ -1013,7 +1014,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 		Self::deposit_event(Event::<T, I>::DepositFetchesScheduled { channel_id, asset });
 
-		let AmountFeesWithheld { amount_after_fees, fees_withheld: ingress_fee } =
+		let AmountFeesWithheld { amount_after_fees, fees_withheld } =
 			Self::withhold_transaction_fee(
 				IngressOrEgress::Ingress,
 				deposit_channel_details.deposit_channel.asset,
@@ -1101,7 +1102,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				asset,
 				amount: deposit_amount,
 				deposit_details,
-				ingress_fee,
+				ingress_fee: fees_withheld,
 				action: deposit_action,
 			});
 		}
@@ -1184,8 +1185,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Withholds the fee for a given amount.
 	///
-	/// Returns the remaining amount after the fee has been withheld, and the fee itself as
-	/// asset's amount
+	/// Returns the remaining amount after the fee has been withheld, and the fee itself, both
+	/// measured in units of the input asset.
 	fn withhold_transaction_fee(
 		ingress_or_egress: IngressOrEgress,
 		asset: TargetChainAsset<T, I>,
@@ -1197,7 +1198,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			IngressOrEgress::Egress => tracked_data.estimate_egress_fee(asset),
 		};
 
-		let (remaining_amount, fee_estimate) =
+		let (amount_after_fees, fee_estimate) =
 			T::AssetConverter::convert_asset_to_approximate_output(
 				asset,
 				available_amount,
@@ -1218,8 +1219,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 
 		AmountFeesWithheld::<T, I> {
-			amount_after_fees: remaining_amount,
-			fees_withheld: available_amount.saturating_sub(remaining_amount),
+			amount_after_fees,
+			fees_withheld: available_amount.saturating_sub(amount_after_fees),
 		}
 	}
 }
@@ -1255,7 +1256,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 				gas_budget
 			},
 			None => {
-				let AmountFeesWithheld { amount_after_fees, fees_withheld: egress_fee } =
+				let AmountFeesWithheld { amount_after_fees, fees_withheld } =
 					Self::withhold_transaction_fee(IngressOrEgress::Egress, asset, amount);
 				ScheduledEgressFetchOrTransfer::<T, I>::append({
 					FetchOrTransfer::<T::TargetChain>::Transfer {
@@ -1265,7 +1266,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 						egress_id,
 					}
 				});
-				egress_fee
+				fees_withheld
 			},
 		};
 
