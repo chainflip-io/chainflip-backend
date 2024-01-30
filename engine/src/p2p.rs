@@ -221,6 +221,9 @@ where
 	))
 }
 
+/// Monitors the State Chain for peer registration events and sends them to the P2P client.
+/// This is done separate to the SC Observer because we do not want to process events in the initial
+/// block.
 async fn monitor_p2p_registration_events<StateChainClient, BlockStream: StreamApi<FINALIZED>>(
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,

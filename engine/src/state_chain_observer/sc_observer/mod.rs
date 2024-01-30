@@ -587,6 +587,7 @@ where
 		bitcoin: if let Some(ceremony_id) = events.iter().find_map(|event| match event {
 			CfeEvent::BtcThresholdSignatureRequest(req) => Some(req.ceremony_id),
 			CfeEvent::BtcKeygenRequest(req) => Some(req.ceremony_id),
+			CfeEvent::BtcKeyHandoverRequest(req) => Some(req.ceremony_id),
 			_ => None,
 		}) {
 			ceremony_id.saturating_sub(1)
