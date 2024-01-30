@@ -27,7 +27,7 @@ mod tests;
 
 mod benchmarking;
 
-pub mod migrations;
+// pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 

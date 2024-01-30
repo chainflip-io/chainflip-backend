@@ -37,7 +37,7 @@ use response_status::ResponseStatus;
 
 pub mod weights;
 pub use weights::WeightInfo;
-pub mod migrations;
+// pub mod migrations;
 mod mock;
 mod tests;
 

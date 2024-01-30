@@ -28,7 +28,7 @@ use sp_std::{boxed::Box, collections::btree_set::BTreeSet, vec::Vec};
 pub use pallet::*;
 
 mod benchmarking;
-pub mod migrations;
+// pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 

@@ -2,7 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-pub mod migrations;
+// pub mod migrations;
 
 use cf_traits::{AuthoritiesCfeVersions, CompatibleCfeVersions};
 use codec::{Codec, Decode, Encode};
@@ -12,9 +12,7 @@ use frame_support::{
 	pallet_prelude::{DispatchResultWithPostInfo, Weight},
 	sp_runtime::{DispatchError, Percent, TransactionOutcome},
 	storage::with_transaction,
-	traits::{
-		EnsureOrigin, Get, OnRuntimeUpgrade, StorageVersion, UnfilteredDispatchable, UnixTime,
-	},
+	traits::{EnsureOrigin, Get, StorageVersion, UnfilteredDispatchable, UnixTime},
 };
 pub use pallet::*;
 use sp_std::{boxed::Box, ops::Add, vec::Vec};
