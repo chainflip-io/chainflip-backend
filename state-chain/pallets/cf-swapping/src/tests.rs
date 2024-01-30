@@ -20,7 +20,7 @@ use cf_traits::{
 	},
 	CcmHandler, SetSafeMode, SwapDepositHandler, SwappingApi,
 };
-use frame_support::{assert_noop, assert_ok, traits::Hooks};
+use frame_support::{assert_err, assert_noop, assert_ok, traits::Hooks};
 use itertools::Itertools;
 use sp_arithmetic::Permill;
 use sp_std::iter;
@@ -73,13 +73,16 @@ fn assert_failed_ccm(
 	ccm: CcmDepositMetadata,
 	reason: CcmFailReason,
 ) {
-	Swapping::on_ccm_deposit(
-		from,
-		amount,
-		output,
-		destination_address.clone(),
-		ccm.clone(),
-		SwapOrigin::Vault { tx_hash: Default::default() },
+	assert_err!(
+		Swapping::on_ccm_deposit(
+			from,
+			amount,
+			output,
+			destination_address.clone(),
+			ccm.clone(),
+			SwapOrigin::Vault { tx_hash: Default::default() },
+		),
+		()
 	);
 	System::assert_last_event(RuntimeEvent::Swapping(Event::CcmFailed {
 		reason,
@@ -482,14 +485,14 @@ fn can_process_ccms_via_swap_deposit_address() {
 			0,
 			Some(request_ccm)
 		));
-		Swapping::on_ccm_deposit(
+		assert_ok!(Swapping::on_ccm_deposit(
 			Asset::Dot,
 			deposit_amount,
 			Asset::Eth,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm.clone(),
 			SwapOrigin::Vault { tx_hash: Default::default() },
-		);
+		));
 
 		assert_eq!(
 			PendingCcms::<Test>::get(1),
@@ -937,14 +940,14 @@ fn ccm_without_principal_swaps_are_accepted() {
 		let ccm = generate_ccm_deposit();
 
 		// Ccm with principal asset = 0
-		Swapping::on_ccm_deposit(
+		assert_ok!(Swapping::on_ccm_deposit(
 			eth,
 			gas_budget,
 			flip,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm.clone(),
 			SwapOrigin::Vault { tx_hash: Default::default() },
-		);
+		));
 
 		// Verify the CCM is processed successfully
 		assert_event_sequence!(
@@ -968,14 +971,14 @@ fn ccm_without_principal_swaps_are_accepted() {
 
 		// Ccm where principal asset = output asset
 		System::reset_events();
-		Swapping::on_ccm_deposit(
+		assert_ok!(Swapping::on_ccm_deposit(
 			eth,
 			gas_budget + principal_amount,
 			eth,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm,
 			SwapOrigin::Vault { tx_hash: Default::default() },
-		);
+		));
 
 		// Verify the CCM is processed successfully
 		assert_event_sequence!(
@@ -1164,14 +1167,14 @@ fn ccm_swaps_emits_events() {
 
 		// Test when both principal and gas need to be swapped.
 		System::reset_events();
-		Swapping::on_ccm_deposit(
+		assert_ok!(Swapping::on_ccm_deposit(
 			Asset::Flip,
 			10_000,
 			Asset::Usdc,
 			destination_address.clone(),
 			ccm.clone(),
 			ORIGIN,
-		);
+		));
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::Swapping(Event::SwapScheduled {
@@ -1182,7 +1185,7 @@ fn ccm_swaps_emits_events() {
 				destination_address: EncodedAddress::Eth(..),
 				origin: ORIGIN,
 				swap_type: SwapType::CcmPrincipal(1),
-				broker_commission: _
+				broker_commission: _,
 			}),
 			RuntimeEvent::Swapping(Event::SwapScheduled {
 				swap_type: SwapType::CcmGas(1),
@@ -1205,14 +1208,14 @@ fn ccm_swaps_emits_events() {
 
 		// Test when only principal needs to be swapped.
 		System::reset_events();
-		Swapping::on_ccm_deposit(
+		assert_ok!(Swapping::on_ccm_deposit(
 			Asset::Eth,
 			10_000,
 			Asset::Usdc,
 			destination_address.clone(),
 			ccm.clone(),
 			ORIGIN,
-		);
+		));
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::Swapping(Event::SwapScheduled {
@@ -1236,14 +1239,14 @@ fn ccm_swaps_emits_events() {
 
 		// Test when only gas needs to be swapped.
 		System::reset_events();
-		Swapping::on_ccm_deposit(
+		assert_ok!(Swapping::on_ccm_deposit(
 			Asset::Flip,
 			10_000,
 			Asset::Flip,
 			destination_address,
 			ccm,
 			ORIGIN,
-		);
+		));
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::Swapping(Event::SwapScheduled {
@@ -1274,14 +1277,14 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 			let eth_address = ForeignChainAddress::Eth(Default::default());
 			let ccm = generate_ccm_deposit();
 
-			Swapping::on_ccm_deposit(
+			assert_ok!(Swapping::on_ccm_deposit(
 				Asset::Usdc,
 				100_000,
 				Asset::Eth,
 				eth_address,
 				ccm,
 				SwapOrigin::Vault { tx_hash: Default::default() },
-			);
+			));
 
 			// Change the swap rate so swap output will be 0
 			SwapRate::set(0.0001f64);
@@ -1425,14 +1428,14 @@ fn swap_excess_are_confiscated_ccm_via_deposit() {
 			Some(request_ccm)
 		));
 
-		Swapping::on_ccm_deposit(
+		assert_ok!(Swapping::on_ccm_deposit(
 			from,
 			gas_budget + principal_amount,
 			to,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm.clone(),
 			SwapOrigin::Vault { tx_hash: Default::default() },
-		);
+		));
 
 		// Excess fee is confiscated
 		System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapAmountConfiscated {
@@ -1876,10 +1879,10 @@ fn swap_broker_fee_subtracted_from_swap_amount() {
 		let mut swap_id = 1;
 		Asset::all().iter().for_each(|asset| {
 			let mut total_fees = 0;
-			combinations.clone().for_each(|(amount, fee)| {
-				swap_with_custom_broker_fee(*asset, Asset::Flip, *amount, fee);
+			combinations.clone().for_each(|(amount, broker_fee)| {
+				swap_with_custom_broker_fee(*asset, Asset::Flip, *amount, broker_fee);
 				let broker_commission =
-					Permill::from_parts(fee as u32 * BASIS_POINTS_PER_MILLION) * *amount;
+					Permill::from_parts(broker_fee as u32 * BASIS_POINTS_PER_MILLION) * *amount;
 				total_fees += broker_commission;
 				assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, *asset), total_fees);
 				swap_scheduled_event_witnessed(

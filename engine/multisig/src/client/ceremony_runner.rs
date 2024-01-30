@@ -79,7 +79,7 @@ where
 
 		// We always create unauthorised first, it can get promoted to
 		// an authorised one with a ceremony request
-		let mut runner = Self::new_unauthorised(outcome_sender, ceremony_id);
+		let mut runner = Self::new_unauthorised(outcome_sender);
 		let mut ceremony_start: Option<Instant> = None;
 		// Fuse the oneshot future so it will not get called twice
 		let mut request_receiver = request_receiver.fuse();
@@ -111,9 +111,11 @@ where
 			}
 		};
 		if let Some(start_instant) = ceremony_start {
-			let duration = start_instant.elapsed().as_millis();
-			runner.metrics.ceremony_duration.set(duration);
-			span.in_scope(|| tracing::info!("Ceremony took {}ms to complete", duration));
+			let duration = start_instant.elapsed();
+			runner.metrics.ceremony_duration.observe(duration);
+			span.in_scope(|| {
+				tracing::info!("Ceremony took {}ms to complete", duration.as_millis())
+			});
 		}
 		let _result = runner.outcome_sender.send((ceremony_id, outcome));
 		Ok(())
@@ -124,7 +126,6 @@ where
 	/// cannot make any progress otherwise
 	fn new_unauthorised(
 		outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
-		ceremony_id: CeremonyId,
 	) -> Self {
 		CeremonyRunner {
 			stage: None,
@@ -133,7 +134,7 @@ where
 			timeout_handle: Box::pin(tokio::time::sleep(tokio::time::Duration::ZERO)),
 			outcome_sender,
 			_phantom: Default::default(),
-			metrics: CeremonyMetrics::new(ceremony_id, Chain::NAME, Ceremony::CEREMONY_TYPE),
+			metrics: CeremonyMetrics::new(Chain::NAME, Ceremony::CEREMONY_TYPE),
 		}
 	}
 
@@ -369,7 +370,7 @@ where
 {
 	/// This is to allow calling a private method from tests
 	pub fn new_unauthorised_for_test() -> Self {
-		Self::new_unauthorised(tokio::sync::mpsc::unbounded_channel().0, 0)
+		Self::new_unauthorised(tokio::sync::mpsc::unbounded_channel().0)
 	}
 
 	fn get_awaited_parties_count(&self) -> Option<AuthorityCount> {

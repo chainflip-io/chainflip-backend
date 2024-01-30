@@ -77,7 +77,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 		// Migrate Timeouts: Map<Block -> Vec<BroadcastAttemptId>> -> Map<Block ->
 		// BTreeSet<(BroadcastId, ValidatorId>>
-		Timeouts::<T, I>::translate(|_, failed_attempts: Vec<old::BroadcastAttemptId>| {
+		Timeouts::<T, I>::translate(|_block, failed_attempts: Vec<old::BroadcastAttemptId>| {
 			Some(
 				failed_attempts
 					.into_iter()
@@ -179,11 +179,12 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 		assert_eq!(broadcast_retry_queue, DelayedBroadcastRetryQueue::<T, I>::get(next_block));
 
 		// Ensure Timeouts data are migrated
-		timeout_broadcasts.into_iter().for_each(|(block_number, attempts)|
-			// Assert the pre- and post- migrated data is identical.
-			assert_eq!(attempts.into_iter().map(|broadcast_id|
-				(broadcast_id, AwaitingBroadcast::<T, I>::get(broadcast_id).unwrap().nominee.unwrap())
-			).collect::<BTreeSet<_>>(), Timeouts::<T, I>::get(block_number)));
+		timeout_broadcasts.into_iter().for_each(|(block_number, attempts)| {
+			// Calls without call data (already succeded) is excluded. New set <= old set
+			Timeouts::<T, I>::get(block_number)
+				.into_iter()
+				.for_each(|(broadcast_id, _nominee)| assert!(attempts.contains(&broadcast_id)))
+		});
 
 		Ok(())
 	}
@@ -337,6 +338,10 @@ mod migration_tests {
 				vec![
 					old::BroadcastAttemptId { broadcast_id: 1, attempt_count: 1 },
 					old::BroadcastAttemptId { broadcast_id: 2, attempt_count: 2 },
+					// The following broadcasts already succeeded with calldata removed,
+					// so they are not migrated
+					old::BroadcastAttemptId { broadcast_id: 100, attempt_count: 1 },
+					old::BroadcastAttemptId { broadcast_id: 101, attempt_count: 1 },
 				],
 			);
 			old::Timeouts::<Test, Instance1>::insert(
@@ -347,6 +352,10 @@ mod migration_tests {
 					old::BroadcastAttemptId { broadcast_id: 3, attempt_count: 3 },
 					old::BroadcastAttemptId { broadcast_id: 4, attempt_count: 1 },
 					old::BroadcastAttemptId { broadcast_id: 4, attempt_count: 2 },
+					// The following broadcasts already succeeded with calldata removed,
+					// so they are not migrated
+					old::BroadcastAttemptId { broadcast_id: 102, attempt_count: 1 },
+					old::BroadcastAttemptId { broadcast_id: 103, attempt_count: 1 },
 				],
 			);
 

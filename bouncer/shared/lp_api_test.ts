@@ -13,7 +13,7 @@ import {
 } from './utils';
 import { jsonRpc } from './json_rpc';
 import { provideLiquidity } from './provide_liquidity';
-import { sendEth } from './send_eth';
+import { sendEvmNative } from './send_evm';
 import { getBalance } from './get_balance';
 
 type RpcAsset = {
@@ -114,7 +114,7 @@ async function testLiquidityDeposit() {
         BigInt(testAssetAmount),
       ),
   );
-  await sendEth(liquidityDepositAddress, String(testAmount));
+  await sendEvmNative(chainFromAsset(testAsset), liquidityDepositAddress, String(testAmount));
   await observeAccountCreditedEvent;
 }
 
