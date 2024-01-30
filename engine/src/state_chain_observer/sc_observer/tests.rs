@@ -532,91 +532,109 @@ async fn test_get_ceremony_id_counters_with_events() {
 	const DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK: CeremonyId = 20;
 	const BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK: CeremonyId = 30;
 	let block_hash = H256::default();
-	let mut state_chain_client = MockStateChainClient::new();
 
-	// Load up the block with events that would cause the ceremony id counters to be updated.
-	// Note: The events must be in order (lowest ceremony id per chain first), just like in a real
-	// SC stream.
-	state_chain_client
-		.expect_storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
-		.with(eq(block_hash))
-		.once()
-		.return_once(|_| {
-			Ok(vec![
-				// EthTxBroadcastRequest should not effect the ceremony id counter
-				CfeEvent::<Runtime>::EthTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> {
-					broadcast_id: Default::default(),
-					nominee: AccountId32::new([1; 32]),
-					payload: Default::default(),
-				}),
-				// Next we have 1 keygen and 1 signing request for each chain.
-				CfeEvent::<Runtime>::EthThresholdSignatureRequest(ThresholdSignatureRequest::<
-					Runtime,
-					_,
-				> {
-					ceremony_id: ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
-					epoch_index: 1,
-					key: Default::default(),
-					signatories: Default::default(),
-					payload: Default::default(),
-				}),
-				CfeEvent::<Runtime>::EthKeygenRequest(KeygenRequest::<Runtime> {
-					ceremony_id: ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 2,
-					epoch_index: 1,
-					participants: Default::default(),
-				}),
-				CfeEvent::<Runtime>::DotThresholdSignatureRequest(ThresholdSignatureRequest::<
-					Runtime,
-					_,
-				> {
-					ceremony_id: DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
-					epoch_index: 1,
-					key: Default::default(),
-					signatories: Default::default(),
-					payload: cf_chains::dot::EncodedPolkadotPayload(vec![]),
-				}),
-				CfeEvent::<Runtime>::DotKeygenRequest(KeygenRequest::<Runtime> {
-					ceremony_id: DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 2,
-					epoch_index: 1,
-					participants: Default::default(),
-				}),
-				CfeEvent::<Runtime>::BtcThresholdSignatureRequest(ThresholdSignatureRequest::<
-					Runtime,
-					_,
-				> {
-					ceremony_id: BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
-					epoch_index: 1,
-					key: Default::default(),
-					signatories: Default::default(),
-					payload: Default::default(),
-				}),
-				CfeEvent::<Runtime>::BtcKeygenRequest(KeygenRequest::<Runtime> {
-					ceremony_id: BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 2,
-					epoch_index: 1,
-					participants: Default::default(),
-				}),
-				// And one key handover request for BTC
-				CfeEvent::<Runtime>::BtcKeyHandoverRequest(KeyHandoverRequest::<Runtime, _> {
-					ceremony_id: BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 3,
-					from_epoch: 1,
-					to_epoch: 2,
-					key_to_share: cf_chains::btc::AggKey::default(),
-					sharing_participants: Default::default(),
-					receiving_participants: Default::default(),
-					new_key: cf_chains::btc::AggKey::default(),
-				}),
-			])
-		});
+	let test_block_streams = vec![
+		// Test 1: 1 signing request for each chain and another event that should not effect the id
+		// counters
+		vec![
+			CfeEvent::<Runtime>::EthTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> {
+				broadcast_id: Default::default(),
+				nominee: AccountId32::new([1; 32]),
+				payload: Default::default(),
+			}),
+			CfeEvent::<Runtime>::EthThresholdSignatureRequest(ThresholdSignatureRequest::<
+				Runtime,
+				_,
+			> {
+				ceremony_id: ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				key: Default::default(),
+				signatories: Default::default(),
+				payload: Default::default(),
+			}),
+			CfeEvent::<Runtime>::DotThresholdSignatureRequest(ThresholdSignatureRequest::<
+				Runtime,
+				_,
+			> {
+				ceremony_id: DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				key: Default::default(),
+				signatories: Default::default(),
+				payload: cf_chains::dot::EncodedPolkadotPayload(vec![]),
+			}),
+			CfeEvent::<Runtime>::BtcThresholdSignatureRequest(ThresholdSignatureRequest::<
+				Runtime,
+				_,
+			> {
+				ceremony_id: BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				key: Default::default(),
+				signatories: Default::default(),
+				payload: Default::default(),
+			}),
+		],
+		// Test 2: 1 keygen request for each chain
+		vec![
+			CfeEvent::<Runtime>::EthKeygenRequest(KeygenRequest::<Runtime> {
+				ceremony_id: ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				participants: Default::default(),
+			}),
+			CfeEvent::<Runtime>::DotKeygenRequest(KeygenRequest::<Runtime> {
+				ceremony_id: DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				participants: Default::default(),
+			}),
+			CfeEvent::<Runtime>::BtcKeygenRequest(KeygenRequest::<Runtime> {
+				ceremony_id: BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				participants: Default::default(),
+			}),
+		],
+		// Test 3: 1 key handover request for BTC (and keygen requests for the other chains to
+		// avoid test complexity)
+		vec![
+			CfeEvent::<Runtime>::EthKeygenRequest(KeygenRequest::<Runtime> {
+				ceremony_id: ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				participants: Default::default(),
+			}),
+			CfeEvent::<Runtime>::DotKeygenRequest(KeygenRequest::<Runtime> {
+				ceremony_id: DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				participants: Default::default(),
+			}),
+			CfeEvent::<Runtime>::BtcKeyHandoverRequest(KeyHandoverRequest::<Runtime, _> {
+				ceremony_id: BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				from_epoch: 1,
+				to_epoch: 2,
+				key_to_share: cf_chains::btc::AggKey::default(),
+				sharing_participants: Default::default(),
+				receiving_participants: Default::default(),
+				new_key: cf_chains::btc::AggKey::default(),
+			}),
+		],
+	];
 
-	let ceremony_id_counters =
-		get_ceremony_id_counters_before_block(block_hash, Arc::new(state_chain_client))
-			.await
-			.unwrap();
+	// Run the function on all 3 test streams and check the ceremony id counters are correct
+	for test_block_stream in test_block_streams {
+		let mut state_chain_client = MockStateChainClient::new();
 
-	// Check the each ceremony id counter is set to the value before the initial block
-	assert_eq!(ceremony_id_counters.ethereum, ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK);
-	assert_eq!(ceremony_id_counters.polkadot, DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK);
-	assert_eq!(ceremony_id_counters.bitcoin, BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK);
+		state_chain_client
+			.expect_storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
+			.with(eq(block_hash))
+			.once()
+			.return_once(|_| Ok(test_block_stream));
+
+		let ceremony_id_counters =
+			get_ceremony_id_counters_before_block(block_hash, Arc::new(state_chain_client))
+				.await
+				.unwrap();
+
+		assert_eq!(ceremony_id_counters.ethereum, ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK);
+		assert_eq!(ceremony_id_counters.polkadot, DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK);
+		assert_eq!(ceremony_id_counters.bitcoin, BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK);
+	}
 }
 
 #[tokio::test]
