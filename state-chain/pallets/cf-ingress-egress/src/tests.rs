@@ -1,6 +1,6 @@
 use crate::{
 	mock_eth::*, Call as PalletCall, ChannelAction, ChannelIdCounter, CrossChainMessage,
-	DepositChannelLookup, DepositChannelPool, DepositIgnoredReason, DepositWitness,
+	DepositAction, DepositChannelLookup, DepositChannelPool, DepositIgnoredReason, DepositWitness,
 	DisabledEgressAssets, Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls,
 	FetchOrTransfer, MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
 	TargetChainAccount,
@@ -156,6 +156,7 @@ fn can_schedule_swap_egress_to_batch() {
 			asset: ETH_ETH,
 			amount: 2_000,
 			destination_address: ALICE_ETH_ADDRESS,
+			egress_fee: 0,
 		}));
 
 		IngressEgress::schedule_egress(ETH_FLIP, 3_000, BOB_ETH_ADDRESS, None);
@@ -165,6 +166,7 @@ fn can_schedule_swap_egress_to_batch() {
 			asset: ETH_FLIP,
 			amount: 4_000,
 			destination_address: BOB_ETH_ADDRESS,
+			egress_fee: 0,
 		}));
 
 		assert_eq!(
@@ -513,22 +515,24 @@ fn can_egress_ccm() {
 	new_test_ext().execute_with(|| {
 		let destination_address: H160 = [0x01; 20].into();
 		let destination_asset = eth::Asset::Eth;
-		let gas_budget = 1_000u128;
+		const GAS_BUDGET: u128 = 1_000;
 		let ccm = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
 			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
 			channel_metadata: CcmChannelMetadata {
 				message: vec![0x00, 0x01, 0x02].try_into().unwrap(),
-				gas_budget,
+				gas_budget: GAS_BUDGET,
 				cf_parameters: vec![].try_into().unwrap(),
 			}
 		};
+
+
 		let amount = 5_000;
 		let egress_id = IngressEgress::schedule_egress(
 			destination_asset,
 			amount,
 			destination_address,
-			Some((ccm.clone(), gas_budget))
+			Some((ccm.clone(), GAS_BUDGET))
 		);
 
 		assert!(ScheduledEgressFetchOrTransfer::<Test>::get().is_empty());
@@ -542,7 +546,7 @@ fn can_egress_ccm() {
 				cf_parameters: vec![].try_into().unwrap(),
 				source_chain: ForeignChain::Ethereum,
 				source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
-				gas_budget,
+				gas_budget: GAS_BUDGET,
 			}
 		]);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
@@ -551,6 +555,7 @@ fn can_egress_ccm() {
 				asset: destination_asset,
 				amount,
 				destination_address,
+    			egress_fee: GAS_BUDGET,
 			}
 		));
 
@@ -566,7 +571,7 @@ fn can_egress_ccm() {
 			},
 			ccm.source_chain,
 			ccm.source_address,
-			gas_budget,
+			GAS_BUDGET,
 			ccm.channel_metadata.message.to_vec(),
 		).unwrap()]);
 
@@ -880,14 +885,17 @@ fn deposits_below_minimum_are_rejected() {
 			},
 		));
 
+		const LP_ACCOUNT: u64 = 0;
 		// Flip deposit should succeed.
-		let (_, deposit_address) = request_address_and_deposit(0, flip);
+		let (_, deposit_address) = request_address_and_deposit(LP_ACCOUNT, flip);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
 			crate::Event::<Test>::DepositReceived {
 				deposit_address,
 				asset: flip,
 				amount: default_deposit_amount,
 				deposit_details: Default::default(),
+				ingress_fee: 0,
+				action: DepositAction::LiquidityProvision { lp_account: LP_ACCOUNT },
 			},
 		));
 	});
@@ -949,6 +957,8 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 				asset: ASSET,
 				amount: DEPOSIT_AMOUNT,
 				deposit_details: (),
+				ingress_fee: 0,
+				action: DepositAction::LiquidityProvision { lp_account: ALICE },
 			},
 		));
 	});
