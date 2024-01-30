@@ -93,9 +93,6 @@ impl MockCfe {
 			payload,
 		}) = event
 		{
-			//assert_eq!(key, current_agg_key());
-			//assert_eq!(signatories, MockNominator::get_nominees().unwrap());
-
 			match &self.behaviour {
 				CfeBehaviour::Success => {
 					// Wrong request id is a no-op

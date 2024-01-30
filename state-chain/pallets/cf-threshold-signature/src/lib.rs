@@ -356,7 +356,7 @@ pub mod pallet {
 		/// A marker trait identifying the chain that we are signing for.
 		type TargetChainCrypto: ChainCrypto;
 
-		///
+		/// trait to activate chains that use this pallet's key
 		type VaultActivator: VaultActivator<Self::TargetChainCrypto>;
 
 		/// Signer nomination.

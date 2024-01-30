@@ -101,7 +101,7 @@ pub mod pallet {
 	pub type VaultStartBlockNumbers<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, EpochIndex, ChainBlockNumberFor<T, I>>;
 
-	/// Vault activation statuses for the current epoch rotation.
+	/// Vault activation status for the current epoch rotation.
 	#[pallet::storage]
 	#[pallet::getter(fn pending_vault_rotations)]
 	pub type PendingVaultActivation<T: Config<I>, I: 'static = ()> =
@@ -200,7 +200,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			if let Some(deployment_block) = self.deployment_block {
-				Pallet::<T, I>::set_starting_block_number_for_epoch(
+				VaultStartBlockNumbers::<T, I>::insert(
 					cf_primitives::GENESIS_EPOCH,
 					deployment_block,
 				);
@@ -214,18 +214,11 @@ pub mod pallet {
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn activate_new_key_for_chain(block_number: ChainBlockNumberFor<T, I>) {
 		PendingVaultActivation::<T, I>::put(VaultActivationStatus::<T, I>::Complete);
-		Self::set_starting_block_number_for_epoch(
+		VaultStartBlockNumbers::<T, I>::insert(
 			CurrentEpochIndex::<T>::get().saturating_add(1),
 			block_number.saturating_add(One::one()),
 		);
 		Self::deposit_event(Event::VaultActivationCompleted);
-	}
-
-	fn set_starting_block_number_for_epoch(
-		epoch_index: EpochIndex,
-		block_number: ChainBlockNumberFor<T, I>,
-	) {
-		VaultStartBlockNumbers::<T, I>::insert(epoch_index, block_number);
 	}
 }
 
@@ -234,7 +227,7 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 		let rotation =
 			PendingVaultActivation::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
 
-		_ = ensure_variant!(
+		ensure_variant!(
 			VaultActivationStatus::<T, I>::AwaitingActivation { new_public_key } => new_public_key,
 			rotation,
 			Error::<T, I>::InvalidRotationStatus

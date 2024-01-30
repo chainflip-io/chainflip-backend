@@ -34,7 +34,7 @@ impl<R> AsyncResult<R> {
 		}
 	}
 
-	pub fn map_to<S>(self, inner: S) -> AsyncResult<S> {
+	pub fn replace_inner<S>(self, inner: S) -> AsyncResult<S> {
 		match self {
 			AsyncResult::Ready(_) => AsyncResult::Ready(inner),
 			AsyncResult::Pending => AsyncResult::Pending,

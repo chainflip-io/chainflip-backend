@@ -113,13 +113,6 @@ impl MockCallback<MockEthereumChainCrypto> {
 				CALL_DISPATCHED.with(|cell| *(cell.borrow_mut()) = Some(999));
 			},
 		}
-		// if let Self::Regular(request_id) = self {
-		// 	assert!(matches!(
-		// 		<EthereumThresholdSigner as ThresholdSigner<_>>::signature_result(request_id),
-		// 		AsyncResult::Ready(..)
-		// 	));
-		// }
-		//CALL_DISPATCHED.with(|cell| *(cell.borrow_mut()) = Some(self.0.unwrap_or(999)));
 		TIMES_CALLED.with(|times| *times.borrow_mut() += 1)
 	}
 

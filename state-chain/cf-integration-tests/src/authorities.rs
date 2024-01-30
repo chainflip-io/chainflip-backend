@@ -70,7 +70,6 @@ fn authority_rotates_with_correct_sequence() {
 			// when rotating for the first time.
 			testnet.move_to_the_next_epoch();
 
-			println!("{:?}", Validator::current_rotation_phase());
 			assert!(matches!(Validator::current_rotation_phase(), RotationPhase::Idle));
 			assert_eq!(
 				AllVaults::status(),

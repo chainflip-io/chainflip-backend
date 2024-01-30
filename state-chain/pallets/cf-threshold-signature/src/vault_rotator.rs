@@ -158,7 +158,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 					};
 
 					let status = T::VaultActivator::status()
-						.map_to(VaultRotationStatusOuter::RotationComplete);
+						.replace_inner(VaultRotationStatusOuter::RotationComplete);
 					if status.is_ready() {
 						Self::activate_new_key(new_public_key);
 					}
