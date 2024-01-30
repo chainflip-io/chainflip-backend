@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use crate::{self as pallet_cf_chain_tracking, Config};
 use cf_chains::mocks::MockEthereum;
 use cf_traits::{self, impl_mock_chainflip};
-use frame_support::{instances::Instance1, parameter_types};
+use frame_support::parameter_types;
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -14,7 +14,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 frame_support::construct_runtime!(
 	pub enum Test {
 		System: frame_system,
-		MockChainTracking: pallet_cf_chain_tracking::<Instance1>,
+		MockChainTracking: pallet_cf_chain_tracking,
 	}
 );
 
@@ -56,7 +56,7 @@ impl frame_system::Config for Test {
 
 impl_mock_chainflip!(Test);
 
-impl Config<Instance1> for Test {
+impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = MockEthereum;
 	type WeightInfo = ();

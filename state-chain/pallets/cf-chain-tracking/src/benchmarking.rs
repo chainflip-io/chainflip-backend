@@ -48,7 +48,7 @@ mod benchmarks {
 	#[test]
 	fn benchmark_works() {
 		new_test_ext().execute_with(|| {
-			_update_chain_state::<Test, Instance1>(true);
+			_update_chain_state::<Test, ()>(true);
 		});
 	}
 }
