@@ -957,6 +957,8 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 				asset: ASSET,
 				amount: DEPOSIT_AMOUNT,
 				deposit_details: (),
+				ingress_fee: 0,
+				action: DepositAction::LiquidityProvision { lp_account: ALICE },
 			},
 		));
 	});
