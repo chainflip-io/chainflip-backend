@@ -1300,7 +1300,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 
 					fees_withheld
 				} else {
-					// TODO: track the ignored deposits somewhere, like withheld fees.
+					// TODO: track the ignored egresses somewhere, like withheld fees.
 					Self::deposit_event(Event::<T, I>::EgressIgnored {
 						egress_id,
 						asset,
