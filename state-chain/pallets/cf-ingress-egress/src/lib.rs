@@ -1027,7 +1027,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			deposit_channel_details.deposit_channel,
 		);
 		DepositBalances::<T, I>::mutate(asset, |deposits| {
-			deposits.register_deposit(deposit_amount)
+			deposits.register_deposit(amount_after_fees)
 		});
 
 		if amount_after_fees.is_zero() {
