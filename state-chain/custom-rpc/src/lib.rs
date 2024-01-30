@@ -60,7 +60,7 @@ impl TryInto<Asset> for RpcAsset {
 				if chain == ForeignChain::from(asset) {
 					Ok(asset)
 				} else {
-					Err(AssetConversionError::UnupportedAsset(chain, asset))
+					Err(AssetConversionError::UnsupportedAsset(chain, asset))
 				},
 		}
 	}
@@ -69,7 +69,7 @@ impl TryInto<Asset> for RpcAsset {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum AssetConversionError {
 	#[error("Unsupported asset {1:?} on chain {0}")]
-	UnupportedAsset(ForeignChain, Asset),
+	UnsupportedAsset(ForeignChain, Asset),
 }
 
 impl From<AssetConversionError> for jsonrpsee::core::Error {
@@ -88,7 +88,7 @@ impl TryFrom<(Asset, Option<ForeignChain>)> for RpcAsset {
 				if chain == ForeignChain::from(asset) {
 					Ok(RpcAsset::ExplicitChain { asset, chain })
 				} else {
-					Err(AssetConversionError::UnupportedAsset(chain, asset))
+					Err(AssetConversionError::UnsupportedAsset(chain, asset))
 				},
 		}
 	}
