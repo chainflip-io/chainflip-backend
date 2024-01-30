@@ -1,15 +1,6 @@
 name: Post build checks
 
-on:
-  workflow_call:
-    inputs:
-      full_bouncer:
-        type: boolean
-        default: false
-      timeout-minutes:
-        type: number
-        required: false
-        default: 120
+on: push
 
 env:
   FORCE_COLOR: 1
