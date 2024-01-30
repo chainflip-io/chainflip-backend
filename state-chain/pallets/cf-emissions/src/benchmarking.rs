@@ -36,7 +36,6 @@ mod benchmarks {
 
 	#[benchmark]
 	fn update_backup_node_emission_inflation() {
-		// Benchmark for the backup node emission inflation update extrinsic
 		let call = Call::<T>::update_backup_node_emission_inflation { inflation: INFLATION_RATE };
 		#[block]
 		{
