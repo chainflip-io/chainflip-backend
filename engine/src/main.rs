@@ -111,7 +111,7 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 			// Use the ceremony id counters from before the initial block so the SCO can process the
 			// events from the initial block.
 			let ceremony_id_counters = state_chain_observer::get_ceremony_id_counters_before_block(
-				state_chain_stream.cache().hash,
+				*state_chain_stream.cache(),
 				state_chain_client.clone(),
 			)
 			.await?;

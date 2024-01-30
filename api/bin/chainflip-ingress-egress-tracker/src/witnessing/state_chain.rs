@@ -339,6 +339,11 @@ mod tests {
 				block_hash: state_chain_runtime::Hash,
 			) -> RpcResult<<StorageValue::QueryKind as QueryKindTrait<StorageValue::Value, StorageValue::OnEmpty>>::Query>;
 
+			async fn storage_value_raw<StorageValue: storage_api::StorageValueAssociatedTypes + 'static>(
+				&self,
+				block_hash: state_chain_runtime::Hash,
+			) -> RpcResult<Option<Vec<u8>>>;
+
 			async fn storage_map_entry<StorageMap: storage_api::StorageMapAssociatedTypes + 'static>(
 				&self,
 				block_hash: state_chain_runtime::Hash,

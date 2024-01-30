@@ -233,6 +233,7 @@ impl ExtBuilder {
 			bitcoin_ingress_egress: Default::default(),
 			polkadot_ingress_egress: Default::default(),
 			ethereum_ingress_egress: Default::default(),
+			cfe_interface: Default::default(),
 		})
 	}
 }

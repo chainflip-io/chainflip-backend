@@ -680,6 +680,7 @@ fn testnet_genesis(
 			deposit_channel_lifetime: polkadot_deposit_channel_lifetime,
 			witness_safety_margin: None,
 		},
+		cfe_interface: Default::default(),
 	}
 }
 

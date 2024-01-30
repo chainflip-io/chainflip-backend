@@ -11,16 +11,15 @@ use cf_chains::{
 };
 use cf_primitives::{Ed25519PublicKey, Ipv6Addr, Port};
 use cf_traits::{CfeBroadcastRequest, CfeMultisigRequest, CfePeerRegistration, Chainflip};
-use frame_support::{
-	pallet_prelude::Hooks,
-	storage::types::{StorageValue, ValueQuery},
-	traits::StorageVersion,
-};
+use frame_support::traits::StorageVersion;
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::vec::Vec;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
+
+// If any breaking change is made the CFE events, increment this version.
+pub const CFE_EVENTS_VERSION: u32 = 1;
 
 pub type EventId = u64;
 
@@ -37,8 +36,28 @@ pub type TxBroadcastRequest<T, C> =
 pub mod pallet {
 
 	use cf_traits::Chainflip;
+	use frame_support::pallet_prelude::*;
 
 	use super::*;
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub cfe_events_version: u32,
+		pub phantom: PhantomData<T>,
+	}
+
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self { cfe_events_version: CFE_EVENTS_VERSION, phantom: PhantomData }
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
+		fn build(&self) {
+			CfeEventsVersion::<T>::put(self.cfe_events_version);
+		}
+	}
 
 	#[pallet::pallet]
 	#[pallet::storage_version(PALLET_VERSION)]
@@ -55,9 +74,14 @@ pub mod pallet {
 	#[pallet::unbounded]
 	pub type CfeEvents<T: Config> = StorageValue<_, Vec<CfeEvent<T>>, ValueQuery>;
 
+	#[pallet::storage]
+	pub type CfeEventsVersion<T: Config> = StorageValue<_, u32, ValueQuery>;
+
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_block_number: BlockNumberFor<T>) -> frame_support::weights::Weight {
+			CfeEventsVersion::<T>::put(CFE_EVENTS_VERSION);
+
 			CfeEvents::<T>::kill();
 
 			T::WeightInfo::clear_events()

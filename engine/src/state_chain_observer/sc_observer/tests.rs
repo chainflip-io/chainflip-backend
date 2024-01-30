@@ -4,6 +4,7 @@ use crate::{
 	btc::retry_rpc::mocks::MockBtcRetryRpcClient,
 	dot::retry_rpc::mocks::MockDotHttpRpcClient,
 	eth::retry_rpc::mocks::MockEthRetryRpcClient,
+	settings::CommandLineOptions,
 	state_chain_observer::{
 		client::{
 			extrinsic_api,
@@ -14,11 +15,13 @@ use crate::{
 };
 use cf_chains::{evm::Transaction, Chain, ChainCrypto};
 use cf_primitives::{AccountRole, CeremonyId, GENESIS_EPOCH};
+use codec::Encode;
 use futures::FutureExt;
 use mockall::predicate::eq;
 use multisig::{eth::EvmCryptoScheme, ChainSigning, SignatureToThresholdSignature};
 use pallet_cf_cfe_interface::{
 	CfeEvent, KeyHandoverRequest, KeygenRequest, ThresholdSignatureRequest, TxBroadcastRequest,
+	CFE_EVENTS_VERSION,
 };
 use sp_runtime::AccountId32;
 
@@ -26,7 +29,7 @@ use sp_core::H256;
 use state_chain_runtime::{
 	AccountId, BitcoinInstance, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall,
 };
-use utilities::cached_stream::MakeCachedStream;
+use utilities::{cached_stream::MakeCachedStream, testing::logging::init_test_logger};
 
 use crate::{
 	settings::Settings,
@@ -67,6 +70,8 @@ async fn start_sc_observer<
 #[tokio::test]
 async fn only_encodes_and_signs_when_specified() {
 	let account_id = AccountId::new([0; 32]);
+	let not_our_account_id = AccountId::new([1; 32]);
+	assert_ne!(account_id, not_our_account_id);
 
 	let mut state_chain_client = MockStateChainClient::new();
 
@@ -80,23 +85,33 @@ async fn only_encodes_and_signs_when_specified() {
 
 	use state_chain_runtime::Runtime;
 
+	// Should version check before trying to get CFE events
 	state_chain_client
-		.expect_storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
+		.expect_storage_value::<pallet_cf_cfe_interface::CfeEventsVersion<Runtime>>()
+		.with(eq(block.hash))
+		.once()
+		.return_once(|_| Ok(CFE_EVENTS_VERSION));
+
+	state_chain_client
+		.expect_storage_value_raw::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
 		.with(eq(block.hash))
 		.once()
 		.return_once(move |_| {
-			Ok(vec![
-				CfeEvent::<Runtime>::EthTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> {
-					broadcast_id: Default::default(),
-					nominee: account_id,
-					payload: Transaction::default(),
-				}),
-				CfeEvent::<Runtime>::EthTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> {
-					broadcast_id: Default::default(),
-					nominee: AccountId32::new([1; 32]), // NOT OUR ACCOUNT ID
-					payload: Transaction::default(),
-				}),
-			])
+			Ok(Some(
+				vec![
+					CfeEvent::<Runtime>::EthTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> {
+						broadcast_id: Default::default(),
+						nominee: account_id,
+						payload: Transaction::default(),
+					}),
+					CfeEvent::<Runtime>::EthTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> {
+						broadcast_id: Default::default(),
+						nominee: not_our_account_id,
+						payload: Transaction::default(),
+					}),
+				]
+				.encode(),
+			))
 		});
 
 	let mut eth_rpc_mock_broadcast = MockEthRetryRpcClient::new();
@@ -475,6 +490,7 @@ where
 
 #[tokio::test]
 async fn should_process_initial_block_first() {
+	const EMPTY_ENCODED_CFE_EVENTS: u8 = 0x00;
 	let mut state_chain_client = MockStateChainClient::new();
 
 	state_chain_client.expect_account_id().once().return_once({
@@ -490,21 +506,37 @@ async fn should_process_initial_block_first() {
 
 	let mut seq = mockall::Sequence::new();
 
-	// We expect the SCO to process the initial block first, even though it was not in the stream.
+	// Should version check before trying to get CFE events
 	state_chain_client
-		.expect_storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
+		.expect_storage_value::<pallet_cf_cfe_interface::CfeEventsVersion<Runtime>>()
 		.with(eq(initial_block.hash))
 		.once()
 		.in_sequence(&mut seq)
-		.return_once(move |_| Ok(vec![]));
+		.return_once(|_| Ok(CFE_EVENTS_VERSION));
 
-	// Then it should process the block that was in the stream
+	// We expect the SCO to process the initial block first, even though it was not in the stream.
 	state_chain_client
-		.expect_storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
+		.expect_storage_value_raw::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
+		.with(eq(initial_block.hash))
+		.once()
+		.in_sequence(&mut seq)
+		.return_once(move |_| Ok(Some(vec![EMPTY_ENCODED_CFE_EVENTS])));
+
+	// Should version check each block before trying to get CFE events
+	state_chain_client
+		.expect_storage_value::<pallet_cf_cfe_interface::CfeEventsVersion<Runtime>>()
 		.with(eq(next_block.hash))
 		.once()
 		.in_sequence(&mut seq)
-		.return_once(move |_| Ok(vec![]));
+		.return_once(|_| Ok(CFE_EVENTS_VERSION));
+
+	// Then it should process the block that was in the stream
+	state_chain_client
+		.expect_storage_value_raw::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
+		.with(eq(next_block.hash))
+		.once()
+		.in_sequence(&mut seq)
+		.return_once(move |_| Ok(Some(vec![EMPTY_ENCODED_CFE_EVENTS])));
 
 	let mut eth_rpc_mock_broadcast = MockEthRetryRpcClient::new();
 
@@ -531,7 +563,7 @@ async fn test_get_ceremony_id_counters_with_events() {
 	const ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK: CeremonyId = 10;
 	const DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK: CeremonyId = 20;
 	const BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK: CeremonyId = 30;
-	let block_hash = H256::default();
+	let block_info = test_header(0, None);
 
 	let test_block_streams = vec![
 		// Test 1: 1 signing request for each chain and another event that should not effect the id
@@ -620,14 +652,21 @@ async fn test_get_ceremony_id_counters_with_events() {
 	for test_block_stream in test_block_streams {
 		let mut state_chain_client = MockStateChainClient::new();
 
+		// Should version check before trying to get CFE events
 		state_chain_client
-			.expect_storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
-			.with(eq(block_hash))
+			.expect_storage_value::<pallet_cf_cfe_interface::CfeEventsVersion<Runtime>>()
+			.with(eq(block_info.hash))
 			.once()
-			.return_once(|_| Ok(test_block_stream));
+			.return_once(|_| Ok(CFE_EVENTS_VERSION));
+
+		state_chain_client
+			.expect_storage_value_raw::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
+			.with(eq(block_info.hash))
+			.once()
+			.return_once(move |_| Ok(Some(test_block_stream.encode())));
 
 		let ceremony_id_counters =
-			get_ceremony_id_counters_before_block(block_hash, Arc::new(state_chain_client))
+			get_ceremony_id_counters_before_block(block_info, Arc::new(state_chain_client))
 				.await
 				.unwrap();
 
@@ -642,8 +681,15 @@ async fn test_get_ceremony_id_counters_without_events() {
 	const ETH_CEREMONY_ID_COUNTER: CeremonyId = 10;
 	const DOT_CEREMONY_ID_COUNTER: CeremonyId = 20;
 	const BTC_CEREMONY_ID_COUNTER: CeremonyId = 30;
-	let block_hash = H256::default();
+	let block_info = test_header(0, None);
 	let mut state_chain_client = MockStateChainClient::new();
+
+	// Should version check before trying to get CFE events
+	state_chain_client
+		.expect_storage_value::<pallet_cf_cfe_interface::CfeEventsVersion<Runtime>>()
+		.with(eq(block_info.hash))
+		.once()
+		.return_once(|_| Ok(CFE_EVENTS_VERSION));
 
 	// Because the block has no events, we expect it to grab the ceremony id counter for each chain
 	// from storage.
@@ -652,7 +698,7 @@ async fn test_get_ceremony_id_counters_without_events() {
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
 		>>()
-		.with(eq(block_hash))
+		.with(eq(block_info.hash))
 		.once()
 		.return_once(|_| Ok(ETH_CEREMONY_ID_COUNTER));
 	state_chain_client
@@ -660,7 +706,7 @@ async fn test_get_ceremony_id_counters_without_events() {
 			state_chain_runtime::Runtime,
 			state_chain_runtime::PolkadotInstance,
 		>>()
-		.with(eq(block_hash))
+		.with(eq(block_info.hash))
 		.once()
 		.return_once(|_| Ok(DOT_CEREMONY_ID_COUNTER));
 	state_chain_client
@@ -668,28 +714,31 @@ async fn test_get_ceremony_id_counters_without_events() {
 			state_chain_runtime::Runtime,
 			state_chain_runtime::BitcoinInstance,
 		>>()
-		.with(eq(block_hash))
+		.with(eq(block_info.hash))
 		.once()
 		.return_once(|_| Ok(BTC_CEREMONY_ID_COUNTER));
 
 	// No events in the stream that would change the ceremony id counters
 	state_chain_client
-		.expect_storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
-		.with(eq(block_hash))
+		.expect_storage_value_raw::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
+		.with(eq(block_info.hash))
 		.once()
 		.return_once(|_| {
-			Ok(vec![
-				// EthTxBroadcastRequest should not effect the ceremony id counter
-				CfeEvent::<Runtime>::EthTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> {
-					broadcast_id: Default::default(),
-					nominee: AccountId32::new([1; 32]),
-					payload: Default::default(),
-				}),
-			])
+			Ok(Some(
+				vec![
+					// EthTxBroadcastRequest should not effect the ceremony id counter
+					CfeEvent::<Runtime>::EthTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> {
+						broadcast_id: Default::default(),
+						nominee: AccountId32::new([1; 32]),
+						payload: Default::default(),
+					}),
+				]
+				.encode(),
+			))
 		});
 
 	let ceremony_id_counters =
-		get_ceremony_id_counters_before_block(block_hash, Arc::new(state_chain_client))
+		get_ceremony_id_counters_before_block(block_info, Arc::new(state_chain_client))
 			.await
 			.unwrap();
 
@@ -704,7 +753,13 @@ async fn test_get_ceremony_id_counters_without_events() {
 async fn run_the_sc_observer() {
 	task_scope(|scope| {
 		async {
-			let settings = Settings::new_test().unwrap();
+			let settings = Settings::new_with_settings_dir(
+				"/etc/chainflip/config",
+				CommandLineOptions::default(),
+			)
+			.unwrap();
+
+			init_test_logger();
 
 			let (sc_block_stream, _, state_chain_client) =
 				crate::state_chain_observer::client::StateChainClient::connect_with_account(

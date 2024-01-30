@@ -15,6 +15,8 @@ use utilities::context;
 
 use super::{CFE_VERSION, SUBSTRATE_BEHAVIOUR};
 
+pub use sp_core::storage::StorageData;
+
 /// This trait extracts otherwise private type information about Substrate storage double maps
 pub trait StorageDoubleMapAssociatedTypes {
 	type Key1;
@@ -137,6 +139,11 @@ pub trait StorageApi {
 		block_hash: state_chain_runtime::Hash,
 	) -> RpcResult<<StorageValue::QueryKind as QueryKindTrait<StorageValue::Value, StorageValue::OnEmpty>>::Query>;
 
+	async fn storage_value_raw<StorageValue: StorageValueAssociatedTypes + 'static>(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<Option<Vec<u8>>>;
+
 	async fn storage_map_entry<StorageMap: StorageMapAssociatedTypes + 'static>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
@@ -214,6 +221,14 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Storag
 			block_hash,
 		)
 		.await
+	}
+
+	#[track_caller]
+	async fn storage_value_raw<StorageValue: StorageValueAssociatedTypes + 'static>(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<Option<Vec<u8>>> {
+		Ok(self.storage(block_hash, StorageValue::_hashed_key()).await?.map(|data| data.0))
 	}
 
 	#[track_caller]
@@ -306,6 +321,14 @@ impl<
 		block_hash: state_chain_runtime::Hash,
 	) -> RpcResult<<StorageValue::QueryKind as QueryKindTrait<StorageValue::Value, StorageValue::OnEmpty>>::Query>{
 		self.base_rpc_client.storage_value::<StorageValue>(block_hash).await
+	}
+
+	#[track_caller]
+	async fn storage_value_raw<StorageValue: StorageValueAssociatedTypes + 'static>(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<Option<Vec<u8>>> {
+		self.base_rpc_client.storage_value_raw::<StorageValue>(block_hash).await
 	}
 
 	#[track_caller]

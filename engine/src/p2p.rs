@@ -231,6 +231,7 @@ async fn monitor_p2p_registration_events<StateChainClient, BlockStream: StreamAp
 ) where
 	StateChainClient: StorageApi + 'static + Send + Sync,
 {
+	use crate::state_chain_observer::get_cfe_events;
 	use state_chain_runtime::Runtime;
 	type CfeEvent = pallet_cf_cfe_interface::CfeEvent<Runtime>;
 
@@ -238,11 +239,7 @@ async fn monitor_p2p_registration_events<StateChainClient, BlockStream: StreamAp
 	loop {
 		match sc_block_stream.next().await {
 			Some(current_block) => {
-				if let Ok(events) = state_chain_client
-					.storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>(
-						current_block.hash,
-					)
-					.await
+				if let Ok(events) = get_cfe_events(state_chain_client.clone(), current_block).await
 				{
 					for event in events {
 						match event {
