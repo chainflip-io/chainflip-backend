@@ -404,6 +404,21 @@ impl<T: Config> Pallet<T> {
 		let min_fee_required_per_tx = bitcoin_fee_info.min_fee_required_per_tx();
 		let fee_per_output_utxo = bitcoin_fee_info.fee_per_output_utxo();
 
+		let calculate_utxos_and_change = |spendable_utxos: Vec<_>| {
+			let total_fee = spendable_utxos
+				.iter()
+				.map(|utxo| bitcoin_fee_info.fee_for_utxo(utxo))
+				.sum::<u64>() + fee_per_output_utxo +
+				min_fee_required_per_tx;
+
+			spendable_utxos
+				.iter()
+				.map(|utxo| utxo.amount)
+				.sum::<u64>()
+				.checked_sub(total_fee)
+				.map(|change_amount| (spendable_utxos, change_amount))
+		};
+
 		match utxo_selection_type {
 			UtxoSelectionType::SelectAllForRotation => {
 				let spendable_utxos: Vec<_> = BitcoinAvailableUtxos::<T>::take()
@@ -414,19 +429,7 @@ impl<T: Config> Pallet<T> {
 				if spendable_utxos.is_empty() {
 					return None
 				}
-
-				let total_fee = spendable_utxos
-					.iter()
-					.map(|utxo| bitcoin_fee_info.fee_for_utxo(utxo))
-					.sum::<u64>() + fee_per_output_utxo +
-					min_fee_required_per_tx;
-
-				spendable_utxos
-					.iter()
-					.map(|utxo| utxo.amount)
-					.sum::<u64>()
-					.checked_sub(total_fee)
-					.map(|change_amount| (spendable_utxos, change_amount))
+				calculate_utxos_and_change(spendable_utxos)
 			},
 			UtxoSelectionType::SelectForConsolidation =>
 				BitcoinAvailableUtxos::<T>::try_mutate(|available_utxos| {
@@ -438,19 +441,7 @@ impl<T: Config> Pallet<T> {
 					if utxos_to_consolidate.is_empty() {
 						Err(())
 					} else {
-						let total_fee = utxos_to_consolidate
-							.iter()
-							.map(|utxo| bitcoin_fee_info.fee_for_utxo(utxo))
-							.sum::<u64>() + fee_per_output_utxo +
-							min_fee_required_per_tx;
-
-						utxos_to_consolidate
-							.iter()
-							.map(|utxo| utxo.amount)
-							.sum::<u64>()
-							.checked_sub(total_fee)
-							.map(|change_amount| (utxos_to_consolidate, change_amount))
-							.ok_or(())
+						calculate_utxos_and_change(utxos_to_consolidate).ok_or(())
 					}
 				})
 				.ok(),

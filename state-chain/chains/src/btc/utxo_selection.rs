@@ -37,9 +37,9 @@ pub fn select_utxos_from_pool(
 
 	while cumulative_amount < amount_to_be_spent {
 		if let Some(current_smallest_utxo) = available_utxos.pop() {
-			if current_smallest_utxo.amount > fee_info.fee_for_utxo(&current_smallest_utxo) {
-				cumulative_amount +=
-					current_smallest_utxo.amount - fee_info.fee_for_utxo(&current_smallest_utxo);
+			let fee = fee_info.fee_for_utxo(&current_smallest_utxo);
+			if current_smallest_utxo.amount > fee {
+				cumulative_amount += current_smallest_utxo.amount - fee;
 				selected_utxos.push(current_smallest_utxo.clone());
 			} else {
 				skipped_utxos.push(current_smallest_utxo.clone());

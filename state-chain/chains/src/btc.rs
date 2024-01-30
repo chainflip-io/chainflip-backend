@@ -776,15 +776,14 @@ impl BitcoinTransaction {
 		let mut transaction_bytes = self.transaction_bytes;
 
 		for i in 0..self.inputs.len() {
-			let unlock_script = self.inputs[i].deposit_address.unlock_script_serialized();
-			if let Some(unlock_script) = unlock_script {
+			if let Some(script_path) = self.inputs[i].deposit_address.script_path.clone() {
 				transaction_bytes.push(NUM_WITNESSES_SCRIPT);
 				transaction_bytes.push(LEN_SIGNATURE);
 				transaction_bytes.extend(self.signatures[i]);
-				transaction_bytes.extend(unlock_script);
+				transaction_bytes.extend(script_path.unlock_script.btc_serialize());
 				// Length of tweaked pubkey + leaf version
 				transaction_bytes.push(33u8);
-				transaction_bytes.push(self.inputs[i].deposit_address.leaf_version().unwrap());
+				transaction_bytes.push(script_path.leaf_version());
 				transaction_bytes.extend(INTERNAL_PUBKEY[1..33].iter());
 			} else {
 				transaction_bytes.push(NUM_WITNESSES_KEY);
@@ -876,13 +875,13 @@ impl BitcoinTransaction {
 					&outputs,
 				]
 				.concat();
-				if input.deposit_address.script_path.is_some() {
+				if let Some(script_path) = input.deposit_address.script_path.clone() {
 					hash_data.append(
 						&mut [
 							&[SPENDTYPE_SCRIPT] as &[u8],
 							&input_index.to_le_bytes(),
 							// "Common signature message extension" according to BIP 342
-							&input.deposit_address.script_path.clone().unwrap().tapleaf_hash[..],
+							&script_path.tapleaf_hash[..],
 							&[KEYVERSION],
 							&CODESEPARATOR,
 						]

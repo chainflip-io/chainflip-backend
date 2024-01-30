@@ -10,6 +10,17 @@ pub struct TapscriptPath {
 	pub unlock_script: BitcoinScript,
 }
 
+/// The leaf version depends on the evenness of the tweaked pubkey.
+impl TapscriptPath {
+	pub fn leaf_version(&self) -> u8 {
+		if self.tweaked_pubkey_bytes[0] == 2 {
+			0xC0
+		} else {
+			0xC1
+		}
+	}
+}
+
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct DepositAddress {
 	pub pubkey_x: [u8; 32],
@@ -27,7 +38,9 @@ fn unlock_script(pubkey_x: [u8; 32], salt: u32) -> BitcoinScript {
 
 impl DepositAddress {
 	pub fn new(pubkey_x: [u8; 32], salt: u32) -> Self {
-		if salt == 0 {
+		// All change goes back into the vault (i.e. salt = 0), but vault UTXOs can
+		// be spent via the taproot key path to save gas
+		if salt == CHANGE_ADDRESS_SALT {
 			return Self { pubkey_x, script_path: None }
 		}
 		let unlock_script = unlock_script(pubkey_x, salt);
@@ -67,25 +80,12 @@ impl DepositAddress {
 		}
 	}
 
-	pub fn unlock_script_serialized(&self) -> Option<Vec<u8>> {
-		Some(self.script_path.clone()?.unlock_script.btc_serialize())
-	}
-
 	pub fn script_pubkey(&self) -> ScriptPubkey {
 		let pubkey = self
 			.script_path
 			.clone()
 			.map_or(self.pubkey_x, |script_path| script_path.tweaked_pubkey_bytes[1..].as_array());
 		ScriptPubkey::Taproot(pubkey)
-	}
-
-	/// The leaf version depends on the evenness of the tweaked pubkey.
-	pub fn leaf_version(&self) -> Option<u8> {
-		if self.script_path.clone()?.tweaked_pubkey_bytes[0] == 2 {
-			Some(0xC0)
-		} else {
-			Some(0xC1)
-		}
 	}
 }
 
