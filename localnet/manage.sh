@@ -17,6 +17,10 @@ source ./localnet/helper.sh
 mkdir -p /tmp/chainflip/
 touch /tmp/chainflip/debug.log
 
+if [ ! -f ./localnet/docker-compose.yml ]; then
+  NODE_COUNT=1-node envsubst < ./localnet/docker-compose.template.yml > ./localnet/docker-compose.yml
+fi
+
 set -eo pipefail
 
 if [[ $CI == true ]]; then
@@ -116,9 +120,8 @@ build-localnet() {
 
   echo "🚦 Waiting for polkadot node to start"
   REPLY=$(check_endpoint_health -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://localhost:9947') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]
+  DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
 
-  echo "🦑 Starting Arbitrum ..."
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
   if which solana-test-validator >>$DEBUG_OUTPUT_DESTINATION 2>&1; then
     echo "☀️ Waiting for Solana node to start"
     ./localnet/init/scripts/start-solana.sh
@@ -130,7 +133,6 @@ build-localnet() {
   echo "🦑 Waiting for Arbitrum nodes to start"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
 
-  DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
 
   INIT_RPC_PORT=9944
 
