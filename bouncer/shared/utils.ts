@@ -487,7 +487,7 @@ export function getWhaleMnemonic(chain: Chain): string {
       throw new Error(`${chain} does not have a whale mnemonic`);
   }
 }
-export function getSolKeyPair(): Keypair {
+export function getSolWhaleKeyPair(): Keypair {
   const secretKey = [
     6, 151, 150, 20, 145, 210, 176, 113, 98, 200, 192, 80, 73, 63, 133, 232, 208, 124, 81, 213, 117,
     199, 196, 243, 219, 33, 79, 217, 157, 69, 205, 140, 247, 157, 94, 2, 111, 18, 237, 198, 68, 58,

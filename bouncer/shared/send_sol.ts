@@ -1,9 +1,9 @@
 import { Transaction, SystemProgram, PublicKey } from '@solana/web3.js';
-import { amountToFineAmount, getSolConnection, getSolKeyPair } from './utils';
+import { amountToFineAmount, getSolConnection, getSolWhaleKeyPair } from './utils';
 
 export async function signAndSendTxSol(tx: Transaction, /* gas = 2000000, */ log = true) {
   const connection = getSolConnection();
-  const whaleKeypair = getSolKeyPair();
+  const whaleKeypair = getSolWhaleKeyPair();
 
   const transaction = tx;
   transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
@@ -23,7 +23,7 @@ export async function sendSol(solAddress: string, solAmount: string, log = true)
   const lamportsAmount = amountToFineAmount(solAmount, 9); // assetDecimals.SOL when available
   const transaction = new Transaction().add(
     SystemProgram.transfer({
-      fromPubkey: getSolKeyPair().publicKey,
+      fromPubkey: getSolWhaleKeyPair().publicKey,
       toPubkey: new PublicKey(solAddress),
       lamports: BigInt(lamportsAmount),
     }),
