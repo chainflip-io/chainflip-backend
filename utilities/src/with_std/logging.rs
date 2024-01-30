@@ -48,7 +48,7 @@ macro_rules! print_start_and_end {
 				println!(
 					"Exiting {} due to panic: {:#?}",
 					env!("CARGO_PKG_NAME"),
-					panic.downcast_ref::<&str>()
+					panic.downcast_ref::<&str>().map(|str| *str).or_else(|| panic.downcast_ref::<String>().map(String::as_str))
 				);
 			},
 		}
