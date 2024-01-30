@@ -1,6 +1,7 @@
 set -e
 echo "Running nightly tests 🧪"
 ./commands/send_arb.ts 0x41aD2bc63A2059f9b623533d87fe99887D794847 1
+./commands/send_sol.ts 7QQGNm3ptwinipDCyaCF7jY5katgmFUu1ieP2f7nwLpE 1.2
 ./setup_for_test.sh
 # gaslimit test has to run before all_concurrent tests
 # We might want to move this back into the standard CI run, but currently it's a little flaky

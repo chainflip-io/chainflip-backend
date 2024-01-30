@@ -12,6 +12,7 @@ import {
   Assets,
 } from '@chainflip-io/cli';
 import Web3 from 'web3';
+import { Connection, Keypair } from '@solana/web3.js';
 import { u8aToHex } from '@polkadot/util';
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
@@ -62,6 +63,17 @@ export function getEvmContractAddress(chain: Chain, contract: string): string {
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
+    case 'Solana':
+      switch (contract) {
+        case 'VAULT':
+          return '632bJHVLPj6XPLVgrabFwxogtAQQ5zb8hwm9zqZuCcHo';
+        case 'SOLUSDC':
+          return process.env.ARB_USDC_ADDRESS ?? '24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p';
+        case 'CFTESTER':
+          return 'NJusJ7itnSsh4jSi43i9MMKB9sF4VbNvdSwUA45gPE6';
+        default:
+          throw new Error(`Unsupported contract: ${contract}`);
+      }
     default:
       throw new Error(`Unsupported chain: ${chain}`);
   }
@@ -81,6 +93,9 @@ export function assetToChain(asset: Asset): string {
     case 'ARBUSDC':
     case 'ARBETH':
       return 'Arbitrum';
+    case 'SOL':
+    case 'SOLUSDC':
+      return 'Solana';
     default:
       return '';
   }
@@ -120,7 +135,10 @@ export function defaultAssetAmounts(asset: Asset): string {
     case 'USDC':
     case 'ARBUSDC':
     case 'FLIP':
+    case 'SOLUSDC':
       return '500';
+    case 'SOL':
+      return '100';
     default:
       throw new Error(`Unsupported asset: ${asset}`);
   }
@@ -446,6 +464,13 @@ export function getEvmEndpoint(chain: Chain): string {
   }
 }
 
+export function getSolConnection(): Connection {
+  return new Connection(process.env.SOL_ENDPOINT ?? 'http://127.0.0.1:8899', {
+    commitment: 'confirmed',
+    wsEndpoint: 'ws://localhost:8900/',
+  });
+}
+
 export function getWhaleMnemonic(chain: Chain): string {
   switch (chain) {
     case 'Ethereum':
@@ -461,6 +486,15 @@ export function getWhaleMnemonic(chain: Chain): string {
     default:
       throw new Error(`${chain} does not have a whale mnemonic`);
   }
+}
+export function getSolKeyPair(): Keypair {
+  const secretKey = [
+    6, 151, 150, 20, 145, 210, 176, 113, 98, 200, 192, 80, 73, 63, 133, 232, 208, 124, 81, 213, 117,
+    199, 196, 243, 219, 33, 79, 217, 157, 69, 205, 140, 247, 157, 94, 2, 111, 18, 237, 198, 68, 58,
+    83, 75, 44, 221, 80, 114, 35, 57, 137, 180, 21, 215, 89, 101, 115, 231, 67, 243, 229, 179, 134,
+    251,
+  ];
+  return Keypair.fromSecretKey(new Uint8Array(secretKey));
 }
 
 export function getWhaleKey(chain: Chain): string {
