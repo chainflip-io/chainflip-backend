@@ -206,5 +206,28 @@ mod benchmarks {
 		assert_eq!(KeygenResponseTimeout::<T, I>::get(), new_timeout);
 	}
 
-	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
+	#[cfg(test)]
+	use crate::mock::*;
+
+	#[test]
+	fn benchmark_works() {
+		new_test_ext().execute_with(|| {
+			_on_initialize_failure::<Test, ()>(10, true);
+		});
+		new_test_ext().execute_with(|| {
+			_on_initialize_success::<Test, ()>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_report_keygen_outcome::<Test, ()>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_on_keygen_verification_result::<Test, ()>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_vault_key_rotated_externally::<Test, ()>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_set_keygen_response_timeout::<Test, ()>(true);
+		});
+	}
 }

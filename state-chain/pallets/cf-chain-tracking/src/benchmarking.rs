@@ -16,21 +16,27 @@ mod benchmarks {
 
 	#[benchmark]
 	fn update_chain_state() {
+		let genesis_chain_state = ChainState {
+			block_height: 1u32.into(),
+			tracked_data: BenchmarkValue::benchmark_value(),
+		};
 		let new_chain_state = ChainState {
 			block_height: 32u32.into(),
 			tracked_data: BenchmarkValue::benchmark_value(),
 		};
 
-		let call = Call::<T, I>::update_chain_state { new_chain_state: new_chain_state.clone() };
-
 		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
 		// Dispatch once to ensure we have a value already inserted - replacing a value is more
 		// expensive than inserting a new one.
-		assert_ok!(call.clone().dispatch_bypass_filter(origin.clone()));
+		assert_ok!(Call::<T, I>::update_chain_state { new_chain_state: genesis_chain_state }
+			.dispatch_bypass_filter(origin.clone()));
 
 		#[block]
 		{
-			assert_ok!(call.dispatch_bypass_filter(origin));
+			assert_ok!(Call::<T, I>::update_chain_state {
+				new_chain_state: new_chain_state.clone()
+			}
+			.dispatch_bypass_filter(origin));
 		}
 
 		assert_eq!(CurrentChainState::<T, I>::get().unwrap(), new_chain_state);
