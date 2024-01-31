@@ -1,11 +1,19 @@
-use cf_primitives::{chains::Solana, AssetAmount, ChannelId};
+pub use cf_primitives::chains::Solana;
+use cf_primitives::{AssetAmount, ChannelId};
 
-use crate::{assets, none::NoneChainCrypto, FeeRefundCalculator, ForeignChainAddress};
+use crate::{assets, none::NoneChainCrypto, FeeRefundCalculator};
 
 use super::Chain;
 
-mod sol_chain_crypto;
-pub use sol_chain_crypto::SolTransaction;
+mod chain_crypto;
+mod consts;
+mod public_key;
+mod signature;
+mod transaction;
+
+pub use public_key::SolPublicKey;
+pub use signature::SolSignature;
+pub use transaction::SolTransaction;
 
 impl Chain for Solana {
 	const NAME: &'static str = "Solana";
@@ -17,7 +25,7 @@ impl Chain for Solana {
 	type TransactionFee = Self::ChainAmount;
 	type TrackedData = ();
 	type ChainAsset = assets::sol::Asset;
-	type ChainAccount = ForeignChainAddress;
+	type ChainAccount = SolPublicKey;
 	type EpochStartData = ();
 	type DepositFetchId = ChannelId;
 	type DepositChannelState = ();
