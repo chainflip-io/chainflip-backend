@@ -8,6 +8,7 @@ use cf_traits::{
 	FlipBurnInfo, Issuance, RewardsDistribution,
 };
 use codec::MaxEncodedLen;
+use frame_support::storage::transactional::with_storage_layer;
 use frame_system::pallet_prelude::BlockNumberFor;
 pub use pallet::*;
 
@@ -36,6 +37,7 @@ pub mod pallet {
 
 	use super::*;
 	use cf_chains::Chain;
+	use cf_primitives::AssetAmount;
 	use frame_support::{pallet_prelude::*, DefaultNoBound};
 	use frame_system::pallet_prelude::OriginFor;
 
@@ -154,6 +156,8 @@ pub mod pallet {
 		SupplyUpdateIntervalUpdated(BlockNumberFor<T>),
 		/// Rewards have been distributed to [account_id] \[amount\]
 		BackupRewardsDistributed { account_id: T::AccountId, amount: T::FlipBalance },
+		/// The Flip that was bought using the network fee has been burned.
+		NetworkFeeBurned { amount: AssetAmount },
 	}
 
 	// Errors inform users that something went wrong.
@@ -173,15 +177,27 @@ pub mod pallet {
 				if T::SafeMode::get().emissions_sync_enabled {
 					let flip_to_burn = T::FlipToBurn::take_flip_to_burn();
 					if flip_to_burn > Zero::zero() {
-						T::EgressHandler::schedule_egress(
-							Asset::Flip,
-							flip_to_burn,
-							ForeignChainAddress::Eth(
-								T::EthEnvironment::state_chain_gateway_address(),
-							),
-							None,
-						);
-						T::Issuance::burn(flip_to_burn.into());
+						match with_storage_layer(|| {
+							T::EgressHandler::schedule_egress(
+								Asset::Flip,
+								flip_to_burn,
+								ForeignChainAddress::Eth(
+									T::EthEnvironment::state_chain_gateway_address(),
+								),
+								None,
+							)
+							.map_err(Into::into)
+						}) {
+							Ok((_id, egress_amount, _fee)) => {
+								T::Issuance::burn(egress_amount.into());
+								Self::deposit_event(Event::NetworkFeeBurned {
+									amount: egress_amount,
+								});
+							},
+							Err(e) => {
+								log::warn!("Failed to schedule egress for Flip burn: {:?}", e);
+							},
+						}
 					}
 					Self::broadcast_update_total_supply(
 						T::Issuance::total_issuance(),
