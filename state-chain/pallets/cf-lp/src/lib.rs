@@ -5,7 +5,7 @@ use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
 use cf_primitives::{Asset, AssetAmount, ForeignChain};
 use cf_traits::{
 	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi,
-	EgressApi, PoolApi,
+	EgressApi, LpDepositHandler, PoolApi,
 };
 
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult};
@@ -116,6 +116,11 @@ pub mod pallet {
 			account_id: T::AccountId,
 			chain: ForeignChain,
 			address: ForeignChainAddress,
+		},
+		LiquidityDepositCredited {
+			account_id: T::AccountId,
+			asset: Asset,
+			amount_credited: AssetAmount,
 		},
 	}
 
@@ -268,6 +273,26 @@ pub mod pallet {
 			});
 			Ok(())
 		}
+	}
+}
+
+impl<T: Config> LpDepositHandler for Pallet<T> {
+	type AccountId = <T as frame_system::Config>::AccountId;
+
+	fn add_deposit(
+		account_id: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> frame_support::pallet_prelude::DispatchResult {
+		Self::try_credit_account(account_id, asset, amount)?;
+
+		Self::deposit_event(Event::LiquidityDepositCredited {
+			account_id: account_id.clone(),
+			asset,
+			amount_credited: amount,
+		});
+
+		Ok(())
 	}
 }
 

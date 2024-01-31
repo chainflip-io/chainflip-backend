@@ -1,6 +1,6 @@
 # Substrate Troubleshooting
 
-This is a living document with tips, gotchas and general subtrate-related wizardry. If you ever get stuck with an incomprehensible compiler error, before spending the day turning in circles, come here first and see if someone else has already encountered the same issue.
+This is a living document with tips, gotchas and general substrate-related wizardry. If you ever get stuck with an incomprehensible compiler error, before spending the day turning in circles, come here first and see if someone else has already encountered the same issue.
 
 Please add anything you think will save your colleagues' precious time.
 

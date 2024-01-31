@@ -155,7 +155,7 @@ pub trait RequestAddressAndDeposit {
 }
 
 impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
-	/// Request desposit addresses and complete the deposit of funds into those addresses.
+	/// Request deposit addresses and complete the deposit of funds into those addresses.
 	#[track_caller]
 	fn request_address_and_deposit(
 		self,

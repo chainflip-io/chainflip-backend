@@ -54,10 +54,16 @@ impl<T: Config> AccountRoleRegistry<T> for MockAccountRoleRegistry {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn register_account(_account_id: T::AccountId, _role: AccountRole) {}
+	fn register_account(account_id: &T::AccountId, role: AccountRole) {
+		<Self as MockPalletStorage>::put_storage(ACCOUNT_ROLES, account_id, role);
+	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn get_account_role(_account_id: T::AccountId) -> AccountRole {
-		AccountRole::Unregistered
+	fn get_account_role(account_id: &T::AccountId) -> AccountRole {
+		<Self as MockPalletStorage>::get_storage::<_, AccountRole>(
+			ACCOUNT_ROLES,
+			account_id.clone(),
+		)
+		.unwrap_or(AccountRole::Unregistered)
 	}
 }

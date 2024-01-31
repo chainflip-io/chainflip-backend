@@ -1,21 +1,30 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_benchmarking::benchmarks;
+use frame_benchmarking::v2::*;
 
-benchmarks! {
+#[benchmarks]
+mod benchmarks {
+	use super::*;
+	use sp_std::vec;
 
-	clear_events {
-		let event = CfeEvent::<T>::EthKeygenRequest(KeygenRequest::<T> {ceremony_id: 0, epoch_index: 0, participants: Default::default()});
+	#[benchmark]
+	fn clear_events() {
+		let event = CfeEvent::<T>::EthKeygenRequest(KeygenRequest::<T> {
+			ceremony_id: 0,
+			epoch_index: 0,
+			participants: Default::default(),
+		});
 
 		CfeEvents::<T>::append(event.clone());
 		CfeEvents::<T>::append(event.clone());
 		CfeEvents::<T>::append(event);
 
-	}: {
-		CfeEvents::<T>::kill();
-	}
-	verify {
+		#[block]
+		{
+			CfeEvents::<T>::kill();
+		}
+
 		assert!(CfeEvents::<T>::get().is_empty());
 	}
 }

@@ -4,7 +4,7 @@ use cf_chains::{
 	CcmChannelMetadata, CcmDepositMetadata, SwapOrigin,
 };
 use cf_primitives::{
-	Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, TransactionHash, STABLE_ASSET,
+	Asset, AssetAmount, ChannelId, ForeignChain, SwapId, SwapLeg, TransactionHash, STABLE_ASSET,
 };
 use cf_traits::{impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi};
 use frame_support::{
@@ -38,12 +38,12 @@ const BASIS_POINTS_PER_MILLION: u32 = 100;
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum SwapType {
 	Swap(ForeignChainAddress),
-	CcmPrincipal(u64),
-	CcmGas(u64),
+	CcmPrincipal(SwapId),
+	CcmGas(SwapId),
 }
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct Swap {
-	pub swap_id: u64,
+	pub swap_id: SwapId,
 	pub from: Asset,
 	pub to: Asset,
 	pub amount: AssetAmount,
@@ -54,7 +54,13 @@ pub struct Swap {
 }
 
 impl Swap {
-	fn new(swap_id: u64, from: Asset, to: Asset, amount: AssetAmount, swap_type: SwapType) -> Self {
+	fn new(
+		swap_id: SwapId,
+		from: Asset,
+		to: Asset,
+		amount: AssetAmount,
+		swap_type: SwapType,
+	) -> Self {
 		Self {
 			swap_id,
 			from,
@@ -149,8 +155,8 @@ pub(crate) struct CcmSwap {
 	destination_asset: Asset,
 	destination_address: ForeignChainAddress,
 	deposit_metadata: CcmDepositMetadata,
-	principal_swap_id: Option<u64>,
-	gas_swap_id: Option<u64>,
+	principal_swap_id: Option<SwapId>,
+	gas_swap_id: Option<SwapId>,
 }
 
 pub struct CcmSwapAmounts {
@@ -174,8 +180,8 @@ impl_pallet_safe_mode! {
 pub mod pallet {
 
 	use cf_chains::{address::EncodedAddress, AnyChain, Chain};
-	use cf_primitives::{Asset, AssetAmount, BasisPoints, EgressId};
-	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, SwapDepositHandler};
+	use cf_primitives::{Asset, AssetAmount, BasisPoints, EgressId, SwapId};
+	use cf_traits::{AccountRoleRegistry, CcmSwapIds, Chainflip, EgressApi, SwapDepositHandler};
 
 	use super::*;
 
@@ -219,7 +225,7 @@ pub mod pallet {
 
 	/// SwapId Counter
 	#[pallet::storage]
-	pub type SwapIdCounter<T: Config> = StorageValue<_, u64, ValueQuery>;
+	pub type SwapIdCounter<T: Config> = StorageValue<_, SwapId, ValueQuery>;
 
 	/// Earned Fees by Brokers
 	#[pallet::storage]
@@ -264,7 +270,7 @@ pub mod pallet {
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
-			swap_id: u64,
+			swap_id: SwapId,
 			source_asset: Asset,
 			deposit_amount: AssetAmount,
 			destination_asset: Asset,
@@ -275,7 +281,7 @@ pub mod pallet {
 		},
 		/// A swap has been executed.
 		SwapExecuted {
-			swap_id: u64,
+			swap_id: SwapId,
 			source_asset: Asset,
 			deposit_amount: AssetAmount,
 			destination_asset: Asset,
@@ -284,7 +290,7 @@ pub mod pallet {
 		},
 		/// A swap egress has been scheduled.
 		SwapEgressScheduled {
-			swap_id: u64,
+			swap_id: SwapId,
 			egress_id: EgressId,
 			asset: Asset,
 			amount: AssetAmount,
@@ -308,8 +314,8 @@ pub mod pallet {
 		},
 		CcmDepositReceived {
 			ccm_id: u64,
-			principal_swap_id: Option<u64>,
-			gas_swap_id: Option<u64>,
+			principal_swap_id: Option<SwapId>,
+			gas_swap_id: Option<SwapId>,
 			deposit_amount: AssetAmount,
 			destination_address: EncodedAddress,
 			deposit_metadata: CcmDepositMetadata,
@@ -324,7 +330,7 @@ pub mod pallet {
 			amount: Option<AssetAmount>,
 		},
 		SwapAmountConfiscated {
-			swap_id: u64,
+			swap_id: SwapId,
 			source_asset: Asset,
 			destination_asset: Asset,
 			total_amount: AssetAmount,
@@ -332,7 +338,7 @@ pub mod pallet {
 		},
 		/// The swap has been executed, but has led to a zero egress amount.
 		EgressAmountZero {
-			swap_id: u64,
+			swap_id: SwapId,
 		},
 	}
 	#[pallet::error]
@@ -609,7 +615,7 @@ pub mod pallet {
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, destination_asset)?;
 
-			Self::on_ccm_deposit(
+			let _ = Self::on_ccm_deposit(
 				source_asset,
 				deposit_amount,
 				destination_asset,
@@ -906,7 +912,7 @@ pub mod pallet {
 			broker_id: Self::AccountId,
 			broker_commission_bps: BasisPoints,
 			channel_id: ChannelId,
-		) {
+		) -> SwapId {
 			// Permill maxes out at 100% so this is safe.
 			let fee = Permill::from_parts(broker_commission_bps as u32 * BASIS_POINTS_PER_MILLION) *
 				amount;
@@ -941,6 +947,8 @@ pub mod pallet {
 				swap_type: SwapType::Swap(destination_address),
 				broker_commission: Some(fee),
 			});
+
+			swap_id
 		}
 	}
 
@@ -952,7 +960,7 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			deposit_metadata: CcmDepositMetadata,
 			origin: SwapOrigin,
-		) {
+		) -> Result<CcmSwapIds, ()> {
 			let encoded_destination_address =
 				T::AddressConverter::to_encoded_address(destination_address.clone());
 			// Caller should ensure that assets and addresses are compatible.
@@ -977,7 +985,7 @@ pub mod pallet {
 							destination_address: encoded_destination_address,
 							deposit_metadata,
 						});
-						return
+						return Err(())
 					},
 				};
 
@@ -1060,6 +1068,8 @@ pub mod pallet {
 				PendingCcms::<T>::insert(ccm_id, ccm_swap);
 				CcmOutputs::<T>::insert(ccm_id, swap_output);
 			}
+
+			Ok(CcmSwapIds { principal_swap_id, gas_swap_id })
 		}
 	}
 }

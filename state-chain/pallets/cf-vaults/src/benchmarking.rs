@@ -1,4 +1,3 @@
-//! Benchmarking setup for pallet-template
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
@@ -8,8 +7,11 @@ use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_primitives::GENESIS_EPOCH;
 use cf_traits::{AccountRoleRegistry, EpochInfo};
 use codec::Decode;
-use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller};
-use frame_support::traits::{OnNewAccount, UnfilteredDispatchable};
+use frame_benchmarking::v2::*;
+use frame_support::{
+	assert_ok,
+	traits::{OnNewAccount, UnfilteredDispatchable},
+};
 use frame_system::RawOrigin;
 
 // Note: Currently we only have one chain (ETH) - as soon we've
@@ -33,102 +35,119 @@ fn generate_authority_set<T: Config<I>, I: 'static>(
 	authority_set
 }
 
-benchmarks_instance_pallet! {
-	on_initialize_failure {
-		let b in 1 .. 100;
+#[instance_benchmarks]
+mod benchmarks {
+	use super::*;
+	use sp_std::vec;
+
+	#[benchmark]
+	fn on_initialize_failure(b: Linear<1, 100>) {
 		let current_block: BlockNumberFor<T> = 0u32.into();
 		KeygenResolutionPendingSince::<T, I>::put(current_block);
 		let caller: T::AccountId = whitelisted_caller();
-		let keygen_participants: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(150, caller.clone().into());
+		let keygen_participants: BTreeSet<T::ValidatorId> =
+			generate_authority_set::<T, I>(150, caller.clone().into());
 		let blamed: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(b, caller.into());
-		let mut keygen_response_status = KeygenResponseStatus::<T, I>::new(keygen_participants.clone());
+		let mut keygen_response_status =
+			KeygenResponseStatus::<T, I>::new(keygen_participants.clone());
 
 		for validator_id in &keygen_participants {
 			keygen_response_status.add_failure_vote(validator_id, blamed.clone());
 		}
 
-		PendingVaultRotation::<T, I>::put(
-			VaultRotationStatus::<T, I>::AwaitingKeygen {
-				ceremony_id: CEREMONY_ID,
-				keygen_participants: keygen_participants.into_iter().collect(),
-				response_status: keygen_response_status,
-				new_epoch_index: GENESIS_EPOCH,
-			},
-		);
-	} : {
-		Pallet::<T, I>::on_initialize(5u32.into());
-	}
-	verify {
+		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingKeygen {
+			ceremony_id: CEREMONY_ID,
+			keygen_participants: keygen_participants.into_iter().collect(),
+			response_status: keygen_response_status,
+			new_epoch_index: GENESIS_EPOCH,
+		});
+		#[block]
+		{
+			Pallet::<T, I>::on_initialize(5u32.into());
+		}
+
 		assert!(matches!(
 			<Pallet::<T, I> as VaultRotator>::status(),
 			AsyncResult::Ready(VaultStatus::Failed(..))
 		));
 	}
-	on_initialize_success {
+
+	#[benchmark]
+	fn on_initialize_success() {
 		let current_block: BlockNumberFor<T> = 0u32.into();
 		KeygenResolutionPendingSince::<T, I>::put(current_block);
 		let caller: T::AccountId = whitelisted_caller();
-		let keygen_participants: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(150, caller.into());
-		let mut keygen_response_status = KeygenResponseStatus::<T, I>::new(keygen_participants.clone());
+		let keygen_participants: BTreeSet<T::ValidatorId> =
+			generate_authority_set::<T, I>(150, caller.into());
+		let mut keygen_response_status =
+			KeygenResponseStatus::<T, I>::new(keygen_participants.clone());
 
 		for validator_id in &keygen_participants {
-			keygen_response_status.add_success_vote(
-				validator_id,
-				AggKeyFor::<T, I>::benchmark_value()
-			);
+			keygen_response_status
+				.add_success_vote(validator_id, AggKeyFor::<T, I>::benchmark_value());
 		}
 
-		PendingVaultRotation::<T, I>::put(
-			VaultRotationStatus::<T, I>::AwaitingKeygen {
-				ceremony_id: CEREMONY_ID,
-				keygen_participants: keygen_participants.into_iter().collect(),
-				response_status: keygen_response_status,
-				new_epoch_index: GENESIS_EPOCH,
-			},
-		);
-	} : {
-		Pallet::<T, I>::on_initialize(5u32.into());
-	}
-	verify {
+		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingKeygen {
+			ceremony_id: CEREMONY_ID,
+			keygen_participants: keygen_participants.into_iter().collect(),
+			response_status: keygen_response_status,
+			new_epoch_index: GENESIS_EPOCH,
+		});
+
+		#[block]
+		{
+			Pallet::<T, I>::on_initialize(5u32.into());
+		}
+
 		assert_eq!(
 			PendingVaultRotation::<T, I>::decode_variant(),
 			Some(VaultRotationStatusVariant::AwaitingKeygenVerification),
 		);
 	}
-	report_keygen_outcome {
+
+	#[benchmark]
+	fn report_keygen_outcome() {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		T::AccountRoleRegistry::register_as_validator(&caller).unwrap();
 
 		let keygen_participants = generate_authority_set::<T, I>(150, caller.clone().into());
-		PendingVaultRotation::<T, I>::put(
-			VaultRotationStatus::<T, I>::AwaitingKeygen {
-				ceremony_id: CEREMONY_ID,
-				keygen_participants: keygen_participants.clone().into_iter().collect(),
-				response_status: KeygenResponseStatus::<T, I>::new(keygen_participants),
-				new_epoch_index: GENESIS_EPOCH,
-			},
-		);
-		use cf_chains::eth::sig_constants::SIG;
-		let bad_sig_byte = (SIG[SIG.len() - 1] + 1) % u8::MAX;
-		let bad_sig = [SIG[..SIG.len() - 1].to_vec(), vec![bad_sig_byte]].concat();
+		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingKeygen {
+			ceremony_id: CEREMONY_ID,
+			keygen_participants: keygen_participants.clone().into_iter().collect(),
+			response_status: KeygenResponseStatus::<T, I>::new(keygen_participants),
+			new_epoch_index: GENESIS_EPOCH,
+		});
 
-		// Submit a key that doesn't verify the signature. This is approximately the same cost as success at time of writing.
-		// But is much easier to write, and we might add slashing, which would increase the cost of the failure. Making this test the more
-		// expensive of the two paths, therefore ensuring we have a more conservative benchmark
-	} : _(RawOrigin::Signed(caller), CEREMONY_ID, KeygenOutcomeFor::<T, I>::Ok(AggKeyFor::<T, I>::benchmark_value()))
-	verify {
+		// Submit a key that doesn't verify the signature. This is approximately the same cost as
+		// success at time of writing. But is much easier to write, and we might add slashing, which
+		// would increase the cost of the failure. Making this test the more expensive of the two
+		// paths, therefore ensuring we have a more conservative benchmark
+		#[extrinsic_call]
+		report_keygen_outcome(
+			RawOrigin::Signed(caller),
+			CEREMONY_ID,
+			KeygenOutcomeFor::<T, I>::Ok(AggKeyFor::<T, I>::benchmark_value()),
+		);
+
 		assert!(matches!(
 			PendingVaultRotation::<T, I>::get().unwrap(),
 			VaultRotationStatus::AwaitingKeygen { response_status, .. }
 				if response_status.remaining_candidate_count() == 149
 		))
 	}
-	on_keygen_verification_result {
+
+	#[benchmark]
+	fn on_keygen_verification_result() {
 		let caller: T::AccountId = whitelisted_caller();
 		let agg_key = AggKeyFor::<T, I>::benchmark_value();
 		let keygen_participants = generate_authority_set::<T, I>(150, caller.into());
-		let request_id = Pallet::<T, I>::trigger_keygen_verification(CEREMONY_ID, agg_key, keygen_participants.into_iter().collect(), 2);
+		let request_id = Pallet::<T, I>::trigger_keygen_verification(
+			CEREMONY_ID,
+			agg_key,
+			keygen_participants.into_iter().collect(),
+			2,
+		);
 		T::ThresholdSigner::insert_signature(
 			request_id,
 			ThresholdSignatureFor::<T, I>::benchmark_value(),
@@ -139,34 +158,76 @@ benchmarks_instance_pallet! {
 			new_public_key: agg_key,
 		};
 		let origin = T::EnsureThresholdSigned::try_successful_origin().unwrap();
-	} : { call.dispatch_bypass_filter(origin)? }
-	verify {
+
+		#[block]
+		{
+			assert_ok!(call.dispatch_bypass_filter(origin));
+		}
+
 		assert!(matches!(
 			PendingVaultRotation::<T, I>::get().unwrap(),
 			VaultRotationStatus::KeygenVerificationComplete { new_public_key }
 				if new_public_key == agg_key
 		))
 	}
-	vault_key_rotated_externally {
+
+	#[benchmark]
+	fn vault_key_rotated_externally() {
 		let origin = T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap();
 		let call = Call::<T, I>::vault_key_rotated_externally {
 			new_public_key: AggKeyFor::<T, I>::benchmark_value(),
 			block_number: 5u32.into(),
-			tx_id: Decode::decode(&mut &TX_HASH[..]).unwrap()
+			tx_id: Decode::decode(&mut &TX_HASH[..]).unwrap(),
 		};
-	} : { call.dispatch_bypass_filter(origin)? }
-	verify {
+
+		#[block]
+		{
+			assert_ok!(call.dispatch_bypass_filter(origin));
+		}
+
 		assert!(Vaults::<T, I>::contains_key(T::EpochInfo::epoch_index().saturating_add(1)));
 	}
-	set_keygen_response_timeout {
+
+	#[benchmark]
+	fn set_keygen_response_timeout() {
 		let old_timeout: BlockNumberFor<T> = 5u32.into();
 		KeygenResponseTimeout::<T, I>::put(old_timeout);
 		let new_timeout: BlockNumberFor<T> = old_timeout + 1u32.into();
 		// ensure it's a different value for most expensive path.
 		let call = Call::<T, I>::set_keygen_response_timeout { new_timeout };
-	} : { call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())? }
-	verify {
+
+		#[block]
+		{
+			assert_ok!(
+				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
+			);
+		}
+
 		assert_eq!(KeygenResponseTimeout::<T, I>::get(), new_timeout);
 	}
-	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
+
+	#[cfg(test)]
+	use crate::mock::*;
+
+	#[test]
+	fn benchmark_works() {
+		new_test_ext().execute_with(|| {
+			_on_initialize_failure::<Test, ()>(10, true);
+		});
+		new_test_ext().execute_with(|| {
+			_on_initialize_success::<Test, ()>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_report_keygen_outcome::<Test, ()>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_on_keygen_verification_result::<Test, ()>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_vault_key_rotated_externally::<Test, ()>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_set_keygen_response_timeout::<Test, ()>(true);
+		});
+	}
 }

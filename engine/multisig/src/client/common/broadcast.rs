@@ -218,7 +218,7 @@ where
 		if let Some(start_instant) = self.stage_started {
 			metrics
 				.stage_duration
-				.set(&[&stage_name, "receiving"], start_instant.elapsed().as_millis());
+				.observe(&[&stage_name, "receiving"], start_instant.elapsed());
 		}
 
 		let process_msg_instant = Instant::now();
@@ -236,7 +236,7 @@ where
 		let result = self.processor.process(messages).await;
 		metrics
 			.stage_duration
-			.set(&[&stage_name, "processing"], process_msg_instant.elapsed().as_millis());
+			.observe(&[&stage_name, "processing"], process_msg_instant.elapsed());
 		result
 	}
 
