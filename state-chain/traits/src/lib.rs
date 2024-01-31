@@ -274,6 +274,11 @@ pub trait Issuance {
 
 	/// Returns the total issuance.
 	fn total_issuance() -> Self::Balance;
+
+	/// Burn some funds that are off-chain (eg. in the StateChainGateway contract).
+	///
+	/// Use with care.
+	fn burn_offchain(amount: Self::Balance);
 }
 
 /// Distribute rewards somehow.

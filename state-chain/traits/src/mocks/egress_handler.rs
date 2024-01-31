@@ -4,7 +4,7 @@ use cf_chains::{CcmCfParameters, CcmDepositMetadata, CcmMessage, Chain};
 use cf_primitives::{AssetAmount, EgressId, ForeignChain};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
-use sp_runtime::{traits::Zero, DispatchError};
+use sp_runtime::{traits::Saturating, DispatchError};
 use sp_std::marker::PhantomData;
 
 pub struct MockEgressHandler<C>(PhantomData<C>);
@@ -18,6 +18,7 @@ pub enum MockEgressParameter<C: Chain> {
 	Swap {
 		asset: C::ChainAsset,
 		amount: C::ChainAmount,
+		fee: C::ChainAmount,
 		destination_address: C::ChainAccount,
 	},
 	Ccm {
@@ -55,6 +56,10 @@ impl<C: Chain> MockEgressHandler<C> {
 	pub fn get_scheduled_egresses() -> Vec<MockEgressParameter<C>> {
 		<Self as MockPalletStorage>::get_value(b"SCHEDULED_EGRESSES").unwrap_or_default()
 	}
+
+	pub fn set_fee(amount: C::ChainAmount) {
+		<Self as MockPalletStorage>::put_value(b"EGRESS_FEE", amount);
+	}
 }
 
 impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
@@ -66,6 +71,7 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 		destination_address: <C as Chain>::ChainAccount,
 		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <C as Chain>::ChainAmount)>,
 	) -> Result<(EgressId, <C as Chain>::ChainAmount, <C as Chain>::ChainAmount), DispatchError> {
+		let egress_fee = <Self as MockPalletStorage>::get_value(b"EGRESS_FEE").unwrap_or_default();
 		<Self as MockPalletStorage>::mutate_value(b"SCHEDULED_EGRESSES", |storage| {
 			if storage.is_none() {
 				*storage = Some(vec![]);
@@ -80,17 +86,25 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 						cf_parameters: message.channel_metadata.cf_parameters.clone(),
 						gas_budget: *gas_budget,
 					},
-					None => MockEgressParameter::<C>::Swap { asset, amount, destination_address },
+					None => MockEgressParameter::<C>::Swap {
+						asset,
+						amount: amount.saturating_sub(egress_fee),
+						destination_address,
+						fee: egress_fee,
+					},
 				});
 			})
 		});
 		let len = Self::get_scheduled_egresses().len();
 		Ok((
 			(ForeignChain::Ethereum, len as u64),
-			amount,
+			match maybe_ccm_with_gas_budget {
+				Some(..) => amount,
+				None => amount.saturating_sub(egress_fee),
+			},
 			match maybe_ccm_with_gas_budget {
 				Some((_, gas_budget)) => gas_budget,
-				None => Zero::zero(),
+				None => egress_fee,
 			},
 		))
 	}
