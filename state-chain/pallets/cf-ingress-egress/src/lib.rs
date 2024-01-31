@@ -446,14 +446,6 @@ pub mod pallet {
 			asset: TargetChainAsset<T, I>,
 			disabled: bool,
 		},
-		#[deprecated]
-		EgressScheduled {
-			id: EgressId,
-			asset: TargetChainAsset<T, I>,
-			amount: AssetAmount,
-			destination_address: TargetChainAccount<T, I>,
-			egress_fee: TargetChainAmount<T, I>,
-		},
 		CcmBroadcastRequested {
 			broadcast_id: BroadcastId,
 			egress_id: EgressId,
