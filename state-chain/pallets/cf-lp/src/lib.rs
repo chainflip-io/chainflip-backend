@@ -111,6 +111,7 @@ pub mod pallet {
 			asset: Asset,
 			amount: AssetAmount,
 			destination_address: EncodedAddress,
+			fee: AssetAmount,
 		},
 		LiquidityRefundAddressRegistered {
 			account_id: T::AccountId,
@@ -208,18 +209,20 @@ pub mod pallet {
 				// Debit the asset from the account.
 				Self::try_debit_account(&account_id, asset, amount)?;
 
-				let egress_id = T::EgressHandler::schedule_egress(
+				let (egress_id, egress_amount, egress_fee) = T::EgressHandler::schedule_egress(
 					asset,
 					amount,
 					destination_address_internal,
 					None,
-				);
+				)
+				.map_err(Into::into)?;
 
 				Self::deposit_event(Event::<T>::WithdrawalEgressScheduled {
 					egress_id,
 					asset,
-					amount,
+					amount: egress_amount,
 					destination_address,
+					fee: egress_fee,
 				});
 			}
 			Ok(())

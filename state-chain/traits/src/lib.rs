@@ -715,33 +715,49 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 
 /// API that allows other pallets to Egress assets out of the State Chain.
 pub trait EgressApi<C: Chain> {
+	type EgressError: Into<DispatchError>;
+
+	/// Schedule the egress of an asset to a destination address.
+	///
+	/// Returns the egress id, the amount of the asset that will be egressed, and the amount of the
+	/// asset that was withheld for fees.
 	fn schedule_egress(
 		asset: C::ChainAsset,
 		amount: C::ChainAmount,
 		destination_address: C::ChainAccount,
 		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, C::ChainAmount)>,
-	) -> EgressId;
+	) -> Result<(EgressId, C::ChainAmount, C::ChainAmount), Self::EgressError>;
 }
 
 impl<T: frame_system::Config> EgressApi<Ethereum> for T {
+	type EgressError = DispatchError;
+
 	fn schedule_egress(
 		_asset: assets::eth::Asset,
 		_amount: <Ethereum as Chain>::ChainAmount,
 		_destination_address: <Ethereum as Chain>::ChainAccount,
 		_maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <Ethereum as Chain>::ChainAmount)>,
-	) -> EgressId {
-		(ForeignChain::Ethereum, 0)
+	) -> Result<
+		(EgressId, <Ethereum as Chain>::ChainAmount, <Ethereum as Chain>::ChainAmount),
+		DispatchError,
+	> {
+		Ok(((ForeignChain::Ethereum, 0), 0, 0))
 	}
 }
 
 impl<T: frame_system::Config> EgressApi<Polkadot> for T {
+	type EgressError = DispatchError;
+
 	fn schedule_egress(
 		_asset: assets::dot::Asset,
 		_amount: <Polkadot as Chain>::ChainAmount,
 		_destination_address: <Polkadot as Chain>::ChainAccount,
 		_maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <Polkadot as Chain>::ChainAmount)>,
-	) -> EgressId {
-		(ForeignChain::Polkadot, 0)
+	) -> Result<
+		(EgressId, <Polkadot as Chain>::ChainAmount, <Polkadot as Chain>::ChainAmount),
+		DispatchError,
+	> {
+		Ok(((ForeignChain::Polkadot, 0), 0, 0))
 	}
 }
 

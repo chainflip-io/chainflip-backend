@@ -4,6 +4,7 @@ use cf_chains::{CcmCfParameters, CcmDepositMetadata, CcmMessage, Chain};
 use cf_primitives::{AssetAmount, EgressId, ForeignChain};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
+use sp_runtime::{traits::Zero, DispatchError};
 use sp_std::marker::PhantomData;
 
 pub struct MockEgressHandler<C>(PhantomData<C>);
@@ -57,31 +58,40 @@ impl<C: Chain> MockEgressHandler<C> {
 }
 
 impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
+	type EgressError = DispatchError;
+
 	fn schedule_egress(
 		asset: <C as Chain>::ChainAsset,
 		amount: <C as Chain>::ChainAmount,
 		destination_address: <C as Chain>::ChainAccount,
 		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <C as Chain>::ChainAmount)>,
-	) -> EgressId {
+	) -> Result<(EgressId, <C as Chain>::ChainAmount, <C as Chain>::ChainAmount), DispatchError> {
 		<Self as MockPalletStorage>::mutate_value(b"SCHEDULED_EGRESSES", |storage| {
 			if storage.is_none() {
 				*storage = Some(vec![]);
 			}
 			storage.as_mut().map(|v| {
-				v.push(match maybe_ccm_with_gas_budget {
+				v.push(match &maybe_ccm_with_gas_budget {
 					Some((message, gas_budget)) => MockEgressParameter::<C>::Ccm {
 						asset,
 						amount,
 						destination_address,
-						message: message.channel_metadata.message,
-						cf_parameters: message.channel_metadata.cf_parameters,
-						gas_budget,
+						message: message.channel_metadata.message.clone(),
+						cf_parameters: message.channel_metadata.cf_parameters.clone(),
+						gas_budget: *gas_budget,
 					},
 					None => MockEgressParameter::<C>::Swap { asset, amount, destination_address },
 				});
 			})
 		});
 		let len = Self::get_scheduled_egresses().len();
-		(ForeignChain::Ethereum, len as u64)
+		Ok((
+			(ForeignChain::Ethereum, len as u64),
+			amount,
+			match maybe_ccm_with_gas_budget {
+				Some((_, gas_budget)) => gas_budget,
+				None => Zero::zero(),
+			},
+		))
 	}
 }

@@ -476,12 +476,14 @@ macro_rules! impl_deposit_api_for_anychain {
 macro_rules! impl_egress_api_for_anychain {
 	( $t: ident, $(($chain: ident, $pallet: ident)),+ ) => {
 		impl EgressApi<AnyChain> for $t {
+			type EgressError = DispatchError;
+
 			fn schedule_egress(
 				asset: Asset,
 				amount: <AnyChain as Chain>::ChainAmount,
 				destination_address: <AnyChain as Chain>::ChainAccount,
 				maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <AnyChain as Chain>::ChainAmount)>,
-			) -> EgressId {
+			) -> Result<(EgressId, <AnyChain as Chain>::ChainAmount, <AnyChain as Chain>::ChainAmount), DispatchError> {
 				match asset.into() {
 					$(
 						ForeignChain::$chain => $pallet::schedule_egress(
@@ -491,8 +493,9 @@ macro_rules! impl_egress_api_for_anychain {
 								.try_into()
 								.expect("This address cast is ensured to succeed."),
 								maybe_ccm_with_gas_budget.map(|(metadata, gas_budget)| (metadata, gas_budget.try_into().expect("Chain's Amount must be compatible with u128."))),
-						),
-
+						)
+						.map(|(egress_id, amount, fee)| (egress_id, amount.into(), fee.into()))
+						.map_err(Into::into),
 					)+
 				}
 			}
