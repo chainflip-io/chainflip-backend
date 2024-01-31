@@ -1,6 +1,6 @@
 use cf_primitives::{Asset, AssetAmount};
 use frame_support::sp_runtime::traits::UniqueSaturatedInto;
-use sp_runtime::traits::AtLeast32BitUnsigned;
+use sp_runtime::traits::{AtLeast32BitUnsigned, Zero};
 
 use crate::AssetConverter;
 
@@ -33,6 +33,17 @@ impl AssetConverter for MockAssetConverter {
 	) -> Option<(Amount, Amount)> {
 		let input_asset = input_asset.into();
 		let output_asset = output_asset.into();
+		// the following check is copied from the implementation in the pool pallet
+		if input_asset == output_asset {
+			if desired_output_amount < available_input_amount {
+				return Some((
+					available_input_amount.saturating_sub(desired_output_amount),
+					desired_output_amount,
+				))
+			} else {
+				return Some((Zero::zero(), available_input_amount))
+			}
+		}
 		let input = Self::get_price(output_asset, input_asset)
 			.map(|price| price * desired_output_amount.into())?;
 

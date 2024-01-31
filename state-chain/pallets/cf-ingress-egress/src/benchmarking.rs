@@ -162,7 +162,7 @@ mod benchmarks {
 	}
 
 	#[cfg(test)]
-	use crate::mock::*;
+	use crate::mock_eth::*;
 
 	#[test]
 	fn benchmark_works() {

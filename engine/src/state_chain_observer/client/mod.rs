@@ -4,6 +4,7 @@ pub mod error_decoder;
 pub mod extrinsic_api;
 pub mod storage_api;
 pub mod stream_api;
+pub mod subxt_state_chain_config;
 
 use async_trait::async_trait;
 
@@ -17,7 +18,7 @@ use jsonrpsee::core::RpcResult;
 use sp_core::{Pair, H256};
 use state_chain_runtime::AccountId;
 use std::{pin::Pin, sync::Arc, time::Duration};
-use subxt::backend::rpc::RpcClient;
+use subxt::{backend::rpc::RpcClient, config::DefaultExtrinsicParamsBuilder};
 use tokio::sync::watch;
 use tracing::{info, warn};
 
@@ -28,8 +29,11 @@ use utilities::{
 	try_cached_stream::{MakeTryCachedStream, TryCachedStream},
 };
 
-use crate::state_chain_observer::client::{
-	base_rpc_api::SubxtInterface, storage_api::CheckBlockCompatibility,
+use crate::{
+	constants::SIGNED_EXTRINSIC_LIFETIME,
+	state_chain_observer::client::{
+		base_rpc_api::SubxtInterface, storage_api::CheckBlockCompatibility,
+	},
 };
 
 use self::{
@@ -707,29 +711,29 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 		};
 
 		if self.submit_cfe_version {
-			use subxt::{tx::Signer, PolkadotConfig};
+			use crate::state_chain_observer::client::subxt_state_chain_config::StateChainConfig;
+			use subxt::tx::Signer;
 
-			let subxt_client = subxt::client::OnlineClient::<PolkadotConfig>::from_rpc_client(
-				RpcClient::new(SubxtInterface(base_rpc_client.clone())),
+			let rpc_client = RpcClient::new(SubxtInterface(base_rpc_client.clone()));
+
+			let subxt_client = subxt::client::OnlineClient::<StateChainConfig>::from_rpc_client(
+				rpc_client.clone(),
 			)
 			.await?;
 			let subxt_signer = {
 				struct SubxtSignerInterface<T>(subxt::utils::AccountId32, T);
-				impl subxt::tx::Signer<PolkadotConfig> for SubxtSignerInterface<sp_core::sr25519::Pair> {
-					fn account_id(&self) -> <subxt::PolkadotConfig as subxt::Config>::AccountId {
+				impl subxt::tx::Signer<StateChainConfig> for SubxtSignerInterface<sp_core::sr25519::Pair> {
+					fn account_id(&self) -> <StateChainConfig as subxt::Config>::AccountId {
 						self.0.clone()
 					}
 
-					fn address(&self) -> <subxt::PolkadotConfig as subxt::Config>::Address {
+					fn address(&self) -> <StateChainConfig as subxt::Config>::Address {
 						subxt::utils::MultiAddress::Id(self.0.clone())
 					}
 
-					fn sign(
-						&self,
-						bytes: &[u8],
-					) -> <subxt::PolkadotConfig as subxt::Config>::Signature {
+					fn sign(&self, bytes: &[u8]) -> <StateChainConfig as subxt::Config>::Signature {
 						use sp_core::Pair;
-						subxt::utils::MultiSignature::Sr25519(self.1.sign(bytes).0)
+						state_chain_runtime::Signature::Sr25519(self.1.sign(bytes))
 					}
 				}
 				SubxtSignerInterface(subxt::utils::AccountId32(*signer.account_id.as_ref()), pair)
@@ -759,13 +763,23 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 					recorded_version, *CFE_VERSION
 				);
 
+				let block_hash = finalized_block_stream.cache().hash;
+				let block_number = finalized_block_stream.cache().number;
+
 				// Submitting transaction with subxt sometimes gets stuck without returning any
 				// error (see https://linear.app/chainflip/issue/PRO-1064/new-cfe-version-gets-stuck-on-startup),
 				// so we use a timeout to ensure we can recover:
 				tokio::time::timeout(CFE_VERSION_SUBMIT_TIMEOUT, async {
+					let current_nonce = rpc_client
+						.request::<u32>(
+							"system_accountNextIndex",
+							subxt::rpc_params![&subxt_signer.account_id()],
+						)
+						.await?;
+
 					subxt_client
 						.tx()
-						.sign_and_submit_then_watch_default(
+						.create_signed_with_nonce(
 							&subxt::dynamic::tx(
 								"Validator",
 								"cfe_version",
@@ -779,7 +793,16 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 								)],
 							),
 							&subxt_signer,
-						)
+							current_nonce.into(),
+							DefaultExtrinsicParamsBuilder::new()
+								.mortal_unchecked(
+									block_number.into(),
+									block_hash,
+									SIGNED_EXTRINSIC_LIFETIME.into(),
+								)
+								.build(),
+						)?
+						.submit_and_watch()
 						.await?
 						.wait_for_in_block()
 						.await

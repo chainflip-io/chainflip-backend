@@ -15,7 +15,7 @@ export async function jsonRpc(
     id,
   });
 
-  const fetchEndpoint = endpoint ?? 'http://localhost:9944';
+  const fetchEndpoint = endpoint ?? 'http://127.0.0.1:9944';
   const response = await fetch(`${fetchEndpoint}`, {
     method: 'POST',
     headers: {
