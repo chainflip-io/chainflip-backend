@@ -478,8 +478,8 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
 			broker_commission_bps: BasisPoints,
-			boost_fee: BasisPoints,
 			channel_metadata: Option<CcmChannelMetadata>,
+			boost_fee: BasisPoints,
 		) -> DispatchResult {
 			ensure!(T::SafeMode::get().deposits_enabled, Error::<T>::DepositsDisabled);
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;

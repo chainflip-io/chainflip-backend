@@ -323,8 +323,8 @@ pub trait BrokerApi: SignedExtrinsicApi {
 					destination_asset,
 					destination_address,
 					broker_commission_bps,
-					boost_fee: boost_fee.unwrap_or_default(),
 					channel_metadata,
+					boost_fee: boost_fee.unwrap_or_default(),
 				},
 			)
 			.await?
