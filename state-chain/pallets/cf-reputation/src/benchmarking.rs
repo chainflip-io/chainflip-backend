@@ -2,7 +2,7 @@
 
 use super::*;
 
-use cf_traits::AccountRoleRegistry;
+use cf_traits::{AccountRoleRegistry, EpochInfo};
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
@@ -80,14 +80,19 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn submit_network_state() {
-		for b in 1..MAX_VALIDATOR_COUNT {
-			let _caller: T::AccountId = account("doogle", b, b);
-		}
+	fn submit_network_state(o: Linear<0, MAX_VALIDATOR_COUNT>) {
+		// o: number of offline validators to report
+
+		// Generate validators and set as validators
+		let validators =
+			(0..o).map(|v| account("validator", v, v)).collect::<BTreeSet<T::ValidatorId>>();
+		T::EpochInfo::set_authorities(validators);
+
 		let interval = T::HeartbeatBlockInterval::get();
 
-		// TODO: set the generated validators as active validators
-		// PRO-1151
+		// Without heartbeat, all nodes are automatically disqualified.
+		let _ = LastHeartbeat::<T>::clear(u32::MAX, None);
+
 		#[block]
 		{
 			Pallet::<T>::on_initialize(interval);

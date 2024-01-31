@@ -43,7 +43,7 @@ sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chain
 cf-test-utilities = { path = '../../test-utilities' }
 
 [features]
-default = ['std']
+default = ['std', 'runtime-benchmarks']
 std = [
   'cf-chains/std',
   'cfe-events/std',
