@@ -19,8 +19,8 @@ export const getErc20abi = loadContractCached(
   '../contracts-interfaces/eth-contract-abis/IERC20.json',
 );
 export const getGatewayAbi = loadContractCached(
-  `../eth-contract-abis/${CF_ETH_CONTRACT_ABI_TAG}/IStateChainGateway.json`,
+  `../contracts-interfaces/eth-contract-abis/${CF_ETH_CONTRACT_ABI_TAG}/IStateChainGateway.json`,
 );
 export const getCFTesterAbi = loadContractCached(
-  `../eth-contract-abis/${CF_ETH_CONTRACT_ABI_TAG}/CFTester.json`,
+  `../contracts-interfaces/eth-contract-abis/${CF_ETH_CONTRACT_ABI_TAG}/CFTester.json`,
 );
