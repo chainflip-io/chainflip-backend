@@ -391,13 +391,13 @@ pub mod pallet {
 				Self::do_group_and_swap(&mut swaps, SwapLeg::FromStable)?;
 
 				for swap in swaps {
-					if let Some(egress_amount) = swap.final_output {
+					if let Some(swap_output) = swap.final_output {
 						Self::deposit_event(Event::<T>::SwapExecuted {
 							swap_id: swap.swap_id,
 							source_asset: swap.from,
 							destination_asset: swap.to,
 							deposit_amount: swap.amount,
-							egress_amount,
+							egress_amount: swap_output,
 							intermediate_amount: swap.intermediate_amount(),
 						});
 						// Handle swap completion logic.
@@ -405,7 +405,7 @@ pub mod pallet {
 							SwapType::Swap(destination_address) => {
 								let egress_id = T::EgressHandler::schedule_egress(
 									swap.to,
-									egress_amount,
+									swap_output,
 									destination_address.clone(),
 									None,
 								);
@@ -420,16 +420,12 @@ pub mod pallet {
 							SwapType::CcmPrincipal(ccm_id) => {
 								Self::handle_ccm_swap_result(
 									*ccm_id,
-									egress_amount,
+									swap_output,
 									CcmSwapLeg::Principal,
 								);
 							},
 							SwapType::CcmGas(ccm_id) => {
-								Self::handle_ccm_swap_result(
-									*ccm_id,
-									egress_amount,
-									CcmSwapLeg::Gas,
-								);
+								Self::handle_ccm_swap_result(*ccm_id, swap_output, CcmSwapLeg::Gas);
 							},
 						};
 					} else {
