@@ -156,6 +156,7 @@ fn process_all_swaps() {
 				} else {
 					ForeignChainAddress::Eth(Default::default())
 				},
+				fee: 0,
 			})
 			.collect::<Vec<_>>();
 		expected.sort();
