@@ -9,7 +9,7 @@ fi
 CONTRACT_RELEASE_TAG=$1
 
 if [ -z "${CONTRACT_RELEASE_TAG}" ]; then
-    echo "🔖 Please provide a release tag to download. Available tags are:"
+    echo "🔖 Please provide a release tag to download for the Solana programs. Available tags are:"
     echo ""
     select tag in $(echo "`gh release list --repo https://github.com/chainflip-io/chainflip-sol-contracts`" | awk '{print $1}'); do
         CONTRACT_RELEASE_TAG=$tag
