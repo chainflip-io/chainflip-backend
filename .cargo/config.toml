@@ -1,5 +1,5 @@
 [env]
-CF_ETH_CONTRACT_ABI_ROOT = { value = "eth-contract-abis", relative = true }
+CF_ETH_CONTRACT_ABI_ROOT = { value = "contract-interfaces/eth-contract-abis", relative = true }
 CF_ETH_CONTRACT_ABI_TAG = "v1.0.0"
 CF_TEST_CONFIG_ROOT = { value = "engine/config/testing", relative = true }
 

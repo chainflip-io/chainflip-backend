@@ -18,8 +18,8 @@ if [ -z "${CONTRACT_RELEASE_TAG}" ]; then
 fi
 
 PROJECT_ROOT=$(git rev-parse --show-toplevel || exit 1)
-ZIP_FILE=$PROJECT_ROOT/eth-contract-abis/abis-${CONTRACT_RELEASE_TAG}.zip
-TARGET_DIR=$PROJECT_ROOT/eth-contract-abis/${CONTRACT_RELEASE_TAG}
+ZIP_FILE=$PROJECT_ROOT/contract-interfaces/eth-contract-abis/abis-${CONTRACT_RELEASE_TAG}.zip
+TARGET_DIR=$PROJECT_ROOT/contract-interfaces/eth-contract-abis/${CONTRACT_RELEASE_TAG}
 
 gh release download \
     --clobber \
