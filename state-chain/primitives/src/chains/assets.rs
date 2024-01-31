@@ -57,6 +57,7 @@ pub mod any {
 		Usdc = 3u32,
 		Dot = 4u32,
 		Btc = 5u32,
+		Sol = 6u32,
 	}
 
 	impl TryFrom<u32> for Asset {
@@ -69,6 +70,7 @@ pub mod any {
 				x if x == Self::Usdc as u32 => Ok(Self::Usdc),
 				x if x == Self::Dot as u32 => Ok(Self::Dot),
 				x if x == Self::Btc as u32 => Ok(Self::Btc),
+				x if x == Self::Sol as u32 => Ok(Self::Sol),
 				_ => Err("Invalid asset id"),
 			}
 		}
@@ -89,6 +91,7 @@ pub mod any {
 				Asset::Usdc => Self::Ethereum,
 				Asset::Dot => Self::Polkadot,
 				Asset::Btc => Self::Bitcoin,
+				Asset::Sol => unimplemented!(),
 			}
 		}
 	}
@@ -103,6 +106,7 @@ pub mod any {
 				"usdc" => Ok(Asset::Usdc),
 				"dot" => Ok(Asset::Dot),
 				"btc" => Ok(Asset::Btc),
+				"sol" => Ok(Asset::Sol),
 				_ => Err("Unrecognized asset"),
 			}
 		}
@@ -199,6 +203,10 @@ macro_rules! chain_assets {
 chain_assets!(eth, Ethereum, Eth, Flip, Usdc);
 chain_assets!(dot, Polkadot, Dot);
 chain_assets!(btc, Bitcoin, Btc);
+
+pub use crate::temporary_sol::asset as sol;
+
+// chain_assets!(sol, Solana, Sol);
 
 #[cfg(test)]
 mod test_assets {

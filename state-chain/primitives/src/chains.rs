@@ -92,6 +92,7 @@ chains! {
 	Polkadot = 2,
 	Bitcoin = 3
 }
+pub use crate::temporary_sol::chain::Solana;
 
 /// Can be any Chain.
 #[derive(
