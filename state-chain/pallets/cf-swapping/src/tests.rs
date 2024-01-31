@@ -274,6 +274,7 @@ fn expect_swap_id_to_be_emitted() {
 				egress_id: (ForeignChain::Ethereum, 1),
 				asset: Asset::Usdc,
 				amount: 500,
+				fee: _,
 			})
 		);
 	});
@@ -1077,6 +1078,7 @@ fn process_all_into_stable_swaps_first() {
 				asset: Asset::Eth,
 				egress_id: (ForeignChain::Ethereum, 1),
 				amount,
+				fee: _,
 			}) if amount == output_amount,
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -1084,6 +1086,7 @@ fn process_all_into_stable_swaps_first() {
 				asset: Asset::Eth,
 				egress_id: (ForeignChain::Ethereum, 2),
 				amount,
+				fee: _,
 			}) if amount == output_amount,
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 3, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -1091,6 +1094,7 @@ fn process_all_into_stable_swaps_first() {
 				asset: Asset::Eth,
 				egress_id: (ForeignChain::Ethereum, 3),
 				amount,
+				fee: _,
 			}) if amount == output_amount,
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 4, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -1098,6 +1102,7 @@ fn process_all_into_stable_swaps_first() {
 				asset: Asset::Eth,
 				egress_id: (ForeignChain::Ethereum, 4),
 				amount,
+				fee: _,
 			}) if amount == output_amount,
 		);
 	});
@@ -1300,6 +1305,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 					destination_asset: Asset::Eth,
 					deposit_amount: 99_000,
 					egress_amount: 9,
+					swap_output: 9,
 					intermediate_amount: None,
 				}),
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
@@ -1308,6 +1314,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 					deposit_amount: 1_000,
 					destination_asset: Asset::Eth,
 					egress_amount: 0,
+					swap_output: 0,
 					intermediate_amount: None,
 				}),
 			);
@@ -1359,16 +1366,18 @@ fn can_handle_swaps_with_zero_outputs() {
 					swap_id: 1,
 					destination_asset: Asset::Eth,
 					egress_amount: 0,
+					swap_output: 0,
 					..
 				}),
-				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_id: 1, amount: 0, .. }),
+				RuntimeEvent::Swapping(Event::SwapEgressIgnored { swap_id: 1, .. }),
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					swap_id: 2,
 					destination_asset: Asset::Eth,
 					egress_amount: 0,
+					swap_output: 0,
 					..
 				}),
-				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_id: 2, amount: 0, .. }),
+				RuntimeEvent::Swapping(Event::SwapEgressIgnored { swap_id: 2, .. }),
 			);
 
 			assert_eq!(SwapQueue::<Test>::decode_len(), None);

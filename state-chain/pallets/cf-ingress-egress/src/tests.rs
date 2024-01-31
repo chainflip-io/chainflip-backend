@@ -1,9 +1,9 @@
 use crate::{
 	mock_eth::*, Call as PalletCall, ChannelAction, ChannelIdCounter, CrossChainMessage,
 	DepositAction, DepositChannelLookup, DepositChannelPool, DepositIgnoredReason, DepositWitness,
-	DisabledEgressAssets, EgressIgnoredReason, Event as PalletEvent, FailedForeignChainCall,
-	FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit, MinimumEgress, Pallet,
-	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount,
+	DisabledEgressAssets, Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls,
+	FetchOrTransfer, MinimumDeposit, MinimumEgress, Pallet, ScheduledEgressCcm,
+	ScheduledEgressFetchOrTransfer, TargetChainAccount,
 };
 use cf_chains::{
 	address::AddressConverter, evm::EvmFetchId, mocks::MockEthereum, CcmChannelMetadata,
@@ -22,7 +22,7 @@ use cf_traits::{
 	DepositApi, EgressApi, EpochInfo, GetBlockHeight,
 };
 use frame_support::{
-	assert_ok,
+	assert_err, assert_ok,
 	traits::{Hooks, OriginTrait},
 	weights::Weight,
 };
@@ -56,8 +56,8 @@ fn blacklisted_asset_will_not_egress_via_batch_all() {
 		));
 
 		// Eth should be blocked while Flip can be sent
-		IngressEgress::schedule_egress(asset, 1_000, ALICE_ETH_ADDRESS, None);
-		IngressEgress::schedule_egress(ETH_FLIP, 1_000, ALICE_ETH_ADDRESS, None);
+		assert_ok!(IngressEgress::schedule_egress(asset, 1_000, ALICE_ETH_ADDRESS, None));
+		assert_ok!(IngressEgress::schedule_egress(ETH_FLIP, 1_000, ALICE_ETH_ADDRESS, None));
 
 		IngressEgress::on_finalize(1);
 
@@ -105,18 +105,18 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 		assert_ok!(IngressEgress::enable_or_disable_egress(RuntimeOrigin::root(), asset, true));
 
 		// Eth should be blocked while Flip can be sent
-		IngressEgress::schedule_egress(
+		assert_ok!(IngressEgress::schedule_egress(
 			asset,
 			1_000,
 			ALICE_ETH_ADDRESS,
 			Some((ccm.clone(), gas_budget)),
-		);
-		IngressEgress::schedule_egress(
+		));
+		assert_ok!(IngressEgress::schedule_egress(
 			ETH_FLIP,
 			1_000,
 			ALICE_ETH_ADDRESS,
 			Some((ccm.clone(), gas_budget)),
-		);
+		));
 
 		IngressEgress::on_finalize(1);
 
@@ -155,42 +155,22 @@ fn egress_below_minimum_deposit_ignored() {
 
 		MinimumEgress::<Test>::insert(ETH_ETH, MIN_EGRESS);
 
-		let egress_id = IngressEgress::schedule_egress(ASSET, AMOUNT, ALICE_ETH_ADDRESS, None);
+		assert_err!(
+			IngressEgress::schedule_egress(ASSET, AMOUNT, ALICE_ETH_ADDRESS, None),
+			crate::Error::<Test, _>::BelowMinimumEgressAmount
+		);
 
 		assert!(ScheduledEgressFetchOrTransfer::<Test>::get().is_empty());
-
-		assert_has_event::<Test>(RuntimeEvent::IngressEgress(crate::Event::EgressIgnored {
-			egress_id,
-			asset: ASSET,
-			amount: AMOUNT,
-			destination_address: ALICE_ETH_ADDRESS,
-			reason: EgressIgnoredReason::BelowMinimumEgress,
-		}));
 	});
 }
 
 #[test]
 fn can_schedule_swap_egress_to_batch() {
 	new_test_ext().execute_with(|| {
-		IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS, None);
-		IngressEgress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS, None);
-		System::assert_last_event(RuntimeEvent::IngressEgress(crate::Event::EgressScheduled {
-			id: (ForeignChain::Ethereum, 2),
-			asset: ETH_ETH,
-			amount: 2_000,
-			destination_address: ALICE_ETH_ADDRESS,
-			egress_fee: 0,
-		}));
-
-		IngressEgress::schedule_egress(ETH_FLIP, 3_000, BOB_ETH_ADDRESS, None);
-		IngressEgress::schedule_egress(ETH_FLIP, 4_000, BOB_ETH_ADDRESS, None);
-		System::assert_last_event(RuntimeEvent::IngressEgress(crate::Event::EgressScheduled {
-			id: (ForeignChain::Ethereum, 4),
-			asset: ETH_FLIP,
-			amount: 4_000,
-			destination_address: BOB_ETH_ADDRESS,
-			egress_fee: 0,
-		}));
+		assert_ok!(IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS, None));
+		assert_ok!(IngressEgress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS, None));
+		assert_ok!(IngressEgress::schedule_egress(ETH_FLIP, 3_000, BOB_ETH_ADDRESS, None));
+		assert_ok!(IngressEgress::schedule_egress(ETH_FLIP, 4_000, BOB_ETH_ADDRESS, None));
 
 		assert_eq!(
 			ScheduledEgressFetchOrTransfer::<Test>::get(),
@@ -279,19 +259,19 @@ fn can_schedule_deposit_fetch() {
 #[test]
 fn on_finalize_can_send_batch_all() {
 	new_test_ext().execute_with(|| {
-		IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS, None);
-		IngressEgress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS, None);
-		IngressEgress::schedule_egress(ETH_ETH, 3_000, BOB_ETH_ADDRESS, None);
-		IngressEgress::schedule_egress(ETH_ETH, 4_000, BOB_ETH_ADDRESS, None);
+		assert_ok!(IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS, None));
+		assert_ok!(IngressEgress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS, None));
+		assert_ok!(IngressEgress::schedule_egress(ETH_ETH, 3_000, BOB_ETH_ADDRESS, None));
+		assert_ok!(IngressEgress::schedule_egress(ETH_ETH, 4_000, BOB_ETH_ADDRESS, None));
 		request_address_and_deposit(1u64, eth::Asset::Eth);
 		request_address_and_deposit(2u64, eth::Asset::Eth);
 		request_address_and_deposit(3u64, eth::Asset::Eth);
 		request_address_and_deposit(4u64, eth::Asset::Eth);
 
-		IngressEgress::schedule_egress(ETH_FLIP, 5_000, ALICE_ETH_ADDRESS, None);
-		IngressEgress::schedule_egress(ETH_FLIP, 6_000, ALICE_ETH_ADDRESS, None);
-		IngressEgress::schedule_egress(ETH_FLIP, 7_000, BOB_ETH_ADDRESS, None);
-		IngressEgress::schedule_egress(ETH_FLIP, 8_000, BOB_ETH_ADDRESS, None);
+		assert_ok!(IngressEgress::schedule_egress(ETH_FLIP, 5_000, ALICE_ETH_ADDRESS, None));
+		assert_ok!(IngressEgress::schedule_egress(ETH_FLIP, 6_000, ALICE_ETH_ADDRESS, None));
+		assert_ok!(IngressEgress::schedule_egress(ETH_FLIP, 7_000, BOB_ETH_ADDRESS, None));
+		assert_ok!(IngressEgress::schedule_egress(ETH_FLIP, 8_000, BOB_ETH_ADDRESS, None));
 		request_address_and_deposit(5u64, eth::Asset::Flip);
 
 		// Take all scheduled Egress and Broadcast as batch
@@ -320,19 +300,19 @@ fn on_finalize_can_send_batch_all() {
 #[test]
 fn all_batch_apicall_creation_failure_should_rollback_storage() {
 	new_test_ext().execute_with(|| {
-		IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS, None);
-		IngressEgress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS, None);
-		IngressEgress::schedule_egress(ETH_ETH, 3_000, BOB_ETH_ADDRESS, None);
-		IngressEgress::schedule_egress(ETH_ETH, 4_000, BOB_ETH_ADDRESS, None);
+		assert_ok!(IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS, None));
+		assert_ok!(IngressEgress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS, None));
+		assert_ok!(IngressEgress::schedule_egress(ETH_ETH, 3_000, BOB_ETH_ADDRESS, None));
+		assert_ok!(IngressEgress::schedule_egress(ETH_ETH, 4_000, BOB_ETH_ADDRESS, None));
 		request_address_and_deposit(1u64, eth::Asset::Eth);
 		request_address_and_deposit(2u64, eth::Asset::Eth);
 		request_address_and_deposit(3u64, eth::Asset::Eth);
 		request_address_and_deposit(4u64, eth::Asset::Eth);
 
-		IngressEgress::schedule_egress(ETH_FLIP, 5_000, ALICE_ETH_ADDRESS, None);
-		IngressEgress::schedule_egress(ETH_FLIP, 6_000, ALICE_ETH_ADDRESS, None);
-		IngressEgress::schedule_egress(ETH_FLIP, 7_000, BOB_ETH_ADDRESS, None);
-		IngressEgress::schedule_egress(ETH_FLIP, 8_000, BOB_ETH_ADDRESS, None);
+		assert_ok!(IngressEgress::schedule_egress(ETH_FLIP, 5_000, ALICE_ETH_ADDRESS, None));
+		assert_ok!(IngressEgress::schedule_egress(ETH_FLIP, 6_000, ALICE_ETH_ADDRESS, None));
+		assert_ok!(IngressEgress::schedule_egress(ETH_FLIP, 7_000, BOB_ETH_ADDRESS, None));
+		assert_ok!(IngressEgress::schedule_egress(ETH_FLIP, 8_000, BOB_ETH_ADDRESS, None));
 		request_address_and_deposit(5u64, eth::Asset::Flip);
 
 		MockEthAllBatch::<MockEthEnvironment>::set_success(false);
@@ -551,12 +531,12 @@ fn can_egress_ccm() {
 
 
 		let amount = 5_000;
-		let egress_id = IngressEgress::schedule_egress(
+		let (egress_id, ..) = IngressEgress::schedule_egress(
 			destination_asset,
 			amount,
 			destination_address,
 			Some((ccm.clone(), GAS_BUDGET))
-		);
+		).expect("Egress should succeed");
 
 		assert!(ScheduledEgressFetchOrTransfer::<Test>::get().is_empty());
 		assert_eq!(ScheduledEgressCcm::<Test>::get(), vec![
@@ -572,15 +552,6 @@ fn can_egress_ccm() {
 				gas_budget: GAS_BUDGET,
 			}
 		]);
-		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::EgressScheduled {
-				id: egress_id,
-				asset: destination_asset,
-				amount,
-				destination_address,
-    			egress_fee: GAS_BUDGET,
-			}
-		));
 
 		// Send the scheduled ccm in on_finalize
 		IngressEgress::on_finalize(1);
@@ -1163,6 +1134,7 @@ fn basic_balance_tracking() {
 	const ETH_DEPOSIT_AMOUNT: u128 = 1_000;
 	const FLIP_DEPOSIT_AMOUNT: u128 = 2_000;
 	const USDC_DEPOSIT_AMOUNT: u128 = 3_000;
+	const FLIP_EGRESS_AMOUNT: u128 = 500;
 
 	new_test_ext()
 		.check_deposit_balances(&[
@@ -1216,7 +1188,22 @@ fn basic_balance_tracking() {
 		)])
 		.check_deposit_balances(&[
 			(eth::Asset::Eth, ETH_DEPOSIT_AMOUNT * 3),
+			// The ETH-FLIP swap uses the mock's hardcoded rate of 1:1.
 			(eth::Asset::Flip, FLIP_DEPOSIT_AMOUNT - ETH_DEPOSIT_AMOUNT),
+			(eth::Asset::Usdc, USDC_DEPOSIT_AMOUNT),
+		])
+		// Trigger a non-swap transfer.
+		.then_execute_at_next_block(|_| {
+			assert_ok!(<IngressEgress as EgressApi<Ethereum>>::schedule_egress(
+				eth::Asset::Flip,
+				FLIP_EGRESS_AMOUNT,
+				Default::default(),
+				None
+			));
+		})
+		.check_deposit_balances(&[
+			(eth::Asset::Eth, ETH_DEPOSIT_AMOUNT * 3),
+			(eth::Asset::Flip, FLIP_DEPOSIT_AMOUNT - ETH_DEPOSIT_AMOUNT - FLIP_EGRESS_AMOUNT),
 			(eth::Asset::Usdc, USDC_DEPOSIT_AMOUNT),
 		]);
 }
