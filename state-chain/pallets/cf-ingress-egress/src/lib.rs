@@ -893,7 +893,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let mut fetch_params = vec![];
 		let mut transfer_params = vec![];
-		let mut egress_ids_to_broadcast = vec![];
+		let mut egress_ids = vec![];
 		let mut addresses = vec![];
 
 		for request in batch_to_send {
@@ -919,7 +919,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					destination_address,
 					egress_id,
 				} => {
-					egress_ids_to_broadcast.push(egress_id);
+					egress_ids.push(egress_id);
 					transfer_params.push(TransferAssetParams {
 						asset,
 						amount,
@@ -942,7 +942,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				);
 				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
 					broadcast_id,
-					egress_ids: egress_ids_to_broadcast,
+					egress_ids,
 				});
 				TransactionOutcome::Commit(Ok(()))
 			},
