@@ -35,7 +35,10 @@ use cf_traits::{
 };
 use frame_support::{
 	pallet_prelude::*,
-	sp_runtime::{traits::Zero, DispatchError, Saturating, TransactionOutcome},
+	sp_runtime::{
+		traits::{One, Zero},
+		DispatchError, Saturating, TransactionOutcome,
+	},
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -390,7 +393,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn minimum_egress)]
 	pub type MinimumEgress<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, TargetChainAmount<T, I>, ValueQuery>;
+		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, TargetChainAmount<T, I>, OptionQuery>;
 
 	#[pallet::storage]
 	pub type DepositChannelLifetime<T: Config<I>, I: 'static = ()> =
@@ -1285,8 +1288,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 					let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
 						Self::withhold_transaction_fee(IngressOrEgress::Egress, asset, amount);
 
-					if !amount_after_fees.is_zero() &&
-						amount_after_fees >= MinimumEgress::<T, I>::get(asset)
+					if amount_after_fees >= MinimumEgress::<T, I>::get(asset).unwrap_or(One::one())
 					{
 						ScheduledEgressFetchOrTransfer::<T, I>::append({
 							FetchOrTransfer::<T::TargetChain>::Transfer {

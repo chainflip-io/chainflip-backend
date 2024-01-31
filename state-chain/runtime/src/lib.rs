@@ -1199,15 +1199,15 @@ impl_runtime_apis! {
 				ForeignChain::Ethereum => MinimumEgress::<Runtime, EthereumInstance>::get(
 					eth::Asset::try_from(asset)
 						.expect("Conversion must succeed: ForeignChain checked in match clause.")
-				),
+				).unwrap_or(1),
 				ForeignChain::Polkadot => MinimumEgress::<Runtime, PolkadotInstance>::get(
 					dot::Asset::try_from(asset)
 						.expect("Conversion must succeed: ForeignChain checked in match clause.")
-				),
+				).unwrap_or(1),
 				ForeignChain::Bitcoin => MinimumEgress::<Runtime, BitcoinInstance>::get(
 					btc::Asset::try_from(asset)
 						.expect("Conversion must succeed: ForeignChain checked in match clause.")
-				).into(),
+				).unwrap_or(1).into(),
 			}
 		}
 
