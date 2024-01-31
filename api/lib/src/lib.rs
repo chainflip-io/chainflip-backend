@@ -313,8 +313,8 @@ pub trait BrokerApi: SignedExtrinsicApi {
 		destination_asset: Asset,
 		destination_address: EncodedAddress,
 		broker_commission_bps: BasisPoints,
-		boost_fee: Option<BasisPoints>,
 		channel_metadata: Option<CcmChannelMetadata>,
+		boost_fee: Option<BasisPoints>,
 	) -> Result<SwapDepositAddress> {
 		let (_tx_hash, events, header, ..) = self
 			.submit_signed_extrinsic_with_dry_run(

@@ -54,8 +54,8 @@ pub trait Rpc {
 		destination_asset: RpcAsset,
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
-		boost_fee: Option<BasisPoints>,
 		channel_metadata: Option<CcmChannelMetadata>,
+		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<BrokerSwapDepositAddress>;
 }
 
@@ -92,8 +92,8 @@ impl RpcServer for RpcServerImpl {
 		destination_asset: RpcAsset,
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
-		boost_fee: Option<BasisPoints>,
 		channel_metadata: Option<CcmChannelMetadata>,
+		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<BrokerSwapDepositAddress> {
 		let destination_asset = destination_asset.try_into()?;
 		Ok(self
@@ -104,8 +104,8 @@ impl RpcServer for RpcServerImpl {
 				destination_asset,
 				clean_foreign_chain_address(destination_asset.into(), &destination_address)?,
 				broker_commission_bps,
-				boost_fee,
 				channel_metadata,
+				boost_fee,
 			)
 			.await
 			.map(BrokerSwapDepositAddress::from)?)
