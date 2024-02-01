@@ -23,12 +23,12 @@ impl<C> BtcSource<C> {
 	}
 }
 
-const POLL_INTERVAL: Duration = Duration::from_secs(10);
+const POLL_INTERVAL: Duration = Duration::from_secs(5);
 
 #[async_trait::async_trait]
 impl<C> ChainSource for BtcSource<C>
 where
-	C: BtcRetryRpcApi + ChainClient<Index = u64, Hash = BlockHash, Data = ()> + Clone,
+	C: BtcRetryRpcApi + ChainClient<Index = u64, Hash = BlockHash, Data = ()>,
 {
 	type Index = <C as ChainClient>::Index;
 	type Hash = <C as ChainClient>::Hash;

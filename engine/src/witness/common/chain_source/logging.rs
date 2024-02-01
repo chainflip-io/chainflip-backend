@@ -36,8 +36,8 @@ where
 					"{} | {}: index: {:?} hash: {:?}",
 					<<InnerSource as ExternalChainSource>::Chain as cf_chains::Chain>::NAME,
 					self.log_prefix,
+					header.index,
 					header.hash,
-					header.index
 				);
 				header
 			})),

@@ -1,17 +1,17 @@
 pub mod address_checker;
 
+use anyhow::bail;
 use ethers::{prelude::*, signers::Signer, types::transaction::eip2718::TypedTransaction};
+use futures_core::Future;
+use utilities::redact_endpoint_secret::SecretUrl;
 
-use crate::{constants::SYNC_POLL_INTERVAL, settings};
-use anyhow::{anyhow, Context, Ok, Result};
-use std::{str::FromStr, sync::Arc, time::Instant};
+use crate::constants::{RPC_RETRY_CONNECTION_INTERVAL, SYNC_POLL_INTERVAL};
+use anyhow::{anyhow, Context, Result};
+use std::{path::PathBuf, str::FromStr, sync::Arc, time::Instant};
 use tokio::sync::Mutex;
 use utilities::make_periodic_tick;
 
 use utilities::read_clean_and_decode_hex_str_file;
-
-#[cfg(test)]
-use mockall::automock;
 
 struct NonceInfo {
 	next_nonce: U256,
@@ -20,22 +20,128 @@ struct NonceInfo {
 
 #[derive(Clone)]
 pub struct EthRpcClient {
-	signer: SignerMiddleware<Arc<Provider<Http>>, LocalWallet>,
-	nonce_info: Arc<Mutex<Option<NonceInfo>>>,
+	provider: Arc<Provider<Http>>,
 }
 
 impl EthRpcClient {
-	pub async fn new(eth_settings: &settings::Eth) -> Result<Self> {
-		let provider =
-			Arc::new(Provider::<Http>::try_from(eth_settings.http_node_endpoint.to_string())?);
-		let wallet = read_clean_and_decode_hex_str_file(
-			&eth_settings.private_key_file,
-			"Ethereum Private Key",
-			|key| ethers::signers::Wallet::from_str(key).map_err(anyhow::Error::new),
-		)?;
-		let chain_id = provider.get_chainid().await?;
-		let signer = SignerMiddleware::new(provider, wallet.with_chain_id(chain_id.as_u64()));
-		Ok(Self { signer, nonce_info: Arc::new(Mutex::new(None)) })
+	pub fn new(
+		http_endpoint: SecretUrl,
+		expected_chain_id: u64,
+	) -> anyhow::Result<impl Future<Output = Self>> {
+		let provider = Arc::new(Provider::<Http>::try_from(http_endpoint.as_ref())?);
+
+		let client = EthRpcClient { provider };
+
+		Ok(async move {
+			// We don't want to return an error here. Returning an error means that we'll exit the
+			// CFE. So on client creation we wait until we can be successfully connected to the ETH
+			// node. So the other chains are unaffected
+			let mut poll_interval = make_periodic_tick(RPC_RETRY_CONNECTION_INTERVAL, true);
+			loop {
+				poll_interval.tick().await;
+				match client.chain_id().await {
+					Ok(chain_id) if chain_id == expected_chain_id.into() => break client,
+					Ok(chain_id) => {
+						tracing::error!(
+								"Connected to Ethereum node but with incorrect chain_id {chain_id}, expected {expected_chain_id} from {http_endpoint}. \
+								Please check your CFE configuration file...",
+							);
+					},
+					Err(e) => tracing::error!(
+						"Cannot connect to an Ethereum node at {http_endpoint} with error: {e}. \
+							Please check your CFE configuration file. Retrying in {:?}...",
+						poll_interval.period()
+					),
+				}
+			}
+		})
+	}
+}
+
+#[async_trait::async_trait]
+impl EthRpcApi for EthRpcClient {
+	async fn estimate_gas(&self, req: &Eip1559TransactionRequest) -> Result<U256> {
+		Ok(self
+			.provider
+			.estimate_gas(&TypedTransaction::Eip1559(req.clone()), None)
+			.await?)
+	}
+
+	async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>> {
+		Ok(self.provider.get_logs(&filter).await?)
+	}
+
+	async fn chain_id(&self) -> Result<U256> {
+		Ok(self.provider.get_chainid().await?)
+	}
+
+	async fn transaction_receipt(&self, tx_hash: TxHash) -> Result<TransactionReceipt> {
+		self.provider.get_transaction_receipt(tx_hash).await?.ok_or_else(|| {
+			anyhow!("Getting ETH transaction receipt for tx hash {tx_hash} returned None")
+		})
+	}
+
+	/// Gets block, returning error when either:
+	/// - Request fails
+	/// - Request succeeds, but doesn't return a block
+	async fn block(&self, block_number: U64) -> Result<Block<H256>> {
+		self.provider.get_block(block_number).await?.ok_or_else(|| {
+			anyhow!("Getting ETH block for block number {block_number} returned None")
+		})
+	}
+
+	async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>> {
+		self.provider.get_block_with_txs(block_number).await?.ok_or_else(|| {
+			anyhow!("Getting ETH block with txs for block number {block_number} returned None")
+		})
+	}
+
+	async fn fee_history(
+		&self,
+		block_count: U256,
+		last_block: BlockNumber,
+		reward_percentiles: &[f64],
+	) -> Result<FeeHistory> {
+		Ok(self.provider.fee_history(block_count, last_block, reward_percentiles).await?)
+	}
+
+	async fn get_transaction(&self, tx_hash: H256) -> Result<Transaction> {
+		self.provider
+			.get_transaction(tx_hash)
+			.await?
+			.ok_or_else(|| anyhow!("Getting ETH transaction for tx hash {tx_hash} returned None"))
+	}
+}
+
+#[derive(Clone)]
+pub struct EthRpcSigningClient {
+	signer: SignerMiddleware<Arc<Provider<Http>>, LocalWallet>,
+	rpc_client: EthRpcClient,
+	nonce_info: Arc<Mutex<Option<NonceInfo>>>,
+}
+
+impl EthRpcSigningClient {
+	pub fn new(
+		private_key_file: PathBuf,
+		http_endpoint: SecretUrl,
+		expected_chain_id: u64,
+	) -> Result<impl Future<Output = Self>> {
+		let rpc_client_fut = EthRpcClient::new(http_endpoint, expected_chain_id)?;
+
+		let wallet =
+			read_clean_and_decode_hex_str_file(&private_key_file, "Ethereum Private Key", |key| {
+				ethers::signers::Wallet::from_str(key).map_err(anyhow::Error::new)
+			})?;
+
+		Ok(async move {
+			let rpc_client = rpc_client_fut.await;
+
+			let signer = SignerMiddleware::new(
+				rpc_client.provider.clone(),
+				wallet.with_chain_id(expected_chain_id),
+			);
+			Self { signer, nonce_info: Arc::new(Mutex::new(None)), rpc_client }
+		})
 	}
 
 	async fn get_next_nonce(&self) -> Result<U256> {
@@ -71,14 +177,9 @@ impl EthRpcClient {
 	}
 }
 
-#[cfg_attr(test, automock)]
 #[async_trait::async_trait]
-pub trait EthRpcApi: Send + Sync {
-	fn address(&self) -> H160;
-
-	async fn estimate_gas(&self, req: &TypedTransaction) -> Result<U256>;
-
-	async fn send_transaction(&self, tx: TransactionRequest) -> Result<TxHash>;
+pub trait EthRpcApi: Send + Sync + Clone + 'static {
+	async fn estimate_gas(&self, req: &Eip1559TransactionRequest) -> Result<U256>;
 
 	async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>>;
 
@@ -99,57 +200,44 @@ pub trait EthRpcApi: Send + Sync {
 		newest_block: BlockNumber,
 		reward_percentiles: &[f64],
 	) -> Result<FeeHistory>;
+
+	async fn get_transaction(&self, tx_hash: H256) -> Result<Transaction>;
 }
 
 #[async_trait::async_trait]
-impl EthRpcApi for EthRpcClient {
-	fn address(&self) -> H160 {
-		self.signer.address()
-	}
+pub trait EthSigningRpcApi: EthRpcApi {
+	fn address(&self) -> H160;
 
-	async fn estimate_gas(&self, req: &TypedTransaction) -> Result<U256> {
-		Ok(self.signer.estimate_gas(req, None).await?)
-	}
+	async fn send_transaction(&self, tx: Eip1559TransactionRequest) -> Result<TxHash>;
+}
 
-	async fn send_transaction(&self, mut tx: TransactionRequest) -> Result<TxHash> {
-		tx.nonce = Some(self.get_next_nonce().await?);
-
-		let res = self.signer.send_transaction(tx, None).await;
-
-		if res.is_err() {
-			// Reset the nonce just in case (it will be re-requested during next broadcast)
-			tracing::warn!("Resetting eth broadcaster nonce due to error");
-			*self.nonce_info.lock().await = None;
-		}
-
-		Ok(res?.tx_hash())
+#[async_trait::async_trait]
+impl EthRpcApi for EthRpcSigningClient {
+	async fn estimate_gas(&self, req: &Eip1559TransactionRequest) -> Result<U256> {
+		self.rpc_client.estimate_gas(req).await
 	}
 
 	async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>> {
-		Ok(self.signer.get_logs(&filter).await?)
+		self.rpc_client.get_logs(filter).await
 	}
 
 	async fn chain_id(&self) -> Result<U256> {
-		Ok(self.signer.get_chainid().await?)
+		self.rpc_client.chain_id().await
 	}
 
 	async fn transaction_receipt(&self, tx_hash: TxHash) -> Result<TransactionReceipt> {
-		Ok(self.signer.get_transaction_receipt(tx_hash).await?.unwrap())
+		self.rpc_client.transaction_receipt(tx_hash).await
 	}
 
 	/// Gets block, returning error when either:
 	/// - Request fails
 	/// - Request succeeds, but doesn't return a block
 	async fn block(&self, block_number: U64) -> Result<Block<H256>> {
-		self.signer.get_block(block_number).await?.ok_or_else(|| {
-			anyhow!("Getting ETH block for block number {} returned None", block_number)
-		})
+		self.rpc_client.block(block_number).await
 	}
 
 	async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>> {
-		self.signer.get_block_with_txs(block_number).await?.ok_or_else(|| {
-			anyhow!("Getting ETH block with txs for block number {} returned None", block_number)
-		})
+		self.rpc_client.block_with_txs(block_number).await
 	}
 
 	async fn fee_history(
@@ -158,21 +246,45 @@ impl EthRpcApi for EthRpcClient {
 		last_block: BlockNumber,
 		reward_percentiles: &[f64],
 	) -> Result<FeeHistory> {
-		Ok(self.signer.fee_history(block_count, last_block, reward_percentiles).await?)
+		self.rpc_client.fee_history(block_count, last_block, reward_percentiles).await
+	}
+
+	async fn get_transaction(&self, tx_hash: H256) -> Result<Transaction> {
+		self.rpc_client.get_transaction(tx_hash).await
+	}
+}
+
+#[async_trait::async_trait]
+impl EthSigningRpcApi for EthRpcSigningClient {
+	fn address(&self) -> H160 {
+		self.signer.address()
+	}
+
+	async fn send_transaction(&self, mut tx: Eip1559TransactionRequest) -> Result<TxHash> {
+		tx.nonce = Some(self.get_next_nonce().await?);
+
+		let res = self.signer.send_transaction(tx, None).await;
+		if res.is_err() {
+			// Reset the nonce just in case (it will be re-requested during next broadcast)
+			tracing::warn!("Resetting eth broadcaster nonce due to error");
+			*self.nonce_info.lock().await = None;
+		}
+
+		Ok(res?.tx_hash())
 	}
 }
 
 /// On each subscription this will create a new WS connection.
 #[derive(Clone)]
 pub struct ReconnectSubscriptionClient {
-	ws_node_endpoint: String,
+	ws_endpoint: SecretUrl,
 	// This value comes from the SC.
 	chain_id: web3::types::U256,
 }
 
 impl ReconnectSubscriptionClient {
-	pub fn new(ws_node_endpoint: String, chain_id: web3::types::U256) -> Self {
-		Self { ws_node_endpoint, chain_id }
+	pub fn new(ws_endpoint: SecretUrl, chain_id: web3::types::U256) -> Self {
+		Self { ws_endpoint, chain_id }
 	}
 }
 
@@ -186,7 +298,8 @@ use crate::eth::ConscientiousEthWebsocketBlockHeaderStream;
 #[async_trait::async_trait]
 impl ReconnectSubscribeApi for ReconnectSubscriptionClient {
 	async fn subscribe_blocks(&self) -> Result<ConscientiousEthWebsocketBlockHeaderStream> {
-		let web3 = web3::Web3::new(web3::transports::WebSocket::new(&self.ws_node_endpoint).await?);
+		let web3 =
+			web3::Web3::new(web3::transports::WebSocket::new(self.ws_endpoint.as_ref()).await?);
 
 		let mut poll_interval = make_periodic_tick(SYNC_POLL_INTERVAL, false);
 
@@ -202,20 +315,10 @@ impl ReconnectSubscribeApi for ReconnectSubscriptionClient {
 
 		let client_chain_id = web3.eth().chain_id().await.context("Failed to fetch chain id.")?;
 		if self.chain_id != client_chain_id {
-			Err(anyhow!(
-				"Expected chain id {}, eth ws client returned {client_chain_id}.",
-				self.chain_id
-			))
-		} else {
-			Ok(ConscientiousEthWebsocketBlockHeaderStream {
-				stream: Some(
-					web3.eth_subscribe()
-						.subscribe_new_heads()
-						.await
-						.context("Failed to subscribe to new heads with WS Client")?,
-				),
-			})
+			bail!("Expected chain id {}, eth ws client returned {client_chain_id}.", self.chain_id)
 		}
+
+		ConscientiousEthWebsocketBlockHeaderStream::new(web3).await
 	}
 }
 
@@ -231,7 +334,13 @@ mod tests {
 	async fn eth_rpc_test() {
 		let settings = Settings::new_test().unwrap();
 
-		let client = EthRpcClient::new(&settings.eth).await.unwrap();
+		let client = EthRpcSigningClient::new(
+			settings.eth.private_key_file,
+			settings.eth.nodes.primary.http_endpoint,
+			2u64,
+		)
+		.unwrap()
+		.await;
 		let chain_id = client.chain_id().await.unwrap();
 		println!("{:?}", chain_id);
 
@@ -242,7 +351,7 @@ mod tests {
 		println!("{:?}", block_with_txs);
 
 		let fee_history = client
-			.fee_history(10.into(), BlockNumber::Latest, &[0.1, 0.5, 0.9])
+			.fee_history(10.into(), BlockNumber::Latest, &[10.0, 50.0, 90.0])
 			.await
 			.unwrap();
 		println!("{:?}", fee_history);

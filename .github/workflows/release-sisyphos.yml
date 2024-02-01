@@ -15,34 +15,55 @@ jobs:
   test:
     uses: ./.github/workflows/_10_test.yml
     secrets: inherit
+  coverage:
+    uses: ./.github/workflows/_11_coverage.yml
+    with:
+      test_features: runtime-benchmarks
+    secrets: inherit
   build:
     needs: [test]
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
-      network: sisyphos
+      profile: "production"
+      binary-subdir: "production"
+  # Used to test upgrades to this version from the latest release
+  build-try-runtime:
+    needs: [test]
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      profile: "try-runtime"
+      upload-name: "chainflip-backend-bin-try-runtime"
+      binary-subdir: release
   docker:
     needs: [build]
     uses: ./.github/workflows/_24_docker.yml
     secrets: inherit
     with:
-      network: sisyphos
-      environment: dev
+      network: "sisyphos"
+      environment: "development"
   package:
     needs: [build]
     uses: ./.github/workflows/_25_package.yml
     with:
       network: "sisyphos"
-      environment: dev
     secrets: inherit
   post-check:
     needs: [build]
     uses: ./.github/workflows/_40_post_check.yml
     secrets: inherit
+    with:
+      full_bouncer: true
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml
     with:
       version: "sisyphos/"
-      environment: dev
+      environment: "development"
     secrets: inherit
+  invalidate-apt-cache:
+    needs: [publish]
+    uses: ./.github/workflows/_70_post_release.yml
+    with:
+      network: "sisyphos"

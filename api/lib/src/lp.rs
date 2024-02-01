@@ -1,81 +1,214 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_amm::{
-	common::{SideMap, Tick},
+	common::{Amount, Order, Side, SideMap, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::address::EncodedAddress;
-use cf_primitives::{Asset, AssetAmount, EgressId};
+use cf_primitives::{Asset, AssetAmount, BlockNumber, EgressId};
 use chainflip_engine::state_chain_observer::client::{
-	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
+	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock, WaitFor, WaitForResult},
 	StateChainClient,
 };
-pub use core::ops::Range;
-pub use pallet_cf_pools::{utilities as pool_utilities, Order as BuyOrSellOrder, RangeOrderSize};
+use pallet_cf_pools::{AssetsMap, IncreaseOrDecrease, OrderId, RangeOrderSize};
 use serde::{Deserialize, Serialize};
-use sp_core::H256;
+use sp_core::{H256, U256};
 use state_chain_runtime::RuntimeCall;
+use std::ops::Range;
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct MintRangeOrderReturn {
-	assets_debited: SideMap<AssetAmount>,
-	collected_fees: SideMap<AssetAmount>,
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum ApiWaitForResult<T> {
+	TxHash(H256),
+	TxDetails { tx_hash: H256, response: T },
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct BurnRangeOrderReturn {
-	assets_credited: SideMap<AssetAmount>,
-	collected_fees: SideMap<AssetAmount>,
+impl<T> ApiWaitForResult<T> {
+	pub fn map_details<R>(self, f: impl FnOnce(T) -> R) -> ApiWaitForResult<R> {
+		match self {
+			ApiWaitForResult::TxHash(hash) => ApiWaitForResult::TxHash(hash),
+			ApiWaitForResult::TxDetails { response, tx_hash } =>
+				ApiWaitForResult::TxDetails { tx_hash, response: f(response) },
+		}
+	}
+
+	#[track_caller]
+	pub fn unwrap_details(self) -> T {
+		match self {
+			ApiWaitForResult::TxHash(_) => panic!("unwrap_details called on TransactionHash"),
+			ApiWaitForResult::TxDetails { response, .. } => response,
+		}
+	}
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct MintLimitOrderReturn {
-	assets_debited: AssetAmount,
-	collected_fees: AssetAmount,
-	swapped_liquidity: AssetAmount,
+pub mod types {
+	use super::*;
+	#[derive(Serialize, Deserialize, Clone)]
+	pub struct RangeOrder {
+		pub base_asset: Asset,
+		pub quote_asset: Asset,
+		pub id: U256,
+		pub tick_range: Range<Tick>,
+		pub liquidity_total: U256,
+		pub collected_fees: AssetsMap<U256>,
+		pub size_change: Option<IncreaseOrDecrease<RangeOrderChange>>,
+	}
+
+	#[derive(Serialize, Deserialize, Clone)]
+	pub struct RangeOrderChange {
+		pub liquidity: U256,
+		pub amounts: AssetsMap<U256>,
+	}
+
+	#[derive(Serialize, Deserialize, Clone)]
+	pub struct LimitOrder {
+		pub base_asset: Asset,
+		pub quote_asset: Asset,
+		pub side: Order,
+		pub id: U256,
+		pub tick: Tick,
+		pub sell_amount_total: U256,
+		pub collected_fees: U256,
+		pub bought_amount: U256,
+		pub sell_amount_change: Option<IncreaseOrDecrease<U256>>,
+	}
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct BurnLimitOrderReturn {
-	assets_credited: AssetAmount,
-	collected_fees: AssetAmount,
-	swapped_liquidity: AssetAmount,
+fn collect_range_order_returns(
+	events: impl IntoIterator<Item = state_chain_runtime::RuntimeEvent>,
+) -> Vec<types::RangeOrder> {
+	events
+		.into_iter()
+		.filter_map(|event| match event {
+			state_chain_runtime::RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::RangeOrderUpdated {
+					size_change,
+					liquidity_total,
+					collected_fees,
+					tick_range,
+					base_asset,
+					quote_asset,
+					id,
+					..
+				},
+			) => Some(types::RangeOrder {
+				base_asset,
+				quote_asset,
+				id: id.into(),
+				size_change: size_change.map(|increase_or_decrese| {
+					increase_or_decrese.map(|range_order_change| types::RangeOrderChange {
+						liquidity: range_order_change.liquidity.into(),
+						amounts: range_order_change.amounts.map(|amount| amount.into()),
+					})
+				}),
+				liquidity_total: liquidity_total.into(),
+				tick_range,
+				collected_fees: collected_fees.map(Into::into),
+			}),
+			_ => None,
+		})
+		.collect()
+}
+
+fn collect_limit_order_returns(
+	events: impl IntoIterator<Item = state_chain_runtime::RuntimeEvent>,
+) -> Vec<types::LimitOrder> {
+	events
+		.into_iter()
+		.filter_map(|event| match event {
+			state_chain_runtime::RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::LimitOrderUpdated {
+					sell_amount_change,
+					sell_amount_total,
+					collected_fees,
+					bought_amount,
+					tick,
+					base_asset,
+					quote_asset,
+					side,
+					id,
+					..
+				},
+			) => Some(types::LimitOrder {
+				base_asset,
+				quote_asset,
+				side,
+				id: id.into(),
+				tick,
+				sell_amount_total: sell_amount_total.into(),
+				collected_fees: collected_fees.into(),
+				bought_amount: bought_amount.into(),
+				sell_amount_change: sell_amount_change
+					.map(|increase_or_decrese| increase_or_decrese.map(|amount| amount.into())),
+			}),
+			_ => None,
+		})
+		.collect()
 }
 
 impl LpApi for StateChainClient {}
 
+fn into_api_wait_for_result<T>(
+	from: WaitForResult,
+	map_events: impl FnOnce(Vec<state_chain_runtime::RuntimeEvent>) -> T,
+) -> ApiWaitForResult<T> {
+	match from {
+		WaitForResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
+		WaitForResult::Details(details) => {
+			let (tx_hash, events, ..) = details;
+			ApiWaitForResult::TxDetails { tx_hash, response: map_events(events) }
+		},
+	}
+}
+
 #[async_trait]
 pub trait LpApi: SignedExtrinsicApi {
-	async fn register_emergency_withdrawal_address(&self, address: EncodedAddress) -> Result<H256> {
+	async fn register_liquidity_refund_address(&self, address: EncodedAddress) -> Result<H256> {
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(RuntimeCall::from(
-				pallet_cf_lp::Call::register_emergency_withdrawal_address { address },
+				pallet_cf_lp::Call::register_liquidity_refund_address { address },
 			))
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await
-			.context("Registration for Emergency Withdrawal address failed.")?;
+			.context("Registration for Liquidity Refund Address failed.")?;
 		Ok(tx_hash)
 	}
 
-	async fn request_liquidity_deposit_address(&self, asset: Asset) -> Result<EncodedAddress> {
-		let (_tx_hash, events, ..) = self
-			.submit_signed_extrinsic(pallet_cf_lp::Call::request_liquidity_deposit_address {
-				asset,
-			})
-			.await
-			.until_finalized()
+	async fn request_liquidity_deposit_address(
+		&self,
+		asset: Asset,
+		wait_for: WaitFor,
+	) -> Result<ApiWaitForResult<EncodedAddress>> {
+		let wait_for_result = self
+			.submit_signed_extrinsic_wait_for(
+				pallet_cf_lp::Call::request_liquidity_deposit_address { asset },
+				wait_for,
+			)
 			.await?;
 
-		Ok(events
-			.into_iter()
-			.find_map(|event| match event {
-				state_chain_runtime::RuntimeEvent::LiquidityProvider(
-					pallet_cf_lp::Event::LiquidityDepositAddressReady { deposit_address, .. },
-				) => Some(deposit_address),
-				_ => None,
-			})
-			.expect("DepositAddressReady must have been generated"))
+		Ok(match wait_for_result {
+			WaitForResult::TransactionHash(tx_hash) => return Ok(ApiWaitForResult::TxHash(tx_hash)),
+			WaitForResult::Details(details) => {
+				let (tx_hash, events, ..) = details;
+				let encoded_address = events
+					.into_iter()
+					.find_map(|event| match event {
+						state_chain_runtime::RuntimeEvent::LiquidityProvider(
+							pallet_cf_lp::Event::LiquidityDepositAddressReady {
+								deposit_address,
+								..
+							},
+						) => Some(deposit_address),
+						_ => None,
+					})
+					.ok_or_else(|| {
+						anyhow::anyhow!("No LiquidityDepositAddressReady event was found")
+					})?;
+
+				ApiWaitForResult::TxDetails { tx_hash, response: encoded_address }
+			},
+		})
 	}
 
 	async fn withdraw_asset(
@@ -83,176 +216,166 @@ pub trait LpApi: SignedExtrinsicApi {
 		amount: AssetAmount,
 		asset: Asset,
 		destination_address: EncodedAddress,
-	) -> Result<EgressId> {
-		let (_tx_hash, events, ..) = self
-			.submit_signed_extrinsic(pallet_cf_lp::Call::withdraw_asset {
-				amount,
-				asset,
-				destination_address,
-			})
-			.await
-			.until_finalized()
+		wait_for: WaitFor,
+	) -> Result<ApiWaitForResult<EgressId>> {
+		if amount == 0 {
+			bail!("Withdrawal amount must be greater than 0");
+		}
+
+		let wait_for_result = self
+			.submit_signed_extrinsic_wait_for(
+				pallet_cf_lp::Call::withdraw_asset { amount, asset, destination_address },
+				wait_for,
+			)
 			.await?;
 
-		Ok(events
-			.into_iter()
-			.find_map(|event| match event {
-				state_chain_runtime::RuntimeEvent::LiquidityProvider(
-					pallet_cf_lp::Event::WithdrawalEgressScheduled { egress_id, .. },
-				) => Some(egress_id),
-				_ => None,
-			})
-			.expect("WithdrawalEgressScheduled must have been generated"))
+		Ok(match wait_for_result {
+			WaitForResult::TransactionHash(tx_hash) => return Ok(ApiWaitForResult::TxHash(tx_hash)),
+			WaitForResult::Details(details) => {
+				let (tx_hash, events, ..) = details;
+				let egress_id = events
+					.into_iter()
+					.find_map(|event| match event {
+						state_chain_runtime::RuntimeEvent::LiquidityProvider(
+							pallet_cf_lp::Event::WithdrawalEgressScheduled { egress_id, .. },
+						) => Some(egress_id),
+						_ => None,
+					})
+					.ok_or_else(|| {
+						anyhow::anyhow!("No WithdrawalEgressScheduled event was found")
+					})?;
+
+				ApiWaitForResult::TxDetails { tx_hash, response: egress_id }
+			},
+		})
 	}
 
-	async fn mint_range_order(
+	async fn update_range_order(
 		&self,
-		asset: Asset,
-		range: Range<Tick>,
-		order_size: RangeOrderSize,
-	) -> Result<MintRangeOrderReturn> {
+		base_asset: Asset,
+		quote_asset: Asset,
+		id: OrderId,
+		option_tick_range: Option<Range<Tick>>,
+		size_change: IncreaseOrDecrease<RangeOrderSize>,
+		wait_for: WaitFor,
+	) -> Result<ApiWaitForResult<Vec<types::RangeOrder>>> {
 		// Submit the mint order
-		let (_tx_hash, events, ..) = self
-			.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_mint_range_order {
-				unstable_asset: asset,
-				price_range_in_ticks: range,
-				order_size,
-			})
-			.await
-			.until_finalized()
-			.await?;
-
-		// Get some details from the emitted event
-		Ok(events
-			.into_iter()
-			.find_map(|event| match event {
-				state_chain_runtime::RuntimeEvent::LiquidityPools(
-					pallet_cf_pools::Event::RangeOrderMinted {
-						assets_debited, collected_fees, ..
-					},
-				) => Some(MintRangeOrderReturn { assets_debited, collected_fees }),
-				_ => None,
-			})
-			.expect("RangeOrderMinted must have been generated"))
+		Ok(into_api_wait_for_result(
+			self.submit_signed_extrinsic_wait_for(
+				pallet_cf_pools::Call::update_range_order {
+					base_asset,
+					quote_asset,
+					id,
+					option_tick_range,
+					size_change,
+				},
+				wait_for,
+			)
+			.await?,
+			collect_range_order_returns,
+		))
 	}
 
-	async fn burn_range_order(
+	async fn set_range_order(
 		&self,
-		asset: Asset,
-		range: Range<Tick>,
-		amount: AssetAmount,
-	) -> Result<BurnRangeOrderReturn> {
-		// TODO: Re-enable this check after #3082 in implemented
-		// Find the current position and calculate new target amount
-		// if get_liquidity_at_position(&state_chain_client, asset, range,
-		// latest_block_hash) 	.await? < amount
-		// {
-		// 	bail!("Insufficient minted liquidity at position");
-		// }
-
-		// Submit the burn call
-		let (_tx_hash, events, ..) = self
-			.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_burn_range_order {
-				unstable_asset: asset,
-				price_range_in_ticks: range,
-				liquidity: amount,
-			})
-			.await
-			.until_finalized()
-			.await?;
-
-		// Get some details from the emitted event
-		Ok(events
-			.into_iter()
-			.find_map(|event| match event {
-				state_chain_runtime::RuntimeEvent::LiquidityPools(
-					pallet_cf_pools::Event::RangeOrderBurned {
-						assets_credited,
-						collected_fees,
-						..
-					},
-				) => Some(BurnRangeOrderReturn { assets_credited, collected_fees }),
-				_ => None,
-			})
-			.expect("RangeOrderBurned must have been generated"))
-	}
-
-	async fn mint_limit_order(
-		&self,
-		asset: Asset,
-		order: BuyOrSellOrder,
-		price: Tick,
-		amount: AssetAmount,
-	) -> Result<MintLimitOrderReturn> {
+		base_asset: Asset,
+		quote_asset: Asset,
+		id: OrderId,
+		option_tick_range: Option<Range<Tick>>,
+		size: RangeOrderSize,
+		wait_for: WaitFor,
+	) -> Result<ApiWaitForResult<Vec<types::RangeOrder>>> {
 		// Submit the mint order
-		let (_tx_hash, events, ..) = self
-			.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_mint_limit_order {
-				unstable_asset: asset,
-				order,
-				price_as_tick: price,
-				amount,
-			})
-			.await
-			.until_finalized()
-			.await?;
-
-		// Get some details from the emitted event
-		Ok(events
-			.into_iter()
-			.find_map(|event| match event {
-				state_chain_runtime::RuntimeEvent::LiquidityPools(
-					pallet_cf_pools::Event::LimitOrderMinted {
-						assets_debited,
-						collected_fees,
-						swapped_liquidity,
-						..
-					},
-				) =>
-					Some(MintLimitOrderReturn { assets_debited, collected_fees, swapped_liquidity }),
-				_ => None,
-			})
-			.expect("LimitOrderMinted must have been generated"))
+		Ok(into_api_wait_for_result(
+			self.submit_signed_extrinsic_wait_for(
+				pallet_cf_pools::Call::set_range_order {
+					base_asset,
+					quote_asset,
+					id,
+					option_tick_range,
+					size,
+				},
+				wait_for,
+			)
+			.await?,
+			collect_range_order_returns,
+		))
 	}
 
-	async fn burn_limit_order(
+	#[allow(clippy::too_many_arguments)]
+	async fn update_limit_order(
 		&self,
-		asset: Asset,
-		order: BuyOrSellOrder,
-		price: Tick,
-		amount: AssetAmount,
-	) -> Result<BurnLimitOrderReturn> {
-		// TODO: get limit orders and see if there's enough liquidity to burn
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Order,
+		id: OrderId,
+		option_tick: Option<Tick>,
+		amount_change: IncreaseOrDecrease<AssetAmount>,
+		dispatch_at: Option<BlockNumber>,
+		wait_for: WaitFor,
+	) -> Result<ApiWaitForResult<Vec<types::LimitOrder>>> {
+		self.scheduled_or_immediate(
+			pallet_cf_pools::Call::update_limit_order {
+				base_asset,
+				quote_asset,
+				side,
+				id,
+				option_tick,
+				amount_change,
+			},
+			dispatch_at,
+			wait_for,
+		)
+		.await
+	}
 
-		// Submit the burn order
-		let (_tx_hash, events, ..) = self
-			.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_burn_limit_order {
-				unstable_asset: asset,
-				order,
-				price_as_tick: price,
-				amount,
-			})
-			.await
-			.until_finalized()
-			.await?;
+	#[allow(clippy::too_many_arguments)]
+	async fn set_limit_order(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Order,
+		id: OrderId,
+		option_tick: Option<Tick>,
+		sell_amount: AssetAmount,
+		dispatch_at: Option<BlockNumber>,
+		wait_for: WaitFor,
+	) -> Result<ApiWaitForResult<Vec<types::LimitOrder>>> {
+		self.scheduled_or_immediate(
+			pallet_cf_pools::Call::set_limit_order {
+				base_asset,
+				quote_asset,
+				side,
+				id,
+				option_tick,
+				sell_amount,
+			},
+			dispatch_at,
+			wait_for,
+		)
+		.await
+	}
 
-		// Get some details from the emitted event
-		Ok(events
-			.into_iter()
-			.find_map(|event| match event {
-				state_chain_runtime::RuntimeEvent::LiquidityPools(
-					pallet_cf_pools::Event::LimitOrderBurned {
-						assets_credited,
-						collected_fees,
-						swapped_liquidity,
-						..
+	async fn scheduled_or_immediate(
+		&self,
+		call: pallet_cf_pools::Call<state_chain_runtime::Runtime>,
+		dispatch_at: Option<BlockNumber>,
+		wait_for: WaitFor,
+	) -> Result<ApiWaitForResult<Vec<types::LimitOrder>>> {
+		Ok(into_api_wait_for_result(
+			if let Some(dispatch_at) = dispatch_at {
+				self.submit_signed_extrinsic_wait_for(
+					pallet_cf_pools::Call::schedule_limit_order_update {
+						call: Box::new(call),
+						dispatch_at,
 					},
-				) => Some(BurnLimitOrderReturn {
-					assets_credited,
-					collected_fees,
-					swapped_liquidity,
-				}),
-				_ => None,
-			})
-			.expect("LimitOrderBurned must have been generated"))
+					wait_for,
+				)
+				.await?
+			} else {
+				self.submit_signed_extrinsic_wait_for(call, wait_for).await?
+			},
+			collect_limit_order_returns,
+		))
 	}
 }

@@ -4,6 +4,7 @@ on:
     - cron: '0 0 * * *'
 
 env:
+  FORCE_COLOR: 1
   RUSTC_WRAPPER: sccache
   SCCACHE_CACHE_SIZE: 32G
   SCCACHE_VERSION: v0.4.1
@@ -13,33 +14,47 @@ jobs:
   test:
     uses: ./.github/workflows/_10_test.yml
     secrets: inherit
+  coverage:
+    uses: ./.github/workflows/_11_coverage.yml
+    with:
+      test_features: runtime-benchmarks,slow-tests
+    secrets: inherit
   build:
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
-      network: development
+      profile: "release"
   docker:
     needs: [build]
     uses: ./.github/workflows/_24_docker.yml
     secrets: inherit
     with:
-      network: development
-      environment: dev
+      network: "test"
+      environment: "development"
   package:
     needs: [build]
     uses: ./.github/workflows/_25_package.yml
     with:
-      network: "development"
-      environment: dev
-    secrets: inherit
-  post-check:
-    needs: [build]
-    uses: ./.github/workflows/_40_post_check.yml
+      network: "test"
     secrets: inherit
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml
     with:
-      version: nightly/
-      environment: dev
+      version: "nightly/"
+      environment: "development"
     secrets: inherit
+  post-check:
+    needs: [build]
+    uses: ./.github/workflows/_40_post_check.yml
+    secrets: inherit
+    with:
+      full_bouncer: true
+  upgrade-check:
+    needs: [build]
+    uses: ./.github/workflows/upgrade-test.yml
+    secrets: inherit
+    with:
+      upgrade-from-release: "perseverance"
+      upgrade-to-workflow-name: "ci-main.yml"
+      

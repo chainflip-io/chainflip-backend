@@ -1,0 +1,42 @@
+name: Release Chainflip Berghain
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+*'
+concurrency:
+  group: ${{ github.ref }}-release-berghain
+  cancel-in-progress: true
+
+jobs:
+  release-checks:
+    uses: ./.github/workflows/_03_release_checks.yml
+    with:
+      network: "berghain"
+  build:
+    needs: [release-checks]
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      profile: "production"
+      binary-subdir: "production"
+  package:
+    needs: [build]
+    uses: ./.github/workflows/_25_package.yml
+    with:
+      network: "berghain"
+    secrets: inherit
+  docker:
+    needs: [build]
+    uses: ./.github/workflows/_24_docker.yml
+    with:
+      network: "berghain"
+      environment: "production"
+      save_tags: "berghain-${{ github.ref_name }}"
+    secrets: inherit
+  upload:
+    needs: [package, docker]
+    uses: ./.github/workflows/_60_upload.yml
+    secrets: inherit
+    with:
+      network: "berghain"
+      version: "${{ github.ref_name }}"

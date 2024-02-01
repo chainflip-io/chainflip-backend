@@ -3,12 +3,12 @@ use std::sync::Arc;
 use cf_chains::ChainState;
 use state_chain_runtime::PalletInstanceAlias;
 
-use crate::witness::common::chain_source::Header;
-
 use crate::{
 	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
-	witness::common::{RuntimeCallHasChain, RuntimeHasChain},
+	witness::common::{chain_source::Header, RuntimeCallHasChain, RuntimeHasChain},
 };
+use cf_chains::Chain;
+use utilities::metrics::CHAIN_TRACKING;
 
 use super::{builder::ChunkedByTimeBuilder, ChunkedByTime};
 
@@ -51,12 +51,12 @@ impl<Inner: ChunkedByTime> ChunkedByTimeBuilder<Inner> {
 					.into(),
 				);
 				state_chain_client
-					.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+					.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 						call,
 						epoch_index: epoch.index,
 					})
 					.await;
-
+				CHAIN_TRACKING.set(&[Inner::Chain::NAME], Into::<u64>::into(header.index));
 				Ok::<_, anyhow::Error>(header.data)
 			}
 		})

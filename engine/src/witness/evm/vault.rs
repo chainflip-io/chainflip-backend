@@ -1,11 +1,10 @@
+use std::collections::HashMap;
+
 use ethers::types::Bloom;
 use sp_core::H256;
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{
-	eth::retry_rpc::EthersRetryRpcApi,
-	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
-};
+use crate::eth::retry_rpc::EthersRetryRpcApi;
 
 use super::{
 	super::common::{
@@ -14,6 +13,8 @@ use super::{
 	},
 	contract_common::{events_at_block, Event},
 };
+use cf_primitives::EpochIndex;
+use futures_core::Future;
 
 use anyhow::{anyhow, Result};
 use cf_chains::{
@@ -100,29 +101,35 @@ where
 			message,
 			gas_amount,
 			cf_parameters,
-		}) => Some(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
-			source_asset: native_asset,
-			destination_asset: try_into_primitive(dst_token)?,
-			deposit_amount: try_into_primitive(amount)?,
-			destination_address: try_into_encoded_address(
-				try_into_primitive(dst_chain)?,
-				dst_address.to_vec(),
-			)?,
-			deposit_metadata: CcmDepositMetadata {
-				source_chain,
-				source_address: Some(
-					<EthereumAddress as IntoForeignChainAddress<C>>::into_foreign_chain_address(
-						sender,
+		}) =>
+			Some(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
+				source_asset: native_asset,
+				destination_asset: try_into_primitive(dst_token)?,
+				deposit_amount: try_into_primitive(amount)?,
+				destination_address: try_into_encoded_address(
+					try_into_primitive(dst_chain)?,
+					dst_address.to_vec(),
+				)?,
+				deposit_metadata: CcmDepositMetadata {
+					source_chain,
+					source_address: Some(
+						<EthereumAddress as IntoForeignChainAddress<C>>::into_foreign_chain_address(
+							sender,
+						),
 					),
-				),
-				channel_metadata: CcmChannelMetadata {
-					message: message.to_vec(),
-					gas_budget: try_into_primitive(gas_amount)?,
-					cf_parameters: cf_parameters.0.to_vec(),
+					channel_metadata: CcmChannelMetadata {
+						message: message
+							.to_vec()
+							.try_into()
+							.map_err(|_| anyhow!("Failed to deposit CCM: `message` too long."))?,
+						gas_budget: try_into_primitive(gas_amount)?,
+						cf_parameters: cf_parameters.0.to_vec().try_into().map_err(|_| {
+							anyhow!("Failed to deposit CCM: `cf_parameters` too long.")
+						})?,
+					},
 				},
-			},
-			tx_hash: event.tx_hash.into(),
-		})),
+				tx_hash: event.tx_hash.into(),
+			})),
 		VaultEvents::XcallTokenFilter(XcallTokenFilter {
 			dst_chain,
 			dst_address,
@@ -133,31 +140,37 @@ where
 			message,
 			gas_amount,
 			cf_parameters,
-		}) => Some(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
-			source_asset: *(supported_assets
-				.get(&src_token)
-				.ok_or(anyhow!("Source token {src_token:?} not found"))?),
-			destination_asset: try_into_primitive(dst_token)?,
-			deposit_amount: try_into_primitive(amount)?,
-			destination_address: try_into_encoded_address(
-				try_into_primitive(dst_chain)?,
-				dst_address.to_vec(),
-			)?,
-			deposit_metadata: CcmDepositMetadata {
-				source_chain,
-				source_address: Some(
-					<EthereumAddress as IntoForeignChainAddress<C>>::into_foreign_chain_address(
-						sender,
+		}) =>
+			Some(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
+				source_asset: *(supported_assets
+					.get(&src_token)
+					.ok_or(anyhow!("Source token {src_token:?} not found"))?),
+				destination_asset: try_into_primitive(dst_token)?,
+				deposit_amount: try_into_primitive(amount)?,
+				destination_address: try_into_encoded_address(
+					try_into_primitive(dst_chain)?,
+					dst_address.to_vec(),
+				)?,
+				deposit_metadata: CcmDepositMetadata {
+					source_chain,
+					source_address: Some(
+						<EthereumAddress as IntoForeignChainAddress<C>>::into_foreign_chain_address(
+							sender,
+						),
 					),
-				),
-				channel_metadata: CcmChannelMetadata {
-					message: message.to_vec(),
-					gas_budget: try_into_primitive(gas_amount)?,
-					cf_parameters: cf_parameters.0.to_vec(),
+					channel_metadata: CcmChannelMetadata {
+						message: message
+							.to_vec()
+							.try_into()
+							.map_err(|_| anyhow!("Failed to deposit CCM. Message too long."))?,
+						gas_budget: try_into_primitive(gas_amount)?,
+						cf_parameters: cf_parameters.0.to_vec().try_into().map_err(|_| {
+							anyhow!("Failed to deposit CCM. cf_parameter too long.")
+						})?,
+					},
 				},
-			},
-			tx_hash: event.tx_hash.into(),
-		})),
+				tx_hash: event.tx_hash.into(),
+			})),
 		VaultEvents::TransferNativeFailedFilter(TransferNativeFailedFilter {
 			recipient,
 			amount,
@@ -189,11 +202,12 @@ where
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub fn vault_witnessing<
-		StateChainClient,
 		EthRpcClient: EthersRetryRpcApi + ChainClient + Clone,
+		ProcessCall,
+		ProcessingFut,
 	>(
 		self,
-		state_chain_client: Arc<StateChainClient>,
+		process_call: ProcessCall,
 		eth_rpc: EthRpcClient,
 		contract_address: EthereumAddress,
 		native_asset: Asset,
@@ -207,11 +221,16 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			ChainAccount = EthereumAddress,
 		>,
 		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = Bloom>,
-		StateChainClient: SignedExtrinsicApi + Send + Sync + 'static,
 		EthereumAddress: IntoForeignChainAddress<Inner::Chain>,
+		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
+			+ Send
+			+ Sync
+			+ Clone
+			+ 'static,
+		ProcessingFut: Future<Output = ()> + Send + 'static,
 	{
 		self.then::<Result<Bloom>, _, _>(move |epoch, header| {
-			let state_chain_client = state_chain_client.clone();
+			let process_call = process_call.clone();
 			let eth_rpc = eth_rpc.clone();
 			let supported_assets = supported_assets.clone();
 			async move {
@@ -226,14 +245,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					) {
 						Ok(option_call) =>
 							if let Some(call) = option_call {
-								state_chain_client
-									.submit_signed_extrinsic(
-										pallet_cf_witnesser::Call::witness_at_epoch {
-											call: Box::new(call),
-											epoch_index: epoch.index,
-										},
-									)
-									.await;
+								process_call(call, epoch.index).await;
 							},
 						Err(message) => {
 							tracing::error!("Ignoring vault contract event: {message}");

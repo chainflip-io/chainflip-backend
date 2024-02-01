@@ -12,6 +12,11 @@ pub const CHAIN_TYPE: ChainType = ChainType::Development;
 pub const NETWORK_ENVIRONMENT: NetworkEnvironment = NetworkEnvironment::Development;
 pub const PROTOCOL_ID: &str = "flip-test";
 
+// These represent approximately 2 hours on testnet block times
+pub const BITCOIN_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / (10 * 60);
+pub const ETHEREUM_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / 14;
+pub const POLKADOT_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / 6;
+
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"),
 	eth_usdc_address: hex_literal::hex!("a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
@@ -32,10 +37,10 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	genesis_funding_amount: GENESIS_FUNDING_AMOUNT,
 	min_funding: MIN_FUNDING,
 	dot_genesis_hash: H256(hex_literal::hex!(
-		"63c94acc94e3275e480d9290f60ebb70338f63fdedeacc1a6d2551c7fc67ac0a"
+		"13d0723c0891a46a0e0931e23fb7c9961c0f87bc73ad965b35cf0f1d84a986b8"
 	)),
 	dot_vault_account_id: None,
-	dot_runtime_version: RuntimeVersion { spec_version: 9360, transaction_version: 19 },
+	dot_runtime_version: RuntimeVersion { spec_version: 10000, transaction_version: 25 },
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 3 * HOURS;
@@ -87,3 +92,6 @@ pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<
 		),
 	]
 }
+
+pub const BITCOIN_SAFETY_MARGIN: u64 = 2;
+pub const ETHEREUM_SAFETY_MARGIN: u64 = 6;

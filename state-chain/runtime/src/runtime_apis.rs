@@ -1,20 +1,27 @@
 use crate::chainflip::Offence;
 use cf_amm::{
-	common::{SqrtPriceQ64F96, Tick},
-	range_orders::{AmountsToLiquidityError, Liquidity},
+	common::{Amount, Tick},
+	range_orders::Liquidity,
 };
-use cf_chains::{
-	btc::BitcoinNetwork, dot::PolkadotHash, eth::Address as EthereumAddress, evm::EthereumChainId,
+use cf_chains::{eth::Address as EthereumAddress, Chain, ForeignChainAddress};
+use cf_primitives::{
+	AccountRole, Asset, AssetAmount, BroadcastId, EpochIndex, ForeignChain, NetworkEnvironment,
+	SemVer, SwapOutput,
 };
-use cf_primitives::{Asset, AssetAmount, EpochIndex, SemVer, SwapOutput};
 use codec::{Decode, Encode};
+use core::ops::Range;
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_pools::PoolQueryError;
-use scale_info::TypeInfo;
+use pallet_cf_pools::{
+	AskBidMap, AssetsMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPrice,
+	UnidirectionalPoolDepth,
+};
+use pallet_cf_witnesser::CallHash;
+use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
-use sp_std::vec::Vec;
+use sp_runtime::DispatchError;
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 type VanityName = Vec<u8>;
 
@@ -31,24 +38,11 @@ pub enum ChainflipAccountStateWithPassive {
 	BackupOrPassive(BackupOrPassive),
 }
 
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
-pub struct RuntimeApiAccountInfo {
-	pub balance: u128,
-	pub bond: u128,
-	pub last_heartbeat: u32,
-	pub is_live: bool,
-	pub is_activated: bool,
-	pub online_credits: u32,
-	pub reputation_points: i32,
-	pub state: ChainflipAccountStateWithPassive,
-}
-
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
 pub struct RuntimeApiAccountInfoV2 {
 	pub balance: u128,
 	pub bond: u128,
 	pub last_heartbeat: u32, // can *maybe* remove this - check with Andrew
-	pub online_credits: u32,
 	pub reputation_points: i32,
 	pub keyholder_epochs: Vec<EpochIndex>,
 	pub is_current_authority: bool,
@@ -57,6 +51,8 @@ pub struct RuntimeApiAccountInfoV2 {
 	pub is_online: bool,
 	pub is_bidding: bool,
 	pub bound_redeem_address: Option<EthereumAddress>,
+	pub apy_bp: Option<u32>, // APY for validator/back only. In Basis points.
+	pub restricted_balances: BTreeMap<EthereumAddress, u128>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
@@ -72,13 +68,33 @@ pub struct AuctionState {
 	pub redemption_period_as_percentage: u8,
 	pub min_funding: u128,
 	pub auction_size_range: (u32, u32),
+	pub min_active_bid: Option<u128>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
-pub struct Environment {
-	pub bitcoin_network: BitcoinNetwork,
-	pub ethereum_chain_id: EthereumChainId,
-	pub polkadot_genesis_hash: PolkadotHash,
+pub struct LiquidityProviderInfo {
+	pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
+	pub balances: Vec<(Asset, AssetAmount)>,
+}
+
+#[derive(Debug, Decode, Encode, TypeInfo)]
+pub enum DispatchErrorWithMessage {
+	Module(Vec<u8>),
+	Other(DispatchError),
+}
+impl From<DispatchError> for DispatchErrorWithMessage {
+	fn from(value: DispatchError) -> Self {
+		match value {
+			DispatchError::Module(sp_runtime::ModuleError { message: Some(message), .. }) =>
+				DispatchErrorWithMessage::Module(message.as_bytes().to_vec()),
+			value => DispatchErrorWithMessage::Other(value),
+		}
+	}
+}
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
+pub struct FailingWitnessValidators {
+	pub failing_count: u32,
+	pub validators: Vec<(cf_primitives::AccountId, String, bool)>,
 }
 
 decl_runtime_apis!(
@@ -96,6 +112,7 @@ decl_runtime_apis!(
 		fn cf_auction_parameters() -> (u32, u32);
 		fn cf_min_funding() -> u128;
 		fn cf_current_epoch() -> u32;
+		#[deprecated(note = "Use direct storage access of `CurrentReleaseVersion` instead.")]
 		fn cf_current_compatibility_version() -> SemVer;
 		fn cf_epoch_duration() -> u32;
 		fn cf_current_epoch_started_at() -> u32;
@@ -104,25 +121,66 @@ decl_runtime_apis!(
 		/// Returns the flip supply in the form [total_issuance, offchain_funds]
 		fn cf_flip_supply() -> (u128, u128);
 		fn cf_accounts() -> Vec<(AccountId32, VanityName)>;
-		fn cf_account_info(account_id: AccountId32) -> RuntimeApiAccountInfo;
-		fn cf_account_info_v2(account_id: AccountId32) -> RuntimeApiAccountInfoV2;
+		fn cf_account_flip_balance(account_id: &AccountId32) -> u128;
+		fn cf_account_info_v2(account_id: &AccountId32) -> RuntimeApiAccountInfoV2;
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)>;
 		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId32)>)>;
 		fn cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash;
 		fn cf_auction_state() -> AuctionState;
-		fn cf_pool_sqrt_price(from: Asset, to: Asset) -> Option<SqrtPriceQ64F96>;
-		fn cf_pool_simulate_swap(from: Asset, to: Asset, amount: AssetAmount)
-			-> Option<SwapOutput>;
-		fn cf_environment() -> Environment;
-		fn cf_get_pool(asset: Asset) -> Option<pallet_cf_pools::Pool<AccountId32>>;
-		fn cf_min_swap_amount(asset: Asset) -> AssetAmount;
-		#[allow(clippy::too_many_arguments)]
-		fn cf_estimate_liquidity_from_range_order(
-			asset: Asset,
-			lower: Tick,
-			upper: Tick,
-			unstable_amount: AssetAmount,
-			stable_amount: AssetAmount,
-		) -> Result<Liquidity, PoolQueryError<AmountsToLiquidityError>>;
+		fn cf_pool_price(from: Asset, to: Asset) -> Option<PoolPrice>;
+		fn cf_pool_simulate_swap(
+			from: Asset,
+			to: Asset,
+			amount: AssetAmount,
+		) -> Result<SwapOutput, DispatchErrorWithMessage>;
+		fn cf_pool_info(
+			base_asset: Asset,
+			quote_asset: Asset,
+		) -> Result<PoolInfo, DispatchErrorWithMessage>;
+		fn cf_pool_depth(
+			base_asset: Asset,
+			quote_asset: Asset,
+			tick_range: Range<cf_amm::common::Tick>,
+		) -> Result<AskBidMap<UnidirectionalPoolDepth>, DispatchErrorWithMessage>;
+		fn cf_pool_liquidity(
+			base_asset: Asset,
+			quote_asset: Asset,
+		) -> Result<PoolLiquidity, DispatchErrorWithMessage>;
+		fn cf_required_asset_ratio_for_range_order(
+			base_asset: Asset,
+			quote_asset: Asset,
+			tick_range: Range<cf_amm::common::Tick>,
+		) -> Result<AssetsMap<Amount>, DispatchErrorWithMessage>;
+		fn cf_pool_orderbook(
+			base_asset: Asset,
+			quote_asset: Asset,
+			orders: u32,
+		) -> Result<PoolOrderbook, DispatchErrorWithMessage>;
+		fn cf_pool_orders(
+			base_asset: Asset,
+			quote_asset: Asset,
+			lp: Option<AccountId32>,
+		) -> Result<PoolOrders<crate::Runtime>, DispatchErrorWithMessage>;
+		fn cf_pool_range_order_liquidity_value(
+			base_asset: Asset,
+			quote_asset: Asset,
+			tick_range: Range<Tick>,
+			liquidity: Liquidity,
+		) -> Result<AssetsMap<Amount>, DispatchErrorWithMessage>;
+
+		fn cf_max_swap_amount(asset: Asset) -> Option<AssetAmount>;
+		fn cf_min_deposit_amount(asset: Asset) -> AssetAmount;
+		fn cf_prewitness_swaps(from: Asset, to: Asset) -> Option<Vec<AssetAmount>>;
+		fn cf_liquidity_provider_info(account_id: AccountId32) -> Option<LiquidityProviderInfo>;
+		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
+		fn cf_redemption_tax() -> AssetAmount;
+		fn cf_network_environment() -> NetworkEnvironment;
+		fn cf_failed_call(
+			broadcast_id: BroadcastId,
+		) -> Option<<cf_chains::Ethereum as Chain>::Transaction>;
+		fn cf_ingress_fee(asset: Asset) -> AssetAmount;
+		fn cf_egress_fee(asset: Asset) -> AssetAmount;
+		fn cf_witness_count(hash: CallHash) -> Option<FailingWitnessValidators>;
+		fn cf_witness_safety_margin(chain: ForeignChain) -> Option<u64>;
 	}
 );

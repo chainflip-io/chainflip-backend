@@ -5,15 +5,12 @@ use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
 use cf_primitives::{Asset, AssetAmount, ForeignChain};
 use cf_traits::{
 	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi,
-	EgressApi,
+	EgressApi, LpDepositHandler, PoolApi,
 };
-use frame_support::{
-	pallet_prelude::*,
-	sp_runtime::{traits::BlockNumberProvider, DispatchResult, Saturating},
-};
+
+use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_std::vec::Vec;
 
 mod benchmarking;
 
@@ -22,14 +19,17 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
-	use cf_chains::address::EncodedAddress;
+	use cf_chains::{address::EncodedAddress, Chain};
 	use cf_primitives::{ChannelId, EgressId};
 
 	use super::*;
@@ -45,7 +45,6 @@ pub mod pallet {
 		type DepositHandler: DepositApi<
 			AnyChain,
 			AccountId = <Self as frame_system::Config>::AccountId,
-			BlockNumber = BlockNumberFor<Self>,
 		>;
 
 		/// API for handling asset egress.
@@ -58,44 +57,32 @@ pub mod pallet {
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;
 
+		/// The interface for sweeping funds from pools into free balance
+		type PoolApi: PoolApi<AccountId = <Self as frame_system::Config>::AccountId>;
+
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
-		// The user does not have enough fund.
+		/// The user does not have enough funds.
 		InsufficientBalance,
-		// The user has reached the maximum balance.
+		/// The user has reached the maximum balance.
 		BalanceOverflow,
-		// The caller is not authorized to modify the trading position.
+		/// The caller is not authorized to modify the trading position.
 		UnauthorisedToModify,
-		// The Asset cannot be egressed to the destination chain.
+		/// The Asset cannot be egressed because the destination address is not invalid.
 		InvalidEgressAddress,
-		// Then given encoded address cannot be decoded into a valid ForeignChainAddress.
+		/// Then given encoded address cannot be decoded into a valid ForeignChainAddress.
 		InvalidEncodedAddress,
-		// An emergency withdrawal address must be set by the user for the chain before
-		// deposit address can be requested.
-		NoEmergencyWithdrawalAddressRegistered,
-		// Liquidity deposit is disabled due to Safe Mode.
+		/// A liquidity refund address must be set by the user for the chain before a
+		/// deposit address can be requested.
+		NoLiquidityRefundAddressRegistered,
+		/// Liquidity deposit is disabled due to Safe Mode.
 		LiquidityDepositDisabled,
-		// Withdrawals are disabled due to Safe Mode.
+		/// Withdrawals are disabled due to Safe Mode.
 		WithdrawalsDisabled,
-	}
-
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
-			let expired = LiquidityChannelExpiries::<T>::take(n);
-			let expired_count = expired.len();
-			for (_, address) in expired {
-				T::DepositHandler::expire_channel(address.clone());
-				Self::deposit_event(Event::LiquidityDepositAddressExpired {
-					address: T::AddressConverter::to_encoded_address(address),
-				});
-			}
-			T::WeightInfo::on_initialize(expired_count as u32)
-		}
 	}
 
 	#[pallet::event]
@@ -113,11 +100,11 @@ pub mod pallet {
 		},
 		LiquidityDepositAddressReady {
 			channel_id: ChannelId,
+			asset: Asset,
 			deposit_address: EncodedAddress,
-			expiry_block: BlockNumberFor<T>,
-		},
-		LiquidityDepositAddressExpired {
-			address: EncodedAddress,
+			// account the funds will be credited to upon deposit
+			account_id: T::AccountId,
+			deposit_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 		},
 		WithdrawalEgressScheduled {
 			egress_id: EgressId,
@@ -125,35 +112,20 @@ pub mod pallet {
 			amount: AssetAmount,
 			destination_address: EncodedAddress,
 		},
-		LpTtlSet {
-			ttl: BlockNumberFor<T>,
-		},
-		EmergencyWithdrawalAddressRegistered {
+		LiquidityRefundAddressRegistered {
 			account_id: T::AccountId,
 			chain: ForeignChain,
 			address: ForeignChainAddress,
 		},
-	}
-
-	#[pallet::genesis_config]
-	pub struct GenesisConfig<T: Config> {
-		pub lp_ttl: BlockNumberFor<T>,
-	}
-
-	#[pallet::genesis_build]
-	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
-		fn build(&self) {
-			LpTTL::<T>::put(self.lp_ttl);
-		}
-	}
-
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			Self { lp_ttl: BlockNumberFor::<T>::from(1200u32) }
-		}
+		LiquidityDepositCredited {
+			account_id: T::AccountId,
+			asset: Asset,
+			amount_credited: AssetAmount,
+		},
 	}
 
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
@@ -162,20 +134,9 @@ pub mod pallet {
 	pub type FreeBalances<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, T::AccountId, Identity, Asset, AssetAmount>;
 
-	/// For a given block number, stores the list of liquidity deposit channels that expire at that
-	/// block.
-	#[pallet::storage]
-	pub(super) type LiquidityChannelExpiries<T: Config> = StorageMap<
-		_,
-		Twox64Concat,
-		BlockNumberFor<T>,
-		Vec<(ChannelId, cf_chains::ForeignChainAddress)>,
-		ValueQuery,
-	>;
-
 	/// Stores the registered energency withdrawal address for an Account
 	#[pallet::storage]
-	pub type EmergencyWithdrawalAddress<T: Config> = StorageDoubleMap<
+	pub type LiquidityRefundAddress<T: Config> = StorageDoubleMap<
 		_,
 		Identity,
 		T::AccountId,
@@ -183,10 +144,6 @@ pub mod pallet {
 		ForeignChain,
 		ForeignChainAddress,
 	>;
-
-	/// The TTL for liquidity channels.
-	#[pallet::storage]
-	pub type LpTTL<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -203,32 +160,19 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			ensure!(
-				EmergencyWithdrawalAddress::<T>::contains_key(
-					&account_id,
-					ForeignChain::from(asset)
-				),
-				Error::<T>::NoEmergencyWithdrawalAddressRegistered
+				LiquidityRefundAddress::<T>::contains_key(&account_id, ForeignChain::from(asset)),
+				Error::<T>::NoLiquidityRefundAddressRegistered
 			);
 
-			let expiry_block =
-				frame_system::Pallet::<T>::current_block_number().saturating_add(LpTTL::<T>::get());
-
-			let (channel_id, deposit_address) =
-				T::DepositHandler::request_liquidity_deposit_address(
-					account_id,
-					asset,
-					expiry_block,
-				)?;
-
-			LiquidityChannelExpiries::<T>::append(
-				expiry_block,
-				(channel_id, deposit_address.clone()),
-			);
+			let (channel_id, deposit_address, expiry_block) =
+				T::DepositHandler::request_liquidity_deposit_address(account_id.clone(), asset)?;
 
 			Self::deposit_event(Event::LiquidityDepositAddressReady {
 				channel_id,
+				asset,
 				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
-				expiry_block,
+				account_id,
+				deposit_chain_expiry_block: expiry_block,
 			});
 
 			Ok(())
@@ -250,17 +194,16 @@ pub mod pallet {
 
 				let destination_address_internal =
 					T::AddressConverter::try_from_encoded_address(destination_address.clone())
-						.map_err(|_| {
-							DispatchError::Other(
-								"Invalid Egress Address, cannot decode the address",
-							)
-						})?;
+						.map_err(|_| Error::<T>::InvalidEgressAddress)?;
 
 				// Check validity of Chain and Asset
 				ensure!(
 					destination_address_internal.chain() == ForeignChain::from(asset),
 					Error::<T>::InvalidEgressAddress
 				);
+
+				// Sweep earned fees
+				T::PoolApi::sweep(&account_id)?;
 
 				// Debit the asset from the account.
 				Self::try_debit_account(&account_id, asset, amount)?;
@@ -294,32 +237,16 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Sets the lifetime of liquidity deposit channels.
+		/// Registers a Liquidity Refund Address(LRA) for an account.
 		///
-		/// Requires Governance
-		///
-		/// ## Events
-		///
-		/// - [On update](Event::LpTtlSet)
-		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::set_lp_ttl())]
-		pub fn set_lp_ttl(origin: OriginFor<T>, ttl: BlockNumberFor<T>) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			LpTTL::<T>::set(ttl);
-
-			Self::deposit_event(Event::<T>::LpTtlSet { ttl });
-			Ok(())
-		}
-
-		/// Registers an Emergency Withdrawal Address (EWA) for an account.
-		/// To request deposit address for a chain, an EWA must be registered for that chain.
+		/// To request a deposit address for a chain, an LRA must be registered for that chain.
 		///
 		/// ## Events
 		///
-		/// - [On Success](Event::EmergencyWithdrawalAddressRegistered)
+		/// - [On Success](Event::LiquidityRefundAddressRegistered)
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::WeightInfo::register_emergency_withdrawal_address())]
-		pub fn register_emergency_withdrawal_address(
+		#[pallet::weight(T::WeightInfo::register_liquidity_refund_address())]
+		pub fn register_liquidity_refund_address(
 			origin: OriginFor<T>,
 			address: EncodedAddress,
 		) -> DispatchResult {
@@ -328,13 +255,13 @@ pub mod pallet {
 			let decoded_address = T::AddressConverter::try_from_encoded_address(address)
 				.map_err(|()| Error::<T>::InvalidEncodedAddress)?;
 
-			EmergencyWithdrawalAddress::<T>::insert(
+			LiquidityRefundAddress::<T>::insert(
 				&account_id,
 				decoded_address.chain(),
 				decoded_address.clone(),
 			);
 
-			Self::deposit_event(Event::<T>::EmergencyWithdrawalAddressRegistered {
+			Self::deposit_event(Event::<T>::LiquidityRefundAddressRegistered {
 				account_id,
 				chain: decoded_address.chain(),
 				address: decoded_address,
@@ -344,8 +271,52 @@ pub mod pallet {
 	}
 }
 
+impl<T: Config> LpDepositHandler for Pallet<T> {
+	type AccountId = <T as frame_system::Config>::AccountId;
+
+	fn add_deposit(
+		account_id: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> frame_support::pallet_prelude::DispatchResult {
+		Self::try_credit_account(account_id, asset, amount)?;
+
+		Self::deposit_event(Event::LiquidityDepositCredited {
+			account_id: account_id.clone(),
+			asset,
+			amount_credited: amount,
+		});
+
+		Ok(())
+	}
+}
+
 impl<T: Config> LpBalanceApi for Pallet<T> {
 	type AccountId = <T as frame_system::Config>::AccountId;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn register_liquidity_refund_address(
+		account_id: &Self::AccountId,
+		address: ForeignChainAddress,
+	) {
+		LiquidityRefundAddress::<T>::insert(account_id, address.chain(), address);
+	}
+
+	fn ensure_has_refund_address_for_pair(
+		account_id: &Self::AccountId,
+		base_asset: Asset,
+		quote_asset: Asset,
+	) -> DispatchResult {
+		ensure!(
+			LiquidityRefundAddress::<T>::contains_key(account_id, ForeignChain::from(base_asset)) &&
+				LiquidityRefundAddress::<T>::contains_key(
+					account_id,
+					ForeignChain::from(quote_asset)
+				),
+			Error::<T>::NoLiquidityRefundAddressRegistered
+		);
+		Ok(())
+	}
 
 	fn try_credit_account(
 		account_id: &Self::AccountId,

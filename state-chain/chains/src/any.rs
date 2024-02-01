@@ -1,13 +1,9 @@
-use crate::{
-	address::{ForeignChainAddress, IntoForeignChainAddress},
-	Chain,
-};
+use crate::{address::ForeignChainAddress, none::NoneChainCrypto, Chain, FeeRefundCalculator};
 
 use cf_primitives::{
 	chains::{assets, AnyChain},
 	AssetAmount, ChannelId,
 };
-use frame_support::traits::ConstBool;
 
 impl IntoForeignChainAddress<AnyChain> for ForeignChainAddress {
 	fn into_foreign_chain_address(address: ForeignChainAddress) -> ForeignChainAddress {
@@ -17,8 +13,9 @@ impl IntoForeignChainAddress<AnyChain> for ForeignChainAddress {
 
 impl Chain for AnyChain {
 	const NAME: &'static str = "AnyChain";
-	type KeyHandoverIsRequired = ConstBool<false>;
-	type OptimisticActivation = ConstBool<true>;
+	const GAS_ASSET: Self::ChainAsset = assets::any::Asset::Usdc;
+
+	type ChainCrypto = NoneChainCrypto;
 	type ChainBlockNumber = u64;
 	type ChainAmount = AssetAmount;
 	type TransactionFee = Self::ChainAmount;
@@ -29,4 +26,17 @@ impl Chain for AnyChain {
 	type DepositFetchId = ChannelId;
 	type DepositChannelState = ();
 	type DepositDetails = ();
+	type Transaction = ();
+	type TransactionMetadata = ();
+	type ReplayProtectionParams = ();
+	type ReplayProtection = ();
+}
+
+impl FeeRefundCalculator<AnyChain> for () {
+	fn return_fee_refund(
+		&self,
+		_fee_paid: <AnyChain as Chain>::TransactionFee,
+	) -> <AnyChain as Chain>::ChainAmount {
+		unimplemented!()
+	}
 }

@@ -2,16 +2,19 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-mod migrations;
+pub mod migrations;
 
+use cf_traits::{AuthoritiesCfeVersions, CompatibleCfeVersions};
 use codec::{Codec, Decode, Encode};
 use frame_support::{
-	dispatch::{GetDispatchInfo, UnfilteredDispatchable, Weight},
+	dispatch::GetDispatchInfo,
 	ensure,
-	pallet_prelude::DispatchResultWithPostInfo,
-	sp_runtime::{DispatchError, TransactionOutcome},
+	pallet_prelude::{DispatchResultWithPostInfo, Weight},
+	sp_runtime::{DispatchError, Percent, TransactionOutcome},
 	storage::with_transaction,
-	traits::{EnsureOrigin, Get, OnRuntimeUpgrade, StorageVersion, UnixTime},
+	traits::{
+		EnsureOrigin, Get, OnRuntimeUpgrade, StorageVersion, UnfilteredDispatchable, UnixTime,
+	},
 };
 pub use pallet::*;
 use sp_std::{boxed::Box, ops::Add, vec::Vec};
@@ -38,6 +41,7 @@ pub mod pallet {
 
 	use super::*;
 
+	use cf_primitives::SemVer;
 	use cf_traits::{Chainflip, ExecutionCondition, RuntimeUpgrade};
 	use codec::Encode;
 	use frame_support::{
@@ -50,6 +54,13 @@ pub mod pallet {
 	use sp_std::{boxed::Box, collections::btree_set::BTreeSet, vec::Vec};
 
 	use super::{GovCallHash, WeightInfo};
+
+	#[derive(Default, Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+	pub enum ExecutionMode {
+		#[default]
+		Automatic,
+		Manual,
+	}
 
 	#[derive(Encode, Decode, TypeInfo, Clone, Copy, RuntimeDebug, PartialEq, Eq)]
 	pub struct ActiveProposal {
@@ -64,12 +75,8 @@ pub mod pallet {
 		pub call: OpaqueCall,
 		/// Accounts who have already approved the proposal.
 		pub approved: BTreeSet<AccountId>,
-	}
-
-	impl<T> Default for Proposal<T> {
-		fn default() -> Self {
-			Self { call: Default::default(), approved: Default::default() }
-		}
+		/// Proposal is pre authorised.
+		pub execution: ExecutionMode,
 	}
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
@@ -99,6 +106,10 @@ pub mod pallet {
 		type UpgradeCondition: ExecutionCondition;
 		/// Provides to implementation for a runtime upgrade
 		type RuntimeUpgrade: RuntimeUpgrade;
+		/// For getting required CFE version for a runtime upgrade.
+		type CompatibleCfeVersions: CompatibleCfeVersions;
+		/// For getting current authorities' CFE versions.
+		type AuthoritiesCfeVersions: AuthoritiesCfeVersions;
 	}
 
 	#[pallet::pallet]
@@ -110,7 +121,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn proposals)]
 	pub(super) type Proposals<T: Config> =
-		StorageMap<_, Blake2_128Concat, ProposalId, Proposal<T::AccountId>, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, ProposalId, Proposal<T::AccountId>>;
 
 	/// Active proposals.
 	#[pallet::storage]
@@ -121,6 +132,11 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn gov_key_whitelisted_call_hash)]
 	pub(super) type GovKeyWhitelistedCallHash<T> = StorageValue<_, GovCallHash, OptionQuery>;
+
+	/// Pre authorised governance calls.
+	#[pallet::storage]
+	pub(super) type PreAuthorisedGovCalls<T> =
+		StorageMap<_, Twox64Concat, u32, OpaqueCall, OptionQuery>;
 
 	/// Any nonces before this have been consumed.
 	#[pallet::storage]
@@ -158,20 +174,6 @@ pub mod pallet {
 			let execution_weight = Self::execute_pending_proposals();
 			active_proposal_weight + execution_weight
 		}
-
-		fn on_runtime_upgrade() -> Weight {
-			migrations::PalletMigration::<T>::on_runtime_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-			migrations::PalletMigration::<T>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-			migrations::PalletMigration::<T>::post_upgrade(state)
-		}
 	}
 
 	#[pallet::event]
@@ -189,8 +191,6 @@ pub mod pallet {
 		FailedExecution(DispatchError),
 		/// The decode of call failed \[proposal_id\]
 		DecodeOfCallFailed(ProposalId),
-		/// The upgrade conditions for a runtime upgrade were satisfied
-		UpgradeConditionsSatisfied,
 		/// Call executed by GovKey
 		GovKeyCallExecuted { call_hash: GovCallHash },
 		/// CallHash whitelisted by the GovKey
@@ -215,6 +215,8 @@ pub mod pallet {
 		UpgradeConditionsNotMet,
 		/// The call hash was not whitelisted
 		CallHashNotWhitelisted,
+		/// Insufficient number of CFEs are at the target version to receive the runtime upgrade.
+		NotEnoughAuthoritiesCfesAtTargetVersion,
 	}
 
 	#[pallet::call]
@@ -233,11 +235,12 @@ pub mod pallet {
 		pub fn propose_governance_extrinsic(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::RuntimeCall>,
+			execution: ExecutionMode,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			ensure!(Members::<T>::get().contains(&who), Error::<T>::NotMember);
 
-			let id = Self::push_proposal(call);
+			let id = Self::push_proposal(call, execution);
 			Self::deposit_event(Event::Proposed(id));
 
 			Self::inner_approve(who, id)?;
@@ -285,11 +288,23 @@ pub mod pallet {
 		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
 		pub fn chainflip_runtime_upgrade(
 			origin: OriginFor<T>,
+			// The version that the percent of nodes need to be compatible with in order for the
+			// runtime upgrade to go through.
+			cfe_version_restriction: Option<(SemVer, Percent)>,
 			code: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(T::UpgradeCondition::is_satisfied(), Error::<T>::UpgradeConditionsNotMet);
-			Self::deposit_event(Event::UpgradeConditionsSatisfied);
+
+			if let Some((required_version, percent)) = cfe_version_restriction {
+				ensure!(
+					T::AuthoritiesCfeVersions::percent_authorities_compatible_with_version(
+						required_version
+					) >= percent,
+					Error::<T>::NotEnoughAuthoritiesCfesAtTargetVersion,
+				);
+			}
+
 			T::RuntimeUpgrade::do_upgrade(code)
 		}
 
@@ -404,6 +419,29 @@ pub mod pallet {
 				_ => Err(Error::<T>::CallHashNotWhitelisted.into()),
 			}
 		}
+
+		#[pallet::call_index(7)]
+		#[pallet::weight(T::WeightInfo::dispatch_whitelisted_call())]
+		pub fn dispatch_whitelisted_call(
+			origin: OriginFor<T>,
+			approved_id: ProposalId,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			ensure!(Members::<T>::get().contains(&who), Error::<T>::NotMember);
+			if let Some(call) = PreAuthorisedGovCalls::<T>::take(approved_id) {
+				if let Ok(call) = <T as Config>::RuntimeCall::decode(&mut &(*call)) {
+					Self::deposit_event(match Self::dispatch_governance_call(call) {
+						Ok(_) => Event::Executed(approved_id),
+						Err(err) => Event::FailedExecution(err.error),
+					});
+					Ok(())
+				} else {
+					Err(Error::<T>::DecodeOfCallFailed.into())
+				}
+			} else {
+				Err(Error::<T>::ProposalNotFound.into())
+			}
+		}
 	}
 
 	/// Genesis definition
@@ -470,7 +508,9 @@ impl<T: Config> Pallet<T> {
 		ensure!(Proposals::<T>::contains_key(approved_id), Error::<T>::ProposalNotFound);
 
 		// Try to approve the proposal
-		let proposal = Proposals::<T>::mutate(approved_id, |proposal| {
+		let proposal = Proposals::<T>::try_mutate(approved_id, |proposal| {
+			let proposal = proposal.as_mut().ok_or(Error::<T>::ProposalNotFound)?;
+
 			if !proposal.approved.insert(who) {
 				return Err(Error::<T>::AlreadyApproved)
 			}
@@ -481,7 +521,11 @@ impl<T: Config> Pallet<T> {
 		if proposal.approved.len() >
 			(Members::<T>::decode_len().ok_or(Error::<T>::DecodeMembersLenFailed)? / 2)
 		{
-			ExecutionPipeline::<T>::append((proposal.call, approved_id));
+			if proposal.execution == ExecutionMode::Manual {
+				PreAuthorisedGovCalls::<T>::insert(approved_id, proposal.call);
+			} else {
+				ExecutionPipeline::<T>::append((proposal.call, approved_id));
+			}
 			Proposals::<T>::remove(approved_id);
 			ActiveProposals::<T>::mutate(|proposals| {
 				proposals.retain(|ActiveProposal { proposal_id, .. }| *proposal_id != approved_id)
@@ -539,11 +583,11 @@ impl<T: Config> Pallet<T> {
 		T::WeightInfo::expire_proposals(expired.len() as u32)
 	}
 
-	fn push_proposal(call: Box<<T as Config>::RuntimeCall>) -> u32 {
+	fn push_proposal(call: Box<<T as Config>::RuntimeCall>, execution: ExecutionMode) -> u32 {
 		let proposal_id = ProposalIdCounter::<T>::get().add(1);
 		Proposals::<T>::insert(
 			proposal_id,
-			Proposal { call: call.encode(), approved: Default::default() },
+			Proposal { call: call.encode(), approved: Default::default(), execution },
 		);
 		ProposalIdCounter::<T>::put(proposal_id);
 		ActiveProposals::<T>::append(ActiveProposal {

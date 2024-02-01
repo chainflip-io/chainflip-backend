@@ -2,8 +2,7 @@ use futures_util::StreamExt;
 use tokio::sync::oneshot;
 use utilities::{
 	loop_select, spmc,
-	task_scope::{Scope, OR_CANCEL},
-	UnendingStream,
+	task_scope::{Scope, UnwrapOrCancel},
 };
 
 use crate::witness::common::ExternalChainSource;
@@ -54,9 +53,9 @@ where
 					if let Some(response_sender) = request_receiver.next() => {
 						let receiver = sender.receiver();
 						let _result = response_sender.send((receiver, inner_client.clone()));
-					},
-					let item = inner_stream.next_or_pending() => {
-						let _result = sender.send(item).await;
+					} else disable,
+					if let Some(item) = inner_stream.next() => { // This branch failing causes `sender` to be dropped, this causes the proxy/duplicate streams to also end.
+						sender.send(item).await;
 					},
 					let _ = sender.closed() => { break },
 				)
@@ -87,7 +86,7 @@ where
 		{
 			let _result = self.request_sender.send(sender).await;
 		}
-		let (stream, client) = receiver.await.expect(OR_CANCEL);
+		let (stream, client) = receiver.unwrap_or_cancel().await;
 		(stream.into_box(), client)
 	}
 }

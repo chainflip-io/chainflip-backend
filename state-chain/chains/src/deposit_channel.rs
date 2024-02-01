@@ -40,35 +40,13 @@ pub trait ChannelLifecycleHooks: Sized {
 
 impl ChannelLifecycleHooks for () {}
 
-impl<C: Chain> ChannelLifecycleHooks for DepositChannel<C> {
-	fn can_fetch(&self) -> bool {
-		self.state.can_fetch()
-	}
-
-	fn on_fetch_scheduled(&mut self) -> bool {
-		self.state.on_fetch_scheduled()
-	}
-
-	fn on_fetch_completed(&mut self) -> bool {
-		self.state.on_fetch_completed()
-	}
-
-	fn maybe_recycle(self) -> Option<Self> {
-		self.state.maybe_recycle().map(|state| Self { state, ..self })
-	}
-}
-
 impl<C: Chain> DepositChannel<C> {
 	pub fn generate_new<A: AddressDerivationApi<C>>(
 		channel_id: ChannelId,
 		asset: C::ChainAsset,
-	) -> Result<Self, DispatchError> {
-		Ok(Self {
-			channel_id,
-			address: A::generate_address(asset, channel_id)?,
-			asset,
-			state: Default::default(),
-		})
+	) -> Result<Self, AddressDerivationError> {
+		let (address, state) = A::generate_address_and_state(asset, channel_id)?;
+		Ok(Self { channel_id, address, asset, state })
 	}
 
 	pub fn fetch_id(&self) -> C::DepositFetchId {

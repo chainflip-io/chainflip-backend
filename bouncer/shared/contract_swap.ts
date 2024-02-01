@@ -3,7 +3,6 @@ import {
   executeSwap,
   ExecuteSwapParams,
   approveVault,
-  assetChains,
   assetDecimals,
 } from '@chainflip-io/cli';
 import { Wallet, getDefaultProvider } from 'ethers';
@@ -11,12 +10,15 @@ import {
   getChainflipApi,
   observeBalanceIncrease,
   observeEvent,
-  getEthContractAddress,
+  getEvmContractAddress,
   observeCcmReceived,
   amountToFineAmount,
   defaultAssetAmounts,
+  chainFromAsset,
+  getEvmEndpoint,
+  getWhaleMnemonic,
 } from './utils';
-import { getNextEthNonce } from './send_eth';
+import { getNextEvmNonce } from './send_evm';
 import { getBalance } from './get_balance';
 import { CcmDepositMetadata } from '../shared/new_swap';
 
@@ -26,21 +28,23 @@ export async function executeContractSwap(
   destAddress: string,
   messageMetadata?: CcmDepositMetadata,
 ): ReturnType<typeof executeSwap> {
-  const wallet = Wallet.fromMnemonic(
-    process.env.ETH_USDC_WHALE_MNEMONIC ??
-      'test test test test test test test test test test test junk',
-  ).connect(getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
+  const srcChain = chainFromAsset(srcAsset);
+  const wallet = Wallet.fromPhrase(getWhaleMnemonic(srcChain)).connect(
+    getDefaultProvider(getEvmEndpoint(srcChain)),
+  );
 
-  const destChain = assetChains[destAsset];
+  const destChain = chainFromAsset(destAsset);
 
-  const nonce = await getNextEthNonce();
-  const options = {
+  const nonce = await getNextEvmNonce(srcChain);
+  const networkOptions = {
     signer: wallet,
-    nonce,
     network: 'localnet',
-    vaultContractAddress: getEthContractAddress('VAULT'),
-    ...(srcAsset !== 'ETH' ? { srcTokenContractAddress: getEthContractAddress(srcAsset) } : {}),
-    gasLimit: 200000,
+    vaultContractAddress: getEvmContractAddress(srcChain, 'VAULT'),
+    srcTokenContractAddress: getEvmContractAddress(srcChain, srcAsset),
+  } as const;
+  const txOptions = {
+    nonce,
+    gasLimit: 200000n,
   } as const;
 
   const receipt = await executeSwap(
@@ -52,13 +56,14 @@ export async function executeContractSwap(
       amount: amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals[srcAsset]),
       destAddress,
       srcAsset,
-      srcChain: assetChains[srcAsset],
+      srcChain,
       ccmMetadata: messageMetadata && {
         gasBudget: messageMetadata.gasBudget.toString(),
         message: messageMetadata.message,
       },
     } as ExecuteSwapParams,
-    options,
+    networkOptions,
+    txOptions,
   );
 
   return receipt;
@@ -93,7 +98,10 @@ export async function performSwapViaContract(
     const receipt = await executeContractSwap(sourceAsset, destAsset, destAddress, messageMetadata);
     await observeEvent('swapping:SwapScheduled', api, (event) => {
       if ('Vault' in event.data.origin) {
-        return event.data.origin.Vault.txHash === receipt.transactionHash;
+        const sourceAssetMatches = sourceAsset === (event.data.sourceAsset.toUpperCase() as Asset);
+        const destAssetMatches = destAsset === (event.data.destinationAsset.toUpperCase() as Asset);
+        const txHashMatches = event.data.origin.Vault.txHash === receipt.hash;
+        return sourceAssetMatches && destAssetMatches && txHashMatches;
       }
       // Otherwise it was a swap scheduled by requesting a deposit address
       return false;
@@ -101,7 +109,13 @@ export async function performSwapViaContract(
     console.log(`${tag} Successfully observed event: swapping: SwapScheduled`);
 
     const ccmEventEmitted = messageMetadata
-      ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata)
+      ? observeCcmReceived(
+          sourceAsset,
+          destAsset,
+          destAddress,
+          messageMetadata,
+          Wallet.fromPhrase(getWhaleMnemonic(chainFromAsset(sourceAsset))).address.toLowerCase(),
+        )
       : Promise.resolve();
 
     const [newBalance] = await Promise.all([
@@ -113,20 +127,25 @@ export async function performSwapViaContract(
       sourceAsset,
       destAsset,
       destAddress,
-      txHash: receipt.transactionHash,
+      txHash: receipt.hash,
     };
   } catch (err) {
+    console.error('err:', err);
+    if (err instanceof Error) {
+      console.log(err.stack);
+    }
     throw new Error(`${tag} ${err}`);
   }
 }
 
-export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC', amount: string) {
-  const wallet = Wallet.fromMnemonic(
-    process.env.ETH_USDC_WHALE_MNEMONIC ??
-      'test test test test test test test test test test test junk',
-  ).connect(getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
+export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC' | 'ARBUSDC', amount: string) {
+  const chain = chainFromAsset(srcAsset as Asset);
 
-  await getNextEthNonce((nextNonce) =>
+  const wallet = Wallet.fromPhrase(getWhaleMnemonic(chain)).connect(
+    getDefaultProvider(getEvmEndpoint(chain)),
+  );
+
+  await getNextEvmNonce(chain, (nextNonce) =>
     approveVault(
       {
         amount,
@@ -134,10 +153,12 @@ export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC', amount: strin
       },
       {
         signer: wallet,
-        nonce: nextNonce,
         network: 'localnet',
-        vaultContractAddress: getEthContractAddress('VAULT'),
-        srcTokenContractAddress: getEthContractAddress(srcAsset),
+        vaultContractAddress: getEvmContractAddress(chain, 'VAULT'),
+        srcTokenContractAddress: getEvmContractAddress(chain, srcAsset),
+      },
+      {
+        nonce: nextNonce,
       },
     ),
   );

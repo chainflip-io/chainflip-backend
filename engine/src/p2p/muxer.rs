@@ -1,14 +1,16 @@
 use anyhow::{anyhow, Result};
-use cf_chains::{Arbitrum, Bitcoin, Ethereum, Polkadot};
+use cf_chains::{
+	btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, Arbitrum, Bitcoin, Ethereum, Polkadot,
+};
 use futures::Future;
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, trace, warn, Instrument};
 
 use crate::p2p::{MultisigMessageReceiver, MultisigMessageSender, OutgoingMultisigStageMessages};
-use multisig::ChainTag;
-
 pub use multisig::p2p::{ProtocolVersion, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION};
+use multisig::ChainTag;
+use utilities::metrics::P2P_BAD_MSG;
 
 pub struct P2PMuxer {
 	all_incoming_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
@@ -90,14 +92,12 @@ impl P2PMuxer {
 		all_incoming_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
 		all_outgoing_sender: UnboundedSender<OutgoingMultisigStageMessages>,
 	) -> (
-		MultisigMessageSender<Ethereum>,
-		MultisigMessageReceiver<Ethereum>,
-		MultisigMessageSender<Polkadot>,
-		MultisigMessageReceiver<Polkadot>,
-		MultisigMessageSender<Bitcoin>,
-		MultisigMessageReceiver<Bitcoin>,
-		MultisigMessageSender<Arbitrum>,
-		MultisigMessageReceiver<Arbitrum>,
+		MultisigMessageSender<EvmCrypto>,
+		MultisigMessageReceiver<EvmCrypto>,
+		MultisigMessageSender<PolkadotCrypto>,
+		MultisigMessageReceiver<PolkadotCrypto>,
+		MultisigMessageSender<BitcoinCrypto>,
+		MultisigMessageReceiver<BitcoinCrypto>,
 		impl Future<Output = ()>,
 	) {
 		let (eth_outgoing_sender, eth_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -128,14 +128,12 @@ impl P2PMuxer {
 		let muxer_fut = muxer.run().instrument(info_span!("P2PMuxer"));
 
 		(
-			MultisigMessageSender::<Ethereum>::new(eth_outgoing_sender),
-			MultisigMessageReceiver::<Ethereum>::new(eth_incoming_receiver),
-			MultisigMessageSender::<Polkadot>::new(dot_outgoing_sender),
-			MultisigMessageReceiver::<Polkadot>::new(dot_incoming_receiver),
-			MultisigMessageSender::<Bitcoin>::new(btc_outgoing_sender),
-			MultisigMessageReceiver::<Bitcoin>::new(btc_incoming_receiver),
-			MultisigMessageSender::<Arbitrum>::new(arb_outgoing_sender),
-			MultisigMessageReceiver::<Arbitrum>::new(arb_incoming_receiver),
+			MultisigMessageSender::<EvmCrypto>::new(eth_outgoing_sender),
+			MultisigMessageReceiver::<EvmCrypto>::new(eth_incoming_receiver),
+			MultisigMessageSender::<PolkadotCrypto>::new(dot_outgoing_sender),
+			MultisigMessageReceiver::<PolkadotCrypto>::new(dot_incoming_receiver),
+			MultisigMessageSender::<BitcoinCrypto>::new(btc_outgoing_sender),
+			MultisigMessageReceiver::<BitcoinCrypto>::new(btc_incoming_receiver),
 			muxer_fut,
 		)
 	}
@@ -170,17 +168,22 @@ impl P2PMuxer {
 									.expect("arb receiver dropped");
 							},
 							ChainTag::Ed25519 => {
+								P2P_BAD_MSG.inc(&["Ed25519_not_supported"]);
 								warn!("Ed25519 not yet supported")
 							},
 						}
 					},
 					Err(e) => {
+						P2P_BAD_MSG.inc(&["deserialization_tagged_msg"]);
 						trace!("Could not deserialize tagged p2p message: {e:?}",);
 					},
 				}
 			} else {
+				P2P_BAD_MSG.inc(&["unexpected_version"]);
 				trace!("ignoring p2p message with unexpected version: {version}",);
 			}
+		} else {
+			P2P_BAD_MSG.inc(&["deserialization_versioned_msg"]);
 		}
 	}
 

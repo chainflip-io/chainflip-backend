@@ -1,8 +1,7 @@
 use frame_support::{
 	assert_noop, assert_ok,
-	dispatch::UnfilteredDispatchable,
 	pallet_prelude::DispatchResult,
-	traits::{OnFinalize, OnIdle, OnInitialize},
+	traits::{IntegrityTest, OnFinalize, OnIdle, OnInitialize, UnfilteredDispatchable},
 	weights::Weight,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -12,7 +11,8 @@ use sp_runtime::BuildStorage;
 pub trait HasAllPallets: frame_system::Config {
 	type AllPalletsWithSystem: OnInitialize<BlockNumberFor<Self>>
 		+ OnIdle<BlockNumberFor<Self>>
-		+ OnFinalize<BlockNumberFor<Self>>;
+		+ OnFinalize<BlockNumberFor<Self>>
+		+ IntegrityTest;
 
 	fn on_initialize(block_number: BlockNumberFor<Self>) {
 		<Self::AllPalletsWithSystem as OnInitialize<BlockNumberFor<Self>>>::on_initialize(
@@ -24,6 +24,9 @@ pub trait HasAllPallets: frame_system::Config {
 	}
 	fn on_finalize(block_number: BlockNumberFor<Self>) {
 		<Self::AllPalletsWithSystem as OnFinalize<BlockNumberFor<Self>>>::on_finalize(block_number);
+	}
+	fn integrity_test() {
+		<Self::AllPalletsWithSystem as IntegrityTest>::integrity_test();
 	}
 }
 
@@ -70,6 +73,7 @@ impl<Runtime: HasAllPallets> RichExternalities<Runtime> {
 			let context = f();
 			Runtime::on_idle(block_number, Weight::MAX);
 			Runtime::on_finalize(block_number);
+			Runtime::integrity_test();
 			context
 		});
 		TestExternalities { ext: self, context }
@@ -105,6 +109,7 @@ where
 		let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 		ext.execute_with(|| {
 			frame_system::Pallet::<Runtime>::set_block_number(1u32.into());
+			Runtime::integrity_test();
 		});
 		TestExternalities { ext: RichExternalities::new(ext), context: () }
 	}
@@ -234,6 +239,13 @@ where
 				self = next.then_execute_at_next_block(|context| context);
 			}
 		}
+	}
+
+	/// Commits storage changes to the DB
+	#[track_caller]
+	pub fn commit_all(mut self) -> Self {
+		assert_ok!(self.ext.0.commit_all());
+		self
 	}
 }
 

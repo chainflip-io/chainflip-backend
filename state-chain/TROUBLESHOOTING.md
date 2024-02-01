@@ -1,6 +1,6 @@
 # Substrate Troubleshooting
 
-This is a living document with tips, gotchas and general subtrate-related wizardry. If you ever get stuck with an incomprehensible compiler error, before spending the day turning in circles, come here first and see if someone else has already encountered the same issue.
+This is a living document with tips, gotchas and general substrate-related wizardry. If you ever get stuck with an incomprehensible compiler error, before spending the day turning in circles, come here first and see if someone else has already encountered the same issue.
 
 Please add anything you think will save your colleagues' precious time.
 
@@ -10,46 +10,45 @@ As of yet there is no real structure - this isn't intended to be a document to r
 
 ## Runtime upgrades / Try-runtime
 
-First, build the runtime node with `try-runtime` enabled.
+First, download and install the [`try-runtime-cli`](https://paritytech.github.io/try-runtime-cli/try_runtime/):
 
-The `try-runtime` features for the Chainflip runtime upgrade utilities are currently incompatible with WASM builds, so use `SKIP_WASM_BUILD` to avoid compiler errors.
-
-> *Note: you need to tweak the `spec_version` of the local runtime to match that of the remote chain.*
-
-```sh
-SKIP_WASM_BUILD=1 cargo build --release --features=try-runtime
+```bash copy
+cargo install --git https://github.com/paritytech/try-runtime-cli --locked
 ```
 
-Now you can run your tests like so (using an appropriate public rpc node):
+You need to build the runtime with `try-runtime` enabled.
 
-```sh
-./target/release/chainflip-node try-runtime --execution native \
+```bash copy
+cargo build --release --features=try-runtime
+```
+
+Now you can run your tests against a public rpc node. For example for perseverance:
+
+```bash copy
+try-runtime \
+    --runtime ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm \
     on-runtime-upgrade live --uri wss://perseverance.chainflip.xyz:443
 ```
 
-Sometimes this doesn't work. In this case you run a local rpc node and connect to that instead.
+If you have trouble connecting to the remote rpc node, you can run a local rpc node and connect to that instead. First connect a local node to the network with some rpc optimisations:
 
-First connect a local node to the network with some rpc optimisations:
-
-```sh
+```bash copy
 ./target/release/chainflip-node \
     --chain ./state-chain/node/chainspecs/perseverance.chainspec.raw.json 
     --sync warp \
     --rpc-max-request-size 100000 \
     --rpc-max-response-size 100000 \
     --rpc-external \
-    --rpc-cors all \
-    --unsafe-ws-external
+    --rpc-cors all
 ```
 
-Once the node has synced, in another terminal window, run the checks:
+Once the node has synced, in another terminal window, run the checks as above:
 
-```sh
-./target/release/chainflip-node try-runtime --execution native \
+```bash copy
+try-runtime \
+    --runtime ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm \
     on-runtime-upgrade live --uri ws://localhost:9944
 ```
-
-> *Note: Using `--execution native` ensures faster execution and also prevents log messages from being scrubbed.
 
 ### General tips and guidelines
 

@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use cf_primitives::SemVer;
 use codec::{Decode, FullCodec};
 use frame_support::{
 	storage::{
@@ -12,7 +13,7 @@ use jsonrpsee::core::RpcResult;
 use sp_core::storage::StorageKey;
 use utilities::context;
 
-use super::SUBSTRATE_BEHAVIOUR;
+use super::{CFE_VERSION, SUBSTRATE_BEHAVIOUR};
 
 /// This trait extracts otherwise private type information about Substrate storage double maps
 pub trait StorageDoubleMapAssociatedTypes {
@@ -186,6 +187,7 @@ pub trait StorageApi {
 impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> StorageApi
 	for BaseRpcApi
 {
+	#[track_caller]
 	async fn storage_item<
 		Value: codec::FullCodec + 'static,
 		OnEmpty: 'static,
@@ -202,6 +204,7 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Storag
 		))
 	}
 
+	#[track_caller]
 	async fn storage_value<StorageValue: StorageValueAssociatedTypes + 'static>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
@@ -213,6 +216,7 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Storag
 		.await
 	}
 
+	#[track_caller]
 	async fn storage_map_entry<StorageMap: StorageMapAssociatedTypes + 'static>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
@@ -230,6 +234,7 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Storag
 		.await
 	}
 
+	#[track_caller]
 	async fn storage_double_map_entry<StorageDoubleMap: StorageDoubleMapAssociatedTypes + 'static>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
@@ -251,6 +256,7 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Storag
 	/// Gets all the storage pairs (key, value) of a StorageMap.
 	/// NB: Because this is an unbounded operation, it requires the node to have
 	/// the `--rpc-methods=unsafe` enabled.
+	#[track_caller]
 	async fn storage_map<
 		StorageMap: StorageMapAssociatedTypes + 'static,
 		ReturnedIter: FromIterator<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)>,
@@ -279,6 +285,7 @@ impl<
 		SignedExtrinsicClient: Send + Sync + 'static,
 	> StorageApi for super::StateChainClient<SignedExtrinsicClient, BaseRpcApi>
 {
+	#[track_caller]
 	async fn storage_item<
 		Value: codec::FullCodec + 'static,
 		OnEmpty: 'static,
@@ -293,6 +300,7 @@ impl<
 			.await
 	}
 
+	#[track_caller]
 	async fn storage_value<StorageValue: StorageValueAssociatedTypes + 'static>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
@@ -300,6 +308,7 @@ impl<
 		self.base_rpc_client.storage_value::<StorageValue>(block_hash).await
 	}
 
+	#[track_caller]
 	async fn storage_map_entry<StorageMap: StorageMapAssociatedTypes + 'static>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
@@ -313,6 +322,7 @@ impl<
 		self.base_rpc_client.storage_map_entry::<StorageMap>(block_hash, key).await
 	}
 
+	#[track_caller]
 	async fn storage_double_map_entry<StorageDoubleMap: StorageDoubleMapAssociatedTypes + 'static>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
@@ -333,6 +343,7 @@ impl<
 			.await
 	}
 
+	#[track_caller]
 	async fn storage_map<
 		StorageMap: StorageMapAssociatedTypes + 'static,
 		ReturnedIter: FromIterator<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)> + 'static,
@@ -343,6 +354,23 @@ impl<
 		self.base_rpc_client.storage_map::<StorageMap, _>(block_hash).await
 	}
 }
+
+#[async_trait]
+pub trait CheckBlockCompatibility: StorageApi {
+	async fn check_block_compatibility(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<Result<(), SemVer>> {
+		let block_version = self
+			.storage_value::<pallet_cf_environment::CurrentReleaseVersion<state_chain_runtime::Runtime>>(
+				block_hash,
+			)
+			.await?;
+		Ok(if CFE_VERSION.is_compatible_with(block_version) { Ok(()) } else { Err(block_version) })
+	}
+}
+#[async_trait]
+impl<T: StorageApi + Send + Sync + 'static> CheckBlockCompatibility for T {}
 
 #[cfg(test)]
 mod tests {

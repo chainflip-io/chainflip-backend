@@ -1,7 +1,7 @@
 [package]
 authors = ["Chainflip team <https://github.com/chainflip-io>"]
 name = "chainflip-broker-api"
-version = "0.9.0"
+version = "1.2.0"
 edition = "2021"
 
 [package.metadata.deb]
@@ -14,7 +14,6 @@ priority = "required"
 section = "rust"
 maintainer-scripts = "package/"
 systemd-units = { enable = false }
-assets = [["target/release/chainflip-broker-api", "usr/bin/", "755"]]
 
 [[bin]]
 name = "chainflip-broker-api"
@@ -22,7 +21,7 @@ name = "chainflip-broker-api"
 [dependencies]
 chainflip-api = { path = "../../lib" }
 cf-utilities = { package = "utilities", path = "../../../utilities" }
-cf-chains = { path = '../../../state-chain/chains', default-features = false }
+custom-rpc = { path = "../../../state-chain/custom-rpc" }
 
 anyhow = "1.0.66"
 clap = { version = "3.2.23", features = ["derive"] }
@@ -30,7 +29,10 @@ futures = "0.3"
 hex = "0.4.3"
 jsonrpsee = { version = "0.16.2", features = ["full"] }
 serde = { version = '1.0', features = ['derive'] }
-sp-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08" }
+sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3" }
 tokio = "1.20.1"
 tracing = "0.1.34"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
+
+[build-dependencies]
+substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }

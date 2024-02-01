@@ -37,13 +37,14 @@ fn account_deletion_removes_relevant_storage_items() {
 		network::Cli::start_bidding(&backup_node);
 		Reputation::heartbeat(state_chain_runtime::RuntimeOrigin::signed(backup_node.clone()))
 			.unwrap();
-		assert!(Reputations::<Runtime>::get(backup_node.clone()).online_credits > 0);
+		assert!(Reputations::<Runtime>::contains_key(backup_node.clone()));
 
-		let elon_vanity_name = "ElonShibMoonInu";
+		let elon_vanity_name = "ElonShibaMoonInu";
 		network::Cli::set_vanity_name(&backup_node, elon_vanity_name);
 		let vanity_names = VanityNames::<Runtime>::get();
 		assert_eq!(*vanity_names.get(&backup_node).unwrap(), elon_vanity_name.as_bytes().to_vec());
 
+		// Redeem all
 		network::Cli::redeem(
 			&backup_node,
 			RedemptionAmount::Max,
@@ -69,6 +70,6 @@ fn account_deletion_removes_relevant_storage_items() {
 		let vanity_names = VanityNames::<Runtime>::get();
 		assert!(vanity_names.get(&backup_node).is_none());
 		assert_eq!(pallet_cf_account_roles::AccountRoles::<Runtime>::get(&backup_node), None);
-		assert_eq!(Reputations::<Runtime>::get(backup_node).online_credits, 0);
+		assert_eq!(Reputations::<Runtime>::get(backup_node).online_blocks, 0);
 	});
 }

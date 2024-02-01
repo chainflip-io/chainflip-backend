@@ -58,7 +58,7 @@ This crate provides a `VersionedMigration` type that can be used to structure su
        (VersionedMigration<crate::Pallet<T>, my_migration::Migration<T>, 0, 1>,);
    ```
 
-4. Now create `migrations/my_migration.rs` with an implemtation of `OnRuntimeUpgrade`:
+4. Now create `migrations/my_migration.rs` with an implementation of `OnRuntimeUpgrade`:
 
    ```rust
    use crate::*;
@@ -84,27 +84,33 @@ This crate provides a `VersionedMigration` type that can be used to structure su
    }
    ```
 
-5. Copy the following boilerplate into the pallet hooks:
+5. If this is the first migration for this pallet, ensure that the `PalletMigration` for this pallet is added to the tuple of PalletMigrations in `state-chain/runtime/src/lib.rs`. Remember to add all the pallet's instances!
 
    ```rust
-       #[pallet::hooks]
-       impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-           // [...]
-
-           fn on_runtime_upgrade() -> Weight {
-               migrations::PalletMigration::<T>::on_runtime_upgrade()
-           }
-
-           #[cfg(feature = "try-runtime")]
-           fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-               migrations::PalletMigration::<T>::pre_upgrade()
-           }
-
-           #[cfg(feature = "try-runtime")]
-           fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
-               migrations::PalletMigration::<T>::post_upgrade(state)
-           }
-       }
+   type PalletMigrations = (
+     pallet_cf_environment::migrations::PalletMigration<Runtime>,
+        pallet_cf_funding::migrations::PalletMigration<Runtime>,
+        pallet_cf_validator::migrations::PalletMigration<Runtime>,
+        pallet_cf_governance::migrations::PalletMigration<Runtime>,
+        pallet_cf_tokenholder_governance::migrations::PalletMigration<Runtime>,
+        pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance1>,
+        pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance2>,
+        pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance3>,
+        pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance1>,
+        pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance2>,
+        pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance3>,
+        pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance1>,
+        pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance2>,
+        pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance3>,
+        pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance1>,
+        pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance2>,
+        pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance3>,
+        pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance1>,
+        pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance2>,
+        pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance3>,
+        pallet_cf_swapping::migrations::PalletMigration<Runtime>,
+        pallet_cf_lp::migrations::PalletMigration<Runtime>,
+   );
    ```
 
 6. Additional migrations can be added to the `PalletMigration` tuple. For example, the following defines migrations from version 0 through 4. Only the required migrations will be applied on-chain. For example, if the on-chain storage version is 2 and the pallet version is 4, the migrations `change_storage_type_b` and `purge_old_values` would be run, and the on-chain storage version would be updated to 4.

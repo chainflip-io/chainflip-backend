@@ -2,6 +2,7 @@
 
 mod async_result;
 pub mod liquidity;
+use cfe_events::{KeyHandoverRequest, KeygenRequest, TxBroadcastRequest};
 pub use liquidity::*;
 pub mod safe_mode;
 pub use safe_mode::*;
@@ -14,23 +15,23 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 
 use cf_chains::{
-	address::ForeignChainAddress, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi,
-	ChainCrypto, Ethereum, Polkadot, SwapOrigin,
+	address::ForeignChainAddress, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain,
+	ChainCrypto, DepositChannel, Ethereum, Polkadot, SwapOrigin,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
-	CeremonyId, ChannelId, EgressId, EpochIndex, ForeignChain, SemVer, ThresholdSignatureRequestId,
+	ChannelId, Ed25519PublicKey, EgressId, EpochIndex, FlipBalance, ForeignChain, Ipv6Addr,
+	NetworkEnvironment, SemVer, SwapId, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
 	error::BadOrigin,
-	pallet_prelude::Member,
+	pallet_prelude::{DispatchResultWithPostInfo, Member},
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
 		DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
 	},
-	traits::{EnsureOrigin, Get, Imbalance, IsType},
+	traits::{EnsureOrigin, Get, Imbalance, IsType, UnfilteredDispatchable},
 	Hashable, Parameter,
 };
 use scale_info::TypeInfo;
@@ -144,14 +145,14 @@ impl<Id, Amount> From<(Id, Amount)> for Bid<Id, Amount> {
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, Decode, Encode)]
-pub enum VaultStatus<ValidatorId> {
+pub enum KeyRotationStatusOuter<ValidatorId> {
 	KeygenComplete,
 	KeyHandoverComplete,
 	RotationComplete,
 	Failed(BTreeSet<ValidatorId>),
 }
 
-pub trait VaultRotator {
+pub trait KeyRotator {
 	type ValidatorId: Ord + Clone;
 
 	/// Start the rotation by kicking off keygen with provided candidates.
@@ -167,18 +168,31 @@ pub trait VaultRotator {
 	);
 
 	/// Get the current rotation status.
-	fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>>;
+	fn status() -> AsyncResult<KeyRotationStatusOuter<Self::ValidatorId>>;
+
+	/// Activate key on for vaults on all chains that use this Key.
+	fn activate_vaults();
+
+	/// Reset the state associated with the current key rotation
+	/// in preparation for a new one.
+	fn reset_key_rotation();
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_status(_outcome: AsyncResult<KeyRotationStatusOuter<Self::ValidatorId>>);
+}
+
+pub trait VaultActivator<C: ChainCrypto> {
+	type ValidatorId: Ord + Clone;
+
+	/// Get the current rotation status.
+	fn status() -> AsyncResult<()>;
 
 	/// Activate key/s on particular chain/s. For example, setting the new key
 	/// on the contract for a smart contract chain.
-	fn activate();
-
-	/// Terminate the current key rotation because of Safe Mode.
-	/// No validators are slashed.
-	fn abort_vault_rotation();
+	fn activate(new_key: C::AggKey, maybe_old_key: Option<C::AggKey>);
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_status(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>);
+	fn set_status(_outcome: AsyncResult<()>);
 }
 
 /// Handler for Epoch life cycle events.
@@ -187,7 +201,6 @@ pub trait EpochTransitionHandler {
 	fn on_expired_epoch(_expired: EpochIndex) {}
 }
 
-/// Resetter for Reputation Points and Online Credits of a Validator
 pub trait ReputationResetter {
 	type ValidatorId;
 
@@ -214,8 +227,8 @@ pub trait OnAccountFunded {
 	type ValidatorId;
 	type Amount;
 
-	/// A callback that is triggered after some validator's balance has changed signigicantly,
-	/// either by funding it with more Flip, or by executing a redemption.
+	/// A callback that is triggered after some validator's balance has changed significantly,
+	/// either by funding it with more Flip, or by initiating/reverting a redemption.
 	///
 	/// Note this does not trigger on small changes like transaction fees.
 	///
@@ -322,25 +335,32 @@ impl<ValidatorId> NetworkState<ValidatorId> {
 pub trait Slashing {
 	type AccountId;
 	type BlockNumber;
+	type Balance;
 
 	/// Slashes a validator for the equivalent of some number of blocks offline.
 	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber);
 
-	/// Slahes a percentage of a validator's total balance.
-	fn slash_balance(account_id: &Self::AccountId, amount: Percent);
+	/// Slashes a validator by some fixed amount.
+	fn slash_balance(account_id: &Self::AccountId, slash_amount: FlipBalance);
+
+	/// Calculate the amount of FLIP to slash
+	fn calculate_slash_amount(
+		account_id: &Self::AccountId,
+		blocks: Self::BlockNumber,
+	) -> Self::Balance;
 }
 
-/// Can nominate a single account.
-pub trait SingleSignerNomination {
-	/// The id type of signer
-	type SignerId;
+/// Nominate a single account for transaction broadcasting.
+pub trait BroadcastNomination {
+	/// The id type of the broadcaster.
+	type BroadcasterId;
 
-	/// Returns a random live signer, excluding particular provided signers. The seed value is used
+	/// Returns a random broadcaster id, excluding particular provided ids. The seed value is used
 	/// as a source of randomness. Returns None if no signers are live.
-	fn nomination_with_seed<H: Hashable>(
+	fn nominate_broadcaster<H: Hashable>(
 		seed: H,
-		exclude_ids: &[Self::SignerId],
-	) -> Option<Self::SignerId>;
+		exclude_ids: impl IntoIterator<Item = Self::BroadcasterId>,
+	) -> Option<Self::BroadcasterId>;
 }
 
 pub trait ThresholdSignerNomination {
@@ -356,40 +376,9 @@ pub trait ThresholdSignerNomination {
 }
 
 #[derive(Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
-pub enum KeyState {
-	Unlocked,
-	/// Key is only available to sign this request id.
-	Locked(ThresholdSignatureRequestId),
-}
-
-impl KeyState {
-	pub fn is_available_for_request(&self, request_id: ThresholdSignatureRequestId) -> bool {
-		match self {
-			KeyState::Unlocked => true,
-			KeyState::Locked(locked_request_id) => request_id == *locked_request_id,
-		}
-	}
-
-	pub fn unlock(&mut self) {
-		*self = KeyState::Unlocked;
-	}
-
-	pub fn lock(&mut self, request_id: ThresholdSignatureRequestId) {
-		*self = KeyState::Locked(request_id);
-	}
-}
-
-#[derive(Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
 pub struct EpochKey<Key> {
 	pub key: Key,
 	pub epoch_index: EpochIndex,
-	pub key_state: KeyState,
-}
-
-impl<Key> EpochKey<Key> {
-	pub fn lock_for_request(&mut self, request_id: ThresholdSignatureRequestId) {
-		self.key_state = KeyState::Locked(request_id);
-	}
 }
 
 /// Provides the currently valid key for multisig ceremonies.
@@ -402,7 +391,7 @@ pub trait KeyProvider<C: ChainCrypto> {
 	fn active_epoch_key() -> Option<EpochKey<C::AggKey>>;
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_key(_key: C::AggKey) {
+	fn set_key(_key: C::AggKey, _epoch: EpochIndex) {
 		unimplemented!()
 	}
 }
@@ -419,13 +408,6 @@ where
 	/// Initiate a signing request and return the request id and, if the request was successful, the
 	/// ceremony id.
 	fn request_signature(payload: C::Payload) -> ThresholdSignatureRequestId;
-
-	fn request_verification_signature(
-		payload: C::Payload,
-		participants: BTreeSet<Self::ValidatorId>,
-		key: C::AggKey,
-		epoch_index: EpochIndex,
-	) -> ThresholdSignatureRequestId;
 
 	/// Register a callback to be dispatched when the signature is available. Can fail if the
 	/// provided request_id does not exist.
@@ -469,26 +451,64 @@ where
 	}
 }
 
+pub trait CfeMultisigRequest<T: Chainflip, C: ChainCrypto> {
+	fn keygen_request(req: KeygenRequest<T::ValidatorId>);
+
+	fn signature_request(req: cfe_events::ThresholdSignatureRequest<T::ValidatorId, C>);
+
+	fn key_handover_request(_req: KeyHandoverRequest<T::ValidatorId, C>) {
+		assert!(!C::key_handover_is_required());
+	}
+}
+
+pub trait CfePeerRegistration<T: Chainflip> {
+	fn peer_registered(
+		account_id: T::ValidatorId,
+		pubkey: Ed25519PublicKey,
+		port: u16,
+		ip: Ipv6Addr,
+	);
+
+	fn peer_deregistered(account_id: T::ValidatorId, pubkey: Ed25519PublicKey);
+}
+
+pub trait CfeBroadcastRequest<T: Chainflip, C: Chain> {
+	fn tx_broadcast_request(req: TxBroadcastRequest<T::ValidatorId, C>);
+}
+
 /// Something that is capable of encoding and broadcasting native blockchain api calls to external
 /// chains.
-pub trait Broadcaster<Api: ChainAbi> {
+pub trait Broadcaster<C: Chain> {
 	/// Supported api calls for this chain.
-	type ApiCall: ApiCall<Api>;
+	type ApiCall: ApiCall<C::ChainCrypto>;
 
 	/// The callback that gets executed when the signature is accepted.
 	type Callback: UnfilteredDispatchable;
 
 	/// Request a threshold signature and then build and broadcast the outbound api call.
-	fn threshold_sign_and_broadcast(
-		api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId);
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId;
 
 	/// Like `threshold_sign_and_broadcast` but also registers a callback to be dispatched when the
 	/// signature accepted event has been witnessed.
 	fn threshold_sign_and_broadcast_with_callback(
 		api_call: Self::ApiCall,
-		callback: Self::Callback,
-	) -> (BroadcastId, ThresholdSignatureRequestId);
+		success_callback: Option<Self::Callback>,
+		failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
+	) -> BroadcastId;
+
+	/// Request a threshold signature and then build and broadcast the outbound api call
+	/// specifically for a rotation tx..
+	fn threshold_sign_and_broadcast_rotation_tx(api_call: Self::ApiCall) -> BroadcastId;
+
+	/// Resign a call, and update the signature data storage, but do not broadcast.
+	fn threshold_resign(broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId>;
+
+	/// Request a call to be threshold signed, but do not broadcast.
+	/// The caller must manage storage cleanup, so signatures are not stored indefinitely.
+	fn threshold_sign(api_call: Self::ApiCall) -> (BroadcastId, ThresholdSignatureRequestId);
+
+	/// Clean up storage data related to a broadcast ID.
+	fn clean_up_broadcast_storage(broadcast_id: BroadcastId);
 }
 
 /// The heartbeat of the network
@@ -508,6 +528,13 @@ pub trait BlockEmissions {
 	fn update_backup_node_block_emission(emission: Self::Balance);
 	/// Calculate the emissions per block
 	fn calculate_block_emissions();
+}
+
+/// Emits an event when backup rewards are distributed that lives inside the Emissions pallet.
+pub trait BackupRewardsNotifier {
+	type Balance;
+	type AccountId;
+	fn emit_event(account_id: &Self::AccountId, amount: Self::Balance);
 }
 
 /// Checks if the caller can execute free transactions
@@ -539,25 +566,17 @@ impl<T: Chainflip, R: frame_support::traits::ValidatorRegistration<T::ValidatorI
 	}
 }
 
-impl<Id: Ord, A, B, C, D, E> QualifyNode<Id> for (A, B, C, D, E)
+impl<Id: Ord, A, B> QualifyNode<Id> for (A, B)
 where
 	A: QualifyNode<Id>,
 	B: QualifyNode<Id>,
-	C: QualifyNode<Id>,
-	D: QualifyNode<Id>,
-	E: QualifyNode<Id>,
 {
 	fn is_qualified(validator_id: &Id) -> bool {
-		A::is_qualified(validator_id) &&
-			B::is_qualified(validator_id) &&
-			C::is_qualified(validator_id) &&
-			D::is_qualified(validator_id)
+		A::is_qualified(validator_id) && B::is_qualified(validator_id)
 	}
 
 	fn filter_unqualified(validators: BTreeSet<Id>) -> BTreeSet<Id> {
-		E::filter_unqualified(D::filter_unqualified(C::filter_unqualified(B::filter_unqualified(
-			A::filter_unqualified(validators),
-		))))
+		B::filter_unqualified(A::filter_unqualified(validators))
 	}
 }
 
@@ -603,11 +622,6 @@ pub trait Bonding {
 	fn update_bond(authority: &Self::ValidatorId, bond: Self::Amount);
 }
 
-pub trait CeremonyIdProvider {
-	/// Increment the ceremony id, returning the new one.
-	fn increment_ceremony_id() -> CeremonyId;
-}
-
 /// Something that is able to provide block authorship slots that were missed.
 pub trait MissedAuthorshipSlots {
 	/// Get a list of slots that were missed.
@@ -641,14 +655,12 @@ pub trait FundingInfo {
 /// Allow pallets to open and expire deposit addresses.
 pub trait DepositApi<C: Chain> {
 	type AccountId;
-	type BlockNumber;
 
 	/// Issues a channel id and deposit address for a new liquidity deposit.
 	fn request_liquidity_deposit_address(
 		lp_account: Self::AccountId,
 		source_asset: C::ChainAsset,
-		expiry: Self::BlockNumber,
-	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
+	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber), DispatchError>;
 
 	/// Issues a channel id and deposit address for a new swap.
 	fn request_swap_deposit_address(
@@ -658,11 +670,7 @@ pub trait DepositApi<C: Chain> {
 		broker_commission_bps: BasisPoints,
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
-		expiry: Self::BlockNumber,
-	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
-
-	/// Expires a channel.
-	fn expire_channel(address: C::ChainAccount);
+	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber), DispatchError>;
 }
 
 pub trait AccountRoleRegistry<T: frame_system::Config> {
@@ -699,10 +707,10 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 		Self::ensure_account_role(origin, AccountRole::Validator)
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn register_account(account_id: T::AccountId, role: AccountRole);
+	fn register_account(account_id: &T::AccountId, role: AccountRole);
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn get_account_role(account_id: T::AccountId) -> AccountRole;
+	fn get_account_role(account_id: &T::AccountId) -> AccountRole;
 }
 
 /// API that allows other pallets to Egress assets out of the State Chain.
@@ -711,7 +719,7 @@ pub trait EgressApi<C: Chain> {
 		asset: C::ChainAsset,
 		amount: C::ChainAmount,
 		destination_address: C::ChainAccount,
-		maybe_message: Option<CcmDepositMetadata>,
+		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, C::ChainAmount)>,
 	) -> EgressId;
 }
 
@@ -720,7 +728,7 @@ impl<T: frame_system::Config> EgressApi<Ethereum> for T {
 		_asset: assets::eth::Asset,
 		_amount: <Ethereum as Chain>::ChainAmount,
 		_destination_address: <Ethereum as Chain>::ChainAccount,
-		_maybe_message: Option<CcmDepositMetadata>,
+		_maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <Ethereum as Chain>::ChainAmount)>,
 	) -> EgressId {
 		(ForeignChain::Ethereum, 0)
 	}
@@ -731,17 +739,14 @@ impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 		_asset: assets::dot::Asset,
 		_amount: <Polkadot as Chain>::ChainAmount,
 		_destination_address: <Polkadot as Chain>::ChainAccount,
-		_maybe_message: Option<CcmDepositMetadata>,
+		_maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <Polkadot as Chain>::ChainAmount)>,
 	) -> EgressId {
 		(ForeignChain::Polkadot, 0)
 	}
 }
 
-pub trait VaultTransitionHandler<C: ChainCrypto> {
-	fn on_new_vault() {}
-}
-pub trait VaultKeyWitnessedHandler<C: ChainAbi> {
-	fn on_new_key_activated(block_number: C::ChainBlockNumber) -> DispatchResultWithPostInfo;
+pub trait VaultKeyWitnessedHandler<C: Chain> {
+	fn on_first_key_activated(block_number: C::ChainBlockNumber) -> DispatchResultWithPostInfo;
 }
 
 pub trait BroadcastAnyChainGovKey {
@@ -756,7 +761,7 @@ pub trait BroadcastAnyChainGovKey {
 }
 
 pub trait CommKeyBroadcaster {
-	fn broadcast(new_key: <Ethereum as ChainCrypto>::GovKey);
+	fn broadcast(new_key: <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey);
 }
 
 /// Provides an interface to access the amount of Flip that is ready to be burned.
@@ -770,21 +775,25 @@ pub trait DepositHandler<C: Chain> {
 	fn on_deposit_made(
 		_deposit_details: C::DepositDetails,
 		_amount: C::ChainAmount,
-		_address: C::ChainAccount,
-		_asset: C::ChainAsset,
+		_channel: DepositChannel<C>,
 	) {
 	}
-	fn on_channel_opened(
-		_address: C::ChainAccount,
-		_channel_id: ChannelId,
-	) -> Result<(), DispatchError> {
-		Ok(())
-	}
+}
+
+pub trait NetworkEnvironmentProvider {
+	fn get_network_environment() -> NetworkEnvironment;
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug)]
+pub struct CcmSwapIds {
+	pub principal_swap_id: Option<SwapId>,
+	pub gas_swap_id: Option<SwapId>,
 }
 
 /// Trait for handling cross chain messages.
 pub trait CcmHandler {
 	/// Triggered when a ccm deposit is made.
+	#[allow(clippy::result_unit_err)]
 	fn on_ccm_deposit(
 		source_asset: Asset,
 		deposit_amount: AssetAmount,
@@ -792,7 +801,7 @@ pub trait CcmHandler {
 		destination_address: ForeignChainAddress,
 		deposit_metadata: CcmDepositMetadata,
 		origin: SwapOrigin,
-	);
+	) -> Result<CcmSwapIds, ()>;
 }
 
 impl CcmHandler for () {
@@ -803,12 +812,13 @@ impl CcmHandler for () {
 		_destination_address: ForeignChainAddress,
 		_deposit_metadata: CcmDepositMetadata,
 		_origin: SwapOrigin,
-	) {
+	) -> Result<CcmSwapIds, ()> {
+		Err(())
 	}
 }
 
-pub trait OnBroadcastReady<C: ChainAbi> {
-	type ApiCall: ApiCall<C>;
+pub trait OnBroadcastReady<C: Chain> {
+	type ApiCall: ApiCall<C::ChainCrypto>;
 
 	fn on_broadcast_ready(_api_call: &Self::ApiCall) {}
 }
@@ -820,7 +830,37 @@ pub trait GetBitcoinFeeInfo {
 pub trait GetBlockHeight<C: Chain> {
 	fn get_block_height() -> C::ChainBlockNumber;
 }
-pub trait CompatibleVersions {
-	fn current_compatibility_version() -> SemVer;
-	fn next_compatibility_version() -> Option<SemVer>;
+
+pub trait GetTrackedData<C: Chain> {
+	fn get_tracked_data() -> C::TrackedData;
+}
+
+pub trait CompatibleCfeVersions {
+	fn current_release_version() -> SemVer;
+}
+
+pub trait AuthoritiesCfeVersions {
+	/// Returns the percentage of current authorities with their CFEs at the given version.
+	fn percent_authorities_compatible_with_version(version: SemVer) -> Percent;
+}
+
+pub trait CallDispatchFilter<RuntimeCall> {
+	fn should_dispatch(&self, call: &RuntimeCall) -> bool;
+}
+
+impl<RuntimeCall> CallDispatchFilter<RuntimeCall> for () {
+	fn should_dispatch(&self, _call: &RuntimeCall) -> bool {
+		true
+	}
+}
+
+pub trait AssetConverter {
+	fn convert_asset_to_approximate_output<
+		Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy,
+	>(
+		input_asset: impl Into<Asset>,
+		available_input_amount: Amount,
+		output_asset: impl Into<Asset>,
+		desired_output_amount: Amount,
+	) -> Option<(Amount, Amount)>;
 }

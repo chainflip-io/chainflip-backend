@@ -16,12 +16,15 @@ mod benchmarking;
 mod rotation_state;
 
 pub use auction_resolver::*;
-use cf_primitives::{AuthorityCount, EpochIndex, SemVer};
+use cf_primitives::{
+	AuthorityCount, Ed25519PublicKey, EpochIndex, Ipv6Addr, SemVer,
+	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION, FLIPPERINOS_PER_FLIP,
+};
 use cf_traits::{
-	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, Bid, BidderProvider,
-	Bonding, Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition, FundingInfo,
-	HistoricalEpoch, MissedAuthorshipSlots, OnAccountFunded, QualifyNode, ReputationResetter,
-	SetSafeMode, VaultRotator,
+	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, AuthoritiesCfeVersions,
+	Bid, BidderProvider, Bonding, CfePeerRegistration, Chainflip, EpochInfo,
+	EpochTransitionHandler, ExecutionCondition, FundingInfo, HistoricalEpoch, KeyRotator,
+	MissedAuthorshipSlots, OnAccountFunded, QualifyNode, ReputationResetter, SetSafeMode,
 };
 
 use cf_utilities::Port;
@@ -46,9 +49,8 @@ use crate::rotation_state::RotationState;
 type SessionIndex = u32;
 
 type Version = SemVer;
-type Ed25519PublicKey = ed25519::Public;
+
 type Ed25519Signature = ed25519::Signature;
-pub type Ipv6Addr = u128;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletConfigUpdate {
@@ -59,6 +61,8 @@ pub enum PalletConfigUpdate {
 	EpochDuration { blocks: u32 },
 	AuthoritySetMinSize { min_size: AuthorityCount },
 	AuctionParameters { parameters: SetSizeParameters },
+	MinimumReportedCfeVersion { version: SemVer },
+	MaxAuthoritySetContractionPercentage { percentage: Percent },
 }
 
 type RuntimeRotationState<T> =
@@ -94,7 +98,7 @@ impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled);
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{AccountRoleRegistry, VaultStatus};
+	use cf_traits::{AccountRoleRegistry, KeyRotationStatusOuter};
 	use frame_support::sp_runtime::app_crypto::RuntimePublic;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 
@@ -115,7 +119,7 @@ pub mod pallet {
 		/// A handler for epoch lifecycle events
 		type EpochTransitionHandler: EpochTransitionHandler;
 
-		type VaultRotator: VaultRotator<ValidatorId = ValidatorIdOf<Self>>;
+		type KeyRotator: KeyRotator<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// For retrieving missed authorship slots.
 		type MissedAuthorshipSlots: MissedAuthorshipSlots;
@@ -143,6 +147,8 @@ pub mod pallet {
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode> + SetSafeMode<PalletSafeMode>;
+
+		type CfePeerRegistration: CfePeerRegistration<Self>;
 
 		/// Benchmark weights.
 		type ValidatorWeightInfo: WeightInfo;
@@ -185,7 +191,7 @@ pub mod pallet {
 	#[pallet::getter(fn current_rotation_phase)]
 	pub type CurrentRotationPhase<T: Config> = StorageValue<_, RotationPhase<T>, ValueQuery>;
 
-	/// A set of the current authorites.
+	/// A set of the current authorities.
 	#[pallet::storage]
 	pub type CurrentAuthorities<T: Config> =
 		StorageValue<_, BTreeSet<ValidatorIdOf<T>>, ValueQuery>;
@@ -207,7 +213,8 @@ pub mod pallet {
 	pub type AccountPeerMapping<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, (Ed25519PublicKey, Port, Ipv6Addr)>;
 
-	/// Peers that are associated with account ids.
+	/// Ed25519 public keys (aka peer ids) that are associated with account ids. (We keep track
+	/// of them to ensure they don't somehow get reused between different account ids.)
 	#[pallet::storage]
 	#[pallet::getter(fn mapped_peer)]
 	pub type MappedPeers<T: Config> = StorageMap<_, Blake2_128Concat, Ed25519PublicKey, ()>;
@@ -274,6 +281,19 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn auction_bid_cutoff_percentage)]
 	pub(super) type AuctionBidCutoffPercentage<T: Config> = StorageValue<_, Percent, ValueQuery>;
+
+	/// Determines the minimum version that each CFE must report to be considered qualified
+	/// for Keygen.
+	#[pallet::storage]
+	#[pallet::getter(fn minimum_reported_cfe_version)]
+	pub(super) type MinimumReportedCfeVersion<T: Config> = StorageValue<_, SemVer, ValueQuery>;
+
+	/// Determines the maximum allowed reduction of authority set size in percents between two
+	/// consecutive epochs.
+	#[pallet::storage]
+	#[pallet::getter(fn max_authority_set_contraction_percentage)]
+	pub(super) type MaxAuthoritySetContractionPercentage<T: Config> =
+		StorageValue<_, Percent, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -360,25 +380,13 @@ pub mod pallet {
 				},
 				RotationPhase::KeygensInProgress(mut rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
-					match T::VaultRotator::status() {
-						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
-							Self::start_key_handover(rotation_state, block_number);
+					match T::KeyRotator::status() {
+						AsyncResult::Ready(KeyRotationStatusOuter::KeygenComplete) => {
+							Self::try_start_key_handover(rotation_state, block_number);
 						},
-						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
-							// TODO: Punish a bit more here? Some of these nodes are already an authority and have failed to participate in handover.
-							// So given they're already not going to be in the set, excluding them from the set may not be enough punishment.
+						AsyncResult::Ready(KeyRotationStatusOuter::Failed(offenders)) => {
 							rotation_state.ban(offenders);
-
-							if (rotation_state.unbanned_current_authorities::<T>().len() as u32) <
-								Self::current_consensus_success_threshold() {
-								log::warn!(
-									target: "cf-validator",
-									"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
-								);
-								Self::abort_rotation();
-							} else {
-								Self::start_vault_rotation(rotation_state);
-							}
+							Self::try_restart_keygen(rotation_state);
 						},
 						AsyncResult::Pending => {
 							log::debug!(target: "cf-validator", "awaiting keygen completion");
@@ -396,33 +404,31 @@ pub mod pallet {
 				},
 				RotationPhase::KeyHandoversInProgress(mut rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
-					match T::VaultRotator::status() {
-						AsyncResult::Ready(VaultStatus::KeyHandoverComplete) => {
+					match T::KeyRotator::status() {
+						AsyncResult::Ready(KeyRotationStatusOuter::KeyHandoverComplete) => {
 							let new_authorities = rotation_state.authority_candidates();
 							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities);
-							T::VaultRotator::activate();
+							T::KeyRotator::activate_vaults();
 							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
 						},
-						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
+						AsyncResult::Ready(KeyRotationStatusOuter::Failed(offenders)) => {
+							// NOTE: we distinguish between candidates (nodes currently selected to become next authorities)
+							// and non-candidates (current authorities *not* currently selected to become next authorities).
+							// The outcome of this failure depends on whether any of the candidates caused it:
 							let num_failed_candidates = offenders.intersection(&rotation_state.authority_candidates()).count();
+							// TODO: Punish a bit more here? Some of these nodes are already an authority and have failed to participate in handover.
+							// So given they're already not going to be in the set, excluding them from the set may not be enough punishment.
 							rotation_state.ban(offenders);
-							if (rotation_state.unbanned_current_authorities::<T>().len() as u32) < Self::current_consensus_success_threshold() {
+							if num_failed_candidates > 0 {
 								log::warn!(
-									target: "cf-validator",
-									"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
+									"{num_failed_candidates} authority candidate(s) failed to participate in key handover. Retrying from keygen.",
 								);
-								Self::abort_rotation();
-							} else if num_failed_candidates > 0 {
-								log::warn!(
-									"{} authority candidate(s) failed to participate in key handover. Retrying from keygen.",
-									num_failed_candidates,
-								);
-								Self::start_vault_rotation(rotation_state);
+								Self::try_restart_keygen(rotation_state);
 							} else {
 								log::warn!(
 									"Key handover attempt failed. Retrying with a new participant set.",
 								);
-								Self::start_key_handover(rotation_state, block_number)
+								Self::try_start_key_handover(rotation_state, block_number)
 							};
 						},
 						AsyncResult::Pending => {
@@ -442,8 +448,8 @@ pub mod pallet {
 				}
 				RotationPhase::ActivatingKeys(rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
-					match T::VaultRotator::status() {
-						AsyncResult::Ready(VaultStatus::RotationComplete) => {
+					match T::KeyRotator::status() {
+						AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete) => {
 							Self::set_rotation_phase(RotationPhase::NewKeysActivated(
 								rotation_state,
 							));
@@ -513,6 +519,12 @@ pub mod pallet {
 				},
 				PalletConfigUpdate::AuctionParameters { parameters } => {
 					Self::try_update_auction_parameters(parameters)?;
+				},
+				PalletConfigUpdate::MinimumReportedCfeVersion { version } => {
+					MinimumReportedCfeVersion::<T>::put(version);
+				},
+				PalletConfigUpdate::MaxAuthoritySetContractionPercentage { percentage } => {
+					MaxAuthoritySetContractionPercentage::<T>::put(percentage);
 				},
 			}
 
@@ -612,6 +624,8 @@ pub mod pallet {
 
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 
+			// Note: this signature is necessary to prevent "rogue key" attacks (by ensuring
+			// that `account_id` holds the corresponding secret key for `peer_id`)
 			// Note: This signature verify doesn't need replay protection as you need the
 			// account_id's private key to pass the above ensure_validator which has replay
 			// protection. Note: Decode impl for peer_id's type doesn't detect invalid PublicKeys,
@@ -650,12 +664,24 @@ pub mod pallet {
 
 			AccountPeerMapping::<T>::insert(&account_id, (peer_id, port, ip_address));
 
+			let validator_id = <ValidatorIdOf<T> as IsType<
+				<T as frame_system::Config>::AccountId,
+			>>::from_ref(&account_id);
+
+			T::CfePeerRegistration::peer_registered(
+				validator_id.clone(),
+				peer_id,
+				port,
+				ip_address,
+			);
+
+			// TODO: Consider removing this
 			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id, port, ip_address));
 			Ok(().into())
 		}
 
-		/// Allow a node to send their current cfe version.  We validate that the version is a
-		/// not the same version stored and if not we store and emit `CFEVersionUpdated`.
+		/// Allow a validator to report their current cfe version. Update storage and emit event if
+		/// version is different from storage.
 		///
 		/// The dispatch origin of this function must be signed.
 		///
@@ -751,9 +777,9 @@ pub mod pallet {
 		pub redemption_period_as_percentage: Percent,
 		pub backup_reward_node_percentage: Percent,
 		pub authority_set_min_size: AuthorityCount,
-		pub min_size: AuthorityCount,
-		pub max_size: AuthorityCount,
-		pub max_expansion: AuthorityCount,
+		pub auction_parameters: SetSizeParameters,
+		pub auction_bid_cutoff_percentage: Percent,
+		pub max_authority_set_contraction_percentage: Percent,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
@@ -767,9 +793,13 @@ pub mod pallet {
 				redemption_period_as_percentage: Zero::zero(),
 				backup_reward_node_percentage: Zero::zero(),
 				authority_set_min_size: Zero::zero(),
-				min_size: 3,
-				max_size: 15,
-				max_expansion: 5,
+				auction_parameters: SetSizeParameters {
+					min_size: 3,
+					max_size: 15,
+					max_expansion: 5,
+				},
+				auction_bid_cutoff_percentage: Zero::zero(),
+				max_authority_set_contraction_percentage: DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 			}
 		}
 	}
@@ -785,15 +815,16 @@ pub mod pallet {
 			BackupRewardNodePercentage::<T>::set(self.backup_reward_node_percentage);
 			AuthoritySetMinSize::<T>::set(self.authority_set_min_size);
 			VanityNames::<T>::put(&self.genesis_vanity_names);
+			MaxAuthoritySetContractionPercentage::<T>::set(
+				self.max_authority_set_contraction_percentage,
+			);
 
 			CurrentEpoch::<T>::set(GENESIS_EPOCH);
 
-			Pallet::<T>::try_update_auction_parameters(SetSizeParameters {
-				min_size: self.min_size,
-				max_size: self.max_size,
-				max_expansion: self.max_expansion,
-			})
-			.expect("we should provide valid auction parameters at genesis");
+			Pallet::<T>::try_update_auction_parameters(self.auction_parameters)
+				.expect("we should provide valid auction parameters at genesis");
+
+			AuctionBidCutoffPercentage::<T>::set(self.auction_bid_cutoff_percentage);
 
 			Pallet::<T>::initialise_new_epoch(
 				GENESIS_EPOCH,
@@ -956,6 +987,8 @@ impl<T: Config> Pallet<T> {
 
 		Bond::<T>::set(new_bond);
 
+		HistoricalBonds::<T>::insert(new_epoch, new_bond);
+
 		new_authorities.iter().enumerate().for_each(|(index, account_id)| {
 			AuthorityIndex::<T>::insert(new_epoch, account_id, index as AuthorityCount);
 			EpochHistory::<T>::activate_epoch(account_id, new_epoch);
@@ -963,8 +996,6 @@ impl<T: Config> Pallet<T> {
 		});
 
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
-
-		HistoricalBonds::<T>::insert(new_epoch, new_bond);
 
 		// We've got new authorities, which means the backups may have changed.
 		Backups::<T>::put(backup_map);
@@ -981,6 +1012,7 @@ impl<T: Config> Pallet<T> {
 			target: "cf-validator",
 			"Aborting rotation at phase: {:?}.", CurrentRotationPhase::<T>::get()
 		);
+		T::KeyRotator::reset_key_rotation();
 		Self::set_rotation_phase(RotationPhase::Idle);
 		Self::deposit_event(Event::<T>::RotationAborted);
 	}
@@ -1031,7 +1063,7 @@ impl<T: Config> Pallet<T> {
 					auction_outcome.winners.len(),
 					auction_outcome.losers.len(),
 					UniqueSaturatedInto::<u128>::unique_saturated_into(auction_outcome.bond) /
-						10u128.pow(18),
+					FLIPPERINOS_PER_FLIP,
 				);
 
 				// Without reading the full list of bidders we can't know the real number.
@@ -1040,9 +1072,7 @@ impl<T: Config> Pallet<T> {
 					(auction_outcome.winners.len() + auction_outcome.losers.len()) as u32,
 				);
 
-				Self::start_vault_rotation(RotationState::from_auction_outcome::<T>(
-					auction_outcome,
-				));
+				Self::try_start_keygen(RotationState::from_auction_outcome::<T>(auction_outcome));
 
 				weight
 			},
@@ -1058,9 +1088,21 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn start_vault_rotation(rotation_state: RuntimeRotationState<T>) {
+	fn try_restart_keygen(rotation_state: RuntimeRotationState<T>) {
+		T::KeyRotator::reset_key_rotation();
+		Self::try_start_keygen(rotation_state);
+	}
+
+	fn try_start_keygen(rotation_state: RuntimeRotationState<T>) {
 		let candidates = rotation_state.authority_candidates();
 		let SetSizeParameters { min_size, .. } = AuctionParameters::<T>::get();
+
+		let min_size = sp_std::cmp::max(
+			min_size,
+			(Percent::one().saturating_sub(MaxAuthoritySetContractionPercentage::<T>::get())) *
+				Self::current_authority_count(),
+		);
+
 		if (candidates.len() as u32) < min_size {
 			log::warn!(
 				target: "cf-validator",
@@ -1070,13 +1112,13 @@ impl<T: Config> Pallet<T> {
 			);
 			Self::abort_rotation();
 		} else {
-			T::VaultRotator::keygen(candidates, rotation_state.new_epoch_index);
+			T::KeyRotator::keygen(candidates, rotation_state.new_epoch_index);
 			Self::set_rotation_phase(RotationPhase::KeygensInProgress(rotation_state));
 			log::info!(target: "cf-validator", "Vault rotation initiated.");
 		}
 	}
 
-	fn start_key_handover(
+	fn try_start_key_handover(
 		rotation_state: RuntimeRotationState<T>,
 		block_number: BlockNumberFor<T>,
 	) {
@@ -1085,7 +1127,6 @@ impl<T: Config> Pallet<T> {
 				target: "cf-validator",
 				"Failed to start Key Handover: Disabled due to Runtime Safe Mode. Aborting Authority rotation."
 			);
-			T::VaultRotator::abort_vault_rotation();
 			Self::abort_rotation();
 			return
 		}
@@ -1097,7 +1138,7 @@ impl<T: Config> Pallet<T> {
 			&authority_candidates,
 			block_number.unique_saturated_into(),
 		) {
-			T::VaultRotator::key_handover(
+			T::KeyRotator::key_handover(
 				sharing_participants,
 				authority_candidates,
 				rotation_state.new_epoch_index,
@@ -1294,6 +1335,14 @@ impl<T: Config> OnKilledAccount<T::AccountId> for DeletePeerMapping<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
 		if let Some((peer_id, _, _)) = AccountPeerMapping::<T>::take(account_id) {
 			MappedPeers::<T>::remove(peer_id);
+
+			let validator_id = <ValidatorIdOf<T> as IsType<
+				<T as frame_system::Config>::AccountId,
+			>>::from_ref(account_id);
+
+			T::CfePeerRegistration::peer_deregistered(validator_id.clone(), peer_id);
+
+			// TODO: consider removing this
 			Pallet::<T>::deposit_event(Event::PeerIdUnregistered(account_id.clone(), peer_id));
 		}
 	}
@@ -1348,5 +1397,41 @@ impl<T: Config> OnAccountFunded for UpdateBackupMapping<T> {
 				backups.insert(validator_id.clone(), amount);
 			}
 		});
+	}
+}
+
+impl<T: Config> AuthoritiesCfeVersions for Pallet<T> {
+	/// Returns the percentage of current authorities that are compatible with the provided version.
+	fn percent_authorities_compatible_with_version(version: SemVer) -> Percent {
+		let current_authorities = CurrentAuthorities::<T>::get();
+		let authorities_count = current_authorities.len() as u32;
+
+		Percent::from_rational(
+			current_authorities
+				.into_iter()
+				.filter(|validator_id| {
+					NodeCFEVersion::<T>::get(validator_id).is_compatible_with(version)
+				})
+				.count() as u32,
+			authorities_count,
+		)
+	}
+}
+
+pub struct QualifyByCfeVersion<T>(PhantomData<T>);
+
+impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByCfeVersion<T> {
+	fn is_qualified(validator_id: &<T as Chainflip>::ValidatorId) -> bool {
+		NodeCFEVersion::<T>::get(validator_id) >= MinimumReportedCfeVersion::<T>::get()
+	}
+
+	fn filter_unqualified(
+		validators: BTreeSet<<T as Chainflip>::ValidatorId>,
+	) -> BTreeSet<<T as Chainflip>::ValidatorId> {
+		let min_version = MinimumReportedCfeVersion::<T>::get();
+		validators
+			.into_iter()
+			.filter(|id| NodeCFEVersion::<T>::get(id) >= min_version)
+			.collect()
 	}
 }

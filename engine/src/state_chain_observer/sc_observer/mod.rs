@@ -7,9 +7,14 @@ use cf_chains::btc::{self, PreviousOrCurrent};
 use cf_primitives::{BlockNumber, CeremonyId, EpochIndex};
 use crypto_compat::CryptoCompat;
 use futures::{FutureExt, StreamExt};
+use pallet_cf_cfe_interface::{ThresholdSignatureRequest, TxBroadcastRequest};
+
+type CfeEvent = pallet_cf_cfe_interface::CfeEvent<Runtime>;
+
 use sp_runtime::AccountId32;
 use state_chain_runtime::{
 	AccountId, ArbitrumInstance, BitcoinInstance, EthereumInstance, PolkadotInstance,
+	AccountId, BitcoinInstance, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall,
 };
 use std::{
 	collections::BTreeSet,
@@ -19,21 +24,19 @@ use std::{
 	},
 	time::Duration,
 };
-use tokio::sync::mpsc::UnboundedSender;
-use tracing::{debug, error, info, info_span, trace, Instrument};
+use tracing::{debug, error, info, info_span, Instrument};
 
 use crate::{
-	btc::{rpc::BtcRpcApi, BtcBroadcaster},
-	dot::{rpc::DotRpcApi, DotBroadcaster},
-	eth::{broadcaster::EthBroadcaster, rpc::EthRpcApi},
-	p2p::{PeerInfo, PeerUpdate},
+	btc::retry_rpc::BtcRetryRpcApi,
+	dot::retry_rpc::DotRetryRpcApi,
+	eth::retry_rpc::EthersRetrySigningRpcApi,
 	state_chain_observer::client::{
 		extrinsic_api::{
 			signed::{SignedExtrinsicApi, UntilFinalized},
 			unsigned::UnsignedExtrinsicApi,
 		},
 		storage_api::StorageApi,
-		StateChainStreamApi,
+		stream_api::{StreamApi, FINALIZED},
 	},
 };
 use multisig::{
@@ -42,6 +45,8 @@ use multisig::{
 	SignatureToThresholdSignature,
 };
 use utilities::task_scope::{task_scope, Scope};
+
+use super::client::chain_api::ChainApi;
 
 async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	scope: &Scope<'a, anyhow::Error>,
@@ -53,12 +58,12 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 ) where
 	MultisigClient: MultisigClientApi<C::CryptoScheme>,
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
-	state_chain_runtime::Runtime: pallet_cf_vaults::Config<I>,
-	C: ChainSigning<Chain = <state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain>
-		+ 'static,
-	I: CryptoCompat<C, C::Chain> + 'static + Sync + Send,
-	state_chain_runtime::RuntimeCall:
-		std::convert::From<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>,
+	Runtime: pallet_cf_threshold_signature::Config<I>,
+	C: ChainSigning<
+			ChainCrypto = <Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChainCrypto,
+		> + 'static,
+	I: CryptoCompat<C, C::ChainCrypto> + 'static + Sync + Send,
+	RuntimeCall: From<pallet_cf_threshold_signature::Call<Runtime, I>>,
 {
 	if keygen_participants.contains(&state_chain_client.account_id()) {
 		// We initiate keygen outside of the spawn to avoid requesting ceremonies out of order
@@ -66,17 +71,16 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 			multisig_client.initiate_keygen(ceremony_id, epoch_index, keygen_participants);
 		scope.spawn(async move {
 			state_chain_client
-                .submit_signed_extrinsic(pallet_cf_vaults::Call::<
-                    state_chain_runtime::Runtime,
-                    I,
-                >::report_keygen_outcome {
-                    ceremony_id,
-                    reported_outcome: keygen_result_future
-                        .await
-                        .map(I::pubkey_to_aggkey)
-                        .map_err(|(bad_account_ids, _reason)| bad_account_ids),
-                })
-                .await;
+				.finalize_signed_extrinsic(
+					pallet_cf_threshold_signature::Call::<Runtime, I>::report_keygen_outcome {
+						ceremony_id,
+						reported_outcome: keygen_result_future
+							.await
+							.map(I::pubkey_to_aggkey)
+							.map_err(|(bad_account_ids, _reason)| bad_account_ids),
+					},
+				)
+				.await;
 			Ok(())
 		});
 	} else {
@@ -100,9 +104,8 @@ async fn handle_key_handover_request<'a, StateChainClient, MultisigClient>(
 ) where
 	MultisigClient: MultisigClientApi<BtcCryptoScheme>,
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
-	state_chain_runtime::Runtime: pallet_cf_vaults::Config<BitcoinInstance>,
-	state_chain_runtime::RuntimeCall:
-		std::convert::From<pallet_cf_vaults::Call<state_chain_runtime::Runtime, BitcoinInstance>>,
+	Runtime: pallet_cf_threshold_signature::Config<BitcoinInstance>,
+	RuntimeCall: From<pallet_cf_threshold_signature::Call<Runtime, BitcoinInstance>>,
 {
 	let account_id = &state_chain_client.account_id();
 	if sharing_participants.contains(account_id) || receiving_participants.contains(account_id) {
@@ -115,8 +118,8 @@ async fn handle_key_handover_request<'a, StateChainClient, MultisigClient>(
 		);
 		scope.spawn(async move {
 			let _result = state_chain_client
-				.submit_signed_extrinsic(pallet_cf_vaults::Call::<
-					state_chain_runtime::Runtime,
+				.finalize_signed_extrinsic(pallet_cf_threshold_signature::Call::<
+					Runtime,
 					BitcoinInstance,
 				>::report_key_handover_outcome {
 					ceremony_id,
@@ -148,11 +151,10 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	StateChainClient: SignedExtrinsicApi + UnsignedExtrinsicApi + 'static + Send + Sync,
 	C: CryptoScheme,
 	I: 'static + Sync + Send,
-	state_chain_runtime::Runtime: pallet_cf_threshold_signature::Config<I>,
-	state_chain_runtime::RuntimeCall:
-		std::convert::From<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, I>>,
+	Runtime: pallet_cf_threshold_signature::Config<I>,
+	RuntimeCall: From<pallet_cf_threshold_signature::Call<Runtime, I>>,
 	Vec<C::Signature>: SignatureToThresholdSignature<
-		<state_chain_runtime::Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain,
+		<Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChainCrypto,
 	>,
 {
 	if signers.contains(&state_chain_client.account_id()) {
@@ -163,9 +165,9 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 		scope.spawn(async move {
 			match signing_result_future.await {
 				Ok(signatures) => {
-					state_chain_client
+					let _result = state_chain_client
 						.submit_unsigned_extrinsic(pallet_cf_threshold_signature::Call::<
-							state_chain_runtime::Runtime,
+							Runtime,
 							I,
 						>::signature_success {
 							ceremony_id,
@@ -175,8 +177,8 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 				},
 				Err((bad_account_ids, _reason)) => {
 					state_chain_client
-						.submit_signed_extrinsic(pallet_cf_threshold_signature::Call::<
-							state_chain_runtime::Runtime,
+						.finalize_signed_extrinsic(pallet_cf_threshold_signature::Call::<
+							Runtime,
 							I,
 						>::report_signature_failed {
 							ceremony_id,
@@ -210,7 +212,6 @@ macro_rules! match_event {
                     }
                 }
             )+
-            _ => () // Don't log events the CFE does not ever process
         }
     }}
 }
@@ -228,34 +229,31 @@ pub async fn start<
 >(
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
-	eth_broadcaster: EthBroadcaster<EthRpc>,
-	dot_broadcaster: DotBroadcaster<DotRpc>,
-	btc_broadcaster: BtcBroadcaster<BtcRpc>,
-	arb_broadcaster: EthBroadcaster<EthRpc>,
+	eth_rpc: EthRpc,
+	dot_rpc: DotRpc,
+	btc_rpc: BtcRpc,
 	eth_multisig_client: EthMultisigClient,
-	dot_multisig_client: DotMultisigClient,
-	btc_multisig_client: BtcMultisigClient,
-	arb_multisig_client: ArbMultisigClient,
-	peer_update_sender: UnboundedSender<PeerUpdate>,
+	dot_multisig_client: PolkadotMultisigClient,
+	btc_multisig_client: BitcoinMultisigClient,
 ) -> Result<(), anyhow::Error>
 where
-	BlockStream: StateChainStreamApi,
-	EthRpc: EthRpcApi + Send + Sync + 'static,
-	DotRpc: DotRpcApi + Send + Sync + 'static,
-	BtcRpc: BtcRpcApi + Send + Sync + 'static,
+	BlockStream: StreamApi<FINALIZED>,
+	EthRpc: EthersRetrySigningRpcApi + Send + Sync + 'static,
+	DotRpc: DotRetryRpcApi + Send + Sync + 'static,
+	BtcRpc: BtcRetryRpcApi + Send + Sync + 'static,
 	EthMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,
 	DotMultisigClient: MultisigClientApi<PolkadotCryptoScheme> + Send + Sync + 'static,
 	BtcMultisigClient: MultisigClientApi<BtcCryptoScheme> + Send + Sync + 'static,
 	ArbMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,
 	StateChainClient:
-		StorageApi + UnsignedExtrinsicApi + SignedExtrinsicApi + 'static + Send + Sync,
+		StorageApi + ChainApi + UnsignedExtrinsicApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
 	task_scope(|scope| async {
         let account_id = state_chain_client.account_id();
 
         let heartbeat_block_interval = {
             use frame_support::traits::TypedGet;
-            <state_chain_runtime::Runtime as pallet_cf_reputation::Config>::HeartbeatBlockInterval::get()
+            <Runtime as pallet_cf_reputation::Config>::HeartbeatBlockInterval::get()
         };
 
         // Ensure we don't submit initial heartbeat too early. Early heartbeats could falsely indicate
@@ -267,7 +265,7 @@ where
             async move {
                 tokio::time::sleep(Duration::from_secs(60)).await;
                 state_chain_client
-                    .submit_signed_extrinsic(
+                    .finalize_signed_extrinsic(
                         pallet_cf_reputation::Call::heartbeat {},
                     )
                     .await
@@ -289,161 +287,59 @@ where
 
         info!("Sending heartbeat every {blocks_per_heartbeat} blocks");
 
-        let mut sc_block_stream = Box::pin(sc_block_stream);
+        // Add the initial (cached) block to the stream so we can process the events in it.
+        let mut sc_block_stream =
+        Box::pin(
+            futures::stream::once(futures::future::ready(*sc_block_stream.cache()))
+                .chain(sc_block_stream)
+        );
+
         loop {
             match sc_block_stream.next().await {
-                Some((current_block_hash, current_block_header)) => {
-                    debug!("Processing SC block {} with block hash: {current_block_hash:#x}", current_block_header.number);
+                Some(current_block) => {
+                    debug!("Processing SC block {} with block hash: {:#x}", current_block.number, current_block.hash);
 
-                    match state_chain_client.storage_value::<frame_system::Events::<state_chain_runtime::Runtime>>(current_block_hash).await {
+                    match state_chain_client
+                        .storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>(
+                            current_block.hash,
+                        )
+                        .await {
+
                         Ok(events) => {
-                            for event_record in events {
-                                match_event! {event_record.event, {
-                                    state_chain_runtime::RuntimeEvent::Validator(
-                                        pallet_cf_validator::Event::PeerIdRegistered(
-                                            account_id,
-                                            ed25519_pubkey,
-                                            port,
-                                            ip_address,
-                                        ),
-                                    ) => {
-                                        peer_update_sender
-                                            .send(PeerUpdate::Registered(
-                                                    PeerInfo::new(account_id, ed25519_pubkey, ip_address.into(), port)
-                                                )
-                                            )
-                                            .unwrap();
-                                    }
-                                    state_chain_runtime::RuntimeEvent::Validator(
-                                        pallet_cf_validator::Event::PeerIdUnregistered(
-                                            account_id,
-                                            ed25519_pubkey,
-                                        ),
-                                    ) => {
-                                        peer_update_sender
-                                            .send(PeerUpdate::Deregistered(account_id, ed25519_pubkey))
-                                            .unwrap();
-                                    }
-                                    state_chain_runtime::RuntimeEvent::EthereumVault(
-                                        pallet_cf_vaults::Event::KeygenRequest {
-                                            ceremony_id,
-                                            participants,
-                                            epoch_index
-                                        }
-                                    ) => {
-                                        handle_keygen_request::<_, _, _, EthereumInstance>(
-                                            scope,
-                                            &eth_multisig_client,
-                                            state_chain_client.clone(),
-                                            ceremony_id,
-                                            epoch_index,
-                                            participants,
+                            for event in events {
+                                match_event! {event, {
+                                    CfeEvent::EthThresholdSignatureRequest(req) => {
+                                        handle_signing_request::<_, _, _, EthereumInstance>(
+                                        scope,
+                                        &eth_multisig_client,
+                                        state_chain_client.clone(),
+                                        req.ceremony_id,
+                                        req.signatories,
+                                        vec![(
+                                            KeyId::new(req.epoch_index, req.key),
+                                            multisig::eth::SigningPayload(req.payload.0)
+                                        )],
                                         ).await;
                                     }
-                                    state_chain_runtime::RuntimeEvent::PolkadotVault(
-                                        pallet_cf_vaults::Event::KeygenRequest {
-                                            ceremony_id,
-                                            participants,
-                                            epoch_index
-                                        }
-                                    ) => {
-                                        handle_keygen_request::<_, _, _, PolkadotInstance>(
+                                    CfeEvent::DotThresholdSignatureRequest(req) => {
+
+                                        handle_signing_request::<_, _, _, PolkadotInstance>(
                                             scope,
                                             &dot_multisig_client,
                                             state_chain_client.clone(),
-                                            ceremony_id,
-                                            epoch_index,
-                                            participants,
-                                        ).await;
-                                    }
-                                    state_chain_runtime::RuntimeEvent::BitcoinVault(
-                                        pallet_cf_vaults::Event::KeygenRequest {
-                                            ceremony_id,
-                                            participants,
-                                            epoch_index
-                                        }
-                                    ) => {
-                                        handle_keygen_request::<_, _, _, BitcoinInstance>(
-                                            scope,
-                                            &btc_multisig_client,
-                                            state_chain_client.clone(),
-                                            ceremony_id,
-                                            epoch_index,
-                                            participants,
-                                        ).await;
-                                    }
-                                    state_chain_runtime::RuntimeEvent::ArbitrumVault(
-                                        pallet_cf_vaults::Event::KeygenRequest {
-                                            ceremony_id,
-                                            participants,
-                                            epoch_index
-                                        }
-                                    ) => {
-                                        handle_keygen_request::<_, _, _, ArbitrumInstance>(
-                                            scope,
-                                            &arb_multisig_client,
-                                            state_chain_client.clone(),
-                                            ceremony_id,
-                                            epoch_index,
-                                            participants,
-                                        ).await;
-                                    }
-                                    state_chain_runtime::RuntimeEvent::EthereumThresholdSigner(
-                                        pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
-                                            request_id: _,
-                                            ceremony_id,
-                                            epoch,
-                                            key,
-                                            signatories,
-                                            payload,
-                                        },
-                                    ) => {
-                                        handle_signing_request::<_, _, _, EthereumInstance>(
-                                                scope,
-                                                &eth_multisig_client,
-                                            state_chain_client.clone(),
-                                            ceremony_id,
-                                            signatories,
+                                            req.ceremony_id,
+                                            req.signatories,
                                             vec![(
-                                                KeyId::new(epoch, key),
-                                                multisig::eth::SigningPayload(payload.0)
-                                            )],
-                                        ).await;
-                                    }
-
-                                    state_chain_runtime::RuntimeEvent::PolkadotThresholdSigner(
-                                        pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
-                                            request_id: _,
-                                            ceremony_id,
-                                            epoch,
-                                            key,
-                                            signatories,
-                                            payload,
-                                        },
-                                    ) => {
-                                        handle_signing_request::<_, _, _, PolkadotInstance>(
-                                                scope,
-                                                &dot_multisig_client,
-                                            state_chain_client.clone(),
-                                            ceremony_id,
-                                            signatories,
-                                            vec![(
-                                                KeyId::new(epoch, key),
-                                                multisig::polkadot::SigningPayload::new(payload.0)
+                                                KeyId::new(req.epoch_index, req.key),
+                                                multisig::polkadot::SigningPayload::new(req.payload.0)
                                                     .expect("Payload should be correct size")
                                             )],
                                         ).await;
+
                                     }
-                                    state_chain_runtime::RuntimeEvent::BitcoinThresholdSigner(
-                                        pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
-                                            request_id: _,
-                                            ceremony_id,
-                                            epoch,
-                                            key,
-                                            signatories,
-                                            payload: payloads,
-                                        },
-                                    ) => {
+                                    CfeEvent::BtcThresholdSignatureRequest(ThresholdSignatureRequest::<Runtime, _> { ceremony_id, epoch_index, key, signatories, payload : payloads }) => {
+
+
                                         if payloads.len() > multisig::MAX_BTC_SIGNING_PAYLOADS {
                                             error!(ceremony_id = ceremony_id, "Too many payloads, ignoring Bitcoin signing request ({}/{})", payloads.len(), multisig::MAX_BTC_SIGNING_PAYLOADS);
                                             btc_multisig_client.update_latest_ceremony_id(ceremony_id);
@@ -451,7 +347,7 @@ where
                                             let signing_info = payloads.into_iter().map(|(previous_or_current, payload)| {
                                                     (
                                                         KeyId::new(
-                                                            epoch,
+                                                            epoch_index,
                                                             match previous_or_current {
                                                                 PreviousOrCurrent::Current => key.current,
                                                                 PreviousOrCurrent::Previous => key.previous
@@ -464,8 +360,8 @@ where
                                                 .collect::<Vec<_>>();
 
                                             handle_signing_request::<_, _, _, BitcoinInstance>(
-                                                    scope,
-                                                    &btc_multisig_client,
+                                                scope,
+                                                &btc_multisig_client,
                                                 state_chain_client.clone(),
                                                 ceremony_id,
                                                 signatories,
@@ -473,199 +369,180 @@ where
                                             ).await;
                                         }
                                     }
-                                    state_chain_runtime::RuntimeEvent::ArbitrumThresholdSigner(
-                                        pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
-                                            request_id: _,
-                                            ceremony_id,
-                                            epoch,
-                                            key,
-                                            signatories,
-                                            payload,
-                                        },
-                                    ) => {
-                                        handle_signing_request::<_, _, _, ArbitrumInstance>(
-                                                scope,
-                                                &arb_multisig_client,
+                                    CfeEvent::EthKeygenRequest(req) => {
+                                        handle_keygen_request::<_, _, _, EthereumInstance>(
+                                            scope,
+                                            &eth_multisig_client,
                                             state_chain_client.clone(),
-                                            ceremony_id,
-                                            signatories,
-                                            vec![(
-                                                KeyId::new(epoch, key),
-                                                multisig::eth::SigningPayload(payload.0)
-                                            )],
+                                            req.ceremony_id,
+                                            req.epoch_index,
+                                            req.participants,
                                         ).await;
                                     }
-                                    // ======= KEY HANDOVER =======
-                                    state_chain_runtime::RuntimeEvent::BitcoinVault(
-                                        pallet_cf_vaults::Event::KeyHandoverRequest {
-                                           ceremony_id,
-                                           key_to_share,
-                                           from_epoch,
-                                           sharing_participants,
-                                           receiving_participants,
-                                           new_key,
-                                           to_epoch,
-                                        },
-                                    ) => {
+                                    CfeEvent::BtcKeygenRequest(req) => {
+                                        handle_keygen_request::<_, _, _, BitcoinInstance>(
+                                            scope,
+                                            &btc_multisig_client,
+                                            state_chain_client.clone(),
+                                            req.ceremony_id,
+                                            req.epoch_index,
+                                            req.participants,
+                                        ).await;
+                                    }
+                                    CfeEvent::DotKeygenRequest(req) => {
+                                        handle_keygen_request::<_, _, _, PolkadotInstance>(
+                                            scope,
+                                            &dot_multisig_client,
+                                            state_chain_client.clone(),
+                                            req.ceremony_id,
+                                            req.epoch_index,
+                                            req.participants,
+                                        ).await;
+                                    }
+                                    CfeEvent::BtcKeyHandoverRequest(req) => {
+
                                         handle_key_handover_request::<_, _>(
                                             scope,
                                             &btc_multisig_client,
                                             state_chain_client.clone(),
-                                            ceremony_id,
-                                            from_epoch,
-                                            to_epoch,
-                                            sharing_participants,
-                                            receiving_participants,
-                                            key_to_share,
-                                            new_key,
+                                            req.ceremony_id,
+                                            req.from_epoch,
+                                            req.to_epoch,
+                                            req.sharing_participants,
+                                            req.receiving_participants,
+                                            req.key_to_share,
+                                            req.new_key,
                                         ).await;
                                     }
-                                    state_chain_runtime::RuntimeEvent::EthereumVault(
-                                        pallet_cf_vaults::Event::KeyHandoverRequest {
-                                           ..
-                                        },
-                                    ) => {
-                                        panic!("There should be no key handover requests made for Ethereum")
-                                    }
-                                    state_chain_runtime::RuntimeEvent::PolkadotVault(
-                                        pallet_cf_vaults::Event::KeyHandoverRequest {
-                                           ..
-                                        },
-                                    ) => {
-                                        panic!("There should be no key handover requests made for Polkadot")
-                                    }
-                                    state_chain_runtime::RuntimeEvent::ArbitrumVault(
-                                        pallet_cf_vaults::Event::KeyHandoverRequest {
-                                           ..
-                                        },
-                                    ) => {
-                                        panic!("There should be no key handover requests made for Arbitrum")
-                                    }
-
-                                    state_chain_runtime::RuntimeEvent::EthereumBroadcaster(
-                                        pallet_cf_broadcast::Event::TransactionBroadcastRequest {
-                                            broadcast_attempt_id,
-                                            nominee,
-                                            transaction_payload,
-                                            // We're already witnessing this since we witness the KeyManager for SignatureAccepted events.
-                                            transaction_out_id: _,
-                                        },
-                                    ) if nominee == account_id => {
-                                        match eth_broadcaster.send(transaction_payload).await {
-                                            Ok(tx_hash) => info!("Ethereum TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
-                                            Err(error) => {
-                                                // Note: this error can indicate that we failed to estimate gas, or that there is
-                                                // a problem with the ethereum rpc node, or with the configured account. For example
-                                                // if the account balance is too low to pay for required gas.
-                                                error!("Error on Ethereum TransactionBroadcastRequest {broadcast_attempt_id:?}: {error:?}");
-                                                state_chain_client.submit_signed_extrinsic(
-                                                    state_chain_runtime::RuntimeCall::EthereumBroadcaster(
-                                                        pallet_cf_broadcast::Call::transaction_signing_failure {
-                                                            broadcast_attempt_id,
-                                                        },
-                                                    ),
-                                                )
-                                                .await;
-                                            }
-                                        }
-                                    }
-                                    state_chain_runtime::RuntimeEvent::PolkadotBroadcaster(
-                                        pallet_cf_broadcast::Event::TransactionBroadcastRequest {
-                                            broadcast_attempt_id,
-                                            nominee,
-                                            transaction_payload,
-                                            transaction_out_id: _,
-                                        },
-                                    ) => {
+                                    CfeEvent::BtcTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> { broadcast_id, nominee, payload }) => {
                                         if nominee == account_id {
-                                            match dot_broadcaster.send(transaction_payload.encoded_extrinsic).await {
-                                                Ok(tx_hash) => info!("Polkadot TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
-                                                Err(error) => {
-                                                    error!("Error on Polkadot TransactionBroadcastRequest {broadcast_attempt_id:?}: {error:?}");
-                                                    state_chain_client.submit_signed_extrinsic(
-                                                        state_chain_runtime::RuntimeCall::PolkadotBroadcaster(
-                                                            pallet_cf_broadcast::Call::transaction_signing_failure {
-                                                                broadcast_attempt_id,
-                                                            },
-                                                        ),
-                                                    )
-                                                    .await;
+                                            let btc_rpc = btc_rpc.clone();
+                                            let state_chain_client = state_chain_client.clone();
+                                            scope.spawn(async move {
+                                                match btc_rpc.send_raw_transaction(payload.encoded_transaction).await {
+                                                    Ok(tx_hash) => info!("Bitcoin TransactionBroadcastRequest {broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
+                                                    Err(error) => {
+                                                        error!("Error on Bitcoin TransactionBroadcastRequest {broadcast_id:?}: {error:?}");
+                                                        state_chain_client.finalize_signed_extrinsic(
+                                                            RuntimeCall::BitcoinBroadcaster(
+                                                                pallet_cf_broadcast::Call::transaction_failed {
+                                                                    broadcast_id,
+                                                                },
+                                                            ),
+                                                        )
+                                                        .await;
+                                                    }
                                                 }
-                                            }
+                                                Ok(())
+                                            });
                                         }
                                     }
-                                    state_chain_runtime::RuntimeEvent::BitcoinBroadcaster(
-                                        pallet_cf_broadcast::Event::TransactionBroadcastRequest {
-                                            broadcast_attempt_id,
-                                            nominee,
-                                            transaction_payload,
-                                            transaction_out_id: _,
-                                        },
-                                    ) => {
+                                    CfeEvent::DotTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> { broadcast_id, nominee, payload }) => {
                                         if nominee == account_id {
-                                            match btc_broadcaster.send(transaction_payload.encoded_transaction).await {
-                                                Ok(tx_hash) => info!("Bitcoin TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
-                                                Err(error) => {
-                                                    error!("Error on Bitcoin TransactionBroadcastRequest {broadcast_attempt_id:?}: {error:?}");
-                                                    state_chain_client.submit_signed_extrinsic(
-                                                        state_chain_runtime::RuntimeCall::BitcoinBroadcaster(
-                                                            pallet_cf_broadcast::Call::transaction_signing_failure {
-                                                                broadcast_attempt_id,
-                                                            },
-                                                        ),
-                                                    )
-                                                    .await;
+                                            let dot_rpc = dot_rpc.clone();
+                                            let state_chain_client = state_chain_client.clone();
+                                            scope.spawn(async move {
+                                                match dot_rpc.submit_raw_encoded_extrinsic(payload.encoded_extrinsic).await {
+                                                    Ok(tx_hash) => info!("Polkadot TransactionBroadcastRequest {broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
+                                                    Err(error) => {
+                                                        error!("Error on Polkadot TransactionBroadcastRequest {broadcast_id:?}: {error:?}");
+                                                        state_chain_client.finalize_signed_extrinsic(
+                                                            RuntimeCall::PolkadotBroadcaster(
+                                                                pallet_cf_broadcast::Call::transaction_failed {
+                                                                    broadcast_id,
+                                                                },
+                                                            ),
+                                                        )
+                                                        .await;
+                                                    }
                                                 }
-                                            }
+                                                Ok(())
+                                            });
                                         }
                                     }
-                                    state_chain_runtime::RuntimeEvent::ArbitrumBroadcaster(
-                                        pallet_cf_broadcast::Event::TransactionBroadcastRequest {
-                                            broadcast_attempt_id,
-                                            nominee,
-                                            transaction_payload,
-                                            // We're already witnessing this since we witness the KeyManager for SignatureAccepted events.
-                                            transaction_out_id: _,
-                                        },
-                                    ) if nominee == account_id => {
-                                        match arb_broadcaster.send(transaction_payload).await {
-                                            Ok(tx_hash) => info!("Arbitrum TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
-                                            Err(error) => {
-                                                // Note: this error can indicate that we failed to estimate gas, or that there is
-                                                // a problem with the Arbitrum rpc node, or with the configured account. For example
-                                                // if the account balance is too low to pay for required gas.
-                                                error!("Error on Arbitrum TransactionBroadcastRequest {broadcast_attempt_id:?}: {error:?}");
-                                                state_chain_client.submit_signed_extrinsic(
-                                                    state_chain_runtime::RuntimeCall::ArbitrumBroadcaster(
-                                                        pallet_cf_broadcast::Call::transaction_signing_failure {
-                                                            broadcast_attempt_id,
-                                                        },
-                                                    ),
-                                                )
-                                                .await;
-                                            }
-                                        }
-                                    }
-                                }}}}
+                                //     state_chain_runtime::RuntimeEvent::ArbitrumBroadcaster(
+                                //         pallet_cf_broadcast::Event::TransactionBroadcastRequest {
+                                //             broadcast_attempt_id,
+                                //             nominee,
+                                //             transaction_payload,
+                                //             // We're already witnessing this since we witness the KeyManager for SignatureAccepted events.
+                                //             transaction_out_id: _,
+                                //         },
+                                //     ) if nominee == account_id => {
+                                //         match arb_broadcaster.send(transaction_payload).await {
+                                //             Ok(tx_hash) => info!("Arbitrum TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
+                                //             Err(error) => {
+                                //                 // Note: this error can indicate that we failed to estimate gas, or that there is
+                                //                 // a problem with the Arbitrum rpc node, or with the configured account. For example
+                                //                 // if the account balance is too low to pay for required gas.
+                                //                 error!("Error on Arbitrum TransactionBroadcastRequest {broadcast_attempt_id:?}: {error:?}");
+                                //                 state_chain_client.submit_signed_extrinsic(
+                                //                     state_chain_runtime::RuntimeCall::ArbitrumBroadcaster(
+                                //                         pallet_cf_broadcast::Call::transaction_signing_failure {
+                                //                             broadcast_attempt_id,
+                                //                         },
+                                //                     ),
+                                //                 )
+                                //                 .await;
+                                //             }
+                                //         }
+                                //     }
+                                // }}}}
                                 Err(error) => {
                                     error!("Failed to decode events at block {}. {error}", current_block_header.number);
+                                    CfeEvent::EthTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> { broadcast_id, nominee, payload }) => {
+                                        if nominee == account_id {
+                                            let eth_rpc = eth_rpc.clone();
+                                            let state_chain_client = state_chain_client.clone();
+                                            scope.spawn(async move {
+                                                match eth_rpc.broadcast_transaction(payload).await {
+                                                    Ok(tx_hash) => info!("Ethereum TransactionBroadcastRequest {broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
+                                                    Err(error) => {
+                                                        // Note: this error can indicate that we failed to estimate gas, or that there is
+                                                        // a problem with the ethereum rpc node, or with the configured account. For example
+                                                        // if the account balance is too low to pay for required gas.
+                                                        error!("Error on Ethereum TransactionBroadcastRequest {broadcast_id:?}: {error:?}");
+                                                        state_chain_client.finalize_signed_extrinsic(
+                                                            RuntimeCall::EthereumBroadcaster(
+                                                                pallet_cf_broadcast::Call::transaction_failed {
+                                                                    broadcast_id,
+                                                                },
+                                                            ),
+                                                        )
+                                                        .await;
+                                                    }
+                                                }
+                                                Ok(())
+                                            })
+                                        }
+                                    }
+                                    CfeEvent::PeerIdRegistered { .. } |
+                                    CfeEvent::PeerIdDeregistered { .. } => {
+                                        // p2p registration is handled in the p2p module.
+                                        // Matching here to log the event due to the match_event macro.
+                                    }
+                                }}
+                            }
+                        }
+                        Err(error) => {
+                            error!("Failed to decode events at block {}. {error}", current_block.number);
                         }
                     }
 
                     // All nodes must send a heartbeat regardless of their validator status (at least for now).
                     // We send it every `blocks_per_heartbeat` from the block they started up at.
-                    if ((current_block_header.number - last_heartbeat_submitted_at) >= blocks_per_heartbeat
+                    if ((current_block.number - last_heartbeat_submitted_at) >= blocks_per_heartbeat
                         // Submitting earlier than one minute in may falsely indicate liveness.
                         ) && has_submitted_init_heartbeat.load(Ordering::Relaxed)
                     {
-                        info!("Sending heartbeat at block: {}", current_block_header.number);
+                        info!("Sending heartbeat at block: {}", current_block.number);
                         state_chain_client
-                            .submit_signed_extrinsic(
+                            .finalize_signed_extrinsic(
                                 pallet_cf_reputation::Call::heartbeat {},
                             )
                             .await;
 
-                        last_heartbeat_submitted_at = current_block_header.number;
+                        last_heartbeat_submitted_at = current_block.number;
                     }
                 }
                 None => {
@@ -676,4 +553,82 @@ where
         }
         Err(anyhow!("State Chain block stream ended"))
     }.instrument(info_span!("SCObserver")).boxed()).await
+}
+
+pub struct CeremonyIdCounters {
+	pub ethereum: CeremonyId,
+	pub polkadot: CeremonyId,
+	pub bitcoin: CeremonyId,
+}
+
+/// Get the ceremony id counters for each chain at the **start** of the given block without
+/// accessing the previous block
+pub async fn get_ceremony_id_counters_before_block<StateChainClient>(
+	block_hash: state_chain_runtime::Hash,
+	state_chain_client: Arc<StateChainClient>,
+) -> Result<CeremonyIdCounters, anyhow::Error>
+where
+	StateChainClient: SignedExtrinsicApi
+		+ UnsignedExtrinsicApi
+		+ 'static
+		+ Send
+		+ Sync
+		+ super::client::storage_api::StorageApi,
+{
+	let events: Vec<_> = state_chain_client
+		.storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>(block_hash)
+		.await
+		.map_err(|error| anyhow!("Failed to decode events at block hash {block_hash}. {error}"))?;
+
+	// Find the first event for each chain that contains a ceremony id and subtract 1 from it. If
+	// none is found, use the ceremony id counter from storage (ceremony id did not change during
+	// this block).
+	Ok(CeremonyIdCounters {
+		ethereum: if let Some(ceremony_id) = events.iter().find_map(|event| match event {
+			CfeEvent::EthThresholdSignatureRequest(req) => Some(req.ceremony_id),
+			CfeEvent::EthKeygenRequest(req) => Some(req.ceremony_id),
+			_ => None,
+		}) {
+			ceremony_id.saturating_sub(1)
+		} else {
+			state_chain_client
+				.storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
+					state_chain_runtime::Runtime,
+					state_chain_runtime::EthereumInstance,
+				>>(block_hash)
+				.await
+				.context("Failed to get Ethereum CeremonyIdCounter from SC")?
+		},
+		polkadot: if let Some(ceremony_id) = events.iter().find_map(|event| match event {
+			CfeEvent::DotThresholdSignatureRequest(req) => Some(req.ceremony_id),
+			CfeEvent::DotKeygenRequest(req) => Some(req.ceremony_id),
+			_ => None,
+		}) {
+			ceremony_id.saturating_sub(1)
+		} else {
+			state_chain_client
+				.storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
+					state_chain_runtime::Runtime,
+					state_chain_runtime::PolkadotInstance,
+				>>(block_hash)
+				.await
+				.context("Failed to get Polkadot CeremonyIdCounter from SC")?
+		},
+		bitcoin: if let Some(ceremony_id) = events.iter().find_map(|event| match event {
+			CfeEvent::BtcThresholdSignatureRequest(req) => Some(req.ceremony_id),
+			CfeEvent::BtcKeygenRequest(req) => Some(req.ceremony_id),
+			CfeEvent::BtcKeyHandoverRequest(req) => Some(req.ceremony_id),
+			_ => None,
+		}) {
+			ceremony_id.saturating_sub(1)
+		} else {
+			state_chain_client
+				.storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
+					state_chain_runtime::Runtime,
+					state_chain_runtime::BitcoinInstance,
+				>>(block_hash)
+				.await
+				.context("Failed to get Bitcoin CeremonyIdCounter from SC")?
+		},
+	})
 }

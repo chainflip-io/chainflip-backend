@@ -1,9 +1,6 @@
 set -e
 ./commands/observe_block.ts 5
-./commands/setup_vaults.ts
-./commands/setup_swaps.ts
-./tests/all_concurrent_tests.ts
-./tests/gaslimit_ccm.ts
-./tests/rotates_through_btc_swap.ts
-./tests/swap_after_temp_disconnecting_chains.ts
-./tests/multiple_members_governance.ts
+./commands/send_arb.ts 0x41aD2bc63A2059f9b623533d87fe99887D794847 1
+./setup_for_test.sh
+./tests/all_concurrent_tests.ts $1
+./tests/broker_fee_collection_test.ts

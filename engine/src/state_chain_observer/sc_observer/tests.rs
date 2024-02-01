@@ -1,30 +1,34 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{
-	btc::rpc::MockBtcRpcApi,
-	state_chain_observer::client::{extrinsic_api, StreamCache},
+	btc::retry_rpc::mocks::MockBtcRetryRpcClient,
+	dot::retry_rpc::mocks::MockDotHttpRpcClient,
+	eth::retry_rpc::mocks::MockEthRetryRpcClient,
+	state_chain_observer::{
+		client::{
+			extrinsic_api,
+			stream_api::{StateChainStream, FINALIZED},
+		},
+		test_helpers::test_header,
+	},
 };
-use cf_chains::{eth::Transaction, evm::SchnorrVerificationComponents, ChainCrypto};
-use cf_primitives::{AccountRole, GENESIS_EPOCH};
-use frame_system::Phase;
-use futures::{FutureExt, StreamExt};
+use cf_chains::{evm::Transaction, ChainCrypto};
+use cf_primitives::{AccountRole, CeremonyId, GENESIS_EPOCH};
+use futures::FutureExt;
 use mockall::predicate::eq;
 use multisig::{eth::EvmCryptoScheme, ChainSigning, SignatureToThresholdSignature};
-use pallet_cf_broadcast::BroadcastAttemptId;
-use sp_runtime::{AccountId32, Digest};
+use pallet_cf_cfe_interface::{
+	CfeEvent, KeyHandoverRequest, KeygenRequest, ThresholdSignatureRequest, TxBroadcastRequest,
+};
+use sp_runtime::AccountId32;
 
-use crate::eth::rpc::MockEthRpcApi;
 use sp_core::H256;
 use state_chain_runtime::{
-	AccountId, BitcoinInstance, EthereumInstance, Header, PolkadotInstance, Runtime, RuntimeCall,
-	RuntimeEvent,
+	AccountId, BitcoinInstance, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall,
 };
-use utilities::MakeCachedStream;
+use utilities::cached_stream::MakeCachedStream;
 
 use crate::{
-	btc::BtcBroadcaster,
-	dot::{rpc::MockDotRpcApi, DotBroadcaster},
-	eth::broadcaster::EthBroadcaster,
 	settings::Settings,
 	state_chain_observer::{client::mocks::MockStateChainClient, sc_observer},
 };
@@ -35,43 +39,24 @@ use multisig::{
 };
 use utilities::task_scope::task_scope;
 
-use super::crypto_compat::CryptoCompat;
-
-fn test_header(number: u32) -> Header {
-	Header {
-		number,
-		parent_hash: H256::default(),
-		state_root: H256::default(),
-		extrinsics_root: H256::default(),
-		digest: Digest { logs: Vec::new() },
-	}
-}
-
-const MOCK_ETH_TRANSACTION_OUT_ID: SchnorrVerificationComponents =
-	SchnorrVerificationComponents { s: [0; 32], k_times_g_address: [1; 20] };
+use super::{crypto_compat::CryptoCompat, get_ceremony_id_counters_before_block};
 
 async fn start_sc_observer<
-	BlockStream: crate::state_chain_observer::client::StateChainStreamApi,
+	BlockStream: crate::state_chain_observer::client::stream_api::StreamApi<FINALIZED>,
 >(
 	state_chain_client: MockStateChainClient,
 	sc_block_stream: BlockStream,
-	eth_rpc: MockEthRpcApi,
+	eth_rpc: MockEthRetryRpcClient,
 ) {
-	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
-		tokio::sync::mpsc::unbounded_channel();
-
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
-		EthBroadcaster::new_test(eth_rpc),
-		DotBroadcaster::new(MockDotRpcApi::new()),
-		BtcBroadcaster::new(MockBtcRpcApi::new()),
-		EthBroadcaster::new_test(MockEthRpcApi::new()),
+		eth_rpc,
+		MockDotHttpRpcClient::new(),
+		MockBtcRetryRpcClient::new(),
 		MockMultisigClientApi::new(),
 		MockMultisigClientApi::new(),
 		MockMultisigClientApi::new(),
-		MockMultisigClientApi::new(),
-		account_peer_mapping_change_sender,
 	)
 	.await
 	.unwrap_err();
@@ -81,7 +66,6 @@ async fn start_sc_observer<
 // historical epochs we were a part of
 #[tokio::test]
 async fn only_encodes_and_signs_when_specified() {
-	let initial_block_hash = H256::default();
 	let account_id = AccountId::new([0; 32]);
 
 	let mut state_chain_client = MockStateChainClient::new();
@@ -91,64 +75,44 @@ async fn only_encodes_and_signs_when_specified() {
 		|| account_id
 	});
 
-	let block_header = test_header(21);
-	let sc_block_stream = tokio_stream::iter([block_header.clone()])
-		.map(|block_header| (block_header.hash(), block_header))
-		.make_cached(
-			StreamCache { block_hash: initial_block_hash, block_number: 20 },
-			|(block_hash, block_header): &(
-				state_chain_runtime::Hash,
-				state_chain_runtime::Header,
-			)| StreamCache { block_hash: *block_hash, block_number: block_header.number },
-		);
+	let block = test_header(20, None);
+	let sc_block_stream = tokio_stream::iter([]).make_cached(block);
+
+	use state_chain_runtime::Runtime;
 
 	state_chain_client
-		.expect_storage_value::<frame_system::Events<Runtime>>()
-		.with(eq(block_header.hash()))
+		.expect_storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
+		.with(eq(block.hash))
 		.once()
 		.return_once(move |_| {
 			Ok(vec![
-				Box::new(frame_system::EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: RuntimeEvent::EthereumBroadcaster(
-						pallet_cf_broadcast::Event::TransactionBroadcastRequest {
-							broadcast_attempt_id: BroadcastAttemptId::default(),
-							nominee: account_id,
-							transaction_payload: Transaction::default(),
-							transaction_out_id: MOCK_ETH_TRANSACTION_OUT_ID,
-						},
-					),
-					topics: vec![H256::default()],
+				CfeEvent::<Runtime>::EthTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> {
+					broadcast_id: Default::default(),
+					nominee: account_id,
+					payload: Transaction::default(),
 				}),
-				Box::new(frame_system::EventRecord {
-					phase: Phase::ApplyExtrinsic(1),
-					event: RuntimeEvent::EthereumBroadcaster(
-						pallet_cf_broadcast::Event::TransactionBroadcastRequest {
-							broadcast_attempt_id: BroadcastAttemptId::default(),
-							nominee: AccountId32::new([1; 32]), // NOT OUR ACCOUNT ID
-							transaction_payload: Transaction::default(),
-							transaction_out_id: MOCK_ETH_TRANSACTION_OUT_ID,
-						},
-					),
-					topics: vec![H256::default()],
+				CfeEvent::<Runtime>::EthTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> {
+					broadcast_id: Default::default(),
+					nominee: AccountId32::new([1; 32]), // NOT OUR ACCOUNT ID
+					payload: Transaction::default(),
 				}),
 			])
 		});
 
-	let mut eth_rpc_mock = MockEthRpcApi::new();
-	// when we are selected to sign we must estimate gas and sign
-	// NB: We only do this once, since we are only selected to sign once
-	eth_rpc_mock
-		.expect_estimate_gas()
-		.once()
-		.returning(|_| Ok(ethers::types::U256::from(100_000)));
+	let mut eth_rpc_mock_broadcast = MockEthRetryRpcClient::new();
 
-	eth_rpc_mock.expect_send_transaction().once().return_once(|tx| {
-		// return some hash
-		Ok(tx.sighash())
+	// This doesn't always get called since the test can finish without the scope that spawns the
+	// broadcast task finishing.
+	eth_rpc_mock_broadcast.expect_broadcast_transaction().return_once(|_| {
+		// Return some hash
+		Ok(H256::from([1; 32]))
 	});
 
-	start_sc_observer(state_chain_client, sc_block_stream, eth_rpc_mock).await;
+	let mut eth_mock_clone = MockEthRetryRpcClient::new();
+	eth_mock_clone.expect_clone().return_once(|| eth_rpc_mock_broadcast);
+
+	start_sc_observer(state_chain_client, StateChainStream::new(sc_block_stream), eth_mock_clone)
+		.await;
 }
 
 // TODO: Test that when we return None for polkadot vault
@@ -163,10 +127,10 @@ where
 	Runtime: pallet_cf_threshold_signature::Config<I>,
 	RuntimeCall:
 		std::convert::From<pallet_cf_threshold_signature::Call<Runtime, I>>,
-	<<Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain as
+	<<Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChainCrypto as
 ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signature>,
 	Vec<C::Signature>: SignatureToThresholdSignature<
-		<Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain
+		<Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChainCrypto
 
 	>,
 {
@@ -211,13 +175,18 @@ ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signat
 			.boxed()
 		});
 	state_chain_client
-		.expect_submit_signed_extrinsic::<pallet_cf_threshold_signature::Call<Runtime, I>>()
+		.expect_finalize_signed_extrinsic::<pallet_cf_threshold_signature::Call<Runtime, I>>()
 		.with(eq(pallet_cf_threshold_signature::Call::<Runtime, I>::report_signature_failed {
 			ceremony_id: ceremony_id_2,
 			offenders: BTreeSet::default(),
 		}))
 		.once()
-		.return_once(|_| (H256::default(), extrinsic_api::signed::MockUntilFinalized::new()));
+		.return_once(|_| {
+			(
+				extrinsic_api::signed::MockUntilInBlock::new(),
+				extrinsic_api::signed::MockUntilFinalized::new(),
+			)
+		});
 
 	// ceremony_id_3 is a success and should submit an unsigned extrinsic
 	let ceremony_id_3 = ceremony_id_2 + 1;
@@ -239,7 +208,7 @@ ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signat
 			signature: signatures.to_threshold_signature(),
 		}))
 		.once()
-		.return_once(|_: pallet_cf_threshold_signature::Call<Runtime, I>| H256::default());
+		.return_once(|_: pallet_cf_threshold_signature::Call<Runtime, I>| Ok(H256::default()));
 
 	let state_chain_client = Arc::new(state_chain_client);
 	task_scope(|scope| {
@@ -309,10 +278,13 @@ mod dot_signing {
 
 async fn should_handle_keygen_request<C, I>()
 where
-	C: ChainSigning<Chain = <Runtime as pallet_cf_vaults::Config<I>>::Chain> + Send + Sync,
-	I: CryptoCompat<C, C::Chain> + 'static + Send + Sync,
-	Runtime: pallet_cf_vaults::Config<I>,
-	RuntimeCall: std::convert::From<pallet_cf_vaults::Call<Runtime, I>>,
+	C: ChainSigning<
+			ChainCrypto = <Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChainCrypto,
+		> + Send
+		+ Sync,
+	I: CryptoCompat<C, C::ChainCrypto> + 'static + Send + Sync,
+	Runtime: pallet_cf_threshold_signature::Config<I>,
+	RuntimeCall: std::convert::From<pallet_cf_threshold_signature::Call<Runtime, I>>,
 {
 	let first_ceremony_id = 1;
 	let our_account_id = AccountId32::new([0; 32]);
@@ -325,9 +297,14 @@ where
 		.times(2)
 		.return_const(our_account_id.clone());
 	state_chain_client
-		.expect_submit_signed_extrinsic::<pallet_cf_vaults::Call<Runtime, I>>()
+		.expect_finalize_signed_extrinsic::<pallet_cf_threshold_signature::Call<Runtime, I>>()
 		.once()
-		.return_once(|_| (H256::default(), extrinsic_api::signed::MockUntilFinalized::new()));
+		.return_once(|_| {
+			(
+				extrinsic_api::signed::MockUntilInBlock::new(),
+				extrinsic_api::signed::MockUntilFinalized::new(),
+			)
+		});
 	let state_chain_client = Arc::new(state_chain_client);
 
 	let mut multisig_client = MockMultisigClientApi::<C::CryptoScheme>::new();
@@ -403,8 +380,8 @@ mod dot_keygen {
 #[tokio::test]
 async fn should_handle_key_handover_request()
 where
-	Runtime: pallet_cf_vaults::Config<BitcoinInstance>,
-	RuntimeCall: std::convert::From<pallet_cf_vaults::Call<Runtime, BitcoinInstance>>,
+	Runtime: pallet_cf_threshold_signature::Config<BitcoinInstance>,
+	RuntimeCall: std::convert::From<pallet_cf_threshold_signature::Call<Runtime, BitcoinInstance>>,
 {
 	use multisig::bitcoin::BtcCryptoScheme;
 
@@ -447,9 +424,15 @@ where
 				.boxed()
 		});
 	state_chain_client
-		.expect_submit_signed_extrinsic::<pallet_cf_vaults::Call<Runtime, BitcoinInstance>>()
+		.expect_finalize_signed_extrinsic::<pallet_cf_threshold_signature::Call<Runtime, BitcoinInstance>>(
+		)
 		.once()
-		.return_once(|_| (H256::default(), extrinsic_api::signed::MockUntilFinalized::new()));
+		.return_once(|_| {
+			(
+				extrinsic_api::signed::MockUntilInBlock::new(),
+				extrinsic_api::signed::MockUntilFinalized::new(),
+			)
+		});
 
 	let state_chain_client = Arc::new(state_chain_client);
 	task_scope(|scope| {
@@ -492,38 +475,260 @@ where
 }
 
 #[tokio::test]
+async fn should_process_initial_block_first() {
+	let mut state_chain_client = MockStateChainClient::new();
+
+	state_chain_client.expect_account_id().once().return_once({
+		let account_id = AccountId::new([0; 32]);
+		|| account_id
+	});
+
+	let initial_block = test_header(20, None);
+	let next_block = test_header(21, Some(initial_block.hash));
+
+	// Create a stream with only `next_block` in it. The initial block is cached.
+	let sc_block_stream = tokio_stream::iter([next_block]).make_cached(initial_block);
+
+	let mut seq = mockall::Sequence::new();
+
+	// We expect the SCO to process the initial block first, even though it was not in the stream.
+	state_chain_client
+		.expect_storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
+		.with(eq(initial_block.hash))
+		.once()
+		.in_sequence(&mut seq)
+		.return_once(move |_| Ok(vec![]));
+
+	// Then it should process the block that was in the stream
+	state_chain_client
+		.expect_storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
+		.with(eq(next_block.hash))
+		.once()
+		.in_sequence(&mut seq)
+		.return_once(move |_| Ok(vec![]));
+
+	let mut eth_rpc_mock_broadcast = MockEthRetryRpcClient::new();
+
+	// This doesn't always get called since the test can finish without the scope that spawns the
+	// broadcast task finishing.
+	eth_rpc_mock_broadcast.expect_broadcast_transaction().return_once(|_| {
+		// Return some hash
+		Ok(H256::from([1; 32]))
+	});
+
+	let mut eth_mock_clone = MockEthRetryRpcClient::new();
+	eth_mock_clone.expect_clone().return_once(|| eth_rpc_mock_broadcast);
+
+	start_sc_observer(
+		state_chain_client,
+		StateChainStream::<true, _>::new(sc_block_stream),
+		eth_mock_clone,
+	)
+	.await;
+}
+
+#[tokio::test]
+async fn test_get_ceremony_id_counters_with_events() {
+	const ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK: CeremonyId = 10;
+	const DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK: CeremonyId = 20;
+	const BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK: CeremonyId = 30;
+	let block_hash = H256::default();
+
+	let test_block_streams = vec![
+		// Test 1: 1 signing request for each chain and another event that should not effect the id
+		// counters
+		vec![
+			CfeEvent::<Runtime>::EthTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> {
+				broadcast_id: Default::default(),
+				nominee: AccountId32::new([1; 32]),
+				payload: Default::default(),
+			}),
+			CfeEvent::<Runtime>::EthThresholdSignatureRequest(ThresholdSignatureRequest::<
+				Runtime,
+				_,
+			> {
+				ceremony_id: ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				key: Default::default(),
+				signatories: Default::default(),
+				payload: Default::default(),
+			}),
+			CfeEvent::<Runtime>::DotThresholdSignatureRequest(ThresholdSignatureRequest::<
+				Runtime,
+				_,
+			> {
+				ceremony_id: DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				key: Default::default(),
+				signatories: Default::default(),
+				payload: cf_chains::dot::EncodedPolkadotPayload(vec![]),
+			}),
+			CfeEvent::<Runtime>::BtcThresholdSignatureRequest(ThresholdSignatureRequest::<
+				Runtime,
+				_,
+			> {
+				ceremony_id: BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				key: Default::default(),
+				signatories: Default::default(),
+				payload: Default::default(),
+			}),
+		],
+		// Test 2: 1 keygen request for each chain
+		vec![
+			CfeEvent::<Runtime>::EthKeygenRequest(KeygenRequest::<Runtime> {
+				ceremony_id: ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				participants: Default::default(),
+			}),
+			CfeEvent::<Runtime>::DotKeygenRequest(KeygenRequest::<Runtime> {
+				ceremony_id: DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				participants: Default::default(),
+			}),
+			CfeEvent::<Runtime>::BtcKeygenRequest(KeygenRequest::<Runtime> {
+				ceremony_id: BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				participants: Default::default(),
+			}),
+		],
+		// Test 3: 1 key handover request for BTC (and keygen requests for the other chains to
+		// avoid test complexity)
+		vec![
+			CfeEvent::<Runtime>::EthKeygenRequest(KeygenRequest::<Runtime> {
+				ceremony_id: ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				participants: Default::default(),
+			}),
+			CfeEvent::<Runtime>::DotKeygenRequest(KeygenRequest::<Runtime> {
+				ceremony_id: DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				participants: Default::default(),
+			}),
+			CfeEvent::<Runtime>::BtcKeyHandoverRequest(KeyHandoverRequest::<Runtime, _> {
+				ceremony_id: BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				from_epoch: 1,
+				to_epoch: 2,
+				key_to_share: cf_chains::btc::AggKey::default(),
+				sharing_participants: Default::default(),
+				receiving_participants: Default::default(),
+				new_key: cf_chains::btc::AggKey::default(),
+			}),
+		],
+	];
+
+	// Run the function on all 3 test streams and check the ceremony id counters are correct
+	for test_block_stream in test_block_streams {
+		let mut state_chain_client = MockStateChainClient::new();
+
+		state_chain_client
+			.expect_storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
+			.with(eq(block_hash))
+			.once()
+			.return_once(|_| Ok(test_block_stream));
+
+		let ceremony_id_counters =
+			get_ceremony_id_counters_before_block(block_hash, Arc::new(state_chain_client))
+				.await
+				.unwrap();
+
+		assert_eq!(ceremony_id_counters.ethereum, ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK);
+		assert_eq!(ceremony_id_counters.polkadot, DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK);
+		assert_eq!(ceremony_id_counters.bitcoin, BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK);
+	}
+}
+
+#[tokio::test]
+async fn test_get_ceremony_id_counters_without_events() {
+	const ETH_CEREMONY_ID_COUNTER: CeremonyId = 10;
+	const DOT_CEREMONY_ID_COUNTER: CeremonyId = 20;
+	const BTC_CEREMONY_ID_COUNTER: CeremonyId = 30;
+	let block_hash = H256::default();
+	let mut state_chain_client = MockStateChainClient::new();
+
+	// Because the block has no events, we expect it to grab the ceremony id counter for each chain
+	// from storage.
+	state_chain_client
+		.expect_storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::EthereumInstance,
+		>>()
+		.with(eq(block_hash))
+		.once()
+		.return_once(|_| Ok(ETH_CEREMONY_ID_COUNTER));
+	state_chain_client
+		.expect_storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::PolkadotInstance,
+		>>()
+		.with(eq(block_hash))
+		.once()
+		.return_once(|_| Ok(DOT_CEREMONY_ID_COUNTER));
+	state_chain_client
+		.expect_storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::BitcoinInstance,
+		>>()
+		.with(eq(block_hash))
+		.once()
+		.return_once(|_| Ok(BTC_CEREMONY_ID_COUNTER));
+
+	// No events in the stream that would change the ceremony id counters
+	state_chain_client
+		.expect_storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
+		.with(eq(block_hash))
+		.once()
+		.return_once(|_| {
+			Ok(vec![
+				// EthTxBroadcastRequest should not effect the ceremony id counter
+				CfeEvent::<Runtime>::EthTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> {
+					broadcast_id: Default::default(),
+					nominee: AccountId32::new([1; 32]),
+					payload: Default::default(),
+				}),
+			])
+		});
+
+	let ceremony_id_counters =
+		get_ceremony_id_counters_before_block(block_hash, Arc::new(state_chain_client))
+			.await
+			.unwrap();
+
+	// Check the each ceremony id counter is the same as the one in storage
+	assert_eq!(ceremony_id_counters.ethereum, ETH_CEREMONY_ID_COUNTER);
+	assert_eq!(ceremony_id_counters.polkadot, DOT_CEREMONY_ID_COUNTER);
+	assert_eq!(ceremony_id_counters.bitcoin, BTC_CEREMONY_ID_COUNTER);
+}
+
+#[tokio::test]
 #[ignore = "runs forever, useful for testing without having to start the whole CFE"]
 async fn run_the_sc_observer() {
 	task_scope(|scope| {
 		async {
 			let settings = Settings::new_test().unwrap();
 
-			let (sc_block_stream, state_chain_client) =
+			let (sc_block_stream, _, state_chain_client) =
 				crate::state_chain_observer::client::StateChainClient::connect_with_account(
 					scope,
 					&settings.state_chain.ws_endpoint,
 					&settings.state_chain.signing_key_file,
-					AccountRole::None,
+					AccountRole::Unregistered,
+					false,
+					false,
 					false,
 				)
 				.await
 				.unwrap();
 
-			let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-
 			sc_observer::start(
 				state_chain_client,
 				sc_block_stream,
-				EthBroadcaster::new(MockEthRpcApi::new()),
-				DotBroadcaster::new(MockDotRpcApi::new()),
-				BtcBroadcaster::new(MockBtcRpcApi::new()),
-				EthBroadcaster::new(MockEthRpcApi::new()),
+				MockEthRetryRpcClient::new(),
+				MockDotHttpRpcClient::new(),
+				MockBtcRetryRpcClient::new(),
 				MockMultisigClientApi::new(),
 				MockMultisigClientApi::new(),
 				MockMultisigClientApi::new(),
-				MockMultisigClientApi::new(),
-				account_peer_mapping_change_sender,
 			)
 			.await
 			.unwrap_err();

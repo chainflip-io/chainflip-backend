@@ -4,17 +4,25 @@ use std::{
 };
 
 use crate::{
-	common::Signal, state_chain_observer::client, witness::common::STATE_CHAIN_CONNECTION,
+	common::Signal,
+	state_chain_observer::client::{
+		storage_api::StorageApi,
+		stream_api::{StreamApi, FINALIZED},
+		STATE_CHAIN_CONNECTION,
+	},
 };
-use cf_chains::Chain;
+use cf_chains::{Chain, ChainCrypto};
 use cf_primitives::{AccountId, EpochIndex};
 use futures::StreamExt;
 use futures_core::{Future, Stream};
 use futures_util::stream;
 use state_chain_runtime::PalletInstanceAlias;
-use utilities::task_scope::Scope;
+use utilities::{spmc, task_scope::Scope};
 
 use super::{ActiveAndFuture, ExternalChain, RuntimeHasChain};
+
+/// https://linear.app/chainflip/issue/PRO-877/external-chain-sources-can-block-sc-observer
+const CHANNEL_BUFFER: usize = 128;
 
 #[derive(Clone)]
 pub struct Epoch<Info, HistoricInfo> {
@@ -34,11 +42,8 @@ enum EpochUpdate<Info, HistoricInfo> {
 #[derive(Clone)]
 pub struct EpochSource<Info, HistoricInfo> {
 	epochs: BTreeMap<EpochIndex, (Info, Option<HistoricInfo>)>,
-	epoch_update_receiver: async_broadcast::Receiver<(
-		EpochIndex,
-		state_chain_runtime::Hash,
-		EpochUpdate<Info, HistoricInfo>,
-	)>,
+	epoch_update_receiver:
+		spmc::Receiver<(EpochIndex, state_chain_runtime::Hash, EpochUpdate<Info, HistoricInfo>)>,
 }
 
 impl<'a, 'env, StateChainClient, Info, HistoricInfo>
@@ -55,11 +60,8 @@ pub struct EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo> {
 	state_chain_client: Arc<StateChainClient>,
 	initial_block_hash: state_chain_runtime::Hash,
 	epochs: BTreeMap<EpochIndex, (Info, Option<HistoricInfo>)>,
-	epoch_update_receiver: async_broadcast::Receiver<(
-		EpochIndex,
-		state_chain_runtime::Hash,
-		EpochUpdate<Info, HistoricInfo>,
-	)>,
+	epoch_update_receiver:
+		spmc::Receiver<(EpochIndex, state_chain_runtime::Hash, EpochUpdate<Info, HistoricInfo>)>,
 }
 impl<'a, 'env, StateChainClient, Info: Clone, HistoricInfo: Clone> Clone
 	for EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>
@@ -78,16 +80,16 @@ impl EpochSource<(), ()> {
 	pub async fn builder<
 		'a,
 		'env,
-		StateChainStream: client::StateChainStreamApi,
-		StateChainClient: client::storage_api::StorageApi + Send + Sync + 'static,
+		StateChainStream: StreamApi<FINALIZED>,
+		StateChainClient: StorageApi + Send + Sync + 'static,
 	>(
 		scope: &'a Scope<'env, anyhow::Error>,
 		mut state_chain_stream: StateChainStream,
 		state_chain_client: Arc<StateChainClient>,
 	) -> EpochSourceBuilder<'a, 'env, StateChainClient, (), ()> {
-		let (epoch_update_sender, epoch_update_receiver) = async_broadcast::broadcast(1);
+		let (epoch_update_sender, epoch_update_receiver) = spmc::channel(CHANNEL_BUFFER);
 
-		let initial_block_hash = state_chain_stream.cache().block_hash;
+		let initial_block_hash = state_chain_stream.cache().hash;
 
 		let mut current_epoch = state_chain_client
 			.storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>(
@@ -117,29 +119,29 @@ impl EpochSource<(), ()> {
 			let state_chain_client = state_chain_client.clone();
 			async move {
 				utilities::loop_select! {
-					if epoch_update_sender.is_closed() => break Ok(()),
-					if let Some((block_hash, _block_header)) = state_chain_stream.next() => {
+					let _ = epoch_update_sender.closed() => { break Ok(()) },
+					if let Some(block) = state_chain_stream.next() => {
 						let old_current_epoch = std::mem::replace(&mut current_epoch, state_chain_client
 							.storage_value::<pallet_cf_validator::CurrentEpoch<
 								state_chain_runtime::Runtime,
-							>>(block_hash)
+							>>(block.hash)
 							.await
 							.expect(STATE_CHAIN_CONNECTION));
 						if old_current_epoch != current_epoch {
-							let _result = epoch_update_sender.broadcast((old_current_epoch, block_hash, EpochUpdate::Historic(()))).await;
-							let _result = epoch_update_sender.broadcast((current_epoch, block_hash, EpochUpdate::NewCurrent(()))).await;
+							epoch_update_sender.send((old_current_epoch, block.hash, EpochUpdate::Historic(()))).await;
+							epoch_update_sender.send((current_epoch, block.hash, EpochUpdate::NewCurrent(()))).await;
 							historic_epochs.insert(old_current_epoch);
 						}
 
 						let old_historic_epochs = std::mem::replace(&mut historic_epochs, BTreeSet::from_iter(
 							state_chain_client.storage_map::<pallet_cf_validator::EpochExpiries<
 								state_chain_runtime::Runtime,
-							>, Vec<_>>(block_hash).await.expect(STATE_CHAIN_CONNECTION).into_iter().map(|(_, index)| index)
+							>, Vec<_>>(block.hash).await.expect(STATE_CHAIN_CONNECTION).into_iter().map(|(_, index)| index)
 						));
 						assert!(!historic_epochs.contains(&current_epoch));
 						assert!(old_historic_epochs.is_superset(&historic_epochs));
 						for expired_epoch in old_historic_epochs.difference(&historic_epochs) {
-							let _result = epoch_update_sender.broadcast((*expired_epoch, block_hash, EpochUpdate::Expired)).await;
+							epoch_update_sender.send((*expired_epoch, block.hash, EpochUpdate::Expired)).await;
 						}
 					} else break Ok(()),
 				}
@@ -235,7 +237,7 @@ impl<Info: Clone + Send + Sync + 'static, HistoricInfo: Clone + Send + Sync + 's
 impl<
 		'a,
 		'env,
-		StateChainClient: client::storage_api::StorageApi + Send + Sync + 'static,
+		StateChainClient: StorageApi + Send + Sync + 'static,
 		Info: Clone + Send + Sync + 'static,
 		HistoricInfo: Clone + Send + Sync + 'static,
 	> EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>
@@ -306,7 +308,7 @@ impl<
 			epoch_update_receiver: mut unmapped_epoch_update_receiver,
 		} = self;
 
-		let (epoch_update_sender, epoch_update_receiver) = async_broadcast::broadcast(1);
+		let (epoch_update_sender, epoch_update_receiver) = spmc::channel(CHANNEL_BUFFER);
 
 		let epochs: BTreeMap<_, _> = futures::stream::iter(unmapped_epochs)
 			.filter_map(|(epoch, (info, option_historic_info))| {
@@ -349,18 +351,18 @@ impl<
 			let mut epochs = epochs.keys().cloned().collect::<BTreeSet<_>>();
 			async move {
 				utilities::loop_select! {
-					if epoch_update_sender.is_closed() => break Ok(()),
+					let _ = epoch_update_sender.closed() => { break Ok(()) },
 					if let Some((epoch, block_hash, update)) = unmapped_epoch_update_receiver.next() => {
 						match update {
 							EpochUpdate::NewCurrent(info) => {
 								if let Some(mapped_info) = filter_map(state_chain_client.clone(), epoch, block_hash, info).await {
 									epochs.insert(epoch);
-									let _result = epoch_update_sender.broadcast((epoch, block_hash, EpochUpdate::NewCurrent(mapped_info))).await;
+									epoch_update_sender.send((epoch, block_hash, EpochUpdate::NewCurrent(mapped_info))).await;
 								}
 							},
 							EpochUpdate::Historic(historic_info) => {
 								if epochs.contains(&epoch) {
-									let _result = epoch_update_sender.broadcast((
+									epoch_update_sender.send((
 										epoch,
 										block_hash,
 										EpochUpdate::Historic(map_historic_info(state_chain_client.clone(), epoch, block_hash, historic_info).await),
@@ -386,25 +388,19 @@ impl<
 	}
 }
 
-pub type Vault<TChain, ExtraInfo, ExtraHistoricInfo> = Epoch<
-	(pallet_cf_vaults::Vault<TChain>, ExtraInfo),
-	(<TChain as Chain>::ChainBlockNumber, ExtraHistoricInfo),
->;
+pub type VaultInfo<C, Info> =
+	(<<C as Chain>::ChainCrypto as ChainCrypto>::AggKey, <C as Chain>::ChainBlockNumber, Info);
 
-pub type VaultSource<TChain, ExtraInfo, ExtraHistoricInfo> = EpochSource<
-	(pallet_cf_vaults::Vault<TChain>, ExtraInfo),
-	(<TChain as Chain>::ChainBlockNumber, ExtraHistoricInfo),
->;
+pub type Vault<TChain, ExtraInfo, ExtraHistoricInfo> =
+	Epoch<VaultInfo<TChain, ExtraInfo>, VaultInfo<TChain, ExtraHistoricInfo>>;
 
-impl<
-		'a,
-		'env,
-		StateChainClient: client::storage_api::StorageApi + Send + Sync + 'static,
-		Info,
-		HistoricInfo,
-	> EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>
+pub type VaultSource<TChain, ExtraInfo, ExtraHistoricInfo> =
+	EpochSource<VaultInfo<TChain, ExtraInfo>, VaultInfo<TChain, ExtraHistoricInfo>>;
+
+impl<'a, 'env, StateChainClient: StorageApi + Send + Sync + 'static, Info, HistoricInfo>
+	EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>
 {
-	/// Get all the vaults for each each epoch for a particular chain.
+	/// Get all the vaults for each epoch for a particular chain.
 	/// Not all epochs will have all vaults. For example, the first epoch will not have a vault for
 	/// Polkadot or Bitcoin.
 	pub async fn vaults<TChain: ExternalChain>(
@@ -413,8 +409,8 @@ impl<
 		'a,
 		'env,
 		StateChainClient,
-		(pallet_cf_vaults::Vault<TChain>, Info),
-		(<TChain as Chain>::ChainBlockNumber, HistoricInfo),
+		VaultInfo<TChain, Info>,
+		VaultInfo<TChain, HistoricInfo>,
 	>
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<TChain>,
@@ -423,26 +419,47 @@ impl<
 	{
 		self.filter_map(
 			|state_chain_client, epoch, block_hash, info| async move {
-				state_chain_client
-					.storage_map_entry::<pallet_cf_vaults::Vaults<
+				 match state_chain_client
+					.storage_map_entry::<pallet_cf_vaults::VaultStartBlockNumbers<
 						state_chain_runtime::Runtime,
 						<TChain as PalletInstanceAlias>::Instance,
 					>>(block_hash, &epoch)
 					.await
 					.expect(STATE_CHAIN_CONNECTION)
-					.map(|vault| (vault, info))
+				{
+					Some(vault_start_block_number) => {
+						Some((
+						state_chain_client
+						.storage_map_entry::<pallet_cf_threshold_signature::Keys<
+							state_chain_runtime::Runtime,
+							<TChain as PalletInstanceAlias>::Instance,
+						>>(block_hash, &epoch)
+						.await
+						.expect(STATE_CHAIN_CONNECTION)
+						.expect("since the block start number for this epoch exists, the vault key for this epoch should also exist. Both the vault key and the vault start block number are set in the same function (activate_vaults() in vault_rotator.rs)"),
+						vault_start_block_number, info))
+					}
+					None => None,
+				}
 			},
 			|state_chain_client, epoch, block_hash, historic_info| async move {
 				(
 					state_chain_client
-						.storage_map_entry::<pallet_cf_vaults::Vaults<
+						.storage_map_entry::<pallet_cf_threshold_signature::Keys<
 							state_chain_runtime::Runtime,
 							<TChain as PalletInstanceAlias>::Instance,
 						>>(block_hash, &(epoch + 1))
 						.await
 						.expect(STATE_CHAIN_CONNECTION)
-						.expect("We know the epoch ended, so the next vault must exist.")
-						.active_from_block,
+						.expect("We know the epoch ended, so the next vault must exist."),
+					state_chain_client
+						.storage_map_entry::<pallet_cf_vaults::VaultStartBlockNumbers<
+							state_chain_runtime::Runtime,
+							<TChain as PalletInstanceAlias>::Instance,
+						>>(block_hash, &(epoch + 1))
+						.await
+						.expect(STATE_CHAIN_CONNECTION)
+						.expect("We know the epoch ended, so the next vault must exist."),
 					historic_info,
 				)
 			},

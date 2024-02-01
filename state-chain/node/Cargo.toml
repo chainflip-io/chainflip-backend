@@ -8,7 +8,7 @@ license = '<TODO>'
 name = 'chainflip-node'
 publish = false
 repository = 'https://github.com/chainflip-io/chainflip-backend'
-version = '0.9.0'
+version = "1.2.0"
 
 [[bin]]
 name = 'chainflip-node'
@@ -36,51 +36,51 @@ log = "0.4.16"
 clap = { version = "4.2.5", features = ["derive"] }
 futures = { version = "0.3.21", features = ["thread-pool"] }
 
-sc-cli = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sc-executor = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sc-network = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sc-service = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sc-telemetry = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sc-keystore = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sc-transaction-pool = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sc-transaction-pool-api = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sc-offchain = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sc-consensus-aura = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sp-consensus-aura = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sp-consensus = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sc-consensus = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sc-consensus-grandpa = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sc-consensus-grandpa-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sp-consensus-grandpa = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sc-client-api = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sp-timestamp = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sp-inherents = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sp-keyring = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-pallet-transaction-payment = { default-features = false, git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
+sc-cli = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-executor = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-network = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-service = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-telemetry = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-keystore = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-transaction-pool = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-transaction-pool-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-offchain = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-consensus-aura = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sp-consensus-aura = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sp-consensus = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-consensus = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-consensus-grandpa = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-consensus-grandpa-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sp-consensus-grandpa = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-client-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sp-timestamp = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sp-inherents = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sp-keyring = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+pallet-transaction-payment = { default-features = false, git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
 
 # These dependencies are used for the node template's RPCs
 jsonrpsee = { version = "0.16.2", features = ["full"] }
-sp-api = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sc-rpc-api = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sp-blockchain = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sp-block-builder = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sc-basic-authorship = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-substrate-frame-rpc-system = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-pallet-transaction-payment-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
+sp-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-rpc-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sp-blockchain = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sp-block-builder = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-basic-authorship = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+substrate-frame-rpc-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+pallet-transaction-payment-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
 
 # These dependencies are used for runtime benchmarking
-frame-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-frame-benchmarking-cli = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
+frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+frame-benchmarking-cli = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
 
 # CLI-specific dependencies
-try-runtime-cli = { optional = true, git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
+try-runtime-cli = { optional = true, git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
 
 [build-dependencies]
-substrate-build-script-utils = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
+substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
 
 [features]
 default = []
@@ -88,8 +88,20 @@ runtime-benchmarks = [
   "state-chain-runtime/runtime-benchmarks",
   "frame-benchmarking/runtime-benchmarks",
   "frame-benchmarking-cli/runtime-benchmarks",
+  "cf-chains/runtime-benchmarks",
+  "cf-primitives/runtime-benchmarks",
+  "frame-system/runtime-benchmarks",
+  "sc-service/runtime-benchmarks",
+  "sp-runtime/runtime-benchmarks",
 ]
-try-runtime = ["state-chain-runtime/try-runtime", "try-runtime-cli/try-runtime"]
+try-runtime = [
+  "state-chain-runtime/try-runtime",
+  "try-runtime-cli/try-runtime",
+  "frame-system/try-runtime",
+  "pallet-transaction-payment/try-runtime",
+  "sp-runtime/try-runtime",
+
+]
 
 [package.metadata.deb]
 depends = "$auto, systemd"
@@ -100,24 +112,29 @@ maintainer = "Chainflip Labs GmbH <dev@chainflip.io>"
 name = "chainflip-node"
 priority = "required"
 section = "rust"
-systemd-units = { unit-name = "chainflip-node", enable = false }
 
-[package.metadata.deb.variants.development]
-maintainer-scripts = "package/development"
-assets = [["target/release/chainflip-node", "usr/bin/", "755"]]
+systemd-units = [
+  { unit-name = "chainflip-node", enable = false },
+  { unit-name = "chainflip-archive-node", enable = false },
+  { unit-name = "chainflip-rpc-node", enable = false },
+  { unit-name = "chainflip-genesis-node", enable = false },
+]
+
+[package.metadata.deb.variants.test]
+maintainer-scripts = "package/test"
 
 [package.metadata.deb.variants.sisyphos]
 maintainer-scripts = "package/sisyphos"
 assets = [
   [
-    "target/release/chainflip-node",
-    "usr/bin/",
-    "755",
-  ],
-  [
     "chainspecs/sisyphos.chainspec.raw.json",
     "etc/chainflip/sisyphos.chainspec.json",
     "644",
+  ],
+  [
+    "target/release/chainflip-node",
+    "usr/bin/",
+    "755",
   ],
 ]
 
@@ -125,28 +142,28 @@ assets = [
 maintainer-scripts = "package/perseverance"
 assets = [
   [
-    "target/release/chainflip-node",
-    "usr/bin/",
-    "755",
-  ],
-  [
     "chainspecs/perseverance.chainspec.raw.json",
     "etc/chainflip/perseverance.chainspec.json",
     "644",
   ],
-]
-
-[package.metadata.deb.variants.partnernet]
-maintainer-scripts = "package/partnernet"
-assets = [
   [
     "target/release/chainflip-node",
     "usr/bin/",
     "755",
   ],
+]
+
+[package.metadata.deb.variants.berghain]
+maintainer-scripts = "package/berghain"
+assets = [
   [
-    "chainspecs/partnernet.chainspec.raw.json",
-    "etc/chainflip/partnernet.chainspec.json",
+    "chainspecs/berghain.chainspec.raw.json",
+    "etc/chainflip/berghain.chainspec.json",
     "644",
+  ],
+  [
+    "target/release/chainflip-node",
+    "usr/bin/",
+    "755",
   ],
 ]

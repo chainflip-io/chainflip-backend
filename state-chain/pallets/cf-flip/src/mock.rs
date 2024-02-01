@@ -29,30 +29,6 @@ frame_support::construct_runtime!(
 	}
 );
 
-cf_test_utilities::impl_test_helpers! {
-	Test,
-	RuntimeGenesisConfig {
-		system: Default::default(),
-		flip: FlipConfig { total_issuance: 1_000 },
-		transaction_payment: Default::default(),
-	},
-	|| {
-		System::set_block_number(1);
-
-		// Seed with two funded accounts.
-		frame_system::Provider::<Test>::created(&ALICE).unwrap();
-		frame_system::Provider::<Test>::created(&BOB).unwrap();
-		assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
-		assert!(frame_system::Pallet::<Test>::account_exists(&BOB));
-		assert!(!frame_system::Pallet::<Test>::account_exists(&CHARLIE));
-		<Flip as Funding>::credit_funds(&ALICE, 100);
-		<Flip as Funding>::credit_funds(&BOB, 50);
-
-		assert_eq!(Flip::offchain_funds(), 850);
-		check_balance_integrity();
-	}
-}
-
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const SS58Prefix: u8 = 42;
@@ -87,10 +63,6 @@ impl frame_system::Config for Test {
 impl_mock_chainflip!(Test);
 
 parameter_types! {
-	pub const ExistentialDeposit: FlipBalance = 10;
-}
-
-parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
 
@@ -100,7 +72,6 @@ impl_mock_waived_fees!(AccountId, RuntimeCall);
 impl pallet_cf_flip::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = FlipBalance;
-	type ExistentialDeposit = ExistentialDeposit;
 	type BlocksPerDay = BlocksPerDay;
 	type OnAccountFunded = MockOnAccountFunded;
 	type WeightInfo = ();
@@ -159,4 +130,26 @@ pub enum FlipOperation {
 	UpdateBalanceAndBond(AccountId, FlipBalance, FlipBalance),
 	SlashAccount(AccountId, SlashingRateType, Bond, Mint, BlockNumberFor<Test>),
 	AccountToAccount(AccountId, AccountId, FlipBalance, FlipBalance),
+}
+
+cf_test_utilities::impl_test_helpers! {
+	Test,
+	RuntimeGenesisConfig {
+		system: Default::default(),
+		flip: FlipConfig { total_issuance: 1_000, daily_slashing_rate: Permill::from_perthousand(1) },
+		transaction_payment: Default::default(),
+	},
+	|| {
+		// Seed with two funded accounts.
+		frame_system::Provider::<Test>::created(&ALICE).unwrap();
+		frame_system::Provider::<Test>::created(&BOB).unwrap();
+		assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
+		assert!(frame_system::Pallet::<Test>::account_exists(&BOB));
+		assert!(!frame_system::Pallet::<Test>::account_exists(&CHARLIE));
+		<Flip as Funding>::credit_funds(&ALICE, 100);
+		<Flip as Funding>::credit_funds(&BOB, 50);
+
+		assert_eq!(Flip::offchain_funds(), 850);
+		check_balance_integrity();
+	}
 }

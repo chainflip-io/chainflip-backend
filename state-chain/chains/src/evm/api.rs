@@ -1,63 +1,24 @@
-pub mod common;
-pub mod tokenizable;
-
-use crate::{
-	eth::{api::all_batch, Address as EvmAddress, EthereumFetchId},
-	evm::{api::common::EncodableFetchAssetParams, SchnorrVerificationComponents},
-	*,
-};
-use ethabi::{ParamType, Token, Uint};
+use crate::{eth::api::EthereumContract, evm::SchnorrVerificationComponents, *};
+use common::*;
+use ethabi::{Address, ParamType, Token, Uint};
 use frame_support::sp_runtime::traits::{Hash, Keccak256};
 
-pub use tokenizable::Tokenizable;
+use super::tokenizable::Tokenizable;
 
-use self::common::EncodableFetchDeployAssetParams;
-use crate::evm::api::common::EncodableTransferAssetParams;
-
-use super::EthereumChainId;
-
-#[cfg(feature = "std")]
-pub mod abi {
-	#[macro_export]
-	macro_rules! include_abi_bytes {
-		($name:ident) => {
-			&include_bytes!(concat!(
-				env!("CF_ETH_CONTRACT_ABI_ROOT"),
-				"/",
-				env!("CF_ETH_CONTRACT_ABI_TAG"),
-				"/",
-				stringify!($name),
-				".json"
-			))[..]
-		};
-	}
-
-	#[cfg(test)]
-	pub fn load_abi(name: &'static str) -> ethabi::Contract {
-		fn abi_file(name: &'static str) -> std::path::PathBuf {
-			let mut path = std::path::PathBuf::from(env!("CF_ETH_CONTRACT_ABI_ROOT"));
-			path.push(env!("CF_ETH_CONTRACT_ABI_TAG"));
-			path.push(name);
-			path.set_extension("json");
-			path.canonicalize()
-				.unwrap_or_else(|e| panic!("Failed to canonicalize abi file {path:?}: {e}"))
-		}
-
-		fn load_abi_bytes(name: &'static str) -> impl std::io::Read {
-			std::fs::File::open(abi_file(name))
-				.unwrap_or_else(|e| panic!("Failed to open abi file {:?}: {e}", abi_file(name)))
-		}
-
-		ethabi::Contract::load(load_abi_bytes(name)).expect("Failed to load abi from bytes.")
-	}
-}
+pub mod all_batch;
+pub mod common;
+pub mod execute_x_swap_and_call;
+pub mod set_agg_key_with_agg_key;
+pub mod set_comm_key_with_agg_key;
+pub mod set_gov_key_with_agg_key;
+pub mod transfer_fallback;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
 pub struct EvmReplayProtection {
 	pub nonce: u64,
-	pub chain_id: EthereumChainId,
-	pub key_manager_address: EvmAddress,
-	pub contract_address: EvmAddress,
+	pub chain_id: EvmChainId,
+	pub key_manager_address: Address,
+	pub contract_address: Address,
 }
 
 impl Tokenizable for EvmReplayProtection {
@@ -78,10 +39,6 @@ impl Tokenizable for EvmReplayProtection {
 			ParamType::Address,
 		])
 	}
-}
-
-pub trait SCGatewayProvider {
-	fn state_chain_gateway_address() -> EvmAddress;
 }
 
 /// The `SigData` struct used for threshold signatures in the smart contracts.
@@ -111,7 +68,7 @@ pub struct SigData {
 	/// Note this is unrelated to the `nonce` above. The nonce in the context of
 	/// `nonceTimesGeneratorAddress` is a generated as part of each signing round (ie. as part
 	/// of the Schnorr signature) to prevent certain classes of cryptographic attacks.
-	pub k_times_g_address: EvmAddress,
+	pub k_times_g_address: Address,
 }
 
 impl SigData {
@@ -139,7 +96,7 @@ impl Tokenizable for SigData {
 	}
 }
 
-pub trait EthereumCall {
+pub trait EvmCall {
 	const FUNCTION_NAME: &'static str;
 
 	/// The function names and parameters, not including sigData.
@@ -160,7 +117,7 @@ pub trait EthereumCall {
 			state_mutability: ethabi::StateMutability::NonPayable,
 		}
 	}
-	/// Encodes the call and signature into Ethereum Abi format.
+	/// Encodes the call and signature into EVM Abi format.
 	fn abi_encoded(&self, sig_data: &SigData) -> Vec<u8> {
 		Self::get_function()
 			.encode_input(
@@ -183,16 +140,19 @@ pub trait EthereumCall {
 				.collect::<Vec<_>>(),
 		))
 	}
+	fn gas_budget(&self) -> Option<<Ethereum as Chain>::ChainAmount> {
+		None
+	}
 }
 
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
-pub struct EthereumTransactionBuilder<C> {
+pub struct EvmTransactionBuilder<C> {
 	pub sig_data: Option<SigData>,
 	pub replay_protection: EvmReplayProtection,
 	pub call: C,
 }
 
-impl<C: EthereumCall> EthereumTransactionBuilder<C> {
+impl<C: EvmCall> EvmTransactionBuilder<C> {
 	pub fn new_unsigned(replay_protection: EvmReplayProtection, call: C) -> Self {
 		Self { replay_protection, call, sig_data: None }
 	}
@@ -201,8 +161,38 @@ impl<C: EthereumCall> EthereumTransactionBuilder<C> {
 		self.replay_protection
 	}
 
-	pub fn chain_id(&self) -> EthereumChainId {
+	pub fn chain_id(&self) -> EvmChainId {
 		self.replay_protection.chain_id
+	}
+
+	pub fn gas_budget(&self) -> Option<<Ethereum as Chain>::ChainAmount> {
+		self.call.gas_budget()
+	}
+}
+
+pub type EvmChainId = u64;
+
+pub(super) fn ethabi_param(name: &'static str, param_type: ethabi::ParamType) -> ethabi::Param {
+	ethabi::Param { name: name.into(), kind: param_type, internal_type: None }
+}
+
+/// Provides the environment data for ethereum-like chains.
+pub trait EthEnvironmentProvider {
+	fn token_address(asset: assets::eth::Asset) -> Option<eth::Address>;
+	fn contract_address(contract: EthereumContract) -> eth::Address;
+	fn chain_id() -> EvmChainId;
+	fn next_nonce() -> u64;
+
+	fn key_manager_address() -> eth::Address {
+		Self::contract_address(EthereumContract::KeyManager)
+	}
+
+	fn state_chain_gateway_address() -> eth::Address {
+		Self::contract_address(EthereumContract::StateChainGateway)
+	}
+
+	fn vault_address() -> eth::Address {
+		Self::contract_address(EthereumContract::Vault)
 	}
 }
 
@@ -245,8 +235,4 @@ pub fn evm_all_batch_builder<
 				.collect::<Result<Vec<_>, _>>()?,
 		),
 	))
-}
-
-pub(super) fn ethabi_param(name: &'static str, param_type: ethabi::ParamType) -> ethabi::Param {
-	ethabi::Param { name: name.into(), kind: param_type, internal_type: None }
 }

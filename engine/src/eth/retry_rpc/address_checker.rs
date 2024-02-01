@@ -1,8 +1,13 @@
 use ethers::prelude::*;
 
-use crate::eth::rpc::address_checker::{AddressCheckerRpcApi, *};
+use crate::eth::rpc::{
+	address_checker::{AddressCheckerRpcApi, *},
+	EthRpcApi,
+};
 
-use super::EthersRetryRpcClient;
+use super::EthRetryRpcClient;
+
+use crate::eth::retry_rpc::RequestLog;
 
 #[async_trait::async_trait]
 pub trait AddressCheckerRetryRpcApi {
@@ -22,7 +27,7 @@ pub trait AddressCheckerRetryRpcApi {
 }
 
 #[async_trait::async_trait]
-impl AddressCheckerRetryRpcApi for EthersRetryRpcClient {
+impl<Rpc: EthRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApi for EthRetryRpcClient<Rpc> {
 	async fn address_states(
 		&self,
 		block_hash: H256,
@@ -38,7 +43,10 @@ impl AddressCheckerRetryRpcApi for EthersRetryRpcClient {
 						client.address_states(block_hash, contract_address, addresses).await
 					})
 				}),
-				format!("address_states({block_hash:?}, {contract_address:?}"),
+				RequestLog::new(
+					"address_states".to_string(),
+					Some(format!("{block_hash:?}, {contract_address:?}")),
+				),
 			)
 			.await
 	}
@@ -58,7 +66,10 @@ impl AddressCheckerRetryRpcApi for EthersRetryRpcClient {
 						client.balances(block_hash, contract_address, addresses).await
 					})
 				}),
-				format!("balances({block_hash:?}, {contract_address:?}"),
+				RequestLog::new(
+					"balances".to_string(),
+					Some(format!("{block_hash:?}, {contract_address:?}")),
+				),
 			)
 			.await
 	}

@@ -5,13 +5,16 @@ use cf_primitives::{
 };
 
 #[cfg(feature = "runtime-benchmarks")]
+use ethereum_types::{H160, U256};
+
+#[cfg(feature = "runtime-benchmarks")]
 use crate::address::EncodedAddress;
 
 #[cfg(feature = "runtime-benchmarks")]
 use crate::address::ForeignChainAddress;
 
 #[cfg(feature = "runtime-benchmarks")]
-use crate::eth::EthereumFetchId;
+use crate::evm::{EvmFetchId, EvmTransactionMetadata};
 
 /// Ensure type specifies a value to be used for benchmarking purposes.
 pub trait BenchmarkValue {
@@ -20,9 +23,9 @@ pub trait BenchmarkValue {
 	fn benchmark_value() -> Self;
 }
 
-/// Optional trait used to generage different benchmarking values.
+/// Optional trait used to generate different benchmarking values.
 pub trait BenchmarkValueExtended {
-	/// Returns different values used for benchmarkings.
+	/// Returns different values used for benchmarking.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn benchmark_value_by_id(id: u8) -> Self;
 }
@@ -103,14 +106,14 @@ impl BenchmarkValue for EncodedAddress {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for EthereumFetchId {
+impl BenchmarkValue for EvmFetchId {
 	fn benchmark_value() -> Self {
 		Self::DeployAndFetch(1)
 	}
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValueExtended for EthereumFetchId {
+impl BenchmarkValueExtended for EvmFetchId {
 	fn benchmark_value_by_id(id: u8) -> Self {
 		Self::DeployAndFetch(id as u64)
 	}
@@ -122,6 +125,19 @@ impl BenchmarkValueExtended for () {
 		Default::default()
 	}
 }
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for EvmTransactionMetadata {
+	fn benchmark_value() -> Self {
+		Self {
+			contract: H160::zero(),
+			max_fee_per_gas: Some(U256::zero()),
+			max_priority_fee_per_gas: Some(U256::zero()),
+			gas_limit: None,
+		}
+	}
+}
+
 impl_default_benchmark_value!(());
 impl_default_benchmark_value!(u32);
 impl_default_benchmark_value!(u64);

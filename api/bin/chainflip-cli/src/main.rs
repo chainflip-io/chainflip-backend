@@ -1,21 +1,24 @@
 #![feature(absolute_path)]
-use anyhow::{Context, Result};
-use clap::Parser;
-use futures::FutureExt;
-use serde::Serialize;
-use std::{io::Write, path::PathBuf, sync::Arc};
-
 use crate::settings::{
 	BrokerSubcommands, CLICommandLineOptions, CLISettings, CliCommand::*,
 	LiquidityProviderSubcommands,
 };
+use anyhow::{Context, Result};
 use api::{
-	lp::LpApi, primitives::RedemptionAmount, AccountId32, BrokerApi, GovernanceApi, KeyPair,
-	OperatorApi, StateChainApi, SwapDepositAddress,
+	lp::LpApi,
+	primitives::{RedemptionAmount, FLIP_DECIMALS},
+	queries::QueryApi,
+	AccountId32, BrokerApi, GovernanceApi, KeyPair, OperatorApi, StateChainApi, SwapDepositAddress,
 };
 use cf_chains::eth::Address as EthereumAddress;
 use chainflip_api as api;
-use utilities::{clean_hex_address, task_scope::task_scope};
+use chainflip_api::primitives::state_chain_runtime;
+use clap::Parser;
+use custom_rpc::RpcAsset;
+use futures::FutureExt;
+use serde::Serialize;
+use std::{io::Write, path::PathBuf, sync::Arc};
+use utilities::{clean_hex_address, round_f64, task_scope::task_scope};
 
 mod settings;
 
@@ -27,7 +30,7 @@ async fn main() {
 	std::process::exit(match run_cli().await {
 		Ok(_) => 0,
 		Err(err) => {
-			eprintln!("Error: {err:?}");
+			eprintln!("Error: {err:#}");
 			1
 		},
 	})
@@ -57,13 +60,17 @@ async fn run_cli() -> Result<()> {
 			let api = StateChainApi::connect(scope, cli_settings.state_chain).await?;
 			match command_line_opts.cmd {
 				Broker(BrokerSubcommands::RequestSwapDepositAddress(params)) => {
-					let SwapDepositAddress { address, expiry_block, .. } = api
+					let destination_asset =
+						RpcAsset::try_from((params.destination_asset, params.destination_chain))?
+							.try_into()?;
+					let SwapDepositAddress { address, .. } = api
 						.broker_api()
 						.request_swap_deposit_address(
-							params.source_asset,
-							params.destination_asset,
+							RpcAsset::try_from((params.source_asset, params.source_chain))?
+								.try_into()?,
+							destination_asset,
 							chainflip_api::clean_foreign_chain_address(
-								params.destination_asset.into(),
+								destination_asset.into(),
 								&params.destination_address,
 							)?,
 							params.broker_commission,
@@ -71,27 +78,40 @@ async fn run_cli() -> Result<()> {
 						)
 						.await?;
 					println!("Deposit Address: {address}");
-					println!("Address expires at block {expiry_block}");
 				},
 				LiquidityProvider(
-					LiquidityProviderSubcommands::RequestLiquidityDepositAddress { asset },
+					LiquidityProviderSubcommands::RequestLiquidityDepositAddress { asset, chain },
 				) => {
-					let address = api.lp_api().request_liquidity_deposit_address(asset).await?;
+					let asset = RpcAsset::try_from((asset, chain))?;
+					let address = api
+						.lp_api()
+						.request_liquidity_deposit_address(asset.try_into()?, api::WaitFor::InBlock)
+						.await?
+						.unwrap_details();
 					println!("Deposit Address: {address}");
 				},
 				LiquidityProvider(
-					LiquidityProviderSubcommands::RegisterEmergencyWithdrawalAddress {
-						chain,
-						address,
-					},
+					LiquidityProviderSubcommands::RegisterLiquidityRefundAddress { chain, address },
 				) => {
-					let ewa_address = chainflip_api::clean_foreign_chain_address(chain, &address)?;
+					let lra_address = chainflip_api::clean_foreign_chain_address(chain, &address)?;
 					let tx_hash =
-						api.lp_api().register_emergency_withdrawal_address(ewa_address).await?;
-					println!("Emergency Withdrawal Address registered. Tx hash: {tx_hash}");
+						api.lp_api().register_liquidity_refund_address(lra_address).await?;
+					println!("Liquidity Refund address registered. Tx hash: {tx_hash}");
 				},
-				Redeem { amount, eth_address } => {
-					request_redemption(api.operator_api(), amount, &eth_address).await?;
+				Redeem { amount, eth_address, executor_address } => {
+					request_redemption(api, amount, eth_address, executor_address).await?;
+				},
+				BindRedeemAddress { eth_address } => {
+					bind_redeem_address(api.operator_api(), &eth_address).await?;
+				},
+				BindExecutorAddress { eth_address } => {
+					bind_executor_address(api.operator_api(), &eth_address).await?;
+				},
+				GetBoundRedeemAddress {} => {
+					get_bound_redeem_address(api.query_api()).await?;
+				},
+				GetBoundExecutorAddress {} => {
+					get_bound_executor_address(api.query_api()).await?;
 				},
 				RegisterAccountRole { role } => {
 					println!(
@@ -116,10 +136,14 @@ async fn run_cli() -> Result<()> {
 				VanityName { name } => {
 					api.operator_api().set_vanity_name(name).await?;
 				},
+				PreUpdateCheck {} => pre_update_check(api.query_api()).await?,
 				ForceRotation {} => {
 					api.governance_api().force_rotation().await?;
 				},
 				GenerateKeys { .. } => unreachable!("GenerateKeys is handled above"),
+				CountWitnesses { hash } => {
+					count_witnesses(api.query_api(), hash).await?;
+				},
 			};
 			Ok(())
 		}
@@ -128,38 +152,52 @@ async fn run_cli() -> Result<()> {
 	.await
 }
 
-async fn request_redemption(
-	api: Arc<impl OperatorApi + Sync>,
-	amount: Option<f64>,
-	eth_address: &str,
-) -> Result<()> {
-	// Sanitise data
-	let eth_address = EthereumAddress::from_slice(
-		clean_hex_address::<[u8; 20]>(eth_address)
-			.context("Invalid ETH address supplied")?
-			.as_slice(),
-	);
-
-	let amount = match amount {
+/// Turns the amount of FLIP into a RedemptionAmount in Flipperinos.
+fn flip_to_redemption_amount(amount: Option<f64>) -> RedemptionAmount {
+	// Using a set number of decimal places of accuracy to avoid floating point rounding errors
+	const MAX_DECIMAL_PLACES: u32 = 6;
+	match amount {
 		Some(amount_float) => {
-			let atomic_amount = (amount_float * 10_f64.powi(18)) as u128;
-
-			println!(
-				"Submitting redemption with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`.",
-				amount_float,
-				atomic_amount,
-				hex::encode(eth_address)
-			);
-
+			let atomic_amount = ((round_f64(amount_float, MAX_DECIMAL_PLACES) *
+				10_f64.powi(MAX_DECIMAL_PLACES as i32)) as u128) *
+				10_u128.pow(FLIP_DECIMALS - MAX_DECIMAL_PLACES);
 			RedemptionAmount::Exact(atomic_amount)
 		},
-		None => {
-			println!(
-				"Submitting redemption with MAX amount to ETH address `0x{}`.",
-				hex::encode(eth_address)
-			);
+		None => RedemptionAmount::Max,
+	}
+}
 
-			RedemptionAmount::Max
+async fn request_redemption(
+	api: StateChainApi,
+	amount: Option<f64>,
+	supplied_redeem_address: String,
+	supplied_executor_address: Option<String>,
+) -> Result<()> {
+	// Check validity of the redeem address
+	let redeem_address = EthereumAddress::from(
+		clean_hex_address::<[u8; 20]>(&supplied_redeem_address)
+			.context("Invalid redeem address")?,
+	);
+
+	// Check the validity of the executor address
+	let executor_address = if let Some(address) = supplied_executor_address {
+		Some(EthereumAddress::from(
+			clean_hex_address::<[u8; 20]>(&address).context("Invalid executor address")?,
+		))
+	} else {
+		None
+	};
+
+	// Calculate the redemption amount
+	let redeem_amount = flip_to_redemption_amount(amount);
+	match redeem_amount {
+		RedemptionAmount::Exact(atomic_amount) => {
+			println!(
+				"Submitting redemption with amount `{}` FLIP (`{atomic_amount}` Flipperinos) to ETH address `{redeem_address:?}`.", amount.expect("Exact must be some")
+			);
+		},
+		RedemptionAmount::Max => {
+			println!("Submitting redemption with MAX amount to ETH address `{redeem_address:?}`.");
 		},
 	};
 
@@ -167,11 +205,100 @@ async fn request_redemption(
 		return Ok(())
 	}
 
-	let tx_hash = api.request_redemption(amount, eth_address).await?;
+	let tx_hash = api
+		.operator_api()
+		.request_redemption(redeem_amount, redeem_address, executor_address)
+		.await?;
 
 	println!(
-		"Your redemption request has transaction hash: `{tx_hash:#x}`. View your redemption's progress on the funding app."
+		"Your redemption request has State Chain transaction hash: `{tx_hash:#x}`.\n
+		View your redemption's progress on the Auctions app."
 	);
+
+	Ok(())
+}
+
+async fn bind_redeem_address(api: Arc<impl OperatorApi + Sync>, eth_address: &str) -> Result<()> {
+	let eth_address = EthereumAddress::from(
+		clean_hex_address::<[u8; 20]>(eth_address).context("Invalid ETH address supplied")?,
+	);
+
+	println!(
+		"Binding your account to a redemption address is irreversible. You will only ever be able to redeem to this address: {eth_address:?}.",
+	);
+	if !confirm_submit() {
+		return Ok(())
+	}
+
+	let tx_hash = api.bind_redeem_address(eth_address).await?;
+
+	println!("Account bound to redeem address {eth_address}, transaction hash: `{tx_hash:#x}`.");
+
+	Ok(())
+}
+
+async fn bind_executor_address(api: Arc<impl OperatorApi + Sync>, eth_address: &str) -> Result<()> {
+	let eth_address = EthereumAddress::from(
+		clean_hex_address::<[u8; 20]>(eth_address).context("Invalid ETH address supplied")?,
+	);
+
+	println!(
+		"Binding your account to an executor address is irreversible. You will only ever be able to execute registered redemptions with this address: {eth_address:?}.",
+	);
+	if !confirm_submit() {
+		return Ok(())
+	}
+
+	let tx_hash = api.bind_executor_address(eth_address).await?;
+
+	println!("Account bound to executor address {eth_address}, transaction hash: `{tx_hash:#x}`.");
+
+	Ok(())
+}
+
+async fn get_bound_redeem_address(api: QueryApi) -> Result<()> {
+	if let Some(bound_address) = api.get_bound_redeem_address(None, None).await? {
+		println!("Your account is bound to redeem address: {bound_address:?}");
+	} else {
+		println!("Your account is not bound to any redeem address.");
+	}
+
+	Ok(())
+}
+
+async fn get_bound_executor_address(api: QueryApi) -> Result<()> {
+	if let Some(bound_address) = api.get_bound_executor_address(None, None).await? {
+		println!("Your account is bound to executor address: {bound_address:?}");
+	} else {
+		println!("Your account is not bound to any executor address.");
+	}
+
+	Ok(())
+}
+
+async fn pre_update_check(api: QueryApi) -> Result<()> {
+	let can_update = api.pre_update_check(None, None).await?;
+
+	println!("Your node is an authority: {}", can_update.is_authority);
+	println!("A rotation is occurring: {}", can_update.rotation);
+	if let Some(blocks) = can_update.next_block_in {
+		println!("Your validator will produce a block in {} blocks", blocks);
+	}
+
+	Ok(())
+}
+
+async fn count_witnesses(api: QueryApi, hash: state_chain_runtime::Hash) -> Result<()> {
+	let result = api.check_witnesses(None, hash).await?;
+	match result {
+		Some(value) => {
+			println!("Number of authorities who failed to witness it: {}", value.failing_count);
+			println!("List of witness votes:\n {:?}", value.validators);
+		},
+		None => {
+			println!("The hash you provided lead to no results")
+		},
+	}
 
 	Ok(())
 }
@@ -215,6 +342,7 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 	#[derive(Serialize)]
 	struct Keys {
 		node_key: KeyPair,
+		peer_id: String,
 		seed_phrase: String,
 		ethereum_key: KeyPair,
 		#[serde(with = "hex")]
@@ -225,21 +353,22 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 
 	impl std::fmt::Display for Keys {
 		fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-			writeln!(f, "🔑 Node public key: 0x{}", hex::encode(&self.node_key.public_key))?;
+			writeln!(f, "🔑 Node Public Key: 0x{}", hex::encode(&self.node_key.public_key))?;
+			writeln!(f, "👤 Node Peer ID: {}", self.peer_id)?;
 			writeln!(
 				f,
-				"🔑 Ethereum public key: 0x{}",
+				"🔑 Ethereum Public Key: 0x{}",
 				hex::encode(&self.ethereum_key.public_key)
 			)?;
-			writeln!(f, "👤 Ethereum address: 0x{}", self.ethereum_address)?;
+			writeln!(f, "👤 Ethereum Address: {:?}", self.ethereum_address)?;
 			writeln!(
 				f,
-				"🔑 Validator public key: 0x{}",
+				"🔑 Validator Public Key: 0x{}",
 				hex::encode(&self.signing_key.public_key)
 			)?;
-			writeln!(f, "👤 Validator account id: {}", self.signing_account_id)?;
+			writeln!(f, "👤 Validator Account ID: {}", self.signing_account_id)?;
 			writeln!(f)?;
-			writeln!(f, "🌱 Seed phrase: {}", self.seed_phrase)?;
+			writeln!(f, "🌱 Seed Phrase: {}", self.seed_phrase)?;
 			Ok(())
 		}
 	}
@@ -253,8 +382,12 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 				api::generate_ethereum_key(Some(&seed_phrase))
 					.context("Error while generating Ethereum key.")?;
 			assert_eq!(seed_phrase, seed_phrase_eth);
+			let (node_key, peer_id) =
+				api::generate_node_key().context("Error while generating node key.")?;
+
 			Ok(Keys {
-				node_key: api::generate_node_key(),
+				node_key,
+				peer_id: peer_id.to_string(),
 				seed_phrase,
 				ethereum_key,
 				ethereum_address,
@@ -269,11 +402,11 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 	if json {
 		println!("{}", serde_json::to_string_pretty(&keys)?);
 	} else {
-		println!();
-		println!("Generated fresh Validator keys for your Chainflip Node!");
-		println!();
-		println!("{}", keys);
-		println!("{}", DISCLAIMER);
+		eprintln!();
+		eprintln!("Generated fresh Validator keys for your Chainflip Node!");
+		eprintln!();
+		eprintln!("{}", keys);
+		eprintln!("{}", DISCLAIMER);
 	}
 
 	if let Some(path) = path {
@@ -300,13 +433,46 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 			.context("Error while writing to file.")?;
 		}
 
-		println!();
-		println!("💾 Saved all secret keys to '{}'.", path.display());
-	} else if !json {
-		println!();
-		println!("💡 You can save the private key files to a directory using the --path argument:");
-		println!("💡 `chainflip-cli --seed $MY_SEED_PHRASE --file $PATH_TO_KEYS_DIR`");
+		eprintln!();
+		eprintln!(" 💾 Saved all secret keys to '{}'.", path.display());
+	} else {
+		eprintln!();
+		eprintln!(
+			"💡 You can save the private key files to a directory using the --path argument:"
+		);
+		eprintln!("💡 `chainflip-cli --seed-phrase $MY_SEED_PHRASE --path $PATH_TO_KEYS_DIR`");
 	}
 
 	Ok(())
+}
+
+#[test]
+fn test_flip_to_redemption_amount() {
+	assert_eq!(flip_to_redemption_amount(None), RedemptionAmount::Max);
+	assert_eq!(flip_to_redemption_amount(Some(0.0)), RedemptionAmount::Exact(0));
+	assert_eq!(flip_to_redemption_amount(Some(-1000.0)), RedemptionAmount::Exact(0));
+	assert_eq!(
+		flip_to_redemption_amount(Some(199995.0)),
+		RedemptionAmount::Exact(199995000000000000000000)
+	);
+
+	assert_eq!(
+		flip_to_redemption_amount(Some(123456789.000001)),
+		RedemptionAmount::Exact(123456789000001000000000000)
+	);
+
+	assert_eq!(
+		flip_to_redemption_amount(Some(69420.123456)),
+		RedemptionAmount::Exact(69420123456000000000000)
+	);
+
+	// Specifying more than the allowed precision rounds the result to the allowed precision
+	assert_eq!(
+		flip_to_redemption_amount(Some(6942000.123456789)),
+		RedemptionAmount::Exact(6942000123457000000000000)
+	);
+	assert_eq!(
+		flip_to_redemption_amount(Some(4206900.1234564321)),
+		RedemptionAmount::Exact(4206900123456000000000000)
+	);
 }

@@ -6,8 +6,6 @@
 // https://www.notion.so/chainflip/Polkadot-Vault-Initialisation-Steps-36d6ab1a24ed4343b91f58deed547559
 // For example: ./commands/setup_vaults.ts
 
-import { Keyring } from '@polkadot/keyring';
-import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { AddressOrPair } from '@polkadot/api/types';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import {
@@ -18,13 +16,11 @@ import {
   sleep,
   handleSubstrateError,
 } from '../shared/utils';
+import { aliceKeyringPair } from '../shared/polkadot_keyring';
 
 async function main(): Promise<void> {
   const btcClient = getBtcClient();
-  await cryptoWaitReady();
-  const keyring = new Keyring({ type: 'sr25519' });
-  const aliceUri = process.env.POLKADOT_ALICE_URI || '//Alice';
-  const alice = keyring.createFromUri(aliceUri);
+  const alice = await aliceKeyringPair();
 
   const chainflip = await getChainflipApi();
   const polkadot = await getPolkadotApi();
@@ -38,20 +34,19 @@ async function main(): Promise<void> {
   // Step 2
   console.log('Waiting for new keys');
 
-  const btcActivationRequest = observeEvent(
+  const dotActivationRequest = observeEvent(
     'polkadotVault:AwaitingGovernanceActivation',
     chainflip,
   );
-  const dotActivationRequest = observeEvent('bitcoinVault:AwaitingGovernanceActivation', chainflip);
-  const dotKey = (await btcActivationRequest).data.newPublicKey;
-  const btcKey = (await dotActivationRequest).data.newPublicKey;
+  const btcActivationRequest = observeEvent('bitcoinVault:AwaitingGovernanceActivation', chainflip);
+  const dotKey = (await dotActivationRequest).data.newPublicKey;
+  const btcKey = (await btcActivationRequest).data.newPublicKey;
 
   // Step 3
   console.log('Requesting Polkadot Vault creation');
   const createPolkadotVault = async () => {
     let vaultAddress: AddressOrPair | undefined;
     let vaultExtrinsicIndex: number | undefined;
-    let vaultBlockHash: Uint8Array | undefined;
     const unsubscribe = await polkadot.tx.proxy
       .createPure(polkadot.createType('ProxyType', 'Any'), 0, 0)
       .signAndSend(alice, { nonce: -1 }, (result) => {
@@ -64,17 +59,17 @@ async function main(): Promise<void> {
           const pureCreated = result.findRecord('proxy', 'PureCreated')!;
           vaultAddress = pureCreated.event.data[0] as AddressOrPair;
           vaultExtrinsicIndex = result.txIndex!;
-          vaultBlockHash = result.dispatchInfo!.createdAtHash!;
           unsubscribe();
         }
       });
-    const vaultBlockNumber = (await polkadot.rpc.chain.getHeader(vaultBlockHash)).number.toNumber();
     while (vaultAddress === undefined) {
       await sleep(3000);
     }
-    return { vaultAddress, vaultExtrinsicIndex, vaultBlockNumber };
+    return { vaultAddress, vaultExtrinsicIndex };
   };
-  const { vaultAddress, vaultExtrinsicIndex, vaultBlockNumber } = await createPolkadotVault();
+  const { vaultAddress, vaultExtrinsicIndex } = await createPolkadotVault();
+
+  const proxyAdded = observeEvent('proxy:ProxyAdded', polkadot);
 
   // Step 4
   console.log('Rotating Proxy and Funding Accounts.');
@@ -109,10 +104,6 @@ async function main(): Promise<void> {
           handleSubstrateError(result);
         }
         if (result.isInBlock) {
-          console.log(
-            `Proxy rotated and accounts funded at block `,
-            result.toHuman().status.InBlock,
-          );
           unsubscribe();
           done = true;
         }
@@ -122,6 +113,7 @@ async function main(): Promise<void> {
     }
   };
   await rotateAndFund();
+  const vaultBlockNumber = await (await proxyAdded).block;
 
   // Step 5
   console.log('Registering Vaults with state chain');

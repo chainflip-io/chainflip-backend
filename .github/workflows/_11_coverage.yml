@@ -1,0 +1,63 @@
+on:
+  workflow_call:
+    inputs:
+      test_features:
+        description: Features to enable in tests
+        type: string
+        default: 'runtime-benchmarks,slow-tests'
+
+env:
+  FORCE_COLOR: 1
+  RUSTC_WRAPPER: sccache
+  SCCACHE_CACHE_SIZE: 32G
+  SCCACHE_VERSION: v0.4.1
+  SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
+
+jobs:
+  unit-tests:
+    runs-on: [hetzner]
+    container:
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-07-31-ubuntu-20.04"
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Setup sccache
+        run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
+
+      - name: cargo cf-test-ci --locked
+        run: |
+          cargo cf-test-ci --locked
+          sccache --show-stats
+
+  coverage:
+    runs-on: [hetzner]
+    container:
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-07-31-ubuntu-20.04"
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Setup sccache
+        run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@c2648687d6fe1a5a70a4b65c84715cafab1f3451
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Generate code coverage
+        run: cargo llvm-cov --lib --features ${{ inputs.test_features}} --workspace --codecov --output-path lcov.info
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@eaaf4bedf32dbdc6b720b63067d99c4d77d6047d
+        with:
+          token: ${{ secrets.CF_BACKEND_CODECOV_TOKEN }} # not required for public repos
+          files: lcov.info
+          fail_ci_if_error: false

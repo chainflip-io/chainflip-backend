@@ -1,6 +1,6 @@
 use crate::{self as pallet_cf_swapping, PalletSafeMode, WeightInfo};
 use cf_chains::AnyChain;
-use cf_primitives::{Asset, AssetAmount, SwapLeg, STABLE_ASSET};
+use cf_primitives::{Asset, AssetAmount};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
@@ -9,7 +9,7 @@ use cf_traits::{
 	},
 	AccountRoleRegistry, SwappingApi,
 };
-use frame_support::{dispatch::DispatchError, parameter_types, weights::Weight};
+use frame_support::{pallet_prelude::DispatchError, parameter_types, weights::Weight};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -74,15 +74,11 @@ impl SwappingApi for MockSwappingApi {
 	}
 
 	fn swap_single_leg(
-		leg: SwapLeg,
-		unstable_asset: Asset,
+		from: Asset,
+		to: Asset,
 		input_amount: AssetAmount,
 	) -> Result<AssetAmount, DispatchError> {
 		let mut swaps = Swaps::get();
-		let (from, to) = match leg {
-			SwapLeg::FromStable => (STABLE_ASSET, unstable_asset),
-			SwapLeg::ToStable => (unstable_asset, STABLE_ASSET),
-		};
 		swaps.push((from, to, input_amount));
 		Swaps::set(swaps);
 		Ok((input_amount as f64 * SwapRate::get()) as AssetAmount)
@@ -112,15 +108,7 @@ impl WeightInfo for MockWeightInfo {
 		Weight::from_parts(100, 0)
 	}
 
-	fn on_initialize(_a: u32) -> Weight {
-		Weight::from_parts(100, 0)
-	}
-
-	fn set_swap_ttl() -> Weight {
-		Weight::from_parts(100, 0)
-	}
-
-	fn set_minimum_swap_amount() -> Weight {
+	fn set_maximum_swap_amount() -> Weight {
 		Weight::from_parts(100, 0)
 	}
 }
@@ -141,7 +129,6 @@ cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
 		system: Default::default(),
-		swapping: SwappingConfig { swap_ttl: 5, minimum_swap_amounts: vec![] },
 	},
 	|| {
 		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(&ALICE).unwrap();

@@ -1,6 +1,6 @@
 use crate as pallet_cf_funding;
 use crate::PalletSafeMode;
-use cf_chains::{ApiCall, Chain, ChainCrypto, Ethereum};
+use cf_chains::{evm::EvmCrypto, ApiCall, Chain, ChainCrypto, Ethereum};
 use cf_primitives::{AccountRole, BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
@@ -13,13 +13,12 @@ use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
-	AccountId32,
+	AccountId32, Permill,
 };
 use std::time::Duration;
 
 // Use a realistic account id for compatibility with `RegisterRedemption`.
 type AccountId = AccountId32;
-type Balance = u128;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // Configure a mock runtime to test the pallet.
@@ -30,25 +29,6 @@ frame_support::construct_runtime!(
 		Funding: pallet_cf_funding,
 	}
 );
-
-cf_test_utilities::impl_test_helpers! {
-	Test,
-	RuntimeGenesisConfig {
-		system: Default::default(),
-		flip: FlipConfig { total_issuance: 1_000_000 },
-		funding: FundingConfig {
-			genesis_accounts: vec![(CHARLIE, AccountRole::Validator, MIN_FUNDING)],
-			redemption_tax: REDEMPTION_TAX,
-			minimum_funding: MIN_FUNDING,
-			redemption_ttl: Duration::from_secs(REDEMPTION_TTL_SECS),
-		},
-	},
-	|| {
-		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&CHARLIE)
-			.unwrap();
-		System::set_block_number(1);
-	}
-}
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -88,10 +68,6 @@ parameter_types! {
 }
 
 parameter_types! {
-	pub const ExistentialDeposit: Balance = 10;
-}
-
-parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
 
@@ -101,7 +77,6 @@ impl_mock_waived_fees!(AccountId, RuntimeCall);
 impl pallet_cf_flip::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = u128;
-	type ExistentialDeposit = ExistentialDeposit;
 	type BlocksPerDay = BlocksPerDay;
 	type OnAccountFunded = MockOnAccountFunded;
 	type WeightInfo = ();
@@ -122,8 +97,14 @@ pub struct MockRegisterRedemption {
 	amount: <Ethereum as Chain>::ChainAmount,
 }
 
-impl cf_chains::RegisterRedemption<Ethereum> for MockRegisterRedemption {
-	fn new_unsigned(_node_id: &[u8; 32], amount: u128, _address: &[u8; 20], _expiry: u64) -> Self {
+impl cf_chains::RegisterRedemption for MockRegisterRedemption {
+	fn new_unsigned(
+		_node_id: &[u8; 32],
+		amount: u128,
+		_address: &[u8; 20],
+		_expiry: u64,
+		_executor: Option<cf_chains::eth::Address>,
+	) -> Self {
 		Self { amount }
 	}
 
@@ -132,12 +113,17 @@ impl cf_chains::RegisterRedemption<Ethereum> for MockRegisterRedemption {
 	}
 }
 
-impl ApiCall<Ethereum> for MockRegisterRedemption {
-	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
+impl ApiCall<EvmCrypto> for MockRegisterRedemption {
+	fn threshold_signature_payload(
+		&self,
+	) -> <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::Payload {
 		unimplemented!()
 	}
 
-	fn signed(self, _threshold_signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
+	fn signed(
+		self,
+		_threshold_signature: &<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
+	) -> Self {
 		unimplemented!()
 	}
 
@@ -149,7 +135,9 @@ impl ApiCall<Ethereum> for MockRegisterRedemption {
 		unimplemented!()
 	}
 
-	fn transaction_out_id(&self) -> <Ethereum as ChainCrypto>::TransactionOutId {
+	fn transaction_out_id(
+		&self,
+	) -> <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId {
 		todo!()
 	}
 }
@@ -166,19 +154,35 @@ impl Broadcaster<Ethereum> for MockBroadcaster {
 	type ApiCall = MockRegisterRedemption;
 	type Callback = MockCallback;
 
-	fn threshold_sign_and_broadcast(
-		api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId {
 		REDEMPTION_BROADCAST_REQUESTS.with(|cell| {
 			cell.borrow_mut().push(api_call.amount);
 		});
-		(0, 1)
+		0
 	}
 
 	fn threshold_sign_and_broadcast_with_callback(
 		_api_call: Self::ApiCall,
-		_callback: Self::Callback,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
+		_success_callback: Option<Self::Callback>,
+		_failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
+	) -> BroadcastId {
+		unimplemented!()
+	}
+
+	fn threshold_sign_and_broadcast_rotation_tx(_api_call: Self::ApiCall) -> BroadcastId {
+		unimplemented!()
+	}
+
+	fn threshold_resign(_broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId> {
+		unimplemented!()
+	}
+
+	fn threshold_sign(_api_call: Self::ApiCall) -> (BroadcastId, ThresholdSignatureRequestId) {
+		unimplemented!()
+	}
+
+	/// Clean up storage data related to a broadcast ID.
+	fn clean_up_broadcast_storage(_broadcast_id: BroadcastId) {
 		unimplemented!()
 	}
 }
@@ -206,3 +210,21 @@ pub const CHARLIE: AccountId = AccountId32::new([0xc1; 32]);
 
 pub const MIN_FUNDING: u128 = 10;
 pub const REDEMPTION_TAX: u128 = MIN_FUNDING / 2;
+
+cf_test_utilities::impl_test_helpers! {
+	Test,
+	RuntimeGenesisConfig {
+		system: Default::default(),
+		flip: FlipConfig { total_issuance: 1_000_000, daily_slashing_rate: Permill::from_perthousand(1)},
+		funding: FundingConfig {
+			genesis_accounts: vec![(CHARLIE, AccountRole::Validator, MIN_FUNDING)],
+			redemption_tax: REDEMPTION_TAX,
+			minimum_funding: MIN_FUNDING,
+			redemption_ttl: Duration::from_secs(REDEMPTION_TTL_SECS),
+		},
+	},
+	|| {
+		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&CHARLIE)
+			.unwrap();
+	}
+}

@@ -1,8 +1,8 @@
 pub mod batch_transfer;
 
 use super::{
-	deposit_address::DepositAddress, AggKey, Bitcoin, BitcoinOutput, BtcAmount, Utxo,
-	CHANGE_ADDRESS_SALT,
+	deposit_address::DepositAddress, AggKey, Bitcoin, BitcoinCrypto, BitcoinOutput, BtcAmount,
+	Utxo, BITCOIN_DUST_LIMIT, CHANGE_ADDRESS_SALT,
 };
 use crate::*;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
@@ -22,7 +22,37 @@ pub type SelectedUtxosAndChangeAmount = (Vec<Utxo>, BtcAmount);
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum UtxoSelectionType {
 	SelectAllForRotation,
+	SelectForConsolidation,
 	Some { output_amount: BtcAmount, number_of_outputs: u64 },
+}
+
+impl<E> ConsolidateCall<Bitcoin> for BitcoinApi<E>
+where
+	E: ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount>
+		+ ChainEnvironment<(), AggKey>,
+{
+	fn consolidate_utxos() -> Result<Self, ConsolidationError> {
+		let agg_key @ AggKey { current, .. } =
+			<E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(ConsolidationError::Other)?;
+		let bitcoin_change_script =
+			DepositAddress::new(current, CHANGE_ADDRESS_SALT).script_pubkey();
+
+		let (selected_input_utxos, change_amount) =
+			E::lookup(UtxoSelectionType::SelectForConsolidation)
+				.ok_or(ConsolidationError::NotRequired)?;
+
+		log::info!("Consolidating {} btc utxos", selected_input_utxos.len());
+
+		let btc_outputs =
+			vec![BitcoinOutput { amount: change_amount, script_pubkey: bitcoin_change_script }];
+
+		Ok(Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
+			&agg_key,
+			agg_key.current,
+			selected_input_utxos,
+			btc_outputs,
+		)))
+	}
 }
 
 impl<E> AllBatch<Bitcoin> for BitcoinApi<E>
@@ -41,11 +71,13 @@ where
 		let mut total_output_amount: u64 = 0;
 		let mut btc_outputs = vec![];
 		for transfer_param in transfer_params {
-			btc_outputs.push(BitcoinOutput {
-				amount: transfer_param.amount,
-				script_pubkey: transfer_param.to,
-			});
-			total_output_amount += transfer_param.amount;
+			if transfer_param.amount >= BITCOIN_DUST_LIMIT {
+				btc_outputs.push(BitcoinOutput {
+					amount: transfer_param.amount,
+					script_pubkey: transfer_param.to,
+				});
+				total_output_amount += transfer_param.amount;
+			}
 		}
 		// Looks up all available Utxos and selects and takes them for the transaction depending on
 		// the amount that needs to be output. If the output amount is 0,
@@ -56,9 +88,12 @@ where
 			number_of_outputs: (btc_outputs.len() + 1) as u64, // +1 for the change output
 		})
 		.ok_or(AllBatchError::Other)?;
-
-		btc_outputs
-			.push(BitcoinOutput { amount: change_amount, script_pubkey: bitcoin_change_script });
+		if change_amount >= BITCOIN_DUST_LIMIT {
+			btc_outputs.push(BitcoinOutput {
+				amount: change_amount,
+				script_pubkey: bitcoin_change_script,
+			});
+		}
 
 		Ok(Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
 			&agg_key,
@@ -69,13 +104,13 @@ where
 	}
 }
 
-impl<E> SetAggKeyWithAggKey<Bitcoin> for BitcoinApi<E>
+impl<E> SetAggKeyWithAggKey<BitcoinCrypto> for BitcoinApi<E>
 where
 	E: ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount>,
 {
 	fn new_unsigned(
-		maybe_old_key: Option<<Bitcoin as ChainCrypto>::AggKey>,
-		new_key: <Bitcoin as ChainCrypto>::AggKey,
+		maybe_old_key: Option<<BitcoinCrypto as ChainCrypto>::AggKey>,
+		new_key: <BitcoinCrypto as ChainCrypto>::AggKey,
 	) -> Result<Self, SetAggKeyWithAggKeyError> {
 		// We will use the bitcoin address derived with the salt of 0 as the vault address where we
 		// collect unspent amounts in btc transactions and consolidate funds when rotating epoch.
@@ -105,18 +140,25 @@ impl<E> From<batch_transfer::BatchTransfer> for BitcoinApi<E> {
 // TODO: Implement transfer / transfer and call for Bitcoin.
 impl<E: ReplayProtectionProvider<Bitcoin>> ExecutexSwapAndCall<Bitcoin> for BitcoinApi<E> {
 	fn new_unsigned(
-		_egress_id: EgressId,
 		_transfer_param: TransferAssetParams<Bitcoin>,
 		_source_chain: ForeignChain,
 		_source_address: Option<ForeignChainAddress>,
+		_gas_budget: <Bitcoin as Chain>::ChainAmount,
 		_message: Vec<u8>,
 	) -> Result<Self, DispatchError> {
 		Err(DispatchError::Other("Bitcoin's ExecutexSwapAndCall is not supported."))
 	}
 }
 
-impl<E> ApiCall<Bitcoin> for BitcoinApi<E> {
-	fn threshold_signature_payload(&self) -> <Bitcoin as ChainCrypto>::Payload {
+// transfer_fallback is unsupported for Bitcoin.
+impl<E: ReplayProtectionProvider<Bitcoin>> TransferFallback<Bitcoin> for BitcoinApi<E> {
+	fn new_unsigned(_transfer_param: TransferAssetParams<Bitcoin>) -> Result<Self, DispatchError> {
+		Err(DispatchError::Other("Bitcoin's TransferFallback is not supported."))
+	}
+}
+
+impl<E> ApiCall<BitcoinCrypto> for BitcoinApi<E> {
+	fn threshold_signature_payload(&self) -> <BitcoinCrypto as ChainCrypto>::Payload {
 		match self {
 			BitcoinApi::BatchTransfer(tx) => tx.threshold_signature_payload(),
 
@@ -124,7 +166,10 @@ impl<E> ApiCall<Bitcoin> for BitcoinApi<E> {
 		}
 	}
 
-	fn signed(self, threshold_signature: &<Bitcoin as ChainCrypto>::ThresholdSignature) -> Self {
+	fn signed(
+		self,
+		threshold_signature: &<BitcoinCrypto as ChainCrypto>::ThresholdSignature,
+	) -> Self {
 		match self {
 			BitcoinApi::BatchTransfer(call) => call.signed(threshold_signature).into(),
 
@@ -148,7 +193,7 @@ impl<E> ApiCall<Bitcoin> for BitcoinApi<E> {
 		}
 	}
 
-	fn transaction_out_id(&self) -> <Bitcoin as ChainCrypto>::TransactionOutId {
+	fn transaction_out_id(&self) -> <BitcoinCrypto as ChainCrypto>::TransactionOutId {
 		match self {
 			BitcoinApi::BatchTransfer(call) => call.transaction_out_id(),
 			BitcoinApi::_Phantom(..) => unreachable!(),

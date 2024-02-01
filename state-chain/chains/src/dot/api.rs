@@ -1,7 +1,9 @@
 pub mod batch_fetch_and_transfer;
 pub mod rotate_vault_proxy;
 
-use super::{PolkadotAccountId, PolkadotExtrinsicBuilder, PolkadotPublicKey, RuntimeVersion};
+use super::{
+	PolkadotAccountId, PolkadotCrypto, PolkadotExtrinsicBuilder, PolkadotPublicKey, RuntimeVersion,
+};
 use crate::{dot::Polkadot, *};
 use frame_support::{traits::Get, CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
 use sp_std::marker::PhantomData;
@@ -25,23 +27,14 @@ pub trait PolkadotEnvironment {
 		Self::try_vault_account().expect("Vault account must be set")
 	}
 
-	fn try_proxy_account() -> Option<PolkadotAccountId>;
-	fn proxy_account() -> PolkadotAccountId {
-		Self::try_proxy_account().expect("Proxy account must be set")
-	}
-
 	fn runtime_version() -> RuntimeVersion;
 }
 
-impl<T: ChainEnvironment<SystemAccounts, PolkadotAccountId> + Get<RuntimeVersion>>
-	PolkadotEnvironment for T
+impl<T: ChainEnvironment<VaultAccount, PolkadotAccountId> + Get<RuntimeVersion>> PolkadotEnvironment
+	for T
 {
 	fn try_vault_account() -> Option<PolkadotAccountId> {
-		Self::lookup(SystemAccounts::Vault)
-	}
-
-	fn try_proxy_account() -> Option<PolkadotAccountId> {
-		Self::lookup(SystemAccounts::Proxy)
+		Self::lookup(VaultAccount)
 	}
 
 	fn runtime_version() -> RuntimeVersion {
@@ -49,10 +42,16 @@ impl<T: ChainEnvironment<SystemAccounts, PolkadotAccountId> + Get<RuntimeVersion
 	}
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum SystemAccounts {
-	Proxy,
-	Vault,
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct VaultAccount;
+
+impl<E> ConsolidateCall<Polkadot> for PolkadotApi<E>
+where
+	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
+{
+	fn consolidate_utxos() -> Result<Self, ConsolidationError> {
+		Err(ConsolidationError::NotRequired)
+	}
 }
 
 impl<E> AllBatch<Polkadot> for PolkadotApi<E>
@@ -64,7 +63,7 @@ where
 		transfer_params: Vec<TransferAssetParams<Polkadot>>,
 	) -> Result<Self, AllBatchError> {
 		Ok(Self::BatchFetchAndTransfer(batch_fetch_and_transfer::extrinsic_builder(
-			E::replay_protection(),
+			E::replay_protection(false),
 			fetch_params,
 			transfer_params,
 			E::try_vault_account().ok_or(AllBatchError::Other)?,
@@ -72,7 +71,7 @@ where
 	}
 }
 
-impl<E> SetGovKeyWithAggKey<Polkadot> for PolkadotApi<E>
+impl<E> SetGovKeyWithAggKey<PolkadotCrypto> for PolkadotApi<E>
 where
 	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
 {
@@ -83,7 +82,7 @@ where
 		let vault = E::try_vault_account().ok_or(())?;
 
 		Ok(Self::ChangeGovKey(rotate_vault_proxy::extrinsic_builder(
-			E::replay_protection(),
+			E::replay_protection(false),
 			maybe_old_key,
 			new_key,
 			vault,
@@ -91,7 +90,7 @@ where
 	}
 }
 
-impl<E> SetAggKeyWithAggKey<Polkadot> for PolkadotApi<E>
+impl<E> SetAggKeyWithAggKey<PolkadotCrypto> for PolkadotApi<E>
 where
 	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
 {
@@ -102,7 +101,8 @@ where
 		let vault = E::try_vault_account().ok_or(SetAggKeyWithAggKeyError::Failed)?;
 
 		Ok(Self::RotateVaultProxy(rotate_vault_proxy::extrinsic_builder(
-			E::replay_protection(),
+			// we reset the proxy account nonce on a rotation tx
+			E::replay_protection(true),
 			maybe_old_key,
 			new_key,
 			vault,
@@ -115,13 +115,22 @@ where
 	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
 {
 	fn new_unsigned(
-		_egress_id: EgressId,
 		_transfer_param: TransferAssetParams<Polkadot>,
 		_source_chain: ForeignChain,
 		_source_address: Option<ForeignChainAddress>,
+		_gas_budget: <Polkadot as Chain>::ChainAmount,
 		_message: Vec<u8>,
 	) -> Result<Self, DispatchError> {
 		Err(DispatchError::Other("Not implemented"))
+	}
+}
+
+impl<E> TransferFallback<Polkadot> for PolkadotApi<E>
+where
+	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
+{
+	fn new_unsigned(_transfer_param: TransferAssetParams<Polkadot>) -> Result<Self, DispatchError> {
+		Err(DispatchError::Other("TransferFallback is not supported for the Polkadot chain."))
 	}
 }
 
@@ -137,8 +146,8 @@ macro_rules! map_over_api_variants {
 	};
 }
 
-impl<E: PolkadotEnvironment> ApiCall<Polkadot> for PolkadotApi<E> {
-	fn threshold_signature_payload(&self) -> <Polkadot as ChainCrypto>::Payload {
+impl<E: PolkadotEnvironment> ApiCall<PolkadotCrypto> for PolkadotApi<E> {
+	fn threshold_signature_payload(&self) -> <PolkadotCrypto as ChainCrypto>::Payload {
 		let RuntimeVersion { spec_version, transaction_version, .. } = E::runtime_version();
 		map_over_api_variants!(
 			self,
@@ -149,13 +158,12 @@ impl<E: PolkadotEnvironment> ApiCall<Polkadot> for PolkadotApi<E> {
 
 	fn signed(
 		mut self,
-		threshold_signature: &<Polkadot as ChainCrypto>::ThresholdSignature,
+		threshold_signature: &<PolkadotCrypto as ChainCrypto>::ThresholdSignature,
 	) -> Self {
-		let proxy_account = E::proxy_account();
 		map_over_api_variants!(
 			self,
 			ref mut call,
-			call.insert_signature(proxy_account, threshold_signature.clone())
+			call.insert_signature(threshold_signature.clone())
 		);
 		self
 	}
@@ -174,12 +182,12 @@ impl<E: PolkadotEnvironment> ApiCall<Polkadot> for PolkadotApi<E> {
 		map_over_api_variants!(self, call, call.is_signed())
 	}
 
-	fn transaction_out_id(&self) -> <Polkadot as ChainCrypto>::TransactionOutId {
+	fn transaction_out_id(&self) -> <PolkadotCrypto as ChainCrypto>::TransactionOutId {
 		map_over_api_variants!(self, call, call.signature().unwrap())
 	}
 }
 
-pub trait CreatePolkadotVault: ApiCall<Polkadot> {
+pub trait CreatePolkadotVault: ApiCall<PolkadotCrypto> {
 	fn new_unsigned() -> Self;
 }
 
@@ -187,6 +195,7 @@ pub trait CreatePolkadotVault: ApiCall<Polkadot> {
 #[scale_info(skip_type_params(E))]
 pub struct OpaqueApiCall<E> {
 	builder: PolkadotExtrinsicBuilder,
+	#[codec(skip)]
 	_environment: PhantomData<E>,
 }
 
@@ -206,15 +215,15 @@ impl WithEnvironment for PolkadotExtrinsicBuilder {
 	}
 }
 
-impl<E: PolkadotEnvironment + 'static> ApiCall<Polkadot> for OpaqueApiCall<E> {
-	fn threshold_signature_payload(&self) -> <Polkadot as ChainCrypto>::Payload {
+impl<E: PolkadotEnvironment + 'static> ApiCall<PolkadotCrypto> for OpaqueApiCall<E> {
+	fn threshold_signature_payload(&self) -> <PolkadotCrypto as ChainCrypto>::Payload {
 		let RuntimeVersion { spec_version, transaction_version, .. } = E::runtime_version();
 
 		self.builder.get_signature_payload(spec_version, transaction_version)
 	}
 
-	fn signed(mut self, signature: &<Polkadot as ChainCrypto>::ThresholdSignature) -> Self {
-		self.builder.insert_signature(E::proxy_account(), signature.clone());
+	fn signed(mut self, signature: &<PolkadotCrypto as ChainCrypto>::ThresholdSignature) -> Self {
+		self.builder.insert_signature(signature.clone());
 		self
 	}
 
@@ -229,35 +238,7 @@ impl<E: PolkadotEnvironment + 'static> ApiCall<Polkadot> for OpaqueApiCall<E> {
 		self.builder.is_signed()
 	}
 
-	fn transaction_out_id(&self) -> <Polkadot as ChainCrypto>::TransactionOutId {
+	fn transaction_out_id(&self) -> <PolkadotCrypto as ChainCrypto>::TransactionOutId {
 		self.builder.signature().unwrap()
-	}
-}
-
-#[cfg(test)]
-mod mocks {
-	use super::*;
-	use crate::dot::{PolkadotPair, PolkadotReplayProtection, NONCE_1, RAW_SEED_1, RAW_SEED_2};
-
-	pub struct MockEnv;
-
-	impl PolkadotEnvironment for MockEnv {
-		fn try_vault_account() -> Option<PolkadotAccountId> {
-			Some(PolkadotPair::from_seed(&RAW_SEED_1).public_key())
-		}
-
-		fn try_proxy_account() -> Option<PolkadotAccountId> {
-			Some(PolkadotPair::from_seed(&RAW_SEED_2).public_key())
-		}
-
-		fn runtime_version() -> crate::dot::RuntimeVersion {
-			dot::TEST_RUNTIME_VERSION
-		}
-	}
-
-	impl ReplayProtectionProvider<Polkadot> for MockEnv {
-		fn replay_protection() -> PolkadotReplayProtection {
-			PolkadotReplayProtection { nonce: NONCE_1, genesis_hash: Default::default() }
-		}
 	}
 }

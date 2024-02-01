@@ -44,9 +44,10 @@ fn auction_repeats_after_failure_because_of_liveness() {
 				testnet.set_active(node, false);
 				pallet_cf_reputation::LastHeartbeat::<Runtime>::remove(node);
 			}
+			testnet.set_auto_heartbeat_all_nodes(false);
 
 			// Run to the next epoch to start the auction
-			testnet.move_to_next_epoch();
+			testnet.move_to_the_end_of_epoch();
 
 			assert!(
 				matches!(Validator::current_rotation_phase(), RotationPhase::Idle),
@@ -63,14 +64,12 @@ fn auction_repeats_after_failure_because_of_liveness() {
 				Validator::current_rotation_phase(),
 			);
 
-			for node in &offline_nodes {
-				testnet.set_active(node, true);
-			}
+			testnet.set_active_all_nodes(true);
 
 			// Submit a heartbeat, for all the nodes. Given we were waiting for the nodes to
 			// come online to start the rotation, the rotation ought to start on the next
 			// block
-			testnet.submit_heartbeat_all_engines();
+			testnet.submit_heartbeat_all_engines(true);
 			testnet.move_forward_blocks(1);
 
 			assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
@@ -88,8 +87,7 @@ fn auction_repeats_after_failure_because_of_liveness() {
 }
 
 #[test]
-// An epoch has completed.  We have a genesis where the blocks per epoch are
-// set to 100
+// An epoch has completed.  We have a genesis where the blocks per epoch are set to 100
 // - When the epoch is reached an auction is started and completed
 // - All nodes add funds above the MAB
 // - We have two nodes that haven't registered their session keys
@@ -154,8 +152,7 @@ fn epoch_rotates() {
 				network::Cli::start_bidding(node);
 			}
 
-			testnet.move_to_next_epoch();
-			testnet.submit_heartbeat_all_engines();
+			testnet.move_to_the_end_of_epoch();
 			testnet.move_forward_blocks(1);
 
 			assert!(matches!(

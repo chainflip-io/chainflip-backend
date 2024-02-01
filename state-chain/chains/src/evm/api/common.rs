@@ -40,7 +40,7 @@ impl Tokenizable for EncodableFetchDeployAssetParams {
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub(crate) struct EncodableTransferAssetParams {
-	/// For Ethereum, the asset is encoded as a contract address.
+	/// For EVM, the asset is encoded as a contract address.
 	pub asset: Address,
 	pub to: Address,
 	pub amount: AssetAmount,

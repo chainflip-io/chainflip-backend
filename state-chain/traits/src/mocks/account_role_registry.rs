@@ -28,7 +28,7 @@ impl<T: Config> AccountRoleRegistry<T> for MockAccountRoleRegistry {
 
 	fn has_account_role(who: &<T as Config>::AccountId, role: AccountRole) -> bool {
 		<Self as MockPalletStorage>::get_storage::<_, AccountRole>(ACCOUNT_ROLES, who)
-			.unwrap_or(AccountRole::None) ==
+			.unwrap_or(AccountRole::Unregistered) ==
 			role
 	}
 
@@ -42,7 +42,7 @@ impl<T: Config> AccountRoleRegistry<T> for MockAccountRoleRegistry {
 					ACCOUNT_ROLES,
 					account_id.clone(),
 				)
-				.unwrap_or(AccountRole::None);
+				.unwrap_or(AccountRole::Unregistered);
 				if account_role == role {
 					Ok(account_id)
 				} else {
@@ -54,10 +54,16 @@ impl<T: Config> AccountRoleRegistry<T> for MockAccountRoleRegistry {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn register_account(_account_id: T::AccountId, _role: AccountRole) {}
+	fn register_account(account_id: &T::AccountId, role: AccountRole) {
+		<Self as MockPalletStorage>::put_storage(ACCOUNT_ROLES, account_id, role);
+	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn get_account_role(_account_id: T::AccountId) -> AccountRole {
-		AccountRole::None
+	fn get_account_role(account_id: &T::AccountId) -> AccountRole {
+		<Self as MockPalletStorage>::get_storage::<_, AccountRole>(
+			ACCOUNT_ROLES,
+			account_id.clone(),
+		)
+		.unwrap_or(AccountRole::Unregistered)
 	}
 }

@@ -13,26 +13,39 @@ jobs:
     needs: [pre-check]
     uses: ./.github/workflows/_10_test.yml
     secrets: inherit
+  coverage:
+    uses: ./.github/workflows/_11_coverage.yml
+    with:
+      test_features: runtime-benchmarks
+    secrets: inherit
   build:
     needs: [test]
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
-      network: development
+      profile: "release"
+  # Used to test upgrades to this version from the latest release
+  build-try-runtime:
+    needs: [test]
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      profile: "try-runtime"
+      upload-name: "chainflip-backend-bin-try-runtime"
+      binary-subdir: release
 
   docker:
     needs: [build]
     uses: ./.github/workflows/_24_docker.yml
     secrets: inherit
     with:
-      network: development
-      environment: dev
+      network: "test"
+      environment: "development"
   package:
     needs: [build]
     uses: ./.github/workflows/_25_package.yml
     with:
-      network: "development"
-      environment: dev
+      network: "test"
     secrets: inherit
   post-check:
     needs: [build]
@@ -43,5 +56,5 @@ jobs:
     uses: ./.github/workflows/_30_publish.yml
     with:
       version: ci/${{ github.sha }}/
-      environment: dev
+      environment: "development"
     secrets: inherit

@@ -8,7 +8,9 @@ use crate::mock_runtime::{
 use super::*;
 use cf_primitives::AccountRole;
 use cf_traits::{AccountInfo, EpochInfo, QualifyNode};
-use state_chain_runtime::{ArbitrumVault, BitcoinVault, EthereumVault, PolkadotVault};
+use state_chain_runtime::{
+	BitcoinThresholdSigner, EthereumThresholdSigner, PolkadotThresholdSigner,
+};
 pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 
 const BLOCKS_PER_EPOCH: u32 = 1000;
@@ -66,10 +68,9 @@ fn state_of_genesis_is_as_expected() {
 
 		assert_eq!(Emissions::last_supply_update_block(), 0, "no emissions");
 
-		assert_eq!(EthereumVault::ceremony_id_counter(), 0, "no key generation requests");
-		assert_eq!(PolkadotVault::ceremony_id_counter(), 0, "no key generation requests");
-		assert_eq!(BitcoinVault::ceremony_id_counter(), 0, "no key generation requests");
-		assert_eq!(ArbitrumVault::ceremony_id_counter(), 0, "no key generation requests");
+		assert_eq!(EthereumThresholdSigner::ceremony_id_counter(), 0, "no key generation requests");
+		assert_eq!(PolkadotThresholdSigner::ceremony_id_counter(), 0, "no key generation requests");
+		assert_eq!(BitcoinThresholdSigner::ceremony_id_counter(), 0, "no key generation requests");
 
 		assert_eq!(
 			pallet_cf_environment::EthereumSignatureNonce::<Runtime>::get(),

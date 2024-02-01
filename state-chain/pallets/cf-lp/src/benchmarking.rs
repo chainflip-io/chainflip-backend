@@ -4,86 +4,77 @@ use super::*;
 use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue};
 use cf_primitives::Asset;
 use cf_traits::AccountRoleRegistry;
-use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::{assert_ok, dispatch::UnfilteredDispatchable, traits::OnNewAccount};
+use frame_benchmarking::v2::*;
+use frame_support::{assert_ok, traits::OnNewAccount};
 use frame_system::RawOrigin;
 
-benchmarks! {
-	request_liquidity_deposit_address {
+#[benchmarks]
+mod benchmarks {
+	use super::*;
+	use sp_std::vec;
+
+	#[benchmark]
+	fn request_liquidity_deposit_address() {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		<T as Chainflip>::AccountRoleRegistry::register_as_liquidity_provider(&caller).unwrap();
-		let _ = Pallet::<T>::register_emergency_withdrawal_address(
+		assert_ok!(Pallet::<T>::register_liquidity_refund_address(
 			RawOrigin::Signed(caller.clone()).into(),
 			EncodedAddress::Eth(Default::default()),
-		);
-	}: _(RawOrigin::Signed(caller), Asset::Eth)
+		));
 
-	withdraw_asset {
+		#[extrinsic_call]
+		request_liquidity_deposit_address(RawOrigin::Signed(caller), Asset::Eth);
+	}
+
+	#[benchmark]
+	fn withdraw_asset() {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		<T as Chainflip>::AccountRoleRegistry::register_as_liquidity_provider(&caller).unwrap();
-		assert_ok!(Pallet::<T>::try_credit_account(
-			&caller,
-			Asset::Eth,
+		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_liquidity_provider(&caller));
+		assert_ok!(Pallet::<T>::try_credit_account(&caller, Asset::Eth, 1_000_000,));
+
+		#[extrinsic_call]
+		withdraw_asset(
+			RawOrigin::Signed(caller.clone()),
 			1_000_000,
-		));
-	}: _(RawOrigin::Signed(caller.clone()), 1_000_000, Asset::Eth, cf_chains::address::EncodedAddress::benchmark_value())
-	verify {
+			Asset::Eth,
+			cf_chains::address::EncodedAddress::benchmark_value(),
+		);
+
 		assert_eq!(FreeBalances::<T>::get(&caller, Asset::Eth), Some(0));
 	}
 
-	register_lp_account {
+	#[benchmark]
+	fn register_lp_account() {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-	}: _(RawOrigin::Signed(caller.clone()))
-	verify {
-		assert_ok!(T::AccountRoleRegistry::ensure_liquidity_provider(RawOrigin::Signed(caller).into()));
+
+		#[extrinsic_call]
+		register_lp_account(RawOrigin::Signed(caller.clone()));
+
+		assert_ok!(T::AccountRoleRegistry::ensure_liquidity_provider(
+			RawOrigin::Signed(caller).into()
+		));
 	}
 
-	on_initialize {
-		let a in 1..100;
+	#[benchmark]
+	fn register_liquidity_refund_address() {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		let _ = Pallet::<T>::register_lp_account(RawOrigin::Signed(caller.clone()).into());
-		let _ = Pallet::<T>::register_emergency_withdrawal_address(
-			RawOrigin::Signed(caller.clone()).into(),
-			EncodedAddress::Eth(Default::default()),
+		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_liquidity_provider(&caller));
+
+		#[extrinsic_call]
+		register_liquidity_refund_address(
+			RawOrigin::Signed(caller.clone()),
+			EncodedAddress::Eth([0x01; 20]),
 		);
-		for i in 0..a {
-			assert_ok!(Pallet::<T>::request_liquidity_deposit_address(RawOrigin::Signed(caller.clone()).into(), Asset::Eth));
-		}
-		let expiry = LpTTL::<T>::get() + frame_system::Pallet::<T>::current_block_number();
-		assert!(!LiquidityChannelExpiries::<T>::get(expiry).is_empty());
-	}: {
-		Pallet::<T>::on_initialize(expiry);
-	} verify {
-		assert!(LiquidityChannelExpiries::<T>::get(expiry).is_empty());
+
+		assert_eq!(
+			LiquidityRefundAddress::<T>::get(caller, ForeignChain::Ethereum),
+			Some(ForeignChainAddress::Eth([0x01; 20].into()))
+		);
 	}
 
-	set_lp_ttl {
-		let ttl = BlockNumberFor::<T>::from(1_000u32);
-		let call = Call::<T>::set_lp_ttl {
-			ttl,
-		};
-	}: {
-		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
-	} verify {
-		assert_eq!(crate::LpTTL::<T>::get(), ttl);
-	}
-
-	register_emergency_withdrawal_address {
-		let caller: T::AccountId = whitelisted_caller();
-		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		<T as Chainflip>::AccountRoleRegistry::register_as_liquidity_provider(&caller).unwrap();
-	}: _(RawOrigin::Signed(caller.clone()), EncodedAddress::Eth([0x01; 20]))
-	verify {
-		assert_eq!(EmergencyWithdrawalAddress::<T>::get(caller, ForeignChain::Ethereum), Some(ForeignChainAddress::Eth([0x01; 20].into())));
-	}
-
-	impl_benchmark_test_suite!(
-		Pallet,
-		crate::mock::new_test_ext(),
-		crate::mock::Test,
-	);
+	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }

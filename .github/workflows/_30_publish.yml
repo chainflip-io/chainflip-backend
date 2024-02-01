@@ -7,11 +7,12 @@ on:
         required: true
         type: string
       environment:
-        description: prod or dev repo
+        description: production or dev repo
         required: true
         type: string
 
 env:
+  FORCE_COLOR: 1
   APTLY_VERSION: "1.5.0"
   REGISTRY: "ghcr.io"
   REPO_REGION: "eu-central-1"
@@ -28,10 +29,10 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Download packages
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@7a1cd3216ca9260cd8022db641d960b1db4d1be4
         with:
           name: chainflip-backend-packages-ubuntu-${{ matrix.ubuntu_version }}
           path: packages
@@ -49,7 +50,7 @@ jobs:
           sudo dpkg -i /tmp/aptly_${APTLY_VERSION}_amd64.deb
 
       - name: Configure AWS credentials using OIDC
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@010d0da01d0b5a38af31e9c3470dbfdabdecca3a
         with:
           aws-region: eu-central-1
           role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
@@ -61,21 +62,21 @@ jobs:
 
       - name: Import prod GPG package signing key
         id: import_gpg_prod
-        if: inputs.environment == 'prod'
-        uses: crazy-max/ghaction-import-gpg@v5
+        if: inputs.environment == 'production'
+        uses: crazy-max/ghaction-import-gpg@82a020f1f7f605c65dd2449b392a52c3fcfef7ef
         with:
           gpg_private_key: ${{ secrets.CF_PROD_PGP_KEY }}
 
       - name: Import dev GPG package signing key
         id: import_gpg_dev
-        if: inputs.environment == 'dev'
-        uses: crazy-max/ghaction-import-gpg@v5
+        if: inputs.environment == 'development'
+        uses: crazy-max/ghaction-import-gpg@82a020f1f7f605c65dd2449b392a52c3fcfef7ef
         with:
           gpg_private_key: ${{ secrets.CF_DEV_PGP_KEY }}
 
       - name: Set environment
         run: |
-          if [[ '${{ inputs.environment }}' == 'prod' ]]; then
+          if [[ '${{ inputs.environment }}' == 'production' ]]; then
             echo "REPO_BUCKET=repo.chainflip.io" >> $GITHUB_ENV
             echo "USER_PASS_PREFIX=" >> $GITHUB_ENV
             echo "REPO_BASIC_AUTH=" >> $GITHUB_ENV
@@ -107,11 +108,11 @@ jobs:
           aptly publish -gpg-key=${{ env.GPG_KEY_ID }} repo local "s3:chainflip-${{ inputs.environment }}:${{ inputs.version }}${{ steps.vars.outputs.codename }}"
 
       - name: Set Summary Title
-        if: inputs.environment == 'prod'
+        if: inputs.environment == 'production'
         run: echo "### Production Packages Published! :rocket:" >> $GITHUB_STEP_SUMMARY
 
       - name: Set Summary Title
-        if: inputs.environment != 'prod'
+        if: inputs.environment != 'production'
         run: echo "### Packages Published! :rocket:" >> $GITHUB_STEP_SUMMARY
 
       - name: Create Github Summary
@@ -134,7 +135,7 @@ jobs:
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Testnet tools summary
-        if: inputs.environment == 'dev'
+        if: inputs.environment == 'development'
         run: |
           echo "### Usage in \`testnet-tools\`" >> $GITHUB_STEP_SUMMARY
           echo "Use the full commit hash: \`${{ github.sha }}\` for your network configuration. " >> $GITHUB_STEP_SUMMARY

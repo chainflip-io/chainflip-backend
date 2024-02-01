@@ -22,6 +22,9 @@ localnet/init/polkadot/docker-compose.yml
 !localnet/init/keyshare/*/*.db
 !localnet/init/keyshare/**/*.log
 !localnet/init/data/**/*.log
+!localnet/init/solana/**/*.log
+
+localnet/init/config/Settings.toml.*.backup
 
 # Local CFE config
 engine/config/Local.toml
@@ -44,3 +47,7 @@ graph
 *terraform.tfstate*
 tfplan
 .tfvars
+
+*rustc-ice*
+
+localnet/docker-compose.yml

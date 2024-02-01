@@ -1,11 +1,15 @@
-use chainflip_node::test_account_from_seed;
+use chainflip_node::{
+	chain_spec::testnet::{EXPIRY_SPAN_IN_SECONDS, REDEMPTION_TTL_SECS},
+	test_account_from_seed,
+};
+use pallet_cf_validator::SetSizeParameters;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
-use sp_runtime::Percent;
+use sp_runtime::{Percent, Permill};
 use state_chain_runtime::{
 	chainflip::Offence, constants::common::*, opaque::SessionKeys, test_runner::*, AccountId,
-	AccountRolesConfig, ArbitrumVaultConfig, EmissionsConfig, EthereumVaultConfig, FlipConfig,
-	FundingConfig, GovernanceConfig, ReputationConfig, SessionConfig, ValidatorConfig,
+	AccountRolesConfig, EmissionsConfig, EthereumThresholdSignerConfig, EthereumVaultConfig,
+	FlipConfig, FundingConfig, GovernanceConfig, ReputationConfig, SessionConfig, ValidatorConfig,
 };
 
 use cf_chains::{
@@ -25,6 +29,8 @@ pub const BACKUP_NODE_EMISSION_INFLATION_PERBILL: u32 = 6;
 pub const SUPPLY_UPDATE_INTERVAL_DEFAULT: u32 = 14_400;
 pub const MIN_FUNDING: FlipBalance = 10 * FLIPPERINOS_PER_FLIP;
 
+pub const ACCRUAL_RATIO: (i32, u32) = (1, 1);
+
 /// The offences committable within the protocol and their respective reputation penalty and
 /// suspension durations.
 pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
@@ -42,7 +48,10 @@ use crate::{
 	threshold_signing::{EthKeyComponents, KeyUtils},
 	GENESIS_KEY_SEED,
 };
-use cf_primitives::{AccountRole, AuthorityCount, BlockNumber, FlipBalance, GENESIS_EPOCH};
+use cf_primitives::{
+	AccountRole, AuthorityCount, BlockNumber, FlipBalance, DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
+	GENESIS_EPOCH,
+};
 
 pub struct ExtBuilder {
 	pub genesis_accounts: Vec<(AccountId, AccountRole, FlipBalance)>,
@@ -118,12 +127,15 @@ impl ExtBuilder {
 					})
 					.collect::<Vec<_>>(),
 			},
-			flip: FlipConfig { total_issuance: TOTAL_ISSUANCE },
+			flip: FlipConfig {
+				total_issuance: TOTAL_ISSUANCE,
+				daily_slashing_rate: Permill::from_perthousand(1),
+			},
 			funding: FundingConfig {
 				genesis_accounts: self.genesis_accounts.clone(),
 				redemption_tax: MIN_FUNDING / 2,
 				minimum_funding: MIN_FUNDING,
-				redemption_ttl: core::time::Duration::from_secs(3 * REDEMPTION_DELAY_SECS),
+				redemption_ttl: core::time::Duration::from_secs(REDEMPTION_TTL_SECS),
 			},
 			reputation: ReputationConfig {
 				accrual_ratio: ACCRUAL_RATIO,
@@ -157,20 +169,15 @@ impl ExtBuilder {
 				),
 				backup_reward_node_percentage: Percent::from_percent(34),
 				authority_set_min_size: self.min_authorities,
-				min_size: self.min_authorities,
-				max_size: self.max_authorities,
-				max_expansion: self.max_authorities,
+				auction_parameters: SetSizeParameters {
+					min_size: self.min_authorities,
+					max_size: self.max_authorities,
+					max_expansion: self.max_authorities,
+				},
+				auction_bid_cutoff_percentage: Percent::from_percent(0),
+				max_authority_set_contraction_percentage: DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 			},
-			ethereum_vault: EthereumVaultConfig {
-				vault_key: Some(ethereum_vault_key),
-				deployment_block: 0,
-				keygen_response_timeout: 4,
-			},
-			arbitrum_vault: ArbitrumVaultConfig {
-				vault_key: Some(ethereum_vault_key),
-				deployment_block: 0,
-				keygen_response_timeout: 4,
-			},
+			ethereum_vault: EthereumVaultConfig { deployment_block: Some(0) },
 			emissions: EmissionsConfig {
 				current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
 				backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_PERBILL,
@@ -188,8 +195,8 @@ impl ExtBuilder {
 				init_chain_state: ChainState::<Ethereum> {
 					block_height: 0,
 					tracked_data: EthereumTrackedData {
-						base_fee: 1000000u32.into(),
-						priority_fee: 100u32.into(),
+						base_fee: 0u32.into(),
+						priority_fee: 0u32.into(),
 					},
 				},
 			},
@@ -214,21 +221,28 @@ impl ExtBuilder {
 			bitcoin_chain_tracking: BitcoinChainTrackingConfig {
 				init_chain_state: ChainState::<Bitcoin> {
 					block_height: 0,
-					tracked_data: BitcoinTrackedData { btc_fee_info: BitcoinFeeInfo::new(1000) },
+					tracked_data: BitcoinTrackedData { btc_fee_info: BitcoinFeeInfo::new(0) },
 				},
 			},
 			bitcoin_threshold_signer: Default::default(),
-			ethereum_threshold_signer: Default::default(),
+			ethereum_threshold_signer: EthereumThresholdSignerConfig {
+				key: Some(ethereum_vault_key),
+				keygen_response_timeout: 4,
+				threshold_signature_response_timeout: 4,
+				amount_to_slash: FLIPPERINOS_PER_FLIP,
+				_instance: std::marker::PhantomData,
+			},
 			polkadot_threshold_signer: Default::default(),
 			arbitrum_threshold_signer: Default::default(),
 			bitcoin_vault: Default::default(),
 			polkadot_vault: Default::default(),
 			environment: Default::default(),
 			liquidity_pools: Default::default(),
-			swapping: Default::default(),
-			liquidity_provider: Default::default(),
 			system: Default::default(),
 			transaction_payment: Default::default(),
+			bitcoin_ingress_egress: Default::default(),
+			polkadot_ingress_egress: Default::default(),
+			ethereum_ingress_egress: Default::default(),
 		})
 	}
 }

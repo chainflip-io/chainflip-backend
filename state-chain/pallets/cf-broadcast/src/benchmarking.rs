@@ -1,38 +1,42 @@
-//! Benchmarking setup for pallet-template
 #![cfg(feature = "runtime-benchmarks")]
-
 use super::*;
 
-use cf_traits::ThresholdSigner;
-use frame_benchmarking::{benchmarks_instance_pallet, whitelisted_caller};
+use cf_chains::benchmarking_value::BenchmarkValue;
+use cf_primitives::AccountRole;
+use cf_traits::{AccountRoleRegistry, ThresholdSigner};
+use frame_benchmarking::v2::*;
 use frame_support::{
-	dispatch::UnfilteredDispatchable,
-	traits::{EnsureOrigin, OnInitialize},
+	assert_ok,
+	traits::{EnsureOrigin, Hooks, UnfilteredDispatchable},
 };
 use frame_system::RawOrigin;
 
-use cf_primitives::AccountRole;
-use cf_traits::AccountRoleRegistry;
-
-use cf_chains::benchmarking_value::BenchmarkValue;
-
 fn insert_transaction_broadcast_attempt<T: pallet::Config<I>, I: 'static>(
-	nominee: <T as Chainflip>::ValidatorId,
-	broadcast_attempt_id: BroadcastAttemptId,
+	nominee: Option<<T as Chainflip>::ValidatorId>,
+	broadcast_id: BroadcastId,
 ) {
 	AwaitingBroadcast::<T, I>::insert(
-		broadcast_attempt_id,
-		TransactionSigningAttempt {
-			broadcast_attempt: BroadcastAttempt::<T, I> {
-				broadcast_attempt_id,
-				transaction_payload: TransactionFor::<T, I>::benchmark_value(),
-				threshold_signature_payload: PayloadFor::<T, I>::benchmark_value(),
-				transaction_out_id: TransactionOutIdFor::<T, I>::benchmark_value(),
-			},
+		broadcast_id,
+		BroadcastData::<T, I> {
+			broadcast_id,
+			transaction_payload: TransactionFor::<T, I>::benchmark_value(),
+			threshold_signature_payload: PayloadFor::<T, I>::benchmark_value(),
+			transaction_out_id: TransactionOutIdFor::<T, I>::benchmark_value(),
 			nominee,
 		},
 	);
+	ThresholdSignatureData::<T, I>::insert(
+		broadcast_id,
+		(
+			ApiCallFor::<T, I>::benchmark_value()
+				.signed(&ThresholdSignatureFor::<T, I>::benchmark_value()),
+			ThresholdSignatureFor::<T, I>::benchmark_value(),
+		),
+	);
+	PendingBroadcasts::<T, I>::append(broadcast_id);
 }
+
+const INITIATED_AT: u32 = 100;
 
 // Generates a new signature ready call.
 fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T, I> {
@@ -46,107 +50,156 @@ fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T
 		threshold_signature_payload: PayloadFor::<T, I>::benchmark_value(),
 		api_call: Box::new(ApiCallFor::<T, I>::benchmark_value()),
 		broadcast_id: 1,
+		initiated_at: INITIATED_AT.into(),
+		should_broadcast: true,
 	}
 }
 
-// TODO: check if we really reach the expensive parts of the code.
-benchmarks_instance_pallet! {
-	on_initialize {
-		// We add one because one is added at genesis
-		let timeout_block = frame_system::Pallet::<T>::block_number() + T::BroadcastTimeout::get() + 1_u32.into();
-		// Complexity parameter for expiry queue.
-		let x in 1 .. 1000u32;
-		for i in 1 .. x {
-			let broadcast_attempt_id = BroadcastAttemptId {broadcast_id: i, attempt_count: 1};
-			Timeouts::<T, I>::append(timeout_block, broadcast_attempt_id);
-			ThresholdSignatureData::<T, I>::insert(i, (ApiCallFor::<T, I>::benchmark_value(), ThresholdSignatureFor::<T, I>::benchmark_value()))
-		}
-		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
-		T::KeyProvider::set_key(valid_key);
-	} : {
-		Pallet::<T, I>::on_initialize(timeout_block);
-	}
-	// TODO: add a benchmark for the failure case
-	transaction_signing_failure {
-		// TODO: This benchmark is the success case. The failure case is not yet implemented and can be quite expensive in the worst case.
-		// Unfortunately with the current implementation, there is no good way to determine this before we execute the benchmark.
+#[instance_benchmarks]
+mod benchmarks {
+	use super::*;
+	use sp_std::vec;
+
+	#[benchmark]
+	fn on_initialize(t: Linear<1, 50>, r: Linear<1, 50>) {
 		let caller: T::AccountId = whitelisted_caller();
-		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
-		let broadcast_attempt_id = BroadcastAttemptId {
-			broadcast_id: 1,
-			attempt_count: 1
-		};
-		insert_transaction_broadcast_attempt::<T, I>(caller.clone().into(), broadcast_attempt_id);
-		generate_on_signature_ready_call::<T, I>().dispatch_bypass_filter(T::EnsureThresholdSigned::try_successful_origin().unwrap())?;
-		let expiry_block = frame_system::Pallet::<T>::block_number() + T::BroadcastTimeout::get();
-		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
-		T::KeyProvider::set_key(valid_key);
-	}: _(RawOrigin::Signed(caller), broadcast_attempt_id)
-	verify {
-		assert!(Timeouts::<T, I>::contains_key(expiry_block));
+		// We add one because one is added at genesis
+		let timeout_block =
+			frame_system::Pallet::<T>::block_number() + T::BroadcastTimeout::get() + 1_u32.into();
+		// Complexity parameter for expiry queue.
+
+		let mut broadcast_id = 0;
+
+		for _ in 1..t {
+			broadcast_id += 1;
+			insert_transaction_broadcast_attempt::<T, I>(Some(caller.clone().into()), broadcast_id);
+			Timeouts::<T, I>::mutate(timeout_block, |timeouts| {
+				timeouts.insert((broadcast_id, caller.clone().into()))
+			});
+		}
+		for _ in 1..r {
+			broadcast_id += 1;
+			insert_transaction_broadcast_attempt::<T, I>(Some(caller.clone().into()), broadcast_id);
+			DelayedBroadcastRetryQueue::<T, I>::append(timeout_block, broadcast_id);
+		}
+
+		#[block]
+		{
+			Pallet::<T, I>::on_initialize(timeout_block);
+		}
 	}
-	on_signature_ready {
-		let broadcast_id = 0;
-		let timeout_block = frame_system::Pallet::<T>::block_number() + T::BroadcastTimeout::get() + 1_u32.into();
-		let broadcast_attempt_id = BroadcastAttemptId {
-			broadcast_id,
-			attempt_count: 0
-		};
-		insert_transaction_broadcast_attempt::<T, I>(whitelisted_caller(), broadcast_attempt_id);
-		let call = generate_on_signature_ready_call::<T, I>();
-		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
-		T::KeyProvider::set_key(valid_key);
-	} : { call.dispatch_bypass_filter(T::EnsureThresholdSigned::try_successful_origin().unwrap())? }
-	verify {
-		assert_eq!(BroadcastIdCounter::<T, I>::get(), 0);
-		assert_eq!(BroadcastAttemptCount::<T, I>::get(broadcast_id), 0);
-		assert!(Timeouts::<T, I>::contains_key(timeout_block));
-	}
-	start_next_broadcast_attempt {
-		let api_call = ApiCallFor::<T, I>::benchmark_value();
-		let signed_api_call = api_call.signed(&BenchmarkValue::benchmark_value());
-		let broadcast_attempt_id = Pallet::<T, I>::start_broadcast(
-			&BenchmarkValue::benchmark_value(),
-			BenchmarkValue::benchmark_value(),
-			signed_api_call,
-			BenchmarkValue::benchmark_value(),
-			1
+
+	#[benchmark]
+	fn transaction_failed() {
+		let caller: T::AccountId = whitelisted_caller();
+		T::AccountRoleRegistry::register_account(&caller, AccountRole::Validator);
+		let broadcast_id = 15;
+		insert_transaction_broadcast_attempt::<T, I>(Some(caller.clone().into()), broadcast_id);
+		frame_system::Pallet::<T>::set_block_number(10u32.into());
+		let retry_block = frame_system::Pallet::<T>::block_number().saturating_add(
+			T::RetryPolicy::next_attempt_delay(Pallet::<T, I>::attempt_count(broadcast_id) + 1)
+				.unwrap_or(One::one()),
 		);
 
-		T::KeyProvider::set_key(<<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value());
-		let transaction_payload = TransactionFor::<T, I>::benchmark_value();
+		#[extrinsic_call]
+		transaction_failed(RawOrigin::Signed(caller), broadcast_id);
 
-	} : {
-		Pallet::<T, I>::start_next_broadcast_attempt( BroadcastAttempt::<T, I> {
-			broadcast_attempt_id,
-			transaction_payload,
-			threshold_signature_payload: PayloadFor::<T, I>::benchmark_value(),
-			transaction_out_id: TransactionOutIdFor::<T, I>::benchmark_value(),
-		})
+		assert!(DelayedBroadcastRetryQueue::<T, I>::get(retry_block).contains(&broadcast_id));
 	}
-	verify {
-		assert!(AwaitingBroadcast::<T, I>::contains_key(broadcast_attempt_id.next_attempt()));
+
+	#[benchmark]
+	fn on_signature_ready() {
+		let broadcast_id = 0;
+		frame_system::Pallet::<T>::set_block_number(100u32.into());
+		let timeout_block = frame_system::Pallet::<T>::block_number() + T::BroadcastTimeout::get();
+		insert_transaction_broadcast_attempt::<T, I>(Some(whitelisted_caller()), broadcast_id);
+		let call = generate_on_signature_ready_call::<T, I>();
+
+		#[block]
+		{
+			assert_ok!(call.dispatch_bypass_filter(
+				T::EnsureThresholdSigned::try_successful_origin().unwrap()
+			));
+		}
+
+		assert_eq!(BroadcastIdCounter::<T, I>::get(), 0);
+		assert_eq!(Pallet::<T, I>::attempt_count(broadcast_id), 0);
+		assert!(Timeouts::<T, I>::contains_key(timeout_block));
 	}
-	transaction_succeeded {
-		let caller: T::AccountId = whitelisted_caller();
+
+	#[benchmark]
+	fn start_next_broadcast_attempt() {
+		let broadcast_id = Pallet::<T, I>::threshold_sign_and_broadcast(
+			BenchmarkValue::benchmark_value(),
+			None,
+			|_| None,
+		);
+		insert_transaction_broadcast_attempt::<T, I>(None, broadcast_id);
+
+		#[block]
+		{
+			Pallet::<T, I>::start_next_broadcast_attempt(broadcast_id)
+		}
+
+		assert!(AwaitingBroadcast::<T, I>::get(broadcast_id).unwrap().nominee.is_some());
+	}
+
+	#[benchmark]
+	fn transaction_succeeded() {
 		let signer_id = SignerIdFor::<T, I>::benchmark_value();
-		TransactionOutIdToBroadcastId::<T, I>::insert(TransactionOutIdFor::<T, I>::benchmark_value(), 1);
+		let initiated_at: ChainBlockNumberFor<T, I> = INITIATED_AT.into();
+		TransactionOutIdToBroadcastId::<T, I>::insert(
+			TransactionOutIdFor::<T, I>::benchmark_value(),
+			(1, initiated_at),
+		);
 
-		let broadcast_attempt_id = BroadcastAttemptId {
-			broadcast_id: 1,
-			attempt_count: 0
-		};
-		insert_transaction_broadcast_attempt::<T, I>(whitelisted_caller(), broadcast_attempt_id);
-		let call = Call::<T, I>::transaction_succeeded{
+		let broadcast_id = 1;
+		insert_transaction_broadcast_attempt::<T, I>(Some(whitelisted_caller()), broadcast_id);
+		TransactionMetadata::<T, I>::insert(
+			broadcast_id,
+			TransactionMetadataFor::<T, I>::benchmark_value(),
+		);
+		let call = Call::<T, I>::transaction_succeeded {
 			tx_out_id: TransactionOutIdFor::<T, I>::benchmark_value(),
 			signer_id,
 			tx_fee: TransactionFeeFor::<T, I>::benchmark_value(),
+			tx_metadata: TransactionMetadataFor::<T, I>::benchmark_value(),
 		};
-		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
-		T::KeyProvider::set_key(valid_key);
-	} : { call.dispatch_bypass_filter(T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap())? }
-	verify {
-		// We expect the unwrap to error if the extrinsic didn't fire an event - if an event has been emitted we reached the end of the extrinsic
-		let _ = frame_system::Pallet::<T>::events().pop().expect("No event has been emitted from the transaction_succeeded extrinsic").event;
+
+		#[block]
+		{
+			assert_ok!(call.dispatch_bypass_filter(
+				T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap(),
+			));
+		}
+
+		// We expect the unwrap to error if the extrinsic didn't fire an event - if an event has
+		// been emitted we reached the end of the extrinsic
+		let _ = frame_system::Pallet::<T>::events()
+			.pop()
+			.expect("No event has been emitted from the transaction_succeeded extrinsic")
+			.event;
+	}
+
+	#[cfg(test)]
+	use crate::mock::*;
+
+	#[test]
+	fn benchmark_works() {
+		new_test_ext().execute_with(|| {
+			_on_initialize::<Test, Instance1>(50, 50, true);
+		});
+		new_test_ext().execute_with(|| {
+			_transaction_failed::<Test, Instance1>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_on_signature_ready::<Test, Instance1>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_start_next_broadcast_attempt::<Test, Instance1>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_transaction_succeeded::<Test, Instance1>(true);
+		});
 	}
 }

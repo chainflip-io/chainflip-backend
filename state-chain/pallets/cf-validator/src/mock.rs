@@ -6,25 +6,28 @@ use crate::PalletSafeMode;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
+		cfe_interface_mock::MockCfeInterface, key_rotator::MockKeyRotatorA,
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
-		vault_rotator::MockVaultRotatorA,
 	},
 	AccountRoleRegistry, Bid,
 };
-use frame_support::{construct_runtime, parameter_types, traits::OnInitialize};
+use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;
 use sp_runtime::{
 	impl_opaque_keys,
 	testing::UintAuthorityId,
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
-	BuildStorage,
 };
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashMap};
 
 pub type Amount = u128;
 pub type ValidatorId = u64;
 
 type Block = frame_system::mocking::MockBlock<Test>;
+
+pub const MIN_AUTHORITY_SIZE: u32 = 1;
+pub const MAX_AUTHORITY_SIZE: u32 = WINNING_BIDS.len() as u32;
+pub const MAX_AUTHORITY_SET_EXPANSION: u32 = WINNING_BIDS.len() as u32;
 
 construct_runtime!(
 	pub struct Test {
@@ -124,13 +127,27 @@ impl MissedAuthorshipSlots for MockMissedAuthorshipSlots {
 	}
 }
 
+thread_local! {
+	pub static AUTHORITY_BONDS: RefCell<HashMap<ValidatorId, Amount>> = RefCell::new(HashMap::default());
+}
+
 pub struct MockBonder;
+
+impl MockBonder {
+	pub fn get_bond(account_id: &ValidatorId) -> Amount {
+		AUTHORITY_BONDS.with(|cell| cell.borrow().get(account_id).copied().unwrap_or(0))
+	}
+}
 
 impl Bonding for MockBonder {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 
-	fn update_bond(_: &Self::ValidatorId, _: Self::Amount) {}
+	fn update_bond(account_id: &Self::ValidatorId, bond: Self::Amount) {
+		AUTHORITY_BONDS.with(|cell| {
+			cell.borrow_mut().insert(*account_id, bond);
+		})
+	}
 }
 
 pub type MockOffenceReporter =
@@ -170,7 +187,7 @@ impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = PalletOffence;
 	type EpochTransitionHandler = TestEpochTransitionHandler;
-	type VaultRotator = MockVaultRotatorA;
+	type KeyRotator = MockKeyRotatorA;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
 	type BidderProvider = MockBidderProvider;
 	type OffenceReporter = MockOffenceReporter;
@@ -179,6 +196,7 @@ impl Config for Test {
 	type KeygenQualification = QualifyAll<ValidatorId>;
 	type SafeMode = MockRuntimeSafeMode;
 	type ValidatorWeightInfo = ();
+	type CfePeerRegistration = MockCfeInterface;
 }
 
 /// Session pallet requires a set of validators at genesis.
@@ -186,8 +204,52 @@ pub const GENESIS_AUTHORITIES: [u64; 3] = [u64::MAX, u64::MAX - 1, u64::MAX - 2]
 pub const REDEMPTION_PERCENTAGE_AT_GENESIS: Percent = Percent::from_percent(50);
 pub const GENESIS_BOND: Amount = 100;
 pub const EPOCH_DURATION: u64 = 10;
-pub(crate) struct TestExternalitiesWithCheck {
-	ext: sp_io::TestExternalities,
+
+cf_test_utilities::impl_test_helpers! {
+	Test,
+	RuntimeGenesisConfig {
+		system: SystemConfig::default(),
+		session: SessionConfig {
+			keys: [&GENESIS_AUTHORITIES[..], &AUCTION_WINNERS[..], &AUCTION_LOSERS[..]]
+				.concat()
+				.iter()
+				.map(|&i| (i, i, UintAuthorityId(i).into()))
+				.collect(),
+		},
+		validator_pallet: ValidatorPalletConfig {
+			genesis_authorities: BTreeSet::from(GENESIS_AUTHORITIES),
+			genesis_backups: Default::default(),
+			genesis_vanity_names: BTreeMap::from_iter([(
+				GENESIS_AUTHORITIES[0],
+				"Alice ✅".as_bytes().to_vec(),
+			)]),
+			blocks_per_epoch: EPOCH_DURATION,
+			bond: GENESIS_BOND,
+			redemption_period_as_percentage: REDEMPTION_PERCENTAGE_AT_GENESIS,
+			backup_reward_node_percentage: Percent::from_percent(34),
+			authority_set_min_size: MIN_AUTHORITY_SIZE,
+			auction_parameters: SetSizeParameters {
+				min_size: MIN_AUTHORITY_SIZE,
+				max_size: MAX_AUTHORITY_SIZE,
+				max_expansion: MAX_AUTHORITY_SET_EXPANSION,
+			},
+			auction_bid_cutoff_percentage: Percent::from_percent(0),
+			max_authority_set_contraction_percentage: DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
+		},
+	},
+	||{
+		assert_eq!(
+			VanityNames::<Test>::get().get(&GENESIS_AUTHORITIES[0]).unwrap(),
+			&"Alice ✅".as_bytes().to_vec()
+		);
+		for account_id in
+			[&GENESIS_AUTHORITIES[..], &AUCTION_WINNERS[..], &AUCTION_LOSERS[..]]
+				.into_iter()
+				.flatten()
+		{
+			<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(account_id).unwrap();
+		}
+	},
 }
 
 #[macro_export]
@@ -213,10 +275,20 @@ macro_rules! assert_invariants {
 	};
 }
 
-impl TestExternalitiesWithCheck {
-	pub fn execute_with<R>(&mut self, execute: impl FnOnce() -> R) -> R {
-		self.ext.execute_with(|| {
-			System::set_block_number(1);
+/// Traits for helper functions used in tests
+pub trait TestHelper {
+	fn then_execute_with_checks<R>(self, execute: impl FnOnce() -> R) -> TestRunner<R>;
+	fn then_advance_n_blocks_and_execute_with_checks<R>(
+		self,
+		block: BlockNumberFor<Test>,
+		execute: impl FnOnce() -> R,
+	) -> TestRunner<R>;
+}
+
+impl<Ctx: Clone> TestHelper for TestRunner<Ctx> {
+	/// Run checks before and after the execution to ensure the integrity of states.
+	fn then_execute_with_checks<R>(self, execute: impl FnOnce() -> R) -> TestRunner<R> {
+		self.then_execute_with(|_| {
 			QualifyAll::<u64>::except([UNQUALIFIED_NODE]);
 			log::debug!("Pre-test invariant check.");
 			assert_invariants!();
@@ -228,82 +300,25 @@ impl TestExternalitiesWithCheck {
 		})
 	}
 
-	pub fn execute_with_unchecked_invariants<R>(&mut self, execute: impl FnOnce() -> R) -> R {
-		self.ext.execute_with(|| {
-			System::set_block_number(1);
-			execute()
-		})
+	/// Run forward certain number of blocks, then execute with checks before and after.
+	/// All hooks are run for each block forwarded.
+	fn then_advance_n_blocks_and_execute_with_checks<R>(
+		self,
+		blocks: BlockNumberFor<Test>,
+		execute: impl FnOnce() -> R,
+	) -> TestRunner<R> {
+		self.then_execute_with(|_| System::current_block_number() + blocks)
+			.then_process_blocks_until(|execution_block| {
+				System::current_block_number() == execution_block - 1
+			})
+			.then_execute_at_next_block(|_| {
+				QualifyAll::<u64>::except([UNQUALIFIED_NODE]);
+				log::debug!("Pre-test invariant check.");
+				assert_invariants!();
+				let r = execute();
+				log::debug!("Post-test invariant check.");
+				assert_invariants!();
+				r
+			})
 	}
-}
-
-pub const MIN_AUTHORITY_SIZE: u32 = 1;
-pub const MAX_AUTHORITY_SIZE: u32 = WINNING_BIDS.len() as u32;
-pub const MAX_AUTHORITY_SET_EXPANSION: u32 = WINNING_BIDS.len() as u32;
-
-pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
-	log::debug!("Initializing TestExternalitiesWithCheck with GenesisConfig.");
-
-	TestExternalitiesWithCheck {
-		ext: {
-			let mut ext: sp_io::TestExternalities = RuntimeGenesisConfig {
-				system: SystemConfig::default(),
-				session: SessionConfig {
-					keys: [&GENESIS_AUTHORITIES[..], &AUCTION_WINNERS[..], &AUCTION_LOSERS[..]]
-						.concat()
-						.iter()
-						.map(|&i| (i, i, UintAuthorityId(i).into()))
-						.collect(),
-				},
-				validator_pallet: ValidatorPalletConfig {
-					genesis_authorities: BTreeSet::from(GENESIS_AUTHORITIES),
-					genesis_backups: Default::default(),
-					genesis_vanity_names: BTreeMap::from_iter([(
-						GENESIS_AUTHORITIES[0],
-						"Alice ✅".as_bytes().to_vec(),
-					)]),
-					blocks_per_epoch: EPOCH_DURATION,
-					bond: GENESIS_BOND,
-					redemption_period_as_percentage: REDEMPTION_PERCENTAGE_AT_GENESIS,
-					backup_reward_node_percentage: Percent::from_percent(34),
-					authority_set_min_size: MIN_AUTHORITY_SIZE,
-					min_size: MIN_AUTHORITY_SIZE,
-					max_size: MAX_AUTHORITY_SIZE,
-					max_expansion: MAX_AUTHORITY_SET_EXPANSION,
-				},
-			}
-			.build_storage()
-			.unwrap()
-			.into();
-
-			ext.execute_with(|| {
-				assert_eq!(
-					VanityNames::<Test>::get().get(&GENESIS_AUTHORITIES[0]).unwrap(),
-					&"Alice ✅".as_bytes().to_vec()
-				);
-				for account_id in
-					[&GENESIS_AUTHORITIES[..], &AUCTION_WINNERS[..], &AUCTION_LOSERS[..]]
-						.into_iter()
-						.flatten()
-				{
-					<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(account_id).unwrap();
-				}
-			});
-
-			ext
-		},
-	}
-}
-
-pub fn run_to_block(n: u64) {
-	assert_invariants!();
-	while System::block_number() < n {
-		log::debug!("Test::on_initialise({:?})", System::block_number());
-		System::set_block_number(System::block_number() + 1);
-		AllPalletsWithoutSystem::on_initialize(System::block_number());
-		assert_invariants!();
-	}
-}
-
-pub fn move_forward_blocks(n: u64) {
-	run_to_block(System::block_number() + n);
 }

@@ -1,6 +1,6 @@
 [package]
 name = "chainflip-api"
-version = "0.1.0"
+version = "1.2.0"
 edition = "2021"
 
 [dependencies]
@@ -19,12 +19,15 @@ tiny-bip39 = "1.0.0"
 tokio = "1.28"
 tracing = "0.1"
 zeroize = "1.5.4"
+libp2p-identity = { version = "0.2", features = ["ed25519", "peerid"] }
+lazy_static = "1.4"
 
 # Local
 chainflip-engine = { path = "../../engine/" }
 utilities = { path = "../../utilities/" }
 
 # State Chain
+cf-amm = { path = "../../state-chain/amm" }
 cf-chains = { path = "../../state-chain/chains" }
 cf-primitives = { path = "../../state-chain/primitives" }
 chainflip-node = { path = "../../state-chain/node" }
@@ -40,10 +43,12 @@ pallet-cf-pools = { path = '../../state-chain/pallets/cf-pools' }
 pallet-cf-threshold-signature = { path = "../../state-chain/pallets/cf-threshold-signature" }
 pallet-cf-validator = { path = "../../state-chain/pallets/cf-validator" }
 state-chain-runtime = { path = "../../state-chain/runtime" }
-frame-system = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2023-08' }
-cf-amm = { path = "../../state-chain/amm" }
 
-# Substrate key types
-sp-consensus-aura = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2023-08' }
-sp-core = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2023-08' }
-sp-consensus-grandpa = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2023-08' }
+
+# Substrate
+frame-system = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.1+3' }
+frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3" }
+sp-consensus-aura = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.1+3' }
+sp-core = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.1+3' }
+sp-consensus-grandpa = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.1+3' }
+codec = { package = "parity-scale-codec", version = "3.6.1" }

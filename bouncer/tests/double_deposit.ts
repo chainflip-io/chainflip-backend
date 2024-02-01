@@ -33,17 +33,21 @@ async function main(): Promise<void> {
     },
   });
 
-  // Register Emergency Withdrawal Address before requesting reposit address.
+  // Register Liquidity Refund Address before requesting reposit address.
   const encodedEthAddr = chainflip.createType('EncodedAddress', {
     Eth: hexStringToBytesArray(await newAddress('ETH', 'LP_1')),
   });
   await chainflip.tx.liquidityProvider
-    .registerEmergencyWithdrawalAddress(encodedEthAddr)
+    .registerLiquidityRefundAddress(encodedEthAddr)
     .signAndSend(lp);
 
   await chainflip.tx.liquidityProvider.requestLiquidityDepositAddress('Eth').signAndSend(lp);
   const ethIngressKey = (
-    await observeEvent('liquidityProvider:LiquidityDepositAddressReady', chainflip)
+    await observeEvent(
+      'liquidityProvider:LiquidityDepositAddressReady',
+      chainflip,
+      (event) => event.data.depositAddress.Eth,
+    )
   ).data.depositAddress.Eth as string;
   console.log('ETH ingress address: ' + ethIngressKey);
   await sleep(8000); // sleep for 8 seconds to give the engine a chance to start witnessing

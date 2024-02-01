@@ -39,6 +39,7 @@
     "no-await-in-loop": "off",
     "no-console": "off",
     "no-plusplus": "off",
+    "no-restricted-syntax": "off",
     "prefer-destructuring": "off",
     "prefer-template": "off",
     "radix": "off"

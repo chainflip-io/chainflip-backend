@@ -7,7 +7,7 @@
 mod mock;
 
 mod benchmarking;
-mod migrations;
+pub mod migrations;
 
 pub mod weights;
 pub use weights::WeightInfo;
@@ -30,17 +30,28 @@ use frame_support::{
 		traits::{CheckedSub, UniqueSaturatedInto, Zero},
 		Saturating,
 	},
-	traits::{
-		EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OnRuntimeUpgrade, StorageVersion,
-		UnixTime,
-	},
+	traits::{EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, StorageVersion, UnixTime},
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use scale_info::TypeInfo;
-use sp_std::{cmp::max, collections::btree_map::BTreeMap, prelude::*};
+use sp_std::{
+	cmp::{max, min},
+	collections::btree_map::BTreeMap,
+	prelude::*,
+};
+#[derive(Encode, Decode, PartialEq, Debug, TypeInfo)]
+pub enum Pending {
+	Pending,
+}
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+#[derive(Encode, Decode, PartialEq, Debug, TypeInfo)]
+pub struct PendingRedemptionInfo<FlipBalance> {
+	pub total: FlipBalance,
+	pub restricted: FlipBalance,
+	pub redeem_address: EthereumAddress,
+}
 
 impl_pallet_safe_mode!(PalletSafeMode; redeem_enabled, start_bidding_enabled, stop_bidding_enabled);
 
@@ -97,7 +108,7 @@ pub mod pallet {
 		type EnsureThresholdSigned: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The implementation of the register redemption transaction.
-		type RegisterRedemption: RegisterRedemption<Ethereum> + Member + Parameter;
+		type RegisterRedemption: RegisterRedemption + Member + Parameter;
 
 		/// Something that provides the current time.
 		type TimeSource: UnixTime;
@@ -119,11 +130,16 @@ pub mod pallet {
 	pub type ActiveBidder<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, bool, ValueQuery>;
 
-	/// PendingRedemptions stores a () for the account until the redemption is executed or the
-	/// redemption expires.
+	/// PendingRedemptions stores a Pending enum for the account until the redemption is executed
+	/// or the redemption expires.
 	#[pallet::storage]
-	pub type PendingRedemptions<T: Config> =
-		StorageMap<_, Blake2_128Concat, AccountId<T>, (), OptionQuery>;
+	pub type PendingRedemptions<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		AccountId<T>,
+		PendingRedemptionInfo<FlipBalance<T>>,
+		OptionQuery,
+	>;
 
 	/// The minimum amount a user can fund their account with, and therefore the minimum balance
 	/// they must have remaining after they redeem.
@@ -134,10 +150,15 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type RedemptionTTLSeconds<T: Config> = StorageValue<_, u64, ValueQuery>;
 
+	/// Registered addresses for an executor.
+	#[pallet::storage]
+	pub type BoundExecutorAddress<T: Config> =
+		StorageMap<_, Blake2_128Concat, AccountId<T>, EthereumAddress, OptionQuery>;
+
 	/// List of restricted addresses
 	#[pallet::storage]
 	pub type RestrictedAddresses<T: Config> =
-		StorageMap<_, Blake2_128Concat, EthereumAddress, (), ValueQuery>;
+		StorageMap<_, Blake2_128Concat, EthereumAddress, (), OptionQuery>;
 
 	/// Map that bookkeeps the restricted balances for each address
 	#[pallet::storage]
@@ -151,29 +172,12 @@ pub mod pallet {
 
 	/// Map of bound addresses for accounts.
 	#[pallet::storage]
-	pub type BoundAddress<T: Config> =
+	pub type BoundRedeemAddress<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, EthereumAddress>;
 
 	/// The fee levied for every redemption request. Can be updated by Governance.
 	#[pallet::storage]
 	pub type RedemptionTax<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
-
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_runtime_upgrade() -> Weight {
-			migrations::PalletMigration::<T>::on_runtime_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-			migrations::PalletMigration::<T>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-			migrations::PalletMigration::<T>::post_upgrade(state)
-		}
-	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -233,6 +237,9 @@ pub mod pallet {
 
 		/// An account has been bound to an address.
 		BoundRedeemAddress { account_id: AccountId<T>, address: EthereumAddress },
+
+		/// An account has been bound to an executor address.
+		BoundExecutorAddress { account_id: AccountId<T>, address: EthereumAddress },
 	}
 
 	#[pallet::error]
@@ -251,13 +258,6 @@ pub mod pallet {
 
 		/// We are in the auction phase
 		AuctionPhase,
-
-		/// A withdrawal address is provided, but the account has a different withdrawal address
-		/// already associated.
-		WithdrawalAddressRestricted,
-
-		/// An invalid redemption has been made
-		InvalidRedemption,
 
 		/// When requesting a redemption, you must not have an amount below the minimum.
 		BelowMinimumFunding,
@@ -288,6 +288,12 @@ pub mod pallet {
 
 		/// Stop Bidding is disabled due to Safe Mode.
 		StopBiddingDisabled,
+
+		/// The executor for this account is bound to another address.
+		ExecutorBindingRestrictionViolated,
+
+		/// The account is already bound to an executor address.
+		ExecutorAddressAlreadyBound,
 	}
 
 	#[pallet::call]
@@ -343,22 +349,14 @@ pub mod pallet {
 		/// An account can only have one pending redemption at a time, the funds wrapped up in the
 		/// pending redemption are inaccessible and are not counted towards a Validator's Auction
 		/// Bid.
-		///
-		/// ## Events
-		///
-		/// - None
-		///
-		/// ## Errors
-		///
-		/// - [PendingRedemption](Error::PendingRedemption)
-		/// - [AuctionPhase](Error::AuctionPhase)
-		/// - [WithdrawalAddressRestricted](Error::WithdrawalAddressRestricted)
 		#[pallet::call_index(1)]
 		#[pallet::weight({ if matches!(amount, RedemptionAmount::Exact(_)) { T::WeightInfo::redeem() } else { T::WeightInfo::redeem_all() }})]
 		pub fn redeem(
 			origin: OriginFor<T>,
 			amount: RedemptionAmount<FlipBalance<T>>,
 			address: EthereumAddress,
+			// Only this address can execute the redemption.
+			executor: Option<EthereumAddress>,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 
@@ -376,12 +374,22 @@ pub mod pallet {
 			);
 
 			let mut restricted_balances = RestrictedBalances::<T>::get(&account_id);
+
+			// Ignore executor binding restrictions for withdrawals of restricted funds.
+			if !restricted_balances.contains_key(&address) {
+				if let Some(bound_executor) = BoundExecutorAddress::<T>::get(&account_id) {
+					ensure!(
+						executor == Some(bound_executor),
+						Error::<T>::ExecutorBindingRestrictionViolated
+					);
+				}
+			}
+
 			let redemption_fee = RedemptionTax::<T>::get();
 
-			if let Some(bound_address) = BoundAddress::<T>::get(&account_id) {
+			if let Some(bound_address) = BoundRedeemAddress::<T>::get(&account_id) {
 				ensure!(
-					bound_address == address ||
-						restricted_balances.keys().any(|res_address| res_address == &address),
+					bound_address == address || restricted_balances.contains_key(&address),
 					Error::<T>::AccountBindingRestrictionViolated
 				);
 			}
@@ -396,9 +404,10 @@ pub mod pallet {
 						restricted_balances.get(&address).copied().unwrap_or_default(),
 				);
 
-			let net_amount = match amount {
-				RedemptionAmount::Max => liquid_balance.saturating_sub(redemption_fee),
-				RedemptionAmount::Exact(amount) => amount,
+			let (debit_amount, redeem_amount) = match amount {
+				RedemptionAmount::Max =>
+					(liquid_balance, liquid_balance.saturating_sub(redemption_fee)),
+				RedemptionAmount::Exact(amount) => (amount.saturating_add(redemption_fee), amount),
 			};
 
 			ensure!(
@@ -406,9 +415,13 @@ pub mod pallet {
 				Error::<T>::InsufficientBalance
 			);
 
+			let mut total_restricted_balance: FlipBalance<T> = T::Amount::zero();
+
 			// If necessary, update account restrictions.
 			if let Some(restricted_balance) = restricted_balances.get_mut(&address) {
-				restricted_balance.saturating_reduce(net_amount);
+				// Use the full debit amount here - fees are paid by restricted funds by default.
+				total_restricted_balance = *restricted_balance;
+				restricted_balance.saturating_reduce(debit_amount);
 				if restricted_balance.is_zero() {
 					restricted_balances.remove(&address);
 				}
@@ -416,7 +429,7 @@ pub mod pallet {
 			}
 
 			let remaining_balance = T::Flip::balance(&account_id)
-				.checked_sub(&net_amount)
+				.checked_sub(&redeem_amount)
 				.ok_or(Error::<T>::InsufficientBalance)?;
 
 			ensure!(
@@ -430,25 +443,36 @@ pub mod pallet {
 			);
 
 			// Update the account balance.
-			if net_amount > Zero::zero() {
-				T::Flip::try_initiate_redemption(&account_id, net_amount)?;
+			if redeem_amount > Zero::zero() {
+				T::Flip::try_initiate_redemption(&account_id, redeem_amount)?;
 
 				// Send the transaction.
 				let contract_expiry =
 					T::TimeSource::now().as_secs() + RedemptionTTLSeconds::<T>::get();
 				let call = T::RegisterRedemption::new_unsigned(
 					<T as Config>::FunderId::from_ref(&account_id).as_ref(),
-					net_amount.unique_saturated_into(),
+					redeem_amount.unique_saturated_into(),
 					address.as_fixed_bytes(),
 					contract_expiry,
+					executor,
 				);
 
-				PendingRedemptions::<T>::insert(&account_id, ());
+				PendingRedemptions::<T>::insert(
+					&account_id,
+					PendingRedemptionInfo {
+						total: redeem_amount,
+						restricted: min(
+							total_restricted_balance.saturating_sub(redemption_fee),
+							redeem_amount,
+						),
+						redeem_address: address,
+					},
+				);
 
 				Self::deposit_event(Event::RedemptionRequested {
 					account_id,
-					amount: net_amount,
-					broadcast_id: T::Broadcaster::threshold_sign_and_broadcast(call).0,
+					amount: redeem_amount,
+					broadcast_id: T::Broadcaster::threshold_sign_and_broadcast(call),
 					expiry_time: contract_expiry,
 				});
 			} else {
@@ -486,7 +510,8 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			PendingRedemptions::<T>::take(&account_id).ok_or(Error::<T>::NoPendingRedemption)?;
+			let _ = PendingRedemptions::<T>::take(&account_id)
+				.ok_or(Error::<T>::NoPendingRedemption)?;
 
 			T::Flip::finalize_redemption(&account_id)
 				.expect("This should never return an error because we already ensured above that the pending redemption does indeed exist");
@@ -519,11 +544,22 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			PendingRedemptions::<T>::take(&account_id).ok_or(Error::<T>::NoPendingRedemption)?;
+			let pending_redemption = PendingRedemptions::<T>::take(&account_id)
+				.ok_or(Error::<T>::NoPendingRedemption)?;
 
 			T::Flip::revert_redemption(&account_id).expect(
 				"Pending Redemption should exist since the corresponding redemption existed",
 			);
+
+			// If the address is still restricted, we update the restricted balances again.
+			if RestrictedAddresses::<T>::contains_key(pending_redemption.redeem_address) {
+				RestrictedBalances::<T>::mutate(&account_id, |restricted_balances| {
+					restricted_balances
+						.entry(pending_redemption.redeem_address)
+						.and_modify(|balance| *balance += pending_redemption.restricted)
+						.or_insert(pending_redemption.restricted);
+				});
+			}
 
 			Self::deposit_event(Event::<T>::RedemptionExpired { account_id });
 
@@ -619,7 +655,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(7)]
-		#[pallet::weight(T::WeightInfo::update_restricted_addresses(addresses_to_add.len() as u32, addresses_to_remove.len() as u32))]
+		#[pallet::weight(T::WeightInfo::update_restricted_addresses(addresses_to_add.len() as u32, addresses_to_remove.len() as u32, 10_u32))]
 		pub fn update_restricted_addresses(
 			origin: OriginFor<T>,
 			addresses_to_add: Vec<EthereumAddress>,
@@ -644,8 +680,8 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Binds an account to a redeem address. This is used to allow an account to redeem their
-		/// funds to a specific address.
+		/// Binds an account to a redeem address. This is used to allow an account to redeem
+		/// their funds only to a specific address.
 		///
 		/// ## Errors
 		///
@@ -658,8 +694,11 @@ pub mod pallet {
 			address: EthereumAddress,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
-			ensure!(!BoundAddress::<T>::contains_key(&account_id), Error::<T>::AccountAlreadyBound);
-			BoundAddress::<T>::insert(&account_id, address);
+			ensure!(
+				!BoundRedeemAddress::<T>::contains_key(&account_id),
+				Error::<T>::AccountAlreadyBound
+			);
+			BoundRedeemAddress::<T>::insert(&account_id, address);
 			Self::deposit_event(Event::BoundRedeemAddress { account_id, address });
 			Ok(().into())
 		}
@@ -680,6 +719,35 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::RedemptionTaxAmountUpdated { amount });
 			Ok(())
 		}
+
+		/// Binds executor address to an account.
+		///
+		/// ## Events
+		///
+		/// - [BoundExecutorAddress](Event::BoundExecutorAddress)
+		///
+		/// ## Errors
+		///
+		/// - [ExecutorAddressAlreadyBound](Error::ExecutorAddressAlreadyBound)
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(10)]
+		#[pallet::weight(T::WeightInfo::bind_executor_address())]
+		pub fn bind_executor_address(
+			origin: OriginFor<T>,
+			executor_address: EthereumAddress,
+		) -> DispatchResultWithPostInfo {
+			let account_id = ensure_signed(origin)?;
+			ensure!(
+				!BoundExecutorAddress::<T>::contains_key(&account_id),
+				Error::<T>::ExecutorAddressAlreadyBound,
+			);
+			BoundExecutorAddress::<T>::insert(account_id.clone(), executor_address);
+			Self::deposit_event(Event::BoundExecutorAddress {
+				account_id,
+				address: executor_address,
+			});
+			Ok(().into())
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -693,7 +761,7 @@ pub mod pallet {
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self {
-				genesis_accounts: vec![],
+				genesis_accounts: Default::default(),
 				redemption_tax: Default::default(),
 				minimum_funding: Default::default(),
 				redemption_ttl: Default::default(),
@@ -774,5 +842,7 @@ impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
 		ActiveBidder::<T>::remove(account_id);
 		RestrictedBalances::<T>::remove(account_id);
+		BoundExecutorAddress::<T>::remove(account_id);
+		BoundRedeemAddress::<T>::remove(account_id);
 	}
 }

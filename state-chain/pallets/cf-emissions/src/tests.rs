@@ -1,6 +1,7 @@
 #![cfg(test)]
 
 use crate::{mock::*, BlockEmissions, LastSupplyUpdateBlock, Pallet};
+use cf_primitives::SECONDS_PER_BLOCK;
 use cf_traits::{mocks::egress_handler::MockEgressHandler, RewardsDistribution, SetSafeMode};
 use frame_support::traits::OnInitialize;
 use pallet_cf_flip::Pallet as Flip;
@@ -116,7 +117,7 @@ fn no_update_of_update_total_supply_during_safe_mode_code_red() {
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
 		// Try send a broadcast to update the total supply
 		Emissions::on_initialize((SUPPLY_UPDATE_INTERVAL * 2).into());
-		// Expect the broadcast to be sendt
+		// Expect the broadcast to be sent
 		assert_eq!(
 			MockBroadcast::get_called().unwrap().new_total_supply,
 			Flip::<Test>::total_issuance()
@@ -125,12 +126,41 @@ fn no_update_of_update_total_supply_during_safe_mode_code_red() {
 }
 
 #[test]
-fn test_example_block_reward_calcaulation() {
+fn test_example_block_reward_calculation() {
 	use crate::calculate_inflation_to_block_reward;
 	let issuance: u128 = 100_000_000_000_000_000_000_000_000; // 100m Flip
 	let inflation: u128 = 2720; // perbill
 	let expected: u128 = 1_813_333_333_333_333_333;
 	assert_eq!(calculate_inflation_to_block_reward(issuance, inflation, 150u128), expected);
+}
+
+const BLOCKS_PER_YEAR: u64 = (365 * 24 + 6) * 60 * 60 / SECONDS_PER_BLOCK;
+#[test]
+fn rewards_calculation_compounding() {
+	const INITIAL_ISSUANCE: u128 = 100_000_000_000_000_000_000_000_000; // 100m Flip
+
+	let mut total_issuance: u128 = INITIAL_ISSUANCE;
+	const TARGET_ANNUAL_INFLATION: f64 = 0.001; // 0.1%
+	const COMPOUNDING_INTERVAL: u64 = 150;
+	// Authority emissions per `COMPOUNDING_INTERVAL` blocks in parts per billion
+	const EMISSION_INFLATION_PERBILL: u64 = 28;
+
+	for _ in 0..(BLOCKS_PER_YEAR / COMPOUNDING_INTERVAL) {
+		let block_reward = crate::calculate_inflation_to_block_reward(
+			total_issuance,
+			EMISSION_INFLATION_PERBILL as u128,
+			COMPOUNDING_INTERVAL as u128,
+		);
+
+		// For `COMPOUNDING_INTERVAL` blocks, block reward is the same
+		total_issuance += block_reward * COMPOUNDING_INTERVAL as u128;
+	}
+
+	let minted_actual = total_issuance.checked_sub(INITIAL_ISSUANCE).unwrap();
+	let inflation_actual = minted_actual as f64 / INITIAL_ISSUANCE as f64;
+	let error = inflation_actual / TARGET_ANNUAL_INFLATION;
+
+	assert!(error > 0.98 && error < 1.02);
 }
 
 #[test]

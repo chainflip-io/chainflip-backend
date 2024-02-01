@@ -1,16 +1,21 @@
 use crate::{self as pallet_cf_pools, PalletSafeMode};
-use cf_traits::{impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleRegistry};
+use cf_primitives::{Asset, AssetAmount};
+use cf_traits::{
+	impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleRegistry, LpBalanceApi,
+};
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage, Permill,
+	DispatchResult, Permill,
 };
 
 type AccountId = u64;
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
+pub const BOB: <Test as frame_system::Config>::AccountId = 124u64;
+
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // Configure a mock runtime to test the pallet.
@@ -57,31 +62,83 @@ impl_mock_chainflip!(Test);
 parameter_types! {
 	// 20 Basis Points
 	pub static NetworkFee: Permill = Permill::from_perthousand(2);
+	pub static AliceCollectedEth: AssetAmount = Default::default();
+	pub static AliceCollectedUsdc: AssetAmount = Default::default();
+	pub static BobCollectedEth: AssetAmount = Default::default();
+	pub static BobCollectedUsdc: AssetAmount = Default::default();
+	pub static AliceDebitedEth: AssetAmount = Default::default();
+	pub static AliceDebitedUsdc: AssetAmount = Default::default();
+	pub static BobDebitedEth: AssetAmount = Default::default();
+	pub static BobDebitedUsdc: AssetAmount = Default::default();
 }
+pub struct MockBalance;
+impl LpBalanceApi for MockBalance {
+	type AccountId = AccountId;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn register_liquidity_refund_address(
+		_who: &Self::AccountId,
+		_address: cf_chains::ForeignChainAddress,
+	) {
+	}
+
+	fn ensure_has_refund_address_for_pair(
+		_who: &Self::AccountId,
+		_base_asset: Asset,
+		_quote_asset: Asset,
+	) -> DispatchResult {
+		Ok(())
+	}
+
+	fn try_credit_account(
+		who: &Self::AccountId,
+		asset: cf_primitives::Asset,
+		amount: cf_primitives::AssetAmount,
+	) -> DispatchResult {
+		match (*who, asset) {
+			(ALICE, Asset::Eth) => AliceCollectedEth::set(AliceCollectedEth::get() + amount),
+			(ALICE, Asset::Usdc) => AliceCollectedUsdc::set(AliceCollectedUsdc::get() + amount),
+			(BOB, Asset::Eth) => BobCollectedEth::set(BobCollectedEth::get() + amount),
+			(BOB, Asset::Usdc) => BobCollectedUsdc::set(BobCollectedUsdc::get() + amount),
+			_ => (),
+		}
+		Ok(())
+	}
+
+	fn try_debit_account(
+		who: &Self::AccountId,
+		asset: cf_primitives::Asset,
+		amount: cf_primitives::AssetAmount,
+	) -> sp_runtime::DispatchResult {
+		match (*who, asset) {
+			(ALICE, Asset::Eth) => AliceDebitedEth::set(AliceDebitedEth::get() + amount),
+			(ALICE, Asset::Usdc) => AliceDebitedUsdc::set(AliceDebitedUsdc::get() + amount),
+			(BOB, Asset::Eth) => BobDebitedEth::set(BobDebitedEth::get() + amount),
+			(BOB, Asset::Usdc) => BobDebitedUsdc::set(BobDebitedUsdc::get() + amount),
+			_ => (),
+		}
+		Ok(())
+	}
+}
+
 impl_mock_runtime_safe_mode!(pools: PalletSafeMode);
 impl pallet_cf_pools::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type LpBalance = Self;
+	type LpBalance = MockBalance;
 	type NetworkFee = NetworkFee;
 	type SafeMode = MockRuntimeSafeMode;
 	type WeightInfo = ();
 }
 
-#[allow(unused)]
-// Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config =
-		RuntimeGenesisConfig { system: Default::default(), liquidity_pools: Default::default() };
-
-	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
-
-	ext.execute_with(|| {
-		System::set_block_number(1);
-		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+cf_test_utilities::impl_test_helpers! {
+	Test,
+	RuntimeGenesisConfig::default(),
+	|| {
+		frame_support::assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
 			&ALICE,
-		)
-		.unwrap();
-	});
-
-	ext
+		));
+		frame_support::assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+			&BOB,
+		));
+	}
 }

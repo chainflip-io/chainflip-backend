@@ -2,19 +2,25 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use sp_core::H256;
-use sp_runtime::traits::Hash;
+use sp_runtime::{traits::Hash, transaction_validity::InvalidTransaction};
 use tokio::sync::{mpsc, oneshot};
-use utilities::task_scope::{Scope, ScopedJoinHandle, OR_CANCEL};
+use utilities::task_scope::{Scope, ScopedJoinHandle, UnwrapOrCancel};
+
+use crate::state_chain_observer::client::extrinsic_api::common::invalid_err_obj;
 
 use super::{
 	super::{base_rpc_api, SUBSTRATE_BEHAVIOUR},
 	common::send_request,
 };
 
+pub enum ExtrinsicError {
+	Stale,
+}
+
 // Note 'static on the generics in this trait are only required for mockall to mock it
 #[async_trait]
 pub trait UnsignedExtrinsicApi {
-	async fn submit_unsigned_extrinsic<Call>(&self, call: Call) -> H256
+	async fn submit_unsigned_extrinsic<Call>(&self, call: Call) -> Result<H256, ExtrinsicError>
 	where
 		Call: Into<state_chain_runtime::RuntimeCall>
 			+ Clone
@@ -25,7 +31,10 @@ pub trait UnsignedExtrinsicApi {
 }
 
 pub struct UnsignedExtrinsicClient {
-	request_sender: mpsc::Sender<(state_chain_runtime::RuntimeCall, oneshot::Sender<H256>)>,
+	request_sender: mpsc::Sender<(
+		state_chain_runtime::RuntimeCall,
+		oneshot::Sender<Result<H256, ExtrinsicError>>,
+	)>,
 	_task_handle: ScopedJoinHandle<()>,
 }
 impl UnsignedExtrinsicClient {
@@ -48,7 +57,7 @@ impl UnsignedExtrinsicClient {
 						match base_rpc_client.submit_extrinsic(extrinsic).await {
 							Ok(tx_hash) => {
 								assert_eq!(tx_hash, expected_hash, "{SUBSTRATE_BEHAVIOUR}");
-								tx_hash
+								Ok(tx_hash)
 							},
 							Err(rpc_err) => {
 								match rpc_err {
@@ -66,7 +75,7 @@ impl UnsignedExtrinsicClient {
 										tracing::debug!(
 											"Already in pool with tx_hash: {expected_hash:#x}."
 										);
-										expected_hash
+										Ok(expected_hash)
 									},
 									// POOL_TEMPORARILY_BANNED error is not entirely understood, we
 									// believe it has a similiar meaning to POOL_ALREADY_IMPORTED,
@@ -78,7 +87,13 @@ impl UnsignedExtrinsicClient {
 										tracing::debug!(
 											"Transaction is temporarily banned with tx_hash: {expected_hash:#x}."
 										);
-										expected_hash
+										Ok(expected_hash)
+									},
+									jsonrpsee::core::Error::Call(
+										jsonrpsee::types::error::CallError::Custom(ref obj),
+									) if obj == &invalid_err_obj(InvalidTransaction::Stale) => {
+										tracing::debug!("Submission failed as the transaction is stale: {obj:?}");
+										Err(ExtrinsicError::Stale)
 									},
 									_ => return Err(rpc_err.into()),
 								}
@@ -95,7 +110,7 @@ impl UnsignedExtrinsicClient {
 
 #[async_trait]
 impl UnsignedExtrinsicApi for UnsignedExtrinsicClient {
-	async fn submit_unsigned_extrinsic<Call>(&self, call: Call) -> H256
+	async fn submit_unsigned_extrinsic<Call>(&self, call: Call) -> Result<H256, ExtrinsicError>
 	where
 		Call: Into<state_chain_runtime::RuntimeCall>
 			+ Clone
@@ -106,7 +121,7 @@ impl UnsignedExtrinsicApi for UnsignedExtrinsicClient {
 	{
 		send_request(&self.request_sender, |result_sender| (call.into(), result_sender))
 			.await
+			.unwrap_or_cancel()
 			.await
-			.expect(OR_CANCEL)
 	}
 }

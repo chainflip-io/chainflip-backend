@@ -9,7 +9,6 @@ use cf_primitives::{
 	ChannelId, ForeignChain, NetworkEnvironment,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::sp_runtime::DispatchError;
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::de::DeserializeOwned;
@@ -17,13 +16,25 @@ use serde::{Deserialize, Serialize};
 use sp_core::H160;
 use sp_std::{fmt::Debug, vec::Vec};
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AddressDerivationError {
+	MissingPolkadotVault,
+	MissingBitcoinVault,
+	BitcoinChannelIdTooLarge,
+}
+
 /// Generates a deterministic deposit address for some combination of asset, chain and channel id.
 pub trait AddressDerivationApi<C: Chain> {
 	// TODO: should also take root pubkey (vault) as an argument?
 	fn generate_address(
 		source_asset: C::ChainAsset,
 		channel_id: ChannelId,
-	) -> Result<C::ChainAccount, DispatchError>;
+	) -> Result<C::ChainAccount, AddressDerivationError>;
+
+	fn generate_address_and_state(
+		source_asset: C::ChainAsset,
+		channel_id: ChannelId,
+	) -> Result<(C::ChainAccount, C::DepositChannelState), AddressDerivationError>;
 }
 
 #[derive(
@@ -269,12 +280,28 @@ impl ToHumanreadableAddress for PolkadotAccountId {
 }
 
 #[cfg(feature = "std")]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(untagged)]
+/// A type that serializes the address in a human-readable way. This can only be
+/// serialized and not deserialized.
+/// `deserialize` is not implemented for ForeignChainAddressHumanreadable
+/// because it is not possible to deserialize a human-readable address without
+/// further context around the asset and chain.
 pub enum ForeignChainAddressHumanreadable {
 	Eth(<EthereumAddress as ToHumanreadableAddress>::Humanreadable),
 	Dot(<PolkadotAccountId as ToHumanreadableAddress>::Humanreadable),
 	Btc(<ScriptPubkey as ToHumanreadableAddress>::Humanreadable),
 	Arb(<ArbitrumAddress as ToHumanreadableAddress>::Humanreadable),
+}
+
+#[cfg(feature = "std")]
+impl<'de> Deserialize<'de> for ForeignChainAddressHumanreadable {
+	fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		unimplemented!("Deserialization of ForeignChainAddressHumanreadable is not implemented")
+	}
 }
 
 impl ToHumanreadableAddress for ForeignChainAddress {

@@ -1,27 +1,8 @@
 use crate::{BitcoinInstance, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall};
+use cf_chains::btc::BitcoinFeeInfo;
 use codec::{Decode, Encode};
 use pallet_cf_witnesser::WitnessDataExtraction;
 use sp_std::{mem, prelude::*};
-
-fn select_median<T: Encode + Decode>(data: &mut [Vec<u8>]) -> Option<T> {
-	if data.is_empty() {
-		return None
-	}
-
-	let len = data.len();
-	let median_index = if len % 2 == 0 { (len - 1) / 2 } else { len / 2 };
-	// Encoding is order-preserving so we can sort the raw encoded bytes and then decode
-	// just the result.
-	let (_, median_bytes, _) = data.select_nth_unstable(median_index);
-
-	match Decode::decode(&mut &median_bytes[..]) {
-		Ok(median) => Some(median),
-		Err(e) => {
-			log::error!("Failed to decode median priority fee: {:?}", e);
-			None
-		},
-	}
-}
 
 impl WitnessDataExtraction for RuntimeCall {
 	fn extract(&mut self) -> Option<Vec<u8>> {
@@ -65,7 +46,7 @@ impl WitnessDataExtraction for RuntimeCall {
 			>::update_chain_state {
 				new_chain_state,
 			}) =>
-				if let Some(median) = select_median(data) {
+				if let Some(median) = decode_and_select(data, select_median) {
 					new_chain_state.tracked_data.priority_fee = median;
 				},
 			RuntimeCall::BitcoinChainTracking(pallet_cf_chain_tracking::Call::<
@@ -73,18 +54,17 @@ impl WitnessDataExtraction for RuntimeCall {
 				BitcoinInstance,
 			>::update_chain_state {
 				new_chain_state,
-			}) => {
-				if let Some(median) = select_median(data) {
+			}) =>
+				if let Some(median) = decode_and_select(data, select_median_btc_info) {
 					new_chain_state.tracked_data.btc_fee_info = median;
-				};
-			},
+				},
 			RuntimeCall::PolkadotChainTracking(pallet_cf_chain_tracking::Call::<
 				Runtime,
 				PolkadotInstance,
 			>::update_chain_state {
 				new_chain_state,
 			}) => {
-				if let Some(median) = select_median(data) {
+				if let Some(median) = decode_and_select(data, select_median) {
 					new_chain_state.tracked_data.median_tip = median;
 				};
 			},
@@ -92,6 +72,48 @@ impl WitnessDataExtraction for RuntimeCall {
 				log::warn!("No witness data injection for call {:?}", self);
 			},
 		}
+	}
+}
+
+fn select_median<T: Ord + Copy>(mut data: Vec<T>) -> Option<T> {
+	let median_index = data.len().checked_sub(1)? / 2;
+	let (_, median_value, _) = data.select_nth_unstable(median_index);
+
+	Some(*median_value)
+}
+
+fn select_median_btc_info(data: Vec<BitcoinFeeInfo>) -> Option<BitcoinFeeInfo> {
+	select_median(data.iter().map(BitcoinFeeInfo::sats_per_kilobyte).collect())
+		.map(BitcoinFeeInfo::new)
+}
+
+fn decode_and_select<T, F>(data: &mut [Vec<u8>], mut select: F) -> Option<T>
+where
+	T: Decode,
+	F: FnMut(Vec<T>) -> Option<T>,
+{
+	// A failure to decode can be caused by a runtime-upgrade,
+	// when some entries are encoded using the old version, and some — using the new version.
+	//
+	// The older implementation would ignore the entries encoded by the old-runtime.
+	// Now we either decode all entries, or ignore them all.
+	//
+	// Thus we are trying to prevent a situation when the whole vote is swayed
+	// by those who happen to witness their observations after the runtime-update.
+	//
+	// We assume that in order to get into that collection,
+	// an entry should to be a valid data structure at the moment of witnessing.
+	// Therefore it wouldn't be possible to sabotage voting by submitting an invalid entry.
+
+	let decode_all_result: Result<Vec<_>, _> =
+		data.iter_mut().map(|entry| T::decode(&mut entry.as_slice())).collect();
+
+	match decode_all_result {
+		Ok(entries) => select(entries),
+		Err(decode_err) => {
+			log::warn!("Error decoding {}: {}", core::any::type_name::<T>(), decode_err);
+			None
+		},
 	}
 }
 
@@ -206,7 +228,7 @@ mod tests {
 
 	#[test]
 	fn test_priority_fee_witnessing() {
-		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+		sp_io::TestExternalities::new_empty().execute_with(|| {
 			// This would be set at genesis
 			CurrentChainState::<Runtime, EthereumInstance>::put(ChainState {
 				block_height: 0,
@@ -250,5 +272,53 @@ mod tests {
 				}
 			);
 		})
+	}
+
+	// Selecting median from integers spanning multiple bytes wasn't
+	// working correctly previously, so this serves as a regression test:
+	#[test]
+	fn select_median_multi_bytes_ints() {
+		let values = vec![1_u16, 8, 32, 256, 768];
+		assert_eq!(select_median::<u16>(values).unwrap(), 32);
+	}
+
+	#[test]
+	fn select_median_out_of_order() {
+		let values = vec![4, 1, 8, 7, 100];
+		assert_eq!(select_median::<u16>(values).unwrap(), 7);
+	}
+
+	#[test]
+	fn select_median_empty() {
+		assert_eq!(select_median::<u16>(vec![]), None);
+	}
+
+	#[test]
+	// The median for a collection of BTC fee infos is selected based on the order of their
+	// `sats_per_kilobyte` properties.
+	//
+	// Other properties (fee per input utxo, fee per output utxo,
+	// min fee required per tx) are assumed to have the same order.
+	fn select_median_btc_info_test() {
+		let mut votes: Vec<_> = (0..10).map(BitcoinFeeInfo::new).collect();
+		votes.sort_unstable_by_key(|info| info.blake2_128());
+
+		let actual =
+			select_median_btc_info(votes).expect("should not happen: the collection is not empty.");
+		let expected = BitcoinFeeInfo::new(5);
+
+		for f in [
+			BitcoinFeeInfo::sats_per_kilobyte,
+			BitcoinFeeInfo::fee_per_input_utxo,
+			BitcoinFeeInfo::fee_per_output_utxo,
+			BitcoinFeeInfo::min_fee_required_per_tx,
+		] {
+			assert_eq!(f(&actual), f(&expected));
+		}
+	}
+
+	#[test]
+	fn select_median_btc_info_empty() {
+		assert_eq!(select_median_btc_info(vec![]), None);
 	}
 }

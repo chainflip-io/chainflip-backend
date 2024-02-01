@@ -6,9 +6,8 @@ use cf_chains::{
 	btc::{
 		api::{SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		deposit_address::DepositAddress,
-		utxo_selection::select_utxos_from_pool,
-		Bitcoin, BitcoinFeeInfo, BitcoinNetwork, BtcAmount, ScriptPubkey, Utxo, UtxoId,
-		CHANGE_ADDRESS_SALT,
+		utxo_selection::{select_utxos_for_consolidation, select_utxos_from_pool},
+		Bitcoin, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EthereumAddress,
@@ -17,7 +16,10 @@ use cf_primitives::{
 	chains::assets::{arb::Asset as ArbAsset, eth::Asset as EthAsset},
 	NetworkEnvironment, SemVer,
 };
-use cf_traits::{CompatibleVersions, GetBitcoinFeeInfo, SafeMode};
+use cf_traits::{
+	CompatibleCfeVersions, CompatibleVersions, GetBitcoinFeeInfo, NetworkEnvironmentProvider,
+	SafeMode,
+};
 use frame_support::{
 	pallet_prelude::*,
 	traits::{OnRuntimeUpgrade, StorageVersion},
@@ -33,9 +35,15 @@ mod tests;
 
 pub mod weights;
 pub use weights::WeightInfo;
-mod migrations;
+pub mod migrations;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(8);
+
+const INITIAL_CONSOLIDATION_PARAMETERS: cf_chains::btc::ConsolidationParameters =
+	cf_chains::btc::ConsolidationParameters {
+		consolidation_threshold: 200,
+		consolidation_size: 100,
+	};
 
 type SignatureNonce = u64;
 
@@ -56,7 +64,7 @@ pub enum SafeModeUpdate<T: Config> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::btc::{ScriptPubkey, Utxo};
+	use cf_chains::btc::Utxo;
 	use cf_primitives::TxId;
 	use cf_traits::VaultKeyWitnessedHandler;
 	use frame_support::DefaultNoBound;
@@ -75,15 +83,13 @@ pub mod pallet {
 		/// The runtime's safe mode is stored in this pallet.
 		type RuntimeSafeMode: cf_traits::SafeMode + Member + Parameter + Default;
 
-		#[pallet::constant]
-		type BitcoinNetwork: Get<BitcoinNetwork>;
-
 		/// Get Bitcoin Fee info from chain tracking
 		type BitcoinFeeInfo: cf_traits::GetBitcoinFeeInfo;
 
-		/// Used to determine compatibility between the runtime and the CFE.
+		/// Used to access the current Chainflip runtime's release version (distinct from the
+		/// substrate RuntimeVersion)
 		#[pallet::constant]
-		type CurrentCompatibilityVersion: Get<SemVer>;
+		type CurrentReleaseVersion: Get<SemVer>;
 
 		/// Weight information
 		type WeightInfo: WeightInfo;
@@ -134,7 +140,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn ethereum_chain_id)]
 	/// The ETH chain id
-	pub type EthereumChainId<T> = StorageValue<_, cf_chains::evm::EthereumChainId, ValueQuery>;
+	pub type EthereumChainId<T> = StorageValue<_, cf_chains::evm::api::EvmChainId, ValueQuery>;
 
 	#[pallet::storage]
 	pub type EthereumSignatureNonce<T> = StorageValue<_, SignatureNonce, ValueQuery>;
@@ -160,20 +166,21 @@ pub mod pallet {
 	pub type BitcoinAvailableUtxos<T> = StorageValue<_, Vec<Utxo>, ValueQuery>;
 
 	#[pallet::storage]
-	/// Lookup for determining which salt and pubkey the current deposit Bitcoin Script was created
-	/// from.
-	pub type BitcoinActiveDepositAddressDetails<T> =
-		StorageMap<_, Twox64Concat, ScriptPubkey, (u32, [u8; 32]), ValueQuery>;
+	#[pallet::getter(fn consolidation_parameters)]
+	pub type ConsolidationParameters<T> =
+		StorageValue<_, cf_chains::btc::ConsolidationParameters, ValueQuery>;
 
+	// OTHER ENVIRONMENT ITEMS
 	#[pallet::storage]
 	#[pallet::getter(fn safe_mode)]
 	/// Stores the current safe mode state for the runtime.
 	pub type RuntimeSafeMode<T> = StorageValue<_, <T as Config>::RuntimeSafeMode, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn next_compatibility_version)]
-	/// If this storage is set, a new version of Chainflip is available for upgrade.
-	pub type NextCompatibilityVersion<T> = StorageValue<_, Option<SemVer>, ValueQuery>;
+	#[pallet::getter(fn current_release_version)]
+	/// Always set to the current release version. We duplicate the `CurrentReleaseVersion` pallet
+	/// constant to allow querying the value by block hash.
+	pub type CurrentReleaseVersion<T> = StorageValue<_, SemVer, ValueQuery>;
 
 	// ARBITRUM CHAIN RELATED ENVIRONMENT ITEMS
 	#[pallet::storage]
@@ -227,34 +234,8 @@ pub mod pallet {
 		BitcoinBlockNumberSetForVault { block_number: cf_chains::btc::BlockNumber },
 		/// The Safe Mode settings for the chain has been updated
 		RuntimeSafeModeUpdated { safe_mode: SafeModeUpdate<T> },
-		/// A new Chainflip runtime will soon be deployed at this version.
-		NextCompatibilityVersionSet { version: Option<SemVer> },
-	}
-
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_runtime_upgrade() -> Weight {
-			let weight = migrations::PalletMigration::<T>::on_runtime_upgrade();
-			NextCompatibilityVersion::<T>::kill();
-			weight
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, DispatchError> {
-			if let Some(next_version) = NextCompatibilityVersion::<T>::get() {
-				if next_version != T::CurrentCompatibilityVersion::get() {
-					return Err("NextCompatibilityVersion does not match the current runtime".into())
-				}
-			} else {
-				return Err("NextCompatibilityVersion is not set".into())
-			}
-			migrations::PalletMigration::<T>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), DispatchError> {
-			migrations::PalletMigration::<T>::post_upgrade(state)
-		}
+		/// UTXO consolidation parameters has been updated
+		UtxoConsolidationParametersUpdated { params: cf_chains::btc::ConsolidationParameters },
 	}
 
 	#[pallet::call]
@@ -297,7 +278,7 @@ pub mod pallet {
 
 			// Witness the agg_key rotation manually in the vaults pallet for polkadot
 			let dispatch_result =
-				T::PolkadotVaultKeyWitnessedHandler::on_new_key_activated(tx_id.block_number)?;
+				T::PolkadotVaultKeyWitnessedHandler::on_first_key_activated(tx_id.block_number)?;
 
 			Ok(dispatch_result)
 		}
@@ -328,7 +309,7 @@ pub mod pallet {
 
 			// Witness the agg_key rotation manually in the vaults pallet for bitcoin
 			let dispatch_result =
-				T::BitcoinVaultKeyWitnessedHandler::on_new_key_activated(block_number)?;
+				T::BitcoinVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
 
 			Self::deposit_event(Event::<T>::BitcoinBlockNumberSetForVault { block_number });
 
@@ -356,31 +337,19 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Sets the next Chainflip compatiblity version.
-		///
-		/// This is used to signal to CFE operators that a new version of the runtime will soon be
-		/// deployed.
-		///
-		/// Requires governance origin.
-		///
-		/// ## Events
-		///
-		/// - [Success](Event::NextCompatibilityVersionSet)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::WeightInfo::set_next_compatibility_version())]
-		pub fn set_next_compatibility_version(
+		#[pallet::weight(T::WeightInfo::update_consolidation_parameters())]
+		pub fn update_consolidation_parameters(
 			origin: OriginFor<T>,
-			version: Option<SemVer>,
+			params: cf_chains::btc::ConsolidationParameters,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			NextCompatibilityVersion::<T>::put(version);
+			ensure!(params.are_valid(), DispatchError::Other("Invalid parameters"));
 
-			Self::deposit_event(Event::<T>::NextCompatibilityVersionSet { version });
+			ConsolidationParameters::<T>::set(params);
+
+			Self::deposit_event(Event::<T>::UtxoConsolidationParametersUpdated { params });
 
 			Ok(())
 		}
@@ -424,6 +393,7 @@ pub mod pallet {
 			PolkadotProxyAccountNonce::<T>::set(0);
 
 			BitcoinAvailableUtxos::<T>::set(vec![]);
+			ConsolidationParameters::<T>::set(INITIAL_CONSOLIDATION_PARAMETERS);
 
 			ArbitrumKeyManagerAddress::<T>::set(self.arb_key_manager_address);
 			ArbitrumVaultAddress::<T>::set(self.arb_vault_address);
@@ -432,11 +402,17 @@ pub mod pallet {
 			ArbitrumAddressCheckerAddress::<T>::set(self.arb_address_checker_address);
 
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
+
+			Pallet::<T>::update_current_release_version();
 		}
 	}
 }
 
 impl<T: Config> Pallet<T> {
+	pub fn update_current_release_version() {
+		CurrentReleaseVersion::<T>::set(T::CurrentReleaseVersion::get());
+	}
+
 	pub fn next_ethereum_signature_nonce() -> SignatureNonce {
 		EthereumSignatureNonce::<T>::mutate(|nonce| {
 			*nonce += 1;
@@ -450,33 +426,25 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	pub fn next_polkadot_proxy_account_nonce() -> PolkadotIndex {
+	pub fn next_polkadot_proxy_account_nonce(reset_nonce: bool) -> PolkadotIndex {
 		PolkadotProxyAccountNonce::<T>::mutate(|nonce| {
-			*nonce += 1;
-			*nonce - 1
-		})
-	}
+			let current_nonce = *nonce;
 
-	pub fn reset_polkadot_proxy_account_nonce() {
-		PolkadotProxyAccountNonce::<T>::set(0);
+			if reset_nonce {
+				*nonce = 0;
+			} else {
+				*nonce += 1;
+			}
+			current_nonce
+		})
 	}
 
 	pub fn add_bitcoin_utxo_to_list(
 		amount: BtcAmount,
 		utxo_id: UtxoId,
-		script_pubkey: ScriptPubkey,
+		deposit_address: DepositAddress,
 	) {
-		let (salt, pubkey) = BitcoinActiveDepositAddressDetails::<T>::get(script_pubkey);
-
-		BitcoinAvailableUtxos::<T>::append(Utxo {
-			amount,
-			id: utxo_id,
-			deposit_address: DepositAddress::new(pubkey, salt),
-		});
-	}
-
-	pub fn cleanup_bitcoin_deposit_address_details(script_pubkey: ScriptPubkey) {
-		BitcoinActiveDepositAddressDetails::<T>::remove(script_pubkey);
+		BitcoinAvailableUtxos::<T>::append(Utxo { amount, id: utxo_id, deposit_address });
 	}
 
 	pub fn add_bitcoin_change_utxo(amount: BtcAmount, utxo_id: UtxoId, pubkey_x: [u8; 32]) {
@@ -495,25 +463,56 @@ impl<T: Config> Pallet<T> {
 	pub fn select_and_take_bitcoin_utxos(
 		utxo_selection_type: UtxoSelectionType,
 	) -> Option<SelectedUtxosAndChangeAmount> {
-		let BitcoinFeeInfo { fee_per_input_utxo, fee_per_output_utxo, min_fee_required_per_tx } =
-			T::BitcoinFeeInfo::bitcoin_fee_info();
+		let bitcoin_fee_info = T::BitcoinFeeInfo::bitcoin_fee_info();
+		let min_fee_required_per_tx = bitcoin_fee_info.min_fee_required_per_tx();
+		let fee_per_output_utxo = bitcoin_fee_info.fee_per_output_utxo();
+
+		let calculate_utxos_and_change = |spendable_utxos: Vec<_>| {
+			let total_fee = spendable_utxos
+				.iter()
+				.map(|utxo| bitcoin_fee_info.fee_for_utxo(utxo))
+				.sum::<u64>() + fee_per_output_utxo +
+				min_fee_required_per_tx;
+
+			spendable_utxos
+				.iter()
+				.map(|utxo| utxo.amount)
+				.sum::<u64>()
+				.checked_sub(total_fee)
+				.map(|change_amount| (spendable_utxos, change_amount))
+		};
+
 		match utxo_selection_type {
 			UtxoSelectionType::SelectAllForRotation => {
-				let available_utxos = BitcoinAvailableUtxos::<T>::take();
-				(!available_utxos.is_empty()).then_some(available_utxos).map(|available_utxos| {
-					(
-						available_utxos.clone(),
-						available_utxos.iter().map(|Utxo { amount, .. }| *amount).sum::<u64>() -
-							(available_utxos.len() as u64) * fee_per_input_utxo -
-							fee_per_output_utxo - min_fee_required_per_tx,
-					)
-				})
+				let spendable_utxos: Vec<_> = BitcoinAvailableUtxos::<T>::take()
+					.into_iter()
+					.filter(|utxo| utxo.amount > bitcoin_fee_info.fee_for_utxo(utxo))
+					.collect();
+
+				if spendable_utxos.is_empty() {
+					return None
+				}
+				calculate_utxos_and_change(spendable_utxos)
 			},
+			UtxoSelectionType::SelectForConsolidation =>
+				BitcoinAvailableUtxos::<T>::try_mutate(|available_utxos| {
+					let params = Self::consolidation_parameters();
+
+					let utxos_to_consolidate =
+						select_utxos_for_consolidation(available_utxos, &bitcoin_fee_info, params);
+
+					if utxos_to_consolidate.is_empty() {
+						Err(())
+					} else {
+						calculate_utxos_and_change(utxos_to_consolidate).ok_or(())
+					}
+				})
+				.ok(),
 			UtxoSelectionType::Some { output_amount, number_of_outputs } =>
 				BitcoinAvailableUtxos::<T>::try_mutate(|available_utxos| {
 					select_utxos_from_pool(
 						available_utxos,
-						fee_per_input_utxo,
+						&bitcoin_fee_info,
 						output_amount +
 							number_of_outputs * fee_per_output_utxo +
 							min_fee_required_per_tx,
@@ -533,21 +532,16 @@ impl<T: Config> Pallet<T> {
 				}),
 		}
 	}
+}
 
-	pub fn add_details_for_btc_deposit_script(
-		script_pubkey: ScriptPubkey,
-		salt: u32,
-		pubkey: [u8; 32],
-	) {
-		BitcoinActiveDepositAddressDetails::<T>::insert(script_pubkey, (salt, pubkey));
+impl<T: Config> CompatibleCfeVersions for Pallet<T> {
+	fn current_release_version() -> SemVer {
+		Self::current_release_version()
 	}
 }
 
-impl<T: Config> CompatibleVersions for Pallet<T> {
-	fn current_compatibility_version() -> SemVer {
-		<T as Config>::CurrentCompatibilityVersion::get()
-	}
-	fn next_compatibility_version() -> Option<SemVer> {
-		NextCompatibilityVersion::<T>::get()
+impl<T: Config> NetworkEnvironmentProvider for Pallet<T> {
+	fn get_network_environment() -> NetworkEnvironment {
+		Self::network_environment()
 	}
 }

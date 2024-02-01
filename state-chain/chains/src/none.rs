@@ -13,8 +13,8 @@ impl IntoForeignChainAddress<NoneChain> for ForeignChainAddress {
 
 impl Chain for NoneChain {
 	const NAME: &'static str = "NONE";
-	type KeyHandoverIsRequired = ConstBool<false>;
-	type OptimisticActivation = ConstBool<true>;
+	const GAS_ASSET: Self::ChainAsset = assets::any::Asset::Usdc;
+	type ChainCrypto = NoneChainCrypto;
 	type ChainBlockNumber = u64;
 	type ChainAmount = u64;
 	type TransactionFee = u64;
@@ -25,14 +25,31 @@ impl Chain for NoneChain {
 	type DepositFetchId = ChannelId;
 	type DepositChannelState = ();
 	type DepositDetails = ();
+	type Transaction = ();
+	type TransactionMetadata = ();
+	type ReplayProtectionParams = ();
+	type ReplayProtection = ();
 }
 
-impl ChainCrypto for NoneChain {
+impl FeeRefundCalculator<NoneChain> for () {
+	fn return_fee_refund(
+		&self,
+		_fee_paid: <NoneChain as Chain>::TransactionFee,
+	) -> <NoneChain as Chain>::ChainAmount {
+		unimplemented!()
+	}
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NoneChainCrypto;
+impl ChainCrypto for NoneChainCrypto {
+	type UtxoChain = ConstBool<false>;
 	type AggKey = ();
 	type Payload = ();
 	type ThresholdSignature = ();
 	type TransactionInId = ();
 	type TransactionOutId = ();
+	type KeyHandoverIsRequired = ConstBool<false>;
 	type GovKey = ();
 
 	fn verify_threshold_signature(
@@ -44,6 +61,12 @@ impl ChainCrypto for NoneChain {
 	}
 
 	fn agg_key_to_payload(_agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
+		unimplemented!()
+	}
+
+	fn maybe_broadcast_barriers_on_rotation(
+		_rotation_broadcast_id: BroadcastId,
+	) -> Vec<BroadcastId> {
 		unimplemented!()
 	}
 }

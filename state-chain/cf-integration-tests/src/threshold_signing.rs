@@ -2,8 +2,7 @@ use arrayref::array_ref;
 use cf_chains::{
 	btc,
 	dot::{EncodedPolkadotPayload, PolkadotPair, PolkadotPublicKey, PolkadotSignature},
-	eth::{to_ethereum_address, AggKey},
-	evm::SchnorrVerificationComponents,
+	evm::{to_evm_address, AggKey, SchnorrVerificationComponents},
 };
 use cf_primitives::{EpochIndex, GENESIS_EPOCH};
 use libsecp256k1::{PublicKey, SecretKey};
@@ -50,8 +49,7 @@ impl KeyUtils for EthKeyComponents {
 		let k = SecretKey::parse(&k).unwrap();
 		let signature = self.agg_key.sign(message, &self.secret, &k);
 
-		let k_times_g_address =
-			to_ethereum_address(PublicKey::from_secret_key(&k)).to_fixed_bytes();
+		let k_times_g_address = to_evm_address(PublicKey::from_secret_key(&k)).to_fixed_bytes();
 		SchnorrVerificationComponents { s: signature, k_times_g_address }
 	}
 
@@ -78,6 +76,7 @@ impl KeyUtils for EthKeyComponents {
 }
 
 pub struct ThresholdSigner<KeyComponents, SigVerification> {
+	previous_key_components: Option<KeyComponents>,
 	key_components: KeyComponents,
 	proposed_key_components: Option<KeyComponents>,
 	_phantom: PhantomData<SigVerification>,
@@ -88,20 +87,22 @@ where
 	KeyComponents: KeyUtils<SigVerification = SigVerification, AggKey = AggKey> + Clone,
 {
 	pub fn sign_with_key(&self, key: AggKey, message: &KeyComponents::Message) -> SigVerification {
-		let curr_key = self.key_components.agg_key();
-		if key == curr_key {
+		let current_key = self.key_components.agg_key();
+		if key == current_key {
 			return self.key_components.sign(message)
 		}
-		let next_key = self.proposed_key_components.as_ref().unwrap().agg_key();
-		if key == next_key {
+		if self.previous_key_components.is_some() &&
+			self.previous_key_components.as_ref().unwrap().agg_key() == key
+		{
+			return self.previous_key_components.as_ref().unwrap().sign(message)
+		}
+		if self.proposed_key_components.is_some() &&
+			self.proposed_key_components.as_ref().unwrap().agg_key() == key
+		{
 			self.proposed_key_components.as_ref().unwrap().sign(message)
 		} else {
 			panic!("Unknown key");
 		}
-	}
-
-	pub fn current_agg_key(&self) -> AggKey {
-		self.key_components.agg_key()
 	}
 
 	pub fn propose_new_key(&mut self) -> AggKey {
@@ -114,9 +115,23 @@ where
 	// Rotate to the current proposed key and clear the proposed key
 	pub fn use_proposed_key(&mut self) {
 		if self.proposed_key_components.is_some() {
+			self.previous_key_components = Some(self.key_components.clone());
 			self.key_components =
 				self.proposed_key_components.as_ref().expect("No key has been proposed").clone();
 			self.proposed_key_components = None;
+		}
+	}
+
+	pub fn is_key_valid(&self, key: &AggKey) -> bool {
+		let current_key = self.key_components.agg_key();
+		if *key != current_key {
+			if let Some(next_key_components) = self.proposed_key_components.as_ref() {
+				*key == next_key_components.agg_key()
+			} else {
+				false
+			}
+		} else {
+			true
 		}
 	}
 }
@@ -126,6 +141,7 @@ pub type EthThresholdSigner = ThresholdSigner<EthKeyComponents, SchnorrVerificat
 impl Default for EthThresholdSigner {
 	fn default() -> Self {
 		ThresholdSigner {
+			previous_key_components: None,
 			key_components: EthKeyComponents::generate(GENESIS_KEY_SEED, GENESIS_EPOCH),
 			proposed_key_components: None,
 			_phantom: PhantomData,
@@ -140,6 +156,7 @@ pub type DotThresholdSigner = ThresholdSigner<DotKeyComponents, PolkadotSignatur
 impl Default for DotThresholdSigner {
 	fn default() -> Self {
 		Self {
+			previous_key_components: None,
 			key_components: DotKeyComponents::generate(GENESIS_KEY_SEED, GENESIS_EPOCH),
 			proposed_key_components: None,
 			_phantom: PhantomData,
@@ -177,6 +194,7 @@ pub type BtcThresholdSigner = ThresholdSigner<BtcKeyComponents, btc::Signature>;
 impl Default for BtcThresholdSigner {
 	fn default() -> Self {
 		Self {
+			previous_key_components: None,
 			key_components: BtcKeyComponents::generate(GENESIS_KEY_SEED, GENESIS_EPOCH),
 			proposed_key_components: None,
 			_phantom: PhantomData,
@@ -207,7 +225,10 @@ impl KeyUtils for BtcKeyComponents {
 	}
 
 	fn generate_next(&self) -> Self {
-		Self::generate(self.seed + 1, self.epoch_index + 1)
+		let prev_agg_key = self.agg_key.current;
+		let mut generated = Self::generate(self.seed + 1, self.epoch_index + 1);
+		generated.agg_key.previous = Some(prev_agg_key);
+		generated
 	}
 
 	fn agg_key(&self) -> Self::AggKey {

@@ -1,6 +1,6 @@
 use cf_chains::address::ForeignChainAddress;
-use cf_primitives::{Asset, AssetAmount, BasisPoints, ChannelId, SwapLeg};
-use frame_support::{dispatch::DispatchError, sp_runtime::DispatchResult};
+use cf_primitives::{Asset, AssetAmount, BasisPoints, ChannelId, SwapId};
+use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 
 pub trait SwapDepositHandler {
 	type AccountId;
@@ -16,11 +16,28 @@ pub trait SwapDepositHandler {
 		broker_id: Self::AccountId,
 		broker_commission_bps: BasisPoints,
 		channel_id: ChannelId,
-	);
+	) -> SwapId;
+}
+
+pub trait LpDepositHandler {
+	type AccountId;
+
+	/// Attempt to credit the account with the given asset and amount
+	/// as a result of a liquidity deposit.
+	fn add_deposit(who: &Self::AccountId, asset: Asset, amount: AssetAmount) -> DispatchResult;
 }
 
 pub trait LpBalanceApi {
 	type AccountId;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn register_liquidity_refund_address(who: &Self::AccountId, address: ForeignChainAddress);
+
+	fn ensure_has_refund_address_for_pair(
+		who: &Self::AccountId,
+		base_asset: Asset,
+		quote_asset: Asset,
+	) -> DispatchResult;
 
 	/// Attempt to credit the account with the given asset and amount.
 	fn try_credit_account(
@@ -37,6 +54,22 @@ pub trait LpBalanceApi {
 	) -> DispatchResult;
 }
 
+pub trait PoolApi {
+	type AccountId;
+
+	/// Sweep all earnings of an LP into their free balance (Should be called before any assets are
+	/// debited from their free balance)
+	fn sweep(who: &Self::AccountId) -> Result<(), DispatchError>;
+}
+
+impl<T: frame_system::Config> PoolApi for T {
+	type AccountId = T::AccountId;
+
+	fn sweep(_who: &Self::AccountId) -> Result<(), DispatchError> {
+		Ok(())
+	}
+}
+
 pub trait SwappingApi {
 	/// Takes the swap amount in STABLE_ASSET, collect network fee from it
 	/// and return the remaining value
@@ -44,8 +77,8 @@ pub trait SwappingApi {
 
 	/// Process a single leg of a swap, into or from Stable asset. No network fee is taken.
 	fn swap_single_leg(
-		leg: SwapLeg,
-		unstable_asset: Asset,
+		from: Asset,
+		to: Asset,
 		input_amount: AssetAmount,
 	) -> Result<AssetAmount, DispatchError>;
 }
@@ -56,50 +89,10 @@ impl<T: frame_system::Config> SwappingApi for T {
 	}
 
 	fn swap_single_leg(
-		_leg: SwapLeg,
-		_unstable_asset: Asset,
+		_from: Asset,
+		_to: Asset,
 		input_amount: AssetAmount,
 	) -> Result<AssetAmount, DispatchError> {
 		Ok(input_amount)
-	}
-}
-
-// TODO Remove these in favour of a real mocks.
-impl<T: frame_system::Config> SwapDepositHandler for T {
-	type AccountId = T::AccountId;
-
-	fn schedule_swap_from_channel(
-		_deposit_address: ForeignChainAddress,
-		_deposit_block_height: u64,
-		_from: Asset,
-		_to: Asset,
-		_amount: AssetAmount,
-		_destination_address: ForeignChainAddress,
-		_broker_id: Self::AccountId,
-		_broker_commission_bps: BasisPoints,
-		_channel_id: ChannelId,
-	) {
-	}
-}
-
-impl<T: frame_system::Config> LpBalanceApi for T {
-	type AccountId = T::AccountId;
-
-	fn try_credit_account(
-		_who: &Self::AccountId,
-		_asset: Asset,
-		_amount: AssetAmount,
-	) -> DispatchResult {
-		// TODO
-		Ok(())
-	}
-
-	fn try_debit_account(
-		_who: &Self::AccountId,
-		_asset: Asset,
-		_amount: AssetAmount,
-	) -> DispatchResult {
-		// TODO
-		Ok(())
 	}
 }

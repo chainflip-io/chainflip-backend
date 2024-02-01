@@ -1,16 +1,22 @@
-use chainflip_api::primitives::{AccountRole, Asset, ForeignChain};
+use chainflip_api::primitives::{state_chain_runtime, AccountRole, Asset, ForeignChain};
 pub use chainflip_engine::settings::StateChain;
 use chainflip_engine::{
 	constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT},
-	settings::{CfSettings, Eth, EthOptions, StateChainOptions},
+	settings::{
+		resolve_settings_path, CfSettings, Eth, EthOptions, PathResolutionExpectation,
+		StateChainOptions, DEFAULT_SETTINGS_DIR,
+	},
 };
 use clap::Parser;
 use config::{ConfigBuilder, ConfigError, Source, Value};
 use serde::Deserialize;
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+	collections::HashMap,
+	path::{Path, PathBuf},
+};
 
 #[derive(Parser, Clone, Debug)]
-#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"))]
+#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"), version_short = 'v')]
 pub struct CLICommandLineOptions {
 	#[clap(short = 'c', long = "config-root", env = CONFIG_ROOT, default_value = DEFAULT_CONFIG_ROOT)]
 	pub config_root: String,
@@ -56,9 +62,9 @@ impl Default for CLICommandLineOptions {
 
 #[derive(Parser, Clone, Debug)]
 pub struct SwapRequestParams {
-	/// Source asset ("eth"|"dot")
+	/// Source asset ("ETH"|"DOT")
 	pub source_asset: Asset,
-	/// Egress asset ("eth"|"dot")
+	/// Egress asset ("ETH"|"DOT")
 	pub destination_asset: Asset,
 	// Note: we delay parsing this into `ForeignChainAddress`
 	// until we know which kind of address to expect (based
@@ -67,6 +73,10 @@ pub struct SwapRequestParams {
 	pub destination_address: String,
 	/// Commission to the broker in basis points
 	pub broker_commission: u16,
+	/// Chain of the source asset ("Ethereum"|"Polkadot")
+	pub source_chain: Option<ForeignChain>,
+	/// Chain of the destination asset ("Ethereum"|"Polkadot")
+	pub destination_chain: Option<ForeignChain>,
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]
@@ -79,12 +89,14 @@ pub enum BrokerSubcommands {
 pub enum LiquidityProviderSubcommands {
 	/// Request a liquidity deposit address.
 	RequestLiquidityDepositAddress {
-		/// Asset to deposit.
+		/// Asset to deposit ("ETH"|"DOT")
 		asset: Asset,
+		/// Chain of the deposit asset ("Ethereum"|"Polkadot")
+		chain: Option<ForeignChain>,
 	},
-	/// Register an Emergency Withdrawal Address for the given chain. An address must be
+	/// Register a Liquidity Refund Address for the given chain. An address must be
 	/// registered to request a deposit address for the given chain.
-	RegisterEmergencyWithdrawalAddress { chain: ForeignChain, address: String },
+	RegisterLiquidityRefundAddress { chain: ForeignChain, address: String },
 }
 
 #[derive(Parser, Clone, Debug)]
@@ -100,13 +112,35 @@ pub enum CliCommand {
 	)]
 	Redeem {
 		#[clap(
-			help = "Amount to redeem in FLIP (omit this option to redeem all available FLIP)",
+			help = "Amount to redeem in FLIP (omit this option to redeem all available FLIP). Up to 6 decimal places, any more are rounded.",
 			long = "exact"
 		)]
 		amount: Option<f64>,
-		#[clap(help = "The Ethereum address you wish to redeem your FLIP to")]
+		#[clap(help = "The Ethereum address you wish to redeem your FLIP to.")]
+		eth_address: String,
+		#[clap(
+			help = "Optional executor address. If specified, only this address will be able to execute the redemption."
+		)]
+		executor_address: Option<String>,
+	},
+	#[clap(
+		about = "Irreversible action that restricts your account to only be able to redeem to the specified address"
+	)]
+	BindRedeemAddress {
+		#[clap(help = "The Ethereum address you wish to bind your account to")]
 		eth_address: String,
 	},
+	#[clap(
+		about = "Irreversible action that restricts your account to only be able to execute registered redemptions with the specified address"
+	)]
+	BindExecutorAddress {
+		#[clap(help = "The Ethereum address you wish to bind your account to")]
+		eth_address: String,
+	},
+	#[clap(about = "Shows the redeem address your account is bound to")]
+	GetBoundRedeemAddress,
+	#[clap(about = "Shows the executor address your account is bound to")]
+	GetBoundExecutorAddress,
 	#[clap(
 		about = "Submit an extrinsic to request generation of a redemption certificate (redeeming all available FLIP)"
 	)]
@@ -126,6 +160,8 @@ pub enum CliCommand {
 		#[clap(help = "Name in UTF-8 (max length 64)")]
 		name: String,
 	},
+	#[clap(about = "Check if it is safe to update your node/engine")]
+	PreUpdateCheck {},
 	#[clap(
         // This is only useful for testing. No need to show to the end user.
         hide = true,
@@ -150,6 +186,11 @@ pub enum CliCommand {
 		/// Supply a seed to generate the keys deterministically (restore keys).
 		#[clap(short, long, action)]
 		seed_phrase: Option<String>,
+	},
+	#[clap(about = "Count how many validators witnessed a given callhash")]
+	CountWitnesses {
+		#[clap(help = "The hash representing the call to check")]
+		hash: state_chain_runtime::Hash,
 	},
 }
 
@@ -176,10 +217,22 @@ pub struct CLISettings {
 impl CfSettings for CLISettings {
 	type CommandLineOptions = CLICommandLineOptions;
 
-	fn validate_settings(&self) -> Result<(), ConfigError> {
+	fn validate_settings(&mut self, config_root: &Path) -> Result<(), ConfigError> {
 		self.eth.validate_settings()?;
+		self.eth.private_key_file = resolve_settings_path(
+			config_root,
+			&self.eth.private_key_file,
+			Some(PathResolutionExpectation::ExistingFile),
+		)?;
 
-		self.state_chain.validate_settings()
+		self.state_chain.validate_settings()?;
+		self.state_chain.signing_key_file = resolve_settings_path(
+			config_root,
+			&self.state_chain.signing_key_file,
+			Some(PathResolutionExpectation::ExistingFile),
+		)?;
+
+		Ok(())
 	}
 
 	fn set_defaults(
@@ -208,7 +261,7 @@ impl CLISettings {
 	/// New settings loaded from "$base_config_path/config/Settings.toml",
 	/// environment and `CommandLineOptions`
 	pub fn new(opts: CLICommandLineOptions) -> Result<Self, ConfigError> {
-		Self::load_settings_from_all_sources(opts.config_root.clone(), opts)
+		Self::load_settings_from_all_sources(opts.config_root.clone(), DEFAULT_SETTINGS_DIR, opts)
 	}
 }
 
@@ -219,13 +272,13 @@ mod tests {
 
 	use super::*;
 
-	use chainflip_engine::constants::{ETH_HTTP_NODE_ENDPOINT, ETH_WS_NODE_ENDPOINT};
+	use chainflip_engine::constants::{ETH_HTTP_ENDPOINT, ETH_WS_ENDPOINT};
 
 	pub fn set_test_env() {
 		use std::env;
 
-		env::set_var(ETH_HTTP_NODE_ENDPOINT, "http://localhost:8545");
-		env::set_var(ETH_WS_NODE_ENDPOINT, "ws://localhost:8545");
+		env::set_var(ETH_HTTP_ENDPOINT, "http://localhost:8545");
+		env::set_var(ETH_WS_ENDPOINT, "ws://localhost:8545");
 	}
 
 	#[test]
@@ -234,12 +287,13 @@ mod tests {
 
 		let settings = CLISettings::load_settings_from_all_sources(
 			DEFAULT_CONFIG_ROOT.to_owned(),
+			DEFAULT_SETTINGS_DIR,
 			CLICommandLineOptions::default(),
 		)
 		.unwrap();
 
 		assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
-		assert_eq!(settings.eth.ws_node_endpoint, "ws://localhost:8545");
+		assert_eq!(settings.eth.nodes.primary.ws_endpoint.as_ref(), "ws://localhost:8545");
 	}
 
 	#[test]
@@ -257,9 +311,11 @@ mod tests {
 			},
 
 			eth_opts: EthOptions {
-				eth_ws_node_endpoint: Some("ws://endpoint2:1234".to_owned()),
-				eth_http_node_endpoint: Some("http://endpoint3:1234".to_owned()),
+				eth_ws_endpoint: Some("ws://endpoint2:1234".to_owned()),
+				eth_http_endpoint: Some("http://endpoint3:1234".to_owned()),
 				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
+				eth_backup_ws_endpoint: Some("ws://endpoint4:1234".to_owned()),
+				eth_backup_http_endpoint: Some("http://endpoint5:1234".to_owned()),
 			},
 
 			cmd: CliCommand::Rotate {}, // Not used in this test
@@ -277,8 +333,25 @@ mod tests {
 			opts.state_chain_opts.state_chain_signing_key_file.unwrap(),
 			settings.state_chain.signing_key_file
 		);
-		assert_eq!(opts.eth_opts.eth_ws_node_endpoint.unwrap(), settings.eth.ws_node_endpoint);
-		assert_eq!(opts.eth_opts.eth_http_node_endpoint.unwrap(), settings.eth.http_node_endpoint);
+		assert_eq!(
+			opts.eth_opts.eth_ws_endpoint.unwrap(),
+			settings.eth.nodes.primary.ws_endpoint.as_ref()
+		);
+		assert_eq!(
+			opts.eth_opts.eth_http_endpoint.unwrap(),
+			settings.eth.nodes.primary.http_endpoint.as_ref()
+		);
+
+		let eth_backup_node = settings.eth.nodes.backup.unwrap();
+		assert_eq!(
+			opts.eth_opts.eth_backup_ws_endpoint.unwrap(),
+			eth_backup_node.ws_endpoint.as_ref()
+		);
+		assert_eq!(
+			opts.eth_opts.eth_backup_http_endpoint.unwrap(),
+			eth_backup_node.http_endpoint.as_ref()
+		);
+
 		assert_eq!(opts.eth_opts.eth_private_key_file.unwrap(), settings.eth.private_key_file);
 	}
 }

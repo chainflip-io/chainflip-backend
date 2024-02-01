@@ -91,6 +91,7 @@ use std::{
 	task::{Context, Poll},
 };
 
+use core::fmt::Debug;
 use futures::{
 	ready,
 	stream::{FusedStream, FuturesUnordered},
@@ -98,54 +99,162 @@ use futures::{
 };
 use tokio::sync::oneshot;
 
-/// This expresses the idea that another task's failure means this task cannot proceed reasonably
-/// and so we must fail too
-pub const OR_CANCEL: &str = "An error has occurred in another task";
+pub trait Unwrappable {
+	type Item;
+
+	fn __internal_to_option(x: Self) -> Option<Self::Item>;
+}
+impl<T> Unwrappable for Option<T> {
+	type Item = T;
+
+	fn __internal_to_option(x: Self) -> Option<Self::Item> {
+		x
+	}
+}
+impl<T, E> Unwrappable for Result<T, E> {
+	type Item = T;
+
+	fn __internal_to_option(x: Self) -> Option<Self::Item> {
+		x.ok()
+	}
+}
+
+const UNWRAP_OR_CANCEL_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(500u64);
+
+#[pin_project::pin_project]
+pub struct UnwrapOrCancelFuture<F> {
+	#[pin]
+	f: Option<F>,
+	#[pin]
+	timeout: Option<tokio::time::Sleep>,
+}
+impl<T> Future for UnwrapOrCancelFuture<T>
+where
+	T: Future,
+	T::Output: Unwrappable,
+{
+	type Output = <T::Output as Unwrappable>::Item;
+
+	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+		let mut this = self.project();
+		if let Some(f) = this.f.as_mut().as_pin_mut() {
+			if let Some(output) = Unwrappable::__internal_to_option(ready!(f.poll(cx))) {
+				return Poll::Ready(output)
+			} else {
+				// Avoids possible deadlocks during sleep (And avoids polling again after ready)
+				this.f.set(None);
+			}
+		}
+
+		if this.timeout.is_none() {
+			this.timeout.set(Some(tokio::time::sleep(UNWRAP_OR_CANCEL_TIMEOUT)));
+		}
+		ready!(this.timeout.as_pin_mut().unwrap().poll(cx));
+		// We only reach this panic if the sleep is ready/ended
+		panic!("Expected task to be cancelled due to another task's failure, but it was not cancelled within {UNWRAP_OR_CANCEL_TIMEOUT:?}");
+	}
+}
+
+pub trait UnwrapOrCancel {
+	/// This expresses the idea that this unwrap can only fail if another task has failed (errored
+	/// or panicked) thereby causing the task scope to be cancelled, and so we expect this task to
+	/// be cancelled very shortly if this unwrap fails.
+	fn unwrap_or_cancel(self) -> UnwrapOrCancelFuture<Self>
+	where
+		Self: Future + Sized,
+		Self::Output: Unwrappable,
+	{
+		UnwrapOrCancelFuture { f: Some(self), timeout: None }
+	}
+}
+impl<T: ?Sized> UnwrapOrCancel for T where T: Future {}
 
 /// This function allows a top level task to spawn tasks such that if any tasks panic or error,
 /// all other tasks will be cancelled, and the panic or error will be propagated by this function.
 /// It guarantees all tasks spawned using its scope object will finish before this function exits.
 /// Thereby making accessing data outside of this scope from inside this scope via a reference safe.
 /// This is why the closures/futures provided to Scope::spawn don't need static lifetimes.
-pub async fn task_scope<
+#[track_caller]
+pub fn task_scope<
 	'a,
 	T,
-	Error: Send + 'static,
+	Error: Debug + Send + 'static,
 	C: for<'b> FnOnce(&'b Scope<'a, Error>) -> futures::future::BoxFuture<'b, Result<T, Error>>,
 >(
 	top_level_task: C,
-) -> Result<T, Error> {
-	let (scope, mut task_result_stream) = Scope::new();
+) -> impl Future<Output = Result<T, Error>> {
+	let location = core::panic::Location::caller();
 
-	// try_join ensures if the top level task returns an error we immediately drop
-	// `task_result_stream`, which in turn cancels all the tasks
-	tokio::try_join!(
-		async move {
-			while let Some(task_result) = task_result_stream.next().await {
-				match task_result {
-					Err(error) => {
-						// Note we drop the task_result_stream on unwind causing all tasks to
-						// be cancelled/aborted
-						if let Ok(panic) = error.try_into_panic() {
-							std::panic::resume_unwind(panic);
-						} /* else: Can only occur if tokio's runtime is dropped during task
-						  * scope's lifetime, in this we are about to be cancelled ourselves */
-					},
-					Ok(future_result) => future_result?,
-				}
+	async move {
+		tracing::info!(target: "task_scope", "opened: '{location}'");
+		let guard = scopeguard::guard((), move |_| {
+			if std::thread::panicking() {
+				tracing::error!(target: "task_scope", "closed by panic: '{location}'");
+			} else {
+				tracing::error!(target: "task_scope", "closed by cancellation: '{location}'");
 			}
-			// task_result_stream has ended meaning scope has been dropped and all tasks (excluding
-			// the top-level task) have finished running
-			Ok(())
-		},
-		// This async move scope ensures scope is dropped when top_level_task and its returned
-		// future finish (Instead of when this function exits)
-		#[allow(clippy::redundant_async_block)]
-		async move {
-			top_level_task(&scope).await
+		});
+
+		let (scope, mut task_result_stream) = Scope::new();
+
+		// try_join ensures if the top level task returns an error we immediately drop
+		// `task_result_stream`, which in turn cancels all the tasks
+		let result = tokio::try_join!(
+			async move {
+				while let Some(task_result) = task_result_stream.next().await {
+					match task_result {
+						Err(error) => {
+							// Note we drop the task_result_stream on unwind causing all tasks to
+							// be cancelled/aborted
+							if let Ok(panic) = error.try_into_panic() {
+								std::panic::resume_unwind(panic);
+							} /* else: Can only occur if tokio's runtime is dropped during task
+							  * scope's lifetime, in this case we are about to be cancelled
+							  * ourselves */
+						},
+						Ok(future_result) => future_result?,
+					}
+				}
+				// task_result_stream has ended meaning scope has been dropped and all tasks
+				// (excluding the top-level task) have finished running
+				Ok(())
+			},
+			// This async move scope ensures scope is dropped when top_level_task and its returned
+			// future finish (Instead of when this function exits)
+			async move {
+				tracing::info!(target: "task_scope", "parent task started: '{location}'");
+				let guard = scopeguard::guard((), move |_| {
+					if std::thread::panicking() {
+						tracing::error!(target: "task_scope", "parent task ended by panic: '{location}'");
+					} else {
+						tracing::error!(target: "task_scope", "parent task ended by cancellation: '{location}'");
+					}
+				});
+				let result = top_level_task(&scope).await;
+				scopeguard::ScopeGuard::into_inner(guard);
+				match &result {
+					Ok(_) =>
+						tracing::info!(target: "task_scope", "parent task ended: '{location}'"),
+					Err(error) =>
+						tracing::error!(target: "task_scope", "parent task ended by error '{error:?}': '{location}'"),
+				}
+				result
+			}
+		);
+
+		scopeguard::ScopeGuard::into_inner(guard);
+
+		match result {
+			Ok((_, t)) => {
+				tracing::info!(target: "task_scope", "closed: '{location}'", );
+				Ok(t)
+			},
+			Err(error) => {
+				tracing::error!(target: "task_scope", "closed by error {error:?}: '{location}'");
+				Err(error)
+			},
 		}
-	)
-	.map(|(_, t)| t)
+	}
 }
 
 type TaskFuture<Error> = Pin<Box<dyn 'static + Future<Output = Result<(), Error>> + Send>>;
@@ -153,7 +262,30 @@ type TaskFuture<Error> = Pin<Box<dyn 'static + Future<Output = Result<(), Error>
 #[derive(Clone, Copy)]
 struct TaskProperties {
 	weak: bool,
+	location: core::panic::Location<'static>,
 }
+impl TaskProperties {
+	fn log_on_end<T, E: Debug + Send + 'static>(
+		&self,
+		result: &Result<Result<T, E>, tokio::task::JoinError>,
+	) {
+		match &result {
+			Ok(result) => match result {
+				Ok(_) =>
+					tracing::info!(target: "task_scope", "child task ended: '{}'", self.location),
+				Err(error) =>
+					tracing::error!(target: "task_scope", "child task ended by error '{error:?}': '{}'", self.location),
+			},
+			Err(error) =>
+				if error.is_panic() {
+					tracing::error!(target: "task_scope", "child task ended by panic: '{}'", self.location);
+				} else {
+					tracing::error!(target: "task_scope", "child task ended by cancellation: '{}'", self.location);
+				},
+		}
+	}
+}
+
 #[pin_project::pin_project]
 struct TaskWrapper<Task> {
 	#[pin]
@@ -169,7 +301,7 @@ impl<Task: Future + Unpin + 'static> Future for TaskWrapper<Task> {
 }
 
 /// An object used to spawn tasks into the associated scope
-pub struct Scope<'env, Error: Send + 'static> {
+pub struct Scope<'env, Error: Debug + Send + 'static> {
 	sender: async_channel::Sender<(TaskProperties, TaskFuture<Error>)>,
 	/// Invariance over 'env, to make sure 'env cannot shrink,
 	/// which is necessary for soundness.
@@ -189,7 +321,7 @@ pub struct Scope<'env, Error: Send + 'static> {
 	/// ```
 	_phantom: std::marker::PhantomData<&'env mut &'env ()>,
 }
-impl<'env, Error: Send + 'static> Scope<'env, Error> {
+impl<'env, Error: Debug + Send + 'static> Scope<'env, Error> {
 	fn new() -> (Self, ScopeResultStream<Error>) {
 		// Must be unbounded so that `try_send` in `spawn` will only fail if the receiver is
 		// dropped, meaning the scope is exiting/aborting, and not when it is full
@@ -217,31 +349,32 @@ impl<'env, Error: Send + 'static> Scope<'env, Error> {
 		)
 	}
 
-	fn inner_spawn<F: 'env + Future<Output = Result<(), Error>> + Send>(
-		&self,
-		properties: TaskProperties,
-		f: F,
-	) {
+	#[track_caller]
+	fn inner_spawn<F: 'env + Future<Output = Result<(), Error>> + Send>(&self, weak: bool, f: F) {
+		let location = core::panic::Location::caller();
 		let _result = self.sender.try_send({
 			let future: Pin<Box<dyn 'env + Future<Output = Result<(), Error>> + Send>> =
 				Box::pin(f);
 			let future: TaskFuture<Error> = unsafe { std::mem::transmute(future) };
-			(properties, future)
+			(TaskProperties { weak, location: *location }, future)
 		});
 	}
 
 	/// Spawns a task that the scope will wait for before exiting.
+	#[track_caller]
 	pub fn spawn<F: 'env + Future<Output = Result<(), Error>> + Send>(&self, f: F) {
-		self.inner_spawn(TaskProperties { weak: false }, f)
+		self.inner_spawn(false, f)
 	}
 
 	/// Spawns a task that the scope will not wait for before exiting, instead it will be cancelled.
+	#[track_caller]
 	pub fn spawn_weak<F: 'env + Future<Output = Result<(), Error>> + Send>(&self, f: F) {
-		self.inner_spawn(TaskProperties { weak: true }, f)
+		self.inner_spawn(true, f)
 	}
 
 	/// Spawns a task that the scope will wait for before exiting, and returns a handle that you can
 	/// receive the output of the task.
+	#[track_caller]
 	pub fn spawn_with_handle<
 		T: Send + 'static,
 		F: 'env + Future<Output = Result<T, Error>> + Send,
@@ -312,7 +445,7 @@ impl<T> Future for ScopedJoinHandle<T> {
 	}
 }
 
-enum ScopedTasks<Error: Send + 'static> {
+enum ScopedTasks<Error: Debug + Send + 'static> {
 	CurrentThread(FuturesUnordered<TaskWrapper<TaskFuture<Error>>>),
 	MultiThread(
 		tokio::runtime::Handle,
@@ -320,13 +453,13 @@ enum ScopedTasks<Error: Send + 'static> {
 	),
 }
 
-struct ScopeResultStream<Error: Send + 'static> {
+struct ScopeResultStream<Error: Debug + Send + 'static> {
 	receiver: Option<async_channel::Receiver<(TaskProperties, TaskFuture<Error>)>>,
 	can_receive_new_tasks: bool,
 	non_weak_tasks: usize,
 	tasks: ScopedTasks<Error>,
 }
-impl<Error: Send + 'static> Stream for ScopeResultStream<Error> {
+impl<Error: Debug + Send + 'static> Stream for ScopeResultStream<Error> {
 	type Item = Result<Result<(), Error>, tokio::task::JoinError>;
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -335,6 +468,7 @@ impl<Error: Send + 'static> Stream for ScopeResultStream<Error> {
 				Pin::new(&mut self.as_mut().receiver.as_mut().unwrap()).poll_next(cx)
 			{
 				if let Some((properties, future)) = option {
+					tracing::info!(target: "task_scope", "child task started: '{}'", properties.location);
 					if !properties.weak {
 						self.non_weak_tasks += 1;
 					}
@@ -369,6 +503,7 @@ impl<Error: Send + 'static> Stream for ScopeResultStream<Error> {
 						Poll::Ready(None)
 					},
 				Some((properties, result)) => {
+					properties.log_on_end(&result);
 					if !properties.weak {
 						self.non_weak_tasks -= 1;
 					}
@@ -385,7 +520,7 @@ impl<Error: Send + 'static> Stream for ScopeResultStream<Error> {
 		}
 	}
 }
-impl<Error: Send + 'static> FusedStream for ScopeResultStream<Error> {
+impl<Error: Debug + Send + 'static> FusedStream for ScopeResultStream<Error> {
 	fn is_terminated(&self) -> bool {
 		self.receiver.as_ref().unwrap().is_terminated() &&
 			match &self.tasks {
@@ -394,7 +529,7 @@ impl<Error: Send + 'static> FusedStream for ScopeResultStream<Error> {
 			}
 	}
 }
-impl<Error: Send + 'static> Drop for ScopeResultStream<Error> {
+impl<Error: Debug + Send + 'static> Drop for ScopeResultStream<Error> {
 	fn drop(&mut self) {
 		// drop all incoming spawn requests
 		self.receiver = None;
@@ -402,11 +537,15 @@ impl<Error: Send + 'static> Drop for ScopeResultStream<Error> {
 		match &mut self.tasks {
 			// Tokio has several flavors of internal runtime
 			// tokio::task::block_in_place doesn't work in a CurrentThread runtime.
-			ScopedTasks::CurrentThread(_) => {
+			ScopedTasks::CurrentThread(tasks) => {
 				// We don't need to wait for tasks to finish here as the tasks member contains all
 				// the futures, so once we drop `tasks` we know all the spawned futures are gone.
 				// Whereas in the MultiThread case calling abort() doesn't guarantee the spawned
 				// futures as gone.
+
+				for task in tasks.into_iter() {
+					tracing::error!(target: "task_scope", "child task ended by cancellation: '{}'", task.properties.location);
+				}
 			},
 			ScopedTasks::MultiThread(runtime, tasks) =>
 				if !tasks.is_empty() {
@@ -414,7 +553,10 @@ impl<Error: Send + 'static> Drop for ScopeResultStream<Error> {
 						task.future.abort();
 					}
 					tokio::task::block_in_place(|| {
-						runtime.block_on(tasks.for_each(|_| async {}));
+						runtime.block_on(tasks.for_each(|(properties, result)| {
+							properties.log_on_end(&result);
+							async {}
+						}));
 					});
 				},
 		}
@@ -647,5 +789,53 @@ mod tests {
 		})
 		.await
 		.unwrap();
+	}
+
+	#[tokio::test]
+	async fn test_unwrap_or_cancel() {
+		async fn inner<T: Unwrappable + Clone>(some: T, none: T)
+		where
+			T::Item: Debug,
+		{
+			crate::assert_future_panics!(async { none.clone() }.unwrap_or_cancel());
+
+			let shorter_than_timeout: std::time::Duration =
+				UNWRAP_OR_CANCEL_TIMEOUT.mul_f64(0.5f64);
+
+			crate::assert_err!(
+				tokio::time::timeout(
+					shorter_than_timeout,
+					async { none.clone() }.unwrap_or_cancel()
+				)
+				.await
+			);
+
+			let longer_than_timeout: std::time::Duration = UNWRAP_OR_CANCEL_TIMEOUT.mul_f64(2.0f64);
+
+			crate::assert_future_panics!(tokio::time::timeout(
+				longer_than_timeout,
+				async { none.clone() }.unwrap_or_cancel()
+			));
+
+			async { some.clone() }.unwrap_or_cancel().await;
+
+			crate::assert_ok!(
+				tokio::time::timeout(
+					shorter_than_timeout,
+					async { some.clone() }.unwrap_or_cancel()
+				)
+				.await
+			);
+			crate::assert_ok!(
+				tokio::time::timeout(
+					shorter_than_timeout,
+					async { some.clone() }.unwrap_or_cancel()
+				)
+				.await
+			);
+		}
+
+		inner(Some(()), None).await;
+		inner(Ok(()), Err(())).await;
 	}
 }

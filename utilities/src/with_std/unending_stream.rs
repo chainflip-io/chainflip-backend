@@ -21,6 +21,9 @@ impl<'a, St: Stream + ?Sized + Unpin> Future for NextOrPending<'a, St> {
 }
 
 pub trait UnendingStream: Stream {
+	/// Returns the next item in the stream. If the stream is empty it will return `Pending` instead
+	/// of returnin `None`. This is useful in scenarios where a stream might be empty for a while
+	/// before a new item is added, such as when using a `FuturesUnordered`.
 	fn next_or_pending(&mut self) -> NextOrPending<'_, Self>
 	where
 		Self: Unpin,

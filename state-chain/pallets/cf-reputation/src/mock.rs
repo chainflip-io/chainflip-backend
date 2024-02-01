@@ -1,13 +1,11 @@
 use super::*;
 use crate::{self as pallet_cf_reputation, PalletSafeMode};
+use cf_primitives::FlipBalance;
 use cf_traits::{impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleRegistry, Slashing};
-use frame_support::{construct_runtime, parameter_types};
+use frame_support::{assert_ok, construct_runtime, parameter_types};
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
-use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 use sp_std::cell::RefCell;
 
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -24,6 +22,8 @@ construct_runtime!(
 		ReputationPallet: pallet_cf_reputation,
 	}
 );
+
+impl_mock_runtime_safe_mode! { reputation: PalletSafeMode }
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -87,6 +87,7 @@ impl MockSlasher {
 impl Slashing for MockSlasher {
 	type AccountId = ValidatorId;
 	type BlockNumber = u64;
+	type Balance = u128;
 
 	fn slash(validator_id: &Self::AccountId, _blocks: Self::BlockNumber) {
 		// Count those slashes
@@ -95,7 +96,17 @@ impl Slashing for MockSlasher {
 		});
 	}
 
-	fn slash_balance(_account_id: &Self::AccountId, _amount: sp_runtime::Percent) {
+	fn slash_balance(account_id: &Self::AccountId, _amount: FlipBalance) {
+		// Count those slashes
+		SLASHES.with(|count| {
+			count.borrow_mut().push(*account_id);
+		});
+	}
+
+	fn calculate_slash_amount(
+		_account_id: &Self::AccountId,
+		_blocks: Self::BlockNumber,
+	) -> Self::Balance {
 		unimplemented!()
 	}
 }
@@ -151,10 +162,9 @@ impl Config for Test {
 	type SafeMode = MockRuntimeSafeMode;
 }
 
-impl_mock_runtime_safe_mode! { reputation: PalletSafeMode }
-
-pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	let config = RuntimeGenesisConfig {
+cf_test_utilities::impl_test_helpers! {
+	Test,
+	RuntimeGenesisConfig {
 		system: Default::default(),
 		reputation_pallet: ReputationPalletConfig {
 			accrual_ratio: ACCRUAL_RATIO,
@@ -169,18 +179,10 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 			],
 			genesis_validators: vec![ALICE],
 		},
-	};
-
-	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
-
-	ext.execute_with(|| {
-		System::set_block_number(1);
-		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE)
-			.unwrap();
-		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&BOB)
-			.unwrap();
+	},
+	||{
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE));
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&BOB));
 		<Test as Chainflip>::EpochInfo::next_epoch(BTreeSet::from([ALICE]));
-	});
-
-	ext
+	}
 }

@@ -2,13 +2,12 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{address::ForeignChainAddress, UpdateFlipSupply};
+use cf_chains::{address::ForeignChainAddress, evm::api::EthEnvironmentProvider, UpdateFlipSupply};
 use cf_traits::{
-	impl_pallet_safe_mode, BlockEmissions, Broadcaster, EgressApi, FlipBurnInfo, Issuance,
-	RewardsDistribution,
+	impl_pallet_safe_mode, BackupRewardsNotifier, BlockEmissions, Broadcaster, EgressApi,
+	FlipBurnInfo, Issuance, RewardsDistribution,
 };
 use codec::MaxEncodedLen;
-use frame_support::dispatch::Weight;
 use frame_system::pallet_prelude::BlockNumberFor;
 pub use pallet::*;
 
@@ -36,7 +35,7 @@ impl_pallet_safe_mode!(PalletSafeMode; emissions_sync_enabled);
 pub mod pallet {
 
 	use super::*;
-	use cf_chains::{eth::StateChainGatewayProvider, ChainAbi};
+	use cf_chains::{eth::StateChainGatewayProvider, Chain, ChainAbi};
 	use frame_support::{pallet_prelude::*, DefaultNoBound};
 	use frame_system::pallet_prelude::OriginFor;
 
@@ -51,7 +50,7 @@ pub mod pallet {
 		///
 		/// In practice this is always [Ethereum] but making this configurable simplifies
 		/// testing.
-		type HostChain: ChainAbi;
+		type HostChain: Chain;
 
 		/// The Flip token denomination.
 		type FlipBalance: Member
@@ -82,7 +81,7 @@ pub mod pallet {
 		>;
 
 		/// An outgoing api call that supports UpdateFlipSupply.
-		type ApiCall: UpdateFlipSupply<Self::HostChain>;
+		type ApiCall: UpdateFlipSupply<<<Self as pallet::Config>::HostChain as Chain>::ChainCrypto>;
 
 		/// Transaction broadcaster for the host chain.
 		type Broadcaster: Broadcaster<Self::HostChain, ApiCall = Self::ApiCall>;
@@ -91,7 +90,8 @@ pub mod pallet {
 		#[pallet::constant]
 		type CompoundingInterval: Get<BlockNumberFor<Self>>;
 
-		type StateChainGatewayProvider: StateChainGatewayProvider;
+		/// Something that can provide the state chain gateway address.
+		type EthEnvironment: EthEnvironmentProvider;
 
 		/// The interface for accessing the amount of Flip we want burn.
 		type FlipToBurn: FlipBurnInfo;
@@ -127,14 +127,12 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn current_authority_emission_inflation)]
-	/// Annual inflation set aside for current authorities, expressed as basis points ie. hundredths
-	/// of a percent.
+	/// Inflation per `COMPOUNDING_INTERVAL` set aside for current authorities in parts per billion.
 	pub(super) type CurrentAuthorityEmissionInflation<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn backup_node_emission_inflation)]
-	/// Annual inflation set aside for *backup* nodes, expressed as basis points ie. hundredths
-	/// of a percent.
+	/// Inflation per `COMPOUNDING_INTERVAL` set aside for *backup* nodes, in parts per billion.
 	pub(super) type BackupNodeEmissionInflation<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::storage]
@@ -154,6 +152,8 @@ pub mod pallet {
 		BackupNodeInflationEmissionsUpdated(u32),
 		/// SupplyUpdateInterval has been updated [block_number]
 		SupplyUpdateIntervalUpdated(BlockNumberFor<T>),
+		/// Rewards have been distributed to [account_id] \[amount\]
+		BackupRewardsDistributed { account_id: T::AccountId, amount: T::FlipBalance },
 	}
 
 	// Errors inform users that something went wrong.
@@ -172,15 +172,17 @@ pub mod pallet {
 			if Self::should_update_supply_at(current_block) {
 				if T::SafeMode::get().emissions_sync_enabled {
 					let flip_to_burn = T::FlipToBurn::take_flip_to_burn();
-					T::EgressHandler::schedule_egress(
-						Asset::Flip,
-						flip_to_burn,
-						ForeignChainAddress::Eth(
-							T::StateChainGatewayProvider::state_chain_gateway_address(),
-						),
-						None,
-					);
-					T::Issuance::burn(flip_to_burn.into());
+					if flip_to_burn > Zero::zero() {
+						T::EgressHandler::schedule_egress(
+							Asset::Flip,
+							flip_to_burn,
+							ForeignChainAddress::Eth(
+								T::EthEnvironment::state_chain_gateway_address(),
+							),
+							None,
+						);
+						T::Issuance::burn(flip_to_burn.into());
+					}
 					Self::broadcast_update_total_supply(
 						T::Issuance::total_issuance(),
 						current_block,
@@ -305,6 +307,18 @@ impl<T: Config> Pallet<T> {
 			total_supply.unique_saturated_into(),
 			block_number.saturated_into(),
 		));
+	}
+}
+
+impl<T: Config> BackupRewardsNotifier for Pallet<T> {
+	type Balance = T::FlipBalance;
+	type AccountId = T::AccountId;
+
+	fn emit_event(account_id: &Self::AccountId, amount: Self::Balance) {
+		Self::deposit_event(Event::BackupRewardsDistributed {
+			account_id: account_id.clone(),
+			amount,
+		});
 	}
 }
 

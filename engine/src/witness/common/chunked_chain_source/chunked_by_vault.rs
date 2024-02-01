@@ -2,8 +2,9 @@ pub mod builder;
 pub mod continuous;
 pub mod deposit_addresses;
 pub mod egress_items;
+pub mod monitored_items;
 
-use cf_chains::Chain;
+use cf_chains::{Chain, ChainCrypto};
 use futures_util::StreamExt;
 
 use crate::witness::common::{
@@ -53,8 +54,16 @@ impl<
 		TExtraHistoricInfo: Clone + Send + Sync + 'static,
 		TChain: ExternalChain<ChainBlockNumber = T::Index>,
 		T: ChunkedChainSource<
-			Info = (pallet_cf_vaults::Vault<TChain>, TExtraInfo),
-			HistoricInfo = (<TChain as Chain>::ChainBlockNumber, TExtraHistoricInfo),
+			Info = (
+				<<TChain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+				<TChain as Chain>::ChainBlockNumber,
+				TExtraInfo,
+			),
+			HistoricInfo = (
+				<<TChain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+				<TChain as Chain>::ChainBlockNumber,
+				TExtraHistoricInfo,
+			),
 			Chain = TChain,
 		>,
 	> ChunkedByVault for T
@@ -128,11 +137,11 @@ where
 						.take_until(vault.expired_signal.wait())
 						.filter(move |header| {
 							futures::future::ready(
-								header.index >= vault.info.0.active_from_block &&
+								header.index >= vault.info.1 &&
 									vault
 										.historic_signal
 										.get()
-										.map_or(true, |(end_index, _)| {
+										.map_or(true, |(_, end_index, _)| {
 											header.index < *end_index
 										}),
 							)

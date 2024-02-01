@@ -11,6 +11,7 @@ mod imbalances;
 mod on_charge_transaction;
 
 pub mod weights;
+use cf_primitives::FlipBalance;
 use scale_info::TypeInfo;
 pub use weights::WeightInfo;
 
@@ -20,7 +21,7 @@ pub use on_charge_transaction::FlipTransactionPayment;
 
 use frame_support::{
 	ensure,
-	traits::{Get, HandleLifetime, Hooks, Imbalance, OnKilledAccount, SignedImbalance},
+	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
 };
 
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -28,7 +29,7 @@ use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, Zero},
-		DispatchError, Percent, Permill, RuntimeDebug,
+		DispatchError, Permill, RuntimeDebug,
 	},
 };
 use frame_system::pallet_prelude::*;
@@ -60,10 +61,6 @@ pub mod pallet {
 			+ MaybeSerializeDeserialize
 			+ Debug
 			+ From<u128>;
-
-		/// The minimum amount required to keep an account open.
-		#[pallet::constant]
-		type ExistentialDeposit: Get<Self::Balance>;
 
 		/// Blocks per day.
 		#[pallet::constant]
@@ -107,7 +104,7 @@ pub mod pallet {
 	#[pallet::getter(fn total_issuance)]
 	pub type TotalIssuance<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
-	/// The per-block slashing rate expressed as a proportion of a validator's bond.
+	/// The per-day slashing rate expressed as a proportion of a validator's bond.
 	#[pallet::storage]
 	#[pallet::getter(fn slashing_rate)]
 	pub type SlashingRate<T: Config> = StorageValue<_, Permill, ValueQuery>;
@@ -148,32 +145,6 @@ pub mod pallet {
 		NoPendingRedemptionForThisID,
 	}
 
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// Reap any accounts that are below `T::ExistentialDeposit`, and burn the dust.
-		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
-			let max_accounts_to_reap = remaining_weight
-				.ref_time()
-				.checked_div(T::WeightInfo::reap_one_account().ref_time())
-				.unwrap_or_default();
-			if max_accounts_to_reap == 0 {
-				return Weight::zero()
-			}
-
-			let mut number_of_accounts_reaped = 0u64;
-			Account::<T>::iter()
-				.filter(|(_account_id, flip_account)| {
-					flip_account.total() < T::ExistentialDeposit::get()
-				})
-				.take(max_accounts_to_reap as usize)
-				.for_each(|(account_id, _flip_account)| {
-					let _reap_result = frame_system::Provider::<T>::killed(&account_id);
-					number_of_accounts_reaped += 1u64;
-				});
-			T::WeightInfo::reap_one_account().saturating_mul(number_of_accounts_reaped)
-		}
-	}
-
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Set the PER BLOCK slashing rate.
@@ -206,12 +177,13 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub total_issuance: T::Balance,
+		pub daily_slashing_rate: Permill,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			use frame_support::sp_runtime::traits::Zero;
-			Self { total_issuance: Zero::zero() }
+			Self { total_issuance: Zero::zero(), daily_slashing_rate: Permill::zero() }
 		}
 	}
 
@@ -220,7 +192,7 @@ pub mod pallet {
 		fn build(&self) {
 			TotalIssuance::<T>::set(self.total_issuance);
 			OffchainFunds::<T>::set(self.total_issuance);
-			SlashingRate::<T>::set(Permill::zero());
+			SlashingRate::<T>::set(self.daily_slashing_rate);
 		}
 	}
 }
@@ -596,16 +568,25 @@ where
 {
 	type AccountId = T::AccountId;
 	type BlockNumber = BlockNumberFor<T>;
+	type Balance = T::Balance;
 
 	fn slash(account_id: &Self::AccountId, blocks: Self::BlockNumber) {
 		let account = Account::<T>::get(account_id);
-		let slash_amount = (SlashingRate::<T>::get() * account.bond).saturating_mul(blocks.into());
+		let slash_amount = Self::calculate_slash_amount(account_id, blocks);
 		Self::attempt_slash(account_id, account, slash_amount);
 	}
 
-	fn slash_balance(account_id: &Self::AccountId, slash_rate: Percent) {
+	fn slash_balance(account_id: &Self::AccountId, slash_amount: FlipBalance) {
 		let account = Account::<T>::get(account_id);
-		let slash_amount = slash_rate * account.balance;
-		Self::attempt_slash(account_id, account, slash_amount);
+		Self::attempt_slash(account_id, account, slash_amount.into());
+	}
+
+	fn calculate_slash_amount(
+		account_id: &Self::AccountId,
+		blocks: Self::BlockNumber,
+	) -> Self::Balance {
+		let account = Account::<T>::get(account_id);
+		(SlashingRate::<T>::get() * account.bond / T::BlocksPerDay::get().into())
+			.saturating_mul(blocks.into())
 	}
 }

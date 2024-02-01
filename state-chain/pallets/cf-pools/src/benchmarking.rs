@@ -1,143 +1,256 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use cf_amm::common::sqrt_price_at_tick;
+use cf_amm::common::price_at_tick;
+use cf_chains::ForeignChainAddress;
 use cf_primitives::Asset;
-use cf_traits::AccountRoleRegistry;
-use frame_benchmarking::{benchmarks, whitelisted_caller};
+use cf_traits::{AccountRoleRegistry, LpBalanceApi};
+use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
-	dispatch::UnfilteredDispatchable,
 	sp_runtime::traits::One,
-	traits::{EnsureOrigin, OnNewAccount},
+	traits::{EnsureOrigin, OnNewAccount, UnfilteredDispatchable},
 };
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 
-fn new_lp_account<T: Chainflip>() -> T::AccountId {
+fn new_lp_account<T: Chainflip + Config>() -> T::AccountId {
 	let caller: T::AccountId = whitelisted_caller();
 	<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 	T::AccountRoleRegistry::register_as_liquidity_provider(&caller).unwrap();
+	for address in [
+		ForeignChainAddress::Eth(Default::default()),
+		ForeignChainAddress::Dot(Default::default()),
+		ForeignChainAddress::Btc(cf_chains::btc::ScriptPubkey::P2PKH(Default::default())),
+	] {
+		T::LpBalance::register_liquidity_refund_address(&caller, address);
+	}
 	caller
 }
 
-benchmarks! {
-	update_buy_interval {
-		let call = Call::<T>::update_buy_interval{
-			new_buy_interval: BlockNumberFor::<T>::one(),
-		};
-	}: {
-		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
-	} verify {
+#[benchmarks]
+mod benchmarks {
+	use super::*;
+	use sp_std::vec;
+
+	#[benchmark]
+	fn update_buy_interval() {
+		let call = Call::<T>::update_buy_interval { new_buy_interval: BlockNumberFor::<T>::one() };
+
+		#[block]
+		{
+			assert_ok!(
+				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
+			);
+		}
+
 		assert_eq!(FlipBuyInterval::<T>::get(), BlockNumberFor::<T>::one());
 	}
 
-	update_pool_enabled {
-		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
-		let _ = Pallet::<T>::new_pool(origin, Asset::Eth, 0, sqrt_price_at_tick(0));
-		let call =  Call::<T>::update_pool_enabled{
-			unstable_asset: Asset::Eth,
-			enabled: false,
-		};
-	}: {
-		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
-	} verify {
-		assert!(!Pools::<T>::get(Asset::Eth).unwrap().enabled);
-	}
-
-	new_pool {
-		let call =  Call::<T>::new_pool {
-			unstable_asset: Asset::Eth,
+	#[benchmark]
+	fn new_pool() {
+		let call = Call::<T>::new_pool {
+			base_asset: Asset::Eth,
+			quote_asset: Asset::Usdc,
 			fee_hundredth_pips: 0u32,
-			initial_sqrt_price: sqrt_price_at_tick(0),
+			initial_price: price_at_tick(0).unwrap(),
 		};
-	}: {
-		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
-	} verify {
-		assert!(Pools::<T>::get(Asset::Eth).is_some());
+
+		#[block]
+		{
+			assert_ok!(
+				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
+			);
+		}
+
+		assert!(Pools::<T>::get(AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap()).is_some());
 	}
 
-	collect_and_mint_range_order {
+	#[benchmark]
+	fn update_range_order() {
 		let caller = new_lp_account::<T>();
-		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, 0, sqrt_price_at_tick(0)));
-		assert_ok!(T::LpBalance::try_credit_account(
-			&caller,
+		assert_ok!(Pallet::<T>::new_pool(
+			T::EnsureGovernance::try_successful_origin().unwrap(),
 			Asset::Eth,
-			1_000_000,
-		));
-		assert_ok!(T::LpBalance::try_credit_account(
-			&caller,
 			Asset::Usdc,
-			1_000_000,
+			0,
+			price_at_tick(0).unwrap()
 		));
-	}: _(
+		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Eth, 1_000_000,));
+		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Usdc, 1_000_000,));
+
+		#[extrinsic_call]
+		update_range_order(
 			RawOrigin::Signed(caller.clone()),
 			Asset::Eth,
-			-100..100,
-			RangeOrderSize::AssetAmounts {
-				desired: SideMap::from_array([1_000_000, 1_000_000]),
-				minimum: SideMap::from_array([500_000, 500_000]),
-			}
-	)
-	verify {}
-
-	collect_and_burn_range_order {
-		let caller = new_lp_account::<T>();
-		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, 0, sqrt_price_at_tick(0)));
-		assert_ok!(T::LpBalance::try_credit_account(
-			&caller,
-			Asset::Eth,
-			1_000_000,
-		));
-		assert_ok!(T::LpBalance::try_credit_account(
-			&caller,
 			Asset::Usdc,
-			1_000_000,
+			0,
+			Some(-100..100),
+			IncreaseOrDecrease::Increase(RangeOrderSize::AssetAmounts {
+				maximum: AssetAmounts { base: 1_000_000, quote: 1_000_000 },
+				minimum: AssetAmounts { base: 500_000, quote: 500_000 },
+			}),
+		);
+	}
+
+	#[benchmark]
+	fn set_range_order() {
+		let caller = new_lp_account::<T>();
+		assert_ok!(Pallet::<T>::new_pool(
+			T::EnsureGovernance::try_successful_origin().unwrap(),
+			Asset::Eth,
+			Asset::Usdc,
+			0,
+			price_at_tick(0).unwrap()
 		));
-		assert_ok!(Pallet::<T>::collect_and_mint_range_order(
+		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Eth, 1_000_000,));
+		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Usdc, 1_000_000,));
+
+		#[extrinsic_call]
+		set_range_order(
+			RawOrigin::Signed(caller.clone()),
+			Asset::Eth,
+			Asset::Usdc,
+			0,
+			Some(-100..100),
+			RangeOrderSize::AssetAmounts {
+				maximum: AssetAmounts { base: 1_000_000, quote: 1_000_000 },
+				minimum: AssetAmounts { base: 500_000, quote: 500_000 },
+			},
+		);
+	}
+
+	#[benchmark]
+	fn update_limit_order() {
+		let caller = new_lp_account::<T>();
+		assert_ok!(Pallet::<T>::new_pool(
+			T::EnsureGovernance::try_successful_origin().unwrap(),
+			Asset::Eth,
+			Asset::Usdc,
+			0,
+			price_at_tick(0).unwrap()
+		));
+		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Eth, 1_000_000,));
+		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Usdc, 1_000_000,));
+
+		#[extrinsic_call]
+		update_limit_order(
+			RawOrigin::Signed(caller.clone()),
+			Asset::Eth,
+			Asset::Usdc,
+			Order::Sell,
+			0,
+			Some(100),
+			IncreaseOrDecrease::Increase(1_000_000),
+		);
+	}
+
+	#[benchmark]
+	fn set_limit_order() {
+		let caller = new_lp_account::<T>();
+		assert_ok!(Pallet::<T>::new_pool(
+			T::EnsureGovernance::try_successful_origin().unwrap(),
+			Asset::Eth,
+			Asset::Usdc,
+			0,
+			price_at_tick(0).unwrap()
+		));
+		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Eth, 1_000_000,));
+		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Usdc, 1_000_000,));
+
+		#[extrinsic_call]
+		set_limit_order(
+			RawOrigin::Signed(caller.clone()),
+			Asset::Eth,
+			Asset::Usdc,
+			Order::Sell,
+			0,
+			Some(100),
+			1_000,
+		);
+	}
+
+	#[benchmark]
+	fn set_pool_fees() {
+		let caller = new_lp_account::<T>();
+		assert_ok!(Pallet::<T>::new_pool(
+			T::EnsureGovernance::try_successful_origin().unwrap(),
+			Asset::Eth,
+			Asset::Usdc,
+			0,
+			price_at_tick(0).unwrap()
+		));
+		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Eth, 1_000_000,));
+		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Usdc, 1_000_000,));
+		assert_ok!(Pallet::<T>::set_limit_order(
 			RawOrigin::Signed(caller.clone()).into(),
 			Asset::Eth,
-			-100..100,
-			RangeOrderSize::Liquidity(1_000),
-		));
-	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, -100..100, 1_000)
-	verify {}
-
-	collect_and_mint_limit_order {
-		let caller = new_lp_account::<T>();
-		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, 0, sqrt_price_at_tick(0)));
-		assert_ok!(T::LpBalance::try_credit_account(
-			&caller,
-			Asset::Eth,
-			1_000_000,
-		));
-		assert_ok!(T::LpBalance::try_credit_account(
-			&caller,
 			Asset::Usdc,
-			1_000_000,
+			Order::Buy,
+			0,
+			Some(0),
+			10_000,
 		));
-	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, Order::Sell, 100, 1_000_000)
-	verify {}
-
-	collect_and_burn_limit_order {
-		let caller = new_lp_account::<T>();
-		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, 0, sqrt_price_at_tick(0)));
-		assert_ok!(T::LpBalance::try_credit_account(
-			&caller,
+		assert_ok!(Pallet::<T>::set_limit_order(
+			RawOrigin::Signed(caller.clone()).into(),
 			Asset::Eth,
-			1_000_000,
-		));
-		assert_ok!(T::LpBalance::try_credit_account(
-			&caller,
 			Asset::Usdc,
-			1_000_000,
+			Order::Sell,
+			1,
+			Some(0),
+			10_000,
 		));
-		assert_ok!(Pallet::<T>::collect_and_mint_limit_order(RawOrigin::Signed(caller.clone()).into(), Asset::Eth, Order::Sell, 100, 1_000));
-	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, Order::Sell, 100, 1_000)
-	verify {}
+		assert_ok!(Pallet::<T>::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 1_000));
+		let fee = 1_000;
+		let call = Call::<T>::set_pool_fees {
+			base_asset: Asset::Eth,
+			quote_asset: Asset::Usdc,
+			fee_hundredth_pips: fee,
+		};
 
-	impl_benchmark_test_suite!(
-		Pallet,
-		crate::mock::new_test_ext(),
-		crate::mock::Test,
-	);
+		#[block]
+		{
+			assert_ok!(
+				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
+			);
+		}
+
+		assert_eq!(
+			Pallet::<T>::pool_info(Asset::Eth, STABLE_ASSET),
+			Ok(PoolInfo {
+				limit_order_fee_hundredth_pips: fee,
+				range_order_fee_hundredth_pips: fee,
+			})
+		);
+	}
+
+	#[benchmark]
+	fn schedule_limit_order_update() {
+		let caller = new_lp_account::<T>();
+		assert_ok!(Pallet::<T>::new_pool(
+			T::EnsureGovernance::try_successful_origin().unwrap(),
+			Asset::Eth,
+			Asset::Usdc,
+			0,
+			price_at_tick(0).unwrap()
+		));
+		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Eth, 1_000_000,));
+		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Usdc, 1_000_000,));
+		#[extrinsic_call]
+		schedule_limit_order_update(
+			RawOrigin::Signed(caller.clone()),
+			Box::new(Call::<T>::set_limit_order {
+				base_asset: Asset::Eth,
+				quote_asset: Asset::Usdc,
+				side: Order::Sell,
+				id: 0,
+				option_tick: Some(0),
+				sell_amount: 100,
+			}),
+			BlockNumberFor::<T>::from(5u32),
+		);
+
+		assert!(!ScheduledLimitOrderUpdates::<T>::get(BlockNumberFor::<T>::from(5u32)).is_empty());
+	}
+
+	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }

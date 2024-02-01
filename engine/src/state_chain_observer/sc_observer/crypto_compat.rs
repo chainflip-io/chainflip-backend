@@ -1,4 +1,9 @@
-use cf_chains::{dot::PolkadotPublicKey, ChainCrypto};
+use cf_chains::{
+	btc::BitcoinCrypto,
+	dot::{PolkadotCrypto, PolkadotPublicKey},
+	evm::EvmCrypto,
+	ChainCrypto,
+};
 use multisig::{
 	bitcoin::BtcSigning,
 	eth::{ArbSigning, EthSigning},
@@ -9,40 +14,32 @@ use state_chain_runtime::{ArbitrumInstance, BitcoinInstance, EthereumInstance, P
 
 /// Compatibility layer for converting between public keys generated using the [CryptoScheme] types
 /// and the on-chain representation as defined by [ChainCrypto].
-pub trait CryptoCompat<S: ChainSigning<Chain = C>, C: ChainCrypto> {
+pub trait CryptoCompat<S: ChainSigning<ChainCrypto = C>, C: ChainCrypto> {
 	fn pubkey_to_aggkey(
 		pubkey: <<S as ChainSigning>::CryptoScheme as CryptoScheme>::PublicKey,
 	) -> C::AggKey;
 }
 
-impl CryptoCompat<EthSigning, cf_chains::Ethereum> for EthereumInstance {
+impl CryptoCompat<EthSigning, EvmCrypto> for EvmInstance {
 	fn pubkey_to_aggkey(
 		pubkey: <<EthSigning as ChainSigning>::CryptoScheme as CryptoScheme>::PublicKey,
-	) -> <cf_chains::Ethereum as ChainCrypto>::AggKey {
+	) -> <EvmCrypto as ChainCrypto>::AggKey {
 		pubkey
 	}
 }
 
-impl CryptoCompat<PolkadotSigning, cf_chains::Polkadot> for PolkadotInstance {
-	fn pubkey_to_aggkey(
-		pubkey: <<PolkadotSigning as ChainSigning>::CryptoScheme as CryptoScheme>::PublicKey,
-	) -> <cf_chains::Polkadot as ChainCrypto>::AggKey {
-		PolkadotPublicKey::from_aliased(pubkey.to_bytes())
-	}
-}
-
-impl CryptoCompat<BtcSigning, cf_chains::Bitcoin> for BitcoinInstance {
+impl CryptoCompat<BtcSigning, BitcoinCrypto> for BitcoinInstance {
 	fn pubkey_to_aggkey(
 		pubkey: <<BtcSigning as ChainSigning>::CryptoScheme as CryptoScheme>::PublicKey,
-	) -> <cf_chains::Bitcoin as ChainCrypto>::AggKey {
+	) -> <BitcoinCrypto as ChainCrypto>::AggKey {
 		cf_chains::btc::AggKey { previous: None, current: pubkey.serialize() }
 	}
 }
 
-impl CryptoCompat<ArbSigning, cf_chains::Arbitrum> for ArbitrumInstance {
+impl CryptoCompat<PolkadotSigning, PolkadotCrypto> for PolkadotInstance {
 	fn pubkey_to_aggkey(
-		pubkey: <<ArbSigning as ChainSigning>::CryptoScheme as CryptoScheme>::PublicKey,
-	) -> <cf_chains::Arbitrum as ChainCrypto>::AggKey {
-		pubkey
+		pubkey: <<PolkadotSigning as ChainSigning>::CryptoScheme as CryptoScheme>::PublicKey,
+	) -> <PolkadotCrypto as ChainCrypto>::AggKey {
+		PolkadotPublicKey::from_aliased(pubkey.to_bytes())
 	}
 }

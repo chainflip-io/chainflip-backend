@@ -1,11 +1,8 @@
 on:
   workflow_call:
-    inputs:
-      coverage:
-        type: boolean
-        default: true
 
 env:
+  FORCE_COLOR: 1
   RUSTC_WRAPPER: sccache
   SCCACHE_CACHE_SIZE: 32G
   SCCACHE_VERSION: v0.4.1
@@ -21,7 +18,7 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Setup sccache
         run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
@@ -30,31 +27,3 @@ jobs:
         run: |
           cargo cf-test-ci --locked
           sccache --show-stats
-
-  coverage:
-    if: inputs.coverage
-    runs-on: [hetzner]
-    container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-07-31-ubuntu-20.04"
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Setup sccache
-        run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
-
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
-
-      - name: Generate code coverage
-        run: cargo llvm-cov --lib --features runtime-benchmarks,slow-tests --workspace --codecov --output-path lcov.info
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          token: ${{ secrets.CF_BACKEND_CODECOV_TOKEN }} # not required for public repos
-          files: lcov.info
-          fail_ci_if_error: false

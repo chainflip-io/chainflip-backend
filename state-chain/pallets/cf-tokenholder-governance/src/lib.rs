@@ -3,7 +3,6 @@ use cf_chains::{eth::Address, ForeignChain};
 use cf_traits::{BroadcastAnyChainGovKey, Chainflip, CommKeyBroadcaster, FeePayment, FundingInfo};
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::Weight,
 	pallet_prelude::*,
 	traits::{OnRuntimeUpgrade, StorageVersion},
 	RuntimeDebugNoBound,
@@ -13,7 +12,7 @@ use sp_std::{cmp::PartialEq, vec, vec::Vec};
 pub use pallet::*;
 
 mod benchmarking;
-mod migrations;
+pub mod migrations;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -170,20 +169,6 @@ pub mod pallet {
 				}
 			}
 			weight
-		}
-
-		fn on_runtime_upgrade() -> Weight {
-			migrations::PalletMigration::<T>::on_runtime_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-			migrations::PalletMigration::<T>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-			migrations::PalletMigration::<T>::post_upgrade(state)
 		}
 	}
 

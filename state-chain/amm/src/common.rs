@@ -3,20 +3,67 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::{U256, U512};
 
-pub const ONE_IN_HUNDREDTH_PIPS: u32 = 1000000;
+pub const ONE_IN_HUNDREDTH_PIPS: u32 = 1_000_000;
+pub const MAX_LP_FEE: u32 = ONE_IN_HUNDREDTH_PIPS / 2;
 
+/// Represents an amount of an asset, in its smallest unit i.e. Ethereum has 10^-18 precision, and
+/// therefore an `Amount` with the literal value of `1` would represent 10^-18 Ethereum.
 pub type Amount = U256;
+/// The `log1.0001(price)` rounded to the nearest integer. Note [Price] is always
+/// in units of asset One.
 pub type Tick = i32;
+/// The square root of the price, represented as a fixed point integer with 96 fractional bits and
+/// 64 integer bits (The higher bits past 96+64 th aren't used). [SqrtPriceQ64F96] is always in sqrt
+/// units of asset one.
 pub type SqrtPriceQ64F96 = U256;
+/// The number of fractional bits used by `SqrtPriceQ64F96`.
 pub const SQRT_PRICE_FRACTIONAL_BITS: u32 = 96;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub enum PostOperationPositionExistence {
-	Exists,
-	DoesNotExist,
+#[derive(Debug)]
+pub enum SetFeesError {
+	/// Fee must be between 0 - 50%
+	InvalidFeeAmount,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[derive(
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Deserialize,
+	Serialize,
+	Hash,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum Order {
+	Buy,
+	Sell,
+}
+impl Order {
+	pub fn to_sold_side(&self) -> Side {
+		match self {
+			Order::Buy => Side::One,
+			Order::Sell => Side::Zero,
+		}
+	}
+}
+impl core::ops::Not for Order {
+	type Output = Self;
+
+	fn not(self) -> Self::Output {
+		match self {
+			Order::Sell => Order::Buy,
+			Order::Buy => Order::Sell,
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum Side {
 	Zero,
 	One,
@@ -41,6 +88,7 @@ impl core::ops::Not for Side {
 	TypeInfo,
 	PartialEq,
 	Eq,
+	Hash,
 	Encode,
 	Decode,
 	MaxEncodedLen,
@@ -48,8 +96,8 @@ impl core::ops::Not for Side {
 	Deserialize,
 )]
 pub struct SideMap<T> {
-	zero: T,
-	one: T,
+	pub zero: T,
+	pub one: T,
 }
 impl<T> SideMap<T> {
 	pub fn from_array(array: [T; 2]) -> Self {
@@ -66,6 +114,27 @@ impl<T> SideMap<T> {
 		mut f: impl FnMut(Side, T) -> Result<R, E>,
 	) -> Result<SideMap<R>, E> {
 		Ok(SideMap { zero: f(Side::Zero, self.zero)?, one: f(Side::One, self.one)? })
+	}
+
+	pub fn as_ref(&self) -> SideMap<&T> {
+		SideMap { zero: &self.zero, one: &self.one }
+	}
+
+	pub fn as_mut(&mut self) -> SideMap<&mut T> {
+		SideMap { zero: &mut self.zero, one: &mut self.one }
+	}
+
+	pub fn zip<S>(self, other: SideMap<S>) -> SideMap<(T, S)> {
+		SideMap { zero: (self.zero, other.zero), one: (self.one, other.one) }
+	}
+}
+impl<T> IntoIterator for SideMap<T> {
+	type Item = (Side, T);
+
+	type IntoIter = core::array::IntoIter<(Side, T), 2>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		[(Side::Zero, self.zero), (Side::One, self.one)].into_iter()
 	}
 }
 impl<T> core::ops::Index<Side> for SideMap<T> {
@@ -85,9 +154,8 @@ impl<T> core::ops::IndexMut<Side> for SideMap<T> {
 		}
 	}
 }
-#[cfg(test)]
-impl<T: std::ops::Add<R>, R> std::ops::Add<SideMap<R>> for SideMap<T> {
-	type Output = SideMap<<T as std::ops::Add<R>>::Output>;
+impl<T: core::ops::Add<R>, R> core::ops::Add<SideMap<R>> for SideMap<T> {
+	type Output = SideMap<<T as core::ops::Add<R>>::Output>;
 	fn add(self, rhs: SideMap<R>) -> Self::Output {
 		SideMap { zero: self.zero + rhs.zero, one: self.one + rhs.one }
 	}
@@ -102,7 +170,7 @@ pub fn mul_div_ceil<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
 	mul_div(a, b, c).1
 }
 
-pub fn mul_div<C: Into<U512>>(a: U256, b: U256, c: C) -> (U256, U256) {
+pub(super) fn mul_div<C: Into<U512>>(a: U256, b: U256, c: C) -> (U256, U256) {
 	let c: U512 = c.into();
 
 	let (d, m) = U512::div_mod(U256::full_mul(a, b), c);
@@ -121,20 +189,57 @@ pub fn mul_div<C: Into<U512>>(a: U256, b: U256, c: C) -> (U256, U256) {
 	)
 }
 
-pub struct ZeroToOne {}
-pub struct OneToZero {}
+pub fn bounded_sqrt_price(quote: Amount, base: Amount) -> SqrtPriceQ64F96 {
+	assert!(!quote.is_zero() || !base.is_zero());
 
-pub trait SwapDirection {
+	if base.is_zero() {
+		MAX_SQRT_PRICE
+	} else {
+		let unbounded_sqrt_price = SqrtPriceQ64F96::try_from(
+			((U512::from(quote) << 256) / U512::from(base)).integer_sqrt() >>
+				(128 - SQRT_PRICE_FRACTIONAL_BITS),
+		)
+		.unwrap();
+
+		if unbounded_sqrt_price < MIN_SQRT_PRICE {
+			MIN_SQRT_PRICE
+		} else if unbounded_sqrt_price > MAX_SQRT_PRICE {
+			MAX_SQRT_PRICE
+		} else {
+			unbounded_sqrt_price
+		}
+	}
+}
+
+/// A marker type to represent a swap that buys asset One, and sells asset Zero
+pub(super) struct ZeroToOne {}
+/// A marker type to represent a swap that buys asset Zero, and sells asset One
+pub(super) struct OneToZero {}
+
+pub(super) trait SwapDirection {
+	/// The asset this type of swap sells, i.e. the asset the swapper provides
 	const INPUT_SIDE: Side;
 
-	/// Determines if a given sqrt_price is more than another
+	/// The worst price in this swap direction
+	const WORST_SQRT_PRICE: SqrtPriceQ64F96;
+
+	/// Determines if a given sqrt_price is more than another for this direction of swap.
 	fn sqrt_price_op_more_than(
 		sqrt_price: SqrtPriceQ64F96,
 		sqrt_price_other: SqrtPriceQ64F96,
 	) -> bool;
+
+	/// Increases a valid sqrt_price by a specified number of ticks
+	fn increase_sqrt_price(sqrt_price: SqrtPriceQ64F96, delta: Tick) -> SqrtPriceQ64F96;
+
+	/// Returns the equivalent saturated amount in the output asset to a given amount of the input
+	/// asset at a specific tick, will return None iff the tick is invalid
+	fn input_to_output_amount_floor(amount: Amount, tick: Tick) -> Option<Amount>;
 }
 impl SwapDirection for ZeroToOne {
 	const INPUT_SIDE: Side = Side::Zero;
+
+	const WORST_SQRT_PRICE: SqrtPriceQ64F96 = MIN_SQRT_PRICE;
 
 	fn sqrt_price_op_more_than(
 		sqrt_price: SqrtPriceQ64F96,
@@ -142,15 +247,116 @@ impl SwapDirection for ZeroToOne {
 	) -> bool {
 		sqrt_price < sqrt_price_other
 	}
+
+	fn increase_sqrt_price(sqrt_price: SqrtPriceQ64F96, delta: Tick) -> SqrtPriceQ64F96 {
+		sqrt_price_at_tick(tick_at_sqrt_price(sqrt_price).saturating_sub(delta).max(MIN_TICK))
+	}
+
+	fn input_to_output_amount_floor(amount: Amount, tick: Tick) -> Option<Amount> {
+		if is_tick_valid(tick) {
+			Some(
+				(U256::full_mul(amount, sqrt_price_to_price(sqrt_price_at_tick(tick))) /
+					(U256::one() << PRICE_FRACTIONAL_BITS))
+					.try_into()
+					.unwrap_or(U256::MAX),
+			)
+		} else {
+			None
+		}
+	}
 }
 impl SwapDirection for OneToZero {
 	const INPUT_SIDE: Side = Side::One;
+
+	const WORST_SQRT_PRICE: SqrtPriceQ64F96 = MAX_SQRT_PRICE;
 
 	fn sqrt_price_op_more_than(
 		sqrt_price: SqrtPriceQ64F96,
 		sqrt_price_other: SqrtPriceQ64F96,
 	) -> bool {
 		sqrt_price > sqrt_price_other
+	}
+
+	fn increase_sqrt_price(sqrt_price: SqrtPriceQ64F96, delta: Tick) -> SqrtPriceQ64F96 {
+		let tick = tick_at_sqrt_price(sqrt_price);
+		sqrt_price_at_tick(
+			if sqrt_price == sqrt_price_at_tick(tick) { tick } else { tick + 1 }
+				.saturating_add(delta)
+				.min(MAX_TICK),
+		)
+	}
+
+	fn input_to_output_amount_floor(amount: Amount, tick: Tick) -> Option<Amount> {
+		if is_tick_valid(tick) {
+			Some(
+				(U256::full_mul(amount, U256::one() << PRICE_FRACTIONAL_BITS) /
+					sqrt_price_to_price(sqrt_price_at_tick(tick)))
+				.try_into()
+				.unwrap_or(U256::MAX),
+			)
+		} else {
+			None
+		}
+	}
+}
+
+// TODO: Consider increasing Price to U512 or switch to a f64 (f64 would only be for the external
+// price representation), as at low ticks the precision in the price is VERY LOW, but this does not
+// cause any problems for the AMM code in terms of correctness
+/// This is the ratio of equivalently valued amounts of asset One and asset Zero. The price is
+/// always measured in amount of asset One per unit of asset Zero. Therefore as asset zero becomes
+/// more valuable relative to asset one the price's literal value goes up, and vice versa. This
+/// ratio is represented as a fixed point number with `PRICE_FRACTIONAL_BITS` fractional bits.
+pub type Price = U256;
+pub const PRICE_FRACTIONAL_BITS: u32 = 128;
+
+/// Converts from a [SqrtPriceQ64F96] to a [Price].
+///
+/// Will panic for `sqrt_price`'s outside `MIN_SQRT_PRICE..=MAX_SQRT_PRICE`
+pub(super) fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
+	assert!(is_sqrt_price_valid(sqrt_price));
+
+	// Note the value here cannot ever be zero as MIN_SQRT_PRICE has its 33th bit set, so sqrt_price
+	// will always include a bit pass the 64th bit that is set, so when we shift down below that set
+	// bit will not be removed.
+	mul_div_floor(
+		sqrt_price,
+		sqrt_price,
+		SqrtPriceQ64F96::one() << (2 * SQRT_PRICE_FRACTIONAL_BITS - PRICE_FRACTIONAL_BITS),
+	)
+}
+
+/// Converts from a `price` to a `sqrt_price`
+///
+/// This function never panics.
+pub(super) fn price_to_sqrt_price(price: Price) -> SqrtPriceQ64F96 {
+	((U512::from(price) << PRICE_FRACTIONAL_BITS).integer_sqrt() >>
+		(PRICE_FRACTIONAL_BITS - SQRT_PRICE_FRACTIONAL_BITS))
+		.try_into()
+		.unwrap_or(SqrtPriceQ64F96::MAX)
+}
+
+/// Converts a `tick` to a `price`. Will return `None` for ticks outside MIN_TICK..=MAX_TICK
+///
+/// This function never panics.
+pub fn price_at_tick(tick: Tick) -> Option<Price> {
+	if is_tick_valid(tick) {
+		Some(sqrt_price_to_price(sqrt_price_at_tick(tick)))
+	} else {
+		None
+	}
+}
+
+/// Converts a `price` to a `tick`. Will return `None` is the price is too high or low to be
+/// represented by a valid tick i.e. one inside MIN_TICK..=MAX_TICK.
+///
+/// This function never panics.
+pub fn tick_at_price(price: Price) -> Option<Tick> {
+	let sqrt_price = price_to_sqrt_price(price);
+	if is_sqrt_price_valid(sqrt_price) {
+		Some(tick_at_sqrt_price(sqrt_price))
+	} else {
+		None
 	}
 }
 
@@ -162,21 +368,21 @@ pub const MIN_TICK: Tick = -887272;
 pub const MAX_TICK: Tick = -MIN_TICK;
 /// The minimum value that can be returned from `sqrt_price_at_tick`. Equivalent to
 /// `sqrt_price_at_tick(MIN_TICK)`
-pub const MIN_SQRT_PRICE: SqrtPriceQ64F96 = U256([0x1000276a3u64, 0x0, 0x0, 0x0]);
+pub(super) const MIN_SQRT_PRICE: SqrtPriceQ64F96 = U256([0x1000276a3u64, 0x0, 0x0, 0x0]);
 /// The maximum value that can be returned from `sqrt_price_at_tick`. Equivalent to
 /// `sqrt_price_at_tick(MAX_TICK)`.
-pub const MAX_SQRT_PRICE: SqrtPriceQ64F96 =
+pub(super) const MAX_SQRT_PRICE: SqrtPriceQ64F96 =
 	U256([0x5d951d5263988d26u64, 0xefd1fc6a50648849u64, 0xfffd8963u64, 0x0u64]);
 
-pub fn is_sqrt_price_valid(sqrt_price: SqrtPriceQ64F96) -> bool {
-	(MIN_SQRT_PRICE..MAX_SQRT_PRICE).contains(&sqrt_price)
+pub(super) fn is_sqrt_price_valid(sqrt_price: SqrtPriceQ64F96) -> bool {
+	(MIN_SQRT_PRICE..=MAX_SQRT_PRICE).contains(&sqrt_price)
 }
 
 pub fn is_tick_valid(tick: Tick) -> bool {
 	(MIN_TICK..=MAX_TICK).contains(&tick)
 }
 
-pub fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
+pub(super) fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
 	assert!(is_tick_valid(tick));
 
 	let abs_tick = tick.unsigned_abs();
@@ -233,13 +439,13 @@ pub fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
 	/* Proof that r is never zero (therefore avoiding the divide by zero case here):
 		We can think of an application of the `handle_tick_bit` macro as increasing the index I of r's MSB/`r.ilog2()` (mul by constant), and then decreasing it by 128 (the right shift).
 
-		Note the increase in I caused by the constant mul will be atleast constant.ilog2().
+		Note the increase in I caused by the constant mul will be at least constant.ilog2().
 
 		Also note each application of `handle_tick_bit` decreases (if the if branch is entered) or else maintains r's value as all the constants are less than 2^128.
 
 		Therefore the largest decrease would be caused if all the macros application's if branches where entered.
 
-		So we assuming all if branches are entered, after all the applications `I` would be atleast I_initial + bigsum(constant.ilog2()) - 19*128.
+		So we assuming all if branches are entered, after all the applications `I` would be at least I_initial + bigsum(constant.ilog2()) - 19*128.
 
 		The test `r_non_zero` checks with value is >= 0, therefore imply the smallest value r could have is more than 0.
 	*/
@@ -259,7 +465,7 @@ pub fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
 
 	let (integer_log_2, mantissa) = {
 		let mut _bits_remaining = sqrt_price_q64f128;
-		let mut most_signifcant_bit = 0u8;
+		let mut most_significant_bit = 0u8;
 
 		// rustfmt chokes when formatting this macro.
 		// See: https://github.com/rust-lang/rustfmt/issues/5404
@@ -267,7 +473,7 @@ pub fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
 		macro_rules! add_integer_bit {
 			($bit:literal, $lower_bits_mask:literal) => {
 				if _bits_remaining > U256::from($lower_bits_mask) {
-					most_signifcant_bit |= $bit;
+					most_significant_bit |= $bit;
 					_bits_remaining >>= $bit;
 				}
 			};
@@ -283,17 +489,17 @@ pub fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
 		add_integer_bit!(1u8, 0x1u128);
 
 		(
-			// most_signifcant_bit is the log2 of sqrt_price_q64f128 as an integer. This
-			// converts most_signifcant_bit to the integer log2 of sqrt_price_q64f128 as an
+			// most_significant_bit is the log2 of sqrt_price_q64f128 as an integer. This
+			// converts most_significant_bit to the integer log2 of sqrt_price_q64f128 as an
 			// q64f128
-			((most_signifcant_bit as i16) + (-128i16)) as i8,
+			((most_significant_bit as i16) + (-128i16)) as i8,
 			// Calculate mantissa of sqrt_price_q64f128.
-			if most_signifcant_bit >= 128u8 {
+			if most_significant_bit >= 128u8 {
 				// The bits we possibly drop when right shifting don't contribute to the log2
 				// above the 14th fractional bit.
-				sqrt_price_q64f128 >> (most_signifcant_bit - 127u8)
+				sqrt_price_q64f128 >> (most_significant_bit - 127u8)
 			} else {
-				sqrt_price_q64f128 << (127u8 - most_signifcant_bit)
+				sqrt_price_q64f128 << (127u8 - most_significant_bit)
 			}
 			.as_u128(), // Conversion to u128 is safe as top 128 bits are always zero
 		)
@@ -375,9 +581,194 @@ pub fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
 	}
 }
 
+/// Takes a Q128 fixed point number and raises it to the nth power, and returns it as a Q128 fixed
+/// point number. If the result is larger than the maximum U384 this function will panic.
+///
+/// The result will be equal or less than the true value.
+pub(super) fn fixed_point_to_power_as_fixed_point(x: U256, n: u32) -> U512 {
+	let x = U512::from(x);
+
+	(0..(32 - n.leading_zeros()))
+		.zip(
+			// This is zipped second and therefore it is not polled if there are no more bits, so
+			// we don't calculate x * x one more time than we need, as it may overflow.
+			sp_std::iter::once(x).chain(sp_std::iter::repeat_with({
+				let mut x = x;
+				move || {
+					x = (x * x) >> 128;
+					x
+				}
+			})),
+		)
+		.fold(U512::one() << 128, |total, (i, expo)| {
+			if 0x1 << i == (n & 0x1 << i) {
+				(total * expo) >> 128
+			} else {
+				total
+			}
+		})
+}
+
+pub(super) fn nth_root_of_integer_as_fixed_point(x: U256, n: u32) -> U256 {
+	// If n is 1 then many x values aren't representable as a fixed point.
+	assert!(n > 1);
+
+	let mut root = U256::try_from(
+		(0..n.ilog2()).fold(U512::from(x) << 128, |acc, _| (acc << 128).integer_sqrt()),
+	)
+	.unwrap();
+
+	let x = U512::from(x) << 128;
+
+	for _ in 0..128 {
+		let f = fixed_point_to_power_as_fixed_point(root, n);
+		let diff = f.abs_diff(x);
+		if diff <= f >> 20 {
+			break
+		} else {
+			let delta = mul_div_floor(
+				U256::try_from(diff).unwrap(),
+				(U256::one() << 128) / U256::from(n),
+				fixed_point_to_power_as_fixed_point(root, n - 1),
+			);
+			root = if f >= x { root - delta } else { root + delta };
+		}
+	}
+
+	root
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;
+
+	#[cfg(feature = "slow-tests")]
+	use rand::SeedableRng;
+
+	#[cfg(feature = "slow-tests")]
+	use crate::test_utilities::rng_u256_inclusive_bound;
+
+	#[cfg(feature = "slow-tests")]
+	#[test]
+	fn test_sqrt_price() {
+		let mut rng: rand::rngs::StdRng = rand::rngs::StdRng::from_seed([0; 32]);
+
+		for _i in 0..10000000 {
+			assert!(is_sqrt_price_valid(bounded_sqrt_price(
+				rng_u256_inclusive_bound(&mut rng, Amount::one()..=Amount::MAX),
+				rng_u256_inclusive_bound(&mut rng, Amount::one()..=Amount::MAX),
+			)));
+		}
+	}
+
+	#[cfg(feature = "slow-tests")]
+	#[test]
+	fn test_increase_sqrt_price() {
+		fn inner<SD: SwapDirection>() {
+			assert_eq!(SD::increase_sqrt_price(SD::WORST_SQRT_PRICE, 0), SD::WORST_SQRT_PRICE);
+			assert_eq!(SD::increase_sqrt_price(SD::WORST_SQRT_PRICE, 1), SD::WORST_SQRT_PRICE);
+
+			let mut rng: rand::rngs::StdRng = rand::rngs::StdRng::from_seed([0; 32]);
+
+			for _i in 0..10000000 {
+				let sqrt_price =
+					rng_u256_inclusive_bound(&mut rng, (MIN_SQRT_PRICE + 1)..=(MAX_SQRT_PRICE - 1));
+				assert!(SD::sqrt_price_op_more_than(
+					SD::increase_sqrt_price(sqrt_price, 1),
+					sqrt_price
+				));
+				assert!(SD::sqrt_price_op_more_than(
+					SD::increase_sqrt_price(sqrt_price, 10000000),
+					sqrt_price
+				));
+			}
+
+			for tick in MIN_TICK..=MAX_TICK {
+				let sqrt_price = sqrt_price_at_tick(tick);
+				assert_eq!(sqrt_price, SD::increase_sqrt_price(sqrt_price, 0));
+			}
+		}
+
+		inner::<ZeroToOne>();
+		inner::<OneToZero>();
+	}
+
+	#[cfg(feature = "slow-tests")]
+	#[test]
+	fn test_fixed_point_to_power_as_fixed_point() {
+		for n in 0..9u32 {
+			for e in 0..9u32 {
+				assert_eq!(
+					U512::from(n.pow(e)) << 128,
+					fixed_point_to_power_as_fixed_point(U256::from(n) << 128, e)
+				);
+			}
+		}
+
+		assert_eq!(
+			U512::from(57),
+			fixed_point_to_power_as_fixed_point(U256::from(3) << 127, 10) >> 128
+		);
+		assert_eq!(
+			U512::from(1) << 128,
+			fixed_point_to_power_as_fixed_point(U256::from(2) << 128, 128) >> 128
+		);
+		assert_eq!(
+			U512::from(1) << 255,
+			fixed_point_to_power_as_fixed_point(U256::from(2) << 128, 255) >> 128
+		);
+	}
+
+	#[cfg(feature = "slow-tests")]
+	#[test]
+	fn test_nth_root_of_integer_as_fixed_point() {
+		fn fixed_point_to_float(x: U256) -> f64 {
+			x.0.into_iter()
+				.fold(0.0f64, |acc, n| (acc / 2.0f64.powi(64)) + (n as f64) * 2.0f64.powi(64))
+		}
+
+		for i in 1..100 {
+			assert_eq!(
+				U256::from(i) << 128,
+				nth_root_of_integer_as_fixed_point(U256::from(i * i), 2)
+			);
+		}
+
+		for n in (0..1000000).step_by(5) {
+			for i in 2..100 {
+				let root_float = (n as f64).powf(1.0f64 / (i as f64));
+				let root = fixed_point_to_float(nth_root_of_integer_as_fixed_point(n.into(), i));
+
+				assert!(
+					(root_float - root).abs() <= root_float * 0.000001f64,
+					"{root_float} {root}"
+				);
+			}
+		}
+
+		assert_eq!(
+			U256::from(2) << 128,
+			nth_root_of_integer_as_fixed_point(U256::one() << 128, 128)
+		);
+		assert_eq!(
+			U256::from_dec_str("1198547750512063821665753418683415504682").unwrap(),
+			nth_root_of_integer_as_fixed_point(U256::from(83434), 9)
+		);
+		assert_eq!(
+			U256::from_dec_str("70594317847877622574934944024871574448634").unwrap(),
+			nth_root_of_integer_as_fixed_point(U256::from(384283294283u128), 5)
+		);
+
+		for n in 0..100000u32 {
+			let n = U256::from(n);
+			for e in 2..10 {
+				let root = nth_root_of_integer_as_fixed_point(n, e);
+				let x =
+					U256::try_from(fixed_point_to_power_as_fixed_point(root, e) >> 128).unwrap();
+				assert!((n.saturating_sub(1.into())..=n + 1).contains(&x));
+			}
+		}
+	}
 
 	#[test]
 	fn test_mul_div_floor() {
@@ -423,6 +814,14 @@ mod test {
 		assert_eq!(mul_div(2.into(), 2.into(), 4), (1.into(), 1.into()));
 		assert_eq!(mul_div(2.into(), 2.into(), 5), (0.into(), 1.into()));
 		assert_eq!(mul_div(2.into(), 2.into(), 6), (0.into(), 1.into()));
+	}
+
+	#[cfg(feature = "slow-tests")]
+	#[test]
+	fn test_conversion_sqrt_price_back_and_forth() {
+		for tick in MIN_TICK..=MAX_TICK {
+			assert_eq!(tick, tick_at_sqrt_price(sqrt_price_at_tick(tick)));
+		}
 	}
 
 	#[test]
@@ -585,5 +984,6 @@ mod test {
 			276324
 		);
 		assert_eq!(tick_at_sqrt_price(MAX_SQRT_PRICE - 1), MAX_TICK - 1);
+		assert_eq!(tick_at_sqrt_price(MAX_SQRT_PRICE), MAX_TICK);
 	}
 }

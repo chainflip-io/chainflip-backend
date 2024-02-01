@@ -1,6 +1,6 @@
 use crate::Runtime;
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::RuntimeDebug;
+use frame_support::pallet_prelude::RuntimeDebug;
 use pallet_cf_reputation::OffenceList;
 use pallet_grandpa::EquivocationOffence;
 use scale_info::TypeInfo;
@@ -68,15 +68,9 @@ impl From<pallet_cf_threshold_signature::PalletOffence> for Offence {
 		match offences {
 			pallet_cf_threshold_signature::PalletOffence::ParticipateSigningFailed =>
 				Self::ParticipateSigningFailed,
-		}
-	}
-}
-
-impl From<pallet_cf_vaults::PalletOffence> for Offence {
-	fn from(offences: pallet_cf_vaults::PalletOffence) -> Self {
-		match offences {
-			pallet_cf_vaults::PalletOffence::FailedKeygen => Self::ParticipateKeygenFailed,
-			pallet_cf_vaults::PalletOffence::FailedKeyHandover =>
+			pallet_cf_threshold_signature::PalletOffence::FailedKeygen =>
+				Self::ParticipateKeygenFailed,
+			pallet_cf_threshold_signature::PalletOffence::FailedKeyHandover =>
 				Self::ParticipateKeyHandoverFailed,
 		}
 	}

@@ -4,7 +4,6 @@ use cf_chains::{
 };
 use cf_primitives::{chains::assets::any, BasisPoints, ChannelId};
 use codec::{Decode, Encode};
-use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_std::marker::PhantomData;
 
@@ -31,7 +30,6 @@ pub struct SwapChannel<C: Chain, T: Chainflip> {
 	pub broker_commission_bps: BasisPoints,
 	pub broker_id: <T as frame_system::Config>::AccountId,
 	pub channel_metadata: Option<CcmChannelMetadata>,
-	pub expiry: BlockNumberFor<T>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -39,7 +37,6 @@ pub struct LpChannel<C: Chain, T: Chainflip> {
 	pub deposit_address: ForeignChainAddress,
 	pub source_asset: <C as Chain>::ChainAsset,
 	pub lp_account: <T as frame_system::Config>::AccountId,
-	pub expiry: BlockNumberFor<T>,
 }
 
 impl<C: Chain, T: Chainflip> MockDepositHandler<C, T> {
@@ -82,13 +79,14 @@ impl<C: Chain, T: Chainflip> MockDepositHandler<C, T> {
 
 impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 	type AccountId = T::AccountId;
-	type BlockNumber = BlockNumberFor<T>;
 
 	fn request_liquidity_deposit_address(
 		lp_account: Self::AccountId,
 		source_asset: <C as cf_chains::Chain>::ChainAsset,
-		expiry: Self::BlockNumber,
-	) -> Result<(cf_primitives::ChannelId, ForeignChainAddress), sp_runtime::DispatchError> {
+	) -> Result<
+		(cf_primitives::ChannelId, ForeignChainAddress, <C as cf_chains::Chain>::ChainBlockNumber),
+		sp_runtime::DispatchError,
+	> {
 		let (channel_id, deposit_address) =
 			Self::get_new_deposit_address(SwapOrLp::Lp, source_asset);
 		<Self as MockPalletStorage>::mutate_value(b"LP_INGRESS_CHANNELS", |lp_channels| {
@@ -100,11 +98,10 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 					deposit_address: deposit_address.clone(),
 					source_asset,
 					lp_account,
-					expiry,
 				});
 			}
 		});
-		Ok((channel_id, deposit_address))
+		Ok((channel_id, deposit_address, 0u32.into()))
 	}
 
 	fn request_swap_deposit_address(
@@ -114,8 +111,10 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 		broker_commission_bps: BasisPoints,
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
-		expiry: Self::BlockNumber,
-	) -> Result<(cf_primitives::ChannelId, ForeignChainAddress), sp_runtime::DispatchError> {
+	) -> Result<
+		(cf_primitives::ChannelId, ForeignChainAddress, C::ChainBlockNumber),
+		sp_runtime::DispatchError,
+	> {
 		let (channel_id, deposit_address) =
 			Self::get_new_deposit_address(SwapOrLp::Swap, source_asset);
 		<Self as MockPalletStorage>::mutate_value(b"SWAP_INGRESS_CHANNELS", |swap_channels| {
@@ -131,31 +130,9 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 					broker_commission_bps,
 					broker_id,
 					channel_metadata,
-					expiry,
 				});
 			};
 		});
-		Ok((channel_id, deposit_address))
-	}
-
-	fn expire_channel(address: <C as cf_chains::Chain>::ChainAccount) {
-		let address =
-			<C as cf_chains::Chain>::ChainAccount::into_foreign_chain_address(address.clone());
-		<Self as MockPalletStorage>::mutate_value(
-			b"SWAP_INGRESS_CHANNELS",
-			|storage: &mut Option<Vec<SwapChannel<C, T>>>| {
-				if let Some(inner) = storage.as_mut() {
-					inner.retain(|x| x.deposit_address != address);
-				}
-			},
-		);
-		<Self as MockPalletStorage>::mutate_value(
-			b"LP_INGRESS_CHANNELS",
-			|storage: &mut Option<Vec<LpChannel<C, T>>>| {
-				if let Some(inner) = storage.as_mut() {
-					inner.retain(|x| x.deposit_address != address);
-				}
-			},
-		);
+		Ok((channel_id, deposit_address, 0u32.into()))
 	}
 }

@@ -7,6 +7,7 @@ pub mod benchmarking;
 #[cfg(feature = "std")]
 pub mod serializable_address;
 
+use cf_utilities::SliceToArray;
 #[cfg(feature = "std")]
 pub use serializable_address::*;
 
@@ -104,6 +105,17 @@ impl PolkadotPair {
 )]
 pub struct PolkadotAccountId([u8; 32]);
 
+impl TryFrom<Vec<u8>> for PolkadotAccountId {
+	type Error = ();
+
+	fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+		if value.len() != 32 {
+			return Err(())
+		}
+		Ok(Self(value.as_array()))
+	}
+}
+
 impl PolkadotAccountId {
 	pub const fn from_aliased(account_id: [u8; 32]) -> Self {
 		Self(account_id)
@@ -138,10 +150,6 @@ pub struct RuntimeVersion {
 	pub spec_version: PolkadotSpecVersion,
 	pub transaction_version: PolkadotTransactionVersion,
 }
-
-// Westend testnet
-pub const TEST_RUNTIME_VERSION: RuntimeVersion =
-	RuntimeVersion { spec_version: 9340, transaction_version: 16 };
 
 pub type PolkadotSpecVersion = u32;
 pub type PolkadotChannelId = u64;
@@ -244,10 +252,73 @@ impl Default for PolkadotTrackedData {
 	}
 }
 
+/// See https://wiki.polkadot.network/docs/learn-transaction-fees
+///
+/// Fee constants here already include the Multiplier.
+mod fee_constants {
+	// See https://wiki.polkadot.network/docs/learn-DOT.
+	pub const MICRO_DOT: u128 = 10_000;
+	pub const MILLI_DOT: u128 = 1_000 * MICRO_DOT;
+
+	/// Taken from the Polkadot runtime.
+	pub const BASE_FEE: u128 = MILLI_DOT;
+	/// Taken from the Polkadot runtime. Should be 0.1 mDOT
+	pub const LENGTH_FEE: u128 = MILLI_DOT / 10;
+
+	pub mod fetch {
+		pub use super::*;
+
+		/// Estimated from the Polkadot runtime.
+		pub const ADJUSTED_WEIGHT_FEE: u128 = 330 * MICRO_DOT;
+		/// This should be a minor over-estimate. It's the length in bytes of an extrinsic that
+		/// encodes a single fetch operation. In practice, multiple fetches and transfers might be
+		/// encoded in the extrinsic, bringing the per-fetch average down.
+		pub const EXTRINSIC_LENGTH: u128 = 184;
+
+		pub const EXTRINSIC_FEE: u128 =
+			BASE_FEE + LENGTH_FEE * EXTRINSIC_LENGTH + ADJUSTED_WEIGHT_FEE;
+	}
+
+	pub mod transfer {
+		pub use super::*;
+
+		/// Estimated from the Polkadot runtime.
+		pub const ADJUSTED_WEIGHT_FEE: u128 = 245 * MICRO_DOT;
+		/// This should be a minor over-estimate. It's the length in bytes of an extrinsic that
+		/// encodes a single fetch operation. In practice, multiple fetches and transfers might be
+		/// encoded in the extrinsic, bringing the per-fetch average down.
+		pub const EXTRINSIC_LENGTH: u128 = 185;
+
+		pub const EXTRINSIC_FEE: u128 =
+			BASE_FEE + LENGTH_FEE * EXTRINSIC_LENGTH + ADJUSTED_WEIGHT_FEE;
+	}
+}
+
+impl FeeEstimationApi<Polkadot> for PolkadotTrackedData {
+	fn estimate_ingress_fee(
+		&self,
+		_asset: <Polkadot as Chain>::ChainAsset,
+	) -> <Polkadot as Chain>::ChainAmount {
+		use fee_constants::fetch::*;
+
+		self.median_tip + fetch::EXTRINSIC_FEE
+	}
+
+	fn estimate_egress_fee(
+		&self,
+		_asset: <Polkadot as Chain>::ChainAsset,
+	) -> <Polkadot as Chain>::ChainAmount {
+		use fee_constants::transfer::*;
+
+		self.median_tip + transfer::EXTRINSIC_FEE
+	}
+}
+
 impl Chain for Polkadot {
 	const NAME: &'static str = "Polkadot";
-	type KeyHandoverIsRequired = ConstBool<false>;
-	type OptimisticActivation = ConstBool<false>;
+	const GAS_ASSET: Self::ChainAsset = assets::dot::Asset::Dot;
+
+	type ChainCrypto = PolkadotCrypto;
 	type ChainBlockNumber = PolkadotBlockNumber;
 	type ChainAmount = PolkadotBalance;
 	type TrackedData = PolkadotTrackedData;
@@ -258,7 +329,13 @@ impl Chain for Polkadot {
 	type DepositFetchId = PolkadotChannelId;
 	type DepositChannelState = PolkadotChannelState;
 	type DepositDetails = ();
+	type Transaction = PolkadotTransactionData;
+	type TransactionMetadata = ();
+	type ReplayProtectionParams = ResetProxyAccountNonce;
+	type ReplayProtection = PolkadotReplayProtection;
 }
+
+pub type ResetProxyAccountNonce = bool;
 
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq, Default)]
 pub struct PolkadotChannelState;
@@ -270,12 +347,17 @@ impl ChannelLifecycleHooks for PolkadotChannelState {
 	}
 }
 
-impl ChainCrypto for Polkadot {
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PolkadotCrypto;
+impl ChainCrypto for PolkadotCrypto {
+	type UtxoChain = ConstBool<false>;
+
 	type AggKey = PolkadotPublicKey;
 	type Payload = EncodedPolkadotPayload;
 	type ThresholdSignature = PolkadotSignature;
 	type TransactionInId = TxId;
 	type TransactionOutId = PolkadotSignature;
+	type KeyHandoverIsRequired = ConstBool<false>;
 
 	type GovKey = PolkadotPublicKey;
 
@@ -289,6 +371,14 @@ impl ChainCrypto for Polkadot {
 
 	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
 		EncodedPolkadotPayload(Blake2_256::hash(&agg_key.aliased_ref()[..]).to_vec())
+	}
+
+	fn maybe_broadcast_barriers_on_rotation(
+		rotation_broadcast_id: BroadcastId,
+	) -> Vec<BroadcastId> {
+		// For polkadot, we need to pause future epoch broadcasts until all the previous epoch
+		// broadcasts (including the rotation tx) has successfully broadcasted.
+		vec![rotation_broadcast_id]
 	}
 }
 
@@ -306,11 +396,6 @@ impl FeeRefundCalculator<Polkadot> for PolkadotTransactionData {
 	}
 }
 
-impl ChainAbi for Polkadot {
-	type Transaction = PolkadotTransactionData;
-	type ReplayProtection = PolkadotReplayProtection;
-}
-
 pub struct CurrentVaultAndProxy {
 	pub vault_account: PolkadotAccountId,
 	pub proxy_account: PolkadotAccountId,
@@ -321,7 +406,7 @@ pub struct CurrentVaultAndProxy {
 pub struct PolkadotExtrinsicBuilder {
 	extrinsic_call: PolkadotRuntimeCall,
 	replay_protection: PolkadotReplayProtection,
-	signer_and_signature: Option<(PolkadotAccountId, PolkadotSignature)>,
+	signature: Option<PolkadotSignature>,
 }
 
 impl PolkadotExtrinsicBuilder {
@@ -329,11 +414,11 @@ impl PolkadotExtrinsicBuilder {
 		replay_protection: PolkadotReplayProtection,
 		extrinsic_call: PolkadotRuntimeCall,
 	) -> Self {
-		Self { extrinsic_call, replay_protection, signer_and_signature: None }
+		Self { extrinsic_call, replay_protection, signature: None }
 	}
 
 	pub fn signature(&self) -> Option<PolkadotSignature> {
-		self.signer_and_signature.as_ref().map(|(_, sig)| sig.clone())
+		self.signature.clone()
 	}
 
 	fn extra(&self) -> PolkadotSignedExtra {
@@ -356,7 +441,7 @@ impl PolkadotExtrinsicBuilder {
 		&self,
 		spec_version: u32,
 		transaction_version: u32,
-	) -> <Polkadot as ChainCrypto>::Payload {
+	) -> <<Polkadot as Chain>::ChainCrypto as ChainCrypto>::Payload {
 		EncodedPolkadotPayload(
 			PolkadotPayload::from_raw(
 				self.extrinsic_call.clone(),
@@ -377,15 +462,15 @@ impl PolkadotExtrinsicBuilder {
 		)
 	}
 
-	pub fn insert_signature(&mut self, signer: PolkadotAccountId, signature: PolkadotSignature) {
-		self.signer_and_signature.replace((signer, signature));
+	pub fn insert_signature(&mut self, signature: PolkadotSignature) {
+		self.signature.replace(signature);
 	}
 
 	pub fn get_signed_unchecked_extrinsic(&self) -> Option<PolkadotUncheckedExtrinsic> {
-		self.signer_and_signature.as_ref().map(|(signer, signature)| {
+		self.signature.as_ref().map(|signature| {
 			PolkadotUncheckedExtrinsic::new_signed(
 				self.extrinsic_call.clone(),
-				*signer,
+				self.replay_protection.signer,
 				signature.clone(),
 				self.extra(),
 			)
@@ -393,7 +478,7 @@ impl PolkadotExtrinsicBuilder {
 	}
 
 	pub fn is_signed(&self) -> bool {
-		self.signer_and_signature.is_some()
+		self.signature.is_some()
 	}
 }
 
@@ -900,6 +985,7 @@ pub type PolkadotPublicKey = PolkadotAccountId;
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
 pub struct PolkadotReplayProtection {
 	pub genesis_hash: PolkadotHash,
+	pub signer: PolkadotAccountId,
 	pub nonce: PolkadotIndex,
 }
 
@@ -910,9 +996,97 @@ impl BenchmarkValueExtended for PolkadotChannelId {
 	}
 }
 
+#[cfg(debug_assertions)]
+pub const TEST_RUNTIME_VERSION: RuntimeVersion =
+	RuntimeVersion { spec_version: 9340, transaction_version: 16 };
+
 #[cfg(test)]
 mod test_polkadot_extrinsics {
 	use super::*;
+
+	#[test]
+	fn decode_into_unchecked_extrinsic() {
+		// These extrinsic bytes were taken from real polkadot extrinsics
+		let tests = [
+			vec![
+				217u8, 2, 132, 0, 204, 244, 17, 138, 147, 245, 170, 200, 63, 156, 208, 149, 110,
+				196, 92, 172, 208, 18, 154, 161, 101, 9, 136, 32, 24, 224, 82, 32, 192, 44, 47, 57,
+				1, 32, 166, 154, 89, 119, 246, 7, 38, 66, 211, 127, 100, 163, 122, 246, 84, 202,
+				17, 78, 163, 200, 19, 43, 106, 49, 143, 86, 195, 159, 227, 118, 115, 227, 169, 9,
+				97, 166, 49, 79, 126, 77, 71, 89, 238, 7, 58, 148, 10, 231, 91, 245, 106, 134, 193,
+				131, 146, 1, 45, 189, 96, 26, 184, 146, 131, 0, 0, 0, 29, 0, 0, 74, 39, 43, 218,
+				234, 215, 148, 117, 64, 37, 43, 141, 168, 78, 215, 71, 242, 11, 51, 73, 71, 152,
+				37, 203, 138, 113, 49, 248, 102, 199, 158, 244, 1, 0, 26, 4, 4, 26, 1, 1, 0, 5, 4,
+				0, 74, 39, 43, 218, 234, 215, 148, 117, 64, 37, 43, 141, 168, 78, 215, 71, 242, 11,
+				51, 73, 71, 152, 37, 203, 138, 113, 49, 248, 102, 199, 158, 244, 0,
+			],
+			vec![
+				121, 8, 132, 0, 204, 244, 17, 138, 147, 245, 170, 200, 63, 156, 208, 149, 110, 196,
+				92, 172, 208, 18, 154, 161, 101, 9, 136, 32, 24, 224, 82, 32, 192, 44, 47, 57, 1,
+				84, 216, 144, 8, 107, 255, 131, 148, 77, 46, 236, 161, 47, 65, 179, 130, 104, 234,
+				83, 208, 133, 54, 252, 198, 32, 98, 231, 23, 32, 223, 158, 37, 113, 39, 128, 26,
+				71, 238, 62, 48, 216, 232, 58, 100, 9, 178, 71, 216, 103, 218, 253, 161, 13, 133,
+				18, 152, 232, 222, 119, 193, 50, 148, 133, 141, 0, 4, 0, 29, 0, 0, 74, 39, 43, 218,
+				234, 215, 148, 117, 64, 37, 43, 141, 168, 78, 215, 71, 242, 11, 51, 73, 71, 152,
+				37, 203, 138, 113, 49, 248, 102, 199, 158, 244, 1, 0, 26, 4, 40, 26, 1, 9, 0, 5, 4,
+				0, 74, 39, 43, 218, 234, 215, 148, 117, 64, 37, 43, 141, 168, 78, 215, 71, 242, 11,
+				51, 73, 71, 152, 37, 203, 138, 113, 49, 248, 102, 199, 158, 244, 0, 26, 1, 11, 0,
+				5, 4, 0, 74, 39, 43, 218, 234, 215, 148, 117, 64, 37, 43, 141, 168, 78, 215, 71,
+				242, 11, 51, 73, 71, 152, 37, 203, 138, 113, 49, 248, 102, 199, 158, 244, 0, 26, 1,
+				10, 0, 5, 4, 0, 74, 39, 43, 218, 234, 215, 148, 117, 64, 37, 43, 141, 168, 78, 215,
+				71, 242, 11, 51, 73, 71, 152, 37, 203, 138, 113, 49, 248, 102, 199, 158, 244, 0,
+				26, 1, 8, 0, 5, 4, 0, 74, 39, 43, 218, 234, 215, 148, 117, 64, 37, 43, 141, 168,
+				78, 215, 71, 242, 11, 51, 73, 71, 152, 37, 203, 138, 113, 49, 248, 102, 199, 158,
+				244, 0, 26, 1, 3, 0, 5, 4, 0, 74, 39, 43, 218, 234, 215, 148, 117, 64, 37, 43, 141,
+				168, 78, 215, 71, 242, 11, 51, 73, 71, 152, 37, 203, 138, 113, 49, 248, 102, 199,
+				158, 244, 0, 26, 1, 5, 0, 5, 4, 0, 74, 39, 43, 218, 234, 215, 148, 117, 64, 37, 43,
+				141, 168, 78, 215, 71, 242, 11, 51, 73, 71, 152, 37, 203, 138, 113, 49, 248, 102,
+				199, 158, 244, 0, 26, 1, 2, 0, 5, 4, 0, 74, 39, 43, 218, 234, 215, 148, 117, 64,
+				37, 43, 141, 168, 78, 215, 71, 242, 11, 51, 73, 71, 152, 37, 203, 138, 113, 49,
+				248, 102, 199, 158, 244, 0, 26, 1, 6, 0, 5, 4, 0, 74, 39, 43, 218, 234, 215, 148,
+				117, 64, 37, 43, 141, 168, 78, 215, 71, 242, 11, 51, 73, 71, 152, 37, 203, 138,
+				113, 49, 248, 102, 199, 158, 244, 0, 26, 1, 7, 0, 5, 4, 0, 74, 39, 43, 218, 234,
+				215, 148, 117, 64, 37, 43, 141, 168, 78, 215, 71, 242, 11, 51, 73, 71, 152, 37,
+				203, 138, 113, 49, 248, 102, 199, 158, 244, 0, 26, 1, 4, 0, 5, 4, 0, 74, 39, 43,
+				218, 234, 215, 148, 117, 64, 37, 43, 141, 168, 78, 215, 71, 242, 11, 51, 73, 71,
+				152, 37, 203, 138, 113, 49, 248, 102, 199, 158, 244, 0,
+			],
+			vec![
+				221, 2, 132, 0, 204, 244, 17, 138, 147, 245, 170, 200, 63, 156, 208, 149, 110, 196,
+				92, 172, 208, 18, 154, 161, 101, 9, 136, 32, 24, 224, 82, 32, 192, 44, 47, 57, 1,
+				200, 78, 45, 101, 48, 19, 155, 165, 69, 100, 122, 205, 219, 131, 91, 65, 66, 170,
+				61, 13, 161, 114, 7, 11, 131, 177, 140, 62, 103, 153, 252, 18, 210, 191, 208, 86,
+				61, 86, 217, 117, 127, 246, 180, 48, 214, 147, 58, 248, 233, 191, 10, 42, 37, 29,
+				228, 232, 55, 80, 241, 113, 77, 126, 212, 139, 0, 8, 0, 29, 0, 0, 74, 39, 43, 218,
+				234, 215, 148, 117, 64, 37, 43, 141, 168, 78, 215, 71, 242, 11, 51, 73, 71, 152,
+				37, 203, 138, 113, 49, 248, 102, 199, 158, 244, 1, 0, 26, 4, 4, 5, 0, 0, 0, 72, 60,
+				242, 234, 28, 242, 48, 175, 91, 19, 67, 23, 112, 3, 45, 92, 152, 192, 32, 128, 83,
+				192, 130, 139, 252, 127, 61, 7, 188, 82, 102, 7, 64, 85, 100, 5, 128,
+			],
+			vec![
+				45, 4, 132, 0, 204, 244, 17, 138, 147, 245, 170, 200, 63, 156, 208, 149, 110, 196,
+				92, 172, 208, 18, 154, 161, 101, 9, 136, 32, 24, 224, 82, 32, 192, 44, 47, 57, 1,
+				20, 152, 207, 160, 55, 187, 5, 113, 7, 208, 84, 47, 190, 91, 88, 68, 62, 57, 31,
+				104, 223, 192, 49, 28, 111, 86, 14, 178, 135, 30, 46, 14, 168, 54, 184, 233, 126,
+				246, 184, 109, 239, 170, 56, 183, 246, 177, 192, 191, 155, 156, 149, 102, 224, 39,
+				144, 118, 117, 83, 76, 179, 146, 169, 91, 133, 0, 12, 0, 29, 0, 0, 74, 39, 43, 218,
+				234, 215, 148, 117, 64, 37, 43, 141, 168, 78, 215, 71, 242, 11, 51, 73, 71, 152,
+				37, 203, 138, 113, 49, 248, 102, 199, 158, 244, 1, 0, 26, 4, 12, 5, 0, 0, 104, 234,
+				42, 87, 45, 71, 66, 169, 83, 127, 86, 95, 110, 56, 251, 79, 105, 212, 23, 12, 203,
+				214, 208, 176, 129, 190, 181, 248, 190, 28, 11, 6, 11, 29, 56, 246, 123, 70, 3, 5,
+				0, 0, 120, 112, 253, 81, 144, 212, 233, 27, 0, 48, 154, 238, 82, 149, 219, 107, 54,
+				192, 135, 124, 162, 21, 208, 18, 242, 77, 64, 233, 6, 149, 242, 40, 7, 160, 129,
+				23, 163, 117, 5, 0, 0, 4, 41, 131, 33, 217, 48, 147, 189, 214, 149, 115, 254, 142,
+				12, 203, 134, 243, 61, 205, 219, 227, 102, 234, 101, 59, 7, 10, 94, 12, 215, 106,
+				45, 11, 90, 10, 235, 19, 70, 3,
+			],
+		];
+
+		tests.into_iter().for_each(|bytes| {
+			let mut bytes = bytes.as_slice();
+			PolkadotUncheckedExtrinsic::decode(&mut bytes).expect("Should decode extrinsic bytes");
+		})
+	}
 
 	#[ignore]
 	#[test]
@@ -938,16 +1112,19 @@ mod test_polkadot_extrinsics {
 		println!("Encoded Call: 0x{}", hex::encode(test_runtime_call.encode()));
 
 		let mut extrinsic_builder = PolkadotExtrinsicBuilder::new(
-			PolkadotReplayProtection { nonce: 12, genesis_hash: Default::default() },
+			PolkadotReplayProtection {
+				nonce: 12,
+				signer: account_id_1,
+				genesis_hash: Default::default(),
+			},
 			test_runtime_call,
 		);
-		extrinsic_builder.insert_signature(
-			account_id_1,
-			keypair_1.sign(&extrinsic_builder.get_signature_payload(
+		extrinsic_builder.insert_signature(keypair_1.sign(
+			&extrinsic_builder.get_signature_payload(
 				TEST_RUNTIME_VERSION.spec_version,
 				TEST_RUNTIME_VERSION.transaction_version,
-			)),
-		);
+			),
+		));
 
 		assert!(extrinsic_builder.is_signed());
 
@@ -955,5 +1132,26 @@ mod test_polkadot_extrinsics {
 			"encoded extrinsic: {:?}",
 			extrinsic_builder.get_signed_unchecked_extrinsic().unwrap().encode()
 		);
+	}
+
+	#[test]
+	fn fee_estimation_doesnt_overflow() {
+		let ingress_fee = PolkadotTrackedData {
+			median_tip: Default::default(),
+			runtime_version: Default::default(),
+		}
+		.estimate_ingress_fee(assets::dot::Asset::Dot);
+
+		let egress_fee = PolkadotTrackedData {
+			median_tip: Default::default(),
+			runtime_version: Default::default(),
+		}
+		.estimate_egress_fee(assets::dot::Asset::Dot);
+
+		// The values are not important. This test serves more as a sanity check that
+		// the fees are valid, and a reference to compare against the actual fees. These values must
+		// be updated if we update the fee calculation.
+		assert_eq!(ingress_fee, 197_300_000u128);
+		assert_eq!(egress_fee, 197_450_000u128);
 	}
 }

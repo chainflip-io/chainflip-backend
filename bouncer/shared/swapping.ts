@@ -5,7 +5,7 @@ import { performSwap, SwapParams } from '../shared/perform_swap';
 import {
   newAddress,
   chainFromAsset,
-  getEthContractAddress,
+  getEvmContractAddress,
   amountToFineAmount,
   defaultAssetAmounts,
 } from '../shared/utils';
@@ -27,7 +27,7 @@ enum SolidityType {
 let swapCount = 1;
 
 function newAbiEncodedMessage(types?: SolidityType[]): string {
-  const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
+  const web3 = new Web3();
 
   let typesArray: SolidityType[] = [];
   if (types === undefined) {
@@ -95,6 +95,7 @@ export async function prepareSwap(
   addressType?: BtcAddressType,
   messageMetadata?: CcmDepositMetadata,
   tagSuffix?: string,
+  log = true,
 ) {
   // Seed needs to be unique per swap:
   const seed = randomAsHex(32);
@@ -107,11 +108,11 @@ export async function prepareSwap(
 
   // For swaps with a message force the address to be the CF Tester address.
   if (messageMetadata && chainFromAsset(destAsset) === chainFromAsset('ETH')) {
-    destAddress = getEthContractAddress('CFTESTER');
-    console.log(`${tag} Using CF Tester address: ${destAddress}`);
+    destAddress = getEvmContractAddress(chainFromAsset(destAsset), 'CFTESTER');
+    if (log) console.log(`${tag} Using CF Tester address: ${destAddress}`);
   } else {
     destAddress = await newAddress(destAsset, seed, addressType);
-    console.log(`${tag} Created new ${destAsset} address: ${destAddress}`);
+    if (log) console.log(`${tag} Created new ${destAsset} address: ${destAddress}`);
   }
 
   return { destAddress, tag };
@@ -123,6 +124,8 @@ export async function testSwap(
   addressType?: BtcAddressType,
   messageMetadata?: CcmDepositMetadata,
   tagSuffix?: string,
+  amount?: string,
+  log = true,
 ) {
   const { destAddress, tag } = await prepareSwap(
     sourceAsset,
@@ -130,8 +133,19 @@ export async function testSwap(
     addressType,
     messageMetadata,
     tagSuffix,
+    log,
   );
-  return performSwap(sourceAsset, destAsset, destAddress, tag, messageMetadata);
+  return performSwap(
+    sourceAsset,
+    destAsset,
+    destAddress,
+    tag,
+    messageMetadata,
+    undefined,
+    amount,
+    undefined,
+    log,
+  );
 }
 async function testSwapViaContract(
   sourceAsset: Asset,
@@ -183,9 +197,15 @@ export async function testAllSwaps() {
     (BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * 9n).toString(),
   );
 
-  Object.values(Assets).forEach((sourceAsset) =>
+  // TODO: Remove this but for now skipping arbitrum swaps as they are not supported yet
+  Object.values(Assets).forEach((sourceAsset) => {
+    if (sourceAsset === 'ARBETH' || sourceAsset === 'ARBUSDC') return;
+
     Object.values(Assets)
-      .filter((destAsset) => sourceAsset !== destAsset)
+      .filter(
+        (destAsset) =>
+          sourceAsset !== destAsset && destAsset !== 'ARBETH' && destAsset !== 'ARBUSDC',
+      )
       .forEach((destAsset) => {
         // Regular swaps
         appendSwap(sourceAsset, destAsset, testSwap);
@@ -203,8 +223,8 @@ export async function testAllSwaps() {
           // CCM swaps
           appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
         }
-      }),
-  );
+      });
+  });
 
   await Promise.all(allSwaps);
 

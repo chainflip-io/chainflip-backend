@@ -1,44 +1,61 @@
-use bitcoin::{Block, BlockHash, Txid};
+use bitcoin::{BlockHash, Txid};
 use utilities::task_scope::Scope;
 
 use crate::{
-	retrier::RetrierClient,
+	retrier::{Attempt, RequestLog, RetrierClient},
+	settings::{HttpBasicAuthEndpoint, NodeContainer},
 	witness::common::chain_source::{ChainClient, Header},
 };
-use cf_chains::Bitcoin;
+use cf_chains::{btc::BitcoinNetwork, Bitcoin};
 use core::time::Duration;
 
-use super::rpc::{BlockHeader, BtcRpcApi, BtcRpcClient};
+use anyhow::Result;
+
+use super::rpc::{BlockHeader, BtcRpcApi, BtcRpcClient, VerboseBlock};
 
 #[derive(Clone)]
 pub struct BtcRetryRpcClient {
 	retry_client: RetrierClient<BtcRpcClient>,
 }
 
-const BITCOIN_RPC_TIMEOUT: Duration = Duration::from_millis(2000);
+const BITCOIN_RPC_TIMEOUT: Duration = Duration::from_millis(4 * 1000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
+const MAX_BROADCAST_RETRIES: Attempt = 2;
+
 impl BtcRetryRpcClient {
-	pub fn new(scope: &Scope<'_, anyhow::Error>, btc_client: BtcRpcClient) -> Self {
-		Self {
+	pub async fn new(
+		scope: &Scope<'_, anyhow::Error>,
+		nodes: NodeContainer<HttpBasicAuthEndpoint>,
+		expected_btc_network: BitcoinNetwork,
+	) -> Result<Self> {
+		let rpc_client = BtcRpcClient::new(nodes.primary, Some(expected_btc_network))?;
+
+		let backup_rpc_client = nodes
+			.backup
+			.map(|backup_endpoint| BtcRpcClient::new(backup_endpoint, Some(expected_btc_network)))
+			.transpose()?;
+
+		Ok(Self {
 			retry_client: RetrierClient::new(
 				scope,
-				"btc_rpc".to_string(),
-				btc_client,
+				"btc_rpc",
+				rpc_client,
+				backup_rpc_client,
 				BITCOIN_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
-		}
+		})
 	}
 }
 
 #[async_trait::async_trait]
-pub trait BtcRetryRpcApi {
-	async fn block(&self, block_hash: BlockHash) -> Block;
+pub trait BtcRetryRpcApi: Clone {
+	async fn block(&self, block_hash: BlockHash) -> VerboseBlock;
 
 	async fn block_hash(&self, block_number: cf_chains::btc::BlockNumber) -> BlockHash;
 
-	async fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> Txid;
+	async fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> anyhow::Result<Txid>;
 
 	async fn next_block_fee_rate(&self) -> Option<cf_chains::btc::BtcAmount>;
 
@@ -49,14 +66,14 @@ pub trait BtcRetryRpcApi {
 
 #[async_trait::async_trait]
 impl BtcRetryRpcApi for BtcRetryRpcClient {
-	async fn block(&self, block_hash: BlockHash) -> Block {
+	async fn block(&self, block_hash: BlockHash) -> VerboseBlock {
 		self.retry_client
 			.request(
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.block(block_hash).await })
 				}),
-				format!("block({block_hash})"),
+				RequestLog::new("block".to_string(), Some(format!("{block_hash}"))),
 			)
 			.await
 	}
@@ -68,21 +85,25 @@ impl BtcRetryRpcApi for BtcRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.block_hash(block_number).await })
 				}),
-				format!("block_hash({block_number})"),
+				RequestLog::new("block_hash".to_string(), Some(format!("{block_number}"))),
 			)
 			.await
 	}
 
-	async fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> Txid {
-		let log = format!("send_raw_transaction({transaction_bytes:?})");
+	async fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> anyhow::Result<Txid> {
+		let log = RequestLog::new(
+			"send_raw_transaction".to_string(),
+			Some(format!("{transaction_bytes:?}")),
+		);
 		self.retry_client
-			.request(
+			.request_with_limit(
 				Box::pin(move |client| {
 					let transaction_bytes = transaction_bytes.clone();
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.send_raw_transaction(transaction_bytes).await })
 				}),
 				log,
+				MAX_BROADCAST_RETRIES,
 			)
 			.await
 	}
@@ -94,7 +115,7 @@ impl BtcRetryRpcApi for BtcRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.next_block_fee_rate().await })
 				}),
-				"next_block_fee_rate".to_string(),
+				RequestLog::new("next_block_fee_rate".to_string(), None),
 			)
 			.await
 	}
@@ -106,7 +127,10 @@ impl BtcRetryRpcApi for BtcRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.average_block_fee_rate(block_hash).await })
 				}),
-				format!("average_block_fee_rate({block_hash})"),
+				RequestLog::new(
+					"average_block_fee_rate".to_string(),
+					Some(format!("{block_hash}")),
+				),
 			)
 			.await
 	}
@@ -123,7 +147,7 @@ impl BtcRetryRpcApi for BtcRetryRpcClient {
 						Ok(header)
 					})
 				}),
-				"best_block_header".to_string(),
+				RequestLog::new("best_block_header".to_string(), None),
 			)
 			.await
 	}
@@ -156,8 +180,38 @@ impl ChainClient for BtcRetryRpcClient {
 						})
 					})
 				}),
-				format!("header_at_index({index})"),
+				RequestLog::new("header_at_index".to_string(), Some(format!("{index}"))),
 			)
 			.await
+	}
+}
+
+#[cfg(test)]
+pub mod mocks {
+
+	use super::*;
+	use mockall::mock;
+
+	mock! {
+		pub BtcRetryRpcClient {}
+
+		impl Clone for BtcRetryRpcClient {
+			fn clone(&self) -> Self;
+		}
+
+		#[async_trait::async_trait]
+		impl BtcRetryRpcApi for BtcRetryRpcClient {
+			async fn block(&self, block_hash: BlockHash) -> VerboseBlock;
+
+			async fn block_hash(&self, block_number: cf_chains::btc::BlockNumber) -> BlockHash;
+
+			async fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> anyhow::Result<Txid>;
+
+			async fn next_block_fee_rate(&self) -> Option<cf_chains::btc::BtcAmount>;
+
+			async fn average_block_fee_rate(&self, block_hash: BlockHash) -> cf_chains::btc::BtcAmount;
+
+			async fn best_block_header(&self) -> BlockHeader;
+		}
 	}
 }

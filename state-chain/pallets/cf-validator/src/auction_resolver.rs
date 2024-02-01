@@ -2,6 +2,7 @@ use core::cmp::min;
 use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
 
 use crate::*;
+use serde::{Deserialize, Serialize};
 
 #[derive(
 	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen,
@@ -12,7 +13,18 @@ pub struct SetSizeMaximisingAuctionResolver {
 }
 
 #[derive(
-	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen,
+	Copy,
+	Clone,
+	RuntimeDebug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
 )]
 pub struct SetSizeParameters {
 	pub min_size: u32,

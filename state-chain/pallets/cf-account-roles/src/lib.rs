@@ -41,6 +41,11 @@ pub mod pallet {
 	#[pallet::getter(fn swapping_enabled)]
 	pub type SwappingEnabled<T: Config> = StorageValue<_, bool, ValueQuery>;
 
+	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	// !!!!!!!!!!!!!!!!!!!! IMPORTANT: Care must be taken when changing this !!!!!!!!!!!!!!!!!!!!
+	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	// !!! This is because this is used before the version compatibility checks in the engine !!!
+	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	#[pallet::storage]
 	pub type AccountRoles<T: Config> = StorageMap<_, Identity, T::AccountId, AccountRole>;
 
@@ -52,8 +57,9 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
+		/// The account has never been created.
 		UnknownAccount,
-		AccountNotInitialised,
+		/// The account already has a registered role.
 		AccountRoleAlreadyRegistered,
 		/// Initially when swapping features are deployed to the chain, they will be disabled.
 		SwappingDisabled,
@@ -127,7 +133,7 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		AccountRoles::<T>::try_mutate(account_id, |old_account_role| {
 			match old_account_role.replace(account_role) {
-				Some(AccountRole::None) => {
+				Some(AccountRole::Unregistered) => {
 					Self::deposit_event(Event::AccountRoleRegistered {
 						account_id: account_id.clone(),
 						role: account_role,
@@ -168,7 +174,7 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 		role: AccountRole,
 	) -> Result<T::AccountId, BadOrigin> {
 		match role {
-			AccountRole::None => Err(BadOrigin),
+			AccountRole::Unregistered => Err(BadOrigin),
 			AccountRole::Validator => ensure_validator::<T>(origin),
 			AccountRole::LiquidityProvider => ensure_liquidity_provider::<T>(origin),
 			AccountRole::Broker => ensure_broker::<T>(origin),
@@ -176,11 +182,11 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn register_account(account_id: T::AccountId, role: AccountRole) {
+	fn register_account(account_id: &T::AccountId, role: AccountRole) {
 		AccountRoles::<T>::insert(account_id, role);
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn get_account_role(account_id: T::AccountId) -> AccountRole {
+	fn get_account_role(account_id: &T::AccountId) -> AccountRole {
 		AccountRoles::<T>::get(account_id).unwrap_or_default()
 	}
 }

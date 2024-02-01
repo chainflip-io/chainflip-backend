@@ -9,9 +9,6 @@ use sc_cli::SubstrateCli;
 use sc_service::PartialComponents;
 use state_chain_runtime::Block;
 
-#[cfg(feature = "try-runtime")]
-use try_runtime_cli::block_building_info::timestamp_with_aura_info;
-
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
 		"Chainflip Node".into()
@@ -40,12 +37,13 @@ impl SubstrateCli for Cli {
 	fn load_spec(&self, id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
 		Ok(match id {
 			"dev" => Box::new(chain_spec::cf_development_config()?),
+			"dev-3" => Box::new(chain_spec::cf_three_node_development_config()?),
 			"test" => Box::new(chain_spec::testnet::Config::build_spec(Some(
 				chain_spec::get_environment_or_defaults(testnet::ENV),
 			))?),
 			"sisyphos-new" => Box::new(chain_spec::sisyphos::Config::build_spec(None)?),
-			"partnernet-new" => Box::new(chain_spec::partnernet::Config::build_spec(None)?),
 			"perseverance-new" => Box::new(chain_spec::perseverance::Config::build_spec(None)?),
+			"berghain-new" => Box::new(chain_spec::berghain::Config::build_spec(None)?),
 			"sisyphos" => Box::new(chain_spec::ChainSpec::from_json_bytes(
 				include_bytes!("../chainspecs/sisyphos.chainspec.raw.json").as_slice(),
 			)?),
@@ -175,34 +173,16 @@ pub fn run() -> sc_cli::Result<()> {
 			})
 		},
 		#[cfg(feature = "try-runtime")]
-		Some(Subcommand::TryRuntime(cmd)) => {
-			use crate::service::ExecutorDispatch;
-			use sc_executor::{sp_wasm_interface::ExtendedHostFunctions, NativeExecutionDispatch};
-			let runner = cli.create_runner(cmd)?;
-			runner.async_run(|config| {
-				// we don't need any of the components of new_partial, just a runtime, or a task
-				// manager to do `async_run`.
-				let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-				let task_manager =
-					sc_service::TaskManager::new(config.tokio_handle.clone(), registry)
-						.map_err(|e| sc_cli::Error::Service(sc_service::Error::Prometheus(e)))?;
-				let info_provider = timestamp_with_aura_info(6000);
-
-				Ok((
-					cmd.run::<Block, ExtendedHostFunctions<
-						sp_io::SubstrateHostFunctions,
-						<ExecutorDispatch as NativeExecutionDispatch>::ExtendHostFunctions,
-					>, _>(Some(info_provider)),
-					task_manager,
-				))
-			})
-		},
+		Some(Subcommand::TryRuntime) => Err(try_runtime_cli::DEPRECATION_NOTICE.into()),
 		#[cfg(not(feature = "try-runtime"))]
 		Some(Subcommand::TryRuntime) => Err("TryRuntime wasn't enabled when building the node. \
-        You can enable it with `--features try-runtime`."
+				You can enable it with `--features try-runtime`."
 			.into()),
+		Some(Subcommand::ChainInfo(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+			runner.sync_run(|config| cmd.run::<Block>(&config))
+		},
 		None => {
-			utilities::print_starting!();
 			let runner = cli.create_runner(&cli.run)?;
 			runner.run_node_until_exit(|config| async move {
 				service::new_full(config).map_err(sc_cli::Error::Service)

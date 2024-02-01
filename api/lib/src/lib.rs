@@ -1,14 +1,14 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use cf_chains::{
-	address::EncodedAddress,
-	eth::{to_ethereum_address, Address as EthereumAddress},
+	address::EncodedAddress, dot::PolkadotAccountId, evm::to_evm_address, AnyChain,
 	CcmChannelMetadata, ForeignChain,
 };
-use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId};
+use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId, SemVer};
 use futures::FutureExt;
+use pallet_cf_governance::ExecutionMode;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use serde::Serialize;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -21,16 +21,20 @@ pub use sp_core::crypto::AccountId32;
 pub mod primitives {
 	pub use cf_primitives::*;
 	pub use pallet_cf_governance::ProposalId;
-	pub use state_chain_runtime::Hash;
+	pub use state_chain_runtime::{self, BlockNumber, Hash};
 	pub type RedemptionAmount = pallet_cf_funding::RedemptionAmount<FlipBalance>;
 	pub use cf_chains::{
 		address::{EncodedAddress, ForeignChainAddress},
 		CcmChannelMetadata, CcmDepositMetadata,
 	};
 }
+pub use cf_chains::eth::Address as EthereumAddress;
 pub use chainflip_engine::state_chain_observer::client::{
 	base_rpc_api::{BaseRpcApi, RawRpcApi},
-	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
+	chain_api::ChainApi,
+	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized, WaitFor, WaitForResult},
+	storage_api::StorageApi,
+	BlockInfo,
 };
 
 pub mod lp;
@@ -40,9 +44,18 @@ pub use chainflip_engine::settings;
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
 use chainflip_engine::state_chain_observer::client::{
-	base_rpc_api::BaseRpcClient, DefaultRpcClient, StateChainClient,
+	base_rpc_api::BaseRpcClient, extrinsic_api::signed::UntilInBlock, DefaultRpcClient,
+	StateChainClient,
 };
 use utilities::{clean_hex_address, task_scope::Scope};
+
+lazy_static::lazy_static! {
+	static ref API_VERSION: SemVer = SemVer {
+		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
+		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
+		patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
+	};
+}
 
 #[async_trait]
 pub trait AuctionPhaseApi {
@@ -102,11 +115,13 @@ impl StateChainApi {
 		scope: &Scope<'a, anyhow::Error>,
 		state_chain_settings: settings::StateChain,
 	) -> Result<Self, anyhow::Error> {
-		let (_state_chain_stream, state_chain_client) = StateChainClient::connect_with_account(
+		let (.., state_chain_client) = StateChainClient::connect_with_account(
 			scope,
 			&state_chain_settings.ws_endpoint,
 			&state_chain_settings.signing_key_file,
-			AccountRole::None,
+			AccountRole::Unregistered,
+			false,
+			false,
 			false,
 		)
 		.await?;
@@ -136,11 +151,11 @@ impl StateChainApi {
 }
 
 #[async_trait]
-impl OperatorApi for StateChainClient {}
-#[async_trait]
 impl GovernanceApi for StateChainClient {}
 #[async_trait]
 impl BrokerApi for StateChainClient {}
+#[async_trait]
+impl OperatorApi for StateChainClient {}
 
 #[async_trait]
 pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseApi {
@@ -148,14 +163,31 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		&self,
 		amount: primitives::RedemptionAmount,
 		address: EthereumAddress,
+		executor: Option<EthereumAddress>,
 	) -> Result<H256> {
-		// Are we in a current auction phase
-		if self.is_auction_phase().await? {
-			bail!("We are currently in an auction phase. Please wait until the auction phase is over.");
-		}
+		let call = RuntimeCall::from(pallet_cf_funding::Call::redeem { amount, address, executor });
 
+		let (tx_hash, ..) =
+			self.submit_signed_extrinsic_with_dry_run(call).await?.until_in_block().await?;
+
+		Ok(tx_hash)
+	}
+
+	async fn bind_redeem_address(&self, address: EthereumAddress) -> Result<H256> {
 		let (tx_hash, ..) = self
-			.submit_signed_extrinsic(pallet_cf_funding::Call::redeem { amount, address })
+			.submit_signed_extrinsic(pallet_cf_funding::Call::bind_redeem_address { address })
+			.await
+			.until_in_block()
+			.await?;
+
+		Ok(tx_hash)
+	}
+
+	async fn bind_executor_address(&self, executor_address: EthereumAddress) -> Result<H256> {
+		let (tx_hash, ..) = self
+			.submit_signed_extrinsic(pallet_cf_funding::Call::bind_executor_address {
+				executor_address,
+			})
 			.await
 			.until_finalized()
 			.await?;
@@ -171,25 +203,25 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 				RuntimeCall::from(pallet_cf_swapping::Call::register_as_broker {}),
 			AccountRole::LiquidityProvider =>
 				RuntimeCall::from(pallet_cf_lp::Call::register_lp_account {}),
-			AccountRole::None => bail!("Cannot register account role None"),
+			AccountRole::Unregistered => bail!("Cannot register account role None"),
 		};
 
 		let (tx_hash, ..) = self
-			.submit_signed_extrinsic(call)
-			.await
-			.until_finalized()
+			.submit_signed_extrinsic_with_dry_run(call)
+			.await?
+			.until_in_block()
 			.await
 			.context("Could not register account role for account")?;
 		Ok(tx_hash)
 	}
 
 	async fn rotate_session_keys(&self) -> Result<H256> {
-		let seed = RotateSessionKeysApi::rotate_session_keys(self)
+		let raw_keys = RotateSessionKeysApi::rotate_session_keys(self)
 			.await
 			.context("Could not rotate session keys.")?;
 
-		let aura_key: [u8; 32] = seed[0..32].try_into().unwrap();
-		let grandpa_key: [u8; 32] = seed[32..64].try_into().unwrap();
+		let aura_key: [u8; 32] = raw_keys[0..32].try_into().unwrap();
+		let grandpa_key: [u8; 32] = raw_keys[32..64].try_into().unwrap();
 
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(pallet_cf_validator::Call::set_keys {
@@ -200,7 +232,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 				proof: [0; 1].to_vec(),
 			})
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await?;
 
 		Ok(tx_hash)
@@ -210,7 +242,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(pallet_cf_funding::Call::stop_bidding {})
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await
 			.context("Could not stop bidding")?;
 		println!("Account stopped bidding, in tx {tx_hash:#x}.");
@@ -221,7 +253,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(pallet_cf_funding::Call::start_bidding {})
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await
 			.context("Could not start bidding")?;
 		println!("Account started bidding at tx {tx_hash:#x}.");
@@ -239,7 +271,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 				name: name.as_bytes().to_vec(),
 			})
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await
 			.context("Could not set vanity name for your account")?;
 		println!("Vanity name set at tx {tx_hash:#x}.");
@@ -253,9 +285,10 @@ pub trait GovernanceApi: SignedExtrinsicApi {
 		println!("Submitting governance proposal for rotation.");
 		self.submit_signed_extrinsic(pallet_cf_governance::Call::propose_governance_extrinsic {
 			call: Box::new(pallet_cf_validator::Call::force_rotation {}.into()),
+			execution: ExecutionMode::Automatic,
 		})
 		.await
-		.until_finalized()
+		.until_in_block()
 		.await
 		.context("Failed to submit rotation governance proposal")?;
 
@@ -267,9 +300,9 @@ pub trait GovernanceApi: SignedExtrinsicApi {
 
 pub struct SwapDepositAddress {
 	pub address: String,
-	pub expiry_block: state_chain_runtime::BlockNumber,
 	pub issued_block: state_chain_runtime::BlockNumber,
 	pub channel_id: ChannelId,
+	pub source_chain_expiry_block: <AnyChain as cf_chains::Chain>::ChainBlockNumber,
 }
 
 #[async_trait]
@@ -283,22 +316,24 @@ pub trait BrokerApi: SignedExtrinsicApi {
 		channel_metadata: Option<CcmChannelMetadata>,
 	) -> Result<SwapDepositAddress> {
 		let (_tx_hash, events, header, ..) = self
-			.submit_signed_extrinsic(pallet_cf_swapping::Call::request_swap_deposit_address {
-				source_asset,
-				destination_asset,
-				destination_address,
-				broker_commission_bps,
-				channel_metadata,
-			})
-			.await
-			.until_finalized()
+			.submit_signed_extrinsic_with_dry_run(
+				pallet_cf_swapping::Call::request_swap_deposit_address {
+					source_asset,
+					destination_asset,
+					destination_address,
+					broker_commission_bps,
+					channel_metadata,
+				},
+			)
+			.await?
+			.until_in_block()
 			.await?;
 
 		if let Some(state_chain_runtime::RuntimeEvent::Swapping(
 			pallet_cf_swapping::Event::SwapDepositAddressReady {
 				deposit_address,
-				expiry_block,
 				channel_id,
+				source_chain_expiry_block,
 				..
 			},
 		)) = events.iter().find(|event| {
@@ -311,12 +346,12 @@ pub trait BrokerApi: SignedExtrinsicApi {
 		}) {
 			Ok(SwapDepositAddress {
 				address: deposit_address.to_string(),
-				expiry_block: *expiry_block,
 				issued_block: header.number,
 				channel_id: *channel_id,
+				source_chain_expiry_block: *source_chain_expiry_block,
 			})
 		} else {
-			panic!("SwapDepositAddressReady must have been generated");
+			bail!("No SwapDepositAddressReady event was found");
 		}
 	}
 }
@@ -327,7 +362,8 @@ pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result
 	Ok(match chain {
 		ForeignChain::Ethereum | ForeignChain::Arbitrum =>
 			EncodedAddress::Eth(clean_hex_address(address)?),
-		ForeignChain::Polkadot => EncodedAddress::Dot(clean_hex_address(address)?),
+		ForeignChain::Polkadot =>
+			EncodedAddress::Dot(PolkadotAccountId::from_str(address).map(|id| *id.aliased_ref())?),
 		ForeignChain::Bitcoin => EncodedAddress::Btc(address.as_bytes().to_vec()),
 	})
 }
@@ -357,17 +393,22 @@ impl Serialize for KeyPair {
 }
 
 /// Generate a new random node key.
+///
 /// This key is used for secure communication between Validators.
-pub fn generate_node_key() -> KeyPair {
+pub fn generate_node_key() -> Result<(KeyPair, libp2p_identity::PeerId)> {
 	use rand_v7::SeedableRng;
 
 	let mut rng = rand_v7::rngs::StdRng::from_entropy();
 	let keypair = ed25519_dalek::Keypair::generate(&mut rng);
+	let libp2p_keypair = libp2p_identity::Keypair::ed25519_from_bytes(keypair.secret.to_bytes())?;
 
-	KeyPair {
-		secret_key: keypair.secret.as_bytes().to_vec(),
-		public_key: keypair.public.to_bytes().to_vec(),
-	}
+	Ok((
+		KeyPair {
+			secret_key: keypair.secret.as_bytes().to_vec(),
+			public_key: keypair.public.to_bytes().to_vec(),
+		},
+		libp2p_keypair.public().to_peer_id(),
+	))
 }
 
 /// Generate a signing key (aka. account key).
@@ -424,65 +465,96 @@ pub fn generate_ethereum_key(
 			secret_key: secret_key.serialize().to_vec(),
 			public_key: public_key.serialize_compressed().to_vec(),
 		},
-		to_ethereum_address(public_key),
+		to_evm_address(public_key),
 	))
 }
 
 #[cfg(test)]
-mod test_key_generation {
-	use sp_core::crypto::Ss58Codec;
-
+mod tests {
 	use super::*;
 
-	#[test]
-	fn restored_keys_remain_compatible() {
-		const SEED_PHRASE: &str =
+	mod key_generation {
+
+		use super::*;
+		use sp_core::crypto::Ss58Codec;
+
+		#[test]
+		fn restored_keys_remain_compatible() {
+			const SEED_PHRASE: &str =
 		"essay awesome afraid movie wish save genius eyebrow tonight milk agree pretty alcohol three whale";
 
-		let generated = generate_signing_key(Some(SEED_PHRASE)).unwrap();
+			let generated = generate_signing_key(Some(SEED_PHRASE)).unwrap();
 
-		// Compare the generated secret key with a known secret key generated using the
-		// `chainflip-node key generate` command
-		assert_eq!(
-			"afabf42a9a99910cdd64795ef05ed71acfa2238f5682d26ae62028df3cc59727",
-			hex::encode(generated.1.secret_key)
-		);
-		assert_eq!(
-			(generated.0, generated.2),
-			(
-				SEED_PHRASE.to_string(),
-				AccountId32::from_ss58check("cFMziohdyxVZy4DGXw2zkapubUoTaqjvAM7QGcpyLo9Cba7HA")
+			// Compare the generated secret key with a known secret key generated using the
+			// `chainflip-node key generate` command
+			assert_eq!(
+				"afabf42a9a99910cdd64795ef05ed71acfa2238f5682d26ae62028df3cc59727",
+				hex::encode(generated.1.secret_key)
+			);
+			assert_eq!(
+				(generated.0, generated.2),
+				(
+					SEED_PHRASE.to_string(),
+					AccountId32::from_ss58check(
+						"cFMziohdyxVZy4DGXw2zkapubUoTaqjvAM7QGcpyLo9Cba7HA"
+					)
 					.unwrap(),
-			)
-		);
+				)
+			);
 
-		let generated = generate_ethereum_key(Some(SEED_PHRASE)).unwrap();
-		assert_eq!(
-			"5c25d9ae0363ecd8dd18da1608ead2a4dc1ec658d6ed412d47e10d486ff0d1db",
-			hex::encode(generated.1.secret_key)
-		);
-		assert_eq!(
-			(generated.0, generated.2.as_bytes().to_vec()),
-			(
-				SEED_PHRASE.to_string(),
-				hex::decode("e01156ca92d904cc67ff47517bf3a3500b418280").unwrap()
-			)
-		);
-	}
+			let generated = generate_ethereum_key(Some(SEED_PHRASE)).unwrap();
+			assert_eq!(
+				"5c25d9ae0363ecd8dd18da1608ead2a4dc1ec658d6ed412d47e10d486ff0d1db",
+				hex::encode(generated.1.secret_key)
+			);
+			assert_eq!(
+				(generated.0, generated.2.as_bytes().to_vec()),
+				(
+					SEED_PHRASE.to_string(),
+					hex::decode("e01156ca92d904cc67ff47517bf3a3500b418280").unwrap()
+				)
+			);
+		}
 
-	#[test]
-	fn test_restore_signing_keys() {
-		let ref original @ (ref seed_phrase, ..) = generate_signing_key(None).unwrap();
-		let restored = generate_signing_key(Some(seed_phrase)).unwrap();
+		#[test]
+		fn test_restore_signing_keys() {
+			let ref original @ (ref seed_phrase, ..) = generate_signing_key(None).unwrap();
+			let restored = generate_signing_key(Some(seed_phrase)).unwrap();
 
-		assert_eq!(*original, restored);
-	}
+			assert_eq!(*original, restored);
+		}
 
-	#[test]
-	fn test_restore_eth_keys() {
-		let ref original @ (ref seed_phrase, ..) = generate_ethereum_key(None).unwrap();
-		let restored = generate_ethereum_key(Some(seed_phrase)).unwrap();
+		#[test]
+		fn test_restore_eth_keys() {
+			let ref original @ (ref seed_phrase, ..) = generate_ethereum_key(None).unwrap();
+			let restored = generate_ethereum_key(Some(seed_phrase)).unwrap();
 
-		assert_eq!(*original, restored);
+			assert_eq!(*original, restored);
+		}
+
+		#[test]
+		fn test_dot_address_decoding() {
+			assert_eq!(
+				clean_foreign_chain_address(
+					ForeignChain::Polkadot,
+					"126PaS7kDWTdtiojd556gD4ZPcxj7KbjrMJj7xZ5i6XKfARE"
+				)
+				.unwrap(),
+				clean_foreign_chain_address(
+					ForeignChain::Polkadot,
+					"0x305875a3025d8be7f7048a280aba2bd571126fc171986adc1af58d1f4e02f15e"
+				)
+				.unwrap(),
+			);
+			assert_eq!(
+				clean_foreign_chain_address(
+					ForeignChain::Polkadot,
+					"126PaS7kDWTdtiojd556gD4ZPcxj7KbjrMJj7xZ5i6XKfARF"
+				)
+				.unwrap_err()
+				.to_string(),
+				anyhow!("Address is neither valid ss58: 'Invalid checksum' nor hex: 'Invalid character 'P' at position 3'").to_string(),
+			);
+		}
 	}
 }
