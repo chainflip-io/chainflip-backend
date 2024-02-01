@@ -1,9 +1,12 @@
 #![cfg(test)]
 
 use crate::{mock::*, PendingVaultActivation, VaultActivationStatus};
-use cf_chains::mocks::MockAggKey;
+use cf_chains::mocks::{MockAggKey, MockEthereum};
 use cf_test_utilities::last_event;
-use cf_traits::{AsyncResult, SafeMode, VaultActivator};
+use cf_traits::{
+	mocks::block_height_provider::BlockHeightProvider, AsyncResult, EpochInfo, SafeMode,
+	VaultActivator,
+};
 use frame_support::assert_ok;
 use sp_core::Get;
 
@@ -63,4 +66,23 @@ fn when_set_agg_key_with_agg_key_not_required_we_skip_to_completion() {
 	});
 }
 
-// add test for testing active from block functionality
+#[test]
+fn vault_start_block_number_is_set_correctly() {
+	new_test_ext_no_key().execute_with(|| {
+		BlockHeightProvider::<MockEthereum>::set_block_height(1000);
+		VaultsPallet::activate(NEW_AGG_PUBKEY, Some(Default::default()));
+
+		assert_eq!(
+			crate::VaultStartBlockNumbers::<Test, _>::get(
+				MockEpochInfo::epoch_index().saturating_add(1)
+			)
+			.unwrap(),
+			1001
+		);
+		assert!(matches!(
+			PendingVaultActivation::<Test, _>::get().unwrap(),
+			VaultActivationStatus::Complete
+		));
+		assert_last_event!(crate::Event::VaultActivationCompleted);
+	});
+}
