@@ -173,12 +173,12 @@ mod benchmarks {
 			));
 		}
 
-		// We expect the unwrap to error if the extrinsic didn't fire an event - if an event has
-		// been emitted we reached the end of the extrinsic
-		let _ = frame_system::Pallet::<T>::events()
-			.pop()
-			.expect("No event has been emitted from the transaction_succeeded extrinsic")
-			.event;
+		// Storage is cleaned up upon successful broadcast
+		assert!(TransactionOutIdToBroadcastId::<T, I>::get(
+			TransactionOutIdFor::<T, I>::benchmark_value()
+		)
+		.is_none());
+		assert!(TransactionMetadata::<T, I>::get(broadcast_id).is_none());
 	}
 
 	#[cfg(test)]

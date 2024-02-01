@@ -74,8 +74,8 @@ mod benchmarks {
 	}
 
 	#[benchmark]
+	// Benchmarks the weight of Partitioning expired proposal.
 	fn on_initialize(b: Linear<1, 100>) {
-		// TODO: mock the time to end in the expire proposals case which is more expensive
 		for _n in 1..b {
 			let call = Box::new(frame_system::Call::remark { remark: vec![] }.into());
 			Pallet::<T>::push_proposal(call, ExecutionMode::Automatic);
