@@ -91,7 +91,7 @@ mod benchmarks {
 		let interval = T::HeartbeatBlockInterval::get();
 
 		// Without heartbeat, all nodes are automatically disqualified.
-		let _ = LastHeartbeat::<T>::clear(u32::MAX, None);
+		let _old_heartbeat = LastHeartbeat::<T>::clear(u32::MAX, None);
 
 		#[block]
 		{
