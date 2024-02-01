@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use cf_primitives::SemVer;
 use codec::{Decode, FullCodec};
 use frame_support::{
 	storage::{
@@ -12,7 +13,7 @@ use jsonrpsee::core::RpcResult;
 use sp_core::storage::StorageKey;
 use utilities::context;
 
-use super::SUBSTRATE_BEHAVIOUR;
+use super::{CFE_VERSION, SUBSTRATE_BEHAVIOUR};
 
 /// This trait extracts otherwise private type information about Substrate storage double maps
 pub trait StorageDoubleMapAssociatedTypes {
@@ -353,6 +354,23 @@ impl<
 		self.base_rpc_client.storage_map::<StorageMap, _>(block_hash).await
 	}
 }
+
+#[async_trait]
+pub trait CheckBlockCompatibility: StorageApi {
+	async fn check_block_compatibility(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<Result<(), SemVer>> {
+		let block_version = self
+			.storage_value::<pallet_cf_environment::CurrentReleaseVersion<state_chain_runtime::Runtime>>(
+				block_hash,
+			)
+			.await?;
+		Ok(if CFE_VERSION.is_compatible_with(block_version) { Ok(()) } else { Err(block_version) })
+	}
+}
+#[async_trait]
+impl<T: StorageApi + Send + Sync + 'static> CheckBlockCompatibility for T {}
 
 #[cfg(test)]
 mod tests {

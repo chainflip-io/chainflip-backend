@@ -121,7 +121,8 @@ impl StateChainApi {
 			&state_chain_settings.signing_key_file,
 			AccountRole::Unregistered,
 			false,
-			Some((*API_VERSION, false)),
+			false,
+			false,
 		)
 		.await?;
 

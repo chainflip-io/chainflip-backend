@@ -1,6 +1,6 @@
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { Asset, assetChains, chainContractIds, assetDecimals } from '@chainflip-io/cli';
+import { Asset, chainContractIds, assetDecimals } from '@chainflip-io/cli';
 import {
   observeEvent,
   newAddress,
@@ -11,6 +11,7 @@ import {
   assetToChain,
   amountToFineAmount,
   isWithinOnePercent,
+  chainFromAsset,
 } from '../shared/utils';
 import { send } from '../shared/send';
 
@@ -28,7 +29,7 @@ export async function provideLiquidity(ccy: Asset, amount: number, waitForFinali
     (
       await chainflip.query.liquidityProvider.liquidityRefundAddress(
         lp.address,
-        chainContractIds[assetChains[ccy]],
+        chainContractIds[chainFromAsset(ccy)],
       )
     ).toJSON() === null
   ) {

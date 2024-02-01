@@ -3,18 +3,27 @@
 
 import { ApiPromise } from '@polkadot/api';
 import { execSync } from 'child_process';
+import path from 'path';
+import os from 'os';
+import fs from 'fs';
 import { compileBinaries } from './utils/compile_binaries';
 
 function tryRuntimeCommand(runtimePath: string, blockParam: string, networkUrl: string) {
+  // Create a temporary file for capturing stderr
+  const stderrFile = path.join(os.tmpdir(), `cmd-stderr-${Date.now()}`);
   try {
     execSync(
-      `try-runtime --runtime ${runtimePath} on-runtime-upgrade --disable-spec-version-check --disable-idempotency-checks --checks all ${blockParam} --uri ${networkUrl}`,
-      { stdio: 'ignore' },
+      `try-runtime --runtime ${runtimePath} on-runtime-upgrade --disable-spec-version-check --disable-idempotency-checks --checks all ${blockParam} --uri ${networkUrl} 2> ${stderrFile}`,
     );
     console.log(`try-runtime success for blockParam ${blockParam}`);
   } catch (e) {
     console.error(`try-runtime failed for blockParam ${blockParam}`);
+    const stderrOutput = fs.readFileSync(stderrFile, 'utf8');
     console.error(e);
+    console.error('Command failed: Command output:', stderrOutput);
+
+    fs.unlinkSync(stderrFile);
+
     process.exit(-1);
   }
 }

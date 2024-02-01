@@ -979,8 +979,8 @@ impl BenchmarkValueExtended for PolkadotChannelId {
 	}
 }
 
-#[cfg(debug_assertions)]
-pub const TEST_RUNTIME_VERSION: RuntimeVersion =
+#[cfg(test)]
+pub(crate) const TEST_RUNTIME_VERSION: RuntimeVersion =
 	RuntimeVersion { spec_version: 9340, transaction_version: 16 };
 
 #[cfg(test)]

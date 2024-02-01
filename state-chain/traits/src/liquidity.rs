@@ -1,6 +1,7 @@
 use cf_chains::address::ForeignChainAddress;
-use cf_primitives::{Asset, AssetAmount, BasisPoints, ChannelId};
+use cf_primitives::{Asset, AssetAmount, BasisPoints, ChannelId, SwapId};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
+use sp_std::vec::Vec;
 
 pub trait SwapDepositHandler {
 	type AccountId;
@@ -16,7 +17,15 @@ pub trait SwapDepositHandler {
 		broker_id: Self::AccountId,
 		broker_commission_bps: BasisPoints,
 		channel_id: ChannelId,
-	);
+	) -> SwapId;
+}
+
+pub trait LpDepositHandler {
+	type AccountId;
+
+	/// Attempt to credit the account with the given asset and amount
+	/// as a result of a liquidity deposit.
+	fn add_deposit(who: &Self::AccountId, asset: Asset, amount: AssetAmount) -> DispatchResult;
 }
 
 pub trait LpBalanceApi {
@@ -44,6 +53,9 @@ pub trait LpBalanceApi {
 		asset: Asset,
 		amount: AssetAmount,
 	) -> DispatchResult;
+
+	/// Returns the asset balances of the given account.
+	fn asset_balances(who: &Self::AccountId) -> Vec<(Asset, AssetAmount)>;
 }
 
 pub trait PoolApi {

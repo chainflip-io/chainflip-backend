@@ -1,15 +1,9 @@
 #![feature(absolute_path)]
-use anyhow::{Context, Result};
-use clap::Parser;
-use custom_rpc::RpcAsset;
-use futures::FutureExt;
-use serde::Serialize;
-use std::{io::Write, path::PathBuf, sync::Arc};
-
 use crate::settings::{
 	BrokerSubcommands, CLICommandLineOptions, CLISettings, CliCommand::*,
 	LiquidityProviderSubcommands,
 };
+use anyhow::{Context, Result};
 use api::{
 	lp::LpApi,
 	primitives::{RedemptionAmount, FLIP_DECIMALS},
@@ -18,6 +12,12 @@ use api::{
 };
 use cf_chains::eth::Address as EthereumAddress;
 use chainflip_api as api;
+use chainflip_api::primitives::state_chain_runtime;
+use clap::Parser;
+use custom_rpc::RpcAsset;
+use futures::FutureExt;
+use serde::Serialize;
+use std::{io::Write, path::PathBuf, sync::Arc};
 use utilities::{clean_hex_address, round_f64, task_scope::task_scope};
 
 mod settings;
@@ -141,6 +141,9 @@ async fn run_cli() -> Result<()> {
 					api.governance_api().force_rotation().await?;
 				},
 				GenerateKeys { .. } => unreachable!("GenerateKeys is handled above"),
+				CountWitnesses { hash } => {
+					count_witnesses(api.query_api(), hash).await?;
+				},
 			};
 			Ok(())
 		}
@@ -280,6 +283,21 @@ async fn pre_update_check(api: QueryApi) -> Result<()> {
 	println!("A rotation is occurring: {}", can_update.rotation);
 	if let Some(blocks) = can_update.next_block_in {
 		println!("Your validator will produce a block in {} blocks", blocks);
+	}
+
+	Ok(())
+}
+
+async fn count_witnesses(api: QueryApi, hash: state_chain_runtime::Hash) -> Result<()> {
+	let result = api.check_witnesses(None, hash).await?;
+	match result {
+		Some(value) => {
+			println!("Number of authorities who failed to witness it: {}", value.failing_count);
+			println!("List of witness votes:\n {:?}", value.validators);
+		},
+		None => {
+			println!("The hash you provided lead to no results")
+		},
 	}
 
 	Ok(())

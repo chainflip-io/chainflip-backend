@@ -109,7 +109,7 @@ pub mod any {
 	}
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize)]
 pub enum AssetError {
 	Unsupported,
 }

@@ -1,6 +1,8 @@
 import { Asset, broker } from '@chainflip-io/cli';
 import { decodeDotAddressForContract, chainFromAsset } from './utils';
 
+const defaultCommissionBps = 100; // 1%
+
 export interface CcmDepositMetadata {
   message: string;
   gasBudget: number;
@@ -12,6 +14,7 @@ export async function newSwap(
   destAsset: Asset,
   destAddress: string,
   messageMetadata?: CcmDepositMetadata,
+  brokerCommissionBps = defaultCommissionBps,
 ): Promise<void> {
   const destinationAddress =
     destAsset === 'DOT' ? decodeDotAddressForContract(destAddress) : destAddress;
@@ -30,7 +33,7 @@ export async function newSwap(
     },
     {
       url: brokerUrl,
-      commissionBps: 0,
+      commissionBps: brokerCommissionBps,
     },
   );
 }

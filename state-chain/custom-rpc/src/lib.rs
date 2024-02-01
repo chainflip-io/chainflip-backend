@@ -30,7 +30,8 @@ use state_chain_runtime::{
 	chainflip::Offence,
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
-		CustomRuntimeApi, DispatchErrorWithMessage, LiquidityProviderInfo, RuntimeApiAccountInfoV2,
+		CustomRuntimeApi, DispatchErrorWithMessage, FailingWitnessValidators,
+		LiquidityProviderInfo, RuntimeApiAccountInfoV2,
 	},
 };
 use std::{
@@ -49,6 +50,13 @@ pub enum RpcAsset {
 	ExplicitChain { chain: ForeignChain, asset: Asset },
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct RpcAssetWithAmount {
+	#[serde(flatten)]
+	pub asset: RpcAsset,
+	pub amount: AssetAmount,
+}
+
 impl TryInto<Asset> for RpcAsset {
 	type Error = AssetConversionError;
 
@@ -59,7 +67,7 @@ impl TryInto<Asset> for RpcAsset {
 				if chain == ForeignChain::from(asset) {
 					Ok(asset)
 				} else {
-					Err(AssetConversionError::UnupportedAsset(chain, asset))
+					Err(AssetConversionError::UnsupportedAsset(chain, asset))
 				},
 		}
 	}
@@ -68,7 +76,7 @@ impl TryInto<Asset> for RpcAsset {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum AssetConversionError {
 	#[error("Unsupported asset {1:?} on chain {0}")]
-	UnupportedAsset(ForeignChain, Asset),
+	UnsupportedAsset(ForeignChain, Asset),
 }
 
 impl From<AssetConversionError> for jsonrpsee::core::Error {
@@ -87,7 +95,7 @@ impl TryFrom<(Asset, Option<ForeignChain>)> for RpcAsset {
 				if chain == ForeignChain::from(asset) {
 					Ok(RpcAsset::ExplicitChain { asset, chain })
 				} else {
-					Err(AssetConversionError::UnupportedAsset(chain, asset))
+					Err(AssetConversionError::UnsupportedAsset(chain, asset))
 				},
 		}
 	}
@@ -258,6 +266,8 @@ pub struct IngressEgressEnvironment {
 	pub minimum_deposit_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
 	pub ingress_fees: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
 	pub egress_fees: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+	pub witness_safety_margins: HashMap<ForeignChain, Option<u64>>,
+	pub egress_dust_limits: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -349,6 +359,12 @@ pub trait CustomApi {
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcAccountInfoV2>;
+	#[method(name = "asset_balances")]
+	fn cf_asset_balances(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcAssetWithAmount>>;
 	#[method(name = "penalties")]
 	fn cf_penalties(
 		&self,
@@ -485,6 +501,13 @@ pub trait CustomApi {
 		&self,
 		broadcast_id: BroadcastId,
 	) -> RpcResult<Option<<cf_chains::Ethereum as Chain>::Transaction>>;
+
+	#[method(name = "witness_count")]
+	fn cf_witness_count(
+		&self,
+		hash: state_chain_runtime::Hash,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<FailingWitnessValidators>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -731,6 +754,21 @@ where
 		})
 	}
 
+	fn cf_asset_balances(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcAssetWithAmount>> {
+		Ok(self
+			.client
+			.runtime_api()
+			.cf_asset_balances(self.unwrap_or_best(at), account_id)
+			.map_err(to_rpc_error)?
+			.into_iter()
+			.map(|(asset, balance)| RpcAssetWithAmount { asset: asset.into(), amount: balance })
+			.collect::<Vec<RpcAssetWithAmount>>())
+	}
+
 	fn cf_penalties(
 		&self,
 		at: Option<<B as BlockT>::Hash>,
@@ -964,6 +1002,8 @@ where
 		let mut minimum_deposit_amounts = HashMap::new();
 		let mut ingress_fees = HashMap::new();
 		let mut egress_fees = HashMap::new();
+		let mut witness_safety_margins = HashMap::new();
+		let mut egress_dust_limits = HashMap::new();
 
 		for asset in Asset::all() {
 			let chain = ForeignChain::from(asset);
@@ -979,9 +1019,26 @@ where
 				asset,
 				runtime_api.cf_egress_fee(hash, asset).map_err(to_rpc_error)?.into(),
 			);
+			egress_dust_limits.entry(chain).or_insert_with(HashMap::new).insert(
+				asset,
+				runtime_api.cf_egress_dust_limit(hash, asset).map_err(to_rpc_error)?.into(),
+			);
 		}
 
-		Ok(IngressEgressEnvironment { minimum_deposit_amounts, ingress_fees, egress_fees })
+		for chain in ForeignChain::iter() {
+			witness_safety_margins.insert(
+				chain,
+				runtime_api.cf_witness_safety_margin(hash, chain).map_err(to_rpc_error)?,
+			);
+		}
+
+		Ok(IngressEgressEnvironment {
+			minimum_deposit_amounts,
+			ingress_fees,
+			egress_fees,
+			witness_safety_margins,
+			egress_dust_limits,
+		})
 	}
 
 	fn cf_swapping_environment(
@@ -1116,6 +1173,17 @@ where
 		self.client
 			.runtime_api()
 			.cf_failed_call(self.unwrap_or_best(None), broadcast_id)
+			.map_err(to_rpc_error)
+	}
+
+	fn cf_witness_count(
+		&self,
+		hash: state_chain_runtime::Hash,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<FailingWitnessValidators>> {
+		self.client
+			.runtime_api()
+			.cf_witness_count(self.unwrap_or_best(at), pallet_cf_witnesser::CallHash(hash.into()))
 			.map_err(to_rpc_error)
 	}
 }
@@ -1342,6 +1410,22 @@ mod test {
 					),
 				]),
 				egress_fees: HashMap::from([
+					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
+					(
+						ForeignChain::Ethereum,
+						HashMap::from([
+							(Asset::Flip, AssetAmount::MAX.into()),
+							(Asset::Usdc, (u64::MAX / 2 - 1).into()),
+							(Asset::Eth, 0u32.into()),
+						]),
+					),
+				]),
+				witness_safety_margins: HashMap::from([
+					(ForeignChain::Bitcoin, Some(3u64)),
+					(ForeignChain::Ethereum, Some(3u64)),
+					(ForeignChain::Polkadot, None),
+				]),
+				egress_dust_limits: HashMap::from([
 					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
 					(
 						ForeignChain::Ethereum,

@@ -28,7 +28,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 pub mod migrations;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(7);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(8);
 
 const INITIAL_CONSOLIDATION_PARAMETERS: cf_chains::btc::ConsolidationParameters =
 	cf_chains::btc::ConsolidationParameters {
@@ -401,51 +401,47 @@ impl<T: Config> Pallet<T> {
 		utxo_selection_type: UtxoSelectionType,
 	) -> Option<SelectedUtxosAndChangeAmount> {
 		let bitcoin_fee_info = T::BitcoinFeeInfo::bitcoin_fee_info();
-		let fee_per_input_utxo = bitcoin_fee_info.fee_per_input_utxo();
 		let min_fee_required_per_tx = bitcoin_fee_info.min_fee_required_per_tx();
 		let fee_per_output_utxo = bitcoin_fee_info.fee_per_output_utxo();
+
+		let calculate_utxos_and_change = |spendable_utxos: Vec<_>| {
+			let total_fee = spendable_utxos
+				.iter()
+				.map(|utxo| bitcoin_fee_info.fee_for_utxo(utxo))
+				.sum::<u64>() + fee_per_output_utxo +
+				min_fee_required_per_tx;
+
+			spendable_utxos
+				.iter()
+				.map(|utxo| utxo.amount)
+				.sum::<u64>()
+				.checked_sub(total_fee)
+				.map(|change_amount| (spendable_utxos, change_amount))
+		};
 
 		match utxo_selection_type {
 			UtxoSelectionType::SelectAllForRotation => {
 				let spendable_utxos: Vec<_> = BitcoinAvailableUtxos::<T>::take()
 					.into_iter()
-					.filter(|utxo| utxo.amount > fee_per_input_utxo)
+					.filter(|utxo| utxo.amount > bitcoin_fee_info.fee_for_utxo(utxo))
 					.collect();
 
 				if spendable_utxos.is_empty() {
 					return None
 				}
-
-				let total_fee = spendable_utxos.len() as u64 * fee_per_input_utxo +
-					fee_per_output_utxo + min_fee_required_per_tx;
-
-				spendable_utxos
-					.iter()
-					.map(|utxo| utxo.amount)
-					.sum::<u64>()
-					.checked_sub(total_fee)
-					.map(|change_amount| (spendable_utxos, change_amount))
+				calculate_utxos_and_change(spendable_utxos)
 			},
 			UtxoSelectionType::SelectForConsolidation =>
 				BitcoinAvailableUtxos::<T>::try_mutate(|available_utxos| {
 					let params = Self::consolidation_parameters();
 
 					let utxos_to_consolidate =
-						select_utxos_for_consolidation(available_utxos, fee_per_input_utxo, params);
+						select_utxos_for_consolidation(available_utxos, &bitcoin_fee_info, params);
 
 					if utxos_to_consolidate.is_empty() {
 						Err(())
 					} else {
-						let total_fee = utxos_to_consolidate.len() as u64 * fee_per_input_utxo +
-							fee_per_output_utxo + min_fee_required_per_tx;
-
-						utxos_to_consolidate
-							.iter()
-							.map(|utxo| utxo.amount)
-							.sum::<u64>()
-							.checked_sub(total_fee)
-							.map(|change_amount| (utxos_to_consolidate, change_amount))
-							.ok_or(())
+						calculate_utxos_and_change(utxos_to_consolidate).ok_or(())
 					}
 				})
 				.ok(),
@@ -453,7 +449,7 @@ impl<T: Config> Pallet<T> {
 				BitcoinAvailableUtxos::<T>::try_mutate(|available_utxos| {
 					select_utxos_from_pool(
 						available_utxos,
-						fee_per_input_utxo,
+						&bitcoin_fee_info,
 						output_amount +
 							number_of_outputs * fee_per_output_utxo +
 							min_fee_required_per_tx,

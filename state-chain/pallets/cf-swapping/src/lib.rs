@@ -1,11 +1,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+
 use cf_chains::{
 	address::{AddressConverter, ForeignChainAddress},
 	CcmChannelMetadata, CcmDepositMetadata, SwapOrigin,
 };
 use cf_primitives::{
-	Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, TransactionHash, STABLE_ASSET,
+	Asset, AssetAmount, ChannelId, ForeignChain, SwapId, SwapLeg, TransactionHash, STABLE_ASSET,
 };
+use cf_runtime_utilities::log_or_panic;
 use cf_traits::{impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi};
 use frame_support::{
 	pallet_prelude::*,
@@ -38,12 +40,12 @@ const BASIS_POINTS_PER_MILLION: u32 = 100;
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum SwapType {
 	Swap(ForeignChainAddress),
-	CcmPrincipal(u64),
-	CcmGas(u64),
+	CcmPrincipal(SwapId),
+	CcmGas(SwapId),
 }
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct Swap {
-	pub swap_id: u64,
+	pub swap_id: SwapId,
 	pub from: Asset,
 	pub to: Asset,
 	pub amount: AssetAmount,
@@ -54,7 +56,13 @@ pub struct Swap {
 }
 
 impl Swap {
-	fn new(swap_id: u64, from: Asset, to: Asset, amount: AssetAmount, swap_type: SwapType) -> Self {
+	fn new(
+		swap_id: SwapId,
+		from: Asset,
+		to: Asset,
+		amount: AssetAmount,
+		swap_type: SwapType,
+	) -> Self {
 		Self {
 			swap_id,
 			from,
@@ -149,8 +157,8 @@ pub(crate) struct CcmSwap {
 	destination_asset: Asset,
 	destination_address: ForeignChainAddress,
 	deposit_metadata: CcmDepositMetadata,
-	principal_swap_id: Option<u64>,
-	gas_swap_id: Option<u64>,
+	principal_swap_id: Option<SwapId>,
+	gas_swap_id: Option<SwapId>,
 }
 
 pub struct CcmSwapAmounts {
@@ -174,8 +182,11 @@ impl_pallet_safe_mode! {
 pub mod pallet {
 
 	use cf_chains::{address::EncodedAddress, AnyChain, Chain};
-	use cf_primitives::{Asset, AssetAmount, BasisPoints, EgressId};
-	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, SwapDepositHandler};
+	use cf_primitives::{Asset, AssetAmount, BasisPoints, EgressId, SwapId};
+	use cf_traits::{
+		AccountRoleRegistry, CcmSwapIds, Chainflip, EgressApi, ScheduledEgressDetails,
+		SwapDepositHandler,
+	};
 
 	use super::*;
 
@@ -219,7 +230,7 @@ pub mod pallet {
 
 	/// SwapId Counter
 	#[pallet::storage]
-	pub type SwapIdCounter<T: Config> = StorageValue<_, u64, ValueQuery>;
+	pub type SwapIdCounter<T: Config> = StorageValue<_, SwapId, ValueQuery>;
 
 	/// Earned Fees by Brokers
 	#[pallet::storage]
@@ -264,7 +275,7 @@ pub mod pallet {
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
-			swap_id: u64,
+			swap_id: SwapId,
 			source_asset: Asset,
 			deposit_amount: AssetAmount,
 			destination_asset: Asset,
@@ -275,24 +286,30 @@ pub mod pallet {
 		},
 		/// A swap has been executed.
 		SwapExecuted {
-			swap_id: u64,
+			swap_id: SwapId,
 			source_asset: Asset,
+			#[deprecated(note = "Use swap_input instead")]
 			deposit_amount: AssetAmount,
+			swap_input: AssetAmount,
 			destination_asset: Asset,
+			#[deprecated(note = "Use swap_output instead")]
 			egress_amount: AssetAmount,
+			swap_output: AssetAmount,
 			intermediate_amount: Option<AssetAmount>,
 		},
 		/// A swap egress has been scheduled.
 		SwapEgressScheduled {
-			swap_id: u64,
+			swap_id: SwapId,
 			egress_id: EgressId,
 			asset: Asset,
 			amount: AssetAmount,
+			fee: AssetAmount,
 		},
 		/// A broker fee withdrawal has been requested.
 		WithdrawalRequested {
 			egress_id: EgressId,
 			egress_amount: AssetAmount,
+			egress_fee: AssetAmount,
 			destination_address: EncodedAddress,
 		},
 		/// Most likely cause of this error is that there are insufficient
@@ -308,8 +325,8 @@ pub mod pallet {
 		},
 		CcmDepositReceived {
 			ccm_id: u64,
-			principal_swap_id: Option<u64>,
-			gas_swap_id: Option<u64>,
+			principal_swap_id: Option<SwapId>,
+			gas_swap_id: Option<SwapId>,
 			deposit_amount: AssetAmount,
 			destination_address: EncodedAddress,
 			deposit_metadata: CcmDepositMetadata,
@@ -324,15 +341,17 @@ pub mod pallet {
 			amount: Option<AssetAmount>,
 		},
 		SwapAmountConfiscated {
-			swap_id: u64,
+			swap_id: SwapId,
 			source_asset: Asset,
 			destination_asset: Asset,
 			total_amount: AssetAmount,
 			confiscated_amount: AssetAmount,
 		},
-		/// The swap has been executed, but has led to a zero egress amount.
-		EgressAmountZero {
-			swap_id: u64,
+		SwapEgressIgnored {
+			swap_id: SwapId,
+			asset: Asset,
+			amount: AssetAmount,
+			reason: DispatchError,
 		},
 	}
 	#[pallet::error]
@@ -389,50 +408,57 @@ pub mod pallet {
 				Self::do_group_and_swap(&mut swaps, SwapLeg::FromStable)?;
 
 				for swap in swaps {
-					if let Some(egress_amount) = swap.final_output {
+					if let Some(swap_output) = swap.final_output {
 						Self::deposit_event(Event::<T>::SwapExecuted {
 							swap_id: swap.swap_id,
 							source_asset: swap.from,
 							destination_asset: swap.to,
 							deposit_amount: swap.amount,
-							egress_amount,
+							swap_input: swap.amount,
+							egress_amount: swap_output,
+							swap_output,
 							intermediate_amount: swap.intermediate_amount(),
 						});
 						// Handle swap completion logic.
 						match &swap.swap_type {
 							SwapType::Swap(destination_address) =>
-								if !egress_amount.is_zero() {
-									let egress_id = T::EgressHandler::schedule_egress(
-										swap.to,
-										egress_amount,
-										destination_address.clone(),
-										None,
-									);
-
-									Self::deposit_event(Event::<T>::SwapEgressScheduled {
-										swap_id: swap.swap_id,
+								match T::EgressHandler::schedule_egress(
+									swap.to,
+									swap_output,
+									destination_address.clone(),
+									None,
+								) {
+									Ok(ScheduledEgressDetails {
 										egress_id,
-										asset: swap.to,
-										amount: egress_amount,
-									});
-								} else {
-									Self::deposit_event(Event::<T>::EgressAmountZero {
-										swap_id: swap.swap_id,
-									})
+										egress_amount,
+										fee_withheld,
+									}) => {
+										Self::deposit_event(Event::<T>::SwapEgressScheduled {
+											swap_id: swap.swap_id,
+											egress_id,
+											asset: swap.to,
+											amount: egress_amount,
+											fee: fee_withheld,
+										});
+									},
+									Err(err) => {
+										Self::deposit_event(Event::<T>::SwapEgressIgnored {
+											swap_id: swap.swap_id,
+											asset: swap.to,
+											amount: swap_output,
+											reason: err.into(),
+										});
+									},
 								},
 							SwapType::CcmPrincipal(ccm_id) => {
 								Self::handle_ccm_swap_result(
 									*ccm_id,
-									egress_amount,
+									swap_output,
 									CcmSwapLeg::Principal,
 								);
 							},
 							SwapType::CcmGas(ccm_id) => {
-								Self::handle_ccm_swap_result(
-									*ccm_id,
-									egress_amount,
-									CcmSwapLeg::Gas,
-								);
+								Self::handle_ccm_swap_result(*ccm_id, swap_output, CcmSwapLeg::Gas);
 							},
 						};
 					} else {
@@ -531,18 +557,23 @@ pub mod pallet {
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, asset)?;
 
-			let egress_amount = EarnedBrokerFees::<T>::take(account_id, asset);
-			ensure!(egress_amount != 0, Error::<T>::NoFundsAvailable);
+			let earned_fees = EarnedBrokerFees::<T>::take(account_id, asset);
+			ensure!(earned_fees != 0, Error::<T>::NoFundsAvailable);
+
+			let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
+				T::EgressHandler::schedule_egress(
+					asset,
+					earned_fees,
+					destination_address_internal,
+					None,
+				)
+				.map_err(Into::into)?;
 
 			Self::deposit_event(Event::<T>::WithdrawalRequested {
 				egress_amount,
+				egress_fee: fee_withheld,
 				destination_address,
-				egress_id: T::EgressHandler::schedule_egress(
-					asset,
-					egress_amount,
-					destination_address_internal,
-					None,
-				),
+				egress_id,
 			});
 
 			Ok(())
@@ -609,7 +640,7 @@ pub mod pallet {
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, destination_asset)?;
 
-			Self::on_ccm_deposit(
+			let _ = Self::on_ccm_deposit(
 				source_asset,
 				deposit_amount,
 				destination_asset,
@@ -832,30 +863,26 @@ pub mod pallet {
 			(ccm_output_principal, ccm_output_gas): (AssetAmount, AssetAmount),
 		) {
 			// Schedule the given ccm to be egressed and deposit a event.
-			let egress_id = T::EgressHandler::schedule_egress(
-				ccm_swap.destination_asset,
-				ccm_output_principal,
-				ccm_swap.destination_address.clone(),
-				Some((ccm_swap.deposit_metadata, ccm_output_gas)),
-			);
-
-			if let Some(swap_id) = ccm_swap.principal_swap_id {
-				Self::deposit_event(Event::<T>::SwapEgressScheduled {
-					swap_id,
-					egress_id,
-					asset: ccm_swap.destination_asset,
-					amount: ccm_output_principal,
-				});
+			if let Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) =
+				T::EgressHandler::schedule_egress(
+					ccm_swap.destination_asset,
+					ccm_output_principal,
+					ccm_swap.destination_address.clone(),
+					Some((ccm_swap.deposit_metadata, ccm_output_gas)),
+				) {
+				if let Some(swap_id) = ccm_swap.principal_swap_id {
+					Self::deposit_event(Event::<T>::SwapEgressScheduled {
+						swap_id,
+						egress_id,
+						asset: ccm_swap.destination_asset,
+						amount: egress_amount,
+						fee: fee_withheld,
+					});
+				}
+				Self::deposit_event(Event::<T>::CcmEgressScheduled { ccm_id, egress_id });
+			} else {
+				log_or_panic!("CCM egress scheduling should never fail.");
 			}
-			if let Some(swap_id) = ccm_swap.gas_swap_id {
-				Self::deposit_event(Event::<T>::SwapEgressScheduled {
-					swap_id,
-					egress_id,
-					asset: ForeignChain::from(ccm_swap.destination_asset).gas_asset(),
-					amount: ccm_output_gas,
-				});
-			}
-			Self::deposit_event(Event::<T>::CcmEgressScheduled { ccm_id, egress_id });
 		}
 
 		/// Schedule the swap, assuming all checks already passed.
@@ -906,7 +933,7 @@ pub mod pallet {
 			broker_id: Self::AccountId,
 			broker_commission_bps: BasisPoints,
 			channel_id: ChannelId,
-		) {
+		) -> SwapId {
 			// Permill maxes out at 100% so this is safe.
 			let fee = Permill::from_parts(broker_commission_bps as u32 * BASIS_POINTS_PER_MILLION) *
 				amount;
@@ -941,6 +968,8 @@ pub mod pallet {
 				swap_type: SwapType::Swap(destination_address),
 				broker_commission: Some(fee),
 			});
+
+			swap_id
 		}
 	}
 
@@ -952,7 +981,7 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			deposit_metadata: CcmDepositMetadata,
 			origin: SwapOrigin,
-		) {
+		) -> Result<CcmSwapIds, ()> {
 			let encoded_destination_address =
 				T::AddressConverter::to_encoded_address(destination_address.clone());
 			// Caller should ensure that assets and addresses are compatible.
@@ -977,7 +1006,7 @@ pub mod pallet {
 							destination_address: encoded_destination_address,
 							deposit_metadata,
 						});
-						return
+						return Err(())
 					},
 				};
 
@@ -1060,6 +1089,8 @@ pub mod pallet {
 				PendingCcms::<T>::insert(ccm_id, ccm_swap);
 				CcmOutputs::<T>::insert(ccm_id, swap_output);
 			}
+
+			Ok(CcmSwapIds { principal_swap_id, gas_swap_id })
 		}
 	}
 }

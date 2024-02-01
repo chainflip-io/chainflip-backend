@@ -2,12 +2,14 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{address::ForeignChainAddress, evm::api::EthEnvironmentProvider, UpdateFlipSupply};
+use cf_chains::{evm::api::EthEnvironmentProvider, UpdateFlipSupply};
+use cf_primitives::{AssetAmount, EgressId};
 use cf_traits::{
-	impl_pallet_safe_mode, BlockEmissions, Broadcaster, EgressApi, FlipBurnInfo, Issuance,
-	RewardsDistribution,
+	impl_pallet_safe_mode, BackupRewardsNotifier, BlockEmissions, Broadcaster, EgressApi,
+	FlipBurnInfo, Issuance, RewardsDistribution, ScheduledEgressDetails,
 };
 use codec::MaxEncodedLen;
+use frame_support::storage::transactional::with_storage_layer;
 use frame_system::pallet_prelude::BlockNumberFor;
 pub use pallet::*;
 
@@ -24,10 +26,12 @@ use frame_support::{
 };
 use sp_arithmetic::traits::UniqueSaturatedFrom;
 
-use cf_primitives::{chains::AnyChain, Asset};
-
 pub mod weights;
 pub use weights::WeightInfo;
+
+/// In order to trigger the buy and burn, the amount to burn must be a factor of [BURN_MULTIPLE]
+/// greater than the egress fee.
+const BURN_FEE_MULTIPLE: AssetAmount = 100;
 
 impl_pallet_safe_mode!(PalletSafeMode; emissions_sync_enabled);
 
@@ -35,7 +39,7 @@ impl_pallet_safe_mode!(PalletSafeMode; emissions_sync_enabled);
 pub mod pallet {
 
 	use super::*;
-	use cf_chains::Chain;
+	use cf_chains::{Chain, Ethereum};
 	use frame_support::{pallet_prelude::*, DefaultNoBound};
 	use frame_system::pallet_prelude::OriginFor;
 
@@ -96,8 +100,8 @@ pub mod pallet {
 		/// The interface for accessing the amount of Flip we want burn.
 		type FlipToBurn: FlipBurnInfo;
 
-		/// API for handling asset egress.
-		type EgressHandler: EgressApi<AnyChain>;
+		/// API for handling asset egress. Emissions only interacts with Ethereum.
+		type EgressHandler: EgressApi<Ethereum>;
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;
@@ -152,6 +156,12 @@ pub mod pallet {
 		BackupNodeInflationEmissionsUpdated(u32),
 		/// SupplyUpdateInterval has been updated [block_number]
 		SupplyUpdateIntervalUpdated(BlockNumberFor<T>),
+		/// Rewards have been distributed to [account_id] \[amount\]
+		BackupRewardsDistributed { account_id: T::AccountId, amount: T::FlipBalance },
+		/// The Flip that was bought using the network fee has been burned.
+		NetworkFeeBurned { amount: AssetAmount, egress_id: EgressId },
+		/// The Flip burn was skipped.
+		FlipBurnSkipped { reason: DispatchError },
 	}
 
 	// Errors inform users that something went wrong.
@@ -161,6 +171,8 @@ pub mod pallet {
 		Overflow,
 		/// Invalid percentage
 		InvalidPercentage,
+		/// The Flip balance was below the burn threshold.
+		FlipBalanceBelowBurnThreshold,
 	}
 
 	#[pallet::hooks]
@@ -169,18 +181,7 @@ pub mod pallet {
 			T::RewardsDistribution::distribute();
 			if Self::should_update_supply_at(current_block) {
 				if T::SafeMode::get().emissions_sync_enabled {
-					let flip_to_burn = T::FlipToBurn::take_flip_to_burn();
-					if flip_to_burn > Zero::zero() {
-						T::EgressHandler::schedule_egress(
-							Asset::Flip,
-							flip_to_burn,
-							ForeignChainAddress::Eth(
-								T::EthEnvironment::state_chain_gateway_address(),
-							),
-							None,
-						);
-						T::Issuance::burn(flip_to_burn.into());
-					}
+					Self::burn_flip_network_fee();
 					Self::broadcast_update_total_supply(
 						T::Issuance::total_issuance(),
 						current_block,
@@ -305,6 +306,49 @@ impl<T: Config> Pallet<T> {
 			total_supply.unique_saturated_into(),
 			block_number.saturated_into(),
 		));
+	}
+
+	fn burn_flip_network_fee() {
+		match with_storage_layer(|| {
+			let flip_to_burn = T::FlipToBurn::take_flip_to_burn();
+			if flip_to_burn == Zero::zero() {
+				return Err(Error::<T>::FlipBalanceBelowBurnThreshold.into())
+			}
+			T::EgressHandler::schedule_egress(
+				cf_chains::assets::eth::Asset::Flip,
+				flip_to_burn,
+				T::EthEnvironment::state_chain_gateway_address(),
+				None,
+			)
+			.map_err(Into::into)
+			.and_then(|result @ ScheduledEgressDetails { egress_amount, fee_withheld, .. }| {
+				if egress_amount < BURN_FEE_MULTIPLE * fee_withheld {
+					Err(Error::<T>::FlipBalanceBelowBurnThreshold.into())
+				} else {
+					Ok(result)
+				}
+			})
+		}) {
+			Ok(ScheduledEgressDetails { egress_id, egress_amount, .. }) => {
+				T::Issuance::burn_offchain(egress_amount.into());
+				Self::deposit_event(Event::NetworkFeeBurned { amount: egress_amount, egress_id });
+			},
+			Err(e) => {
+				Self::deposit_event(Event::FlipBurnSkipped { reason: e });
+			},
+		}
+	}
+}
+
+impl<T: Config> BackupRewardsNotifier for Pallet<T> {
+	type Balance = T::FlipBalance;
+	type AccountId = T::AccountId;
+
+	fn emit_event(account_id: &Self::AccountId, amount: Self::Balance) {
+		Self::deposit_event(Event::BackupRewardsDistributed {
+			account_id: account_id.clone(),
+			amount,
+		});
 	}
 }
 

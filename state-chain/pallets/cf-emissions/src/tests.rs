@@ -1,12 +1,16 @@
 #![cfg(test)]
 
-use crate::{mock::*, BlockEmissions, LastSupplyUpdateBlock, Pallet};
+use crate::{mock::*, BlockEmissions, LastSupplyUpdateBlock, Pallet, BURN_FEE_MULTIPLE};
 use cf_primitives::SECONDS_PER_BLOCK;
-use cf_traits::{mocks::egress_handler::MockEgressHandler, RewardsDistribution, SetSafeMode};
+use cf_test_utilities::{assert_has_event, assert_has_matching_event};
+use cf_traits::{
+	mocks::{egress_handler::MockEgressHandler, flip_burn_info::MockFlipBurnInfo},
+	RewardsDistribution, SetSafeMode,
+};
 use frame_support::traits::OnInitialize;
 use pallet_cf_flip::Pallet as Flip;
 
-use cf_chains::AnyChain;
+use cf_chains::Ethereum;
 
 type Emissions = Pallet<Test>;
 
@@ -96,7 +100,7 @@ fn should_mint_and_initiate_broadcast() {
 		assert!(MockBroadcast::get_called().is_none());
 		Emissions::on_initialize(SUPPLY_UPDATE_INTERVAL.into());
 		let after = Flip::<Test>::total_issuance();
-		assert!(after > before, "Expected {after:?} > {before:?}");
+		assert!(after > before - FLIP_TO_BURN, "Expected {after:?} > {before:?}");
 		assert_eq!(
 			MockBroadcast::get_called().unwrap().new_total_supply,
 			Flip::<Test>::total_issuance()
@@ -171,8 +175,59 @@ fn burn_flip() {
 			MockBroadcast::get_called().unwrap().new_total_supply,
 			Flip::<Test>::total_issuance()
 		);
-		let egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
+		let egresses = MockEgressHandler::<Ethereum>::get_scheduled_egresses();
 		assert!(egresses.len() == 1);
 		assert_eq!(egresses.first().expect("should exist").amount(), FLIP_TO_BURN);
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::Emissions(crate::Event::NetworkFeeBurned { amount: FLIP_TO_BURN, .. }),
+		);
+	});
+}
+
+#[test]
+fn dont_burn_flip_below_threshold() {
+	new_test_ext().execute_with(|| {
+		let total_issuance = Flip::<Test>::total_issuance();
+		assert_eq!(total_issuance, TOTAL_ISSUANCE);
+		// Set the fee to be too high.
+		MockEgressHandler::<Ethereum>::set_fee(FLIP_TO_BURN / BURN_FEE_MULTIPLE);
+		Pallet::<Test>::burn_flip_network_fee();
+		assert_has_event::<Test>(
+			crate::Event::FlipBurnSkipped {
+				reason: crate::Error::<Test>::FlipBalanceBelowBurnThreshold.into(),
+			}
+			.into(),
+		);
+		assert_eq!(
+			Flip::<Test>::total_issuance(),
+			TOTAL_ISSUANCE,
+			"Expected total issuance to remain unchanged"
+		);
+		assert_eq!(
+			MockFlipBurnInfo::peek_flip_to_burn(),
+			FLIP_TO_BURN,
+			"Expected flip to remain available."
+		);
+	});
+
+	new_test_ext().execute_with(|| {
+		// Set a lower fee.
+		const LOW_FEE: u128 = FLIP_TO_BURN / BURN_FEE_MULTIPLE / 2;
+		MockEgressHandler::<Ethereum>::set_fee(LOW_FEE);
+		Pallet::<Test>::burn_flip_network_fee();
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::Emissions(crate::Event::NetworkFeeBurned {
+				amount,
+				..
+			}) if *amount == FLIP_TO_BURN - LOW_FEE,
+		);
+		assert_eq!(
+			Flip::<Test>::total_issuance(),
+			TOTAL_ISSUANCE - (FLIP_TO_BURN - LOW_FEE),
+			"Expected total issuance to be reduced by net egress amount."
+		);
+		assert_eq!(MockFlipBurnInfo::peek_flip_to_burn(), 0, "Expected flip to be burned.");
 	});
 }

@@ -1,4 +1,6 @@
 use cf_chains::{
+	assets::btc,
+	btc::BITCOIN_DUST_LIMIT,
 	dot::{PolkadotAccountId, PolkadotHash},
 	ChainState,
 };
@@ -274,7 +276,7 @@ pub fn inner_cf_development_config(
 				devnet::AUCTION_BID_CUTOFF_PERCENTAGE,
 			)
 		},
-		// Bootnodes
+		// Boot nodes
 		vec![],
 		// Telemetry
 		None,
@@ -403,7 +405,7 @@ macro_rules! network_spec {
 							AUCTION_BID_CUTOFF_PERCENTAGE,
 						)
 					},
-					// Bootnodes
+					// Boot nodes
 					vec![],
 					// Telemetry
 					None,
@@ -640,7 +642,7 @@ fn testnet_genesis(
 			supply_update_interval,
 			_config: PhantomData,
 		},
-		// !!! These Chain tracking values should be set to reasonable vaules at time of launch !!!
+		// !!! These Chain tracking values should be set to reasonable values at time of launch !!!
 		ethereum_chain_tracking: EthereumChainTrackingConfig {
 			init_chain_state: ChainState::<Ethereum> {
 				block_height: 0,
@@ -671,14 +673,17 @@ fn testnet_genesis(
 		bitcoin_ingress_egress: BitcoinIngressEgressConfig {
 			deposit_channel_lifetime: bitcoin_deposit_channel_lifetime.into(),
 			witness_safety_margin: Some(bitcoin_safety_margin),
+			dust_limits: vec![(btc::Asset::Btc, BITCOIN_DUST_LIMIT)],
 		},
 		ethereum_ingress_egress: EthereumIngressEgressConfig {
 			deposit_channel_lifetime: ethereum_deposit_channel_lifetime.into(),
 			witness_safety_margin: Some(ethereum_safety_margin),
+			dust_limits: Default::default(),
 		},
 		polkadot_ingress_egress: PolkadotIngressEgressConfig {
 			deposit_channel_lifetime: polkadot_deposit_channel_lifetime,
 			witness_safety_margin: None,
+			dust_limits: Default::default(),
 		},
 	}
 }
