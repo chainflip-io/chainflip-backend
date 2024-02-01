@@ -242,10 +242,9 @@ where
 	DotRpc: DotRetryRpcApi + Send + Sync + 'static,
 	BtcRpc: BtcRetryRpcApi + Send + Sync + 'static,
 	EthMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,
-	DotMultisigClient: MultisigClientApi<PolkadotCryptoScheme> + Send + Sync + 'static,
-	BtcMultisigClient: MultisigClientApi<BtcCryptoScheme> + Send + Sync + 'static,
-	ArbMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,
-	StateChainClient:
+	PolkadotMultisigClient: MultisigClientApi<PolkadotCryptoScheme> + Send + Sync + 'static,
+	BitcoinMultisigClient: MultisigClientApi<BtcCryptoScheme> + Send + Sync + 'static,
+		StateChainClient:
 		StorageApi + ChainApi + UnsignedExtrinsicApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
 	task_scope(|scope| async {

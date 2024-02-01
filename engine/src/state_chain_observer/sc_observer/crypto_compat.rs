@@ -5,12 +5,9 @@ use cf_chains::{
 	ChainCrypto,
 };
 use multisig::{
-	bitcoin::BtcSigning,
-	eth::{ArbSigning, EthSigning},
-	polkadot::PolkadotSigning,
-	ChainSigning, CryptoScheme,
+	bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning, ChainSigning, CryptoScheme,
 };
-use state_chain_runtime::{ArbitrumInstance, BitcoinInstance, EthereumInstance, PolkadotInstance};
+use state_chain_runtime::{BitcoinInstance, EvmInstance, PolkadotInstance};
 
 /// Compatibility layer for converting between public keys generated using the [CryptoScheme] types
 /// and the on-chain representation as defined by [ChainCrypto].
