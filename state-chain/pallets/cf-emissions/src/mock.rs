@@ -5,11 +5,14 @@ use cf_chains::{
 	mocks::{MockEthereum, MockEthereumChainCrypto},
 	ApiCall, ChainCrypto, Ethereum, UpdateFlipSupply,
 };
-use cf_primitives::{AssetAmount, BroadcastId, FlipBalance, ThresholdSignatureRequestId};
+use cf_primitives::{BroadcastId, FlipBalance, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
-	mocks::{egress_handler::MockEgressHandler, eth_environment_provider::MockEthEnvironment},
-	Broadcaster, FlipBurnInfo, Issuance, RewardsDistribution, WaivedFees,
+	mocks::{
+		egress_handler::MockEgressHandler, eth_environment_provider::MockEthEnvironment,
+		flip_burn_info::MockFlipBurnInfo,
+	},
+	Broadcaster, Issuance, RewardsDistribution, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -22,7 +25,6 @@ use scale_info::TypeInfo;
 use sp_arithmetic::Permill;
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
-use sp_std::cell::RefCell;
 
 pub type AccountId = u64;
 
@@ -152,18 +154,6 @@ impl ApiCall<MockEthereumChainCrypto> for MockUpdateFlipSupply {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockBroadcast;
 
-pub struct MockFlipToBurn;
-
-thread_local! {
-	pub static AVAILABLE_FLIP_TO_BURN: RefCell<AssetAmount> = RefCell::new(FLIP_TO_BURN);
-}
-
-impl FlipBurnInfo for MockFlipToBurn {
-	fn take_flip_to_burn() -> cf_primitives::AssetAmount {
-		AVAILABLE_FLIP_TO_BURN.with(|v| v.replace(0))
-	}
-}
-
 impl MockBroadcast {
 	pub fn call(outgoing: MockUpdateFlipSupply) {
 		storage::hashed::put(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcast", &outgoing);
@@ -222,7 +212,7 @@ impl pallet_cf_emissions::Config for Test {
 	type CompoundingInterval = HeartbeatBlockInterval;
 	type EthEnvironment = MockEthEnvironment;
 	type Broadcaster = MockBroadcast;
-	type FlipToBurn = MockFlipToBurn;
+	type FlipToBurn = MockFlipBurnInfo;
 	type SafeMode = MockRuntimeSafeMode;
 	type EgressHandler = MockEgressHandler<Ethereum>;
 	type WeightInfo = ();
@@ -245,5 +235,6 @@ cf_test_utilities::impl_test_helpers! {
 	|| {
 		MockEpochInfo::add_authorities(1);
 		MockEpochInfo::add_authorities(2);
+		MockFlipBurnInfo::set_flip_to_burn(FLIP_TO_BURN);
 	}
 }

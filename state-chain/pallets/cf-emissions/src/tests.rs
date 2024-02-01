@@ -3,7 +3,10 @@
 use crate::{mock::*, BlockEmissions, LastSupplyUpdateBlock, Pallet, BURN_FEE_MULTIPLE};
 use cf_primitives::SECONDS_PER_BLOCK;
 use cf_test_utilities::{assert_has_event, assert_has_matching_event};
-use cf_traits::{mocks::egress_handler::MockEgressHandler, RewardsDistribution, SetSafeMode};
+use cf_traits::{
+	mocks::{egress_handler::MockEgressHandler, flip_burn_info::MockFlipBurnInfo},
+	RewardsDistribution, SetSafeMode,
+};
 use frame_support::traits::OnInitialize;
 use pallet_cf_flip::Pallet as Flip;
 
@@ -201,7 +204,14 @@ fn dont_burn_flip_below_threshold() {
 			TOTAL_ISSUANCE,
 			"Expected total issuance to remain unchanged"
 		);
+		assert_eq!(
+			MockFlipBurnInfo::peek_flip_to_burn(),
+			FLIP_TO_BURN,
+			"Expected flip to remain available."
+		);
+	});
 
+	new_test_ext().execute_with(|| {
 		// Set a lower fee.
 		const LOW_FEE: u128 = FLIP_TO_BURN / BURN_FEE_MULTIPLE / 2;
 		MockEgressHandler::<Ethereum>::set_fee(LOW_FEE);
