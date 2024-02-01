@@ -365,6 +365,9 @@ impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
 	}
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct SolanaEnvironment;
+
 pub struct TokenholderGovernanceBroadcaster;
 
 impl TokenholderGovernanceBroadcaster {

@@ -1,7 +1,7 @@
 pub use cf_primitives::chains::Solana;
 use cf_primitives::{AssetAmount, ChannelId};
 
-use crate::{assets, none::NoneChainCrypto, FeeRefundCalculator};
+use crate::{assets, FeeRefundCalculator};
 
 use super::Chain;
 
@@ -11,6 +11,9 @@ mod public_key;
 mod signature;
 mod transaction;
 
+pub mod api;
+
+pub use chain_crypto::SolanaCrypto;
 pub use public_key::SolPublicKey;
 pub use signature::SolSignature;
 pub use transaction::SolTransaction;
@@ -19,7 +22,7 @@ impl Chain for Solana {
 	const NAME: &'static str = "Solana";
 	const GAS_ASSET: Self::ChainAsset = assets::sol::Asset::Sol;
 
-	type ChainCrypto = NoneChainCrypto;
+	type ChainCrypto = SolanaCrypto;
 	type ChainBlockNumber = u64;
 	type ChainAmount = AssetAmount;
 	type TransactionFee = Self::ChainAmount;

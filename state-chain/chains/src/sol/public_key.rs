@@ -7,6 +7,7 @@ use crate::address;
 use super::consts::SOLANA_PUBLIC_KEY_SIZE;
 
 #[derive(
+	Default,
 	Debug,
 	Clone,
 	Copy,

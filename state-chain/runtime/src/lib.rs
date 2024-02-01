@@ -26,7 +26,7 @@ use cf_chains::{
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
 	Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, FeeEstimationApi, ForeignChain, Polkadot,
-	TransactionBuilder,
+	Solana, TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, NetworkEnvironment};
 use cf_traits::GetTrackedData;
@@ -342,6 +342,24 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
 }
+
+// impl pallet_cf_ingress_egress::Config<SolanaInstance> for Runtime {
+// 	type RuntimeEvent = RuntimeEvent;
+// 	type RuntimeCall = RuntimeCall;
+// 	type TargetChain = Solana;
+// 	type AddressDerivation = AddressDerivation;
+// 	type AddressConverter = ChainAddressConverter;
+// 	type LpBalance = LiquidityProvider;
+// 	type SwapDepositHandler = Swapping;
+// 	type ChainApiCall = cf_chains::sol::api::SolanaApi<chainflip::SolanaEnvironment>;
+// 	type Broadcaster = ();
+// 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
+// 	type DepositHandler = ();
+// 	type ChainTracking = ();
+// 	type CcmHandler = Swapping;
+// 	type NetworkEnvironment = Environment;
+// 	type AssetConverter = LiquidityPools;
+// }
 
 parameter_types! {
 	pub const NetworkFee: Permill = Permill::from_perthousand(1);
@@ -766,6 +784,12 @@ impl pallet_cf_chain_tracking::Config<BitcoinInstance> for Runtime {
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
+// impl pallet_cf_chain_tracking::Config<SolanaInstance> for Runtime {
+// 	type RuntimeEvent = RuntimeEvent;
+// 	type TargetChain = Solana;
+// 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
+// }
+
 construct_runtime!(
 	pub struct Runtime
 	{
@@ -792,18 +816,22 @@ construct_runtime!(
 		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
 		PolkadotChainTracking: pallet_cf_chain_tracking::<Instance2>,
 		BitcoinChainTracking: pallet_cf_chain_tracking::<Instance3>,
+		// SolanaChainTracking: pallet_cf_chain_tracking::<Instance4>,
 
 		EthereumVault: pallet_cf_vaults::<Instance1>,
 		PolkadotVault: pallet_cf_vaults::<Instance2>,
 		BitcoinVault: pallet_cf_vaults::<Instance3>,
+		// SolanaVault: pallet_cf_vaults::<Instance4>,
 
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
 		PolkadotThresholdSigner: pallet_cf_threshold_signature::<Instance2>,
 		BitcoinThresholdSigner: pallet_cf_threshold_signature::<Instance3>,
+		// SolanaThresholdSigner: pallet_cf_threshold_signature::<Instance4>,
 
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
 		PolkadotBroadcaster: pallet_cf_broadcast::<Instance2>,
 		BitcoinBroadcaster: pallet_cf_broadcast::<Instance3>,
+		// SolanaBroadcaster: pallet_cf_broadcast::<Instance4>,
 
 		Swapping: pallet_cf_swapping,
 		LiquidityProvider: pallet_cf_lp,
@@ -811,6 +839,7 @@ construct_runtime!(
 		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
 		PolkadotIngressEgress: pallet_cf_ingress_egress::<Instance2>,
 		BitcoinIngressEgress: pallet_cf_ingress_egress::<Instance3>,
+		// SolanaIngressEgress: pallet_cf_ingress_egress::<Instance4>,
 
 		LiquidityPools: pallet_cf_pools,
 
