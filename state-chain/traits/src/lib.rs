@@ -724,7 +724,7 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 pub struct ScheduledEgressDetails<C: Chain> {
 	pub egress_id: EgressId,
 	pub egress_amount: C::ChainAmount,
-	pub fee_taken: C::ChainAmount,
+	pub fee_withheld: C::ChainAmount,
 }
 
 impl<C: Chain + Get<ForeignChain>> Default for ScheduledEgressDetails<C> {
@@ -737,9 +737,13 @@ impl<C: Chain + Get<ForeignChain>> ScheduledEgressDetails<C> {
 	pub fn new(
 		id_counter: EgressCounter,
 		egress_amount: C::ChainAmount,
-		fee_taken: C::ChainAmount,
+		fee_withheld: C::ChainAmount,
 	) -> Self {
-		Self { egress_id: (<C as Get<ForeignChain>>::get(), id_counter), egress_amount, fee_taken }
+		Self {
+			egress_id: (<C as Get<ForeignChain>>::get(), id_counter),
+			egress_amount,
+			fee_withheld,
+		}
 	}
 }
 

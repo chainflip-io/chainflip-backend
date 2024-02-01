@@ -108,7 +108,7 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 				Some(..) => amount,
 				None => amount.saturating_sub(egress_fee),
 			},
-			fee_taken: match maybe_ccm_with_gas_budget {
+			fee_withheld: match maybe_ccm_with_gas_budget {
 				Some((_, gas_budget)) => gas_budget,
 				None => egress_fee,
 			},

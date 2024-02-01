@@ -321,8 +321,8 @@ impl<T: Config> Pallet<T> {
 				None,
 			)
 			.map_err(Into::into)
-			.and_then(|result @ ScheduledEgressDetails { egress_amount, fee_taken, .. }| {
-				if egress_amount < BURN_FEE_MULTIPLE * fee_taken {
+			.and_then(|result @ ScheduledEgressDetails { egress_amount, fee_withheld, .. }| {
+				if egress_amount < BURN_FEE_MULTIPLE * fee_withheld {
 					Err(Error::<T>::FlipBalanceBelowBurnThreshold.into())
 				} else {
 					Ok(result)

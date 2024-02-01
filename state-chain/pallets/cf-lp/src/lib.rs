@@ -209,7 +209,7 @@ pub mod pallet {
 				// Debit the asset from the account.
 				Self::try_debit_account(&account_id, asset, amount)?;
 
-				let ScheduledEgressDetails { egress_id, egress_amount, fee_taken } =
+				let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
 					T::EgressHandler::schedule_egress(
 						asset,
 						amount,
@@ -223,7 +223,7 @@ pub mod pallet {
 					asset,
 					amount: egress_amount,
 					destination_address,
-					fee: fee_taken,
+					fee: fee_withheld,
 				});
 			}
 			Ok(())

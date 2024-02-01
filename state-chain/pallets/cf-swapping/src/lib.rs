@@ -431,14 +431,14 @@ pub mod pallet {
 									Ok(ScheduledEgressDetails {
 										egress_id,
 										egress_amount,
-										fee_taken,
+										fee_withheld,
 									}) => {
 										Self::deposit_event(Event::<T>::SwapEgressScheduled {
 											swap_id: swap.swap_id,
 											egress_id,
 											asset: swap.to,
 											amount: egress_amount,
-											fee: fee_taken,
+											fee: fee_withheld,
 										});
 									},
 									Err(err) => {
@@ -560,7 +560,7 @@ pub mod pallet {
 			let earned_fees = EarnedBrokerFees::<T>::take(account_id, asset);
 			ensure!(earned_fees != 0, Error::<T>::NoFundsAvailable);
 
-			let ScheduledEgressDetails { egress_id, egress_amount, fee_taken } =
+			let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
 				T::EgressHandler::schedule_egress(
 					asset,
 					earned_fees,
@@ -571,7 +571,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::WithdrawalRequested {
 				egress_amount,
-				egress_fee: fee_taken,
+				egress_fee: fee_withheld,
 				destination_address,
 				egress_id,
 			});
@@ -863,7 +863,7 @@ pub mod pallet {
 			(ccm_output_principal, ccm_output_gas): (AssetAmount, AssetAmount),
 		) {
 			// Schedule the given ccm to be egressed and deposit a event.
-			if let Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_taken }) =
+			if let Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) =
 				T::EgressHandler::schedule_egress(
 					ccm_swap.destination_asset,
 					ccm_output_principal,
@@ -876,7 +876,7 @@ pub mod pallet {
 						egress_id,
 						asset: ccm_swap.destination_asset,
 						amount: egress_amount,
-						fee: fee_taken,
+						fee: fee_withheld,
 					});
 				}
 				Self::deposit_event(Event::<T>::CcmEgressScheduled { ccm_id, egress_id });

@@ -494,7 +494,7 @@ macro_rules! impl_egress_api_for_anychain {
 								.expect("This address cast is ensured to succeed."),
 								maybe_ccm_with_gas_budget.map(|(metadata, gas_budget)| (metadata, gas_budget.try_into().expect("Chain's Amount must be compatible with u128."))),
 						)
-						.map(|ScheduledEgressDetails { egress_id, egress_amount, fee_taken }| ScheduledEgressDetails { egress_id, egress_amount: egress_amount.into(), fee_taken: fee_taken.into() })
+						.map(|ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }| ScheduledEgressDetails { egress_id, egress_amount: egress_amount.into(), fee_withheld: fee_withheld.into() })
 						.map_err(Into::into),
 					)+
 				}
