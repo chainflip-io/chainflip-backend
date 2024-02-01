@@ -29,7 +29,7 @@ use cf_chains::{
 	TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, NetworkEnvironment};
-use cf_traits::GetTrackedData;
+use cf_traits::{GetTrackedData, LpBalanceApi};
 use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
@@ -1018,6 +1018,9 @@ impl_runtime_apis! {
 					(account_id, vanity_name)
 				})
 				.collect()
+		}
+		fn cf_asset_balances(account_id: AccountId) -> Vec<(Asset, u128)> {
+			LiquidityProvider::asset_balances(&account_id)
 		}
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()

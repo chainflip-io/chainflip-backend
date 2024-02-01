@@ -50,6 +50,13 @@ pub enum RpcAsset {
 	ExplicitChain { chain: ForeignChain, asset: Asset },
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct RpcAssetWithAmount {
+	#[serde(flatten)]
+	pub asset: RpcAsset,
+	pub amount: AssetAmount,
+}
+
 impl TryInto<Asset> for RpcAsset {
 	type Error = AssetConversionError;
 
@@ -351,6 +358,12 @@ pub trait CustomApi {
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcAccountInfoV2>;
+	#[method(name = "asset_balances")]
+	fn cf_asset_balances(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcAssetWithAmount>>;
 	#[method(name = "penalties")]
 	fn cf_penalties(
 		&self,
@@ -738,6 +751,21 @@ where
 			apy_bp: account_info.apy_bp,
 			restricted_balances: account_info.restricted_balances,
 		})
+	}
+
+	fn cf_asset_balances(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcAssetWithAmount>> {
+		Ok(self
+			.client
+			.runtime_api()
+			.cf_asset_balances(self.unwrap_or_best(at), account_id)
+			.map_err(to_rpc_error)?
+			.into_iter()
+			.map(|(asset, balance)| RpcAssetWithAmount { asset: asset.into(), amount: balance })
+			.collect::<Vec<RpcAssetWithAmount>>())
 	}
 
 	fn cf_penalties(
