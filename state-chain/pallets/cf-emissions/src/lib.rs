@@ -3,7 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{address::ForeignChainAddress, evm::api::EthEnvironmentProvider, UpdateFlipSupply};
-use cf_primitives::{Asset, AssetAmount};
+use cf_primitives::{Asset, AssetAmount, EgressId};
 use cf_traits::{
 	impl_pallet_safe_mode, BackupRewardsNotifier, BlockEmissions, Broadcaster, EgressApi,
 	FlipBurnInfo, Issuance, RewardsDistribution,
@@ -160,7 +160,7 @@ pub mod pallet {
 		/// Rewards have been distributed to [account_id] \[amount\]
 		BackupRewardsDistributed { account_id: T::AccountId, amount: T::FlipBalance },
 		/// The Flip that was bought using the network fee has been burned.
-		NetworkFeeBurned { amount: AssetAmount },
+		NetworkFeeBurned { amount: AssetAmount, egress_id: EgressId },
 		/// The Flip burn was skipped.
 		FlipBurnSkipped { reason: DispatchError },
 	}
@@ -310,32 +310,8 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn burn_flip_network_fee() {
-		let flip_to_burn = T::FlipToBurn::take_flip_to_burn();
-		if flip_to_burn > Zero::zero() {
-			match with_storage_layer(|| {
-				T::EgressHandler::schedule_egress(
-					Asset::Flip,
-					flip_to_burn,
-					ForeignChainAddress::Eth(T::EthEnvironment::state_chain_gateway_address()),
-					None,
-				)
-				.map_err(Into::into)
-				.and_then(|result @ (_, egress_amount, egress_fee)| {
-					if egress_amount < BURN_FEE_MULTIPLE * egress_fee {
-						Err(Error::<T>::FlipBalanceBelowBurnThreshold.into())
-					} else {
-						Ok(result)
-					}
-				})
-			}) {
-				Ok((_id, egress_amount, _fee)) => {
-					T::Issuance::burn_offchain(egress_amount.into());
-					Self::deposit_event(Event::NetworkFeeBurned { amount: egress_amount });
-				},
-				Err(e) => {
-					Self::deposit_event(Event::FlipBurnSkipped { reason: e });
-				},
-			}
+			Ok((egress_id, egress_amount, _fee)) => {
+				Self::deposit_event(Event::NetworkFeeBurned { amount: egress_amount, egress_id });
 		}
 	}
 }
