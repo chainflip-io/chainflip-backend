@@ -784,11 +784,11 @@ impl pallet_cf_chain_tracking::Config<BitcoinInstance> for Runtime {
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
-// impl pallet_cf_chain_tracking::Config<SolanaInstance> for Runtime {
-// 	type RuntimeEvent = RuntimeEvent;
-// 	type TargetChain = Solana;
-// 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
-// }
+impl pallet_cf_chain_tracking::Config<SolanaInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type TargetChain = Solana;
+	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
+}
 
 construct_runtime!(
 	pub struct Runtime
@@ -816,7 +816,7 @@ construct_runtime!(
 		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
 		PolkadotChainTracking: pallet_cf_chain_tracking::<Instance2>,
 		BitcoinChainTracking: pallet_cf_chain_tracking::<Instance3>,
-		// SolanaChainTracking: pallet_cf_chain_tracking::<Instance4>,
+		SolanaChainTracking: pallet_cf_chain_tracking::<Instance4>,
 
 		EthereumVault: pallet_cf_vaults::<Instance1>,
 		PolkadotVault: pallet_cf_vaults::<Instance2>,

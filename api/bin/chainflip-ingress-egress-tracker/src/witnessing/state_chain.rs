@@ -229,6 +229,7 @@ where
 		EthereumChainTracking(_) |
 		BitcoinChainTracking(_) |
 		PolkadotChainTracking(_) |
+		SolanaChainTracking(_) |
 		EthereumVault(_) |
 		PolkadotVault(_) |
 		BitcoinVault(_) |

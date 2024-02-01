@@ -665,6 +665,7 @@ fn testnet_genesis(
 				tracked_data: BitcoinTrackedData { btc_fee_info: BitcoinFeeInfo::new(1000) },
 			},
 		},
+		solana_chain_tracking: Default::default(),
 		transaction_payment: Default::default(),
 		liquidity_pools: Default::default(),
 		// Channel lifetimes are set to ~2 hours at average block times.
