@@ -74,7 +74,7 @@ mod benchmarks {
 
 		add_authorities::<T, _>(all_accounts);
 
-		let _ = <Pallet<T, I> as ThresholdSigner<_>>::request_signature(
+		let _request_id = <Pallet<T, I> as ThresholdSigner<_>>::request_signature(
 			PayloadFor::<T, I>::benchmark_value(),
 		);
 		let ceremony_id = 1;

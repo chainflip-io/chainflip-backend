@@ -122,6 +122,9 @@ pub trait EpochInfo {
 		epoch_index: EpochIndex,
 		new_authorities: BTreeSet<Self::ValidatorId>,
 	);
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_authorities(authorities: BTreeSet<Self::ValidatorId>);
 }
 
 pub struct CurrentEpochIndex<T>(PhantomData<T>);
