@@ -131,7 +131,7 @@ impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
 }
 pub struct MockPolkadotVaultKeyWitnessedHandler;
 impl VaultKeyWitnessedHandler<Polkadot> for MockPolkadotVaultKeyWitnessedHandler {
-	fn on_new_key_activated(
+	fn on_first_key_activated(
 		_block_number: <Polkadot as Chain>::ChainBlockNumber,
 	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
 		unimplemented!()
@@ -139,7 +139,7 @@ impl VaultKeyWitnessedHandler<Polkadot> for MockPolkadotVaultKeyWitnessedHandler
 }
 pub struct MockBitcoinVaultKeyWitnessedHandler;
 impl VaultKeyWitnessedHandler<Bitcoin> for MockBitcoinVaultKeyWitnessedHandler {
-	fn on_new_key_activated(
+	fn on_first_key_activated(
 		_block_number: <Bitcoin as Chain>::ChainBlockNumber,
 	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
 		unimplemented!()

@@ -739,7 +739,7 @@ impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 }
 
 pub trait VaultKeyWitnessedHandler<C: Chain> {
-	fn on_new_key_activated(block_number: C::ChainBlockNumber) -> DispatchResultWithPostInfo;
+	fn on_first_key_activated(block_number: C::ChainBlockNumber) -> DispatchResultWithPostInfo;
 }
 
 pub trait BroadcastAnyChainGovKey {

@@ -223,7 +223,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, I> {
-	fn on_new_key_activated(block_number: ChainBlockNumberFor<T, I>) -> DispatchResultWithPostInfo {
+	fn on_first_key_activated(
+		block_number: ChainBlockNumberFor<T, I>,
+	) -> DispatchResultWithPostInfo {
 		let rotation =
 			PendingVaultActivation::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
 

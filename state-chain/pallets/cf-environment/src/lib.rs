@@ -231,7 +231,7 @@ pub mod pallet {
 
 			// Witness the agg_key rotation manually in the vaults pallet for polkadot
 			let dispatch_result =
-				T::PolkadotVaultKeyWitnessedHandler::on_new_key_activated(tx_id.block_number)?;
+				T::PolkadotVaultKeyWitnessedHandler::on_first_key_activated(tx_id.block_number)?;
 
 			Ok(dispatch_result)
 		}
@@ -262,7 +262,7 @@ pub mod pallet {
 
 			// Witness the agg_key rotation manually in the vaults pallet for bitcoin
 			let dispatch_result =
-				T::BitcoinVaultKeyWitnessedHandler::on_new_key_activated(block_number)?;
+				T::BitcoinVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
 
 			Self::deposit_event(Event::<T>::BitcoinBlockNumberSetForVault { block_number });
 
