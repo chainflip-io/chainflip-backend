@@ -1353,7 +1353,7 @@ mod test {
 						]),
 					),
 				]),
-				network_fee: Permill::from_percent(0),
+				network_fee: Permill::from_percent(100),
 			},
 			ingress_egress: IngressEgressEnvironment {
 				minimum_deposit_amounts: HashMap::from([
