@@ -8,7 +8,6 @@ use cf_traits::{
 	EgressApi, LpDepositHandler, PoolApi,
 };
 
-use cf_chains::assets::AssetBalance;
 use sp_std::vec;
 
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult};
@@ -365,14 +364,11 @@ impl<T: Config> LpBalanceApi for Pallet<T> {
 		Ok(())
 	}
 
-	fn asset_balances(who: &Self::AccountId) -> Vec<AssetBalance> {
-		let mut balances: Vec<AssetBalance> = vec![];
+	fn asset_balances(who: &Self::AccountId) -> Vec<(Asset, AssetAmount)> {
+		let mut balances: Vec<(Asset, AssetAmount)> = vec![];
 		T::PoolApi::sweep(who).unwrap();
 		for asset in Asset::all() {
-			balances.push(AssetBalance {
-				asset,
-				balance: FreeBalances::<T>::get(who, asset).unwrap_or(0),
-			});
+			balances.push((asset, FreeBalances::<T>::get(who, asset).unwrap_or_default()));
 		}
 		balances
 	}

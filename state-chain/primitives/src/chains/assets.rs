@@ -114,12 +114,6 @@ pub enum AssetError {
 	Unsupported,
 }
 
-#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize)]
-pub struct AssetBalance {
-	pub asset: any::Asset,
-	pub balance: AssetAmount,
-}
-
 /// Defines the assets types for a chain and some useful conversion traits. See the module level
 /// docs for more detail.
 macro_rules! chain_assets {

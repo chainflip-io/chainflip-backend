@@ -1,4 +1,4 @@
-use cf_chains::{address::ForeignChainAddress, assets::AssetBalance};
+use cf_chains::address::ForeignChainAddress;
 use cf_primitives::{Asset, AssetAmount, BasisPoints, ChannelId, SwapId};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 use sp_std::vec::Vec;
@@ -55,7 +55,7 @@ pub trait LpBalanceApi {
 	) -> DispatchResult;
 
 	/// Returns the asset balances of the given account.
-	fn asset_balances(who: &Self::AccountId) -> Vec<AssetBalance>;
+	fn asset_balances(who: &Self::AccountId) -> Vec<(Asset, AssetAmount)>;
 }
 
 pub trait PoolApi {

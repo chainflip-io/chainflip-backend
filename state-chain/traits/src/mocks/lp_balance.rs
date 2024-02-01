@@ -1,5 +1,5 @@
 use crate::{LpBalanceApi, LpDepositHandler};
-use cf_chains::assets::{any::Asset, AssetBalance};
+use cf_chains::assets::any::Asset;
 use cf_primitives::AssetAmount;
 use sp_runtime::DispatchResult;
 
@@ -50,7 +50,7 @@ impl LpBalanceApi for MockBalance {
 		Ok(())
 	}
 
-	fn asset_balances(_who: &Self::AccountId) -> Vec<AssetBalance> {
+	fn asset_balances(_who: &Self::AccountId) -> Vec<(Asset, AssetAmount)> {
 		unreachable!()
 	}
 }

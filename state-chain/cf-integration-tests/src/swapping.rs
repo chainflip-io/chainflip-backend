@@ -218,8 +218,8 @@ fn setup_pool_and_accounts(assets: Vec<Asset>) {
 fn get_asset_balance(who: &AccountId, asset: Asset) -> u128 {
 	LiquidityProvider::asset_balances(who)
 		.iter()
-		.filter(|asset_balance| asset_balance.asset == asset)
-		.map(|asset_balance| asset_balance.balance)
+		.filter(|asset_balance| asset_balance.0 == asset)
+		.map(|asset_balance| asset_balance.1)
 		.sum()
 }
 

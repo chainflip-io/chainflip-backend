@@ -42,8 +42,6 @@ use std::{
 };
 use tracing::log;
 
-use cf_primitives::chains::assets::AssetBalance as InternalAssetBalance;
-
 /// Contains RPC interface types that differ from internal types.
 pub mod rpc_types {
 	use super::*;
@@ -102,12 +100,6 @@ pub mod rpc_types {
 	pub struct AssetBalance {
 		pub asset: Asset,
 		pub balance: NumberOrHex,
-	}
-
-	impl From<InternalAssetBalance> for AssetBalance {
-		fn from(asset_balance: InternalAssetBalance) -> Self {
-			Self { asset: asset_balance.asset, balance: asset_balance.balance.into() }
-		}
 	}
 }
 
@@ -322,12 +314,13 @@ impl RpcServer for RpcServerImpl {
 
 		let mut lp_asset_balances: BTreeMap<ForeignChain, Vec<AssetBalance>> = BTreeMap::new();
 
-		for (rpc_asset, asset_amount) in cf_asset_balances {
-			let (chain, asset) = match rpc_asset {
+		for rpc_asset_with_amount in cf_asset_balances {
+			let (chain, asset) = match rpc_asset_with_amount.asset {
 				ImplicitChain(asset) => (asset.into(), asset),
 				ExplicitChain { chain, asset } => (chain, asset),
 			};
-			let asset_balance = AssetBalance { asset, balance: asset_amount.into() };
+			let asset_balance =
+				AssetBalance { asset, balance: rpc_asset_with_amount.amount.into() };
 			lp_asset_balances.entry(chain).or_insert_with(Vec::new).push(asset_balance);
 		}
 		Ok(lp_asset_balances)
