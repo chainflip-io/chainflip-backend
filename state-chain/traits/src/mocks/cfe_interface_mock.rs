@@ -1,5 +1,3 @@
-#![cfg(debug_assertions)]
-
 use cf_chains::mocks::{MockEthereum, MockEthereumChainCrypto};
 use codec::{Decode, Encode};
 use frame_support::{storage, StorageHasher, Twox64Concat};
