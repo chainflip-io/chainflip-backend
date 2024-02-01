@@ -55,14 +55,6 @@ pub struct RuntimeApiAccountInfoV2 {
 	pub restricted_balances: BTreeMap<EthereumAddress, u128>,
 }
 
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
-pub struct ChainAsset {
-	#[serde(flatten)]
-	pub chain: ForeignChain,
-	#[serde(flatten)]
-	pub asset: Asset,
-}
-
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct RuntimeApiPenalty {
 	pub reputation_points: i32,
