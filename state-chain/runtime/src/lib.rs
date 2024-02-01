@@ -12,7 +12,8 @@ mod weights;
 use crate::{
 	chainflip::{calculate_account_apy, Offence},
 	runtime_apis::{
-		AuctionState, DispatchErrorWithMessage, LiquidityProviderInfo, RuntimeApiPenalty,
+		AuctionState, DispatchErrorWithMessage, FailingWitnessValidators, LiquidityProviderInfo,
+		RuntimeApiAccountInfoV2, RuntimeApiPenalty,
 	},
 };
 use cf_amm::{
@@ -40,8 +41,8 @@ use pallet_cf_reputation::ExclusionList;
 use pallet_cf_swapping::CcmSwapAmounts;
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
-
-use crate::runtime_apis::RuntimeApiAccountInfoV2;
+use scale_info::prelude::string::String;
+use sp_std::collections::btree_map::BTreeMap;
 
 pub use frame_support::{
 	construct_runtime, debug,
@@ -1238,6 +1239,15 @@ impl_runtime_apis! {
 			}
 		}
 
+		fn cf_witness_safety_margin(chain: ForeignChain) -> Option<u64> {
+			match chain {
+				ForeignChain::Bitcoin => pallet_cf_ingress_egress::Pallet::<Runtime, BitcoinInstance>::witness_safety_margin(),
+				ForeignChain::Ethereum => pallet_cf_ingress_egress::Pallet::<Runtime, EthereumInstance>::witness_safety_margin(),
+				ForeignChain::Polkadot => pallet_cf_ingress_egress::Pallet::<Runtime, PolkadotInstance>::witness_safety_margin().map(Into::into),
+			}
+		}
+
+
 		fn cf_liquidity_provider_info(
 			account_id: AccountId,
 		) -> Option<LiquidityProviderInfo> {
@@ -1391,6 +1401,27 @@ impl_runtime_apis! {
 			} else {
 				None
 			}
+		}
+
+		fn cf_witness_count(hash: pallet_cf_witnesser::CallHash) -> Option<FailingWitnessValidators> {
+			let mut result: FailingWitnessValidators = FailingWitnessValidators {
+				failing_count: 0,
+				validators: vec![],
+			};
+			let voting_validators = Witnesser::count_votes(hash);
+			let vanity_names: BTreeMap<AccountId, Vec<u8>> = pallet_cf_validator::VanityNames::<Runtime>::get();
+			voting_validators?.iter().for_each(|(val, voted)| {
+				let vanity = match vanity_names.get(val) {
+					Some(vanity_name) => { vanity_name.clone() },
+					None => { vec![] }
+				};
+				if !voted {
+					result.failing_count += 1;
+				}
+				result.validators.push((val.clone(), String::from_utf8_lossy(&vanity).into(), *voted));
+			});
+
+			Some(result)
 		}
 	}
 

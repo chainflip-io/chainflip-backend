@@ -1,6 +1,6 @@
 #!/usr/bin/env -S pnpm tsx
 import { testAllSwaps } from '../shared/swapping';
-import { testEthereumDeposits } from '../shared/ethereum_deposits';
+import { testEvmDeposits } from '../shared/evm_deposits';
 import { runWithTimeout, observeBadEvents } from '../shared/utils';
 import { testFundRedeem } from '../shared/fund_redeem';
 import { testMultipleMembersGovernance } from '../shared/multiple_members_governance';
@@ -23,7 +23,7 @@ async function runAllConcurrentTests() {
   const tests = [
     swapLessThanED(),
     testAllSwaps(),
-    testEthereumDeposits(),
+    testEvmDeposits(),
     testFundRedeem('redeem'),
     testMultipleMembersGovernance(),
     testLpApi(),

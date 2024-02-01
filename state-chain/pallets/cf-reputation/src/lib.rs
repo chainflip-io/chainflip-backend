@@ -140,9 +140,11 @@ pub mod pallet {
 				current_block % T::HeartbeatBlockInterval::get() == Zero::zero()
 			{
 				// Reputation depends on heartbeats
-				Self::penalise_offline_authorities(Self::current_network_state().offline);
+				let offline_authorities = Self::current_network_state().offline;
+				let num_offline_authorities = offline_authorities.len() as u32;
+				Self::penalise_offline_authorities(offline_authorities);
 				T::Heartbeat::on_heartbeat_interval();
-				return T::WeightInfo::submit_network_state()
+				return T::WeightInfo::submit_network_state(num_offline_authorities)
 			}
 			T::WeightInfo::on_initialize_no_action()
 		}

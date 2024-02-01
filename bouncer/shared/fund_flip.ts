@@ -2,11 +2,13 @@ import { HexString } from '@polkadot/util/types';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { assetDecimals, fundStateChainAccount } from '@chainflip-io/cli';
 import { Wallet, ethers } from 'ethers';
-import { getNextEthNonce } from './send_eth';
+import { getNextEvmNonce } from './send_evm';
 import {
-  getEthContractAddress,
+  getEvmContractAddress,
   hexPubkeyToFlipAddress,
   decodeFlipAddressForContract,
+  getEvmEndpoint,
+  getWhaleKey,
 } from './utils';
 import { observeEvent, getChainflipApi, amountToFineAmount } from '../shared/utils';
 import { approveErc20 } from './approve_erc20';
@@ -15,24 +17,20 @@ export async function fundFlip(scAddress: string, flipAmount: string) {
   const chainflip = await getChainflipApi();
   await cryptoWaitReady();
 
-  await approveErc20('FLIP', getEthContractAddress('GATEWAY'), flipAmount);
+  await approveErc20('FLIP', getEvmContractAddress('Ethereum', 'GATEWAY'), flipAmount);
 
   const flipperinoAmount = amountToFineAmount(flipAmount, assetDecimals.FLIP);
 
-  const flipContractAddress = process.env.ETH_FLIP_ADDRESS ?? getEthContractAddress('FLIP');
+  const flipContractAddress =
+    process.env.ETH_FLIP_ADDRESS ?? getEvmContractAddress('Ethereum', 'FLIP');
 
   const gatewayContractAddress =
-    process.env.ETH_GATEWAY_ADDRESS ?? getEthContractAddress('GATEWAY');
+    process.env.ETH_GATEWAY_ADDRESS ?? getEvmContractAddress('Ethereum', 'GATEWAY');
 
-  const whaleKey =
-    process.env.ETH_USDC_WHALE ||
-    '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+  const whaleKey = getWhaleKey('Ethereum');
   console.log('Approving ' + flipAmount + ' FLIP to State Chain Gateway');
 
-  const wallet = new Wallet(
-    whaleKey,
-    ethers.getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'),
-  );
+  const wallet = new Wallet(whaleKey, ethers.getDefaultProvider(getEvmEndpoint('Ethereum')));
 
   const networkOptions = {
     signer: wallet,
@@ -41,7 +39,7 @@ export async function fundFlip(scAddress: string, flipAmount: string) {
     flipContractAddress,
   } as const;
   const txOptions = {
-    nonce: BigInt(await getNextEthNonce()),
+    nonce: BigInt(await getNextEvmNonce('Ethereum')),
   } as const;
 
   console.log('Funding ' + flipAmount + ' FLIP to ' + scAddress);

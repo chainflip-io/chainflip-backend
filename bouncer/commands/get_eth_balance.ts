@@ -8,10 +8,10 @@
 // might print: 1.2
 
 import { runWithTimeout } from '../shared/utils';
-import { getEthBalance } from '../shared/get_eth_balance';
+import { getEvmNativeBalance } from '../shared/get_evm_native_balance';
 
 export async function getEthBalanceCommand(address: string) {
-  const balance = await getEthBalance(address);
+  const balance = await getEvmNativeBalance('Ethereum', address);
   console.log(balance);
   process.exit(0);
 }

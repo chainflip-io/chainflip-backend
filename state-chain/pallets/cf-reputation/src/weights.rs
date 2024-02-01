@@ -36,7 +36,7 @@ pub trait WeightInfo {
 	fn set_penalty() -> Weight;
 	fn update_missed_heartbeat_penalty() -> Weight;
 	fn heartbeat() -> Weight;
-	fn submit_network_state() -> Weight;
+	fn submit_network_state(o: u32) -> Weight;
 	fn on_initialize_no_action() -> Weight;
 }
 
@@ -113,7 +113,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// Proof: `Emissions::CurrentAuthorityEmissionPerBlock` (`max_values`: Some(1), `max_size`: Some(16), added: 511, mode: `MaxEncodedLen`)
 	/// Storage: `Emissions::BackupNodeEmissionPerBlock` (r:0 w:1)
 	/// Proof: `Emissions::BackupNodeEmissionPerBlock` (`max_values`: Some(1), `max_size`: Some(16), added: 511, mode: `MaxEncodedLen`)
-	fn submit_network_state() -> Weight {
+	fn submit_network_state(_o: u32) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `1291`
 		//  Estimated: `4756`
@@ -206,7 +206,7 @@ impl WeightInfo for () {
 	/// Proof: `Emissions::CurrentAuthorityEmissionPerBlock` (`max_values`: Some(1), `max_size`: Some(16), added: 511, mode: `MaxEncodedLen`)
 	/// Storage: `Emissions::BackupNodeEmissionPerBlock` (r:0 w:1)
 	/// Proof: `Emissions::BackupNodeEmissionPerBlock` (`max_values`: Some(1), `max_size`: Some(16), added: 511, mode: `MaxEncodedLen`)
-	fn submit_network_state() -> Weight {
+	fn submit_network_state(_o: u32) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `1291`
 		//  Estimated: `4756`

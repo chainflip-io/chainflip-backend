@@ -26,21 +26,19 @@ use std::{
 	},
 	time::Duration,
 };
-use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info, info_span, Instrument};
 
 use crate::{
 	btc::retry_rpc::BtcRetryRpcApi,
 	dot::retry_rpc::DotRetryRpcApi,
 	eth::retry_rpc::EthersRetrySigningRpcApi,
-	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{
 		extrinsic_api::{
 			signed::{SignedExtrinsicApi, UntilFinalized},
 			unsigned::UnsignedExtrinsicApi,
 		},
 		storage_api::StorageApi,
-		StateChainStreamApi,
+		stream_api::{StreamApi, FINALIZED},
 	},
 };
 use multisig::{
@@ -238,10 +236,9 @@ pub async fn start<
 	eth_multisig_client: EthMultisigClient,
 	dot_multisig_client: PolkadotMultisigClient,
 	btc_multisig_client: BitcoinMultisigClient,
-	peer_update_sender: UnboundedSender<PeerUpdate>,
 ) -> Result<(), anyhow::Error>
 where
-	BlockStream: StateChainStreamApi,
+	BlockStream: StreamApi<FINALIZED>,
 	EthRpc: EthersRetrySigningRpcApi + Send + Sync + 'static,
 	DotRpc: DotRetryRpcApi + Send + Sync + 'static,
 	BtcRpc: BtcRetryRpcApi + Send + Sync + 'static,
@@ -290,7 +287,13 @@ where
 
         info!("Sending heartbeat every {blocks_per_heartbeat} blocks");
 
-        let mut sc_block_stream = Box::pin(sc_block_stream);
+        // Add the initial (cached) block to the stream so we can process the events in it.
+        let mut sc_block_stream =
+        Box::pin(
+            futures::stream::once(futures::future::ready(*sc_block_stream.cache()))
+                .chain(sc_block_stream)
+        );
+
         loop {
             match sc_block_stream.next().await {
                 Some(current_block) => {
@@ -483,18 +486,10 @@ where
                                             })
                                         }
                                     }
-                                    CfeEvent::PeerIdRegistered { account_id, pubkey, port, ip } => {
-                                        peer_update_sender
-                                            .send(PeerUpdate::Registered(
-                                                    PeerInfo::new(account_id, pubkey, ip.into(), port)
-                                                )
-                                            )
-                                            .unwrap();
-                                    }
-                                    CfeEvent::PeerIdDeregistered { account_id, pubkey } => {
-                                        peer_update_sender
-                                            .send(PeerUpdate::Deregistered(account_id, pubkey))
-                                            .unwrap();
+                                    CfeEvent::PeerIdRegistered { .. } |
+                                    CfeEvent::PeerIdDeregistered { .. } => {
+                                        // p2p registration is handled in the p2p module.
+                                        // Matching here to log the event due to the match_event macro.
                                     }
                                 }}
                             }
@@ -528,4 +523,82 @@ where
         }
         Err(anyhow!("State Chain block stream ended"))
     }.instrument(info_span!("SCObserver")).boxed()).await
+}
+
+pub struct CeremonyIdCounters {
+	pub ethereum: CeremonyId,
+	pub polkadot: CeremonyId,
+	pub bitcoin: CeremonyId,
+}
+
+/// Get the ceremony id counters for each chain at the **start** of the given block without
+/// accessing the previous block
+pub async fn get_ceremony_id_counters_before_block<StateChainClient>(
+	block_hash: state_chain_runtime::Hash,
+	state_chain_client: Arc<StateChainClient>,
+) -> Result<CeremonyIdCounters, anyhow::Error>
+where
+	StateChainClient: SignedExtrinsicApi
+		+ UnsignedExtrinsicApi
+		+ 'static
+		+ Send
+		+ Sync
+		+ super::client::storage_api::StorageApi,
+{
+	let events: Vec<_> = state_chain_client
+		.storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>(block_hash)
+		.await
+		.map_err(|error| anyhow!("Failed to decode events at block hash {block_hash}. {error}"))?;
+
+	// Find the first event for each chain that contains a ceremony id and subtract 1 from it. If
+	// none is found, use the ceremony id counter from storage (ceremony id did not change during
+	// this block).
+	Ok(CeremonyIdCounters {
+		ethereum: if let Some(ceremony_id) = events.iter().find_map(|event| match event {
+			CfeEvent::EthThresholdSignatureRequest(req) => Some(req.ceremony_id),
+			CfeEvent::EthKeygenRequest(req) => Some(req.ceremony_id),
+			_ => None,
+		}) {
+			ceremony_id.saturating_sub(1)
+		} else {
+			state_chain_client
+				.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+					state_chain_runtime::Runtime,
+					state_chain_runtime::EthereumInstance,
+				>>(block_hash)
+				.await
+				.context("Failed to get Ethereum CeremonyIdCounter from SC")?
+		},
+		polkadot: if let Some(ceremony_id) = events.iter().find_map(|event| match event {
+			CfeEvent::DotThresholdSignatureRequest(req) => Some(req.ceremony_id),
+			CfeEvent::DotKeygenRequest(req) => Some(req.ceremony_id),
+			_ => None,
+		}) {
+			ceremony_id.saturating_sub(1)
+		} else {
+			state_chain_client
+				.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+					state_chain_runtime::Runtime,
+					state_chain_runtime::PolkadotInstance,
+				>>(block_hash)
+				.await
+				.context("Failed to get Polkadot CeremonyIdCounter from SC")?
+		},
+		bitcoin: if let Some(ceremony_id) = events.iter().find_map(|event| match event {
+			CfeEvent::BtcThresholdSignatureRequest(req) => Some(req.ceremony_id),
+			CfeEvent::BtcKeygenRequest(req) => Some(req.ceremony_id),
+			CfeEvent::BtcKeyHandoverRequest(req) => Some(req.ceremony_id),
+			_ => None,
+		}) {
+			ceremony_id.saturating_sub(1)
+		} else {
+			state_chain_client
+				.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+					state_chain_runtime::Runtime,
+					state_chain_runtime::BitcoinInstance,
+				>>(block_hash)
+				.await
+				.context("Failed to get Bitcoin CeremonyIdCounter from SC")?
+		},
+	})
 }

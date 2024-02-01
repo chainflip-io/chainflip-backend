@@ -21,7 +21,7 @@ use cf_chains::{
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
 	CeremonyId, ChannelId, Ed25519PublicKey, EgressId, EpochIndex, FlipBalance, ForeignChain,
-	Ipv6Addr, NetworkEnvironment, SemVer, ThresholdSignatureRequestId,
+	Ipv6Addr, NetworkEnvironment, SemVer, SwapId, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -122,6 +122,9 @@ pub trait EpochInfo {
 		epoch_index: EpochIndex,
 		new_authorities: BTreeSet<Self::ValidatorId>,
 	);
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_authorities(authorities: BTreeSet<Self::ValidatorId>);
 }
 
 pub struct CurrentEpochIndex<T>(PhantomData<T>);
@@ -525,6 +528,13 @@ pub trait BlockEmissions {
 	fn calculate_block_emissions();
 }
 
+/// Emits an event when backup rewards are distributed that lives inside the Emissions pallet.
+pub trait BackupRewardsNotifier {
+	type Balance;
+	type AccountId;
+	fn emit_event(account_id: &Self::AccountId, amount: Self::Balance);
+}
+
 /// Checks if the caller can execute free transactions
 pub trait WaivedFees {
 	type AccountId;
@@ -700,10 +710,10 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 		Self::ensure_account_role(origin, AccountRole::Validator)
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn register_account(account_id: T::AccountId, role: AccountRole);
+	fn register_account(account_id: &T::AccountId, role: AccountRole);
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn get_account_role(account_id: T::AccountId) -> AccountRole;
+	fn get_account_role(account_id: &T::AccountId) -> AccountRole;
 }
 
 /// API that allows other pallets to Egress assets out of the State Chain.
@@ -777,9 +787,16 @@ pub trait NetworkEnvironmentProvider {
 	fn get_network_environment() -> NetworkEnvironment;
 }
 
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug)]
+pub struct CcmSwapIds {
+	pub principal_swap_id: Option<SwapId>,
+	pub gas_swap_id: Option<SwapId>,
+}
+
 /// Trait for handling cross chain messages.
 pub trait CcmHandler {
 	/// Triggered when a ccm deposit is made.
+	#[allow(clippy::result_unit_err)]
 	fn on_ccm_deposit(
 		source_asset: Asset,
 		deposit_amount: AssetAmount,
@@ -787,7 +804,7 @@ pub trait CcmHandler {
 		destination_address: ForeignChainAddress,
 		deposit_metadata: CcmDepositMetadata,
 		origin: SwapOrigin,
-	);
+	) -> Result<CcmSwapIds, ()>;
 }
 
 impl CcmHandler for () {
@@ -798,7 +815,8 @@ impl CcmHandler for () {
 		_destination_address: ForeignChainAddress,
 		_deposit_metadata: CcmDepositMetadata,
 		_origin: SwapOrigin,
-	) {
+	) -> Result<CcmSwapIds, ()> {
+		Err(())
 	}
 }
 

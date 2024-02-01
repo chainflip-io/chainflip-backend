@@ -44,6 +44,8 @@ pub type BasisPoints = u16;
 
 pub type BroadcastId = u32;
 
+pub type SwapId = u64;
+
 /// The type of the Id given to threshold signature requests. Note a single request may
 /// result in multiple ceremonies, but only one ceremony should succeed.
 pub type ThresholdSignatureRequestId = u32;
@@ -59,7 +61,7 @@ pub const FLIPPERINOS_PER_FLIP: FlipBalance = 10u128.pow(FLIP_DECIMALS);
 
 // Bitcoin default fee, in sats per bytes, to be used if current fee is not available via chain
 // tracking.
-pub const DEFAULT_FEE_SATS_PER_KILOBYTE: u64 = 102400;
+pub const DEFAULT_FEE_SATS_PER_KILOBYTE: u64 = 100000;
 
 // To spend one of our deposit UTXOs, we need:
 // 32 bytes for the TX ID
@@ -81,6 +83,13 @@ pub const DEFAULT_FEE_SATS_PER_KILOBYTE: u64 = 102400;
 // since we may add multiple utxos together, the fractional parts could add up to another byte,
 // so we are rounding up to be on the safe side and set the UTXO size to 78 bytes
 pub const INPUT_UTXO_SIZE_IN_BYTES: u64 = 78;
+
+// We can spend vault UTOXs (utxos with salt=0) directly via the internal key
+// as opposed to using the script path. This saves some transaction costs, because
+// the witness data only consists of
+// 1 byte for the number of witness elements
+// 65 bytes for the signature
+pub const VAULT_UTXO_SIZE_IN_BYTES: u64 = 58;
 
 // An output contains:
 // 8 bytes for the amount

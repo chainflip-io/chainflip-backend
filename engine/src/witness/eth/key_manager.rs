@@ -209,7 +209,8 @@ mod tests {
 						PathBuf::from_str("/some/sc/key/bashful-key").unwrap().as_path(),
 						AccountRole::Unregistered,
 						false,
-						None,
+						false,
+						false,
 					)
 					.await
 					.unwrap();
