@@ -591,7 +591,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type CompoundingInterval = ConstU32<COMPOUNDING_INTERVAL>;
 	type EthEnvironment = EthEnvironment;
 	type FlipToBurn = LiquidityPools;
-	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
+	type EgressHandler = pallet_cf_ingress_egress::Pallet<Runtime, EthereumInstance>;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
 }
@@ -1191,6 +1191,26 @@ impl_runtime_apis! {
 					btc::Asset::try_from(asset)
 						.expect("Conversion must succeed: ForeignChain checked in match clause.")
 				).into(),
+			}
+		}
+
+		fn cf_egress_dust_limit(asset: Asset) -> AssetAmount {
+			use pallet_cf_ingress_egress::EgressDustLimit;
+			use cf_chains::assets::{eth, dot, btc};
+
+			match ForeignChain::from(asset) {
+				ForeignChain::Ethereum => EgressDustLimit::<Runtime, EthereumInstance>::get(
+					eth::Asset::try_from(asset)
+						.expect("Conversion must succeed: ForeignChain checked in match clause.")
+				),
+				ForeignChain::Polkadot => EgressDustLimit::<Runtime, PolkadotInstance>::get(
+					dot::Asset::try_from(asset)
+						.expect("Conversion must succeed: ForeignChain checked in match clause.")
+				),
+				ForeignChain::Bitcoin => EgressDustLimit::<Runtime, BitcoinInstance>::get(
+					btc::Asset::try_from(asset)
+						.expect("Conversion must succeed: ForeignChain checked in match clause.")
+				),
 			}
 		}
 

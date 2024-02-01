@@ -13,6 +13,7 @@ mod mock_eth;
 #[cfg(test)]
 mod tests;
 pub mod weights;
+
 use cf_runtime_utilities::log_or_panic;
 use frame_support::{pallet_prelude::OptionQuery, sp_runtime::SaturatedConversion, transactional};
 pub use weights::WeightInfo;
@@ -24,14 +25,14 @@ use cf_chains::{
 	FeeEstimationApi, FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	Asset, AssetAmount, BasisPoints, BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex,
-	ForeignChain, SwapId, ThresholdSignatureRequestId,
+	Asset, BasisPoints, BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex, ForeignChain,
+	SwapId, ThresholdSignatureRequestId,
 };
 use cf_traits::{
 	liquidity::{LpBalanceApi, LpDepositHandler},
 	AssetConverter, Broadcaster, CcmHandler, CcmSwapIds, Chainflip, DepositApi, DepositHandler,
 	EgressApi, EpochInfo, GetBlockHeight, GetTrackedData, NetworkEnvironmentProvider,
-	SwapDepositHandler,
+	ScheduledEgressDetails, SwapDepositHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -39,6 +40,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
+use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::{vec, vec::Vec};
 
 /// Enum wrapper for fetch and egress requests.
@@ -98,7 +100,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
 
 /// Calls to the external chains that has failed to be broadcast/accepted by the target chain.
 /// User can use information stored here to query for relevant information to broadcast
@@ -121,7 +123,7 @@ pub mod pallet {
 	use core::marker::PhantomData;
 	use frame_support::{
 		storage::with_transaction,
-		traits::{EnsureOrigin, IsType},
+		traits::{ConstU128, EnsureOrigin, IsType},
 		DefaultNoBound,
 	};
 	use sp_std::vec::Vec;
@@ -166,7 +168,7 @@ pub mod pallet {
 		Egress,
 	}
 
-	pub struct AmountFeesWithheld<T: Config<I>, I: 'static> {
+	pub struct AmountAndFeesWithheld<T: Config<I>, I: 'static> {
 		pub amount_after_fees: TargetChainAmount<T, I>,
 		pub fees_withheld: TargetChainAmount<T, I>,
 	}
@@ -251,11 +253,16 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub deposit_channel_lifetime: TargetChainBlockNumber<T, I>,
 		pub witness_safety_margin: Option<TargetChainBlockNumber<T, I>>,
+		pub dust_limits: Vec<(TargetChainAsset<T, I>, TargetChainAmount<T, I>)>,
 	}
 
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
-			Self { deposit_channel_lifetime: Default::default(), witness_safety_margin: None }
+			Self {
+				deposit_channel_lifetime: Default::default(),
+				witness_safety_margin: None,
+				dust_limits: Default::default(),
+			}
 		}
 	}
 
@@ -264,6 +271,10 @@ pub mod pallet {
 		fn build(&self) {
 			DepositChannelLifetime::<T, I>::put(self.deposit_channel_lifetime);
 			WitnessSafetyMargin::<T, I>::set(self.witness_safety_margin);
+
+			for (asset, dust_limit) in self.dust_limits.clone() {
+				EgressDustLimit::<T, I>::set(asset, dust_limit.unique_saturated_into());
+			}
 		}
 	}
 
@@ -375,6 +386,16 @@ pub mod pallet {
 	pub type MinimumDeposit<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, TargetChainAmount<T, I>, ValueQuery>;
 
+	/// Defines the minimum amount aka. dust limit for a single egress i.e. *not* of a batch, but
+	/// the outputs of each individual egress within that batch. If not set, defaults to 1.
+	///
+	/// This is required for bitcoin, for example, where any amount below 600 satoshis is considered
+	/// dust and will be rejected by miners.
+	#[pallet::storage]
+	#[pallet::getter(fn egress_dust_limit)]
+	pub type EgressDustLimit<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, u128, ValueQuery, ConstU128<1>>;
+
 	#[pallet::storage]
 	pub type DepositChannelLifetime<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, TargetChainBlockNumber<T, I>, ValueQuery>;
@@ -425,16 +446,6 @@ pub mod pallet {
 		AssetEgressStatusChanged {
 			asset: TargetChainAsset<T, I>,
 			disabled: bool,
-		},
-		EgressScheduled {
-			id: EgressId,
-			asset: TargetChainAsset<T, I>,
-			// This amount includes the egress fee.
-			amount: AssetAmount,
-			destination_address: TargetChainAccount<T, I>,
-			// In the case of CCM this egress fee is already reserved as the "gas budget" so it's
-			// not taken from the principal amount.
-			egress_fee: TargetChainAmount<T, I>,
 		},
 		CcmBroadcastRequested {
 			broadcast_id: BroadcastId,
@@ -494,6 +505,7 @@ pub mod pallet {
 		},
 	}
 
+	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
 		/// The deposit address is not valid. It may have expired or may never have been issued.
@@ -508,6 +520,8 @@ pub mod pallet {
 		MissingBitcoinVault,
 		/// Channel ID is too large for Bitcoin address derivation
 		BitcoinChannelIdTooLarge,
+		/// The amount is below the minimum egress amount.
+		BelowEgressDustLimit,
 	}
 
 	#[pallet::hooks]
@@ -1014,7 +1028,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 		Self::deposit_event(Event::<T, I>::DepositFetchesScheduled { channel_id, asset });
 
-		let AmountFeesWithheld { amount_after_fees, fees_withheld } =
+		let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
 			Self::withhold_transaction_fee(
 				IngressOrEgress::Ingress,
 				deposit_channel_details.deposit_channel.asset,
@@ -1191,7 +1205,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ingress_or_egress: IngressOrEgress,
 		asset: TargetChainAsset<T, I>,
 		available_amount: TargetChainAmount<T, I>,
-	) -> AmountFeesWithheld<T, I> {
+	) -> AmountAndFeesWithheld<T, I> {
 		let tracked_data = T::ChainTracking::get_tracked_data();
 		let fee_estimate = match ingress_or_egress {
 			IngressOrEgress::Ingress => tracked_data.estimate_ingress_fee(asset),
@@ -1217,8 +1231,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		WithheldTransactionFees::<T, I>::mutate(<T::TargetChain as Chain>::GAS_ASSET, |fees| {
 			fees.saturating_accrue(fee_estimate);
 		});
+		// Since we credit the fees to the withheld fees, we need to take these from somewhere, ie.
+		// we effectively have transfered them from the vault.
+		DepositBalances::<T, I>::mutate(<T::TargetChain as Chain>::GAS_ASSET, |tracker| {
+			tracker.register_transfer(fee_estimate);
+		});
 
-		AmountFeesWithheld::<T, I> {
+		AmountAndFeesWithheld::<T, I> {
 			amount_after_fees,
 			fees_withheld: available_amount.saturating_sub(amount_after_fees),
 		}
@@ -1226,63 +1245,80 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
+	type EgressError = Error<T, I>;
+
 	fn schedule_egress(
 		asset: TargetChainAsset<T, I>,
 		amount: TargetChainAmount<T, I>,
 		destination_address: TargetChainAccount<T, I>,
 		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, TargetChainAmount<T, I>)>,
-	) -> EgressId {
-		let egress_counter = EgressIdCounter::<T, I>::mutate(|id| {
-			*id = id.saturating_add(1);
-			*id
-		});
-		let egress_id = (<T as Config<I>>::TargetChain::get(), egress_counter);
-		let egress_fee = match maybe_ccm_with_gas_budget {
-			Some((
-				CcmDepositMetadata { source_chain, source_address, channel_metadata },
-				gas_budget,
-			)) => {
-				ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
-					egress_id,
-					asset,
-					amount,
-					destination_address: destination_address.clone(),
-					message: channel_metadata.message,
-					cf_parameters: channel_metadata.cf_parameters,
-					source_chain,
-					source_address,
+	) -> Result<ScheduledEgressDetails<T::TargetChain>, Error<T, I>> {
+		let result = EgressIdCounter::<T, I>::try_mutate(|id_counter| {
+			*id_counter = id_counter.saturating_add(1);
+			let egress_id = (<T as Config<I>>::TargetChain::get(), *id_counter);
+
+			match maybe_ccm_with_gas_budget {
+				Some((
+					CcmDepositMetadata { source_chain, source_address, channel_metadata },
 					gas_budget,
-				});
-				gas_budget
-			},
-			None => {
-				let AmountFeesWithheld { amount_after_fees, fees_withheld } =
-					Self::withhold_transaction_fee(IngressOrEgress::Egress, asset, amount);
-				ScheduledEgressFetchOrTransfer::<T, I>::append({
-					FetchOrTransfer::<T::TargetChain>::Transfer {
-						asset,
-						destination_address: destination_address.clone(),
-						amount: amount_after_fees,
+				)) => {
+					ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
 						egress_id,
+						asset,
+						amount,
+						destination_address: destination_address.clone(),
+						message: channel_metadata.message,
+						cf_parameters: channel_metadata.cf_parameters,
+						source_chain,
+						source_address,
+						gas_budget,
+					});
+
+					// The ccm gas budget is already in terms of the swap asset.
+					Ok(ScheduledEgressDetails::new(*id_counter, amount, gas_budget))
+				},
+				None => {
+					let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
+						Self::withhold_transaction_fee(IngressOrEgress::Egress, asset, amount);
+
+					if amount_after_fees >=
+						EgressDustLimit::<T, I>::get(asset).unique_saturated_into()
+					{
+						let egress_details = ScheduledEgressDetails::new(
+							*id_counter,
+							amount_after_fees,
+							fees_withheld,
+						);
+
+						ScheduledEgressFetchOrTransfer::<T, I>::append({
+							FetchOrTransfer::<T::TargetChain>::Transfer {
+								asset,
+								destination_address: destination_address.clone(),
+								amount: amount_after_fees,
+								egress_id: egress_details.egress_id,
+							}
+						});
+
+						Ok(egress_details)
+					} else {
+						// TODO: Consider tracking the ignored egresses somewhere.
+						// For example, store the egress and try it again later when fees have
+						// dropped?
+						Err(Error::<T, I>::BelowEgressDustLimit)
 					}
-				});
-				fees_withheld
-			},
+				},
+			}
+		});
+
+		if let Ok(ScheduledEgressDetails { egress_amount, .. }) = result {
+			// Only the egress_amount will be transferred. The fee was converted to the native
+			// asset and will be consumed in terms of the native asset.
+			DepositBalances::<T, I>::mutate(asset, |tracker| {
+				tracker.register_transfer(egress_amount);
+			});
 		};
 
-		DepositBalances::<T, I>::mutate(asset, |tracker| {
-			tracker.register_transfer(amount);
-		});
-
-		Self::deposit_event(Event::<T, I>::EgressScheduled {
-			id: egress_id,
-			asset,
-			amount: amount.into(),
-			destination_address,
-			egress_fee,
-		});
-
-		egress_id
+		result
 	}
 }
 
