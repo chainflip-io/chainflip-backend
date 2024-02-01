@@ -1306,6 +1306,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 					destination_asset: Asset::Eth,
 					deposit_amount: 99_000,
 					egress_amount: 9,
+					swap_input: 99_000,
 					swap_output: 9,
 					intermediate_amount: None,
 				}),
@@ -1315,6 +1316,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 					deposit_amount: 1_000,
 					destination_asset: Asset::Eth,
 					egress_amount: 0,
+					swap_input: 1_000,
 					swap_output: 0,
 					intermediate_amount: None,
 				}),
@@ -1366,7 +1368,6 @@ fn can_handle_swaps_with_zero_outputs() {
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					swap_id: 1,
 					destination_asset: Asset::Eth,
-					egress_amount: 0,
 					swap_output: 0,
 					..
 				}),
@@ -1374,7 +1375,6 @@ fn can_handle_swaps_with_zero_outputs() {
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					swap_id: 2,
 					destination_asset: Asset::Eth,
-					egress_amount: 0,
 					swap_output: 0,
 					..
 				}),

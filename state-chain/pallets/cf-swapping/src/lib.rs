@@ -288,7 +288,9 @@ pub mod pallet {
 		SwapExecuted {
 			swap_id: SwapId,
 			source_asset: Asset,
+			#[deprecated(note = "Use swap_input instead")]
 			deposit_amount: AssetAmount,
+			swap_input: AssetAmount,
 			destination_asset: Asset,
 			#[deprecated(note = "Use swap_output instead")]
 			egress_amount: AssetAmount,
@@ -411,6 +413,7 @@ pub mod pallet {
 							source_asset: swap.from,
 							destination_asset: swap.to,
 							deposit_amount: swap.amount,
+							swap_input: swap.amount,
 							egress_amount: swap_output,
 							swap_output,
 							intermediate_amount: swap.intermediate_amount(),
