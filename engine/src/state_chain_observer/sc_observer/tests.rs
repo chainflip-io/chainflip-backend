@@ -13,11 +13,13 @@ use crate::{
 	},
 };
 use cf_chains::{evm::Transaction, ChainCrypto};
-use cf_primitives::{AccountRole, GENESIS_EPOCH};
+use cf_primitives::{AccountRole, CeremonyId, GENESIS_EPOCH};
 use futures::FutureExt;
 use mockall::predicate::eq;
 use multisig::{eth::EvmCryptoScheme, ChainSigning, SignatureToThresholdSignature};
-use pallet_cf_cfe_interface::{CfeEvent, TxBroadcastRequest};
+use pallet_cf_cfe_interface::{
+	CfeEvent, KeyHandoverRequest, KeygenRequest, ThresholdSignatureRequest, TxBroadcastRequest,
+};
 use sp_runtime::AccountId32;
 
 use sp_core::H256;
@@ -37,7 +39,7 @@ use multisig::{
 };
 use utilities::task_scope::task_scope;
 
-use super::crypto_compat::CryptoCompat;
+use super::{crypto_compat::CryptoCompat, get_ceremony_id_counters_before_block};
 
 async fn start_sc_observer<
 	BlockStream: crate::state_chain_observer::client::stream_api::StreamApi<FINALIZED>,
@@ -46,9 +48,6 @@ async fn start_sc_observer<
 	sc_block_stream: BlockStream,
 	eth_rpc: MockEthRetryRpcClient,
 ) {
-	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
-		tokio::sync::mpsc::unbounded_channel();
-
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -58,7 +57,6 @@ async fn start_sc_observer<
 		MockMultisigClientApi::new(),
 		MockMultisigClientApi::new(),
 		MockMultisigClientApi::new(),
-		account_peer_mapping_change_sender,
 	)
 	.await
 	.unwrap_err();
@@ -77,8 +75,8 @@ async fn only_encodes_and_signs_when_specified() {
 		|| account_id
 	});
 
-	let block = test_header(21, None);
-	let sc_block_stream = tokio_stream::iter([block]).make_cached(test_header(20, None));
+	let block = test_header(20, None);
+	let sc_block_stream = tokio_stream::iter([]).make_cached(block);
 
 	use state_chain_runtime::Runtime;
 
@@ -103,10 +101,10 @@ async fn only_encodes_and_signs_when_specified() {
 
 	let mut eth_rpc_mock_broadcast = MockEthRetryRpcClient::new();
 
-	// This doesn't always get called since the test can finish without the scope that spwans the
+	// This doesn't always get called since the test can finish without the scope that spawns the
 	// broadcast task finishing.
 	eth_rpc_mock_broadcast.expect_broadcast_transaction().return_once(|_| {
-		// return some hash
+		// Return some hash
 		Ok(H256::from([1; 32]))
 	});
 
@@ -477,6 +475,232 @@ where
 }
 
 #[tokio::test]
+async fn should_process_initial_block_first() {
+	let mut state_chain_client = MockStateChainClient::new();
+
+	state_chain_client.expect_account_id().once().return_once({
+		let account_id = AccountId::new([0; 32]);
+		|| account_id
+	});
+
+	let initial_block = test_header(20, None);
+	let next_block = test_header(21, Some(initial_block.hash));
+
+	// Create a stream with only `next_block` in it. The initial block is cached.
+	let sc_block_stream = tokio_stream::iter([next_block]).make_cached(initial_block);
+
+	let mut seq = mockall::Sequence::new();
+
+	// We expect the SCO to process the initial block first, even though it was not in the stream.
+	state_chain_client
+		.expect_storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
+		.with(eq(initial_block.hash))
+		.once()
+		.in_sequence(&mut seq)
+		.return_once(move |_| Ok(vec![]));
+
+	// Then it should process the block that was in the stream
+	state_chain_client
+		.expect_storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
+		.with(eq(next_block.hash))
+		.once()
+		.in_sequence(&mut seq)
+		.return_once(move |_| Ok(vec![]));
+
+	let mut eth_rpc_mock_broadcast = MockEthRetryRpcClient::new();
+
+	// This doesn't always get called since the test can finish without the scope that spawns the
+	// broadcast task finishing.
+	eth_rpc_mock_broadcast.expect_broadcast_transaction().return_once(|_| {
+		// Return some hash
+		Ok(H256::from([1; 32]))
+	});
+
+	let mut eth_mock_clone = MockEthRetryRpcClient::new();
+	eth_mock_clone.expect_clone().return_once(|| eth_rpc_mock_broadcast);
+
+	start_sc_observer(
+		state_chain_client,
+		StateChainStream::<true, _>::new(sc_block_stream),
+		eth_mock_clone,
+	)
+	.await;
+}
+
+#[tokio::test]
+async fn test_get_ceremony_id_counters_with_events() {
+	const ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK: CeremonyId = 10;
+	const DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK: CeremonyId = 20;
+	const BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK: CeremonyId = 30;
+	let block_hash = H256::default();
+
+	let test_block_streams = vec![
+		// Test 1: 1 signing request for each chain and another event that should not effect the id
+		// counters
+		vec![
+			CfeEvent::<Runtime>::EthTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> {
+				broadcast_id: Default::default(),
+				nominee: AccountId32::new([1; 32]),
+				payload: Default::default(),
+			}),
+			CfeEvent::<Runtime>::EthThresholdSignatureRequest(ThresholdSignatureRequest::<
+				Runtime,
+				_,
+			> {
+				ceremony_id: ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				key: Default::default(),
+				signatories: Default::default(),
+				payload: Default::default(),
+			}),
+			CfeEvent::<Runtime>::DotThresholdSignatureRequest(ThresholdSignatureRequest::<
+				Runtime,
+				_,
+			> {
+				ceremony_id: DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				key: Default::default(),
+				signatories: Default::default(),
+				payload: cf_chains::dot::EncodedPolkadotPayload(vec![]),
+			}),
+			CfeEvent::<Runtime>::BtcThresholdSignatureRequest(ThresholdSignatureRequest::<
+				Runtime,
+				_,
+			> {
+				ceremony_id: BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				key: Default::default(),
+				signatories: Default::default(),
+				payload: Default::default(),
+			}),
+		],
+		// Test 2: 1 keygen request for each chain
+		vec![
+			CfeEvent::<Runtime>::EthKeygenRequest(KeygenRequest::<Runtime> {
+				ceremony_id: ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				participants: Default::default(),
+			}),
+			CfeEvent::<Runtime>::DotKeygenRequest(KeygenRequest::<Runtime> {
+				ceremony_id: DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				participants: Default::default(),
+			}),
+			CfeEvent::<Runtime>::BtcKeygenRequest(KeygenRequest::<Runtime> {
+				ceremony_id: BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				participants: Default::default(),
+			}),
+		],
+		// Test 3: 1 key handover request for BTC (and keygen requests for the other chains to
+		// avoid test complexity)
+		vec![
+			CfeEvent::<Runtime>::EthKeygenRequest(KeygenRequest::<Runtime> {
+				ceremony_id: ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				participants: Default::default(),
+			}),
+			CfeEvent::<Runtime>::DotKeygenRequest(KeygenRequest::<Runtime> {
+				ceremony_id: DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				participants: Default::default(),
+			}),
+			CfeEvent::<Runtime>::BtcKeyHandoverRequest(KeyHandoverRequest::<Runtime, _> {
+				ceremony_id: BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				from_epoch: 1,
+				to_epoch: 2,
+				key_to_share: cf_chains::btc::AggKey::default(),
+				sharing_participants: Default::default(),
+				receiving_participants: Default::default(),
+				new_key: cf_chains::btc::AggKey::default(),
+			}),
+		],
+	];
+
+	// Run the function on all 3 test streams and check the ceremony id counters are correct
+	for test_block_stream in test_block_streams {
+		let mut state_chain_client = MockStateChainClient::new();
+
+		state_chain_client
+			.expect_storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
+			.with(eq(block_hash))
+			.once()
+			.return_once(|_| Ok(test_block_stream));
+
+		let ceremony_id_counters =
+			get_ceremony_id_counters_before_block(block_hash, Arc::new(state_chain_client))
+				.await
+				.unwrap();
+
+		assert_eq!(ceremony_id_counters.ethereum, ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK);
+		assert_eq!(ceremony_id_counters.polkadot, DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK);
+		assert_eq!(ceremony_id_counters.bitcoin, BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK);
+	}
+}
+
+#[tokio::test]
+async fn test_get_ceremony_id_counters_without_events() {
+	const ETH_CEREMONY_ID_COUNTER: CeremonyId = 10;
+	const DOT_CEREMONY_ID_COUNTER: CeremonyId = 20;
+	const BTC_CEREMONY_ID_COUNTER: CeremonyId = 30;
+	let block_hash = H256::default();
+	let mut state_chain_client = MockStateChainClient::new();
+
+	// Because the block has no events, we expect it to grab the ceremony id counter for each chain
+	// from storage.
+	state_chain_client
+		.expect_storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::EthereumInstance,
+		>>()
+		.with(eq(block_hash))
+		.once()
+		.return_once(|_| Ok(ETH_CEREMONY_ID_COUNTER));
+	state_chain_client
+		.expect_storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::PolkadotInstance,
+		>>()
+		.with(eq(block_hash))
+		.once()
+		.return_once(|_| Ok(DOT_CEREMONY_ID_COUNTER));
+	state_chain_client
+		.expect_storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::BitcoinInstance,
+		>>()
+		.with(eq(block_hash))
+		.once()
+		.return_once(|_| Ok(BTC_CEREMONY_ID_COUNTER));
+
+	// No events in the stream that would change the ceremony id counters
+	state_chain_client
+		.expect_storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>()
+		.with(eq(block_hash))
+		.once()
+		.return_once(|_| {
+			Ok(vec![
+				// EthTxBroadcastRequest should not effect the ceremony id counter
+				CfeEvent::<Runtime>::EthTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> {
+					broadcast_id: Default::default(),
+					nominee: AccountId32::new([1; 32]),
+					payload: Default::default(),
+				}),
+			])
+		});
+
+	let ceremony_id_counters =
+		get_ceremony_id_counters_before_block(block_hash, Arc::new(state_chain_client))
+			.await
+			.unwrap();
+
+	// Check the each ceremony id counter is the same as the one in storage
+	assert_eq!(ceremony_id_counters.ethereum, ETH_CEREMONY_ID_COUNTER);
+	assert_eq!(ceremony_id_counters.polkadot, DOT_CEREMONY_ID_COUNTER);
+	assert_eq!(ceremony_id_counters.bitcoin, BTC_CEREMONY_ID_COUNTER);
+}
+
+#[tokio::test]
 #[ignore = "runs forever, useful for testing without having to start the whole CFE"]
 async fn run_the_sc_observer() {
 	task_scope(|scope| {
@@ -496,9 +720,6 @@ async fn run_the_sc_observer() {
 				.await
 				.unwrap();
 
-			let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-
 			sc_observer::start(
 				state_chain_client,
 				sc_block_stream,
@@ -508,7 +729,6 @@ async fn run_the_sc_observer() {
 				MockMultisigClientApi::new(),
 				MockMultisigClientApi::new(),
 				MockMultisigClientApi::new(),
-				account_peer_mapping_change_sender,
 			)
 			.await
 			.unwrap_err();

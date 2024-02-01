@@ -453,7 +453,6 @@ pub(crate) fn setup_peer_mapping(node_id: &NodeId) {
 pub struct Network {
 	engines: HashMap<NodeId, Engine>,
 	pub state_chain_gateway_contract: ScGatewayContract,
-	node_counter: u32,
 
 	// Used to initialised the threshold signers of the engines added
 	pub eth_threshold_signer: Rc<RefCell<EthThresholdSigner>>,
@@ -520,11 +519,6 @@ pub fn dispatch_all_pending_extrinsics() {
 }
 
 impl Network {
-	pub fn next_node_id(&mut self) -> NodeId {
-		self.node_counter += 1;
-		[self.node_counter as u8; 32].into()
-	}
-
 	pub fn live_nodes(&self) -> Vec<NodeId> {
 		self.engines
 			.iter()
@@ -572,7 +566,7 @@ impl Network {
 	}
 
 	pub fn create_engine(&mut self) -> NodeId {
-		let node_id = self.next_node_id();
+		let node_id = NodeId::from([self.engines.len() as u8; 32]);
 		self.add_engine(&node_id);
 		node_id
 	}
@@ -605,6 +599,13 @@ impl Network {
 		if target > current_block {
 			self.move_forward_blocks(target - current_block - 1)
 		}
+	}
+
+	/// Move to the next heartbeat interval block.
+	pub fn move_to_next_heartbeat_block(&mut self) {
+		self.move_forward_blocks(
+			HEARTBEAT_BLOCK_INTERVAL - System::block_number() % HEARTBEAT_BLOCK_INTERVAL,
+		);
 	}
 
 	// Submits heartbeat for keep alive.

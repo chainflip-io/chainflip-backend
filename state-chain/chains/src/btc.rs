@@ -17,7 +17,7 @@ use bech32::{self, u5, FromBase32, ToBase32, Variant};
 pub use cf_primitives::chains::Bitcoin;
 use cf_primitives::{
 	chains::assets, NetworkEnvironment, DEFAULT_FEE_SATS_PER_KILOBYTE, INPUT_UTXO_SIZE_IN_BYTES,
-	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES,
+	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES, VAULT_UTXO_SIZE_IN_BYTES,
 };
 use cf_utilities::SliceToArray;
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -163,7 +163,8 @@ pub struct BitcoinFeeInfo {
 	sats_per_kilobyte: BtcAmount,
 }
 
-const BYTES_PER_KILOBYTE: BtcAmount = 1024;
+// See https://github.com/bitcoin/bitcoin/blob/master/src/policy/feerate.h#L35
+const BYTES_PER_BTC_KILOBYTE: BtcAmount = 1000;
 
 impl Default for BitcoinFeeInfo {
 	fn default() -> Self {
@@ -173,29 +174,40 @@ impl Default for BitcoinFeeInfo {
 
 impl BitcoinFeeInfo {
 	pub fn new(sats_per_kilobyte: BtcAmount) -> Self {
-		Self { sats_per_kilobyte: max(sats_per_kilobyte, BYTES_PER_KILOBYTE) }
+		Self { sats_per_kilobyte: max(sats_per_kilobyte, BYTES_PER_BTC_KILOBYTE) }
 	}
 
 	pub fn sats_per_kilobyte(&self) -> BtcAmount {
 		self.sats_per_kilobyte
 	}
 
+	pub fn fee_for_utxo(&self, utxo: &Utxo) -> BtcAmount {
+		if utxo.deposit_address.script_path.is_none() {
+			// Our vault utxos (salt = 0) use VAULT_UTXO_SIZE_IN_BYTES vbytes in a Btc transaction
+			self.sats_per_kilobyte.saturating_mul(VAULT_UTXO_SIZE_IN_BYTES) / BYTES_PER_BTC_KILOBYTE
+		} else {
+			// Our input utxos are approximately INPUT_UTXO_SIZE_IN_BYTES vbytes each in the Btc
+			// transaction
+			self.sats_per_kilobyte.saturating_mul(INPUT_UTXO_SIZE_IN_BYTES) / BYTES_PER_BTC_KILOBYTE
+		}
+	}
+
 	pub fn fee_per_input_utxo(&self) -> BtcAmount {
 		// Our input utxos are approximately INPUT_UTXO_SIZE_IN_BYTES vbytes each in the Btc
 		// transaction
-		self.sats_per_kilobyte.saturating_mul(INPUT_UTXO_SIZE_IN_BYTES) / BYTES_PER_KILOBYTE
+		self.sats_per_kilobyte.saturating_mul(INPUT_UTXO_SIZE_IN_BYTES) / BYTES_PER_BTC_KILOBYTE
 	}
 
 	pub fn fee_per_output_utxo(&self) -> BtcAmount {
 		// Our output utxos are approximately OUTPUT_UTXO_SIZE_IN_BYTES vbytes each in the Btc
 		// transaction
-		self.sats_per_kilobyte.saturating_mul(OUTPUT_UTXO_SIZE_IN_BYTES) / BYTES_PER_KILOBYTE
+		self.sats_per_kilobyte.saturating_mul(OUTPUT_UTXO_SIZE_IN_BYTES) / BYTES_PER_BTC_KILOBYTE
 	}
 
 	pub fn min_fee_required_per_tx(&self) -> BtcAmount {
 		// Minimum size of tx that does not scale with input and output utxos is
 		// MINIMUM_BTC_TX_SIZE_IN_BYTES bytes
-		self.sats_per_kilobyte.saturating_mul(MINIMUM_BTC_TX_SIZE_IN_BYTES) / BYTES_PER_KILOBYTE
+		self.sats_per_kilobyte.saturating_mul(MINIMUM_BTC_TX_SIZE_IN_BYTES) / BYTES_PER_BTC_KILOBYTE
 	}
 }
 
@@ -383,15 +395,6 @@ pub struct Utxo {
 	pub id: UtxoId,
 	pub amount: u64,
 	pub deposit_address: DepositAddress,
-}
-
-pub trait GetUtxoAmount {
-	fn amount(&self) -> u64;
-}
-impl GetUtxoAmount for Utxo {
-	fn amount(&self) -> u64 {
-		self.amount
-	}
 }
 
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
@@ -766,20 +769,27 @@ impl BitcoinTransaction {
 	}
 
 	pub fn finalize(self) -> Vec<u8> {
-		const NUM_WITNESSES: u8 = 3u8;
+		const NUM_WITNESSES_SCRIPT: u8 = 3u8;
+		const NUM_WITNESSES_KEY: u8 = 1u8;
 		const LEN_SIGNATURE: u8 = 64u8;
 
 		let mut transaction_bytes = self.transaction_bytes;
 
 		for i in 0..self.inputs.len() {
-			transaction_bytes.push(NUM_WITNESSES);
-			transaction_bytes.push(LEN_SIGNATURE);
-			transaction_bytes.extend(self.signatures[i]);
-			transaction_bytes.extend(self.inputs[i].deposit_address.unlock_script_serialized());
-			// Length of tweaked pubkey + leaf version
-			transaction_bytes.push(33u8);
-			transaction_bytes.push(self.inputs[i].deposit_address.leaf_version());
-			transaction_bytes.extend(INTERNAL_PUBKEY[1..33].iter());
+			if let Some(script_path) = self.inputs[i].deposit_address.script_path.clone() {
+				transaction_bytes.push(NUM_WITNESSES_SCRIPT);
+				transaction_bytes.push(LEN_SIGNATURE);
+				transaction_bytes.extend(self.signatures[i]);
+				transaction_bytes.extend(script_path.unlock_script.btc_serialize());
+				// Length of tweaked pubkey + leaf version
+				transaction_bytes.push(33u8);
+				transaction_bytes.push(script_path.leaf_version());
+				transaction_bytes.extend(INTERNAL_PUBKEY[1..33].iter());
+			} else {
+				transaction_bytes.push(NUM_WITNESSES_KEY);
+				transaction_bytes.push(LEN_SIGNATURE);
+				transaction_bytes.extend(self.signatures[i]);
+			}
 		}
 		transaction_bytes.extend(LOCKTIME);
 		transaction_bytes
@@ -794,7 +804,8 @@ impl BitcoinTransaction {
 		const EPOCH: u8 = 0u8;
 		const HASHTYPE: u8 = 0u8;
 		const VERSION: [u8; 4] = 2u32.to_le_bytes();
-		const SPENDTYPE: u8 = 2u8;
+		const SPENDTYPE_KEY: u8 = 0u8;
+		const SPENDTYPE_SCRIPT: u8 = 2u8;
 		const KEYVERSION: u8 = 0u8;
 		const CODESEPARATOR: [u8; 4] = u32::MAX.to_le_bytes();
 
@@ -847,6 +858,40 @@ impl BitcoinTransaction {
 		(0u32..)
 			.zip(&self.inputs)
 			.map(|(input_index, input)| {
+				let mut hash_data = [
+					// Tagged Hash according to BIP 340
+					TAPSIG_HASH,
+					TAPSIG_HASH,
+					// Epoch according to footnote 20 in BIP 341
+					&[EPOCH],
+					// "Common signature message" according to BIP 341
+					&[HASHTYPE],
+					&VERSION,
+					&LOCKTIME,
+					&prevouts,
+					&amounts,
+					&scriptpubkeys,
+					&sequences,
+					&outputs,
+				]
+				.concat();
+				if let Some(script_path) = input.deposit_address.script_path.clone() {
+					hash_data.append(
+						&mut [
+							&[SPENDTYPE_SCRIPT] as &[u8],
+							&input_index.to_le_bytes(),
+							// "Common signature message extension" according to BIP 342
+							&script_path.tapleaf_hash[..],
+							&[KEYVERSION],
+							&CODESEPARATOR,
+						]
+						.concat(),
+					);
+				} else {
+					hash_data.append(
+						&mut [&[SPENDTYPE_KEY] as &[u8], &input_index.to_le_bytes()].concat(),
+					);
+				}
 				(
 					if Some(&input_index) == old_utxo_input_indices.front() {
 						old_utxo_input_indices.pop_front();
@@ -854,31 +899,7 @@ impl BitcoinTransaction {
 					} else {
 						PreviousOrCurrent::Current
 					},
-					sha2_256(
-						&[
-							// Tagged Hash according to BIP 340
-							TAPSIG_HASH,
-							TAPSIG_HASH,
-							// Epoch according to footnote 20 in BIP 341
-							&[EPOCH],
-							// "Common signature message" according to BIP 341
-							&[HASHTYPE],
-							&VERSION,
-							&LOCKTIME,
-							&prevouts,
-							&amounts,
-							&scriptpubkeys,
-							&sequences,
-							&outputs,
-							&[SPENDTYPE],
-							&input_index.to_le_bytes(),
-							// "Common signature message extension" according to BIP 342
-							&input.deposit_address.tapleaf_hash[..],
-							&[KEYVERSION],
-							&CODESEPARATOR,
-						]
-						.concat(),
-					),
+					sha2_256(hash_data.as_slice()),
 				)
 			})
 			.collect()
@@ -916,7 +937,7 @@ impl<T: SerializeBtc> SerializeBtc for &[T] {
 ///
 /// For reference see https://en.bitcoin.it/wiki/Script
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
-enum BitcoinOp {
+pub enum BitcoinOp {
 	PushUint { value: u32 },
 	PushBytes { bytes: BoundedVec<u8, ConstU32<MAX_SEGWIT_PROGRAM_BYTES>> },
 	Drop,
@@ -932,7 +953,7 @@ enum BitcoinOp {
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
-struct BitcoinScript {
+pub struct BitcoinScript {
 	bytes: BoundedVec<u8, ConstU32<MAX_BITCOIN_SCRIPT_LENGTH>>,
 }
 

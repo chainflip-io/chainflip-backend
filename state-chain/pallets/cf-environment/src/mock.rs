@@ -157,7 +157,7 @@ parameter_types! {
 pub struct MockBitcoinFeeInfo;
 impl GetBitcoinFeeInfo for MockBitcoinFeeInfo {
 	fn bitcoin_fee_info() -> BitcoinFeeInfo {
-		BitcoinFeeInfo::new(10 * 1024)
+		BitcoinFeeInfo::new(10 * 1000)
 	}
 }
 

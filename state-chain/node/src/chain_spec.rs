@@ -274,7 +274,7 @@ pub fn inner_cf_development_config(
 				devnet::AUCTION_BID_CUTOFF_PERCENTAGE,
 			)
 		},
-		// Bootnodes
+		// Boot nodes
 		vec![],
 		// Telemetry
 		None,
@@ -403,7 +403,7 @@ macro_rules! network_spec {
 							AUCTION_BID_CUTOFF_PERCENTAGE,
 						)
 					},
-					// Bootnodes
+					// Boot nodes
 					vec![],
 					// Telemetry
 					None,
@@ -635,7 +635,7 @@ fn testnet_genesis(
 			supply_update_interval,
 			_config: PhantomData,
 		},
-		// !!! These Chain tracking values should be set to reasonable vaules at time of launch !!!
+		// !!! These Chain tracking values should be set to reasonable values at time of launch !!!
 		ethereum_chain_tracking: EthereumChainTrackingConfig {
 			init_chain_state: ChainState::<Ethereum> {
 				block_height: 0,
