@@ -16,11 +16,11 @@ pub use async_result::AsyncResult;
 
 use cf_chains::{
 	address::ForeignChainAddress, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain,
-	ChainCrypto, DepositChannel, Ethereum, Polkadot, SwapOrigin,
+	ChainCrypto, DepositChannel, Ethereum, SwapOrigin,
 };
 use cf_primitives::{
-	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
-	CeremonyId, ChannelId, Ed25519PublicKey, EgressId, EpochIndex, FlipBalance, ForeignChain,
+	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId, CeremonyId,
+	ChannelId, Ed25519PublicKey, EgressCounter, EgressId, EpochIndex, FlipBalance, ForeignChain,
 	Ipv6Addr, NetworkEnvironment, SemVer, SwapId, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -32,7 +32,7 @@ use frame_support::{
 		DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
 	},
 	traits::{EnsureOrigin, Get, Imbalance, IsType, UnfilteredDispatchable},
-	Hashable, Parameter,
+	CloneNoBound, EqNoBound, Hashable, Parameter, PartialEqNoBound,
 };
 use scale_info::TypeInfo;
 use sp_std::{collections::btree_set::BTreeSet, iter::Sum, marker::PhantomData, prelude::*};
@@ -718,51 +718,56 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 	fn get_account_role(account_id: &T::AccountId) -> AccountRole;
 }
 
+#[derive(
+	PartialEqNoBound, EqNoBound, CloneNoBound, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug,
+)]
+pub struct ScheduledEgressDetails<C: Chain> {
+	pub egress_id: EgressId,
+	pub egress_amount: C::ChainAmount,
+	pub fee_taken: C::ChainAmount,
+}
+
+impl<C: Chain + Get<ForeignChain>> Default for ScheduledEgressDetails<C> {
+	fn default() -> Self {
+		Self::new(Default::default(), Default::default(), Default::default())
+	}
+}
+
+impl<C: Chain + Get<ForeignChain>> ScheduledEgressDetails<C> {
+	pub fn new(
+		id_counter: EgressCounter,
+		egress_amount: C::ChainAmount,
+		fee_taken: C::ChainAmount,
+	) -> Self {
+		Self { egress_id: (<C as Get<ForeignChain>>::get(), id_counter), egress_amount, fee_taken }
+	}
+}
+
 /// API that allows other pallets to Egress assets out of the State Chain.
 pub trait EgressApi<C: Chain> {
 	type EgressError: Into<DispatchError>;
 
 	/// Schedule the egress of an asset to a destination address.
 	///
-	/// Returns the egress id, the amount of the asset that will be egressed, and the amount of the
-	/// asset that was withheld for fees.
+	/// May take a fee and will return an error if egress cannot be scheduled.
 	fn schedule_egress(
 		asset: C::ChainAsset,
 		amount: C::ChainAmount,
 		destination_address: C::ChainAccount,
 		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, C::ChainAmount)>,
-	) -> Result<(EgressId, C::ChainAmount, C::ChainAmount), Self::EgressError>;
+	) -> Result<ScheduledEgressDetails<C>, Self::EgressError>;
 }
 
-impl<T: frame_system::Config> EgressApi<Ethereum> for T {
+impl<C: Chain + Get<ForeignChain>> EgressApi<C> for () {
 	type EgressError = DispatchError;
 
 	fn schedule_egress(
-		_asset: assets::eth::Asset,
-		_amount: <Ethereum as Chain>::ChainAmount,
-		_destination_address: <Ethereum as Chain>::ChainAccount,
-		_maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <Ethereum as Chain>::ChainAmount)>,
-	) -> Result<
-		(EgressId, <Ethereum as Chain>::ChainAmount, <Ethereum as Chain>::ChainAmount),
-		DispatchError,
-	> {
-		Ok(((ForeignChain::Ethereum, 0), 0, 0))
-	}
-}
-
-impl<T: frame_system::Config> EgressApi<Polkadot> for T {
-	type EgressError = DispatchError;
-
-	fn schedule_egress(
-		_asset: assets::dot::Asset,
-		_amount: <Polkadot as Chain>::ChainAmount,
-		_destination_address: <Polkadot as Chain>::ChainAccount,
-		_maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <Polkadot as Chain>::ChainAmount)>,
-	) -> Result<
-		(EgressId, <Polkadot as Chain>::ChainAmount, <Polkadot as Chain>::ChainAmount),
-		DispatchError,
-	> {
-		Ok(((ForeignChain::Polkadot, 0), 0, 0))
+		_asset: C::ChainAsset,
+		_amount: <C as Chain>::ChainAmount,
+		_destination_address: <C as Chain>::ChainAccount,
+		_maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <C as Chain>::ChainAmount)>,
+	) -> Result<ScheduledEgressDetails<C>, DispatchError> {
+		Ok(Default::default())
 	}
 }
 

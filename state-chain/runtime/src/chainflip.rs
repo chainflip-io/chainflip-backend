@@ -42,12 +42,12 @@ use cf_chains::{
 	ChainEnvironment, ChainState, DepositChannel, ForeignChain, ReplayProtectionProvider,
 	SetCommKeyWithAggKey, SetGovKeyWithAggKey, TransactionBuilder,
 };
-use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId};
+use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId};
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi,
 	DepositHandler, EgressApi, EpochInfo, Heartbeat, Issuance, KeyProvider, OnBroadcastReady,
-	QualifyNode, RewardsDistribution, RuntimeUpgrade,
+	QualifyNode, RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -483,7 +483,7 @@ macro_rules! impl_egress_api_for_anychain {
 				amount: <AnyChain as Chain>::ChainAmount,
 				destination_address: <AnyChain as Chain>::ChainAccount,
 				maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <AnyChain as Chain>::ChainAmount)>,
-			) -> Result<(EgressId, <AnyChain as Chain>::ChainAmount, <AnyChain as Chain>::ChainAmount), DispatchError> {
+			) -> Result<ScheduledEgressDetails<AnyChain>, DispatchError> {
 				match asset.into() {
 					$(
 						ForeignChain::$chain => $pallet::schedule_egress(
@@ -494,7 +494,7 @@ macro_rules! impl_egress_api_for_anychain {
 								.expect("This address cast is ensured to succeed."),
 								maybe_ccm_with_gas_budget.map(|(metadata, gas_budget)| (metadata, gas_budget.try_into().expect("Chain's Amount must be compatible with u128."))),
 						)
-						.map(|(egress_id, amount, fee)| (egress_id, amount.into(), fee.into()))
+						.map(|ScheduledEgressDetails { egress_id, egress_amount, fee_taken }| ScheduledEgressDetails { egress_id, egress_amount: egress_amount.into(), fee_taken: fee_taken.into() })
 						.map_err(Into::into),
 					)+
 				}

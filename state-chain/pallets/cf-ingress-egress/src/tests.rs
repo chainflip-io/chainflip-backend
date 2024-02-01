@@ -19,7 +19,7 @@ use cf_traits::{
 		ccm_handler::{CcmRequest, MockCcmHandler},
 		tracked_data_provider::TrackedDataProvider,
 	},
-	DepositApi, EgressApi, EpochInfo, GetBlockHeight,
+	DepositApi, EgressApi, EpochInfo, GetBlockHeight, ScheduledEgressDetails,
 };
 use frame_support::{
 	assert_err, assert_ok,
@@ -529,9 +529,8 @@ fn can_egress_ccm() {
 			}
 		};
 
-
 		let amount = 5_000;
-		let (egress_id, ..) = IngressEgress::schedule_egress(
+		let ScheduledEgressDetails { egress_id, .. } = IngressEgress::schedule_egress(
 			destination_asset,
 			amount,
 			destination_address,

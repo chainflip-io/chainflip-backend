@@ -3,7 +3,7 @@
 use crate::{self as pallet_cf_emissions, PalletSafeMode};
 use cf_chains::{
 	mocks::{MockEthereum, MockEthereumChainCrypto},
-	AnyChain, ApiCall, ChainCrypto, UpdateFlipSupply,
+	ApiCall, ChainCrypto, Ethereum, UpdateFlipSupply,
 };
 use cf_primitives::{AssetAmount, BroadcastId, FlipBalance, ThresholdSignatureRequestId};
 use cf_traits::{
@@ -224,7 +224,7 @@ impl pallet_cf_emissions::Config for Test {
 	type Broadcaster = MockBroadcast;
 	type FlipToBurn = MockFlipToBurn;
 	type SafeMode = MockRuntimeSafeMode;
-	type EgressHandler = MockEgressHandler<AnyChain>;
+	type EgressHandler = MockEgressHandler<Ethereum>;
 	type WeightInfo = ();
 }
 

@@ -591,7 +591,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type CompoundingInterval = ConstU32<COMPOUNDING_INTERVAL>;
 	type EthEnvironment = EthEnvironment;
 	type FlipToBurn = LiquidityPools;
-	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
+	type EgressHandler = pallet_cf_ingress_egress::Pallet<Runtime, EthereumInstance>;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
 }

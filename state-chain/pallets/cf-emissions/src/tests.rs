@@ -7,7 +7,7 @@ use cf_traits::{mocks::egress_handler::MockEgressHandler, RewardsDistribution, S
 use frame_support::traits::OnInitialize;
 use pallet_cf_flip::Pallet as Flip;
 
-use cf_chains::AnyChain;
+use cf_chains::Ethereum;
 
 type Emissions = Pallet<Test>;
 
@@ -172,7 +172,7 @@ fn burn_flip() {
 			MockBroadcast::get_called().unwrap().new_total_supply,
 			Flip::<Test>::total_issuance()
 		);
-		let egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
+		let egresses = MockEgressHandler::<Ethereum>::get_scheduled_egresses();
 		assert!(egresses.len() == 1);
 		assert_eq!(egresses.first().expect("should exist").amount(), FLIP_TO_BURN);
 		assert_has_matching_event!(
@@ -188,7 +188,7 @@ fn dont_burn_flip_below_threshold() {
 		let total_issuance = Flip::<Test>::total_issuance();
 		assert_eq!(total_issuance, TOTAL_ISSUANCE);
 		// Set the fee to be too high.
-		MockEgressHandler::<AnyChain>::set_fee(FLIP_TO_BURN / BURN_FEE_MULTIPLE);
+		MockEgressHandler::<Ethereum>::set_fee(FLIP_TO_BURN / BURN_FEE_MULTIPLE);
 		Pallet::<Test>::burn_flip_network_fee();
 		assert_has_event::<Test>(
 			crate::Event::FlipBurnSkipped {
@@ -204,7 +204,7 @@ fn dont_burn_flip_below_threshold() {
 
 		// Set a lower fee.
 		const LOW_FEE: u128 = FLIP_TO_BURN / BURN_FEE_MULTIPLE / 2;
-		MockEgressHandler::<AnyChain>::set_fee(LOW_FEE);
+		MockEgressHandler::<Ethereum>::set_fee(LOW_FEE);
 		Pallet::<Test>::burn_flip_network_fee();
 		assert_has_matching_event!(
 			Test,

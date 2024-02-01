@@ -2,11 +2,11 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{address::ForeignChainAddress, evm::api::EthEnvironmentProvider, UpdateFlipSupply};
-use cf_primitives::{Asset, AssetAmount, EgressId};
+use cf_chains::{evm::api::EthEnvironmentProvider, UpdateFlipSupply};
+use cf_primitives::{AssetAmount, EgressId};
 use cf_traits::{
 	impl_pallet_safe_mode, BackupRewardsNotifier, BlockEmissions, Broadcaster, EgressApi,
-	FlipBurnInfo, Issuance, RewardsDistribution,
+	FlipBurnInfo, Issuance, RewardsDistribution, ScheduledEgressDetails,
 };
 use codec::MaxEncodedLen;
 use frame_support::storage::transactional::with_storage_layer;
@@ -39,8 +39,7 @@ impl_pallet_safe_mode!(PalletSafeMode; emissions_sync_enabled);
 pub mod pallet {
 
 	use super::*;
-	use cf_chains::Chain;
-	use cf_primitives::chains::AnyChain;
+	use cf_chains::{Chain, Ethereum};
 	use frame_support::{pallet_prelude::*, DefaultNoBound};
 	use frame_system::pallet_prelude::OriginFor;
 
@@ -101,8 +100,8 @@ pub mod pallet {
 		/// The interface for accessing the amount of Flip we want burn.
 		type FlipToBurn: FlipBurnInfo;
 
-		/// API for handling asset egress.
-		type EgressHandler: EgressApi<AnyChain>;
+		/// API for handling asset egress. Emissions only interacts with Ethereum.
+		type EgressHandler: EgressApi<Ethereum>;
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;
@@ -316,21 +315,21 @@ impl<T: Config> Pallet<T> {
 				return Err(Error::<T>::FlipBalanceBelowBurnThreshold.into())
 			}
 			T::EgressHandler::schedule_egress(
-				Asset::Flip,
+				cf_chains::assets::eth::Asset::Flip,
 				flip_to_burn,
-				ForeignChainAddress::Eth(T::EthEnvironment::state_chain_gateway_address()),
+				T::EthEnvironment::state_chain_gateway_address(),
 				None,
 			)
 			.map_err(Into::into)
-			.and_then(|result @ (_, egress_amount, egress_fee)| {
-				if egress_amount < BURN_FEE_MULTIPLE * egress_fee {
+			.and_then(|result @ ScheduledEgressDetails { egress_amount, fee_taken, .. }| {
+				if egress_amount < BURN_FEE_MULTIPLE * fee_taken {
 					Err(Error::<T>::FlipBalanceBelowBurnThreshold.into())
 				} else {
 					Ok(result)
 				}
 			})
 		}) {
-			Ok((egress_id, egress_amount, _fee)) => {
+			Ok(ScheduledEgressDetails { egress_id, egress_amount, .. }) => {
 				T::Issuance::burn_offchain(egress_amount.into());
 				Self::deposit_event(Event::NetworkFeeBurned { amount: egress_amount, egress_id });
 			},

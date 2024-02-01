@@ -183,7 +183,10 @@ pub mod pallet {
 
 	use cf_chains::{address::EncodedAddress, AnyChain, Chain};
 	use cf_primitives::{Asset, AssetAmount, BasisPoints, EgressId, SwapId};
-	use cf_traits::{AccountRoleRegistry, CcmSwapIds, Chainflip, EgressApi, SwapDepositHandler};
+	use cf_traits::{
+		AccountRoleRegistry, CcmSwapIds, Chainflip, EgressApi, ScheduledEgressDetails,
+		SwapDepositHandler,
+	};
 
 	use super::*;
 
@@ -421,13 +424,17 @@ pub mod pallet {
 									destination_address.clone(),
 									None,
 								) {
-									Ok((egress_id, egress_amount, egress_fee)) => {
+									Ok(ScheduledEgressDetails {
+										egress_id,
+										egress_amount,
+										fee_taken,
+									}) => {
 										Self::deposit_event(Event::<T>::SwapEgressScheduled {
 											swap_id: swap.swap_id,
 											egress_id,
 											asset: swap.to,
 											amount: egress_amount,
-											fee: egress_fee,
+											fee: fee_taken,
 										});
 									},
 									Err(err) => {
@@ -549,13 +556,14 @@ pub mod pallet {
 			let earned_fees = EarnedBrokerFees::<T>::take(account_id, asset);
 			ensure!(earned_fees != 0, Error::<T>::NoFundsAvailable);
 
-			let (egress_id, egress_amount, _egress_fee) = T::EgressHandler::schedule_egress(
-				asset,
-				earned_fees,
-				destination_address_internal,
-				None,
-			)
-			.map_err(Into::into)?;
+			let ScheduledEgressDetails { egress_id, egress_amount, .. } =
+				T::EgressHandler::schedule_egress(
+					asset,
+					earned_fees,
+					destination_address_internal,
+					None,
+				)
+				.map_err(Into::into)?;
 
 			Self::deposit_event(Event::<T>::WithdrawalRequested {
 				egress_amount,
@@ -850,19 +858,20 @@ pub mod pallet {
 			(ccm_output_principal, ccm_output_gas): (AssetAmount, AssetAmount),
 		) {
 			// Schedule the given ccm to be egressed and deposit a event.
-			if let Ok((egress_id, egress_amount, egress_fee)) = T::EgressHandler::schedule_egress(
-				ccm_swap.destination_asset,
-				ccm_output_principal,
-				ccm_swap.destination_address.clone(),
-				Some((ccm_swap.deposit_metadata, ccm_output_gas)),
-			) {
+			if let Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_taken }) =
+				T::EgressHandler::schedule_egress(
+					ccm_swap.destination_asset,
+					ccm_output_principal,
+					ccm_swap.destination_address.clone(),
+					Some((ccm_swap.deposit_metadata, ccm_output_gas)),
+				) {
 				if let Some(swap_id) = ccm_swap.principal_swap_id {
 					Self::deposit_event(Event::<T>::SwapEgressScheduled {
 						swap_id,
 						egress_id,
 						asset: ccm_swap.destination_asset,
 						amount: egress_amount,
-						fee: egress_fee,
+						fee: fee_taken,
 					});
 				}
 				Self::deposit_event(Event::<T>::CcmEgressScheduled { ccm_id, egress_id });

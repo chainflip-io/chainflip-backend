@@ -31,7 +31,7 @@ use cf_traits::{
 	liquidity::{LpBalanceApi, LpDepositHandler},
 	AssetConverter, Broadcaster, CcmHandler, CcmSwapIds, Chainflip, DepositApi, DepositHandler,
 	EgressApi, EpochInfo, GetBlockHeight, GetTrackedData, NetworkEnvironmentProvider,
-	SwapDepositHandler,
+	ScheduledEgressDetails, SwapDepositHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -1251,7 +1251,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		amount: TargetChainAmount<T, I>,
 		destination_address: TargetChainAccount<T, I>,
 		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, TargetChainAmount<T, I>)>,
-	) -> Result<(EgressId, TargetChainAmount<T, I>, TargetChainAmount<T, I>), Error<T, I>> {
+	) -> Result<ScheduledEgressDetails<T::TargetChain>, Error<T, I>> {
 		let result = EgressIdCounter::<T, I>::try_mutate(|id_counter| {
 			*id_counter = id_counter.saturating_add(1);
 			let egress_id = (<T as Config<I>>::TargetChain::get(), *id_counter);
@@ -1274,7 +1274,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 					});
 
 					// The ccm gas budget is already in terms of the swap asset.
-					Ok((egress_id, amount, gas_budget))
+					Ok(ScheduledEgressDetails::new(*id_counter, amount, gas_budget))
 				},
 				None => {
 					let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
@@ -1282,16 +1282,22 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 
 					if amount_after_fees >= MinimumEgress::<T, I>::get(asset).unwrap_or(One::one())
 					{
+						let egress_details = ScheduledEgressDetails::new(
+							*id_counter,
+							amount_after_fees,
+							fees_withheld,
+						);
+
 						ScheduledEgressFetchOrTransfer::<T, I>::append({
 							FetchOrTransfer::<T::TargetChain>::Transfer {
 								asset,
 								destination_address: destination_address.clone(),
 								amount: amount_after_fees,
-								egress_id,
+								egress_id: egress_details.egress_id,
 							}
 						});
 
-						Ok((egress_id, amount_after_fees, fees_withheld))
+						Ok(egress_details)
 					} else {
 						// TODO: Consider tracking the ignored egresses somewhere.
 						// For example, store the egress and try it again later when fees have
@@ -1302,7 +1308,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 			}
 		});
 
-		if let Ok((_, egress_amount, _)) = result {
+		if let Ok(ScheduledEgressDetails { egress_amount, .. }) = result {
 			// Only the egress_amount will be transferred. The fee was converted to the native
 			// asset and will be consumed in terms of the native asset.
 			DepositBalances::<T, I>::mutate(asset, |tracker| {

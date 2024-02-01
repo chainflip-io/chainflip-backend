@@ -1,7 +1,7 @@
 use super::{MockPallet, MockPalletStorage};
-use crate::EgressApi;
+use crate::{EgressApi, ScheduledEgressDetails};
 use cf_chains::{CcmCfParameters, CcmDepositMetadata, CcmMessage, Chain};
-use cf_primitives::{AssetAmount, EgressId, ForeignChain};
+use cf_primitives::{AssetAmount, EgressCounter};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -73,7 +73,7 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 		amount: <C as Chain>::ChainAmount,
 		destination_address: <C as Chain>::ChainAccount,
 		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <C as Chain>::ChainAmount)>,
-	) -> Result<(EgressId, <C as Chain>::ChainAmount, <C as Chain>::ChainAmount), DispatchError> {
+	) -> Result<ScheduledEgressDetails<C>, DispatchError> {
 		if amount.is_zero() {
 			return Err(DispatchError::from("Ignoring zero egress amount."))
 		}
@@ -102,16 +102,16 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 			})
 		});
 		let len = Self::get_scheduled_egresses().len();
-		Ok((
-			(ForeignChain::Ethereum, len as u64),
-			match maybe_ccm_with_gas_budget {
+		Ok(ScheduledEgressDetails {
+			egress_id: (asset.into(), len as EgressCounter),
+			egress_amount: match maybe_ccm_with_gas_budget {
 				Some(..) => amount,
 				None => amount.saturating_sub(egress_fee),
 			},
-			match maybe_ccm_with_gas_budget {
+			fee_taken: match maybe_ccm_with_gas_budget {
 				Some((_, gas_budget)) => gas_budget,
 				None => egress_fee,
 			},
-		))
+		})
 	}
 }

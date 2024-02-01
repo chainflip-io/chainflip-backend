@@ -5,7 +5,7 @@ use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
 use cf_primitives::{Asset, AssetAmount, ForeignChain};
 use cf_traits::{
 	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi,
-	EgressApi, LpDepositHandler, PoolApi,
+	EgressApi, LpDepositHandler, PoolApi, ScheduledEgressDetails,
 };
 
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult};
@@ -209,20 +209,21 @@ pub mod pallet {
 				// Debit the asset from the account.
 				Self::try_debit_account(&account_id, asset, amount)?;
 
-				let (egress_id, egress_amount, egress_fee) = T::EgressHandler::schedule_egress(
-					asset,
-					amount,
-					destination_address_internal,
-					None,
-				)
-				.map_err(Into::into)?;
+				let ScheduledEgressDetails { egress_id, egress_amount, fee_taken } =
+					T::EgressHandler::schedule_egress(
+						asset,
+						amount,
+						destination_address_internal,
+						None,
+					)
+					.map_err(Into::into)?;
 
 				Self::deposit_event(Event::<T>::WithdrawalEgressScheduled {
 					egress_id,
 					asset,
 					amount: egress_amount,
 					destination_address,
-					fee: egress_fee,
+					fee: fee_taken,
 				});
 			}
 			Ok(())
