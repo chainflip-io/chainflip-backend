@@ -310,8 +310,33 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn burn_flip_network_fee() {
+		match with_storage_layer(|| {
+			let flip_to_burn = T::FlipToBurn::take_flip_to_burn();
+			if flip_to_burn == Zero::zero() {
+				return Err(Error::<T>::FlipBalanceBelowBurnThreshold.into())
+			}
+			T::EgressHandler::schedule_egress(
+				Asset::Flip,
+				flip_to_burn,
+				ForeignChainAddress::Eth(T::EthEnvironment::state_chain_gateway_address()),
+				None,
+			)
+			.map_err(Into::into)
+			.and_then(|result @ (_, egress_amount, egress_fee)| {
+				if egress_amount < BURN_FEE_MULTIPLE * egress_fee {
+					Err(Error::<T>::FlipBalanceBelowBurnThreshold.into())
+				} else {
+					Ok(result)
+				}
+			})
+		}) {
 			Ok((egress_id, egress_amount, _fee)) => {
+				T::Issuance::burn_offchain(egress_amount.into());
 				Self::deposit_event(Event::NetworkFeeBurned { amount: egress_amount, egress_id });
+			},
+			Err(e) => {
+				Self::deposit_event(Event::FlipBurnSkipped { reason: e });
+			},
 		}
 	}
 }

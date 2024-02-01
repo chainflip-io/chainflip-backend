@@ -5,7 +5,7 @@ use cf_chains::{
 	mocks::{MockEthereum, MockEthereumChainCrypto},
 	AnyChain, ApiCall, ChainCrypto, UpdateFlipSupply,
 };
-use cf_primitives::{BroadcastId, FlipBalance, ThresholdSignatureRequestId};
+use cf_primitives::{AssetAmount, BroadcastId, FlipBalance, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
 	mocks::{egress_handler::MockEgressHandler, eth_environment_provider::MockEthEnvironment},
@@ -22,6 +22,7 @@ use scale_info::TypeInfo;
 use sp_arithmetic::Permill;
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
+use sp_std::cell::RefCell;
 
 pub type AccountId = u64;
 
@@ -153,9 +154,13 @@ pub struct MockBroadcast;
 
 pub struct MockFlipToBurn;
 
+thread_local! {
+	pub static AVAILABLE_FLIP_TO_BURN: RefCell<AssetAmount> = RefCell::new(FLIP_TO_BURN);
+}
+
 impl FlipBurnInfo for MockFlipToBurn {
 	fn take_flip_to_burn() -> cf_primitives::AssetAmount {
-		FLIP_TO_BURN
+		AVAILABLE_FLIP_TO_BURN.with(|v| v.replace(0))
 	}
 }
 

@@ -2,7 +2,7 @@
 
 use crate::{mock::*, BlockEmissions, LastSupplyUpdateBlock, Pallet, BURN_FEE_MULTIPLE};
 use cf_primitives::SECONDS_PER_BLOCK;
-use cf_test_utilities::assert_has_event;
+use cf_test_utilities::{assert_has_event, assert_has_matching_event};
 use cf_traits::{mocks::egress_handler::MockEgressHandler, RewardsDistribution, SetSafeMode};
 use frame_support::traits::OnInitialize;
 use pallet_cf_flip::Pallet as Flip;
@@ -175,7 +175,10 @@ fn burn_flip() {
 		let egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
 		assert!(egresses.len() == 1);
 		assert_eq!(egresses.first().expect("should exist").amount(), FLIP_TO_BURN);
-		assert_has_event::<Test>(crate::Event::NetworkFeeBurned { amount: FLIP_TO_BURN }.into());
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::Emissions(crate::Event::NetworkFeeBurned { amount: FLIP_TO_BURN, .. }),
+		);
 	});
 }
 
@@ -203,8 +206,12 @@ fn dont_burn_flip_below_threshold() {
 		const LOW_FEE: u128 = FLIP_TO_BURN / BURN_FEE_MULTIPLE / 2;
 		MockEgressHandler::<AnyChain>::set_fee(LOW_FEE);
 		Pallet::<Test>::burn_flip_network_fee();
-		assert_has_event::<Test>(
-			crate::Event::NetworkFeeBurned { amount: FLIP_TO_BURN - LOW_FEE }.into(),
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::Emissions(crate::Event::NetworkFeeBurned {
+				amount,
+				..
+			}) if *amount == FLIP_TO_BURN - LOW_FEE,
 		);
 		assert_eq!(
 			Flip::<Test>::total_issuance(),
