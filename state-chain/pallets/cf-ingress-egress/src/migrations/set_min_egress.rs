@@ -4,8 +4,7 @@ use frame_support::traits::OnRuntimeUpgrade;
 
 pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 
-// No need to migrate Eth or Dot, as they have no minimum egress for any asset, and the Value query
-// will return 0.
+// No need to migrate Eth or Dot, as they have no explicit minimum egress for any asset.
 impl<T: Config<Instance1>> OnRuntimeUpgrade for Migration<T, Instance1> {
 	fn on_runtime_upgrade() -> Weight {
 		Weight::zero()
