@@ -305,6 +305,7 @@ fn withdraw_broker_fees() {
 			egress_id: (ForeignChain::Ethereum, 1),
 			egress_amount: 200,
 			destination_address: EncodedAddress::Eth(Default::default()),
+			egress_fee: 0,
 		}));
 	});
 }

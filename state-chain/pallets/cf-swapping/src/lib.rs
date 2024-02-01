@@ -309,6 +309,7 @@ pub mod pallet {
 		WithdrawalRequested {
 			egress_id: EgressId,
 			egress_amount: AssetAmount,
+			egress_fee: AssetAmount,
 			destination_address: EncodedAddress,
 		},
 		/// Most likely cause of this error is that there are insufficient
@@ -559,7 +560,7 @@ pub mod pallet {
 			let earned_fees = EarnedBrokerFees::<T>::take(account_id, asset);
 			ensure!(earned_fees != 0, Error::<T>::NoFundsAvailable);
 
-			let ScheduledEgressDetails { egress_id, egress_amount, .. } =
+			let ScheduledEgressDetails { egress_id, egress_amount, fee_taken } =
 				T::EgressHandler::schedule_egress(
 					asset,
 					earned_fees,
@@ -570,6 +571,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::WithdrawalRequested {
 				egress_amount,
+				egress_fee: fee_taken,
 				destination_address,
 				egress_id,
 			});
