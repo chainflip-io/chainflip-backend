@@ -74,7 +74,7 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 		destination_address: <C as Chain>::ChainAccount,
 		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <C as Chain>::ChainAmount)>,
 	) -> Result<ScheduledEgressDetails<C>, DispatchError> {
-		if amount.is_zero() {
+		if amount.is_zero() && maybe_ccm_with_gas_budget.is_none() {
 			return Err(DispatchError::from("Ignoring zero egress amount."))
 		}
 		let egress_fee = <Self as MockPalletStorage>::get_value(b"EGRESS_FEE").unwrap_or_default();
