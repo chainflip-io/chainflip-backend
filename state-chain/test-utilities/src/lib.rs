@@ -50,7 +50,7 @@ macro_rules! assert_event_sequence {
 
 		$(
 			let actual = events.pop().unwrap_or_else(|| panic!("No more events. Expected: {:?}", stringify!($evt)));
-			assert!(matches!(actual, $evt $(if $guard)?), "Expected: {:?}. Actual: {:?}", stringify!($evt $(if $guard)?), actual);
+			assert!(matches!(actual, $evt $(if $guard)?), "Expected: {:#?}. Actual: {:#?}", stringify!($evt $(if $guard)?), actual);
 		)*
 	};
 }
