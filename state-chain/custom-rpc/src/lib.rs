@@ -260,7 +260,7 @@ pub struct IngressEgressEnvironment {
 	pub ingress_fees: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
 	pub egress_fees: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
 	pub witness_safety_margins: HashMap<ForeignChain, Option<u64>>,
-	pub minimum_egress_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+	pub egress_dust_limits: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -975,7 +975,7 @@ where
 		let mut ingress_fees = HashMap::new();
 		let mut egress_fees = HashMap::new();
 		let mut witness_safety_margins = HashMap::new();
-		let mut minimum_egress_amounts = HashMap::new();
+		let mut egress_dust_limits = HashMap::new();
 
 		for asset in Asset::all() {
 			let chain = ForeignChain::from(asset);
@@ -991,9 +991,9 @@ where
 				asset,
 				runtime_api.cf_egress_fee(hash, asset).map_err(to_rpc_error)?.into(),
 			);
-			minimum_egress_amounts.entry(chain).or_insert_with(HashMap::new).insert(
+			egress_dust_limits.entry(chain).or_insert_with(HashMap::new).insert(
 				asset,
-				runtime_api.cf_min_egress_amount(hash, asset).map_err(to_rpc_error)?.into(),
+				runtime_api.cf_egress_dust_limit(hash, asset).map_err(to_rpc_error)?.into(),
 			);
 		}
 
@@ -1009,7 +1009,7 @@ where
 			ingress_fees,
 			egress_fees,
 			witness_safety_margins,
-			minimum_egress_amounts,
+			egress_dust_limits,
 		})
 	}
 
@@ -1397,7 +1397,7 @@ mod test {
 					(ForeignChain::Ethereum, Some(3u64)),
 					(ForeignChain::Polkadot, None),
 				]),
-				minimum_egress_amounts: HashMap::from([
+				egress_dust_limits: HashMap::from([
 					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
 					(
 						ForeignChain::Ethereum,

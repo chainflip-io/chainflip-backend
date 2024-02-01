@@ -1191,23 +1191,23 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_min_egress_amount(asset: Asset) -> AssetAmount {
-			use pallet_cf_ingress_egress::MinimumEgress;
+		fn cf_egress_dust_limit(asset: Asset) -> AssetAmount {
+			use pallet_cf_ingress_egress::EgressDustLimit;
 			use cf_chains::assets::{eth, dot, btc};
 
 			match ForeignChain::from(asset) {
-				ForeignChain::Ethereum => MinimumEgress::<Runtime, EthereumInstance>::get(
+				ForeignChain::Ethereum => EgressDustLimit::<Runtime, EthereumInstance>::get(
 					eth::Asset::try_from(asset)
 						.expect("Conversion must succeed: ForeignChain checked in match clause.")
-				).unwrap_or(1),
-				ForeignChain::Polkadot => MinimumEgress::<Runtime, PolkadotInstance>::get(
+				),
+				ForeignChain::Polkadot => EgressDustLimit::<Runtime, PolkadotInstance>::get(
 					dot::Asset::try_from(asset)
 						.expect("Conversion must succeed: ForeignChain checked in match clause.")
-				).unwrap_or(1),
-				ForeignChain::Bitcoin => MinimumEgress::<Runtime, BitcoinInstance>::get(
+				),
+				ForeignChain::Bitcoin => EgressDustLimit::<Runtime, BitcoinInstance>::get(
 					btc::Asset::try_from(asset)
 						.expect("Conversion must succeed: ForeignChain checked in match clause.")
-				).unwrap_or(1).into(),
+				),
 			}
 		}
 

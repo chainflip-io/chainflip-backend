@@ -13,6 +13,7 @@ mod mock_eth;
 #[cfg(test)]
 mod tests;
 pub mod weights;
+
 use cf_runtime_utilities::log_or_panic;
 use frame_support::{pallet_prelude::OptionQuery, sp_runtime::SaturatedConversion, transactional};
 pub use weights::WeightInfo;
@@ -35,13 +36,11 @@ use cf_traits::{
 };
 use frame_support::{
 	pallet_prelude::*,
-	sp_runtime::{
-		traits::{One, Zero},
-		DispatchError, Saturating, TransactionOutcome,
-	},
+	sp_runtime::{traits::Zero, DispatchError, Saturating, TransactionOutcome},
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
+use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::{vec, vec::Vec};
 
 /// Enum wrapper for fetch and egress requests.
@@ -124,7 +123,7 @@ pub mod pallet {
 	use core::marker::PhantomData;
 	use frame_support::{
 		storage::with_transaction,
-		traits::{EnsureOrigin, IsType},
+		traits::{ConstU128, EnsureOrigin, IsType},
 		DefaultNoBound,
 	};
 	use sp_std::vec::Vec;
@@ -254,7 +253,7 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub deposit_channel_lifetime: TargetChainBlockNumber<T, I>,
 		pub witness_safety_margin: Option<TargetChainBlockNumber<T, I>>,
-		pub min_egresses: Vec<(TargetChainAsset<T, I>, TargetChainAmount<T, I>)>,
+		pub dust_limits: Vec<(TargetChainAsset<T, I>, TargetChainAmount<T, I>)>,
 	}
 
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
@@ -262,7 +261,7 @@ pub mod pallet {
 			Self {
 				deposit_channel_lifetime: Default::default(),
 				witness_safety_margin: None,
-				min_egresses: Default::default(),
+				dust_limits: Default::default(),
 			}
 		}
 	}
@@ -273,8 +272,8 @@ pub mod pallet {
 			DepositChannelLifetime::<T, I>::put(self.deposit_channel_lifetime);
 			WitnessSafetyMargin::<T, I>::set(self.witness_safety_margin);
 
-			for (asset, min_egress) in &self.min_egresses {
-				MinimumEgress::<T, I>::insert(asset, min_egress);
+			for (asset, dust_limit) in self.dust_limits.clone() {
+				EgressDustLimit::<T, I>::set(asset, dust_limit.unique_saturated_into());
 			}
 		}
 	}
@@ -387,13 +386,15 @@ pub mod pallet {
 	pub type MinimumDeposit<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, TargetChainAmount<T, I>, ValueQuery>;
 
-	/// Defines the minimum amount for a single egress i.e. *not* of a batch, but the outputs of
-	/// each individual egress within that batch. Note: The amount must be strictly greater than
-	/// this minimum.
+	/// Defines the minimum amount aka. dust limit for a single egress i.e. *not* of a batch, but
+	/// the outputs of each individual egress within that batch. If not set, defaults to 1.
+	///
+	/// This is required for bitcoin, for example, where any amount below 600 satoshis is considered
+	/// dust and will be rejected by miners.
 	#[pallet::storage]
-	#[pallet::getter(fn minimum_egress)]
-	pub type MinimumEgress<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, TargetChainAmount<T, I>, OptionQuery>;
+	#[pallet::getter(fn egress_dust_limit)]
+	pub type EgressDustLimit<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, u128, ValueQuery, ConstU128<1>>;
 
 	#[pallet::storage]
 	pub type DepositChannelLifetime<T: Config<I>, I: 'static = ()> =
@@ -520,7 +521,7 @@ pub mod pallet {
 		/// Channel ID is too large for Bitcoin address derivation
 		BitcoinChannelIdTooLarge,
 		/// The amount is below the minimum egress amount.
-		BelowMinimumEgressAmount,
+		BelowEgressDustLimit,
 	}
 
 	#[pallet::hooks]
@@ -1280,7 +1281,8 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 					let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
 						Self::withhold_transaction_fee(IngressOrEgress::Egress, asset, amount);
 
-					if amount_after_fees >= MinimumEgress::<T, I>::get(asset).unwrap_or(One::one())
+					if amount_after_fees >=
+						EgressDustLimit::<T, I>::get(asset).unique_saturated_into()
 					{
 						let egress_details = ScheduledEgressDetails::new(
 							*id_counter,
@@ -1302,7 +1304,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 						// TODO: Consider tracking the ignored egresses somewhere.
 						// For example, store the egress and try it again later when fees have
 						// dropped?
-						Err(Error::<T, I>::BelowMinimumEgressAmount)
+						Err(Error::<T, I>::BelowEgressDustLimit)
 					}
 				},
 			}

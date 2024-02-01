@@ -1,8 +1,8 @@
 use crate::{
 	mock_eth::*, Call as PalletCall, ChannelAction, ChannelIdCounter, CrossChainMessage,
 	DepositAction, DepositChannelLookup, DepositChannelPool, DepositIgnoredReason, DepositWitness,
-	DisabledEgressAssets, Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls,
-	FetchOrTransfer, MinimumDeposit, MinimumEgress, Pallet, ScheduledEgressCcm,
+	DisabledEgressAssets, EgressDustLimit, Event as PalletEvent, FailedForeignChainCall,
+	FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit, Pallet, ScheduledEgressCcm,
 	ScheduledEgressFetchOrTransfer, TargetChainAccount,
 };
 use cf_chains::{
@@ -151,13 +151,12 @@ fn egress_below_minimum_deposit_ignored() {
 	new_test_ext().execute_with(|| {
 		const MIN_EGRESS: u128 = 1_000;
 		const AMOUNT: u128 = MIN_EGRESS - 1;
-		const ASSET: eth::Asset = ETH_ETH;
 
-		MinimumEgress::<Test>::insert(ETH_ETH, MIN_EGRESS);
+		EgressDustLimit::<Test>::set(ETH_ETH, MIN_EGRESS);
 
 		assert_err!(
-			IngressEgress::schedule_egress(ASSET, AMOUNT, ALICE_ETH_ADDRESS, None),
-			crate::Error::<Test, _>::BelowMinimumEgressAmount
+			IngressEgress::schedule_egress(ETH_ETH, AMOUNT, ALICE_ETH_ADDRESS, None),
+			crate::Error::<Test, _>::BelowEgressDustLimit
 		);
 
 		assert!(ScheduledEgressFetchOrTransfer::<Test>::get().is_empty());
