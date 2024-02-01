@@ -228,5 +228,6 @@ fn dont_burn_flip_below_threshold() {
 			TOTAL_ISSUANCE - (FLIP_TO_BURN - LOW_FEE),
 			"Expected total issuance to be reduced by net egress amount."
 		);
+		assert_eq!(MockFlipBurnInfo::peek_flip_to_burn(), 0, "Expected flip to be burned.");
 	});
 }
