@@ -388,31 +388,14 @@ impl<
 	}
 }
 
-pub type Vault<TChain, ExtraInfo, ExtraHistoricInfo> = Epoch<
-	(
-		<<TChain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-		<TChain as Chain>::ChainBlockNumber,
-		ExtraInfo,
-	),
-	(
-		<<TChain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-		<TChain as Chain>::ChainBlockNumber,
-		ExtraHistoricInfo,
-	),
->;
+pub type VaultInfo<C, Info> =
+	(<<C as Chain>::ChainCrypto as ChainCrypto>::AggKey, <C as Chain>::ChainBlockNumber, Info);
 
-pub type VaultSource<TChain, ExtraInfo, ExtraHistoricInfo> = EpochSource<
-	(
-		<<TChain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-		<TChain as Chain>::ChainBlockNumber,
-		ExtraInfo,
-	),
-	(
-		<<TChain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-		<TChain as Chain>::ChainBlockNumber,
-		ExtraHistoricInfo,
-	),
->;
+pub type Vault<TChain, ExtraInfo, ExtraHistoricInfo> =
+	Epoch<VaultInfo<TChain, ExtraInfo>, VaultInfo<TChain, ExtraHistoricInfo>>;
+
+pub type VaultSource<TChain, ExtraInfo, ExtraHistoricInfo> =
+	EpochSource<VaultInfo<TChain, ExtraInfo>, VaultInfo<TChain, ExtraHistoricInfo>>;
 
 impl<'a, 'env, StateChainClient: StorageApi + Send + Sync + 'static, Info, HistoricInfo>
 	EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>
@@ -426,16 +409,8 @@ impl<'a, 'env, StateChainClient: StorageApi + Send + Sync + 'static, Info, Histo
 		'a,
 		'env,
 		StateChainClient,
-		(
-			<<TChain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-			<TChain as Chain>::ChainBlockNumber,
-			Info,
-		),
-		(
-			<<TChain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-			<TChain as Chain>::ChainBlockNumber,
-			HistoricInfo,
-		),
+		VaultInfo<TChain, Info>,
+		VaultInfo<TChain, HistoricInfo>,
 	>
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<TChain>,
