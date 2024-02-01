@@ -273,6 +273,9 @@ fn basic_pool_setup_provision_and_swap() {
 		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
 		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(2);
 		state_chain_runtime::AllPalletsWithoutSystem::on_idle(3, Weight::from_parts(1_000_000_000_000, 0));
+		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
+		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(3);
+		state_chain_runtime::AllPalletsWithoutSystem::on_idle(4, Weight::from_parts(1_000_000_000_000, 0));
 
 		let (.., egress_id) = assert_events_match!(
 			Runtime,
@@ -371,6 +374,10 @@ fn can_process_ccm_via_swap_deposit_address() {
 		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(2);
 		state_chain_runtime::AllPalletsWithoutSystem::on_idle(3, Weight::from_parts(1_000_000_000_000, 0));
 
+		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
+		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(3);
+		state_chain_runtime::AllPalletsWithoutSystem::on_idle(4, Weight::from_parts(1_000_000_000_000, 0));
+
 		let (.., egress_id) = assert_events_match!(
 			Runtime,
 			RuntimeEvent::LiquidityPools(
@@ -458,6 +465,10 @@ fn can_process_ccm_via_direct_deposit() {
 		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
 		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(2);
 		state_chain_runtime::AllPalletsWithoutSystem::on_idle(3, Weight::from_parts(1_000_000_000_000, 0));
+
+		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
+		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(3);
+		state_chain_runtime::AllPalletsWithoutSystem::on_idle(4, Weight::from_parts(1_000_000_000_000, 0));
 
 		let (.., egress_id) = assert_events_match!(
 			Runtime,
@@ -555,7 +566,7 @@ fn failed_swaps_are_rolled_back() {
 		System::reset_events();
 
 		// Usdc -> Flip swap will fail. All swaps are stalled.
-		Swapping::on_finalize(1);
+		Swapping::on_finalize(3);
 
 		assert_events_match!(
 			Runtime,
@@ -582,7 +593,7 @@ fn failed_swaps_are_rolled_back() {
 
 		// Subsequent swaps will also fail. No swaps should be processed and the Pool liquidity
 		// shouldn't be drained.
-		Swapping::on_finalize(2);
+		Swapping::on_finalize(4);
 		assert_eq!(
 			Some(eth_price),
 			LiquidityPools::current_price(Asset::Eth, STABLE_ASSET)
@@ -598,7 +609,7 @@ fn failed_swaps_are_rolled_back() {
 		setup_pool_and_accounts(vec![Asset::Flip]);
 		System::reset_events();
 
-		Swapping::on_finalize(3);
+		Swapping::on_finalize(5);
 
 		assert_ne!(
 			Some(eth_price),

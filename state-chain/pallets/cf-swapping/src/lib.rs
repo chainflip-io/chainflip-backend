@@ -31,9 +31,11 @@ pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 const BASIS_POINTS_PER_MILLION: u32 = 100;
+
+const SWAP_DELAY_BLOCKS: u32 = 2;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum SwapType {
@@ -42,7 +44,8 @@ pub enum SwapType {
 	CcmGas(SwapId),
 }
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct Swap {
+#[scale_info(skip_type_params(T))]
+pub struct Swap<T: Config> {
 	pub swap_id: SwapId,
 	pub from: Asset,
 	pub to: Asset,
@@ -51,15 +54,17 @@ pub struct Swap {
 	pub stable_amount: Option<AssetAmount>,
 	pub final_output: Option<AssetAmount>,
 	pub fee_taken: bool,
+	pub execute_at: BlockNumberFor<T>,
 }
 
-impl Swap {
+impl<T: Config> Swap<T> {
 	fn new(
 		swap_id: SwapId,
 		from: Asset,
 		to: Asset,
 		amount: AssetAmount,
 		swap_type: SwapType,
+		execute_at: BlockNumberFor<T>,
 	) -> Self {
 		Self {
 			swap_id,
@@ -70,6 +75,7 @@ impl Swap {
 			stable_amount: if from == STABLE_ASSET { Some(amount) } else { None },
 			final_output: if from == to { Some(amount) } else { None },
 			fee_taken: false,
+			execute_at,
 		}
 	}
 
@@ -187,7 +193,7 @@ pub mod pallet {
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config: Chainflip {
+	pub trait Config: Chainflip + core::fmt::Debug {
 		/// Standard Event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
@@ -221,7 +227,7 @@ pub mod pallet {
 
 	/// Scheduled Swaps
 	#[pallet::storage]
-	pub(crate) type SwapQueue<T: Config> = StorageValue<_, Vec<Swap>, ValueQuery>;
+	pub(crate) type SwapQueue<T: Config> = StorageValue<_, Vec<Swap<T>>, ValueQuery>;
 
 	/// SwapId Counter
 	#[pallet::storage]
@@ -278,6 +284,7 @@ pub mod pallet {
 			origin: SwapOrigin,
 			swap_type: SwapType,
 			broker_commission: Option<AssetAmount>,
+			execute_at: BlockNumberFor<T>,
 		},
 		/// A swap has been executed.
 		SwapExecuted {
@@ -369,14 +376,19 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Execute all swaps in the SwapQueue
-		fn on_finalize(_n: BlockNumberFor<T>) {
+		fn on_finalize(n: BlockNumberFor<T>) {
 			if !T::SafeMode::get().swaps_enabled {
 				return
 			}
 			// Wrap the entire swapping section as a transaction, any failed swap will rollback all
 			// storage changes.
 			if let Err(failed_swap) = with_storage_layer(|| -> Result<(), BatchExecutionError> {
-				let mut swaps = SwapQueue::<T>::take();
+				let all_swaps = SwapQueue::<T>::take();
+
+				let (mut swaps, remaining): (Vec<_>, Vec<_>) =
+					all_swaps.into_iter().partition(|s| s.execute_at <= n);
+
+				SwapQueue::<T>::set(remaining);
 
 				// Swap into Stable asset first.
 				Self::do_group_and_swap(&mut swaps, SwapLeg::ToStable)?;
@@ -577,11 +589,14 @@ pub mod pallet {
 				Self::validate_destination_address(&destination_address, to)?;
 			let swap_origin = SwapOrigin::Vault { tx_hash };
 
+			let execute_at = frame_system::Pallet::<T>::block_number() + SWAP_DELAY_BLOCKS.into();
+
 			let swap_id = Self::schedule_swap_internal(
 				from,
 				to,
 				deposit_amount,
 				SwapType::Swap(destination_address_internal.clone()),
+				execute_at,
 			);
 
 			Self::deposit_event(Event::<T>::SwapScheduled {
@@ -593,6 +608,7 @@ pub mod pallet {
 				origin: swap_origin,
 				swap_type: SwapType::Swap(destination_address_internal),
 				broker_commission: None,
+				execute_at,
 			});
 
 			Ok(())
@@ -717,7 +733,7 @@ pub mod pallet {
 		// and do the swaps of a given direction. Processed and unprocessed swaps are
 		// returned.
 		fn do_group_and_swap(
-			swaps: &mut Vec<Swap>,
+			swaps: &mut Vec<Swap<T>>,
 			direction: SwapLeg,
 		) -> Result<(), BatchExecutionError> {
 			let swap_groups = Self::split_and_group_swaps(swaps, direction);
@@ -733,7 +749,7 @@ pub mod pallet {
 		/// Bundle the given swaps and do a single swap of a given direction. Updates the given
 		/// swaps in-place. If batch swap failed, return the input amount.
 		fn execute_group_of_swaps(
-			swaps: Vec<&mut Swap>,
+			swaps: Vec<&mut Swap<T>>,
 			asset: Asset,
 			direction: SwapLeg,
 		) -> Result<(), AssetAmount> {
@@ -817,9 +833,9 @@ pub mod pallet {
 		/// Split all swaps of a given direction, and group them by asset into a BTreeMap and return
 		/// the rest
 		fn split_and_group_swaps(
-			swaps: &mut Vec<Swap>,
+			swaps: &mut Vec<Swap<T>>,
 			direction: SwapLeg,
-		) -> BTreeMap<Asset, Vec<&mut Swap>> {
+		) -> BTreeMap<Asset, Vec<&mut Swap<T>>> {
 			let mut grouped_swaps = BTreeMap::new();
 
 			for swap in swaps {
@@ -870,6 +886,7 @@ pub mod pallet {
 			to: Asset,
 			amount: AssetAmount,
 			swap_type: SwapType,
+			execute_at: BlockNumberFor<T>,
 		) -> u64 {
 			let swap_id = SwapIdCounter::<T>::mutate(|id| {
 				id.saturating_accrue(1);
@@ -892,7 +909,14 @@ pub mod pallet {
 				});
 			}
 
-			SwapQueue::<T>::append(Swap::new(swap_id, from, to, swap_amount, swap_type));
+			SwapQueue::<T>::append(Swap::new(
+				swap_id,
+				from,
+				to,
+				swap_amount,
+				swap_type,
+				execute_at,
+			));
 
 			swap_id
 		}
@@ -928,11 +952,14 @@ pub mod pallet {
 				deposit_block_height,
 			};
 
+			let execute_at = frame_system::Pallet::<T>::block_number() + SWAP_DELAY_BLOCKS.into();
+
 			let swap_id = Self::schedule_swap_internal(
 				from,
 				to,
 				net_amount,
 				SwapType::Swap(destination_address.clone()),
+				execute_at,
 			);
 			EarnedBrokerFees::<T>::mutate(&broker_id, from, |earned_fees| {
 				earned_fees.saturating_accrue(fee)
@@ -946,6 +973,7 @@ pub mod pallet {
 				origin: swap_origin,
 				swap_type: SwapType::Swap(destination_address),
 				broker_commission: Some(fee),
+				execute_at,
 			});
 
 			swap_id
@@ -996,6 +1024,8 @@ pub mod pallet {
 
 			let mut swap_output = CcmSwapOutput::default();
 
+			let execute_at = frame_system::Pallet::<T>::block_number() + SWAP_DELAY_BLOCKS.into();
+
 			let principal_swap_id =
 				if source_asset == destination_asset || principal_swap_amount.is_zero() {
 					swap_output.principal = Some(principal_swap_amount);
@@ -1006,6 +1036,7 @@ pub mod pallet {
 						destination_asset,
 						principal_swap_amount,
 						SwapType::CcmPrincipal(ccm_id),
+						execute_at,
 					);
 					Self::deposit_event(Event::<T>::SwapScheduled {
 						swap_id,
@@ -1016,6 +1047,7 @@ pub mod pallet {
 						origin: origin.clone(),
 						swap_type: SwapType::CcmPrincipal(ccm_id),
 						broker_commission: None,
+						execute_at,
 					});
 					Some(swap_id)
 				};
@@ -1026,6 +1058,7 @@ pub mod pallet {
 					other_gas_asset,
 					gas_budget,
 					SwapType::CcmGas(ccm_id),
+					execute_at,
 				);
 				Self::deposit_event(Event::<T>::SwapScheduled {
 					swap_id,
@@ -1036,6 +1069,7 @@ pub mod pallet {
 					origin,
 					swap_type: SwapType::CcmGas(ccm_id),
 					broker_commission: None,
+					execute_at,
 				});
 				Some(swap_id)
 			} else {
