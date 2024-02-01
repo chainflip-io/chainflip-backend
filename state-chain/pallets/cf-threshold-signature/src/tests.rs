@@ -34,14 +34,17 @@ use sp_runtime::traits::BlockNumberProvider;
 
 const ALL_CANDIDATES: &[<Test as Chainflip>::ValidatorId] = &[ALICE, BOB, CHARLIE];
 
-macro_rules! assert_last_event {
-	($pat:pat) => {
-		let event = last_event::<Test>();
+// assert an arbitrary number of last events with the last one first and going in reverse from
+// there.
+macro_rules! assert_last_events {
+	($($pat:pat),*) => {
+		let mut events = frame_system::Pallet::<Test>::events();
+		$(let event = events.pop().map(|e| e.event).unwrap();
 		assert!(
 			matches!(event, $crate::mock::RuntimeEvent::EthereumThresholdSigner($pat)),
 			"Unexpected event {:?}",
 			event
-		);
+		);)*
 	};
 }
 
@@ -1004,7 +1007,12 @@ fn keygen_verification_failure() {
 					EthereumThresholdSigner::threshold_signature_response_timeout(),
 			);
 
-			//assert_last_event!(PalletEvent::KeygenVerificationFailure { .. });
+			println!("{:?}", System::events());
+			assert_last_events!(
+				PalletEvent::ThresholdSignatureFailed { .. },
+				PalletEvent::ThresholdDispatchComplete { .. },
+				PalletEvent::KeygenVerificationFailure { .. }
+			);
 			MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, blamed.clone());
 			assert_eq!(
 				EthereumThresholdSigner::status(),
@@ -1344,9 +1352,10 @@ fn do_full_key_rotation() {
 	<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
 	assert_eq!(<EthereumThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
 
-	//assert_last_event!(crate::Event::ThresholdSignatureRequest { .. });
-
-	//assert_last_event!(crate::Event::KeyHandoverSuccess { .. });
+	assert_last_events!(
+		crate::Event::ThresholdSignatureRequest { .. },
+		crate::Event::KeyHandoverSuccess { .. }
+	);
 
 	assert!(matches!(
 		PendingKeyRotation::<Test, _>::get().unwrap(),
@@ -1360,8 +1369,10 @@ fn do_full_key_rotation() {
 		AsyncResult::Ready(KeyRotationStatusOuter::KeyHandoverComplete)
 	);
 
-	//println!("{:?}", System::events());
-	//assert_last_event!(crate::Event::KeyHandoverVerificationSuccess { .. });
+	assert_last_events!(
+		crate::Event::ThresholdDispatchComplete { .. },
+		crate::Event::KeyHandoverVerificationSuccess { .. }
+	);
 
 	assert!(matches!(
 		PendingKeyRotation::<Test, _>::get().unwrap(),
@@ -1382,7 +1393,7 @@ fn do_full_key_rotation() {
 	);
 	MockVaultActivator::set_activation_completed();
 
-	assert_last_event!(crate::Event::KeyRotationCompleted);
+	assert_last_events!(crate::Event::KeyRotationCompleted);
 	assert_eq!(PendingKeyRotation::<Test, _>::get(), Some(KeyRotationStatus::Complete));
 	assert_eq!(
 		EthereumThresholdSigner::status(),
@@ -1450,7 +1461,7 @@ fn keygen_report_failure() {
 
 		MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, vec![CHARLIE]);
 
-		assert_last_event!(crate::Event::KeygenFailure(..));
+		assert_last_events!(crate::Event::KeygenFailure(..));
 
 		// Voting has been cleared.
 		assert!(KeygenSuccessVoters::<Test, _>::iter_keys().next().is_none());
@@ -1605,7 +1616,7 @@ mod key_rotation {
 
 			// Status is complete.
 			assert_eq!(PendingKeyRotation::<Test, _>::get(), Some(KeyRotationStatus::Complete));
-			assert_last_event!(crate::Event::KeyRotationCompleted { .. });
+			assert_last_events!(crate::Event::KeyRotationCompleted { .. });
 		});
 	}
 
@@ -1681,7 +1692,7 @@ mod key_rotation {
 	#[test]
 	fn key_handover_fails_on_key_mismatch() {
 		setup(Ok(BAD_AGG_KEY_POST_HANDOVER)).execute_with(|| {
-			assert_last_event!(crate::Event::KeyHandoverFailure { .. });
+			assert_last_events!(crate::Event::KeyHandoverFailure { .. });
 			assert!(matches!(
 				PendingKeyRotation::<Test, _>::get(),
 				Some(KeyRotationStatus::KeyHandoverFailed { .. })
@@ -1708,7 +1719,11 @@ mod key_rotation {
 					EthereumThresholdSigner::threshold_signature_response_timeout(),
 			);
 
-			//assert_last_event!(crate::Event::KeyHandoverVerificationFailure { .. });
+			assert_last_events!(
+				PalletEvent::ThresholdSignatureFailed { .. },
+				PalletEvent::ThresholdDispatchComplete { .. },
+				PalletEvent::KeyHandoverVerificationFailure { .. }
+			);
 
 			MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, offenders.clone());
 
@@ -1744,7 +1759,7 @@ fn set_keygen_response_timeout_works() {
 		EthereumThresholdSigner::set_keygen_response_timeout(RuntimeOrigin::root(), new_timeout)
 			.unwrap();
 
-		assert_last_event!(crate::Event::KeygenResponseTimeoutUpdated { .. });
+		assert_last_events!(crate::Event::KeygenResponseTimeoutUpdated { .. });
 		assert_eq!(KeygenResponseTimeout::<Test, _>::get(), new_timeout)
 	});
 }

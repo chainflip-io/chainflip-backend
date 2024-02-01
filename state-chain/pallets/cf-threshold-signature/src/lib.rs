@@ -739,7 +739,7 @@ pub mod pallet {
 							// For key handover we also check that the key is the same as before
 							|reported_new_agg_key| {
 								let current_key = Self::active_epoch_key()
-									.expect("key must exist during handover")
+									.expect("In order to handover the key from the last epoch that key must already exist")
 									.key;
 
 								if T::TargetChainCrypto::handover_key_matches(

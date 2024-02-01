@@ -461,7 +461,7 @@ impl<'a, 'env, StateChainClient: StorageApi + Send + Sync + 'static, Info, Histo
 						>>(block_hash, &epoch)
 						.await
 						.expect(STATE_CHAIN_CONNECTION)
-						.expect("since the block start number for this epoch exists, the vault key for this epoch should also exist. Both the vault key and the vault start block number are set in the same function (activate_vaults() in vault_rotator.rs"),
+						.expect("since the block start number for this epoch exists, the vault key for this epoch should also exist. Both the vault key and the vault start block number are set in the same function (activate_vaults() in vault_rotator.rs)"),
 						vault_start_block_number, info))
 					}
 					None => None,
