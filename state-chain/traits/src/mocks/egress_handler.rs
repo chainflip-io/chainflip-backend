@@ -4,7 +4,10 @@ use cf_chains::{CcmCfParameters, CcmDepositMetadata, CcmMessage, Chain};
 use cf_primitives::{AssetAmount, EgressId, ForeignChain};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
-use sp_runtime::{traits::Saturating, DispatchError};
+use sp_runtime::{
+	traits::{Saturating, Zero},
+	DispatchError,
+};
 use sp_std::marker::PhantomData;
 
 pub struct MockEgressHandler<C>(PhantomData<C>);
@@ -71,6 +74,9 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 		destination_address: <C as Chain>::ChainAccount,
 		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <C as Chain>::ChainAmount)>,
 	) -> Result<(EgressId, <C as Chain>::ChainAmount, <C as Chain>::ChainAmount), DispatchError> {
+		if amount.is_zero() {
+			return Err(DispatchError::from("Ignoring zero egress amount."))
+		}
 		let egress_fee = <Self as MockPalletStorage>::get_value(b"EGRESS_FEE").unwrap_or_default();
 		<Self as MockPalletStorage>::mutate_value(b"SCHEDULED_EGRESSES", |storage| {
 			if storage.is_none() {

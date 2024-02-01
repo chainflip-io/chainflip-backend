@@ -1382,9 +1382,10 @@ fn can_handle_swaps_with_zero_outputs() {
 			);
 
 			assert_eq!(SwapQueue::<Test>::decode_len(), None);
-			// Egress is still scheduled when egress is 0, they are filtered within the
-			// ingress-egress pallet.
-			assert_eq!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().len(), 2);
+			assert!(
+				MockEgressHandler::<AnyChain>::get_scheduled_egresses().is_empty(),
+				"No egresses should be scheduled."
+			);
 		});
 }
 
