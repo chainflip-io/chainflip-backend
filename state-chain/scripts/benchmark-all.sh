@@ -1,7 +1,7 @@
 #!/bin/bash
 binary=./target/${1:-release}/chainflip-node
-steps=5
-repeat=1
+steps=20
+repeat=10
 
 while [ $# -gt 0 ]; do
     if [[ $1 == "--"* ]]; then
