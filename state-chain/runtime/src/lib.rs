@@ -898,30 +898,29 @@ pub type PalletExecutionOrder = (
 // We use the executive pallet because the `pre_upgrade` and `post_upgrade` hooks are noops
 // for tuple migrations (like these).
 type PalletMigrations = (
-	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	pallet_cf_environment::migrations::PalletMigration<Runtime>,
 	pallet_cf_funding::migrations::PalletMigration<Runtime>,
 	// pallet_cf_validator::migrations::PalletMigration<Runtime>,
-	pallet_cf_governance::migrations::PalletMigration<Runtime>,
-	pallet_cf_tokenholder_governance::migrations::PalletMigration<Runtime>,
+	// pallet_cf_governance::migrations::PalletMigration<Runtime>,
+	// pallet_cf_tokenholder_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance1>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance2>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance3>,
-	pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance1>,
-	pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance2>,
-	pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance3>,
+	// pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance1>,
+	// pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance2>,
+	// pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance3>,
 	// pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance1>,
 	// pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance2>,
 	// pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance3>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance1>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance2>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance3>,
-	pallet_cf_swapping::migrations::PalletMigration<Runtime>,
-	pallet_cf_lp::migrations::PalletMigration<Runtime>,
+	// pallet_cf_swapping::migrations::PalletMigration<Runtime>,
+	// pallet_cf_lp::migrations::PalletMigration<Runtime>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance1>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance2>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance3>,
-	pallet_cf_pools::migrations::PalletMigration<Runtime>,
+	// pallet_cf_pools::migrations::PalletMigration<Runtime>,
 );
 
 #[cfg(feature = "runtime-benchmarks")]
