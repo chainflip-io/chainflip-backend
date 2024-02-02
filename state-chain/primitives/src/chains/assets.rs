@@ -148,16 +148,6 @@ macro_rules! chain_assets {
 				}
 			}
 
-			impl AsRef<any::Asset> for Asset {
-				fn as_ref(&self) -> &any::Asset {
-					match self {
-						$(
-							Asset::$asset => &any::Asset::$asset,
-						)+
-					}
-				}
-			}
-
 			impl TryFrom<any::Asset> for Asset {
 				type Error = AssetError;
 
