@@ -83,7 +83,7 @@ get-workflow() {
       export BINARY_ROOT_PATH=${BINARY_ROOT_PATH:-"./target/debug"}
     fi
 
-    echo "Do you want to start ingress-egress-tracker? (Type YES or leave empty)"
+    echo "Do you want to start ingress-egress-tracker? (Type y or leave empty)"
     read -p "(default: NO) " START_TRACKER
     echo
     export START_TRACKER=${START_TRACKER}
@@ -188,7 +188,7 @@ build-localnet() {
   echo "🤑 Starting LP API ..."
   KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-lp-api.sh $BINARY_ROOT_PATH
 
-  if [[ $START_TRACKER == "YES" ]]; then
+  if [[ $START_TRACKER == "y" ]]; then
     echo "👁 Starting Ingress-Egress-tracker ..."
     KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-ingress-egress-tracker.sh $BINARY_ROOT_PATH
   fi
