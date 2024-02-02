@@ -12,7 +12,7 @@ use crate::{
 		test_helpers::test_header,
 	},
 };
-use cf_chains::{evm::Transaction, Chain, ChainCrypto};
+use cf_chains::{evm::Transaction, ChainCrypto};
 use cf_primitives::{AccountRole, CeremonyId, GENESIS_EPOCH};
 use futures::FutureExt;
 use mockall::predicate::eq;
@@ -279,12 +279,12 @@ mod dot_signing {
 async fn should_handle_keygen_request<C, I>()
 where
 	C: ChainSigning<
-			ChainCrypto = <<Runtime as pallet_cf_vaults::Config<I>>::Chain as Chain>::ChainCrypto,
+			ChainCrypto = <Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChainCrypto,
 		> + Send
 		+ Sync,
 	I: CryptoCompat<C, C::ChainCrypto> + 'static + Send + Sync,
-	Runtime: pallet_cf_vaults::Config<I>,
-	RuntimeCall: std::convert::From<pallet_cf_vaults::Call<Runtime, I>>,
+	Runtime: pallet_cf_threshold_signature::Config<I>,
+	RuntimeCall: std::convert::From<pallet_cf_threshold_signature::Call<Runtime, I>>,
 {
 	let first_ceremony_id = 1;
 	let our_account_id = AccountId32::new([0; 32]);
@@ -297,7 +297,7 @@ where
 		.times(2)
 		.return_const(our_account_id.clone());
 	state_chain_client
-		.expect_finalize_signed_extrinsic::<pallet_cf_vaults::Call<Runtime, I>>()
+		.expect_finalize_signed_extrinsic::<pallet_cf_threshold_signature::Call<Runtime, I>>()
 		.once()
 		.return_once(|_| {
 			(
@@ -380,8 +380,8 @@ mod dot_keygen {
 #[tokio::test]
 async fn should_handle_key_handover_request()
 where
-	Runtime: pallet_cf_vaults::Config<BitcoinInstance>,
-	RuntimeCall: std::convert::From<pallet_cf_vaults::Call<Runtime, BitcoinInstance>>,
+	Runtime: pallet_cf_threshold_signature::Config<BitcoinInstance>,
+	RuntimeCall: std::convert::From<pallet_cf_threshold_signature::Call<Runtime, BitcoinInstance>>,
 {
 	use multisig::bitcoin::BtcCryptoScheme;
 
@@ -424,7 +424,8 @@ where
 				.boxed()
 		});
 	state_chain_client
-		.expect_finalize_signed_extrinsic::<pallet_cf_vaults::Call<Runtime, BitcoinInstance>>()
+		.expect_finalize_signed_extrinsic::<pallet_cf_threshold_signature::Call<Runtime, BitcoinInstance>>(
+		)
 		.once()
 		.return_once(|_| {
 			(
@@ -648,7 +649,7 @@ async fn test_get_ceremony_id_counters_without_events() {
 	// Because the block has no events, we expect it to grab the ceremony id counter for each chain
 	// from storage.
 	state_chain_client
-		.expect_storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+		.expect_storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
 		>>()
@@ -656,7 +657,7 @@ async fn test_get_ceremony_id_counters_without_events() {
 		.once()
 		.return_once(|_| Ok(ETH_CEREMONY_ID_COUNTER));
 	state_chain_client
-		.expect_storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+		.expect_storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::PolkadotInstance,
 		>>()
@@ -664,7 +665,7 @@ async fn test_get_ceremony_id_counters_without_events() {
 		.once()
 		.return_once(|_| Ok(DOT_CEREMONY_ID_COUNTER));
 	state_chain_client
-		.expect_storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+		.expect_storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::BitcoinInstance,
 		>>()

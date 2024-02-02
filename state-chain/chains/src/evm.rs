@@ -34,6 +34,7 @@ impl ChainCrypto for EvmCrypto {
 	// We can't use the hash since we don't know it for the Evm, as we must select an individual
 	// authority to sign the transaction.
 	type TransactionOutId = Self::ThresholdSignature;
+	type KeyHandoverIsRequired = ConstBool<false>;
 	type GovKey = Address;
 
 	fn verify_threshold_signature(

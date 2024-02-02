@@ -2,8 +2,11 @@
 
 use super::*;
 
-use cf_primitives::FLIPPERINOS_PER_FLIP;
-use cf_traits::{AccountRoleRegistry, SafeMode, SetSafeMode, VaultStatus};
+use pallet_cf_funding::Config as FundingConfig;
+use pallet_cf_reputation::Config as ReputationConfig;
+use pallet_session::Config as SessionConfig;
+
+use cf_traits::{AccountRoleRegistry, KeyRotationStatusOuter, SafeMode, SetSafeMode};
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
@@ -12,9 +15,6 @@ use frame_support::{
 	traits::{OnNewAccount, UnfilteredDispatchable},
 };
 use frame_system::{pallet_prelude::OriginFor, Pallet as SystemPallet, RawOrigin};
-use pallet_cf_funding::Config as FundingConfig;
-use pallet_cf_reputation::Config as ReputationConfig;
-use pallet_session::Config as SessionConfig;
 use sp_application_crypto::RuntimeAppPublic;
 use sp_std::vec;
 
@@ -275,7 +275,7 @@ mod benchmarks {
 		try_start_keygen::<T>(a, 50, 1);
 
 		// Simulate success.
-		T::VaultRotator::set_status(AsyncResult::Ready(VaultStatus::KeygenComplete));
+		T::KeyRotator::set_status(AsyncResult::Ready(KeyRotationStatusOuter::KeygenComplete));
 
 		// This assertion ensures we are using the correct weight parameter.
 		assert_eq!(
@@ -310,7 +310,7 @@ mod benchmarks {
 
 		assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeygensInProgress(..)));
 
-		T::VaultRotator::set_status(AsyncResult::Ready(VaultStatus::KeygenComplete));
+		T::KeyRotator::set_status(AsyncResult::Ready(KeyRotationStatusOuter::KeygenComplete));
 
 		Pallet::<T>::on_initialize(block);
 
@@ -319,11 +319,11 @@ mod benchmarks {
 			RotationPhase::KeyHandoversInProgress(..)
 		));
 
-		T::VaultRotator::set_status(AsyncResult::Ready(VaultStatus::KeyHandoverComplete));
+		T::KeyRotator::set_status(AsyncResult::Ready(KeyRotationStatusOuter::KeyHandoverComplete));
 
 		Pallet::<T>::on_initialize(block);
 
-		T::VaultRotator::set_status(AsyncResult::Ready(VaultStatus::RotationComplete));
+		T::KeyRotator::set_status(AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete));
 
 		#[block]
 		{

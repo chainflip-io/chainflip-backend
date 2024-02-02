@@ -3,7 +3,7 @@ use super::*;
 use crate::threshold_signing::{BtcThresholdSigner, DotThresholdSigner, EthThresholdSigner};
 
 use cf_primitives::{AccountRole, BlockNumber, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
-use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo, VaultRotator};
+use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo, KeyRotator};
 use cfe_events::{KeyHandoverRequest, ThresholdSignatureRequest};
 use chainflip_node::test_account_from_seed;
 use codec::Encode;
@@ -340,8 +340,8 @@ impl Engine {
 					CfeEvent::EthKeygenRequest(req) =>
 						if req.participants.contains(&self.node_id) {
 							queue_dispatch_extrinsic(
-								RuntimeCall::EthereumVault(
-									pallet_cf_vaults::Call::report_keygen_outcome {
+								RuntimeCall::EthereumThresholdSigner(
+									pallet_cf_threshold_signature::Call::report_keygen_outcome {
 										ceremony_id: req.ceremony_id,
 										reported_outcome: Ok(self
 											.eth_threshold_signer
@@ -355,8 +355,8 @@ impl Engine {
 					CfeEvent::DotKeygenRequest(req) =>
 						if req.participants.contains(&self.node_id) {
 							queue_dispatch_extrinsic(
-								RuntimeCall::PolkadotVault(
-									pallet_cf_vaults::Call::report_keygen_outcome {
+								RuntimeCall::PolkadotThresholdSigner(
+									pallet_cf_threshold_signature::Call::report_keygen_outcome {
 										ceremony_id: req.ceremony_id,
 										reported_outcome: Ok(self
 											.dot_threshold_signer
@@ -370,8 +370,8 @@ impl Engine {
 					CfeEvent::BtcKeygenRequest(req) =>
 						if req.participants.contains(&self.node_id) {
 							queue_dispatch_extrinsic(
-								RuntimeCall::BitcoinVault(
-									pallet_cf_vaults::Call::report_keygen_outcome {
+								RuntimeCall::BitcoinThresholdSigner(
+									pallet_cf_threshold_signature::Call::report_keygen_outcome {
 										ceremony_id: req.ceremony_id,
 										reported_outcome: Ok(self
 											.btc_threshold_signer
@@ -394,8 +394,8 @@ impl Engine {
 							.collect::<BTreeSet<_>>();
 						if all_participants.contains(&self.node_id) {
 							queue_dispatch_extrinsic(
-								RuntimeCall::BitcoinVault(
-									pallet_cf_vaults::Call::report_key_handover_outcome {
+								RuntimeCall::BitcoinThresholdSigner(
+									pallet_cf_threshold_signature::Call::report_key_handover_outcome {
 										ceremony_id: *ceremony_id,
 										reported_outcome: Ok(self
 											.btc_threshold_signer

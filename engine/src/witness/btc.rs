@@ -53,11 +53,8 @@ pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoric
 			state_chain_runtime::RuntimeCall::BitcoinBroadcaster(
 				pallet_cf_broadcast::Call::transaction_succeeded {
 					tx_out_id: tx_hash,
-					signer_id: DepositAddress::new(
-						epoch.info.0.public_key.current,
-						CHANGE_ADDRESS_SALT,
-					)
-					.script_pubkey(),
+					signer_id: DepositAddress::new(epoch.info.0.current, CHANGE_ADDRESS_SALT)
+						.script_pubkey(),
 					tx_fee: tx.fee.unwrap_or_default().to_sat(),
 					tx_metadata: (),
 				},
@@ -111,7 +108,7 @@ where
 		.logging("chain tracking")
 		.spawn(scope);
 
-	let vaults = epoch_source.vaults().await;
+	let vaults = epoch_source.vaults::<cf_chains::Bitcoin>().await;
 
 	let block_source = btc_source
 		.then({

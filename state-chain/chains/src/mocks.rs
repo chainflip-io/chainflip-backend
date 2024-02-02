@@ -250,6 +250,7 @@ impl ChainCrypto for MockEthereumChainCrypto {
 	type TransactionInId = [u8; 4];
 	// TODO: Use a different type here? So we can get better coverage
 	type TransactionOutId = [u8; 4];
+	type KeyHandoverIsRequired = MockKeyHandoverIsRequired;
 	type GovKey = [u8; 32];
 
 	fn verify_threshold_signature(
