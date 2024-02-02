@@ -15,10 +15,12 @@ function loadContractCached(abiPath: string) {
   };
 }
 const CF_ETH_CONTRACT_ABI_TAG = 'v1.0.0';
-export const getErc20abi = loadContractCached('../eth-contract-abis/IERC20.json');
+export const getErc20abi = loadContractCached(
+  '../contract-interfaces/eth-contract-abis/IERC20.json',
+);
 export const getGatewayAbi = loadContractCached(
-  `../eth-contract-abis/${CF_ETH_CONTRACT_ABI_TAG}/IStateChainGateway.json`,
+  `../contract-interfaces/eth-contract-abis/${CF_ETH_CONTRACT_ABI_TAG}/IStateChainGateway.json`,
 );
 export const getCFTesterAbi = loadContractCached(
-  `../eth-contract-abis/${CF_ETH_CONTRACT_ABI_TAG}/CFTester.json`,
+  `../contract-interfaces/eth-contract-abis/${CF_ETH_CONTRACT_ABI_TAG}/CFTester.json`,
 );

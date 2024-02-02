@@ -131,7 +131,7 @@ impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
 		system: Default::default(),
-		ingress_egress: IngressEgressConfig { deposit_channel_lifetime: 100, witness_safety_margin: Some(2) },
+		ingress_egress: IngressEgressConfig { deposit_channel_lifetime: 100, witness_safety_margin: Some(2), dust_limits: Default::default() },
 	},
 	|| {
 		cf_traits::mocks::tracked_data_provider::TrackedDataProvider::<Ethereum>::set_tracked_data(
@@ -155,7 +155,7 @@ pub trait RequestAddressAndDeposit {
 }
 
 impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
-	/// Request desposit addresses and complete the deposit of funds into those addresses.
+	/// Request deposit addresses and complete the deposit of funds into those addresses.
 	#[track_caller]
 	fn request_address_and_deposit(
 		self,

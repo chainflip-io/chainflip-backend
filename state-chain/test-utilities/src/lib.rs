@@ -23,14 +23,16 @@ pub fn assert_has_event<T: frame_system::Config>(event: <T as frame_system::Conf
 
 #[macro_export]
 macro_rules! assert_has_matching_event {
-	(( $runtime:ty, $event:pat )) => {
-		let events = frame_system::Pallet::<T>::events()
+	( $runtime:ty, $event:pat $(if $guard:expr )? $(,)? ) => {
+		let events = frame_system::Pallet::<$runtime>::events()
 			.into_iter()
 			.map(|e| e.event)
 			.collect::<Vec<_>>();
 		assert!(
-			events.iter().any(|e| matches!(e, $event)),
-			"No event matching {stringify!($event):#?} found in {events:#?}",
+			events.iter().any(|e| matches!(e, $event $(if $guard)?)),
+			"No event matching {:#?} found in {:#?}",
+			stringify!($event $(if $guard)?),
+			events,
 		);
 	};
 }
@@ -48,7 +50,7 @@ macro_rules! assert_event_sequence {
 
 		$(
 			let actual = events.pop().unwrap_or_else(|| panic!("No more events. Expected: {:?}", stringify!($evt)));
-			assert!(matches!(actual, $evt $(if $guard)?), "Expected: {:?}. Actual: {:?}", stringify!($evt $(if $guard)?), actual);
+			assert!(matches!(actual, $evt $(if $guard)?), "Expected: {:#?}. Actual: {:#?}", stringify!($evt $(if $guard)?), actual);
 		)*
 	};
 }

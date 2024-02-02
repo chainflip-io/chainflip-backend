@@ -119,6 +119,10 @@ impl LpBalanceApi for MockBalance {
 		}
 		Ok(())
 	}
+
+	fn asset_balances(_who: &Self::AccountId) -> Vec<(Asset, AssetAmount)> {
+		unreachable!()
+	}
 }
 
 impl_mock_runtime_safe_mode!(pools: PalletSafeMode);

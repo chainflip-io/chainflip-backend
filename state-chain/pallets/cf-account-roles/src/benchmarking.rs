@@ -1,31 +1,44 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
+use frame_benchmarking::v2::*;
+use frame_support::{assert_ok, traits::UnfilteredDispatchable};
 
-use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::traits::UnfilteredDispatchable;
+#[benchmarks]
+mod benchmarks {
+	use super::*;
+	use sp_std::vec;
 
-benchmarks! {
-	enable_swapping {
+	#[benchmark]
+	fn enable_swapping() {
 		let origin = <T as Config>::EnsureGovernance::try_successful_origin().unwrap();
-		let call = Call::<T>::enable_swapping{};
-	}: {
-		call.dispatch_bypass_filter(origin)?;
-	}
-	verify {
+		let call = Call::<T>::enable_swapping {};
+
+		#[block]
+		{
+			assert_ok!(call.dispatch_bypass_filter(origin));
+		}
+
 		assert!(SwappingEnabled::<T>::get());
 	}
-	gov_register_account_role {
+
+	#[benchmark]
+	fn gov_register_account_role() {
 		let origin = <T as Config>::EnsureGovernance::try_successful_origin().unwrap();
 		let caller: T::AccountId = whitelisted_caller();
 		Pallet::<T>::on_new_account(&caller);
+		let call = Call::<T>::gov_register_account_role {
+			account: caller.clone(),
+			role: AccountRole::Broker,
+		};
 
-		let call = Call::<T>::gov_register_account_role{ account: caller.clone(), role: AccountRole::Broker };
-	}: {
-		call.dispatch_bypass_filter(origin)?;
-	}
-	verify {
+		#[block]
+		{
+			assert_ok!(call.dispatch_bypass_filter(origin));
+		}
+
 		assert_eq!(AccountRoles::<T>::get(&caller), Some(AccountRole::Broker));
 	}
+
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }

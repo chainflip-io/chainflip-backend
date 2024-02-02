@@ -88,19 +88,12 @@ async function testGasLimitSwap(
     messageMetadata,
   );
 
-  // If sourceAsset is ETH then deposited gasAmount won't be swapped, so we need to observe the principal swap
-  // instead. In any other scenario, including when destAsset is ETH, both principal and gasLimitBudget are being swapped.
-  let swapScheduledHandle;
-  if (sourceAsset === Assets.ETH) {
-    swapScheduledHandle = observeSwapScheduled(
-      sourceAsset,
-      destAsset,
-      channelId,
-      SwapType.CcmPrincipal,
-    );
-  } else {
-    swapScheduledHandle = observeSwapScheduled(sourceAsset, Assets.ETH, channelId, SwapType.CcmGas);
-  }
+  const swapScheduledHandle = observeSwapScheduled(
+    sourceAsset,
+    destAsset,
+    channelId,
+    SwapType.CcmPrincipal,
+  );
 
   // SwapExecuted is emitted at the same time as swapScheduled so we can't wait for swapId to be known.
   const swapIdToEgressAmount: { [key: string]: string } = {};
