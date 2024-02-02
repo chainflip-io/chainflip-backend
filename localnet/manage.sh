@@ -182,6 +182,9 @@ build-localnet() {
   echo "🤑 Starting LP API ..."
   KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-lp-api.sh $BINARY_ROOT_PATH
 
+  echo "🤑 Starting Ingress-Egress-tracker ..."
+  KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-ingress-egress-tracker.sh $BINARY_ROOT_PATH
+
 
   print_success
 }
@@ -242,7 +245,7 @@ yeet() {
 
 logs() {
   echo "🤖 Which service would you like to tail?"
-  select SERVICE in node engine broker lp polkadot geth bitcoin solana poster sequencer staker debug all; do
+  select SERVICE in node engine broker lp polkadot geth bitcoin solana poster sequencer staker debug redis all; do
     if [[ $SERVICE == "all" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow
       tail -f /tmp/chainflip/chainflip-*.log
@@ -258,6 +261,9 @@ logs() {
     fi
     if [[ $SERVICE == "poster" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow poster
+    fi
+    if [[ $SERVICE == "redis" ]]; then
+      docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow redis
     fi
     if [[ $SERVICE == "sequencer" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow sequencer
