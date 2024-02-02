@@ -49,4 +49,8 @@ impl LpBalanceApi for MockBalance {
 	) -> DispatchResult {
 		Ok(())
 	}
+
+	fn asset_balances(_who: &Self::AccountId) -> Vec<(Asset, AssetAmount)> {
+		unreachable!()
+	}
 }

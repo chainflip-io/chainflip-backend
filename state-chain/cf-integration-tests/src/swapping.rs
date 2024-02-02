@@ -215,6 +215,14 @@ fn setup_pool_and_accounts(assets: Vec<Asset>) {
 	}
 }
 
+fn get_asset_balance(who: &AccountId, asset: Asset) -> u128 {
+	LiquidityProvider::asset_balances(who)
+		.iter()
+		.filter(|asset_balance| asset_balance.0 == asset)
+		.map(|asset_balance| asset_balance.1)
+		.sum()
+}
+
 #[test]
 fn basic_pool_setup_provision_and_swap() {
 	super::genesis::default().build().execute_with(|| {
@@ -234,6 +242,8 @@ fn basic_pool_setup_provision_and_swap() {
 		set_range_order(&DORIS, Asset::Flip, Asset::Usdc, 0, Some(-10..10), 1_000_000);
 
 		new_account(&ZION, AccountRole::Broker);
+
+		let usdc_balance_before = get_asset_balance(&DORIS, Asset::Usdc);
 
 		assert_ok!(Swapping::request_swap_deposit_address(
 			RuntimeOrigin::signed(ZION.clone()),
@@ -317,6 +327,9 @@ fn basic_pool_setup_provision_and_swap() {
 				},
 			) if egress_ids.contains(&egress_id) => ()
 		);
+
+		let usdc_balance_after = get_asset_balance(&DORIS, Asset::Usdc);
+		assert!(usdc_balance_after > usdc_balance_before, "Fees should be collected");
 	});
 }
 

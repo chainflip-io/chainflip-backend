@@ -894,6 +894,11 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		}
 		HistoricalAuthorities::<T>::insert(epoch_index, new_authorities);
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_authorities(authorities: BTreeSet<Self::ValidatorId>) {
+		CurrentAuthorities::<T>::put(authorities);
+	}
 }
 
 /// Indicates to the session module if the session should be rotated.

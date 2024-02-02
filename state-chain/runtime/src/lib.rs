@@ -29,7 +29,7 @@ use cf_chains::{
 	TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, NetworkEnvironment};
-use cf_traits::GetTrackedData;
+use cf_traits::{GetTrackedData, LpBalanceApi};
 use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
@@ -591,7 +591,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type CompoundingInterval = ConstU32<COMPOUNDING_INTERVAL>;
 	type EthEnvironment = EthEnvironment;
 	type FlipToBurn = LiquidityPools;
-	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
+	type EgressHandler = pallet_cf_ingress_egress::Pallet<Runtime, EthereumInstance>;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
 }
@@ -1019,6 +1019,9 @@ impl_runtime_apis! {
 				})
 				.collect()
 		}
+		fn cf_asset_balances(account_id: AccountId) -> Vec<(Asset, u128)> {
+			LiquidityProvider::asset_balances(&account_id)
+		}
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()
 		}
@@ -1188,6 +1191,26 @@ impl_runtime_apis! {
 					btc::Asset::try_from(asset)
 						.expect("Conversion must succeed: ForeignChain checked in match clause.")
 				).into(),
+			}
+		}
+
+		fn cf_egress_dust_limit(asset: Asset) -> AssetAmount {
+			use pallet_cf_ingress_egress::EgressDustLimit;
+			use cf_chains::assets::{eth, dot, btc};
+
+			match ForeignChain::from(asset) {
+				ForeignChain::Ethereum => EgressDustLimit::<Runtime, EthereumInstance>::get(
+					eth::Asset::try_from(asset)
+						.expect("Conversion must succeed: ForeignChain checked in match clause.")
+				),
+				ForeignChain::Polkadot => EgressDustLimit::<Runtime, PolkadotInstance>::get(
+					dot::Asset::try_from(asset)
+						.expect("Conversion must succeed: ForeignChain checked in match clause.")
+				),
+				ForeignChain::Bitcoin => EgressDustLimit::<Runtime, BitcoinInstance>::get(
+					btc::Asset::try_from(asset)
+						.expect("Conversion must succeed: ForeignChain checked in match clause.")
+				),
 			}
 		}
 

@@ -24,10 +24,6 @@ mod benchmarks {
 
 		T::EpochInfo::add_authority_info_for_epoch(epoch, BTreeSet::from([validator_id]));
 
-		// TODO: currently we don't measure the actual execution path
-		// we need to set the threshold to 1 to do this.
-		// Unfortunately, this is blocked by the fact that we can't pass
-		// a witness call here - for now.
 		#[extrinsic_call]
 		witness_at_epoch(RawOrigin::Signed(caller.clone()), Box::new(call.clone()), epoch);
 
@@ -46,7 +42,7 @@ mod benchmarks {
 
 		#[block]
 		{
-			let _ = Votes::<T>::clear_prefix(0, u32::MAX, None);
+			let _old_votes = Votes::<T>::clear_prefix(0, u32::MAX, None);
 		}
 	}
 
@@ -56,7 +52,7 @@ mod benchmarks {
 
 		#[block]
 		{
-			let _ = crate::Pallet::<T>::on_idle(Default::default(), Default::default());
+			let _weight = crate::Pallet::<T>::on_idle(Default::default(), Default::default());
 		}
 	}
 
