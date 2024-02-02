@@ -1,9 +1,9 @@
-use crate::{eth::api::EthereumContract, evm::SchnorrVerificationComponents, *};
+use crate::{eth::Address as EvmAddress, evm::SchnorrVerificationComponents, *};
 use common::*;
 use ethabi::{Address, ParamType, Token, Uint};
 use frame_support::sp_runtime::traits::{Hash, Keccak256};
 
-use super::tokenizable::Tokenizable;
+use super::{tokenizable::Tokenizable, EvmFetchId};
 
 pub mod all_batch;
 pub mod common;
@@ -176,22 +176,52 @@ pub(super) fn ethabi_param(name: &'static str, param_type: ethabi::ParamType) ->
 	ethabi::Param { name: name.into(), kind: param_type, internal_type: None }
 }
 
+pub fn evm_all_batch_builder<
+	C: Chain<DepositFetchId = EvmFetchId, ChainAccount = EvmAddress, ChainAmount = u128>,
+	F: Fn(<C as Chain>::ChainAsset) -> Option<EvmAddress>,
+>(
+	fetch_params: Vec<FetchAssetParams<C>>,
+	transfer_params: Vec<TransferAssetParams<C>>,
+	token_address_fn: F,
+	replay_protection: EvmReplayProtection,
+) -> Result<EvmTransactionBuilder<all_batch::AllBatch>, AllBatchError> {
+	let mut fetch_only_params = vec![];
+	let mut fetch_deploy_params = vec![];
+	for FetchAssetParams { deposit_fetch_id, asset } in fetch_params {
+		if let Some(token_address) = token_address_fn(asset) {
+			match deposit_fetch_id {
+				EvmFetchId::Fetch(contract_address) => fetch_only_params
+					.push(EncodableFetchAssetParams { contract_address, asset: token_address }),
+				EvmFetchId::DeployAndFetch(channel_id) => fetch_deploy_params
+					.push(EncodableFetchDeployAssetParams { channel_id, asset: token_address }),
+				EvmFetchId::NotRequired => (),
+			};
+		} else {
+			return Err(AllBatchError::Other)
+		}
+	}
+	Ok(EvmTransactionBuilder::new_unsigned(
+		replay_protection,
+		all_batch::AllBatch::new(
+			fetch_deploy_params,
+			fetch_only_params,
+			transfer_params
+				.into_iter()
+				.map(|TransferAssetParams { asset, to, amount }| {
+					token_address_fn(asset)
+						.map(|address| EncodableTransferAssetParams { to, amount, asset: address })
+						.ok_or(AllBatchError::Other)
+				})
+				.collect::<Result<Vec<_>, _>>()?,
+		),
+	))
+}
+
 /// Provides the environment data for ethereum-like chains.
-pub trait EthEnvironmentProvider {
-	fn token_address(asset: assets::eth::Asset) -> Option<eth::Address>;
-	fn contract_address(contract: EthereumContract) -> eth::Address;
+pub trait EvmEnvironmentProvider<C: Chain> {
+	fn token_address(asset: <C as Chain>::ChainAsset) -> Option<EvmAddress>;
+	fn key_manager_address() -> EvmAddress;
+	fn vault_address() -> EvmAddress;
 	fn chain_id() -> EvmChainId;
 	fn next_nonce() -> u64;
-
-	fn key_manager_address() -> eth::Address {
-		Self::contract_address(EthereumContract::KeyManager)
-	}
-
-	fn state_chain_gateway_address() -> eth::Address {
-		Self::contract_address(EthereumContract::StateChainGateway)
-	}
-
-	fn vault_address() -> eth::Address {
-		Self::contract_address(EthereumContract::Vault)
-	}
 }

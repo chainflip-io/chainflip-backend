@@ -12,7 +12,7 @@ use cf_traits::{AsyncResult, EpochInfo, KeyRotationStatusOuter, KeyRotator};
 use pallet_cf_environment::SafeModeUpdate;
 use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
 use state_chain_runtime::{
-	BitcoinThresholdSigner, Environment, EthereumInstance, EthereumThresholdSigner, Flip,
+	BitcoinThresholdSigner, Environment, EthereumInstance, EvmThresholdSigner, Flip,
 	PolkadotInstance, PolkadotThresholdSigner, Runtime, RuntimeOrigin, Validator,
 };
 
@@ -380,9 +380,9 @@ fn authority_rotation_can_recover_after_keygen_fails() {
 			));
 			assert_eq!(AllVaults::status(), AsyncResult::Pending);
 			backup_nodes.iter().for_each(|validator| {
-				assert_ok!(EthereumThresholdSigner::report_keygen_outcome(
+				assert_ok!(EvmThresholdSigner::report_keygen_outcome(
 					RuntimeOrigin::signed(validator.clone()),
-					EthereumThresholdSigner::ceremony_id_counter(),
+					EvmThresholdSigner::ceremony_id_counter(),
 					Err(BTreeSet::default()),
 				));
 				assert_ok!(PolkadotThresholdSigner::report_keygen_outcome(
@@ -435,9 +435,9 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 					Err(BTreeSet::default()),
 				));
 				assert_err!(
-					EthereumThresholdSigner::report_key_handover_outcome(
+					EvmThresholdSigner::report_key_handover_outcome(
 						RuntimeOrigin::signed(validator.clone()),
-						EthereumThresholdSigner::ceremony_id_counter(),
+						EvmThresholdSigner::ceremony_id_counter(),
 						Err(BTreeSet::default()),
 					),
 					pallet_cf_threshold_signature::Error::<Runtime, EthereumInstance>::InvalidRotationStatus
@@ -445,7 +445,7 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 				assert_err!(
 					PolkadotThresholdSigner::report_key_handover_outcome(
 						RuntimeOrigin::signed(validator.clone()),
-						EthereumThresholdSigner::ceremony_id_counter(),
+						EvmThresholdSigner::ceremony_id_counter(),
 						Err(BTreeSet::default()),
 					),
 					pallet_cf_threshold_signature::Error::<Runtime, PolkadotInstance>::InvalidRotationStatus

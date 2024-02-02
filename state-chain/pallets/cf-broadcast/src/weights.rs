@@ -111,8 +111,8 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(5_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
 	}
-	/// Storage: `EthereumThresholdSigner::Signature` (r:1 w:1)
-	/// Proof: `EthereumThresholdSigner::Signature` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EvmThresholdSigner::Signature` (r:1 w:1)
+	/// Proof: `EvmThresholdSigner::Signature` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `EthereumBroadcaster::BroadcastBarriers` (r:1 w:0)
 	/// Proof: `EthereumBroadcaster::BroadcastBarriers` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// Storage: `EthereumChainTracking::CurrentChainState` (r:1 w:0)
@@ -279,8 +279,8 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(5_u64))
 			.saturating_add(RocksDbWeight::get().writes(2_u64))
 	}
-	/// Storage: `EthereumThresholdSigner::Signature` (r:1 w:1)
-	/// Proof: `EthereumThresholdSigner::Signature` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EvmThresholdSigner::Signature` (r:1 w:1)
+	/// Proof: `EvmThresholdSigner::Signature` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `EthereumBroadcaster::BroadcastBarriers` (r:1 w:0)
 	/// Proof: `EthereumBroadcaster::BroadcastBarriers` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// Storage: `EthereumChainTracking::CurrentChainState` (r:1 w:0)

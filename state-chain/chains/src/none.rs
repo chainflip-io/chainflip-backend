@@ -1,4 +1,5 @@
 use super::*;
+use crate::address::IntoForeignChainAddress;
 use frame_support::traits::ConstBool;
 
 /// A Chain that can't be constructed.
@@ -62,5 +63,11 @@ impl ChainCrypto for NoneChainCrypto {
 		_rotation_broadcast_id: BroadcastId,
 	) -> Vec<BroadcastId> {
 		unimplemented!()
+	}
+}
+
+impl IntoForeignChainAddress<NoneChain> for ForeignChainAddress {
+	fn into_foreign_chain_address(address: ForeignChainAddress) -> ForeignChainAddress {
+		address
 	}
 }

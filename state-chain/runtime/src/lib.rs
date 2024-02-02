@@ -46,7 +46,7 @@ use sp_std::collections::btree_map::BTreeMap;
 
 pub use frame_support::{
 	construct_runtime, debug,
-	instances::{Instance1, Instance2, Instance3},
+	instances::{BitcoinInstance, EthereumInstance, PolkadotInstance},
 	parameter_types,
 	traits::{
 		ConstBool, ConstU128, ConstU16, ConstU32, ConstU64, ConstU8, Get, KeyOwnerProofSystem,
@@ -179,7 +179,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type EpochTransitionHandler = ChainflipEpochTransitions;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
 	type KeyRotator =
-		AllKeyRotator<EthereumThresholdSigner, PolkadotThresholdSigner, BitcoinThresholdSigner>;
+		AllKeyRotator<EvmThresholdSigner, PolkadotThresholdSigner, BitcoinThresholdSigner>;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type BidderProvider = pallet_cf_funding::Pallet<Self>;
 	type KeygenQualification = (
@@ -266,6 +266,17 @@ impl pallet_cf_vaults::Config<BitcoinInstance> for Runtime {
 	type CfeMultisigRequest = CfeInterface;
 }
 
+impl pallet_cf_vaults::Config<ArbitrumInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Chain = Arbitrum;
+	type SetAggKeyWithAggKey = cf_chains::arb::api::ArbitrumApi<ArbEnvironment>;
+	type Broadcaster = ArbitrumBroadcaster;
+	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
+	type ChainTracking = ArbitrumChainTracking;
+	type SafeMode = RuntimeSafeMode;
+	type CfeMultisigRequest = CfeInterface;
+}
+
 use chainflip::address_derivation::AddressDerivation;
 
 impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
@@ -278,7 +289,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type SwapDepositHandler = Swapping;
 	type ChainApiCall = eth::api::EthereumApi<EthEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
-	type DepositHandler = chainflip::EthDepositHandler;
+	type DepositHandler = chainflip::DepositHandler;
 	type CcmHandler = Swapping;
 	type ChainTracking = EthereumChainTracking;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
@@ -297,7 +308,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type ChainApiCall = dot::api::PolkadotApi<chainflip::DotEnvironment>;
 	type Broadcaster = PolkadotBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
-	type DepositHandler = chainflip::DotDepositHandler;
+	type DepositHandler = chainflip::DepositHandler;
 	type ChainTracking = PolkadotChainTracking;
 	type CcmHandler = Swapping;
 	type NetworkEnvironment = Environment;
@@ -315,9 +326,27 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type ChainApiCall = cf_chains::btc::api::BitcoinApi<chainflip::BtcEnvironment>;
 	type Broadcaster = BitcoinBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
-	type DepositHandler = chainflip::BtcDepositHandler;
+	type DepositHandler = chainflip::DepositHandler;
 	type ChainTracking = BitcoinChainTracking;
 	type CcmHandler = Swapping;
+	type NetworkEnvironment = Environment;
+	type AssetConverter = LiquidityPools;
+}
+
+impl pallet_cf_ingress_egress::Config<ArbitrumInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type TargetChain = Arbitrum;
+	type AddressDerivation = AddressDerivation;
+	type AddressConverter = ChainAddressConverter;
+	type LpBalance = LiquidityProvider;
+	type SwapDepositHandler = Swapping;
+	type ChainApiCall = arb::api::ArbitrumApi<ArbEnvironment>;
+	type Broadcaster = ArbitrumBroadcaster;
+	type DepositHandler = chainflip::DepositHandler;
+	type CcmHandler = Swapping;
+	type ChainTracking = ArbitrumChainTracking;
+	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
 }
@@ -528,7 +557,7 @@ impl pallet_cf_funding::Config for Runtime {
 	type Flip = Flip;
 	type Broadcaster = EthereumBroadcaster;
 	type EnsureThresholdSigned =
-		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
+		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EthereumInstance>;
 	type RegisterRedemption = EthereumApi<EthEnvironment>;
 	type TimeSource = Timestamp;
 	type SafeMode = RuntimeSafeMode;
@@ -610,7 +639,7 @@ impl pallet_cf_reputation::Config for Runtime {
 	type SafeMode = RuntimeSafeMode;
 }
 
-impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
+impl pallet_cf_threshold_signature::Config<EvmInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
 	type RuntimeOrigin = RuntimeOrigin;
@@ -666,7 +695,7 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type Offence = chainflip::Offence;
 	type TargetChain = Ethereum;
 	type ApiCall = eth::api::EthereumApi<EthEnvironment>;
-	type ThresholdSigner = EthereumThresholdSigner;
+	type ThresholdSigner = EvmThresholdSigner;
 	type TransactionBuilder = chainflip::EthTransactionBuilder;
 	type BroadcastSignerNomination = chainflip::RandomSignerNomination;
 	type OffenceReporter = Reputation;
@@ -730,6 +759,30 @@ impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
 	type CfeBroadcastRequest = CfeInterface;
 }
 
+impl pallet_cf_broadcast::Config<ArbitrumInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type RuntimeOrigin = RuntimeOrigin;
+	type BroadcastCallable = RuntimeCall;
+	type Offence = chainflip::Offence;
+	type TargetChain = Arbitrum;
+	type ApiCall = cf_chains::arb::api::ArbitrumApi<ArbEnvironment>;
+	type ThresholdSigner = EvmThresholdSigner;
+	type TransactionBuilder = chainflip::ArbTransactionBuilder;
+	type BroadcastSignerNomination = chainflip::RandomSignerNomination;
+	type OffenceReporter = Reputation;
+	type EnsureThresholdSigned =
+		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EvmInstance>;
+	type BroadcastReadyProvider = BroadcastReadyProvider;
+	type BroadcastTimeout = ConstU32<{ 90 * MINUTES }>;
+	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
+	type SafeMode = RuntimeSafeMode;
+	type SafeModeBlockMargin = ConstU32<10>;
+	type ChainTracking = ArbitrumChainTracking;
+	type RetryPolicy = DefaultRetryPolicy;
+	type CfeBroadcastRequest = CfeInterface;
+}
+
 impl pallet_cf_chain_tracking::Config<EthereumInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Ethereum;
@@ -745,6 +798,12 @@ impl pallet_cf_chain_tracking::Config<PolkadotInstance> for Runtime {
 impl pallet_cf_chain_tracking::Config<BitcoinInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Bitcoin;
+	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
+}
+
+impl pallet_cf_chain_tracking::Config<ArbitrumInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type TargetChain = Arbitrum;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
@@ -771,28 +830,32 @@ construct_runtime!(
 		TokenholderGovernance: pallet_cf_tokenholder_governance,
 		Reputation: pallet_cf_reputation,
 
-		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
-		PolkadotChainTracking: pallet_cf_chain_tracking::<Instance2>,
-		BitcoinChainTracking: pallet_cf_chain_tracking::<Instance3>,
+		EthereumChainTracking: pallet_cf_chain_tracking::<EthereumInstance>,
+		PolkadotChainTracking: pallet_cf_chain_tracking::<PolkadotInstance>,
+		BitcoinChainTracking: pallet_cf_chain_tracking::<BitcoinInstance>,
+		ArbitrumChainTracking: pallet_cf_chain_tracking::<ArbitrumInstance>,
 
-		EthereumVault: pallet_cf_vaults::<Instance1>,
-		PolkadotVault: pallet_cf_vaults::<Instance2>,
-		BitcoinVault: pallet_cf_vaults::<Instance3>,
+		EthereumVault: pallet_cf_vaults::<EthereumInstance>,
+		PolkadotVault: pallet_cf_vaults::<PolkadotInstance>,
+		BitcoinVault: pallet_cf_vaults::<BitcoinInstance>,
+		ArbitrumVault: pallet_cf_vaults::<ArbitrumInstance>,
 
-		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
-		PolkadotThresholdSigner: pallet_cf_threshold_signature::<Instance2>,
-		BitcoinThresholdSigner: pallet_cf_threshold_signature::<Instance3>,
+		EvmThresholdSigner: pallet_cf_threshold_signature::<EvmInstance>,
+		PolkadotThresholdSigner: pallet_cf_threshold_signature::<PolkadotInstance>,
+		BitcoinThresholdSigner: pallet_cf_threshold_signature::<BitcoinInstance>,
 
-		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
-		PolkadotBroadcaster: pallet_cf_broadcast::<Instance2>,
-		BitcoinBroadcaster: pallet_cf_broadcast::<Instance3>,
+		EthereumBroadcaster: pallet_cf_broadcast::<EthereumInstance>,
+		PolkadotBroadcaster: pallet_cf_broadcast::<PolkadotInstance>,
+		BitcoinBroadcaster: pallet_cf_broadcast::<BitcoinInstance>,
+		ArbitrumBroadcaster: pallet_cf_broadcast::<ArbitrumInstance>,
 
 		Swapping: pallet_cf_swapping,
 		LiquidityProvider: pallet_cf_lp,
 
-		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
-		PolkadotIngressEgress: pallet_cf_ingress_egress::<Instance2>,
-		BitcoinIngressEgress: pallet_cf_ingress_egress::<Instance3>,
+		EthereumIngressEgress: pallet_cf_ingress_egress::<EthereumInstance>,
+		PolkadotIngressEgress: pallet_cf_ingress_egress::<PolkadotInstance>,
+		BitcoinIngressEgress: pallet_cf_ingress_egress::<BitcoinInstance>,
+		ArbitrumIngressEgress: pallet_cf_ingress_egress::<ArbitrumInstance>,
 
 		LiquidityPools: pallet_cf_pools,
 
@@ -862,7 +925,7 @@ pub type PalletExecutionOrder = (
 	EthereumVault,
 	PolkadotVault,
 	BitcoinVault,
-	EthereumThresholdSigner,
+	EvmThresholdSigner,
 	PolkadotThresholdSigner,
 	BitcoinThresholdSigner,
 	EthereumBroadcaster,
@@ -886,23 +949,23 @@ type PalletMigrations = (
 	// pallet_cf_validator::migrations::PalletMigration<Runtime>,
 	pallet_cf_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_tokenholder_governance::migrations::PalletMigration<Runtime>,
-	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance1>,
-	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance2>,
-	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance3>,
-	// pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance1>,
-	// 	pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance2>,
-	// 	pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance3>,
-	// pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance1>,
-	// pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance2>,
-	// pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance3>,
-	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance1>,
-	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance2>,
-	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance3>,
+	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, EthereumInstance>,
+	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, PolkadotInstance>,
+	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, BitcoinInstance>,
+	// pallet_cf_vaults::migrations::PalletMigration<Runtime, EthereumInstance>,
+	// 	pallet_cf_vaults::migrations::PalletMigration<Runtime, PolkadotInstance>,
+	// 	pallet_cf_vaults::migrations::PalletMigration<Runtime, BitcoinInstance>,
+	// pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, EthereumInstance>,
+	// pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, PolkadotInstance>,
+	// pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, BitcoinInstance>,
+	pallet_cf_broadcast::migrations::PalletMigration<Runtime, EthereumInstance>,
+	pallet_cf_broadcast::migrations::PalletMigration<Runtime, PolkadotInstance>,
+	pallet_cf_broadcast::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	pallet_cf_swapping::migrations::PalletMigration<Runtime>,
 	pallet_cf_lp::migrations::PalletMigration<Runtime>,
-	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance1>,
-	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance2>,
-	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance3>,
+	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, EthereumInstance>,
+	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, PolkadotInstance>,
+	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 );
 
@@ -927,7 +990,7 @@ mod benches {
 		[pallet_cf_tokenholder_governance, TokenholderGovernance]
 		[pallet_cf_vaults, EthereumVault]
 		[pallet_cf_reputation, Reputation]
-		[pallet_cf_threshold_signature, EthereumThresholdSigner]
+		[pallet_cf_threshold_signature, EvmThresholdSigner]
 		[pallet_cf_broadcast, EthereumBroadcaster]
 		[pallet_cf_chain_tracking, EthereumChainTracking]
 		[pallet_cf_swapping, Swapping]
@@ -961,7 +1024,7 @@ impl_runtime_apis! {
 			let epoch_index = Self::cf_current_epoch();
 			// We should always have a Vault for the current epoch, but in case we do
 			// not, just return an empty Vault.
-			(EthereumThresholdSigner::keys(epoch_index).unwrap_or_default().to_pubkey_compressed(), EthereumVault::vault_start_block_numbers(epoch_index).unwrap().unique_saturated_into())
+			(EvmThresholdSigner::keys(epoch_index).unwrap_or_default().to_pubkey_compressed(), EthereumVault::vault_start_block_numbers(epoch_index).unwrap().unique_saturated_into())
 		}
 		fn cf_auction_parameters() -> (u32, u32) {
 			let auction_params = Validator::auction_parameters();

@@ -199,6 +199,14 @@ impl Broadcaster<MockEthereum> for MockBroadcast {
 	}
 }
 
+pub struct MockStateChainGatewayProvider;
+
+impl StateChainGatewayProvider for MockStateChainGatewayProvider {
+	fn state_chain_gateway_address() -> cf_chains::eth::Address {
+		[0xcc; 20].into()
+	}
+}
+
 impl_mock_runtime_safe_mode! { emissions: PalletSafeMode }
 
 impl pallet_cf_emissions::Config for Test {
@@ -210,7 +218,7 @@ impl pallet_cf_emissions::Config for Test {
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 	type RewardsDistribution = MockRewardsDistribution;
 	type CompoundingInterval = HeartbeatBlockInterval;
-	type EthEnvironment = MockEthEnvironment;
+	type StateChainGatewayProvider = MockStateChainGatewayProvider;
 	type Broadcaster = MockBroadcast;
 	type FlipToBurn = MockFlipBurnInfo;
 	type SafeMode = MockRuntimeSafeMode;
