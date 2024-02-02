@@ -35,7 +35,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 const BASIS_POINTS_PER_MILLION: u32 = 100;
 
-const SWAP_DELAY_BLOCKS: u32 = 2;
+pub const SWAP_DELAY_BLOCKS: u32 = 2;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum SwapType {

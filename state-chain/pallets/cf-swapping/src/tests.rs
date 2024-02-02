@@ -149,7 +149,7 @@ fn process_all_swaps() {
 	new_test_ext().execute_with(|| {
 		let swaps = generate_test_swaps();
 		insert_swaps(&swaps);
-		Swapping::on_finalize(3);
+		Swapping::on_finalize(System::block_number() + SWAP_DELAY_BLOCKS as u64);
 		assert!(SwapQueue::<Test>::get().is_empty());
 		let mut expected = swaps
 			.iter()
@@ -542,7 +542,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 		assert_eq!(CcmOutputs::<Test>::get(1), Some(CcmSwapOutput { principal: None, gas: None }));
 
 		// Swaps are executed during on_finalize after SWAP_DELAY_BLOCKS delay
-		Swapping::on_finalize(3);
+		Swapping::on_finalize(execute_at);
 
 		// CCM is scheduled for egress
 		assert_eq!(
@@ -618,7 +618,7 @@ fn can_process_ccms_via_extrinsic() {
 		assert_eq!(CcmOutputs::<Test>::get(1), Some(CcmSwapOutput { principal: None, gas: None }));
 
 		// Swaps are executed during on_finalize
-		Swapping::on_finalize(3);
+		Swapping::on_finalize(execute_at);
 
 		// CCM is scheduled for egress
 		assert_eq!(
@@ -681,6 +681,8 @@ fn can_handle_ccms_with_non_native_gas_asset() {
 			})
 		);
 
+		let execute_at = System::block_number() + u64::from(SWAP_DELAY_BLOCKS);
+
 		assert_eq!(
 			SwapQueue::<Test>::get(),
 			vec![Swap::new(
@@ -689,7 +691,7 @@ fn can_handle_ccms_with_non_native_gas_asset() {
 				Asset::Usdc,
 				deposit_amount - gas_budget,
 				SwapType::CcmPrincipal(1),
-				System::block_number() + u64::from(SWAP_DELAY_BLOCKS)
+				execute_at,
 			)]
 		);
 		assert_eq!(
@@ -698,7 +700,7 @@ fn can_handle_ccms_with_non_native_gas_asset() {
 		);
 
 		// Swaps are executed during on_finalize
-		Swapping::on_finalize(3);
+		Swapping::on_finalize(execute_at);
 
 		// CCM is scheduled for egress
 		assert_eq!(
@@ -762,6 +764,7 @@ fn can_handle_ccms_with_native_gas_asset() {
 			})
 		);
 
+		let execute_at = System::block_number() + u64::from(SWAP_DELAY_BLOCKS);
 		assert_eq!(
 			SwapQueue::<Test>::get(),
 			vec![Swap::new(
@@ -770,7 +773,7 @@ fn can_handle_ccms_with_native_gas_asset() {
 				Asset::Eth,
 				gas_budget,
 				SwapType::CcmGas(1),
-				System::block_number() + u64::from(SWAP_DELAY_BLOCKS)
+				execute_at,
 			)]
 		);
 		assert_eq!(
@@ -779,7 +782,7 @@ fn can_handle_ccms_with_native_gas_asset() {
 		);
 
 		// Swaps are executed during on_finalize
-		Swapping::on_finalize(3);
+		Swapping::on_finalize(execute_at);
 
 		// CCM is scheduled for egress
 		assert_eq!(
@@ -1113,7 +1116,7 @@ fn process_all_into_stable_swaps_first() {
 
 		System::reset_events();
 		// All swaps in the SwapQueue are executed.
-		Swapping::on_finalize(3);
+		Swapping::on_finalize(execute_at);
 		assert!(SwapQueue::<Test>::get().is_empty());
 
 		// Network fee should only be taken once.
@@ -1174,14 +1177,16 @@ fn cannot_swap_in_safe_mode() {
 		// Activate code red
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
 
+		let swaps_scheduled_at = System::block_number() + SWAP_DELAY_BLOCKS as u64;
+
 		// No swap is done
-		Swapping::on_finalize(3);
+		Swapping::on_finalize(swaps_scheduled_at);
 		assert_eq!(SwapQueue::<Test>::decode_len(), Some(4));
 
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
 
 		// Swaps are processed
-		Swapping::on_finalize(4);
+		Swapping::on_finalize(swaps_scheduled_at + 1);
 		assert_eq!(SwapQueue::<Test>::decode_len(), Some(0));
 	});
 }
