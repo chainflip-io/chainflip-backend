@@ -1,6 +1,6 @@
 extern crate alloc;
 
-use crate::{btc::ScriptPubkey, dot::PolkadotAccountId, eth::Address as EthereumAddress, Chain};
+use crate::{btc::ScriptPubkey, dot::PolkadotAccountId, eth::Address as EvmAddress, Chain};
 use cf_primitives::{ChannelId, ForeignChain, NetworkEnvironment};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -46,9 +46,10 @@ pub trait AddressDerivationApi<C: Chain> {
 	Deserialize,
 )]
 pub enum ForeignChainAddress {
-	Eth(EthereumAddress),
+	Eth(EvmAddress),
 	Dot(PolkadotAccountId),
 	Btc(ScriptPubkey),
+	Arb(EvmAddress),
 }
 
 impl ForeignChainAddress {
@@ -57,6 +58,7 @@ impl ForeignChainAddress {
 			ForeignChainAddress::Eth(_) => ForeignChain::Ethereum,
 			ForeignChainAddress::Dot(_) => ForeignChain::Polkadot,
 			ForeignChainAddress::Btc(_) => ForeignChain::Bitcoin,
+			ForeignChainAddress::Arb(_) => ForeignChain::Arbitrum,
 		}
 	}
 }
@@ -68,6 +70,7 @@ pub enum EncodedAddress {
 	Eth([u8; 20]),
 	Dot([u8; 32]),
 	Btc(Vec<u8>),
+	Arb([u8; 20]),
 }
 
 pub trait AddressConverter: Sized {
@@ -81,7 +84,7 @@ pub trait AddressConverter: Sized {
 impl core::fmt::Display for EncodedAddress {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		match self {
-			EncodedAddress::Eth(addr) => {
+			EncodedAddress::Eth(addr) | EncodedAddress::Arb(addr) => {
 				write!(f, "0x{}", hex::encode(&addr[..]))
 			},
 			EncodedAddress::Dot(addr) => {
@@ -137,21 +140,31 @@ impl TryFrom<ForeignChainAddress> for ScriptPubkey {
 	}
 }
 
-impl From<EthereumAddress> for ForeignChainAddress {
-	fn from(address: EthereumAddress) -> ForeignChainAddress {
+pub trait IntoForeignChainAddress<C: Chain> {
+	fn into_foreign_chain_address(address: C::ChainAccount) -> ForeignChainAddress;
+}
+
+impl IntoForeignChainAddress<Ethereum> for EvmAddress {
+	fn into_foreign_chain_address(address: EvmAddress) -> ForeignChainAddress {
 		ForeignChainAddress::Eth(address)
 	}
 }
 
-impl From<PolkadotAccountId> for ForeignChainAddress {
-	fn from(account_id: PolkadotAccountId) -> ForeignChainAddress {
-		ForeignChainAddress::Dot(account_id)
+impl IntoForeignChainAddress<Arbitrum> for EvmAddress {
+	fn into_foreign_chain_address(address: EvmAddress) -> ForeignChainAddress {
+		ForeignChainAddress::Arb(address)
 	}
 }
 
-impl From<ScriptPubkey> for ForeignChainAddress {
-	fn from(script_pubkey: ScriptPubkey) -> ForeignChainAddress {
-		ForeignChainAddress::Btc(script_pubkey)
+impl IntoForeignChainAddress<Polkadot> for PolkadotAccountId {
+	fn into_foreign_chain_address(address: PolkadotAccountId) -> ForeignChainAddress {
+		ForeignChainAddress::Dot(address)
+	}
+}
+
+impl IntoForeignChainAddress<Bitcoin> for ScriptPubkey {
+	fn into_foreign_chain_address(address: ScriptPubkey) -> ForeignChainAddress {
+		ForeignChainAddress::Btc(address)
 	}
 }
 
@@ -175,6 +188,14 @@ impl EncodedAddress {
 				Ok(EncodedAddress::Dot(address))
 			},
 			ForeignChain::Bitcoin => Ok(EncodedAddress::Btc(bytes)),
+			ForeignChain::Arbitrum => {
+				if bytes.len() != 20 {
+					return Err("Invalid Arbitrum address length")
+				}
+				let mut address = [0u8; 20];
+				address.copy_from_slice(&bytes);
+				Ok(EncodedAddress::Arb(address))
+			},
 		}
 	}
 }
@@ -189,6 +210,7 @@ pub fn to_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 		ForeignChainAddress::Btc(script_pubkey) => EncodedAddress::Btc(
 			script_pubkey.to_address(&network_environment().into()).as_bytes().to_vec(),
 		),
+		ForeignChainAddress::Arb(address) => EncodedAddress::Arb(address.0),
 	}
 }
 
@@ -199,6 +221,7 @@ pub fn try_from_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 ) -> Result<ForeignChainAddress, ()> {
 	match encoded_address {
 		EncodedAddress::Eth(address_bytes) => Ok(ForeignChainAddress::Eth(address_bytes.into())),
+		EncodedAddress::Arb(address_bytes) => Ok(ForeignChainAddress::Arb(address_bytes.into())),
 		EncodedAddress::Dot(address_bytes) =>
 			Ok(ForeignChainAddress::Dot(PolkadotAccountId::from_aliased(address_bytes))),
 		EncodedAddress::Btc(address_bytes) => Ok(ForeignChainAddress::Btc(
@@ -230,7 +253,7 @@ impl ToHumanreadableAddress for ScriptPubkey {
 	}
 }
 
-impl ToHumanreadableAddress for EthereumAddress {
+impl ToHumanreadableAddress for EvmAddress {
 	#[cfg(feature = "std")]
 	type Humanreadable = Self;
 
@@ -259,9 +282,10 @@ impl ToHumanreadableAddress for PolkadotAccountId {
 /// because it is not possible to deserialize a human-readable address without
 /// further context around the asset and chain.
 pub enum ForeignChainAddressHumanreadable {
-	Eth(<EthereumAddress as ToHumanreadableAddress>::Humanreadable),
+	Eth(<EvmAddress as ToHumanreadableAddress>::Humanreadable),
 	Dot(<PolkadotAccountId as ToHumanreadableAddress>::Humanreadable),
 	Btc(<ScriptPubkey as ToHumanreadableAddress>::Humanreadable),
+	Arb(<EvmAddress as ToHumanreadableAddress>::Humanreadable),
 }
 
 #[cfg(feature = "std")]
@@ -287,6 +311,8 @@ impl ToHumanreadableAddress for ForeignChainAddress {
 				ForeignChainAddressHumanreadable::Dot(address.to_humanreadable(network_environment)),
 			ForeignChainAddress::Btc(address) =>
 				ForeignChainAddressHumanreadable::Btc(address.to_humanreadable(network_environment)),
+			ForeignChainAddress::Arb(address) =>
+				ForeignChainAddressHumanreadable::Arb(address.to_humanreadable(network_environment)),
 		}
 	}
 }

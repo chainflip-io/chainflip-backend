@@ -212,55 +212,12 @@ where
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
 		transfer_params: Vec<TransferAssetParams<Ethereum>>,
 	) -> Result<Self, AllBatchError> {
-		let mut fetch_only_params = vec![];
-		let mut fetch_deploy_params = vec![];
-		for FetchAssetParams { deposit_fetch_id, asset } in fetch_params {
-			if let Some(token_address) = E::token_address(asset) {
-				match deposit_fetch_id {
-					EvmFetchId::Fetch(contract_address) => {
-						debug_assert!(
-							asset != assets::eth::Asset::Eth,
-							"Eth should not be fetched. It is auto-fetched in the smart contract."
-						);
-						fetch_only_params.push(EncodableFetchAssetParams {
-							contract_address,
-							asset: token_address,
-						})
-					},
-					EvmFetchId::DeployAndFetch(channel_id) => fetch_deploy_params
-						.push(EncodableFetchDeployAssetParams { channel_id, asset: token_address }),
-					EvmFetchId::NotRequired => (),
-				};
-			} else {
-				return Err(AllBatchError::Other)
-			}
-		}
-		if fetch_only_params.is_empty() &&
-			fetch_deploy_params.is_empty() &&
-			transfer_params.is_empty()
-		{
-			Err(AllBatchError::NotRequired)
-		} else {
-			Ok(Self::AllBatch(EvmTransactionBuilder::new_unsigned(
-				E::replay_protection(E::contract_address(EthereumContract::Vault)),
-				all_batch::AllBatch::new(
-					fetch_deploy_params,
-					fetch_only_params,
-					transfer_params
-						.into_iter()
-						.map(|TransferAssetParams { asset, to, amount }| {
-							E::token_address(asset)
-								.map(|address| EncodableTransferAssetParams {
-									to,
-									amount,
-									asset: address,
-								})
-								.ok_or(AllBatchError::Other)
-						})
-						.collect::<Result<Vec<_>, _>>()?,
-				),
-			)))
-		}
+		Ok(Self::AllBatch(evm_all_batch_builder(
+			fetch_params,
+			transfer_params,
+			E::token_address,
+			E::replay_protection(EthereumContract::Vault),
+		)?))
 	}
 }
 

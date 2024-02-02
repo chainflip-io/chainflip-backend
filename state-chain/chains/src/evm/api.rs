@@ -1,4 +1,8 @@
-use crate::{eth::api::EthereumContract, evm::SchnorrVerificationComponents, *};
+use crate::{
+	eth::{api::EthereumContract, Address as EvmAddress},
+	evm::SchnorrVerificationComponents,
+	*,
+};
 use common::*;
 use ethabi::{Address, ParamType, Token, Uint};
 use frame_support::sp_runtime::traits::{Hash, Keccak256};
@@ -177,21 +181,10 @@ pub(super) fn ethabi_param(name: &'static str, param_type: ethabi::ParamType) ->
 }
 
 /// Provides the environment data for ethereum-like chains.
-pub trait EthEnvironmentProvider {
-	fn token_address(asset: assets::eth::Asset) -> Option<eth::Address>;
-	fn contract_address(contract: EthereumContract) -> eth::Address;
+pub trait EvmEnvironmentProvider<C: Chain> {
+	fn token_address(asset: <C as Chain>::ChainAsset) -> Option<EvmAddress>;
+	fn key_manager_address() -> EvmAddress;
+	fn vault_address() -> EvmAddress;
 	fn chain_id() -> EvmChainId;
 	fn next_nonce() -> u64;
-
-	fn key_manager_address() -> eth::Address {
-		Self::contract_address(EthereumContract::KeyManager)
-	}
-
-	fn state_chain_gateway_address() -> eth::Address {
-		Self::contract_address(EthereumContract::StateChainGateway)
-	}
-
-	fn vault_address() -> eth::Address {
-		Self::contract_address(EthereumContract::Vault)
-	}
 }

@@ -22,7 +22,12 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	key_manager_address: hex_literal::hex!("Aea44be51d86eA635D51cFB2Fd5EB17Fd2A322BC"),
 	eth_vault_address: hex_literal::hex!("C17CCec5015081EB2DF26d20A9e02c5484C1d641"),
 	eth_address_checker_address: hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512"),
+	arb_key_manager_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+	arb_vault_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+	arbusdc_token_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+	arb_address_checker_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
 	ethereum_chain_id: CHAIN_ID_GOERLI,
+	arbitrum_chain_id: CHAIN_ID_MAINNET, // put the correct chain id for arb testnet
 	eth_init_agg_key: hex_literal::hex!(
 		"025fe47808af34826795b6dc483f95076cbd3779f420ea01d2e12396cdd049e224"
 	),

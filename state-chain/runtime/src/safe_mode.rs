@@ -1,6 +1,9 @@
 //! For filtering runtime calls and other related utilities.
 
-use crate::{BitcoinInstance, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall};
+use crate::{
+	ArbitrumInstance, BitcoinInstance, EthereumInstance, EvmInstance, PolkadotInstance, Runtime,
+	RuntimeCall,
+};
 use cf_traits::{impl_runtime_safe_mode, CallDispatchFilter};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -15,12 +18,13 @@ impl_runtime_safe_mode! {
 	validator: pallet_cf_validator::PalletSafeMode,
 	pools: pallet_cf_pools::PalletSafeMode,
 	reputation: pallet_cf_reputation::PalletSafeMode,
-	threshold_signature_ethereum: pallet_cf_threshold_signature::PalletSafeMode<EthereumInstance>,
+	threshold_signature_ethereum: pallet_cf_threshold_signature::PalletSafeMode<EvmInstance>,
 	threshold_signature_bitcoin: pallet_cf_threshold_signature::PalletSafeMode<BitcoinInstance>,
 	threshold_signature_polkadot: pallet_cf_threshold_signature::PalletSafeMode<PolkadotInstance>,
 	broadcast_ethereum: pallet_cf_broadcast::PalletSafeMode<EthereumInstance>,
 	broadcast_bitcoin: pallet_cf_broadcast::PalletSafeMode<BitcoinInstance>,
 	broadcast_polkadot: pallet_cf_broadcast::PalletSafeMode<PolkadotInstance>,
+	broadcast_ethereum: pallet_cf_broadcast::PalletSafeMode<ArbitrumInstance>,
 	witnesser: pallet_cf_witnesser::PalletSafeMode<WitnesserCallPermission>,
 }
 

@@ -25,11 +25,11 @@ use state_chain_runtime::{
 	chainflip::Offence, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
 	BitcoinChainTrackingConfig, BitcoinIngressEgressConfig, BitcoinThresholdSignerConfig,
 	BitcoinVaultConfig, BlockNumber, EmissionsConfig, EnvironmentConfig,
-	EthereumChainTrackingConfig, EthereumIngressEgressConfig, EthereumThresholdSignerConfig,
-	EthereumVaultConfig, FlipBalance, FlipConfig, FundingConfig, GovernanceConfig, GrandpaConfig,
-	PolkadotChainTrackingConfig, PolkadotIngressEgressConfig, PolkadotThresholdSignerConfig,
-	PolkadotVaultConfig, ReputationConfig, RuntimeGenesisConfig, SessionConfig, SetSizeParameters,
-	Signature, SystemConfig, ValidatorConfig, WASM_BINARY,
+	EthereumChainTrackingConfig, EthereumIngressEgressConfig, EthereumVaultConfig,
+	EvmThresholdSignerConfig, FlipBalance, FlipConfig, FundingConfig, GovernanceConfig,
+	GrandpaConfig, PolkadotChainTrackingConfig, PolkadotIngressEgressConfig,
+	PolkadotThresholdSignerConfig, PolkadotVaultConfig, ReputationConfig, RuntimeGenesisConfig,
+	SessionConfig, SetSizeParameters, Signature, SystemConfig, ValidatorConfig, WASM_BINARY,
 };
 
 use std::{
@@ -85,11 +85,16 @@ pub struct StateChainEnvironment {
 	flip_token_address: [u8; 20],
 	eth_usdc_address: [u8; 20],
 	state_chain_gateway_address: [u8; 20],
-	key_manager_address: [u8; 20],
+	eth_key_manager_address: [u8; 20],
 	eth_vault_address: [u8; 20],
 	eth_address_checker_address: [u8; 20],
 	ethereum_chain_id: u64,
 	eth_init_agg_key: [u8; 33],
+	arb_key_manager_address: [u8; 20],
+	arb_vault_address: [u8; 20],
+	arbusdc_token_address: [u8; 20],
+	arb_address_checker_address: [u8; 20],
+	arbitrum_chain_id: u64,
 	ethereum_deployment_block: u64,
 	genesis_funding_amount: u128,
 	/// Note: Minimum funding should be expressed in Flipperinos.
@@ -121,9 +126,14 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(clean_hex_address, STATE_CHAIN_GATEWAY_ADDRESS, state_chain_gateway_address);
 	from_env_var!(clean_hex_address, KEY_MANAGER_ADDRESS, key_manager_address);
 	from_env_var!(clean_hex_address, ETH_VAULT_ADDRESS, eth_vault_address);
+	from_env_var!(clean_hex_address, ARB_KEY_MANAGER_ADDRESS, arb_key_manager_address);
+	from_env_var!(clean_hex_address, ARB_VAULT_ADDRESS, arb_vault_address);
+	from_env_var!(clean_hex_address, ARBUSDC_TOKEN_ADDRESS, arbusdc_token_address);
 	from_env_var!(clean_hex_address, ADDRESS_CHECKER_ADDRESS, eth_address_checker_address);
+	from_env_var!(clean_hex_address, ARB_ADDRESS_CHECKER, arb_address_checker_address);
 	from_env_var!(hex_decode, ETH_INIT_AGG_KEY, eth_init_agg_key);
 	from_env_var!(FromStr::from_str, ETHEREUM_CHAIN_ID, ethereum_chain_id);
+	from_env_var!(FromStr::from_str, ARBITRUM_CHAIN_ID, arbitrum_chain_id);
 	from_env_var!(FromStr::from_str, ETH_DEPLOYMENT_BLOCK, ethereum_deployment_block);
 	from_env_var!(FromStr::from_str, GENESIS_FUNDING, genesis_funding_amount);
 	from_env_var!(FromStr::from_str, MIN_FUNDING, min_funding);
@@ -152,8 +162,13 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		state_chain_gateway_address,
 		key_manager_address,
 		eth_vault_address,
+		arb_key_manager_address,
+		arb_vault_address,
+		arbusdc_token_address,
 		eth_address_checker_address,
+		arb_address_checker_address,
 		ethereum_chain_id,
+		arbitrum_chain_id,
 		eth_init_agg_key,
 		ethereum_deployment_block,
 		genesis_funding_amount,
@@ -209,8 +224,13 @@ pub fn inner_cf_development_config(
 		state_chain_gateway_address,
 		key_manager_address,
 		eth_vault_address,
+		arb_key_manager_address,
+		arb_vault_address,
+		arbusdc_token_address,
 		eth_address_checker_address,
+		arb_address_checker_address,
 		ethereum_chain_id,
+		arbitrum_chain_id,
 		eth_init_agg_key,
 		ethereum_deployment_block,
 		genesis_funding_amount,
@@ -235,12 +255,17 @@ pub fn inner_cf_development_config(
 				DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 				EnvironmentConfig {
 					flip_token_address: flip_token_address.into(),
-					eth_usdc_address: eth_usdc_address.into(),
 					state_chain_gateway_address: state_chain_gateway_address.into(),
-					key_manager_address: key_manager_address.into(),
+					eth_usdc_address: eth_usdc_address.into(),
+					eth_key_manager_address: key_manager_address.into(),
 					eth_vault_address: eth_vault_address.into(),
 					eth_address_checker_address: eth_address_checker_address.into(),
 					ethereum_chain_id,
+					arb_key_manager_address: arb_key_manager_address.into(),
+					arb_vault_address: arb_vault_address.into(),
+					arb_usdc_address: arbusdc_token_address.into(),
+					arb_address_checker_address: arb_address_checker_address.into(),
+					arbitrum_chain_id,
 					polkadot_genesis_hash: dot_genesis_hash,
 					polkadot_vault_account_id: dot_vault_account_id,
 					network_environment: NetworkEnvironment::Development,
@@ -310,8 +335,13 @@ macro_rules! network_spec {
 					state_chain_gateway_address,
 					key_manager_address,
 					eth_vault_address,
+					arb_key_manager_address,
+					arb_vault_address,
+					arbusdc_token_address,
 					eth_address_checker_address,
+					arb_address_checker_address,
 					ethereum_chain_id,
+					arbitrum_chain_id,
 					eth_init_agg_key,
 					ethereum_deployment_block,
 					genesis_funding_amount,
@@ -367,10 +397,15 @@ macro_rules! network_spec {
 								flip_token_address: flip_token_address.into(),
 								eth_usdc_address: eth_usdc_address.into(),
 								state_chain_gateway_address: state_chain_gateway_address.into(),
-								key_manager_address: key_manager_address.into(),
+								eth_key_manager_address: key_manager_address.into(),
 								eth_vault_address: eth_vault_address.into(),
+								arb_key_manager_address: arb_key_manager_address.into(),
+								arb_vault_address: arb_vault_address.into(),
+								arb_usdc_address: arbusdc_token_address.into(),
 								eth_address_checker_address: eth_address_checker_address.into(),
+								arb_address_checker_address: arb_address_checker_address.into(),
 								ethereum_chain_id,
+								arbitrum_chain_id,
 								polkadot_genesis_hash: dot_genesis_hash,
 								polkadot_vault_account_id: dot_vault_account_id.clone(),
 								network_environment: NETWORK_ENVIRONMENT,
@@ -606,8 +641,9 @@ fn testnet_genesis(
 		ethereum_vault: EthereumVaultConfig { deployment_block: Some(ethereum_deployment_block) },
 		polkadot_vault: PolkadotVaultConfig { deployment_block: None },
 		bitcoin_vault: BitcoinVaultConfig { deployment_block: None },
+		arbitrum_vault: ArbitrumVaultConfig { deployment_block: None },
 
-		ethereum_threshold_signer: EthereumThresholdSignerConfig {
+		ethereum_threshold_signer: EvmThresholdSignerConfig {
 			key: Some(cf_chains::evm::AggKey::from_pubkey_compressed(eth_init_agg_key)),
 			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
 			keygen_response_timeout: keygen_ceremony_timeout_blocks,
@@ -658,6 +694,12 @@ fn testnet_genesis(
 			init_chain_state: ChainState::<Bitcoin> {
 				block_height: 0,
 				tracked_data: BitcoinTrackedData { btc_fee_info: BitcoinFeeInfo::new(1000) },
+			},
+		},
+		arbitrum_chain_tracking: ArbitrumChainTrackingConfig {
+			init_chain_state: ChainState::<Arbitrum> {
+				block_height: 0,
+				tracked_data: ArbitrumTrackedData { base_fee: 100000000u32.into() },
 			},
 		},
 		transaction_payment: Default::default(),

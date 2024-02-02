@@ -269,7 +269,7 @@ impl Engine {
 					}) =>
 						if signatories.contains(&self.node_id) {
 							queue_dispatch_extrinsic(
-								RuntimeCall::EthereumThresholdSigner(
+								RuntimeCall::EvmThresholdSigner(
 									pallet_cf_threshold_signature::Call::signature_success {
 										ceremony_id: *ceremony_id,
 										signature: self
@@ -340,7 +340,7 @@ impl Engine {
 					CfeEvent::EthKeygenRequest(req) =>
 						if req.participants.contains(&self.node_id) {
 							queue_dispatch_extrinsic(
-								RuntimeCall::EthereumThresholdSigner(
+								RuntimeCall::EvmThresholdSigner(
 									pallet_cf_threshold_signature::Call::report_keygen_outcome {
 										ceremony_id: req.ceremony_id,
 										reported_outcome: Ok(self
@@ -476,7 +476,7 @@ pub fn dispatch_all_pending_extrinsics() {
 	PENDING_EXTRINSICS.with_borrow_mut(|v| {
 		v.drain(..).for_each(|(call, origin)| {
 			let expect_ok = match call {
-				RuntimeCall::EthereumThresholdSigner(..) |
+				RuntimeCall::EvmThresholdSigner(..) |
 				RuntimeCall::PolkadotThresholdSigner(..) |
 				RuntimeCall::BitcoinThresholdSigner(..) |
 				RuntimeCall::Environment(..) => {

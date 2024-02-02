@@ -64,3 +64,9 @@ impl ChainCrypto for NoneChainCrypto {
 		unimplemented!()
 	}
 }
+
+impl IntoForeignChainAddress<NoneChain> for ForeignChainAddress {
+	fn into_foreign_chain_address(address: ForeignChainAddress) -> ForeignChainAddress {
+		address
+	}
+}

@@ -232,7 +232,7 @@ where
 		EthereumVault(_) |
 		PolkadotVault(_) |
 		BitcoinVault(_) |
-		EthereumThresholdSigner(_) |
+		EvmThresholdSigner(_) |
 		PolkadotThresholdSigner(_) |
 		BitcoinThresholdSigner(_) |
 		EthereumBroadcaster(_) |

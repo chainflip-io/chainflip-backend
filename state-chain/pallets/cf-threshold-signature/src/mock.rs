@@ -39,7 +39,7 @@ pub const BTC_DUMMY_SIG: btc::Signature = [0xcf; 64];
 frame_support::construct_runtime!(
 	pub enum Test {
 		System: frame_system,
-		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
+		EvmThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
 	}
 );
 
@@ -103,7 +103,7 @@ impl MockCallback<MockEthereumChainCrypto> {
 		match self {
 			Self::Regular(request_id, _) => {
 				assert!(matches!(
-					<EthereumThresholdSigner as ThresholdSigner<_>>::signature_result(request_id),
+					<EvmThresholdSigner as ThresholdSigner<_>>::signature_result(request_id),
 					AsyncResult::Ready(..)
 				));
 				CALL_DISPATCHED.with(|cell| *(cell.borrow_mut()) = Some(request_id));
@@ -289,13 +289,13 @@ impl TestHelper for TestRunner<()> {
 			let initial_ceremony_id = current_ceremony_id();
 			// Initiate request
 			let request_id =
-				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(*message);
+				<EvmThresholdSigner as ThresholdSigner<_>>::request_signature(*message);
 			let ceremony_id = current_ceremony_id();
 
-			let maybe_pending_ceremony = EthereumThresholdSigner::pending_ceremonies(ceremony_id);
+			let maybe_pending_ceremony = EvmThresholdSigner::pending_ceremonies(ceremony_id);
 			assert!(
 				maybe_pending_ceremony.is_some() !=
-					EthereumThresholdSigner::pending_requests(request_id).is_some(),
+					EvmThresholdSigner::pending_requests(request_id).is_some(),
 					"The request should be either a pending ceremony OR a pending request at this point"
 			);
 			if let Some(pending_ceremony) = maybe_pending_ceremony {
@@ -308,7 +308,7 @@ impl TestHelper for TestRunner<()> {
 				assert_eq!(current_ceremony_id(), initial_ceremony_id);
 			}
 
-			assert!(matches!(EthereumThresholdSigner::signature(request_id), AsyncResult::Pending));
+			assert!(matches!(EvmThresholdSigner::signature(request_id), AsyncResult::Pending));
 		})
 	}
 
@@ -320,15 +320,15 @@ impl TestHelper for TestRunner<()> {
 		self.execute_with(|| {
 			// Initiate request
 			let request_id =
-				EthereumThresholdSigner::request_signature_with_callback(*message, callback_gen);
+				EvmThresholdSigner::request_signature_with_callback(*message, callback_gen);
 			let ceremony_id = current_ceremony_id();
-			let pending = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+			let pending = EvmThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			assert_eq!(
 				pending.remaining_respondents,
 				BTreeSet::from_iter(MockNominator::get_nominees().unwrap_or_default())
 			);
-			assert!(matches!(EthereumThresholdSigner::signature(request_id), AsyncResult::Pending));
-			assert!(EthereumThresholdSigner::request_callback(request_id).is_some());
+			assert!(matches!(EvmThresholdSigner::signature(request_id), AsyncResult::Pending));
+			assert!(EvmThresholdSigner::request_callback(request_id).is_some());
 		})
 	}
 
@@ -367,7 +367,7 @@ cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
 		system:Default::default(),
-		ethereum_threshold_signer: EthereumThresholdSignerConfig {
+		ethereum_threshold_signer: EvmThresholdSignerConfig {
 			key: Some(GENESIS_AGG_PUB_KEY),
 			threshold_signature_response_timeout: 1,
 			keygen_response_timeout: MOCK_KEYGEN_RESPONSE_TIMEOUT,

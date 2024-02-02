@@ -8,8 +8,8 @@ use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::{Percent, Permill};
 use state_chain_runtime::{
 	chainflip::Offence, constants::common::*, opaque::SessionKeys, test_runner::*, AccountId,
-	AccountRolesConfig, EmissionsConfig, EthereumThresholdSignerConfig, EthereumVaultConfig,
-	FlipConfig, FundingConfig, GovernanceConfig, ReputationConfig, SessionConfig, ValidatorConfig,
+	AccountRolesConfig, EmissionsConfig, EthereumVaultConfig, EvmThresholdSignerConfig, FlipConfig,
+	FundingConfig, GovernanceConfig, ReputationConfig, SessionConfig, ValidatorConfig,
 };
 
 use cf_chains::{
@@ -216,8 +216,14 @@ impl ExtBuilder {
 					tracked_data: BitcoinTrackedData { btc_fee_info: BitcoinFeeInfo::new(0) },
 				},
 			},
+			arbitrum_chain_tracking: ArbitrumChainTrackingConfig {
+				init_chain_state: ChainState::<Arbitrum> {
+					block_height: 0,
+					tracked_data: ArbitrumTrackedData { base_fee: 100000u32.into() },
+				},
+			},
 			bitcoin_threshold_signer: Default::default(),
-			ethereum_threshold_signer: EthereumThresholdSignerConfig {
+			ethereum_threshold_signer: EvmThresholdSignerConfig {
 				key: Some(ethereum_vault_key),
 				keygen_response_timeout: 4,
 				threshold_signature_response_timeout: 4,

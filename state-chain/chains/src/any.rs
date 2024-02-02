@@ -34,3 +34,9 @@ impl FeeRefundCalculator<AnyChain> for () {
 		unimplemented!()
 	}
 }
+
+impl IntoForeignChainAddress<AnyChain> for ForeignChainAddress {
+	fn into_foreign_chain_address(address: ForeignChainAddress) -> ForeignChainAddress {
+		address
+	}
+}

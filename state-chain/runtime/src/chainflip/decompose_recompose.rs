@@ -177,6 +177,16 @@ mod tests {
 						},
 					},
 				}),
+			ForeignChain::Arbitrum =>
+				RuntimeCall::ArbitrumChainTracking(pallet_cf_chain_tracking::Call::<
+					Runtime,
+					ArbitrumInstance,
+				>::update_chain_state {
+					new_chain_state: ChainState {
+						block_height: BLOCK_HEIGHT,
+						tracked_data: ArbitrumTrackedData { base_fee: BASE_FEE },
+					},
+				}),
 		}
 	}
 

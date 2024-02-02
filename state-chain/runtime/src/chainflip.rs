@@ -36,7 +36,7 @@ use cf_chains::{
 		Ethereum,
 	},
 	evm::{
-		api::{EthEnvironmentProvider, EvmReplayProtection},
+		api::{EthEnvironmentProvider, EvmEnvironmentProvider, EvmReplayProtection},
 		EvmCrypto, Transaction,
 	},
 	AnyChain, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
@@ -51,6 +51,7 @@ use cf_traits::{
 	QualifyNode, RewardsDistribution, RuntimeUpgrade,
 };
 use codec::{Decode, Encode};
+use eth::Address as EvmAddress;
 use frame_support::{
 	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
 	pallet_prelude::DispatchError,
@@ -253,6 +254,65 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 	}
 }
 
+pub struct ArbTransactionBuilder;
+
+impl TransactionBuilder<Arbitrum, ArbitrumApi<ArbEnvironment>> for ArbTransactionBuilder {
+	fn build_transaction(
+		signed_call: &ArbitrumApi<ArbEnvironment>,
+	) -> <Arbitrum as Chain>::Transaction {
+		Transaction {
+			chain_id: signed_call.replay_protection().chain_id,
+			contract: signed_call.replay_protection().contract_address,
+			data: signed_call.chain_encoded(),
+			gas_limit: Self::calculate_gas_limit(signed_call),
+			..Default::default()
+		}
+	}
+
+	fn refresh_unsigned_data(unsigned_tx: &mut <Arbitrum as Chain>::Transaction) {
+		if let Some(ChainState { tracked_data, .. }) = ArbitrumChainTracking::chain_state() {
+			let max_fee_per_gas = tracked_data.max_fee_per_gas(ARBITRUM_BASE_FEE_MULTIPLIER);
+			unsigned_tx.max_fee_per_gas = Some(U256::from(max_fee_per_gas));
+			unsigned_tx.max_priority_fee_per_gas = Some(U256::from(tracked_data.priority_fee));
+		} else {
+			log::warn!("No chain data for Arbitrum. This should never happen. Please check Chain Tracking data.");
+		}
+	}
+
+	fn requires_signature_refresh(
+		_call: &ArbitrumApi<ArbEnvironment>,
+		_payload: &<<Arbitrum as Chain>::ChainCrypto as ChainCrypto>::Payload,
+	) -> bool {
+		false
+	}
+
+	/// Calculate the gas limit for a Arbitrum call, using the current gas price.
+	/// Currently for only CCM calls, the gas limit is calculated as:
+	/// Gas limit = gas_budget / (multiplier * base_gas_price + priority_fee)
+	/// All other calls uses a default gas limit. Multiplier=1 to avoid user overpaying for gas.
+	/// The max_fee_per_gas will still have the default Arbitrum base fee multiplier applied.
+	fn calculate_gas_limit(call: &ArbitrumApi<ArbEnvironment>) -> Option<U256> {
+		if let Some(gas_budget) = call.gas_budget() {
+			let current_fee_per_gas = ArbitrumChainTracking::chain_state()
+				.or_else(||{
+					log::warn!("No chain data for Arbitrum. This should never happen. Please check Chain Tracking data.");
+					None
+				})?
+				.tracked_data
+				.max_fee_per_gas(One::one());
+			Some(gas_budget
+				.checked_div(current_fee_per_gas)
+				.unwrap_or_else(||{
+					log::warn!("Current gas price for Arbitrum is 0. This should never happen. Please check Chain Tracking data.");
+					Default::default()
+				}).min(ARBITRUM_MAX_GAS_LIMIT)
+				.into())
+		} else {
+			None
+		}
+	}
+}
+
 pub struct BlockAuthorRewardDistribution;
 
 impl RewardsDistribution for BlockAuthorRewardDistribution {
@@ -277,33 +337,33 @@ impl RuntimeUpgrade for RuntimeUpgradeManager {
 		System::set_code(frame_system::RawOrigin::Root.into(), code)
 	}
 }
-pub struct EthEnvironment;
+pub struct EvmEnvironment;
 
-impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
-	fn replay_protection(contract_address: eth::Address) -> EvmReplayProtection {
+impl<C: Chain> ReplayProtectionProvider<C> for EvmEnvironment {
+	fn replay_protection(contract_address: EvmAddress) -> EvmReplayProtection {
 		EvmReplayProtection {
-			nonce: Self::next_nonce(),
-			chain_id: Self::chain_id(),
-			key_manager_address: Self::key_manager_address(),
+			nonce: <Self as EvmEnvironmentProvider<C>>::next_nonce(),
+			chain_id: <Self as EvmEnvironmentProvider<C>>::chain_id(),
+			key_manager_address: <Self as EvmEnvironmentProvider<C>>::key_manager_address(),
 			contract_address,
 		}
 	}
 }
 
-impl EthEnvironmentProvider for EthEnvironment {
-	fn token_address(asset: assets::eth::Asset) -> Option<eth::Address> {
+impl EvmEnvironmentProvider<Ethereum> for EvmEnvironment {
+	fn token_address(asset: assets::eth::Asset) -> Option<EvmAddress> {
 		match asset {
 			assets::eth::Asset::Eth => Some(ETHEREUM_ETH_ADDRESS),
 			erc20 => Environment::supported_eth_assets(erc20).map(Into::into),
 		}
 	}
 
-	fn contract_address(contract: EthereumContract) -> eth::Address {
-		match contract {
-			EthereumContract::StateChainGateway => Environment::state_chain_gateway_address(),
-			EthereumContract::KeyManager => Environment::key_manager_address(),
-			EthereumContract::Vault => Environment::eth_vault_address(),
-		}
+	fn vault_address() -> EvmAddress {
+		Environment::eth_vault_address()
+	}
+
+	fn key_manager_address() -> EvmAddress {
+		Environment::key_manager_address()
 	}
 
 	fn chain_id() -> cf_chains::evm::api::EvmChainId {
@@ -312,6 +372,38 @@ impl EthEnvironmentProvider for EthEnvironment {
 
 	fn next_nonce() -> u64 {
 		Environment::next_ethereum_signature_nonce()
+	}
+}
+
+// state chain gateway address only exists for Ethereum and does not exist for any other Evm Chain
+impl EvmEnvironment<Ethereum> {
+	fn state_chain_gateway_address() -> EvmAddress {
+		Environment::state_chain_gateway_address()
+	}
+}
+
+impl EvmEnvironmentProvider<Arbitrum> for EvmEnvironment {
+	fn token_address(asset: assets::arb::Asset) -> Option<H160> {
+		match asset {
+			assets::arb::Asset::ArbEth => Some(ETHEREUM_ETH_ADDRESS),
+			assets::arb::Asset::ArbUsdc => Environment::supported_arb_assets(asset).map(Into::into),
+		}
+	}
+
+	fn vault_address() -> EvmAddress {
+		Environment::arb_vault_address()
+	}
+
+	fn key_manager_address() -> EvmAddress {
+		Environment::arb_key_manager_address()
+	}
+
+	fn chain_id() -> EthereumChainId {
+		Environment::arbitrum_chain_id()
+	}
+
+	fn next_nonce() -> u64 {
+		Environment::next_arbitrum_signature_nonce()
 	}
 }
 
@@ -406,6 +498,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 			ForeignChain::Polkadot =>
 				Self::broadcast_gov_key::<Polkadot, PolkadotBroadcaster>(maybe_old_key, new_key),
 			ForeignChain::Bitcoin => Err(()),
+			ForeignChain::Arbitrum => todo!("Arbitrum govkey broadcast"),
 		}
 	}
 
@@ -416,6 +509,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 			ForeignChain::Polkadot =>
 				Self::is_govkey_compatible::<<Polkadot as Chain>::ChainCrypto>(key),
 			ForeignChain::Bitcoin => false,
+			ForeignChain::Arbitrum => todo!("Arbitrum govkey compatibility"),
 		}
 	}
 }
@@ -507,24 +601,22 @@ impl_deposit_api_for_anychain!(
 	AnyChainIngressEgressHandler,
 	(Ethereum, EthereumIngressEgress),
 	(Polkadot, PolkadotIngressEgress),
-	(Bitcoin, BitcoinIngressEgress)
+	(Bitcoin, BitcoinIngressEgress),
+	(Arbitrum, ArbitrumIngressEgress)
 );
 
 impl_egress_api_for_anychain!(
 	AnyChainIngressEgressHandler,
 	(Ethereum, EthereumIngressEgress),
 	(Polkadot, PolkadotIngressEgress),
-	(Bitcoin, BitcoinIngressEgress)
+	(Bitcoin, BitcoinIngressEgress),
+	(Arbitrum, ArbitrumIngressEgress)
 );
 
-pub struct EthDepositHandler;
-impl DepositHandler<Ethereum> for EthDepositHandler {}
-
-pub struct DotDepositHandler;
-impl DepositHandler<Polkadot> for DotDepositHandler {}
-
-pub struct BtcDepositHandler;
-impl DepositHandler<Bitcoin> for BtcDepositHandler {
+pub struct DepositHandler;
+impl DepositHandler<Ethereum> for DepositHandler {}
+impl DepositHandler<Polkadot> for DepositHandler {}
+impl DepositHandler<Bitcoin> for DepositHandler {
 	fn on_deposit_made(
 		utxo_id: <Bitcoin as Chain>::DepositDetails,
 		amount: <Bitcoin as Chain>::ChainAmount,
@@ -533,6 +625,7 @@ impl DepositHandler<Bitcoin> for BtcDepositHandler {
 		Environment::add_bitcoin_utxo_to_list(amount, utxo_id, channel.state)
 	}
 }
+impl DepositHandler<Arbitrum> for DepositHandler {}
 
 pub struct ChainAddressConverter;
 
@@ -550,7 +643,7 @@ impl AddressConverter for ChainAddressConverter {
 
 pub struct BroadcastReadyProvider;
 impl OnBroadcastReady<Ethereum> for BroadcastReadyProvider {
-	type ApiCall = EthereumApi<EthEnvironment>;
+	type ApiCall = EthereumApi<EvmEnvironment>;
 }
 impl OnBroadcastReady<Polkadot> for BroadcastReadyProvider {
 	type ApiCall = PolkadotApi<DotEnvironment>;
@@ -575,6 +668,9 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 			_ => unreachable!(),
 		}
 	}
+}
+impl OnBroadcastReady<Arbitrum> for BroadcastReadyProvider {
+	type ApiCall = ArbitrumApi<EvmEnvironment>;
 }
 
 pub struct BitcoinFeeGetter;
