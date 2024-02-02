@@ -183,7 +183,7 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 		KeygenResolutionPendingSince::<T, I>::kill();
 	}
 
-	fn activate_vaults() {
+	fn activate_keys() {
 		if let Some(KeyRotationStatus::<T, I>::KeyHandoverComplete { new_public_key }) =
 			PendingKeyRotation::<T, I>::get()
 		{

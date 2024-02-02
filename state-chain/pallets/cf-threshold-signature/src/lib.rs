@@ -436,9 +436,9 @@ pub mod pallet {
 	pub type ThresholdSignatureResponseTimeout<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
-	/// The epoch whose authorities control the current key key.
+	/// The epoch whose authorities control the current key.
 	#[pallet::storage]
-	#[pallet::getter(fn current_keyholders_epoch)]
+	#[pallet::getter(fn current_key_epoch)]
 	pub type CurrentKeyEpoch<T: Config<I>, I: 'static = ()> = StorageValue<_, EpochIndex>;
 
 	/// The map of all keys by epoch.

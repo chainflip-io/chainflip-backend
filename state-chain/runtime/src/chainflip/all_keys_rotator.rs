@@ -87,10 +87,10 @@ where
 		C::reset_key_rotation();
 	}
 
-	fn activate_vaults() {
-		A::activate_vaults();
-		B::activate_vaults();
-		C::activate_vaults();
+	fn activate_keys() {
+		A::activate_keys();
+		B::activate_keys();
+		C::activate_keys();
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

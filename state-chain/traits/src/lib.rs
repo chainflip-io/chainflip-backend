@@ -19,9 +19,9 @@ use cf_chains::{
 	ChainCrypto, DepositChannel, Ethereum, SwapOrigin,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId, CeremonyId,
-	ChannelId, Ed25519PublicKey, EgressCounter, EgressId, EpochIndex, FlipBalance, ForeignChain,
-	Ipv6Addr, NetworkEnvironment, SemVer, SwapId, ThresholdSignatureRequestId,
+	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId, ChannelId,
+	Ed25519PublicKey, EgressCounter, EgressId, EpochIndex, FlipBalance, ForeignChain, Ipv6Addr,
+	NetworkEnvironment, SemVer, SwapId, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -174,7 +174,7 @@ pub trait KeyRotator {
 	fn status() -> AsyncResult<KeyRotationStatusOuter<Self::ValidatorId>>;
 
 	/// Activate key on for vaults on all chains that use this Key.
-	fn activate_vaults();
+	fn activate_keys();
 
 	/// Reset the state associated with the current key rotation
 	/// in preparation for a new one.

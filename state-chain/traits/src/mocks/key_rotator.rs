@@ -84,7 +84,7 @@ macro_rules! mock_key_rotator {
 				Self::get_value(ROTATION_OUTCOME).unwrap_or_default()
 			}
 
-			fn activate_vaults() {
+			fn activate_keys() {
 				Self::put_value(
 					ROTATION_OUTCOME,
 					AsyncResult::<KeyRotationStatusOuter<u64>>::Pending,

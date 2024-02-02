@@ -1380,7 +1380,7 @@ fn do_full_key_rotation() {
 	));
 
 	// Called by validator pallet
-	EthereumThresholdSigner::activate_vaults();
+	EthereumThresholdSigner::activate_keys();
 
 	assert!(!KeygenResolutionPendingSince::<Test, _>::exists());
 	// Voting has been cleared.
@@ -1631,7 +1631,7 @@ mod key_rotation {
 			run_cfes_on_sc_events(&cfes);
 
 			BlockHeightProvider::<MockEthereum>::set_block_height(HANDOVER_ACTIVATION_BLOCK);
-			EthereumThresholdSigner::activate_vaults();
+			EthereumThresholdSigner::activate_keys();
 
 			assert!(matches!(
 				PendingKeyRotation::<Test, _>::get().unwrap(),
@@ -1673,7 +1673,7 @@ mod key_rotation {
 				.collect::<Vec<_>>();
 			run_cfes_on_sc_events(&cfes);
 
-			EthereumThresholdSigner::activate_vaults();
+			EthereumThresholdSigner::activate_keys();
 		});
 
 		final_checks(ext);

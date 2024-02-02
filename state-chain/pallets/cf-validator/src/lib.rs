@@ -408,7 +408,7 @@ pub mod pallet {
 						AsyncResult::Ready(KeyRotationStatusOuter::KeyHandoverComplete) => {
 							let new_authorities = rotation_state.authority_candidates();
 							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities);
-							T::KeyRotator::activate_vaults();
+							T::KeyRotator::activate_keys();
 							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
 						},
 						AsyncResult::Ready(KeyRotationStatusOuter::Failed(offenders)) => {
