@@ -1061,7 +1061,10 @@ where
 				.insert(asset, max_amount.map(|amt| amt.into()));
 		}
 
-		Ok(SwappingEnvironment { maximum_swap_amounts, network_fee_hundredth_pips: NetworkFee::get() })
+		Ok(SwappingEnvironment {
+			maximum_swap_amounts,
+			network_fee_hundredth_pips: NetworkFee::get(),
+		})
 	}
 
 	fn cf_funding_environment(
