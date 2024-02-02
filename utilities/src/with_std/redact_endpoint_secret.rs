@@ -147,7 +147,11 @@ mod tests {
 		assert_eq!(format!("{}", SecretUrl("https://a".to_string())), "https://a****");
 
 		assert_eq!(format!("{}", SecretUrl("no.schema.com".to_string())), "no.****");
-		assert_eq!(format!("{:?}", SecretUrl("debug_print".to_string())), "\"debug_print\"");
+		if cfg!(debug_assertions) {
+			assert_eq!(format!("{:?}", SecretUrl("debug_print".to_string())), "\"debug_print\"");
+		} else {
+			assert_eq!(format!("{:?}", SecretUrl("debug_print".to_string())), "\"deb****\"");
+		}
 
 		assert_eq!(
 			format!(

@@ -16,12 +16,12 @@ pub use async_result::AsyncResult;
 
 use cf_chains::{
 	address::ForeignChainAddress, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain,
-	ChainCrypto, DepositChannel, Ethereum, Polkadot, SwapOrigin,
+	ChainCrypto, DepositChannel, Ethereum, SwapOrigin,
 };
 use cf_primitives::{
-	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
-	ChannelId, Ed25519PublicKey, EgressId, EpochIndex, FlipBalance, ForeignChain, Ipv6Addr,
-	NetworkEnvironment, SemVer, SwapId, ThresholdSignatureRequestId,
+	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId, CeremonyId,
+	ChannelId, Ed25519PublicKey, EgressCounter, EgressId, EpochIndex, FlipBalance, ForeignChain,
+	Ipv6Addr, NetworkEnvironment, SemVer, SwapId, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -32,7 +32,7 @@ use frame_support::{
 		DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
 	},
 	traits::{EnsureOrigin, Get, Imbalance, IsType, UnfilteredDispatchable},
-	Hashable, Parameter,
+	CloneNoBound, EqNoBound, Hashable, Parameter, PartialEqNoBound,
 };
 use scale_info::TypeInfo;
 use sp_std::{collections::btree_set::BTreeSet, iter::Sum, marker::PhantomData, prelude::*};
@@ -122,6 +122,9 @@ pub trait EpochInfo {
 		epoch_index: EpochIndex,
 		new_authorities: BTreeSet<Self::ValidatorId>,
 	);
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_authorities(authorities: BTreeSet<Self::ValidatorId>);
 }
 
 pub struct CurrentEpochIndex<T>(PhantomData<T>);
@@ -287,6 +290,11 @@ pub trait Issuance {
 
 	/// Returns the total issuance.
 	fn total_issuance() -> Self::Balance;
+
+	/// Burn some funds that are off-chain (eg. in the StateChainGateway contract).
+	///
+	/// Use with care.
+	fn burn_offchain(amount: Self::Balance);
 }
 
 /// Distribute rewards somehow.
@@ -713,35 +721,60 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 	fn get_account_role(account_id: &T::AccountId) -> AccountRole;
 }
 
+#[derive(
+	PartialEqNoBound, EqNoBound, CloneNoBound, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug,
+)]
+pub struct ScheduledEgressDetails<C: Chain> {
+	pub egress_id: EgressId,
+	pub egress_amount: C::ChainAmount,
+	pub fee_withheld: C::ChainAmount,
+}
+
+impl<C: Chain + Get<ForeignChain>> Default for ScheduledEgressDetails<C> {
+	fn default() -> Self {
+		Self::new(Default::default(), Default::default(), Default::default())
+	}
+}
+
+impl<C: Chain + Get<ForeignChain>> ScheduledEgressDetails<C> {
+	pub fn new(
+		id_counter: EgressCounter,
+		egress_amount: C::ChainAmount,
+		fee_withheld: C::ChainAmount,
+	) -> Self {
+		Self {
+			egress_id: (<C as Get<ForeignChain>>::get(), id_counter),
+			egress_amount,
+			fee_withheld,
+		}
+	}
+}
+
 /// API that allows other pallets to Egress assets out of the State Chain.
 pub trait EgressApi<C: Chain> {
+	type EgressError: Into<DispatchError>;
+
+	/// Schedule the egress of an asset to a destination address.
+	///
+	/// May take a fee and will return an error if egress cannot be scheduled.
 	fn schedule_egress(
 		asset: C::ChainAsset,
 		amount: C::ChainAmount,
 		destination_address: C::ChainAccount,
 		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, C::ChainAmount)>,
-	) -> EgressId;
+	) -> Result<ScheduledEgressDetails<C>, Self::EgressError>;
 }
 
-impl<T: frame_system::Config> EgressApi<Ethereum> for T {
-	fn schedule_egress(
-		_asset: assets::eth::Asset,
-		_amount: <Ethereum as Chain>::ChainAmount,
-		_destination_address: <Ethereum as Chain>::ChainAccount,
-		_maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <Ethereum as Chain>::ChainAmount)>,
-	) -> EgressId {
-		(ForeignChain::Ethereum, 0)
-	}
-}
+impl<C: Chain + Get<ForeignChain>> EgressApi<C> for () {
+	type EgressError = DispatchError;
 
-impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 	fn schedule_egress(
-		_asset: assets::dot::Asset,
-		_amount: <Polkadot as Chain>::ChainAmount,
-		_destination_address: <Polkadot as Chain>::ChainAccount,
-		_maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <Polkadot as Chain>::ChainAmount)>,
-	) -> EgressId {
-		(ForeignChain::Polkadot, 0)
+		_asset: C::ChainAsset,
+		_amount: <C as Chain>::ChainAmount,
+		_destination_address: <C as Chain>::ChainAccount,
+		_maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <C as Chain>::ChainAmount)>,
+	) -> Result<ScheduledEgressDetails<C>, DispatchError> {
+		Ok(Default::default())
 	}
 }
 

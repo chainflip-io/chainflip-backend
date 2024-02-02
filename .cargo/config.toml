@@ -1,6 +1,8 @@
 [env]
-CF_ETH_CONTRACT_ABI_ROOT = { value = "eth-contract-abis", relative = true }
+CF_ETH_CONTRACT_ABI_ROOT = { value = "contract-interfaces/eth-contract-abis", relative = true }
 CF_ETH_CONTRACT_ABI_TAG = "v1.0.0"
+CF_SOL_PROGRAM_IDL_ROOT = { value = "contract-interfaces/sol-program-idls", relative = true }
+CF_SOL_PROGRAM_IDL_TAG = "test-tag-10"
 CF_TEST_CONFIG_ROOT = { value = "engine/config/testing", relative = true }
 
 # Note: If you just want to save typing command commands, you can install tab completions for most shells. Type
@@ -8,11 +10,11 @@ CF_TEST_CONFIG_ROOT = { value = "engine/config/testing", relative = true }
 
 [alias]
 cf-test = "test --lib --features runtime-benchmarks,try-runtime"
-cf-test-ci = "test --lib --features runtime-benchmarks,slow-tests,try-runtime"
+cf-test-ci = "test --release --lib --features runtime-benchmarks,slow-tests,try-runtime"
 cf-test-cfe = "test --lib --package chainflip-engine --package multisig"
 
-cf-clippy = "clippy --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,slow-tests -- -D warnings"
-cf-clippy-ci = "clippy --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,slow-tests -- -D warnings"
+cf-clippy = "clippy --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,slow-tests -- -D warnings -A deprecated"
+cf-clippy-ci = "clippy --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,slow-tests -- -D warnings -A deprecated"
 
 cf-build = "build --features runtime-benchmarks,try-runtime"
 

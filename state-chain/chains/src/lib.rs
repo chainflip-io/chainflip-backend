@@ -75,6 +75,7 @@ pub trait Chain: Member + Parameter {
 	type ChainAmount: Member
 		+ Parameter
 		+ Copy
+		+ MaybeSerializeDeserialize
 		+ Default
 		+ AtLeast32BitUnsigned
 		+ Into<AssetAmount>
@@ -97,6 +98,7 @@ pub trait Chain: Member + Parameter {
 		+ Parameter
 		+ MaxEncodedLen
 		+ Copy
+		+ MaybeSerializeDeserialize
 		+ BenchmarkValue
 		+ FullCodec
 		+ Into<cf_primitives::Asset>

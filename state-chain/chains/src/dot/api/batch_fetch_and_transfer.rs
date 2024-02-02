@@ -32,7 +32,7 @@ pub fn extrinsic_builder(
 					transfer_params
 						.into_iter()
 						.map(|transfer_param| {
-							PolkadotRuntimeCall::Balances(BalancesCall::transfer {
+							PolkadotRuntimeCall::Balances(BalancesCall::transfer_allow_death {
 								dest: PolkadotAccountIdLookup::from(transfer_param.to),
 								value: transfer_param.amount,
 							})
