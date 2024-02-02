@@ -5,12 +5,15 @@ use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
 use cf_primitives::{Asset, AssetAmount, ForeignChain};
 use cf_traits::{
 	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi,
-	EgressApi, LpDepositHandler, PoolApi,
+	EgressApi, LpDepositHandler, PoolApi, ScheduledEgressDetails,
 };
+
+use sp_std::vec;
 
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
+use sp_std::vec::Vec;
 
 mod benchmarking;
 
@@ -111,6 +114,7 @@ pub mod pallet {
 			asset: Asset,
 			amount: AssetAmount,
 			destination_address: EncodedAddress,
+			fee: AssetAmount,
 		},
 		LiquidityRefundAddressRegistered {
 			account_id: T::AccountId,
@@ -213,18 +217,21 @@ pub mod pallet {
 				// Debit the asset from the account.
 				Self::try_debit_account(&account_id, asset, amount)?;
 
-				let egress_id = T::EgressHandler::schedule_egress(
-					asset,
-					amount,
-					destination_address_internal,
-					None,
-				);
+				let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
+					T::EgressHandler::schedule_egress(
+						asset,
+						amount,
+						destination_address_internal,
+						None,
+					)
+					.map_err(Into::into)?;
 
 				Self::deposit_event(Event::<T>::WithdrawalEgressScheduled {
 					egress_id,
 					asset,
-					amount,
+					amount: egress_amount,
 					destination_address,
+					fee: fee_withheld,
 				});
 			}
 			Ok(())
@@ -368,5 +375,14 @@ impl<T: Config> LpBalanceApi for Pallet<T> {
 
 	fn record_fees(account_id: &Self::AccountId, amount: AssetAmount) {
 		HistoricalEarnedFees::<T>::mutate(account_id, |fee| *fee += amount);
+	}
+
+	fn asset_balances(who: &Self::AccountId) -> Vec<(Asset, AssetAmount)> {
+		let mut balances: Vec<(Asset, AssetAmount)> = vec![];
+		T::PoolApi::sweep(who).unwrap();
+		for asset in Asset::all() {
+			balances.push((asset, FreeBalances::<T>::get(who, asset).unwrap_or_default()));
+		}
+		balances
 	}
 }

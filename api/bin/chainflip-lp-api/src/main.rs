@@ -15,10 +15,14 @@ use chainflip_api::{
 		AccountRole, Asset, ForeignChain, Hash, RedemptionAmount,
 	},
 	settings::StateChain,
-	BlockInfo, ChainApi, EthereumAddress, OperatorApi, StateChainApi, StorageApi, WaitFor,
+	BlockInfo, ChainApi, EthereumAddress, OperatorApi, SignedExtrinsicApi, StateChainApi,
+	StorageApi, WaitFor,
 };
 use clap::Parser;
-use custom_rpc::RpcAsset;
+use custom_rpc::{
+	CustomApiClient, RpcAsset,
+	RpcAsset::{ExplicitChain, ImplicitChain},
+};
 use futures::{try_join, FutureExt, StreamExt};
 use jsonrpsee::{
 	core::{async_trait, RpcResult},
@@ -297,14 +301,29 @@ impl RpcServer for RpcServerImpl {
 
 	/// Returns a list of all assets and their free balance in json format
 	async fn asset_balances(&self) -> RpcResult<BTreeMap<ForeignChain, Vec<AssetBalance>>> {
-		let mut balances = BTreeMap::<_, Vec<_>>::new();
-		for (asset, balance) in self.api.query_api().get_balances(None).await? {
-			balances
-				.entry(ForeignChain::from(asset))
-				.or_default()
-				.push(AssetBalance { asset, balance: balance.into() });
+		let cf_asset_balances = self
+			.api
+			.state_chain_client
+			.base_rpc_client
+			.raw_rpc_client
+			.cf_asset_balances(
+				self.api.state_chain_client.account_id(),
+				Some(self.api.state_chain_client.latest_finalized_block().hash),
+			)
+			.await?;
+
+		let mut lp_asset_balances: BTreeMap<ForeignChain, Vec<AssetBalance>> = BTreeMap::new();
+
+		for rpc_asset_with_amount in cf_asset_balances {
+			let (chain, asset) = match rpc_asset_with_amount.asset {
+				ImplicitChain(asset) => (asset.into(), asset),
+				ExplicitChain { chain, asset } => (chain, asset),
+			};
+			let asset_balance =
+				AssetBalance { asset, balance: rpc_asset_with_amount.amount.into() };
+			lp_asset_balances.entry(chain).or_insert_with(Vec::new).push(asset_balance);
 		}
-		Ok(balances)
+		Ok(lp_asset_balances)
 	}
 
 	async fn update_range_order(

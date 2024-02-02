@@ -1,4 +1,4 @@
-#![cfg(debug_assertions)]
+#![cfg(feature = "std")]
 
 use crate::{
 	evm::{api::EvmReplayProtection, TransactionFee},

@@ -127,6 +127,10 @@ impl LpBalanceApi for MockBalance {
 			recorded_fees.entry(*who).and_modify(|v| *v += amount).or_insert(amount);
 		});
 	}
+
+	fn asset_balances(_who: &Self::AccountId) -> Vec<(Asset, AssetAmount)> {
+		unreachable!()
+	}
 }
 
 impl MockBalance {

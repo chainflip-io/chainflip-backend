@@ -50,7 +50,8 @@ impl LpBalanceApi for MockBalance {
 		Ok(())
 	}
 
-	fn record_fees(_who: &Self::AccountId, _amount: AssetAmount) {
+	fn record_fees(_who: &Self::AccountId, _amount: AssetAmount) {}
+	fn asset_balances(_who: &Self::AccountId) -> Vec<(Asset, AssetAmount)> {
 		unreachable!()
 	}
 }
