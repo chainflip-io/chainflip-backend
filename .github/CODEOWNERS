@@ -3,3 +3,6 @@
 /api/bin/chainflip-ingress-egress-tracker @chainflip-io/web
 /engine/config/CI/config/Settings.toml @chainflip-io/platform
 /localnet/ @chainflip-io/platform
+/engine/src/witness/ @kylezs @AlastairHolmes
+/engine/src/witness.rs @kylezs @AlastairHolmes
+/engine/multisig/ @msgmaxim 
