@@ -14,6 +14,7 @@ type ValidatorId = u64;
 
 thread_local! {
 	pub static SLASHES: RefCell<Vec<u64>> = RefCell::new(Default::default());
+	pub static BALANCE: RefCell<u128> = RefCell::new(Default::default());
 }
 
 construct_runtime!(
@@ -119,7 +120,9 @@ impl Heartbeat for MockHeartbeat {
 	type ValidatorId = ValidatorId;
 	type BlockNumber = u64;
 
-	fn on_heartbeat_interval() {}
+	fn on_heartbeat_interval() {
+		BALANCE.with(|balance| *balance.borrow_mut() += 100);
+	}
 }
 
 #[derive(

@@ -304,6 +304,21 @@ fn dont_report_in_safe_mode() {
 	});
 }
 
+#[test]
+fn backup_rewards_emitted_in_safe_mode() {
+	new_test_ext().execute_with(|| {
+		BALANCE.with(|val| assert_eq!(*val.borrow(), 0));
+
+		// enable safe mode (disable reporting)
+		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+			reputation: crate::PalletSafeMode { reporting_enabled: false },
+		});
+		advance_by_hearbeat_intervals(1);
+
+		BALANCE.with(|val| assert_eq!(*val.borrow(), 100));
+	});
+}
+
 #[cfg(test)]
 mod reporting_adapter_test {
 	use super::*;
