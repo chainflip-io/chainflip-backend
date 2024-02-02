@@ -281,7 +281,7 @@ pub struct FundingEnvironment {
 #[derive(Serialize, Deserialize)]
 pub struct SwappingEnvironment {
 	maximum_swap_amounts: HashMap<ForeignChain, HashMap<Asset, Option<NumberOrHex>>>,
-	network_fee: Permill,
+	network_fee_hundredth_pips: Permill,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -1061,7 +1061,7 @@ where
 				.insert(asset, max_amount.map(|amt| amt.into()));
 		}
 
-		Ok(SwappingEnvironment { maximum_swap_amounts, network_fee: NetworkFee::get() })
+		Ok(SwappingEnvironment { maximum_swap_amounts, network_fee_hundredth_pips: NetworkFee::get() })
 	}
 
 	fn cf_funding_environment(
@@ -1388,7 +1388,7 @@ mod test {
 						]),
 					),
 				]),
-				network_fee: Permill::from_percent(100),
+				network_fee_hundredth_pips: Permill::from_percent(100),
 			},
 			ingress_egress: IngressEgressEnvironment {
 				minimum_deposit_amounts: HashMap::from([
