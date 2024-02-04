@@ -15,4 +15,4 @@ use serde::{Deserialize, Serialize};
 	Serialize,
 	Deserialize,
 )]
-pub struct SolTransaction;
+pub enum SolTransaction {}
