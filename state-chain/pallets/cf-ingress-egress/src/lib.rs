@@ -1282,7 +1282,9 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 						Self::withhold_transaction_fee(IngressOrEgress::Egress, asset, amount);
 
 					if amount_after_fees >=
-						EgressDustLimit::<T, I>::get(asset).unique_saturated_into()
+						EgressDustLimit::<T, I>::get(asset).unique_saturated_into() ||
+						// We always want to benchmark the success case.
+						cfg!(all(feature = "runtime-benchmarks", not(test)))
 					{
 						let egress_details = ScheduledEgressDetails::new(
 							*id_counter,

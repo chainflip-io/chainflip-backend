@@ -133,7 +133,8 @@ fn request_swap_success_with_valid_parameters() {
 			Asset::Usdc,
 			EncodedAddress::Eth(Default::default()),
 			0,
-			None
+			None,
+			0
 		));
 	});
 }
@@ -229,7 +230,8 @@ fn expect_swap_id_to_be_emitted() {
 			Asset::Usdc,
 			EncodedAddress::Eth(Default::default()),
 			0,
-			None
+			None,
+			0
 		));
 		// 2. Schedule the swap -> SwapScheduled
 		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
@@ -411,7 +413,8 @@ fn rejects_invalid_swap_deposit() {
 				Asset::Eth,
 				EncodedAddress::Dot(Default::default()),
 				0,
-				Some(ccm.clone())
+				Some(ccm.clone()),
+				0
 			),
 			Error::<Test>::IncompatibleAssetAndAddress
 		);
@@ -423,7 +426,8 @@ fn rejects_invalid_swap_deposit() {
 				Asset::Dot,
 				EncodedAddress::Dot(Default::default()),
 				0,
-				Some(ccm)
+				Some(ccm),
+				0
 			),
 			Error::<Test>::CcmUnsupportedForTargetChain
 		);
@@ -486,7 +490,8 @@ fn can_process_ccms_via_swap_deposit_address() {
 			Asset::Eth,
 			EncodedAddress::Eth(Default::default()),
 			0,
-			Some(request_ccm)
+			Some(request_ccm),
+			0
 		));
 		assert_ok!(Swapping::on_ccm_deposit(
 			Asset::Dot,
@@ -1438,7 +1443,8 @@ fn swap_excess_are_confiscated_ccm_via_deposit() {
 			to,
 			EncodedAddress::Eth(Default::default()),
 			0,
-			Some(request_ccm)
+			Some(request_ccm),
+			0,
 		));
 
 		assert_ok!(Swapping::on_ccm_deposit(
@@ -1922,6 +1928,7 @@ fn broker_bps_is_limited() {
 				EncodedAddress::Eth(Default::default()),
 				1001,
 				None,
+				0,
 			),
 			Error::<Test>::BrokerCommissionBpsTooHigh
 		);

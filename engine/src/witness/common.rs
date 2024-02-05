@@ -54,7 +54,10 @@ pub type BoxActiveAndFuture<'a, T> =
 
 pub trait RuntimeHasChain<TChain: ExternalChain>:
 	pallet_cf_vaults::Config<<TChain as PalletInstanceAlias>::Instance, Chain = TChain>
-	+ pallet_cf_chain_tracking::Config<
+	+ pallet_cf_threshold_signature::Config<
+		<TChain as PalletInstanceAlias>::Instance,
+		TargetChainCrypto = TChain::ChainCrypto,
+	> + pallet_cf_chain_tracking::Config<
 		<TChain as PalletInstanceAlias>::Instance,
 		TargetChain = TChain,
 	> + pallet_cf_ingress_egress::Config<
@@ -65,7 +68,10 @@ pub trait RuntimeHasChain<TChain: ExternalChain>:
 }
 impl<TChain: ExternalChain> RuntimeHasChain<TChain> for state_chain_runtime::Runtime where
 	Self: pallet_cf_vaults::Config<<TChain as PalletInstanceAlias>::Instance, Chain = TChain>
-		+ pallet_cf_chain_tracking::Config<
+		+ pallet_cf_threshold_signature::Config<
+			<TChain as PalletInstanceAlias>::Instance,
+			TargetChainCrypto = TChain::ChainCrypto,
+		> + pallet_cf_chain_tracking::Config<
 			<TChain as PalletInstanceAlias>::Instance,
 			TargetChain = TChain,
 		> + pallet_cf_ingress_egress::Config<

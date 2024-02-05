@@ -314,6 +314,7 @@ pub trait BrokerApi: SignedExtrinsicApi {
 		destination_address: EncodedAddress,
 		broker_commission_bps: BasisPoints,
 		channel_metadata: Option<CcmChannelMetadata>,
+		boost_fee: Option<BasisPoints>,
 	) -> Result<SwapDepositAddress> {
 		let (_tx_hash, events, header, ..) = self
 			.submit_signed_extrinsic_with_dry_run(
@@ -323,6 +324,7 @@ pub trait BrokerApi: SignedExtrinsicApi {
 					destination_address,
 					broker_commission_bps,
 					channel_metadata,
+					boost_fee: boost_fee.unwrap_or_default(),
 				},
 			)
 			.await?

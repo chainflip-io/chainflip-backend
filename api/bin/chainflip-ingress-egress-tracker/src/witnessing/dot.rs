@@ -58,7 +58,7 @@ where
 		)
 		.await;
 
-	let vaults = epoch_source.vaults().await;
+	let vaults = epoch_source.vaults::<cf_chains::Polkadot>().await;
 
 	DotUnfinalisedSource::new(dot_client.clone())
 		.then(|header| async move { header.data.iter().filter_map(filter_map_events).collect() })

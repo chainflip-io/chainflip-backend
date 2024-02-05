@@ -33,6 +33,14 @@ impl<R> AsyncResult<R> {
 			_ => panic!("AsyncResult not Ready!"),
 		}
 	}
+
+	pub fn replace_inner<S>(self, inner: S) -> AsyncResult<S> {
+		match self {
+			AsyncResult::Ready(_) => AsyncResult::Ready(inner),
+			AsyncResult::Pending => AsyncResult::Pending,
+			AsyncResult::Void => AsyncResult::Void,
+		}
+	}
 }
 
 impl<R> Default for AsyncResult<R> {
