@@ -120,6 +120,8 @@ pallet-cf-cfe-interface = { path = "../state-chain/pallets/cf-cfe-interface" }
 state-chain-runtime = { path = "../state-chain/runtime" }
 utilities = { path = "../utilities" }
 
+solana-rpc = {path = "chain-rpc/solana-rpc"}
+
 # substrate deps
 cf-amm = { path = "../state-chain/amm" }
 codec = { package = "parity-scale-codec", version = "3.6.1", features = [
