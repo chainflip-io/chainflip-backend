@@ -58,31 +58,7 @@ This crate provides a `VersionedMigration` type that can be used to structure su
        (VersionedMigration<crate::Pallet<T>, my_migration::Migration<T>, 0, 1>,);
    ```
 
-4. Now create `migrations/my_migration.rs` with an implementation of `OnRuntimeUpgrade`:
-
-   ```rust
-   use crate::*;
-   use sp_std::marker::PhantomData;
-
-   /// My first migration.
-   pub struct Migration<T: Config>(PhantomData<T>);
-
-   impl<T: Config> OnRuntimeUpgrade for Migration<T> {
-       fn on_runtime_upgrade() -> frame_support::weights::Weight {
-           todo!()
-       }
-
-       #[cfg(feature = "try-runtime")]
-       fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-           todo!()
-       }
-
-       #[cfg(feature = "try-runtime")]
-       fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
-           todo!()
-       }
-   }
-   ```
+4. Now create `migrations/my_migration.rs` with an implementation of `OnRuntimeUpgrade`. You can use the `src/migration_template.rs` included in this crate as a starting point.
 
 5. If this is the first migration for this pallet, ensure that the `PalletMigration` for this pallet is added to the tuple of PalletMigrations in `state-chain/runtime/src/lib.rs`. Remember to add all the pallet's instances!
 
