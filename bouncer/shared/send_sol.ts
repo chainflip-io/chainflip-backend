@@ -7,6 +7,24 @@ import {
 } from '@solana/web3.js';
 import { amountToFineAmount, getSolConnection, getSolWhaleKeyPair } from './utils';
 
+export async function signAndSendTxSol(transaction: Transaction, log = true) {
+  const connection = getSolConnection();
+  const whaleKeypair = getSolWhaleKeyPair();
+  const tx = transaction;
+
+  tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+  tx.sign(whaleKeypair);
+  const txHash = await connection.sendRawTransaction(tx.serialize());
+  await connection.confirmTransaction(txHash);
+
+  const receipt = await connection.getParsedTransaction(txHash);
+
+  if (log) {
+    console.log('Transaction complete, tx_hash: ' + txHash + ' at slot: ' + receipt!.slot);
+  }
+  return receipt;
+}
+
 export async function signAndSendIxsSol(
   instructions: TransactionInstruction[],
   prioFee = 0,
@@ -37,23 +55,6 @@ export async function signAndSendIxsSol(
   });
 
   return signAndSendTxSol(transaction, log);
-}
-
-export async function signAndSendTxSol(transaction: Transaction, log = true) {
-  const connection = getSolConnection();
-  const whaleKeypair = getSolWhaleKeyPair();
-
-  transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-  transaction.sign(whaleKeypair);
-  const txHash = await connection.sendRawTransaction(transaction.serialize());
-  await connection.confirmTransaction(txHash);
-
-  const receipt = await connection.getParsedTransaction(txHash);
-
-  if (log) {
-    console.log('Transaction complete, tx_hash: ' + txHash + ' at slot: ' + receipt!.slot);
-  }
-  return receipt;
 }
 
 export async function sendSol(solAddress: string, solAmount: string, log = true) {
