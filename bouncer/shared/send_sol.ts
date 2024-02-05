@@ -7,15 +7,12 @@ import {
 } from '@solana/web3.js';
 import { amountToFineAmount, getSolConnection, getSolWhaleKeyPair } from './utils';
 
-export async function signAndSendTxSol(
+export async function signAndSendIxsSol(
   instructions: TransactionInstruction[],
   prioFee = 0,
   limitCU = 0,
   log = true,
 ) {
-  const connection = getSolConnection();
-  const whaleKeypair = getSolWhaleKeyPair();
-
   const transaction = new Transaction();
 
   if (prioFee > 0) {
@@ -34,10 +31,17 @@ export async function signAndSendTxSol(
     );
   }
 
-  // Add remaining instructions
+  // Add instructions
   instructions.forEach((item) => {
     transaction.add(item);
   });
+
+  return signAndSendTxSol(transaction, log);
+}
+
+export async function signAndSendTxSol(transaction: Transaction, log = true) {
+  const connection = getSolConnection();
+  const whaleKeypair = getSolWhaleKeyPair();
 
   transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
   transaction.sign(whaleKeypair);
@@ -54,12 +58,12 @@ export async function signAndSendTxSol(
 
 export async function sendSol(solAddress: string, solAmount: string, log = true) {
   const lamportsAmount = amountToFineAmount(solAmount, 9); // assetDecimals.SOL when available
-  const intruction = [
+  const transaction = new Transaction().add(
     SystemProgram.transfer({
       fromPubkey: getSolWhaleKeyPair().publicKey,
       toPubkey: new PublicKey(solAddress),
       lamports: BigInt(lamportsAmount),
     }),
-  ];
-  await signAndSendTxSol(intruction, undefined, undefined, log);
+  );
+  await signAndSendTxSol(transaction, log);
 }
