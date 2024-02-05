@@ -19,9 +19,9 @@ use cf_chains::{
 	ChainCrypto, DepositChannel, Ethereum, SwapOrigin,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId, CeremonyId,
-	ChannelId, Ed25519PublicKey, EgressCounter, EgressId, EpochIndex, FlipBalance, ForeignChain,
-	Ipv6Addr, NetworkEnvironment, SemVer, SwapId, ThresholdSignatureRequestId,
+	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId, ChannelId,
+	Ed25519PublicKey, EgressCounter, EgressId, EpochIndex, FlipBalance, ForeignChain, Ipv6Addr,
+	NetworkEnvironment, SemVer, SwapId, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -148,14 +148,14 @@ impl<Id, Amount> From<(Id, Amount)> for Bid<Id, Amount> {
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, Decode, Encode)]
-pub enum VaultStatus<ValidatorId> {
+pub enum KeyRotationStatusOuter<ValidatorId> {
 	KeygenComplete,
 	KeyHandoverComplete,
 	RotationComplete,
 	Failed(BTreeSet<ValidatorId>),
 }
 
-pub trait VaultRotator {
+pub trait KeyRotator {
 	type ValidatorId: Ord + Clone;
 
 	/// Start the rotation by kicking off keygen with provided candidates.
@@ -171,18 +171,31 @@ pub trait VaultRotator {
 	);
 
 	/// Get the current rotation status.
-	fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>>;
+	fn status() -> AsyncResult<KeyRotationStatusOuter<Self::ValidatorId>>;
 
-	/// Activate key/s on particular chain/s. For example, setting the new key
-	/// on the contract for a smart contract chain.
-	fn activate();
+	/// Activate key on for vaults on all chains that use this Key.
+	fn activate_keys();
 
 	/// Reset the state associated with the current key rotation
 	/// in preparation for a new one.
-	fn reset_vault_rotation();
+	fn reset_key_rotation();
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_status(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>);
+	fn set_status(_outcome: AsyncResult<KeyRotationStatusOuter<Self::ValidatorId>>);
+}
+
+pub trait VaultActivator<C: ChainCrypto> {
+	type ValidatorId: Ord + Clone;
+
+	/// Get the current rotation status.
+	fn status() -> AsyncResult<()>;
+
+	/// Activate key/s on particular chain/s. For example, setting the new key
+	/// on the contract for a smart contract chain.
+	fn activate(new_key: C::AggKey, maybe_old_key: Option<C::AggKey>);
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_status(_outcome: AsyncResult<()>);
 }
 
 /// Handler for Epoch life cycle events.
@@ -404,14 +417,6 @@ where
 	/// ceremony id.
 	fn request_signature(payload: C::Payload) -> ThresholdSignatureRequestId;
 
-	fn request_verification_signature(
-		payload: C::Payload,
-		participants: BTreeSet<Self::ValidatorId>,
-		key: C::AggKey,
-		epoch_index: EpochIndex,
-		on_signature_ready: impl FnOnce(ThresholdSignatureRequestId) -> Self::Callback,
-	) -> ThresholdSignatureRequestId;
-
 	/// Register a callback to be dispatched when the signature is available. Can fail if the
 	/// provided request_id does not exist.
 	fn register_callback(
@@ -625,11 +630,6 @@ pub trait Bonding {
 	fn update_bond(authority: &Self::ValidatorId, bond: Self::Amount);
 }
 
-pub trait CeremonyIdProvider {
-	/// Increment the ceremony id, returning the new one.
-	fn increment_ceremony_id() -> CeremonyId;
-}
-
 /// Something that is able to provide block authorship slots that were missed.
 pub trait MissedAuthorshipSlots {
 	/// Get a list of slots that were missed.
@@ -779,7 +779,7 @@ impl<C: Chain + Get<ForeignChain>> EgressApi<C> for () {
 }
 
 pub trait VaultKeyWitnessedHandler<C: Chain> {
-	fn on_new_key_activated(block_number: C::ChainBlockNumber) -> DispatchResultWithPostInfo;
+	fn on_first_key_activated(block_number: C::ChainBlockNumber) -> DispatchResultWithPostInfo;
 }
 
 pub trait BroadcastAnyChainGovKey {

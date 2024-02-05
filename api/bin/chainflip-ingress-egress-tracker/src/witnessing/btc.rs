@@ -43,7 +43,7 @@ where
 	)
 	.await?;
 
-	let vaults = epoch_source.vaults().await;
+	let vaults = epoch_source.vaults::<cf_chains::Bitcoin>().await;
 
 	BtcSource::new(btc_client.clone())
 		.strictly_monotonic()

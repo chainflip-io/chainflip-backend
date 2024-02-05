@@ -76,6 +76,7 @@ fn cannot_deposit_and_withdrawal_during_safe_mode() {
 			LiquidityProvider::request_liquidity_deposit_address(
 				RuntimeOrigin::signed(LP_ACCOUNT.into()),
 				Asset::Eth,
+				0
 			),
 			crate::Error::<Test>::LiquidityDepositDisabled,
 		);
@@ -98,6 +99,7 @@ fn cannot_deposit_and_withdrawal_during_safe_mode() {
 		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			Asset::Eth,
+			0
 		));
 
 		assert_ok!(LiquidityProvider::withdraw_asset(
@@ -166,6 +168,7 @@ fn cannot_request_deposit_address_without_registering_liquidity_refund_address()
 		assert_noop!(LiquidityProvider::request_liquidity_deposit_address(
 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			Asset::Eth,
+			0,
 		), crate::Error::<Test>::NoLiquidityRefundAddressRegistered);
 
 		// Register EWA
@@ -178,14 +181,17 @@ fn cannot_request_deposit_address_without_registering_liquidity_refund_address()
 		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			Asset::Eth,
+			0,
 		));
 		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			Asset::Flip,
+			0,
 		));
 		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			Asset::Usdc,
+			0,
 		));
 		assert_events_match!(Test, RuntimeEvent::LiquidityProvider(crate::Event::LiquidityDepositAddressReady {
 			..
@@ -200,10 +206,12 @@ fn cannot_request_deposit_address_without_registering_liquidity_refund_address()
 		assert_noop!(LiquidityProvider::request_liquidity_deposit_address(
 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			Asset::Btc,
+			0,
 		), crate::Error::<Test>::NoLiquidityRefundAddressRegistered);
 		assert_noop!(LiquidityProvider::request_liquidity_deposit_address(
 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			Asset::Dot,
+			0,
 		), crate::Error::<Test>::NoLiquidityRefundAddressRegistered);
 	});
 }

@@ -9,6 +9,7 @@ pub mod vault;
 
 use std::{collections::HashMap, sync::Arc};
 
+use cf_chains::Ethereum;
 use cf_primitives::{chains::assets::eth, EpochIndex};
 use futures_core::Future;
 use sp_core::H160;
@@ -109,7 +110,7 @@ where
 		.logging("chain tracking")
 		.spawn(scope);
 
-	let vaults = epoch_source.vaults().await;
+	let vaults = epoch_source.vaults::<Ethereum>().await;
 
 	// ===== Full witnessing stream =====
 

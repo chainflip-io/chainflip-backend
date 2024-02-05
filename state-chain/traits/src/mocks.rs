@@ -24,6 +24,7 @@ pub mod fee_payment;
 pub mod flip_burn_info;
 pub mod funding_info;
 pub mod key_provider;
+pub mod key_rotator;
 pub mod lp_balance;
 pub mod offence_reporting;
 pub mod on_account_funded;
@@ -35,7 +36,6 @@ pub mod swap_deposit_handler;
 pub mod threshold_signer;
 pub mod time_source;
 pub mod tracked_data_provider;
-pub mod vault_rotator;
 pub mod waived_fees_mock;
 
 #[macro_export]

@@ -5,7 +5,7 @@ pub use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::address::EncodedAddress;
-use cf_primitives::{Asset, AssetAmount, BlockNumber, EgressId};
+use cf_primitives::{Asset, AssetAmount, BasisPoints, BlockNumber, EgressId};
 use chainflip_engine::state_chain_observer::client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock, WaitFor, WaitForResult},
 	StateChainClient,
@@ -179,10 +179,14 @@ pub trait LpApi: SignedExtrinsicApi {
 		&self,
 		asset: Asset,
 		wait_for: WaitFor,
+		boost_fee: Option<BasisPoints>,
 	) -> Result<ApiWaitForResult<EncodedAddress>> {
 		let wait_for_result = self
 			.submit_signed_extrinsic_wait_for(
-				pallet_cf_lp::Call::request_liquidity_deposit_address { asset },
+				pallet_cf_lp::Call::request_liquidity_deposit_address {
+					asset,
+					boost_fee: boost_fee.unwrap_or_default(),
+				},
 				wait_for,
 			)
 			.await?;

@@ -28,6 +28,7 @@ mod benchmarks {
 			destination_asset: Asset::Usdc,
 			destination_address: EncodedAddress::benchmark_value(),
 			broker_commission_bps: 0,
+			boost_fee: 0,
 			channel_metadata: None,
 		};
 		#[block]
