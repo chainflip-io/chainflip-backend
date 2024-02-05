@@ -24,7 +24,7 @@ mod benchmarks {
 		));
 
 		#[extrinsic_call]
-		request_liquidity_deposit_address(RawOrigin::Signed(caller), Asset::Eth);
+		request_liquidity_deposit_address(RawOrigin::Signed(caller), Asset::Eth, 0);
 	}
 
 	#[benchmark]

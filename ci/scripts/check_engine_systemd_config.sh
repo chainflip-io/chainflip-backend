@@ -27,7 +27,7 @@ for subdir in "${subdirectories[@]}"; do
     if [[ -f "$filepath" ]]; then
         echo "File exists: $filepath"
 
-        # Check if the file contains the string 'chainflip-engine1.1'
+        # Check if the file contains the string 'chainflip-engine1.2'
         if grep -q "chainflip-engine${major_version}.${minor_version}" "$filepath"; then
             echo "The string '$engine_binary_name' exists in $filepath"
         else

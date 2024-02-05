@@ -4,8 +4,6 @@ use scale_info::TypeInfo;
 
 use frame_support::{storage, StorageHasher, Twox64Concat};
 
-use crate::CeremonyIdProvider;
-
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockCeremonyIdProvider;
 
@@ -18,14 +16,5 @@ impl MockCeremonyIdProvider {
 
 	pub fn get() -> CeremonyId {
 		storage::hashed::get_or_default(&<Twox64Concat as StorageHasher>::hash, Self::STORAGE_KEY)
-	}
-}
-
-impl CeremonyIdProvider for MockCeremonyIdProvider {
-	fn increment_ceremony_id() -> CeremonyId {
-		let mut id = Self::get();
-		id += 1;
-		Self::set(id);
-		id
 	}
 }

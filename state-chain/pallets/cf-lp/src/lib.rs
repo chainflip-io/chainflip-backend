@@ -2,7 +2,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
-use cf_primitives::{Asset, AssetAmount, ForeignChain};
+use cf_primitives::{Asset, AssetAmount, BasisPoints, ForeignChain};
 use cf_traits::{
 	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi,
 	EgressApi, LpDepositHandler, PoolApi, ScheduledEgressDetails,
@@ -108,6 +108,7 @@ pub mod pallet {
 			// account the funds will be credited to upon deposit
 			account_id: T::AccountId,
 			deposit_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
+			boost_fee: BasisPoints,
 		},
 		WithdrawalEgressScheduled {
 			egress_id: EgressId,
@@ -158,6 +159,7 @@ pub mod pallet {
 		pub fn request_liquidity_deposit_address(
 			origin: OriginFor<T>,
 			asset: Asset,
+			boost_fee: BasisPoints,
 		) -> DispatchResult {
 			ensure!(T::SafeMode::get().deposit_enabled, Error::<T>::LiquidityDepositDisabled);
 
@@ -177,6 +179,7 @@ pub mod pallet {
 				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
 				account_id,
 				deposit_chain_expiry_block: expiry_block,
+				boost_fee,
 			});
 
 			Ok(())

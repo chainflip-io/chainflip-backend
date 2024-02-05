@@ -6,8 +6,8 @@ use crate::PalletSafeMode;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
-		cfe_interface_mock::MockCfeInterface, qualify_node::QualifyAll,
-		reputation_resetter::MockReputationResetter, vault_rotator::MockVaultRotatorA,
+		cfe_interface_mock::MockCfeInterface, key_rotator::MockKeyRotatorA,
+		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
 	},
 	AccountRoleRegistry, Bid,
 };
@@ -187,7 +187,7 @@ impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = PalletOffence;
 	type EpochTransitionHandler = TestEpochTransitionHandler;
-	type VaultRotator = MockVaultRotatorA;
+	type KeyRotator = MockKeyRotatorA;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
 	type BidderProvider = MockBidderProvider;
 	type OffenceReporter = MockOffenceReporter;

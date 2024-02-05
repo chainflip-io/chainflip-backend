@@ -319,7 +319,6 @@ impl Chain for Polkadot {
 	const GAS_ASSET: Self::ChainAsset = assets::dot::Asset::Dot;
 
 	type ChainCrypto = PolkadotCrypto;
-
 	type ChainBlockNumber = PolkadotBlockNumber;
 	type ChainAmount = PolkadotBalance;
 	type TrackedData = PolkadotTrackedData;
@@ -358,6 +357,7 @@ impl ChainCrypto for PolkadotCrypto {
 	type ThresholdSignature = PolkadotSignature;
 	type TransactionInId = TxId;
 	type TransactionOutId = PolkadotSignature;
+	type KeyHandoverIsRequired = ConstBool<false>;
 
 	type GovKey = PolkadotPublicKey;
 

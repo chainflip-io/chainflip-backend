@@ -43,6 +43,7 @@ impl ChainCrypto for NoneChainCrypto {
 	type ThresholdSignature = ();
 	type TransactionInId = ();
 	type TransactionOutId = ();
+	type KeyHandoverIsRequired = ConstBool<false>;
 	type GovKey = ();
 
 	fn verify_threshold_signature(

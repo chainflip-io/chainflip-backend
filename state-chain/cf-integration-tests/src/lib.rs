@@ -66,7 +66,7 @@ pub enum ChainflipAccountState {
 	Backup,
 }
 
-pub type AllVaults = <Runtime as pallet_cf_validator::Config>::VaultRotator;
+pub type AllVaults = <Runtime as pallet_cf_validator::Config>::KeyRotator;
 
 /// Helper function that dispatches a call that requires EnsureWitnessed origin.
 pub fn witness_call(call: RuntimeCall) {

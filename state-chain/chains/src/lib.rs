@@ -165,6 +165,8 @@ pub trait ChainCrypto {
 	/// Uniquely identifies a transaction on the outgoing direction.
 	type TransactionOutId: Member + Parameter + Unpin + BenchmarkValue;
 
+	type KeyHandoverIsRequired: Get<bool>;
+
 	type GovKey: Member + Parameter + Copy + BenchmarkValue;
 
 	fn verify_threshold_signature(

@@ -100,7 +100,7 @@ pub async fn proxy_added_witnessing(
 	header: Header<PolkadotBlockNumber, PolkadotHash, Vec<(Phase, EventWrapper)>>,
 ) -> (Vec<(Phase, EventWrapper)>, BTreeSet<u32>) {
 	let events = header.data;
-	let proxy_added_broadcasts = proxy_addeds(header.index, &events, &epoch.info.1);
+	let proxy_added_broadcasts = proxy_addeds(header.index, &events, &epoch.info.0);
 
 	(events, proxy_added_broadcasts)
 }
@@ -155,7 +155,7 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 						process_call(
 							pallet_cf_broadcast::Call::<_, PolkadotInstance>::transaction_succeeded {
 								tx_out_id: signature,
-								signer_id: epoch.info.1,
+								signer_id: epoch.info.0,
 								tx_fee,
 								tx_metadata: (),
 							}
@@ -219,7 +219,7 @@ where
 		)
 		.await;
 
-	let vaults = epoch_source.vaults().await;
+	let vaults = epoch_source.vaults::<cf_chains::Polkadot>().await;
 
 	// Full witnessing
 	DotFinalisedSource::new(dot_client.clone())

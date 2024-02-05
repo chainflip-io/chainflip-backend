@@ -1,6 +1,6 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 pub mod address_derivation;
-pub mod all_vaults_rotator;
+pub mod all_keys_rotator;
 pub mod backup_node_rewards;
 pub mod chain_instances;
 pub mod decompose_recompose;
@@ -9,10 +9,11 @@ mod missed_authorship_slots;
 mod offences;
 mod signer_nomination;
 use crate::{
-	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress, BitcoinVault,
-	BlockNumber, Emissions, Environment, EthereumBroadcaster, EthereumChainTracking,
-	EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster, PolkadotChainTracking,
-	PolkadotIngressEgress, PolkadotVault, Runtime, RuntimeCall, System, Validator, YEAR,
+	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress,
+	BitcoinThresholdSigner, BlockNumber, Emissions, Environment, EthereumBroadcaster,
+	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster,
+	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
+	System, Validator, YEAR,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -77,6 +78,7 @@ impl Chainflip for Runtime {
 	type AccountRoleRegistry = AccountRoles;
 	type FundingInfo = Flip;
 }
+
 struct BackupNodeEmissions;
 
 impl RewardsDistribution for BackupNodeEmissions {
@@ -325,7 +327,7 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 			// It should not be possible to get None here, since we never send
 			// any transactions unless we have a vault account and associated
 			// proxy.
-			signer: <PolkadotVault as KeyProvider<PolkadotCrypto>>::active_epoch_key()
+			signer: <PolkadotThresholdSigner as KeyProvider<PolkadotCrypto>>::active_epoch_key()
 				.map(|epoch_key| epoch_key.key)
 				.defensive_unwrap_or_default(),
 			nonce: Environment::next_polkadot_proxy_account_nonce(reset_nonce),
@@ -360,7 +362,7 @@ impl ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount> for BtcEn
 
 impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
 	fn lookup(_: ()) -> Option<cf_chains::btc::AggKey> {
-		<BitcoinVault as KeyProvider<BitcoinCrypto>>::active_epoch_key()
+		<BitcoinThresholdSigner as KeyProvider<BitcoinCrypto>>::active_epoch_key()
 			.map(|epoch_key| epoch_key.key)
 	}
 }
