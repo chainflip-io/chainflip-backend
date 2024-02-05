@@ -1,21 +1,25 @@
-use crate::*;
 use frame_support::traits::OnRuntimeUpgrade;
 use sp_std::marker::PhantomData;
 
-pub struct Migration<T: Config>(PhantomData<T>);
+#[cfg(feature = "try-runtime")]
+use frame_support::pallet_prelude::DispatchError;
+#[cfg(feature = "try-runtime")]
+use sp_std::vec::Vec;
 
-impl<T: Config> OnRuntimeUpgrade for Migration<T> {
+pub struct Migration<T>(PhantomData<T>);
+
+impl<T> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		Default::default()
+		unimplemented!()
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		Ok(Default::default())
+		unimplemented!()
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
-		Ok(())
+		unimplemented!()
 	}
 }

@@ -1,5 +1,5 @@
-pub mod v1;
+use crate::Pallet;
 
-// use cf_runtime_upgrade_utilities::VersionedMigration;
+use cf_runtime_upgrade_utilities::{migration_template::Migration, VersionedMigration};
 
-pub type PalletMigration = (); //(VersionedMigration<crate::Pallet<T>, v1::Migration<T>, 0, 1>,);
+pub type PalletMigration<T> = VersionedMigration<Pallet<T>, Migration<T>, 0, 1>;
