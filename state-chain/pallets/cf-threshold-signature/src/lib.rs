@@ -35,7 +35,7 @@ use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
 	sp_runtime::{
-		traits::{BlockNumberProvider, Saturating, Zero},
+		traits::{BlockNumberProvider, Saturating},
 		RuntimeDebug,
 	},
 	traits::{DefensiveOption, EnsureOrigin, Get, StorageVersion, UnfilteredDispatchable},
@@ -160,6 +160,14 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
 
 const THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
 const KEYGEN_CEREMONY_RESPONSE_TIMEOUT_BLOCKS_DEFAULT: u32 = 90;
+
+struct GetFromU32<C: Get<u32>>(PhantomData<C>);
+
+impl<C: Get<u32>, B: From<u32>> Get<B> for GetFromU32<C> {
+	fn get() -> B {
+		C::get().into()
+	}
+}
 
 macro_rules! handle_key_ceremony_report {
 	($origin:expr, $ceremony_id:expr, $reported_outcome:expr, $variant:path, $success_event:expr, $failure_event:expr) => {
@@ -434,8 +442,12 @@ pub mod pallet {
 	/// Maximum duration of a threshold signing ceremony before it is timed out and retried
 	#[pallet::storage]
 	#[pallet::getter(fn threshold_signature_response_timeout)]
-	pub type ThresholdSignatureResponseTimeout<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+	pub(super) type ThresholdSignatureResponseTimeout<T: Config<I>, I: 'static = ()> = StorageValue<
+		_,
+		BlockNumberFor<T>,
+		ValueQuery,
+		GetFromU32<ConstU32<THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT>>,
+	>;
 
 	/// The epoch whose authorities control the current key.
 	#[pallet::storage]
@@ -491,8 +503,12 @@ pub mod pallet {
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	#[pallet::storage]
-	pub(super) type KeygenResponseTimeout<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+	pub(super) type KeygenResponseTimeout<T: Config<I>, I: 'static = ()> = StorageValue<
+		_,
+		BlockNumberFor<T>,
+		ValueQuery,
+		GetFromU32<ConstU32<KEYGEN_CEREMONY_RESPONSE_TIMEOUT_BLOCKS_DEFAULT>>,
+	>;
 
 	/// The amount of FLIP that is slashed for an agreed reported party expressed in Flipperinos
 	/// (2/3 must agree the node was an offender) on keygen failure.
@@ -860,22 +876,6 @@ pub mod pallet {
 			weight +
 				T::Weights::on_initialize(T::EpochInfo::current_authority_count(), num_retries) +
 				T::Weights::report_offenders(num_offenders as AuthorityCount)
-		}
-
-		fn on_runtime_upgrade() -> Weight {
-			// For new pallet instances, this always needs to be set.
-			ThresholdSignatureResponseTimeout::<T, I>::mutate(|timeout| {
-				if timeout.is_zero() {
-					*timeout = THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT.into();
-				}
-			});
-			// For new pallet instances, genesis items need to be set.
-			if !KeygenResponseTimeout::<T, I>::exists() {
-				KeygenResponseTimeout::<T, I>::set(
-					KEYGEN_CEREMONY_RESPONSE_TIMEOUT_BLOCKS_DEFAULT.into(),
-				);
-			}
-			Weight::zero()
 		}
 	}
 
