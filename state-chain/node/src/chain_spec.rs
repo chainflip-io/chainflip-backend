@@ -685,6 +685,7 @@ fn testnet_genesis(
 			deposit_channel_lifetime: polkadot_deposit_channel_lifetime,
 			witness_safety_margin: None,
 		},
+		solana_ingress_egress: Default::default(),
 	}
 }
 

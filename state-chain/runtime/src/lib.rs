@@ -362,23 +362,23 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type AssetConverter = LiquidityPools;
 }
 
-// impl pallet_cf_ingress_egress::Config<SolanaInstance> for Runtime {
-// 	type RuntimeEvent = RuntimeEvent;
-// 	type RuntimeCall = RuntimeCall;
-// 	type TargetChain = Solana;
-// 	type AddressDerivation = AddressDerivation;
-// 	type AddressConverter = ChainAddressConverter;
-// 	type LpBalance = LiquidityProvider;
-// 	type SwapDepositHandler = Swapping;
-// 	type ChainApiCall = cf_chains::sol::api::SolanaApi<chainflip::SolanaEnvironment>;
-// 	type Broadcaster = ();
-// 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
-// 	type DepositHandler = ();
-// 	type ChainTracking = ();
-// 	type CcmHandler = Swapping;
-// 	type NetworkEnvironment = Environment;
-// 	type AssetConverter = LiquidityPools;
-// }
+impl pallet_cf_ingress_egress::Config<SolanaInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type TargetChain = Solana;
+	type AddressDerivation = AddressDerivation;
+	type AddressConverter = ChainAddressConverter;
+	type LpBalance = LiquidityProvider;
+	type SwapDepositHandler = Swapping;
+	type ChainApiCall = cf_chains::sol::api::SolanaApi<chainflip::SolanaEnvironment>;
+	type Broadcaster = SolanaBroadcaster;
+	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
+	type DepositHandler = chainflip::SolDepositHandler;
+	type ChainTracking = SolanaChainTracking;
+	type CcmHandler = Swapping;
+	type NetworkEnvironment = Environment;
+	type AssetConverter = LiquidityPools;
+}
 
 parameter_types! {
 	pub const NetworkFee: Permill = Permill::from_perthousand(1);
@@ -897,7 +897,7 @@ construct_runtime!(
 		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
 		PolkadotIngressEgress: pallet_cf_ingress_egress::<Instance2>,
 		BitcoinIngressEgress: pallet_cf_ingress_egress::<Instance3>,
-		// SolanaIngressEgress: pallet_cf_ingress_egress::<Instance4>,
+		SolanaIngressEgress: pallet_cf_ingress_egress::<Instance4>,
 
 		LiquidityPools: pallet_cf_pools,
 

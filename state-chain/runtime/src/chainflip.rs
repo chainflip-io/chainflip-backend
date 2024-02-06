@@ -557,6 +557,9 @@ impl DepositHandler<Bitcoin> for BtcDepositHandler {
 	}
 }
 
+pub struct SolDepositHandler;
+impl DepositHandler<Solana> for SolDepositHandler {}
+
 pub struct ChainAddressConverter;
 
 impl AddressConverter for ChainAddressConverter {
