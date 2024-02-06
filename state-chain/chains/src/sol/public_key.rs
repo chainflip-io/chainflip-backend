@@ -60,15 +60,24 @@ impl core::str::FromStr for SolPublicKey {
 	}
 }
 
+impl core::fmt::Display for SolPublicKey {
+	fn fmt(
+		&self,
+		f: &mut scale_info::prelude::fmt::Formatter<'_>,
+	) -> scale_info::prelude::fmt::Result {
+		write!(f, "{}", base58::ToBase58::to_base58(&self.0[..]))
+	}
+}
+
 impl address::ToHumanreadableAddress for SolPublicKey {
 	#[cfg(feature = "std")]
-	type Humanreadable = Self;
+	type Humanreadable = String;
 
 	#[cfg(feature = "std")]
 	fn to_humanreadable(
 		&self,
 		_network_environment: cf_primitives::NetworkEnvironment,
 	) -> Self::Humanreadable {
-		*self
+		self.to_string()
 	}
 }

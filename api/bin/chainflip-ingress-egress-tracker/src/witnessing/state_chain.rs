@@ -20,6 +20,7 @@ enum TransactionId {
 	Bitcoin { hash: String },
 	Ethereum { signature: SchnorrVerificationComponents },
 	Polkadot { signature: String },
+	Solana { signature: String },
 }
 
 #[derive(Serialize)]
@@ -47,6 +48,7 @@ impl WitnessInformation {
 				TransactionId::Bitcoin { .. } => ForeignChain::Bitcoin,
 				TransactionId::Ethereum { .. } => ForeignChain::Ethereum,
 				TransactionId::Polkadot { .. } => ForeignChain::Polkadot,
+				TransactionId::Solana { .. } => ForeignChain::Solana,
 			},
 		}
 	}
@@ -110,8 +112,13 @@ impl From<DepositInfo<Polkadot>> for WitnessInformation {
 }
 
 impl From<DepositInfo<Solana>> for WitnessInformation {
-	fn from((_value, _deposit_chain_block_height, _network): DepositInfo<Solana>) -> Self {
-		unimplemented!()
+	fn from((value, deposit_chain_block_height, network): DepositInfo<Solana>) -> Self {
+		Self::Deposit {
+			deposit_chain_block_height,
+			deposit_address: value.deposit_address.to_humanreadable(network),
+			amount: value.amount.into(),
+			asset: value.asset.into(),
+		}
 	}
 }
 
