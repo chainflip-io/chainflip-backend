@@ -208,6 +208,10 @@ where
 					.await?;
 			}
 		},
+		SolanaBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
+			let _ = tx_out_id;
+			unimplemented!()
+		},
 
 		EthereumIngressEgress(_) |
 		BitcoinIngressEgress(_) |
@@ -233,12 +237,15 @@ where
 		EthereumVault(_) |
 		PolkadotVault(_) |
 		BitcoinVault(_) |
+		SolanaVault(_) |
 		EthereumThresholdSigner(_) |
 		PolkadotThresholdSigner(_) |
 		BitcoinThresholdSigner(_) |
+		SolanaThresholdSigner(_) |
 		EthereumBroadcaster(_) |
 		PolkadotBroadcaster(_) |
 		BitcoinBroadcaster(_) |
+		SolanaBroadcaster(_) |
 		Swapping(_) |
 		LiquidityProvider(_) |
 		LiquidityPools(_) => {},

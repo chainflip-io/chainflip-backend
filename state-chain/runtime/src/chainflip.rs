@@ -38,9 +38,10 @@ use cf_chains::{
 		api::{EthEnvironmentProvider, EvmReplayProtection},
 		EvmCrypto, Transaction,
 	},
+	sol::api::SolanaApi,
 	AnyChain, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	ChainEnvironment, ChainState, DepositChannel, ForeignChain, ReplayProtectionProvider,
-	SetCommKeyWithAggKey, SetGovKeyWithAggKey, TransactionBuilder,
+	SetCommKeyWithAggKey, SetGovKeyWithAggKey, Solana, TransactionBuilder,
 };
 use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId};
 use cf_traits::{
@@ -248,6 +249,27 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 		// the btc tx is always valid as long as the input UTXOs are valid. Therefore, we don't have
 		// to check anything here and just rebroadcast.
 		false
+	}
+}
+
+pub struct SolanaTransactionBuilder;
+impl TransactionBuilder<Solana, SolanaApi<SolanaEnvironment>> for SolanaTransactionBuilder {
+	fn build_transaction(
+		_signed_call: &SolanaApi<SolanaEnvironment>,
+	) -> <Solana as Chain>::Transaction {
+		unimplemented!()
+	}
+	fn refresh_unsigned_data(_tx: &mut <Solana as Chain>::Transaction) {
+		unimplemented!()
+	}
+	fn calculate_gas_limit(_call: &SolanaApi<SolanaEnvironment>) -> Option<U256> {
+		unimplemented!()
+	}
+	fn requires_signature_refresh(
+		_call: &SolanaApi<SolanaEnvironment>,
+		_payload: &<<Solana as Chain>::ChainCrypto as ChainCrypto>::Payload,
+	) -> bool {
+		unimplemented!()
 	}
 }
 
@@ -576,6 +598,9 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 			_ => unreachable!(),
 		}
 	}
+}
+impl OnBroadcastReady<Solana> for BroadcastReadyProvider {
+	type ApiCall = SolanaApi<SolanaEnvironment>;
 }
 
 pub struct BitcoinFeeGetter;

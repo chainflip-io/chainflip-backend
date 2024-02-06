@@ -621,6 +621,8 @@ fn testnet_genesis(
 			keygen_response_timeout: keygen_ceremony_timeout_blocks,
 			amount_to_slash: FLIPPERINOS_PER_FLIP,
 		},
+		solana_vault: Default::default(),
+
 		ethereum_threshold_signer: EthereumThresholdSignerConfig {
 			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
 			_instance: PhantomData,
@@ -634,6 +636,8 @@ fn testnet_genesis(
 			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
 			_instance: PhantomData,
 		},
+		solana_threshold_signer: Default::default(),
+
 		emissions: EmissionsConfig {
 			current_authority_emission_inflation: current_authority_emission_inflation_perbill,
 			backup_node_emission_inflation: backup_node_emission_inflation_perbill,

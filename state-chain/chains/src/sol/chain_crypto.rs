@@ -5,6 +5,7 @@ use crate::ChainCrypto;
 
 use super::{SolPublicKey, SolSignature};
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SolanaCrypto;
 
 impl ChainCrypto for SolanaCrypto {

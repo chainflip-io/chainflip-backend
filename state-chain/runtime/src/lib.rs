@@ -25,6 +25,7 @@ use cf_chains::{
 	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
+	sol::SolanaCrypto,
 	Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, FeeEstimationApi, ForeignChain, Polkadot,
 	Solana, TransactionBuilder,
 };
@@ -102,7 +103,7 @@ pub use chainflip::chain_instances::*;
 use chainflip::{
 	all_vaults_rotator::AllVaultRotator, epoch_transition::ChainflipEpochTransitions,
 	BroadcastReadyProvider, BtcEnvironment, ChainAddressConverter, ChainflipHeartbeat,
-	DotEnvironment, EthEnvironment, TokenholderGovernanceBroadcaster,
+	DotEnvironment, EthEnvironment, SolanaEnvironment, TokenholderGovernanceBroadcaster,
 };
 use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
 
@@ -282,6 +283,24 @@ impl pallet_cf_vaults::Config<BitcoinInstance> for Runtime {
 	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type ChainTracking = BitcoinChainTracking;
+	type SafeMode = RuntimeSafeMode;
+	type Slasher = FlipSlasher<Self>;
+	type CfeMultisigRequest = CfeInterface;
+}
+
+impl pallet_cf_vaults::Config<SolanaInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type EnsureThresholdSigned =
+		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, SolanaInstance>;
+	type ThresholdSigner = SolanaThresholdSigner;
+	type Offence = chainflip::Offence;
+	type Chain = Solana;
+	type SetAggKeyWithAggKey = cf_chains::sol::api::SolanaApi<SolanaEnvironment>;
+	type Broadcaster = SolanaBroadcaster;
+	type OffenceReporter = Reputation;
+	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
+	type ChainTracking = SolanaChainTracking;
 	type SafeMode = RuntimeSafeMode;
 	type Slasher = FlipSlasher<Self>;
 	type CfeMultisigRequest = CfeInterface;
@@ -694,6 +713,21 @@ impl pallet_cf_threshold_signature::Config<BitcoinInstance> for Runtime {
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
 
+impl pallet_cf_threshold_signature::Config<SolanaInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Offence = chainflip::Offence;
+	type RuntimeOrigin = RuntimeOrigin;
+	type ThresholdCallable = RuntimeCall;
+	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
+	type TargetChainCrypto = SolanaCrypto;
+	type KeyProvider = SolanaVault;
+	type OffenceReporter = Reputation;
+	type CeremonyIdProvider = SolanaVault;
+	type CeremonyRetryDelay = ConstU32<1>;
+	type CfeMultisigRequest = CfeInterface;
+	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
+}
+
 impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
@@ -766,6 +800,30 @@ impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
 	type CfeBroadcastRequest = CfeInterface;
 }
 
+impl pallet_cf_broadcast::Config<SolanaInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type RuntimeOrigin = RuntimeOrigin;
+	type BroadcastCallable = RuntimeCall;
+	type Offence = chainflip::Offence;
+	type TargetChain = Solana;
+	type ApiCall = cf_chains::sol::api::SolanaApi<SolanaEnvironment>;
+	type ThresholdSigner = SolanaThresholdSigner;
+	type TransactionBuilder = chainflip::SolanaTransactionBuilder;
+	type BroadcastSignerNomination = chainflip::RandomSignerNomination;
+	type OffenceReporter = Reputation;
+	type EnsureThresholdSigned =
+		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, SolanaInstance>;
+	type BroadcastReadyProvider = BroadcastReadyProvider;
+	type BroadcastTimeout = ConstU32<{ 90 * MINUTES }>;
+	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
+	type SafeMode = RuntimeSafeMode;
+	type SafeModeBlockMargin = ConstU32<10>;
+	type ChainTracking = SolanaChainTracking;
+	type RetryPolicy = DefaultRetryPolicy;
+	type CfeBroadcastRequest = CfeInterface;
+}
+
 impl pallet_cf_chain_tracking::Config<EthereumInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Ethereum;
@@ -821,17 +879,17 @@ construct_runtime!(
 		EthereumVault: pallet_cf_vaults::<Instance1>,
 		PolkadotVault: pallet_cf_vaults::<Instance2>,
 		BitcoinVault: pallet_cf_vaults::<Instance3>,
-		// SolanaVault: pallet_cf_vaults::<Instance4>,
+		SolanaVault: pallet_cf_vaults::<Instance4>,
 
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
 		PolkadotThresholdSigner: pallet_cf_threshold_signature::<Instance2>,
 		BitcoinThresholdSigner: pallet_cf_threshold_signature::<Instance3>,
-		// SolanaThresholdSigner: pallet_cf_threshold_signature::<Instance4>,
+		SolanaThresholdSigner: pallet_cf_threshold_signature::<Instance4>,
 
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
 		PolkadotBroadcaster: pallet_cf_broadcast::<Instance2>,
 		BitcoinBroadcaster: pallet_cf_broadcast::<Instance3>,
-		// SolanaBroadcaster: pallet_cf_broadcast::<Instance4>,
+		SolanaBroadcaster: pallet_cf_broadcast::<Instance4>,
 
 		Swapping: pallet_cf_swapping,
 		LiquidityProvider: pallet_cf_lp,

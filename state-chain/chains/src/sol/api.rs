@@ -5,7 +5,7 @@ use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;
 use sp_std::vec;
 
-use crate::{ApiCall, ConsolidateCall};
+use crate::{ApiCall, ConsolidateCall, SetAggKeyWithAggKey};
 
 use super::{Solana, SolanaCrypto};
 
@@ -40,6 +40,15 @@ impl<Env: 'static> ApiCall<SolanaCrypto> for SolanaApi<Env> {
 
 impl<Env: 'static> ConsolidateCall<Solana> for SolanaApi<Env> {
 	fn consolidate_utxos() -> Result<Self, crate::ConsolidationError> {
+		unimplemented!()
+	}
+}
+
+impl<Env: 'static> SetAggKeyWithAggKey<SolanaCrypto> for SolanaApi<Env> {
+	fn new_unsigned(
+		_maybe_old_key: Option<<SolanaCrypto as crate::ChainCrypto>::AggKey>,
+		_new_key: <SolanaCrypto as crate::ChainCrypto>::AggKey,
+	) -> Result<Self, crate::SetAggKeyWithAggKeyError> {
 		unimplemented!()
 	}
 }
