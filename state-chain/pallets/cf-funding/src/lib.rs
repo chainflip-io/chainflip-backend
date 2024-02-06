@@ -394,15 +394,35 @@ pub mod pallet {
 				);
 			}
 
+			// In case the balance is lower than the sum of restricted addresses we keep this
+			// discrepancy into account such that restricted addresses can still redeem
+			let mut restricted_deficit: FlipBalance<T> = Zero::zero();
+			if restricted_balances.values().copied().sum::<FlipBalance<T>>() >=
+				T::Flip::balance(&account_id)
+			{
+				restricted_deficit = restricted_balances.values().copied().sum::<FlipBalance<T>>() -
+					T::Flip::balance(&account_id);
+			}
+
 			// The available funds are the total balance minus whichever is larger from:
 			// - The bond.
 			// - The total restricted funds that need to remain in the account after the redemption.
-			let liquid_balance = T::Flip::balance(&account_id) -
-				max(
-					T::Flip::bond(&account_id),
-					restricted_balances.values().copied().sum::<FlipBalance<T>>() -
-						restricted_balances.get(&address).copied().unwrap_or_default(),
-				);
+			// + the deficit (if present in case of multiple restricted addresses)
+			let liquid_balance = {
+				if restricted_balances.values().len() <= 1 {
+					T::Flip::balance(&account_id).saturating_sub(max(
+						T::Flip::bond(&account_id),
+						restricted_balances.values().copied().sum::<FlipBalance<T>>() -
+							restricted_balances.get(&address).copied().unwrap_or_default(),
+					))
+				} else {
+					T::Flip::balance(&account_id).saturating_sub(max(
+						T::Flip::bond(&account_id),
+						restricted_balances.values().copied().sum::<FlipBalance<T>>() -
+							restricted_balances.get(&address).copied().unwrap_or_default(),
+					)) + restricted_deficit
+				}
+			};
 
 			let (debit_amount, redeem_amount) = match amount {
 				RedemptionAmount::Max =>
@@ -438,7 +458,9 @@ pub mod pallet {
 				Error::<T>::BelowMinimumFunding
 			);
 			ensure!(
-				remaining_balance >= restricted_balances.values().copied().sum::<FlipBalance<T>>(),
+				remaining_balance >=
+					restricted_balances.values().copied().sum::<FlipBalance<T>>() -
+						restricted_deficit,
 				Error::<T>::InsufficientUnrestrictedFunds
 			);
 

@@ -1678,3 +1678,108 @@ fn detect_wrong_executor_address() {
 		);
 	});
 }
+
+#[test]
+fn can_redeem_if_balance_lower_than_restricted_funds() {
+	new_test_ext().execute_with(|| {
+		const RESTRICTED_ADDRESS_1: EthereumAddress = H160([0x01; 20]);
+		const RESTRICTED_ADDRESS_2: EthereumAddress = H160([0x02; 20]);
+		const DEBIT_AMOUNT: u128 = 50;
+		const RESTRICTED_AMOUNT: u128 = 150;
+		const REDEEM_AMOUNT: u128 = 60;
+		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_1, ());
+		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_2, ());
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			RESTRICTED_AMOUNT,
+			RESTRICTED_ADDRESS_1,
+			TX_HASH
+		));
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			RESTRICTED_AMOUNT,
+			RESTRICTED_ADDRESS_2,
+			TX_HASH
+		));
+
+		// we want to have a balance < sum of restricted balances
+		let _debit = Flip::debit(&ALICE, DEBIT_AMOUNT);
+		// redemption towards a non restricted address fails
+		assert_noop!(
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				REDEEM_AMOUNT.into(),
+				H160([0x05; 20]),
+				Default::default()
+			),
+			Error::<Test>::InsufficientUnrestrictedFunds
+		);
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			REDEEM_AMOUNT.into(),
+			RESTRICTED_ADDRESS_1,
+			Default::default()
+		));
+		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, REDEEM_AMOUNT, TX_HASH));
+		assert_eq!(
+			RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS_1),
+			Some(&(RESTRICTED_AMOUNT - REDEEM_AMOUNT - REDEMPTION_TAX))
+		);
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			RedemptionAmount::Max,
+			RESTRICTED_ADDRESS_1,
+			Default::default()
+		));
+		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, 80, TX_HASH));
+		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS_1), None);
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			RedemptionAmount::Max,
+			RESTRICTED_ADDRESS_2,
+			Default::default()
+		));
+
+		// we are able to withdraw the whole balance
+		assert_eq!(Flip::balance(&ALICE), 0);
+		// the last restricted address still has some balance in it (sum of initial restricted
+		// balances - initial account balance)
+		assert_eq!(
+			RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS_2),
+			Some(&(DEBIT_AMOUNT))
+		);
+	});
+}
+
+#[test]
+fn cannot_redeem_to_non_restricted_address_with_balance_lower_than_restricted_funds() {
+	new_test_ext().execute_with(|| {
+		const RESTRICTED_ADDRESS_1: EthereumAddress = H160([0x01; 20]);
+		const DEBIT_AMOUNT: u128 = 50;
+		const RESTRICTED_AMOUNT: u128 = 150;
+		const REDEEM_AMOUNT: u128 = 60;
+		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_1, ());
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			RESTRICTED_AMOUNT,
+			RESTRICTED_ADDRESS_1,
+			TX_HASH
+		));
+
+		// we want to have a balance < sum of restricted balances
+		let _debit = Flip::debit(&ALICE, DEBIT_AMOUNT);
+
+		assert_noop!(
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				REDEEM_AMOUNT.into(),
+				H160([0x05; 20]),
+				Default::default()
+			),
+			Error::<Test>::InsufficientUnrestrictedFunds
+		);
+	});
+}
