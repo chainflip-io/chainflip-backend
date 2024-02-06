@@ -9,7 +9,7 @@ fi
 CONTRACT_RELEASE_TAG=$1
 
 if [ -z "${CONTRACT_RELEASE_TAG}" ]; then
-    echo "🔖 Please provide a release tag to download. Available tags are:"
+    echo "🔖 Please provide a release tag for to download for the Ethereum contracts. Available tags are:"
     echo ""
     select tag in $(echo "`gh release list --repo https://github.com/chainflip-io/chainflip-eth-contracts`" | awk '{print $1}'); do
         CONTRACT_RELEASE_TAG=$tag
@@ -18,8 +18,8 @@ if [ -z "${CONTRACT_RELEASE_TAG}" ]; then
 fi
 
 PROJECT_ROOT=$(git rev-parse --show-toplevel || exit 1)
-ZIP_FILE=$PROJECT_ROOT/eth-contract-abis/abis-${CONTRACT_RELEASE_TAG}.zip
-TARGET_DIR=$PROJECT_ROOT/eth-contract-abis/${CONTRACT_RELEASE_TAG}
+ZIP_FILE=$PROJECT_ROOT/contract-interfaces/eth-contract-abis/abis-${CONTRACT_RELEASE_TAG}.zip
+TARGET_DIR=$PROJECT_ROOT/contract-interfaces/eth-contract-abis/${CONTRACT_RELEASE_TAG}
 
 gh release download \
     --clobber \

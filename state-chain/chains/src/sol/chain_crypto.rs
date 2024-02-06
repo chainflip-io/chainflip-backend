@@ -10,6 +10,7 @@ pub struct SolanaCrypto;
 
 impl ChainCrypto for SolanaCrypto {
 	type UtxoChain = ConstBool<false>;
+	type KeyHandoverIsRequired = ConstBool<false>;
 
 	type AggKey = SolPublicKey;
 	type Payload = [u8; 0];

@@ -23,9 +23,8 @@ use cf_primitives::{
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, AuthoritiesCfeVersions,
 	Bid, BidderProvider, Bonding, CfePeerRegistration, Chainflip, EpochInfo,
-	EpochTransitionHandler, ExecutionCondition, FundingInfo, HistoricalEpoch,
+	EpochTransitionHandler, ExecutionCondition, FundingInfo, HistoricalEpoch, KeyRotator,
 	MissedAuthorshipSlots, OnAccountFunded, QualifyNode, ReputationResetter, SetSafeMode,
-	VaultRotator,
 };
 
 use cf_utilities::Port;
@@ -99,7 +98,7 @@ impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled);
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{AccountRoleRegistry, VaultStatus};
+	use cf_traits::{AccountRoleRegistry, KeyRotationStatusOuter};
 	use frame_support::sp_runtime::app_crypto::RuntimePublic;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 
@@ -120,7 +119,7 @@ pub mod pallet {
 		/// A handler for epoch lifecycle events
 		type EpochTransitionHandler: EpochTransitionHandler;
 
-		type VaultRotator: VaultRotator<ValidatorId = ValidatorIdOf<Self>>;
+		type KeyRotator: KeyRotator<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// For retrieving missed authorship slots.
 		type MissedAuthorshipSlots: MissedAuthorshipSlots;
@@ -381,11 +380,11 @@ pub mod pallet {
 				},
 				RotationPhase::KeygensInProgress(mut rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
-					match T::VaultRotator::status() {
-						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
+					match T::KeyRotator::status() {
+						AsyncResult::Ready(KeyRotationStatusOuter::KeygenComplete) => {
 							Self::try_start_key_handover(rotation_state, block_number);
 						},
-						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
+						AsyncResult::Ready(KeyRotationStatusOuter::Failed(offenders)) => {
 							rotation_state.ban(offenders);
 							Self::try_restart_keygen(rotation_state);
 						},
@@ -405,14 +404,14 @@ pub mod pallet {
 				},
 				RotationPhase::KeyHandoversInProgress(mut rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
-					match T::VaultRotator::status() {
-						AsyncResult::Ready(VaultStatus::KeyHandoverComplete) => {
+					match T::KeyRotator::status() {
+						AsyncResult::Ready(KeyRotationStatusOuter::KeyHandoverComplete) => {
 							let new_authorities = rotation_state.authority_candidates();
 							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities);
-							T::VaultRotator::activate();
+							T::KeyRotator::activate_keys();
 							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
 						},
-						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
+						AsyncResult::Ready(KeyRotationStatusOuter::Failed(offenders)) => {
 							// NOTE: we distinguish between candidates (nodes currently selected to become next authorities)
 							// and non-candidates (current authorities *not* currently selected to become next authorities).
 							// The outcome of this failure depends on whether any of the candidates caused it:
@@ -449,8 +448,8 @@ pub mod pallet {
 				}
 				RotationPhase::ActivatingKeys(rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
-					match T::VaultRotator::status() {
-						AsyncResult::Ready(VaultStatus::RotationComplete) => {
+					match T::KeyRotator::status() {
+						AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete) => {
 							Self::set_rotation_phase(RotationPhase::NewKeysActivated(
 								rotation_state,
 							));
@@ -894,6 +893,11 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		}
 		HistoricalAuthorities::<T>::insert(epoch_index, new_authorities);
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_authorities(authorities: BTreeSet<Self::ValidatorId>) {
+		CurrentAuthorities::<T>::put(authorities);
+	}
 }
 
 /// Indicates to the session module if the session should be rotated.
@@ -1013,7 +1017,7 @@ impl<T: Config> Pallet<T> {
 			target: "cf-validator",
 			"Aborting rotation at phase: {:?}.", CurrentRotationPhase::<T>::get()
 		);
-		T::VaultRotator::reset_vault_rotation();
+		T::KeyRotator::reset_key_rotation();
 		Self::set_rotation_phase(RotationPhase::Idle);
 		Self::deposit_event(Event::<T>::RotationAborted);
 	}
@@ -1090,7 +1094,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn try_restart_keygen(rotation_state: RuntimeRotationState<T>) {
-		T::VaultRotator::reset_vault_rotation();
+		T::KeyRotator::reset_key_rotation();
 		Self::try_start_keygen(rotation_state);
 	}
 
@@ -1113,7 +1117,7 @@ impl<T: Config> Pallet<T> {
 			);
 			Self::abort_rotation();
 		} else {
-			T::VaultRotator::keygen(candidates, rotation_state.new_epoch_index);
+			T::KeyRotator::keygen(candidates, rotation_state.new_epoch_index);
 			Self::set_rotation_phase(RotationPhase::KeygensInProgress(rotation_state));
 			log::info!(target: "cf-validator", "Vault rotation initiated.");
 		}
@@ -1139,7 +1143,7 @@ impl<T: Config> Pallet<T> {
 			&authority_candidates,
 			block_number.unique_saturated_into(),
 		) {
-			T::VaultRotator::key_handover(
+			T::KeyRotator::key_handover(
 				sharing_participants,
 				authority_candidates,
 				rotation_state.new_epoch_index,

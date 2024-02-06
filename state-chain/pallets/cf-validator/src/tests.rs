@@ -6,8 +6,8 @@ use crate::{mock::*, Error, *};
 use cf_test_utilities::{assert_event_sequence, last_event};
 use cf_traits::{
 	mocks::{
-		funding_info::MockFundingInfo, reputation_resetter::MockReputationResetter,
-		vault_rotator::MockVaultRotatorA,
+		funding_info::MockFundingInfo, key_rotator::MockKeyRotatorA,
+		reputation_resetter::MockReputationResetter,
 	},
 	AccountRoleRegistry, SafeMode, SetSafeMode,
 };
@@ -23,9 +23,9 @@ fn assert_epoch_index(n: EpochIndex) {
 	assert_eq!(
 		ValidatorPallet::epoch_index(),
 		n,
-		"we should be in epoch {n:?}. VaultRotator says {:?} / {:?}",
+		"we should be in epoch {n:?}. KeyRotator says {:?} / {:?}",
 		CurrentRotationPhase::<Test>::get(),
-		<Test as crate::Config>::VaultRotator::status()
+		<Test as crate::Config>::KeyRotator::status()
 	);
 }
 
@@ -52,7 +52,7 @@ macro_rules! assert_default_rotation_outcome {
 #[track_caller]
 fn assert_rotation_aborted() {
 	assert_rotation_phase_matches!(RotationPhase::Idle);
-	assert_eq!(<Test as Config>::VaultRotator::status(), AsyncResult::Void);
+	assert_eq!(<Test as Config>::KeyRotator::status(), AsyncResult::Void);
 	assert_event_sequence!(
 		Test,
 		RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
@@ -113,21 +113,21 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 				CurrentRotationPhase::<Test>::get(),
 				RotationPhase::<Test>::KeygensInProgress(..)
 			));
-			MockVaultRotatorA::keygen_success();
+			MockKeyRotatorA::keygen_success();
 		})
 		.then_advance_n_blocks_and_execute_with_checks(2, || {
 			assert!(matches!(
 				CurrentRotationPhase::<Test>::get(),
 				RotationPhase::<Test>::KeyHandoversInProgress(..)
 			));
-			MockVaultRotatorA::key_handover_success();
+			MockKeyRotatorA::key_handover_success();
 		})
 		.then_advance_n_blocks_and_execute_with_checks(2, || {
 			assert!(matches!(
 				CurrentRotationPhase::<Test>::get(),
 				RotationPhase::<Test>::ActivatingKeys(..)
 			));
-			MockVaultRotatorA::keys_activated();
+			MockKeyRotatorA::keys_activated();
 		})
 		.then_advance_n_blocks_and_execute_with_checks(2, || {
 			assert_default_rotation_outcome!();
@@ -181,16 +181,16 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 			);
 
 			assert_rotation_phase_matches!(RotationPhase::<Test>::KeygensInProgress(..));
-			MockVaultRotatorA::keygen_success();
+			MockKeyRotatorA::keygen_success();
 		})
 		.then_advance_n_blocks_and_execute_with_checks(2, || {
 			assert_rotation_phase_matches!(RotationPhase::<Test>::KeyHandoversInProgress(..));
-			MockVaultRotatorA::key_handover_success();
+			MockKeyRotatorA::key_handover_success();
 		})
 		.then_advance_n_blocks_and_execute_with_checks(2, || {
 			assert_rotation_phase_matches!(RotationPhase::<Test>::ActivatingKeys(..));
 
-			MockVaultRotatorA::keys_activated();
+			MockKeyRotatorA::keys_activated();
 		})
 		.then_advance_n_blocks_and_execute_with_checks(2, || {
 			assert_default_rotation_outcome!();
@@ -773,7 +773,7 @@ fn failed_keygen_with_offenders(offenders: impl IntoIterator<Item = u64>) {
 		}),
 	));
 
-	MockVaultRotatorA::failed(offenders);
+	MockKeyRotatorA::failed(offenders);
 	Pallet::<Test>::on_initialize(1);
 }
 #[cfg(test)]
@@ -843,12 +843,12 @@ mod key_handover {
 				bond: Default::default(),
 			}),
 		));
-		MockVaultRotatorA::keygen_success();
+		MockKeyRotatorA::keygen_success();
 		System::reset_events();
 		Pallet::<Test>::on_initialize(1);
 
 		assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
-		MockVaultRotatorA::failed(offenders);
+		MockKeyRotatorA::failed(offenders);
 		System::reset_events();
 		Pallet::<Test>::on_initialize(2);
 	}
@@ -874,14 +874,14 @@ mod key_handover {
 			})
 			.then_execute_at_next_block(|_| {
 				// Successful keygen should transition to handover
-				MockVaultRotatorA::keygen_success();
+				MockKeyRotatorA::keygen_success();
 			})
 			.then_execute_at_next_block(|_| {
 				assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
 			})
 			.then_execute_at_next_block(|_| {
 				// Handover fails with a different non-candidate and will be retried
-				MockVaultRotatorA::failed([fails_handover]);
+				MockKeyRotatorA::failed([fails_handover]);
 			})
 			.then_execute_at_next_block(|_| {
 				// Ensure that banned nodes banned during either keygen or handover aren't selected
@@ -954,7 +954,7 @@ fn safe_mode_can_aborts_authority_rotation_before_key_handover() {
 
 		assert_rotation_phase_matches!(RotationPhase::<Test>::KeygensInProgress(..));
 
-		MockVaultRotatorA::keygen_success();
+		MockKeyRotatorA::keygen_success();
 
 		System::reset_events();
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
@@ -968,9 +968,9 @@ fn safe_mode_does_not_aborts_authority_rotation_after_key_handover() {
 	new_test_ext().then_execute_with_checks(|| {
 		MockBidderProvider::set_default_test_bids();
 		ValidatorPallet::start_authority_rotation();
-		MockVaultRotatorA::keygen_success();
+		MockKeyRotatorA::keygen_success();
 		ValidatorPallet::on_initialize(1);
-		MockVaultRotatorA::key_handover_success();
+		MockKeyRotatorA::key_handover_success();
 
 		System::reset_events();
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
@@ -991,11 +991,11 @@ fn safe_mode_does_not_aborts_authority_rotation_during_key_activation() {
 	new_test_ext().then_execute_with_checks(|| {
 		MockBidderProvider::set_default_test_bids();
 		ValidatorPallet::start_authority_rotation();
-		MockVaultRotatorA::keygen_success();
+		MockKeyRotatorA::keygen_success();
 		ValidatorPallet::on_initialize(1);
-		MockVaultRotatorA::key_handover_success();
+		MockKeyRotatorA::key_handover_success();
 		ValidatorPallet::on_initialize(1);
-		MockVaultRotatorA::keys_activated();
+		MockKeyRotatorA::keys_activated();
 
 		System::reset_events();
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
@@ -1017,7 +1017,7 @@ fn authority_rotation_can_succeed_after_aborted_by_safe_mode() {
 			MockBidderProvider::set_default_test_bids();
 			// Abort authority rotation using Safe Mode.
 			ValidatorPallet::start_authority_rotation();
-			MockVaultRotatorA::keygen_success();
+			MockKeyRotatorA::keygen_success();
 			<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
 		})
 		.then_execute_at_next_block(|_| {
@@ -1030,17 +1030,17 @@ fn authority_rotation_can_succeed_after_aborted_by_safe_mode() {
 		.then_execute_at_next_block(|_| {
 			assert_rotation_phase_matches!(RotationPhase::<Test>::KeygensInProgress(..));
 
-			MockVaultRotatorA::keygen_success();
+			MockKeyRotatorA::keygen_success();
 		})
 		.then_execute_at_next_block(|_| {
 			assert_rotation_phase_matches!(RotationPhase::<Test>::KeyHandoversInProgress(..));
 
-			MockVaultRotatorA::key_handover_success();
+			MockKeyRotatorA::key_handover_success();
 		})
 		.then_execute_at_next_block(|_| {
 			assert_rotation_phase_matches!(RotationPhase::<Test>::ActivatingKeys(..));
 
-			MockVaultRotatorA::keys_activated();
+			MockKeyRotatorA::keys_activated();
 		})
 		.then_advance_n_blocks_and_execute_with_checks(2, || {
 			assert_default_rotation_outcome!();

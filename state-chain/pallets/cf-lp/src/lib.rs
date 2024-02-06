@@ -2,15 +2,18 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
-use cf_primitives::{Asset, AssetAmount, ForeignChain};
+use cf_primitives::{Asset, AssetAmount, BasisPoints, ForeignChain};
 use cf_traits::{
 	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi,
-	EgressApi, LpDepositHandler, PoolApi,
+	EgressApi, LpDepositHandler, PoolApi, ScheduledEgressDetails,
 };
+
+use sp_std::vec;
 
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
+use sp_std::vec::Vec;
 
 mod benchmarking;
 
@@ -105,12 +108,14 @@ pub mod pallet {
 			// account the funds will be credited to upon deposit
 			account_id: T::AccountId,
 			deposit_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
+			boost_fee: BasisPoints,
 		},
 		WithdrawalEgressScheduled {
 			egress_id: EgressId,
 			asset: Asset,
 			amount: AssetAmount,
 			destination_address: EncodedAddress,
+			fee: AssetAmount,
 		},
 		LiquidityRefundAddressRegistered {
 			account_id: T::AccountId,
@@ -154,6 +159,7 @@ pub mod pallet {
 		pub fn request_liquidity_deposit_address(
 			origin: OriginFor<T>,
 			asset: Asset,
+			boost_fee: BasisPoints,
 		) -> DispatchResult {
 			ensure!(T::SafeMode::get().deposit_enabled, Error::<T>::LiquidityDepositDisabled);
 
@@ -173,6 +179,7 @@ pub mod pallet {
 				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
 				account_id,
 				deposit_chain_expiry_block: expiry_block,
+				boost_fee,
 			});
 
 			Ok(())
@@ -208,18 +215,21 @@ pub mod pallet {
 				// Debit the asset from the account.
 				Self::try_debit_account(&account_id, asset, amount)?;
 
-				let egress_id = T::EgressHandler::schedule_egress(
-					asset,
-					amount,
-					destination_address_internal,
-					None,
-				);
+				let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
+					T::EgressHandler::schedule_egress(
+						asset,
+						amount,
+						destination_address_internal,
+						None,
+					)
+					.map_err(Into::into)?;
 
 				Self::deposit_event(Event::<T>::WithdrawalEgressScheduled {
 					egress_id,
 					asset,
-					amount,
+					amount: egress_amount,
 					destination_address,
+					fee: fee_withheld,
 				});
 			}
 			Ok(())
@@ -359,5 +369,14 @@ impl<T: Config> LpBalanceApi for Pallet<T> {
 			amount_debited: amount,
 		});
 		Ok(())
+	}
+
+	fn asset_balances(who: &Self::AccountId) -> Vec<(Asset, AssetAmount)> {
+		let mut balances: Vec<(Asset, AssetAmount)> = vec![];
+		T::PoolApi::sweep(who).unwrap();
+		for asset in Asset::all() {
+			balances.push((asset, FreeBalances::<T>::get(who, asset).unwrap_or_default()));
+		}
+		balances
 	}
 }

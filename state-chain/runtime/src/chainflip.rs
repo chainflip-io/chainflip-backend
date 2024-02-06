@@ -1,6 +1,6 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 pub mod address_derivation;
-pub mod all_vaults_rotator;
+pub mod all_keys_rotator;
 pub mod backup_node_rewards;
 pub mod chain_instances;
 pub mod decompose_recompose;
@@ -9,10 +9,11 @@ mod missed_authorship_slots;
 mod offences;
 mod signer_nomination;
 use crate::{
-	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress, BitcoinVault,
-	BlockNumber, Emissions, Environment, EthereumBroadcaster, EthereumChainTracking,
-	EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster, PolkadotChainTracking,
-	PolkadotIngressEgress, PolkadotVault, Runtime, RuntimeCall, System, Validator, YEAR,
+	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress,
+	BitcoinThresholdSigner, BlockNumber, Emissions, Environment, EthereumBroadcaster,
+	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster,
+	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
+	System, Validator, YEAR,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -43,12 +44,12 @@ use cf_chains::{
 	ChainEnvironment, ChainState, DepositChannel, ForeignChain, ReplayProtectionProvider,
 	SetCommKeyWithAggKey, SetGovKeyWithAggKey, Solana, TransactionBuilder,
 };
-use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId};
+use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId};
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi,
 	DepositHandler, EgressApi, EpochInfo, Heartbeat, Issuance, KeyProvider, OnBroadcastReady,
-	QualifyNode, RewardsDistribution, RuntimeUpgrade,
+	QualifyNode, RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -78,6 +79,7 @@ impl Chainflip for Runtime {
 	type AccountRoleRegistry = AccountRoles;
 	type FundingInfo = Flip;
 }
+
 struct BackupNodeEmissions;
 
 impl RewardsDistribution for BackupNodeEmissions {
@@ -347,7 +349,7 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 			// It should not be possible to get None here, since we never send
 			// any transactions unless we have a vault account and associated
 			// proxy.
-			signer: <PolkadotVault as KeyProvider<PolkadotCrypto>>::active_epoch_key()
+			signer: <PolkadotThresholdSigner as KeyProvider<PolkadotCrypto>>::active_epoch_key()
 				.map(|epoch_key| epoch_key.key)
 				.defensive_unwrap_or_default(),
 			nonce: Environment::next_polkadot_proxy_account_nonce(reset_nonce),
@@ -382,7 +384,7 @@ impl ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount> for BtcEn
 
 impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
 	fn lookup(_: ()) -> Option<cf_chains::btc::AggKey> {
-		<BitcoinVault as KeyProvider<BitcoinCrypto>>::active_epoch_key()
+		<BitcoinThresholdSigner as KeyProvider<BitcoinCrypto>>::active_epoch_key()
 			.map(|epoch_key| epoch_key.key)
 	}
 }
@@ -501,12 +503,14 @@ macro_rules! impl_deposit_api_for_anychain {
 macro_rules! impl_egress_api_for_anychain {
 	( $t: ident, $(($chain: ident, $pallet: ident)),+ ) => {
 		impl EgressApi<AnyChain> for $t {
+			type EgressError = DispatchError;
+
 			fn schedule_egress(
 				asset: Asset,
 				amount: <AnyChain as Chain>::ChainAmount,
 				destination_address: <AnyChain as Chain>::ChainAccount,
 				maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <AnyChain as Chain>::ChainAmount)>,
-			) -> EgressId {
+			) -> Result<ScheduledEgressDetails<AnyChain>, DispatchError> {
 				match asset.into() {
 					$(
 						ForeignChain::$chain => $pallet::schedule_egress(
@@ -516,8 +520,9 @@ macro_rules! impl_egress_api_for_anychain {
 								.try_into()
 								.expect("This address cast is ensured to succeed."),
 								maybe_ccm_with_gas_budget.map(|(metadata, gas_budget)| (metadata, gas_budget.try_into().expect("Chain's Amount must be compatible with u128."))),
-						),
-
+						)
+						.map(|ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }| ScheduledEgressDetails { egress_id, egress_amount: egress_amount.into(), fee_withheld: fee_withheld.into() })
+						.map_err(Into::into),
 					)+
 				}
 			}

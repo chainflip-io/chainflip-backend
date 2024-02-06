@@ -33,7 +33,6 @@ impl Chain for Ethereum {
 	const GAS_ASSET: Self::ChainAsset = assets::eth::Asset::Eth;
 
 	type ChainCrypto = evm::EvmCrypto;
-
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;
 	type TransactionFee = evm::TransactionFee;

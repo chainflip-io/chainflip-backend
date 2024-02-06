@@ -1,4 +1,6 @@
 use cf_chains::{
+	assets::btc,
+	btc::BITCOIN_DUST_LIMIT,
 	dot::{PolkadotAccountId, PolkadotHash},
 	ChainState,
 };
@@ -602,38 +604,32 @@ fn testnet_genesis(
 				.collect(),
 		},
 		environment: config_set,
-		ethereum_vault: EthereumVaultConfig {
-			vault_key: Some(cf_chains::evm::AggKey::from_pubkey_compressed(eth_init_agg_key)),
-			deployment_block: ethereum_deployment_block,
-			keygen_response_timeout: keygen_ceremony_timeout_blocks,
-			amount_to_slash: FLIPPERINOS_PER_FLIP,
-		},
 
-		polkadot_vault: PolkadotVaultConfig {
-			vault_key: None,
-			deployment_block: 0,
-			keygen_response_timeout: keygen_ceremony_timeout_blocks,
-			amount_to_slash: FLIPPERINOS_PER_FLIP,
-		},
-		bitcoin_vault: BitcoinVaultConfig {
-			vault_key: None,
-			deployment_block: 0,
-			keygen_response_timeout: keygen_ceremony_timeout_blocks,
-			amount_to_slash: FLIPPERINOS_PER_FLIP,
-		},
+		ethereum_vault: EthereumVaultConfig { deployment_block: Some(ethereum_deployment_block) },
+		polkadot_vault: PolkadotVaultConfig { deployment_block: None },
+		bitcoin_vault: BitcoinVaultConfig { deployment_block: None },
 		solana_vault: Default::default(),
 
 		ethereum_threshold_signer: EthereumThresholdSignerConfig {
+			key: Some(cf_chains::evm::AggKey::from_pubkey_compressed(eth_init_agg_key)),
 			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
+			keygen_response_timeout: keygen_ceremony_timeout_blocks,
+			amount_to_slash: FLIPPERINOS_PER_FLIP,
 			_instance: PhantomData,
 		},
 
 		polkadot_threshold_signer: PolkadotThresholdSignerConfig {
+			key: None,
 			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
+			keygen_response_timeout: keygen_ceremony_timeout_blocks,
+			amount_to_slash: FLIPPERINOS_PER_FLIP,
 			_instance: PhantomData,
 		},
 		bitcoin_threshold_signer: BitcoinThresholdSignerConfig {
+			key: None,
 			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
+			keygen_response_timeout: keygen_ceremony_timeout_blocks,
+			amount_to_slash: FLIPPERINOS_PER_FLIP,
 			_instance: PhantomData,
 		},
 		solana_threshold_signer: Default::default(),
@@ -676,14 +672,17 @@ fn testnet_genesis(
 		bitcoin_ingress_egress: BitcoinIngressEgressConfig {
 			deposit_channel_lifetime: bitcoin_deposit_channel_lifetime.into(),
 			witness_safety_margin: Some(bitcoin_safety_margin),
+			dust_limits: vec![(btc::Asset::Btc, BITCOIN_DUST_LIMIT)],
 		},
 		ethereum_ingress_egress: EthereumIngressEgressConfig {
 			deposit_channel_lifetime: ethereum_deposit_channel_lifetime.into(),
 			witness_safety_margin: Some(ethereum_safety_margin),
+			dust_limits: Default::default(),
 		},
 		polkadot_ingress_egress: PolkadotIngressEgressConfig {
 			deposit_channel_lifetime: polkadot_deposit_channel_lifetime,
 			witness_safety_margin: None,
+			dust_limits: Default::default(),
 		},
 		solana_ingress_egress: Default::default(),
 	}

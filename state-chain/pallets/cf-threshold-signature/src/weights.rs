@@ -37,6 +37,11 @@ pub trait WeightInfo {
 	fn set_threshold_signature_timeout() -> Weight;
 	fn on_initialize(a: u32, r: u32, ) -> Weight;
 	fn report_offenders(o: u32, ) -> Weight;
+	fn report_keygen_outcome() -> Weight;
+	fn on_keygen_verification_result() -> Weight;
+	fn set_keygen_response_timeout() -> Weight;
+	fn on_initialize_failure(b: u32, ) -> Weight;
+	fn on_initialize_success() -> Weight;
 }
 
 /// Weights for pallet_cf_threshold_signature using the Substrate node and recommended hardware.
@@ -98,8 +103,8 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// Proof: `Reputation::Penalties` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Reputation::Suspensions` (r:4 w:1)
 	/// Proof: `Reputation::Suspensions` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::CurrentVaultEpochAndState` (r:1 w:0)
-	/// Proof: `EthereumVault::CurrentVaultEpochAndState` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumVault::CurrentKeyEpochAndState` (r:1 w:0)
+	/// Proof: `EthereumVault::CurrentKeyEpochAndState` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// Storage: `EthereumVault::Vaults` (r:1 w:0)
 	/// Proof: `EthereumVault::Vaults` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Validator::HistoricalAuthorities` (r:1 w:0)
@@ -152,18 +157,98 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(o.into())))
 			.saturating_add(Weight::from_parts(0, 2475).saturating_mul(o.into()))
 	}
+	// Storage: AccountRoles AccountRoles (r:1 w:0)
+	// Storage: EthereumVault PendingKeyRotation (r:1 w:1)
+	// Storage: EthereumVault SuccessVoters (r:1 w:1)
+	fn report_keygen_outcome() -> Weight {
+		// Minimum execution time: 44_000 nanoseconds.
+		Weight::from_parts(47_000_000, 0)
+			.saturating_add(T::DbWeight::get().reads(3))
+			.saturating_add(T::DbWeight::get().writes(2))
+	}
+	// Storage: EthereumThresholdSigner Signature (r:1 w:1)
+	// Storage: EthereumVault PendingKeyRotation (r:0 w:1)
+	fn on_keygen_verification_result() -> Weight {
+		// Minimum execution time: 18_000 nanoseconds.
+		Weight::from_parts(19_000_000, 0)
+			.saturating_add(T::DbWeight::get().reads(1))
+			.saturating_add(T::DbWeight::get().writes(2))
+	}
+		// Storage: EthereumVault KeygenResponseTimeout (r:1 w:1)
+		fn set_keygen_response_timeout() -> Weight {
+			// Minimum execution time: 14_000 nanoseconds.
+			Weight::from_parts(15_000_000, 0)
+				.saturating_add(T::DbWeight::get().reads(1))
+				.saturating_add(T::DbWeight::get().writes(1))
+		}
+			// Storage: EthereumVault PendingKeyRotation (r:1 w:1)
+	// Storage: EthereumVault SuccessVoters (r:1 w:0)
+	// Storage: EthereumVault FailureVoters (r:1 w:1)
+	// Storage: Reputation Penalties (r:1 w:0)
+	// Storage: Reputation Reputations (r:1 w:1)
+	// Storage: Reputation Suspensions (r:1 w:1)
+	// Storage: EthereumVault KeygenResolutionPendingSince (r:0 w:1)
+	/// The range of component `b` is `[1, 100]`.
+	fn on_initialize_failure(_b: u32, ) -> Weight {
+		// Minimum execution time: 42_000 nanoseconds.
+		Weight::from_parts(140_533_616, 0)
+			.saturating_add(T::DbWeight::get().reads(28))
+			.saturating_add(T::DbWeight::get().writes(27))
+	}
+	// Storage: EthereumVault PendingKeyRotation (r:1 w:1)
+	// Storage: EthereumThresholdSigner ThresholdSignatureRequestIdCounter (r:1 w:1)
+	// Storage: Validator CeremonyIdCounter (r:1 w:1)
+	// Storage: EthereumThresholdSigner ThresholdSignatureResponseTimeout (r:1 w:0)
+	// Storage: EthereumThresholdSigner CeremonyRetryQueues (r:1 w:1)
+	// Storage: EthereumVault SuccessVoters (r:0 w:1)
+	// Storage: EthereumVault KeygenResolutionPendingSince (r:0 w:1)
+	// Storage: EthereumThresholdSigner Signature (r:0 w:1)
+	// Storage: EthereumThresholdSigner PendingCeremonies (r:0 w:1)
+	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
+	fn on_initialize_success() -> Weight {
+		// Minimum execution time: 74_000 nanoseconds.
+		Weight::from_parts(92_000_000, 0)
+			.saturating_add(T::DbWeight::get().reads(5))
+			.saturating_add(T::DbWeight::get().writes(9))
+	}
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	/// Storage: `EthereumThresholdSigner::PendingCeremonies` (r:1 w:1)
-	/// Proof: `EthereumThresholdSigner::PendingCeremonies` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::RequestCallback` (r:1 w:0)
-	/// Proof: `EthereumThresholdSigner::RequestCallback` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::PendingRequestInstructions` (r:0 w:1)
-	/// Proof: `EthereumThresholdSigner::PendingRequestInstructions` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::Signature` (r:0 w:1)
-	/// Proof: `EthereumThresholdSigner::Signature` (`max_values`: None, `max_size`: None, mode: `Measured`)
+		// Storage: EthereumVault PendingKeyRotation (r:1 w:1)
+	// Storage: EthereumVault SuccessVoters (r:1 w:0)
+	// Storage: EthereumVault FailureVoters (r:1 w:1)
+	// Storage: Reputation Penalties (r:1 w:0)
+	// Storage: Reputation Reputations (r:1 w:1)
+	// Storage: Reputation Suspensions (r:1 w:1)
+	// Storage: EthereumVault KeygenResolutionPendingSince (r:0 w:1)
+	/// The range of component `b` is `[1, 100]`.
+	fn on_initialize_failure(_b: u32, ) -> Weight {
+		// Minimum execution time: 42_000 nanoseconds.
+		Weight::from_parts(140_533_616, 0)
+			.saturating_add(RocksDbWeight::get().reads(28))
+			.saturating_add(RocksDbWeight::get().writes(27))
+	}
+	// Storage: EthereumVault PendingKeyRotation (r:1 w:1)
+	// Storage: EthereumThresholdSigner ThresholdSignatureRequestIdCounter (r:1 w:1)
+	// Storage: Validator CeremonyIdCounter (r:1 w:1)
+	// Storage: EthereumThresholdSigner ThresholdSignatureResponseTimeout (r:1 w:0)
+	// Storage: EthereumThresholdSigner CeremonyRetryQueues (r:1 w:1)
+	// Storage: EthereumVault SuccessVoters (r:0 w:1)
+	// Storage: EthereumVault KeygenResolutionPendingSince (r:0 w:1)
+	// Storage: EthereumThresholdSigner Signature (r:0 w:1)
+	// Storage: EthereumThresholdSigner PendingCeremonies (r:0 w:1)
+	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
+	fn on_initialize_success() -> Weight {
+		// Minimum execution time: 74_000 nanoseconds.
+		Weight::from_parts(92_000_000, 0)
+			.saturating_add(RocksDbWeight::get().reads(5))
+			.saturating_add(RocksDbWeight::get().writes(9))
+	}
+	// Storage: EthereumThresholdSigner PendingCeremonies (r:1 w:1)
+	// Storage: EthereumThresholdSigner RequestCallback (r:1 w:0)
+	// Storage: EthereumThresholdSigner PendingRequestInstructions (r:0 w:1)
+	// Storage: EthereumThresholdSigner Signature (r:0 w:1)
 	fn signature_success() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `410`
@@ -212,8 +297,8 @@ impl WeightInfo for () {
 	/// Proof: `Reputation::Penalties` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Reputation::Suspensions` (r:4 w:1)
 	/// Proof: `Reputation::Suspensions` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::CurrentVaultEpochAndState` (r:1 w:0)
-	/// Proof: `EthereumVault::CurrentVaultEpochAndState` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumVault::CurrentKeyEpochAndState` (r:1 w:0)
+	/// Proof: `EthereumVault::CurrentKeyEpochAndState` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// Storage: `EthereumVault::Vaults` (r:1 w:0)
 	/// Proof: `EthereumVault::Vaults` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Validator::HistoricalAuthorities` (r:1 w:0)
@@ -266,4 +351,28 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(o.into())))
 			.saturating_add(Weight::from_parts(0, 2475).saturating_mul(o.into()))
 	}
+		// Storage: AccountRoles AccountRoles (r:1 w:0)
+	// Storage: EthereumVault PendingKeyRotation (r:1 w:1)
+	// Storage: EthereumVault SuccessVoters (r:1 w:1)
+	fn report_keygen_outcome() -> Weight {
+		// Minimum execution time: 44_000 nanoseconds.
+		Weight::from_parts(47_000_000, 0)
+			.saturating_add(RocksDbWeight::get().reads(3))
+			.saturating_add(RocksDbWeight::get().writes(2))
+	}
+	// Storage: EthereumThresholdSigner Signature (r:1 w:1)
+	// Storage: EthereumVault PendingKeyRotation (r:0 w:1)
+	fn on_keygen_verification_result() -> Weight {
+		// Minimum execution time: 18_000 nanoseconds.
+		Weight::from_parts(19_000_000, 0)
+			.saturating_add(RocksDbWeight::get().reads(1))
+			.saturating_add(RocksDbWeight::get().writes(2))
+	}
+		// Storage: EthereumVault KeygenResponseTimeout (r:1 w:1)
+		fn set_keygen_response_timeout() -> Weight {
+			// Minimum execution time: 14_000 nanoseconds.
+			Weight::from_parts(15_000_000, 0)
+				.saturating_add(RocksDbWeight::get().reads(1))
+				.saturating_add(RocksDbWeight::get().writes(1))
+		}
 }

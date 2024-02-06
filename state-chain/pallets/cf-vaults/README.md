@@ -43,7 +43,7 @@ the key for authorising vault transfers. Note that the vault rotation stage must
 ### Confirmation
 
 Only once all of the vault rotations have been witnessed should we officially transition to the next epoch. The
-[VaultRotator] trait implementation can be used to control this.
+[KeyRotator] trait implementation can be used to control this.
 
 ### Aborting
 

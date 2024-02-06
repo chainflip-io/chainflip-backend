@@ -75,17 +75,26 @@ async fn run_cli() -> Result<()> {
 							)?,
 							params.broker_commission,
 							None,
+							params.boost_fee,
 						)
 						.await?;
 					println!("Deposit Address: {address}");
 				},
 				LiquidityProvider(
-					LiquidityProviderSubcommands::RequestLiquidityDepositAddress { asset, chain },
+					LiquidityProviderSubcommands::RequestLiquidityDepositAddress {
+						asset,
+						chain,
+						boost_fee,
+					},
 				) => {
 					let asset = RpcAsset::try_from((asset, chain))?;
 					let address = api
 						.lp_api()
-						.request_liquidity_deposit_address(asset.try_into()?, api::WaitFor::InBlock)
+						.request_liquidity_deposit_address(
+							asset.try_into()?,
+							api::WaitFor::InBlock,
+							boost_fee,
+						)
 						.await?
 						.unwrap_details();
 					println!("Deposit Address: {address}");

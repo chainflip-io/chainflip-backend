@@ -41,7 +41,7 @@ pub const CHANGE_ADDRESS_SALT: u32 = 0;
 // our construction
 pub const MAX_BITCOIN_SCRIPT_LENGTH: u32 = 128;
 
-// The minimum amount for transaction outputs we want to generate to avoid hitting the Bitcoin dust
+// We must send strictly greater than this amount to avoid hitting the Bitcoin dust
 // limit
 pub const BITCOIN_DUST_LIMIT: u64 = 600;
 
@@ -240,7 +240,6 @@ impl Chain for Bitcoin {
 	const GAS_ASSET: Self::ChainAsset = assets::btc::Asset::Btc;
 
 	type ChainCrypto = BitcoinCrypto;
-
 	type ChainBlockNumber = BlockNumber;
 	type ChainAmount = BtcAmount;
 	type TransactionFee = Self::ChainAmount;
@@ -279,6 +278,7 @@ impl ChainCrypto for BitcoinCrypto {
 	type ThresholdSignature = Vec<Signature>;
 	type TransactionInId = Hash;
 	type TransactionOutId = Hash;
+	type KeyHandoverIsRequired = ConstBool<true>;
 
 	type GovKey = Self::AggKey;
 

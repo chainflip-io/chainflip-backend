@@ -94,22 +94,6 @@ where
 		req_id
 	}
 
-	fn request_verification_signature(
-		payload: <C as ChainCrypto>::Payload,
-		participants: BTreeSet<Self::ValidatorId>,
-		key: <C as ChainCrypto>::AggKey,
-		epoch_index: EpochIndex,
-		on_signature_ready: impl FnOnce(ThresholdSignatureRequestId) -> Self::Callback,
-	) -> ThresholdSignatureRequestId {
-		Self::put_value(
-			KEY_VERIFICATION_REQUEST,
-			VerificationParams::<C> { participants, key, epoch_index },
-		);
-		let req_id = Self::request_signature(payload);
-		Self::register_callback(req_id, on_signature_ready(req_id)).unwrap();
-		req_id
-	}
-
 	fn register_callback(
 		request_id: ThresholdSignatureRequestId,
 		on_signature_ready: Self::Callback,

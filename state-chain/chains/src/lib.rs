@@ -76,6 +76,7 @@ pub trait Chain: Member + Parameter {
 	type ChainAmount: Member
 		+ Parameter
 		+ Copy
+		+ MaybeSerializeDeserialize
 		+ Default
 		+ AtLeast32BitUnsigned
 		+ Into<AssetAmount>
@@ -98,6 +99,7 @@ pub trait Chain: Member + Parameter {
 		+ Parameter
 		+ MaxEncodedLen
 		+ Copy
+		+ MaybeSerializeDeserialize
 		+ BenchmarkValue
 		+ FullCodec
 		+ Into<cf_primitives::Asset>
@@ -163,6 +165,8 @@ pub trait ChainCrypto {
 
 	/// Uniquely identifies a transaction on the outgoing direction.
 	type TransactionOutId: Member + Parameter + Unpin + BenchmarkValue;
+
+	type KeyHandoverIsRequired: Get<bool>;
 
 	type GovKey: Member + Parameter + Copy + BenchmarkValue;
 

@@ -12,9 +12,7 @@ use frame_support::{
 	pallet_prelude::{DispatchResultWithPostInfo, Weight},
 	sp_runtime::{DispatchError, Percent, TransactionOutcome},
 	storage::with_transaction,
-	traits::{
-		EnsureOrigin, Get, OnRuntimeUpgrade, StorageVersion, UnfilteredDispatchable, UnixTime,
-	},
+	traits::{EnsureOrigin, Get, StorageVersion, UnfilteredDispatchable, UnixTime},
 };
 pub use pallet::*;
 use sp_std::{boxed::Box, ops::Add, vec::Vec};

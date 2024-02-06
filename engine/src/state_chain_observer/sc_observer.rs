@@ -3,10 +3,7 @@ mod crypto_compat;
 mod tests;
 
 use anyhow::{anyhow, Context};
-use cf_chains::{
-	btc::{self, PreviousOrCurrent},
-	Chain,
-};
+use cf_chains::btc::{self, PreviousOrCurrent};
 use cf_primitives::{BlockNumber, CeremonyId, EpochIndex};
 use crypto_compat::CryptoCompat;
 use futures::{FutureExt, StreamExt};
@@ -60,12 +57,12 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 ) where
 	MultisigClient: MultisigClientApi<C::CryptoScheme>,
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
-	Runtime: pallet_cf_vaults::Config<I>,
+	Runtime: pallet_cf_threshold_signature::Config<I>,
 	C: ChainSigning<
-			ChainCrypto = <<Runtime as pallet_cf_vaults::Config<I>>::Chain as Chain>::ChainCrypto,
+			ChainCrypto = <Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChainCrypto,
 		> + 'static,
 	I: CryptoCompat<C, C::ChainCrypto> + 'static + Sync + Send,
-	RuntimeCall: From<pallet_cf_vaults::Call<Runtime, I>>,
+	RuntimeCall: From<pallet_cf_threshold_signature::Call<Runtime, I>>,
 {
 	if keygen_participants.contains(&state_chain_client.account_id()) {
 		// We initiate keygen outside of the spawn to avoid requesting ceremonies out of order
@@ -74,7 +71,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 		scope.spawn(async move {
 			state_chain_client
 				.finalize_signed_extrinsic(
-					pallet_cf_vaults::Call::<Runtime, I>::report_keygen_outcome {
+					pallet_cf_threshold_signature::Call::<Runtime, I>::report_keygen_outcome {
 						ceremony_id,
 						reported_outcome: keygen_result_future
 							.await
@@ -106,8 +103,8 @@ async fn handle_key_handover_request<'a, StateChainClient, MultisigClient>(
 ) where
 	MultisigClient: MultisigClientApi<BtcCryptoScheme>,
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
-	Runtime: pallet_cf_vaults::Config<BitcoinInstance>,
-	RuntimeCall: From<pallet_cf_vaults::Call<Runtime, BitcoinInstance>>,
+	Runtime: pallet_cf_threshold_signature::Config<BitcoinInstance>,
+	RuntimeCall: From<pallet_cf_threshold_signature::Call<Runtime, BitcoinInstance>>,
 {
 	let account_id = &state_chain_client.account_id();
 	if sharing_participants.contains(account_id) || receiving_participants.contains(account_id) {
@@ -120,7 +117,7 @@ async fn handle_key_handover_request<'a, StateChainClient, MultisigClient>(
 		);
 		scope.spawn(async move {
 			let _result = state_chain_client
-				.finalize_signed_extrinsic(pallet_cf_vaults::Call::<
+				.finalize_signed_extrinsic(pallet_cf_threshold_signature::Call::<
 					Runtime,
 					BitcoinInstance,
 				>::report_key_handover_outcome {
@@ -567,7 +564,7 @@ where
 			ceremony_id.saturating_sub(1)
 		} else {
 			state_chain_client
-				.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+				.storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
 					state_chain_runtime::Runtime,
 					state_chain_runtime::EthereumInstance,
 				>>(block_hash)
@@ -582,7 +579,7 @@ where
 			ceremony_id.saturating_sub(1)
 		} else {
 			state_chain_client
-				.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+				.storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
 					state_chain_runtime::Runtime,
 					state_chain_runtime::PolkadotInstance,
 				>>(block_hash)
@@ -598,7 +595,7 @@ where
 			ceremony_id.saturating_sub(1)
 		} else {
 			state_chain_client
-				.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+				.storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
 					state_chain_runtime::Runtime,
 					state_chain_runtime::BitcoinInstance,
 				>>(block_hash)

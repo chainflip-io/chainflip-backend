@@ -136,13 +136,15 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
-			if T::SafeMode::get().reporting_enabled &&
-				current_block % T::HeartbeatBlockInterval::get() == Zero::zero()
-			{
-				// Reputation depends on heartbeats
-				Self::penalise_offline_authorities(Self::current_network_state().offline);
+			if current_block % T::HeartbeatBlockInterval::get() == Zero::zero() {
 				T::Heartbeat::on_heartbeat_interval();
-				return T::WeightInfo::submit_network_state()
+				if T::SafeMode::get().reporting_enabled {
+					// Reputation depends on heartbeats
+					let offline_authorities = Self::current_network_state().offline;
+					let num_offline_authorities = offline_authorities.len() as u32;
+					Self::penalise_offline_authorities(offline_authorities);
+					return T::WeightInfo::submit_network_state(num_offline_authorities)
+				}
 			}
 			T::WeightInfo::on_initialize_no_action()
 		}

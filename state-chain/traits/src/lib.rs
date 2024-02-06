@@ -16,12 +16,12 @@ pub use async_result::AsyncResult;
 
 use cf_chains::{
 	address::ForeignChainAddress, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain,
-	ChainCrypto, DepositChannel, Ethereum, Polkadot, SwapOrigin,
+	ChainCrypto, DepositChannel, Ethereum, SwapOrigin,
 };
 use cf_primitives::{
-	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
-	CeremonyId, ChannelId, Ed25519PublicKey, EgressId, EpochIndex, FlipBalance, ForeignChain,
-	Ipv6Addr, NetworkEnvironment, SemVer, SwapId, ThresholdSignatureRequestId,
+	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId, ChannelId,
+	Ed25519PublicKey, EgressCounter, EgressId, EpochIndex, FlipBalance, ForeignChain, Ipv6Addr,
+	NetworkEnvironment, SemVer, SwapId, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -32,7 +32,7 @@ use frame_support::{
 		DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
 	},
 	traits::{EnsureOrigin, Get, Imbalance, IsType, UnfilteredDispatchable},
-	Hashable, Parameter,
+	CloneNoBound, EqNoBound, Hashable, Parameter, PartialEqNoBound,
 };
 use scale_info::TypeInfo;
 use sp_std::{collections::btree_set::BTreeSet, iter::Sum, marker::PhantomData, prelude::*};
@@ -122,6 +122,9 @@ pub trait EpochInfo {
 		epoch_index: EpochIndex,
 		new_authorities: BTreeSet<Self::ValidatorId>,
 	);
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_authorities(authorities: BTreeSet<Self::ValidatorId>);
 }
 
 pub struct CurrentEpochIndex<T>(PhantomData<T>);
@@ -145,14 +148,14 @@ impl<Id, Amount> From<(Id, Amount)> for Bid<Id, Amount> {
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, Decode, Encode)]
-pub enum VaultStatus<ValidatorId> {
+pub enum KeyRotationStatusOuter<ValidatorId> {
 	KeygenComplete,
 	KeyHandoverComplete,
 	RotationComplete,
 	Failed(BTreeSet<ValidatorId>),
 }
 
-pub trait VaultRotator {
+pub trait KeyRotator {
 	type ValidatorId: Ord + Clone;
 
 	/// Start the rotation by kicking off keygen with provided candidates.
@@ -168,18 +171,31 @@ pub trait VaultRotator {
 	);
 
 	/// Get the current rotation status.
-	fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>>;
+	fn status() -> AsyncResult<KeyRotationStatusOuter<Self::ValidatorId>>;
 
-	/// Activate key/s on particular chain/s. For example, setting the new key
-	/// on the contract for a smart contract chain.
-	fn activate();
+	/// Activate key on for vaults on all chains that use this Key.
+	fn activate_keys();
 
 	/// Reset the state associated with the current key rotation
 	/// in preparation for a new one.
-	fn reset_vault_rotation();
+	fn reset_key_rotation();
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_status(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>);
+	fn set_status(_outcome: AsyncResult<KeyRotationStatusOuter<Self::ValidatorId>>);
+}
+
+pub trait VaultActivator<C: ChainCrypto> {
+	type ValidatorId: Ord + Clone;
+
+	/// Get the current rotation status.
+	fn status() -> AsyncResult<()>;
+
+	/// Activate key/s on particular chain/s. For example, setting the new key
+	/// on the contract for a smart contract chain.
+	fn activate(new_key: C::AggKey, maybe_old_key: Option<C::AggKey>);
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_status(_outcome: AsyncResult<()>);
 }
 
 /// Handler for Epoch life cycle events.
@@ -274,6 +290,11 @@ pub trait Issuance {
 
 	/// Returns the total issuance.
 	fn total_issuance() -> Self::Balance;
+
+	/// Burn some funds that are off-chain (eg. in the StateChainGateway contract).
+	///
+	/// Use with care.
+	fn burn_offchain(amount: Self::Balance);
 }
 
 /// Distribute rewards somehow.
@@ -395,14 +416,6 @@ where
 	/// Initiate a signing request and return the request id and, if the request was successful, the
 	/// ceremony id.
 	fn request_signature(payload: C::Payload) -> ThresholdSignatureRequestId;
-
-	fn request_verification_signature(
-		payload: C::Payload,
-		participants: BTreeSet<Self::ValidatorId>,
-		key: C::AggKey,
-		epoch_index: EpochIndex,
-		on_signature_ready: impl FnOnce(ThresholdSignatureRequestId) -> Self::Callback,
-	) -> ThresholdSignatureRequestId;
 
 	/// Register a callback to be dispatched when the signature is available. Can fail if the
 	/// provided request_id does not exist.
@@ -617,11 +630,6 @@ pub trait Bonding {
 	fn update_bond(authority: &Self::ValidatorId, bond: Self::Amount);
 }
 
-pub trait CeremonyIdProvider {
-	/// Increment the ceremony id, returning the new one.
-	fn increment_ceremony_id() -> CeremonyId;
-}
-
 /// Something that is able to provide block authorship slots that were missed.
 pub trait MissedAuthorshipSlots {
 	/// Get a list of slots that were missed.
@@ -713,40 +721,65 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 	fn get_account_role(account_id: &T::AccountId) -> AccountRole;
 }
 
+#[derive(
+	PartialEqNoBound, EqNoBound, CloneNoBound, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug,
+)]
+pub struct ScheduledEgressDetails<C: Chain> {
+	pub egress_id: EgressId,
+	pub egress_amount: C::ChainAmount,
+	pub fee_withheld: C::ChainAmount,
+}
+
+impl<C: Chain + Get<ForeignChain>> Default for ScheduledEgressDetails<C> {
+	fn default() -> Self {
+		Self::new(Default::default(), Default::default(), Default::default())
+	}
+}
+
+impl<C: Chain + Get<ForeignChain>> ScheduledEgressDetails<C> {
+	pub fn new(
+		id_counter: EgressCounter,
+		egress_amount: C::ChainAmount,
+		fee_withheld: C::ChainAmount,
+	) -> Self {
+		Self {
+			egress_id: (<C as Get<ForeignChain>>::get(), id_counter),
+			egress_amount,
+			fee_withheld,
+		}
+	}
+}
+
 /// API that allows other pallets to Egress assets out of the State Chain.
 pub trait EgressApi<C: Chain> {
+	type EgressError: Into<DispatchError>;
+
+	/// Schedule the egress of an asset to a destination address.
+	///
+	/// May take a fee and will return an error if egress cannot be scheduled.
 	fn schedule_egress(
 		asset: C::ChainAsset,
 		amount: C::ChainAmount,
 		destination_address: C::ChainAccount,
 		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, C::ChainAmount)>,
-	) -> EgressId;
+	) -> Result<ScheduledEgressDetails<C>, Self::EgressError>;
 }
 
-impl<T: frame_system::Config> EgressApi<Ethereum> for T {
-	fn schedule_egress(
-		_asset: assets::eth::Asset,
-		_amount: <Ethereum as Chain>::ChainAmount,
-		_destination_address: <Ethereum as Chain>::ChainAccount,
-		_maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <Ethereum as Chain>::ChainAmount)>,
-	) -> EgressId {
-		(ForeignChain::Ethereum, 0)
-	}
-}
+impl<C: Chain + Get<ForeignChain>> EgressApi<C> for () {
+	type EgressError = DispatchError;
 
-impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 	fn schedule_egress(
-		_asset: assets::dot::Asset,
-		_amount: <Polkadot as Chain>::ChainAmount,
-		_destination_address: <Polkadot as Chain>::ChainAccount,
-		_maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <Polkadot as Chain>::ChainAmount)>,
-	) -> EgressId {
-		(ForeignChain::Polkadot, 0)
+		_asset: C::ChainAsset,
+		_amount: <C as Chain>::ChainAmount,
+		_destination_address: <C as Chain>::ChainAccount,
+		_maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <C as Chain>::ChainAmount)>,
+	) -> Result<ScheduledEgressDetails<C>, DispatchError> {
+		Ok(Default::default())
 	}
 }
 
 pub trait VaultKeyWitnessedHandler<C: Chain> {
-	fn on_new_key_activated(block_number: C::ChainBlockNumber) -> DispatchResultWithPostInfo;
+	fn on_first_key_activated(block_number: C::ChainBlockNumber) -> DispatchResultWithPostInfo;
 }
 
 pub trait BroadcastAnyChainGovKey {

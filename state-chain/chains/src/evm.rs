@@ -34,6 +34,7 @@ impl ChainCrypto for EvmCrypto {
 	// We can't use the hash since we don't know it for the Evm, as we must select an individual
 	// authority to sign the transaction.
 	type TransactionOutId = Self::ThresholdSignature;
+	type KeyHandoverIsRequired = ConstBool<false>;
 	type GovKey = Address;
 
 	fn verify_threshold_signature(
@@ -561,18 +562,14 @@ impl ChannelLifecycleHooks for DeploymentStatus {
 				true
 			},
 			Self::Deployed => false,
-			Self::Undeployed => {
-				#[cfg(debug_assertions)]
-				{
+			Self::Undeployed =>
+				if cfg!(debug_assertions) {
 					panic!("Cannot finalize fetch to an undeployed address")
-				}
-				#[cfg(not(debug_assertions))]
-				{
+				} else {
 					log::error!("Cannot finalize fetch to an undeployed address");
 					*self = Self::Deployed;
 					false
-				}
-			},
+				},
 		}
 	}
 

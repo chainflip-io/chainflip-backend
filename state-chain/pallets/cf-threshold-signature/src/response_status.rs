@@ -1,4 +1,7 @@
-use frame_support::{IterableStorageMap, StorageMap, StoragePrefixedMap, StorageValue};
+use frame_support::{
+	CloneNoBound, DebugNoBound, EqNoBound, IterableStorageMap, PartialEqNoBound, StorageMap,
+	StoragePrefixedMap, StorageValue,
+};
 
 use super::*;
 
@@ -149,7 +152,7 @@ mod tests {
 
 	macro_rules! assert_failure_outcome {
 		($ex:expr) => {
-			let outcome: KeygenOutcomeFor<Test> = $ex;
+			let outcome: KeygenOutcomeFor<Test, Instance1> = $ex;
 			assert!(outcome.is_err(), "Expected failure, got: {:?}", outcome);
 		};
 	}
@@ -208,15 +211,18 @@ mod tests {
 			.collect()
 	}
 
-	fn unanimous(num_candidates: usize, outcome: ReportedOutcome) -> KeygenOutcomeFor<Test> {
+	fn unanimous(
+		num_candidates: usize,
+		outcome: ReportedOutcome,
+	) -> KeygenOutcomeFor<Test, Instance1> {
 		get_outcome(&n_times([(num_candidates, outcome)]), |_| [])
 	}
 
-	fn unanimous_success(num_candidates: usize) -> KeygenOutcomeFor<Test> {
+	fn unanimous_success(num_candidates: usize) -> KeygenOutcomeFor<Test, Instance1> {
 		unanimous(num_candidates, ReportedOutcome::Success)
 	}
 
-	fn unanimous_failure(num_candidates: usize) -> KeygenOutcomeFor<Test> {
+	fn unanimous_failure(num_candidates: usize) -> KeygenOutcomeFor<Test, Instance1> {
 		unanimous(num_candidates, ReportedOutcome::Failure)
 	}
 
@@ -226,7 +232,7 @@ mod tests {
 		num_bad_keys: usize,
 		num_timeouts: usize,
 		report_gen: F,
-	) -> KeygenOutcomeFor<Test> {
+	) -> KeygenOutcomeFor<Test, Instance1> {
 		get_outcome(
 			n_times([
 				(num_successes, ReportedOutcome::Success),
@@ -265,7 +271,7 @@ mod tests {
 	fn get_outcome<F: Fn(u64) -> I, I: IntoIterator<Item = u64>>(
 		outcomes: &[ReportedOutcome],
 		report_gen: F,
-	) -> Result<AggKeyFor<Test>, BTreeSet<u64>> {
+	) -> Result<AggKeyFor<Test, Instance1>, BTreeSet<u64>> {
 		let mut status =
 			KeygenResponseStatus::<Test, _>::new(BTreeSet::from_iter(1..=outcomes.len() as u64));
 

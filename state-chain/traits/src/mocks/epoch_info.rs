@@ -2,7 +2,6 @@
 macro_rules! impl_mock_epoch_info {
 	($account_id:ty, $balance:ty, $epoch_index:ty, $authority_count:ty $(,)? ) => {
 		use $crate::EpochInfo;
-
 		pub struct MockEpochInfo;
 
 		thread_local! {
@@ -124,6 +123,13 @@ macro_rules! impl_mock_epoch_info {
 			#[cfg(feature = "runtime-benchmarks")]
 			fn add_authority_info_for_epoch(epoch_index: $epoch_index, new_authorities: sp_std::collections::btree_set::BTreeSet<Self::ValidatorId>) {
 				MockEpochInfo::inner_add_authority_info_for_epoch(epoch_index, new_authorities);
+			}
+
+			#[cfg(feature = "runtime-benchmarks")]
+			fn set_authorities(
+				authorities: sp_std::collections::btree_set::BTreeSet<Self::ValidatorId>,
+			) {
+				Self::set_authorities(authorities);
 			}
 		}
 	};

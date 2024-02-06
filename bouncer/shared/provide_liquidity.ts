@@ -53,7 +53,7 @@ export async function provideLiquidity(ccy: Asset, amount: number, waitForFinali
   console.log('Requesting ' + ccy + ' deposit address');
   await lpMutex.runExclusive(async () => {
     await chainflip.tx.liquidityProvider
-      .requestLiquidityDepositAddress(ccy.toLowerCase())
+      .requestLiquidityDepositAddress(ccy.toLowerCase(), null)
       .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
   });
 
