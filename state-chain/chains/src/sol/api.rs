@@ -46,7 +46,7 @@ impl<Env: 'static> ApiCall<SolanaCrypto> for SolanaApi<Env> {
 
 impl<Env: 'static> ConsolidateCall<Solana> for SolanaApi<Env> {
 	fn consolidate_utxos() -> Result<Self, ConsolidationError> {
-		unimplemented!()
+		Err(ConsolidationError::NotRequired)
 	}
 }
 
