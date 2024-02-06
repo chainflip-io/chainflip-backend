@@ -1,5 +1,5 @@
 use cf_amm::{
-	common::{Amount, Tick},
+	common::{Amount, AssetsMap, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -20,9 +20,7 @@ use jsonrpsee::{
 	SubscriptionSink,
 };
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_pools::{
-	AskBidMap, AssetsMap, PoolInfo, PoolLiquidity, PoolPrice, UnidirectionalPoolDepth,
-};
+use pallet_cf_pools::{AskBidMap, PoolInfo, PoolLiquidity, PoolPrice, UnidirectionalPoolDepth};
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_api::BlockT;

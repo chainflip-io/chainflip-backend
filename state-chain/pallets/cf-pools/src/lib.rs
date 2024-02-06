@@ -2,7 +2,7 @@
 use core::ops::Range;
 
 use cf_amm::{
-	common::{Amount, Order, Price, Side, SideMap, SqrtPriceQ64F96, Tick},
+	common::{Amount, Assets, AssetsMap, Order, Price, SqrtPriceQ64F96, Tick},
 	limit_orders,
 	limit_orders::{Collected, PositionInfo},
 	range_orders,
@@ -78,57 +78,58 @@ impl AssetPair {
 	}
 }
 
-#[derive(
-	Copy,
-	Clone,
-	Debug,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
-	PartialEq,
-	Eq,
-	Deserialize,
-	Serialize,
-)]
-pub enum Assets {
-	Base,
-	Quote,
-}
-impl core::ops::Not for Assets {
-	type Output = Self;
+// #[derive(
+// 	Copy,
+// 	Clone,
+// 	Debug,
+// 	Encode,
+// 	Decode,
+// 	TypeInfo,
+// 	MaxEncodedLen,
+// 	PartialEq,
+// 	Eq,
+// 	Deserialize,
+// 	Serialize,
+// )]
+// pub enum Assets {
+// 	Base,
+// 	Quote,
+// }
+// impl core::ops::Not for Assets {
+// 	type Output = Self;
 
-	fn not(self) -> Self::Output {
-		match self {
-			Assets::Base => Assets::Quote,
-			Assets::Quote => Assets::Base,
-		}
-	}
-}
-impl From<Side> for Assets {
-	fn from(value: Side) -> Self {
-		match value {
-			Side::Zero => Self::Base,
-			Side::One => Self::Quote,
-		}
-	}
-}
-impl From<Assets> for Side {
-	fn from(value: Assets) -> Self {
-		match value {
-			Assets::Base => Self::Zero,
-			Assets::Quote => Self::One,
-		}
-	}
-}
-impl Assets {
-	fn sell_order(&self) -> Order {
-		match self {
-			Assets::Base => Order::Sell,
-			Assets::Quote => Order::Buy,
-		}
-	}
-}
+// 	fn not(self) -> Self::Output {
+// 		match self {
+// 			Assets::Base => Assets::Quote,
+// 			Assets::Quote => Assets::Base,
+// 		}
+// 	}
+// }
+
+// impl From<Assets> for Assets {
+// 	fn from(value: Assets) -> Self {
+// 		match value {
+// 			Assets::Base => Self::Base,
+// 			Assets::Quote => Self::Quote,
+// 		}
+// 	}
+// }
+// impl From<Assets> for Assets {
+// 	fn from(value: Assets) -> Self {
+// 		match value {
+// 			Assets::Base => Self::Zero,
+// 			Assets::Quote => Self::One,
+// 		}
+// 	}
+// }
+// impl Assets {
+// 	fn sell_order(&self) -> Order {
+// 		match self {
+// 			Assets::Base => Order::Sell,
+// 			Assets::Quote => Order::Buy,
+// 		}
+// 	}
+// }
 
 #[derive(
 	Copy,
@@ -164,83 +165,83 @@ impl<T> AskBidMap<T> {
 	}
 }
 
-// TODO Move into AMM crate
-#[derive(
-	Copy,
-	Clone,
-	Debug,
-	Default,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
-	PartialEq,
-	Eq,
-	Deserialize,
-	Serialize,
-	Hash,
-)]
-pub struct AssetsMap<S> {
-	pub base: S,
-	pub quote: S,
-}
-impl<S> AssetsMap<S> {
-	pub fn try_map<R, E, F: FnMut(S) -> Result<R, E>>(self, mut f: F) -> Result<AssetsMap<R>, E> {
-		Ok(AssetsMap { base: f(self.base)?, quote: f(self.quote)? })
-	}
+// // TODO Move into AMM crate
+// #[derive(
+// 	Copy,
+// 	Clone,
+// 	Debug,
+// 	Default,
+// 	Encode,
+// 	Decode,
+// 	TypeInfo,
+// 	MaxEncodedLen,
+// 	PartialEq,
+// 	Eq,
+// 	Deserialize,
+// 	Serialize,
+// 	Hash,
+// )]
+// pub struct AssetsMap<S> {
+// 	pub base: S,
+// 	pub quote: S,
+// }
+// impl<S> AssetsMap<S> {
+// 	pub fn try_map<R, E, F: FnMut(S) -> Result<R, E>>(self, mut f: F) -> Result<AssetsMap<R>, E> {
+// 		Ok(AssetsMap { base: f(self.base)?, quote: f(self.quote)? })
+// 	}
 
-	pub fn map<R, F: FnMut(S) -> R>(self, mut f: F) -> AssetsMap<R> {
-		AssetsMap { base: f(self.base), quote: f(self.quote) }
-	}
+// 	pub fn map<R, F: FnMut(S) -> R>(self, mut f: F) -> AssetsMap<R> {
+// 		AssetsMap { base: f(self.base), quote: f(self.quote) }
+// 	}
 
-	pub fn map_with_asset<R, F: FnMut(Assets, S) -> R>(self, mut f: F) -> AssetsMap<R> {
-		AssetsMap { base: f(Assets::Base, self.base), quote: f(Assets::Quote, self.quote) }
-	}
+// 	pub fn map_with_asset<R, F: FnMut(Assets, S) -> R>(self, mut f: F) -> AssetsMap<R> {
+// 		AssetsMap { base: f(Assets::Base, self.base), quote: f(Assets::Quote, self.quote) }
+// 	}
 
-	pub fn zip<T>(self, x: AssetsMap<T>) -> AssetsMap<(S, T)> {
-		AssetsMap { base: (self.base, x.base), quote: (self.quote, x.quote) }
-	}
+// 	pub fn zip<T>(self, x: AssetsMap<T>) -> AssetsMap<(S, T)> {
+// 		AssetsMap { base: (self.base, x.base), quote: (self.quote, x.quote) }
+// 	}
+// -
+// 	pub fn as_ref(&self) -> AssetsMap<&S> {
+// 		AssetsMap { base: &self.base, quote: &self.quote }
+// 	}
+// }
+// impl<T> IntoIterator for AssetsMap<T> {
+// 	type Item = (Assets, T);
 
-	pub fn as_ref(&self) -> AssetsMap<&S> {
-		AssetsMap { base: &self.base, quote: &self.quote }
-	}
-}
-impl<T> IntoIterator for AssetsMap<T> {
-	type Item = (Assets, T);
+// 	type IntoIter = core::array::IntoIter<(Assets, T), 2>;
 
-	type IntoIter = core::array::IntoIter<(Assets, T), 2>;
-
-	fn into_iter(self) -> Self::IntoIter {
-		[(Assets::Base, self.base), (Assets::Quote, self.quote)].into_iter()
-	}
-}
-impl<T> core::ops::Index<Assets> for AssetsMap<T> {
-	type Output = T;
-	fn index(&self, assets: Assets) -> &T {
-		match assets {
-			Assets::Base => &self.base,
-			Assets::Quote => &self.quote,
-		}
-	}
-}
-impl<T> core::ops::IndexMut<Assets> for AssetsMap<T> {
-	fn index_mut(&mut self, assets: Assets) -> &mut T {
-		match assets {
-			Assets::Base => &mut self.base,
-			Assets::Quote => &mut self.quote,
-		}
-	}
-}
-impl<T> From<SideMap<T>> for AssetsMap<T> {
-	fn from(value: SideMap<T>) -> Self {
-		Self { base: value.zero, quote: value.one }
-	}
-}
-impl<T> From<AssetsMap<T>> for SideMap<T> {
-	fn from(value: AssetsMap<T>) -> Self {
-		Self { zero: value.base, one: value.quote }
-	}
-}
+// 	fn into_iter(self) -> Self::IntoIter {
+// 		[(Assets::Base, self.base), (Assets::Quote, self.quote)].into_iter()
+// 	}
+// }
+// impl<T> core::ops::Index<Assets> for AssetsMap<T> {
+// 	type Output = T;
+// 	fn index(&self, assets: Assets) -> &T {
+// 		match assets {
+// 			Assets::Base => &self.base,
+// 			Assets::Quote => &self.quote,
+// 		}
+// 	}
+// }
+// impl<T> core::ops::IndexMut<Assets> for AssetsMap<T> {
+// 	fn index_mut(&mut self, assets: Assets) -> &mut T {
+// 		match assets {
+// 			Assets::Base => &mut self.base,
+// 			Assets::Quote => &mut self.quote,
+// 		}
+// 	}
+// }
+// impl<T> From<AssetsMap<T>> for AssetsMap<T> {
+// 	fn from(value: AssetsMap<T>) -> Self {
+// 		Self { base: value.zero, quote: value.one }
+// 	}
+// }
+// impl<T> From<AssetsMap<T>> for AssetsMap<T> {
+// 	fn from(value: AssetsMap<T>) -> Self {
+// 		Self { zero: value.base, one: value.quote }
+// 	}
+// }
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
@@ -1010,7 +1011,7 @@ pub mod pallet {
 				pool.pool_state
 					.set_fees(fee_hundredth_pips)
 					.map_err(|_| Error::<T>::InvalidFeeAmount)?
-					.try_map(|side, collected_fees| {
+					.try_map_2(|side, collected_fees| {
 						for ((lp, id), tick, collected, position_info) in collected_fees.into_iter()
 						{
 							Self::process_limit_order_update(
@@ -1727,7 +1728,7 @@ impl<T: Config> Pallet<T> {
 		Ok(AskBidMap::from_sell_map(
 			limit_orders
 				.zip(range_orders)
-				.map(|_, (limit_orders, range_orders)| {
+				.map(|(limit_orders, range_orders)| {
 					let to_single_depth =
 						|(price, depth)| UnidirectionalSubPoolDepth { price, depth };
 					UnidirectionalPoolDepth {

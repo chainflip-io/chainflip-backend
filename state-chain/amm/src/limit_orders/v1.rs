@@ -4,7 +4,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 use crate::{
-	common::{Amount, SideMap, SqrtPriceQ64F96},
+	common::{Amount, AssetsMap, SqrtPriceQ64F96},
 	limit_orders::FloatBetweenZeroAndOne,
 };
 
@@ -19,8 +19,8 @@ struct Position {
 pub struct PoolState<LiquidityProvider> {
 	fee_hundredth_pips: u32,
 	next_pool_instance: u128,
-	fixed_pools: SideMap<BTreeMap<SqrtPriceQ64F96, super::FixedPool>>,
-	positions: SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
+	fixed_pools: AssetsMap<BTreeMap<SqrtPriceQ64F96, super::FixedPool>>,
+	positions: AssetsMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
 }
 
 impl<LiquidityProvider: Ord> From<PoolState<LiquidityProvider>>
@@ -31,7 +31,7 @@ impl<LiquidityProvider: Ord> From<PoolState<LiquidityProvider>>
 			fee_hundredth_pips: v1_state.fee_hundredth_pips,
 			next_pool_instance: v1_state.next_pool_instance,
 			fixed_pools: v1_state.fixed_pools,
-			positions: v1_state.positions.map(|_side, positions| {
+			positions: v1_state.positions.map_with_asset(|_side, positions| {
 				positions
 					.into_iter()
 					.map(|((sqrt_price, lp), position)| {

@@ -33,7 +33,7 @@ use sp_std::vec::Vec;
 
 use crate::common::{
 	is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, sqrt_price_to_price,
-	tick_at_sqrt_price, Amount, OneToZero, Price, SetFeesError, SideMap, SqrtPriceQ64F96, Tick,
+	tick_at_sqrt_price, Amount, AssetsMap, OneToZero, Price, SetFeesError, SqrtPriceQ64F96, Tick,
 	ZeroToOne, MAX_LP_FEE, ONE_IN_HUNDREDTH_PIPS, PRICE_FRACTIONAL_BITS,
 };
 
@@ -382,19 +382,19 @@ pub(super) struct PoolState<LiquidityProvider: Ord> {
 	/// The ID the next FixedPool that is created will use.
 	next_pool_instance: u128,
 	/// All the FixedPools that have some liquidity. They are grouped into all those that are
-	/// selling asset `Zero` and all those that are selling asset `One` used the SideMap.
-	fixed_pools: SideMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,
+	/// selling asset `Zero` and all those that are selling asset `One` used the AssetsMap.
+	fixed_pools: AssetsMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,
 	/// All the Positions that either are providing liquidity currently, or were providing
 	/// liquidity directly after the last time they where updated. They are grouped into all those
-	/// that are selling asset `Zero` and all those that are selling asset `One` used the SideMap.
-	/// Therefore there can be positions stored here that don't provide any liquidity.
-	positions: SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
+	/// that are selling asset `Zero` and all those that are selling asset `One` used the
+	/// AssetsMap. Therefore there can be positions stored here that don't provide any liquidity.
+	positions: AssetsMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
 	/// Total fees earned over all time
-	total_fees_earned: SideMap<Amount>,
+	total_fees_earned: AssetsMap<Amount>,
 	/// Total of all swap inputs over all time (not including fees)
-	total_swap_inputs: SideMap<Amount>,
+	total_swap_inputs: AssetsMap<Amount>,
 	/// Total of all swap outputs over all time
-	total_swap_outputs: SideMap<Amount>,
+	total_swap_outputs: AssetsMap<Amount>,
 }
 
 impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
@@ -442,18 +442,18 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		})
 	}
 
-	/// Runs collect for all positions in the pool. Returns a SideMap
+	/// Runs collect for all positions in the pool. Returns a AssetsMap
 	/// containing the state and fees collected from every position. The positions are grouped into
-	/// a SideMap by the asset they sell.
+	/// a AssetsMap by the asset they sell.
 	///
 	/// This function never panics.
 	#[allow(clippy::type_complexity)]
 	pub(super) fn collect_all(
 		&mut self,
-	) -> SideMap<Vec<(LiquidityProvider, Tick, Collected, PositionInfo)>> {
+	) -> AssetsMap<Vec<(LiquidityProvider, Tick, Collected, PositionInfo)>> {
 		// We must collect all positions before we can change the fee, otherwise the fee and swapped
 		// liquidity calculations would be wrong.
-		SideMap::from_array([
+		AssetsMap::from_array([
 			self.positions[!<OneToZero as crate::common::SwapDirection>::INPUT_SIDE]
 				.keys()
 				.cloned()
@@ -482,16 +482,16 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	}
 
 	/// Sets the fee for the pool. This will apply to future swaps. The fee may not be set
-	/// higher than 50%. Also runs collect for all positions in the pool. Returns a SideMap
+	/// higher than 50%. Also runs collect for all positions in the pool. Returns a AssetsMap
 	/// containing the state and fees collected from every position as part of the set_fees
-	/// operation. The positions are grouped into a SideMap by the asset they sell.
+	/// operation. The positions are grouped into a AssetsMap by the asset they sell.
 	///
 	/// This function never panics.
 	#[allow(clippy::type_complexity)]
 	pub(super) fn set_fees(
 		&mut self,
 		fee_hundredth_pips: u32,
-	) -> Result<SideMap<Vec<(LiquidityProvider, Tick, Collected, PositionInfo)>>, SetFeesError> {
+	) -> Result<AssetsMap<Vec<(LiquidityProvider, Tick, Collected, PositionInfo)>>, SetFeesError> {
 		Self::validate_fees(fee_hundredth_pips)
 			.then_some(())
 			.ok_or(SetFeesError::InvalidFeeAmount)?;

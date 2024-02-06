@@ -17,7 +17,7 @@ use crate::{
 	},
 };
 use cf_amm::{
-	common::{Amount, Tick},
+	common::{Amount, AssetsMap, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -35,7 +35,7 @@ pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
 use pallet_cf_pools::{
-	AskBidMap, AssetsMap, PoolLiquidity, PoolOrderbook, PoolPrice, UnidirectionalPoolDepth,
+	AskBidMap, PoolLiquidity, PoolOrderbook, PoolPrice, UnidirectionalPoolDepth,
 };
 use pallet_cf_reputation::ExclusionList;
 use pallet_cf_swapping::CcmSwapAmounts;

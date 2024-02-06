@@ -4,12 +4,12 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 use super::{FeeGrowthQ128F128, Liquidity};
-use crate::common::{SideMap, SqrtPriceQ64F96, Tick};
+use crate::common::{AssetsMap, SqrtPriceQ64F96, Tick};
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
 struct Position {
 	liquidity: Liquidity,
-	last_fee_growth_inside: SideMap<FeeGrowthQ128F128>,
+	last_fee_growth_inside: AssetsMap<FeeGrowthQ128F128>,
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
@@ -18,7 +18,7 @@ pub struct PoolState<LiquidityProvider> {
 	current_sqrt_price: SqrtPriceQ64F96,
 	current_tick: Tick,
 	current_liquidity: Liquidity,
-	global_fee_growth: SideMap<FeeGrowthQ128F128>,
+	global_fee_growth: AssetsMap<FeeGrowthQ128F128>,
 	liquidity_map: BTreeMap<Tick, super::TickDelta>,
 	positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
 }

@@ -45,10 +45,10 @@ pub enum Order {
 	Sell,
 }
 impl Order {
-	pub fn to_sold_side(&self) -> Side {
+	pub fn to_sold_side(&self) -> Assets {
 		match self {
-			Order::Buy => Side::One,
-			Order::Sell => Side::Zero,
+			Order::Buy => Assets::Base,
+			Order::Sell => Assets::Quote,
 		}
 	}
 }
@@ -64,18 +64,27 @@ impl core::ops::Not for Order {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub enum Side {
-	Zero,
-	One,
+pub enum Assets {
+	Base,
+	Quote,
 }
 
-impl core::ops::Not for Side {
+impl core::ops::Not for Assets {
 	type Output = Self;
 
 	fn not(self) -> Self::Output {
 		match self {
-			Side::Zero => Side::One,
-			Side::One => Side::Zero,
+			Assets::Base => Assets::Quote,
+			Assets::Quote => Assets::Base,
+		}
+	}
+}
+
+impl Assets {
+	pub fn sell_order(&self) -> Order {
+		match self {
+			Assets::Base => Order::Sell,
+			Assets::Quote => Order::Buy,
 		}
 	}
 }
@@ -95,69 +104,82 @@ impl core::ops::Not for Side {
 	Serialize,
 	Deserialize,
 )]
-pub struct SideMap<T> {
-	pub zero: T,
-	pub one: T,
+pub struct AssetsMap<S> {
+	pub base: S,
+	pub quote: S,
 }
-impl<T> SideMap<T> {
+
+impl<T> AssetsMap<T> {
 	pub fn from_array(array: [T; 2]) -> Self {
-		let [zero, one] = array;
-		Self { zero, one }
+		let [base, quote] = array;
+		Self { base, quote }
 	}
 
-	pub fn map<R>(self, mut f: impl FnMut(Side, T) -> R) -> SideMap<R> {
-		SideMap { zero: f(Side::Zero, self.zero), one: f(Side::One, self.one) }
+	pub fn map<R, F: FnMut(T) -> R>(self, mut f: F) -> AssetsMap<R> {
+		AssetsMap { base: f(self.base), quote: f(self.quote) }
 	}
 
-	pub fn try_map<R, E>(
+	// pub fn map<R>(self, mut f: impl FnMut(Assets, T) -> R) -> AssetsMap<R> {
+	// 	AssetsMap { base: f(Assets::Base, self.base), quote: f(Assets::Quote, self.quote) }
+	// }
+
+	pub fn try_map<R, E, F: FnMut(T) -> Result<R, E>>(self, mut f: F) -> Result<AssetsMap<R>, E> {
+		Ok(AssetsMap { base: f(self.base)?, quote: f(self.quote)? })
+	}
+
+	pub fn try_map_2<R, E>(
 		self,
-		mut f: impl FnMut(Side, T) -> Result<R, E>,
-	) -> Result<SideMap<R>, E> {
-		Ok(SideMap { zero: f(Side::Zero, self.zero)?, one: f(Side::One, self.one)? })
+		mut f: impl FnMut(Assets, T) -> Result<R, E>,
+	) -> Result<AssetsMap<R>, E> {
+		Ok(AssetsMap { base: f(Assets::Base, self.base)?, quote: f(Assets::Quote, self.quote)? })
 	}
 
-	pub fn as_ref(&self) -> SideMap<&T> {
-		SideMap { zero: &self.zero, one: &self.one }
+	pub fn as_ref(&self) -> AssetsMap<&T> {
+		AssetsMap { base: &self.base, quote: &self.quote }
 	}
 
-	pub fn as_mut(&mut self) -> SideMap<&mut T> {
-		SideMap { zero: &mut self.zero, one: &mut self.one }
+	pub fn as_mut(&mut self) -> AssetsMap<&mut T> {
+		AssetsMap { base: &mut self.base, quote: &mut self.quote }
 	}
 
-	pub fn zip<S>(self, other: SideMap<S>) -> SideMap<(T, S)> {
-		SideMap { zero: (self.zero, other.zero), one: (self.one, other.one) }
+	pub fn zip<S>(self, other: AssetsMap<S>) -> AssetsMap<(T, S)> {
+		AssetsMap { base: (self.base, other.base), quote: (self.quote, other.quote) }
+	}
+
+	pub fn map_with_asset<R, F: FnMut(Assets, T) -> R>(self, mut f: F) -> AssetsMap<R> {
+		AssetsMap { base: f(Assets::Base, self.base), quote: f(Assets::Quote, self.quote) }
 	}
 }
-impl<T> IntoIterator for SideMap<T> {
-	type Item = (Side, T);
+impl<T> IntoIterator for AssetsMap<T> {
+	type Item = (Assets, T);
 
-	type IntoIter = core::array::IntoIter<(Side, T), 2>;
+	type IntoIter = core::array::IntoIter<(Assets, T), 2>;
 
 	fn into_iter(self) -> Self::IntoIter {
-		[(Side::Zero, self.zero), (Side::One, self.one)].into_iter()
+		[(Assets::Base, self.base), (Assets::Quote, self.quote)].into_iter()
 	}
 }
-impl<T> core::ops::Index<Side> for SideMap<T> {
+impl<T> core::ops::Index<Assets> for AssetsMap<T> {
 	type Output = T;
-	fn index(&self, side: Side) -> &T {
+	fn index(&self, side: Assets) -> &T {
 		match side {
-			Side::Zero => &self.zero,
-			Side::One => &self.one,
+			Assets::Base => &self.base,
+			Assets::Quote => &self.quote,
 		}
 	}
 }
-impl<T> core::ops::IndexMut<Side> for SideMap<T> {
-	fn index_mut(&mut self, side: Side) -> &mut T {
+impl<T> core::ops::IndexMut<Assets> for AssetsMap<T> {
+	fn index_mut(&mut self, side: Assets) -> &mut T {
 		match side {
-			Side::Zero => &mut self.zero,
-			Side::One => &mut self.one,
+			Assets::Base => &mut self.base,
+			Assets::Quote => &mut self.quote,
 		}
 	}
 }
-impl<T: core::ops::Add<R>, R> core::ops::Add<SideMap<R>> for SideMap<T> {
-	type Output = SideMap<<T as core::ops::Add<R>>::Output>;
-	fn add(self, rhs: SideMap<R>) -> Self::Output {
-		SideMap { zero: self.zero + rhs.zero, one: self.one + rhs.one }
+impl<T: core::ops::Add<R>, R> core::ops::Add<AssetsMap<R>> for AssetsMap<T> {
+	type Output = AssetsMap<<T as core::ops::Add<R>>::Output>;
+	fn add(self, rhs: AssetsMap<R>) -> Self::Output {
+		AssetsMap { base: self.base + rhs.base, quote: self.quote + rhs.quote }
 	}
 }
 
@@ -218,7 +240,7 @@ pub(super) struct OneToZero {}
 
 pub(super) trait SwapDirection {
 	/// The asset this type of swap sells, i.e. the asset the swapper provides
-	const INPUT_SIDE: Side;
+	const INPUT_SIDE: Assets;
 
 	/// The worst price in this swap direction
 	const WORST_SQRT_PRICE: SqrtPriceQ64F96;
@@ -237,7 +259,7 @@ pub(super) trait SwapDirection {
 	fn input_to_output_amount_floor(amount: Amount, tick: Tick) -> Option<Amount>;
 }
 impl SwapDirection for ZeroToOne {
-	const INPUT_SIDE: Side = Side::Zero;
+	const INPUT_SIDE: Assets = Assets::Base;
 
 	const WORST_SQRT_PRICE: SqrtPriceQ64F96 = MIN_SQRT_PRICE;
 
@@ -266,7 +288,7 @@ impl SwapDirection for ZeroToOne {
 	}
 }
 impl SwapDirection for OneToZero {
-	const INPUT_SIDE: Side = Side::One;
+	const INPUT_SIDE: Assets = Assets::Quote;
 
 	const WORST_SQRT_PRICE: SqrtPriceQ64F96 = MAX_SQRT_PRICE;
 

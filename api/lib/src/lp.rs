@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_amm::{
-	common::{Amount, Order, Side, SideMap, Tick},
+	common::{Amount, Assets, AssetsMap, Order, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::address::EncodedAddress;
@@ -10,7 +10,7 @@ use chainflip_engine::state_chain_observer::client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock, WaitFor, WaitForResult},
 	StateChainClient,
 };
-use pallet_cf_pools::{AssetsMap, IncreaseOrDecrease, OrderId, RangeOrderSize};
+use pallet_cf_pools::{IncreaseOrDecrease, OrderId, RangeOrderSize};
 use serde::{Deserialize, Serialize};
 use sp_core::{H256, U256};
 use state_chain_runtime::RuntimeCall;

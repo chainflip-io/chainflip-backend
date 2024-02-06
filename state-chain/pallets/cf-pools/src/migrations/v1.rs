@@ -10,7 +10,7 @@ mod old {
 
 	#[derive(Copy, Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEq, Eq)]
 	pub struct CanonicalAssetPair {
-		pub assets: SideMap<Asset>,
+		pub assets: AssetsMap<Asset>,
 	}
 
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
@@ -22,7 +22,7 @@ mod old {
 		pub range_orders_cache: BTreeMap<T::AccountId, BTreeMap<OrderId, Range<Tick>>>,
 		/// A cache of all the limit orders that exist in the pool. This must be kept up to date
 		/// with the underlying pool. These are grouped by the asset the limit order is selling
-		pub limit_orders_cache: SideMap<BTreeMap<T::AccountId, BTreeMap<OrderId, Tick>>>,
+		pub limit_orders_cache: AssetsMap<BTreeMap<T::AccountId, BTreeMap<OrderId, Tick>>>,
 		pub pool_state: cf_amm::v1::PoolState<(T::AccountId, OrderId)>,
 	}
 
@@ -35,7 +35,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		for (key, pool) in old::Pools::<T>::drain().filter_map(|(old_key, old_pool)| {
 			Some((
-				AssetPair::new(old_key.assets[Side::Zero], old_key.assets[Side::One])?,
+				AssetPair::new(old_key.assets[Assets::Base], old_key.assets[Assets::Quote])?,
 				Pool::<T> {
 					range_orders_cache: old_pool.range_orders_cache,
 					limit_orders_cache: old_pool.limit_orders_cache.into(),

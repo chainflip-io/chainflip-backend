@@ -8,7 +8,7 @@ use chainflip_api::{
 	self,
 	lp::{
 		types::{LimitOrder, RangeOrder},
-		ApiWaitForResult, LpApi, Order, Tick,
+		ApiWaitForResult, AssetsMap, LpApi, Order, Tick,
 	},
 	primitives::{
 		chains::{Bitcoin, Ethereum, Polkadot},
@@ -31,7 +31,7 @@ use jsonrpsee::{
 	types::SubscriptionResult,
 	SubscriptionSink,
 };
-use pallet_cf_pools::{AssetPair, AssetsMap, IncreaseOrDecrease, OrderId, RangeOrderSize};
+use pallet_cf_pools::{AssetPair, IncreaseOrDecrease, OrderId, RangeOrderSize};
 use rpc_types::{AssetBalance, OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
 use sp_core::U256;
 use std::{
@@ -47,8 +47,7 @@ pub mod rpc_types {
 	use super::*;
 	use anyhow::anyhow;
 	use cf_utilities::rpc::NumberOrHex;
-	use chainflip_api::queries::SwapChannelInfo;
-	use pallet_cf_pools::AssetsMap;
+	use chainflip_api::{lp::AssetsMap, queries::SwapChannelInfo};
 	use serde::{Deserialize, Serialize};
 
 	#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
@@ -650,7 +649,7 @@ where
 										collected
 											.fees
 											.zip(previous_collected.fees)
-											.map(|_, (fees, previous_fees)| fees - previous_fees)
+											.map(|(fees, previous_fees)| fees - previous_fees)
 									} else {
 										collected.fees
 									}
@@ -665,7 +664,7 @@ where
 										quote_asset: asset_pair.assets().quote,
 										id: id.into(),
 										range: range.clone(),
-										fees: fees.map(|_, fees| fees).into(),
+										fees: fees.map(|fees| fees).into(),
 										liquidity: position_info.liquidity.into(),
 									})
 								}

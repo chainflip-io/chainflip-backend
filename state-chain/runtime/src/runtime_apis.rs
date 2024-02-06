@@ -1,6 +1,6 @@
 use crate::chainflip::Offence;
 use cf_amm::{
-	common::{Amount, Tick},
+	common::{Amount, AssetsMap, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{eth::Address as EthereumAddress, Chain, ForeignChainAddress};
@@ -13,7 +13,7 @@ use core::ops::Range;
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{
-	AskBidMap, AssetsMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPrice,
+	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPrice,
 	UnidirectionalPoolDepth,
 };
 use pallet_cf_witnesser::CallHash;

@@ -32,7 +32,7 @@ use sp_core::{U256, U512};
 
 use crate::common::{
 	is_sqrt_price_valid, is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick,
-	tick_at_sqrt_price, Amount, OneToZero, SetFeesError, Side, SideMap, SqrtPriceQ64F96, Tick,
+	tick_at_sqrt_price, Amount, Assets, AssetsMap, OneToZero, SetFeesError, SqrtPriceQ64F96, Tick,
 	ZeroToOne, MAX_LP_FEE, MAX_TICK, MIN_TICK, ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
 };
 
@@ -56,8 +56,8 @@ pub struct Position {
 	/// The `depth` of this range order, this value is proportional to the value of the order i.e.
 	/// the amount of assets that make up the order.
 	liquidity: Liquidity,
-	last_fee_growth_inside: SideMap<FeeGrowthQ128F128>,
-	accumulative_fees: SideMap<Amount>,
+	last_fee_growth_inside: AssetsMap<FeeGrowthQ128F128>,
+	accumulative_fees: AssetsMap<Amount>,
 	original_sqrt_price: SqrtPriceQ64F96,
 }
 
@@ -70,7 +70,7 @@ impl Position {
 		upper_tick: Tick,
 		upper_delta: &TickDelta,
 	) -> Collected {
-		let fee_growth_inside = SideMap::default().map(|side, ()| {
+		let fee_growth_inside = AssetsMap::default().map_with_asset(|side, ()| {
 			let fee_growth_below = if pool_state.current_tick < lower_tick {
 				pool_state.global_fee_growth[side] - lower_delta.fee_growth_outside[side]
 			} else {
@@ -85,7 +85,7 @@ impl Position {
 
 			pool_state.global_fee_growth[side] - fee_growth_below - fee_growth_above
 		});
-		let fees = SideMap::default().map(|side, ()| {
+		let fees = AssetsMap::default().map_with_asset(|side, ()| {
 			// DIFF: This behaviour is different than Uniswap's. We use U256 instead of u128 to
 			// calculate fees, therefore it is not possible to overflow the fees here.
 
@@ -102,7 +102,7 @@ impl Position {
 		});
 		self.accumulative_fees = self
 			.accumulative_fees
-			.map(|side, accumulative_fees| accumulative_fees.saturating_add(fees[side]));
+			.map_with_asset(|side, accumulative_fees| accumulative_fees.saturating_add(fees[side]));
 		let collected_fees = Collected {
 			fees,
 			accumulative_fees: self.accumulative_fees,
@@ -150,7 +150,7 @@ pub struct TickDelta {
 	/// calculate the fees earned by an order. It is stored this way as this value will only change
 	/// when the price moves across this tick, thereby limiting the computation/state changes
 	/// needed during a swap.
-	fee_growth_outside: SideMap<FeeGrowthQ128F128>,
+	fee_growth_outside: AssetsMap<FeeGrowthQ128F128>,
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, Serialize, Deserialize)]
@@ -170,17 +170,17 @@ pub struct PoolState<LiquidityProvider: Ord> {
 	/// The total liquidity/depth at the `current_sqrt_price`
 	current_liquidity: Liquidity,
 	/// The total fees earned over all time per unit liquidity
-	global_fee_growth: SideMap<FeeGrowthQ128F128>,
+	global_fee_growth: AssetsMap<FeeGrowthQ128F128>,
 	/// All the ticks that have at least one range order that starts or ends at it, i.e. those
 	/// ticks where liquidity_gross is non-zero.
 	liquidity_map: BTreeMap<Tick, TickDelta>,
 	positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
 	/// Total fees earned over all time
-	total_fees_earned: SideMap<Amount>,
+	total_fees_earned: AssetsMap<Amount>,
 	/// Total of all swap inputs over all time (not including fees)
-	total_swap_inputs: SideMap<Amount>,
+	total_swap_inputs: AssetsMap<Amount>,
 	/// Total of all swap outputs over all time
-	total_swap_outputs: SideMap<Amount>,
+	total_swap_outputs: AssetsMap<Amount>,
 }
 
 pub(super) trait SwapDirection: crate::common::SwapDirection {
@@ -415,15 +415,15 @@ pub enum LiquidityToAmountsError {
 
 #[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub struct Collected {
-	pub fees: SideMap<Amount>,
-	pub accumulative_fees: SideMap<Amount>,
+	pub fees: AssetsMap<Amount>,
+	pub accumulative_fees: AssetsMap<Amount>,
 	pub original_sqrt_price: SqrtPriceQ64F96,
 }
 
 #[derive(Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub enum Size {
 	Liquidity { liquidity: Liquidity },
-	Amount { maximum: SideMap<Amount>, minimum: SideMap<Amount> },
+	Amount { maximum: AssetsMap<Amount>, minimum: AssetsMap<Amount> },
 }
 
 #[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
@@ -533,7 +533,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// This function never panics
 	///
 	/// If this function returns an `Err(_)` no state changes have occurred
-	pub(super) fn collect_and_mint<T, E, TryDebit: FnOnce(SideMap<Amount>) -> Result<T, E>>(
+	pub(super) fn collect_and_mint<T, E, TryDebit: FnOnce(AssetsMap<Amount>) -> Result<T, E>>(
 		&mut self,
 		lp: &LiquidityProvider,
 		lower_tick: Tick,
@@ -649,7 +649,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		lower_tick: Tick,
 		upper_tick: Tick,
 		size: Size,
-	) -> Result<(SideMap<Amount>, Liquidity, Collected, PositionInfo), PositionError<BurnError>> {
+	) -> Result<(AssetsMap<Amount>, Liquidity, Collected, PositionInfo), PositionError<BurnError>> {
 		Self::validate_position_range(lower_tick, upper_tick)?;
 		if let Some(mut position) =
 			self.positions.get(&(lp.clone(), lower_tick, upper_tick)).cloned()
@@ -873,8 +873,9 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			assert!(!SD::sqrt_price_op_more_than(sqrt_price_next, sqrt_price_at_delta));
 
 			if sqrt_price_next == sqrt_price_at_delta {
-				delta.fee_growth_outside = SideMap::default()
-					.map(|side, ()| self.global_fee_growth[side] - delta.fee_growth_outside[side]);
+				delta.fee_growth_outside = AssetsMap::default().map_with_asset(|side, ()| {
+					self.global_fee_growth[side] - delta.fee_growth_outside[side]
+				});
 				self.current_sqrt_price = sqrt_price_next;
 				self.current_tick = SD::current_tick_after_crossing_tick(*tick_at_delta);
 
@@ -911,7 +912,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&self,
 		lower_tick: Tick,
 		upper_tick: Tick,
-	) -> Result<SideMap<Amount>, RequiredAssetRatioError> {
+	) -> Result<AssetsMap<Amount>, RequiredAssetRatioError> {
 		Self::validate_position_range::<Infallible>(lower_tick, upper_tick)
 			.map_err(|_err| RequiredAssetRatioError::InvalidTickRange)?;
 		Ok(self
@@ -933,7 +934,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		liquidity: Liquidity,
 		lower_tick: Tick,
 		upper_tick: Tick,
-	) -> Result<SideMap<Amount>, LiquidityToAmountsError> {
+	) -> Result<AssetsMap<Amount>, LiquidityToAmountsError> {
 		Self::validate_position_range::<Infallible>(lower_tick, upper_tick)
 			.map_err(|_err| LiquidityToAmountsError::InvalidTickRange)?;
 		if liquidity > MAX_TICK_GROSS_LIQUIDITY {
@@ -948,10 +949,10 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		liquidity: Liquidity,
 		lower_tick: Tick,
 		upper_tick: Tick,
-	) -> (SideMap<Amount>, Liquidity) {
+	) -> (AssetsMap<Amount>, Liquidity) {
 		if self.current_tick < lower_tick {
 			(
-				SideMap::from_array([
+				AssetsMap::from_array([
 					(if ROUND_UP { zero_amount_delta_ceil } else { zero_amount_delta_floor })(
 						sqrt_price_at_tick(lower_tick),
 						sqrt_price_at_tick(upper_tick),
@@ -963,7 +964,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			)
 		} else if self.current_tick < upper_tick {
 			(
-				SideMap::from_array([
+				AssetsMap::from_array([
 					(if ROUND_UP { zero_amount_delta_ceil } else { zero_amount_delta_floor })(
 						self.current_sqrt_price,
 						sqrt_price_at_tick(upper_tick),
@@ -979,7 +980,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			)
 		} else {
 			(
-				SideMap::from_array([
+				AssetsMap::from_array([
 					0.into(),
 					(if ROUND_UP { one_amount_delta_ceil } else { one_amount_delta_floor })(
 						sqrt_price_at_tick(lower_tick),
@@ -1006,8 +1007,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				let (possible, _) =
 					self.inner_liquidity_to_amounts::<false>(liquidity, lower_tick, upper_tick);
 
-				if possible[Side::Zero] < minimum[Side::Zero] ||
-					possible[Side::One] < minimum[Side::One]
+				if possible[Assets::Base] < minimum[Assets::Base] ||
+					possible[Assets::Quote] < minimum[Assets::Quote]
 				{
 					None
 				} else {
@@ -1021,16 +1022,16 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&self,
 		lower_tick: Tick,
 		upper_tick: Tick,
-		amounts: SideMap<Amount>,
+		amounts: AssetsMap<Amount>,
 	) -> Liquidity {
 		// Inverse of `zero_amount_delta_ceil`
 		fn zero_amount_to_liquidity(
 			lower_sqrt_price: SqrtPriceQ64F96,
 			upper_sqrt_price: SqrtPriceQ64F96,
-			amounts: SideMap<Amount>,
+			amounts: AssetsMap<Amount>,
 		) -> U512 {
 			(U512::saturating_mul(
-				amounts[Side::Zero].into(),
+				amounts[Assets::Base].into(),
 				U256::full_mul(lower_sqrt_price, upper_sqrt_price),
 			) / U512::from(upper_sqrt_price - lower_sqrt_price)) >>
 				SQRT_PRICE_FRACTIONAL_BITS
@@ -1040,9 +1041,9 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		fn one_amount_to_liquidity(
 			lower_sqrt_price: SqrtPriceQ64F96,
 			upper_sqrt_price: SqrtPriceQ64F96,
-			amounts: SideMap<Amount>,
+			amounts: AssetsMap<Amount>,
 		) -> U512 {
-			U256::full_mul(amounts[Side::One], U256::one() << SQRT_PRICE_FRACTIONAL_BITS) /
+			U256::full_mul(amounts[Assets::Quote], U256::one() << SQRT_PRICE_FRACTIONAL_BITS) /
 				(upper_sqrt_price - lower_sqrt_price)
 		}
 
@@ -1140,7 +1141,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&self,
 		lower_tick: Tick,
 		upper_tick: Tick,
-	) -> Result<SideMap<Amount>, DepthError> {
+	) -> Result<AssetsMap<Amount>, DepthError> {
 		if !is_tick_valid(lower_tick) || !is_tick_valid(upper_tick) {
 			return Err(DepthError::InvalidTick)
 		}
@@ -1157,7 +1158,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				.map(|(tick, tick_delta)| (tick, tick_delta.liquidity_delta))
 				.chain(core::iter::once((&upper_tick, 0 /* value doesn't matter */)))
 				.fold(
-					(liquidity_at_lower_tick, lower_tick, SideMap::<Amount>::default()),
+					(liquidity_at_lower_tick, lower_tick, AssetsMap::<Amount>::default()),
 					|(liquidity, previous_tick, assets), (current_tick, liquidity_delta)| {
 						(
 							// Addition is guaranteed to never overflow, see test `max_liquidity`
