@@ -3,8 +3,8 @@ use crate::{
 	utils::{get_broadcast_id, hex_encode_bytes},
 };
 use cf_chains::{
-	address::ToHumanreadableAddress, evm::SchnorrVerificationComponents, AnyChain, Bitcoin, Chain,
-	Ethereum, Polkadot,
+	address::ToHumanreadableAddress, evm::SchnorrVerificationComponents, AnyChain, Arbitrum,
+	Bitcoin, Chain, Ethereum, Polkadot,
 };
 use cf_primitives::{Asset, BroadcastId, ForeignChain, NetworkEnvironment};
 use chainflip_engine::state_chain_observer::client::{
@@ -20,6 +20,7 @@ enum TransactionId {
 	Bitcoin { hash: String },
 	Ethereum { signature: SchnorrVerificationComponents },
 	Polkadot { signature: String },
+	Arbitrum { signature: SchnorrVerificationComponents },
 }
 
 #[derive(Serialize)]
@@ -47,6 +48,7 @@ impl WitnessInformation {
 				TransactionId::Bitcoin { .. } => ForeignChain::Bitcoin,
 				TransactionId::Ethereum { .. } => ForeignChain::Ethereum,
 				TransactionId::Polkadot { .. } => ForeignChain::Polkadot,
+				TransactionId::Arbitrum { .. } => ForeignChain::Arbitrum,
 			},
 		}
 	}
@@ -109,6 +111,17 @@ impl From<DepositInfo<Polkadot>> for WitnessInformation {
 	}
 }
 
+impl From<DepositInfo<Arbitrum>> for WitnessInformation {
+	fn from((value, height, _): DepositInfo<Arbitrum>) -> Self {
+		Self::Deposit {
+			deposit_chain_block_height: height,
+			deposit_address: hex_encode_bytes(value.deposit_address.as_bytes()),
+			amount: value.amount.into(),
+			asset: value.asset.into(),
+		}
+	}
+}
+
 pub async fn handle_call<S, StateChainClient>(
 	call: state_chain_runtime::RuntimeCall,
 	store: &mut S,
@@ -163,6 +176,19 @@ where
 					)))
 					.await?;
 			},
+		ArbitrumIngressEgress(IngressEgressCall::process_deposits {
+			deposit_witnesses,
+			block_height,
+		}) =>
+			for witness in deposit_witnesses as Vec<DepositWitness<Arbitrum>> {
+				store
+					.save_to_array(&WitnessInformation::from((
+						witness,
+						block_height,
+						chainflip_network,
+					)))
+					.await?;
+			},
 		EthereumBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
 			let broadcast_id =
 				get_broadcast_id::<Ethereum, StateChainClient>(state_chain_client, &tx_out_id)
@@ -208,10 +234,25 @@ where
 					.await?;
 			}
 		},
+		ArbitrumBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
+			let broadcast_id =
+				get_broadcast_id::<Arbitrum, StateChainClient>(state_chain_client, &tx_out_id)
+					.await;
+
+			if let Some(broadcast_id) = broadcast_id {
+				store
+					.save_singleton(&WitnessInformation::Broadcast {
+						broadcast_id,
+						tx_out_id: TransactionId::Arbitrum { signature: tx_out_id },
+					})
+					.await?;
+			}
+		},
 
 		EthereumIngressEgress(_) |
 		BitcoinIngressEgress(_) |
 		PolkadotIngressEgress(_) |
+		ArbitrumIngressEgress(_) |
 		System(_) |
 		Timestamp(_) |
 		Environment(_) |
@@ -229,15 +270,18 @@ where
 		EthereumChainTracking(_) |
 		BitcoinChainTracking(_) |
 		PolkadotChainTracking(_) |
+		ArbitrumChainTracking(_) |
 		EthereumVault(_) |
 		PolkadotVault(_) |
 		BitcoinVault(_) |
+		ArbitrumVault(_) |
 		EvmThresholdSigner(_) |
 		PolkadotThresholdSigner(_) |
 		BitcoinThresholdSigner(_) |
 		EthereumBroadcaster(_) |
 		PolkadotBroadcaster(_) |
 		BitcoinBroadcaster(_) |
+		ArbitrumBroadcaster(_) |
 		Swapping(_) |
 		LiquidityProvider(_) |
 		LiquidityPools(_) => {},

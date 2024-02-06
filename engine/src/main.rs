@@ -166,6 +166,22 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 					expected_eth_chain_id,
 				)?
 			};
+			let arb_client = {
+				let expected_arb_chain_id = web3::types::U256::from(
+					state_chain_client
+						.storage_value::<pallet_cf_environment::ArbitrumChainId<state_chain_runtime::Runtime>>(
+							state_chain_client.latest_finalized_block().hash,
+						)
+						.await
+						.expect(STATE_CHAIN_CONNECTION),
+				);
+				EthRetryRpcClient::<EthRpcSigningClient>::new(
+					scope,
+					settings.arb.private_key_file,
+					settings.arb.nodes,
+					expected_arb_chain_id,
+				)?
+			};
 			let btc_client = {
 				let expected_btc_network = cf_chains::btc::BitcoinNetwork::from(
 					state_chain_client
@@ -192,6 +208,7 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 			witness::start::start(
 				scope,
 				eth_client.clone(),
+				arb_client.clone(),
 				btc_client.clone(),
 				dot_client.clone(),
 				state_chain_client.clone(),
@@ -205,6 +222,7 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 				state_chain_client.clone(),
 				state_chain_stream,
 				eth_client,
+				arb_client,
 				dot_client,
 				btc_client,
 				eth_multisig_client,
