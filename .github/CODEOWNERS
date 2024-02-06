@@ -8,6 +8,7 @@
 /engine/multisig/ @msgmaxim
 /state-chain/pallets/cf-pools/ @AlastairHolmes
 /state-chain/amm/ @AlastairHolmes
+/state-chain/ @dandanlen
 /utilities/with_std/task_scope @AlastairHolmes
 /engine/state_chain_observer/client/ @AlastairHolmes
 /engine/src/eth/ @kylezs
