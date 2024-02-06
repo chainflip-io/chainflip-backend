@@ -235,7 +235,19 @@ where
 					.await?;
 			}
 		},
-		SolanaBroadcaster(BroadcastCall::transaction_succeeded { .. }) => unimplemented!(),
+		SolanaBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
+			let broadcast_id =
+				get_broadcast_id::<Solana, StateChainClient>(state_chain_client, &tx_out_id).await;
+
+			if let Some(broadcast_id) = broadcast_id {
+				store
+					.save_singleton(&WitnessInformation::Broadcast {
+						broadcast_id,
+						tx_out_id: TransactionId::Solana { signature: tx_out_id.to_string() },
+					})
+					.await?;
+			}
+		},
 
 		EthereumIngressEgress(_) |
 		BitcoinIngressEgress(_) |

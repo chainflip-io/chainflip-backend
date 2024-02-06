@@ -61,10 +61,7 @@ impl core::str::FromStr for SolPublicKey {
 }
 
 impl core::fmt::Display for SolPublicKey {
-	fn fmt(
-		&self,
-		f: &mut scale_info::prelude::fmt::Formatter<'_>,
-	) -> scale_info::prelude::fmt::Result {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		write!(f, "{}", base58::ToBase58::to_base58(&self.0[..]))
 	}
 }
