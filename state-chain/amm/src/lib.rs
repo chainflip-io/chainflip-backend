@@ -8,7 +8,7 @@ use core::convert::Infallible;
 use codec::{Decode, Encode};
 use common::{
 	is_sqrt_price_valid, price_to_sqrt_price, sqrt_price_to_price, tick_at_sqrt_price, Amount,
-	Assets, AssetsMap, BaseToQuote, Order, Price, QuoteToBase, SetFeesError, SqrtPriceQ64F96,
+	AssetsMap, BaseToQuote, Order, Pairs, Price, QuoteToBase, SetFeesError, SqrtPriceQ64F96,
 	SwapDirection, Tick,
 };
 use limit_orders::{Collected, PositionInfo};
@@ -50,7 +50,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	}
 
 	/// Returns the current price for a given direction of swap. The price is measured in units of
-	/// the specified Assets argument
+	/// the specified Pairs argument
 	pub fn current_price(&mut self, order: Order) -> Option<(Price, SqrtPriceQ64F96, Tick)> {
 		self.current_sqrt_price(order).map(|sqrt_price| {
 			(sqrt_price_to_price(sqrt_price), sqrt_price, tick_at_sqrt_price(sqrt_price))
@@ -58,18 +58,18 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	}
 
 	/// Returns the current sqrt price for a given direction of swap. The price is measured in units
-	/// of the specified Assets argument
+	/// of the specified Pairs argument
 	pub fn current_sqrt_price(&mut self, order: Order) -> Option<SqrtPriceQ64F96> {
 		match order.to_sold_side() {
-			Assets::Base => self.inner_current_sqrt_price::<BaseToQuote>(),
-			Assets::Quote => self.inner_current_sqrt_price::<QuoteToBase>(),
+			Pairs::Base => self.inner_current_sqrt_price::<BaseToQuote>(),
+			Pairs::Quote => self.inner_current_sqrt_price::<QuoteToBase>(),
 		}
 	}
 
 	fn inner_worst_price(order: Order) -> SqrtPriceQ64F96 {
 		match order.to_sold_side() {
-			Assets::Quote => QuoteToBase::WORST_SQRT_PRICE,
-			Assets::Base => BaseToQuote::WORST_SQRT_PRICE,
+			Pairs::Quote => QuoteToBase::WORST_SQRT_PRICE,
+			Pairs::Base => BaseToQuote::WORST_SQRT_PRICE,
 		}
 	}
 
@@ -172,8 +172,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		sqrt_price_limit: Option<SqrtPriceQ64F96>,
 	) -> (Amount, Amount) {
 		match order.to_sold_side() {
-			Assets::Base => self.inner_swap::<BaseToQuote>(sold_amount, sqrt_price_limit),
-			Assets::Quote => self.inner_swap::<QuoteToBase>(sold_amount, sqrt_price_limit),
+			Pairs::Base => self.inner_swap::<BaseToQuote>(sold_amount, sqrt_price_limit),
+			Pairs::Quote => self.inner_swap::<QuoteToBase>(sold_amount, sqrt_price_limit),
 		}
 	}
 
@@ -235,9 +235,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		limit_orders::PositionError<limit_orders::MintError>,
 	> {
 		match order.to_sold_side() {
-			Assets::Base =>
-				self.limit_orders.collect_and_mint::<QuoteToBase>(lp, tick, sold_amount),
-			Assets::Quote =>
+			Pairs::Base => self.limit_orders.collect_and_mint::<QuoteToBase>(lp, tick, sold_amount),
+			Pairs::Quote =>
 				self.limit_orders.collect_and_mint::<BaseToQuote>(lp, tick, sold_amount),
 		}
 	}
@@ -253,9 +252,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		limit_orders::PositionError<limit_orders::BurnError>,
 	> {
 		match order.to_sold_side() {
-			Assets::Base =>
-				self.limit_orders.collect_and_burn::<QuoteToBase>(lp, tick, sold_amount),
-			Assets::Quote =>
+			Pairs::Base => self.limit_orders.collect_and_burn::<QuoteToBase>(lp, tick, sold_amount),
+			Pairs::Quote =>
 				self.limit_orders.collect_and_burn::<BaseToQuote>(lp, tick, sold_amount),
 		}
 	}
@@ -418,11 +416,11 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		self.range_orders.depth(range.start, range.end).map(|assets| AssetsMap {
 			base: (
 				self.range_orders.current_sqrt_price::<QuoteToBase>().map(sqrt_price_to_price),
-				assets[Assets::Base],
+				assets[Pairs::Base],
 			),
 			quote: (
 				self.range_orders.current_sqrt_price::<BaseToQuote>().map(sqrt_price_to_price),
-				assets[Assets::Quote],
+				assets[Pairs::Quote],
 			),
 		})
 	}

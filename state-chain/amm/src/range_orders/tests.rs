@@ -4,7 +4,7 @@ use rand::{prelude::Distribution, Rng, SeedableRng};
 
 #[cfg(feature = "slow-tests")]
 use crate::common::MIN_SQRT_PRICE;
-use crate::{common::Assets, test_utilities::rng_u256_inclusive_bound};
+use crate::{common::Pairs, test_utilities::rng_u256_inclusive_bound};
 
 use super::*;
 
@@ -100,7 +100,7 @@ fn maximum_liquidity_swap() {
 
 	let (output, _remaining) = pool_state.swap::<QuoteToBase>(Amount::MAX, None);
 
-	assert!(((minted_amounts[Assets::Base] - (MAX_TICK - MIN_TICK) /* Maximum rounding down by one per swap iteration */)..minted_amounts[Assets::Base]).contains(&output));
+	assert!(((minted_amounts[Pairs::Base] - (MAX_TICK - MIN_TICK) /* Maximum rounding down by one per swap iteration */)..minted_amounts[Pairs::Base]).contains(&output));
 }
 
 #[test]
@@ -157,7 +157,7 @@ fn test_amounts_to_liquidity() {
 						pool_state.inner_amounts_to_liquidity(lower, upper, amounts);
 
 					let maximum_error_from_rounding_amount =
-						[amounts[Assets::Base], amounts[Assets::Quote]]
+						[amounts[Pairs::Base], amounts[Pairs::Quote]]
 							.into_iter()
 							.filter(|amount| !amount.is_zero())
 							.map(|amount| {

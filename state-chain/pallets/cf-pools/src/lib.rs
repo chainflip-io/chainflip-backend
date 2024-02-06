@@ -2,7 +2,7 @@
 use core::ops::Range;
 
 use cf_amm::{
-	common::{Amount, Assets, AssetsMap, Order, Price, SqrtPriceQ64F96, Tick},
+	common::{Amount, AssetsMap, Order, Pairs, Price, SqrtPriceQ64F96, Tick},
 	limit_orders,
 	limit_orders::{Collected, PositionInfo},
 	range_orders,
@@ -887,7 +887,7 @@ pub mod pallet {
 								pool,
 								asset_pair,
 								&lp,
-								Assets::from(asset).sell_order(),
+								Pairs::from(asset).sell_order(),
 								id,
 								tick,
 								collected,

@@ -32,7 +32,7 @@ use sp_core::{U256, U512};
 
 use crate::common::{
 	is_sqrt_price_valid, is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick,
-	tick_at_sqrt_price, Amount, Assets, AssetsMap, BaseToQuote, QuoteToBase, SetFeesError,
+	tick_at_sqrt_price, Amount, AssetsMap, BaseToQuote, Pairs, QuoteToBase, SetFeesError,
 	SqrtPriceQ64F96, Tick, MAX_LP_FEE, MAX_TICK, MIN_TICK, ONE_IN_HUNDREDTH_PIPS,
 	SQRT_PRICE_FRACTIONAL_BITS,
 };
@@ -1008,8 +1008,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				let (possible, _) =
 					self.inner_liquidity_to_amounts::<false>(liquidity, lower_tick, upper_tick);
 
-				if possible[Assets::Base] < minimum[Assets::Base] ||
-					possible[Assets::Quote] < minimum[Assets::Quote]
+				if possible[Pairs::Base] < minimum[Pairs::Base] ||
+					possible[Pairs::Quote] < minimum[Pairs::Quote]
 				{
 					None
 				} else {
@@ -1032,7 +1032,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			amounts: AssetsMap<Amount>,
 		) -> U512 {
 			(U512::saturating_mul(
-				amounts[Assets::Base].into(),
+				amounts[Pairs::Base].into(),
 				U256::full_mul(lower_sqrt_price, upper_sqrt_price),
 			) / U512::from(upper_sqrt_price - lower_sqrt_price)) >>
 				SQRT_PRICE_FRACTIONAL_BITS
@@ -1044,7 +1044,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			upper_sqrt_price: SqrtPriceQ64F96,
 			amounts: AssetsMap<Amount>,
 		) -> U512 {
-			U256::full_mul(amounts[Assets::Quote], U256::one() << SQRT_PRICE_FRACTIONAL_BITS) /
+			U256::full_mul(amounts[Pairs::Quote], U256::one() << SQRT_PRICE_FRACTIONAL_BITS) /
 				(upper_sqrt_price - lower_sqrt_price)
 		}
 

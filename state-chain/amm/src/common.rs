@@ -45,10 +45,10 @@ pub enum Order {
 	Sell,
 }
 impl Order {
-	pub fn to_sold_side(&self) -> Assets {
+	pub fn to_sold_side(&self) -> Pairs {
 		match self {
-			Order::Buy => Assets::Quote,
-			Order::Sell => Assets::Base,
+			Order::Buy => Pairs::Quote,
+			Order::Sell => Pairs::Base,
 		}
 	}
 }
@@ -64,27 +64,27 @@ impl core::ops::Not for Order {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub enum Assets {
+pub enum Pairs {
 	Base,
 	Quote,
 }
 
-impl core::ops::Not for Assets {
+impl core::ops::Not for Pairs {
 	type Output = Self;
 
 	fn not(self) -> Self::Output {
 		match self {
-			Assets::Base => Assets::Quote,
-			Assets::Quote => Assets::Base,
+			Pairs::Base => Pairs::Quote,
+			Pairs::Quote => Pairs::Base,
 		}
 	}
 }
 
-impl Assets {
+impl Pairs {
 	pub fn sell_order(&self) -> Order {
 		match self {
-			Assets::Base => Order::Sell,
-			Assets::Quote => Order::Buy,
+			Pairs::Base => Order::Sell,
+			Pairs::Quote => Order::Buy,
 		}
 	}
 }
@@ -125,9 +125,9 @@ impl<T> AssetsMap<T> {
 
 	pub fn try_map_with_asset<R, E>(
 		self,
-		mut f: impl FnMut(Assets, T) -> Result<R, E>,
+		mut f: impl FnMut(Pairs, T) -> Result<R, E>,
 	) -> Result<AssetsMap<R>, E> {
-		Ok(AssetsMap { base: f(Assets::Base, self.base)?, quote: f(Assets::Quote, self.quote)? })
+		Ok(AssetsMap { base: f(Pairs::Base, self.base)?, quote: f(Pairs::Quote, self.quote)? })
 	}
 
 	pub fn as_ref(&self) -> AssetsMap<&T> {
@@ -142,33 +142,33 @@ impl<T> AssetsMap<T> {
 		AssetsMap { base: (self.base, other.base), quote: (self.quote, other.quote) }
 	}
 
-	pub fn map_with_asset<R, F: FnMut(Assets, T) -> R>(self, mut f: F) -> AssetsMap<R> {
-		AssetsMap { base: f(Assets::Base, self.base), quote: f(Assets::Quote, self.quote) }
+	pub fn map_with_asset<R, F: FnMut(Pairs, T) -> R>(self, mut f: F) -> AssetsMap<R> {
+		AssetsMap { base: f(Pairs::Base, self.base), quote: f(Pairs::Quote, self.quote) }
 	}
 }
 impl<T> IntoIterator for AssetsMap<T> {
-	type Item = (Assets, T);
+	type Item = (Pairs, T);
 
-	type IntoIter = core::array::IntoIter<(Assets, T), 2>;
+	type IntoIter = core::array::IntoIter<(Pairs, T), 2>;
 
 	fn into_iter(self) -> Self::IntoIter {
-		[(Assets::Base, self.base), (Assets::Quote, self.quote)].into_iter()
+		[(Pairs::Base, self.base), (Pairs::Quote, self.quote)].into_iter()
 	}
 }
-impl<T> core::ops::Index<Assets> for AssetsMap<T> {
+impl<T> core::ops::Index<Pairs> for AssetsMap<T> {
 	type Output = T;
-	fn index(&self, side: Assets) -> &T {
+	fn index(&self, side: Pairs) -> &T {
 		match side {
-			Assets::Base => &self.base,
-			Assets::Quote => &self.quote,
+			Pairs::Base => &self.base,
+			Pairs::Quote => &self.quote,
 		}
 	}
 }
-impl<T> core::ops::IndexMut<Assets> for AssetsMap<T> {
-	fn index_mut(&mut self, side: Assets) -> &mut T {
+impl<T> core::ops::IndexMut<Pairs> for AssetsMap<T> {
+	fn index_mut(&mut self, side: Pairs) -> &mut T {
 		match side {
-			Assets::Base => &mut self.base,
-			Assets::Quote => &mut self.quote,
+			Pairs::Base => &mut self.base,
+			Pairs::Quote => &mut self.quote,
 		}
 	}
 }
@@ -236,7 +236,7 @@ pub(super) struct QuoteToBase {}
 
 pub(super) trait SwapDirection {
 	/// The asset this type of swap sells, i.e. the asset the swapper provides
-	const INPUT_SIDE: Assets;
+	const INPUT_SIDE: Pairs;
 
 	/// The worst price in this swap direction
 	const WORST_SQRT_PRICE: SqrtPriceQ64F96;
@@ -255,7 +255,7 @@ pub(super) trait SwapDirection {
 	fn input_to_output_amount_floor(amount: Amount, tick: Tick) -> Option<Amount>;
 }
 impl SwapDirection for BaseToQuote {
-	const INPUT_SIDE: Assets = Assets::Base;
+	const INPUT_SIDE: Pairs = Pairs::Base;
 
 	const WORST_SQRT_PRICE: SqrtPriceQ64F96 = MIN_SQRT_PRICE;
 
@@ -284,7 +284,7 @@ impl SwapDirection for BaseToQuote {
 	}
 }
 impl SwapDirection for QuoteToBase {
-	const INPUT_SIDE: Assets = Assets::Quote;
+	const INPUT_SIDE: Pairs = Pairs::Quote;
 
 	const WORST_SQRT_PRICE: SqrtPriceQ64F96 = MAX_SQRT_PRICE;
 

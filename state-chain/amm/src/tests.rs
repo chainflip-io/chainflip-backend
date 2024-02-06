@@ -51,8 +51,8 @@ fn test_basic_swaps() {
 
 		{
 			let initial_sqrt_price = match order.to_sold_side() {
-				Assets::Base => MAX_SQRT_PRICE,
-				Assets::Quote => MIN_SQRT_PRICE,
+				Pairs::Base => MAX_SQRT_PRICE,
+				Pairs::Quote => MIN_SQRT_PRICE,
 			};
 			let mut pool_state = PoolState {
 				limit_orders: limit_orders::PoolState::new(0).unwrap(),
@@ -90,8 +90,8 @@ fn test_basic_swaps() {
 
 		{
 			let initial_sqrt_price = match order.to_sold_side() {
-				Assets::Base => MAX_SQRT_PRICE,
-				Assets::Quote => MIN_SQRT_PRICE,
+				Pairs::Base => MAX_SQRT_PRICE,
+				Pairs::Quote => MIN_SQRT_PRICE,
 			};
 			let mut pool_state = PoolState {
 				limit_orders: limit_orders::PoolState::new(0).unwrap(),
@@ -146,8 +146,8 @@ fn test_basic_swaps() {
 
 		{
 			let initial_sqrt_price = match order.to_sold_side() {
-				Assets::Base => MAX_SQRT_PRICE,
-				Assets::Quote => MIN_SQRT_PRICE,
+				Pairs::Base => MAX_SQRT_PRICE,
+				Pairs::Quote => MIN_SQRT_PRICE,
 			};
 			let mut pool_state = PoolState {
 				limit_orders: limit_orders::PoolState::new(0).unwrap(),
