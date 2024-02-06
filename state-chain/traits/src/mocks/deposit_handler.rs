@@ -83,7 +83,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 	fn request_liquidity_deposit_address(
 		lp_account: Self::AccountId,
 		source_asset: <C as cf_chains::Chain>::ChainAsset,
-		boost_fee: BasisPoints
+		boost_fee: BasisPoints,
 	) -> Result<
 		(cf_primitives::ChannelId, ForeignChainAddress, <C as cf_chains::Chain>::ChainBlockNumber),
 		sp_runtime::DispatchError,
@@ -99,7 +99,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 					deposit_address: deposit_address.clone(),
 					source_asset,
 					lp_account,
-					boost_fee
+					boost_fee,
 				});
 			}
 		});
