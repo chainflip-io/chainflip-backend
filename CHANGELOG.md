@@ -2,6 +2,91 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.2.0] - 2024-02-02
+
+### Features
+
+- Decouple CFE from SC events ([#4382](https://github.com/chainflip-io/chainflip-backend/issues/4382))
+- Expose ingress and egress fees on events ([#4442](https://github.com/chainflip-io/chainflip-backend/issues/4442))
+- BitcoinFeeInfo: Store single field, derive the rest (([PRO-1073](https://linear.app/chainflip/issue/PRO-1073))) ([#4372](https://github.com/chainflip-io/chainflip-backend/issues/4372))
+- Track btc fees on success ([#4334](https://github.com/chainflip-io/chainflip-backend/issues/4334))
+- Shave fees on ingress ([#4335](https://github.com/chainflip-io/chainflip-backend/issues/4335))
+- Add version cmd to all bins ([#4343](https://github.com/chainflip-io/chainflip-backend/issues/4343))
+- API Bins check SC compatibility ([#4342](https://github.com/chainflip-io/chainflip-backend/issues/4342))
+- Enforce version is greater than release version on PRs to main ([#4351](https://github.com/chainflip-io/chainflip-backend/issues/4351))
+- Spec_version of PR is greater than spec version of current release ([#4355](https://github.com/chainflip-io/chainflip-backend/issues/4355))
+- End to end network upgrade github action ([#4274](https://github.com/chainflip-io/chainflip-backend/issues/4274))
+- Btc utxo consolidation ([#4338](https://github.com/chainflip-io/chainflip-backend/issues/4338))
+- Add chaintracking metric ([#4369](https://github.com/chainflip-io/chainflip-backend/issues/4369))
+- Order_fills rpc (([PRO-1044](https://linear.app/chainflip/issue/PRO-1044))) ([#4376](https://github.com/chainflip-io/chainflip-backend/issues/4376))
+- Track deposit witnesses and egress confirmations [([WEB-715](https://linear.app/chainflip/issue/WEB-715))] ([#4370](https://github.com/chainflip-io/chainflip-backend/issues/4370))
+- Nightly bouncer ([#4400](https://github.com/chainflip-io/chainflip-backend/issues/4400))
+- Bouncer command to check how many validator witnessed something ([#4408](https://github.com/chainflip-io/chainflip-backend/issues/4408))
+- Add witness safety margin [([PRO-1059](https://linear.app/chainflip/issue/PRO-1059))] ([#4438](https://github.com/chainflip-io/chainflip-backend/issues/4438))
+- Solana localnet ([#4428](https://github.com/chainflip-io/chainflip-backend/issues/4428))
+- Upgrade test can be run from any commit on main ([#4421](https://github.com/chainflip-io/chainflip-backend/issues/4421))
+- Improve ceremony metrics ([#4354](https://github.com/chainflip-io/chainflip-backend/issues/4354))
+- Upgrade-test can work on releases ([#4453](https://github.com/chainflip-io/chainflip-backend/issues/4453))
+- CFE processes SC events in the initial block on startup ([#4228](https://github.com/chainflip-io/chainflip-backend/issues/4228))
+- Nightly upgrade ([#4462](https://github.com/chainflip-io/chainflip-backend/issues/4462))
+- Run tests in release-mode (pragmatic approach) ([#4441](https://github.com/chainflip-io/chainflip-backend/issues/4441))
+- Expose all ignored egresses in ingress-egress pallet ([#4458](https://github.com/chainflip-io/chainflip-backend/issues/4458))
+
+### Fixes
+
+- CFE Witnessing, use parent block metadata when decoding events ([#4331](https://github.com/chainflip-io/chainflip-backend/issues/4331))
+- Build sisyphos with production profile ([#4327](https://github.com/chainflip-io/chainflip-backend/issues/4327))
+- Sweeping before withdrawal ([#4337](https://github.com/chainflip-io/chainflip-backend/issues/4337))
+- Changelog check 🤫 ([#4348](https://github.com/chainflip-io/chainflip-backend/issues/4348))
+- Connections can become stale when reconnecting ([#4310](https://github.com/chainflip-io/chainflip-backend/issues/4310))
+- Btc witnesser test failing sometimes ([#4353](https://github.com/chainflip-io/chainflip-backend/issues/4353))
+- Remove pre-witnessing functionality ([#4358](https://github.com/chainflip-io/chainflip-backend/issues/4358))
+- Can timeout when updating CFE version ([#4365](https://github.com/chainflip-io/chainflip-backend/issues/4365))
+- Use correct runtime name for upgrade test ([#4378](https://github.com/chainflip-io/chainflip-backend/issues/4378))
+- Bitcoin deposit witness code (([PRO-1078](https://linear.app/chainflip/issue/PRO-1078))) ([#4373](https://github.com/chainflip-io/chainflip-backend/issues/4373))
+- Ensure api lib version is bumped ([#4387](https://github.com/chainflip-io/chainflip-backend/issues/4387))
+- Cargo fmt ([#4392](https://github.com/chainflip-io/chainflip-backend/issues/4392))
+- Remove meaningless bearer token ([#4397](https://github.com/chainflip-io/chainflip-backend/issues/4397))
+- Avoid SCC "sparse stream" error in CLI when making requests (([PRO-998](https://linear.app/chainflip/issue/PRO-998))) ([#4393](https://github.com/chainflip-io/chainflip-backend/issues/4393))
+- Bump subxt version to 0.32.1 ([#4388](https://github.com/chainflip-io/chainflip-backend/issues/4388))
+- Return correct error in cf-pool pallet ([#4405](https://github.com/chainflip-io/chainflip-backend/issues/4405))
+- Use existing script for upgrade job ([#4403](https://github.com/chainflip-io/chainflip-backend/issues/4403))
+- Don't have conflicting redis port with localnet ([#4415](https://github.com/chainflip-io/chainflip-backend/issues/4415))
+- Pool_orders rpc filters empty orders (([PRO-1039](https://linear.app/chainflip/issue/PRO-1039))) ([#4377](https://github.com/chainflip-io/chainflip-backend/issues/4377))
+- Await finalisation before starting broker ([#4412](https://github.com/chainflip-io/chainflip-backend/issues/4412))
+- Bump spec version command only bumps when necessary ([#4422](https://github.com/chainflip-io/chainflip-backend/issues/4422))
+- Restore correct restriction on redemption expiry (([PRO-1072](https://linear.app/chainflip/issue/PRO-1072)))
+- RUSTSEC-2024-0006 ([#4439](https://github.com/chainflip-io/chainflip-backend/issues/4439))
+- Filter incompatible blocks (([PRO-1108](https://linear.app/chainflip/issue/PRO-1108))) ([#4432](https://github.com/chainflip-io/chainflip-backend/issues/4432))
+- Use custom subxt config + nextAccountIndex ([#4440](https://github.com/chainflip-io/chainflip-backend/issues/4440))
+- :bug: fixed storage version ([#4447](https://github.com/chainflip-io/chainflip-backend/issues/4447))
+- Const UNFINALIZED = false; ([#4452](https://github.com/chainflip-io/chainflip-backend/issues/4452))
+- Use 127.0.0.1 instead of localhost ([#4457](https://github.com/chainflip-io/chainflip-backend/issues/4457))
+- Issues with merge ([#4466](https://github.com/chainflip-io/chainflip-backend/issues/4466))
+- Spelling of AssetConversionError::UnsupportedAsset ([#4474](https://github.com/chainflip-io/chainflip-backend/issues/4474))
+- Force egress success for benchmarks ([#4480](https://github.com/chainflip-io/chainflip-backend/issues/4480))
+
+### Refactor
+
+- Code cleaniness ([#4389](https://github.com/chainflip-io/chainflip-backend/issues/4389))
+- Save data to redis [([WEB-761](https://linear.app/chainflip/issue/WEB-761))] ([#4399](https://github.com/chainflip-io/chainflip-backend/issues/4399))
+- Improve panic behaviour ([#4391](https://github.com/chainflip-io/chainflip-backend/issues/4391))
+- Give structure [([WEB-761](https://linear.app/chainflip/issue/WEB-761))] ([#4402](https://github.com/chainflip-io/chainflip-backend/issues/4402))
+- Configurable expiry times [([WEB-761](https://linear.app/chainflip/issue/WEB-761))] ([#4406](https://github.com/chainflip-io/chainflip-backend/issues/4406))
+- Use yargs for all try_runtime_command options ([#4423](https://github.com/chainflip-io/chainflip-backend/issues/4423))
+- Remove unnecessary fields ([#4425](https://github.com/chainflip-io/chainflip-backend/issues/4425))
+
+### Documentation
+
+- Correct env vars ([#4416](https://github.com/chainflip-io/chainflip-backend/issues/4416))
+
+### Testing
+
+- Cfe event encoding ([#4429](https://github.com/chainflip-io/chainflip-backend/issues/4429))
+- Latest_then adapter testing ([#4322](https://github.com/chainflip-io/chainflip-backend/issues/4322))
+- Polkadot runtime update bouncer test ([#4286](https://github.com/chainflip-io/chainflip-backend/issues/4286))
+- Ensure DepositIgnored(NotEnoughToPayFees) event is emitted ([#4460](https://github.com/chainflip-io/chainflip-backend/issues/4460))
+
 ## [1.1.5] - 2024-01-02
 
 ### Fixes

@@ -24,6 +24,7 @@ use pallet_cf_pools::{AskBidMap, PoolInfo, PoolLiquidity, PoolPrice, Unidirectio
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_api::BlockT;
+use sp_runtime::Permill;
 use state_chain_runtime::{
 	chainflip::Offence,
 	constants::common::TX_FEE_MULTIPLIER,
@@ -31,6 +32,7 @@ use state_chain_runtime::{
 		CustomRuntimeApi, DispatchErrorWithMessage, FailingWitnessValidators,
 		LiquidityProviderInfo, RuntimeApiAccountInfoV2,
 	},
+	NetworkFee,
 };
 use std::{
 	collections::{BTreeMap, HashMap},
@@ -277,6 +279,7 @@ pub struct FundingEnvironment {
 #[derive(Serialize, Deserialize)]
 pub struct SwappingEnvironment {
 	maximum_swap_amounts: HashMap<ForeignChain, HashMap<Asset, Option<NumberOrHex>>>,
+	network_fee_hundredth_pips: Permill,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -1056,7 +1059,10 @@ where
 				.insert(asset, max_amount.map(|amt| amt.into()));
 		}
 
-		Ok(SwappingEnvironment { maximum_swap_amounts })
+		Ok(SwappingEnvironment {
+			maximum_swap_amounts,
+			network_fee_hundredth_pips: NetworkFee::get(),
+		})
 	}
 
 	fn cf_funding_environment(
@@ -1383,6 +1389,7 @@ mod test {
 						]),
 					),
 				]),
+				network_fee_hundredth_pips: Permill::from_percent(100),
 			},
 			ingress_egress: IngressEgressEnvironment {
 				minimum_deposit_amounts: HashMap::from([
