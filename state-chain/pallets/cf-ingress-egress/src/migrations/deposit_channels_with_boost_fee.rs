@@ -203,9 +203,6 @@ mod migration_tests {
 			);
 
 			// Perform runtime migration.
-			// crate::migrations::deposit_channels_with_boost_fee::Migration::<Test, Instance1>::on_runtime_upgrade();
-			// Perform runtime migration.
-			// crate::migrations::deposit_channels_with_boost_fee::Migration::<Test, Instance2>::on_runtime_upgrade();
 			crate::migrations::deposit_channels_with_boost_fee::Migration::<Test, Instance3>::on_runtime_upgrade();
 
 			// Verify data is correctly migrated into new storage.
