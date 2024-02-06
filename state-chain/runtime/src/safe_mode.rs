@@ -66,6 +66,12 @@ pub struct WitnesserCallPermission {
 	pub bitcoin_chain_tracking: bool,
 	pub bitcoin_ingress_egress: bool,
 	pub bitcoin_vault: bool,
+
+	// Solana pallets
+	pub solana_broadcast: bool,
+	pub solana_chain_tracking: bool,
+	pub solana_ingress_egress: bool,
+	pub solana_vault: bool,
 }
 
 impl WitnesserCallPermission {
@@ -86,6 +92,10 @@ impl WitnesserCallPermission {
 			bitcoin_chain_tracking: true,
 			bitcoin_ingress_egress: true,
 			bitcoin_vault: true,
+			solana_broadcast: true,
+			solana_chain_tracking: true,
+			solana_ingress_egress: true,
+			solana_vault: true,
 		}
 	}
 }
@@ -111,6 +121,11 @@ impl CallDispatchFilter<RuntimeCall> for WitnesserCallPermission {
 			RuntimeCall::BitcoinChainTracking(..) => self.bitcoin_chain_tracking,
 			RuntimeCall::BitcoinIngressEgress(..) => self.bitcoin_ingress_egress,
 			RuntimeCall::BitcoinVault(..) => self.bitcoin_vault,
+
+			RuntimeCall::SolanaBroadcaster(..) => self.solana_broadcast,
+			RuntimeCall::SolanaChainTracking(..) => self.solana_chain_tracking,
+			// RuntimeCall::SolanaIngressEgress(..) => self.solana_ingress_egress,
+			RuntimeCall::SolanaVault(..) => self.solana_vault,
 
 			_ => {
 				cf_runtime_utilities::log_or_panic!(
