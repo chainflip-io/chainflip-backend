@@ -5,4 +5,13 @@
 /localnet/ @chainflip-io/platform
 /engine/src/witness/ @kylezs @AlastairHolmes
 /engine/src/witness.rs @kylezs @AlastairHolmes
-/engine/multisig/ @msgmaxim 
+/engine/multisig/ @msgmaxim
+/state-chain/pallets/cf-pools/ @AlastairHolmes
+/state-chain/amm/ @AlastairHolmes
+/utilities/with_std/task_scope @AlastairHolmes
+/engine/state_chain_observer/client/ @AlastairHolmes
+/engine/src/eth/ @kylezs
+/engine/src/btc/ @kylezs
+/engine/src/dot/ @kylezs
+/engine/src/p2p/ @msgmaxim
+/engine/src/p2p.rs @msgmaxim
