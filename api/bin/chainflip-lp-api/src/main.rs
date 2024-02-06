@@ -664,7 +664,7 @@ where
 										quote_asset: asset_pair.assets().quote,
 										id: id.into(),
 										range: range.clone(),
-										fees: fees.map(|fees| fees).into(),
+										fees: fees.map(|fees| fees),
 										liquidity: position_info.liquidity.into(),
 									})
 								}

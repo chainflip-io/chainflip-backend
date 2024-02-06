@@ -2,7 +2,7 @@
 use core::ops::Range;
 
 use cf_amm::{
-	common::{Amount, AssetsMap, Order, Pairs, Price, SqrtPriceQ64F96, Tick},
+	common::{Amount, AssetsMap, Order, Price, SqrtPriceQ64F96, Tick},
 	limit_orders,
 	limit_orders::{Collected, PositionInfo},
 	range_orders,
@@ -612,7 +612,7 @@ pub mod pallet {
 								new_tick_range.clone(),
 								IncreaseOrDecrease::Increase(range_orders::Size::Amount {
 									minimum: Default::default(),
-									maximum: withdrawn_asset_amounts.map(Into::into).into(),
+									maximum: withdrawn_asset_amounts.map(Into::into),
 								}),
 								/* allow_noop */ true,
 							)?;
@@ -632,8 +632,8 @@ pub mod pallet {
 							range_orders::Size::Liquidity { liquidity },
 						RangeOrderSize::AssetAmounts { maximum, minimum } =>
 							range_orders::Size::Amount {
-								maximum: maximum.map(Into::into).into(),
-								minimum: minimum.map(Into::into).into(),
+								maximum: maximum.map(Into::into),
+								minimum: minimum.map(Into::into),
 							},
 					}),
 					/* allow_noop */ false,
@@ -699,8 +699,8 @@ pub mod pallet {
 							range_orders::Size::Liquidity { liquidity },
 						RangeOrderSize::AssetAmounts { maximum, minimum } =>
 							range_orders::Size::Amount {
-								maximum: maximum.map(Into::into).into(),
-								minimum: minimum.map(Into::into).into(),
+								maximum: maximum.map(Into::into),
+								minimum: minimum.map(Into::into),
 							},
 					}),
 					/* allow noop */ true,
@@ -736,7 +736,7 @@ pub mod pallet {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
 				let tick = match (
-					pool.limit_orders_cache[side.to_sold_side().into()]
+					pool.limit_orders_cache[side.to_sold_side()]
 						.get(&lp)
 						.and_then(|limit_orders| limit_orders.get(&id))
 						.cloned(),
@@ -812,7 +812,7 @@ pub mod pallet {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
 				let tick = match (
-					pool.limit_orders_cache[side.to_sold_side().into()]
+					pool.limit_orders_cache[side.to_sold_side()]
 						.get(&lp)
 						.and_then(|limit_orders| limit_orders.get(&id))
 						.cloned(),
@@ -887,7 +887,7 @@ pub mod pallet {
 								pool,
 								asset_pair,
 								&lp,
-								Pairs::from(asset).sell_order(),
+								asset.sell_order(),
 								id,
 								tick,
 								collected,
@@ -1214,7 +1214,7 @@ impl<T: Config> Pallet<T> {
 					let debited_amount: AssetAmount = sold_amount.try_into()?;
 					T::LpBalance::try_debit_account(
 						lp,
-						asset_pair.assets()[side.to_sold_side().into()],
+						asset_pair.assets()[side.to_sold_side()],
 						debited_amount,
 					)?;
 
@@ -1241,7 +1241,7 @@ impl<T: Config> Pallet<T> {
 					let withdrawn_amount: AssetAmount = sold_amount.try_into()?;
 					T::LpBalance::try_credit_account(
 						lp,
-						asset_pair.assets()[side.to_sold_side().into()],
+						asset_pair.assets()[side.to_sold_side()],
 						withdrawn_amount,
 					)?;
 
@@ -1283,7 +1283,7 @@ impl<T: Config> Pallet<T> {
 						tick_range.clone(),
 						size,
 						|required_amounts| {
-							asset_pair.assets().zip(required_amounts.into()).try_map(
+							asset_pair.assets().zip(required_amounts).try_map(
 								|(asset, required_amount)| {
 									AssetAmount::try_from(required_amount)
 										.map_err(Into::into)
@@ -1350,7 +1350,7 @@ impl<T: Config> Pallet<T> {
 					}),
 				}?;
 
-				let assets_withdrawn = asset_pair.assets().zip(assets_withdrawn.into()).try_map(
+				let assets_withdrawn = asset_pair.assets().zip(assets_withdrawn).try_map(
 					|(asset, amount_withdrawn)| {
 						AssetAmount::try_from(amount_withdrawn).map_err(Into::into).and_then(
 							|amount_withdrawn| {
@@ -1371,17 +1371,14 @@ impl<T: Config> Pallet<T> {
 		};
 
 		let collected_fees =
-			asset_pair
-				.assets()
-				.zip(collected.fees.into())
-				.try_map(|(asset, collected_fees)| {
-					AssetAmount::try_from(collected_fees).map_err(Into::into).and_then(
-						|collected_fees| {
-							T::LpBalance::try_credit_account(lp, asset, collected_fees)
-								.map(|()| collected_fees)
-						},
-					)
-				})?;
+			asset_pair.assets().zip(collected.fees).try_map(|(asset, collected_fees)| {
+				AssetAmount::try_from(collected_fees).map_err(Into::into).and_then(
+					|collected_fees| {
+						T::LpBalance::try_credit_account(lp, asset, collected_fees)
+							.map(|()| collected_fees)
+					},
+				)
+			})?;
 
 		if position_info.liquidity == 0 {
 			if let Some(range_orders) = pool.range_orders_cache.get_mut(lp) {
@@ -1594,19 +1591,15 @@ impl<T: Config> Pallet<T> {
 				range_orders::DepthError::InvalidTick => Error::<T>::InvalidTick,
 			})?;
 
-		Ok(AskBidMap::from_sell_map(
-			limit_orders
-				.zip(range_orders)
-				.map(|(limit_orders, range_orders)| {
-					let to_single_depth =
-						|(price, depth)| UnidirectionalSubPoolDepth { price, depth };
-					UnidirectionalPoolDepth {
-						limit_orders: to_single_depth(limit_orders),
-						range_orders: to_single_depth(range_orders),
-					}
-				})
-				.into(),
-		))
+		Ok(AskBidMap::from_sell_map(limit_orders.zip(range_orders).map(
+			|(limit_orders, range_orders)| {
+				let to_single_depth = |(price, depth)| UnidirectionalSubPoolDepth { price, depth };
+				UnidirectionalPoolDepth {
+					limit_orders: to_single_depth(limit_orders),
+					range_orders: to_single_depth(range_orders),
+				}
+			},
+		)))
 	}
 
 	pub fn pool_liquidity_providers(
@@ -1755,7 +1748,7 @@ impl<T: Config> Pallet<T> {
 					id: id.into(),
 					range: tick_range.clone(),
 					liquidity: position_info.liquidity,
-					fees_earned: collected.accumulative_fees.into(),
+					fees_earned: collected.accumulative_fees,
 				}
 			})
 			.collect(),
@@ -1803,18 +1796,18 @@ impl<T: Config> Pallet<T> {
 		let collected_fees: AssetAmount = collected.fees.try_into()?;
 		T::LpBalance::try_credit_account(
 			lp,
-			asset_pair.assets()[(!order.to_sold_side()).into()],
+			asset_pair.assets()[!order.to_sold_side()],
 			collected_fees,
 		)?;
 
 		let bought_amount: AssetAmount = collected.bought_amount.try_into()?;
 		T::LpBalance::try_credit_account(
 			lp,
-			asset_pair.assets()[(!order.to_sold_side()).into()],
+			asset_pair.assets()[!order.to_sold_side()],
 			bought_amount,
 		)?;
 
-		let limit_orders = &mut pool.limit_orders_cache[order.to_sold_side().into()];
+		let limit_orders = &mut pool.limit_orders_cache[order.to_sold_side()];
 		if position_info.amount.is_zero() {
 			if let Some(lp_limit_orders) = limit_orders.get_mut(lp) {
 				lp_limit_orders.remove(&id);
