@@ -100,6 +100,9 @@ build-localnet() {
   echo "🪄 Generating docker-compose.yml"
   envsubst < ./localnet/docker-compose.template.yml > ./localnet/docker-compose.yml
 
+  mkdir -p /tmp/chainflip/
+  touch /tmp/chainflip/debug.log
+
   echo "🔮 Initializing Network"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
   echo "🦺 Updating init state files permissions ..."

@@ -30,6 +30,7 @@ mod benchmarks {
 			tx_id: Decode::decode(&mut &TX_HASH[..]).unwrap(),
 		};
 		let origin = T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap();
+
 		#[block]
 		{
 			assert_ok!(call.dispatch_bypass_filter(origin));
@@ -48,12 +49,27 @@ mod benchmarks {
 			block_number: 5u32.into(),
 			tx_id: Decode::decode(&mut &TX_HASH[..]).unwrap(),
 		};
+
 		#[block]
 		{
 			assert_ok!(call.dispatch_bypass_filter(origin));
 		}
+
 		assert!(VaultStartBlockNumbers::<T, I>::contains_key(
 			T::EpochInfo::epoch_index().saturating_add(1)
 		));
+	}
+
+	#[cfg(test)]
+	use crate::mock::*;
+
+	#[test]
+	fn benchmark_works() {
+		new_test_ext().execute_with(|| {
+			_vault_key_rotated::<Test, ()>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_vault_key_rotated_externally::<Test, ()>(true);
+		});
 	}
 }
