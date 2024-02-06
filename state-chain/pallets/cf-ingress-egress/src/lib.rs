@@ -161,6 +161,8 @@ pub mod pallet {
 
 		/// The action to be taken when the DepositChannel is deposited to.
 		pub action: ChannelAction<T::AccountId>,
+		/// The boost fee, if set to 0 it means no required
+		pub boost_fee: BasisPoints,
 	}
 
 	pub enum IngressOrEgress {
@@ -1142,6 +1144,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn open_channel(
 		source_asset: TargetChainAsset<T, I>,
 		action: ChannelAction<T::AccountId>,
+		boost_fee: BasisPoints
 	) -> Result<(ChannelId, TargetChainAccount<T, I>, TargetChainBlockNumber<T, I>), DispatchError>
 	{
 		let (deposit_channel, channel_id) = if let Some((channel_id, mut deposit_channel)) =
@@ -1183,6 +1186,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				opened_at: current_height,
 				expires_at: expiry_height,
 				action,
+				boost_fee
 			},
 		);
 
@@ -1330,12 +1334,13 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	fn request_liquidity_deposit_address(
 		lp_account: T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
+		boost_fee: BasisPoints
 	) -> Result<
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber),
 		DispatchError,
 	> {
 		let (channel_id, deposit_address, expiry_block) =
-			Self::open_channel(source_asset, ChannelAction::LiquidityProvision { lp_account })?;
+			Self::open_channel(source_asset, ChannelAction::LiquidityProvision { lp_account }, boost_fee)?;
 
 		Ok((channel_id, deposit_address.into(), expiry_block))
 	}
@@ -1348,6 +1353,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		broker_commission_bps: BasisPoints,
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
+		boost_fee: BasisPoints,
 	) -> Result<
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber),
 		DispatchError,
@@ -1367,6 +1373,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 					broker_id,
 				},
 			},
+			boost_fee
 		)?;
 
 		Ok((channel_id, deposit_address.into(), expiry_height))

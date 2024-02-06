@@ -437,6 +437,7 @@ macro_rules! impl_deposit_api_for_anychain {
 			fn request_liquidity_deposit_address(
 				lp_account: Self::AccountId,
 				source_asset: Asset,
+				boost_fee: BasisPoints
 			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber), DispatchError> {
 				match source_asset.into() {
 					$(
@@ -444,6 +445,7 @@ macro_rules! impl_deposit_api_for_anychain {
 							$pallet::request_liquidity_deposit_address(
 								lp_account,
 								source_asset.try_into().unwrap(),
+								boost_fee
 							).map(|(channel, address, block_number)| (channel, address, block_number.into())),
 					)+
 				}
@@ -456,6 +458,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				broker_commission_bps: BasisPoints,
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadata>,
+				boost_fee: BasisPoints
 			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber), DispatchError> {
 				match source_asset.into() {
 					$(
@@ -466,6 +469,7 @@ macro_rules! impl_deposit_api_for_anychain {
 							broker_commission_bps,
 							broker_id,
 							channel_metadata,
+							boost_fee
 						).map(|(channel, address, block_number)| (channel, address, block_number.into())),
 					)+
 				}
