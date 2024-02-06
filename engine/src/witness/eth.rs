@@ -1,11 +1,5 @@
-mod contract_common;
-pub mod erc20_deposits;
-mod eth_chain_tracking;
-mod eth_source;
-mod ethereum_deposits;
-mod key_manager;
+mod chain_tracking;
 mod state_chain_gateway;
-pub mod vault;
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -25,11 +19,11 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED},
 		STATE_CHAIN_CONNECTION,
 	},
-	witness::eth::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents},
+	witness::evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents},
 };
 
-use super::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder};
-pub use eth_source::EthSource;
+use super::{common::epoch_source::EpochSourceBuilder, evm::source::EvmSource};
+use crate::witness::common::chain_source::extension::ChainSourceExt;
 
 use anyhow::{Context, Result};
 
@@ -101,7 +95,7 @@ where
 		.map(|(asset, address)| (address, asset.into()))
 		.collect();
 
-	let eth_source = EthSource::new(eth_client.clone()).strictly_monotonic().shared(scope);
+	let eth_source = EvmSource::new(eth_client.clone()).strictly_monotonic().shared(scope);
 
 	eth_source
 		.clone()
@@ -138,7 +132,7 @@ where
 	eth_safe_vault_source
 		.clone()
 		.key_manager_witnessing(process_call.clone(), eth_client.clone(), key_manager_address)
-		.continuous("KeyManager".to_string(), db.clone())
+		.continuous("KeyManager", db.clone())
 		.logging("KeyManager")
 		.spawn(scope);
 
@@ -149,7 +143,7 @@ where
 			eth_client.clone(),
 			state_chain_gateway_address,
 		)
-		.continuous("StateChainGateway".to_string(), db.clone())
+		.continuous("StateChainGateway", db.clone())
 		.logging("StateChainGateway")
 		.spawn(scope);
 
@@ -162,7 +156,7 @@ where
 			usdc_contract_address,
 		)
 		.await?
-		.continuous("USDCDeposits".to_string(), db.clone())
+		.continuous("USDCDeposits", db.clone())
 		.logging("USDCDeposits")
 		.spawn(scope);
 
@@ -175,7 +169,7 @@ where
 			flip_contract_address,
 		)
 		.await?
-		.continuous("FlipDeposits".to_string(), db.clone())
+		.continuous("FlipDeposits", db.clone())
 		.logging("FlipDeposits")
 		.spawn(scope);
 
@@ -189,7 +183,7 @@ where
 			vault_address,
 		)
 		.await
-		.continuous("EthereumDeposits".to_string(), db.clone())
+		.continuous("EthereumDeposits", db.clone())
 		.logging("EthereumDeposits")
 		.spawn(scope);
 
@@ -202,7 +196,7 @@ where
 			cf_primitives::ForeignChain::Ethereum,
 			supported_erc20_tokens,
 		)
-		.continuous("Vault".to_string(), db)
+		.continuous("Vault", db)
 		.logging("Vault")
 		.spawn(scope);
 

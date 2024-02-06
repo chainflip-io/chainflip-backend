@@ -4,7 +4,9 @@ use core::{fmt::Display, iter::Step};
 
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 pub use address::ForeignChainAddress;
-use address::{AddressDerivationApi, AddressDerivationError, ToHumanreadableAddress};
+use address::{
+	AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress, ToHumanreadableAddress,
+};
 use cf_primitives::{AssetAmount, BroadcastId, ChannelId, EthAmount, TransactionHash};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
@@ -115,7 +117,7 @@ pub trait Chain: Member + Parameter {
 		+ Ord
 		+ PartialOrd
 		+ TryFrom<ForeignChainAddress>
-		+ Into<ForeignChainAddress>
+		+ IntoForeignChainAddress<Self>
 		+ Unpin
 		+ ToHumanreadableAddress;
 

@@ -24,7 +24,7 @@ impl_runtime_safe_mode! {
 	broadcast_ethereum: pallet_cf_broadcast::PalletSafeMode<EthereumInstance>,
 	broadcast_bitcoin: pallet_cf_broadcast::PalletSafeMode<BitcoinInstance>,
 	broadcast_polkadot: pallet_cf_broadcast::PalletSafeMode<PolkadotInstance>,
-	broadcast_ethereum: pallet_cf_broadcast::PalletSafeMode<ArbitrumInstance>,
+	broadcast_arbitrum: pallet_cf_broadcast::PalletSafeMode<ArbitrumInstance>,
 	witnesser: pallet_cf_witnesser::PalletSafeMode<WitnesserCallPermission>,
 }
 

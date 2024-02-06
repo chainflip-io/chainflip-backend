@@ -2,16 +2,14 @@
 
 use crate::{self as pallet_cf_emissions, PalletSafeMode};
 use cf_chains::{
+	eth::api::StateChainGatewayAddressProvider,
 	mocks::{MockEthereum, MockEthereumChainCrypto},
 	ApiCall, ChainCrypto, Ethereum, UpdateFlipSupply,
 };
 use cf_primitives::{BroadcastId, FlipBalance, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
-	mocks::{
-		egress_handler::MockEgressHandler, eth_environment_provider::MockEthEnvironment,
-		flip_burn_info::MockFlipBurnInfo,
-	},
+	mocks::{egress_handler::MockEgressHandler, flip_burn_info::MockFlipBurnInfo},
 	Broadcaster, Issuance, RewardsDistribution, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -201,7 +199,7 @@ impl Broadcaster<MockEthereum> for MockBroadcast {
 
 pub struct MockStateChainGatewayProvider;
 
-impl StateChainGatewayProvider for MockStateChainGatewayProvider {
+impl StateChainGatewayAddressProvider for MockStateChainGatewayProvider {
 	fn state_chain_gateway_address() -> cf_chains::eth::Address {
 		[0xcc; 20].into()
 	}
@@ -218,7 +216,7 @@ impl pallet_cf_emissions::Config for Test {
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 	type RewardsDistribution = MockRewardsDistribution;
 	type CompoundingInterval = HeartbeatBlockInterval;
-	type StateChainGatewayProvider = MockStateChainGatewayProvider;
+	type EthEnvironment = MockStateChainGatewayProvider;
 	type Broadcaster = MockBroadcast;
 	type FlipToBurn = MockFlipBurnInfo;
 	type SafeMode = MockRuntimeSafeMode;

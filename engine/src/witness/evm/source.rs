@@ -1,4 +1,6 @@
 use ethers::types::Bloom;
+use futures::stream::StreamExt;
+use futures_util::stream;
 use sp_core::H256;
 
 use crate::{
@@ -7,33 +9,38 @@ use crate::{
 	},
 	witness::common::{
 		chain_source::{BoxChainStream, ChainClient, ChainSource, Header},
-		ExternalChainSource,
+		ExternalChain, ExternalChainSource,
 	},
 };
-use futures::stream::StreamExt;
-use futures_util::stream;
 use std::time::Duration;
 
 #[derive(Clone)]
-pub struct EthSource<C> {
-	client: C,
+pub struct EvmSource<Client, EvmChain> {
+	client: Client,
+	_phantom: std::marker::PhantomData<EvmChain>,
 }
 
-impl<C: EthersRetrySubscribeApi + ChainClient<Index = u64, Hash = H256, Data = Bloom> + Clone>
-	EthSource<C>
+impl<
+		C: EthersRetrySubscribeApi + ChainClient<Index = u64, Hash = H256, Data = Bloom> + Clone,
+		EvmChain: ExternalChain,
+	> EvmSource<C, EvmChain>
 {
 	pub fn new(client: C) -> Self {
-		Self { client }
+		Self { client, _phantom: std::marker::PhantomData }
 	}
 }
 
-const TIMEOUT: Duration = Duration::from_secs(60);
+/// The maximum amount of time we wait for a block to be pulled from the stream.
+const BLOCK_PULL_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// The time we wait before restarting the stream if we didn't get a block.
 const RESTART_STREAM_DELAY: Duration = Duration::from_secs(6);
 
 #[async_trait::async_trait]
-impl<C> ChainSource for EthSource<C>
+impl<C, EvmChain> ChainSource for EvmSource<C, EvmChain>
 where
 	C: EthersRetrySubscribeApi + ChainClient<Index = u64, Hash = H256, Data = Bloom> + Clone,
+	EvmChain: ExternalChain,
 {
 	type Index = <C as ChainClient>::Index;
 	type Hash = <C as ChainClient>::Hash;
@@ -51,10 +58,10 @@ where
 		let client = self.client.clone();
 		let stream = client.subscribe_blocks().await;
 		(
-			Box::pin(stream::unfold(State { client, stream }, |mut state| async move {
+			Box::pin(stream::unfold(State { client, stream }, move |mut state| async move {
 				loop {
 					while let Ok(Some(header)) =
-						tokio::time::timeout(TIMEOUT, state.stream.next()).await
+						tokio::time::timeout(BLOCK_PULL_TIMEOUT, state.stream.next()).await
 					{
 						if let Ok(header) = header {
 							let (Some(index), Some(hash)) = (header.number, header.hash) else {
@@ -85,9 +92,10 @@ where
 	}
 }
 
-impl<C> ExternalChainSource for EthSource<C>
+impl<C, EvmChain> ExternalChainSource for EvmSource<C, EvmChain>
 where
 	C: EthersRetrySubscribeApi + ChainClient<Index = u64, Hash = H256, Data = Bloom> + Clone,
+	EvmChain: ExternalChain<ChainBlockNumber = u64>,
 {
-	type Chain = cf_chains::Ethereum;
+	type Chain = EvmChain;
 }

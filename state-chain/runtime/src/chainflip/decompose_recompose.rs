@@ -34,6 +34,8 @@ impl WitnessDataExtraction for RuntimeCall {
 				let fee_info = mem::take(&mut new_chain_state.tracked_data.median_tip);
 				Some(fee_info.encode())
 			},
+			// Since there is no priority fee in Arbitrum, we do not extract anything from the chain
+			// tracking witness data.
 			_ => None,
 		}
 	}
@@ -120,12 +122,13 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{RuntimeOrigin, Validator, Witnesser};
+	use crate::{ArbitrumInstance, RuntimeOrigin, Validator, Witnesser};
 	use cf_chains::{
+		arb::ArbitrumTrackedData,
 		btc::{BitcoinFeeInfo, BitcoinTrackedData},
 		dot::PolkadotTrackedData,
 		eth::EthereumTrackedData,
-		Bitcoin, Chain, ChainState, Ethereum, Polkadot,
+		Arbitrum, Bitcoin, Chain, ChainState, Ethereum, Polkadot,
 	};
 	use cf_primitives::{AccountRole, ForeignChain};
 	use cf_traits::EpochInfo;
@@ -195,6 +198,7 @@ mod tests {
 		test_medians::<Ethereum>();
 		test_medians::<Bitcoin>();
 		test_medians::<Polkadot>();
+		test_medians::<Arbitrum>();
 	}
 
 	#[track_caller]

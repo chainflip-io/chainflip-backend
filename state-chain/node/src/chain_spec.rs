@@ -1,8 +1,9 @@
 use cf_chains::{
+	arb::ArbitrumTrackedData,
 	assets::btc,
 	btc::BITCOIN_DUST_LIMIT,
 	dot::{PolkadotAccountId, PolkadotHash},
-	ChainState,
+	Arbitrum, ChainState,
 };
 use cf_primitives::{
 	AccountRole, AuthorityCount, NetworkEnvironment, DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
@@ -24,7 +25,8 @@ use sp_core::{
 	Pair, Public,
 };
 use state_chain_runtime::{
-	chainflip::Offence, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
+	chainflip::Offence, opaque::SessionKeys, AccountId, AccountRolesConfig,
+	ArbitrumChainTrackingConfig, ArbitrumIngressEgressConfig, ArbitrumVaultConfig, AuraConfig,
 	BitcoinChainTrackingConfig, BitcoinIngressEgressConfig, BitcoinThresholdSignerConfig,
 	BitcoinVaultConfig, BlockNumber, EmissionsConfig, EnvironmentConfig,
 	EthereumChainTrackingConfig, EthereumIngressEgressConfig, EthereumVaultConfig,
@@ -126,7 +128,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(clean_hex_address, FLIP_TOKEN_ADDRESS, flip_token_address);
 	from_env_var!(clean_hex_address, ETH_USDC_ADDRESS, eth_usdc_address);
 	from_env_var!(clean_hex_address, STATE_CHAIN_GATEWAY_ADDRESS, state_chain_gateway_address);
-	from_env_var!(clean_hex_address, KEY_MANAGER_ADDRESS, key_manager_address);
+	from_env_var!(clean_hex_address, KEY_MANAGER_ADDRESS, eth_key_manager_address);
 	from_env_var!(clean_hex_address, ETH_VAULT_ADDRESS, eth_vault_address);
 	from_env_var!(clean_hex_address, ARB_KEY_MANAGER_ADDRESS, arb_key_manager_address);
 	from_env_var!(clean_hex_address, ARB_VAULT_ADDRESS, arb_vault_address);
@@ -162,7 +164,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		flip_token_address,
 		eth_usdc_address,
 		state_chain_gateway_address,
-		key_manager_address,
+		eth_key_manager_address,
 		eth_vault_address,
 		arb_key_manager_address,
 		arb_vault_address,
@@ -224,7 +226,7 @@ pub fn inner_cf_development_config(
 		flip_token_address,
 		eth_usdc_address,
 		state_chain_gateway_address,
-		key_manager_address,
+		eth_key_manager_address,
 		eth_vault_address,
 		arb_key_manager_address,
 		arb_vault_address,
@@ -259,7 +261,7 @@ pub fn inner_cf_development_config(
 					flip_token_address: flip_token_address.into(),
 					state_chain_gateway_address: state_chain_gateway_address.into(),
 					eth_usdc_address: eth_usdc_address.into(),
-					eth_key_manager_address: key_manager_address.into(),
+					eth_key_manager_address: eth_key_manager_address.into(),
 					eth_vault_address: eth_vault_address.into(),
 					eth_address_checker_address: eth_address_checker_address.into(),
 					ethereum_chain_id,
@@ -295,9 +297,11 @@ pub fn inner_cf_development_config(
 				// Bitcoin block times on localnets are much faster, so we account for that here.
 				devnet::BITCOIN_EXPIRY_BLOCKS,
 				devnet::ETHEREUM_EXPIRY_BLOCKS,
+				devnet::ARBITRUM_EXPIRY_BLOCKS,
 				devnet::POLKADOT_EXPIRY_BLOCKS,
 				devnet::BITCOIN_SAFETY_MARGIN,
 				devnet::ETHEREUM_SAFETY_MARGIN,
+				devnet::ARBITRUM_SAFETY_MARGIN,
 				devnet::AUCTION_BID_CUTOFF_PERCENTAGE,
 			)
 		},
@@ -335,7 +339,7 @@ macro_rules! network_spec {
 					flip_token_address,
 					eth_usdc_address,
 					state_chain_gateway_address,
-					key_manager_address,
+					eth_key_manager_address,
 					eth_vault_address,
 					arb_key_manager_address,
 					arb_vault_address,
@@ -399,7 +403,7 @@ macro_rules! network_spec {
 								flip_token_address: flip_token_address.into(),
 								eth_usdc_address: eth_usdc_address.into(),
 								state_chain_gateway_address: state_chain_gateway_address.into(),
-								eth_key_manager_address: key_manager_address.into(),
+								eth_key_manager_address: eth_key_manager_address.into(),
 								eth_vault_address: eth_vault_address.into(),
 								arb_key_manager_address: arb_key_manager_address.into(),
 								arb_vault_address: arb_vault_address.into(),
@@ -434,9 +438,11 @@ macro_rules! network_spec {
 							dot_runtime_version,
 							BITCOIN_EXPIRY_BLOCKS,
 							ETHEREUM_EXPIRY_BLOCKS,
+							ARBITRUM_EXPIRY_BLOCKS,
 							POLKADOT_EXPIRY_BLOCKS,
 							BITCOIN_SAFETY_MARGIN,
 							ETHEREUM_SAFETY_MARGIN,
+							ARBITRUM_SAFETY_MARGIN,
 							AUCTION_BID_CUTOFF_PERCENTAGE,
 						)
 					},
@@ -495,9 +501,11 @@ fn testnet_genesis(
 	dot_runtime_version: RuntimeVersion,
 	bitcoin_deposit_channel_lifetime: u32,
 	ethereum_deposit_channel_lifetime: u32,
+	arbitrum_deposit_channel_lifetime: u32,
 	polkadot_deposit_channel_lifetime: u32,
 	bitcoin_safety_margin: u64,
 	ethereum_safety_margin: u64,
+	arbitrum_safety_margin: u64,
 	auction_bid_cutoff_percentage: Percent,
 ) -> RuntimeGenesisConfig {
 	// Sanity Checks
@@ -645,7 +653,7 @@ fn testnet_genesis(
 		bitcoin_vault: BitcoinVaultConfig { deployment_block: None },
 		arbitrum_vault: ArbitrumVaultConfig { deployment_block: None },
 
-		ethereum_threshold_signer: EvmThresholdSignerConfig {
+		evm_threshold_signer: EvmThresholdSignerConfig {
 			key: Some(cf_chains::evm::AggKey::from_pubkey_compressed(eth_init_agg_key)),
 			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
 			keygen_response_timeout: keygen_ceremony_timeout_blocks,
@@ -720,6 +728,11 @@ fn testnet_genesis(
 		polkadot_ingress_egress: PolkadotIngressEgressConfig {
 			deposit_channel_lifetime: polkadot_deposit_channel_lifetime,
 			witness_safety_margin: None,
+			dust_limits: Default::default(),
+		},
+		arbitrum_ingress_egress: ArbitrumIngressEgressConfig {
+			deposit_channel_lifetime: arbitrum_deposit_channel_lifetime.into(),
+			witness_safety_margin: Some(arbitrum_safety_margin),
 			dust_limits: Default::default(),
 		},
 	}

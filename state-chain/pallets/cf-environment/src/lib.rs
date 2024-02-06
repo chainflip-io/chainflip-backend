@@ -12,7 +12,10 @@ use cf_chains::{
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
 };
-use cf_primitives::{chains::assets::eth::Asset as EthAsset, NetworkEnvironment, SemVer};
+use cf_primitives::{
+	chains::assets::{arb::Asset as ArbAsset, eth::Asset as EthAsset},
+	NetworkEnvironment, SemVer,
+};
 use cf_traits::{CompatibleCfeVersions, GetBitcoinFeeInfo, NetworkEnvironmentProvider, SafeMode};
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
@@ -122,7 +125,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn eth_address_checker_address)]
 	/// The address of the Address Checker contract on ETH
-	pub type EvmAddressCheckerAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
+	pub type EthereumAddressCheckerAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn ethereum_chain_id)]
@@ -194,7 +197,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn arbitrum_chain_id)]
 	/// The ARB chain id
-	pub type ArbitrumChainId<T> = StorageValue<_, cf_chains::evm::EthereumChainId, ValueQuery>;
+	pub type ArbitrumChainId<T> = StorageValue<_, cf_chains::evm::api::EvmChainId, ValueQuery>;
 
 	#[pallet::storage]
 	pub type ArbitrumSignatureNonce<T> = StorageValue<_, SignatureNonce, ValueQuery>;
@@ -212,9 +215,9 @@ pub mod pallet {
 		/// The address of an supported ETH asset was updated
 		UpdatedEthAsset(EthAsset, EvmAddress),
 		/// A new supported ARB asset was added
-		AddedNewArbAsset(ArbAsset, EthereumAddress),
+		AddedNewArbAsset(ArbAsset, EvmAddress),
 		/// The address of an supported ARB asset was updated
-		UpdatedArbAsset(ArbAsset, EthereumAddress),
+		UpdatedArbAsset(ArbAsset, EvmAddress),
 		/// Polkadot Vault Account is successfully set
 		PolkadotVaultAccountSet { polkadot_vault_account_id: PolkadotAccountId },
 		/// The starting block number for the new Bitcoin vault was set
@@ -354,10 +357,10 @@ pub mod pallet {
 		pub ethereum_chain_id: u64,
 		pub polkadot_genesis_hash: PolkadotHash,
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
-		pub arb_usdc_address: EthereumAddress,
-		pub arb_key_manager_address: EthereumAddress,
-		pub arb_vault_address: EthereumAddress,
-		pub arb_address_checker_address: EthereumAddress,
+		pub arb_usdc_address: EvmAddress,
+		pub arb_key_manager_address: EvmAddress,
+		pub arb_vault_address: EvmAddress,
+		pub arb_address_checker_address: EvmAddress,
 		pub arbitrum_chain_id: u64,
 		pub network_environment: NetworkEnvironment,
 		pub _config: PhantomData<T>,
@@ -370,7 +373,7 @@ pub mod pallet {
 			EthereumStateChainGatewayAddress::<T>::set(self.state_chain_gateway_address);
 			EthereumKeyManagerAddress::<T>::set(self.eth_key_manager_address);
 			EthereumVaultAddress::<T>::set(self.eth_vault_address);
-			EvmAddressCheckerAddress::<T>::set(self.eth_address_checker_address);
+			EthereumAddressCheckerAddress::<T>::set(self.eth_address_checker_address);
 
 			EthereumChainId::<T>::set(self.ethereum_chain_id);
 			EthereumSupportedAssets::<T>::insert(EthAsset::Flip, self.flip_token_address);

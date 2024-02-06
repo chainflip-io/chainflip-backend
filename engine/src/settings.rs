@@ -188,6 +188,7 @@ pub struct Settings {
 	pub eth: Eth,
 	pub dot: Dot,
 	pub btc: Btc,
+	pub arb: Eth,
 
 	pub health_check: Option<HealthCheck>,
 	pub prometheus: Option<Prometheus>,
@@ -250,6 +251,16 @@ pub struct BtcOptions {
 }
 
 #[derive(Parser, Debug, Clone, Default)]
+pub struct ArbOptions {
+	#[clap(long = "arb.ws_node_endpoint")]
+	pub arb_ws_node_endpoint: Option<String>,
+	#[clap(long = "arb.http_node_endpoint")]
+	pub arb_http_node_endpoint: Option<String>,
+	#[clap(long = "arb.private_key_file")]
+	pub arb_private_key_file: Option<PathBuf>,
+}
+
+#[derive(Parser, Debug, Clone, Default)]
 pub struct P2POptions {
 	#[clap(long = "p2p.node_key_file", parse(from_os_str))]
 	node_key_file: Option<PathBuf>,
@@ -282,6 +293,9 @@ pub struct CommandLineOptions {
 
 	#[clap(flatten)]
 	pub btc_opts: BtcOptions,
+
+	#[clap(flatten)]
+	arb_opts: ArbOptions,
 
 	// Health Check Settings
 	#[clap(long = "health_check.hostname")]
@@ -319,6 +333,7 @@ impl Default for CommandLineOptions {
 			eth_opts: EthOptions::default(),
 			dot_opts: DotOptions::default(),
 			btc_opts: BtcOptions::default(),
+			arb_opts: ArbOptions::default(),
 			health_check_hostname: None,
 			health_check_port: None,
 			prometheus_hostname: None,
@@ -338,6 +353,7 @@ const STATE_CHAIN_WS_ENDPOINT: &str = "state_chain.ws_endpoint";
 const STATE_CHAIN_SIGNING_KEY_FILE: &str = "state_chain.signing_key_file";
 
 const ETH_PRIVATE_KEY_FILE: &str = "eth.private_key_file";
+const ARB_PRIVATE_KEY_FILE: &str = "arb.private_key_file";
 
 const SIGNING_DB_FILE: &str = "signing.db_file";
 
@@ -500,6 +516,8 @@ impl CfSettings for Settings {
 
 		self.btc.validate_settings()?;
 
+		self.arb.validate_settings()?;
+
 		self.state_chain.validate_settings()?;
 
 		is_valid_db_path(&self.signing.db_file).map_err(|e| ConfigError::Message(e.to_string()))?;
@@ -556,6 +574,13 @@ impl CfSettings for Settings {
 					.expect("Invalid eth_private_key path"),
 			)?
 			.set_default(
+				ARB_PRIVATE_KEY_FILE,
+				PathBuf::from(config_root)
+					.join("keys/eth_private_key")
+					.to_str()
+					.expect("Invalid arb_private_key path"),
+			)?
+			.set_default(
 				SIGNING_DB_FILE,
 				PathBuf::from(config_root)
 					.join("data.db")
@@ -582,6 +607,8 @@ impl Source for CommandLineOptions {
 		self.dot_opts.insert_all(&mut map);
 
 		self.btc_opts.insert_all(&mut map);
+
+		self.arb_opts.insert_all(&mut map);
 
 		insert_command_line_option(&mut map, "health_check.hostname", &self.health_check_hostname);
 		insert_command_line_option(&mut map, "health_check.port", &self.health_check_port);
@@ -716,6 +743,15 @@ impl DotOptions {
 	}
 }
 
+impl ArbOptions {
+	/// Inserts all the Arb Options into the given map (if Some)
+	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
+		insert_command_line_option(map, "arb.ws_node_endpoint", &self.arb_ws_node_endpoint);
+		insert_command_line_option(map, "arb.http_node_endpoint", &self.arb_http_node_endpoint);
+		insert_command_line_option_path(map, ARB_PRIVATE_KEY_FILE, &self.arb_private_key_file);
+	}
+}
+
 impl Settings {
 	/// New settings loaded from "$base_config_path/config/Settings.toml",
 	/// environment and `CommandLineOptions`
@@ -779,10 +815,11 @@ pub mod tests {
 	use utilities::assert_ok;
 
 	use crate::constants::{
-		BTC_BACKUP_HTTP_ENDPOINT, BTC_BACKUP_RPC_PASSWORD, BTC_BACKUP_RPC_USER, BTC_HTTP_ENDPOINT,
-		BTC_RPC_PASSWORD, BTC_RPC_USER, DOT_BACKUP_HTTP_ENDPOINT, DOT_BACKUP_WS_ENDPOINT,
-		DOT_HTTP_ENDPOINT, DOT_WS_ENDPOINT, ETH_BACKUP_HTTP_ENDPOINT, ETH_BACKUP_WS_ENDPOINT,
-		ETH_HTTP_ENDPOINT, ETH_WS_ENDPOINT, NODE_P2P_IP_ADDRESS,
+		ARB_HTTP_NODE_ENDPOINT, ARB_WS_NODE_ENDPOINT, BTC_BACKUP_HTTP_ENDPOINT,
+		BTC_BACKUP_RPC_PASSWORD, BTC_BACKUP_RPC_USER, BTC_HTTP_ENDPOINT, BTC_RPC_PASSWORD,
+		BTC_RPC_USER, DOT_BACKUP_HTTP_ENDPOINT, DOT_BACKUP_WS_ENDPOINT, DOT_HTTP_ENDPOINT,
+		DOT_WS_ENDPOINT, ETH_BACKUP_HTTP_ENDPOINT, ETH_BACKUP_WS_ENDPOINT, ETH_HTTP_ENDPOINT,
+		ETH_WS_ENDPOINT, NODE_P2P_IP_ADDRESS,
 	};
 
 	use super::*;

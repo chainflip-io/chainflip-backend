@@ -1,6 +1,6 @@
-mod btc_chain_tracking;
-mod btc_deposits;
-pub mod btc_source;
+mod chain_tracking;
+mod deposits;
+pub mod source;
 
 use std::sync::Arc;
 
@@ -23,7 +23,7 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED, UNFINALIZED},
 	},
 };
-use btc_source::BtcSource;
+use source::BtcSource;
 
 use super::common::{
 	chain_source::{extension::ChainSourceExt, Header},
@@ -172,7 +172,7 @@ where
 			let process_call = process_call.clone();
 			move |epoch, header| process_egress(epoch, header, process_call.clone())
 		})
-		.continuous("Bitcoin".to_string(), db)
+		.continuous("All", db)
 		.logging("witnessing")
 		.spawn(scope);
 
@@ -202,7 +202,7 @@ mod tests {
 	use bitcoin::Amount;
 
 	use super::*;
-	use crate::witness::btc::btc_deposits::tests::{fake_transaction, fake_verbose_vouts};
+	use crate::witness::btc::deposits::tests::{fake_transaction, fake_verbose_vouts};
 
 	#[test]
 	fn witnesses_tx_hash_successfully() {

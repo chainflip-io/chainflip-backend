@@ -367,7 +367,7 @@ cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
 		system:Default::default(),
-		ethereum_threshold_signer: EvmThresholdSignerConfig {
+		evm_threshold_signer: EvmThresholdSignerConfig {
 			key: Some(GENESIS_AGG_PUB_KEY),
 			threshold_signature_response_timeout: 1,
 			keygen_response_timeout: MOCK_KEYGEN_RESPONSE_TIMEOUT,

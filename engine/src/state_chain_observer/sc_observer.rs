@@ -13,7 +13,7 @@ type CfeEvent = pallet_cf_cfe_interface::CfeEvent<Runtime>;
 
 use sp_runtime::AccountId32;
 use state_chain_runtime::{
-	AccountId, BitcoinInstance, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall,
+	AccountId, BitcoinInstance, EvmInstance, PolkadotInstance, Runtime, RuntimeCall,
 };
 use std::{
 	collections::BTreeSet,
@@ -228,6 +228,7 @@ pub async fn start<
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
 	eth_rpc: EthRpc,
+	arb_rpc: EthRpc,
 	dot_rpc: DotRpc,
 	btc_rpc: BtcRpc,
 	eth_multisig_client: EthMultisigClient,
@@ -306,7 +307,7 @@ where
                             for event in events {
                                 match_event! {event, {
                                     CfeEvent::EthThresholdSignatureRequest(req) => {
-                                        handle_signing_request::<_, _, _, EthereumInstance>(
+                                        handle_signing_request::<_, _, _, EvmInstance>(
                                         scope,
                                         &eth_multisig_client,
                                         state_chain_client.clone(),
@@ -367,7 +368,7 @@ where
                                         }
                                     }
                                     CfeEvent::EthKeygenRequest(req) => {
-                                        handle_keygen_request::<_, _, _, EthereumInstance>(
+                                        handle_keygen_request::<_, _, _, EvmInstance>(
                                             scope,
                                             &eth_multisig_client,
                                             state_chain_client.clone(),
@@ -483,6 +484,32 @@ where
                                             })
                                         }
                                     }
+                                    CfeEvent::ArbTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> { broadcast_id, nominee, payload }) => {
+                                        if nominee == account_id {
+                                            let arb_rpc = arb_rpc.clone();
+                                            let state_chain_client = state_chain_client.clone();
+                                            scope.spawn(async move {
+                                                match arb_rpc.broadcast_transaction(payload).await {
+                                                    Ok(tx_hash) => info!("Arbitrum TransactionBroadcastRequest {broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
+                                                    Err(error) => {
+                                                        // Note: this error can indicate that we failed to estimate gas, or that there is
+                                                        // a problem with the arbitrum rpc node, or with the configured account. For example
+                                                        // if the account balance is too low to pay for required gas.
+                                                        error!("Error on Arbitrum TransactionBroadcastRequest {broadcast_id:?}: {error:?}");
+                                                        state_chain_client.finalize_signed_extrinsic(
+                                                            RuntimeCall::ArbitrumBroadcaster(
+                                                                pallet_cf_broadcast::Call::transaction_failed {
+                                                                    broadcast_id,
+                                                                },
+                                                            ),
+                                                        )
+                                                        .await;
+                                                    }
+                                                }
+                                                Ok(())
+                                            })
+                                        }
+                                    }
                                     CfeEvent::PeerIdRegistered { .. } |
                                     CfeEvent::PeerIdDeregistered { .. } => {
                                         // p2p registration is handled in the p2p module.
@@ -561,7 +588,7 @@ where
 			state_chain_client
 				.storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
 					state_chain_runtime::Runtime,
-					state_chain_runtime::EthereumInstance,
+					state_chain_runtime::EvmInstance,
 				>>(block_hash)
 				.await
 				.context("Failed to get Ethereum CeremonyIdCounter from SC")?

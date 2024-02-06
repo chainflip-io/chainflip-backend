@@ -11,7 +11,7 @@ use state_chain_runtime::PalletInstanceAlias;
 
 use crate::witness::{
 	common::chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses,
-	eth::vault::VaultEvents,
+	evm::vault::VaultEvents,
 };
 
 use std::collections::BTreeMap;
@@ -188,7 +188,7 @@ pub fn eth_ingresses_at_block<
 	addresses: Addresses,
 	native_events: Vec<FetchedNativeFilter>,
 ) -> Result<Vec<(H160, U256)>, anyhow::Error> {
-	let fetched_native_totals: BTreeMap<_, _> = native_events
+	let fetched_native_totals: BTreeMap<H160, _> = native_events
 		.into_iter()
 		.into_group_map_by(|f| f.sender)
 		.into_iter()

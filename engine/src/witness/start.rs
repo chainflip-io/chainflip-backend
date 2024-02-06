@@ -28,6 +28,7 @@ use anyhow::Result;
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	eth_client: EthRetryRpcClient<EthRpcSigningClient>,
+	arb_client: EthRetryRpcClient<EthRpcSigningClient>,
 	btc_client: BtcRetryRpcClient,
 	dot_client: DotRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,
@@ -101,14 +102,24 @@ where
 	let start_dot = super::dot::start(
 		scope,
 		dot_client,
-		witness_call,
-		state_chain_client,
-		state_chain_stream,
-		epoch_source,
-		db,
+		witness_call.clone(),
+		state_chain_client.clone(),
+		state_chain_stream.clone(),
+		epoch_source.clone(),
+		db.clone(),
 	);
 
-	futures::future::try_join3(start_eth, start_btc, start_dot).await?;
+	let start_arb = super::arb::start(
+		scope,
+		arb_client,
+		witness_call,
+		state_chain_client.clone(),
+		state_chain_stream.clone(),
+		epoch_source.clone(),
+		db.clone(),
+	);
+
+	futures::future::try_join4(start_eth, start_btc, start_dot, start_arb).await?;
 
 	Ok(())
 }

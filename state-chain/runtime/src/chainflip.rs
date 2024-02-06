@@ -9,11 +9,11 @@ mod missed_authorship_slots;
 mod offences;
 mod signer_nomination;
 use crate::{
-	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress,
-	BitcoinThresholdSigner, BlockNumber, Emissions, Environment, EthereumBroadcaster,
-	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster,
-	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
-	System, Validator, YEAR,
+	AccountId, AccountRoles, ArbitrumChainTracking, ArbitrumIngressEgress, Authorship,
+	BitcoinChainTracking, BitcoinIngressEgress, BitcoinThresholdSigner, BlockNumber, Emissions,
+	Environment, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress, Flip,
+	FlipBalance, PolkadotBroadcaster, PolkadotChainTracking, PolkadotIngressEgress,
+	PolkadotThresholdSigner, Runtime, RuntimeCall, System, Validator, YEAR,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -21,6 +21,7 @@ use cf_chains::{
 		to_encoded_address, try_from_encoded_address, AddressConverter, EncodedAddress,
 		ForeignChainAddress,
 	},
+	arb::api::ArbitrumApi,
 	btc::{
 		api::{BitcoinApi, SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		Bitcoin, BitcoinCrypto, BitcoinFeeInfo, BitcoinTransactionData, UtxoId,
@@ -31,24 +32,24 @@ use cf_chains::{
 	},
 	eth::{
 		self,
-		api::{EthereumApi, EthereumContract},
+		api::{EthereumApi, StateChainGatewayAddressProvider},
 		deposit_address::ETHEREUM_ETH_ADDRESS,
 		Ethereum,
 	},
 	evm::{
-		api::{EthEnvironmentProvider, EvmEnvironmentProvider, EvmReplayProtection},
+		api::{EvmChainId, EvmEnvironmentProvider, EvmReplayProtection},
 		EvmCrypto, Transaction,
 	},
-	AnyChain, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
+	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	ChainEnvironment, ChainState, DepositChannel, ForeignChain, ReplayProtectionProvider,
 	SetCommKeyWithAggKey, SetGovKeyWithAggKey, TransactionBuilder,
 };
 use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId};
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
-	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi,
-	DepositHandler, EgressApi, EpochInfo, Heartbeat, Issuance, KeyProvider, OnBroadcastReady,
-	QualifyNode, RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
+	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
+	EpochInfo, Heartbeat, Issuance, KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode,
+	RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
 };
 use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
@@ -142,14 +143,19 @@ impl cf_traits::WaivedFees for WaivedFees {
 /// We are willing to pay at most 2x the base fee. This is approximately the theoretical
 /// limit of the rate of increase of the base fee over 6 blocks (12.5% per block).
 const ETHEREUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(2, 1);
+/// TODO!!:We are willing to pay at most 2x the base fee. This is approximately the theoretical
+/// limit of the rate of increase of the base fee over 6 blocks (12.5% per block).
+const ARBITRUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(2, 1);
 // We arbitrarily set the MAX_GAS_LIMIT we are willing broadcast to 10M.
 const ETHEREUM_MAX_GAS_LIMIT: u128 = 10_000_000;
+// We arbitrarily set the MAX_GAS_LIMIT we are willing broadcast to 10M.
+const ARBITRUM_MAX_GAS_LIMIT: u128 = 10_000_000;
 
 pub struct EthTransactionBuilder;
 
-impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactionBuilder {
+impl TransactionBuilder<Ethereum, EthereumApi<EvmEnvironment>> for EthTransactionBuilder {
 	fn build_transaction(
-		signed_call: &EthereumApi<EthEnvironment>,
+		signed_call: &EthereumApi<EvmEnvironment>,
 	) -> <Ethereum as Chain>::Transaction {
 		Transaction {
 			chain_id: signed_call.replay_protection().chain_id,
@@ -171,7 +177,7 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 	}
 
 	fn requires_signature_refresh(
-		_call: &EthereumApi<EthEnvironment>,
+		_call: &EthereumApi<EvmEnvironment>,
 		_payload: &<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::Payload,
 	) -> bool {
 		false
@@ -182,7 +188,7 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 	/// Gas limit = gas_budget / (multiplier * base_gas_price + priority_fee)
 	/// All other calls uses a default gas limit. Multiplier=1 to avoid user overpaying for gas.
 	/// The max_fee_per_gas will still have the default ethereum base fee multiplier applied.
-	fn calculate_gas_limit(call: &EthereumApi<EthEnvironment>) -> Option<U256> {
+	fn calculate_gas_limit(call: &EthereumApi<EvmEnvironment>) -> Option<U256> {
 		if let Some(gas_budget) = call.gas_budget() {
 			let current_fee_per_gas = EthereumChainTracking::chain_state()
 				.or_else(||{
@@ -256,9 +262,9 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 
 pub struct ArbTransactionBuilder;
 
-impl TransactionBuilder<Arbitrum, ArbitrumApi<ArbEnvironment>> for ArbTransactionBuilder {
+impl TransactionBuilder<Arbitrum, ArbitrumApi<EvmEnvironment>> for ArbTransactionBuilder {
 	fn build_transaction(
-		signed_call: &ArbitrumApi<ArbEnvironment>,
+		signed_call: &ArbitrumApi<EvmEnvironment>,
 	) -> <Arbitrum as Chain>::Transaction {
 		Transaction {
 			chain_id: signed_call.replay_protection().chain_id,
@@ -273,14 +279,14 @@ impl TransactionBuilder<Arbitrum, ArbitrumApi<ArbEnvironment>> for ArbTransactio
 		if let Some(ChainState { tracked_data, .. }) = ArbitrumChainTracking::chain_state() {
 			let max_fee_per_gas = tracked_data.max_fee_per_gas(ARBITRUM_BASE_FEE_MULTIPLIER);
 			unsigned_tx.max_fee_per_gas = Some(U256::from(max_fee_per_gas));
-			unsigned_tx.max_priority_fee_per_gas = Some(U256::from(tracked_data.priority_fee));
+			unsigned_tx.max_priority_fee_per_gas = None;
 		} else {
 			log::warn!("No chain data for Arbitrum. This should never happen. Please check Chain Tracking data.");
 		}
 	}
 
 	fn requires_signature_refresh(
-		_call: &ArbitrumApi<ArbEnvironment>,
+		_call: &ArbitrumApi<EvmEnvironment>,
 		_payload: &<<Arbitrum as Chain>::ChainCrypto as ChainCrypto>::Payload,
 	) -> bool {
 		false
@@ -291,7 +297,7 @@ impl TransactionBuilder<Arbitrum, ArbitrumApi<ArbEnvironment>> for ArbTransactio
 	/// Gas limit = gas_budget / (multiplier * base_gas_price + priority_fee)
 	/// All other calls uses a default gas limit. Multiplier=1 to avoid user overpaying for gas.
 	/// The max_fee_per_gas will still have the default Arbitrum base fee multiplier applied.
-	fn calculate_gas_limit(call: &ArbitrumApi<ArbEnvironment>) -> Option<U256> {
+	fn calculate_gas_limit(call: &ArbitrumApi<EvmEnvironment>) -> Option<U256> {
 		if let Some(gas_budget) = call.gas_budget() {
 			let current_fee_per_gas = ArbitrumChainTracking::chain_state()
 				.or_else(||{
@@ -339,8 +345,14 @@ impl RuntimeUpgrade for RuntimeUpgradeManager {
 }
 pub struct EvmEnvironment;
 
-impl<C: Chain> ReplayProtectionProvider<C> for EvmEnvironment {
-	fn replay_protection(contract_address: EvmAddress) -> EvmReplayProtection {
+impl<C: Chain<ReplayProtection = EvmReplayProtection, ReplayProtectionParams = EvmAddress>>
+	ReplayProtectionProvider<C> for EvmEnvironment
+where
+	EvmEnvironment: EvmEnvironmentProvider<C>,
+{
+	fn replay_protection(
+		contract_address: <C as Chain>::ReplayProtectionParams,
+	) -> EvmReplayProtection {
 		EvmReplayProtection {
 			nonce: <Self as EvmEnvironmentProvider<C>>::next_nonce(),
 			chain_id: <Self as EvmEnvironmentProvider<C>>::chain_id(),
@@ -376,14 +388,14 @@ impl EvmEnvironmentProvider<Ethereum> for EvmEnvironment {
 }
 
 // state chain gateway address only exists for Ethereum and does not exist for any other Evm Chain
-impl EvmEnvironment<Ethereum> {
+impl StateChainGatewayAddressProvider for EvmEnvironment {
 	fn state_chain_gateway_address() -> EvmAddress {
 		Environment::state_chain_gateway_address()
 	}
 }
 
 impl EvmEnvironmentProvider<Arbitrum> for EvmEnvironment {
-	fn token_address(asset: assets::arb::Asset) -> Option<H160> {
+	fn token_address(asset: assets::arb::Asset) -> Option<EvmAddress> {
 		match asset {
 			assets::arb::Asset::ArbEth => Some(ETHEREUM_ETH_ADDRESS),
 			assets::arb::Asset::ArbUsdc => Environment::supported_arb_assets(asset).map(Into::into),
@@ -398,7 +410,7 @@ impl EvmEnvironmentProvider<Arbitrum> for EvmEnvironment {
 		Environment::arb_key_manager_address()
 	}
 
-	fn chain_id() -> EthereumChainId {
+	fn chain_id() -> EvmChainId {
 		Environment::arbitrum_chain_id()
 	}
 
@@ -617,9 +629,9 @@ impl_egress_api_for_anychain!(
 );
 
 pub struct DepositHandler;
-impl DepositHandler<Ethereum> for DepositHandler {}
-impl DepositHandler<Polkadot> for DepositHandler {}
-impl DepositHandler<Bitcoin> for DepositHandler {
+impl OnDeposit<Ethereum> for DepositHandler {}
+impl OnDeposit<Polkadot> for DepositHandler {}
+impl OnDeposit<Bitcoin> for DepositHandler {
 	fn on_deposit_made(
 		utxo_id: <Bitcoin as Chain>::DepositDetails,
 		amount: <Bitcoin as Chain>::ChainAmount,
@@ -628,7 +640,7 @@ impl DepositHandler<Bitcoin> for DepositHandler {
 		Environment::add_bitcoin_utxo_to_list(amount, utxo_id, channel.state)
 	}
 }
-impl DepositHandler<Arbitrum> for DepositHandler {}
+impl OnDeposit<Arbitrum> for DepositHandler {}
 
 pub struct ChainAddressConverter;
 

@@ -24,6 +24,14 @@ use sp_std::{convert::TryFrom, str, vec};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EvmCrypto;
 
+pub mod fees {
+	// TODO: refine these constants.
+	pub const BASE_COST_PER_BATCH: u128 = 50_000;
+	pub const GAS_COST_PER_FETCH: u128 = 30_000;
+	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
+	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
+}
+
 impl ChainCrypto for EvmCrypto {
 	type UtxoChain = ConstBool<false>;
 

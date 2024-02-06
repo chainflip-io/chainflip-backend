@@ -37,8 +37,8 @@ use pallet_cf_swapping::CcmIdCounter;
 use sp_core::U256;
 use state_chain_runtime::{
 	chainflip::{
-		address_derivation::AddressDerivation, ChainAddressConverter, EthEnvironment,
-		EthTransactionBuilder,
+		address_derivation::AddressDerivation, ChainAddressConverter, EthTransactionBuilder,
+		EvmEnvironment,
 	},
 	AccountRoles, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
 	EthereumInstance, LiquidityPools, LiquidityProvider, Runtime, RuntimeCall, RuntimeEvent,
@@ -699,7 +699,7 @@ fn ethereum_ccm_can_calculate_gas_limits() {
 		assert_eq!(EthereumChainTracking::chain_state(), Some(chain_state));
 
 		let make_ccm_call = |gas_budget: u128| {
-			<EthereumApi<EthEnvironment> as ExecutexSwapAndCall<Ethereum>>::new_unsigned(
+			<EthereumApi<EvmEnvironment> as ExecutexSwapAndCall<Ethereum>>::new_unsigned(
 				TransferAssetParams::<Ethereum> {
 					asset: EthAsset::Flip,
 					amount: 1_000,
