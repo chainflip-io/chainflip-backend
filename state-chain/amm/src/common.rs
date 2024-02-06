@@ -47,8 +47,8 @@ pub enum Order {
 impl Order {
 	pub fn to_sold_side(&self) -> Assets {
 		match self {
-			Order::Buy => Assets::Base,
-			Order::Sell => Assets::Quote,
+			Order::Buy => Assets::Quote,
+			Order::Sell => Assets::Base,
 		}
 	}
 }
@@ -127,7 +127,7 @@ impl<T> AssetsMap<T> {
 		Ok(AssetsMap { base: f(self.base)?, quote: f(self.quote)? })
 	}
 
-	pub fn try_map_2<R, E>(
+	pub fn try_map_with_asset<R, E>(
 		self,
 		mut f: impl FnMut(Assets, T) -> Result<R, E>,
 	) -> Result<AssetsMap<R>, E> {

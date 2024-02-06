@@ -1011,14 +1011,14 @@ pub mod pallet {
 				pool.pool_state
 					.set_fees(fee_hundredth_pips)
 					.map_err(|_| Error::<T>::InvalidFeeAmount)?
-					.try_map_2(|side, collected_fees| {
+					.try_map_with_asset(|asset, collected_fees| {
 						for ((lp, id), tick, collected, position_info) in collected_fees.into_iter()
 						{
 							Self::process_limit_order_update(
 								pool,
 								asset_pair,
 								&lp,
-								Assets::from(side).sell_order(),
+								Assets::from(asset).sell_order(),
 								id,
 								tick,
 								collected,
