@@ -394,8 +394,8 @@ pub mod pallet {
 				);
 			}
 
-			// In case the balance is lower than the sum of restricted addresses we keep this
-			// discrepancy into account such that restricted addresses can still redeem
+			// In case the balance is lower than the sum of restricted addresses we take this
+			// discrepancy into account so that restricted addresses can still redeem.
 			let restricted_deficit: FlipBalance<T> = restricted_balances
 				.values()
 				.copied()
@@ -404,8 +404,7 @@ pub mod pallet {
 
 			// The available funds are the total balance minus whichever is larger from:
 			// - The bond.
-			// - The total restricted funds that need to remain in the account after the redemption
-			//   + the deficit
+			// - The total restricted funds that need to remain in the account after the redemption.
 			let liquid_balance = T::Flip::balance(&account_id).saturating_sub(max(
 				T::Flip::bond(&account_id),
 				restricted_balances.values().copied().sum::<FlipBalance<T>>().saturating_sub(
