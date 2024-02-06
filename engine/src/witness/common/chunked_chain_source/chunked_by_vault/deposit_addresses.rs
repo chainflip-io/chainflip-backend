@@ -1,3 +1,4 @@
+use cf_chains::Chain;
 use pallet_cf_ingress_egress::DepositChannelDetails;
 use state_chain_runtime::PalletInstanceAlias;
 use std::sync::Arc;
@@ -41,6 +42,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 		StateChainStream: StreamApi<IS_FINALIZED>,
 		StateChainClient: StorageApi + Send + Sync + 'static,
+		<Inner::Chain as Chain>::ChainCrypto: PalletInstanceAlias,
 	{
 		let state_chain_client_c = state_chain_client.clone();
 		ChunkedByVaultBuilder::new(

@@ -33,6 +33,7 @@ impl<Inner: ChunkedByTime> ChunkedByTimeBuilder<Inner> {
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 		state_chain_runtime::RuntimeCall:
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
+		<Inner::Chain as Chain>::ChainCrypto: PalletInstanceAlias,
 	{
 		self.latest_then(move |epoch, header| {
 			let state_chain_client = state_chain_client.clone();

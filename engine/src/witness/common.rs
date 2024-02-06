@@ -55,7 +55,7 @@ pub type BoxActiveAndFuture<'a, T> =
 pub trait RuntimeHasChain<TChain: ExternalChain>:
 	pallet_cf_vaults::Config<<TChain as PalletInstanceAlias>::Instance, Chain = TChain>
 	+ pallet_cf_threshold_signature::Config<
-		<TChain as PalletInstanceAlias>::Instance,
+		<TChain::ChainCrypto as PalletInstanceAlias>::Instance,
 		TargetChainCrypto = TChain::ChainCrypto,
 	> + pallet_cf_chain_tracking::Config<
 		<TChain as PalletInstanceAlias>::Instance,
@@ -64,12 +64,15 @@ pub trait RuntimeHasChain<TChain: ExternalChain>:
 		<TChain as PalletInstanceAlias>::Instance,
 		TargetChain = TChain,
 	> + pallet_cf_broadcast::Config<<TChain as PalletInstanceAlias>::Instance, TargetChain = TChain>
+where
+	<TChain as Chain>::ChainCrypto: PalletInstanceAlias,
 {
 }
-impl<TChain: ExternalChain> RuntimeHasChain<TChain> for state_chain_runtime::Runtime where
+impl<TChain: ExternalChain> RuntimeHasChain<TChain> for state_chain_runtime::Runtime
+where
 	Self: pallet_cf_vaults::Config<<TChain as PalletInstanceAlias>::Instance, Chain = TChain>
 		+ pallet_cf_threshold_signature::Config<
-			<TChain as PalletInstanceAlias>::Instance,
+			<TChain::ChainCrypto as PalletInstanceAlias>::Instance,
 			TargetChainCrypto = TChain::ChainCrypto,
 		> + pallet_cf_chain_tracking::Config<
 			<TChain as PalletInstanceAlias>::Instance,
@@ -77,7 +80,9 @@ impl<TChain: ExternalChain> RuntimeHasChain<TChain> for state_chain_runtime::Run
 		> + pallet_cf_ingress_egress::Config<
 			<TChain as PalletInstanceAlias>::Instance,
 			TargetChain = TChain,
-		> + pallet_cf_broadcast::Config<<TChain as PalletInstanceAlias>::Instance, TargetChain = TChain>
+		> + pallet_cf_broadcast::Config<<TChain as PalletInstanceAlias>::Instance, TargetChain = TChain>,
+
+	<TChain as Chain>::ChainCrypto: PalletInstanceAlias,
 {
 }
 
@@ -90,6 +95,8 @@ pub trait RuntimeCallHasChain<Runtime: RuntimeHasChain<TChain>, TChain: External
 	> + std::convert::From<
 		pallet_cf_ingress_egress::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
 	>
+where
+	<TChain as Chain>::ChainCrypto: PalletInstanceAlias,
 {
 }
 impl<Runtime: RuntimeHasChain<TChain>, TChain: ExternalChain> RuntimeCallHasChain<Runtime, TChain>
@@ -104,6 +111,7 @@ where
 		> + std::convert::From<
 			pallet_cf_ingress_egress::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
 		>,
+	<TChain as Chain>::ChainCrypto: PalletInstanceAlias,
 {
 }
 

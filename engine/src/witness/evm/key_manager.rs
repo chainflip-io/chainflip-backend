@@ -1,5 +1,6 @@
-use cf_chains::evm::{
-	EvmCrypto, EvmTransactionMetadata, SchnorrVerificationComponents, TransactionFee,
+use cf_chains::{
+	evm::{EvmCrypto, EvmTransactionMetadata, SchnorrVerificationComponents, TransactionFee},
+	Chain,
 };
 use cf_primitives::EpochIndex;
 use ethers::{
@@ -58,7 +59,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	where
 		// These are the types for EVM chains, so this adapter can be shared by all EVM chains.
 		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = Bloom>,
-		Inner::Chain: cf_chains::Chain<
+		Inner::Chain: Chain<
 			ChainCrypto = EvmCrypto,
 			ChainAccount = H160,
 			TransactionFee = TransactionFee,
@@ -71,6 +72,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			+ 'static,
 		ProcessingFut: Future<Output = ()> + Send + 'static,
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
+		<Inner::Chain as Chain>::ChainCrypto: PalletInstanceAlias,
 		state_chain_runtime::RuntimeCall:
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
 	{

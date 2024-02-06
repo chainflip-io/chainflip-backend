@@ -1,4 +1,6 @@
+use cf_chains::Chain;
 use futures_core::Future;
+use state_chain_runtime::PalletInstanceAlias;
 use utilities::task_scope::Scope;
 
 use crate::witness::common::{
@@ -117,6 +119,7 @@ pub trait ChainSourceExt: ChainSource {
 		Self::Client: Clone,
 		Self::Data: Clone,
 		state_chain_runtime::Runtime: RuntimeHasChain<Self::Chain>,
+		<Self::Chain as Chain>::ChainCrypto: PalletInstanceAlias,
 		ExtraInfo: Clone + Send + Sync + 'static,
 		ExtraHistoricInfo: Clone + Send + Sync + 'static,
 	{

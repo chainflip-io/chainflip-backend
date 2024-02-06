@@ -414,6 +414,7 @@ impl<'a, 'env, StateChainClient: StorageApi + Send + Sync + 'static, Info, Histo
 	>
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<TChain>,
+		<TChain as Chain>::ChainCrypto: PalletInstanceAlias,
 		Info: Clone + Send + Sync + 'static,
 		HistoricInfo: Clone + Send + Sync + 'static,
 	{
@@ -432,7 +433,7 @@ impl<'a, 'env, StateChainClient: StorageApi + Send + Sync + 'static, Info, Histo
 						state_chain_client
 						.storage_map_entry::<pallet_cf_threshold_signature::Keys<
 							state_chain_runtime::Runtime,
-							<TChain as PalletInstanceAlias>::Instance,
+							<TChain::ChainCrypto as PalletInstanceAlias>::Instance,
 						>>(block_hash, &epoch)
 						.await
 						.expect(STATE_CHAIN_CONNECTION)
@@ -447,7 +448,7 @@ impl<'a, 'env, StateChainClient: StorageApi + Send + Sync + 'static, Info, Histo
 					state_chain_client
 						.storage_map_entry::<pallet_cf_threshold_signature::Keys<
 							state_chain_runtime::Runtime,
-							<TChain as PalletInstanceAlias>::Instance,
+							<TChain::ChainCrypto as PalletInstanceAlias>::Instance,
 						>>(block_hash, &(epoch + 1))
 						.await
 						.expect(STATE_CHAIN_CONNECTION)

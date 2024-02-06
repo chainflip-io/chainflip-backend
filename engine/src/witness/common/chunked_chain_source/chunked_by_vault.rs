@@ -6,6 +6,7 @@ pub mod monitored_items;
 
 use cf_chains::{Chain, ChainCrypto};
 use futures_util::StreamExt;
+use state_chain_runtime::PalletInstanceAlias;
 
 use crate::witness::common::{
 	chain_source::{aliases, BoxChainStream, ChainClient, ChainStream},
@@ -90,6 +91,7 @@ impl<
 pub struct ChunkByVault<TChainSource: ExternalChainSource, Info, HistoricInfo>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<TChainSource::Chain>,
+	<TChainSource::Chain as Chain>::ChainCrypto: PalletInstanceAlias,
 {
 	chain_source: TChainSource,
 	_phantom: std::marker::PhantomData<(Info, HistoricInfo)>,
@@ -98,6 +100,7 @@ impl<TChainSource: ExternalChainSource, Info, HistoricInfo>
 	ChunkByVault<TChainSource, Info, HistoricInfo>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<TChainSource::Chain>,
+	<TChainSource::Chain as Chain>::ChainCrypto: PalletInstanceAlias,
 {
 	pub fn new(chain_source: TChainSource) -> Self {
 		Self { chain_source, _phantom: Default::default() }
@@ -108,6 +111,7 @@ impl<TChainSource: ExternalChainSource, ExtraInfo, ExtraHistoricInfo> ChunkedByV
 	for ChunkByVault<TChainSource, ExtraInfo, ExtraHistoricInfo>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<TChainSource::Chain>,
+	<TChainSource::Chain as Chain>::ChainCrypto: PalletInstanceAlias,
 	ExtraInfo: Clone + Send + Sync + 'static,
 	ExtraHistoricInfo: Clone + Send + Sync + 'static,
 {
