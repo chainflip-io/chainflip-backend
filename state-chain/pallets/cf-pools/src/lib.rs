@@ -78,59 +78,6 @@ impl AssetPair {
 	}
 }
 
-// #[derive(
-// 	Copy,
-// 	Clone,
-// 	Debug,
-// 	Encode,
-// 	Decode,
-// 	TypeInfo,
-// 	MaxEncodedLen,
-// 	PartialEq,
-// 	Eq,
-// 	Deserialize,
-// 	Serialize,
-// )]
-// pub enum Assets {
-// 	Base,
-// 	Quote,
-// }
-// impl core::ops::Not for Assets {
-// 	type Output = Self;
-
-// 	fn not(self) -> Self::Output {
-// 		match self {
-// 			Assets::Base => Assets::Quote,
-// 			Assets::Quote => Assets::Base,
-// 		}
-// 	}
-// }
-
-// impl From<Assets> for Assets {
-// 	fn from(value: Assets) -> Self {
-// 		match value {
-// 			Assets::Base => Self::Base,
-// 			Assets::Quote => Self::Quote,
-// 		}
-// 	}
-// }
-// impl From<Assets> for Assets {
-// 	fn from(value: Assets) -> Self {
-// 		match value {
-// 			Assets::Base => Self::Zero,
-// 			Assets::Quote => Self::One,
-// 		}
-// 	}
-// }
-// impl Assets {
-// 	fn sell_order(&self) -> Order {
-// 		match self {
-// 			Assets::Base => Order::Sell,
-// 			Assets::Quote => Order::Buy,
-// 		}
-// 	}
-// }
-
 #[derive(
 	Copy,
 	Clone,

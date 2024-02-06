@@ -32,8 +32,9 @@ use sp_core::{U256, U512};
 
 use crate::common::{
 	is_sqrt_price_valid, is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick,
-	tick_at_sqrt_price, Amount, Assets, AssetsMap, OneToZero, SetFeesError, SqrtPriceQ64F96, Tick,
-	ZeroToOne, MAX_LP_FEE, MAX_TICK, MIN_TICK, ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
+	tick_at_sqrt_price, Amount, Assets, AssetsMap, BaseToQuote, QuoteToBase, SetFeesError,
+	SqrtPriceQ64F96, Tick, MAX_LP_FEE, MAX_TICK, MIN_TICK, ONE_IN_HUNDREDTH_PIPS,
+	SQRT_PRICE_FRACTIONAL_BITS,
 };
 
 /// This is the invariant wrt xy = k. It represents / is proportional to the depth of the
@@ -161,10 +162,10 @@ pub struct PoolState<LiquidityProvider: Ord> {
 	/// Note the current_sqrt_price can reach MAX_SQRT_PRICE, but only if the tick is MAX_TICK
 	current_sqrt_price: SqrtPriceQ64F96,
 	/// This is the highest tick that represents a strictly lower price than the
-	/// current_sqrt_price. `current_tick` is the tick that when you swap ZeroToOne the
+	/// current_sqrt_price. `current_tick` is the tick that when you swap BaseToQuote the
 	/// `current_sqrt_price` is moving towards (going down in literal value), and will cross when
 	/// `current_sqrt_price` reaches it. `current_tick + 1` is the tick the price is moving towards
-	/// (going up in literal value) when you swap OneToZero and will cross when
+	/// (going up in literal value) when you swap QuoteToBase and will cross when
 	/// `current_sqrt_price` reaches it,
 	current_tick: Tick,
 	/// The total liquidity/depth at the `current_sqrt_price`
@@ -226,7 +227,7 @@ pub(super) trait SwapDirection: crate::common::SwapDirection {
 	fn current_tick_after_crossing_tick(tick: Tick) -> Tick;
 }
 
-impl SwapDirection for ZeroToOne {
+impl SwapDirection for BaseToQuote {
 	fn further_liquidity(current_tick: Tick) -> bool {
 		current_tick >= MIN_TICK
 	}
@@ -295,7 +296,7 @@ impl SwapDirection for ZeroToOne {
 	}
 }
 
-impl SwapDirection for OneToZero {
+impl SwapDirection for QuoteToBase {
 	fn further_liquidity(current_tick: Tick) -> bool {
 		current_tick < MAX_TICK
 	}
@@ -754,8 +755,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 	/// Swaps the specified Amount into the other currency until sqrt_price_limit is reached (If
 	/// Some), and returns the resulting Amount and the remaining input Amount. The direction of the
-	/// swap is controlled by the generic type parameter `SD`, by setting it to `ZeroToOne` or
-	/// `OneToZero`.
+	/// swap is controlled by the generic type parameter `SD`, by setting it to `BaseToQuote` or
+	/// `QuoteToBase`.
 	///
 	/// This function never panics
 	pub(super) fn swap<SD: SwapDirection>(
@@ -1129,7 +1130,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			.iter()
 			.map(|(tick, tick_delta)| {
 				liquidity = liquidity
-					.checked_add_signed(OneToZero::liquidity_delta_on_crossing_tick(tick_delta))
+					.checked_add_signed(QuoteToBase::liquidity_delta_on_crossing_tick(tick_delta))
 					.unwrap();
 
 				(*tick, liquidity)

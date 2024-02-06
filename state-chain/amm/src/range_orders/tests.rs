@@ -59,14 +59,14 @@ fn r_non_zero() {
 #[test]
 fn output_amounts_bounded() {
 	// Note these values are significant over-estimates of the maximum output amount
-	OneToZero::output_amount_delta_floor(
+	QuoteToBase::output_amount_delta_floor(
 		sqrt_price_at_tick(MIN_TICK),
 		sqrt_price_at_tick(MAX_TICK),
 		MAX_TICK_GROSS_LIQUIDITY,
 	)
 	.checked_mul((1 + MAX_TICK - MIN_TICK).into())
 	.unwrap();
-	ZeroToOne::output_amount_delta_floor(
+	BaseToQuote::output_amount_delta_floor(
 		sqrt_price_at_tick(MAX_TICK),
 		sqrt_price_at_tick(MIN_TICK),
 		MAX_TICK_GROSS_LIQUIDITY,
@@ -98,7 +98,7 @@ fn maximum_liquidity_swap() {
 		})
 		.fold(Default::default(), |acc, x| acc + x);
 
-	let (output, _remaining) = pool_state.swap::<OneToZero>(Amount::MAX, None);
+	let (output, _remaining) = pool_state.swap::<QuoteToBase>(Amount::MAX, None);
 
 	assert!(((minted_amounts[Assets::Base] - (MAX_TICK - MIN_TICK) /* Maximum rounding down by one per swap iteration */)..minted_amounts[Assets::Base]).contains(&output));
 }

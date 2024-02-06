@@ -233,10 +233,10 @@ pub fn bounded_sqrt_price(quote: Amount, base: Amount) -> SqrtPriceQ64F96 {
 	}
 }
 
-/// A marker type to represent a swap that buys asset One, and sells asset Zero
-pub(super) struct ZeroToOne {}
-/// A marker type to represent a swap that buys asset Zero, and sells asset One
-pub(super) struct OneToZero {}
+/// A marker type to represent a swap that buys asset Quote, and sells asset Base
+pub(super) struct BaseToQuote {}
+/// A marker type to represent a swap that buys asset Base, and sells asset Quote
+pub(super) struct QuoteToBase {}
 
 pub(super) trait SwapDirection {
 	/// The asset this type of swap sells, i.e. the asset the swapper provides
@@ -258,7 +258,7 @@ pub(super) trait SwapDirection {
 	/// asset at a specific tick, will return None iff the tick is invalid
 	fn input_to_output_amount_floor(amount: Amount, tick: Tick) -> Option<Amount>;
 }
-impl SwapDirection for ZeroToOne {
+impl SwapDirection for BaseToQuote {
 	const INPUT_SIDE: Assets = Assets::Base;
 
 	const WORST_SQRT_PRICE: SqrtPriceQ64F96 = MIN_SQRT_PRICE;
@@ -287,7 +287,7 @@ impl SwapDirection for ZeroToOne {
 		}
 	}
 }
-impl SwapDirection for OneToZero {
+impl SwapDirection for QuoteToBase {
 	const INPUT_SIDE: Assets = Assets::Quote;
 
 	const WORST_SQRT_PRICE: SqrtPriceQ64F96 = MAX_SQRT_PRICE;
@@ -711,8 +711,8 @@ mod test {
 			}
 		}
 
-		inner::<ZeroToOne>();
-		inner::<OneToZero>();
+		inner::<BaseToQuote>();
+		inner::<QuoteToBase>();
 	}
 
 	#[cfg(feature = "slow-tests")]
