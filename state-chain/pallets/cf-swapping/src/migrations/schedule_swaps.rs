@@ -32,9 +32,11 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 		let current_block = frame_system::Pallet::<T>::block_number();
 
+		FirstBlockWithPendingSwaps::<T>::set(current_block);
+
 		let updated_swaps: Vec<_> = existing_swaps
 			.into_iter()
-			.map(|s| Swap::<T> {
+			.map(|s| Swap {
 				swap_id: s.swap_id,
 				from: s.from,
 				to: s.to,
@@ -43,11 +45,10 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 				stable_amount: s.stable_amount,
 				final_output: s.final_output,
 				fee_taken: s.fee_taken,
-				execute_at: current_block,
 			})
 			.collect();
 
-		SwapQueue::<T>::put(updated_swaps);
+		SwapQueue::<T>::insert(current_block, updated_swaps);
 
 		Weight::zero()
 	}
@@ -62,9 +63,15 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn post_upgrade(state: Vec<u8>) -> Result<(), frame_support::sp_runtime::TryRuntimeError> {
 		let pre_upgrade_count =
 			<u32>::decode(&mut &state[..]).map_err(|_| "Failed to decode pre-upgrade state.")?;
+
+		let current_block = frame_system::Pallet::<T>::block_number();
 		ensure!(
-			pre_upgrade_count == SwapQueue::<T>::decode_len().unwrap_or_default() as u32,
+			pre_upgrade_count == SwapQueue::<T>::get(current_block).len() as u32,
 			"Swap count mismatch!"
+		);
+		ensure!(
+			SwapQueue::<T>::iter_keys().count() == 1,
+			"All swaps existing swaps should be scheduled at the same block"
 		);
 		Ok(())
 	}
