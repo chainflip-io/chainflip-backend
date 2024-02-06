@@ -13,7 +13,7 @@ use crate::{
 	BitcoinThresholdSigner, BlockNumber, Emissions, Environment, EthereumBroadcaster,
 	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster,
 	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
-	System, Validator, YEAR,
+	SolanaIngressEgress, System, Validator, YEAR,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -431,6 +431,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 			ForeignChain::Polkadot =>
 				Self::broadcast_gov_key::<Polkadot, PolkadotBroadcaster>(maybe_old_key, new_key),
 			ForeignChain::Bitcoin => Err(()),
+			ForeignChain::Solana => unimplemented!(),
 		}
 	}
 
@@ -441,6 +442,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 			ForeignChain::Polkadot =>
 				Self::is_govkey_compatible::<<Polkadot as Chain>::ChainCrypto>(key),
 			ForeignChain::Bitcoin => false,
+			ForeignChain::Solana => unimplemented!(),
 		}
 	}
 }
@@ -535,14 +537,16 @@ impl_deposit_api_for_anychain!(
 	AnyChainIngressEgressHandler,
 	(Ethereum, EthereumIngressEgress),
 	(Polkadot, PolkadotIngressEgress),
-	(Bitcoin, BitcoinIngressEgress)
+	(Bitcoin, BitcoinIngressEgress),
+	(Solana, SolanaIngressEgress)
 );
 
 impl_egress_api_for_anychain!(
 	AnyChainIngressEgressHandler,
 	(Ethereum, EthereumIngressEgress),
 	(Polkadot, PolkadotIngressEgress),
-	(Bitcoin, BitcoinIngressEgress)
+	(Bitcoin, BitcoinIngressEgress),
+	(Solana, SolanaIngressEgress)
 );
 
 pub struct EthDepositHandler;

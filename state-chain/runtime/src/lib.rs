@@ -1242,7 +1242,7 @@ impl_runtime_apis! {
 
 		fn cf_min_deposit_amount(asset: Asset) -> AssetAmount {
 			use pallet_cf_ingress_egress::MinimumDeposit;
-			use cf_chains::assets::{eth, dot, btc};
+			use cf_chains::assets::{eth, dot, btc, sol};
 
 			match ForeignChain::from(asset) {
 				ForeignChain::Ethereum => MinimumDeposit::<Runtime, EthereumInstance>::get(
@@ -1257,12 +1257,16 @@ impl_runtime_apis! {
 					btc::Asset::try_from(asset)
 						.expect("Conversion must succeed: ForeignChain checked in match clause.")
 				).into(),
+				ForeignChain::Solana => MinimumDeposit::<Runtime, SolanaInstance>::get(
+					sol::Asset::try_from(asset)
+						.expect("Conversion must succeed: ForeignChain checked in match clause.")
+				)
 			}
 		}
 
 		fn cf_egress_dust_limit(asset: Asset) -> AssetAmount {
 			use pallet_cf_ingress_egress::EgressDustLimit;
-			use cf_chains::assets::{eth, dot, btc};
+			use cf_chains::assets::{eth, dot, btc, sol};
 
 			match ForeignChain::from(asset) {
 				ForeignChain::Ethereum => EgressDustLimit::<Runtime, EthereumInstance>::get(
@@ -1275,6 +1279,10 @@ impl_runtime_apis! {
 				),
 				ForeignChain::Bitcoin => EgressDustLimit::<Runtime, BitcoinInstance>::get(
 					btc::Asset::try_from(asset)
+						.expect("Conversion must succeed: ForeignChain checked in match clause.")
+				),
+				ForeignChain::Solana => EgressDustLimit::<Runtime, SolanaInstance>::get(
+					sol::Asset::try_from(asset)
 						.expect("Conversion must succeed: ForeignChain checked in match clause.")
 				),
 			}
@@ -1301,6 +1309,12 @@ impl_runtime_apis! {
 							.expect("Conversion must succeed: ForeignChain checked in match clause.")
 						)
 						.into(),
+				ForeignChain::Solana => pallet_cf_chain_tracking::Pallet::<Runtime, SolanaInstance>::get_tracked_data()
+					.estimate_ingress_fee(
+						asset
+							.try_into()
+							.expect("Conversion must succeed: ForeignChain checked in match clause.")
+						)
 			}
 		}
 
@@ -1325,6 +1339,12 @@ impl_runtime_apis! {
 							.expect("Conversion must succeed: ForeignChain checked in match clause.")
 						)
 						.into(),
+				ForeignChain::Solana => pallet_cf_chain_tracking::Pallet::<Runtime, SolanaInstance>::get_tracked_data()
+					.estimate_egress_fee(
+						asset
+							.try_into()
+							.expect("Conversion must succeed: ForeignChain checked in match clause.")
+						),
 			}
 		}
 
@@ -1333,6 +1353,7 @@ impl_runtime_apis! {
 				ForeignChain::Bitcoin => pallet_cf_ingress_egress::Pallet::<Runtime, BitcoinInstance>::witness_safety_margin(),
 				ForeignChain::Ethereum => pallet_cf_ingress_egress::Pallet::<Runtime, EthereumInstance>::witness_safety_margin(),
 				ForeignChain::Polkadot => pallet_cf_ingress_egress::Pallet::<Runtime, PolkadotInstance>::witness_safety_margin().map(Into::into),
+				ForeignChain::Solana => pallet_cf_ingress_egress::Pallet::<Runtime, EthereumInstance>::witness_safety_margin(),
 			}
 		}
 

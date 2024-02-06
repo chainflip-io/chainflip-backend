@@ -17,8 +17,6 @@ use sp_std::{
 
 pub mod chains;
 
-mod temporary_sol;
-
 pub use chains::{assets::any::Asset, ForeignChain};
 
 /// An index to a block.

@@ -6,12 +6,13 @@ use crate::{assets, FeeRefundCalculator};
 use super::Chain;
 
 mod chain_crypto;
-mod consts;
 mod public_key;
 mod signature;
+mod tracked_data;
 mod transaction;
 
 pub mod api;
+pub mod consts;
 
 pub use chain_crypto::SolanaCrypto;
 pub use public_key::SolPublicKey;
@@ -26,7 +27,7 @@ impl Chain for Solana {
 	type ChainBlockNumber = u64;
 	type ChainAmount = AssetAmount;
 	type TransactionFee = Self::ChainAmount;
-	type TrackedData = ();
+	type TrackedData = tracked_data::SolTrackedData;
 	type ChainAsset = assets::sol::Asset;
 	type ChainAccount = SolPublicKey;
 	type EpochStartData = ();
