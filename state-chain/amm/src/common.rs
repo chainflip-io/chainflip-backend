@@ -119,10 +119,6 @@ impl<T> AssetsMap<T> {
 		AssetsMap { base: f(self.base), quote: f(self.quote) }
 	}
 
-	// pub fn map<R>(self, mut f: impl FnMut(Assets, T) -> R) -> AssetsMap<R> {
-	// 	AssetsMap { base: f(Assets::Base, self.base), quote: f(Assets::Quote, self.quote) }
-	// }
-
 	pub fn try_map<R, E, F: FnMut(T) -> Result<R, E>>(self, mut f: F) -> Result<AssetsMap<R>, E> {
 		Ok(AssetsMap { base: f(self.base)?, quote: f(self.quote)? })
 	}
