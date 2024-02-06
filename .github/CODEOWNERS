@@ -15,3 +15,4 @@
 /engine/src/dot/ @kylezs
 /engine/src/p2p/ @msgmaxim
 /engine/src/p2p.rs @msgmaxim
+/engine/src/retrier.rs @kylezs
