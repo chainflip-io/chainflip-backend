@@ -1,5 +1,5 @@
 pub use super::common::*;
-use super::{get_account_id_from_seed, StateChainEnvironment};
+use super::{get_account_id_from_seed, SolPublicKey, StateChainEnvironment};
 use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use sc_service::ChainType;
@@ -36,6 +36,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	)),
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 10000, transaction_version: 25 },
+	sol_vault_address: SolPublicKey([0; 32]), // TODO: fill in the valid Solana address,
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 3 * HOURS;

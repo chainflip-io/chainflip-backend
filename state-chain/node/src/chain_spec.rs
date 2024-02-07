@@ -2,6 +2,7 @@ use cf_chains::{
 	assets::btc,
 	btc::BITCOIN_DUST_LIMIT,
 	dot::{PolkadotAccountId, PolkadotHash},
+	sol::SolPublicKey,
 	ChainState,
 };
 use cf_primitives::{
@@ -93,6 +94,7 @@ pub struct StateChainEnvironment {
 	ethereum_chain_id: u64,
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
+	sol_vault_address: SolPublicKey,
 	genesis_funding_amount: u128,
 	/// Note: Minimum funding should be expressed in Flipperinos.
 	min_funding: u128,
@@ -125,6 +127,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(clean_hex_address, ETH_VAULT_ADDRESS, eth_vault_address);
 	from_env_var!(clean_hex_address, ADDRESS_CHECKER_ADDRESS, eth_address_checker_address);
 	from_env_var!(hex_decode, ETH_INIT_AGG_KEY, eth_init_agg_key);
+	from_env_var!(FromStr::from_str, SOL_VAULT_ADDRESS, sol_vault_address);
 	from_env_var!(FromStr::from_str, ETHEREUM_CHAIN_ID, ethereum_chain_id);
 	from_env_var!(FromStr::from_str, ETH_DEPLOYMENT_BLOCK, ethereum_deployment_block);
 	from_env_var!(FromStr::from_str, GENESIS_FUNDING, genesis_funding_amount);
@@ -166,6 +169,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 			spec_version: dot_spec_version,
 			transaction_version: dot_transaction_version,
 		},
+		sol_vault_address,
 	}
 }
 
@@ -220,6 +224,7 @@ pub fn inner_cf_development_config(
 		dot_genesis_hash,
 		dot_vault_account_id,
 		dot_runtime_version,
+		sol_vault_address,
 	} = get_environment_or_defaults(testnet::ENV);
 	Ok(ChainSpec::from_genesis(
 		"CF Develop",
@@ -246,6 +251,7 @@ pub fn inner_cf_development_config(
 					polkadot_genesis_hash: dot_genesis_hash,
 					polkadot_vault_account_id: dot_vault_account_id,
 					network_environment: NetworkEnvironment::Development,
+					sol_vault_address,
 					_config: PhantomData,
 				},
 				eth_init_agg_key,
@@ -321,6 +327,7 @@ macro_rules! network_spec {
 					dot_genesis_hash,
 					dot_vault_account_id,
 					dot_runtime_version,
+					sol_vault_address,
 				} = env_override.unwrap_or(ENV);
 				let protocol_id = format!(
 					"{}-{}",
@@ -376,6 +383,7 @@ macro_rules! network_spec {
 								polkadot_genesis_hash: dot_genesis_hash,
 								polkadot_vault_account_id: dot_vault_account_id.clone(),
 								network_environment: NETWORK_ENVIRONMENT,
+								sol_vault_address: sol_vault_address.into(),
 								_config: PhantomData,
 							},
 							eth_init_agg_key,

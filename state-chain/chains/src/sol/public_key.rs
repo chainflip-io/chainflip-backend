@@ -22,6 +22,9 @@ use super::consts::SOLANA_PUBLIC_KEY_SIZE;
 	Serialize,
 	Deserialize,
 )]
+
+// TODO: rename it into `SolAddress` (it is not a public-key in the sence of a point on a curve, is
+// it?)
 pub struct SolPublicKey(#[serde(with = "::serde_bytes")] pub [u8; SOLANA_PUBLIC_KEY_SIZE]);
 
 impl From<[u8; SOLANA_PUBLIC_KEY_SIZE]> for SolPublicKey {
