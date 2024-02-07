@@ -8,15 +8,17 @@ use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::{Percent, Permill};
 use state_chain_runtime::{
 	chainflip::Offence, constants::common::*, opaque::SessionKeys, test_runner::*, AccountId,
-	AccountRolesConfig, EmissionsConfig, EthereumVaultConfig, EvmThresholdSignerConfig, FlipConfig,
-	FundingConfig, GovernanceConfig, ReputationConfig, SessionConfig, ValidatorConfig,
+	AccountRolesConfig, ArbitrumChainTrackingConfig, EmissionsConfig, EthereumVaultConfig,
+	EvmThresholdSignerConfig, FlipConfig, FundingConfig, GovernanceConfig, ReputationConfig,
+	SessionConfig, ValidatorConfig,
 };
 
 use cf_chains::{
+	arb::ArbitrumTrackedData,
 	btc::{BitcoinFeeInfo, BitcoinTrackedData},
 	dot::{PolkadotTrackedData, RuntimeVersion},
 	eth::EthereumTrackedData,
-	Bitcoin, ChainState, Ethereum, Polkadot,
+	Arbitrum, Bitcoin, ChainState, Ethereum, Polkadot,
 };
 use state_chain_runtime::{
 	BitcoinChainTrackingConfig, EthereumChainTrackingConfig, PolkadotChainTrackingConfig,
@@ -223,7 +225,7 @@ impl ExtBuilder {
 				},
 			},
 			bitcoin_threshold_signer: Default::default(),
-			ethereum_threshold_signer: EvmThresholdSignerConfig {
+			evm_threshold_signer: EvmThresholdSignerConfig {
 				key: Some(ethereum_vault_key),
 				keygen_response_timeout: 4,
 				threshold_signature_response_timeout: 4,
@@ -233,6 +235,7 @@ impl ExtBuilder {
 			polkadot_threshold_signer: Default::default(),
 			bitcoin_vault: Default::default(),
 			polkadot_vault: Default::default(),
+			arbitrum_vault: Default::default(),
 			environment: Default::default(),
 			liquidity_pools: Default::default(),
 			system: Default::default(),
@@ -240,6 +243,7 @@ impl ExtBuilder {
 			bitcoin_ingress_egress: Default::default(),
 			polkadot_ingress_egress: Default::default(),
 			ethereum_ingress_egress: Default::default(),
+			arbitrum_ingress_egress: Default::default(),
 		})
 	}
 }

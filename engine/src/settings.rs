@@ -295,7 +295,7 @@ pub struct CommandLineOptions {
 	pub btc_opts: BtcOptions,
 
 	#[clap(flatten)]
-	arb_opts: ArbOptions,
+	pub arb_opts: ArbOptions,
 
 	// Health Check Settings
 	#[clap(long = "health_check.hostname")]
@@ -868,7 +868,11 @@ pub mod tests {
 		DOT_BACKUP_WS_ENDPOINT =>
 		"wss://second.my_fake_polkadot_rpc:443/<secret_key>",
 		DOT_BACKUP_HTTP_ENDPOINT =>
-		"https://second.my_fake_polkadot_rpc:443/<secret_key>"
+		"https://second.my_fake_polkadot_rpc:443/<secret_key>",
+
+		ARB_HTTP_NODE_ENDPOINT => "http://localhost:8547",
+		ARB_WS_NODE_ENDPOINT => "ws://localhost:8547"
+
 	}
 
 	// We do them like this so they run sequentially, which is necessary so the environment doesn't
@@ -988,6 +992,11 @@ pub mod tests {
 				btc_backup_http_endpoint: Some("http://second.btc-endpoint:4321".to_owned()),
 				btc_backup_basic_auth_user: Some("second.my_username".to_owned()),
 				btc_backup_basic_auth_password: Some("second.my_password".to_owned()),
+			},
+			arb_opts: ArbOptions {
+				arb_ws_node_endpoint: Some("ws://endpoint:4321".to_owned()),
+				arb_http_node_endpoint: Some("http://endpoint:4321".to_owned()),
+				arb_private_key_file: Some(PathBuf::from_str("keys/eth_private_key_2").unwrap()),
 			},
 			health_check_hostname: Some("health_check_hostname".to_owned()),
 			health_check_port: Some(1337),

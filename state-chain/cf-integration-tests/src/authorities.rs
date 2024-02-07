@@ -12,8 +12,8 @@ use cf_traits::{AsyncResult, EpochInfo, KeyRotationStatusOuter, KeyRotator};
 use pallet_cf_environment::SafeModeUpdate;
 use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
 use state_chain_runtime::{
-	BitcoinThresholdSigner, Environment, EthereumInstance, EvmThresholdSigner, Flip,
-	PolkadotInstance, PolkadotThresholdSigner, Runtime, RuntimeOrigin, Validator,
+	BitcoinThresholdSigner, Environment, EvmInstance, EvmThresholdSigner, Flip, PolkadotInstance,
+	PolkadotThresholdSigner, Runtime, RuntimeOrigin, Validator,
 };
 
 // Helper function that creates a network, funds backup nodes, and have them join the auction.
@@ -440,7 +440,7 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 						EvmThresholdSigner::ceremony_id_counter(),
 						Err(BTreeSet::default()),
 					),
-					pallet_cf_threshold_signature::Error::<Runtime, EthereumInstance>::InvalidRotationStatus
+					pallet_cf_threshold_signature::Error::<Runtime, EvmInstance>::InvalidRotationStatus
 				);
 				assert_err!(
 					PolkadotThresholdSigner::report_key_handover_outcome(

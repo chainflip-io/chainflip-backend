@@ -4,10 +4,10 @@ use cf_traits::{offence_reporting::OffenceReporter, EpochInfo, ThresholdSignerNo
 use pallet_cf_threshold_signature::PalletOffence;
 use pallet_cf_validator::{CurrentAuthorities, CurrentEpoch, HistoricalAuthorities};
 use sp_runtime::AccountId32;
-use state_chain_runtime::{EthereumInstance, Reputation, Runtime, Validator};
+use state_chain_runtime::{EvmInstance, Reputation, Runtime, Validator};
 
 type RuntimeThresholdSignerNomination =
-	<Runtime as pallet_cf_threshold_signature::Config<EthereumInstance>>::ThresholdSignerNomination;
+	<Runtime as pallet_cf_threshold_signature::Config<EvmInstance>>::ThresholdSignerNomination;
 
 #[test]
 fn threshold_signer_nomination_respects_epoch() {

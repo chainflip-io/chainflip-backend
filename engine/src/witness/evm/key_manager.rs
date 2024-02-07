@@ -172,7 +172,7 @@ mod tests {
 
 	use std::{path::PathBuf, str::FromStr};
 
-	use cf_chains::{Arbitrum, Ethereum};
+	use cf_chains::Ethereum;
 	use cf_primitives::AccountRole;
 	use futures_util::FutureExt;
 	use sp_core::{H160, U256};
@@ -192,20 +192,6 @@ mod tests {
 	async fn test_key_manager_witnesser() {
 		task_scope(|scope| {
 			async {
-				let arb_settings = settings::Eth {
-					ws_node_endpoint: "ws://localhost:8548".to_string(),
-					http_node_endpoint: "http://localhost:8547".to_string(),
-					private_key_file: PathBuf::from_str(
-						"/Users/kylezs/Documents/test-keys/eth-cf-metamask",
-					)
-					.unwrap(),
-				};
-
-				let client = EthRpcClient::new(&arb_settings).await.unwrap();
-
-				let chain_id = client.chain_id().await.unwrap();
-				println!("Here's the chain_id: {chain_id}");
-
 				let retry_client = EthRetryRpcClient::<EthRpcClient>::new(
 					scope,
 					NodeContainer {
@@ -238,7 +224,7 @@ mod tests {
 						.vaults::<Ethereum>()
 						.await;
 
-				EvmSource::<_, Arbitrum>::new(retry_client.clone())
+				EvmSource::<_, Ethereum>::new(retry_client.clone())
 					.chunk_by_vault(vault_source, scope)
 					.key_manager_witnessing(
 						|call, _| async move {
