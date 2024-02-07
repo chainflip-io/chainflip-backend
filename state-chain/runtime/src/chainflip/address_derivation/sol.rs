@@ -10,7 +10,7 @@ impl AddressDerivationApi<Solana> for AddressDerivation {
 		<Solana as cf_chains::Chain>::ChainAccount,
 		cf_chains::address::AddressDerivationError,
 	> {
-		unimplemented!()
+		todo!()
 	}
 
 	fn generate_address_and_state(
@@ -23,6 +23,6 @@ impl AddressDerivationApi<Solana> for AddressDerivation {
 		),
 		cf_chains::address::AddressDerivationError,
 	> {
-		unimplemented!()
+		todo!()
 	}
 }

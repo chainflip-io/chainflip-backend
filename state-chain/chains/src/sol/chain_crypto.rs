@@ -25,24 +25,24 @@ impl ChainCrypto for SolanaCrypto {
 		_payload: &Self::Payload,
 		_signature: &Self::ThresholdSignature,
 	) -> bool {
-		unimplemented!()
+		todo!()
 	}
 
 	fn agg_key_to_payload(_agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
-		unimplemented!()
+		todo!()
 	}
 
 	fn handover_key_matches(_current_key: &Self::AggKey, _new_key: &Self::AggKey) -> bool {
-		unimplemented!()
+		todo!()
 	}
 
 	fn key_handover_is_required() -> bool {
-		unimplemented!()
+		todo!()
 	}
 
 	fn maybe_broadcast_barriers_on_rotation(
 		_rotation_broadcast_id: cf_primitives::BroadcastId,
 	) -> vec::Vec<cf_primitives::BroadcastId> {
-		unimplemented!()
+		todo!()
 	}
 }

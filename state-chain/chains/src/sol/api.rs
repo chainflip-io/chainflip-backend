@@ -21,26 +21,26 @@ pub struct SolanaApi<Env>(PhantomData<Env>);
 
 impl<Env: 'static> ApiCall<SolanaCrypto> for SolanaApi<Env> {
 	fn threshold_signature_payload(&self) -> <SolanaCrypto as ChainCrypto>::Payload {
-		unimplemented!()
+		todo!()
 	}
 
 	fn signed(
 		self,
 		_threshold_signature: &<SolanaCrypto as ChainCrypto>::ThresholdSignature,
 	) -> Self {
-		unimplemented!()
+		todo!()
 	}
 
 	fn chain_encoded(&self) -> vec::Vec<u8> {
-		unimplemented!()
+		todo!()
 	}
 
 	fn is_signed(&self) -> bool {
-		unimplemented!()
+		todo!()
 	}
 
 	fn transaction_out_id(&self) -> <SolanaCrypto as ChainCrypto>::TransactionOutId {
-		unimplemented!()
+		todo!()
 	}
 }
 
@@ -55,7 +55,7 @@ impl<Env: 'static> SetAggKeyWithAggKey<SolanaCrypto> for SolanaApi<Env> {
 		_maybe_old_key: Option<<SolanaCrypto as ChainCrypto>::AggKey>,
 		_new_key: <SolanaCrypto as ChainCrypto>::AggKey,
 	) -> Result<Self, crate::SetAggKeyWithAggKeyError> {
-		unimplemented!()
+		todo!()
 	}
 }
 
@@ -67,7 +67,7 @@ impl<Env: 'static> ExecutexSwapAndCall<Solana> for SolanaApi<Env> {
 		_gas_budget: <Solana as Chain>::ChainAmount,
 		_message: vec::Vec<u8>,
 	) -> Result<Self, DispatchError> {
-		unimplemented!()
+		todo!()
 	}
 }
 
@@ -76,12 +76,12 @@ impl<Env: 'static> AllBatch<Solana> for SolanaApi<Env> {
 		_fetch_params: vec::Vec<FetchAssetParams<Solana>>,
 		_transfer_params: vec::Vec<TransferAssetParams<Solana>>,
 	) -> Result<Self, AllBatchError> {
-		unimplemented!()
+		todo!()
 	}
 }
 
 impl<Env: 'static> TransferFallback<Solana> for SolanaApi<Env> {
 	fn new_unsigned(_transfer_param: TransferAssetParams<Solana>) -> Result<Self, DispatchError> {
-		unimplemented!()
+		todo!()
 	}
 }

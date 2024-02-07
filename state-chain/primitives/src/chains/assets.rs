@@ -91,7 +91,7 @@ pub mod any {
 				Asset::Usdc => Self::Ethereum,
 				Asset::Dot => Self::Polkadot,
 				Asset::Btc => Self::Bitcoin,
-				Asset::Sol => unimplemented!(),
+				Asset::Sol => Self::Solana,
 			}
 		}
 	}

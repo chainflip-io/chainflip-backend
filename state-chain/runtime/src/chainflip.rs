@@ -259,19 +259,19 @@ impl TransactionBuilder<Solana, SolanaApi<SolanaEnvironment>> for SolanaTransact
 	fn build_transaction(
 		_signed_call: &SolanaApi<SolanaEnvironment>,
 	) -> <Solana as Chain>::Transaction {
-		unimplemented!()
+		todo!()
 	}
 	fn refresh_unsigned_data(_tx: &mut <Solana as Chain>::Transaction) {
-		unimplemented!()
+		todo!()
 	}
 	fn calculate_gas_limit(_call: &SolanaApi<SolanaEnvironment>) -> Option<U256> {
-		unimplemented!()
+		todo!()
 	}
 	fn requires_signature_refresh(
 		_call: &SolanaApi<SolanaEnvironment>,
 		_payload: &<<Solana as Chain>::ChainCrypto as ChainCrypto>::Payload,
 	) -> bool {
-		unimplemented!()
+		todo!()
 	}
 }
 
@@ -431,7 +431,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 			ForeignChain::Polkadot =>
 				Self::broadcast_gov_key::<Polkadot, PolkadotBroadcaster>(maybe_old_key, new_key),
 			ForeignChain::Bitcoin => Err(()),
-			ForeignChain::Solana => unimplemented!(),
+			ForeignChain::Solana => todo!(),
 		}
 	}
 
@@ -442,7 +442,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 			ForeignChain::Polkadot =>
 				Self::is_govkey_compatible::<<Polkadot as Chain>::ChainCrypto>(key),
 			ForeignChain::Bitcoin => false,
-			ForeignChain::Solana => unimplemented!(),
+			ForeignChain::Solana => todo!(),
 		}
 	}
 }
