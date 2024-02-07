@@ -32,7 +32,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 		let current_block = frame_system::Pallet::<T>::block_number();
 
-		FirstBlockWithPendingSwaps::<T>::set(current_block);
+		FirstUnprocessedBlock::<T>::set(current_block);
 
 		let updated_swaps: Vec<_> = existing_swaps
 			.into_iter()

@@ -233,7 +233,7 @@ pub mod pallet {
 
 	/// The first block for which swaps haven't yet been processed
 	#[pallet::storage]
-	pub(crate) type FirstBlockWithPendingSwaps<T: Config> =
+	pub(crate) type FirstUnprocessedBlock<T: Config> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	/// SwapId Counter
@@ -397,7 +397,7 @@ pub mod pallet {
 				return
 			}
 
-			let mut block_to_process = FirstBlockWithPendingSwaps::<T>::get();
+			let mut block_to_process = FirstUnprocessedBlock::<T>::get();
 
 			// NOTE: we iterate manually because BlockNumberFor<T> does not implement Step:
 			while block_to_process <= current_block {
@@ -420,6 +420,7 @@ pub mod pallet {
 					block_to_process += 1u32.into();
 				}
 			}
+			FirstUnprocessedBlock::<T>::set(block_to_process);
 		}
 	}
 
@@ -649,6 +650,10 @@ pub mod pallet {
 		fn process_swaps_for_block(block: BlockNumberFor<T>) -> Result<(), BatchExecutionError> {
 			let mut swaps = SwapQueue::<T>::take(block);
 
+			if swaps.is_empty() {
+				return Ok(())
+			}
+
 			// Swap into Stable asset first.
 			Self::do_group_and_swap(&mut swaps, SwapLeg::ToStable)?;
 
@@ -724,7 +729,6 @@ pub mod pallet {
 				}
 			}
 
-			FirstBlockWithPendingSwaps::<T>::set(block + 1u32.into());
 			Ok(())
 		}
 
