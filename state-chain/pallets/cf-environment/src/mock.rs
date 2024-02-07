@@ -4,7 +4,7 @@ use crate::{self as pallet_cf_environment, Decode, Encode, TypeInfo};
 use cf_chains::{
 	btc::BitcoinFeeInfo,
 	dot::{api::CreatePolkadotVault, PolkadotCrypto},
-	eth, ApiCall, Bitcoin, Chain, ChainCrypto, Polkadot,
+	eth, ApiCall, Arbitrum, Bitcoin, Chain, ChainCrypto, Polkadot,
 };
 use cf_primitives::{BroadcastId, SemVer, ThresholdSignatureRequestId};
 use cf_traits::{
@@ -146,6 +146,15 @@ impl VaultKeyWitnessedHandler<Bitcoin> for MockBitcoinVaultKeyWitnessedHandler {
 	}
 }
 
+pub struct MockArbitrumVaultKeyWitnessedHandler;
+impl VaultKeyWitnessedHandler<Arbitrum> for MockArbitrumVaultKeyWitnessedHandler {
+	fn on_first_key_activated(
+		_block_number: <Arbitrum as Chain>::ChainBlockNumber,
+	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
+		unimplemented!()
+	}
+}
+
 parameter_types! {
 	pub CurrentReleaseVersion: SemVer = SemVer {
 		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
@@ -168,6 +177,7 @@ impl pallet_cf_environment::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
 	type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;
+	type ArbitrumVaultKeyWitnessedHandler = MockArbitrumVaultKeyWitnessedHandler;
 	type BitcoinFeeInfo = MockBitcoinFeeInfo;
 	type RuntimeSafeMode = MockRuntimeSafeMode;
 	type CurrentReleaseVersion = CurrentReleaseVersion;

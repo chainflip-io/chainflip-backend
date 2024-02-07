@@ -58,7 +58,7 @@ pub enum SafeModeUpdate<T: Config> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::btc::Utxo;
+	use cf_chains::{btc::Utxo, Arbitrum};
 	use cf_primitives::TxId;
 	use cf_traits::VaultKeyWitnessedHandler;
 	use frame_support::DefaultNoBound;
@@ -73,6 +73,8 @@ pub mod pallet {
 		type PolkadotVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Polkadot>;
 		/// On new key witnessed handler for Bitcoin
 		type BitcoinVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Bitcoin>;
+		/// On new key witnessed handler for Arbitrum
+		type ArbitrumVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Arbitrum>;
 
 		/// The runtime's safe mode is stored in this pallet.
 		type RuntimeSafeMode: cf_traits::SafeMode + Member + Parameter + Default;
@@ -160,18 +162,6 @@ pub mod pallet {
 	pub type ConsolidationParameters<T> =
 		StorageValue<_, cf_chains::btc::ConsolidationParameters, ValueQuery>;
 
-	// OTHER ENVIRONMENT ITEMS
-	#[pallet::storage]
-	#[pallet::getter(fn safe_mode)]
-	/// Stores the current safe mode state for the runtime.
-	pub type RuntimeSafeMode<T> = StorageValue<_, <T as Config>::RuntimeSafeMode, ValueQuery>;
-
-	#[pallet::storage]
-	#[pallet::getter(fn current_release_version)]
-	/// Always set to the current release version. We duplicate the `CurrentReleaseVersion` pallet
-	/// constant to allow querying the value by block hash.
-	pub type CurrentReleaseVersion<T> = StorageValue<_, SemVer, ValueQuery>;
-
 	// ARBITRUM CHAIN RELATED ENVIRONMENT ITEMS
 	#[pallet::storage]
 	#[pallet::getter(fn supported_arb_assets)]
@@ -202,6 +192,18 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type ArbitrumSignatureNonce<T> = StorageValue<_, SignatureNonce, ValueQuery>;
 
+	// OTHER ENVIRONMENT ITEMS
+	#[pallet::storage]
+	#[pallet::getter(fn safe_mode)]
+	/// Stores the current safe mode state for the runtime.
+	pub type RuntimeSafeMode<T> = StorageValue<_, <T as Config>::RuntimeSafeMode, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn current_release_version)]
+	/// Always set to the current release version. We duplicate the `CurrentReleaseVersion` pallet
+	/// constant to allow querying the value by block hash.
+	pub type CurrentReleaseVersion<T> = StorageValue<_, SemVer, ValueQuery>;
+
 	#[pallet::storage]
 	#[pallet::getter(fn network_environment)]
 	/// Contains the network environment for this runtime.
@@ -226,6 +228,8 @@ pub mod pallet {
 		RuntimeSafeModeUpdated { safe_mode: SafeModeUpdate<T> },
 		/// UTXO consolidation parameters has been updated
 		UtxoConsolidationParametersUpdated { params: cf_chains::btc::ConsolidationParameters },
+		/// Arbitrum Initialized: contract addresses have been set, first key activated
+		ArbitrumInitialized,
 	}
 
 	#[pallet::call]
@@ -342,6 +346,49 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::UtxoConsolidationParametersUpdated { params });
 
 			Ok(())
+		}
+
+		/// Manually witnesses the current Bitcoin block number to complete the pending vault
+		/// rotation.
+		///
+		/// ## Events
+		///
+		/// - [BitcoinBlockNumberSetForVault](Event::BitcoinBlockNumberSetForVault)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[allow(clippy::too_many_arguments)]
+		#[pallet::call_index(5)]
+		// This weight is not strictly correct but since it's a governance call, weight is
+		// irrelevant.
+		#[pallet::weight(Weight::zero())]
+		pub fn witness_initialize_arbitrum_vault(
+			origin: OriginFor<T>,
+			block_number: u64,
+			key_manager_address: cf_chains::evm::Address,
+			vault_address: cf_chains::evm::Address,
+			address_checker_address: cf_chains::evm::Address,
+			chain_id: cf_chains::evm::api::EvmChainId,
+			arb_usdc_address: cf_chains::evm::Address,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			use cf_traits::VaultKeyWitnessedHandler;
+
+			// Witness the agg_key rotation manually in the vaults pallet for bitcoin
+			let dispatch_result =
+				T::ArbitrumVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
+
+			ArbitrumChainId::<T>::put(chain_id);
+			ArbitrumAddressCheckerAddress::<T>::put(address_checker_address);
+			ArbitrumVaultAddress::<T>::put(vault_address);
+			ArbitrumKeyManagerAddress::<T>::put(key_manager_address);
+			ArbitrumSupportedAssets::<T>::insert(ArbAsset::ArbUsdc, arb_usdc_address);
+
+			Self::deposit_event(Event::<T>::ArbitrumInitialized);
+
+			Ok(dispatch_result)
 		}
 	}
 
