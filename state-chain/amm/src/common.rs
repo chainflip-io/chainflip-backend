@@ -104,9 +104,9 @@ impl Pairs {
 	Serialize,
 	Deserialize,
 )]
-pub struct AssetsMap<S> {
-	pub base: S,
-	pub quote: S,
+pub struct AssetsMap<T> {
+	pub base: T,
+	pub quote: T,
 }
 
 impl<T> AssetsMap<T> {
@@ -123,7 +123,7 @@ impl<T> AssetsMap<T> {
 		Ok(AssetsMap { base: f(self.base)?, quote: f(self.quote)? })
 	}
 
-	pub fn try_map_with_asset<R, E>(
+	pub fn try_map_with_pair<R, E>(
 		self,
 		mut f: impl FnMut(Pairs, T) -> Result<R, E>,
 	) -> Result<AssetsMap<R>, E> {
@@ -142,7 +142,7 @@ impl<T> AssetsMap<T> {
 		AssetsMap { base: (self.base, other.base), quote: (self.quote, other.quote) }
 	}
 
-	pub fn map_with_asset<R, F: FnMut(Pairs, T) -> R>(self, mut f: F) -> AssetsMap<R> {
+	pub fn map_with_pair<R, F: FnMut(Pairs, T) -> R>(self, mut f: F) -> AssetsMap<R> {
 		AssetsMap { base: f(Pairs::Base, self.base), quote: f(Pairs::Quote, self.quote) }
 	}
 }

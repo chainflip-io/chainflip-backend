@@ -71,7 +71,7 @@ impl Position {
 		upper_tick: Tick,
 		upper_delta: &TickDelta,
 	) -> Collected {
-		let fee_growth_inside = AssetsMap::default().map_with_asset(|side, ()| {
+		let fee_growth_inside = AssetsMap::default().map_with_pair(|side, ()| {
 			let fee_growth_below = if pool_state.current_tick < lower_tick {
 				pool_state.global_fee_growth[side] - lower_delta.fee_growth_outside[side]
 			} else {
@@ -86,7 +86,7 @@ impl Position {
 
 			pool_state.global_fee_growth[side] - fee_growth_below - fee_growth_above
 		});
-		let fees = AssetsMap::default().map_with_asset(|side, ()| {
+		let fees = AssetsMap::default().map_with_pair(|side, ()| {
 			// DIFF: This behaviour is different than Uniswap's. We use U256 instead of u128 to
 			// calculate fees, therefore it is not possible to overflow the fees here.
 
@@ -103,7 +103,7 @@ impl Position {
 		});
 		self.accumulative_fees = self
 			.accumulative_fees
-			.map_with_asset(|side, accumulative_fees| accumulative_fees.saturating_add(fees[side]));
+			.map_with_pair(|side, accumulative_fees| accumulative_fees.saturating_add(fees[side]));
 		let collected_fees = Collected {
 			fees,
 			accumulative_fees: self.accumulative_fees,
@@ -874,7 +874,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			assert!(!SD::sqrt_price_op_more_than(sqrt_price_next, sqrt_price_at_delta));
 
 			if sqrt_price_next == sqrt_price_at_delta {
-				delta.fee_growth_outside = AssetsMap::default().map_with_asset(|side, ()| {
+				delta.fee_growth_outside = AssetsMap::default().map_with_pair(|side, ()| {
 					self.global_fee_growth[side] - delta.fee_growth_outside[side]
 				});
 				self.current_sqrt_price = sqrt_price_next;

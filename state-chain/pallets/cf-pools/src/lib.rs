@@ -880,7 +880,7 @@ pub mod pallet {
 				pool.pool_state
 					.set_fees(fee_hundredth_pips)
 					.map_err(|_| Error::<T>::InvalidFeeAmount)?
-					.try_map_with_asset(|asset, collected_fees| {
+					.try_map_with_pair(|asset, collected_fees| {
 						for ((lp, id), tick, collected, position_info) in collected_fees.into_iter()
 						{
 							Self::process_limit_order_update(
@@ -1681,8 +1681,8 @@ impl<T: Config> Pallet<T> {
 			.ok_or(Error::<T>::PoolDoesNotExist)?;
 		let option_lp = option_lp.as_ref();
 		Ok(PoolOrders {
-			limit_orders: AskBidMap::from_sell_map(
-				pool.limit_orders_cache.as_ref().map_with_asset(|asset, limit_orders_cache| {
+			limit_orders: AskBidMap::from_sell_map(pool.limit_orders_cache.as_ref().map_with_pair(
+				|asset, limit_orders_cache| {
 					cf_utilities::conditional::conditional(
 						option_lp,
 						|lp| {
@@ -1720,8 +1720,8 @@ impl<T: Config> Pallet<T> {
 						}
 					})
 					.collect()
-				}),
-			),
+				},
+			)),
 			range_orders: cf_utilities::conditional::conditional(
 				option_lp,
 				|lp| {

@@ -31,7 +31,7 @@ impl<LiquidityProvider: Ord> From<PoolState<LiquidityProvider>>
 			fee_hundredth_pips: v1_state.fee_hundredth_pips,
 			next_pool_instance: v1_state.next_pool_instance,
 			fixed_pools: v1_state.fixed_pools,
-			positions: v1_state.positions.map_with_asset(|_side, positions| {
+			positions: v1_state.positions.map_with_pair(|_side, positions| {
 				positions
 					.into_iter()
 					.map(|((sqrt_price, lp), position)| {
