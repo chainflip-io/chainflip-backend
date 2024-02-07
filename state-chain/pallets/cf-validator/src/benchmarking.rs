@@ -103,7 +103,6 @@ pub fn try_start_keygen<T: RuntimeConfig>(
 #[benchmarks(where T: RuntimeConfig)]
 mod benchmarks {
 	use super::*;
-	use sp_std::vec;
 
 	#[benchmark]
 	fn update_pallet_config() {

@@ -12,7 +12,6 @@ use frame_support::{
 #[instance_benchmarks]
 mod benchmarks {
 	use super::*;
-	use sp_std::vec;
 
 	#[benchmark]
 	fn update_chain_state() {

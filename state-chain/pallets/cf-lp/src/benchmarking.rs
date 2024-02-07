@@ -11,7 +11,6 @@ use frame_system::RawOrigin;
 #[benchmarks]
 mod benchmarks {
 	use super::*;
-	use sp_std::vec;
 
 	#[benchmark]
 	fn request_liquidity_deposit_address() {

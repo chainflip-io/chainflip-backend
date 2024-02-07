@@ -15,7 +15,6 @@ pub(crate) type TargetChainBlockNumber<T, I> =
 #[instance_benchmarks]
 mod benchmarks {
 	use super::*;
-	use sp_std::vec;
 
 	#[benchmark]
 	fn disable_asset_egress() {
