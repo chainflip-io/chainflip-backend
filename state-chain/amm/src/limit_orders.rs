@@ -382,11 +382,11 @@ pub(super) struct PoolState<LiquidityProvider: Ord> {
 	/// The ID the next FixedPool that is created will use.
 	next_pool_instance: u128,
 	/// All the FixedPools that have some liquidity. They are grouped into all those that are
-	/// selling asset `Zero` and all those that are selling asset `One` used the AssetsMap.
+	/// selling asset `Base` and all those that are selling asset `Quote` used the AssetsMap.
 	fixed_pools: AssetsMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,
 	/// All the Positions that either are providing liquidity currently, or were providing
 	/// liquidity directly after the last time they where updated. They are grouped into all those
-	/// that are selling asset `Zero` and all those that are selling asset `One` used the
+	/// that are selling asset `Base` and all those that are selling asset `Quote` used the
 	/// AssetsMap. Therefore there can be positions stored here that don't provide any liquidity.
 	positions: AssetsMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
 	/// Total fees earned over all time
