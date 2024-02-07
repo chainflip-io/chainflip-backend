@@ -22,6 +22,7 @@ jobs:
 
       - name: Cherry-pick commit
         run: |
+          set -x
           RELEASE_BRANCH=$(git branch -r | grep 'origin/release/[0-9]\+\.[0-9]' | sed 's/.*release\///' | sort -V | tail -n1)
           echo "RELEASE_BRANCH=release/$RELEASE_BRANCH" >> $GITHUB_ENV
           BRANCH=pick/non-breaking-$(date +%s)
