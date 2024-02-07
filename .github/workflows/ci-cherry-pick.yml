@@ -41,7 +41,7 @@ jobs:
           RELEASE_BRANCH=$(git branch -r | grep 'origin/release/[0-9]\+\.[0-9]' | sed 's/.*release\///' | sort -V | tail -n1)
           echo "RELEASE_BRANCH=release/$RELEASE_BRANCH" >> $GITHUB_ENV
 
-#
+#2
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v3
         with:
