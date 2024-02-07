@@ -897,7 +897,7 @@ type PalletMigrations = (
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance1>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance2>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance3>,
-	// pallet_cf_swapping::migrations::PalletMigration<Runtime>,
+	pallet_cf_swapping::migrations::PalletMigration<Runtime>,
 	// pallet_cf_lp::migrations::PalletMigration<Runtime>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance1>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance2>,
