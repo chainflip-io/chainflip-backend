@@ -10,9 +10,13 @@ cf-primitives = { path = '../primitives', default-features = false }
 cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
 
 # Cryptography
+curve25519-dalek = { version = "2.1", default-features = false, features = [] }
+digest = {version = "0.10"}
 libsecp256k1 = { default-features = false, version = '0.7', features = [
   'static-context',
 ] }
+sha2 = { version = "0.10", default-features = false }
+
 
 # Ethereum
 ethabi = { default-features = false, version = '18.0' }

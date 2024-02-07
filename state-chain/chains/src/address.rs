@@ -1,7 +1,10 @@
 extern crate alloc;
 
 use crate::{
-	btc::ScriptPubkey, dot::PolkadotAccountId, eth::Address as EthereumAddress, sol::SolAddress,
+	btc::ScriptPubkey,
+	dot::PolkadotAccountId,
+	eth::Address as EthereumAddress,
+	sol::{self, SolAddress},
 	Chain,
 };
 use cf_primitives::{ChannelId, ForeignChain, NetworkEnvironment};
@@ -18,6 +21,7 @@ pub enum AddressDerivationError {
 	MissingPolkadotVault,
 	MissingBitcoinVault,
 	BitcoinChannelIdTooLarge,
+	SolanaDerivationError(sol::AddressDerivationError),
 }
 
 /// Generates a deterministic deposit address for some combination of asset, chain and channel id.
@@ -159,6 +163,12 @@ impl From<PolkadotAccountId> for ForeignChainAddress {
 impl From<ScriptPubkey> for ForeignChainAddress {
 	fn from(script_pubkey: ScriptPubkey) -> ForeignChainAddress {
 		ForeignChainAddress::Btc(script_pubkey)
+	}
+}
+
+impl From<sol::AddressDerivationError> for AddressDerivationError {
+	fn from(value: sol::AddressDerivationError) -> Self {
+		Self::SolanaDerivationError(value)
 	}
 }
 

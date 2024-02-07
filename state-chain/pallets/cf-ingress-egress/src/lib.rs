@@ -522,6 +522,8 @@ pub mod pallet {
 		BitcoinChannelIdTooLarge,
 		/// The amount is below the minimum egress amount.
 		BelowEgressDustLimit,
+		/// Solana address derivation error.
+		SolanaAddressDerivationError,
 	}
 
 	#[pallet::hooks]
@@ -1164,6 +1166,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							Error::<T, I>::MissingBitcoinVault,
 						AddressDerivationError::BitcoinChannelIdTooLarge =>
 							Error::<T, I>::BitcoinChannelIdTooLarge,
+						AddressDerivationError::SolanaDerivationError { .. } =>
+							Error::<T, I>::SolanaAddressDerivationError,
 					})?,
 				next_channel_id,
 			)

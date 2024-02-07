@@ -160,6 +160,7 @@ pub mod pallet {
 
 	// SOLANA CHAIN RELATED ENVIRONMENT ITEMS
 	#[pallet::storage]
+	#[pallet::getter(fn sol_vault_address)]
 	pub type SolanaVaultAddress<T> = StorageValue<_, SolAddress, ValueQuery>;
 
 	// OTHER ENVIRONMENT ITEMS

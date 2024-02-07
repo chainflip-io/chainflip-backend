@@ -5,8 +5,8 @@ use crate::{assets, FeeRefundCalculator};
 
 use super::Chain;
 
+mod address;
 mod chain_crypto;
-mod public_key;
 mod signature;
 mod tracked_data;
 mod transaction;
@@ -14,8 +14,8 @@ mod transaction;
 pub mod api;
 pub mod consts;
 
+pub use address::{AddressDerivationError, DerivedAddressBuilder, SolAddress};
 pub use chain_crypto::SolanaCrypto;
-pub use public_key::SolAddress;
 pub use signature::SolSignature;
 pub use transaction::SolTransaction;
 

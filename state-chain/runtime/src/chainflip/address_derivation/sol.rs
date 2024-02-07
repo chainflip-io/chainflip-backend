@@ -1,23 +1,30 @@
 use cf_chains::{address::AddressDerivationApi, assets::sol::Asset, Solana};
+use core::marker::PhantomData;
+
+use crate::Environment;
 
 use super::AddressDerivation;
+
+const VAULT_PDA_ASSET_SOL: &str = "VaultPdaAssetSol";
 
 impl AddressDerivationApi<Solana> for AddressDerivation {
 	fn generate_address(
 		source_asset: <Solana as cf_chains::Chain>::ChainAsset,
-		_channel_id: cf_primitives::ChannelId,
+		channel_id: cf_primitives::ChannelId,
 	) -> Result<
 		<Solana as cf_chains::Chain>::ChainAccount,
 		cf_chains::address::AddressDerivationError,
 	> {
-		match source_asset {
-			Asset::Sol => todo!("Derive using cf-environment::SolanaVaultAddress"),
-		}
+		let (address, _) = <Self as AddressDerivationApi<Solana>>::generate_address_and_state(
+			source_asset,
+			channel_id,
+		)?;
+		Ok(address)
 	}
 
 	fn generate_address_and_state(
 		source_asset: <Solana as cf_chains::Chain>::ChainAsset,
-		_channel_id: cf_primitives::ChannelId,
+		channel_id: cf_primitives::ChannelId,
 	) -> Result<
 		(
 			<Solana as cf_chains::Chain>::ChainAccount,
@@ -25,8 +32,16 @@ impl AddressDerivationApi<Solana> for AddressDerivation {
 		),
 		cf_chains::address::AddressDerivationError,
 	> {
+		let vault_address = Environment::sol_vault_address();
 		match source_asset {
-			Asset::Sol => todo!("Derive Derive using cf-environment::SolanaVaultAddress"),
+			Asset::Sol => {
+				let (pda, _bump) = vault_address
+					.derive()?
+					.chain_seed(VAULT_PDA_ASSET_SOL)?
+					.chain_seed(channel_id.to_ne_bytes())?
+					.finish()?;
+				Ok((pda, Default::default()))
+			},
 		}
 	}
 }
