@@ -36,11 +36,6 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
 
-pub const ETH_DUMMY_SIG: SchnorrVerificationComponents =
-	SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
-
-pub const BTC_DUMMY_SIG: btc::Signature = [0xcf; 64];
-
 #[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;

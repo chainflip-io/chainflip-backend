@@ -487,11 +487,8 @@ mod tests {
 		insta::assert_display_snapshot!(store
 			.storage
 			.get(
-				format!(
-					"deposit:Polkadot:{}",
-					format!("0x{}", hex::encode(polkadot_account_id.aliased_ref()))
-				)
-				.as_str()
+				format!("deposit:Polkadot:0x{}", hex::encode(polkadot_account_id.aliased_ref()))
+					.as_str()
 			)
 			.unwrap());
 		insta::assert_display_snapshot!(store

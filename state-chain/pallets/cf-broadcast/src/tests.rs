@@ -423,6 +423,9 @@ fn re_request_threshold_signature_on_invalid_tx_params() {
 		});
 }
 
+pub const ETH_DUMMY_SIG: SchnorrVerificationComponents =
+	SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
+
 #[test]
 fn threshold_sign_and_broadcast_with_callback() {
 	new_test_ext().execute_with(|| {
