@@ -122,13 +122,12 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{ArbitrumInstance, RuntimeOrigin, Validator, Witnesser};
+	use crate::{RuntimeOrigin, Validator, Witnesser};
 	use cf_chains::{
-		arb::ArbitrumTrackedData,
 		btc::{BitcoinFeeInfo, BitcoinTrackedData},
 		dot::PolkadotTrackedData,
 		eth::EthereumTrackedData,
-		Arbitrum, Bitcoin, Chain, ChainState, Ethereum, Polkadot,
+		Bitcoin, Chain, ChainState, Ethereum, Polkadot,
 	};
 	use cf_primitives::{AccountRole, ForeignChain};
 	use cf_traits::EpochInfo;
@@ -180,16 +179,7 @@ mod tests {
 						},
 					},
 				}),
-			ForeignChain::Arbitrum =>
-				RuntimeCall::ArbitrumChainTracking(pallet_cf_chain_tracking::Call::<
-					Runtime,
-					ArbitrumInstance,
-				>::update_chain_state {
-					new_chain_state: ChainState {
-						block_height: BLOCK_HEIGHT,
-						tracked_data: ArbitrumTrackedData { base_fee: BASE_FEE },
-					},
-				}),
+			ForeignChain::Arbitrum => unimplemented!(),
 		}
 	}
 
@@ -198,7 +188,7 @@ mod tests {
 		test_medians::<Ethereum>();
 		test_medians::<Bitcoin>();
 		test_medians::<Polkadot>();
-		test_medians::<Arbitrum>();
+		// we dont test medians for Arbitrum since there is no priority fee in arbitrum
 	}
 
 	#[track_caller]
