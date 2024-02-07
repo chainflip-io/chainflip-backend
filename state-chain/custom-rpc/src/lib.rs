@@ -1406,24 +1406,30 @@ mod test {
 					),
 				]),
 				ingress_fees: HashMap::from([
-					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
+					(
+						ForeignChain::Bitcoin,
+						HashMap::from([(Asset::Btc, Some(0u32).map(Into::into))]),
+					),
 					(
 						ForeignChain::Ethereum,
-						HashMap::from([
-							(Asset::Flip, AssetAmount::MAX.into()),
-							(Asset::Usdc, (u64::MAX / 2 - 1).into()),
-							(Asset::Eth, 0u32.into()),
+						HashMap::<_, Option<NumberOrHex>>::from([
+							(Asset::Flip, Some(AssetAmount::MAX).map(Into::into)),
+							(Asset::Usdc, Some(u64::MAX / 2 - 1).map(Into::into)),
+							(Asset::Eth, Some(0u32).map(Into::into)),
 						]),
 					),
 				]),
 				egress_fees: HashMap::from([
-					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
+					(
+						ForeignChain::Bitcoin,
+						HashMap::from([(Asset::Btc, Some(0u32).map(Into::into))]),
+					),
 					(
 						ForeignChain::Ethereum,
-						HashMap::from([
-							(Asset::Flip, AssetAmount::MAX.into()),
-							(Asset::Usdc, (u64::MAX / 2 - 1).into()),
-							(Asset::Eth, 0u32.into()),
+						HashMap::<_, Option<NumberOrHex>>::from([
+							(Asset::Flip, Some(AssetAmount::MAX).map(Into::into)),
+							(Asset::Usdc, Some(u64::MAX / 2 - 1).map(Into::into)),
+							(Asset::Eth, Some(0u32).map(Into::into)),
 						]),
 					),
 				]),
