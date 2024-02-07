@@ -9,7 +9,7 @@ run-name: Cherry pick `${{ github.sha }}` to release branch
 
 jobs:
   cherry-pick:
-    if: github.event.head_commit.message =~ /\[pick\]/
+    if: contains(github.event.head_commit.message, '[pick]')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout main branch

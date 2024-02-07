@@ -8,7 +8,7 @@ Please conduct a thorough self-review before opening the PR.
 
 - [ ] I am confident that the code works.
 - [ ] I have updated documentation where appropriate.
-- [ ] If the PR is `non-breaking`, I have added `non-breaking` to the title of the PR.
+- [ ] If the PR is `non-breaking`, I have added `[pick]` to the title of the PR.
 
 ## Summary
 
@@ -17,4 +17,4 @@ Please conduct a thorough self-review before opening the PR.
 
 #### Non-Breaking changes
 
-If this PR includes non-breaking changes, you can add `non-breaking` to the title of the PR. This will create a PR against the latest release branch.
+If this PR includes non-breaking changes, you can add `[pick]` to the title of the PR. This will create a PR against the latest release branch.
