@@ -161,7 +161,7 @@ pub mod pallet {
 
 		/// The action to be taken when the DepositChannel is deposited to.
 		pub action: ChannelAction<T::AccountId>,
-		/// The boost fee, if set to 0 it means no required
+		/// The boost fee
 		pub boost_fee: BasisPoints,
 	}
 

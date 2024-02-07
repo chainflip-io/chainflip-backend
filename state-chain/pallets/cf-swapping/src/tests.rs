@@ -1934,3 +1934,29 @@ fn broker_bps_is_limited() {
 		);
 	});
 }
+
+#[test]
+fn deposit_address_ready_event_contain_correct_boost_fee_value() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Swapping::request_swap_deposit_address(
+			RuntimeOrigin::signed(ALICE),
+			Asset::Eth,
+			Asset::Usdc,
+			EncodedAddress::Eth(Default::default()),
+			0,
+			None,
+			100
+		));
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::Swapping(Event::SwapDepositAddressReady {
+				deposit_address: EncodedAddress::Eth(..),
+				destination_address: EncodedAddress::Eth(..),
+				source_asset: Asset::Eth,
+				destination_asset: Asset::Usdc,
+				channel_id: 0,
+				..
+			})
+		);
+	});
+}

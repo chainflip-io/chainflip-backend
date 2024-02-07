@@ -1,7 +1,5 @@
-use crate::{Instance1, Instance2, Instance3, *};
-use cf_chains::{
-	btc::ScriptPubkey, dot::PolkadotAccountId, Bitcoin, DepositChannel, Ethereum, Polkadot,
-};
+use crate::*;
+use cf_chains::DepositChannel;
 use frame_support::traits::OnRuntimeUpgrade;
 pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 
@@ -29,12 +27,11 @@ mod old {
 	>;
 }
 
-impl<T: Config<Instance1, TargetChain = Ethereum>> OnRuntimeUpgrade for Migration<T, Instance1> {
+impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> Weight {
-		DepositChannelLookup::<T, Instance1>::translate(
-			|_address: <cf_chains::Ethereum as cf_chains::Chain>::ChainAccount,
-			 old_channel: old::DepositChannelDetails<T, Instance1>| {
-				Some(DepositChannelDetails::<T, Instance1> {
+		DepositChannelLookup::<T, I>::translate(
+			|_address, old_channel: old::DepositChannelDetails<T, I>| {
+				Some(DepositChannelDetails::<T, I> {
 					deposit_channel: old_channel.deposit_channel,
 					opened_at: old_channel.opened_at,
 					expires_at: old_channel.expires_at,
@@ -49,7 +46,7 @@ impl<T: Config<Instance1, TargetChain = Ethereum>> OnRuntimeUpgrade for Migratio
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		let number_of_channels_in_lookup =
-			old::DepositChannelLookup::<T, Instance1>::iter_keys().count() as u32;
+			old::DepositChannelLookup::<T, I>::iter_keys().count() as u32;
 
 		Ok(number_of_channels_in_lookup.encode())
 	}
@@ -58,79 +55,7 @@ impl<T: Config<Instance1, TargetChain = Ethereum>> OnRuntimeUpgrade for Migratio
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
 		let number_of_channels_in_lookup_pre_migration = <u32>::decode(&mut &state[..]).unwrap();
 		ensure!(
-			DepositChannelLookup::<T, Instance1>::iter_keys().count() as u32 ==
-				number_of_channels_in_lookup_pre_migration,
-			"DepositChannelLookup migration failed."
-		);
-		Ok(())
-	}
-}
-
-impl<T: Config<Instance2, TargetChain = Polkadot>> OnRuntimeUpgrade for Migration<T, Instance2> {
-	fn on_runtime_upgrade() -> Weight {
-		DepositChannelLookup::<T, Instance2>::translate(
-			|_address: PolkadotAccountId, old_channel: old::DepositChannelDetails<T, Instance2>| {
-				Some(DepositChannelDetails::<T, Instance2> {
-					deposit_channel: old_channel.deposit_channel,
-					opened_at: old_channel.opened_at,
-					expires_at: old_channel.expires_at,
-					action: old_channel.action,
-					boost_fee: 0,
-				})
-			},
-		);
-		Weight::zero()
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		let number_of_channels_in_lookup =
-			old::DepositChannelLookup::<T, Instance2>::iter_keys().count() as u32;
-
-		Ok(number_of_channels_in_lookup.encode())
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let number_of_channels_in_lookup_pre_migration = <u32>::decode(&mut &state[..]).unwrap();
-		ensure!(
-			DepositChannelLookup::<T, Instance2>::iter_keys().count() as u32 ==
-				number_of_channels_in_lookup_pre_migration,
-			"DepositChannelLookup migration failed."
-		);
-		Ok(())
-	}
-}
-
-impl<T: Config<Instance3, TargetChain = Bitcoin>> OnRuntimeUpgrade for Migration<T, Instance3> {
-	fn on_runtime_upgrade() -> Weight {
-		DepositChannelLookup::<T, Instance3>::translate(
-			|_address: ScriptPubkey, old_channel: old::DepositChannelDetails<T, Instance3>| {
-				Some(DepositChannelDetails::<T, Instance3> {
-					deposit_channel: old_channel.deposit_channel,
-					opened_at: old_channel.opened_at,
-					expires_at: old_channel.expires_at,
-					action: old_channel.action,
-					boost_fee: 0,
-				})
-			},
-		);
-		Weight::zero()
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		let number_of_channels_in_lookup =
-			old::DepositChannelLookup::<T, Instance3>::iter_keys().count() as u32;
-
-		Ok(number_of_channels_in_lookup.encode())
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let number_of_channels_in_lookup_pre_migration = <u32>::decode(&mut &state[..]).unwrap();
-		ensure!(
-			DepositChannelLookup::<T, Instance3>::iter_keys().count() as u32 ==
+			DepositChannelLookup::<T, I>::iter_keys().count() as u32 ==
 				number_of_channels_in_lookup_pre_migration,
 			"DepositChannelLookup migration failed."
 		);
@@ -157,61 +82,41 @@ mod migration_tests {
 			let address2 = ScriptPubkey::Taproot([1u8; 32]);
 
 			// Insert mock data into old storage
-			old::DepositChannelLookup::insert(
-				address1.clone(),
-				old::DepositChannelDetails::<Test, _> {
-					deposit_channel: DepositChannel {
-						channel_id: 123,
-						address: address2.clone(),
-						asset: <Bitcoin as Chain>::ChainAsset::Btc,
-						state: DepositAddress {
-							pubkey_x: [1u8; 32],
-							script_path: Some(TapscriptPath {
-                                salt: 123,
-								tweaked_pubkey_bytes: [2u8; 33],
-								tapleaf_hash: [3u8; 32],
-								unlock_script: BitcoinScript::new(Default::default()),
-                            }),
-						},
-					},
-					opened_at: Default::default(),
-					expires_at: Default::default(),
-					action: ChannelAction::LiquidityProvision { lp_account: Default::default() },
-				},
-			);
-			old::DepositChannelLookup::insert(
-				address2.clone(),
-				old::DepositChannelDetails::<Test, _> {
-					deposit_channel: DepositChannel {
-						channel_id: 123,
-						address: address2.clone(),
-						asset: <Bitcoin as Chain>::ChainAsset::Btc,
-						state: DepositAddress {
-							pubkey_x: [1u8; 32],
-							script_path: Some(TapscriptPath {
-                                salt: 123,
-								tweaked_pubkey_bytes: [2u8; 33],
-								tapleaf_hash: [3u8; 32],
-								unlock_script: BitcoinScript::new(Default::default()),
-                            }),
-						},
-					},
-					opened_at: Default::default(),
-					expires_at: Default::default(),
-					action: ChannelAction::LiquidityProvision { lp_account: Default::default() },
-				},
-			);
+			old::DepositChannelLookup::insert(address1.clone(), mock_deposit_channel_details());
+			old::DepositChannelLookup::insert(address2.clone(), mock_deposit_channel_details());
 
 			// Perform runtime migration.
-			crate::migrations::deposit_channels_with_boost_fee::Migration::<Test, Instance3>::on_runtime_upgrade();
+			crate::migrations::deposit_channels_with_boost_fee::Migration::<Test, _>::on_runtime_upgrade();
 
 			// Verify data is correctly migrated into new storage.
 			let channel = DepositChannelLookup::<Test, Instance3>::get(address1);
 			assert!(channel.is_some());
 			assert_eq!(channel.unwrap().boost_fee, 0);
 			let channel = DepositChannelLookup::<Test, Instance3>::get(address2);
-            assert!(channel.is_some());
-            assert_eq!(channel.unwrap().boost_fee, 0);
+			assert!(channel.is_some());
+			assert_eq!(channel.unwrap().boost_fee, 0);
 		});
+	}
+
+	fn mock_deposit_channel_details() -> old::DepositChannelDetails<Test, Instance3> {
+		old::DepositChannelDetails::<Test, _> {
+			deposit_channel: DepositChannel {
+				channel_id: 123,
+				address: ScriptPubkey::Taproot([0u8; 32]).clone(),
+				asset: <Bitcoin as Chain>::ChainAsset::Btc,
+				state: DepositAddress {
+					pubkey_x: [1u8; 32],
+					script_path: Some(TapscriptPath {
+						salt: 123,
+						tweaked_pubkey_bytes: [2u8; 33],
+						tapleaf_hash: [3u8; 32],
+						unlock_script: BitcoinScript::new(Default::default()),
+					}),
+				},
+			},
+			opened_at: Default::default(),
+			expires_at: Default::default(),
+			action: ChannelAction::LiquidityProvision { lp_account: Default::default() },
+		}
 	}
 }

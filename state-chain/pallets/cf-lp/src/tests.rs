@@ -215,3 +215,44 @@ fn cannot_request_deposit_address_without_registering_liquidity_refund_address()
 		), crate::Error::<Test>::NoLiquidityRefundAddressRegistered);
 	});
 }
+
+#[test]
+fn deposit_address_ready_event_contain_correct_boost_fee_value() {
+	new_test_ext().execute_with(|| {
+
+		// Register EWA
+		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			EncodedAddress::Eth([0x01; 20])
+		));
+
+		// Now the LPer should be able to request deposit channel for assets of the Ethereum chain.
+		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			Asset::Eth,
+			0,
+		));
+		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			Asset::Flip,
+			100,
+		));
+		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			Asset::Usdc,
+			50,
+		));
+		assert_events_match!(Test, RuntimeEvent::LiquidityProvider(crate::Event::LiquidityDepositAddressReady {
+			boost_fee: 0,
+			..
+		}) => (),
+		RuntimeEvent::LiquidityProvider(crate::Event::LiquidityDepositAddressReady {
+			boost_fee: 100,
+			..
+		}) => (),
+		RuntimeEvent::LiquidityProvider(crate::Event::LiquidityDepositAddressReady {
+			boost_fee: 50,
+			..
+		}) => ());
+	});
+}
