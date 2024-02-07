@@ -1,0 +1,54 @@
+name: Cherry-Pick to Release Branch
+
+on:
+  pull_request:
+    branches:
+      - pla-1142
+    types:
+      - closed
+
+run-name: Cherry pick {{ github.event.pull_request.title }} to release branch
+
+jobs:
+  cherry-pick:
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'non-breaking')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v3
+        with:
+          ref: 'main'
+
+      - name: Configure Git
+        run: |
+          git config --global user.name 'GitHub Action'
+          git config --global user.email 'action@github.com'
+
+      - name: Cherry-pick commit
+        run: |
+          DATE=$(date +%s)
+          echo "DATE=$DATE" >> $GITHUB_ENV
+          COMMIT_SHA=$(git rev-parse HEAD)
+          git checkout -b cherry-pick-branch-$DATE
+          git cherry-pick -x $COMMIT_SHA
+
+      - name: Push to Remote
+        run: |
+          git push origin cherry-pick-branch-$DATE
+
+      - name: Find latest release branch
+        run: |
+          RELEASE_BRANCH=$(git branch -r | grep 'origin/release/[0-9]\+\.[0-9]' | sed 's/.*release\///' | sort -V | tail -n1)
+          echo "RELEASE_BRANCH=release/$RELEASE_BRANCH" >> $GITHUB_ENV
+
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v3
+        with:
+          token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
+          commit-message: Cherry-picked from ${{ github.event.pull_request.head.sha }}
+          title: "Cherry-Pick: ${{ github.event.pull_request.title }}"
+          branch: cherry-pick-branch-{{ env.DATE }}
+          base: '{{ env.RELEASE_BRANCH }}' # Update with your current release branch
+          reviewers: 'martin-chainflip'
+          labels: cherry-pick
