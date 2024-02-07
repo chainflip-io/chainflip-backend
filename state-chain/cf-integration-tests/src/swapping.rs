@@ -81,7 +81,7 @@ fn new_account(account_id: &AccountId, role: AccountRole) {
 	System::reset_events();
 }
 
-fn register_refund_addressses(account_id: &AccountId) {
+fn register_refund_addresses(account_id: &AccountId) {
 	for encoded_address in [
 		EncodedAddress::Eth(Default::default()),
 		EncodedAddress::Dot(Default::default()),
@@ -203,7 +203,7 @@ fn set_limit_order(
 
 fn setup_pool_and_accounts(assets: Vec<Asset>) {
 	new_account(&DORIS, AccountRole::LiquidityProvider);
-	register_refund_addressses(&DORIS);
+	register_refund_addresses(&DORIS);
 
 	new_account(&ZION, AccountRole::Broker);
 
@@ -230,7 +230,7 @@ fn basic_pool_setup_provision_and_swap() {
 		new_pool(Asset::Flip, 0u32, price_at_tick(0).unwrap());
 
 		new_account(&DORIS, AccountRole::LiquidityProvider);
-		register_refund_addressses(&DORIS);
+		register_refund_addresses(&DORIS);
 		credit_account(&DORIS, Asset::Eth, 1_000_000);
 		credit_account(&DORIS, Asset::Flip, 1_000_000);
 		credit_account(&DORIS, Asset::Usdc, 1_000_000);

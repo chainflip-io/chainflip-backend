@@ -25,8 +25,8 @@ use cf_chains::{
 	FeeEstimationApi, FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	Asset, BasisPoints, BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex, ForeignChain,
-	SwapId, ThresholdSignatureRequestId,
+	Asset, BasisPoints, BoostableDepositId, BroadcastId, ChannelId, EgressCounter, EgressId,
+	EpochIndex, ForeignChain, SwapId, ThresholdSignatureRequestId,
 };
 use cf_traits::{
 	liquidity::{LpBalanceApi, LpDepositHandler},
@@ -42,6 +42,13 @@ use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::{vec, vec::Vec};
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct BoostableDeposit<C: Chain> {
+	pub asset: C::ChainAsset,
+	pub amount: C::ChainAmount,
+	pub channel_id: ChannelId,
+}
 
 /// Enum wrapper for fetch and egress requests.
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
@@ -432,6 +439,16 @@ pub mod pallet {
 	pub type WithheldTransactionFees<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, TargetChainAmount<T, I>, ValueQuery>;
 
+	/// Stores the latest boostable deposit id used.
+	#[pallet::storage]
+	pub type BoostableDepositIdCounter<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, BoostableDepositId, ValueQuery>;
+
+	/// Stores all boostable deposits that have been prewitnessed.
+	#[pallet::storage]
+	pub type BoostableDeposits<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, BoostableDepositId, BoostableDeposit<T::TargetChain>>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -504,6 +521,10 @@ pub mod pallet {
 		},
 		UtxoConsolidation {
 			broadcast_id: BroadcastId,
+		},
+		PrewitnessedDeposit {
+			deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
+			block_height: TargetChainBlockNumber<T, I>,
 		},
 	}
 
@@ -809,6 +830,44 @@ pub mod pallet {
 			);
 
 			Self::deposit_event(Event::<T, I>::CcmBroadcastFailed { broadcast_id });
+			Ok(())
+		}
+
+		/// Called when an unfinalised deposit has been seen at the given address.
+		///
+		/// Requires `EnsureWitnessed` origin.
+		#[pallet::call_index(6)]
+		#[pallet::weight(Weight::zero())] // TODO JAMIE: Weight?
+		pub fn prewitness_deposits(
+			origin: OriginFor<T>,
+			deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
+			block_height: TargetChainBlockNumber<T, I>,
+		) -> DispatchResult {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			Self::deposit_event(Event::<T, I>::PrewitnessedDeposit {
+				deposit_witnesses: deposit_witnesses.clone(),
+				block_height,
+			});
+
+			for DepositWitness { ref deposit_address, asset, amount, .. } in deposit_witnesses {
+				let id = BoostableDepositIdCounter::<T, I>::mutate(|id| -> u64 {
+					*id = id.saturating_add(1);
+					*id
+				});
+
+				let deposit_channel_details = DepositChannelLookup::<T, I>::get(deposit_address)
+					.ok_or(Error::<T, I>::InvalidDepositAddress)?;
+
+				BoostableDeposits::<T, I>::insert(
+					id,
+					BoostableDeposit {
+						asset,
+						amount,
+						channel_id: deposit_channel_details.deposit_channel.channel_id,
+					},
+				);
+			}
 			Ok(())
 		}
 	}

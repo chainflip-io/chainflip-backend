@@ -65,18 +65,10 @@ pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoric
 	}
 }
 
-pub async fn start<
-	StateChainClient,
-	StateChainStream,
-	ProcessCall,
-	ProcessingFut,
-	PrewitnessCall,
-	PrewitnessFut,
->(
+pub async fn start<StateChainClient, StateChainStream, ProcessCall, ProcessingFut>(
 	scope: &Scope<'_, anyhow::Error>,
 	btc_client: BtcRetryRpcClient,
 	process_call: ProcessCall,
-	prewitness_call: PrewitnessCall,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	unfinalised_state_chain_stream: impl StreamApi<UNFINALIZED>,
@@ -92,12 +84,6 @@ where
 		+ Clone
 		+ 'static,
 	ProcessingFut: Future<Output = ()> + Send + 'static,
-	PrewitnessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> PrewitnessFut
-		+ Send
-		+ Sync
-		+ Clone
-		+ 'static,
-	PrewitnessFut: Future<Output = ()> + Send + 'static,
 {
 	let btc_source = BtcSource::new(btc_client.clone()).strictly_monotonic().shared(scope);
 
@@ -129,7 +115,7 @@ where
 		.chunk_by_vault(vaults.clone(), scope)
 		.deposit_addresses(scope, unfinalised_state_chain_stream, state_chain_client.clone())
 		.await
-		.btc_deposits(prewitness_call)
+		.btc_deposits(process_call.clone(), true)
 		.logging("pre-witnessing")
 		.spawn(scope);
 
@@ -165,7 +151,7 @@ where
 		.chunk_by_vault(vaults, scope)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
-		.btc_deposits(process_call.clone())
+		.btc_deposits(process_call.clone(), false)
 		.egress_items(scope, state_chain_stream, state_chain_client.clone())
 		.await
 		.then({

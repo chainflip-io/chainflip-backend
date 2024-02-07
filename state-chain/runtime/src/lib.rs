@@ -1359,42 +1359,37 @@ impl_runtime_apis! {
 			let current_block_events = System::read_events_no_consensus();
 
 			for event in current_block_events {
-				match *event {
-					frame_system::EventRecord::<RuntimeEvent, sp_core::H256> { event: RuntimeEvent::Witnesser(pallet_cf_witnesser::Event::Prewitnessed { call }), ..} => {
+				let frame_system::EventRecord::<RuntimeEvent, sp_core::H256> { event, .. } = *event;
+				match event {
+					RuntimeEvent::Witnesser(pallet_cf_witnesser::Event::Prewitnessed { call }) => {
 						match call {
 							RuntimeCall::Swapping(pallet_cf_swapping::Call::schedule_swap_from_contract {
 								from: swap_from, to: swap_to, deposit_amount, ..
 							}) if from == swap_from && to == swap_to => {
 								all_prewitnessed_swaps.push(deposit_amount);
-							}
-							RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::process_deposits {
-								deposit_witnesses, ..
-							}) => {
-								all_prewitnessed_swaps.extend(filter_deposit_swaps::<Ethereum, EthereumInstance>(from, to, deposit_witnesses));
 							},
-							RuntimeCall::BitcoinIngressEgress(pallet_cf_ingress_egress::Call::process_deposits {
-								deposit_witnesses, ..
-							}) => {
-								all_prewitnessed_swaps.extend(filter_deposit_swaps::<Bitcoin, BitcoinInstance>(from, to, deposit_witnesses));
-							},
-							RuntimeCall::PolkadotIngressEgress(pallet_cf_ingress_egress::Call::process_deposits {
-								deposit_witnesses, ..
-							}) => {
-								all_prewitnessed_swaps.extend(filter_deposit_swaps::<Polkadot, PolkadotInstance>(from, to, deposit_witnesses));
-							}
 							RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
 								source_asset, deposit_amount, destination_asset, deposit_metadata, ..
 							}) => {
 								// There are two swaps for CCM, the principal swap, and the gas amount swap.
 								all_prewitnessed_swaps.extend(ccm_swaps(from, to, source_asset, destination_asset, deposit_amount, deposit_metadata.channel_metadata));
-							}
+							},
 							_ => {
-								// ignore, we only care about calls that trigger swaps.
+								// Ignore, we only care about calls that trigger swaps.
 							}
-						}
-					}
+						};
+					},
+					RuntimeEvent::EthereumIngressEgress(pallet_cf_ingress_egress::Event::PrewitnessedDeposit{deposit_witnesses, ..}) => {
+						all_prewitnessed_swaps.extend(filter_deposit_swaps::<Ethereum, EthereumInstance>(from, to, deposit_witnesses));
+					},
+					RuntimeEvent::BitcoinIngressEgress(pallet_cf_ingress_egress::Event::PrewitnessedDeposit{deposit_witnesses, ..}) => {
+						all_prewitnessed_swaps.extend(filter_deposit_swaps::<Bitcoin, BitcoinInstance>(from, to, deposit_witnesses));
+					},
+					RuntimeEvent::PolkadotIngressEgress(pallet_cf_ingress_egress::Event::PrewitnessedDeposit{deposit_witnesses, ..}) => {
+						all_prewitnessed_swaps.extend(filter_deposit_swaps::<Polkadot, PolkadotInstance>(from, to, deposit_witnesses));
+					},
 					_ => {
-						// ignore, we only care about Prewitnessed calls
+						// Ignore, we only care about Prewitness events
 					}
 				}
 			}
