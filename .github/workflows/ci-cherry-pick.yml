@@ -24,10 +24,12 @@ jobs:
         run: |
           set -x
           git fetch --all
-          RELEASE_BRANCH=$(git branch -r | grep 'origin/release/[0-9]\+\.[0-9]' | sed 's/.*release\///' | sort -V | tail -n1)
-          echo "RELEASE_BRANCH=release/$RELEASE_BRANCH" >> $GITHUB_ENV
+          RELEASE_BRANCH="release/$(git branch -r | grep 'origin/release/[0-9]\+\.[0-9]' | sed 's/.*release\///' | sort -V | tail -n1)"
+          echo "RELEASE_BRANCH=$RELEASE_BRANCH" >> $GITHUB_ENV
+          
           BRANCH=pick/non-breaking-$(date +%s)
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
+          
           COMMIT_SHA=$(git rev-parse HEAD)
           
           git checkout $RELEASE_BRANCH
