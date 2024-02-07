@@ -1,23 +1,19 @@
 name: Cherry-Pick to Release Branch
 
 on:
-  pull_request:
+  push:
     branches:
       - pla-1142
-    types:
-      - closed
 
-run-name: Cherry pick {{ github.event.pull_request.title }} to release branch
+run-name: Cherry pick `${{ github.sha }}` to release branch
 
 jobs:
   cherry-pick:
-    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'non-breaking')
+    if: github.event.head_commit.message =~ /\[pick\]/
     runs-on: ubuntu-latest
     steps:
       - name: Checkout main branch
         uses: actions/checkout@v3
-        with:
-          ref: 'main'
 
       - name: Configure Git
         run: |
@@ -29,6 +25,7 @@ jobs:
           BRANCH=pick/non-breaking-$(date +%s)
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
           COMMIT_SHA=$(git rev-parse HEAD)
+          echo "COMMIT_SHA=$COMMIT_SHA" >> $GITHUB_ENV
           git checkout -b $BRANCH
           git cherry-pick -x $COMMIT_SHA
 
