@@ -15,7 +15,7 @@ pub mod api;
 pub mod consts;
 
 pub use chain_crypto::SolanaCrypto;
-pub use public_key::SolPublicKey;
+pub use public_key::SolAddress;
 pub use signature::SolSignature;
 pub use transaction::SolTransaction;
 
@@ -29,7 +29,7 @@ impl Chain for Solana {
 	type TransactionFee = Self::ChainAmount;
 	type TrackedData = tracked_data::SolTrackedData;
 	type ChainAsset = assets::sol::Asset;
-	type ChainAccount = SolPublicKey;
+	type ChainAccount = SolAddress;
 	type EpochStartData = ();
 	type DepositFetchId = ChannelId;
 	type DepositChannelState = ();

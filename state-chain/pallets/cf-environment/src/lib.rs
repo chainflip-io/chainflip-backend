@@ -11,7 +11,7 @@ use cf_chains::{
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EthereumAddress,
-	sol::SolPublicKey,
+	sol::SolAddress,
 };
 use cf_primitives::{chains::assets::eth::Asset as EthAsset, NetworkEnvironment, SemVer};
 use cf_traits::{CompatibleCfeVersions, GetBitcoinFeeInfo, NetworkEnvironmentProvider, SafeMode};
@@ -160,7 +160,7 @@ pub mod pallet {
 
 	// SOLANA CHAIN RELATED ENVIRONMENT ITEMS
 	#[pallet::storage]
-	pub type SolanaVaultAddress<T> = StorageValue<_, SolPublicKey, ValueQuery>;
+	pub type SolanaVaultAddress<T> = StorageValue<_, SolAddress, ValueQuery>;
 
 	// OTHER ENVIRONMENT ITEMS
 	#[pallet::storage]
@@ -326,7 +326,7 @@ pub mod pallet {
 		pub polkadot_genesis_hash: PolkadotHash,
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
 		pub network_environment: NetworkEnvironment,
-		pub sol_vault_address: SolPublicKey,
+		pub sol_vault_address: SolAddress,
 		pub _config: PhantomData<T>,
 	}
 

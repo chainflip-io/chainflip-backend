@@ -1,7 +1,7 @@
 extern crate alloc;
 
 use crate::{
-	btc::ScriptPubkey, dot::PolkadotAccountId, eth::Address as EthereumAddress, sol::SolPublicKey,
+	btc::ScriptPubkey, dot::PolkadotAccountId, eth::Address as EthereumAddress, sol::SolAddress,
 	Chain,
 };
 use cf_primitives::{ChannelId, ForeignChain, NetworkEnvironment};
@@ -52,7 +52,7 @@ pub enum ForeignChainAddress {
 	Eth(EthereumAddress),
 	Dot(PolkadotAccountId),
 	Btc(ScriptPubkey),
-	Sol(SolPublicKey),
+	Sol(SolAddress),
 }
 
 impl ForeignChainAddress {
@@ -73,7 +73,7 @@ pub enum EncodedAddress {
 	Eth([u8; 20]),
 	Dot([u8; 32]),
 	Btc(Vec<u8>),
-	Sol([u8; crate::sol::consts::SOLANA_PUBLIC_KEY_SIZE]),
+	Sol([u8; crate::sol::consts::SOLANA_ADDRESS_SIZE]),
 }
 
 pub trait AddressConverter: Sized {
@@ -274,7 +274,7 @@ pub enum ForeignChainAddressHumanreadable {
 	Eth(<EthereumAddress as ToHumanreadableAddress>::Humanreadable),
 	Dot(<PolkadotAccountId as ToHumanreadableAddress>::Humanreadable),
 	Btc(<ScriptPubkey as ToHumanreadableAddress>::Humanreadable),
-	Sol(<SolPublicKey as ToHumanreadableAddress>::Humanreadable),
+	Sol(<SolAddress as ToHumanreadableAddress>::Humanreadable),
 }
 
 #[cfg(feature = "std")]

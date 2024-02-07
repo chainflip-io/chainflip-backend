@@ -2,7 +2,7 @@ use cf_chains::{
 	assets::btc,
 	btc::BITCOIN_DUST_LIMIT,
 	dot::{PolkadotAccountId, PolkadotHash},
-	sol::SolPublicKey,
+	sol::SolAddress,
 	ChainState,
 };
 use cf_primitives::{
@@ -94,7 +94,7 @@ pub struct StateChainEnvironment {
 	ethereum_chain_id: u64,
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
-	sol_vault_address: SolPublicKey,
+	sol_vault_address: SolAddress,
 	genesis_funding_amount: u128,
 	/// Note: Minimum funding should be expressed in Flipperinos.
 	min_funding: u128,

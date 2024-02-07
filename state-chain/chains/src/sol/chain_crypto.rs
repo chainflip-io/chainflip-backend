@@ -3,7 +3,7 @@ use sp_std::vec;
 
 use crate::ChainCrypto;
 
-use super::{SolPublicKey, SolSignature};
+use super::{SolAddress, SolSignature};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SolanaCrypto;
@@ -12,13 +12,13 @@ impl ChainCrypto for SolanaCrypto {
 	type UtxoChain = ConstBool<false>;
 	type KeyHandoverIsRequired = ConstBool<false>;
 
-	type AggKey = SolPublicKey;
+	type AggKey = SolAddress;
 	type Payload = [u8; 0];
 	type ThresholdSignature = SolSignature;
 	type TransactionInId = [u8; 0];
 	type TransactionOutId = Self::ThresholdSignature;
 
-	type GovKey = SolPublicKey;
+	type GovKey = SolAddress;
 
 	fn verify_threshold_signature(
 		_agg_key: &Self::AggKey,

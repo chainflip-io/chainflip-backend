@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::address;
 
-use super::consts::SOLANA_PUBLIC_KEY_SIZE;
+use super::consts::SOLANA_ADDRESS_SIZE;
 
 #[derive(
 	Default,
@@ -22,23 +22,20 @@ use super::consts::SOLANA_PUBLIC_KEY_SIZE;
 	Serialize,
 	Deserialize,
 )]
+pub struct SolAddress(#[serde(with = "::serde_bytes")] pub [u8; SOLANA_ADDRESS_SIZE]);
 
-// TODO: rename it into `SolAddress` (it is not a public-key in the sence of a point on a curve, is
-// it?)
-pub struct SolPublicKey(#[serde(with = "::serde_bytes")] pub [u8; SOLANA_PUBLIC_KEY_SIZE]);
-
-impl From<[u8; SOLANA_PUBLIC_KEY_SIZE]> for SolPublicKey {
-	fn from(value: [u8; SOLANA_PUBLIC_KEY_SIZE]) -> Self {
+impl From<[u8; SOLANA_ADDRESS_SIZE]> for SolAddress {
+	fn from(value: [u8; SOLANA_ADDRESS_SIZE]) -> Self {
 		Self(value)
 	}
 }
-impl From<SolPublicKey> for [u8; SOLANA_PUBLIC_KEY_SIZE] {
-	fn from(value: SolPublicKey) -> Self {
+impl From<SolAddress> for [u8; SOLANA_ADDRESS_SIZE] {
+	fn from(value: SolAddress) -> Self {
 		value.0
 	}
 }
 
-impl TryFrom<address::ForeignChainAddress> for SolPublicKey {
+impl TryFrom<address::ForeignChainAddress> for SolAddress {
 	type Error = address::AddressError;
 	fn try_from(value: address::ForeignChainAddress) -> Result<Self, Self::Error> {
 		if let address::ForeignChainAddress::Sol(value) = value {
@@ -48,13 +45,13 @@ impl TryFrom<address::ForeignChainAddress> for SolPublicKey {
 		}
 	}
 }
-impl From<SolPublicKey> for address::ForeignChainAddress {
-	fn from(value: SolPublicKey) -> Self {
+impl From<SolAddress> for address::ForeignChainAddress {
+	fn from(value: SolAddress) -> Self {
 		address::ForeignChainAddress::Sol(value)
 	}
 }
 
-impl core::str::FromStr for SolPublicKey {
+impl core::str::FromStr for SolAddress {
 	type Err = address::AddressError;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		let bytes = base58::FromBase58::from_base58(s)
@@ -63,13 +60,13 @@ impl core::str::FromStr for SolPublicKey {
 	}
 }
 
-impl core::fmt::Display for SolPublicKey {
+impl core::fmt::Display for SolAddress {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		write!(f, "{}", base58::ToBase58::to_base58(&self.0[..]))
 	}
 }
 
-impl address::ToHumanreadableAddress for SolPublicKey {
+impl address::ToHumanreadableAddress for SolAddress {
 	#[cfg(feature = "std")]
 	type Humanreadable = String;
 
