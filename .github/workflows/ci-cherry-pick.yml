@@ -26,15 +26,15 @@ jobs:
 
       - name: Cherry-pick commit
         run: |
-          DATE=$(date +%s)
-          echo "DATE=$DATE" >> $GITHUB_ENV
+          BRANCH=pick/non-breaking-$(date +%s)
+          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
           COMMIT_SHA=$(git rev-parse HEAD)
-          git checkout -b cherry-pick-branch-$DATE
+          git checkout -b $BRANCH
           git cherry-pick -x $COMMIT_SHA
 
       - name: Push to Remote
         run: |
-          git push origin cherry-pick-branch-$DATE
+          git push origin ${{ env.BRANCH }}
 
       - name: Find latest release branch
         run: |
@@ -48,7 +48,7 @@ jobs:
           token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
           commit-message: Cherry-picked from ${{ github.event.pull_request.head.sha }}
           title: "Cherry-Pick: ${{ github.event.pull_request.title }}"
-          branch: cherry-pick-branch-{{ env.DATE }}
-          base: '{{ env.RELEASE_BRANCH }}' # Update with your current release branch
+          branch: ${{ env.BRANCH }}
+          base: '${{ env.RELEASE_BRANCH }}' # Update with your current release branch
           reviewers: 'martin-chainflip'
           labels: cherry-pick
