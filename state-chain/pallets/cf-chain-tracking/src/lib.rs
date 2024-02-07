@@ -12,9 +12,7 @@ pub use weights::WeightInfo;
 
 use cf_chains::{Chain, ChainState};
 use cf_traits::{Chainflip, GetBlockHeight, GetTrackedData};
-use frame_support::{
-	dispatch::DispatchResultWithPostInfo, pallet_prelude::*, traits::OnRuntimeUpgrade,
-};
+use frame_support::{dispatch::DispatchResultWithPostInfo, pallet_prelude::*};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::marker::PhantomData;

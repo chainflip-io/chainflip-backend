@@ -21,7 +21,6 @@ use crate::common::{mul_div_floor, nth_root_of_integer_as_fixed_point};
 pub mod common;
 pub mod limit_orders;
 pub mod range_orders;
-pub mod v1;
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub struct PoolState<LiquidityProvider: Ord> {
