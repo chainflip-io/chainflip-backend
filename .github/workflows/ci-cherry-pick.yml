@@ -22,10 +22,13 @@ jobs:
 
       - name: Cherry-pick commit
         run: |
+          RELEASE_BRANCH=$(git branch -r | grep 'origin/release/[0-9]\+\.[0-9]' | sed 's/.*release\///' | sort -V | tail -n1)
+          echo "RELEASE_BRANCH=release/$RELEASE_BRANCH" >> $GITHUB_ENV
           BRANCH=pick/non-breaking-$(date +%s)
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
           COMMIT_SHA=$(git rev-parse HEAD)
-          echo "COMMIT_SHA=$COMMIT_SHA" >> $GITHUB_ENV
+          
+          git checkout $RELEASE_BRANCH
           git checkout -b $BRANCH
           git cherry-pick -x $COMMIT_SHA
 
@@ -33,12 +36,6 @@ jobs:
         run: |
           git push origin ${{ env.BRANCH }}
 
-      - name: Find latest release branch
-        run: |
-          RELEASE_BRANCH=$(git branch -r | grep 'origin/release/[0-9]\+\.[0-9]' | sed 's/.*release\///' | sort -V | tail -n1)
-          echo "RELEASE_BRANCH=release/$RELEASE_BRANCH" >> $GITHUB_ENV
-
-#2
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v3
         with:
