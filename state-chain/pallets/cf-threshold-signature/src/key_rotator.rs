@@ -1,6 +1,8 @@
 use super::*;
 use cf_runtime_utilities::{log_or_panic, StorageDecodeVariant};
-use cf_traits::{CfeMultisigRequest, KeyRotationStatusOuter, KeyRotator, VaultActivator};
+use cf_traits::{
+	CfeMultisigRequest, FirstVault, KeyRotationStatusOuter, KeyRotator, VaultActivator,
+};
 use cfe_events::{KeyHandoverRequest, KeygenRequest};
 use frame_support::{sp_runtime::traits::BlockNumberProvider, traits::PalletInfoAccess};
 
@@ -187,18 +189,15 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 		if let Some(KeyRotationStatus::<T, I>::KeyHandoverComplete { new_public_key }) =
 			PendingKeyRotation::<T, I>::get()
 		{
-			let maybe_active_epoch_key = Self::active_epoch_key();
-			T::VaultActivator::activate(
+			match T::VaultActivator::activate(
 				new_public_key,
-				maybe_active_epoch_key.map(|EpochKey { key, .. }| key),
-			);
-
-			if maybe_active_epoch_key.is_some() {
-				Self::activate_new_key(new_public_key);
-			} else {
-				PendingKeyRotation::<T, I>::put(KeyRotationStatus::<T, I>::AwaitingActivation {
-					new_public_key,
-				});
+				Self::active_epoch_key().map(|EpochKey { key, .. }| key),
+			) {
+				FirstVault::False => Self::activate_new_key(new_public_key),
+				FirstVault::True =>
+					PendingKeyRotation::<T, I>::put(KeyRotationStatus::<T, I>::AwaitingActivation {
+						new_public_key,
+					}),
 			}
 		} else {
 			log::error!("Vault activation called during wrong state.");

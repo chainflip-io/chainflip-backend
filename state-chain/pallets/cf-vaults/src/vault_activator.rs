@@ -1,7 +1,7 @@
 use super::*;
 use cf_chains::SetAggKeyWithAggKeyError;
 use cf_runtime_utilities::{log_or_panic, StorageDecodeVariant};
-use cf_traits::{GetBlockHeight, VaultActivator};
+use cf_traits::{FirstVault, GetBlockHeight, VaultActivator};
 
 impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> for Pallet<T, I> {
 	type ValidatorId = T::ValidatorId;
@@ -18,10 +18,13 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 		}
 	}
 
-	fn activate(new_public_key: AggKeyFor<T, I>, maybe_old_public_key: Option<AggKeyFor<T, I>>) {
-		if let Some(old_key) = maybe_old_public_key {
+	fn activate(
+		new_public_key: AggKeyFor<T, I>,
+		maybe_old_public_key: Option<AggKeyFor<T, I>>,
+	) -> FirstVault {
+		if VaultStartBlockNumbers::<T, I>::iter_keys().collect::<Vec<u32>>().is_empty() {
 			match <T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
-				Some(old_key),
+				maybe_old_public_key,
 				new_public_key,
 			) {
 				Ok(activation_call) => {
@@ -40,12 +43,14 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 					);
 				},
 			}
+			FirstVault::False
 		} else {
-			// No active key means we are bootstrapping the vault.
+			// VaultStartBlockNumbers being empty means we are bootstrapping the vault.
 			PendingVaultActivation::<T, I>::put(
 				VaultActivationStatus::<T, I>::AwaitingActivation { new_public_key },
 			);
 			Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation { new_public_key });
+			FirstVault::True
 		}
 	}
 
