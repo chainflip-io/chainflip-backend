@@ -266,8 +266,8 @@ pub struct PoolsEnvironment {
 #[derive(Serialize, Deserialize)]
 pub struct IngressEgressEnvironment {
 	pub minimum_deposit_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
-	pub ingress_fees: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
-	pub egress_fees: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+	pub ingress_fees: HashMap<ForeignChain, HashMap<Asset, Option<NumberOrHex>>>,
+	pub egress_fees: HashMap<ForeignChain, HashMap<Asset, Option<NumberOrHex>>>,
 	pub witness_safety_margins: HashMap<ForeignChain, Option<u64>>,
 	pub egress_dust_limits: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
 }
@@ -1016,11 +1016,11 @@ where
 			);
 			ingress_fees.entry(chain).or_insert_with(HashMap::new).insert(
 				asset,
-				runtime_api.cf_ingress_fee(hash, asset).map_err(to_rpc_error)?.into(),
+				runtime_api.cf_ingress_fee(hash, asset).map_err(to_rpc_error)?.map(Into::into),
 			);
 			egress_fees.entry(chain).or_insert_with(HashMap::new).insert(
 				asset,
-				runtime_api.cf_egress_fee(hash, asset).map_err(to_rpc_error)?.into(),
+				runtime_api.cf_egress_fee(hash, asset).map_err(to_rpc_error)?.map(Into::into),
 			);
 			egress_dust_limits.entry(chain).or_insert_with(HashMap::new).insert(
 				asset,

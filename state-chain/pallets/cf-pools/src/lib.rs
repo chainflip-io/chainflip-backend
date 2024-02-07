@@ -1986,6 +1986,35 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
+	fn estimate_swap_input_for_desired_output<
+		Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy,
+	>(
+		input_asset: impl Into<Asset>,
+		output_asset: impl Into<Asset>,
+		desired_output_amount: Amount,
+	) -> Option<Amount> {
+		let input_asset = input_asset.into();
+		let output_asset = output_asset.into();
+
+		if input_asset == output_asset {
+			return Some(desired_output_amount)
+		}
+		// Because we don't know input amount, we swap in the
+		// opposite direction, which should give us a good enough
+		// approximation of the required input amount:
+		with_transaction_unchecked(|| {
+			TransactionOutcome::Rollback(
+				Self::swap_with_network_fee(
+					output_asset,
+					input_asset,
+					desired_output_amount.into(),
+				)
+				.ok(),
+			)
+		})
+		.map(|swap_output| swap_output.output.unique_saturated_into())
+	}
+
 	/// Try to convert the input asset to the output asset, subject to an available input amount and
 	/// desired output amount. The actual output amount is not guaranteed to be close to the desired
 	/// amount.
