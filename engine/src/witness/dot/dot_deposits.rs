@@ -1,6 +1,6 @@
 use cf_primitives::{EpochIndex, PolkadotBlockNumber};
 use futures_core::Future;
-use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
+use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness, WitnessType};
 use state_chain_runtime::PolkadotInstance;
 
 use super::super::common::chunked_chain_source::chunked_by_vault::{
@@ -67,6 +67,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 						pallet_cf_ingress_egress::Call::<_, PolkadotInstance>::process_deposits {
 							deposit_witnesses,
 							block_height: header.index,
+							witness_type: WitnessType::Finalised,
 						}
 						.into(),
 						epoch.index,

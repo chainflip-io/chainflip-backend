@@ -59,23 +59,6 @@ where
 		}
 	};
 
-	let prewitness_call = {
-		let state_chain_client = state_chain_client.clone();
-		move |call, epoch_index| {
-			let state_chain_client = state_chain_client.clone();
-			async move {
-				let _ = state_chain_client
-					.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
-						call: Box::new(
-							pallet_cf_witnesser::Call::prewitness { call: Box::new(call) }.into(),
-						),
-						epoch_index,
-					})
-					.await;
-			}
-		}
-	};
-
 	let start_eth = super::eth::start(
 		scope,
 		eth_client,
@@ -90,7 +73,6 @@ where
 		scope,
 		btc_client,
 		witness_call.clone(),
-		prewitness_call.clone(),
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
 		unfinalised_state_chain_stream.clone(),

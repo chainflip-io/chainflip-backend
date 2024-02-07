@@ -31,7 +31,7 @@ use pallet_cf_broadcast::{
 	AwaitingBroadcast, BroadcastIdCounter, RequestFailureCallbacks, RequestSuccessCallbacks,
 	ThresholdSignatureData,
 };
-use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall};
+use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall, WitnessType};
 use pallet_cf_pools::{OrderId, RangeOrderSize};
 use pallet_cf_swapping::CcmIdCounter;
 use sp_core::U256;
@@ -81,7 +81,7 @@ fn new_account(account_id: &AccountId, role: AccountRole) {
 	System::reset_events();
 }
 
-fn register_refund_addressses(account_id: &AccountId) {
+fn register_refund_addresses(account_id: &AccountId) {
 	for encoded_address in [
 		EncodedAddress::Eth(Default::default()),
 		EncodedAddress::Dot(Default::default()),
@@ -203,7 +203,7 @@ fn set_limit_order(
 
 fn setup_pool_and_accounts(assets: Vec<Asset>) {
 	new_account(&DORIS, AccountRole::LiquidityProvider);
-	register_refund_addressses(&DORIS);
+	register_refund_addresses(&DORIS);
 
 	new_account(&ZION, AccountRole::Broker);
 
@@ -230,7 +230,7 @@ fn basic_pool_setup_provision_and_swap() {
 		new_pool(Asset::Flip, 0u32, price_at_tick(0).unwrap());
 
 		new_account(&DORIS, AccountRole::LiquidityProvider);
-		register_refund_addressses(&DORIS);
+		register_refund_addresses(&DORIS);
 		credit_account(&DORIS, Asset::Eth, 1_000_000);
 		credit_account(&DORIS, Asset::Flip, 1_000_000);
 		credit_account(&DORIS, Asset::Usdc, 1_000_000);
@@ -269,6 +269,7 @@ fn basic_pool_setup_provision_and_swap() {
 				deposit_details: (),
 			}],
 			block_height: 0,
+			witness_type: WitnessType::Finalised,
 		}));
 
 		let swap_id = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapScheduled {
@@ -371,6 +372,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 					deposit_details: (),
 				}],
 				block_height: 0,
+				witness_type: WitnessType::Finalised,
 			}
 		));
 		let (principal_swap_id, gas_swap_id) = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::CcmDepositReceived {

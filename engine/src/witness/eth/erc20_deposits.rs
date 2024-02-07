@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use cf_primitives::EpochIndex;
 use ethers::types::{Bloom, H160};
 use futures_core::Future;
-use pallet_cf_ingress_egress::DepositWitness;
+use pallet_cf_ingress_egress::{DepositWitness, WitnessType};
 use sp_core::{H256, U256};
 use state_chain_runtime::PalletInstanceAlias;
 
@@ -137,6 +137,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 						>::process_deposits {
 							deposit_witnesses,
 							block_height: header.index,
+							witness_type: WitnessType::Finalised,
 						}
 						.into(),
 						epoch.index,

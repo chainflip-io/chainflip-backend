@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use cf_primitives::EpochIndex;
 use futures_core::Future;
 use itertools::Itertools;
-use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
+use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness, WitnessType};
 use secp256k1::hashes::Hash as secp256k1Hash;
 use state_chain_runtime::BitcoinInstance;
 
@@ -28,6 +28,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub fn btc_deposits<ProcessCall, ProcessingFut>(
 		self,
 		process_call: ProcessCall,
+		witness_type: WitnessType,
 	) -> ChunkedByVaultBuilder<
 		impl ChunkedByVault<
 			Index = u64,
@@ -69,6 +70,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 						pallet_cf_ingress_egress::Call::<_, BitcoinInstance>::process_deposits {
 							deposit_witnesses,
 							block_height: header.index,
+							witness_type,
 						}
 						.into(),
 						epoch.index,

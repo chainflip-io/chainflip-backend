@@ -14,6 +14,7 @@ use chainflip_engine::{
 	},
 };
 use futures::Future;
+use pallet_cf_ingress_egress::WitnessType;
 use utilities::task_scope::Scope;
 
 use crate::DepositTrackerSettings;
@@ -60,7 +61,7 @@ where
 		.chunk_by_vault(vaults, scope)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
-		.btc_deposits(witness_call.clone())
+		.btc_deposits(witness_call.clone(), WitnessType::Finalised)
 		.egress_items(scope, state_chain_stream, state_chain_client)
 		.await
 		.then(move |epoch, header| process_egress(epoch, header, witness_call.clone()))

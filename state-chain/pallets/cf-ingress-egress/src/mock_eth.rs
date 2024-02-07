@@ -1,5 +1,5 @@
 pub use crate::{self as pallet_cf_ingress_egress};
-use crate::{DepositBalances, DepositWitness};
+use crate::{DepositBalances, DepositWitness, WitnessType};
 
 use cf_chains::eth::EthereumTrackedData;
 pub use cf_chains::{
@@ -179,6 +179,7 @@ impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
 									deposit_details: Default::default(),
 								}],
 								block_height: Default::default(),
+								witness_type: WitnessType::Finalised,
 							}),
 							Ok(()),
 						))

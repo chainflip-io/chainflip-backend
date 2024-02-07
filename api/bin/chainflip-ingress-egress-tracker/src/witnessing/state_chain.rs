@@ -127,6 +127,7 @@ where
 		EthereumIngressEgress(IngressEgressCall::process_deposits {
 			deposit_witnesses,
 			block_height,
+			..
 		}) =>
 			for witness in deposit_witnesses as Vec<DepositWitness<Ethereum>> {
 				store
@@ -140,6 +141,7 @@ where
 		BitcoinIngressEgress(IngressEgressCall::process_deposits {
 			deposit_witnesses,
 			block_height,
+			..
 		}) =>
 			for witness in deposit_witnesses as Vec<DepositWitness<Bitcoin>> {
 				store
@@ -153,6 +155,7 @@ where
 		PolkadotIngressEgress(IngressEgressCall::process_deposits {
 			deposit_witnesses,
 			block_height,
+			..
 		}) =>
 			for witness in deposit_witnesses as Vec<DepositWitness<Polkadot>> {
 				store
@@ -267,7 +270,7 @@ mod tests {
 	use frame_support::storage::types::QueryKindTrait;
 	use jsonrpsee::core::RpcResult;
 	use mockall::mock;
-	use pallet_cf_ingress_egress::DepositWitness;
+	use pallet_cf_ingress_egress::{DepositWitness, WitnessType};
 	use sp_core::{storage::StorageKey, H160};
 	use state_chain_runtime::PalletInstanceAlias;
 	use std::collections::HashMap;
@@ -433,6 +436,7 @@ mod tests {
 						deposit_details: (),
 					}],
 					block_height: 1,
+					witness_type: WitnessType::Finalised,
 				},
 			),
 			&mut store,
@@ -451,6 +455,7 @@ mod tests {
 						deposit_details: (),
 					}],
 					block_height: 1,
+					witness_type: WitnessType::Finalised,
 				},
 			),
 			&mut store,
@@ -469,6 +474,7 @@ mod tests {
 						deposit_details: (),
 					}],
 					block_height: 1,
+					witness_type: WitnessType::Finalised,
 				},
 			),
 			&mut store,
@@ -509,6 +515,7 @@ mod tests {
 						deposit_details: (),
 					}],
 					block_height: 1,
+					witness_type: WitnessType::Finalised,
 				},
 			),
 			&mut store,

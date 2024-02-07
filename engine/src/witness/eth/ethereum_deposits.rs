@@ -6,6 +6,7 @@ use anyhow::ensure;
 use cf_primitives::EpochIndex;
 use ethers::types::Bloom;
 use futures_core::Future;
+use pallet_cf_ingress_egress::WitnessType;
 use sp_core::H256;
 use state_chain_runtime::PalletInstanceAlias;
 
@@ -127,6 +128,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 										})
 										.collect(),
 									block_height: header.index,
+									witness_type: WitnessType::Finalised,
 								}
 								.into(),
 								epoch.index,

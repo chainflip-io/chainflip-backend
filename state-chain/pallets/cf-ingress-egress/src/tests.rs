@@ -1,9 +1,10 @@
 use crate::{
-	mock_eth::*, Call as PalletCall, ChannelAction, ChannelIdCounter, CrossChainMessage,
-	DepositAction, DepositChannelLookup, DepositChannelPool, DepositIgnoredReason, DepositWitness,
+	mock_eth::*, BoostableDeposit, BoostableDepositIdCounter, BoostableDeposits,
+	Call as PalletCall, ChannelAction, ChannelIdCounter, CrossChainMessage, DepositAction,
+	DepositChannelLookup, DepositChannelPool, DepositIgnoredReason, DepositWitness,
 	DisabledEgressAssets, EgressDustLimit, Event as PalletEvent, FailedForeignChainCall,
 	FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit, Pallet, ScheduledEgressCcm,
-	ScheduledEgressFetchOrTransfer, TargetChainAccount,
+	ScheduledEgressFetchOrTransfer, TargetChainAccount, WitnessType,
 };
 use cf_chains::{
 	address::AddressConverter, evm::EvmFetchId, mocks::MockEthereum, CcmChannelMetadata,
@@ -613,6 +614,7 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 					],
 					// The block height is purely informative.
 					block_height: BlockHeightProvider::<MockEthereum>::get_block_height(),
+					witness_type: WitnessType::Finalised,
 				},
 				Ok(()),
 			)]
@@ -661,6 +663,7 @@ fn multi_use_deposit_address_different_blocks() {
 					}],
 					// block height is purely informative.
 					block_height: BlockHeightProvider::<MockEthereum>::get_block_height(),
+					witness_type: WitnessType::Finalised,
 				},
 				Ok(()),
 			)]
@@ -691,6 +694,7 @@ fn multi_use_deposit_address_different_blocks() {
 					}],
 					// block height is purely informative.
 					block_height: BlockHeightProvider::<MockEthereum>::get_block_height(),
+					witness_type: WitnessType::Finalised,
 				},
 				Ok(()),
 			)]
@@ -746,6 +750,7 @@ fn multi_use_deposit_same_block() {
 						},
 					],
 					block_height: Default::default(),
+					witness_type: WitnessType::Finalised,
 				},
 				Ok(()),
 			)]
@@ -919,7 +924,8 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 		assert_ok!(IngressEgress::process_deposits(
 			RuntimeOrigin::root(),
 			vec![deposit_detail.clone()],
-			Default::default()
+			Default::default(),
+			WitnessType::Finalised,
 		));
 		// Observe the DepositIgnored Event
 		System::assert_last_event(RuntimeEvent::IngressEgress(
@@ -940,7 +946,8 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 		assert_ok!(IngressEgress::process_deposits(
 			RuntimeOrigin::root(),
 			vec![deposit_detail],
-			Default::default()
+			Default::default(),
+			WitnessType::Finalised,
 		));
 		// Observe the DepositReceived Event
 		System::assert_last_event(RuntimeEvent::IngressEgress(
@@ -1469,5 +1476,51 @@ fn consolidation_tx_gets_broadcasted_on_finalize() {
 		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
 			crate::Event::BatchBroadcastRequested { broadcast_id: 1, egress_ids: vec![] },
 		));
+	});
+}
+
+#[test]
+fn handle_prewitness_deposit() {
+	const ASSET: cf_chains::assets::eth::Asset = eth::Asset::Eth;
+	const DEPOSIT_AMOUNT: u128 = 50000;
+	const BLOCK_HEIGHT: u64 = 1;
+
+	new_test_ext().execute_with(|| {
+		let (_id, address, ..) =
+			IngressEgress::request_liquidity_deposit_address(ALICE, ASSET).unwrap();
+		let deposit_address = address.try_into().unwrap();
+
+		let deposit_detail: DepositWitness<Ethereum> = DepositWitness::<Ethereum> {
+			deposit_address,
+			asset: ASSET,
+			amount: DEPOSIT_AMOUNT,
+			deposit_details: (),
+		};
+
+		let deposit_witnesses = vec![deposit_detail.clone()];
+
+		// Run a prewitnessed deposit
+		assert_ok!(IngressEgress::process_deposits(
+			RuntimeOrigin::root(),
+			deposit_witnesses.clone(),
+			BLOCK_HEIGHT,
+			WitnessType::Prewitness,
+		));
+
+		// Observe the PrewitnessedDeposit Event
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::PrewitnessedDeposit {
+				deposit_witnesses,
+				block_height: BLOCK_HEIGHT,
+			},
+		));
+
+		// Check that the deposit is stored in the storage
+		let deposit_id = BoostableDepositIdCounter::<Test>::get();
+		let channel_id = ChannelIdCounter::<Test>::get();
+		assert_eq!(
+			BoostableDeposits::<Test>::get(deposit_id),
+			Some(BoostableDeposit { asset: ASSET, amount: DEPOSIT_AMOUNT, channel_id })
+		);
 	});
 }
