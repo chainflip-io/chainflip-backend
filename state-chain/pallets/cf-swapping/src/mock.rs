@@ -81,7 +81,7 @@ impl MockSwappingApi {
 		SWAPS_SHOULD_FAIL.with(|cell| cell.set(should_fail));
 	}
 
-	fn get_swaps_should_fail() -> bool {
+	fn swaps_should_fail() -> bool {
 		SWAPS_SHOULD_FAIL.with(|cell| cell.get())
 	}
 }
@@ -96,7 +96,7 @@ impl SwappingApi for MockSwappingApi {
 		to: Asset,
 		input_amount: AssetAmount,
 	) -> Result<AssetAmount, DispatchError> {
-		if Self::get_swaps_should_fail() {
+		if Self::swaps_should_fail() {
 			return Err(DispatchError::from("Test swap failed"))
 		}
 

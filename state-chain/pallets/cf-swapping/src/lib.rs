@@ -412,7 +412,11 @@ pub mod pallet {
 						break
 					},
 					Err(BatchExecutionError::DispatchError { error }) => {
-						log::error!("Failed to execute swap batch: {:?}", error);
+						log::error!(
+							"Failed to execute swap batch at block {:?}: {:?}",
+							block_to_process,
+							error
+						);
 						break
 					},
 					Ok(()) => {
