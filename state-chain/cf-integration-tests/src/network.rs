@@ -16,8 +16,8 @@ use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 use sp_consensus_aura::SlotDuration;
 use sp_std::collections::btree_set::BTreeSet;
 use state_chain_runtime::{
-	AccountRoles, AllPalletsWithSystem, BitcoinInstance, PalletExecutionOrder, PolkadotInstance,
-	Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Validator, Weight,
+	AccountRoles, AllPalletsWithSystem, ArbitrumInstance, BitcoinInstance, PalletExecutionOrder,
+	PolkadotInstance, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Validator, Weight,
 };
 use std::{
 	cell::RefCell,
@@ -250,6 +250,21 @@ impl Engine {
 								block_number: 0,
 								new_public_key: *new_public_key,
 							}),
+							pallet_cf_governance::RawOrigin::GovernanceApproval.into()
+						);
+					}
+					RuntimeEvent::ArbitrumVault(pallet_cf_vaults::Event::<_, ArbitrumInstance>::AwaitingGovernanceActivation { .. }) => {
+						queue_dispatch_extrinsic(
+							RuntimeCall::Environment(
+								pallet_cf_environment::Call::witness_initialize_arbitrum_vault {
+									block_number: 1,
+									key_manager_address: Default::default(),
+									vault_address: Default::default(),
+									address_checker_address: Default::default(),
+									chain_id: Default::default(),
+									arb_usdc_address: Default::default(),
+								},
+							),
 							pallet_cf_governance::RawOrigin::GovernanceApproval.into()
 						);
 					}
