@@ -16,6 +16,7 @@ use frame_support::{dispatch::DispatchResultWithPostInfo, pallet_prelude::*};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::marker::PhantomData;
+
 const NO_CHAIN_STATE: &str = "Chain state should be set at genesis and never removed.";
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
