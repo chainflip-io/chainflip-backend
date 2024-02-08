@@ -853,7 +853,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	}
 
 	fn current_authority_count() -> AuthorityCount {
-		CurrentAuthorities::<T>::decode_len().unwrap_or_default() as AuthorityCount
+		CurrentAuthorities::<T>::decode_non_dedup_len().unwrap_or_default() as AuthorityCount
 	}
 
 	fn authority_index(
@@ -883,7 +883,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	}
 
 	fn authority_count_at_epoch(epoch_index: EpochIndex) -> Option<AuthorityCount> {
-		HistoricalAuthorities::<T>::decode_len(epoch_index).map(|l| l as AuthorityCount)
+		HistoricalAuthorities::<T>::decode_non_dedup_len(epoch_index).map(|l| l as AuthorityCount)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

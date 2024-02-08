@@ -657,7 +657,7 @@ impl ScriptPubkey {
 		) -> Option<ScriptPubkey> {
 			let (hrp, data, variant) = bech32::decode(address).ok()?;
 			if hrp == network.bech32_and_bech32m_address_hrp() {
-				let version = data.get(0)?.to_u8();
+				let version = data.first()?.to_u8();
 				let program = Vec::from_base32(&data[1..]).ok()?;
 				match (version, variant, program.len() as u32) {
 					(SEGWIT_VERSION_ZERO, Variant::Bech32, 20) =>

@@ -4,13 +4,13 @@ use crate::{DepositBalances, DepositWitness};
 use cf_chains::eth::EthereumTrackedData;
 pub use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError, ForeignChainAddress},
-	eth::{api::EthereumApi, Address as EthereumAddress},
-	CcmDepositMetadata, Chain, ChainEnvironment, DepositChannel,
+	eth::Address as EthereumAddress,
+	CcmDepositMetadata, Chain,
 };
 use cf_primitives::ChannelId;
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
-	Asset, AssetAmount,
+	Asset,
 };
 use cf_test_utilities::{impl_test_helpers, TestExternalities};
 use cf_traits::{
@@ -27,7 +27,10 @@ use cf_traits::{
 	},
 	DepositApi, DepositHandler, NetworkEnvironmentProvider,
 };
-use frame_support::traits::{OriginTrait, UnfilteredDispatchable};
+use frame_support::{
+	derive_impl,
+	traits::{OriginTrait, UnfilteredDispatchable},
+};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup, Zero};
@@ -42,6 +45,7 @@ frame_support::construct_runtime!(
 	}
 );
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();

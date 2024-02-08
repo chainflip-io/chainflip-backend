@@ -517,7 +517,7 @@ impl<T: Config> Pallet<T> {
 		})?;
 
 		if proposal.approved.len() >
-			(Members::<T>::decode_len().ok_or(Error::<T>::DecodeMembersLenFailed)? / 2)
+			(Members::<T>::decode_non_dedup_len().ok_or(Error::<T>::DecodeMembersLenFailed)? / 2)
 		{
 			if proposal.execution == ExecutionMode::Manual {
 				PreAuthorisedGovCalls::<T>::insert(approved_id, proposal.call);

@@ -14,7 +14,7 @@ use cf_traits::{
 	mocks::{block_height_provider::BlockHeightProvider, cfe_interface_mock::MockCfeInterface},
 };
 use frame_support::{
-	construct_runtime, parameter_types, traits::UnfilteredDispatchable, StorageHasher,
+	construct_runtime, derive_impl, parameter_types, traits::UnfilteredDispatchable, StorageHasher,
 };
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
@@ -36,6 +36,12 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
 
+pub const ETH_DUMMY_SIG: SchnorrVerificationComponents =
+	SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
+
+pub const BTC_DUMMY_SIG: btc::Signature = [0xcf; 64];
+
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();

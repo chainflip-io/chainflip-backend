@@ -11,7 +11,7 @@ use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
 	Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
 };
-use frame_support::{parameter_types, traits::UnfilteredDispatchable};
+use frame_support::{derive_impl, parameter_types, traits::UnfilteredDispatchable};
 use sp_core::{H160, H256};
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
@@ -31,6 +31,7 @@ parameter_types! {
 	pub const SS58Prefix: u8 = 42;
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();

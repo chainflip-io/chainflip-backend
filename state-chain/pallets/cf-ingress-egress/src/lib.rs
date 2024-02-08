@@ -639,7 +639,7 @@ pub mod pallet {
 						});
 					},
 					// Previous epoch, signature is invalid. Re-sign and store.
-					n if n == 1 => {
+					1 => {
 						if let Some(threshold_signature_id) =
 							T::Broadcaster::threshold_resign(call.broadcast_id)
 						{

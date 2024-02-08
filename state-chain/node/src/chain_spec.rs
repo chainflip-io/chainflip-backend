@@ -24,14 +24,8 @@ use sp_core::{
 	Pair, Public,
 };
 use state_chain_runtime::{
-	chainflip::Offence, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
-	BitcoinChainTrackingConfig, BitcoinIngressEgressConfig, BitcoinThresholdSignerConfig,
-	BitcoinVaultConfig, BlockNumber, EmissionsConfig, EnvironmentConfig,
-	EthereumChainTrackingConfig, EthereumIngressEgressConfig, EthereumThresholdSignerConfig,
-	EthereumVaultConfig, FlipBalance, FlipConfig, FundingConfig, GovernanceConfig, GrandpaConfig,
-	PolkadotChainTrackingConfig, PolkadotIngressEgressConfig, PolkadotThresholdSignerConfig,
-	PolkadotVaultConfig, ReputationConfig, RuntimeGenesisConfig, SessionConfig, SetSizeParameters,
-	Signature, SystemConfig, ValidatorConfig, WASM_BINARY,
+	chainflip::Offence, opaque::SessionKeys, AccountId, BlockNumber, FlipBalance,
+	RuntimeGenesisConfig, SetSizeParameters, Signature, WASM_BINARY,
 };
 
 use std::{
@@ -221,74 +215,60 @@ pub fn inner_cf_development_config(
 		dot_vault_account_id,
 		dot_runtime_version,
 	} = get_environment_or_defaults(testnet::ENV);
-	Ok(ChainSpec::from_genesis(
-		"CF Develop",
-		"cf-dev",
-		ChainType::Development,
-		move || {
-			testnet_genesis(
-				wasm_binary,
-				initial_authorities.clone(),
-				testnet::extra_accounts(),
-				// Governance account - Snow White
-				testnet::SNOW_WHITE_SR25519.into(),
-				devnet::MIN_AUTHORITIES,
-				devnet::AUCTION_PARAMETERS,
-				DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
-				EnvironmentConfig {
-					flip_token_address: flip_token_address.into(),
-					eth_usdc_address: eth_usdc_address.into(),
-					state_chain_gateway_address: state_chain_gateway_address.into(),
-					key_manager_address: key_manager_address.into(),
-					eth_vault_address: eth_vault_address.into(),
-					eth_address_checker_address: eth_address_checker_address.into(),
-					ethereum_chain_id,
-					polkadot_genesis_hash: dot_genesis_hash,
-					polkadot_vault_account_id: dot_vault_account_id,
-					network_environment: NetworkEnvironment::Development,
-					_config: PhantomData,
-				},
-				eth_init_agg_key,
-				ethereum_deployment_block,
-				devnet::TOTAL_ISSUANCE,
-				common::DAILY_SLASHING_RATE,
-				genesis_funding_amount,
-				min_funding,
-				devnet::REDEMPTION_TAX,
-				8 * devnet::HOURS,
-				devnet::REDEMPTION_TTL_SECS,
-				devnet::CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
-				devnet::BACKUP_NODE_EMISSION_INFLATION_PERBILL,
-				devnet::EXPIRY_SPAN_IN_SECONDS,
-				devnet::ACCRUAL_RATIO,
-				Percent::from_percent(devnet::REDEMPTION_PERIOD_AS_PERCENTAGE),
-				devnet::SUPPLY_UPDATE_INTERVAL,
-				devnet::PENALTIES.to_vec(),
-				devnet::KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
-				devnet::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
-				dot_runtime_version,
-				// Bitcoin block times on localnets are much faster, so we account for that here.
-				devnet::BITCOIN_EXPIRY_BLOCKS,
-				devnet::ETHEREUM_EXPIRY_BLOCKS,
-				devnet::POLKADOT_EXPIRY_BLOCKS,
-				devnet::BITCOIN_SAFETY_MARGIN,
-				devnet::ETHEREUM_SAFETY_MARGIN,
-				devnet::AUCTION_BID_CUTOFF_PERCENTAGE,
-			)
-		},
-		// Boot nodes
-		vec![],
-		// Telemetry
-		None,
-		// Protocol ID
-		Some("flip-dev"),
-		// Fork ID
-		None,
-		// Properties
-		Some(chainflip_properties()),
-		// Extensions
-		None,
-	))
+	Ok(ChainSpec::builder(wasm_binary, None)
+		.with_name("CF Develop")
+		.with_id("cf-dev")
+		.with_protocol_id("flip-dev")
+		.with_chain_type(ChainType::Development)
+		.with_genesis_config(testnet_genesis(
+			initial_authorities.clone(),
+			testnet::extra_accounts(),
+			// Governance account - Snow White
+			testnet::SNOW_WHITE_SR25519.into(),
+			devnet::MIN_AUTHORITIES,
+			devnet::AUCTION_PARAMETERS,
+			DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
+			serde_json::json!({
+				"flip_token_address": flip_token_address,
+				"eth_usdc_address": eth_usdc_address,
+				"state_chain_gateway_address": state_chain_gateway_address,
+				"key_manager_address": key_manager_address,
+				"eth_vault_address": eth_vault_address,
+				"eth_address_checker_address": eth_address_checker_address,
+				"ethereum_chain_id": ethereum_chain_id,
+				"polkadot_genesis_hash": dot_genesis_hash,
+				"polkadot_vault_account_id": dot_vault_account_id,
+				"network_environment": NetworkEnvironment::Development,
+				"_config": (),
+			}),
+			eth_init_agg_key,
+			ethereum_deployment_block,
+			devnet::TOTAL_ISSUANCE,
+			common::DAILY_SLASHING_RATE,
+			genesis_funding_amount,
+			min_funding,
+			devnet::REDEMPTION_TAX,
+			8 * devnet::HOURS,
+			devnet::REDEMPTION_TTL_SECS,
+			devnet::CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
+			devnet::BACKUP_NODE_EMISSION_INFLATION_PERBILL,
+			devnet::EXPIRY_SPAN_IN_SECONDS,
+			devnet::ACCRUAL_RATIO,
+			Percent::from_percent(devnet::REDEMPTION_PERIOD_AS_PERCENTAGE),
+			devnet::SUPPLY_UPDATE_INTERVAL,
+			devnet::PENALTIES.to_vec(),
+			devnet::KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
+			devnet::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
+			dot_runtime_version,
+			// Bitcoin block times on localnets are much faster, so we account for that here.
+			devnet::BITCOIN_EXPIRY_BLOCKS,
+			devnet::ETHEREUM_EXPIRY_BLOCKS,
+			devnet::POLKADOT_EXPIRY_BLOCKS,
+			devnet::BITCOIN_SAFETY_MARGIN,
+			devnet::ETHEREUM_SAFETY_MARGIN,
+			devnet::AUCTION_BID_CUTOFF_PERCENTAGE,
+		))
+		.build())
 }
 
 macro_rules! network_spec {
@@ -333,90 +313,78 @@ macro_rules! network_spec {
 							.to_be_bytes()[4..],
 					)
 				);
-				Ok(ChainSpec::from_genesis(
-					NETWORK_NAME,
-					NETWORK_NAME,
-					CHAIN_TYPE,
-					move || {
-						testnet_genesis(
-							wasm_binary,
-							// Initial PoA authorities
-							vec![
-								(
-									parse_account(BASHFUL_ACCOUNT_ID),
-									BASHFUL_SR25519.unchecked_into(),
-									BASHFUL_ED25519.unchecked_into(),
-								),
-								(
-									parse_account(DOC_ACCOUNT_ID),
-									DOC_SR25519.unchecked_into(),
-									DOC_ED25519.unchecked_into(),
-								),
-								(
-									parse_account(DOPEY_ACCOUNT_ID),
-									DOPEY_SR25519.unchecked_into(),
-									DOPEY_ED25519.unchecked_into(),
-								),
-							],
-							// Extra accounts
-							$network::extra_accounts(),
-							// Governance account - Snow White
-							SNOW_WHITE_SR25519.into(),
-							MIN_AUTHORITIES,
-							AUCTION_PARAMETERS,
-							DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
-							EnvironmentConfig {
-								flip_token_address: flip_token_address.into(),
-								eth_usdc_address: eth_usdc_address.into(),
-								state_chain_gateway_address: state_chain_gateway_address.into(),
-								key_manager_address: key_manager_address.into(),
-								eth_vault_address: eth_vault_address.into(),
-								eth_address_checker_address: eth_address_checker_address.into(),
-								ethereum_chain_id,
-								polkadot_genesis_hash: dot_genesis_hash,
-								polkadot_vault_account_id: dot_vault_account_id.clone(),
-								network_environment: NETWORK_ENVIRONMENT,
-								_config: PhantomData,
-							},
-							eth_init_agg_key,
-							ethereum_deployment_block,
-							TOTAL_ISSUANCE,
-							DAILY_SLASHING_RATE,
-							genesis_funding_amount,
-							min_funding,
-							REDEMPTION_TAX,
-							EPOCH_DURATION_BLOCKS,
-							REDEMPTION_TTL_SECS,
-							CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
-							BACKUP_NODE_EMISSION_INFLATION_PERBILL,
-							EXPIRY_SPAN_IN_SECONDS,
-							ACCRUAL_RATIO,
-							Percent::from_percent(REDEMPTION_PERIOD_AS_PERCENTAGE),
-							SUPPLY_UPDATE_INTERVAL,
-							PENALTIES.to_vec(),
-							KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
-							THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
-							dot_runtime_version,
-							BITCOIN_EXPIRY_BLOCKS,
-							ETHEREUM_EXPIRY_BLOCKS,
-							POLKADOT_EXPIRY_BLOCKS,
-							BITCOIN_SAFETY_MARGIN,
-							ETHEREUM_SAFETY_MARGIN,
-							AUCTION_BID_CUTOFF_PERCENTAGE,
-						)
-					},
-					// Boot nodes
-					vec![],
-					// Telemetry
-					None,
-					Some(&protocol_id[..]),
-					// Fork ID
-					None,
-					// Properties
-					Some(chainflip_properties()),
-					// Extensions
-					None,
-				))
+				Ok(ChainSpec::builder(wasm_binary, None)
+					.with_name(NETWORK_NAME)
+					.with_id(NETWORK_NAME)
+					.with_protocol_id(&protocol_id)
+					.with_chain_type(CHAIN_TYPE)
+					.with_properties(chainflip_properties())
+					.with_genesis_config(testnet_genesis(
+						// Initial PoA authorities
+						vec![
+							(
+								parse_account(BASHFUL_ACCOUNT_ID),
+								BASHFUL_SR25519.unchecked_into(),
+								BASHFUL_ED25519.unchecked_into(),
+							),
+							(
+								parse_account(DOC_ACCOUNT_ID),
+								DOC_SR25519.unchecked_into(),
+								DOC_ED25519.unchecked_into(),
+							),
+							(
+								parse_account(DOPEY_ACCOUNT_ID),
+								DOPEY_SR25519.unchecked_into(),
+								DOPEY_ED25519.unchecked_into(),
+							),
+						],
+						// Extra accounts
+						$network::extra_accounts(),
+						// Governance account - Snow White
+						SNOW_WHITE_SR25519.into(),
+						MIN_AUTHORITIES,
+						AUCTION_PARAMETERS,
+						DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
+						serde_json::json!({
+							"flip_token_address": flip_token_address,
+							"eth_usdc_address": eth_usdc_address,
+							"state_chain_gateway_address": state_chain_gateway_address,
+							"key_manager_address": key_manager_address,
+							"eth_vault_address": eth_vault_address,
+							"eth_address_checker_address": eth_address_checker_address,
+							"ethereum_chain_id": ethereum_chain_id,
+							"polkadot_genesis_hash": dot_genesis_hash,
+							"polkadot_vault_account_id": dot_vault_account_id.clone(),
+							"network_environment": NETWORK_ENVIRONMENT,
+							"_config": (),
+						}),
+						eth_init_agg_key,
+						ethereum_deployment_block,
+						TOTAL_ISSUANCE,
+						DAILY_SLASHING_RATE,
+						genesis_funding_amount,
+						min_funding,
+						REDEMPTION_TAX,
+						EPOCH_DURATION_BLOCKS,
+						REDEMPTION_TTL_SECS,
+						CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
+						BACKUP_NODE_EMISSION_INFLATION_PERBILL,
+						EXPIRY_SPAN_IN_SECONDS,
+						ACCRUAL_RATIO,
+						Percent::from_percent(REDEMPTION_PERIOD_AS_PERCENTAGE),
+						SUPPLY_UPDATE_INTERVAL,
+						PENALTIES.to_vec(),
+						KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
+						THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
+						dot_runtime_version,
+						BITCOIN_EXPIRY_BLOCKS,
+						ETHEREUM_EXPIRY_BLOCKS,
+						POLKADOT_EXPIRY_BLOCKS,
+						BITCOIN_SAFETY_MARGIN,
+						ETHEREUM_SAFETY_MARGIN,
+						AUCTION_BID_CUTOFF_PERCENTAGE,
+					))
+					.build())
 			}
 		}
 	};
@@ -431,14 +399,13 @@ network_spec!(berghain);
 /// 150 authority limit
 #[allow(clippy::too_many_arguments)]
 fn testnet_genesis(
-	wasm_binary: &[u8],
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>, // initial validators
 	extra_accounts: Vec<(AccountId, AccountRole, u128, Option<Vec<u8>>)>,
 	root_key: AccountId,
 	min_authorities: AuthorityCount,
 	auction_parameters: SetSizeParameters,
 	max_authority_set_contraction_percentage: Percent,
-	config_set: EnvironmentConfig,
+	environment_genesis_config: serde_json::Value,
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
 	total_issuance: FlipBalance,
@@ -464,7 +431,7 @@ fn testnet_genesis(
 	bitcoin_safety_margin: u64,
 	ethereum_safety_margin: u64,
 	auction_bid_cutoff_percentage: Percent,
-) -> RuntimeGenesisConfig {
+) -> serde_json::Value {
 	// Sanity Checks
 	for (account_id, aura_id, grandpa_id) in initial_authorities.iter() {
 		assert_eq!(
@@ -527,21 +494,16 @@ fn testnet_genesis(
 		"Found a vanity name for non-genesis account."
 	);
 
-	RuntimeGenesisConfig {
-		account_roles: AccountRolesConfig {
-			initial_account_roles: all_accounts
+	serde_json::json!({
+		"account_roles": {
+			"initial_account_roles": all_accounts
 				.iter()
 				.map(|(id, role, ..)| (id.clone(), *role))
-				.collect(),
+				.collect::<Vec<_>>(),
 		},
-		system: SystemConfig {
-			// Add Wasm runtime to storage.
-			code: wasm_binary.to_vec(),
-			_config: PhantomData,
-		},
-		validator: ValidatorConfig {
-			genesis_authorities: authority_ids.clone(),
-			genesis_backups: extra_accounts
+		"validator": {
+			"genesis_authorities": authority_ids.clone(),
+			"genesis_backups": extra_accounts
 				.iter()
 				.filter_map(|(id, role, amount)| {
 					if *role == AccountRole::Validator {
@@ -550,12 +512,12 @@ fn testnet_genesis(
 						None
 					}
 				})
-				.collect(),
-			genesis_vanity_names,
-			blocks_per_epoch,
-			redemption_period_as_percentage,
-			backup_reward_node_percentage: Percent::from_percent(33),
-			bond: all_accounts
+				.collect::<Vec<_>>(),
+			"genesis_vanity_names": genesis_vanity_names,
+			"blocks_per_epoch": blocks_per_epoch,
+			"redemption_period_as_percentage": redemption_period_as_percentage,
+			"backup_reward_node_percentage": Percent::from_percent(33),
+			"bond": all_accounts
 				.iter()
 				.filter_map(|(id, _, funds)| authority_ids.contains(id).then_some(*funds))
 				.min()
@@ -564,33 +526,33 @@ fn testnet_genesis(
 					bond
 				})
 				.expect("At least one authority is required"),
-			authority_set_min_size: min_authorities,
-			auction_parameters,
-			auction_bid_cutoff_percentage,
-			max_authority_set_contraction_percentage,
+			"authority_set_min_size": min_authorities,
+			"auction_parameters": auction_parameters,
+			"auction_bid_cutoff_percentage": auction_bid_cutoff_percentage,
+			"max_authority_set_contraction_percentage": max_authority_set_contraction_percentage,
 		},
-		session: SessionConfig {
-			keys: initial_authorities
+		"session": {
+			"keys": initial_authorities
 				.iter()
 				.map(|x| (x.0.clone(), x.0.clone(), session_keys(x.1.clone(), x.2.clone())))
 				.collect::<Vec<_>>(),
 		},
-		flip: FlipConfig { total_issuance, daily_slashing_rate },
-		funding: FundingConfig {
-			genesis_accounts: Vec::from_iter(all_accounts.clone()),
-			minimum_funding,
-			redemption_tax,
-			redemption_ttl: core::time::Duration::from_secs(redemption_ttl_secs),
+		"flip": { "total_issuance": total_issuance, "daily_slashing_rate": daily_slashing_rate },
+		"funding": {
+			"genesis_accounts": Vec::from_iter(all_accounts.clone()),
+			"minimum_funding": minimum_funding,
+			"redemption_tax": redemption_tax,
+			"redemption_ttl": core::time::Duration::from_secs(redemption_ttl_secs),
 		},
 		// These are set indirectly via the session pallet.
-		aura: AuraConfig { authorities: vec![] },
+		"aura": { "authorities": vec![] },
 		// These are set indirectly via the session pallet.
-		grandpa: GrandpaConfig { authorities: vec![], _config: PhantomData },
-		governance: GovernanceConfig { members: BTreeSet::from([root_key]), expiry_span },
-		reputation: ReputationConfig {
-			accrual_ratio,
-			penalties,
-			genesis_validators: all_accounts
+		"grandpa": { "authorities": vec![], "_config": PhantomData },
+		"governance": { "members": BTreeSet::from([root_key]), "expiry_span": expiry_span },
+		"reputation": {
+			"accrual_ratio": accrual_ratio,
+			"penalties": penalties,
+			"genesis_validators": all_accounts
 				.iter()
 				.filter_map(
 					|(id, role, _)| {
@@ -601,45 +563,44 @@ fn testnet_genesis(
 						}
 					},
 				)
-				.collect(),
+				.collect::<BTreeSet<_>>(),
 		},
-		environment: config_set,
+		"environment": environment_genesis_config,
+		"ethereum_vault": {
+			"deployment_block": ethereum_deployment_block,
+		},
 
-		ethereum_vault: EthereumVaultConfig { deployment_block: Some(ethereum_deployment_block) },
-		polkadot_vault: PolkadotVaultConfig { deployment_block: None },
-		bitcoin_vault: BitcoinVaultConfig { deployment_block: None },
+		"polkadot_vault": {
 
-		ethereum_threshold_signer: EthereumThresholdSignerConfig {
-			key: Some(cf_chains::evm::AggKey::from_pubkey_compressed(eth_init_agg_key)),
-			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
-			keygen_response_timeout: keygen_ceremony_timeout_blocks,
-			amount_to_slash: FLIPPERINOS_PER_FLIP,
-			_instance: PhantomData,
+		},
+		"bitcoin_vault": {
+		},
+		"ethereum_threshold_signer": {
+			"threshold_signature_response_timeout": threshold_signature_ceremony_timeout_blocks,
+			"key": Some(cf_chains::evm::AggKey::from_pubkey_compressed(eth_init_agg_key)),
+			"keygen_response_timeout": keygen_ceremony_timeout_blocks,
+			"amount_to_slash": FLIPPERINOS_PER_FLIP,
 		},
 
 		polkadot_threshold_signer: PolkadotThresholdSignerConfig {
-			key: None,
 			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
-			keygen_response_timeout: keygen_ceremony_timeout_blocks,
-			amount_to_slash: FLIPPERINOS_PER_FLIP,
-			_instance: PhantomData,
+			"keygen_response_timeout": keygen_ceremony_timeout_blocks,
+			"amount_to_slash": FLIPPERINOS_PER_FLIP,
 		},
 		bitcoin_threshold_signer: BitcoinThresholdSignerConfig {
-			key: None,
 			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
-			keygen_response_timeout: keygen_ceremony_timeout_blocks,
-			amount_to_slash: FLIPPERINOS_PER_FLIP,
-			_instance: PhantomData,
+			"keygen_response_timeout": keygen_ceremony_timeout_blocks,
+			"amount_to_slash": FLIPPERINOS_PER_FLIP,
 		},
-		emissions: EmissionsConfig {
-			current_authority_emission_inflation: current_authority_emission_inflation_perbill,
-			backup_node_emission_inflation: backup_node_emission_inflation_perbill,
-			supply_update_interval,
-			_config: PhantomData,
+		"emissions": {
+			"current_authority_emission_inflation": current_authority_emission_inflation_perbill,
+			"backup_node_emission_inflation": backup_node_emission_inflation_perbill,
+			"supply_update_interval": supply_update_interval,
+			"_config": PhantomData,
 		},
 		// !!! These Chain tracking values should be set to reasonable values at time of launch !!!
-		ethereum_chain_tracking: EthereumChainTrackingConfig {
-			init_chain_state: ChainState::<Ethereum> {
+		"ethereum_chain_tracking": {
+			"init_chain_state": ChainState::<Ethereum> {
 				block_height: 0,
 				tracked_data: EthereumTrackedData {
 					base_fee: 1000000u32.into(),
@@ -647,8 +608,8 @@ fn testnet_genesis(
 				},
 			},
 		},
-		polkadot_chain_tracking: PolkadotChainTrackingConfig {
-			init_chain_state: ChainState::<Polkadot> {
+		"polkadot_chain_tracking": {
+			"init_chain_state": ChainState::<Polkadot> {
 				block_height: 0,
 				tracked_data: PolkadotTrackedData {
 					median_tip: 0,
@@ -656,31 +617,27 @@ fn testnet_genesis(
 				},
 			},
 		},
-		bitcoin_chain_tracking: BitcoinChainTrackingConfig {
-			init_chain_state: ChainState::<Bitcoin> {
+		"bitcoin_chain_tracking": {
+			"init_chain_state": ChainState::<Bitcoin> {
 				block_height: 0,
 				tracked_data: BitcoinTrackedData { btc_fee_info: BitcoinFeeInfo::new(1000) },
 			},
 		},
-		transaction_payment: Default::default(),
-		liquidity_pools: Default::default(),
 		// Channel lifetimes are set to ~2 hours at average block times.
-		bitcoin_ingress_egress: BitcoinIngressEgressConfig {
-			deposit_channel_lifetime: bitcoin_deposit_channel_lifetime.into(),
-			witness_safety_margin: Some(bitcoin_safety_margin),
-			dust_limits: vec![(btc::Asset::Btc, BITCOIN_DUST_LIMIT)],
+		"bitcoin_ingress_egress": {
+			"deposit_channel_lifetime": bitcoin_deposit_channel_lifetime,
+			"witness_safety_margin": Some(bitcoin_safety_margin),
+			"dust_limits": vec![(btc::Asset::Btc, BITCOIN_DUST_LIMIT)],
 		},
-		ethereum_ingress_egress: EthereumIngressEgressConfig {
-			deposit_channel_lifetime: ethereum_deposit_channel_lifetime.into(),
-			witness_safety_margin: Some(ethereum_safety_margin),
-			dust_limits: Default::default(),
+		"ethereum_ingress_egress": {
+			"deposit_channel_lifetime": ethereum_deposit_channel_lifetime,
+			"witness_safety_margin": Some(ethereum_safety_margin),
 		},
-		polkadot_ingress_egress: PolkadotIngressEgressConfig {
-			deposit_channel_lifetime: polkadot_deposit_channel_lifetime,
-			witness_safety_margin: None,
-			dust_limits: Default::default(),
+		"polkadot_ingress_egress": {
+			"deposit_channel_lifetime": polkadot_deposit_channel_lifetime,
+			"witness_safety_margin": None,
 		},
-	}
+	})
 }
 
 pub fn chainflip_properties() -> Properties {

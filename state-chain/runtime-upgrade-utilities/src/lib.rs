@@ -146,6 +146,10 @@ mod test_versioned_upgrade {
 		fn crate_version() -> frame_support::traits::CrateVersion {
 			Default::default()
 		}
+
+		fn name_hash() -> [u8; 16] {
+			Default::default()
+		}
 	}
 
 	thread_local! {

@@ -6,7 +6,7 @@ use cf_traits::{
 	mocks::offence_reporting::MockOffenceReporter, AccountRoleRegistry, CallDispatchFilter,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{pallet_prelude::RuntimeDebug, parameter_types};
+use frame_support::{derive_impl, pallet_prelude::RuntimeDebug, parameter_types};
 use frame_system as system;
 use scale_info::TypeInfo;
 use sp_core::H256;
@@ -32,6 +32,7 @@ parameter_types! {
 	pub const SS58Prefix: u8 = 42;
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
