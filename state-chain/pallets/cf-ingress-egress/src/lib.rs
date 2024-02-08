@@ -100,7 +100,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(6);
 
 /// Calls to the external chains that has failed to be broadcast/accepted by the target chain.
 /// User can use information stored here to query for relevant information to broadcast
@@ -585,9 +585,17 @@ pub mod pallet {
 			// Process failed external chain calls: re-sign or cull storage.
 			// Take 1 call per block to avoid weight spike.
 			let current_epoch = T::EpochInfo::epoch_index();
-			if let Some(call) =
-				FailedForeignChainCalls::<T, I>::mutate(current_epoch.saturating_sub(1), Vec::pop)
-			{
+			if let Some(call) = FailedForeignChainCalls::<T, I>::mutate_exists(
+				current_epoch.saturating_sub(1),
+				|calls| {
+					let next_call = calls.as_mut().and_then(Vec::pop);
+					if calls.as_ref().map(Vec::len).unwrap_or_default() == 0 {
+						// Ensures we remove the storage if there are no more calls.
+						*calls = None;
+					}
+					next_call
+				},
+			) {
 				match current_epoch.saturating_sub(call.original_epoch) {
 					// The call is stale, clean up storage.
 					n if n >= 2 => {
