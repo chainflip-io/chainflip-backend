@@ -240,13 +240,15 @@ fn expect_swap_id_to_be_emitted() {
 				None,
 				0
 			));
+
+			const AMOUNT: AssetAmount = 500;
 			// 2. Schedule the swap -> SwapScheduled
 			<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
 				ForeignChainAddress::Eth(Default::default()),
 				Default::default(),
 				Asset::Eth,
 				Asset::Usdc,
-				500,
+				AMOUNT,
 				ForeignChainAddress::Eth(Default::default()),
 				ALICE,
 				0,
@@ -267,7 +269,7 @@ fn expect_swap_id_to_be_emitted() {
 				RuntimeEvent::Swapping(Event::SwapScheduled {
 					swap_id: 1,
 					source_asset: Asset::Eth,
-					deposit_amount: 500,
+					deposit_amount: AMOUNT,
 					destination_asset: Asset::Usdc,
 					destination_address: EncodedAddress::Eth(..),
 					origin: SwapOrigin::DepositChannel {
