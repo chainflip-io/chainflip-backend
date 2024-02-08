@@ -3,6 +3,7 @@
 #![feature(step_trait)]
 #![cfg_attr(any(feature = "test-utils", test), feature(closure_track_caller))]
 #![feature(array_methods)]
+#![feature(async_fn_track_caller)]
 
 #[cfg(feature = "std")]
 mod with_std;
