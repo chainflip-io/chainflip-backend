@@ -10,45 +10,17 @@ mod old {
 
 	use frame_support::pallet_prelude::ValueQuery;
 
-	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-	pub struct Swap {
-		pub swap_id: u64,
-		pub from: Asset,
-		pub to: Asset,
-		pub amount: AssetAmount,
-		pub swap_type: SwapType,
-		pub stable_amount: Option<AssetAmount>,
-		pub final_output: Option<AssetAmount>,
-		pub fee_taken: bool,
-	}
-
 	#[frame_support::storage_alias]
 	pub(crate) type SwapQueue<T: Config> = StorageValue<Pallet<T>, Vec<Swap>, ValueQuery>;
 }
 
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		let existing_swaps = old::SwapQueue::<T>::take();
-
 		let current_block = frame_system::Pallet::<T>::block_number();
 
 		FirstUnprocessedBlock::<T>::set(current_block);
 
-		let updated_swaps: Vec<_> = existing_swaps
-			.into_iter()
-			.map(|s| Swap {
-				swap_id: s.swap_id,
-				from: s.from,
-				to: s.to,
-				amount: s.amount,
-				swap_type: s.swap_type,
-				stable_amount: s.stable_amount,
-				final_output: s.final_output,
-				fee_taken: s.fee_taken,
-			})
-			.collect();
-
-		SwapQueue::<T>::insert(current_block, updated_swaps);
+		SwapQueue::<T>::insert(current_block, old::SwapQueue::<T>::take());
 
 		Weight::zero()
 	}
