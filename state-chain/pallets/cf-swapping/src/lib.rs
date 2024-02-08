@@ -546,14 +546,11 @@ pub mod pallet {
 				Self::validate_destination_address(&destination_address, to)?;
 			let swap_origin = SwapOrigin::Vault { tx_hash };
 
-			let execute_at = frame_system::Pallet::<T>::block_number() + SWAP_DELAY_BLOCKS.into();
-
-			let swap_id = Self::schedule_swap_internal(
+			let (swap_id, execute_at) = Self::schedule_swap_internal(
 				from,
 				to,
 				deposit_amount,
 				SwapType::Swap(destination_address_internal.clone()),
-				execute_at,
 			);
 
 			Self::deposit_event(Event::<T>::SwapScheduled {
@@ -920,14 +917,14 @@ pub mod pallet {
 			}
 		}
 
-		/// Schedule the swap, assuming all checks already passed.
+		/// Schedule the swap, assuming all checks already passed. Return swap_id along
+		/// with the block at which the swap is scheduled to be executed.
 		fn schedule_swap_internal(
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
 			swap_type: SwapType,
-			execute_at: BlockNumberFor<T>,
-		) -> u64 {
+		) -> (u64, BlockNumberFor<T>) {
 			let swap_id = SwapIdCounter::<T>::mutate(|id| {
 				id.saturating_accrue(1);
 				*id
@@ -949,12 +946,14 @@ pub mod pallet {
 				});
 			}
 
+			let execute_at = frame_system::Pallet::<T>::block_number() + SWAP_DELAY_BLOCKS.into();
+
 			SwapQueue::<T>::append(
 				execute_at,
 				Swap::new(swap_id, from, to, swap_amount, swap_type),
 			);
 
-			swap_id
+			(swap_id, execute_at)
 		}
 	}
 
@@ -988,14 +987,11 @@ pub mod pallet {
 				deposit_block_height,
 			};
 
-			let execute_at = frame_system::Pallet::<T>::block_number() + SWAP_DELAY_BLOCKS.into();
-
-			let swap_id = Self::schedule_swap_internal(
+			let (swap_id, execute_at) = Self::schedule_swap_internal(
 				from,
 				to,
 				net_amount,
 				SwapType::Swap(destination_address.clone()),
-				execute_at,
 			);
 			EarnedBrokerFees::<T>::mutate(&broker_id, from, |earned_fees| {
 				earned_fees.saturating_accrue(fee)
@@ -1060,19 +1056,16 @@ pub mod pallet {
 
 			let mut swap_output = CcmSwapOutput::default();
 
-			let execute_at = frame_system::Pallet::<T>::block_number() + SWAP_DELAY_BLOCKS.into();
-
 			let principal_swap_id =
 				if source_asset == destination_asset || principal_swap_amount.is_zero() {
 					swap_output.principal = Some(principal_swap_amount);
 					None
 				} else {
-					let swap_id = Self::schedule_swap_internal(
+					let (swap_id, execute_at) = Self::schedule_swap_internal(
 						source_asset,
 						destination_asset,
 						principal_swap_amount,
 						SwapType::CcmPrincipal(ccm_id),
-						execute_at,
 					);
 					Self::deposit_event(Event::<T>::SwapScheduled {
 						swap_id,
@@ -1089,12 +1082,11 @@ pub mod pallet {
 				};
 
 			let gas_swap_id = if let Some(other_gas_asset) = other_gas_asset {
-				let swap_id = Self::schedule_swap_internal(
+				let (swap_id, execute_at) = Self::schedule_swap_internal(
 					source_asset,
 					other_gas_asset,
 					gas_budget,
 					SwapType::CcmGas(ccm_id),
-					execute_at,
 				);
 				Self::deposit_event(Event::<T>::SwapScheduled {
 					swap_id,
