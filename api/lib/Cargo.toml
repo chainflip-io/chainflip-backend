@@ -7,13 +7,12 @@ edition = "2021"
 anyhow = "1.0"
 async-trait = "0.1.49"
 base58 = '0.2.0'
-ed25519-dalek = "1.0"
+ed25519-dalek = "2.1"
 futures = "0.3.14"
 hex = "0.4.3"
 hmac-sha512 = "1.1.4"
 libsecp256k1 = { version = '0.7' }
 rand = "0.8.5"
-rand-v7 = { package = "rand", version = "0.7" }
 serde = { version = "1.0", features = ["derive"] }
 tiny-bip39 = "1.0.0"
 tokio = "1.28"

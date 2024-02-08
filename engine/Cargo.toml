@@ -78,15 +78,14 @@ web3 = { version = "0.19", default-features = false, features = [
   "ws-tls-tokio",
 ] }
 zeroize = "1.5.4"
-# We will update curve25519-dalek when we can update schnorrkel
-curve25519-dalek = { version = "2.1", features = ["serde"] }
-ed25519-dalek = "1.0"
+curve25519-dalek = { version = "4.1", features = ["serde"] }
+ed25519-dalek = "2.1"
 pin-project = "1.0.12"
 rand = "0.8.4"
 reqwest = { version = "0.11.4", features = ["rustls-tls"] }
 toml = "0.7.4"
 tracing = "0.1"
-x25519-dalek = { version = "1.1", features = ["serde"] }
+x25519-dalek = { version = "2.0", features = ["serde"] }
 zmq = { git = "https://github.com/chainflip-io/rust-zmq.git", tag = "chainflip-v0.9.2+1", features = [
   "vendored",
 ] }

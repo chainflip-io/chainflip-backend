@@ -35,19 +35,11 @@ num-bigint = "0.4"
 num-traits = "0.2"
 num-derive = "0.3"
 zeroize = "1.5.4"
-generic-array = "0.14"
+generic-array = "1.0"
 public-ip = "0.2.2"
-# We will update curve25519-dalek when we can update schnorrkel
-curve25519-dalek = { version = "2.1", features = ["serde"] }
+curve25519-dalek = { version = "4.1", features = ["serde"] }
 typenum = "1.15"
-# Note: we don't use the most recent version of schnorrkel since 0.10 switches
-# to curve25519-dalek-ng, but it is not clear at all why that fork of
-# curve25519-dalek was created, so we are not willing to trust it just yet.
-# (There is little public information on this, but some mentions can be found
-# in https://github.com/dalek-cryptography/curve25519-dalek/pull/338#issuecomment-772059572)
-# We might eventually update, but for now let's just
-# use the same version as polkadot.
-schnorrkel = "0.9.1"
+schnorrkel = "0.11.4"
 rayon = "1.7.0"
 rand = "0.8.4"
 ed25519-consensus = "2.0"
