@@ -890,6 +890,14 @@ impl<RuntimeCall> CallDispatchFilter<RuntimeCall> for () {
 }
 
 pub trait AssetConverter {
+	fn estimate_swap_input_for_desired_output<
+		Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy,
+	>(
+		input_asset: impl Into<Asset>,
+		output_asset: impl Into<Asset>,
+		desired_output_amount: Amount,
+	) -> Option<Amount>;
+
 	fn convert_asset_to_approximate_output<
 		Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy,
 	>(
