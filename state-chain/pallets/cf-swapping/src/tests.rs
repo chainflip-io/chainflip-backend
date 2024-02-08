@@ -2045,3 +2045,66 @@ fn swaps_are_executed_according_to_execute_at_field() {
 			);
 		});
 }
+
+#[test]
+fn swaps_get_retried_on_next_block_after_failure() {
+	let mut swaps = generate_test_swaps();
+	let later_swaps = swaps.split_off(2);
+
+	new_test_ext()
+		.execute_with(|| {
+			// Block 1, swaps should be scheduled at block 3
+			assert_eq!(System::block_number(), 1);
+			assert_eq!(FirstUnprocessedBlock::<Test>::get(), 0);
+			insert_swaps(&swaps);
+
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapScheduled { swap_id: 1, execute_at: 3, .. }),
+				RuntimeEvent::Swapping(Event::SwapScheduled { swap_id: 2, execute_at: 3, .. }),
+			);
+		})
+		.then_execute_at_next_block(|_| {
+			// Block 2, swaps should be scheduled at block 4
+			assert_eq!(System::block_number(), 2);
+			insert_swaps(&later_swaps);
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapScheduled { swap_id: 3, execute_at: 4, .. }),
+				RuntimeEvent::Swapping(Event::SwapScheduled { swap_id: 4, execute_at: 4, .. }),
+			);
+		})
+		.then_execute_at_next_block(|_| {
+			// First group of swaps will be processed at the end of this block,
+			// but we force them to fail:
+			MockSwappingApi::set_swaps_should_fail(true);
+			assert_eq!(FirstUnprocessedBlock::<Test>::get(), 3);
+		})
+		.then_execute_with(|_| {
+			assert_eq!(System::block_number(), 3);
+			assert_event_sequence!(Test, RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),);
+
+			// The storage state has been rolled back:
+			assert_eq!(SwapQueue::<Test>::get(3).len(), 2);
+		})
+		.then_execute_at_next_block(|_| {
+			// All swaps be processed at the end of this block, including the swaps
+			// from previous block. This time we allow swaps to succeed:
+			MockSwappingApi::set_swaps_should_fail(false);
+			assert_eq!(FirstUnprocessedBlock::<Test>::get(), 3);
+		})
+		.then_execute_with(|_| {
+			assert_eq!(System::block_number(), 4);
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
+				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_id: 1, .. }),
+				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2, .. }),
+				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_id: 2, .. }),
+				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 3, .. }),
+				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_id: 3, .. }),
+				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 4, .. }),
+				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_id: 4, .. }),
+			);
+		});
+}
