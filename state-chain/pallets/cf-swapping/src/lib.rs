@@ -469,6 +469,7 @@ pub mod pallet {
 					broker_commission_bps,
 					broker,
 					channel_metadata.clone(),
+					boost_fee,
 				)?;
 
 			Self::deposit_event(Event::<T>::SwapDepositAddressReady {

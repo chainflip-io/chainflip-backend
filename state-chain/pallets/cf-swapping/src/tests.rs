@@ -2108,3 +2108,23 @@ fn swaps_get_retried_on_next_block_after_failure() {
 			);
 		});
 }
+
+#[test]
+fn deposit_address_ready_event_contain_correct_boost_fee_value() {
+	new_test_ext().execute_with(|| {
+		const BOOST_FEE: u16 = 100;
+		assert_ok!(Swapping::request_swap_deposit_address(
+			RuntimeOrigin::signed(ALICE),
+			Asset::Eth,
+			Asset::Usdc,
+			EncodedAddress::Eth(Default::default()),
+			0,
+			None,
+			BOOST_FEE
+		));
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::Swapping(Event::SwapDepositAddressReady { boost_fee: BOOST_FEE, .. })
+		);
+	});
+}
