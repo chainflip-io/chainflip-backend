@@ -401,23 +401,23 @@ pub mod pallet {
 
 			// NOTE: we iterate manually because BlockNumberFor<T> does not implement Step:
 			while block_to_process <= current_block {
-				if let Err(failed_swap) = Self::process_swaps_for_block(block_to_process) {
-					match failed_swap {
-						BatchExecutionError::SwapLegFailed { asset, direction, amount } =>
-							Self::deposit_event(Event::<T>::BatchSwapFailed {
-								asset,
-								direction,
-								amount,
-							}),
-						BatchExecutionError::DispatchError { error } => {
-							log::error!("Failed to execute swap batch: {:?}", error);
-						},
-					}
+				match Self::process_swaps_for_block(block_to_process) {
+					Err(BatchExecutionError::SwapLegFailed { asset, direction, amount }) => {
+						Self::deposit_event(Event::<T>::BatchSwapFailed {
+							asset,
+							direction,
+							amount,
+						});
 
-					// Break on first failure to preserve order of swaps
-					break
-				} else {
-					block_to_process += 1u32.into();
+						break
+					},
+					Err(BatchExecutionError::DispatchError { error }) => {
+						log::error!("Failed to execute swap batch: {:?}", error);
+						break
+					},
+					Ok(()) => {
+						block_to_process += 1u32.into();
+					},
 				}
 			}
 			FirstUnprocessedBlock::<T>::set(block_to_process);
