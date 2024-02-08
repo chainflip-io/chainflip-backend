@@ -215,3 +215,45 @@ fn cannot_request_deposit_address_without_registering_liquidity_refund_address()
 		), crate::Error::<Test>::NoLiquidityRefundAddressRegistered);
 	});
 }
+
+#[test]
+fn deposit_address_ready_event_contain_correct_boost_fee_value() {
+	new_test_ext().execute_with(|| {
+		const BOOST_FEE1: u16 = 0;
+		const BOOST_FEE2: u16 = 50;
+		const BOOST_FEE3: u16 = 100;
+
+		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			EncodedAddress::Eth([0x01; 20])
+		));
+
+		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			Asset::Eth,
+			BOOST_FEE1,
+		));
+		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			Asset::Flip,
+			BOOST_FEE2,
+		));
+		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			Asset::Usdc,
+			BOOST_FEE3,
+		));
+		assert_events_match!(Test, RuntimeEvent::LiquidityProvider(crate::Event::LiquidityDepositAddressReady {
+			boost_fee: BOOST_FEE1,
+			..
+		}) => (),
+		RuntimeEvent::LiquidityProvider(crate::Event::LiquidityDepositAddressReady {
+			boost_fee: BOOST_FEE2,
+			..
+		}) => (),
+		RuntimeEvent::LiquidityProvider(crate::Event::LiquidityDepositAddressReady {
+			boost_fee: BOOST_FEE3,
+			..
+		}) => ());
+	});
+}

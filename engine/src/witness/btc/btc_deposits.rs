@@ -182,6 +182,7 @@ pub mod tests {
 			action: ChannelAction::<AccountId32>::LiquidityProvision {
 				lp_account: AccountId32::new([0xab; 32]),
 			},
+			boost_fee: 0,
 		}
 	}
 
