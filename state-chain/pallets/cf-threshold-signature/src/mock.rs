@@ -5,8 +5,6 @@ use crate::{
 	EnsureThresholdSigned, Origin, Pallet, PalletOffence, PendingCeremonies, RequestId,
 };
 use cf_chains::{
-	btc,
-	evm::SchnorrVerificationComponents,
 	mocks::{MockAggKey, MockEthereumChainCrypto, MockThresholdSignature},
 	ChainCrypto,
 };

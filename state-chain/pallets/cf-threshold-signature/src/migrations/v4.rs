@@ -94,6 +94,6 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			crate::Keys::<T, I>::contains_key(<T as Chainflip>::EpochInfo::epoch_index()),
 			"Keys were not migrated!"
 		);
-		Ok(Default::default())
+		Ok(())
 	}
 }
