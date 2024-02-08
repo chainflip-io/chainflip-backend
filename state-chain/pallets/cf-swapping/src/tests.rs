@@ -1911,7 +1911,7 @@ fn swap_broker_fee_cannot_exceed_amount() {
 	});
 }
 
-fn swap_scheduled_event_witnessed(
+fn assert_swap_scheduled_event_emitted(
 	swap_id: u64,
 	source_asset: Asset,
 	deposit_amount: AssetAmount,
@@ -1954,7 +1954,7 @@ fn swap_broker_fee_subtracted_from_swap_amount() {
 					Permill::from_parts(broker_fee as u32 * BASIS_POINTS_PER_MILLION) * *amount;
 				total_fees += broker_commission;
 				assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, *asset), total_fees);
-				swap_scheduled_event_witnessed(
+				assert_swap_scheduled_event_emitted(
 					swap_id,
 					*asset,
 					*amount,
