@@ -1414,9 +1414,13 @@ mod test {
 						ForeignChain::Ethereum,
 						HashMap::<_, Option<NumberOrHex>>::from([
 							(Asset::Flip, Some(AssetAmount::MAX).map(Into::into)),
-							(Asset::Usdc, Some(u64::MAX / 2 - 1).map(Into::into)),
+							(Asset::Usdc, None),
 							(Asset::Eth, Some(0u32).map(Into::into)),
 						]),
+					),
+					(
+						ForeignChain::Polkadot,
+						HashMap::from([(Asset::Dot, Some(u64::MAX / 2 - 1).map(Into::into))]),
 					),
 				]),
 				egress_fees: HashMap::from([
@@ -1428,9 +1432,13 @@ mod test {
 						ForeignChain::Ethereum,
 						HashMap::<_, Option<NumberOrHex>>::from([
 							(Asset::Flip, Some(AssetAmount::MAX).map(Into::into)),
-							(Asset::Usdc, Some(u64::MAX / 2 - 1).map(Into::into)),
+							(Asset::Usdc, None),
 							(Asset::Eth, Some(0u32).map(Into::into)),
 						]),
+					),
+					(
+						ForeignChain::Polkadot,
+						HashMap::from([(Asset::Dot, Some(u64::MAX / 2 - 1).map(Into::into))]),
 					),
 				]),
 				witness_safety_margins: HashMap::from([
