@@ -961,7 +961,7 @@ type PalletMigrations = (
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, EthereumInstance>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, BitcoinInstance>,
-	// pallet_cf_swapping::migrations::PalletMigration<Runtime>,
+	pallet_cf_swapping::migrations::PalletMigration<Runtime>,
 	// pallet_cf_lp::migrations::PalletMigration<Runtime>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, EthereumInstance>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, PolkadotInstance>,
