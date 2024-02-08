@@ -171,7 +171,11 @@ pub mod pallet {
 			);
 
 			let (channel_id, deposit_address, expiry_block) =
-				T::DepositHandler::request_liquidity_deposit_address(account_id.clone(), asset)?;
+				T::DepositHandler::request_liquidity_deposit_address(
+					account_id.clone(),
+					asset,
+					boost_fee,
+				)?;
 
 			Self::deposit_event(Event::LiquidityDepositAddressReady {
 				channel_id,
