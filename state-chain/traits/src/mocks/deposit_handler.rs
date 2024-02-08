@@ -29,6 +29,7 @@ pub struct SwapChannel<C: Chain, T: Chainflip> {
 	pub broker_commission_bps: BasisPoints,
 	pub broker_id: <T as frame_system::Config>::AccountId,
 	pub channel_metadata: Option<CcmChannelMetadata>,
+	pub boost_fee: BasisPoints,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -36,6 +37,7 @@ pub struct LpChannel<C: Chain, T: Chainflip> {
 	pub deposit_address: ForeignChainAddress,
 	pub source_asset: <C as Chain>::ChainAsset,
 	pub lp_account: <T as frame_system::Config>::AccountId,
+	pub boost_fee: BasisPoints,
 }
 
 impl<C: Chain, T: Chainflip> MockDepositHandler<C, T> {
@@ -82,6 +84,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 	fn request_liquidity_deposit_address(
 		lp_account: Self::AccountId,
 		source_asset: <C as cf_chains::Chain>::ChainAsset,
+		boost_fee: BasisPoints,
 	) -> Result<
 		(cf_primitives::ChannelId, ForeignChainAddress, <C as cf_chains::Chain>::ChainBlockNumber),
 		sp_runtime::DispatchError,
@@ -97,6 +100,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 					deposit_address: deposit_address.clone(),
 					source_asset,
 					lp_account,
+					boost_fee,
 				});
 			}
 		});
@@ -110,6 +114,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 		broker_commission_bps: BasisPoints,
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
+		boost_fee: BasisPoints,
 	) -> Result<
 		(cf_primitives::ChannelId, ForeignChainAddress, C::ChainBlockNumber),
 		sp_runtime::DispatchError,
@@ -129,6 +134,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 					broker_commission_bps,
 					broker_id,
 					channel_metadata,
+					boost_fee,
 				});
 			};
 		});

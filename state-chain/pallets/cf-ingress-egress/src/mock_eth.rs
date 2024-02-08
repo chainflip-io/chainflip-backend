@@ -230,7 +230,7 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 				.cloned()
 				.map(|request| match request {
 					DepositRequest::Liquidity { lp_account, asset } =>
-						IngressEgress::request_liquidity_deposit_address(lp_account, asset)
+						IngressEgress::request_liquidity_deposit_address(lp_account, asset, 0)
 							.map(|(id, addr, ..)| {
 								(request, id, TestChainAccount::try_from(addr).unwrap())
 							})
@@ -246,6 +246,7 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 						Default::default(),
 						BROKER,
 						None,
+						0,
 					)
 					.map(|(channel_id, deposit_address, ..)| {
 						(request, channel_id, TestChainAccount::try_from(deposit_address).unwrap())

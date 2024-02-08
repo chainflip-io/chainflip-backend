@@ -209,7 +209,8 @@ fn request_address_and_deposit(
 	who: ChannelId,
 	asset: eth::Asset,
 ) -> (ChannelId, <Ethereum as Chain>::ChainAccount) {
-	let (id, address, ..) = IngressEgress::request_liquidity_deposit_address(who, asset).unwrap();
+	let (id, address, ..) =
+		IngressEgress::request_liquidity_deposit_address(who, asset, 0).unwrap();
 	let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
 	assert_ok!(IngressEgress::process_single_deposit(
 		address,
@@ -441,6 +442,7 @@ fn reused_address_channel_id_matches() {
 		let (reused_channel_id, reused_address, ..) = IngressEgress::open_channel(
 			eth::Asset::Eth,
 			ChannelAction::LiquidityProvision { lp_account: 0 },
+			0,
 		)
 		.unwrap();
 		// The reused details should be the same as before.
@@ -476,6 +478,7 @@ fn can_process_ccm_deposit() {
 			0,
 			1,
 			Some(channel_metadata),
+			0,
 		)
 		.unwrap();
 
@@ -583,7 +586,7 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 	new_test_ext()
 		.then_execute_at_next_block(|_| {
 			let (_, address, ..) =
-				IngressEgress::request_liquidity_deposit_address(ALICE, ETH).unwrap();
+				IngressEgress::request_liquidity_deposit_address(ALICE, ETH, 0).unwrap();
 			let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
 			let recycles_at = IngressEgress::expiry_and_recycle_block_height().2;
 			(address, recycles_at)
@@ -594,7 +597,7 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 		})
 		.then_execute_at_next_block(|address| {
 			let (_, address2, ..) =
-				IngressEgress::request_liquidity_deposit_address(ALICE, ETH).unwrap();
+				IngressEgress::request_liquidity_deposit_address(ALICE, ETH, 0).unwrap();
 			let address2: <Ethereum as Chain>::ChainAccount = address2.try_into().unwrap();
 			(address, address2)
 		})
@@ -911,7 +914,7 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 		});
 
 		let (_id, address, ..) =
-			IngressEgress::request_liquidity_deposit_address(ALICE, ASSET).unwrap();
+			IngressEgress::request_liquidity_deposit_address(ALICE, ASSET, 0).unwrap();
 		let deposit_address = address.try_into().unwrap();
 
 		// Swap a low enough amount such that it gets swallowed by fees
