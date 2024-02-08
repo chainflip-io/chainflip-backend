@@ -33,7 +33,7 @@ use pallet_cf_broadcast::{
 };
 use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall};
 use pallet_cf_pools::{OrderId, RangeOrderSize};
-use pallet_cf_swapping::CcmIdCounter;
+use pallet_cf_swapping::{CcmIdCounter, SWAP_DELAY_BLOCKS};
 use sp_core::U256;
 use state_chain_runtime::{
 	chainflip::{
@@ -284,6 +284,9 @@ fn basic_pool_setup_provision_and_swap() {
 		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
 		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(2);
 		state_chain_runtime::AllPalletsWithoutSystem::on_idle(3, Weight::from_parts(1_000_000_000_000, 0));
+		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
+		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(3);
+		state_chain_runtime::AllPalletsWithoutSystem::on_idle(4, Weight::from_parts(1_000_000_000_000, 0));
 
 		let (.., egress_id) = assert_events_match!(
 			Runtime,
@@ -386,6 +389,10 @@ fn can_process_ccm_via_swap_deposit_address() {
 		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(2);
 		state_chain_runtime::AllPalletsWithoutSystem::on_idle(3, Weight::from_parts(1_000_000_000_000, 0));
 
+		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
+		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(3);
+		state_chain_runtime::AllPalletsWithoutSystem::on_idle(4, Weight::from_parts(1_000_000_000_000, 0));
+
 		let (.., egress_id) = assert_events_match!(
 			Runtime,
 			RuntimeEvent::LiquidityPools(
@@ -473,6 +480,10 @@ fn can_process_ccm_via_direct_deposit() {
 		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
 		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(2);
 		state_chain_runtime::AllPalletsWithoutSystem::on_idle(3, Weight::from_parts(1_000_000_000_000, 0));
+
+		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
+		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(3);
+		state_chain_runtime::AllPalletsWithoutSystem::on_idle(4, Weight::from_parts(1_000_000_000_000, 0));
 
 		let (.., egress_id) = assert_events_match!(
 			Runtime,
@@ -569,8 +580,10 @@ fn failed_swaps_are_rolled_back() {
 		);
 		System::reset_events();
 
+		let swaps_scheduled_at = System::block_number() + SWAP_DELAY_BLOCKS;
+
 		// Usdc -> Flip swap will fail. All swaps are stalled.
-		Swapping::on_finalize(1);
+		Swapping::on_finalize(swaps_scheduled_at);
 
 		assert_events_match!(
 			Runtime,
@@ -597,7 +610,7 @@ fn failed_swaps_are_rolled_back() {
 
 		// Subsequent swaps will also fail. No swaps should be processed and the Pool liquidity
 		// shouldn't be drained.
-		Swapping::on_finalize(2);
+		Swapping::on_finalize(swaps_scheduled_at + 1);
 		assert_eq!(
 			Some(eth_price),
 			LiquidityPools::current_price(Asset::Eth, STABLE_ASSET)
@@ -613,7 +626,7 @@ fn failed_swaps_are_rolled_back() {
 		setup_pool_and_accounts(vec![Asset::Flip]);
 		System::reset_events();
 
-		Swapping::on_finalize(3);
+		Swapping::on_finalize(swaps_scheduled_at + 2);
 
 		assert_ne!(
 			Some(eth_price),
