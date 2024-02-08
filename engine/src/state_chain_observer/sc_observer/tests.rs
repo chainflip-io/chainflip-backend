@@ -544,7 +544,7 @@ async fn test_get_ceremony_id_counters_with_events() {
 				nominee: AccountId32::new([1; 32]),
 				payload: Default::default(),
 			}),
-			CfeEvent::<Runtime>::EthThresholdSignatureRequest(ThresholdSignatureRequest::<
+			CfeEvent::<Runtime>::EvmThresholdSignatureRequest(ThresholdSignatureRequest::<
 				Runtime,
 				_,
 			> {
@@ -577,7 +577,7 @@ async fn test_get_ceremony_id_counters_with_events() {
 		],
 		// Test 2: 1 keygen request for each chain
 		vec![
-			CfeEvent::<Runtime>::EthKeygenRequest(KeygenRequest::<Runtime> {
+			CfeEvent::<Runtime>::EvmKeygenRequest(KeygenRequest::<Runtime> {
 				ceremony_id: ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
 				epoch_index: 1,
 				participants: Default::default(),
@@ -596,7 +596,7 @@ async fn test_get_ceremony_id_counters_with_events() {
 		// Test 3: 1 key handover request for BTC (and keygen requests for the other chains to
 		// avoid test complexity)
 		vec![
-			CfeEvent::<Runtime>::EthKeygenRequest(KeygenRequest::<Runtime> {
+			CfeEvent::<Runtime>::EvmKeygenRequest(KeygenRequest::<Runtime> {
 				ceremony_id: ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
 				epoch_index: 1,
 				participants: Default::default(),

@@ -275,7 +275,7 @@ impl Engine {
 
 			for event in cfe_events {
 				match event {
-					CfeEvent::EthThresholdSignatureRequest(ThresholdSignatureRequest {
+					CfeEvent::EvmThresholdSignatureRequest(ThresholdSignatureRequest {
 						ceremony_id,
 						key,
 						signatories,
@@ -352,7 +352,7 @@ impl Engine {
 								RuntimeOrigin::none(),
 							);
 						},
-					CfeEvent::EthKeygenRequest(req) =>
+					CfeEvent::EvmKeygenRequest(req) =>
 						if req.participants.contains(&self.node_id) {
 							queue_dispatch_extrinsic(
 								RuntimeCall::EvmThresholdSigner(

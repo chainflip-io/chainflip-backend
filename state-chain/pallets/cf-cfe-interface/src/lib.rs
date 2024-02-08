@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
+pub mod migrations;
 mod weights;
 
 pub use weights::PalletWeight;
@@ -20,7 +21,7 @@ use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::vec::Vec;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 pub type EventId = u64;
 
@@ -67,11 +68,11 @@ pub mod pallet {
 
 impl<T: Config> CfeMultisigRequest<T, EvmCrypto> for Pallet<T> {
 	fn keygen_request(req: KeygenRequest<T>) {
-		CfeEvents::<T>::append(CfeEvent::<T>::EthKeygenRequest(req))
+		CfeEvents::<T>::append(CfeEvent::<T>::EvmKeygenRequest(req))
 	}
 
 	fn signature_request(req: ThresholdSignatureRequest<T, EvmCrypto>) {
-		CfeEvents::<T>::append(CfeEvent::<T>::EthThresholdSignatureRequest(req))
+		CfeEvents::<T>::append(CfeEvent::<T>::EvmThresholdSignatureRequest(req))
 	}
 }
 

@@ -54,10 +54,10 @@ pub struct TxBroadcastRequest<ValidatorId, C: Chain> {
 
 #[derive(Clone, RuntimeDebug, Encode, Decode, PartialEq, Eq, TypeInfo)]
 pub enum CfeEvent<ValidatorId> {
-	EthThresholdSignatureRequest(ThresholdSignatureRequest<ValidatorId, EvmCrypto>),
+	EvmThresholdSignatureRequest(ThresholdSignatureRequest<ValidatorId, EvmCrypto>),
 	DotThresholdSignatureRequest(ThresholdSignatureRequest<ValidatorId, PolkadotCrypto>),
 	BtcThresholdSignatureRequest(ThresholdSignatureRequest<ValidatorId, BitcoinCrypto>),
-	EthKeygenRequest(KeygenRequest<ValidatorId>),
+	EvmKeygenRequest(KeygenRequest<ValidatorId>),
 	DotKeygenRequest(KeygenRequest<ValidatorId>),
 	BtcKeygenRequest(KeygenRequest<ValidatorId>),
 	BtcKeyHandoverRequest(KeyHandoverRequest<ValidatorId, BitcoinCrypto>),

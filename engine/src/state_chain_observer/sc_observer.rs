@@ -306,7 +306,7 @@ where
                         Ok(events) => {
                             for event in events {
                                 match_event! {event, {
-                                    CfeEvent::EthThresholdSignatureRequest(req) => {
+                                    CfeEvent::EvmThresholdSignatureRequest(req) => {
                                         handle_signing_request::<_, _, _, EvmInstance>(
                                         scope,
                                         &eth_multisig_client,
@@ -367,7 +367,7 @@ where
                                             ).await;
                                         }
                                     }
-                                    CfeEvent::EthKeygenRequest(req) => {
+                                    CfeEvent::EvmKeygenRequest(req) => {
                                         handle_keygen_request::<_, _, _, EvmInstance>(
                                             scope,
                                             &eth_multisig_client,
@@ -579,8 +579,8 @@ where
 	// this block).
 	Ok(CeremonyIdCounters {
 		ethereum: if let Some(ceremony_id) = events.iter().find_map(|event| match event {
-			CfeEvent::EthThresholdSignatureRequest(req) => Some(req.ceremony_id),
-			CfeEvent::EthKeygenRequest(req) => Some(req.ceremony_id),
+			CfeEvent::EvmThresholdSignatureRequest(req) => Some(req.ceremony_id),
+			CfeEvent::EvmKeygenRequest(req) => Some(req.ceremony_id),
 			_ => None,
 		}) {
 			ceremony_id.saturating_sub(1)

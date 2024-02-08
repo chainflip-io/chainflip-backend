@@ -10,7 +10,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn clear_events() {
-		let event = CfeEvent::<T>::EthKeygenRequest(KeygenRequest::<T> {
+		let event = CfeEvent::<T>::EvmKeygenRequest(KeygenRequest::<T> {
 			ceremony_id: 0,
 			epoch_index: 0,
 			participants: Default::default(),

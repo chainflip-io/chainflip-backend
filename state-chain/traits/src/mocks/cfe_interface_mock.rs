@@ -8,11 +8,11 @@ pub struct MockCfeInterface {}
 
 #[derive(Encode, Decode, Clone, Debug, PartialEq, Eq)]
 pub enum MockCfeEvent<ValidatorId> {
-	EthThresholdSignatureRequest(
+	EvmThresholdSignatureRequest(
 		cfe_events::ThresholdSignatureRequest<ValidatorId, MockEthereumChainCrypto>,
 	),
 	EthTxBroadcastRequest(cfe_events::TxBroadcastRequest<ValidatorId, MockEthereum>),
-	EthKeygenRequest(cfe_events::KeygenRequest<ValidatorId>),
+	EvmKeygenRequest(cfe_events::KeygenRequest<ValidatorId>),
 	// Note: we don't normally do handover for eth, but this works for tests
 	EthKeyHandoverRequest(cfe_events::KeyHandoverRequest<ValidatorId, MockEthereumChainCrypto>),
 }
@@ -21,13 +21,13 @@ const STORAGE_KEY: &[u8] = b"MockCfeInterface::Events";
 
 impl<T: Chainflip> CfeMultisigRequest<T, MockEthereumChainCrypto> for MockCfeInterface {
 	fn keygen_request(req: cfe_events::KeygenRequest<T::ValidatorId>) {
-		Self::append_event(MockCfeEvent::EthKeygenRequest(req));
+		Self::append_event(MockCfeEvent::EvmKeygenRequest(req));
 	}
 
 	fn signature_request(
 		req: cfe_events::ThresholdSignatureRequest<T::ValidatorId, MockEthereumChainCrypto>,
 	) {
-		Self::append_event(MockCfeEvent::EthThresholdSignatureRequest(req));
+		Self::append_event(MockCfeEvent::EvmThresholdSignatureRequest(req));
 	}
 
 	fn key_handover_request(

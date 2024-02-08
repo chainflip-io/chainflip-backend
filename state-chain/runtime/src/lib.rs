@@ -967,6 +967,7 @@ type PalletMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	// pallet_cf_pools::migrations::PalletMigration<Runtime>,
+	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 );
 
 #[cfg(feature = "runtime-benchmarks")]

@@ -88,7 +88,7 @@ type ValidatorId = <Test as Chainflip>::ValidatorId;
 
 impl MockCfe {
 	fn process_event(&self, event: MockCfeEvent<ValidatorId>) {
-		if let MockCfeEvent::EthThresholdSignatureRequest(ThresholdSignatureRequest {
+		if let MockCfeEvent::EvmThresholdSignatureRequest(ThresholdSignatureRequest {
 			ceremony_id,
 			epoch_index: _,
 			key,
@@ -768,7 +768,7 @@ fn keygen_request_emitted() {
 		let events = MockCfeInterface::take_events::<ValidatorId>();
 		assert_eq!(
 			events[0],
-			MockCfeEvent::EthKeygenRequest(KeygenRequest {
+			MockCfeEvent::EvmKeygenRequest(KeygenRequest {
 				ceremony_id: current_ceremony_id(),
 				participants: btree_candidates.clone(),
 				epoch_index: rotation_epoch,
