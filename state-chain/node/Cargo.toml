@@ -72,6 +72,7 @@ sp-block-builder = { git = "https://github.com/chainflip-io/polkadot-sdk.git", t
 sc-basic-authorship = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.6' }
 substrate-frame-rpc-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.6' }
 pallet-transaction-payment-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.6' }
+sc-rpc-spec-v2 = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.6' }
 
 # These dependencies are used for runtime benchmarking
 frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.6' }

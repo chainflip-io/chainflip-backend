@@ -1902,6 +1902,7 @@ dependencies = [
  "sc-network",
  "sc-offchain",
  "sc-rpc-api",
+ "sc-rpc-spec-v2",
  "sc-service",
  "sc-telemetry",
  "sc-transaction-pool",
