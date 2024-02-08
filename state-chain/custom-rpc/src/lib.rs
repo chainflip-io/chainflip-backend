@@ -266,8 +266,8 @@ pub struct PoolsEnvironment {
 #[derive(Serialize, Deserialize)]
 pub struct IngressEgressEnvironment {
 	pub minimum_deposit_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
-	pub ingress_fees: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
-	pub egress_fees: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+	pub ingress_fees: HashMap<ForeignChain, HashMap<Asset, Option<NumberOrHex>>>,
+	pub egress_fees: HashMap<ForeignChain, HashMap<Asset, Option<NumberOrHex>>>,
 	pub witness_safety_margins: HashMap<ForeignChain, Option<u64>>,
 	pub egress_dust_limits: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
 }
@@ -1016,11 +1016,11 @@ where
 			);
 			ingress_fees.entry(chain).or_insert_with(HashMap::new).insert(
 				asset,
-				runtime_api.cf_ingress_fee(hash, asset).map_err(to_rpc_error)?.into(),
+				runtime_api.cf_ingress_fee(hash, asset).map_err(to_rpc_error)?.map(Into::into),
 			);
 			egress_fees.entry(chain).or_insert_with(HashMap::new).insert(
 				asset,
-				runtime_api.cf_egress_fee(hash, asset).map_err(to_rpc_error)?.into(),
+				runtime_api.cf_egress_fee(hash, asset).map_err(to_rpc_error)?.map(Into::into),
 			);
 			egress_dust_limits.entry(chain).or_insert_with(HashMap::new).insert(
 				asset,
@@ -1406,25 +1406,39 @@ mod test {
 					),
 				]),
 				ingress_fees: HashMap::from([
-					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
+					(
+						ForeignChain::Bitcoin,
+						HashMap::from([(Asset::Btc, Some(0u32).map(Into::into))]),
+					),
 					(
 						ForeignChain::Ethereum,
-						HashMap::from([
-							(Asset::Flip, AssetAmount::MAX.into()),
-							(Asset::Usdc, (u64::MAX / 2 - 1).into()),
-							(Asset::Eth, 0u32.into()),
+						HashMap::<_, Option<NumberOrHex>>::from([
+							(Asset::Flip, Some(AssetAmount::MAX).map(Into::into)),
+							(Asset::Usdc, None),
+							(Asset::Eth, Some(0u32).map(Into::into)),
 						]),
+					),
+					(
+						ForeignChain::Polkadot,
+						HashMap::from([(Asset::Dot, Some(u64::MAX / 2 - 1).map(Into::into))]),
 					),
 				]),
 				egress_fees: HashMap::from([
-					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
+					(
+						ForeignChain::Bitcoin,
+						HashMap::from([(Asset::Btc, Some(0u32).map(Into::into))]),
+					),
 					(
 						ForeignChain::Ethereum,
-						HashMap::from([
-							(Asset::Flip, AssetAmount::MAX.into()),
-							(Asset::Usdc, (u64::MAX / 2 - 1).into()),
-							(Asset::Eth, 0u32.into()),
+						HashMap::<_, Option<NumberOrHex>>::from([
+							(Asset::Flip, Some(AssetAmount::MAX).map(Into::into)),
+							(Asset::Usdc, None),
+							(Asset::Eth, Some(0u32).map(Into::into)),
 						]),
+					),
+					(
+						ForeignChain::Polkadot,
+						HashMap::from([(Asset::Dot, Some(u64::MAX / 2 - 1).map(Into::into))]),
 					),
 				]),
 				witness_safety_margins: HashMap::from([
