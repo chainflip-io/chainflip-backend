@@ -37,6 +37,8 @@ export function getEvmContractAddress(chain: Chain, contract: string): string {
       switch (contract) {
         case 'VAULT':
           return '0xb7a5bd0345ef1cc5e66bf61bdec17d2461fbd968';
+        case 'KEY_MANAGER':
+          return '0xa16E02E87b7454126E5E10d957A927A7F5B5d2be';
         case 'ETH':
           return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
         case 'FLIP':

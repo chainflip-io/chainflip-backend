@@ -20,6 +20,8 @@ import {
   getEvmContractAddress,
 } from '../shared/utils';
 import { aliceKeyringPair } from '../shared/polkadot_keyring';
+import { getKeyManagerAbi } from '../shared/eth_abis';
+import { signAndSendTxEvm } from '../shared/send_evm';
 
 async function main(): Promise<void> {
   const btcClient = getBtcClient();
@@ -134,6 +136,7 @@ async function main(): Promise<void> {
     ),
   );
 
+  console.log('Initialize Arbitrum');
   await submitGovernanceExtrinsic(
     chainflip.tx.environment.witnessInitializeArbitrumVault(
       await arbClient.eth.getBlockNumber(),
@@ -144,6 +147,31 @@ async function main(): Promise<void> {
       getEvmContractAddress('Arbitrum', 'ARBUSDC'),
     ),
   );
+
+  // // Ethereum has rotated in the begining of the test but not Arbitrum, so the keys will
+  // // be different. We need to insert the aggKey to match Ethereum.
+  // console.log('Insert AggKey to match Ethereum');
+  // // TODO: problem here is that not enough time has passed to be able to insert the aggKey.
+  // // We either not rotate in the begining or we fast forward Arbitrum before taking the snapshot.
+  // For now we just follow this flow while we fix arbitrum:
+  // Start network
+  // run setup_vaults
+  // deploy contracts with aggkey
+  // run setup_vaults and continue
+
+  // const web3 = new Web3(getEvmEndpoint('Ethereum'));
+  // const keyManagerAbi = await getKeyManagerAbi();
+
+  // const contract = new web3.eth.Contract(
+  //   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  //   keyManagerAbi as any,
+  //   getEvmContractAddress('Ethereum', 'KEY_MANAGER'),
+  // );
+
+  // const aggKey = await contract.methods.getAggregateKey().call();
+  // const txData = contract.methods.setAggKeyWithGovKey(aggKey).encodeABI();
+  // await signAndSendTxEvm('Arbitrum', getEvmContractAddress('Arbitrum', 'KEY_MANAGER'), '0', txData);
+
   // Confirmation
   console.log('Waiting for new epoch...');
   await observeEvent('validator:NewEpoch', chainflip);
