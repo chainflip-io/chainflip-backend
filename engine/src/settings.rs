@@ -532,6 +532,11 @@ impl CfSettings for Settings {
 			&self.eth.private_key_file,
 			Some(PathResolutionExpectation::ExistingFile),
 		)?;
+		self.arb.private_key_file = resolve_settings_path(
+			config_root,
+			&self.arb.private_key_file,
+			Some(PathResolutionExpectation::ExistingFile),
+		)?;
 		self.signing.db_file = resolve_settings_path(config_root, &self.signing.db_file, None)?;
 		self.node_p2p.node_key_file = resolve_settings_path(
 			config_root,
