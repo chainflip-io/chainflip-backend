@@ -21,6 +21,7 @@ permissions:
 jobs:
   bouncer:
     runs-on: [digitalocean]
+#    runs-on: [nscloud-ubuntu-22.04-amd64-2x4]
     timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
       - name: Checkout chainflip-backend

@@ -10,7 +10,8 @@ env:
 
 jobs:
   unit-tests:
-    runs-on: [hetzner]
+#    runs-on: [hetzner]
+    runs-on: [nscloud-ubuntu-22.04-amd64-32x64]
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-07-31-ubuntu-20.04"
       credentials:

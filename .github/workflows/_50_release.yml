@@ -10,7 +10,8 @@ env:
 
 jobs:
   compress-binaries:
-    runs-on: ubuntu-latest
+#    runs-on: ubuntu-latest
+    runs-on: [nscloud-ubuntu-22.04-amd64-2x4]
     strategy:
       fail-fast: false
       matrix:
@@ -39,7 +40,8 @@ jobs:
           path: ${{ env.RELEASE_DIR }}.tar.gz
 
   release:
-    runs-on: ubuntu-latest
+#    runs-on: ubuntu-latest
+    runs-on: [nscloud-ubuntu-22.04-amd64-2x4]
     needs:
       - compress-binaries
     steps:

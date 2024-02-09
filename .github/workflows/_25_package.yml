@@ -11,7 +11,7 @@ env:
 
 jobs:
   packages:
-    runs-on: [hetzner]
+    runs-on: [nscloud-ubuntu-22.04-amd64-4x8]
     strategy:
       fail-fast: false
       matrix:

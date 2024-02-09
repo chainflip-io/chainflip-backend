@@ -85,7 +85,8 @@ jobs:
           - chainflip-engine-databases
         docker-repo:
           - ghcr.io/${{ github.repository }}
-    runs-on: ubuntu-22.04
+#    runs-on: ubuntu-22.04
+    runs-on: [nscloud-ubuntu-22.04-amd64-2x4]
     steps:
       - name: Checkout 🏁
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -170,7 +171,8 @@ jobs:
           - chainflip-lp-api
         docker-repo:
           - chainfliplabs
-    runs-on: ubuntu-22.04
+#    runs-on: ubuntu-22.04
+    runs-on: [nscloud-ubuntu-22.04-amd64-2x4]
     steps:
       - name: Checkout 🏁
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11

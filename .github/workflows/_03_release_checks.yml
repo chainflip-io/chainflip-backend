@@ -15,7 +15,8 @@ env:
 
 jobs:
   check-version:
-    runs-on: ubuntu-latest
+#    runs-on: ubuntu-latest
+    runs-on: [nscloud-ubuntu-22.04-amd64-1x2]
     strategy:
       matrix:
         manifest:
@@ -54,7 +55,8 @@ jobs:
         run: ./ci/scripts/check_engine_systemd_config.sh ${{ inputs.tag }}
 
   check-engine-systemd:
-    runs-on: ubuntu-latest
+#    runs-on: ubuntu-latest
+    runs-on: [nscloud-ubuntu-22.04-amd64-1x2]
     steps:
       - name: Checkout 🏁
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -64,7 +66,8 @@ jobs:
         run: ./ci/scripts/check_engine_systemd_config.sh ${{ inputs.tag }}
 
   check-changelog:
-    runs-on: ubuntu-latest
+#    runs-on: ubuntu-latest
+    runs-on: [nscloud-ubuntu-22.04-amd64-1x2]
     steps:
       - name: Checkout 🏁
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -74,7 +77,8 @@ jobs:
         run: ./ci/scripts/check_changelog.sh ${{ inputs.tag }}
 
   check-runtime-spec-version:
-    runs-on: ubuntu-latest
+#    runs-on: ubuntu-latest
+    runs-on: [nscloud-ubuntu-22.04-amd64-1x2]
     steps:
       - name: Checkout 🏁
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11

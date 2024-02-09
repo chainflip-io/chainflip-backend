@@ -4,7 +4,8 @@ on:
 
 jobs:
   force-version-bump:
-    runs-on: [digitalocean]
+#    runs-on: [digitalocean]
+    runs-on: [nscloud-ubuntu-22.04-amd64-1x2]
     steps:
       - name: Checkout backend
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -20,10 +21,10 @@ jobs:
       - name: Download latest release binaries
         uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
         with:
-              workflow: release-perseverance.yml
-              name: chainflip-backend-bin-ubuntu-22.04
-              github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
-              path: latest-release-bins
+          workflow: release-perseverance.yml
+          name: chainflip-backend-bin-ubuntu-22.04
+          github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
+          path: latest-release-bins
       - name: Permissions for latest binaries
         run: |
             chmod +x ./latest-release-bins/chainflip-*
