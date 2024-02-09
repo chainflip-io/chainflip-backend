@@ -32,115 +32,28 @@ use core::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_vaults.
 pub trait WeightInfo {
-	fn on_initialize_failure(b: u32, ) -> Weight;
-	fn on_initialize_success() -> Weight;
-	fn report_keygen_outcome() -> Weight;
-	fn on_keygen_verification_result() -> Weight;
+	fn vault_key_rotated() -> Weight;
 	fn vault_key_rotated_externally() -> Weight;
-	fn set_keygen_response_timeout() -> Weight;
 }
 
 /// Weights for pallet_cf_vaults using the Substrate node and recommended hardware.
 pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
-	/// Storage: `EthereumVault::PendingVaultRotation` (r:1 w:1)
-	/// Proof: `EthereumVault::PendingVaultRotation` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::KeygenSuccessVoters` (r:1 w:0)
-	/// Proof: `EthereumVault::KeygenSuccessVoters` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::KeygenFailureVoters` (r:1 w:1)
-	/// Proof: `EthereumVault::KeygenFailureVoters` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
-	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Reputation::Penalties` (r:1 w:0)
-	/// Proof: `Reputation::Penalties` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Reputation::Suspensions` (r:1 w:1)
-	/// Proof: `Reputation::Suspensions` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::KeygenResolutionPendingSince` (r:0 w:1)
-	/// Proof: `EthereumVault::KeygenResolutionPendingSince` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Reputation::Reputations` (r:47 w:47)
-	/// Proof: `Reputation::Reputations` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::KeygenSlashAmount` (r:1 w:0)
-	/// Proof: `EthereumVault::KeygenSlashAmount` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Flip::Account` (r:47 w:0)
-	/// Proof: `Flip::Account` (`max_values`: None, `max_size`: Some(80), added: 2555, mode: `MaxEncodedLen`)
-	/// The range of component `b` is `[1, 100]`.
-	fn on_initialize_failure(b: u32, ) -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `15642 + b * (32 ±0)`
-		//  Estimated: `19209 + b * (2555 ±0)`
-		// Minimum execution time: 81_978_000 picoseconds.
-		Weight::from_parts(297_047_481, 19209)
-			.saturating_add(T::DbWeight::get().reads(54_u64))
-			.saturating_add(T::DbWeight::get().writes(27_u64))
-			.saturating_add(Weight::from_parts(0, 2555).saturating_mul(b.into()))
+
+	// Storage: EthereumVault PendingKeyRotation (r:1 w:1)
+	// Storage: Validator CurrentEpoch (r:1 w:0)
+	// Storage: EthereumVault Vaults (r:0 w:1)
+	// Storage: EthereumVault CurrentKeyEpochAndState (r:0 w:1)
+	fn vault_key_rotated() -> Weight {
+		// Minimum execution time: 21_000 nanoseconds.
+		Weight::from_parts(22_000_000, 0)
+			.saturating_add(T::DbWeight::get().reads(2))
+			.saturating_add(T::DbWeight::get().writes(3))
 	}
-	/// Storage: `EthereumVault::PendingVaultRotation` (r:1 w:1)
-	/// Proof: `EthereumVault::PendingVaultRotation` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::KeygenSuccessVoters` (r:1 w:1)
-	/// Proof: `EthereumVault::KeygenSuccessVoters` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::ThresholdSignatureRequestIdCounter` (r:1 w:1)
-	/// Proof: `EthereumThresholdSigner::ThresholdSignatureRequestIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::CeremonyIdCounter` (r:1 w:1)
-	/// Proof: `EthereumVault::CeremonyIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::ThresholdSignatureResponseTimeout` (r:1 w:0)
-	/// Proof: `EthereumThresholdSigner::ThresholdSignatureResponseTimeout` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::CeremonyRetryQueues` (r:1 w:1)
-	/// Proof: `EthereumThresholdSigner::CeremonyRetryQueues` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::KeygenResolutionPendingSince` (r:0 w:1)
-	/// Proof: `EthereumVault::KeygenResolutionPendingSince` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::Signature` (r:0 w:1)
-	/// Proof: `EthereumThresholdSigner::Signature` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::PendingCeremonies` (r:0 w:1)
-	/// Proof: `EthereumThresholdSigner::PendingCeremonies` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::RequestCallback` (r:0 w:1)
-	/// Proof: `EthereumThresholdSigner::RequestCallback` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn on_initialize_success() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `10026`
-		//  Estimated: `13491`
-		// Minimum execution time: 90_589_000 picoseconds.
-		Weight::from_parts(93_286_000, 13491)
-			.saturating_add(T::DbWeight::get().reads(6_u64))
-			.saturating_add(T::DbWeight::get().writes(9_u64))
-	}
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: Some(33), added: 2508, mode: `MaxEncodedLen`)
-	/// Storage: `EthereumVault::PendingVaultRotation` (r:1 w:1)
-	/// Proof: `EthereumVault::PendingVaultRotation` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::KeygenSuccessVoters` (r:1 w:1)
-	/// Proof: `EthereumVault::KeygenSuccessVoters` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn report_keygen_outcome() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `14900`
-		//  Estimated: `18365`
-		// Minimum execution time: 62_306_000 picoseconds.
-		Weight::from_parts(63_205_000, 18365)
-			.saturating_add(T::DbWeight::get().reads(3_u64))
-			.saturating_add(T::DbWeight::get().writes(2_u64))
-	}
-	/// Storage: `EthereumThresholdSigner::Signature` (r:1 w:1)
-	/// Proof: `EthereumThresholdSigner::Signature` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::PendingVaultRotation` (r:0 w:1)
-	/// Proof: `EthereumVault::PendingVaultRotation` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn on_keygen_verification_result() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `347`
-		//  Estimated: `3812`
-		// Minimum execution time: 18_399_000 picoseconds.
-		Weight::from_parts(18_698_000, 3812)
-			.saturating_add(T::DbWeight::get().reads(1_u64))
-			.saturating_add(T::DbWeight::get().writes(2_u64))
-	}
-	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
-	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::Vaults` (r:0 w:1)
-	/// Proof: `EthereumVault::Vaults` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::CurrentVaultEpochAndState` (r:0 w:1)
-	/// Proof: `EthereumVault::CurrentVaultEpochAndState` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::PendingVaultRotation` (r:0 w:1)
-	/// Proof: `EthereumVault::PendingVaultRotation` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Environment::RuntimeSafeMode` (r:0 w:1)
-	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	// Storage: Validator CurrentEpoch (r:1 w:0)
+	// Storage: Environment CurrentSystemState (r:1 w:1)
+	// Storage: EthereumVault Vaults (r:0 w:1)
+	// Storage: EthereumVault CurrentKeyEpochAndState (r:0 w:1)
 	fn vault_key_rotated_externally() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `339`
@@ -150,119 +63,25 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(4_u64))
 	}
-	/// Storage: `EthereumVault::KeygenResponseTimeout` (r:1 w:1)
-	/// Proof: `EthereumVault::KeygenResponseTimeout` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn set_keygen_response_timeout() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `125`
-		//  Estimated: `1610`
-		// Minimum execution time: 13_170_000 picoseconds.
-		Weight::from_parts(13_357_000, 1610)
-			.saturating_add(T::DbWeight::get().reads(1_u64))
-			.saturating_add(T::DbWeight::get().writes(1_u64))
-	}
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	/// Storage: `EthereumVault::PendingVaultRotation` (r:1 w:1)
-	/// Proof: `EthereumVault::PendingVaultRotation` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::KeygenSuccessVoters` (r:1 w:0)
-	/// Proof: `EthereumVault::KeygenSuccessVoters` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::KeygenFailureVoters` (r:1 w:1)
-	/// Proof: `EthereumVault::KeygenFailureVoters` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
-	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Reputation::Penalties` (r:1 w:0)
-	/// Proof: `Reputation::Penalties` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Reputation::Suspensions` (r:1 w:1)
-	/// Proof: `Reputation::Suspensions` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::KeygenResolutionPendingSince` (r:0 w:1)
-	/// Proof: `EthereumVault::KeygenResolutionPendingSince` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Reputation::Reputations` (r:47 w:47)
-	/// Proof: `Reputation::Reputations` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::KeygenSlashAmount` (r:1 w:0)
-	/// Proof: `EthereumVault::KeygenSlashAmount` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Flip::Account` (r:47 w:0)
-	/// Proof: `Flip::Account` (`max_values`: None, `max_size`: Some(80), added: 2555, mode: `MaxEncodedLen`)
-	/// The range of component `b` is `[1, 100]`.
-	fn on_initialize_failure(b: u32, ) -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `15642 + b * (32 ±0)`
-		//  Estimated: `19209 + b * (2555 ±0)`
-		// Minimum execution time: 81_978_000 picoseconds.
-		Weight::from_parts(297_047_481, 19209)
-			.saturating_add(RocksDbWeight::get().reads(54_u64))
-			.saturating_add(RocksDbWeight::get().writes(27_u64))
-			.saturating_add(Weight::from_parts(0, 2555).saturating_mul(b.into()))
+
+	// Storage: EthereumVault PendingKeyRotation (r:1 w:1)
+	// Storage: Validator CurrentEpoch (r:1 w:0)
+	// Storage: EthereumVault Vaults (r:0 w:1)
+	// Storage: EthereumVault CurrentKeyEpochAndState (r:0 w:1)
+	fn vault_key_rotated() -> Weight {
+		// Minimum execution time: 21_000 nanoseconds.
+		Weight::from_parts(22_000_000, 0)
+			.saturating_add(RocksDbWeight::get().reads(2))
+			.saturating_add(RocksDbWeight::get().writes(3))
 	}
-	/// Storage: `EthereumVault::PendingVaultRotation` (r:1 w:1)
-	/// Proof: `EthereumVault::PendingVaultRotation` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::KeygenSuccessVoters` (r:1 w:1)
-	/// Proof: `EthereumVault::KeygenSuccessVoters` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::ThresholdSignatureRequestIdCounter` (r:1 w:1)
-	/// Proof: `EthereumThresholdSigner::ThresholdSignatureRequestIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::CeremonyIdCounter` (r:1 w:1)
-	/// Proof: `EthereumVault::CeremonyIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::ThresholdSignatureResponseTimeout` (r:1 w:0)
-	/// Proof: `EthereumThresholdSigner::ThresholdSignatureResponseTimeout` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::CeremonyRetryQueues` (r:1 w:1)
-	/// Proof: `EthereumThresholdSigner::CeremonyRetryQueues` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::KeygenResolutionPendingSince` (r:0 w:1)
-	/// Proof: `EthereumVault::KeygenResolutionPendingSince` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::Signature` (r:0 w:1)
-	/// Proof: `EthereumThresholdSigner::Signature` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::PendingCeremonies` (r:0 w:1)
-	/// Proof: `EthereumThresholdSigner::PendingCeremonies` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::RequestCallback` (r:0 w:1)
-	/// Proof: `EthereumThresholdSigner::RequestCallback` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn on_initialize_success() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `10026`
-		//  Estimated: `13491`
-		// Minimum execution time: 90_589_000 picoseconds.
-		Weight::from_parts(93_286_000, 13491)
-			.saturating_add(RocksDbWeight::get().reads(6_u64))
-			.saturating_add(RocksDbWeight::get().writes(9_u64))
-	}
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: Some(33), added: 2508, mode: `MaxEncodedLen`)
-	/// Storage: `EthereumVault::PendingVaultRotation` (r:1 w:1)
-	/// Proof: `EthereumVault::PendingVaultRotation` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::KeygenSuccessVoters` (r:1 w:1)
-	/// Proof: `EthereumVault::KeygenSuccessVoters` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn report_keygen_outcome() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `14900`
-		//  Estimated: `18365`
-		// Minimum execution time: 62_306_000 picoseconds.
-		Weight::from_parts(63_205_000, 18365)
-			.saturating_add(RocksDbWeight::get().reads(3_u64))
-			.saturating_add(RocksDbWeight::get().writes(2_u64))
-	}
-	/// Storage: `EthereumThresholdSigner::Signature` (r:1 w:1)
-	/// Proof: `EthereumThresholdSigner::Signature` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::PendingVaultRotation` (r:0 w:1)
-	/// Proof: `EthereumVault::PendingVaultRotation` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn on_keygen_verification_result() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `347`
-		//  Estimated: `3812`
-		// Minimum execution time: 18_399_000 picoseconds.
-		Weight::from_parts(18_698_000, 3812)
-			.saturating_add(RocksDbWeight::get().reads(1_u64))
-			.saturating_add(RocksDbWeight::get().writes(2_u64))
-	}
-	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
-	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::Vaults` (r:0 w:1)
-	/// Proof: `EthereumVault::Vaults` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::CurrentVaultEpochAndState` (r:0 w:1)
-	/// Proof: `EthereumVault::CurrentVaultEpochAndState` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::PendingVaultRotation` (r:0 w:1)
-	/// Proof: `EthereumVault::PendingVaultRotation` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Environment::RuntimeSafeMode` (r:0 w:1)
-	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	// Storage: Validator CurrentEpoch (r:1 w:0)
+	// Storage: Environment CurrentSystemState (r:1 w:1)
+	// Storage: EthereumVault Vaults (r:0 w:1)
+	// Storage: EthereumVault CurrentKeyEpochAndState (r:0 w:1)
 	fn vault_key_rotated_externally() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `339`
@@ -271,16 +90,5 @@ impl WeightInfo for () {
 		Weight::from_parts(25_170_000, 1824)
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(4_u64))
-	}
-	/// Storage: `EthereumVault::KeygenResponseTimeout` (r:1 w:1)
-	/// Proof: `EthereumVault::KeygenResponseTimeout` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn set_keygen_response_timeout() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `125`
-		//  Estimated: `1610`
-		// Minimum execution time: 13_170_000 picoseconds.
-		Weight::from_parts(13_357_000, 1610)
-			.saturating_add(RocksDbWeight::get().reads(1_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
 }

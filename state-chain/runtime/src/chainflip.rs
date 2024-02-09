@@ -1,6 +1,6 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 pub mod address_derivation;
-pub mod all_vaults_rotator;
+pub mod all_keys_rotator;
 pub mod backup_node_rewards;
 pub mod chain_instances;
 pub mod decompose_recompose;
@@ -9,10 +9,11 @@ mod missed_authorship_slots;
 mod offences;
 mod signer_nomination;
 use crate::{
-	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress, BitcoinVault,
-	BlockNumber, Emissions, Environment, EthereumBroadcaster, EthereumChainTracking,
-	EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster, PolkadotChainTracking,
-	PolkadotIngressEgress, PolkadotVault, Runtime, RuntimeCall, System, Validator, YEAR,
+	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress,
+	BitcoinThresholdSigner, BlockNumber, Emissions, Environment, EthereumBroadcaster,
+	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, Hash, PolkadotBroadcaster,
+	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
+	System, Validator, YEAR,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -62,6 +63,7 @@ use frame_support::{
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
 use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
 pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
 use sp_std::prelude::*;
@@ -77,6 +79,7 @@ impl Chainflip for Runtime {
 	type AccountRoleRegistry = AccountRoles;
 	type FundingInfo = Flip;
 }
+
 struct BackupNodeEmissions;
 
 impl RewardsDistribution for BackupNodeEmissions {
@@ -325,7 +328,7 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 			// It should not be possible to get None here, since we never send
 			// any transactions unless we have a vault account and associated
 			// proxy.
-			signer: <PolkadotVault as KeyProvider<PolkadotCrypto>>::active_epoch_key()
+			signer: <PolkadotThresholdSigner as KeyProvider<PolkadotCrypto>>::active_epoch_key()
 				.map(|epoch_key| epoch_key.key)
 				.defensive_unwrap_or_default(),
 			nonce: Environment::next_polkadot_proxy_account_nonce(reset_nonce),
@@ -360,7 +363,7 @@ impl ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount> for BtcEn
 
 impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
 	fn lookup(_: ()) -> Option<cf_chains::btc::AggKey> {
-		<BitcoinVault as KeyProvider<BitcoinCrypto>>::active_epoch_key()
+		<BitcoinThresholdSigner as KeyProvider<BitcoinCrypto>>::active_epoch_key()
 			.map(|epoch_key| epoch_key.key)
 	}
 }
@@ -435,6 +438,7 @@ macro_rules! impl_deposit_api_for_anychain {
 			fn request_liquidity_deposit_address(
 				lp_account: Self::AccountId,
 				source_asset: Asset,
+				boost_fee: BasisPoints
 			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber), DispatchError> {
 				match source_asset.into() {
 					$(
@@ -442,6 +446,7 @@ macro_rules! impl_deposit_api_for_anychain {
 							$pallet::request_liquidity_deposit_address(
 								lp_account,
 								source_asset.try_into().unwrap(),
+								boost_fee
 							).map(|(channel, address, block_number)| (channel, address, block_number.into())),
 					)+
 				}
@@ -454,6 +459,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				broker_commission_bps: BasisPoints,
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadata>,
+				boost_fee: BasisPoints
 			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber), DispatchError> {
 				match source_asset.into() {
 					$(
@@ -464,6 +470,7 @@ macro_rules! impl_deposit_api_for_anychain {
 							broker_commission_bps,
 							broker_id,
 							channel_metadata,
+							boost_fee
 						).map(|(channel, address, block_number)| (channel, address, block_number.into())),
 					)+
 				}
@@ -631,4 +638,14 @@ pub fn calculate_account_apy(account_id: &AccountId) -> Option<u32> {
 			.checked_mul_int(10_000u32)
 			.unwrap_or_default()
 	})
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug, Encode, Decode)]
+pub struct BlockUpdate<Data> {
+	pub block_hash: Hash,
+	pub block_number: BlockNumber,
+	// NOTE: Flatten requires Data types to be struct or map
+	// Also flatten is incompatible with u128, so AssetAmounts needs to be String type.
+	#[serde(flatten)]
+	pub data: Data,
 }

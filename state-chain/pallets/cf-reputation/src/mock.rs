@@ -14,6 +14,7 @@ type ValidatorId = u64;
 
 thread_local! {
 	pub static SLASHES: RefCell<Vec<u64>> = RefCell::new(Default::default());
+	pub static HEARTBEATS: RefCell<u32> = RefCell::new(Default::default());
 }
 
 construct_runtime!(
@@ -114,12 +115,22 @@ impl Slashing for MockSlasher {
 pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
 
+/// Counts the number of heartbeats.
 pub struct MockHeartbeat;
+
+impl MockHeartbeat {
+	pub fn heartbeats() -> u32 {
+		HEARTBEATS.with(|heartbeats| *heartbeats.borrow())
+	}
+}
+
 impl Heartbeat for MockHeartbeat {
 	type ValidatorId = ValidatorId;
 	type BlockNumber = u64;
 
-	fn on_heartbeat_interval() {}
+	fn on_heartbeat_interval() {
+		HEARTBEATS.with(|heartbeats| *heartbeats.borrow_mut() += 1);
+	}
 }
 
 #[derive(

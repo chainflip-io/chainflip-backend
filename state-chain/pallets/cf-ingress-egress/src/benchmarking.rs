@@ -54,6 +54,7 @@ mod benchmarks {
 				action: ChannelAction::<T::AccountId>::LiquidityProvision {
 					lp_account: account("doogle", 0, 0),
 				},
+				boost_fee: 0,
 			},
 		);
 
@@ -108,6 +109,7 @@ mod benchmarks {
 					action: ChannelAction::<T::AccountId>::LiquidityProvision {
 						lp_account: account("doogle", 0, 0),
 					},
+					boost_fee: 0,
 				};
 			channel.deposit_channel.state.on_fetch_scheduled();
 			DepositChannelLookup::<T, I>::insert(deposit_address.clone(), channel);

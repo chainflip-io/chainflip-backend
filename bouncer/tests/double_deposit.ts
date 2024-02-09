@@ -41,7 +41,7 @@ async function main(): Promise<void> {
     .registerLiquidityRefundAddress(encodedEthAddr)
     .signAndSend(lp);
 
-  await chainflip.tx.liquidityProvider.requestLiquidityDepositAddress('Eth').signAndSend(lp);
+  await chainflip.tx.liquidityProvider.requestLiquidityDepositAddress('Eth', null).signAndSend(lp);
   const ethIngressKey = (
     await observeEvent(
       'liquidityProvider:LiquidityDepositAddressReady',

@@ -19,7 +19,6 @@
 
 #[cfg(test)]
 mod tests;
-pub mod v1;
 
 use core::convert::Infallible;
 

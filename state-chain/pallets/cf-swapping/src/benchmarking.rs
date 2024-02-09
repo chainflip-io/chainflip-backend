@@ -28,6 +28,7 @@ mod benchmarks {
 			destination_asset: Asset::Usdc,
 			destination_address: EncodedAddress::benchmark_value(),
 			broker_commission_bps: 0,
+			boost_fee: 0,
 			channel_metadata: None,
 		};
 		#[block]
@@ -78,13 +79,15 @@ mod benchmarks {
 		}
 
 		assert_eq!(
-			SwapQueue::<T>::get(),
+			SwapQueue::<T>::get(
+				<frame_system::Pallet<T>>::block_number() + SWAP_DELAY_BLOCKS.into()
+			),
 			vec![Swap::new(
 				1,
 				Asset::Usdc,
 				Asset::Eth,
 				deposit_amount,
-				SwapType::Swap(ForeignChainAddress::benchmark_value())
+				SwapType::Swap(ForeignChainAddress::benchmark_value()),
 			)]
 		);
 	}
@@ -116,10 +119,12 @@ mod benchmarks {
 		}
 
 		assert_eq!(
-			SwapQueue::<T>::get(),
+			SwapQueue::<T>::get(
+				<frame_system::Pallet<T>>::block_number() + SWAP_DELAY_BLOCKS.into()
+			),
 			vec![
-				Swap::new(1, Asset::Usdc, Asset::Eth, 1_000 - 1, SwapType::CcmPrincipal(1)),
-				Swap::new(2, Asset::Usdc, Asset::Eth, 1, SwapType::CcmGas(1))
+				Swap::new(1, Asset::Usdc, Asset::Eth, 1_000 - 1, SwapType::CcmPrincipal(1),),
+				Swap::new(2, Asset::Usdc, Asset::Eth, 1, SwapType::CcmGas(1),)
 			]
 		);
 	}

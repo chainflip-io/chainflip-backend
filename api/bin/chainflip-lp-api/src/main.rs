@@ -1,4 +1,4 @@
-use cf_primitives::{AccountId, BlockNumber, EgressId};
+use cf_primitives::{AccountId, BasisPoints, BlockNumber, EgressId};
 use cf_utilities::{
 	rpc::NumberOrHex,
 	task_scope::{task_scope, Scope},
@@ -15,8 +15,8 @@ use chainflip_api::{
 		AccountRole, Asset, ForeignChain, Hash, RedemptionAmount,
 	},
 	settings::StateChain,
-	BlockInfo, ChainApi, EthereumAddress, OperatorApi, SignedExtrinsicApi, StateChainApi,
-	StorageApi, WaitFor,
+	BlockInfo, BlockUpdate, ChainApi, EthereumAddress, OperatorApi, SignedExtrinsicApi,
+	StateChainApi, StorageApi, WaitFor,
 };
 use clap::Parser;
 use custom_rpc::{
@@ -113,6 +113,7 @@ pub trait Rpc {
 		&self,
 		asset: RpcAsset,
 		wait_for: Option<WaitFor>,
+		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<ApiWaitForResult<String>>;
 
 	#[method(name = "register_liquidity_refund_address")]
@@ -193,11 +194,11 @@ pub trait Rpc {
 		executor_address: Option<EthereumAddress>,
 	) -> RpcResult<Hash>;
 
-	#[subscription(name = "subscribe_order_fills", item = OrderFills)]
+	#[subscription(name = "subscribe_order_fills", item = BlockUpdate<OrderFills>)]
 	fn subscribe_order_fills(&self);
 
 	#[method(name = "order_fills")]
-	async fn order_fills(&self, at: Option<Hash>) -> RpcResult<OrderFills>;
+	async fn order_fills(&self, at: Option<Hash>) -> RpcResult<BlockUpdate<OrderFills>>;
 }
 
 pub struct RpcServerImpl {
@@ -218,8 +219,6 @@ impl RpcServerImpl {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct OrderFills {
-	block_hash: Hash,
-	block_number: BlockNumber,
 	fills: Vec<OrderFilled>,
 }
 
@@ -256,11 +255,16 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		asset: RpcAsset,
 		wait_for: Option<WaitFor>,
+		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<ApiWaitForResult<String>> {
 		Ok(self
 			.api
 			.lp_api()
-			.request_liquidity_deposit_address(asset.try_into()?, wait_for.unwrap_or_default())
+			.request_liquidity_deposit_address(
+				asset.try_into()?,
+				wait_for.unwrap_or_default(),
+				boost_fee,
+			)
 			.await
 			.map(|result| result.map_details(|address| address.to_string()))?)
 	}
@@ -490,7 +494,7 @@ impl RpcServer for RpcServerImpl {
 		Ok(())
 	}
 
-	async fn order_fills(&self, at: Option<Hash>) -> RpcResult<OrderFills> {
+	async fn order_fills(&self, at: Option<Hash>) -> RpcResult<BlockUpdate<OrderFills>> {
 		let state_chain_client = &self.api.state_chain_client;
 
 		let block = if let Some(at) = at {
@@ -506,14 +510,14 @@ impl RpcServer for RpcServerImpl {
 async fn order_fills<StateChainClient>(
 	state_chain_client: Arc<StateChainClient>,
 	block: BlockInfo,
-) -> Result<OrderFills, jsonrpsee::core::Error>
+) -> Result<BlockUpdate<OrderFills>, jsonrpsee::core::Error>
 where
 	StateChainClient: StorageApi,
 {
-	Ok(OrderFills {
+	Ok(BlockUpdate::<OrderFills> {
 		block_hash: block.hash,
 		block_number: block.number,
-		fills: {
+		data: {
 			let (previous_pools, pools, events) = try_join!(
 				state_chain_client.storage_map::<pallet_cf_pools::Pools<
 					chainflip_api::primitives::state_chain_runtime::Runtime,
@@ -668,7 +672,7 @@ where
 				})
 				.collect::<Vec<_>>();
 
-			order_fills
+			OrderFills { fills: order_fills }
 		},
 	})
 }

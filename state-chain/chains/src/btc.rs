@@ -240,7 +240,6 @@ impl Chain for Bitcoin {
 	const GAS_ASSET: Self::ChainAsset = assets::btc::Asset::Btc;
 
 	type ChainCrypto = BitcoinCrypto;
-
 	type ChainBlockNumber = BlockNumber;
 	type ChainAmount = BtcAmount;
 	type TransactionFee = Self::ChainAmount;
@@ -279,6 +278,7 @@ impl ChainCrypto for BitcoinCrypto {
 	type ThresholdSignature = Vec<Signature>;
 	type TransactionInId = Hash;
 	type TransactionOutId = Hash;
+	type KeyHandoverIsRequired = ConstBool<true>;
 
 	type GovKey = Self::AggKey;
 

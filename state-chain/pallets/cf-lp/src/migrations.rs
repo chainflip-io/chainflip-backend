@@ -1,6 +1,5 @@
-pub mod remove_expiries;
+use crate::Pallet;
 
-use cf_runtime_upgrade_utilities::VersionedMigration;
+use cf_runtime_upgrade_utilities::{migration_template::Migration, VersionedMigration};
 
-pub type PalletMigration<T> =
-	(VersionedMigration<crate::Pallet<T>, remove_expiries::Migration<T>, 0, 1>,);
+pub type PalletMigration<T> = VersionedMigration<Pallet<T>, Migration<T>, 0, 1>;

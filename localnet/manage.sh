@@ -100,6 +100,9 @@ build-localnet() {
   echo "🪄 Generating docker-compose.yml"
   envsubst < ./localnet/docker-compose.template.yml > ./localnet/docker-compose.yml
 
+  mkdir -p /tmp/chainflip/
+  touch /tmp/chainflip/debug.log
+
   echo "🔮 Initializing Network"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
   echo "🦺 Updating init state files permissions ..."
@@ -125,7 +128,7 @@ build-localnet() {
   if which solana-test-validator >>$DEBUG_OUTPUT_DESTINATION 2>&1; then
     echo "☀️ Waiting for Solana node to start"
     ./localnet/init/scripts/start-solana.sh
-    until curl -s http://localhost:8899 >>$DEBUG_OUTPUT_DESTINATION 2>&1; do sleep 1; done
+    until curl -s http://localhost:8899 >> $DEBUG_OUTPUT_DESTINATION 2>&1; do sleep 1; done
   else
     echo "☀️ Solana not installed, skipping..."
   fi
