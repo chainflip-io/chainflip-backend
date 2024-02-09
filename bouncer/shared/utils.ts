@@ -484,9 +484,14 @@ export function getWhaleMnemonic(chain: Chain): string {
       );
     case 'Arbitrum':
       return (
-        process.env.ARB_WHALE_MNEMONIC ??
-        'indoor dish desk flag debris potato excuse depart ticket judge file exit'
+        process.env.ETH_USDC_WHALE_MNEMONIC ??
+        'test test test test test test test test test test test junk'
       );
+
+    // return (
+    //   process.env.ARB_WHALE_MNEMONIC ??
+    //   'indoor dish desk flag debris potato excuse depart ticket judge file exit'
+    // );
     default:
       throw new Error(`${chain} does not have a whale mnemonic`);
   }
@@ -509,9 +514,13 @@ export function getWhaleKey(chain: Chain): string {
         '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
       );
     case 'Arbitrum':
+      // return (
+      //   process.env.ARB_WHALE ??
+      //   '0xb6b15c8cb491557369f3c7d2c287b053eb229daa9c22138887752191c9520659'
+      // );
       return (
-        process.env.ARB_WHALE ??
-        '0xb6b15c8cb491557369f3c7d2c287b053eb229daa9c22138887752191c9520659'
+        process.env.ETH_USDC_WHALE ??
+        '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
       );
     default:
       throw new Error(`${chain} does not have a whale key`);
