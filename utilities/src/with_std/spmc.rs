@@ -61,6 +61,7 @@ impl<T> Sender<T> {
 	}
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct Receiver<T>(async_broadcast::Receiver<T>, tokio::sync::watch::Receiver<()>);
 impl<T: Clone> Stream for Receiver<T> {

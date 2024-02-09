@@ -153,8 +153,8 @@ mod test_versioned_upgrade {
 	}
 
 	thread_local! {
-		pub static UPGRADES_COMPLETED: RefCell<u32> = RefCell::new(0);
-		pub static POST_UPGRADE_ERROR: RefCell<bool> = RefCell::new(false);
+		pub static UPGRADES_COMPLETED: RefCell<u32> = const { RefCell::new(0) };
+		pub static POST_UPGRADE_ERROR: RefCell<bool> = const { RefCell::new(false) };
 	}
 
 	impl GetStorageVersion for Pallet {

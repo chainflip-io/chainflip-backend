@@ -90,7 +90,8 @@ cf_traits::impl_mock_on_account_funded!(AccountId, u128);
 pub struct MockBroadcaster;
 
 thread_local! {
-	pub static REDEMPTION_BROADCAST_REQUESTS: RefCell<Vec<<Ethereum as Chain>::ChainAmount>> = RefCell::new(vec![]);
+	pub static REDEMPTION_BROADCAST_REQUESTS: RefCell<Vec<<Ethereum as Chain>::ChainAmount>> =
+		const { RefCell::new(vec![]) };
 }
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]

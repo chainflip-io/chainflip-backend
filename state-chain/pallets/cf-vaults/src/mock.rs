@@ -20,7 +20,7 @@ use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
 thread_local! {
-	pub static SET_AGG_KEY_WITH_AGG_KEY_REQUIRED: RefCell<bool> = RefCell::new(true);
+	pub static SET_AGG_KEY_WITH_AGG_KEY_REQUIRED: RefCell<bool> = const { RefCell::new(true) };
 }
 
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -185,7 +185,7 @@ impl SafeMode for MockRuntimeSafeMode {
 }
 
 thread_local! {
-	pub static SAFE_MODE: RefCell<MockRuntimeSafeMode> = RefCell::new(MockRuntimeSafeMode::CodeGreen);
+	pub static SAFE_MODE: RefCell<MockRuntimeSafeMode> = const { RefCell::new(MockRuntimeSafeMode::CodeGreen) };
 }
 
 //pub struct MockRuntimeSafeMode;
