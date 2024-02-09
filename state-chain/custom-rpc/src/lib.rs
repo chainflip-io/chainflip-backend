@@ -114,7 +114,7 @@ pub enum RpcAccountInfo {
 		balances: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
 		refund_addresses: HashMap<ForeignChain, Option<ForeignChainAddressHumanreadable>>,
 		flip_balance: NumberOrHex,
-		earned_fees: AssetAmount,
+		earned_fees: BTreeMap<ForeignChain, Vec<RpcAssetWithAmount>>,
 	},
 	Validator {
 		flip_balance: NumberOrHex,
@@ -160,7 +160,21 @@ impl RpcAccountInfo {
 				.into_iter()
 				.map(|(chain, address)| (chain, address.map(|a| a.to_humanreadable(network))))
 				.collect(),
-			earned_fees: info.earned_fees,
+			earned_fees: info
+				.earned_fees
+				.into_iter()
+				.map(|(chain, fees)| {
+					(
+						chain,
+						fees.into_iter()
+							.map(|(asset, amount)| RpcAssetWithAmount {
+								asset: asset.into(),
+								amount,
+							})
+							.collect(),
+					)
+				})
+				.collect(),
 		}
 	}
 
@@ -1340,7 +1354,10 @@ mod test {
 					(Asset::Btc, 0),
 					(Asset::Flip, u128::MAX / 2),
 				],
-				earned_fees: 0,
+				earned_fees: BTreeMap::from([(
+					ForeignChain::Bitcoin,
+					vec![(Asset::Btc, 1_000_000u32.into())],
+				)]),
 			},
 			cf_primitives::NetworkEnvironment::Mainnet,
 			0,

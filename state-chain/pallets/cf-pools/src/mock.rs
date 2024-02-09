@@ -71,7 +71,7 @@ parameter_types! {
 	pub static AliceDebitedUsdc: AssetAmount = Default::default();
 	pub static BobDebitedEth: AssetAmount = Default::default();
 	pub static BobDebitedUsdc: AssetAmount = Default::default();
-	pub static RecordedFees: BTreeMap<AccountId, AssetAmount> = BTreeMap::new();
+	pub static RecordedFees: BTreeMap<AccountId, (Asset, AssetAmount)> = BTreeMap::new();
 }
 pub struct MockBalance;
 impl LpBalanceApi for MockBalance {
@@ -122,9 +122,9 @@ impl LpBalanceApi for MockBalance {
 		Ok(())
 	}
 
-	fn record_fees(who: &Self::AccountId, amount: AssetAmount) {
+	fn record_fees(who: &Self::AccountId, amount: AssetAmount, asset: Asset) {
 		RecordedFees::mutate(|recorded_fees| {
-			recorded_fees.entry(*who).and_modify(|v| *v += amount).or_insert(amount);
+			recorded_fees.insert(*who, (asset, amount));
 		});
 	}
 

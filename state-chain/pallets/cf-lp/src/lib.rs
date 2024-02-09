@@ -141,7 +141,7 @@ pub mod pallet {
 	#[pallet::storage]
 	/// Historical earned fees for an account. Map: AccountId => AssetAmount
 	pub type HistoricalEarnedFees<T: Config> =
-		StorageDoubleMap<_, Twox64Concat, T::AccountId, Identity, Asset, AssetAmount>;
+		StorageDoubleMap<_, Twox64Concat, T::AccountId, Identity, Asset, AssetAmount, ValueQuery>;
 
 	/// Stores the registered energency withdrawal address for an Account
 	#[pallet::storage]
@@ -374,21 +374,7 @@ impl<T: Config> LpBalanceApi for Pallet<T> {
 	}
 
 	fn record_fees(account_id: &Self::AccountId, amount: AssetAmount, asset: Asset) {
-		// HistoricalEarnedFees::<T>::mutate(account_id, asset, |fee| {
-		// 	if let Some(fee) = fee {
-		// 		*fee = fee.saturating_add(amount);
-		// 	} else {
-		// 		*fee = amount;
-		// 	}
-		// }
-
-		HistoricalEarnedFees::<T>::mutate(account_id, asset, |fee| {
-			if let Some(fee) = fee {
-				Some(fee.saturating_add(amount))
-			} else {
-				Some(amount)
-			}
-		});
+		HistoricalEarnedFees::<T>::mutate(account_id, asset, |fee| fee.saturating_add(amount));
 	}
 
 	fn asset_balances(who: &Self::AccountId) -> Vec<(Asset, AssetAmount)> {
