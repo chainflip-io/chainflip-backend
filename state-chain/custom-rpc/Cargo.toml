@@ -4,6 +4,9 @@ version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
 edition = '2021'
 
+[lints]
+workspace = true
+
 [dependencies]
 
 # Chainflip Runtime
@@ -22,7 +25,7 @@ cf-utilities = { package = 'utilities', path = '../../utilities' }
 cf-amm = { path = '../amm' }
 pallet-cf-governance = { path = "../pallets/cf-governance" }
 pallet-cf-pools = { path = "../pallets/cf-pools" }
-pallet-cf-witnesser = { path = "../pallets/cf-witnesser"}
+pallet-cf-witnesser = { path = "../pallets/cf-witnesser" }
 
 sp-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6" }
 sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6" }

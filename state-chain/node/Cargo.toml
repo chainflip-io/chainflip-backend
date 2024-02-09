@@ -17,6 +17,9 @@ name = 'chainflip-node'
 targets = ['x86_64-unknown-linux-gnu']
 
 
+[lints]
+workspace = true
+
 [dependencies]
 # Chainflip Runtime
 state-chain-runtime = { path = "../runtime" }

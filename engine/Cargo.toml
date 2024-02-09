@@ -37,6 +37,9 @@ maintainer-scripts = "package/berghain"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = "1.0"
 async-broadcast = "0.5"

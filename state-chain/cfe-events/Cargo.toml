@@ -6,6 +6,9 @@ authors = ['Chainflip <https://chainflip.io>']
 description = 'Events for CFE'
 
 
+[lints]
+workspace = true
+
 [dependencies]
 # Internal dependencies
 cf-primitives = { path = '../primitives', default-features = false }

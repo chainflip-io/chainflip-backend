@@ -18,6 +18,9 @@ systemd-units = { enable = false }
 [[bin]]
 name = "chainflip-lp-api"
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = "1.0"
 clap = { version = "3.2.23", features = ["derive", "env"] }

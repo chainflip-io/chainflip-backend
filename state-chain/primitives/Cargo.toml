@@ -5,6 +5,9 @@ edition = '2021'
 authors = ['Chainflip <https://chainflip.io>']
 description = 'Common primitive types used across Chainflip'
 
+[lints]
+workspace = true
+
 [dependencies]
 serde = { default_features = false, version = '1.0.195', features = [
   'alloc',

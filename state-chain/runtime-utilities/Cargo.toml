@@ -5,6 +5,9 @@ edition = '2021'
 authors = ['Chainflip <https://chainflip.io>']
 description = 'Utilities for interacting with substrate runtimes.'
 
+[lints]
+workspace = true
+
 [dependencies]
 log = { version = '0.4.16', default-features = false }
 cf-runtime-macros = { path = './macros', optional = true, default-features = false }

@@ -18,6 +18,9 @@ systemd-units = { enable = false }
 [[bin]]
 name = "chainflip-broker-api"
 
+[lints]
+workspace = true
+
 [dependencies]
 chainflip-api = { path = "../../lib" }
 cf-utilities = { package = "utilities", path = "../../../utilities" }
