@@ -129,6 +129,12 @@ jobs:
       - name: Checkout 🏁
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
+      - name: Login to DockerHub 🔑
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
+        with:
+          username: ${{ secrets.CF_DOCKERHUB_USERNAME }}
+          password: ${{ secrets.CF_DOCKERHUB_TOKEN }}
+
       - name: Lint 🐳🔬
         uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4bfde3cf
         with:

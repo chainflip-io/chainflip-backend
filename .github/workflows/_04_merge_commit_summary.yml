@@ -7,7 +7,7 @@ env:
 jobs:
   build-deb:
 #    runs-on: ubuntu-20.04
-    runs-on: [nscloud-ubuntu-22.04-amd64-1x2]
+    runs-on: [nscloud-ubuntu-22.04-amd64-2x4]
     steps:
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11

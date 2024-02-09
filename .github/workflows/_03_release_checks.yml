@@ -16,7 +16,7 @@ env:
 jobs:
   check-version:
 #    runs-on: ubuntu-latest
-    runs-on: [nscloud-ubuntu-22.04-amd64-1x2]
+    runs-on: [nscloud-ubuntu-22.04-amd64-2x4]
     strategy:
       matrix:
         manifest:
@@ -56,7 +56,7 @@ jobs:
 
   check-engine-systemd:
 #    runs-on: ubuntu-latest
-    runs-on: [nscloud-ubuntu-22.04-amd64-1x2]
+    runs-on: [nscloud-ubuntu-22.04-amd64-2x4]
     steps:
       - name: Checkout 🏁
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -67,7 +67,7 @@ jobs:
 
   check-changelog:
 #    runs-on: ubuntu-latest
-    runs-on: [nscloud-ubuntu-22.04-amd64-1x2]
+    runs-on: [nscloud-ubuntu-22.04-amd64-2x4]
     steps:
       - name: Checkout 🏁
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -78,7 +78,7 @@ jobs:
 
   check-runtime-spec-version:
 #    runs-on: ubuntu-latest
-    runs-on: [nscloud-ubuntu-22.04-amd64-1x2]
+    runs-on: [nscloud-ubuntu-22.04-amd64-2x4]
     steps:
       - name: Checkout 🏁
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
