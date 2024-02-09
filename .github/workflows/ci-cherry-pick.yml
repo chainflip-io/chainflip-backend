@@ -3,7 +3,7 @@ name: Cherry-Pick to Release Branch
 on:
   push:
     branches:
-      - pla-1142
+      - main
 
 run-name: Cherry pick `${{ github.sha }}` to release branch
 
@@ -12,7 +12,7 @@ jobs:
     if: contains(github.event.head_commit.message, '[pick]')
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout main branch
+      - name: Checkout branch
         uses: actions/checkout@v3
 
       - name: Configure Git
