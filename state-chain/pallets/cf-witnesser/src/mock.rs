@@ -1,11 +1,12 @@
 #![cfg(test)]
 
-use crate::{self as pallet_cf_witness, WitnessDataExtraction};
+use crate::{self as pallet_cf_witness, PalletOffence, WitnessDataExtraction};
 use cf_traits::{
-	impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleRegistry, CallDispatchFilter,
+	impl_mock_chainflip, impl_mock_runtime_safe_mode,
+	mocks::offence_reporting::MockOffenceReporter, AccountRoleRegistry, CallDispatchFilter,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{pallet_prelude::RuntimeDebug, parameter_types};
+use frame_support::{pallet_prelude::RuntimeDebug, parameter_types, traits::ConstU64};
 use frame_system as system;
 use scale_info::TypeInfo;
 use sp_core::H256;
@@ -78,6 +79,9 @@ impl pallet_cf_witness::Config for Test {
 	type RuntimeCall = RuntimeCall;
 	type SafeMode = MockRuntimeSafeMode;
 	type CallDispatchPermission = MockCallFilter;
+	type Offence = PalletOffence;
+	type OffenceReporter = MockOffenceReporter<u64, PalletOffence>;
+	type LateWitnessGracePeriod = ConstU64<10>;
 	type WeightInfo = ();
 }
 
