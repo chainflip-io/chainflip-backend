@@ -14,26 +14,6 @@ env:
   SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
 
 jobs:
-  unit-tests:
-#    runs-on: [hetzner]
-    runs-on: [nscloud-ubuntu-22.04-amd64-32x64]
-    container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-07-31-ubuntu-20.04"
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-
-      - name: Setup sccache
-        run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
-
-      - name: cargo cf-test-ci --locked
-        run: |
-          cargo cf-test-ci --locked
-          sccache --show-stats
-
   coverage:
     runs-on: [hetzner]
     container:
@@ -41,9 +21,20 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+      env:
+        NSC_CACHE_PATH: ${{ env.NSC_CACHE_PATH }} # env.NSC_CACHE_PATH contains the path to Cache Volume directory, that is `/cache`.
+      volumes:
+        - /cache:/cache # Where the Cache Volume is mounted.
+      options: --cap-add=SYS_ADMIN # Required to by nscloud-cache-action to call `mount`.
+
     steps:
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Setup Rust cache
+        uses: namespacelabs/nscloud-cache-action@v1
+        with:
+          cache: rust
 
       - name: Setup sccache
         run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
