@@ -30,7 +30,7 @@ jobs:
           BRANCH=pick/non-breaking-$(date +%s)
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
           
-          COMMIT_SHA=$(git rev-parse HEAD)
+          COMMIT_SHA=${{ github.event.pull_request.head.sha }}
           
           git checkout $RELEASE_BRANCH
           git checkout -b $BRANCH
@@ -45,7 +45,7 @@ jobs:
         with:
           token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
           commit-message: Cherry-picked from ${{ github.event.pull_request.head.sha }}
-          title: "Cherry-Pick: ${{ github.event.pull_request.title }}"
+          title: "Cherry-Pick ${{ github.event.pull_request.head.sha }} to ${{ env.RELEASE_BRANCH }}"
           branch: ${{ env.BRANCH }}
           base: '${{ env.RELEASE_BRANCH }}' # Update with your current release branch
           reviewers: 'martin-chainflip'
