@@ -144,11 +144,17 @@ export async function testEvmDeposits() {
     testSuccessiveNativeDeposits('ETH', 'BTC'),
     testSuccessiveNativeDeposits('ETH', 'FLIP'),
     testSuccessiveNativeDeposits('ETH', 'USDC'),
+    testSuccessiveNativeDeposits('ARBETH', 'DOT'),
+    testSuccessiveNativeDeposits('ARBETH', 'BTC'),
+    testSuccessiveNativeDeposits('ARBETH', 'FLIP'),
+    testSuccessiveNativeDeposits('ARBETH', 'USDC'),
   ]);
 
   const multipleTxSwapsTest = Promise.all([
     testTxMultipleContractSwaps('ETH', 'DOT'),
     testTxMultipleContractSwaps('ETH', 'FLIP'),
+    testTxMultipleContractSwaps('ARBETH', 'DOT'),
+    testTxMultipleContractSwaps('ARBETH', 'FLIP'),
   ]);
 
   await Promise.all([depositTests, duplicatedDepositTest, multipleTxSwapsTest]);

@@ -197,15 +197,9 @@ export async function testAllSwaps() {
     (BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * 9n).toString(),
   );
 
-  // TODO: Remove this but for now skipping arbitrum swaps as they are not supported yet
-  Object.values(Assets).forEach((sourceAsset) => {
-    if (sourceAsset === 'ARBETH' || sourceAsset === 'ARBUSDC') return;
-
+  Object.values(Assets).forEach((sourceAsset) =>
     Object.values(Assets)
-      .filter(
-        (destAsset) =>
-          sourceAsset !== destAsset && destAsset !== 'ARBETH' && destAsset !== 'ARBUSDC',
-      )
+      .filter((destAsset) => sourceAsset !== destAsset)
       .forEach((destAsset) => {
         // Regular swaps
         appendSwap(sourceAsset, destAsset, testSwap);
@@ -223,8 +217,8 @@ export async function testAllSwaps() {
           // CCM swaps
           appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
         }
-      });
-  });
+      }),
+  );
 
   await Promise.all(allSwaps);
 

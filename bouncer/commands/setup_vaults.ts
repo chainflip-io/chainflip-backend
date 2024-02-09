@@ -7,6 +7,7 @@
 // For example: ./commands/setup_vaults.ts
 
 import { AddressOrPair } from '@polkadot/api/types';
+import Web3 from 'web3';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import {
   getChainflipApi,
@@ -15,11 +16,14 @@ import {
   observeEvent,
   sleep,
   handleSubstrateError,
+  getEvmEndpoint,
+  getEvmContractAddress,
 } from '../shared/utils';
 import { aliceKeyringPair } from '../shared/polkadot_keyring';
 
 async function main(): Promise<void> {
   const btcClient = getBtcClient();
+  const arbClient = new Web3(getEvmEndpoint('Arbitrum'));
   const alice = await aliceKeyringPair();
 
   const chainflip = await getChainflipApi();
@@ -129,7 +133,16 @@ async function main(): Promise<void> {
       btcKey,
     ),
   );
-
+  await submitGovernanceExtrinsic(
+    chainflip.tx.environment.witnessInitializeArbitrumVault(
+      await arbClient.eth.getBlockNumber(),
+      getEvmContractAddress('Arbitrum', 'KEY_MANAGER'),
+      getEvmContractAddress('Arbitrum', 'VAULT'),
+      getEvmContractAddress('Arbitrum', 'ADDRESS_CHECKER'),
+      arbClient.eth.getChainId(),
+      getEvmContractAddress('Arbitrum', 'ARBUSDC'),
+    ),
+  );
   // Confirmation
   console.log('Waiting for new epoch...');
   await observeEvent('validator:NewEpoch', chainflip);

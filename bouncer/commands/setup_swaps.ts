@@ -40,8 +40,8 @@ async function main(): Promise<void> {
     createLpPool('DOT', price.get('DOT')!),
     createLpPool('BTC', price.get('BTC')!),
     createLpPool('FLIP', price.get('FLIP')!),
-    // createLpPool('ARBETH', price.get('ARBETH')!),
-    // createLpPool('ARBUSDC', price.get('ARBUSDC')!),
+    createLpPool('ARBETH', price.get('ARBETH')!),
+    createLpPool('ARBUSDC', price.get('ARBUSDC')!),
   ]);
 
   await Promise.all([
@@ -50,8 +50,8 @@ async function main(): Promise<void> {
     provideLiquidity('DOT', deposits.get('DOT')!),
     provideLiquidity('BTC', deposits.get('BTC')!),
     provideLiquidity('FLIP', deposits.get('FLIP')!),
-    // provideLiquidity('ARBETH', deposits.get('ARBETH')!),
-    // provideLiquidity('ARBUSDC', deposits.get('ARBUSDC')!),
+    provideLiquidity('ARBETH', deposits.get('ARBETH')!),
+    provideLiquidity('ARBUSDC', deposits.get('ARBUSDC')!),
   ]);
 
   await Promise.all([
@@ -59,8 +59,8 @@ async function main(): Promise<void> {
     rangeOrder('DOT', deposits.get('DOT')! * 0.9999),
     rangeOrder('BTC', deposits.get('BTC')! * 0.9999),
     rangeOrder('FLIP', deposits.get('FLIP')! * 0.9999),
-    // rangeOrder('ARBETH', deposits.get('ARBETH')! * 0.9999),
-    // rangeOrder('ARBUSDC', deposits.get('ARBUSDC')! * 0.9999),
+    rangeOrder('ARBETH', deposits.get('ARBETH')! * 0.9999),
+    rangeOrder('ARBUSDC', deposits.get('ARBUSDC')! * 0.9999),
   ]);
   console.log('=== Swaps Setup completed ===');
 
