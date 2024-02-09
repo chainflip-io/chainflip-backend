@@ -73,6 +73,13 @@ impl AssetPair {
 		}
 	}
 
+	pub fn to_swap(base_asset: Asset, quote_asset: Asset, side: Order) -> (Asset, Asset) {
+		match side {
+			Order::Buy => (quote_asset, base_asset),
+			Order::Sell => (base_asset, quote_asset),
+		}
+	}
+
 	pub fn assets(&self) -> AssetsMap<Asset> {
 		self.assets
 	}
@@ -1245,10 +1252,16 @@ pub struct PoolOrderbook {
 }
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
-pub struct PoolPrice {
+pub struct PoolPriceV1 {
 	pub price: Price,
 	pub sqrt_price: SqrtPriceQ64F96,
 	pub tick: Tick,
+}
+
+#[derive(Serialize, Deserialize, Clone, Encode, Decode, TypeInfo, PartialEq, Eq, Debug)]
+pub struct PoolPriceV2 {
+	pub sell: Option<SqrtPriceQ64F96>,
+	pub buy: Option<SqrtPriceQ64F96>,
 }
 
 impl<T: Config> Pallet<T> {
@@ -1602,11 +1615,20 @@ impl<T: Config> Pallet<T> {
 		Self::try_mutate_pool(asset_pair, f)
 	}
 
-	pub fn current_price(from: Asset, to: Asset) -> Option<PoolPrice> {
+	pub fn current_price(from: Asset, to: Asset) -> Option<PoolPriceV1> {
 		let (asset_pair, order) = AssetPair::from_swap(from, to)?;
 		Pools::<T>::get(asset_pair).and_then(|mut pool| {
 			let (price, sqrt_price, tick) = pool.pool_state.current_price(order)?;
-			Some(PoolPrice { price, sqrt_price, tick })
+			Some(PoolPriceV1 { price, sqrt_price, tick })
+		})
+	}
+
+	pub fn pool_price(base_asset: Asset, quote_asset: Asset) -> Result<PoolPriceV2, DispatchError> {
+		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
+		let mut pool = Pools::<T>::get(asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?;
+		Ok(PoolPriceV2 {
+			sell: pool.pool_state.current_price(Order::Sell).map(|(_, sqrt_price, _)| sqrt_price),
+			buy: pool.pool_state.current_price(Order::Buy).map(|(_, sqrt_price, _)| sqrt_price),
 		})
 	}
 
@@ -1986,6 +2008,35 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
+	fn estimate_swap_input_for_desired_output<
+		Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy,
+	>(
+		input_asset: impl Into<Asset>,
+		output_asset: impl Into<Asset>,
+		desired_output_amount: Amount,
+	) -> Option<Amount> {
+		let input_asset = input_asset.into();
+		let output_asset = output_asset.into();
+
+		if input_asset == output_asset {
+			return Some(desired_output_amount)
+		}
+		// Because we don't know input amount, we swap in the
+		// opposite direction, which should give us a good enough
+		// approximation of the required input amount:
+		with_transaction_unchecked(|| {
+			TransactionOutcome::Rollback(
+				Self::swap_with_network_fee(
+					output_asset,
+					input_asset,
+					desired_output_amount.into(),
+				)
+				.ok(),
+			)
+		})
+		.map(|swap_output| swap_output.output.unique_saturated_into())
+	}
+
 	/// Try to convert the input asset to the output asset, subject to an available input amount and
 	/// desired output amount. The actual output amount is not guaranteed to be close to the desired
 	/// amount.

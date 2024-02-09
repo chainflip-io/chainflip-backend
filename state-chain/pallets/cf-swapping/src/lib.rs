@@ -15,7 +15,7 @@ use frame_support::{
 		traits::{Get, Saturating},
 		DispatchError, Permill,
 	},
-	storage::with_storage_layer,
+	transactional,
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -33,9 +33,11 @@ pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 const BASIS_POINTS_PER_MILLION: u32 = 100;
+
+pub const SWAP_DELAY_BLOCKS: u32 = 2;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum SwapType {
@@ -226,7 +228,13 @@ pub mod pallet {
 
 	/// Scheduled Swaps
 	#[pallet::storage]
-	pub(crate) type SwapQueue<T: Config> = StorageValue<_, Vec<Swap>, ValueQuery>;
+	pub(crate) type SwapQueue<T: Config> =
+		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<Swap>, ValueQuery>;
+
+	/// The first block for which swaps haven't yet been processed
+	#[pallet::storage]
+	pub(crate) type FirstUnprocessedBlock<T: Config> =
+		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	/// SwapId Counter
 	#[pallet::storage]
@@ -284,6 +292,7 @@ pub mod pallet {
 			origin: SwapOrigin,
 			swap_type: SwapType,
 			broker_commission: Option<AssetAmount>,
+			execute_at: BlockNumberFor<T>,
 		},
 		/// A swap has been executed.
 		SwapExecuted {
@@ -383,103 +392,39 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Execute all swaps in the SwapQueue
-		fn on_finalize(_n: BlockNumberFor<T>) {
+		fn on_finalize(current_block: BlockNumberFor<T>) {
 			if !T::SafeMode::get().swaps_enabled {
 				return
 			}
-			// Wrap the entire swapping section as a transaction, any failed swap will rollback all
-			// storage changes.
-			if let Err(failed_swap) = with_storage_layer(|| -> Result<(), BatchExecutionError> {
-				let mut swaps = SwapQueue::<T>::take();
 
-				// Swap into Stable asset first.
-				Self::do_group_and_swap(&mut swaps, SwapLeg::ToStable)?;
+			let mut block_to_process = FirstUnprocessedBlock::<T>::get();
 
-				// Take NetworkFee for all swaps
-				for swap in swaps.iter_mut() {
-					debug_assert!(
-						swap.stable_amount.is_some(),
-						"All swaps should have Stable amount set here"
-					);
-					let stable_amount = swap.stable_amount.get_or_insert_with(Default::default);
-					*stable_amount = T::SwappingApi::take_network_fee(*stable_amount);
-				}
-
-				// Swap from Stable asset, and complete the swap logic.
-				Self::do_group_and_swap(&mut swaps, SwapLeg::FromStable)?;
-
-				for swap in swaps {
-					if let Some(swap_output) = swap.final_output {
-						Self::deposit_event(Event::<T>::SwapExecuted {
-							swap_id: swap.swap_id,
-							source_asset: swap.from,
-							destination_asset: swap.to,
-							deposit_amount: swap.amount,
-							swap_input: swap.amount,
-							egress_amount: swap_output,
-							swap_output,
-							intermediate_amount: swap.intermediate_amount(),
-						});
-						// Handle swap completion logic.
-						match &swap.swap_type {
-							SwapType::Swap(destination_address) =>
-								match T::EgressHandler::schedule_egress(
-									swap.to,
-									swap_output,
-									destination_address.clone(),
-									None,
-								) {
-									Ok(ScheduledEgressDetails {
-										egress_id,
-										egress_amount,
-										fee_withheld,
-									}) => {
-										Self::deposit_event(Event::<T>::SwapEgressScheduled {
-											swap_id: swap.swap_id,
-											egress_id,
-											asset: swap.to,
-											amount: egress_amount,
-											fee: fee_withheld,
-										});
-									},
-									Err(err) => {
-										Self::deposit_event(Event::<T>::SwapEgressIgnored {
-											swap_id: swap.swap_id,
-											asset: swap.to,
-											amount: swap_output,
-											reason: err.into(),
-										});
-									},
-								},
-							SwapType::CcmPrincipal(ccm_id) => {
-								Self::handle_ccm_swap_result(
-									*ccm_id,
-									swap_output,
-									CcmSwapLeg::Principal,
-								);
-							},
-							SwapType::CcmGas(ccm_id) => {
-								Self::handle_ccm_swap_result(*ccm_id, swap_output, CcmSwapLeg::Gas);
-							},
-						};
-					} else {
-						debug_assert!(false, "Swap is not completed yet!");
-					}
-				}
-				Ok(())
-			}) {
-				match failed_swap {
-					BatchExecutionError::SwapLegFailed { asset, direction, amount } =>
+			// NOTE: we iterate manually because BlockNumberFor<T> does not implement Step:
+			while block_to_process <= current_block {
+				match Self::process_swaps_for_block(block_to_process) {
+					Err(BatchExecutionError::SwapLegFailed { asset, direction, amount }) => {
 						Self::deposit_event(Event::<T>::BatchSwapFailed {
 							asset,
 							direction,
 							amount,
-						}),
-					BatchExecutionError::DispatchError { error } => {
-						log::error!("Failed to execute swap batch: {:?}", error);
+						});
+
+						break
+					},
+					Err(BatchExecutionError::DispatchError { error }) => {
+						log::error!(
+							"Failed to execute swap batch at block {:?}: {:?}",
+							block_to_process,
+							error
+						);
+						break
+					},
+					Ok(()) => {
+						block_to_process += 1u32.into();
 					},
 				}
 			}
+			FirstUnprocessedBlock::<T>::set(block_to_process);
 		}
 	}
 
@@ -524,6 +469,7 @@ pub mod pallet {
 					broker_commission_bps,
 					broker,
 					channel_metadata.clone(),
+					boost_fee,
 				)?;
 
 			Self::deposit_event(Event::<T>::SwapDepositAddressReady {
@@ -605,7 +551,7 @@ pub mod pallet {
 				Self::validate_destination_address(&destination_address, to)?;
 			let swap_origin = SwapOrigin::Vault { tx_hash };
 
-			let swap_id = Self::schedule_swap_internal(
+			let (swap_id, execute_at) = Self::schedule_swap_internal(
 				from,
 				to,
 				deposit_amount,
@@ -621,6 +567,7 @@ pub mod pallet {
 				origin: swap_origin,
 				swap_type: SwapType::Swap(destination_address_internal),
 				broker_commission: None,
+				execute_at,
 			});
 
 			Ok(())
@@ -700,6 +647,93 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
+		// Transactional ensures that any failed swap will rollback all storage changes.
+		#[transactional]
+		fn process_swaps_for_block(block: BlockNumberFor<T>) -> Result<(), BatchExecutionError> {
+			let mut swaps = SwapQueue::<T>::take(block);
+
+			if swaps.is_empty() {
+				return Ok(())
+			}
+
+			// Swap into Stable asset first.
+			Self::do_group_and_swap(&mut swaps, SwapLeg::ToStable)?;
+
+			// Take NetworkFee for all swaps
+			for swap in swaps.iter_mut() {
+				debug_assert!(
+					swap.stable_amount.is_some(),
+					"All swaps should have Stable amount set here"
+				);
+				let stable_amount = swap.stable_amount.get_or_insert_with(Default::default);
+				*stable_amount = T::SwappingApi::take_network_fee(*stable_amount);
+			}
+
+			// Swap from Stable asset, and complete the swap logic.
+			Self::do_group_and_swap(&mut swaps, SwapLeg::FromStable)?;
+
+			for swap in swaps {
+				if let Some(swap_output) = swap.final_output {
+					Self::deposit_event(Event::<T>::SwapExecuted {
+						swap_id: swap.swap_id,
+						source_asset: swap.from,
+						destination_asset: swap.to,
+						deposit_amount: swap.amount,
+						swap_input: swap.amount,
+						egress_amount: swap_output,
+						swap_output,
+						intermediate_amount: swap.intermediate_amount(),
+					});
+					// Handle swap completion logic.
+					match &swap.swap_type {
+						SwapType::Swap(destination_address) =>
+							match T::EgressHandler::schedule_egress(
+								swap.to,
+								swap_output,
+								destination_address.clone(),
+								None,
+							) {
+								Ok(ScheduledEgressDetails {
+									egress_id,
+									egress_amount,
+									fee_withheld,
+								}) => {
+									Self::deposit_event(Event::<T>::SwapEgressScheduled {
+										swap_id: swap.swap_id,
+										egress_id,
+										asset: swap.to,
+										amount: egress_amount,
+										fee: fee_withheld,
+									});
+								},
+								Err(err) => {
+									Self::deposit_event(Event::<T>::SwapEgressIgnored {
+										swap_id: swap.swap_id,
+										asset: swap.to,
+										amount: swap_output,
+										reason: err.into(),
+									});
+								},
+							},
+						SwapType::CcmPrincipal(ccm_id) => {
+							Self::handle_ccm_swap_result(
+								*ccm_id,
+								swap_output,
+								CcmSwapLeg::Principal,
+							);
+						},
+						SwapType::CcmGas(ccm_id) => {
+							Self::handle_ccm_swap_result(*ccm_id, swap_output, CcmSwapLeg::Gas);
+						},
+					};
+				} else {
+					debug_assert!(false, "Swap is not completed yet!");
+				}
+			}
+
+			Ok(())
+		}
+
 		pub fn principal_and_gas_amounts(
 			deposit_amount: AssetAmount,
 			channel_metadata: &CcmChannelMetadata,
@@ -888,13 +922,14 @@ pub mod pallet {
 			}
 		}
 
-		/// Schedule the swap, assuming all checks already passed.
+		/// Schedule the swap, assuming all checks already passed. Return swap_id along
+		/// with the block at which the swap is scheduled to be executed.
 		fn schedule_swap_internal(
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
 			swap_type: SwapType,
-		) -> u64 {
+		) -> (u64, BlockNumberFor<T>) {
 			let swap_id = SwapIdCounter::<T>::mutate(|id| {
 				id.saturating_accrue(1);
 				*id
@@ -916,9 +951,14 @@ pub mod pallet {
 				});
 			}
 
-			SwapQueue::<T>::append(Swap::new(swap_id, from, to, swap_amount, swap_type));
+			let execute_at = frame_system::Pallet::<T>::block_number() + SWAP_DELAY_BLOCKS.into();
 
-			swap_id
+			SwapQueue::<T>::append(
+				execute_at,
+				Swap::new(swap_id, from, to, swap_amount, swap_type),
+			);
+
+			(swap_id, execute_at)
 		}
 	}
 
@@ -952,7 +992,7 @@ pub mod pallet {
 				deposit_block_height,
 			};
 
-			let swap_id = Self::schedule_swap_internal(
+			let (swap_id, execute_at) = Self::schedule_swap_internal(
 				from,
 				to,
 				net_amount,
@@ -970,6 +1010,7 @@ pub mod pallet {
 				origin: swap_origin,
 				swap_type: SwapType::Swap(destination_address),
 				broker_commission: Some(fee),
+				execute_at,
 			});
 
 			swap_id
@@ -1025,7 +1066,7 @@ pub mod pallet {
 					swap_output.principal = Some(principal_swap_amount);
 					None
 				} else {
-					let swap_id = Self::schedule_swap_internal(
+					let (swap_id, execute_at) = Self::schedule_swap_internal(
 						source_asset,
 						destination_asset,
 						principal_swap_amount,
@@ -1040,12 +1081,13 @@ pub mod pallet {
 						origin: origin.clone(),
 						swap_type: SwapType::CcmPrincipal(ccm_id),
 						broker_commission: None,
+						execute_at,
 					});
 					Some(swap_id)
 				};
 
 			let gas_swap_id = if let Some(other_gas_asset) = other_gas_asset {
-				let swap_id = Self::schedule_swap_internal(
+				let (swap_id, execute_at) = Self::schedule_swap_internal(
 					source_asset,
 					other_gas_asset,
 					gas_budget,
@@ -1060,6 +1102,7 @@ pub mod pallet {
 					origin,
 					swap_type: SwapType::CcmGas(ccm_id),
 					broker_commission: None,
+					execute_at,
 				});
 				Some(swap_id)
 			} else {

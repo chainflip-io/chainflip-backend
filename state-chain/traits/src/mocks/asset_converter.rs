@@ -23,6 +23,17 @@ impl MockAssetConverter {
 }
 
 impl AssetConverter for MockAssetConverter {
+	fn estimate_swap_input_for_desired_output<
+		Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy,
+	>(
+		input_asset: impl Into<Asset>,
+		output_asset: impl Into<Asset>,
+		desired_output_amount: Amount,
+	) -> Option<Amount> {
+		Self::get_price(output_asset.into(), input_asset.into())
+			.map(|price| (price * desired_output_amount.into()).unique_saturated_into())
+	}
+
 	fn convert_asset_to_approximate_output<
 		Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy,
 	>(

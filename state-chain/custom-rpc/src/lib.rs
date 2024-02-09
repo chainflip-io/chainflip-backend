@@ -1,5 +1,5 @@
 use cf_amm::{
-	common::{Amount, Tick},
+	common::{Amount, Order, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -21,14 +21,15 @@ use jsonrpsee::{
 };
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{
-	AskBidMap, AssetsMap, PoolInfo, PoolLiquidity, PoolPrice, UnidirectionalPoolDepth,
+	AskBidMap, AssetsMap, PoolInfo, PoolLiquidity, PoolPriceV1, UnidirectionalPoolDepth,
 };
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
-use sp_api::BlockT;
+use sp_api::{BlockT, HeaderT};
+use sp_core::U256;
 use sp_runtime::Permill;
 use state_chain_runtime::{
-	chainflip::Offence,
+	chainflip::{BlockUpdate, Offence},
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
 		CustomRuntimeApi, DispatchErrorWithMessage, FailingWitnessValidators,
@@ -42,7 +43,7 @@ use std::{
 	sync::Arc,
 };
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(untagged)]
 #[serde(
 	expecting = r#"Expected a valid asset specifier. Assets should be specified as upper-case strings, e.g. `"ETH"`, and can be optionally distinguished by chain, e.g. `{ chain: "Ethereum", asset: "ETH" }."#
@@ -266,8 +267,8 @@ pub struct PoolsEnvironment {
 #[derive(Serialize, Deserialize)]
 pub struct IngressEgressEnvironment {
 	pub minimum_deposit_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
-	pub ingress_fees: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
-	pub egress_fees: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+	pub ingress_fees: HashMap<ForeignChain, HashMap<Asset, Option<NumberOrHex>>>,
+	pub egress_fees: HashMap<ForeignChain, HashMap<Asset, Option<NumberOrHex>>>,
 	pub witness_safety_margins: HashMap<ForeignChain, Option<u64>>,
 	pub egress_dust_limits: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
 }
@@ -290,6 +291,22 @@ pub struct RpcEnvironment {
 	swapping: SwappingEnvironment,
 	funding: FundingEnvironment,
 	pools: PoolsEnvironment,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+pub struct PoolPriceV2 {
+	pub base_asset: RpcAsset,
+	pub quote_asset: RpcAsset,
+	#[serde(flatten)]
+	pub price: pallet_cf_pools::PoolPriceV2,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+pub struct RpcPrewitnessedSwap {
+	pub base_asset: RpcAsset,
+	pub quote_asset: RpcAsset,
+	pub side: Order,
+	pub amounts: Vec<U256>,
 }
 
 #[rpc(server, client, namespace = "cf")]
@@ -390,7 +407,14 @@ pub trait CustomApi {
 		from_asset: RpcAsset,
 		to_asset: RpcAsset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<PoolPrice>>;
+	) -> RpcResult<Option<PoolPriceV1>>;
+	#[method(name = "pool_price_v2")]
+	fn cf_pool_price_v2(
+		&self,
+		base_asset: RpcAsset,
+		quote_asset: RpcAsset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<PoolPriceV2>;
 	#[method(name = "swap_rate")]
 	fn cf_pool_swap_rate(
 		&self,
@@ -482,19 +506,26 @@ pub trait CustomApi {
 
 	#[method(name = "max_swap_amount")]
 	fn cf_max_swap_amount(&self, asset: RpcAsset) -> RpcResult<Option<AssetAmount>>;
-	#[subscription(name = "subscribe_pool_price", item = PoolPrice)]
+	#[subscription(name = "subscribe_pool_price", item = PoolPriceV1)]
 	fn cf_subscribe_pool_price(&self, from_asset: RpcAsset, to_asset: RpcAsset);
-
-	#[subscription(name = "subscribe_prewitness_swaps", item = Vec<AssetAmount>)]
-	fn cf_subscribe_prewitness_swaps(&self, from_asset: RpcAsset, to_asset: RpcAsset);
+	#[subscription(name = "subscribe_pool_price_v2", item = BlockUpdate<PoolPriceV2>)]
+	fn cf_subscribe_pool_price_v2(&self, base_asset: RpcAsset, quote_asset: RpcAsset);
+	#[subscription(name = "subscribe_prewitness_swaps", item = BlockUpdate<RpcPrewitnessedSwap>)]
+	fn cf_subscribe_prewitness_swaps(
+		&self,
+		base_asset: RpcAsset,
+		quote_asset: RpcAsset,
+		side: Order,
+	);
 
 	#[method(name = "prewitness_swaps")]
 	fn cf_prewitness_swaps(
 		&self,
-		from_asset: RpcAsset,
-		to_asset: RpcAsset,
+		base_asset: RpcAsset,
+		quote_asset: RpcAsset,
+		side: Order,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Vec<AssetAmount>>>;
+	) -> RpcResult<RpcPrewitnessedSwap>;
 
 	#[method(name = "supported_assets")]
 	fn cf_supported_assets(&self) -> RpcResult<HashMap<ForeignChain, Vec<Asset>>>;
@@ -554,7 +585,7 @@ fn map_dispatch_error(e: DispatchErrorWithMessage) -> jsonrpsee::core::Error {
 
 impl<C, B> CustomApiServer for CustomRpc<C, B>
 where
-	B: BlockT<Hash = state_chain_runtime::Hash>,
+	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
 	C: sp_api::ProvideRuntimeApi<B>
 		+ Send
 		+ Sync
@@ -833,11 +864,32 @@ where
 		from_asset: RpcAsset,
 		to_asset: RpcAsset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<PoolPrice>> {
+	) -> RpcResult<Option<PoolPriceV1>> {
 		self.client
 			.runtime_api()
 			.cf_pool_price(self.unwrap_or_best(at), from_asset.try_into()?, to_asset.try_into()?)
 			.map_err(to_rpc_error)
+	}
+
+	fn cf_pool_price_v2(
+		&self,
+		base_asset: RpcAsset,
+		quote_asset: RpcAsset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<PoolPriceV2> {
+		let base = base_asset.try_into()?;
+		let quote = quote_asset.try_into()?;
+		let hash = self.unwrap_or_best(at);
+		Ok(PoolPriceV2 {
+			base_asset,
+			quote_asset,
+			price: self
+				.client
+				.runtime_api()
+				.cf_pool_price_v2(hash, base, quote)
+				.map_err(to_rpc_error)
+				.and_then(|result| result.map_err(map_dispatch_error))?,
+		})
 	}
 
 	fn cf_pool_swap_rate(
@@ -1016,11 +1068,11 @@ where
 			);
 			ingress_fees.entry(chain).or_insert_with(HashMap::new).insert(
 				asset,
-				runtime_api.cf_ingress_fee(hash, asset).map_err(to_rpc_error)?.into(),
+				runtime_api.cf_ingress_fee(hash, asset).map_err(to_rpc_error)?.map(Into::into),
 			);
 			egress_fees.entry(chain).or_insert_with(HashMap::new).insert(
 				asset,
-				runtime_api.cf_egress_fee(hash, asset).map_err(to_rpc_error)?.into(),
+				runtime_api.cf_egress_fee(hash, asset).map_err(to_rpc_error)?.map(Into::into),
 			);
 			egress_dust_limits.entry(chain).or_insert_with(HashMap::new).insert(
 				asset,
@@ -1131,34 +1183,89 @@ where
 	) -> Result<(), SubscriptionEmptyError> {
 		let from = from_asset.try_into().map_err(|_| SubscriptionEmptyError)?;
 		let to = to_asset.try_into().map_err(|_| SubscriptionEmptyError)?;
-		self.new_update_subscription(sink, move |api, hash| api.cf_pool_price(hash, from, to))
+		self.new_subscription(
+			true,  /* only_on_changes */
+			false, /* end_on_error */
+			sink,
+			move |api, hash| api.cf_pool_price(hash, from, to),
+		)
+	}
+
+	fn cf_subscribe_pool_price_v2(
+		&self,
+		sink: SubscriptionSink,
+		base_asset: RpcAsset,
+		quote_asset: RpcAsset,
+	) -> Result<(), SubscriptionEmptyError> {
+		let base_asset_inner = base_asset.try_into().map_err(|_| SubscriptionEmptyError)?;
+		let quote_asset_inner = quote_asset.try_into().map_err(|_| SubscriptionEmptyError)?;
+		self.new_subscription(
+			false, /* only_on_changes */
+			true,  /* end_on_error */
+			sink,
+			move |api, hash| {
+				api.cf_pool_price_v2(hash, base_asset_inner, quote_asset_inner)
+					.map_err(to_rpc_error)
+					.and_then(|result| result.map_err(map_dispatch_error))
+					.map(|price| PoolPriceV2 { base_asset, quote_asset, price })
+			},
+		)
 	}
 
 	fn cf_subscribe_prewitness_swaps(
 		&self,
 		sink: SubscriptionSink,
-		from_asset: RpcAsset,
-		to_asset: RpcAsset,
+		base_asset: RpcAsset,
+		quote_asset: RpcAsset,
+		side: Order,
 	) -> Result<(), SubscriptionEmptyError> {
-		let from = from_asset.try_into().map_err(|_| SubscriptionEmptyError)?;
-		let to = to_asset.try_into().map_err(|_| SubscriptionEmptyError)?;
-		self.new_items_subscription(sink, move |api, hash| api.cf_prewitness_swaps(hash, from, to))
+		let base_asset_inner = base_asset.try_into().map_err(|_| SubscriptionEmptyError)?;
+		let quote_asset_inner = quote_asset.try_into().map_err(|_| SubscriptionEmptyError)?;
+		self.new_subscription(
+			false, /* only_on_changes */
+			true,  /* end_on_error */
+			sink,
+			move |api, hash| {
+				Ok::<RpcPrewitnessedSwap, jsonrpsee::core::Error>(RpcPrewitnessedSwap {
+					base_asset,
+					quote_asset,
+					side,
+					amounts: api
+						.cf_prewitness_swaps(hash, base_asset_inner, quote_asset_inner, side)
+						.map_err(to_rpc_error)?
+						.into_iter()
+						.map(|s| s.into())
+						.collect(),
+				})
+			},
+		)
 	}
 
 	fn cf_prewitness_swaps(
 		&self,
-		from_asset: RpcAsset,
-		to_asset: RpcAsset,
+		base_asset: RpcAsset,
+		quote_asset: RpcAsset,
+		side: Order,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Vec<AssetAmount>>> {
-		self.client
-			.runtime_api()
-			.cf_prewitness_swaps(
-				self.unwrap_or_best(at),
-				from_asset.try_into()?,
-				to_asset.try_into()?,
-			)
-			.map_err(to_rpc_error)
+	) -> RpcResult<RpcPrewitnessedSwap> {
+		Ok(RpcPrewitnessedSwap {
+			base_asset,
+			quote_asset,
+			side,
+			amounts: self
+				.client
+				.runtime_api()
+				.cf_prewitness_swaps(
+					self.unwrap_or_best(at),
+					base_asset.try_into()?,
+					quote_asset.try_into()?,
+					side,
+				)
+				.map_err(to_rpc_error)?
+				.into_iter()
+				.map(|s| s.into())
+				.collect(),
+		})
 	}
 
 	fn cf_supported_assets(&self) -> RpcResult<HashMap<ForeignChain, Vec<Asset>>> {
@@ -1196,7 +1303,7 @@ where
 
 impl<C, B> CustomRpc<C, B>
 where
-	B: BlockT<Hash = state_chain_runtime::Hash>,
+	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
 	C: sp_api::ProvideRuntimeApi<B>
 		+ Send
 		+ Sync
@@ -1205,22 +1312,26 @@ where
 		+ BlockchainEvents<B>,
 	C::Api: CustomRuntimeApi<B>,
 {
-	/// Upon subscribing returns the first value immediately and then subscribes to updates. i.e. it
-	/// will only return a value if it has changed from the previous value it returned.
-	fn new_update_subscription<
+	/// The subscription will return the first value immediately and then either return new values
+	/// only when it changes, or every new block. Note in both cases this can skip blocks. Also this
+	/// subscription can either filter out, or end the stream if the provided async closure returns
+	/// an error.
+	fn new_subscription<
 		T: Serialize + Send + Clone + Eq + 'static,
 		E: std::error::Error + Send + Sync + 'static,
 		F: Fn(&C::Api, state_chain_runtime::Hash) -> Result<T, E> + Send + Clone + 'static,
 	>(
 		&self,
+		only_on_changes: bool,
+		end_on_error: bool,
 		mut sink: SubscriptionSink,
 		f: F,
 	) -> Result<(), SubscriptionEmptyError> {
 		use futures::{future::FutureExt, stream::StreamExt};
 
-		let client = self.client.clone();
+		let info = self.client.info();
 
-		let initial = match f(&self.client.runtime_api(), self.client.info().best_hash) {
+		let initial = match f(&self.client.runtime_api(), info.best_hash) {
 			Ok(initial) => initial,
 			Err(e) => {
 				let _ = sink.reject(jsonrpsee::core::Error::from(
@@ -1229,69 +1340,43 @@ where
 				return Ok(())
 			},
 		};
+		let stream = futures::stream::iter(std::iter::once(Ok(BlockUpdate {
+			block_hash: info.best_hash,
+			block_number: info.best_number,
+			data: initial.clone(),
+		})))
+		.chain(
+			self.client
+				.import_notification_stream()
+				.filter(|n| futures::future::ready(n.is_new_best))
+				.filter_map({
+					let client = self.client.clone();
+					let mut previous = initial;
+					move |n| {
+						futures::future::ready(match f(&client.runtime_api(), n.hash) {
+							Ok(new) if !only_on_changes || new != previous => {
+								previous = new.clone();
+								Some(Ok(BlockUpdate {
+									block_hash: n.hash,
+									block_number: *n.header.number(),
+									data: new,
+								}))
+							},
+							Err(error) if end_on_error => Some(Err(error)),
+							_ => None,
+						})
+					}
+				}),
+		);
 
-		let mut previous = initial.clone();
-
-		let stream = self
-			.client
-			.import_notification_stream()
-			.filter(|n| futures::future::ready(n.is_new_best))
-			.filter_map(move |n| {
-				let new = f(&client.runtime_api(), n.hash);
-
-				match new {
-					Ok(new) if new != previous => {
-						previous = new.clone();
-						futures::future::ready(Some(new))
-					},
-					_ => futures::future::ready(None),
-				}
-			});
-
-		let stream = futures::stream::once(futures::future::ready(initial)).chain(stream);
-
-		let fut = async move {
-			sink.pipe_from_stream(stream).await;
-		};
-
-		self.executor.spawn("cf-rpc-update-subscription", Some("rpc"), fut.boxed());
-
-		Ok(())
-	}
-
-	/// After creating the subscription it will return all the new prewitnessed swaps from this
-	/// point onwards.
-	fn new_items_subscription<
-		T: Serialize + Send + Clone + Eq + 'static,
-		E: std::error::Error + Send + Sync + 'static,
-		F: Fn(&C::Api, state_chain_runtime::Hash) -> Result<Option<T>, E> + Send + Clone + 'static,
-	>(
-		&self,
-		mut sink: SubscriptionSink,
-		f: F,
-	) -> Result<(), SubscriptionEmptyError> {
-		use futures::{future::FutureExt, stream::StreamExt};
-
-		let client = self.client.clone();
-
-		let stream = self
-			.client
-			.import_notification_stream()
-			.filter(|n| futures::future::ready(n.is_new_best))
-			.filter_map(move |n| {
-				let new = f(&client.runtime_api(), n.hash);
-
-				match new {
-					Ok(new) => futures::future::ready(new),
-					_ => futures::future::ready(None),
-				}
-			});
-
-		let fut = async move {
-			sink.pipe_from_stream(stream).await;
-		};
-
-		self.executor.spawn("cf-rpc-stream-subscription", Some("rpc"), fut.boxed());
+		self.executor.spawn(
+			"cf-rpc-update-subscription",
+			Some("rpc"),
+			async move {
+				sink.pipe_from_try_stream(stream).await;
+			}
+			.boxed(),
+		);
 
 		Ok(())
 	}
@@ -1406,25 +1491,39 @@ mod test {
 					),
 				]),
 				ingress_fees: HashMap::from([
-					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
+					(
+						ForeignChain::Bitcoin,
+						HashMap::from([(Asset::Btc, Some(0u32).map(Into::into))]),
+					),
 					(
 						ForeignChain::Ethereum,
-						HashMap::from([
-							(Asset::Flip, AssetAmount::MAX.into()),
-							(Asset::Usdc, (u64::MAX / 2 - 1).into()),
-							(Asset::Eth, 0u32.into()),
+						HashMap::<_, Option<NumberOrHex>>::from([
+							(Asset::Flip, Some(AssetAmount::MAX).map(Into::into)),
+							(Asset::Usdc, None),
+							(Asset::Eth, Some(0u32).map(Into::into)),
 						]),
+					),
+					(
+						ForeignChain::Polkadot,
+						HashMap::from([(Asset::Dot, Some(u64::MAX / 2 - 1).map(Into::into))]),
 					),
 				]),
 				egress_fees: HashMap::from([
-					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
+					(
+						ForeignChain::Bitcoin,
+						HashMap::from([(Asset::Btc, Some(0u32).map(Into::into))]),
+					),
 					(
 						ForeignChain::Ethereum,
-						HashMap::from([
-							(Asset::Flip, AssetAmount::MAX.into()),
-							(Asset::Usdc, (u64::MAX / 2 - 1).into()),
-							(Asset::Eth, 0u32.into()),
+						HashMap::<_, Option<NumberOrHex>>::from([
+							(Asset::Flip, Some(AssetAmount::MAX).map(Into::into)),
+							(Asset::Usdc, None),
+							(Asset::Eth, Some(0u32).map(Into::into)),
 						]),
+					),
+					(
+						ForeignChain::Polkadot,
+						HashMap::from([(Asset::Dot, Some(u64::MAX / 2 - 1).map(Into::into))]),
 					),
 				]),
 				witness_safety_margins: HashMap::from([
