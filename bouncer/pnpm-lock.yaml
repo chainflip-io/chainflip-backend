@@ -6,8 +6,8 @@ settings:
 
 dependencies:
   '@chainflip-io/cli':
-    specifier: file:./chainflip-io/packages/cli
-    version: file:chainflip-io/packages/cli
+    specifier: file:/home/albert/work/chainflip/sdk-client/chainflip-sdk-monorepo/packages/cli
+    version: file:../../../sdk-client/chainflip-sdk-monorepo/packages/cli
   '@iarna/toml':
     specifier: ^2.2.5
     version: 2.2.5
@@ -5517,8 +5517,8 @@ packages:
     resolution: {integrity: sha512-iC+8Io04lddc+mVqQ9AZ7OQ2MrUKGN+oIQyq1vemgt46jwCwLfhq7/pwnBnNXXXZb8VTVLKwp9EDkx+ryxIWmg==}
     dev: false
 
-  file:chainflip-io/packages/cli:
-    resolution: {directory: chainflip-io/packages/cli, type: directory}
+  file:../../../sdk-client/chainflip-sdk-monorepo/packages/cli:
+    resolution: {directory: ../../../sdk-client/chainflip-sdk-monorepo/packages/cli, type: directory}
     name: '@chainflip-io/cli'
     hasBin: true
     dependencies:

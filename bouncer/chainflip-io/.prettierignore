@@ -1,6 +1,0 @@
-pnpm-lock.yaml
-dist
-coverage
-node_modules
-packages/swap/src/gql/generated/*
-**/abis/**/*.ts
