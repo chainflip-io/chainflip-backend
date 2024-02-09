@@ -23,7 +23,7 @@ env:
 
 jobs:
   compile:
-    runs-on: [hetzner]
+    runs-on: [namespace-profile-default]
     strategy:
       fail-fast: false
       matrix:
