@@ -38,7 +38,6 @@ frame-system = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag =
 
 # Local
 chainflip-api = { path = "../../lib" }
-state-chain-runtime = { path = "../../../state-chain/runtime" }
 cf-utilities = { package = "utilities", path = "../../../utilities" }
 
 [build-dependencies]

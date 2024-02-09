@@ -15,8 +15,8 @@ use chainflip_api::{
 		AccountRole, Asset, ForeignChain, Hash, RedemptionAmount,
 	},
 	settings::StateChain,
-	BlockInfo, ChainApi, EthereumAddress, OperatorApi, SignedExtrinsicApi, StateChainApi,
-	StorageApi, WaitFor,
+	BlockInfo, BlockUpdate, ChainApi, EthereumAddress, OperatorApi, SignedExtrinsicApi,
+	StateChainApi, StorageApi, WaitFor,
 };
 use clap::Parser;
 use custom_rpc::{
@@ -34,7 +34,6 @@ use jsonrpsee::{
 use pallet_cf_pools::{AssetPair, AssetsMap, IncreaseOrDecrease, OrderId, RangeOrderSize};
 use rpc_types::{AssetBalance, OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
 use sp_core::U256;
-use state_chain_runtime::chainflip::BlockUpdate;
 use std::{
 	collections::{BTreeMap, HashMap, HashSet},
 	ops::Range,
