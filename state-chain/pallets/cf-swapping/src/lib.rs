@@ -186,7 +186,7 @@ pub mod pallet {
 	use cf_chains::{address::EncodedAddress, AnyChain, Chain};
 	use cf_primitives::{Asset, AssetAmount, BasisPoints, EgressId, SwapId};
 	use cf_traits::{
-		AccountRoleRegistry, CcmSwapIds, Chainflip, EgressApi, ScheduledEgressDetails,
+		AccountRoleRegistry, CcmSwapIds, Chainflip, EgressApi, FeePayment, ScheduledEgressDetails,
 		SwapDepositHandler,
 	};
 
@@ -213,6 +213,9 @@ pub mod pallet {
 		/// A converter to convert address to and from human readable to internal address
 		/// representation.
 		type AddressConverter: AddressConverter;
+
+		/// For paying the channel opening fee.
+		type FeePayment: FeePayment<Amount = Self::Amount, AccountId = Self::AccountId>;
 
 		/// Safe mode access.
 		type SafeMode: Get<PalletSafeMode>;
@@ -266,6 +269,10 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn maximum_swap_amount)]
 	pub type MaximumSwapAmount<T: Config> = StorageMap<_, Twox64Concat, Asset, AssetAmount>;
+
+	/// The fixed fee charged for opening a channel, in Flipperinos.
+	#[pallet::storage]
+	pub type ChannelOpeningFee<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -449,6 +456,7 @@ pub mod pallet {
 			ensure!(T::SafeMode::get().deposits_enabled, Error::<T>::DepositsDisabled);
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
 			ensure!(broker_commission_bps <= 1000, Error::<T>::BrokerCommissionBpsTooHigh);
+			T::FeePayment::try_burn_fee(&broker, ChannelOpeningFee::<T>::get())?;
 
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, destination_asset)?;

@@ -7,7 +7,7 @@ use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		address_converter::MockAddressConverter, deposit_handler::MockDepositHandler,
-		egress_handler::MockEgressHandler,
+		egress_handler::MockEgressHandler, fee_payment::MockFeePayment,
 	},
 	AccountRoleRegistry, SwappingApi,
 };
@@ -143,6 +143,7 @@ impl pallet_cf_swapping::Config for Test {
 	type SwappingApi = MockSwappingApi;
 	type SafeMode = MockRuntimeSafeMode;
 	type WeightInfo = MockWeightInfo;
+	type FeePayment = MockFeePayment<Self>;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

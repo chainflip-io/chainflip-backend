@@ -15,10 +15,12 @@ use cf_primitives::{Asset, AssetAmount, BasisPoints, ForeignChain, NetworkEnviro
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::{
+		self,
 		address_converter::MockAddressConverter,
 		egress_handler::{MockEgressHandler, MockEgressParameter},
+		funding_info::MockFundingInfo,
 	},
-	CcmHandler, SetSafeMode, SwapDepositHandler, SwappingApi,
+	CcmHandler, FundingInfo, SetSafeMode, SwapDepositHandler, SwappingApi,
 };
 use frame_support::{assert_err, assert_noop, assert_ok, traits::Hooks};
 use itertools::Itertools;
@@ -2125,6 +2127,39 @@ fn deposit_address_ready_event_contain_correct_boost_fee_value() {
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::Swapping(Event::SwapDepositAddressReady { boost_fee: BOOST_FEE, .. })
+		);
+	});
+}
+
+#[test]
+fn broker_pays_a_fee_for_each_deposit_address() {
+	new_test_ext().execute_with(|| {
+		const FEE: u128 = 100;
+		MockFundingInfo::<Test>::credit_funds(&ALICE, FEE);
+		assert_eq!(MockFundingInfo::<Test>::total_balance_of(&ALICE), FEE);
+		ChannelOpeningFee::<Test>::set(FEE);
+		assert_ok!(Swapping::request_swap_deposit_address(
+			RuntimeOrigin::signed(ALICE),
+			Asset::Eth,
+			Asset::Usdc,
+			EncodedAddress::Eth(Default::default()),
+			0,
+			None,
+			0
+		));
+		assert_eq!(MockFundingInfo::<Test>::total_balance_of(&ALICE), 0);
+		ChannelOpeningFee::<Test>::set(FEE * 10);
+		assert_err!(
+			Swapping::request_swap_deposit_address(
+				RuntimeOrigin::signed(ALICE),
+				Asset::Eth,
+				Asset::Usdc,
+				EncodedAddress::Eth(Default::default()),
+				0,
+				None,
+				0
+			),
+			mocks::fee_payment::ERROR_INSUFFICIENT_LIQUIDITY
 		);
 	});
 }
