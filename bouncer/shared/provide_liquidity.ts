@@ -33,7 +33,7 @@ export async function provideLiquidity(ccy: Asset, amount: number, waitForFinali
       )
     ).toJSON() === null
   ) {
-    let refundAddress = await newAddress(chain.toUpperCase() as Asset, 'LP_1');
+    let refundAddress = await newAddress(ccy, 'LP_1');
     refundAddress = ccy === 'DOT' ? decodeDotAddressForContract(refundAddress) : refundAddress;
 
     console.log('Registering Liquidity Refund Address for ' + ccy + ': ' + refundAddress);

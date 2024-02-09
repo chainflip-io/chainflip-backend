@@ -1,0 +1,48 @@
+diff --git a/index.d.ts b/index.d.ts
+index 48356c9a9ed7dea11da37226b23c7a11234bd5fe..67cb1338e2b4f12838ba4214091391fb6b3ec3d0 100644
+--- a/index.d.ts
++++ b/index.d.ts
+@@ -135,7 +135,7 @@ export declare class BitcoinAddress {
+    * Human-readable prefix. Equals `'bc'` (for mainnet addresses)
+    * or `'tb'` (for testnet addresses).
+    */
+-  prefix: 'bc' | 'tb';
++  prefix: 'bc' | 'tb' | 'bcrt';
+   /**
+    * Script version. An integer between 0 and 16 (inclusive).
+    */
+@@ -164,7 +164,7 @@ export declare class BitcoinAddress {
+    *
+    * @throws {Error} If provided fields do not pass validation.
+    */
+-  constructor(prefix: 'bc' | 'tb', scriptVersion: number, data: Uint8Array);
++  constructor(prefix: 'bc' | 'tb' | 'bcrt', scriptVersion: number, data: Uint8Array);
+
+   /**
+    * Encodes this address in Bech32 or Bech32m format, depending on the script version.
+diff --git a/lib/index.js b/lib/index.js
+index 1f5e7eda2c4c507e1242c18352381e84b3a0dfd1..622e71bfa48394a8d65f205b90e6107c8b14ae9e 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -223,8 +223,8 @@ var BitcoinAddress = /*#__PURE__*/function () {
+   function BitcoinAddress(prefix, scriptVersion, data) {
+     _classCallCheck(this, BitcoinAddress);
+
+-    if (prefix !== 'bc' && prefix !== 'tb') {
+-      throw new Error('Invalid human-readable prefix, "bc" or "tb" expected');
++    if (prefix !== 'bc' && prefix !== 'tb' && prefix !== 'bcrt') {
++      throw new Error('Invalid human-readable prefix, "bc", "tb", or "bcrt" expected');
+     }
+
+     if (scriptVersion < 0 || scriptVersion > 16) {
+@@ -325,8 +325,8 @@ var BitcoinAddress = /*#__PURE__*/function () {
+           encoding = _decodeTo5BitArray2.encoding; // Extra check to satisfy Flow.
+
+
+-      if (prefix !== 'bc' && prefix !== 'tb') {
+-        throw new Error('Invalid human-readable prefix, "bc" or "tb" expected');
++      if (prefix !== 'bc' && prefix !== 'tb' && prefix !== 'bcrt') {
++        throw new Error('Invalid human-readable prefix, "bc", "tb", or "bcrt" expected');
+       }
+
+       var scriptVersion = data[0];

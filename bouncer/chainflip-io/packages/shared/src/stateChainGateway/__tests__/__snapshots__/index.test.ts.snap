@@ -1,0 +1,10 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`executeRedemption executes the redemption 1`] = `
+[
+  "0x1234",
+  {
+    "nonce": 1,
+  },
+]
+`;

@@ -1,0 +1,37 @@
+{
+  "name": "@chainflip-io/sdk-shared",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "build": "tsc -p tsconfig.cjs.json && tsc -p tsconfig.mjs.json",
+    "build:abis": "typechain --target=ethers-v6 --out-dir=./src/abis ./abis/**",
+    "lint": "pnpm eslint --max-warnings 0 './**/*.ts'",
+    "test": "jest",
+    "test:ci": "CI=1 pnpm test -- --forceExit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@polkadot/util": "^12.6.2",
+    "@polkadot/util-crypto": "^12.6.2",
+    "axios": "^1.6.7",
+    "bech32-buffer": "^0.2.1",
+    "ethers": "^6.9.2",
+    "ioredis": "^5.3.2",
+    "rxjs": "^7.8.1",
+    "ws": "^8.16.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@ethersproject/abi": "^5.7.0",
+    "@ethersproject/providers": "^5.7.2",
+    "@typechain/ethers-v6": "^0.5.1",
+    "@types/ws": "^8.5.10",
+    "eslint-plugin-n": "^16.6.2",
+    "typechain": "^8.3.2",
+    "winston": "^3.11.0"
+  }
+}

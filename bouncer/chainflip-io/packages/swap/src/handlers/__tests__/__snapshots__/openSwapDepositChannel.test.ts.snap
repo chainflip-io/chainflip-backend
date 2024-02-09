@@ -1,0 +1,91 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`openSwapDepositChannel creates channel and stores it in the database 1`] = `
+[
+  [
+    {
+      "destAddress": "5FAGoHvkBsUMnoD3W95JoVTvT8jgeFpjhFK8W73memyGBcBd",
+      "destAsset": "DOT",
+      "destChain": "Polkadot",
+      "expectedDepositAmount": "777",
+      "srcAsset": "FLIP",
+      "srcChain": "Ethereum",
+    },
+    {
+      "commissionBps": 0,
+      "url": "",
+    },
+    "perseverance",
+  ],
+]
+`;
+
+exports[`openSwapDepositChannel creates channel and stores it in the database 2`] = `
+{
+  "brokerCommissionBps": 0,
+  "ccmGasBudget": null,
+  "ccmMessage": null,
+  "channelId": 888n,
+  "createdAt": Any<ClockDate>,
+  "depositAddress": "address",
+  "destAddress": "5FAGoHvkBsUMnoD3W95JoVTvT8jgeFpjhFK8W73memyGBcBd",
+  "destAsset": "DOT",
+  "estimatedExpiryAt": 2023-11-09T13:38:45.000Z,
+  "expectedDepositAmount": "777",
+  "expiryBlock": null,
+  "id": Any<BigInt>,
+  "isExpired": false,
+  "issuedBlock": 123,
+  "openedThroughBackend": true,
+  "srcAsset": "FLIP",
+  "srcChain": "Ethereum",
+  "srcChainExpiryBlock": 1000n,
+}
+`;
+
+exports[`openSwapDepositChannel creates channel with ccmMetadata and stores it in the database 1`] = `
+[
+  [
+    {
+      "ccmMetadata": {
+        "gasBudget": "125000",
+        "message": "0xdeadc0de",
+      },
+      "destAddress": "0xFcd3C82b154CB4717Ac98718D0Fd13EEBA3D2754",
+      "destAsset": "USDC",
+      "destChain": "Ethereum",
+      "expectedDepositAmount": "10101010",
+      "srcAsset": "FLIP",
+      "srcChain": "Ethereum",
+    },
+    {
+      "commissionBps": 0,
+      "url": "",
+    },
+    "perseverance",
+  ],
+]
+`;
+
+exports[`openSwapDepositChannel creates channel with ccmMetadata and stores it in the database 2`] = `
+{
+  "brokerCommissionBps": 0,
+  "ccmGasBudget": "125000",
+  "ccmMessage": "0xdeadc0de",
+  "channelId": 909n,
+  "createdAt": Any<ClockDate>,
+  "depositAddress": "address",
+  "destAddress": "0xFcd3C82b154CB4717Ac98718D0Fd13EEBA3D2754",
+  "destAsset": "USDC",
+  "estimatedExpiryAt": 2023-11-09T13:38:45.000Z,
+  "expectedDepositAmount": "10101010",
+  "expiryBlock": null,
+  "id": Any<BigInt>,
+  "isExpired": false,
+  "issuedBlock": 123,
+  "openedThroughBackend": true,
+  "srcAsset": "FLIP",
+  "srcChain": "Ethereum",
+  "srcChainExpiryBlock": 1000n,
+}
+`;

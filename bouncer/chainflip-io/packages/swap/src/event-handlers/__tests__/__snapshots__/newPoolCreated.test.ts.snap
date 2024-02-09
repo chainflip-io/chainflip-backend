@@ -1,0 +1,10 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`newPoolCreated creates a pool with the correct data 1`] = `
+{
+  "baseAsset": "BTC",
+  "id": Any<Number>,
+  "liquidityFeeHundredthPips": 1000,
+  "quoteAsset": "USDC",
+}
+`;

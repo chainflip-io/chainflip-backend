@@ -1,0 +1,121 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`swapScheduled deposit channel origin stores a new swap from a btc deposit channel 1`] = `
+{
+  "ccmDepositReceivedBlockIndex": null,
+  "ccmGasBudget": null,
+  "ccmMessage": null,
+  "createdAt": Any<Date>,
+  "depositAmount": "75000000",
+  "depositReceivedAt": 2022-12-06T14:31:33.000Z,
+  "depositReceivedBlockIndex": "100-0",
+  "destAddress": "0x41ad2bc63a2059f9b623533d87fe99887d794847",
+  "destAsset": "ETH",
+  "egressId": null,
+  "fees": [],
+  "id": Any<BigInt>,
+  "intermediateAmount": null,
+  "nativeId": 3n,
+  "srcAsset": "BTC",
+  "swapDepositChannelId": Any<BigInt>,
+  "swapExecutedAt": null,
+  "swapExecutedBlockIndex": null,
+  "swapInputAmount": "75000000",
+  "swapOutputAmount": null,
+  "txHash": null,
+  "type": "SWAP",
+  "updatedAt": Any<Date>,
+}
+`;
+
+exports[`swapScheduled deposit channel origin stores a new swap from a dot deposit channel 1`] = `
+{
+  "ccmDepositReceivedBlockIndex": null,
+  "ccmGasBudget": null,
+  "ccmMessage": null,
+  "createdAt": Any<Date>,
+  "depositAmount": "125000000000",
+  "depositReceivedAt": 2022-12-06T14:31:33.000Z,
+  "depositReceivedBlockIndex": "100-0",
+  "destAddress": "bcrt1pzjdpc799qa5f7m65hpr66880res5ac3lr6y2chc4jsa",
+  "destAsset": "BTC",
+  "egressId": null,
+  "fees": [],
+  "id": Any<BigInt>,
+  "intermediateAmount": null,
+  "nativeId": 1n,
+  "srcAsset": "DOT",
+  "swapDepositChannelId": Any<BigInt>,
+  "swapExecutedAt": null,
+  "swapExecutedBlockIndex": null,
+  "swapInputAmount": "125000000000",
+  "swapOutputAmount": null,
+  "txHash": null,
+  "type": "SWAP",
+  "updatedAt": Any<Date>,
+}
+`;
+
+exports[`swapScheduled deposit channel origin stores a new swap with a broker commission 1`] = `
+{
+  "ccmDepositReceivedBlockIndex": null,
+  "ccmGasBudget": null,
+  "ccmMessage": null,
+  "createdAt": Any<Date>,
+  "depositAmount": "125000000000",
+  "depositReceivedAt": 2022-12-06T14:31:33.000Z,
+  "depositReceivedBlockIndex": "100-0",
+  "destAddress": "bcrt1pzjdpc799qa5f7m65hpr66880res5ac3lr6y2chc4jsa",
+  "destAsset": "BTC",
+  "egressId": null,
+  "fees": [
+    {
+      "amount": "5000000000",
+      "asset": "DOT",
+      "id": Any<BigInt>,
+      "swapId": Any<BigInt>,
+      "type": "BROKER",
+    },
+  ],
+  "id": Any<BigInt>,
+  "intermediateAmount": null,
+  "nativeId": 1n,
+  "srcAsset": "DOT",
+  "swapDepositChannelId": Any<BigInt>,
+  "swapExecutedAt": null,
+  "swapExecutedBlockIndex": null,
+  "swapInputAmount": "125000000000",
+  "swapOutputAmount": null,
+  "txHash": null,
+  "type": "SWAP",
+  "updatedAt": Any<Date>,
+}
+`;
+
+exports[`swapScheduled smart contract origin stores a new swap from a contract deposit 1`] = `
+{
+  "ccmDepositReceivedBlockIndex": null,
+  "ccmGasBudget": null,
+  "ccmMessage": null,
+  "createdAt": Any<Date>,
+  "depositAmount": "175000000000000000",
+  "depositReceivedAt": 2022-12-06T14:31:33.000Z,
+  "depositReceivedBlockIndex": "100-0",
+  "destAddress": "1yMmfLti1k3huRQM2c47WugwonQMqTvQ2GUFxnU7Pcs7xPo",
+  "destAsset": "DOT",
+  "egressId": null,
+  "fees": [],
+  "id": Any<BigInt>,
+  "intermediateAmount": null,
+  "nativeId": 2n,
+  "srcAsset": "ETH",
+  "swapDepositChannelId": null,
+  "swapExecutedAt": null,
+  "swapExecutedBlockIndex": null,
+  "swapInputAmount": "175000000000000000",
+  "swapOutputAmount": null,
+  "txHash": "0x1103ebed92b02a278b54789bfabc056e69ad5c6558049364ea23ec2f3bfa0fd9",
+  "type": "SWAP",
+  "updatedAt": Any<Date>,
+}
+`;

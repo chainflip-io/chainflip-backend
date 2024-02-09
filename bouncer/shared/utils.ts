@@ -54,6 +54,10 @@ export function getEvmContractAddress(chain: Chain, contract: string): string {
       switch (contract) {
         case 'VAULT':
           return '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
+        case 'KEY_MANAGER':
+          return '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+        case 'ADDRESS_CHECKER':
+          return '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
         case 'ARBETH':
           return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
         case 'ARBUSDC':
@@ -92,10 +96,10 @@ export function assetToChain(asset: Asset): string {
       return 'Btc';
     case 'ARBUSDC':
     case 'ARBETH':
-      return 'Arbitrum';
+      return 'Arb';
     case 'SOL':
     case 'SOLUSDC':
-      return 'Solana';
+      return 'Sol';
     default:
       return '';
   }
@@ -439,7 +443,7 @@ export async function newAddress(
       rawAddress = await newBtcAddress(seed, type ?? 'P2PKH');
       break;
     default:
-      throw new Error('unexpected asset');
+      throw new Error(`unexpected asset ${asset}`);
   }
 
   return String(rawAddress).trim();

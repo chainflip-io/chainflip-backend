@@ -1,0 +1,59 @@
+{
+  "name": "@chainflip/sdk",
+  "version": "1.1.5",
+  "description": "",
+  "exports": {
+    "./swap": {
+      "import": "./dist/swap.mjs",
+      "require": "./dist/swap.js",
+      "types": "./dist/swap.d.ts"
+    },
+    "./funding": {
+      "import": "./dist/funding.mjs",
+      "require": "./dist/funding.js",
+      "types": "./dist/funding.d.ts"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "swap": [
+        "dist/swap.d.ts"
+      ],
+      "funding": [
+        "dist/funding.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "jest --forceExit",
+    "test:ci": "CI=1 jest --forceExit",
+    "build": "rm -rf dist && tsup",
+    "lint": "pnpm eslint --max-warnings 0 './**/*.ts'",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "engines": {
+    "node": "^18 || ^20.11.0",
+    "pnpm": ">=7"
+  },
+  "repository": "https://github.com/chainflip-io/chainflip-sdk-monorepo.git",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
+  "dependencies": {
+    "@polkadot/util": "^12.6.2",
+    "@polkadot/util-crypto": "^12.6.2",
+    "axios": "^1.6.7",
+    "ethers": "^6.9.2"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.1"
+  }
+}

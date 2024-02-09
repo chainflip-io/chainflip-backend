@@ -1,0 +1,15 @@
+{
+  "extends": "../../.eslintrc.json",
+  "plugins": ["eslint-plugin-n"],
+  "rules": {
+    "n/no-process-env": ["error"]
+  },
+  "overrides": [
+    {
+      "files": ["*.test.ts", "*.mjs", "*.js", "*.cjs"],
+      "rules": {
+        "n/no-process-env": ["off"]
+      }
+    }
+  ]
+}

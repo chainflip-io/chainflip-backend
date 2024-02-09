@@ -1,0 +1,21 @@
+version: '3.7'
+services:
+  db:
+    image: postgres:15.3
+    restart: always
+    ports:
+      - ${DB_PORT}:5432 # 5432 needs to be used by the archive
+    volumes:
+      - /var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME}
+
+  redis:
+    image: redis:latest
+    restart: always
+    ports:
+      - 6379:6379
+    volumes:
+      - /var/lib/redis/data

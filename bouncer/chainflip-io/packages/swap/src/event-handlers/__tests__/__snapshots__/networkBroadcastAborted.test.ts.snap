@@ -1,0 +1,19 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`networkBroadcastAborted updates an existing broadcast entity with the succeeded timestamp 1`] = `
+{
+  "abortedAt": 2022-12-06T14:31:45.000Z,
+  "abortedBlockIndex": "120-7",
+  "chain": "Ethereum",
+  "createdAt": Any<Date>,
+  "id": Any<BigInt>,
+  "nativeId": 62n,
+  "replacedById": null,
+  "requestedAt": 2022-12-06T14:31:45.000Z,
+  "requestedBlockIndex": "119-1",
+  "succeededAt": null,
+  "succeededBlockIndex": null,
+  "type": "BATCH",
+  "updatedAt": Any<Date>,
+}
+`;

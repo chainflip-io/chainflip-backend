@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig",
+  "compilerOptions": {
+    "module": "ESNext",
+    "outDir": "./dist/mjs" /* Redirect output structure to the directory. */,
+    "noEmit": false
+  }
+}

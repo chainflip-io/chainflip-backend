@@ -1,0 +1,15 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`networkEgressScheduled creates an egress entity with the correct data 1`] = `
+{
+  "amount": "4396575964",
+  "broadcastId": null,
+  "chain": "Ethereum",
+  "createdAt": Any<Date>,
+  "id": Any<BigInt>,
+  "nativeId": 13n,
+  "scheduledAt": 2022-12-06T14:31:45.000Z,
+  "scheduledBlockIndex": "120-123",
+  "updatedAt": Any<Date>,
+}
+`;

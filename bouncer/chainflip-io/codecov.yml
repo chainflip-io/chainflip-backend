@@ -1,0 +1,9 @@
+coverage:
+  status:
+    project:
+      default:
+        target: auto # compare coverage to base commit
+        threshold: 1% # allow 1% drop from base commit coverage
+flag_management:
+  default_rules:
+    carryforward: true # carry forward coverage from base commit if tests are not executed

@@ -1,0 +1,50 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`networkThresholdSignatureInvalid handles the replacement of an invalid broadcast 1`] = `
+{
+  "abortedAt": null,
+  "abortedBlockIndex": null,
+  "chain": "Ethereum",
+  "createdAt": Any<Date>,
+  "egresses": [],
+  "id": Any<BigInt>,
+  "nativeId": 1n,
+  "replacedById": Any<BigInt>,
+  "requestedAt": 2023-04-01T08:18:13.000Z,
+  "requestedBlockIndex": "418-1",
+  "succeededAt": null,
+  "succeededBlockIndex": null,
+  "type": "BATCH",
+  "updatedAt": Any<Date>,
+}
+`;
+
+exports[`networkThresholdSignatureInvalid handles the replacement of an invalid broadcast 2`] = `
+{
+  "abortedAt": null,
+  "abortedBlockIndex": null,
+  "chain": "Ethereum",
+  "createdAt": Any<Date>,
+  "egresses": [
+    {
+      "amount": "123456789",
+      "chain": "Ethereum",
+      "nativeId": 1n,
+    },
+    {
+      "amount": "987654321",
+      "chain": "Ethereum",
+      "nativeId": 2n,
+    },
+  ],
+  "id": Any<BigInt>,
+  "nativeId": 10n,
+  "replacedById": null,
+  "requestedAt": 2023-04-01T08:18:25.000Z,
+  "requestedBlockIndex": "420-7",
+  "succeededAt": null,
+  "succeededBlockIndex": null,
+  "type": "BATCH",
+  "updatedAt": Any<Date>,
+}
+`;

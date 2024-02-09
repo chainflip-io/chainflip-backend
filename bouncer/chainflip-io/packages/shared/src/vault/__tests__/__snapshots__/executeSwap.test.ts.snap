@@ -1,0 +1,398 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`executeSwap accepts a nonce (1) 1`] = `
+[
+  [
+    3,
+    "0x74623171676539767664326d6d6a7866687578757132303468346678787068723076666e736e78323035",
+    5,
+    "0x",
+    {
+      "nonce": 1,
+      "value": "1",
+    },
+  ],
+]
+`;
+
+exports[`executeSwap can be invoked with localnet options 1`] = `
+[
+  [
+    3,
+    "0x74623171676539767664326d6d6a7866687578757132303468346678787068723076666e736e78323035",
+    5,
+    "0x456",
+    "1",
+    "0x",
+    {},
+  ],
+]
+`;
+
+exports[`executeSwap can be invoked with localnet options 2`] = `
+[
+  [
+    "MY ADDRESS",
+    "0x123",
+  ],
+]
+`;
+
+exports[`executeSwap submits a native call ({"ccmMetadata": [Object], "destAddress": "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2", "destAsset": "FLIP", "destChain": "Ethereum", "srcAsset": "ETH", "srcChain": "Ethereum"}) 1`] = `
+[
+  [
+    1,
+    "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2",
+    2,
+    "0xdeadc0de",
+    "101",
+    "0x",
+    {
+      "value": "1",
+    },
+  ],
+]
+`;
+
+exports[`executeSwap submits a native call ({"ccmMetadata": [Object], "destAddress": "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2", "destAsset": "USDC", "destChain": "Ethereum", "srcAsset": "ETH", "srcChain": "Ethereum"}) 1`] = `
+[
+  [
+    1,
+    "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2",
+    3,
+    "0xdeadc0de",
+    "101",
+    "0x",
+    {
+      "value": "1",
+    },
+  ],
+]
+`;
+
+exports[`executeSwap submits a native swap ({"destAddress": "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2", "destAsset": "FLIP", "destChain": "Ethereum", "srcAsset": "ETH", "srcChain": "Ethereum"}) 1`] = `
+[
+  [
+    1,
+    "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2",
+    2,
+    "0x",
+    {
+      "value": "1",
+    },
+  ],
+]
+`;
+
+exports[`executeSwap submits a native swap ({"destAddress": "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2", "destAsset": "USDC", "destChain": "Ethereum", "srcAsset": "ETH", "srcChain": "Ethereum"}) 1`] = `
+[
+  [
+    1,
+    "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2",
+    3,
+    "0x",
+    {
+      "value": "1",
+    },
+  ],
+]
+`;
+
+exports[`executeSwap submits a native swap ({"destAddress": "5F3sa2TJAWMqDhXG6jhV4N8ko9SxwGy8TpaNS1repo5EYjQX", "destAsset": "DOT", "destChain": "Polkadot", "srcAsset": "ETH", "srcChain": "Ethereum"}) 1`] = `
+[
+  [
+    2,
+    "0x841226ea070c9577979ca2e854130fbe3253853c13c05943e09908312950275d",
+    4,
+    "0x",
+    {
+      "value": "1",
+    },
+  ],
+]
+`;
+
+exports[`executeSwap submits a native swap ({"destAddress": "tb1qge9vvd2mmjxfhuxuq204h4fxxphr0vfnsnx205", "destAsset": "BTC", "destChain": "Bitcoin", "srcAsset": "ETH", "srcChain": "Ethereum"}) 1`] = `
+[
+  [
+    3,
+    "0x74623171676539767664326d6d6a7866687578757132303468346678787068723076666e736e78323035",
+    5,
+    "0x",
+    {
+      "value": "1",
+    },
+  ],
+]
+`;
+
+exports[`executeSwap submits a native swap ({"destAddress": "tb1qge9vvd2mmjxfhuxuq204h4fxxphr0vfnsnx205", "destAsset": "BTC", "destChain": "Bitcoin", "srcAsset": "ETH", "srcChain": "Ethereum"}) 2`] = `
+[
+  [
+    3,
+    "0x74623171676539767664326d6d6a7866687578757132303468346678787068723076666e736e78323035",
+    5,
+    "0x",
+    {
+      "value": "1",
+    },
+  ],
+]
+`;
+
+exports[`executeSwap submits a token call ({"ccmMetadata": [Object], "destAddress": "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2", "destAsset": "ETH", "destChain": "Ethereum", "srcAsset": "FLIP", "srcChain": "Ethereum"}) 1`] = `
+[
+  [
+    1,
+    "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2",
+    1,
+    "0xdeadc0de",
+    "101",
+    "0x2BbB561C6eaB74f358cA9e8a961E3A20CAE3D100",
+    "1",
+    "0x",
+    {},
+  ],
+]
+`;
+
+exports[`executeSwap submits a token call ({"ccmMetadata": [Object], "destAddress": "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2", "destAsset": "ETH", "destChain": "Ethereum", "srcAsset": "FLIP", "srcChain": "Ethereum"}) 2`] = `
+[
+  [
+    "MY ADDRESS",
+    "0xC17CCec5015081EB2DF26d20A9e02c5484C1d641",
+  ],
+]
+`;
+
+exports[`executeSwap submits a token call ({"ccmMetadata": [Object], "destAddress": "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2", "destAsset": "ETH", "destChain": "Ethereum", "srcAsset": "USDC", "srcChain": "Ethereum"}) 1`] = `
+[
+  [
+    1,
+    "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2",
+    1,
+    "0xdeadc0de",
+    "101",
+    "0x07865c6E87B9F70255377e024ace6630C1Eaa37F",
+    "1",
+    "0x",
+    {},
+  ],
+]
+`;
+
+exports[`executeSwap submits a token call ({"ccmMetadata": [Object], "destAddress": "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2", "destAsset": "ETH", "destChain": "Ethereum", "srcAsset": "USDC", "srcChain": "Ethereum"}) 2`] = `
+[
+  [
+    "MY ADDRESS",
+    "0xC17CCec5015081EB2DF26d20A9e02c5484C1d641",
+  ],
+]
+`;
+
+exports[`executeSwap submits a token swap ({"destAddress": "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2", "destAsset": "ETH", "destChain": "Ethereum", "srcAsset": "FLIP", "srcChain": "Ethereum"}) 1`] = `
+[
+  [
+    1,
+    "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2",
+    1,
+    "0x2BbB561C6eaB74f358cA9e8a961E3A20CAE3D100",
+    "1",
+    "0x",
+    {},
+  ],
+]
+`;
+
+exports[`executeSwap submits a token swap ({"destAddress": "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2", "destAsset": "ETH", "destChain": "Ethereum", "srcAsset": "FLIP", "srcChain": "Ethereum"}) 2`] = `
+[
+  [
+    "MY ADDRESS",
+    "0xC17CCec5015081EB2DF26d20A9e02c5484C1d641",
+  ],
+]
+`;
+
+exports[`executeSwap submits a token swap ({"destAddress": "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2", "destAsset": "ETH", "destChain": "Ethereum", "srcAsset": "USDC", "srcChain": "Ethereum"}) 1`] = `
+[
+  [
+    1,
+    "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2",
+    1,
+    "0x07865c6E87B9F70255377e024ace6630C1Eaa37F",
+    "1",
+    "0x",
+    {},
+  ],
+]
+`;
+
+exports[`executeSwap submits a token swap ({"destAddress": "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2", "destAsset": "ETH", "destChain": "Ethereum", "srcAsset": "USDC", "srcChain": "Ethereum"}) 2`] = `
+[
+  [
+    "MY ADDRESS",
+    "0xC17CCec5015081EB2DF26d20A9e02c5484C1d641",
+  ],
+]
+`;
+
+exports[`executeSwap submits a token swap ({"destAddress": "5F3sa2TJAWMqDhXG6jhV4N8ko9SxwGy8TpaNS1repo5EYjQX", "destAsset": "DOT", "destChain": "Polkadot", "srcAsset": "FLIP", "srcChain": "Ethereum"}) 1`] = `
+[
+  [
+    2,
+    "0x841226ea070c9577979ca2e854130fbe3253853c13c05943e09908312950275d",
+    4,
+    "0x2BbB561C6eaB74f358cA9e8a961E3A20CAE3D100",
+    "1",
+    "0x",
+    {},
+  ],
+]
+`;
+
+exports[`executeSwap submits a token swap ({"destAddress": "5F3sa2TJAWMqDhXG6jhV4N8ko9SxwGy8TpaNS1repo5EYjQX", "destAsset": "DOT", "destChain": "Polkadot", "srcAsset": "FLIP", "srcChain": "Ethereum"}) 2`] = `
+[
+  [
+    "MY ADDRESS",
+    "0xC17CCec5015081EB2DF26d20A9e02c5484C1d641",
+  ],
+]
+`;
+
+exports[`executeSwap submits a token swap ({"destAddress": "5F3sa2TJAWMqDhXG6jhV4N8ko9SxwGy8TpaNS1repo5EYjQX", "destAsset": "DOT", "destChain": "Polkadot", "srcAsset": "USDC", "srcChain": "Ethereum"}) 1`] = `
+[
+  [
+    2,
+    "0x841226ea070c9577979ca2e854130fbe3253853c13c05943e09908312950275d",
+    4,
+    "0x07865c6E87B9F70255377e024ace6630C1Eaa37F",
+    "1",
+    "0x",
+    {},
+  ],
+]
+`;
+
+exports[`executeSwap submits a token swap ({"destAddress": "5F3sa2TJAWMqDhXG6jhV4N8ko9SxwGy8TpaNS1repo5EYjQX", "destAsset": "DOT", "destChain": "Polkadot", "srcAsset": "USDC", "srcChain": "Ethereum"}) 2`] = `
+[
+  [
+    "MY ADDRESS",
+    "0xC17CCec5015081EB2DF26d20A9e02c5484C1d641",
+  ],
+]
+`;
+
+exports[`executeSwap submits a token swap ({"destAddress": "tb1qge9vvd2mmjxfhuxuq204h4fxxphr0vfnsnx205", "destAsset": "BTC", "destChain": "Bitcoin", "srcAsset": "FLIP", "srcChain": "Ethereum"}) 1`] = `
+[
+  [
+    3,
+    "0x74623171676539767664326d6d6a7866687578757132303468346678787068723076666e736e78323035",
+    5,
+    "0x2BbB561C6eaB74f358cA9e8a961E3A20CAE3D100",
+    "1",
+    "0x",
+    {},
+  ],
+]
+`;
+
+exports[`executeSwap submits a token swap ({"destAddress": "tb1qge9vvd2mmjxfhuxuq204h4fxxphr0vfnsnx205", "destAsset": "BTC", "destChain": "Bitcoin", "srcAsset": "FLIP", "srcChain": "Ethereum"}) 2`] = `
+[
+  [
+    "MY ADDRESS",
+    "0xC17CCec5015081EB2DF26d20A9e02c5484C1d641",
+  ],
+]
+`;
+
+exports[`executeSwap submits a token swap ({"destAddress": "tb1qge9vvd2mmjxfhuxuq204h4fxxphr0vfnsnx205", "destAsset": "BTC", "destChain": "Bitcoin", "srcAsset": "FLIP", "srcChain": "Ethereum"}) 3`] = `
+[
+  [
+    3,
+    "0x74623171676539767664326d6d6a7866687578757132303468346678787068723076666e736e78323035",
+    5,
+    "0x2BbB561C6eaB74f358cA9e8a961E3A20CAE3D100",
+    "1",
+    "0x",
+    {},
+  ],
+]
+`;
+
+exports[`executeSwap submits a token swap ({"destAddress": "tb1qge9vvd2mmjxfhuxuq204h4fxxphr0vfnsnx205", "destAsset": "BTC", "destChain": "Bitcoin", "srcAsset": "FLIP", "srcChain": "Ethereum"}) 4`] = `
+[
+  [
+    "MY ADDRESS",
+    "0xC17CCec5015081EB2DF26d20A9e02c5484C1d641",
+  ],
+]
+`;
+
+exports[`executeSwap submits a token swap ({"destAddress": "tb1qge9vvd2mmjxfhuxuq204h4fxxphr0vfnsnx205", "destAsset": "BTC", "destChain": "Bitcoin", "srcAsset": "USDC", "srcChain": "Ethereum"}) 1`] = `
+[
+  [
+    3,
+    "0x74623171676539767664326d6d6a7866687578757132303468346678787068723076666e736e78323035",
+    5,
+    "0x07865c6E87B9F70255377e024ace6630C1Eaa37F",
+    "1",
+    "0x",
+    {},
+  ],
+]
+`;
+
+exports[`executeSwap submits a token swap ({"destAddress": "tb1qge9vvd2mmjxfhuxuq204h4fxxphr0vfnsnx205", "destAsset": "BTC", "destChain": "Bitcoin", "srcAsset": "USDC", "srcChain": "Ethereum"}) 2`] = `
+[
+  [
+    "MY ADDRESS",
+    "0xC17CCec5015081EB2DF26d20A9e02c5484C1d641",
+  ],
+]
+`;
+
+exports[`executeSwap submits a token swap ({"destAddress": "tb1qge9vvd2mmjxfhuxuq204h4fxxphr0vfnsnx205", "destAsset": "BTC", "destChain": "Bitcoin", "srcAsset": "USDC", "srcChain": "Ethereum"}) 3`] = `
+[
+  [
+    3,
+    "0x74623171676539767664326d6d6a7866687578757132303468346678787068723076666e736e78323035",
+    5,
+    "0x07865c6E87B9F70255377e024ace6630C1Eaa37F",
+    "1",
+    "0x",
+    {},
+  ],
+]
+`;
+
+exports[`executeSwap submits a token swap ({"destAddress": "tb1qge9vvd2mmjxfhuxuq204h4fxxphr0vfnsnx205", "destAsset": "BTC", "destChain": "Bitcoin", "srcAsset": "USDC", "srcChain": "Ethereum"}) 4`] = `
+[
+  [
+    "MY ADDRESS",
+    "0xC17CCec5015081EB2DF26d20A9e02c5484C1d641",
+  ],
+]
+`;
+
+exports[`executeSwap submits a token swap with sufficient approval 1`] = `
+[
+  [
+    3,
+    "0x74623171676539767664326d6d6a7866687578757132303468346678787068723076666e736e78323035",
+    5,
+    "0x2BbB561C6eaB74f358cA9e8a961E3A20CAE3D100",
+    "1",
+    "0x",
+    {},
+  ],
+]
+`;
+
+exports[`executeSwap submits a token swap with sufficient approval 2`] = `
+[
+  [
+    "MY ADDRESS",
+    "0xC17CCec5015081EB2DF26d20A9e02c5484C1d641",
+  ],
+]
+`;

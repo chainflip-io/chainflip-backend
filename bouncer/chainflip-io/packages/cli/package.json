@@ -1,0 +1,55 @@
+{
+  "name": "@chainflip/cli",
+  "version": "1.1.6",
+  "description": "",
+  "main": "./dist/lib.mjs",
+  "types": "./dist/lib.d.mts",
+  "bin": {
+    "chainflip": "./dist/cli.mjs"
+  },
+  "exports": {
+    ".": {
+      "require": "./dist/lib.js",
+      "import": "./dist/lib.mjs",
+      "types": "./dist/lib.d.mts"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      ".": [
+        "dist/lib.d.mts"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bech32-buffer": "^0.2.1",
+    "ioredis": "^5.3.2",
+    "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "@types/yargs": "^17.0.32",
+    "tsup": "^8.0.1",
+    "tsx": "^4.7.0"
+  },
+  "peerDependencies": {
+    "axios": "^1.x",
+    "ethers": "^6.x",
+    "@polkadot/util-crypto": "^12.x",
+    "@polkadot/util": "^12.x"
+  },
+  "repository": "https://github.com/chainflip-io/chainflip-sdk-monorepo.git",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  }
+}

@@ -1,0 +1,87 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`batch swap flow handles all the events: broadcast 1`] = `
+{
+  "abortedAt": null,
+  "abortedBlockIndex": null,
+  "chain": "Ethereum",
+  "createdAt": Any<Date>,
+  "id": Any<BigInt>,
+  "nativeId": 4n,
+  "replacedById": null,
+  "requestedAt": 1970-01-01T00:00:12.000Z,
+  "requestedBlockIndex": "2-81",
+  "succeededAt": 1970-01-01T00:00:18.000Z,
+  "succeededBlockIndex": "3-25",
+  "type": "CCM",
+  "updatedAt": Any<Date>,
+}
+`;
+
+exports[`batch swap flow handles all the events: egress 1`] = `
+{
+  "amount": "960671821324",
+  "broadcastId": Any<BigInt>,
+  "chain": "Ethereum",
+  "createdAt": Any<Date>,
+  "id": Any<BigInt>,
+  "nativeId": 1n,
+  "scheduledAt": 1970-01-01T00:00:12.000Z,
+  "scheduledBlockIndex": "2-56",
+  "updatedAt": Any<Date>,
+}
+`;
+
+exports[`batch swap flow handles all the events: gas swap 1`] = `
+{
+  "ccmDepositReceivedBlockIndex": "2-18",
+  "ccmGasBudget": "2000",
+  "ccmMessage": "0x12abf87",
+  "createdAt": Any<Date>,
+  "depositAmount": "1000000",
+  "depositReceivedAt": 1970-01-01T00:00:12.000Z,
+  "depositReceivedBlockIndex": "2-14",
+  "destAddress": "0xa51c1fc2f0d1a1b8494ed1fe312d7c3a78ed91c0",
+  "destAsset": "ETH",
+  "egressId": Any<BigInt>,
+  "id": Any<BigInt>,
+  "intermediateAmount": "970",
+  "nativeId": 2n,
+  "srcAsset": "DOT",
+  "swapDepositChannelId": Any<BigInt>,
+  "swapExecutedAt": 1970-01-01T00:00:12.000Z,
+  "swapExecutedBlockIndex": "2-55",
+  "swapInputAmount": "1000000",
+  "swapOutputAmount": "960672170800",
+  "txHash": null,
+  "type": "GAS",
+  "updatedAt": Any<Date>,
+}
+`;
+
+exports[`batch swap flow handles all the events: principal swap 1`] = `
+{
+  "ccmDepositReceivedBlockIndex": null,
+  "ccmGasBudget": null,
+  "ccmMessage": null,
+  "createdAt": Any<Date>,
+  "depositAmount": "499999000000",
+  "depositReceivedAt": 1970-01-01T00:00:12.000Z,
+  "depositReceivedBlockIndex": "2-13",
+  "destAddress": "0xa51c1fc2f0d1a1b8494ed1fe312d7c3a78ed91c0",
+  "destAsset": "ETH",
+  "egressId": Any<BigInt>,
+  "id": Any<BigInt>,
+  "intermediateAmount": "485434508",
+  "nativeId": 1n,
+  "srcAsset": "DOT",
+  "swapDepositChannelId": Any<BigInt>,
+  "swapExecutedAt": 1970-01-01T00:00:12.000Z,
+  "swapExecutedBlockIndex": "2-54",
+  "swapInputAmount": "499999000000",
+  "swapOutputAmount": "480766415032706356",
+  "txHash": null,
+  "type": "PRINCIPAL",
+  "updatedAt": Any<Date>,
+}
+`;

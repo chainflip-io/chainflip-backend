@@ -117,7 +117,7 @@ async function main(): Promise<void> {
     }
   };
   await rotateAndFund();
-  const vaultBlockNumber = await (await proxyAdded).block;
+  const vaultBlockNumber = (await proxyAdded).block;
 
   // Step 5
   console.log('Registering Vaults with state chain');
@@ -133,13 +133,14 @@ async function main(): Promise<void> {
       btcKey,
     ),
   );
+
   await submitGovernanceExtrinsic(
     chainflip.tx.environment.witnessInitializeArbitrumVault(
       await arbClient.eth.getBlockNumber(),
       getEvmContractAddress('Arbitrum', 'KEY_MANAGER'),
       getEvmContractAddress('Arbitrum', 'VAULT'),
       getEvmContractAddress('Arbitrum', 'ADDRESS_CHECKER'),
-      arbClient.eth.getChainId(),
+      await arbClient.eth.getChainId(),
       getEvmContractAddress('Arbitrum', 'ARBUSDC'),
     ),
   );

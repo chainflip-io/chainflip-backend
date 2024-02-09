@@ -1,0 +1,6 @@
+{
+  "watch": ["dist", "*.json"],
+  "ext": ".ts,.js, .json",
+  "ignoreRoot": [".git"],
+  "exec": "node dist/cjs/swap/index.js"
+}

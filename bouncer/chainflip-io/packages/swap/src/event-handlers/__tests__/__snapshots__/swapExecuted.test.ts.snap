@@ -1,0 +1,137 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`swapExecuted updates an existing swap 1`] = `
+{
+  "ccmDepositReceivedBlockIndex": null,
+  "ccmGasBudget": null,
+  "ccmMessage": null,
+  "createdAt": Any<Date>,
+  "depositAmount": "10000000000",
+  "depositReceivedAt": 2022-12-06T14:31:33.000Z,
+  "depositReceivedBlockIndex": "100-0",
+  "destAddress": "1yMmfLti1k3huRQM2c47WugwonQMqTvQ2GUFxnU7Pcs7xPo",
+  "destAsset": "USDC",
+  "egressId": null,
+  "fees": [
+    {
+      "amount": "10010010",
+      "asset": "USDC",
+      "id": Any<BigInt>,
+      "swapId": Any<BigInt>,
+      "type": "NETWORK",
+    },
+    {
+      "amount": "10000000",
+      "asset": "ETH",
+      "id": Any<BigInt>,
+      "swapId": Any<BigInt>,
+      "type": "LIQUIDITY",
+    },
+  ],
+  "id": Any<BigInt>,
+  "intermediateAmount": null,
+  "nativeId": 9876545n,
+  "srcAsset": "ETH",
+  "swapDepositChannelId": Any<BigInt>,
+  "swapExecutedAt": 2022-12-06T14:31:39.000Z,
+  "swapExecutedBlockIndex": "100-0",
+  "swapInputAmount": "10000000000",
+  "swapOutputAmount": "10000000000",
+  "txHash": null,
+  "type": "SWAP",
+  "updatedAt": Any<Date>,
+}
+`;
+
+exports[`swapExecuted updates an existing swap 2`] = `
+{
+  "ccmDepositReceivedBlockIndex": null,
+  "ccmGasBudget": null,
+  "ccmMessage": null,
+  "createdAt": Any<Date>,
+  "depositAmount": "10000000000",
+  "depositReceivedAt": 2022-12-06T14:31:33.000Z,
+  "depositReceivedBlockIndex": "100-0",
+  "destAddress": "1yMmfLti1k3huRQM2c47WugwonQMqTvQ2GUFxnU7Pcs7xPo",
+  "destAsset": "USDC",
+  "egressId": null,
+  "fees": [
+    {
+      "amount": "10010010",
+      "asset": "USDC",
+      "id": Any<BigInt>,
+      "swapId": Any<BigInt>,
+      "type": "NETWORK",
+    },
+    {
+      "amount": "10000000",
+      "asset": "ETH",
+      "id": Any<BigInt>,
+      "swapId": Any<BigInt>,
+      "type": "LIQUIDITY",
+    },
+  ],
+  "id": Any<BigInt>,
+  "intermediateAmount": null,
+  "nativeId": 9876545n,
+  "srcAsset": "ETH",
+  "swapDepositChannelId": Any<BigInt>,
+  "swapExecutedAt": 2022-12-06T14:31:39.000Z,
+  "swapExecutedBlockIndex": "100-0",
+  "swapInputAmount": "10000000000",
+  "swapOutputAmount": "10000000000",
+  "txHash": null,
+  "type": "SWAP",
+  "updatedAt": Any<Date>,
+}
+`;
+
+exports[`swapExecuted updates an existing swap with intermediate amount 1`] = `
+{
+  "ccmDepositReceivedBlockIndex": null,
+  "ccmGasBudget": null,
+  "ccmMessage": null,
+  "createdAt": Any<Date>,
+  "depositAmount": "10000000000",
+  "depositReceivedAt": 2022-12-06T14:31:33.000Z,
+  "depositReceivedBlockIndex": "100-0",
+  "destAddress": "1yMmfLti1k3huRQM2c47WugwonQMqTvQ2GUFxnU7Pcs7xPo",
+  "destAsset": "DOT",
+  "egressId": null,
+  "fees": [
+    {
+      "amount": "100",
+      "asset": "USDC",
+      "id": Any<BigInt>,
+      "swapId": Any<BigInt>,
+      "type": "NETWORK",
+    },
+    {
+      "amount": "10000000",
+      "asset": "ETH",
+      "id": Any<BigInt>,
+      "swapId": Any<BigInt>,
+      "type": "LIQUIDITY",
+    },
+    {
+      "amount": "150",
+      "asset": "USDC",
+      "id": Any<BigInt>,
+      "swapId": Any<BigInt>,
+      "type": "LIQUIDITY",
+    },
+  ],
+  "id": Any<BigInt>,
+  "intermediateAmount": "100000",
+  "nativeId": 9876545n,
+  "srcAsset": "ETH",
+  "swapDepositChannelId": Any<BigInt>,
+  "swapExecutedAt": 2022-12-06T14:31:39.000Z,
+  "swapExecutedBlockIndex": "100-0",
+  "swapInputAmount": "10000000000",
+  "swapOutputAmount": "10000000000",
+  "txHash": null,
+  "type": "SWAP",
+  "updatedAt": Any<Date>,
+}
+`;

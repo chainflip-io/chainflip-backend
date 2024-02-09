@@ -1,0 +1,22 @@
+{
+  "sisyphos": {
+    "item": "sisyphos-swapping-backend",
+    "vault": "Web",
+    "account": "chainflip.1password.com"
+  },
+  "perseverance": {
+    "item": "perseverance-swapping-backend",
+    "vault": "Web",
+    "account": "chainflip.1password.com"
+  },
+  "backspin": {
+    "item": "backspin-swapping-backend",
+    "vault": "Web",
+    "account": "chainflip.1password.com"
+  },
+  "berghain": {
+    "item": "berghain-swapping-backend",
+    "vault": "Web",
+    "account": "chainflip.1password.com"
+  }
+}
