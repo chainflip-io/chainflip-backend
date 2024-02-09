@@ -1,0 +1,65 @@
+name: Publish npm packages 🛰️
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - main
+    paths:
+      - packages/sdk/**
+
+permissions:
+  packages: write
+  contents: read
+
+env:
+  PACKAGE: "none"
+
+jobs:
+  publish-gpr:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Check commit message
+        run: |
+          if [[ "${{ github.event.head_commit.message }}" =~ ^@chainflip/sdk/v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          then
+            echo "PACKAGE=@chainflip/sdk" >> $GITHUB_ENV
+          fi
+
+      - name: Get Node.JS version from .nvmrc
+        if: ${{ env.PACKAGE != 'none' }}
+        run: echo "NODE_VERSION=$(cat .nvmrc)" >> $GITHUB_ENV
+
+      - name: Install pnpm 💿
+        if: ${{ env.PACKAGE != 'none' }}
+        run: npm install -g pnpm@8
+
+      - name: Setup Node 🎮
+        if: ${{ env.PACKAGE != 'none' }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@chainflip'
+
+      - name: Install dependencies 🚚 📦
+        if: ${{ env.PACKAGE != 'none' }}
+        run: pnpm install
+
+      - name: Build
+        if: ${{ env.PACKAGE != 'none' }}
+        run: pnpm --filter $PACKAGE build
+        working-directory: ./
+
+      - name: Publish npm package 📦
+        if: ${{ env.PACKAGE != 'none' }}
+        run: |
+          pnpm --filter $PACKAGE publish
+        working-directory: ./
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.CF_NPM_JS_PACKAGES_READ_WRITE }}

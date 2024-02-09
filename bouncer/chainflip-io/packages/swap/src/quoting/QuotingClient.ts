@@ -2,14 +2,13 @@ import * as crypto from 'crypto';
 import { EventEmitter } from 'events';
 import { io, Socket } from 'socket.io-client';
 import { promisify } from 'util';
-import { z } from 'zod';
-import { marketMakerResponseSchema } from './schemas';
-import { QuoteRequest } from '../schemas';
+import { QuoteRequest, MarketMakerResponse } from '../schemas';
 
 const signAsync = promisify(crypto.sign);
 
-type RawQuoteResponse = Omit<z.input<typeof marketMakerResponseSchema>, 'id'>;
-type QuoteHandler = (quote: QuoteRequest) => Promise<RawQuoteResponse>;
+type QuoteHandler = (
+  quote: QuoteRequest,
+) => Promise<Omit<MarketMakerResponse, 'id'>>;
 
 /**
  * A reference implementation of a client that connects to the quoting service

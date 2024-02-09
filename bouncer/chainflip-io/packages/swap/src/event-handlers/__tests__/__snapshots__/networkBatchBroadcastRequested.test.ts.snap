@@ -20,12 +20,10 @@ exports[`networkBatchBroadcastRequested creates a broadcast entity and updates t
   ],
   "id": Any<BigInt>,
   "nativeId": 9n,
-  "replacedById": null,
   "requestedAt": 2022-12-06T14:31:45.000Z,
   "requestedBlockIndex": "120-135",
   "succeededAt": null,
   "succeededBlockIndex": null,
-  "type": "BATCH",
   "updatedAt": Any<Date>,
 }
 `;

@@ -15,37 +15,11 @@ import {
 import { promisify } from 'util';
 import { Assets } from '@/shared/enums';
 import { QuoteQueryParams } from '@/shared/schemas';
-import { environment, swapRate } from '@/shared/tests/fixtures';
 import prisma from '../client';
 import app from '../server';
 import { getBrokerQuote } from '../utils/statechain';
 
-jest.mock('../utils/statechain', () => ({
-  getBrokerQuote: jest.fn(),
-}));
-jest.mock('axios', () => ({
-  post: jest.fn((url, data) => {
-    if (data.method === 'cf_environment') {
-      return Promise.resolve({
-        data: environment({
-          maxSwapAmount: null,
-          ingressFee: '0xF4240', // 2000000
-          egressFee: '0x61A8', // 25000
-        }),
-      });
-    }
-
-    if (data.method === 'cf_swap_rate') {
-      return Promise.resolve({
-        data: swapRate({
-          output: `0x${(BigInt(data.params[2]) * 2n).toString(16)}`,
-        }),
-      });
-    }
-
-    throw new Error(`unexpected axios call to ${url}: ${JSON.stringify(data)}`);
-  }),
-}));
+jest.mock('../utils/statechain', () => ({ getBrokerQuote: jest.fn() }));
 
 const generateKeyPairAsync = promisify(crypto.generateKeyPair);
 
@@ -58,24 +32,6 @@ describe('python integration test', () => {
   let child: ChildProcessWithoutNullStreams;
   let stdout$: Observable<string>;
   let serverUrl: string;
-
-  beforeAll(async () => {
-    await prisma.$queryRaw`TRUNCATE TABLE public."Pool" CASCADE`;
-    await prisma.pool.createMany({
-      data: [
-        {
-          baseAsset: 'FLIP',
-          quoteAsset: 'USDC',
-          liquidityFeeHundredthPips: 1000,
-        },
-        {
-          baseAsset: 'ETH',
-          quoteAsset: 'USDC',
-          liquidityFeeHundredthPips: 2000,
-        },
-      ],
-    });
-  });
 
   beforeEach(async () => {
     await prisma.$queryRaw`TRUNCATE TABLE private."MarketMaker" CASCADE`;
@@ -128,12 +84,11 @@ describe('python integration test', () => {
       ),
     ).resolves.toBe('connected');
 
-    const query = {
+    const params = new URLSearchParams({
       srcAsset: Assets.FLIP,
       destAsset: Assets.ETH,
       amount: '1000000000000000000',
-    } as QuoteQueryParams;
-    const params = new URLSearchParams(query as Record<string, any>);
+    } as QuoteQueryParams);
 
     jest.mocked(getBrokerQuote).mockResolvedValueOnce({
       id: "doesn't matter",
@@ -145,40 +100,8 @@ describe('python integration test', () => {
 
     expect(await response.json()).toEqual({
       id: expect.any(String),
-      intermediateAmount: '1996000000',
-      egressAmount: '995999999999975000',
-      includedFees: [
-        {
-          amount: '2000000',
-          asset: 'FLIP',
-          chain: 'Ethereum',
-          type: 'INGRESS',
-        },
-        {
-          amount: '1996000',
-          asset: 'USDC',
-          chain: 'Ethereum',
-          type: 'NETWORK',
-        },
-        {
-          amount: '999999999998000',
-          asset: 'FLIP',
-          chain: 'Ethereum',
-          type: 'LIQUIDITY',
-        },
-        {
-          amount: '3992000',
-          asset: 'USDC',
-          chain: 'Ethereum',
-          type: 'LIQUIDITY',
-        },
-        {
-          amount: '25000',
-          asset: 'ETH',
-          chain: 'Ethereum',
-          type: 'EGRESS',
-        },
-      ],
+      intermediateAmount: '2000000000',
+      egressAmount: '1000000000000000000',
     });
   });
 });

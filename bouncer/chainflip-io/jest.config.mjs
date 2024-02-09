@@ -49,7 +49,10 @@ export default {
   collectCoverage: true,
 
   // An array of glob patterns indicating a set of files for which coverage information should be collected
-  collectCoverageFrom: ['src/**/*.{js,jsx,ts,tsx}', '!src/**/*.test.ts'],
+  collectCoverageFrom: [
+    'packages/src/**/*.{js,jsx,ts,tsx}',
+    '!packages/src/**/*.test.ts',
+  ],
 
   // The directory where Jest should output its coverage files
   coverageDirectory: 'coverage',
@@ -123,7 +126,7 @@ export default {
   // reporters: undefined,
 
   // Automatically reset mock state before every test
-  resetMocks: true,
+  // resetMocks: false,
 
   // Reset the module registry before running each individual test
   // resetModules: false,
@@ -216,7 +219,7 @@ export default {
   },
 
   // An array of regexp pattern strings that are matched against all source file paths, matched files will skip transformation
-  transformIgnorePatterns: ['/node_modules/.pnpm/(?!(superjson))'],
+  // transformIgnorePatterns: [],
 
   // An array of regexp pattern strings that are matched against all modules before the module loader will automatically return a mock for them
   // unmockedModulePathPatterns: undefined,

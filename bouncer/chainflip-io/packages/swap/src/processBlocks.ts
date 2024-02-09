@@ -3,15 +3,21 @@ import { GraphQLClient } from 'graphql-request';
 import { performance } from 'perf_hooks';
 import { setTimeout as sleep } from 'timers/promises';
 import prisma from './client';
-import env from './config/env';
 import { getEventHandler, swapEventNames } from './event-handlers';
 import { GetBatchQuery } from './gql/generated/graphql';
 import { GET_BATCH } from './gql/query';
-import preBlock from './preBlock';
 import { handleExit } from './utils/function';
 import logger from './utils/logger';
 
-const client = new GraphQLClient(env.INGEST_GATEWAY_URL);
+const { INGEST_GATEWAY_URL } = process.env;
+
+assert(INGEST_GATEWAY_URL, 'INGEST_GATEWAY_URL is not defined');
+
+const client = new GraphQLClient(INGEST_GATEWAY_URL);
+
+const BATCH_SIZE = Number(process.env.PROCESSOR_BATCH_SIZE) || 50;
+const TRANSACTION_TIMEOUT =
+  Number(process.env.PROCESSOR_TRANSACTION_TIMEOUT) || 10000;
 
 export type Block = NonNullable<GetBatchQuery['blocks']>['nodes'][number];
 export type Event = Block['events']['nodes'][number];
@@ -22,7 +28,7 @@ const fetchBlocks = async (height: number): Promise<Block[]> => {
     try {
       const batch = await client.request(GET_BATCH, {
         height,
-        limit: env.PROCESSOR_BATCH_SIZE,
+        limit: BATCH_SIZE,
         swapEvents: swapEventNames,
       });
 
@@ -82,7 +88,7 @@ export default async function processBlocks() {
     }
 
     nextBatch =
-      blocks.length === env.PROCESSOR_BATCH_SIZE
+      blocks.length === BATCH_SIZE
         ? fetchBlocks(lastBlock + blocks.length + 1)
         : undefined;
 
@@ -107,8 +113,6 @@ export default async function processBlocks() {
 
       await prisma.$transaction(
         async (txClient) => {
-          await preBlock(txClient, block);
-
           for (const event of block.events.nodes) {
             const eventHandler = getEventHandler(event.name, block.specId);
             if (!eventHandler) {
@@ -142,7 +146,7 @@ export default async function processBlocks() {
             'failed to update state, maybe another process is running',
           );
         },
-        { timeout: env.PROCESSOR_TRANSACTION_TIMEOUT },
+        { timeout: TRANSACTION_TIMEOUT },
       );
       lastBlock = block.height;
     }

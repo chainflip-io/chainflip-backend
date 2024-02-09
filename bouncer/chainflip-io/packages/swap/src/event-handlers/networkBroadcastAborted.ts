@@ -13,7 +13,7 @@ export async function handleEvent(
 ): Promise<void> {
   const { broadcastId } = eventArgs.parse(event.args);
 
-  // use updateMany to skip update if broadcast does not include any swap
+  // use updateMany to skip update if we are not tracking swap
   await prisma.broadcast.updateMany({
     where: { chain, nativeId: broadcastId },
     data: {

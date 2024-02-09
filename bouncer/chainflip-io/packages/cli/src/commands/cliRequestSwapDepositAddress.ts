@@ -1,8 +1,6 @@
 import { ArgumentsCamelCase, InferredOptionTypes, Options } from 'yargs';
 import { Assets, Chains } from '@/shared/enums';
-import { assert } from '@/shared/guards';
-import { CcmMetadata } from '@/shared/schemas';
-import { broker } from '../lib';
+import { BrokerClient } from '../lib';
 
 export const yargsOptions = {
   'src-asset': {
@@ -35,52 +33,25 @@ export const yargsOptions = {
     describe: 'The chain to swap to',
     demandOption: true,
   },
-  message: {
-    type: 'string',
-    describe: 'The CCM message that is sent along with the swapped assets',
-  },
-  'gas-budget': {
-    type: 'string',
-    describe: 'The amount of gas that is sent with the CCM message',
-  },
-  network: {
-    type: 'string',
-    demandOption: true,
-    choices: ['mainnet', 'perseverance', 'backspin', 'sisyphos'],
-  },
 } as const satisfies { [key: string]: Options };
 
 export default async function cliRequestSwapDepositAddress(
   args: ArgumentsCamelCase<InferredOptionTypes<typeof yargsOptions>>,
 ) {
-  let ccmMetadata: CcmMetadata | undefined;
+  const client = await BrokerClient.create({ url: args.brokerUrl });
 
-  if (args.gasBudget || args.message) {
-    assert(args.gasBudget, 'missing gas budget');
-    assert(args.message, 'missing message');
-
-    ccmMetadata = {
-      gasBudget: args.gasBudget,
-      message: args.message as `0x${string}`,
-    };
-  }
-  const result = await broker.requestSwapDepositAddress(
-    {
-      srcAsset: args.srcAsset,
-      destAsset: args.destAsset,
-      destAddress: args.destAddress,
-      srcChain: args.srcChain,
-      destChain: args.destChain,
-      ccmMetadata,
-    },
-    {
-      url: args.brokerUrl,
-      commissionBps: 0,
-    },
-    args.network,
-  );
+  const result = await client.requestSwapDepositAddress({
+    srcAsset: args.srcAsset,
+    destAsset: args.destAsset,
+    destAddress: args.destAddress,
+    srcChain: args.srcChain,
+    destChain: args.destChain,
+  });
 
   console.log(`Deposit address: ${result.address}`);
   console.log(`Issued block: ${result.issuedBlock}`);
+  console.log(`Expiry block: ${result.expiryBlock}`);
   console.log(`Channel ID: ${result.channelId}`);
+
+  await client.close();
 }

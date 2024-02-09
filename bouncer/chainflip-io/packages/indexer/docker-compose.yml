@@ -1,4 +1,4 @@
-version: '3.7'
+version: "3.7"
 services:
   db: # cannot change this name or port (ty squid)
     image: postgres:15.3
@@ -18,14 +18,14 @@ services:
     restart: on-failure
     image: subsquid/substrate-ingest:firesquid
     command: [
-        '-e',
-        'ws://host.docker.internal:9944',
-        '-c',
-        '20', # allow up to 20 pending requests for the above endpoint (default is 5)
+        "-e",
+        "ws://host.docker.internal:9944",
+        "-c",
+        "20", # allow up to 20 pending requests for the above endpoint (default is 5)
         # add another endpoint to increase archiving speed and reliability.
-        '-e',
-        'ws://host.docker.internal:9944',
+        "-e",
+        "ws://host.docker.internal:9944",
         #  "--start-block", "1000000", # uncomment to specify a non-zero start block
-        '--out',
-        'postgres://postgres:postgres@db:5432/squid_archive',
+        "--out",
+        "postgres://postgres:postgres@db:5432/squid_archive",
       ]

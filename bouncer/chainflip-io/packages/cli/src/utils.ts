@@ -18,7 +18,7 @@ type GetEthNetworkOptions =
   | { chainflipNetwork: ChainflipNetwork };
 
 export function getEthNetwork(opts: GetEthNetworkOptions) {
-  if (opts.chainflipNetwork === 'localnet') return opts.ethNetwork as string;
+  if (opts.chainflipNetwork === 'localnet') return opts.ethNetwork;
   if (opts.chainflipNetwork === ChainflipNetworks.mainnet) return 'mainnet';
   return 'goerli';
 }

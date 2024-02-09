@@ -1,13 +1,12 @@
 import { Assets } from '@/shared/enums';
+import prisma, { SwapDepositChannel } from '../../client';
+import swapScheduled from '../swapScheduled';
 import {
   createDepositChannel,
   swapScheduledBtcDepositChannelMock,
-  swapScheduledDotDepositChannelBrokerCommissionMock,
   swapScheduledDotDepositChannelMock,
   swapScheduledVaultMock,
 } from './utils';
-import prisma, { SwapDepositChannel } from '../../client';
-import swapScheduled from '../swapScheduled';
 
 describe(swapScheduled, () => {
   beforeEach(async () => {
@@ -23,14 +22,8 @@ describe(swapScheduled, () => {
         srcChain: 'Polkadot',
         srcAsset: Assets.DOT,
         destAsset: Assets.BTC,
-        depositAddress: '1yMmfLti1k3huRQM2c47WugwonQMqTvQ2GUFxnU7Pcs7xPo',
+        depositAddress: '5CGLqaFMheyVcsXz6QEtjtSAi6RcXFaEDJKvovgCdPiZhw11',
         destAddress: 'bcrt1pzjdpc799qa5f7m65hpr66880res5ac3lr6y2chc4jsa',
-        isExpired: true,
-        srcChainExpiryBlock:
-          Number(
-            swapScheduledDotDepositChannelMock.eventContext.event.args.origin
-              .depositBlockHeight,
-          ) + 1,
       });
       btcSwapDepositChannel = await createDepositChannel({
         srcChain: 'Bitcoin',
@@ -38,12 +31,6 @@ describe(swapScheduled, () => {
         destAsset: Assets.ETH,
         depositAddress: 'bcrt1pzjdpc799qa5f7m65hpr66880res5ac3lr6y2chc4jsa',
         destAddress: '0x41ad2bc63a2059f9b623533d87fe99887d794847',
-        isExpired: true,
-        srcChainExpiryBlock:
-          Number(
-            swapScheduledBtcDepositChannelMock.eventContext.event.args.origin
-              .depositBlockHeight,
-          ) + 1,
       });
     });
 
@@ -58,7 +45,6 @@ describe(swapScheduled, () => {
 
       const swap = await prisma.swap.findFirstOrThrow({
         where: { swapDepositChannelId: dotSwapDepositChannel.id },
-        include: { fees: true },
       });
 
       expect(swap.depositAmount.toString()).toEqual(
@@ -84,7 +70,6 @@ describe(swapScheduled, () => {
 
       const swap = await prisma.swap.findFirstOrThrow({
         where: { swapDepositChannelId: btcSwapDepositChannel.id },
-        include: { fees: true },
       });
 
       expect(swap.depositAmount.toString()).toEqual(
@@ -99,38 +84,21 @@ describe(swapScheduled, () => {
       });
     });
 
-    it('stores a new swap with a broker commission', async () => {
+    it('does not store a new swap if the deposit channel is expired', async () => {
+      await prisma.swapDepositChannel.update({
+        where: { id: dotSwapDepositChannel.id },
+        data: { expiryBlock: -1 },
+      });
+
       await prisma.$transaction(async (client) => {
         await swapScheduled({
           prisma: client,
-          block:
-            swapScheduledDotDepositChannelBrokerCommissionMock.block as any,
-          event: swapScheduledDotDepositChannelBrokerCommissionMock.eventContext
-            .event as any,
+          block: swapScheduledDotDepositChannelMock.block,
+          event: swapScheduledDotDepositChannelMock.eventContext.event as any,
         });
       });
 
-      const swap = await prisma.swap.findFirstOrThrow({
-        where: { swapDepositChannelId: dotSwapDepositChannel.id },
-        include: { fees: true },
-      });
-
-      expect(swap.depositAmount.toString()).toEqual(
-        swapScheduledDotDepositChannelMock.eventContext.event.args
-          .depositAmount,
-      );
-      expect(swap).toMatchSnapshot({
-        id: expect.any(BigInt),
-        createdAt: expect.any(Date),
-        updatedAt: expect.any(Date),
-        swapDepositChannelId: expect.any(BigInt),
-        fees: [
-          {
-            id: expect.any(BigInt),
-            swapId: expect.any(BigInt),
-          },
-        ],
-      });
+      expect(await prisma.swap.findFirst()).toBeNull();
     });
 
     it('does not store a new swap if the deposit channel is not found', async () => {
@@ -149,6 +117,25 @@ describe(swapScheduled, () => {
 
       expect(await prisma.swap.findFirst()).toBeNull();
     });
+
+    it('does not store a new swap if the deposit channel is not unique', async () => {
+      const { id, ...rest } = dotSwapDepositChannel;
+      await prisma.swapDepositChannel.create({
+        data: { ...rest, channelId: 2n },
+      });
+
+      await expect(
+        prisma.$transaction(async (client) => {
+          await swapScheduled({
+            prisma: client,
+            block: swapScheduledDotDepositChannelMock.block,
+            event: swapScheduledDotDepositChannelMock.eventContext.event as any,
+          });
+        }),
+      ).rejects.toThrowError();
+
+      expect(await prisma.swap.findFirst()).toBeNull();
+    });
   });
 
   describe('smart contract origin', () => {
@@ -162,9 +149,7 @@ describe(swapScheduled, () => {
         });
       });
 
-      const swap = await prisma.swap.findFirstOrThrow({
-        include: { fees: true },
-      });
+      const swap = await prisma.swap.findFirstOrThrow();
 
       expect(swap.depositAmount.toString()).toEqual(
         swapScheduledVaultMock.eventContext.event.args.depositAmount,

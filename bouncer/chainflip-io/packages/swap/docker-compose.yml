@@ -1,4 +1,4 @@
-version: '3.7'
+version: "3.7"
 services:
   db:
     image: postgres:15.3
@@ -11,11 +11,3 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASS}
       POSTGRES_DB: ${DB_NAME}
-
-  redis:
-    image: redis:latest
-    restart: always
-    ports:
-      - 6379:6379
-    volumes:
-      - /var/lib/redis/data

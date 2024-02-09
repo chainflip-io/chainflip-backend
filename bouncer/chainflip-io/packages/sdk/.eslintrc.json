@@ -1,0 +1,16 @@
+{
+  "extends": "../../.eslintrc.json",
+  "rules": {
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["@/shared/node-apis/*"],
+            "message": "This directory uses Node.js APIs that are not browser compatible."
+          }
+        ]
+      }
+    ]
+  }
+}

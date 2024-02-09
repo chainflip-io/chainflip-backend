@@ -1,6 +1,6 @@
-import { networkBroadcastSuccessMock } from './utils';
 import prisma from '../../client';
 import networkBroadcastSuccess from '../networkBroadcastSuccess';
+import { networkBroadcastSuccessMock } from './utils';
 
 describe(networkBroadcastSuccess, () => {
   beforeEach(async () => {

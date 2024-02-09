@@ -1,22 +1,16 @@
 // Set the column in the DB to the block timestamp and the deposit amount.
+import assert from 'assert';
 import { z } from 'zod';
-import {
-  chainflipAssetEnum,
-  u128,
-  u64,
-  swapType as swapTypeSchema,
-} from '@/shared/parsers';
-import { encodedAddress } from './common';
+import { chainflipAssetEnum, u128, u64 } from '@/shared/parsers';
 import logger from '../utils/logger';
+import { encodedAddress } from './common';
 import type { EventHandlerArgs } from '.';
 
 const depositChannelSwapOrigin = z.object({
   __kind: z.literal('DepositChannel'),
   channelId: u64,
   depositAddress: encodedAddress,
-  depositBlockHeight: u64,
 });
-
 const vaultSwapOrigin = z.object({
   __kind: z.literal('Vault'),
   txHash: z.string(),
@@ -29,8 +23,6 @@ const swapScheduledArgs = z.object({
   destinationAsset: chainflipAssetEnum,
   destinationAddress: encodedAddress,
   origin: z.union([depositChannelSwapOrigin, vaultSwapOrigin]),
-  swapType: swapTypeSchema,
-  brokerCommission: u128.optional(),
 });
 
 export type SwapScheduledEvent = z.input<typeof swapScheduledArgs>;
@@ -47,51 +39,41 @@ export default async function swapScheduled({
     destinationAsset,
     destinationAddress,
     origin,
-    swapType,
-    brokerCommission: brokerCommissionAmount,
   } = swapScheduledArgs.parse(event.args);
 
   const newSwapData = {
     depositReceivedBlockIndex: `${block.height}-${event.indexInBlock}`,
-    depositAmount: depositAmount.toString(), // will be overwritten with value before fees in the networkDepositReceived handler
-    swapInputAmount: depositAmount.toString(),
+    depositAmount: depositAmount.toString(),
     nativeId: swapId,
     depositReceivedAt: new Date(block.timestamp),
-    fees: brokerCommissionAmount
-      ? {
-          create: {
-            type: 'BROKER' as const,
-            asset: sourceAsset,
-            amount: brokerCommissionAmount.toString(),
-          },
-        }
-      : undefined,
   };
 
   if (origin.__kind === 'DepositChannel') {
     const depositAddress = origin.depositAddress.address;
 
-    const channel = await prisma.swapDepositChannel.findFirst({
+    const channels = await prisma.swapDepositChannel.findMany({
       where: {
         srcAsset: sourceAsset,
         depositAddress,
-        srcChainExpiryBlock: { gte: origin.depositBlockHeight },
+        expiryBlock: { gte: block.height },
+        issuedBlock: { lte: block.height },
       },
-      orderBy: { issuedBlock: 'desc' },
     });
-
-    if (!channel) {
+    if (channels.length === 0) {
       logger.info(
         `SwapScheduled: SwapDepositChannel not found for depositAddress ${depositAddress}`,
       );
       return;
     }
+    assert(
+      channels.length === 1,
+      `SwapScheduled: too many active swap intents found for depositAddress ${depositAddress}`,
+    );
 
-    const { srcAsset, destAddress, destAsset, id } = channel;
+    const [{ srcAsset, destAddress, destAsset, id }] = channels;
 
     await prisma.swap.create({
       data: {
-        type: swapType.type,
         swapDepositChannelId: id,
         srcAsset,
         destAsset,
@@ -102,7 +84,6 @@ export default async function swapScheduled({
   } else if (origin.__kind === 'Vault') {
     await prisma.swap.create({
       data: {
-        type: swapType.type,
         srcAsset: sourceAsset,
         destAsset: destinationAsset,
         destAddress: destinationAddress.address,

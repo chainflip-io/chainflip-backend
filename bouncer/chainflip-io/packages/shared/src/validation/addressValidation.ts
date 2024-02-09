@@ -1,24 +1,15 @@
-import { isHex, u8aToHex } from '@polkadot/util';
-import {
-  base58Decode,
-  decodeAddress,
-  encodeAddress,
-} from '@polkadot/util-crypto';
+import { isHex, hexToU8a } from '@polkadot/util';
+import { decodeAddress, encodeAddress } from '@polkadot/util-crypto';
 import * as ethers from 'ethers';
-import { isValidSegwitAddress } from '../bitcoin';
-import { Chain, ChainflipNetwork } from '../enums';
+import { Asset, Assets, Chain, Chains } from '../enums';
 import { assert } from '../guards';
+import { isValidSegwitAddress } from './segwitAddr';
 
 export type AddressValidator = (address: string) => boolean;
 
 export const validatePolkadotAddress: AddressValidator = (address) => {
   try {
-    const bytes = decodeAddress(address);
-    if (isHex(address)) {
-      const pubkey = u8aToHex(bytes);
-      if (pubkey.length !== 66) return false; // we only support 32 byte dot addresses (from dan)
-    }
-    encodeAddress(bytes);
+    encodeAddress(isHex(address) ? hexToU8a(address) : decodeAddress(address));
     return true;
   } catch {
     return false;
@@ -26,7 +17,7 @@ export const validatePolkadotAddress: AddressValidator = (address) => {
 };
 
 export const validateEvmAddress: AddressValidator = (address) =>
-  ethers.isAddress(address);
+  ethers.utils.isAddress(address);
 
 type BitcoinNetwork = 'mainnet' | 'testnet' | 'regtest';
 
@@ -37,13 +28,32 @@ const assertArraylikeEqual = <T>(a: ArrayLike<T>, b: ArrayLike<T>) => {
   }
 };
 
+// if we go back to ethers 6 when typechain updates
+// const hexToUint8Array = (hex: string) => {
+//   const withoutPrefix = hex.replace(/^0x/, '');
+//   const padded =
+//     withoutPrefix.length % 2 === 0 ? withoutPrefix : `0${withoutPrefix}`;
+//   const matchArray = padded.match(/.{2}/g);
+//   assert(matchArray, 'matchArray must not be null');
+//   return new Uint8Array(matchArray.map((n) => Number.parseInt(n, 16)));
+// };
+
+// const decodeBase58 = (address: string) => {
+//   const bigint = ethers.decodeBase58(address);
+//   // this regex will always match
+//   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+//   const leadingZeroes = address.match(/^1*/)![0].length;
+//   const hex = `${'0'.repeat(leadingZeroes)}${bigint.toString(16)}`;
+//   return hexToUint8Array(hex);
+// };
+
 const validateP2PKHOrP2SHAddress = (
   address: string,
   network: BitcoinNetwork,
 ) => {
   try {
     // The address must be a valid base58 encoded string.
-    const decoded = base58Decode(address);
+    const decoded = ethers.utils.base58.decode(address);
 
     // Decoding it must result in exactly 25 bytes.
     assert(decoded.length === 25, 'decoded address must be 25 bytes long');
@@ -63,8 +73,8 @@ const validateP2PKHOrP2SHAddress = (
     }
     // The last 4 decoded bytes must be equal to the first 4 bytes of the double sha256 of the first 21 decoded bytes
     const checksum = decoded.slice(-4);
-    const doubleHash = ethers.getBytes(
-      ethers.sha256(ethers.sha256(decoded.slice(0, 21))),
+    const doubleHash = ethers.utils.arrayify(
+      ethers.utils.sha256(ethers.utils.sha256(decoded.slice(0, 21))),
     );
 
     assertArraylikeEqual(checksum, doubleHash.slice(0, 4));
@@ -110,31 +120,31 @@ export const validateBitcoinRegtestAddress: AddressValidator = (
   address: string,
 ) => validateBitcoinAddress(address, 'regtest');
 
-const validators: Record<ChainflipNetwork, Record<Chain, AddressValidator>> = {
-  mainnet: {
-    Bitcoin: validateBitcoinMainnetAddress,
-    Ethereum: validateEvmAddress,
-    Polkadot: validatePolkadotAddress,
-  },
-  perseverance: {
-    Bitcoin: validateBitcoinTestnetAddress,
-    Ethereum: validateEvmAddress,
-    Polkadot: validatePolkadotAddress,
-  },
-  sisyphos: {
-    Bitcoin: validateBitcoinTestnetAddress,
-    Ethereum: validateEvmAddress,
-    Polkadot: validatePolkadotAddress,
-  },
-  backspin: {
-    Bitcoin: validateBitcoinRegtestAddress,
-    Ethereum: validateEvmAddress,
-    Polkadot: validatePolkadotAddress,
-  },
-};
+export const validateChainAddress = (
+  address: string,
+  isMainnet = true,
+): Record<Chain | Asset, boolean> => ({
+  [Assets.ETH]: validateEvmAddress(address),
+  [Assets.BTC]: isMainnet
+    ? validateBitcoinMainnetAddress(address)
+    : validateBitcoinTestnetAddress(address) ||
+      validateBitcoinRegtestAddress(address),
+  [Assets.DOT]: validatePolkadotAddress(address),
+  [Assets.FLIP]: validateEvmAddress(address),
+  [Assets.USDC]: validateEvmAddress(address),
+  [Chains.Ethereum]: validateEvmAddress(address),
+  [Chains.Bitcoin]: isMainnet
+    ? validateBitcoinMainnetAddress(address)
+    : validateBitcoinTestnetAddress(address) ||
+      validateBitcoinRegtestAddress(address),
+  [Chains.Polkadot]: validatePolkadotAddress(address),
+});
 
 export const validateAddress = (
-  chain: Chain,
+  assetOrChain: Chain | Asset | undefined,
   address: string,
-  network: ChainflipNetwork,
-): boolean => validators[network][chain](address);
+  isMainnet = true,
+): boolean => {
+  if (!assetOrChain) return validateEvmAddress(address);
+  return validateChainAddress(address, isMainnet)[assetOrChain];
+};

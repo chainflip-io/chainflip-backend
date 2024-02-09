@@ -1,7 +1,8 @@
 module.exports = {
-  dependencyTypes: ['dev', 'prod', 'resolutions', 'overrides'],
+  dependencyTypes: ['dev', 'peer', 'prod', 'resolutions', 'overrides'],
   filter: '.',
   indent: '  ',
+  overrides: false,
   semverGroups: [],
   semverRange: '',
   versionGroups: [

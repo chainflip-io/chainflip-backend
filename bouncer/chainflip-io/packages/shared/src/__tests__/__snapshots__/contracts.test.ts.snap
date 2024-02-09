@@ -4,7 +4,10 @@ exports[`approve approves the spender for an allowance equal to the spend reques
 [
   [
     "0xdeadbeef",
-    900n,
+    {
+      "hex": "0x0384",
+      "type": "BigNumber",
+    },
     {
       "nonce": 1,
     },
@@ -16,7 +19,10 @@ exports[`approve approves the spender for an allowance equal to the spend reques
 [
   [
     "0xdeadbeef",
-    1000n,
+    {
+      "hex": "0x03e8",
+      "type": "BigNumber",
+    },
     {
       "nonce": 1,
     },

@@ -1,104 +1,83 @@
-import { ContractTransactionReceipt, Signer } from 'ethers';
-import { getStateChainGateway } from './utils';
-import {
-  checkAllowance,
-  extractOverrides,
-  getTokenContractAddress,
-  TransactionOptions,
-} from '../contracts';
+import type { BigNumber, ContractReceipt, Signer } from 'ethers';
+import { checkAllowance, getTokenContractAddress } from '../contracts';
 import { Assets, ChainflipNetwork } from '../enums';
 import { assert } from '../guards';
+import { getStateChainGateway } from './utils';
 
-export type FundingNetworkOptions =
+type WithNonce<T> = T & { nonce?: number | bigint | string };
+
+export type SignerOptions = WithNonce<
   | { network: ChainflipNetwork; signer: Signer }
   | {
       network: 'localnet';
       signer: Signer;
       stateChainGatewayContractAddress: string;
-      flipContractAddress: string;
-    };
+    }
+>;
 
-export type PendingRedemption = {
-  amount: bigint;
-  redeemAddress: string;
-  startTime: bigint;
-  expiryTime: bigint;
-};
+type ExtendLocalnetOptions<T, U> = T extends { network: 'localnet' }
+  ? T & U
+  : T;
+
+export type FundStateChainAccountOptions = ExtendLocalnetOptions<
+  SignerOptions,
+  { flipContractAddress: string }
+>;
 
 export const fundStateChainAccount = async (
   accountId: `0x${string}`,
-  amount: bigint,
-  networkOpts: FundingNetworkOptions,
-  txOpts: TransactionOptions,
-): Promise<ContractTransactionReceipt> => {
+  amount: string,
+  options: FundStateChainAccountOptions,
+): Promise<ContractReceipt> => {
   const flipContractAddress =
-    networkOpts.network === 'localnet'
-      ? networkOpts.flipContractAddress
-      : getTokenContractAddress(Assets.FLIP, networkOpts.network);
+    options.network === 'localnet'
+      ? options.flipContractAddress
+      : getTokenContractAddress(Assets.FLIP, options.network);
 
-  const stateChainGateway = getStateChainGateway(networkOpts);
+  const stateChainGateway = getStateChainGateway(options);
 
   const { isAllowable } = await checkAllowance(
     amount,
-    await stateChainGateway.getAddress(),
+    stateChainGateway.address,
     flipContractAddress,
-    networkOpts.signer,
+    options.signer,
   );
   assert(isAllowable, 'Insufficient allowance');
 
   const transaction = await stateChainGateway.fundStateChainAccount(
     accountId,
     amount,
-    extractOverrides(txOpts),
+    { nonce: options.nonce },
   );
 
-  return transaction.wait(txOpts.wait) as Promise<ContractTransactionReceipt>;
+  return transaction.wait(1);
 };
 
 export const executeRedemption = async (
   accountId: `0x${string}`,
-  networkOpts: FundingNetworkOptions,
-  txOpts: TransactionOptions,
-): Promise<ContractTransactionReceipt> => {
-  const stateChainGateway = getStateChainGateway(networkOpts);
+  { nonce, ...options }: WithNonce<SignerOptions>,
+): Promise<ContractReceipt> => {
+  const stateChainGateway = getStateChainGateway(options);
 
-  const transaction = await stateChainGateway.executeRedemption(
-    accountId,
-    extractOverrides(txOpts),
-  );
+  const transaction = await stateChainGateway.executeRedemption(accountId, {
+    nonce,
+  });
 
-  return transaction.wait(txOpts.wait) as Promise<ContractTransactionReceipt>;
+  return transaction.wait(1);
 };
 
 export const getMinimumFunding = (
-  networkOpts: FundingNetworkOptions,
-): Promise<bigint> => {
-  const stateChainGateway = getStateChainGateway(networkOpts);
+  options: SignerOptions,
+): Promise<BigNumber> => {
+  const stateChainGateway = getStateChainGateway(options);
 
   return stateChainGateway.getMinimumFunding();
 };
 
-export const getRedemptionDelay = (
-  networkOpts: FundingNetworkOptions,
-): Promise<bigint> => {
-  const stateChainGateway = getStateChainGateway(networkOpts);
+export const getRedemptionDelay = (options: SignerOptions): Promise<number> => {
+  const stateChainGateway = getStateChainGateway(options);
 
   return stateChainGateway.REDEMPTION_DELAY();
-};
-
-export const getPendingRedemption = async (
-  accountId: `0x${string}`,
-  networkOpts: FundingNetworkOptions,
-): Promise<PendingRedemption | undefined> => {
-  const stateChainGateway = getStateChainGateway(networkOpts);
-  const pendingRedemption =
-    await stateChainGateway.getPendingRedemption(accountId);
-
-  // there is no null in solidity, therefore we compare against the initial value to determine if the value is set:
-  // https://www.wtf.academy/en/solidity-start/InitialValue/
-  return pendingRedemption.amount !== 0n
-    ? stateChainGateway.getPendingRedemption(accountId)
-    : undefined;
 };
 
 export * from './approval';

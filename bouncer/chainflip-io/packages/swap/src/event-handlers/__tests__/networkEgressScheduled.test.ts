@@ -1,6 +1,6 @@
-import { networkEgressScheduledMock } from './utils';
 import prisma from '../../client';
 import networkEgressScheduled from '../networkEgressScheduled';
+import { networkEgressScheduledMock } from './utils';
 
 describe(networkEgressScheduled, () => {
   beforeEach(async () => {

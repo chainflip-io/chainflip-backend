@@ -1,6 +1,6 @@
-import { networkBatchBroadcastRequestedMock } from './utils';
 import prisma from '../../client';
 import networkBatchBroadcastRequested from '../networkBatchBroadcastRequested';
+import { networkBatchBroadcastRequestedMock } from './utils';
 
 describe(networkBatchBroadcastRequested, () => {
   beforeEach(async () => {

@@ -3,14 +3,9 @@
   "version": "0.0.16",
   "description": "",
   "scripts": {
-    "build:shared": "pnpm --filter sdk-shared build",
-    "build:sdk": "pnpm build:shared && pnpm --filter sdk build",
+    "build:shared": "pnpm --filter @chainflip-io/sdk-shared build",
+    "build:sdk": "pnpm build:shared && pnpm --filter @chainflip-io/chainflip-sdk build",
     "build:swap": "pnpm build:shared && pnpm --filter swap build",
-    "build:cli": "pnpm --filter cli build",
-    "test:ci:shared": "pnpm --filter sdk-shared test:ci",
-    "test:ci:sdk": "pnpm --filter sdk test:ci",
-    "test:ci:swap": "pnpm --filter swap test:ci",
-    "test:ci:cli": "exit 0",
     "prettier:check": "prettier ./** --check",
     "prettier:write": "prettier ./** --write",
     "eslint:check": "pnpm -r lint",
@@ -25,44 +20,31 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@swc/core": "^1.3.107",
-    "@swc/jest": "^0.2.36",
-    "@types/jest": "^29.5.12",
-    "@types/node": "^20.11.16",
-    "@types/yargs": "^17.0.32",
-    "@typescript-eslint/eslint-plugin": "^6.19.1",
-    "@typescript-eslint/parser": "^6.20.0",
+    "@swc/core": "^1.3.36",
+    "@swc/jest": "^0.2.24",
+    "@types/jest": "^29.4.0",
+    "@types/node": "^18.11.9",
+    "@typescript-eslint/eslint-plugin": "^5.59.8",
+    "@typescript-eslint/parser": "^5.59.8",
     "envlocker": "^0.2.0",
-    "eslint": "^8.56.0",
+    "eslint": "^8.21.0",
     "eslint-config-airbnb-base": "^15.0.0",
-    "eslint-config-prettier": "^9.1.0",
+    "eslint-config-prettier": "^8.5.0",
     "eslint-import-resolver-alias": "^1.1.2",
-    "eslint-plugin-import": "^2.29.1",
-    "husky": "^9.0.6",
-    "jest": "^29.7.0",
-    "lint-staged": "^15.2.0",
-    "prettier": "^3.2.2",
-    "syncpack": "^12.3.0",
-    "ts-morph": "^21.0.1",
-    "tsc-alias": "^1.8.8",
-    "tsx": "^4.7.0",
-    "typescript": "^5.3.3",
-    "yargs": "^17.7.2"
+    "eslint-plugin-import": "^2.26.0",
+    "husky": "^8.0.3",
+    "jest": "^29.6.0",
+    "lint-staged": "^13.1.2",
+    "prettier": "^2.8.8",
+    "syncpack": "^10.0.0",
+    "ts-morph": "^19.0.0",
+    "tsc-alias": "^1.8.4",
+    "tsx": "^3.12.6",
+    "typescript": "^5.0.0",
+    "yargs": "^17.5.1"
   },
   "engines": {
-    "node": "20.11.0",
+    "node": "18.16.0",
     "pnpm": ">=7"
-  },
-  "dependencies": {
-    "@trpc/client": "^10.45.0",
-    "@trpc/server": "^10.45.0",
-    "bech32-buffer": "^0.2.1",
-    "superjson": "^1.13.3",
-    "zod": "^3.22.4"
-  },
-  "pnpm": {
-    "patchedDependencies": {
-      "bech32-buffer@0.2.1": "patches/bech32-buffer@0.2.1.patch"
-    }
   }
 }

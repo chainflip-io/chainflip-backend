@@ -7,7 +7,7 @@
     "start": "pnpm postgraphile --append-plugins postgraphile-plugin-connection-filter -c postgres://postgres:postgres@localhost:5432/squid_archive --port 8000 --dynamic-json"
   },
   "dependencies": {
-    "postgraphile": "^4.13.0",
+    "postgraphile": "^4.12.11",
     "postgraphile-plugin-connection-filter": "^2.3.0"
   }
 }

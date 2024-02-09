@@ -1,61 +1,58 @@
-import { ContractTransactionReceipt } from 'ethers';
-import { TokenSwapParams } from './schemas';
+import { ContractReceipt } from 'ethers';
 import {
   checkAllowance,
   getTokenContractAddress,
   getVaultManagerContractAddress,
   approve,
-  TransactionOptions,
 } from '../contracts';
 import { assert } from '../guards';
-import { SwapNetworkOptions } from './index';
+import { ExecuteOptions, TokenSwapParams } from './schemas';
 
 export const checkVaultAllowance = (
   params: Pick<TokenSwapParams, 'srcAsset' | 'amount'>,
-  networkOpts: SwapNetworkOptions,
+  opts: ExecuteOptions,
 ): ReturnType<typeof checkAllowance> => {
   const erc20Address =
-    networkOpts.network === 'localnet'
-      ? networkOpts.srcTokenContractAddress
-      : getTokenContractAddress(params.srcAsset, networkOpts.network);
+    opts.network === 'localnet'
+      ? opts.srcTokenContractAddress
+      : getTokenContractAddress(params.srcAsset, opts.network);
 
   assert(erc20Address !== undefined, 'Missing ERC20 contract address');
 
   const vaultContractAddress =
-    networkOpts.network === 'localnet'
-      ? networkOpts.vaultContractAddress
-      : getVaultManagerContractAddress(networkOpts.network);
+    opts.network === 'localnet'
+      ? opts.vaultContractAddress
+      : getVaultManagerContractAddress(opts.network);
 
   return checkAllowance(
-    BigInt(params.amount),
+    params.amount,
     vaultContractAddress,
     erc20Address,
-    networkOpts.signer,
+    opts.signer,
   );
 };
 
 export const approveVault = async (
   params: Pick<TokenSwapParams, 'srcAsset' | 'amount'>,
-  networkOpts: SwapNetworkOptions,
-  txOpts: TransactionOptions,
-): Promise<ContractTransactionReceipt | null> => {
+  opts: ExecuteOptions,
+): Promise<ContractReceipt | null> => {
   const { isAllowable, erc20, allowance } = await checkVaultAllowance(
     params,
-    networkOpts,
+    opts,
   );
 
   if (isAllowable) return null;
 
   const vaultContractAddress =
-    networkOpts.network === 'localnet'
-      ? networkOpts.vaultContractAddress
-      : getVaultManagerContractAddress(networkOpts.network);
+    opts.network === 'localnet'
+      ? opts.vaultContractAddress
+      : getVaultManagerContractAddress(opts.network);
 
   return approve(
-    BigInt(params.amount),
+    params.amount,
     vaultContractAddress,
     erc20,
     allowance,
-    txOpts,
+    opts.nonce,
   );
 };

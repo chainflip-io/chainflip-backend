@@ -11,8 +11,6 @@ const eventArgs = z.object({
 });
 
 /**
- * @deprecated no longer exists since 1.2.0
- *
  * the event emits the egress id (Network, number) and the egress amount. the
  * egress id is used to uniquely identify an egress and correlate it to a swap
  * and determining if funds were successfully sent by the broadcast pallets

@@ -10,6 +10,7 @@ exports[`networkEgressScheduled creates an egress entity with the correct data 1
   "nativeId": 13n,
   "scheduledAt": 2022-12-06T14:31:45.000Z,
   "scheduledBlockIndex": "120-123",
+  "swapId": null,
   "updatedAt": Any<Date>,
 }
 `;

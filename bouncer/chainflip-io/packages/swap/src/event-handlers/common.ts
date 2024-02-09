@@ -7,7 +7,6 @@ import {
   hexString,
   unsignedInteger,
 } from '@/shared/parsers';
-import env from '../config/env';
 
 export const egressId = z.tuple([
   z.object({ __kind: chainflipChain }).transform(({ __kind }) => __kind),
@@ -26,7 +25,7 @@ const btcChainAddress = z.object({
   __kind: z.literal('Btc'),
   value: hexString
     .transform((v) => Buffer.from(v.slice(2), 'hex').toString())
-    .pipe(btcAddress(env.CHAINFLIP_NETWORK)),
+    .pipe(btcAddress),
 });
 
 export const encodedAddress = z
@@ -36,5 +35,5 @@ export const encodedAddress = z
       ({
         chain: assetChains[__kind.toUpperCase() as Uppercase<typeof __kind>],
         address: value,
-      }) as const,
+      } as const),
   );

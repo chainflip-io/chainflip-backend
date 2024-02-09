@@ -75,18 +75,20 @@ describe(RpcClient, () => {
 
   it("doesn't spam the reconnect", async () => {
     jest.useFakeTimers();
+    const timeoutSpy = jest.spyOn(global, 'setTimeout');
+
     const response = await client.sendRequest('echo', 'hello');
     expect(response).toEqual('hello');
 
     killConnections();
     closeServer();
     await once(client, 'DISCONNECT');
+    timeoutSpy.mockReset();
     const connectSpy = jest.spyOn(client, 'connect');
 
     for (let i = 0; i < 10; i += 1) {
-      const promise = once(client, 'DISCONNECT');
-      await jest.runOnlyPendingTimersAsync();
-      await promise;
+      jest.runAllTimers();
+      await once(client, 'DISCONNECT');
       expect(connectSpy).toHaveBeenCalled();
     }
 

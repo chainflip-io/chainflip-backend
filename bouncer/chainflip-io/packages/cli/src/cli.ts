@@ -1,4 +1,7 @@
 import yargs from 'yargs/yargs';
+import cliExecuteCall, {
+  yargsOptions as cliExecuteCallOptions,
+} from './commands/cliExecuteCall';
 import cliExecuteSwap, {
   yargsOptions as cliExecuteSwapOptions,
 } from './commands/cliExecuteSwap';
@@ -14,6 +17,7 @@ export default async function cli(args: string[]) {
     .scriptName('chainflip-cli')
     .usage('$0 <cmd> [args]')
     .command('swap', '', cliExecuteSwapOptions, cliExecuteSwap)
+    .command('call', '', cliExecuteCallOptions, cliExecuteCall)
     .command(
       'fund-state-chain-account',
       '',

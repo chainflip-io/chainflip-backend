@@ -1,0 +1,49 @@
+name: Code quality
+
+on:
+  workflow_dispatch: {}
+  pull_request:
+    types:
+      - opened
+      - synchronize
+    paths:
+      - packages/**
+  push:
+    branches:
+      - main
+    paths:
+      - packages/**
+
+env:
+  FORCE_COLOR: 1
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@v3
+
+      - name: Get Node.JS version from package.json 👀
+        run: echo "NODE_VERSION=$(cat .nvmrc)" >> $GITHUB_ENV
+
+      - name: Install pnpm 💿
+        run: npm install -g pnpm@8
+
+      - name: Setup Node 🎮
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+
+      - name: Install dependencies 🚚 📦
+        run: pnpm install
+
+      - name: Run prettier check
+        run: pnpm prettier:check
+
+      - name: Run eslint check
+        run: pnpm eslint:check
+
+      - name: Run typecheck
+        run: pnpm typecheck

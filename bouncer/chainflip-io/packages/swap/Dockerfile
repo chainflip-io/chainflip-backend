@@ -1,4 +1,4 @@
-FROM node:20.11.0-bullseye-slim as builder
+FROM node:18.16.0-bullseye-slim as builder
 
 # create root application folder
 WORKDIR /app
@@ -20,7 +20,7 @@ ENV NODE_ENV=$node_env
 
 RUN pnpm --filter swap build
 
-FROM node:20.11.0-bullseye-slim
+FROM node:18.16.0-bullseye-slim
 
 WORKDIR /app
 

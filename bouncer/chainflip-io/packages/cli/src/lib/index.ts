@@ -1,13 +1,15 @@
 export {
   executeSwap,
-  type SwapNetworkOptions,
+  executeCall,
+  type ExecuteOptions,
   type ExecuteSwapParams,
+  type ExecuteCallParams,
   approveVault,
   checkVaultAllowance,
 } from '@/shared/vault';
 export {
   fundStateChainAccount,
-  type FundingNetworkOptions,
+  type FundStateChainAccountOptions,
   executeRedemption,
   getMinimumFunding,
   getRedemptionDelay,
@@ -27,5 +29,4 @@ export {
   chainAssets,
   chainContractIds,
 } from '@/shared/enums';
-export * as broker from '@/shared/broker';
-export { default as RedisClient } from '@/shared/node-apis/redis';
+export { default as BrokerClient } from '@/shared/node-apis/broker';

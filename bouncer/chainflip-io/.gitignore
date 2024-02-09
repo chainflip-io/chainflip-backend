@@ -1,0 +1,10 @@
+dist
+.env
+.DS_Store
+.vscode/**
+node_modules
+coverage
+.idea
+*.log
+.husky
+*.tsbuildinfo

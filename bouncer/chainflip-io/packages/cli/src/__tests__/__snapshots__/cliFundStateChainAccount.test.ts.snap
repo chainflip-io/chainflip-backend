@@ -1,0 +1,29 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`cli calls the correct handler with the proper arguments 1`] = `
+[
+  [
+    "0x1",
+    "1000000",
+    {
+      "flipContractAddress": "0x4",
+      "network": "localnet",
+      "signer": undefined,
+      "stateChainGatewayContractAddress": "0x3",
+    },
+  ],
+]
+`;
+
+exports[`cli calls the correct handler with the proper arguments 2`] = `
+[
+  [
+    "0x1",
+    "1000000",
+    {
+      "network": "sisyphos",
+      "signer": undefined,
+    },
+  ],
+]
+`;

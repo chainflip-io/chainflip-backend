@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { unsignedInteger } from '@/shared/parsers';
-import { egressId as egressIdParser } from './common';
 import logger from '../utils/logger';
+import { egressId as egressIdParser } from './common';
 import type { EventHandlerArgs } from '.';
 
 const eventArgs = z.object({
@@ -12,7 +12,7 @@ const eventArgs = z.object({
 /**
  * this event emits a list of egress ids and a new broadcast id to track the
  * egress. the broadcast success event will be emitted with this id when all
- * of the egresses are successful
+ * of the egresss are successful
  */
 export default async function networkBatchBroadcastRequested({
   prisma,

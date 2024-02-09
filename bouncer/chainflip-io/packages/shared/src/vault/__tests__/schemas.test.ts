@@ -7,10 +7,10 @@ import {
 
 const ETH_ADDRESS = '0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2';
 const DOT_ADDRESS = '5F3sa2TJAWMqDhXG6jhV4N8ko9SxwGy8TpaNS1repo5EYjQX';
-const BTC_ADDRESS = 'tb1qge9vvd2mmjxfhuxuq204h4fxxphr0vfnsnx205';
+const BTC_ADDRESS = 'bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq';
 
 const parse = (params: unknown): boolean =>
-  executeSwapParamsSchema('perseverance').safeParse(params).success;
+  executeSwapParamsSchema.safeParse(params).success;
 
 describe('executeSwapParamsSchema', () => {
   it.each([

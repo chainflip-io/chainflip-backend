@@ -1,0 +1,194 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`executeCall accepts a nonce ('1') 1`] = `
+[
+  [
+    1,
+    "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2",
+    2,
+    "0xdeadc0de",
+    "101",
+    [],
+    {
+      "nonce": "1",
+      "value": "1",
+    },
+  ],
+]
+`;
+
+exports[`executeCall accepts a nonce (1) 1`] = `
+[
+  [
+    1,
+    "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2",
+    2,
+    "0xdeadc0de",
+    "101",
+    [],
+    {
+      "nonce": 1,
+      "value": "1",
+    },
+  ],
+]
+`;
+
+exports[`executeCall accepts a nonce (1n) 1`] = `
+[
+  [
+    1,
+    "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2",
+    2,
+    "0xdeadc0de",
+    "101",
+    [],
+    {
+      "nonce": 1n,
+      "value": "1",
+    },
+  ],
+]
+`;
+
+exports[`executeCall can be invoked with localnet options 1`] = `
+[
+  [
+    1,
+    "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2",
+    1,
+    "0xdeadc0de",
+    "101",
+    "0x456",
+    "1",
+    [],
+    {
+      "nonce": undefined,
+    },
+  ],
+]
+`;
+
+exports[`executeCall can be invoked with localnet options 2`] = `
+[
+  [
+    "MY ADDRESS",
+    "0x123",
+  ],
+]
+`;
+
+exports[`executeCall submits a native call ({"destAddress": "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2", "destAsset": "FLIP", "destChain": "Ethereum", "srcAsset": "ETH", "srcChain": "Ethereum"}) 1`] = `
+[
+  [
+    1,
+    "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2",
+    2,
+    "0xdeadc0de",
+    "101",
+    [],
+    {
+      "nonce": undefined,
+      "value": "1",
+    },
+  ],
+]
+`;
+
+exports[`executeCall submits a native call ({"destAddress": "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2", "destAsset": "USDC", "destChain": "Ethereum", "srcAsset": "ETH", "srcChain": "Ethereum"}) 1`] = `
+[
+  [
+    1,
+    "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2",
+    3,
+    "0xdeadc0de",
+    "101",
+    [],
+    {
+      "nonce": undefined,
+      "value": "1",
+    },
+  ],
+]
+`;
+
+exports[`executeCall submits a token call ({"destAddress": "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2", "destAsset": "ETH", "destChain": "Ethereum", "srcAsset": "FLIP", "srcChain": "Ethereum"}) 1`] = `
+[
+  [
+    1,
+    "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2",
+    1,
+    "0xdeadc0de",
+    "101",
+    "0x2FD78122663A07672e9ac63486573A99EB00125d",
+    "1",
+    [],
+    {
+      "nonce": undefined,
+    },
+  ],
+]
+`;
+
+exports[`executeCall submits a token call ({"destAddress": "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2", "destAsset": "ETH", "destChain": "Ethereum", "srcAsset": "FLIP", "srcChain": "Ethereum"}) 2`] = `
+[
+  [
+    "MY ADDRESS",
+    "0xd498606dcb9F440CD9F06B397C40fd3327FC2550",
+  ],
+]
+`;
+
+exports[`executeCall submits a token call ({"destAddress": "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2", "destAsset": "ETH", "destChain": "Ethereum", "srcAsset": "USDC", "srcChain": "Ethereum"}) 1`] = `
+[
+  [
+    1,
+    "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2",
+    1,
+    "0xdeadc0de",
+    "101",
+    "0x07865c6E87B9F70255377e024ace6630C1Eaa37F",
+    "1",
+    [],
+    {
+      "nonce": undefined,
+    },
+  ],
+]
+`;
+
+exports[`executeCall submits a token call ({"destAddress": "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2", "destAsset": "ETH", "destChain": "Ethereum", "srcAsset": "USDC", "srcChain": "Ethereum"}) 2`] = `
+[
+  [
+    "MY ADDRESS",
+    "0xd498606dcb9F440CD9F06B397C40fd3327FC2550",
+  ],
+]
+`;
+
+exports[`executeCall submits a token call with sufficient approval 1`] = `
+[
+  [
+    1,
+    "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2",
+    1,
+    "0xdeadc0de",
+    "101",
+    "0x2FD78122663A07672e9ac63486573A99EB00125d",
+    "1",
+    [],
+    {
+      "nonce": undefined,
+    },
+  ],
+]
+`;
+
+exports[`executeCall submits a token call with sufficient approval 2`] = `
+[
+  [
+    "MY ADDRESS",
+    "0xd498606dcb9F440CD9F06B397C40fd3327FC2550",
+  ],
+]
+`;

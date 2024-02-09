@@ -8,46 +8,6 @@ jest.mock('axios', () => ({
   post: jest.fn(),
 }));
 
-const env = {
-  ingressEgress: {
-    minimumDepositAmounts: {
-      Ethereum: {
-        USDC: 0xf4240n,
-        ETH: 0x20f81c5f84000n,
-        FLIP: 0xde0b6b3a7640000n,
-      },
-      Polkadot: { DOT: 0x77359400n },
-      Bitcoin: { BTC: 0x5f370n },
-    },
-    ingressFees: {
-      Ethereum: { ETH: 0n, FLIP: 0n, USDC: 0n },
-      Polkadot: { DOT: 0n },
-      Bitcoin: { BTC: 0n },
-    },
-    egressFees: {
-      Ethereum: { ETH: 0n, FLIP: 0n, USDC: 0n },
-      Polkadot: { DOT: 0n },
-      Bitcoin: { BTC: 0n },
-    },
-    minimumEgressAmounts: {
-      Ethereum: { ETH: 0x1n, USDC: 0x1n, FLIP: 0x1n },
-      Polkadot: { DOT: 0x1n },
-      Bitcoin: { BTC: 0x258n },
-    },
-  },
-  swapping: {
-    maximumSwapAmounts: {
-      Ethereum: {
-        USDC: 0xf4240n,
-        ETH: null,
-        FLIP: null,
-      },
-      Polkadot: { DOT: 0x77359400n },
-      Bitcoin: { BTC: null },
-    },
-  },
-};
-
 describe('ApiService', () => {
   const mockRoute = {
     amount: '10000',
@@ -76,18 +36,27 @@ describe('ApiService', () => {
     `${ApiService.getAssets.name} (%s)`,
     (network) => {
       it.each(Object.values(Chains))(
-        'gets the correct assets for networks (%s)',
+        'gets the correct assets for testnets (%s)',
         async (chain) => {
-          expect(
-            await ApiService.getAssets(chain, network, env),
-          ).toMatchSnapshot();
+          expect(await ApiService.getAssets(chain, network)).toMatchSnapshot();
         },
       );
     },
   );
 
+  describe(ApiService.getAssets, () => {
+    it.each(Object.values(Chains))(
+      'gets the correct assets for mainnets (%s)',
+      async (chain) => {
+        expect(
+          await ApiService.getAssets(chain, ChainflipNetworks.mainnet),
+        ).toMatchSnapshot();
+      },
+    );
+  });
+
   describe(ApiService.getQuote, () => {
-    it('gets a quote', async () => {
+    it('gets a route with a quote', async () => {
       const mockedGet = jest.mocked(axios.get);
       mockedGet.mockResolvedValueOnce({
         data: {
@@ -105,33 +74,6 @@ describe('ApiService', () => {
           srcAsset: Assets.BTC,
           destChain: Chains.Ethereum,
           destAsset: Assets.ETH,
-        },
-        {},
-      );
-
-      expect(route).toMatchSnapshot();
-      expect(mockedGet.mock.lastCall).toMatchSnapshot();
-    });
-
-    it('gets a quote with a broker commission', async () => {
-      const mockedGet = jest.mocked(axios.get);
-      mockedGet.mockResolvedValueOnce({
-        data: {
-          id: 'string',
-          intermediateAmount: '1',
-          egressAmount: '2',
-        },
-      });
-
-      const route = await ApiService.getQuote(
-        'https://swapperoo.org',
-        {
-          amount: '10000',
-          srcChain: Chains.Bitcoin,
-          srcAsset: Assets.BTC,
-          destChain: Chains.Ethereum,
-          destAsset: Assets.ETH,
-          brokerCommissionBps: 15,
         },
         {},
       );
@@ -155,6 +97,53 @@ describe('ApiService', () => {
       });
 
       expect(mockedGet.mock.lastCall?.[1]?.signal).not.toBeUndefined();
+    });
+  });
+
+  describe(ApiService.requestDepositAddress, () => {
+    it('executes the route and returns the data from the service', async () => {
+      const mockedPost = jest.mocked(axios.post);
+      const response = {
+        id: 'new deposit channel id',
+        depositAddress: '0xcafebabe',
+      };
+      mockedPost.mockResolvedValueOnce({ data: response });
+
+      const depositChannel = await ApiService.requestDepositAddress(
+        'https://swapperoo.org',
+        {
+          ...mockRoute,
+          amount: mockRoute.amount,
+          destAddress: 'abcdefgh',
+        },
+        {},
+      );
+      expect(depositChannel).toEqual({
+        ...mockRoute,
+        destAddress: 'abcdefgh',
+        depositChannelId: response.id,
+        depositAddress: response.depositAddress,
+      });
+    });
+
+    it('passes on the signal', async () => {
+      const mockedPost = jest.mocked(axios.post);
+      mockedPost.mockResolvedValueOnce({
+        data: { id: 'new deposit channel id', depositAddress: '0xcafebabe' },
+      });
+
+      await ApiService.requestDepositAddress(
+        'https://swapperoo.org',
+        {
+          ...mockRoute,
+          amount: mockRoute.amount,
+          destAddress: '',
+        },
+        {
+          signal: new AbortController().signal,
+        },
+      );
+      expect(mockedPost.mock.lastCall?.[2]?.signal).not.toBeUndefined();
     });
   });
 

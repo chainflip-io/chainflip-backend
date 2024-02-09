@@ -1,10 +1,9 @@
-import { AlchemyProvider, getDefaultProvider, Wallet } from 'ethers';
+import { getDefaultProvider, providers, Wallet } from 'ethers';
 import { ArgumentsCamelCase, InferredOptionTypes, Options } from 'yargs';
 import { assetChains, Assets, ChainflipNetworks } from '@/shared/enums';
-import { assert } from '@/shared/guards';
 import {
   executeSwap,
-  type SwapNetworkOptions,
+  type ExecuteOptions,
   type ExecuteSwapParams,
 } from '@/shared/vault';
 import { askForPrivateKey, getEthNetwork, cliNetworks } from '../utils';
@@ -34,14 +33,6 @@ export const yargsOptions = {
     type: 'string',
     demandOption: true,
     describe: 'The address to send the swapped assets to',
-  },
-  message: {
-    type: 'string',
-    describe: 'The message that is sent along with the swapped assets',
-  },
-  'gas-budget': {
-    type: 'string',
-    describe: 'The amount of gas that is sent with the message',
   },
   'wallet-private-key': {
     type: 'string',
@@ -73,11 +64,11 @@ export default async function cliExecuteSwap(
 
   const wallet = new Wallet(privateKey).connect(
     process.env.ALCHEMY_KEY
-      ? new AlchemyProvider(ethNetwork, process.env.ALCHEMY_KEY)
+      ? new providers.AlchemyProvider(ethNetwork, process.env.ALCHEMY_KEY)
       : getDefaultProvider(ethNetwork),
   );
 
-  const networkOpts: SwapNetworkOptions =
+  const opts: ExecuteOptions =
     args.chainflipNetwork === 'localnet'
       ? {
           vaultContractAddress: args.vaultContractAddress as string,
@@ -87,16 +78,6 @@ export default async function cliExecuteSwap(
         }
       : { network: args.chainflipNetwork, signer: wallet };
 
-  let ccmMetadata;
-  if (args.gasBudget || args.message) {
-    assert(args.gasBudget, 'missing gas budget');
-    assert(args.message, 'missing message');
-    ccmMetadata = {
-      message: args.message,
-      gasBudget: args.gasBudget,
-    };
-  }
-
   const receipt = await executeSwap(
     {
       srcChain: assetChains[args.srcAsset],
@@ -105,11 +86,9 @@ export default async function cliExecuteSwap(
       destAsset: args.destAsset,
       amount: args.amount,
       destAddress: args.destAddress,
-      ccmMetadata,
     } as ExecuteSwapParams,
-    networkOpts,
-    {},
+    opts,
   );
 
-  console.log(`Swap executed. Transaction hash: ${receipt.hash}`);
+  console.log(`Swap executed. Transaction hash: ${receipt.transactionHash}`);
 }

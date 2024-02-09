@@ -1,4 +1,4 @@
-export { SwapSDK, type SwapSDKOptions } from './sdk';
+export { SwapSDK, type SDKOptions } from './sdk';
 export {
   type ChainData,
   type AssetData,

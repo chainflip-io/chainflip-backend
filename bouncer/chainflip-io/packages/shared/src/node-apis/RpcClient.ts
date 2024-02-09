@@ -4,10 +4,15 @@ import { filter, firstValueFrom, Subject, timeout } from 'rxjs';
 import type { Logger } from 'winston';
 import WebSocket from 'ws';
 import { z } from 'zod';
+import { Asset } from '../enums';
 import { onceWithTimeout } from '../functions';
 
 const READY = 'READY';
 const DISCONNECT = 'DISCONNECT';
+
+export type RpcAsset = {
+  [K in Asset]: Capitalize<Lowercase<K>>;
+}[Asset];
 
 type RpcResponse =
   | { id: number; result: unknown }

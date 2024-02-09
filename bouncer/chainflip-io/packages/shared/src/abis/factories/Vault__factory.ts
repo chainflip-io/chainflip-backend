@@ -2,7 +2,8 @@
 /* tslint:disable */
 /* eslint-disable */
 
-import { Contract, Interface, type ContractRunner } from "ethers";
+import { Contract, Signer, utils } from "ethers";
+import type { Provider } from "@ethersproject/providers";
 import type { Vault, VaultInterface } from "../Vault";
 
 const _abi = [
@@ -1222,9 +1223,9 @@ const _abi = [
 export class Vault__factory {
   static readonly abi = _abi;
   static createInterface(): VaultInterface {
-    return new Interface(_abi) as VaultInterface;
+    return new utils.Interface(_abi) as VaultInterface;
   }
-  static connect(address: string, runner?: ContractRunner | null): Vault {
-    return new Contract(address, _abi, runner) as unknown as Vault;
+  static connect(address: string, signerOrProvider: Signer | Provider): Vault {
+    return new Contract(address, _abi, signerOrProvider) as Vault;
   }
 }

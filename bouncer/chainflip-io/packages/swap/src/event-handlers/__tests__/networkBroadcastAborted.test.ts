@@ -1,6 +1,6 @@
-import { networkBroadcastAbortedMock } from './utils';
 import prisma from '../../client';
 import networkBroadcastAborted from '../networkBroadcastAborted';
+import { networkBroadcastAbortedMock } from './utils';
 
 describe(networkBroadcastAborted, () => {
   beforeEach(async () => {

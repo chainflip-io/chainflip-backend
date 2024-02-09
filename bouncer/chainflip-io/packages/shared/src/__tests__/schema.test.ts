@@ -1,4 +1,4 @@
-import { openSwapDepositChannelSchema } from '../schemas';
+import { postSwapSchema } from '../schemas';
 
 const swapBody = {
   srcAsset: 'BTC',
@@ -12,18 +12,18 @@ const swapBody = {
 describe('postSwapSchema', () => {
   it('handles empty ccmMetadata strings', () => {
     expect(
-      openSwapDepositChannelSchema.safeParse({
+      postSwapSchema.safeParse({
         ...swapBody,
       }),
     ).toEqual(expect.objectContaining({ success: true }));
   });
   it('handles full ccmMetadata', () => {
     expect(
-      openSwapDepositChannelSchema.safeParse({
+      postSwapSchema.safeParse({
         ...swapBody,
         ccmMetadata: {
-          gasBudget: '123',
-          message: '0xdeadc0de',
+          gasBudget: '0x123',
+          message: 'message',
           cfParameters: 'string',
         },
       }),
@@ -31,31 +31,31 @@ describe('postSwapSchema', () => {
   });
   it('handles without cf parameters', () => {
     expect(
-      openSwapDepositChannelSchema.safeParse({
+      postSwapSchema.safeParse({
         ...swapBody,
         ccmMetadata: {
-          gasBudget: '123',
-          message: '0xdeadc0de',
+          gasBudget: '0x123',
+          message: 'message',
         },
       }),
     ).toEqual(expect.objectContaining({ success: true }));
   });
   it('handles missing ccm params', () => {
     expect(
-      openSwapDepositChannelSchema.safeParse({
+      postSwapSchema.safeParse({
         ...swapBody,
         ccmMetadata: {
-          gasBudget: '123',
+          gasBudget: '0x123',
         },
       }),
     ).toEqual(expect.objectContaining({ success: false }));
   });
   it('handles missing ccm params', () => {
     expect(
-      openSwapDepositChannelSchema.safeParse({
+      postSwapSchema.safeParse({
         ...swapBody,
         ccmMetadata: {
-          message: '0xdeadc0de',
+          message: 'message',
           cfParameters: 'string',
         },
       }),
@@ -63,13 +63,13 @@ describe('postSwapSchema', () => {
   });
   it('handles missing swap body params', () => {
     expect(
-      openSwapDepositChannelSchema.safeParse({
+      postSwapSchema.safeParse({
         srcAsset: 'BTC',
         destAsset: 'ETH',
         destAddress: '0x123',
         ccmMetadata: {
-          gasBudget: '123',
-          message: '0xdeadc0de',
+          gasBudget: 123,
+          message: 'message',
           cfParameters: 'string',
         },
       }),
@@ -77,11 +77,11 @@ describe('postSwapSchema', () => {
   });
   it('handles wrong type for gasBudget', () => {
     expect(
-      openSwapDepositChannelSchema.safeParse({
+      postSwapSchema.safeParse({
         ...swapBody,
         ccmMetadata: {
-          gasBudget: '0x123',
-          message: '0xdeadc0de',
+          gasBudget: '123',
+          message: 'message',
           cfParameters: 'string',
         },
       }),

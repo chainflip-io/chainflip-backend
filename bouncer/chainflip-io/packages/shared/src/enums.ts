@@ -14,10 +14,10 @@ export const Assets = arrayToMap(['FLIP', 'USDC', 'DOT', 'ETH', 'BTC', 'ARBETH',
 export type Asset = (typeof Assets)[keyof typeof Assets];
 
 export const ChainflipNetworks = arrayToMap([
-  'backspin',
   'sisyphos',
   'perseverance',
   'mainnet',
+  'partnernet',
 ]);
 
 export type ChainflipNetwork =
@@ -66,13 +66,6 @@ export const chainAssets = {
   [Chains.Arbitrum]: [Assets.ARBETH, Assets.ARBUSDC],
 } satisfies Record<Chain, Asset[]>;
 
-export const chainNativeAssets = {
-  [Chains.Ethereum]: Assets.ETH,
-  [Chains.Bitcoin]: Assets.BTC,
-  [Chains.Polkadot]: Assets.DOT,
-  [Chains.Arbitrum]: Assets.ARBETH,
-} satisfies Record<Chain, Asset>;
-
 // https://github.com/chainflip-io/chainflip-backend/blob/a2a3c2e447e7b629c4b96797d9eed22eb5b87a0b/state-chain/primitives/src/chains.rs#L52-L56
 export const chainContractIds: Record<Chain, number> = {
   [Chains.Ethereum]: 1,
@@ -80,26 +73,3 @@ export const chainContractIds: Record<Chain, number> = {
   [Chains.Bitcoin]: 3,
   [Chains.Arbitrum]: 4,
 };
-
-export type AssetAndChain = {
-  [A in Asset]: { asset: A; chain: (typeof assetChains)[A] };
-}[Asset];
-
-export type UncheckedAssetAndChain = {
-  asset: Asset;
-  chain: Chain;
-};
-
-function assertAsset(asset: string): asserts asset is Asset {
-  if (!(asset in Assets)) throw new Error('invalid asset');
-}
-
-export function assertIsValidAssetAndChain(
-  assetAndChain: UncheckedAssetAndChain,
-): asserts assetAndChain is AssetAndChain {
-  const { asset, chain } = assetAndChain;
-  assertAsset(asset);
-  if (chain !== assetChains[asset]) {
-    throw new Error('invalid asset and chain combination');
-  }
-}

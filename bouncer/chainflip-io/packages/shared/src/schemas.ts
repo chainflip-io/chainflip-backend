@@ -1,35 +1,29 @@
 import { z } from 'zod';
-import { Asset, Chain } from './enums';
+import { Asset } from './enums';
 import {
   chainflipAsset,
-  chainflipAssetAndChain,
   chainflipChain,
-  hexStringWithMaxByteSize,
+  hexString,
   numericString,
 } from './parsers';
 
 export const quoteQuerySchema = z.object({
-  srcAsset: chainflipAssetAndChain,
-  destAsset: chainflipAssetAndChain,
+  srcAsset: chainflipAsset,
+  destAsset: chainflipAsset,
   amount: numericString,
-  brokerCommissionBps: z
-    .string()
-    .regex(/^[0-9]*$/)
-    .transform((v) => Number(v))
-    .optional(),
 });
 
-export type QuoteQueryParams = z.input<typeof quoteQuerySchema>;
-export type ParsedQuoteParams = z.output<typeof quoteQuerySchema>;
+export type QuoteQueryParams = z.infer<typeof quoteQuerySchema>;
 
 export const ccmMetadataSchema = z.object({
-  gasBudget: numericString,
-  message: hexStringWithMaxByteSize(1024 * 10),
+  gasBudget: z.union([hexString, z.number()]),
+  message: z.union([hexString, z.string()]),
+  cfParameters: z.union([hexString, z.string()]).optional(),
 });
 
 export type CcmMetadata = z.infer<typeof ccmMetadataSchema>;
 
-export const openSwapDepositChannelSchema = z
+export const postSwapSchema = z
   .object({
     srcAsset: chainflipAsset,
     destAsset: chainflipAsset,
@@ -44,28 +38,34 @@ export const openSwapDepositChannelSchema = z
     expectedDepositAmount: amount,
   }));
 
-export type OpenSwapDepositChannelArgs = z.input<
-  typeof openSwapDepositChannelSchema
->;
+export type SwapRequestBody = z.input<typeof postSwapSchema>;
+export type PostSwapResponse = { id: string; depositAddress: string };
 
-export type PostSwapResponse = {
-  id: string;
-  depositAddress: string;
-  issuedBlock: number;
-};
+export const quoteResponseSchema = z.union([
+  z
+    .object({
+      id: z.string(),
+      intermediate_amount: z.string(),
+      egress_amount: z.string(),
+    })
+    .transform(({ id, ...rest }) => ({
+      id,
+      intermediateAmount: rest.intermediate_amount,
+      egressAmount: rest.egress_amount,
+    })),
+  z
+    .object({
+      id: z.string(),
+      egress_amount: z.string(),
+    })
+    .transform(({ id, ...rest }) => ({
+      id,
+      egressAmount: rest.egress_amount,
+    })),
+]);
 
-export type SwapFee = {
-  type: 'LIQUIDITY' | 'NETWORK' | 'INGRESS' | 'EGRESS' | 'BROKER';
-  chain: Chain;
-  asset: Asset;
-  amount: string;
-};
-
-export type QuoteQueryResponse = {
-  intermediateAmount?: string;
-  egressAmount: string;
-  includedFees: SwapFee[];
-};
+export type MarketMakerResponse = z.input<typeof quoteResponseSchema>;
+export type QuoteQueryResponse = z.infer<typeof quoteResponseSchema>;
 
 interface BaseRequest {
   id: string; // random UUID

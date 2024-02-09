@@ -8,12 +8,10 @@ exports[`networkBroadcastAborted updates an existing broadcast entity with the s
   "createdAt": Any<Date>,
   "id": Any<BigInt>,
   "nativeId": 62n,
-  "replacedById": null,
   "requestedAt": 2022-12-06T14:31:45.000Z,
   "requestedBlockIndex": "119-1",
   "succeededAt": null,
   "succeededBlockIndex": null,
-  "type": "BATCH",
   "updatedAt": Any<Date>,
 }
 `;

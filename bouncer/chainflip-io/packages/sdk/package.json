@@ -1,6 +1,6 @@
 {
   "name": "@chainflip/sdk",
-  "version": "1.1.5",
+  "version": "0.1.5",
   "description": "",
   "exports": {
     "./swap": {
@@ -39,7 +39,7 @@
   "author": "",
   "license": "ISC",
   "engines": {
-    "node": "^18 || ^20.11.0",
+    "node": "^16 || ^18.16.0",
     "pnpm": ">=7"
   },
   "repository": "https://github.com/chainflip-io/chainflip-sdk-monorepo.git",
@@ -48,12 +48,13 @@
     "access": "public"
   },
   "dependencies": {
-    "@polkadot/util": "^12.6.2",
-    "@polkadot/util-crypto": "^12.6.2",
-    "axios": "^1.6.7",
-    "ethers": "^6.9.2"
+    "@polkadot/util": "^12.0.1",
+    "@polkadot/util-crypto": "^12.0.1",
+    "axios": "^1.3.4",
+    "ethers": "5.7.2",
+    "zod": "^3.21.4"
   },
   "devDependencies": {
-    "tsup": "^8.0.1"
+    "tsup": "^6.7.0"
   }
 }

@@ -26,10 +26,7 @@ export default class ServiceError extends Error {
     if (!condition) throw ServiceError[code](message);
   }
 
-  constructor(
-    message: string,
-    readonly code: number,
-  ) {
+  constructor(message: string, readonly code: number) {
     super(message);
 
     Error.captureStackTrace(this, ServiceError);

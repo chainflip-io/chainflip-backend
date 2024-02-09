@@ -1,9 +1,6 @@
 import { GraphQLClient } from 'graphql-request';
 import prisma from '../client';
-import {
-  DOT_ADDRESS,
-  swapScheduledDotDepositChannelMock,
-} from '../event-handlers/__tests__/utils';
+import { swapScheduledDotDepositChannelMock } from '../event-handlers/__tests__/utils';
 import { GetBatchQuery } from '../gql/generated/graphql';
 import processBlocks from '../processBlocks';
 
@@ -15,16 +12,15 @@ describe(processBlocks, () => {
   it('dispatches a SwapScheduled event', async () => {
     await prisma.swapDepositChannel.create({
       data: {
-        depositAddress: DOT_ADDRESS,
+        depositAddress: '5CGLqaFMheyVcsXz6QEtjtSAi6RcXFaEDJKvovgCdPiZhw11',
         issuedBlock: 100,
+        expiryBlock: 200,
         channelId: 250n,
         srcChain: 'Polkadot',
         srcAsset: 'DOT',
         destAsset: 'BTC',
         destAddress: 'bcrt1pzjdpc799qa5f7m65hpr66880res5ac3lr6y2chc4jsa',
-        brokerCommissionBps: 0,
         expectedDepositAmount: '1000000000000000000',
-        srcChainExpiryBlock: 1000,
       },
     });
 
@@ -42,7 +38,6 @@ describe(processBlocks, () => {
             {
               height: 150,
               timestamp: 1681989543437,
-              hash: '0x6c35d3e08b00e979961976cefc79f9594e8ae12f8cc4e9cabfd4796a1994ccd8',
               specId: 'chainflip-node@0',
               events: {
                 nodes: [swapScheduledDotDepositChannelMock.eventContext.event],
@@ -70,16 +65,13 @@ describe(processBlocks, () => {
       },
       `
       {
-        "ccmDepositReceivedBlockIndex": null,
-        "ccmGasBudget": null,
-        "ccmMessage": null,
         "createdAt": Any<Date>,
         "depositAmount": "125000000000",
         "depositReceivedAt": 2023-04-20T11:19:03.437Z,
         "depositReceivedBlockIndex": "150-0",
         "destAddress": "bcrt1pzjdpc799qa5f7m65hpr66880res5ac3lr6y2chc4jsa",
         "destAsset": "BTC",
-        "egressId": null,
+        "egressAmount": null,
         "id": Any<BigInt>,
         "intermediateAmount": null,
         "nativeId": 1n,
@@ -87,10 +79,7 @@ describe(processBlocks, () => {
         "swapDepositChannelId": Any<BigInt>,
         "swapExecutedAt": null,
         "swapExecutedBlockIndex": null,
-        "swapInputAmount": "125000000000",
-        "swapOutputAmount": null,
         "txHash": null,
-        "type": "SWAP",
         "updatedAt": Any<Date>,
       }
     `,

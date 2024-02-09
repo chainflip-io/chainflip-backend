@@ -63,7 +63,7 @@ describe('server', () => {
         });
       } catch (e) {
         expect(e).toBeInstanceOf(Error);
-        expect((e as Error).message).toBe('No ThirdPartySwap found');
+        expect(e.message).toBe('No ThirdPartySwap found');
       }
       expect(status).not.toBe(201);
     });

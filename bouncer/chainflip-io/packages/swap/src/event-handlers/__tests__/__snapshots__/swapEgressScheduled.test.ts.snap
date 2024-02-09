@@ -1,129 +1,19 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`swapEgressScheduled updates an existing swap when the egress amount is higher than the swapOutputAmount 1`] = `
+exports[`swapEgressScheduled updates an existing swap with the scheduled timestamp 1`] = `
 {
-  "ccmDepositReceivedBlockIndex": null,
-  "ccmGasBudget": null,
-  "ccmMessage": null,
-  "createdAt": Any<Date>,
-  "depositAmount": "1000",
-  "depositReceivedAt": 2022-12-06T14:31:33.000Z,
-  "depositReceivedBlockIndex": "20-0",
-  "destAddress": "1yMmfLti1k3huRQM2c47WugwonQMqTvQ2GUFxnU7Pcs7xPo",
-  "destAsset": "DOT",
-  "egress": {
-    "amount": "0",
-    "chain": "Ethereum",
-    "scheduledAt": 2022-12-06T14:31:45.000Z,
-  },
-  "egressId": Any<BigInt>,
-  "fees": [
-    {
-      "amount": "1000",
-      "asset": "DOT",
-      "id": Any<BigInt>,
-      "swapId": Any<BigInt>,
-      "type": "EGRESS",
-    },
-  ],
-  "id": Any<BigInt>,
-  "intermediateAmount": null,
-  "nativeId": 9876545n,
-  "srcAsset": "ETH",
-  "swapDepositChannelId": Any<BigInt>,
-  "swapExecutedAt": 2022-12-06T14:31:39.000Z,
-  "swapExecutedBlockIndex": "120-0",
-  "swapInputAmount": "1000",
-  "swapOutputAmount": "1000",
-  "txHash": null,
-  "type": "SWAP",
-  "updatedAt": Any<Date>,
-}
-`;
-
-exports[`swapEgressScheduled updates an existing swap when the egress asset is not the native asset 1`] = `
-{
-  "ccmDepositReceivedBlockIndex": null,
-  "ccmGasBudget": null,
-  "ccmMessage": null,
   "createdAt": Any<Date>,
   "depositAmount": "10000000000",
   "depositReceivedAt": 2022-12-06T14:31:33.000Z,
   "depositReceivedBlockIndex": "20-0",
-  "destAddress": "0x6Aa69332B63bB5b1d7Ca5355387EDd5624e181F2",
-  "destAsset": "USDC",
-  "egress": {
-    "amount": "9976511899",
-    "chain": "Ethereum",
-    "scheduledAt": 2022-12-06T14:31:45.000Z,
-  },
-  "egressId": Any<BigInt>,
-  "fees": [
-    {
-      "amount": "23488101",
-      "asset": "USDC",
-      "id": Any<BigInt>,
-      "swapId": Any<BigInt>,
-      "type": "EGRESS",
-    },
-  ],
-  "id": Any<BigInt>,
-  "intermediateAmount": null,
-  "nativeId": 9876545n,
-  "srcAsset": "ETH",
-  "swapDepositChannelId": Any<BigInt>,
-  "swapExecutedAt": 2022-12-06T14:31:39.000Z,
-  "swapExecutedBlockIndex": "120-0",
-  "swapInputAmount": "10000000000",
-  "swapOutputAmount": "10000000000",
-  "txHash": null,
-  "type": "SWAP",
-  "updatedAt": Any<Date>,
-}
-`;
-
-exports[`swapEgressScheduled updates an existing swap when the egress asset is not the native asset 2`] = `
-[
-  {
-    "id": 1,
-    "jsonrpc": "2.0",
-    "method": "cf_swap_rate",
-    "params": [
-      "ETH",
-      "USDC",
-      "0x777777",
-      undefined,
-    ],
-  },
-]
-`;
-
-exports[`swapEgressScheduled updates an existing swap when the egress asset is the native asset 1`] = `
-{
-  "ccmDepositReceivedBlockIndex": null,
-  "ccmGasBudget": null,
-  "ccmMessage": null,
-  "createdAt": Any<Date>,
-  "depositAmount": "10000000000",
-  "depositReceivedAt": 2022-12-06T14:31:33.000Z,
-  "depositReceivedBlockIndex": "20-0",
-  "destAddress": "1yMmfLti1k3huRQM2c47WugwonQMqTvQ2GUFxnU7Pcs7xPo",
+  "destAddress": "5F3sa2TJAWMqDhXG6jhV4N8ko9SxwGy8TpaNS1repo5EYjQX",
   "destAsset": "DOT",
   "egress": {
-    "amount": "9992170633",
+    "amount": "1234567890",
     "chain": "Ethereum",
     "scheduledAt": 2022-12-06T14:31:45.000Z,
   },
-  "egressId": Any<BigInt>,
-  "fees": [
-    {
-      "amount": "7829367",
-      "asset": "DOT",
-      "id": Any<BigInt>,
-      "swapId": Any<BigInt>,
-      "type": "EGRESS",
-    },
-  ],
+  "egressAmount": null,
   "id": Any<BigInt>,
   "intermediateAmount": null,
   "nativeId": 9876545n,
@@ -131,51 +21,7 @@ exports[`swapEgressScheduled updates an existing swap when the egress asset is t
   "swapDepositChannelId": Any<BigInt>,
   "swapExecutedAt": 2022-12-06T14:31:39.000Z,
   "swapExecutedBlockIndex": "120-0",
-  "swapInputAmount": "10000000000",
-  "swapOutputAmount": "10000000000",
   "txHash": null,
-  "type": "SWAP",
-  "updatedAt": Any<Date>,
-}
-`;
-
-exports[`swapEgressScheduled uses the fee from the event and creates an egress record 1`] = `
-{
-  "ccmDepositReceivedBlockIndex": null,
-  "ccmGasBudget": null,
-  "ccmMessage": null,
-  "createdAt": Any<Date>,
-  "depositAmount": "10000000000",
-  "depositReceivedAt": 2022-12-06T14:31:33.000Z,
-  "depositReceivedBlockIndex": "20-0",
-  "destAddress": "1yMmfLti1k3huRQM2c47WugwonQMqTvQ2GUFxnU7Pcs7xPo",
-  "destAsset": "DOT",
-  "egress": {
-    "amount": "78187493520",
-    "chain": "Ethereum",
-    "scheduledAt": 2022-12-06T14:31:45.000Z,
-  },
-  "egressId": Any<BigInt>,
-  "fees": [
-    {
-      "amount": "291",
-      "asset": "DOT",
-      "id": Any<BigInt>,
-      "swapId": Any<BigInt>,
-      "type": "EGRESS",
-    },
-  ],
-  "id": Any<BigInt>,
-  "intermediateAmount": null,
-  "nativeId": 9876545n,
-  "srcAsset": "ETH",
-  "swapDepositChannelId": Any<BigInt>,
-  "swapExecutedAt": 2022-12-06T14:31:39.000Z,
-  "swapExecutedBlockIndex": "120-0",
-  "swapInputAmount": "10000000000",
-  "swapOutputAmount": "10000000000",
-  "txHash": null,
-  "type": "SWAP",
   "updatedAt": Any<Date>,
 }
 `;

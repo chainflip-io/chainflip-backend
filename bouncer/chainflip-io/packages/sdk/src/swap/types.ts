@@ -1,5 +1,5 @@
 import { Chain, Asset, chainAssets } from '@/shared/enums';
-import { CcmMetadata, QuoteQueryResponse, SwapFee } from '@/shared/schemas';
+import { CcmMetadata, QuoteQueryResponse } from '@/shared/schemas';
 
 export interface ChainData {
   id: Chain;
@@ -11,14 +11,11 @@ export type AssetData = {
   [K in keyof typeof chainAssets]: {
     id: (typeof chainAssets)[K][number];
     chain: K;
-    contractAddress: string | undefined;
+    contractAddress: string;
     decimals: number;
     name: string;
     symbol: string;
     isMainnet: boolean;
-    minimumSwapAmount: string;
-    maximumSwapAmount: string | null;
-    minimumEgressAmount: string;
   };
 }[keyof typeof chainAssets];
 
@@ -45,9 +42,6 @@ export interface DepositAddressRequest extends QuoteRequest {
 export interface DepositAddressResponse extends DepositAddressRequest {
   depositChannelId: string;
   depositAddress: string;
-  brokerCommissionBps: number;
-  depositChannelExpiryBlock: bigint;
-  estimatedDepositChannelExpiryTime: number | undefined;
 }
 
 export interface SwapStatusRequest {
@@ -57,31 +51,12 @@ export interface SwapStatusRequest {
 export interface CommonStatusFields extends ChainsAndAssets {
   destAddress: string;
   depositAddress: string | undefined;
-  depositChannelCreatedAt: number | undefined;
-  depositChannelBrokerCommissionBps: number | undefined;
   expectedDepositAmount: string | undefined;
-  depositChannelExpiryBlock: bigint;
-  estimatedDepositChannelExpiryTime: number | undefined;
-  isDepositChannelExpired: boolean;
-  depositChannelOpenedThroughBackend: boolean;
-  ccmDepositReceivedBlockIndex: string | undefined;
-  ccmMetadata:
-    | {
-        gasBudget: string;
-        message: `0x${string}`;
-      }
-    | undefined;
-  feesPaid: SwapFee[];
 }
 
 export type SwapStatusResponse = CommonStatusFields &
   (
-    | {
-        state: 'AWAITING_DEPOSIT';
-        depositAmount: string | undefined;
-        depositTransactionHash: string | undefined;
-        depositTransactionConfirmations: number | undefined;
-      }
+    | { state: 'AWAITING_DEPOSIT' }
     | {
         state: 'DEPOSIT_RECEIVED';
         swapId: string;
@@ -95,7 +70,6 @@ export type SwapStatusResponse = CommonStatusFields &
         depositAmount: string;
         depositReceivedAt: number;
         depositReceivedBlockIndex: string;
-        intermediateAmount: string | undefined;
         swapExecutedAt: number;
         swapExecutedBlockIndex: string;
       }
@@ -105,7 +79,6 @@ export type SwapStatusResponse = CommonStatusFields &
         depositAmount: string;
         depositReceivedAt: number;
         depositReceivedBlockIndex: string;
-        intermediateAmount: string | undefined;
         swapExecutedAt: number;
         swapExecutedBlockIndex: string;
         egressAmount: string;
@@ -113,12 +86,11 @@ export type SwapStatusResponse = CommonStatusFields &
         egressScheduledBlockIndex: string;
       }
     | {
-        state: 'BROADCAST_REQUESTED' | 'BROADCASTED';
+        state: 'BROADCAST_REQUESTED';
         swapId: string;
         depositAmount: string;
         depositReceivedAt: number;
         depositReceivedBlockIndex: string;
-        intermediateAmount: string | undefined;
         swapExecutedAt: number;
         swapExecutedBlockIndex: string;
         egressAmount: string;
@@ -133,7 +105,6 @@ export type SwapStatusResponse = CommonStatusFields &
         depositAmount: string;
         depositReceivedAt: number;
         depositReceivedBlockIndex: string;
-        intermediateAmount: string | undefined;
         swapExecutedAt: number;
         swapExecutedBlockIndex: string;
         egressAmount: string;
@@ -150,7 +121,6 @@ export type SwapStatusResponse = CommonStatusFields &
         depositAmount: string;
         depositReceivedAt: number;
         depositReceivedBlockIndex: string;
-        intermediateAmount: string | undefined;
         swapExecutedAt: number;
         swapExecutedBlockIndex: string;
         egressAmount: string;

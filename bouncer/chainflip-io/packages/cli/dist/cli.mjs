@@ -1,9 +1,15 @@
 #! /usr/bin/env node
-import { __name, chainflipNetwork, Assets, ChainflipNetworks, Chains, assert, executeSwap_default, assetChains, fundStateChainAccount, broker_exports } from './chunk-PHKVE3J3.mjs';
+import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
+import * as path from 'path';
+import { __name, chainflipNetwork, Assets, ChainflipNetworks, Chains, executeCall_default, assetChains, executeSwap_default, fundStateChainAccount, BrokerClient } from './chunk-6GTU7ZVU.mjs';
 import yargs from 'yargs/yargs';
-import { Wallet, AlchemyProvider, getDefaultProvider } from 'ethers';
-import { createInterface } from 'node:readline/promises';
+import { Wallet, providers, getDefaultProvider } from 'ethers';
+import { createInterface } from 'readline/promises';
 
+createRequire(import.meta.url);
+const __filename = fileURLToPath(import.meta.url);
+path.dirname(__filename);
 var askForPrivateKey = /* @__PURE__ */ __name(async () => {
   const rl = createInterface({
     input: process.stdin,
@@ -28,7 +34,7 @@ var cliNetworks = [
   "localnet"
 ];
 
-// src/commands/cliExecuteSwap.ts
+// src/commands/cliExecuteCall.ts
 var yargsOptions = {
   "src-asset": {
     choices: Object.values(Assets),
@@ -57,11 +63,82 @@ var yargsOptions = {
   },
   message: {
     type: "string",
+    demandOption: true,
     describe: "The message that is sent along with the swapped assets"
   },
-  "gas-budget": {
+  "gas-amount": {
     type: "string",
-    describe: "The amount of gas that is sent with the message"
+    demandOption: true,
+    describe: "The maximum gas amount that is sent with the message"
+  },
+  "wallet-private-key": {
+    type: "string",
+    describe: "The private key of the wallet to use"
+  },
+  "src-token-contract-address": {
+    type: "string",
+    describe: "The contract address of the token to swap from when `chainflip-network` is `localnet`"
+  },
+  "vault-contract-address": {
+    type: "string",
+    describe: "The contract address of the vault when `chainflip-network` is `localnet`"
+  },
+  "eth-network": {
+    type: "string",
+    describe: "The eth network URL to use when `chainflip-network` is `localnet`"
+  }
+};
+async function cliExecuteCall(args) {
+  const privateKey = args.walletPrivateKey ?? await askForPrivateKey();
+  const ethNetwork = getEthNetwork(args);
+  const wallet = new Wallet(privateKey).connect(process.env.ALCHEMY_KEY ? new providers.AlchemyProvider(ethNetwork, process.env.ALCHEMY_KEY) : getDefaultProvider(ethNetwork));
+  const opts = args.chainflipNetwork === "localnet" ? {
+    vaultContractAddress: args.vaultContractAddress,
+    srcTokenContractAddress: args.srcTokenContractAddress,
+    signer: wallet,
+    network: args.chainflipNetwork
+  } : {
+    network: args.chainflipNetwork,
+    signer: wallet
+  };
+  const receipt = await executeCall_default({
+    srcChain: assetChains[args.srcAsset],
+    srcAsset: args.srcAsset,
+    destChain: assetChains[args.destAsset],
+    destAsset: args.destAsset,
+    amount: args.amount,
+    destAddress: args.destAddress,
+    message: args.message,
+    gasAmount: args.gasAmount
+  }, opts);
+  console.log(`Call executed. Transaction hash: ${receipt.transactionHash}`);
+}
+__name(cliExecuteCall, "cliExecuteCall");
+var yargsOptions2 = {
+  "src-asset": {
+    choices: Object.values(Assets),
+    demandOption: true,
+    describe: "The asset to swap from"
+  },
+  "dest-asset": {
+    choices: Object.values(Assets),
+    demandOption: true,
+    describe: "The asset to swap to"
+  },
+  "chainflip-network": {
+    choices: cliNetworks,
+    describe: "The Chainflip network to execute the swap on",
+    default: ChainflipNetworks.sisyphos
+  },
+  amount: {
+    type: "string",
+    demandOption: true,
+    describe: "The amount to swap"
+  },
+  "dest-address": {
+    type: "string",
+    demandOption: true,
+    describe: "The address to send the swapped assets to"
   },
   "wallet-private-key": {
     type: "string",
@@ -83,8 +160,8 @@ var yargsOptions = {
 async function cliExecuteSwap(args) {
   const privateKey = args.walletPrivateKey ?? await askForPrivateKey();
   const ethNetwork = getEthNetwork(args);
-  const wallet = new Wallet(privateKey).connect(process.env.ALCHEMY_KEY ? new AlchemyProvider(ethNetwork, process.env.ALCHEMY_KEY) : getDefaultProvider(ethNetwork));
-  const networkOpts = args.chainflipNetwork === "localnet" ? {
+  const wallet = new Wallet(privateKey).connect(process.env.ALCHEMY_KEY ? new providers.AlchemyProvider(ethNetwork, process.env.ALCHEMY_KEY) : getDefaultProvider(ethNetwork));
+  const opts = args.chainflipNetwork === "localnet" ? {
     vaultContractAddress: args.vaultContractAddress,
     srcTokenContractAddress: args.srcTokenContractAddress,
     signer: wallet,
@@ -93,28 +170,18 @@ async function cliExecuteSwap(args) {
     network: args.chainflipNetwork,
     signer: wallet
   };
-  let ccmMetadata;
-  if (args.gasBudget || args.message) {
-    assert(args.gasBudget, "missing gas budget");
-    assert(args.message, "missing message");
-    ccmMetadata = {
-      message: args.message,
-      gasBudget: args.gasBudget
-    };
-  }
   const receipt = await executeSwap_default({
     srcChain: assetChains[args.srcAsset],
     srcAsset: args.srcAsset,
     destChain: assetChains[args.destAsset],
     destAsset: args.destAsset,
     amount: args.amount,
-    destAddress: args.destAddress,
-    ccmMetadata
-  }, networkOpts, {});
-  console.log(`Swap executed. Transaction hash: ${receipt.hash}`);
+    destAddress: args.destAddress
+  }, opts);
+  console.log(`Swap executed. Transaction hash: ${receipt.transactionHash}`);
 }
 __name(cliExecuteSwap, "cliExecuteSwap");
-var yargsOptions2 = {
+var yargsOptions3 = {
   "src-account-id": {
     type: "string",
     demandOption: true,
@@ -150,8 +217,8 @@ var yargsOptions2 = {
 async function cliFundStateChainAccount(args) {
   const privateKey = args.walletPrivateKey ?? await askForPrivateKey();
   const ethNetwork = getEthNetwork(args);
-  const wallet = new Wallet(privateKey).connect(process.env.ALCHEMY_KEY ? new AlchemyProvider(ethNetwork, process.env.ALCHEMY_KEY) : getDefaultProvider(ethNetwork));
-  const networkOpts = args.chainflipNetwork === "localnet" ? {
+  const wallet = new Wallet(privateKey).connect(process.env.ALCHEMY_KEY ? new providers.AlchemyProvider(ethNetwork, process.env.ALCHEMY_KEY) : getDefaultProvider(ethNetwork));
+  const opts = args.chainflipNetwork === "localnet" ? {
     stateChainGatewayContractAddress: args.stateChainManagerContractAddress,
     flipContractAddress: args.flipTokenContractAddress,
     signer: wallet,
@@ -160,13 +227,13 @@ async function cliFundStateChainAccount(args) {
     network: args.chainflipNetwork,
     signer: wallet
   };
-  const receipt = await fundStateChainAccount(args.srcAccountId, BigInt(args.amount), networkOpts, {});
-  console.log(`Call executed. Transaction hash: ${receipt.hash}`);
+  const receipt = await fundStateChainAccount(args.srcAccountId, args.amount, opts);
+  console.log(`Call executed. Transaction hash: ${receipt.transactionHash}`);
 }
 __name(cliFundStateChainAccount, "cliFundStateChainAccount");
 
 // src/commands/cliRequestSwapDepositAddress.ts
-var yargsOptions3 = {
+var yargsOptions4 = {
   "src-asset": {
     choices: Object.values(Assets),
     describe: "The asset to swap from",
@@ -196,56 +263,30 @@ var yargsOptions3 = {
     choices: Object.values(Chains),
     describe: "The chain to swap to",
     demandOption: true
-  },
-  message: {
-    type: "string",
-    describe: "The CCM message that is sent along with the swapped assets"
-  },
-  "gas-budget": {
-    type: "string",
-    describe: "The amount of gas that is sent with the CCM message"
-  },
-  network: {
-    type: "string",
-    demandOption: true,
-    choices: [
-      "mainnet",
-      "perseverance",
-      "backspin",
-      "sisyphos"
-    ]
   }
 };
 async function cliRequestSwapDepositAddress(args) {
-  let ccmMetadata;
-  if (args.gasBudget || args.message) {
-    assert(args.gasBudget, "missing gas budget");
-    assert(args.message, "missing message");
-    ccmMetadata = {
-      gasBudget: args.gasBudget,
-      message: args.message
-    };
-  }
-  const result = await broker_exports.requestSwapDepositAddress({
+  const client = await BrokerClient.create({
+    url: args.brokerUrl
+  });
+  const result = await client.requestSwapDepositAddress({
     srcAsset: args.srcAsset,
     destAsset: args.destAsset,
     destAddress: args.destAddress,
     srcChain: args.srcChain,
-    destChain: args.destChain,
-    ccmMetadata
-  }, {
-    url: args.brokerUrl,
-    commissionBps: 0
-  }, args.network);
+    destChain: args.destChain
+  });
   console.log(`Deposit address: ${result.address}`);
   console.log(`Issued block: ${result.issuedBlock}`);
+  console.log(`Expiry block: ${result.expiryBlock}`);
   console.log(`Channel ID: ${result.channelId}`);
+  await client.close();
 }
 __name(cliRequestSwapDepositAddress, "cliRequestSwapDepositAddress");
 
 // src/cli.ts
 async function cli(args) {
-  return yargs(args).scriptName("chainflip-cli").usage("$0 <cmd> [args]").command("swap", "", yargsOptions, cliExecuteSwap).command("fund-state-chain-account", "", yargsOptions2, cliFundStateChainAccount).command("request-swap-deposit-address", "", yargsOptions3, cliRequestSwapDepositAddress).wrap(0).strict().help().parse();
+  return yargs(args).scriptName("chainflip-cli").usage("$0 <cmd> [args]").command("swap", "", yargsOptions2, cliExecuteSwap).command("call", "", yargsOptions, cliExecuteCall).command("fund-state-chain-account", "", yargsOptions3, cliFundStateChainAccount).command("request-swap-deposit-address", "", yargsOptions4, cliRequestSwapDepositAddress).wrap(0).strict().help().parse();
 }
 __name(cli, "cli");
 

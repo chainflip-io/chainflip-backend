@@ -17,19 +17,6 @@ datasource db {
   schemas  = ["public", "private"]
 }
 
-model DepositChannel {
-  id             BigInt  @id @default(autoincrement())
-  channelId      BigInt
-  srcChain       Chain
-  issuedBlock    Int
-  depositAddress String
-  isSwapping     Boolean
-
-  @@unique([issuedBlock, srcChain, channelId])
-  @@index([depositAddress])
-  @@schema("private")
-}
-
 enum Chain {
   Polkadot
   Ethereum
@@ -49,119 +36,45 @@ enum Asset {
 }
 
 model SwapDepositChannel {
-  id                    BigInt       @id @default(autoincrement())
+  id                    BigInt   @id @default(autoincrement())
   channelId             BigInt
   srcChain              Chain
   srcAsset              Asset
   depositAddress        String
-  expectedDepositAmount Decimal?     @db.Decimal(30, 0)
+  expectedDepositAmount Decimal  @db.Decimal(30, 0)
   destAsset             Asset
   destAddress           String
-  ccmGasBudget          Decimal?     @db.Decimal(30, 0)
-  ccmMessage            String?
+  expiryBlock           Int
   issuedBlock           Int
-  expiryBlock           Int? // TODO(mainnet): remove this column
-  srcChainExpiryBlock   BigInt?
-  brokerCommissionBps   Int
-  isExpired             Boolean      @default(false)
-  createdAt             DateTime     @default(now())
+  createdAt             DateTime @default(now())
   swaps                 Swap[]
-  failedSwaps           FailedSwap[]
-  estimatedExpiryAt     DateTime?
-  openedThroughBackend  Boolean      @default(false)
 
   @@unique([issuedBlock, srcChain, channelId])
   @@index([depositAddress])
   @@schema("public")
 }
 
-enum SwapType {
-  SWAP
-  PRINCIPAL
-  GAS
-
-  @@schema("public")
-}
-
 model Swap {
-  id                           BigInt              @id @default(autoincrement())
+  id                        BigInt              @id @default(autoincrement())
   /// the swap id on the state chain
-  nativeId                     BigInt              @unique
-  type                         SwapType
-  srcAsset                     Asset
-  depositAmount                Decimal             @db.Decimal(30, 0)
-  swapInputAmount              Decimal             @db.Decimal(30, 0) // deposit amount after ingress fee was decucted
-  intermediateAmount           Decimal?            @db.Decimal(30, 0)
-  swapOutputAmount             Decimal?            @db.Decimal(30, 0) // output of the swap before egress fee is deducted
-  fees                         SwapFee[]
-  destAsset                    Asset
-  destAddress                  String
-  depositReceivedAt            DateTime
-  depositReceivedBlockIndex    String
-  swapExecutedAt               DateTime?
-  swapExecutedBlockIndex       String?
-  swapDepositChannel           SwapDepositChannel? @relation(fields: [swapDepositChannelId], references: [id])
-  swapDepositChannelId         BigInt?
-  ccmDepositReceivedBlockIndex String?
-  ccmGasBudget                 Decimal?            @db.Decimal(30, 0)
-  ccmMessage                   String?
-  txHash                       String?
-  egress                       Egress?             @relation(fields: [egressId], references: [id])
-  egressId                     BigInt?
-  createdAt                    DateTime            @default(now())
-  updatedAt                    DateTime            @default(now()) @updatedAt
+  nativeId                  BigInt              @unique
+  srcAsset                  Asset
+  depositAmount             Decimal             @db.Decimal(30, 0)
+  intermediateAmount        Decimal?            @db.Decimal(30, 0)
+  egressAmount              Decimal?            @db.Decimal(30, 0)
+  destAsset                 Asset
+  destAddress               String
+  depositReceivedAt         DateTime
+  depositReceivedBlockIndex String
+  swapExecutedAt            DateTime?
+  swapExecutedBlockIndex    String?
+  swapDepositChannel        SwapDepositChannel? @relation(fields: [swapDepositChannelId], references: [id])
+  swapDepositChannelId      BigInt?
+  txHash                    String?
+  egress                    Egress?
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @default(now()) @updatedAt
 
-  @@schema("public")
-}
-
-enum SwapFeeType {
-  LIQUIDITY
-  NETWORK
-  INGRESS
-  EGRESS
-  BROKER
-
-  @@schema("public")
-}
-
-model SwapFee {
-  id     BigInt      @id @default(autoincrement())
-  swap   Swap        @relation(fields: [swapId], references: [id])
-  swapId BigInt
-  type   SwapFeeType
-  asset  Asset
-  amount Decimal     @db.Decimal(30, 0)
-
-  @@index([swapId])
-  @@schema("public")
-}
-
-enum FailedSwapType {
-  FAILED
-  IGNORED
-
-  @@schema("public")
-}
-enum FailedSwapReason {
-  BelowMinimumDeposit 
-  NotEnoughToPayFees // gas price to process deposit is too high
-  EgressAmountZero  // egress amount left after fees is too low 
-  
-  @@schema("public")
-}
-model FailedSwap {
-  id                   Int                 @id @default(autoincrement())
-  type                 FailedSwapType
-  reason               FailedSwapReason?
-  destAddress          String
-  destChain            Chain
-  depositAmount        Decimal             @db.Decimal(30, 0)
-  srcChain             Chain
-  swapDepositChannel   SwapDepositChannel? @relation(fields: [swapDepositChannelId], references: [id])
-  swapDepositChannelId BigInt?
-  txHash               String?
-
-  @@index([swapDepositChannelId])
   @@schema("public")
 }
 
@@ -173,7 +86,8 @@ model Egress {
   amount              Decimal    @db.Decimal(30, 0)
   scheduledAt         DateTime
   scheduledBlockIndex String
-  swaps               Swap[]
+  swap                Swap?      @relation(fields: [swapId], references: [id])
+  swapId              BigInt?    @unique
   broadcast           Broadcast? @relation(fields: [broadcastId], references: [id])
   broadcastId         BigInt?
   createdAt           DateTime   @default(now())
@@ -183,19 +97,11 @@ model Egress {
   @@schema("public")
 }
 
-enum BroadcastType {
-  BATCH
-  CCM
-
-  @@schema("public")
-}
-
 model Broadcast {
-  id                  BigInt        @id @default(autoincrement())
+  id                  BigInt    @id @default(autoincrement())
   /// the broadcast id on the state chain
   nativeId            BigInt
   chain               Chain
-  type                BroadcastType @default(BATCH)
   egresses            Egress[]
   requestedAt         DateTime
   requestedBlockIndex String
@@ -203,11 +109,8 @@ model Broadcast {
   succeededBlockIndex String?
   abortedAt           DateTime?
   abortedBlockIndex   String?
-  replacedBy          Broadcast?    @relation("replacedBy", fields: [replacedById], references: [id])
-  replaces            Broadcast?    @relation("replacedBy")
-  replacedById        BigInt?       @unique
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @default(now()) @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @default(now()) @updatedAt
 
   @@unique([nativeId, chain])
   @@schema("public")
@@ -243,26 +146,6 @@ model ThirdPartySwap {
   txHash        String
   txLink        String
   createdAt     DateTime           @default(now())
-
-  @@schema("public")
-}
-
-model Pool {
-  id                        Int   @id @default(autoincrement())
-  baseAsset                 Asset
-  quoteAsset                Asset
-  liquidityFeeHundredthPips Int
-
-  @@unique([baseAsset, quoteAsset])
-  @@schema("public")
-}
-
-model ChainTracking {
-  id             Int      @id @default(autoincrement())
-  chain          Chain    @unique
-  height         BigInt   @default(0)
-  blockTrackedAt DateTime @default(now())
-  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
 
   @@schema("public")
 }

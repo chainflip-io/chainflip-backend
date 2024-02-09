@@ -1,47 +1,79 @@
 import axios from 'axios';
-import { type ChainflipNetwork, Chain, Chains } from '@/shared/enums';
-import type { Environment } from '@/shared/rpc';
-import type { QuoteQueryParams, QuoteQueryResponse } from '@/shared/schemas';
-import { dot$, btc$, eth$, usdc$, flip$ } from '../assets';
-import { bitcoin, ethereum, polkadot } from '../chains';
+import {
+  type ChainflipNetwork,
+  isTestnet,
+  Chain,
+  Chains,
+} from '@/shared/enums';
+import type {
+  QuoteQueryParams,
+  QuoteQueryResponse,
+  SwapRequestBody,
+} from '@/shared/schemas';
+import { PostSwapResponse } from '@/shared/schemas';
+import {
+  bitcoin,
+  polkadot,
+  dot$,
+  ethereum,
+  btc$,
+  ethereumAssets,
+  testnetChains,
+  testnetAssets,
+} from '../mocks';
 import {
   ChainData,
   QuoteRequest,
   QuoteResponse,
+  DepositAddressRequest,
+  DepositAddressResponse,
   SwapStatusRequest,
   SwapStatusResponse,
   AssetData,
 } from '../types';
 
-const getChains = async (network: ChainflipNetwork): Promise<ChainData[]> => [
-  ethereum(network),
-  polkadot(network),
-  bitcoin(network),
-];
+const getChains = async (network: ChainflipNetwork): Promise<ChainData[]> => {
+  if (isTestnet(network)) {
+    return testnetChains([ethereum, polkadot, bitcoin]);
+  }
+  return [ethereum, polkadot, bitcoin];
+};
 
 const getPossibleDestinationChains = async (
   sourceChain: Chain,
   network: ChainflipNetwork,
 ): Promise<ChainData[]> => {
-  if (sourceChain === Chains.Ethereum)
-    return [ethereum(network), bitcoin(network), polkadot(network)];
-  if (sourceChain === Chains.Polkadot)
-    return [ethereum(network), bitcoin(network)];
-  if (sourceChain === Chains.Bitcoin)
-    return [ethereum(network), polkadot(network)];
+  if (isTestnet(network)) {
+    if (sourceChain === Chains.Ethereum)
+      return testnetChains([polkadot, bitcoin]);
+    if (sourceChain === Chains.Polkadot)
+      return testnetChains([ethereum, bitcoin]);
+    if (sourceChain === Chains.Bitcoin)
+      return testnetChains([ethereum, polkadot]);
+    throw new Error('received testnet flag but mainnet chain');
+  }
+
+  if (sourceChain === Chains.Ethereum) return [bitcoin, polkadot];
+  if (sourceChain === Chains.Polkadot) return [ethereum, bitcoin];
+  if (sourceChain === Chains.Bitcoin) return [ethereum, polkadot];
   throw new Error('received unknown chain');
 };
 
 const getAssets = async (
   chain: Chain,
   network: ChainflipNetwork,
-  env: Pick<Environment, 'swapping' | 'ingressEgress'>,
 ): Promise<AssetData[]> => {
-  if (chain === Chains.Ethereum)
-    return [eth$(network, env), usdc$(network, env), flip$(network, env)];
-  if (chain === Chains.Polkadot) return [dot$(network, env)];
-  if (chain === Chains.Bitcoin) return [btc$(network, env)];
-  throw new Error('received unexpected chain');
+  if (isTestnet(network)) {
+    if (chain === Chains.Ethereum) return testnetAssets(ethereumAssets);
+    if (chain === Chains.Polkadot) return testnetAssets([dot$]);
+    if (chain === Chains.Bitcoin) return testnetAssets([btc$]);
+    throw new Error('received testnet flag but mainnet chain');
+  }
+
+  if (chain === Chains.Ethereum) return ethereumAssets;
+  if (chain === Chains.Polkadot) return [dot$];
+  if (chain === Chains.Bitcoin) return [btc$];
+  throw new Error('received unknown chain');
 };
 
 export type RequestOptions = {
@@ -54,28 +86,49 @@ type BackendQuery<T, U> = (
   options: RequestOptions,
 ) => Promise<U>;
 
-const getQuote: BackendQuery<
-  QuoteRequest & { brokerCommissionBps?: number },
-  QuoteResponse
-> = async (baseUrl, quoteRequest, { signal }) => {
-  const { brokerCommissionBps, ...returnedRequestData } = quoteRequest;
+const getQuote: BackendQuery<QuoteRequest, QuoteResponse> = async (
+  baseUrl,
+  quoteRequest,
+  { signal },
+) => {
   const params: QuoteQueryParams = {
-    amount: returnedRequestData.amount,
-    srcAsset: returnedRequestData.srcAsset,
-    destAsset: returnedRequestData.destAsset,
-    ...(brokerCommissionBps && {
-      brokerCommissionBps: String(brokerCommissionBps),
-    }),
+    amount: quoteRequest.amount,
+    srcAsset: quoteRequest.srcAsset,
+    destAsset: quoteRequest.destAsset,
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const queryParams = new URLSearchParams(params as Record<string, any>);
+  const queryParams = new URLSearchParams(params);
 
   const url = new URL(`/quote?${queryParams.toString()}`, baseUrl).toString();
 
   const { data } = await axios.get<QuoteQueryResponse>(url, { signal });
 
-  return { ...returnedRequestData, quote: data };
+  return { ...quoteRequest, quote: data };
+};
+
+const requestDepositAddress: BackendQuery<
+  DepositAddressRequest,
+  DepositAddressResponse
+> = async (baseUrl, depositAddressRequest, { signal }) => {
+  const body: SwapRequestBody = {
+    destAddress: depositAddressRequest.destAddress,
+    srcAsset: depositAddressRequest.srcAsset,
+    destAsset: depositAddressRequest.destAsset,
+    srcChain: depositAddressRequest.srcChain,
+    destChain: depositAddressRequest.destChain,
+    amount: depositAddressRequest.amount,
+    ccmMetadata: depositAddressRequest.ccmMetadata,
+  };
+
+  const url = new URL('/swaps', baseUrl).toString();
+
+  const { data } = await axios.post<PostSwapResponse>(url, body, { signal });
+
+  return {
+    ...depositAddressRequest,
+    depositChannelId: data.id,
+    depositAddress: data.depositAddress,
+  };
 };
 
 const getStatus: BackendQuery<SwapStatusRequest, SwapStatusResponse> = async (
@@ -96,4 +149,5 @@ export default {
   getQuote,
   getAssets,
   getStatus,
+  requestDepositAddress,
 };

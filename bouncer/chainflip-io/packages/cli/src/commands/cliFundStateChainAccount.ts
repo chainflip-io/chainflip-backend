@@ -1,7 +1,8 @@
-import { AlchemyProvider, Wallet, getDefaultProvider } from 'ethers';
+import { Wallet, getDefaultProvider, providers } from 'ethers';
 import { ArgumentsCamelCase, InferredOptionTypes, Options } from 'yargs';
 import { ChainflipNetworks } from '@/shared/enums';
-import { FundingNetworkOptions, fundStateChainAccount } from '../lib';
+import { FundStateChainAccountOptions } from '@/shared/stateChainGateway';
+import { fundStateChainAccount } from '../lib';
 import { askForPrivateKey, getEthNetwork, cliNetworks } from '../utils';
 
 export const yargsOptions = {
@@ -50,11 +51,11 @@ export default async function cliFundStateChainAccount(
 
   const wallet = new Wallet(privateKey).connect(
     process.env.ALCHEMY_KEY
-      ? new AlchemyProvider(ethNetwork, process.env.ALCHEMY_KEY)
+      ? new providers.AlchemyProvider(ethNetwork, process.env.ALCHEMY_KEY)
       : getDefaultProvider(ethNetwork),
   );
 
-  const networkOpts: FundingNetworkOptions =
+  const opts: FundStateChainAccountOptions =
     args.chainflipNetwork === 'localnet'
       ? {
           stateChainGatewayContractAddress:
@@ -67,10 +68,9 @@ export default async function cliFundStateChainAccount(
 
   const receipt = await fundStateChainAccount(
     args.srcAccountId as `0x${string}`,
-    BigInt(args.amount),
-    networkOpts,
-    {},
+    args.amount,
+    opts,
   );
 
-  console.log(`Call executed. Transaction hash: ${receipt.hash}`);
+  console.log(`Call executed. Transaction hash: ${receipt.transactionHash}`);
 }

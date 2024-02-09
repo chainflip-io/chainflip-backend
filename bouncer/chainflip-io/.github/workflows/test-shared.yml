@@ -1,0 +1,53 @@
+name: Test shared
+
+on:
+  workflow_dispatch: {}
+  pull_request:
+    types:
+      - opened
+      - synchronize
+    paths:
+      - packages/shared/**
+  push:
+    branches:
+      - main
+    paths:
+      - packages/shared/**
+
+env:
+  FORCE_COLOR: 1
+  PACKAGE: "@chainflip-io/sdk-shared"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@v3
+
+      - name: Get Node.JS version from package.json 👀
+        run: echo "NODE_VERSION=$(cat .nvmrc)" >> $GITHUB_ENV
+
+      - name: Install pnpm 💿
+        run: npm install -g pnpm@8
+
+      - name: Setup Node 🎮
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+
+      - name: Install dependencies 🚚 📦
+        run: pnpm --filter $PACKAGE install
+
+      - name: Run tests
+        run: pnpm --filter $PACKAGE test:ci
+
+      - name: Get package name without scope
+        run: echo "PACKAGE_WITHOUT_SCOPE=${PACKAGE#*/}" >> "$GITHUB_ENV" # https://stackoverflow.com/a/30865542
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          flags: ${{ env.PACKAGE_WITHOUT_SCOPE }}
+          token: ${{ secrets.CF_SDK_CODECOV_TOKEN }} # not required for public repos

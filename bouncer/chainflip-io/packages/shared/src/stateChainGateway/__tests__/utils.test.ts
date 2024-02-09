@@ -1,4 +1,4 @@
-import { VoidSigner, getDefaultProvider } from 'ethers';
+import { VoidSigner, ethers } from 'ethers';
 import { ADDRESSES } from '../../consts';
 import { getStateChainGateway } from '../utils';
 
@@ -12,7 +12,7 @@ describe(getStateChainGateway, () => {
           signer: new VoidSigner('0x0'),
         }),
       ).toMatchObject({
-        target: ADDRESSES[network].STATE_CHAIN_GATEWAY_ADDRESS,
+        address: ADDRESSES[network].STATE_CHAIN_MANAGER_CONTRACT_ADDRESS,
       });
     },
   );
@@ -22,12 +22,13 @@ describe(getStateChainGateway, () => {
     expect(
       getStateChainGateway({
         network: 'localnet',
-        signer: new VoidSigner('0x0').connect(getDefaultProvider('goerli')),
+        signer: new VoidSigner('0x0').connect(
+          ethers.providers.getDefaultProvider('goerli'),
+        ),
         stateChainGatewayContractAddress: address,
-        flipContractAddress: '0x0000',
       }),
     ).toMatchObject({
-      target: address,
+      address,
     });
   });
 });
