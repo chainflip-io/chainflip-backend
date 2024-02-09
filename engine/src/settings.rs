@@ -256,6 +256,8 @@ pub struct ArbOptions {
 	pub arb_ws_endpoint: Option<String>,
 	#[clap(long = "arb.rpc.http_endpoint")]
 	pub arb_http_endpoint: Option<String>,
+	#[clap(long = "arb.private_key_file")]
+	pub arb_private_key_file: Option<PathBuf>,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -746,6 +748,7 @@ impl ArbOptions {
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
 		insert_command_line_option(map, "arb.ws_node_endpoint", &self.arb_ws_endpoint);
 		insert_command_line_option(map, "arb.http_node_endpoint", &self.arb_http_endpoint);
+		insert_command_line_option_path(map, ARB_PRIVATE_KEY_FILE, &self.arb_private_key_file);
 	}
 }
 
@@ -993,6 +996,7 @@ pub mod tests {
 			arb_opts: ArbOptions {
 				arb_ws_endpoint: Some("ws://endpoint:4321".to_owned()),
 				arb_http_endpoint: Some("http://endpoint:4321".to_owned()),
+				arb_private_key_file: Some(PathBuf::from_str("keys/eth_private_key_2").unwrap()),
 			},
 			health_check_hostname: Some("health_check_hostname".to_owned()),
 			health_check_port: Some(1337),
