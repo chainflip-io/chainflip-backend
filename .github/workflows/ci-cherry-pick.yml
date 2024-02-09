@@ -50,3 +50,14 @@ jobs:
           base: '${{ env.RELEASE_BRANCH }}' # Update with your current release branch
           reviewers: 'martin-chainflip'
           labels: cherry-pick
+
+      - name: Notify on failed cherry-pick
+        if: failure() || cancelled()
+        env:
+          DISCORD_USERNAME: "Release Picker"
+          DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
+        uses: Ilshidur/action-discord@0.3.2
+        with:
+          args: |
+            🍒⚠️ Sorry **${{ github.actor }}**, The attempt to cherry-pick `${{ env.COMMIT_SHA }}` on to `${{ env.RELEASE_BRANCH }}` was unsuccessful
+            Please check the [GitHub job](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) to see what went wrong.
