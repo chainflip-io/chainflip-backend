@@ -668,6 +668,7 @@ pub trait DepositApi<C: Chain> {
 	fn request_liquidity_deposit_address(
 		lp_account: Self::AccountId,
 		source_asset: C::ChainAsset,
+		boost_fee: BasisPoints,
 	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber), DispatchError>;
 
 	/// Issues a channel id and deposit address for a new swap.
@@ -678,6 +679,7 @@ pub trait DepositApi<C: Chain> {
 		broker_commission_bps: BasisPoints,
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
+		boost_fee: BasisPoints,
 	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber), DispatchError>;
 }
 
@@ -888,6 +890,14 @@ impl<RuntimeCall> CallDispatchFilter<RuntimeCall> for () {
 }
 
 pub trait AssetConverter {
+	fn estimate_swap_input_for_desired_output<
+		Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy,
+	>(
+		input_asset: impl Into<Asset>,
+		output_asset: impl Into<Asset>,
+		desired_output_amount: Amount,
+	) -> Option<Amount>;
+
 	fn convert_asset_to_approximate_output<
 		Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy,
 	>(

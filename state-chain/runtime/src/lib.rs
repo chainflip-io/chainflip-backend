@@ -17,7 +17,7 @@ use crate::{
 	},
 };
 use cf_amm::{
-	common::{Amount, AssetsMap, Tick},
+	common::{Amount, AssetsMap, Order, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -29,13 +29,14 @@ use cf_chains::{
 	TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, NetworkEnvironment};
-use cf_traits::{GetTrackedData, LpBalanceApi};
+use cf_traits::{AssetConverter, GetTrackedData, LpBalanceApi};
 use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
 use pallet_cf_pools::{
-	AskBidMap, PoolLiquidity, PoolOrderbook, PoolPrice, UnidirectionalPoolDepth,
+	AskBidMap, AssetPair, PoolLiquidity, PoolOrderbook, PoolPriceV1, PoolPriceV2,
+	UnidirectionalPoolDepth,
 };
 use pallet_cf_reputation::ExclusionList;
 use pallet_cf_swapping::CcmSwapAmounts;
@@ -897,7 +898,7 @@ type PalletMigrations = (
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance1>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance2>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance3>,
-	// pallet_cf_swapping::migrations::PalletMigration<Runtime>,
+	pallet_cf_swapping::migrations::PalletMigration<Runtime>,
 	// pallet_cf_lp::migrations::PalletMigration<Runtime>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance1>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance2>,
@@ -1085,8 +1086,12 @@ impl_runtime_apis! {
 		fn cf_pool_price(
 			from: Asset,
 			to: Asset,
-		) -> Option<PoolPrice> {
+		) -> Option<PoolPriceV1> {
 			LiquidityPools::current_price(from, to)
+		}
+
+		fn cf_pool_price_v2(base_asset: Asset, quote_asset: Asset) -> Result<PoolPriceV2, DispatchErrorWithMessage> {
+			LiquidityPools::pool_price(base_asset, quote_asset).map_err(Into::into)
 		}
 
 		/// Simulates a swap and return the intermediate (if any) and final output.
@@ -1194,51 +1199,62 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_ingress_fee(asset: Asset) -> AssetAmount {
+		fn cf_ingress_fee(asset: Asset) -> Option<AssetAmount> {
+
 			match ForeignChain::from(asset) {
-				ForeignChain::Ethereum => pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::get_tracked_data()
+				ForeignChain::Ethereum => {
+					let ingress_fee_in_eth = pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::get_tracked_data()
+						.estimate_ingress_fee(
+							asset
+								.try_into()
+								.expect("Conversion must succeed: ForeignChain checked in match clause.")
+						);
+
+					pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(asset, Asset::Eth, ingress_fee_in_eth)
+				},
+				ForeignChain::Polkadot => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::get_tracked_data()
 					.estimate_ingress_fee(
 						asset
 							.try_into()
 							.expect("Conversion must succeed: ForeignChain checked in match clause.")
-					),
-				ForeignChain::Polkadot => pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::get_tracked_data()
-					.estimate_ingress_fee(
-						asset
-							.try_into()
-							.expect("Conversion must succeed: ForeignChain checked in match clause.")
-					),
-				ForeignChain::Bitcoin => pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::get_tracked_data()
+					)),
+				ForeignChain::Bitcoin => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::get_tracked_data()
 					.estimate_ingress_fee(
 						asset
 							.try_into()
 							.expect("Conversion must succeed: ForeignChain checked in match clause.")
 						)
-						.into(),
+						.into()),
 			}
 		}
 
-		fn cf_egress_fee(asset: Asset) -> AssetAmount {
+		fn cf_egress_fee(asset: Asset) -> Option<AssetAmount> {
 			match ForeignChain::from(asset) {
-				ForeignChain::Ethereum => pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::get_tracked_data()
+				ForeignChain::Ethereum => {
+
+					let egress_fee_in_eth = pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::get_tracked_data()
 					.estimate_egress_fee(
 						asset
 							.try_into()
 							.expect("Conversion must succeed: ForeignChain checked in match clause.")
-						),
-				ForeignChain::Polkadot => pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::get_tracked_data()
+						);
+
+					pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(asset, Asset::Eth, egress_fee_in_eth)
+
+				},
+				ForeignChain::Polkadot => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::get_tracked_data()
 					.estimate_egress_fee(
 						asset
 							.try_into()
 							.expect("Conversion must succeed: ForeignChain checked in match clause.")
-						),
-				ForeignChain::Bitcoin => pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::get_tracked_data()
+						)),
+				ForeignChain::Bitcoin => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::get_tracked_data()
 					.estimate_egress_fee(
 						asset
 							.try_into()
 							.expect("Conversion must succeed: ForeignChain checked in match clause.")
 						)
-						.into(),
+						.into()),
 			}
 		}
 
@@ -1285,7 +1301,8 @@ impl_runtime_apis! {
 
 		/// This should *not* be fully trusted as if the deposits that are pre-witnessed will definitely go through.
 		/// This returns a list of swaps in the requested direction that are pre-witnessed in the current block.
-		fn cf_prewitness_swaps(from: Asset, to: Asset) -> Option<Vec<AssetAmount>> {
+		fn cf_prewitness_swaps(base_asset: Asset, quote_asset: Asset, side: Order) -> Vec<AssetAmount> {
+			let (from, to) = AssetPair::to_swap(base_asset, quote_asset, side);
 
 			fn filter_deposit_swaps<C, I: 'static>(from: Asset, to: Asset, deposit_witnesses: Vec<DepositWitness<C>>) -> Vec<AssetAmount>
 				where Runtime: pallet_cf_ingress_egress::Config<I>,
@@ -1355,7 +1372,7 @@ impl_runtime_apis! {
 								from: swap_from, to: swap_to, deposit_amount, ..
 							}) if from == swap_from && to == swap_to => {
 								all_prewitnessed_swaps.push(deposit_amount);
-							}
+							},
 							RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::process_deposits {
 								deposit_witnesses, ..
 							}) => {
@@ -1370,16 +1387,16 @@ impl_runtime_apis! {
 								deposit_witnesses, ..
 							}) => {
 								all_prewitnessed_swaps.extend(filter_deposit_swaps::<Polkadot, PolkadotInstance>(from, to, deposit_witnesses));
-							}
+							},
 							RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
 								source_asset, deposit_amount, destination_asset, deposit_metadata, ..
 							}) => {
 								// There are two swaps for CCM, the principal swap, and the gas amount swap.
 								all_prewitnessed_swaps.extend(ccm_swaps(from, to, source_asset, destination_asset, deposit_amount, deposit_metadata.channel_metadata));
-							}
+							},
 							_ => {
 								// ignore, we only care about calls that trigger swaps.
-							}
+							},
 						}
 					}
 					_ => {
@@ -1388,12 +1405,7 @@ impl_runtime_apis! {
 				}
 			}
 
-			// We don't want to return anything from the websocket stream if there are no items
-			if all_prewitnessed_swaps.is_empty() {
-				None
-			} else {
-				Some(all_prewitnessed_swaps)
-			}
+			all_prewitnessed_swaps
 		}
 
 		fn cf_failed_call(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {

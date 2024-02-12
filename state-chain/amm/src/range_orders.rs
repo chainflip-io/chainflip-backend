@@ -21,7 +21,6 @@
 
 #[cfg(test)]
 mod tests;
-pub mod v1;
 
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, convert::Infallible, vec::Vec};
