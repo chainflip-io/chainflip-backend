@@ -6,7 +6,7 @@ use cf_chains::{
 	address::EncodedAddress, dot::PolkadotAccountId, evm::to_evm_address, AnyChain,
 	CcmChannelMetadata, ForeignChain,
 };
-use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId, SemVer};
+use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId, FlipBalance, SemVer};
 use futures::FutureExt;
 use pallet_cf_governance::ExecutionMode;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
@@ -303,6 +303,7 @@ pub struct SwapDepositAddress {
 	pub issued_block: state_chain_runtime::BlockNumber,
 	pub channel_id: ChannelId,
 	pub source_chain_expiry_block: <AnyChain as cf_chains::Chain>::ChainBlockNumber,
+	pub channel_opening_fee: FlipBalance,
 }
 
 #[async_trait]
@@ -336,6 +337,7 @@ pub trait BrokerApi: SignedExtrinsicApi {
 				deposit_address,
 				channel_id,
 				source_chain_expiry_block,
+				channel_opening_fee,
 				..
 			},
 		)) = events.iter().find(|event| {
@@ -351,6 +353,7 @@ pub trait BrokerApi: SignedExtrinsicApi {
 				issued_block: header.number,
 				channel_id: *channel_id,
 				source_chain_expiry_block: *source_chain_expiry_block,
+				channel_opening_fee: *channel_opening_fee,
 			})
 		} else {
 			bail!("No SwapDepositAddressReady event was found");

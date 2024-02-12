@@ -288,6 +288,7 @@ pub mod pallet {
 			channel_metadata: Option<CcmChannelMetadata>,
 			source_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 			boost_fee: BasisPoints,
+			channel_opening_fee: T::Amount,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
@@ -456,7 +457,8 @@ pub mod pallet {
 			ensure!(T::SafeMode::get().deposits_enabled, Error::<T>::DepositsDisabled);
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
 			ensure!(broker_commission_bps <= 1000, Error::<T>::BrokerCommissionBpsTooHigh);
-			T::FeePayment::try_burn_fee(&broker, ChannelOpeningFee::<T>::get())?;
+			let channel_opening_fee = ChannelOpeningFee::<T>::get();
+			T::FeePayment::try_burn_fee(&broker, channel_opening_fee)?;
 
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, destination_asset)?;
@@ -490,6 +492,7 @@ pub mod pallet {
 				channel_metadata,
 				source_chain_expiry_block: expiry_height,
 				boost_fee,
+				channel_opening_fee,
 			});
 
 			Ok(())
