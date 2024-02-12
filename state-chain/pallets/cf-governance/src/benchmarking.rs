@@ -8,11 +8,12 @@ use frame_support::{
 	traits::{Get, OnInitialize, UnfilteredDispatchable},
 };
 use frame_system::RawOrigin;
-use sp_std::{boxed::Box, collections::btree_set::BTreeSet};
+use sp_std::collections::btree_set::BTreeSet;
 
 #[benchmarks]
 mod benchmarks {
 	use super::*;
+	use sp_std::vec;
 
 	#[benchmark]
 	fn propose_governance_extrinsic() {
