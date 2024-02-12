@@ -163,6 +163,26 @@ mod benchmarks {
 		);
 	}
 
+	#[benchmark]
+	fn remove_boostable_deposits(n: Linear<1, 255>) {
+		for i in 0..n {
+			BoostableDeposits::<T, I>::insert(
+				0,
+				i as u64,
+				BoostableDeposit {
+					asset: BenchmarkValue::benchmark_value(),
+					amount: BenchmarkValue::benchmark_value(),
+					deposit_address: BenchmarkValue::benchmark_value(),
+				},
+			);
+		}
+
+		#[block]
+		{
+			let _old_deposits = BoostableDeposits::<T, I>::clear_prefix(0, u32::MAX, None);
+		}
+	}
+
 	#[cfg(test)]
 	use crate::mock_eth::*;
 
@@ -185,6 +205,9 @@ mod benchmarks {
 		});
 		new_test_ext().execute_with(|| {
 			_disable_asset_egress::<Test, ()>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_remove_boostable_deposits::<Test, ()>(100, true);
 		});
 	}
 }
