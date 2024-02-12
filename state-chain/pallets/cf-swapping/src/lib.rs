@@ -19,7 +19,11 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_arithmetic::{helpers_128bit::multiply_by_rational_with_rounding, traits::Zero, Rounding};
+use sp_arithmetic::{
+	helpers_128bit::multiply_by_rational_with_rounding,
+	traits::{UniqueSaturatedInto, Zero},
+	Rounding,
+};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 #[cfg(test)]
 mod mock;
@@ -176,6 +180,14 @@ pub enum CcmFailReason {
 	InsufficientDepositAmount,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum PalletConfigUpdate {
+	/// Set the maximum amount allowed to be put into a swap. Excess amounts are confiscated.
+	MaximumSwapAmount { asset: Asset, amount: Option<AssetAmount> },
+	/// Set the fixed fee that is burned when opening a channel, denominated in Flipperinos.
+	ChannelOpeningFee { flipperinos: AssetAmount },
+}
+
 impl_pallet_safe_mode! {
 	PalletSafeMode; swaps_enabled, withdrawals_enabled, deposits_enabled, broker_registration_enabled,
 }
@@ -189,6 +201,7 @@ pub mod pallet {
 		AccountRoleRegistry, CcmSwapIds, Chainflip, EgressApi, FeePayment, ScheduledEgressDetails,
 		SwapDepositHandler,
 	};
+	use frame_system::WeightInfo as SystemWeightInfo;
 
 	use super::*;
 
@@ -370,6 +383,9 @@ pub mod pallet {
 			asset: Asset,
 			amount: AssetAmount,
 			reason: DispatchError,
+		},
+		ChannelOpeningFeeSet {
+			fee: T::Amount,
 		},
 	}
 	#[pallet::error]
@@ -631,28 +647,31 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Sets the Maximum amount allowed in a single swap for an asset.
+		/// Apply a list of configuration updates to the pallet.
 		///
 		/// Requires Governance.
-		///
-		/// ## Events
-		///
-		/// - [On update](Event::MaximumSwapAmountSet)
-		#[pallet::call_index(7)]
-		#[pallet::weight(T::WeightInfo::set_maximum_swap_amount())]
-		pub fn set_maximum_swap_amount(
+		#[pallet::call_index(8)]
+		#[pallet::weight(<T as frame_system::Config>::SystemWeightInfo::set_storage(updates.len() as u32))]
+		pub fn update_pallet_config(
 			origin: OriginFor<T>,
-			asset: Asset,
-			amount: Option<AssetAmount>,
+			updates: BoundedVec<PalletConfigUpdate, ConstU32<10>>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			match amount {
-				Some(max) => MaximumSwapAmount::<T>::insert(asset, max),
-				None => MaximumSwapAmount::<T>::remove(asset),
-			};
+			for update in updates {
+				match update {
+					PalletConfigUpdate::MaximumSwapAmount { asset, amount } => {
+						MaximumSwapAmount::<T>::set(asset, amount);
+						Self::deposit_event(Event::<T>::MaximumSwapAmountSet { asset, amount });
+					},
+					PalletConfigUpdate::ChannelOpeningFee { flipperinos } => {
+						let fee = flipperinos.unique_saturated_into();
+						ChannelOpeningFee::<T>::set(fee);
+						Self::deposit_event(Event::<T>::ChannelOpeningFeeSet { fee });
+					},
+				}
+			}
 
-			Self::deposit_event(Event::<T>::MaximumSwapAmountSet { asset, amount });
 			Ok(())
 		}
 	}
