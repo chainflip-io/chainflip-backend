@@ -6,7 +6,7 @@ use cf_traits::{
 	mocks::offence_reporting::MockOffenceReporter, AccountRoleRegistry, CallDispatchFilter,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{pallet_prelude::RuntimeDebug, parameter_types, traits::ConstU64};
+use frame_support::{pallet_prelude::RuntimeDebug, parameter_types};
 use frame_system as system;
 use scale_info::TypeInfo;
 use sp_core::H256;
@@ -62,6 +62,7 @@ impl_mock_runtime_safe_mode! { witnesser: pallet_cf_witness::PalletSafeMode<Mock
 
 parameter_types! {
 	pub static AllowCall: bool = true;
+	pub const GracePeriod: u64 = 10u64;
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -73,6 +74,8 @@ impl CallDispatchFilter<RuntimeCall> for MockCallFilter {
 	}
 }
 
+pub type OffenceReporter = MockOffenceReporter<u64, PalletOffence>;
+
 impl pallet_cf_witness::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeOrigin = RuntimeOrigin;
@@ -80,8 +83,8 @@ impl pallet_cf_witness::Config for Test {
 	type SafeMode = MockRuntimeSafeMode;
 	type CallDispatchPermission = MockCallFilter;
 	type Offence = PalletOffence;
-	type OffenceReporter = MockOffenceReporter<u64, PalletOffence>;
-	type LateWitnessGracePeriod = ConstU64<10>;
+	type OffenceReporter = OffenceReporter;
+	type LateWitnessGracePeriod = GracePeriod;
 	type WeightInfo = ();
 }
 

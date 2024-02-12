@@ -116,7 +116,11 @@ macro_rules! impl_mock_epoch_info {
 			}
 
 			fn authorities_at_epoch(epoch: $epoch_index) -> Option<sp_std::collections::btree_set::BTreeSet<Self::ValidatorId>> {
-				PAST_AUTHORITIES.with(|cell| cell.borrow().clone())
+				if epoch == Self::epoch_index() {
+					Some(CURRENT_AUTHORITIES.with(|cell| cell.borrow().clone()))
+				} else {
+					PAST_AUTHORITIES.with(|cell| cell.borrow().clone())
+				}
 			}
 
 			fn bond() -> Self::Amount {
