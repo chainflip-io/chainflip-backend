@@ -118,7 +118,7 @@ jobs:
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: ${{ inputs.upgrade-to-workflow-name }}
-          name: chainflip-node-runtime-try-runtime-ubuntu-22.04
+          name: chainflip-node-runtime-try-runtime
           path: main-runtime
           commit: ${{ inputs.upgrade-to-commit }}
 
