@@ -929,8 +929,6 @@ mod threshold_signature_refactor_migration {
 					"CeremonyIdCounter",
 					"KeygenSlashAmount",
 					"Vaults",
-					"VaultsByEpoch",
-					"VaultsByEpochAndKey",
 				] {
 					move_pallet_storage::<
 						pallet_cf_vaults::Pallet<Runtime, I>,
