@@ -1,6 +1,6 @@
 use cf_traits::{Chainflip, EpochInfo};
 use frame_support::traits::OnRuntimeUpgrade;
-use sp_std::{marker::PhantomData, prelude::*};
+use sp_std::marker::PhantomData;
 
 #[cfg(feature = "try-runtime")]
 mod try_runtime_includes {
@@ -8,6 +8,7 @@ mod try_runtime_includes {
 	pub use frame_support::{
 		ensure, pallet_prelude::DispatchError, storage, traits::PalletInfoAccess,
 	};
+	pub use sp_std::prelude::*;
 }
 #[cfg(feature = "try-runtime")]
 use try_runtime_includes::*;
@@ -32,7 +33,6 @@ pub struct Migration<T, I>(PhantomData<(T, I)>);
 impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		log::info!("Running V4 threshold migration");
-		// rename_pallet_storage::<crate::Pallet<T, I>>(b"Vaults", b"Keys");
 		for (k, v) in old::Vaults::<T, I>::drain() {
 			crate::Keys::<T, I>::insert(k, v);
 		}
@@ -55,6 +55,8 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
+		// NOTE Most of the below migrations are run by the vaults pallet or in the
+		// ThresholdSignatureRefactorMigration in the runtime.
 		ensure!(crate::CeremonyIdCounter::<T, I>::exists(), "CeremonyIdCounter was not migrated!");
 		ensure!(
 			crate::KeyHandoverFailureVoters::<T, I>::decode_len().is_none(),
