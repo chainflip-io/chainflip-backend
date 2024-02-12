@@ -2189,6 +2189,9 @@ fn broker_pays_a_fee_for_each_deposit_address() {
 #[test]
 fn can_update_multiple_items_at_once() {
 	new_test_ext().execute_with(|| {
+		assert_eq!(ChannelOpeningFee::<Test>::get(), 0);
+		assert!(MaximumSwapAmount::<Test>::get(Asset::Btc).is_none());
+		assert!(MaximumSwapAmount::<Test>::get(Asset::Dot).is_none());
 		assert_ok!(Swapping::update_pallet_config(
 			OriginTrait::root(),
 			vec![
