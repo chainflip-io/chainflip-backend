@@ -1,3 +1,5 @@
+use core::cell::Cell;
+
 use crate::{self as pallet_cf_swapping, PalletSafeMode, WeightInfo};
 use cf_chains::AnyChain;
 use cf_primitives::{Asset, AssetAmount};
@@ -67,7 +69,23 @@ parameter_types! {
 	pub static Swaps: Vec<(Asset, Asset, AssetAmount)> = vec![];
 	pub static SwapRate: f64 = 1f64;
 }
+
+thread_local! {
+	pub static SWAPS_SHOULD_FAIL: Cell<bool> = Cell::new(false);
+}
+
 pub struct MockSwappingApi;
+
+impl MockSwappingApi {
+	pub fn set_swaps_should_fail(should_fail: bool) {
+		SWAPS_SHOULD_FAIL.with(|cell| cell.set(should_fail));
+	}
+
+	fn swaps_should_fail() -> bool {
+		SWAPS_SHOULD_FAIL.with(|cell| cell.get())
+	}
+}
+
 impl SwappingApi for MockSwappingApi {
 	fn take_network_fee(input_amount: AssetAmount) -> AssetAmount {
 		input_amount - NetworkFee::get() * input_amount
@@ -78,6 +96,10 @@ impl SwappingApi for MockSwappingApi {
 		to: Asset,
 		input_amount: AssetAmount,
 	) -> Result<AssetAmount, DispatchError> {
+		if Self::swaps_should_fail() {
+			return Err(DispatchError::from("Test swap failed"))
+		}
+
 		let mut swaps = Swaps::get();
 		swaps.push((from, to, input_amount));
 		Swaps::set(swaps);

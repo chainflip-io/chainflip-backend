@@ -9,6 +9,8 @@ use sp_std::marker::PhantomData;
 mod helper_functions;
 pub use helper_functions::*;
 
+pub mod migration_template;
+
 #[cfg(feature = "try-runtime")]
 use frame_support::pallet_prelude::DispatchError;
 #[cfg(feature = "try-runtime")]

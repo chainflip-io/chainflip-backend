@@ -48,7 +48,7 @@ where
 		EthRetryRpcClient::<EthRpcClient>::new(scope, nodes, env_params.eth_chain_id.into())?
 	};
 
-	let vaults = epoch_source.vaults().await;
+	let vaults = epoch_source.vaults::<cf_chains::Ethereum>().await;
 	let eth_source = EthSource::new(eth_client.clone())
 		.strictly_monotonic()
 		.chunk_by_vault(vaults, scope);

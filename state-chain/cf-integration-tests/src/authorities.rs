@@ -8,12 +8,12 @@ use sp_runtime::AccountId32;
 use std::collections::{BTreeSet, HashMap};
 
 use cf_primitives::{AuthorityCount, FlipBalance, GENESIS_EPOCH};
-use cf_traits::{AsyncResult, EpochInfo, VaultRotator, VaultStatus};
+use cf_traits::{AsyncResult, EpochInfo, KeyRotationStatusOuter, KeyRotator};
 use pallet_cf_environment::SafeModeUpdate;
 use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
 use state_chain_runtime::{
-	BitcoinVault, Environment, EthereumInstance, EthereumVault, Flip, PolkadotInstance,
-	PolkadotVault, Runtime, RuntimeOrigin, Validator,
+	BitcoinThresholdSigner, Environment, EthereumInstance, EthereumThresholdSigner, Flip,
+	PolkadotInstance, PolkadotThresholdSigner, Runtime, RuntimeOrigin, Validator,
 };
 
 // Helper function that creates a network, funds backup nodes, and have them join the auction.
@@ -71,7 +71,10 @@ fn authority_rotates_with_correct_sequence() {
 			testnet.move_to_the_next_epoch();
 
 			assert!(matches!(Validator::current_rotation_phase(), RotationPhase::Idle));
-			assert_eq!(AllVaults::status(), AsyncResult::Ready(VaultStatus::RotationComplete));
+			assert_eq!(
+				AllVaults::status(),
+				AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete)
+			);
 			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index());
 
 			testnet.move_to_the_end_of_epoch();
@@ -85,7 +88,10 @@ fn authority_rotates_with_correct_sequence() {
 			));
 			// NOTE: This happens due to a bug in `move_forward_blocks`: keygen completes in the
 			// same block in which is was requested.
-			assert_eq!(AllVaults::status(), AsyncResult::Ready(VaultStatus::KeygenComplete));
+			assert_eq!(
+				AllVaults::status(),
+				AsyncResult::Ready(KeyRotationStatusOuter::KeygenComplete)
+			);
 
 			// Key Handover complete.
 			testnet.move_forward_blocks(4);
@@ -94,7 +100,10 @@ fn authority_rotates_with_correct_sequence() {
 				RotationPhase::KeyHandoversInProgress(..)
 			));
 			// NOTE: See above, we skip the pending state.
-			assert_eq!(AllVaults::status(), AsyncResult::Ready(VaultStatus::KeyHandoverComplete));
+			assert_eq!(
+				AllVaults::status(),
+				AsyncResult::Ready(KeyRotationStatusOuter::KeyHandoverComplete)
+			);
 
 			// Activate new key.
 			// The key is immediately activated in the next block
@@ -106,7 +115,7 @@ fn authority_rotates_with_correct_sequence() {
 
 			assert_eq!(
 				AllVaults::status(),
-				AsyncResult::Ready(VaultStatus::RotationComplete),
+				AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete),
 				"Rotation should be complete but vault status is {:?}",
 				AllVaults::status()
 			);
@@ -117,12 +126,18 @@ fn authority_rotates_with_correct_sequence() {
 				Validator::current_rotation_phase(),
 				RotationPhase::SessionRotating(..)
 			));
-			assert_eq!(AllVaults::status(), AsyncResult::Ready(VaultStatus::RotationComplete));
+			assert_eq!(
+				AllVaults::status(),
+				AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete)
+			);
 
 			// Rotation Completed.
 			testnet.move_forward_blocks(1);
 			assert!(matches!(Validator::current_rotation_phase(), RotationPhase::Idle));
-			assert_eq!(AllVaults::status(), AsyncResult::Ready(VaultStatus::RotationComplete));
+			assert_eq!(
+				AllVaults::status(),
+				AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete)
+			);
 
 			assert_eq!(
 				GENESIS_EPOCH + 2,
@@ -261,7 +276,10 @@ fn authority_rotation_can_succeed_after_aborted_by_safe_mode() {
 			// Run until key gen is completed.
 			testnet.move_forward_blocks(4);
 			assert!(
-				matches!(AllVaults::status(), AsyncResult::Ready(VaultStatus::KeygenComplete)),
+				matches!(
+					AllVaults::status(),
+					AsyncResult::Ready(KeyRotationStatusOuter::KeygenComplete)
+				),
 				"Keygen should be complete but is {:?}",
 				AllVaults::status()
 			);
@@ -313,7 +331,10 @@ fn authority_rotation_cannot_be_aborted_after_key_handover_and_completes_even_on
 			// Run until key handover starts
 			testnet.move_forward_blocks(5);
 			assert!(
-				matches!(AllVaults::status(), AsyncResult::Ready(VaultStatus::KeyHandoverComplete)),
+				matches!(
+					AllVaults::status(),
+					AsyncResult::Ready(KeyRotationStatusOuter::KeyHandoverComplete)
+				),
 				"Key handover should be complete but is {:?}",
 				AllVaults::status()
 			);
@@ -329,7 +350,7 @@ fn authority_rotation_cannot_be_aborted_after_key_handover_and_completes_even_on
 			// witness extrinsics and so witnessing vault rotation will be stalled.
 			assert!(matches!(
 				AllVaults::status(),
-				AsyncResult::Ready(VaultStatus::RotationComplete)
+				AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete)
 			));
 			testnet.move_forward_blocks(3);
 			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
@@ -359,19 +380,19 @@ fn authority_rotation_can_recover_after_keygen_fails() {
 			));
 			assert_eq!(AllVaults::status(), AsyncResult::Pending);
 			backup_nodes.iter().for_each(|validator| {
-				assert_ok!(EthereumVault::report_keygen_outcome(
+				assert_ok!(EthereumThresholdSigner::report_keygen_outcome(
 					RuntimeOrigin::signed(validator.clone()),
-					EthereumVault::ceremony_id_counter(),
+					EthereumThresholdSigner::ceremony_id_counter(),
 					Err(BTreeSet::default()),
 				));
-				assert_ok!(PolkadotVault::report_keygen_outcome(
+				assert_ok!(PolkadotThresholdSigner::report_keygen_outcome(
 					RuntimeOrigin::signed(validator.clone()),
-					PolkadotVault::ceremony_id_counter(),
+					PolkadotThresholdSigner::ceremony_id_counter(),
 					Err(BTreeSet::default()),
 				));
-				assert_ok!(BitcoinVault::report_keygen_outcome(
+				assert_ok!(BitcoinThresholdSigner::report_keygen_outcome(
 					RuntimeOrigin::signed(validator.clone()),
-					BitcoinVault::ceremony_id_counter(),
+					BitcoinThresholdSigner::ceremony_id_counter(),
 					Err(BTreeSet::default()),
 				));
 			});
@@ -408,26 +429,26 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 
 			testnet.move_forward_blocks(1);
 			backup_nodes.iter().for_each(|validator| {
-				assert_ok!(BitcoinVault::report_key_handover_outcome(
+				assert_ok!(BitcoinThresholdSigner::report_key_handover_outcome(
 					RuntimeOrigin::signed(validator.clone()),
-					BitcoinVault::ceremony_id_counter(),
+					BitcoinThresholdSigner::ceremony_id_counter(),
 					Err(BTreeSet::default()),
 				));
 				assert_err!(
-					EthereumVault::report_key_handover_outcome(
+					EthereumThresholdSigner::report_key_handover_outcome(
 						RuntimeOrigin::signed(validator.clone()),
-						EthereumVault::ceremony_id_counter(),
+						EthereumThresholdSigner::ceremony_id_counter(),
 						Err(BTreeSet::default()),
 					),
-					pallet_cf_vaults::Error::<Runtime, EthereumInstance>::InvalidRotationStatus
+					pallet_cf_threshold_signature::Error::<Runtime, EthereumInstance>::InvalidRotationStatus
 				);
 				assert_err!(
-					PolkadotVault::report_key_handover_outcome(
+					PolkadotThresholdSigner::report_key_handover_outcome(
 						RuntimeOrigin::signed(validator.clone()),
-						EthereumVault::ceremony_id_counter(),
+						EthereumThresholdSigner::ceremony_id_counter(),
 						Err(BTreeSet::default()),
 					),
-					pallet_cf_vaults::Error::<Runtime, PolkadotInstance>::InvalidRotationStatus
+					pallet_cf_threshold_signature::Error::<Runtime, PolkadotInstance>::InvalidRotationStatus
 				);
 			});
 
@@ -438,7 +459,7 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 			));
 			assert_eq!(
 				AllVaults::status(),
-				AsyncResult::Ready(VaultStatus::Failed(BTreeSet::default()))
+				AsyncResult::Ready(KeyRotationStatusOuter::Failed(BTreeSet::default()))
 			);
 
 			// Key handovers are retried after failure.

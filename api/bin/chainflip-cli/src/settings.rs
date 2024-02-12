@@ -73,6 +73,8 @@ pub struct SwapRequestParams {
 	pub destination_address: String,
 	/// Commission to the broker in basis points
 	pub broker_commission: u16,
+	/// Commission to the booster in basis points
+	pub boost_fee: Option<u16>,
 	/// Chain of the source asset ("Ethereum"|"Polkadot")
 	pub source_chain: Option<ForeignChain>,
 	/// Chain of the destination asset ("Ethereum"|"Polkadot")
@@ -93,6 +95,7 @@ pub enum LiquidityProviderSubcommands {
 		asset: Asset,
 		/// Chain of the deposit asset ("Ethereum"|"Polkadot")
 		chain: Option<ForeignChain>,
+		boost_fee: Option<u16>,
 	},
 	/// Register a Liquidity Refund Address for the given chain. An address must be
 	/// registered to request a deposit address for the given chain.
