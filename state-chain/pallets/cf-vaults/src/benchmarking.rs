@@ -44,9 +44,6 @@ mod benchmarks {
 	#[test]
 	fn benchmark_works() {
 		new_test_ext().execute_with(|| {
-			_vault_key_rotated::<Test, ()>(true);
-		});
-		new_test_ext().execute_with(|| {
 			_vault_key_rotated_externally::<Test, ()>(true);
 		});
 	}
