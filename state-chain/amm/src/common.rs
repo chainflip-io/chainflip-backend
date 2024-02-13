@@ -45,7 +45,7 @@ pub enum Order {
 	Sell,
 }
 impl Order {
-	pub fn to_sold_side(&self) -> Pairs {
+	pub fn to_sold_pair(&self) -> Pairs {
 		match self {
 			Order::Buy => Pairs::Quote,
 			Order::Sell => Pairs::Base,

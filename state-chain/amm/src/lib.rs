@@ -60,14 +60,14 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// Returns the current sqrt price for a given direction of swap. The price is measured in units
 	/// of the specified Pairs argument
 	pub fn current_sqrt_price(&mut self, order: Order) -> Option<SqrtPriceQ64F96> {
-		match order.to_sold_side() {
+		match order.to_sold_pair() {
 			Pairs::Base => self.inner_current_sqrt_price::<BaseToQuote>(),
 			Pairs::Quote => self.inner_current_sqrt_price::<QuoteToBase>(),
 		}
 	}
 
 	fn inner_worst_price(order: Order) -> SqrtPriceQ64F96 {
-		match order.to_sold_side() {
+		match order.to_sold_pair() {
 			Pairs::Quote => QuoteToBase::WORST_SQRT_PRICE,
 			Pairs::Base => BaseToQuote::WORST_SQRT_PRICE,
 		}
@@ -171,7 +171,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		sold_amount: Amount,
 		sqrt_price_limit: Option<SqrtPriceQ64F96>,
 	) -> (Amount, Amount) {
-		match order.to_sold_side() {
+		match order.to_sold_pair() {
 			Pairs::Base => self.inner_swap::<BaseToQuote>(sold_amount, sqrt_price_limit),
 			Pairs::Quote => self.inner_swap::<QuoteToBase>(sold_amount, sqrt_price_limit),
 		}
@@ -234,7 +234,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		(limit_orders::Collected, limit_orders::PositionInfo),
 		limit_orders::PositionError<limit_orders::MintError>,
 	> {
-		match order.to_sold_side() {
+		match order.to_sold_pair() {
 			Pairs::Base => self.limit_orders.collect_and_mint::<QuoteToBase>(lp, tick, sold_amount),
 			Pairs::Quote =>
 				self.limit_orders.collect_and_mint::<BaseToQuote>(lp, tick, sold_amount),
@@ -251,7 +251,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		(Amount, limit_orders::Collected, limit_orders::PositionInfo),
 		limit_orders::PositionError<limit_orders::BurnError>,
 	> {
-		match order.to_sold_side() {
+		match order.to_sold_pair() {
 			Pairs::Base => self.limit_orders.collect_and_burn::<QuoteToBase>(lp, tick, sold_amount),
 			Pairs::Quote =>
 				self.limit_orders.collect_and_burn::<BaseToQuote>(lp, tick, sold_amount),

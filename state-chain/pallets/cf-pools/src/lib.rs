@@ -743,7 +743,7 @@ pub mod pallet {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
 				let tick = match (
-					pool.limit_orders_cache[side.to_sold_side()]
+					pool.limit_orders_cache[side.to_sold_pair()]
 						.get(&lp)
 						.and_then(|limit_orders| limit_orders.get(&id))
 						.cloned(),
@@ -819,7 +819,7 @@ pub mod pallet {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
 				let tick = match (
-					pool.limit_orders_cache[side.to_sold_side()]
+					pool.limit_orders_cache[side.to_sold_pair()]
 						.get(&lp)
 						.and_then(|limit_orders| limit_orders.get(&id))
 						.cloned(),
@@ -1227,7 +1227,7 @@ impl<T: Config> Pallet<T> {
 					let debited_amount: AssetAmount = sold_amount.try_into()?;
 					T::LpBalance::try_debit_account(
 						lp,
-						asset_pair.assets()[side.to_sold_side()],
+						asset_pair.assets()[side.to_sold_pair()],
 						debited_amount,
 					)?;
 
@@ -1254,7 +1254,7 @@ impl<T: Config> Pallet<T> {
 					let withdrawn_amount: AssetAmount = sold_amount.try_into()?;
 					T::LpBalance::try_credit_account(
 						lp,
-						asset_pair.assets()[side.to_sold_side()],
+						asset_pair.assets()[side.to_sold_pair()],
 						withdrawn_amount,
 					)?;
 
@@ -1818,18 +1818,18 @@ impl<T: Config> Pallet<T> {
 		let collected_fees: AssetAmount = collected.fees.try_into()?;
 		T::LpBalance::try_credit_account(
 			lp,
-			asset_pair.assets()[!order.to_sold_side()],
+			asset_pair.assets()[!order.to_sold_pair()],
 			collected_fees,
 		)?;
 
 		let bought_amount: AssetAmount = collected.bought_amount.try_into()?;
 		T::LpBalance::try_credit_account(
 			lp,
-			asset_pair.assets()[!order.to_sold_side()],
+			asset_pair.assets()[!order.to_sold_pair()],
 			bought_amount,
 		)?;
 
-		let limit_orders = &mut pool.limit_orders_cache[order.to_sold_side()];
+		let limit_orders = &mut pool.limit_orders_cache[order.to_sold_pair()];
 		if position_info.amount.is_zero() {
 			if let Some(lp_limit_orders) = limit_orders.get_mut(lp) {
 				lp_limit_orders.remove(&id);
