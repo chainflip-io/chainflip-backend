@@ -15,12 +15,10 @@ use cf_primitives::{Asset, AssetAmount, BasisPoints, ForeignChain, NetworkEnviro
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::{
-		self,
 		address_converter::MockAddressConverter,
 		egress_handler::{MockEgressHandler, MockEgressParameter},
-		funding_info::MockFundingInfo,
 	},
-	CcmHandler, FundingInfo, SetSafeMode, SwapDepositHandler, SwappingApi,
+	CcmHandler, SetSafeMode, SwapDepositHandler, SwappingApi,
 };
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
@@ -2144,65 +2142,19 @@ fn deposit_address_ready_event_contain_correct_boost_fee_value() {
 }
 
 #[test]
-fn broker_pays_a_fee_for_each_deposit_address() {
-	new_test_ext().execute_with(|| {
-		const FEE: u128 = 100;
-		MockFundingInfo::<Test>::credit_funds(&ALICE, FEE);
-		assert_eq!(MockFundingInfo::<Test>::total_balance_of(&ALICE), FEE);
-		assert_ok!(Swapping::update_pallet_config(
-			OriginTrait::root(),
-			vec![PalletConfigUpdate::ChannelOpeningFee { flipperinos: FEE }]
-				.try_into()
-				.unwrap()
-		));
-		assert_ok!(Swapping::request_swap_deposit_address(
-			RuntimeOrigin::signed(ALICE),
-			Asset::Eth,
-			Asset::Usdc,
-			EncodedAddress::Eth(Default::default()),
-			0,
-			None,
-			0
-		));
-		assert_eq!(MockFundingInfo::<Test>::total_balance_of(&ALICE), 0);
-		assert_ok!(Swapping::update_pallet_config(
-			OriginTrait::root(),
-			vec![PalletConfigUpdate::ChannelOpeningFee { flipperinos: FEE * 10 }]
-				.try_into()
-				.unwrap()
-		));
-		assert_err!(
-			Swapping::request_swap_deposit_address(
-				RuntimeOrigin::signed(ALICE),
-				Asset::Eth,
-				Asset::Usdc,
-				EncodedAddress::Eth(Default::default()),
-				0,
-				None,
-				0
-			),
-			mocks::fee_payment::ERROR_INSUFFICIENT_LIQUIDITY
-		);
-	});
-}
-
-#[test]
 fn can_update_multiple_items_at_once() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(ChannelOpeningFee::<Test>::get(), 0);
 		assert!(MaximumSwapAmount::<Test>::get(Asset::Btc).is_none());
 		assert!(MaximumSwapAmount::<Test>::get(Asset::Dot).is_none());
 		assert_ok!(Swapping::update_pallet_config(
 			OriginTrait::root(),
 			vec![
-				PalletConfigUpdate::ChannelOpeningFee { flipperinos: 100 },
 				PalletConfigUpdate::MaximumSwapAmount { asset: Asset::Btc, amount: Some(100) },
 				PalletConfigUpdate::MaximumSwapAmount { asset: Asset::Dot, amount: Some(200) },
 			]
 			.try_into()
 			.unwrap()
 		));
-		assert_eq!(ChannelOpeningFee::<Test>::get(), 100);
 		assert_eq!(MaximumSwapAmount::<Test>::get(Asset::Btc), Some(100));
 		assert_eq!(MaximumSwapAmount::<Test>::get(Asset::Dot), Some(200));
 	});

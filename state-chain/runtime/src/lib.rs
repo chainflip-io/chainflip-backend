@@ -232,7 +232,6 @@ impl pallet_cf_swapping::Config for Runtime {
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type SwappingApi = LiquidityPools;
 	type AddressConverter = ChainAddressConverter;
-	type FeePayment = Flip;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 }
@@ -288,6 +287,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
+	type FeePayment = Flip;
 }
 
 impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
@@ -306,6 +306,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type CcmHandler = Swapping;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
+	type FeePayment = Flip;
 }
 
 impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
@@ -324,6 +325,7 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type CcmHandler = Swapping;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
+	type FeePayment = Flip;
 }
 
 parameter_types! {

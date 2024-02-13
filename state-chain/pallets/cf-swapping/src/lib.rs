@@ -19,11 +19,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_arithmetic::{
-	helpers_128bit::multiply_by_rational_with_rounding,
-	traits::{UniqueSaturatedInto, Zero},
-	Rounding,
-};
+use sp_arithmetic::{helpers_128bit::multiply_by_rational_with_rounding, traits::Zero, Rounding};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 #[cfg(test)]
 mod mock;
@@ -184,8 +180,6 @@ pub enum CcmFailReason {
 pub enum PalletConfigUpdate {
 	/// Set the maximum amount allowed to be put into a swap. Excess amounts are confiscated.
 	MaximumSwapAmount { asset: Asset, amount: Option<AssetAmount> },
-	/// Set the fixed fee that is burned when opening a channel, denominated in Flipperinos.
-	ChannelOpeningFee { flipperinos: AssetAmount },
 }
 
 impl_pallet_safe_mode! {
@@ -198,7 +192,7 @@ pub mod pallet {
 	use cf_chains::{address::EncodedAddress, AnyChain, Chain};
 	use cf_primitives::{Asset, AssetAmount, BasisPoints, EgressId, SwapId};
 	use cf_traits::{
-		AccountRoleRegistry, CcmSwapIds, Chainflip, EgressApi, FeePayment, ScheduledEgressDetails,
+		AccountRoleRegistry, CcmSwapIds, Chainflip, EgressApi, ScheduledEgressDetails,
 		SwapDepositHandler,
 	};
 	use frame_system::WeightInfo as SystemWeightInfo;
@@ -226,9 +220,6 @@ pub mod pallet {
 		/// A converter to convert address to and from human readable to internal address
 		/// representation.
 		type AddressConverter: AddressConverter;
-
-		/// For paying the channel opening fee.
-		type FeePayment: FeePayment<Amount = Self::Amount, AccountId = Self::AccountId>;
 
 		/// Safe mode access.
 		type SafeMode: Get<PalletSafeMode>;
@@ -283,10 +274,6 @@ pub mod pallet {
 	#[pallet::getter(fn maximum_swap_amount)]
 	pub type MaximumSwapAmount<T: Config> = StorageMap<_, Twox64Concat, Asset, AssetAmount>;
 
-	/// The fixed fee charged for opening a channel, in Flipperinos.
-	#[pallet::storage]
-	pub type ChannelOpeningFee<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
-
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -301,7 +288,6 @@ pub mod pallet {
 			channel_metadata: Option<CcmChannelMetadata>,
 			source_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 			boost_fee: BasisPoints,
-			channel_opening_fee: T::Amount,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
@@ -383,9 +369,6 @@ pub mod pallet {
 			asset: Asset,
 			amount: AssetAmount,
 			reason: DispatchError,
-		},
-		ChannelOpeningFeeSet {
-			fee: T::Amount,
 		},
 	}
 	#[pallet::error]
@@ -473,8 +456,6 @@ pub mod pallet {
 			ensure!(T::SafeMode::get().deposits_enabled, Error::<T>::DepositsDisabled);
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
 			ensure!(broker_commission_bps <= 1000, Error::<T>::BrokerCommissionBpsTooHigh);
-			let channel_opening_fee = ChannelOpeningFee::<T>::get();
-			T::FeePayment::try_burn_fee(&broker, channel_opening_fee)?;
 
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, destination_asset)?;
@@ -508,7 +489,6 @@ pub mod pallet {
 				channel_metadata,
 				source_chain_expiry_block: expiry_height,
 				boost_fee,
-				channel_opening_fee,
 			});
 
 			Ok(())
@@ -663,11 +643,6 @@ pub mod pallet {
 					PalletConfigUpdate::MaximumSwapAmount { asset, amount } => {
 						MaximumSwapAmount::<T>::set(asset, amount);
 						Self::deposit_event(Event::<T>::MaximumSwapAmountSet { asset, amount });
-					},
-					PalletConfigUpdate::ChannelOpeningFee { flipperinos } => {
-						let fee = flipperinos.unique_saturated_into();
-						ChannelOpeningFee::<T>::set(fee);
-						Self::deposit_event(Event::<T>::ChannelOpeningFeeSet { fee });
 					},
 				}
 			}
