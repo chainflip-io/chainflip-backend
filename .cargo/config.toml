@@ -1,6 +1,6 @@
 [env]
 CF_ETH_CONTRACT_ABI_ROOT = { value = "contract-interfaces/eth-contract-abis", relative = true }
-CF_ETH_CONTRACT_ABI_TAG = "v1.0.0"
+CF_ETH_CONTRACT_ABI_TAG = "v1.1.0"
 CF_SOL_PROGRAM_IDL_ROOT = { value = "contract-interfaces/sol-program-idls", relative = true }
 CF_SOL_PROGRAM_IDL_TAG = "test-tag-10"
 CF_TEST_CONFIG_ROOT = { value = "engine/config/testing", relative = true }
