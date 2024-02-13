@@ -64,7 +64,10 @@ export async function newSwap(
         destAsset,
         { [dstChain]: destinationAddress },
         brokerCommissionBps,
-        messageMetadata ?? null,
+        messageMetadata && {
+          message: messageMetadata.message as `0x${string}`,
+          gasBudget: messageMetadata.gasBudget.toString(),
+        },
         undefined,
       )
       .signAndSend(broker, { nonce: -1 });
