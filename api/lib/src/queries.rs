@@ -102,14 +102,14 @@ impl QueryApi {
 		let block_hash =
 			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_block().hash);
 
-		futures::future::join_all(Asset::all().iter().map(|asset| async {
+		futures::future::join_all(Asset::all().map(|asset| async move {
 			Ok((
-				*asset,
+				asset,
 				self.state_chain_client
 					.storage_double_map_entry::<pallet_cf_lp::FreeBalances<state_chain_runtime::Runtime>>(
 						block_hash,
 						&self.state_chain_client.account_id(),
-						asset,
+						&asset,
 					)
 					.await?
 					.unwrap_or_default(),

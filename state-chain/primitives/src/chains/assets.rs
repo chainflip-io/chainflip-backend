@@ -13,182 +13,307 @@
 //!
 //! assert_eq!(any::Asset::Flip, any::Asset::from(eth::Asset::Flip));
 //! ```
-use super::*;
 
-use serde::{Deserialize, Serialize};
+macro_rules! assets {
+	(pub enum Asset {
+		$(($chain_mod:ident, $chain:ident) => {
+			($gas_asset:ident, $gas_string:literal) = $gas_value:literal (GAS_ASSET)
+			$(,($asset:ident, $string:literal) = $value:literal)* $(,)?
+		}),*$(,)?
+	}) => {
+		pub mod any {
+			use strum_macros::EnumIter;
+			use codec::{MaxEncodedLen, Encode, Decode};
+			use scale_info::TypeInfo;
 
-use strum_macros::EnumIter;
-
-/// Defines all Assets, and the Chain each asset belongs to.
-/// There's a unique 1:1 relationship between an Asset and a Chain.
-pub mod any {
-	use core::str::FromStr;
-
-	use super::*;
-	pub type Chain = AnyChain;
-
-	/// A token or currency that can be swapped natively in the Chainflip AMM.
-	#[derive(
-		Copy,
-		Clone,
-		Debug,
-		PartialEq,
-		Eq,
-		Encode,
-		Decode,
-		TypeInfo,
-		MaxEncodedLen,
-		Hash,
-		PartialOrd,
-		Ord,
-		EnumIter,
-		Serialize,
-		Deserialize,
-	)]
-	#[repr(u32)]
-	#[serde(rename_all = "UPPERCASE")]
-	// !!!!!! IMPORTANT !!!!!!
-	// Do not change these indices.
-	pub enum Asset {
-		// 0 is reserved for particular cross chain messaging scenarios where we want to pass
-		// through a message without making a swap.
-		Eth = 1u32,
-		Flip = 2u32,
-		Usdc = 3u32,
-		Dot = 4u32,
-		Btc = 5u32,
-	}
-
-	impl TryFrom<u32> for Asset {
-		type Error = &'static str;
-
-		fn try_from(n: u32) -> Result<Self, Self::Error> {
-			match n {
-				x if x == Self::Eth as u32 => Ok(Self::Eth),
-				x if x == Self::Flip as u32 => Ok(Self::Flip),
-				x if x == Self::Usdc as u32 => Ok(Self::Usdc),
-				x if x == Self::Dot as u32 => Ok(Self::Dot),
-				x if x == Self::Btc as u32 => Ok(Self::Btc),
-				_ => Err("Invalid asset id"),
-			}
-		}
-	}
-
-	impl Asset {
-		pub fn all() -> Vec<Self> {
-			use strum::IntoEnumIterator;
-			Self::iter().collect()
-		}
-	}
-
-	impl From<Asset> for ForeignChain {
-		fn from(asset: Asset) -> Self {
-			match asset {
-				Asset::Eth => Self::Ethereum,
-				Asset::Flip => Self::Ethereum,
-				Asset::Usdc => Self::Ethereum,
-				Asset::Dot => Self::Polkadot,
-				Asset::Btc => Self::Bitcoin,
-			}
-		}
-	}
-
-	impl FromStr for Asset {
-		type Err = &'static str;
-
-		fn from_str(s: &str) -> Result<Self, Self::Err> {
-			match s.to_lowercase().as_str() {
-				"eth" => Ok(Asset::Eth),
-				"flip" => Ok(Asset::Flip),
-				"usdc" => Ok(Asset::Usdc),
-				"dot" => Ok(Asset::Dot),
-				"btc" => Ok(Asset::Btc),
-				_ => Err("Unrecognized asset"),
-			}
-		}
-	}
-}
-
-#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize)]
-pub enum AssetError {
-	Unsupported,
-}
-
-/// Defines the assets types for a chain and some useful conversion traits. See the module level
-/// docs for more detail.
-macro_rules! chain_assets {
-	( $mod:ident, $chain:ident, $( $asset:ident ),+ ) => {
-		/// Chain-specific assets types.
-		pub mod $mod {
-			use $crate::chains::*;
-			use $crate::chains::assets::*;
-
-			pub type Chain = $chain;
-
-			#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Hash, serde::Serialize, serde::Deserialize)]
+			#[derive(
+				Copy,
+				Clone,
+				Debug,
+				PartialEq,
+				Eq,
+				Encode,
+				Decode,
+				TypeInfo,
+				MaxEncodedLen,
+				Hash,
+				PartialOrd,
+				Ord,
+				EnumIter,
+			)]
+			#[repr(u32)]
 			pub enum Asset {
 				$(
-					$asset,
-				)+
+					$gas_asset = $gas_value,
+					$($asset = $value,)*
+				)*
 			}
+			impl TryFrom<u32> for Asset {
+				type Error = &'static str;
 
-			pub const GAS_ASSET: Asset = [
-				$(
-					Asset::$asset,
-				)+
-			][0];
-
-			impl From<Asset> for any::Asset {
+				fn try_from(n: u32) -> Result<Self, Self::Error> {
+					match n {
+						$(
+							x if x == Self::$gas_asset as u32 => Ok(Self::$gas_asset),
+							$(x if x == Self::$asset as u32 => Ok(Self::$asset),)*
+						)*
+						_ => Err("Invalid asset id"),
+					}
+				}
+			}
+			impl Asset {
+				pub fn all() -> impl Iterator<Item = Self> + 'static {
+					use strum::IntoEnumIterator;
+					Self::iter()
+				}
+			}
+			impl From<Asset> for $crate::ForeignChain {
 				fn from(asset: Asset) -> Self {
 					match asset {
 						$(
-							Asset::$asset => any::Asset::$asset,
-						)+
+							Asset::$gas_asset $(| Asset::$asset)* => Self::$chain,
+						)*
 					}
 				}
 			}
-
-			impl TryFrom<any::Asset> for Asset {
-				type Error = AssetError;
-
-				fn try_from(asset: any::Asset) -> Result<Self, Self::Error> {
-					match asset {
+			impl core::fmt::Display for Asset {
+				fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+					write!(f, "{}", match self {
 						$(
-							any::Asset::$asset => Ok(Asset::$asset),
-						)+
-						_ => Err(AssetError::Unsupported),
+							Asset::$gas_asset => stringify!($gas_asset),
+							$(
+								Asset::$asset => stringify!($asset),
+							)*
+						)*
+					}.to_uppercase())
+				}
+			}
+			impl core::str::FromStr for Asset {
+				type Err = &'static str;
+
+				fn from_str(s: &str) -> Result<Self, Self::Err> {
+					match s.to_lowercase().as_str() {
+						$(
+							$gas_string => Ok(Asset::$gas_asset),
+							$($string => Ok(Asset::$asset),)*
+						)*
+						_ => Err("Unrecognized asset"),
+					}
+				}
+			}
+			mod asset_serde_impls {
+				use serde::{Serialize, Deserialize};
+
+				#[derive(Copy, Clone, Serialize, Deserialize)]
+				#[repr(u32)]
+				#[serde(rename_all = "UPPERCASE")]
+				enum SerdeAsset {
+					$(
+						$gas_asset = $gas_value,
+						$($asset = $value,)*
+					)*
+				}
+				impl From<SerdeAsset> for super::Asset {
+					fn from(serde_asset: SerdeAsset) -> Self {
+						match serde_asset {
+							$(
+								SerdeAsset::$gas_asset => super::Asset::$gas_asset,
+								$(SerdeAsset::$asset => super::Asset::$asset,)*
+							)*
+						}
+					}
+				}
+
+				#[derive(Serialize, Deserialize)]
+				#[serde(untagged)]
+				#[serde(
+					expecting = r#"Expected a valid asset specifier. Assets should be specified as upper-case strings, e.g. `"ETH"`, and can be optionally distinguished by chain, e.g. `{ chain: "Ethereum", asset: "ETH" }."#
+				)]
+				enum SerdeAssetOptionalExplicitChain {
+					ImplicitChain(SerdeAsset),
+					ExplicitChain { chain: Option<$crate::ForeignChain>, asset: SerdeAsset },
+				}
+
+				impl Serialize for super::Asset {
+					fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+						where S: serde::Serializer
+					{
+						Serialize::serialize(&SerdeAssetOptionalExplicitChain::ExplicitChain {
+							chain: Some((*self).into()), asset: match self {
+								$(
+									super::Asset::$gas_asset => SerdeAsset::$gas_asset,
+									$(super::Asset::$asset => SerdeAsset::$asset,)*
+								)*
+							}
+						}, serializer)
+					}
+				}
+				impl<'de> Deserialize<'de> for super::Asset {
+					fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+					   where D: serde::Deserializer<'de> {
+						<SerdeAssetOptionalExplicitChain as Deserialize<'de>>::deserialize(deserializer).and_then(|serde_asset_optional_explicit_chain| {
+							let serde_asset = match serde_asset_optional_explicit_chain {
+								SerdeAssetOptionalExplicitChain::ImplicitChain(serde_asset) | SerdeAssetOptionalExplicitChain::ExplicitChain { chain: None, asset: serde_asset } => serde_asset,
+								SerdeAssetOptionalExplicitChain::ExplicitChain {
+									chain: Some(serde_chain),
+									asset: serde_asset
+								} => {
+									let asset_chain = match serde_asset {
+										$(
+											SerdeAsset::$gas_asset $(| SerdeAsset::$asset)* => $crate::ForeignChain::$chain,
+										)*
+									};
+
+									if asset_chain != serde_chain {
+										return Err(<<D as serde::Deserializer<'de>>::Error as serde::de::Error>::custom(lazy_format::lazy_format!("The asset '{asset}' does not exist on the '{serde_chain}' chain, but is instead a '{asset_chain}' asset. Either try using '{{\"chain\":\"{asset_chain}\", \"asset\":\"{asset}\"}}', or use a different asset (i.e. '{example_chain_asset}') ", asset = super::Asset::from(serde_asset), example_chain_asset = match serde_chain {
+											$(
+												$crate::ForeignChain::$chain => super::Asset::$gas_asset,
+											)*
+										})))
+									} else {
+										serde_asset
+									}
+								},
+							};
+
+							Ok(serde_asset.into())
+						})
+					}
+				}
+
+				#[cfg(test)]
+				mod tests {
+					use serde_json;
+					use cf_utilities::assert_ok;
+					use super::super::Asset;
+
+					#[test]
+					fn test_asset_serde_encoding() {
+						assert_eq!(assert_ok!(serde_json::to_string(&Asset::Eth)), "{\"chain\":\"Ethereum\",\"asset\":\"ETH\"}");
+						assert_eq!(assert_ok!(serde_json::to_string(&Asset::Dot)), "{\"chain\":\"Polkadot\",\"asset\":\"DOT\"}");
+						assert_eq!(assert_ok!(serde_json::to_string(&Asset::Btc)), "{\"chain\":\"Bitcoin\",\"asset\":\"BTC\"}");
+
+						assert_eq!(assert_ok!(serde_json::from_str::<Asset>("{\"chain\":\"Ethereum\",\"asset\":\"ETH\"}")), Asset::Eth);
+						assert_eq!(assert_ok!(serde_json::from_str::<Asset>("{\"chain\":\"Polkadot\",\"asset\":\"DOT\"}")), Asset::Dot);
+						assert_eq!(assert_ok!(serde_json::from_str::<Asset>("{\"chain\":\"Bitcoin\",\"asset\":\"BTC\"}")), Asset::Btc);
+
+						assert_eq!(assert_ok!(serde_json::from_str::<Asset>("{\"asset\":\"ETH\"}")), Asset::Eth);
+						assert_eq!(assert_ok!(serde_json::from_str::<Asset>("{\"asset\":\"DOT\"}")), Asset::Dot);
+						assert_eq!(assert_ok!(serde_json::from_str::<Asset>("{\"asset\":\"BTC\"}")), Asset::Btc);
+
+						assert_eq!(assert_ok!(serde_json::from_str::<Asset>("\"ETH\"")), Asset::Eth);
+						assert_eq!(assert_ok!(serde_json::from_str::<Asset>("\"DOT\"")), Asset::Dot);
+						assert_eq!(assert_ok!(serde_json::from_str::<Asset>("\"BTC\"")), Asset::Btc);
 					}
 				}
 			}
 
-			impl From<Asset> for ForeignChain {
-				fn from(_asset: Asset) -> Self {
-					ForeignChain::$chain
+			#[derive(
+				Copy,
+				Clone,
+				Debug,
+				PartialEq,
+				Eq,
+				Hash,
+			)]
+			pub enum ForeignChainAndAsset {
+				$(
+					$chain(super::$chain_mod::Asset),
+				)*
+			}
+			impl From<Asset> for ForeignChainAndAsset {
+				fn from(value: Asset) -> Self {
+					match value {
+						$(
+							Asset::$gas_asset => Self::$chain(super::$chain_mod::Asset::$gas_asset),
+							$(Asset::$asset => Self::$chain(super::$chain_mod::Asset::$asset),)*
+						)*
+					}
 				}
 			}
-
-			#[test]
-			fn consistency_check() {
-				$(
-					assert_eq!(
-						ForeignChain::from(any::Asset::from(Asset::$asset)),
-						ForeignChain::from(Asset::$asset),
-						"Inconsistent asset type definition. Asset {} defined in {}, but mapped to chain {:?}",
-						stringify!($asset),
-						stringify!($mod),
-						ForeignChain::from(any::Asset::from(Asset::$asset)),
-					);
-				)+
+			impl From<ForeignChainAndAsset> for Asset {
+				fn from(value: ForeignChainAndAsset) -> Self {
+					match value {
+						$(
+							ForeignChainAndAsset::$chain(super::$chain_mod::Asset::$gas_asset) => Self::$gas_asset,
+							$(ForeignChainAndAsset::$chain(super::$chain_mod::Asset::$asset) => Self::$asset,)*
+						)*
+					}
+				}
 			}
 		}
-	};
+
+		$(
+			pub mod $chain_mod {
+				use super::any;
+				use codec::{MaxEncodedLen, Encode, Decode};
+				use scale_info::TypeInfo;
+				use serde::{Serialize, Deserialize};
+
+				pub type Chain = $crate::chains::$chain;
+				pub const GAS_ASSET: Asset = Asset::$gas_asset;
+
+				#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Hash, Serialize, Deserialize)]
+				pub enum Asset {
+					$gas_asset,
+					$($asset,)*
+				}
+				impl From<Asset> for any::Asset {
+					fn from(asset: Asset) -> Self {
+						match asset {
+							Asset::$gas_asset => any::Asset::$gas_asset,
+							$(
+								Asset::$asset => any::Asset::$asset,
+							)*
+						}
+					}
+				}
+				impl From<Asset> for $crate::ForeignChain {
+					fn from(_asset: Asset) -> Self {
+						Self::$chain
+					}
+				}
+				impl TryFrom<super::any::Asset> for Asset {
+					type Error = AssetError;
+
+					fn try_from(asset: super::any::Asset) -> Result<Self, Self::Error> {
+						match asset {
+							super::any::Asset::$gas_asset => Ok(Asset::$gas_asset),
+							$(
+								super::any::Asset::$asset => Ok(Asset::$asset),
+							)*
+							_ => Err(AssetError::Unsupported),
+						}
+					}
+				}
+
+				#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
+				pub enum AssetError {
+					Unsupported,
+				}
+			}
+
+		)*
+	}
 }
 
-// Defines each chain's Asset enum.
-// Must be consistent with the mapping defined in any::Asset
-chain_assets!(eth, Ethereum, Eth, Flip, Usdc);
-chain_assets!(dot, Polkadot, Dot);
-chain_assets!(btc, Bitcoin, Btc);
+// !!!!!! IMPORTANT !!!!!!
+// Do not change these indices.
+assets!(pub enum Asset {
+	// 0 is reserved for particular cross chain messaging scenarios where we want to pass
+	// through a message without making a swap.
+	(eth, Ethereum) => {
+		(Eth, "eth") = 1u32 (GAS_ASSET),
+		(Flip, "flip") = 2u32,
+		(Usdc, "usdc") = 3u32,
+	},
+	(dot, Polkadot) => {
+		(Dot, "dot") = 4u32 (GAS_ASSET),
+	},
+	(btc, Bitcoin) => {
+		(Btc, "btc") = 5u32 (GAS_ASSET),
+	},
+});
 
 #[cfg(test)]
 mod test_assets {
@@ -209,12 +334,12 @@ mod test_assets {
 
 	#[test]
 	fn asset_id_to_asset() {
-		assert!(Asset::try_from(0).is_err());
-		assert_eq!(Asset::try_from(1).unwrap(), Asset::Eth);
-		assert_eq!(Asset::try_from(2).unwrap(), Asset::Flip);
-		assert_eq!(Asset::try_from(3).unwrap(), Asset::Usdc);
-		assert_eq!(Asset::try_from(4).unwrap(), Asset::Dot);
-		assert_eq!(Asset::try_from(5).unwrap(), Asset::Btc);
+		assert!(any::Asset::try_from(0).is_err());
+		assert_eq!(any::Asset::try_from(1).unwrap(), any::Asset::Eth);
+		assert_eq!(any::Asset::try_from(2).unwrap(), any::Asset::Flip);
+		assert_eq!(any::Asset::try_from(3).unwrap(), any::Asset::Usdc);
+		assert_eq!(any::Asset::try_from(4).unwrap(), any::Asset::Dot);
+		assert_eq!(any::Asset::try_from(5).unwrap(), any::Asset::Btc);
 	}
 
 	#[test]

@@ -1270,11 +1270,8 @@ where
 
 	fn cf_supported_assets(&self) -> RpcResult<HashMap<ForeignChain, Vec<Asset>>> {
 		let mut chain_to_asset: HashMap<ForeignChain, Vec<Asset>> = HashMap::new();
-		Asset::all().iter().for_each(|asset| {
-			chain_to_asset
-				.entry((*asset).into())
-				.and_modify(|asset_vec| asset_vec.push(*asset))
-				.or_insert(vec![*asset]);
+		Asset::all().for_each(|asset| {
+			chain_to_asset.entry((asset).into()).or_default().push(asset);
 		});
 		Ok(chain_to_asset)
 	}

@@ -1488,14 +1488,17 @@ dependencies = [
  "ethabi",
  "frame-support",
  "hex",
+ "lazy_format",
  "parity-scale-codec",
  "scale-info",
  "serde",
+ "serde_json",
  "sp-core 21.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.1+3)",
  "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.1+3)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.1+3)",
  "strum 0.24.1",
  "strum_macros 0.24.3",
+ "utilities",
 ]
 
 [[package]]
