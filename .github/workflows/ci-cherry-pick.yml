@@ -1,19 +1,23 @@
 name: Cherry-Pick to Release Branch
 
 on:
-  push:
+  pull_request:
     branches:
       - main
+    types:
+      - closed
 
 run-name: Cherry pick `${{ github.sha }}` to release branch
 
 jobs:
   cherry-pick:
-    if: contains(github.event.head_commit.message, '[pick]')
+    if: ${{ (github.event.pull_request.merged == true) && (contains(github.event.pull_request.labels.*.name, 'non-breaking')) }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
         uses: actions/checkout@v3
+        with:
+          ref: main
 
       - name: Configure Git
         run: |
