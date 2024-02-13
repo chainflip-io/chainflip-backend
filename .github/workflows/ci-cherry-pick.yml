@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - pla-1142
     types:
       - closed
 
@@ -28,13 +29,13 @@ jobs:
         run: |
           set -x
           git fetch --all
+          COMMIT_SHA=$(git rev-parse HEAD)
+          
           RELEASE_BRANCH="release/$(git branch -r | grep 'origin/release/[0-9]\+\.[0-9]' | sed 's/.*release\///' | sort -V | tail -n1)"
           echo "RELEASE_BRANCH=$RELEASE_BRANCH" >> $GITHUB_ENV
           
           BRANCH=pick/non-breaking-$(date +%s)
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
-          
-          COMMIT_SHA=${{ github.sha }}
           
           git checkout $RELEASE_BRANCH
           git checkout -b $BRANCH
