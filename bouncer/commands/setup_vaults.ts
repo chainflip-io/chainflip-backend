@@ -21,20 +21,9 @@ import {
 } from '../shared/utils';
 import { aliceKeyringPair } from '../shared/polkadot_keyring';
 import { getKeyManagerAbi } from '../shared/eth_abis';
-// import { signAndSendTxEvm } from '../shared/send_evm';
+import { signAndSendTxEvm } from '../shared/send_evm';
 
 async function main(): Promise<void> {
-  // Check that the contracts on Arbitrum are deployed
-  let web3 = new Web3(getEvmEndpoint('Arbitrum'));
-  let keyManagerAbi = await getKeyManagerAbi();
-
-  let keyManagerContract = new web3.eth.Contract(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    keyManagerAbi as any,
-    getEvmContractAddress('Arbitrum', 'KEY_MANAGER'),
-  );
-  console.log('arbAggKey', await keyManagerContract.methods.getAggregateKey().call());
-
   const btcClient = getBtcClient();
   const arbClient = new Web3(getEvmEndpoint('Arbitrum'));
   const alice = await aliceKeyringPair();
@@ -56,8 +45,13 @@ async function main(): Promise<void> {
     chainflip,
   );
   const btcActivationRequest = observeEvent('bitcoinVault:AwaitingGovernanceActivation', chainflip);
+  const arbActivationRequest = observeEvent(
+    'arbitrumVault:AwaitingGovernanceActivation',
+    chainflip,
+  );
   const dotKey = (await dotActivationRequest).data.newPublicKey;
   const btcKey = (await btcActivationRequest).data.newPublicKey;
+  const arbKey = (await arbActivationRequest).data.newPublicKey;
 
   // Step 3
   console.log('Requesting Polkadot Vault creation');
@@ -133,6 +127,24 @@ async function main(): Promise<void> {
   const vaultBlockNumber = (await proxyAdded).block;
 
   // Step 5
+  console.log('Inserting Arbitrum key in the contracts');
+  const keyManagerAddress = getEvmContractAddress('Arbitrum', 'KEY_MANAGER');
+  const web3 = new Web3(getEvmEndpoint('Arbitrum'));
+
+  const keyManagerContract = new web3.eth.Contract(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (await getKeyManagerAbi()) as any,
+    keyManagerAddress,
+  );
+  const txData = keyManagerContract.methods
+    .setAggKeyWithGovKey({
+      pubKeyX: arbKey.pubKeyX,
+      pubKeyYParity: arbKey.pubKeyYParity === 'Odd' ? 1 : 0,
+    })
+    .encodeABI();
+  await signAndSendTxEvm('Arbitrum', keyManagerAddress, '0', txData);
+
+  // Step 6
   console.log('Registering Vaults with state chain');
   await submitGovernanceExtrinsic(
     chainflip.tx.environment.witnessPolkadotVaultCreation(vaultAddress, {
@@ -147,7 +159,6 @@ async function main(): Promise<void> {
     ),
   );
 
-  console.log('Initialize Arbitrum');
   await submitGovernanceExtrinsic(
     chainflip.tx.environment.witnessInitializeArbitrumVault(
       await arbClient.eth.getBlockNumber(),
@@ -159,61 +170,9 @@ async function main(): Promise<void> {
     ),
   );
 
-  // // Ethereum has rotated in the begining of the test but not Arbitrum, so the keys will
-  // // be different. We need to insert the aggKey to match Ethereum.
-  // console.log('Insert AggKey to match Ethereum');
-  // // TODO: problem here is that not enough time has passed to be able to insert the aggKey via governance.
-  // // Problem is that we can't fast-forward geth, so we might have to not do an initial rotation.
-  // Start network
-  // run setup_vaults
-  // deploy contracts with aggkey
-  // run setup_vaults and continue
-
-  // const web3 = new Web3(getEvmEndpoint('Ethereum'));
-  // const keyManagerAbi = await getKeyManagerAbi();
-
-  // const contract = new web3.eth.Contract(
-  //   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  //   keyManagerAbi as any,
-  //   getEvmContractAddress('Ethereum', 'KEY_MANAGER'),
-  // );
-
-  // const aggKey = await contract.methods.getAggregateKey().call();
-  // const txData = contract.methods.setAggKeyWithGovKey(aggKey).encodeABI();
-  // await signAndSendTxEvm('Arbitrum', getEvmContractAddress('Arbitrum', 'KEY_MANAGER'), '0', txData);
-
   // Confirmation
   console.log('Waiting for new epoch...');
   await observeEvent('validator:NewEpoch', chainflip);
-
-  // Check EVM keys are the same. Wait until keys are submitted to the chains.
-  console.log('Sleeping waiting for key activation...');
-  sleep(20000);
-
-  web3 = new Web3(getEvmEndpoint('Ethereum'));
-  keyManagerAbi = await getKeyManagerAbi();
-
-  keyManagerContract = new web3.eth.Contract(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    keyManagerAbi as any,
-    getEvmContractAddress('Ethereum', 'KEY_MANAGER'),
-  );
-  const ethAggKey = await keyManagerContract.methods.getAggregateKey().call();
-
-  web3 = new Web3(getEvmEndpoint('Arbitrum'));
-  keyManagerContract = new web3.eth.Contract(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    keyManagerAbi as any,
-    getEvmContractAddress('Arbitrum', 'KEY_MANAGER'),
-  );
-  const arbAggKey = await keyManagerContract.methods.getAggregateKey().call();
-
-  if (ethAggKey.toString() !== arbAggKey.toString()) {
-    console.log("ERROR: Keys don't match");
-    console.log('Ethereum:', ethAggKey);
-    console.log('Arbitrum:', arbAggKey);
-    throw new Error('EVM keys are not the same');
-  }
 
   console.log('=== New Epoch ===');
   console.log('=== Vault Setup completed ===');
