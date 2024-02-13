@@ -8,7 +8,7 @@ on:
     types:
       - closed
 
-run-name: Cherry pick `${{ github.sha }}` to release branch
+run-name: Cherry pick `${{ github.event.pull_request.title }}` to release branch
 
 jobs:
   cherry-pick:
@@ -18,7 +18,7 @@ jobs:
       - name: Checkout branch
         uses: actions/checkout@v3
         with:
-          ref: main
+          ref: pla-1142
 
       - name: Configure Git
         run: |
