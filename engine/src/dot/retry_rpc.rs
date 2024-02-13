@@ -176,7 +176,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 	) -> anyhow::Result<PolkadotHash> {
 		let log = RequestLog::new(
 			"submit_raw_encoded_extrinsic".to_string(),
-			Some(format!("{encoded_bytes:?}")),
+			Some(format!("0x{}", hex::encode(&encoded_bytes[..]))),
 		);
 		self.rpc_retry_client
 			.request_with_limit(

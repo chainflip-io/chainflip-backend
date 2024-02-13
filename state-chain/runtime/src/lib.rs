@@ -161,7 +161,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 120,
+	spec_version: 130,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 12,
@@ -889,12 +889,14 @@ type PalletMigrations = (
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance1>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance2>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance3>,
-	// pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance1>,
-	// pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance2>,
-	// pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance3>,
-	// pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance1>,
-	// pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance2>,
-	// pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance3>,
+	pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance1>,
+	pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance2>,
+	pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance3>,
+	// TODO: Remove this after version 1.3 release.
+	ThresholdSignatureRefactorMigration,
+	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance1>,
+	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance2>,
+	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance3>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance1>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance2>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance3>,
@@ -905,6 +907,51 @@ type PalletMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance3>,
 	// pallet_cf_pools::migrations::PalletMigration<Runtime>,
 );
+
+pub struct ThresholdSignatureRefactorMigration;
+
+mod threshold_signature_refactor_migration {
+	use super::Runtime;
+	use cf_runtime_upgrade_utilities::move_pallet_storage;
+	use frame_support::traits::GetStorageVersion;
+
+	pub fn migrate_instance<I: 'static>()
+	where
+		Runtime: pallet_cf_threshold_signature::Config<I>,
+		Runtime: pallet_cf_vaults::Config<I>,
+	{
+		// The migration needs to be run *after* the vaults pallet migration (3 -> 4) and *before*
+		// the threshold signer pallet migration (4 -> 5).
+		if <pallet_cf_threshold_signature::Pallet::<Runtime, I> as GetStorageVersion>::on_chain_storage_version() == 4 &&
+			<pallet_cf_vaults::Pallet::<Runtime, I> as GetStorageVersion>::on_chain_storage_version() == 4 {
+
+				log::info!("✅ Applying threshold signature refactor storage migration.");
+				for storage_name in [
+					"CeremonyIdCounter",
+					"KeygenSlashAmount",
+					"Vaults",
+				] {
+					move_pallet_storage::<
+						pallet_cf_vaults::Pallet<Runtime, I>,
+						pallet_cf_threshold_signature::Pallet<Runtime, I>,
+					>(storage_name.as_bytes());
+				}
+			} else {
+				log::info!("⏭ Skipping threshold signature refactor migration.");
+			}
+	}
+}
+
+impl frame_support::traits::OnRuntimeUpgrade for ThresholdSignatureRefactorMigration {
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		log::info!("⏫ Applying threshold signature refactor storage migration.");
+		threshold_signature_refactor_migration::migrate_instance::<EthereumInstance>();
+		threshold_signature_refactor_migration::migrate_instance::<BitcoinInstance>();
+		threshold_signature_refactor_migration::migrate_instance::<PolkadotInstance>();
+
+		Default::default()
+	}
+}
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]

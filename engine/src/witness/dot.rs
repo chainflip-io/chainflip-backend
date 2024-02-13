@@ -290,7 +290,7 @@ fn proxy_addeds(
 					continue
 				}
 
-				tracing::info!("Witnessing ProxyAdded. new delegatee: {delegatee:?} at block number {block_number} and extrinsic_index; {extrinsic_index}");
+				tracing::info!("Witnessing ProxyAdded. new delegatee: {delegatee} at block number {block_number} and extrinsic_index; {extrinsic_index}");
 
 				extrinsic_indices.insert(extrinsic_index);
 			}

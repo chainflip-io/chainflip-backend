@@ -46,7 +46,7 @@ jobs:
           sccache --show-stats
 
       - name: Upload binary artifacts
-        uses: actions/upload-artifact@c7d193f32edcb7bfad88892161225aeda64e9392
+        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
         with:
           name: ${{ inputs.upload-name }}-ubuntu-${{ matrix.ubuntu_version }}
           path: |
@@ -59,8 +59,9 @@ jobs:
             ./target/${{ inputs.binary-subdir }}/chainflip-ingress-egress-tracker
 
       - name: Upload runtime artifacts
-        uses: actions/upload-artifact@c7d193f32edcb7bfad88892161225aeda64e9392
+        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
+        if: ${{ matrix.ubuntu_version == '22.04' }} # Only upload runtime once as it is the same for both versions
         with:
-          name: chainflip-node-runtime-${{ inputs.profile }}-ubuntu-${{ matrix.ubuntu_version }}
+          name: chainflip-node-runtime-${{ inputs.profile }}
           path: |
             ./target/${{ inputs.binary-subdir }}/wbuild/state-chain-runtime/state_chain_runtime*.wasm
