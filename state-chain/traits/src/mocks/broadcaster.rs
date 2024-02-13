@@ -27,17 +27,20 @@ impl<
 	type ApiCall = A;
 	type Callback = C;
 
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> cf_primitives::BroadcastId {
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> (cf_primitives::BroadcastId, u32) {
 		Self::mutate_value(b"API_CALLS", |api_calls: &mut Option<Vec<A>>| {
 			let api_calls = api_calls.get_or_insert(Default::default());
 			api_calls.push(api_call);
 		});
-		let _ = Self::next_threshold_id();
-		<Self as MockPalletStorage>::mutate_value(b"BROADCAST_ID", |v: &mut Option<u32>| {
-			let v = v.get_or_insert(0);
-			*v += 1;
-			*v
-		})
+		let tss_request_id = Self::next_threshold_id();
+		(
+			<Self as MockPalletStorage>::mutate_value(b"BROADCAST_ID", |v: &mut Option<u32>| {
+				let v = v.get_or_insert(0);
+				*v += 1;
+				*v
+			}),
+			tss_request_id,
+		)
 	}
 
 	fn threshold_sign_and_broadcast_with_callback(
@@ -45,7 +48,7 @@ impl<
 		success_callback: Option<Self::Callback>,
 		failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
 	) -> BroadcastId {
-		let id = <Self as Broadcaster<Api>>::threshold_sign_and_broadcast(api_call);
+		let (id, _) = <Self as Broadcaster<Api>>::threshold_sign_and_broadcast(api_call);
 		if let Some(callback) = success_callback {
 			Self::put_storage(b"SUCCESS_CALLBACKS", id, callback);
 		}
@@ -74,7 +77,7 @@ impl<
 	/// Clean up storage data related to a broadcast ID.
 	fn clean_up_broadcast_storage(_broadcast_id: BroadcastId) {}
 
-	fn threshold_sign_and_broadcast_rotation_tx(api_call: Self::ApiCall) -> BroadcastId {
+	fn threshold_sign_and_broadcast_rotation_tx(api_call: Self::ApiCall) -> (BroadcastId, u32) {
 		<Self as Broadcaster<Api>>::threshold_sign_and_broadcast(api_call)
 	}
 }

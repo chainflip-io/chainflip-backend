@@ -139,6 +139,10 @@ pub enum KeyRotationStatus<T: Config<I>, I: 'static = ()> {
 	KeyHandoverComplete {
 		new_public_key: AggKeyFor<T, I>,
 	},
+	AwaitingActivationKeyTss {
+		request_id: RequestId,
+		new_public_key: AggKeyFor<T, I>,
+	},
 	/// We are waiting for the key to be updated on the contract, and witnessed by the network.
 	AwaitingActivation {
 		new_public_key: AggKeyFor<T, I>,

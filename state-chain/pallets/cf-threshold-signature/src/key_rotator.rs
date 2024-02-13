@@ -146,6 +146,30 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 							"Unreachable because we are in the branch for the Failed variant."
 						),
 					},
+				KeyRotationStatusVariant::AwaitingActivationKeyTss => {
+					let (new_public_key, request_id) = match PendingKeyRotation::<T, I>::get() {
+						Some(KeyRotationStatus::AwaitingActivationKeyTss {
+							new_public_key,
+							request_id,
+						}) => (new_public_key, request_id),
+						_ => unreachable!(
+							"Unreachable because we are in the branch for the AwaitingActivationKeyTss variant."
+						),
+					};
+					let signature = Signature::<T, I>::get(request_id);
+					match signature {
+						AsyncResult::Pending => AsyncResult::Pending,
+						AsyncResult::Ready(_) => {
+							PendingKeyRotation::<T, I>::put(
+								KeyRotationStatus::AwaitingActivation { new_public_key },
+							);
+							T::VaultActivator::activate_keys();
+							//TODO: should I return Ready????
+							AsyncResult::Ready(KeyRotationStatusOuter::KeyHandoverComplete)
+						},
+						AsyncResult::Void => AsyncResult::Void,
+					}
+				},
 				KeyRotationStatusVariant::AwaitingActivation => {
 					let new_public_key = match PendingKeyRotation::<T, I>::get() {
 						Some(KeyRotationStatus::AwaitingActivation { new_public_key }) =>
@@ -188,18 +212,36 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 			PendingKeyRotation::<T, I>::get()
 		{
 			let maybe_active_epoch_key = Self::active_epoch_key();
-			T::VaultActivator::activate(
+			// 1) only internal payload(bytes), save the whole call in a storage item
+
+			match T::VaultActivator::activate(
 				new_public_key,
 				maybe_active_epoch_key.map(|EpochKey { key, .. }| key),
-			);
-
-			if maybe_active_epoch_key.is_some() {
-				Self::activate_new_key(new_public_key);
-			} else {
-				PendingKeyRotation::<T, I>::put(KeyRotationStatus::<T, I>::AwaitingActivation {
-					new_public_key,
-				});
+			) {
+				Some(request_id) => {
+					// 2) sign and broadcast the whole tx with the previous function (modified now)
+					PendingKeyRotation::<T, I>::put(
+						KeyRotationStatus::<T, I>::AwaitingActivationKeyTss {
+							request_id,
+							new_public_key,
+						},
+					);
+				},
+				// if none it means no activation required or governance in case of vault bootstrap
+				None => {},
 			}
+
+		// We don't need to update the PendingKeyRotation state anymore, it will be updated once the
+		// signature is completed and the callback is executed, the status method will then allow to
+		// move forward to the AwaitingActivation phase.
+
+		// if maybe_active_epoch_key.is_some() {
+		// 	Self::activate_new_key(new_public_key);
+		// } else {
+		// 	PendingKeyRotation::<T, I>::put(KeyRotationStatus::<T, I>::AwaitingActivation {
+		// 		new_public_key,
+		// 	});
+		// }
 		} else {
 			log::error!("Vault activation called during wrong state.");
 		}
