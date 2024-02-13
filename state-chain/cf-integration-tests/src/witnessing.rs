@@ -26,6 +26,8 @@ fn can_punish_failed_witnesser() {
 			let (mut testnet, _, _) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
 			testnet.move_to_the_next_epoch();
 
+			// Split current authority into 2 groups. Some to witness and some will be punished for
+			// failing to witness.
 			let mut to_witness = Validator::current_authorities().into_iter().collect::<Vec<_>>();
 			let success_threshold =
 				success_threshold_from_share_count(to_witness.len() as u32) as u64;
@@ -43,7 +45,7 @@ fn can_punish_failed_witnesser() {
 			assert_ok!(Reputation::set_penalty(
 				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
 				Offence::FailedToWitnessInTime,
-				Penalty { reputation: -100, suspension: EPOCH_BLOCKS * 2 },
+				Penalty { reputation: -100, suspension: EPOCH_BLOCKS },
 			));
 
 			// Before the deadline is set, no one has been reported.
@@ -51,7 +53,7 @@ fn can_punish_failed_witnesser() {
 				Reputation::validators_suspended_for(&[Offence::FailedToWitnessInTime]).is_empty()
 			);
 
-			// Rotate to a new epoch with a new set of authorities
+			// Setup a new set of authorities:
 			// Create new engine nodes, load funds and start bidding.
 			const INITIAL_FUNDING: FlipBalance = GENESIS_BALANCE * 3;
 			let new_authorities = (0..50)
@@ -71,7 +73,7 @@ fn can_punish_failed_witnesser() {
 				network::setup_account_and_peer_mapping(node);
 				let _ = Funding::start_bidding(RuntimeOrigin::signed(node.clone()));
 			}
-			// Have current authorities stop bidding, so the next epoch will use a new set of
+			// Have current authorities stop bidding, so the next epoch will use the new set of
 			// Authorities.
 			Validator::current_authorities().into_iter().for_each(|v| {
 				assert_ok!(Funding::stop_bidding(RuntimeOrigin::signed(v.clone())));
