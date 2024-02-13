@@ -104,49 +104,52 @@ impl Pairs {
 	Serialize,
 	Deserialize,
 )]
-pub struct AssetsMap<T> {
+pub struct PoolPairsMap<T> {
 	pub base: T,
 	pub quote: T,
 }
 
-impl<T> AssetsMap<T> {
+impl<T> PoolPairsMap<T> {
 	pub fn from_array(array: [T; 2]) -> Self {
 		let [base, quote] = array;
 		Self { base, quote }
 	}
 
-	pub fn map<R, F: FnMut(T) -> R>(self, mut f: F) -> AssetsMap<R> {
-		AssetsMap { base: f(self.base), quote: f(self.quote) }
+	pub fn map<R, F: FnMut(T) -> R>(self, mut f: F) -> PoolPairsMap<R> {
+		PoolPairsMap { base: f(self.base), quote: f(self.quote) }
 	}
 
-	pub fn try_map<R, E, F: FnMut(T) -> Result<R, E>>(self, mut f: F) -> Result<AssetsMap<R>, E> {
-		Ok(AssetsMap { base: f(self.base)?, quote: f(self.quote)? })
+	pub fn try_map<R, E, F: FnMut(T) -> Result<R, E>>(
+		self,
+		mut f: F,
+	) -> Result<PoolPairsMap<R>, E> {
+		Ok(PoolPairsMap { base: f(self.base)?, quote: f(self.quote)? })
 	}
 
 	pub fn try_map_with_pair<R, E>(
 		self,
 		mut f: impl FnMut(Pairs, T) -> Result<R, E>,
-	) -> Result<AssetsMap<R>, E> {
-		Ok(AssetsMap { base: f(Pairs::Base, self.base)?, quote: f(Pairs::Quote, self.quote)? })
+	) -> Result<PoolPairsMap<R>, E> {
+		Ok(PoolPairsMap { base: f(Pairs::Base, self.base)?, quote: f(Pairs::Quote, self.quote)? })
 	}
 
-	pub fn as_ref(&self) -> AssetsMap<&T> {
-		AssetsMap { base: &self.base, quote: &self.quote }
+	pub fn as_ref(&self) -> PoolPairsMap<&T> {
+		PoolPairsMap { base: &self.base, quote: &self.quote }
 	}
 
-	pub fn as_mut(&mut self) -> AssetsMap<&mut T> {
-		AssetsMap { base: &mut self.base, quote: &mut self.quote }
+	pub fn as_mut(&mut self) -> PoolPairsMap<&mut T> {
+		PoolPairsMap { base: &mut self.base, quote: &mut self.quote }
 	}
 
-	pub fn zip<S>(self, other: AssetsMap<S>) -> AssetsMap<(T, S)> {
-		AssetsMap { base: (self.base, other.base), quote: (self.quote, other.quote) }
+	pub fn zip<S>(self, other: PoolPairsMap<S>) -> PoolPairsMap<(T, S)> {
+		PoolPairsMap { base: (self.base, other.base), quote: (self.quote, other.quote) }
 	}
 
-	pub fn map_with_pair<R, F: FnMut(Pairs, T) -> R>(self, mut f: F) -> AssetsMap<R> {
-		AssetsMap { base: f(Pairs::Base, self.base), quote: f(Pairs::Quote, self.quote) }
+	pub fn map_with_pair<R, F: FnMut(Pairs, T) -> R>(self, mut f: F) -> PoolPairsMap<R> {
+		PoolPairsMap { base: f(Pairs::Base, self.base), quote: f(Pairs::Quote, self.quote) }
 	}
 }
-impl<T> IntoIterator for AssetsMap<T> {
+impl<T> IntoIterator for PoolPairsMap<T> {
 	type Item = (Pairs, T);
 
 	type IntoIter = core::array::IntoIter<(Pairs, T), 2>;
@@ -155,7 +158,7 @@ impl<T> IntoIterator for AssetsMap<T> {
 		[(Pairs::Base, self.base), (Pairs::Quote, self.quote)].into_iter()
 	}
 }
-impl<T> core::ops::Index<Pairs> for AssetsMap<T> {
+impl<T> core::ops::Index<Pairs> for PoolPairsMap<T> {
 	type Output = T;
 	fn index(&self, side: Pairs) -> &T {
 		match side {
@@ -164,7 +167,7 @@ impl<T> core::ops::Index<Pairs> for AssetsMap<T> {
 		}
 	}
 }
-impl<T> core::ops::IndexMut<Pairs> for AssetsMap<T> {
+impl<T> core::ops::IndexMut<Pairs> for PoolPairsMap<T> {
 	fn index_mut(&mut self, side: Pairs) -> &mut T {
 		match side {
 			Pairs::Base => &mut self.base,
@@ -172,10 +175,10 @@ impl<T> core::ops::IndexMut<Pairs> for AssetsMap<T> {
 		}
 	}
 }
-impl<T: core::ops::Add<R>, R> core::ops::Add<AssetsMap<R>> for AssetsMap<T> {
-	type Output = AssetsMap<<T as core::ops::Add<R>>::Output>;
-	fn add(self, rhs: AssetsMap<R>) -> Self::Output {
-		AssetsMap { base: self.base + rhs.base, quote: self.quote + rhs.quote }
+impl<T: core::ops::Add<R>, R> core::ops::Add<PoolPairsMap<R>> for PoolPairsMap<T> {
+	type Output = PoolPairsMap<<T as core::ops::Add<R>>::Output>;
+	fn add(self, rhs: PoolPairsMap<R>) -> Self::Output {
+		PoolPairsMap { base: self.base + rhs.base, quote: self.quote + rhs.quote }
 	}
 }
 

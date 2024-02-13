@@ -82,7 +82,7 @@ fn maximum_liquidity_swap() {
 
 	let mut pool_state = PoolState::new(0, MIN_SQRT_PRICE).unwrap();
 
-	let minted_amounts: AssetsMap<Amount> = (MIN_TICK..0)
+	let minted_amounts: PoolPairsMap<Amount> = (MIN_TICK..0)
 		.map(|lower_tick| (lower_tick, -lower_tick))
 		.map(|(lower_tick, upper_tick)| {
 			pool_state

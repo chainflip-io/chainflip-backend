@@ -1,7 +1,8 @@
 use crate::{
-	self as pallet_cf_pools, mock::*, utilities, AskBidMap, AssetAmounts, AssetPair, AssetsMap,
+	self as pallet_cf_pools, mock::*, utilities, AskBidMap, AssetAmounts, AssetPair,
 	CollectedNetworkFee, Error, Event, FlipBuyInterval, FlipToBurn, LimitOrder, PoolInfo,
-	PoolOrders, Pools, RangeOrder, RangeOrderSize, ScheduledLimitOrderUpdates, STABLE_ASSET,
+	PoolOrders, PoolPairsMap, Pools, RangeOrder, RangeOrderSize, ScheduledLimitOrderUpdates,
+	STABLE_ASSET,
 };
 use cf_amm::common::{price_at_tick, tick_at_price, Side, Tick, PRICE_FRACTIONAL_BITS};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount, SwapOutput};
@@ -691,7 +692,7 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 					id: 0.into(),
 					range: range.clone(),
 					liquidity: 1_000_000,
-					fees_earned: AssetsMap { base: 999.into(), quote: 997.into() }
+					fees_earned: PoolPairsMap { base: 999.into(), quote: 997.into() }
 				}]
 			})
 		);
@@ -704,7 +705,7 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 					id: 0.into(),
 					range: range.clone(),
 					liquidity: 1_000_000,
-					fees_earned: AssetsMap { base: 999.into(), quote: 997.into() }
+					fees_earned: PoolPairsMap { base: 999.into(), quote: 997.into() }
 				}]
 			})
 		);

@@ -1,6 +1,6 @@
 use crate::chainflip::Offence;
 use cf_amm::{
-	common::{Amount, AssetsMap, Side, Tick},
+	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{eth::Address as EthereumAddress, Chain, ForeignChainAddress};
@@ -154,7 +154,7 @@ decl_runtime_apis!(
 			base_asset: Asset,
 			quote_asset: Asset,
 			tick_range: Range<cf_amm::common::Tick>,
-		) -> Result<AssetsMap<Amount>, DispatchErrorWithMessage>;
+		) -> Result<PoolPairsMap<Amount>, DispatchErrorWithMessage>;
 		fn cf_pool_orderbook(
 			base_asset: Asset,
 			quote_asset: Asset,
@@ -170,7 +170,7 @@ decl_runtime_apis!(
 			quote_asset: Asset,
 			tick_range: Range<Tick>,
 			liquidity: Liquidity,
-		) -> Result<AssetsMap<Amount>, DispatchErrorWithMessage>;
+		) -> Result<PoolPairsMap<Amount>, DispatchErrorWithMessage>;
 
 		fn cf_max_swap_amount(asset: Asset) -> Option<AssetAmount>;
 		fn cf_min_deposit_amount(asset: Asset) -> AssetAmount;

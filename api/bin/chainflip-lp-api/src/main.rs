@@ -8,7 +8,7 @@ use chainflip_api::{
 	self,
 	lp::{
 		types::{LimitOrder, RangeOrder},
-		ApiWaitForResult, AssetsMap, LpApi, Side, Tick,
+		ApiWaitForResult, LpApi, PoolPairsMap, Side, Tick,
 	},
 	primitives::{
 		chains::{Bitcoin, Ethereum, Polkadot},
@@ -47,7 +47,7 @@ pub mod rpc_types {
 	use super::*;
 	use anyhow::anyhow;
 	use cf_utilities::rpc::NumberOrHex;
-	use chainflip_api::{lp::AssetsMap, queries::SwapChannelInfo};
+	use chainflip_api::{lp::PoolPairsMap, queries::SwapChannelInfo};
 	use serde::{Deserialize, Serialize};
 
 	#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
@@ -62,7 +62,7 @@ pub mod rpc_types {
 
 	#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 	pub enum RangeOrderSizeJson {
-		AssetAmounts { maximum: AssetsMap<NumberOrHex>, minimum: AssetsMap<NumberOrHex> },
+		AssetAmounts { maximum: PoolPairsMap<NumberOrHex>, minimum: PoolPairsMap<NumberOrHex> },
 		Liquidity { liquidity: NumberOrHex },
 	}
 	impl TryFrom<RangeOrderSizeJson> for RangeOrderSize {
@@ -242,7 +242,7 @@ pub enum OrderFilled {
 		quote_asset: Asset,
 		id: U256,
 		range: Range<Tick>,
-		fees: AssetsMap<U256>,
+		fees: PoolPairsMap<U256>,
 		liquidity: U256,
 	},
 }

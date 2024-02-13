@@ -2,7 +2,7 @@
 use core::ops::Range;
 
 use cf_amm::{
-	common::{Amount, AssetsMap, Price, Side, SqrtPriceQ64F96, Tick},
+	common::{Amount, PoolPairsMap, Price, Side, SqrtPriceQ64F96, Tick},
 	limit_orders,
 	limit_orders::{Collected, PositionInfo},
 	range_orders,
@@ -44,7 +44,7 @@ impl_pallet_safe_mode!(PalletSafeMode; range_order_update_enabled, limit_order_u
 // nature.
 #[derive(Copy, Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEq, Eq, Hash)]
 pub struct AssetPair {
-	assets: AssetsMap<Asset>,
+	assets: PoolPairsMap<Asset>,
 }
 impl AssetPair {
 	pub fn new(base_asset: Asset, quote_asset: Asset) -> Option<Self> {
@@ -52,7 +52,7 @@ impl AssetPair {
 			assets: match (base_asset, quote_asset) {
 				(STABLE_ASSET, STABLE_ASSET) => None,
 				(_unstable_asset, STABLE_ASSET) =>
-					Some(AssetsMap { base: base_asset, quote: quote_asset }),
+					Some(PoolPairsMap { base: base_asset, quote: quote_asset }),
 				_ => None,
 			}?,
 		})
@@ -80,7 +80,7 @@ impl AssetPair {
 		}
 	}
 
-	pub fn assets(&self) -> AssetsMap<Asset> {
+	pub fn assets(&self) -> PoolPairsMap<Asset> {
 		self.assets
 	}
 }
@@ -106,12 +106,12 @@ pub struct AskBidMap<S> {
 impl<T> AskBidMap<T> {
 	/// Takes a map from an asset to details regarding selling that asset, and returns a map from
 	/// ask/bid to the details associated with the asks or the bids
-	pub fn from_sell_map(map: AssetsMap<T>) -> Self {
+	pub fn from_sell_map(map: PoolPairsMap<T>) -> Self {
 		Self { asks: map.base, bids: map.quote }
 	}
 
 	pub fn from_fn<F: FnMut(Side) -> T>(mut f: F) -> Self {
-		Self::from_sell_map(AssetsMap { base: f(Side::Sell), quote: f(Side::Buy) })
+		Self::from_sell_map(PoolPairsMap { base: f(Side::Sell), quote: f(Side::Buy) })
 	}
 
 	pub fn map<S, F: FnMut(T) -> S>(self, mut f: F) -> AskBidMap<S> {
@@ -151,13 +151,13 @@ pub mod pallet {
 		pub range_orders_cache: BTreeMap<T::AccountId, BTreeMap<OrderId, Range<Tick>>>,
 		/// A cache of all the limit orders that exist in the pool. This must be kept up to date
 		/// with the underlying pool. These are grouped by the asset the limit order is selling
-		pub limit_orders_cache: AssetsMap<BTreeMap<T::AccountId, BTreeMap<OrderId, Tick>>>,
+		pub limit_orders_cache: PoolPairsMap<BTreeMap<T::AccountId, BTreeMap<OrderId, Tick>>>,
 		pub pool_state: PoolState<(T::AccountId, OrderId)>,
 	}
 
 	pub type OrderId = u64;
 
-	pub type AssetAmounts = AssetsMap<AssetAmount>;
+	pub type AssetAmounts = PoolPairsMap<AssetAmount>;
 
 	/// Represents an amount of liquidity, either as an exact amount, or through maximum and minimum
 	/// amounts of both assets. Internally those max/min are converted into exact liquidity amounts,
@@ -1054,7 +1054,7 @@ pub struct RangeOrder<T: Config> {
 	pub id: Amount,
 	pub range: Range<Tick>,
 	pub liquidity: Liquidity,
-	pub fees_earned: AssetsMap<Amount>,
+	pub fees_earned: PoolPairsMap<Amount>,
 }
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
@@ -1503,7 +1503,7 @@ impl<T: Config> Pallet<T> {
 		base_asset: any::Asset,
 		quote_asset: any::Asset,
 		tick_range: Range<cf_amm::common::Tick>,
-	) -> Result<AssetsMap<Amount>, DispatchError> {
+	) -> Result<PoolPairsMap<Amount>, DispatchError> {
 		let pool_state = Pools::<T>::get(AssetPair::try_new::<T>(base_asset, quote_asset)?)
 			.ok_or(Error::<T>::PoolDoesNotExist)?
 			.pool_state;
@@ -1654,7 +1654,7 @@ impl<T: Config> Pallet<T> {
 		.collect())
 	}
 
-	pub fn pools() -> Vec<AssetsMap<Asset>> {
+	pub fn pools() -> Vec<PoolPairsMap<Asset>> {
 		Pools::<T>::iter_keys().map(|asset_pair| asset_pair.assets()).collect()
 	}
 
@@ -1782,7 +1782,7 @@ impl<T: Config> Pallet<T> {
 		quote_asset: any::Asset,
 		tick_range: Range<Tick>,
 		liquidity: Liquidity,
-	) -> Result<AssetsMap<Amount>, DispatchError> {
+	) -> Result<PoolPairsMap<Amount>, DispatchError> {
 		let pool = Pools::<T>::get(AssetPair::try_new::<T>(base_asset, quote_asset)?)
 			.ok_or(Error::<T>::PoolDoesNotExist)?;
 		pool.pool_state

@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_amm::{
-	common::{Amount, AssetsMap, Side, Tick},
+	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::address::EncodedAddress;
@@ -50,14 +50,14 @@ pub mod types {
 		pub id: U256,
 		pub tick_range: Range<Tick>,
 		pub liquidity_total: U256,
-		pub collected_fees: AssetsMap<U256>,
+		pub collected_fees: PoolPairsMap<U256>,
 		pub size_change: Option<IncreaseOrDecrease<RangeOrderChange>>,
 	}
 
 	#[derive(Serialize, Deserialize, Clone)]
 	pub struct RangeOrderChange {
 		pub liquidity: U256,
-		pub amounts: AssetsMap<U256>,
+		pub amounts: PoolPairsMap<U256>,
 	}
 
 	#[derive(Serialize, Deserialize, Clone)]

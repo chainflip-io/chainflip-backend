@@ -1,5 +1,5 @@
 use cf_amm::{
-	common::{Amount, AssetsMap, Side, Tick},
+	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -428,7 +428,7 @@ pub trait CustomApi {
 		quote_asset: RpcAsset,
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<AssetsMap<Amount>>;
+	) -> RpcResult<PoolPairsMap<Amount>>;
 	#[method(name = "pool_orderbook")]
 	fn cf_pool_orderbook(
 		&self,
@@ -475,7 +475,7 @@ pub trait CustomApi {
 		tick_range: Range<Tick>,
 		liquidity: Liquidity,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<AssetsMap<Amount>>;
+	) -> RpcResult<PoolPairsMap<Amount>>;
 	#[method(name = "funding_environment")]
 	fn cf_funding_environment(
 		&self,
@@ -974,7 +974,7 @@ where
 		quote_asset: RpcAsset,
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<AssetsMap<Amount>> {
+	) -> RpcResult<PoolPairsMap<Amount>> {
 		self.client
 			.runtime_api()
 			.cf_required_asset_ratio_for_range_order(
@@ -1032,7 +1032,7 @@ where
 		tick_range: Range<Tick>,
 		liquidity: Liquidity,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<AssetsMap<Amount>> {
+	) -> RpcResult<PoolPairsMap<Amount>> {
 		self.client
 			.runtime_api()
 			.cf_pool_range_order_liquidity_value(

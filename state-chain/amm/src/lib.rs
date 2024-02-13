@@ -8,7 +8,7 @@ use core::convert::Infallible;
 use codec::{Decode, Encode};
 use common::{
 	is_sqrt_price_valid, price_to_sqrt_price, sqrt_price_to_price, tick_at_sqrt_price, Amount,
-	AssetsMap, BaseToQuote, Pairs, Price, QuoteToBase, SetFeesError, Side, SqrtPriceQ64F96,
+	BaseToQuote, Pairs, PoolPairsMap, Price, QuoteToBase, SetFeesError, Side, SqrtPriceQ64F96,
 	SwapDirection, Tick,
 };
 use limit_orders::{Collected, PositionInfo};
@@ -261,7 +261,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn collect_and_mint_range_order<
 		T,
 		E,
-		TryDebit: FnOnce(AssetsMap<Amount>) -> Result<T, E>,
+		TryDebit: FnOnce(PoolPairsMap<Amount>) -> Result<T, E>,
 	>(
 		&mut self,
 		lp: &LiquidityProvider,
@@ -283,7 +283,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		size: range_orders::Size,
 	) -> Result<
 		(
-			AssetsMap<Amount>,
+			PoolPairsMap<Amount>,
 			range_orders::Liquidity,
 			range_orders::Collected,
 			range_orders::PositionInfo,
@@ -297,7 +297,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&self,
 		tick_range: core::ops::Range<Tick>,
 		liquidity: Liquidity,
-	) -> Result<AssetsMap<Amount>, range_orders::LiquidityToAmountsError> {
+	) -> Result<PoolPairsMap<Amount>, range_orders::LiquidityToAmountsError> {
 		self.range_orders
 			.liquidity_to_amounts::<true>(liquidity, tick_range.start, tick_range.end)
 	}
@@ -305,7 +305,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn required_asset_ratio_for_range_order(
 		&self,
 		tick_range: core::ops::Range<Tick>,
-	) -> Result<AssetsMap<Amount>, range_orders::RequiredAssetRatioError> {
+	) -> Result<PoolPairsMap<Amount>, range_orders::RequiredAssetRatioError> {
 		self.range_orders
 			.required_asset_ratio::<false>(tick_range.start, tick_range.end)
 	}
@@ -396,8 +396,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn limit_order_depth(
 		&mut self,
 		range: core::ops::Range<Tick>,
-	) -> Result<AssetsMap<(Option<Price>, Amount)>, limit_orders::DepthError> {
-		Ok(AssetsMap {
+	) -> Result<PoolPairsMap<(Option<Price>, Amount)>, limit_orders::DepthError> {
+		Ok(PoolPairsMap {
 			base: (
 				self.limit_orders.current_sqrt_price::<QuoteToBase>(),
 				self.limit_orders.depth::<QuoteToBase>(range.clone())?,
@@ -412,8 +412,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn range_order_depth(
 		&self,
 		range: core::ops::Range<Tick>,
-	) -> Result<AssetsMap<(Option<Price>, Amount)>, range_orders::DepthError> {
-		self.range_orders.depth(range.start, range.end).map(|assets| AssetsMap {
+	) -> Result<PoolPairsMap<(Option<Price>, Amount)>, range_orders::DepthError> {
+		self.range_orders.depth(range.start, range.end).map(|assets| PoolPairsMap {
 			base: (
 				self.range_orders.current_sqrt_price::<QuoteToBase>().map(sqrt_price_to_price),
 				assets[Pairs::Base],
@@ -429,7 +429,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn set_fees(
 		&mut self,
 		fee_hundredth_pips: u32,
-	) -> Result<AssetsMap<Vec<(LiquidityProvider, Tick, Collected, PositionInfo)>>, SetFeesError> {
+	) -> Result<PoolPairsMap<Vec<(LiquidityProvider, Tick, Collected, PositionInfo)>>, SetFeesError>
+	{
 		self.range_orders.set_fees(fee_hundredth_pips)?;
 		self.limit_orders.set_fees(fee_hundredth_pips)
 	}
@@ -452,7 +453,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 	pub fn collect_all_limit_orders(
 		&mut self,
-	) -> AssetsMap<
+	) -> PoolPairsMap<
 		Vec<(LiquidityProvider, Tick, limit_orders::Collected, limit_orders::PositionInfo)>,
 	> {
 		self.limit_orders.collect_all()
