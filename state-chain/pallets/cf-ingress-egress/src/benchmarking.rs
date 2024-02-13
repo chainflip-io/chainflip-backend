@@ -183,6 +183,54 @@ mod benchmarks {
 		}
 	}
 
+	#[benchmark]
+	fn prewitness_deposits(n: Linear<1, 255>) {
+		let origin = T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap();
+		let deposit_witnesses: Vec<DepositWitness<<T as Config<I>>::TargetChain>> = (0..n)
+			.map(|_| {
+				let deposit_address =
+					<<T as Config<I>>::TargetChain as Chain>::ChainAccount::benchmark_value_by_id(
+						n as u8,
+					);
+				let source_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset =
+					BenchmarkValue::benchmark_value();
+				let block_number = TargetChainBlockNumber::<T, I>::benchmark_value();
+				let mut channel = DepositChannelDetails::<T, I> {
+					opened_at: block_number,
+					expires_at: block_number,
+					deposit_channel: DepositChannel::generate_new::<
+						<T as Config<I>>::AddressDerivation,
+					>(1, source_asset)
+					.unwrap(),
+					action: ChannelAction::<T::AccountId>::LiquidityProvision {
+						lp_account: account("doogle", 0, 0),
+					},
+					boost_fee: 0,
+				};
+				channel.deposit_channel.state.on_fetch_scheduled();
+				DepositChannelLookup::<T, I>::insert(deposit_address.clone(), channel);
+
+				DepositWitness::<<T as Config<I>>::TargetChain> {
+					deposit_address,
+					asset: BenchmarkValue::benchmark_value(),
+					amount: BenchmarkValue::benchmark_value(),
+					deposit_details: BenchmarkValue::benchmark_value(),
+				}
+			})
+			.collect();
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T, I>::prewitness_deposits(
+				origin,
+				deposit_witnesses,
+				BenchmarkValue::benchmark_value()
+			));
+		}
+
+		assert_eq!(BoostableDepositIdCounter::<T, I>::get(), n as u64);
+	}
+
 	#[cfg(test)]
 	use crate::mock_eth::*;
 
@@ -208,6 +256,9 @@ mod benchmarks {
 		});
 		new_test_ext().execute_with(|| {
 			_remove_boostable_deposits::<Test, ()>(100, true);
+		});
+		new_test_ext().execute_with(|| {
+			_prewitness_deposits::<Test, ()>(100, true);
 		});
 	}
 }

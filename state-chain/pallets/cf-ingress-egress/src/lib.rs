@@ -885,7 +885,7 @@ pub mod pallet {
 		///
 		/// Requires `EnsureWitnessed` origin.
 		#[pallet::call_index(6)]
-		#[pallet::weight(Weight::zero())] // TODO JAMIE: Weight?
+		#[pallet::weight(T::WeightInfo::prewitness_deposits(deposit_witnesses.len() as u32))]
 		pub fn prewitness_deposits(
 			origin: OriginFor<T>,
 			deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,

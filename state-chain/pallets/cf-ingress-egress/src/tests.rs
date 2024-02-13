@@ -1526,6 +1526,7 @@ fn handle_prewitness_deposit() {
 fn test_idle_cleanup() {
 	use frame_support::weights::constants::RocksDbWeight;
 
+	const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 	const ASSET: cf_chains::assets::eth::Asset = eth::Asset::Eth;
 	const DEPOSIT_AMOUNT: u128 = 50000;
 
