@@ -17,7 +17,7 @@ use crate::{
 	},
 };
 use cf_amm::{
-	common::{Amount, Tick},
+	common::{Amount, Order, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -35,7 +35,8 @@ pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
 use pallet_cf_pools::{
-	AskBidMap, AssetsMap, PoolLiquidity, PoolOrderbook, PoolPrice, UnidirectionalPoolDepth,
+	AskBidMap, AssetPair, AssetsMap, PoolLiquidity, PoolOrderbook, PoolPriceV1, PoolPriceV2,
+	UnidirectionalPoolDepth,
 };
 use pallet_cf_reputation::ExclusionList;
 use pallet_cf_swapping::CcmSwapAmounts;
@@ -1085,8 +1086,12 @@ impl_runtime_apis! {
 		fn cf_pool_price(
 			from: Asset,
 			to: Asset,
-		) -> Option<PoolPrice> {
+		) -> Option<PoolPriceV1> {
 			LiquidityPools::current_price(from, to)
+		}
+
+		fn cf_pool_price_v2(base_asset: Asset, quote_asset: Asset) -> Result<PoolPriceV2, DispatchErrorWithMessage> {
+			LiquidityPools::pool_price(base_asset, quote_asset).map_err(Into::into)
 		}
 
 		/// Simulates a swap and return the intermediate (if any) and final output.
@@ -1296,7 +1301,8 @@ impl_runtime_apis! {
 
 		/// This should *not* be fully trusted as if the deposits that are pre-witnessed will definitely go through.
 		/// This returns a list of swaps in the requested direction that are pre-witnessed in the current block.
-		fn cf_prewitness_swaps(from: Asset, to: Asset) -> Option<Vec<AssetAmount>> {
+		fn cf_prewitness_swaps(base_asset: Asset, quote_asset: Asset, side: Order) -> Vec<AssetAmount> {
+			let (from, to) = AssetPair::to_swap(base_asset, quote_asset, side);
 
 			fn filter_deposit_swaps<C, I: 'static>(from: Asset, to: Asset, deposit_witnesses: Vec<DepositWitness<C>>) -> Vec<AssetAmount>
 				where Runtime: pallet_cf_ingress_egress::Config<I>,
@@ -1376,7 +1382,7 @@ impl_runtime_apis! {
 							},
 							_ => {
 								// Ignore, we only care about calls that trigger swaps.
-							}
+							},
 						};
 					},
 					RuntimeEvent::EthereumIngressEgress(pallet_cf_ingress_egress::Event::PrewitnessedDeposit{deposit_witnesses, ..}) => {
@@ -1390,16 +1396,11 @@ impl_runtime_apis! {
 					},
 					_ => {
 						// Ignore, we only care about Prewitness events
-					}
+					},
 				}
 			}
 
-			// We don't want to return anything from the websocket stream if there are no items
-			if all_prewitnessed_swaps.is_empty() {
-				None
-			} else {
-				Some(all_prewitnessed_swaps)
-			}
+			all_prewitnessed_swaps
 		}
 
 		fn cf_failed_call(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {
