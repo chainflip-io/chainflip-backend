@@ -17,7 +17,7 @@ jobs:
       - name: Checkout branch
         uses: actions/checkout@v3
         with:
-          ref: pla-1142
+          ref: main
 
       - name: Configure Git
         run: |
