@@ -52,7 +52,7 @@ jobs:
           commit-message: Cherry-picked from ${{ env.COMMIT_SHA }}
           title: "Cherry-Pick ${{ env.COMMIT_SHA }} to ${{ env.RELEASE_BRANCH }}"
           branch: ${{ env.BRANCH }}
-          base: '${{ env.RELEASE_BRANCH }}' # Update with your current release branch
+          base: '${{ env.RELEASE_BRANCH }}'
           reviewers: 'martin-chainflip'
           labels: cherry-pick
 
