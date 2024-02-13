@@ -28,7 +28,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub fn btc_deposits<ProcessCall, ProcessingFut>(
 		self,
 		process_call: ProcessCall,
-		is_prewitness: bool,
 	) -> ChunkedByVaultBuilder<
 		impl ChunkedByVault<
 			Index = u64,
@@ -44,7 +43,11 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			Data = (((), Vec<VerboseTransaction>), Addresses<Inner>),
 			Chain = Bitcoin,
 		>,
-		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
+		ProcessCall: Fn(
+				Vec<DepositWitness<Bitcoin>>,
+				<cf_chains::Bitcoin as cf_chains::Chain>::ChainBlockNumber,
+				EpochIndex,
+			) -> ProcessingFut
 			+ Send
 			+ Sync
 			+ Clone
@@ -66,27 +69,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 				// Submit all deposit witnesses for the block.
 				if !deposit_witnesses.is_empty() {
-					if is_prewitness {
-						process_call(
-							pallet_cf_ingress_egress::Call::<_, BitcoinInstance>::prewitness_deposits {
-								deposit_witnesses,
-								block_height: header.index,
-							}
-							.into(),
-							epoch.index,
-						)
-						.await;
-					} else {
-						process_call(
-							pallet_cf_ingress_egress::Call::<_, BitcoinInstance>::process_deposits {
-								deposit_witnesses,
-								block_height: header.index,
-							}
-							.into(),
-							epoch.index,
-						)
-						.await;
-					}
+					process_call(deposit_witnesses, header.index, epoch.index).await;
 				}
 				txs
 			}

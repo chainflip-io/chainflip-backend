@@ -9,6 +9,7 @@ use cf_chains::btc::{self, deposit_address::DepositAddress, BlockNumber, CHANGE_
 use cf_primitives::{EpochIndex, NetworkEnvironment};
 use futures_core::Future;
 use secp256k1::hashes::Hash;
+use state_chain_runtime::BitcoinInstance;
 use utilities::task_scope::Scope;
 
 use crate::{
@@ -87,6 +88,42 @@ where
 {
 	let btc_source = BtcSource::new(btc_client.clone()).strictly_monotonic().shared(scope);
 
+	let btc_deposit_prewitness_call = {
+		let process_call = process_call.clone();
+		move |deposit_witnesses, block_height, epoch_index| {
+			let process_call = process_call.clone();
+			async move {
+				process_call(
+					pallet_cf_ingress_egress::Call::<_, BitcoinInstance>::prewitness_deposits {
+						deposit_witnesses,
+						block_height,
+					}
+					.into(),
+					epoch_index,
+				)
+				.await;
+			}
+		}
+	};
+
+	let btc_deposit_witness_call = {
+		let process_call = process_call.clone();
+		move |deposit_witnesses, block_height, epoch_index| {
+			let process_call = process_call.clone();
+			async move {
+				process_call(
+					pallet_cf_ingress_egress::Call::<_, BitcoinInstance>::process_deposits {
+						deposit_witnesses,
+						block_height,
+					}
+					.into(),
+					epoch_index,
+				)
+				.await;
+			}
+		}
+	};
+
 	btc_source
 		.clone()
 		.chunk_by_time(epoch_source.clone(), scope)
@@ -115,7 +152,7 @@ where
 		.chunk_by_vault(vaults.clone(), scope)
 		.deposit_addresses(scope, unfinalised_state_chain_stream, state_chain_client.clone())
 		.await
-		.btc_deposits(process_call.clone(), true)
+		.btc_deposits(btc_deposit_prewitness_call)
 		.logging("pre-witnessing")
 		.spawn(scope);
 
@@ -151,7 +188,7 @@ where
 		.chunk_by_vault(vaults, scope)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
-		.btc_deposits(process_call.clone(), false)
+		.btc_deposits(btc_deposit_witness_call)
 		.egress_items(scope, state_chain_stream, state_chain_client.clone())
 		.await
 		.then({
