@@ -636,7 +636,14 @@ fn testnet_genesis(
 			deposit_channel_lifetime: polkadot_deposit_channel_lifetime,
 			..Default::default()
 		},
-		..Default::default()
+		// We can't use ..Default::default() here because chain tracking panics on default (by
+		// design). And the way ..Default::default() syntax works is that it generates the default
+		// value for the whole struct, not just the fields that are missing.
+		liquidity_pools: Default::default(),
+		bitcoin_vault: Default::default(),
+		polkadot_vault: Default::default(),
+		system: Default::default(),
+		transaction_payment: Default::default(),
 	})
 	.expect("Genesis config is JSON-compatible.")
 }
@@ -656,4 +663,13 @@ pub fn chainflip_properties() -> Properties {
 /// Sets global that ensures SC AccountId's are printed correctly
 pub fn use_chainflip_account_id_encoding() {
 	set_default_ss58_version(Ss58AddressFormat::custom(common::CHAINFLIP_SS58_PREFIX));
+}
+
+#[test]
+fn can_build_genesis() {
+	use_chainflip_account_id_encoding();
+	let _ = testnet::Config::build_spec(None).unwrap();
+	let _ = sisyphos::Config::build_spec(None).unwrap();
+	let _ = perseverance::Config::build_spec(None).unwrap();
+	let _ = berghain::Config::build_spec(None).unwrap();
 }
