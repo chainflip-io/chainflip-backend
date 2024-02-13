@@ -3,6 +3,7 @@ use super::*;
 use crate::threshold_signing::{BtcThresholdSigner, DotThresholdSigner, EthThresholdSigner};
 
 use cf_primitives::{AccountRole, BlockNumber, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
+use cf_test_utilities::assert_events_eq;
 use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo, KeyRotator};
 use cfe_events::{KeyHandoverRequest, ThresholdSignatureRequest};
 use chainflip_node::test_account_from_seed;
@@ -10,7 +11,7 @@ use codec::Encode;
 use frame_support::{
 	inherent::ProvideInherent,
 	pallet_prelude::InherentData,
-	traits::{IntegrityTest, OnFinalize, OnIdle, UnfilteredDispatchable},
+	traits::{IntegrityTest, OnFinalize, OnIdle, OnNewAccount, UnfilteredDispatchable},
 };
 use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 use sp_consensus_aura::SlotDuration;
@@ -733,4 +734,19 @@ pub fn fund_authorities_and_join_auction(
 	}
 
 	(testnet, genesis_authorities, init_backup_nodes)
+}
+
+// Helper function that registers account role for a new account.
+pub fn new_account(account_id: &AccountId, role: AccountRole) {
+	<Runtime as frame_system::Config>::OnNewAccount::on_new_account(account_id);
+	System::inc_providers(account_id);
+	assert_ok!(AccountRoles::register_account_role(account_id, role));
+	assert_events_eq!(
+		Runtime,
+		RuntimeEvent::AccountRoles(pallet_cf_account_roles::Event::AccountRoleRegistered {
+			account_id: account_id.clone(),
+			role,
+		})
+	);
+	System::reset_events();
 }
