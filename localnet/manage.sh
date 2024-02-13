@@ -82,6 +82,12 @@ get-workflow() {
       echo
       export BINARY_ROOT_PATH=${BINARY_ROOT_PATH:-"./target/debug"}
     fi
+
+    echo "Do you want to start ingress-egress-tracker? (Type y or leave empty)"
+    read -p "(default: NO) " START_TRACKER
+    echo
+    export START_TRACKER=${START_TRACKER}
+  
   fi
 }
 
@@ -128,7 +134,7 @@ build-localnet() {
   if which solana-test-validator >>$DEBUG_OUTPUT_DESTINATION 2>&1; then
     echo "☀️ Waiting for Solana node to start"
     ./localnet/init/scripts/start-solana.sh
-    until curl -s http://localhost:8899 >>$DEBUG_OUTPUT_DESTINATION 2>&1; do sleep 1; done
+    until curl -s http://localhost:8899 >> $DEBUG_OUTPUT_DESTINATION 2>&1; do sleep 1; done
   else
     echo "☀️ Solana not installed, skipping..."
   fi
@@ -185,6 +191,10 @@ build-localnet() {
   echo "🤑 Starting LP API ..."
   KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-lp-api.sh $BINARY_ROOT_PATH
 
+  if [[ $START_TRACKER == "y" ]]; then
+    echo "👁 Starting Ingress-Egress-tracker ..."
+    KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-ingress-egress-tracker.sh $BINARY_ROOT_PATH
+  fi
 
   print_success
 }
@@ -245,7 +255,7 @@ yeet() {
 
 logs() {
   echo "🤖 Which service would you like to tail?"
-  select SERVICE in node engine broker lp polkadot geth bitcoin solana poster sequencer staker debug all; do
+  select SERVICE in node engine broker lp polkadot geth bitcoin solana poster sequencer staker debug redis all ingress-egress-tracker; do
     if [[ $SERVICE == "all" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow
       tail -f /tmp/chainflip/chainflip-*.log
@@ -261,6 +271,9 @@ logs() {
     fi
     if [[ $SERVICE == "poster" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow poster
+    fi
+    if [[ $SERVICE == "redis" ]]; then
+      docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow redis
     fi
     if [[ $SERVICE == "sequencer" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow sequencer
@@ -278,6 +291,9 @@ logs() {
     fi
     if [[ $SERVICE == "lp" ]]; then
       tail -f /tmp/chainflip/chainflip-lp-api.log
+    fi
+    if [[ $SERVICE == "ingress-egress-tracker" ]]; then
+      tail -f /tmp/chainflip/chainflip-ingress-egress-tracker.log
     fi
     if [[ $SERVICE == "solana" ]]; then
       tail -f /tmp/solana/solana.log

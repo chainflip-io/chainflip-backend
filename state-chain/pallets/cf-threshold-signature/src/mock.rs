@@ -5,8 +5,6 @@ use crate::{
 	EnsureThresholdSigned, Origin, Pallet, PalletOffence, PendingCeremonies, RequestId,
 };
 use cf_chains::{
-	btc,
-	evm::SchnorrVerificationComponents,
 	mocks::{MockAggKey, MockEthereumChainCrypto, MockThresholdSignature},
 	ChainCrypto,
 };
@@ -29,11 +27,6 @@ use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 type Block = frame_system::mocking::MockBlock<Test>;
 
 pub type ValidatorId = u64;
-
-pub const ETH_DUMMY_SIG: SchnorrVerificationComponents =
-	SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
-
-pub const BTC_DUMMY_SIG: btc::Signature = [0xcf; 64];
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(

@@ -1,5 +1,6 @@
-use crate::Pallet;
+mod schedule_swaps;
 
-use cf_runtime_upgrade_utilities::{migration_template::Migration, VersionedMigration};
+use cf_runtime_upgrade_utilities::VersionedMigration;
 
-pub type PalletMigration<T> = VersionedMigration<Pallet<T>, Migration<T>, 0, 1>;
+pub type PalletMigration<T> =
+	(VersionedMigration<crate::Pallet<T>, schedule_swaps::Migration<T>, 1, 2>,);

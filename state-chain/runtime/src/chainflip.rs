@@ -11,7 +11,7 @@ mod signer_nomination;
 use crate::{
 	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress,
 	BitcoinThresholdSigner, BlockNumber, Emissions, Environment, EthereumBroadcaster,
-	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster,
+	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, Hash, PolkadotBroadcaster,
 	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
 	System, Validator, YEAR,
 };
@@ -63,6 +63,7 @@ use frame_support::{
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
 use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
 pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
 use sp_std::prelude::*;
@@ -437,6 +438,7 @@ macro_rules! impl_deposit_api_for_anychain {
 			fn request_liquidity_deposit_address(
 				lp_account: Self::AccountId,
 				source_asset: Asset,
+				boost_fee: BasisPoints
 			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber), DispatchError> {
 				match source_asset.into() {
 					$(
@@ -444,6 +446,7 @@ macro_rules! impl_deposit_api_for_anychain {
 							$pallet::request_liquidity_deposit_address(
 								lp_account,
 								source_asset.try_into().unwrap(),
+								boost_fee
 							).map(|(channel, address, block_number)| (channel, address, block_number.into())),
 					)+
 				}
@@ -456,6 +459,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				broker_commission_bps: BasisPoints,
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadata>,
+				boost_fee: BasisPoints
 			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber), DispatchError> {
 				match source_asset.into() {
 					$(
@@ -466,6 +470,7 @@ macro_rules! impl_deposit_api_for_anychain {
 							broker_commission_bps,
 							broker_id,
 							channel_metadata,
+							boost_fee
 						).map(|(channel, address, block_number)| (channel, address, block_number.into())),
 					)+
 				}
@@ -633,4 +638,14 @@ pub fn calculate_account_apy(account_id: &AccountId) -> Option<u32> {
 			.checked_mul_int(10_000u32)
 			.unwrap_or_default()
 	})
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug, Encode, Decode)]
+pub struct BlockUpdate<Data> {
+	pub block_hash: Hash,
+	pub block_number: BlockNumber,
+	// NOTE: Flatten requires Data types to be struct or map
+	// Also flatten is incompatible with u128, so AssetAmounts needs to be String type.
+	#[serde(flatten)]
+	pub data: Data,
 }
