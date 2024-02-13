@@ -40,8 +40,8 @@ fn can_punish_failed_witnesser() {
 				}));
 			let call_hash = CallHash(call.blake2_256());
 
-			// Set the penalty for failing to witness. Suspension needs to be long enough
-			// to last into the next epoch.
+			// Set the penalty for failing to witness. Use a long suspension period to make it
+			// easier to check the penalty.
 			assert_ok!(Reputation::set_penalty(
 				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
 				Offence::FailedToWitnessInTime,

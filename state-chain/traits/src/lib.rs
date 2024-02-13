@@ -96,7 +96,7 @@ pub trait EpochInfo {
 	fn current_authorities() -> BTreeSet<Self::ValidatorId>;
 
 	/// The authority set for a given epoch
-	fn authorities_at_epoch(epoch: EpochIndex) -> Option<BTreeSet<Self::ValidatorId>>;
+	fn authorities_at_epoch(epoch: EpochIndex) -> BTreeSet<Self::ValidatorId>;
 
 	/// Get the current number of authorities
 	fn current_authority_count() -> AuthorityCount;

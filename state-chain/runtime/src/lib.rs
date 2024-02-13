@@ -1413,8 +1413,7 @@ impl_runtime_apis! {
 				failing_count: 0,
 				validators: vec![],
 			};
-			let current_epoch = <Runtime as Chainflip>::EpochInfo::current_epoch();
-			let voting_validators = Witnesser::count_votes(current_epoch, hash);
+			let voting_validators = Witnesser::count_votes(<Runtime as Chainflip>::EpochInfo::current_epoch(), hash);
 			let vanity_names: BTreeMap<AccountId, Vec<u8>> = pallet_cf_validator::VanityNames::<Runtime>::get();
 			voting_validators?.iter().for_each(|(val, voted)| {
 				let vanity = match vanity_names.get(val) {

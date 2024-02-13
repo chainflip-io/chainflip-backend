@@ -632,7 +632,7 @@ fn can_punish_failed_witnesser_in_previous_epochs() {
 			// Rotate to the next epoch with new authorities
 			let _ = setup_witness_authorities(100u64..200u64);
 			// Set the current set of authority as the past authorities in the Mock.
-			MockEpochInfo::set_past_authorities(Some(BTreeSet::from_iter(0u64..100u64)));
+			MockEpochInfo::set_past_authorities(BTreeSet::from_iter(0u64..100u64));
 
 			// Some of remaining authorities can witness to pass the
 			for v in (success_threshold / 2)..success_threshold {

@@ -30,7 +30,7 @@ use frame_support::{
 	Hashable,
 };
 use scale_info::TypeInfo;
-use sp_std::prelude::*;
+use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum PalletSafeMode<CallPermission> {
@@ -277,16 +277,27 @@ pub mod pallet {
 		}
 
 		fn on_finalize(n: BlockNumberFor<T>) {
-			// Take calls over the deadline and punish all those who hasn't witnessed in time.
-			WitnessDeadline::<T>::take(n).into_iter().for_each(|(epoch, call_hash)| {
-				if let Some(votes) = Self::count_votes(epoch, call_hash) {
-					// Find the nodes that has not witnessed the call.
-					let failed_witnessers = votes
+			// -- Punish nodes who haven't witnessed the call within the grace period. -- //
+			// Cache the authorities to avoid repeated storage lookups.
+			let mut authorities_cache = BTreeMap::new();
+			for (epoch, call_hash) in WitnessDeadline::<T>::take(n) {
+				if let Some(votes) = Votes::<T>::get(epoch, call_hash) {
+					let authorities = authorities_cache.entry(epoch).or_insert_with(|| {
+						T::EpochInfo::authorities_at_epoch(epoch).into_iter().collect::<Vec<_>>()
+					});
+					let failed_witnessers = BitVec::<u8, Msb0>::from_vec(votes)
 						.into_iter()
-						.filter_map(|(id, witnessed)| match witnessed {
-							true => None,
-							false => Some(id),
-						})
+						.enumerate()
+						.filter_map(
+							|(index, witnessed)| {
+								if witnessed {
+									None
+								} else {
+									authorities.get(index)
+								}
+							},
+						)
+						.cloned()
 						.collect::<Vec<_>>();
 
 					// Report these nodes for failed to witness in time.
@@ -297,7 +308,7 @@ pub mod pallet {
 						);
 					}
 				}
-			});
+			}
 		}
 	}
 
@@ -544,8 +555,8 @@ impl<T: Config> Pallet<T> {
 		let votes: BitVec<u8, Msb0> = BitVec::from_vec(Votes::<T>::get(epoch, call_hash)?);
 
 		// Take authorities from the given epoch and match them with witnessing votes.
-		T::EpochInfo::authorities_at_epoch(epoch).map(|authorities| {
-			authorities
+		Some(
+			T::EpochInfo::authorities_at_epoch(epoch)
 				.into_iter()
 				.zip(
 					votes
@@ -553,8 +564,8 @@ impl<T: Config> Pallet<T> {
 						// by_vals is needed to convert to true/false bool values.
 						.by_vals(), // authorities are stored in the same order as the votes
 				)
-				.collect()
-		})
+				.collect(),
+		)
 	}
 }
 
