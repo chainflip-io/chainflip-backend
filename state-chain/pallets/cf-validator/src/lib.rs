@@ -848,6 +848,10 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		CurrentAuthorities::<T>::get()
 	}
 
+	fn authorities_at_epoch(epoch: u32) -> BTreeSet<Self::ValidatorId> {
+		HistoricalAuthorities::<T>::get(epoch)
+	}
+
 	fn current_authority_count() -> AuthorityCount {
 		CurrentAuthorities::<T>::decode_len().unwrap_or_default() as AuthorityCount
 	}

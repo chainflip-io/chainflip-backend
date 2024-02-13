@@ -519,6 +519,9 @@ impl pallet_cf_witnesser::Config for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type SafeMode = RuntimeSafeMode;
 	type CallDispatchPermission = WitnesserCallPermission;
+	type Offence = chainflip::Offence;
+	type OffenceReporter = Reputation;
+	type LateWitnessGracePeriod = ConstU32<LATE_WITNESS_GRACE_PERIOD>;
 	type WeightInfo = pallet_cf_witnesser::weights::PalletWeight<Runtime>;
 }
 
@@ -584,8 +587,7 @@ impl pallet_transaction_payment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type OnChargeTransaction = pallet_cf_flip::FlipTransactionPayment<Self>;
 	type OperationalFeeMultiplier = ConstU8<5>;
-	type WeightToFee =
-		ConstantMultiplier<FlipBalance, ConstU128<{ constants::common::TX_FEE_MULTIPLIER }>>;
+	type WeightToFee = ConstantMultiplier<FlipBalance, ConstU128<{ TX_FEE_MULTIPLIER }>>;
 	type LengthToFee = ConstantMultiplier<FlipBalance, ConstU128<1_000_000>>;
 	type FeeMultiplierUpdate = ConstFeeMultiplier<FeeMultiplier>;
 }
@@ -1470,7 +1472,7 @@ impl_runtime_apis! {
 				failing_count: 0,
 				validators: vec![],
 			};
-			let voting_validators = Witnesser::count_votes(hash);
+			let voting_validators = Witnesser::count_votes(<Runtime as Chainflip>::EpochInfo::current_epoch(), hash);
 			let vanity_names: BTreeMap<AccountId, Vec<u8>> = pallet_cf_validator::VanityNames::<Runtime>::get();
 			voting_validators?.iter().for_each(|(val, voted)| {
 				let vanity = match vanity_names.get(val) {

@@ -1478,6 +1478,7 @@ dependencies = [
  "sp-transaction-pool",
  "sp-version",
  "state-chain-runtime",
+ "utilities",
 ]
 
 [[package]]

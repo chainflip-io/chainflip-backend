@@ -5,7 +5,8 @@ macro_rules! impl_mock_epoch_info {
 		pub struct MockEpochInfo;
 
 		thread_local! {
-			pub static CURRENT_AUTHORITIES: std::cell::RefCell<sp_std::collections::btree_set::BTreeSet<$account_id>> = std::cell::RefCell::new(sp_std::collections::btree_set::BTreeSet::default());
+			pub static CURRENT_AUTHORITIES: std::cell::RefCell<sp_std::collections::btree_set::BTreeSet<$account_id>> = std::cell::RefCell::new(Default::default());
+			pub static PAST_AUTHORITIES: std::cell::RefCell<sp_std::collections::btree_set::BTreeSet<$account_id>> = std::cell::RefCell::new(Default::default());
 			pub static AUTHORITY_INDEX: std::cell::RefCell<std::collections::HashMap<$epoch_index, std::collections::HashMap<$account_id, $authority_count>>> = std::cell::RefCell::new(std::collections::HashMap::new());
 			pub static BOND: std::cell::RefCell<$balance> = std::cell::RefCell::new(0);
 			pub static EPOCH: std::cell::RefCell<$epoch_index> = std::cell::RefCell::new(0);
@@ -19,6 +20,12 @@ macro_rules! impl_mock_epoch_info {
 			/// Set the current authorities.
 			pub fn set_authorities(authorities: sp_std::collections::btree_set::BTreeSet<$account_id>) {
 				CURRENT_AUTHORITIES.with(|cell| {
+					*cell.borrow_mut() = authorities;
+				})
+			}
+
+			pub fn set_past_authorities(authorities: sp_std::collections::btree_set::BTreeSet<$account_id>) {
+				PAST_AUTHORITIES.with(|cell| {
 					*cell.borrow_mut() = authorities;
 				})
 			}
@@ -106,6 +113,14 @@ macro_rules! impl_mock_epoch_info {
 				EPOCH_AUTHORITY_COUNT.with(|cell| {
 					cell.borrow().get(&epoch).cloned()
 				})
+			}
+
+			fn authorities_at_epoch(epoch: $epoch_index) -> sp_std::collections::btree_set::BTreeSet<Self::ValidatorId> {
+				if epoch == Self::epoch_index() {
+					CURRENT_AUTHORITIES.with(|cell| cell.borrow().clone())
+				} else {
+					PAST_AUTHORITIES.with(|cell| cell.borrow().clone())
+				}
 			}
 
 			fn bond() -> Self::Amount {
