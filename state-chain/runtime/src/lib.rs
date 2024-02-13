@@ -1457,6 +1457,14 @@ impl_runtime_apis! {
 
 			Some(result)
 		}
+
+		fn cf_channel_opening_fee(chain: ForeignChain) -> FlipBalance {
+			match chain {
+				ForeignChain::Ethereum => pallet_cf_ingress_egress::Pallet::<Runtime, EthereumInstance>::channel_opening_fee(),
+				ForeignChain::Polkadot => pallet_cf_ingress_egress::Pallet::<Runtime, PolkadotInstance>::channel_opening_fee(),
+				ForeignChain::Bitcoin => pallet_cf_ingress_egress::Pallet::<Runtime, BitcoinInstance>::channel_opening_fee(),
+			}
+		}
 	}
 
 	// END custom runtime APIs

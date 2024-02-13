@@ -456,6 +456,7 @@ pub mod pallet {
 
 	/// The fixed fee charged for opening a channel, in Flipperinos.
 	#[pallet::storage]
+	#[pallet::getter(fn channel_opening_fee)]
 	pub type ChannelOpeningFee<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, T::Amount, ValueQuery>;
 
