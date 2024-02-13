@@ -42,6 +42,7 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2021-0139: This advisory comes from `ansi_term`, which is unmaintained but not a security issue. It's a dependency of `subxt`.
 # - RUSTSEC-2022-0061: This advisory is related to the deprecated `parity-wasm`, not a security issue. It's a dependency of `substrate`.
 # - RUSTSEC-2023-0074: Related to zerocopy, this is a transitive dependency. We can update this when we update substrate.
+# - RUSTSEC-2024-0011: Unauthenticated Nonce Increment in snow. Is a transitive dependency of substrate.
 cf-audit = '''
 audit -D unmaintained -D unsound
     --ignore RUSTSEC-2022-0093
@@ -53,4 +54,5 @@ audit -D unmaintained -D unsound
     --ignore RUSTSEC-2021-0139
     --ignore RUSTSEC-2022-0061
     --ignore RUSTSEC-2023-0074
+    --ignore RUSTSEC-2024-0011
 '''
