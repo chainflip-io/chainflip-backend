@@ -43,11 +43,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			Data = (((), Vec<VerboseTransaction>), Addresses<Inner>),
 			Chain = Bitcoin,
 		>,
-		ProcessCall: Fn(
-				Vec<DepositWitness<Bitcoin>>,
-				<cf_chains::Bitcoin as cf_chains::Chain>::ChainBlockNumber,
-				EpochIndex,
-			) -> ProcessingFut
+		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 			+ Send
 			+ Sync
 			+ Clone
@@ -69,7 +65,15 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 				// Submit all deposit witnesses for the block.
 				if !deposit_witnesses.is_empty() {
-					process_call(deposit_witnesses, header.index, epoch.index).await;
+					process_call(
+						pallet_cf_ingress_egress::Call::<_, BitcoinInstance>::process_deposits {
+							deposit_witnesses,
+							block_height: header.index,
+						}
+						.into(),
+						epoch.index,
+					)
+					.await;
 				}
 				txs
 			}

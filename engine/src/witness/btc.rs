@@ -90,36 +90,20 @@ where
 
 	let btc_deposit_prewitness_call = {
 		let process_call = process_call.clone();
-		move |deposit_witnesses, block_height, epoch_index| {
+		move |call, epoch_index| {
 			let process_call = process_call.clone();
 			async move {
-				process_call(
-					pallet_cf_ingress_egress::Call::<_, BitcoinInstance>::prewitness_deposits {
-						deposit_witnesses,
-						block_height,
-					}
-					.into(),
-					epoch_index,
-				)
-				.await;
+				process_call(call, epoch_index).await;
 			}
 		}
 	};
 
 	let btc_deposit_witness_call = {
 		let process_call = process_call.clone();
-		move |deposit_witnesses, block_height, epoch_index| {
+		move |call, epoch_index| {
 			let process_call = process_call.clone();
 			async move {
-				process_call(
-					pallet_cf_ingress_egress::Call::<_, BitcoinInstance>::process_deposits {
-						deposit_witnesses,
-						block_height,
-					}
-					.into(),
-					epoch_index,
-				)
-				.await;
+				process_call(call, epoch_index).await;
 			}
 		}
 	};
