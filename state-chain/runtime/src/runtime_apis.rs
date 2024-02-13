@@ -1,6 +1,6 @@
 use crate::chainflip::Offence;
 use cf_amm::{
-	common::{Amount, AssetsMap, Order, Tick},
+	common::{Amount, AssetsMap, Side, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{eth::Address as EthereumAddress, Chain, ForeignChainAddress};
@@ -178,7 +178,7 @@ decl_runtime_apis!(
 		fn cf_prewitness_swaps(
 			base_asset: Asset,
 			quote_asset: Asset,
-			side: Order,
+			side: Side,
 		) -> Vec<AssetAmount>;
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> Option<LiquidityProviderInfo>;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;

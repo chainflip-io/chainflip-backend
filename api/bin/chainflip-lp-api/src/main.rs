@@ -8,7 +8,7 @@ use chainflip_api::{
 	self,
 	lp::{
 		types::{LimitOrder, RangeOrder},
-		ApiWaitForResult, AssetsMap, LpApi, Order, Tick,
+		ApiWaitForResult, AssetsMap, LpApi, Side, Tick,
 	},
 	primitives::{
 		chains::{Bitcoin, Ethereum, Polkadot},
@@ -158,7 +158,7 @@ pub trait Rpc {
 		&self,
 		base_asset: RpcAsset,
 		quote_asset: RpcAsset,
-		side: Order,
+		side: Side,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<NumberOrHex>,
@@ -171,7 +171,7 @@ pub trait Rpc {
 		&self,
 		base_asset: RpcAsset,
 		quote_asset: RpcAsset,
-		side: Order,
+		side: Side,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		sell_amount: NumberOrHex,
@@ -228,7 +228,7 @@ pub enum OrderFilled {
 		lp: AccountId,
 		base_asset: Asset,
 		quote_asset: Asset,
-		side: Order,
+		side: Side,
 		id: U256,
 		tick: Tick,
 		sold: U256,
@@ -379,7 +379,7 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		base_asset: RpcAsset,
 		quote_asset: RpcAsset,
-		side: Order,
+		side: Side,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<NumberOrHex>,
@@ -406,7 +406,7 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		base_asset: RpcAsset,
 		quote_asset: RpcAsset,
-		side: Order,
+		side: Side,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		sell_amount: NumberOrHex,
@@ -570,7 +570,7 @@ where
 					let updated_range_orders = &updated_range_orders;
 					let updated_limit_orders = &updated_limit_orders;
 					let previous_pools = &previous_pools;
-					[Order::Sell, Order::Buy]
+					[Side::Sell, Side::Buy]
 						.into_iter()
 						.flat_map(move |side| {
 							pool.pool_state.limit_orders(side).filter_map(

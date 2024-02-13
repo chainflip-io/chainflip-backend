@@ -15,7 +15,7 @@ type PoolState = super::PoolState<LiquidityProvider>;
 
 #[test]
 fn test_basic_swaps() {
-	fn inner(order: Order) {
+	fn inner(order: Side) {
 		{
 			let mut pool_state = PoolState {
 				limit_orders: limit_orders::PoolState::new(0).unwrap(),
@@ -204,8 +204,8 @@ fn test_basic_swaps() {
 		}
 	}
 
-	inner(Order::Sell);
-	inner(Order::Buy);
+	inner(Side::Sell);
+	inner(Side::Buy);
 }
 
 #[test]

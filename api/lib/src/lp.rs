@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_amm::{
-	common::{Amount, AssetsMap, Order, Tick},
+	common::{Amount, AssetsMap, Side, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::address::EncodedAddress;
@@ -64,7 +64,7 @@ pub mod types {
 	pub struct LimitOrder {
 		pub base_asset: Asset,
 		pub quote_asset: Asset,
-		pub side: Order,
+		pub side: Side,
 		pub id: U256,
 		pub tick: Tick,
 		pub sell_amount_total: U256,
@@ -311,7 +311,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		side: Order,
+		side: Side,
 		id: OrderId,
 		option_tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<AssetAmount>,
@@ -338,7 +338,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		side: Order,
+		side: Side,
 		id: OrderId,
 		option_tick: Option<Tick>,
 		sell_amount: AssetAmount,

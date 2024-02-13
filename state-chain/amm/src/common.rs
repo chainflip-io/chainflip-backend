@@ -40,25 +40,25 @@ pub enum SetFeesError {
 	Hash,
 )]
 #[serde(rename_all = "snake_case")]
-pub enum Order {
+pub enum Side {
 	Buy,
 	Sell,
 }
-impl Order {
+impl Side {
 	pub fn to_sold_pair(&self) -> Pairs {
 		match self {
-			Order::Buy => Pairs::Quote,
-			Order::Sell => Pairs::Base,
+			Side::Buy => Pairs::Quote,
+			Side::Sell => Pairs::Base,
 		}
 	}
 }
-impl core::ops::Not for Order {
+impl core::ops::Not for Side {
 	type Output = Self;
 
 	fn not(self) -> Self::Output {
 		match self {
-			Order::Sell => Order::Buy,
-			Order::Buy => Order::Sell,
+			Side::Sell => Side::Buy,
+			Side::Buy => Side::Sell,
 		}
 	}
 }
@@ -81,10 +81,10 @@ impl core::ops::Not for Pairs {
 }
 
 impl Pairs {
-	pub fn sell_order(&self) -> Order {
+	pub fn sell_order(&self) -> Side {
 		match self {
-			Pairs::Base => Order::Sell,
-			Pairs::Quote => Order::Buy,
+			Pairs::Base => Side::Sell,
+			Pairs::Quote => Side::Buy,
 		}
 	}
 }

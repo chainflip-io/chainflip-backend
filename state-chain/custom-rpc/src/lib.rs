@@ -1,5 +1,5 @@
 use cf_amm::{
-	common::{Amount, AssetsMap, Order, Tick},
+	common::{Amount, AssetsMap, Side, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -303,7 +303,7 @@ pub struct PoolPriceV2 {
 pub struct RpcPrewitnessedSwap {
 	pub base_asset: RpcAsset,
 	pub quote_asset: RpcAsset,
-	pub side: Order,
+	pub side: Side,
 	pub amounts: Vec<U256>,
 }
 
@@ -513,7 +513,7 @@ pub trait CustomApi {
 		&self,
 		base_asset: RpcAsset,
 		quote_asset: RpcAsset,
-		side: Order,
+		side: Side,
 	);
 
 	#[method(name = "prewitness_swaps")]
@@ -521,7 +521,7 @@ pub trait CustomApi {
 		&self,
 		base_asset: RpcAsset,
 		quote_asset: RpcAsset,
-		side: Order,
+		side: Side,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcPrewitnessedSwap>;
 
@@ -1215,7 +1215,7 @@ where
 		sink: SubscriptionSink,
 		base_asset: RpcAsset,
 		quote_asset: RpcAsset,
-		side: Order,
+		side: Side,
 	) -> Result<(), SubscriptionEmptyError> {
 		let base_asset_inner = base_asset.try_into().map_err(|_| SubscriptionEmptyError)?;
 		let quote_asset_inner = quote_asset.try_into().map_err(|_| SubscriptionEmptyError)?;
@@ -1243,7 +1243,7 @@ where
 		&self,
 		base_asset: RpcAsset,
 		quote_asset: RpcAsset,
-		side: Order,
+		side: Side,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcPrewitnessedSwap> {
 		Ok(RpcPrewitnessedSwap {

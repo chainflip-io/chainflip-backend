@@ -8,7 +8,7 @@ use core::convert::Infallible;
 use codec::{Decode, Encode};
 use common::{
 	is_sqrt_price_valid, price_to_sqrt_price, sqrt_price_to_price, tick_at_sqrt_price, Amount,
-	AssetsMap, BaseToQuote, Order, Pairs, Price, QuoteToBase, SetFeesError, SqrtPriceQ64F96,
+	AssetsMap, BaseToQuote, Pairs, Price, QuoteToBase, SetFeesError, Side, SqrtPriceQ64F96,
 	SwapDirection, Tick,
 };
 use limit_orders::{Collected, PositionInfo};
@@ -51,7 +51,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 	/// Returns the current price for a given direction of swap. The price is measured in units of
 	/// the specified Pairs argument
-	pub fn current_price(&mut self, order: Order) -> Option<(Price, SqrtPriceQ64F96, Tick)> {
+	pub fn current_price(&mut self, order: Side) -> Option<(Price, SqrtPriceQ64F96, Tick)> {
 		self.current_sqrt_price(order).map(|sqrt_price| {
 			(sqrt_price_to_price(sqrt_price), sqrt_price, tick_at_sqrt_price(sqrt_price))
 		})
@@ -59,14 +59,14 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 	/// Returns the current sqrt price for a given direction of swap. The price is measured in units
 	/// of the specified Pairs argument
-	pub fn current_sqrt_price(&mut self, order: Order) -> Option<SqrtPriceQ64F96> {
+	pub fn current_sqrt_price(&mut self, order: Side) -> Option<SqrtPriceQ64F96> {
 		match order.to_sold_pair() {
 			Pairs::Base => self.inner_current_sqrt_price::<BaseToQuote>(),
 			Pairs::Quote => self.inner_current_sqrt_price::<QuoteToBase>(),
 		}
 	}
 
-	fn inner_worst_price(order: Order) -> SqrtPriceQ64F96 {
+	fn inner_worst_price(order: Side) -> SqrtPriceQ64F96 {
 		match order.to_sold_pair() {
 			Pairs::Quote => QuoteToBase::WORST_SQRT_PRICE,
 			Pairs::Base => BaseToQuote::WORST_SQRT_PRICE,
@@ -75,7 +75,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 	pub fn logarithm_sqrt_price_sequence(
 		&mut self,
-		order: Order,
+		order: Side,
 		count: u32,
 	) -> Vec<SqrtPriceQ64F96> {
 		let worst_sqrt_price = Self::inner_worst_price(order);
@@ -127,14 +127,14 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 	pub fn relative_sqrt_price(
 		&self,
-		order: Order,
+		order: Side,
 		sqrt_price: SqrtPriceQ64F96,
 		delta: Tick,
 	) -> Option<SqrtPriceQ64F96> {
 		if is_sqrt_price_valid(sqrt_price) {
 			Some(match order {
-				Order::Buy => QuoteToBase::increase_sqrt_price(sqrt_price, delta),
-				Order::Sell => BaseToQuote::increase_sqrt_price(sqrt_price, delta),
+				Side::Buy => QuoteToBase::increase_sqrt_price(sqrt_price, delta),
+				Side::Sell => BaseToQuote::increase_sqrt_price(sqrt_price, delta),
 			})
 		} else {
 			None
@@ -167,7 +167,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// This function never panics.
 	pub fn swap(
 		&mut self,
-		order: Order,
+		order: Side,
 		sold_amount: Amount,
 		sqrt_price_limit: Option<SqrtPriceQ64F96>,
 	) -> (Amount, Amount) {
@@ -227,7 +227,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn collect_and_mint_limit_order(
 		&mut self,
 		lp: &LiquidityProvider,
-		order: Order,
+		order: Side,
 		tick: Tick,
 		sold_amount: Amount,
 	) -> Result<
@@ -244,7 +244,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn collect_and_burn_limit_order(
 		&mut self,
 		lp: &LiquidityProvider,
-		order: Order,
+		order: Side,
 		tick: Tick,
 		sold_amount: Amount,
 	) -> Result<
@@ -342,21 +342,21 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn limit_order(
 		&self,
 		lp: &LiquidityProvider,
-		order: Order,
+		order: Side,
 		tick: Tick,
 	) -> Result<
 		(limit_orders::Collected, limit_orders::PositionInfo),
 		limit_orders::PositionError<Infallible>,
 	> {
 		match order {
-			Order::Sell => self.limit_orders.position::<QuoteToBase>(lp, tick),
-			Order::Buy => self.limit_orders.position::<BaseToQuote>(lp, tick),
+			Side::Sell => self.limit_orders.position::<QuoteToBase>(lp, tick),
+			Side::Buy => self.limit_orders.position::<BaseToQuote>(lp, tick),
 		}
 	}
 
 	pub fn limit_orders(
 		&self,
-		order: Order,
+		order: Side,
 	) -> sp_std::boxed::Box<
 		dyn '_
 			+ Iterator<
@@ -369,8 +369,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			>,
 	> {
 		match order {
-			Order::Sell => sp_std::boxed::Box::new(self.limit_orders.positions::<QuoteToBase>()),
-			Order::Buy => sp_std::boxed::Box::new(self.limit_orders.positions::<BaseToQuote>()),
+			Side::Sell => sp_std::boxed::Box::new(self.limit_orders.positions::<QuoteToBase>()),
+			Side::Buy => sp_std::boxed::Box::new(self.limit_orders.positions::<BaseToQuote>()),
 		}
 	}
 
@@ -382,10 +382,10 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		self.range_orders.fee_hundredth_pips
 	}
 
-	pub fn limit_order_liquidity(&self, order: Order) -> Vec<(Tick, Amount)> {
+	pub fn limit_order_liquidity(&self, order: Side) -> Vec<(Tick, Amount)> {
 		match order {
-			Order::Sell => self.limit_orders.liquidity::<QuoteToBase>(),
-			Order::Buy => self.limit_orders.liquidity::<BaseToQuote>(),
+			Side::Sell => self.limit_orders.liquidity::<QuoteToBase>(),
+			Side::Buy => self.limit_orders.liquidity::<BaseToQuote>(),
 		}
 	}
 

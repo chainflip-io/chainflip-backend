@@ -2,7 +2,7 @@
 use core::ops::Range;
 
 use cf_amm::{
-	common::{Amount, AssetsMap, Order, Price, SqrtPriceQ64F96, Tick},
+	common::{Amount, AssetsMap, Price, Side, SqrtPriceQ64F96, Tick},
 	limit_orders,
 	limit_orders::{Collected, PositionInfo},
 	range_orders,
@@ -62,21 +62,21 @@ impl AssetPair {
 		Self::new(base_asset, quote_asset).ok_or(Error::<T>::PoolDoesNotExist)
 	}
 
-	pub fn from_swap(from: Asset, to: Asset) -> Option<(Self, Order)> {
+	pub fn from_swap(from: Asset, to: Asset) -> Option<(Self, Side)> {
 		#[allow(clippy::manual_map)]
 		if let Some(asset_pair) = Self::new(from, to) {
-			Some((asset_pair, Order::Sell))
+			Some((asset_pair, Side::Sell))
 		} else if let Some(asset_pair) = Self::new(to, from) {
-			Some((asset_pair, Order::Buy))
+			Some((asset_pair, Side::Buy))
 		} else {
 			None
 		}
 	}
 
-	pub fn to_swap(base_asset: Asset, quote_asset: Asset, side: Order) -> (Asset, Asset) {
+	pub fn to_swap(base_asset: Asset, quote_asset: Asset, side: Side) -> (Asset, Asset) {
 		match side {
-			Order::Buy => (quote_asset, base_asset),
-			Order::Sell => (base_asset, quote_asset),
+			Side::Buy => (quote_asset, base_asset),
+			Side::Sell => (base_asset, quote_asset),
 		}
 	}
 
@@ -110,8 +110,8 @@ impl<T> AskBidMap<T> {
 		Self { asks: map.base, bids: map.quote }
 	}
 
-	pub fn from_fn<F: FnMut(Order) -> T>(mut f: F) -> Self {
-		Self::from_sell_map(AssetsMap { base: f(Order::Sell), quote: f(Order::Buy) })
+	pub fn from_fn<F: FnMut(Side) -> T>(mut f: F) -> Self {
+		Self::from_sell_map(AssetsMap { base: f(Side::Sell), quote: f(Side::Buy) })
 	}
 
 	pub fn map<S, F: FnMut(T) -> S>(self, mut f: F) -> AskBidMap<S> {
@@ -443,7 +443,7 @@ pub mod pallet {
 			lp: T::AccountId,
 			base_asset: Asset,
 			quote_asset: Asset,
-			side: Order,
+			side: Side,
 			id: OrderId,
 			tick: Tick,
 			sell_amount_change: Option<IncreaseOrDecrease<AssetAmount>>,
@@ -731,7 +731,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			base_asset: any::Asset,
 			quote_asset: any::Asset,
-			side: Order,
+			side: Side,
 			id: OrderId,
 			option_tick: Option<Tick>,
 			amount_change: IncreaseOrDecrease<AssetAmount>,
@@ -807,7 +807,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			base_asset: any::Asset,
 			quote_asset: any::Asset,
-			side: Order,
+			side: Side,
 			id: OrderId,
 			option_tick: Option<Tick>,
 			sell_amount: AssetAmount,
@@ -1193,7 +1193,7 @@ impl<T: Config> Pallet<T> {
 		pool: &mut Pool<T>,
 		lp: &T::AccountId,
 		asset_pair: &AssetPair,
-		side: Order,
+		side: Side,
 		id: OrderId,
 		tick: cf_amm::common::Tick,
 		sold_amount_change: IncreaseOrDecrease<cf_amm::common::Amount>,
@@ -1494,8 +1494,8 @@ impl<T: Config> Pallet<T> {
 		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
 		let mut pool = Pools::<T>::get(asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?;
 		Ok(PoolPriceV2 {
-			sell: pool.pool_state.current_price(Order::Sell).map(|(_, sqrt_price, _)| sqrt_price),
-			buy: pool.pool_state.current_price(Order::Buy).map(|(_, sqrt_price, _)| sqrt_price),
+			sell: pool.pool_state.current_price(Side::Sell).map(|(_, sqrt_price, _)| sqrt_price),
+			buy: pool.pool_state.current_price(Side::Buy).map(|(_, sqrt_price, _)| sqrt_price),
 		})
 	}
 
@@ -1538,13 +1538,13 @@ impl<T: Config> Pallet<T> {
 		Ok(PoolOrderbook {
 			asks: {
 				let mut pool_state = pool_state.clone();
-				let sqrt_prices = pool_state.logarithm_sqrt_price_sequence(Order::Buy, orders);
+				let sqrt_prices = pool_state.logarithm_sqrt_price_sequence(Side::Buy, orders);
 
 				sqrt_prices
 					.into_iter()
 					.filter_map(|sqrt_price| {
 						let (sold_base_amount, remaining_quote_amount) =
-							pool_state.swap(Order::Buy, Amount::MAX, Some(sqrt_price));
+							pool_state.swap(Side::Buy, Amount::MAX, Some(sqrt_price));
 
 						let bought_quote_amount = Amount::MAX - remaining_quote_amount;
 
@@ -1564,13 +1564,13 @@ impl<T: Config> Pallet<T> {
 			},
 			bids: {
 				let mut pool_state = pool_state;
-				let sqrt_prices = pool_state.logarithm_sqrt_price_sequence(Order::Sell, orders);
+				let sqrt_prices = pool_state.logarithm_sqrt_price_sequence(Side::Sell, orders);
 
 				sqrt_prices
 					.into_iter()
 					.filter_map(|sqrt_price| {
 						let (sold_quote_amount, remaining_base_amount) =
-							pool_state.swap(Order::Sell, Amount::MAX, Some(sqrt_price));
+							pool_state.swap(Side::Sell, Amount::MAX, Some(sqrt_price));
 
 						let bought_base_amount = Amount::MAX - remaining_base_amount;
 
@@ -1808,7 +1808,7 @@ impl<T: Config> Pallet<T> {
 		pool: &mut Pool<T>,
 		asset_pair: &AssetPair,
 		lp: &T::AccountId,
-		order: Order,
+		order: Side,
 		id: OrderId,
 		tick: Tick,
 		collected: Collected,

@@ -17,7 +17,7 @@ use crate::{
 	},
 };
 use cf_amm::{
-	common::{Amount, AssetsMap, Order, Tick},
+	common::{Amount, AssetsMap, Side, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -1301,7 +1301,7 @@ impl_runtime_apis! {
 
 		/// This should *not* be fully trusted as if the deposits that are pre-witnessed will definitely go through.
 		/// This returns a list of swaps in the requested direction that are pre-witnessed in the current block.
-		fn cf_prewitness_swaps(base_asset: Asset, quote_asset: Asset, side: Order) -> Vec<AssetAmount> {
+		fn cf_prewitness_swaps(base_asset: Asset, quote_asset: Asset, side: Side) -> Vec<AssetAmount> {
 			let (from, to) = AssetPair::to_swap(base_asset, quote_asset, side);
 
 			fn filter_deposit_swaps<C, I: 'static>(from: Asset, to: Asset, deposit_witnesses: Vec<DepositWitness<C>>) -> Vec<AssetAmount>
