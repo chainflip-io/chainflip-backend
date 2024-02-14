@@ -146,37 +146,27 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 							"Unreachable because we are in the branch for the Failed variant."
 						),
 					},
-				KeyRotationStatusVariant::AwaitingActivationKeyTss => {
+				KeyRotationStatusVariant::AwaitingActivation => {
 					let (new_public_key, request_id) = match PendingKeyRotation::<T, I>::get() {
-						Some(KeyRotationStatus::AwaitingActivationKeyTss {
-							new_public_key,
+						Some(KeyRotationStatus::AwaitingActivation {
 							request_id,
+							new_public_key,
 						}) => (new_public_key, request_id),
 						_ => unreachable!(
 							"Unreachable because we are in the branch for the AwaitingActivationKeyTss variant."
 						),
 					};
-					let signature = Signature::<T, I>::get(request_id);
-					match signature {
-						AsyncResult::Pending => AsyncResult::Pending,
-						AsyncResult::Ready(_) => {
-							PendingKeyRotation::<T, I>::put(
-								KeyRotationStatus::AwaitingActivation { new_public_key },
-							);
-							T::VaultActivator::activate_keys();
-							//TODO: should I return Ready????
-							AsyncResult::Ready(KeyRotationStatusOuter::KeyHandoverComplete)
-						},
-						AsyncResult::Void => AsyncResult::Void,
-					}
-				},
-				KeyRotationStatusVariant::AwaitingActivation => {
-					let new_public_key = match PendingKeyRotation::<T, I>::get() {
-						Some(KeyRotationStatus::AwaitingActivation { new_public_key }) =>
-							new_public_key,
-						_ => unreachable!(
-							"Unreachable because we are in the branch for the AwaitingActivation variant."
-						),
+
+					if let Some(tss_request_id) = request_id {
+						match Signature::<T, I>::get(tss_request_id) {
+							// After a tss ceremony completes, it is consumed and Void is left
+							// behind At this point we are sure the ceremony existed and we
+							// completed it we can activate the key
+							AsyncResult::Void => {
+								T::VaultActivator::activate_key();
+							},
+							_ => {},
+						};
 					};
 
 					let status = T::VaultActivator::status()
@@ -212,36 +202,35 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 			PendingKeyRotation::<T, I>::get()
 		{
 			let maybe_active_epoch_key = Self::active_epoch_key();
-			// 1) only internal payload(bytes), save the whole call in a storage item
 
 			match T::VaultActivator::activate(
 				new_public_key,
 				maybe_active_epoch_key.map(|EpochKey { key, .. }| key),
 			) {
+				// If a request_id was returned we need to wait for the request (tss) to complete
+				// before ending the rotation succesfully
 				Some(request_id) => {
-					// 2) sign and broadcast the whole tx with the previous function (modified now)
 					PendingKeyRotation::<T, I>::put(
-						KeyRotationStatus::<T, I>::AwaitingActivationKeyTss {
-							request_id,
+						KeyRotationStatus::<T, I>::AwaitingActivation {
+							request_id: Some(request_id),
 							new_public_key,
 						},
 					);
 				},
-				// if none it means no activation required or governance in case of vault bootstrap
-				None => {},
+				// if none was returned no ceremony is required and we can already complete the
+				// rotation/wait for governance extrinsic to activate the vault
+				None =>
+					if maybe_active_epoch_key.is_some() {
+						Self::activate_new_key(new_public_key);
+					} else {
+						PendingKeyRotation::<T, I>::put(
+							KeyRotationStatus::<T, I>::AwaitingActivation {
+								request_id: None,
+								new_public_key,
+							},
+						);
+					},
 			}
-
-		// We don't need to update the PendingKeyRotation state anymore, it will be updated once the
-		// signature is completed and the callback is executed, the status method will then allow to
-		// move forward to the AwaitingActivation phase.
-
-		// if maybe_active_epoch_key.is_some() {
-		// 	Self::activate_new_key(new_public_key);
-		// } else {
-		// 	PendingKeyRotation::<T, I>::put(KeyRotationStatus::<T, I>::AwaitingActivation {
-		// 		new_public_key,
-		// 	});
-		// }
 		} else {
 			log::error!("Vault activation called during wrong state.");
 		}

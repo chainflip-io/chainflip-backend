@@ -18,7 +18,7 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 		}
 	}
 
-	fn activate_keys() {
+	fn activate_key() {
 		Self::activate_new_key_for_chain(T::ChainTracking::get_block_height());
 	}
 
@@ -32,11 +32,16 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 				new_public_key,
 			) {
 				Ok(activation_call) => {
+					// we need to sign and submit the rotation call
+					// reporting back the request_id of the tss such that we can complete the
+					// rotation when that request is completed
 					let (_, tss_request_id) =
-						T::Broadcaster::threshold_sign_and_broadcast_rotation_tx(
-							activation_call.clone(),
-						);
-
+						T::Broadcaster::threshold_sign_and_broadcast_rotation_tx(activation_call);
+					// since vaults are activated only when the tss completes we need to initiate
+					// the activation
+					PendingVaultActivation::<T, I>::put(
+						VaultActivationStatus::<T, I>::AwaitingActivation { new_public_key },
+					);
 					Some(tss_request_id)
 				},
 				Err(SetAggKeyWithAggKeyError::NotRequired) => {
@@ -52,42 +57,6 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 					);
 					None
 				},
-				// Ok(activation_call) => {
-				// 	// save the activation_call in a storage item
-				// 	// let request_id =
-				// T::ThresholdSigner::request_signature(activation_call.clone().
-				// threshold_signature_payload()); 	// T::ThresholdSigner::register_callback(
-				// 	// 	request_id,
-				// 	// 	Call::on_signature_ready {
-				// 	// 		request_id,
-				// 	// 		threshold_signature_payload:
-				// activation_call.clone().threshold_signature_payload(), 	// 		api_call:
-				// Box::new(activation_call), 	// 		broadcast_id,
-				// 	// 		initiated_at,
-				// 	// 		should_broadcast: true,
-				// 	// 	}
-				// 	// 	.into()
-				// 	// );
-				// 	let (_, tss_request_id) =
-				// T::Broadcaster::threshold_sign_and_broadcast_rotation_tx(activation_call.
-				// clone());
-
-				// 	// PendingVaultActivationCall::<T,I>::put(request_id);
-				// 	// 	avtivation_call.clone().threshold_signature_payload(),
-				// 	// 	|threshold_request_id| {
-				// 	// 		Call::on_signature_ready {
-				// 	// 			threshold_request_id,
-				// 	// 			threshold_signature_payload,
-				// 	// 			api_call: Box::new(api_call),
-				// 	// 			broadcast_id,
-				// 	// 			initiated_at,
-				// 	// 			should_broadcast,
-				// 	// 		}
-				// 	// 		.into()
-				// 	// 	},
-				// 	// );
-				// 	Some(tss_request_id)
-				// }
 			}
 		} else {
 			// No active key means we are bootstrapping the vault.

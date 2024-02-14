@@ -194,7 +194,7 @@ pub trait VaultActivator<C: ChainCrypto> {
 	/// on the contract for a smart contract chain.
 	fn activate(new_key: C::AggKey, maybe_old_key: Option<C::AggKey>) -> Option<u32>;
 
-	fn activate_keys();
+	fn activate_key();
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(_outcome: AsyncResult<()>);
