@@ -38,6 +38,8 @@ jobs:
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
           
           git checkout $RELEASE_BRANCH
+          git pull origin $RELEASE_BRANCH
+          
           git checkout -b $BRANCH
           git cherry-pick -x $COMMIT_SHA
 
