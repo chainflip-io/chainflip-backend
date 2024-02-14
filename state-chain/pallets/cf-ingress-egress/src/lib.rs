@@ -561,6 +561,8 @@ pub mod pallet {
 
 			let read_weight =
 				frame_support::weights::constants::RocksDbWeight::get().reads_writes(1, 0);
+			let write_weight =
+				frame_support::weights::constants::RocksDbWeight::get().reads_writes(0, 1);
 
 			while remaining_weight.saturating_sub(used_weight).all_gte(read_weight * 2) {
 				used_weight = used_weight.saturating_add(read_weight);
@@ -581,10 +583,7 @@ pub mod pallet {
 						.count() as u32;
 
 						let cleanup_weight = T::WeightInfo::remove_boostable_deposits(item_count)
-							.saturating_add(
-								frame_support::weights::constants::RocksDbWeight::get()
-									.reads_writes(0, 2),
-							);
+							.saturating_add(write_weight * 2);
 
 						// If we don't have enough weight to do the cleanup, leave it for next time
 						if !remaining_weight.saturating_sub(used_weight).all_gte(cleanup_weight) {
@@ -597,10 +596,7 @@ pub mod pallet {
 								details.deposit_channel.channel_id,
 								DepositChannel { state, ..details.deposit_channel },
 							);
-							used_weight = used_weight.saturating_add(
-								frame_support::weights::constants::RocksDbWeight::get()
-									.reads_writes(0, 1),
-							);
+							used_weight = used_weight.saturating_add(write_weight);
 						}
 
 						// Cleanup the deposit data
@@ -613,15 +609,13 @@ pub mod pallet {
 
 						used_weight = used_weight
 							.saturating_add(T::WeightInfo::remove_boostable_deposits(item_count))
-							.saturating_add(
-								frame_support::weights::constants::RocksDbWeight::get()
-									.reads_writes(0, 1),
-							);
+							.saturating_add(write_weight);
 					}
 
 					DepositChannelRecycleBlocks::<T, I>::mutate(|recycle_queue| {
 						recycle_queue.remove(0);
 					});
+					used_weight = used_weight.saturating_add(write_weight);
 				} else {
 					break
 				}

@@ -1563,7 +1563,7 @@ fn test_idle_cleanup() {
 
 		// Calculate the weight for the cleanup (without recycle).
 		let weight_per_channel = RocksDbWeight::get()
-			.reads_writes(2, 1)
+			.reads_writes(2, 2)
 			.saturating_add(<Test as Config>::WeightInfo::remove_boostable_deposits(1));
 
 		// Run cleanup with only enough weight for 2 of the 3 channels
