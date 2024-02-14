@@ -39,14 +39,17 @@ jobs:
           git checkout $RELEASE_BRANCH
           
           git cherry-pick -x $COMMIT_SHA
-          
-          
+
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v3
         with:
           token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
           commit-message: Cherry-picked from ${{ env.COMMIT_SHA }}
           title: "Cherry-Pick ${{ env.COMMIT_SHA }} to ${{ env.RELEASE_BRANCH }}"
+          body: |
+            This is an automated cherry-pick of ${{ env.COMMIT_SHA }} to ${{ env.RELEASE_BRANCH }}.
+            Please review and merge if appropriate.
+            Original PR: ${{ github.event.pull_request.html_url }}
           branch: pick/non-breaking
           base: '${{ env.RELEASE_BRANCH }}'
           reviewers: 'martin-chainflip'
