@@ -203,7 +203,7 @@ fn get_asset_balance(who: &AccountId, asset: Asset) -> u128 {
 
 #[test]
 fn basic_pool_setup_provision_and_swap() {
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 	.with_additional_accounts(&[
 		(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
 		(ZION, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
@@ -317,7 +317,7 @@ fn basic_pool_setup_provision_and_swap() {
 
 #[test]
 fn can_process_ccm_via_swap_deposit_address() {
-	super::genesis::default().build().execute_with(|| {
+	super::genesis::with_test_defaults().build().execute_with(|| {
 		// Setup pool and liquidity
 		setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip]);
 
@@ -425,7 +425,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 
 #[test]
 fn can_process_ccm_via_direct_deposit() {
-	super::genesis::default().build().execute_with(|| {
+	super::genesis::with_test_defaults().build().execute_with(|| {
 		setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip]);
 
 		let gas_budget = 100;
@@ -517,7 +517,7 @@ fn can_process_ccm_via_direct_deposit() {
 
 #[test]
 fn failed_swaps_are_rolled_back() {
-	super::genesis::default().build().execute_with(|| {
+	super::genesis::with_test_defaults().build().execute_with(|| {
 		setup_pool_and_accounts(vec![Asset::Eth, Asset::Btc]);
 
 		// Get current pool's liquidity
@@ -676,7 +676,7 @@ fn failed_swaps_are_rolled_back() {
 
 #[test]
 fn ethereum_ccm_can_calculate_gas_limits() {
-	super::genesis::default().build().execute_with(|| {
+	super::genesis::with_test_defaults().build().execute_with(|| {
 		let chain_state = ChainState::<Ethereum> {
 			block_height: 1,
 			tracked_data: EthereumTrackedData {
@@ -745,7 +745,7 @@ fn ethereum_ccm_can_calculate_gas_limits() {
 fn can_resign_failed_ccm() {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
@@ -874,7 +874,7 @@ fn can_resign_failed_ccm() {
 fn can_handle_failed_vault_transfer() {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
