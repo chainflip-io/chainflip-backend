@@ -1457,9 +1457,9 @@ fn on_finalize_handles_failed_calls() {
 		));
 
 		// All calls are culled from storage.
-		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch), vec![]);
-		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch + 1), vec![]);
-		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch + 2), vec![]);
+		assert!(!FailedForeignChainCalls::<Test>::contains_key(epoch));
+		assert!(!FailedForeignChainCalls::<Test>::contains_key(epoch + 1));
+		assert!(!FailedForeignChainCalls::<Test>::contains_key(epoch + 2));
 	});
 }
 

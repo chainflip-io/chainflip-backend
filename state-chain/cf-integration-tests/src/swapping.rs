@@ -1,7 +1,10 @@
 //! Contains tests related to liquidity, pools and swapping
 use crate::{
 	genesis,
-	network::{fund_authorities_and_join_auction, setup_account_and_peer_mapping, Cli, Network},
+	network::{
+		fund_authorities_and_join_auction, new_account, setup_account_and_peer_mapping, Cli,
+		Network,
+	},
 	witness_call,
 };
 use cf_amm::{
@@ -21,11 +24,11 @@ use cf_primitives::{
 	AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, GENESIS_EPOCH, STABLE_ASSET,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match};
-use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo, LpBalanceApi};
+use cf_traits::{Chainflip, EpochInfo, LpBalanceApi};
 use frame_support::{
 	assert_ok,
 	instances::Instance1,
-	traits::{OnFinalize, OnIdle, OnNewAccount},
+	traits::{OnFinalize, OnIdle},
 };
 use pallet_cf_broadcast::{
 	AwaitingBroadcast, BroadcastIdCounter, RequestFailureCallbacks, RequestSuccessCallbacks,
@@ -40,9 +43,9 @@ use state_chain_runtime::{
 		address_derivation::AddressDerivation, ChainAddressConverter, EthEnvironment,
 		EthTransactionBuilder,
 	},
-	AccountRoles, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
-	EthereumInstance, LiquidityPools, LiquidityProvider, Runtime, RuntimeCall, RuntimeEvent,
-	RuntimeOrigin, Swapping, System, Timestamp, Validator, Weight, Witnesser,
+	EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress, EthereumInstance,
+	LiquidityPools, LiquidityProvider, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping,
+	System, Timestamp, Validator, Weight, Witnesser,
 };
 
 const DORIS: AccountId = AccountId::new([0x11; 32]);
@@ -64,19 +67,6 @@ fn new_pool(unstable_asset: Asset, fee_hundredth_pips: u32, initial_price: Price
 			fee_hundredth_pips,
 			initial_price,
 		},)
-	);
-	System::reset_events();
-}
-
-fn new_account(account_id: &AccountId, role: AccountRole) {
-	AccountRoles::on_new_account(account_id);
-	assert_ok!(AccountRoles::register_account_role(account_id, role));
-	assert_events_eq!(
-		Runtime,
-		RuntimeEvent::AccountRoles(pallet_cf_account_roles::Event::AccountRoleRegistered {
-			account_id: account_id.clone(),
-			role,
-		})
 	);
 	System::reset_events();
 }

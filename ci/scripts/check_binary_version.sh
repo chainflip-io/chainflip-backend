@@ -1,6 +1,6 @@
 #!/bin/bash
 
-binary_version_full=$($1 -V)
+binary_version_full=$($1 --version)
 github_tag=$2
 
 binary_semver=$(echo $binary_version_full | awk '{print $2}' | awk -F '-' '{print $1}')

@@ -1,18 +1,12 @@
-use frame_support::storage::{storage_prefix, unhashed};
+use frame_support::{migration::move_storage_from_pallet, traits::PalletInfoAccess};
 
-/// Not to be confused with [move_prefix]. This function move the storage identified by the given
-/// pallet and storage names.
-pub fn move_storage(
-	old_pallet_name: &[u8],
-	old_storage_name: &[u8],
-	new_pallet_name: &[u8],
-	new_storage_name: &[u8],
-) {
-	let new_prefix = storage_prefix(new_pallet_name, new_storage_name);
-	let old_prefix = storage_prefix(old_pallet_name, old_storage_name);
-
-	if let Some(value) = unhashed::get_raw(&old_prefix) {
-		unhashed::put_raw(&new_prefix, &value);
-		unhashed::kill(&old_prefix);
-	}
+/// Move storage between pallets.
+pub fn move_pallet_storage<From: PalletInfoAccess, To: PalletInfoAccess>(storage_name: &[u8]) {
+	log::info!(
+		"⏫ Moving storage {} from {} to {}.",
+		sp_std::str::from_utf8(storage_name).expect("storage names are all valid utf8"),
+		From::name(),
+		To::name(),
+	);
+	move_storage_from_pallet(storage_name, From::name().as_bytes(), To::name().as_bytes());
 }

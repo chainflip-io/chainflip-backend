@@ -34,6 +34,8 @@ pub enum Offence {
 	GrandpaEquivocation,
 	/// A node failed to participate in key handover.
 	ParticipateKeyHandoverFailed,
+	/// A authority failed to Witness a call in time.
+	FailedToWitnessInTime,
 }
 
 /// Nodes should be excluded from keygen if they have been reported for any of the offences in this
@@ -80,6 +82,15 @@ impl From<pallet_cf_validator::PalletOffence> for Offence {
 	fn from(offences: pallet_cf_validator::PalletOffence) -> Self {
 		match offences {
 			pallet_cf_validator::PalletOffence::MissedAuthorshipSlot => Self::MissedAuthorshipSlot,
+		}
+	}
+}
+
+impl From<pallet_cf_witnesser::PalletOffence> for Offence {
+	fn from(offences: pallet_cf_witnesser::PalletOffence) -> Self {
+		match offences {
+			pallet_cf_witnesser::PalletOffence::FailedToWitnessInTime =>
+				Self::FailedToWitnessInTime,
 		}
 	}
 }
