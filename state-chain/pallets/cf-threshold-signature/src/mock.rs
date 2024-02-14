@@ -193,7 +193,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 pub struct MockVaultActivator;
 impl VaultActivator<MockEthereumChainCrypto> for MockVaultActivator {
 	type ValidatorId = <Test as Chainflip>::ValidatorId;
-	fn activate(_new_key: MockAggKey, _maybe_old_key: Option<MockAggKey>) -> Option<u32>{
+	fn activate(_new_key: MockAggKey, _maybe_old_key: Option<MockAggKey>) -> Option<u32> {
 		None
 	}
 
@@ -207,8 +207,8 @@ impl VaultActivator<MockEthereumChainCrypto> for MockVaultActivator {
 	}
 
 	fn activate_key() {
-        unimplemented!()
-    }
+		unimplemented!()
+	}
 }
 
 impl MockVaultActivator {

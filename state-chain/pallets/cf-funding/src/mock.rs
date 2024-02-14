@@ -158,7 +158,7 @@ impl Broadcaster<Ethereum> for MockBroadcaster {
 		REDEMPTION_BROADCAST_REQUESTS.with(|cell| {
 			cell.borrow_mut().push(api_call.amount);
 		});
-		(0,0)
+		(0, 0)
 	}
 
 	fn threshold_sign_and_broadcast_with_callback(

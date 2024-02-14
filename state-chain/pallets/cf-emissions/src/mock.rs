@@ -170,7 +170,7 @@ impl Broadcaster<MockEthereum> for MockBroadcast {
 
 	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> (BroadcastId, u32) {
 		Self::call(api_call);
-		(1,1)
+		(1, 1)
 	}
 
 	fn threshold_sign_and_broadcast_with_callback(
