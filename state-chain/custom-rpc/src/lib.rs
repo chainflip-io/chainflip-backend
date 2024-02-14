@@ -8,8 +8,8 @@ use cf_chains::{
 	Chain,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, BroadcastId, ForeignChain, NetworkEnvironment, SemVer,
-	SwapOutput,
+	chains::assets::any, AccountRole, Asset, AssetAmount, BroadcastId, ForeignChain,
+	NetworkEnvironment, SemVer, SwapOutput,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -72,7 +72,7 @@ pub enum RpcAccountInfo {
 		flip_balance: NumberOrHex,
 	},
 	LiquidityProvider {
-		balances: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+		balances: any::AssetMap<NumberOrHex>,
 		refund_addresses: HashMap<ForeignChain, Option<ForeignChainAddressHumanreadable>>,
 		flip_balance: NumberOrHex,
 	},
@@ -103,18 +103,12 @@ impl RpcAccountInfo {
 	}
 
 	fn lp(info: LiquidityProviderInfo, network: NetworkEnvironment, balance: u128) -> Self {
-		let mut balances = HashMap::new();
-
-		for (asset, balance) in info.balances {
-			balances
-				.entry(asset.into())
-				.or_insert_with(HashMap::new)
-				.insert(asset, balance.into());
-		}
-
 		Self::LiquidityProvider {
 			flip_balance: balance.into(),
-			balances,
+			balances: cf_chains::assets::any::AssetMap::try_from_iter(
+				info.balances.iter().map(|(asset, balance)| (*asset, (*balance).into())),
+			)
+			.unwrap(),
 			refund_addresses: info
 				.refund_addresses
 				.into_iter()
@@ -218,11 +212,11 @@ pub struct PoolsEnvironment {
 
 #[derive(Serialize, Deserialize)]
 pub struct IngressEgressEnvironment {
-	pub minimum_deposit_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
-	pub ingress_fees: HashMap<ForeignChain, HashMap<Asset, Option<NumberOrHex>>>,
-	pub egress_fees: HashMap<ForeignChain, HashMap<Asset, Option<NumberOrHex>>>,
+	pub minimum_deposit_amounts: any::AssetMap<NumberOrHex>,
+	pub ingress_fees: any::AssetMap<Option<NumberOrHex>>,
+	pub egress_fees: any::AssetMap<Option<NumberOrHex>>,
 	pub witness_safety_margins: HashMap<ForeignChain, Option<u64>>,
-	pub egress_dust_limits: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+	pub egress_dust_limits: any::AssetMap<NumberOrHex>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -233,7 +227,7 @@ pub struct FundingEnvironment {
 
 #[derive(Serialize, Deserialize)]
 pub struct SwappingEnvironment {
-	maximum_swap_amounts: HashMap<ForeignChain, HashMap<Asset, Option<NumberOrHex>>>,
+	maximum_swap_amounts: any::AssetMap<Option<NumberOrHex>>,
 	network_fee_hundredth_pips: Permill,
 }
 
@@ -470,7 +464,7 @@ pub trait CustomApi {
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-        side: Order,
+		side: Order,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcPrewitnessedSwap>;
 
@@ -980,31 +974,8 @@ where
 	) -> RpcResult<IngressEgressEnvironment> {
 		let runtime_api = &self.client.runtime_api();
 		let hash = self.unwrap_or_best(at);
-		let mut minimum_deposit_amounts = HashMap::new();
-		let mut ingress_fees = HashMap::new();
-		let mut egress_fees = HashMap::new();
-		let mut witness_safety_margins = HashMap::new();
-		let mut egress_dust_limits = HashMap::new();
 
-		for asset in Asset::all() {
-			let chain = ForeignChain::from(asset);
-			minimum_deposit_amounts.entry(chain).or_insert_with(HashMap::new).insert(
-				asset,
-				runtime_api.cf_min_deposit_amount(hash, asset).map_err(to_rpc_error)?.into(),
-			);
-			ingress_fees.entry(chain).or_insert_with(HashMap::new).insert(
-				asset,
-				runtime_api.cf_ingress_fee(hash, asset).map_err(to_rpc_error)?.map(Into::into),
-			);
-			egress_fees.entry(chain).or_insert_with(HashMap::new).insert(
-				asset,
-				runtime_api.cf_egress_fee(hash, asset).map_err(to_rpc_error)?.map(Into::into),
-			);
-			egress_dust_limits.entry(chain).or_insert_with(HashMap::new).insert(
-				asset,
-				runtime_api.cf_egress_dust_limit(hash, asset).map_err(to_rpc_error)?.into(),
-			);
-		}
+		let mut witness_safety_margins = HashMap::new();
 
 		for chain in ForeignChain::iter() {
 			witness_safety_margins.insert(
@@ -1014,11 +985,31 @@ where
 		}
 
 		Ok(IngressEgressEnvironment {
-			minimum_deposit_amounts,
-			ingress_fees,
-			egress_fees,
+			minimum_deposit_amounts: any::AssetMap::try_from_fn(|asset| {
+				runtime_api
+					.cf_min_deposit_amount(hash, asset)
+					.map_err(to_rpc_error)
+					.map(Into::into)
+			})?,
+			ingress_fees: any::AssetMap::try_from_fn(|asset| {
+				runtime_api
+					.cf_ingress_fee(hash, asset)
+					.map_err(to_rpc_error)
+					.map(|value| value.map(Into::into))
+			})?,
+			egress_fees: any::AssetMap::try_from_fn(|asset| {
+				runtime_api
+					.cf_egress_fee(hash, asset)
+					.map_err(to_rpc_error)
+					.map(|value| value.map(Into::into))
+			})?,
 			witness_safety_margins,
-			egress_dust_limits,
+			egress_dust_limits: any::AssetMap::try_from_fn(|asset| {
+				runtime_api
+					.cf_egress_dust_limit(hash, asset)
+					.map_err(to_rpc_error)
+					.map(Into::into)
+			})?,
 		})
 	}
 
@@ -1028,19 +1019,13 @@ where
 	) -> RpcResult<SwappingEnvironment> {
 		let runtime_api = &self.client.runtime_api();
 		let hash = self.unwrap_or_best(at);
-
-		let mut maximum_swap_amounts = HashMap::new();
-
-		for asset in Asset::all() {
-			let max_amount = runtime_api.cf_max_swap_amount(hash, asset).map_err(to_rpc_error)?;
-			maximum_swap_amounts
-				.entry(asset.into())
-				.or_insert_with(HashMap::new)
-				.insert(asset, max_amount.map(|amt| amt.into()));
-		}
-
 		Ok(SwappingEnvironment {
-			maximum_swap_amounts,
+			maximum_swap_amounts: any::AssetMap::try_from_fn(|asset| {
+				runtime_api
+					.cf_max_swap_amount(hash, asset)
+					.map_err(to_rpc_error)
+					.map(|option| option.map(Into::into))
+			})?,
 			network_fee_hundredth_pips: NetworkFee::get(),
 		})
 	}
@@ -1297,7 +1282,10 @@ where
 #[cfg(test)]
 mod test {
 	use super::*;
-	use cf_primitives::FLIPPERINOS_PER_FLIP;
+	use cf_primitives::{
+		chains::assets::{any, btc, dot, eth},
+		FLIPPERINOS_PER_FLIP,
+	};
 	use sp_core::H160;
 
 	/*
@@ -1377,83 +1365,59 @@ mod test {
 	fn test_environment_serialization() {
 		let env = RpcEnvironment {
 			swapping: SwappingEnvironment {
-				maximum_swap_amounts: HashMap::from([
-					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, Some(0u32.into()))])),
-					(
-						ForeignChain::Ethereum,
-						HashMap::from([
-							(Asset::Flip, None),
-							(Asset::Usdc, Some((u64::MAX / 2 - 1).into())),
-							(Asset::Eth, Some(0u32.into())),
-						]),
-					),
-				]),
+				maximum_swap_amounts: any::AssetMap {
+					eth: eth::AssetMap {
+						eth: Some(0u32.into()),
+						flip: None,
+						usdc: Some((u64::MAX / 2 - 1).into()),
+					},
+					btc: btc::AssetMap { btc: Some(0u32.into()) },
+					dot: dot::AssetMap { dot: None },
+				},
 				network_fee_hundredth_pips: Permill::from_percent(100),
 			},
 			ingress_egress: IngressEgressEnvironment {
-				minimum_deposit_amounts: HashMap::from([
-					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
-					(
-						ForeignChain::Ethereum,
-						HashMap::from([
-							(Asset::Flip, u64::MAX.into()),
-							(Asset::Usdc, (u64::MAX / 2 - 1).into()),
-							(Asset::Eth, 0u32.into()),
-						]),
-					),
-				]),
-				ingress_fees: HashMap::from([
-					(
-						ForeignChain::Bitcoin,
-						HashMap::from([(Asset::Btc, Some(0u32).map(Into::into))]),
-					),
-					(
-						ForeignChain::Ethereum,
-						HashMap::<_, Option<NumberOrHex>>::from([
-							(Asset::Flip, Some(AssetAmount::MAX).map(Into::into)),
-							(Asset::Usdc, None),
-							(Asset::Eth, Some(0u32).map(Into::into)),
-						]),
-					),
-					(
-						ForeignChain::Polkadot,
-						HashMap::from([(Asset::Dot, Some(u64::MAX / 2 - 1).map(Into::into))]),
-					),
-				]),
-				egress_fees: HashMap::from([
-					(
-						ForeignChain::Bitcoin,
-						HashMap::from([(Asset::Btc, Some(0u32).map(Into::into))]),
-					),
-					(
-						ForeignChain::Ethereum,
-						HashMap::<_, Option<NumberOrHex>>::from([
-							(Asset::Flip, Some(AssetAmount::MAX).map(Into::into)),
-							(Asset::Usdc, None),
-							(Asset::Eth, Some(0u32).map(Into::into)),
-						]),
-					),
-					(
-						ForeignChain::Polkadot,
-						HashMap::from([(Asset::Dot, Some(u64::MAX / 2 - 1).map(Into::into))]),
-					),
-				]),
+				minimum_deposit_amounts: any::AssetMap {
+					eth: eth::AssetMap {
+						eth: 0u32.into(),
+						flip: u64::MAX.into(),
+						usdc: (u64::MAX / 2 - 1).into(),
+					},
+					btc: btc::AssetMap { btc: 0u32.into() },
+					dot: dot::AssetMap { dot: 0u32.into() },
+				},
+				ingress_fees: any::AssetMap {
+					eth: eth::AssetMap {
+						eth: Some(0u32.into()),
+						flip: Some(AssetAmount::MAX.into()),
+						usdc: None,
+					},
+					btc: btc::AssetMap { btc: Some(0u32.into()) },
+					dot: dot::AssetMap { dot: Some((u64::MAX / 2 - 1).into()) },
+				},
+				egress_fees: any::AssetMap {
+					eth: eth::AssetMap {
+						eth: Some(0u32.into()),
+						usdc: None,
+						flip: Some(AssetAmount::MAX.into()),
+					},
+					btc: btc::AssetMap { btc: Some(0u32.into()) },
+					dot: dot::AssetMap { dot: Some((u64::MAX / 2 - 1).into()) },
+				},
 				witness_safety_margins: HashMap::from([
 					(ForeignChain::Bitcoin, Some(3u64)),
 					(ForeignChain::Ethereum, Some(3u64)),
 					(ForeignChain::Polkadot, None),
 				]),
-				egress_dust_limits: HashMap::from([
-					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
-					(
-						ForeignChain::Ethereum,
-						HashMap::from([
-							(Asset::Flip, AssetAmount::MAX.into()),
-							(Asset::Usdc, (u64::MAX / 2 - 1).into()),
-							(Asset::Eth, 0u32.into()),
-						]),
-					),
-				]),
+				egress_dust_limits: any::AssetMap {
+					eth: eth::AssetMap {
+						eth: 0u32.into(),
+						usdc: (u64::MAX / 2 - 1).into(),
+						flip: AssetAmount::MAX.into(),
+					},
+					btc: btc::AssetMap { btc: 0u32.into() },
+					dot: dot::AssetMap { dot: 0u32.into() },
+				},
 			},
 			funding: FundingEnvironment {
 				redemption_tax: 0u32.into(),

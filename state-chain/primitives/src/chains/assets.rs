@@ -16,15 +16,16 @@
 
 macro_rules! assets {
 	(pub enum Asset {
-		$(($chain_mod:ident, $chain:ident) => {
-			($gas_asset:ident, $gas_string:literal) = $gas_value:literal (GAS_ASSET)
-			$(,($asset:ident, $string:literal) = $value:literal)* $(,)?
+		$(($chain_mod:ident, $chain:ident, $chain_str:literal) => {
+			($gas_asset:ident, $gas_lowercase:ident) = $gas_value:literal (GAS_ASSET)
+			$(,($asset:ident, $lowercase:ident) = $value:literal)* $(,)?
 		}),*$(,)?
 	}) => {
 		pub mod any {
 			use strum_macros::EnumIter;
 			use codec::{MaxEncodedLen, Encode, Decode};
 			use scale_info::TypeInfo;
+			use serde::{Serialize, Deserialize};
 
 			#[derive(
 				Copy,
@@ -94,8 +95,8 @@ macro_rules! assets {
 				fn from_str(s: &str) -> Result<Self, Self::Err> {
 					match s.to_lowercase().as_str() {
 						$(
-							$gas_string => Ok(Asset::$gas_asset),
-							$($string => Ok(Asset::$asset),)*
+							stringify!($gas_lowercase) => Ok(Asset::$gas_asset),
+							$(stringify!($lowercase) => Ok(Asset::$asset),)*
 						)*
 						_ => Err("Unrecognized asset"),
 					}
@@ -241,6 +242,40 @@ macro_rules! assets {
 					}
 				}
 			}
+
+			#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, TypeInfo, MaxEncodedLen)]
+			pub struct AssetMap<T> {
+				$(
+					#[serde(rename = $chain_str)]
+					pub $chain_mod: super::$chain_mod::AssetMap::<T>,
+				)*
+			}
+			impl<T> AssetMap<T> {
+				pub fn from_fn<F: FnMut(Asset) -> T>(mut f: F) -> Self {
+					Self {
+						$($chain_mod: super::$chain_mod::AssetMap::<T>::from_fn(|asset| f(asset.into())),)*
+					}
+				}
+
+				pub fn try_from_fn<E, F: FnMut(Asset) -> Result<T, E>>(mut f: F) -> Result<Self, E> {
+					Ok(Self {
+						$($chain_mod: super::$chain_mod::AssetMap::<T>::try_from_fn(|asset| f(asset.into()))?,)*
+					})
+				}
+
+				pub fn map<R, F: FnMut(T) -> R>(self, mut f: F) -> AssetMap<R> {
+					AssetMap {
+						$($chain_mod: self.$chain_mod.map(&mut f),)*
+					}
+				}
+
+				/// TODO: Remove this function, once PRO-1202 is complete
+				pub fn try_from_iter<Iter: Iterator<Item = (Asset, T)> + Clone>(iter: Iter) -> Option<Self> {
+					Self::try_from_fn(|required_asset| {
+						iter.clone().find(|(asset, _t)| *asset == required_asset).ok_or(()).map(|x| x.1)
+					}).ok()
+				}
+			}
 		}
 
 		$(
@@ -291,6 +326,37 @@ macro_rules! assets {
 				pub enum AssetError {
 					Unsupported,
 				}
+
+				#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, TypeInfo, MaxEncodedLen)]
+				#[serde(rename_all = "UPPERCASE")]
+				pub struct AssetMap<T> {
+					pub $gas_lowercase: T,
+					$(
+						pub $lowercase: T,
+					)*
+				}
+				impl<T> AssetMap<T> {
+					pub fn from_fn<F: FnMut(Asset) -> T>(mut f: F) -> Self {
+						Self {
+							$gas_lowercase: f(Asset::$gas_asset),
+							$($lowercase: f(Asset::$asset),)*
+						}
+					}
+
+					pub fn try_from_fn<E, F: FnMut(Asset) -> Result<T, E>>(mut f: F) -> Result<Self, E> {
+						Ok(Self {
+							$gas_lowercase: f(Asset::$gas_asset)?,
+							$($lowercase: f(Asset::$asset)?,)*
+						})
+					}
+
+					pub fn map<R, F: FnMut(T) -> R>(self, mut f: F) -> AssetMap<R> {
+						AssetMap {
+							$gas_lowercase: f(self.$gas_lowercase),
+							$($lowercase: f(self.$lowercase),)*
+						}
+					}
+				}
 			}
 
 		)*
@@ -302,16 +368,16 @@ macro_rules! assets {
 assets!(pub enum Asset {
 	// 0 is reserved for particular cross chain messaging scenarios where we want to pass
 	// through a message without making a swap.
-	(eth, Ethereum) => {
-		(Eth, "eth") = 1u32 (GAS_ASSET),
-		(Flip, "flip") = 2u32,
-		(Usdc, "usdc") = 3u32,
+	(eth, Ethereum, "Ethereum") => {
+		(Eth, eth) = 1u32 (GAS_ASSET),
+		(Flip, flip) = 2u32,
+		(Usdc, usdc) = 3u32,
 	},
-	(dot, Polkadot) => {
-		(Dot, "dot") = 4u32 (GAS_ASSET),
+	(dot, Polkadot, "Polkadot") => {
+		(Dot, dot) = 4u32 (GAS_ASSET),
 	},
-	(btc, Bitcoin) => {
-		(Btc, "btc") = 5u32 (GAS_ASSET),
+	(btc, Bitcoin, "Bitcoin") => {
+		(Btc, btc) = 5u32 (GAS_ASSET),
 	},
 });
 
