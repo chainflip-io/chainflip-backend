@@ -51,18 +51,6 @@ pub struct AssetWithAmount {
 	pub amount: AssetAmount,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-pub enum AssetConversionError {
-	#[error("Unsupported asset {1:?} on chain {0}")]
-	UnsupportedAsset(ForeignChain, Asset),
-}
-
-impl From<AssetConversionError> for jsonrpsee::core::Error {
-	fn from(e: AssetConversionError) -> Self {
-		CallError::from_std_error(e).into()
-	}
-}
-
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "role", rename_all = "snake_case")]
 pub enum RpcAccountInfo {
