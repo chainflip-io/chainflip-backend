@@ -102,13 +102,16 @@ macro_rules! assets {
 					}
 				}
 			}
-			mod asset_serde_impls {
+			pub use asset_serde_impls::SerdeAsset as OldAsset;
+			pub(super) mod asset_serde_impls {
 				use serde::{Serialize, Deserialize};
 
+				/// DO NOT USE THIS TYPE. This is only public to allow consistency in behaviour for out of date RPCs and Runtime API functions, once we remove those apis (and replace them in PRO-1202)
 				#[derive(Copy, Clone, Serialize, Deserialize)]
+				#[derive(Debug, PartialEq, Eq, Hash, codec::Encode, codec::Decode, scale_info::TypeInfo, codec::MaxEncodedLen)] /* Remove these derives once PRO-1202 is done */
 				#[repr(u32)]
 				#[serde(rename_all = "UPPERCASE")]
-				enum SerdeAsset {
+				pub enum SerdeAsset {
 					$(
 						$gas_asset = $gas_value,
 						$($asset = $value,)*
@@ -120,6 +123,16 @@ macro_rules! assets {
 							$(
 								SerdeAsset::$gas_asset => super::Asset::$gas_asset,
 								$(SerdeAsset::$asset => super::Asset::$asset,)*
+							)*
+						}
+					}
+				}
+				impl From<super::Asset> for SerdeAsset {
+					fn from(asset: super::Asset) -> Self {
+						match asset {
+							$(
+								super::Asset::$gas_asset => SerdeAsset::$gas_asset,
+								$(super::Asset::$asset => SerdeAsset::$asset,)*
 							)*
 						}
 					}
@@ -140,12 +153,7 @@ macro_rules! assets {
 						where S: serde::Serializer
 					{
 						Serialize::serialize(&SerdeAssetOptionalExplicitChain::ExplicitChain {
-							chain: Some((*self).into()), asset: match self {
-								$(
-									super::Asset::$gas_asset => SerdeAsset::$gas_asset,
-									$(super::Asset::$asset => SerdeAsset::$asset,)*
-								)*
-							}
+							chain: Some((*self).into()), asset: (*self).into()
 						}, serializer)
 					}
 				}

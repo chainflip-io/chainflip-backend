@@ -91,7 +91,8 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{
-	AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, SemVer, SwapOutput,
+	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, SemVer,
+	SwapOutput,
 };
 pub use cf_traits::{
 	AccountInfo, BidderProvider, CcmHandler, Chainflip, EpochInfo, PoolApi, QualifyNode,
@@ -1241,9 +1242,9 @@ impl_runtime_apis! {
 		fn cf_ingress_fee(generic_asset: Asset) -> Option<AssetAmount> {
 			match generic_asset.into() {
 				ForeignChainAndAsset::Ethereum(asset) => {
-                    pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(
-                        generic_asset,
-                        Asset::Eth,
+					pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(
+						generic_asset,
+						Asset::Eth,
 						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::get_tracked_data()
 							.estimate_ingress_fee(asset)
 					)

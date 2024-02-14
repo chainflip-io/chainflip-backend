@@ -11,7 +11,7 @@ use chainflip_api::{
 		ApiWaitForResult, LpApi, Order, Tick,
 	},
 	primitives::{
-		chains::{Bitcoin, Ethereum, Polkadot},
+		chains::{assets::any::OldAsset, Bitcoin, Ethereum, Polkadot},
 		AccountRole, Asset, ForeignChain, Hash, RedemptionAmount,
 	},
 	settings::StateChain,
@@ -95,7 +95,7 @@ pub mod rpc_types {
 
 	#[derive(Serialize, Deserialize, Clone)]
 	pub struct AssetBalance {
-		pub asset: Asset,
+		pub asset: OldAsset,
 		pub balance: NumberOrHex,
 	}
 }
@@ -224,8 +224,8 @@ pub struct OrderFills {
 pub enum OrderFilled {
 	LimitOrder {
 		lp: AccountId,
-		base_asset: Asset,
-		quote_asset: Asset,
+		base_asset: OldAsset,
+		quote_asset: OldAsset,
 		side: Order,
 		id: U256,
 		tick: Tick,
@@ -236,8 +236,8 @@ pub enum OrderFilled {
 	},
 	RangeOrder {
 		lp: AccountId,
-		base_asset: Asset,
-		quote_asset: Asset,
+		base_asset: OldAsset,
+		quote_asset: OldAsset,
 		id: U256,
 		range: Range<Tick>,
 		fees: AssetsMap<U256>,
@@ -312,7 +312,7 @@ impl RpcServer for RpcServerImpl {
 			lp_asset_balances
 				.entry(asset.into())
 				.or_insert_with(Vec::new)
-				.push(AssetBalance { asset, balance: amount.into() });
+				.push(AssetBalance { asset: asset.into(), balance: amount.into() });
 		}
 		Ok(lp_asset_balances)
 	}
@@ -600,8 +600,8 @@ where
 									} else {
 										Some(OrderFilled::LimitOrder {
 											lp,
-											base_asset: asset_pair.assets().base,
-											quote_asset: asset_pair.assets().quote,
+											base_asset: asset_pair.assets().base.into(),
+											quote_asset: asset_pair.assets().quote.into(),
 											side,
 											id: id.into(),
 											tick,
@@ -646,8 +646,8 @@ where
 								} else {
 									Some(OrderFilled::RangeOrder {
 										lp: lp.clone(),
-										base_asset: asset_pair.assets().base,
-										quote_asset: asset_pair.assets().quote,
+										base_asset: asset_pair.assets().base.into(),
+										quote_asset: asset_pair.assets().quote.into(),
 										id: id.into(),
 										range: range.clone(),
 										fees: fees.map(|_, fees| fees).into(),
