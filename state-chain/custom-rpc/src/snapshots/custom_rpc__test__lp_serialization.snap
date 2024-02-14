@@ -1,5 +1,6 @@
 ---
 source: state-chain/custom-rpc/src/lib.rs
+assertion_line: 1344
 expression: "serde_json::to_value(lp).unwrap()"
 ---
-{"balances":{"Bitcoin":{"BTC":"0x0"},"Ethereum":{"ETH":"0xffffffffffffffffffffffffffffffff","FLIP":"0x7fffffffffffffffffffffffffffffff"}},"flip_balance":"0x0","refund_addresses":{"Bitcoin":null,"Ethereum":"0x0101010101010101010101010101010101010101","Polkadot":"111111111111111111111111111111111HC1"},"role":"liquidity_provider"}
+{"balances":{"Bitcoin":{"BTC":"0x0"},"Ethereum":{"ETH":"0xffffffffffffffffffffffffffffffff","FLIP":"0x7fffffffffffffffffffffffffffffff","USDC":"0x0"},"Polkadot":{"DOT":"0x0"}},"flip_balance":"0x0","refund_addresses":{"Bitcoin":null,"Ethereum":"0x0101010101010101010101010101010101010101","Polkadot":"111111111111111111111111111111111HC1"},"role":"liquidity_provider"}

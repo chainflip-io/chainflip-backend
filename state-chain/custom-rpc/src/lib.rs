@@ -1333,6 +1333,8 @@ mod test {
 					(Asset::Eth, u128::MAX),
 					(Asset::Btc, 0),
 					(Asset::Flip, u128::MAX / 2),
+					(Asset::Usdc, 0),
+					(Asset::Dot, 0),
 				],
 			},
 			cf_primitives::NetworkEnvironment::Mainnet,
