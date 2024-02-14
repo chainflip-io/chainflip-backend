@@ -203,18 +203,18 @@ export async function testAllSwaps() {
       .filter((destAsset) => sourceAsset !== destAsset)
       .forEach((destAsset) => {
         // // Regular swaps - all swaps that don't egress to Arbitrum work well!
-        if (destAsset !== 'ARBETH' && destAsset !== 'ARBUSDC') {
-          appendSwap(sourceAsset, destAsset, testSwap);
-        }
+        // if (destAsset !== 'ARBETH' && destAsset !== 'ARBUSDC') {
+        //   appendSwap(sourceAsset, destAsset, testSwap);
+        // }
 
         // NOTE: Looks like swap Egresses are not broadcasted to Arbitrum. There is SwapEgressScheduled
         // with the correct destination asset but nothing happens afterwards. In the CFE no transaction
         // to Arbitrum os send for broadcast.
-        // if (assetToChain(destAsset) === 'Arb') {
-        //   if (assetToChain(sourceAsset) !== 'Eth' && assetToChain(sourceAsset) !== 'Arb') {
-        //     appendSwap(sourceAsset, destAsset, testSwap);
-        //   }
-        // }
+        if (assetToChain(destAsset) === 'Arb') {
+          if (assetToChain(sourceAsset) !== 'Eth' && assetToChain(sourceAsset) !== 'Arb') {
+            appendSwap(sourceAsset, destAsset, testSwap);
+          }
+        }
         // NOTE: I am using an old SDK so this ones don't work, even for non-Arbitrum assets
         //   // if (sourceAsset !== 'ARBETH' && sourceAsset !== 'ARBUSDC') {
         //   if (chainFromAsset(sourceAsset) === chainFromAsset('ETH')) {

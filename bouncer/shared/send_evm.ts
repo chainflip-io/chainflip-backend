@@ -6,6 +6,7 @@ import {
   arbNonceMutex,
   getEvmEndpoint,
   getWhaleKey,
+  sleep,
 } from './utils';
 
 const nextEvmNonce: { [key in 'Ethereum' | 'Arbitrum']: number | undefined } = {
@@ -90,4 +91,20 @@ export async function sendEvmNative(
 ) {
   const weiAmount = amountToFineAmount(ethAmount, assetDecimals.ETH);
   await signAndSendTxEvm(chain, evmAddress, weiAmount, undefined, undefined, log);
+}
+
+export async function spamEvm(chain: Chain, periodMilisec: number, spam?: () => boolean) {
+  const continueSpam = spam ?? (() => true);
+
+  while (continueSpam) {
+    signAndSendTxEvm(
+      chain,
+      '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+      '1',
+      undefined,
+      undefined,
+      false,
+    );
+    await sleep(periodMilisec);
+  }
 }

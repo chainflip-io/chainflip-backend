@@ -12,12 +12,19 @@ import { runWithTimeout, getEvmEndpoint } from '../shared/utils';
 
 async function main(): Promise<void> {
   // const arbitrumAddress = process.argv[2];
+
+  // Hardcoding to USDC address for now
   const arbitrumAddress = '0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9';
 
   const web3 = new Web3(getEvmEndpoint('Arbitrum'));
-  console.log(
-    `Address: ${arbitrumAddress} has bytecode ${await web3.eth.getCode(arbitrumAddress)}`,
-  );
+
+  const bytecode = await web3.eth.getCode(arbitrumAddress);
+
+  if (bytecode === '0x') {
+    throw new Error('Arbitrum USDC address has no bytecode. Arbitrum contracts not deployed');
+  } else {
+    console.log(`Address: ${arbitrumAddress} has bytecode ${bytecode}`);
+  }
 
   process.exit(0);
 }
