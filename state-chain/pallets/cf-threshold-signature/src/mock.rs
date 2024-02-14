@@ -193,7 +193,9 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 pub struct MockVaultActivator;
 impl VaultActivator<MockEthereumChainCrypto> for MockVaultActivator {
 	type ValidatorId = <Test as Chainflip>::ValidatorId;
-	fn activate(_new_key: MockAggKey, _maybe_old_key: Option<MockAggKey>) {}
+	fn activate(_new_key: MockAggKey, _maybe_old_key: Option<MockAggKey>) -> Option<u32>{
+		None
+	}
 
 	fn status() -> AsyncResult<()> {
 		VAULT_ACTIVATION_STATUS.with(|value| *value.borrow())
@@ -203,6 +205,10 @@ impl VaultActivator<MockEthereumChainCrypto> for MockVaultActivator {
 	fn set_status(outcome: AsyncResult<()>) {
 		VAULT_ACTIVATION_STATUS.with(|value| *(value.borrow_mut()) = outcome)
 	}
+
+	fn activate_key() {
+        unimplemented!()
+    }
 }
 
 impl MockVaultActivator {

@@ -158,14 +158,11 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 					};
 
 					if let Some(tss_request_id) = request_id {
-						match Signature::<T, I>::get(tss_request_id) {
-							// After a tss ceremony completes, it is consumed and Void is left
-							// behind At this point we are sure the ceremony existed and we
-							// completed it we can activate the key
-							AsyncResult::Void => {
-								T::VaultActivator::activate_key();
-							},
-							_ => {},
+						// After a tss ceremony completes, it is consumed and Void is left
+						// behind At this point we are sure the ceremony existed and we
+						// completed it we can activate the key
+						if Signature::<T, I>::get(tss_request_id) == AsyncResult::Void {
+							T::VaultActivator::activate_key();
 						};
 					};
 

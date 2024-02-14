@@ -71,7 +71,7 @@ fn vault_start_block_number_is_set_correctly() {
 	new_test_ext_no_key().execute_with(|| {
 		BlockHeightProvider::<MockEthereum>::set_block_height(1000);
 		VaultsPallet::activate(NEW_AGG_PUBKEY, Some(Default::default()));
-
+		VaultsPallet::activate_key();
 		assert_eq!(
 			crate::VaultStartBlockNumbers::<Test, _>::get(
 				MockEpochInfo::epoch_index().saturating_add(1)
