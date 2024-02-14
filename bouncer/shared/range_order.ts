@@ -34,6 +34,7 @@ export async function rangeOrder(ccy: Asset, amount: number) {
       event.data.baseAsset.toUpperCase() === ccy &&
       event.data.id === String(0),
   );
+  console.log('liquidity', liquidity.toString());
   await lpMutex.runExclusive(async () => {
     await chainflip.tx.liquidityPools
       .setRangeOrder(ccy.toLowerCase(), 'usdc', 0, [-887272, 887272], {

@@ -8,6 +8,7 @@ import {
   getEvmContractAddress,
   amountToFineAmount,
   defaultAssetAmounts,
+  assetToChain,
 } from '../shared/utils';
 import { BtcAddressType, btcAddressTypes } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
@@ -201,11 +202,19 @@ export async function testAllSwaps() {
     Object.values(Assets)
       .filter((destAsset) => sourceAsset !== destAsset)
       .forEach((destAsset) => {
-        // NOTE: Looks like swap Egresses are not broadcasted to Arbitrum. Looking at the logs it seems
-        // like there is only broadcasts to Ethereum. When doing a rotation I see a broadcast to Arbitrum.
-        // So it looks like something is broken on the swap egress.
-        // Regular swaps
-        appendSwap(sourceAsset, destAsset, testSwap);
+        // // Regular swaps - all swaps that don't egress to Arbitrum work well!
+        if (destAsset !== 'ARBETH' && destAsset !== 'ARBUSDC') {
+          appendSwap(sourceAsset, destAsset, testSwap);
+        }
+
+        // NOTE: Looks like swap Egresses are not broadcasted to Arbitrum. There is SwapEgressScheduled
+        // with the correct destination asset but nothing happens afterwards. In the CFE no transaction
+        // to Arbitrum os send for broadcast.
+        // if (assetToChain(destAsset) === 'Arb') {
+        //   if (assetToChain(sourceAsset) !== 'Eth' && assetToChain(sourceAsset) !== 'Arb') {
+        //     appendSwap(sourceAsset, destAsset, testSwap);
+        //   }
+        // }
         // NOTE: I am using an old SDK so this ones don't work, even for non-Arbitrum assets
         //   // if (sourceAsset !== 'ARBETH' && sourceAsset !== 'ARBUSDC') {
         //   if (chainFromAsset(sourceAsset) === chainFromAsset('ETH')) {

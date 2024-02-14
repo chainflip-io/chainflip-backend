@@ -60,8 +60,8 @@ async function main(): Promise<void> {
     rangeOrder('BTC', deposits.get('BTC')! * 0.9999),
     rangeOrder('FLIP', deposits.get('FLIP')! * 0.9999),
     rangeOrder('ARBETH', deposits.get('ARBETH')! * 0.9999),
-    // * 0.9999 amount results in insufficient liquidity
-    rangeOrder('ARBUSDC', deposits.get('ARBUSDC')! * 0.2),
+    // TODO: more than *0.5 certain amount results in insufficient liquidity. To be investigated
+    rangeOrder('ARBUSDC', deposits.get('ARBUSDC')! * 0.5),
   ]);
   console.log('=== Swaps Setup completed ===');
 
