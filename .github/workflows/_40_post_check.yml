@@ -84,84 +84,89 @@ jobs:
           touch ./localnet/.setup_complete
           ./localnet/manage.sh
 
-      - name: Run HeuteLeiderNicht.voll.exe 🙅‍♂️
-        if: inputs.full_bouncer
+      - name: Check for bytecode 🙅‍♂️
         working-directory: bouncer
         run: |
-          ./full_bouncer.sh
+          ./commands/get_address_bytecode.ts
 
-      - name: Run HeuteLeiderNicht.einfach.exe 🦺
-        if: ${{ ! inputs.full_bouncer }}
-        working-directory: bouncer
-        run: |
-          ./run.sh
+      # - name: Run HeuteLeiderNicht.voll.exe 🙅‍♂️
+      #   if: inputs.full_bouncer
+      #   working-directory: bouncer
+      #   run: |
+      #     ./full_bouncer.sh
 
-      - name: Print chainflip-engine logs 🚗
-        if: failure()
-        run: |
-          cat /tmp/chainflip/*/chainflip-engine.log
+      # - name: Run HeuteLeiderNicht.einfach.exe 🦺
+      #   if: ${{ ! inputs.full_bouncer }}
+      #   working-directory: bouncer
+      #   run: |
+      #     ./run.sh
 
-      - name: Print chainflip-node logs 📡
-        if: failure()
-        run: |
-          cat /tmp/chainflip/*/chainflip-node.log
+      # - name: Print chainflip-engine logs 🚗
+      #   if: failure()
+      #   run: |
+      #     cat /tmp/chainflip/*/chainflip-engine.log
 
-      - name: Print chainflip-broker-api logs 💼
-        if: failure()
-        run: |
-          cat /tmp/chainflip/chainflip-broker-api.log
+      # - name: Print chainflip-node logs 📡
+      #   if: failure()
+      #   run: |
+      #     cat /tmp/chainflip/*/chainflip-node.log
 
-      - name: Print chainflip-lp-api logs 🤑
-        if: failure()
-        run: |
-          cat /tmp/chainflip/chainflip-lp-api.log
+      # - name: Print chainflip-broker-api logs 💼
+      #   if: failure()
+      #   run: |
+      #     cat /tmp/chainflip/chainflip-broker-api.log
 
-      - name: Print localnet init debug logs 🕵️‍♂️
-        if: failure()
-        run: |
-          cat /tmp/chainflip/debug.log
+      # - name: Print chainflip-lp-api logs 🤑
+      #   if: failure()
+      #   run: |
+      #     cat /tmp/chainflip/chainflip-lp-api.log
 
-      - name: Print solana logs ☀️
-        if: failure()
-        run: |
-          cat /tmp/solana/solana.log
+      # - name: Print localnet init debug logs 🕵️‍♂️
+      #   if: failure()
+      #   run: |
+      #     cat /tmp/chainflip/debug.log
 
-      - name: Upload Localnet Logs 💾
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@c7d193f32edcb7bfad88892161225aeda64e9392
-        with:
-          name: localnet-logs
-          path: |
-            /tmp/chainflip/*/chainflip-*.log
-            /tmp/chainflip/chainflip-*.log
-            /tmp/chainflip/debug.log
-            /tmp/solana/*.log
+      # - name: Print solana logs ☀️
+      #   if: failure()
+      #   run: |
+      #     cat /tmp/solana/solana.log
 
-      - name: List /tmp/chainflip 📂
-        if: always()
-        continue-on-error: true
-        run: ls -alR /tmp/chainflip
+      # - name: Upload Localnet Logs 💾
+      #   if: always()
+      #   continue-on-error: true
+      #   uses: actions/upload-artifact@c7d193f32edcb7bfad88892161225aeda64e9392
+      #   with:
+      #     name: localnet-logs
+      #     path: |
+      #       /tmp/chainflip/*/chainflip-*.log
+      #       /tmp/chainflip/chainflip-*.log
+      #       /tmp/chainflip/debug.log
+      #       /tmp/solana/*.log
 
-      - name: Show logs from docker containers 🐳🕵️‍♂️
-        if: always()
-        continue-on-error: true
-        run: docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs
+      # - name: List /tmp/chainflip 📂
+      #   if: always()
+      #   continue-on-error: true
+      #   run: ls -alR /tmp/chainflip
 
-      - name: Clean Up docker containers 🧹
-        if: always()
-        continue-on-error: true
-        run: |
-          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --rmi all --volumes --remove-orphans
+      # - name: Show logs from docker containers 🐳🕵️‍♂️
+      #   if: always()
+      #   continue-on-error: true
+      #   run: docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs
 
-      - name: Notify on failed bouncer 📢
-        if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main'
-        env:
-          DISCORD_USERNAME: "HEUTE LEIDER NICHT"
-          DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
-        uses: Ilshidur/action-discord@0c4b27844ba47cb1c7bee539c8eead5284ce9fa9
-        with:
-          args: |
-            ❗️❗️❗️❗️ Sorry **${{ github.actor }}**, the Bouncer has rejected you ❗️❗️❗️❗️
-            👾 Link to job: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>
-            #️⃣ Tagging: <@&939151218708709416>
+      # - name: Clean Up docker containers 🧹
+      #   if: always()
+      #   continue-on-error: true
+      #   run: |
+      #     docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --rmi all --volumes --remove-orphans
+
+      # - name: Notify on failed bouncer 📢
+      #   if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main'
+      #   env:
+      #     DISCORD_USERNAME: "HEUTE LEIDER NICHT"
+      #     DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
+      #   uses: Ilshidur/action-discord@0c4b27844ba47cb1c7bee539c8eead5284ce9fa9
+      #   with:
+      #     args: |
+      #       ❗️❗️❗️❗️ Sorry **${{ github.actor }}**, the Bouncer has rejected you ❗️❗️❗️❗️
+      #       👾 Link to job: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>
+      #       #️⃣ Tagging: <@&939151218708709416>
