@@ -39,7 +39,7 @@ use pallet_cf_pools::{
 	UnidirectionalPoolDepth,
 };
 use pallet_cf_reputation::ExclusionList;
-use pallet_cf_swapping::CcmSwapAmounts;
+use pallet_cf_swapping::{CcmSwapAmounts, Swap};
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use scale_info::prelude::string::String;
@@ -1406,6 +1406,25 @@ impl_runtime_apis! {
 			}
 
 			all_prewitnessed_swaps
+		}
+
+		fn cf_scheduled_swaps(from: Asset, to: Asset) -> Vec<(Swap, BlockNumber)> {
+
+			let mut first_block = Swapping::first_unprocessed_block();
+			let last_block = System::block_number() + pallet_cf_swapping::SWAP_DELAY_BLOCKS;
+
+			let mut swaps = vec![];
+
+			while first_block <= last_block {
+				let swaps_selected_from_block = Swapping::swap_queue(first_block).into_iter()
+					.filter(|swap| { (swap.from == from && swap.to == to) || (swap.from == to && swap.to == from)})
+					.map(|swap| (swap, first_block));
+
+				swaps.extend(swaps_selected_from_block);
+				first_block += 1u32;
+			}
+
+			swaps
 		}
 
 		fn cf_failed_call(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {

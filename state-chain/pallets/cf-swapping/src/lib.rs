@@ -40,12 +40,14 @@ const BASIS_POINTS_PER_MILLION: u32 = 100;
 pub const SWAP_DELAY_BLOCKS: u32 = 2;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum SwapType {
 	Swap(ForeignChainAddress),
 	CcmPrincipal(SwapId),
 	CcmGas(SwapId),
 }
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct Swap {
 	pub swap_id: SwapId,
 	pub from: Asset,
@@ -228,11 +230,13 @@ pub mod pallet {
 
 	/// Scheduled Swaps
 	#[pallet::storage]
+	#[pallet::getter(fn swap_queue)]
 	pub(crate) type SwapQueue<T: Config> =
 		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<Swap>, ValueQuery>;
 
 	/// The first block for which swaps haven't yet been processed
 	#[pallet::storage]
+	#[pallet::getter(fn first_unprocessed_block)]
 	pub(crate) type FirstUnprocessedBlock<T: Config> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 

@@ -8,13 +8,13 @@ use cf_chains::{
 	Chain,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, BroadcastId, ForeignChain, NetworkEnvironment, SemVer,
-	SwapOutput,
+	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, ForeignChain, NetworkEnvironment,
+	SemVer, SwapOutput,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
 use jsonrpsee::{
-	core::RpcResult,
+	core::{error::SubscriptionClosed, RpcResult},
 	proc_macros::rpc,
 	types::error::{CallError, SubscriptionEmptyError},
 	SubscriptionSink,
@@ -23,9 +23,10 @@ use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{
 	AskBidMap, AssetsMap, PoolInfo, PoolLiquidity, PoolPriceV1, UnidirectionalPoolDepth,
 };
+use pallet_cf_swapping::Swap;
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
-use sp_api::{BlockT, HeaderT};
+use sp_api::{ApiError, BlockT, HeaderT};
 use sp_core::U256;
 use sp_runtime::Permill;
 use state_chain_runtime::{
@@ -42,6 +43,13 @@ use std::{
 	marker::PhantomData,
 	sync::Arc,
 };
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct ScheduledSwap {
+	#[serde(flatten)]
+	swap: Swap,
+	execute_at: BlockNumber,
+}
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(untagged)]
@@ -517,6 +525,9 @@ pub trait CustomApi {
 		quote_asset: RpcAsset,
 		side: Order,
 	);
+
+	#[subscription(name = "subscribe_scheduled_swaps", item = Vec<AssetAmount>)]
+	fn cf_subscribe_scheduled_swaps(&self, asset1: RpcAsset, asset2: RpcAsset);
 
 	#[method(name = "prewitness_swaps")]
 	fn cf_prewitness_swaps(
@@ -1212,6 +1223,30 @@ where
 		)
 	}
 
+	fn cf_subscribe_scheduled_swaps(
+		&self,
+		sink: SubscriptionSink,
+		asset1: RpcAsset,
+		asset2: RpcAsset,
+	) -> Result<(), SubscriptionEmptyError> {
+		let asset1 = asset1.try_into().map_err(|_| SubscriptionEmptyError)?;
+		let asset2 = asset2.try_into().map_err(|_| SubscriptionEmptyError)?;
+		self.new_subscription(false, false, sink, move |api, hash| {
+			let swaps = api
+				.cf_scheduled_swaps(hash, asset1, asset2)?
+				.into_iter()
+				.map(|(swap, execute_at)| ScheduledSwap { swap, execute_at })
+				.collect::<Vec<_>>();
+
+			#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
+			struct SwapResponse {
+				swaps: Vec<ScheduledSwap>,
+			}
+
+			Ok::<_, ApiError>(SwapResponse { swaps })
+		})
+	}
+
 	fn cf_subscribe_prewitness_swaps(
 		&self,
 		sink: SubscriptionSink,
@@ -1373,7 +1408,10 @@ where
 			"cf-rpc-update-subscription",
 			Some("rpc"),
 			async move {
-				sink.pipe_from_try_stream(stream).await;
+				if let SubscriptionClosed::Failed(err) = sink.pipe_from_try_stream(stream).await {
+					log::error!("Subscription closed due to error: {err:?}");
+					sink.close(err);
+				}
 			}
 			.boxed(),
 		);
