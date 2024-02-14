@@ -1,6 +1,6 @@
 mod chain_tracking;
 
-use std::{collections::HashMap, sync::Arc, str::FromStr};
+use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use cf_chains::Arbitrum;
 use cf_primitives::EpochIndex;
@@ -73,7 +73,8 @@ where
 	// 	)
 	// 	.await
 	// 	.expect(STATE_CHAIN_CONNECTION);
-	let address_checker_address = H160::from_str("0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0").unwrap();
+	let address_checker_address =
+		H160::from_str("0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0").unwrap();
 
 	let supported_arb_erc20_assets: HashMap<cf_primitives::chains::assets::arb::Asset, H160> =
 		state_chain_client
@@ -86,7 +87,8 @@ where
 	// let usdc_contract_address = *supported_arb_erc20_assets
 	// 	.get(&cf_primitives::chains::assets::arb::Asset::ArbUsdc)
 	// 	.context("ArbitrumSupportedAssets does not include USDC")?;
-	let usdc_contract_address = H160::from_str("0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9").unwrap();
+	let usdc_contract_address =
+		H160::from_str("0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9").unwrap();
 
 	let supported_arb_erc20_assets: HashMap<H160, cf_primitives::Asset> =
 		supported_arb_erc20_assets
