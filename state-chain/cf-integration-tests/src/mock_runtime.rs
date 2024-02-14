@@ -77,6 +77,14 @@ impl ExtBuilder {
 		self
 	}
 
+	pub fn with_additional_accounts(
+		mut self,
+		accounts: &[(AccountId, AccountRole, FlipBalance)],
+	) -> Self {
+		self.genesis_accounts.extend_from_slice(accounts);
+		self
+	}
+
 	pub fn root(mut self, root: AccountId) -> Self {
 		self.root = Some(root);
 		self
@@ -161,7 +169,14 @@ impl ExtBuilder {
 				genesis_backups: Default::default(),
 				genesis_vanity_names: Default::default(),
 				blocks_per_epoch: self.blocks_per_epoch,
-				bond: self.genesis_accounts.iter().map(|(.., amount)| *amount).min().unwrap(),
+				bond: self
+					.genesis_accounts
+					.iter()
+					.filter_map(|(.., role, amount)| {
+						matches!(role, AccountRole::Validator).then_some(*amount)
+					})
+					.min()
+					.unwrap(),
 				redemption_period_as_percentage: Percent::from_percent(
 					REDEMPTION_PERIOD_AS_PERCENTAGE,
 				),
