@@ -268,12 +268,10 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			Members::<T>::mutate(|old_members| {
-				let outgoing = old_members.difference(&new_members).collect::<BTreeSet<_>>();
-				let incoming = new_members.difference(&old_members).collect::<BTreeSet<_>>();
-				for member in outgoing {
+				for member in old_members.difference(&new_members) {
 					<frame_system::Pallet<T>>::dec_sufficients(member);
 				}
-				for member in incoming {
+				for member in new_members.difference(old_members) {
 					<frame_system::Pallet<T>>::inc_sufficients(member);
 				}
 				*old_members = new_members;
