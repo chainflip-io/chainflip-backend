@@ -883,6 +883,7 @@ pub type PalletExecutionOrder = (
 // We use the executive pallet because the `pre_upgrade` and `post_upgrade` hooks are noops
 // for tuple migrations (like these).
 type PalletMigrations = (
+	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	pallet_cf_environment::migrations::PalletMigration<Runtime>,
 	pallet_cf_funding::migrations::PalletMigration<Runtime>,
 	// pallet_cf_validator::migrations::PalletMigration<Runtime>,
