@@ -31,6 +31,8 @@ export const btcClientMutex = new Mutex();
 export const brokerMutex = new Mutex();
 export const snowWhiteMutex = new Mutex();
 
+export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'];
+
 export function getEvmContractAddress(chain: Chain, contract: string): string {
   switch (chain) {
     case 'Ethereum':

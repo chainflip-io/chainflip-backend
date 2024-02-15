@@ -155,8 +155,12 @@ export async function performSwap(
 
   if (log)
     console.log(
-      `${tag} The args are:  ${sourceAsset} ${destAsset} ${destAddress} ${
-        messageMetadata ? `someMessage` : ''
+      `${tag} The args are: ${sourceAsset} ${destAsset} ${destAddress} ${
+        messageMetadata
+          ? messageMetadata.message.substring(0, 6) +
+            '...' +
+            messageMetadata.message.substring(messageMetadata.message.length - 4)
+          : ''
       }`,
     );
 

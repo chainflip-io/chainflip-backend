@@ -9,6 +9,7 @@ import {
   amountToFineAmount,
   defaultAssetAmounts,
   assetToChain,
+  ccmSupportedChains,
 } from '../shared/utils';
 import { BtcAddressType, btcAddressTypes } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
@@ -108,7 +109,7 @@ export async function prepareSwap(
   tag += tagSuffix ? `${tagSuffix}]` : ']';
 
   // For swaps with a message force the address to be the CF Tester address.
-  if (messageMetadata && chainFromAsset(destAsset) === chainFromAsset('ETH')) {
+  if (messageMetadata && ccmSupportedChains.includes(chainFromAsset(destAsset))) {
     destAddress = getEvmContractAddress(chainFromAsset(destAsset), 'CFTESTER');
     if (log) console.log(`${tag} Using CF Tester address: ${destAddress}`);
   } else {
@@ -185,6 +186,8 @@ export async function testAllSwaps() {
 
   console.log('=== Testing all swaps ===');
 
+  // TODO: Manually do token approvals and contract swaps.
+
   // Single approval of all the assets swapped in contractsSwaps to avoid overlapping async approvals.
   // Set the allowance to the same amount of total asset swapped in contractsSwaps to avoid nonce issues.
   // Total contract swap per ERC20 token = ccmContractSwaps + contractSwaps =
@@ -198,7 +201,8 @@ export async function testAllSwaps() {
   //   (BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * 9n).toString(),
   // );
 
-  // NOTE: Sometimes getting this error. I think it's related to starting too many connections in parallel.
+  // NOTE: Sometimes getting this error. I think it's related to starting too many connections in parallel to the SC.
+  // This won't be a problem when the broker supports it.
   //    RPC-CORE: getMetadata(at?: BlockHash): Metadata:: -32000: Client error: Execution failed: Other error happened while constructing the runtime: failed to instantiate a new WASM module instance: maximum concurrent instance limit of 32 reached
   //    API/INIT: Error: FATAL: Unable to initialize the API: -32000: Client error: Execution failed: Other error happened while constructing the runtime: failed to instantiate a new WASM module instance: maximum concurrent instance limit of 32 reached
   //              at ApiPromise.__internal__onProviderConnect (file:///home/albert/work/chainflip/backend_arbitrum/chainflip-backend/bouncer/node_modules/.pnpm/@polkadot+api@10.7.2/node_modules/@polkadot/api/base/Init.js:311:27)
@@ -209,25 +213,27 @@ export async function testAllSwaps() {
       .filter((destAsset) => sourceAsset !== destAsset)
       .forEach((destAsset) => {
         // Regular swaps
-        appendSwap(sourceAsset, destAsset, testSwap);
+        // appendSwap(sourceAsset, destAsset, testSwap);
 
-        // NOTE: I am using an old SDK so this ones don't work, even for non-Arbitrum assets
-        //   // if (sourceAsset !== 'ARBETH' && sourceAsset !== 'ARBUSDC') {
-        //   if (chainFromAsset(sourceAsset) === chainFromAsset('ETH')) {
-        //     // Contract Swaps
-        //     appendSwap(sourceAsset, destAsset, testSwapViaContract);
-        //     if (chainFromAsset(destAsset) === chainFromAsset('ETH')) {
-        //       // CCM contract swaps
-        //       appendSwap(sourceAsset, destAsset, testSwapViaContract, newCcmMetadata(sourceAsset));
-        //     }
-        //   }
+        // // NOTE: I am using an old SDK so this ones don't work, even for non-Arbitrum assets
+        // // if (sourceAsset !== 'ARBETH' && sourceAsset !== 'ARBUSDC') {
+        // if (chainFromAsset(sourceAsset) === chainFromAsset('ETH')) {
+        //   // Contract Swaps
+        //   appendSwap(sourceAsset, destAsset, testSwapViaContract);
         //   if (chainFromAsset(destAsset) === chainFromAsset('ETH')) {
-        //     // CCM swaps
-        //     appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
+        //     // CCM contract swaps
+        //     appendSwap(sourceAsset, destAsset, testSwapViaContract, newCcmMetadata(sourceAsset));
         //   }
         // }
+
+        if (ccmSupportedChains.includes(chainFromAsset(destAsset))) {
+          // CCM swaps
+          appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
+        }
       }),
   );
+
+  // appendSwap('ETH', 'ARBETH', testSwap, newCcmMetadata('ETH'));
 
   await Promise.all(allSwaps);
 

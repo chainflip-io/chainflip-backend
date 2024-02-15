@@ -18,7 +18,7 @@ const deposits = new Map<Asset, number>([
   ['ARBETH', 100],
   ['BTC', 10],
   ['USDC', 1000000],
-  ['ARBUSDC', 1000000],
+  ['ARBUSDC', 100000],
   ['FLIP', 10000],
 ]);
 
@@ -60,8 +60,7 @@ async function main(): Promise<void> {
     rangeOrder('BTC', deposits.get('BTC')! * 0.9999),
     rangeOrder('FLIP', deposits.get('FLIP')! * 0.9999),
     rangeOrder('ARBETH', deposits.get('ARBETH')! * 0.9999),
-    // TODO: more than *0.5 certain amount results in insufficient liquidity. To be investigated
-    rangeOrder('ARBUSDC', deposits.get('ARBUSDC')! * 0.5),
+    rangeOrder('ARBUSDC', deposits.get('ARBUSDC')! * 0.9999),
   ]);
   console.log('=== Swaps Setup completed ===');
 
