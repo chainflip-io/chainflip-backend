@@ -1,7 +1,7 @@
 version: "3.9"
 services:
   init:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.1.0-${NODE_COUNT}-20240215
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.1.0-${NODE_COUNT}
     pull_policy: always
     container_name: init
     platform: linux/amd64
@@ -17,7 +17,7 @@ services:
       - "/tmp/chainflip/data/redis-data:/data"
 
   geth:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v1.1.0-${NODE_COUNT}-20240215
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v1.1.0-${NODE_COUNT}
     container_name: geth
     platform: linux/amd64
     ports:
