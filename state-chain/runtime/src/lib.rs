@@ -287,6 +287,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
+	type FeePayment = Flip;
 }
 
 impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
@@ -305,6 +306,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type CcmHandler = Swapping;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
+	type FeePayment = Flip;
 }
 
 impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
@@ -323,6 +325,7 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type CcmHandler = Swapping;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
+	type FeePayment = Flip;
 }
 
 parameter_types! {
@@ -1453,6 +1456,14 @@ impl_runtime_apis! {
 			});
 
 			Some(result)
+		}
+
+		fn cf_channel_opening_fee(chain: ForeignChain) -> FlipBalance {
+			match chain {
+				ForeignChain::Ethereum => pallet_cf_ingress_egress::Pallet::<Runtime, EthereumInstance>::channel_opening_fee(),
+				ForeignChain::Polkadot => pallet_cf_ingress_egress::Pallet::<Runtime, PolkadotInstance>::channel_opening_fee(),
+				ForeignChain::Bitcoin => pallet_cf_ingress_egress::Pallet::<Runtime, BitcoinInstance>::channel_opening_fee(),
+			}
 		}
 	}
 

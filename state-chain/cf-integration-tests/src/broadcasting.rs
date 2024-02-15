@@ -14,7 +14,7 @@ use state_chain_runtime::{
 fn bitcoin_broadcast_delay_works() {
 	const EPOCH_BLOCKS: u32 = 200;
 	const MAX_AUTHORITIES: AuthorityCount = 150;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()

@@ -8,7 +8,7 @@ use state_chain_runtime::Validator;
 #[test]
 fn auction_repeats_after_failure_because_of_liveness() {
 	const EPOCH_BLOCKS: BlockNumber = 1000;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		// As we run a rotation at genesis we will need accounts to support
 		// having 5 authorities as the default is 3 (Alice, Bob and Charlie)
@@ -96,7 +96,7 @@ fn auction_repeats_after_failure_because_of_liveness() {
 fn epoch_rotates() {
 	const EPOCH_BLOCKS: BlockNumber = 1000;
 	const MAX_SET_SIZE: AuthorityCount = 5;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.min_authorities(MAX_SET_SIZE)
 		.build()

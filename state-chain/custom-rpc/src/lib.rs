@@ -206,6 +206,7 @@ pub struct IngressEgressEnvironment {
 	pub egress_fees: any::AssetMap<Option<NumberOrHex>>,
 	pub witness_safety_margins: HashMap<ForeignChain, Option<u64>>,
 	pub egress_dust_limits: any::AssetMap<NumberOrHex>,
+	pub channel_opening_fees: HashMap<ForeignChain, NumberOrHex>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -965,11 +966,16 @@ where
 		let hash = self.unwrap_or_best(at);
 
 		let mut witness_safety_margins = HashMap::new();
+		let mut channel_opening_fees = HashMap::new();
 
 		for chain in ForeignChain::iter() {
 			witness_safety_margins.insert(
 				chain,
 				runtime_api.cf_witness_safety_margin(hash, chain).map_err(to_rpc_error)?,
+			);
+			channel_opening_fees.insert(
+				chain,
+				runtime_api.cf_channel_opening_fee(hash, chain).map_err(to_rpc_error)?.into(),
 			);
 		}
 
@@ -999,6 +1005,7 @@ where
 					.map_err(to_rpc_error)
 					.map(Into::into)
 			})?,
+			channel_opening_fees,
 		})
 	}
 
@@ -1413,6 +1420,11 @@ mod test {
 					btc: btc::AssetMap { btc: 0u32.into() },
 					dot: dot::AssetMap { dot: 0u32.into() },
 				},
+				channel_opening_fees: HashMap::from([
+					(ForeignChain::Bitcoin, 0u32.into()),
+					(ForeignChain::Ethereum, 1000u32.into()),
+					(ForeignChain::Polkadot, 1000u32.into()),
+				]),
 			},
 			funding: FundingEnvironment {
 				redemption_tax: 0u32.into(),

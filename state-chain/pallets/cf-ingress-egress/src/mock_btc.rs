@@ -20,6 +20,7 @@ use cf_traits::{
 		asset_converter::MockAssetConverter,
 		broadcaster::MockBroadcaster,
 		ccm_handler::MockCcmHandler,
+		fee_payment::MockFeePayment,
 		lp_balance::MockBalance,
 	},
 	DepositHandler, NetworkEnvironmentProvider, SwapDepositHandler,
@@ -137,6 +138,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Test {
 	type WeightInfo = ();
 	type NetworkEnvironment = MockNetworkEnvironmentProvider;
 	type AssetConverter = MockAssetConverter;
+	type FeePayment = MockFeePayment<Self>;
 }
 
 impl_test_helpers! {

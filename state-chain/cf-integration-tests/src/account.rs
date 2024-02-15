@@ -11,7 +11,7 @@ use state_chain_runtime::{Reputation, Runtime, Validator};
 
 #[test]
 fn account_deletion_removes_relevant_storage_items() {
-	super::genesis::default().build().execute_with(|| {
+	super::genesis::with_test_defaults().build().execute_with(|| {
 		let genesis_nodes = Validator::current_authorities();
 
 		// Create a single backup node which we will use to test deletion

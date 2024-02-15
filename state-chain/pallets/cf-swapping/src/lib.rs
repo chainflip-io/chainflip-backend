@@ -176,6 +176,12 @@ pub enum CcmFailReason {
 	InsufficientDepositAmount,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum PalletConfigUpdate {
+	/// Set the maximum amount allowed to be put into a swap. Excess amounts are confiscated.
+	MaximumSwapAmount { asset: Asset, amount: Option<AssetAmount> },
+}
+
 impl_pallet_safe_mode! {
 	PalletSafeMode; swaps_enabled, withdrawals_enabled, deposits_enabled, broker_registration_enabled,
 }
@@ -189,6 +195,7 @@ pub mod pallet {
 		AccountRoleRegistry, CcmSwapIds, Chainflip, EgressApi, ScheduledEgressDetails,
 		SwapDepositHandler,
 	};
+	use frame_system::WeightInfo as SystemWeightInfo;
 
 	use super::*;
 
@@ -620,28 +627,26 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Sets the Maximum amount allowed in a single swap for an asset.
+		/// Apply a list of configuration updates to the pallet.
 		///
 		/// Requires Governance.
-		///
-		/// ## Events
-		///
-		/// - [On update](Event::MaximumSwapAmountSet)
-		#[pallet::call_index(7)]
-		#[pallet::weight(T::WeightInfo::set_maximum_swap_amount())]
-		pub fn set_maximum_swap_amount(
+		#[pallet::call_index(8)]
+		#[pallet::weight(<T as frame_system::Config>::SystemWeightInfo::set_storage(updates.len() as u32))]
+		pub fn update_pallet_config(
 			origin: OriginFor<T>,
-			asset: Asset,
-			amount: Option<AssetAmount>,
+			updates: BoundedVec<PalletConfigUpdate, ConstU32<10>>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			match amount {
-				Some(max) => MaximumSwapAmount::<T>::insert(asset, max),
-				None => MaximumSwapAmount::<T>::remove(asset),
-			};
+			for update in updates {
+				match update {
+					PalletConfigUpdate::MaximumSwapAmount { asset, amount } => {
+						MaximumSwapAmount::<T>::set(asset, amount);
+						Self::deposit_event(Event::<T>::MaximumSwapAmountSet { asset, amount });
+					},
+				}
+			}
 
-			Self::deposit_event(Event::<T>::MaximumSwapAmountSet { asset, amount });
 			Ok(())
 		}
 	}

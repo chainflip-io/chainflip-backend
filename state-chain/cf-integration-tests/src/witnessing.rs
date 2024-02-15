@@ -18,7 +18,7 @@ use pallet_cf_witnesser::{CallHash, CallHashExecuted, WitnessDeadline};
 fn can_punish_failed_witnesser() {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 50;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
