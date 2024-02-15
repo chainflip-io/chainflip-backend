@@ -24,6 +24,7 @@ use sp_std::{convert::TryFrom, str, vec};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EvmCrypto;
 
+// TODO: Gas amounts are different between ETH & ARB!! To differentiate.
 pub mod fees {
 	// TODO: refine these constants.
 	pub const BASE_COST_PER_BATCH: u128 = 50_000;
