@@ -372,7 +372,8 @@ macro_rules! assets {
 }
 
 // !!!!!! IMPORTANT !!!!!!
-// Do not change these indices.
+// Do not change these indices, or the orderings (as the orderings will effect some serde formats
+// (But not JSON), and the scale encoding)
 assets!(pub enum Asset {
 	// 0 is reserved for particular cross chain messaging scenarios where we want to pass
 	// through a message without making a swap.
