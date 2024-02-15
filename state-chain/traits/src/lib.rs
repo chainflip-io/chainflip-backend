@@ -192,7 +192,10 @@ pub trait VaultActivator<C: ChainCrypto> {
 
 	/// Activate key/s on particular chain/s. For example, setting the new key
 	/// on the contract for a smart contract chain.
-	fn activate(new_key: C::AggKey, maybe_old_key: Option<C::AggKey>) -> Option<u32>;
+	fn activate(
+		new_key: C::AggKey,
+		maybe_old_key: Option<C::AggKey>,
+	) -> Option<ThresholdSignatureRequestId>;
 
 	fn activate_key();
 
@@ -496,7 +499,9 @@ pub trait Broadcaster<C: Chain> {
 	type Callback: UnfilteredDispatchable;
 
 	/// Request a threshold signature and then build and broadcast the outbound api call.
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> (BroadcastId, u32);
+	fn threshold_sign_and_broadcast(
+		api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId);
 
 	/// Like `threshold_sign_and_broadcast` but also registers a callback to be dispatched when the
 	/// signature accepted event has been witnessed.
@@ -508,7 +513,9 @@ pub trait Broadcaster<C: Chain> {
 
 	/// Request a threshold signature and then build and broadcast the outbound api call
 	/// specifically for a rotation tx..
-	fn threshold_sign_and_broadcast_rotation_tx(api_call: Self::ApiCall) -> (BroadcastId, u32);
+	fn threshold_sign_and_broadcast_rotation_tx(
+		api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId);
 
 	/// Resign a call, and update the signature data storage, but do not broadcast.
 	fn threshold_resign(broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId>;

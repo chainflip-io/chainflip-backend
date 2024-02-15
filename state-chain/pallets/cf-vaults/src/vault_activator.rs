@@ -1,5 +1,6 @@
 use super::*;
 use cf_chains::SetAggKeyWithAggKeyError;
+use cf_primitives::ThresholdSignatureRequestId;
 use cf_runtime_utilities::{log_or_panic, StorageDecodeVariant};
 use cf_traits::{GetBlockHeight, VaultActivator};
 
@@ -25,7 +26,7 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 	fn activate(
 		new_public_key: AggKeyFor<T, I>,
 		maybe_old_public_key: Option<AggKeyFor<T, I>>,
-	) -> Option<u32> {
+	) -> Option<ThresholdSignatureRequestId> {
 		if let Some(old_key) = maybe_old_public_key {
 			match <T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
 				Some(old_key),

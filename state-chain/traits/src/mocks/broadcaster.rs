@@ -27,7 +27,9 @@ impl<
 	type ApiCall = A;
 	type Callback = C;
 
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> (cf_primitives::BroadcastId, u32) {
+	fn threshold_sign_and_broadcast(
+		api_call: Self::ApiCall,
+	) -> (cf_primitives::BroadcastId, ThresholdSignatureRequestId) {
 		Self::mutate_value(b"API_CALLS", |api_calls: &mut Option<Vec<A>>| {
 			let api_calls = api_calls.get_or_insert(Default::default());
 			api_calls.push(api_call);
@@ -77,7 +79,9 @@ impl<
 	/// Clean up storage data related to a broadcast ID.
 	fn clean_up_broadcast_storage(_broadcast_id: BroadcastId) {}
 
-	fn threshold_sign_and_broadcast_rotation_tx(api_call: Self::ApiCall) -> (BroadcastId, u32) {
+	fn threshold_sign_and_broadcast_rotation_tx(
+		api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		<Self as Broadcaster<Api>>::threshold_sign_and_broadcast(api_call)
 	}
 }

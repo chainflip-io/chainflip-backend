@@ -153,7 +153,7 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 							new_public_key,
 						}) => (new_public_key, request_id),
 						_ => unreachable!(
-							"Unreachable because we are in the branch for the AwaitingActivationKeyTss variant."
+							"Unreachable because we are in the branch for the AwaitingActivation variant."
 						),
 					};
 
