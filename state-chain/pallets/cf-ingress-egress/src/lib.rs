@@ -505,6 +505,9 @@ pub mod pallet {
 		UtxoConsolidation {
 			broadcast_id: BroadcastId,
 		},
+		FailedToBuildAllBatchCall {
+			error: AllBatchError,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -942,9 +945,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				TransactionOutcome::Commit(Ok(()))
 			},
 			Err(AllBatchError::NotRequired) => TransactionOutcome::Commit(Ok(())),
-			Err(AllBatchError::Other) => TransactionOutcome::Rollback(Err(DispatchError::Other(
-				"AllBatch ApiCall creation failed, rolled back storage",
-			))),
+			Err(error) => {
+				Self::deposit_event(Event::<T, I>::FailedToBuildAllBatchCall { error });
+				TransactionOutcome::Rollback(Err(DispatchError::Other(
+					"AllBatch ApiCall creation failed, rolled back storage",
+				)))
+			},
 		}
 	}
 
