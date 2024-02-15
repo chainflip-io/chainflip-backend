@@ -316,14 +316,14 @@ pub struct Scope<'env, Error: Debug + Send + 'static> {
 	/// task_scope::<(), (), _>(|scope| async move {
 	///     scope.spawn(async {
 	///         a += 1;
-	/// 			Ok(())
+	///             Ok(())
 	///     });
 	///     scope.spawn(async {
 	///         a += 1; // might run concurrently to other spawn
-	/// 			Ok(())
+	///             Ok(())
 	///     });
 	///
-	/// 		Ok(())
+	///             Ok(())
 	/// }.boxed());
 	/// ```
 	_phantom: std::marker::PhantomData<&'env mut &'env ()>,
