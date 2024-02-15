@@ -177,9 +177,12 @@ decl_runtime_apis!(
 		fn cf_asset_balances(account_id: AccountId32) -> Vec<(Asset, AssetAmount)>;
 		fn cf_redemption_tax() -> AssetAmount;
 		fn cf_network_environment() -> NetworkEnvironment;
-		fn cf_failed_call(
+		fn cf_failed_call_ethereum(
 			broadcast_id: BroadcastId,
 		) -> Option<<cf_chains::Ethereum as Chain>::Transaction>;
+		fn cf_failed_call_arbitrum(
+			broadcast_id: BroadcastId,
+		) -> Option<<cf_chains::Arbitrum as Chain>::Transaction>;
 		fn cf_ingress_fee(asset: Asset) -> Option<AssetAmount>;
 		fn cf_egress_fee(asset: Asset) -> Option<AssetAmount>;
 		fn cf_witness_count(hash: CallHash) -> Option<FailingWitnessValidators>;

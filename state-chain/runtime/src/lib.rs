@@ -923,20 +923,24 @@ pub type PalletExecutionOrder = (
 	EthereumChainTracking,
 	PolkadotChainTracking,
 	BitcoinChainTracking,
+	ArbitrumChainTracking,
 	EthereumVault,
 	PolkadotVault,
 	BitcoinVault,
+	ArbitrumVault,
 	EvmThresholdSigner,
 	PolkadotThresholdSigner,
 	BitcoinThresholdSigner,
 	EthereumBroadcaster,
 	PolkadotBroadcaster,
 	BitcoinBroadcaster,
+	ArbitrumBroadcaster,
 	Swapping,
 	LiquidityProvider,
 	EthereumIngressEgress,
 	PolkadotIngressEgress,
 	BitcoinIngressEgress,
+	ArbitrumIngressEgress,
 	LiquidityPools,
 );
 
@@ -1508,10 +1512,20 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_failed_call(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {
+		fn cf_failed_call_ethereum(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {
 			if EthereumIngressEgress::get_failed_call(broadcast_id).is_some() {
 				EthereumBroadcaster::threshold_signature_data(broadcast_id).map(|(api_call, _)|{
 					chainflip::EthTransactionBuilder::build_transaction(&api_call)
+				})
+			} else {
+				None
+			}
+		}
+
+		fn cf_failed_call_arbitrum(broadcast_id: BroadcastId) -> Option<<cf_chains::Arbitrum as cf_chains::Chain>::Transaction> {
+			if ArbitrumIngressEgress::get_failed_call(broadcast_id).is_some() {
+				ArbitrumBroadcaster::threshold_signature_data(broadcast_id).map(|(api_call, _)|{
+					chainflip::ArbTransactionBuilder::build_transaction(&api_call)
 				})
 			} else {
 				None
