@@ -279,6 +279,7 @@ mod tests {
 	}
 
 	#[test]
+	#[ignore = "Requires config file at root"]
 	fn init_default_config() {
 		set_test_env();
 
@@ -294,6 +295,7 @@ mod tests {
 	}
 
 	#[test]
+	#[ignore = "Requires config file at default root"]
 	fn test_all_command_line_options() {
 		// Fill the options with test values that will pass the parsing/validation.
 		// The test values need to be different from the default values set during `set_defaults()`
