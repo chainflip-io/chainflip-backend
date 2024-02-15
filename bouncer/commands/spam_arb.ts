@@ -8,7 +8,7 @@ import { spamEvm } from '../shared/send_evm';
 
 async function main() {
   // For now we just do every 6 sec
-  await spamEvm('Arbitrum', 6000);
+  await spamEvm('Arbitrum', 3000);
 
   process.exit(0);
 }

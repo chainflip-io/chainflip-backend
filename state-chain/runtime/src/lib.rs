@@ -921,6 +921,7 @@ pub type PalletExecutionOrder = (
 	TokenholderGovernance,
 	Reputation,
 	EthereumChainTracking,
+	ArbitrumChainTracking,
 	PolkadotChainTracking,
 	BitcoinChainTracking,
 	EthereumVault,
@@ -930,11 +931,13 @@ pub type PalletExecutionOrder = (
 	PolkadotThresholdSigner,
 	BitcoinThresholdSigner,
 	EthereumBroadcaster,
+	ArbitrumBroadcaster,
 	PolkadotBroadcaster,
 	BitcoinBroadcaster,
 	Swapping,
 	LiquidityProvider,
 	EthereumIngressEgress,
+	ArbitrumIngressEgress,
 	PolkadotIngressEgress,
 	BitcoinIngressEgress,
 	LiquidityPools,
@@ -1508,6 +1511,7 @@ impl_runtime_apis! {
 			}
 		}
 
+		// TODO: Should this also support Arbitrum
 		fn cf_failed_call(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {
 			if EthereumIngressEgress::get_failed_call(broadcast_id).is_some() {
 				EthereumBroadcaster::threshold_signature_data(broadcast_id).map(|(api_call, _)|{

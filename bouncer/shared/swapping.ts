@@ -198,23 +198,19 @@ export async function testAllSwaps() {
   //   (BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * 9n).toString(),
   // );
 
+  // NOTE: Sometimes getting this error. I think it's related to starting too many connections in parallel.
+  //    RPC-CORE: getMetadata(at?: BlockHash): Metadata:: -32000: Client error: Execution failed: Other error happened while constructing the runtime: failed to instantiate a new WASM module instance: maximum concurrent instance limit of 32 reached
+  //    API/INIT: Error: FATAL: Unable to initialize the API: -32000: Client error: Execution failed: Other error happened while constructing the runtime: failed to instantiate a new WASM module instance: maximum concurrent instance limit of 32 reached
+  //              at ApiPromise.__internal__onProviderConnect (file:///home/albert/work/chainflip/backend_arbitrum/chainflip-backend/bouncer/node_modules/.pnpm/@polkadot+api@10.7.2/node_modules/@polkadot/api/base/Init.js:311:27)
+  //              at processTicksAndRejections (node:internal/process/task_queues:96:5)
+
   Object.values(Assets).forEach((sourceAsset) =>
     Object.values(Assets)
       .filter((destAsset) => sourceAsset !== destAsset)
       .forEach((destAsset) => {
-        // // Regular swaps - all swaps that don't egress to Arbitrum work well!
-        // if (destAsset !== 'ARBETH' && destAsset !== 'ARBUSDC') {
-        //   appendSwap(sourceAsset, destAsset, testSwap);
-        // }
+        // Regular swaps
+        appendSwap(sourceAsset, destAsset, testSwap);
 
-        // NOTE: Looks like swap Egresses are not broadcasted to Arbitrum. There is SwapEgressScheduled
-        // with the correct destination asset but nothing happens afterwards. In the CFE no transaction
-        // to Arbitrum os send for broadcast.
-        if (assetToChain(destAsset) === 'Arb') {
-          if (assetToChain(sourceAsset) !== 'Eth' && assetToChain(sourceAsset) !== 'Arb') {
-            appendSwap(sourceAsset, destAsset, testSwap);
-          }
-        }
         // NOTE: I am using an old SDK so this ones don't work, even for non-Arbitrum assets
         //   // if (sourceAsset !== 'ARBETH' && sourceAsset !== 'ARBUSDC') {
         //   if (chainFromAsset(sourceAsset) === chainFromAsset('ETH')) {
