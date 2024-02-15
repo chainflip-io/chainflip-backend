@@ -1893,10 +1893,10 @@ fn swap_broker_fee_calculated_correctly() {
 		const AMOUNT: AssetAmount = 100000;
 
 		// calculate broker fees for each asset available
-		Asset::all().iter().for_each(|asset| {
+		Asset::all().for_each(|asset| {
 			let total_fees: u128 =
 				fees.iter().fold(0, |total_fees: u128, fee_bps: &BasisPoints| {
-					swap_with_custom_broker_fee(*asset, Asset::Usdc, AMOUNT, *fee_bps);
+					swap_with_custom_broker_fee(asset, Asset::Usdc, AMOUNT, *fee_bps);
 					total_fees +
 						Permill::from_parts(*fee_bps as u32 * BASIS_POINTS_PER_MILLION) * AMOUNT
 				});
@@ -1948,17 +1948,17 @@ fn swap_broker_fee_subtracted_from_swap_amount() {
 		let execute_at = System::block_number() + SWAP_DELAY_BLOCKS as u64;
 
 		let mut swap_id = 1;
-		Asset::all().iter().for_each(|asset| {
+		Asset::all().for_each(|asset| {
 			let mut total_fees = 0;
 			combinations.clone().for_each(|(amount, broker_fee)| {
-				swap_with_custom_broker_fee(*asset, Asset::Flip, *amount, broker_fee);
+				swap_with_custom_broker_fee(asset, Asset::Flip, *amount, broker_fee);
 				let broker_commission =
 					Permill::from_parts(broker_fee as u32 * BASIS_POINTS_PER_MILLION) * *amount;
 				total_fees += broker_commission;
-				assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, *asset), total_fees);
+				assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, asset), total_fees);
 				assert_swap_scheduled_event_emitted(
 					swap_id,
-					*asset,
+					asset,
 					*amount,
 					Asset::Flip,
 					broker_commission,
