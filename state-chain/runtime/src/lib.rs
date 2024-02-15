@@ -1413,6 +1413,8 @@ impl_runtime_apis! {
 			let first_block = Swapping::first_unprocessed_block();
 			let last_block = System::block_number() + pallet_cf_swapping::SWAP_DELAY_BLOCKS;
 
+			debug_assert!(first_block < last_block);
+
 			(first_block..=last_block).into_iter().map(|block| {
 				Swapping::swap_queue(block).into_iter()
 				.filter(|swap| {(swap.from == from && swap.to == to) || (swap.from == to && swap.to == from)})

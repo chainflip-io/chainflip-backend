@@ -526,7 +526,7 @@ pub trait CustomApi {
 		side: Order,
 	);
 
-	#[subscription(name = "subscribe_scheduled_swaps", item = Vec<AssetAmount>)]
+	#[subscription(name = "subscribe_scheduled_swaps", item = Vec<ScheduledSwap>)]
 	fn cf_subscribe_scheduled_swaps(&self, asset1: RpcAsset, asset2: RpcAsset);
 
 	#[method(name = "prewitness_swaps")]
