@@ -676,9 +676,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			RequestFailureCallbacks::<T, I>::insert(broadcast_id, callback);
 		}
 
-		let _threshold_signature_id = Self::threshold_sign(api_call, broadcast_id, true);
-
-		(broadcast_id, _threshold_signature_id)
+		(broadcast_id, Self::threshold_sign(api_call, broadcast_id, true))
 	}
 
 	/// Signs a API call, use `Call::on_signature_ready` as the callback, and returns the signature

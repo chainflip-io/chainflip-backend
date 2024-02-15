@@ -196,7 +196,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 pub struct MockVaultActivator;
 impl VaultActivator<MockEthereumChainCrypto> for MockVaultActivator {
 	type ValidatorId = <Test as Chainflip>::ValidatorId;
-	fn activate(
+	fn start_key_activation(
 		_new_key: MockAggKey,
 		_maybe_old_key: Option<MockAggKey>,
 	) -> Option<ThresholdSignatureRequestId> {

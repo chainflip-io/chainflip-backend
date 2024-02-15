@@ -23,7 +23,7 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 		Self::activate_new_key_for_chain(T::ChainTracking::get_block_height());
 	}
 
-	fn activate(
+	fn start_key_activation(
 		new_public_key: AggKeyFor<T, I>,
 		maybe_old_public_key: Option<AggKeyFor<T, I>>,
 	) -> Option<ThresholdSignatureRequestId> {

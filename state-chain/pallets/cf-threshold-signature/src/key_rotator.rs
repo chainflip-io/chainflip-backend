@@ -200,7 +200,7 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 		{
 			let maybe_active_epoch_key = Self::active_epoch_key();
 
-			match T::VaultActivator::activate(
+			match T::VaultActivator::start_key_activation(
 				new_public_key,
 				maybe_active_epoch_key.map(|EpochKey { key, .. }| key),
 			) {
