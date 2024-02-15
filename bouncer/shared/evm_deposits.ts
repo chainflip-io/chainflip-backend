@@ -137,7 +137,12 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
 export async function testEvmDeposits() {
   console.log('=== Testing EVM Deposits ===');
 
-  const depositTests = Promise.all([testDepositEvm('ETH', 'DOT'), testDepositEvm('FLIP', 'BTC')]);
+  const depositTests = Promise.all([
+    testDepositEvm('ETH', 'DOT'),
+    testDepositEvm('FLIP', 'BTC'),
+    testDepositEvm('ARBETH', 'DOT'),
+    testDepositEvm('ARBUSDC', 'BTC'),
+  ]);
 
   const duplicatedDepositTest = Promise.all([
     testSuccessiveNativeDeposits('ETH', 'DOT'),
