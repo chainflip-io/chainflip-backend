@@ -1,4 +1,4 @@
-import { exec, execSync } from 'child_process';
+import { execSync } from 'child_process';
 import fs from 'fs/promises';
 import * as toml from 'toml';
 import path from 'path';
@@ -83,31 +83,33 @@ async function incompatibleUpgradeNoBuild(
   console.log('Killing the old node.');
   execSync(`kill $(ps aux | grep chainflip-node | grep -v grep | awk '{print $2}')`);
 
-  console.log("Killed old node");
+  console.log('Killed old node');
 
   // let them shutdown
   await sleep(2000);
 
   console.log('Stopped old broker and lp-api. Starting the new ones.');
 
-  console.log("Starting the new node");
+  console.log('Starting the new node');
 
   const KEYS_DIR = `${localnetInitPath}/keys`;
 
   const selectedNodesSep = `"${selectedNodes.join(' ')}"`;
 
   try {
-    const buffer = execSync(`INIT_RPC_PORT=9944 KEYS_DIR=${KEYS_DIR} NODE_COUNT=${nodeCount} SELECTED_NODES=${selectedNodesSep} LOCALNET_INIT_DIR=${localnetInitPath} BINARY_ROOT_PATH=${binaryPath} ${localnetInitPath}/scripts/start-all-nodes.sh`);
-    console.log("start node success: " + buffer.toString());
+    const buffer = execSync(
+      `INIT_RPC_PORT=9944 KEYS_DIR=${KEYS_DIR} NODE_COUNT=${nodeCount} SELECTED_NODES=${selectedNodesSep} LOCALNET_INIT_DIR=${localnetInitPath} BINARY_ROOT_PATH=${binaryPath} ${localnetInitPath}/scripts/start-all-nodes.sh`,
+    );
+    console.log('start node success: ' + buffer.toString());
   } catch (e) {
-    console.error("start node error: ");
+    console.error('start node error: ');
     console.log(e);
   }
 
   await sleep(7000);
 
   const output = execSync("ps aux | grep chainflip-node | grep -v grep | awk '{print $2}'");
-  console.log("New node PID: " + output.toString());
+  console.log('New node PID: ' + output.toString());
 
   // Restart the engines
   execSync(
@@ -121,11 +123,10 @@ async function incompatibleUpgradeNoBuild(
 
   await sleep(20000);
 
-  const brokerPID = execSync("lsof -t -i:10997");
-  console.log("New broker PID: " + brokerPID.toString());
-  const lpApiPID = execSync("lsof -t -i:10589");
-  console.log("New LP API PID: " + lpApiPID.toString());
-
+  const brokerPID = execSync('lsof -t -i:10997');
+  console.log('New broker PID: ' + brokerPID.toString());
+  const lpApiPID = execSync('lsof -t -i:10589');
+  console.log('New LP API PID: ' + lpApiPID.toString());
 
   console.log('Started new broker and lp-api.');
 }

@@ -156,7 +156,7 @@ async function testRegisterWithExistingLpAccount() {
 /// Test lp_set_range_order and lp_update_range_order by minting, updating, and burning a range order.
 
 async function testRangeOrder() {
-  console.log('=== Starting testRangeOrder ===')
+  console.log('=== Starting testRangeOrder ===');
   const range = { start: 1, end: 2 };
   const orderId = 74398; // Arbitrary order id so it does not interfere with other tests
   const zeroAssetAmounts = {
@@ -255,13 +255,13 @@ async function testRangeOrder() {
 }
 
 async function testGetOpenSwapChannels() {
-  console.log('=== Starting testGetOpenSwapChannels ===')
+  console.log('=== Starting testGetOpenSwapChannels ===');
   // TODO: Test with some SwapChannelInfo data
   const openSwapChannels = await lpApiRpc(`lp_get_open_swap_channels`, []);
   assert(openSwapChannels.ethereum, `Missing ethereum swap channel info`);
   assert(openSwapChannels.polkadot, `Missing polkadot swap channel info`);
   assert(openSwapChannels.bitcoin, `Missing bitcoin swap channel info`);
-  console.log('=== testGetOpenSwapChannels complete ===')
+  console.log('=== testGetOpenSwapChannels complete ===');
 }
 
 /// Test lp_set_limit_order and lp_update_limit_order by minting, updating, and burning a limit order.
