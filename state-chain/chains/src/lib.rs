@@ -357,6 +357,15 @@ pub enum AllBatchError {
 
 	/// Unable to select Utxos.
 	UtxoSelectionFailed,
+
+	/// Some other DispatchError occurred.
+	DispatchError(DispatchError),
+}
+
+impl From<DispatchError> for AllBatchError {
+	fn from(e: DispatchError) -> Self {
+		AllBatchError::DispatchError(e)
+	}
 }
 
 #[derive(Debug)]

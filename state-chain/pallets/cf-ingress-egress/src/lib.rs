@@ -40,7 +40,6 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use scale_info::prelude::{format, string::String};
 use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::{vec, vec::Vec};
 
@@ -534,7 +533,7 @@ pub mod pallet {
 			broadcast_id: BroadcastId,
 		},
 		FailedToBuildAllBatchCall {
-			error: String,
+			error: AllBatchError,
 		},
 		ChannelOpeningFeePaid {
 			fee: T::Amount,
@@ -601,11 +600,9 @@ pub mod pallet {
 		/// Take all scheduled Egress and send them out
 		fn on_finalize(_n: BlockNumberFor<T>) {
 			// Send all fetch/transfer requests as a batch. Revert storage if failed.
-			if let Err(e) = Self::do_egress_scheduled_fetch_transfer() {
-				log::error!("Ingress-Egress failed to send BatchAll. Error: {e:?}");
-				Self::deposit_event(Event::<T, I>::FailedToBuildAllBatchCall {
-					error: format!("{:?}", e),
-				});
+			if let Err(error) = Self::do_egress_scheduled_fetch_transfer() {
+				log::error!("Ingress-Egress failed to send BatchAll. Error: {error:?}");
+				Self::deposit_event(Event::<T, I>::FailedToBuildAllBatchCall { error });
 			}
 
 			if let Ok(egress_transaction) =
@@ -892,7 +889,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// Note: Egress transactions with Blacklisted assets are not sent, and kept in storage.
 	#[transactional]
-	fn do_egress_scheduled_fetch_transfer() -> DispatchResult {
+	fn do_egress_scheduled_fetch_transfer() -> Result<(), AllBatchError> {
 		let batch_to_send: Vec<_> =
 			ScheduledEgressFetchOrTransfer::<T, I>::mutate(|requests: &mut Vec<_>| {
 				// Filter out disabled assets and requests that are not ready to be egressed.
@@ -993,9 +990,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Ok(())
 			},
 			Err(AllBatchError::NotRequired) => Ok(()),
-			Err(error) => Err(DispatchError::Other(
-				format!("Failed to build AllBatch call. Error: {:?}", error).leak(),
-			)),
+			Err(other) => Err(other),
 		}
 	}
 
