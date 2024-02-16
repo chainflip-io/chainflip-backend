@@ -133,6 +133,7 @@ pub mod pallet {
 		traits::{ConstU128, EnsureOrigin, IsType},
 		DefaultNoBound,
 	};
+	use sp_runtime::SaturatedConversion;
 	use sp_std::vec::Vec;
 
 	pub(crate) type ChannelRecycleQueue<T, I> =
@@ -559,68 +560,54 @@ pub mod pallet {
 		fn on_idle(_n: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut used_weight = Weight::zero();
 
-			let read_weight =
-				frame_support::weights::constants::RocksDbWeight::get().reads_writes(1, 0);
-			let write_weight =
-				frame_support::weights::constants::RocksDbWeight::get().reads_writes(0, 1);
+			let cleanup_weight = frame_support::weights::constants::RocksDbWeight::get()
+				.reads_writes(2, 2)
+				.saturating_add(T::WeightInfo::remove_boostable_deposits(1));
 
-			while remaining_weight.saturating_sub(used_weight).all_gte(read_weight * 2) {
-				used_weight = used_weight.saturating_add(read_weight);
+			let maximum_recycle_number = remaining_weight
+				.ref_time()
+				.checked_div(cleanup_weight.ref_time())
+				.unwrap_or_default()
+				.saturated_into::<usize>();
 
-				if let Some((block, address)) = DepositChannelRecycleBlocks::<T, I>::get().first() {
-					// Only cleanup expired channels
-					if *block > T::ChainTracking::get_block_height() {
-						break
-					}
+			let can_recycle = DepositChannelRecycleBlocks::<T, I>::mutate(|recycle_queue| {
+				Self::can_and_cannot_recycle(
+					recycle_queue,
+					maximum_recycle_number,
+					T::ChainTracking::get_block_height(),
+				)
+			});
+			used_weight = used_weight.saturating_add(
+				frame_support::weights::constants::RocksDbWeight::get()
+					.reads_writes((can_recycle.len() + 1) as u64, can_recycle.len() as u64),
+			);
 
-					used_weight = used_weight.saturating_add(read_weight);
-
-					if let Some(details) = DepositChannelLookup::<T, I>::get(address) {
-						// Calculate the weight of the cleanup
-						let item_count = BoostableDeposits::<T, I>::iter_prefix(
+			for address in can_recycle.iter() {
+				if let Some(details) = DepositChannelLookup::<T, I>::take(address) {
+					if let Some(state) = details.deposit_channel.state.maybe_recycle() {
+						DepositChannelPool::<T, I>::insert(
 							details.deposit_channel.channel_id,
-						)
-						.count() as u32;
-
-						let cleanup_weight = T::WeightInfo::remove_boostable_deposits(item_count)
-							.saturating_add(write_weight * 2);
-
-						// If we don't have enough weight to do the cleanup, leave it for next time
-						if !remaining_weight.saturating_sub(used_weight).all_gte(cleanup_weight) {
-							break
-						}
-
-						// Recycle the channel
-						if let Some(state) = details.deposit_channel.state.maybe_recycle() {
-							DepositChannelPool::<T, I>::insert(
-								details.deposit_channel.channel_id,
-								DepositChannel { state, ..details.deposit_channel },
-							);
-							used_weight = used_weight.saturating_add(write_weight);
-						}
-
-						// Cleanup the deposit data
-						let _removed_deposits = BoostableDeposits::<T, I>::clear_prefix(
-							details.deposit_channel.channel_id,
-							item_count,
-							None,
+							DepositChannel { state, ..details.deposit_channel },
 						);
-						DepositChannelLookup::<T, I>::remove(address);
-
-						used_weight = used_weight
-							.saturating_add(T::WeightInfo::remove_boostable_deposits(item_count))
-							.saturating_add(write_weight);
+						used_weight = used_weight.saturating_add(
+							frame_support::weights::constants::RocksDbWeight::get()
+								.reads_writes(1, 0),
+						);
 					}
-
-					DepositChannelRecycleBlocks::<T, I>::mutate(|recycle_queue| {
-						recycle_queue.remove(0);
-					});
-					used_weight = used_weight.saturating_add(write_weight);
-				} else {
-					break
+					// Cleanup the deposit data
+					let item_count =
+						BoostableDeposits::<T, I>::iter_prefix(details.deposit_channel.channel_id)
+							.count() as u32;
+					let removed_deposits = BoostableDeposits::<T, I>::clear_prefix(
+						details.deposit_channel.channel_id,
+						item_count,
+						None,
+					);
+					used_weight = used_weight.saturating_add(
+						T::WeightInfo::remove_boostable_deposits(removed_deposits.unique),
+					);
 				}
 			}
-
 			used_weight
 		}
 
@@ -922,6 +909,21 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	fn can_and_cannot_recycle(
+		channel_recycle_blocks: &mut ChannelRecycleQueue<T, I>,
+		maximum_recyclable_number: usize,
+		current_block_height: TargetChainBlockNumber<T, I>,
+	) -> Vec<TargetChainAccount<T, I>> {
+		let partition_point = sp_std::cmp::min(
+			channel_recycle_blocks.partition_point(|(block, _)| *block <= current_block_height),
+			maximum_recyclable_number,
+		);
+		channel_recycle_blocks
+			.drain(..partition_point)
+			.map(|(_, address)| address)
+			.collect()
+	}
+
 	/// Take all scheduled egress requests and send them out in an `AllBatch` call.
 	///
 	/// Note: Egress transactions with Blacklisted assets are not sent, and kept in storage.

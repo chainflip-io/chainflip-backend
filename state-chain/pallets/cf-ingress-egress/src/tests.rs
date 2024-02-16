@@ -1,11 +1,10 @@
 use crate::{
-	mock_eth::*, weights::WeightInfo, BoostableDeposit, BoostableDepositIdCounter,
-	BoostableDeposits, Call as PalletCall, ChannelAction, ChannelIdCounter, Config,
-	CrossChainMessage, DepositAction, DepositChannelLookup, DepositChannelPool,
-	DepositChannelRecycleBlocks, DepositIgnoredReason, DepositWitness, DisabledEgressAssets,
-	EgressDustLimit, Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls,
-	FetchOrTransfer, MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
-	TargetChainAccount,
+	mock_eth::*, BoostableDeposit, BoostableDepositIdCounter, BoostableDeposits,
+	Call as PalletCall, ChannelAction, ChannelIdCounter, CrossChainMessage, DepositAction,
+	DepositChannelLookup, DepositChannelPool, DepositIgnoredReason, DepositWitness,
+	DisabledEgressAssets, EgressDustLimit, Event as PalletEvent, FailedForeignChainCall,
+	FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit, Pallet, ScheduledEgressCcm,
+	ScheduledEgressFetchOrTransfer, TargetChainAccount,
 };
 use cf_chains::{
 	address::AddressConverter, evm::EvmFetchId, mocks::MockEthereum, CcmChannelMetadata,
@@ -1211,100 +1210,100 @@ fn basic_balance_tracking() {
 		]);
 }
 
-// #[test]
-// fn test_default_empty_amounts() {
-// 	let mut channel_recycle_blocks = Default::default();
-// 	let can_recycle = IngressEgress::can_and_cannot_recycle(&mut channel_recycle_blocks, 0, 0);
+#[test]
+fn test_default_empty_amounts() {
+	let mut channel_recycle_blocks = Default::default();
+	let can_recycle = IngressEgress::can_and_cannot_recycle(&mut channel_recycle_blocks, 0, 0);
 
-// 	assert_eq!(can_recycle, vec![]);
-// 	assert_eq!(channel_recycle_blocks, vec![]);
-// }
+	assert_eq!(can_recycle, vec![]);
+	assert_eq!(channel_recycle_blocks, vec![]);
+}
 
-// #[test]
-// fn test_cannot_recycle_if_block_number_less_than_current_height() {
-// 	let maximum_recyclable_number = 2;
-// 	let mut channel_recycle_blocks =
-// 		(1u64..5).map(|i| (i, H160::from([i as u8; 20]))).collect::<Vec<_>>();
-// 	let current_block_height = 3;
+#[test]
+fn test_cannot_recycle_if_block_number_less_than_current_height() {
+	let maximum_recyclable_number = 2;
+	let mut channel_recycle_blocks =
+		(1u64..5).map(|i| (i, H160::from([i as u8; 20]))).collect::<Vec<_>>();
+	let current_block_height = 3;
 
-// 	let can_recycle = IngressEgress::can_and_cannot_recycle(
-// 		&mut channel_recycle_blocks,
-// 		maximum_recyclable_number,
-// 		current_block_height,
-// 	);
+	let can_recycle = IngressEgress::can_and_cannot_recycle(
+		&mut channel_recycle_blocks,
+		maximum_recyclable_number,
+		current_block_height,
+	);
 
-// 	assert_eq!(can_recycle, vec![H160::from([1u8; 20]), H160::from([2; 20])]);
-// 	assert_eq!(
-// 		channel_recycle_blocks,
-// 		vec![(3, H160::from([3u8; 20])), (4, H160::from([4u8; 20]))]
-// 	);
-// }
+	assert_eq!(can_recycle, vec![H160::from([1u8; 20]), H160::from([2; 20])]);
+	assert_eq!(
+		channel_recycle_blocks,
+		vec![(3, H160::from([3u8; 20])), (4, H160::from([4u8; 20]))]
+	);
+}
 
-// // Same test as above, but lower maximum recyclable number
-// #[test]
-// fn test_can_only_recycle_up_to_max_amount() {
-// 	let maximum_recyclable_number = 1;
-// 	let mut channel_recycle_blocks =
-// 		(1u64..5).map(|i| (i, H160::from([i as u8; 20]))).collect::<Vec<_>>();
-// 	let current_block_height = 3;
+// Same test as above, but lower maximum recyclable number
+#[test]
+fn test_can_only_recycle_up_to_max_amount() {
+	let maximum_recyclable_number = 1;
+	let mut channel_recycle_blocks =
+		(1u64..5).map(|i| (i, H160::from([i as u8; 20]))).collect::<Vec<_>>();
+	let current_block_height = 3;
 
-// 	let can_recycle = IngressEgress::can_and_cannot_recycle(
-// 		&mut channel_recycle_blocks,
-// 		maximum_recyclable_number,
-// 		current_block_height,
-// 	);
+	let can_recycle = IngressEgress::can_and_cannot_recycle(
+		&mut channel_recycle_blocks,
+		maximum_recyclable_number,
+		current_block_height,
+	);
 
-// 	assert_eq!(can_recycle, vec![H160::from([1u8; 20])]);
-// 	assert_eq!(
-// 		channel_recycle_blocks,
-// 		vec![(2, H160::from([2; 20])), (3, H160::from([3u8; 20])), (4, H160::from([4u8; 20]))]
-// 	);
-// }
+	assert_eq!(can_recycle, vec![H160::from([1u8; 20])]);
+	assert_eq!(
+		channel_recycle_blocks,
+		vec![(2, H160::from([2; 20])), (3, H160::from([3u8; 20])), (4, H160::from([4u8; 20]))]
+	);
+}
 
-// #[test]
-// fn none_can_be_recycled_due_to_low_block_number() {
-// 	let maximum_recyclable_number = 4;
-// 	let mut channel_recycle_blocks =
-// 		(1u64..5).map(|i| (i, H160::from([i as u8; 20]))).collect::<Vec<_>>();
-// 	let current_block_height = 0;
+#[test]
+fn none_can_be_recycled_due_to_low_block_number() {
+	let maximum_recyclable_number = 4;
+	let mut channel_recycle_blocks =
+		(1u64..5).map(|i| (i, H160::from([i as u8; 20]))).collect::<Vec<_>>();
+	let current_block_height = 0;
 
-// 	let can_recycle = IngressEgress::can_and_cannot_recycle(
-// 		&mut channel_recycle_blocks,
-// 		maximum_recyclable_number,
-// 		current_block_height,
-// 	);
+	let can_recycle = IngressEgress::can_and_cannot_recycle(
+		&mut channel_recycle_blocks,
+		maximum_recyclable_number,
+		current_block_height,
+	);
 
-// 	assert!(can_recycle.is_empty());
-// 	assert_eq!(
-// 		channel_recycle_blocks,
-// 		vec![
-// 			(1, H160::from([1u8; 20])),
-// 			(2, H160::from([2; 20])),
-// 			(3, H160::from([3; 20])),
-// 			(4, H160::from([4; 20]))
-// 		]
-// 	);
-// }
+	assert!(can_recycle.is_empty());
+	assert_eq!(
+		channel_recycle_blocks,
+		vec![
+			(1, H160::from([1u8; 20])),
+			(2, H160::from([2; 20])),
+			(3, H160::from([3; 20])),
+			(4, H160::from([4; 20]))
+		]
+	);
+}
 
-// #[test]
-// fn all_can_be_recycled() {
-// 	let maximum_recyclable_number = 4;
-// 	let mut channel_recycle_blocks =
-// 		(1u64..5).map(|i| (i, H160::from([i as u8; 20]))).collect::<Vec<_>>();
-// 	let current_block_height = 4;
+#[test]
+fn all_can_be_recycled() {
+	let maximum_recyclable_number = 4;
+	let mut channel_recycle_blocks =
+		(1u64..5).map(|i| (i, H160::from([i as u8; 20]))).collect::<Vec<_>>();
+	let current_block_height = 4;
 
-// 	let can_recycle = IngressEgress::can_and_cannot_recycle(
-// 		&mut channel_recycle_blocks,
-// 		maximum_recyclable_number,
-// 		current_block_height,
-// 	);
+	let can_recycle = IngressEgress::can_and_cannot_recycle(
+		&mut channel_recycle_blocks,
+		maximum_recyclable_number,
+		current_block_height,
+	);
 
-// 	assert_eq!(
-// 		can_recycle,
-// 		vec![H160::from([1u8; 20]), H160::from([2; 20]), H160::from([3; 20]), H160::from([4; 20])]
-// 	);
-// 	assert!(channel_recycle_blocks.is_empty());
-// }
+	assert_eq!(
+		can_recycle,
+		vec![H160::from([1u8; 20]), H160::from([2; 20]), H160::from([3; 20]), H160::from([4; 20])]
+	);
+	assert!(channel_recycle_blocks.is_empty());
+}
 
 #[test]
 fn failed_ccm_is_stored() {
@@ -1518,82 +1517,6 @@ fn handle_prewitness_deposit() {
 		assert_eq!(
 			BoostableDeposits::<Test>::get(channel_id, deposit_id),
 			Some(BoostableDeposit { asset: ASSET, amount: DEPOSIT_AMOUNT, deposit_address })
-		);
-	});
-}
-
-#[test]
-fn test_idle_cleanup() {
-	use frame_support::weights::constants::RocksDbWeight;
-
-	const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
-	const ASSET: cf_chains::assets::eth::Asset = eth::Asset::Eth;
-	const DEPOSIT_AMOUNT: u128 = 50000;
-
-	new_test_ext().execute_with(|| {
-		// Make deposit channels
-		let deposit_addresses: Vec<<Ethereum as Chain>::ChainAccount> = (0..3)
-			.map(|_| {
-				let (_, address, ..) =
-					IngressEgress::request_liquidity_deposit_address(ALICE, ASSET, 0).unwrap();
-				address.try_into().unwrap()
-			})
-			.collect();
-
-		let deposit_witnesses: Vec<DepositWitness<Ethereum>> = deposit_addresses
-			.iter()
-			.map(|deposit_address| DepositWitness::<Ethereum> {
-				deposit_address: *deposit_address,
-				asset: ASSET,
-				amount: DEPOSIT_AMOUNT,
-				deposit_details: (),
-			})
-			.collect();
-
-		// Submit the prewitnessed deposit
-		assert_ok!(IngressEgress::prewitness_deposits(
-			RuntimeOrigin::root(),
-			deposit_witnesses.clone(),
-			BlockHeightProvider::<MockEthereum>::get_block_height(),
-		));
-
-		// Expire the channels
-		let recycle_block = IngressEgress::expiry_and_recycle_block_height().2;
-		BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
-
-		// Calculate the weight for the cleanup (without recycle).
-		let weight_per_channel = RocksDbWeight::get()
-			.reads_writes(2, 2)
-			.saturating_add(<Test as Config>::WeightInfo::remove_boostable_deposits(1));
-
-		// Run cleanup with only enough weight for 2 of the 3 channels
-		let weight_used = IngressEgress::on_idle(
-			1,
-			(weight_per_channel * 2).saturating_add(RocksDbWeight::get().reads_writes(2, 1)),
-		);
-
-		assert_eq!(
-			weight_used,
-			// 2 channel cleanups and 2 more reads to find out that there is not enough weight for
-			// the 3rd.
-			(weight_per_channel * 2).saturating_add(RocksDbWeight::get().reads_writes(2, 0))
-		);
-
-		// Check that one channel remains to be cleaned up
-		let deposit_id = BoostableDepositIdCounter::<Test>::get();
-		let channel_id = ChannelIdCounter::<Test>::get();
-		assert_eq!(DepositChannelRecycleBlocks::<Test, _>::get().len(), 1);
-		assert_eq!(BoostableDeposits::<Test, _>::get(channel_id, deposit_id).iter().count(), 1);
-		assert_eq!(DepositChannelLookup::<Test, _>::get(deposit_addresses[2]).iter().count(), 1);
-
-		// Run the cleanup again, but with plenty of weight
-		let weight_used = IngressEgress::on_idle(1, Weight::MAX);
-
-		assert_eq!(
-			weight_used,
-			// 1 channel cleanup and 1 more read to find out that there is no more channels to
-			// cleanup
-			weight_per_channel.saturating_add(RocksDbWeight::get().reads_writes(1, 0))
 		);
 	});
 }
