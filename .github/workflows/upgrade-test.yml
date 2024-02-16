@@ -47,29 +47,20 @@ jobs:
       - name: Checkout chainflip-backend
         uses: actions/checkout@v3
 
-      - name: Get upgrade-to-commit hash
-        uses: actions/github-script@v5
+      - name: Get upgrade-to-commit SHA
+        uses: ./.github/actions/get-workflow-commit
         id: get-upgrade-to-commit
         with:
+          workflow-name: ${{ inputs.upgrade-to-workflow-name }}
           github-token: ${{secrets.GITHUB_TOKEN}}
-          script: |
-            if (${{ inputs.upgrade-to-commit != '' }}) {
-              return ${{ inputs.upgrade-to-commit }};
-            }
-            const workflow_id = "${{ inputs.upgrade-to-workflow-name }}";
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            // Use octokit to access the GitHub API
-            const runs = await github.rest.actions.listWorkflowRuns({
-              owner,
-              repo,
-              workflow_id,
-              status: 'completed',
-              event: 'push',
-            });
-            const run = runs.data.workflow_runs[0]; // Assuming you want the most recent run; adjust as necessary
-            return run.head_sha; // This is the commit SHA of the workflow run
 
+      - name: Set upgrade-to-commit
+        run: |
+          if [ -z "${{ inputs.upgrade-to-commit }}" ]; then
+            echo "UPGRADE_TO_COMMIT=${{ steps.get-upgrade-to-commit.outputs.commit-sha }}" >> $GITHUB_ENV
+          else
+            echo "UPGRADE_TO_COMMIT=${{ inputs.upgrade-to-commit }}" >> $GITHUB_ENV
+          fi
 
       - name: Login to Github Container Registry 🔑
         uses: docker/login-action@v2
@@ -110,25 +101,16 @@ jobs:
           rename-to: try-runtime
           chmod: 0755
 
-      - name: Get upgrade-from run commit SHA
+      - name: Get upgrade-from-commit
+        uses: ./.github/actions/get-workflow-commit
         id: get-upgrade-from-commit
-        uses: actions/github-script@v5
         with:
+          workflow-name: release-${{ inputs.upgrade-from-release }}.yml
           github-token: ${{secrets.GITHUB_TOKEN}}
-          script: |
-            const workflow_id = 'release-${{ inputs.upgrade-from-release }}.yml';
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            // Use octokit to access the GitHub API
-            const runs = await github.rest.actions.listWorkflowRuns({
-              owner,
-              repo,
-              workflow_id,
-              status: 'completed',
-              event: 'push',
-            });
-            const run = runs.data.workflow_runs[0]; // Assuming you want the most recent run; adjust as necessary
-            return run.head_sha; // This is the commit SHA of the workflow run
+
+      - name: echo upgrade from commit
+        run: |
+          echo "The upgrade-from-commit is: ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}"
 
       - name: Download latest release binaries
         uses: dawidd6/action-download-artifact@v2
@@ -155,7 +137,7 @@ jobs:
           workflow: ${{ inputs.upgrade-to-workflow-name }}
           name: chainflip-backend-bin-try-runtime-ubuntu-22.04
           path: upgrade-to-bins
-          commit: ${{ inputs.upgrade-to-commit }}
+          commit: ${{ inputs.UPGRADE_TO_COMMIT }}
 
       - name: Download latest main runtime
         uses: dawidd6/action-download-artifact@v2
@@ -163,7 +145,7 @@ jobs:
           workflow: ${{ inputs.upgrade-to-workflow-name }}
           name: chainflip-node-runtime-try-runtime
           path: main-runtime
-          commit: ${{ inputs.upgrade-to-commit }}
+          commit: ${{ env.UPGRADE_TO_COMMIT }}
 
       - name: Permissions for latest binaries
         run: |
@@ -197,7 +179,8 @@ jobs:
         id: pre-upgrade-bouncer
         run: |
           git fetch --all
-          git checkout ${{ steps.get-upgrade-from-commit.outputs.result }}
+          git checkout ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}
+          git rev-parse HEAD
           cd bouncer
           ./run.sh
 
@@ -218,9 +201,8 @@ jobs:
 
       - name: Run bouncer after upgrade
         id: post-upgrade-bouncer
-        # Use git checkout ${ steps.get-upgrade-to-commit.outputs.result } instead
         run: |
-          git checkout ${{ github.sha }}
+          git checkout ${{ env.UPGRADE_TO_COMMIT }}
           git rev-parse HEAD
           cd bouncer
           ./tests/all_concurrent_tests.ts
