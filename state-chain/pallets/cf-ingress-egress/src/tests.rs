@@ -1507,8 +1507,7 @@ fn all_batch_errors_are_logged_as_event() {
 		.then_execute_with(|_| {
 			System::assert_last_event(RuntimeEvent::IngressEgress(
 				crate::Event::<Test>::FailedToBuildAllBatchCall {
-					error: "Other(\"Failed to build AllBatch call. Error: UnsupportedToken\")"
-						.to_string(),
+					error: cf_chains::AllBatchError::UnsupportedToken,
 				},
 			));
 		});
