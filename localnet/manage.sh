@@ -83,7 +83,7 @@ get-workflow() {
     read -p "(default: NO) " START_TRACKER
     echo
     export START_TRACKER=${START_TRACKER}
-  
+
   fi
 }
 
@@ -201,7 +201,6 @@ destroy() {
   for pid in $(ps -ef | grep chainflip | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
   for pid in $(ps -ef | grep solana | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
   rm -rf /tmp/chainflip
-  rm ./localnet/docker-compose.yml
   rm -rf /tmp/solana/
   echo "done"
 }
