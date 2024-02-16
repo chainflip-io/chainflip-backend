@@ -3,9 +3,9 @@
   "id": "Chainflip-Berghain",
   "chainType": "Live",
   "bootNodes": [
-    "/ip4/157.230.77.174/tcp/30333/p2p/12D3KooWJmbuGVvmAjJp54uMyaH4vHEU3Pf75wTf8Ziq3egxd1Wy",
-    "/ip4/146.190.6.80/tcp/30333/p2p/12D3KooWDajoYKLQoriAzA9nUBb367qmA3gnqz7xhRPf8aVPVfUt",
-    "/ip4/146.190.190.84/tcp/30333/p2p/12D3KooWBGigY15ZM73JFdMyapu3TstELagHUxu4oPXQEVdVsmvL"
+    "/ip4/138.68.126.239/tcp/30333/p2p/12D3KooWPWqdeeWGjycVLiy6drp2P9ghozqbe9o57Fjvj39QFHaF",
+    "/ip4/146.190.189.21/tcp/30333/p2p/12D3KooWHrjEjYQwm8gEKrp4djHvXascpG8E3sRNGbNtwaLGxPy3",
+    "/ip4/139.59.221.101/tcp/30333/p2p/12D3KooWAuvxnKDKeruz5KrPQkedLd6TLsnxtEv7EXzkdUHdHTCw"
   ],
   "telemetryEndpoints": null,
   "protocolId": "flip-berghain-6551fd46",
