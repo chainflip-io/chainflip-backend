@@ -89,7 +89,7 @@ where
 				.ok_or(AllBatchError::NotRequired)?,
 			number_of_outputs: (btc_outputs.len() + 1) as u64, // +1 for the change output
 		})
-		.ok_or(AllBatchError::InvalidUtxo)?;
+		.ok_or(AllBatchError::UtxoSelectionFailed)?;
 		if change_amount >= BITCOIN_DUST_LIMIT {
 			btc_outputs.push(BitcoinOutput {
 				amount: change_amount,

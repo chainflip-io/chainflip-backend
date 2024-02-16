@@ -1477,25 +1477,25 @@ fn consolidation_tx_gets_broadcasted_on_finalize() {
 
 #[test]
 fn all_batch_errors_are_logged_as_event() {
-	new_test_ext().execute_with(|| {
-		ScheduledEgressFetchOrTransfer::<Test>::set(vec![FetchOrTransfer::<Ethereum>::Transfer {
-			asset: ETH_ETH,
-			amount: 1_000,
-			destination_address: ALICE_ETH_ADDRESS,
-			egress_id: (ForeignChain::Ethereum, 1),
-		}]);
-		MockEthAllBatch::set_success(false);
-
-		// Expect the egress to fail
-		matches!(
-			IngressEgress::do_egress_scheduled_fetch_transfer(),
-			sp_runtime::TransactionOutcome::Rollback(..)
-		);
-
-		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::FailedToBuildAllBatchCall {
-				error: cf_chains::AllBatchError::Other,
-			},
-		));
-	});
+	new_test_ext()
+		.execute_with(|| {
+			ScheduledEgressFetchOrTransfer::<Test>::set(vec![
+				FetchOrTransfer::<Ethereum>::Transfer {
+					asset: ETH_ETH,
+					amount: 1_000,
+					destination_address: ALICE_ETH_ADDRESS,
+					egress_id: (ForeignChain::Ethereum, 1),
+				},
+			]);
+			MockEthAllBatch::set_success(false);
+		})
+		.then_execute_at_next_block(|_| {})
+		.then_execute_with(|_| {
+			System::assert_last_event(RuntimeEvent::IngressEgress(
+				crate::Event::<Test>::FailedToBuildAllBatchCall {
+					error: "Other(\"Failed to build AllBatch call. Error: UnsupportedToken\")"
+						.to_string(),
+				},
+			));
+		});
 }
