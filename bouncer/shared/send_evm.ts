@@ -96,7 +96,7 @@ export async function sendEvmNative(
 export async function spamEvm(chain: Chain, periodMilisec: number, spam?: () => boolean) {
   const continueSpam = spam ?? (() => true);
 
-  while (continueSpam) {
+  while (continueSpam()) {
     signAndSendTxEvm(
       chain,
       '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',

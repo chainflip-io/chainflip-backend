@@ -32,6 +32,9 @@ pub mod fees {
 	pub const ETH_GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
 	pub const ETH_GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
 
+	// TODO: We might have to be able to update these on the fly. They are 
+	// variable with the L1 calldata prize and L1 calldata size. L1 calldata
+	// price will change in 4844 and L1 calldata size will change as Arb improves.
 	pub const ARB_BASE_COST_PER_BATCH: u128 = 5_200_000;
 	pub const ARB_GAS_COST_PER_FETCH: u128 = 1_800_000;
 	pub const ARB_GAS_COST_PER_TRANSFER_NATIVE: u128 = 1_500_000;

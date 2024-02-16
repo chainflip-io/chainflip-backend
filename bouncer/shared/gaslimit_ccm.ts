@@ -1,5 +1,5 @@
 import Web3 from 'web3';
-import { Asset, Assets } from '@chainflip-io/cli';
+import { Asset, Assets, Chain } from '@chainflip-io/cli';
 import { newCcmMetadata, prepareSwap } from './swapping';
 import {
   chainFromAsset,
@@ -21,17 +21,18 @@ import { spamEvm } from './send_evm';
 // the gasLimitBudget amount specified in the CCM message with an error margin. On top of that, the gasLimitBudget overhead of the
 // CCM call itself is ~115k with some variability depending on the parameters. We also add extra gasLimitBudget depending
 // on the lenght of the message.
-const MIN_BASE_GAS_OVERHEAD = 100000;
-const BASE_GAS_OVERHEAD_BUFFER = 20000;
-const CFE_GAS_LIMIT_CAP = 10000000;
+const MIN_BASE_GAS_OVERHEAD: { [key: string]: number } = { Ethereum: 100000, Arbitrum: 5200000 };
+const BASE_GAS_OVERHEAD_BUFFER: { [key: string]: number } = { Ethereum: 20000, Arbitrum: 200000 };
+const CFE_GAS_LIMIT_CAP: { [key: string]: number } = { Ethereum: 10000000, Arbitrum: 25000000 };
 // Arbitrary gas consumption values for testing. The total default gas used is then ~360-380k depending on the parameters.
-let DEFAULT_GAS_CONSUMPTION = 260000;
-const MIN_TEST_GAS_CONSUMPTION = 200000;
-const MAX_TEST_GAS_CONSUMPTION = 4000000;
+const DEFAULT_GAS_CONSUMPTION: { [key: string]: number } = { Ethereum: 260000, Arbitrum: 0 }; // TODO: To update
+const MIN_TEST_GAS_CONSUMPTION: { [key: string]: number } = { Ethereum: 200000, Arbitrum: 0 }; // TODO: To update
+const MAX_TEST_GAS_CONSUMPTION: { [key: string]: number } = { Ethereum: 4000000, Arbitrum: 0 }; // TODO: To update
 // The base overhead increases with message lenght. This is an approximation => BASE_GAS_OVERHEAD + messageLength * gasPerByte
 // EVM requires 16 gas per calldata byte so a reasonable approximation is 17 to cover hashing and other operations over the data.
 const GAS_PER_BYTE = 17;
-const MIN_PRIORITY_FEE = 1000000000;
+// MIN_FEE is the priority fee for ethereum, baseFee for arbitrum
+const MIN_FEE: { [key: string]: number } = { Ethereum: 1000000000, Arbitrum: 100000000 };
 const LOOP_TIMEOUT = 15;
 
 let stopObservingCcmReceived = false;
@@ -46,15 +47,21 @@ function gasTestCcmMetadata(sourceAsset: Asset, gasToConsume: number, gasBudgetF
   );
 }
 
-async function getChainFees() {
+async function getEvmChainFees(chain: Chain) {
   const chainflipApi = await getChainflipApi();
 
-  const ethTrackedData = (
-    await observeEvent('ethereumChainTracking:ChainStateUpdated', chainflipApi)
+  const trackedData = (
+    await observeEvent(`${chain.toLowerCase()}ChainTracking:ChainStateUpdated`, chainflipApi)
   ).data.newChainState.trackedData;
 
-  const baseFee = Number(ethTrackedData.baseFee.replace(/,/g, ''));
-  const priorityFee = Number(ethTrackedData.priorityFee.replace(/,/g, ''));
+  const baseFee = Number(trackedData.baseFee.replace(/,/g, ''));
+
+  // Arbitrum doesn't have priorityFee
+  let priorityFee = 0;
+  if (chain !== 'Arbitrum') {
+    priorityFee = Number(trackedData.priorityFee.replace(/,/g, ''));
+  }
+
   return { baseFee, priorityFee };
 }
 
@@ -67,9 +74,10 @@ async function testGasLimitSwap(
   addressType?: BtcAddressType,
 ) {
   const chainflipApi = await getChainflipApi();
+  const destChain = chainFromAsset(destAsset).toString();
 
   // Increase the gas consumption to make sure all the messages are unique
-  const gasConsumption = gasToConsume ?? DEFAULT_GAS_CONSUMPTION++;
+  const gasConsumption = gasToConsume ?? DEFAULT_GAS_CONSUMPTION[destChain]++;
 
   const messageMetadata = gasTestCcmMetadata(sourceAsset, gasConsumption, gasBudgetFraction);
   const { destAddress, tag } = await prepareSwap(
@@ -178,10 +186,11 @@ async function testGasLimitSwap(
 
   const byteLength = Web3.utils.hexToBytes(messageMetadata.message).length;
 
-  const minGasLimitRequired = gasConsumption + MIN_BASE_GAS_OVERHEAD + byteLength * GAS_PER_BYTE;
+  const minGasLimitRequired =
+    gasConsumption + MIN_BASE_GAS_OVERHEAD[destChain] + byteLength * GAS_PER_BYTE;
 
   // This is a very rough approximation for the gas limit required. A buffer is added to account for that.
-  if (minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER >= gasLimitBudget) {
+  if (minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER[destChain] >= gasLimitBudget) {
     observeCcmReceived(
       sourceAsset,
       destAsset,
@@ -209,7 +218,7 @@ async function testGasLimitSwap(
         egressIdToBroadcastId[swapIdToEgressId[swapId]]
       }`,
     );
-  } else if (minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER < gasLimitBudget) {
+  } else if (minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER[destChain] < gasLimitBudget) {
     console.log(`${tag} Gas budget ${gasLimitBudget}. Expecting successful broadcast.`);
 
     // Check that broadcast is not aborted
@@ -254,7 +263,7 @@ async function testGasLimitSwap(
         `${tag} Tx Max fee per gas ${tx.maxFeePerGas} different than expected ${maxFeePerGas}`,
       );
     }
-    if (tx.gas !== Math.min(gasLimitBudget, CFE_GAS_LIMIT_CAP)) {
+    if (tx.gas !== Math.min(gasLimitBudget, CFE_GAS_LIMIT_CAP[destChain])) {
       throw new Error(`${tag} Tx gas limit ${tx.gas} different than expected ${gasLimitBudget}`);
     }
     // This should not happen by definition, as maxFeePerGas * gasLimit < egressBudgetAmount
@@ -276,11 +285,11 @@ let spam = true;
 
 const usedNumbers = new Set<number>();
 
-function getRandomGasConsumption(): number {
-  const range = MAX_TEST_GAS_CONSUMPTION - MIN_TEST_GAS_CONSUMPTION + 1;
-  let randomInt = Math.floor(Math.random() * range) + MIN_TEST_GAS_CONSUMPTION;
+function getRandomGasConsumption(chain: Chain): number {
+  const range = MAX_TEST_GAS_CONSUMPTION[chain] - MIN_TEST_GAS_CONSUMPTION[chain] + 1;
+  let randomInt = Math.floor(Math.random() * range) + MIN_TEST_GAS_CONSUMPTION[chain];
   while (usedNumbers.has(randomInt)) {
-    randomInt = Math.floor(Math.random() * range) + MIN_TEST_GAS_CONSUMPTION;
+    randomInt = Math.floor(Math.random() * range) + MIN_TEST_GAS_CONSUMPTION[chain];
   }
   usedNumbers.add(randomInt);
   return randomInt;
@@ -288,14 +297,21 @@ function getRandomGasConsumption(): number {
 
 export async function testGasLimitCcmSwaps() {
   // Spam ethereum with transfers to increase the gasLimitBudget price
-  const spamming = spamEvm('Ethereum', 500, () => spam);
+  const spammingEth = spamEvm('Ethereum', 500, () => spam);
+  const spammingArb = spamEvm('Arbitrum', 500, () => spam);
 
   // Wait for the fees to increase to the stable expected amount
   let i = 0;
-  while ((await getChainFees()).priorityFee < MIN_PRIORITY_FEE) {
+  while (
+    (await getEvmChainFees('Ethereum')).priorityFee < MIN_FEE.Ethereum ||
+    (await getEvmChainFees('Arbitrum')).baseFee < MIN_FEE.Arbitrum
+  ) {
+    console.log('Arbitrum fees', await getEvmChainFees('Arbitrum'));
+    console.log('Ethereum fees', await getEvmChainFees('Ethereum'));
     if (++i > LOOP_TIMEOUT) {
       spam = false;
-      await spamming;
+      await spammingEth;
+      await spammingArb;
       console.log("=== Skipping gasLimit CCM test as the priority fee didn't increase enough. ===");
       return;
     }
@@ -304,10 +320,10 @@ export async function testGasLimitCcmSwaps() {
 
   // The default gas budgets should allow for almost any reasonable gas consumption
   const gasLimitSwapsDefault = [
-    testGasLimitSwap('DOT', 'FLIP', undefined, getRandomGasConsumption()),
-    testGasLimitSwap('ETH', 'USDC', undefined, getRandomGasConsumption()),
-    testGasLimitSwap('FLIP', 'ETH', undefined, getRandomGasConsumption()),
-    testGasLimitSwap('BTC', 'ETH', undefined, getRandomGasConsumption()),
+    testGasLimitSwap('DOT', 'FLIP', undefined, getRandomGasConsumption('Ethereum')),
+    testGasLimitSwap('ETH', 'USDC', undefined, getRandomGasConsumption('Ethereum')),
+    testGasLimitSwap('FLIP', 'ETH', undefined, getRandomGasConsumption('Ethereum')),
+    testGasLimitSwap('BTC', 'ETH', undefined, getRandomGasConsumption('Ethereum')),
   ];
 
   // reducing gas budget input amount used for gas to achieve a gasLimitBudget ~= 4-500k, which is enough for the CCM broadcast.
@@ -343,7 +359,8 @@ export async function testGasLimitCcmSwaps() {
   ]);
 
   spam = false;
-  await spamming;
+  await spammingEth;
+  await spammingArb;
 
   // Make sure all the spamming has stopped to avoid triggering connectivity issues when running the next test.
   await sleep(10000);
