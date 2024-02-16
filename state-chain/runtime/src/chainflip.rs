@@ -511,7 +511,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 			ForeignChain::Polkadot =>
 				Self::broadcast_gov_key::<Polkadot, PolkadotBroadcaster>(maybe_old_key, new_key),
 			ForeignChain::Bitcoin => Err(()),
-			ForeignChain::Arbitrum => todo!("Arbitrum govkey broadcast"),
+			ForeignChain::Arbitrum => Err(()),
 		}
 	}
 
@@ -522,7 +522,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 			ForeignChain::Polkadot =>
 				Self::is_govkey_compatible::<<Polkadot as Chain>::ChainCrypto>(key),
 			ForeignChain::Bitcoin => false,
-			ForeignChain::Arbitrum => todo!("Arbitrum govkey compatibility"),
+			ForeignChain::Arbitrum => false,
 		}
 	}
 }
