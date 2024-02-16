@@ -191,7 +191,8 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   );
   const detectWithdrawalGasFee =
     balanceBeforeWithdrawalBigInt + earnedBrokerFeesAfter - balanceAfterWithdrawalBigInt;
-  if (['FLIP', 'DOT', 'USDC'].includes(asset.toString())) {
+  // Log the chain state for Ethereum assets to help debugging.
+  if (['FLIP', 'ETH', 'USDC'].includes(asset.toString())) {
     const chainState = JSON.stringify(
       await chainflip.query.ethereumChainTracking.currentChainState(),
     );
