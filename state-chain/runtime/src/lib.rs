@@ -1225,23 +1225,13 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_egress_dust_limit(asset: Asset) -> AssetAmount {
+		fn cf_egress_dust_limit(generic_asset: Asset) -> AssetAmount {
 			use pallet_cf_ingress_egress::EgressDustLimit;
-			use cf_chains::assets::{eth, dot, btc};
 
-			match ForeignChain::from(asset) {
-				ForeignChain::Ethereum => EgressDustLimit::<Runtime, EthereumInstance>::get(
-					eth::Asset::try_from(asset)
-						.expect("Conversion must succeed: ForeignChain checked in match clause.")
-				),
-				ForeignChain::Polkadot => EgressDustLimit::<Runtime, PolkadotInstance>::get(
-					dot::Asset::try_from(asset)
-						.expect("Conversion must succeed: ForeignChain checked in match clause.")
-				),
-				ForeignChain::Bitcoin => EgressDustLimit::<Runtime, BitcoinInstance>::get(
-					btc::Asset::try_from(asset)
-						.expect("Conversion must succeed: ForeignChain checked in match clause.")
-				),
+			match generic_asset.into() {
+				ForeignChainAndAsset::Ethereum(asset) => EgressDustLimit::<Runtime, EthereumInstance>::get(asset),
+				ForeignChainAndAsset::Polkadot(asset) => EgressDustLimit::<Runtime, PolkadotInstance>::get(asset),
+				ForeignChainAndAsset::Bitcoin(asset) => EgressDustLimit::<Runtime, BitcoinInstance>::get(asset),
 			}
 		}
 
