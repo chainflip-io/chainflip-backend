@@ -137,7 +137,7 @@ jobs:
           workflow: ${{ inputs.upgrade-to-workflow-name }}
           name: chainflip-backend-bin-try-runtime-ubuntu-22.04
           path: upgrade-to-bins
-          commit: ${{ inputs.UPGRADE_TO_COMMIT }}
+          commit: ${{ env.UPGRADE_TO_COMMIT }}
 
       - name: Download latest main runtime
         uses: dawidd6/action-download-artifact@v2
