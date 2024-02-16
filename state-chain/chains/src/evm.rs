@@ -24,13 +24,18 @@ use sp_std::{convert::TryFrom, str, vec};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EvmCrypto;
 
-// TODO: Gas amounts are different between ETH & ARB!! To differentiate.
+// TODO: Since they are different we can probably move this to its own
+// respective files (arb.rs and eth.rs)
 pub mod fees {
-	// TODO: refine these constants.
-	pub const BASE_COST_PER_BATCH: u128 = 50_000;
-	pub const GAS_COST_PER_FETCH: u128 = 30_000;
-	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
-	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
+	pub const ETH_BASE_COST_PER_BATCH: u128 = 50_000;
+	pub const ETH_GAS_COST_PER_FETCH: u128 = 30_000;
+	pub const ETH_GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
+	pub const ETH_GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
+
+	pub const ARB_BASE_COST_PER_BATCH: u128 = 5_200_000;
+	pub const ARB_GAS_COST_PER_FETCH: u128 = 1_800_000;
+	pub const ARB_GAS_COST_PER_TRANSFER_NATIVE: u128 = 1_500_000;
+	pub const ARB_GAS_COST_PER_TRANSFER_TOKEN: u128 = 1_800_000;
 }
 
 impl ChainCrypto for EvmCrypto {

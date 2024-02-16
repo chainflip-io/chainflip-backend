@@ -149,10 +149,8 @@ const ETHEREUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(2, 1);
 const ARBITRUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(3, 2);
 // We arbitrarily set the MAX_GAS_LIMIT we are willing to broadcast to 10M.
 const ETHEREUM_MAX_GAS_LIMIT: u128 = 10_000_000;
-// TODO!! To update this to reasonable Arbitrum gas limits: ARB has 32M gas limit
-// At least 15M. We can reassess depending on what our calls cost.
-// We arbitrarily set the MAX_GAS_LIMIT we are willing to broadcast to 10M.
-const ARBITRUM_MAX_GAS_LIMIT: u128 = 15_000_000;
+// We arbitrarily set the MAX_GAS_LIMIT we are willing to broadcast to 25M.
+const ARBITRUM_MAX_GAS_LIMIT: u128 = 25_000_000;
 
 pub struct EthTransactionBuilder;
 
