@@ -59,6 +59,16 @@ pub struct Swap {
 	pub fee_taken: bool,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+pub struct SwapLegInfo {
+	pub swap_id: SwapId,
+	pub from: Asset,
+	pub to: Asset,
+	pub amount: AssetAmount,
+	pub swap_type: SwapType,
+}
+
 impl Swap {
 	fn new(
 		swap_id: SwapId,
@@ -651,17 +661,46 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		// Transactional ensures that any failed swap will rollback all storage changes.
-		#[transactional]
-		fn process_swaps_for_block(block: BlockNumberFor<T>) -> Result<(), BatchExecutionError> {
-			let mut swaps = SwapQueue::<T>::take(block);
+		pub fn get_scheduled_swap_legs(
+			mut swaps: Vec<Swap>,
+			base_asset: Asset,
+		) -> Result<Vec<SwapLegInfo>, ()> {
+			Self::swap_into_stable_taking_network_fee(&mut swaps)
+				.map_err(|_| log::error!("Failed to simulate swaps"))?;
 
-			if swaps.is_empty() {
-				return Ok(())
-			}
+			Ok(swaps
+				.into_iter()
+				.filter_map(|swap| {
+					if swap.from == base_asset {
+						Some(SwapLegInfo {
+							swap_id: swap.swap_id,
+							from: swap.from,
+							// All swaps from `base_asset` have to go through Usdc:
+							to: Asset::Usdc,
+							amount: swap.amount,
+							swap_type: swap.swap_type,
+						})
+					} else if swap.to == base_asset {
+						Some(SwapLegInfo {
+							swap_id: swap.swap_id,
+							// All swaps to `base_asset` have to go through Usdc:
+							from: Asset::Usdc,
+							to: swap.to,
+							// Safe to unwrap as we have swapped everything into USDC at this point
+							amount: swap.stable_amount.unwrap(),
+							swap_type: swap.swap_type,
+						})
+					} else {
+						None
+					}
+				})
+				.collect())
+		}
 
-			// Swap into Stable asset first.
-			Self::do_group_and_swap(&mut swaps, SwapLeg::ToStable)?;
+		fn swap_into_stable_taking_network_fee(
+			swaps: &mut Vec<Swap>,
+		) -> Result<(), BatchExecutionError> {
+			Self::do_group_and_swap(swaps, SwapLeg::ToStable)?;
 
 			// Take NetworkFee for all swaps
 			for swap in swaps.iter_mut() {
@@ -672,6 +711,21 @@ pub mod pallet {
 				let stable_amount = swap.stable_amount.get_or_insert_with(Default::default);
 				*stable_amount = T::SwappingApi::take_network_fee(*stable_amount);
 			}
+
+			Ok(())
+		}
+
+		// Transactional ensures that any failed swap will rollback all storage changes.
+		#[transactional]
+		fn process_swaps_for_block(block: BlockNumberFor<T>) -> Result<(), BatchExecutionError> {
+			let mut swaps = SwapQueue::<T>::take(block);
+
+			if swaps.is_empty() {
+				return Ok(())
+			}
+
+			// Swap into Stable asset first, then take network fees:
+			Self::swap_into_stable_taking_network_fee(&mut swaps)?;
 
 			// Swap from Stable asset, and complete the swap logic.
 			Self::do_group_and_swap(&mut swaps, SwapLeg::FromStable)?;

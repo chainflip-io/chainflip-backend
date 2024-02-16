@@ -16,7 +16,7 @@ use pallet_cf_pools::{
 	AskBidMap, AssetsMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1,
 	PoolPriceV2, UnidirectionalPoolDepth,
 };
-use pallet_cf_swapping::Swap;
+use pallet_cf_swapping::SwapLegInfo;
 use pallet_cf_witnesser::CallHash;
 use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
@@ -182,9 +182,9 @@ decl_runtime_apis!(
 			side: Order,
 		) -> Vec<AssetAmount>;
 		fn cf_scheduled_swaps(
-			asset1: Asset,
-			asset2: Asset,
-		) -> Vec<(Swap, cf_primitives::BlockNumber)>;
+			base_asset: Asset,
+			quote_asset: Asset,
+		) -> Vec<(SwapLegInfo, cf_primitives::BlockNumber)>;
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> Option<LiquidityProviderInfo>;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
 		fn cf_asset_balances(account_id: AccountId32) -> Vec<(Asset, AssetAmount)>;

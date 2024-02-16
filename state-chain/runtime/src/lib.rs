@@ -39,7 +39,7 @@ use pallet_cf_pools::{
 	UnidirectionalPoolDepth,
 };
 use pallet_cf_reputation::ExclusionList;
-use pallet_cf_swapping::{CcmSwapAmounts, Swap};
+use pallet_cf_swapping::{CcmSwapAmounts, SwapLegInfo};
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use scale_info::prelude::string::String;
@@ -1408,17 +1408,19 @@ impl_runtime_apis! {
 			all_prewitnessed_swaps
 		}
 
-		fn cf_scheduled_swaps(from: Asset, to: Asset) -> Vec<(Swap, BlockNumber)> {
+		fn cf_scheduled_swaps(base_asset: Asset, _quote_asset: Asset) -> Vec<(SwapLegInfo, BlockNumber)> {
 
 			let first_block = Swapping::first_unprocessed_block();
 			let last_block = System::block_number() + pallet_cf_swapping::SWAP_DELAY_BLOCKS;
 
 			debug_assert!(first_block < last_block);
 
-			(first_block..=last_block).into_iter().map(|block| {
-				Swapping::swap_queue(block).into_iter()
-				.filter(|swap| {(swap.from == from && swap.to == to) || (swap.from == to && swap.to == from)})
-				.map(move |swap| (swap, block))
+			(first_block..=last_block).map(|block| {
+				let swaps_for_block = Swapping::swap_queue(block);
+
+				let swaps: Vec<_> = swaps_for_block.iter().filter(|swap| swap.from == base_asset || swap.to == base_asset).cloned().collect();
+
+				Swapping::get_scheduled_swap_legs(swaps, base_asset).unwrap().into_iter().map(move |swap| (swap, block))
 			}).flatten().collect()
 
 		}

@@ -23,7 +23,7 @@ use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{
 	AskBidMap, AssetsMap, PoolInfo, PoolLiquidity, PoolPriceV1, UnidirectionalPoolDepth,
 };
-use pallet_cf_swapping::Swap;
+use pallet_cf_swapping::SwapLegInfo;
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_api::{ApiError, BlockT, HeaderT};
@@ -47,7 +47,7 @@ use std::{
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ScheduledSwap {
 	#[serde(flatten)]
-	swap: Swap,
+	swap: SwapLegInfo,
 	execute_at: BlockNumber,
 }
 
@@ -526,8 +526,11 @@ pub trait CustomApi {
 		side: Order,
 	);
 
-	#[subscription(name = "subscribe_scheduled_swaps", item = Vec<ScheduledSwap>)]
-	fn cf_subscribe_scheduled_swaps(&self, asset1: RpcAsset, asset2: RpcAsset);
+	// Subscribe to a stream that on every block produces a list of all scheduled/pending
+	// swaps in the base_asset/quote_asset pool, including any "implicit" half-swaps (as a
+	// part of a swap involving two pools)
+	#[subscription(name = "subscribe_scheduled_swaps", item = SwapResponse)]
+	fn cf_subscribe_scheduled_swaps(&self, base_asset: RpcAsset, quote_asset: RpcAsset);
 
 	#[method(name = "prewitness_swaps")]
 	fn cf_prewitness_swaps(
@@ -1226,25 +1229,30 @@ where
 	fn cf_subscribe_scheduled_swaps(
 		&self,
 		sink: SubscriptionSink,
-		asset1: RpcAsset,
-		asset2: RpcAsset,
+		base_asset: RpcAsset,
+		quote_asset: RpcAsset,
 	) -> Result<(), SubscriptionEmptyError> {
-		let asset1 = asset1.try_into().map_err(|_| SubscriptionEmptyError)?;
-		let asset2 = asset2.try_into().map_err(|_| SubscriptionEmptyError)?;
-		self.new_subscription(false, false, sink, move |api, hash| {
-			let swaps = api
-				.cf_scheduled_swaps(hash, asset1, asset2)?
-				.into_iter()
-				.map(|(swap, execute_at)| ScheduledSwap { swap, execute_at })
-				.collect::<Vec<_>>();
+		let base_asset = base_asset.try_into().map_err(|_| SubscriptionEmptyError)?;
+		let quote_asset = quote_asset.try_into().map_err(|_| SubscriptionEmptyError)?;
+		self.new_subscription(
+			false, /* only_on_changes */
+			true,  /* end_on_error */
+			sink,
+			move |api, hash| {
+				let swaps = api
+					.cf_scheduled_swaps(hash, base_asset, quote_asset)?
+					.into_iter()
+					.map(|(swap, execute_at)| ScheduledSwap { swap, execute_at })
+					.collect::<Vec<_>>();
 
-			#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
-			struct SwapResponse {
-				swaps: Vec<ScheduledSwap>,
-			}
+				#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
+				struct SwapResponse {
+					swaps: Vec<ScheduledSwap>,
+				}
 
-			Ok::<_, ApiError>(SwapResponse { swaps })
-		})
+				Ok::<_, ApiError>(SwapResponse { swaps })
+			},
+		)
 	}
 
 	fn cf_subscribe_prewitness_swaps(

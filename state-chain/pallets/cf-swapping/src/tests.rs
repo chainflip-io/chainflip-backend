@@ -23,6 +23,7 @@ use cf_traits::{
 use frame_support::{assert_err, assert_noop, assert_ok, traits::Hooks};
 use itertools::Itertools;
 use sp_arithmetic::Permill;
+use sp_core::H160;
 use sp_std::iter;
 
 const GAS_BUDGET: AssetAmount = 1_000u128;
@@ -2125,6 +2126,65 @@ fn deposit_address_ready_event_contain_correct_boost_fee_value() {
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::Swapping(Event::SwapDepositAddressReady { boost_fee: BOOST_FEE, .. })
+		);
+	});
+}
+
+#[test]
+fn test_get_scheduled_swap_legs() {
+	new_test_ext().execute_with(|| {
+		const SWAP_TYPE: SwapType = SwapType::Swap(ForeignChainAddress::Eth(H160::zero()));
+		const INIT_AMOUNT: AssetAmount = 1000;
+
+		let swaps: Vec<_> = [
+			(1, Asset::Flip, Asset::Usdc),
+			(2, Asset::Usdc, Asset::Flip),
+			(3, Asset::Btc, Asset::Eth),
+			(4, Asset::Flip, Asset::Btc),
+			(5, Asset::Eth, Asset::Flip),
+		]
+		.into_iter()
+		.map(|(id, from, to)| Swap::new(id, from, to, INIT_AMOUNT, SWAP_TYPE.clone()))
+		.collect();
+
+		// The amount of USDC in the middle of swap (5):
+		const INTERMEDIATE_AMOUNT: AssetAmount = 2000;
+
+		// The test is more useful when these aren't equal:
+		assert_ne!(INIT_AMOUNT, INTERMEDIATE_AMOUNT);
+
+		assert_eq!(
+			Swapping::get_scheduled_swap_legs(swaps, Asset::Flip).unwrap(),
+			vec![
+				SwapLegInfo {
+					swap_id: 1,
+					from: Asset::Flip,
+					to: Asset::Usdc,
+					amount: INIT_AMOUNT,
+					swap_type: SWAP_TYPE.clone()
+				},
+				SwapLegInfo {
+					swap_id: 2,
+					from: Asset::Usdc,
+					to: Asset::Flip,
+					amount: INIT_AMOUNT,
+					swap_type: SWAP_TYPE.clone(),
+				},
+				SwapLegInfo {
+					swap_id: 4,
+					from: Asset::Flip,
+					to: Asset::Usdc,
+					amount: INIT_AMOUNT,
+					swap_type: SWAP_TYPE.clone(),
+				},
+				SwapLegInfo {
+					swap_id: 5,
+					from: Asset::Usdc,
+					to: Asset::Flip,
+					amount: INTERMEDIATE_AMOUNT,
+					swap_type: SWAP_TYPE.clone(),
+				},
+			]
 		);
 	});
 }
