@@ -199,7 +199,7 @@ jobs:
           git fetch --all
           git checkout ${{ steps.get-upgrade-from-commit.outputs.result }}
           cd bouncer
-          ./setup_for_test.sh
+          ./run.sh
 
       # we need to be sure that when this fails, we catch the error, any panics etc. that occur
       # TODO: Run swaps simultaneously to the upgrade - we could do that inside the `upgrade_network` command itself.
