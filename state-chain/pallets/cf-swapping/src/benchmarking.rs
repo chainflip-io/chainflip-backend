@@ -3,7 +3,7 @@
 use super::*;
 
 use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue};
-use cf_traits::{AccountRoleRegistry, Chainflip};
+use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
@@ -127,22 +127,6 @@ mod benchmarks {
 				Swap::new(2, Asset::Usdc, Asset::Eth, 1, SwapType::CcmGas(1),)
 			]
 		);
-	}
-
-	#[benchmark]
-	fn set_maximum_swap_amount() {
-		let asset = Asset::Eth;
-		let amount = 1_000;
-		let call = Call::<T>::set_maximum_swap_amount { asset, amount: Some(amount) };
-
-		#[block]
-		{
-			assert_ok!(call.dispatch_bypass_filter(
-				<T as Chainflip>::EnsureGovernance::try_successful_origin().unwrap()
-			));
-		}
-
-		assert_eq!(crate::MaximumSwapAmount::<T>::get(asset), Some(amount));
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

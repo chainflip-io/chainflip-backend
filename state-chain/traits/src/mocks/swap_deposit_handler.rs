@@ -8,7 +8,7 @@ pub struct MockSwapDepositHandler<T>(sp_std::marker::PhantomData<T>);
 
 impl<C: Chain, E: EgressApi<C>> SwapDepositHandler for MockSwapDepositHandler<(C, E)>
 where
-	C::ChainAsset: TryFrom<cf_primitives::Asset>,
+	cf_primitives::Asset: TryInto<C::ChainAsset>,
 {
 	type AccountId = u64;
 

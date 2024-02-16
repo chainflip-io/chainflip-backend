@@ -5,7 +5,7 @@ WORKFLOW=build-localnet
 GENESIS_NODES=("bashful" "doc" "dopey")
 SELECTED_NODES=("bashful")
 REQUIRED_BINARIES="chainflip-engine chainflip-node"
-INITIAL_CONTAINERS="init"
+INITIAL_CONTAINERS="init init-solana"
 CORE_CONTAINERS="bitcoin geth polkadot redis"
 ARB_CONTAINERS="sequencer staker-unsafe poster"
 export NODE_COUNT="1-node"
@@ -16,10 +16,6 @@ source ./localnet/helper.sh
 
 mkdir -p /tmp/chainflip/
 touch /tmp/chainflip/debug.log
-
-if [ ! -f ./localnet/docker-compose.yml ]; then
-  NODE_COUNT=1-node envsubst < ./localnet/docker-compose.template.yml > ./localnet/docker-compose.yml
-fi
 
 set -eo pipefail
 
@@ -74,7 +70,7 @@ get-workflow() {
       exit 1
     fi
     echo "You have chosen $NODE_COUNT node(s) network"
-    NODE_COUNT="$NODE_COUNT-node"
+    export NODE_COUNT="$NODE_COUNT-node"
 
     if [[ -z "${BINARY_ROOT_PATH}" ]]; then
       echo "💻 Please provide the location to the binaries you would like to use."
@@ -103,8 +99,6 @@ build-localnet() {
       exit 1
     fi
   done
-  echo "🪄 Generating docker-compose.yml"
-  envsubst < ./localnet/docker-compose.template.yml > ./localnet/docker-compose.yml
 
   mkdir -p /tmp/chainflip/
   touch /tmp/chainflip/debug.log
@@ -114,8 +108,10 @@ build-localnet() {
   echo "🦺 Updating init state files permissions ..."
   if [[ $CI == true ]]; then
     sudo chmod -R 777 /tmp/chainflip
+    sudo chmod -R 777 /tmp/solana
   else
     chmod -R 777 /tmp/chainflip
+    chmod -R 777 /tmp/solana
   fi
   echo "🏗 Building network"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $CORE_CONTAINERS -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1

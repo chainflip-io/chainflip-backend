@@ -69,23 +69,6 @@ mod benchmarks {
 			));
 		}
 	}
-
-	#[benchmark]
-	fn set_minimum_deposit() {
-		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
-		let destination_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset =
-			BenchmarkValue::benchmark_value();
-		let amount: <<T as Config<I>>::TargetChain as Chain>::ChainAmount =
-			BenchmarkValue::benchmark_value();
-
-		#[block]
-		{
-			assert_ok!(Pallet::<T, I>::set_minimum_deposit(origin, destination_asset, amount));
-		}
-
-		assert_eq!(MinimumDeposit::<T, I>::get(destination_asset,), amount);
-	}
-
 	#[benchmark]
 	fn finalise_ingress(a: Linear<1, 100>) {
 		let mut addresses = vec![];
@@ -176,9 +159,6 @@ mod benchmarks {
 		});
 		new_test_ext().execute_with(|| {
 			_finalise_ingress::<Test, ()>(100, true);
-		});
-		new_test_ext().execute_with(|| {
-			_set_minimum_deposit::<Test, ()>(true);
 		});
 		new_test_ext().execute_with(|| {
 			_process_single_deposit::<Test, ()>(true);

@@ -75,10 +75,6 @@ pub struct SwapRequestParams {
 	pub broker_commission: u16,
 	/// Commission to the booster in basis points
 	pub boost_fee: Option<u16>,
-	/// Chain of the source asset ("Ethereum"|"Polkadot")
-	pub source_chain: Option<ForeignChain>,
-	/// Chain of the destination asset ("Ethereum"|"Polkadot")
-	pub destination_chain: Option<ForeignChain>,
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]
@@ -93,8 +89,6 @@ pub enum LiquidityProviderSubcommands {
 	RequestLiquidityDepositAddress {
 		/// Asset to deposit ("ETH"|"DOT")
 		asset: Asset,
-		/// Chain of the deposit asset ("Ethereum"|"Polkadot")
-		chain: Option<ForeignChain>,
 		boost_fee: Option<u16>,
 	},
 	/// Register a Liquidity Refund Address for the given chain. An address must be

@@ -21,6 +21,7 @@ use cf_chains::{
 		to_encoded_address, try_from_encoded_address, AddressConverter, EncodedAddress,
 		ForeignChainAddress,
 	},
+	assets::any::ForeignChainAndAsset,
 	btc::{
 		api::{BitcoinApi, SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		Bitcoin, BitcoinCrypto, BitcoinFeeInfo, BitcoinTransactionData, UtxoId,
@@ -442,10 +443,10 @@ macro_rules! impl_deposit_api_for_anychain {
 			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber), DispatchError> {
 				match source_asset.into() {
 					$(
-						ForeignChain::$chain =>
+						ForeignChainAndAsset::$chain(source_asset) =>
 							$pallet::request_liquidity_deposit_address(
 								lp_account,
-								source_asset.try_into().unwrap(),
+								source_asset,
 								boost_fee
 							).map(|(channel, address, block_number)| (channel, address, block_number.into())),
 					)+
@@ -463,8 +464,8 @@ macro_rules! impl_deposit_api_for_anychain {
 			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber), DispatchError> {
 				match source_asset.into() {
 					$(
-						ForeignChain::$chain => $pallet::request_swap_deposit_address(
-							source_asset.try_into().unwrap(),
+						ForeignChainAndAsset::$chain(source_asset) => $pallet::request_swap_deposit_address(
+							source_asset,
 							destination_asset,
 							destination_address,
 							broker_commission_bps,
@@ -493,8 +494,8 @@ macro_rules! impl_egress_api_for_anychain {
 			) -> Result<ScheduledEgressDetails<AnyChain>, DispatchError> {
 				match asset.into() {
 					$(
-						ForeignChain::$chain => $pallet::schedule_egress(
-							asset.try_into().expect("Checked for asset compatibility"),
+						ForeignChainAndAsset::$chain(asset) => $pallet::schedule_egress(
+							asset,
 							amount.try_into().expect("Checked for amount compatibility"),
 							destination_address
 								.try_into()
