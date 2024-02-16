@@ -36,7 +36,7 @@ use cf_traits::{
 };
 use frame_support::{
 	pallet_prelude::*,
-	sp_runtime::{traits::Zero, DispatchError, Saturating, TransactionOutcome},
+	sp_runtime::{traits::Zero, DispatchError, Saturating},
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -140,7 +140,6 @@ pub mod pallet {
 	use cf_traits::LpDepositHandler;
 	use core::marker::PhantomData;
 	use frame_support::{
-		storage::with_transaction,
 		traits::{ConstU128, EnsureOrigin, IsType},
 		DefaultNoBound,
 	};
@@ -533,6 +532,9 @@ pub mod pallet {
 		UtxoConsolidation {
 			broadcast_id: BroadcastId,
 		},
+		FailedToBuildAllBatchCall {
+			error: AllBatchError,
+		},
 		ChannelOpeningFeePaid {
 			fee: T::Amount,
 		},
@@ -598,8 +600,9 @@ pub mod pallet {
 		/// Take all scheduled Egress and send them out
 		fn on_finalize(_n: BlockNumberFor<T>) {
 			// Send all fetch/transfer requests as a batch. Revert storage if failed.
-			if let Err(e) = with_transaction(|| Self::do_egress_scheduled_fetch_transfer()) {
-				log::error!("Ingress-Egress failed to send BatchAll. Error: {e:?}");
+			if let Err(error) = Self::do_egress_scheduled_fetch_transfer() {
+				log::error!("Ingress-Egress failed to send BatchAll. Error: {error:?}");
+				Self::deposit_event(Event::<T, I>::FailedToBuildAllBatchCall { error });
 			}
 
 			if let Ok(egress_transaction) =
@@ -885,7 +888,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Take all scheduled egress requests and send them out in an `AllBatch` call.
 	///
 	/// Note: Egress transactions with Blacklisted assets are not sent, and kept in storage.
-	fn do_egress_scheduled_fetch_transfer() -> TransactionOutcome<DispatchResult> {
+	#[transactional]
+	fn do_egress_scheduled_fetch_transfer() -> Result<(), AllBatchError> {
 		let batch_to_send: Vec<_> =
 			ScheduledEgressFetchOrTransfer::<T, I>::mutate(|requests: &mut Vec<_>| {
 				// Filter out disabled assets and requests that are not ready to be egressed.
@@ -927,7 +931,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			});
 
 		if batch_to_send.is_empty() {
-			return TransactionOutcome::Commit(Ok(()))
+			return Ok(())
 		}
 
 		let mut fetch_params = vec![];
@@ -983,12 +987,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					broadcast_id,
 					egress_ids,
 				});
-				TransactionOutcome::Commit(Ok(()))
+				Ok(())
 			},
-			Err(AllBatchError::NotRequired) => TransactionOutcome::Commit(Ok(())),
-			Err(AllBatchError::Other) => TransactionOutcome::Rollback(Err(DispatchError::Other(
-				"AllBatch ApiCall creation failed, rolled back storage",
-			))),
+			Err(AllBatchError::NotRequired) => Ok(()),
+			Err(other) => Err(other),
 		}
 	}
 

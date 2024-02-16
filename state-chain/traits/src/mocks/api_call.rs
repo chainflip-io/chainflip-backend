@@ -90,7 +90,7 @@ impl AllBatch<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 				_phantom: PhantomData,
 			}))
 		} else {
-			Err(AllBatchError::Other)
+			Err(AllBatchError::UnsupportedToken)
 		}
 	}
 }
@@ -294,7 +294,7 @@ impl AllBatch<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 				_phantom: PhantomData,
 			}))
 		} else {
-			Err(AllBatchError::Other)
+			Err(AllBatchError::UnsupportedToken)
 		}
 	}
 }
