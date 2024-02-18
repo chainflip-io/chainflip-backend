@@ -3,7 +3,9 @@ use frame_support::{IterableStorageMap, StorageMap, StoragePrefixedMap, StorageV
 use super::*;
 
 /// Tracks the current state of the keygen ceremony.
-#[derive(PartialEqNoBound, EqNoBound, CloneNoBound, Encode, Decode, TypeInfo, DebugNoBound)]
+#[derive(
+	PartialEqNoBound, EqNoBound, CloneNoBound, Encode, Decode, TypeInfo, DebugNoBound, MaxEncodedLen,
+)]
 #[scale_info(skip_type_params(T, SuccessVoters, FailureVoters, I))]
 pub struct ResponseStatus<T: Config<I>, SuccessVoters, FailureVoters, I: 'static = ()> {
 	/// The candidates participating in the keygen ceremony.

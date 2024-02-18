@@ -18,7 +18,7 @@ pub(crate) mod old {
 		pub attempt_count: AttemptCount,
 	}
 
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 	pub struct BroadcastAttempt<T: Config<I>, I: 'static> {
 		pub broadcast_attempt_id: BroadcastAttemptId,
 		pub transaction_payload: TransactionFor<T, I>,
@@ -26,7 +26,7 @@ pub(crate) mod old {
 		pub transaction_out_id: TransactionOutIdFor<T, I>,
 	}
 
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 	pub struct BroadcastWithNominee<T: Config<I>, I: 'static> {
 		pub broadcast_attempt: BroadcastAttempt<T, I>,
 		pub nominee: T::ValidatorId,

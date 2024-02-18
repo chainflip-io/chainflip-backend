@@ -2,7 +2,7 @@ use crate::*;
 use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::collections::btree_set::BTreeSet;
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default, MaxEncodedLen)]
 pub struct RotationState<Id, Amount> {
 	primary_candidates: Vec<Id>,
 	secondary_candidates: Vec<Id>,

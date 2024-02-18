@@ -104,7 +104,9 @@ pub mod pallet {
 	pub type ApiCallFor<T, I> = <T as Config<I>>::ApiCall;
 
 	/// All data contained in a Broadcast
-	#[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, CloneNoBound)]
+	#[derive(
+		RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, CloneNoBound, MaxEncodedLen,
+	)]
 	#[scale_info(skip_type_params(T, I))]
 	pub struct BroadcastData<T: Config<I>, I: 'static> {
 		pub broadcast_id: BroadcastId,

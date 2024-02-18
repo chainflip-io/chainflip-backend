@@ -46,8 +46,8 @@ use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId, 
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi,
-	DepositHandler, EgressApi, EpochInfo, Heartbeat, Issuance, KeyProvider, OnBroadcastReady,
-	QualifyNode, RewardsDistribution, RuntimeUpgrade,
+	DepositHandler, EgressApi, EpochInfo, GovernanceKey, Heartbeat, Issuance, KeyProvider,
+	OnBroadcastReady, QualifyNode, RewardsDistribution, RuntimeUpgrade,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -368,7 +368,10 @@ impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
 pub struct TokenholderGovernanceBroadcaster;
 
 impl TokenholderGovernanceBroadcaster {
-	fn broadcast_gov_key<C, B>(maybe_old_key: Option<Vec<u8>>, new_key: Vec<u8>) -> Result<(), ()>
+	fn broadcast_gov_key<C, B>(
+		maybe_old_key: Option<GovernanceKey>,
+		new_key: GovernanceKey,
+	) -> Result<(), ()>
 	where
 		C: Chain,
 		B: Broadcaster<C>,
@@ -395,8 +398,8 @@ impl TokenholderGovernanceBroadcaster {
 impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 	fn broadcast_gov_key(
 		chain: ForeignChain,
-		maybe_old_key: Option<Vec<u8>>,
-		new_key: Vec<u8>,
+		maybe_old_key: Option<GovernanceKey>,
+		new_key: GovernanceKey,
 	) -> Result<(), ()> {
 		match chain {
 			ForeignChain::Ethereum =>

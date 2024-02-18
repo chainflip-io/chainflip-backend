@@ -448,7 +448,9 @@ pub struct CcmChannelMetadata {
 	pub cf_parameters: CcmCfParameters,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+#[derive(
+	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize, MaxEncodedLen,
+)]
 pub struct CcmDepositMetadata {
 	pub source_chain: ForeignChain,
 	pub source_address: Option<ForeignChainAddress>,

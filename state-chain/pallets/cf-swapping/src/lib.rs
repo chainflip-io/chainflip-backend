@@ -148,7 +148,7 @@ impl CcmSwapOutput {
 }
 
 // Cross chain message, including information at different stages.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub(crate) struct CcmSwap {
 	source_asset: Asset,
 	deposit_amount: AssetAmount,

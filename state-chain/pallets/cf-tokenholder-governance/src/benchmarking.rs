@@ -9,7 +9,7 @@ use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use sp_std::collections::btree_set::BTreeSet;
 
 fn generate_proposal() -> Proposal {
-	Proposal::SetGovernanceKey(ForeignChain::Ethereum, vec![1; 32])
+	Proposal::SetGovernanceKey(ForeignChain::Ethereum, vec![1; 32].try_into().unwrap())
 }
 
 #[benchmarks]
@@ -44,7 +44,7 @@ mod benchmarks {
 	fn on_initialize_execute_proposal() {
 		GovKeyUpdateAwaitingEnactment::<T>::set(Some((
 			1u32.into(),
-			(ForeignChain::Ethereum, vec![1; 32]),
+			(ForeignChain::Ethereum, vec![1; 32].try_into().unwrap()),
 		)));
 
 		#[block]

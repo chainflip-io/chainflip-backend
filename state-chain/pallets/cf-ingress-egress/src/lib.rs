@@ -42,7 +42,7 @@ pub use pallet::*;
 use sp_std::{vec, vec::Vec};
 
 /// Enum wrapper for fetch and egress requests.
-#[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
+#[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum FetchOrTransfer<C: Chain> {
 	Fetch {
 		asset: C::ChainAsset,
@@ -67,7 +67,7 @@ impl<C: Chain> FetchOrTransfer<C> {
 	}
 }
 
-#[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
+#[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum DepositIgnoredReason {
 	BelowMinimumDeposit,
 
@@ -103,7 +103,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 /// Calls to the external chains that has failed to be broadcast/accepted by the target chain.
 /// User can use information stored here to query for relevant information to broadcast
 /// the call themselves.
-#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct FailedForeignChainCall {
 	/// Broadcast ID used in the broadcast pallet. Use it to query broadcast information,
 	/// such as the threshold signature, the API call etc.
@@ -172,7 +172,7 @@ pub mod pallet {
 	}
 
 	/// Determines the action to take when a deposit is made to a channel.
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 	pub enum ChannelAction<AccountId> {
 		Swap {
 			destination_asset: Asset,
@@ -192,7 +192,7 @@ pub mod pallet {
 
 	/// Contains identifying information about the particular actions that have occurred for a
 	/// particular deposit.
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 	pub enum DepositAction<AccountId> {
 		Swap { swap_id: SwapId },
 		LiquidityProvision { lp_account: AccountId },

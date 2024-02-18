@@ -43,7 +43,7 @@ pub enum AuctionError {
 }
 
 /// The outcome of a successful auction.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, MaxEncodedLen)]
 pub struct AuctionOutcome<Id, Amount> {
 	/// The auction winners, sorted by descending bid.
 	pub winners: Vec<Id>,

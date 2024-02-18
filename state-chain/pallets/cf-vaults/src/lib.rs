@@ -81,7 +81,9 @@ impl<I: 'static> SafeMode for PalletSafeMode<I> {
 }
 
 /// The current status of a vault rotation.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebugNoBound, EnumVariant)]
+#[derive(
+	PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebugNoBound, EnumVariant, MaxEncodedLen,
+)]
 #[scale_info(skip_type_params(T, I))]
 pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	/// We are waiting for nodes to generate a new aggregate key.
@@ -140,7 +142,7 @@ impl<T: Config<I>, I: 'static> cf_traits::CeremonyIdProvider for Pallet<T, I> {
 }
 
 /// A single vault.
-#[derive(Default, PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
+#[derive(Default, PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, MaxEncodedLen)]
 pub struct Vault<T: Chain> {
 	/// The vault's public key.
 	pub public_key: <<T as Chain>::ChainCrypto as ChainCrypto>::AggKey,

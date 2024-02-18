@@ -17,7 +17,7 @@ use cf_traits::{
 	},
 	AccountRoleRegistry, OnBroadcastReady,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
@@ -85,7 +85,7 @@ thread_local! {
 
 pub type EthMockThresholdSigner = MockThresholdSigner<EvmCrypto, crate::mock::RuntimeCall>;
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockCallback;
 
 impl MockCallback {

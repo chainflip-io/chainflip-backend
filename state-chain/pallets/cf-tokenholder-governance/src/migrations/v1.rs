@@ -9,7 +9,7 @@ mod v0 {
 	use super::*;
 	use frame_support::Twox64Concat;
 
-	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
 	pub enum Proposal {
 		SetGovernanceKey(<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey),
 		SetCommunityKey(<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey),
@@ -31,8 +31,10 @@ mod v0 {
 impl From<v0::Proposal> for Proposal {
 	fn from(old: v0::Proposal) -> Self {
 		match old {
-			v0::Proposal::SetGovernanceKey(ref new_key) =>
-				Proposal::SetGovernanceKey(ForeignChain::Ethereum, new_key.encode()),
+			v0::Proposal::SetGovernanceKey(ref new_key) => Proposal::SetGovernanceKey(
+				ForeignChain::Ethereum,
+				new_key.encode().try_into().unwrap(),
+			),
 			v0::Proposal::SetCommunityKey(new_key) => Proposal::SetCommunityKey(new_key),
 		}
 	}
@@ -55,7 +57,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 			_,
 		>(|maybe_update| {
 			maybe_update.map(|(block_number, eth_gov_key)| {
-				(block_number, (ForeignChain::Ethereum, eth_gov_key.encode()))
+				(block_number, (ForeignChain::Ethereum, eth_gov_key.encode().try_into().unwrap()))
 			})
 		})
 		.expect("Decoding of old type shouldn't fail");
@@ -113,7 +115,8 @@ mod test_runtime_upgrade {
 			#[cfg(feature = "try-runtime")]
 			Migration::<Test>::post_upgrade(state).unwrap();
 
-			let expected_proposal = Proposal::SetGovernanceKey(CHAIN, GOV_KEY.into());
+			let expected_proposal =
+				Proposal::SetGovernanceKey(CHAIN, GOV_KEY.to_vec().try_into().unwrap());
 			assert_eq!(
 				Proposals::<Test>::get(block).unwrap(),
 				expected_proposal,

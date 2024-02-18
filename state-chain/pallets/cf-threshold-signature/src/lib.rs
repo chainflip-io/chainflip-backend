@@ -53,7 +53,7 @@ pub enum PalletOffence {
 	ParticipateSigningFailed,
 }
 
-#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum RequestType<Key, Participants> {
 	/// Uses the provided key and selects new participants from the provided epoch.
 	/// This signing request will be retried until success.
@@ -65,7 +65,7 @@ pub enum RequestType<Key, Participants> {
 }
 
 /// The type of a threshold *Ceremony* i.e. after a request has been emitted, it is then a ceremony.
-#[derive(Clone, Copy, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Copy, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum ThresholdCeremonyType {
 	Standard,
 	KeygenVerification,
@@ -90,7 +90,7 @@ pub mod pallet {
 	};
 	use frame_system::ensure_none;
 	/// Context for tracking the progress of a threshold signature ceremony.
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 	#[scale_info(skip_type_params(T, I))]
 	pub struct CeremonyContext<T: Config<I>, I: 'static> {
 		pub request_context: RequestContext<T, I>,
@@ -108,7 +108,7 @@ pub mod pallet {
 		pub threshold_ceremony_type: ThresholdCeremonyType,
 	}
 
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 	#[scale_info(skip_type_params(T, I))]
 	pub struct RequestContext<T: Config<I>, I: 'static> {
 		pub request_id: RequestId,
@@ -120,7 +120,7 @@ pub mod pallet {
 		pub payload: PayloadFor<T, I>,
 	}
 
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 	#[scale_info(skip_type_params(T, I))]
 	pub struct RequestInstruction<T: Config<I>, I: 'static> {
 		pub request_context: RequestContext<T, I>,

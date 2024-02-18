@@ -21,7 +21,7 @@ use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Bid, BidderProvider, Broadcaster,
 	Chainflip, EpochInfo, FeePayment, Funding,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
@@ -40,13 +40,13 @@ use sp_std::{
 	collections::btree_map::BTreeMap,
 	prelude::*,
 };
-#[derive(Encode, Decode, PartialEq, Debug, TypeInfo)]
+#[derive(Encode, Decode, PartialEq, Debug, TypeInfo, MaxEncodedLen)]
 pub enum Pending {
 	Pending,
 }
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
-#[derive(Encode, Decode, PartialEq, Debug, TypeInfo)]
+#[derive(Encode, Decode, PartialEq, Debug, TypeInfo, MaxEncodedLen)]
 pub struct PendingRedemptionInfo<FlipBalance> {
 	pub total: FlipBalance,
 	pub restricted: FlipBalance,
@@ -74,7 +74,7 @@ pub mod pallet {
 
 	pub type EthTransactionHash = [u8; 32];
 
-	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 	pub enum RedemptionAmount<T: Parameter> {
 		Max,
 		Exact(T),

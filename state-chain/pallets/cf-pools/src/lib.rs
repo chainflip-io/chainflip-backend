@@ -258,7 +258,7 @@ pub mod pallet {
 
 	use super::*;
 
-	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
+	#[derive(Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 	#[scale_info(skip_type_params(T))]
 	pub struct LimitOrderUpdate<T: Config> {
 		pub lp: T::AccountId,
@@ -266,7 +266,7 @@ pub mod pallet {
 		pub call: Call<T>,
 	}
 
-	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
+	#[derive(Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 	#[scale_info(skip_type_params(T))]
 	pub struct Pool<T: Config> {
 		/// A cache of all the range orders that exist in the pool. This must be kept up to date
@@ -498,7 +498,7 @@ pub mod pallet {
 		/// The specified exchange pool does not exist.
 		PoolDoesNotExist,
 		/// For previously unused order ids, you must specific a tick/tick range for the order,
-		/// thereby specifying the order price associated with that order id
+		/// thereby specifying the order price associated with that order id.
 		UnspecifiedOrderPrice,
 		/// The exchange pool is currently disabled.
 		PoolDisabled,
@@ -510,7 +510,7 @@ pub mod pallet {
 		InvalidTickRange,
 		/// The tick is invalid.
 		InvalidTick,
-		/// One of the referenced ticks reached its maximum gross liquidity
+		/// One of the referenced ticks reached its maximum gross liquidity.
 		MaximumGrossLiquidity,
 		/// The user's order does not exist.
 		OrderDoesNotExist,
@@ -522,7 +522,7 @@ pub mod pallet {
 		/// The swap output is past the maximum allowed amount.
 		OutputOverflow,
 		/// There are no amounts between the specified maximum and minimum that match the required
-		/// ratio of assets
+		/// ratio of assets.
 		AssetRatioUnachieveable,
 		/// Updating Limit Orders is disabled.
 		UpdatingLimitOrdersDisabled,
@@ -532,6 +532,8 @@ pub mod pallet {
 		UnsupportedCall,
 		/// The update can't be scheduled because it has expired (dispatch_at is in the past).
 		LimitOrderUpdateExpired,
+		/// The maximum amount of orders in a Pool Orderbook is exceeded.
+		MaximumPoolOrderbook,
 	}
 
 	#[pallet::event]
@@ -1159,7 +1161,9 @@ pub struct PoolInfo {
 	pub range_order_fee_hundredth_pips: u32,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+	Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize, MaxEncodedLen,
+)]
 #[serde(bound = "")]
 pub struct LimitOrder<T: Config> {
 	pub lp: T::AccountId,
@@ -1170,7 +1174,9 @@ pub struct LimitOrder<T: Config> {
 	pub original_sell_amount: Amount,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+	Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize, MaxEncodedLen,
+)]
 #[serde(bound = "")]
 pub struct RangeOrder<T: Config> {
 	pub lp: T::AccountId,
@@ -1180,7 +1186,9 @@ pub struct RangeOrder<T: Config> {
 	pub fees_earned: AssetsMap<Amount>,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+	Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize, MaxEncodedLen,
+)]
 #[serde(bound = "")]
 pub struct PoolOrders<T: Config> {
 	/// Limit orders are groups by which asset they are selling.
@@ -1190,13 +1198,17 @@ pub struct PoolOrders<T: Config> {
 	pub range_orders: Vec<RangeOrder<T>>,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(
+	Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize, MaxEncodedLen,
+)]
 pub struct LimitOrderLiquidity {
 	tick: Tick,
 	amount: Amount,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(
+	Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize, MaxEncodedLen,
+)]
 pub struct RangeOrderLiquidity {
 	tick: Tick,
 	liquidity: Amount, /* TODO: Change (Using Amount as it is U256 so we get the right
@@ -1216,7 +1228,9 @@ pub struct PoolLiquidity {
 	pub range_orders: Vec<RangeOrderLiquidity>,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(
+	Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize, MaxEncodedLen,
+)]
 pub struct UnidirectionalSubPoolDepth {
 	/// The current price in this sub pool, in the given direction of swaps.
 	pub price: Option<Price>,
@@ -1224,7 +1238,9 @@ pub struct UnidirectionalSubPoolDepth {
 	pub depth: Amount,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(
+	Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize, MaxEncodedLen,
+)]
 pub struct UnidirectionalPoolDepth {
 	/// The depth of the limit order pool.
 	pub limit_orders: UnidirectionalSubPoolDepth,
@@ -1232,19 +1248,27 @@ pub struct UnidirectionalPoolDepth {
 	pub range_orders: UnidirectionalSubPoolDepth,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
+pub const MAXIMUM_ORDERS_IN_POOL_ORDERBOOK: u32 = 16384;
+
+#[derive(
+	Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize, MaxEncodedLen,
+)]
 pub struct PoolOrder {
 	pub amount: Amount,
 	pub sqrt_price: SqrtPriceQ64F96,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+	Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize, MaxEncodedLen,
+)]
 pub struct PoolOrderbook {
-	pub bids: Vec<PoolOrder>,
-	pub asks: Vec<PoolOrder>,
+	pub bids: BoundedVec<PoolOrder, ConstU32<MAXIMUM_ORDERS_IN_POOL_ORDERBOOK>>,
+	pub asks: BoundedVec<PoolOrder, ConstU32<MAXIMUM_ORDERS_IN_POOL_ORDERBOOK>>,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(
+	Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize, MaxEncodedLen,
+)]
 pub struct PoolPrice {
 	pub price: Price,
 	pub sqrt_price: SqrtPriceQ64F96,
@@ -1631,27 +1655,26 @@ impl<T: Config> Pallet<T> {
 			.map(Into::into)
 	}
 
+	/// Returns up to MAXIMUM_ORDERS_IN_POOL_ORDERBOOK orders (bids and asks) for a given pool.
 	pub fn pool_orderbook(
 		base_asset: any::Asset,
 		quote_asset: any::Asset,
 		orders: u32,
 	) -> Result<PoolOrderbook, DispatchError> {
-		let orders = sp_std::cmp::max(sp_std::cmp::min(orders, 16384), 1);
-
 		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
 		let pool_state =
 			Pools::<T>::get(asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?.pool_state;
 
-		// TODO: Need to change limit order pool implmentation so Amount::MAX is guaranteed to drain
-		// pool (so the calculated amounts here are guaranteed to reflect the accurate
-		// maximum_bough_amounts)
+		// TODO: Need to change limit order pool implementation so Amount::MAX is guaranteed to
+		// drain pool (so the calculated amounts here are guaranteed to reflect the accurate
+		// maximum_bought_amounts)
 
 		Ok(PoolOrderbook {
 			asks: {
 				let mut pool_state = pool_state.clone();
 				let sqrt_prices = pool_state.logarithm_sqrt_price_sequence(Order::Buy, orders);
 
-				sqrt_prices
+				let asks: Vec<PoolOrder> = sqrt_prices
 					.into_iter()
 					.filter_map(|sqrt_price| {
 						let (sold_base_amount, remaining_quote_amount) =
@@ -1671,13 +1694,15 @@ impl<T: Config> Pallet<T> {
 							})
 						}
 					})
-					.collect()
+					.collect();
+				asks.try_into()
+					.map_err(|_| DispatchError::from(Error::<T>::MaximumPoolOrderbook))?
 			},
 			bids: {
 				let mut pool_state = pool_state;
 				let sqrt_prices = pool_state.logarithm_sqrt_price_sequence(Order::Sell, orders);
 
-				sqrt_prices
+				let bids: Vec<PoolOrder> = sqrt_prices
 					.into_iter()
 					.filter_map(|sqrt_price| {
 						let (sold_quote_amount, remaining_base_amount) =
@@ -1697,7 +1722,9 @@ impl<T: Config> Pallet<T> {
 							})
 						}
 					})
-					.collect()
+					.collect();
+				bids.try_into()
+					.map_err(|_| DispatchError::from(Error::<T>::MaximumPoolOrderbook))?
 			},
 		})
 	}

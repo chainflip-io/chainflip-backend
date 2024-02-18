@@ -70,7 +70,9 @@ type RuntimeRotationState<T> =
 	RotationState<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
 // Might be better to add the enum inside a struct rather than struct inside enum
-#[derive(Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
+#[derive(
+	Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound, MaxEncodedLen,
+)]
 #[scale_info(skip_type_params(T))]
 pub enum RotationPhase<T: Config> {
 	#[default]

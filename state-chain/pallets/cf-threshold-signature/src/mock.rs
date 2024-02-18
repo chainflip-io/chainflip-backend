@@ -16,7 +16,7 @@ use cf_traits::{
 	},
 	AccountRoleRegistry, AsyncResult, KeyProvider, ThresholdSigner,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 pub use frame_support::{
 	instances::Instance1,
 	parameter_types,
@@ -73,7 +73,7 @@ thread_local! {
 	pub static CALL_DISPATCHED: std::cell::RefCell<Option<RequestId>> = Default::default();
 	pub static TIMES_CALLED: std::cell::RefCell<u8> = Default::default();
 }
-#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockCallback<C: ChainCrypto>(RequestId, PhantomData<C>);
 
 impl MockCallback<MockEthereumChainCrypto> {

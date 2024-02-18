@@ -6,6 +6,7 @@ use cfe_events::{KeyHandoverRequest, KeygenRequest, TxBroadcastRequest};
 pub use liquidity::*;
 pub mod safe_mode;
 pub use safe_mode::*;
+use sp_runtime::BoundedVec;
 
 pub mod mocks;
 pub mod offence_reporting;
@@ -31,7 +32,7 @@ use frame_support::{
 		traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
 		DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
 	},
-	traits::{EnsureOrigin, Get, Imbalance, IsType, UnfilteredDispatchable},
+	traits::{ConstU32, EnsureOrigin, Get, Imbalance, IsType, UnfilteredDispatchable},
 	Hashable, Parameter,
 };
 use scale_info::TypeInfo;
@@ -749,12 +750,15 @@ pub trait VaultKeyWitnessedHandler<C: Chain> {
 	fn on_new_key_activated(block_number: C::ChainBlockNumber) -> DispatchResultWithPostInfo;
 }
 
+pub const MAXIMUM_GOVERNANCE_KEY_LENGTH: u32 = 32;
+pub type GovernanceKey = BoundedVec<u8, ConstU32<MAXIMUM_GOVERNANCE_KEY_LENGTH>>;
+
 pub trait BroadcastAnyChainGovKey {
 	#[allow(clippy::result_unit_err)]
 	fn broadcast_gov_key(
 		chain: ForeignChain,
-		old_key: Option<Vec<u8>>,
-		new_key: Vec<u8>,
+		old_key: Option<GovernanceKey>,
+		new_key: GovernanceKey,
 	) -> Result<(), ()>;
 
 	fn is_govkey_compatible(chain: ForeignChain, key: &[u8]) -> bool;

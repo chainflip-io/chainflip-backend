@@ -17,7 +17,7 @@ mod old {
 		pub unlock_script: BitcoinScript,
 	}
 
-	#[derive(Encode, Decode, TypeInfo)]
+	#[derive(Encode, Decode, TypeInfo, MaxEncodedLen)]
 	pub struct Utxo {
 		pub id: UtxoId,
 		pub amount: u64,

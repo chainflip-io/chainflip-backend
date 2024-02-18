@@ -55,14 +55,16 @@ pub mod pallet {
 
 	use super::{GovCallHash, WeightInfo};
 
-	#[derive(Default, Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+	#[derive(
+		Default, Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, MaxEncodedLen,
+	)]
 	pub enum ExecutionMode {
 		#[default]
 		Automatic,
 		Manual,
 	}
 
-	#[derive(Encode, Decode, TypeInfo, Clone, Copy, RuntimeDebug, PartialEq, Eq)]
+	#[derive(Encode, Decode, TypeInfo, Clone, Copy, RuntimeDebug, PartialEq, Eq, MaxEncodedLen)]
 	pub struct ActiveProposal {
 		pub proposal_id: ProposalId,
 		pub expiry_time: Timestamp,

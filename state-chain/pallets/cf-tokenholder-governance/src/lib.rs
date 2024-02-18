@@ -1,6 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_chains::{eth::Address, ForeignChain};
-use cf_traits::{BroadcastAnyChainGovKey, Chainflip, CommKeyBroadcaster, FeePayment, FundingInfo};
+use cf_traits::{
+	BroadcastAnyChainGovKey, Chainflip, CommKeyBroadcaster, FeePayment, FundingInfo, GovernanceKey,
+};
 use codec::{Decode, Encode};
 use frame_support::{
 	pallet_prelude::*,
@@ -21,10 +23,10 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, RuntimeDebugNoBound, MaxEncodedLen)]
 #[scale_info(skip_type_params(T))]
 pub enum Proposal {
-	SetGovernanceKey(ForeignChain, Vec<u8>),
+	SetGovernanceKey(ForeignChain, GovernanceKey),
 	SetCommunityKey(Address),
 }
 
@@ -81,7 +83,7 @@ pub mod pallet {
 	/// number we will attempt to enact this update.
 	#[pallet::storage]
 	pub type GovKeyUpdateAwaitingEnactment<T> =
-		StorageValue<_, (BlockNumberFor<T>, (ForeignChain, Vec<u8>)), OptionQuery>;
+		StorageValue<_, (BlockNumberFor<T>, (ForeignChain, GovernanceKey)), OptionQuery>;
 
 	/// The Community key proposal currently awaiting enactment, if any. Indexed by the block number
 	/// we will attempt to enact this update.
@@ -91,7 +93,7 @@ pub mod pallet {
 
 	/// Current Governance keys for foreign chains.
 	#[pallet::storage]
-	pub type GovKeys<T> = StorageMap<_, Twox64Concat, ForeignChain, Vec<u8>>;
+	pub type GovKeys<T> = StorageMap<_, Twox64Concat, ForeignChain, GovernanceKey>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -105,9 +107,9 @@ pub mod pallet {
 		/// A proposal was enacted.
 		ProposalEnacted { proposal: Proposal },
 		/// Update of GOV key has failed.
-		GovKeyUpdatedHasFailed { chain: ForeignChain, key: Vec<u8> },
+		GovKeyUpdatedHasFailed { chain: ForeignChain, key: GovernanceKey },
 		/// Update of GOV key was successful.
-		GovKeyUpdatedWasSuccessful { chain: ForeignChain, key: Vec<u8> },
+		GovKeyUpdatedWasSuccessful { chain: ForeignChain, key: GovernanceKey },
 	}
 
 	#[pallet::error]
@@ -118,6 +120,8 @@ pub mod pallet {
 		ProposalDoesntExist,
 		/// The proposed governance key is incompatible with the proposed chain.
 		IncompatibleGovkey,
+		/// The maximum length of the Governance Key is exceeded.
+		MaximumGovernanceKeyLength,
 	}
 
 	#[pallet::hooks]
@@ -248,7 +252,7 @@ pub mod pallet {
 						Proposal::SetGovernanceKey(chain, key) => {
 							GovKeyUpdateAwaitingEnactment::<T>::put::<(
 								BlockNumberFor<T>,
-								(cf_chains::ForeignChain, Vec<u8>),
+								(cf_chains::ForeignChain, GovernanceKey),
 							)>((enactment_block, (chain, key)));
 						},
 						Proposal::SetCommunityKey(key) => {

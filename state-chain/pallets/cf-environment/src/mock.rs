@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use crate::{self as pallet_cf_environment, Decode, Encode, TypeInfo};
+use crate::{self as pallet_cf_environment, Decode, Encode, MaxEncodedLen, TypeInfo};
 use cf_chains::{
 	btc::BitcoinFeeInfo,
 	dot::{api::CreatePolkadotVault, PolkadotCrypto},
@@ -59,7 +59,7 @@ impl frame_system::Config for Test {
 
 impl_mock_chainflip!(Test);
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockCreatePolkadotVault;
 
 impl CreatePolkadotVault for MockCreatePolkadotVault {

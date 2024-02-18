@@ -13,7 +13,7 @@ mod old {
 		pub assets: SideMap<Asset>,
 	}
 
-	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
+	#[derive(Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 	#[scale_info(skip_type_params(T))]
 	pub struct Pool<T: Config> {
 		pub enabled: bool,

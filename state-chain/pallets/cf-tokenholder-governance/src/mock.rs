@@ -3,9 +3,9 @@ use cf_chains::{Chain, ChainCrypto, Ethereum, ForeignChain};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_ensure_witnessed_for_origin, impl_mock_on_account_funded,
 	impl_mock_waived_fees, mocks::fee_payment::MockFeePayment, BroadcastAnyChainGovKey,
-	CommKeyBroadcaster, WaivedFees,
+	CommKeyBroadcaster, GovernanceKey, WaivedFees,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{parameter_types, traits::HandleLifetime};
 use frame_system as system;
 use sp_core::H256;
@@ -76,7 +76,7 @@ impl MockBroadcaster {
 	pub fn set_behaviour(behaviour: MockBroadcasterBehaviour) {
 		MockBroadcasterStorage::put(behaviour);
 	}
-	pub fn broadcasted_gov_key() -> Option<(ForeignChain, Option<Vec<u8>>, Vec<u8>)> {
+	pub fn broadcasted_gov_key() -> Option<(ForeignChain, Option<GovernanceKey>, GovernanceKey)> {
 		GovKeyBroadcasted::get()
 	}
 	fn is_govkey_compatible() -> bool {
@@ -87,7 +87,7 @@ impl MockBroadcaster {
 	}
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
 pub struct MockBroadcasterBehaviour {
 	pub key_compatible: bool,
 	pub broadcast_success: bool,
@@ -103,7 +103,8 @@ impl Default for MockBroadcasterBehaviour {
 type MockBroadcasterStorage = StorageValue<Mock, MockBroadcasterBehaviour>;
 
 #[frame_support::storage_alias]
-type GovKeyBroadcasted = StorageValue<Mock, (cf_chains::ForeignChain, Option<Vec<u8>>, Vec<u8>)>;
+type GovKeyBroadcasted =
+	StorageValue<Mock, (cf_chains::ForeignChain, Option<GovernanceKey>, GovernanceKey)>;
 
 #[frame_support::storage_alias]
 type CommKeyBroadcasted =
@@ -112,8 +113,8 @@ type CommKeyBroadcasted =
 impl BroadcastAnyChainGovKey for MockBroadcaster {
 	fn broadcast_gov_key(
 		chain: cf_chains::ForeignChain,
-		old_key: Option<Vec<u8>>,
-		new_key: Vec<u8>,
+		old_key: Option<GovernanceKey>,
+		new_key: GovernanceKey,
 	) -> Result<(), ()> {
 		if Self::broadcast_success() {
 			GovKeyBroadcasted::put((chain, old_key, new_key));

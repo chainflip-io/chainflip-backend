@@ -13,13 +13,13 @@ mod old {
 
 	use super::*;
 
-	#[derive(Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
+	#[derive(Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq, MaxEncodedLen)]
 	pub enum KeyState {
 		Unlocked,
 		/// Key is only available to sign this request id.
 		Locked(ThresholdSignatureRequestId),
 	}
-	#[derive(Encode, Decode, TypeInfo)]
+	#[derive(Encode, Decode, TypeInfo, MaxEncodedLen)]
 	pub struct VaultEpochAndState {
 		pub epoch_index: EpochIndex,
 		pub key_state: KeyState,

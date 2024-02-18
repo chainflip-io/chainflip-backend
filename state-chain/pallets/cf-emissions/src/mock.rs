@@ -148,7 +148,7 @@ impl ApiCall<MockEthereumChainCrypto> for MockUpdateFlipSupply {
 	}
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockBroadcast;
 
 pub struct MockFlipToBurn;
