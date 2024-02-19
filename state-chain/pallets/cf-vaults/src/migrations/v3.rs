@@ -7,8 +7,6 @@ mod try_runtime_includes {
 	pub use frame_support::{ensure, pallet_prelude::DispatchError};
 	pub use sp_std::prelude::*;
 }
-#[cfg(feature = "try-runtime")]
-use try_runtime_includes::*;
 
 use crate::{PendingVaultActivation, VaultActivationStatus, VaultStartBlockNumbers};
 
@@ -70,14 +68,41 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 		Default::default()
 	}
+}
 
-	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		Ok(Default::default())
-	}
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::mock::{new_test_ext, Test};
+	use cf_chains::mocks::MockAggKey;
 
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
-		Ok(())
+	#[test]
+	fn vaults_translated_correctly() {
+		new_test_ext().execute_with(|| {
+			// Insert storage into old vaults
+			old::Vaults::<Test, _>::insert(
+				1,
+				old::Vault { public_key: MockAggKey([22u8; 4]), active_from_block: 1 },
+			);
+			old::Vaults::<Test, _>::insert(
+				2,
+				old::Vault { public_key: MockAggKey([25u8; 4]), active_from_block: 24 },
+			);
+
+			// Run migration
+			Migration::<Test, _>::on_runtime_upgrade();
+
+			// Check that the old storage has been translated correctly
+			assert_eq!(
+				new::Vaults::<Test, _>::get(1),
+				Some(MockAggKey([22u8; 4])),
+				"Vaults were not translated correctly"
+			);
+			assert_eq!(
+				new::Vaults::<Test, _>::get(2),
+				Some(MockAggKey([25u8; 4])),
+				"Vaults were not translated correctly"
+			);
+		});
 	}
 }
