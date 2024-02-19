@@ -83,7 +83,9 @@ jobs:
           chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
           touch ./localnet/.setup_complete
           ./localnet/manage.sh
+
       - name: Check L2 Contract Deployment 🕵🏻‍♂️
+        shell: bash
         run: |
           for address in 0x5FbDB2315678afecb367f032d93F642f64180aa3 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82; do
             response=$(curl -s -X POST -H "Content-Type: application/json" --data "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getCode\",\"params\":[\"$address\", \"latest\"],\"id\":1}" http://127.0.0.1:8547)
@@ -95,6 +97,7 @@ jobs:
               echo "$name ($address) is deployed."
             fi
           done
+
       - name: Run HeuteLeiderNicht.voll.exe 🙅‍♂️
         if: inputs.full_bouncer
         working-directory: bouncer
