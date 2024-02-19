@@ -31,7 +31,7 @@ const MAX_TEST_GAS_CONSUMPTION: { [key: string]: number } = { Ethereum: 4000000,
 // The base overhead increases with message lenght. This is an approximation => BASE_GAS_OVERHEAD + messageLength * gasPerByte
 // EVM requires 16 gas per calldata byte so a reasonable approximation is 17 to cover hashing and other operations over the data.
 const GAS_PER_BYTE = 17;
-// MIN_FEE is the priority fee for ethereum, baseFee for arbitrum
+// MIN_FEE is the priority fee for Ethereum and baseFee for Arbitrum, since those are the fees that increase here upon spamming.
 const MIN_FEE: { [key: string]: number } = { Ethereum: 1000000000, Arbitrum: 100000000 };
 const LOOP_TIMEOUT = 15;
 
@@ -127,7 +127,7 @@ async function testGasLimitSwap(
   );
   const egressIdToBroadcastId: { [key: string]: string } = {};
   const ccmBroadcastHandle = observeEvent(
-    'ethereumIngressEgress:CcmBroadcastRequested',
+    `${destChain.toLowerCase()}IngressEgress:CcmBroadcastRequested`,
     chainflipApi,
     (event) => {
       egressIdToBroadcastId[event.data.egressId] = event.data.broadcastId;
@@ -139,7 +139,7 @@ async function testGasLimitSwap(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const broadcastIdToTxPayload: { [key: string]: any } = {};
   const broadcastRequesthandle = observeEvent(
-    'ethereumBroadcaster:TransactionBroadcastRequest',
+    `${destChain.toLowerCase()}Broadcaster:TransactionBroadcastRequest`,
     chainflipApi,
     (event) => {
       broadcastIdToTxPayload[event.data.broadcastId] = event.data.transactionPayload;
@@ -208,7 +208,7 @@ async function testGasLimitSwap(
       `${tag} Gas budget of ${gasLimitBudget} is too low. Expecting BroadcastAborted event.`,
     );
     await observeEvent(
-      'ethereumBroadcaster:BroadcastAborted',
+      `${destChain.toLowerCase()}Broadcaster:BroadcastAborted`,
       await getChainflipApi(),
       (event) => event.data.broadcastId === egressIdToBroadcastId[swapIdToEgressId[swapId]],
     );
@@ -224,7 +224,7 @@ async function testGasLimitSwap(
     // Check that broadcast is not aborted
     let stopObserving = false;
     const observeBroadcastFailure = observeBadEvents(
-      'ethereumBroadcaster:BroadcastAborted',
+      `${destChain.toLowerCase()}Broadcaster:BroadcastAborted`,
       () => stopObserving,
       (event) => event.data.broadcastId === egressIdToBroadcastId[swapIdToEgressId[swapId]],
     );
@@ -252,7 +252,7 @@ async function testGasLimitSwap(
     const totalFee = gasUsed * Number(gasPrice);
 
     const feeDeficitHandle = observeEvent(
-      'ethereumBroadcaster:TransactionFeeDeficitRecorded',
+      `${destChain.toLowerCase()}Broadcaster:TransactionFeeDeficitRecorded`,
       await getChainflipApi(),
       (event) => Number(event.data.amount.replace(/,/g, '')) === totalFee,
     );
@@ -296,7 +296,7 @@ function getRandomGasConsumption(chain: Chain): number {
 }
 
 export async function testGasLimitCcmSwaps() {
-  // Spam ethereum with transfers to increase the gasLimitBudget price
+  // Spam chains to increase the gasLimitBudget price
   const spammingEth = spamEvm('Ethereum', 500, () => spam);
   const spammingArb = spamEvm('Arbitrum', 500, () => spam);
 
