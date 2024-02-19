@@ -1,11 +1,12 @@
 #![cfg(test)]
 
-use crate::{self as pallet_cf_witness, WitnessDataExtraction};
+use crate::{self as pallet_cf_witness, PalletOffence, WitnessDataExtraction};
 use cf_traits::{
-	impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleRegistry, CallDispatchFilter,
+	impl_mock_chainflip, impl_mock_runtime_safe_mode,
+	mocks::offence_reporting::MockOffenceReporter, AccountRoleRegistry, CallDispatchFilter,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{pallet_prelude::RuntimeDebug, parameter_types};
+use frame_support::{derive_impl, pallet_prelude::RuntimeDebug, parameter_types};
 use frame_system as system;
 use scale_info::TypeInfo;
 use sp_core::H256;
@@ -31,6 +32,7 @@ parameter_types! {
 	pub const SS58Prefix: u8 = 42;
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -61,6 +63,7 @@ impl_mock_runtime_safe_mode! { witnesser: pallet_cf_witness::PalletSafeMode<Mock
 
 parameter_types! {
 	pub static AllowCall: bool = true;
+	pub const GracePeriod: u64 = 10u64;
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -72,12 +75,17 @@ impl CallDispatchFilter<RuntimeCall> for MockCallFilter {
 	}
 }
 
+pub type OffenceReporter = MockOffenceReporter<u64, PalletOffence>;
+
 impl pallet_cf_witness::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type SafeMode = MockRuntimeSafeMode;
 	type CallDispatchPermission = MockCallFilter;
+	type Offence = PalletOffence;
+	type OffenceReporter = OffenceReporter;
+	type LateWitnessGracePeriod = GracePeriod;
 	type WeightInfo = ();
 }
 

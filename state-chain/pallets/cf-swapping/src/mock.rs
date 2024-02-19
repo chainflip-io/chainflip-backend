@@ -11,7 +11,7 @@ use cf_traits::{
 	},
 	AccountRoleRegistry, SwappingApi,
 };
-use frame_support::{pallet_prelude::DispatchError, parameter_types, weights::Weight};
+use frame_support::{derive_impl, pallet_prelude::DispatchError, parameter_types, weights::Weight};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -35,6 +35,7 @@ parameter_types! {
 	pub const SS58Prefix: u8 = 42;
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -127,10 +128,6 @@ impl WeightInfo for MockWeightInfo {
 	}
 
 	fn register_as_broker() -> Weight {
-		Weight::from_parts(100, 0)
-	}
-
-	fn set_maximum_swap_amount() -> Weight {
 		Weight::from_parts(100, 0)
 	}
 }

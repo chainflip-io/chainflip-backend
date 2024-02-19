@@ -189,14 +189,19 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   const balanceBeforeWithdrawalBigInt = BigInt(
     amountToFineAmount(balanceBeforeWithdrawal, assetDecimals[asset]),
   );
-  const minExpectedBalanceAfterWithdrawal =
-    balanceBeforeWithdrawalBigInt + earnedBrokerFeesAfter - maxWithdrawalFee[asset];
   const detectWithdrawalGasFee =
     balanceBeforeWithdrawalBigInt + earnedBrokerFeesAfter - balanceAfterWithdrawalBigInt;
+  // Log the chain state for Ethereum assets to help debugging.
+  if (['FLIP', 'ETH', 'USDC'].includes(asset.toString())) {
+    const chainState = JSON.stringify(
+      await chainflip.query.ethereumChainTracking.currentChainState(),
+    );
+    console.log('Ethereum chain tracking state:', chainState);
+  }
   assert(
-    balanceAfterWithdrawalBigInt >= minExpectedBalanceAfterWithdrawal &&
+    detectWithdrawalGasFee <= maxWithdrawalFee[asset] &&
       balanceAfterWithdrawalBigInt <= balanceBeforeWithdrawalBigInt + earnedBrokerFeesAfter,
-    `Unexpected ${asset} balance after withdrawal, amount ${balanceAfterWithdrawalBigInt}, expected >=${minExpectedBalanceAfterWithdrawal}, did gas fees change? detected gas fee: ${detectWithdrawalGasFee}`,
+    `Unexpected ${asset} balance after withdrawal, amount ${balanceAfterWithdrawalBigInt}, did gas fees change? Max expected gas fee is ${maxWithdrawalFee[asset]}, detected gas fee: ${detectWithdrawalGasFee}`,
   );
 }
 

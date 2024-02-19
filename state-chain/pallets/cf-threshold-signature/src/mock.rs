@@ -5,8 +5,6 @@ use crate::{
 	EnsureThresholdSigned, Origin, Pallet, PalletOffence, PendingCeremonies, RequestId,
 };
 use cf_chains::{
-	btc,
-	evm::SchnorrVerificationComponents,
 	mocks::{MockAggKey, MockEthereumChainCrypto, MockThresholdSignature},
 	ChainCrypto,
 };
@@ -18,6 +16,7 @@ use cf_traits::{
 };
 use codec::{Decode, Encode};
 pub use frame_support::{
+	derive_impl,
 	instances::Instance1,
 	parameter_types,
 	traits::{EnsureOrigin, UnfilteredDispatchable},
@@ -29,11 +28,6 @@ use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 type Block = frame_system::mocking::MockBlock<Test>;
 
 pub type ValidatorId = u64;
-
-pub const ETH_DUMMY_SIG: SchnorrVerificationComponents =
-	SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
-
-pub const BTC_DUMMY_SIG: btc::Signature = [0xcf; 64];
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -48,6 +42,7 @@ parameter_types! {
 	pub const SS58Prefix: u8 = 42;
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();

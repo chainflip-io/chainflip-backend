@@ -30,7 +30,6 @@ fn new_lp_account<T: Chainflip + Config>() -> T::AccountId {
 #[benchmarks]
 mod benchmarks {
 	use super::*;
-	use sp_std::vec;
 
 	#[benchmark]
 	fn update_buy_interval() {

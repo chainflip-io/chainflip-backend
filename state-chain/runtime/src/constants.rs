@@ -80,4 +80,9 @@ pub mod common {
 	///
 	/// See https://github.com/chainflip-io/chainflip-backend/issues/1629
 	pub const TX_FEE_MULTIPLIER: FlipBalance = 10_000;
+
+	/// The amount of time (in block number) allowed to pass from when a Witnessed call is
+	/// dispatched to the witnessing deadline. After the deadline is passed, any authorities failed
+	/// to witness the dispatched call are penalized.
+	pub const LATE_WITNESS_GRACE_PERIOD: BlockNumber = 10u32;
 }

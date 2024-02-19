@@ -8,7 +8,7 @@ use cf_traits::{
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::cell::RefCell;
-use frame_support::{parameter_types, traits::UnfilteredDispatchable};
+use frame_support::{derive_impl, parameter_types, traits::UnfilteredDispatchable};
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -35,6 +35,7 @@ parameter_types! {
 	pub const SS58Prefix: u8 = 42;
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -89,7 +90,8 @@ cf_traits::impl_mock_on_account_funded!(AccountId, u128);
 pub struct MockBroadcaster;
 
 thread_local! {
-	pub static REDEMPTION_BROADCAST_REQUESTS: RefCell<Vec<<Ethereum as Chain>::ChainAmount>> = RefCell::new(vec![]);
+	pub static REDEMPTION_BROADCAST_REQUESTS: RefCell<Vec<<Ethereum as Chain>::ChainAmount>> =
+		const { RefCell::new(vec![]) };
 }
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]

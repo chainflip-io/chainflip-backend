@@ -5,7 +5,7 @@ pub struct Mock;
 const START: Duration = Duration::from_secs(0);
 
 thread_local! {
-	pub static FAKE_TIME: RefCell<Duration> = RefCell::new(START);
+	pub static FAKE_TIME: RefCell<Duration> = const { RefCell::new(START) };
 }
 
 impl Mock {

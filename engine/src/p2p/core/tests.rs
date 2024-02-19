@@ -12,10 +12,10 @@ use utilities::{
 	Port,
 };
 
-fn create_node_info(id: AccountId, node_key: &ed25519_dalek::Keypair, port: Port) -> PeerInfo {
+fn create_node_info(id: AccountId, node_key: &ed25519_dalek::SigningKey, port: Port) -> PeerInfo {
 	use std::net::Ipv4Addr;
 	let ip = "0.0.0.0".parse::<Ipv4Addr>().unwrap().to_ipv6_mapped();
-	let pubkey = Public(node_key.public.to_bytes());
+	let pubkey = Public(node_key.verifying_key().to_bytes());
 	PeerInfo::new(id, pubkey, ip, port)
 }
 
@@ -34,16 +34,12 @@ struct Node {
 }
 
 fn spawn_node(
-	key: &ed25519_dalek::Keypair,
+	key: &ed25519_dalek::SigningKey,
 	idx: usize,
 	our_peer_info: PeerInfo,
 	peer_infos: &[PeerInfo],
 ) -> Node {
 	let account_id = AccountId::new([idx as u8 + 1; 32]);
-
-	// Secret key does not implement clone:
-	let secret = ed25519_dalek::SecretKey::from_bytes(&key.secret.to_bytes()).unwrap();
-	let key = P2PKey::new(secret);
 
 	let (incoming_message_sender, incoming_message_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -55,7 +51,7 @@ fn spawn_node(
 
 	tokio::spawn({
 		super::start(
-			key,
+			P2PKey::new(key.as_bytes()),
 			our_peer_info.port,
 			peer_infos.to_vec(),
 			account_id.clone(),
@@ -75,15 +71,8 @@ fn spawn_node(
 }
 
 // Create an x25519 keypair along with the corresponding ed25519 public key
-fn create_keypair() -> ed25519_dalek::Keypair {
-	use rand::RngCore;
-	let mut secret_key_bytes = [0; 32];
-	rand::thread_rng().fill_bytes(&mut secret_key_bytes);
-
-	let secret = ed25519_dalek::SecretKey::from_bytes(&secret_key_bytes).expect("invalid key size");
-	let public: ed25519_dalek::PublicKey = (&secret).into();
-
-	ed25519_dalek::Keypair { secret, public }
+fn create_keypair() -> ed25519_dalek::SigningKey {
+	ed25519_dalek::SigningKey::generate(&mut rand::thread_rng())
 }
 
 /// Ensure that a node can (eventually) receive messages from a peer

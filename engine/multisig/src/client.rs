@@ -344,10 +344,10 @@ impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C::CryptoSchem
 			signing_info
 				.into_iter()
 				.map(|(key_id, payload)| key_store.get_key(&key_id).map(|key| (key, payload)))
-				.collect::<Vec<_>>()
+				.collect::<Option<Vec<_>>>()
 		};
 
-		if let Some(signing_info) = signing_info.into_iter().collect::<Option<_>>() {
+		if let Some(signing_info) = signing_info {
 			let (result_sender, result_receiver) = tokio::sync::oneshot::channel();
 			self.ceremony_request_sender
 				.send(CeremonyRequest {

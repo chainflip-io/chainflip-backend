@@ -246,6 +246,7 @@ fn migrate_db_to_version(
 				);
 			}
 
+			#[allow(clippy::never_loop)]
 			for version in current_version..target_version {
 				info!("Database is migrating from version {version} to {}", version + 1);
 				// Once we have migrations, we will match on the version here
