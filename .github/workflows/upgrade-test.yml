@@ -52,7 +52,7 @@ jobs:
         id: get-upgrade-to-commit
         with:
           workflow-name: ${{ inputs.upgrade-to-workflow-name }}
-          github-token: ${{secrets.GITHUB_TOKEN}}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set upgrade-to-commit
         run: |
@@ -106,7 +106,7 @@ jobs:
         id: get-upgrade-from-commit
         with:
           workflow-name: release-${{ inputs.upgrade-from-release }}.yml
-          github-token: ${{secrets.GITHUB_TOKEN}}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: echo upgrade from commit
         run: |
