@@ -1,0 +1,34 @@
+name: "Get Workflow Latest Commit SHA"
+description: "Fetches the commit SHA of the last successful workflow run"
+inputs:
+  workflow-name:
+    description: "Workflow name to fetch the most recent run commit SHA from"
+    required: true
+  github-token:
+    description: "GitHub token for authentication"
+    required: true
+outputs:
+  commit-sha:
+    description: "The latest commit of the selected workflow"
+    value: ${{ steps.get-workflow-commit.outputs.result }}
+runs:
+  using: "composite"
+  steps:
+    - name: Get workflow commit SHA
+      id: get-workflow-commit
+      uses: actions/github-script@v5
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const workflow_id = "${{ inputs.workflow-name }}";
+          const owner = context.repo.owner;
+          const repo = context.repo.repo;
+          const runs = await github.rest.actions.listWorkflowRuns({
+            owner,
+            repo,
+            workflow_id,
+            status: 'completed',
+            event: 'push',
+          });
+          const run = runs.data.workflow_runs[0];
+          return run.head_sha;

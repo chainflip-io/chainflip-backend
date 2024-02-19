@@ -73,7 +73,7 @@ export async function provideLiquidity(ccy: Asset, amount: number, waitForFinali
     undefined,
     waitForFinalization,
   );
-  send(ccy, ingressAddress, String(amount));
+  await send(ccy, ingressAddress, String(amount));
 
   await eventHandle;
 }
