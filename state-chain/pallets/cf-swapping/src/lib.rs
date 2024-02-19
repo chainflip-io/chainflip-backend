@@ -226,6 +226,12 @@ pub mod pallet {
 
 		/// The Weight information.
 		type WeightInfo: WeightInfo;
+
+		#[cfg(feature = "runtime-benchmarks")]
+		type FeePayment: cf_traits::FeePayment<
+			Amount = <Self as Chainflip>::Amount,
+			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
 	}
 
 	#[pallet::pallet]

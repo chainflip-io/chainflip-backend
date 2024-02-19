@@ -3,6 +3,8 @@ use core::cell::Cell;
 use crate::{self as pallet_cf_swapping, PalletSafeMode, WeightInfo};
 use cf_chains::AnyChain;
 use cf_primitives::{Asset, AssetAmount};
+#[cfg(feature = "runtime-benchmarks")]
+use cf_traits::mocks::fee_payment::MockFeePayment;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
@@ -140,6 +142,8 @@ impl pallet_cf_swapping::Config for Test {
 	type SwappingApi = MockSwappingApi;
 	type SafeMode = MockRuntimeSafeMode;
 	type WeightInfo = MockWeightInfo;
+	#[cfg(feature = "runtime-benchmarks")]
+	type FeePayment = MockFeePayment<Self>;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
