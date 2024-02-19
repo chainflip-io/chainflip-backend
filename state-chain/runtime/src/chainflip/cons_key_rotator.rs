@@ -38,16 +38,6 @@ where
 		T::key_handover(sharing_participants, receiving_participants, epoch_index);
 	}
 
-	fn reset_key_rotation() {
-		H::reset_key_rotation();
-		T::reset_key_rotation();
-	}
-
-	fn activate_keys() {
-		H::activate_keys();
-		T::activate_keys();
-	}
-
 	fn status() -> AsyncResult<KeyRotationStatusOuter<Self::ValidatorId>> {
 		use KeyRotationStatusOuter::*;
 		match (H::status(), T::status()) {
@@ -68,6 +58,16 @@ where
 
 			_ => AsyncResult::Pending,
 		}
+	}
+
+	fn reset_key_rotation() {
+		H::reset_key_rotation();
+		T::reset_key_rotation();
+	}
+
+	fn activate_keys() {
+		H::activate_keys();
+		T::activate_keys();
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
