@@ -22,11 +22,7 @@ use cf_traits::{
 	},
 	DepositApi, EgressApi, EpochInfo, GetBlockHeight, ScheduledEgressDetails,
 };
-use frame_support::{
-	assert_err, assert_ok,
-	traits::{Hooks, OriginTrait},
-	weights::Weight,
-};
+use frame_support::{assert_err, assert_ok, traits::Hooks, weights::Weight};
 use sp_core::H160;
 
 const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
@@ -597,29 +593,27 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 			let address2: <Ethereum as Chain>::ChainAccount = address2.try_into().unwrap();
 			(address, address2)
 		})
-		.then_apply_extrinsics(|&(address, address2)| {
-			[(
-				RuntimeOrigin::root(),
-				crate::Call::<Test, _>::process_deposits {
-					deposit_witnesses: vec![
-						DepositWitness {
-							deposit_address: address,
-							asset: ETH,
-							amount: 1,
-							deposit_details: Default::default(),
-						},
-						DepositWitness {
-							deposit_address: address2,
-							asset: ETH,
-							amount: 1,
-							deposit_details: Default::default(),
-						},
-					],
-					// The block height is purely informative.
-					block_height: BlockHeightProvider::<MockEthereum>::get_block_height(),
-				},
-				Ok(()),
-			)]
+		.then_execute_at_next_block(|(address, address2)| {
+			IngressEgress::process_deposit_witnesses(
+				vec![
+					DepositWitness {
+						deposit_address: address,
+						asset: ETH,
+						amount: 1,
+						deposit_details: Default::default(),
+					},
+					DepositWitness {
+						deposit_address: address2,
+						asset: ETH,
+						amount: 1,
+						deposit_details: Default::default(),
+					},
+				],
+				// block height is purely informative.
+				BlockHeightProvider::<MockEthereum>::get_block_height(),
+			)
+			.unwrap();
+			(address, address2)
 		})
 		.then_process_events(|_, event| match event {
 			RuntimeEvent::IngressEgress(crate::Event::DepositWitnessRejected { .. }) |
@@ -653,23 +647,21 @@ fn multi_use_deposit_address_different_blocks() {
 
 	new_test_ext()
 		.then_execute_at_next_block(|_| request_address_and_deposit(ALICE, ETH))
-		.then_apply_extrinsics(|&(_, deposit_address)| {
-			[(
-				RuntimeOrigin::root(),
-				crate::Call::<Test, _>::process_deposits {
-					deposit_witnesses: vec![DepositWitness {
-						deposit_address,
-						asset: ETH,
-						amount: 1,
-						deposit_details: Default::default(),
-					}],
-					// block height is purely informative.
-					block_height: BlockHeightProvider::<MockEthereum>::get_block_height(),
-				},
-				Ok(()),
-			)]
+		.then_execute_at_next_block(|(_, deposit_address)| {
+			IngressEgress::process_deposit_witnesses(
+				vec![DepositWitness {
+					deposit_address,
+					asset: ETH,
+					amount: 1,
+					deposit_details: Default::default(),
+				}],
+				// block height is purely informative.
+				BlockHeightProvider::<MockEthereum>::get_block_height(),
+			)
+			.unwrap();
+			deposit_address
 		})
-		.then_execute_at_next_block(|channel @ (_, deposit_address)| {
+		.then_execute_at_next_block(|deposit_address| {
 			assert_ok!(Pallet::<Test, _>::process_single_deposit(
 				deposit_address,
 				ETH,
@@ -680,24 +672,22 @@ fn multi_use_deposit_address_different_blocks() {
 			let recycle_block = IngressEgress::expiry_and_recycle_block_height().2;
 			BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
 
-			channel
+			deposit_address
 		})
 		// The channel should be closed at the next block.
-		.then_apply_extrinsics(|&(_, deposit_address)| {
-			[(
-				RuntimeOrigin::root(),
-				crate::Call::<Test, _>::process_deposits {
-					deposit_witnesses: vec![DepositWitness {
-						deposit_address,
-						asset: ETH,
-						amount: 1,
-						deposit_details: Default::default(),
-					}],
-					// block height is purely informative.
-					block_height: BlockHeightProvider::<MockEthereum>::get_block_height(),
-				},
-				Ok(()),
-			)]
+		.then_execute_at_next_block(|deposit_address| {
+			IngressEgress::process_deposit_witnesses(
+				vec![DepositWitness {
+					deposit_address,
+					asset: ETH,
+					amount: 1,
+					deposit_details: Default::default(),
+				}],
+				// block height is purely informative.
+				BlockHeightProvider::<MockEthereum>::get_block_height(),
+			)
+			.unwrap();
+			deposit_address
 		})
 		.then_process_events(|_, event| match event {
 			RuntimeEvent::IngressEgress(crate::Event::DepositWitnessRejected {
@@ -706,7 +696,7 @@ fn multi_use_deposit_address_different_blocks() {
 			}) => Some(deposit_witness.deposit_address),
 			_ => None,
 		})
-		.inspect_context(|((_, expected_address), emitted)| {
+		.inspect_context(|(expected_address, emitted)| {
 			assert_eq!(*emitted, vec![*expected_address]);
 		});
 }
@@ -730,29 +720,27 @@ fn multi_use_deposit_same_block() {
 					.state == cf_chains::evm::DeploymentStatus::Undeployed
 			);
 		})
-		.then_apply_extrinsics(|(request, _, deposit_address)| {
+		.then_execute_at_next_block(|(request, channel_id, deposit_address)| {
 			let asset = request.source_asset();
-			[(
-				OriginTrait::root(),
-				PalletCall::<Test, _>::process_deposits {
-					deposit_witnesses: vec![
-						DepositWitness {
-							deposit_address: *deposit_address,
-							asset,
-							amount: MinimumDeposit::<Test>::get(asset) + DEPOSIT_AMOUNT,
-							deposit_details: Default::default(),
-						},
-						DepositWitness {
-							deposit_address: *deposit_address,
-							asset,
-							amount: MinimumDeposit::<Test>::get(asset) + DEPOSIT_AMOUNT,
-							deposit_details: Default::default(),
-						},
-					],
-					block_height: Default::default(),
-				},
-				Ok(()),
-			)]
+			IngressEgress::process_deposit_witnesses(
+				vec![
+					DepositWitness {
+						deposit_address,
+						asset,
+						amount: MinimumDeposit::<Test>::get(asset) + DEPOSIT_AMOUNT,
+						deposit_details: Default::default(),
+					},
+					DepositWitness {
+						deposit_address,
+						asset,
+						amount: MinimumDeposit::<Test>::get(asset) + DEPOSIT_AMOUNT,
+						deposit_details: Default::default(),
+					},
+				],
+				Default::default(),
+			)
+			.unwrap();
+			(request, channel_id, deposit_address)
 		})
 		.inspect_storage(|(_, channel_id, deposit_address)| {
 			assert_eq!(
@@ -920,8 +908,7 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 			amount: DEPOSIT_AMOUNT,
 			deposit_details: (),
 		};
-		assert_ok!(IngressEgress::process_deposits(
-			RuntimeOrigin::root(),
+		assert_ok!(IngressEgress::process_deposit_witnesses(
 			vec![deposit_detail.clone()],
 			Default::default(),
 		));
@@ -941,8 +928,7 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 			base_fee: 0,
 			priority_fee: 0,
 		});
-		assert_ok!(IngressEgress::process_deposits(
-			RuntimeOrigin::root(),
+		assert_ok!(IngressEgress::process_deposit_witnesses(
 			vec![deposit_detail],
 			Default::default(),
 		));
@@ -1480,7 +1466,6 @@ fn consolidation_tx_gets_broadcasted_on_finalize() {
 fn handle_prewitness_deposit() {
 	const ASSET: cf_chains::assets::eth::Asset = eth::Asset::Eth;
 	const DEPOSIT_AMOUNT: u128 = 50000;
-	const BLOCK_HEIGHT: u64 = 1;
 
 	new_test_ext().execute_with(|| {
 		let (_id, address, ..) =
@@ -1497,19 +1482,7 @@ fn handle_prewitness_deposit() {
 		let deposit_witnesses = vec![deposit_detail.clone()];
 
 		// Submit the prewitnessed deposit
-		assert_ok!(IngressEgress::prewitness_deposits(
-			RuntimeOrigin::root(),
-			deposit_witnesses.clone(),
-			BLOCK_HEIGHT,
-		));
-
-		// Observe the PrewitnessedDeposit Event
-		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::PrewitnessedDeposit {
-				deposit_witnesses,
-				block_height: BLOCK_HEIGHT,
-			},
-		));
+		assert_ok!(IngressEgress::add_boostable_deposits(deposit_witnesses.clone(),));
 
 		// Check that the deposit is stored in the storage
 		let deposit_id = BoostableDepositIdCounter::<Test>::get();

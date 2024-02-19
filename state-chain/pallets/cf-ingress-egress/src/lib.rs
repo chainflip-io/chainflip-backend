@@ -529,10 +529,6 @@ pub mod pallet {
 		UtxoConsolidation {
 			broadcast_id: BroadcastId,
 		},
-		PrewitnessedDeposit {
-			deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
-			block_height: TargetChainBlockNumber<T, I>,
-		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -742,7 +738,7 @@ pub mod pallet {
 
 		/// Called when funds have been deposited into the given address.
 		///
-		/// Requires `EnsureWitnessed` origin.
+		/// Requires `EnsurePrewitnessed` or `EnsureWitnessed` origin.
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::process_single_deposit().saturating_mul(deposit_witnesses.len() as u64))]
 		pub fn process_deposits(
@@ -750,28 +746,11 @@ pub mod pallet {
 			deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
 			block_height: TargetChainBlockNumber<T, I>,
 		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			for ref deposit_witness @ DepositWitness {
-				ref deposit_address,
-				asset,
-				amount,
-				ref deposit_details,
-			} in deposit_witnesses
-			{
-				Self::process_single_deposit(
-					deposit_address.clone(),
-					asset,
-					amount,
-					deposit_details.clone(),
-					block_height,
-				)
-				.unwrap_or_else(|e| {
-					Self::deposit_event(Event::<T, I>::DepositWitnessRejected {
-						reason: e,
-						deposit_witness: deposit_witness.clone(),
-					});
-				})
+			if T::EnsurePrewitnessed::ensure_origin(origin.clone()).is_ok() {
+				Self::add_boostable_deposits(deposit_witnesses)?;
+			} else {
+				T::EnsureWitnessed::ensure_origin(origin)?;
+				Self::process_deposit_witnesses(deposit_witnesses, block_height)?;
 			}
 			Ok(())
 		}
@@ -867,42 +846,6 @@ pub mod pallet {
 			);
 
 			Self::deposit_event(Event::<T, I>::CcmBroadcastFailed { broadcast_id });
-			Ok(())
-		}
-
-		/// Called when an unfinalised deposit has been seen at the given address.
-		///
-		/// Requires `EnsureWitnessed` origin.
-		#[pallet::call_index(6)]
-		#[pallet::weight(T::WeightInfo::prewitness_deposits(deposit_witnesses.len() as u32))]
-		pub fn prewitness_deposits(
-			origin: OriginFor<T>,
-			deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
-			block_height: TargetChainBlockNumber<T, I>,
-		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			Self::deposit_event(Event::<T, I>::PrewitnessedDeposit {
-				deposit_witnesses: deposit_witnesses.clone(),
-				block_height,
-			});
-
-			for DepositWitness { deposit_address, asset, amount, .. } in deposit_witnesses {
-				let id = BoostableDepositIdCounter::<T, I>::mutate(|id| -> u64 {
-					*id = id.saturating_add(1);
-					*id
-				});
-
-				let deposit_channel_details =
-					DepositChannelLookup::<T, I>::get(deposit_address.clone())
-						.ok_or(Error::<T, I>::InvalidDepositAddress)?;
-
-				BoostableDeposits::<T, I>::insert(
-					deposit_channel_details.deposit_channel.channel_id,
-					id,
-					BoostableDeposit { asset, amount, deposit_address },
-				);
-			}
 			Ok(())
 		}
 	}
@@ -1073,6 +1016,56 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				}),
 			};
 		}
+	}
+
+	fn process_deposit_witnesses(
+		deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
+		block_height: TargetChainBlockNumber<T, I>,
+	) -> DispatchResult {
+		for ref deposit_witness @ DepositWitness {
+			ref deposit_address,
+			asset,
+			amount,
+			ref deposit_details,
+		} in deposit_witnesses
+		{
+			Self::process_single_deposit(
+				deposit_address.clone(),
+				asset,
+				amount,
+				deposit_details.clone(),
+				block_height,
+			)
+			.unwrap_or_else(|e| {
+				Self::deposit_event(Event::<T, I>::DepositWitnessRejected {
+					reason: e,
+					deposit_witness: deposit_witness.clone(),
+				});
+			})
+		}
+		Ok(())
+	}
+
+	fn add_boostable_deposits(
+		deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
+	) -> DispatchResult {
+		for DepositWitness { deposit_address, asset, amount, .. } in deposit_witnesses {
+			let id = BoostableDepositIdCounter::<T, I>::mutate(|id| -> u64 {
+				*id = id.saturating_add(1);
+				*id
+			});
+
+			let deposit_channel_details =
+				DepositChannelLookup::<T, I>::get(deposit_address.clone())
+					.ok_or(Error::<T, I>::InvalidDepositAddress)?;
+
+			BoostableDeposits::<T, I>::insert(
+				deposit_channel_details.deposit_channel.channel_id,
+				id,
+				BoostableDeposit { asset, amount, deposit_address },
+			);
+		}
+		Ok(())
 	}
 
 	/// Completes a single deposit request.

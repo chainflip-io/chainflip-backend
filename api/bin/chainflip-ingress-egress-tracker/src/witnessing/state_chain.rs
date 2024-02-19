@@ -124,45 +124,6 @@ where
 	use state_chain_runtime::RuntimeCall::*;
 
 	match call {
-		EthereumIngressEgress(IngressEgressCall::prewitness_deposits {
-			deposit_witnesses,
-			block_height,
-		}) =>
-			for witness in deposit_witnesses as Vec<DepositWitness<Ethereum>> {
-				store
-					.save_to_array(&WitnessInformation::from((
-						witness,
-						block_height,
-						chainflip_network,
-					)))
-					.await?;
-			},
-		BitcoinIngressEgress(IngressEgressCall::prewitness_deposits {
-			deposit_witnesses,
-			block_height,
-		}) =>
-			for witness in deposit_witnesses as Vec<DepositWitness<Bitcoin>> {
-				store
-					.save_to_array(&WitnessInformation::from((
-						witness,
-						block_height,
-						chainflip_network,
-					)))
-					.await?;
-			},
-		PolkadotIngressEgress(IngressEgressCall::prewitness_deposits {
-			deposit_witnesses,
-			block_height,
-		}) =>
-			for witness in deposit_witnesses as Vec<DepositWitness<Polkadot>> {
-				store
-					.save_to_array(&WitnessInformation::from((
-						witness,
-						block_height,
-						chainflip_network,
-					)))
-					.await?;
-			},
 		EthereumIngressEgress(IngressEgressCall::process_deposits {
 			deposit_witnesses,
 			block_height,
