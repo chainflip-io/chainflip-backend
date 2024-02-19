@@ -17,14 +17,13 @@ pub struct ConsKeyRotator<H, T>(H, T);
 
 impl<H, T> KeyRotator for ConsKeyRotator<H, T>
 where
-    H: KeyRotator,
+	H: KeyRotator,
 	T: KeyRotator<ValidatorId = H::ValidatorId>,
-    H::ValidatorId: core::fmt::Debug
 {
 	type ValidatorId = H::ValidatorId;
 
 	fn keygen(candidates: BTreeSet<Self::ValidatorId>, new_epoch_index: EpochIndex) {
-        H::keygen(candidates.clone(), new_epoch_index);
+		H::keygen(candidates.clone(), new_epoch_index);
 		T::keygen(candidates, new_epoch_index);
 	}
 
@@ -35,12 +34,12 @@ where
 		receiving_participants: BTreeSet<Self::ValidatorId>,
 		epoch_index: EpochIndex,
 	) {
-        H::key_handover(sharing_participants.clone(), receiving_participants.clone(), epoch_index);
+		H::key_handover(sharing_participants.clone(), receiving_participants.clone(), epoch_index);
 		T::key_handover(sharing_participants, receiving_participants, epoch_index);
 	}
 
 	fn reset_key_rotation() {
-        H::reset_key_rotation();
+		H::reset_key_rotation();
 		T::reset_key_rotation();
 	}
 
@@ -50,7 +49,7 @@ where
 	}
 
 	fn status() -> AsyncResult<KeyRotationStatusOuter<Self::ValidatorId>> {
-        use KeyRotationStatusOuter::*;
+		use KeyRotationStatusOuter::*;
 		match (H::status(), T::status()) {
 			(AsyncResult::Void, _) => AsyncResult::Void,
 			(_, AsyncResult::Void) => AsyncResult::Void,
