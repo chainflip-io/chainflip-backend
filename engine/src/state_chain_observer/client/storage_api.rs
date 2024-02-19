@@ -83,7 +83,7 @@ impl<
 	}
 
 	fn _prefix_hash() -> StorageKey {
-		StorageKey(Self::prefix_hash())
+		StorageKey(Self::prefix_hash().to_vec())
 	}
 
 	fn key_from_storage_key(storage_key: &StorageKey) -> Self::Key {

@@ -912,8 +912,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	pub fn attempt_count(broadcast_id: BroadcastId) -> AttemptCount {
-		// NOTE: decode_len is correct here only as long as we *don't* use `append` to insert items.
-		FailedBroadcasters::<T, I>::decode_len(broadcast_id).unwrap_or_default() as u32
+		// NOTE: decode_non_dedup_len is correct here only as long as we *don't* use `append` to
+		// insert items.
+		FailedBroadcasters::<T, I>::decode_non_dedup_len(broadcast_id).unwrap_or_default() as u32
 	}
 }
 

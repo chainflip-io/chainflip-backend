@@ -32,25 +32,17 @@ tree --no-default-features --depth 1 --edges=features,normal
 # The `cf-audit` command is configured to ignore the following advisories:
 # Vulnerabilities:
 # - RUSTSEC-2022-0093: This advisory is related to ed25519-dalek's public api design, which we don't expose.
-# - RUSTSEC-2023-0052: This advisory comes from webpki, a dependency of ethers-rs. CPU denial of service in certificate path building. We don't use this functionality.
 # Unsound:
 # - RUSTSEC-2021-0145: This advisory only affects the windows platform. It's a transitive dependency of `substrate`.
 # Unmaintained:
 # - RUSTSEC-2020-0168: This advisory comes from `mach`, which is unmaintained but not a security issue. It's a dependency of `subxt`.
-# - RUSTSEC-2021-0059: This is a transitive dependency of libp2p and will be fixed in an upcoming release.
-# - RUSTSEC-2021-0060: This is a transitive dependency of libp2p and will be fixed in an upcoming release.
 # - RUSTSEC-2021-0139: This advisory comes from `ansi_term`, which is unmaintained but not a security issue. It's a dependency of `subxt`.
 # - RUSTSEC-2022-0061: This advisory is related to the deprecated `parity-wasm`, not a security issue. It's a dependency of `substrate`.
-# - RUSTSEC-2023-0074: Related to zerocopy, this is a transitive dependency. We can update this when we update substrate.
 cf-audit = '''
 audit -D unmaintained -D unsound
     --ignore RUSTSEC-2022-0093
-    --ignore RUSTSEC-2023-0052
-    --ignore RUSTSEC-2021-0145
-    --ignore RUSTSEC-2020-0168
-    --ignore RUSTSEC-2021-0059
-    --ignore RUSTSEC-2021-0060
     --ignore RUSTSEC-2021-0139
+    --ignore RUSTSEC-2020-0168
     --ignore RUSTSEC-2022-0061
-    --ignore RUSTSEC-2023-0074
+    --ignore RUSTSEC-2021-0145
 '''

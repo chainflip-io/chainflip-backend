@@ -311,7 +311,7 @@ impl RpcServer for RpcServerImpl {
 		for custom_rpc::AssetWithAmount { asset, amount } in cf_asset_balances {
 			lp_asset_balances
 				.entry(asset.into())
-				.or_insert_with(Vec::new)
+				.or_default()
 				.push(AssetBalance { asset: asset.into(), balance: amount.into() });
 		}
 		Ok(lp_asset_balances)

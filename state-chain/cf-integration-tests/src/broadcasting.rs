@@ -101,7 +101,7 @@ fn bitcoin_broadcast_delay_works() {
 
 				assert!(AwaitingBroadcast::<Runtime, BitcoinInstance>::contains_key(broadcast_id));
 				assert_eq!(
-					DelayedBroadcastRetryQueue::<Runtime, BitcoinInstance>::decode_len(
+					DelayedBroadcastRetryQueue::<Runtime, BitcoinInstance>::decode_non_dedup_len(
 						System::block_number()
 					),
 					None
