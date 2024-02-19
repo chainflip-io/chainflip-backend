@@ -235,6 +235,8 @@ impl pallet_cf_swapping::Config for Runtime {
 	type AddressConverter = ChainAddressConverter;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
+	#[cfg(feature = "runtime-benchmarks")]
+	type FeePayment = Flip;
 }
 
 impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
@@ -349,6 +351,8 @@ impl pallet_cf_lp::Config for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type PoolApi = LiquidityPools;
 	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;
+	#[cfg(feature = "runtime-benchmarks")]
+	type FeePayment = Flip;
 }
 
 impl pallet_cf_account_roles::Config for Runtime {
