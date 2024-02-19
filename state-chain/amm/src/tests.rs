@@ -11,7 +11,8 @@ use crate::{
 use super::*;
 
 type LiquidityProvider = cf_primitives::AccountId;
-type PoolState = super::PoolState<LiquidityProvider>;
+type OrderId = u64;
+type PoolState = super::PoolState<LiquidityProvider, OrderId>;
 
 #[test]
 fn test_basic_swaps() {
@@ -64,6 +65,7 @@ fn test_basic_swaps() {
 			let (minted_amounts, minted_liquidity, collected_fees, position_info) =
 				assert_ok!(pool_state.collect_and_mint_range_order(
 					&LiquidityProvider::from([0; 32]),
+					1,
 					-100..100,
 					range_orders::Size::Liquidity { liquidity },
 					Result::<_, Infallible>::Ok
@@ -103,6 +105,7 @@ fn test_basic_swaps() {
 			let (range_order_minted_amounts, minted_liquidity, collected_fees, position_info) =
 				assert_ok!(pool_state.collect_and_mint_range_order(
 					&LiquidityProvider::from([0; 32]),
+					1,
 					-100..100,
 					range_orders::Size::Liquidity { liquidity: range_order_liquidity },
 					Result::<_, Infallible>::Ok
@@ -159,6 +162,7 @@ fn test_basic_swaps() {
 				let (range_order_minted_amounts, minted_liquidity, collected_fees, position_info) =
 					assert_ok!(pool_state.collect_and_mint_range_order(
 						&LiquidityProvider::from([0; 32]),
+						1,
 						lower_tick..upper_tick,
 						range_orders::Size::Liquidity { liquidity },
 						Result::<_, Infallible>::Ok

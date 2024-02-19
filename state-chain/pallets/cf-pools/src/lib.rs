@@ -282,7 +282,7 @@ pub mod pallet {
 		/// A cache of all the limit orders that exist in the pool. This must be kept up to date
 		/// with the underlying pool. These are grouped by the asset the limit order is selling
 		pub limit_orders_cache: AssetsMap<BTreeMap<T::AccountId, BTreeMap<OrderId, Tick>>>,
-		pub pool_state: PoolState<(T::AccountId, OrderId)>,
+		pub pool_state: PoolState<(T::AccountId, OrderId), OrderId>,
 	}
 
 	pub type OrderId = u64;
@@ -669,8 +669,9 @@ pub mod pallet {
 				ensure!(maybe_pool.is_none(), Error::<T>::PoolAlreadyExists);
 
 				*maybe_pool = Some(Pool {
-					range_orders_cache: Default::default(),
+					// range_orders_cache: Default::default(),
 					limit_orders_cache: Default::default(),
+					range_orders_cache: Default::default(),
 					pool_state: PoolState::new(fee_hundredth_pips, initial_price).map_err(|e| {
 						match e {
 							NewError::LimitOrders(limit_orders::NewError::InvalidFeeAmount) =>
@@ -719,13 +720,16 @@ pub mod pallet {
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
-				let tick_range = match (
-					pool.range_orders_cache
-						.get(&lp)
-						.and_then(|range_orders| range_orders.get(&id))
-						.cloned(),
-					option_tick_range,
-				) {
+				let current_tick_range = pool
+					.clone()
+					.pool_state
+					.get_range_order_tick_for_lp(&(lp.clone(), id.clone()), id.clone());
+				// let current_tick_range = pool
+				// 	.range_orders_cache
+				// 	.get(&lp)
+				// 	.and_then(|range_orders| range_orders.get(&id))
+				// 	.cloned();
+				let tick_range = match (current_tick_range, option_tick_range) {
 					(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
 					(None, Some(tick_range)) | (Some(tick_range), None) => Ok(tick_range),
 					(Some(previous_tick_range), Some(new_tick_range)) => {
@@ -800,13 +804,9 @@ pub mod pallet {
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
-				let tick_range = match (
-					pool.range_orders_cache
-						.get(&lp)
-						.and_then(|range_orders| range_orders.get(&id))
-						.cloned(),
-					option_tick_range,
-				) {
+				let current_tick =
+					pool.pool_state.clone().get_range_order_tick_for_lp(&(lp.clone(), id), id);
+				let tick_range = match (current_tick, option_tick_range) {
 					(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
 					(None, Some(tick_range)) => Ok(tick_range),
 					(Some(previous_tick_range), option_new_tick_range) => {
@@ -1009,7 +1009,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(
-				PoolState::<(T::AccountId, OrderId)>::validate_fees(fee_hundredth_pips),
+				PoolState::<(T::AccountId, OrderId), OrderId>::validate_fees(fee_hundredth_pips),
 				Error::<T>::InvalidFeeAmount
 			);
 			let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
@@ -1423,6 +1423,7 @@ impl<T: Config> Pallet<T> {
 				let (assets_debited, minted_liquidity, collected, position_info) =
 					match pool.pool_state.collect_and_mint_range_order(
 						&(lp.clone(), id),
+						id,
 						tick_range.clone(),
 						size,
 						|required_amounts| {
@@ -1474,7 +1475,7 @@ impl<T: Config> Pallet<T> {
 			IncreaseOrDecrease::Decrease(size) => {
 				let (assets_withdrawn, burnt_liquidity, collected, position_info) = match pool
 					.pool_state
-					.collect_and_burn_range_order(&(lp.clone(), id), tick_range.clone(), size)
+					.collect_and_burn_range_order(&(lp.clone(), id), id, tick_range.clone(), size)
 				{
 					Ok(ok) => Ok(ok),
 					Err(error) => Err(match error {
@@ -1901,7 +1902,7 @@ impl<T: Config> Pallet<T> {
 			)
 			.map(|(lp, id, tick_range)| {
 				let (collected, position_info) =
-					pool.pool_state.range_order(&(lp.clone(), id), tick_range.clone()).unwrap();
+					pool.pool_state.range_order(&(lp.clone(), id), id, tick_range.clone()).unwrap();
 				RangeOrder {
 					lp: lp.clone(),
 					id: id.into(),

@@ -628,7 +628,7 @@ where
 							)
 						})
 						.chain(pool.pool_state.range_orders().filter_map(
-							move |((lp, id), range, collected, position_info)| {
+							move |((lp, id), id_2, range, collected, position_info)| {
 								let fees = {
 									let option_previous_order_state = if updated_range_orders
 										.contains(&(lp.clone(), *asset_pair, id))
@@ -637,7 +637,7 @@ where
 									} else {
 										previous_pools.get(asset_pair).and_then(|pool| {
 											pool.pool_state
-												.range_order(&(lp.clone(), id), range.clone())
+												.range_order(&(lp.clone(), id), id, range.clone())
 												.ok()
 										})
 									};

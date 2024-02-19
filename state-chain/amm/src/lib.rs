@@ -3,7 +3,7 @@
 pub mod test_utilities;
 mod tests;
 
-use core::convert::Infallible;
+use core::{convert::Infallible, ops::Range};
 
 use codec::{Decode, Encode};
 use common::{
@@ -23,9 +23,9 @@ pub mod limit_orders;
 pub mod range_orders;
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, serde::Serialize, serde::Deserialize)]
-pub struct PoolState<LiquidityProvider: Ord> {
+pub struct PoolState<LiquidityProvider: Ord, OrderId: Ord + Clone> {
 	limit_orders: limit_orders::PoolState<LiquidityProvider>,
-	range_orders: range_orders::PoolState<LiquidityProvider>,
+	range_orders: range_orders::PoolState<LiquidityProvider, OrderId>,
 }
 
 pub enum NewError {
@@ -33,7 +33,7 @@ pub enum NewError {
 	RangeOrders(range_orders::NewError),
 }
 
-impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
+impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityProvider, OrderId> {
 	pub fn new(
 		fee_hundredth_pips: u32,
 		initial_range_order_price: Price,
@@ -259,6 +259,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn collect_and_mint_range_order<T, E, TryDebit: FnOnce(SideMap<Amount>) -> Result<T, E>>(
 		&mut self,
 		lp: &LiquidityProvider,
+		order_id: OrderId,
 		tick_range: core::ops::Range<Tick>,
 		size: range_orders::Size,
 		try_debit: TryDebit,
@@ -266,13 +267,20 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		(T, range_orders::Liquidity, range_orders::Collected, range_orders::PositionInfo),
 		range_orders::PositionError<range_orders::MintError<E>>,
 	> {
-		self.range_orders
-			.collect_and_mint(lp, tick_range.start, tick_range.end, size, try_debit)
+		self.range_orders.collect_and_mint(
+			lp,
+			order_id,
+			tick_range.start,
+			tick_range.end,
+			size,
+			try_debit,
+		)
 	}
 
 	pub fn collect_and_burn_range_order(
 		&mut self,
 		lp: &LiquidityProvider,
+		order_id: OrderId,
 		tick_range: core::ops::Range<Tick>,
 		size: range_orders::Size,
 	) -> Result<
@@ -284,7 +292,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		),
 		range_orders::PositionError<range_orders::BurnError>,
 	> {
-		self.range_orders.collect_and_burn(lp, tick_range.start, tick_range.end, size)
+		self.range_orders
+			.collect_and_burn(lp, order_id, tick_range.start, tick_range.end, size)
 	}
 
 	pub fn range_order_liquidity_value(
@@ -307,12 +316,13 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn range_order(
 		&self,
 		lp: &LiquidityProvider,
+		order_id: OrderId,
 		tick_range: core::ops::Range<Tick>,
 	) -> Result<
 		(range_orders::Collected, range_orders::PositionInfo),
 		range_orders::PositionError<Infallible>,
 	> {
-		self.range_orders.position(lp, tick_range.start, tick_range.end)
+		self.range_orders.position(lp, order_id, tick_range.start, tick_range.end)
 	}
 
 	pub fn range_orders(
@@ -321,14 +331,15 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	       + Iterator<
 		Item = (
 			LiquidityProvider,
+			OrderId,
 			core::ops::Range<Tick>,
 			range_orders::Collected,
 			range_orders::PositionInfo,
 		),
 	> {
 		self.range_orders.positions().map(
-			|(lp, lower_tick, upper_tick, collected, position_info)| {
-				(lp, lower_tick..upper_tick, collected, position_info)
+			|(lp, order_id, lower_tick, upper_tick, collected, position_info)| {
+				(lp, order_id, lower_tick..upper_tick, collected, position_info)
 			},
 		)
 	}
@@ -454,6 +465,47 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	// Returns if the pool fee is valid.
 	pub fn validate_fees(fee_hundredth_pips: u32) -> bool {
 		limit_orders::PoolState::<LiquidityProvider>::validate_fees(fee_hundredth_pips) &&
-			range_orders::PoolState::<LiquidityProvider>::validate_fees(fee_hundredth_pips)
+			range_orders::PoolState::<LiquidityProvider, OrderId>::validate_fees(
+				fee_hundredth_pips,
+			)
+	}
+
+	pub fn get_range_order_tick_for_lp(
+		self,
+		lp: &LiquidityProvider,
+		id: OrderId,
+	) -> Option<Range<Tick>> {
+		self.range_orders
+			.positions()
+			.find_map(|(lp_, id_, lower_tick, upper_tick, _, _)| {
+				if lp_ == *lp && id == id_ {
+					Some(Range { start: lower_tick, end: upper_tick })
+				} else {
+					None
+				}
+			})
+	}
+
+	pub fn range_orders_for_lp<'a>(
+		&'a self,
+		lp: &'a LiquidityProvider,
+	) -> impl 'a
+	       + Iterator<
+		Item = (
+			OrderId,
+			core::ops::Range<Tick>,
+			range_orders::Collected,
+			range_orders::PositionInfo,
+		),
+	> {
+		self.range_orders.positions().filter_map(
+			move |(lp_, order_id, lower_tick, upper_tick, collected, position_info)| {
+				if lp == &lp_ {
+					Some((order_id, lower_tick..upper_tick, collected, position_info))
+				} else {
+					None
+				}
+			},
+		)
 	}
 }

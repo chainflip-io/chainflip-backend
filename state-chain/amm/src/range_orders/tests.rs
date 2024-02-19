@@ -9,7 +9,8 @@ use crate::{common::Side, test_utilities::rng_u256_inclusive_bound};
 use super::*;
 
 type LiquidityProvider = cf_primitives::AccountId;
-type PoolState = super::PoolState<LiquidityProvider>;
+type OrderId = u64;
+type PoolState = super::PoolState<LiquidityProvider, OrderId>;
 
 #[test]
 fn max_liquidity() {
