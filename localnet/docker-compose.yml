@@ -8,6 +8,14 @@ services:
       - "/tmp/chainflip/data:/localnet-initial-state"
     command: /bin/sh -c "cp -R /initial-state/* /localnet-initial-state"
 
+  init-solana:
+    image: ghcr.io/chainflip-io/solana-localnet-ledger:0.1.0
+    container_name: init-solana
+    platform: linux/amd64
+    volumes:
+      - "/tmp/solana/test-ledger:/test-ledger"
+    command: /bin/sh -c "cp -R /solana/ledger/* /test-ledger"
+
   redis:
     image: redis:6.2.6
     ports:

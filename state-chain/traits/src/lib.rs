@@ -95,6 +95,9 @@ pub trait EpochInfo {
 	/// The current authority set's validator ids
 	fn current_authorities() -> BTreeSet<Self::ValidatorId>;
 
+	/// The authority set for a given epoch
+	fn authorities_at_epoch(epoch: EpochIndex) -> BTreeSet<Self::ValidatorId>;
+
 	/// Get the current number of authorities
 	fn current_authority_count() -> AuthorityCount;
 
@@ -107,7 +110,7 @@ pub trait EpochInfo {
 	/// Authority count at a particular epoch.
 	fn authority_count_at_epoch(epoch: EpochIndex) -> Option<AuthorityCount>;
 
-	/// The bond amount for this epoch. Authorities can only redeem funds above this minumum
+	/// The bond amount for this epoch. Authorities can only redeem funds above this minimum
 	/// balance.
 	fn bond() -> Self::Amount;
 

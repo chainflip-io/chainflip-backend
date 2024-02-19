@@ -129,10 +129,6 @@ impl WeightInfo for MockWeightInfo {
 	fn register_as_broker() -> Weight {
 		Weight::from_parts(100, 0)
 	}
-
-	fn set_maximum_swap_amount() -> Weight {
-		Weight::from_parts(100, 0)
-	}
 }
 
 impl pallet_cf_swapping::Config for Test {

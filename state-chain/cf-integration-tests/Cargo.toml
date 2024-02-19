@@ -28,6 +28,7 @@ cf-amm = { path = '../amm' }
 cf-chains = { path = '../chains', features = ['runtime-integration-tests'] }
 cf-primitives = { path = '../primitives' }
 cf-test-utilities = { path = '../test-utilities' }
+cf-utilities = { package = 'utilities', path = '../../utilities' }
 cf-traits = { path = '../traits' }
 cfe-events = { path = '../cfe-events' }
 chainflip-node = { path = '../node' }

@@ -232,7 +232,7 @@ where
 					EvmFetchId::NotRequired => (),
 				};
 			} else {
-				return Err(AllBatchError::Other)
+				return Err(AllBatchError::UnsupportedToken)
 			}
 		}
 		if fetch_only_params.is_empty() &&
@@ -255,7 +255,7 @@ where
 									amount,
 									asset: address,
 								})
-								.ok_or(AllBatchError::Other)
+								.ok_or(AllBatchError::UnsupportedToken)
 						})
 						.collect::<Result<Vec<_>, _>>()?,
 				),

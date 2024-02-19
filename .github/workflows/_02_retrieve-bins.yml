@@ -51,7 +51,7 @@ jobs:
           ./ci/scripts/check_binary_version.sh ./chainflip-cli ${{ github.ref_name }}
 
       - name: Re-upload binary artifacts
-        uses: actions/upload-artifact@c7d193f32edcb7bfad88892161225aeda64e9392
+        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
         with:
           name: chainflip-backend-bin-ubuntu-${{ matrix.ubuntu_version }}
           path: |
@@ -64,7 +64,7 @@ jobs:
             generate-genesis-keys
 
       - name: Re-upload runtime artifacts
-        uses: actions/upload-artifact@c7d193f32edcb7bfad88892161225aeda64e9392
+        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
         with:
           name: chainflip-node-runtime-production
           path: |

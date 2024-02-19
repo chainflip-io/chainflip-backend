@@ -34,7 +34,7 @@
 //! task_scope system has no method to force spawn_blocking tasks to end/cancel, so they must handle
 //! exiting themselves. For example:
 //!
-//! ```rust
+//! ```rust(ignore)
 //! {
 //!     let (sender, receiver) = std::sync::mpsc::channel(10);
 //!
@@ -68,7 +68,7 @@
 //! If you don't do the above when an error occurs the scope will not ever exit, and will wait for
 //! the spawn_blocking to exit forever i.e. if the spawn_blocking was like this instead:
 //!
-//! ```rust
+//! ```rust(ignore)
 //! {
 //!     scope.spawn_blocking(|| {
 //!         loop {
@@ -309,15 +309,22 @@ pub struct Scope<'env, Error: Debug + Send + 'static> {
 	/// Without invariance, this would compile fine but be unsound:
 	///
 	/// ```compile_fail,E0373
+	/// use utilities::task_scope::task_scope;
+	/// use futures::FutureExt;
+	///
 	/// let mut a = 1;
-	/// task_scope(|scope| {
+	/// task_scope::<(), (), _>(|scope| async move {
 	///     scope.spawn(async {
 	///         a += 1;
+	///             Ok(())
 	///     });
 	///     scope.spawn(async {
 	///         a += 1; // might run concurrently to other spawn
+	///             Ok(())
 	///     });
-	/// });
+	///
+	///             Ok(())
+	/// }.boxed());
 	/// ```
 	_phantom: std::marker::PhantomData<&'env mut &'env ()>,
 }

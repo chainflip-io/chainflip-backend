@@ -1,7 +1,12 @@
 //! Contains tests related to liquidity, pools and swapping
+use std::vec;
+
 use crate::{
 	genesis,
-	network::{fund_authorities_and_join_auction, setup_account_and_peer_mapping, Cli, Network},
+	network::{
+		fund_authorities_and_join_auction, new_account, register_refund_addresses,
+		setup_account_and_peer_mapping, Cli, Network,
+	},
 	witness_call,
 };
 use cf_amm::{
@@ -18,14 +23,15 @@ use cf_chains::{
 	TransactionBuilder, TransferAssetParams,
 };
 use cf_primitives::{
-	AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, GENESIS_EPOCH, STABLE_ASSET,
+	AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, FLIPPERINOS_PER_FLIP,
+	GENESIS_EPOCH, STABLE_ASSET,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match};
-use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo, LpBalanceApi};
+use cf_traits::{Chainflip, EpochInfo, LpBalanceApi};
 use frame_support::{
 	assert_ok,
 	instances::Instance1,
-	traits::{OnFinalize, OnIdle, OnNewAccount},
+	traits::{OnFinalize, OnIdle},
 };
 use pallet_cf_broadcast::{
 	AwaitingBroadcast, BroadcastIdCounter, RequestFailureCallbacks, RequestSuccessCallbacks,
@@ -40,9 +46,9 @@ use state_chain_runtime::{
 		address_derivation::AddressDerivation, ChainAddressConverter, EthEnvironment,
 		EthTransactionBuilder,
 	},
-	AccountRoles, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
-	EthereumInstance, LiquidityPools, LiquidityProvider, Runtime, RuntimeCall, RuntimeEvent,
-	RuntimeOrigin, Swapping, System, Timestamp, Validator, Weight, Witnesser,
+	EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress, EthereumInstance,
+	LiquidityPools, LiquidityProvider, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping,
+	System, Timestamp, Validator, Weight, Witnesser,
 };
 
 const DORIS: AccountId = AccountId::new([0x11; 32]);
@@ -66,32 +72,6 @@ fn new_pool(unstable_asset: Asset, fee_hundredth_pips: u32, initial_price: Price
 		},)
 	);
 	System::reset_events();
-}
-
-fn new_account(account_id: &AccountId, role: AccountRole) {
-	AccountRoles::on_new_account(account_id);
-	assert_ok!(AccountRoles::register_account_role(account_id, role));
-	assert_events_eq!(
-		Runtime,
-		RuntimeEvent::AccountRoles(pallet_cf_account_roles::Event::AccountRoleRegistered {
-			account_id: account_id.clone(),
-			role,
-		})
-	);
-	System::reset_events();
-}
-
-fn register_refund_addressses(account_id: &AccountId) {
-	for encoded_address in [
-		EncodedAddress::Eth(Default::default()),
-		EncodedAddress::Dot(Default::default()),
-		EncodedAddress::Btc("bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw".as_bytes().to_vec()),
-	] {
-		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
-			RuntimeOrigin::signed(account_id.clone()),
-			encoded_address
-		));
-	}
 }
 
 fn credit_account(account_id: &AccountId, asset: Asset, amount: AssetAmount) {
@@ -203,8 +183,6 @@ fn set_limit_order(
 
 fn setup_pool_and_accounts(assets: Vec<Asset>) {
 	new_account(&DORIS, AccountRole::LiquidityProvider);
-	register_refund_addressses(&DORIS);
-
 	new_account(&ZION, AccountRole::Broker);
 
 	for asset in assets {
@@ -225,12 +203,17 @@ fn get_asset_balance(who: &AccountId, asset: Asset) -> u128 {
 
 #[test]
 fn basic_pool_setup_provision_and_swap() {
-	super::genesis::default().build().execute_with(|| {
+	super::genesis::with_test_defaults()
+	.with_additional_accounts(&[
+		(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
+		(ZION, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+	])
+	.build()
+	.execute_with(|| {
 		new_pool(Asset::Eth, 0u32, price_at_tick(0).unwrap());
 		new_pool(Asset::Flip, 0u32, price_at_tick(0).unwrap());
+		register_refund_addresses(&DORIS);
 
-		new_account(&DORIS, AccountRole::LiquidityProvider);
-		register_refund_addressses(&DORIS);
 		credit_account(&DORIS, Asset::Eth, 1_000_000);
 		credit_account(&DORIS, Asset::Flip, 1_000_000);
 		credit_account(&DORIS, Asset::Usdc, 1_000_000);
@@ -240,8 +223,6 @@ fn basic_pool_setup_provision_and_swap() {
 
 		set_limit_order(&DORIS, Asset::Flip, Asset::Usdc, 0, Some(0), 500_000);
 		set_range_order(&DORIS, Asset::Flip, Asset::Usdc, 0, Some(-10..10), 1_000_000);
-
-		new_account(&ZION, AccountRole::Broker);
 
 		let usdc_balance_before = get_asset_balance(&DORIS, Asset::Usdc);
 
@@ -336,7 +317,7 @@ fn basic_pool_setup_provision_and_swap() {
 
 #[test]
 fn can_process_ccm_via_swap_deposit_address() {
-	super::genesis::default().build().execute_with(|| {
+	super::genesis::with_test_defaults().build().execute_with(|| {
 		// Setup pool and liquidity
 		setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip]);
 
@@ -444,7 +425,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 
 #[test]
 fn can_process_ccm_via_direct_deposit() {
-	super::genesis::default().build().execute_with(|| {
+	super::genesis::with_test_defaults().build().execute_with(|| {
 		setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip]);
 
 		let gas_budget = 100;
@@ -536,7 +517,7 @@ fn can_process_ccm_via_direct_deposit() {
 
 #[test]
 fn failed_swaps_are_rolled_back() {
-	super::genesis::default().build().execute_with(|| {
+	super::genesis::with_test_defaults().build().execute_with(|| {
 		setup_pool_and_accounts(vec![Asset::Eth, Asset::Btc]);
 
 		// Get current pool's liquidity
@@ -695,7 +676,7 @@ fn failed_swaps_are_rolled_back() {
 
 #[test]
 fn ethereum_ccm_can_calculate_gas_limits() {
-	super::genesis::default().build().execute_with(|| {
+	super::genesis::with_test_defaults().build().execute_with(|| {
 		let chain_state = ChainState::<Ethereum> {
 			block_height: 1,
 			tracked_data: EthereumTrackedData {
@@ -764,7 +745,7 @@ fn ethereum_ccm_can_calculate_gas_limits() {
 fn can_resign_failed_ccm() {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
@@ -893,7 +874,7 @@ fn can_resign_failed_ccm() {
 fn can_handle_failed_vault_transfer() {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()

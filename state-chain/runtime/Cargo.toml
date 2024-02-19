@@ -1,6 +1,6 @@
 [package]
 name = 'state-chain-runtime'
-version = '1.2.0'
+version = '1.3.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
 edition = '2021'
 homepage = 'https://chainflip.io'
@@ -29,6 +29,7 @@ cf-chains = { path = '../chains', default-features = false }
 cf-primitives = { path = '../primitives', default-features = false }
 cf-session-benchmarking = { path = '../cf-session-benchmarking', optional = true, default-features = false }
 cf-runtime-utilities = { path = '../runtime-utilities', default-features = false }
+cf-runtime-upgrade-utilities = { path = '../runtime-upgrade-utilities', default-features = false }
 cf-traits = { path = '../traits', default-features = false }
 cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
 
@@ -141,6 +142,7 @@ std = [
   'cf-chains/std',
   'cf-primitives/std',
   'cf-runtime-utilities/std',
+  'cf-runtime-upgrade-utilities/std',
   'cf-traits/std',
   'cf-utilities/std',
   'codec/std',
@@ -199,6 +201,7 @@ std = [
   'dep:cf-test-utilities',
 ]
 try-runtime = [
+  'cf-runtime-upgrade-utilities/try-runtime',
   'frame-executive/try-runtime',
   'frame-try-runtime/try-runtime',
   'frame-system/try-runtime',

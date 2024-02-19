@@ -21,6 +21,7 @@ use cf_traits::{
 		asset_converter::MockAssetConverter,
 		broadcaster::MockBroadcaster,
 		ccm_handler::MockCcmHandler,
+		fee_payment::MockFeePayment,
 		lp_balance::MockBalance,
 		swap_deposit_handler::MockSwapDepositHandler,
 	},
@@ -122,6 +123,7 @@ impl crate::Config for Test {
 	type WeightInfo = ();
 	type NetworkEnvironment = MockNetworkEnvironmentProvider;
 	type AssetConverter = MockAssetConverter;
+	type FeePayment = MockFeePayment<Self>;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

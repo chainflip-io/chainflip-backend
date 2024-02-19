@@ -20,28 +20,6 @@ mod benchmarks {
 	use sp_std::vec;
 
 	#[benchmark]
-	fn vault_key_rotated() {
-		let new_public_key = AggKeyFor::<T, I>::benchmark_value();
-		PendingVaultActivation::<T, I>::put(VaultActivationStatus::<T, I>::AwaitingActivation {
-			new_public_key,
-		});
-		let call = Call::<T, I>::vault_key_rotated {
-			block_number: 5u32.into(),
-			tx_id: Decode::decode(&mut &TX_HASH[..]).unwrap(),
-		};
-		let origin = T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap();
-
-		#[block]
-		{
-			assert_ok!(call.dispatch_bypass_filter(origin));
-		}
-
-		assert!(VaultStartBlockNumbers::<T, I>::contains_key(
-			T::EpochInfo::epoch_index().saturating_add(1)
-		));
-	}
-
-	#[benchmark]
 	fn vault_key_rotated_externally() {
 		let origin = T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap();
 		let call = Call::<T, I>::vault_key_rotated_externally {
@@ -65,9 +43,6 @@ mod benchmarks {
 
 	#[test]
 	fn benchmark_works() {
-		new_test_ext().execute_with(|| {
-			_vault_key_rotated::<Test, ()>(true);
-		});
 		new_test_ext().execute_with(|| {
 			_vault_key_rotated_externally::<Test, ()>(true);
 		});

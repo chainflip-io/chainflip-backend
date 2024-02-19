@@ -20,13 +20,25 @@ use cf_traits::{
 	},
 	CcmHandler, SetSafeMode, SwapDepositHandler, SwappingApi,
 };
-use frame_support::{assert_err, assert_noop, assert_ok, traits::Hooks};
+use frame_support::{
+	assert_err, assert_noop, assert_ok,
+	traits::{Hooks, OriginTrait},
+};
 use itertools::Itertools;
 use sp_arithmetic::Permill;
 use sp_core::H160;
 use sp_std::iter;
 
 const GAS_BUDGET: AssetAmount = 1_000u128;
+
+fn set_maximum_swap_amount(asset: Asset, amount: Option<AssetAmount>) {
+	assert_ok!(Swapping::update_pallet_config(
+		OriginTrait::root(),
+		vec![PalletConfigUpdate::MaximumSwapAmount { asset, amount }]
+			.try_into()
+			.unwrap()
+	));
+}
 
 // Returns some test data
 fn generate_test_swaps() -> Vec<Swap> {
@@ -1443,7 +1455,7 @@ fn can_set_maximum_swap_amount() {
 		assert!(MaximumSwapAmount::<Test>::get(asset).is_none());
 
 		// Set the new maximum swap_amount
-		assert_ok!(Swapping::set_maximum_swap_amount(RuntimeOrigin::root(), asset, amount));
+		set_maximum_swap_amount(asset, amount);
 
 		assert_eq!(MaximumSwapAmount::<Test>::get(asset), amount);
 		assert_eq!(Swapping::maximum_swap_amount(asset), amount);
@@ -1454,7 +1466,7 @@ fn can_set_maximum_swap_amount() {
 		}));
 
 		// Can remove maximum swap amount
-		assert_ok!(Swapping::set_maximum_swap_amount(RuntimeOrigin::root(), asset, None));
+		set_maximum_swap_amount(asset, None);
 		assert!(MaximumSwapAmount::<Test>::get(asset).is_none());
 		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::MaximumSwapAmountSet {
 			asset,
@@ -1474,7 +1486,7 @@ fn swap_excess_are_confiscated_ccm_via_deposit() {
 		let request_ccm = generate_ccm_channel();
 		let ccm = generate_ccm_deposit();
 
-		assert_ok!(Swapping::set_maximum_swap_amount(RuntimeOrigin::root(), from, Some(max_swap)));
+		set_maximum_swap_amount(from, Some(max_swap));
 
 		// Register CCM via Swap deposit
 		assert_ok!(Swapping::request_swap_deposit_address(
@@ -1553,7 +1565,7 @@ fn swap_excess_are_confiscated_ccm_via_extrinsic() {
 		let to: Asset = Asset::Flip;
 		let ccm = generate_ccm_deposit();
 
-		assert_ok!(Swapping::set_maximum_swap_amount(RuntimeOrigin::root(), from, Some(max_swap)));
+		set_maximum_swap_amount(from, Some(max_swap));
 
 		// Register CCM via Swap deposit
 		assert_ok!(Swapping::ccm_deposit(
@@ -1621,7 +1633,7 @@ fn swap_excess_are_confiscated_for_swap_via_extrinsic() {
 		let from: Asset = Asset::Usdc;
 		let to: Asset = Asset::Flip;
 
-		assert_ok!(Swapping::set_maximum_swap_amount(RuntimeOrigin::root(), from, Some(max_swap)));
+		set_maximum_swap_amount(from, Some(max_swap));
 
 		assert_ok!(Swapping::schedule_swap_from_contract(
 			RuntimeOrigin::signed(ALICE),
@@ -1666,7 +1678,7 @@ fn swap_excess_are_confiscated_for_swap_via_deposit() {
 		let from: Asset = Asset::Usdc;
 		let to: Asset = Asset::Flip;
 
-		assert_ok!(Swapping::set_maximum_swap_amount(RuntimeOrigin::root(), from, Some(max_swap)));
+		set_maximum_swap_amount(from, Some(max_swap));
 
 		Swapping::schedule_swap_from_channel(
 			ForeignChainAddress::Eth(Default::default()),
@@ -1715,7 +1727,7 @@ fn max_swap_amount_can_be_removed() {
 		let to: Asset = Asset::Flip;
 
 		// Initial max swap amount is set.
-		assert_ok!(Swapping::set_maximum_swap_amount(RuntimeOrigin::root(), from, Some(max_swap)));
+		set_maximum_swap_amount(from, Some(max_swap));
 		assert_ok!(Swapping::schedule_swap_from_contract(
 			RuntimeOrigin::signed(ALICE),
 			from,
@@ -1732,7 +1744,7 @@ fn max_swap_amount_can_be_removed() {
 		System::reset_events();
 
 		// Max is removed.
-		assert_ok!(Swapping::set_maximum_swap_amount(RuntimeOrigin::root(), from, None));
+		set_maximum_swap_amount(from, None);
 
 		assert_ok!(Swapping::schedule_swap_from_contract(
 			RuntimeOrigin::signed(ALICE),
@@ -1785,7 +1797,7 @@ fn can_swap_below_max_amount() {
 		let to: Asset = Asset::Flip;
 
 		// Initial max swap amount is set.
-		assert_ok!(Swapping::set_maximum_swap_amount(RuntimeOrigin::root(), from, Some(max_swap)));
+		set_maximum_swap_amount(from, Some(max_swap));
 		assert_ok!(Swapping::schedule_swap_from_contract(
 			RuntimeOrigin::signed(ALICE),
 			from,
@@ -1823,7 +1835,7 @@ fn can_swap_ccm_below_max_amount() {
 		let to: Asset = Asset::Flip;
 		let ccm = generate_ccm_deposit();
 
-		assert_ok!(Swapping::set_maximum_swap_amount(RuntimeOrigin::root(), from, Some(max_swap)));
+		set_maximum_swap_amount(from, Some(max_swap));
 
 		// Register CCM via Swap deposit
 		assert_ok!(Swapping::ccm_deposit(
@@ -1894,10 +1906,10 @@ fn swap_broker_fee_calculated_correctly() {
 		const AMOUNT: AssetAmount = 100000;
 
 		// calculate broker fees for each asset available
-		Asset::all().iter().for_each(|asset| {
+		Asset::all().for_each(|asset| {
 			let total_fees: u128 =
 				fees.iter().fold(0, |total_fees: u128, fee_bps: &BasisPoints| {
-					swap_with_custom_broker_fee(*asset, Asset::Usdc, AMOUNT, *fee_bps);
+					swap_with_custom_broker_fee(asset, Asset::Usdc, AMOUNT, *fee_bps);
 					total_fees +
 						Permill::from_parts(*fee_bps as u32 * BASIS_POINTS_PER_MILLION) * AMOUNT
 				});
@@ -1949,17 +1961,17 @@ fn swap_broker_fee_subtracted_from_swap_amount() {
 		let execute_at = System::block_number() + SWAP_DELAY_BLOCKS as u64;
 
 		let mut swap_id = 1;
-		Asset::all().iter().for_each(|asset| {
+		Asset::all().for_each(|asset| {
 			let mut total_fees = 0;
 			combinations.clone().for_each(|(amount, broker_fee)| {
-				swap_with_custom_broker_fee(*asset, Asset::Flip, *amount, broker_fee);
+				swap_with_custom_broker_fee(asset, Asset::Flip, *amount, broker_fee);
 				let broker_commission =
 					Permill::from_parts(broker_fee as u32 * BASIS_POINTS_PER_MILLION) * *amount;
 				total_fees += broker_commission;
-				assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, *asset), total_fees);
+				assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, asset), total_fees);
 				assert_swap_scheduled_event_emitted(
 					swap_id,
-					*asset,
+					asset,
 					*amount,
 					Asset::Flip,
 					broker_commission,
@@ -2186,5 +2198,24 @@ fn test_get_scheduled_swap_legs() {
 				},
 			]
 		);
+	});
+}
+
+#[test]
+fn can_update_multiple_items_at_once() {
+	new_test_ext().execute_with(|| {
+		assert!(MaximumSwapAmount::<Test>::get(Asset::Btc).is_none());
+		assert!(MaximumSwapAmount::<Test>::get(Asset::Dot).is_none());
+		assert_ok!(Swapping::update_pallet_config(
+			OriginTrait::root(),
+			vec![
+				PalletConfigUpdate::MaximumSwapAmount { asset: Asset::Btc, amount: Some(100) },
+				PalletConfigUpdate::MaximumSwapAmount { asset: Asset::Dot, amount: Some(200) },
+			]
+			.try_into()
+			.unwrap()
+		));
+		assert_eq!(MaximumSwapAmount::<Test>::get(Asset::Btc), Some(100));
+		assert_eq!(MaximumSwapAmount::<Test>::get(Asset::Dot), Some(200));
 	});
 }

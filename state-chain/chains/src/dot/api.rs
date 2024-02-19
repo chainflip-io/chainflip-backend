@@ -66,7 +66,7 @@ where
 			E::replay_protection(false),
 			fetch_params,
 			transfer_params,
-			E::try_vault_account().ok_or(AllBatchError::Other)?,
+			E::try_vault_account().ok_or(AllBatchError::VaultAccountNotSet)?,
 		)))
 	}
 }
