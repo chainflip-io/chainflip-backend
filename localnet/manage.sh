@@ -141,20 +141,26 @@ build-localnet() {
 
   INIT_RPC_PORT=9944
 
-  P2P_PORT=30333
-  RPC_PORT=$INIT_RPC_PORT
-  for NODE in "${SELECTED_NODES[@]}"; do
-    echo "🚧 Starting chainflip-node of $NODE ..."
-    DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2} ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARY_ROOT_PATH $NODE $P2P_PORT $RPC_PORT $NODE_COUNT
-    ((P2P_PORT++))
-    ((RPC_PORT++))
-  done
+  # This is unset on `destroy()`
+  export DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2}
+
+  KEYS_DIR=./$LOCALNET_INIT_DIR/keys
+
+  BINARY_ROOT_PATH=$BINARY_ROOT_PATH \
+  SELECTED_NODES=${SELECTED_NODES[@]} \
+  NODE_COUNT=$NODE_COUNT \
+  INIT_RPC_PORT=$INIT_RPC_PORT \
+  LOCALNET_INIT_DIR=$LOCALNET_INIT_DIR \
+  KEYS_DIR=$KEYS_DIR \
+  ./$LOCALNET_INIT_DIR/scripts/start-all-nodes.sh
+
+  echo "🚧 Checking health ..."
 
   RPC_PORT=$INIT_RPC_PORT
-  for NODE in "${SELECTED_NODES[@]}"; do
-    check_endpoint_health -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' "http://localhost:$RPC_PORT" >>$DEBUG_OUTPUT_DESTINATION
-    echo "💚 $NODE's chainflip-node is running!"
-    ((RPC_PORT++))
+  for NODE in $SELECTED_NODES; do
+      check_endpoint_health -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' "http://localhost:$RPC_PORT" >>$DEBUG_OUTPUT_DESTINATION
+      echo "💚 $NODE's chainflip-node is running!"
+      ((RPC_PORT++))
   done
 
   NODE_COUNT=$NODE_COUNT \
@@ -179,8 +185,6 @@ build-localnet() {
 
   wait
 
-  KEYS_DIR=./$LOCALNET_INIT_DIR/keys
-
   echo "🕺 Starting Broker API ..."
   KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-broker-api.sh $BINARY_ROOT_PATH
 
@@ -202,6 +206,9 @@ destroy() {
   for pid in $(ps -ef | grep solana | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
   rm -rf /tmp/chainflip
   rm -rf /tmp/solana/
+
+  unset DOT_GENESIS_HASH
+
   echo "done"
 }
 
