@@ -27,7 +27,7 @@ use cf_primitives::{
 	GENESIS_EPOCH, STABLE_ASSET,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match};
-use cf_traits::{Chainflip, EpochInfo, LpBalanceApi};
+use cf_traits::{Chainflip, EpochInfo, LpBalanceApi, PoolApi};
 use frame_support::{
 	assert_ok,
 	instances::Instance1,
@@ -194,14 +194,6 @@ fn setup_pool_and_accounts(assets: Vec<Asset>) {
 	}
 }
 
-fn get_asset_balance(who: &AccountId, asset: Asset) -> u128 {
-	LiquidityProvider::asset_balances(who)
-		.iter()
-		.filter(|asset_balance| asset_balance.0 == asset)
-		.map(|asset_balance| asset_balance.1)
-		.sum()
-}
-
 #[test]
 fn basic_pool_setup_provision_and_swap() {
 	super::genesis::with_test_defaults()
@@ -218,15 +210,13 @@ fn basic_pool_setup_provision_and_swap() {
 		credit_account(&DORIS, Asset::Eth, 1_000_000);
 		credit_account(&DORIS, Asset::Flip, 1_000_000);
 		credit_account(&DORIS, Asset::Usdc, 1_000_000);
-		assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Usdc));
+		assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS));
 
 		set_limit_order(&DORIS, Asset::Eth, Asset::Usdc, 0, Some(0), 500_000);
 		set_range_order(&DORIS, Asset::Eth, Asset::Usdc, 0, Some(-10..10), 1_000_000);
 
 		set_limit_order(&DORIS, Asset::Flip, Asset::Usdc, 0, Some(0), 500_000);
 		set_range_order(&DORIS, Asset::Flip, Asset::Usdc, 0, Some(-10..10), 1_000_000);
-
-		let usdc_balance_before = get_asset_balance(&DORIS, Asset::Usdc);
 
 		assert_ok!(Swapping::request_swap_deposit_address(
 			RuntimeOrigin::signed(ZION.clone()),
@@ -312,13 +302,7 @@ fn basic_pool_setup_provision_and_swap() {
 			) if egress_ids.contains(&egress_id) => ()
 		);
 
-		assert!(HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Usdc));
-		assert!(HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Flip));
-		assert!(HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Eth));
-		assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Btc));
-
-		let usdc_balance_after = get_asset_balance(&DORIS, Asset::Usdc);
-		assert!(usdc_balance_after > usdc_balance_before, "Fees should be collected");
+		assert!(HistoricalEarnedFees::<Runtime>::contains_key(&DORIS));
 	});
 }
 

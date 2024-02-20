@@ -1294,22 +1294,12 @@ impl_runtime_apis! {
 
 			LiquidityPools::sweep(&account_id).unwrap();
 
-			let mut earned_fees: BTreeMap<_, _> =  BTreeMap::new();
-
-			for asset in Asset::all() {
-				let earned_fees_for_asset = pallet_cf_lp::HistoricalEarnedFees::<Runtime>::get(&account_id, asset);
-				earned_fees
-				  .entry(asset.into())
-				  .and_modify(|assets: &mut Vec<_>| assets.push((asset, earned_fees_for_asset)))
-				  .or_insert(vec![(asset, earned_fees_for_asset)]);
-			}
-
 			Some(LiquidityProviderInfo {
 				refund_addresses,
 				balances: Asset::all().map(|asset|
 					(asset, pallet_cf_lp::FreeBalances::<Runtime>::get(&account_id, asset).unwrap_or(0))
 				).collect(),
-				earned_fees,
+				earned_fees: pallet_cf_lp::HistoricalEarnedFees::<Runtime>::get(&account_id),
 			})
 		}
 
