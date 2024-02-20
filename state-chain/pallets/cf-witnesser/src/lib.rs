@@ -491,20 +491,20 @@ pub mod pallet {
 		/// Simply emits an event to notify that this call has been witnessed. Implicitly signals
 		/// that we expect the same call to be witnessed at a later block.
 		#[pallet::call_index(2)]
-		#[pallet::weight(call.get_dispatch_info().weight)]
+		#[pallet::weight(call.get_dispatch_info().weight)] // TODO JAMIE: is this weight correct?
 		pub fn prewitness(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			Self::deposit_event(Event::<T>::Prewitnessed { call: *call.clone() });
+			Self::deposit_event(Event::<T>::Prewitnessed { call: *call });
 			Ok(())
 		}
 
 		/// Emits an event to notify that this call has been witnessed. Then, it dispatches the call
 		/// using the prewitness threshold origin.
 		#[pallet::call_index(3)]
-		#[pallet::weight(call.get_dispatch_info().weight)] // TODO JAMIE: weight
+		#[pallet::weight(call.get_dispatch_info().weight)]
 		pub fn prewitness_and_execute(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::RuntimeCall>,

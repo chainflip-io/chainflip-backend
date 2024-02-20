@@ -26,7 +26,7 @@ use cf_traits::{
 	},
 	DepositApi, DepositHandler, NetworkEnvironmentProvider,
 };
-use frame_support::traits::{OriginTrait, UnfilteredDispatchable};
+use frame_support::traits::UnfilteredDispatchable;
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup, Zero};
@@ -164,24 +164,24 @@ impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
 		let (requests, amounts): (Vec<_>, Vec<_>) = requests.iter().cloned().unzip();
 
 		self.request_deposit_addresses(&requests[..])
-			.then_apply_extrinsics(move |channels| {
+			.then_execute_at_next_block(move |channels| {
 				channels
-					.iter()
+					.into_iter()
 					.zip(amounts)
-					.filter_map(|((request, _channel_id, deposit_address), amount)| {
-						(!amount.is_zero()).then_some((
-							OriginTrait::none(),
-							RuntimeCall::from(pallet_cf_ingress_egress::Call::process_deposits {
-								deposit_witnesses: vec![DepositWitness {
-									deposit_address: *deposit_address,
+					.map(|((request, channel_id, deposit_address), amount)| {
+						if !amount.is_zero() {
+							IngressEgress::process_deposit_witnesses(
+								vec![DepositWitness {
+									deposit_address,
 									asset: request.source_asset(),
 									amount,
 									deposit_details: Default::default(),
 								}],
-								block_height: Default::default(),
-							}),
-							Ok(()),
-						))
+								Default::default(),
+							)
+							.unwrap();
+						}
+						(request, channel_id, deposit_address)
 					})
 					.collect::<Vec<_>>()
 			})

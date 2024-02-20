@@ -39,7 +39,6 @@ pub trait WeightInfo {
 	fn vault_transfer_failed() -> Weight;
 	fn ccm_broadcast_failed() -> Weight;
 	fn remove_boostable_deposits(n: u32, ) -> Weight;
-	fn prewitness_deposits(n: u32, ) -> Weight;
 }
 
 /// Weights for pallet_cf_ingress_egress using the Substrate node and recommended hardware.
@@ -180,25 +179,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(n.into())))
 			.saturating_add(Weight::from_parts(0, 2527).saturating_mul(n.into()))
 	}
-	/// Storage: `EthereumIngressEgress::BoostableDepositIdCounter` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::BoostableDepositIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::DepositChannelLookup` (r:1 w:0)
-	/// Proof: `EthereumIngressEgress::DepositChannelLookup` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::BoostableDeposits` (r:0 w:254)
-	/// Proof: `EthereumIngressEgress::BoostableDeposits` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// The range of component `n` is `[1, 255]`.
-	fn prewitness_deposits(n: u32, ) -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `234`
-		//  Estimated: `3699`
-		// Minimum execution time: 17_000_000 picoseconds.
-		Weight::from_parts(8_684_911, 3699)
-			// Standard Error: 6_803
-			.saturating_add(Weight::from_parts(5_369_647, 0).saturating_mul(n.into()))
-			.saturating_add(T::DbWeight::get().reads(2_u64))
-			.saturating_add(T::DbWeight::get().writes(1_u64))
-			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(n.into())))
-	}
 }
 
 // For backwards compatibility and tests
@@ -337,24 +317,5 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads((1_u64).saturating_mul(n.into())))
 			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(n.into())))
 			.saturating_add(Weight::from_parts(0, 2527).saturating_mul(n.into()))
-	}
-	/// Storage: `EthereumIngressEgress::BoostableDepositIdCounter` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::BoostableDepositIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::DepositChannelLookup` (r:1 w:0)
-	/// Proof: `EthereumIngressEgress::DepositChannelLookup` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::BoostableDeposits` (r:0 w:254)
-	/// Proof: `EthereumIngressEgress::BoostableDeposits` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// The range of component `n` is `[1, 255]`.
-	fn prewitness_deposits(n: u32, ) -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `234`
-		//  Estimated: `3699`
-		// Minimum execution time: 17_000_000 picoseconds.
-		Weight::from_parts(8_684_911, 3699)
-			// Standard Error: 6_803
-			.saturating_add(Weight::from_parts(5_369_647, 0).saturating_mul(n.into()))
-			.saturating_add(RocksDbWeight::get().reads(2_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
-			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(n.into())))
 	}
 }

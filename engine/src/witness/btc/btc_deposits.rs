@@ -75,7 +75,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					)
 					.await;
 				}
-
 				txs
 			}
 		})
