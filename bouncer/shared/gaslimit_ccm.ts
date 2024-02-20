@@ -346,21 +346,6 @@ export async function testGasLimitCcmSwaps() {
     await sleep(500);
   }
 
-  // The default gas budgets should allow for almost any reasonable gas consumption
-  // const gasLimitSwapsDefault: Promise<void>[] = [];
-  // Object.values(Assets).forEach((sourceAsset) =>
-  //   Object.values(Assets)
-  //     .filter((destAsset) => sourceAsset !== destAsset)
-  //     .forEach((destAsset) => {
-  //       const destChain = chainFromAsset(destAsset);
-  //       if (ccmSupportedChains.includes(destChain)) {
-  //         gasLimitSwapsDefault.push(
-  //           testGasLimitSwap(sourceAsset, destAsset, undefined, getRandomGasConsumption(destChain)),
-  //         );
-  //       }
-  //     }),
-  // );
-
   const gasLimitSwapsDefault = [
     testGasLimitSwap('DOT', 'FLIP', undefined, getRandomGasConsumption('Ethereum')),
     testGasLimitSwap('ETH', 'USDC', undefined, getRandomGasConsumption('Ethereum')),
