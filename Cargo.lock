@@ -12349,6 +12349,7 @@ dependencies = [
  "cf-amm",
  "cf-chains",
  "cf-primitives",
+ "cf-runtime-upgrade-utilities",
  "cf-runtime-utilities",
  "cf-session-benchmarking",
  "cf-test-utilities",

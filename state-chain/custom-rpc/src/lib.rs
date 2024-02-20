@@ -499,11 +499,17 @@ pub trait CustomApi {
 	#[method(name = "supported_assets")]
 	fn cf_supported_assets(&self) -> RpcResult<HashMap<ForeignChain, Vec<Asset>>>;
 
-	#[method(name = "failed_call")]
-	fn cf_failed_call(
+	#[method(name = "failed_call_ethereum")]
+	fn cf_failed_call_ethereum(
 		&self,
 		broadcast_id: BroadcastId,
 	) -> RpcResult<Option<<cf_chains::Ethereum as Chain>::Transaction>>;
+
+	#[method(name = "failed_call_arbitrum")]
+	fn cf_failed_call_arbitrum(
+		&self,
+		broadcast_id: BroadcastId,
+	) -> RpcResult<Option<<cf_chains::Arbitrum as Chain>::Transaction>>;
 
 	#[method(name = "witness_count")]
 	fn cf_witness_count(
@@ -1172,13 +1178,23 @@ where
 		Ok(chain_to_asset)
 	}
 
-	fn cf_failed_call(
+	fn cf_failed_call_ethereum(
 		&self,
 		broadcast_id: BroadcastId,
 	) -> RpcResult<Option<<cf_chains::Ethereum as Chain>::Transaction>> {
 		self.client
 			.runtime_api()
-			.cf_failed_call(self.unwrap_or_best(None), broadcast_id)
+			.cf_failed_call_ethereum(self.unwrap_or_best(None), broadcast_id)
+			.map_err(to_rpc_error)
+	}
+
+	fn cf_failed_call_arbitrum(
+		&self,
+		broadcast_id: BroadcastId,
+	) -> RpcResult<Option<<cf_chains::Arbitrum as Chain>::Transaction>> {
+		self.client
+			.runtime_api()
+			.cf_failed_call_arbitrum(self.unwrap_or_best(None), broadcast_id)
 			.map_err(to_rpc_error)
 	}
 

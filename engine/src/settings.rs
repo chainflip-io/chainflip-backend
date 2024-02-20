@@ -875,8 +875,8 @@ pub mod tests {
 		DOT_BACKUP_HTTP_ENDPOINT =>
 		"https://second.my_fake_polkadot_rpc:443/<secret_key>",
 
-		ARB_HTTP_ENDPOINT => "http://localhost:8547",
-		ARB_WS_ENDPOINT => "ws://localhost:8547"
+		ARB_HTTP_ENDPOINT => "http://localhost:8548",
+		ARB_WS_ENDPOINT => "ws://localhost:8548"
 
 	}
 
