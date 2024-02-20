@@ -372,12 +372,10 @@ export async function testGasLimitCcmSwaps() {
     // testGasLimitSwap('ETH', 'USDC', ' sufBudget', undefined, 7500),
     // testGasLimitSwap('FLIP', 'ETH', ' sufBudget', undefined, 6000),
     // testGasLimitSwap('BTC', 'ETH', ' sufBudget', undefined, 750),
-
-    // TODO: The transaction deficit check fails for this ones
     testGasLimitSwap('DOT', 'ARBUSDC', ' sufBudget', undefined, 100),
-    // testGasLimitSwap('ETH', 'ARBUSDC', ' sufBudget', undefined, 1000),
-    // testGasLimitSwap('FLIP', 'ARBUSDC', ' sufBudget', undefined, 1000),
-    // testGasLimitSwap('BTC', 'ARBETH', ' sufBudget', undefined, 100),
+    testGasLimitSwap('ETH', 'ARBUSDC', ' sufBudget', undefined, 1000),
+    testGasLimitSwap('FLIP', 'ARBUSDC', ' sufBudget', undefined, 1000),
+    testGasLimitSwap('BTC', 'ARBETH', ' sufBudget', undefined, 100),
   ];
 
   // None of this should be broadcasted as the gasLimitBudget is not enough
