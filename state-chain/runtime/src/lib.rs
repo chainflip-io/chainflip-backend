@@ -1424,13 +1424,13 @@ impl_runtime_apis! {
 
 			debug_assert!(first_block < last_block);
 
-			(first_block..=last_block).map(|block| {
+			(first_block..=last_block).flat_map(|block| {
 				let swaps_for_block = Swapping::swap_queue(block);
 
 				let swaps: Vec<_> = swaps_for_block.iter().filter(|swap| swap.from == base_asset || swap.to == base_asset).cloned().collect();
 
 				Swapping::get_scheduled_swap_legs(swaps, base_asset).unwrap().into_iter().map(move |swap| (swap, block))
-			}).flatten().collect()
+			}).collect()
 
 		}
 

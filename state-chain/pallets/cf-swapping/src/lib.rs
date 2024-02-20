@@ -666,6 +666,7 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
+		#[allow(clippy::result_unit_err)]
 		pub fn get_scheduled_swap_legs(
 			mut swaps: Vec<Swap>,
 			base_asset: Asset,

@@ -1144,8 +1144,6 @@ where
 		base_asset: Asset,
 		quote_asset: Asset,
 	) -> Result<(), SubscriptionEmptyError> {
-		let base_asset = base_asset.try_into().map_err(|_| SubscriptionEmptyError)?;
-		let quote_asset = quote_asset.try_into().map_err(|_| SubscriptionEmptyError)?;
 		self.new_subscription(
 			false, /* only_on_changes */
 			true,  /* end_on_error */
