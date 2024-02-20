@@ -2159,6 +2159,7 @@ fn test_get_scheduled_swap_legs() {
 		.map(|(id, from, to)| Swap::new(id, from, to, INIT_AMOUNT, SWAP_TYPE.clone()))
 		.collect();
 
+		SwapRate::set(2f64);
 		// The amount of USDC in the middle of swap (5):
 		const INTERMEDIATE_AMOUNT: AssetAmount = 2000;
 

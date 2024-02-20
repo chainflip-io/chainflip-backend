@@ -67,7 +67,7 @@ impl_mock_runtime_safe_mode! { swapping: PalletSafeMode }
 parameter_types! {
 	pub static NetworkFee: Percent = Percent::from_percent(0);
 	pub static Swaps: Vec<(Asset, Asset, AssetAmount)> = vec![];
-	pub static SwapRate: f64 = 2f64;
+	pub static SwapRate: f64 = 1f64;
 }
 
 thread_local! {
