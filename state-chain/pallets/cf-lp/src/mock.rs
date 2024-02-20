@@ -5,6 +5,8 @@ use cf_chains::{
 	AnyChain, Chain, Ethereum,
 };
 use cf_primitives::{chains::assets, AccountId, ChannelId};
+#[cfg(feature = "runtime-benchmarks")]
+use cf_traits::mocks::fee_payment::MockFeePayment;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
@@ -102,6 +104,8 @@ impl crate::Config for Test {
 	type SafeMode = MockRuntimeSafeMode;
 	type WeightInfo = ();
 	type PoolApi = Self;
+	#[cfg(feature = "runtime-benchmarks")]
+	type FeePayment = MockFeePayment<Self>;
 }
 
 pub const LP_ACCOUNT: [u8; 32] = [1u8; 32];

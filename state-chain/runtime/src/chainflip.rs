@@ -1,8 +1,8 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 pub mod address_derivation;
-pub mod all_keys_rotator;
 pub mod backup_node_rewards;
 pub mod chain_instances;
+pub mod cons_key_rotator;
 pub mod decompose_recompose;
 pub mod epoch_transition;
 mod missed_authorship_slots;
