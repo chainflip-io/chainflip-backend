@@ -294,6 +294,7 @@ mod test_examples {
 		type SS58Prefix = ConstU16<42>;
 		type OnSetCode = ();
 		type MaxConsumers = frame_support::traits::ConstU32<5>;
+		type RuntimeTask = ();
 	}
 
 	impl HasAllPallets for Test {

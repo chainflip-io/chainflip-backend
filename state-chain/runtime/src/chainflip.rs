@@ -1,8 +1,8 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 pub mod address_derivation;
-pub mod all_keys_rotator;
 pub mod backup_node_rewards;
 pub mod chain_instances;
+pub mod cons_key_rotator;
 pub mod decompose_recompose;
 pub mod epoch_transition;
 mod missed_authorship_slots;
@@ -609,7 +609,7 @@ pub fn calculate_account_apy(account_id: &AccountId) -> Option<u32> {
 		// Authority: reward is earned by authoring a block.
 		Some(
 			Emissions::current_authority_emission_per_block() * YEAR as u128 /
-				pallet_cf_validator::CurrentAuthorities::<Runtime>::decode_len()
+				pallet_cf_validator::CurrentAuthorities::<Runtime>::decode_non_dedup_len()
 					.expect("Current authorities must exists and non-empty.") as u128,
 		)
 	} else {

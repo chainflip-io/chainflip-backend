@@ -1,6 +1,5 @@
 #![cfg(test)]
 #![feature(exclusive_range_pattern)]
-#![feature(local_key_cell_methods)]
 mod network;
 
 mod broadcasting;

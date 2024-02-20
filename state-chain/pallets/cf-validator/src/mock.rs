@@ -11,7 +11,7 @@ use cf_traits::{
 	},
 	AccountRoleRegistry, Bid,
 };
-use frame_support::{construct_runtime, parameter_types};
+use frame_support::{construct_runtime, derive_impl, parameter_types};
 use sp_core::H256;
 use sp_runtime::{
 	impl_opaque_keys,
@@ -40,6 +40,7 @@ construct_runtime!(
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();

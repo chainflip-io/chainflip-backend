@@ -8,7 +8,7 @@ use frame_support::{
 	traits::{Get, OnInitialize, UnfilteredDispatchable},
 };
 use frame_system::RawOrigin;
-use sp_std::{boxed::Box, collections::btree_set::BTreeSet};
+use sp_std::collections::btree_set::BTreeSet;
 
 #[benchmarks]
 mod benchmarks {
@@ -49,7 +49,7 @@ mod benchmarks {
 		let caller: T::AccountId = whitelisted_caller();
 		let members = BTreeSet::from([caller]);
 		let call =
-			Call::<T>::new_membership_set { accounts: members.clone().into_iter().collect() };
+			Call::<T>::new_membership_set { new_members: members.clone().into_iter().collect() };
 		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
 
 		#[block]
@@ -129,7 +129,7 @@ mod benchmarks {
 		NextGovKeyCallHashNonce::<T>::put(next_nonce);
 
 		let new_membership_set_call: <T as Config>::RuntimeCall =
-			Call::<T>::new_membership_set { accounts: vec![] }.into();
+			Call::<T>::new_membership_set { new_members: Default::default() }.into();
 
 		let call_hash = frame_support::Hashable::blake2_256(&(
 			new_membership_set_call.clone(),
@@ -157,7 +157,7 @@ mod benchmarks {
 		let caller: T::AccountId = whitelisted_caller();
 		<Members<T>>::put(BTreeSet::from([caller.clone()]));
 		let call: <T as Config>::RuntimeCall =
-			Call::<T>::new_membership_set { accounts: vec![] }.into();
+			Call::<T>::new_membership_set { new_members: Default::default() }.into();
 		Pallet::<T>::push_proposal(Box::new(call.clone()), ExecutionMode::Manual);
 		PreAuthorisedGovCalls::<T>::insert(1, call.encode());
 

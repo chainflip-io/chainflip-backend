@@ -61,10 +61,10 @@ pub fn init_bidders<T: RuntimeConfig>(n: u32, set_id: u32, flip_funded: u128) {
 		let signature = public_key.sign(&bidder.encode()).unwrap();
 		assert_ok!(Pallet::<T>::register_peer_id(
 			bidder_origin.clone(),
-			public_key.clone().try_into().unwrap(),
+			public_key.clone().into(),
 			1337,
 			1u128,
-			signature.try_into().unwrap(),
+			signature.into(),
 		));
 
 		// Reuse the random peer id for the session keys, we don't need real ones.
@@ -103,7 +103,6 @@ pub fn try_start_keygen<T: RuntimeConfig>(
 #[benchmarks(where T: RuntimeConfig)]
 mod benchmarks {
 	use super::*;
-	use sp_std::vec;
 
 	#[benchmark]
 	fn update_pallet_config() {
@@ -141,8 +140,8 @@ mod benchmarks {
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&caller));
 		let pair: p2p_crypto::Public = RuntimeAppPublic::generate_pair(None);
-		let signature: Ed25519Signature = pair.sign(&caller.encode()).unwrap().try_into().unwrap();
-		let public_key: Ed25519PublicKey = pair.try_into().unwrap();
+		let signature: Ed25519Signature = pair.sign(&caller.encode()).unwrap().into();
+		let public_key: Ed25519PublicKey = pair.into();
 
 		#[extrinsic_call]
 		register_peer_id(RawOrigin::Signed(caller.clone()), public_key, 0, 0, signature);

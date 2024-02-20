@@ -3,6 +3,8 @@ use core::cell::Cell;
 use crate::{self as pallet_cf_swapping, PalletSafeMode, WeightInfo};
 use cf_chains::AnyChain;
 use cf_primitives::{Asset, AssetAmount};
+#[cfg(feature = "runtime-benchmarks")]
+use cf_traits::mocks::fee_payment::MockFeePayment;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
@@ -11,7 +13,7 @@ use cf_traits::{
 	},
 	AccountRoleRegistry, SwappingApi,
 };
-use frame_support::{pallet_prelude::DispatchError, parameter_types, weights::Weight};
+use frame_support::{derive_impl, pallet_prelude::DispatchError, parameter_types, weights::Weight};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -35,6 +37,7 @@ parameter_types! {
 	pub const SS58Prefix: u8 = 42;
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -139,6 +142,8 @@ impl pallet_cf_swapping::Config for Test {
 	type SwappingApi = MockSwappingApi;
 	type SafeMode = MockRuntimeSafeMode;
 	type WeightInfo = MockWeightInfo;
+	#[cfg(feature = "runtime-benchmarks")]
+	type FeePayment = MockFeePayment<Self>;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

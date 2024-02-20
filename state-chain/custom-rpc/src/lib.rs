@@ -27,9 +27,12 @@ use pallet_cf_pools::{
 use pallet_cf_swapping::SwapLegInfo;
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
-use sp_api::{ApiError, BlockT, HeaderT};
+use sp_api::ApiError;
 use sp_core::U256;
-use sp_runtime::Permill;
+use sp_runtime::{
+	traits::{Block as BlockT, Header as HeaderT},
+	Permill,
+};
 use state_chain_runtime::{
 	chainflip::{BlockUpdate, Offence},
 	constants::common::TX_FEE_MULTIPLIER,
