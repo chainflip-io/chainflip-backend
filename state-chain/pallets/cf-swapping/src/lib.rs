@@ -456,7 +456,8 @@ pub mod pallet {
 			if channel_metadata.is_some() {
 				// Currently only Ethereum supports CCM.
 				ensure!(
-					ForeignChain::Ethereum == destination_asset.into(),
+					ForeignChain::Ethereum == destination_asset.into() ||
+						ForeignChain::Arbitrum == destination_asset.into(),
 					Error::<T>::CcmUnsupportedForTargetChain
 				);
 			}
@@ -743,7 +744,9 @@ pub mod pallet {
 			let gas_budget = channel_metadata.gas_budget;
 			let principal_swap_amount = deposit_amount.saturating_sub(gas_budget);
 
-			if ForeignChain::Ethereum != destination_asset.into() {
+			if (ForeignChain::Ethereum != destination_asset.into() &&
+				ForeignChain::Arbitrum != destination_asset.into())
+			{
 				return Err(CcmFailReason::UnsupportedForTargetChain)
 			} else if deposit_amount < gas_budget {
 				return Err(CcmFailReason::InsufficientDepositAmount)

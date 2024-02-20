@@ -144,13 +144,13 @@ impl cf_traits::WaivedFees for WaivedFees {
 /// We are willing to pay at most 2x the base fee. This is approximately the theoretical
 /// limit of the rate of increase of the base fee over 6 blocks (12.5% per block).
 const ETHEREUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(2, 1);
-/// TODO!!:We are willing to pay at most 2x the base fee. This is approximately the theoretical
-/// limit of the rate of increase of the base fee over 6 blocks (12.5% per block).
-const ARBITRUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(2, 1);
-// We arbitrarily set the MAX_GAS_LIMIT we are willing broadcast to 10M.
+/// For Arbitrum we could theoretically set the multiplier to 1 but we add
+/// a smaller multiplier for future proofing.
+const ARBITRUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(3, 2);
+// We arbitrarily set the MAX_GAS_LIMIT we are willing to broadcast to 10M.
 const ETHEREUM_MAX_GAS_LIMIT: u128 = 10_000_000;
-// We arbitrarily set the MAX_GAS_LIMIT we are willing broadcast to 10M.
-const ARBITRUM_MAX_GAS_LIMIT: u128 = 10_000_000;
+// We arbitrarily set the MAX_GAS_LIMIT we are willing to broadcast to 25M.
+const ARBITRUM_MAX_GAS_LIMIT: u128 = 25_000_000;
 
 pub struct EthTransactionBuilder;
 
@@ -272,6 +272,7 @@ impl TransactionBuilder<Arbitrum, ArbitrumApi<EvmEnvironment>> for ArbTransactio
 			contract: signed_call.replay_protection().contract_address,
 			data: signed_call.chain_encoded(),
 			gas_limit: Self::calculate_gas_limit(signed_call),
+			max_priority_fee_per_gas: Some(U256::from(0)),
 			..Default::default()
 		}
 	}
@@ -280,7 +281,7 @@ impl TransactionBuilder<Arbitrum, ArbitrumApi<EvmEnvironment>> for ArbTransactio
 		if let Some(ChainState { tracked_data, .. }) = ArbitrumChainTracking::chain_state() {
 			let max_fee_per_gas = tracked_data.max_fee_per_gas(ARBITRUM_BASE_FEE_MULTIPLIER);
 			unsigned_tx.max_fee_per_gas = Some(U256::from(max_fee_per_gas));
-			unsigned_tx.max_priority_fee_per_gas = None;
+			unsigned_tx.max_priority_fee_per_gas = Some(U256::from(0));
 		} else {
 			log::warn!("No chain data for Arbitrum. This should never happen. Please check Chain Tracking data.");
 		}
@@ -295,7 +296,7 @@ impl TransactionBuilder<Arbitrum, ArbitrumApi<EvmEnvironment>> for ArbTransactio
 
 	/// Calculate the gas limit for a Arbitrum call, using the current gas price.
 	/// Currently for only CCM calls, the gas limit is calculated as:
-	/// Gas limit = gas_budget / (multiplier * base_gas_price + priority_fee)
+	/// Gas limit = gas_budget / (multiplier * base_gas_price)
 	/// All other calls uses a default gas limit. Multiplier=1 to avoid user overpaying for gas.
 	/// The max_fee_per_gas will still have the default Arbitrum base fee multiplier applied.
 	fn calculate_gas_limit(call: &ArbitrumApi<EvmEnvironment>) -> Option<U256> {

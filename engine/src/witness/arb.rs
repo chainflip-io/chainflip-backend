@@ -1,6 +1,6 @@
 mod chain_tracking;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use cf_chains::Arbitrum;
 use cf_primitives::EpochIndex;
@@ -49,26 +49,32 @@ where
 		+ 'static,
 	ProcessingFut: Future<Output = ()> + Send + 'static,
 {
-	let key_manager_address = state_chain_client
-		.storage_value::<pallet_cf_environment::ArbitrumKeyManagerAddress<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_block().hash,
-		)
-		.await
-		.context("Failed to get KeyManager address from SC")?;
+	// let key_manager_address = state_chain_client
+	// 	.storage_value::<pallet_cf_environment::ArbitrumKeyManagerAddress<state_chain_runtime::Runtime>>(
+	// 		state_chain_client.latest_finalized_block().hash,
+	// 	)
+	// 	.await
+	// 	.context("Failed to get KeyManager address from SC")?;
 
-	let vault_address = state_chain_client
-		.storage_value::<pallet_cf_environment::ArbitrumVaultAddress<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_block().hash,
-		)
-		.await
-		.context("Failed to get Vault contract address from SC")?;
+	let key_manager_address = H160::from_str("0x5FbDB2315678afecb367f032d93F642f64180aa3").unwrap();
 
-	let address_checker_address = state_chain_client
-		.storage_value::<pallet_cf_environment::ArbitrumAddressCheckerAddress<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_block().hash,
-		)
-		.await
-		.expect(STATE_CHAIN_CONNECTION);
+	// let vault_address = state_chain_client
+	// 	.storage_value::<pallet_cf_environment::ArbitrumVaultAddress<state_chain_runtime::Runtime>>(
+	// 		state_chain_client.latest_finalized_block().hash,
+	// 	)
+	// 	.await
+	// 	.context("Failed to get Vault contract address from SC")?;
+
+	let vault_address = H160::from_str("0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512").unwrap();
+
+	// let address_checker_address = state_chain_client
+	// 	.storage_value::<pallet_cf_environment::ArbitrumAddressCheckerAddress<state_chain_runtime::Runtime>>(
+	// 		state_chain_client.latest_finalized_block().hash,
+	// 	)
+	// 	.await
+	// 	.expect(STATE_CHAIN_CONNECTION);
+	let address_checker_address =
+		H160::from_str("0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0").unwrap();
 
 	let supported_arb_erc20_assets: HashMap<cf_primitives::chains::assets::arb::Asset, H160> =
 		state_chain_client
@@ -78,9 +84,11 @@ where
 			.await
 			.context("Failed to fetch Arbitrum supported assets")?;
 
-	let usdc_contract_address = *supported_arb_erc20_assets
-		.get(&cf_primitives::chains::assets::arb::Asset::ArbUsdc)
-		.context("ArbitrumSupportedAssets does not include USDC")?;
+	// let usdc_contract_address = *supported_arb_erc20_assets
+	// 	.get(&cf_primitives::chains::assets::arb::Asset::ArbUsdc)
+	// 	.context("ArbitrumSupportedAssets does not include USDC")?;
+	let usdc_contract_address =
+		H160::from_str("0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9").unwrap();
 
 	let supported_arb_erc20_assets: HashMap<H160, cf_primitives::Asset> =
 		supported_arb_erc20_assets
