@@ -22,7 +22,7 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 		new_public_key: AggKeyFor<T, I>,
 		maybe_old_public_key: Option<AggKeyFor<T, I>>,
 	) -> FirstVault {
-		if VaultStartBlockNumbers::<T, I>::iter_keys().next().is_none() {
+		if VaultStartBlockNumbers::<T, I>::iter_keys().next().is_some() {
 			match <T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
 				maybe_old_public_key,
 				new_public_key,
