@@ -200,7 +200,9 @@ impl VaultActivator<MockEthereumChainCrypto> for MockVaultActivator {
 		_new_key: MockAggKey,
 		_maybe_old_key: Option<MockAggKey>,
 	) -> Option<ThresholdSignatureRequestId> {
-		None
+		VAULT_ACTIVATION_STATUS.with(|value| *(value.borrow_mut()) = AsyncResult::Pending);
+		let ceremony_id = current_ceremony_id();
+		Some(ceremony_id as u32)
 	}
 
 	fn status() -> AsyncResult<()> {
@@ -213,7 +215,7 @@ impl VaultActivator<MockEthereumChainCrypto> for MockVaultActivator {
 	}
 
 	fn activate_key() {
-		unimplemented!()
+		VAULT_ACTIVATION_STATUS.with(|value| *(value.borrow_mut()) = AsyncResult::Ready(()))
 	}
 }
 
