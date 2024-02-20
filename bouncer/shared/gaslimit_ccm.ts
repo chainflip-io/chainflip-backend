@@ -19,27 +19,27 @@ import { spamEvm } from './send_evm';
 
 // This test uses the CFTester contract as the receiver for a CCM call. The contract will consume approximately
 // the gasLimitBudget amount specified in the CCM message with an error margin. On top of that, the gasLimitBudget overhead of the
-// CCM call itself is ~115k (ETH) ~2M (ARB) with some variability depending on the parameters. We also add extra gasLimitBudget
+// CCM call itself is ~115k (ETH) ~5.2M (ARB) with some variability depending on the parameters. We also add extra gasLimitBudget
 // depending on the lenght of the message.
-const MIN_BASE_GAS_OVERHEAD: { [key: string]: number } = { Ethereum: 100000, Arbitrum: 5200000 };
-const BASE_GAS_OVERHEAD_BUFFER: { [key: string]: number } = { Ethereum: 20000, Arbitrum: 200000 };
-const CFE_GAS_LIMIT_CAP: { [key: string]: number } = { Ethereum: 10000000, Arbitrum: 25000000 };
+const MIN_BASE_GAS_OVERHEAD: Record<string, number> = { Ethereum: 100000, Arbitrum: 5200000 };
+const BASE_GAS_OVERHEAD_BUFFER: Record<string, number> = { Ethereum: 20000, Arbitrum: 200000 };
+const CFE_GAS_LIMIT_CAP: Record<string, number> = { Ethereum: 10000000, Arbitrum: 25000000 };
 // Minimum and maximum gas consumption values to be in a useful range for testing.
-const MIN_TEST_GAS_CONSUMPTION: { [key: string]: number } = { Ethereum: 200000, Arbitrum: 3000000 };
-const MAX_TEST_GAS_CONSUMPTION: { [key: string]: number } = {
+const MIN_TEST_GAS_CONSUMPTION: Record<string, number> = { Ethereum: 200000, Arbitrum: 1000000 };
+const MAX_TEST_GAS_CONSUMPTION: Record<string, number> = {
   Ethereum: 4000000,
   Arbitrum: 6000000,
 };
 // Arbitrary default gas consumption values for testing.
-const DEFAULT_GAS_CONSUMPTION: { [key: string]: number } = { Ethereum: 260000, Arbitrum: 3000000 };
+const DEFAULT_GAS_CONSUMPTION: Record<string, number> = { Ethereum: 260000, Arbitrum: 3000000 };
 // The base overhead increases with message lenght. This is an approximation => BASE_GAS_OVERHEAD + messageLength * gasPerByte
 // EVM requires 16 gas per calldata byte so a reasonable approximation is 17 to cover hashing and other operations over the data.
 const GAS_PER_BYTE = 17;
 // MIN_FEE is the priority fee for Ethereum and baseFee for Arbitrum, since those are the fees that increase here upon spamming.
-const MIN_FEE: { [key: string]: number } = { Ethereum: 1000000000, Arbitrum: 100000000 };
+const MIN_FEE: Record<string, number> = { Ethereum: 1000000000, Arbitrum: 100000000 };
 const LOOP_TIMEOUT = 15;
 
-const CCM_CHAINS_NATIVE_ASSETS: { [key: string]: Asset } = {
+const CCM_CHAINS_NATIVE_ASSETS: Record<string, Asset> = {
   Ethereum: 'ETH',
   Arbitrum: 'ARBETH',
   // Solana: 'SOL',
@@ -276,22 +276,11 @@ async function testGasLimitSwap(
     const gasUsed = receipt.gasUsed;
     const gasPrice = tx.gasPrice;
     const totalFee = gasUsed * Number(gasPrice);
-    console.log(tx);
-    console.log('gasUsed', gasUsed);
 
-    // TODO: FIX THIS, VALUES DONT MATCH
     const feeDeficitHandle = observeEvent(
       `${destChain.toLowerCase()}Broadcaster:TransactionFeeDeficitRecorded`,
       await getChainflipApi(),
-      (event) => {
-        console.log(
-          'Amount found in deficit recorded',
-          Number(event.data.amount.replace(/,/g, '')),
-        );
-        console.log('Amount expecting                ', totalFee);
-        console.log('result: ', Number(event.data.amount.replace(/,/g, '')) === totalFee);
-        return Number(event.data.amount.replace(/,/g, '')) === totalFee;
-      },
+      (event) => Number(event.data.amount.replace(/,/g, '')) === totalFee,
     );
 
     // Priority fee is not fully deterministic so we just log it for now
@@ -304,7 +293,6 @@ async function testGasLimitSwap(
       throw new Error(`${tag} Tx gas limit ${tx.gas} different than expected ${gasLimitBudget}`);
     }
     // This should not happen by definition, as maxFeePerGas * gasLimit < egressBudgetAmount
-    console.log(`${tag} totalFee: ${totalFee} egressBudgetAmount: ${egressBudgetAmount}`);
     if (totalFee > egressBudgetAmount) {
       throw new Error(
         `${tag} Transaction fee paid is higher than the budget paid by the user! totalFee: ${totalFee} egressBudgetAmount: ${egressBudgetAmount}`,
@@ -359,49 +347,72 @@ export async function testGasLimitCcmSwaps() {
   }
 
   // The default gas budgets should allow for almost any reasonable gas consumption
+  // const gasLimitSwapsDefault: Promise<void>[] = [];
+  // Object.values(Assets).forEach((sourceAsset) =>
+  //   Object.values(Assets)
+  //     .filter((destAsset) => sourceAsset !== destAsset)
+  //     .forEach((destAsset) => {
+  //       const destChain = chainFromAsset(destAsset);
+  //       if (ccmSupportedChains.includes(destChain)) {
+  //         gasLimitSwapsDefault.push(
+  //           testGasLimitSwap(sourceAsset, destAsset, undefined, getRandomGasConsumption(destChain)),
+  //         );
+  //       }
+  //     }),
+  // );
+
   const gasLimitSwapsDefault = [
-    // testGasLimitSwap('DOT', 'FLIP', undefined, getRandomGasConsumption('Ethereum')),
-    // testGasLimitSwap('ETH', 'USDC', undefined, getRandomGasConsumption('Ethereum')),
-    // testGasLimitSwap('FLIP', 'ETH', undefined, getRandomGasConsumption('Ethereum')),
-    // testGasLimitSwap('BTC', 'ETH', undefined, getRandomGasConsumption('Ethereum')),
+    testGasLimitSwap('DOT', 'FLIP', undefined, getRandomGasConsumption('Ethereum')),
+    testGasLimitSwap('ETH', 'USDC', undefined, getRandomGasConsumption('Ethereum')),
+    testGasLimitSwap('FLIP', 'ETH', undefined, getRandomGasConsumption('Ethereum')),
+    testGasLimitSwap('BTC', 'ETH', undefined, getRandomGasConsumption('Ethereum')),
+    testGasLimitSwap('DOT', 'ARBETH', undefined, getRandomGasConsumption('Arbitrum')),
+    testGasLimitSwap('ETH', 'ARBUSDC', undefined, getRandomGasConsumption('Arbitrum')),
+    testGasLimitSwap('FLIP', 'ARBETH', undefined, getRandomGasConsumption('Arbitrum')),
+    testGasLimitSwap('ARBETH', 'ETH', undefined, getRandomGasConsumption('Arbitrum')),
   ];
 
-  // reducing gas budget input amount used for gas to achieve a gasLimitBudget ~= 4-500k (ETH) and ~ XYZ (ARB).
+  // reducing gas budget input amount used for gas to achieve a gasLimitBudget ~= 4-500k (ETH) and ~8M (ARB).
   const gasLimitSwapsSufBudget = [
-    // testGasLimitSwap('DOT', 'FLIP', ' sufBudget', undefined, 750),
-    // testGasLimitSwap('ETH', 'USDC', ' sufBudget', undefined, 7500),
-    // testGasLimitSwap('FLIP', 'ETH', ' sufBudget', undefined, 6000),
-    // testGasLimitSwap('BTC', 'ETH', ' sufBudget', undefined, 750),
+    testGasLimitSwap('DOT', 'FLIP', ' sufBudget', undefined, 750),
+    testGasLimitSwap('ETH', 'USDC', ' sufBudget', undefined, 7500),
+    testGasLimitSwap('FLIP', 'ETH', ' sufBudget', undefined, 5000),
+    testGasLimitSwap('BTC', 'ETH', ' sufBudget', undefined, 750),
     testGasLimitSwap('DOT', 'ARBUSDC', ' sufBudget', undefined, 100),
     testGasLimitSwap('ETH', 'ARBUSDC', ' sufBudget', undefined, 1000),
-    testGasLimitSwap('FLIP', 'ARBUSDC', ' sufBudget', undefined, 1000),
-    testGasLimitSwap('BTC', 'ARBETH', ' sufBudget', undefined, 100),
+    testGasLimitSwap('FLIP', 'ARBETH', ' sufBudget', undefined, 1000),
+    testGasLimitSwap('BTC', 'ARBUSDC', ' sufBudget', undefined, 100),
+    testGasLimitSwap('ARBETH', 'ETH', ' sufBudget', undefined, 750),
+    testGasLimitSwap('ARBUSDC', 'FLIP', ' sufBudget', undefined, 100),
   ];
 
   // None of this should be broadcasted as the gasLimitBudget is not enough
   const gasLimitSwapsInsufBudget = [
-    // testGasLimitSwap('DOT', 'FLIP', ' insufBudget', undefined, 10 ** 4),
-    // testGasLimitSwap('ETH', 'USDC', ' insufBudget', undefined, 10 ** 5),
-    // testGasLimitSwap('FLIP', 'ETH', ' insufBudget', undefined, 10 ** 5),
-    // testGasLimitSwap('BTC', 'ETH', ' insufBudget', undefined, 10 ** 4),
-    // TODO: Make at least one swap be from/to Arbitrum
-    // testGasLimitSwap('DOT', 'ARBETH', ' insufBudget', undefined, 10 ** 3),
-    // testGasLimitSwap('ETH', 'ARBETH', ' insufBudget', undefined, 10 ** 4),
-    // testGasLimitSwap('FLIP', 'ARBUSDC', ' insufBudget', undefined, 10 ** 4),
-    // testGasLimitSwap('BTC', 'ARBUSDC', ' insufBudget', undefined, 10 ** 3),
+    testGasLimitSwap('DOT', 'FLIP', ' insufBudget', undefined, 10 ** 4),
+    testGasLimitSwap('ETH', 'USDC', ' insufBudget', undefined, 10 ** 5),
+    testGasLimitSwap('FLIP', 'ETH', ' insufBudget', undefined, 10 ** 5),
+    testGasLimitSwap('BTC', 'ETH', ' insufBudget', undefined, 10 ** 4),
+    testGasLimitSwap('DOT', 'ARBETH', ' insufBudget', undefined, 10 ** 3),
+    testGasLimitSwap('ETH', 'ARBETH', ' insufBudget', undefined, 10 ** 4),
+    testGasLimitSwap('FLIP', 'ARBUSDC', ' insufBudget', undefined, 10 ** 4),
+    testGasLimitSwap('BTC', 'ARBUSDC', ' insufBudget', undefined, 10 ** 3),
+    testGasLimitSwap('ARBETH', 'ETH', ' sufBudget', undefined, 10 ** 4),
+    testGasLimitSwap('ARBUSDC', 'FLIP', ' sufBudget', undefined, 10 ** 3),
   ];
 
   // This amount of gasLimitBudget will be swapped into very little gasLimitBudget. Not into zero as that will cause a debug_assert to
   // panic when not in release due to zero swap intput amount. So for now we provide the minimum so it gets swapped to just > 0.
   const gasLimitSwapsNoBudget = [
-    // testGasLimitSwap('DOT', 'FLIP', ' noBudget', undefined, 10 ** 6),
-    // testGasLimitSwap('ETH', 'USDC', ' noBudget', undefined, 10 ** 8),
-    // testGasLimitSwap('FLIP', 'ETH', ' noBudget', undefined, 10 ** 6),
-    // testGasLimitSwap('BTC', 'ETH', ' noBudget', undefined, 10 ** 5),
-    // testGasLimitSwap('DOT', 'ARBUSDC', ' noBudget', undefined, 10 ** 6),
-    // testGasLimitSwap('ETH', 'ARBETH', ' noBudget', undefined, 10 ** 8),
-    // testGasLimitSwap('FLIP', 'ARBUSDC', ' noBudget', undefined, 10 ** 6),
-    // testGasLimitSwap('BTC', 'ARBETH', ' noBudget', undefined, 10 ** 5),
+    testGasLimitSwap('DOT', 'FLIP', ' noBudget', undefined, 10 ** 6),
+    testGasLimitSwap('ETH', 'USDC', ' noBudget', undefined, 10 ** 8),
+    testGasLimitSwap('FLIP', 'ETH', ' noBudget', undefined, 10 ** 6),
+    testGasLimitSwap('BTC', 'ETH', ' noBudget', undefined, 10 ** 5),
+    testGasLimitSwap('DOT', 'ARBUSDC', ' noBudget', undefined, 10 ** 6),
+    testGasLimitSwap('ETH', 'ARBETH', ' noBudget', undefined, 10 ** 8),
+    testGasLimitSwap('FLIP', 'ARBUSDC', ' noBudget', undefined, 10 ** 6),
+    testGasLimitSwap('BTC', 'ARBETH', ' noBudget', undefined, 10 ** 5),
+    testGasLimitSwap('ARBETH', 'ETH', ' sufBudget', undefined, 10 ** 6),
+    testGasLimitSwap('ARBUSDC', 'FLIP', ' sufBudget', undefined, 10 ** 5),
   ];
 
   await Promise.all([
