@@ -54,6 +54,15 @@ async function main(): Promise<void> {
     // provideLiquidity('ARBUSDC', deposits.get('ARBUSDC')!),
   ]);
 
+  // also fund the boost account
+  await Promise.all([
+    provideLiquidity('USDC', deposits.get('USDC')!, false, "//LP_BOOST"),
+    provideLiquidity('ETH', deposits.get('ETH')!, false, "//LP_BOOST"),
+    provideLiquidity('DOT', deposits.get('DOT')!, false, "//LP_BOOST"),
+    provideLiquidity('BTC', deposits.get('BTC')!, false, "//LP_BOOST"),
+    provideLiquidity('FLIP', deposits.get('FLIP')!, false, "//LP_BOOST"),
+  ]);
+  
   await Promise.all([
     rangeOrder('ETH', deposits.get('ETH')! * 0.9999),
     rangeOrder('DOT', deposits.get('DOT')! * 0.9999),
