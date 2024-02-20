@@ -10,11 +10,12 @@ mod missed_authorship_slots;
 mod offences;
 mod signer_nomination;
 use crate::{
-	AccountId, AccountRoles, ArbitrumChainTracking, ArbitrumIngressEgress, Authorship,
-	BitcoinChainTracking, BitcoinIngressEgress, BitcoinThresholdSigner, BlockNumber, Emissions,
-	Environment, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress, Flip,
-	FlipBalance, PolkadotBroadcaster, PolkadotChainTracking, PolkadotIngressEgress,
-	PolkadotThresholdSigner, Runtime, RuntimeCall, System, Validator, YEAR,
+	impl_transaction_builder_for_evm_chain, AccountId, AccountRoles, ArbitrumChainTracking,
+	ArbitrumIngressEgress, Authorship, BitcoinChainTracking, BitcoinIngressEgress,
+	BitcoinThresholdSigner, BlockNumber, Emissions, Environment, EthereumBroadcaster,
+	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster,
+	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
+	System, Validator, YEAR,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -152,61 +153,100 @@ const ETHEREUM_MAX_GAS_LIMIT: u128 = 10_000_000;
 // We arbitrarily set the MAX_GAS_LIMIT we are willing to broadcast to 25M.
 const ARBITRUM_MAX_GAS_LIMIT: u128 = 25_000_000;
 
+pub trait EvmPriorityFee<C: Chain> {
+	fn get_priority_fee(_tracked_data: &C::TrackedData) -> Option<U256> {
+		None
+	}
+}
+
+impl EvmPriorityFee<Ethereum> for EthTransactionBuilder {
+	fn get_priority_fee(tracked_data: &<Ethereum as Chain>::TrackedData) -> Option<U256> {
+		Some(U256::from(tracked_data.priority_fee))
+	}
+}
+impl EvmPriorityFee<Arbitrum> for ArbTransactionBuilder {
+	fn get_priority_fee(tracked_data: &<Arbitrum as Chain>::TrackedData) -> Option<U256> {
+		Some(U256::from(0))
+	}
+}
+
 pub struct EthTransactionBuilder;
+pub struct ArbTransactionBuilder;
+impl_transaction_builder_for_evm_chain!(
+	Ethereum,
+	EthTransactionBuilder,
+	EthereumApi<EvmEnvironment>,
+	EthereumChainTracking,
+	ETHEREUM_BASE_FEE_MULTIPLIER,
+	ETHEREUM_MAX_GAS_LIMIT
+);
+impl_transaction_builder_for_evm_chain!(
+	Arbitrum,
+	ArbTransactionBuilder,
+	ArbitrumApi<EvmEnvironment>,
+	ArbitrumChainTracking,
+	ARBITRUM_BASE_FEE_MULTIPLIER,
+	ARBITRUM_MAX_GAS_LIMIT
+);
 
-impl TransactionBuilder<Ethereum, EthereumApi<EvmEnvironment>> for EthTransactionBuilder {
-	fn build_transaction(
-		signed_call: &EthereumApi<EvmEnvironment>,
-	) -> <Ethereum as Chain>::Transaction {
-		Transaction {
-			chain_id: signed_call.replay_protection().chain_id,
-			contract: signed_call.replay_protection().contract_address,
-			data: signed_call.chain_encoded(),
-			gas_limit: Self::calculate_gas_limit(signed_call),
-			..Default::default()
-		}
-	}
+#[macro_export]
+macro_rules! impl_transaction_builder_for_evm_chain {
+	( $chain: ident, $transaction_builder: ident, $chain_api: ident <$env: ident>, $chain_tracking: ident, $base_fee_multiplier: expr, $max_gas_limit: expr ) => {
+		impl TransactionBuilder<$chain, $chain_api<$env>> for $transaction_builder {
+			fn build_transaction(
+				signed_call: &$chain_api<$env>,
+			) -> Transaction {
+				Transaction {
+					chain_id: signed_call.replay_protection().chain_id,
+					contract: signed_call.replay_protection().contract_address,
+					data: signed_call.chain_encoded(),
+					gas_limit: Self::calculate_gas_limit(signed_call),
+					..Default::default()
+				}
+			}
 
-	fn refresh_unsigned_data(unsigned_tx: &mut <Ethereum as Chain>::Transaction) {
-		if let Some(ChainState { tracked_data, .. }) = EthereumChainTracking::chain_state() {
-			let max_fee_per_gas = tracked_data.max_fee_per_gas(ETHEREUM_BASE_FEE_MULTIPLIER);
-			unsigned_tx.max_fee_per_gas = Some(U256::from(max_fee_per_gas));
-			unsigned_tx.max_priority_fee_per_gas = Some(U256::from(tracked_data.priority_fee));
-		} else {
-			log::warn!("No chain data for Ethereum. This should never happen. Please check Chain Tracking data.");
-		}
-	}
+			fn refresh_unsigned_data(unsigned_tx: &mut Transaction) {
+				if let Some(ChainState { tracked_data, .. }) = $chain_tracking::chain_state() {
+					let max_fee_per_gas = tracked_data.max_fee_per_gas($base_fee_multiplier);
+					unsigned_tx.max_fee_per_gas = Some(U256::from(max_fee_per_gas));
+					unsigned_tx.max_priority_fee_per_gas = $transaction_builder::get_priority_fee(&tracked_data);
+				} else {
+					log::warn!("No chain data for {}. This should never happen. Please check Chain Tracking data.", $chain::NAME);
+				}
+			}
 
-	fn requires_signature_refresh(
-		_call: &EthereumApi<EvmEnvironment>,
-		_payload: &<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::Payload,
-	) -> bool {
-		false
-	}
+			fn requires_signature_refresh(
+				_call: &$chain_api<$env>,
+				_payload: &<EvmCrypto as ChainCrypto>::Payload,
+			) -> bool {
+				false
+			}
 
-	/// Calculate the gas limit for a Ethereum call, using the current gas price.
-	/// Currently for only CCM calls, the gas limit is calculated as:
-	/// Gas limit = gas_budget / (multiplier * base_gas_price + priority_fee)
-	/// All other calls uses a default gas limit. Multiplier=1 to avoid user overpaying for gas.
-	/// The max_fee_per_gas will still have the default ethereum base fee multiplier applied.
-	fn calculate_gas_limit(call: &EthereumApi<EvmEnvironment>) -> Option<U256> {
-		if let Some(gas_budget) = call.gas_budget() {
-			let current_fee_per_gas = EthereumChainTracking::chain_state()
-				.or_else(||{
-					log::warn!("No chain data for Ethereum. This should never happen. Please check Chain Tracking data.");
+			/// Calculate the gas limit for a this evm chain's call, using the current gas price.
+			/// Currently for only CCM calls, the gas limit is calculated as:
+			/// Gas limit = gas_budget / (multiplier * base_gas_price + priority_fee)
+			/// All other calls uses a default gas limit. Multiplier=1 to avoid user overpaying for gas.
+			/// The max_fee_per_gas will still have the default this evm chain's base fee multiplier applied.
+			fn calculate_gas_limit(call: &$chain_api<$env>) -> Option<U256> {
+				if let Some(gas_budget) = call.gas_budget() {
+					let current_fee_per_gas = $chain_tracking::chain_state()
+						.or_else(||{
+							log::warn!("No chain data for {}. This should never happen. Please check Chain Tracking data.", $chain::NAME);
+							None
+						})?
+						.tracked_data
+						.max_fee_per_gas(One::one());
+					Some(gas_budget
+						.checked_div(current_fee_per_gas)
+						.unwrap_or_else(||{
+							log::warn!("Current gas price for {} is 0. This should never happen. Please check Chain Tracking data.", $chain::NAME);
+							Default::default()
+						}).min($max_gas_limit)
+						.into())
+				} else {
 					None
-				})?
-				.tracked_data
-				.max_fee_per_gas(One::one());
-			Some(gas_budget
-				.checked_div(current_fee_per_gas)
-				.unwrap_or_else(||{
-					log::warn!("Current gas price for Ethereum is 0. This should never happen. Please check Chain Tracking data.");
-					Default::default()
-				}).min(ETHEREUM_MAX_GAS_LIMIT)
-				.into())
-		} else {
-			None
+				}
+			}
 		}
 	}
 }
@@ -258,66 +298,6 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 		// the btc tx is always valid as long as the input UTXOs are valid. Therefore, we don't have
 		// to check anything here and just rebroadcast.
 		false
-	}
-}
-
-pub struct ArbTransactionBuilder;
-
-impl TransactionBuilder<Arbitrum, ArbitrumApi<EvmEnvironment>> for ArbTransactionBuilder {
-	fn build_transaction(
-		signed_call: &ArbitrumApi<EvmEnvironment>,
-	) -> <Arbitrum as Chain>::Transaction {
-		Transaction {
-			chain_id: signed_call.replay_protection().chain_id,
-			contract: signed_call.replay_protection().contract_address,
-			data: signed_call.chain_encoded(),
-			gas_limit: Self::calculate_gas_limit(signed_call),
-			max_priority_fee_per_gas: Some(U256::from(0)),
-			..Default::default()
-		}
-	}
-
-	fn refresh_unsigned_data(unsigned_tx: &mut <Arbitrum as Chain>::Transaction) {
-		if let Some(ChainState { tracked_data, .. }) = ArbitrumChainTracking::chain_state() {
-			let max_fee_per_gas = tracked_data.max_fee_per_gas(ARBITRUM_BASE_FEE_MULTIPLIER);
-			unsigned_tx.max_fee_per_gas = Some(U256::from(max_fee_per_gas));
-			unsigned_tx.max_priority_fee_per_gas = Some(U256::from(0));
-		} else {
-			log::warn!("No chain data for Arbitrum. This should never happen. Please check Chain Tracking data.");
-		}
-	}
-
-	fn requires_signature_refresh(
-		_call: &ArbitrumApi<EvmEnvironment>,
-		_payload: &<<Arbitrum as Chain>::ChainCrypto as ChainCrypto>::Payload,
-	) -> bool {
-		false
-	}
-
-	/// Calculate the gas limit for a Arbitrum call, using the current gas price.
-	/// Currently for only CCM calls, the gas limit is calculated as:
-	/// Gas limit = gas_budget / (multiplier * base_gas_price)
-	/// All other calls uses a default gas limit. Multiplier=1 to avoid user overpaying for gas.
-	/// The max_fee_per_gas will still have the default Arbitrum base fee multiplier applied.
-	fn calculate_gas_limit(call: &ArbitrumApi<EvmEnvironment>) -> Option<U256> {
-		if let Some(gas_budget) = call.gas_budget() {
-			let current_fee_per_gas = ArbitrumChainTracking::chain_state()
-				.or_else(||{
-					log::warn!("No chain data for Arbitrum. This should never happen. Please check Chain Tracking data.");
-					None
-				})?
-				.tracked_data
-				.max_fee_per_gas(One::one());
-			Some(gas_budget
-				.checked_div(current_fee_per_gas)
-				.unwrap_or_else(||{
-					log::warn!("Current gas price for Arbitrum is 0. This should never happen. Please check Chain Tracking data.");
-					Default::default()
-				}).min(ARBITRUM_MAX_GAS_LIMIT)
-				.into())
-		} else {
-			None
-		}
 	}
 }
 

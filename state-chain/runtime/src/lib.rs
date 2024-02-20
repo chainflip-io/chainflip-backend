@@ -30,8 +30,10 @@ use cf_chains::{
 	Polkadot, TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, NetworkEnvironment};
+use cf_runtime_upgrade_utilities::VersionedMigration;
 use cf_traits::{AssetConverter, GetTrackedData, LpBalanceApi};
 use core::ops::Range;
+use frame_support::traits::OnRuntimeUpgrade;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
@@ -972,7 +974,89 @@ type PalletMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	// pallet_cf_pools::migrations::PalletMigration<Runtime>,
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
+	VersionedMigration<
+		pallet_cf_environment::Pallet<Runtime>,
+		arbitrum_integration_migration::ArbitrumIntegration,
+		8,
+		9,
+	>,
 );
+
+mod arbitrum_integration_migration {
+	use super::*;
+	use crate::{safe_mode, ArbitrumInstance, BitcoinInstance, EthereumInstance, PolkadotInstance};
+	use cf_traits::SafeMode;
+	use sp_runtime::DispatchError;
+
+	mod old {
+		use super::*;
+		use frame_support::pallet_prelude::*;
+		#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+		pub struct RuntimeSafeMode {
+			pub emissions: pallet_cf_emissions::PalletSafeMode,
+			pub funding: pallet_cf_funding::PalletSafeMode,
+			pub swapping: pallet_cf_swapping::PalletSafeMode,
+			pub liquidity_provider: pallet_cf_lp::PalletSafeMode,
+			pub validator: pallet_cf_validator::PalletSafeMode,
+			pub pools: pallet_cf_pools::PalletSafeMode,
+			pub reputation: pallet_cf_reputation::PalletSafeMode,
+			pub threshold_signature_ethereum:
+				pallet_cf_threshold_signature::PalletSafeMode<EvmInstance>,
+			pub threshold_signature_bitcoin:
+				pallet_cf_threshold_signature::PalletSafeMode<BitcoinInstance>,
+			pub threshold_signature_polkadot:
+				pallet_cf_threshold_signature::PalletSafeMode<PolkadotInstance>,
+			pub broadcast_ethereum: pallet_cf_broadcast::PalletSafeMode<EthereumInstance>,
+			pub broadcast_bitcoin: pallet_cf_broadcast::PalletSafeMode<BitcoinInstance>,
+			pub broadcast_polkadot: pallet_cf_broadcast::PalletSafeMode<PolkadotInstance>,
+			pub witnesser: pallet_cf_witnesser::PalletSafeMode<WitnesserCallPermission>,
+		}
+	}
+	pub struct ArbitrumIntegration;
+
+	impl OnRuntimeUpgrade for ArbitrumIntegration {
+		fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			use frame_support::assert_ok;
+			assert_ok!(pallet_cf_environment::RuntimeSafeMode::<Runtime>::translate(
+				|maybe_old: Option<old::RuntimeSafeMode>| {
+					maybe_old.map(|old| {
+						safe_mode::RuntimeSafeMode {
+							emissions: old.emissions,
+							funding: old.funding,
+							swapping: old.swapping,
+							liquidity_provider: old.liquidity_provider,
+							validator: old.validator,
+							pools: old.pools,
+							reputation: old.reputation,
+							threshold_signature_ethereum: old.threshold_signature_ethereum,
+							threshold_signature_bitcoin: old.threshold_signature_bitcoin,
+							threshold_signature_polkadot: old.threshold_signature_polkadot,
+							broadcast_ethereum: old.broadcast_ethereum,
+							broadcast_bitcoin: old.broadcast_bitcoin,
+							broadcast_polkadot: old.broadcast_polkadot,
+							broadcast_arbitrum: <pallet_cf_broadcast::PalletSafeMode<
+								ArbitrumInstance,
+							> as SafeMode>::CODE_GREEN,
+							witnesser: old.witnesser,
+						}
+					})
+				},
+			));
+
+			Weight::zero()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+			Ok(vec![])
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
+			Ok(())
+		}
+	}
+}
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
