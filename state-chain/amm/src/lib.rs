@@ -382,6 +382,22 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		self.range_orders.fee_hundredth_pips
 	}
 
+	pub fn range_order_total_fees_earned(&self) -> PoolPairsMap<Amount> {
+		self.range_orders.total_fees_earned
+	}
+
+	pub fn limit_order_total_fees_earned(&self) -> PoolPairsMap<Amount> {
+		self.limit_orders.total_fees_earned
+	}
+
+	pub fn range_order_swap_inputs(&self) -> PoolPairsMap<Amount> {
+		self.range_orders.total_swap_inputs
+	}
+
+	pub fn limit_order_swap_inputs(&self) -> PoolPairsMap<Amount> {
+		self.limit_orders.total_swap_inputs
+	}
+
 	pub fn limit_order_liquidity(&self, order: Side) -> Vec<(Tick, Amount)> {
 		match order {
 			Side::Sell => self.limit_orders.liquidity::<QuoteToBase>(),

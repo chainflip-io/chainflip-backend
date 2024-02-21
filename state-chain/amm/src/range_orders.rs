@@ -176,9 +176,9 @@ pub struct PoolState<LiquidityProvider: Ord> {
 	liquidity_map: BTreeMap<Tick, TickDelta>,
 	positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
 	/// Total fees earned over all time
-	total_fees_earned: PoolPairsMap<Amount>,
+	pub(super) total_fees_earned: PoolPairsMap<Amount>,
 	/// Total of all swap inputs over all time (not including fees)
-	total_swap_inputs: PoolPairsMap<Amount>,
+	pub(super) total_swap_inputs: PoolPairsMap<Amount>,
 	/// Total of all swap outputs over all time
 	total_swap_outputs: PoolPairsMap<Amount>,
 }

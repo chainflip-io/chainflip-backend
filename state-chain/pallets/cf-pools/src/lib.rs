@@ -1034,6 +1034,14 @@ pub struct PoolInfo {
 	/// The fee taken, when range orders are used, from swap inputs that contributes to liquidity
 	/// provider earnings
 	pub range_order_fee_hundredth_pips: u32,
+	/// The total fees earned in this pool by range orders.
+	pub range_order_total_fees_earned: PoolPairsMap<Amount>,
+	/// The total fees earned in this pool by limit orders.
+	pub limit_order_total_fees_earned: PoolPairsMap<Amount>,
+	/// The total amount of assets that have been bought by range orders in this pool.
+	pub range_total_swap_inputs: PoolPairsMap<Amount>,
+	/// The total amount of assets that have been bought by limit orders in this pool.
+	pub limit_total_swap_inputs: PoolPairsMap<Amount>,
 }
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
@@ -1387,6 +1395,7 @@ impl<T: Config> Pallet<T> {
 			asset_pair.assets().zip(collected.fees).try_map(|(asset, collected_fees)| {
 				AssetAmount::try_from(collected_fees).map_err(Into::into).and_then(
 					|collected_fees| {
+						T::LpBalance::record_fees(lp, collected_fees, asset);
 						T::LpBalance::try_credit_account(lp, asset, collected_fees)
 							.map(|()| collected_fees)
 					},
@@ -1667,6 +1676,10 @@ impl<T: Config> Pallet<T> {
 		Ok(PoolInfo {
 			limit_order_fee_hundredth_pips: pool.pool_state.limit_order_fee(),
 			range_order_fee_hundredth_pips: pool.pool_state.range_order_fee(),
+			range_order_total_fees_earned: pool.pool_state.range_order_total_fees_earned(),
+			limit_order_total_fees_earned: pool.pool_state.limit_order_total_fees_earned(),
+			range_total_swap_inputs: pool.pool_state.range_order_swap_inputs(),
+			limit_total_swap_inputs: pool.pool_state.limit_order_swap_inputs(),
 		})
 	}
 
@@ -1816,11 +1829,9 @@ impl<T: Config> Pallet<T> {
 		amount_change: IncreaseOrDecrease<AssetAmount>,
 	) -> DispatchResult {
 		let collected_fees: AssetAmount = collected.fees.try_into()?;
-		T::LpBalance::try_credit_account(
-			lp,
-			asset_pair.assets()[!order.to_sold_pair()],
-			collected_fees,
-		)?;
+		let asset = asset_pair.assets()[!order.to_sold_pair()];
+		T::LpBalance::record_fees(lp, collected_fees, asset);
+		T::LpBalance::try_credit_account(lp, asset, collected_fees)?;
 
 		let bought_amount: AssetAmount = collected.bought_amount.try_into()?;
 		T::LpBalance::try_credit_account(

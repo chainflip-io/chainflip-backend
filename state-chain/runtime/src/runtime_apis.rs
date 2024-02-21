@@ -3,7 +3,9 @@ use cf_amm::{
 	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{eth::Address as EthereumAddress, Chain, ForeignChainAddress};
+use cf_chains::{
+	assets::any::AssetMap, eth::Address as EthereumAddress, Chain, ForeignChainAddress,
+};
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BroadcastId, EpochIndex, FlipBalance, ForeignChain,
 	NetworkEnvironment, SemVer, SwapOutput,
@@ -75,6 +77,7 @@ pub struct AuctionState {
 pub struct LiquidityProviderInfo {
 	pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
 	pub balances: Vec<(Asset, AssetAmount)>,
+	pub earned_fees: AssetMap<AssetAmount>,
 }
 
 #[derive(Debug, Decode, Encode, TypeInfo)]

@@ -38,6 +38,7 @@ use pallet_cf_broadcast::{
 	ThresholdSignatureData,
 };
 use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall};
+use pallet_cf_lp::HistoricalEarnedFees;
 use pallet_cf_pools::{OrderId, RangeOrderSize};
 use pallet_cf_swapping::{CcmIdCounter, SWAP_DELAY_BLOCKS};
 use sp_core::U256;
@@ -193,14 +194,6 @@ fn setup_pool_and_accounts(assets: Vec<Asset>) {
 	}
 }
 
-fn get_asset_balance(who: &AccountId, asset: Asset) -> u128 {
-	LiquidityProvider::asset_balances(who)
-		.iter()
-		.filter(|asset_balance| asset_balance.0 == asset)
-		.map(|asset_balance| asset_balance.1)
-		.sum()
-}
-
 #[test]
 fn basic_pool_setup_provision_and_swap() {
 	super::genesis::with_test_defaults()
@@ -210,21 +203,20 @@ fn basic_pool_setup_provision_and_swap() {
 	])
 	.build()
 	.execute_with(|| {
-		new_pool(Asset::Eth, 0u32, price_at_tick(0).unwrap());
-		new_pool(Asset::Flip, 0u32, price_at_tick(0).unwrap());
+		new_pool(Asset::Eth, 0, price_at_tick(0).unwrap());
+		new_pool(Asset::Flip, 0, price_at_tick(0).unwrap());
 		register_refund_addresses(&DORIS);
 
 		credit_account(&DORIS, Asset::Eth, 1_000_000);
 		credit_account(&DORIS, Asset::Flip, 1_000_000);
 		credit_account(&DORIS, Asset::Usdc, 1_000_000);
+		assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS));
 
 		set_limit_order(&DORIS, Asset::Eth, Asset::Usdc, 0, Some(0), 500_000);
 		set_range_order(&DORIS, Asset::Eth, Asset::Usdc, 0, Some(-10..10), 1_000_000);
 
 		set_limit_order(&DORIS, Asset::Flip, Asset::Usdc, 0, Some(0), 500_000);
 		set_range_order(&DORIS, Asset::Flip, Asset::Usdc, 0, Some(-10..10), 1_000_000);
-
-		let usdc_balance_before = get_asset_balance(&DORIS, Asset::Usdc);
 
 		assert_ok!(Swapping::request_swap_deposit_address(
 			RuntimeOrigin::signed(ZION.clone()),
@@ -310,8 +302,7 @@ fn basic_pool_setup_provision_and_swap() {
 			) if egress_ids.contains(&egress_id) => ()
 		);
 
-		let usdc_balance_after = get_asset_balance(&DORIS, Asset::Usdc);
-		assert!(usdc_balance_after > usdc_balance_before, "Fees should be collected");
+		assert!(HistoricalEarnedFees::<Runtime>::contains_key(&DORIS));
 	});
 }
 

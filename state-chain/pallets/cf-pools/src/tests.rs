@@ -290,6 +290,10 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			Ok(PoolInfo {
 				limit_order_fee_hundredth_pips: old_fee,
 				range_order_fee_hundredth_pips: old_fee,
+				range_order_total_fees_earned: Default::default(),
+				limit_order_total_fees_earned: Default::default(),
+				range_total_swap_inputs: Default::default(),
+				limit_total_swap_inputs: Default::default(),
 			})
 		);
 
@@ -410,8 +414,19 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			Ok(PoolInfo {
 				limit_order_fee_hundredth_pips: new_fee,
 				range_order_fee_hundredth_pips: new_fee,
+				range_order_total_fees_earned: Default::default(),
+				limit_order_total_fees_earned: PoolPairsMap {
+					base: U256::from(4000),
+					quote: U256::from(3992)
+				},
+				range_total_swap_inputs: Default::default(),
+				limit_total_swap_inputs: PoolPairsMap {
+					base: U256::from(6000),
+					quote: U256::from(5988)
+				},
 			})
 		);
+
 		System::assert_has_event(RuntimeEvent::LiquidityPools(Event::<Test>::PoolFeeSet {
 			base_asset: Asset::Eth,
 			quote_asset: STABLE_ASSET,
@@ -640,6 +655,10 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 			Ok(PoolInfo {
 				limit_order_fee_hundredth_pips: old_fee,
 				range_order_fee_hundredth_pips: old_fee,
+				range_order_total_fees_earned: Default::default(),
+				limit_order_total_fees_earned: Default::default(),
+				range_total_swap_inputs: Default::default(),
+				limit_total_swap_inputs: Default::default(),
 			})
 		);
 
@@ -1061,5 +1080,44 @@ fn asset_conversion() {
 				..
 			}),
 		);
+	});
+}
+
+#[test]
+fn fees_are_getting_recorded() {
+	new_test_ext().execute_with(|| {
+		let range_1 = -100..100;
+
+		// Create a new pool.
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			Asset::Eth,
+			STABLE_ASSET,
+			Default::default(),
+			price_at_tick(0).unwrap(),
+		));
+
+		assert_ok!(LiquidityPools::set_range_order(
+			RuntimeOrigin::signed(ALICE),
+			Asset::Eth,
+			STABLE_ASSET,
+			0,
+			Some(range_1.clone()),
+			RangeOrderSize::Liquidity { liquidity: 100_000 },
+		));
+
+		MockBalance::assert_fees_recorded(&ALICE);
+
+		assert_ok!(LiquidityPools::set_limit_order(
+			RuntimeOrigin::signed(BOB),
+			Asset::Eth,
+			STABLE_ASSET,
+			Side::Sell,
+			6,
+			Some(100),
+			700_000,
+		));
+
+		MockBalance::assert_fees_recorded(&BOB);
 	});
 }

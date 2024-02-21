@@ -213,13 +213,13 @@ mod benchmarks {
 			);
 		}
 
-		assert_eq!(
-			Pallet::<T>::pool_info(Asset::Eth, STABLE_ASSET),
-			Ok(PoolInfo {
-				limit_order_fee_hundredth_pips: fee,
-				range_order_fee_hundredth_pips: fee,
-			})
-		);
+		match Pallet::<T>::pool_info(Asset::Eth, STABLE_ASSET) {
+			Ok(pool_info) => {
+				assert_eq!(pool_info.limit_order_fee_hundredth_pips, fee);
+				assert_eq!(pool_info.range_order_fee_hundredth_pips, fee);
+			},
+			Err(_) => panic!("Pool not found"),
+		}
 	}
 
 	#[benchmark]

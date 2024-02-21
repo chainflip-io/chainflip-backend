@@ -1304,6 +1304,7 @@ impl_runtime_apis! {
 				balances: Asset::all().map(|asset|
 					(asset, pallet_cf_lp::FreeBalances::<Runtime>::get(&account_id, asset).unwrap_or(0))
 				).collect(),
+				earned_fees: pallet_cf_lp::HistoricalEarnedFees::<Runtime>::get(&account_id),
 			})
 		}
 
