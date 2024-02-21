@@ -1139,6 +1139,12 @@ where
 		base_asset: Asset,
 		quote_asset: Asset,
 	) -> Result<(), SubscriptionEmptyError> {
+
+		// Check that the requested pool exists:
+		let Ok(Ok(_)) = self.client.runtime_api().cf_pool_info(self.client.info().best_hash, base_asset, quote_asset) else {
+			return Err(SubscriptionEmptyError);
+		};
+
 		self.new_subscription(
 			false, /* only_on_changes */
 			true,  /* end_on_error */
