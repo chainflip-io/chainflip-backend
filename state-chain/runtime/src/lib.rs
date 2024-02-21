@@ -485,6 +485,25 @@ type GrandpaOffenceReporter<T> = pallet_cf_reputation::ChainflipOffenceReporting
 	<T as pallet_session::historical::Config>::FullIdentification,
 >;
 
+// The coverage build can't resolve the Historical KeyOwnerProof type: Returns "error[E0275]:
+// overflow evaluating the requirement `<Runtime as pallet_grandpa::Config>::KeyOwnerProof ==
+// _`".
+// TODO: periodically check this with new rust toolchains by running coverage with `cargo
+// llvm-cov --no-cfg-coverage`.
+#[cfg(coverage)]
+impl pallet_grandpa::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = ();
+	type MaxAuthorities = ConstU32<MAX_AUTHORITIES>;
+	// Note: We don't use nomination.
+	type MaxNominators = ConstU32<0>;
+
+	type MaxSetIdSessionEntries = ConstU64<8>;
+	type KeyOwnerProof = sp_core::Void;
+	type EquivocationReportSystem = ();
+}
+
+#[cfg(not(coverage))]
 impl pallet_grandpa::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
