@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_amm::{
-	common::{Amount, Order, Side, SideMap, Tick},
+	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::address::EncodedAddress;
@@ -10,7 +10,7 @@ use chainflip_engine::state_chain_observer::client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock, WaitFor, WaitForResult},
 	StateChainClient,
 };
-use pallet_cf_pools::{AssetsMap, IncreaseOrDecrease, OrderId, RangeOrderSize};
+use pallet_cf_pools::{IncreaseOrDecrease, OrderId, RangeOrderSize};
 use serde::{Deserialize, Serialize};
 use sp_core::{H256, U256};
 use state_chain_runtime::RuntimeCall;
@@ -52,21 +52,21 @@ pub mod types {
 		pub id: U256,
 		pub tick_range: Range<Tick>,
 		pub liquidity_total: U256,
-		pub collected_fees: AssetsMap<U256>,
+		pub collected_fees: PoolPairsMap<U256>,
 		pub size_change: Option<IncreaseOrDecrease<RangeOrderChange>>,
 	}
 
 	#[derive(Serialize, Deserialize, Clone)]
 	pub struct RangeOrderChange {
 		pub liquidity: U256,
-		pub amounts: AssetsMap<U256>,
+		pub amounts: PoolPairsMap<U256>,
 	}
 
 	#[derive(Serialize, Deserialize, Clone)]
 	pub struct LimitOrder {
 		pub base_asset: OldAsset,
 		pub quote_asset: OldAsset,
-		pub side: Order,
+		pub side: Side,
 		pub id: U256,
 		pub tick: Tick,
 		pub sell_amount_total: U256,
@@ -313,7 +313,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		side: Order,
+		side: Side,
 		id: OrderId,
 		option_tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<AssetAmount>,
@@ -340,7 +340,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		side: Order,
+		side: Side,
 		id: OrderId,
 		option_tick: Option<Tick>,
 		sell_amount: AssetAmount,

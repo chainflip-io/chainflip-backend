@@ -1,5 +1,5 @@
 use cf_amm::{
-	common::{Amount, Order, Tick},
+	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -21,9 +21,7 @@ use jsonrpsee::{
 	SubscriptionSink,
 };
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_pools::{
-	AskBidMap, AssetsMap, PoolInfo, PoolLiquidity, PoolPriceV1, UnidirectionalPoolDepth,
-};
+use pallet_cf_pools::{AskBidMap, PoolInfo, PoolLiquidity, PoolPriceV1, UnidirectionalPoolDepth};
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_core::U256;
@@ -246,7 +244,7 @@ pub struct PoolPriceV2 {
 pub struct RpcPrewitnessedSwap {
 	pub base_asset: OldAsset,
 	pub quote_asset: OldAsset,
-	pub side: Order,
+	pub side: Side,
 	pub amounts: Vec<U256>,
 }
 
@@ -371,7 +369,7 @@ pub trait CustomApi {
 		quote_asset: Asset,
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<AssetsMap<Amount>>;
+	) -> RpcResult<PoolPairsMap<Amount>>;
 	#[method(name = "pool_orderbook")]
 	fn cf_pool_orderbook(
 		&self,
@@ -418,7 +416,7 @@ pub trait CustomApi {
 		tick_range: Range<Tick>,
 		liquidity: Liquidity,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<AssetsMap<Amount>>;
+	) -> RpcResult<PoolPairsMap<Amount>>;
 	#[method(name = "funding_environment")]
 	fn cf_funding_environment(
 		&self,
@@ -452,14 +450,14 @@ pub trait CustomApi {
 	#[subscription(name = "subscribe_pool_price_v2", item = BlockUpdate<PoolPriceV2>)]
 	fn cf_subscribe_pool_price_v2(&self, base_asset: Asset, quote_asset: Asset);
 	#[subscription(name = "subscribe_prewitness_swaps", item = BlockUpdate<RpcPrewitnessedSwap>)]
-	fn cf_subscribe_prewitness_swaps(&self, base_asset: Asset, quote_asset: Asset, side: Order);
+	fn cf_subscribe_prewitness_swaps(&self, base_asset: Asset, quote_asset: Asset, side: Side);
 
 	#[method(name = "prewitness_swaps")]
 	fn cf_prewitness_swaps(
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		side: Order,
+		side: Side,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcPrewitnessedSwap>;
 
@@ -901,7 +899,7 @@ where
 		quote_asset: Asset,
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<AssetsMap<Amount>> {
+	) -> RpcResult<PoolPairsMap<Amount>> {
 		self.client
 			.runtime_api()
 			.cf_required_asset_ratio_for_range_order(
@@ -949,7 +947,7 @@ where
 		tick_range: Range<Tick>,
 		liquidity: Liquidity,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<AssetsMap<Amount>> {
+	) -> RpcResult<PoolPairsMap<Amount>> {
 		self.client
 			.runtime_api()
 			.cf_pool_range_order_liquidity_value(
@@ -1129,7 +1127,7 @@ where
 		sink: SubscriptionSink,
 		base_asset: Asset,
 		quote_asset: Asset,
-		side: Order,
+		side: Side,
 	) -> Result<(), SubscriptionEmptyError> {
 		self.new_subscription(
 			false, /* only_on_changes */
@@ -1155,7 +1153,7 @@ where
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		side: Order,
+		side: Side,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcPrewitnessedSwap> {
 		Ok(RpcPrewitnessedSwap {
