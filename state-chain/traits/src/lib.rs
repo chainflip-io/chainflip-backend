@@ -192,14 +192,14 @@ pub trait VaultActivator<C: ChainCrypto> {
 
 	/// Activate key/s on particular chain/s. For example, setting the new key
 	/// on the contract for a smart contract chain.
-	/// Can also complete the activation if we don't require a TSS
+	/// Can also complete the activation if we don't require a signing ceremony
 	fn start_key_activation(
 		new_key: C::AggKey,
 		maybe_old_key: Option<C::AggKey>,
 	) -> Option<ThresholdSignatureRequestId>;
 
 	/// Final step of key activation which result in the vault activation (in case we need to wait
-	/// for TSS to complete)
+	/// for the signing ceremony to complete)
 	fn activate_key();
 
 	#[cfg(feature = "runtime-benchmarks")]

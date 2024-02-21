@@ -147,7 +147,8 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 						),
 					},
 				KeyRotationStatusVariant::AwaitingActivation => {
-					let (new_public_key, request_id) = match PendingKeyRotation::<T, I>::get() {
+					let (new_public_key, maybe_request_id) = match PendingKeyRotation::<T, I>::get()
+					{
 						Some(KeyRotationStatus::AwaitingActivation {
 							request_id,
 							new_public_key,
@@ -157,11 +158,11 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 						),
 					};
 
-					if let Some(tss_request_id) = request_id {
-						// After a tss ceremony completes, it is consumed and Void is left
-						// behind At this point we are sure the ceremony existed and we
-						// completed it we can activate the key
-						if Signature::<T, I>::get(tss_request_id) == AsyncResult::Void {
+					if let Some(request_id) = maybe_request_id {
+						// After the ceremony completes, it is consumed and Void is left
+						// behind. At this point we are sure the ceremony existed and we
+						// completed it, we can activate the key
+						if Signature::<T, I>::get(request_id) == AsyncResult::Void {
 							T::VaultActivator::activate_key();
 						};
 					};
@@ -204,7 +205,7 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 				new_public_key,
 				maybe_active_epoch_key.map(|EpochKey { key, .. }| key),
 			) {
-				// If a request_id was returned we need to wait for the request (tss) to complete
+				// If a request_id was returned we need to wait for the signing request to complete
 				// before ending the rotation succesfully
 				Some(request_id) => {
 					PendingKeyRotation::<T, I>::put(
