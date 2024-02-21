@@ -106,7 +106,7 @@ pub trait ECPoint:
 {
 	type Scalar: ECScalar;
 
-	type CompressedPointLength: ArrayLength<u8> + Unsigned;
+	type CompressedPointLength: ArrayLength + Unsigned;
 
 	fn from_scalar(scalar: &Self::Scalar) -> Self;
 

@@ -2,7 +2,9 @@ use super::*;
 
 use crate::threshold_signing::{BtcThresholdSigner, DotThresholdSigner, EthThresholdSigner};
 
+use cf_chains::address::EncodedAddress;
 use cf_primitives::{AccountRole, BlockNumber, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
+use cf_test_utilities::assert_events_eq;
 use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo, KeyRotator};
 use cfe_events::{KeyHandoverRequest, ThresholdSignatureRequest};
 use chainflip_node::test_account_from_seed;
@@ -10,14 +12,14 @@ use codec::Encode;
 use frame_support::{
 	inherent::ProvideInherent,
 	pallet_prelude::InherentData,
-	traits::{IntegrityTest, OnFinalize, OnIdle, UnfilteredDispatchable},
+	traits::{IntegrityTest, OnFinalize, OnIdle, OnNewAccount, UnfilteredDispatchable},
 };
 use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 use sp_consensus_aura::SlotDuration;
 use sp_std::collections::btree_set::BTreeSet;
 use state_chain_runtime::{
-	AccountRoles, AllPalletsWithSystem, BitcoinInstance, PalletExecutionOrder, PolkadotInstance,
-	Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Validator, Weight,
+	AccountRoles, AllPalletsWithSystem, BitcoinInstance, LiquidityProvider, PalletExecutionOrder,
+	PolkadotInstance, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Validator, Weight,
 };
 use std::{
 	cell::RefCell,
@@ -733,4 +735,36 @@ pub fn fund_authorities_and_join_auction(
 	}
 
 	(testnet, genesis_authorities, init_backup_nodes)
+}
+
+pub fn new_account(account_id: &AccountId, role: AccountRole) {
+	use cf_traits::Funding;
+
+	Flip::credit_funds(account_id, FLIPPERINOS_PER_FLIP);
+	AccountRoles::on_new_account(account_id);
+	assert_ok!(AccountRoles::register_account_role(account_id, role));
+	assert_events_eq!(
+		Runtime,
+		RuntimeEvent::AccountRoles(pallet_cf_account_roles::Event::AccountRoleRegistered {
+			account_id: account_id.clone(),
+			role,
+		})
+	);
+	if role == AccountRole::LiquidityProvider {
+		register_refund_addresses(account_id);
+	}
+	System::reset_events();
+}
+
+pub fn register_refund_addresses(account_id: &AccountId) {
+	for encoded_address in [
+		EncodedAddress::Eth(Default::default()),
+		EncodedAddress::Dot(Default::default()),
+		EncodedAddress::Btc("bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw".as_bytes().to_vec()),
+	] {
+		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
+			RuntimeOrigin::signed(account_id.clone()),
+			encoded_address
+		));
+	}
 }

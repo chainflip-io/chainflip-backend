@@ -29,8 +29,8 @@ fn max_liquidity() {
 	}
 
 	for price in [MIN_SQRT_PRICE, MAX_SQRT_PRICE].map(sqrt_price_to_price) {
-		checks!(ZeroToOne, price);
-		checks!(OneToZero, price);
+		checks!(BaseToQuote, price);
+		checks!(QuoteToBase, price);
 	}
 }
 
@@ -294,7 +294,7 @@ fn historics() {
 		let amount: Amount = 1000.into();
 		let mut pool_state = PoolState::new(MAX_LP_FEE).unwrap();
 		assert_eq!(
-			assert_ok!(pool_state.collect_and_mint::<ZeroToOne>(&lp, 0, amount)),
+			assert_ok!(pool_state.collect_and_mint::<BaseToQuote>(&lp, 0, amount)),
 			(
 				Collected {
 					fees: Amount::zero(),
@@ -311,10 +311,10 @@ fn historics() {
 		let bought_amount = Amount::from(24);
 		let fees = Amount::from(24);
 
-		pool_state.swap::<ZeroToOne>(swap_amount, None);
+		pool_state.swap::<BaseToQuote>(swap_amount, None);
 
 		assert_eq!(
-			assert_ok!(pool_state.collect::<ZeroToOne>(&lp, 0)),
+			assert_ok!(pool_state.collect::<BaseToQuote>(&lp, 0)),
 			(
 				Collected {
 					fees,
@@ -327,10 +327,10 @@ fn historics() {
 			)
 		);
 
-		pool_state.swap::<ZeroToOne>(swap_amount, None);
+		pool_state.swap::<BaseToQuote>(swap_amount, None);
 
 		assert_eq!(
-			assert_ok!(pool_state.collect::<ZeroToOne>(&lp, 0)),
+			assert_ok!(pool_state.collect::<BaseToQuote>(&lp, 0)),
 			(
 				Collected {
 					fees,
@@ -343,10 +343,10 @@ fn historics() {
 			)
 		);
 
-		pool_state.swap::<ZeroToOne>(swap_amount, None);
+		pool_state.swap::<BaseToQuote>(swap_amount, None);
 
 		assert_eq!(
-			assert_ok!(pool_state.collect::<ZeroToOne>(&lp, 0)),
+			assert_ok!(pool_state.collect::<BaseToQuote>(&lp, 0)),
 			(
 				Collected {
 					fees,
@@ -360,7 +360,7 @@ fn historics() {
 		);
 
 		assert_eq!(
-			assert_ok!(pool_state.collect_and_burn::<ZeroToOne>(&lp, 0, amount)),
+			assert_ok!(pool_state.collect_and_burn::<BaseToQuote>(&lp, 0, amount)),
 			(
 				amount - Amount::from(75),
 				Collected {
@@ -424,8 +424,8 @@ fn mint() {
 		}
 	}
 
-	inner::<ZeroToOne>();
-	inner::<OneToZero>();
+	inner::<BaseToQuote>();
+	inner::<QuoteToBase>();
 }
 
 #[test]
@@ -581,8 +581,8 @@ fn burn() {
 		}
 	}
 
-	inner::<ZeroToOne>();
-	inner::<OneToZero>();
+	inner::<BaseToQuote>();
+	inner::<QuoteToBase>();
 }
 
 #[test]
@@ -634,8 +634,8 @@ fn swap() {
 		}
 	}
 
-	inner::<ZeroToOne>();
-	inner::<OneToZero>();
+	inner::<BaseToQuote>();
+	inner::<QuoteToBase>();
 
 	// Partial liquidity, multiple prices
 	{
@@ -645,18 +645,18 @@ fn swap() {
 			(U256::from(150000000)..=U256::from(150010000), 1),
 		] {
 			let mut pool_state = PoolState::new(0).unwrap();
-			assert_ok!(pool_state.collect_and_mint::<ZeroToOne>(
+			assert_ok!(pool_state.collect_and_mint::<BaseToQuote>(
 				&LiquidityProvider::from([0; 32]),
 				tick,
 				100000000.into()
 			));
-			assert_ok!(pool_state.collect_and_mint::<ZeroToOne>(
+			assert_ok!(pool_state.collect_and_mint::<BaseToQuote>(
 				&LiquidityProvider::from([0; 32]),
 				offset +
 					tick_at_sqrt_price(sqrt_price_at_tick(tick) * U256::from(4).integer_sqrt()),
 				100000000.into()
 			));
-			let (output, remaining) = pool_state.swap::<ZeroToOne>(75000000.into(), None);
+			let (output, remaining) = pool_state.swap::<BaseToQuote>(75000000.into(), None);
 			assert!(range.contains(&output));
 			assert_eq!(remaining, Amount::zero());
 		}
@@ -668,18 +668,18 @@ fn swap() {
 			(U256::from(119998000)..=U256::from(120000000), 1),
 		] {
 			let mut pool_state = PoolState::new(0).unwrap();
-			assert_ok!(pool_state.collect_and_mint::<OneToZero>(
+			assert_ok!(pool_state.collect_and_mint::<QuoteToBase>(
 				&LiquidityProvider::from([0; 32]),
 				tick,
 				100000000.into()
 			));
-			assert_ok!(pool_state.collect_and_mint::<OneToZero>(
+			assert_ok!(pool_state.collect_and_mint::<QuoteToBase>(
 				&LiquidityProvider::from([0; 32]),
 				offset +
 					tick_at_sqrt_price(sqrt_price_at_tick(tick) * U256::from(4).integer_sqrt()),
 				100000000.into()
 			));
-			let (output, remaining) = pool_state.swap::<OneToZero>(180000000.into(), None);
+			let (output, remaining) = pool_state.swap::<QuoteToBase>(180000000.into(), None);
 			assert!(range.contains(&output));
 			assert_eq!(remaining, Amount::zero());
 		}
@@ -689,32 +689,32 @@ fn swap() {
 	{
 		let mut pool_state = PoolState::new(0).unwrap();
 		let tick = 0;
-		assert_ok!(pool_state.collect_and_mint::<ZeroToOne>(
+		assert_ok!(pool_state.collect_and_mint::<BaseToQuote>(
 			&LiquidityProvider::from([0; 32]),
 			tick,
 			100.into()
 		));
-		assert_ok!(pool_state.collect_and_mint::<ZeroToOne>(
+		assert_ok!(pool_state.collect_and_mint::<BaseToQuote>(
 			&LiquidityProvider::from([0; 32]),
 			tick_at_sqrt_price(sqrt_price_at_tick(tick) * U256::from(4).integer_sqrt()),
 			100.into()
 		));
-		assert_eq!(pool_state.swap::<ZeroToOne>(150.into(), None), (200.into(), 24.into()));
+		assert_eq!(pool_state.swap::<BaseToQuote>(150.into(), None), (200.into(), 24.into()));
 	}
 	{
 		let mut pool_state = PoolState::new(0).unwrap();
 		let tick = 0;
-		assert_ok!(pool_state.collect_and_mint::<OneToZero>(
+		assert_ok!(pool_state.collect_and_mint::<QuoteToBase>(
 			&LiquidityProvider::from([0; 32]),
 			tick,
 			100.into()
 		));
-		assert_ok!(pool_state.collect_and_mint::<OneToZero>(
+		assert_ok!(pool_state.collect_and_mint::<QuoteToBase>(
 			&LiquidityProvider::from([0; 32]),
 			tick_at_sqrt_price(sqrt_price_at_tick(tick) * U256::from(4).integer_sqrt()),
 			100.into()
 		));
-		assert_eq!(pool_state.swap::<OneToZero>(550.into(), None), (200.into(), 50.into()));
+		assert_eq!(pool_state.swap::<QuoteToBase>(550.into(), None), (200.into(), 50.into()));
 	}
 }
 
@@ -726,7 +726,7 @@ fn maximum_liquidity_swap() {
 	for tick in MIN_TICK..=MAX_TICK {
 		assert_eq!(
 			pool_state
-				.collect_and_mint::<ZeroToOne>(
+				.collect_and_mint::<BaseToQuote>(
 					&LiquidityProvider::from([0; 32]),
 					tick,
 					MAX_FIXED_POOL_LIQUIDITY
@@ -738,7 +738,7 @@ fn maximum_liquidity_swap() {
 
 	assert_eq!(
 		MAX_FIXED_POOL_LIQUIDITY * (1 + MAX_TICK - MIN_TICK),
-		std::iter::repeat_with(|| { pool_state.swap::<ZeroToOne>(Amount::MAX, None).0 })
+		std::iter::repeat_with(|| { pool_state.swap::<BaseToQuote>(Amount::MAX, None).0 })
 			.take_while(|x| !x.is_zero())
 			.fold(Amount::zero(), |acc, x| acc + x)
 	);

@@ -34,7 +34,6 @@ use core::marker::PhantomData;
 pub trait WeightInfo {
 	fn disable_asset_egress() -> Weight;
 	fn process_single_deposit() -> Weight;
-	fn set_minimum_deposit() -> Weight;
 	fn finalise_ingress(a: u32, ) -> Weight;
 	fn vault_transfer_failed() -> Weight;
 	fn ccm_broadcast_failed() -> Weight;
@@ -74,16 +73,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(42_887_000, 3746)
 			.saturating_add(T::DbWeight::get().reads(6_u64))
 			.saturating_add(T::DbWeight::get().writes(3_u64))
-	}
-	/// Storage: `EthereumIngressEgress::MinimumDeposit` (r:0 w:1)
-	/// Proof: `EthereumIngressEgress::MinimumDeposit` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn set_minimum_deposit() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `0`
-		//  Estimated: `0`
-		// Minimum execution time: 10_089_000 picoseconds.
-		Weight::from_parts(10_496_000, 0)
-			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
 	/// Storage: `EthereumIngressEgress::DepositChannelLookup` (r:1 w:1)
 	/// Proof: `EthereumIngressEgress::DepositChannelLookup` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -149,16 +138,6 @@ impl WeightInfo for () {
 		Weight::from_parts(42_887_000, 3746)
 			.saturating_add(RocksDbWeight::get().reads(6_u64))
 			.saturating_add(RocksDbWeight::get().writes(3_u64))
-	}
-	/// Storage: `EthereumIngressEgress::MinimumDeposit` (r:0 w:1)
-	/// Proof: `EthereumIngressEgress::MinimumDeposit` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn set_minimum_deposit() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `0`
-		//  Estimated: `0`
-		// Minimum execution time: 10_089_000 picoseconds.
-		Weight::from_parts(10_496_000, 0)
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `EthereumIngressEgress::DepositChannelLookup` (r:1 w:1)
 	/// Proof: `EthereumIngressEgress::DepositChannelLookup` (`max_values`: None, `max_size`: None, mode: `Measured`)

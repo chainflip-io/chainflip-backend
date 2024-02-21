@@ -17,7 +17,6 @@ const TX_HASH: [u8; 32] = [0xab; 32];
 #[instance_benchmarks]
 mod benchmarks {
 	use super::*;
-	use sp_std::vec;
 
 	#[benchmark]
 	fn vault_key_rotated_externally() {

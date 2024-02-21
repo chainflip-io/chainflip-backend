@@ -25,7 +25,7 @@ pub use weights::WeightInfo;
 /// Hash over (call, nonce, runtime_version)
 pub type GovCallHash = [u8; 32];
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 #[cfg(test)]
 mod mock;
@@ -264,10 +264,18 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::new_membership_set())]
 		pub fn new_membership_set(
 			origin: OriginFor<T>,
-			accounts: Vec<T::AccountId>,
+			new_members: BTreeSet<T::AccountId>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			Members::<T>::set(accounts.into_iter().collect());
+			Members::<T>::mutate(|old_members| {
+				for member in old_members.difference(&new_members) {
+					<frame_system::Pallet<T>>::dec_sufficients(member);
+				}
+				for member in new_members.difference(old_members) {
+					<frame_system::Pallet<T>>::inc_sufficients(member);
+				}
+				*old_members = new_members;
+			});
 			Ok(().into())
 		}
 
@@ -460,6 +468,9 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
+			for member in &self.members {
+				<frame_system::Pallet<T>>::inc_sufficients(member);
+			}
 			Members::<T>::set(self.members.clone());
 			ExpiryTime::<T>::set(self.expiry_span);
 		}
@@ -517,7 +528,7 @@ impl<T: Config> Pallet<T> {
 		})?;
 
 		if proposal.approved.len() >
-			(Members::<T>::decode_len().ok_or(Error::<T>::DecodeMembersLenFailed)? / 2)
+			(Members::<T>::decode_non_dedup_len().ok_or(Error::<T>::DecodeMembersLenFailed)? / 2)
 		{
 			if proposal.execution == ExecutionMode::Manual {
 				PreAuthorisedGovCalls::<T>::insert(approved_id, proposal.call);

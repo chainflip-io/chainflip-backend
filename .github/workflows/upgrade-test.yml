@@ -44,9 +44,23 @@ jobs:
     # conservatively 1.5 hours. 2 bouncer runs need to occur.
     timeout-minutes: 90
     steps:
-      
       - name: Checkout chainflip-backend
         uses: actions/checkout@v3
+
+      - name: Get upgrade-to-commit SHA
+        uses: ./.github/actions/get-workflow-commit
+        id: get-upgrade-to-commit
+        with:
+          workflow-name: ${{ inputs.upgrade-to-workflow-name }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set upgrade-to-commit
+        run: |
+          if [ -z "${{ inputs.upgrade-to-commit }}" ]; then
+            echo "UPGRADE_TO_COMMIT=${{ steps.get-upgrade-to-commit.outputs.commit-sha }}" >> $GITHUB_ENV
+          else
+            echo "UPGRADE_TO_COMMIT=${{ inputs.upgrade-to-commit }}" >> $GITHUB_ENV
+          fi
 
       - name: Login to Github Container Registry 🔑
         uses: docker/login-action@v2
@@ -87,6 +101,17 @@ jobs:
           rename-to: try-runtime
           chmod: 0755
 
+      - name: Get upgrade-from-commit
+        uses: ./.github/actions/get-workflow-commit
+        id: get-upgrade-from-commit
+        with:
+          workflow-name: release-${{ inputs.upgrade-from-release }}.yml
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: echo upgrade from commit
+        run: |
+          echo "The upgrade-from-commit is: ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}"
+
       - name: Download latest release binaries
         uses: dawidd6/action-download-artifact@v2
         with:
@@ -112,7 +137,7 @@ jobs:
           workflow: ${{ inputs.upgrade-to-workflow-name }}
           name: chainflip-backend-bin-try-runtime-ubuntu-22.04
           path: upgrade-to-bins
-          commit: ${{ inputs.upgrade-to-commit }}
+          commit: ${{ env.UPGRADE_TO_COMMIT }}
 
       - name: Download latest main runtime
         uses: dawidd6/action-download-artifact@v2
@@ -120,7 +145,7 @@ jobs:
           workflow: ${{ inputs.upgrade-to-workflow-name }}
           name: chainflip-node-runtime-try-runtime
           path: main-runtime
-          commit: ${{ inputs.upgrade-to-commit }}
+          commit: ${{ env.UPGRADE_TO_COMMIT }}
 
       - name: Permissions for latest binaries
         run: |
@@ -139,18 +164,24 @@ jobs:
       - name: Start a localnet from current release
         env:
           BINARY_ROOT_PATH: ./latest-release-bins
+          DEBUG_OUTPUT_DESTINATION: /tmp/chainflip/debug.log
         run: |
           set -x
           mkdir -p /tmp/chainflip/bashful
           mkdir -p /tmp/chainflip/doc
           mkdir -p /tmp/chainflip/dopey
+          touch /tmp/chainflip/debug.log
+          chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
           touch ./localnet/.setup_complete
           ./localnet/manage.sh
 
       - name: Run bouncer on latest release
         id: pre-upgrade-bouncer
-        working-directory: bouncer
         run: |
+          git fetch --all
+          git checkout ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}
+          git rev-parse HEAD
+          cd bouncer
           ./run.sh
 
       # we need to be sure that when this fails, we catch the error, any panics etc. that occur
@@ -158,8 +189,10 @@ jobs:
       - name: Upgrade network
         shell: bash
         id: upgrade-network
-        working-directory: bouncer
         run: |
+          git checkout ${{ github.sha }}
+          git rev-parse HEAD
+          cd bouncer
           ./commands/upgrade_network.ts prebuilt \
             --runtime ./../main-runtime/state_chain_runtime.compact.compressed.wasm \
             --bins ./../upgrade-to-bins \
@@ -168,8 +201,10 @@ jobs:
 
       - name: Run bouncer after upgrade
         id: post-upgrade-bouncer
-        working-directory: bouncer
         run: |
+          git checkout ${{ env.UPGRADE_TO_COMMIT }}
+          git rev-parse HEAD
+          cd bouncer
           ./tests/all_concurrent_tests.ts
 
       - name: Print old chainflip-engine logs
@@ -196,6 +231,11 @@ jobs:
         if: failure()
         run: |
           cat /tmp/chainflip/chainflip-lp-api.log
+
+      - name: Print localnet init debug logs 🕵️‍♂️
+        if: always()
+        run: |
+          cat /tmp/chainflip/debug.log
 
       - name: Upload Localnet Logs 💾
         if: always()

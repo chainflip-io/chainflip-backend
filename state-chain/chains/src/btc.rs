@@ -657,7 +657,7 @@ impl ScriptPubkey {
 		) -> Option<ScriptPubkey> {
 			let (hrp, data, variant) = bech32::decode(address).ok()?;
 			if hrp == network.bech32_and_bech32m_address_hrp() {
-				let version = data.get(0)?.to_u8();
+				let version = data.first()?.to_u8();
 				let program = Vec::from_base32(&data[1..]).ok()?;
 				match (version, variant, program.len() as u32) {
 					(SEGWIT_VERSION_ZERO, Variant::Bech32, 20) =>
@@ -700,11 +700,7 @@ const LOCKTIME: [u8; 4] = 0u32.to_le_bytes();
 const VERSION: [u8; 4] = 2u32.to_le_bytes();
 const SEQUENCE_NUMBER: [u8; 4] = (u32::MAX - 2).to_le_bytes();
 
-fn extend_with_inputs_outputs(
-	bytes: &mut Vec<u8>,
-	inputs: &Vec<Utxo>,
-	outputs: &Vec<BitcoinOutput>,
-) {
+fn extend_with_inputs_outputs(bytes: &mut Vec<u8>, inputs: &[Utxo], outputs: &[BitcoinOutput]) {
 	bytes.extend(to_varint(inputs.len() as u64));
 	bytes.extend(inputs.iter().fold(Vec::<u8>::default(), |mut acc, input| {
 		acc.extend(input.id.tx_id);
@@ -714,7 +710,7 @@ fn extend_with_inputs_outputs(
 		acc
 	}));
 
-	outputs.as_slice().btc_encode_to(bytes);
+	outputs.btc_encode_to(bytes);
 }
 
 impl BitcoinTransaction {

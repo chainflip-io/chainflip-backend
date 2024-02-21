@@ -18,8 +18,8 @@ use utilities::task_scope;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwapChannelInfo<C: Chain> {
 	deposit_address: <C::ChainAccount as ToHumanreadableAddress>::Humanreadable,
-	source_asset: any::Asset,
-	destination_asset: any::Asset,
+	source_asset: any::OldAsset,
+	destination_asset: any::OldAsset,
 }
 
 pub struct PreUpdateStatus {
@@ -87,8 +87,8 @@ impl QueryApi {
 					destination_asset, ..
 				} => Some(SwapChannelInfo {
 					deposit_address: deposit_channel.address.to_humanreadable(network_environment),
-					source_asset: deposit_channel.asset.into(),
-					destination_asset: *destination_asset,
+					source_asset: Into::<Asset>::into(deposit_channel.asset).into(),
+					destination_asset: (*destination_asset).into(),
 				}),
 				_ => None,
 			})
@@ -102,14 +102,14 @@ impl QueryApi {
 		let block_hash =
 			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_block().hash);
 
-		futures::future::join_all(Asset::all().iter().map(|asset| async {
+		futures::future::join_all(Asset::all().map(|asset| async move {
 			Ok((
-				*asset,
+				asset,
 				self.state_chain_client
 					.storage_double_map_entry::<pallet_cf_lp::FreeBalances<state_chain_runtime::Runtime>>(
 						block_hash,
 						&self.state_chain_client.account_id(),
-						asset,
+						&asset,
 					)
 					.await?
 					.unwrap_or_default(),

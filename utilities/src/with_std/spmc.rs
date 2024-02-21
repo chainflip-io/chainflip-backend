@@ -5,10 +5,16 @@ pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
 	let (sender, receiver) = async_broadcast::broadcast(capacity);
 	let (detect_close_sender, detect_close_receiver) = tokio::sync::watch::channel(());
 
-	(Sender(sender, detect_close_sender), Receiver(receiver, detect_close_receiver))
+	(
+		Sender { sender, detect_close_sender },
+		Receiver { receiver, _detect_close_receiver: detect_close_receiver },
+	)
 }
 
-pub struct Sender<T>(async_broadcast::Sender<T>, tokio::sync::watch::Sender<()>);
+pub struct Sender<T> {
+	sender: async_broadcast::Sender<T>,
+	detect_close_sender: tokio::sync::watch::Sender<()>,
+}
 
 impl<T: Clone> Sender<T> {
 	/// Sends an item to all receivers
@@ -16,13 +22,13 @@ impl<T: Clone> Sender<T> {
 	#[track_caller]
 	pub fn send(&self, msg: T) -> impl futures::Future<Output = bool> + '_ {
 		async move {
-			match self.0.try_broadcast(msg) {
+			match self.sender.try_broadcast(msg) {
 				Ok(None) => true,
 				Ok(Some(_)) => unreachable!("async_broadcast feature unused"),
 				Err(error) => match error {
 					async_broadcast::TrySendError::Full(msg) => {
-						warn!("Waiting for space in channel which is currently full with a capacity of {} items at {}", self.0.capacity(), core::panic::Location::caller());
-						match self.0.broadcast(msg).await {
+						warn!("Waiting for space in channel which is currently full with a capacity of {} items at {}", self.sender.capacity(), core::panic::Location::caller());
+						match self.sender.broadcast(msg).await {
 							Ok(None) => true,
 							Ok(Some(_)) => unreachable!("async_broadcast feature unused"),
 							Err(_) => false,
@@ -39,30 +45,36 @@ impl<T: Clone> Sender<T> {
 impl<T> Sender<T> {
 	/// Creates a receiver, and reopens channel if it was previously closed
 	pub fn receiver(&mut self) -> Receiver<T> {
-		Receiver(
-			{
-				let receiver = self.0.new_receiver();
+		Receiver {
+			receiver: {
+				let receiver = self.sender.new_receiver();
 
 				if receiver.is_closed() {
-					let (new_sender, new_receiver) = async_broadcast::broadcast(self.0.capacity());
-					let _ = std::mem::replace(&mut self.0, new_sender);
+					let (new_sender, new_receiver) =
+						async_broadcast::broadcast(self.sender.capacity());
+					let _ = std::mem::replace(&mut self.sender, new_sender);
 					new_receiver
 				} else {
 					receiver
 				}
 			},
-			self.1.subscribe(), /* Will reopen channel even if closed previously */
-		)
+			_detect_close_receiver: self.detect_close_sender.subscribe(), /* Will reopen channel
+			                                                               * even if closed
+			                                                               * previously */
+		}
 	}
 
 	/// Waits until all receivers have been dropped, and therefore the channel is closed
 	pub async fn closed(&self) {
-		self.1.closed().await
+		self.detect_close_sender.closed().await
 	}
 }
 
 #[derive(Clone)]
-pub struct Receiver<T>(async_broadcast::Receiver<T>, tokio::sync::watch::Receiver<()>);
+pub struct Receiver<T> {
+	receiver: async_broadcast::Receiver<T>,
+	_detect_close_receiver: tokio::sync::watch::Receiver<()>,
+}
 impl<T: Clone> Stream for Receiver<T> {
 	type Item = T;
 
@@ -70,7 +82,7 @@ impl<T: Clone> Stream for Receiver<T> {
 		mut self: std::pin::Pin<&mut Self>,
 		cx: &mut std::task::Context<'_>,
 	) -> std::task::Poll<Option<Self::Item>> {
-		self.0.poll_next_unpin(cx)
+		self.receiver.poll_next_unpin(cx)
 	}
 }
 

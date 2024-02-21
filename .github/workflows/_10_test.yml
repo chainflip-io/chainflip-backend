@@ -12,7 +12,7 @@ jobs:
   unit-tests:
     runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-07-31-ubuntu-20.04"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-20.04-44"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}

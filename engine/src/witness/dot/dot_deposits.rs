@@ -208,8 +208,8 @@ mod test {
 		);
 
 		assert_eq!(deposit_witnesses.len(), 3);
-		assert_eq!(deposit_witnesses.get(0).unwrap().amount, TRANSFER_1_AMOUNT);
-		assert_eq!(deposit_witnesses.get(1).unwrap().amount, TRANSFER_2_AMOUNT);
-		assert_eq!(deposit_witnesses.get(2).unwrap().amount, TRANSFER_TO_SELF_AMOUNT);
+		assert_eq!(deposit_witnesses[0].amount, TRANSFER_1_AMOUNT);
+		assert_eq!(deposit_witnesses[1].amount, TRANSFER_2_AMOUNT);
+		assert_eq!(deposit_witnesses[2].amount, TRANSFER_TO_SELF_AMOUNT);
 	}
 }

@@ -1,9 +1,10 @@
 use crate::{
-	mock_eth::*, Call as PalletCall, ChannelAction, ChannelIdCounter, CrossChainMessage,
-	DepositAction, DepositChannelLookup, DepositChannelPool, DepositIgnoredReason, DepositWitness,
-	DisabledEgressAssets, EgressDustLimit, Event as PalletEvent, FailedForeignChainCall,
-	FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit, Pallet, ScheduledEgressCcm,
-	ScheduledEgressFetchOrTransfer, TargetChainAccount,
+	mock_eth::*, Call as PalletCall, ChannelAction, ChannelIdCounter, ChannelOpeningFee,
+	CrossChainMessage, DepositAction, DepositChannelLookup, DepositChannelPool,
+	DepositIgnoredReason, DepositWitness, DisabledEgressAssets, EgressDustLimit,
+	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
+	MinimumDeposit, Pallet, PalletConfigUpdate, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
+	TargetChainAccount,
 };
 use cf_chains::{
 	address::AddressConverter, evm::EvmFetchId, mocks::MockEthereum, CcmChannelMetadata,
@@ -13,13 +14,15 @@ use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
 use cf_test_utilities::assert_has_event;
 use cf_traits::{
 	mocks::{
+		self,
 		address_converter::MockAddressConverter,
 		api_call::{MockEthAllBatch, MockEthEnvironment, MockEthereumApiCall},
 		block_height_provider::BlockHeightProvider,
 		ccm_handler::{CcmRequest, MockCcmHandler},
+		funding_info::MockFundingInfo,
 		tracked_data_provider::TrackedDataProvider,
 	},
-	DepositApi, EgressApi, EpochInfo, GetBlockHeight, ScheduledEgressDetails,
+	DepositApi, EgressApi, EpochInfo, FundingInfo, GetBlockHeight, ScheduledEgressDetails,
 };
 use frame_support::{
 	assert_err, assert_ok,
@@ -438,6 +441,7 @@ fn reused_address_channel_id_matches() {
 		.unwrap();
 		DepositChannelPool::<Test, _>::insert(CHANNEL_ID, new_channel.clone());
 		let (reused_channel_id, reused_address, ..) = IngressEgress::open_channel(
+			&ALICE,
 			eth::Asset::Eth,
 			ChannelAction::LiquidityProvision { lp_account: 0 },
 			0,
@@ -839,10 +843,11 @@ fn can_set_minimum_deposit() {
 		let minimum_deposit = 1_500u128;
 		assert_eq!(MinimumDeposit::<Test>::get(asset), 0);
 		// Set the new minimum deposits
-		assert_ok!(IngressEgress::set_minimum_deposit(
+		assert_ok!(IngressEgress::update_pallet_config(
 			RuntimeOrigin::root(),
-			asset,
-			minimum_deposit
+			vec![PalletConfigUpdate::<Test, _>::SetMinimumDeposit { asset, minimum_deposit }]
+				.try_into()
+				.unwrap()
 		));
 
 		assert_eq!(MinimumDeposit::<Test>::get(asset), minimum_deposit);
@@ -861,11 +866,20 @@ fn deposits_below_minimum_are_rejected() {
 		let default_deposit_amount = 1_000;
 
 		// Set minimum deposit
-		assert_ok!(IngressEgress::set_minimum_deposit(RuntimeOrigin::root(), eth, 1_500));
-		assert_ok!(IngressEgress::set_minimum_deposit(
+		assert_ok!(IngressEgress::update_pallet_config(
 			RuntimeOrigin::root(),
-			flip,
-			default_deposit_amount
+			vec![
+				PalletConfigUpdate::<Test, _>::SetMinimumDeposit {
+					asset: eth,
+					minimum_deposit: 1_500
+				},
+				PalletConfigUpdate::<Test, _>::SetMinimumDeposit {
+					asset: flip,
+					minimum_deposit: default_deposit_amount
+				},
+			]
+			.try_into()
+			.unwrap()
 		));
 
 		// Observe that eth deposit gets rejected.
@@ -1455,9 +1469,9 @@ fn on_finalize_handles_failed_calls() {
 		));
 
 		// All calls are culled from storage.
-		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch), vec![]);
-		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch + 1), vec![]);
-		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch + 2), vec![]);
+		assert!(!FailedForeignChainCalls::<Test>::contains_key(epoch));
+		assert!(!FailedForeignChainCalls::<Test>::contains_key(epoch + 1));
+		assert!(!FailedForeignChainCalls::<Test>::contains_key(epoch + 2));
 	});
 }
 
@@ -1472,5 +1486,93 @@ fn consolidation_tx_gets_broadcasted_on_finalize() {
 		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
 			crate::Event::BatchBroadcastRequested { broadcast_id: 1, egress_ids: vec![] },
 		));
+	});
+}
+
+#[test]
+fn all_batch_errors_are_logged_as_event() {
+	new_test_ext()
+		.execute_with(|| {
+			ScheduledEgressFetchOrTransfer::<Test>::set(vec![
+				FetchOrTransfer::<Ethereum>::Transfer {
+					asset: ETH_ETH,
+					amount: 1_000,
+					destination_address: ALICE_ETH_ADDRESS,
+					egress_id: (ForeignChain::Ethereum, 1),
+				},
+			]);
+			MockEthAllBatch::set_success(false);
+		})
+		.then_execute_at_next_block(|_| {})
+		.then_execute_with(|_| {
+			System::assert_last_event(RuntimeEvent::IngressEgress(
+				crate::Event::<Test>::FailedToBuildAllBatchCall {
+					error: cf_chains::AllBatchError::UnsupportedToken,
+				},
+			));
+		});
+}
+
+#[test]
+fn broker_pays_a_fee_for_each_deposit_address() {
+	new_test_ext().execute_with(|| {
+		const CHANNEL_REQUESTER: u64 = 789;
+		const FEE: u128 = 100;
+		MockFundingInfo::<Test>::credit_funds(&CHANNEL_REQUESTER, FEE);
+		assert_eq!(MockFundingInfo::<Test>::total_balance_of(&CHANNEL_REQUESTER), FEE);
+		assert_ok!(IngressEgress::update_pallet_config(
+			OriginTrait::root(),
+			vec![PalletConfigUpdate::ChannelOpeningFee { fee: FEE }].try_into().unwrap()
+		));
+		assert_ok!(IngressEgress::open_channel(
+			&CHANNEL_REQUESTER,
+			eth::Asset::Eth,
+			ChannelAction::LiquidityProvision { lp_account: CHANNEL_REQUESTER },
+			0
+		));
+		assert_eq!(MockFundingInfo::<Test>::total_balance_of(&CHANNEL_REQUESTER), 0);
+		assert_ok!(IngressEgress::update_pallet_config(
+			OriginTrait::root(),
+			vec![PalletConfigUpdate::ChannelOpeningFee { fee: FEE * 10 }]
+				.try_into()
+				.unwrap()
+		));
+		assert_err!(
+			IngressEgress::open_channel(
+				&CHANNEL_REQUESTER,
+				eth::Asset::Eth,
+				ChannelAction::LiquidityProvision { lp_account: CHANNEL_REQUESTER },
+				0
+			),
+			mocks::fee_payment::ERROR_INSUFFICIENT_LIQUIDITY
+		);
+	});
+}
+
+#[test]
+fn can_update_multiple_items_at_once() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(ChannelOpeningFee::<Test, _>::get(), 0);
+		assert_eq!(MinimumDeposit::<Test, _>::get(eth::Asset::Flip), 0);
+		assert_eq!(MinimumDeposit::<Test, _>::get(eth::Asset::Eth), 0);
+		assert_ok!(IngressEgress::update_pallet_config(
+			OriginTrait::root(),
+			vec![
+				PalletConfigUpdate::ChannelOpeningFee { fee: 100 },
+				PalletConfigUpdate::SetMinimumDeposit {
+					asset: eth::Asset::Flip,
+					minimum_deposit: 100
+				},
+				PalletConfigUpdate::SetMinimumDeposit {
+					asset: eth::Asset::Eth,
+					minimum_deposit: 200
+				},
+			]
+			.try_into()
+			.unwrap()
+		));
+		assert_eq!(ChannelOpeningFee::<Test, _>::get(), 100);
+		assert_eq!(MinimumDeposit::<Test, _>::get(eth::Asset::Flip), 100);
+		assert_eq!(MinimumDeposit::<Test, _>::get(eth::Asset::Eth), 200);
 	});
 }

@@ -3,11 +3,14 @@
 use crate::{
 	mock::{dummy::pallet as pallet_dummy, *},
 	weights::WeightInfo,
-	CallHash, CallHashExecuted, Config, EpochsToCull, Error, ExtraCallData, PalletSafeMode,
-	VoteMask, Votes, WitnessedCallsScheduledForDispatch,
+	CallHash, CallHashExecuted, Config, EpochsToCull, Error, ExtraCallData, PalletOffence,
+	PalletSafeMode, VoteMask, Votes, WitnessDeadline, WitnessedCallsScheduledForDispatch,
 };
 use cf_test_utilities::assert_event_sequence;
-use cf_traits::{EpochInfo, EpochTransitionHandler, SafeMode, SetSafeMode};
+use cf_traits::{
+	mocks::account_role_registry::MockAccountRoleRegistry, AccountRoleRegistry, EpochInfo,
+	EpochTransitionHandler, SafeMode, SetSafeMode,
+};
 use frame_support::{assert_noop, assert_ok, traits::Hooks, weights::Weight};
 use sp_std::collections::btree_set::BTreeSet;
 
@@ -472,4 +475,190 @@ fn safe_mode_recovery_ignores_duplicates() {
 		// The call was only applied once.
 		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(0u32));
 	});
+}
+
+fn setup_witness_authorities(
+	authority_ids: impl Iterator<Item = u64>,
+) -> (Box<RuntimeCall>, CallHash) {
+	// Setup authorities and variables.
+	let authorities = authority_ids
+		.map(|v| {
+			let _ =
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&v);
+			v
+		})
+		.collect::<BTreeSet<_>>();
+	MockEpochInfo::next_epoch(authorities.clone());
+	let mut call: Box<RuntimeCall> =
+		Box::new(RuntimeCall::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
+	let (_, call_hash) = Witnesser::split_calldata(&mut call);
+	(call, call_hash)
+}
+
+#[test]
+fn count_votes_works() {
+	new_test_ext().execute_with(|| {
+		// Setup authorities and variables.
+		let (call, call_hash) = setup_witness_authorities(0u64..100u64);
+		let epoch = MockEpochInfo::epoch_index();
+
+		// Prepare expected votes vec.
+		let mut votes = (0u64..100u64).map(|v| (v, false)).collect::<Vec<_>>();
+
+		// Verify the count_votes function can correctly split the votes.
+		for v in 0u64..100u64 {
+			// Update expected values
+			votes[v as usize].1 = true;
+
+			// Insert a new witness
+			assert_ok!(Witnesser::witness_at_epoch(RuntimeOrigin::signed(v), call.clone(), epoch));
+
+			assert_eq!(Witnesser::count_votes(epoch, call_hash), Some(votes.clone()));
+		}
+	});
+}
+
+#[test]
+fn can_punish_failed_witnesser() {
+	let mut target = 0u64;
+	let success_threshold = cf_utilities::success_threshold_from_share_count(100u32) as u64;
+	new_test_ext()
+		.execute_with(|| {
+			// Setup authorities and variables.
+			let (call, call_hash) = setup_witness_authorities(0u64..100u64);
+			let epoch = MockEpochInfo::epoch_index();
+
+			// Upon hook execution, a deadline is set for witnessing.
+			target = System::block_number() + GracePeriod::get();
+
+			// Witness just enough to succeed
+			for v in 0u64..success_threshold {
+				// Insert a new witness
+				assert_ok!(Witnesser::witness_at_epoch(
+					RuntimeOrigin::signed(v),
+					call.clone(),
+					epoch
+				));
+			}
+
+			assert!(CallHashExecuted::<Test>::contains_key(epoch, call_hash));
+			assert_eq!(WitnessDeadline::<Test>::get(target), vec![(epoch, call_hash)]);
+
+			// Before the deadline is set, no one has been reported.
+			OffenceReporter::assert_reported(PalletOffence::FailedToWitnessInTime, vec![]);
+			call_hash
+		})
+		.then_execute_at_block(target, |_| {})
+		.then_execute_with(|_| {
+			// After deadline has passed, all nodes that are late are reported.
+			OffenceReporter::assert_reported(
+				PalletOffence::FailedToWitnessInTime,
+				success_threshold..100u64,
+			);
+
+			// storage is cleaned up.
+			assert_eq!(WitnessDeadline::<Test>::decode_len(target), None);
+		});
+}
+
+#[test]
+fn can_punish_failed_witnesser_after_forced_witness() {
+	let mut target = 0u64;
+	let witnessed_nodes = 10u64;
+	new_test_ext()
+		.execute_with(|| {
+			// Setup authorities and variables.
+			let (call, call_hash) = setup_witness_authorities(0u64..100u64);
+			let epoch = MockEpochInfo::epoch_index();
+
+			// Upon hook execution, a deadline is set for witnessing.
+			target = System::block_number() + GracePeriod::get();
+
+			// Have a few nodes witness
+			for v in 0u64..witnessed_nodes {
+				// Insert a new witness
+				assert_ok!(Witnesser::witness_at_epoch(
+					RuntimeOrigin::signed(v),
+					call.clone(),
+					epoch
+				));
+			}
+
+			// Force witness to pass the votes
+			assert_ok!(Witnesser::force_witness(RuntimeOrigin::root(), call, epoch,));
+
+			assert!(CallHashExecuted::<Test>::contains_key(epoch, call_hash));
+			assert_eq!(WitnessDeadline::<Test>::get(target), vec![(epoch, call_hash)]);
+
+			// Before the deadline is set, no one has been reported.
+			OffenceReporter::assert_reported(PalletOffence::FailedToWitnessInTime, vec![]);
+			call_hash
+		})
+		.then_execute_at_block(target, |_| {})
+		.then_execute_with(|_| {
+			// After deadline has passed, all nodes that are late are reported.
+			OffenceReporter::assert_reported(
+				PalletOffence::FailedToWitnessInTime,
+				witnessed_nodes..100u64,
+			);
+
+			// storage is cleaned up.
+			assert_eq!(WitnessDeadline::<Test>::decode_len(target), None);
+		});
+}
+
+#[test]
+fn can_punish_failed_witnesser_in_previous_epochs() {
+	let mut target = 0u64;
+	let success_threshold = cf_utilities::success_threshold_from_share_count(100u32) as u64;
+	new_test_ext()
+		.execute_with(|| {
+			// Setup authorities and variables.
+			let (call, call_hash) = setup_witness_authorities(0u64..100u64);
+			let epoch = MockEpochInfo::epoch_index();
+
+			// Upon hook execution, a deadline is set for witnessing.
+			target = System::block_number() + GracePeriod::get();
+
+			// Have some nodes to witness
+			for v in 0u64..(success_threshold / 2) {
+				assert_ok!(Witnesser::witness_at_epoch(
+					RuntimeOrigin::signed(v),
+					call.clone(),
+					epoch
+				));
+			}
+
+			// Rotate to the next epoch with new authorities
+			let _ = setup_witness_authorities(100u64..200u64);
+			// Set the current set of authority as the past authorities in the Mock.
+			MockEpochInfo::set_past_authorities(BTreeSet::from_iter(0u64..100u64));
+
+			// Some of remaining authorities can witness to pass the
+			for v in (success_threshold / 2)..success_threshold {
+				assert_ok!(Witnesser::witness_at_epoch(
+					RuntimeOrigin::signed(v),
+					call.clone(),
+					epoch
+				));
+			}
+
+			assert!(CallHashExecuted::<Test>::contains_key(epoch, call_hash));
+			assert_eq!(WitnessDeadline::<Test>::get(target), vec![(epoch, call_hash)]);
+
+			// Before the deadline is set, no one has been reported.
+			OffenceReporter::assert_reported(PalletOffence::FailedToWitnessInTime, vec![]);
+			call_hash
+		})
+		.then_execute_at_block(target, |_| {})
+		.then_execute_with(|_| {
+			// Nodes from previous epoch is reported.
+			OffenceReporter::assert_reported(
+				PalletOffence::FailedToWitnessInTime,
+				success_threshold..100u64,
+			);
+
+			// storage is cleaned up.
+			assert_eq!(WitnessDeadline::<Test>::decode_len(target), None);
+		});
 }

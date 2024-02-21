@@ -66,18 +66,15 @@ impl<C: ChainCrypto> MultisigMessageReceiver<C> {
 }
 
 struct P2PKey {
-	signing_key: ed25519_dalek::Keypair,
+	signing_key: ed25519_dalek::SigningKey,
 	encryption_key: X25519KeyPair,
 }
 
 impl P2PKey {
-	fn new(ed25519_secret_key: ed25519_dalek::SecretKey) -> Self {
-		let x_secret_key = ed25519_secret_key_to_x25519_secret_key(&ed25519_secret_key);
+	fn new(ed25519_secret_key: &ed25519_dalek::SecretKey) -> Self {
+		let x_secret_key = ed25519_secret_key_to_x25519_secret_key(ed25519_secret_key);
 		P2PKey {
-			signing_key: ed25519_dalek::Keypair {
-				public: (&ed25519_secret_key).into(),
-				secret: ed25519_secret_key,
-			},
+			signing_key: ed25519_dalek::SigningKey::from_bytes(ed25519_secret_key),
 			encryption_key: X25519KeyPair {
 				public_key: (&x_secret_key).into(),
 				secret_key: x_secret_key,
@@ -117,16 +114,12 @@ where
 	}
 
 	let node_key = {
-		let ed_secret_key =
-			read_clean_and_decode_hex_str_file(&settings.node_key_file, "Node Key", |str| {
-				ed25519_dalek::SecretKey::from_bytes(
-					&Zeroizing::new(hex::decode(str).map_err(anyhow::Error::msg)?)[..],
-				)
-				.map_err(anyhow::Error::msg)
-			})
-			.context("Failed to build key from file.")?;
+		let mut ed_secret_key = Zeroizing::new(ed25519_dalek::SecretKey::default());
+		read_clean_and_decode_hex_str_file(&settings.node_key_file, "Node Key", |str| {
+			hex::decode_to_slice(str, &mut ed_secret_key[..]).map_err(anyhow::Error::msg)
+		})?;
 
-		P2PKey::new(ed_secret_key)
+		P2PKey::new(&ed_secret_key)
 	};
 
 	let current_peers =

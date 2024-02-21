@@ -566,6 +566,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 								matching_request.until_in_block_sender
 							{
 								let _result = until_in_block_sender.send(
+									#[allow(clippy::useless_asref)]
 									result.as_ref().map(Clone::clone).map_err(
 										|error| match error {
 											ExtrinsicError::Dispatch(dispatch_error) =>
