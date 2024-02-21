@@ -13,7 +13,7 @@ use crate::{
 	chainflip::{calculate_account_apy, Offence},
 	runtime_apis::{
 		AuctionState, DispatchErrorWithMessage, FailingWitnessValidators, LiquidityProviderInfo,
-		RuntimeApiAccountInfoV2, RuntimeApiPenalty,
+		RuntimeApiAccountInfoV2, RuntimeApiPenalty, ScheduledSwap
 	},
 };
 use cf_amm::{
@@ -40,7 +40,7 @@ use pallet_cf_pools::{
 	UnidirectionalPoolDepth,
 };
 use pallet_cf_reputation::ExclusionList;
-use pallet_cf_swapping::{CcmSwapAmounts, SwapLegInfo};
+use pallet_cf_swapping::{CcmSwapAmounts};
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use scale_info::prelude::string::String;
@@ -1423,7 +1423,7 @@ impl_runtime_apis! {
 			all_prewitnessed_swaps
 		}
 
-		fn cf_scheduled_swaps(base_asset: Asset, _quote_asset: Asset) -> Vec<(SwapLegInfo, BlockNumber)> {
+		fn cf_scheduled_swaps(base_asset: Asset, _quote_asset: Asset) -> Vec<ScheduledSwap> {
 
 			let first_block = Swapping::first_unprocessed_block();
 			let last_block = System::block_number() + pallet_cf_swapping::SWAP_DELAY_BLOCKS;
@@ -1435,9 +1435,8 @@ impl_runtime_apis! {
 
 				let swaps: Vec<_> = swaps_for_block.iter().filter(|swap| swap.from == base_asset || swap.to == base_asset).cloned().collect();
 
-				Swapping::get_scheduled_swap_legs(swaps, base_asset).unwrap().into_iter().map(move |swap| (swap, block))
+				Swapping::get_scheduled_swap_legs(swaps, base_asset).unwrap().into_iter().map(move |swap| ScheduledSwap {swap, execute_at: block })
 			}).collect()
-
 		}
 
 		fn cf_failed_call(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {

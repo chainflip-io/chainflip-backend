@@ -9,7 +9,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets::any::{self, OldAsset},
-	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, ForeignChain, NetworkEnvironment,
+	AccountRole, Asset, AssetAmount, BroadcastId, ForeignChain, NetworkEnvironment,
 	SemVer, SwapOutput,
 };
 use cf_utilities::rpc::NumberOrHex;
@@ -24,7 +24,6 @@ use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{
 	AskBidMap, AssetsMap, PoolInfo, PoolLiquidity, PoolPriceV1, UnidirectionalPoolDepth,
 };
-use pallet_cf_swapping::SwapLegInfo;
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_api::ApiError;
@@ -38,7 +37,7 @@ use state_chain_runtime::{
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
 		CustomRuntimeApi, DispatchErrorWithMessage, FailingWitnessValidators,
-		LiquidityProviderInfo, RuntimeApiAccountInfoV2,
+		LiquidityProviderInfo, RuntimeApiAccountInfoV2, ScheduledSwap,
 	},
 	NetworkFee,
 };
@@ -47,13 +46,6 @@ use std::{
 	marker::PhantomData,
 	sync::Arc,
 };
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct ScheduledSwap {
-	#[serde(flatten)]
-	swap: SwapLegInfo,
-	execute_at: BlockNumber,
-}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AssetWithAmount {
@@ -468,7 +460,7 @@ pub trait CustomApi {
 	// Subscribe to a stream that on every block produces a list of all scheduled/pending
 	// swaps in the base_asset/quote_asset pool, including any "implicit" half-swaps (as a
 	// part of a swap involving two pools)
-	#[subscription(name = "subscribe_scheduled_swaps", item = SwapResponse)]
+	#[subscription(name = "subscribe_scheduled_swaps", item = BlockUpdate<SwapResponse>)]
 	fn cf_subscribe_scheduled_swaps(&self, base_asset: Asset, quote_asset: Asset);
 
 	#[method(name = "prewitness_swaps")]
@@ -1152,13 +1144,8 @@ where
 			true,  /* end_on_error */
 			sink,
 			move |api, hash| {
-				let swaps = api
-					.cf_scheduled_swaps(hash, base_asset, quote_asset)?
-					.into_iter()
-					.map(|(swap, execute_at)| ScheduledSwap { swap, execute_at })
-					.collect::<Vec<_>>();
-
-				Ok::<_, ApiError>(SwapResponse { swaps })
+				Ok::<_, ApiError>(SwapResponse { swaps: api
+					.cf_scheduled_swaps(hash, base_asset, quote_asset)? })
 			},
 		)
 	}

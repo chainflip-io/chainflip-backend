@@ -6,7 +6,7 @@ use cf_amm::{
 use cf_chains::{eth::Address as EthereumAddress, Chain, ForeignChainAddress};
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BroadcastId, EpochIndex, FlipBalance, ForeignChain,
-	NetworkEnvironment, SemVer, SwapOutput,
+	NetworkEnvironment, SemVer, SwapOutput, BlockNumber,
 };
 use codec::{Decode, Encode};
 use core::ops::Range;
@@ -98,6 +98,14 @@ pub struct FailingWitnessValidators {
 	pub validators: Vec<(cf_primitives::AccountId, String, bool)>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+pub struct ScheduledSwap {
+	#[serde(flatten)]
+	pub swap: SwapLegInfo,
+	pub execute_at: BlockNumber,
+}
+
 decl_runtime_apis!(
 	/// Definition for all runtime API interfaces.
 	pub trait CustomRuntimeApi {
@@ -184,7 +192,7 @@ decl_runtime_apis!(
 		fn cf_scheduled_swaps(
 			base_asset: Asset,
 			quote_asset: Asset,
-		) -> Vec<(SwapLegInfo, cf_primitives::BlockNumber)>;
+		) -> Vec<ScheduledSwap>;
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> Option<LiquidityProviderInfo>;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
 		fn cf_asset_balances(account_id: AccountId32) -> Vec<(Asset, AssetAmount)>;
