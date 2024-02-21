@@ -2174,28 +2174,24 @@ fn test_get_scheduled_swap_legs() {
 					from: Asset::Flip,
 					to: Asset::Usdc,
 					amount: INIT_AMOUNT,
-					swap_type: SWAP_TYPE.clone()
 				},
 				SwapLegInfo {
 					swap_id: 2,
 					from: Asset::Usdc,
 					to: Asset::Flip,
 					amount: INIT_AMOUNT,
-					swap_type: SWAP_TYPE.clone(),
 				},
 				SwapLegInfo {
 					swap_id: 4,
 					from: Asset::Flip,
 					to: Asset::Usdc,
 					amount: INIT_AMOUNT,
-					swap_type: SWAP_TYPE.clone(),
 				},
 				SwapLegInfo {
 					swap_id: 5,
 					from: Asset::Usdc,
 					to: Asset::Flip,
 					amount: INTERMEDIATE_AMOUNT,
-					swap_type: SWAP_TYPE.clone(),
 				},
 			]
 		);

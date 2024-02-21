@@ -40,14 +40,12 @@ const BASIS_POINTS_PER_MILLION: u32 = 100;
 pub const SWAP_DELAY_BLOCKS: u32 = 2;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum SwapType {
 	Swap(ForeignChainAddress),
 	CcmPrincipal(SwapId),
 	CcmGas(SwapId),
 }
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct Swap {
 	pub swap_id: SwapId,
 	pub from: Asset,
@@ -66,7 +64,6 @@ pub struct SwapLegInfo {
 	pub from: Asset,
 	pub to: Asset,
 	pub amount: AssetAmount,
-	pub swap_type: SwapType,
 }
 
 impl Swap {
@@ -690,7 +687,6 @@ pub mod pallet {
 							// All swaps from `base_asset` have to go through Usdc:
 							to: Asset::Usdc,
 							amount: swap.amount,
-							swap_type: swap.swap_type,
 						})
 					} else if swap.to == base_asset {
 						Some(SwapLegInfo {
@@ -700,7 +696,6 @@ pub mod pallet {
 							to: swap.to,
 							// Safe to unwrap as we have swapped everything into USDC at this point
 							amount: swap.stable_amount.unwrap(),
-							swap_type: swap.swap_type,
 						})
 					} else {
 						None
