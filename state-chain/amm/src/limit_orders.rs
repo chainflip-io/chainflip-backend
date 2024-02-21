@@ -388,7 +388,7 @@ pub(super) struct PoolState<LiquidityProvider: Ord> {
 	/// that are selling asset `Base` and all those that are selling asset `Quote` used the
 	/// PoolPairsMap. Therefore there can be positions stored here that don't provide any
 	/// liquidity.
-	positions: PoolPairsMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
+	positions: PoolPairsMap<BTreeMap<(LiquidityProvider, SqrtPriceQ64F96), Position>>,
 	/// Total fees earned over all time
 	total_fees_earned: PoolPairsMap<Amount>,
 	/// Total of all swap inputs over all time (not including fees)
@@ -424,7 +424,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub(super) fn positions<SD: SwapDirection>(
 		&self,
 	) -> impl '_ + Iterator<Item = (LiquidityProvider, Tick, Collected, PositionInfo)> {
-		self.positions[!SD::INPUT_SIDE].iter().map(|((sqrt_price, lp), position)| {
+		self.positions[!SD::INPUT_SIDE].iter().map(|((lp, sqrt_price), position)| {
 			let (collected, option_position) = Self::collect_from_position::<SD>(
 				position.clone(),
 				self.fixed_pools[!SD::INPUT_SIDE].get(sqrt_price),
@@ -459,7 +459,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				.cloned()
 				.collect::<sp_std::vec::Vec<_>>()
 				.into_iter()
-				.map(|(sqrt_price, lp)| {
+				.map(|(lp, sqrt_price)| {
 					let (collected, position_info) =
 						self.inner_collect::<QuoteToBase>(&lp, sqrt_price).unwrap();
 
@@ -471,7 +471,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				.cloned()
 				.collect::<sp_std::vec::Vec<_>>()
 				.into_iter()
-				.map(|(sqrt_price, lp)| {
+				.map(|(lp, sqrt_price)| {
 					let (collected, position_info) =
 						self.inner_collect::<BaseToQuote>(&lp, sqrt_price).unwrap();
 
@@ -691,7 +691,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 			let option_fixed_pool = fixed_pools.get(&sqrt_price);
 			let (collected_amounts, option_position) =
-				if let Some(position) = positions.get(&(sqrt_price, lp.clone())).cloned() {
+				if let Some(position) = positions.get(&(lp.clone(), sqrt_price)).cloned() {
 					Self::collect_from_position::<SD>(
 						position,
 						option_fixed_pool,
@@ -751,7 +751,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 				self.next_pool_instance = next_pool_instance;
 				fixed_pools.insert(sqrt_price, fixed_pool);
-				positions.insert((sqrt_price, lp.clone()), position);
+				positions.insert((lp.clone(), sqrt_price), position);
 
 				Ok((collected_amounts, position_info))
 			}
@@ -789,7 +789,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			let fixed_pools = &mut self.fixed_pools[!SD::INPUT_SIDE];
 
 			let position = positions
-				.get(&(sqrt_price, lp.clone()))
+				.get(&(lp.clone(), sqrt_price))
 				.ok_or(PositionError::NonExistent)?
 				.clone();
 			let option_fixed_pool = fixed_pools.get(&sqrt_price);
@@ -811,10 +811,10 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				let position_info = PositionInfo::from(&position);
 
 				if position.amount.is_zero() {
-					positions.remove(&(sqrt_price, lp.clone()));
+					positions.remove(&(lp.clone(), sqrt_price));
 				} else {
 					assert!(!fixed_pool.available.is_zero());
-					positions.insert((sqrt_price, lp.clone()), position);
+					positions.insert((lp.clone(), sqrt_price), position);
 				};
 				if fixed_pool.available.is_zero() {
 					fixed_pools.remove(&sqrt_price);
@@ -824,7 +824,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 				(amount, collected_amounts, position_info)
 			} else {
-				positions.remove(&(sqrt_price, lp.clone()));
+				positions.remove(&(lp.clone(), sqrt_price));
 				(Default::default(), collected_amounts, PositionInfo::default())
 			})
 		}
@@ -855,7 +855,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 		let (collected_amounts, option_position) = Self::collect_from_position::<SD>(
 			positions
-				.get(&(sqrt_price, lp.clone()))
+				.get(&(lp.clone(), sqrt_price))
 				.ok_or(PositionError::NonExistent)?
 				.clone(),
 			fixed_pools.get(&sqrt_price),
@@ -867,10 +867,10 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			collected_amounts,
 			if let Some(position) = option_position {
 				let position_info = PositionInfo::from(&position);
-				positions.insert((sqrt_price, lp.clone()), position);
+				positions.insert((lp.clone(), sqrt_price), position);
 				position_info
 			} else {
-				positions.remove(&(sqrt_price, lp.clone()));
+				positions.remove(&(lp.clone(), sqrt_price));
 				PositionInfo::default()
 			},
 		))
@@ -892,7 +892,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 		let (collected_amounts, option_position) = Self::collect_from_position::<SD>(
 			positions
-				.get(&(sqrt_price, lp.clone()))
+				.get(&(lp.clone(), sqrt_price))
 				.ok_or(PositionError::NonExistent)?
 				.clone(),
 			fixed_pools.get(&sqrt_price),
