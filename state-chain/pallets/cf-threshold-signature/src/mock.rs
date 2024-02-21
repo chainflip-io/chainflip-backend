@@ -16,6 +16,7 @@ use cf_traits::{
 };
 use codec::{Decode, Encode};
 pub use frame_support::{
+	derive_impl,
 	instances::Instance1,
 	parameter_types,
 	traits::{EnsureOrigin, UnfilteredDispatchable},
@@ -41,6 +42,7 @@ parameter_types! {
 	pub const SS58Prefix: u8 = 42;
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();

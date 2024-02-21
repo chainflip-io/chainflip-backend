@@ -3,7 +3,8 @@
 use super::*;
 
 use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue};
-use cf_traits::{AccountRoleRegistry, Chainflip};
+use cf_primitives::FLIPPERINOS_PER_FLIP;
+use cf_traits::{AccountRoleRegistry, FeePayment};
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
@@ -11,16 +12,19 @@ use frame_support::{
 };
 use frame_system::RawOrigin;
 
-#[benchmarks]
+#[benchmarks(
+	where <T::FeePayment as cf_traits::FeePayment>::Amount: From<u128>
+)]
 mod benchmarks {
 	use super::*;
-	use sp_std::vec;
 
 	#[benchmark]
 	fn request_swap_deposit_address() {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		assert_ok!(T::AccountRoleRegistry::register_as_broker(&caller));
+		// A non-zero balance is required to pay for the channel opening fee.
+		T::FeePayment::mint_to_account(&caller, (5 * FLIPPERINOS_PER_FLIP).into());
 
 		let origin = RawOrigin::Signed(caller);
 		let call = Call::<T>::request_swap_deposit_address {
@@ -127,22 +131,6 @@ mod benchmarks {
 				Swap::new(2, Asset::Usdc, Asset::Eth, 1, SwapType::CcmGas(1),)
 			]
 		);
-	}
-
-	#[benchmark]
-	fn set_maximum_swap_amount() {
-		let asset = Asset::Eth;
-		let amount = 1_000;
-		let call = Call::<T>::set_maximum_swap_amount { asset, amount: Some(amount) };
-
-		#[block]
-		{
-			assert_ok!(call.dispatch_bypass_filter(
-				<T as Chainflip>::EnsureGovernance::try_successful_origin().unwrap()
-			));
-		}
-
-		assert_eq!(crate::MaximumSwapAmount::<T>::get(asset), Some(amount));
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

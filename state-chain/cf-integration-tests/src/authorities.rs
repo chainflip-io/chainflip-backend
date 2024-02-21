@@ -58,7 +58,7 @@ pub fn fund_authorities_and_join_auction(
 fn authority_rotates_with_correct_sequence() {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
@@ -154,7 +154,7 @@ fn authorities_earn_rewards_for_authoring_blocks() {
 	// Reduce our validating set and hence the number of nodes we need to have a backup
 	// set
 	const MAX_AUTHORITIES: AuthorityCount = 3;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
@@ -198,7 +198,7 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 	// Reduce our validating set and hence the number of nodes we need to have a backup
 	// set
 	const MAX_AUTHORITIES: AuthorityCount = 10;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
@@ -263,7 +263,7 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 fn authority_rotation_can_succeed_after_aborted_by_safe_mode() {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
@@ -318,7 +318,7 @@ fn authority_rotation_cannot_be_aborted_after_key_handover_and_completes_even_on
 {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
@@ -361,7 +361,7 @@ fn authority_rotation_cannot_be_aborted_after_key_handover_and_completes_even_on
 fn authority_rotation_can_recover_after_keygen_fails() {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
@@ -409,7 +409,7 @@ fn authority_rotation_can_recover_after_keygen_fails() {
 fn authority_rotation_can_recover_after_key_handover_fails() {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
@@ -477,7 +477,7 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 fn can_move_through_multiple_epochs() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()

@@ -44,11 +44,11 @@ mod scalar_impls {
 		}
 
 		fn zero() -> Self {
-			Scalar(SK::zero())
+			Scalar(SK::ZERO)
 		}
 
 		fn invert(&self) -> Option<Self> {
-			if self.0 != SK::zero() {
+			if self.0 != SK::ZERO {
 				Some(Scalar(self.0.invert()))
 			} else {
 				None

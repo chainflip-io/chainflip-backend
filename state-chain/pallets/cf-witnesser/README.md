@@ -28,4 +28,10 @@ An example of this is witnessing gas prices: the price can be removed from the c
 
 ## Vote Pruning
 
-We periodically prune votes to prevent storage bloat. When an epoch expires, it's no longer possible for the events that occured during that epoch to be witnessed, so the associated storage is deleted.
+We periodically prune votes to prevent storage bloat. When an epoch expires, it's no longer possible for the events that occurred during that epoch to be witnessed, so the associated storage is deleted.
+
+## Punishing nodes that failed to witness in time
+
+After a call is successfully witnessed (enough authorities has witnessed), the call is dispatched and a deadline is set in the future. The length of the grace period is set via Config. 
+
+Upon the end of the grace period, all nodes that are suppose to witness but failed to will be reported and have their reputation reduced. This is implemented to prevent nodes from being a lazy witnesser.

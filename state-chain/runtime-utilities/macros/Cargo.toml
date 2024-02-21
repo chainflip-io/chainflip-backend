@@ -6,6 +6,9 @@ edition = '2021'
 [lib]
 proc-macro = true
 
+[lints]
+workspace = true
+
 [dependencies]
 # proc-macro-crate = '0.1.5'
 # proc-macro-error = '1.0.4'

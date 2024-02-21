@@ -7,6 +7,7 @@ use cf_test_utilities::last_event;
 use cf_traits::mocks::time_source;
 use frame_support::{assert_err, assert_noop, assert_ok};
 use sp_runtime::Percent;
+use sp_std::collections::btree_set::BTreeSet;
 use std::time::Duration;
 
 use crate as pallet_cf_governance;
@@ -15,7 +16,7 @@ const DUMMY_WASM_BLOB: Vec<u8> = vec![];
 
 fn mock_extrinsic() -> Box<RuntimeCall> {
 	Box::new(RuntimeCall::Governance(pallet_cf_governance::Call::<Test>::new_membership_set {
-		accounts: vec![EVE, PETER, MAX],
+		new_members: BTreeSet::from_iter([EVE, PETER, MAX]),
 	}))
 }
 
@@ -316,5 +317,43 @@ fn whitelisted_gov_call() {
 		assert!(PreAuthorisedGovCalls::<Test>::contains_key(1));
 		assert_ok!(Governance::dispatch_whitelisted_call(RuntimeOrigin::signed(CHARLES), 1));
 		assert!(!PreAuthorisedGovCalls::<Test>::contains_key(1));
+	});
+}
+
+#[test]
+fn replacing_governance_members() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(Members::<Test>::get(), BTreeSet::from_iter([ALICE, BOB, CHARLES]));
+		assert_eq!(System::sufficients(&ALICE), 1);
+		assert_eq!(System::sufficients(&BOB), 1);
+		assert_eq!(System::sufficients(&CHARLES), 1);
+		assert_eq!(System::sufficients(&EVE), 0);
+		assert_eq!(System::sufficients(&PETER), 0);
+		assert_eq!(System::sufficients(&MAX), 0);
+
+		assert_ok!(Governance::new_membership_set(
+			crate::RawOrigin::GovernanceApproval.into(),
+			BTreeSet::from_iter([EVE, PETER, MAX])
+		));
+
+		assert_eq!(Members::<Test>::get(), BTreeSet::from_iter([EVE, PETER, MAX]));
+		assert_eq!(System::sufficients(&ALICE), 0);
+		assert_eq!(System::sufficients(&BOB), 0);
+		assert_eq!(System::sufficients(&CHARLES), 0);
+		assert_eq!(System::sufficients(&EVE), 1);
+		assert_eq!(System::sufficients(&PETER), 1);
+		assert_eq!(System::sufficients(&MAX), 1);
+
+		assert_ok!(Governance::new_membership_set(
+			crate::RawOrigin::GovernanceApproval.into(),
+			BTreeSet::from_iter([ALICE, EVE, PETER])
+		));
+		assert_eq!(Members::<Test>::get(), BTreeSet::from_iter([ALICE, EVE, PETER]));
+		assert_eq!(System::sufficients(&ALICE), 1);
+		assert_eq!(System::sufficients(&BOB), 0);
+		assert_eq!(System::sufficients(&CHARLES), 0);
+		assert_eq!(System::sufficients(&EVE), 1);
+		assert_eq!(System::sufficients(&PETER), 1);
+		assert_eq!(System::sufficients(&MAX), 0);
 	});
 }

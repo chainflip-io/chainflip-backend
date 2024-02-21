@@ -4,12 +4,11 @@ use cf_utilities::{
 };
 use chainflip_api::{
 	self, clean_foreign_chain_address,
-	primitives::{AccountRole, BasisPoints, BlockNumber, CcmChannelMetadata, ChannelId},
+	primitives::{AccountRole, Asset, BasisPoints, BlockNumber, CcmChannelMetadata, ChannelId},
 	settings::StateChain,
 	BrokerApi, OperatorApi, StateChainApi,
 };
 use clap::Parser;
-use custom_rpc::RpcAsset;
 use futures::FutureExt;
 use jsonrpsee::{
 	core::{async_trait, RpcResult},
@@ -50,8 +49,8 @@ pub trait Rpc {
 	#[method(name = "request_swap_deposit_address", aliases = ["broker_requestSwapDepositAddress"])]
 	async fn request_swap_deposit_address(
 		&self,
-		source_asset: RpcAsset,
-		destination_asset: RpcAsset,
+		source_asset: Asset,
+		destination_asset: Asset,
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
 		channel_metadata: Option<CcmChannelMetadata>,
@@ -88,19 +87,18 @@ impl RpcServer for RpcServerImpl {
 
 	async fn request_swap_deposit_address(
 		&self,
-		source_asset: RpcAsset,
-		destination_asset: RpcAsset,
+		source_asset: Asset,
+		destination_asset: Asset,
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<BrokerSwapDepositAddress> {
-		let destination_asset = destination_asset.try_into()?;
 		Ok(self
 			.api
 			.broker_api()
 			.request_swap_deposit_address(
-				source_asset.try_into()?,
+				source_asset,
 				destination_asset,
 				clean_foreign_chain_address(destination_asset.into(), &destination_address)?,
 				broker_commission_bps,

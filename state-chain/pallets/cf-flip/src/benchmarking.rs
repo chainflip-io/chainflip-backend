@@ -10,7 +10,6 @@ use frame_support::{
 #[benchmarks]
 mod benchmarks {
 	use super::*;
-	use sp_std::vec;
 
 	#[benchmark]
 	fn set_slashing_rate() {

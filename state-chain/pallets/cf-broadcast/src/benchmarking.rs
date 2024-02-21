@@ -58,7 +58,6 @@ fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T
 #[instance_benchmarks]
 mod benchmarks {
 	use super::*;
-	use sp_std::vec;
 
 	#[benchmark]
 	fn on_initialize(t: Linear<1, 50>, r: Linear<1, 50>) {

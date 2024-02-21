@@ -28,7 +28,10 @@ jobs:
 
       - name: Get toolchain version
         id: toolchain
-        run: echo "rust_toolchain=$(grep 'channel' rust-toolchain.toml | sed -n -e 's/^.*channel = "\(.*\)".*$/\1/p')" >> $GITHUB_OUTPUT
+        run: |
+          RUST_TOOLCHAIN=$(grep 'channel' rust-toolchain.toml | sed -n -e 's/^.*channel = "\(.*\)".*$/\1/p')
+          echo "Found Rust Toolchain: $RUST_TOOLCHAIN"
+          echo "rust_toolchain=$RUST_TOOLCHAIN" >> $GITHUB_OUTPUT
 
       - name: Set Image Tags
         id: image_tags
@@ -38,6 +41,9 @@ jobs:
           else
             echo "image_tag=${{ steps.toolchain.outputs.rust_toolchain }}-ubuntu-${{ matrix.ubuntu_version }}" >> $GITHUB_OUTPUT
           fi
+
+      - name: Debug | Check Docker Image Tag
+        run: echo "Docker Image Tag output ${{ steps.image_tags.outputs.image_tag }}"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@68827325e0b33c7199eb31dd4e31fbe9023e06e3

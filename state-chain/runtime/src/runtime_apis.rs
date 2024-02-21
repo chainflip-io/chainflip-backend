@@ -5,8 +5,8 @@ use cf_amm::{
 };
 use cf_chains::{eth::Address as EthereumAddress, Chain, ForeignChainAddress};
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, BroadcastId, EpochIndex, ForeignChain, NetworkEnvironment,
-	SemVer, SwapOutput,
+	AccountRole, Asset, AssetAmount, BroadcastId, EpochIndex, FlipBalance, ForeignChain,
+	NetworkEnvironment, SemVer, SwapOutput,
 };
 use codec::{Decode, Encode};
 use core::ops::Range;
@@ -192,5 +192,6 @@ decl_runtime_apis!(
 		fn cf_egress_fee(asset: Asset) -> Option<AssetAmount>;
 		fn cf_witness_count(hash: CallHash) -> Option<FailingWitnessValidators>;
 		fn cf_witness_safety_margin(chain: ForeignChain) -> Option<u64>;
+		fn cf_channel_opening_fee(chain: ForeignChain) -> FlipBalance;
 	}
 );

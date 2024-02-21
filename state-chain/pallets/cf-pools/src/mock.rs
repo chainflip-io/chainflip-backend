@@ -3,7 +3,7 @@ use cf_primitives::{Asset, AssetAmount};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleRegistry, LpBalanceApi,
 };
-use frame_support::parameter_types;
+use frame_support::{derive_impl, parameter_types};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -31,6 +31,7 @@ parameter_types! {
 	pub const SS58Prefix: u8 = 42;
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();

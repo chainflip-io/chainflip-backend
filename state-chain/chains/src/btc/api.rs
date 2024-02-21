@@ -67,7 +67,7 @@ where
 		transfer_params: Vec<TransferAssetParams<Bitcoin>>,
 	) -> Result<Self, AllBatchError> {
 		let agg_key @ AggKey { current, .. } =
-			<E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(AllBatchError::Other)?;
+			<E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(AllBatchError::AggKeyNotSet)?;
 		let bitcoin_change_script =
 			DepositAddress::new(current, CHANGE_ADDRESS_SALT).script_pubkey();
 		let mut total_output_amount: u64 = 0;
@@ -89,7 +89,7 @@ where
 				.ok_or(AllBatchError::NotRequired)?,
 			number_of_outputs: (btc_outputs.len() + 1) as u64, // +1 for the change output
 		})
-		.ok_or(AllBatchError::Other)?;
+		.ok_or(AllBatchError::UtxoSelectionFailed)?;
 		if change_amount >= BITCOIN_DUST_LIMIT {
 			btc_outputs.push(BitcoinOutput {
 				amount: change_amount,

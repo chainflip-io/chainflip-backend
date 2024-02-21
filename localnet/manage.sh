@@ -5,7 +5,7 @@ WORKFLOW=build-localnet
 GENESIS_NODES=("bashful" "doc" "dopey")
 SELECTED_NODES=("bashful")
 REQUIRED_BINARIES="chainflip-engine chainflip-node"
-INITIAL_CONTAINERS="init"
+INITIAL_CONTAINERS="init init-solana"
 CORE_CONTAINERS="bitcoin geth polkadot redis"
 ARB_CONTAINERS="sequencer staker-unsafe poster"
 export NODE_COUNT="1-node"
@@ -16,10 +16,6 @@ source ./localnet/helper.sh
 
 mkdir -p /tmp/chainflip/
 touch /tmp/chainflip/debug.log
-
-if [ ! -f ./localnet/docker-compose.yml ]; then
-  NODE_COUNT=1-node envsubst < ./localnet/docker-compose.template.yml > ./localnet/docker-compose.yml
-fi
 
 set -eo pipefail
 
@@ -74,7 +70,7 @@ get-workflow() {
       exit 1
     fi
     echo "You have chosen $NODE_COUNT node(s) network"
-    NODE_COUNT="$NODE_COUNT-node"
+    export NODE_COUNT="$NODE_COUNT-node"
 
     if [[ -z "${BINARY_ROOT_PATH}" ]]; then
       echo "💻 Please provide the location to the binaries you would like to use."
@@ -82,6 +78,12 @@ get-workflow() {
       echo
       export BINARY_ROOT_PATH=${BINARY_ROOT_PATH:-"./target/debug"}
     fi
+
+    echo "Do you want to start ingress-egress-tracker? (Type y or leave empty)"
+    read -p "(default: NO) " START_TRACKER
+    echo
+    export START_TRACKER=${START_TRACKER}
+
   fi
 }
 
@@ -97,8 +99,6 @@ build-localnet() {
       exit 1
     fi
   done
-  echo "🪄 Generating docker-compose.yml"
-  envsubst < ./localnet/docker-compose.template.yml > ./localnet/docker-compose.yml
 
   mkdir -p /tmp/chainflip/
   touch /tmp/chainflip/debug.log
@@ -108,8 +108,10 @@ build-localnet() {
   echo "🦺 Updating init state files permissions ..."
   if [[ $CI == true ]]; then
     sudo chmod -R 777 /tmp/chainflip
+    sudo chmod -R 777 /tmp/solana
   else
     chmod -R 777 /tmp/chainflip
+    chmod -R 777 /tmp/solana
   fi
   echo "🏗 Building network"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $CORE_CONTAINERS -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
@@ -139,20 +141,26 @@ build-localnet() {
 
   INIT_RPC_PORT=9944
 
-  P2P_PORT=30333
-  RPC_PORT=$INIT_RPC_PORT
-  for NODE in "${SELECTED_NODES[@]}"; do
-    echo "🚧 Starting chainflip-node of $NODE ..."
-    DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2} ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARY_ROOT_PATH $NODE $P2P_PORT $RPC_PORT $NODE_COUNT
-    ((P2P_PORT++))
-    ((RPC_PORT++))
-  done
+  # This is unset on `destroy()`
+  export DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2}
+
+  KEYS_DIR=./$LOCALNET_INIT_DIR/keys
+
+  BINARY_ROOT_PATH=$BINARY_ROOT_PATH \
+  SELECTED_NODES=${SELECTED_NODES[@]} \
+  NODE_COUNT=$NODE_COUNT \
+  INIT_RPC_PORT=$INIT_RPC_PORT \
+  LOCALNET_INIT_DIR=$LOCALNET_INIT_DIR \
+  KEYS_DIR=$KEYS_DIR \
+  ./$LOCALNET_INIT_DIR/scripts/start-all-nodes.sh
+
+  echo "🚧 Checking health ..."
 
   RPC_PORT=$INIT_RPC_PORT
-  for NODE in "${SELECTED_NODES[@]}"; do
-    check_endpoint_health -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' "http://localhost:$RPC_PORT" >>$DEBUG_OUTPUT_DESTINATION
-    echo "💚 $NODE's chainflip-node is running!"
-    ((RPC_PORT++))
+  for NODE in $SELECTED_NODES; do
+      check_endpoint_health -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' "http://localhost:$RPC_PORT" >>$DEBUG_OUTPUT_DESTINATION
+      echo "💚 $NODE's chainflip-node is running!"
+      ((RPC_PORT++))
   done
 
   NODE_COUNT=$NODE_COUNT \
@@ -177,14 +185,16 @@ build-localnet() {
 
   wait
 
-  KEYS_DIR=./$LOCALNET_INIT_DIR/keys
-
   echo "🕺 Starting Broker API ..."
   KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-broker-api.sh $BINARY_ROOT_PATH
 
   echo "🤑 Starting LP API ..."
   KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-lp-api.sh $BINARY_ROOT_PATH
 
+  if [[ $START_TRACKER == "y" ]]; then
+    echo "👁 Starting Ingress-Egress-tracker ..."
+    KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-ingress-egress-tracker.sh $BINARY_ROOT_PATH
+  fi
 
   print_success
 }
@@ -195,8 +205,10 @@ destroy() {
   for pid in $(ps -ef | grep chainflip | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
   for pid in $(ps -ef | grep solana | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
   rm -rf /tmp/chainflip
-  rm ./localnet/docker-compose.yml
   rm -rf /tmp/solana/
+
+  unset DOT_GENESIS_HASH
+
   echo "done"
 }
 
@@ -245,7 +257,7 @@ yeet() {
 
 logs() {
   echo "🤖 Which service would you like to tail?"
-  select SERVICE in node engine broker lp polkadot geth bitcoin solana poster sequencer staker debug all; do
+  select SERVICE in node engine broker lp polkadot geth bitcoin solana poster sequencer staker debug redis all ingress-egress-tracker; do
     if [[ $SERVICE == "all" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow
       tail -f /tmp/chainflip/chainflip-*.log
@@ -261,6 +273,9 @@ logs() {
     fi
     if [[ $SERVICE == "poster" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow poster
+    fi
+    if [[ $SERVICE == "redis" ]]; then
+      docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow redis
     fi
     if [[ $SERVICE == "sequencer" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow sequencer
@@ -278,6 +293,9 @@ logs() {
     fi
     if [[ $SERVICE == "lp" ]]; then
       tail -f /tmp/chainflip/chainflip-lp-api.log
+    fi
+    if [[ $SERVICE == "ingress-egress-tracker" ]]; then
+      tail -f /tmp/chainflip/chainflip-ingress-egress-tracker.log
     fi
     if [[ $SERVICE == "solana" ]]; then
       tail -f /tmp/solana/solana.log

@@ -161,6 +161,24 @@ impl<'de> Deserialize<'de> for PartyIdxMapping {
 }
 
 #[cfg(test)]
+pub fn ensure_unsorted<T>(mut v: Vec<T>, seed: u64) -> Vec<T>
+where
+	T: Clone + Ord,
+{
+	use rand::prelude::*;
+
+	assert!(v.len() > 1);
+	let mut rng = StdRng::seed_from_u64(seed);
+	let sorted = v.iter().cloned().sorted().collect::<Vec<_>>();
+
+	while v != sorted {
+		v.shuffle(&mut rng);
+	}
+
+	v
+}
+
+#[cfg(test)]
 mod utils_tests {
 	use utilities::assert_panics;
 
@@ -213,22 +231,4 @@ mod utils_tests {
 		assert_eq!(find_frequent_element([1, 2, 3, 2, 3, 3].into_iter(), 3), None);
 		assert_eq!(find_frequent_element::<u32, _>([].into_iter(), 3), None);
 	}
-}
-
-#[cfg(test)]
-pub fn ensure_unsorted<T>(mut v: Vec<T>, seed: u64) -> Vec<T>
-where
-	T: Clone + Ord,
-{
-	use rand::prelude::*;
-
-	assert!(v.len() > 1);
-	let mut rng = StdRng::seed_from_u64(seed);
-	let sorted = v.iter().cloned().sorted().collect::<Vec<_>>();
-
-	while v != sorted {
-		v.shuffle(&mut rng);
-	}
-
-	v
 }
