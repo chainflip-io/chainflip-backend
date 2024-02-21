@@ -160,8 +160,8 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 
 					if let Some(request_id) = maybe_request_id {
 						// After the ceremony completes, it is consumed and Void is left
-						// behind. At this point we are sure the ceremony existed and we
-						// completed it, we can activate the key
+						// behind. At this point we are sure the ceremony existed and succeded, we
+						// can activate the key
 						if Signature::<T, I>::get(request_id) == AsyncResult::Void {
 							T::VaultActivator::activate_key();
 						};
