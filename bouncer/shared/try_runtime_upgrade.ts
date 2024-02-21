@@ -14,6 +14,7 @@ function tryRuntimeCommand(runtimePath: string, blockParam: string, networkUrl: 
   try {
     execSync(
       `try-runtime --runtime ${runtimePath} on-runtime-upgrade --disable-spec-version-check --disable-idempotency-checks --checks all ${blockParam} --uri ${networkUrl} 2> ${stderrFile}`,
+      { env: { ...process.env, RUST_LOG: 'runtime::executive=debug' } }
     );
     console.log(`try-runtime success for blockParam ${blockParam}`);
   } catch (e) {
