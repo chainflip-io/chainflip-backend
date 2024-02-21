@@ -53,6 +53,7 @@ pub struct AssetWithAmount {
 	pub amount: AssetAmount,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "role", rename_all = "snake_case")]
 pub enum RpcAccountInfo {

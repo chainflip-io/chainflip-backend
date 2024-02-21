@@ -27,7 +27,7 @@ use cf_primitives::{
 	GENESIS_EPOCH, STABLE_ASSET,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match};
-use cf_traits::{Chainflip, EpochInfo, LpBalanceApi, PoolApi};
+use cf_traits::{Chainflip, EpochInfo, LpBalanceApi};
 use frame_support::{
 	assert_ok,
 	instances::Instance1,
@@ -203,8 +203,8 @@ fn basic_pool_setup_provision_and_swap() {
 	])
 	.build()
 	.execute_with(|| {
-		new_pool(Asset::Eth, 0u32, price_at_tick(0).unwrap());
-		new_pool(Asset::Flip, 0u32, price_at_tick(0).unwrap());
+		new_pool(Asset::Eth, 1_000_000u32, price_at_tick(0).unwrap());
+		new_pool(Asset::Flip, 1_000_000u32, price_at_tick(0).unwrap());
 		register_refund_addresses(&DORIS);
 
 		credit_account(&DORIS, Asset::Eth, 1_000_000);
