@@ -19,14 +19,14 @@ export async function provideLiquidity(
   ccy: Asset,
   amount: number,
   waitForFinalization = false,
-  lpKey = '',
+  lpKey?: string,
 ) {
   const chainflip = await getChainflipApi();
   await cryptoWaitReady();
   const chain = assetToChain(ccy);
 
   const keyring = new Keyring({ type: 'sr25519' });
-  const lpUri = lpKey === '' ? process.env.LP_URI || '//LP_1' : lpKey;
+  const lpUri = lpKey ?? (process.env.LP_URI || '//LP_1');
   const lp = keyring.createFromUri(lpUri);
 
   // If no liquidity refund address is registered, then do that now
