@@ -101,7 +101,7 @@ pub struct FailingWitnessValidators {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct ScheduledSwap {
-	#[serde(flatten)]
+	#[cfg_attr(feature = "std", serde(flatten))]
 	pub swap: SwapLegInfo,
 	pub execute_at: BlockNumber,
 }
