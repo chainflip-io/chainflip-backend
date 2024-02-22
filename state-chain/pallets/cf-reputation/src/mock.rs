@@ -2,7 +2,7 @@ use super::*;
 use crate::{self as pallet_cf_reputation, PalletSafeMode};
 use cf_primitives::FlipBalance;
 use cf_traits::{impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleRegistry, Slashing};
-use frame_support::{assert_ok, construct_runtime, parameter_types};
+use frame_support::{assert_ok, construct_runtime, derive_impl, parameter_types};
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
@@ -30,6 +30,7 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();

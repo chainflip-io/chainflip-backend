@@ -344,10 +344,31 @@ pub trait RegisterRedemption: ApiCall<<Ethereum as Chain>::ChainCrypto> {
 	fn amount(&self) -> u128;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq, TypeInfo)]
 pub enum AllBatchError {
+	/// Empty transaction - the call is not required.
 	NotRequired,
-	Other,
+
+	/// The token address lookup failed. The token is not supported on the target chain.
+	UnsupportedToken,
+
+	/// The vault account is not set.
+	VaultAccountNotSet,
+
+	/// The Aggregate key lookup failed
+	AggKeyNotSet,
+
+	/// Unable to select Utxos.
+	UtxoSelectionFailed,
+
+	/// Some other DispatchError occurred.
+	DispatchError(DispatchError),
+}
+
+impl From<DispatchError> for AllBatchError {
+	fn from(e: DispatchError) -> Self {
+		AllBatchError::DispatchError(e)
+	}
 }
 
 #[derive(Debug)]

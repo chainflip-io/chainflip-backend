@@ -62,7 +62,6 @@ fn generate_authority_set<T: Config<I>, I: 'static>(
 )]
 mod benchmarks {
 	use super::*;
-	use sp_std::vec;
 
 	#[benchmark]
 	fn signature_success() {

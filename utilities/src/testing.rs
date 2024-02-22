@@ -49,9 +49,6 @@ pub async fn recv_with_custom_timeout<I>(
 	tokio::time::timeout(timeout, receiver.recv()).await.ok()?
 }
 
-// Note: Clippy seems to throw a false positive without this.
-// (as of `clippy 0.1.73 (a17c7968 2023-07-30)`).
-#[allow(clippy::needless_pass_by_ref_mut)]
 #[track_caller]
 pub async fn expect_recv_with_timeout<Item: std::fmt::Debug>(
 	receiver: &mut UnboundedReceiver<Item>,

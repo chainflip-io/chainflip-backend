@@ -62,7 +62,7 @@ async function incompatibleUpgradeNoBuild(
 
   const nodeCount = numberOfNodes + '-node';
   execSync(
-    `LOG_SUFFIX="-upgrade" NODE_COUNT=${nodeCount} SELECTED_NODES="${selectedNodes.join(
+    `INIT_RUN=false LOG_SUFFIX="-upgrade" NODE_COUNT=${nodeCount} SELECTED_NODES="${selectedNodes.join(
       ' ',
     )}" LOCALNET_INIT_DIR=${localnetInitPath} BINARY_ROOT_PATH=${binaryPath} ${localnetInitPath}/scripts/start-all-engines.sh`,
   );
@@ -77,17 +77,57 @@ async function incompatibleUpgradeNoBuild(
     'Check that the old engine has now shut down, and that the new engine is now running.',
   );
 
-  execSync(`kill $(lsof -t -i:10997)`);
-  execSync(`kill $(lsof -t -i:10589)`);
+  // Wait for the old broker and lp-api to shut down, and ensure the runtime upgrade is finalised.
+  await sleep(20000);
+
+  console.log('Killing the old node.');
+  execSync(`kill $(ps aux | grep chainflip-node | grep -v grep | awk '{print $2}')`);
+
+  console.log('Killed old node');
+
+  // let them shutdown
+  await sleep(2000);
+
   console.log('Stopped old broker and lp-api. Starting the new ones.');
 
-  // Wait for the old broker and lp-api to shut down, and ensure the runtime upgrade is finalised.
-  await sleep(22000);
+  console.log('Starting the new node');
 
   const KEYS_DIR = `${localnetInitPath}/keys`;
+
+  const selectedNodesSep = `"${selectedNodes.join(' ')}"`;
+
+  try {
+    const buffer = execSync(
+      `INIT_RPC_PORT=9944 KEYS_DIR=${KEYS_DIR} NODE_COUNT=${nodeCount} SELECTED_NODES=${selectedNodesSep} LOCALNET_INIT_DIR=${localnetInitPath} BINARY_ROOT_PATH=${binaryPath} ${localnetInitPath}/scripts/start-all-nodes.sh`,
+    );
+    console.log('start node success: ' + buffer.toString());
+  } catch (e) {
+    console.error('start node error: ');
+    console.log(e);
+  }
+
+  await sleep(7000);
+
+  const output = execSync("ps aux | grep chainflip-node | grep -v grep | awk '{print $2}'");
+  console.log('New node PID: ' + output.toString());
+
+  // Restart the engines
+  execSync(
+    `INIT_RUN=false LOG_SUFFIX="-upgrade" NODE_COUNT=${nodeCount} SELECTED_NODES=${selectedNodesSep} LOCALNET_INIT_DIR=${localnetInitPath} BINARY_ROOT_PATH=${binaryPath} ${localnetInitPath}/scripts/start-all-engines.sh`,
+  );
+
+  console.log('Starting new broker and lp-api.');
+
   execSync(`KEYS_DIR=${KEYS_DIR} ${localnetInitPath}/scripts/start-broker-api.sh ${binaryPath}`);
   execSync(`KEYS_DIR=${KEYS_DIR} ${localnetInitPath}/scripts/start-lp-api.sh ${binaryPath}`);
-  await sleep(6000);
+
+  await sleep(20000);
+
+  const brokerPID = execSync('lsof -t -i:10997');
+  console.log('New broker PID: ' + brokerPID.toString());
+  const lpApiPID = execSync('lsof -t -i:10589');
+  console.log('New LP API PID: ' + lpApiPID.toString());
+
   console.log('Started new broker and lp-api.');
 }
 

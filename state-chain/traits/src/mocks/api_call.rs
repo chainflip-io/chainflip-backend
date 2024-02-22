@@ -73,8 +73,8 @@ impl MockEthAllBatch<MockEvmEnvironment> {
 }
 
 thread_local! {
-	static ALL_BATCH_SUCCESS: std::cell::RefCell<bool> = std::cell::RefCell::new(true);
-	pub static SHOULD_CONSOLIDATE: std::cell::Cell<bool> = std::cell::Cell::new(false);
+	static ALL_BATCH_SUCCESS: std::cell::RefCell<bool> = const { std::cell::RefCell::new(true) };
+	pub static SHOULD_CONSOLIDATE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 impl AllBatch<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
@@ -90,7 +90,7 @@ impl AllBatch<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 				_phantom: PhantomData,
 			}))
 		} else {
-			Err(AllBatchError::Other)
+			Err(AllBatchError::UnsupportedToken)
 		}
 	}
 }
@@ -294,7 +294,7 @@ impl AllBatch<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 				_phantom: PhantomData,
 			}))
 		} else {
-			Err(AllBatchError::Other)
+			Err(AllBatchError::UnsupportedToken)
 		}
 	}
 }

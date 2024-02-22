@@ -43,10 +43,12 @@ impl<T> ApiWaitForResult<T> {
 
 pub mod types {
 	use super::*;
+	use cf_chains::assets::any::OldAsset;
+
 	#[derive(Serialize, Deserialize, Clone)]
 	pub struct RangeOrder {
-		pub base_asset: Asset,
-		pub quote_asset: Asset,
+		pub base_asset: OldAsset,
+		pub quote_asset: OldAsset,
 		pub id: U256,
 		pub tick_range: Range<Tick>,
 		pub liquidity_total: U256,
@@ -62,8 +64,8 @@ pub mod types {
 
 	#[derive(Serialize, Deserialize, Clone)]
 	pub struct LimitOrder {
-		pub base_asset: Asset,
-		pub quote_asset: Asset,
+		pub base_asset: OldAsset,
+		pub quote_asset: OldAsset,
 		pub side: Order,
 		pub id: U256,
 		pub tick: Tick,
@@ -92,8 +94,8 @@ fn collect_range_order_returns(
 					..
 				},
 			) => Some(types::RangeOrder {
-				base_asset,
-				quote_asset,
+				base_asset: base_asset.into(),
+				quote_asset: quote_asset.into(),
 				id: id.into(),
 				size_change: size_change.map(|increase_or_decrese| {
 					increase_or_decrese.map(|range_order_change| types::RangeOrderChange {
@@ -130,8 +132,8 @@ fn collect_limit_order_returns(
 					..
 				},
 			) => Some(types::LimitOrder {
-				base_asset,
-				quote_asset,
+				base_asset: base_asset.into(),
+				quote_asset: quote_asset.into(),
 				side,
 				id: id.into(),
 				tick,

@@ -6,7 +6,7 @@ use cf_chains::{
 	address::ToHumanreadableAddress, evm::SchnorrVerificationComponents, AnyChain, Arbitrum,
 	Bitcoin, Chain, Ethereum, Polkadot,
 };
-use cf_primitives::{Asset, BroadcastId, ForeignChain, NetworkEnvironment};
+use cf_primitives::{BroadcastId, ForeignChain, NetworkEnvironment};
 use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi,
 };
@@ -31,7 +31,7 @@ enum WitnessInformation {
 		#[serde(skip_serializing)]
 		deposit_address: String,
 		amount: NumberOrHex,
-		asset: Asset,
+		asset: cf_chains::assets::any::Asset,
 	},
 	Broadcast {
 		#[serde(skip_serializing)]
@@ -531,11 +531,8 @@ mod tests {
 		insta::assert_display_snapshot!(store
 			.storage
 			.get(
-				format!(
-					"deposit:Polkadot:{}",
-					format!("0x{}", hex::encode(polkadot_account_id.aliased_ref()))
-				)
-				.as_str()
+				format!("deposit:Polkadot:0x{}", hex::encode(polkadot_account_id.aliased_ref()))
+					.as_str()
 			)
 			.unwrap());
 		insta::assert_display_snapshot!(store

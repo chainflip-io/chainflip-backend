@@ -17,11 +17,12 @@ use crate::{
 	},
 };
 use cf_amm::{
-	common::{Amount, Tick},
+	common::{Amount, Order, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
 	arb::api::ArbitrumApi,
+	assets::any::ForeignChainAndAsset,
 	btc::{BitcoinCrypto, BitcoinRetryPolicy},
 	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
@@ -38,7 +39,8 @@ pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
 use pallet_cf_pools::{
-	AskBidMap, AssetsMap, PoolLiquidity, PoolOrderbook, PoolPrice, UnidirectionalPoolDepth,
+	AskBidMap, AssetPair, AssetsMap, PoolLiquidity, PoolOrderbook, PoolPriceV1, PoolPriceV2,
+	UnidirectionalPoolDepth,
 };
 use pallet_cf_reputation::ExclusionList;
 use pallet_cf_swapping::CcmSwapAmounts;
@@ -76,6 +78,7 @@ use sp_runtime::traits::{
 	OpaqueKeys, UniqueSaturatedInto, Verify,
 };
 
+use frame_support::genesis_builder_helper::{build_config, create_default_config};
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -90,7 +93,8 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{
-	AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, SemVer, SwapOutput,
+	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, SemVer,
+	SwapOutput,
 };
 pub use cf_traits::{
 	AccountInfo, BidderProvider, CcmHandler, Chainflip, EpochInfo, PoolApi, QualifyNode,
@@ -101,10 +105,9 @@ pub use pallet_cf_validator::SetSizeParameters;
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
-	all_keys_rotator::AllKeyRotator, all_vault_activator::EvmVaultActivator,
-	epoch_transition::ChainflipEpochTransitions, BroadcastReadyProvider, BtcEnvironment,
-	ChainAddressConverter, ChainflipHeartbeat, DotEnvironment, EvmEnvironment,
-	TokenholderGovernanceBroadcaster,
+	all_vault_activator::EvmVaultActivator, epoch_transition::ChainflipEpochTransitions,
+	BroadcastReadyProvider, BtcEnvironment, ChainAddressConverter, ChainflipHeartbeat,
+	DotEnvironment, EvmEnvironment, TokenholderGovernanceBroadcaster,
 };
 use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
 
@@ -162,7 +165,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 120,
+	spec_version: 130,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 12,
@@ -181,7 +184,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type EpochTransitionHandler = ChainflipEpochTransitions;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
 	type KeyRotator =
-		AllKeyRotator<EvmThresholdSigner, PolkadotThresholdSigner, BitcoinThresholdSigner>;
+		cons_key_rotator!(EvmThresholdSigner, PolkadotThresholdSigner, BitcoinThresholdSigner);
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type BidderProvider = pallet_cf_funding::Pallet<Self>;
 	type KeygenQualification = (
@@ -234,6 +237,8 @@ impl pallet_cf_swapping::Config for Runtime {
 	type AddressConverter = ChainAddressConverter;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
+	#[cfg(feature = "runtime-benchmarks")]
+	type FeePayment = Flip;
 }
 
 impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
@@ -298,6 +303,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
+	type FeePayment = Flip;
 }
 
 impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
@@ -316,6 +322,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type CcmHandler = Swapping;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
+	type FeePayment = Flip;
 }
 
 impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
@@ -334,6 +341,7 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type CcmHandler = Swapping;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
+	type FeePayment = Flip;
 }
 
 impl pallet_cf_ingress_egress::Config<ArbitrumInstance> for Runtime {
@@ -352,6 +360,7 @@ impl pallet_cf_ingress_egress::Config<ArbitrumInstance> for Runtime {
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
+	type FeePayment = Flip;
 }
 
 parameter_types! {
@@ -374,6 +383,8 @@ impl pallet_cf_lp::Config for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type PoolApi = LiquidityPools;
 	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;
+	#[cfg(feature = "runtime-benchmarks")]
+	type FeePayment = Flip;
 }
 
 impl pallet_cf_account_roles::Config for Runtime {
@@ -479,6 +490,7 @@ impl frame_system::Config for Runtime {
 	/// The set code logic, just the default since we're not a parachain.
 	type OnSetCode = ();
 	type MaxConsumers = ConstU32<16>;
+	type RuntimeTask = ();
 }
 
 impl frame_system::offchain::SigningTypes for Runtime {
@@ -550,6 +562,9 @@ impl pallet_cf_witnesser::Config for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type SafeMode = RuntimeSafeMode;
 	type CallDispatchPermission = WitnesserCallPermission;
+	type Offence = chainflip::Offence;
+	type OffenceReporter = Reputation;
+	type LateWitnessGracePeriod = ConstU32<LATE_WITNESS_GRACE_PERIOD>;
 	type WeightInfo = pallet_cf_witnesser::weights::PalletWeight<Runtime>;
 }
 
@@ -615,8 +630,7 @@ impl pallet_transaction_payment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type OnChargeTransaction = pallet_cf_flip::FlipTransactionPayment<Self>;
 	type OperationalFeeMultiplier = ConstU8<5>;
-	type WeightToFee =
-		ConstantMultiplier<FlipBalance, ConstU128<{ constants::common::TX_FEE_MULTIPLIER }>>;
+	type WeightToFee = ConstantMultiplier<FlipBalance, ConstU128<{ TX_FEE_MULTIPLIER }>>;
 	type LengthToFee = ConstantMultiplier<FlipBalance, ConstU128<1_000_000>>;
 	type FeeMultiplierUpdate = ConstFeeMultiplier<FeeMultiplier>;
 }
@@ -950,28 +964,38 @@ pub type PalletExecutionOrder = (
 // We use the executive pallet because the `pre_upgrade` and `post_upgrade` hooks are noops
 // for tuple migrations (like these).
 type PalletMigrations = (
+	// DO NOT REMOVE `VersionUpdate`. THIS IS REQUIRED TO UPDATE THE VERSION FOR THE CFES EVERY
+	// UPGRADE
+	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	pallet_cf_environment::migrations::PalletMigration<Runtime>,
 	pallet_cf_funding::migrations::PalletMigration<Runtime>,
 	// pallet_cf_validator::migrations::PalletMigration<Runtime>,
-	// pallet_cf_governance::migrations::PalletMigration<Runtime>,
+	pallet_grandpa::migrations::MigrateV4ToV5<Runtime>,
+	pallet_cf_governance::migrations::PalletMigration<Runtime>,
 	// pallet_cf_tokenholder_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, EthereumInstance>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, BitcoinInstance>,
-	// pallet_cf_vaults::migrations::PalletMigration<Runtime, EthereumInstance>,
-	// pallet_cf_vaults::migrations::PalletMigration<Runtime, PolkadotInstance>,
-	// pallet_cf_vaults::migrations::PalletMigration<Runtime, BitcoinInstance>,
-	// pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, EvmInstance>,
-	// pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, PolkadotInstance>,
-	// pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, BitcoinInstance>,
+	// pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, ArbitrumInstance>,
+	pallet_cf_vaults::migrations::PalletMigration<Runtime, EthereumInstance>,
+	pallet_cf_vaults::migrations::PalletMigration<Runtime, PolkadotInstance>,
+	pallet_cf_vaults::migrations::PalletMigration<Runtime, BitcoinInstance>,
+	// pallet_cf_vaults::migrations::PalletMigration<Runtime, ArbitrumInstance>,
+	// TODO: Remove this after version 1.3 release.
+	ThresholdSignatureRefactorMigration,
+	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, EvmInstance>,
+	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, PolkadotInstance>,
+	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, EthereumInstance>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, BitcoinInstance>,
+	// pallet_cf_broadcast::migrations::PalletMigration<Runtime, ArbitrumInstance>,
 	pallet_cf_swapping::migrations::PalletMigration<Runtime>,
 	// pallet_cf_lp::migrations::PalletMigration<Runtime>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, EthereumInstance>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, BitcoinInstance>,
+	// pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, ArbitrumInstance>,
 	// pallet_cf_pools::migrations::PalletMigration<Runtime>,
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 	VersionedMigration<
@@ -1055,6 +1079,55 @@ mod arbitrum_integration_migration {
 		fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
 			Ok(())
 		}
+	}
+}
+
+pub struct ThresholdSignatureRefactorMigration;
+
+mod threshold_signature_refactor_migration {
+	use super::Runtime;
+	use cf_runtime_upgrade_utilities::move_pallet_storage;
+	use frame_support::traits::GetStorageVersion;
+
+	pub fn migrate_instance<I: 'static, J: 'static>()
+	where
+		Runtime: pallet_cf_threshold_signature::Config<I>,
+		Runtime: pallet_cf_vaults::Config<J>,
+	{
+		// The migration needs to be run *after* the vaults pallet migration (3 -> 4) and *before*
+		// the threshold signer pallet migration (4 -> 5).
+		if <pallet_cf_threshold_signature::Pallet::<Runtime, I> as GetStorageVersion>::on_chain_storage_version() == 4 &&
+			<pallet_cf_vaults::Pallet::<Runtime, J> as GetStorageVersion>::on_chain_storage_version() == 4 {
+
+				log::info!("✅ Applying threshold signature refactor storage migration.");
+				for storage_name in [
+					"CeremonyIdCounter",
+					"KeygenSlashAmount",
+					"Vaults",
+				] {
+					move_pallet_storage::<
+						pallet_cf_vaults::Pallet<Runtime, J>,
+						pallet_cf_threshold_signature::Pallet<Runtime, I>,
+					>(storage_name.as_bytes());
+				}
+			} else {
+				log::info!("⏭ Skipping threshold signature refactor migration.");
+			}
+	}
+}
+
+impl frame_support::traits::OnRuntimeUpgrade for ThresholdSignatureRefactorMigration {
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		log::info!("⏫ Applying threshold signature refactor storage migration.");
+		threshold_signature_refactor_migration::migrate_instance::<EvmInstance, EthereumInstance>();
+		threshold_signature_refactor_migration::migrate_instance::<BitcoinInstance, BitcoinInstance>(
+		);
+		threshold_signature_refactor_migration::migrate_instance::<
+			PolkadotInstance,
+			PolkadotInstance,
+		>();
+
+		Default::default()
 	}
 }
 
@@ -1238,8 +1311,12 @@ impl_runtime_apis! {
 		fn cf_pool_price(
 			from: Asset,
 			to: Asset,
-		) -> Option<PoolPrice> {
+		) -> Option<PoolPriceV1> {
 			LiquidityPools::current_price(from, to)
+		}
+
+		fn cf_pool_price_v2(base_asset: Asset, quote_asset: Asset) -> Result<PoolPriceV2, DispatchErrorWithMessage> {
+			LiquidityPools::pool_price(base_asset, quote_asset).map_err(Into::into)
 		}
 
 		/// Simulates a swap and return the intermediate (if any) and final output.
@@ -1309,130 +1386,73 @@ impl_runtime_apis! {
 
 		fn cf_min_deposit_amount(asset: Asset) -> AssetAmount {
 			use pallet_cf_ingress_egress::MinimumDeposit;
-			use cf_chains::assets::{eth, dot, btc, arb};
-
-			match ForeignChain::from(asset) {
-				ForeignChain::Ethereum => MinimumDeposit::<Runtime, EthereumInstance>::get(
-					eth::Asset::try_from(asset)
-						.expect("Conversion must succeed: ForeignChain checked in match clause.")
-				),
-				ForeignChain::Polkadot => MinimumDeposit::<Runtime, PolkadotInstance>::get(
-					dot::Asset::try_from(asset)
-						.expect("Conversion must succeed: ForeignChain checked in match clause.")
-				),
-				ForeignChain::Bitcoin => MinimumDeposit::<Runtime, BitcoinInstance>::get(
-					btc::Asset::try_from(asset)
-						.expect("Conversion must succeed: ForeignChain checked in match clause.")
-				).into(),
-				ForeignChain::Arbitrum => MinimumDeposit::<Runtime, ArbitrumInstance>::get(
-					arb::Asset::try_from(asset)
-						.expect("Conversion must succeed: ForeignChain checked in match clause.")
-				),
+			match asset.into() {
+				ForeignChainAndAsset::Ethereum(asset) => MinimumDeposit::<Runtime, EthereumInstance>::get(asset),
+				ForeignChainAndAsset::Polkadot(asset) => MinimumDeposit::<Runtime, PolkadotInstance>::get(asset),
+				ForeignChainAndAsset::Bitcoin(asset) => MinimumDeposit::<Runtime, BitcoinInstance>::get(asset).into(),
+				ForeignChainAndAsset::Arbitrum(asset) => MinimumDeposit::<Runtime, ArbitrumInstance>::get(asset),
 			}
 		}
 
-		fn cf_egress_dust_limit(asset: Asset) -> AssetAmount {
+		fn cf_egress_dust_limit(generic_asset: Asset) -> AssetAmount {
 			use pallet_cf_ingress_egress::EgressDustLimit;
-			use cf_chains::assets::{eth, dot, btc, arb};
 
-			match ForeignChain::from(asset) {
-				ForeignChain::Ethereum => EgressDustLimit::<Runtime, EthereumInstance>::get(
-					eth::Asset::try_from(asset)
-						.expect("Conversion must succeed: ForeignChain checked in match clause.")
-				),
-				ForeignChain::Polkadot => EgressDustLimit::<Runtime, PolkadotInstance>::get(
-					dot::Asset::try_from(asset)
-						.expect("Conversion must succeed: ForeignChain checked in match clause.")
-				),
-				ForeignChain::Bitcoin => EgressDustLimit::<Runtime, BitcoinInstance>::get(
-					btc::Asset::try_from(asset)
-						.expect("Conversion must succeed: ForeignChain checked in match clause.")
-				),
-				ForeignChain::Arbitrum => EgressDustLimit::<Runtime, ArbitrumInstance>::get(
-					arb::Asset::try_from(asset)
-						.expect("Conversion must succeed: ForeignChain checked in match clause.")
-				),
+			match generic_asset.into() {
+				ForeignChainAndAsset::Ethereum(asset) => EgressDustLimit::<Runtime, EthereumInstance>::get(asset),
+				ForeignChainAndAsset::Polkadot(asset) => EgressDustLimit::<Runtime, PolkadotInstance>::get(asset),
+				ForeignChainAndAsset::Bitcoin(asset) => EgressDustLimit::<Runtime, BitcoinInstance>::get(asset),
+				ForeignChainAndAsset::Arbitrum(asset) => EgressDustLimit::<Runtime, ArbitrumInstance>::get(asset),
+
 			}
 		}
 
-		fn cf_ingress_fee(asset: Asset) -> Option<AssetAmount> {
-
-			match ForeignChain::from(asset) {
-				ForeignChain::Ethereum => {
-					let ingress_fee_in_eth = pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::get_tracked_data()
-						.estimate_ingress_fee(
-							asset
-								.try_into()
-								.expect("Conversion must succeed: ForeignChain checked in match clause.")
-						);
-
-					pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(asset, Asset::Eth, ingress_fee_in_eth)
+		fn cf_ingress_fee(generic_asset: Asset) -> Option<AssetAmount> {
+			match generic_asset.into() {
+				ForeignChainAndAsset::Ethereum(asset) => {
+					pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(
+						generic_asset,
+						Asset::Eth,
+						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::get_tracked_data()
+							.estimate_ingress_fee(asset)
+					)
 				},
-				ForeignChain::Polkadot => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::get_tracked_data()
-					.estimate_ingress_fee(
-						asset
-							.try_into()
-							.expect("Conversion must succeed: ForeignChain checked in match clause.")
-					)),
-				ForeignChain::Bitcoin => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::get_tracked_data()
-					.estimate_ingress_fee(
-						asset
-							.try_into()
-							.expect("Conversion must succeed: ForeignChain checked in match clause.")
+				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::get_tracked_data()
+					.estimate_ingress_fee(asset)),
+				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::get_tracked_data()
+					.estimate_ingress_fee(asset).into()),
+					ForeignChainAndAsset::Arbitrum(asset) => {
+						pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(
+							generic_asset,
+							Asset::ArbEth,
+							pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::get_tracked_data()
+								.estimate_ingress_fee(asset)
 						)
-						.into()),
-				ForeignChain::Arbitrum => {
-					let ingress_fee_in_arbeth = pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::get_tracked_data()
-					.estimate_ingress_fee(
-					asset
-						.try_into()
-						.expect("Conversion must succeed: ForeignChain checked in match clause.")
-					);
-
-					pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(asset, Asset::ArbEth, ingress_fee_in_arbeth)
-				},
+					},
 			}
 		}
 
-		fn cf_egress_fee(asset: Asset) -> Option<AssetAmount> {
-			match ForeignChain::from(asset) {
-				ForeignChain::Ethereum => {
-
-					let egress_fee_in_eth = pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::get_tracked_data()
-					.estimate_egress_fee(
-						asset
-							.try_into()
-							.expect("Conversion must succeed: ForeignChain checked in match clause.")
-						);
-
-					pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(asset, Asset::Eth, egress_fee_in_eth)
-
+		fn cf_egress_fee(generic_asset: Asset) -> Option<AssetAmount> {
+			match generic_asset.into() {
+				ForeignChainAndAsset::Ethereum(asset) => {
+					pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(
+						generic_asset,
+						Asset::Eth,
+						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::get_tracked_data()
+							.estimate_egress_fee(asset)
+					)
 				},
-				ForeignChain::Polkadot => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::get_tracked_data()
-					.estimate_egress_fee(
-						asset
-							.try_into()
-							.expect("Conversion must succeed: ForeignChain checked in match clause.")
-						)),
-				ForeignChain::Bitcoin => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::get_tracked_data()
-					.estimate_egress_fee(
-						asset
-							.try_into()
-							.expect("Conversion must succeed: ForeignChain checked in match clause.")
+				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::get_tracked_data()
+					.estimate_egress_fee(asset)),
+				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::get_tracked_data()
+					.estimate_egress_fee(asset).into()),
+					ForeignChainAndAsset::Arbitrum(asset) => {
+						pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(
+							generic_asset,
+							Asset::ArbEth,
+							pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::get_tracked_data()
+								.estimate_egress_fee(asset)
 						)
-						.into()),
-				ForeignChain::Arbitrum => {
-
-					let egress_fee_in_arbeth = pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::get_tracked_data()
-					.estimate_egress_fee(
-						asset
-							.try_into()
-							.expect("Conversion must succeed: ForeignChain checked in match clause.")
-						);
-
-					pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(asset, Asset::ArbEth, egress_fee_in_arbeth)
-
-				},
+					},
 			}
 		}
 
@@ -1460,13 +1480,11 @@ impl_runtime_apis! {
 
 			LiquidityPools::sweep(&account_id).unwrap();
 
-			let balances = Asset::all().iter().map(|&asset|
-				(asset, pallet_cf_lp::FreeBalances::<Runtime>::get(&account_id, asset).unwrap_or(0))
-			).collect();
-
 			Some(LiquidityProviderInfo {
 				refund_addresses,
-				balances,
+				balances: Asset::all().map(|asset|
+					(asset, pallet_cf_lp::FreeBalances::<Runtime>::get(&account_id, asset).unwrap_or(0))
+				).collect(),
 			})
 		}
 
@@ -1480,7 +1498,8 @@ impl_runtime_apis! {
 
 		/// This should *not* be fully trusted as if the deposits that are pre-witnessed will definitely go through.
 		/// This returns a list of swaps in the requested direction that are pre-witnessed in the current block.
-		fn cf_prewitness_swaps(from: Asset, to: Asset) -> Option<Vec<AssetAmount>> {
+		fn cf_prewitness_swaps(base_asset: Asset, quote_asset: Asset, side: Order) -> Vec<AssetAmount> {
+			let (from, to) = AssetPair::to_swap(base_asset, quote_asset, side);
 
 			fn filter_deposit_swaps<C, I: 'static>(from: Asset, to: Asset, deposit_witnesses: Vec<DepositWitness<C>>) -> Vec<AssetAmount>
 				where Runtime: pallet_cf_ingress_egress::Config<I>,
@@ -1570,16 +1589,16 @@ impl_runtime_apis! {
 								deposit_witnesses, ..
 							}) => {
 								all_prewitnessed_swaps.extend(filter_deposit_swaps::<Polkadot, PolkadotInstance>(from, to, deposit_witnesses));
-							}
+							},
 							RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
 								source_asset, deposit_amount, destination_asset, deposit_metadata, ..
 							}) => {
 								// There are two swaps for CCM, the principal swap, and the gas amount swap.
 								all_prewitnessed_swaps.extend(ccm_swaps(from, to, source_asset, destination_asset, deposit_amount, deposit_metadata.channel_metadata));
-							}
+							},
 							_ => {
 								// ignore, we only care about calls that trigger swaps.
-							}
+							},
 						}
 					}
 					_ => {
@@ -1588,12 +1607,7 @@ impl_runtime_apis! {
 				}
 			}
 
-			// We don't want to return anything from the websocket stream if there are no items
-			if all_prewitnessed_swaps.is_empty() {
-				None
-			} else {
-				Some(all_prewitnessed_swaps)
-			}
+			all_prewitnessed_swaps
 		}
 
 		fn cf_failed_call_ethereum(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {
@@ -1621,7 +1635,7 @@ impl_runtime_apis! {
 				failing_count: 0,
 				validators: vec![],
 			};
-			let voting_validators = Witnesser::count_votes(hash);
+			let voting_validators = Witnesser::count_votes(<Runtime as Chainflip>::EpochInfo::current_epoch(), hash);
 			let vanity_names: BTreeMap<AccountId, Vec<u8>> = pallet_cf_validator::VanityNames::<Runtime>::get();
 			voting_validators?.iter().for_each(|(val, voted)| {
 				let vanity = match vanity_names.get(val) {
@@ -1635,6 +1649,15 @@ impl_runtime_apis! {
 			});
 
 			Some(result)
+		}
+
+		fn cf_channel_opening_fee(chain: ForeignChain) -> FlipBalance {
+			match chain {
+				ForeignChain::Ethereum => pallet_cf_ingress_egress::Pallet::<Runtime, EthereumInstance>::channel_opening_fee(),
+				ForeignChain::Polkadot => pallet_cf_ingress_egress::Pallet::<Runtime, PolkadotInstance>::channel_opening_fee(),
+				ForeignChain::Bitcoin => pallet_cf_ingress_egress::Pallet::<Runtime, BitcoinInstance>::channel_opening_fee(),
+				ForeignChain::Arbitrum => pallet_cf_ingress_egress::Pallet::<Runtime, ArbitrumInstance>::channel_opening_fee(),
+			}
 		}
 	}
 
@@ -1832,6 +1855,16 @@ impl_runtime_apis! {
 			// NOTE: intentional unwrap: we don't want to propagate the error backwards, and want to
 			// have a backtrace here.
 			Executive::try_execute_block(block, state_root_check, signature_check, select).expect("execute-block failed")
+		}
+	}
+
+	impl sp_genesis_builder::GenesisBuilder<Block> for Runtime {
+		fn create_default_config() -> Vec<u8> {
+			create_default_config::<RuntimeGenesisConfig>()
+		}
+
+		fn build_config(config: Vec<u8>) -> sp_genesis_builder::Result {
+			build_config::<RuntimeGenesisConfig>(config)
 		}
 	}
 
