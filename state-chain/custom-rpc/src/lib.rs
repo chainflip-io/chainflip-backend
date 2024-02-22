@@ -1,5 +1,5 @@
 use cf_amm::{
-	common::{Amount, Order, Tick},
+	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -21,9 +21,7 @@ use jsonrpsee::{
 	SubscriptionSink,
 };
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_pools::{
-	AskBidMap, AssetsMap, PoolInfo, PoolLiquidity, PoolPriceV1, UnidirectionalPoolDepth,
-};
+use pallet_cf_pools::{AskBidMap, PoolInfo, PoolLiquidity, PoolPriceV1, UnidirectionalPoolDepth};
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_api::ApiError;
@@ -54,6 +52,7 @@ pub struct AssetWithAmount {
 	pub amount: AssetAmount,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "role", rename_all = "snake_case")]
 pub enum RpcAccountInfo {
@@ -67,6 +66,7 @@ pub enum RpcAccountInfo {
 		balances: any::AssetMap<NumberOrHex>,
 		refund_addresses: HashMap<ForeignChain, Option<ForeignChainAddressHumanreadable>>,
 		flip_balance: NumberOrHex,
+		earned_fees: any::AssetMap<AssetAmount>,
 	},
 	Validator {
 		flip_balance: NumberOrHex,
@@ -106,6 +106,7 @@ impl RpcAccountInfo {
 				.into_iter()
 				.map(|(chain, address)| (chain, address.map(|a| a.to_humanreadable(network))))
 				.collect(),
+			earned_fees: info.earned_fees,
 		}
 	}
 
@@ -244,7 +245,7 @@ pub struct PoolPriceV2 {
 pub struct RpcPrewitnessedSwap {
 	pub base_asset: OldAsset,
 	pub quote_asset: OldAsset,
-	pub side: Order,
+	pub side: Side,
 	pub amounts: Vec<U256>,
 }
 
@@ -374,7 +375,7 @@ pub trait CustomApi {
 		quote_asset: Asset,
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<AssetsMap<Amount>>;
+	) -> RpcResult<PoolPairsMap<Amount>>;
 	#[method(name = "pool_orderbook")]
 	fn cf_pool_orderbook(
 		&self,
@@ -421,7 +422,7 @@ pub trait CustomApi {
 		tick_range: Range<Tick>,
 		liquidity: Liquidity,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<AssetsMap<Amount>>;
+	) -> RpcResult<PoolPairsMap<Amount>>;
 	#[method(name = "funding_environment")]
 	fn cf_funding_environment(
 		&self,
@@ -455,7 +456,7 @@ pub trait CustomApi {
 	#[subscription(name = "subscribe_pool_price_v2", item = BlockUpdate<PoolPriceV2>)]
 	fn cf_subscribe_pool_price_v2(&self, base_asset: Asset, quote_asset: Asset);
 	#[subscription(name = "subscribe_prewitness_swaps", item = BlockUpdate<RpcPrewitnessedSwap>)]
-	fn cf_subscribe_prewitness_swaps(&self, base_asset: Asset, quote_asset: Asset, side: Order);
+	fn cf_subscribe_prewitness_swaps(&self, base_asset: Asset, quote_asset: Asset, side: Side);
 
 	// Subscribe to a stream that on every block produces a list of all scheduled/pending
 	// swaps in the base_asset/quote_asset pool, including any "implicit" half-swaps (as a
@@ -476,7 +477,7 @@ pub trait CustomApi {
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		side: Order,
+		side: Side,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcPrewitnessedSwap>;
 
@@ -918,7 +919,7 @@ where
 		quote_asset: Asset,
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<AssetsMap<Amount>> {
+	) -> RpcResult<PoolPairsMap<Amount>> {
 		self.client
 			.runtime_api()
 			.cf_required_asset_ratio_for_range_order(
@@ -966,7 +967,7 @@ where
 		tick_range: Range<Tick>,
 		liquidity: Liquidity,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<AssetsMap<Amount>> {
+	) -> RpcResult<PoolPairsMap<Amount>> {
 		self.client
 			.runtime_api()
 			.cf_pool_range_order_liquidity_value(
@@ -1184,7 +1185,7 @@ where
 		sink: SubscriptionSink,
 		base_asset: Asset,
 		quote_asset: Asset,
-		side: Order,
+		side: Side,
 	) -> Result<(), SubscriptionEmptyError> {
 		self.new_subscription(
 			false, /* only_on_changes */
@@ -1210,7 +1211,7 @@ where
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		side: Order,
+		side: Side,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcPrewitnessedSwap> {
 		Ok(RpcPrewitnessedSwap {
@@ -1394,6 +1395,15 @@ mod test {
 					(Asset::Usdc, 0),
 					(Asset::Dot, 0),
 				],
+				earned_fees: any::AssetMap {
+					eth: eth::AssetMap {
+						eth: 0u32.into(),
+						flip: u64::MAX.into(),
+						usdc: (u64::MAX / 2 - 1).into(),
+					},
+					btc: btc::AssetMap { btc: 0u32.into() },
+					dot: dot::AssetMap { dot: 0u32.into() },
+				},
 			},
 			cf_primitives::NetworkEnvironment::Mainnet,
 			0,
@@ -1502,6 +1512,10 @@ mod test {
 							PoolInfo {
 								limit_order_fee_hundredth_pips: 0,
 								range_order_fee_hundredth_pips: 100,
+								range_order_total_fees_earned: Default::default(),
+								limit_order_total_fees_earned: Default::default(),
+								range_total_swap_inputs: Default::default(),
+								limit_total_swap_inputs: Default::default(),
 							}
 							.into(),
 						),

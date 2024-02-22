@@ -1,9 +1,11 @@
 use crate::chainflip::Offence;
 use cf_amm::{
-	common::{Amount, Order, Tick},
+	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{eth::Address as EthereumAddress, Chain, ForeignChainAddress};
+use cf_chains::{
+	assets::any::AssetMap, eth::Address as EthereumAddress, Chain, ForeignChainAddress,
+};
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BroadcastId, EpochIndex, FlipBalance, ForeignChain,
 	NetworkEnvironment, SemVer, SwapOutput, BlockNumber,
@@ -13,8 +15,8 @@ use core::ops::Range;
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{
-	AskBidMap, AssetsMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1,
-	PoolPriceV2, UnidirectionalPoolDepth,
+	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
+	UnidirectionalPoolDepth,
 };
 use pallet_cf_swapping::SwapLegInfo;
 use pallet_cf_witnesser::CallHash;
@@ -76,6 +78,7 @@ pub struct AuctionState {
 pub struct LiquidityProviderInfo {
 	pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
 	pub balances: Vec<(Asset, AssetAmount)>,
+	pub earned_fees: AssetMap<AssetAmount>,
 }
 
 #[derive(Debug, Decode, Encode, TypeInfo)]
@@ -163,7 +166,7 @@ decl_runtime_apis!(
 			base_asset: Asset,
 			quote_asset: Asset,
 			tick_range: Range<cf_amm::common::Tick>,
-		) -> Result<AssetsMap<Amount>, DispatchErrorWithMessage>;
+		) -> Result<PoolPairsMap<Amount>, DispatchErrorWithMessage>;
 		fn cf_pool_orderbook(
 			base_asset: Asset,
 			quote_asset: Asset,
@@ -179,7 +182,7 @@ decl_runtime_apis!(
 			quote_asset: Asset,
 			tick_range: Range<Tick>,
 			liquidity: Liquidity,
-		) -> Result<AssetsMap<Amount>, DispatchErrorWithMessage>;
+		) -> Result<PoolPairsMap<Amount>, DispatchErrorWithMessage>;
 
 		fn cf_max_swap_amount(asset: Asset) -> Option<AssetAmount>;
 		fn cf_min_deposit_amount(asset: Asset) -> AssetAmount;
@@ -187,7 +190,7 @@ decl_runtime_apis!(
 		fn cf_prewitness_swaps(
 			base_asset: Asset,
 			quote_asset: Asset,
-			side: Order,
+			side: Side,
 		) -> Vec<AssetAmount>;
 		fn cf_scheduled_swaps(
 			base_asset: Asset,

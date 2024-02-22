@@ -17,7 +17,7 @@ use crate::{
 	},
 };
 use cf_amm::{
-	common::{Amount, Order, Tick},
+	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -36,7 +36,7 @@ pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
 use pallet_cf_pools::{
-	AskBidMap, AssetPair, AssetsMap, PoolLiquidity, PoolOrderbook, PoolPriceV1, PoolPriceV2,
+	AskBidMap, AssetPair, PoolLiquidity, PoolOrderbook, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
 };
 use pallet_cf_reputation::ExclusionList;
@@ -493,7 +493,7 @@ impl pallet_grandpa::Config for Runtime {
 	type MaxNominators = ConstU32<0>;
 
 	type MaxSetIdSessionEntries = ConstU64<8>;
-	type KeyOwnerProof = <Historical as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
+	type KeyOwnerProof = sp_session::MembershipProof;
 	type EquivocationReportSystem = pallet_grandpa::EquivocationReportSystem<
 		Self,
 		GrandpaOffenceReporter<Self>,
@@ -900,7 +900,8 @@ type PalletMigrations = (
 	pallet_cf_environment::migrations::PalletMigration<Runtime>,
 	pallet_cf_funding::migrations::PalletMigration<Runtime>,
 	// pallet_cf_validator::migrations::PalletMigration<Runtime>,
-	// pallet_cf_governance::migrations::PalletMigration<Runtime>,
+	pallet_grandpa::migrations::MigrateV4ToV5<Runtime>,
+	pallet_cf_governance::migrations::PalletMigration<Runtime>,
 	// pallet_cf_tokenholder_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance1>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance2>,
@@ -1185,7 +1186,7 @@ impl_runtime_apis! {
 			base_asset: Asset,
 			quote_asset: Asset,
 			tick_range: Range<cf_amm::common::Tick>,
-		) -> Result<AssetsMap<Amount>, DispatchErrorWithMessage> {
+		) -> Result<PoolPairsMap<Amount>, DispatchErrorWithMessage> {
 			LiquidityPools::required_asset_ratio_for_range_order(base_asset, quote_asset, tick_range).map_err(Into::into)
 		}
 
@@ -1210,7 +1211,7 @@ impl_runtime_apis! {
 			quote_asset: Asset,
 			tick_range: Range<Tick>,
 			liquidity: Liquidity,
-		) -> Result<AssetsMap<Amount>, DispatchErrorWithMessage> {
+		) -> Result<PoolPairsMap<Amount>, DispatchErrorWithMessage> {
 			LiquidityPools::pool_range_order_liquidity_value(base_asset, quote_asset, tick_range, liquidity).map_err(Into::into)
 		}
 
@@ -1303,6 +1304,7 @@ impl_runtime_apis! {
 				balances: Asset::all().map(|asset|
 					(asset, pallet_cf_lp::FreeBalances::<Runtime>::get(&account_id, asset).unwrap_or(0))
 				).collect(),
+				earned_fees: pallet_cf_lp::HistoricalEarnedFees::<Runtime>::get(&account_id),
 			})
 		}
 
@@ -1316,7 +1318,7 @@ impl_runtime_apis! {
 
 		/// This should *not* be fully trusted as if the deposits that are pre-witnessed will definitely go through.
 		/// This returns a list of swaps in the requested direction that are pre-witnessed in the current block.
-		fn cf_prewitness_swaps(base_asset: Asset, quote_asset: Asset, side: Order) -> Vec<AssetAmount> {
+		fn cf_prewitness_swaps(base_asset: Asset, quote_asset: Asset, side: Side) -> Vec<AssetAmount> {
 			let (from, to) = AssetPair::to_swap(base_asset, quote_asset, side);
 
 			fn filter_deposit_swaps<C, I: 'static>(from: Asset, to: Asset, deposit_witnesses: Vec<DepositWitness<C>>) -> Vec<AssetAmount>
