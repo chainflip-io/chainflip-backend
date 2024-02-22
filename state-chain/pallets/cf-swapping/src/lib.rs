@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, ForeignChainAddress},
 	CcmChannelMetadata, CcmDepositMetadata, SwapOrigin,
@@ -61,8 +62,9 @@ pub struct Swap {
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct SwapLegInfo {
 	pub swap_id: SwapId,
-	pub from: Asset,
-	pub to: Asset,
+	pub base_asset: Asset,
+	pub quote_asset: Asset,
+	pub side: Side,
 	pub amount: AssetAmount,
 }
 
@@ -682,18 +684,21 @@ pub mod pallet {
 					if swap.from == base_asset {
 						Some(SwapLegInfo {
 							swap_id: swap.swap_id,
-							from: swap.from,
+							base_asset,
 							// All swaps from `base_asset` have to go through the stable asset:
-							to: STABLE_ASSET,
+							quote_asset: STABLE_ASSET,
+							side: Side::Sell,
 							amount: swap.amount,
 						})
 					} else if swap.to == base_asset {
 						Some(SwapLegInfo {
 							swap_id: swap.swap_id,
+							base_asset,
 							// All swaps to `base_asset` have to go through the stable asset:
-							from: STABLE_ASSET,
-							to: swap.to,
-							// Safe to unwrap as we have swapped everything into USDC at this point
+							quote_asset: STABLE_ASSET,
+							side: Side::Buy,
+							// Safe to unwrap as we have swapped everything into the stable asset at
+							// this point
 							amount: swap.stable_amount.unwrap(),
 						})
 					} else {

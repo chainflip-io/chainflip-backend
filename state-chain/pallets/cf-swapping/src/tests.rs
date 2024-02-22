@@ -2171,26 +2171,30 @@ fn test_get_scheduled_swap_legs() {
 			vec![
 				SwapLegInfo {
 					swap_id: 1,
-					from: Asset::Flip,
-					to: Asset::Usdc,
+					base_asset: Asset::Flip,
+					quote_asset: Asset::Usdc,
+					side: Side::Sell,
 					amount: INIT_AMOUNT,
 				},
 				SwapLegInfo {
 					swap_id: 2,
-					from: Asset::Usdc,
-					to: Asset::Flip,
+					base_asset: Asset::Flip,
+					quote_asset: Asset::Usdc,
+					side: Side::Buy,
 					amount: INIT_AMOUNT,
 				},
 				SwapLegInfo {
 					swap_id: 4,
-					from: Asset::Flip,
-					to: Asset::Usdc,
-					amount: INIT_AMOUNT,
+					base_asset: Asset::Flip,
+					quote_asset: Asset::Usdc,
+					side: Side::Sell,
+					amount: INIT_AMOUNT
 				},
 				SwapLegInfo {
 					swap_id: 5,
-					from: Asset::Usdc,
-					to: Asset::Flip,
+					base_asset: Asset::Flip,
+					quote_asset: Asset::Usdc,
+					side: Side::Buy,
 					amount: INTERMEDIATE_AMOUNT,
 				},
 			]
