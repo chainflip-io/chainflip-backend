@@ -26,6 +26,8 @@ macro_rules! assets {
 			use codec::{MaxEncodedLen, Encode, Decode};
 			use scale_info::TypeInfo;
 			use serde::{Serialize, Deserialize};
+			use core::ops::IndexMut;
+			use core::ops::Index;
 
 			#[derive(
 				Copy,
@@ -255,7 +257,7 @@ macro_rules! assets {
 				}
 			}
 
-			#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, TypeInfo, MaxEncodedLen)]
+			#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
 			pub struct AssetMap<T> {
 				$(
 					#[serde(rename = $chain_str)]
@@ -286,6 +288,29 @@ macro_rules! assets {
 					Self::try_from_fn(|required_asset| {
 						iter.clone().find(|(asset, _t)| *asset == required_asset).ok_or(()).map(|x| x.1)
 					}).ok()
+				}
+			}
+
+			impl<T> IndexMut<Asset> for AssetMap<T> {
+				fn index_mut(&mut self, index: Asset) -> &mut T {
+					match index {
+						$(
+							Asset::$gas_asset => &mut self.$chain_mod.$gas_lowercase,
+							$(Asset::$asset => &mut self.$chain_mod.$lowercase,)*
+						)*
+					}
+				}
+			}
+
+			impl<T> Index<Asset> for AssetMap<T> {
+				type Output = T;
+				fn index(&self, index: Asset) -> &T {
+					match index {
+						$(
+							Asset::$gas_asset => &self.$chain_mod.$gas_lowercase,
+							$(Asset::$asset => &self.$chain_mod.$lowercase,)*
+						)*
+					}
 				}
 			}
 		}
@@ -339,7 +364,7 @@ macro_rules! assets {
 					Unsupported,
 				}
 
-				#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, TypeInfo, MaxEncodedLen)]
+				#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
 				#[serde(rename_all = "UPPERCASE")]
 				pub struct AssetMap<T> {
 					pub $gas_lowercase: T,

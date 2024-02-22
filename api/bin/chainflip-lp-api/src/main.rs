@@ -8,7 +8,7 @@ use chainflip_api::{
 	self,
 	lp::{
 		types::{LimitOrder, RangeOrder},
-		ApiWaitForResult, LpApi, Order, Tick,
+		ApiWaitForResult, LpApi, PoolPairsMap, Side, Tick,
 	},
 	primitives::{
 		chains::{assets::any::OldAsset, Bitcoin, Ethereum, Polkadot},
@@ -28,7 +28,7 @@ use jsonrpsee::{
 	types::SubscriptionResult,
 	SubscriptionSink,
 };
-use pallet_cf_pools::{AssetPair, AssetsMap, IncreaseOrDecrease, OrderId, RangeOrderSize};
+use pallet_cf_pools::{AssetPair, IncreaseOrDecrease, OrderId, RangeOrderSize};
 use rpc_types::{AssetBalance, OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
 use sp_core::U256;
 use std::{
@@ -44,8 +44,7 @@ pub mod rpc_types {
 	use super::*;
 	use anyhow::anyhow;
 	use cf_utilities::rpc::NumberOrHex;
-	use chainflip_api::queries::SwapChannelInfo;
-	use pallet_cf_pools::AssetsMap;
+	use chainflip_api::{lp::PoolPairsMap, queries::SwapChannelInfo};
 	use serde::{Deserialize, Serialize};
 
 	#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
@@ -60,7 +59,7 @@ pub mod rpc_types {
 
 	#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 	pub enum RangeOrderSizeJson {
-		AssetAmounts { maximum: AssetsMap<NumberOrHex>, minimum: AssetsMap<NumberOrHex> },
+		AssetAmounts { maximum: PoolPairsMap<NumberOrHex>, minimum: PoolPairsMap<NumberOrHex> },
 		Liquidity { liquidity: NumberOrHex },
 	}
 	impl TryFrom<RangeOrderSizeJson> for RangeOrderSize {
@@ -156,7 +155,7 @@ pub trait Rpc {
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		side: Order,
+		side: Side,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<NumberOrHex>,
@@ -169,7 +168,7 @@ pub trait Rpc {
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		side: Order,
+		side: Side,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		sell_amount: NumberOrHex,
@@ -226,7 +225,7 @@ pub enum OrderFilled {
 		lp: AccountId,
 		base_asset: OldAsset,
 		quote_asset: OldAsset,
-		side: Order,
+		side: Side,
 		id: U256,
 		tick: Tick,
 		sold: U256,
@@ -240,7 +239,7 @@ pub enum OrderFilled {
 		quote_asset: OldAsset,
 		id: U256,
 		range: Range<Tick>,
-		fees: AssetsMap<U256>,
+		fees: PoolPairsMap<U256>,
 		liquidity: U256,
 	},
 }
@@ -367,7 +366,7 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		side: Order,
+		side: Side,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<NumberOrHex>,
@@ -394,7 +393,7 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		side: Order,
+		side: Side,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		sell_amount: NumberOrHex,
@@ -558,7 +557,7 @@ where
 					let updated_range_orders = &updated_range_orders;
 					let updated_limit_orders = &updated_limit_orders;
 					let previous_pools = &previous_pools;
-					[Order::Sell, Order::Buy]
+					[Side::Sell, Side::Buy]
 						.into_iter()
 						.flat_map(move |side| {
 							pool.pool_state.limit_orders(side).filter_map(
@@ -635,7 +634,7 @@ where
 										collected
 											.fees
 											.zip(previous_collected.fees)
-											.map(|_, (fees, previous_fees)| fees - previous_fees)
+											.map(|(fees, previous_fees)| fees - previous_fees)
 									} else {
 										collected.fees
 									}
@@ -650,7 +649,7 @@ where
 										quote_asset: asset_pair.assets().quote.into(),
 										id: id.into(),
 										range: range.clone(),
-										fees: fees.map(|_, fees| fees).into(),
+										fees: fees.map(|fees| fees),
 										liquidity: position_info.liquidity.into(),
 									})
 								}
