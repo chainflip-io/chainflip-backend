@@ -1425,19 +1425,11 @@ impl_runtime_apis! {
 
 		fn cf_scheduled_swaps(base_asset: Asset, _quote_asset: Asset) -> Vec<ScheduledSwap> {
 
-			let first_block = Swapping::first_unprocessed_block();
-			let last_block = System::block_number() + pallet_cf_swapping::SWAP_DELAY_BLOCKS;
-
-			debug_assert!(first_block < last_block);
-
-			(first_block..=last_block).flat_map(|block| {
-				let swaps_for_block = Swapping::swap_queue(block);
-
+			pallet_cf_swapping::SwapQueue::<Runtime>::iter().flat_map(|(block, swaps_for_block)| {
 				let swaps: Vec<_> = swaps_for_block.iter().filter(|swap| swap.from == base_asset || swap.to == base_asset).cloned().collect();
-
 				Swapping::get_scheduled_swap_legs(swaps, base_asset).unwrap().into_iter().map(move |swap| ScheduledSwap {swap, execute_at: block })
 			}).collect()
-		}
+	}
 
 		fn cf_failed_call(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {
 			if EthereumIngressEgress::get_failed_call(broadcast_id).is_some() {

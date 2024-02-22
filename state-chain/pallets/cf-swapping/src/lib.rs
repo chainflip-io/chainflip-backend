@@ -251,12 +251,11 @@ pub mod pallet {
 	/// Scheduled Swaps
 	#[pallet::storage]
 	#[pallet::getter(fn swap_queue)]
-	pub(crate) type SwapQueue<T: Config> =
+	pub type SwapQueue<T: Config> =
 		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<Swap>, ValueQuery>;
 
 	/// The first block for which swaps haven't yet been processed
 	#[pallet::storage]
-	#[pallet::getter(fn first_unprocessed_block)]
 	pub(crate) type FirstUnprocessedBlock<T: Config> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
