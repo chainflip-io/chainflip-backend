@@ -9,8 +9,8 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets::any::{self, OldAsset},
-	AccountRole, Asset, AssetAmount, BroadcastId, ForeignChain, NetworkEnvironment,
-	SemVer, SwapOutput,
+	AccountRole, Asset, AssetAmount, BroadcastId, ForeignChain, NetworkEnvironment, SemVer,
+	SwapOutput,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -1148,9 +1148,12 @@ where
 		base_asset: Asset,
 		quote_asset: Asset,
 	) -> Result<(), SubscriptionEmptyError> {
-
 		// Check that the requested pool exists:
-		let Ok(Ok(_)) = self.client.runtime_api().cf_pool_info(self.client.info().best_hash, base_asset, quote_asset) else {
+		let Ok(Ok(_)) = self.client.runtime_api().cf_pool_info(
+			self.client.info().best_hash,
+			base_asset,
+			quote_asset,
+		) else {
 			return Err(SubscriptionEmptyError);
 		};
 
@@ -1159,8 +1162,9 @@ where
 			true,  /* end_on_error */
 			sink,
 			move |api, hash| {
-				Ok::<_, ApiError>(SwapResponse { swaps: api
-					.cf_scheduled_swaps(hash, base_asset, quote_asset)? })
+				Ok::<_, ApiError>(SwapResponse {
+					swaps: api.cf_scheduled_swaps(hash, base_asset, quote_asset)?,
+				})
 			},
 		)
 	}
@@ -1169,15 +1173,19 @@ where
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		at: Option<state_chain_runtime::Hash>
+		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<ScheduledSwap>> {
-
 		// Check that the requested pool exists:
-		let Ok(Ok(_)) = self.client.runtime_api().cf_pool_info(self.client.info().best_hash, base_asset, quote_asset) else {
-			return Err(SubscriptionEmptyError);
-		};
+		self.client
+			.runtime_api()
+			.cf_pool_info(self.client.info().best_hash, base_asset, quote_asset)
+			.map_err(to_rpc_error)
+			.and_then(|result| result.map_err(map_dispatch_error))?;
 
-		self.client.runtime_api().cf_scheduled_swaps(self.unwrap_or_best(at), base_asset, quote_asset).map_err(to_rpc_error)
+		self.client
+			.runtime_api()
+			.cf_scheduled_swaps(self.unwrap_or_best(at), base_asset, quote_asset)
+			.map_err(to_rpc_error)
 	}
 
 	fn cf_subscribe_prewitness_swaps(
