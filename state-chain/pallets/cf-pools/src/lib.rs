@@ -152,7 +152,7 @@ pub mod pallet {
 		/// A cache of all the limit orders that exist in the pool. This must be kept up to date
 		/// with the underlying pool. These are grouped by the asset the limit order is selling
 		pub limit_orders_cache: PoolPairsMap<BTreeMap<T::AccountId, BTreeMap<OrderId, Tick>>>,
-		pub pool_state: PoolState<(T::AccountId, OrderId), OrderId>,
+		pub pool_state: PoolState<T::AccountId, OrderId>,
 	}
 
 	pub type OrderId = u64;
@@ -590,10 +590,8 @@ pub mod pallet {
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
-				let current_tick_range = pool
-					.clone()
-					.pool_state
-					.get_range_order_tick_for_lp(&(lp.clone(), id.clone()), id.clone());
+				let current_tick_range =
+					pool.clone().pool_state.get_range_order_tick_for_lp(&lp.clone(), id.clone());
 				// let current_tick_range = pool
 				// 	.range_orders_cache
 				// 	.get(&lp)
@@ -675,7 +673,7 @@ pub mod pallet {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
 				let current_tick =
-					pool.pool_state.clone().get_range_order_tick_for_lp(&(lp.clone(), id), id);
+					pool.pool_state.clone().get_range_order_tick_for_lp(&lp.clone(), id);
 				let tick_range = match (current_tick, option_tick_range) {
 					(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
 					(None, Some(tick_range)) => Ok(tick_range),
@@ -888,8 +886,7 @@ pub mod pallet {
 					.set_fees(fee_hundredth_pips)
 					.map_err(|_| Error::<T>::InvalidFeeAmount)?
 					.try_map_with_pair(|asset, collected_fees| {
-						for ((lp, id), tick, collected, position_info) in collected_fees.into_iter()
-						{
+						for (lp, id, tick, collected, position_info) in collected_fees.into_iter() {
 							Self::process_limit_order_update(
 								pool,
 								asset_pair,
@@ -1204,7 +1201,7 @@ impl<T: Config> Pallet<T> {
 				IncreaseOrDecrease::Increase(sold_amount) => {
 					let (collected, position_info) = match pool
 						.pool_state
-						.collect_and_mint_limit_order(&(lp.clone(), id), side, tick, sold_amount)
+						.collect_and_mint_limit_order(&lp.clone(), id, side, tick, sold_amount)
 					{
 						Ok(ok) => Ok(ok),
 						Err(error) => Err(match error {
@@ -1236,7 +1233,7 @@ impl<T: Config> Pallet<T> {
 				IncreaseOrDecrease::Decrease(sold_amount) => {
 					let (sold_amount, collected, position_info) = match pool
 						.pool_state
-						.collect_and_burn_limit_order(&(lp.clone(), id), side, tick, sold_amount)
+						.collect_and_burn_limit_order(&lp.clone(), id, side, tick, sold_amount)
 					{
 						Ok(ok) => Ok(ok),
 						Err(error) => Err(match error {
@@ -1292,7 +1289,7 @@ impl<T: Config> Pallet<T> {
 			IncreaseOrDecrease::Increase(size) => {
 				let (assets_debited, minted_liquidity, collected, position_info) =
 					match pool.pool_state.collect_and_mint_range_order(
-						&(lp.clone(), id),
+						&lp.clone(),
 						id,
 						tick_range.clone(),
 						size,
@@ -1345,7 +1342,7 @@ impl<T: Config> Pallet<T> {
 			IncreaseOrDecrease::Decrease(size) => {
 				let (assets_withdrawn, burnt_liquidity, collected, position_info) = match pool
 					.pool_state
-					.collect_and_burn_range_order(&(lp.clone(), id), id, tick_range.clone(), size)
+					.collect_and_burn_range_order(&lp.clone(), id, tick_range.clone(), size)
 				{
 					Ok(ok) => Ok(ok),
 					Err(error) => Err(match error {
@@ -1641,7 +1638,7 @@ impl<T: Config> Pallet<T> {
 						positions.iter().any(move |(id, tick)| {
 							!pool
 								.pool_state
-								.limit_order(&((*lp).clone(), *id), assets.sell_order(), *tick)
+								.limit_order(&(*lp).clone(), *id, assets.sell_order(), *tick)
 								.unwrap()
 								.1
 								.amount
@@ -1727,7 +1724,7 @@ impl<T: Config> Pallet<T> {
 					.filter_map(|(lp, id, tick)| {
 						let (collected, position_info) = pool
 							.pool_state
-							.limit_order(&(lp.clone(), id), asset.sell_order(), tick)
+							.limit_order(&lp.clone(), id, asset.sell_order(), tick)
 							.unwrap();
 						if position_info.amount.is_zero() {
 							None
@@ -1765,7 +1762,7 @@ impl<T: Config> Pallet<T> {
 			)
 			.map(|(lp, id, tick_range)| {
 				let (collected, position_info) =
-					pool.pool_state.range_order(&(lp.clone(), id), id, tick_range.clone()).unwrap();
+					pool.pool_state.range_order(&lp.clone(), id, tick_range.clone()).unwrap();
 				RangeOrder {
 					lp: lp.clone(),
 					id: id.into(),

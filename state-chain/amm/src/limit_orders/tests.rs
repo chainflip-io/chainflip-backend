@@ -13,7 +13,8 @@ use cf_utilities::{assert_ok, assert_panics};
 use rand::{Rng, SeedableRng};
 
 type LiquidityProvider = cf_primitives::AccountId;
-type PoolState = super::PoolState<LiquidityProvider>;
+type OrderId = u64;
+type PoolState = super::PoolState<LiquidityProvider, OrderId>;
 
 /// The amounts used as parameters to input_amount_floor, input_amount_ceil, output_amount_floor are
 /// guaranteed to be <= MAX_FIXED_POOL_LIQUIDITY. This test checks that MAX_FIXED_POOL_LIQUIDITY is
@@ -294,7 +295,7 @@ fn historics() {
 		let amount: Amount = 1000.into();
 		let mut pool_state = PoolState::new(MAX_LP_FEE).unwrap();
 		assert_eq!(
-			assert_ok!(pool_state.collect_and_mint::<BaseToQuote>(&lp, 0, amount)),
+			assert_ok!(pool_state.collect_and_mint::<BaseToQuote>(&lp, 0, 0, amount)),
 			(
 				Collected {
 					fees: Amount::zero(),
@@ -314,7 +315,7 @@ fn historics() {
 		pool_state.swap::<BaseToQuote>(swap_amount, None);
 
 		assert_eq!(
-			assert_ok!(pool_state.collect::<BaseToQuote>(&lp, 0)),
+			assert_ok!(pool_state.collect::<BaseToQuote>(&lp, 0, 0)),
 			(
 				Collected {
 					fees,
@@ -330,7 +331,7 @@ fn historics() {
 		pool_state.swap::<BaseToQuote>(swap_amount, None);
 
 		assert_eq!(
-			assert_ok!(pool_state.collect::<BaseToQuote>(&lp, 0)),
+			assert_ok!(pool_state.collect::<BaseToQuote>(&lp, 0, 0)),
 			(
 				Collected {
 					fees,
@@ -346,7 +347,7 @@ fn historics() {
 		pool_state.swap::<BaseToQuote>(swap_amount, None);
 
 		assert_eq!(
-			assert_ok!(pool_state.collect::<BaseToQuote>(&lp, 0)),
+			assert_ok!(pool_state.collect::<BaseToQuote>(&lp, 0, 0)),
 			(
 				Collected {
 					fees,
@@ -360,7 +361,7 @@ fn historics() {
 		);
 
 		assert_eq!(
-			assert_ok!(pool_state.collect_and_burn::<BaseToQuote>(&lp, 0, amount)),
+			assert_ok!(pool_state.collect_and_burn::<BaseToQuote>(&lp, 0, 0, amount)),
 			(
 				amount - Amount::from(75),
 				Collected {
@@ -384,6 +385,7 @@ fn mint() {
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_mint::<SD>(
 					&LiquidityProvider::from([0; 32]),
+					0,
 					good,
 					1000.into()
 				)),
@@ -396,6 +398,7 @@ fn mint() {
 			assert!(matches!(
 				pool_state.collect_and_mint::<SD>(
 					&LiquidityProvider::from([0; 32]),
+					0,
 					bad,
 					1000.into()
 				),
@@ -409,18 +412,25 @@ fn mint() {
 				assert_ok!(pool_state.collect_and_mint::<SD>(
 					&LiquidityProvider::from([0; 32]),
 					0,
+					0,
 					good
 				)),
 				(Collected::default(), PositionInfo::new(good))
 			);
 		}
-
+		let mut order_id = 0;
 		for bad in [MAX_FIXED_POOL_LIQUIDITY + 1, MAX_FIXED_POOL_LIQUIDITY + 2] {
 			let mut pool_state = PoolState::new(0).unwrap();
 			assert!(matches!(
-				pool_state.collect_and_mint::<SD>(&LiquidityProvider::from([0; 32]), 0, bad),
+				pool_state.collect_and_mint::<SD>(
+					&LiquidityProvider::from([0; 32]),
+					order_id,
+					0,
+					bad
+				),
 				Err(PositionError::Other(MintError::MaximumLiquidity))
 			));
+			order_id += 1;
 		}
 	}
 
@@ -436,6 +446,7 @@ fn burn() {
 			assert!(matches!(
 				pool_state.collect_and_burn::<SD>(
 					&LiquidityProvider::from([0; 32]),
+					0,
 					MIN_TICK - 1,
 					1000.into()
 				),
@@ -444,6 +455,7 @@ fn burn() {
 			assert!(matches!(
 				pool_state.collect_and_burn::<SD>(
 					&LiquidityProvider::from([0; 32]),
+					0,
 					MAX_TICK + 1,
 					1000.into()
 				),
@@ -455,6 +467,7 @@ fn burn() {
 			assert!(matches!(
 				pool_state.collect_and_burn::<SD>(
 					&LiquidityProvider::from([0; 32]),
+					0,
 					120,
 					1000.into()
 				),
@@ -468,6 +481,7 @@ fn burn() {
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_mint::<SD>(
 					&LiquidityProvider::from([0; 32]),
+					0,
 					tick,
 					amount
 				)),
@@ -476,6 +490,7 @@ fn burn() {
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_burn::<SD>(
 					&LiquidityProvider::from([0; 32]),
+					0,
 					tick,
 					amount
 				)),
@@ -490,19 +505,21 @@ fn burn() {
 			let mut pool_state = PoolState::new(0).unwrap();
 			let tick = 120;
 			let amount = U256::from(1000);
-			assert_ok!(pool_state.collect_and_mint::<SD>(&[1u8; 32].into(), tick, 56.into()));
+			assert_ok!(pool_state.collect_and_mint::<SD>(&[1u8; 32].into(), 0, tick, 56.into()));
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_mint::<SD>(
 					&LiquidityProvider::from([0; 32]),
+					0,
 					tick,
 					amount
 				)),
 				(Collected::default(), PositionInfo::new(amount))
 			);
-			assert_ok!(pool_state.collect_and_mint::<SD>(&[2u8; 32].into(), tick, 16.into()));
+			assert_ok!(pool_state.collect_and_mint::<SD>(&[2u8; 32].into(), 0, tick, 16.into()));
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_burn::<SD>(
 					&LiquidityProvider::from([0; 32]),
+					0,
 					tick,
 					amount
 				)),
@@ -520,6 +537,7 @@ fn burn() {
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_mint::<SD>(
 					&LiquidityProvider::from([0; 32]),
+					0,
 					tick,
 					amount
 				)),
@@ -529,6 +547,7 @@ fn burn() {
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_burn::<SD>(
 					&LiquidityProvider::from([0; 32]),
+					0,
 					tick,
 					0.into()
 				)),
@@ -554,6 +573,7 @@ fn burn() {
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_mint::<SD>(
 					&LiquidityProvider::from([0; 32]),
+					0,
 					tick,
 					amount
 				)),
@@ -563,6 +583,7 @@ fn burn() {
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_burn::<SD>(
 					&LiquidityProvider::from([0; 32]),
+					0,
 					tick,
 					amount - swap
 				)),
@@ -596,6 +617,7 @@ fn swap() {
 				assert_ok!(pool_state.collect_and_mint::<SD>(
 					&LiquidityProvider::from([0; 32]),
 					0,
+					0,
 					1000.into()
 				));
 				assert_eq!(pool_state.swap::<SD>(swap, None), (output, 0.into()));
@@ -605,11 +627,13 @@ fn swap() {
 				let tick = 0;
 				assert_ok!(pool_state.collect_and_mint::<SD>(
 					&LiquidityProvider::from([0; 32]),
+					0,
 					tick,
 					500.into()
 				));
 				assert_ok!(pool_state.collect_and_mint::<SD>(
 					&LiquidityProvider::from([0; 32]),
+					1,
 					tick,
 					500.into()
 				));
@@ -618,8 +642,18 @@ fn swap() {
 			{
 				let mut pool_state = PoolState::new(0).unwrap();
 				let tick = 0;
-				assert_ok!(pool_state.collect_and_mint::<SD>(&[1u8; 32].into(), tick, 500.into()));
-				assert_ok!(pool_state.collect_and_mint::<SD>(&[2u8; 32].into(), tick, 500.into()));
+				assert_ok!(pool_state.collect_and_mint::<SD>(
+					&[1u8; 32].into(),
+					0,
+					tick,
+					500.into()
+				));
+				assert_ok!(pool_state.collect_and_mint::<SD>(
+					&[2u8; 32].into(),
+					1,
+					tick,
+					500.into()
+				));
 				assert_eq!(pool_state.swap::<SD>(swap, None), (output, 0.into()));
 			}
 		}
@@ -627,6 +661,7 @@ fn swap() {
 			let mut pool_state = PoolState::new(100000).unwrap();
 			assert_ok!(pool_state.collect_and_mint::<SD>(
 				&LiquidityProvider::from([0; 32]),
+				0,
 				0,
 				1000.into()
 			));
@@ -640,6 +675,7 @@ fn swap() {
 	// Partial liquidity, multiple prices
 	{
 		let tick = 0;
+		let order_id = 1;
 		for (range, offset) in [
 			(U256::from(149990000)..=U256::from(150000000), 0),
 			(U256::from(150000000)..=U256::from(150010000), 1),
@@ -647,11 +683,13 @@ fn swap() {
 			let mut pool_state = PoolState::new(0).unwrap();
 			assert_ok!(pool_state.collect_and_mint::<BaseToQuote>(
 				&LiquidityProvider::from([0; 32]),
+				order_id,
 				tick,
 				100000000.into()
 			));
 			assert_ok!(pool_state.collect_and_mint::<BaseToQuote>(
 				&LiquidityProvider::from([0; 32]),
+				order_id,
 				offset +
 					tick_at_sqrt_price(sqrt_price_at_tick(tick) * U256::from(4).integer_sqrt()),
 				100000000.into()
@@ -663,6 +701,7 @@ fn swap() {
 	}
 	{
 		let tick = 0;
+		let order_id = 1;
 		for (range, offset) in [
 			(U256::from(120000000)..=U256::from(120002000), 0),
 			(U256::from(119998000)..=U256::from(120000000), 1),
@@ -670,11 +709,13 @@ fn swap() {
 			let mut pool_state = PoolState::new(0).unwrap();
 			assert_ok!(pool_state.collect_and_mint::<QuoteToBase>(
 				&LiquidityProvider::from([0; 32]),
+				order_id,
 				tick,
 				100000000.into()
 			));
 			assert_ok!(pool_state.collect_and_mint::<QuoteToBase>(
 				&LiquidityProvider::from([0; 32]),
+				order_id,
 				offset +
 					tick_at_sqrt_price(sqrt_price_at_tick(tick) * U256::from(4).integer_sqrt()),
 				100000000.into()
@@ -689,13 +730,16 @@ fn swap() {
 	{
 		let mut pool_state = PoolState::new(0).unwrap();
 		let tick = 0;
+		let order_id = 1;
 		assert_ok!(pool_state.collect_and_mint::<BaseToQuote>(
 			&LiquidityProvider::from([0; 32]),
+			order_id,
 			tick,
 			100.into()
 		));
 		assert_ok!(pool_state.collect_and_mint::<BaseToQuote>(
 			&LiquidityProvider::from([0; 32]),
+			order_id,
 			tick_at_sqrt_price(sqrt_price_at_tick(tick) * U256::from(4).integer_sqrt()),
 			100.into()
 		));
@@ -704,13 +748,16 @@ fn swap() {
 	{
 		let mut pool_state = PoolState::new(0).unwrap();
 		let tick = 0;
+		let order_id = 1;
 		assert_ok!(pool_state.collect_and_mint::<QuoteToBase>(
 			&LiquidityProvider::from([0; 32]),
+			order_id,
 			tick,
 			100.into()
 		));
 		assert_ok!(pool_state.collect_and_mint::<QuoteToBase>(
 			&LiquidityProvider::from([0; 32]),
+			order_id,
 			tick_at_sqrt_price(sqrt_price_at_tick(tick) * U256::from(4).integer_sqrt()),
 			100.into()
 		));
@@ -728,6 +775,7 @@ fn maximum_liquidity_swap() {
 			pool_state
 				.collect_and_mint::<BaseToQuote>(
 					&LiquidityProvider::from([0; 32]),
+					0,
 					tick,
 					MAX_FIXED_POOL_LIQUIDITY
 				)

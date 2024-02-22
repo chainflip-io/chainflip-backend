@@ -89,6 +89,7 @@ fn maximum_liquidity_swap() {
 			pool_state
 				.collect_and_mint(
 					&LiquidityProvider::from([0; 32]),
+					1,
 					lower_tick,
 					upper_tick,
 					Size::Liquidity { liquidity: MAX_TICK_GROSS_LIQUIDITY },

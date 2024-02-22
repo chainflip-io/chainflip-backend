@@ -39,6 +39,7 @@ fn test_basic_swaps() {
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_mint_limit_order(
 					&LiquidityProvider::from([0; 32]),
+					0,
 					!order,
 					0,
 					amount
@@ -125,6 +126,7 @@ fn test_basic_swaps() {
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_mint_limit_order(
 					&LiquidityProvider::from([0; 32]),
+					0,
 					!order,
 					0,
 					limit_order_liquidity
@@ -186,6 +188,7 @@ fn test_basic_swaps() {
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_mint_limit_order(
 					&LiquidityProvider::from([0; 32]),
+					0,
 					!order,
 					0,
 					limit_order_liquidity

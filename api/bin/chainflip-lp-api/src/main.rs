@@ -561,7 +561,7 @@ where
 						.into_iter()
 						.flat_map(move |side| {
 							pool.pool_state.limit_orders(side).filter_map(
-								move |((lp, id), tick, collected, position_info)| {
+								move |(lp, id, tick, collected, position_info)| {
 									let (fees, sold, bought) = {
 										let option_previous_order_state = if updated_limit_orders
 											.contains(&(lp.clone(), *asset_pair, side, id))
@@ -570,7 +570,7 @@ where
 										} else {
 											previous_pools.get(asset_pair).and_then(|pool| {
 												pool.pool_state
-													.limit_order(&(lp.clone(), id), side, tick)
+													.limit_order(&lp.clone(), id, side, tick)
 													.ok()
 											})
 										};
@@ -614,7 +614,7 @@ where
 							)
 						})
 						.chain(pool.pool_state.range_orders().filter_map(
-							move |((lp, id), id_2, range, collected, position_info)| {
+							move |(lp, id, range, collected, position_info)| {
 								let fees = {
 									let option_previous_order_state = if updated_range_orders
 										.contains(&(lp.clone(), *asset_pair, id))
@@ -623,7 +623,7 @@ where
 									} else {
 										previous_pools.get(asset_pair).and_then(|pool| {
 											pool.pool_state
-												.range_order(&(lp.clone(), id), id, range.clone())
+												.range_order(&lp.clone(), id, range.clone())
 												.ok()
 										})
 									};

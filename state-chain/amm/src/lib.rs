@@ -24,7 +24,7 @@ pub mod range_orders;
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub struct PoolState<LiquidityProvider: Ord, OrderId: Ord + Clone> {
-	limit_orders: limit_orders::PoolState<LiquidityProvider>,
+	limit_orders: limit_orders::PoolState<LiquidityProvider, OrderId>,
 	range_orders: range_orders::PoolState<LiquidityProvider, OrderId>,
 }
 
@@ -227,6 +227,7 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityPr
 	pub fn collect_and_mint_limit_order(
 		&mut self,
 		lp: &LiquidityProvider,
+		order_id: OrderId,
 		order: Side,
 		tick: Tick,
 		sold_amount: Amount,
@@ -235,15 +236,19 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityPr
 		limit_orders::PositionError<limit_orders::MintError>,
 	> {
 		match order.to_sold_pair() {
-			Pairs::Base => self.limit_orders.collect_and_mint::<QuoteToBase>(lp, tick, sold_amount),
+			Pairs::Base =>
+				self.limit_orders
+					.collect_and_mint::<QuoteToBase>(lp, order_id, tick, sold_amount),
 			Pairs::Quote =>
-				self.limit_orders.collect_and_mint::<BaseToQuote>(lp, tick, sold_amount),
+				self.limit_orders
+					.collect_and_mint::<BaseToQuote>(lp, order_id, tick, sold_amount),
 		}
 	}
 
 	pub fn collect_and_burn_limit_order(
 		&mut self,
 		lp: &LiquidityProvider,
+		order_id: OrderId,
 		order: Side,
 		tick: Tick,
 		sold_amount: Amount,
@@ -252,9 +257,12 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityPr
 		limit_orders::PositionError<limit_orders::BurnError>,
 	> {
 		match order.to_sold_pair() {
-			Pairs::Base => self.limit_orders.collect_and_burn::<QuoteToBase>(lp, tick, sold_amount),
+			Pairs::Base =>
+				self.limit_orders
+					.collect_and_burn::<QuoteToBase>(lp, order_id, tick, sold_amount),
 			Pairs::Quote =>
-				self.limit_orders.collect_and_burn::<BaseToQuote>(lp, tick, sold_amount),
+				self.limit_orders
+					.collect_and_burn::<BaseToQuote>(lp, order_id, tick, sold_amount),
 		}
 	}
 
@@ -353,6 +361,7 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityPr
 	pub fn limit_order(
 		&self,
 		lp: &LiquidityProvider,
+		order_id: OrderId,
 		order: Side,
 		tick: Tick,
 	) -> Result<
@@ -360,8 +369,8 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityPr
 		limit_orders::PositionError<Infallible>,
 	> {
 		match order {
-			Side::Sell => self.limit_orders.position::<QuoteToBase>(lp, tick),
-			Side::Buy => self.limit_orders.position::<BaseToQuote>(lp, tick),
+			Side::Sell => self.limit_orders.position::<QuoteToBase>(lp, order_id, tick),
+			Side::Buy => self.limit_orders.position::<BaseToQuote>(lp, order_id, tick),
 		}
 	}
 
@@ -373,6 +382,7 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityPr
 			+ Iterator<
 				Item = (
 					LiquidityProvider,
+					OrderId,
 					Tick,
 					limit_orders::Collected,
 					limit_orders::PositionInfo,
@@ -440,8 +450,10 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityPr
 	pub fn set_fees(
 		&mut self,
 		fee_hundredth_pips: u32,
-	) -> Result<PoolPairsMap<Vec<(LiquidityProvider, Tick, Collected, PositionInfo)>>, SetFeesError>
-	{
+	) -> Result<
+		PoolPairsMap<Vec<(LiquidityProvider, OrderId, Tick, Collected, PositionInfo)>>,
+		SetFeesError,
+	> {
 		self.range_orders.set_fees(fee_hundredth_pips)?;
 		self.limit_orders.set_fees(fee_hundredth_pips)
 	}
@@ -465,14 +477,20 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityPr
 	pub fn collect_all_limit_orders(
 		&mut self,
 	) -> PoolPairsMap<
-		Vec<(LiquidityProvider, Tick, limit_orders::Collected, limit_orders::PositionInfo)>,
+		Vec<(
+			LiquidityProvider,
+			OrderId,
+			Tick,
+			limit_orders::Collected,
+			limit_orders::PositionInfo,
+		)>,
 	> {
 		self.limit_orders.collect_all()
 	}
 
 	// Returns if the pool fee is valid.
 	pub fn validate_fees(fee_hundredth_pips: u32) -> bool {
-		limit_orders::PoolState::<LiquidityProvider>::validate_fees(fee_hundredth_pips) &&
+		limit_orders::PoolState::<LiquidityProvider, OrderId>::validate_fees(fee_hundredth_pips) &&
 			range_orders::PoolState::<LiquidityProvider, OrderId>::validate_fees(
 				fee_hundredth_pips,
 			)
