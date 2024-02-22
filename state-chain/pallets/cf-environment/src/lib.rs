@@ -453,6 +453,7 @@ impl<T: Config> Pallet<T> {
 						output_amount +
 							number_of_outputs * fee_per_output_utxo +
 							min_fee_required_per_tx,
+						Self::consolidation_parameters().consolidation_size,
 					)
 					.ok_or_else(|| {
 						log::error!("Unable to select desired amount from available utxos.");

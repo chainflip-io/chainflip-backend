@@ -1,5 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(step_trait)]
+#![feature(extract_if)]
+
 use core::{fmt::Display, iter::Step};
 
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
