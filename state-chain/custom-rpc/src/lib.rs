@@ -463,6 +463,14 @@ pub trait CustomApi {
 	#[subscription(name = "subscribe_scheduled_swaps", item = BlockUpdate<SwapResponse>)]
 	fn cf_subscribe_scheduled_swaps(&self, base_asset: Asset, quote_asset: Asset);
 
+	#[method(name = "scheduled_swaps")]
+	fn cf_scheduled_swaps(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<ScheduledSwap>>;
+
 	#[method(name = "prewitness_swaps")]
 	fn cf_prewitness_swaps(
 		&self,
@@ -1154,6 +1162,21 @@ where
 					.cf_scheduled_swaps(hash, base_asset, quote_asset)? })
 			},
 		)
+	}
+
+	fn cf_scheduled_swaps(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		at: Option<state_chain_runtime::Hash>
+	) -> RpcResult<Vec<ScheduledSwap>> {
+
+		// Check that the requested pool exists:
+		let Ok(Ok(_)) = self.client.runtime_api().cf_pool_info(self.client.info().best_hash, base_asset, quote_asset) else {
+			return Err(SubscriptionEmptyError);
+		};
+
+		self.client.runtime_api().cf_scheduled_swaps(self.unwrap_or_best(at), base_asset, quote_asset).map_err(to_rpc_error)
 	}
 
 	fn cf_subscribe_prewitness_swaps(
