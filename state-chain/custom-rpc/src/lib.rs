@@ -1342,6 +1342,10 @@ mod test {
 						Some(cf_chains::ForeignChainAddress::Dot(Default::default())),
 					),
 					(ForeignChain::Bitcoin, None),
+					(
+						ForeignChain::Arbitrum,
+						Some(cf_chains::ForeignChainAddress::Arb(H160::from([2; 20]))),
+					),
 				],
 				balances: vec![
 					(Asset::Eth, u128::MAX),
@@ -1349,6 +1353,8 @@ mod test {
 					(Asset::Flip, u128::MAX / 2),
 					(Asset::Usdc, 0),
 					(Asset::Dot, 0),
+					(Asset::ArbEth, 1),
+					(Asset::ArbUsdc, 2),
 				],
 			},
 			cf_primitives::NetworkEnvironment::Mainnet,
