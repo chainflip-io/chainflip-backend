@@ -13,7 +13,7 @@ use crate::{
 	chainflip::{calculate_account_apy, Offence},
 	runtime_apis::{
 		AuctionState, DispatchErrorWithMessage, FailingWitnessValidators, LiquidityProviderInfo,
-		RuntimeApiAccountInfoV2, RuntimeApiPenalty, ScheduledSwap
+		RuntimeApiAccountInfoV2, RuntimeApiPenalty, ScheduledSwap,
 	},
 };
 use cf_amm::{
@@ -40,7 +40,7 @@ use pallet_cf_pools::{
 	UnidirectionalPoolDepth,
 };
 use pallet_cf_reputation::ExclusionList;
-use pallet_cf_swapping::{CcmSwapAmounts};
+use pallet_cf_swapping::CcmSwapAmounts;
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use scale_info::prelude::string::String;

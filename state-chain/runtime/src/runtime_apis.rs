@@ -7,8 +7,8 @@ use cf_chains::{
 	assets::any::AssetMap, eth::Address as EthereumAddress, Chain, ForeignChainAddress,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, BroadcastId, EpochIndex, FlipBalance, ForeignChain,
-	NetworkEnvironment, SemVer, SwapOutput, BlockNumber,
+	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, FlipBalance,
+	ForeignChain, NetworkEnvironment, SemVer, SwapOutput,
 };
 use codec::{Decode, Encode};
 use core::ops::Range;
@@ -192,10 +192,7 @@ decl_runtime_apis!(
 			quote_asset: Asset,
 			side: Side,
 		) -> Vec<AssetAmount>;
-		fn cf_scheduled_swaps(
-			base_asset: Asset,
-			quote_asset: Asset,
-		) -> Vec<ScheduledSwap>;
+		fn cf_scheduled_swaps(base_asset: Asset, quote_asset: Asset) -> Vec<ScheduledSwap>;
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> Option<LiquidityProviderInfo>;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
 		fn cf_asset_balances(account_id: AccountId32) -> Vec<(Asset, AssetAmount)>;
