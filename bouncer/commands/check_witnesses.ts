@@ -16,6 +16,7 @@
 import { blake2AsHex } from '@polkadot/util-crypto';
 import { runWithTimeout, sleep, getChainflipApi } from '../shared/utils';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const witnessHash = new Set<any>();
 function hashCall(extrinsic: SubmittableExtrinsic<'promise', ISubmittableResult>) {
   const blakeHash = blake2AsHex(extrinsic.method.toU8a(), 256);
@@ -48,6 +49,7 @@ async function main(): Promise<void> {
       console.log(currentBlockNumber);
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     signedBlock.block.extrinsics.forEach((ex: any, _index: any) => {
       if (ex.toHuman().method.method === 'witnessAtEpoch') {
         const callData = ex.toHuman().method.args.call;
