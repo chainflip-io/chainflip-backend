@@ -684,15 +684,15 @@ pub mod pallet {
 						Some(SwapLegInfo {
 							swap_id: swap.swap_id,
 							from: swap.from,
-							// All swaps from `base_asset` have to go through Usdc:
-							to: Asset::Usdc,
+							// All swaps from `base_asset` have to go through the stable asset:
+							to: STABLE_ASSET,
 							amount: swap.amount,
 						})
 					} else if swap.to == base_asset {
 						Some(SwapLegInfo {
 							swap_id: swap.swap_id,
-							// All swaps to `base_asset` have to go through Usdc:
-							from: Asset::Usdc,
+							// All swaps to `base_asset` have to go through the stable asset:
+							from: STABLE_ASSET,
 							to: swap.to,
 							// Safe to unwrap as we have swapped everything into USDC at this point
 							amount: swap.stable_amount.unwrap(),
