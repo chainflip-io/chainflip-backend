@@ -14,13 +14,13 @@ use cf_traits::{
 	mocks::{block_height_provider::BlockHeightProvider, cfe_interface_mock::MockCfeInterface},
 };
 use frame_support::{
-	construct_runtime, parameter_types, traits::UnfilteredDispatchable, StorageHasher,
+	construct_runtime, derive_impl, parameter_types, traits::UnfilteredDispatchable, StorageHasher,
 };
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
 thread_local! {
-	pub static SET_AGG_KEY_WITH_AGG_KEY_REQUIRED: RefCell<bool> = RefCell::new(true);
+	pub static SET_AGG_KEY_WITH_AGG_KEY_REQUIRED: RefCell<bool> = const { RefCell::new(true) };
 }
 
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -36,6 +36,7 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -184,7 +185,7 @@ impl SafeMode for MockRuntimeSafeMode {
 }
 
 thread_local! {
-	pub static SAFE_MODE: RefCell<MockRuntimeSafeMode> = RefCell::new(MockRuntimeSafeMode::CodeGreen);
+	pub static SAFE_MODE: RefCell<MockRuntimeSafeMode> = const { RefCell::new(MockRuntimeSafeMode::CodeGreen) };
 }
 
 //pub struct MockRuntimeSafeMode;

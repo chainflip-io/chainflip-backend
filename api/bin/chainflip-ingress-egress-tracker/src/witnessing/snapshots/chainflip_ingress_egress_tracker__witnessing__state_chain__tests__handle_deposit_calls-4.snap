@@ -1,5 +1,6 @@
 ---
 source: api/bin/chainflip-ingress-egress-tracker/src/witnessing/state_chain.rs
+assertion_line: 521
 expression: "store.storage.get(format!(\"deposit:Ethereum:{}\",\n                eth_address_str1.to_lowercase()).as_str()).unwrap()"
 ---
-[{"amount":"0x64","asset":"ETH","deposit_chain_block_height":1},{"amount":"0x1e8480","asset":"ETH","deposit_chain_block_height":1}]
+[{"amount":"0x64","asset":{"asset":"ETH","chain":"Ethereum"},"deposit_chain_block_height":1},{"amount":"0x1e8480","asset":{"asset":"ETH","chain":"Ethereum"},"deposit_chain_block_height":1}]

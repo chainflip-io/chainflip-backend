@@ -190,31 +190,46 @@ pub fn evm_all_batch_builder<
 	for FetchAssetParams { deposit_fetch_id, asset } in fetch_params {
 		if let Some(token_address) = token_address_fn(asset) {
 			match deposit_fetch_id {
-				EvmFetchId::Fetch(contract_address) => fetch_only_params
-					.push(EncodableFetchAssetParams { contract_address, asset: token_address }),
+				EvmFetchId::Fetch(contract_address) => {
+					debug_assert!(
+						asset != <C as Chain>::GAS_ASSET,
+						"Eth should not be fetched. It is auto-fetched in the smart contract."
+					);
+					fetch_only_params
+						.push(EncodableFetchAssetParams { contract_address, asset: token_address })
+				},
 				EvmFetchId::DeployAndFetch(channel_id) => fetch_deploy_params
 					.push(EncodableFetchDeployAssetParams { channel_id, asset: token_address }),
 				EvmFetchId::NotRequired => (),
 			};
 		} else {
-			return Err(AllBatchError::Other)
+			return Err(AllBatchError::UnsupportedToken)
 		}
 	}
-	Ok(EvmTransactionBuilder::new_unsigned(
-		replay_protection,
-		all_batch::AllBatch::new(
-			fetch_deploy_params,
-			fetch_only_params,
-			transfer_params
-				.into_iter()
-				.map(|TransferAssetParams { asset, to, amount }| {
-					token_address_fn(asset)
-						.map(|address| EncodableTransferAssetParams { to, amount, asset: address })
-						.ok_or(AllBatchError::Other)
-				})
-				.collect::<Result<Vec<_>, _>>()?,
-		),
-	))
+	if fetch_only_params.is_empty() && fetch_deploy_params.is_empty() && transfer_params.is_empty()
+	{
+		Err(AllBatchError::NotRequired)
+	} else {
+		Ok(EvmTransactionBuilder::new_unsigned(
+			replay_protection,
+			all_batch::AllBatch::new(
+				fetch_deploy_params,
+				fetch_only_params,
+				transfer_params
+					.into_iter()
+					.map(|TransferAssetParams { asset, to, amount }| {
+						token_address_fn(asset)
+							.map(|address| EncodableTransferAssetParams {
+								to,
+								amount,
+								asset: address,
+							})
+							.ok_or(AllBatchError::UnsupportedToken)
+					})
+					.collect::<Result<Vec<_>, _>>()?,
+			),
+		))
+	}
 }
 
 /// Provides the environment data for ethereum-like chains.

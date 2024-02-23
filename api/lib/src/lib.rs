@@ -13,11 +13,11 @@ use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use serde::Serialize;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
+pub use sp_core::crypto::AccountId32;
 use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair, H256};
+pub use state_chain_runtime::chainflip::BlockUpdate;
 use state_chain_runtime::{opaque::SessionKeys, RuntimeCall};
 use zeroize::Zeroize;
-
-pub use sp_core::crypto::AccountId32;
 pub mod primitives {
 	pub use cf_primitives::*;
 	pub use pallet_cf_governance::ProposalId;
@@ -398,16 +398,13 @@ impl Serialize for KeyPair {
 ///
 /// This key is used for secure communication between Validators.
 pub fn generate_node_key() -> Result<(KeyPair, libp2p_identity::PeerId)> {
-	use rand_v7::SeedableRng;
-
-	let mut rng = rand_v7::rngs::StdRng::from_entropy();
-	let keypair = ed25519_dalek::Keypair::generate(&mut rng);
-	let libp2p_keypair = libp2p_identity::Keypair::ed25519_from_bytes(keypair.secret.to_bytes())?;
+	let signing_keypair = ed25519_dalek::SigningKey::generate(&mut rand::thread_rng());
+	let libp2p_keypair = libp2p_identity::Keypair::ed25519_from_bytes(signing_keypair.to_bytes())?;
 
 	Ok((
 		KeyPair {
-			secret_key: keypair.secret.as_bytes().to_vec(),
-			public_key: keypair.public.to_bytes().to_vec(),
+			secret_key: signing_keypair.to_bytes().to_vec(),
+			public_key: signing_keypair.verifying_key().to_bytes().to_vec(),
 		},
 		libp2p_keypair.public().to_peer_id(),
 	))

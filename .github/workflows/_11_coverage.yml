@@ -4,7 +4,7 @@ on:
       test_features:
         description: Features to enable in tests
         type: string
-        default: 'runtime-benchmarks,slow-tests'
+        default: "runtime-benchmarks,slow-tests"
 
 env:
   FORCE_COLOR: 1
@@ -17,7 +17,7 @@ jobs:
   unit-tests:
     runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-07-31-ubuntu-20.04"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-20.04-44"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -36,7 +36,7 @@ jobs:
   coverage:
     runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-07-31-ubuntu-20.04"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-20.04-44"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}

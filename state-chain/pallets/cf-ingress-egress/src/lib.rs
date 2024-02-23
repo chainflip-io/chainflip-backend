@@ -30,19 +30,17 @@ use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	liquidity::{LpBalanceApi, LpDepositHandler},
 	AssetConverter, Broadcaster, CcmHandler, CcmSwapIds, Chainflip, DepositApi, EgressApi,
-	EpochInfo, GetBlockHeight, GetTrackedData, NetworkEnvironmentProvider, OnDeposit,
+	EpochInfo, FeePayment, GetBlockHeight, GetTrackedData, NetworkEnvironmentProvider, OnDeposit,
 	ScheduledEgressDetails, SwapDepositHandler,
 };
 use frame_support::{
-	pallet_prelude::{OptionQuery, *},
-	sp_runtime::{
-		traits::Zero, DispatchError, SaturatedConversion, Saturating, TransactionOutcome,
-	},
+	pallet_prelude::*,
+	sp_runtime::{traits::Zero, DispatchError, Saturating},
 	transactional,
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_runtime::traits::UniqueSaturatedInto;
+use sp_runtime::{traits::UniqueSaturatedInto, SaturatedConversion};
 use sp_std::{vec, vec::Vec};
 pub use weights::WeightInfo;
 
@@ -103,7 +101,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(6);
 
 /// Calls to the external chains that has failed to be broadcast/accepted by the target chain.
 /// User can use information stored here to query for relevant information to broadcast
@@ -117,6 +115,24 @@ pub struct FailedForeignChainCall {
 	pub original_epoch: EpochIndex,
 }
 
+#[derive(
+	CloneNoBound,
+	RuntimeDebugNoBound,
+	PartialEqNoBound,
+	EqNoBound,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+)]
+#[scale_info(skip_type_params(T, I))]
+pub enum PalletConfigUpdate<T: Config<I>, I: 'static = ()> {
+	/// Set the fixed fee that is burned when opening a channel, denominated in Flipperinos.
+	ChannelOpeningFee { fee: T::Amount },
+	/// Set the minimum deposit allowed for a particular asset.
+	SetMinimumDeposit { asset: TargetChainAsset<T, I>, minimum_deposit: TargetChainAmount<T, I> },
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -125,10 +141,10 @@ pub mod pallet {
 	use cf_traits::{LpDepositHandler, OnDeposit};
 	use core::marker::PhantomData;
 	use frame_support::{
-		storage::with_transaction,
 		traits::{ConstU128, EnsureOrigin, IsType},
 		DefaultNoBound,
 	};
+	use frame_system::WeightInfo as SystemWeightInfo;
 	use sp_std::vec::Vec;
 
 	pub(crate) type ChannelRecycleQueue<T, I> =
@@ -342,6 +358,9 @@ pub mod pallet {
 		/// Allows assets to be converted through the AMM.
 		type AssetConverter: AssetConverter;
 
+		/// For paying the channel opening fee.
+		type FeePayment: FeePayment<Amount = Self::Amount, AccountId = Self::AccountId>;
+
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 	}
@@ -435,6 +454,12 @@ pub mod pallet {
 	pub type WithheldTransactionFees<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, TargetChainAmount<T, I>, ValueQuery>;
 
+	/// The fixed fee charged for opening a channel, in Flipperinos.
+	#[pallet::storage]
+	#[pallet::getter(fn channel_opening_fee)]
+	pub type ChannelOpeningFee<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, T::Amount, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -508,6 +533,15 @@ pub mod pallet {
 		UtxoConsolidation {
 			broadcast_id: BroadcastId,
 		},
+		FailedToBuildAllBatchCall {
+			error: AllBatchError,
+		},
+		ChannelOpeningFeePaid {
+			fee: T::Amount,
+		},
+		ChannelOpeningFeeSet {
+			fee: T::Amount,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -567,8 +601,9 @@ pub mod pallet {
 		/// Take all scheduled Egress and send them out
 		fn on_finalize(_n: BlockNumberFor<T>) {
 			// Send all fetch/transfer requests as a batch. Revert storage if failed.
-			if let Err(e) = with_transaction(|| Self::do_egress_scheduled_fetch_transfer()) {
-				log::error!("Ingress-Egress failed to send BatchAll. Error: {e:?}");
+			if let Err(error) = Self::do_egress_scheduled_fetch_transfer() {
+				log::error!("Ingress-Egress failed to send BatchAll. Error: {error:?}");
+				Self::deposit_event(Event::<T, I>::FailedToBuildAllBatchCall { error });
 			}
 
 			if let Ok(egress_transaction) =
@@ -588,9 +623,17 @@ pub mod pallet {
 			// Process failed external chain calls: re-sign or cull storage.
 			// Take 1 call per block to avoid weight spike.
 			let current_epoch = T::EpochInfo::epoch_index();
-			if let Some(call) =
-				FailedForeignChainCalls::<T, I>::mutate(current_epoch.saturating_sub(1), Vec::pop)
-			{
+			if let Some(call) = FailedForeignChainCalls::<T, I>::mutate_exists(
+				current_epoch.saturating_sub(1),
+				|calls| {
+					let next_call = calls.as_mut().and_then(Vec::pop);
+					if calls.as_ref().map(Vec::len).unwrap_or_default() == 0 {
+						// Ensures we remove the storage if there are no more calls.
+						*calls = None;
+					}
+					next_call
+				},
+			) {
 				match current_epoch.saturating_sub(call.original_epoch) {
 					// The call is stale, clean up storage.
 					n if n >= 2 => {
@@ -600,7 +643,7 @@ pub mod pallet {
 						});
 					},
 					// Previous epoch, signature is invalid. Re-sign and store.
-					n if n == 1 => {
+					1 => {
 						if let Some(threshold_signature_id) =
 							T::Broadcaster::threshold_resign(call.broadcast_id)
 						{
@@ -721,27 +764,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Sets the minimum deposit amount allowed for an asset.
-		/// Requires governance
-		///
-		/// ## Events
-		///
-		/// - [on_success](Event::MinimumDepositSet)
-		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::set_minimum_deposit())]
-		pub fn set_minimum_deposit(
-			origin: OriginFor<T>,
-			asset: TargetChainAsset<T, I>,
-			minimum_deposit: TargetChainAmount<T, I>,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-
-			MinimumDeposit::<T, I>::insert(asset, minimum_deposit);
-
-			Self::deposit_event(Event::<T, I>::MinimumDepositSet { asset, minimum_deposit });
-			Ok(())
-		}
-
 		/// Stores information on failed Vault transfer.
 		/// Requires Witness origin.
 		///
@@ -814,6 +836,37 @@ pub mod pallet {
 			Self::deposit_event(Event::<T, I>::CcmBroadcastFailed { broadcast_id });
 			Ok(())
 		}
+
+		/// Apply a list of configuration updates to the pallet.
+		///
+		/// Requires Governance.
+		#[pallet::call_index(6)]
+		#[pallet::weight(<T as frame_system::Config>::SystemWeightInfo::set_storage(updates.len() as u32))]
+		pub fn update_pallet_config(
+			origin: OriginFor<T>,
+			updates: BoundedVec<PalletConfigUpdate<T, I>, ConstU32<10>>,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			for update in updates {
+				match update {
+					PalletConfigUpdate::<T, I>::ChannelOpeningFee { fee } => {
+						let fee = fee.unique_saturated_into();
+						ChannelOpeningFee::<T, I>::set(fee);
+						Self::deposit_event(Event::<T, I>::ChannelOpeningFeeSet { fee });
+					},
+					PalletConfigUpdate::<T, I>::SetMinimumDeposit { asset, minimum_deposit } => {
+						MinimumDeposit::<T, I>::insert(asset, minimum_deposit);
+						Self::deposit_event(Event::<T, I>::MinimumDepositSet {
+							asset,
+							minimum_deposit,
+						});
+					},
+				}
+			}
+
+			Ok(())
+		}
 	}
 }
 
@@ -836,7 +889,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Take all scheduled egress requests and send them out in an `AllBatch` call.
 	///
 	/// Note: Egress transactions with Blacklisted assets are not sent, and kept in storage.
-	fn do_egress_scheduled_fetch_transfer() -> TransactionOutcome<DispatchResult> {
+	#[transactional]
+	fn do_egress_scheduled_fetch_transfer() -> Result<(), AllBatchError> {
 		let batch_to_send: Vec<_> =
 			ScheduledEgressFetchOrTransfer::<T, I>::mutate(|requests: &mut Vec<_>| {
 				// Filter out disabled assets and requests that are not ready to be egressed.
@@ -878,7 +932,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			});
 
 		if batch_to_send.is_empty() {
-			return TransactionOutcome::Commit(Ok(()))
+			return Ok(())
 		}
 
 		let mut fetch_params = vec![];
@@ -934,12 +988,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					broadcast_id,
 					egress_ids,
 				});
-				TransactionOutcome::Commit(Ok(()))
+				Ok(())
 			},
-			Err(AllBatchError::NotRequired) => TransactionOutcome::Commit(Ok(())),
-			Err(AllBatchError::Other) => TransactionOutcome::Rollback(Err(DispatchError::Other(
-				"AllBatch ApiCall creation failed, rolled back storage",
-			))),
+			Err(AllBatchError::NotRequired) => Ok(()),
+			Err(other) => Err(other),
 		}
 	}
 
@@ -1147,13 +1199,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Opens a channel for the given asset and registers it with the given action.
 	///
 	/// May re-use an existing deposit address, depending on chain configuration.
+	///
+	/// The requester must have enough FLIP available to pay the channel opening fee.
 	#[allow(clippy::type_complexity)]
 	fn open_channel(
+		requester: &T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
 		action: ChannelAction<T::AccountId>,
 		boost_fee: BasisPoints,
 	) -> Result<(ChannelId, TargetChainAccount<T, I>, TargetChainBlockNumber<T, I>), DispatchError>
 	{
+		let channel_opening_fee = ChannelOpeningFee::<T, I>::get();
+		T::FeePayment::try_burn_fee(requester, channel_opening_fee)?;
+		Self::deposit_event(Event::<T, I>::ChannelOpeningFeePaid { fee: channel_opening_fee });
+
 		let (deposit_channel, channel_id) = if let Some((channel_id, mut deposit_channel)) =
 			DepositChannelPool::<T, I>::drain().next()
 		{
@@ -1347,8 +1406,9 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		DispatchError,
 	> {
 		let (channel_id, deposit_address, expiry_block) = Self::open_channel(
+			&lp_account,
 			source_asset,
-			ChannelAction::LiquidityProvision { lp_account },
+			ChannelAction::LiquidityProvision { lp_account: lp_account.clone() },
 			boost_fee,
 		)?;
 
@@ -1373,6 +1433,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		DispatchError,
 	> {
 		let (channel_id, deposit_address, expiry_height) = Self::open_channel(
+			&broker_id,
 			source_asset,
 			match channel_metadata {
 				Some(msg) => ChannelAction::CcmTransfer {
@@ -1384,7 +1445,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 					destination_asset,
 					destination_address,
 					broker_commission_bps,
-					broker_id,
+					broker_id: broker_id.clone(),
 				},
 			},
 			boost_fee,

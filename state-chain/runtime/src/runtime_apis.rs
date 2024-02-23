@@ -1,19 +1,21 @@
 use crate::chainflip::Offence;
 use cf_amm::{
-	common::{Amount, Tick},
+	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{eth::Address as EthereumAddress, Chain, ForeignChainAddress};
+use cf_chains::{
+	assets::any::AssetMap, eth::Address as EthereumAddress, Chain, ForeignChainAddress,
+};
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, BroadcastId, EpochIndex, ForeignChain, NetworkEnvironment,
-	SemVer, SwapOutput,
+	AccountRole, Asset, AssetAmount, BroadcastId, EpochIndex, FlipBalance, ForeignChain,
+	NetworkEnvironment, SemVer, SwapOutput,
 };
 use codec::{Decode, Encode};
 use core::ops::Range;
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{
-	AskBidMap, AssetsMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPrice,
+	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
 };
 use pallet_cf_witnesser::CallHash;
@@ -75,6 +77,7 @@ pub struct AuctionState {
 pub struct LiquidityProviderInfo {
 	pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
 	pub balances: Vec<(Asset, AssetAmount)>,
+	pub earned_fees: AssetMap<AssetAmount>,
 }
 
 #[derive(Debug, Decode, Encode, TypeInfo)]
@@ -127,7 +130,11 @@ decl_runtime_apis!(
 		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId32)>)>;
 		fn cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash;
 		fn cf_auction_state() -> AuctionState;
-		fn cf_pool_price(from: Asset, to: Asset) -> Option<PoolPrice>;
+		fn cf_pool_price(from: Asset, to: Asset) -> Option<PoolPriceV1>;
+		fn cf_pool_price_v2(
+			base_asset: Asset,
+			quote_asset: Asset,
+		) -> Result<PoolPriceV2, DispatchErrorWithMessage>;
 		fn cf_pool_simulate_swap(
 			from: Asset,
 			to: Asset,
@@ -150,7 +157,7 @@ decl_runtime_apis!(
 			base_asset: Asset,
 			quote_asset: Asset,
 			tick_range: Range<cf_amm::common::Tick>,
-		) -> Result<AssetsMap<Amount>, DispatchErrorWithMessage>;
+		) -> Result<PoolPairsMap<Amount>, DispatchErrorWithMessage>;
 		fn cf_pool_orderbook(
 			base_asset: Asset,
 			quote_asset: Asset,
@@ -166,12 +173,16 @@ decl_runtime_apis!(
 			quote_asset: Asset,
 			tick_range: Range<Tick>,
 			liquidity: Liquidity,
-		) -> Result<AssetsMap<Amount>, DispatchErrorWithMessage>;
+		) -> Result<PoolPairsMap<Amount>, DispatchErrorWithMessage>;
 
 		fn cf_max_swap_amount(asset: Asset) -> Option<AssetAmount>;
 		fn cf_min_deposit_amount(asset: Asset) -> AssetAmount;
 		fn cf_egress_dust_limit(asset: Asset) -> AssetAmount;
-		fn cf_prewitness_swaps(from: Asset, to: Asset) -> Option<Vec<AssetAmount>>;
+		fn cf_prewitness_swaps(
+			base_asset: Asset,
+			quote_asset: Asset,
+			side: Side,
+		) -> Vec<AssetAmount>;
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> Option<LiquidityProviderInfo>;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
 		fn cf_asset_balances(account_id: AccountId32) -> Vec<(Asset, AssetAmount)>;
@@ -187,5 +198,6 @@ decl_runtime_apis!(
 		fn cf_egress_fee(asset: Asset) -> Option<AssetAmount>;
 		fn cf_witness_count(hash: CallHash) -> Option<FailingWitnessValidators>;
 		fn cf_witness_safety_margin(chain: ForeignChain) -> Option<u64>;
+		fn cf_channel_opening_fee(chain: ForeignChain) -> FlipBalance;
 	}
 );

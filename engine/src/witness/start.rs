@@ -28,7 +28,7 @@ use anyhow::Result;
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	eth_client: EthRetryRpcClient<EthRpcSigningClient>,
-	arb_client: EthRetryRpcClient<EthRpcSigningClient>,
+	_arb_client: EthRetryRpcClient<EthRpcSigningClient>,
 	btc_client: BtcRetryRpcClient,
 	dot_client: DotRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,
@@ -109,17 +109,22 @@ where
 		db.clone(),
 	);
 
-	let start_arb = super::arb::start(
-		scope,
-		arb_client,
-		witness_call,
-		state_chain_client.clone(),
-		state_chain_stream.clone(),
-		epoch_source.clone(),
-		db.clone(),
-	);
+	// This code is commented since we dont want the arb witnesser to start. This allows us to
+	// disable arbitrum witnessing so that we can have all the arbitrum integration functionality in
+	// the main branch without actually activating arbitrum. When we actually do activate arbitrum,
+	// we should uncomment this code.
 
-	futures::future::try_join4(start_eth, start_btc, start_dot, start_arb).await?;
+	// let start_arb = super::arb::start(
+	// 	scope,
+	// 	arb_client,
+	// 	witness_call,
+	// 	state_chain_client.clone(),
+	// 	state_chain_stream.clone(),
+	// 	epoch_source.clone(),
+	// 	db.clone(),
+	// );
+
+	futures::future::try_join3(start_eth, start_btc, start_dot).await?;
 
 	Ok(())
 }

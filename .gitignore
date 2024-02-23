@@ -14,7 +14,6 @@ localnet/.setup_complete
 
 # docker-compose is generated dynamically
 localnet/init/polkadot/docker-compose.yml
-./docker-compose.yaml
 
 # Logs and test artifacts
 **/*.log
@@ -50,4 +49,3 @@ tfplan
 
 *rustc-ice*
 
-localnet/docker-compose.yml

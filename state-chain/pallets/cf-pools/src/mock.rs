@@ -3,13 +3,14 @@ use cf_primitives::{Asset, AssetAmount};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleRegistry, LpBalanceApi,
 };
-use frame_support::parameter_types;
+use frame_support::{derive_impl, parameter_types};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	DispatchResult, Permill,
 };
+use sp_std::collections::btree_map::BTreeMap;
 
 type AccountId = u64;
 
@@ -31,6 +32,7 @@ parameter_types! {
 	pub const SS58Prefix: u8 = 42;
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -70,6 +72,7 @@ parameter_types! {
 	pub static AliceDebitedUsdc: AssetAmount = Default::default();
 	pub static BobDebitedEth: AssetAmount = Default::default();
 	pub static BobDebitedUsdc: AssetAmount = Default::default();
+	pub static RecordedFees: BTreeMap<AccountId, (Asset, AssetAmount)> = BTreeMap::new();
 }
 pub struct MockBalance;
 impl LpBalanceApi for MockBalance {
@@ -120,8 +123,20 @@ impl LpBalanceApi for MockBalance {
 		Ok(())
 	}
 
+	fn record_fees(who: &Self::AccountId, amount: AssetAmount, asset: Asset) {
+		RecordedFees::mutate(|recorded_fees| {
+			recorded_fees.insert(*who, (asset, amount));
+		});
+	}
+
 	fn asset_balances(_who: &Self::AccountId) -> Vec<(Asset, AssetAmount)> {
 		unreachable!()
+	}
+}
+
+impl MockBalance {
+	pub fn assert_fees_recorded(who: &AccountId) {
+		assert!(RecordedFees::get().contains_key(who), "Fees not recorded for {:?}", who);
 	}
 }
 
