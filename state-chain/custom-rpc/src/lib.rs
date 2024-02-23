@@ -34,7 +34,7 @@ use state_chain_runtime::{
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
 		BrokerInfo, CustomRuntimeApi, DispatchErrorWithMessage, FailingWitnessValidators,
-		LiquidityProviderInfo, RuntimeApiAccountInfoV2,
+		LiquidityProviderInfo, ValidatorInfo,
 	},
 	NetworkFee,
 };
@@ -119,7 +119,7 @@ impl RpcAccountInfo {
 		}
 	}
 
-	fn validator(info: RuntimeApiAccountInfoV2) -> Self {
+	fn validator(info: ValidatorInfo) -> Self {
 		Self::Validator {
 			flip_balance: info.balance.into(),
 			bond: info.bond.into(),
@@ -1343,7 +1343,7 @@ mod test {
 
 	#[test]
 	fn test_validator_serialization() {
-		let validator = RpcAccountInfo::validator(RuntimeApiAccountInfoV2 {
+		let validator = RpcAccountInfo::validator(ValidatorInfo {
 			balance: FLIPPERINOS_PER_FLIP,
 			bond: FLIPPERINOS_PER_FLIP,
 			last_heartbeat: 0,
