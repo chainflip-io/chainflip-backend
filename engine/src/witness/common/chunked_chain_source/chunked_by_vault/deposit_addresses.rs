@@ -52,6 +52,12 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				move |block_hash| {
 					let state_chain_client = state_chain_client_c.clone();
 					async move {
+						// tracing::warn!(
+						// 	"[{}] FETCH DEPOSIT ADDRESSES @{:?}...",
+						// 	core::any::type_name::<Inner::Chain>(),
+						// 	block_hash
+						// );
+
 						state_chain_client
 							.storage_map_values::<pallet_cf_ingress_egress::DepositChannelLookup<
 								state_chain_runtime::Runtime,
@@ -65,6 +71,17 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					addresses
 						.iter()
 						.filter(|details| details.opened_at <= index && index <= details.expires_at)
+						// .inspect(|details| {
+						// 	tracing::warn!(
+						// 		"[{}@{:?}] + ADDR: {:?} [{:?} -> {:?}] {:?}",
+						// 		core::any::type_name::<Inner::Chain>(),
+						// 		index,
+						// 		details.deposit_channel,
+						// 		details.opened_at,
+						// 		details.expires_at,
+						// 		details.action
+						// 	)
+						// })
 						.cloned()
 						.collect()
 				},

@@ -413,6 +413,9 @@ assets!(pub enum Asset {
 	(btc, Bitcoin, "Bitcoin") => {
 		(Btc, btc) = 5u32 (GAS_ASSET),
 	},
+	(sol, Solana, "Solana") => {
+		(Sol, sol) = 8u32 (GAS_ASSET),
+	}
 });
 
 #[cfg(test)]
@@ -440,6 +443,7 @@ mod test_assets {
 		assert_eq!(any::Asset::try_from(3).unwrap(), any::Asset::Usdc);
 		assert_eq!(any::Asset::try_from(4).unwrap(), any::Asset::Dot);
 		assert_eq!(any::Asset::try_from(5).unwrap(), any::Asset::Btc);
+		assert_eq!(any::Asset::try_from(6).unwrap(), any::Asset::Sol);
 	}
 
 	#[test]
@@ -449,6 +453,7 @@ mod test_assets {
 		assert_conversion!(eth, Usdc);
 		assert_conversion!(dot, Dot);
 		assert_conversion!(btc, Btc);
+		assert_conversion!(sol, Sol);
 
 		assert_incompatible!(eth, Dot);
 		assert_incompatible!(dot, Eth);

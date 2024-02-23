@@ -11,6 +11,7 @@ use cf_chains::{
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EthereumAddress,
+	sol::SolAddress,
 };
 use cf_primitives::{chains::assets::eth::Asset as EthAsset, NetworkEnvironment, SemVer};
 use cf_traits::{CompatibleCfeVersions, GetBitcoinFeeInfo, NetworkEnvironmentProvider, SafeMode};
@@ -156,6 +157,11 @@ pub mod pallet {
 	#[pallet::getter(fn consolidation_parameters)]
 	pub type ConsolidationParameters<T> =
 		StorageValue<_, cf_chains::btc::ConsolidationParameters, ValueQuery>;
+
+	// SOLANA CHAIN RELATED ENVIRONMENT ITEMS
+	#[pallet::storage]
+	#[pallet::getter(fn sol_vault_address)]
+	pub type SolanaVaultAddress<T> = StorageValue<_, SolAddress, ValueQuery>;
 
 	// OTHER ENVIRONMENT ITEMS
 	#[pallet::storage]
@@ -321,6 +327,7 @@ pub mod pallet {
 		pub polkadot_genesis_hash: PolkadotHash,
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
 		pub network_environment: NetworkEnvironment,
+		pub sol_vault_address: SolAddress,
 		pub _config: PhantomData<T>,
 	}
 
@@ -345,6 +352,8 @@ pub mod pallet {
 			ConsolidationParameters::<T>::set(INITIAL_CONSOLIDATION_PARAMETERS);
 
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
+
+			SolanaVaultAddress::<T>::set(self.sol_vault_address);
 
 			Pallet::<T>::update_current_release_version();
 		}

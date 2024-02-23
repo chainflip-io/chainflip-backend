@@ -560,6 +560,8 @@ pub mod pallet {
 		BitcoinChannelIdTooLarge,
 		/// The amount is below the minimum egress amount.
 		BelowEgressDustLimit,
+		/// Solana address derivation error.
+		SolanaAddressDerivationError,
 	}
 
 	#[pallet::hooks]
@@ -584,7 +586,9 @@ pub mod pallet {
 			});
 
 			for address in can_recycle.iter() {
+				log::warn!("on_idle. can-recycle + {:?}", address);
 				if let Some(details) = DepositChannelLookup::<T, I>::take(address) {
+					log::warn!("on_idle. Taken: {:?}", address);
 					if let Some(state) = details.deposit_channel.state.maybe_recycle() {
 						DepositChannelPool::<T, I>::insert(
 							details.deposit_channel.channel_id,
@@ -1204,6 +1208,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		boost_fee: BasisPoints,
 	) -> Result<(ChannelId, TargetChainAccount<T, I>, TargetChainBlockNumber<T, I>), DispatchError>
 	{
+		log::warn!(
+			"ingress-egress[{}] source: {:?}; action: {:?}; boost: {:?}",
+			T::TargetChain::NAME,
+			source_asset,
+			action,
+			boost_fee
+		);
+
 		let channel_opening_fee = ChannelOpeningFee::<T, I>::get();
 		T::FeePayment::try_burn_fee(requester, channel_opening_fee)?;
 		Self::deposit_event(Event::<T, I>::ChannelOpeningFeePaid { fee: channel_opening_fee });
@@ -1228,10 +1240,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							Error::<T, I>::MissingBitcoinVault,
 						AddressDerivationError::BitcoinChannelIdTooLarge =>
 							Error::<T, I>::BitcoinChannelIdTooLarge,
+						AddressDerivationError::SolanaDerivationError { .. } =>
+							Error::<T, I>::SolanaAddressDerivationError,
 					})?,
 				next_channel_id,
 			)
 		};
+
+		log::warn!("deposit-channel: {:?}; channel-id: {:?}", deposit_channel, channel_id);
 
 		let deposit_address = deposit_channel.address.clone();
 

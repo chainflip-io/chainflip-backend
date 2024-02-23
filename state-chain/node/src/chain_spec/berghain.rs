@@ -1,6 +1,6 @@
 pub use super::common::*;
 use super::StateChainEnvironment;
-use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_MAINNET};
+use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_MAINNET, sol::SolAddress};
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use sc_service::ChainType;
 use sp_core::H256;
@@ -17,6 +17,7 @@ pub const PROTOCOL_ID: &str = "flip-berghain";
 pub const BITCOIN_EXPIRY_BLOCKS: u32 = 24 * 60 / 10;
 pub const ETHEREUM_EXPIRY_BLOCKS: u32 = 24 * 3600 / 14;
 pub const POLKADOT_EXPIRY_BLOCKS: u32 = 24 * 3600 / 6;
+pub const SOLANA_EXPIRY_BLOCKS: u32 = 24 * 3600 * 10 / 4;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("826180541412D574cf1336d22c0C0a287822678A"),
@@ -37,6 +38,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	)),
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 9431, transaction_version: 24 },
+	sol_vault_address: SolAddress([0; 32]), // TODO: fill in the valid Solana address,
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 24 * HOURS;

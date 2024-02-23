@@ -2,6 +2,7 @@ use cf_chains::{
 	assets::btc,
 	btc::BITCOIN_DUST_LIMIT,
 	dot::{PolkadotAccountId, PolkadotHash},
+	sol::SolAddress,
 	ChainState,
 };
 use cf_primitives::{
@@ -12,7 +13,8 @@ use cf_chains::{
 	btc::{BitcoinFeeInfo, BitcoinTrackedData},
 	dot::{PolkadotTrackedData, RuntimeVersion},
 	eth::EthereumTrackedData,
-	Bitcoin, Ethereum, Polkadot,
+	sol::SolTrackedData,
+	Bitcoin, Ethereum, Polkadot, Solana,
 };
 use common::FLIPPERINOS_PER_FLIP;
 pub use sc_service::{ChainType, Properties};
@@ -86,6 +88,7 @@ pub struct StateChainEnvironment {
 	ethereum_chain_id: u64,
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
+	sol_vault_address: SolAddress,
 	genesis_funding_amount: u128,
 	/// Note: Minimum funding should be expressed in Flipperinos.
 	min_funding: u128,
@@ -118,6 +121,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(clean_hex_address, ETH_VAULT_ADDRESS, eth_vault_address);
 	from_env_var!(clean_hex_address, ADDRESS_CHECKER_ADDRESS, eth_address_checker_address);
 	from_env_var!(hex_decode, ETH_INIT_AGG_KEY, eth_init_agg_key);
+	from_env_var!(FromStr::from_str, SOL_VAULT_ADDRESS, sol_vault_address);
 	from_env_var!(FromStr::from_str, ETHEREUM_CHAIN_ID, ethereum_chain_id);
 	from_env_var!(FromStr::from_str, ETH_DEPLOYMENT_BLOCK, ethereum_deployment_block);
 	from_env_var!(FromStr::from_str, GENESIS_FUNDING, genesis_funding_amount);
@@ -159,6 +163,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 			spec_version: dot_spec_version,
 			transaction_version: dot_transaction_version,
 		},
+		sol_vault_address,
 	}
 }
 
@@ -213,6 +218,7 @@ pub fn inner_cf_development_config(
 		dot_genesis_hash,
 		dot_vault_account_id,
 		dot_runtime_version,
+		sol_vault_address,
 	} = get_environment_or_defaults(testnet::ENV);
 	Ok(ChainSpec::builder(wasm_binary, None)
 		.with_name("CF Develop")
@@ -238,6 +244,7 @@ pub fn inner_cf_development_config(
 				polkadot_genesis_hash: dot_genesis_hash,
 				polkadot_vault_account_id: dot_vault_account_id,
 				network_environment: NetworkEnvironment::Development,
+				sol_vault_address,
 				..Default::default()
 			},
 			eth_init_agg_key,
@@ -263,6 +270,7 @@ pub fn inner_cf_development_config(
 			devnet::BITCOIN_EXPIRY_BLOCKS,
 			devnet::ETHEREUM_EXPIRY_BLOCKS,
 			devnet::POLKADOT_EXPIRY_BLOCKS,
+			devnet::SOLANA_EXPIRY_BLOCKS,
 			devnet::BITCOIN_SAFETY_MARGIN,
 			devnet::ETHEREUM_SAFETY_MARGIN,
 			devnet::AUCTION_BID_CUTOFF_PERCENTAGE,
@@ -300,6 +308,7 @@ macro_rules! network_spec {
 					dot_genesis_hash,
 					dot_vault_account_id,
 					dot_runtime_version,
+					sol_vault_address,
 				} = env_override.unwrap_or(ENV);
 				let protocol_id = format!(
 					"{}-{}",
@@ -355,6 +364,7 @@ macro_rules! network_spec {
 							polkadot_genesis_hash: dot_genesis_hash,
 							polkadot_vault_account_id: dot_vault_account_id.clone(),
 							network_environment: NETWORK_ENVIRONMENT,
+							sol_vault_address,
 							..Default::default()
 						},
 						eth_init_agg_key,
@@ -379,6 +389,7 @@ macro_rules! network_spec {
 						BITCOIN_EXPIRY_BLOCKS,
 						ETHEREUM_EXPIRY_BLOCKS,
 						POLKADOT_EXPIRY_BLOCKS,
+						SOLANA_EXPIRY_BLOCKS,
 						BITCOIN_SAFETY_MARGIN,
 						ETHEREUM_SAFETY_MARGIN,
 						AUCTION_BID_CUTOFF_PERCENTAGE,
@@ -427,6 +438,8 @@ fn testnet_genesis(
 	bitcoin_deposit_channel_lifetime: u32,
 	ethereum_deposit_channel_lifetime: u32,
 	polkadot_deposit_channel_lifetime: u32,
+	solana_deposit_channel_lifetime: u32,
+
 	bitcoin_safety_margin: u64,
 	ethereum_safety_margin: u64,
 	auction_bid_cutoff_percentage: Percent,
@@ -590,6 +603,12 @@ fn testnet_genesis(
 			amount_to_slash: FLIPPERINOS_PER_FLIP,
 			..Default::default()
 		},
+		solana_threshold_signer: state_chain_runtime::SolanaThresholdSignerConfig {
+			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
+			keygen_response_timeout: keygen_ceremony_timeout_blocks,
+			amount_to_slash: FLIPPERINOS_PER_FLIP,
+			..Default::default()
+		},
 		emissions: state_chain_runtime::EmissionsConfig {
 			current_authority_emission_inflation: current_authority_emission_inflation_perbill,
 			backup_node_emission_inflation: backup_node_emission_inflation_perbill,
@@ -621,6 +640,12 @@ fn testnet_genesis(
 				tracked_data: BitcoinTrackedData { btc_fee_info: BitcoinFeeInfo::new(1000) },
 			},
 		},
+		solana_chain_tracking: state_chain_runtime::SolanaChainTrackingConfig {
+			init_chain_state: ChainState::<Solana> {
+				block_height: 0,
+				tracked_data: SolTrackedData { ingress_fee: None, egress_fee: None },
+			},
+		},
 		// Channel lifetimes are set to ~2 hours at average block times.
 		bitcoin_ingress_egress: state_chain_runtime::BitcoinIngressEgressConfig {
 			deposit_channel_lifetime: bitcoin_deposit_channel_lifetime.into(),
@@ -636,12 +661,17 @@ fn testnet_genesis(
 			deposit_channel_lifetime: polkadot_deposit_channel_lifetime,
 			..Default::default()
 		},
+		solana_ingress_egress: state_chain_runtime::SolanaIngressEgressConfig {
+			deposit_channel_lifetime: solana_deposit_channel_lifetime as u64,
+			..Default::default()
+		},
 		// We can't use ..Default::default() here because chain tracking panics on default (by
 		// design). And the way ..Default::default() syntax works is that it generates the default
 		// value for the whole struct, not just the fields that are missing.
 		liquidity_pools: Default::default(),
 		bitcoin_vault: Default::default(),
 		polkadot_vault: Default::default(),
+		solana_vault: Default::default(),
 		system: Default::default(),
 		transaction_payment: Default::default(),
 	})

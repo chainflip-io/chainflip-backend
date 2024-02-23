@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use utilities::task_scope::Scope;
 
+use sol_rpc::traits::CallApi as SolanaApi;
+
 use crate::{
 	btc::retry_rpc::BtcRetryRpcClient,
 	db::PersistentKeyDB,
@@ -30,6 +32,7 @@ pub async fn start<StateChainClient>(
 	eth_client: EthRetryRpcClient<EthRpcSigningClient>,
 	btc_client: BtcRetryRpcClient,
 	dot_client: DotRetryRpcClient,
+	sol_client: impl SolanaApi + Send + Sync + 'static,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: impl StreamApi<FINALIZED> + Clone,
 	unfinalised_state_chain_stream: impl StreamApi<UNFINALIZED> + Clone,
@@ -47,6 +50,7 @@ where
 	let witness_call = {
 		let state_chain_client = state_chain_client.clone();
 		move |call, epoch_index| {
+			// tracing::warn!("WITNESS: @{:?} — {:?}", epoch_index, call);
 			let state_chain_client = state_chain_client.clone();
 			async move {
 				let _ = state_chain_client
@@ -62,6 +66,7 @@ where
 	let prewitness_call = {
 		let state_chain_client = state_chain_client.clone();
 		move |call, epoch_index| {
+			// tracing::warn!("PREWITNESS: @{:?} — {:?}", epoch_index, call);
 			let state_chain_client = state_chain_client.clone();
 			async move {
 				let _ = state_chain_client
@@ -100,7 +105,17 @@ where
 
 	let start_dot = super::dot::start(
 		scope,
-		dot_client,
+		dot_client.clone(),
+		witness_call.clone(),
+		state_chain_client.clone(),
+		state_chain_stream.clone(),
+		epoch_source.clone(),
+		db.clone(),
+	);
+
+	let start_sol = super::sol::start(
+		scope,
+		sol_client,
 		witness_call,
 		state_chain_client,
 		state_chain_stream,
@@ -108,7 +123,7 @@ where
 		db,
 	);
 
-	futures::future::try_join3(start_eth, start_btc, start_dot).await?;
+	futures::future::try_join4(start_eth, start_btc, start_dot, start_sol).await?;
 
 	Ok(())
 }

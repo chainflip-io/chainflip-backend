@@ -2,6 +2,9 @@
 resolver = "2"
 
 members = [
+  "foreign-chains/solana/sol-prim",
+  "foreign-chains/solana/sol-rpc",
+
   'api/lib',
   'api/bin/chainflip-cli',
   'api/bin/chainflip-broker-api',
@@ -43,7 +46,7 @@ members = [
   'utilities',
   'state-chain/custom-rpc',
   'state-chain/cf-session-benchmarking',
-  'engine/multisig',
+  'engine/multisig', "foreign-chains/solana/sol-watch",
 ]
 
 [workspace.lints.clippy]

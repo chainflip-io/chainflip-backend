@@ -199,6 +199,7 @@ macro_rules! match_event {
     ($event:expr, { $($(#[$cfg_param:meta])? $bind:pat $(if $condition:expr)? => $block:expr)+ }) => {{
         let event = $event;
         let formatted_event = format!("{:?}", event);
+
         match event {
             $(
                 $(#[$cfg_param])?
@@ -487,6 +488,18 @@ where
                                     CfeEvent::PeerIdDeregistered { .. } => {
                                         // p2p registration is handled in the p2p module.
                                         // Matching here to log the event due to the match_event macro.
+                                    }
+                                    CfeEvent::SolThresholdSignatureRequest(unsupported) => {
+                                        tracing::warn!("sol-threshold-signature-request: {:?}", unsupported);
+                                        todo!()
+                                    }
+                                    CfeEvent::SolKeygenRequest(unsupported) => {
+                                        tracing::warn!("sol-keygen-request: {:?}", unsupported);
+                                        todo!()
+                                    }
+                                    CfeEvent::SolTxBroadcastRequest(unsupported) => {
+                                        tracing::warn!("sol-tx-broadcast-request: {:?}", unsupported);
+                                        todo!()
                                     }
                                 }}
                             }

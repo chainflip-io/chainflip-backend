@@ -7,7 +7,8 @@ pub use weights::PalletWeight;
 use weights::WeightInfo;
 
 use cf_chains::{
-	btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, Bitcoin, Ethereum, Polkadot,
+	btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, sol::SolanaCrypto, Bitcoin, Ethereum,
+	Polkadot, Solana,
 };
 use cf_primitives::{Ed25519PublicKey, Ipv6Addr, Port};
 use cf_traits::{CfeBroadcastRequest, CfeMultisigRequest, CfePeerRegistration, Chainflip};
@@ -99,6 +100,18 @@ impl<T: Config> CfeMultisigRequest<T, PolkadotCrypto> for Pallet<T> {
 	}
 }
 
+impl<T: Config> CfeMultisigRequest<T, SolanaCrypto> for Pallet<T> {
+	fn keygen_request(req: cfe_events::KeygenRequest<<T as Chainflip>::ValidatorId>) {
+		CfeEvents::<T>::append(CfeEvent::<T>::SolKeygenRequest(req))
+	}
+
+	fn signature_request(
+		req: cfe_events::ThresholdSignatureRequest<<T as Chainflip>::ValidatorId, SolanaCrypto>,
+	) {
+		CfeEvents::<T>::append(CfeEvent::<T>::SolThresholdSignatureRequest(req))
+	}
+}
+
 impl<T: Config> CfeBroadcastRequest<T, Polkadot> for Pallet<T> {
 	fn tx_broadcast_request(req: TxBroadcastRequest<T, Polkadot>) {
 		CfeEvents::<T>::append(CfeEvent::<T>::DotTxBroadcastRequest(req))
@@ -114,6 +127,14 @@ impl<T: Config> CfeBroadcastRequest<T, Bitcoin> for Pallet<T> {
 impl<T: Config> CfeBroadcastRequest<T, Ethereum> for Pallet<T> {
 	fn tx_broadcast_request(req: TxBroadcastRequest<T, Ethereum>) {
 		CfeEvents::<T>::append(CfeEvent::<T>::EthTxBroadcastRequest(req))
+	}
+}
+
+impl<T: Config> CfeBroadcastRequest<T, Solana> for Pallet<T> {
+	fn tx_broadcast_request(
+		req: cfe_events::TxBroadcastRequest<<T as Chainflip>::ValidatorId, Solana>,
+	) {
+		CfeEvents::<T>::append(CfeEvent::<T>::SolTxBroadcastRequest(req))
 	}
 }
 

@@ -12,6 +12,8 @@ import {
   amountToFineAmount,
   isWithinOnePercent,
   chainFromAsset,
+  decodeSolAddress,
+  encodeSolAddress,
 } from '../shared/utils';
 import { send } from '../shared/send';
 
@@ -34,7 +36,9 @@ export async function provideLiquidity(ccy: Asset, amount: number, waitForFinali
     ).toJSON() === null
   ) {
     let refundAddress = await newAddress(chain.toUpperCase() as Asset, 'LP_1');
+
     refundAddress = ccy === 'DOT' ? decodeDotAddressForContract(refundAddress) : refundAddress;
+    refundAddress = ccy === 'SOL' ? decodeSolAddress(refundAddress) : refundAddress;
 
     console.log('Registering Liquidity Refund Address for ' + ccy + ': ' + refundAddress);
     await lpMutex.runExclusive(async () => {
@@ -57,7 +61,7 @@ export async function provideLiquidity(ccy: Asset, amount: number, waitForFinali
       .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
   });
 
-  const ingressAddress = (await eventHandle).data.depositAddress[chain];
+  let ingressAddress = (await eventHandle).data.depositAddress[chain];
 
   console.log('Received ' + ccy + ' address: ' + ingressAddress);
   console.log('Sending ' + amount + ' ' + ccy + ' to ' + ingressAddress);
@@ -73,6 +77,9 @@ export async function provideLiquidity(ccy: Asset, amount: number, waitForFinali
     undefined,
     waitForFinalization,
   );
+  console.log('Ingress Address before encode: ' + ingressAddress);
+  ingressAddress = ccy === 'SOL' ? encodeSolAddress(ingressAddress) : ingressAddress;
+  console.log('Ingress Address after encode: ' + ingressAddress);
   await send(ccy, ingressAddress, String(amount));
 
   await eventHandle;

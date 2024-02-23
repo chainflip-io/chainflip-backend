@@ -13,6 +13,7 @@ import {
 } from './utils';
 import { approveErc20 } from './approve_erc20';
 import { getCFTesterAbi } from './eth_abis';
+import { sendSol } from './send_sol';
 
 const cfTesterAbi = await getCFTesterAbi();
 
@@ -29,6 +30,9 @@ export async function send(asset: Asset, address: string, amount?: string, log =
       break;
     case 'DOT':
       await sendDot(address, amount ?? defaultAssetAmounts(asset));
+      break;
+    case 'SOL':
+      await sendSol(address, amount ?? defaultAssetAmounts(asset));
       break;
     case 'USDC': {
       const contractAddress = getEvmContractAddress('Ethereum', asset);
