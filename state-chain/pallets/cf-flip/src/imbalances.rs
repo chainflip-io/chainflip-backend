@@ -318,6 +318,11 @@ impl<T: Config> Imbalance<T::Balance> for Surplus<T> {
 	fn peek(&self) -> T::Balance {
 		self.amount
 	}
+	fn extract(&mut self, amount: T::Balance) -> Self {
+		let extracted = self.amount.min(amount);
+		self.amount -= extracted;
+		Self::new(extracted, self.source.clone())
+	}
 }
 
 impl<T: Config> TryDrop for Deficit<T> {
@@ -372,6 +377,11 @@ impl<T: Config> Imbalance<T::Balance> for Deficit<T> {
 	}
 	fn peek(&self) -> T::Balance {
 		self.amount
+	}
+	fn extract(&mut self, amount: T::Balance) -> Self {
+		let extracted = self.amount.min(amount);
+		self.amount -= extracted;
+		Self::new(extracted, self.source.clone())
 	}
 }
 

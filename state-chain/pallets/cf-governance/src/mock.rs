@@ -6,7 +6,7 @@ use cf_traits::{
 	impl_mock_chainflip, mocks::time_source, AuthoritiesCfeVersions, CompatibleCfeVersions,
 	ExecutionCondition, RuntimeUpgrade,
 };
-use frame_support::{dispatch::DispatchResultWithPostInfo, ensure, parameter_types};
+use frame_support::{derive_impl, dispatch::DispatchResultWithPostInfo, ensure, parameter_types};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -36,6 +36,7 @@ thread_local! {
 	pub static UPGRADE_SUCCEEDED: std::cell::RefCell<bool>  = RefCell::new(true);
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();

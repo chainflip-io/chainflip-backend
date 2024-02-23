@@ -15,7 +15,6 @@ fn generate_proposal() -> Proposal {
 #[benchmarks]
 mod benchmarks {
 	use super::*;
-	use sp_std::vec;
 
 	#[benchmark]
 	fn on_initialize_resolve_votes(a: Linear<10, 1_000>) {

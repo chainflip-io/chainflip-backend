@@ -1,103 +1,89 @@
-//! Key rotator to be used by the Validator pallet to control the rotation of multiple keys
-
-use core::marker::PhantomData;
-
 use cf_primitives::EpochIndex;
 use cf_traits::{AsyncResult, KeyRotationStatusOuter, KeyRotator};
-use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
+use sp_std::collections::btree_set::BTreeSet;
 
-pub struct AllKeyRotator<A, B, C> {
-	_phantom: PhantomData<(A, B, C)>,
+#[macro_export]
+macro_rules! cons_key_rotator {
+    ($last: ty) => {
+        $last
+    };
+
+    ($head: ty, $($tail:ty),+) => {
+        $crate::chainflip::cons_key_rotator::ConsKeyRotator<$head, cons_key_rotator!($($tail),+)>
+    }
 }
 
-impl<A, B, C> KeyRotator for AllKeyRotator<A, B, C>
-where
-	A: KeyRotator,
-	B: KeyRotator<ValidatorId = A::ValidatorId>,
-	C: KeyRotator<ValidatorId = A::ValidatorId>,
-{
-	type ValidatorId = A::ValidatorId;
+pub struct ConsKeyRotator<H, T>(H, T);
 
-	/// Start all key rotations with the provided `candidates`.
-	fn keygen(candidates: BTreeSet<Self::ValidatorId>, next_epoch_index: EpochIndex) {
-		A::keygen(candidates.clone(), next_epoch_index);
-		B::keygen(candidates.clone(), next_epoch_index);
-		C::keygen(candidates, next_epoch_index);
+impl<H, T> KeyRotator for ConsKeyRotator<H, T>
+where
+	H: KeyRotator,
+	T: KeyRotator<ValidatorId = H::ValidatorId>,
+{
+	type ValidatorId = H::ValidatorId;
+
+	fn keygen(candidates: BTreeSet<Self::ValidatorId>, new_epoch_index: EpochIndex) {
+		H::keygen(candidates.clone(), new_epoch_index);
+		T::keygen(candidates, new_epoch_index);
 	}
 
-	/// Start all the key handovers for the keys with the provided `candidates`.
 	fn key_handover(
+		// Authorities of the last epoch selected to share their key in the key handover
 		sharing_participants: BTreeSet<Self::ValidatorId>,
-		new_candidates: BTreeSet<Self::ValidatorId>,
+		// These are any authorities for the new epoch who are not sharing participants
+		receiving_participants: BTreeSet<Self::ValidatorId>,
 		epoch_index: EpochIndex,
 	) {
-		A::key_handover(sharing_participants.clone(), new_candidates.clone(), epoch_index);
-		B::key_handover(sharing_participants.clone(), new_candidates.clone(), epoch_index);
-		C::key_handover(sharing_participants, new_candidates, epoch_index);
+		H::key_handover(sharing_participants.clone(), receiving_participants.clone(), epoch_index);
+		T::key_handover(sharing_participants, receiving_participants, epoch_index);
 	}
 
 	fn status() -> AsyncResult<KeyRotationStatusOuter<Self::ValidatorId>> {
-		let async_results = [A::status(), B::status(), C::status()];
+		use KeyRotationStatusOuter::*;
+		match (H::status(), T::status()) {
+			(AsyncResult::Void, _) => AsyncResult::Void,
+			(_, AsyncResult::Void) => AsyncResult::Void,
 
-		// if any of the inner rotations are void, then the overall key rotation result is void.
-		if async_results.iter().any(|item| matches!(item, AsyncResult::Void)) {
-			return AsyncResult::Void
-		}
+			(AsyncResult::Ready(head_status), AsyncResult::Ready(tail_status)) =>
+				AsyncResult::Ready(match (head_status, tail_status) {
+					(KeygenComplete, KeygenComplete) => KeygenComplete,
+					(KeyHandoverComplete, KeyHandoverComplete) => KeyHandoverComplete,
+					(RotationComplete, RotationComplete) => RotationComplete,
+					(head_maybe_failed, tail_maybe_failed) => Failed(
+						extract_offenders(head_maybe_failed)
+							.chain(extract_offenders(tail_maybe_failed))
+							.collect(),
+					),
+				}),
 
-		// We must wait until all of these are ready before we do any action
-		if async_results.iter().all(|item| matches!(item, AsyncResult::Ready(..))) {
-			let statuses = async_results.into_iter().map(AsyncResult::unwrap).collect::<Vec<_>>();
-
-			if statuses.iter().all(|x| matches!(x, KeyRotationStatusOuter::KeygenComplete)) {
-				AsyncResult::Ready(KeyRotationStatusOuter::KeygenComplete)
-			} else if statuses
-				.iter()
-				.all(|x| matches!(x, KeyRotationStatusOuter::KeyHandoverComplete))
-			{
-				AsyncResult::Ready(KeyRotationStatusOuter::KeyHandoverComplete)
-			} else if statuses.iter().all(|x| matches!(x, KeyRotationStatusOuter::RotationComplete))
-			{
-				AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete)
-			} else {
-				// We currently treat an offence in one key rotation as bad as in all rotations.
-				// We may want to change it, but this is simplest for now.
-
-				AsyncResult::Ready(KeyRotationStatusOuter::Failed(
-					statuses
-						.into_iter()
-						.filter_map(|r| {
-							if let KeyRotationStatusOuter::Failed(offenders) = r {
-								Some(offenders)
-							} else {
-								None
-							}
-						})
-						.flatten()
-						.collect(),
-				))
-			}
-		} else {
-			AsyncResult::Pending
+			_ => AsyncResult::Pending,
 		}
 	}
 
 	fn reset_key_rotation() {
-		A::reset_key_rotation();
-		B::reset_key_rotation();
-		C::reset_key_rotation();
+		H::reset_key_rotation();
+		T::reset_key_rotation();
 	}
 
 	fn activate_keys() {
-		A::activate_keys();
-		B::activate_keys();
-		C::activate_keys();
+		H::activate_keys();
+		T::activate_keys();
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(outcome: AsyncResult<KeyRotationStatusOuter<Self::ValidatorId>>) {
-		A::set_status(outcome.clone());
-		B::set_status(outcome.clone());
-		C::set_status(outcome);
+		H::set_status(outcome.clone());
+		T::set_status(outcome);
+	}
+}
+
+fn extract_offenders<ValidatorId>(
+	status: KeyRotationStatusOuter<ValidatorId>,
+) -> impl Iterator<Item = ValidatorId> {
+	if let KeyRotationStatusOuter::Failed(offenders) = status {
+		Some(offenders.into_iter()).into_iter().flatten()
+	} else {
+		None.into_iter().flatten()
 	}
 }
 
@@ -118,7 +104,7 @@ mod tests {
 			MockKeyRotatorC::keygen_success();
 
 			assert_eq!(
-				AllKeyRotator::<MockKeyRotatorA, MockKeyRotatorB, MockKeyRotatorC>::status(),
+				<cons_key_rotator!(MockKeyRotatorA, MockKeyRotatorB, MockKeyRotatorC)>::status(),
 				AsyncResult::Ready(KeyRotationStatusOuter::KeygenComplete)
 			);
 		});
@@ -132,7 +118,7 @@ mod tests {
 			MockKeyRotatorC::key_handover_success();
 
 			assert_eq!(
-				AllKeyRotator::<MockKeyRotatorA, MockKeyRotatorB, MockKeyRotatorC>::status(),
+				<cons_key_rotator!(MockKeyRotatorA, MockKeyRotatorB, MockKeyRotatorC)>::status(),
 				AsyncResult::Ready(KeyRotationStatusOuter::KeyHandoverComplete)
 			);
 		});
@@ -146,7 +132,7 @@ mod tests {
 			MockKeyRotatorC::keys_activated();
 
 			assert_eq!(
-				AllKeyRotator::<MockKeyRotatorA, MockKeyRotatorB, MockKeyRotatorC>::status(),
+				<cons_key_rotator!(MockKeyRotatorA, MockKeyRotatorB, MockKeyRotatorC)>::status(),
 				AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete)
 			);
 		});
@@ -163,7 +149,7 @@ mod tests {
 			MockKeyRotatorC::keygen_success();
 
 			assert_eq!(
-				AllKeyRotator::<MockKeyRotatorA, MockKeyRotatorB, MockKeyRotatorC>::status(),
+				<cons_key_rotator!(MockKeyRotatorA, MockKeyRotatorB, MockKeyRotatorC)>::status(),
 				AsyncResult::Ready(KeyRotationStatusOuter::Failed(BTreeSet::default()))
 			);
 		});
@@ -179,7 +165,7 @@ mod tests {
 			MockKeyRotatorC::keygen_success();
 
 			assert_eq!(
-				AllKeyRotator::<MockKeyRotatorA, MockKeyRotatorB, MockKeyRotatorC>::status(),
+				<cons_key_rotator!(MockKeyRotatorA, MockKeyRotatorB, MockKeyRotatorC)>::status(),
 				AsyncResult::Ready(KeyRotationStatusOuter::Failed(BTreeSet::from(OFFENDERS)))
 			);
 		});
@@ -191,7 +177,7 @@ mod tests {
 			MockKeyRotatorC::key_handover_success();
 
 			assert_eq!(
-				AllKeyRotator::<MockKeyRotatorA, MockKeyRotatorB, MockKeyRotatorC>::status(),
+				<cons_key_rotator!(MockKeyRotatorA, MockKeyRotatorB, MockKeyRotatorC)>::status(),
 				AsyncResult::Ready(KeyRotationStatusOuter::Failed(BTreeSet::from(OFFENDERS)))
 			);
 		});
@@ -205,7 +191,7 @@ mod tests {
 			MockKeyRotatorC::failed([4, 5, 6]);
 
 			assert_eq!(
-				AllKeyRotator::<MockKeyRotatorA, MockKeyRotatorB, MockKeyRotatorC>::status(),
+				<cons_key_rotator!(MockKeyRotatorA, MockKeyRotatorB, MockKeyRotatorC)>::status(),
 				AsyncResult::Ready(KeyRotationStatusOuter::Failed(BTreeSet::from([
 					1, 2, 3, 4, 5, 6
 				])))
@@ -221,7 +207,7 @@ mod tests {
 			MockKeyRotatorC::pending();
 
 			assert_eq!(
-				AllKeyRotator::<MockKeyRotatorA, MockKeyRotatorB, MockKeyRotatorC>::status(),
+				<cons_key_rotator!(MockKeyRotatorA, MockKeyRotatorB, MockKeyRotatorC)>::status(),
 				AsyncResult::Pending
 			);
 		});
@@ -235,7 +221,7 @@ mod tests {
 			MockKeyRotatorC::keygen_success();
 
 			assert_eq!(
-				AllKeyRotator::<MockKeyRotatorA, MockKeyRotatorB, MockKeyRotatorC>::status(),
+				<cons_key_rotator!(MockKeyRotatorA, MockKeyRotatorB, MockKeyRotatorC)>::status(),
 				AsyncResult::Pending
 			);
 		});
@@ -252,7 +238,7 @@ mod tests {
 			MockKeyRotatorC::failed([4, 5, 6]);
 
 			assert_eq!(
-				AllKeyRotator::<MockKeyRotatorA, MockKeyRotatorB, MockKeyRotatorC>::status(),
+				<cons_key_rotator!(MockKeyRotatorA, MockKeyRotatorB, MockKeyRotatorC)>::status(),
 				AsyncResult::Pending
 			);
 		});

@@ -2,7 +2,7 @@
 use core::ops::Range;
 
 use cf_amm::{
-	common::{Amount, Order, Price, Side, SideMap, SqrtPriceQ64F96, Tick},
+	common::{Amount, PoolPairsMap, Price, Side, SqrtPriceQ64F96, Tick},
 	limit_orders,
 	limit_orders::{Collected, PositionInfo},
 	range_orders,
@@ -44,7 +44,7 @@ impl_pallet_safe_mode!(PalletSafeMode; range_order_update_enabled, limit_order_u
 // nature.
 #[derive(Copy, Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEq, Eq, Hash)]
 pub struct AssetPair {
-	assets: AssetsMap<Asset>,
+	assets: PoolPairsMap<Asset>,
 }
 impl AssetPair {
 	pub fn new(base_asset: Asset, quote_asset: Asset) -> Option<Self> {
@@ -52,7 +52,7 @@ impl AssetPair {
 			assets: match (base_asset, quote_asset) {
 				(STABLE_ASSET, STABLE_ASSET) => None,
 				(_unstable_asset, STABLE_ASSET) =>
-					Some(AssetsMap { base: base_asset, quote: quote_asset }),
+					Some(PoolPairsMap { base: base_asset, quote: quote_asset }),
 				_ => None,
 			}?,
 		})
@@ -62,78 +62,26 @@ impl AssetPair {
 		Self::new(base_asset, quote_asset).ok_or(Error::<T>::PoolDoesNotExist)
 	}
 
-	pub fn from_swap(from: Asset, to: Asset) -> Option<(Self, Order)> {
+	pub fn from_swap(from: Asset, to: Asset) -> Option<(Self, Side)> {
 		#[allow(clippy::manual_map)]
 		if let Some(asset_pair) = Self::new(from, to) {
-			Some((asset_pair, Order::Sell))
+			Some((asset_pair, Side::Sell))
 		} else if let Some(asset_pair) = Self::new(to, from) {
-			Some((asset_pair, Order::Buy))
+			Some((asset_pair, Side::Buy))
 		} else {
 			None
 		}
 	}
 
-	pub fn to_swap(base_asset: Asset, quote_asset: Asset, side: Order) -> (Asset, Asset) {
+	pub fn to_swap(base_asset: Asset, quote_asset: Asset, side: Side) -> (Asset, Asset) {
 		match side {
-			Order::Buy => (quote_asset, base_asset),
-			Order::Sell => (base_asset, quote_asset),
+			Side::Buy => (quote_asset, base_asset),
+			Side::Sell => (base_asset, quote_asset),
 		}
 	}
 
-	pub fn assets(&self) -> AssetsMap<Asset> {
+	pub fn assets(&self) -> PoolPairsMap<Asset> {
 		self.assets
-	}
-}
-
-#[derive(
-	Copy,
-	Clone,
-	Debug,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
-	PartialEq,
-	Eq,
-	Deserialize,
-	Serialize,
-)]
-pub enum Assets {
-	Base,
-	Quote,
-}
-impl core::ops::Not for Assets {
-	type Output = Self;
-
-	fn not(self) -> Self::Output {
-		match self {
-			Assets::Base => Assets::Quote,
-			Assets::Quote => Assets::Base,
-		}
-	}
-}
-impl From<Side> for Assets {
-	fn from(value: Side) -> Self {
-		match value {
-			Side::Zero => Self::Base,
-			Side::One => Self::Quote,
-		}
-	}
-}
-impl From<Assets> for Side {
-	fn from(value: Assets) -> Self {
-		match value {
-			Assets::Base => Self::Zero,
-			Assets::Quote => Self::One,
-		}
-	}
-}
-impl Assets {
-	fn sell_order(&self) -> Order {
-		match self {
-			Assets::Base => Order::Sell,
-			Assets::Quote => Order::Buy,
-		}
 	}
 }
 
@@ -158,94 +106,16 @@ pub struct AskBidMap<S> {
 impl<T> AskBidMap<T> {
 	/// Takes a map from an asset to details regarding selling that asset, and returns a map from
 	/// ask/bid to the details associated with the asks or the bids
-	pub fn from_sell_map(map: AssetsMap<T>) -> Self {
+	pub fn from_sell_map(map: PoolPairsMap<T>) -> Self {
 		Self { asks: map.base, bids: map.quote }
 	}
 
-	pub fn from_fn<F: FnMut(Order) -> T>(mut f: F) -> Self {
-		Self::from_sell_map(AssetsMap { base: f(Order::Sell), quote: f(Order::Buy) })
+	pub fn from_fn<F: FnMut(Side) -> T>(mut f: F) -> Self {
+		Self::from_sell_map(PoolPairsMap { base: f(Side::Sell), quote: f(Side::Buy) })
 	}
 
 	pub fn map<S, F: FnMut(T) -> S>(self, mut f: F) -> AskBidMap<S> {
 		AskBidMap { asks: f(self.asks), bids: f(self.bids) }
-	}
-}
-
-// TODO Move into AMM crate
-#[derive(
-	Copy,
-	Clone,
-	Debug,
-	Default,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
-	PartialEq,
-	Eq,
-	Deserialize,
-	Serialize,
-	Hash,
-)]
-pub struct AssetsMap<S> {
-	pub base: S,
-	pub quote: S,
-}
-impl<S> AssetsMap<S> {
-	pub fn try_map<R, E, F: FnMut(S) -> Result<R, E>>(self, mut f: F) -> Result<AssetsMap<R>, E> {
-		Ok(AssetsMap { base: f(self.base)?, quote: f(self.quote)? })
-	}
-
-	pub fn map<R, F: FnMut(S) -> R>(self, mut f: F) -> AssetsMap<R> {
-		AssetsMap { base: f(self.base), quote: f(self.quote) }
-	}
-
-	pub fn map_with_asset<R, F: FnMut(Assets, S) -> R>(self, mut f: F) -> AssetsMap<R> {
-		AssetsMap { base: f(Assets::Base, self.base), quote: f(Assets::Quote, self.quote) }
-	}
-
-	pub fn zip<T>(self, x: AssetsMap<T>) -> AssetsMap<(S, T)> {
-		AssetsMap { base: (self.base, x.base), quote: (self.quote, x.quote) }
-	}
-
-	pub fn as_ref(&self) -> AssetsMap<&S> {
-		AssetsMap { base: &self.base, quote: &self.quote }
-	}
-}
-impl<T> IntoIterator for AssetsMap<T> {
-	type Item = (Assets, T);
-
-	type IntoIter = core::array::IntoIter<(Assets, T), 2>;
-
-	fn into_iter(self) -> Self::IntoIter {
-		[(Assets::Base, self.base), (Assets::Quote, self.quote)].into_iter()
-	}
-}
-impl<T> core::ops::Index<Assets> for AssetsMap<T> {
-	type Output = T;
-	fn index(&self, assets: Assets) -> &T {
-		match assets {
-			Assets::Base => &self.base,
-			Assets::Quote => &self.quote,
-		}
-	}
-}
-impl<T> core::ops::IndexMut<Assets> for AssetsMap<T> {
-	fn index_mut(&mut self, assets: Assets) -> &mut T {
-		match assets {
-			Assets::Base => &mut self.base,
-			Assets::Quote => &mut self.quote,
-		}
-	}
-}
-impl<T> From<SideMap<T>> for AssetsMap<T> {
-	fn from(value: SideMap<T>) -> Self {
-		Self { base: value.zero, quote: value.one }
-	}
-}
-impl<T> From<AssetsMap<T>> for SideMap<T> {
-	fn from(value: AssetsMap<T>) -> Self {
-		Self { zero: value.base, one: value.quote }
 	}
 }
 
@@ -281,13 +151,13 @@ pub mod pallet {
 		pub range_orders_cache: BTreeMap<T::AccountId, BTreeMap<OrderId, Range<Tick>>>,
 		/// A cache of all the limit orders that exist in the pool. This must be kept up to date
 		/// with the underlying pool. These are grouped by the asset the limit order is selling
-		pub limit_orders_cache: AssetsMap<BTreeMap<T::AccountId, BTreeMap<OrderId, Tick>>>,
+		pub limit_orders_cache: PoolPairsMap<BTreeMap<T::AccountId, BTreeMap<OrderId, Tick>>>,
 		pub pool_state: PoolState<(T::AccountId, OrderId)>,
 	}
 
 	pub type OrderId = u64;
 
-	pub type AssetAmounts = AssetsMap<AssetAmount>;
+	pub type AssetAmounts = PoolPairsMap<AssetAmount>;
 
 	/// Represents an amount of liquidity, either as an exact amount, or through maximum and minimum
 	/// amounts of both assets. Internally those max/min are converted into exact liquidity amounts,
@@ -573,7 +443,7 @@ pub mod pallet {
 			lp: T::AccountId,
 			base_asset: Asset,
 			quote_asset: Asset,
-			side: Order,
+			side: Side,
 			id: OrderId,
 			tick: Tick,
 			sell_amount_change: Option<IncreaseOrDecrease<AssetAmount>>,
@@ -749,7 +619,7 @@ pub mod pallet {
 								new_tick_range.clone(),
 								IncreaseOrDecrease::Increase(range_orders::Size::Amount {
 									minimum: Default::default(),
-									maximum: withdrawn_asset_amounts.map(Into::into).into(),
+									maximum: withdrawn_asset_amounts.map(Into::into),
 								}),
 								/* allow_noop */ true,
 							)?;
@@ -769,8 +639,8 @@ pub mod pallet {
 							range_orders::Size::Liquidity { liquidity },
 						RangeOrderSize::AssetAmounts { maximum, minimum } =>
 							range_orders::Size::Amount {
-								maximum: maximum.map(Into::into).into(),
-								minimum: minimum.map(Into::into).into(),
+								maximum: maximum.map(Into::into),
+								minimum: minimum.map(Into::into),
 							},
 					}),
 					/* allow_noop */ false,
@@ -836,8 +706,8 @@ pub mod pallet {
 							range_orders::Size::Liquidity { liquidity },
 						RangeOrderSize::AssetAmounts { maximum, minimum } =>
 							range_orders::Size::Amount {
-								maximum: maximum.map(Into::into).into(),
-								minimum: minimum.map(Into::into).into(),
+								maximum: maximum.map(Into::into),
+								minimum: minimum.map(Into::into),
 							},
 					}),
 					/* allow noop */ true,
@@ -861,7 +731,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			base_asset: any::Asset,
 			quote_asset: any::Asset,
-			side: Order,
+			side: Side,
 			id: OrderId,
 			option_tick: Option<Tick>,
 			amount_change: IncreaseOrDecrease<AssetAmount>,
@@ -873,7 +743,7 @@ pub mod pallet {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
 				let tick = match (
-					pool.limit_orders_cache[side.to_sold_side().into()]
+					pool.limit_orders_cache[side.to_sold_pair()]
 						.get(&lp)
 						.and_then(|limit_orders| limit_orders.get(&id))
 						.cloned(),
@@ -937,7 +807,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			base_asset: any::Asset,
 			quote_asset: any::Asset,
-			side: Order,
+			side: Side,
 			id: OrderId,
 			option_tick: Option<Tick>,
 			sell_amount: AssetAmount,
@@ -949,7 +819,7 @@ pub mod pallet {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
 				let tick = match (
-					pool.limit_orders_cache[side.to_sold_side().into()]
+					pool.limit_orders_cache[side.to_sold_pair()]
 						.get(&lp)
 						.and_then(|limit_orders| limit_orders.get(&id))
 						.cloned(),
@@ -1017,14 +887,14 @@ pub mod pallet {
 				pool.pool_state
 					.set_fees(fee_hundredth_pips)
 					.map_err(|_| Error::<T>::InvalidFeeAmount)?
-					.try_map(|side, collected_fees| {
+					.try_map_with_pair(|asset, collected_fees| {
 						for ((lp, id), tick, collected, position_info) in collected_fees.into_iter()
 						{
 							Self::process_limit_order_update(
 								pool,
 								asset_pair,
 								&lp,
-								Assets::from(side).sell_order(),
+								asset.sell_order(),
 								id,
 								tick,
 								collected,
@@ -1164,6 +1034,14 @@ pub struct PoolInfo {
 	/// The fee taken, when range orders are used, from swap inputs that contributes to liquidity
 	/// provider earnings
 	pub range_order_fee_hundredth_pips: u32,
+	/// The total fees earned in this pool by range orders.
+	pub range_order_total_fees_earned: PoolPairsMap<Amount>,
+	/// The total fees earned in this pool by limit orders.
+	pub limit_order_total_fees_earned: PoolPairsMap<Amount>,
+	/// The total amount of assets that have been bought by range orders in this pool.
+	pub range_total_swap_inputs: PoolPairsMap<Amount>,
+	/// The total amount of assets that have been bought by limit orders in this pool.
+	pub limit_total_swap_inputs: PoolPairsMap<Amount>,
 }
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
@@ -1184,7 +1062,7 @@ pub struct RangeOrder<T: Config> {
 	pub id: Amount,
 	pub range: Range<Tick>,
 	pub liquidity: Liquidity,
-	pub fees_earned: AssetsMap<Amount>,
+	pub fees_earned: PoolPairsMap<Amount>,
 }
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
@@ -1323,7 +1201,7 @@ impl<T: Config> Pallet<T> {
 		pool: &mut Pool<T>,
 		lp: &T::AccountId,
 		asset_pair: &AssetPair,
-		side: Order,
+		side: Side,
 		id: OrderId,
 		tick: cf_amm::common::Tick,
 		sold_amount_change: IncreaseOrDecrease<cf_amm::common::Amount>,
@@ -1357,7 +1235,7 @@ impl<T: Config> Pallet<T> {
 					let debited_amount: AssetAmount = sold_amount.try_into()?;
 					T::LpBalance::try_debit_account(
 						lp,
-						asset_pair.assets()[side.to_sold_side().into()],
+						asset_pair.assets()[side.to_sold_pair()],
 						debited_amount,
 					)?;
 
@@ -1384,7 +1262,7 @@ impl<T: Config> Pallet<T> {
 					let withdrawn_amount: AssetAmount = sold_amount.try_into()?;
 					T::LpBalance::try_credit_account(
 						lp,
-						asset_pair.assets()[side.to_sold_side().into()],
+						asset_pair.assets()[side.to_sold_pair()],
 						withdrawn_amount,
 					)?;
 
@@ -1426,7 +1304,7 @@ impl<T: Config> Pallet<T> {
 						tick_range.clone(),
 						size,
 						|required_amounts| {
-							asset_pair.assets().zip(required_amounts.into()).try_map(
+							asset_pair.assets().zip(required_amounts).try_map(
 								|(asset, required_amount)| {
 									AssetAmount::try_from(required_amount)
 										.map_err(Into::into)
@@ -1493,7 +1371,7 @@ impl<T: Config> Pallet<T> {
 					}),
 				}?;
 
-				let assets_withdrawn = asset_pair.assets().zip(assets_withdrawn.into()).try_map(
+				let assets_withdrawn = asset_pair.assets().zip(assets_withdrawn).try_map(
 					|(asset, amount_withdrawn)| {
 						AssetAmount::try_from(amount_withdrawn).map_err(Into::into).and_then(
 							|amount_withdrawn| {
@@ -1514,17 +1392,15 @@ impl<T: Config> Pallet<T> {
 		};
 
 		let collected_fees =
-			asset_pair
-				.assets()
-				.zip(collected.fees.into())
-				.try_map(|(asset, collected_fees)| {
-					AssetAmount::try_from(collected_fees).map_err(Into::into).and_then(
-						|collected_fees| {
-							T::LpBalance::try_credit_account(lp, asset, collected_fees)
-								.map(|()| collected_fees)
-						},
-					)
-				})?;
+			asset_pair.assets().zip(collected.fees).try_map(|(asset, collected_fees)| {
+				AssetAmount::try_from(collected_fees).map_err(Into::into).and_then(
+					|collected_fees| {
+						T::LpBalance::record_fees(lp, collected_fees, asset);
+						T::LpBalance::try_credit_account(lp, asset, collected_fees)
+							.map(|()| collected_fees)
+					},
+				)
+			})?;
 
 		if position_info.liquidity == 0 {
 			if let Some(range_orders) = pool.range_orders_cache.get_mut(lp) {
@@ -1627,8 +1503,8 @@ impl<T: Config> Pallet<T> {
 		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
 		let mut pool = Pools::<T>::get(asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?;
 		Ok(PoolPriceV2 {
-			sell: pool.pool_state.current_price(Order::Sell).map(|(_, sqrt_price, _)| sqrt_price),
-			buy: pool.pool_state.current_price(Order::Buy).map(|(_, sqrt_price, _)| sqrt_price),
+			sell: pool.pool_state.current_price(Side::Sell).map(|(_, sqrt_price, _)| sqrt_price),
+			buy: pool.pool_state.current_price(Side::Buy).map(|(_, sqrt_price, _)| sqrt_price),
 		})
 	}
 
@@ -1636,7 +1512,7 @@ impl<T: Config> Pallet<T> {
 		base_asset: any::Asset,
 		quote_asset: any::Asset,
 		tick_range: Range<cf_amm::common::Tick>,
-	) -> Result<AssetsMap<Amount>, DispatchError> {
+	) -> Result<PoolPairsMap<Amount>, DispatchError> {
 		let pool_state = Pools::<T>::get(AssetPair::try_new::<T>(base_asset, quote_asset)?)
 			.ok_or(Error::<T>::PoolDoesNotExist)?
 			.pool_state;
@@ -1671,13 +1547,13 @@ impl<T: Config> Pallet<T> {
 		Ok(PoolOrderbook {
 			asks: {
 				let mut pool_state = pool_state.clone();
-				let sqrt_prices = pool_state.logarithm_sqrt_price_sequence(Order::Buy, orders);
+				let sqrt_prices = pool_state.logarithm_sqrt_price_sequence(Side::Buy, orders);
 
 				sqrt_prices
 					.into_iter()
 					.filter_map(|sqrt_price| {
 						let (sold_base_amount, remaining_quote_amount) =
-							pool_state.swap(Order::Buy, Amount::MAX, Some(sqrt_price));
+							pool_state.swap(Side::Buy, Amount::MAX, Some(sqrt_price));
 
 						let bought_quote_amount = Amount::MAX - remaining_quote_amount;
 
@@ -1697,13 +1573,13 @@ impl<T: Config> Pallet<T> {
 			},
 			bids: {
 				let mut pool_state = pool_state;
-				let sqrt_prices = pool_state.logarithm_sqrt_price_sequence(Order::Sell, orders);
+				let sqrt_prices = pool_state.logarithm_sqrt_price_sequence(Side::Sell, orders);
 
 				sqrt_prices
 					.into_iter()
 					.filter_map(|sqrt_price| {
 						let (sold_quote_amount, remaining_base_amount) =
-							pool_state.swap(Order::Sell, Amount::MAX, Some(sqrt_price));
+							pool_state.swap(Side::Sell, Amount::MAX, Some(sqrt_price));
 
 						let bought_base_amount = Amount::MAX - remaining_base_amount;
 
@@ -1746,19 +1622,15 @@ impl<T: Config> Pallet<T> {
 				range_orders::DepthError::InvalidTick => Error::<T>::InvalidTick,
 			})?;
 
-		Ok(AskBidMap::from_sell_map(
-			limit_orders
-				.zip(range_orders)
-				.map(|_, (limit_orders, range_orders)| {
-					let to_single_depth =
-						|(price, depth)| UnidirectionalSubPoolDepth { price, depth };
-					UnidirectionalPoolDepth {
-						limit_orders: to_single_depth(limit_orders),
-						range_orders: to_single_depth(range_orders),
-					}
-				})
-				.into(),
-		))
+		Ok(AskBidMap::from_sell_map(limit_orders.zip(range_orders).map(
+			|(limit_orders, range_orders)| {
+				let to_single_depth = |(price, depth)| UnidirectionalSubPoolDepth { price, depth };
+				UnidirectionalPoolDepth {
+					limit_orders: to_single_depth(limit_orders),
+					range_orders: to_single_depth(range_orders),
+				}
+			},
+		)))
 	}
 
 	pub fn pool_liquidity_providers(
@@ -1791,7 +1663,7 @@ impl<T: Config> Pallet<T> {
 		.collect())
 	}
 
-	pub fn pools() -> Vec<AssetsMap<Asset>> {
+	pub fn pools() -> Vec<PoolPairsMap<Asset>> {
 		Pools::<T>::iter_keys().map(|asset_pair| asset_pair.assets()).collect()
 	}
 
@@ -1804,6 +1676,10 @@ impl<T: Config> Pallet<T> {
 		Ok(PoolInfo {
 			limit_order_fee_hundredth_pips: pool.pool_state.limit_order_fee(),
 			range_order_fee_hundredth_pips: pool.pool_state.range_order_fee(),
+			range_order_total_fees_earned: pool.pool_state.range_order_total_fees_earned(),
+			limit_order_total_fees_earned: pool.pool_state.limit_order_total_fees_earned(),
+			range_total_swap_inputs: pool.pool_state.range_order_swap_inputs(),
+			limit_total_swap_inputs: pool.pool_state.limit_order_swap_inputs(),
 		})
 	}
 
@@ -1840,8 +1716,8 @@ impl<T: Config> Pallet<T> {
 			.ok_or(Error::<T>::PoolDoesNotExist)?;
 		let option_lp = option_lp.as_ref();
 		Ok(PoolOrders {
-			limit_orders: AskBidMap::from_sell_map(
-				pool.limit_orders_cache.as_ref().map_with_asset(|asset, limit_orders_cache| {
+			limit_orders: AskBidMap::from_sell_map(pool.limit_orders_cache.as_ref().map_with_pair(
+				|asset, limit_orders_cache| {
 					cf_utilities::conditional::conditional(
 						option_lp,
 						|lp| {
@@ -1879,8 +1755,8 @@ impl<T: Config> Pallet<T> {
 						}
 					})
 					.collect()
-				}),
-			),
+				},
+			)),
 			range_orders: cf_utilities::conditional::conditional(
 				option_lp,
 				|lp| {
@@ -1907,7 +1783,7 @@ impl<T: Config> Pallet<T> {
 					id: id.into(),
 					range: tick_range.clone(),
 					liquidity: position_info.liquidity,
-					fees_earned: collected.accumulative_fees.into(),
+					fees_earned: collected.accumulative_fees,
 				}
 			})
 			.collect(),
@@ -1919,7 +1795,7 @@ impl<T: Config> Pallet<T> {
 		quote_asset: any::Asset,
 		tick_range: Range<Tick>,
 		liquidity: Liquidity,
-	) -> Result<AssetsMap<Amount>, DispatchError> {
+	) -> Result<PoolPairsMap<Amount>, DispatchError> {
 		let pool = Pools::<T>::get(AssetPair::try_new::<T>(base_asset, quote_asset)?)
 			.ok_or(Error::<T>::PoolDoesNotExist)?;
 		pool.pool_state
@@ -1945,7 +1821,7 @@ impl<T: Config> Pallet<T> {
 		pool: &mut Pool<T>,
 		asset_pair: &AssetPair,
 		lp: &T::AccountId,
-		order: Order,
+		order: Side,
 		id: OrderId,
 		tick: Tick,
 		collected: Collected,
@@ -1953,20 +1829,18 @@ impl<T: Config> Pallet<T> {
 		amount_change: IncreaseOrDecrease<AssetAmount>,
 	) -> DispatchResult {
 		let collected_fees: AssetAmount = collected.fees.try_into()?;
-		T::LpBalance::try_credit_account(
-			lp,
-			asset_pair.assets()[(!order.to_sold_side()).into()],
-			collected_fees,
-		)?;
+		let asset = asset_pair.assets()[!order.to_sold_pair()];
+		T::LpBalance::record_fees(lp, collected_fees, asset);
+		T::LpBalance::try_credit_account(lp, asset, collected_fees)?;
 
 		let bought_amount: AssetAmount = collected.bought_amount.try_into()?;
 		T::LpBalance::try_credit_account(
 			lp,
-			asset_pair.assets()[(!order.to_sold_side()).into()],
+			asset_pair.assets()[!order.to_sold_pair()],
 			bought_amount,
 		)?;
 
-		let limit_orders = &mut pool.limit_orders_cache[order.to_sold_side().into()];
+		let limit_orders = &mut pool.limit_orders_cache[order.to_sold_pair()];
 		if position_info.amount.is_zero() {
 			if let Some(lp_limit_orders) = limit_orders.get_mut(lp) {
 				lp_limit_orders.remove(&id);

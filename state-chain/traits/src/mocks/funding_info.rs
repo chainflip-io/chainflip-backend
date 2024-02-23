@@ -1,6 +1,9 @@
 use crate::{Chainflip, FundingInfo};
 use frame_support::Never;
-use sp_runtime::{traits::CheckedSub, Saturating};
+use sp_runtime::{
+	traits::{CheckedSub, Zero},
+	Saturating,
+};
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
 
 use super::{MockPallet, MockPalletStorage};
@@ -30,6 +33,9 @@ impl<T: Chainflip> MockFundingInfo<T> {
 	}
 
 	pub fn try_debit_funds(account_id: &T::AccountId, amount: T::Amount) -> Option<T::Amount> {
+		if amount.is_zero() {
+			return Some(amount)
+		}
 		<Self as MockPalletStorage>::mutate_value(
 			BALANCES,
 			|storage: &mut Option<BTreeMap<T::AccountId, T::Amount>>| {

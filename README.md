@@ -124,7 +124,7 @@ You can use either release or debug builds.
 From the repo root, run the following:
 
 ```shell
-cargo cf-build # or cargo cf-build-release
+cargo build
 ./localnet/manage.sh
 ```
 

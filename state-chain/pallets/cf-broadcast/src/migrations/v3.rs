@@ -270,8 +270,8 @@ mod migration_tests {
 			assert_eq!(failed_1, failed_broadcasters);
 			assert_eq!(failed_2, failed_broadcasters);
 
-			assert_eq!(FailedBroadcasters::<Test, Instance1>::decode_len(1), Some(3));
-			assert_eq!(FailedBroadcasters::<Test, Instance1>::decode_len(2), Some(3));
+			assert_eq!(FailedBroadcasters::<Test, Instance1>::decode_non_dedup_len(1), Some(3));
+			assert_eq!(FailedBroadcasters::<Test, Instance1>::decode_non_dedup_len(2), Some(3));
 		});
 	}
 

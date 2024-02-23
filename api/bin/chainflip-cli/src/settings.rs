@@ -75,10 +75,6 @@ pub struct SwapRequestParams {
 	pub broker_commission: u16,
 	/// Commission to the booster in basis points
 	pub boost_fee: Option<u16>,
-	/// Chain of the source asset ("Ethereum"|"Polkadot")
-	pub source_chain: Option<ForeignChain>,
-	/// Chain of the destination asset ("Ethereum"|"Polkadot")
-	pub destination_chain: Option<ForeignChain>,
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]
@@ -93,8 +89,6 @@ pub enum LiquidityProviderSubcommands {
 	RequestLiquidityDepositAddress {
 		/// Asset to deposit ("ETH"|"DOT")
 		asset: Asset,
-		/// Chain of the deposit asset ("Ethereum"|"Polkadot")
-		chain: Option<ForeignChain>,
 		boost_fee: Option<u16>,
 	},
 	/// Register a Liquidity Refund Address for the given chain. An address must be
@@ -285,6 +279,7 @@ mod tests {
 	}
 
 	#[test]
+	#[ignore = "Requires config file at root"]
 	fn init_default_config() {
 		set_test_env();
 
@@ -300,6 +295,7 @@ mod tests {
 	}
 
 	#[test]
+	#[ignore = "Requires config file at default root"]
 	fn test_all_command_line_options() {
 		// Fill the options with test values that will pass the parsing/validation.
 		// The test values need to be different from the default values set during `set_defaults()`

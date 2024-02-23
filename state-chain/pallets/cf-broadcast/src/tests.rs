@@ -497,7 +497,7 @@ fn ensure_retries_are_skipped_during_safe_mode() {
 			MockCfe::respond(Scenario::BroadcastFailure);
 			let next_block = System::block_number() + 1;
 			assert_eq!(
-				DelayedBroadcastRetryQueue::<Test, Instance1>::decode_len(next_block),
+				DelayedBroadcastRetryQueue::<Test, Instance1>::decode_non_dedup_len(next_block),
 				Some(2)
 			);
 			<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
@@ -506,7 +506,10 @@ fn ensure_retries_are_skipped_during_safe_mode() {
 		.then_execute_with(|_| {
 			let target = System::block_number() +
 				<<Test as crate::Config<Instance1>>::SafeModeBlockMargin as Get<u64>>::get();
-			assert_eq!(DelayedBroadcastRetryQueue::<Test, Instance1>::decode_len(target), Some(2));
+			assert_eq!(
+				DelayedBroadcastRetryQueue::<Test, Instance1>::decode_non_dedup_len(target),
+				Some(2)
+			);
 		});
 }
 
@@ -948,7 +951,9 @@ fn broadcast_can_be_aborted_due_to_time_out() {
 				crate::Event::<Test, Instance1>::BroadcastAborted { broadcast_id },
 			));
 			assert!(AbortedBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
-			assert!(FailedBroadcasters::<Test, Instance1>::decode_len(broadcast_id).is_none());
+			assert!(
+				FailedBroadcasters::<Test, Instance1>::decode_non_dedup_len(broadcast_id).is_none()
+			);
 		});
 }
 
@@ -972,7 +977,9 @@ fn aborted_broadcasts_can_still_succeed() {
 			System::assert_last_event(RuntimeEvent::Broadcaster(
 				crate::Event::<Test, Instance1>::BroadcastAborted { broadcast_id },
 			));
-			assert!(FailedBroadcasters::<Test, Instance1>::decode_len(broadcast_id).is_none());
+			assert!(
+				FailedBroadcasters::<Test, Instance1>::decode_non_dedup_len(broadcast_id).is_none()
+			);
 			assert!(AbortedBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
 
 			// Broadcast can still be reported as successful
@@ -1027,7 +1034,10 @@ fn broadcast_retry_delay_works() {
 			target = System::block_number() + delay;
 
 			let next_block = System::block_number() + 1;
-			assert_eq!(DelayedBroadcastRetryQueue::<Test, Instance1>::decode_len(next_block), None);
+			assert_eq!(
+				DelayedBroadcastRetryQueue::<Test, Instance1>::decode_non_dedup_len(next_block),
+				None
+			);
 			assert!(
 				DelayedBroadcastRetryQueue::<Test, Instance1>::get(target).contains(&broadcast_id),
 			);
@@ -1041,8 +1051,12 @@ fn broadcast_retry_delay_works() {
 		.then_execute_at_block(target, |_| {})
 		.then_execute_with(|_| {
 			let next_block = System::block_number() + 1;
-			assert!(DelayedBroadcastRetryQueue::<Test, Instance1>::decode_len(next_block).is_none());
-			assert!(DelayedBroadcastRetryQueue::<Test, Instance1>::decode_len(target).is_none());
+			assert!(DelayedBroadcastRetryQueue::<Test, Instance1>::decode_non_dedup_len(
+				next_block
+			)
+			.is_none());
+			assert!(DelayedBroadcastRetryQueue::<Test, Instance1>::decode_non_dedup_len(target)
+				.is_none());
 
 			assert_transaction_broadcast_request_event(broadcast_id, tx_out_id);
 		});
