@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use cf_chains::{Chain, ChainCrypto};
-use state_chain_runtime::PalletInstanceAlias;
+use cf_chains::{Chain, ChainCrypto, PalletInstanceAlias};
 use utilities::task_scope::Scope;
 
 use crate::{
@@ -44,7 +43,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 		StateChainStream: StreamApi<IS_FINALIZED>,
 		StateChainClient: StorageApi + Send + Sync + 'static,
-		<Inner::Chain as Chain>::ChainCrypto: PalletInstanceAlias,
 	{
 		let state_chain_client_c = state_chain_client.clone();
 		ChunkedByVaultBuilder::new(

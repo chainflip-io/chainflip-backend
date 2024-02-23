@@ -34,7 +34,7 @@ use cf_primitives::{BroadcastId, NetworkEnvironment};
 use cf_runtime_upgrade_utilities::VersionedMigration;
 use cf_traits::{AssetConverter, GetTrackedData, LpBalanceApi};
 use core::ops::Range;
-use frame_support::traits::OnRuntimeUpgrade;
+use frame_support::{instances::*, traits::OnRuntimeUpgrade};
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
@@ -48,6 +48,11 @@ use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use scale_info::prelude::string::String;
 use sp_std::collections::btree_map::BTreeMap;
+
+pub use cf_chains::{
+	arb::ArbitrumInstance, btc::BitcoinInstance, dot::PolkadotInstance, eth::EthereumInstance,
+	evm::EvmInstance,
+};
 
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
@@ -103,7 +108,6 @@ pub use cf_traits::{
 // Required for genesis config.
 pub use pallet_cf_validator::SetSizeParameters;
 
-pub use chainflip::chain_instances::*;
 use chainflip::{
 	all_vault_activator::EvmVaultActivator, epoch_transition::ChainflipEpochTransitions,
 	BroadcastReadyProvider, BtcEnvironment, ChainAddressConverter, ChainflipHeartbeat,
@@ -241,7 +245,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type FeePayment = Flip;
 }
 
-impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
+impl pallet_cf_vaults::Config<Instance1> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Chain = Ethereum;
 	type SetAggKeyWithAggKey = eth::api::EthereumApi<EvmEnvironment>;
@@ -252,7 +256,7 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type CfeMultisigRequest = CfeInterface;
 }
 
-impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
+impl pallet_cf_vaults::Config<Instance2> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Chain = Polkadot;
 	type SetAggKeyWithAggKey = dot::api::PolkadotApi<DotEnvironment>;
@@ -263,7 +267,7 @@ impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
 	type CfeMultisigRequest = CfeInterface;
 }
 
-impl pallet_cf_vaults::Config<BitcoinInstance> for Runtime {
+impl pallet_cf_vaults::Config<Instance3> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Chain = Bitcoin;
 	type SetAggKeyWithAggKey = cf_chains::btc::api::BitcoinApi<BtcEnvironment>;
@@ -274,7 +278,7 @@ impl pallet_cf_vaults::Config<BitcoinInstance> for Runtime {
 	type CfeMultisigRequest = CfeInterface;
 }
 
-impl pallet_cf_vaults::Config<ArbitrumInstance> for Runtime {
+impl pallet_cf_vaults::Config<Instance4> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Chain = Arbitrum;
 	type SetAggKeyWithAggKey = cf_chains::arb::api::ArbitrumApi<EvmEnvironment>;
@@ -287,7 +291,7 @@ impl pallet_cf_vaults::Config<ArbitrumInstance> for Runtime {
 
 use chainflip::address_derivation::AddressDerivation;
 
-impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
+impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Ethereum;
@@ -306,7 +310,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type FeePayment = Flip;
 }
 
-impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
+impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Polkadot;
@@ -325,7 +329,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type FeePayment = Flip;
 }
 
-impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
+impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Bitcoin;
@@ -344,7 +348,7 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type FeePayment = Flip;
 }
 
-impl pallet_cf_ingress_egress::Config<ArbitrumInstance> for Runtime {
+impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Arbitrum;
@@ -656,7 +660,7 @@ impl pallet_cf_reputation::Config for Runtime {
 	type SafeMode = RuntimeSafeMode;
 }
 
-impl pallet_cf_threshold_signature::Config<EvmInstance> for Runtime {
+impl pallet_cf_threshold_signature::Config<Instance16> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
 	type RuntimeOrigin = RuntimeOrigin;
@@ -672,7 +676,7 @@ impl pallet_cf_threshold_signature::Config<EvmInstance> for Runtime {
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
 
-impl pallet_cf_threshold_signature::Config<PolkadotInstance> for Runtime {
+impl pallet_cf_threshold_signature::Config<Instance2> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
 	type RuntimeOrigin = RuntimeOrigin;
@@ -688,7 +692,7 @@ impl pallet_cf_threshold_signature::Config<PolkadotInstance> for Runtime {
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
 
-impl pallet_cf_threshold_signature::Config<BitcoinInstance> for Runtime {
+impl pallet_cf_threshold_signature::Config<Instance3> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
 	type RuntimeOrigin = RuntimeOrigin;
@@ -704,7 +708,7 @@ impl pallet_cf_threshold_signature::Config<BitcoinInstance> for Runtime {
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
 
-impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
+impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeOrigin = RuntimeOrigin;
@@ -728,7 +732,7 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type CfeBroadcastRequest = CfeInterface;
 }
 
-impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
+impl pallet_cf_broadcast::Config<Instance2> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeOrigin = RuntimeOrigin;
@@ -752,7 +756,7 @@ impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
 	type CfeBroadcastRequest = CfeInterface;
 }
 
-impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
+impl pallet_cf_broadcast::Config<Instance3> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeOrigin = RuntimeOrigin;
@@ -776,7 +780,7 @@ impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
 	type CfeBroadcastRequest = CfeInterface;
 }
 
-impl pallet_cf_broadcast::Config<ArbitrumInstance> for Runtime {
+impl pallet_cf_broadcast::Config<Instance4> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeOrigin = RuntimeOrigin;
@@ -800,25 +804,25 @@ impl pallet_cf_broadcast::Config<ArbitrumInstance> for Runtime {
 	type CfeBroadcastRequest = CfeInterface;
 }
 
-impl pallet_cf_chain_tracking::Config<EthereumInstance> for Runtime {
+impl pallet_cf_chain_tracking::Config<Instance1> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Ethereum;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
-impl pallet_cf_chain_tracking::Config<PolkadotInstance> for Runtime {
+impl pallet_cf_chain_tracking::Config<Instance2> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Polkadot;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
-impl pallet_cf_chain_tracking::Config<BitcoinInstance> for Runtime {
+impl pallet_cf_chain_tracking::Config<Instance3> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Bitcoin;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
-impl pallet_cf_chain_tracking::Config<ArbitrumInstance> for Runtime {
+impl pallet_cf_chain_tracking::Config<Instance4> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Arbitrum;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;

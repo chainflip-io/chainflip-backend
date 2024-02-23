@@ -11,12 +11,11 @@ use crate::{
 		STATE_CHAIN_CONNECTION,
 	},
 };
-use cf_chains::{Chain, ChainCrypto};
+use cf_chains::{Chain, ChainCrypto, PalletInstanceAlias};
 use cf_primitives::{AccountId, EpochIndex};
 use futures::StreamExt;
 use futures_core::{Future, Stream};
 use futures_util::stream;
-use state_chain_runtime::PalletInstanceAlias;
 use utilities::{spmc, task_scope::Scope};
 
 use super::{ActiveAndFuture, ExternalChain, RuntimeHasChain};
@@ -414,7 +413,6 @@ impl<'a, 'env, StateChainClient: StorageApi + Send + Sync + 'static, Info, Histo
 	>
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<TChain>,
-		<TChain as Chain>::ChainCrypto: PalletInstanceAlias,
 		Info: Clone + Send + Sync + 'static,
 		HistoricInfo: Clone + Send + Sync + 'static,
 	{

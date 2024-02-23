@@ -1,6 +1,6 @@
 use cf_chains::{
 	evm::{EvmCrypto, EvmTransactionMetadata, SchnorrVerificationComponents, TransactionFee},
-	Chain,
+	Chain, PalletInstanceAlias,
 };
 use cf_primitives::EpochIndex;
 use ethers::{
@@ -9,7 +9,6 @@ use ethers::{
 };
 use futures_core::Future;
 use sp_core::{H160, H256};
-use state_chain_runtime::PalletInstanceAlias;
 use tracing::{info, trace};
 
 use super::{
@@ -72,7 +71,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			+ 'static,
 		ProcessingFut: Future<Output = ()> + Send + 'static,
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-		<Inner::Chain as Chain>::ChainCrypto: PalletInstanceAlias,
 		state_chain_runtime::RuntimeCall:
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
 	{

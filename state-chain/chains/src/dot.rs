@@ -15,13 +15,17 @@ pub use cf_primitives::chains::Polkadot;
 use cf_primitives::{PolkadotBlockNumber, TxId};
 use codec::{Decode, Encode};
 use core::str::FromStr;
-use frame_support::sp_runtime::{
-	generic::{Era, SignedPayload, UncheckedExtrinsic},
-	traits::{
-		AccountIdLookup, BlakeTwo256, DispatchInfoOf, Hash, SignedExtension, StaticLookup, Verify,
+use frame_support::{
+	instances::Instance2,
+	sp_runtime::{
+		generic::{Era, SignedPayload, UncheckedExtrinsic},
+		traits::{
+			AccountIdLookup, BlakeTwo256, DispatchInfoOf, Hash, SignedExtension, StaticLookup,
+			Verify,
+		},
+		transaction_validity::{TransactionValidity, TransactionValidityError, ValidTransaction},
+		MultiAddress, MultiSignature,
 	},
-	transaction_validity::{TransactionValidity, TransactionValidityError, ValidTransaction},
-	MultiAddress, MultiSignature,
 };
 use scale_info::TypeInfo;
 use sp_core::{sr25519, ConstBool, H256};
@@ -381,6 +385,14 @@ impl ChainCrypto for PolkadotCrypto {
 		vec![rotation_broadcast_id]
 	}
 }
+
+impl PalletInstanceAlias for Polkadot {
+	type Instance = Instance2;
+}
+impl PalletInstanceAlias for PolkadotCrypto {
+	type Instance = Instance2;
+}
+pub type PolkadotInstance = <Polkadot as PalletInstanceAlias>::Instance;
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct PolkadotTransactionData {

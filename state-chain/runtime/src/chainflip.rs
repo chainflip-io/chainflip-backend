@@ -2,7 +2,6 @@
 pub mod address_derivation;
 pub mod all_vault_activator;
 pub mod backup_node_rewards;
-pub mod chain_instances;
 pub mod cons_key_rotator;
 pub mod decompose_recompose;
 pub mod epoch_transition;

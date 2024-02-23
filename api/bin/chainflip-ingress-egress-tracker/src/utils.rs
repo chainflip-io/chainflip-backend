@@ -1,9 +1,9 @@
+use cf_chains::PalletInstanceAlias;
 use cf_primitives::BroadcastId;
 use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi, STATE_CHAIN_CONNECTION,
 };
 use pallet_cf_broadcast::TransactionOutIdFor;
-use state_chain_runtime::PalletInstanceAlias;
 use tracing::log;
 
 pub fn hex_encode_bytes(bytes: &[u8]) -> String {

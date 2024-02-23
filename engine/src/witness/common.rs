@@ -2,10 +2,9 @@ pub mod chain_source;
 pub mod chunked_chain_source;
 pub mod epoch_source;
 
-use cf_chains::Chain;
+use cf_chains::{Chain, PalletInstanceAlias};
 use futures_core::{stream::BoxStream, Future, Stream};
 use futures_util::{stream, StreamExt};
-use state_chain_runtime::PalletInstanceAlias;
 
 use chain_source::ChainSource;
 
@@ -64,12 +63,9 @@ pub trait RuntimeHasChain<TChain: ExternalChain>:
 		<TChain as PalletInstanceAlias>::Instance,
 		TargetChain = TChain,
 	> + pallet_cf_broadcast::Config<<TChain as PalletInstanceAlias>::Instance, TargetChain = TChain>
-where
-	<TChain as Chain>::ChainCrypto: PalletInstanceAlias,
 {
 }
-impl<TChain: ExternalChain> RuntimeHasChain<TChain> for state_chain_runtime::Runtime
-where
+impl<TChain: ExternalChain> RuntimeHasChain<TChain> for state_chain_runtime::Runtime where
 	Self: pallet_cf_vaults::Config<<TChain as PalletInstanceAlias>::Instance, Chain = TChain>
 		+ pallet_cf_threshold_signature::Config<
 			<TChain::ChainCrypto as PalletInstanceAlias>::Instance,
@@ -80,9 +76,7 @@ where
 		> + pallet_cf_ingress_egress::Config<
 			<TChain as PalletInstanceAlias>::Instance,
 			TargetChain = TChain,
-		> + pallet_cf_broadcast::Config<<TChain as PalletInstanceAlias>::Instance, TargetChain = TChain>,
-
-	<TChain as Chain>::ChainCrypto: PalletInstanceAlias,
+		> + pallet_cf_broadcast::Config<<TChain as PalletInstanceAlias>::Instance, TargetChain = TChain>
 {
 }
 
@@ -95,8 +89,6 @@ pub trait RuntimeCallHasChain<Runtime: RuntimeHasChain<TChain>, TChain: External
 	> + std::convert::From<
 		pallet_cf_ingress_egress::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
 	>
-where
-	<TChain as Chain>::ChainCrypto: PalletInstanceAlias,
 {
 }
 impl<Runtime: RuntimeHasChain<TChain>, TChain: ExternalChain> RuntimeCallHasChain<Runtime, TChain>
@@ -111,7 +103,6 @@ where
 		> + std::convert::From<
 			pallet_cf_ingress_egress::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
 		>,
-	<TChain as Chain>::ChainCrypto: PalletInstanceAlias,
 {
 }
 

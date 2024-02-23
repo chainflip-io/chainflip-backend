@@ -8,7 +8,8 @@ use core::{cmp::max, mem::size_of};
 
 use self::deposit_address::DepositAddress;
 use crate::{
-	Chain, ChainCrypto, DepositChannel, FeeEstimationApi, FeeRefundCalculator, RetryPolicy,
+	Chain, ChainCrypto, DepositChannel, FeeEstimationApi, FeeRefundCalculator, PalletInstanceAlias,
+	RetryPolicy,
 };
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
@@ -22,6 +23,7 @@ use cf_primitives::{
 use cf_utilities::SliceToArray;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
+	instances::Instance3,
 	pallet_prelude::RuntimeDebug,
 	sp_runtime::{FixedPointNumber, FixedU128},
 	traits::{ConstBool, ConstU32},
@@ -322,6 +324,14 @@ impl ChainCrypto for BitcoinCrypto {
 		vec![]
 	}
 }
+
+impl PalletInstanceAlias for Bitcoin {
+	type Instance = Instance3;
+}
+impl PalletInstanceAlias for BitcoinCrypto {
+	type Instance = Instance3;
+}
+pub type BitcoinInstance = <Bitcoin as PalletInstanceAlias>::Instance;
 
 fn verify_single_threshold_signature(
 	pubkey_x: &[u8; 32],
