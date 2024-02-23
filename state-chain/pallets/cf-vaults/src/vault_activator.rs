@@ -44,13 +44,16 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 				},
 			}
 			FirstVault::False
-		} else {
+		} else if ChainInitialized::<T, I>::get() {
 			// VaultStartBlockNumbers being empty means we are bootstrapping the vault.
 			PendingVaultActivation::<T, I>::put(
 				VaultActivationStatus::<T, I>::AwaitingActivation { new_public_key },
 			);
 			Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation { new_public_key });
 			FirstVault::True
+		} else {
+			PendingVaultActivation::<T, I>::put(VaultActivationStatus::<T, I>::Complete);
+			FirstVault::False
 		}
 	}
 

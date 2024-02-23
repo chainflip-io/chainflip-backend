@@ -218,6 +218,7 @@ cf_test_utilities::impl_test_helpers! {
 		system: Default::default(),
 		vaults_pallet: VaultsPalletConfig {
 			deployment_block: Some(0),
+			chain_initialized: true,
 		},
 	},
 	|| {},
