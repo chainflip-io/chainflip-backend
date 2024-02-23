@@ -60,7 +60,7 @@ pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoric
 						.script_pubkey(),
 					tx_fee: tx.fee.unwrap_or_default().to_sat(),
 					tx_metadata: BitcoinTransactionMetadata {
-						tx_ref: tx_hash.iter().rev().map(|elem| elem.to_owned()).collect_array(),
+						tx_hash: tx_hash.iter().rev().map(|elem| elem.to_owned()).collect_array(),
 					},
 				},
 			),

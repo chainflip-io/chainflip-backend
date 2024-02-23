@@ -136,7 +136,7 @@ impl BenchmarkValue for EvmTransactionMetadata {
 			max_fee_per_gas: Some(U256::zero()),
 			max_priority_fee_per_gas: Some(U256::zero()),
 			gas_limit: None,
-			tx_ref: Default::default(),
+			tx_hash: Default::default(),
 		}
 	}
 }
@@ -144,14 +144,14 @@ impl BenchmarkValue for EvmTransactionMetadata {
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for PolkadotTransactionMetadata {
 	fn benchmark_value() -> Self {
-		Self { tx_ref: Default::default() }
+		Self { tx_id: Default::default() }
 	}
 }
 
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for BitcoinTransactionMetadata {
 	fn benchmark_value() -> Self {
-		Self { tx_ref: Default::default() }
+		Self { tx_hash: Default::default() }
 	}
 }
 

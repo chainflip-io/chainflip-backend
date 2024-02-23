@@ -4,7 +4,7 @@ mod dot_source;
 
 use cf_chains::dot::{
 	PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash, PolkadotSignature,
-	PolkadotTransactionMetadata, PolkadotTransactionSignature, PolkadotUncheckedExtrinsic,
+	PolkadotTransactionId, PolkadotTransactionMetadata, PolkadotUncheckedExtrinsic,
 };
 use cf_primitives::{EpochIndex, PolkadotBlockNumber};
 use futures_core::Future;
@@ -158,8 +158,8 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 								signer_id: epoch.info.0,
 								tx_fee,
 								tx_metadata: PolkadotTransactionMetadata {
-									tx_ref: PolkadotTransactionSignature {
-										block_hash: header.hash,
+									tx_id: PolkadotTransactionId {
+										block_number: header.index,
 										extrinsic_index
 									}
 								},

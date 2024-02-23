@@ -23,7 +23,7 @@ impl Chain for NoneChain {
 	type TransactionMetadata = ();
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
-	type TransactionHashItem = ();
+	type TransactionRef = ();
 }
 
 impl FeeRefundCalculator<NoneChain> for () {

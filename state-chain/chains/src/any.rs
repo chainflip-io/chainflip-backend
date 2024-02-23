@@ -24,7 +24,7 @@ impl Chain for AnyChain {
 	type TransactionMetadata = ();
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
-	type TransactionHashItem = ();
+	type TransactionRef = ();
 }
 
 impl FeeRefundCalculator<AnyChain> for () {

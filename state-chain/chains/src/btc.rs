@@ -7,7 +7,7 @@ extern crate alloc;
 use self::deposit_address::DepositAddress;
 use crate::{
 	Chain, ChainCrypto, DepositChannel, FeeEstimationApi, FeeRefundCalculator, RetryPolicy,
-	TransactionMetadata, TransactionMetadataHash,
+	TransactionMetadata,
 };
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
@@ -239,23 +239,20 @@ impl ConsolidationParameters {
 	Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize,
 )]
 pub struct BitcoinTransactionMetadata {
-	pub tx_ref: Hash,
+	pub tx_hash: Hash,
 }
 
-impl<C: Chain<TransactionHashItem = Hash>> TransactionMetadataHash<C>
-	for BitcoinTransactionMetadata
-{
-	fn get_transaction_hash(&self) -> <C as Chain>::TransactionHashItem {
-		self.tx_ref
-	}
-}
-impl<C: Chain> TransactionMetadata<C> for BitcoinTransactionMetadata {
+impl<C: Chain<TransactionRef = Hash>> TransactionMetadata<C> for BitcoinTransactionMetadata {
 	fn extract_metadata(_transaction: &<C as Chain>::Transaction) -> Self {
 		Default::default()
 	}
 
 	fn verify_metadata(&self, _expected_metadata: &Self) -> bool {
 		true
+	}
+
+	fn get_transaction_ref(&self) -> <C as Chain>::TransactionRef {
+		self.tx_hash
 	}
 }
 
@@ -279,7 +276,7 @@ impl Chain for Bitcoin {
 	// There is no need for replay protection on Bitcoin since it is a UTXO chain.
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
-	type TransactionHashItem = Hash;
+	type TransactionRef = Hash;
 }
 
 #[derive(Clone, Copy, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
