@@ -406,7 +406,7 @@ impl<C: Chain<Transaction = Transaction>> TransactionMetadata<C> for EvmTransact
 			check_optional!(gas_limit)
 	}
 }
-impl <C: Chain<TransactionHashItem = H256>> TransactionHashTest<C> for EvmTransactionMetadata {
+impl<C: Chain<TransactionHashItem = H256>> TransactionMetadataHash<C> for EvmTransactionMetadata {
 	fn get_transaction_hash(&self) -> C::TransactionHashItem {
 		self.tx_ref
 	}

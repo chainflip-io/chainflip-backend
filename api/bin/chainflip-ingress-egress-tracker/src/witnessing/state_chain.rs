@@ -540,7 +540,7 @@ mod tests {
 						max_priority_fee_per_gas: None,
 						contract: H160::from([0; 20]),
 						gas_limit: None,
-						tx_ref: Default::default()
+						tx_ref: Default::default(),
 					},
 				},
 			),

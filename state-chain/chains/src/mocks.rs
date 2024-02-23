@@ -68,7 +68,7 @@ impl TransactionMetadata<MockEthereum> for MockEthereumTransactionMetadata {
 	}
 }
 
-impl TransactionHashTest<MockEthereum> for MockEthereumTransactionMetadata {
+impl TransactionMetadataHash<MockEthereum> for MockEthereumTransactionMetadata {
 	fn get_transaction_hash(&self) -> <MockEthereum as Chain>::TransactionHashItem {
 		Default::default()
 	}

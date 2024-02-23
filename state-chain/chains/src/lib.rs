@@ -139,11 +139,13 @@ pub trait Chain: Member + Parameter {
 		+ TransactionMetadata<Self>
 		+ BenchmarkValue
 		+ Default
-		+ TransactionHashTest<Self>;
+		+ TransactionMetadataHash<Self>;
+
+	type TransactionHashItem: Member + Parameter;
+
 	/// Passed in to construct the replay protection.
 	type ReplayProtectionParams: Member + Parameter;
 	type ReplayProtection: Member + Parameter;
-	type TransactionHashItem: Member + Parameter;
 }
 
 /// Common crypto-related types and operations for some external chain.
@@ -256,12 +258,11 @@ where
 	}
 }
 
-pub trait TransactionHashTest<C: Chain> {
+pub trait TransactionMetadataHash<C: Chain> {
 	fn get_transaction_hash(&self) -> C::TransactionHashItem;
 }
-impl <C: Chain<TransactionHashItem = ()>> TransactionHashTest<C> for () {
-	fn get_transaction_hash(&self) -> C::TransactionHashItem {
-	}
+impl<C: Chain<TransactionHashItem = ()>> TransactionMetadataHash<C> for () {
+	fn get_transaction_hash(&self) -> C::TransactionHashItem {}
 }
 
 pub trait TransactionMetadata<C: Chain> {

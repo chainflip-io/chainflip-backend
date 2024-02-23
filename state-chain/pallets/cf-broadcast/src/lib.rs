@@ -15,7 +15,7 @@ use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 
 use cf_chains::{
 	ApiCall, Chain, ChainCrypto, FeeRefundCalculator, RetryPolicy, TransactionBuilder,
-	TransactionMetadata as _, TransactionHashTest,
+	TransactionMetadata as _, TransactionMetadataHash,
 };
 use cf_traits::{
 	offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster, CfeBroadcastRequest,
@@ -80,7 +80,7 @@ pub mod pallet {
 
 	pub type TransactionOutIdFor<T, I> =
 		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId;
-	
+
 	pub type TransactionHashFor<T, I> =
 		<<T as Config<I>>::TargetChain as Chain>::TransactionHashItem;
 

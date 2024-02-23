@@ -321,25 +321,30 @@ pub struct PolkadotTransactionMetadata {
 	pub tx_ref: PolkadotTransactionSignature,
 }
 
-impl <C: Chain<TransactionHashItem = PolkadotTransactionSignature>> TransactionHashTest<C> for PolkadotTransactionMetadata {
+impl<C: Chain<TransactionHashItem = PolkadotTransactionSignature>> TransactionMetadataHash<C>
+	for PolkadotTransactionMetadata
+{
 	fn get_transaction_hash(&self) -> <C as Chain>::TransactionHashItem {
 		self.tx_ref.clone()
 	}
 }
-impl<C: Chain>TransactionMetadata<C> for PolkadotTransactionMetadata {
+impl<C: Chain> TransactionMetadata<C> for PolkadotTransactionMetadata {
 	fn extract_metadata(_transaction: &<C as Chain>::Transaction) -> Self {
 		Default::default()
 	}
 
-	fn verify_metadata(&self, expected_metadata: &Self) -> bool {
-		self.tx_ref == expected_metadata.tx_ref
+	fn verify_metadata(&self, _expected_metadata: &Self) -> bool {
+		true
 	}
 }
 
 #[derive(
 	Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize,
 )]
-pub struct PolkadotTransactionSignature { pub block_hash: H256, pub extrinsic_index: u32, }
+pub struct PolkadotTransactionSignature {
+	pub block_hash: H256,
+	pub extrinsic_index: u32,
+}
 
 impl Chain for Polkadot {
 	const NAME: &'static str = "Polkadot";

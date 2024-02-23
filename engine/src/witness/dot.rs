@@ -3,7 +3,8 @@ mod dot_deposits;
 mod dot_source;
 
 use cf_chains::dot::{
-	PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash, PolkadotSignature, PolkadotTransactionMetadata, PolkadotUncheckedExtrinsic, PolkadotTransactionSignature,
+	PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash, PolkadotSignature,
+	PolkadotTransactionMetadata, PolkadotTransactionSignature, PolkadotUncheckedExtrinsic,
 };
 use cf_primitives::{EpochIndex, PolkadotBlockNumber};
 use futures_core::Future;

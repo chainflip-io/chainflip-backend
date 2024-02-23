@@ -5,12 +5,14 @@ pub mod btc_source;
 use std::sync::Arc;
 
 use bitcoin::BlockHash;
-use cf_chains::btc::{self, deposit_address::DepositAddress, BlockNumber, CHANGE_ADDRESS_SALT, BitcoinTransactionMetadata};
+use cf_chains::btc::{
+	self, deposit_address::DepositAddress, BitcoinTransactionMetadata, BlockNumber,
+	CHANGE_ADDRESS_SALT,
+};
 use cf_primitives::{EpochIndex, NetworkEnvironment};
 use futures_core::Future;
 use secp256k1::hashes::Hash;
-use utilities::task_scope::Scope;
-use utilities::ArrayCollect;
+use utilities::{task_scope::Scope, ArrayCollect};
 
 use crate::{
 	btc::{
@@ -57,7 +59,9 @@ pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoric
 					signer_id: DepositAddress::new(epoch.info.0.current, CHANGE_ADDRESS_SALT)
 						.script_pubkey(),
 					tx_fee: tx.fee.unwrap_or_default().to_sat(),
-					tx_metadata: BitcoinTransactionMetadata { tx_ref: tx_hash.iter().rev().map(|elem| elem.to_owned()).collect_array() },
+					tx_metadata: BitcoinTransactionMetadata {
+						tx_ref: tx_hash.iter().rev().map(|elem| elem.to_owned()).collect_array(),
+					},
 				},
 			),
 			epoch.index,

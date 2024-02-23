@@ -12,11 +12,11 @@ use crate::address::EncodedAddress;
 #[cfg(feature = "runtime-benchmarks")]
 use crate::address::ForeignChainAddress;
 #[cfg(feature = "runtime-benchmarks")]
-use crate::evm::{EvmFetchId, EvmTransactionMetadata};
+use crate::btc::BitcoinTransactionMetadata;
 #[cfg(feature = "runtime-benchmarks")]
 use crate::dot::PolkadotTransactionMetadata;
 #[cfg(feature = "runtime-benchmarks")]
-use crate::btc::BitcoinTransactionMetadata;
+use crate::evm::{EvmFetchId, EvmTransactionMetadata};
 
 /// Ensure type specifies a value to be used for benchmarking purposes.
 pub trait BenchmarkValue {
@@ -136,7 +136,7 @@ impl BenchmarkValue for EvmTransactionMetadata {
 			max_fee_per_gas: Some(U256::zero()),
 			max_priority_fee_per_gas: Some(U256::zero()),
 			gas_limit: None,
-			tx_ref: Default::default()
+			tx_ref: Default::default(),
 		}
 	}
 }
@@ -144,18 +144,14 @@ impl BenchmarkValue for EvmTransactionMetadata {
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for PolkadotTransactionMetadata {
 	fn benchmark_value() -> Self {
-		Self {
-			tx_ref: Default::default()
-		}
+		Self { tx_ref: Default::default() }
 	}
 }
 
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for BitcoinTransactionMetadata {
 	fn benchmark_value() -> Self {
-		Self {
-			tx_ref: Default::default()
-		}
+		Self { tx_ref: Default::default() }
 	}
 }
 
