@@ -14,7 +14,7 @@ use cf_chains::{
 		MockEthereumChainCrypto, MockEthereumTransactionMetadata, MockThresholdSignature,
 		MockTransactionBuilder, ETH_TX_FEE, MOCK_TRANSACTION_OUT_ID, MOCK_TX_METADATA,
 	},
-	ChainCrypto, FeeRefundCalculator,
+	ChainCrypto, FeeRefundCalculator, TransactionMetadata as _,
 };
 use cf_traits::{
 	mocks::{
