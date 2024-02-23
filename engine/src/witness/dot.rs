@@ -3,7 +3,7 @@ mod dot_deposits;
 mod dot_source;
 
 use cf_chains::dot::{
-	PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash, PolkadotSignature, PolkadotTransactionMetadata, PolkadotUncheckedExtrinsic
+	PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash, PolkadotSignature, PolkadotTransactionMetadata, PolkadotUncheckedExtrinsic, PolkadotTransactionSignature,
 };
 use cf_primitives::{EpochIndex, PolkadotBlockNumber};
 use futures_core::Future;
@@ -156,7 +156,12 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 								tx_out_id: signature,
 								signer_id: epoch.info.0,
 								tx_fee,
-								tx_metadata: PolkadotTransactionMetadata::default(),
+								tx_metadata: PolkadotTransactionMetadata {
+									tx_ref: PolkadotTransactionSignature {
+										block_hash: header.hash,
+										extrinsic_index
+									}
+								},
 							}
 							.into(),
 							epoch.index,

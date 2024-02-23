@@ -459,7 +459,8 @@ fn threshold_sign_and_broadcast_with_callback() {
 			events.pop().expect("an event").event,
 			RuntimeEvent::Broadcaster(crate::Event::BroadcastSuccess {
 				broadcast_id,
-				transaction_out_id: api_call.tx_out_id
+				transaction_out_id: api_call.tx_out_id,
+				transaction_hash: Default::default()
 			})
 		);
 		assert_eq!(
@@ -996,6 +997,7 @@ fn aborted_broadcasts_can_still_succeed() {
 				crate::Event::<Test, Instance1>::BroadcastSuccess {
 					broadcast_id,
 					transaction_out_id,
+					transaction_hash: Default::default()
 				},
 			));
 			assert_broadcast_storage_cleaned_up(broadcast_id);
@@ -1149,6 +1151,7 @@ fn succeeded_broadcasts_will_not_retry() {
 				crate::Event::<Test, Instance1>::BroadcastSuccess {
 					broadcast_id,
 					transaction_out_id,
+					transaction_hash: Default::default()
 				},
 			));
 			broadcast_id
@@ -1261,6 +1264,7 @@ fn broadcast_is_retried_without_initial_nominee() {
 				crate::Event::<Test, Instance1>::BroadcastSuccess {
 					broadcast_id,
 					transaction_out_id,
+					transaction_hash: Default::default()
 				},
 			));
 			assert_broadcast_storage_cleaned_up(broadcast_id);

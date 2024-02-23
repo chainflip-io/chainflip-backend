@@ -339,7 +339,7 @@ impl<C: Chain>TransactionMetadata<C> for PolkadotTransactionMetadata {
 #[derive(
 	Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize,
 )]
-pub struct PolkadotTransactionSignature { block_hash: sp_core::H160, extrinsic_index: u32, }
+pub struct PolkadotTransactionSignature { pub block_hash: H256, pub extrinsic_index: u32, }
 
 impl Chain for Polkadot {
 	const NAME: &'static str = "Polkadot";
