@@ -27,10 +27,7 @@ use cf_traits::{
 	},
 	DepositApi, DepositHandler, NetworkEnvironmentProvider,
 };
-use frame_support::{
-	derive_impl,
-	traits::{OriginTrait, UnfilteredDispatchable},
-};
+use frame_support::{derive_impl, traits::UnfilteredDispatchable};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup, Zero};

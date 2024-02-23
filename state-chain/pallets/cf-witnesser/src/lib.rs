@@ -491,7 +491,7 @@ pub mod pallet {
 		/// Simply emits an event to notify that this call has been witnessed. Implicitly signals
 		/// that we expect the same call to be witnessed at a later block.
 		#[pallet::call_index(2)]
-		#[pallet::weight(call.get_dispatch_info().weight)] // TODO JAMIE: is this weight correct?
+		#[pallet::weight(T::WeightInfo::prewitness())]
 		pub fn prewitness(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::RuntimeCall>,

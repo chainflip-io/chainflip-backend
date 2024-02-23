@@ -24,7 +24,11 @@ use cf_traits::{
 	},
 	DepositApi, EgressApi, EpochInfo, FundingInfo, GetBlockHeight, ScheduledEgressDetails,
 };
-use frame_support::{assert_err, assert_ok, traits::Hooks, weights::Weight};
+use frame_support::{
+	assert_err, assert_ok,
+	traits::{Hooks, OriginTrait},
+	weights::Weight,
+};
 use sp_core::H160;
 
 const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
