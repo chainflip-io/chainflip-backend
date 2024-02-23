@@ -33,7 +33,7 @@ use state_chain_runtime::{
 	chainflip::{BlockUpdate, Offence},
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
-		CustomRuntimeApi, DispatchErrorWithMessage, FailingWitnessValidators,
+		BrokerInfo, CustomRuntimeApi, DispatchErrorWithMessage, FailingWitnessValidators,
 		LiquidityProviderInfo, RuntimeApiAccountInfoV2,
 	},
 	NetworkFee,
@@ -60,6 +60,7 @@ pub enum RpcAccountInfo {
 	},
 	Broker {
 		flip_balance: NumberOrHex,
+		earned_fees: any::AssetMap<NumberOrHex>,
 	},
 	LiquidityProvider {
 		balances: any::AssetMap<NumberOrHex>,
@@ -89,8 +90,17 @@ impl RpcAccountInfo {
 		Self::Unregistered { flip_balance: balance.into() }
 	}
 
-	fn broker(balance: u128) -> Self {
-		Self::Broker { flip_balance: balance.into() }
+	fn broker(balance: u128, broker_info: BrokerInfo) -> Self {
+		Self::Broker {
+			flip_balance: balance.into(),
+			earned_fees: cf_chains::assets::any::AssetMap::try_from_iter(
+				broker_info
+					.earned_fees
+					.iter()
+					.map(|(asset, balance)| (*asset, (*balance).into())),
+			)
+			.unwrap(),
+		}
 	}
 
 	fn lp(info: LiquidityProviderInfo, network: NetworkEnvironment, balance: u128) -> Self {
@@ -312,12 +322,6 @@ pub trait CustomApi {
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcAccountInfo>;
-	#[method(name = "account_info_v2")]
-	fn cf_account_info_v2(
-		&self,
-		account_id: state_chain_runtime::AccountId,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcAccountInfoV2>;
 	#[method(name = "asset_balances")]
 	fn cf_asset_balances(
 		&self,
@@ -672,12 +676,14 @@ where
 				.unwrap_or(AccountRole::Unregistered)
 			{
 				AccountRole::Unregistered => RpcAccountInfo::unregistered(balance),
-				AccountRole::Broker => RpcAccountInfo::broker(balance),
+				AccountRole::Broker => {
+					let info = api.cf_broker_info(hash, account_id).map_err(to_rpc_error)?;
+
+					RpcAccountInfo::broker(balance, info)
+				},
 				AccountRole::LiquidityProvider => {
-					let info = api
-						.cf_liquidity_provider_info(hash, account_id)
-						.map_err(to_rpc_error)?
-						.expect("role already validated");
+					let info =
+						api.cf_liquidity_provider_info(hash, account_id).map_err(to_rpc_error)?;
 
 					RpcAccountInfo::lp(
 						info,
@@ -686,40 +692,12 @@ where
 					)
 				},
 				AccountRole::Validator => {
-					let info = api.cf_account_info_v2(hash, &account_id).map_err(to_rpc_error)?;
+					let info = api.cf_validator_info(hash, &account_id).map_err(to_rpc_error)?;
 
 					RpcAccountInfo::validator(info)
 				},
 			},
 		)
-	}
-
-	fn cf_account_info_v2(
-		&self,
-		account_id: state_chain_runtime::AccountId,
-		at: Option<<B as BlockT>::Hash>,
-	) -> RpcResult<RpcAccountInfoV2> {
-		let account_info = self
-			.client
-			.runtime_api()
-			.cf_account_info_v2(self.unwrap_or_best(at), &account_id)
-			.map_err(to_rpc_error)?;
-
-		Ok(RpcAccountInfoV2 {
-			balance: account_info.balance.into(),
-			bond: account_info.bond.into(),
-			last_heartbeat: account_info.last_heartbeat,
-			reputation_points: account_info.reputation_points,
-			keyholder_epochs: account_info.keyholder_epochs,
-			is_current_authority: account_info.is_current_authority,
-			is_current_backup: account_info.is_current_backup,
-			is_qualified: account_info.is_qualified,
-			is_online: account_info.is_online,
-			is_bidding: account_info.is_bidding,
-			bound_redeem_address: account_info.bound_redeem_address,
-			apy_bp: account_info.apy_bp,
-			restricted_balances: account_info.restricted_balances,
-		})
 	}
 
 	fn cf_asset_balances(
@@ -1309,7 +1287,19 @@ mod test {
 
 	#[test]
 	fn test_broker_serialization() {
-		insta::assert_display_snapshot!(serde_json::to_value(RpcAccountInfo::broker(0)).unwrap());
+		insta::assert_display_snapshot!(serde_json::to_value(RpcAccountInfo::broker(
+			0,
+			BrokerInfo {
+				earned_fees: vec![
+					(Asset::Eth, 0),
+					(Asset::Btc, 0),
+					(Asset::Flip, 1000000000000000000),
+					(Asset::Usdc, 0),
+					(Asset::Dot, 0),
+				]
+			}
+		))
+		.unwrap());
 	}
 
 	#[test]
