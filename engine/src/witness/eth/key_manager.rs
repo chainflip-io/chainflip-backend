@@ -130,6 +130,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								max_fee_per_gas: transaction.max_fee_per_gas,
 								max_priority_fee_per_gas: transaction.max_priority_fee_per_gas,
 								gas_limit: Some(transaction.gas),
+								tx_ref: Default::default()
 							};
 							pallet_cf_broadcast::Call::<
 								_,

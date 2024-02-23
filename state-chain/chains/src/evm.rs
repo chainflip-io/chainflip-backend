@@ -379,6 +379,7 @@ pub struct EvmTransactionMetadata {
 	pub max_priority_fee_per_gas: Option<Uint>,
 	pub contract: Address,
 	pub gas_limit: Option<Uint>,
+	pub tx_ref: H256,
 }
 
 impl<C: Chain<Transaction = Transaction>> TransactionMetadata<C> for EvmTransactionMetadata {
@@ -388,6 +389,7 @@ impl<C: Chain<Transaction = Transaction>> TransactionMetadata<C> for EvmTransact
 			max_fee_per_gas: transaction.max_fee_per_gas,
 			max_priority_fee_per_gas: transaction.max_priority_fee_per_gas,
 			gas_limit: transaction.gas_limit,
+			tx_ref: Default::default(),
 		}
 	}
 
@@ -404,7 +406,11 @@ impl<C: Chain<Transaction = Transaction>> TransactionMetadata<C> for EvmTransact
 			check_optional!(gas_limit)
 	}
 }
-
+impl <C: Chain<TransactionHashItem = H256>> TransactionHashTest<C> for EvmTransactionMetadata {
+	fn get_transaction_hash(&self) -> C::TransactionHashItem {
+		self.tx_ref
+	}
+}
 impl Transaction {
 	fn check_contract(
 		&self,
@@ -758,6 +764,7 @@ fn metadata_verification() {
 		max_priority_fee_per_gas: Some(U256::one()),
 		contract: Default::default(),
 		gas_limit: None,
+		tx_ref: Default::default(),
 	};
 
 	// Exact match.

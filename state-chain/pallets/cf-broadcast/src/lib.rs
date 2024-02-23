@@ -15,7 +15,7 @@ use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 
 use cf_chains::{
 	ApiCall, Chain, ChainCrypto, FeeRefundCalculator, RetryPolicy, TransactionBuilder,
-	TransactionMetadata as _,
+	TransactionMetadata as _, TransactionHashTest,
 };
 use cf_traits::{
 	offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster, CfeBroadcastRequest,
@@ -80,6 +80,9 @@ pub mod pallet {
 
 	pub type TransactionOutIdFor<T, I> =
 		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId;
+	
+	pub type TransactionHashFor<T, I> =
+		<<T as Config<I>>::TargetChain as Chain>::TransactionHashItem;
 
 	/// Type alias for the instance's configured Payload.
 	pub type PayloadFor<T, I> =
@@ -316,6 +319,7 @@ pub mod pallet {
 		BroadcastSuccess {
 			broadcast_id: BroadcastId,
 			transaction_out_id: TransactionOutIdFor<T, I>,
+			transaction_hash: TransactionHashFor<T, I>,
 		},
 		/// A broadcast's threshold signature is invalid, we will attempt to re-sign it.
 		ThresholdSignatureInvalid { broadcast_id: BroadcastId },
@@ -589,6 +593,7 @@ pub mod pallet {
 			Self::deposit_event(Event::<T, I>::BroadcastSuccess {
 				broadcast_id,
 				transaction_out_id: tx_out_id,
+				transaction_hash: tx_metadata.get_transaction_hash(),
 			});
 			Ok(().into())
 		}

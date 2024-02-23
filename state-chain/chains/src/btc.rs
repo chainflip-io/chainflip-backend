@@ -5,7 +5,8 @@ pub mod utxo_selection;
 
 extern crate alloc;
 use core::{cmp::max, mem::size_of};
-
+use crate::TransactionHashTest;
+use crate::TransactionMetadata;
 use self::deposit_address::DepositAddress;
 use crate::{
 	Chain, ChainCrypto, DepositChannel, FeeEstimationApi, FeeRefundCalculator, RetryPolicy,
@@ -235,6 +236,28 @@ impl ConsolidationParameters {
 	}
 }
 
+#[derive(
+	Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize,
+)]
+pub struct BitcoinTransactionMetadata {
+	pub tx_ref: Hash,
+}
+
+impl <C: Chain<TransactionHashItem = Hash>> TransactionHashTest<C> for BitcoinTransactionMetadata {
+	fn get_transaction_hash(&self) -> <C as Chain>::TransactionHashItem {
+		self.tx_ref
+	}
+}
+impl<C: Chain>TransactionMetadata<C> for BitcoinTransactionMetadata {
+	fn extract_metadata(_transaction: &<C as Chain>::Transaction) -> Self {
+		Default::default()
+	}
+
+	fn verify_metadata(&self, expected_metadata: &Self) -> bool {
+		self.tx_ref == expected_metadata.tx_ref
+	}
+}
+
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
 	const GAS_ASSET: Self::ChainAsset = assets::btc::Asset::Btc;
@@ -251,10 +274,11 @@ impl Chain for Bitcoin {
 	type DepositChannelState = DepositAddress;
 	type DepositDetails = UtxoId;
 	type Transaction = BitcoinTransactionData;
-	type TransactionMetadata = ();
+	type TransactionMetadata = BitcoinTransactionMetadata;
 	// There is no need for replay protection on Bitcoin since it is a UTXO chain.
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
+	type TransactionHashItem = Hash;
 }
 
 #[derive(Clone, Copy, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]

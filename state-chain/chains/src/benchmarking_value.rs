@@ -13,6 +13,10 @@ use crate::address::EncodedAddress;
 use crate::address::ForeignChainAddress;
 #[cfg(feature = "runtime-benchmarks")]
 use crate::evm::{EvmFetchId, EvmTransactionMetadata};
+#[cfg(feature = "runtime-benchmarks")]
+use crate::dot::PolkadotTransactionMetadata;
+#[cfg(feature = "runtime-benchmarks")]
+use crate::btc::BitcoinTransactionMetadata;
 
 /// Ensure type specifies a value to be used for benchmarking purposes.
 pub trait BenchmarkValue {
@@ -132,6 +136,25 @@ impl BenchmarkValue for EvmTransactionMetadata {
 			max_fee_per_gas: Some(U256::zero()),
 			max_priority_fee_per_gas: Some(U256::zero()),
 			gas_limit: None,
+			tx_ref: Default::default()
+		}
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for PolkadotTransactionMetadata {
+	fn benchmark_value() -> Self {
+		Self {
+			tx_ref: Default::default()
+		}
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for BitcoinTransactionMetadata {
+	fn benchmark_value() -> Self {
+		Self {
+			tx_ref: Default::default()
 		}
 	}
 }

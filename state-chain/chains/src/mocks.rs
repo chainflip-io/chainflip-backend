@@ -68,6 +68,11 @@ impl TransactionMetadata<MockEthereum> for MockEthereumTransactionMetadata {
 	}
 }
 
+impl TransactionHashTest<MockEthereum> for MockEthereumTransactionMetadata {
+	fn get_transaction_hash(&self) -> <MockEthereum as Chain>::TransactionHashItem {
+		Default::default()
+	}
+}
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for MockEthereumTransactionMetadata {
 	fn benchmark_value() -> Self {
@@ -102,6 +107,7 @@ impl Chain for MockEthereum {
 	type TransactionMetadata = MockEthereumTransactionMetadata;
 	type ReplayProtectionParams = ();
 	type ReplayProtection = EvmReplayProtection;
+	type TransactionHashItem = ();
 }
 
 impl ToHumanreadableAddress for u64 {

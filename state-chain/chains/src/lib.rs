@@ -138,10 +138,12 @@ pub trait Chain: Member + Parameter {
 		+ Parameter
 		+ TransactionMetadata<Self>
 		+ BenchmarkValue
-		+ Default;
+		+ Default
+		+ TransactionHashTest<Self>;
 	/// Passed in to construct the replay protection.
 	type ReplayProtectionParams: Member + Parameter;
 	type ReplayProtection: Member + Parameter;
+	type TransactionHashItem: Member + Parameter;
 }
 
 /// Common crypto-related types and operations for some external chain.
@@ -251,6 +253,14 @@ where
 	/// Calculate the Units of gas that is allowed to make this call.
 	fn calculate_gas_limit(_call: &Call) -> Option<U256> {
 		Default::default()
+	}
+}
+
+pub trait TransactionHashTest<C: Chain> {
+	fn get_transaction_hash(&self) -> C::TransactionHashItem;
+}
+impl <C: Chain<TransactionHashItem = ()>> TransactionHashTest<C> for () {
+	fn get_transaction_hash(&self) -> C::TransactionHashItem {
 	}
 }
 
