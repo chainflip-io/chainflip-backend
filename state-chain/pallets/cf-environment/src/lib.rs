@@ -380,10 +380,10 @@ pub mod pallet {
 			let dispatch_result =
 				T::ArbitrumVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
 
-			ArbitrumChainId::<T>::put(chain_id);
-			ArbitrumAddressCheckerAddress::<T>::put(address_checker_address);
-			ArbitrumVaultAddress::<T>::put(vault_address);
 			ArbitrumKeyManagerAddress::<T>::put(key_manager_address);
+			ArbitrumVaultAddress::<T>::put(vault_address);
+			ArbitrumAddressCheckerAddress::<T>::put(address_checker_address);
+			ArbitrumChainId::<T>::put(chain_id);
 			ArbitrumSupportedAssets::<T>::insert(ArbAsset::ArbUsdc, arb_usdc_address);
 
 			Self::deposit_event(Event::<T>::ArbitrumInitialized);
