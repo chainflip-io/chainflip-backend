@@ -122,6 +122,25 @@ impl From<DepositInfo<Arbitrum>> for WitnessInformation {
 	}
 }
 
+async fn save_deposit_witnesses<S: Store, C: Chain>(
+	store: &mut S,
+	deposit_witnesses: Vec<DepositWitness<C>>,
+	block_height: <C as Chain>::ChainBlockNumber,
+	chainflip_network: NetworkEnvironment,
+) -> anyhow::Result<()>
+where
+	WitnessInformation:
+		From<(DepositWitness<C>, <C as Chain>::ChainBlockNumber, NetworkEnvironment)>,
+{
+	for witness in deposit_witnesses {
+		store
+			.save_to_array(&WitnessInformation::from((witness, block_height, chainflip_network)))
+			.await?;
+	}
+
+	Ok(())
+}
+
 pub async fn handle_call<S, StateChainClient>(
 	call: state_chain_runtime::RuntimeCall,
 	store: &mut S,
@@ -141,54 +160,26 @@ where
 			deposit_witnesses,
 			block_height,
 		}) =>
-			for witness in deposit_witnesses as Vec<DepositWitness<Ethereum>> {
-				store
-					.save_to_array(&WitnessInformation::from((
-						witness,
-						block_height,
-						chainflip_network,
-					)))
-					.await?;
-			},
+			save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network)
+				.await?,
 		BitcoinIngressEgress(IngressEgressCall::process_deposits {
 			deposit_witnesses,
 			block_height,
 		}) =>
-			for witness in deposit_witnesses as Vec<DepositWitness<Bitcoin>> {
-				store
-					.save_to_array(&WitnessInformation::from((
-						witness,
-						block_height,
-						chainflip_network,
-					)))
-					.await?;
-			},
+			save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network)
+				.await?,
 		PolkadotIngressEgress(IngressEgressCall::process_deposits {
 			deposit_witnesses,
 			block_height,
 		}) =>
-			for witness in deposit_witnesses as Vec<DepositWitness<Polkadot>> {
-				store
-					.save_to_array(&WitnessInformation::from((
-						witness,
-						block_height,
-						chainflip_network,
-					)))
-					.await?;
-			},
+			save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network)
+				.await?,
 		ArbitrumIngressEgress(IngressEgressCall::process_deposits {
 			deposit_witnesses,
 			block_height,
 		}) =>
-			for witness in deposit_witnesses as Vec<DepositWitness<Arbitrum>> {
-				store
-					.save_to_array(&WitnessInformation::from((
-						witness,
-						block_height,
-						chainflip_network,
-					)))
-					.await?;
-			},
+			save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network)
+				.await?,
 		EthereumBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
 			let broadcast_id =
 				get_broadcast_id::<Ethereum, StateChainClient>(state_chain_client, &tx_out_id)

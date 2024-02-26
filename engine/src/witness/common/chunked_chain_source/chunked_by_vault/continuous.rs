@@ -151,13 +151,12 @@ where
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub fn continuous(
 		self,
-		name: &'static str,
+		name: String,
 		db: Arc<PersistentKeyDB>,
 	) -> ChunkedByVaultBuilder<Continuous<Inner, (String, Arc<PersistentKeyDB>)>>
 	where
 		Inner::Client: Clone,
 	{
-		let name: String = format!("{}-{}", <Inner::Chain as cf_chains::Chain>::NAME, name);
 		ChunkedByVaultBuilder::new(Continuous::new(self.source, (name, db)), self.parameters)
 	}
 }

@@ -172,7 +172,7 @@ where
 			let process_call = process_call.clone();
 			move |epoch, header| process_egress(epoch, header, process_call.clone())
 		})
-		.continuous("All", db)
+		.continuous("Bitcoin".to_string(), db)
 		.logging("witnessing")
 		.spawn(scope);
 
