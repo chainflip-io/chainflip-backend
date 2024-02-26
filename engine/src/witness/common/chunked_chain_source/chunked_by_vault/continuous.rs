@@ -122,6 +122,7 @@ where
 
 									break Some((header, (chain_stream, chain_client, epoch, unprocessed_indices, inprogress_indices, processed_indices)))
 								},
+								// Allows the stream to exit while waiting for blocks, if the epoch becomes historic
 								if let true = epoch.historic_signal.clone().wait().map(|(_, historic_at, _)| is_epoch_complete(&processed_indices, historic_at)) => {
 									break None
 								} else disable then if is_epoch_complete(&processed_indices, epoch.historic_signal.get().unwrap().1) => break None,
