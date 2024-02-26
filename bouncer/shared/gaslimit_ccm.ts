@@ -14,7 +14,6 @@ import {
 } from './utils';
 import { requestNewSwap } from './perform_swap';
 import { send } from './send';
-import { BtcAddressType } from './new_btc_address';
 import { spamEvm } from './send_evm';
 
 // This test uses the CFTester contract as the receiver for a CCM call. The contract will consume approximately
@@ -81,7 +80,6 @@ async function testGasLimitSwap(
   testTag?: string,
   gasToConsume?: number,
   gasBudgetFraction?: number,
-  addressType?: BtcAddressType,
 ) {
   const chainflipApi = await getChainflipApi();
   const destChain = chainFromAsset(destAsset).toString();
@@ -93,7 +91,7 @@ async function testGasLimitSwap(
   const { destAddress, tag } = await prepareSwap(
     sourceAsset,
     destAsset,
-    addressType,
+    undefined,
     messageMetadata,
     ` GasLimit${testTag || ''}`,
   );
@@ -252,7 +250,19 @@ async function testGasLimitSwap(
     const observeBroadcastFailure = observeBadEvents(
       `${destChain.toLowerCase()}Broadcaster:BroadcastAborted`,
       () => stopObserving,
-      (event) => event.data.broadcastId === egressIdToBroadcastId[swapIdToEgressId[swapId]],
+      (event) => {
+        const aborted = event.data.broadcastId === egressIdToBroadcastId[swapIdToEgressId[swapId]];
+        if (aborted) {
+          console.log(
+            `${tag} FAILURE! Broadcast Aborted unexpected! broadcastId: ${
+              event.data.broadcastId
+            }. Gas budget: ${gasLimitBudget} while limit is ${
+              minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER[destChain]
+            }!`,
+          );
+        }
+        return aborted;
+      },
     );
 
     // Expecting success
@@ -364,7 +374,7 @@ export async function testGasLimitCcmSwaps() {
     testGasLimitSwap('FLIP', 'ETH', ' sufBudget', undefined, 5000),
     testGasLimitSwap('BTC', 'ETH', ' sufBudget', undefined, 750),
     testGasLimitSwap('DOT', 'ARBUSDC', ' sufBudget', undefined, 100),
-    testGasLimitSwap('ETH', 'ARBUSDC', ' sufBudget', undefined, 1000),
+    testGasLimitSwap('ETH', 'ARBUSDC', ' sufBudget', undefined, 2000),
     testGasLimitSwap('FLIP', 'ARBETH', ' sufBudget', undefined, 1000),
     testGasLimitSwap('BTC', 'ARBUSDC', ' sufBudget', undefined, 100),
     testGasLimitSwap('ARBETH', 'ETH', ' sufBudget', undefined, 750),

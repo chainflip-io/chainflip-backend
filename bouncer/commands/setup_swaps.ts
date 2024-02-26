@@ -7,10 +7,13 @@
 
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { Asset } from '@chainflip-io/cli';
-import { runWithTimeout } from '../shared/utils';
+import { getEvmContractAddress, runWithTimeout, sleep } from '../shared/utils';
 import { createLpPool } from '../shared/create_lp_pool';
 import { provideLiquidity } from '../shared/provide_liquidity';
 import { rangeOrder } from '../shared/range_order';
+import { getEvmNativeBalance } from '../shared/get_evm_native_balance';
+import { getErc20Balance } from '../shared/get_erc20_balance';
+import { number } from 'yargs';
 
 const deposits = new Map<Asset, number>([
   ['DOT', 10000],
@@ -64,6 +67,29 @@ async function main(): Promise<void> {
   ]);
   console.log('=== Swaps Setup completed ===');
 
+  // For debugging purposes because I've seen fetches not going through
+  console.log('=== Checking that Arbitrum Vaults fetch the funds ===');
+  const arbitrumVault = getEvmContractAddress('Arbitrum', 'VAULT');
+  const usdcContractAddress = getEvmContractAddress('Arbitrum', 'ARBUSDC');
+
+  let timeout = 0;
+  let arbVaultBalance = 0;
+  let usdcVaultBalance = 0;
+
+  while (arbVaultBalance <= 0 || usdcVaultBalance <= 0) {
+    arbVaultBalance = parseFloat(await getEvmNativeBalance('Arbitrum', arbitrumVault));
+    usdcVaultBalance = parseFloat(
+      await getErc20Balance('Arbitrum', arbitrumVault, usdcContractAddress),
+    );
+    console.log('arbVaultBalance', arbVaultBalance);
+    console.log('usdcVaultBalance', usdcVaultBalance);
+    await sleep(6000);
+    timeout += 1;
+    if (timeout > 10) {
+      throw new Error('Arbitrum Vaults do not have funds');
+    }
+  }
+  console.log('=== Arbitrum Vaults have not fetched the funds ===');
   process.exit(0);
 }
 

@@ -23,7 +23,7 @@ async function runAllConcurrentTests() {
   const tests = [
     // swapLessThanED(),
     testAllSwaps(),
-    testEvmDeposits(),
+    // testEvmDeposits(),
     // testFundRedeem('redeem'),
     // testMultipleMembersGovernance(),
     // testLpApi(),

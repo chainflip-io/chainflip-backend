@@ -618,7 +618,7 @@ fn testnet_genesis(
 
 		arbitrum_vault: state_chain_runtime::ArbitrumVaultConfig {
 			deployment_block: None,
-			chain_initialized: false,
+			chain_initialized: true,
 		},
 
 		evm_threshold_signer: state_chain_runtime::EvmThresholdSignerConfig {

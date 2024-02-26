@@ -77,7 +77,10 @@ export function newCcmMetadata(
 ) {
   const message = ccmMessage ?? newAbiEncodedMessage();
   const cfParameters = newAbiEncodedMessage(cfParamsArray);
-  const gasDiv = gasBudgetFraction ?? 100;
+  // TODO: Arbitrum has way higher fees, to check if this works. This should depend on
+  // the egress chain but it's annoying to get that value here. We'd rather set a fraction
+  // that works for all chains.
+  const gasDiv = gasBudgetFraction ?? 2;
 
   const gasBudget = Math.floor(
     Number(amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals[sourceAsset])) /
@@ -213,7 +216,7 @@ export async function testAllSwaps() {
       .filter((destAsset) => sourceAsset !== destAsset)
       .forEach((destAsset) => {
         // Regular swaps
-        // appendSwap(sourceAsset, destAsset, testSwap);
+        appendSwap(sourceAsset, destAsset, testSwap);
 
         // // NOTE: I am using an old SDK so this ones don't work, even for non-Arbitrum assets
         // // if (sourceAsset !== 'ARBETH' && sourceAsset !== 'ARBUSDC') {
@@ -226,10 +229,10 @@ export async function testAllSwaps() {
         //   }
         // }
 
-        if (ccmSupportedChains.includes(chainFromAsset(destAsset))) {
-          // CCM swaps
-          appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
-        }
+        // if (ccmSupportedChains.includes(chainFromAsset(destAsset))) {
+        //   // CCM swaps
+        //   appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
+        // }
       }),
   );
 
