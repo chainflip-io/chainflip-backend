@@ -127,7 +127,7 @@ where
 	arb_safe_vault_source
 		.clone()
 		.key_manager_witnessing(process_call.clone(), arb_client.clone(), key_manager_address)
-		.continuous("KeyManager", db.clone())
+		.continuous("KeyManager".to_string(), db.clone())
 		.logging("KeyManager")
 		.spawn(scope);
 
@@ -140,7 +140,7 @@ where
 			usdc_contract_address,
 		)
 		.await?
-		.continuous("USDCDeposits", db.clone())
+		.continuous("USDCDeposits".to_string(), db.clone())
 		.logging("USDCDeposits")
 		.spawn(scope);
 
@@ -154,7 +154,7 @@ where
 			vault_address,
 		)
 		.await
-		.continuous("EthereumDeposits", db.clone())
+		.continuous("EthereumDeposits".to_string(), db.clone())
 		.logging("EthereumDeposits")
 		.spawn(scope);
 
@@ -167,7 +167,7 @@ where
 			cf_primitives::ForeignChain::Arbitrum,
 			supported_arb_erc20_assets,
 		)
-		.continuous("Vault", db)
+		.continuous("Vault".to_string(), db)
 		.logging("Vault")
 		.spawn(scope);
 

@@ -132,7 +132,7 @@ where
 	eth_safe_vault_source
 		.clone()
 		.key_manager_witnessing(process_call.clone(), eth_client.clone(), key_manager_address)
-		.continuous("KeyManager", db.clone())
+		.continuous("KeyManager".to_string(), db.clone())
 		.logging("KeyManager")
 		.spawn(scope);
 
@@ -143,7 +143,7 @@ where
 			eth_client.clone(),
 			state_chain_gateway_address,
 		)
-		.continuous("StateChainGateway", db.clone())
+		.continuous("StateChainGateway".to_string(), db.clone())
 		.logging("StateChainGateway")
 		.spawn(scope);
 
@@ -156,7 +156,7 @@ where
 			usdc_contract_address,
 		)
 		.await?
-		.continuous("USDCDeposits", db.clone())
+		.continuous("USDCDeposits".to_string(), db.clone())
 		.logging("USDCDeposits")
 		.spawn(scope);
 
@@ -169,7 +169,7 @@ where
 			flip_contract_address,
 		)
 		.await?
-		.continuous("FlipDeposits", db.clone())
+		.continuous("FlipDeposits".to_string(), db.clone())
 		.logging("FlipDeposits")
 		.spawn(scope);
 
@@ -183,7 +183,7 @@ where
 			vault_address,
 		)
 		.await
-		.continuous("EthereumDeposits", db.clone())
+		.continuous("EthereumDeposits".to_string(), db.clone())
 		.logging("EthereumDeposits")
 		.spawn(scope);
 
@@ -196,7 +196,7 @@ where
 			cf_primitives::ForeignChain::Ethereum,
 			supported_erc20_tokens,
 		)
-		.continuous("Vault", db)
+		.continuous("Vault".to_string(), db)
 		.logging("Vault")
 		.spawn(scope);
 

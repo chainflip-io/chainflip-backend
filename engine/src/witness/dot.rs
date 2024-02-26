@@ -243,7 +243,7 @@ where
 				process_egress(epoch, header, process_call.clone(), dot_client.clone())
 			}
 		})
-		.continuous("Polkadot", db)
+		.continuous("Polkadot".to_string(), db)
 		.logging("witnessing")
 		.spawn(scope);
 
