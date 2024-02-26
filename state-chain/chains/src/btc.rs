@@ -242,6 +242,8 @@ pub struct BitcoinTransactionMetadata {
 	pub tx_hash: Hash,
 }
 impl BitcoinTransactionMetadata {
+	/// It creates a tx_hash by reversing the provided hash
+	/// Btc softwares and explorers display blocks/txs hashes as big endian values, we need to convert it to obtain a valid tx hash
 	pub fn new(hash: Hash) -> Self {
 		BitcoinTransactionMetadata { tx_hash: hash.iter().rev().copied().collect_array() }
 	}
