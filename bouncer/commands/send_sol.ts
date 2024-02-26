@@ -7,6 +7,8 @@
 //
 // For example: ./commands/send_sol.ts 7QQGNm3ptwinipDCyaCF7jY5katgmFUu1ieP2f7nwLpE 1.2
 // will send 1.2 SOL to account 7QQGNm3ptwinipDCyaCF7jY5katgmFUu1ieP2f7nwLpE
+// It also accepts non-encoded bs58 address representations:
+// ./commands/send_sol.ts 0x2f3fcadf740018f6037513959bab60d0dbef26888d264d54fc4d3d36c8cf5c91 1.2
 
 import { runWithTimeout } from '../shared/utils';
 import { sendSol } from '../shared/send_sol';

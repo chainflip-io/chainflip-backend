@@ -13,6 +13,7 @@ pub struct AddressSignatures<Api, K> {
 	call_api: Api,
 	address: Address,
 	starting_with_slot: Option<SlotNumber>,
+	ending_with_slot: Option<SlotNumber>,
 	after_transaction: Option<Signature>,
 	max_page_size: usize,
 	poll_interval: Duration,
@@ -27,6 +28,7 @@ impl<Api, K> AddressSignatures<Api, K> {
 			call_api,
 			address,
 			starting_with_slot: None,
+			ending_with_slot: None,
 			after_transaction: None,
 			max_page_size: DEFAULT_MAX_PAGE_SIZE,
 			poll_interval: DEFAULT_POLL_INTERVAL,
@@ -39,7 +41,9 @@ impl<Api, K> AddressSignatures<Api, K> {
 	pub fn starting_with_slot(self, slot: SlotNumber) -> Self {
 		Self { starting_with_slot: Some(slot), ..self }
 	}
-	// TODO: `fn ending_with_slot(self, slot: SlotNumber) -> Self`
+	pub fn ending_with_slot(self, slot: SlotNumber) -> Self {
+		Self { ending_with_slot: Some(slot), ..self }
+	}
 	pub fn after_transaction(self, tx_id: Signature) -> Self {
 		Self { after_transaction: Some(tx_id), ..self }
 	}
@@ -87,6 +91,7 @@ where
 					&mut history,
 					self.address,
 					self.starting_with_slot,
+					self.ending_with_slot,
 					last_signature,
 					self.max_page_size,
 				)
@@ -115,6 +120,7 @@ async fn get_transaction_history<Api>(
 
 	address: Address,
 	starting_with_slot: Option<SlotNumber>,
+	ending_with_slot: Option<SlotNumber>,
 	after_tx: Option<Signature>,
 
 	max_page_size: usize,
@@ -130,6 +136,7 @@ where
 			output,
 			address,
 			starting_with_slot,
+			ending_with_slot,
 			after_tx,
 			before_tx,
 			max_page_size,
@@ -150,6 +157,7 @@ async fn get_single_page<Api>(
 
 	address: Address,
 	starting_with_slot: Option<SlotNumber>,
+	ending_with_slot: Option<SlotNumber>,
 	after_tx: Option<Signature>,
 	before_tx: Option<Signature>,
 
@@ -171,8 +179,14 @@ where
 	let mut row_count = 0;
 	let mut reference_signature = None;
 	let signatures = page
+		// the page is sorted newest-to-oldest
 		.into_iter()
-		.take_while(|e| starting_with_slot.map(|s| s <= e.slot).unwrap_or(true))
+		// skip those entries `e` for which `e.slot` is strictly higher than `ending_with_slot`
+		// (if the latter is not specified — do not skip)
+		.skip_while(|e| ending_with_slot.map(|s| e.slot > s).unwrap_or(false))
+		// take those entries `e` for which `e.slot` is greater than or equal to
+		// `starting_with_slot` (if the latter is not specified — take it anyway)
+		.take_while(|e| starting_with_slot.map(|s| e.slot >= s).unwrap_or(true))
 		.map(|e| {
 			row_count += 1;
 			reference_signature = Some(e.signature);

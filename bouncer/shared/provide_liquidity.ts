@@ -13,7 +13,6 @@ import {
   isWithinOnePercent,
   chainFromAsset,
   decodeSolAddress,
-  encodeSolAddress,
 } from '../shared/utils';
 import { send } from '../shared/send';
 
@@ -61,7 +60,7 @@ export async function provideLiquidity(ccy: Asset, amount: number, waitForFinali
       .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
   });
 
-  let ingressAddress = (await eventHandle).data.depositAddress[chain];
+  const ingressAddress = (await eventHandle).data.depositAddress[chain];
 
   console.log('Received ' + ccy + ' address: ' + ingressAddress);
   console.log('Sending ' + amount + ' ' + ccy + ' to ' + ingressAddress);
@@ -77,9 +76,6 @@ export async function provideLiquidity(ccy: Asset, amount: number, waitForFinali
     undefined,
     waitForFinalization,
   );
-  console.log('Ingress Address before encode: ' + ingressAddress);
-  ingressAddress = ccy === 'SOL' ? encodeSolAddress(ingressAddress) : ingressAddress;
-  console.log('Ingress Address after encode: ' + ingressAddress);
   await send(ccy, ingressAddress, String(amount));
 
   await eventHandle;

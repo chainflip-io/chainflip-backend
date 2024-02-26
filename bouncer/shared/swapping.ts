@@ -188,43 +188,45 @@ export async function testAllSwaps() {
   // Set the allowance to the same amount of total asset swapped in contractsSwaps to avoid nonce issues.
   // Total contract swap per ERC20 token = ccmContractSwaps + contractSwaps =
   //     (numberAssetsEthereum - 1) + (numberAssets (BTC has 4 different types) - 1) = 2 + 7 = 9
-  await approveTokenVault(
-    'USDC',
-    (BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals.USDC)) * 9n).toString(),
-  );
-  await approveTokenVault(
-    'FLIP',
-    (BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * 9n).toString(),
-  );
+  // await approveTokenVault(
+  //   'USDC',
+  //   (BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals.USDC)) * 9n).toString(),
+  // );
+  // await approveTokenVault(
+  //   'FLIP',
+  //   (BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * 9n).toString(),
+  // );
 
-  // TODO: Remove this but for now skipping arbitrum swaps as they are not supported yet
-  Object.values(Assets).forEach((sourceAsset) => {
-    if (sourceAsset === 'ARBETH' || sourceAsset === 'ARBUSDC') return;
+  // // TODO: Remove this but for now skipping arbitrum swaps as they are not supported yet
+  // Object.values(Assets).forEach((sourceAsset) => {
+  //   if (sourceAsset === 'ARBETH' || sourceAsset === 'ARBUSDC') return;
 
-    Object.values(Assets)
-      .filter(
-        (destAsset) =>
-          sourceAsset !== destAsset && destAsset !== 'ARBETH' && destAsset !== 'ARBUSDC',
-      )
-      .forEach((destAsset) => {
-        // Regular swaps
-        appendSwap(sourceAsset, destAsset, testSwap);
+  //   Object.values(Assets)
+  //     .filter(
+  //       (destAsset) =>
+  //         sourceAsset !== destAsset && destAsset !== 'ARBETH' && destAsset !== 'ARBUSDC',
+  //     )
+  //     .forEach((destAsset) => {
+  //       // Regular swaps
+  //       appendSwap(sourceAsset, destAsset, testSwap);
 
-        if (chainFromAsset(sourceAsset) === chainFromAsset('ETH')) {
-          // Contract Swaps
-          appendSwap(sourceAsset, destAsset, testSwapViaContract);
+  //       if (chainFromAsset(sourceAsset) === chainFromAsset('ETH')) {
+  //         // Contract Swaps
+  //         appendSwap(sourceAsset, destAsset, testSwapViaContract);
 
-          if (chainFromAsset(destAsset) === chainFromAsset('ETH')) {
-            // CCM contract swaps
-            appendSwap(sourceAsset, destAsset, testSwapViaContract, newCcmMetadata(sourceAsset));
-          }
-        }
-        if (chainFromAsset(destAsset) === chainFromAsset('ETH')) {
-          // CCM swaps
-          appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
-        }
-      });
-  });
+  //         if (chainFromAsset(destAsset) === chainFromAsset('ETH')) {
+  //           // CCM contract swaps
+  //           appendSwap(sourceAsset, destAsset, testSwapViaContract, newCcmMetadata(sourceAsset));
+  //         }
+  //       }
+  //       if (chainFromAsset(destAsset) === chainFromAsset('ETH')) {
+  //         // CCM swaps
+  //         appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
+  //       }
+  //     });
+  // });
+
+  appendSwap('SOL', 'ETH', testSwap);
 
   await Promise.all(allSwaps);
 

@@ -8,15 +8,15 @@ use std::{
 use futures::Stream;
 
 pub trait DeduplicateStreamExt: Stream + Sized {
-	fn deduplicate<Value, ExtractValue, OnDuplicate>(
+	fn deduplicate<Value, ExtractKey, OnDuplicate>(
 		self,
 		backlog_size: usize,
-		extract_value: ExtractValue,
+		extract_value: ExtractKey,
 		on_duplicate: OnDuplicate,
-	) -> DeduplicateStream<Self, Value, ExtractValue, OnDuplicate>
+	) -> DeduplicateStream<Self, Value, ExtractKey, OnDuplicate>
 	where
 		Value: Clone + Eq + Hash,
-		ExtractValue: Fn(&Self::Item) -> Option<Value>,
+		ExtractKey: Fn(&Self::Item) -> Option<Value>,
 		OnDuplicate: FnMut(Value, Self::Item),
 	{
 		DeduplicateStream::new(self, backlog_size, extract_value, on_duplicate)
@@ -25,18 +25,18 @@ pub trait DeduplicateStreamExt: Stream + Sized {
 
 #[derive(Debug, Clone)]
 #[pin_project::pin_project]
-pub struct DeduplicateStream<Stream, Value, ExtractValue, OnDuplicate> {
+pub struct DeduplicateStream<Stream, Value, ExtractKey, OnDuplicate> {
 	#[pin]
 	inner: Stream,
 	backlog_size: usize,
 	queue: VecDeque<Value>,
 	set: HashSet<Value>,
-	extract_value: ExtractValue,
+	extract_value: ExtractKey,
 	on_duplicate: OnDuplicate,
 }
 
-impl<S, V, X, D> DeduplicateStream<S, V, X, D> {
-	pub fn new(inner: S, backlog_size: usize, extract_value: X, on_duplicate: D) -> Self {
+impl<S, V, K, D> DeduplicateStream<S, V, K, D> {
+	pub fn new(inner: S, backlog_size: usize, extract_value: K, on_duplicate: D) -> Self {
 		Self {
 			inner,
 			backlog_size,
@@ -50,11 +50,11 @@ impl<S, V, X, D> DeduplicateStream<S, V, X, D> {
 
 impl<S> DeduplicateStreamExt for S where S: Sized + Stream {}
 
-impl<S, V, X, D> Stream for DeduplicateStream<S, V, X, D>
+impl<S, V, K, D> Stream for DeduplicateStream<S, V, K, D>
 where
 	S: Stream,
 	V: Clone + Eq + Hash,
-	X: Fn(&S::Item) -> Option<V>,
+	K: Fn(&S::Item) -> Option<V>,
 	D: FnMut(V, S::Item),
 {
 	type Item = S::Item;

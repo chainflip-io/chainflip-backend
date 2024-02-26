@@ -91,21 +91,15 @@ pub trait AddressConverter: Sized {
 impl core::fmt::Display for EncodedAddress {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		match self {
-			EncodedAddress::Eth(addr) => {
-				write!(f, "0x{}", hex::encode(&addr[..]))
-			},
-			EncodedAddress::Dot(addr) => {
-				write!(f, "0x{}", hex::encode(&addr[..]))
-			},
-			EncodedAddress::Btc(addr) => {
-				write!(
-					f,
-					"{}",
-					std::str::from_utf8(addr)
-						.unwrap_or("The address cant be decoded from the utf8 encoded bytes")
-				)
-			},
-			EncodedAddress::Sol(addr) => write!(f, "{}", base58::ToBase58::to_base58(&addr[..])),
+			EncodedAddress::Eth(addr) => write!(f, "0x{}", hex::encode(&addr[..])),
+			EncodedAddress::Dot(addr) => write!(f, "0x{}", hex::encode(&addr[..])),
+			EncodedAddress::Btc(addr) => write!(
+				f,
+				"{}",
+				std::str::from_utf8(addr)
+					.unwrap_or("The address cant be decoded from the utf8 encoded bytes")
+			),
+			EncodedAddress::Sol(addr) => core::fmt::Display::fmt(&SolAddress(*addr), f),
 		}
 	}
 }

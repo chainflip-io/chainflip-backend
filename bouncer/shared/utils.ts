@@ -701,6 +701,10 @@ export function encodeSolAddress(address: string): string {
   return base58Encode(hexToU8a(address));
 }
 
+export function getEncodedSolAddress(address: string): string {
+  return /^0x[a-fA-F0-9]+$/.test(address) ? encodeSolAddress(address) : address;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function handleSubstrateError(api: any) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

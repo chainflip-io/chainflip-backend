@@ -14,12 +14,15 @@ use crate::{
 		storage_api::StorageApi,
 		stream_api::{StreamApi, FINALIZED},
 	},
+	witness::{common::epoch_source::EpochSource, sol::epoch_stream::epoch_stream},
 };
 
 use super::common::epoch_source::EpochSourceBuilder;
 
 mod deposit_addresses;
+mod epoch_stream;
 mod tracked_data;
+mod zip_with_latest;
 
 const SOLANA_SIGNATURES_FOR_TRANSACTION_PAGE_SIZE: usize = 100;
 const SOLANA_SIGNATURES_FOR_TRANSACTION_POLL_INTERVAL: Duration = Duration::from_secs(5);
@@ -60,14 +63,17 @@ where
 
 	tracing::info!("solana vault address: {}", vault_address);
 
+	let epoch_source = EpochSource::from(epoch_source);
+
 	scope.spawn(tracked_data::track_chain_state(
-		epoch_source.into(),
+		epoch_stream(epoch_source.clone()).await,
 		Arc::clone(&sol_client),
 		process_call.clone(),
 		state_chain_client.clone(),
 	));
 
 	scope.spawn(deposit_addresses::track_deposit_addresses(
+		epoch_source,
 		sol_client,
 		process_call,
 		state_chain_client,

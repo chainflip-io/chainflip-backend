@@ -6,6 +6,8 @@
 //
 // For example: ./commands/get_sol_balance.ts 7QQGNm3ptwinipDCyaCF7jY5katgmFUu1ieP2f7nwLpE
 // might print: 1.2
+// It also accepts non-encoded bs58 address representations:
+// ./commands/get_sol_balance.ts 0x2f3fcadf740018f6037513959bab60d0dbef26888d264d54fc4d3d36c8cf5c91
 
 import { runWithTimeout } from '../shared/utils';
 import { getSolBalance } from '../shared/get_sol_balance';
