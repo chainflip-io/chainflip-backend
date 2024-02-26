@@ -18,7 +18,7 @@ use cf_primitives::{
 	chains::assets, NetworkEnvironment, DEFAULT_FEE_SATS_PER_KILOBYTE, INPUT_UTXO_SIZE_IN_BYTES,
 	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES, VAULT_UTXO_SIZE_IN_BYTES,
 };
-use cf_utilities::SliceToArray;
+use cf_utilities::{ArrayCollect, SliceToArray};
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::{cmp::max, mem::size_of};
 use frame_support::{
@@ -241,7 +241,11 @@ impl ConsolidationParameters {
 pub struct BitcoinTransactionMetadata {
 	pub tx_hash: Hash,
 }
-
+impl BitcoinTransactionMetadata {
+	pub fn new(hash: Hash) -> Self {
+		BitcoinTransactionMetadata { tx_hash: hash.iter().rev().copied().collect_array() }
+	}
+}
 impl<C: Chain<TransactionRef = Hash>> TransactionMetadata<C> for BitcoinTransactionMetadata {
 	fn extract_metadata(_transaction: &<C as Chain>::Transaction) -> Self {
 		Default::default()
@@ -1456,5 +1460,17 @@ mod test {
 		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(30), Some(32));
 		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(40), Some(1200));
 		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(150), Some(1200));
+	}
+
+	#[test]
+	fn btc_transaction_hash_correctly_derived() {
+		let tx_out_id: Hash = [
+			0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+			24, 25, 26, 27, 28, 29, 30, 31,
+		];
+		let tx_metadata: BitcoinTransactionMetadata = BitcoinTransactionMetadata::new(tx_out_id);
+		for (i, item) in tx_out_id.iter().enumerate() {
+			assert_eq!(*item, tx_metadata.tx_hash[31 - i]);
+		}
 	}
 }
