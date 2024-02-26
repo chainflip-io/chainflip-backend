@@ -237,6 +237,7 @@ export async function testAllSwaps() {
   );
 
   // appendSwap('ETH', 'ARBETH', testSwap, newCcmMetadata('ETH'));
+  // appendSwap('ETH', 'ARBETH', testSwap);
 
   await Promise.all(allSwaps);
 
