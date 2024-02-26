@@ -7,7 +7,7 @@ pub use super::common::*;
 // Bitcoin blocks are 5 seconds on localnets.
 pub const BITCOIN_EXPIRY_BLOCKS: u32 = 10 * 60 / 5;
 pub const ETHEREUM_EXPIRY_BLOCKS: u32 = 10 * 60 / 14;
-pub const ARBITRUM_EXPIRY_BLOCKS: u32 = 10 * 60 / 14; //TODO: to be set!
+pub const ARBITRUM_EXPIRY_BLOCKS: u32 = 10 * 60 * 4;
 pub const POLKADOT_EXPIRY_BLOCKS: u32 = 10 * 60 / 6;
 
 pub const MIN_AUTHORITIES: AuthorityCount = 1;

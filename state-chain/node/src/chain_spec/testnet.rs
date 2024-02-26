@@ -15,7 +15,7 @@ pub const PROTOCOL_ID: &str = "flip-test";
 // These represent approximately 2 hours on testnet block times
 pub const BITCOIN_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / (10 * 60);
 pub const ETHEREUM_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / 14;
-pub const ARBITRUM_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / 14; // TODO: to be set
+pub const ARBITRUM_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 * 4;
 pub const POLKADOT_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / 6;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
