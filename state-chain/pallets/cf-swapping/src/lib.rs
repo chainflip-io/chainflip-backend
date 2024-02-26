@@ -66,6 +66,10 @@ pub struct SwapLegInfo {
 	pub quote_asset: Asset,
 	pub side: Side,
 	pub amount: AssetAmount,
+	#[cfg_attr(feature = "std", serde(skip_serializing_if = "Option::is_none"))]
+	pub source_asset: Option<Asset>,
+	#[cfg_attr(feature = "std", serde(skip_serializing_if = "Option::is_none"))]
+	pub source_amount: Option<AssetAmount>,
 }
 
 impl Swap {
@@ -689,8 +693,18 @@ pub mod pallet {
 							quote_asset: STABLE_ASSET,
 							side: Side::Sell,
 							amount: swap.amount,
+							source_asset: None,
+							source_amount: None,
 						})
 					} else if swap.to == base_asset {
+						// In case the swap is "simulated", the amount is just an estimate,
+						// so we additionally include `source_asset` and `source_amount`:
+						let (source_asset, source_amount) = if swap.from != STABLE_ASSET {
+							(Some(swap.from), Some(swap.amount))
+						} else {
+							(None, None)
+						};
+
 						Some(SwapLegInfo {
 							swap_id: swap.swap_id,
 							base_asset,
@@ -700,6 +714,8 @@ pub mod pallet {
 							// Safe to unwrap as we have swapped everything into the stable asset at
 							// this point
 							amount: swap.stable_amount.unwrap(),
+							source_asset,
+							source_amount,
 						})
 					} else {
 						None

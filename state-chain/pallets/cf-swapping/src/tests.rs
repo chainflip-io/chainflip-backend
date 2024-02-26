@@ -2175,6 +2175,8 @@ fn test_get_scheduled_swap_legs() {
 					quote_asset: Asset::Usdc,
 					side: Side::Sell,
 					amount: INIT_AMOUNT,
+					source_asset: None,
+					source_amount: None,
 				},
 				SwapLegInfo {
 					swap_id: 2,
@@ -2182,13 +2184,17 @@ fn test_get_scheduled_swap_legs() {
 					quote_asset: Asset::Usdc,
 					side: Side::Buy,
 					amount: INIT_AMOUNT,
+					source_asset: None,
+					source_amount: None,
 				},
 				SwapLegInfo {
 					swap_id: 4,
 					base_asset: Asset::Flip,
 					quote_asset: Asset::Usdc,
 					side: Side::Sell,
-					amount: INIT_AMOUNT
+					amount: INIT_AMOUNT,
+					source_asset: None,
+					source_amount: None,
 				},
 				SwapLegInfo {
 					swap_id: 5,
@@ -2196,6 +2202,8 @@ fn test_get_scheduled_swap_legs() {
 					quote_asset: Asset::Usdc,
 					side: Side::Buy,
 					amount: INTERMEDIATE_AMOUNT,
+					source_asset: Some(Asset::Eth),
+					source_amount: Some(INIT_AMOUNT),
 				},
 			]
 		);
