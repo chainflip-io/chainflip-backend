@@ -322,6 +322,12 @@ pub trait CustomApi {
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcAccountInfo>;
+	#[method(name = "account_info_v2")]
+	fn cf_account_info_v2(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcAccountInfoV2>;
 	#[method(name = "asset_balances")]
 	fn cf_asset_balances(
 		&self,
@@ -698,6 +704,34 @@ where
 				},
 			},
 		)
+	}
+
+	fn cf_account_info_v2(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<<B as BlockT>::Hash>,
+	) -> RpcResult<RpcAccountInfoV2> {
+		let account_info = self
+			.client
+			.runtime_api()
+			.cf_validator_info(self.unwrap_or_best(at), &account_id)
+			.map_err(to_rpc_error)?;
+
+		Ok(RpcAccountInfoV2 {
+			balance: account_info.balance.into(),
+			bond: account_info.bond.into(),
+			last_heartbeat: account_info.last_heartbeat,
+			reputation_points: account_info.reputation_points,
+			keyholder_epochs: account_info.keyholder_epochs,
+			is_current_authority: account_info.is_current_authority,
+			is_current_backup: account_info.is_current_backup,
+			is_qualified: account_info.is_qualified,
+			is_online: account_info.is_online,
+			is_bidding: account_info.is_bidding,
+			bound_redeem_address: account_info.bound_redeem_address,
+			apy_bp: account_info.apy_bp,
+			restricted_balances: account_info.restricted_balances,
+		})
 	}
 
 	fn cf_asset_balances(
