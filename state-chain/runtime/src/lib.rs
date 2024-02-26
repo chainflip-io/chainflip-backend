@@ -109,7 +109,7 @@ pub use cf_traits::{
 pub use pallet_cf_validator::SetSizeParameters;
 
 use chainflip::{
-	all_vault_activator::EvmVaultActivator, epoch_transition::ChainflipEpochTransitions,
+	epoch_transition::ChainflipEpochTransitions, evm_vault_activator::EvmVaultActivator,
 	BroadcastReadyProvider, BtcEnvironment, ChainAddressConverter, ChainflipHeartbeat,
 	DotEnvironment, EvmEnvironment, TokenholderGovernanceBroadcaster,
 };
