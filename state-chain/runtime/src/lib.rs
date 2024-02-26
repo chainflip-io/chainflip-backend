@@ -1427,9 +1427,15 @@ impl_runtime_apis! {
 
 		fn cf_scheduled_swaps(base_asset: Asset, _quote_asset: Asset) -> Vec<ScheduledSwap> {
 
+			let current_block = System::block_number();
+
 			pallet_cf_swapping::SwapQueue::<Runtime>::iter().flat_map(|(block, swaps_for_block)| {
+
+				// In case `block` has already passed, the swaps will be re-tried at the next block:
+				let execute_at = if block > current_block { block } else { current_block.saturating_add(1) };
+
 				let swaps: Vec<_> = swaps_for_block.iter().filter(|swap| swap.from == base_asset || swap.to == base_asset).cloned().collect();
-				Swapping::get_scheduled_swap_legs(swaps, base_asset).unwrap().into_iter().map(move |swap| ScheduledSwap {swap, execute_at: block })
+				Swapping::get_scheduled_swap_legs(swaps, base_asset).unwrap().into_iter().map(move |swap| ScheduledSwap {swap, execute_at })
 			}).collect()
 	}
 
