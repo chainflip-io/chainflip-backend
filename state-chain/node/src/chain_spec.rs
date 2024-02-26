@@ -613,6 +613,12 @@ fn testnet_genesis(
 
 		ethereum_vault: state_chain_runtime::EthereumVaultConfig {
 			deployment_block: Some(ethereum_deployment_block),
+			chain_initialized: true,
+		},
+
+		arbitrum_vault: state_chain_runtime::ArbitrumVaultConfig {
+			deployment_block: None,
+			chain_initialized: false,
 		},
 
 		evm_threshold_signer: state_chain_runtime::EvmThresholdSignerConfig {
@@ -696,7 +702,6 @@ fn testnet_genesis(
 		liquidity_pools: Default::default(),
 		bitcoin_vault: Default::default(),
 		polkadot_vault: Default::default(),
-		arbitrum_vault: Default::default(),
 		system: Default::default(),
 		transaction_payment: Default::default(),
 	})

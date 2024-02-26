@@ -148,7 +148,7 @@ pub trait Chain: Member + Parameter {
 }
 
 /// Common crypto-related types and operations for some external chain.
-pub trait ChainCrypto {
+pub trait ChainCrypto: PalletInstanceAlias {
 	type UtxoChain: Get<bool>;
 
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
@@ -199,6 +199,11 @@ pub trait ChainCrypto {
 	/// broadcast
 	fn maybe_broadcast_barriers_on_rotation(rotation_broadcast_id: BroadcastId)
 		-> Vec<BroadcastId>;
+}
+
+/// Allows a type to be used as an alias for a pallet `Instance`.
+pub trait PalletInstanceAlias {
+	type Instance: Send + Sync + 'static;
 }
 
 /// Provides chain-specific replay protection data.

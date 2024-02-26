@@ -2,6 +2,7 @@
 pub mod api;
 
 pub mod benchmarking;
+use frame_support::instances::Instance4;
 
 use crate::{
 	evm::{DeploymentStatus, EvmFetchId},
@@ -45,6 +46,11 @@ impl Chain for Arbitrum {
 	type ReplayProtectionParams = Self::ChainAccount;
 	type ReplayProtection = evm::api::EvmReplayProtection;
 }
+
+impl PalletInstanceAlias for Arbitrum {
+	type Instance = Instance4;
+}
+pub type ArbitrumInstance = <Arbitrum as PalletInstanceAlias>::Instance;
 
 #[derive(
 	Copy,

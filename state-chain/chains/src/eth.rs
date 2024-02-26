@@ -17,7 +17,10 @@ pub use ethabi::{
 	Address, Hash as TxHash, Token, Uint, Word,
 };
 use evm::api::EvmReplayProtection;
-use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug};
+use frame_support::{
+	instances::Instance1,
+	sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug},
+};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{cmp::min, convert::TryInto, str};
@@ -48,6 +51,12 @@ impl Chain for Ethereum {
 	type ReplayProtectionParams = Self::ChainAccount;
 	type ReplayProtection = EvmReplayProtection;
 }
+
+impl PalletInstanceAlias for Ethereum {
+	type Instance = Instance1;
+}
+pub type EthereumInstance = <Ethereum as PalletInstanceAlias>::Instance;
+
 #[derive(
 	Copy,
 	Clone,

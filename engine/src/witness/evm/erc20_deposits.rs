@@ -1,12 +1,11 @@
 use std::collections::HashSet;
 
-use cf_chains::Chain;
+use cf_chains::PalletInstanceAlias;
 use cf_primitives::EpochIndex;
 use ethers::types::{Bloom, H160};
 use futures_core::Future;
 use pallet_cf_ingress_egress::DepositWitness;
 use sp_core::{H256, U256};
-use state_chain_runtime::PalletInstanceAlias;
 
 use crate::{
 	eth::retry_rpc::EthersRetryRpcApi,
@@ -87,7 +86,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			+ Into<Erc20Events>
 			+ 'static,
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-		<Inner::Chain as Chain>::ChainCrypto: PalletInstanceAlias,
 		state_chain_runtime::RuntimeCall:
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
 	{

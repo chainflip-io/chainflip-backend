@@ -108,6 +108,11 @@ pub mod pallet {
 	pub type PendingVaultActivation<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, VaultActivationStatus<T, I>>;
 
+	/// Whether this chain is initialized.
+	#[pallet::storage]
+	#[pallet::getter(fn vault_initialized)]
+	pub type ChainInitialized<T: Config<I>, I: 'static = ()> = StorageValue<_, bool, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -174,11 +179,12 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub deployment_block: Option<ChainBlockNumberFor<T, I>>,
+		pub chain_initialized: bool,
 	}
 
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
-			Self { deployment_block: None }
+			Self { deployment_block: None, chain_initialized: true }
 		}
 	}
 
@@ -193,6 +199,7 @@ pub mod pallet {
 			} else {
 				log::info!("No genesis vault key configured for {}.", Pallet::<T, I>::name());
 			}
+			ChainInitialized::<T, I>::put(self.chain_initialized);
 		}
 	}
 }

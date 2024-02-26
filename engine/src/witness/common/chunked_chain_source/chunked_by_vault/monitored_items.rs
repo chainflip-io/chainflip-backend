@@ -1,10 +1,9 @@
 use std::sync::Arc;
 
-use cf_chains::{Chain, ChainState};
+use cf_chains::{ChainState, PalletInstanceAlias};
 use frame_support::CloneNoBound;
 use futures::Future;
 use futures_util::{stream, StreamExt};
-use state_chain_runtime::PalletInstanceAlias;
 use tokio::sync::watch;
 use utilities::{
 	loop_select,
@@ -51,7 +50,6 @@ fn is_header_ready<Inner: ChunkedByVault>(
 pub struct MonitoredSCItems<Inner: ChunkedByVault, MonitoredItems, ItemFilter>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-	<Inner::Chain as Chain>::ChainCrypto: PalletInstanceAlias,
 	MonitoredItems: Send + Sync + 'static,
 	ItemFilter: Fn(Inner::Index, &MonitoredItems) -> MonitoredItems + Send + Sync + Clone + 'static,
 {
@@ -64,7 +62,6 @@ impl<Inner: ChunkedByVault, MonitoredItems, ItemFilter>
 	MonitoredSCItems<Inner, MonitoredItems, ItemFilter>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-	<Inner::Chain as Chain>::ChainCrypto: PalletInstanceAlias,
 	MonitoredItems: Send + Sync + 'static,
 	ItemFilter: Fn(Inner::Index, &MonitoredItems) -> MonitoredItems + Send + Sync + Clone + 'static,
 {
@@ -142,7 +139,6 @@ impl<Inner: ChunkedByVault, MonitoredItems, ItemFilter> ChunkedByVault
 	for MonitoredSCItems<Inner, MonitoredItems, ItemFilter>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-	<Inner::Chain as Chain>::ChainCrypto: PalletInstanceAlias,
 	MonitoredItems: Send + Sync + Unpin + 'static,
 	ItemFilter: Fn(Inner::Index, &MonitoredItems) -> MonitoredItems + Send + Sync + Clone + 'static,
 {
@@ -171,8 +167,7 @@ where
 				struct State<Inner: ChunkedByVault, MonitoredItems, ItemFilter>
 				where
 					state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-					<Inner::Chain as Chain>::ChainCrypto: PalletInstanceAlias,
-					MonitoredItems: Send + Sync + 'static,
+										MonitoredItems: Send + Sync + 'static,
 					ItemFilter: Fn(Inner::Index, &MonitoredItems) -> MonitoredItems
 						+ Send
 						+ Sync
@@ -189,8 +184,7 @@ where
 				impl<Inner: ChunkedByVault, MonitoredItems, ItemFilter> State<Inner, MonitoredItems, ItemFilter>
 				where
 					state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-					<Inner::Chain as Chain>::ChainCrypto: PalletInstanceAlias,
-					MonitoredItems: Send + Sync + 'static,
+										MonitoredItems: Send + Sync + 'static,
 					ItemFilter: Fn(Inner::Index, &MonitoredItems) -> MonitoredItems
 						+ Send
 						+ Sync
@@ -264,7 +258,6 @@ where
 pub struct MonitoredSCItemsClient<Inner: ChunkedByVault, MonitoredItems, ItemFilter>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-	<Inner::Chain as Chain>::ChainCrypto: PalletInstanceAlias,
 	ItemFilter: Fn(Inner::Index, &MonitoredItems) -> MonitoredItems + Send + Sync + Clone + 'static,
 {
 	inner_client: Inner::Client,
@@ -276,7 +269,6 @@ impl<Inner: ChunkedByVault, MonitoredItems, ItemFilter>
 	MonitoredSCItemsClient<Inner, MonitoredItems, ItemFilter>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-	<Inner::Chain as Chain>::ChainCrypto: PalletInstanceAlias,
 	ItemFilter: Fn(Inner::Index, &MonitoredItems) -> MonitoredItems + Send + Sync + Clone + 'static,
 {
 	pub fn new(
@@ -292,7 +284,6 @@ impl<Inner: ChunkedByVault, MonitoredItems, ItemFilter> ChainClient
 	for MonitoredSCItemsClient<Inner, MonitoredItems, ItemFilter>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-	<Inner::Chain as Chain>::ChainCrypto: PalletInstanceAlias,
 	MonitoredItems: Send + Sync + Unpin + 'static,
 	ItemFilter: Fn(Inner::Index, &MonitoredItems) -> MonitoredItems + Send + Sync + Clone + 'static,
 {

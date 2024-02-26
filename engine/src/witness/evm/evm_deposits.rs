@@ -3,12 +3,11 @@ use crate::{
 	witness::common::{RuntimeCallHasChain, RuntimeHasChain},
 };
 use anyhow::ensure;
-use cf_chains::Chain;
+use cf_chains::PalletInstanceAlias;
 use cf_primitives::EpochIndex;
 use ethers::types::Bloom;
 use futures_core::Future;
 use sp_core::H256;
-use state_chain_runtime::PalletInstanceAlias;
 
 use crate::witness::{
 	common::chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses,
@@ -59,7 +58,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		ProcessingFut: Future<Output = ()> + Send + 'static,
 		EthRetryRpcClient: EthersRetryRpcApi + AddressCheckerRetryRpcApi + Send + Sync + Clone,
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-		<Inner::Chain as Chain>::ChainCrypto: PalletInstanceAlias,
 		state_chain_runtime::RuntimeCall:
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
 	{

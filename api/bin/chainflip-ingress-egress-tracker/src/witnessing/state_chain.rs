@@ -298,7 +298,7 @@ mod tests {
 	use cf_chains::{
 		dot::PolkadotAccountId,
 		evm::{EvmTransactionMetadata, TransactionFee},
-		Chain,
+		Chain, PalletInstanceAlias,
 	};
 	use cf_primitives::{BroadcastId, NetworkEnvironment};
 	use chainflip_engine::state_chain_observer::client::{
@@ -313,7 +313,6 @@ mod tests {
 	use mockall::mock;
 	use pallet_cf_ingress_egress::DepositWitness;
 	use sp_core::{storage::StorageKey, H160};
-	use state_chain_runtime::PalletInstanceAlias;
 	use std::collections::HashMap;
 
 	#[derive(Default)]
