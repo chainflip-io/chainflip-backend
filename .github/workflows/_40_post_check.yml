@@ -13,6 +13,7 @@ on:
 
 env:
   FORCE_COLOR: 1
+  SOLANA_VERSION: v1.17.22
 
 permissions:
   packages: read
@@ -67,7 +68,7 @@ jobs:
 
       - name: Install solana
         run: |
-          sh -c "$(curl -sSfL https://release.solana.com/v1.17.16/install)"
+          sh -c "$(curl -sSfL https://release.solana.com/$SOLANA_VERSION/install)"
 
       - name: Start a localnet 🚀
         env:

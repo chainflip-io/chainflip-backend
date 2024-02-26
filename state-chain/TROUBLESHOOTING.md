@@ -77,7 +77,7 @@ Make sure to add `my-pallet/try-runtime` in the runtime's Cargo.toml, otherwise 
 ### Compile the node with benchmark features enabled
 
 ```bash
-cargo cf-build-with-benchmarks
+cargo cf-build-benchmarks
 ```
 
 ### Generating weight files

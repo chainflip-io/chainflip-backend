@@ -10,6 +10,7 @@ use cf_traits::{
 
 use sp_std::vec;
 
+use cf_chains::assets::any::AssetMap;
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -144,6 +145,11 @@ pub mod pallet {
 	/// Storage for user's free balances/ DoubleMap: (AccountId, Asset) => Balance
 	pub type FreeBalances<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, T::AccountId, Identity, Asset, AssetAmount>;
+
+	#[pallet::storage]
+	/// Historical earned fees for an account. Map: AccountId => AssetAmount
+	pub type HistoricalEarnedFees<T: Config> =
+		StorageMap<_, Twox64Concat, T::AccountId, AssetMap<AssetAmount>, ValueQuery>;
 
 	/// Stores the registered energency withdrawal address for an Account
 	#[pallet::storage]
@@ -379,6 +385,12 @@ impl<T: Config> LpBalanceApi for Pallet<T> {
 			amount_debited: amount,
 		});
 		Ok(())
+	}
+
+	fn record_fees(account_id: &Self::AccountId, amount: AssetAmount, asset: Asset) {
+		HistoricalEarnedFees::<T>::mutate(account_id, |fees| {
+			fees[asset] = fees[asset].saturating_add(amount);
+		});
 	}
 
 	fn asset_balances(who: &Self::AccountId) -> Vec<(Asset, AssetAmount)> {

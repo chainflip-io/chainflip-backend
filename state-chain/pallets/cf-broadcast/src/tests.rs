@@ -435,7 +435,7 @@ fn threshold_sign_and_broadcast_with_callback() {
 			tx_out_id: MOCK_TRANSACTION_OUT_ID,
 		};
 
-		let broadcast_id =
+		let (broadcast_id, _) =
 			Broadcaster::threshold_sign_and_broadcast(api_call.clone(), Some(MockCallback), |_| {
 				None
 			});
@@ -544,7 +544,7 @@ fn callback_is_called_upon_broadcast_failure() {
 			sig: Default::default(),
 			tx_out_id: MOCK_TRANSACTION_OUT_ID,
 		};
-		let broadcast_id =
+		let (broadcast_id, _) =
 			Broadcaster::threshold_sign_and_broadcast(api_call.clone(), None, |_| {
 				Some(MockCallback)
 			});
@@ -883,7 +883,7 @@ fn initiate_and_sign_broadcast(
 	api_call: &MockApiCall<MockEthereumChainCrypto>,
 	tx_type: TxType,
 ) -> BroadcastId {
-	let broadcast_id = match tx_type {
+	let (broadcast_id, _) = match tx_type {
 		TxType::Normal => <Broadcaster as BroadcasterTrait<
 			<Test as Config<Instance1>>::TargetChain,
 		>>::threshold_sign_and_broadcast((*api_call).clone()),

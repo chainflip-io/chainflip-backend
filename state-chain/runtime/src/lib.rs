@@ -12,12 +12,12 @@ mod weights;
 use crate::{
 	chainflip::{calculate_account_apy, Offence},
 	runtime_apis::{
-		AuctionState, DispatchErrorWithMessage, FailingWitnessValidators, LiquidityProviderInfo,
-		RuntimeApiAccountInfoV2, RuntimeApiPenalty,
+		AuctionState, BrokerInfo, DispatchErrorWithMessage, FailingWitnessValidators,
+		LiquidityProviderInfo, RuntimeApiPenalty, ValidatorInfo,
 	},
 };
 use cf_amm::{
-	common::{Amount, Order, Tick},
+	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -36,7 +36,7 @@ pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
 use pallet_cf_pools::{
-	AskBidMap, AssetPair, AssetsMap, PoolLiquidity, PoolOrderbook, PoolPriceV1, PoolPriceV2,
+	AskBidMap, AssetPair, PoolLiquidity, PoolOrderbook, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
 };
 use pallet_cf_reputation::ExclusionList;
@@ -493,7 +493,7 @@ impl pallet_grandpa::Config for Runtime {
 	type MaxNominators = ConstU32<0>;
 
 	type MaxSetIdSessionEntries = ConstU64<8>;
-	type KeyOwnerProof = <Historical as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
+	type KeyOwnerProof = sp_session::MembershipProof;
 	type EquivocationReportSystem = pallet_grandpa::EquivocationReportSystem<
 		Self,
 		GrandpaOffenceReporter<Self>,
@@ -900,7 +900,8 @@ type PalletMigrations = (
 	pallet_cf_environment::migrations::PalletMigration<Runtime>,
 	pallet_cf_funding::migrations::PalletMigration<Runtime>,
 	// pallet_cf_validator::migrations::PalletMigration<Runtime>,
-	// pallet_cf_governance::migrations::PalletMigration<Runtime>,
+	pallet_grandpa::migrations::MigrateV4ToV5<Runtime>,
+	pallet_cf_governance::migrations::PalletMigration<Runtime>,
 	// pallet_cf_tokenholder_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance1>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance2>,
@@ -1069,7 +1070,7 @@ impl_runtime_apis! {
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()
 		}
-		fn cf_account_info_v2(account_id: &AccountId) -> RuntimeApiAccountInfoV2 {
+		fn cf_validator_info(account_id: &AccountId) -> ValidatorInfo {
 			let is_current_backup = pallet_cf_validator::Backups::<Runtime>::get().contains_key(account_id);
 			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(account_id);
 			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode<_>>::is_qualified(account_id);
@@ -1080,7 +1081,7 @@ impl_runtime_apis! {
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(account_id);
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(account_id);
 			let restricted_balances = pallet_cf_funding::RestrictedBalances::<Runtime>::get(account_id);
-			RuntimeApiAccountInfoV2 {
+			ValidatorInfo {
 				balance: account_info.total(),
 				bond: account_info.bond(),
 				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(account_id).unwrap_or(0),
@@ -1185,7 +1186,7 @@ impl_runtime_apis! {
 			base_asset: Asset,
 			quote_asset: Asset,
 			tick_range: Range<cf_amm::common::Tick>,
-		) -> Result<AssetsMap<Amount>, DispatchErrorWithMessage> {
+		) -> Result<PoolPairsMap<Amount>, DispatchErrorWithMessage> {
 			LiquidityPools::required_asset_ratio_for_range_order(base_asset, quote_asset, tick_range).map_err(Into::into)
 		}
 
@@ -1210,7 +1211,7 @@ impl_runtime_apis! {
 			quote_asset: Asset,
 			tick_range: Range<Tick>,
 			liquidity: Liquidity,
-		) -> Result<AssetsMap<Amount>, DispatchErrorWithMessage> {
+		) -> Result<PoolPairsMap<Amount>, DispatchErrorWithMessage> {
 			LiquidityPools::pool_range_order_liquidity_value(base_asset, quote_asset, tick_range, liquidity).map_err(Into::into)
 		}
 
@@ -1283,27 +1284,32 @@ impl_runtime_apis! {
 			}
 		}
 
-
 		fn cf_liquidity_provider_info(
 			account_id: AccountId,
-		) -> Option<LiquidityProviderInfo> {
-			let role = Self::cf_account_role(account_id.clone())?;
-			if role != AccountRole::LiquidityProvider {
-				return None;
-			}
-
+		) -> LiquidityProviderInfo {
 			let refund_addresses = ForeignChain::iter().map(|chain| {
 				(chain, pallet_cf_lp::LiquidityRefundAddress::<Runtime>::get(&account_id, chain))
 			}).collect();
 
 			LiquidityPools::sweep(&account_id).unwrap();
 
-			Some(LiquidityProviderInfo {
+			LiquidityProviderInfo {
 				refund_addresses,
 				balances: Asset::all().map(|asset|
 					(asset, pallet_cf_lp::FreeBalances::<Runtime>::get(&account_id, asset).unwrap_or(0))
 				).collect(),
-			})
+				earned_fees: pallet_cf_lp::HistoricalEarnedFees::<Runtime>::get(&account_id),
+			}
+		}
+
+		fn cf_broker_info(
+			account_id: AccountId,
+		) -> BrokerInfo {
+			let earned_fees = Asset::all().map(|asset|
+				(asset, Swapping::earned_broker_fees(&account_id, asset))
+			).collect();
+
+			BrokerInfo { earned_fees }
 		}
 
 		fn cf_account_role(account_id: AccountId) -> Option<AccountRole> {
@@ -1316,7 +1322,7 @@ impl_runtime_apis! {
 
 		/// This should *not* be fully trusted as if the deposits that are pre-witnessed will definitely go through.
 		/// This returns a list of swaps in the requested direction that are pre-witnessed in the current block.
-		fn cf_prewitness_swaps(base_asset: Asset, quote_asset: Asset, side: Order) -> Vec<AssetAmount> {
+		fn cf_prewitness_swaps(base_asset: Asset, quote_asset: Asset, side: Side) -> Vec<AssetAmount> {
 			let (from, to) = AssetPair::to_swap(base_asset, quote_asset, side);
 
 			fn filter_deposit_swaps<C, I: 'static>(from: Asset, to: Asset, deposit_witnesses: Vec<DepositWitness<C>>) -> Vec<AssetAmount>

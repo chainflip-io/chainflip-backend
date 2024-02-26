@@ -40,42 +40,51 @@ pub enum SetFeesError {
 	Hash,
 )]
 #[serde(rename_all = "snake_case")]
-pub enum Order {
+pub enum Side {
 	Buy,
 	Sell,
 }
-impl Order {
-	pub fn to_sold_side(&self) -> Side {
+impl Side {
+	pub fn to_sold_pair(&self) -> Pairs {
 		match self {
-			Order::Buy => Side::One,
-			Order::Sell => Side::Zero,
+			Side::Buy => Pairs::Quote,
+			Side::Sell => Pairs::Base,
 		}
 	}
 }
-impl core::ops::Not for Order {
-	type Output = Self;
-
-	fn not(self) -> Self::Output {
-		match self {
-			Order::Sell => Order::Buy,
-			Order::Buy => Order::Sell,
-		}
-	}
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub enum Side {
-	Zero,
-	One,
-}
-
 impl core::ops::Not for Side {
 	type Output = Self;
 
 	fn not(self) -> Self::Output {
 		match self {
-			Side::Zero => Side::One,
-			Side::One => Side::Zero,
+			Side::Sell => Side::Buy,
+			Side::Buy => Side::Sell,
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Encode, Decode, MaxEncodedLen, TypeInfo)]
+pub enum Pairs {
+	Base,
+	Quote,
+}
+
+impl core::ops::Not for Pairs {
+	type Output = Self;
+
+	fn not(self) -> Self::Output {
+		match self {
+			Pairs::Base => Pairs::Quote,
+			Pairs::Quote => Pairs::Base,
+		}
+	}
+}
+
+impl Pairs {
+	pub fn sell_order(&self) -> Side {
+		match self {
+			Pairs::Base => Side::Sell,
+			Pairs::Quote => Side::Buy,
 		}
 	}
 }
@@ -95,69 +104,81 @@ impl core::ops::Not for Side {
 	Serialize,
 	Deserialize,
 )]
-pub struct SideMap<T> {
-	pub zero: T,
-	pub one: T,
+pub struct PoolPairsMap<T> {
+	pub base: T,
+	pub quote: T,
 }
-impl<T> SideMap<T> {
+
+impl<T> PoolPairsMap<T> {
 	pub fn from_array(array: [T; 2]) -> Self {
-		let [zero, one] = array;
-		Self { zero, one }
+		let [base, quote] = array;
+		Self { base, quote }
 	}
 
-	pub fn map<R>(self, mut f: impl FnMut(Side, T) -> R) -> SideMap<R> {
-		SideMap { zero: f(Side::Zero, self.zero), one: f(Side::One, self.one) }
+	pub fn map<R, F: FnMut(T) -> R>(self, mut f: F) -> PoolPairsMap<R> {
+		PoolPairsMap { base: f(self.base), quote: f(self.quote) }
 	}
 
-	pub fn try_map<R, E>(
+	pub fn try_map<R, E, F: FnMut(T) -> Result<R, E>>(
 		self,
-		mut f: impl FnMut(Side, T) -> Result<R, E>,
-	) -> Result<SideMap<R>, E> {
-		Ok(SideMap { zero: f(Side::Zero, self.zero)?, one: f(Side::One, self.one)? })
+		mut f: F,
+	) -> Result<PoolPairsMap<R>, E> {
+		Ok(PoolPairsMap { base: f(self.base)?, quote: f(self.quote)? })
 	}
 
-	pub fn as_ref(&self) -> SideMap<&T> {
-		SideMap { zero: &self.zero, one: &self.one }
+	pub fn try_map_with_pair<R, E>(
+		self,
+		mut f: impl FnMut(Pairs, T) -> Result<R, E>,
+	) -> Result<PoolPairsMap<R>, E> {
+		Ok(PoolPairsMap { base: f(Pairs::Base, self.base)?, quote: f(Pairs::Quote, self.quote)? })
 	}
 
-	pub fn as_mut(&mut self) -> SideMap<&mut T> {
-		SideMap { zero: &mut self.zero, one: &mut self.one }
+	pub fn as_ref(&self) -> PoolPairsMap<&T> {
+		PoolPairsMap { base: &self.base, quote: &self.quote }
 	}
 
-	pub fn zip<S>(self, other: SideMap<S>) -> SideMap<(T, S)> {
-		SideMap { zero: (self.zero, other.zero), one: (self.one, other.one) }
+	pub fn as_mut(&mut self) -> PoolPairsMap<&mut T> {
+		PoolPairsMap { base: &mut self.base, quote: &mut self.quote }
+	}
+
+	pub fn zip<S>(self, other: PoolPairsMap<S>) -> PoolPairsMap<(T, S)> {
+		PoolPairsMap { base: (self.base, other.base), quote: (self.quote, other.quote) }
+	}
+
+	pub fn map_with_pair<R, F: FnMut(Pairs, T) -> R>(self, mut f: F) -> PoolPairsMap<R> {
+		PoolPairsMap { base: f(Pairs::Base, self.base), quote: f(Pairs::Quote, self.quote) }
 	}
 }
-impl<T> IntoIterator for SideMap<T> {
-	type Item = (Side, T);
+impl<T> IntoIterator for PoolPairsMap<T> {
+	type Item = (Pairs, T);
 
-	type IntoIter = core::array::IntoIter<(Side, T), 2>;
+	type IntoIter = core::array::IntoIter<(Pairs, T), 2>;
 
 	fn into_iter(self) -> Self::IntoIter {
-		[(Side::Zero, self.zero), (Side::One, self.one)].into_iter()
+		[(Pairs::Base, self.base), (Pairs::Quote, self.quote)].into_iter()
 	}
 }
-impl<T> core::ops::Index<Side> for SideMap<T> {
+impl<T> core::ops::Index<Pairs> for PoolPairsMap<T> {
 	type Output = T;
-	fn index(&self, side: Side) -> &T {
+	fn index(&self, side: Pairs) -> &T {
 		match side {
-			Side::Zero => &self.zero,
-			Side::One => &self.one,
+			Pairs::Base => &self.base,
+			Pairs::Quote => &self.quote,
 		}
 	}
 }
-impl<T> core::ops::IndexMut<Side> for SideMap<T> {
-	fn index_mut(&mut self, side: Side) -> &mut T {
+impl<T> core::ops::IndexMut<Pairs> for PoolPairsMap<T> {
+	fn index_mut(&mut self, side: Pairs) -> &mut T {
 		match side {
-			Side::Zero => &mut self.zero,
-			Side::One => &mut self.one,
+			Pairs::Base => &mut self.base,
+			Pairs::Quote => &mut self.quote,
 		}
 	}
 }
-impl<T: core::ops::Add<R>, R> core::ops::Add<SideMap<R>> for SideMap<T> {
-	type Output = SideMap<<T as core::ops::Add<R>>::Output>;
-	fn add(self, rhs: SideMap<R>) -> Self::Output {
-		SideMap { zero: self.zero + rhs.zero, one: self.one + rhs.one }
+impl<T: core::ops::Add<R>, R> core::ops::Add<PoolPairsMap<R>> for PoolPairsMap<T> {
+	type Output = PoolPairsMap<<T as core::ops::Add<R>>::Output>;
+	fn add(self, rhs: PoolPairsMap<R>) -> Self::Output {
+		PoolPairsMap { base: self.base + rhs.base, quote: self.quote + rhs.quote }
 	}
 }
 
@@ -211,14 +232,14 @@ pub fn bounded_sqrt_price(quote: Amount, base: Amount) -> SqrtPriceQ64F96 {
 	}
 }
 
-/// A marker type to represent a swap that buys asset One, and sells asset Zero
-pub(super) struct ZeroToOne {}
-/// A marker type to represent a swap that buys asset Zero, and sells asset One
-pub(super) struct OneToZero {}
+/// A marker type to represent a swap that buys asset Quote, and sells asset Base
+pub(super) struct BaseToQuote {}
+/// A marker type to represent a swap that buys asset Base, and sells asset Quote
+pub(super) struct QuoteToBase {}
 
 pub(super) trait SwapDirection {
 	/// The asset this type of swap sells, i.e. the asset the swapper provides
-	const INPUT_SIDE: Side;
+	const INPUT_SIDE: Pairs;
 
 	/// The worst price in this swap direction
 	const WORST_SQRT_PRICE: SqrtPriceQ64F96;
@@ -236,8 +257,8 @@ pub(super) trait SwapDirection {
 	/// asset at a specific tick, will return None iff the tick is invalid
 	fn input_to_output_amount_floor(amount: Amount, tick: Tick) -> Option<Amount>;
 }
-impl SwapDirection for ZeroToOne {
-	const INPUT_SIDE: Side = Side::Zero;
+impl SwapDirection for BaseToQuote {
+	const INPUT_SIDE: Pairs = Pairs::Base;
 
 	const WORST_SQRT_PRICE: SqrtPriceQ64F96 = MIN_SQRT_PRICE;
 
@@ -265,8 +286,8 @@ impl SwapDirection for ZeroToOne {
 		}
 	}
 }
-impl SwapDirection for OneToZero {
-	const INPUT_SIDE: Side = Side::One;
+impl SwapDirection for QuoteToBase {
+	const INPUT_SIDE: Pairs = Pairs::Quote;
 
 	const WORST_SQRT_PRICE: SqrtPriceQ64F96 = MAX_SQRT_PRICE;
 
@@ -689,8 +710,8 @@ mod test {
 			}
 		}
 
-		inner::<ZeroToOne>();
-		inner::<OneToZero>();
+		inner::<BaseToQuote>();
+		inner::<QuoteToBase>();
 	}
 
 	#[cfg(feature = "slow-tests")]
