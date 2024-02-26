@@ -965,8 +965,10 @@ pub mod pallet {
 			}
 		}
 
-		/// Sets the maximum percentage increase (in number of ticks) of the price of the brought
-		/// asset during a swap.
+		/// Sets the allowed percentage increase (in number of ticks) of the price of the brought
+		/// asset during a swap. Note this limit applies to the difference between the swap's mean
+		/// price, and both the pool price before and after the swap. If the limit is exceeded the
+		/// swap will fail and will be retried in the next block.
 		#[pallet::call_index(9)]
 		#[pallet::weight(T::WeightInfo::set_maximum_relative_slippage())]
 		pub fn set_maximum_relative_slippage(
