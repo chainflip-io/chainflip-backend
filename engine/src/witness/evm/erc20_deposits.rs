@@ -99,7 +99,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					.into_iter()
 					.filter(|deposit_channel| deposit_channel.deposit_channel.asset == asset)
 					.map(|deposit_channel| deposit_channel.deposit_channel.address)
-					.collect::<HashSet<H160>>();
+					.collect::<HashSet<_>>();
 
 				let deposit_witnesses = events_at_block::<Events, _>(
 					Header {

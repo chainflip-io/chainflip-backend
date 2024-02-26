@@ -128,8 +128,9 @@ async fn save_deposit_witnesses<S: Store, C: Chain>(
 	block_height: <C as Chain>::ChainBlockNumber,
 	chainflip_network: NetworkEnvironment,
 ) -> anyhow::Result<()>
-where 
-	WitnessInformation: From<(DepositWitness<C>, <C as Chain>::ChainBlockNumber, NetworkEnvironment)> 
+where
+	WitnessInformation:
+		From<(DepositWitness<C>, <C as Chain>::ChainBlockNumber, NetworkEnvironment)>,
 {
 	for witness in deposit_witnesses {
 		store
@@ -158,19 +159,27 @@ where
 		EthereumIngressEgress(IngressEgressCall::process_deposits {
 			deposit_witnesses,
 			block_height,
-		}) => save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network).await?,
+		}) =>
+			save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network)
+				.await?,
 		BitcoinIngressEgress(IngressEgressCall::process_deposits {
 			deposit_witnesses,
 			block_height,
-		}) => save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network).await?,
+		}) =>
+			save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network)
+				.await?,
 		PolkadotIngressEgress(IngressEgressCall::process_deposits {
 			deposit_witnesses,
 			block_height,
-		}) => save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network).await?,
+		}) =>
+			save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network)
+				.await?,
 		ArbitrumIngressEgress(IngressEgressCall::process_deposits {
 			deposit_witnesses,
 			block_height,
-		}) => save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network).await?,
+		}) =>
+			save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network)
+				.await?,
 		EthereumBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
 			let broadcast_id =
 				get_broadcast_id::<Ethereum, StateChainClient>(state_chain_client, &tx_out_id)
