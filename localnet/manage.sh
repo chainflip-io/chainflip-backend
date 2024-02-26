@@ -102,7 +102,8 @@ build-localnet() {
 
   mkdir -p /tmp/chainflip/
   touch /tmp/chainflip/debug.log
-
+  echo "🪢 Pulling Docker Images"
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" pull >>$DEBUG_OUTPUT_DESTINATION 2>&1
   echo "🔮 Initializing Network"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
   echo "🦺 Updating init state files permissions ..."
@@ -137,6 +138,8 @@ build-localnet() {
 
   echo "🦑 Waiting for Arbitrum nodes to start"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
+  echo "🪄 Deploying L2 Contracts"
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up arb-init -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
 
 
   INIT_RPC_PORT=9944

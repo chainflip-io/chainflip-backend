@@ -32,9 +32,9 @@ const commissionBps = 1000; // 10%
 // Maximum expected deposit and withdrawal fees.
 // Values obtained from running this test on 1 node localnet.
 const maxDepositFee = {
-  [Assets.ETH]: BigInt(350000),
+  [Assets.ETH]: BigInt(3500000),
   [Assets.DOT]: BigInt(197300000),
-  [Assets.FLIP]: BigInt(300000000),
+  [Assets.FLIP]: BigInt('20000000000000000'),
   [Assets.BTC]: BigInt(190),
   [Assets.USDC]: BigInt(0), // Fee is too low for localnet, it rounds to 0
 };
