@@ -46,7 +46,7 @@ pub type BroadcastId = u32;
 
 pub type SwapId = u64;
 
-pub type BoostableDepositId = u64;
+pub type PrewitnessedDepositId = u64;
 
 /// The type of the Id given to threshold signature requests. Note a single request may
 /// result in multiple ceremonies, but only one ceremony should succeed.

@@ -1,10 +1,10 @@
 use crate::{
-	mock_eth::*, BoostableDeposit, BoostableDepositIdCounter, BoostableDeposits,
-	Call as PalletCall, ChannelAction, ChannelIdCounter, ChannelOpeningFee, CrossChainMessage,
-	DepositAction, DepositChannelLookup, DepositChannelPool, DepositIgnoredReason, DepositWitness,
-	DisabledEgressAssets, EgressDustLimit, Event as PalletEvent, FailedForeignChainCall,
-	FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit, Pallet, PalletConfigUpdate,
-	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount,
+	mock_eth::*, Call as PalletCall, ChannelAction, ChannelIdCounter, ChannelOpeningFee,
+	CrossChainMessage, DepositAction, DepositChannelLookup, DepositChannelPool,
+	DepositIgnoredReason, DepositWitness, DisabledEgressAssets, EgressDustLimit,
+	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
+	MinimumDeposit, Pallet, PalletConfigUpdate, PrewitnessedDeposit, PrewitnessedDepositIdCounter,
+	PrewitnessedDeposits, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount,
 };
 use cf_chains::{
 	address::AddressConverter, evm::EvmFetchId, mocks::MockEthereum, CcmChannelMetadata,
@@ -1587,20 +1587,20 @@ fn handle_prewitness_deposit() {
 		let deposit_witnesses = vec![deposit_detail.clone()];
 
 		// Submit the prewitnessed deposit
-		assert_ok!(IngressEgress::add_boostable_deposits(deposit_witnesses.clone(),));
+		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses.clone(),));
 
 		// Check that the deposit is stored in the storage
-		let deposit_id = BoostableDepositIdCounter::<Test>::get();
+		let prewitnessed_deposit_id = PrewitnessedDepositIdCounter::<Test>::get();
 		let channel_id = ChannelIdCounter::<Test>::get();
 		assert_eq!(
-			BoostableDeposits::<Test>::get(channel_id, deposit_id),
-			Some(BoostableDeposit { asset: ASSET, amount: DEPOSIT_AMOUNT, deposit_address })
+			PrewitnessedDeposits::<Test>::get(channel_id, prewitnessed_deposit_id),
+			Some(PrewitnessedDeposit { asset: ASSET, amount: DEPOSIT_AMOUNT, deposit_address })
 		);
 	});
 }
 
 #[test]
-fn should_cleanup_boostable_deposits_when_channel_is_recycled() {
+fn should_cleanup_prewitnessed_deposits_when_channel_is_recycled() {
 	const ASSET: cf_chains::assets::eth::Asset = eth::Asset::Eth;
 	const DEPOSIT_AMOUNT: u128 = 50000;
 
@@ -1618,14 +1618,14 @@ fn should_cleanup_boostable_deposits_when_channel_is_recycled() {
 			deposit_details: (),
 		};
 		let deposit_witnesses = vec![deposit_detail.clone()];
-		assert_ok!(IngressEgress::add_boostable_deposits(deposit_witnesses.clone(),));
+		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses.clone(),));
 
 		// Check that the deposit is stored in the storage
-		let deposit_id = BoostableDepositIdCounter::<Test>::get();
+		let prewitnessed_deposit_id = PrewitnessedDepositIdCounter::<Test>::get();
 		let channel_id = ChannelIdCounter::<Test>::get();
 		assert_eq!(
-			BoostableDeposits::<Test>::get(channel_id, deposit_id),
-			Some(BoostableDeposit { asset: ASSET, amount: DEPOSIT_AMOUNT, deposit_address })
+			PrewitnessedDeposits::<Test>::get(channel_id, prewitnessed_deposit_id),
+			Some(PrewitnessedDeposit { asset: ASSET, amount: DEPOSIT_AMOUNT, deposit_address })
 		);
 
 		// Fast forward the block height to the recycle block of the created deposit channel
@@ -1635,8 +1635,44 @@ fn should_cleanup_boostable_deposits_when_channel_is_recycled() {
 		// Run the cleanup
 		IngressEgress::on_idle(1, Weight::MAX);
 
-		// Check that the deposit is removed from the storage
-		assert_eq!(BoostableDeposits::<Test>::get(channel_id, deposit_id), None);
+		// Check that the prewitnessed deposit is removed from the storage
+		assert_eq!(PrewitnessedDeposits::<Test>::get(channel_id, prewitnessed_deposit_id), None);
 	});
 }
 
+#[test]
+fn should_remove_prewitnessed_deposit_when_witnessed() {
+	const ASSET: cf_chains::assets::eth::Asset = eth::Asset::Eth;
+	const DEPOSIT_AMOUNT: u128 = 50000;
+
+	new_test_ext().execute_with(|| {
+		// Create a deposit channel
+		let (_id, address, ..) =
+			IngressEgress::request_liquidity_deposit_address(ALICE, ASSET, 0).unwrap();
+		let deposit_address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
+
+		// Submit the prewitnessed deposit twice
+		let deposit_detail: DepositWitness<Ethereum> = DepositWitness::<Ethereum> {
+			deposit_address,
+			asset: ASSET,
+			amount: DEPOSIT_AMOUNT,
+			deposit_details: (),
+		};
+		let deposit_witnesses = vec![deposit_detail.clone()];
+		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses.clone()));
+		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses.clone()));
+
+		// Check that the deposits are in storage
+		let channel_id = ChannelIdCounter::<Test>::get();
+		assert_eq!(PrewitnessedDeposits::<Test>::iter_prefix_values(channel_id).count(), 2);
+
+		// Witness one of the deposits
+		assert_ok!(Pallet::<Test, _>::process_deposit_witnesses(
+			deposit_witnesses,
+			Default::default()
+		));
+
+		// Check that one of the deposits was removed and the other remains
+		assert_eq!(PrewitnessedDeposits::<Test>::iter_prefix_values(channel_id).count(), 1);
+	});
+}

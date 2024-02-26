@@ -32,6 +32,9 @@ mod benchmarks {
 
 	#[benchmark]
 	fn process_single_deposit() {
+		const CHANNEL_ID: u64 = 1;
+		const PREWITNESSED_DEPOSIT_ID: u64 = 1;
+
 		let deposit_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount =
 			BenchmarkValue::benchmark_value();
 		let source_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset =
@@ -46,7 +49,7 @@ mod benchmarks {
 				expires_at: block_number,
 				deposit_channel:
 					DepositChannel::generate_new::<<T as Config<I>>::AddressDerivation>(
-						1,
+						CHANNEL_ID,
 						source_asset,
 					)
 					.unwrap(),
@@ -54,6 +57,15 @@ mod benchmarks {
 					lp_account: account("doogle", 0, 0),
 				},
 				boost_fee: 0,
+			},
+		);
+		PrewitnessedDeposits::<T, I>::insert(
+			CHANNEL_ID,
+			PREWITNESSED_DEPOSIT_ID,
+			PrewitnessedDeposit {
+				asset: source_asset,
+				amount: deposit_amount,
+				deposit_address: deposit_address.clone(),
 			},
 		);
 
@@ -67,6 +79,8 @@ mod benchmarks {
 				BenchmarkValue::benchmark_value()
 			));
 		}
+
+		assert!(PrewitnessedDeposits::<T, I>::get(CHANNEL_ID, PREWITNESSED_DEPOSIT_ID).is_none());
 	}
 	#[benchmark]
 	fn finalise_ingress(a: Linear<1, 100>) {
@@ -146,12 +160,12 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn remove_boostable_deposits(n: Linear<1, 255>) {
+	fn remove_prewitnessed_deposits(n: Linear<1, 255>) {
 		for i in 0..n {
-			BoostableDeposits::<T, I>::insert(
+			PrewitnessedDeposits::<T, I>::insert(
 				0,
 				i as u64,
-				BoostableDeposit {
+				PrewitnessedDeposit {
 					asset: BenchmarkValue::benchmark_value(),
 					amount: BenchmarkValue::benchmark_value(),
 					deposit_address: BenchmarkValue::benchmark_value(),
@@ -161,7 +175,7 @@ mod benchmarks {
 
 		#[block]
 		{
-			let _old_deposits = BoostableDeposits::<T, I>::clear_prefix(0, u32::MAX, None);
+			let _old_deposits = PrewitnessedDeposits::<T, I>::clear_prefix(0, u32::MAX, None);
 		}
 	}
 
@@ -186,7 +200,7 @@ mod benchmarks {
 			_disable_asset_egress::<Test, ()>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_remove_boostable_deposits::<Test, ()>(100, true);
+			_remove_prewitnessed_deposits::<Test, ()>(100, true);
 		});
 	}
 }

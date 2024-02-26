@@ -25,8 +25,8 @@ use cf_chains::{
 	FeeEstimationApi, FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	Asset, BasisPoints, BoostableDepositId, BroadcastId, ChannelId, EgressCounter, EgressId,
-	EpochIndex, ForeignChain, SwapId, ThresholdSignatureRequestId,
+	Asset, BasisPoints, BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex, ForeignChain,
+	PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId,
 };
 use cf_traits::{
 	liquidity::{LpBalanceApi, LpDepositHandler},
@@ -44,7 +44,7 @@ use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::{vec, vec::Vec};
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct BoostableDeposit<C: Chain> {
+pub struct PrewitnessedDeposit<C: Chain> {
 	pub asset: C::ChainAsset,
 	pub amount: C::ChainAmount,
 	pub deposit_address: C::ChainAccount,
@@ -467,20 +467,20 @@ pub mod pallet {
 	pub type ChannelOpeningFee<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, T::Amount, ValueQuery>;
 
-	/// Stores the latest boostable deposit id used.
+	/// Stores the latest prewitnessed deposit id used.
 	#[pallet::storage]
-	pub type BoostableDepositIdCounter<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, BoostableDepositId, ValueQuery>;
+	pub type PrewitnessedDepositIdCounter<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, PrewitnessedDepositId, ValueQuery>;
 
-	/// Stores all boostable deposits that have been prewitnessed.
+	/// Stores all deposits that have been prewitnessed but not yet finalised.
 	#[pallet::storage]
-	pub type BoostableDeposits<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub type PrewitnessedDeposits<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Twox64Concat,
 		ChannelId,
 		Twox64Concat,
-		BoostableDepositId,
-		BoostableDeposit<T::TargetChain>,
+		PrewitnessedDepositId,
+		PrewitnessedDeposit<T::TargetChain>,
 	>;
 
 	#[pallet::event]
@@ -594,7 +594,7 @@ pub mod pallet {
 
 			let cleanup_weight = frame_support::weights::constants::RocksDbWeight::get()
 				.reads_writes(2, 2)
-				.saturating_add(T::WeightInfo::remove_boostable_deposits(1));
+				.saturating_add(T::WeightInfo::remove_prewitnessed_deposits(1));
 
 			let maximum_recycle_number = remaining_weight
 				.ref_time()
@@ -627,16 +627,17 @@ pub mod pallet {
 						);
 					}
 					// Cleanup the deposit data
-					let item_count =
-						BoostableDeposits::<T, I>::iter_prefix(details.deposit_channel.channel_id)
-							.count() as u32;
-					let removed_deposits = BoostableDeposits::<T, I>::clear_prefix(
+					let item_count = PrewitnessedDeposits::<T, I>::iter_prefix(
+						details.deposit_channel.channel_id,
+					)
+					.count() as u32;
+					let removed_deposits = PrewitnessedDeposits::<T, I>::clear_prefix(
 						details.deposit_channel.channel_id,
 						item_count,
 						None,
 					);
 					used_weight = used_weight.saturating_add(
-						T::WeightInfo::remove_boostable_deposits(removed_deposits.unique),
+						T::WeightInfo::remove_prewitnessed_deposits(removed_deposits.unique),
 					);
 				}
 			}
@@ -784,7 +785,7 @@ pub mod pallet {
 			block_height: TargetChainBlockNumber<T, I>,
 		) -> DispatchResult {
 			if T::EnsurePrewitnessed::ensure_origin(origin.clone()).is_ok() {
-				Self::add_boostable_deposits(deposit_witnesses)?;
+				Self::add_prewitnessed_deposits(deposit_witnesses)?;
 			} else {
 				T::EnsureWitnessed::ensure_origin(origin)?;
 				Self::process_deposit_witnesses(deposit_witnesses, block_height)?;
@@ -1092,11 +1093,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	fn add_boostable_deposits(
+	fn add_prewitnessed_deposits(
 		deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
 	) -> DispatchResult {
 		for DepositWitness { deposit_address, asset, amount, .. } in deposit_witnesses {
-			let id = BoostableDepositIdCounter::<T, I>::mutate(|id| -> u64 {
+			let id = PrewitnessedDepositIdCounter::<T, I>::mutate(|id| -> u64 {
 				*id = id.saturating_add(1);
 				*id
 			});
@@ -1105,10 +1106,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				DepositChannelLookup::<T, I>::get(deposit_address.clone())
 					.ok_or(Error::<T, I>::InvalidDepositAddress)?;
 
-			BoostableDeposits::<T, I>::insert(
+			PrewitnessedDeposits::<T, I>::insert(
 				deposit_channel_details.deposit_channel.channel_id,
 				id,
-				BoostableDeposit { asset, amount, deposit_address },
+				PrewitnessedDeposit { asset, amount, deposit_address },
 			);
 		}
 		Ok(())
@@ -1153,6 +1154,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				reason: DepositIgnoredReason::BelowMinimumDeposit,
 			});
 			return Ok(())
+		}
+
+		// Remove the prewitnessed deposit that matches this deposit
+		if let Some((prewitnessed_deposit_id, _)) =
+			PrewitnessedDeposits::<T, I>::iter_prefix(channel_id)
+				.find(|(_id, deposit)| deposit.amount == deposit_amount)
+		{
+			PrewitnessedDeposits::<T, I>::remove(channel_id, prewitnessed_deposit_id);
 		}
 
 		ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Fetch {

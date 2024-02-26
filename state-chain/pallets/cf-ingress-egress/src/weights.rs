@@ -37,7 +37,7 @@ pub trait WeightInfo {
 	fn finalise_ingress(a: u32, ) -> Weight;
 	fn vault_transfer_failed() -> Weight;
 	fn ccm_broadcast_failed() -> Weight;
-	fn remove_boostable_deposits(n: u32, ) -> Weight;
+	fn remove_prewitnessed_deposits(n: u32, ) -> Weight;
 }
 
 /// Weights for pallet_cf_ingress_egress using the Substrate node and recommended hardware.
@@ -153,10 +153,10 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
-	/// Storage: `EthereumIngressEgress::BoostableDeposits` (r:254 w:254)
-	/// Proof: `EthereumIngressEgress::BoostableDeposits` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumIngressEgress::PrewitnessedDeposits` (r:254 w:254)
+	/// Proof: `EthereumIngressEgress::PrewitnessedDeposits` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// The range of component `n` is `[1, 255]`.
-	fn remove_boostable_deposits(n: u32, ) -> Weight {
+	fn remove_prewitnessed_deposits(n: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `140 + n * (51 ±0)`
 		//  Estimated: `1130 + n * (2527 ±0)`
@@ -282,10 +282,10 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(2_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
-	/// Storage: `EthereumIngressEgress::BoostableDeposits` (r:254 w:254)
-	/// Proof: `EthereumIngressEgress::BoostableDeposits` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumIngressEgress::PrewitnessedDeposits` (r:254 w:254)
+	/// Proof: `EthereumIngressEgress::PrewitnessedDeposits` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// The range of component `n` is `[1, 255]`.
-	fn remove_boostable_deposits(n: u32, ) -> Weight {
+	fn remove_prewitnessed_deposits(n: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `140 + n * (51 ±0)`
 		//  Estimated: `1130 + n * (2527 ±0)`
