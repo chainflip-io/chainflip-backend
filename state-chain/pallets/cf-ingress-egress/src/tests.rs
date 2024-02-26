@@ -1598,3 +1598,45 @@ fn handle_prewitness_deposit() {
 		);
 	});
 }
+
+#[test]
+fn should_cleanup_boostable_deposits_when_channel_is_recycled() {
+	const ASSET: cf_chains::assets::eth::Asset = eth::Asset::Eth;
+	const DEPOSIT_AMOUNT: u128 = 50000;
+
+	new_test_ext().execute_with(|| {
+		// Create a deposit channel
+		let (_id, address, ..) =
+			IngressEgress::request_liquidity_deposit_address(ALICE, ASSET, 0).unwrap();
+		let deposit_address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
+
+		// Submit the prewitnessed deposit
+		let deposit_detail: DepositWitness<Ethereum> = DepositWitness::<Ethereum> {
+			deposit_address,
+			asset: ASSET,
+			amount: DEPOSIT_AMOUNT,
+			deposit_details: (),
+		};
+		let deposit_witnesses = vec![deposit_detail.clone()];
+		assert_ok!(IngressEgress::add_boostable_deposits(deposit_witnesses.clone(),));
+
+		// Check that the deposit is stored in the storage
+		let deposit_id = BoostableDepositIdCounter::<Test>::get();
+		let channel_id = ChannelIdCounter::<Test>::get();
+		assert_eq!(
+			BoostableDeposits::<Test>::get(channel_id, deposit_id),
+			Some(BoostableDeposit { asset: ASSET, amount: DEPOSIT_AMOUNT, deposit_address })
+		);
+
+		// Fast forward the block height to the recycle block of the created deposit channel
+		let expiry_block = IngressEgress::expiry_and_recycle_block_height().2;
+		BlockHeightProvider::<MockEthereum>::set_block_height(expiry_block);
+
+		// Run the cleanup
+		IngressEgress::on_idle(1, Weight::MAX);
+
+		// Check that the deposit is removed from the storage
+		assert_eq!(BoostableDeposits::<Test>::get(channel_id, deposit_id), None);
+	});
+}
+
