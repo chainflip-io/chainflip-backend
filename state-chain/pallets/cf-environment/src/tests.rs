@@ -70,7 +70,7 @@ fn test_btc_utxo_selection() {
 				number_of_outputs: 2
 			})
 			.unwrap(),
-			(vec![utxo(5000, 1), utxo(10000, 0), utxo(25000, 4)], EXPECTED_CHANGE_AMOUNT)
+			(vec![utxo(25000, 4), utxo(10000, 0), utxo(5000, 1),], EXPECTED_CHANGE_AMOUNT)
 		);
 
 		// add the change utxo back to the available utxo list
@@ -113,11 +113,12 @@ fn test_btc_utxo_consolidation() {
 		};
 
 		// Reduce consolidation parameters to make testing easier
-		assert_ok!(Environment::update_consolidation_parameters(
+		assert_ok!(Environment::update_utxo_parameters(
 			OriginTrait::root(),
-			cf_chains::btc::ConsolidationParameters {
+			cf_chains::btc::UtxoParameters {
 				consolidation_threshold: 2,
 				consolidation_size: 2,
+				utxo_selection_limit: 10
 			}
 		));
 
@@ -167,23 +168,25 @@ fn test_btc_utxo_consolidation() {
 }
 
 #[test]
-fn updating_consolidation_parameters() {
+fn updating_utxo_parameters() {
 	new_test_ext().execute_with(|| {
 		// Should work with valid parameters
-		assert_ok!(Environment::update_consolidation_parameters(
+		assert_ok!(Environment::update_utxo_parameters(
 			OriginTrait::root(),
-			cf_chains::btc::ConsolidationParameters {
+			cf_chains::btc::UtxoParameters {
 				consolidation_threshold: 2,
 				consolidation_size: 2,
+				utxo_selection_limit: 10
 			}
 		));
 
 		// Should fail with invalid parameters
-		assert!(Environment::update_consolidation_parameters(
+		assert!(Environment::update_utxo_parameters(
 			OriginTrait::root(),
-			cf_chains::btc::ConsolidationParameters {
+			cf_chains::btc::UtxoParameters {
 				consolidation_threshold: 1,
 				consolidation_size: 2,
+				utxo_selection_limit: 10
 			}
 		)
 		.is_err());

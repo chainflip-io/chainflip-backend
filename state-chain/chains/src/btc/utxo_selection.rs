@@ -1,10 +1,21 @@
-use itertools::Itertools;
 use sp_std::{vec, vec::Vec};
 
-use super::{BitcoinFeeInfo, ConsolidationParameters, Utxo};
+use super::{BitcoinFeeInfo, Utxo, UtxoParameters};
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum UtxoSelectionError {
+	/// All available utxos have their Fees > amount, therefore is unusable.
+	NoUtxoAvailableAfterFeeReduction,
+	/// Cannot select utxos with enough funds within the given limit.
+	InsufficientFundsInAvailableUtxos,
+}
 
 /// Attempt to select up to `selection_limit` number of uxtos that contains more than required
-/// amount. Prioritize small amounts firs to avoid fragmenting.
+/// amount. Prioritize small amounts first to avoid fragmentation.
+///
+/// On success, the `(selected_utxos and accumulated_total)` is returned.
+/// On failure the appropriate error is returned, and `available_utxos` is still modified. It is
+/// expected that the user will roll back storage.
 ///
 /// In the case where the fee to spend the utxo is higher than the amount locked in the utxo, the
 /// algorithm will skip the selection of that utxo and will keep it in the list of available utxos
@@ -14,115 +25,102 @@ use super::{BitcoinFeeInfo, ConsolidationParameters, Utxo};
 /// 1. Filter out all available utxos whose fees are >= amount, they are excluded from the
 /// selection.
 ///
-/// 2. Check that in the worst case scenario, when the highest N utxos are selected, enough funds
-/// can be accrued.
-/// Return early if unable to select enough funds within the selection limit.
+/// 2. Find a optimal range such that `sum(utxo[first ..= last]) >= target_amount`
+/// When the selected range is < selection_limit, move the `first` index to the left
 ///
-/// 3. In a greedy approach it starts selecting utxos from the lowest value utxos in a sorted array.
-/// It keeps selecting the utxos until a) the cumulative amount in utxos (without fees) is just
-/// greater than or equal to the total required amount to be egressed or b) when the number of
-/// selected utxos has reached the given `selection_limit`.
+/// e.g. using a selection limit of 3
+/// Currently 2 utxos are selected. Move the start index to the left.
+///                    | end
+/// 10 9 8 7 6 5 4 3 2 1
+///                |<| Start
+/// New end points to "1" and new start points to "3"
 ///
-/// 4. In the case that the selected utxos do not contain enough value, the algorithm will then
-/// proceed to swap the smallest selected utxo with the largest unselected utxo, increasing the
-/// total selected values without changing the number of utxos selected.
+/// When the selection limit is reached, both the start and end pointer are moved.
+///                  |<| end
+/// 10 9 8 7 6 5 4 3 2 1
+///            |<| Start
+/// New end points to 2 and new start points to 5, keeping the selected utxos to the limit of 3.
 ///
-/// In the worst case scenarios, only the largest N utxos are selected. Checks in step 2 guarantees
-/// enough value are selected.
+/// In the worst case scenarios, the largest N utxos are selected.
 ///
-/// 5. We then take 1 more utxo as safety measure (in the case that the fees are more expensive than
-/// expected).
+/// If after this step, the accumulated amount is still below the target, report as failure.
+/// Thought this is extremely unlikely to happen since we proactively consolidate our utxos.
+///
+/// 3. We then take 1 more utxo if within limit, to actively reduce fragmentation.
 /// The skipped utxos are appended back to the `available_utxos` for future use.
-///
-/// Note that on failure (when `None` is returned) this may still modify `available_utxos`. It is
-/// expected that the user will roll back storage on failed cases.
 pub fn select_utxos_from_pool(
 	available_utxos: &mut Vec<Utxo>,
 	fee_info: &BitcoinFeeInfo,
 	amount_to_be_spent: u64,
-	selection_limit: u32,
-) -> Option<(Vec<Utxo>, u64)> {
-	if available_utxos.is_empty() {
-		return None
-	}
+	maybe_limit: Option<u32>,
+) -> Result<(Vec<Utxo>, u64), UtxoSelectionError> {
+	// If no selection limit is given, selecting all utxos is allowed.
+	let selection_limit = match maybe_limit {
+		Some(limit) => limit as usize,
+		None => available_utxos.len(),
+	};
 
 	// 1. Filter out utxos whose fees are too high.
 	let mut skipped_utxos = available_utxos
 		.extract_if(|utxo| utxo.amount <= fee_info.fee_for_utxo(utxo))
-		.collect_vec();
+		.collect::<Vec<_>>();
 
-	// 2. Return None if the largest N utxos cannot produce enough outputs.
+	if available_utxos.is_empty() || selection_limit == 0usize {
+		return Err(UtxoSelectionError::NoUtxoAvailableAfterFeeReduction)
+	}
+
+	// 2. Find the optimal `first` and `last` index, such that
+	// `sum(utxo[first ..= last]) >= target_amount`
 	available_utxos.sort_by_key(|utxo| sp_std::cmp::Reverse(utxo.amount));
-	if available_utxos
-		.iter()
-		.take(selection_limit as usize)
-		.map(|utxo| utxo.amount.saturating_sub(fee_info.fee_for_utxo(utxo)))
-		.sum::<u64>() <
-		amount_to_be_spent
-	{
-		available_utxos.append(&mut skipped_utxos);
-		return None
-	}
 
-	let mut selected_utxos: Vec<Utxo> = vec![];
-
-	// 3. Select from the smallest utxos until either we have enough funds or reached the limit.
+	let mut first = available_utxos.len();
+	let mut last = first - 1;
 	let mut cumulative_amount = 0;
-	while cumulative_amount < amount_to_be_spent && selected_utxos.len() < selection_limit as usize
-	{
-		if let Some(current_utxo) = available_utxos.pop() {
-			cumulative_amount +=
-				current_utxo.amount.saturating_sub(fee_info.fee_for_utxo(&current_utxo));
-			selected_utxos.push(current_utxo.clone());
-		} else {
-			// This should never happen, but is here for safety.
-			// Upon failure, it is expected to rollback storage
-			return None
+
+	while first > 0usize {
+		first -= 1usize;
+		let utxo_to_add = &available_utxos[first];
+		cumulative_amount += utxo_to_add.amount.saturating_sub(fee_info.fee_for_utxo(utxo_to_add));
+
+		if last - first + 1 > selection_limit {
+			// Move the `last` pointer forward by one to keep selection size within limit.
+			let utxo_to_remove = &available_utxos[last];
+			last -= 1;
+			cumulative_amount -=
+				utxo_to_remove.amount.saturating_sub(fee_info.fee_for_utxo(utxo_to_remove));
+		}
+
+		if cumulative_amount >= amount_to_be_spent {
+			break;
 		}
 	}
 
-	// 4. If total amount is not reached, keep swapping smallest elected with the largest
-	// unselected.
-	// Since the largest N element is > target, worse case scenario is to select largest N utxos.
-	while cumulative_amount < amount_to_be_spent &&
-		!available_utxos.is_empty() &&
-		!selected_utxos.is_empty()
-	{
-		// selected is sorted small >>> large
-		// available is sorted large >>> small
-		let small_utxo = selected_utxos.remove(0);
-		let large_utxo = available_utxos.remove(0);
-
-		if small_utxo.amount >= large_utxo.amount {
-			// Guard against infinite loop. Cannot select enough utxo for the given amount.
-			// Theoretically this should never happen, since we already checked against this
-			// previously.
-			return None
+	if cumulative_amount < amount_to_be_spent {
+		// Failed to find utxos that contained target amount - extremely unlikely since we
+		// proactively consolidate out utxos.
+		Err(UtxoSelectionError::InsufficientFundsInAvailableUtxos)
+	} else {
+		// 3. Try to fit one more utxo in
+		if first > 0usize && last - first + 1 < selection_limit {
+			first -= 1usize;
+			let utxo = &available_utxos[first];
+			cumulative_amount += utxo.amount - fee_info.fee_for_utxo(utxo);
 		}
-		cumulative_amount = cumulative_amount +
-			(large_utxo.amount - fee_info.fee_for_utxo(&large_utxo)) -
-			(small_utxo.amount - fee_info.fee_for_utxo(&small_utxo));
 
-		selected_utxos.push(large_utxo);
-		available_utxos.push(small_utxo);
+		// Take all utxos from the `first` to `last` (inclusive).
+		let selected_utxos = available_utxos.splice(first..=last, []).collect();
+
+		// Re-append the skipped utxos since they are not used.
+		available_utxos.append(&mut skipped_utxos);
+
+		Ok((selected_utxos, cumulative_amount))
 	}
-
-	// 5. We are guaranteed to have enough funds here. Take 1 more after sufficient utxos are
-	// selected.
-	if let Some(utxo) = available_utxos.pop() {
-		cumulative_amount += utxo.amount - fee_info.fee_for_utxo(&utxo);
-		selected_utxos.push(utxo);
-	}
-
-	available_utxos.append(&mut skipped_utxos);
-
-	Some((selected_utxos, cumulative_amount))
 }
 
 pub fn select_utxos_for_consolidation(
 	available_utxos: &mut Vec<Utxo>,
 	fee_info: &BitcoinFeeInfo,
-	params: ConsolidationParameters,
+	params: UtxoParameters,
 ) -> Vec<Utxo> {
 	let (mut spendable, mut dust) = available_utxos
 		.drain(..)
@@ -156,22 +154,20 @@ mod tests {
 		initial_available_utxos: &[Utxo],
 		fee_info: &BitcoinFeeInfo,
 		amount_to_be_spent: u64,
-		limit: Option<u32>,
-		expected_selection: Option<(Vec<Utxo>, u64)>,
+		maybe_limit: Option<u32>,
+		expected: Result<(Vec<u64>, u64), UtxoSelectionError>,
 	) {
 		let mut utxos = initial_available_utxos.to_owned();
-		let selection_limit = limit.unwrap_or(utxos.len() as u32);
 		let selected =
-			select_utxos_from_pool(&mut utxos, fee_info, amount_to_be_spent, selection_limit);
-		match (selected, expected_selection) {
-			(Some(actual), Some(expected)) => {
-				let expected_set =
-					expected.0.iter().map(|utxo| utxo.amount).collect::<BTreeSet<_>>();
+			select_utxos_from_pool(&mut utxos, fee_info, amount_to_be_spent, maybe_limit);
+		match (selected, expected) {
+			(Ok(actual), Ok(expected)) => {
 				let actual_set = actual.0.iter().map(|utxo| utxo.amount).collect::<BTreeSet<_>>();
+				let expected_set = BTreeSet::from_iter(expected.0.clone());
 
 				// Ensure no duplicate utxos are selected
-				assert_eq!(expected.0.len(), expected_set.len());
 				assert_eq!(actual.0.len(), actual_set.len());
+				assert_eq!(expected.0.len(), expected_set.len());
 
 				// Compare selection result, ignoring order.
 				assert_eq!((actual_set, actual.1), (expected_set, expected.1));
@@ -186,16 +182,7 @@ mod tests {
 					}
 				}
 			},
-			(None, None) => {
-				// If no result is returned, the utxo is only sorted, but otherwise unchanged.
-				assert_eq!(
-					utxos.iter().map(|utxo| utxo.amount).collect::<BTreeSet::<_>>(),
-					initial_available_utxos
-						.iter()
-						.map(|utxo| utxo.amount)
-						.collect::<BTreeSet::<_>>()
-				);
-			},
+			(Err(actual), Err(expected)) => assert_eq!(actual, expected),
 			(actual, expected) => panic!(
 				"Test case failed. Actual utxo selected: \n{:?} \nExpected: \n{:?}",
 				actual, expected
@@ -229,49 +216,36 @@ mod tests {
 		let fee_info = BitcoinFeeInfo { sats_per_kilobyte: 1000 };
 
 		// Empty utxo list as input should return Option::None.
-		test_case(&Vec::<Utxo>::new(), &fee_info, 0, None, None);
+		test_case(
+			&Vec::<Utxo>::new(),
+			&fee_info,
+			0,
+			None,
+			Err(UtxoSelectionError::NoUtxoAvailableAfterFeeReduction),
+		);
 
 		// Entering the amount greater than the max spendable amount will
 		// cause the function to return no utxos. Note that we don't check
 		// remaining utxos in this case since it will be an "incorrect" value
 		// (which is OK since it will be ignored).
-		assert_eq!(select_utxos_from_pool(&mut mock_utxos(), &fee_info, 1000000, 100u32), None);
-
-		test_case(
-			&mock_utxos(),
-			&fee_info,
-			1,
-			None,
-			Some((vec![build_utxo(80, 3), build_utxo(150, 4)], 74)),
+		assert_eq!(
+			select_utxos_from_pool(&mut mock_utxos(), &fee_info, 1000000, Some(100u32)),
+			Err(UtxoSelectionError::InsufficientFundsInAvailableUtxos)
 		);
 
-		test_case(
-			&mock_utxos(),
-			&fee_info,
-			18,
-			None,
-			Some((vec![build_utxo(80, 3), build_utxo(150, 4), build_utxo(190, 6)], 186)),
-		);
+		test_case(&mock_utxos(), &fee_info, 1, None, Ok((vec![80, 150], 74)));
 
-		test_case(
-			&mock_utxos(),
-			&fee_info,
-			80,
-			None,
-			Some((
-				vec![build_utxo(80, 3), build_utxo(150, 4), build_utxo(190, 6), build_utxo(200, 5)],
-				308,
-			)),
-		);
+		test_case(&mock_utxos(), &fee_info, 18, None, Ok((vec![80, 150, 190], 186)));
 
-		let mut all_utxos_sorted = mock_utxos();
-		all_utxos_sorted.sort_by_key(|utxo| utxo.amount);
+		test_case(&mock_utxos(), &fee_info, 80, None, Ok((vec![80, 150, 190, 200], 308)));
+
+		let all_utxos = mock_utxos().into_iter().map(|utxo| utxo.amount).collect::<Vec<_>>();
 
 		// The amount that will cause all utxos to be selected
-		test_case(&mock_utxos(), &fee_info, 20000, None, Some((all_utxos_sorted.clone(), 24300)));
+		test_case(&mock_utxos(), &fee_info, 20000, None, Ok((all_utxos.clone(), 24300)));
 
 		// Max amount that can be spent with the given utxos.
-		test_case(&mock_utxos(), &fee_info, 24300, None, Some((all_utxos_sorted, 24300)));
+		test_case(&mock_utxos(), &fee_info, 24300, None, Ok((all_utxos, 24300)));
 
 		// choosing the fee to spend the input utxo as greater than the amounts in the 2 smallest
 		// utxos will cause the algorithm to skip the selection of those 2 utxos and adding it to
@@ -281,16 +255,7 @@ mod tests {
 			&BitcoinFeeInfo { sats_per_kilobyte: 2000 },
 			190,
 			None,
-			Some((
-				vec![
-					build_utxo(190, 6),
-					build_utxo(200, 5),
-					build_utxo(250, 1),
-					build_utxo(410, 7),
-					build_utxo(1100, 0),
-				],
-				1410,
-			)),
+			Ok((vec![190, 200, 250, 410, 1_100], 1410)),
 		);
 	}
 
@@ -298,73 +263,43 @@ mod tests {
 	fn test_utxo_selection_with_limit() {
 		let fee_info = BitcoinFeeInfo { sats_per_kilobyte: 1000 };
 
-		// Enable to select with the given limit.
-		test_case(&mock_utxos(), &fee_info, 23_780, Some(3), None);
+		// Unable to select with the given limit.
+		test_case(
+			&mock_utxos(),
+			&fee_info,
+			23_780,
+			Some(3),
+			Err(UtxoSelectionError::InsufficientFundsInAvailableUtxos),
+		);
 
-		// Enable to select due to high fees
+		// Unable to select due to high fees
 		let fee_info = BitcoinFeeInfo { sats_per_kilobyte: 1_000_000 };
-		test_case(&mock_utxos(), &fee_info, 1, Some(3), None);
+		test_case(
+			&mock_utxos(),
+			&fee_info,
+			1,
+			Some(3),
+			Err(UtxoSelectionError::NoUtxoAvailableAfterFeeReduction),
+		);
 
-		// lowest 5 are skipped due to high fee.
+		// lowest 5 utxos are skipped due to high fee.
 		let fee_info = BitcoinFeeInfo { sats_per_kilobyte: 4_000 };
-		test_case(
-			&mock_utxos(),
-			&fee_info,
-			1_500,
-			Some(3),
-			Some((
-				vec![
-					build_utxo(410, 7),
-					build_utxo(1_100, 0),
-					build_utxo(5_000, 2),
-					build_utxo(7_680, 8),
-				],
-				13_022,
-			)),
-		);
+		test_case(&mock_utxos(), &fee_info, 1_500, Some(3), Ok((vec![410, 1_100, 5_000], 5_654)));
 
-		test_case(
-			&mock_utxos(),
-			&fee_info,
-			80,
-			Some(5),
-			Some((vec![build_utxo(410, 7), build_utxo(1_100, 0)], 966)),
-		);
+		test_case(&mock_utxos(), &fee_info, 80, Some(5), Ok((vec![410, 1_100], 966)));
 
-		// Lowest N do not have enough funds, swapping with larger utxo is required.
+		// Lowest N do not have enough funds. `last` pointer need to be shifted up.
 		let fee_info = BitcoinFeeInfo { sats_per_kilobyte: 0 };
-		test_case(
-			&mock_utxos(),
-			&fee_info,
-			430,
-			Some(3),
-			Some((
-				vec![
-					build_utxo(150, 4),
-					build_utxo(190, 6),
-					build_utxo(10_000, 9),
-					build_utxo(80, 3),
-				],
-				10_420,
-			)),
-		);
+		test_case(&mock_utxos(), &fee_info, 430, Some(3), Ok((vec![150, 190, 200], 540)));
 
-		// Worse case scenario: Highest N elements are selected
+		// Worst case scenario: Highest N elements are selected
 		let fee_info = BitcoinFeeInfo { sats_per_kilobyte: 1_000 };
 		test_case(
 			&mock_utxos(),
 			&fee_info,
 			22_000,
 			Some(3),
-			Some((
-				vec![
-					build_utxo(10_000, 9),
-					build_utxo(7_680, 8),
-					build_utxo(5_000, 2),
-					build_utxo(190, 3),
-				],
-				22_558,
-			)),
+			Ok((vec![10_000, 7_680, 5_000], 22_446)),
 		);
 	}
 }

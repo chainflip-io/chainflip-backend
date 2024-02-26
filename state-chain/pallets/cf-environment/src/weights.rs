@@ -33,7 +33,7 @@ use core::marker::PhantomData;
 /// Weight functions needed for pallet_cf_environment.
 pub trait WeightInfo {
 	fn update_safe_mode() -> Weight;
-	fn update_consolidation_parameters() -> Weight;
+	fn update_utxo_parameters() -> Weight;
 }
 
 /// Weights for pallet_cf_environment using the Substrate node and recommended hardware.
@@ -49,9 +49,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(8_000_000, 0)
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
-	/// Storage: `Environment::ConsolidationParameters` (r:0 w:1)
-	/// Proof: `Environment::ConsolidationParameters` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn update_consolidation_parameters() -> Weight {
+	/// Storage: `Environment::UtxoParameters` (r:0 w:1)
+	/// Proof: `Environment::UtxoParameters` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	fn update_utxo_parameters() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
@@ -73,9 +73,9 @@ impl WeightInfo for () {
 		Weight::from_parts(8_000_000, 0)
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
-	/// Storage: `Environment::ConsolidationParameters` (r:0 w:1)
-	/// Proof: `Environment::ConsolidationParameters` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn update_consolidation_parameters() -> Weight {
+	/// Storage: `Environment::UtxoParameters` (r:0 w:1)
+	/// Proof: `Environment::UtxoParameters` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	fn update_utxo_parameters() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
