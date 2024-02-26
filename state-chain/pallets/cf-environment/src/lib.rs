@@ -432,10 +432,11 @@ impl<T: Config> Pallet<T> {
 			},
 			UtxoSelectionType::SelectForConsolidation =>
 				BitcoinAvailableUtxos::<T>::try_mutate(|available_utxos| {
-					let params = Self::utxo_parameters();
-
-					let utxos_to_consolidate =
-						select_utxos_for_consolidation(available_utxos, &bitcoin_fee_info, params);
+					let utxos_to_consolidate = select_utxos_for_consolidation(
+						available_utxos,
+						&bitcoin_fee_info,
+						Self::utxo_parameters(),
+					);
 
 					if utxos_to_consolidate.is_empty() {
 						Err(())
