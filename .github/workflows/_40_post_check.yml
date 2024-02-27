@@ -66,18 +66,9 @@ jobs:
         working-directory: bouncer
         run: pnpm install
 
-      - name: Check solana binaries
-        continue-on-error: true
-        run: |
-          which solana-test-validator
-
       - name: Install solana
         run: |
           sh -c "$(curl -sSfL https://release.solana.com/$SOLANA_VERSION/install)"
-
-      - name: Check solana binaries
-        run: |
-          which solana-test-validator
 
       - name: Start a localnet 🚀
         env:
