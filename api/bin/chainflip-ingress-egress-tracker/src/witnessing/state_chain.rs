@@ -17,12 +17,10 @@ use pallet_cf_ingress_egress::DepositWitness;
 use serde::Serialize;
 use utilities::rpc::NumberOrHex;
 
-type Hash = [u8; 32];
-
 #[derive(Serialize)]
 #[serde(untagged)]
 enum TransactionRef {
-	Bitcoin { hash: Hash },
+	Bitcoin { hash: String },
 	Ethereum { hash: H256 },
 	Polkadot { transaction_id: PolkadotTransactionId },
 }
@@ -216,12 +214,14 @@ where
 						tx_out_id: TransactionId::Bitcoin {
 							hash: format!("0x{}", hex::encode(tx_out_id)),
 						},
-						tx_ref:
-							TransactionRef::Bitcoin {
-								hash: <BitcoinTransactionMetadata as TransactionMetadata<
+						tx_ref: TransactionRef::Bitcoin {
+							hash: format!(
+								"0x{}",
+								hex::encode(<BitcoinTransactionMetadata as TransactionMetadata<
 									Bitcoin,
-								>>::get_transaction_ref(&tx_metadata),
-							},
+								>>::get_transaction_ref(&tx_metadata))
+							),
+						},
 					})
 					.await?;
 			}
