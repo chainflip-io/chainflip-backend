@@ -39,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
 
 	// Note: the greeting should only be printed in normal mode (i.e. not for short-lived commands
 	// like `--version`), so we execute it only after the settings have been parsed.
-	utilities::print_start_and_end!(async run_main(settings));
+	let _ = utilities::print_start_and_end!(async run_main(settings));
 
 	Ok(())
 }
