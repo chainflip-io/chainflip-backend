@@ -124,6 +124,7 @@ jobs:
 
       - name: Print solana logs ☀️
         if: failure()
+        continue-on-error: true
         run: |
           cat /tmp/solana/solana.log
 
