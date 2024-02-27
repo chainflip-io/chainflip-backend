@@ -33,11 +33,11 @@ mod mock;
 mod tests;
 
 macro_rules! ensure_governance_member {
-	(origin:ident) => {
+	($origin:ident) => {{
 		let account_id = ensure_signed($origin)?;
 		ensure!(Members::<T>::get().contains(&account_id), Error::<T>::NotMember);
 		account_id
-	};
+	}};
 }
 
 pub type ProposalId = u32;
