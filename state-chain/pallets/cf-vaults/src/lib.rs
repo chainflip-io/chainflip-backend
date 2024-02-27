@@ -125,6 +125,7 @@ pub mod pallet {
 		AwaitingGovernanceActivation {
 			new_public_key: <<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 		},
+		ChainInitialized,
 	}
 
 	#[pallet::error]
@@ -171,6 +172,30 @@ pub mod pallet {
 			T::SafeMode::set_code_red();
 
 			Pallet::<T, I>::deposit_event(Event::VaultRotatedExternally(new_public_key));
+
+			Ok(().into())
+		}
+
+		/// Sets the ChainInitialized flag to true for this chain so that the chain can be
+		/// initialized on the next epoch rotation
+		///
+		/// ## Events
+		///
+		/// - [ChainInitialized](Event::ChainInitialized)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(5)]
+		// This weight is not strictly correct but since it's a governance call, weight is
+		// irrelevant.
+		#[pallet::weight(Weight::zero())]
+		pub fn initialize_chain(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			ChainInitialized::<T, I>::put(true);
+
+			Self::deposit_event(Event::<T, I>::ChainInitialized);
 
 			Ok(().into())
 		}
