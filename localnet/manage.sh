@@ -131,7 +131,7 @@ build-localnet() {
   if which solana-test-validator >>$DEBUG_OUTPUT_DESTINATION 2>&1; then
     echo "☀️ Waiting for Solana node to start"
     ./localnet/init/scripts/start-solana.sh
-    until curl -s http://localhost:8899 >> $DEBUG_OUTPUT_DESTINATION 2>&1; do sleep 1; done
+    check_endpoint_health -s http://localhost:8899 >> $DEBUG_OUTPUT_DESTINATION 2>&1
   else
     echo "☀️ Solana not installed, skipping..."
   fi
