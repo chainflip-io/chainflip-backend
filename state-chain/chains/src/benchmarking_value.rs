@@ -12,9 +12,9 @@ use crate::address::EncodedAddress;
 #[cfg(feature = "runtime-benchmarks")]
 use crate::address::ForeignChainAddress;
 #[cfg(feature = "runtime-benchmarks")]
-use crate::btc::BitcoinTransactionMetadata;
+use crate::btc::BitcoinTransactionHash;
 #[cfg(feature = "runtime-benchmarks")]
-use crate::dot::PolkadotTransactionMetadata;
+use crate::dot::PolkadotTransactionId;
 #[cfg(feature = "runtime-benchmarks")]
 use crate::evm::{EvmFetchId, EvmTransactionMetadata};
 
@@ -136,22 +136,21 @@ impl BenchmarkValue for EvmTransactionMetadata {
 			max_fee_per_gas: Some(U256::zero()),
 			max_priority_fee_per_gas: Some(U256::zero()),
 			gas_limit: None,
-			tx_hash: Default::default(),
 		}
 	}
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for PolkadotTransactionMetadata {
+impl BenchmarkValue for PolkadotTransactionId {
 	fn benchmark_value() -> Self {
-		Self { tx_id: Default::default() }
+		Self { block_number: 0u32, extrinsic_index: 0u32 }
 	}
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for BitcoinTransactionMetadata {
+impl BenchmarkValue for BitcoinTransactionHash {
 	fn benchmark_value() -> Self {
-		Self { tx_hash: Default::default() }
+		BitcoinTransactionHash::new(Default::default())
 	}
 }
 
