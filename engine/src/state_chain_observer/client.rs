@@ -308,6 +308,9 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 					.into());
 				},
 				CfeCompatibility::NotYetCompatible => {
+					// TODO: After the whole "single binary CFE upgrade" is complete, we should be
+					// able to remove `wait_for_required_version` as we'll never wait. We'll always
+					// return out the error and let the runner start the other version.
 					if wait_for_required_version {
 						let incompatible_blocks = futures::stream::once(futures::future::ready(
 							Ok::<_, anyhow::Error>(latest_block),
