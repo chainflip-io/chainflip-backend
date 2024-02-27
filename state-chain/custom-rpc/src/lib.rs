@@ -34,8 +34,8 @@ use state_chain_runtime::{
 	chainflip::{BlockUpdate, Offence},
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
-		CustomRuntimeApi, DispatchErrorWithMessage, FailingWitnessValidators,
-		LiquidityProviderInfo, RuntimeApiAccountInfoV2, ScheduledSwap,
+		BrokerInfo, CustomRuntimeApi, DispatchErrorWithMessage, FailingWitnessValidators,
+		LiquidityProviderInfo, ScheduledSwap, ValidatorInfo,
 	},
 	NetworkFee,
 };
@@ -61,6 +61,7 @@ pub enum RpcAccountInfo {
 	},
 	Broker {
 		flip_balance: NumberOrHex,
+		earned_fees: any::AssetMap<NumberOrHex>,
 	},
 	LiquidityProvider {
 		balances: any::AssetMap<NumberOrHex>,
@@ -90,8 +91,17 @@ impl RpcAccountInfo {
 		Self::Unregistered { flip_balance: balance.into() }
 	}
 
-	fn broker(balance: u128) -> Self {
-		Self::Broker { flip_balance: balance.into() }
+	fn broker(balance: u128, broker_info: BrokerInfo) -> Self {
+		Self::Broker {
+			flip_balance: balance.into(),
+			earned_fees: cf_chains::assets::any::AssetMap::try_from_iter(
+				broker_info
+					.earned_fees
+					.iter()
+					.map(|(asset, balance)| (*asset, (*balance).into())),
+			)
+			.unwrap(),
+		}
 	}
 
 	fn lp(info: LiquidityProviderInfo, network: NetworkEnvironment, balance: u128) -> Self {
@@ -110,7 +120,7 @@ impl RpcAccountInfo {
 		}
 	}
 
-	fn validator(info: RuntimeApiAccountInfoV2) -> Self {
+	fn validator(info: ValidatorInfo) -> Self {
 		Self::Validator {
 			flip_balance: info.balance.into(),
 			bond: info.bond.into(),
@@ -692,12 +702,14 @@ where
 				.unwrap_or(AccountRole::Unregistered)
 			{
 				AccountRole::Unregistered => RpcAccountInfo::unregistered(balance),
-				AccountRole::Broker => RpcAccountInfo::broker(balance),
+				AccountRole::Broker => {
+					let info = api.cf_broker_info(hash, account_id).map_err(to_rpc_error)?;
+
+					RpcAccountInfo::broker(balance, info)
+				},
 				AccountRole::LiquidityProvider => {
-					let info = api
-						.cf_liquidity_provider_info(hash, account_id)
-						.map_err(to_rpc_error)?
-						.expect("role already validated");
+					let info =
+						api.cf_liquidity_provider_info(hash, account_id).map_err(to_rpc_error)?;
 
 					RpcAccountInfo::lp(
 						info,
@@ -706,7 +718,7 @@ where
 					)
 				},
 				AccountRole::Validator => {
-					let info = api.cf_account_info_v2(hash, &account_id).map_err(to_rpc_error)?;
+					let info = api.cf_validator_info(hash, &account_id).map_err(to_rpc_error)?;
 
 					RpcAccountInfo::validator(info)
 				},
@@ -722,7 +734,7 @@ where
 		let account_info = self
 			.client
 			.runtime_api()
-			.cf_account_info_v2(self.unwrap_or_best(at), &account_id)
+			.cf_validator_info(self.unwrap_or_best(at), &account_id)
 			.map_err(to_rpc_error)?;
 
 		Ok(RpcAccountInfoV2 {
@@ -1378,7 +1390,19 @@ mod test {
 
 	#[test]
 	fn test_broker_serialization() {
-		insta::assert_display_snapshot!(serde_json::to_value(RpcAccountInfo::broker(0)).unwrap());
+		insta::assert_display_snapshot!(serde_json::to_value(RpcAccountInfo::broker(
+			0,
+			BrokerInfo {
+				earned_fees: vec![
+					(Asset::Eth, 0),
+					(Asset::Btc, 0),
+					(Asset::Flip, 1000000000000000000),
+					(Asset::Usdc, 0),
+					(Asset::Dot, 0),
+				]
+			}
+		))
+		.unwrap());
 	}
 
 	#[test]
@@ -1422,7 +1446,7 @@ mod test {
 
 	#[test]
 	fn test_validator_serialization() {
-		let validator = RpcAccountInfo::validator(RuntimeApiAccountInfoV2 {
+		let validator = RpcAccountInfo::validator(ValidatorInfo {
 			balance: FLIPPERINOS_PER_FLIP,
 			bond: FLIPPERINOS_PER_FLIP,
 			last_heartbeat: 0,

@@ -147,12 +147,24 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 						),
 					},
 				KeyRotationStatusVariant::AwaitingActivation => {
-					let new_public_key = match PendingKeyRotation::<T, I>::get() {
-						Some(KeyRotationStatus::AwaitingActivation { new_public_key }) =>
+					let (new_public_key, maybe_request_id) = match PendingKeyRotation::<T, I>::get()
+					{
+						Some(KeyRotationStatus::AwaitingActivation {
+							request_id,
 							new_public_key,
+						}) => (new_public_key, request_id),
 						_ => unreachable!(
 							"Unreachable because we are in the branch for the AwaitingActivation variant."
 						),
+					};
+
+					if let Some(request_id) = maybe_request_id {
+						// After the ceremony completes, it is consumed and Void is left
+						// behind. At this point we are sure the ceremony existed and succeded, we
+						// can activate the key
+						if Signature::<T, I>::get(request_id) == AsyncResult::Void {
+							T::VaultActivator::activate_key();
+						};
 					};
 
 					let status = T::VaultActivator::status()
@@ -188,17 +200,34 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 			PendingKeyRotation::<T, I>::get()
 		{
 			let maybe_active_epoch_key = Self::active_epoch_key();
-			T::VaultActivator::activate(
+
+			match T::VaultActivator::start_key_activation(
 				new_public_key,
 				maybe_active_epoch_key.map(|EpochKey { key, .. }| key),
-			);
-
-			if maybe_active_epoch_key.is_some() {
-				Self::activate_new_key(new_public_key);
-			} else {
-				PendingKeyRotation::<T, I>::put(KeyRotationStatus::<T, I>::AwaitingActivation {
-					new_public_key,
-				});
+			) {
+				// If a request_id was returned we need to wait for the signing request to complete
+				// before ending the rotation succesfully
+				Some(request_id) => {
+					PendingKeyRotation::<T, I>::put(
+						KeyRotationStatus::<T, I>::AwaitingActivation {
+							request_id: Some(request_id),
+							new_public_key,
+						},
+					);
+				},
+				// if none was returned no ceremony is required and we can already complete the
+				// rotation/wait for governance extrinsic to activate the vault
+				None =>
+					if maybe_active_epoch_key.is_some() {
+						Self::activate_new_key(new_public_key);
+					} else {
+						PendingKeyRotation::<T, I>::put(
+							KeyRotationStatus::<T, I>::AwaitingActivation {
+								request_id: None,
+								new_public_key,
+							},
+						);
+					},
 			}
 		} else {
 			log::error!("Vault activation called during wrong state.");

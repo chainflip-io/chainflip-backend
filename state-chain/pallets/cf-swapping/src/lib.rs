@@ -271,6 +271,7 @@ pub mod pallet {
 
 	/// Earned Fees by Brokers
 	#[pallet::storage]
+	#[pallet::getter(fn earned_broker_fees)]
 	pub(crate) type EarnedBrokerFees<T: Config> =
 		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
