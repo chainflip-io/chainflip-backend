@@ -3,8 +3,11 @@ use crate::{
 	utils::{get_broadcast_id, hex_encode_bytes},
 };
 use cf_chains::{
-	address::ToHumanreadableAddress, evm::{SchnorrVerificationComponents, H256, EvmTransactionMetadata}, AnyChain, Bitcoin, Chain,
-	Ethereum, Polkadot, TransactionMetadata, btc::BitcoinTransactionMetadata, dot::{PolkadotTransactionMetadata, PolkadotTransactionId},
+	address::ToHumanreadableAddress,
+	btc::BitcoinTransactionMetadata,
+	dot::{PolkadotTransactionId, PolkadotTransactionMetadata},
+	evm::{EvmTransactionMetadata, SchnorrVerificationComponents, H256},
+	AnyChain, Bitcoin, Chain, Ethereum, Polkadot, TransactionMetadata,
 };
 use cf_primitives::{BroadcastId, ForeignChain, NetworkEnvironment};
 use chainflip_engine::state_chain_observer::client::{
@@ -16,7 +19,7 @@ use utilities::rpc::NumberOrHex;
 
 type Hash = [u8; 32];
 
-#[derive(Serialize]
+#[derive(Serialize)]
 #[serde(untagged)]
 enum TransactionRef {
 	Bitcoin { hash: Hash },
@@ -24,7 +27,7 @@ enum TransactionRef {
 	Polkadot { transaction_id: PolkadotTransactionId },
 }
 
-#[derive(Serialize]
+#[derive(Serialize)]
 #[serde(untagged)]
 enum TransactionId {
 	Bitcoin { hash: String },
@@ -32,7 +35,7 @@ enum TransactionId {
 	Polkadot { signature: String },
 }
 
-#[derive(Serialize]
+#[derive(Serialize)]
 #[serde(untagged)]
 enum WitnessInformation {
 	Deposit {
@@ -174,22 +177,35 @@ where
 					)))
 					.await?;
 			},
-		EthereumBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, tx_metadata, .. }) => {
+		EthereumBroadcaster(BroadcastCall::transaction_succeeded {
+			tx_out_id,
+			tx_metadata,
+			..
+		}) => {
 			let broadcast_id =
 				get_broadcast_id::<Ethereum, StateChainClient>(state_chain_client, &tx_out_id)
 					.await;
 
 			if let Some(broadcast_id) = broadcast_id {
 				store
-					.save_singleton(&WitnessInformation::Broadcast {
-						broadcast_id,
-						tx_out_id: TransactionId::Ethereum { signature: tx_out_id },
-						tx_ref: TransactionRef::Ethereum { hash: <EvmTransactionMetadata as TransactionMetadata<Ethereum>>::get_transaction_ref(&tx_metadata)}
-					})
+					.save_singleton(
+						&WitnessInformation::Broadcast {
+							broadcast_id,
+							tx_out_id: TransactionId::Ethereum { signature: tx_out_id },
+							tx_ref:
+								TransactionRef::Ethereum {
+									hash: <EvmTransactionMetadata as TransactionMetadata<
+										Ethereum,
+									>>::get_transaction_ref(&tx_metadata),
+								},
+						},
+					)
 					.await?;
 			}
 		},
-		BitcoinBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, tx_metadata, .. }) => {
+		BitcoinBroadcaster(BroadcastCall::transaction_succeeded {
+			tx_out_id, tx_metadata, ..
+		}) => {
 			let broadcast_id =
 				get_broadcast_id::<Bitcoin, StateChainClient>(state_chain_client, &tx_out_id).await;
 
@@ -200,12 +216,21 @@ where
 						tx_out_id: TransactionId::Bitcoin {
 							hash: format!("0x{}", hex::encode(tx_out_id)),
 						},
-						tx_ref: TransactionRef::Bitcoin { hash: <BitcoinTransactionMetadata as TransactionMetadata<Bitcoin>>::get_transaction_ref(&tx_metadata)}
+						tx_ref:
+							TransactionRef::Bitcoin {
+								hash: <BitcoinTransactionMetadata as TransactionMetadata<
+									Bitcoin,
+								>>::get_transaction_ref(&tx_metadata),
+							},
 					})
 					.await?;
 			}
 		},
-		PolkadotBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, tx_metadata, .. }) => {
+		PolkadotBroadcaster(BroadcastCall::transaction_succeeded {
+			tx_out_id,
+			tx_metadata,
+			..
+		}) => {
 			let broadcast_id =
 				get_broadcast_id::<Polkadot, StateChainClient>(state_chain_client, &tx_out_id)
 					.await;
@@ -217,7 +242,11 @@ where
 						tx_out_id: TransactionId::Polkadot {
 							signature: format!("0x{}", hex::encode(tx_out_id.aliased_ref())),
 						},
-						tx_ref: TransactionRef::Polkadot { transaction_id: <PolkadotTransactionMetadata as TransactionMetadata<Polkadot>>::get_transaction_ref(&tx_metadata)}
+						tx_ref: TransactionRef::Polkadot {
+							transaction_id: <PolkadotTransactionMetadata as TransactionMetadata<
+								Polkadot,
+							>>::get_transaction_ref(&tx_metadata),
+						},
 					})
 					.await?;
 			}
