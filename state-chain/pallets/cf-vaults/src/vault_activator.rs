@@ -22,6 +22,8 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 		new_public_key: AggKeyFor<T, I>,
 		maybe_old_public_key: Option<AggKeyFor<T, I>>,
 	) -> FirstVault {
+		// If this storage item exists, it means this chain is already active we will rotate
+		// normally
 		if VaultStartBlockNumbers::<T, I>::iter_keys().next().is_some() {
 			match <T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
 				maybe_old_public_key,
@@ -44,14 +46,20 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 				},
 			}
 			FirstVault::False
-		} else if ChainInitialized::<T, I>::get() {
+		}
+		// If the chain is not active yet, we check this flag to decide whether we want to activate
+		// this chain during this epoch rotation
+		else if ChainInitialized::<T, I>::get() {
 			// VaultStartBlockNumbers being empty means we are bootstrapping the vault.
 			PendingVaultActivation::<T, I>::put(
 				VaultActivationStatus::<T, I>::AwaitingActivation { new_public_key },
 			);
 			Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation { new_public_key });
 			FirstVault::True
-		} else {
+		}
+		// The case where the ChainInitialized flag is not set, we skip activation for this chain
+		// and complete rotation since this chain is still not ready to be activated yet.
+		else {
 			PendingVaultActivation::<T, I>::put(VaultActivationStatus::<T, I>::Complete);
 			FirstVault::False
 		}
