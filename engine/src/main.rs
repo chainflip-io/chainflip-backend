@@ -188,12 +188,24 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 				);
 				DotRetryRpcClient::new(scope, settings.dot.nodes, expected_dot_genesis_hash)?
 			};
+			let sol_client = {
+				let http_api_url = "http://0.0.0.0:8899";
+				let http_api =
+					jsonrpsee::http_client::HttpClientBuilder::default().build(http_api_url)?;
+				let retrying = sol_rpc::retrying::Retrying::new(
+					http_api,
+					sol_rpc::retrying::Delays::default(),
+				);
+
+				retrying
+			};
 
 			witness::start::start(
 				scope,
 				eth_client.clone(),
 				btc_client.clone(),
 				dot_client.clone(),
+				sol_client, // .clone(),
 				state_chain_client.clone(),
 				state_chain_stream.clone(),
 				unfinalised_state_chain_stream.clone(),
@@ -207,6 +219,7 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 				eth_client,
 				dot_client,
 				btc_client,
+				// sol_client,
 				eth_multisig_client,
 				dot_multisig_client,
 				btc_multisig_client,

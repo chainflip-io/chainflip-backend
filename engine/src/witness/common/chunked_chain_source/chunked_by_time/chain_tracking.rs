@@ -38,15 +38,14 @@ impl<Inner: ChunkedByTime> ChunkedByTimeBuilder<Inner> {
 			let state_chain_client = state_chain_client.clone();
 			let tracked_data_client = tracked_data_client.clone();
 			async move {
+				let tracked_data = tracked_data_client.get_tracked_data(&header).await?;
+				tracing::info!("tracked-data: {:?}", tracked_data);
 				let call: Box<state_chain_runtime::RuntimeCall> = Box::new(
 					pallet_cf_chain_tracking::Call::<
 						state_chain_runtime::Runtime,
 						<Inner::Chain as PalletInstanceAlias>::Instance,
 					>::update_chain_state {
-						new_chain_state: ChainState {
-							block_height: header.index,
-							tracked_data: tracked_data_client.get_tracked_data(&header).await?,
-						},
+						new_chain_state: ChainState { block_height: header.index, tracked_data },
 					}
 					.into(),
 				);

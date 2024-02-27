@@ -13,7 +13,7 @@ use crate::{
 	BitcoinThresholdSigner, BlockNumber, Emissions, Environment, EthereumBroadcaster,
 	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, Hash, PolkadotBroadcaster,
 	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
-	System, Validator, YEAR,
+	SolanaIngressEgress, System, Validator, YEAR,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -40,9 +40,10 @@ use cf_chains::{
 		api::{EthEnvironmentProvider, EvmReplayProtection},
 		EvmCrypto, Transaction,
 	},
+	sol::api::SolanaApi,
 	AnyChain, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	ChainEnvironment, ChainState, DepositChannel, ForeignChain, ReplayProtectionProvider,
-	SetCommKeyWithAggKey, SetGovKeyWithAggKey, TransactionBuilder,
+	SetCommKeyWithAggKey, SetGovKeyWithAggKey, Solana, TransactionBuilder,
 };
 use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId};
 use cf_traits::{
@@ -255,6 +256,27 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 	}
 }
 
+pub struct SolanaTransactionBuilder;
+impl TransactionBuilder<Solana, SolanaApi<SolanaEnvironment>> for SolanaTransactionBuilder {
+	fn build_transaction(
+		_signed_call: &SolanaApi<SolanaEnvironment>,
+	) -> <Solana as Chain>::Transaction {
+		todo!()
+	}
+	fn refresh_unsigned_data(_tx: &mut <Solana as Chain>::Transaction) {
+		todo!()
+	}
+	fn calculate_gas_limit(_call: &SolanaApi<SolanaEnvironment>) -> Option<U256> {
+		todo!()
+	}
+	fn requires_signature_refresh(
+		_call: &SolanaApi<SolanaEnvironment>,
+		_payload: &<<Solana as Chain>::ChainCrypto as ChainCrypto>::Payload,
+	) -> bool {
+		todo!()
+	}
+}
+
 pub struct BlockAuthorRewardDistribution;
 
 impl RewardsDistribution for BlockAuthorRewardDistribution {
@@ -369,6 +391,9 @@ impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
 	}
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct SolanaEnvironment;
+
 pub struct TokenholderGovernanceBroadcaster;
 
 impl TokenholderGovernanceBroadcaster {
@@ -408,6 +433,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 			ForeignChain::Polkadot =>
 				Self::broadcast_gov_key::<Polkadot, PolkadotBroadcaster>(maybe_old_key, new_key),
 			ForeignChain::Bitcoin => Err(()),
+			ForeignChain::Solana => todo!(),
 		}
 	}
 
@@ -418,6 +444,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 			ForeignChain::Polkadot =>
 				Self::is_govkey_compatible::<<Polkadot as Chain>::ChainCrypto>(key),
 			ForeignChain::Bitcoin => false,
+			ForeignChain::Solana => todo!(),
 		}
 	}
 }
@@ -516,14 +543,16 @@ impl_deposit_api_for_anychain!(
 	AnyChainIngressEgressHandler,
 	(Ethereum, EthereumIngressEgress),
 	(Polkadot, PolkadotIngressEgress),
-	(Bitcoin, BitcoinIngressEgress)
+	(Bitcoin, BitcoinIngressEgress),
+	(Solana, SolanaIngressEgress)
 );
 
 impl_egress_api_for_anychain!(
 	AnyChainIngressEgressHandler,
 	(Ethereum, EthereumIngressEgress),
 	(Polkadot, PolkadotIngressEgress),
-	(Bitcoin, BitcoinIngressEgress)
+	(Bitcoin, BitcoinIngressEgress),
+	(Solana, SolanaIngressEgress)
 );
 
 pub struct EthDepositHandler;
@@ -542,6 +571,9 @@ impl DepositHandler<Bitcoin> for BtcDepositHandler {
 		Environment::add_bitcoin_utxo_to_list(amount, utxo_id, channel.state)
 	}
 }
+
+pub struct SolDepositHandler;
+impl DepositHandler<Solana> for SolDepositHandler {}
 
 pub struct ChainAddressConverter;
 
@@ -584,6 +616,9 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 			_ => unreachable!(),
 		}
 	}
+}
+impl OnBroadcastReady<Solana> for BroadcastReadyProvider {
+	type ApiCall = SolanaApi<SolanaEnvironment>;
 }
 
 pub struct BitcoinFeeGetter;

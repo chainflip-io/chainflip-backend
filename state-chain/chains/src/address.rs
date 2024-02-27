@@ -1,6 +1,12 @@
 extern crate alloc;
 
-use crate::{btc::ScriptPubkey, dot::PolkadotAccountId, eth::Address as EthereumAddress, Chain};
+use crate::{
+	btc::ScriptPubkey,
+	dot::PolkadotAccountId,
+	eth::Address as EthereumAddress,
+	sol::{self, SolAddress},
+	Chain,
+};
 use cf_primitives::{ChannelId, ForeignChain, NetworkEnvironment};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -15,6 +21,7 @@ pub enum AddressDerivationError {
 	MissingPolkadotVault,
 	MissingBitcoinVault,
 	BitcoinChannelIdTooLarge,
+	SolanaDerivationError(sol::AddressDerivationError),
 }
 
 /// Generates a deterministic deposit address for some combination of asset, chain and channel id.
@@ -49,6 +56,7 @@ pub enum ForeignChainAddress {
 	Eth(EthereumAddress),
 	Dot(PolkadotAccountId),
 	Btc(ScriptPubkey),
+	Sol(SolAddress),
 }
 
 impl ForeignChainAddress {
@@ -57,6 +65,7 @@ impl ForeignChainAddress {
 			ForeignChainAddress::Eth(_) => ForeignChain::Ethereum,
 			ForeignChainAddress::Dot(_) => ForeignChain::Polkadot,
 			ForeignChainAddress::Btc(_) => ForeignChain::Bitcoin,
+			ForeignChainAddress::Sol(_) => ForeignChain::Solana,
 		}
 	}
 }
@@ -68,6 +77,7 @@ pub enum EncodedAddress {
 	Eth([u8; 20]),
 	Dot([u8; 32]),
 	Btc(Vec<u8>),
+	Sol([u8; crate::sol::consts::SOLANA_ADDRESS_SIZE]),
 }
 
 pub trait AddressConverter: Sized {
@@ -81,20 +91,15 @@ pub trait AddressConverter: Sized {
 impl core::fmt::Display for EncodedAddress {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		match self {
-			EncodedAddress::Eth(addr) => {
-				write!(f, "0x{}", hex::encode(&addr[..]))
-			},
-			EncodedAddress::Dot(addr) => {
-				write!(f, "0x{}", hex::encode(&addr[..]))
-			},
-			EncodedAddress::Btc(addr) => {
-				write!(
-					f,
-					"{}",
-					std::str::from_utf8(addr)
-						.unwrap_or("The address cant be decoded from the utf8 encoded bytes")
-				)
-			},
+			EncodedAddress::Eth(addr) => write!(f, "0x{}", hex::encode(&addr[..])),
+			EncodedAddress::Dot(addr) => write!(f, "0x{}", hex::encode(&addr[..])),
+			EncodedAddress::Btc(addr) => write!(
+				f,
+				"{}",
+				std::str::from_utf8(addr)
+					.unwrap_or("The address cant be decoded from the utf8 encoded bytes")
+			),
+			EncodedAddress::Sol(addr) => core::fmt::Display::fmt(&SolAddress(*addr), f),
 		}
 	}
 }
@@ -155,6 +160,12 @@ impl From<ScriptPubkey> for ForeignChainAddress {
 	}
 }
 
+impl From<sol::AddressDerivationError> for AddressDerivationError {
+	fn from(value: sol::AddressDerivationError) -> Self {
+		Self::SolanaDerivationError(value)
+	}
+}
+
 impl EncodedAddress {
 	pub fn from_chain_bytes(chain: ForeignChain, bytes: Vec<u8>) -> Result<Self, &'static str> {
 		match chain {
@@ -175,6 +186,9 @@ impl EncodedAddress {
 				Ok(EncodedAddress::Dot(address))
 			},
 			ForeignChain::Bitcoin => Ok(EncodedAddress::Btc(bytes)),
+			ForeignChain::Solana => Ok(EncodedAddress::Sol(
+				bytes.try_into().map_err(|_| "Invalid Solana address length")?,
+			)),
 		}
 	}
 }
@@ -189,6 +203,7 @@ pub fn to_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 		ForeignChainAddress::Btc(script_pubkey) => EncodedAddress::Btc(
 			script_pubkey.to_address(&network_environment().into()).as_bytes().to_vec(),
 		),
+		ForeignChainAddress::Sol(address) => EncodedAddress::Sol(address.into()),
 	}
 }
 
@@ -208,6 +223,7 @@ pub fn try_from_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 			)
 			.map_err(|_| ())?,
 		)),
+		EncodedAddress::Sol(address_bytes) => Ok(ForeignChainAddress::Sol(address_bytes.into())),
 	}
 }
 
@@ -262,6 +278,7 @@ pub enum ForeignChainAddressHumanreadable {
 	Eth(<EthereumAddress as ToHumanreadableAddress>::Humanreadable),
 	Dot(<PolkadotAccountId as ToHumanreadableAddress>::Humanreadable),
 	Btc(<ScriptPubkey as ToHumanreadableAddress>::Humanreadable),
+	Sol(<SolAddress as ToHumanreadableAddress>::Humanreadable),
 }
 
 #[cfg(feature = "std")]
@@ -287,6 +304,8 @@ impl ToHumanreadableAddress for ForeignChainAddress {
 				ForeignChainAddressHumanreadable::Dot(address.to_humanreadable(network_environment)),
 			ForeignChainAddress::Btc(address) =>
 				ForeignChainAddressHumanreadable::Btc(address.to_humanreadable(network_environment)),
+			ForeignChainAddress::Sol(address) =>
+				ForeignChainAddressHumanreadable::Sol(address.to_humanreadable(network_environment)),
 		}
 	}
 }

@@ -26,8 +26,9 @@ use cf_chains::{
 	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
+	sol::SolanaCrypto,
 	Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, FeeEstimationApi, ForeignChain, Polkadot,
-	TransactionBuilder,
+	Solana, TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, NetworkEnvironment};
 use cf_traits::{AssetConverter, GetTrackedData, LpBalanceApi};
@@ -105,7 +106,7 @@ pub use pallet_cf_validator::SetSizeParameters;
 pub use chainflip::chain_instances::*;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, BroadcastReadyProvider, BtcEnvironment,
-	ChainAddressConverter, ChainflipHeartbeat, DotEnvironment, EthEnvironment,
+	ChainAddressConverter, ChainflipHeartbeat, DotEnvironment, EthEnvironment, SolanaEnvironment,
 	TokenholderGovernanceBroadcaster,
 };
 use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
@@ -272,6 +273,17 @@ impl pallet_cf_vaults::Config<BitcoinInstance> for Runtime {
 	type CfeMultisigRequest = CfeInterface;
 }
 
+impl pallet_cf_vaults::Config<SolanaInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Chain = Solana;
+	type SetAggKeyWithAggKey = cf_chains::sol::api::SolanaApi<SolanaEnvironment>;
+	type Broadcaster = SolanaBroadcaster;
+	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
+	type ChainTracking = SolanaChainTracking;
+	type SafeMode = RuntimeSafeMode;
+	type CfeMultisigRequest = CfeInterface;
+}
+
 use chainflip::address_derivation::AddressDerivation;
 
 impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
@@ -325,6 +337,25 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type DepositHandler = chainflip::BtcDepositHandler;
 	type ChainTracking = BitcoinChainTracking;
+	type CcmHandler = Swapping;
+	type NetworkEnvironment = Environment;
+	type AssetConverter = LiquidityPools;
+	type FeePayment = Flip;
+}
+
+impl pallet_cf_ingress_egress::Config<SolanaInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type TargetChain = Solana;
+	type AddressDerivation = AddressDerivation;
+	type AddressConverter = ChainAddressConverter;
+	type LpBalance = LiquidityProvider;
+	type SwapDepositHandler = Swapping;
+	type ChainApiCall = cf_chains::sol::api::SolanaApi<chainflip::SolanaEnvironment>;
+	type Broadcaster = SolanaBroadcaster;
+	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
+	type DepositHandler = chainflip::SolDepositHandler;
+	type ChainTracking = SolanaChainTracking;
 	type CcmHandler = Swapping;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
@@ -672,6 +703,22 @@ impl pallet_cf_threshold_signature::Config<BitcoinInstance> for Runtime {
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
 
+impl pallet_cf_threshold_signature::Config<SolanaInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Offence = chainflip::Offence;
+	type RuntimeOrigin = RuntimeOrigin;
+	type ThresholdCallable = RuntimeCall;
+	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
+	type TargetChainCrypto = SolanaCrypto;
+	type VaultActivator = SolanaVault;
+	type OffenceReporter = Reputation;
+	type CeremonyRetryDelay = ConstU32<1>;
+	type SafeMode = RuntimeSafeMode;
+	type Slasher = FlipSlasher<Self>;
+	type CfeMultisigRequest = CfeInterface;
+	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
+}
+
 impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
@@ -744,6 +791,30 @@ impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
 	type CfeBroadcastRequest = CfeInterface;
 }
 
+impl pallet_cf_broadcast::Config<SolanaInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type RuntimeOrigin = RuntimeOrigin;
+	type BroadcastCallable = RuntimeCall;
+	type Offence = chainflip::Offence;
+	type TargetChain = Solana;
+	type ApiCall = cf_chains::sol::api::SolanaApi<SolanaEnvironment>;
+	type ThresholdSigner = SolanaThresholdSigner;
+	type TransactionBuilder = chainflip::SolanaTransactionBuilder;
+	type BroadcastSignerNomination = chainflip::RandomSignerNomination;
+	type OffenceReporter = Reputation;
+	type EnsureThresholdSigned =
+		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, SolanaInstance>;
+	type BroadcastReadyProvider = BroadcastReadyProvider;
+	type BroadcastTimeout = ConstU32<{ 90 * MINUTES }>;
+	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
+	type SafeMode = RuntimeSafeMode;
+	type SafeModeBlockMargin = ConstU32<10>;
+	type ChainTracking = SolanaChainTracking;
+	type RetryPolicy = DefaultRetryPolicy;
+	type CfeBroadcastRequest = CfeInterface;
+}
+
 impl pallet_cf_chain_tracking::Config<EthereumInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Ethereum;
@@ -759,6 +830,12 @@ impl pallet_cf_chain_tracking::Config<PolkadotInstance> for Runtime {
 impl pallet_cf_chain_tracking::Config<BitcoinInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Bitcoin;
+	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
+}
+
+impl pallet_cf_chain_tracking::Config<SolanaInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type TargetChain = Solana;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
@@ -788,18 +865,22 @@ construct_runtime!(
 		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
 		PolkadotChainTracking: pallet_cf_chain_tracking::<Instance2>,
 		BitcoinChainTracking: pallet_cf_chain_tracking::<Instance3>,
+		SolanaChainTracking: pallet_cf_chain_tracking::<Instance4>,
 
 		EthereumVault: pallet_cf_vaults::<Instance1>,
 		PolkadotVault: pallet_cf_vaults::<Instance2>,
 		BitcoinVault: pallet_cf_vaults::<Instance3>,
+		SolanaVault: pallet_cf_vaults::<Instance4>,
 
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
 		PolkadotThresholdSigner: pallet_cf_threshold_signature::<Instance2>,
 		BitcoinThresholdSigner: pallet_cf_threshold_signature::<Instance3>,
+		SolanaThresholdSigner: pallet_cf_threshold_signature::<Instance4>,
 
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
 		PolkadotBroadcaster: pallet_cf_broadcast::<Instance2>,
 		BitcoinBroadcaster: pallet_cf_broadcast::<Instance3>,
+		SolanaBroadcaster: pallet_cf_broadcast::<Instance4>,
 
 		Swapping: pallet_cf_swapping,
 		LiquidityProvider: pallet_cf_lp,
@@ -807,6 +888,7 @@ construct_runtime!(
 		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
 		PolkadotIngressEgress: pallet_cf_ingress_egress::<Instance2>,
 		BitcoinIngressEgress: pallet_cf_ingress_egress::<Instance3>,
+		SolanaIngressEgress: pallet_cf_ingress_egress::<Instance4>,
 
 		LiquidityPools: pallet_cf_pools,
 
@@ -873,20 +955,25 @@ pub type PalletExecutionOrder = (
 	EthereumChainTracking,
 	PolkadotChainTracking,
 	BitcoinChainTracking,
+	SolanaChainTracking,
 	EthereumVault,
 	PolkadotVault,
 	BitcoinVault,
+	SolanaVault,
 	EthereumThresholdSigner,
 	PolkadotThresholdSigner,
 	BitcoinThresholdSigner,
+	SolanaThresholdSigner,
 	EthereumBroadcaster,
 	PolkadotBroadcaster,
 	BitcoinBroadcaster,
+	SolanaBroadcaster,
 	Swapping,
 	LiquidityProvider,
 	EthereumIngressEgress,
 	PolkadotIngressEgress,
 	BitcoinIngressEgress,
+	SolanaIngressEgress,
 	LiquidityPools,
 );
 
@@ -1229,6 +1316,7 @@ impl_runtime_apis! {
 				ForeignChainAndAsset::Ethereum(asset) => MinimumDeposit::<Runtime, EthereumInstance>::get(asset),
 				ForeignChainAndAsset::Polkadot(asset) => MinimumDeposit::<Runtime, PolkadotInstance>::get(asset),
 				ForeignChainAndAsset::Bitcoin(asset) => MinimumDeposit::<Runtime, BitcoinInstance>::get(asset).into(),
+				ForeignChainAndAsset::Solana(asset) => MinimumDeposit::<Runtime, SolanaInstance>::get(asset),
 			}
 		}
 
@@ -1239,6 +1327,7 @@ impl_runtime_apis! {
 				ForeignChainAndAsset::Ethereum(asset) => EgressDustLimit::<Runtime, EthereumInstance>::get(asset),
 				ForeignChainAndAsset::Polkadot(asset) => EgressDustLimit::<Runtime, PolkadotInstance>::get(asset),
 				ForeignChainAndAsset::Bitcoin(asset) => EgressDustLimit::<Runtime, BitcoinInstance>::get(asset),
+				ForeignChainAndAsset::Solana(asset) => EgressDustLimit::<Runtime, SolanaInstance>::get(asset),
 			}
 		}
 
@@ -1256,6 +1345,8 @@ impl_runtime_apis! {
 					.estimate_ingress_fee(asset)),
 				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::get_tracked_data()
 					.estimate_ingress_fee(asset).into()),
+				ForeignChainAndAsset::Solana(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, SolanaInstance>::get_tracked_data()
+					.estimate_ingress_fee(asset)),
 			}
 		}
 
@@ -1273,6 +1364,8 @@ impl_runtime_apis! {
 					.estimate_egress_fee(asset)),
 				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::get_tracked_data()
 					.estimate_egress_fee(asset).into()),
+				ForeignChainAndAsset::Solana(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, SolanaInstance>::get_tracked_data()
+					.estimate_egress_fee(asset)),
 			}
 		}
 
@@ -1281,6 +1374,7 @@ impl_runtime_apis! {
 				ForeignChain::Bitcoin => pallet_cf_ingress_egress::Pallet::<Runtime, BitcoinInstance>::witness_safety_margin(),
 				ForeignChain::Ethereum => pallet_cf_ingress_egress::Pallet::<Runtime, EthereumInstance>::witness_safety_margin(),
 				ForeignChain::Polkadot => pallet_cf_ingress_egress::Pallet::<Runtime, PolkadotInstance>::witness_safety_margin().map(Into::into),
+				ForeignChain::Solana => pallet_cf_ingress_egress::Pallet::<Runtime, EthereumInstance>::witness_safety_margin(),
 			}
 		}
 
@@ -1461,6 +1555,7 @@ impl_runtime_apis! {
 				ForeignChain::Ethereum => pallet_cf_ingress_egress::Pallet::<Runtime, EthereumInstance>::channel_opening_fee(),
 				ForeignChain::Polkadot => pallet_cf_ingress_egress::Pallet::<Runtime, PolkadotInstance>::channel_opening_fee(),
 				ForeignChain::Bitcoin => pallet_cf_ingress_egress::Pallet::<Runtime, BitcoinInstance>::channel_opening_fee(),
+				ForeignChain::Solana => pallet_cf_ingress_egress::Pallet::<Runtime, SolanaInstance>::channel_opening_fee(),
 			}
 		}
 	}

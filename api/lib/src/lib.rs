@@ -3,8 +3,8 @@ use std::{str::FromStr, sync::Arc};
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use cf_chains::{
-	address::EncodedAddress, dot::PolkadotAccountId, evm::to_evm_address, AnyChain,
-	CcmChannelMetadata, ForeignChain,
+	address::EncodedAddress, dot::PolkadotAccountId, evm::to_evm_address, sol::SolAddress,
+	AnyChain, CcmChannelMetadata, ForeignChain,
 };
 use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId, SemVer};
 use futures::FutureExt;
@@ -366,6 +366,11 @@ pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result
 		ForeignChain::Polkadot =>
 			EncodedAddress::Dot(PolkadotAccountId::from_str(address).map(|id| *id.aliased_ref())?),
 		ForeignChain::Bitcoin => EncodedAddress::Btc(address.as_bytes().to_vec()),
+		ForeignChain::Solana => EncodedAddress::Sol(
+			SolAddress::from_str(address)
+				.map_err(|_| anyhow::anyhow!("Invalid solana-address"))?
+				.into(),
+		),
 	})
 }
 

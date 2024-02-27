@@ -8,6 +8,7 @@ pub use super::common::*;
 pub const BITCOIN_EXPIRY_BLOCKS: u32 = 10 * 60 / 5;
 pub const ETHEREUM_EXPIRY_BLOCKS: u32 = 10 * 60 / 14;
 pub const POLKADOT_EXPIRY_BLOCKS: u32 = 10 * 60 / 6;
+pub const SOLANA_EXPIRY_BLOCKS: u32 = 10 * 60 * 10 / 4;
 
 pub const MIN_AUTHORITIES: AuthorityCount = 1;
 pub const AUCTION_PARAMETERS: SetSizeParameters = SetSizeParameters {

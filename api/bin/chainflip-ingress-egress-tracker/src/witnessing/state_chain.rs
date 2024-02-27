@@ -4,7 +4,7 @@ use crate::{
 };
 use cf_chains::{
 	address::ToHumanreadableAddress, evm::SchnorrVerificationComponents, AnyChain, Bitcoin, Chain,
-	Ethereum, Polkadot,
+	Ethereum, Polkadot, Solana,
 };
 use cf_primitives::{BroadcastId, ForeignChain, NetworkEnvironment};
 use chainflip_engine::state_chain_observer::client::{
@@ -20,6 +20,7 @@ enum TransactionId {
 	Bitcoin { hash: String },
 	Ethereum { signature: SchnorrVerificationComponents },
 	Polkadot { signature: String },
+	Solana { signature: String },
 }
 
 #[derive(Serialize)]
@@ -47,6 +48,7 @@ impl WitnessInformation {
 				TransactionId::Bitcoin { .. } => ForeignChain::Bitcoin,
 				TransactionId::Ethereum { .. } => ForeignChain::Ethereum,
 				TransactionId::Polkadot { .. } => ForeignChain::Polkadot,
+				TransactionId::Solana { .. } => ForeignChain::Solana,
 			},
 		}
 	}
@@ -109,6 +111,17 @@ impl From<DepositInfo<Polkadot>> for WitnessInformation {
 	}
 }
 
+impl From<DepositInfo<Solana>> for WitnessInformation {
+	fn from((value, deposit_chain_block_height, network): DepositInfo<Solana>) -> Self {
+		Self::Deposit {
+			deposit_chain_block_height,
+			deposit_address: value.deposit_address.to_humanreadable(network),
+			amount: value.amount.into(),
+			asset: value.asset.into(),
+		}
+	}
+}
+
 pub async fn handle_call<S, StateChainClient>(
 	call: state_chain_runtime::RuntimeCall,
 	store: &mut S,
@@ -163,6 +176,20 @@ where
 					)))
 					.await?;
 			},
+		SolanaIngressEgress(IngressEgressCall::process_deposits {
+			deposit_witnesses,
+			block_height,
+		}) =>
+			for witness in deposit_witnesses as Vec<DepositWitness<Solana>> {
+				store
+					.save_to_array(&WitnessInformation::from((
+						witness,
+						block_height,
+						chainflip_network,
+					)))
+					.await?;
+			},
+
 		EthereumBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
 			let broadcast_id =
 				get_broadcast_id::<Ethereum, StateChainClient>(state_chain_client, &tx_out_id)
@@ -208,10 +235,24 @@ where
 					.await?;
 			}
 		},
+		SolanaBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
+			let broadcast_id =
+				get_broadcast_id::<Solana, StateChainClient>(state_chain_client, &tx_out_id).await;
+
+			if let Some(broadcast_id) = broadcast_id {
+				store
+					.save_singleton(&WitnessInformation::Broadcast {
+						broadcast_id,
+						tx_out_id: TransactionId::Solana { signature: tx_out_id.to_string() },
+					})
+					.await?;
+			}
+		},
 
 		EthereumIngressEgress(_) |
 		BitcoinIngressEgress(_) |
 		PolkadotIngressEgress(_) |
+		SolanaIngressEgress(_) |
 		System(_) |
 		Timestamp(_) |
 		Environment(_) |
@@ -229,15 +270,19 @@ where
 		EthereumChainTracking(_) |
 		BitcoinChainTracking(_) |
 		PolkadotChainTracking(_) |
+		SolanaChainTracking(_) |
 		EthereumVault(_) |
 		PolkadotVault(_) |
 		BitcoinVault(_) |
+		SolanaVault(_) |
 		EthereumThresholdSigner(_) |
 		PolkadotThresholdSigner(_) |
 		BitcoinThresholdSigner(_) |
+		SolanaThresholdSigner(_) |
 		EthereumBroadcaster(_) |
 		PolkadotBroadcaster(_) |
 		BitcoinBroadcaster(_) |
+		SolanaBroadcaster(_) |
 		Swapping(_) |
 		LiquidityProvider(_) |
 		LiquidityPools(_) => {},

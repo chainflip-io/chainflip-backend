@@ -1,5 +1,5 @@
 pub use super::common::*;
-use super::{get_account_id_from_seed, StateChainEnvironment};
+use super::{get_account_id_from_seed, SolAddress, StateChainEnvironment};
 use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use sc_service::ChainType;
@@ -16,6 +16,7 @@ pub const PROTOCOL_ID: &str = "flip-test";
 pub const BITCOIN_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / (10 * 60);
 pub const ETHEREUM_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / 14;
 pub const POLKADOT_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / 6;
+pub const SOLANA_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 * 10 / 4;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"),
@@ -36,6 +37,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	)),
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 10000, transaction_version: 25 },
+	sol_vault_address: SolAddress([0; 32]), // TODO: fill in the valid Solana address,
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 3 * HOURS;
