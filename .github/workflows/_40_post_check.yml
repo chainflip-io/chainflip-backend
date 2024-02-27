@@ -66,9 +66,9 @@ jobs:
         working-directory: bouncer
         run: pnpm install
 
-      - name: Install solana
-        run: |
-          sh -c "$(curl -sSfL https://release.solana.com/$SOLANA_VERSION/install)"
+      # - name: Install solana
+      #   run: |
+      #     sh -c "$(curl -sSfL https://release.solana.com/$SOLANA_VERSION/install)"
 
       - name: Start a localnet 🚀
         env:
