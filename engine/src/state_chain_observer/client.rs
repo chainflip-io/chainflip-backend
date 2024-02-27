@@ -12,6 +12,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use cf_primitives::{AccountRole, SemVer};
 use futures::{StreamExt, TryStreamExt};
 
+use cf_primitives::CfeCompatibility;
 use futures_core::future::BoxFuture;
 use futures_util::FutureExt;
 use jsonrpsee::core::RpcResult;
@@ -19,6 +20,7 @@ use sp_core::{Pair, H256};
 use state_chain_runtime::AccountId;
 use std::{pin::Pin, sync::Arc, time::Duration};
 use subxt::{backend::rpc::RpcClient, config::DefaultExtrinsicParamsBuilder};
+use thiserror::Error;
 use tokio::sync::watch;
 use tracing::{info, warn};
 
@@ -92,6 +94,20 @@ impl DefaultRpcClient {
 				})?,
 		))
 	}
+}
+
+#[derive(Error, Debug)]
+pub enum CreateBlockStreamError {
+	#[error("The runtime version '{cfe_version}' is not yet compatible with the current release '{cfe_version_required}'")]
+	NotYetCompatible { cfe_version: SemVer, cfe_version_required: SemVer },
+	#[error("The runtime version '{cfe_version}' is no longer compatible with the current release '{cfe_version_required}' at block {first_incompatible_block}")]
+	NoLongerCompatible {
+		cfe_version: SemVer,
+		cfe_version_required: SemVer,
+		first_incompatible_block: state_chain_runtime::BlockNumber,
+	},
+	#[error(transparent)]
+	Other(#[from] anyhow::Error),
 }
 
 pub struct StateChainClient<
@@ -279,52 +295,75 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			let mut block_stream =
 				process_stream_fn(Box::pin(block_stream.make_try_cached(latest_block))).await?;
 
-			let latest_block = *block_stream.cache();
-			if wait_for_required_version {
-				let incompatible_blocks =
-					futures::stream::once(futures::future::ready(Ok::<_, anyhow::Error>(
-						latest_block,
-					)))
-					.chain(block_stream.by_ref())
-					.try_take_while(|block_info| {
-						let base_rpc_client = base_rpc_client.clone();
-						let block_info = *block_info;
-						async move {
-							Ok(
-								if let Err(block_version) = base_rpc_client
-									.check_block_compatibility(block_info.hash)
-									.await?
-								{
-									info!(
-										"{} WAITING for a compatible release version.",
-										incompatible_block_message(block_version, block_info)
-									);
-									true
-								} else {
-									false
-								},
-							)
+			let (cfe_compatibility, latest_version_runtime_requires) =
+				base_rpc_client.check_block_compatibility(latest_block.hash).await?;
+
+			match cfe_compatibility {
+				CfeCompatibility::NoLongerCompatible => {
+					return Err(CreateBlockStreamError::NoLongerCompatible {
+						cfe_version: *CFE_VERSION,
+						cfe_version_required: latest_version_runtime_requires,
+						first_incompatible_block: latest_block.number,
+					}
+					.into());
+				},
+				CfeCompatibility::NotYetCompatible => {
+					if wait_for_required_version {
+						let incompatible_blocks = futures::stream::once(futures::future::ready(
+							Ok::<_, anyhow::Error>(latest_block),
+						))
+						.chain(block_stream.by_ref())
+						.try_take_while(|block_info| {
+							let base_rpc_client = base_rpc_client.clone();
+							let block_info = *block_info;
+							async move {
+								Ok({
+									let (cfe_compatibility, version_runtime_requires) =
+										base_rpc_client
+											.check_block_compatibility(block_info.hash)
+											.await?;
+
+									match cfe_compatibility {
+										CfeCompatibility::Compatible => false,
+										// We want the stream to continue as before
+										CfeCompatibility::NotYetCompatible => {
+											info!(
+												"{} WAITING for a compatible release version.",
+												incompatible_block_message(
+													version_runtime_requires,
+													block_info
+												)
+											);
+											true
+										},
+										CfeCompatibility::NoLongerCompatible => {
+											unreachable!("We cannot move from no longer compatible to compatible.")
+										},
+									}
+								})
+							}
+						})
+						.boxed();
+
+						// Note underlying stream ends in Error, therefore it is guaranteed
+						// try_for_each will not exit successfully until a compatible block is found
+						incompatible_blocks
+							.try_for_each(move |_| {
+								futures::future::ready(Ok::<_, anyhow::Error>(()))
+							})
+							.await?;
+
+						block_stream
+					} else {
+						return Err(CreateBlockStreamError::NotYetCompatible {
+							cfe_version: *CFE_VERSION,
+							cfe_version_required: latest_version_runtime_requires,
 						}
-					})
-					.boxed();
-
-				// Note underlying stream ends in Error, therefore it is guaranteed try_for_each
-				// will not exit successfully until a compatible block is found
-				incompatible_blocks
-					.try_for_each(move |_| futures::future::ready(Ok::<_, anyhow::Error>(())))
-					.await?;
-			} else {
-				base_rpc_client.check_block_compatibility(latest_block.hash).await?.map_err(
-					|latest_block_version| {
-						anyhow::anyhow!(
-							"{}",
-							incompatible_block_message(latest_block_version, latest_block)
-						)
-					},
-				)?;
+						.into());
+					}
+				},
+				CfeCompatibility::Compatible => block_stream,
 			}
-
-			block_stream
 		};
 
 		const BLOCK_CAPACITY: usize = 10;
@@ -348,17 +387,25 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 					let result_block = processed_stream.next().map(|option| option.unwrap()) => {
 						let block = result_block?;
 
-						match base_rpc_client.check_block_compatibility(block.hash).await? {
-							Ok(()) => {
+						let (cfe_compatibility, version_runtime_requires) = base_rpc_client.check_block_compatibility(block.hash).await?;
+						match cfe_compatibility {
+							CfeCompatibility::Compatible => {
 								latest_block = block;
 								block_sender.send(block).await;
 								let _result = latest_block_sender.send(block);
 							},
-							Err(block_version) => {
+							CfeCompatibility::NoLongerCompatible => {
 								if error_on_incompatible_block {
-									break Err(anyhow!("{}", incompatible_block_message(block_version, block)));
+									break Err(CreateBlockStreamError::NoLongerCompatible {
+										cfe_version: *CFE_VERSION,
+										cfe_version_required: version_runtime_requires,
+										first_incompatible_block: block.number,
+									}.into());
 								}
 							}
+							CfeCompatibility::NotYetCompatible => {
+								unreachable!("We've either already returned a NotYetCompatible error, or we've waited until we're compatible.")
+							},
 						}
 					},
 					if let Some(block_stream_request) = block_stream_request_receiver.next() => {
@@ -384,7 +431,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			+ 'a,
 		base_rpc_client: Arc<BaseRpcClient>,
 	) -> utilities::try_cached_stream::InnerTryCachedStream<
-		impl futures::Stream<Item = Result<BlockInfo, anyhow::Error>> + Send + 'a,
+		impl futures::Stream<Item = Result<BlockInfo>> + Send + 'a,
 	> {
 		let latest_finalized_block: BlockInfo = *sparse_block_stream.cache();
 

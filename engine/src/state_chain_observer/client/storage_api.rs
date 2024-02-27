@@ -12,6 +12,7 @@ use frame_support::{
 use jsonrpsee::core::RpcResult;
 use sp_core::storage::StorageKey;
 use utilities::context;
+use cf_primitives::CfeCompatibility;
 
 use super::{CFE_VERSION, SUBSTRATE_BEHAVIOUR};
 
@@ -360,13 +361,13 @@ pub trait CheckBlockCompatibility: StorageApi {
 	async fn check_block_compatibility(
 		&self,
 		block_hash: state_chain_runtime::Hash,
-	) -> RpcResult<Result<(), SemVer>> {
-		let block_version = self
+	) -> RpcResult<(CfeCompatibility, SemVer)> {
+		let version_runtime_requires = self
 			.storage_value::<pallet_cf_environment::CurrentReleaseVersion<state_chain_runtime::Runtime>>(
 				block_hash,
 			)
 			.await?;
-		Ok(if CFE_VERSION.is_compatible_with(block_version) { Ok(()) } else { Err(block_version) })
+		Ok((CFE_VERSION.compatibility_with_runtime(version_runtime_requires), version_runtime_requires))
 	}
 }
 #[async_trait]

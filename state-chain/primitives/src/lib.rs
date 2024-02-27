@@ -234,7 +234,30 @@ pub struct SemVer {
 	pub minor: u8,
 	pub patch: u8,
 }
+
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub enum CfeCompatibility {
+	/// The version is currently compatible with the target.
+	Compatible,
+
+	/// The version is not yet compatible with the target. Should wait for the new version.
+	NotYetCompatible,
+
+	/// The version of the engine is no longer compatible with the runtime. Should switch to the new version.
+	NoLongerCompatible,
+}
+
 impl SemVer {
+	pub fn compatibility_with_runtime(&self, version_runtime_requires: SemVer) -> CfeCompatibility {
+		if self.is_compatible_with(version_runtime_requires) {
+			CfeCompatibility::Compatible
+		} else if self < &version_runtime_requires {
+			CfeCompatibility::NotYetCompatible
+		} else {
+			CfeCompatibility::NoLongerCompatible
+		}
+	}
+
 	/// Check if "self" is compatible with the target version.
 	/// This is true if the major and minor versions are the same.
 	pub fn is_compatible_with(&self, target: SemVer) -> bool {

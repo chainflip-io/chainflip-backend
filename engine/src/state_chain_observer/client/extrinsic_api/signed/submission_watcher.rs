@@ -22,6 +22,7 @@ use utilities::{
 	task_scope::{self, Scope},
 	UnendingStream,
 };
+use cf_primitives::CfeCompatibility;
 
 use crate::state_chain_observer::client::{
 	base_rpc_api,
@@ -413,7 +414,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			}
 			self.block_cache.push_back((
 				block_hash,
-				if self.base_rpc_client.check_block_compatibility(block_hash).await?.is_ok() {
+				if self.base_rpc_client.check_block_compatibility(block_hash).await?.0 == CfeCompatibility::Compatible {
 					Some((
 						block.block.header,
 						block.block.extrinsics,

@@ -1,3 +1,4 @@
+use crate::state_chain_observer::client::CreateBlockStreamError;
 use anyhow::Context;
 use cf_chains::dot::PolkadotHash;
 use cf_primitives::AccountRole;
@@ -45,7 +46,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_main(settings: Settings) -> anyhow::Result<()> {
-	task_scope(|scope| {
+	let root_result = task_scope(|scope| {
 		async move {
 			let mut start_logger_server_fn =
 				Some(utilities::logging::init_json_logger(settings.logging.clone()).await);
@@ -220,5 +221,39 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 		}
 		.boxed()
 	})
-	.await
+	.await;
+
+	if let Err(e) = root_result {
+		let sc_error = e.downcast_ref::<CreateBlockStreamError>();
+		match sc_error {
+			Some(CreateBlockStreamError::NoLongerCompatible {
+				cfe_version,
+				cfe_version_required,
+				first_incompatible_block,
+			}) => {
+				tracing::info!(
+					"Chainflip Engine is no longer compatible with the current state chain. \
+					Engine version: {}, required version: {}, first incompatible block: {}",
+					cfe_version,
+					cfe_version_required,
+					first_incompatible_block
+				);
+			},
+			Some(CreateBlockStreamError::NotYetCompatible {
+				cfe_version,
+				cfe_version_required,
+			}) => {
+				tracing::info!(
+					"Chainflip Engine is not yet compatible with the current state chain. \
+					Engine version: {}, required version: {}",
+					cfe_version,
+					cfe_version_required
+				);
+			},
+			_ => {
+				tracing::error!("Error in main: {:?}", e);
+			},
+		}
+	}
+	Ok(())
 }
