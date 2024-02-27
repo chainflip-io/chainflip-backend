@@ -2643,8 +2643,10 @@ dependencies = [
  "hex",
  "insta",
  "jsonrpsee 0.16.3",
+ "log",
  "pallet-cf-governance",
  "pallet-cf-pools",
+ "pallet-cf-swapping",
  "pallet-cf-witnesser",
  "sc-client-api",
  "sc-rpc-api",
@@ -7579,6 +7581,7 @@ dependencies = [
 name = "pallet-cf-swapping"
 version = "0.1.0"
 dependencies = [
+ "cf-amm",
  "cf-chains",
  "cf-primitives",
  "cf-runtime-upgrade-utilities",
@@ -7593,6 +7596,7 @@ dependencies = [
  "pallet-cf-account-roles",
  "parity-scale-codec",
  "scale-info",
+ "serde",
  "sp-arithmetic 16.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.6)",
  "sp-core 21.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.6)",
  "sp-io 23.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.6)",

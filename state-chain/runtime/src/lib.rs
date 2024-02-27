@@ -13,7 +13,7 @@ use crate::{
 	chainflip::{calculate_account_apy, Offence},
 	runtime_apis::{
 		AuctionState, BrokerInfo, DispatchErrorWithMessage, FailingWitnessValidators,
-		LiquidityProviderInfo, RuntimeApiPenalty, ValidatorInfo,
+		LiquidityProviderInfo, RuntimeApiPenalty, ScheduledSwap, ValidatorInfo,
 	},
 };
 use cf_amm::{
@@ -1428,6 +1428,20 @@ impl_runtime_apis! {
 
 			all_prewitnessed_swaps
 		}
+
+		fn cf_scheduled_swaps(base_asset: Asset, _quote_asset: Asset) -> Vec<ScheduledSwap> {
+
+			let current_block = System::block_number();
+
+			pallet_cf_swapping::SwapQueue::<Runtime>::iter().flat_map(|(block, swaps_for_block)| {
+
+				// In case `block` has already passed, the swaps will be re-tried at the next block:
+				let execute_at = core::cmp::max(block, current_block.saturating_add(1));
+
+				let swaps: Vec<_> = swaps_for_block.iter().filter(|swap| swap.from == base_asset || swap.to == base_asset).cloned().collect();
+				Swapping::get_scheduled_swap_legs(swaps, base_asset).unwrap().into_iter().map(move |swap| ScheduledSwap {swap, execute_at })
+			}).collect()
+	}
 
 		fn cf_failed_call(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {
 			if EthereumIngressEgress::get_failed_call(broadcast_id).is_some() {
