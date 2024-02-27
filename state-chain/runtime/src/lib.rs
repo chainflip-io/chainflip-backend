@@ -423,7 +423,7 @@ impl pallet_session::historical::Config for Runtime {
 	type FullIdentificationOf = ();
 }
 
-const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(25);
+const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(50);
 
 parameter_types! {
 	pub const Version: RuntimeVersion = VERSION;
