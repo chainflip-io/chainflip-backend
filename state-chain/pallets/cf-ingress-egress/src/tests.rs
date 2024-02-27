@@ -1216,7 +1216,7 @@ fn basic_balance_tracking() {
 #[test]
 fn test_default_empty_amounts() {
 	let mut channel_recycle_blocks = Default::default();
-	let can_recycle = IngressEgress::can_and_cannot_recycle(&mut channel_recycle_blocks, 0, 0);
+	let can_recycle = IngressEgress::take_recyclable_addresses(&mut channel_recycle_blocks, 0, 0);
 
 	assert_eq!(can_recycle, vec![]);
 	assert_eq!(channel_recycle_blocks, vec![]);
@@ -1229,7 +1229,7 @@ fn test_cannot_recycle_if_block_number_less_than_current_height() {
 		(1u64..5).map(|i| (i, H160::from([i as u8; 20]))).collect::<Vec<_>>();
 	let current_block_height = 3;
 
-	let can_recycle = IngressEgress::can_and_cannot_recycle(
+	let can_recycle = IngressEgress::take_recyclable_addresses(
 		&mut channel_recycle_blocks,
 		maximum_recyclable_number,
 		current_block_height,
@@ -1250,7 +1250,7 @@ fn test_can_only_recycle_up_to_max_amount() {
 		(1u64..5).map(|i| (i, H160::from([i as u8; 20]))).collect::<Vec<_>>();
 	let current_block_height = 3;
 
-	let can_recycle = IngressEgress::can_and_cannot_recycle(
+	let can_recycle = IngressEgress::take_recyclable_addresses(
 		&mut channel_recycle_blocks,
 		maximum_recyclable_number,
 		current_block_height,
@@ -1270,7 +1270,7 @@ fn none_can_be_recycled_due_to_low_block_number() {
 		(1u64..5).map(|i| (i, H160::from([i as u8; 20]))).collect::<Vec<_>>();
 	let current_block_height = 0;
 
-	let can_recycle = IngressEgress::can_and_cannot_recycle(
+	let can_recycle = IngressEgress::take_recyclable_addresses(
 		&mut channel_recycle_blocks,
 		maximum_recyclable_number,
 		current_block_height,
@@ -1295,7 +1295,7 @@ fn all_can_be_recycled() {
 		(1u64..5).map(|i| (i, H160::from([i as u8; 20]))).collect::<Vec<_>>();
 	let current_block_height = 4;
 
-	let can_recycle = IngressEgress::can_and_cannot_recycle(
+	let can_recycle = IngressEgress::take_recyclable_addresses(
 		&mut channel_recycle_blocks,
 		maximum_recyclable_number,
 		current_block_height,
@@ -1568,38 +1568,6 @@ fn can_update_multiple_items_at_once() {
 }
 
 #[test]
-fn handle_prewitness_deposit() {
-	const ASSET: cf_chains::assets::eth::Asset = eth::Asset::Eth;
-	const DEPOSIT_AMOUNT: u128 = 50000;
-
-	new_test_ext().execute_with(|| {
-		let (_id, address, ..) =
-			IngressEgress::request_liquidity_deposit_address(ALICE, ASSET, 0).unwrap();
-		let deposit_address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
-
-		let deposit_detail: DepositWitness<Ethereum> = DepositWitness::<Ethereum> {
-			deposit_address,
-			asset: ASSET,
-			amount: DEPOSIT_AMOUNT,
-			deposit_details: (),
-		};
-
-		let deposit_witnesses = vec![deposit_detail.clone()];
-
-		// Submit the prewitnessed deposit
-		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses.clone(),));
-
-		// Check that the deposit is stored in the storage
-		let prewitnessed_deposit_id = PrewitnessedDepositIdCounter::<Test>::get();
-		let channel_id = ChannelIdCounter::<Test>::get();
-		assert_eq!(
-			PrewitnessedDeposits::<Test>::get(channel_id, prewitnessed_deposit_id),
-			Some(PrewitnessedDeposit { asset: ASSET, amount: DEPOSIT_AMOUNT, deposit_address })
-		);
-	});
-}
-
-#[test]
 fn should_cleanup_prewitnessed_deposits_when_channel_is_recycled() {
 	const ASSET: cf_chains::assets::eth::Asset = eth::Asset::Eth;
 	const DEPOSIT_AMOUNT: u128 = 50000;
@@ -1633,17 +1601,21 @@ fn should_cleanup_prewitnessed_deposits_when_channel_is_recycled() {
 		BlockHeightProvider::<MockEthereum>::set_block_height(expiry_block);
 
 		// Run the cleanup
-		IngressEgress::on_idle(1, Weight::MAX);
+		IngressEgress::on_idle(Default::default(), Weight::MAX);
 
 		// Check that the prewitnessed deposit is removed from the storage
 		assert_eq!(PrewitnessedDeposits::<Test>::get(channel_id, prewitnessed_deposit_id), None);
 	});
 }
 
+// Test that a prewitnessed deposit is removed when it is witnessed and it does not remove any other
+// prewitness deposits in the same channel. For both a deposit of the same amount and a different
+// amount.
 #[test]
 fn should_remove_prewitnessed_deposit_when_witnessed() {
 	const ASSET: cf_chains::assets::eth::Asset = eth::Asset::Eth;
-	const DEPOSIT_AMOUNT: u128 = 50000;
+	const DEPOSIT_AMOUNT_1: u128 = 50000;
+	const DEPOSIT_AMOUNT_2: u128 = DEPOSIT_AMOUNT_1 + 10000;
 
 	new_test_ext().execute_with(|| {
 		// Create a deposit channel
@@ -1652,27 +1624,42 @@ fn should_remove_prewitnessed_deposit_when_witnessed() {
 		let deposit_address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
 
 		// Submit the prewitnessed deposit twice
-		let deposit_detail: DepositWitness<Ethereum> = DepositWitness::<Ethereum> {
+		let deposit_witnesses_1 = vec![DepositWitness::<Ethereum> {
 			deposit_address,
 			asset: ASSET,
-			amount: DEPOSIT_AMOUNT,
+			amount: DEPOSIT_AMOUNT_1,
 			deposit_details: (),
-		};
-		let deposit_witnesses = vec![deposit_detail.clone()];
-		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses.clone()));
-		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses.clone()));
+		}];
+		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses_1.clone()));
+		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses_1.clone()));
+
+		// Submit another prewitness for the same address but a different amount
+		let deposit_witnesses_2 = vec![DepositWitness::<Ethereum> {
+			deposit_address,
+			asset: ASSET,
+			amount: DEPOSIT_AMOUNT_2,
+			deposit_details: (),
+		}];
+		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses_2.clone()));
 
 		// Check that the deposits are in storage
 		let channel_id = ChannelIdCounter::<Test>::get();
-		assert_eq!(PrewitnessedDeposits::<Test>::iter_prefix_values(channel_id).count(), 2);
+		assert_eq!(PrewitnessedDeposits::<Test>::iter_prefix_values(channel_id).count(), 3);
 
 		// Witness one of the deposits
 		assert_ok!(Pallet::<Test, _>::process_deposit_witnesses(
-			deposit_witnesses,
+			deposit_witnesses_1,
 			Default::default()
 		));
 
-		// Check that one of the deposits was removed and the other remains
-		assert_eq!(PrewitnessedDeposits::<Test>::iter_prefix_values(channel_id).count(), 1);
+		// Check that one of the deposits was removed and the other 2 remain.
+		// we don't care which one of the two with the same amount was removed.
+		assert_eq!(PrewitnessedDeposits::<Test>::iter_prefix_values(channel_id).count(), 2);
+		let prewitnessed_deposit_id = PrewitnessedDepositIdCounter::<Test>::get();
+		assert_eq!(
+			PrewitnessedDeposits::<Test>::get(channel_id, prewitnessed_deposit_id),
+			Some(PrewitnessedDeposit { asset: ASSET, amount: DEPOSIT_AMOUNT_2, deposit_address })
+		);
 	});
+}
 }

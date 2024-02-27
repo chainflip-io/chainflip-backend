@@ -160,7 +160,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn remove_prewitnessed_deposits(n: Linear<1, 255>) {
+	fn clear_prewitnessed_deposits(n: Linear<1, 255>) {
 		for i in 0..n {
 			PrewitnessedDeposits::<T, I>::insert(
 				0,
@@ -175,8 +175,11 @@ mod benchmarks {
 
 		#[block]
 		{
-			let _old_deposits = PrewitnessedDeposits::<T, I>::clear_prefix(0, u32::MAX, None);
+			assert_eq!(Pallet::<T, I>::clear_prewitnessed_deposits(0), n as u32);
 		}
+
+		// FIXME JAMIE: clear_prewitnessed_deposits always return 0
+		// assert_eq!(PrewitnessedDeposits::<T, I>::iter().count(), 0);
 	}
 
 	#[cfg(test)]
@@ -200,7 +203,7 @@ mod benchmarks {
 			_disable_asset_egress::<Test, ()>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_remove_prewitnessed_deposits::<Test, ()>(100, true);
+			_clear_prewitnessed_deposits::<Test, ()>(100, true);
 		});
 	}
 }

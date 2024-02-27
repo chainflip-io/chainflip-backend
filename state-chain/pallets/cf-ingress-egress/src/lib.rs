@@ -592,29 +592,38 @@ pub mod pallet {
 		fn on_idle(_n: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut used_weight = Weight::zero();
 
-			let cleanup_weight = frame_support::weights::constants::RocksDbWeight::get()
-				.reads_writes(2, 2)
-				.saturating_add(T::WeightInfo::remove_prewitnessed_deposits(1));
+			// Approximate weight calculation: r/w DepositChannelLookup + r PrewitnessedDeposits +
+			// w DepositChannelPool + 1 clear_prewitnessed_deposits
+			let recycle_weight_per_address =
+				frame_support::weights::constants::RocksDbWeight::get()
+					.reads_writes(2, 2)
+					.saturating_add(T::WeightInfo::clear_prewitnessed_deposits(1));
 
-			let maximum_recycle_number = remaining_weight
+			let maximum_addresses_to_recycle = remaining_weight
 				.ref_time()
-				.checked_div(cleanup_weight.ref_time())
+				.checked_div(recycle_weight_per_address.ref_time())
 				.unwrap_or_default()
 				.saturated_into::<usize>();
 
-			let can_recycle = DepositChannelRecycleBlocks::<T, I>::mutate(|recycle_queue| {
-				Self::can_and_cannot_recycle(
-					recycle_queue,
-					maximum_recycle_number,
-					T::ChainTracking::get_block_height(),
-				)
-			});
+			let addresses_to_recycle =
+				DepositChannelRecycleBlocks::<T, I>::mutate(|recycle_queue| {
+					Self::take_recyclable_addresses(
+						recycle_queue,
+						maximum_addresses_to_recycle,
+						T::ChainTracking::get_block_height(),
+					)
+				});
+
+			// Add weight for the DepositChannelRecycleBlocks read/write plus the
+			// DepositChannelLookup read/writes in the for loop below
 			used_weight = used_weight.saturating_add(
-				frame_support::weights::constants::RocksDbWeight::get()
-					.reads_writes((can_recycle.len() + 1) as u64, can_recycle.len() as u64),
+				frame_support::weights::constants::RocksDbWeight::get().reads_writes(
+					(addresses_to_recycle.len() + 1) as u64,
+					(addresses_to_recycle.len() + 1) as u64,
+				),
 			);
 
-			for address in can_recycle.iter() {
+			for address in addresses_to_recycle.iter() {
 				if let Some(details) = DepositChannelLookup::<T, I>::take(address) {
 					if let Some(state) = details.deposit_channel.state.maybe_recycle() {
 						DepositChannelPool::<T, I>::insert(
@@ -623,21 +632,13 @@ pub mod pallet {
 						);
 						used_weight = used_weight.saturating_add(
 							frame_support::weights::constants::RocksDbWeight::get()
-								.reads_writes(1, 0),
+								.reads_writes(0, 1),
 						);
 					}
-					// Cleanup the deposit data
-					let item_count = PrewitnessedDeposits::<T, I>::iter_prefix(
-						details.deposit_channel.channel_id,
-					)
-					.count() as u32;
-					let removed_deposits = PrewitnessedDeposits::<T, I>::clear_prefix(
-						details.deposit_channel.channel_id,
-						item_count,
-						None,
-					);
+					let removed_deposits =
+						Self::clear_prewitnessed_deposits(details.deposit_channel.channel_id);
 					used_weight = used_weight.saturating_add(
-						T::WeightInfo::remove_prewitnessed_deposits(removed_deposits.unique),
+						T::WeightInfo::clear_prewitnessed_deposits(removed_deposits),
 					);
 				}
 			}
@@ -900,19 +901,26 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	fn can_and_cannot_recycle(
+	fn take_recyclable_addresses(
 		channel_recycle_blocks: &mut ChannelRecycleQueue<T, I>,
-		maximum_recyclable_number: usize,
+		maximum_addresses_to_take: usize,
 		current_block_height: TargetChainBlockNumber<T, I>,
 	) -> Vec<TargetChainAccount<T, I>> {
 		let partition_point = sp_std::cmp::min(
 			channel_recycle_blocks.partition_point(|(block, _)| *block <= current_block_height),
-			maximum_recyclable_number,
+			maximum_addresses_to_take,
 		);
 		channel_recycle_blocks
 			.drain(..partition_point)
 			.map(|(_, address)| address)
 			.collect()
+	}
+
+	// Clears all prewitnessed deposits for a given channel, returning the number of items removed.
+	fn clear_prewitnessed_deposits(channel_id: ChannelId) -> u32 {
+		let item_count = PrewitnessedDeposits::<T, I>::iter_prefix(channel_id).count() as u32;
+		// FIXME JAMIE: clear_prefix is always returning 0.
+		PrewitnessedDeposits::<T, I>::clear_prefix(channel_id, item_count, None).backend
 	}
 
 	/// Take all scheduled egress requests and send them out in an `AllBatch` call.
@@ -1102,9 +1110,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				*id
 			});
 
-			let deposit_channel_details =
-				DepositChannelLookup::<T, I>::get(deposit_address.clone())
-					.ok_or(Error::<T, I>::InvalidDepositAddress)?;
+			let deposit_channel_details = DepositChannelLookup::<T, I>::get(&deposit_address)
+				.ok_or(Error::<T, I>::InvalidDepositAddress)?;
 
 			PrewitnessedDeposits::<T, I>::insert(
 				deposit_channel_details.deposit_channel.channel_id,
