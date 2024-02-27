@@ -243,7 +243,8 @@ pub enum CfeCompatibility {
 	/// The version is not yet compatible with the target. Should wait for the new version.
 	NotYetCompatible,
 
-	/// The version of the engine is no longer compatible with the runtime. Should switch to the new version.
+	/// The version of the engine is no longer compatible with the runtime. Should switch to the
+	/// new version.
 	NoLongerCompatible,
 }
 

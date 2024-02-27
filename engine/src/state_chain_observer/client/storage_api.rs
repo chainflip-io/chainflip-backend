@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use cf_primitives::SemVer;
+use cf_primitives::{CfeCompatibility, SemVer};
 use codec::{Decode, FullCodec};
 use frame_support::{
 	storage::{
@@ -12,7 +12,6 @@ use frame_support::{
 use jsonrpsee::core::RpcResult;
 use sp_core::storage::StorageKey;
 use utilities::context;
-use cf_primitives::CfeCompatibility;
 
 use super::{CFE_VERSION, SUBSTRATE_BEHAVIOUR};
 
@@ -367,7 +366,10 @@ pub trait CheckBlockCompatibility: StorageApi {
 				block_hash,
 			)
 			.await?;
-		Ok((CFE_VERSION.compatibility_with_runtime(version_runtime_requires), version_runtime_requires))
+		Ok((
+			CFE_VERSION.compatibility_with_runtime(version_runtime_requires),
+			version_runtime_requires,
+		))
 	}
 }
 #[async_trait]
