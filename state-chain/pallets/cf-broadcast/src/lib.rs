@@ -81,6 +81,8 @@ pub mod pallet {
 	pub type TransactionOutIdFor<T, I> =
 		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId;
 
+	pub type TransactionRefFor<T, I> = <<T as Config<I>>::TargetChain as Chain>::TransactionRef;
+
 	/// Type alias for the instance's configured Payload.
 	pub type PayloadFor<T, I> =
 		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::Payload;
@@ -316,6 +318,7 @@ pub mod pallet {
 		BroadcastSuccess {
 			broadcast_id: BroadcastId,
 			transaction_out_id: TransactionOutIdFor<T, I>,
+			transaction_ref: TransactionRefFor<T, I>,
 		},
 		/// A broadcast's threshold signature is invalid, we will attempt to re-sign it.
 		ThresholdSignatureInvalid { broadcast_id: BroadcastId },
@@ -589,6 +592,7 @@ pub mod pallet {
 			Self::deposit_event(Event::<T, I>::BroadcastSuccess {
 				broadcast_id,
 				transaction_out_id: tx_out_id,
+				transaction_ref: tx_metadata.get_transaction_ref(),
 			});
 			Ok(().into())
 		}
