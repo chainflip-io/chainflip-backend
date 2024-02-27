@@ -919,8 +919,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	// Clears all prewitnessed deposits for a given channel, returning the number of items removed.
 	fn clear_prewitnessed_deposits(channel_id: ChannelId) -> u32 {
 		let item_count = PrewitnessedDeposits::<T, I>::iter_prefix(channel_id).count() as u32;
-		// FIXME JAMIE: clear_prefix is always returning 0.
-		PrewitnessedDeposits::<T, I>::clear_prefix(channel_id, item_count, None).backend
+		// TODO: find out why clear_prefix returns 0 and ignores the given limit.
+		let _removed = PrewitnessedDeposits::<T, I>::clear_prefix(channel_id, item_count, None);
+		item_count
 	}
 
 	/// Take all scheduled egress requests and send them out in an `AllBatch` call.

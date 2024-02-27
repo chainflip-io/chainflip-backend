@@ -178,8 +178,7 @@ mod benchmarks {
 			assert_eq!(Pallet::<T, I>::clear_prewitnessed_deposits(0), n as u32);
 		}
 
-		// FIXME JAMIE: clear_prewitnessed_deposits always return 0
-		// assert_eq!(PrewitnessedDeposits::<T, I>::iter().count(), 0);
+		assert_eq!(PrewitnessedDeposits::<T, I>::iter().count(), 0);
 	}
 
 	#[cfg(test)]

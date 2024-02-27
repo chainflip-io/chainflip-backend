@@ -1662,4 +1662,3 @@ fn should_remove_prewitnessed_deposit_when_witnessed() {
 		);
 	});
 }
-}
