@@ -69,6 +69,8 @@ pub trait Chainflip: frame_system::Config {
 		+ IsType<<Self as frame_system::Config>::RuntimeCall>;
 
 	/// A type that allows us to check if a call was a result of witness consensus.
+	type EnsurePrewitnessed: EnsureOrigin<Self::RuntimeOrigin>;
+	/// A type that allows us to check if a call was a result of witness consensus.
 	type EnsureWitnessed: EnsureOrigin<Self::RuntimeOrigin>;
 	/// A type that allows us to check if a call was a result of witness consensus by the current
 	/// epoch.
