@@ -13,6 +13,7 @@ function tryRuntimeCommand(runtimePath: string, blockParam: string, networkUrl: 
   const stderrFile = path.join(os.tmpdir(), `cmd-stderr-${Date.now()}`);
   try {
     execSync(
+      // TODO: Replace pre-and-post with all after the SDK issue paritytech/polkadot-sdk#2560 is merged.
       `try-runtime --runtime ${runtimePath} on-runtime-upgrade --disable-spec-version-check --disable-idempotency-checks --checks pre-and-post ${blockParam} --uri ${networkUrl} 2> ${stderrFile}`,
       { env: { ...process.env, RUST_LOG: 'runtime::executive=debug' } },
     );
