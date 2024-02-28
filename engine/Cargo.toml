@@ -126,16 +126,16 @@ codec = { package = "parity-scale-codec", version = "3.6.1", features = [
   "derive",
   "full",
 ] }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6" }
-frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6" }
-sc-rpc-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6" }
-sc-transaction-pool-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.6' }
+frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+sc-rpc-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+sc-transaction-pool-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.6+1' }
 scale-info = { version = "2.10.0", features = ["derive"] }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6" }
-sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6" }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6" }
-sp-version = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6" }
-substrate-frame-rpc-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6" }
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+sp-version = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+substrate-frame-rpc-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
 
 frame-metadata = { version = "16.0.0", default-features = false, features = [
   "current",
@@ -162,7 +162,7 @@ utilities = { package = "utilities", path = "../utilities", features = [
 serde_path_to_error = "*"
 
 [build-dependencies]
-substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6" }
+substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
 
 [features]
 integration-test = []
