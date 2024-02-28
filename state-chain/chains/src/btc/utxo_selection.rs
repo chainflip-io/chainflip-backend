@@ -112,7 +112,7 @@ pub fn select_utxos_for_consolidation(
 ) -> Vec<Utxo> {
 	let (mut spendable, mut dust) = available_utxos
 		.drain(..)
-		.partition::<Vec<_>, _>(|utxo| utxo.amount > fee_info.fee_for_utxo(utxo));
+		.partition::<Vec<_>, _>(|utxo| utxo.net_value(fee_info) > 0u64);
 
 	if spendable.len() >= params.consolidation_threshold as usize {
 		let mut remaining = spendable.split_off(params.consolidation_size as usize);

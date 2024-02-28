@@ -451,7 +451,7 @@ impl<T: Config> Pallet<T> {
 			UtxoSelectionType::SelectAllForRotation => {
 				let spendable_utxos: Vec<_> = BitcoinAvailableUtxos::<T>::take()
 					.into_iter()
-					.filter(|utxo| utxo.amount > bitcoin_fee_info.fee_for_utxo(utxo))
+					.filter(|utxo| utxo.net_value(&bitcoin_fee_info) > 0u64)
 					.collect();
 
 				if spendable_utxos.is_empty() {
