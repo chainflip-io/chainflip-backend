@@ -13,13 +13,27 @@ use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi,
 };
 use pallet_cf_ingress_egress::DepositWitness;
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 use utilities::rpc::NumberOrHex;
+use utilities::ArrayCollect;
+
+pub type Hash = [u8; 32];
+#[derive(Debug)]
+struct ReverseSerializer(Hash);
+impl Serialize for ReverseSerializer {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  	where
+		S: Serializer 
+	{
+		hex::encode(&self.0.iter().rev().copied().collect_array::<32>()).serialize(serializer)
+    	// <[u8; 32] as Serialize>::serialize::<S>(&self.0.iter().rev().copied().collect_array(), serializer)
+  	}
+}
 
 #[derive(Serialize)]
 #[serde(untagged)]
 enum TransactionRef {
-	Bitcoin { hash: String },
+	Bitcoin { hash: ReverseSerializer },
 	Ethereum { hash: H256 },
 	Polkadot { transaction_id: PolkadotTransactionId },
 }
@@ -209,10 +223,11 @@ where
 							hash: format!("0x{}", hex::encode(tx_out_id)),
 						},
 						tx_ref: TransactionRef::Bitcoin {
-							hash: format!("0x{}", hex::encode(transaction_ref.hash())),
+							hash: ReverseSerializer(transaction_ref),
 						},
 					})
 					.await?;
+				println!("{:?}", ReverseSerializer(transaction_ref));
 			}
 		},
 		PolkadotBroadcaster(BroadcastCall::transaction_succeeded {
