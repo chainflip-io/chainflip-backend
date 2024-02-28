@@ -4,10 +4,9 @@ use crate::{
 };
 use cf_chains::{
 	address::ToHumanreadableAddress,
-	btc::BitcoinTransactionMetadata,
-	dot::{PolkadotTransactionId, PolkadotTransactionMetadata},
-	evm::{EvmTransactionMetadata, SchnorrVerificationComponents, H256},
-	AnyChain, Bitcoin, Chain, Ethereum, Polkadot, TransactionMetadata,
+	dot::PolkadotTransactionId,
+	evm::{SchnorrVerificationComponents, H256},
+	AnyChain, Bitcoin, Chain, Ethereum, Polkadot,
 };
 use cf_primitives::{BroadcastId, ForeignChain, NetworkEnvironment};
 use chainflip_engine::state_chain_observer::client::{
@@ -186,21 +185,18 @@ where
 
 			if let Some(broadcast_id) = broadcast_id {
 				store
-					.save_singleton(
-						&WitnessInformation::Broadcast {
-							broadcast_id,
-							tx_out_id: TransactionId::Ethereum { signature: tx_out_id },
-							tx_ref:
-								TransactionRef::Ethereum {
-									hash: transaction_ref,
-								},
-						},
-					)
+					.save_singleton(&WitnessInformation::Broadcast {
+						broadcast_id,
+						tx_out_id: TransactionId::Ethereum { signature: tx_out_id },
+						tx_ref: TransactionRef::Ethereum { hash: transaction_ref },
+					})
 					.await?;
 			}
 		},
 		BitcoinBroadcaster(BroadcastCall::transaction_succeeded {
-			tx_out_id, transaction_ref, ..
+			tx_out_id,
+			transaction_ref,
+			..
 		}) => {
 			let broadcast_id =
 				get_broadcast_id::<Bitcoin, StateChainClient>(state_chain_client, &tx_out_id).await;
@@ -213,10 +209,7 @@ where
 							hash: format!("0x{}", hex::encode(tx_out_id)),
 						},
 						tx_ref: TransactionRef::Bitcoin {
-							hash: format!(
-								"0x{}",
-								hex::encode(transaction_ref)
-							),
+							hash: format!("0x{}", hex::encode(transaction_ref.hash())),
 						},
 					})
 					.await?;
@@ -238,9 +231,7 @@ where
 						tx_out_id: TransactionId::Polkadot {
 							signature: format!("0x{}", hex::encode(tx_out_id.aliased_ref())),
 						},
-						tx_ref: TransactionRef::Polkadot {
-							transaction_id: transaction_ref,
-						},
+						tx_ref: TransactionRef::Polkadot { transaction_id: transaction_ref },
 					})
 					.await?;
 			}
