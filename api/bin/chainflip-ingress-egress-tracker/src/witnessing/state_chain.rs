@@ -177,7 +177,7 @@ where
 			},
 		EthereumBroadcaster(BroadcastCall::transaction_succeeded {
 			tx_out_id,
-			tx_metadata,
+			transaction_ref,
 			..
 		}) => {
 			let broadcast_id =
@@ -192,9 +192,7 @@ where
 							tx_out_id: TransactionId::Ethereum { signature: tx_out_id },
 							tx_ref:
 								TransactionRef::Ethereum {
-									hash: <EvmTransactionMetadata as TransactionMetadata<
-										Ethereum,
-									>>::get_transaction_ref(&tx_metadata),
+									hash: transaction_ref,
 								},
 						},
 					)
@@ -202,7 +200,7 @@ where
 			}
 		},
 		BitcoinBroadcaster(BroadcastCall::transaction_succeeded {
-			tx_out_id, tx_metadata, ..
+			tx_out_id, transaction_ref, ..
 		}) => {
 			let broadcast_id =
 				get_broadcast_id::<Bitcoin, StateChainClient>(state_chain_client, &tx_out_id).await;
@@ -217,9 +215,7 @@ where
 						tx_ref: TransactionRef::Bitcoin {
 							hash: format!(
 								"0x{}",
-								hex::encode(<BitcoinTransactionMetadata as TransactionMetadata<
-									Bitcoin,
-								>>::get_transaction_ref(&tx_metadata))
+								hex::encode(transaction_ref)
 							),
 						},
 					})
@@ -228,7 +224,7 @@ where
 		},
 		PolkadotBroadcaster(BroadcastCall::transaction_succeeded {
 			tx_out_id,
-			tx_metadata,
+			transaction_ref,
 			..
 		}) => {
 			let broadcast_id =
@@ -243,9 +239,7 @@ where
 							signature: format!("0x{}", hex::encode(tx_out_id.aliased_ref())),
 						},
 						tx_ref: TransactionRef::Polkadot {
-							transaction_id: <PolkadotTransactionMetadata as TransactionMetadata<
-								Polkadot,
-							>>::get_transaction_ref(&tx_metadata),
+							transaction_id: transaction_ref,
 						},
 					})
 					.await?;
