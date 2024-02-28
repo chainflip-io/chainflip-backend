@@ -62,9 +62,9 @@ jobs:
       #   with:
       #     name: chainflip-backend-bin-ubuntu-22.04
 
-      - name: Install node dependencies 📦
-        working-directory: bouncer
-        run: pnpm install
+      # - name: Install node dependencies 📦
+      #   working-directory: bouncer
+      #   run: pnpm install
 
       - name: Install solana ☀️
         run: |
@@ -81,7 +81,7 @@ jobs:
           mkdir -p /tmp/chainflip/doc
           mkdir -p /tmp/chainflip/dopey
           touch /tmp/chainflip/debug.log
-          chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
+          # chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
           touch ./localnet/.setup_complete
           ./localnet/manage.sh
 
