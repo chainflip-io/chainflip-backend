@@ -415,6 +415,7 @@ assets!(pub enum Asset {
 	},
 	(sol, Solana, "Solana") => {
 		(Sol, sol) = 8u32 (GAS_ASSET),
+		(SolUsdc, solusdc) = 9u32,
 	}
 });
 
