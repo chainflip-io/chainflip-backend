@@ -6,7 +6,7 @@
 // For example: ./commands/setup_swaps.ts
 
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { Asset } from '@chainflip-io/cli';
+import { Asset, assetChains } from '@chainflip-io/cli';
 import { runWithTimeout } from '../shared/utils';
 import { createLpPool } from '../shared/create_lp_pool';
 import { provideLiquidity } from '../shared/provide_liquidity';
@@ -20,6 +20,7 @@ const deposits = new Map<Asset, number>([
   ['USDC', 1000000],
   ['ARBUSDC', 1000000],
   ['FLIP', 10000],
+  ['SOL', 100],
 ]);
 
 const price = new Map<Asset, number>([
@@ -30,6 +31,7 @@ const price = new Map<Asset, number>([
   ['USDC', 1],
   ['ARBUSDC', 1],
   ['FLIP', 10],
+  ['SOL', 100],
 ]);
 
 async function main(): Promise<void> {
@@ -40,8 +42,10 @@ async function main(): Promise<void> {
     createLpPool('DOT', price.get('DOT')!),
     createLpPool('BTC', price.get('BTC')!),
     createLpPool('FLIP', price.get('FLIP')!),
-    // createLpPool('ARBETH', price.get('ARBETH')!),
-    // createLpPool('ARBUSDC', price.get('ARBUSDC')!),
+    createLpPool('SOL', price.get('SOL')!),
+    // // createLpPool('SOLUSDC', price.get('SOLUSDC')!),
+    // // createLpPool('ARBETH', price.get('ARBETH')!),
+    // // createLpPool('ARBUSDC', price.get('ARBUSDC')!),
   ]);
 
   await Promise.all([
@@ -50,8 +54,10 @@ async function main(): Promise<void> {
     provideLiquidity('DOT', deposits.get('DOT')!),
     provideLiquidity('BTC', deposits.get('BTC')!),
     provideLiquidity('FLIP', deposits.get('FLIP')!),
-    // provideLiquidity('ARBETH', deposits.get('ARBETH')!),
-    // provideLiquidity('ARBUSDC', deposits.get('ARBUSDC')!),
+    provideLiquidity('SOL', deposits.get('SOL')!),
+    // // provideLiquidity('SOLUSDC', deposits.get('SOLUSDC')!),
+    // // provideLiquidity('ARBETH', deposits.get('ARBETH')!),
+    // // provideLiquidity('ARBUSDC', deposits.get('ARBUSDC')!),
   ]);
 
   await Promise.all([
@@ -59,8 +65,9 @@ async function main(): Promise<void> {
     rangeOrder('DOT', deposits.get('DOT')! * 0.9999),
     rangeOrder('BTC', deposits.get('BTC')! * 0.9999),
     rangeOrder('FLIP', deposits.get('FLIP')! * 0.9999),
-    // rangeOrder('ARBETH', deposits.get('ARBETH')! * 0.9999),
-    // rangeOrder('ARBUSDC', deposits.get('ARBUSDC')! * 0.9999),
+    rangeOrder('SOL', deposits.get('SOL')! * 0.9999),
+    // // rangeOrder('ARBETH', deposits.get('ARBETH')! * 0.9999),
+    // // rangeOrder('ARBUSDC', deposits.get('ARBUSDC')! * 0.9999),
   ]);
   console.log('=== Swaps Setup completed ===');
 

@@ -13,7 +13,8 @@ import {
 } from '@chainflip-io/cli';
 import Web3 from 'web3';
 import { Connection, Keypair } from '@solana/web3.js';
-import { u8aToHex } from '@polkadot/util';
+import { base58Decode, base58Encode } from '@polkadot/util-crypto';
+import { hexToU8a, u8aToHex } from '@polkadot/util';
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
@@ -21,6 +22,7 @@ import { newEvmAddress } from './new_evm_address';
 import { CcmDepositMetadata } from './new_swap';
 import { getCFTesterAbi } from './eth_abis';
 import { SwapParams } from './perform_swap';
+import { newSolAddress } from './new_sol_address';
 
 const cfTesterAbi = await getCFTesterAbi();
 
@@ -92,10 +94,10 @@ export function assetToChain(asset: Asset): string {
       return 'Btc';
     case 'ARBUSDC':
     case 'ARBETH':
-      return 'Arbitrum';
+      return 'Arb';
     case 'SOL':
     case 'SOLUSDC':
-      return 'Solana';
+      return 'Sol';
     default:
       return '';
   }
@@ -423,7 +425,6 @@ export async function newAddress(
   type?: BtcAddressType,
 ): Promise<string> {
   let rawAddress;
-
   switch (asset) {
     case Assets.FLIP:
     case Assets.ETH:
@@ -437,6 +438,9 @@ export async function newAddress(
       break;
     case Assets.BTC:
       rawAddress = await newBtcAddress(seed, type ?? 'P2PKH');
+      break;
+    case Assets.SOL:
+      rawAddress = newSolAddress(seed);
       break;
     default:
       throw new Error('unexpected asset');
@@ -687,6 +691,18 @@ export function hexPubkeyToFlipAddress(hexPubkey: string) {
   const keyring = new Keyring({ type: 'sr25519' });
   keyring.setSS58Format(2112);
   return keyring.encodeAddress(hexPubkey);
+}
+
+export function decodeSolAddress(address: string): string {
+  return u8aToHex(base58Decode(address));
+}
+
+export function encodeSolAddress(address: string): string {
+  return base58Encode(hexToU8a(address));
+}
+
+export function getEncodedSolAddress(address: string): string {
+  return /^0x[a-fA-F0-9]+$/.test(address) ? encodeSolAddress(address) : address;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
