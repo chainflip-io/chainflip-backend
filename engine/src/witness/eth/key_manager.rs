@@ -63,6 +63,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			ChainAccount = H160,
 			TransactionFee = TransactionFee,
 			TransactionMetadata = EvmTransactionMetadata,
+			TransactionRef = H256,
 		>,
 		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 			+ Send
@@ -130,7 +131,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								max_fee_per_gas: transaction.max_fee_per_gas,
 								max_priority_fee_per_gas: transaction.max_priority_fee_per_gas,
 								gas_limit: Some(transaction.gas),
-								tx_hash: transaction.hash,
 							};
 							pallet_cf_broadcast::Call::<
 								_,
@@ -143,6 +143,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								signer_id: from,
 								tx_fee: TransactionFee { effective_gas_price, gas_used },
 								tx_metadata,
+								transaction_ref: transaction.hash,
 							}
 							.into()
 						},

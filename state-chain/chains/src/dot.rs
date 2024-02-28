@@ -317,29 +317,6 @@ impl FeeEstimationApi<Polkadot> for PolkadotTrackedData {
 #[derive(
 	Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize,
 )]
-pub struct PolkadotTransactionMetadata {
-	pub tx_id: PolkadotTransactionId,
-}
-
-impl<C: Chain<TransactionRef = PolkadotTransactionId>> TransactionMetadata<C>
-	for PolkadotTransactionMetadata
-{
-	fn extract_metadata(_transaction: &<C as Chain>::Transaction) -> Self {
-		Default::default()
-	}
-
-	fn verify_metadata(&self, _expected_metadata: &Self) -> bool {
-		true
-	}
-
-	fn get_transaction_ref(&self) -> <C as Chain>::TransactionRef {
-		self.tx_id.clone()
-	}
-}
-
-#[derive(
-	Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize,
-)]
 pub struct PolkadotTransactionId {
 	pub block_number: PolkadotBlockNumber,
 	pub extrinsic_index: u32,
@@ -361,7 +338,7 @@ impl Chain for Polkadot {
 	type DepositChannelState = PolkadotChannelState;
 	type DepositDetails = ();
 	type Transaction = PolkadotTransactionData;
-	type TransactionMetadata = PolkadotTransactionMetadata;
+	type TransactionMetadata = ();
 	type ReplayProtectionParams = ResetProxyAccountNonce;
 	type ReplayProtection = PolkadotReplayProtection;
 	type TransactionRef = PolkadotTransactionId;
