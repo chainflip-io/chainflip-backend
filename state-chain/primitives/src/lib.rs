@@ -253,9 +253,9 @@ impl SemVer {
 		if self.is_compatible_with(version_runtime_requires) {
 			CfeCompatibility::Compatible
 		} else if self < &version_runtime_requires {
-			CfeCompatibility::NotYetCompatible
-		} else {
 			CfeCompatibility::NoLongerCompatible
+		} else {
+			CfeCompatibility::NotYetCompatible
 		}
 	}
 
