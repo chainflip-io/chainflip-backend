@@ -4,7 +4,7 @@ import { assetDecimals, fundStateChainAccount } from '@chainflip-io/cli';
 import { Wallet, ethers } from 'ethers';
 import { getNextEvmNonce } from './send_evm';
 import {
-  getEvmContractAddress,
+  getContractAddress,
   hexPubkeyToFlipAddress,
   decodeFlipAddressForContract,
   getEvmEndpoint,
@@ -17,15 +17,15 @@ export async function fundFlip(scAddress: string, flipAmount: string) {
   const chainflip = await getChainflipApi();
   await cryptoWaitReady();
 
-  await approveErc20('FLIP', getEvmContractAddress('Ethereum', 'GATEWAY'), flipAmount);
+  await approveErc20('FLIP', getContractAddress('Ethereum', 'GATEWAY'), flipAmount);
 
   const flipperinoAmount = amountToFineAmount(flipAmount, assetDecimals.FLIP);
 
   const flipContractAddress =
-    process.env.ETH_FLIP_ADDRESS ?? getEvmContractAddress('Ethereum', 'FLIP');
+    process.env.ETH_FLIP_ADDRESS ?? getContractAddress('Ethereum', 'FLIP');
 
   const gatewayContractAddress =
-    process.env.ETH_GATEWAY_ADDRESS ?? getEvmContractAddress('Ethereum', 'GATEWAY');
+    process.env.ETH_GATEWAY_ADDRESS ?? getContractAddress('Ethereum', 'GATEWAY');
 
   const whaleKey = getWhaleKey('Ethereum');
   console.log('Approving ' + flipAmount + ' FLIP to State Chain Gateway');

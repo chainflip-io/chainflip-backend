@@ -5,7 +5,7 @@ import { performSwap, SwapParams } from '../shared/perform_swap';
 import {
   newAddress,
   chainFromAsset,
-  getEvmContractAddress,
+  getContractAddress,
   amountToFineAmount,
   defaultAssetAmounts,
 } from '../shared/utils';
@@ -108,7 +108,7 @@ export async function prepareSwap(
 
   // For swaps with a message force the address to be the CF Tester address.
   if (messageMetadata && chainFromAsset(destAsset) === chainFromAsset('ETH')) {
-    destAddress = getEvmContractAddress(chainFromAsset(destAsset), 'CFTESTER');
+    destAddress = getContractAddress(chainFromAsset(destAsset), 'CFTESTER');
     if (log) console.log(`${tag} Using CF Tester address: ${destAddress}`);
   } else {
     destAddress = await newAddress(destAsset, seed, addressType);

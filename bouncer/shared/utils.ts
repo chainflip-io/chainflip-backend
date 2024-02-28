@@ -33,7 +33,7 @@ export const btcClientMutex = new Mutex();
 export const brokerMutex = new Mutex();
 export const snowWhiteMutex = new Mutex();
 
-export function getEvmContractAddress(chain: Chain, contract: string): string {
+export function getContractAddress(chain: Chain, contract: string): string {
   switch (chain) {
     case 'Ethereum':
       switch (contract) {
@@ -69,6 +69,8 @@ export function getEvmContractAddress(chain: Chain, contract: string): string {
       switch (contract) {
         case 'VAULT':
           return '632bJHVLPj6XPLVgrabFwxogtAQQ5zb8hwm9zqZuCcHo';
+        case 'DATA_ACCOUNT':
+          return '495WG7zQn1bzyJGM4mnfv1YrHAV7gc4oL2TUjCVaSm48';
         case 'SOLUSDC':
           return process.env.ARB_USDC_ADDRESS ?? '24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p';
         case 'CFTESTER':
@@ -653,7 +655,7 @@ export async function observeCcmReceived(
       chainContractIds[chainFromAsset(sourceAsset)].toString(),
       sourceAddress ?? null,
       messageMetadata.message,
-      getEvmContractAddress(chainFromAsset(destAsset), destAsset.toString()),
+      getContractAddress(chainFromAsset(destAsset), destAsset.toString()),
       '*',
       '*',
       '*',

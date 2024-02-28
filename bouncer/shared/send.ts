@@ -5,7 +5,7 @@ import { sendBtc } from './send_btc';
 import { sendErc20 } from './send_erc20';
 import { sendEvmNative, signAndSendTxEvm } from './send_evm';
 import {
-  getEvmContractAddress,
+  getContractAddress,
   defaultAssetAmounts,
   amountToFineAmount,
   chainFromAsset,
@@ -35,7 +35,7 @@ export async function send(asset: Asset, address: string, amount?: string, log =
       await sendSol(address, amount ?? defaultAssetAmounts(asset));
       break;
     case 'USDC': {
-      const contractAddress = getEvmContractAddress('Ethereum', asset);
+      const contractAddress = getContractAddress('Ethereum', asset);
       await sendErc20(
         'Ethereum',
         address,
@@ -46,7 +46,7 @@ export async function send(asset: Asset, address: string, amount?: string, log =
       break;
     }
     case 'FLIP': {
-      const contractAddress = getEvmContractAddress('Ethereum', asset);
+      const contractAddress = getContractAddress('Ethereum', asset);
       await sendErc20(
         'Ethereum',
         address,
@@ -57,7 +57,7 @@ export async function send(asset: Asset, address: string, amount?: string, log =
       break;
     }
     case 'ARBUSDC': {
-      const contractAddress = getEvmContractAddress('Arbitrum', asset);
+      const contractAddress = getContractAddress('Arbitrum', asset);
       await sendErc20(
         'Arbitrum',
         address,
@@ -77,7 +77,7 @@ export async function sendViaCfTester(asset: Asset, toAddress: string, amount?: 
 
   const web3 = new Web3(getEvmEndpoint(chain));
 
-  const cfTesterAddress = getEvmContractAddress(chain, 'CFTESTER');
+  const cfTesterAddress = getContractAddress(chain, 'CFTESTER');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const cfTesterContract = new web3.eth.Contract(cfTesterAbi as any, cfTesterAddress);
 
@@ -94,7 +94,7 @@ export async function sendViaCfTester(asset: Asset, toAddress: string, amount?: 
       txData = cfTesterContract.methods
         .transferToken(
           toAddress,
-          getEvmContractAddress(chain, asset),
+          getContractAddress(chain, asset),
           amountToFineAmount(amount ?? defaultAssetAmounts(asset), assetDecimals[asset]),
         )
         .encodeABI();

@@ -9,7 +9,7 @@ import {
   sleep,
   observeEvent,
   handleSubstrateError,
-  getEvmContractAddress,
+  getContractAddress,
   getChainflipApi,
   amountToFineAmount,
   observeEVMEvent,
@@ -46,8 +46,8 @@ export async function redeemFlip(
   const networkOptions = {
     signer: ethWallet,
     network: 'localnet',
-    stateChainGatewayContractAddress: getEvmContractAddress('Ethereum', 'GATEWAY'),
-    flipContractAddress: getEvmContractAddress('Ethereum', 'FLIP'),
+    stateChainGatewayContractAddress: getContractAddress('Ethereum', 'GATEWAY'),
+    flipContractAddress: getContractAddress('Ethereum', 'FLIP'),
   } as const;
 
   const pendingRedemption = await chainflip.query.flip.pendingRedemptionsReserve(
@@ -78,7 +78,7 @@ export async function redeemFlip(
   await observeEVMEvent(
     chainFromAsset(Assets.FLIP),
     gatewayAbi,
-    getEvmContractAddress('Ethereum', 'GATEWAY'),
+    getContractAddress('Ethereum', 'GATEWAY'),
     'RedemptionRegistered',
     [accountIdHex, observeEventAmount, ethAddress, '*', '*', '*'],
   );

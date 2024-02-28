@@ -15,8 +15,14 @@ import {
   observeEvent,
   sleep,
   handleSubstrateError,
+  getSolConnection,
+  getContractAddress,
+  getSolWhaleKeyPair,
+  encodeSolAddress,
 } from '../shared/utils';
 import { aliceKeyringPair } from '../shared/polkadot_keyring';
+import { PublicKey, SystemProgram } from '@solana/web3.js';
+import { signAndSendTxSol } from '../shared/send_sol';
 
 async function main(): Promise<void> {
   const btcClient = getBtcClient();
@@ -24,6 +30,7 @@ async function main(): Promise<void> {
 
   const chainflip = await getChainflipApi();
   const polkadot = await getPolkadotApi();
+  const solana = await getSolConnection();
 
   console.log('=== Performing initial Vault setup ===');
 
@@ -39,8 +46,10 @@ async function main(): Promise<void> {
     chainflip,
   );
   const btcActivationRequest = observeEvent('bitcoinVault:AwaitingGovernanceActivation', chainflip);
+  const solActivationRequest = observeEvent('solanaVault:AwaitingGovernanceActivation', chainflip);
   const dotKey = (await dotActivationRequest).data.newPublicKey;
   const btcKey = (await btcActivationRequest).data.newPublicKey;
+  const solKey = (await solActivationRequest).data.newPublicKey;
 
   // Step 3
   console.log('Requesting Polkadot Vault creation');
@@ -113,9 +122,38 @@ async function main(): Promise<void> {
     }
   };
   await rotateAndFund();
-  const vaultBlockNumber = await (await proxyAdded).block;
+  const vaultBlockNumber = (await proxyAdded).block;
 
   // Step 5
+  console.log('Inserting keys in the Solana program');
+  const solanaVaultAddress = new PublicKey(getContractAddress('Solana', 'VAULT'));
+  const whaleKeypair = getSolWhaleKeyPair();
+  // const solanaVaultProgram = getContractAddress('Solana', 'VAULT');
+
+  let tx = await program.methods
+    .initialize(encodeSolAddress(solKey))
+    .accounts({
+      dataAccount: getContractAddress('Solana', 'DATA_ACCOUNT'),
+      initializer: whaleKeypair.publicKey,
+      systemProgram: SystemProgram.programId,
+    })
+    .signers([whaleKeypair])
+    .transaction();
+
+  await signAndSendTxSol(tx);
+
+  // TODO: We might want this just to check it went well for development but
+  // it should be removed.
+  // // Check that the PDA's owner is the program itself.
+  // const accountInfo = await connection.getAccountInfo(dataAccountPubkey);
+  // assert.ok(accountInfo.owner.equals(program.programId));
+
+  // // Check that the data account account has the correct data.
+  // await checkDataAccount(dataAccountPubkey, vaultPubKey);
+
+  // TODO: Pass Nonce Account authority.
+
+  // Step 6
   console.log('Registering Vaults with state chain');
   await submitGovernanceExtrinsic(
     chainflip.tx.environment.witnessPolkadotVaultCreation(vaultAddress, {
@@ -129,6 +167,18 @@ async function main(): Promise<void> {
       btcKey,
     ),
   );
+
+  // TODO: Update
+  // await submitGovernanceExtrinsic(
+  //   chainflip.tx.environment.witnessInitializeSolanaVault(
+  //     await arbClient.eth.getBlockNumber(),
+  //     getContractAddress('Arbitrum', 'KEY_MANAGER'),
+  //     getContractAddress('Arbitrum', 'VAULT'),
+  //     getContractAddress('Arbitrum', 'ADDRESS_CHECKER'),
+  //     await arbClient.eth.getChainId(),
+  //     getContractAddress('Arbitrum', 'ARBUSDC'),
+  //   ),
+  // );
 
   // Confirmation
   console.log('Waiting for new epoch...');

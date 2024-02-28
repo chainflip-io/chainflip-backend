@@ -8,7 +8,7 @@ import {
   sleep,
   observeEvent,
   getChainflipApi,
-  getEvmContractAddress,
+  getContractAddress,
   decodeDotAddressForContract,
   defaultAssetAmounts,
   amountToFineAmount,
@@ -77,7 +77,7 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
 
   const web3 = new Web3(getEvmEndpoint(chainFromAsset(sourceAsset)));
 
-  const cfTesterAddress = getEvmContractAddress(chainFromAsset(sourceAsset), 'CFTESTER');
+  const cfTesterAddress = getContractAddress(chainFromAsset(sourceAsset), 'CFTESTER');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const cfTesterContract = new web3.eth.Contract(cfTesterAbi as any, cfTesterAddress);
   const amount = BigInt(
@@ -89,7 +89,7 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
       chainContractIds[chainFromAsset(destAsset)],
       destAsset === 'DOT' ? decodeDotAddressForContract(destAddress) : destAddress,
       assetContractIds[destAsset],
-      getEvmContractAddress(chainFromAsset(sourceAsset), sourceAsset),
+      getContractAddress(chainFromAsset(sourceAsset), sourceAsset),
       amount,
       '0x',
       numSwaps,
