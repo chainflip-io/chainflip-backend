@@ -135,6 +135,7 @@ impl StateChainClient<extrinsic_api::signed::SignedExtrinsicClient> {
 		wait_for_required_role: bool,
 		wait_for_required_version: bool,
 		submit_cfe_version: bool,
+		start_from: Option<state_chain_runtime::BlockNumber>,
 	) -> Result<(impl StreamApi<FINALIZED> + Clone, impl StreamApi<UNFINALIZED> + Clone, Arc<Self>)>
 	{
 		Self::new_with_account(
@@ -145,6 +146,7 @@ impl StateChainClient<extrinsic_api::signed::SignedExtrinsicClient> {
 			wait_for_required_role,
 			wait_for_required_version,
 			submit_cfe_version,
+			start_from,
 		)
 		.await
 	}
@@ -177,6 +179,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		wait_for_required_role: bool,
 		wait_for_required_version: bool,
 		submit_cfe_version: bool,
+		start_from: Option<state_chain_runtime::BlockNumber>,
 	) -> Result<(impl StreamApi<FINALIZED> + Clone, impl StreamApi<UNFINALIZED> + Clone, Arc<Self>)>
 	{
 		Self::new(
@@ -192,6 +195,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				submit_cfe_version,
 			},
 			wait_for_required_version,
+			start_from,
 		)
 		.await
 	}
@@ -206,7 +210,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		wait_for_required_version: bool,
 	) -> Result<(impl StreamApi<FINALIZED> + Clone, impl StreamApi<UNFINALIZED> + Clone, Arc<Self>)>
 	{
-		Self::new(scope, base_rpc_client, (), wait_for_required_version).await
+		Self::new(scope, base_rpc_client, (), wait_for_required_version, None).await
 	}
 }
 
@@ -225,6 +229,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 		base_rpc_client: Arc<BaseRpcClient>,
 		wait_for_required_version: bool,
 		error_on_incompatible_block: bool,
+		start_from: Option<u32>,
 		new_stream_fn: NewStreamFn,
 		process_stream_fn: ProcessStreamFn,
 	) -> Result<(
@@ -292,18 +297,64 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 
 		let mut processed_stream = {
 			let latest_block: BlockInfo = block_stream.next().await.unwrap()?;
-			let mut block_stream =
-				process_stream_fn(Box::pin(block_stream.make_try_cached(latest_block))).await?;
+
+			let block_stream: Pin<
+				Box<
+					dyn TryCachedStream<
+							Error = anyhow::Error,
+							Ok = BlockInfo,
+							Item = Result<BlockInfo, anyhow::Error>,
+						> + Send,
+				>,
+			> = if let Some(start_from) = start_from {
+				let base_rpc_client = base_rpc_client.clone();
+
+				let mut start_from_headers = Box::pin(
+					futures::stream::iter(start_from..latest_block.number)
+						.then(move |block_number| {
+							let base_rpc_client_c = base_rpc_client.clone();
+							async move {
+								let hash = base_rpc_client_c
+									.block_hash(block_number)
+									.await?
+									.ok_or_else(|| {
+										anyhow::anyhow!(
+											"Block number {} does not exist in the state chain",
+											block_number
+										)
+									})?;
+								Ok(base_rpc_client_c.block_header(hash).await?)
+							}
+						})
+						.map_ok(|header| -> BlockInfo { header.into() }),
+				);
+
+				let first_block: BlockInfo = start_from_headers.next().await.unwrap()?;
+				Box::pin(
+					start_from_headers
+						.chain(futures::stream::once(futures::future::ready(
+							Ok::<_, anyhow::Error>(latest_block),
+						)))
+						.chain(block_stream)
+						.make_try_cached(first_block),
+				)
+			} else {
+				Box::pin(block_stream.make_try_cached(latest_block))
+			};
+
+			let first_block = *block_stream.cache();
+
+			let mut block_stream = process_stream_fn(block_stream).await?;
 
 			let (cfe_compatibility, latest_version_runtime_requires) =
-				base_rpc_client.check_block_compatibility(latest_block.hash).await?;
+				base_rpc_client.check_block_compatibility(first_block.hash).await?;
 
 			match cfe_compatibility {
 				CfeCompatibility::NoLongerCompatible => {
 					return Err(CreateBlockStreamError::NoLongerCompatible {
 						cfe_version: *CFE_VERSION,
 						cfe_version_required: latest_version_runtime_requires,
-						first_incompatible_block: latest_block.number,
+						first_incompatible_block: first_block.number,
 					}
 					.into());
 				},
@@ -313,7 +364,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 					// return out the error and let the runner start the other version.
 					if wait_for_required_version {
 						let incompatible_blocks = futures::stream::once(futures::future::ready(
-							Ok::<_, anyhow::Error>(latest_block),
+							Ok::<_, anyhow::Error>(first_block),
 						))
 						.chain(block_stream.by_ref())
 						.try_take_while(|block_info| {
@@ -502,6 +553,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 		base_rpc_client: Arc<BaseRpcClient>,
 		mut signed_extrinsic_client_builder: SignedExtrinsicClientBuilder,
 		wait_for_required_version: bool,
+		start_from: Option<u32>,
 	) -> Result<(impl StreamApi<FINALIZED> + Clone, impl StreamApi<UNFINALIZED> + Clone, Arc<Self>)>
 	{
 		{
@@ -526,6 +578,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			base_rpc_client.clone(),
 			wait_for_required_version,
 			true,
+			start_from,
 			|base_rpc_client| base_rpc_client.subscribe_finalized_block_headers(),
 			|sparse_finalized_block_stream| {
 				let base_rpc_client = base_rpc_client.clone();
@@ -578,6 +631,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			base_rpc_client.clone(),
 			wait_for_required_version,
 			false,
+			start_from,
 			|base_rpc_client| base_rpc_client.subscribe_unfinalized_block_headers(),
 			|block_stream| futures::future::ready(Ok(block_stream)),
 		)
