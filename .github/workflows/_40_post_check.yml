@@ -57,21 +57,14 @@ jobs:
         run: |
           npm install -g wscat
 
-      # - name: Download binaries 📥
-      #   uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
-      #   with:
-      #     name: chainflip-backend-bin-ubuntu-22.04
-
-      - name: Download latest main binaries
-        uses: dawidd6/action-download-artifact@v2
+      - name: Download binaries 📥
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
         with:
-          workflow: ci-main.yml
           name: chainflip-backend-bin-ubuntu-22.04
-          github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
 
-      # - name: Install node dependencies 📦
-      #   working-directory: bouncer
-      #   run: pnpm install
+      - name: Install node dependencies 📦
+        working-directory: bouncer
+        run: pnpm install
 
       - name: Install solana ☀️
         run: |
@@ -92,17 +85,17 @@ jobs:
           touch ./localnet/.setup_complete
           ./localnet/manage.sh
 
-      # - name: Run HeuteLeiderNicht.voll.exe 🙅‍♂️
-      #   if: inputs.full_bouncer
-      #   working-directory: bouncer
-      #   run: |
-      #     ./full_bouncer.sh
+      - name: Run HeuteLeiderNicht.voll.exe 🙅‍♂️
+        if: inputs.full_bouncer
+        working-directory: bouncer
+        run: |
+          ./full_bouncer.sh
 
-      # - name: Run HeuteLeiderNicht.einfach.exe 🦺
-      #   if: ${{ ! inputs.full_bouncer }}
-      #   working-directory: bouncer
-      #   run: |
-      #     ./run.sh
+      - name: Run HeuteLeiderNicht.einfach.exe 🦺
+        if: ${{ ! inputs.full_bouncer }}
+        working-directory: bouncer
+        run: |
+          ./run.sh
 
       - name: Print chainflip-engine logs 🚗
         if: always()
