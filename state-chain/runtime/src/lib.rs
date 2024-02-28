@@ -1074,6 +1074,11 @@ mod arbitrum_integration_migration {
 				},
 			));
 
+			pallet_cf_vaults::ChainInitialized::<Runtime, EthereumInstance>::put(true);
+			pallet_cf_vaults::ChainInitialized::<Runtime, PolkadotInstance>::put(true);
+			pallet_cf_vaults::ChainInitialized::<Runtime, BitcoinInstance>::put(true);
+			pallet_cf_vaults::ChainInitialized::<Runtime, ArbitrumInstance>::put(false);
+
 			Weight::zero()
 		}
 
