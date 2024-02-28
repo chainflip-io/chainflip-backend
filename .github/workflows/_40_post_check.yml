@@ -43,7 +43,7 @@ jobs:
           scope: "@chainflip-io"
           cache-dependency-path: "bouncer/pnpm-lock.yaml"
 
-      - name: Set NPM registry
+      - name: Set NPM registry 🔧
         run: |
           pnpm set @chainflip-io:registry=https://npm.pkg.github.com/
           pnpm set //npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}
@@ -57,16 +57,16 @@ jobs:
         run: |
           npm install -g wscat
 
-      - name: Download binaries 📥
-        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
-        with:
-          name: chainflip-backend-bin-ubuntu-22.04
+      # - name: Download binaries 📥
+      #   uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+      #   with:
+      #     name: chainflip-backend-bin-ubuntu-22.04
 
       - name: Install node dependencies 📦
         working-directory: bouncer
         run: pnpm install
 
-      - name: Install solana
+      - name: Install solana ☀️
         run: |
           sh -c "$(curl -sSfL https://release.solana.com/$SOLANA_VERSION/install)"
 
@@ -85,45 +85,50 @@ jobs:
           touch ./localnet/.setup_complete
           ./localnet/manage.sh
 
-      - name: Run HeuteLeiderNicht.voll.exe 🙅‍♂️
-        if: inputs.full_bouncer
-        working-directory: bouncer
-        run: |
-          ./full_bouncer.sh
+      # - name: Run HeuteLeiderNicht.voll.exe 🙅‍♂️
+      #   if: inputs.full_bouncer
+      #   working-directory: bouncer
+      #   run: |
+      #     ./full_bouncer.sh
 
-      - name: Run HeuteLeiderNicht.einfach.exe 🦺
-        if: ${{ ! inputs.full_bouncer }}
-        working-directory: bouncer
-        run: |
-          ./run.sh
+      # - name: Run HeuteLeiderNicht.einfach.exe 🦺
+      #   if: ${{ ! inputs.full_bouncer }}
+      #   working-directory: bouncer
+      #   run: |
+      #     ./run.sh
 
       - name: Print chainflip-engine logs 🚗
-        if: failure()
+        if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/*/chainflip-engine.log
 
       - name: Print chainflip-node logs 📡
-        if: failure()
+        if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/*/chainflip-node.log
 
       - name: Print chainflip-broker-api logs 💼
-        if: failure()
+        if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/chainflip-broker-api.log
 
       - name: Print chainflip-lp-api logs 🤑
-        if: failure()
+        if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/chainflip-lp-api.log
 
       - name: Print localnet init debug logs 🕵️‍♂️
-        if: failure()
+        if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/debug.log
 
       - name: Print solana logs ☀️
-        if: failure()
+        if: always()
         continue-on-error: true
         run: |
           cat /tmp/solana/solana.log

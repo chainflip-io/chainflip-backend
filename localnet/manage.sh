@@ -142,62 +142,62 @@ build-localnet() {
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up arb-init -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
 
 
-  INIT_RPC_PORT=9944
+  # INIT_RPC_PORT=9944
 
-  # This is unset on `destroy()`
-  export DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2}
+  # # This is unset on `destroy()`
+  # export DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2}
 
-  KEYS_DIR=./$LOCALNET_INIT_DIR/keys
+  # KEYS_DIR=./$LOCALNET_INIT_DIR/keys
 
-  BINARY_ROOT_PATH=$BINARY_ROOT_PATH \
-  SELECTED_NODES=${SELECTED_NODES[@]} \
-  NODE_COUNT=$NODE_COUNT \
-  INIT_RPC_PORT=$INIT_RPC_PORT \
-  LOCALNET_INIT_DIR=$LOCALNET_INIT_DIR \
-  KEYS_DIR=$KEYS_DIR \
-  ./$LOCALNET_INIT_DIR/scripts/start-all-nodes.sh
+  # BINARY_ROOT_PATH=$BINARY_ROOT_PATH \
+  # SELECTED_NODES=${SELECTED_NODES[@]} \
+  # NODE_COUNT=$NODE_COUNT \
+  # INIT_RPC_PORT=$INIT_RPC_PORT \
+  # LOCALNET_INIT_DIR=$LOCALNET_INIT_DIR \
+  # KEYS_DIR=$KEYS_DIR \
+  # ./$LOCALNET_INIT_DIR/scripts/start-all-nodes.sh
 
-  echo "🚧 Checking health ..."
+  # echo "🚧 Checking health ..."
 
-  RPC_PORT=$INIT_RPC_PORT
-  for NODE in $SELECTED_NODES; do
-      check_endpoint_health -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' "http://localhost:$RPC_PORT" >>$DEBUG_OUTPUT_DESTINATION
-      echo "💚 $NODE's chainflip-node is running!"
-      ((RPC_PORT++))
-  done
+  # RPC_PORT=$INIT_RPC_PORT
+  # for NODE in $SELECTED_NODES; do
+  #     check_endpoint_health -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' "http://localhost:$RPC_PORT" >>$DEBUG_OUTPUT_DESTINATION
+  #     echo "💚 $NODE's chainflip-node is running!"
+  #     ((RPC_PORT++))
+  # done
 
-  NODE_COUNT=$NODE_COUNT \
-  BINARY_ROOT_PATH=$BINARY_ROOT_PATH \
-  SC_RPC_PORT=$INIT_RPC_PORT \
-  LOCALNET_INIT_DIR=$LOCALNET_INIT_DIR \
-  SELECTED_NODES=${SELECTED_NODES[@]} \
-  ./$LOCALNET_INIT_DIR/scripts/start-all-engines.sh
+  # NODE_COUNT=$NODE_COUNT \
+  # BINARY_ROOT_PATH=$BINARY_ROOT_PATH \
+  # SC_RPC_PORT=$INIT_RPC_PORT \
+  # LOCALNET_INIT_DIR=$LOCALNET_INIT_DIR \
+  # SELECTED_NODES=${SELECTED_NODES[@]} \
+  # ./$LOCALNET_INIT_DIR/scripts/start-all-engines.sh
 
-  HEALTH_PORT=5555
-  for NODE in "${SELECTED_NODES[@]}"; do
-    while true; do
-        output=$(check_endpoint_health "http://localhost:$HEALTH_PORT/health")
-        if [[ $output == "RUNNING" ]]; then
-            echo "💚 $NODE's chainflip-engine is running!"
-            break
-        fi
-        sleep 1
-    done
-    ((HEALTH_PORT++))
-  done
+  # HEALTH_PORT=5555
+  # for NODE in "${SELECTED_NODES[@]}"; do
+  #   while true; do
+  #       output=$(check_endpoint_health "http://localhost:$HEALTH_PORT/health")
+  #       if [[ $output == "RUNNING" ]]; then
+  #           echo "💚 $NODE's chainflip-engine is running!"
+  #           break
+  #       fi
+  #       sleep 1
+  #   done
+  #   ((HEALTH_PORT++))
+  # done
 
-  wait
+  # wait
 
-  echo "🕺 Starting Broker API ..."
-  KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-broker-api.sh $BINARY_ROOT_PATH
+  # echo "🕺 Starting Broker API ..."
+  # KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-broker-api.sh $BINARY_ROOT_PATH
 
-  echo "🤑 Starting LP API ..."
-  KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-lp-api.sh $BINARY_ROOT_PATH
+  # echo "🤑 Starting LP API ..."
+  # KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-lp-api.sh $BINARY_ROOT_PATH
 
-  if [[ $START_TRACKER == "y" ]]; then
-    echo "👁 Starting Ingress-Egress-tracker ..."
-    KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-ingress-egress-tracker.sh $BINARY_ROOT_PATH
-  fi
+  # if [[ $START_TRACKER == "y" ]]; then
+  #   echo "👁 Starting Ingress-Egress-tracker ..."
+  #   KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-ingress-egress-tracker.sh $BINARY_ROOT_PATH
+  # fi
 
   print_success
 }
