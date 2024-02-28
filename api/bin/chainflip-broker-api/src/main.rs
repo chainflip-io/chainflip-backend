@@ -56,6 +56,13 @@ pub trait Rpc {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<BrokerSwapDepositAddress>;
+
+	#[method(name = "withdraw_fee_asset", aliases = ["broker_withdrawFeeAsset"])]
+	async fn withdraw_fee_asset(
+		&self,
+		asset: Asset,
+		destination_address: String,
+	) -> RpcResult<String>;
 }
 
 pub struct RpcServerImpl {
@@ -107,6 +114,14 @@ impl RpcServer for RpcServerImpl {
 			)
 			.await
 			.map(BrokerSwapDepositAddress::from)?)
+	}
+
+	async fn withdraw_fee_asset(
+		&self,
+		asset: Asset,
+		destination_address: String,
+	) -> RpcResult<String> {
+		Ok(self.api.broker_api().withdraw_fee_asset(asset, clean_foreign_chain_address(asset.into(), &destination_address)?).await.map(|tx_hash| format!("{tx_hash:#x}"))?)
 	}
 }
 

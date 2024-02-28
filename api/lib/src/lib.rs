@@ -356,6 +356,21 @@ pub trait BrokerApi: SignedExtrinsicApi {
 			bail!("No SwapDepositAddressReady event was found");
 		}
 	}
+	async fn withdraw_fee_asset(
+		&self,
+		asset: Asset,
+		destination_address: EncodedAddress,
+	) -> Result<H256> {
+		let (tx_hash, ..) = self
+			.submit_signed_extrinsic(RuntimeCall::from(
+				pallet_cf_swapping::Call::withdraw { asset, destination_address },
+			))
+			.await
+			.until_in_block()
+			.await
+			.context("Request to withdraw broker fee for ${asset} failed.")?;
+		Ok(tx_hash)
+	}
 }
 
 /// Sanitize the given address (hex or base58) and turn it into a EncodedAddress of the given

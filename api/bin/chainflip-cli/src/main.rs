@@ -75,6 +75,19 @@ async fn run_cli() -> Result<()> {
 						.await?;
 					println!("Deposit Address: {address}");
 				},
+				Broker(BrokerSubcommands::WithdrawFeeAsset(params)) => {
+					let tx_hash = api
+						.broker_api()
+						.withdraw_fee_asset(
+							params.asset,
+							chainflip_api::clean_foreign_chain_address(
+								params.asset.into(),
+								&params.destination_address,
+							)?,
+						)
+						.await?;
+					println!("Withdrawal request successfull submitted. Tx hash: {tx_hash}");
+				},
 				LiquidityProvider(
 					LiquidityProviderSubcommands::RequestLiquidityDepositAddress {
 						asset,
