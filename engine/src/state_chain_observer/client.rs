@@ -363,41 +363,39 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 					// able to remove `wait_for_required_version` as we'll never wait. We'll always
 					// return out the error and let the runner start the other version.
 					if wait_for_required_version {
-						let incompatible_blocks = futures::stream::once(futures::future::ready(
-							Ok::<_, anyhow::Error>(first_block),
-						))
-						.chain(block_stream.by_ref())
-						.try_take_while(|block_info| {
-							let base_rpc_client = base_rpc_client.clone();
-							let block_info = *block_info;
-							async move {
-								Ok({
-									let (cfe_compatibility, version_runtime_requires) =
-										base_rpc_client
-											.check_block_compatibility(block_info.hash)
-											.await?;
+						let incompatible_blocks = block_stream
+							.by_ref()
+							.try_take_while(|block_info| {
+								let base_rpc_client = base_rpc_client.clone();
+								let block_info = *block_info;
+								async move {
+									Ok({
+										let (cfe_compatibility, version_runtime_requires) =
+											base_rpc_client
+												.check_block_compatibility(block_info.hash)
+												.await?;
 
-									match cfe_compatibility {
-										CfeCompatibility::Compatible => false,
-										// We want the stream to continue as before
-										CfeCompatibility::NotYetCompatible => {
-											info!(
-												"{} WAITING for a compatible release version.",
-												incompatible_block_message(
-													version_runtime_requires,
-													block_info
-												)
-											);
-											true
-										},
-										CfeCompatibility::NoLongerCompatible => {
-											unreachable!("We cannot move from no longer compatible to compatible.")
-										},
-									}
-								})
-							}
-						})
-						.boxed();
+										match cfe_compatibility {
+											CfeCompatibility::Compatible => false,
+											// We want the stream to continue as before
+											CfeCompatibility::NotYetCompatible => {
+												info!(
+													"{} WAITING for a compatible release version.",
+													incompatible_block_message(
+														version_runtime_requires,
+														block_info
+													)
+												);
+												true
+											},
+											CfeCompatibility::NoLongerCompatible => {
+												unreachable!("We cannot move from no longer compatible to compatible.")
+											},
+										}
+									})
+								}
+							})
+							.boxed();
 
 						// Note underlying stream ends in Error, therefore it is guaranteed
 						// try_for_each will not exit successfully until a compatible block is found
