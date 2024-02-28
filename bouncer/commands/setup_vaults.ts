@@ -30,7 +30,7 @@ import {
 } from '../shared/utils';
 import { aliceKeyringPair } from '../shared/polkadot_keyring';
 import { signAndSendTxSol } from '../shared/send_sol';
-import { getSolanaVaultIdl } from '../shared/eth_abis';
+import { getSolanaVaultIdl } from '../shared/contract_interfaces';
 
 async function main(): Promise<void> {
   const btcClient = getBtcClient();
@@ -167,7 +167,7 @@ async function main(): Promise<void> {
   // await signAndSendTxSol(tx);
 
   // // For now just deriving the nonceAccounts from the whaleKeypair with index seeds
-  // const numberNonceAccounts = 5;
+  // const numberNonceAccounts = 10;
   // const nonceAccounts = [];
   // const nonceValues = [];
   // for (let i = 0; i < numberNonceAccounts; i++) {

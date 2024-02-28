@@ -12,7 +12,7 @@ import {
   getEvmEndpoint,
 } from './utils';
 import { approveErc20 } from './approve_erc20';
-import { getCFTesterAbi } from './eth_abis';
+import { getCFTesterAbi } from './contract_interfaces';
 import { sendSol } from './send_sol';
 
 const cfTesterAbi = await getCFTesterAbi();

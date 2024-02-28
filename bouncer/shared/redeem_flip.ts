@@ -4,7 +4,7 @@ import { HexString } from '@polkadot/util/types';
 import { Wallet, ethers } from 'ethers';
 import Keyring from '@polkadot/keyring';
 import { getNextEvmNonce } from './send_evm';
-import { getGatewayAbi } from './eth_abis';
+import { getGatewayAbi } from './contract_interfaces';
 import {
   sleep,
   observeEvent,

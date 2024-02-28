@@ -3,7 +3,7 @@ import { Asset } from '@chainflip-io/cli';
 import { amountToFineAmount, chainFromAsset, getEvmEndpoint } from '../shared/utils';
 import { getContractAddress } from './utils';
 import { signAndSendTxEvm } from './send_evm';
-import { getErc20abi } from './eth_abis';
+import { getErc20abi } from './contract_interfaces';
 
 const erc20abi = await getErc20abi();
 

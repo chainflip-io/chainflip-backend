@@ -16,7 +16,7 @@ import {
   getEvmEndpoint,
 } from '../shared/utils';
 import { signAndSendTxEvm } from './send_evm';
-import { getCFTesterAbi } from './eth_abis';
+import { getCFTesterAbi } from './contract_interfaces';
 
 const cfTesterAbi = await getCFTesterAbi();
 
