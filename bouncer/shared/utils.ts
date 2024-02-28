@@ -70,7 +70,7 @@ export function getContractAddress(chain: Chain, contract: string): string {
         case 'VAULT':
           return '632bJHVLPj6XPLVgrabFwxogtAQQ5zb8hwm9zqZuCcHo';
         case 'DATA_ACCOUNT':
-          return '495WG7zQn1bzyJGM4mnfv1YrHAV7gc4oL2TUjCVaSm48';
+          return '5yhN4QzBFg9jKhLfVHcS5apMB7e3ftofCkzkNH6dZctC';
         case 'SOLUSDC':
           return process.env.ARB_USDC_ADDRESS ?? '24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p';
         case 'CFTESTER':
