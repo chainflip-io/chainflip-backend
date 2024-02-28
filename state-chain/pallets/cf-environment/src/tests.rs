@@ -70,7 +70,7 @@ fn test_btc_utxo_selection() {
 				number_of_outputs: 2
 			})
 			.unwrap(),
-			(vec![utxo(25000, 4), utxo(10000, 0), utxo(5000, 1),], EXPECTED_CHANGE_AMOUNT)
+			(vec![utxo(5000, 1), utxo(10000, 0), utxo(25000, 4)], EXPECTED_CHANGE_AMOUNT)
 		);
 
 		// add the change utxo back to the available utxo list
@@ -80,7 +80,7 @@ fn test_btc_utxo_selection() {
 		assert_eq!(
 			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectAllForRotation)
 				.unwrap(),
-			(vec![utxo(5000000, 3), utxo(100000, 2), utxo(EXPECTED_CHANGE_AMOUNT, 0),], 5121870)
+			(vec![utxo(100000, 2), utxo(5000000, 3), utxo(EXPECTED_CHANGE_AMOUNT, 0)], 5121870)
 		);
 
 		// add some more utxos to the list
