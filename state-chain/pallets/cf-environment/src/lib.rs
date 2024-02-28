@@ -30,11 +30,14 @@ pub mod migrations;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(9);
 
-const INITIAL_UTXO_PARAMETERS: cf_chains::btc::UtxoParameters = cf_chains::btc::UtxoParameters {
-	consolidation_threshold: 200,
-	consolidation_size: 100,
-	utxo_selection_limit: 250,
-};
+const INITIAL_UTXO_CONSOLIDATION_PARAMETERS: cf_chains::btc::ConsolidationParameters =
+	cf_chains::btc::ConsolidationParameters {
+		consolidation_threshold: 200,
+		consolidation_size: 100,
+	};
+
+const INITIAL_UTXO_SELECTION_PARAMETERS: cf_chains::btc::UtxoSelectionParameters =
+	cf_chains::btc::UtxoSelectionParameters { selection_limit: 250 };
 
 type SignatureNonce = u64;
 
@@ -153,8 +156,14 @@ pub mod pallet {
 	pub type BitcoinAvailableUtxos<T> = StorageValue<_, Vec<Utxo>, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn utxo_parameters)]
-	pub type UtxoParameters<T> = StorageValue<_, cf_chains::btc::UtxoParameters, ValueQuery>;
+	#[pallet::getter(fn consolidation_parameters)]
+	pub type ConsolidationParameters<T> =
+		StorageValue<_, cf_chains::btc::ConsolidationParameters, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn utxo_selection_parameters)]
+	pub type UtxoSelectionParameters<T> =
+		StorageValue<_, cf_chains::btc::UtxoSelectionParameters, ValueQuery>;
 
 	// OTHER ENVIRONMENT ITEMS
 	#[pallet::storage]
@@ -186,8 +195,10 @@ pub mod pallet {
 		BitcoinBlockNumberSetForVault { block_number: cf_chains::btc::BlockNumber },
 		/// The Safe Mode settings for the chain has been updated
 		RuntimeSafeModeUpdated { safe_mode: SafeModeUpdate<T> },
-		/// UTXO parameters has been updated
-		UtxoUtxoParametersUpdated { params: cf_chains::btc::UtxoParameters },
+		/// Utxo consolidation parameters has been updated
+		UtxoConsolidationParametersUpdated { params: cf_chains::btc::ConsolidationParameters },
+		/// Utxo selection parameters has been updated
+		UtxoSelectionParametersUpdated { params: cf_chains::btc::UtxoSelectionParameters },
 	}
 
 	#[pallet::call]
@@ -201,7 +212,7 @@ pub mod pallet {
 		/// vault creation transaction was witnessed in. This extrinsic should complete the Polkadot
 		/// initiation process and the vault should rotate successfully.
 		///
-		/// ## Events
+		/// ## Events
 		///
 		/// - [PolkadotVaultCreationCallInitiated](Event::PolkadotVaultCreationCallInitiated)
 		///
@@ -290,18 +301,35 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::WeightInfo::update_utxo_parameters())]
-		pub fn update_utxo_parameters(
+		#[pallet::weight(T::WeightInfo::update_consolidation_parameters())]
+		pub fn update_consolidation_parameters(
 			origin: OriginFor<T>,
-			params: cf_chains::btc::UtxoParameters,
+			params: cf_chains::btc::ConsolidationParameters,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			ensure!(params.are_valid(), DispatchError::Other("Invalid parameters"));
 
-			UtxoParameters::<T>::set(params);
+			ConsolidationParameters::<T>::set(params);
 
-			Self::deposit_event(Event::<T>::UtxoUtxoParametersUpdated { params });
+			Self::deposit_event(Event::<T>::UtxoConsolidationParametersUpdated { params });
+
+			Ok(())
+		}
+
+		#[pallet::call_index(5)]
+		#[pallet::weight(T::WeightInfo::update_consolidation_parameters())]
+		pub fn update_utxo_selection_parameters(
+			origin: OriginFor<T>,
+			params: cf_chains::btc::UtxoSelectionParameters,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			ensure!(params.are_valid(), DispatchError::Other("Invalid parameters"));
+
+			UtxoSelectionParameters::<T>::set(params);
+
+			Self::deposit_event(Event::<T>::UtxoSelectionParametersUpdated { params });
 
 			Ok(())
 		}
@@ -341,7 +369,8 @@ pub mod pallet {
 			PolkadotProxyAccountNonce::<T>::set(0);
 
 			BitcoinAvailableUtxos::<T>::set(vec![]);
-			UtxoParameters::<T>::set(INITIAL_UTXO_PARAMETERS);
+			ConsolidationParameters::<T>::set(INITIAL_UTXO_CONSOLIDATION_PARAMETERS);
+			UtxoSelectionParameters::<T>::set(INITIAL_UTXO_SELECTION_PARAMETERS);
 
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
 
@@ -435,7 +464,7 @@ impl<T: Config> Pallet<T> {
 					let utxos_to_consolidate = select_utxos_for_consolidation(
 						available_utxos,
 						&bitcoin_fee_info,
-						Self::utxo_parameters(),
+						Self::consolidation_parameters(),
 					);
 
 					if utxos_to_consolidate.is_empty() {
@@ -453,7 +482,7 @@ impl<T: Config> Pallet<T> {
 						output_amount +
 							number_of_outputs * fee_per_output_utxo +
 							min_fee_required_per_tx,
-						Some(Self::utxo_parameters().consolidation_size),
+						Some(Self::utxo_selection_parameters().selection_limit),
 					)
 					.map_err(|error| {
 						log::error!(

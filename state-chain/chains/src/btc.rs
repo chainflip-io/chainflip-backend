@@ -217,29 +217,33 @@ pub struct EpochStartData {
 }
 
 #[derive(Encode, Decode, Default, PartialEq, Copy, Clone, TypeInfo, RuntimeDebug)]
-pub struct UtxoParameters {
+pub struct ConsolidationParameters {
 	/// Consolidate when total UTXO count reaches this threshold
 	pub consolidation_threshold: u32,
 	/// Consolidate this many UTXOs
 	pub consolidation_size: u32,
-	/// The maximum number of utxos can be selected for egress.
-	pub utxo_selection_limit: u32,
 }
 
-impl UtxoParameters {
+impl ConsolidationParameters {
 	#[cfg(test)]
-	fn new(
-		consolidation_threshold: u32,
-		consolidation_size: u32,
-		utxo_selection_limit: u32,
-	) -> UtxoParameters {
-		UtxoParameters { consolidation_threshold, consolidation_size, utxo_selection_limit }
+	fn new(consolidation_threshold: u32, consolidation_size: u32) -> ConsolidationParameters {
+		ConsolidationParameters { consolidation_threshold, consolidation_size }
 	}
 
 	pub fn are_valid(&self) -> bool {
-		self.consolidation_size <= self.consolidation_threshold &&
-			(self.consolidation_size > 1) &&
-			self.utxo_selection_limit > 1
+		self.consolidation_size <= self.consolidation_threshold && self.consolidation_size > 1
+	}
+}
+
+#[derive(Encode, Decode, Default, PartialEq, Copy, Clone, TypeInfo, RuntimeDebug)]
+pub struct UtxoSelectionParameters {
+	/// Max number of utxos can be selected.
+	pub selection_limit: u32,
+}
+
+impl UtxoSelectionParameters {
+	pub fn are_valid(&self) -> bool {
+		self.selection_limit > 1
 	}
 }
 
@@ -401,8 +405,14 @@ pub enum Error {
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct Utxo {
 	pub id: UtxoId,
-	pub amount: u64,
+	pub amount: BtcAmount,
 	pub deposit_address: DepositAddress,
+}
+
+impl Utxo {
+	pub fn net_value(&self, fee_info: &BitcoinFeeInfo) -> BtcAmount {
+		self.amount.saturating_sub(fee_info.fee_for_utxo(self))
+	}
 }
 
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
@@ -1414,24 +1424,21 @@ mod test {
 	}
 
 	#[test]
-	fn utxo_parameters() {
+	fn consolidation_parameters() {
 		// These are expected to be valid:
-		assert!(UtxoParameters::new(2, 2, 10).are_valid());
-		assert!(UtxoParameters::new(10, 2, 10).are_valid());
-		assert!(UtxoParameters::new(10, 10, 10).are_valid());
-		assert!(UtxoParameters::new(200, 100, 10).are_valid());
-		assert!(UtxoParameters::new(2, 2, 2).are_valid());
+		assert!(ConsolidationParameters::new(2, 2).are_valid());
+		assert!(ConsolidationParameters::new(10, 2).are_valid());
+		assert!(ConsolidationParameters::new(10, 10).are_valid());
+		assert!(ConsolidationParameters::new(200, 100).are_valid());
+		assert!(ConsolidationParameters::new(2, 2).are_valid());
 
 		// Invalid: size < threshold
-		assert!(!UtxoParameters::new(9, 10, 10).are_valid());
-		// Invalid: size is too small
-		assert!(!UtxoParameters::new(0, 0, 10).are_valid());
-		assert!(!UtxoParameters::new(1, 1, 10).are_valid());
-		assert!(!UtxoParameters::new(0, 10, 10).are_valid());
+		assert!(!ConsolidationParameters::new(9, 10).are_valid());
 
-		// Invalid: Selection limit is too small
-		assert!(!UtxoParameters::new(2, 2, 0).are_valid());
-		assert!(!UtxoParameters::new(2, 2, 1).are_valid());
+		// Invalid: size is too small
+		assert!(!ConsolidationParameters::new(0, 0).are_valid());
+		assert!(!ConsolidationParameters::new(1, 1).are_valid());
+		assert!(!ConsolidationParameters::new(0, 10).are_valid());
 	}
 
 	#[test]

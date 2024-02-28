@@ -5,7 +5,7 @@ pub struct Migration<T: Config>(PhantomData<T>);
 
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		UtxoParameters::<T>::set(INITIAL_UTXO_PARAMETERS);
+		UtxoSelectionParameters::<T>::set(INITIAL_UTXO_SELECTION_PARAMETERS);
 
 		Weight::zero()
 	}
@@ -17,7 +17,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
-		assert_eq!(UtxoParameters::<T>::get(), INITIAL_UTXO_PARAMETERS);
+		assert_eq!(UtxoSelectionParameters::<T>::get(), INITIAL_UTXO_SELECTION_PARAMETERS);
 
 		Ok(())
 	}

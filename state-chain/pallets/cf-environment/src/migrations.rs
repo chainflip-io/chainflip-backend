@@ -1,5 +1,4 @@
-mod bitcoin_utxos;
-mod utxo_parameters;
+mod utxo_selection_parameters;
 
 use crate::*;
 use cf_runtime_upgrade_utilities::VersionedMigration;
@@ -32,7 +31,7 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 }
 
 pub type PalletMigration<T> =
-	(VersionedMigration<crate::Pallet<T>, utxo_parameters::Migration<T>, 8, 9>,);
+	(VersionedMigration<crate::Pallet<T>, utxo_selection_parameters::Migration<T>, 8, 9>,);
 
 #[cfg(test)]
 mod tests {
