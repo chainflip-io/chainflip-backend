@@ -1,5 +1,5 @@
 #!/usr/bin/env -S pnpm tsx
-import { Asset } from '@chainflip-io/cli';
+import { Asset } from '@chainflip/cli';
 import { performSwap } from '../shared/perform_swap';
 
 async function main() {
