@@ -225,7 +225,7 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 	})
 	.await;
 
-	if let Err(e) = root_result {
+	if let Err(e) = &root_result {
 		let sc_error = e.downcast_ref::<CreateBlockStreamError>();
 		match sc_error {
 			Some(CreateBlockStreamError::NoLongerCompatible {
@@ -257,5 +257,5 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 			},
 		}
 	}
-	Ok(())
+	root_result
 }
