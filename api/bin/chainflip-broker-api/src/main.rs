@@ -121,7 +121,15 @@ impl RpcServer for RpcServerImpl {
 		asset: Asset,
 		destination_address: String,
 	) -> RpcResult<String> {
-		Ok(self.api.broker_api().withdraw_fee_asset(asset, clean_foreign_chain_address(asset.into(), &destination_address)?).await.map(|tx_hash| format!("{tx_hash:#x}"))?)
+		Ok(self
+			.api
+			.broker_api()
+			.withdraw_fee_asset(
+				asset,
+				clean_foreign_chain_address(asset.into(), &destination_address)?,
+			)
+			.await
+			.map(|tx_hash| format!("{tx_hash:#x}"))?)
 	}
 }
 

@@ -362,9 +362,10 @@ pub trait BrokerApi: SignedExtrinsicApi {
 		destination_address: EncodedAddress,
 	) -> Result<H256> {
 		let (tx_hash, ..) = self
-			.submit_signed_extrinsic(RuntimeCall::from(
-				pallet_cf_swapping::Call::withdraw { asset, destination_address },
-			))
+			.submit_signed_extrinsic(RuntimeCall::from(pallet_cf_swapping::Call::withdraw {
+				asset,
+				destination_address,
+			}))
 			.await
 			.until_in_block()
 			.await
