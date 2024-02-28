@@ -34,7 +34,7 @@ import { getSolanaVaultIdl } from '../shared/eth_abis';
 
 async function main(): Promise<void> {
   const btcClient = getBtcClient();
-  const solClient = getSolConnection();
+  // const solClient = getSolConnection();
   const alice = await aliceKeyringPair();
 
   const chainflip = await getChainflipApi();
@@ -54,10 +54,10 @@ async function main(): Promise<void> {
     chainflip,
   );
   const btcActivationRequest = observeEvent('bitcoinVault:AwaitingGovernanceActivation', chainflip);
-  const solActivationRequest = observeEvent('solanaVault:AwaitingGovernanceActivation', chainflip);
+  // const solActivationRequest = observeEvent('solanaVault:AwaitingGovernanceActivation', chainflip);
   const dotKey = (await dotActivationRequest).data.newPublicKey;
   const btcKey = (await btcActivationRequest).data.newPublicKey;
-  const solKey = (await solActivationRequest).data.newPublicKey;
+  // const solKey = (await solActivationRequest).data.newPublicKey;
 
   // Step 3
   console.log('Requesting Polkadot Vault creation');
@@ -134,7 +134,7 @@ async function main(): Promise<void> {
 
   // // Step 5
   // console.log('Inserting keys in the Solana program');
-  // // const solKey = '0x25fcb03ab6435d106b5df1e677f3c6a10a7b22719deedeb3761c005e1306423d';
+  // const solKey = '0x25fcb03ab6435d106b5df1e677f3c6a10a7b22719deedeb3761c005e1306423d';
 
   // const solanaVaultProgramId = new PublicKey(getContractAddress('Solana', 'VAULT'));
   // const dataAccount = new PublicKey(getContractAddress('Solana', 'DATA_ACCOUNT'));
@@ -166,15 +166,25 @@ async function main(): Promise<void> {
 
   // await signAndSendTxSol(tx);
 
-  // // TODO: Either get this accounts from the sol-contracts in a JSON file or derive
-  // // the addresses from known seeds that we can replicate here
-  // const nonceAccounts = [
-  //   '2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw',
-  //   'HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo',
-  //   'HDYArziNzyuNMrK89igisLrXFe78ti8cvkcxfx4qdU2p',
-  //   'HLPsNyxBqfq2tLE31v6RiViLp2dTXtJRgHgsWgNDRPs2',
-  //   'GKMP63TqzbueWTrFYjRwMNkAyTHpQ54notRbAbMDmePM',
-  // ];
+  // // For now just deriving the nonceAccounts from the whaleKeypair with index seeds
+  // const numberNonceAccounts = 5;
+  // const nonceAccounts = [];
+  // const nonceValues = [];
+  // for (let i = 0; i < numberNonceAccounts; i++) {
+  //   // Using the index stringified as the seed ('0', '1', '2' ...)
+  //   const seed = i.toString();
+  //   const nonceAccount = await PublicKey.createWithSeed(
+  //     whaleKeypair.publicKey,
+  //     seed,
+  //     SystemProgram.programId,
+  //   );
+  //   nonceAccounts.push(nonceAccount);
+
+  //   const nonceAccountInfo = await solClient.getAccountInfo(new PublicKey(nonceAccount));
+  //   const nonceValue = NonceAccount.fromAccountData(nonceAccountInfo!.data).nonce;
+  //   nonceValues.push(nonceValue);
+  // }
+
   // const nonceAuthorizeTransaction = new Transaction();
   // for (const nonceAccount of nonceAccounts) {
   //   nonceAuthorizeTransaction.add(
@@ -186,12 +196,6 @@ async function main(): Promise<void> {
   //   );
   // }
   // await signAndSendTxSol(nonceAuthorizeTransaction);
-
-  // const nonces = [];
-  // for (const nonceAccount of nonceAccounts) {
-  //   const nonceAccountInfo = await solClient.getAccountInfo(new PublicKey(nonceAccount));
-  //   nonces.push(NonceAccount.fromAccountData(nonceAccountInfo!.data).nonce);
-  // }
 
   // Step 6
   console.log('Registering Vaults with state chain');
@@ -208,16 +212,10 @@ async function main(): Promise<void> {
     ),
   );
 
-  // TODO: Update => This should contain the new vault address,
+  // TODO: This call should contain the new vault address,
   // nonce accounts and probably nonce values
   // await submitGovernanceExtrinsic(
   //   chainflip.tx.environment.witnessInitializeSolanaVault(
-  //     await arbClient.eth.getBlockNumber(),
-  //     getContractAddress('Arbitrum', 'KEY_MANAGER'),
-  //     getContractAddress('Arbitrum', 'VAULT'),
-  //     getContractAddress('Arbitrum', 'ADDRESS_CHECKER'),
-  //     await arbClient.eth.getChainId(),
-  //     getContractAddress('Arbitrum', 'ARBUSDC'),
   //   ),
   // );
 
