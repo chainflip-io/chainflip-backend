@@ -156,7 +156,7 @@ jobs:
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --rmi all --volumes --remove-orphans
 
       - name: Notify on failed bouncer 📢
-        if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main' || failure() && github.ref_name == 'release/*' || cancelled() && github.ref_name == 'release/*'
+        if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main' || failure() && contains(github.ref_name, 'release/') || cancelled() && contains(github.ref_name, 'release/')
         env:
           DISCORD_USERNAME: "HEUTE LEIDER NICHT"
           DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
