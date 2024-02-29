@@ -77,7 +77,7 @@ pub struct SwapRequestParams {
 	pub boost_fee: Option<u16>,
 }
 #[derive(Parser, Clone, Debug)]
-pub struct WithdrawFeeAssetParams {
+pub struct WithdrawFeesParams {
 	/// Asset to withdraw ("ETH"|"DOT")
 	pub asset: Asset,
 	/// Egress asset address to receive withdrawn funds
@@ -87,7 +87,7 @@ pub struct WithdrawFeeAssetParams {
 pub enum BrokerSubcommands {
 	/// Request a swap deposit address.
 	RequestSwapDepositAddress(SwapRequestParams),
-	WithdrawFeeAsset(WithdrawFeeAssetParams),
+	WithdrawFees(WithdrawFeesParams),
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]

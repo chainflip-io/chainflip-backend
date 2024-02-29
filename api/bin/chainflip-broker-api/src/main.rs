@@ -6,8 +6,9 @@ use chainflip_api::{
 	self, clean_foreign_chain_address,
 	primitives::{AccountRole, Asset, BasisPoints, BlockNumber, CcmChannelMetadata, ChannelId},
 	settings::StateChain,
-	BrokerApi, OperatorApi, StateChainApi,
+	BrokerApi, OperatorApi, StateChainApi, WithdrawFeesDetail,
 };
+
 use clap::Parser;
 use futures::FutureExt;
 use jsonrpsee::{
@@ -57,12 +58,12 @@ pub trait Rpc {
 		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<BrokerSwapDepositAddress>;
 
-	#[method(name = "withdraw_fee_asset", aliases = ["broker_withdrawFeeAsset"])]
-	async fn withdraw_fee_asset(
+	#[method(name = "withdraw_fees", aliases = ["broker_withdrawFees"])]
+	async fn withdraw_fees(
 		&self,
 		asset: Asset,
 		destination_address: String,
-	) -> RpcResult<String>;
+	) -> RpcResult<WithdrawFeesDetail>;
 }
 
 pub struct RpcServerImpl {
@@ -116,20 +117,16 @@ impl RpcServer for RpcServerImpl {
 			.map(BrokerSwapDepositAddress::from)?)
 	}
 
-	async fn withdraw_fee_asset(
+	async fn withdraw_fees(
 		&self,
 		asset: Asset,
 		destination_address: String,
-	) -> RpcResult<String> {
+	) -> RpcResult<WithdrawFeesDetail> {
 		Ok(self
 			.api
 			.broker_api()
-			.withdraw_fee_asset(
-				asset,
-				clean_foreign_chain_address(asset.into(), &destination_address)?,
-			)
-			.await
-			.map(|tx_hash| format!("{tx_hash:#x}"))?)
+			.withdraw_fees(asset, clean_foreign_chain_address(asset.into(), &destination_address)?)
+			.await?)
 	}
 }
 

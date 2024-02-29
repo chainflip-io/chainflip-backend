@@ -10,7 +10,7 @@ use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId, SemVer};
 use futures::FutureExt;
 use pallet_cf_governance::ExecutionMode;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 pub use sp_core::crypto::AccountId32;
@@ -304,6 +304,11 @@ pub struct SwapDepositAddress {
 	pub channel_id: ChannelId,
 	pub source_chain_expiry_block: <AnyChain as cf_chains::Chain>::ChainBlockNumber,
 }
+#[derive(Serialize, Deserialize)]
+pub struct WithdrawFeesDetail {
+	pub tx_hash: H256,
+	pub egress_id: (ForeignChain, u64),
+}
 
 #[async_trait]
 pub trait BrokerApi: SignedExtrinsicApi {
@@ -356,12 +361,12 @@ pub trait BrokerApi: SignedExtrinsicApi {
 			bail!("No SwapDepositAddressReady event was found");
 		}
 	}
-	async fn withdraw_fee_asset(
+	async fn withdraw_fees(
 		&self,
 		asset: Asset,
 		destination_address: EncodedAddress,
-	) -> Result<H256> {
-		let (tx_hash, ..) = self
+	) -> Result<WithdrawFeesDetail> {
+		let (tx_hash, events, ..) = self
 			.submit_signed_extrinsic(RuntimeCall::from(pallet_cf_swapping::Call::withdraw {
 				asset,
 				destination_address,
@@ -370,7 +375,27 @@ pub trait BrokerApi: SignedExtrinsicApi {
 			.until_in_block()
 			.await
 			.context("Request to withdraw broker fee for ${asset} failed.")?;
-		Ok(tx_hash)
+
+		if let Some(state_chain_runtime::RuntimeEvent::Swapping(
+			pallet_cf_swapping::Event::WithdrawalRequested {
+				egress_amount: _,
+				egress_fee: _,
+				destination_address: _,
+				egress_id,
+			},
+		)) = events.iter().find(|event| {
+			matches!(
+				event,
+				state_chain_runtime::RuntimeEvent::Swapping(
+					pallet_cf_swapping::Event::WithdrawalRequested { .. }
+				)
+			)
+		}) {
+			Ok(WithdrawFeesDetail { tx_hash, egress_id: *egress_id })
+		} else {
+			bail!("No WithdrawalRequested event was found");
+		}
+		// Ok(tx_hash)
 	}
 }
 
