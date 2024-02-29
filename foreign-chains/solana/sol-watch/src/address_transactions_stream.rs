@@ -6,6 +6,7 @@ use futures::{stream, Stream, TryStreamExt};
 use sol_prim::{Address, Signature, SlotNumber};
 use sol_rpc::{calls::GetSignaturesForAddress, traits::CallApi};
 
+// NOTE: Solana default is 1000
 const DEFAULT_MAX_PAGE_SIZE: usize = 100;
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(5);
 
@@ -96,7 +97,7 @@ where
 					self.max_page_size,
 				)
 				.await?;
-				let last_signature = history.front().copied().or(last_signature);
+				let last_signature = history.back().copied().or(last_signature);
 				self.state = State::Drain(history, last_signature);
 
 				Some((None, self))
@@ -145,6 +146,7 @@ where
 
 		before_tx = reference_signature;
 
+		// page_size should never be > max_page_size
 		if page_size != max_page_size {
 			break Ok(())
 		}
@@ -174,10 +176,23 @@ where
 	};
 	let page = call_api.call(request).await?;
 
-	// TODO: make sure the page is actually sorted by slot-number.
+	// TODO: Currently there is a bug with `getSignaturesForAddress` RPC method. Transactions in the
+	// same slot might not be ordered correctly for time of execution. This might be a problem when
+	// using "until" to stop the getSignaturesForAddress call. 
+	// https://github.com/solana-labs/solana/issues/22456
+	// This is fixed in https://github.com/solana-labs/solana/pull/33419
+	// The fix will be live on v1.18, which should be Q2. We need to make sure it's done or we could
+	// either miss a transaction or double witness. Double witness is most likely not a problem because
+	// the State Chain will reject it (right?). If so, the downside is not too bad in normal scenarios as
+	// there shouldn't be two transactions in the same slot. Probably not worth the workaround.
+
+	// TODO: make sure the page is actually sorted by slot-number. We are now sorting it in the
+	// rpc "process_response", we need to double check if it behaves well.
 
 	let mut row_count = 0;
 	let mut reference_signature = None;
+	// Filtering out by slot number for when we reuse a channel, as we won't have the last transaction signature.
+	// We can use ending_with_slot for when a channel closes (althoght it might not be necessary)
 	let signatures = page
 		// the page is sorted newest-to-oldest
 		.into_iter()

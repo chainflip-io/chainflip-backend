@@ -24,8 +24,7 @@ impl GetSignaturesForAddress {
 	pub fn for_address(address: Address) -> Self {
 		Self {
 			address,
-
-			commitment: Default::default(),
+			commitment: Commitment::Confirmed,
 			before: None,
 			until: None,
 			limit: None,
@@ -51,9 +50,10 @@ impl Call for GetSignaturesForAddress {
 		]
 	}
 
+	// NOTE: In theory this should not be necessary. TBD.
 	fn process_response(&self, input: JsValue) -> Result<Self::Response, serde_json::Error> {
 		let mut entries: Vec<SignatureForAddress> = serde_json::from_value(input)?;
-		entries.sort_by_key(|e| std::cmp::Reverse(e.slot));
+		entries.sort_by_key(|e: &SignatureForAddress| std::cmp::Reverse(e.slot));
 
 		Ok(entries)
 	}

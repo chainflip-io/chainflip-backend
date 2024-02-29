@@ -20,7 +20,7 @@ pub use sol_prim::{
 };
 
 pub use chain_crypto::SolanaCrypto;
-pub use tracked_data::SolTrackedData;
+pub use tracked_data::SolanaTrackedData;
 pub use transaction::SolTransaction;
 
 impl Chain for Solana {
@@ -31,7 +31,7 @@ impl Chain for Solana {
 	type ChainBlockNumber = SlotNumber;
 	type ChainAmount = AssetAmount;
 	type TransactionFee = Self::ChainAmount;
-	type TrackedData = tracked_data::SolTrackedData;
+	type TrackedData = tracked_data::SolanaTrackedData;
 	type ChainAsset = assets::sol::Asset;
 	type ChainAccount = SolAddress;
 	type EpochStartData = ();

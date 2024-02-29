@@ -66,6 +66,7 @@ async fn main() -> Result<(), AnyError> {
 				)
 		})
 		.map_err(AnyError::from)
+		// NOTE: Probably not necessary?
 		.ensure_balance_continuity(args.page_size)
 		.try_for_each(|balance| async move {
 			Ok(eprintln!(

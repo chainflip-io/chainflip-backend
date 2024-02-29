@@ -3,12 +3,12 @@ use serde_json::json;
 use sol_prim::Amount;
 
 use crate::traits::Call;
-
+use crate::types::Commitment;
 use super::GetFeeForMessage;
 
 impl<M> GetFeeForMessage<M> {
 	pub fn new(message: M) -> Self {
-		Self { message, commitment: Default::default() }
+		Self { message, commitment: Commitment::Confirmed }
 	}
 }
 

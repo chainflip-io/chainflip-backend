@@ -6,7 +6,7 @@ use serde_json::json;
 use sol_prim::{Address, Amount, Signature, SlotNumber};
 
 use super::GetTransaction;
-use crate::{traits::Call, types::JsValue};
+use crate::{traits::Call, types::JsValue, types::Commitment};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -72,7 +72,7 @@ impl Call for GetTransaction {
 
 impl GetTransaction {
 	pub fn for_signature(signature: Signature) -> Self {
-		Self { signature, commitment: Default::default() }
+		Self { signature, commitment: Commitment::Confirmed }
 	}
 }
 

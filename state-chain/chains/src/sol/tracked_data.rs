@@ -2,24 +2,11 @@ use cf_primitives::chains::Solana;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use cf_primitives::chains::assets;
 
 use crate::{Chain, FeeEstimationApi};
 
-// // Taken from the [example](https://solana.com/docs/rpc/http/getfeeformessage).
-// // Should probably be replaced with an actual program invocation.
-// pub const DEFAULT_MESSAGE_FOR_FEE_ESTIMATION: &[u8] = &[
-// 	0x01, 0x00, 0x01, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-// 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-// 	0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-// 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-// 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-// 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-// 	0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x00, 0x00,
-// ];
-// pub const EGRESS_EXAMPLE_MESSAGE: &[u8] = DEFAULT_MESSAGE_FOR_FEE_ESTIMATION;
-// pub const INGRESS_EXAMPLE_MESSAGE: &[u8] = DEFAULT_MESSAGE_FOR_FEE_ESTIMATION;
-
-pub const DEFAULT_TRANSACTION_FEE: <Solana as Chain>::ChainAmount = 5000 /* lamports */;
+pub const BASE_FEE: <Solana as Chain>::ChainAmount = 5000 /* lamports */;
 
 #[derive(
 	Default,
@@ -34,22 +21,48 @@ pub const DEFAULT_TRANSACTION_FEE: <Solana as Chain>::ChainAmount = 5000 /* lamp
 	Serialize,
 	Deserialize,
 )]
-pub struct SolTrackedData {
-	pub ingress_fee: Option<<Solana as Chain>::ChainAmount>,
-	pub egress_fee: Option<<Solana as Chain>::ChainAmount>,
+pub struct SolanaTrackedData {
+	pub priority_fee: <Solana as Chain>::ChainAmount,
 }
 
-impl FeeEstimationApi<Solana> for SolTrackedData {
+mod fees {
+	// TODO: In Solana we could treat NATIVE & TOKEN the same
+	pub const BASE_COMPUTE_UNITS_PER_BATCH: u128 = 1; // TODO: Update this
+	pub const COMPUTE_UNITS_PER_FETCH_NATIVE: u128 = 1;// TODO: Update this
+	pub const COMPUTE_UNITS_PER_FETCH_TOKEN: u128 = 1;    // TODO: Update this
+	pub const COMPUTE_UNITS_PER_TRANSFER_NATIVE: u128 = 1;// TODO: Update this
+	pub const COMPUTE_UNITS_PER_TRANSFER_TOKEN: u128 = 1; // TODO: Update this
+}
+
+
+impl FeeEstimationApi<Solana> for SolanaTrackedData {
 	fn estimate_egress_fee(
 		&self,
-		_asset: <Solana as crate::Chain>::ChainAsset,
+		asset: <Solana as crate::Chain>::ChainAsset,
 	) -> <Solana as crate::Chain>::ChainAmount {
-		self.ingress_fee.unwrap_or(DEFAULT_TRANSACTION_FEE)
+		use fees::*;
+
+		let compute_units_per_transfer = BASE_COMPUTE_UNITS_PER_BATCH +
+			match asset {
+				assets::sol::Asset::Sol => COMPUTE_UNITS_PER_TRANSFER_NATIVE,
+				assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_TRANSFER_TOKEN,
+			};
+
+		BASE_FEE + (self.priority_fee).saturating_mul(compute_units_per_transfer)
+
 	}
 	fn estimate_ingress_fee(
 		&self,
-		_asset: <Solana as crate::Chain>::ChainAsset,
+		asset: <Solana as crate::Chain>::ChainAsset,
 	) -> <Solana as crate::Chain>::ChainAmount {
-		self.egress_fee.unwrap_or(DEFAULT_TRANSACTION_FEE)
-	}
+		use fees::*;
+
+		let compute_units_per_transfer = BASE_COMPUTE_UNITS_PER_BATCH +
+			match asset {
+				assets::sol::Asset::Sol => COMPUTE_UNITS_PER_FETCH_NATIVE,
+				assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_FETCH_TOKEN,
+			};
+
+		BASE_FEE + (self.priority_fee).saturating_mul(compute_units_per_transfer)
+		}
 }

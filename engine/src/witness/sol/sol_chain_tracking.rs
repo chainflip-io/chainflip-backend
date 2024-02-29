@@ -2,9 +2,9 @@ use std::{future::Future, sync::Arc};
 
 use futures::{FutureExt, Stream, StreamExt, TryStreamExt};
 
-use cf_chains::{sol::SolTrackedData, ChainState, Solana};
+use cf_chains::{sol::SolanaTrackedData, ChainState, Solana};
 use cf_primitives::EpochIndex;
-use sol_rpc::calls::{GetExistingBlocks, GetSlot};
+use sol_rpc::calls::GetRecentPrioritizationFees;
 use sol_watch::deduplicate_stream::DeduplicateStreamExt;
 use state_chain_runtime::SolanaInstance;
 use tokio_stream::wrappers::IntervalStream;
@@ -20,20 +20,22 @@ use super::{
 	zip_with_latest::TryZipLatestExt, Result, SolanaApi, SOLANA_CHAIN_TRACKER_SLEEP_INTERVAL,
 };
 
-const SLOT_GRANULARITY: u64 = 25;
+use utilities::context;
 
 pub async fn collect_tracked_data<C: SolanaApi>(sol_client: C) -> Result<ChainState<Solana>> {
-	let latest_slot = sol_client.call(GetSlot::default()).await?;
-	let min_slot = latest_slot - (latest_slot % SLOT_GRANULARITY);
-	let existing_slots = sol_client.call(GetExistingBlocks::range(min_slot, latest_slot)).await?;
-	let reported_slot = existing_slots
-		.first()
-		.copied()
-		.ok_or_else(|| anyhow::anyhow!("Come on! At least the `latest_slot` must exist!"))?;
+	let priorization_fees = sol_client.call(GetRecentPrioritizationFees::default()).await?;
+
+	// TODO: We should never get zero items, but do something else than defaulting to zero. Getting the latest slot?
+	// TODO: Use context like in eth.rs instead of using "?" after the await?
+	let latest_slot = priorization_fees.iter().max_by_key(|f| f.slot).map(|f| f.slot).unwrap_or(0);
+
+	let mut priority_fees: Vec<u64> = priorization_fees.iter().map(|f| f.prioritization_fee).collect();
+	priority_fees.sort();
+	let priority_fee = priority_fees.get(priority_fees.len().saturating_sub(1) / 2).cloned().unwrap_or_default();
 
 	let chain_state = ChainState {
-		block_height: reported_slot,
-		tracked_data: SolTrackedData { ingress_fee: None, egress_fee: None },
+		block_height: latest_slot,
+		tracked_data: SolanaTrackedData { priority_fee: priority_fee.try_into().expect("Priority fee should fit u128") },
 	};
 
 	Ok(chain_state)
