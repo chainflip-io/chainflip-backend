@@ -15,7 +15,7 @@ use cf_primitives::{
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
 use jsonrpsee::{
-	core::RpcResult,
+	core::{error::SubscriptionClosed, RpcResult},
 	proc_macros::rpc,
 	types::error::{CallError, SubscriptionEmptyError},
 	SubscriptionSink,
@@ -24,6 +24,7 @@ use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{AskBidMap, PoolInfo, PoolLiquidity, PoolPriceV1, UnidirectionalPoolDepth};
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
+use sp_api::ApiError;
 use sp_core::U256;
 use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT},
@@ -34,7 +35,7 @@ use state_chain_runtime::{
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
 		BrokerInfo, CustomRuntimeApi, DispatchErrorWithMessage, FailingWitnessValidators,
-		LiquidityProviderInfo, ValidatorInfo,
+		LiquidityProviderInfo, ScheduledSwap, ValidatorInfo,
 	},
 	NetworkFee,
 };
@@ -258,6 +259,11 @@ pub struct RpcPrewitnessedSwap {
 	pub amounts: Vec<U256>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
+pub struct SwapResponse {
+	swaps: Vec<ScheduledSwap>,
+}
+
 #[rpc(server, client, namespace = "cf")]
 /// The custom RPC endpoints for the state chain node.
 pub trait CustomApi {
@@ -461,6 +467,20 @@ pub trait CustomApi {
 	fn cf_subscribe_pool_price_v2(&self, base_asset: Asset, quote_asset: Asset);
 	#[subscription(name = "subscribe_prewitness_swaps", item = BlockUpdate<RpcPrewitnessedSwap>)]
 	fn cf_subscribe_prewitness_swaps(&self, base_asset: Asset, quote_asset: Asset, side: Side);
+
+	// Subscribe to a stream that on every block produces a list of all scheduled/pending
+	// swaps in the base_asset/quote_asset pool, including any "implicit" half-swaps (as a
+	// part of a swap involving two pools)
+	#[subscription(name = "subscribe_scheduled_swaps", item = BlockUpdate<SwapResponse>)]
+	fn cf_subscribe_scheduled_swaps(&self, base_asset: Asset, quote_asset: Asset);
+
+	#[method(name = "scheduled_swaps")]
+	fn cf_scheduled_swaps(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<ScheduledSwap>>;
 
 	#[method(name = "prewitness_swaps")]
 	fn cf_prewitness_swaps(
@@ -1134,6 +1154,52 @@ where
 		)
 	}
 
+	fn cf_subscribe_scheduled_swaps(
+		&self,
+		sink: SubscriptionSink,
+		base_asset: Asset,
+		quote_asset: Asset,
+	) -> Result<(), SubscriptionEmptyError> {
+		// Check that the requested pool exists:
+		let Ok(Ok(_)) = self.client.runtime_api().cf_pool_info(
+			self.client.info().best_hash,
+			base_asset,
+			quote_asset,
+		) else {
+			return Err(SubscriptionEmptyError);
+		};
+
+		self.new_subscription(
+			false, /* only_on_changes */
+			true,  /* end_on_error */
+			sink,
+			move |api, hash| {
+				Ok::<_, ApiError>(SwapResponse {
+					swaps: api.cf_scheduled_swaps(hash, base_asset, quote_asset)?,
+				})
+			},
+		)
+	}
+
+	fn cf_scheduled_swaps(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<ScheduledSwap>> {
+		// Check that the requested pool exists:
+		self.client
+			.runtime_api()
+			.cf_pool_info(self.client.info().best_hash, base_asset, quote_asset)
+			.map_err(to_rpc_error)
+			.and_then(|result| result.map_err(map_dispatch_error))?;
+
+		self.client
+			.runtime_api()
+			.cf_scheduled_swaps(self.unwrap_or_best(at), base_asset, quote_asset)
+			.map_err(to_rpc_error)
+	}
+
 	fn cf_subscribe_prewitness_swaps(
 		&self,
 		sink: SubscriptionSink,
@@ -1285,7 +1351,10 @@ where
 			"cf-rpc-update-subscription",
 			Some("rpc"),
 			async move {
-				sink.pipe_from_try_stream(stream).await;
+				if let SubscriptionClosed::Failed(err) = sink.pipe_from_try_stream(stream).await {
+					log::error!("Subscription closed due to error: {err:?}");
+					sink.close(err);
+				}
 			}
 			.boxed(),
 		);

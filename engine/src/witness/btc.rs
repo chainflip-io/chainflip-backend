@@ -2,15 +2,6 @@ mod btc_chain_tracking;
 mod btc_deposits;
 pub mod btc_source;
 
-use std::sync::Arc;
-
-use bitcoin::BlockHash;
-use cf_chains::btc::{self, deposit_address::DepositAddress, BlockNumber, CHANGE_ADDRESS_SALT};
-use cf_primitives::{EpochIndex, NetworkEnvironment};
-use futures_core::Future;
-use secp256k1::hashes::Hash;
-use utilities::task_scope::Scope;
-
 use crate::{
 	btc::{
 		retry_rpc::{BtcRetryRpcApi, BtcRetryRpcClient},
@@ -23,7 +14,16 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED, UNFINALIZED},
 	},
 };
+use bitcoin::BlockHash;
 use btc_source::BtcSource;
+use cf_chains::btc::{
+	self, deposit_address::DepositAddress, BitcoinTransactionHash, BlockNumber, CHANGE_ADDRESS_SALT,
+};
+use cf_primitives::{EpochIndex, NetworkEnvironment};
+use futures_core::Future;
+use secp256k1::hashes::Hash;
+use std::sync::Arc;
+use utilities::task_scope::Scope;
 
 use super::common::{
 	chain_source::{extension::ChainSourceExt, Header},
@@ -48,15 +48,16 @@ pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoric
 
 	let monitored_tx_hashes = monitored_tx_hashes.iter().map(|(tx_hash, _)| tx_hash);
 
-	for (tx_hash, tx) in success_witnesses(monitored_tx_hashes, txs) {
+	for (tx_hash_bytes_little_endian, tx) in success_witnesses(monitored_tx_hashes, txs) {
 		process_call(
 			state_chain_runtime::RuntimeCall::BitcoinBroadcaster(
 				pallet_cf_broadcast::Call::transaction_succeeded {
-					tx_out_id: tx_hash,
+					tx_out_id: tx_hash_bytes_little_endian,
 					signer_id: DepositAddress::new(epoch.info.0.current, CHANGE_ADDRESS_SALT)
 						.script_pubkey(),
 					tx_fee: tx.fee.unwrap_or_default().to_sat(),
 					tx_metadata: (),
+					transaction_ref: BitcoinTransactionHash::new(tx_hash_bytes_little_endian),
 				},
 			),
 			epoch.index,

@@ -216,7 +216,7 @@ pub fn bounded_sqrt_price(quote: Amount, base: Amount) -> SqrtPriceQ64F96 {
 	if base.is_zero() {
 		MAX_SQRT_PRICE
 	} else {
-		let unbounded_sqrt_price = SqrtPriceQ64F96::try_from(
+		let unbounded_sqrt_price = U256::try_from(
 			((U512::from(quote) << 256) / U512::from(base)).integer_sqrt() >>
 				(128 - SQRT_PRICE_FRACTIONAL_BITS),
 		)

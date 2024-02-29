@@ -141,6 +141,10 @@ pub trait Chain: Member + Parameter {
 		+ TransactionMetadata<Self>
 		+ BenchmarkValue
 		+ Default;
+
+	/// The type representing the transaction hash for this particular chain
+	type TransactionRef: Member + Parameter + BenchmarkValue;
+
 	/// Passed in to construct the replay protection.
 	type ReplayProtectionParams: Member + Parameter;
 	type ReplayProtection: Member + Parameter;

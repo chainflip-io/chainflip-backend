@@ -13,7 +13,7 @@ use crate::{
 	chainflip::{calculate_account_apy, Offence},
 	runtime_apis::{
 		AuctionState, BrokerInfo, DispatchErrorWithMessage, FailingWitnessValidators,
-		LiquidityProviderInfo, RuntimeApiPenalty, ValidatorInfo,
+		LiquidityProviderInfo, RuntimeApiPenalty, ScheduledSwap, ValidatorInfo,
 	},
 };
 use cf_amm::{
@@ -840,6 +840,7 @@ pub type UncheckedExtrinsic =
 pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, RuntimeCall, SignedExtra>;
+#[cfg(not(feature = "try-runtime"))]
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<
 	Runtime,
@@ -848,6 +849,20 @@ pub type Executive = frame_executive::Executive<
 	Runtime,
 	PalletExecutionOrder,
 	PalletMigrations,
+>;
+
+// NOTE: This should be a temporary workaround. When paritytech/polkadot-sdk#2560 is merged into our
+// substrate fork, we can remove this.
+#[cfg(feature = "try-runtime")]
+/// Executive: handles dispatch to the various modules.
+pub type Executive = frame_executive::Executive<
+	Runtime,
+	Block,
+	frame_system::ChainContext<Runtime>,
+	Runtime,
+	PalletExecutionOrder,
+	PalletMigrations,
+	AllPalletsWithoutSystem,
 >;
 
 pub type PalletExecutionOrder = (
@@ -1428,6 +1443,20 @@ impl_runtime_apis! {
 
 			all_prewitnessed_swaps
 		}
+
+		fn cf_scheduled_swaps(base_asset: Asset, _quote_asset: Asset) -> Vec<ScheduledSwap> {
+
+			let current_block = System::block_number();
+
+			pallet_cf_swapping::SwapQueue::<Runtime>::iter().flat_map(|(block, swaps_for_block)| {
+
+				// In case `block` has already passed, the swaps will be re-tried at the next block:
+				let execute_at = core::cmp::max(block, current_block.saturating_add(1));
+
+				let swaps: Vec<_> = swaps_for_block.iter().filter(|swap| swap.from == base_asset || swap.to == base_asset).cloned().collect();
+				Swapping::get_scheduled_swap_legs(swaps, base_asset).unwrap().into_iter().map(move |swap| ScheduledSwap {swap, execute_at })
+			}).collect()
+	}
 
 		fn cf_failed_call(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {
 			if EthereumIngressEgress::get_failed_call(broadcast_id).is_some() {
