@@ -88,6 +88,7 @@ fn assert_failed_ccm(
 		reason,
 		destination_address: MockAddressConverter::to_encoded_address(destination_address),
 		deposit_metadata: ccm,
+		origin: SwapOrigin::Vault { tx_hash: Default::default() },
 	}));
 }
 

@@ -335,6 +335,7 @@ pub mod pallet {
 			reason: CcmFailReason,
 			destination_address: EncodedAddress,
 			deposit_metadata: CcmDepositMetadata,
+			origin: SwapOrigin,
 		},
 		MaximumSwapAmountSet {
 			asset: Asset,
@@ -1003,6 +1004,7 @@ pub mod pallet {
 							reason,
 							destination_address: encoded_destination_address,
 							deposit_metadata,
+							origin: origin.clone(),
 						});
 						return Err(())
 					},
