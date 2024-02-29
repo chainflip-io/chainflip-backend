@@ -304,19 +304,36 @@ pub struct SwapDepositAddress {
 	pub channel_id: ChannelId,
 	pub source_chain_expiry_block: <AnyChain as cf_chains::Chain>::ChainBlockNumber,
 }
-#[derive(Serialize, Deserialize)]
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct WithdrawFeesDetail {
 	pub tx_hash: H256,
 	pub egress_id: (ForeignChain, u64),
 	pub egress_amount: u128,
 	pub egress_fee: u128,
-	pub destination_address: EncodedAddress,
+	pub destination_address: String,
 }
+
 impl fmt::Display for WithdrawFeesDetail {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "Tx hash: {:#x}\nEgress id: {:?}\nEgress amount: {}\nEgress fee: {}\nDestination address: {}", self.tx_hash, self.egress_id, self.egress_amount, self.egress_fee, self.destination_address)
+		write!(
+			f,
+			"\
+			Tx hash: {:?}\n\
+			Egress id: {:?}\n\
+			Egress amount: {}\n\
+			Egress fee: {}\n\
+			Destination address: {}\n\
+			",
+			self.tx_hash,
+			self.egress_id,
+			self.egress_amount,
+			self.egress_fee,
+			self.destination_address,
+		)
 	}
 }
+
 #[async_trait]
 pub trait BrokerApi: SignedExtrinsicApi {
 	async fn request_swap_deposit_address(
@@ -403,7 +420,7 @@ pub trait BrokerApi: SignedExtrinsicApi {
 				egress_id: *egress_id,
 				egress_amount: *egress_amount,
 				egress_fee: *egress_fee,
-				destination_address: destination_address.clone(),
+				destination_address: destination_address.to_string(),
 			})
 		} else {
 			bail!("No WithdrawalRequested event was found");
