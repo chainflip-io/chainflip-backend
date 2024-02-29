@@ -641,7 +641,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			base_rpc_client.clone(),
 			wait_for_required_version,
 			false,
-			start_from,
+			None,
 			|base_rpc_client| base_rpc_client.subscribe_unfinalized_block_headers(),
 			|block_stream| futures::future::ready(Ok(block_stream)),
 		)
