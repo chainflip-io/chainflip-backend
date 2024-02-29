@@ -43,7 +43,7 @@ impl Serialize for DotSignature {
 	where
 		S: Serializer,
 	{
-		format!("0x{}", hex::encode(&self.0)).serialize(serializer)
+		format!("0x{}", hex::encode(self.0)).serialize(serializer)
 	}
 }
 
@@ -614,7 +614,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test() {
+	fn serialization_works_as_expected() {
 		let h = ReverseSerializer([
 			0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
 			24, 25, 26, 27, 28, 29, 30, 31,
@@ -629,8 +629,14 @@ mod tests {
 			16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
 		]);
 
-		println!("{}", serde_json::to_string(&h).unwrap());
-		println!("{}", serde_json::to_string(&h2).unwrap());
-		println!("{}", serde_json::to_string(&s).unwrap());
+		assert_eq!(
+			serde_json::to_string(&h).unwrap(),
+			"\"0x1f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100\""
+		);
+		assert_eq!(
+			serde_json::to_string(&h2).unwrap(),
+			"\"0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f\""
+		);
+		assert_eq!(serde_json::to_string(&s).unwrap(), "\"0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f\"");
 	}
 }
