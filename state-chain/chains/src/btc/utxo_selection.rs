@@ -23,8 +23,8 @@ pub enum UtxoSelectionError {
 ///
 /// The algorithm for the utxo selection works as follows:
 /// 1. Sort the available utxos according to their net value (amount - fees)
-/// Set the `first` and `last` to the first utxo whose net value > 0, effectively skipping all
-/// utxos whose fees are too high.
+/// Initializes the `first` and `last` to the first utxo whose net value > 0, effectively skipping
+/// all utxos whose fees are too high.
 ///
 /// 2. Find a optimal range such that `sum(utxo[first ..= last]) >= target_amount`
 /// When the selected range is < selection_limit, move the `first` index to the left
@@ -76,7 +76,7 @@ pub fn select_utxos_from_pool(
 		cumulative_amount += available_utxos[last].net_value(fee_info);
 
 		if last - first >= selection_limit {
-			// Move the `last` pointer forward by one to keep selection size within limit.
+			// Move the `first` pointer forward by one to keep selection size within limit.
 			cumulative_amount -= available_utxos[first].net_value(fee_info);
 			first += 1usize;
 		}
