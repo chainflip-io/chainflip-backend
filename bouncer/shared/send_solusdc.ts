@@ -25,15 +25,15 @@ export async function sendSolUsdc(solAddress: string, usdcAmount: string, log = 
 
   const transaction = new Transaction().add(
     createAssociatedTokenAccountIdempotentInstruction(
-      whaleKeypair.publicKey, // payer
-      receiverAta, // associatedTokenAddress
-      encodedSolAddress, // owner
-      usdcMintPubKey, // mint
+      whaleKeypair.publicKey,
+      receiverAta,
+      encodedSolAddress,
+      usdcMintPubKey,
     ),
     createTransferInstruction(
-      whaleAta, // sourceAta
-      receiverAta, // destinationAta
-      whaleKeypair.publicKey, // owner sourceAta
+      whaleAta,
+      receiverAta,
+      whaleKeypair.publicKey,
       BigInt(usdcFineAmount),
     ),
   );

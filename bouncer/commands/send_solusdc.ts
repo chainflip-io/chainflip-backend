@@ -2,8 +2,9 @@
 // INSTRUCTIONS
 //
 // This command takes two arguments.
-// It will fund the solana address provided as the first argument with the amount
-// provided in the second argument. The asset amount is interpreted in SolUSDC.
+// It will fund the associated token account of the solana address provided as the
+// first argument with the amount provided in the second argument.
+// The asset amount is interpreted in SOLUSDC.
 //
 // For example: ./commands/send_solusdc.ts 7QQGNm3ptwinipDCyaCF7jY5katgmFUu1ieP2f7nwLpE 1.2
 // will send 1.2 SOLUSDC to account 7QQGNm3ptwinipDCyaCF7jY5katgmFUu1ieP2f7nwLpE
@@ -17,7 +18,7 @@ async function main() {
   const solanaAddress = process.argv[2];
   const usdcAmount = process.argv[3].trim();
 
-  console.log('Transferring ' + usdcAmount + ' SOLUSDC to ' + solanaAddress);
+  console.log('Transferring ' + usdcAmount + ' SOLUSDC to the ATA of ' + solanaAddress);
   await sendSolUsdc(solanaAddress, usdcAmount);
 
   process.exit(0);
