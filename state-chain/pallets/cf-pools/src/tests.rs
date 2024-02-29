@@ -5,6 +5,7 @@ use crate::{
 	STABLE_ASSET,
 };
 use cf_amm::common::{price_at_tick, tick_at_price, Side, Tick, PRICE_FRACTIONAL_BITS};
+use cf_chains::SwapType;
 use cf_primitives::{chains::assets::any::Asset, AssetAmount, SwapOutput};
 use cf_test_utilities::{assert_events_match, assert_has_event, last_event};
 use cf_traits::{AssetConverter, SwappingApi};
@@ -241,8 +242,14 @@ fn test_buy_back_flip() {
 		// If we're at an interval, we should buy flip.
 		LiquidityPools::on_initialize(INTERVAL * 3);
 		assert_eq!(0, CollectedNetworkFee::<Test>::get());
-		assert!(
-			FlipToBurn::<Test>::get().abs_diff(EXPECTED_COLLECTED_FEES / FLIP_PRICE_IN_USDC) <= 1
+		assert_eq!(
+			SwapQueue::get().first().expect("Should have swapped usdc for flip"),
+			&MockSwap {
+				from: STABLE_ASSET,
+				to: FLIP,
+				amount: EXPECTED_COLLECTED_FEES,
+				swap_type: SwapType::NetworkFee,
+			}
 		);
 	});
 }

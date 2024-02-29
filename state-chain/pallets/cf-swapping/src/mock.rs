@@ -71,6 +71,7 @@ parameter_types! {
 	pub static NetworkFee: Percent = Percent::from_percent(0);
 	pub static Swaps: Vec<(Asset, Asset, AssetAmount)> = vec![];
 	pub static SwapRate: f64 = 1f64;
+	pub static BurntFlip: AssetAmount = 0;
 }
 
 thread_local! {
@@ -107,6 +108,10 @@ impl SwappingApi for MockSwappingApi {
 		swaps.push((from, to, input_amount));
 		Swaps::set(swaps);
 		Ok((input_amount as f64 * SwapRate::get()) as AssetAmount)
+	}
+
+	fn add_flip_to_burn(amount: AssetAmount) {
+		BurntFlip::set(BurntFlip::get() + amount);
 	}
 }
 

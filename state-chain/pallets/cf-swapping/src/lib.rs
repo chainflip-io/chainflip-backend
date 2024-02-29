@@ -3,13 +3,15 @@
 use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, ForeignChainAddress},
-	CcmChannelMetadata, CcmDepositMetadata, SwapOrigin,
+	CcmChannelMetadata, CcmDepositMetadata, SwapOrigin, SwapType,
 };
 use cf_primitives::{
 	Asset, AssetAmount, ChannelId, ForeignChain, SwapId, SwapLeg, TransactionHash, STABLE_ASSET,
 };
 use cf_runtime_utilities::log_or_panic;
-use cf_traits::{impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi};
+use cf_traits::{
+	impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi, SwapQueueApi,
+};
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
@@ -40,12 +42,6 @@ const BASIS_POINTS_PER_MILLION: u32 = 100;
 
 pub const SWAP_DELAY_BLOCKS: u32 = 2;
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum SwapType {
-	Swap(ForeignChainAddress),
-	CcmPrincipal(SwapId),
-	CcmGas(SwapId),
-}
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct Swap {
 	pub swap_id: SwapId,
@@ -811,6 +807,20 @@ pub mod pallet {
 						SwapType::CcmGas(ccm_id) => {
 							Self::handle_ccm_swap_result(*ccm_id, swap_output, CcmSwapLeg::Gas);
 						},
+						SwapType::NetworkFee =>
+							if swap.to == Asset::Flip {
+								T::SwappingApi::add_flip_to_burn(swap_output);
+							} else {
+								debug_assert!(
+									false,
+									"NetworkFee burning should not be in asset: {:?}",
+									swap.to
+								);
+								log::error!(
+									"NetworkFee burning is not supported for asset: {:?}",
+									swap.to
+								);
+							},
 					};
 				} else {
 					debug_assert!(false, "Swap is not completed yet!");
@@ -1008,7 +1018,7 @@ pub mod pallet {
 
 		/// Schedule the swap, assuming all checks already passed. Return swap_id along
 		/// with the block at which the swap is scheduled to be executed.
-		fn schedule_swap_internal(
+		pub fn schedule_swap_internal(
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
@@ -1222,5 +1232,18 @@ pub mod pallet {
 
 			Ok(CcmSwapIds { principal_swap_id, gas_swap_id })
 		}
+	}
+}
+
+impl<T: Config> SwapQueueApi for Pallet<T> {
+	type BlockNumber = BlockNumberFor<T>;
+
+	fn schedule_swap(
+		from: Asset,
+		to: Asset,
+		amount: AssetAmount,
+		swap_type: SwapType,
+	) -> (u64, Self::BlockNumber) {
+		Self::schedule_swap_internal(from, to, amount, swap_type)
 	}
 }

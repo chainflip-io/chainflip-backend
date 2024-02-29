@@ -5,7 +5,7 @@ use core::{fmt::Display, iter::Step};
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 pub use address::ForeignChainAddress;
 use address::{AddressDerivationApi, AddressDerivationError, ToHumanreadableAddress};
-use cf_primitives::{AssetAmount, BroadcastId, ChannelId, EthAmount, TransactionHash};
+use cf_primitives::{AssetAmount, BroadcastId, ChannelId, EthAmount, SwapId, TransactionHash};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member, RuntimeDebug},
@@ -535,4 +535,12 @@ impl RetryPolicy for DefaultRetryPolicy {
 	fn next_attempt_delay(_retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber> {
 		Some(10u32)
 	}
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum SwapType {
+	Swap(ForeignChainAddress),
+	CcmPrincipal(SwapId),
+	CcmGas(SwapId),
+	NetworkFee,
 }

@@ -7,8 +7,11 @@ use cf_amm::{
 	range_orders::{self, Liquidity},
 	PoolState,
 };
+use cf_chains::SwapType;
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
-use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwappingApi};
+use cf_traits::{
+	impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwapQueueApi, SwappingApi,
+};
 use frame_support::{
 	dispatch::GetDispatchInfo,
 	pallet_prelude::*,
@@ -253,6 +256,8 @@ pub mod pallet {
 		/// Pallet responsible for managing Liquidity Providers.
 		type LpBalance: LpBalanceApi<AccountId = Self::AccountId>;
 
+		type SwapQueueApi: SwapQueueApi;
+
 		#[pallet::constant]
 		type NetworkFee: Get<Permill>;
 
@@ -325,14 +330,12 @@ pub mod pallet {
 				{
 					weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 					if let Err(e) = CollectedNetworkFee::<T>::try_mutate(|collected_fee| {
-						let flip_to_burn = Self::swap_single_leg(
+						T::SwapQueueApi::schedule_swap(
 							any::Asset::Usdc,
 							any::Asset::Flip,
 							*collected_fee,
-						)?;
-						FlipToBurn::<T>::mutate(|total| {
-							total.saturating_accrue(flip_to_burn);
-						});
+							SwapType::NetworkFee,
+						);
 						collected_fee.set_zero();
 						Ok::<_, DispatchError>(())
 					}) {
@@ -1050,6 +1053,12 @@ impl<T: Config> SwappingApi for Pallet<T> {
 			Self::deposit_event(Event::<T>::AssetSwapped { from, to, input_amount, output_amount });
 			Ok(output_amount)
 		})
+	}
+
+	fn add_flip_to_burn(amount: AssetAmount) {
+		FlipToBurn::<T>::mutate(|total| {
+			total.saturating_accrue(amount);
+		});
 	}
 }
 

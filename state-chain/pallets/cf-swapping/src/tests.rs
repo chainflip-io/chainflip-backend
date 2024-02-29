@@ -2228,3 +2228,17 @@ fn can_update_multiple_items_at_once() {
 		assert_eq!(MaximumSwapAmount::<Test>::get(Asset::Dot), Some(200));
 	});
 }
+
+#[test]
+fn network_fee_swap_gets_burnt() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: AssetAmount = 100;
+
+		Swapping::schedule_swap(Asset::Usdc, Asset::Flip, AMOUNT, SwapType::NetworkFee);
+		assert_eq!(BurntFlip::get(), 0);
+
+		Swapping::on_finalize(System::block_number() + SWAP_DELAY_BLOCKS as u64);
+		assert_swaps_queue_is_empty();
+		assert_eq!(BurntFlip::get(), AMOUNT);
+	});
+}

@@ -338,6 +338,7 @@ parameter_types! {
 impl pallet_cf_pools::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type LpBalance = LiquidityProvider;
+	type SwapQueueApi = Swapping;
 	type NetworkFee = NetworkFee;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = ();

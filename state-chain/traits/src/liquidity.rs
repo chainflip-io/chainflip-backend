@@ -1,6 +1,7 @@
-use cf_chains::address::ForeignChainAddress;
+use cf_chains::{address::ForeignChainAddress, SwapType};
 use cf_primitives::{Asset, AssetAmount, BasisPoints, ChannelId, SwapId};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_std::vec::Vec;
 
 pub trait SwapDepositHandler {
@@ -88,6 +89,9 @@ pub trait SwappingApi {
 		to: Asset,
 		input_amount: AssetAmount,
 	) -> Result<AssetAmount, DispatchError>;
+
+	// Add the given amount of flip to the FlipToBurn storage item
+	fn add_flip_to_burn(amount: AssetAmount);
 }
 
 impl<T: frame_system::Config> SwappingApi for T {
@@ -101,5 +105,34 @@ impl<T: frame_system::Config> SwappingApi for T {
 		input_amount: AssetAmount,
 	) -> Result<AssetAmount, DispatchError> {
 		Ok(input_amount)
+	}
+
+	fn add_flip_to_burn(_amount: AssetAmount) {
+		// Do nothing
+	}
+}
+
+pub trait SwapQueueApi {
+	type BlockNumber;
+
+	/// Add a swap to the internal swapping queue with the default block delay
+	fn schedule_swap(
+		from: Asset,
+		to: Asset,
+		amount: AssetAmount,
+		swap_type: SwapType,
+	) -> (u64, Self::BlockNumber);
+}
+
+impl<T: frame_system::Config> SwapQueueApi for T {
+	type BlockNumber = BlockNumberFor<T>;
+
+	fn schedule_swap(
+		_from: Asset,
+		_to: Asset,
+		_amount: AssetAmount,
+		_swap_type: SwapType,
+	) -> (u64, Self::BlockNumber) {
+		(0, Self::BlockNumber::default())
 	}
 }
