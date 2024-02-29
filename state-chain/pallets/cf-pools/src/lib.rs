@@ -1193,6 +1193,7 @@ pub struct PoolPriceV1 {
 pub struct PoolPriceV2 {
 	pub sell: Option<SqrtPriceQ64F96>,
 	pub buy: Option<SqrtPriceQ64F96>,
+	pub range_order: SqrtPriceQ64F96,
 }
 
 impl<T: Config> Pallet<T> {
@@ -1558,6 +1559,7 @@ impl<T: Config> Pallet<T> {
 		Ok(PoolPriceV2 {
 			sell: pool.pool_state.current_price(Side::Sell).map(|(_, sqrt_price, _)| sqrt_price),
 			buy: pool.pool_state.current_price(Side::Buy).map(|(_, sqrt_price, _)| sqrt_price),
+			range_order: pool.pool_state.current_range_order_pool_price(),
 		})
 	}
 
