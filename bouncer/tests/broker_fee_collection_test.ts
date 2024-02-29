@@ -105,8 +105,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   console.log('depositAmount:', depositAmount);
   assert(
     depositAmount >= minExpectedDepositAmount && depositAmount <= testSwapAmount,
-    `Unexpected ${asset} deposit amount ${depositAmount}, expected >=${minExpectedDepositAmount}, did gas fees change? detectedGasFee: ${
-      testSwapAmount - depositAmount
+    `Unexpected ${asset} deposit amount ${depositAmount}, expected >=${minExpectedDepositAmount}, did gas fees change? detectedGasFee: ${testSwapAmount - depositAmount
     }`,
   );
 
@@ -190,8 +189,8 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
     console.log('Ethereum chain tracking state:', chainState);
   }
   assert(
-    balanceAfterWithdrawalBigInt <= balanceBeforeWithdrawalBigInt + earnedBrokerFeesAfter,
-    `Unexpected ${asset} balance after withdrawal, amount ${balanceAfterWithdrawalBigInt}, did gas fees change?`,
+    balanceAfterWithdrawalBigInt > balanceBeforeWithdrawalBigInt,
+    `Balance after withdrawal is less than balance before withdrawal.`,
   );
 }
 
