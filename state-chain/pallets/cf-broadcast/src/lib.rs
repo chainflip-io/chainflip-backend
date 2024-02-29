@@ -518,6 +518,7 @@ pub mod pallet {
 			signer_id: SignerIdFor<T, I>,
 			tx_fee: TransactionFeeFor<T, I>,
 			tx_metadata: TransactionMetadataFor<T, I>,
+			transaction_ref: TransactionRefFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin.clone())?;
 
@@ -592,7 +593,7 @@ pub mod pallet {
 			Self::deposit_event(Event::<T, I>::BroadcastSuccess {
 				broadcast_id,
 				transaction_out_id: tx_out_id,
-				transaction_ref: tx_metadata.get_transaction_ref(),
+				transaction_ref,
 			});
 			Ok(().into())
 		}

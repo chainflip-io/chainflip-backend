@@ -763,6 +763,7 @@ fn can_resign_failed_ccm() {
 								gas_used: Default::default()
 							},
 							tx_metadata: Default::default(),
+							transaction_ref: Default::default()
 						}
 					)),
 					<Runtime as Chainflip>::EpochInfo::current_epoch()
