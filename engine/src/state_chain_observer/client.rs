@@ -106,8 +106,6 @@ pub enum CreateStateChainClientError {
 		cfe_version_required: SemVer,
 		first_incompatible_block: state_chain_runtime::BlockNumber,
 	},
-	#[error(transparent)]
-	Other(#[from] anyhow::Error),
 }
 
 pub struct StateChainClient<
