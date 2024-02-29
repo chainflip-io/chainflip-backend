@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc};
+use std::{fmt, str::FromStr, sync::Arc};
 
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
@@ -308,8 +308,15 @@ pub struct SwapDepositAddress {
 pub struct WithdrawFeesDetail {
 	pub tx_hash: H256,
 	pub egress_id: (ForeignChain, u64),
+	pub egress_amount: u128,
+	pub egress_fee: u128,
+	pub destination_address: EncodedAddress,
 }
-
+impl fmt::Display for WithdrawFeesDetail {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "Tx hash: {:#x}\nEgress id: {:?}\nEgress amount: {}\nEgress fee: {}\nDestination address: {}", self.tx_hash, self.egress_id, self.egress_amount, self.egress_fee, self.destination_address)
+	}
+}
 #[async_trait]
 pub trait BrokerApi: SignedExtrinsicApi {
 	async fn request_swap_deposit_address(
@@ -378,9 +385,9 @@ pub trait BrokerApi: SignedExtrinsicApi {
 
 		if let Some(state_chain_runtime::RuntimeEvent::Swapping(
 			pallet_cf_swapping::Event::WithdrawalRequested {
-				egress_amount: _,
-				egress_fee: _,
-				destination_address: _,
+				egress_amount,
+				egress_fee,
+				destination_address,
 				egress_id,
 			},
 		)) = events.iter().find(|event| {
@@ -391,11 +398,16 @@ pub trait BrokerApi: SignedExtrinsicApi {
 				)
 			)
 		}) {
-			Ok(WithdrawFeesDetail { tx_hash, egress_id: *egress_id })
+			Ok(WithdrawFeesDetail {
+				tx_hash,
+				egress_id: *egress_id,
+				egress_amount: *egress_amount,
+				egress_fee: *egress_fee,
+				destination_address: destination_address.clone(),
+			})
 		} else {
 			bail!("No WithdrawalRequested event was found");
 		}
-		// Ok(tx_hash)
 	}
 }
 

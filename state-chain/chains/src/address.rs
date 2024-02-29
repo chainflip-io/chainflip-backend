@@ -68,6 +68,28 @@ pub enum EncodedAddress {
 	Btc(Vec<u8>),
 }
 
+impl Serialize for EncodedAddress {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		match self {
+			EncodedAddress::Btc(addr) => format!("0x{}", hex::encode(addr)).serialize(serializer),
+			EncodedAddress::Dot(addr) => format!("0x{}", hex::encode(addr)).serialize(serializer),
+			EncodedAddress::Eth(addr) => format!("0x{}", hex::encode(addr)).serialize(serializer),
+		}
+	}
+}
+
+impl<'de> Deserialize<'de> for EncodedAddress {
+	fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		unimplemented!()
+	}
+}
+
 pub trait AddressConverter: Sized {
 	fn to_encoded_address(address: ForeignChainAddress) -> EncodedAddress;
 	#[allow(clippy::result_unit_err)]

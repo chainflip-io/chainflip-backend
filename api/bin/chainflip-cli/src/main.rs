@@ -86,11 +86,7 @@ async fn run_cli() -> Result<()> {
 							)?,
 						)
 						.await?;
-					println!(
-						"Withdrawal request successfull submitted. Tx hash: {:#x}",
-						withdraw_details.tx_hash
-					);
-					println!("Egress id: {:?}", withdraw_details.egress_id);
+					println!("Withdrawal request successfull submitted: {}", withdraw_details);
 				},
 				LiquidityProvider(
 					LiquidityProviderSubcommands::RequestLiquidityDepositAddress {
