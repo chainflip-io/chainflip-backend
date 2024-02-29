@@ -16,9 +16,7 @@ use crate::{
 };
 use bitcoin::BlockHash;
 use btc_source::BtcSource;
-use cf_chains::btc::{
-	self, deposit_address::DepositAddress, BlockNumber, CHANGE_ADDRESS_SALT,
-};
+use cf_chains::btc::{self, deposit_address::DepositAddress, BlockNumber, CHANGE_ADDRESS_SALT};
 use cf_primitives::{EpochIndex, NetworkEnvironment};
 use futures_core::Future;
 use secp256k1::hashes::Hash;
