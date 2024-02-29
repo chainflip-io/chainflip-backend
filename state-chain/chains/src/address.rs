@@ -3,7 +3,7 @@ extern crate alloc;
 use crate::{btc::ScriptPubkey, dot::PolkadotAccountId, eth::Address as EthereumAddress, Chain};
 use cf_primitives::{ChannelId, ForeignChain, NetworkEnvironment};
 use codec::{Decode, Encode, MaxEncodedLen};
-use scale_info::TypeInfo;
+use scale_info::{prelude::format, TypeInfo};
 #[cfg(feature = "std")]
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
