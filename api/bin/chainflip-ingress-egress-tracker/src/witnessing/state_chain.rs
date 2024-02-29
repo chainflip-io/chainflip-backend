@@ -25,8 +25,26 @@ impl Serialize for ReverseSerializer {
   	where
 		S: Serializer 
 	{
-		hex::encode(&self.0.iter().rev().copied().collect_array::<32>()).serialize(serializer)
-    	// <[u8; 32] as Serialize>::serialize::<S>(&self.0.iter().rev().copied().collect_array(), serializer)
+		H256::from_slice(&self.0.iter().rev().copied().collect_array::<32>()).serialize(serializer)
+  	}
+}
+struct HashWrapper(Hash);
+impl Serialize for HashWrapper {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  	where
+		S: Serializer 
+	{
+		H256::from_slice(&self.0).serialize(serializer)
+  	}
+}
+
+struct DotSignature([u8; 64]);
+impl Serialize for DotSignature {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  	where
+		S: Serializer 
+	{
+		format!("0x{}", hex::encode(&self.0)).serialize(serializer)
   	}
 }
 
@@ -41,9 +59,9 @@ enum TransactionRef {
 #[derive(Serialize)]
 #[serde(untagged)]
 enum TransactionId {
-	Bitcoin { hash: String },
+	Bitcoin { hash: HashWrapper },
 	Ethereum { signature: SchnorrVerificationComponents },
-	Polkadot { signature: String },
+	Polkadot { signature: DotSignature },
 }
 
 #[derive(Serialize)]
@@ -220,7 +238,7 @@ where
 					.save_singleton(&WitnessInformation::Broadcast {
 						broadcast_id,
 						tx_out_id: TransactionId::Bitcoin {
-							hash: format!("0x{}", hex::encode(tx_out_id)),
+							hash: HashWrapper(tx_out_id),
 						},
 						tx_ref: TransactionRef::Bitcoin {
 							hash: ReverseSerializer(transaction_ref),
@@ -244,7 +262,7 @@ where
 					.save_singleton(&WitnessInformation::Broadcast {
 						broadcast_id,
 						tx_out_id: TransactionId::Polkadot {
-							signature: format!("0x{}", hex::encode(tx_out_id.aliased_ref())),
+							signature: DotSignature(*tx_out_id.aliased_ref()),
 						},
 						tx_ref: TransactionRef::Polkadot { transaction_id: transaction_ref },
 					})
@@ -596,5 +614,18 @@ mod tests {
 
 		assert_eq!(store.storage.len(), 1);
 		insta::assert_display_snapshot!(store.storage.get("broadcast:Ethereum:1").unwrap());
+	}
+
+	#[test]
+	fn test() {
+		let h = ReverseSerializer([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]);
+		let h2 = HashWrapper([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]);
+		let s = DotSignature([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]);
+
+		println!("{}", serde_json::to_string(&h).unwrap());
+		println!("{}", serde_json::to_string(&h2).unwrap());
+		println!("{}", serde_json::to_string(&s).unwrap());
+
+
 	}
 }
