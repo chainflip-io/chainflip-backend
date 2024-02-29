@@ -284,15 +284,6 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 				}
 			});
 
-		let incompatible_block_message = |block_version: SemVer, block: BlockInfo| {
-			lazy_format::lazy_format!(
-				"This version '{}' is incompatible with the current release '{block_version}' at block {}: {:?}.",
-				*CFE_VERSION,
-				block.number,
-				block.hash,
-			)
-		};
-
 		let mut processed_stream = {
 			let latest_block: BlockInfo = block_stream.next().await.unwrap()?;
 
@@ -379,11 +370,14 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 											CfeCompatibility::NotYetCompatible => {
 												info!(
 													"{} WAITING for a compatible release version.",
-													incompatible_block_message(
-														version_runtime_requires,
-														block_info
+													lazy_format::lazy_format!(
+														"This version '{}' is incompatible with the current release '{version_runtime_requires}' at block {}: {:?}.",
+														*CFE_VERSION,
+														block_info.number,
+														block_info.hash,
 													)
 												);
+
 												true
 											},
 											// Generally we cannot move from no longer compatible to
