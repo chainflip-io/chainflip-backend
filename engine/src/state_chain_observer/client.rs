@@ -97,7 +97,7 @@ impl DefaultRpcClient {
 }
 
 #[derive(Error, Debug)]
-pub enum CreateBlockStreamError {
+pub enum CreateStateChainClientError {
 	#[error("The runtime version '{cfe_version}' is not yet compatible with the current release '{cfe_version_required}'")]
 	NotYetCompatible { cfe_version: SemVer, cfe_version_required: SemVer },
 	#[error("The runtime version '{cfe_version}' is no longer compatible with the current release '{cfe_version_required}' at block {first_incompatible_block}")]
@@ -351,7 +351,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 
 			match cfe_compatibility {
 				CfeCompatibility::NoLongerCompatible => {
-					return Err(CreateBlockStreamError::NoLongerCompatible {
+					return Err(CreateStateChainClientError::NoLongerCompatible {
 						cfe_version: *CFE_VERSION,
 						cfe_version_required: latest_version_runtime_requires,
 						first_incompatible_block: first_block.number,
@@ -407,7 +407,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 
 						block_stream
 					} else {
-						return Err(CreateBlockStreamError::NotYetCompatible {
+						return Err(CreateStateChainClientError::NotYetCompatible {
 							cfe_version: *CFE_VERSION,
 							cfe_version_required: latest_version_runtime_requires,
 						}
@@ -448,7 +448,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 							},
 							CfeCompatibility::NoLongerCompatible => {
 								if error_on_incompatible_block {
-									break Err(CreateBlockStreamError::NoLongerCompatible {
+									break Err(CreateStateChainClientError::NoLongerCompatible {
 										cfe_version: *CFE_VERSION,
 										cfe_version_required: version_runtime_requires,
 										first_incompatible_block: block.number,

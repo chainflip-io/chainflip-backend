@@ -1,4 +1,4 @@
-use crate::state_chain_observer::client::CreateBlockStreamError;
+use crate::state_chain_observer::client::CreateStateChainClientError;
 use anyhow::Context;
 use cf_chains::dot::PolkadotHash;
 use cf_primitives::AccountRole;
@@ -226,9 +226,9 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 	.await;
 
 	if let Err(e) = &root_result {
-		let sc_error = e.downcast_ref::<CreateBlockStreamError>();
+		let sc_error = e.downcast_ref::<CreateStateChainClientError>();
 		match sc_error {
-			Some(CreateBlockStreamError::NoLongerCompatible {
+			Some(CreateStateChainClientError::NoLongerCompatible {
 				cfe_version,
 				cfe_version_required,
 				first_incompatible_block,
@@ -241,7 +241,7 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 					first_incompatible_block
 				);
 			},
-			Some(CreateBlockStreamError::NotYetCompatible {
+			Some(CreateStateChainClientError::NotYetCompatible {
 				cfe_version,
 				cfe_version_required,
 			}) => {
