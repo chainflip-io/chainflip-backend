@@ -6,7 +6,10 @@ use serde_json::json;
 use sol_prim::{Address, Amount, Signature, SlotNumber};
 
 use super::GetTransaction;
-use crate::{traits::Call, types::JsValue, types::Commitment};
+use crate::{
+	traits::Call,
+	types::{Commitment, JsValue},
+};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]

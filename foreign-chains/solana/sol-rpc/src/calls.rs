@@ -4,8 +4,8 @@ use crate::types::Commitment;
 
 pub mod get_fee_for_message;
 pub mod get_genesis_hash;
-pub mod get_signatures_for_address;
 pub mod get_recent_prioritization_fees;
+pub mod get_signatures_for_address;
 pub mod get_transaction;
 
 #[derive(Debug, Clone)]

@@ -25,17 +25,19 @@ use utilities::context;
 pub async fn collect_tracked_data<C: SolanaApi>(sol_client: C) -> Result<ChainState<Solana>> {
 	let priorization_fees = sol_client.call(GetRecentPrioritizationFees::default()).await?;
 
-	// TODO: We should never get zero items, but do something else than defaulting to zero. Getting the latest slot?
-	// TODO: Use context like in eth.rs instead of using "?" after the await?
-	let latest_slot = priorization_fees.iter().max_by_key(|f| f.slot).map(|f| f.slot).unwrap_or(0);
-
-	let mut priority_fees: Vec<u64> = priorization_fees.iter().map(|f| f.prioritization_fee).collect();
-	priority_fees.sort();
-	let priority_fee = priority_fees.get(priority_fees.len().saturating_sub(1) / 2).cloned().unwrap_or_default();
+	let mut priority_fees: Vec<u64> =
+		priorization_fees.iter().map(|f| f.prioritization_fee).collect().sort();
 
 	let chain_state = ChainState {
-		block_height: latest_slot,
-		tracked_data: SolanaTrackedData { priority_fee: priority_fee.try_into().expect("Priority fee should fit u128") },
+		// Submit latest block height
+		block_height: context!(priorization_fees.iter().max_by_key(|f| f.slot).map(|f| f.slot))?,
+		tracked_data: SolanaTrackedData {
+			priority_fee: (context!(priority_fees
+				.get(priority_fees.len().saturating_sub(1) / 2)
+				.cloned())?)
+			.try_into()
+			.expect("Priority fee should fit u128"),
+		},
 	};
 
 	Ok(chain_state)
