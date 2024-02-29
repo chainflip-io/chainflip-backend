@@ -105,7 +105,8 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   console.log('depositAmount:', depositAmount);
   assert(
     depositAmount >= minExpectedDepositAmount && depositAmount <= testSwapAmount,
-    `Unexpected ${asset} deposit amount ${depositAmount}, expected >=${minExpectedDepositAmount}, did gas fees change? detectedGasFee: ${testSwapAmount - depositAmount
+    `Unexpected ${asset} deposit amount ${depositAmount}, expected >=${minExpectedDepositAmount}, did gas fees change? detectedGasFee: ${
+      testSwapAmount - depositAmount
     }`,
   );
 
