@@ -28,7 +28,7 @@ pub use weights::WeightInfo;
 mod mock;
 mod tests;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
 
 pub type PayloadFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::Payload;
 
