@@ -250,19 +250,15 @@ pub enum CfeCompatibility {
 
 impl SemVer {
 	pub fn compatibility_with_runtime(&self, version_runtime_requires: SemVer) -> CfeCompatibility {
-		if self.is_compatible_with(version_runtime_requires) {
+		if self.major == version_runtime_requires.major &&
+			self.minor == version_runtime_requires.minor
+		{
 			CfeCompatibility::Compatible
 		} else if self < &version_runtime_requires {
 			CfeCompatibility::NoLongerCompatible
 		} else {
 			CfeCompatibility::NotYetCompatible
 		}
-	}
-
-	/// Check if "self" is compatible with the target version.
-	/// This is true if the major and minor versions are the same.
-	pub fn is_compatible_with(&self, target: SemVer) -> bool {
-		self.major == target.major && self.minor == target.minor
 	}
 
 	pub fn is_more_recent_than(&self, other: SemVer) -> bool {
