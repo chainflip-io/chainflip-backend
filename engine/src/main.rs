@@ -252,9 +252,7 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 					cfe_version_required
 				);
 			},
-			_ => {
-				tracing::error!("Error in main: {:?}", e);
-			},
+			_ => {},
 		}
 	}
 	root_result
