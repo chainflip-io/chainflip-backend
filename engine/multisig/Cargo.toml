@@ -58,8 +58,8 @@ state-chain-runtime = { path = "../../state-chain/runtime" }
 utilities = { package = "utilities", path = "../../utilities" }
 
 # substrate deps
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6" }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6" }
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
 
 [dev-dependencies]
 mockall = "0.11.0"
