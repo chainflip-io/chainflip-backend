@@ -18,7 +18,7 @@ jsonrpsee = { version = "0.16.2", features = ["full"] }
 hex = '0.4.3'
 serde = { version = '1.0', features = ['derive'] }
 thiserror = "1.0"
-log = { version = '0.4'}
+log = { version = '0.4' }
 
 cf-chains = { path = '../chains' }
 cf-primitives = { path = '../primitives' }
@@ -29,12 +29,12 @@ pallet-cf-pools = { path = "../pallets/cf-pools" }
 pallet-cf-witnesser = { path = "../pallets/cf-witnesser" }
 pallet-cf-swapping = { path = "../pallets/cf-swapping" }
 
-sp-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6" }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6" }
-sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6" }
-sc-rpc-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6" }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6" }
-sc-client-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6" }
+sp-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+sc-rpc-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+sc-client-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
 
 [dev-dependencies]
 insta = { version = "1.34.0", features = ["json"] }

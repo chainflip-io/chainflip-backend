@@ -190,8 +190,8 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
     console.log('Ethereum chain tracking state:', chainState);
   }
   assert(
-    balanceAfterWithdrawalBigInt <= balanceBeforeWithdrawalBigInt + earnedBrokerFeesAfter,
-    `Unexpected ${asset} balance after withdrawal, amount ${balanceAfterWithdrawalBigInt}, did gas fees change?`,
+    balanceAfterWithdrawalBigInt > balanceBeforeWithdrawalBigInt,
+    `Balance after withdrawal is less than balance before withdrawal.`,
   );
 }
 
