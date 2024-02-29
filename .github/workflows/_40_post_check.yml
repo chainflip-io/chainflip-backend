@@ -98,32 +98,32 @@ jobs:
           ./run.sh
 
       - name: Print chainflip-engine logs 🚗
-        if: failure()
+        if: failure() || cancelled()
         run: |
           cat /tmp/chainflip/*/chainflip-engine.log
 
       - name: Print chainflip-node logs 📡
-        if: failure()
+        if: failure() || cancelled()
         run: |
           cat /tmp/chainflip/*/chainflip-node.log
 
       - name: Print chainflip-broker-api logs 💼
-        if: failure()
+        if: failure() || cancelled()
         run: |
           cat /tmp/chainflip/chainflip-broker-api.log
 
       - name: Print chainflip-lp-api logs 🤑
-        if: failure()
+        if: failure() || cancelled()
         run: |
           cat /tmp/chainflip/chainflip-lp-api.log
 
       - name: Print localnet init debug logs 🕵️‍♂️
-        if: failure()
+        if: failure() || cancelled()
         run: |
           cat /tmp/chainflip/debug.log
 
       - name: Print solana logs ☀️
-        if: failure()
+        if: failure() || cancelled()
         run: |
           cat /tmp/solana/solana.log
 
@@ -156,7 +156,7 @@ jobs:
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --rmi all --volumes --remove-orphans
 
       - name: Notify on failed bouncer 📢
-        if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main'
+        if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main' || failure() && github.ref_name == 'release/*' || cancelled() && github.ref_name == 'release/*'
         env:
           DISCORD_USERNAME: "HEUTE LEIDER NICHT"
           DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
@@ -164,5 +164,6 @@ jobs:
         with:
           args: |
             ❗️❗️❗️❗️ Sorry **${{ github.actor }}**, the Bouncer has rejected you ❗️❗️❗️❗️
+            The Bouncer has rejected the build on branch `${{ github.ref_name }}`
             👾 Link to job: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>
             #️⃣ Tagging: <@&939151218708709416>
