@@ -388,9 +388,16 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 												);
 												true
 											},
-											CfeCompatibility::NoLongerCompatible => {
-												unreachable!("We cannot move from no longer compatible to compatible.")
-											},
+											// Generally we cannot move from no longer compatible to
+											// compatible. We don't expect this to happen.
+											CfeCompatibility::NoLongerCompatible => return Err(
+												CreateStateChainClientError::NoLongerCompatible {
+													cfe_version: *CFE_VERSION,
+													cfe_version_required: version_runtime_requires,
+													first_incompatible_block: block_info.number,
+												}
+												.into(),
+											),
 										}
 									})
 								}
@@ -456,7 +463,12 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 								}
 							}
 							CfeCompatibility::NotYetCompatible => {
-								unreachable!("We've either already returned a NotYetCompatible error, or we've waited until we're compatible.")
+								// We've either already returned a NotYetCompatible error, or we've waited until we're compatible. So we 
+								// don't expect this case to happen.
+								break Err(CreateStateChainClientError::NotYetCompatible {
+									cfe_version: *CFE_VERSION,
+									cfe_version_required: version_runtime_requires,
+								}.into());
 							},
 						}
 					},
