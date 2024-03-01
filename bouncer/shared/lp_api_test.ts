@@ -1,4 +1,4 @@
-import { assetDecimals, Asset, Chain, Assets } from '@chainflip-io/cli';
+import { Asset, Chain, Assets } from '@chainflip/cli';
 import assert from 'assert';
 import {
   getChainflipApi,
@@ -10,6 +10,7 @@ import {
   observeBalanceIncrease,
   chainFromAsset,
   isWithinOnePercent,
+  assetDecimals,
 } from './utils';
 import { jsonRpc } from './json_rpc';
 import { provideLiquidity } from './provide_liquidity';
@@ -24,7 +25,7 @@ type RpcAsset = {
 const testAsset: Asset = 'ETH'; // TODO: Make these tests work with any asset
 const testRpcAsset: RpcAsset = { chain: chainFromAsset(testAsset), asset: testAsset };
 const testAmount = 0.1;
-const testAssetAmount = parseInt(amountToFineAmount(testAmount.toString(), assetDecimals.ETH));
+const testAssetAmount = parseInt(amountToFineAmount(testAmount.toString(), assetDecimals('ETH')));
 const amountToProvide = testAmount * 50; // Provide plenty of the asset for the tests
 const chainflip = await getChainflipApi();
 const testAddress = '0x1594300cbd587694affd70c933b9ee9155b186d9';
@@ -37,7 +38,7 @@ async function lpApiRpc(method: string, params: any[]): Promise<any> {
 
 async function provideLiquidityAndTestAssetBalances() {
   const fineAmountToProvide = parseInt(
-    amountToFineAmount(amountToProvide.toString(), assetDecimals.ETH),
+    amountToFineAmount(amountToProvide.toString(), assetDecimals('ETH')),
   );
   // We have to wait finalization here because the LP API server is using a finalized block stream (This may change in PRO-777 PR#3986)
   await provideLiquidity(testAsset, amountToProvide, true);
