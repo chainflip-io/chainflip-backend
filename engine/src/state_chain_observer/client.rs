@@ -221,7 +221,6 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 		base_rpc_client: Arc<BaseRpcClient>,
 		wait_for_required_version: bool,
 		error_on_incompatible_block: bool,
-		start_from: Option<state_chain_runtime::BlockNumber>,
 		new_stream_fn: NewStreamFn,
 		process_stream_fn: ProcessStreamFn,
 	) -> Result<(
@@ -281,62 +280,8 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 		let mut processed_stream = {
 			let latest_block: BlockInfo = block_stream.next().await.unwrap()?;
 
-			let block_stream: Pin<
-				Box<
-					dyn TryCachedStream<
-							Error = anyhow::Error,
-							Ok = BlockInfo,
-							Item = Result<BlockInfo, anyhow::Error>,
-						> + Send,
-				>,
-			> = if let Some(start_from) = start_from {
-				let base_rpc_client = base_rpc_client.clone();
-
-				if start_from > latest_block.number {
-					return Err(anyhow::anyhow!(
-						"Start from block number cannot be greater than the latest block number. Start from: {}, Latest block number: {}",
-						start_from, latest_block.number
-					));
-				} else {
-					let mut start_from_headers = Box::pin(
-						futures::stream::iter(start_from..latest_block.number)
-							.then(move |block_number| {
-								let base_rpc_client_c = base_rpc_client.clone();
-								async move {
-									let hash = base_rpc_client_c
-										.block_hash(block_number)
-										.await?
-										.ok_or_else(|| {
-											anyhow::anyhow!(
-												"Block number {} does not exist in the state chain",
-												block_number
-											)
-										})?;
-									Ok(base_rpc_client_c.block_header(hash).await?)
-								}
-							})
-							.map_ok(|header| -> BlockInfo { header.into() }),
-					);
-
-					let first_block: BlockInfo = start_from_headers
-						.next()
-						.await
-						.expect("Checked start_from > latest_block.number")?;
-					Box::pin(
-						start_from_headers
-							.chain(futures::stream::once(futures::future::ready(Ok::<
-								_,
-								anyhow::Error,
-							>(latest_block))))
-							.chain(block_stream)
-							.make_try_cached(first_block),
-					)
-				}
-			} else {
-				Box::pin(block_stream.make_try_cached(latest_block))
-			};
-
-			let mut block_stream = process_stream_fn(block_stream).await?;
+			let mut block_stream =
+				process_stream_fn(Box::pin(block_stream.make_try_cached(latest_block))).await?;
 
 			let first_block = *block_stream.cache();
 
@@ -564,7 +509,6 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			base_rpc_client.clone(),
 			wait_for_required_version,
 			true,
-			start_from,
 			|base_rpc_client| base_rpc_client.subscribe_finalized_block_headers(),
 			|sparse_finalized_block_stream| {
 				let base_rpc_client = base_rpc_client.clone();
@@ -580,23 +524,77 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 
 					// Often `finalized_header` returns a significantly newer latest block than the
 					// stream returns so we move the stream forward to this block
-					{
-						let finalised_header_hash =
-							base_rpc_client.latest_finalized_block_hash().await?;
-						let finalised_header =
-							base_rpc_client.block_header(finalised_header_hash).await?;
-						if finalized_block_stream.cache().number < finalised_header.number {
-							let blocks_to_skip =
-								finalized_block_stream.cache().number + 1..=finalised_header.number;
-							for block_number in blocks_to_skip {
+					let finalized_hash = base_rpc_client.latest_finalized_block_hash().await?;
+					let finalized_header = base_rpc_client.block_header(finalized_hash).await?;
+
+					let base_rpc_client = base_rpc_client.clone();
+					let mut finalized_block_stream: Pin<
+						Box<
+							dyn TryCachedStream<
+									Ok = BlockInfo,
+									Error = anyhow::Error,
+									Item = Result<BlockInfo, anyhow::Error>,
+								> + Send,
+						>,
+					> = match start_from {
+						Some(start_from) if start_from < finalized_block_stream.cache().number => {
+							// save this to avoid fetching the same block again
+							let latest_block_from_cache = *finalized_block_stream.cache();
+
+							// we can make this range exclusive because we've saved the cached block
+							// above, which we chain later.
+							let earlier_blocks_to_fetch =
+								start_from..finalized_block_stream.cache().number;
+
+							let base_rpc_client = base_rpc_client.clone();
+							let mut start_from_headers = Box::pin(
+								futures::stream::iter(earlier_blocks_to_fetch)
+									.then(move |block_number| {
+										let base_rpc_client_c = base_rpc_client.clone();
+										async move {
+											let hash = base_rpc_client_c
+												.block_hash(block_number)
+												.await?
+												.ok_or_else(|| {
+													anyhow::anyhow!(
+														"Block number {} does not exist in the state chain",
+														block_number
+													)
+												})?;
+											Ok(base_rpc_client_c.block_header(hash).await?)
+										}
+									})
+									.map_ok(|header| -> BlockInfo { header.into() }),
+							);
+
+							let start_block = start_from_headers
+								.next()
+								.await
+								.expect("start_from is less than block stream cache number")?;
+
+							Box::pin(
+								start_from_headers
+									.chain(futures::stream::once(futures::future::ready(Ok(
+										latest_block_from_cache,
+									))))
+									.chain(finalized_block_stream)
+									.make_try_cached(start_block),
+							)
+						},
+						_ => {
+							// No need to fetch any earlier blocks, we just have to move the stream
+							// to the correct starting point.
+							let skip_to = start_from.unwrap_or(finalized_header.number);
+							for block_number in finalized_block_stream.cache().number + 1..skip_to {
 								assert_eq!(
 									finalized_block_stream.next().await.unwrap()?.number,
 									block_number,
 									"{SUBSTRATE_BEHAVIOUR}"
 								);
 							}
-						}
-					}
+							finalized_block_stream
+						},
+					};
 
 					signed_extrinsic_client_builder
 						.pre_compatibility(base_rpc_client.clone(), &mut finalized_block_stream)
@@ -617,7 +615,6 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			base_rpc_client.clone(),
 			wait_for_required_version,
 			false,
-			None,
 			|base_rpc_client| base_rpc_client.subscribe_unfinalized_block_headers(),
 			|block_stream| futures::future::ready(Ok(block_stream)),
 		)
