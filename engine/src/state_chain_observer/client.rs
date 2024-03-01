@@ -336,9 +336,9 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 				Box::pin(block_stream.make_try_cached(latest_block))
 			};
 
-			let first_block = *block_stream.cache();
-
 			let mut block_stream = process_stream_fn(block_stream).await?;
+
+			let first_block = *block_stream.cache();
 
 			let block_compatibility =
 				base_rpc_client.check_block_compatibility(first_block).await?;
