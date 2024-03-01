@@ -1,4 +1,3 @@
-use crate::state_chain_observer::client::CreateStateChainClientError;
 use anyhow::Context;
 use cf_chains::dot::PolkadotHash;
 use cf_primitives::AccountRole;
@@ -13,7 +12,7 @@ use chainflip_engine::{
 		self,
 		client::{
 			chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi,
-			storage_api::StorageApi, STATE_CHAIN_CONNECTION,
+			storage_api::StorageApi, CreateStateChainClientError, STATE_CHAIN_CONNECTION,
 		},
 	},
 	witness,
@@ -227,32 +226,9 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 
 	if let Err(e) = &root_result {
 		let sc_error = e.downcast_ref::<CreateStateChainClientError>();
-		match sc_error {
-			Some(CreateStateChainClientError::NoLongerCompatible {
-				cfe_version,
-				cfe_version_required,
-				at_block,
-			}) => {
-				tracing::info!(
-					"Chainflip Engine is no longer compatible with the current state chain. \
-					Engine version: {}, required version: {}, first incompatible block: {}",
-					cfe_version,
-					cfe_version_required,
-					at_block
-				);
-			},
-			Some(CreateStateChainClientError::NotYetCompatible {
-				cfe_version,
-				cfe_version_required,
-			}) => {
-				tracing::info!(
-					"Chainflip Engine is not yet compatible with the current state chain. \
-					Engine version: {}, required version: {}",
-					cfe_version,
-					cfe_version_required
-				);
-			},
-			_ => {},
+		if let Some(CreateStateChainClientError::CompatibilityError(block_compatibility)) = sc_error
+		{
+			tracing::info!("Block compatibility on shutdown: {:?}", block_compatibility);
 		}
 	}
 	root_result
