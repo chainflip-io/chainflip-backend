@@ -3,23 +3,57 @@ use crate::{
 	utils::{get_broadcast_id, hex_encode_bytes},
 };
 use cf_chains::{
-	address::ToHumanreadableAddress, evm::SchnorrVerificationComponents, AnyChain, Bitcoin, Chain,
-	Ethereum, Polkadot,
+	address::ToHumanreadableAddress,
+	dot::PolkadotTransactionId,
+	evm::{SchnorrVerificationComponents, H256},
+	AnyChain, Bitcoin, Chain, Ethereum, Polkadot,
 };
 use cf_primitives::{BroadcastId, ForeignChain, NetworkEnvironment};
 use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi,
 };
 use pallet_cf_ingress_egress::DepositWitness;
-use serde::Serialize;
-use utilities::rpc::NumberOrHex;
+use serde::{Serialize, Serializer};
+use utilities::{rpc::NumberOrHex, ArrayCollect};
+
+/// A wrapper type for bitcoin hashes that serializes the hash in reverse.
+#[derive(Debug)]
+struct BitcoinHash(pub H256);
+
+impl Serialize for BitcoinHash {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		H256(self.0.to_fixed_bytes().into_iter().rev().collect_array()).serialize(serializer)
+	}
+}
+
+struct DotSignature([u8; 64]);
+
+impl Serialize for DotSignature {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		format!("0x{}", hex::encode(self.0)).serialize(serializer)
+	}
+}
+
+#[derive(Serialize)]
+#[serde(untagged)]
+enum TransactionRef {
+	Bitcoin { hash: BitcoinHash },
+	Ethereum { hash: H256 },
+	Polkadot { transaction_id: PolkadotTransactionId },
+}
 
 #[derive(Serialize)]
 #[serde(untagged)]
 enum TransactionId {
-	Bitcoin { hash: String },
+	Bitcoin { hash: BitcoinHash },
 	Ethereum { signature: SchnorrVerificationComponents },
-	Polkadot { signature: String },
+	Polkadot { signature: DotSignature },
 }
 
 #[derive(Serialize)]
@@ -36,6 +70,7 @@ enum WitnessInformation {
 		#[serde(skip_serializing)]
 		broadcast_id: BroadcastId,
 		tx_out_id: TransactionId,
+		tx_ref: TransactionRef,
 	},
 }
 
@@ -163,7 +198,11 @@ where
 					)))
 					.await?;
 			},
-		EthereumBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
+		EthereumBroadcaster(BroadcastCall::transaction_succeeded {
+			tx_out_id,
+			transaction_ref,
+			..
+		}) => {
 			let broadcast_id =
 				get_broadcast_id::<Ethereum, StateChainClient>(state_chain_client, &tx_out_id)
 					.await;
@@ -173,11 +212,16 @@ where
 					.save_singleton(&WitnessInformation::Broadcast {
 						broadcast_id,
 						tx_out_id: TransactionId::Ethereum { signature: tx_out_id },
+						tx_ref: TransactionRef::Ethereum { hash: transaction_ref },
 					})
 					.await?;
 			}
 		},
-		BitcoinBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
+		BitcoinBroadcaster(BroadcastCall::transaction_succeeded {
+			tx_out_id,
+			transaction_ref,
+			..
+		}) => {
 			let broadcast_id =
 				get_broadcast_id::<Bitcoin, StateChainClient>(state_chain_client, &tx_out_id).await;
 
@@ -185,14 +229,18 @@ where
 				store
 					.save_singleton(&WitnessInformation::Broadcast {
 						broadcast_id,
-						tx_out_id: TransactionId::Bitcoin {
-							hash: format!("0x{}", hex::encode(tx_out_id)),
-						},
+						tx_out_id: TransactionId::Bitcoin { hash: BitcoinHash(tx_out_id) },
+						tx_ref: TransactionRef::Bitcoin { hash: BitcoinHash(transaction_ref) },
 					})
 					.await?;
+				println!("{:?}", BitcoinHash(transaction_ref));
 			}
 		},
-		PolkadotBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
+		PolkadotBroadcaster(BroadcastCall::transaction_succeeded {
+			tx_out_id,
+			transaction_ref,
+			..
+		}) => {
 			let broadcast_id =
 				get_broadcast_id::<Polkadot, StateChainClient>(state_chain_client, &tx_out_id)
 					.await;
@@ -202,8 +250,9 @@ where
 					.save_singleton(&WitnessInformation::Broadcast {
 						broadcast_id,
 						tx_out_id: TransactionId::Polkadot {
-							signature: format!("0x{}", hex::encode(tx_out_id.aliased_ref())),
+							signature: DotSignature(*tx_out_id.aliased_ref()),
 						},
+						tx_ref: TransactionRef::Polkadot { transaction_id: transaction_ref },
 					})
 					.await?;
 			}
@@ -553,5 +602,27 @@ mod tests {
 
 		assert_eq!(store.storage.len(), 1);
 		insta::assert_display_snapshot!(store.storage.get("broadcast:Ethereum:1").unwrap());
+	}
+
+	#[test]
+	fn serialization_works_as_expected() {
+		let h = BitcoinHash(
+			[
+				0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+				23, 24, 25, 26, 27, 28, 29, 30, 31,
+			]
+			.into(),
+		);
+		let s = DotSignature([
+			0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+			24, 25, 26, 27, 28, 29, 30, 31, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+			16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+		]);
+
+		assert_eq!(
+			serde_json::to_string(&h).unwrap(),
+			"\"0x1f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100\""
+		);
+		assert_eq!(serde_json::to_string(&s).unwrap(), "\"0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f\"");
 	}
 }

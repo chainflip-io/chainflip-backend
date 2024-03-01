@@ -12,7 +12,6 @@ use frame_support::sp_runtime::RuntimeDebug;
 /// ids.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct BatchTransfer {
-	/// The handler for creating and signing polkadot extrinsics
 	pub bitcoin_transaction: BitcoinTransaction,
 	pub change_utxo_key: [u8; 32],
 }
