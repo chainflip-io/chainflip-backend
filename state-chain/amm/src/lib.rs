@@ -66,6 +66,19 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		}
 	}
 
+	/// Returns the current sqrt price for a given direction of swap. The price is measured in units
+	/// of the specified Pairs argument
+	pub fn swap_sqrt_price(
+		order: Side,
+		input_amount: Amount,
+		output_amount: Amount,
+	) -> SqrtPriceQ64F96 {
+		match order.to_sold_pair() {
+			Pairs::Base => common::bounded_sqrt_price(output_amount, input_amount),
+			Pairs::Quote => common::bounded_sqrt_price(input_amount, output_amount),
+		}
+	}
+
 	fn inner_worst_price(order: Side) -> SqrtPriceQ64F96 {
 		match order.to_sold_pair() {
 			Pairs::Quote => QuoteToBase::WORST_SQRT_PRICE,

@@ -1,7 +1,7 @@
 //! Key rotator to be used by the Validator pallet to control the rotation of multiple keys
 
 use cf_chains::{evm::EvmCrypto, ChainCrypto};
-use cf_traits::{AsyncResult, FirstVault, VaultActivator};
+use cf_traits::{AsyncResult, StartKeyActivationResult, VaultActivator};
 use core::marker::PhantomData;
 
 pub struct EvmVaultActivator<A, B> {
@@ -15,18 +15,21 @@ where
 {
 	type ValidatorId = A::ValidatorId;
 
+	fn activate_key() {
+		A::activate_key();
+		B::activate_key();
+	}
+
 	/// Start all key rotations with the provided `candidates`.
-	fn activate(
+	fn start_key_activation(
 		new_key: <EvmCrypto as ChainCrypto>::AggKey,
 		maybe_old_key: Option<<EvmCrypto as ChainCrypto>::AggKey>,
-	) -> FirstVault {
-		let maybe_first_vaults =
-			[A::activate(new_key, maybe_old_key), B::activate(new_key, maybe_old_key)];
-		if maybe_first_vaults.into_iter().any(|item| matches!(item, FirstVault::True)) {
-			FirstVault::True
-		} else {
-			FirstVault::False
-		}
+	) -> Vec<StartKeyActivationResult> {
+		[
+			A::start_key_activation(new_key, maybe_old_key),
+			B::start_key_activation(new_key, maybe_old_key),
+		]
+		.concat()
 	}
 
 	fn status() -> AsyncResult<()> {

@@ -397,7 +397,9 @@ pub struct EvmTransactionMetadata {
 	pub gas_limit: Option<Uint>,
 }
 
-impl<C: Chain<Transaction = Transaction>> TransactionMetadata<C> for EvmTransactionMetadata {
+impl<C: Chain<Transaction = Transaction, TransactionRef = H256>> TransactionMetadata<C>
+	for EvmTransactionMetadata
+{
 	fn extract_metadata(transaction: &<C as Chain>::Transaction) -> Self {
 		Self {
 			contract: transaction.contract,

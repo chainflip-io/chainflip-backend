@@ -66,9 +66,7 @@ impl ForeignChainAddress {
 	}
 }
 
-#[derive(
-	Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord,
-)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
 pub enum EncodedAddress {
 	Eth([u8; 20]),
 	Dot([u8; 32]),

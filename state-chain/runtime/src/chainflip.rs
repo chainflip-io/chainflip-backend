@@ -77,6 +77,7 @@ impl Chainflip for Runtime {
 	type Amount = FlipBalance;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
+	type EnsurePrewitnessed = pallet_cf_witnesser::EnsurePrewitnessed;
 	type EnsureWitnessedAtCurrentEpoch = pallet_cf_witnesser::EnsureWitnessedAtCurrentEpoch;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type EpochInfo = Validator;

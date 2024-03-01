@@ -128,7 +128,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn start_next_broadcast_attempt() {
-		let broadcast_id = Pallet::<T, I>::threshold_sign_and_broadcast(
+		let (broadcast_id, _) = Pallet::<T, I>::threshold_sign_and_broadcast(
 			BenchmarkValue::benchmark_value(),
 			None,
 			|_| None,
@@ -163,6 +163,7 @@ mod benchmarks {
 			signer_id,
 			tx_fee: TransactionFeeFor::<T, I>::benchmark_value(),
 			tx_metadata: TransactionMetadataFor::<T, I>::benchmark_value(),
+			transaction_ref: TransactionRefFor::<T, I>::benchmark_value(),
 		};
 
 		#[block]

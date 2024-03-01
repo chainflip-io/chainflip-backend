@@ -15,7 +15,7 @@ use cf_primitives::{
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
 use jsonrpsee::{
-	core::RpcResult,
+	core::{error::SubscriptionClosed, RpcResult},
 	proc_macros::rpc,
 	types::error::{CallError, SubscriptionEmptyError},
 	SubscriptionSink,
@@ -24,6 +24,7 @@ use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{AskBidMap, PoolInfo, PoolLiquidity, PoolPriceV1, UnidirectionalPoolDepth};
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
+use sp_api::ApiError;
 use sp_core::U256;
 use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT},
@@ -33,8 +34,8 @@ use state_chain_runtime::{
 	chainflip::{BlockUpdate, Offence},
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
-		CustomRuntimeApi, DispatchErrorWithMessage, FailingWitnessValidators,
-		LiquidityProviderInfo, RuntimeApiAccountInfoV2,
+		BrokerInfo, CustomRuntimeApi, DispatchErrorWithMessage, FailingWitnessValidators,
+		LiquidityProviderInfo, ScheduledSwap, ValidatorInfo,
 	},
 	NetworkFee,
 };
@@ -60,6 +61,7 @@ pub enum RpcAccountInfo {
 	},
 	Broker {
 		flip_balance: NumberOrHex,
+		earned_fees: any::AssetMap<NumberOrHex>,
 	},
 	LiquidityProvider {
 		balances: any::AssetMap<NumberOrHex>,
@@ -89,8 +91,17 @@ impl RpcAccountInfo {
 		Self::Unregistered { flip_balance: balance.into() }
 	}
 
-	fn broker(balance: u128) -> Self {
-		Self::Broker { flip_balance: balance.into() }
+	fn broker(balance: u128, broker_info: BrokerInfo) -> Self {
+		Self::Broker {
+			flip_balance: balance.into(),
+			earned_fees: cf_chains::assets::any::AssetMap::try_from_iter(
+				broker_info
+					.earned_fees
+					.iter()
+					.map(|(asset, balance)| (*asset, (*balance).into())),
+			)
+			.unwrap(),
+		}
 	}
 
 	fn lp(info: LiquidityProviderInfo, network: NetworkEnvironment, balance: u128) -> Self {
@@ -109,7 +120,7 @@ impl RpcAccountInfo {
 		}
 	}
 
-	fn validator(info: RuntimeApiAccountInfoV2) -> Self {
+	fn validator(info: ValidatorInfo) -> Self {
 		Self::Validator {
 			flip_balance: info.balance.into(),
 			bond: info.bond.into(),
@@ -246,6 +257,11 @@ pub struct RpcPrewitnessedSwap {
 	pub quote_asset: OldAsset,
 	pub side: Side,
 	pub amounts: Vec<U256>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
+pub struct SwapResponse {
+	swaps: Vec<ScheduledSwap>,
 }
 
 #[rpc(server, client, namespace = "cf")]
@@ -451,6 +467,20 @@ pub trait CustomApi {
 	fn cf_subscribe_pool_price_v2(&self, base_asset: Asset, quote_asset: Asset);
 	#[subscription(name = "subscribe_prewitness_swaps", item = BlockUpdate<RpcPrewitnessedSwap>)]
 	fn cf_subscribe_prewitness_swaps(&self, base_asset: Asset, quote_asset: Asset, side: Side);
+
+	// Subscribe to a stream that on every block produces a list of all scheduled/pending
+	// swaps in the base_asset/quote_asset pool, including any "implicit" half-swaps (as a
+	// part of a swap involving two pools)
+	#[subscription(name = "subscribe_scheduled_swaps", item = BlockUpdate<SwapResponse>)]
+	fn cf_subscribe_scheduled_swaps(&self, base_asset: Asset, quote_asset: Asset);
+
+	#[method(name = "scheduled_swaps")]
+	fn cf_scheduled_swaps(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<ScheduledSwap>>;
 
 	#[method(name = "prewitness_swaps")]
 	fn cf_prewitness_swaps(
@@ -678,12 +708,14 @@ where
 				.unwrap_or(AccountRole::Unregistered)
 			{
 				AccountRole::Unregistered => RpcAccountInfo::unregistered(balance),
-				AccountRole::Broker => RpcAccountInfo::broker(balance),
+				AccountRole::Broker => {
+					let info = api.cf_broker_info(hash, account_id).map_err(to_rpc_error)?;
+
+					RpcAccountInfo::broker(balance, info)
+				},
 				AccountRole::LiquidityProvider => {
-					let info = api
-						.cf_liquidity_provider_info(hash, account_id)
-						.map_err(to_rpc_error)?
-						.expect("role already validated");
+					let info =
+						api.cf_liquidity_provider_info(hash, account_id).map_err(to_rpc_error)?;
 
 					RpcAccountInfo::lp(
 						info,
@@ -692,7 +724,7 @@ where
 					)
 				},
 				AccountRole::Validator => {
-					let info = api.cf_account_info_v2(hash, &account_id).map_err(to_rpc_error)?;
+					let info = api.cf_validator_info(hash, &account_id).map_err(to_rpc_error)?;
 
 					RpcAccountInfo::validator(info)
 				},
@@ -708,7 +740,7 @@ where
 		let account_info = self
 			.client
 			.runtime_api()
-			.cf_account_info_v2(self.unwrap_or_best(at), &account_id)
+			.cf_validator_info(self.unwrap_or_best(at), &account_id)
 			.map_err(to_rpc_error)?;
 
 		Ok(RpcAccountInfoV2 {
@@ -1128,6 +1160,52 @@ where
 		)
 	}
 
+	fn cf_subscribe_scheduled_swaps(
+		&self,
+		sink: SubscriptionSink,
+		base_asset: Asset,
+		quote_asset: Asset,
+	) -> Result<(), SubscriptionEmptyError> {
+		// Check that the requested pool exists:
+		let Ok(Ok(_)) = self.client.runtime_api().cf_pool_info(
+			self.client.info().best_hash,
+			base_asset,
+			quote_asset,
+		) else {
+			return Err(SubscriptionEmptyError);
+		};
+
+		self.new_subscription(
+			false, /* only_on_changes */
+			true,  /* end_on_error */
+			sink,
+			move |api, hash| {
+				Ok::<_, ApiError>(SwapResponse {
+					swaps: api.cf_scheduled_swaps(hash, base_asset, quote_asset)?,
+				})
+			},
+		)
+	}
+
+	fn cf_scheduled_swaps(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<ScheduledSwap>> {
+		// Check that the requested pool exists:
+		self.client
+			.runtime_api()
+			.cf_pool_info(self.client.info().best_hash, base_asset, quote_asset)
+			.map_err(to_rpc_error)
+			.and_then(|result| result.map_err(map_dispatch_error))?;
+
+		self.client
+			.runtime_api()
+			.cf_scheduled_swaps(self.unwrap_or_best(at), base_asset, quote_asset)
+			.map_err(to_rpc_error)
+	}
+
 	fn cf_subscribe_prewitness_swaps(
 		&self,
 		sink: SubscriptionSink,
@@ -1289,7 +1367,10 @@ where
 			"cf-rpc-update-subscription",
 			Some("rpc"),
 			async move {
-				sink.pipe_from_try_stream(stream).await;
+				if let SubscriptionClosed::Failed(err) = sink.pipe_from_try_stream(stream).await {
+					log::error!("Subscription closed due to error: {err:?}");
+					sink.close(err);
+				}
 			}
 			.boxed(),
 		);
@@ -1325,7 +1406,19 @@ mod test {
 
 	#[test]
 	fn test_broker_serialization() {
-		insta::assert_display_snapshot!(serde_json::to_value(RpcAccountInfo::broker(0)).unwrap());
+		insta::assert_display_snapshot!(serde_json::to_value(RpcAccountInfo::broker(
+			0,
+			BrokerInfo {
+				earned_fees: vec![
+					(Asset::Eth, 0),
+					(Asset::Btc, 0),
+					(Asset::Flip, 1000000000000000000),
+					(Asset::Usdc, 0),
+					(Asset::Dot, 0),
+				]
+			}
+		))
+		.unwrap());
 	}
 
 	#[test]
@@ -1376,7 +1469,7 @@ mod test {
 
 	#[test]
 	fn test_validator_serialization() {
-		let validator = RpcAccountInfo::validator(RuntimeApiAccountInfoV2 {
+		let validator = RpcAccountInfo::validator(ValidatorInfo {
 			balance: FLIPPERINOS_PER_FLIP,
 			bond: FLIPPERINOS_PER_FLIP,
 			last_heartbeat: 0,

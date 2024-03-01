@@ -575,6 +575,7 @@ mod tests {
 						contract: H160::from([0; 20]),
 						gas_limit: None,
 					},
+					transaction_ref: Default::default(),
 				},
 			),
 			&mut store,

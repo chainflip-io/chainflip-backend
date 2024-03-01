@@ -69,6 +69,8 @@ pub trait Chainflip: frame_system::Config {
 		+ IsType<<Self as frame_system::Config>::RuntimeCall>;
 
 	/// A type that allows us to check if a call was a result of witness consensus.
+	type EnsurePrewitnessed: EnsureOrigin<Self::RuntimeOrigin>;
+	/// A type that allows us to check if a call was a result of witness consensus.
 	type EnsureWitnessed: EnsureOrigin<Self::RuntimeOrigin>;
 	/// A type that allows us to check if a call was a result of witness consensus by the current
 	/// epoch.
@@ -195,15 +197,27 @@ pub trait VaultActivator<C: ChainCrypto> {
 
 	/// Activate key/s on particular chain/s. For example, setting the new key
 	/// on the contract for a smart contract chain.
-	fn activate(new_key: C::AggKey, maybe_old_key: Option<C::AggKey>) -> FirstVault;
+	/// Can also complete the activation if we don't require a signing ceremony
+	fn start_key_activation(
+		new_key: C::AggKey,
+		maybe_old_key: Option<C::AggKey>,
+	) -> Vec<StartKeyActivationResult>;
+
+	/// Final step of key activation which result in the vault activation (in case we need to wait
+	/// for the signing ceremony to complete)
+	fn activate_key();
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(_outcome: AsyncResult<()>);
 }
 
-pub enum FirstVault {
-	True,
-	False,
+#[derive(Clone, Eq, PartialEq)]
+pub enum StartKeyActivationResult {
+	FirstVault,
+	Normal(ThresholdSignatureRequestId),
+	ActivationTxNotRequired,
+	ActivationTxFailed,
+	ChainNotInitialized,
 }
 
 /// Handler for Epoch life cycle events.
@@ -502,7 +516,9 @@ pub trait Broadcaster<C: Chain> {
 	type Callback: UnfilteredDispatchable;
 
 	/// Request a threshold signature and then build and broadcast the outbound api call.
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId;
+	fn threshold_sign_and_broadcast(
+		api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId);
 
 	/// Like `threshold_sign_and_broadcast` but also registers a callback to be dispatched when the
 	/// signature accepted event has been witnessed.
@@ -514,7 +530,9 @@ pub trait Broadcaster<C: Chain> {
 
 	/// Request a threshold signature and then build and broadcast the outbound api call
 	/// specifically for a rotation tx..
-	fn threshold_sign_and_broadcast_rotation_tx(api_call: Self::ApiCall) -> BroadcastId;
+	fn threshold_sign_and_broadcast_rotation_tx(
+		api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId);
 
 	/// Resign a call, and update the signature data storage, but do not broadcast.
 	fn threshold_resign(broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId>;

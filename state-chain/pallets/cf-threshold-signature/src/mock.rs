@@ -12,8 +12,8 @@ use cf_primitives::{AuthorityCount, CeremonyId, FlipBalance, FLIPPERINOS_PER_FLI
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{cfe_interface_mock::MockCfeInterface, signer_nomination::MockNominator},
-	AccountRoleRegistry, AsyncResult, FirstVault, KeyProvider, Slashing, ThresholdSigner,
-	VaultActivator,
+	AccountRoleRegistry, AsyncResult, KeyProvider, Slashing, StartKeyActivationResult,
+	ThresholdSigner, VaultActivator,
 };
 use codec::{Decode, Encode};
 pub use frame_support::{
@@ -189,8 +189,13 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 pub struct MockVaultActivator;
 impl VaultActivator<MockEthereumChainCrypto> for MockVaultActivator {
 	type ValidatorId = <Test as Chainflip>::ValidatorId;
-	fn activate(_new_key: MockAggKey, _maybe_old_key: Option<MockAggKey>) -> FirstVault {
-		FirstVault::False
+	fn start_key_activation(
+		_new_key: MockAggKey,
+		_maybe_old_key: Option<MockAggKey>,
+	) -> Vec<StartKeyActivationResult> {
+		VAULT_ACTIVATION_STATUS.with(|value| *(value.borrow_mut()) = AsyncResult::Pending);
+		let ceremony_id = current_ceremony_id();
+		vec![StartKeyActivationResult::Normal(ceremony_id as u32)]
 	}
 
 	fn status() -> AsyncResult<()> {
@@ -200,6 +205,10 @@ impl VaultActivator<MockEthereumChainCrypto> for MockVaultActivator {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(outcome: AsyncResult<()>) {
 		VAULT_ACTIVATION_STATUS.with(|value| *(value.borrow_mut()) = outcome)
+	}
+
+	fn activate_key() {
+		VAULT_ACTIVATION_STATUS.with(|value| *(value.borrow_mut()) = AsyncResult::Ready(()))
 	}
 }
 

@@ -50,6 +50,7 @@ impl Chain for Ethereum {
 	type TransactionMetadata = EvmTransactionMetadata;
 	type ReplayProtectionParams = Self::ChainAccount;
 	type ReplayProtection = EvmReplayProtection;
+	type TransactionRef = H256;
 }
 
 impl PalletInstanceAlias for Ethereum {

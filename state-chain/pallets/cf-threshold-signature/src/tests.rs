@@ -18,7 +18,7 @@ use cf_traits::{
 		signer_nomination::MockNominator,
 	},
 	AccountRoleRegistry, AsyncResult, Chainflip, EpochInfo, EpochKey, KeyProvider,
-	KeyRotationStatusOuter, KeyRotator, SetSafeMode,
+	KeyRotationStatusOuter, KeyRotator, SetSafeMode, VaultActivator,
 };
 pub use frame_support::traits::Get;
 
@@ -1628,6 +1628,7 @@ mod key_rotation {
 
 			BlockHeightProvider::<MockEthereum>::set_block_height(HANDOVER_ACTIVATION_BLOCK);
 			EvmThresholdSigner::activate_keys();
+			EvmThresholdSigner::status();
 
 			assert!(matches!(
 				PendingKeyRotation::<Test, _>::get().unwrap(),
@@ -1670,6 +1671,7 @@ mod key_rotation {
 			run_cfes_on_sc_events(&cfes);
 
 			EvmThresholdSigner::activate_keys();
+			EvmThresholdSigner::status();
 		});
 
 		final_checks(ext);
@@ -1737,6 +1739,37 @@ mod key_rotation {
 			// Can restart the key rotation and succeed.
 			do_full_key_rotation();
 		});
+	}
+
+	#[test]
+	fn wait_for_activating_key_tss_before_completing_rotation() {
+		let ext = setup(Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)).execute_with(|| {
+			// KeyHandoverComplete
+			PendingKeyRotation::<Test, _>::put(KeyRotationStatus::KeyHandoverComplete {
+				new_public_key: NEW_AGG_PUB_KEY_POST_HANDOVER,
+			});
+			// Start ActivatingKeys
+			EvmThresholdSigner::activate_keys();
+			assert_eq!(
+				PendingKeyRotation::<Test, _>::get().unwrap(),
+				KeyRotationStatus::AwaitingActivation {
+					request_ids: vec![4],
+					new_public_key: NEW_AGG_PUB_KEY_POST_HANDOVER
+				}
+			);
+
+			// Vault activation started and it is now pending
+			assert_eq!(MockVaultActivator::status(), AsyncResult::Pending);
+
+			// Request is complete
+			assert_eq!(EvmThresholdSigner::signature(4), AsyncResult::Void);
+
+			// Proceed to complete activation
+			EvmThresholdSigner::status();
+
+			assert_eq!(MockVaultActivator::status(), AsyncResult::Ready(()));
+		});
+		final_checks(ext);
 	}
 }
 

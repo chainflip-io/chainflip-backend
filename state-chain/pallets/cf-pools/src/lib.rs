@@ -2,11 +2,9 @@
 use core::ops::Range;
 
 use cf_amm::{
-	common::{Amount, PoolPairsMap, Price, Side, SqrtPriceQ64F96, Tick},
-	limit_orders,
-	limit_orders::{Collected, PositionInfo},
-	range_orders,
-	range_orders::Liquidity,
+	common::{self, Amount, PoolPairsMap, Price, Side, SqrtPriceQ64F96, Tick},
+	limit_orders::{self, Collected, PositionInfo},
+	range_orders::{self, Liquidity},
 	PoolState,
 };
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
@@ -290,6 +288,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type ScheduledLimitOrderUpdates<T: Config> =
 		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<LimitOrderUpdate<T>>, ValueQuery>;
+
+	/// Maximum relative slippage for a single swap, measured in number of ticks.
+	#[pallet::storage]
+	pub(super) type MaximumRelativeSlippage<T: Config> = StorageValue<_, u32, OptionQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -929,7 +931,7 @@ pub mod pallet {
 		/// - [BadOrigin](frame_system::BadOrigin)
 		/// - [UnsupportedCall](pallet_cf_pools::Error::UnsupportedCall)
 		#[pallet::call_index(8)]
-		#[pallet::weight(T::WeightInfo::schedule())]
+		#[pallet::weight(T::WeightInfo::schedule_limit_order_update())]
 		pub fn schedule_limit_order_update(
 			origin: OriginFor<T>,
 			call: Box<Call<T>>,
@@ -962,6 +964,21 @@ pub mod pallet {
 				_ => Err(Error::<T>::UnsupportedCall)?,
 			}
 		}
+
+		/// Sets the allowed percentage increase (in number of ticks) of the price of the brought
+		/// asset during a swap. Note this limit applies to the difference between the swap's mean
+		/// price, and both the pool price before and after the swap. If the limit is exceeded the
+		/// swap will fail and will be retried in the next block.
+		#[pallet::call_index(9)]
+		#[pallet::weight(T::WeightInfo::set_maximum_relative_slippage())]
+		pub fn set_maximum_relative_slippage(
+			origin: OriginFor<T>,
+			ticks: Option<u32>,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			MaximumRelativeSlippage::<T>::set(ticks);
+			Ok(())
+		}
 	}
 }
 
@@ -987,13 +1004,49 @@ impl<T: Config> SwappingApi for Pallet<T> {
 		let (asset_pair, order) =
 			AssetPair::from_swap(from, to).ok_or(Error::<T>::PoolDoesNotExist)?;
 		Self::try_mutate_pool(asset_pair, |_asset_pair, pool| {
-			let (output_amount, remaining_amount) =
-				pool.pool_state.swap(order, input_amount.into(), None);
-			remaining_amount
-				.is_zero()
-				.then_some(())
-				.ok_or(Error::<T>::InsufficientLiquidity)?;
-			let output_amount = output_amount.try_into().map_err(|_| Error::<T>::OutputOverflow)?;
+			let output_amount = if input_amount == 0 {
+				0
+			} else {
+				let input_amount: Amount = input_amount.into();
+
+				let tick_before = pool
+					.pool_state
+					.current_price(order)
+					.ok_or(Error::<T>::InsufficientLiquidity)?
+					.2;
+				let (output_amount, _remaining_amount) =
+					pool.pool_state.swap(order, input_amount, None);
+				let tick_after = pool
+					.pool_state
+					.current_price(order)
+					.ok_or(Error::<T>::InsufficientLiquidity)?
+					.2;
+
+				let swap_tick = common::tick_at_sqrt_price(
+					PoolState::<(T::AccountId, OrderId)>::swap_sqrt_price(
+						order,
+						input_amount,
+						output_amount,
+					),
+				);
+				let bounded_swap_tick = if tick_after < tick_before {
+					core::cmp::min(core::cmp::max(tick_after, swap_tick), tick_before)
+				} else {
+					core::cmp::min(core::cmp::max(tick_before, swap_tick), tick_after)
+				};
+
+				if let Some(maximum_relative_slippage) = MaximumRelativeSlippage::<T>::get() {
+					if core::cmp::min(
+						bounded_swap_tick.abs_diff(tick_after),
+						bounded_swap_tick.abs_diff(tick_before),
+					) > maximum_relative_slippage
+					{
+						return Err(Error::<T>::InsufficientLiquidity.into());
+					}
+				}
+
+				output_amount.try_into().map_err(|_| Error::<T>::OutputOverflow)?
+			};
 			Self::deposit_event(Event::<T>::AssetSwapped { from, to, input_amount, output_amount });
 			Ok(output_amount)
 		})
@@ -1958,27 +2011,32 @@ impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
 		})?
 		.output;
 
-		let input_amount_to_convert = multiply_by_rational_with_rounding(
-			desired_output_amount.into(),
-			available_input_amount.into(),
-			available_output_amount,
-			sp_arithmetic::Rounding::Down,
-		)
-		.defensive_proof(
-			"Unexpected overflow occurred during asset conversion. Please report this to Chainflip Labs."
-		)?;
-
-		Some((
-			available_input_amount.saturating_sub(input_amount_to_convert.unique_saturated_into()),
-			Self::swap_with_network_fee(
-				input_asset,
-				output_asset,
-				sp_std::cmp::min(input_amount_to_convert, available_input_amount.into()),
+		if available_output_amount == 0 {
+			None
+		} else {
+			let input_amount_to_convert = multiply_by_rational_with_rounding(
+				desired_output_amount.into(),
+				available_input_amount.into(),
+				available_output_amount,
+				sp_arithmetic::Rounding::Down,
 			)
-			.ok()?
-			.output
-			.unique_saturated_into(),
-		))
+			.defensive_proof(
+				"Unexpected overflow occurred during asset conversion. Please report this to Chainflip Labs."
+			)?;
+
+			Some((
+				available_input_amount
+					.saturating_sub(input_amount_to_convert.unique_saturated_into()),
+				Self::swap_with_network_fee(
+					input_asset,
+					output_asset,
+					sp_std::cmp::min(input_amount_to_convert, available_input_amount.into()),
+				)
+				.ok()?
+				.output
+				.unique_saturated_into(),
+			))
+		}
 	}
 }
 
