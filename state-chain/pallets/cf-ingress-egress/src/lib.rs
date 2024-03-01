@@ -348,7 +348,7 @@ pub mod pallet {
 			+ ConsolidateCall<Self::TargetChain>;
 
 		/// Get the latest chain state of the target chain.
-		type ChainTracking: GetBlockHeight<Self::TargetChain> + GetTrackedData<Self::TargetChain>;
+		type ChainTracking: GetBlockHeight<Self::TargetChain> + FeeEstimationApi<Self::TargetChain>;
 
 		/// A broadcaster instance.
 		type Broadcaster: Broadcaster<
@@ -482,11 +482,6 @@ pub mod pallet {
 		PrewitnessedDepositId,
 		PrewitnessedDeposit<T::TargetChain>,
 	>;
-
-	/// The fee multiplier value used when estimating ingress/egree fees
-	#[pallet::storage]
-	#[pallet::getter(fn fee_multiplier)]
-	pub type FeeMultiplier<T: Config<I>, I: 'static = ()> = StorageValue<_, FixedU128, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -900,22 +895,6 @@ pub mod pallet {
 					},
 				}
 			}
-
-			Ok(())
-		}
-
-		/// Update the fee multiplier with the provided value
-		///
-		/// Requires Governance.
-		#[pallet::call_index(7)]
-		#[pallet::weight(T::WeightInfo::ccm_broadcast_failed())]
-		pub fn update_fee_multiplier(
-			origin: OriginFor<T>,
-			new_fee_multiplier: FixedU128,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-
-			FeeMultiplier::<T, I>::put(new_fee_multiplier);
 
 			Ok(())
 		}
@@ -1391,10 +1370,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> AmountAndFeesWithheld<T, I> {
 		let tracked_data = T::ChainTracking::get_tracked_data();
 		let fee_estimate = match ingress_or_egress {
-			IngressOrEgress::Ingress =>
-				tracked_data.estimate_ingress_fee(asset, Pallet::<T, I>::fee_multiplier()),
-			IngressOrEgress::Egress =>
-				tracked_data.estimate_egress_fee(asset, Pallet::<T, I>::fee_multiplier()),
+			IngressOrEgress::Ingress => tracked_data.estimate_ingress_fee(asset),
+			IngressOrEgress::Egress => tracked_data.estimate_egress_fee(asset),
 		};
 
 		let (amount_after_fees, fee_estimate) =

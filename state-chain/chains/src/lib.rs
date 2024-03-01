@@ -502,33 +502,17 @@ pub struct ChainState<C: Chain> {
 }
 
 pub trait FeeEstimationApi<C: Chain> {
-	fn estimate_ingress_fee(
-		&self,
-		asset: C::ChainAsset,
-		fee_multiplier: FixedU128,
-	) -> C::ChainAmount;
+	fn estimate_ingress_fee(&self, asset: C::ChainAsset) -> C::ChainAmount;
 
-	fn estimate_egress_fee(
-		&self,
-		asset: C::ChainAsset,
-		fee_multiplier: FixedU128,
-	) -> C::ChainAmount;
+	fn estimate_egress_fee(&self, asset: C::ChainAsset) -> C::ChainAmount;
 }
 
 impl<C: Chain> FeeEstimationApi<C> for () {
-	fn estimate_ingress_fee(
-		&self,
-		_asset: C::ChainAsset,
-		_fee_multiplier: FixedU128,
-	) -> C::ChainAmount {
+	fn estimate_ingress_fee(&self, _asset: C::ChainAsset) -> C::ChainAmount {
 		Default::default()
 	}
 
-	fn estimate_egress_fee(
-		&self,
-		_asset: C::ChainAsset,
-		_fee_multiplier: FixedU128,
-	) -> C::ChainAmount {
+	fn estimate_egress_fee(&self, _asset: C::ChainAsset) -> C::ChainAmount {
 		Default::default()
 	}
 }

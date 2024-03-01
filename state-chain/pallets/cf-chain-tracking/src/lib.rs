@@ -19,6 +19,14 @@ use sp_std::marker::PhantomData;
 
 const NO_CHAIN_STATE: &str = "Chain state should be set at genesis and never removed.";
 
+struct GetOne;
+
+impl Get<FixedU128> for GetOne {
+	fn get() -> FixedU128 {
+		FixedU128::one()
+	}
+}
+
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 #[frame_support::pallet]
@@ -52,6 +60,12 @@ pub mod pallet {
 	#[allow(clippy::type_complexity)]
 	pub type CurrentChainState<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, ChainState<T::TargetChain>>;
+
+	/// The fee multiplier value used when estimating ingress/egree fees
+	#[pallet::storage]
+	#[pallet::getter(fn fee_multiplier)]
+	pub type FeeMultiplier<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, FixedU128, ValueQuery, GetOne>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -123,6 +137,22 @@ pub mod pallet {
 
 			Ok(().into())
 		}
+
+		/// Update the fee multiplier with the provided value
+		///
+		/// Requires Governance.
+		#[pallet::call_index(1)]
+		#[pallet::weight(<T::WeightInfo as frame_system::WeightInfo>::set_storage())]
+		pub fn update_fee_multiplier(
+			origin: OriginFor<T>,
+			new_fee_multiplier: FixedU128,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			FeeMultiplier::<T, I>::put(new_fee_multiplier);
+
+			Ok(())
+		}
 	}
 }
 
@@ -132,8 +162,24 @@ impl<T: Config<I>, I: 'static> GetBlockHeight<T::TargetChain> for Pallet<T, I> {
 	}
 }
 
-impl<T: Config<I>, I: 'static> GetTrackedData<T::TargetChain> for Pallet<T, I> {
-	fn get_tracked_data() -> <T::TargetChain as Chain>::TrackedData {
-		CurrentChainState::<T, I>::get().expect(NO_CHAIN_STATE).tracked_data
+impl<T: Config<I>, I: 'static> FeeEstimationApi<T::TargetChain> for Pallet<T, I> {
+	fn estimate_ingress_fee(
+		asset: <T::TargetChain as Chain>::ChainAsset,
+	) -> <T::TargetChain as Chain>::TrackedData {
+		FeeMultiplier::<T, I>::get() *
+			CurrentChainState::<T, I>::get()
+				.expect(NO_CHAIN_STATE)
+				.tracked_data
+				.estimate_ingress_fee(asset)
+	}
+
+	fn estimate_egress_fee(
+		asset: <T::TargetChain as Chain>::ChainAsset,
+	) -> <T::TargetChain as Chain>::TrackedData {
+		FeeMultiplier::<T, I>::get() *
+			CurrentChainState::<T, I>::get()
+				.expect(NO_CHAIN_STATE)
+				.tracked_data
+				.estimate_egress_fee(asset)
 	}
 }
