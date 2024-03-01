@@ -1068,7 +1068,7 @@ mod arbitrum_integration_migration {
 			use frame_support::assert_ok;
 			use frame_system::pallet_prelude::BlockNumberFor;
 			use sp_runtime::traits::Zero;
-			use std::str::FromStr;
+			use sp_std::str::FromStr;
 
 			assert_ok!(pallet_cf_environment::RuntimeSafeMode::<Runtime>::translate(
 				|maybe_old: Option<old::RuntimeSafeMode>| {

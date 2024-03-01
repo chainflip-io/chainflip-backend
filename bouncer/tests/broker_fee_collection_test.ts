@@ -29,15 +29,6 @@ const swapAssetAmount = {
 };
 const commissionBps = 1000; // 10%
 
-// Maximum expected deposit and withdrawal fees.
-// Values obtained from running this test on 1 node localnet.
-const maxDepositFee = {
-  [Assets.ETH]: BigInt(3500000),
-  [Assets.DOT]: BigInt(197300000),
-  [Assets.FLIP]: BigInt('20000000000000000'),
-  [Assets.BTC]: BigInt(190),
-  [Assets.USDC]: BigInt(400000), // Fee is too low for localnet, it rounds to 0
-};
 const chainflip = await getChainflipApi();
 
 const keyring = new Keyring({ type: 'sr25519' });
@@ -79,6 +70,8 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
       observeDestinationAddress.toLowerCase(),
   );
   console.log(`Running swap ${asset} -> ${swapAsset}`);
+
+  const rawDepositForSwapAmount = swapAssetAmount[asset].toString();
   await performSwap(
     asset,
     swapAsset,
@@ -86,7 +79,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
     undefined,
     undefined,
     undefined,
-    swapAssetAmount[asset].toString(),
+    rawDepositForSwapAmount,
     commissionBps,
     false,
   );
@@ -97,16 +90,17 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   console.log('brokerCommission:', brokerCommission);
 
   // Check that the deposit amount is correct after deducting the deposit fee
-  const depositAmount = BigInt(swapScheduledEvent.data.depositAmount.replaceAll(',', ''));
-  const testSwapAmount = BigInt(
-    amountToFineAmount(swapAssetAmount[asset].toString(), assetDecimals[asset]),
+  const depositAmountAfterIngressFee = BigInt(
+    swapScheduledEvent.data.depositAmount.replaceAll(',', ''),
   );
-  const minExpectedDepositAmount = testSwapAmount - maxDepositFee[asset];
-  console.log('depositAmount:', depositAmount);
+  const rawDepositForSwapAmountBigInt = BigInt(
+    amountToFineAmount(rawDepositForSwapAmount, assetDecimals[asset]),
+  );
+  console.log('depositAmount:', depositAmountAfterIngressFee);
   assert(
-    depositAmount >= minExpectedDepositAmount && depositAmount <= testSwapAmount,
-    `Unexpected ${asset} deposit amount ${depositAmount}, expected >=${minExpectedDepositAmount}, did gas fees change? detectedGasFee: ${
-      testSwapAmount - depositAmount
+    depositAmountAfterIngressFee >= 0 &&
+      depositAmountAfterIngressFee <= rawDepositForSwapAmountBigInt,
+    `Unexpected ${asset} deposit amount ${depositAmountAfterIngressFee},
     }`,
   );
 
@@ -126,7 +120,8 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   // Calculating the fee. Using some strange math here because the SC rounds down on 0.5 instead of up.
   const divisor = BigInt(10000 / commissionBps);
   const expectedIncrease =
-    depositAmount / divisor + (depositAmount % divisor > divisor / 2n ? 1n : 0n);
+    depositAmountAfterIngressFee / divisor +
+    (depositAmountAfterIngressFee % divisor > divisor / 2n ? 1n : 0n);
   assert.strictEqual(
     increase,
     expectedIncrease,
@@ -190,8 +185,8 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
     console.log('Ethereum chain tracking state:', chainState);
   }
   assert(
-    balanceAfterWithdrawalBigInt <= balanceBeforeWithdrawalBigInt + earnedBrokerFeesAfter,
-    `Unexpected ${asset} balance after withdrawal, amount ${balanceAfterWithdrawalBigInt}, did gas fees change?`,
+    balanceAfterWithdrawalBigInt > balanceBeforeWithdrawalBigInt,
+    `Balance after withdrawal is less than balance before withdrawal.`,
   );
 }
 

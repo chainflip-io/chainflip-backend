@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc};
+use std::{fmt, str::FromStr, sync::Arc};
 
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
@@ -10,7 +10,7 @@ use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId, SemVer};
 use futures::FutureExt;
 use pallet_cf_governance::ExecutionMode;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 pub use sp_core::crypto::AccountId32;
@@ -305,6 +305,35 @@ pub struct SwapDepositAddress {
 	pub source_chain_expiry_block: <AnyChain as cf_chains::Chain>::ChainBlockNumber,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct WithdrawFeesDetail {
+	pub tx_hash: H256,
+	pub egress_id: (ForeignChain, u64),
+	pub egress_amount: u128,
+	pub egress_fee: u128,
+	pub destination_address: String,
+}
+
+impl fmt::Display for WithdrawFeesDetail {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(
+			f,
+			"\
+			Tx hash: {:?}\n\
+			Egress id: {:?}\n\
+			Egress amount: {}\n\
+			Egress fee: {}\n\
+			Destination address: {}\n\
+			",
+			self.tx_hash,
+			self.egress_id,
+			self.egress_amount,
+			self.egress_fee,
+			self.destination_address,
+		)
+	}
+}
+
 #[async_trait]
 pub trait BrokerApi: SignedExtrinsicApi {
 	async fn request_swap_deposit_address(
@@ -354,6 +383,48 @@ pub trait BrokerApi: SignedExtrinsicApi {
 			})
 		} else {
 			bail!("No SwapDepositAddressReady event was found");
+		}
+	}
+	async fn withdraw_fees(
+		&self,
+		asset: Asset,
+		destination_address: EncodedAddress,
+	) -> Result<WithdrawFeesDetail> {
+		let (tx_hash, events, ..) = self
+			.submit_signed_extrinsic(RuntimeCall::from(pallet_cf_swapping::Call::withdraw {
+				asset,
+				destination_address,
+			}))
+			.await
+			.until_in_block()
+			.await
+			.context("Request to withdraw broker fee for ${asset} failed.")?;
+
+		if let Some(state_chain_runtime::RuntimeEvent::Swapping(
+			pallet_cf_swapping::Event::WithdrawalRequested {
+				egress_amount,
+				egress_fee,
+				destination_address,
+				egress_id,
+				..
+			},
+		)) = events.iter().find(|event| {
+			matches!(
+				event,
+				state_chain_runtime::RuntimeEvent::Swapping(
+					pallet_cf_swapping::Event::WithdrawalRequested { .. }
+				)
+			)
+		}) {
+			Ok(WithdrawFeesDetail {
+				tx_hash,
+				egress_id: *egress_id,
+				egress_amount: *egress_amount,
+				egress_fee: *egress_fee,
+				destination_address: destination_address.to_string(),
+			})
+		} else {
+			bail!("No WithdrawalRequested event was found");
 		}
 	}
 }

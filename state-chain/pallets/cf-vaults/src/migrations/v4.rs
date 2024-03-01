@@ -6,6 +6,9 @@ use crate::ChainInitialized;
 #[cfg(feature = "try-runtime")]
 use frame_support::pallet_prelude::DispatchError;
 
+#[cfg(feature = "try-runtime")]
+use sp_std::vec::Vec;
+
 pub struct Migration<T, I>(PhantomData<(T, I)>);
 
 impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {

@@ -3,6 +3,7 @@
 use cf_chains::{evm::EvmCrypto, ChainCrypto};
 use cf_traits::{AsyncResult, StartKeyActivationResult, VaultActivator};
 use core::marker::PhantomData;
+use sp_std::vec::Vec;
 
 pub struct EvmVaultActivator<A, B> {
 	_phantom: PhantomData<(A, B)>,
