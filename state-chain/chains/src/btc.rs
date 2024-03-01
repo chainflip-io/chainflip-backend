@@ -119,11 +119,6 @@ impl Default for BitcoinTrackedData {
 	}
 }
 
-/// A constant multiplier applied to the fees.
-///
-/// TODO: Allow this value to adjust based on the current fee deficit/surplus.
-pub const BTC_FEE_MULTIPLIER: FixedU128 = FixedU128::from_rational(3, 2);
-
 impl FeeEstimationApi<Bitcoin> for BitcoinTrackedData {
 	fn estimate_ingress_fee(
 		&self,

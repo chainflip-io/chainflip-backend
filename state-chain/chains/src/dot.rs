@@ -21,7 +21,7 @@ use frame_support::sp_runtime::{
 		AccountIdLookup, BlakeTwo256, DispatchInfoOf, Hash, SignedExtension, StaticLookup, Verify,
 	},
 	transaction_validity::{TransactionValidity, TransactionValidityError, ValidTransaction},
-	MultiAddress, MultiSignature, FixedU128
+	FixedU128, MultiAddress, MultiSignature,
 };
 use scale_info::TypeInfo;
 use sp_core::{sr25519, ConstBool, H256};

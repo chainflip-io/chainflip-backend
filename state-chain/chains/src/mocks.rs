@@ -5,11 +5,10 @@ use crate::{
 	*,
 };
 use cf_utilities::SliceToArray;
+use frame_support::sp_runtime::FixedU128;
 use sp_core::{ConstBool, H160};
 use sp_std::marker::PhantomData;
 use std::cell::RefCell;
-use frame_support::sp_runtime::FixedU128;
-
 
 #[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockEthereum;

@@ -1,8 +1,10 @@
 use crate::*;
-use cf_chains::{btc::BTC_FEE_MULTIPLIER, Bitcoin};
+use cf_chains::Bitcoin;
 use frame_support::traits::OnRuntimeUpgrade;
 
 pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
+
+const BTC_FEE_MULTIPLIER: FixedU128 = FixedU128::from_rational(3, 2);
 
 // No need to migrate Eth or Dot, as the fee multiplier is not used there
 impl<T: Config<Instance1>> OnRuntimeUpgrade for Migration<T, Instance1> {
@@ -31,10 +33,7 @@ impl<T: Config<Instance3, TargetChain = Bitcoin>> OnRuntimeUpgrade for Migration
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
-		assert_eq!(
-			FeeMultiplier::<T, Instance3>::get(),
-			BTC_FEE_MULTIPLIER
-		);
+		assert_eq!(FeeMultiplier::<T, Instance3>::get(), BTC_FEE_MULTIPLIER);
 
 		Ok(())
 	}
