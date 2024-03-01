@@ -231,14 +231,14 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 			Some(CreateStateChainClientError::NoLongerCompatible {
 				cfe_version,
 				cfe_version_required,
-				first_incompatible_block,
+				at_block,
 			}) => {
 				tracing::info!(
 					"Chainflip Engine is no longer compatible with the current state chain. \
 					Engine version: {}, required version: {}, first incompatible block: {}",
 					cfe_version,
 					cfe_version_required,
-					first_incompatible_block
+					at_block
 				);
 			},
 			Some(CreateStateChainClientError::NotYetCompatible {
