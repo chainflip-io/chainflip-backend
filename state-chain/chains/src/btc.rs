@@ -30,6 +30,7 @@ use itertools;
 use libsecp256k1::{curve::*, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_core::H256;
 use sp_io::hashing::sha2_256;
 use sp_std::{vec, vec::Vec};
 
@@ -55,7 +56,7 @@ pub type SigningPayload = [u8; 32];
 
 pub type Signature = [u8; 64];
 
-pub type Hash = [u8; 32];
+pub type Hash = H256;
 
 #[derive(
 	Copy,
@@ -233,23 +234,6 @@ impl ConsolidationParameters {
 		self.consolidation_size <= self.consolidation_threshold && (self.consolidation_size > 1)
 	}
 }
-
-// #[derive(
-// 	Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize,
-// )]
-// pub struct BitcoinTransactionHash(Hash);
-// impl BitcoinTransactionHash {
-// 	/// It creates a tx_hash by reversing the provided hash
-// 	/// Btc softwares and explorers display blocks/txs hashes as big endian values, we need to
-// 	/// convert it to obtain a valid tx hash
-// 	pub fn new(hash: Hash) -> Self {
-// 		BitcoinTransactionHash(hash.iter().rev().copied().collect_array())
-// 	}
-
-// 	pub fn hash(&self) -> Hash {
-// 		self.0
-// 	}
-// }
 
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
@@ -720,7 +704,7 @@ const SEQUENCE_NUMBER: [u8; 4] = (u32::MAX - 2).to_le_bytes();
 fn extend_with_inputs_outputs(bytes: &mut Vec<u8>, inputs: &[Utxo], outputs: &[BitcoinOutput]) {
 	bytes.extend(to_varint(inputs.len() as u64));
 	bytes.extend(inputs.iter().fold(Vec::<u8>::default(), |mut acc, input| {
-		acc.extend(input.id.tx_id);
+		acc.extend(input.id.tx_id.0);
 		acc.extend(input.id.vout.to_le_bytes());
 		acc.push(0);
 		acc.extend(SEQUENCE_NUMBER);
@@ -772,13 +756,13 @@ impl BitcoinTransaction {
 			!self.signatures.iter().any(|signature| signature == &[0u8; 64])
 	}
 
-	pub fn txid(&self) -> [u8; 32] {
+	pub fn txid(&self) -> Hash {
 		let mut id_bytes = Vec::default();
 		id_bytes.extend(VERSION);
 		extend_with_inputs_outputs(&mut id_bytes, &self.inputs, &self.outputs);
 		id_bytes.extend(&LOCKTIME);
 
-		sha2_256(&sha2_256(&id_bytes))
+		sha2_256(&sha2_256(&id_bytes)).into()
 	}
 
 	pub fn finalize(self) -> Vec<u8> {
@@ -826,7 +810,7 @@ impl BitcoinTransaction {
 			self.inputs
 				.iter()
 				.fold(Vec::<u8>::default(), |mut acc, input| {
-					acc.extend(input.id.tx_id);
+					acc.extend(input.id.tx_id.0);
 					acc.extend(input.id.vout.to_le_bytes());
 					acc
 				})
@@ -1320,7 +1304,8 @@ mod test {
 			id: UtxoId {
 				tx_id: hex_literal::hex!(
 					"4C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB5"
-				),
+				)
+				.into(),
 				vout: 1,
 			},
 			deposit_address: DepositAddress::new(pubkey_x, 123),

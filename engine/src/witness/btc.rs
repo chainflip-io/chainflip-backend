@@ -186,7 +186,7 @@ fn success_witnesses<'a>(
 
 	for tx in txs {
 		let mut monitored = monitored_tx_hashes.clone();
-		let tx_hash = tx.txid.as_raw_hash().to_byte_array();
+		let tx_hash = tx.txid.to_byte_array().into();
 
 		if monitored.any(|&monitored_hash| monitored_hash == tx_hash) {
 			successful_witnesses.push((tx_hash, tx));
@@ -225,8 +225,7 @@ mod tests {
 			),
 		];
 
-		let tx_hashes =
-			txs.iter().map(|tx| tx.txid.to_raw_hash().to_byte_array()).collect::<Vec<_>>();
+		let tx_hashes = txs.iter().map(|tx| tx.txid.to_byte_array().into()).collect::<Vec<_>>();
 
 		// we're not monitoring for index 2, and they're out of order.
 		let monitored_hashes = [tx_hashes[3], tx_hashes[0], tx_hashes[1]];

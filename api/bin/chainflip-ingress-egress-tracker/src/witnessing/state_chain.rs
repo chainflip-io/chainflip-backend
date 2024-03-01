@@ -16,28 +16,21 @@ use pallet_cf_ingress_egress::DepositWitness;
 use serde::{Serialize, Serializer};
 use utilities::{rpc::NumberOrHex, ArrayCollect};
 
-pub type Hash = [u8; 32];
+/// A wrapper type for bitcoin hashes that serializes the hash in reverse.
 #[derive(Debug)]
-struct ReverseSerializer(Hash);
-impl Serialize for ReverseSerializer {
+struct BitcoinHash(pub H256);
+
+impl Serialize for BitcoinHash {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
 	{
-		H256::from_slice(&self.0.iter().rev().copied().collect_array::<32>()).serialize(serializer)
-	}
-}
-struct HashWrapper(Hash);
-impl Serialize for HashWrapper {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: Serializer,
-	{
-		H256::from_slice(&self.0).serialize(serializer)
+		H256(self.0.to_fixed_bytes().into_iter().rev().collect_array()).serialize(serializer)
 	}
 }
 
 struct DotSignature([u8; 64]);
+
 impl Serialize for DotSignature {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
@@ -50,7 +43,7 @@ impl Serialize for DotSignature {
 #[derive(Serialize)]
 #[serde(untagged)]
 enum TransactionRef {
-	Bitcoin { hash: ReverseSerializer },
+	Bitcoin { hash: BitcoinHash },
 	Ethereum { hash: H256 },
 	Polkadot { transaction_id: PolkadotTransactionId },
 }
@@ -58,7 +51,7 @@ enum TransactionRef {
 #[derive(Serialize)]
 #[serde(untagged)]
 enum TransactionId {
-	Bitcoin { hash: HashWrapper },
+	Bitcoin { hash: BitcoinHash },
 	Ethereum { signature: SchnorrVerificationComponents },
 	Polkadot { signature: DotSignature },
 }
@@ -236,13 +229,11 @@ where
 				store
 					.save_singleton(&WitnessInformation::Broadcast {
 						broadcast_id,
-						tx_out_id: TransactionId::Bitcoin { hash: HashWrapper(tx_out_id) },
-						tx_ref: TransactionRef::Bitcoin {
-							hash: ReverseSerializer(transaction_ref),
-						},
+						tx_out_id: TransactionId::Bitcoin { hash: BitcoinHash(tx_out_id) },
+						tx_ref: TransactionRef::Bitcoin { hash: BitcoinHash(transaction_ref) },
 					})
 					.await?;
-				println!("{:?}", ReverseSerializer(transaction_ref));
+				println!("{:?}", BitcoinHash(transaction_ref));
 			}
 		},
 		PolkadotBroadcaster(BroadcastCall::transaction_succeeded {
@@ -615,14 +606,13 @@ mod tests {
 
 	#[test]
 	fn serialization_works_as_expected() {
-		let h = ReverseSerializer([
-			0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-			24, 25, 26, 27, 28, 29, 30, 31,
-		]);
-		let h2 = HashWrapper([
-			0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-			24, 25, 26, 27, 28, 29, 30, 31,
-		]);
+		let h = BitcoinHash(
+			[
+				0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+				23, 24, 25, 26, 27, 28, 29, 30, 31,
+			]
+			.into(),
+		);
 		let s = DotSignature([
 			0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
 			24, 25, 26, 27, 28, 29, 30, 31, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
@@ -632,10 +622,6 @@ mod tests {
 		assert_eq!(
 			serde_json::to_string(&h).unwrap(),
 			"\"0x1f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100\""
-		);
-		assert_eq!(
-			serde_json::to_string(&h2).unwrap(),
-			"\"0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f\""
 		);
 		assert_eq!(serde_json::to_string(&s).unwrap(), "\"0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f\"");
 	}
