@@ -227,7 +227,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 		base_rpc_client: Arc<BaseRpcClient>,
 		wait_for_required_version: bool,
 		error_on_incompatible_block: bool,
-		start_from: Option<u32>,
+		start_from: Option<state_chain_runtime::BlockNumber>,
 		new_stream_fn: NewStreamFn,
 		process_stream_fn: ProcessStreamFn,
 	) -> Result<(
@@ -555,7 +555,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 		base_rpc_client: Arc<BaseRpcClient>,
 		mut signed_extrinsic_client_builder: SignedExtrinsicClientBuilder,
 		wait_for_required_version: bool,
-		start_from: Option<u32>,
+		start_from: Option<state_chain_runtime::BlockNumber>,
 	) -> Result<(impl StreamApi<FINALIZED> + Clone, impl StreamApi<UNFINALIZED> + Clone, Arc<Self>)>
 	{
 		{
