@@ -90,13 +90,16 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   console.log('brokerCommission:', brokerCommission);
 
   // Check that the deposit amount is correct after deducting the deposit fee
-  const depositAmountAfterIngressFee = BigInt(swapScheduledEvent.data.depositAmount.replaceAll(',', ''));
+  const depositAmountAfterIngressFee = BigInt(
+    swapScheduledEvent.data.depositAmount.replaceAll(',', ''),
+  );
   const rawDepositForSwapAmountBigInt = BigInt(
     amountToFineAmount(rawDepositForSwapAmount, assetDecimals[asset]),
   );
   console.log('depositAmount:', depositAmountAfterIngressFee);
   assert(
-    depositAmountAfterIngressFee >= 0 && depositAmountAfterIngressFee <= rawDepositForSwapAmountBigInt,
+    depositAmountAfterIngressFee >= 0 &&
+      depositAmountAfterIngressFee <= rawDepositForSwapAmountBigInt,
     `Unexpected ${asset} deposit amount ${depositAmountAfterIngressFee},
     }`,
   );
@@ -117,7 +120,8 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   // Calculating the fee. Using some strange math here because the SC rounds down on 0.5 instead of up.
   const divisor = BigInt(10000 / commissionBps);
   const expectedIncrease =
-    depositAmountAfterIngressFee / divisor + (depositAmountAfterIngressFee % divisor > divisor / 2n ? 1n : 0n);
+    depositAmountAfterIngressFee / divisor +
+    (depositAmountAfterIngressFee % divisor > divisor / 2n ? 1n : 0n);
   assert.strictEqual(
     increase,
     expectedIncrease,
