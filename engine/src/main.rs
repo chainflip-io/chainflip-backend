@@ -45,7 +45,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_main(settings: Settings) -> anyhow::Result<()> {
-	let root_result = task_scope(|scope| {
+	task_scope(|scope| {
 		async move {
 			let mut start_logger_server_fn =
 				Some(utilities::logging::init_json_logger(settings.logging.clone()).await);
@@ -222,14 +222,12 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 		}
 		.boxed()
 	})
-	.await;
-
-	if let Err(e) = &root_result {
-		let sc_error = e.downcast_ref::<CreateStateChainClientError>();
-		if let Some(CreateStateChainClientError::CompatibilityError(block_compatibility)) = sc_error
+	.await
+	.inspect_err(|e| {
+		if let Some(CreateStateChainClientError::CompatibilityError(block_compatibility)) =
+			e.downcast_ref::<CreateStateChainClientError>()
 		{
 			tracing::info!("Block compatibility on shutdown: {:?}", block_compatibility);
 		}
-	}
-	root_result
+	})
 }
