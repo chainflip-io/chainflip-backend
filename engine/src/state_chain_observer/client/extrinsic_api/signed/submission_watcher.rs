@@ -29,7 +29,7 @@ use crate::state_chain_observer::client::{
 	error_decoder::{DispatchError, ErrorDecoder},
 	extrinsic_api::common::invalid_err_obj,
 	storage_api::{CheckBlockCompatibility, StorageApi},
-	BlockInfo, SUBSTRATE_BEHAVIOUR,
+	SUBSTRATE_BEHAVIOUR,
 };
 
 use super::signer;
@@ -416,11 +416,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				block_hash,
 				if self
 					.base_rpc_client
-					.check_block_compatibility(BlockInfo {
-						parent_hash: block.block.header.parent_hash,
-						hash: block_hash,
-						number: block.block.header.number,
-					})
+					.check_block_compatibility(block.block.header.clone().into())
 					.await?
 					.compatibility == CfeCompatibility::Compatible
 				{
