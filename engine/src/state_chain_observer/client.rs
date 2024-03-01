@@ -584,7 +584,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 						_ => {
 							// No need to fetch any earlier blocks, we just have to move the stream
 							// to the correct starting point.
-							let skip_to = start_from.unwrap_or(finalized_header.number);
+							let skip_to = start_from.unwrap_or(finalized_header.number + 1);
 							for block_number in finalized_block_stream.cache().number + 1..skip_to {
 								assert_eq!(
 									finalized_block_stream.next().await.unwrap()?.number,
