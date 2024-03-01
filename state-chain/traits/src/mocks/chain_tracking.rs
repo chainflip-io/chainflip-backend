@@ -1,6 +1,6 @@
 use cf_chains::Chain;
 
-use crate::{GetBlockHeight, GetTrackedData};
+use crate::GetBlockHeight;
 
 use super::{
 	block_height_provider::BlockHeightProvider, tracked_data_provider::TrackedDataProvider,
@@ -14,8 +14,8 @@ impl<C: Chain> GetBlockHeight<C> for ChainTracking<C> {
 	}
 }
 
-impl<C: Chain> GetTrackedData<C> for ChainTracking<C> {
-	fn get_tracked_data() -> C::TrackedData {
-		TrackedDataProvider::<C>::get_tracked_data()
-	}
-}
+// impl<C: Chain> GetTrackedData<C> for ChainTracking<C> {
+// 	fn get_tracked_data() -> C::TrackedData {
+// 		TrackedDataProvider::<C>::get_tracked_data()
+// 	}
+// }

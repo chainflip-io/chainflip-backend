@@ -38,7 +38,6 @@ pub trait WeightInfo {
 	fn vault_transfer_failed() -> Weight;
 	fn ccm_broadcast_failed() -> Weight;
 	fn clear_prewitnessed_deposits(n: u32, ) -> Weight;
-	fn update_fee_multiplier() -> Weight;
 }
 
 /// Weights for pallet_cf_ingress_egress using the Substrate node and recommended hardware.
@@ -169,10 +168,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(n.into())))
 			.saturating_add(Weight::from_parts(0, 2527).saturating_mul(n.into()))
 	}
-	
-	fn update_fee_multiplier() -> Weight {
-		Weight::zero()
-	}
 }
 
 // For backwards compatibility and tests
@@ -301,9 +296,5 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads((1_u64).saturating_mul(n.into())))
 			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(n.into())))
 			.saturating_add(Weight::from_parts(0, 2527).saturating_mul(n.into()))
-	}
-	
-	fn update_fee_multiplier() -> Weight {
-		Weight::zero()
 	}
 }

@@ -33,6 +33,7 @@ use core::marker::PhantomData;
 /// Weight functions needed for pallet_cf_chain_tracking.
 pub trait WeightInfo {
 	fn update_chain_state() -> Weight;
+	fn update_fee_multiplier() -> Weight;
 }
 
 /// Weights for pallet_cf_chain_tracking using the Substrate node and recommended hardware.
@@ -48,6 +49,10 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(7_246_000, 1525)
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 	}
+
+	fn update_fee_multiplier() -> Weight {
+		Weight::zero()
+	}
 }
 
 // For backwards compatibility and tests
@@ -61,5 +66,9 @@ impl WeightInfo for () {
 		// Minimum execution time: 6_908_000 picoseconds.
 		Weight::from_parts(7_246_000, 1525)
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
+	}
+
+	fn update_fee_multiplier() -> Weight {
+		Weight::zero()
 	}
 }

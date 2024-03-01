@@ -10,20 +10,21 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_chains::{Chain, ChainState};
-use cf_traits::{Chainflip, GetBlockHeight, GetTrackedData};
+use cf_chains::{Chain, ChainState, FeeEstimationApi};
+use cf_traits::{Chainflip, GetBlockHeight};
 use frame_support::{dispatch::DispatchResultWithPostInfo, pallet_prelude::*};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
+use sp_runtime::{FixedPointNumber, FixedU128};
 use sp_std::marker::PhantomData;
 
 const NO_CHAIN_STATE: &str = "Chain state should be set at genesis and never removed.";
 
-struct GetOne;
+pub struct GetOne;
 
 impl Get<FixedU128> for GetOne {
 	fn get() -> FixedU128 {
-		FixedU128::one()
+		FixedU128::from_u32(1)
 	}
 }
 
@@ -142,7 +143,7 @@ pub mod pallet {
 		///
 		/// Requires Governance.
 		#[pallet::call_index(1)]
-		#[pallet::weight(<T::WeightInfo as frame_system::WeightInfo>::set_storage())]
+		#[pallet::weight(T::WeightInfo::update_fee_multiplier())]
 		pub fn update_fee_multiplier(
 			origin: OriginFor<T>,
 			new_fee_multiplier: FixedU128,
@@ -164,22 +165,26 @@ impl<T: Config<I>, I: 'static> GetBlockHeight<T::TargetChain> for Pallet<T, I> {
 
 impl<T: Config<I>, I: 'static> FeeEstimationApi<T::TargetChain> for Pallet<T, I> {
 	fn estimate_ingress_fee(
+		&self,
 		asset: <T::TargetChain as Chain>::ChainAsset,
-	) -> <T::TargetChain as Chain>::TrackedData {
-		FeeMultiplier::<T, I>::get() *
+	) -> <T::TargetChain as Chain>::ChainAmount {
+		FeeMultiplier::<T, I>::get().saturating_mul_int(
 			CurrentChainState::<T, I>::get()
 				.expect(NO_CHAIN_STATE)
 				.tracked_data
-				.estimate_ingress_fee(asset)
+				.estimate_ingress_fee(asset),
+		)
 	}
 
 	fn estimate_egress_fee(
+		&self,
 		asset: <T::TargetChain as Chain>::ChainAsset,
-	) -> <T::TargetChain as Chain>::TrackedData {
-		FeeMultiplier::<T, I>::get() *
+	) -> <T::TargetChain as Chain>::ChainAmount {
+		FeeMultiplier::<T, I>::get().saturating_mul_int(
 			CurrentChainState::<T, I>::get()
 				.expect(NO_CHAIN_STATE)
 				.tracked_data
-				.estimate_egress_fee(asset)
+				.estimate_egress_fee(asset),
+		)
 	}
 }
