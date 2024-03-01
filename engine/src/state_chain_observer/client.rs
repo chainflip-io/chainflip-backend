@@ -292,35 +292,46 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			> = if let Some(start_from) = start_from {
 				let base_rpc_client = base_rpc_client.clone();
 
-				let mut start_from_headers = Box::pin(
-					futures::stream::iter(start_from..latest_block.number)
-						.then(move |block_number| {
-							let base_rpc_client_c = base_rpc_client.clone();
-							async move {
-								let hash = base_rpc_client_c
-									.block_hash(block_number)
-									.await?
-									.ok_or_else(|| {
-										anyhow::anyhow!(
-											"Block number {} does not exist in the state chain",
-											block_number
-										)
-									})?;
-								Ok(base_rpc_client_c.block_header(hash).await?)
-							}
-						})
-						.map_ok(|header| -> BlockInfo { header.into() }),
-				);
+				if start_from > latest_block.number {
+					return Err(anyhow::anyhow!(
+						"Start from block number cannot be greater than the latest block number. Start from: {}, Latest block number: {}",
+						start_from, latest_block.number
+					));
+				} else {
+					let mut start_from_headers = Box::pin(
+						futures::stream::iter(start_from..latest_block.number)
+							.then(move |block_number| {
+								let base_rpc_client_c = base_rpc_client.clone();
+								async move {
+									let hash = base_rpc_client_c
+										.block_hash(block_number)
+										.await?
+										.ok_or_else(|| {
+											anyhow::anyhow!(
+												"Block number {} does not exist in the state chain",
+												block_number
+											)
+										})?;
+									Ok(base_rpc_client_c.block_header(hash).await?)
+								}
+							})
+							.map_ok(|header| -> BlockInfo { header.into() }),
+					);
 
-				let first_block: BlockInfo = start_from_headers.next().await.unwrap()?;
-				Box::pin(
-					start_from_headers
-						.chain(futures::stream::once(futures::future::ready(
-							Ok::<_, anyhow::Error>(latest_block),
-						)))
-						.chain(block_stream)
-						.make_try_cached(first_block),
-				)
+					let first_block: BlockInfo = start_from_headers
+						.next()
+						.await
+						.expect("Checked start_from > latest_block.number")?;
+					Box::pin(
+						start_from_headers
+							.chain(futures::stream::once(futures::future::ready(Ok::<
+								_,
+								anyhow::Error,
+							>(latest_block))))
+							.chain(block_stream)
+							.make_try_cached(first_block),
+					)
+				}
 			} else {
 				Box::pin(block_stream.make_try_cached(latest_block))
 			};
@@ -365,7 +376,6 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 														block_compatibility
 													)
 												);
-
 												true
 											},
 											// Generally we cannot move from no longer compatible to
