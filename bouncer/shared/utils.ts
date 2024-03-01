@@ -427,6 +427,7 @@ export async function newAddress(
   type?: BtcAddressType,
 ): Promise<string> {
   let rawAddress;
+  console.log('DEBUGGING', asset);
   switch (asset) {
     case Assets.FLIP:
     case Assets.ETH:
@@ -442,6 +443,7 @@ export async function newAddress(
       rawAddress = await newBtcAddress(seed, type ?? 'P2PKH');
       break;
     case Assets.SOL:
+    case Assets.SOLUSDC:
       rawAddress = newSolAddress(seed);
       break;
     default:

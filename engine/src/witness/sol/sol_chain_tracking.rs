@@ -26,7 +26,8 @@ pub async fn collect_tracked_data<C: SolanaApi>(sol_client: C) -> Result<ChainSt
 	let priorization_fees = sol_client.call(GetRecentPrioritizationFees::default()).await?;
 
 	let mut priority_fees: Vec<u64> =
-		priorization_fees.iter().map(|f| f.prioritization_fee).collect().sort();
+		priorization_fees.iter().map(|f| f.prioritization_fee).collect();
+	priority_fees.sort();
 
 	let chain_state = ChainState {
 		// Submit latest block height

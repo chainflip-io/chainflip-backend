@@ -1,8 +1,7 @@
-use cf_primitives::chains::Solana;
+use cf_primitives::chains::{assets, Solana};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use cf_primitives::chains::assets;
 
 use crate::{Chain, FeeEstimationApi};
 
@@ -28,12 +27,11 @@ pub struct SolanaTrackedData {
 mod fees {
 	// TODO: In Solana we could treat NATIVE & TOKEN the same
 	pub const BASE_COMPUTE_UNITS_PER_BATCH: u128 = 1; // TODO: Update this
-	pub const COMPUTE_UNITS_PER_FETCH_NATIVE: u128 = 1;// TODO: Update this
-	pub const COMPUTE_UNITS_PER_FETCH_TOKEN: u128 = 1;    // TODO: Update this
-	pub const COMPUTE_UNITS_PER_TRANSFER_NATIVE: u128 = 1;// TODO: Update this
+	pub const COMPUTE_UNITS_PER_FETCH_NATIVE: u128 = 1; // TODO: Update this
+	pub const COMPUTE_UNITS_PER_FETCH_TOKEN: u128 = 1; // TODO: Update this
+	pub const COMPUTE_UNITS_PER_TRANSFER_NATIVE: u128 = 1; // TODO: Update this
 	pub const COMPUTE_UNITS_PER_TRANSFER_TOKEN: u128 = 1; // TODO: Update this
 }
-
 
 impl FeeEstimationApi<Solana> for SolanaTrackedData {
 	fn estimate_egress_fee(
@@ -49,7 +47,6 @@ impl FeeEstimationApi<Solana> for SolanaTrackedData {
 			};
 
 		BASE_FEE + (self.priority_fee).saturating_mul(compute_units_per_transfer)
-
 	}
 	fn estimate_ingress_fee(
 		&self,
@@ -64,5 +61,5 @@ impl FeeEstimationApi<Solana> for SolanaTrackedData {
 			};
 
 		BASE_FEE + (self.priority_fee).saturating_mul(compute_units_per_transfer)
-		}
+	}
 }

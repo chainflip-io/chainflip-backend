@@ -40,39 +40,39 @@ async function main(): Promise<void> {
   await cryptoWaitReady();
 
   await Promise.all([
-    // createLpPool('ETH', price.get('ETH')!),
-    // createLpPool('DOT', price.get('DOT')!),
-    // createLpPool('BTC', price.get('BTC')!),
-    // createLpPool('FLIP', price.get('FLIP')!),
-    // createLpPool('SOL', price.get('SOL')!),
-    // createLpPool('SOLUSDC', price.get('SOLUSDC')!),
-    // createLpPool('ARBETH', price.get('ARBETH')!),
-    // createLpPool('ARBUSDC', price.get('ARBUSDC')!),
+    createLpPool('ETH', price.get('ETH')!),
+    createLpPool('DOT', price.get('DOT')!),
+    createLpPool('BTC', price.get('BTC')!),
+    createLpPool('FLIP', price.get('FLIP')!),
+    createLpPool('SOL', price.get('SOL')!),
+    createLpPool('SOLUSDC', price.get('SOLUSDC')!),
+    // // createLpPool('ARBETH', price.get('ARBETH')!),
+    // // createLpPool('ARBUSDC', price.get('ARBUSDC')!),
   ]);
 
   console.log('Providing liquidity');
 
   await Promise.all([
-    // provideLiquidity('USDC', deposits.get('USDC')!),
-    // provideLiquidity('ETH', deposits.get('ETH')!),
-    // provideLiquidity('DOT', deposits.get('DOT')!),
-    // provideLiquidity('BTC', deposits.get('BTC')!),
-    // provideLiquidity('FLIP', deposits.get('FLIP')!),
-    // provideLiquidity('SOL', deposits.get('SOL')!),
-    provideLiquidity('SOLUSDC', deposits.get('SOLUSDC')!),
-    // provideLiquidity('ARBETH', deposits.get('ARBETH')!),
-    // provideLiquidity('ARBUSDC', deposits.get('ARBUSDC')!),
+    provideLiquidity('USDC', deposits.get('USDC')!),
+    provideLiquidity('ETH', deposits.get('ETH')!),
+    provideLiquidity('DOT', deposits.get('DOT')!),
+    provideLiquidity('BTC', deposits.get('BTC')!),
+    provideLiquidity('FLIP', deposits.get('FLIP')!),
+    provideLiquidity('SOL', deposits.get('SOL')!),
+    // provideLiquidity('SOLUSDC', deposits.get('SOLUSDC')!), // This won't work yet until we witness SOLUSDC
+    // // provideLiquidity('ARBETH', deposits.get('ARBETH')!),
+    // // provideLiquidity('ARBUSDC', deposits.get('ARBUSDC')!),
   ]);
 
   await Promise.all([
-    // rangeOrder('ETH', deposits.get('ETH')! * 0.9999),
-    // rangeOrder('DOT', deposits.get('DOT')! * 0.9999),
-    // rangeOrder('BTC', deposits.get('BTC')! * 0.9999),
-    // rangeOrder('FLIP', deposits.get('FLIP')! * 0.9999),
-    // rangeOrder('SOL', deposits.get('SOL')! * 0.9999),
-    // rangeOrder('SOLUSDC', deposits.get('SOLUSDC')! * 0.9999),
-    // rangeOrder('ARBETH', deposits.get('ARBETH')! * 0.9999),
-    // rangeOrder('ARBUSDC', deposits.get('ARBUSDC')! * 0.9999),
+    rangeOrder('ETH', deposits.get('ETH')! * 0.9999),
+    rangeOrder('DOT', deposits.get('DOT')! * 0.9999),
+    rangeOrder('BTC', deposits.get('BTC')! * 0.9999),
+    rangeOrder('FLIP', deposits.get('FLIP')! * 0.9999),
+    rangeOrder('SOL', deposits.get('SOL')! * 0.9999),
+    // rangeOrder('SOLUSDC', deposits.get('SOLUSDC')! * 0.9999), // This won't work yet until we witness SOLUSDC
+    // // rangeOrder('ARBETH', deposits.get('ARBETH')! * 0.9999),
+    // // rangeOrder('ARBUSDC', deposits.get('ARBUSDC')! * 0.9999),
   ]);
   console.log('=== Swaps Setup completed ===');
 
