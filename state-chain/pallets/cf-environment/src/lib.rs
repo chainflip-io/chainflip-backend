@@ -6,7 +6,7 @@ use cf_chains::{
 	btc::{
 		api::{SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		deposit_address::DepositAddress,
-		utxo_selection::{select_utxos_for_consolidation, select_utxos_from_pool},
+		utxo_selection::{self, select_utxos_for_consolidation, select_utxos_from_pool},
 		Bitcoin, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
@@ -30,14 +30,14 @@ pub mod migrations;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(9);
 
-const INITIAL_UTXO_CONSOLIDATION_PARAMETERS: cf_chains::btc::ConsolidationParameters =
-	cf_chains::btc::ConsolidationParameters {
+const INITIAL_UTXO_CONSOLIDATION_PARAMETERS: utxo_selection::ConsolidationParameters =
+	utxo_selection::ConsolidationParameters {
 		consolidation_threshold: 200,
 		consolidation_size: 100,
 	};
 
-const INITIAL_UTXO_SELECTION_PARAMETERS: cf_chains::btc::UtxoSelectionParameters =
-	cf_chains::btc::UtxoSelectionParameters { selection_limit: 250 };
+const INITIAL_UTXO_SELECTION_PARAMETERS: utxo_selection::UtxoSelectionParameters =
+	utxo_selection::UtxoSelectionParameters { selection_limit: 250 };
 
 type SignatureNonce = u64;
 
@@ -158,12 +158,12 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn consolidation_parameters)]
 	pub type ConsolidationParameters<T> =
-		StorageValue<_, cf_chains::btc::ConsolidationParameters, ValueQuery>;
+		StorageValue<_, utxo_selection::ConsolidationParameters, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn utxo_selection_parameters)]
 	pub type UtxoSelectionParameters<T> =
-		StorageValue<_, cf_chains::btc::UtxoSelectionParameters, ValueQuery>;
+		StorageValue<_, utxo_selection::UtxoSelectionParameters, ValueQuery>;
 
 	// OTHER ENVIRONMENT ITEMS
 	#[pallet::storage]
@@ -196,9 +196,9 @@ pub mod pallet {
 		/// The Safe Mode settings for the chain has been updated
 		RuntimeSafeModeUpdated { safe_mode: SafeModeUpdate<T> },
 		/// Utxo consolidation parameters has been updated
-		UtxoConsolidationParametersUpdated { params: cf_chains::btc::ConsolidationParameters },
+		UtxoConsolidationParametersUpdated { params: utxo_selection::ConsolidationParameters },
 		/// Utxo selection parameters has been updated
-		UtxoSelectionParametersUpdated { params: cf_chains::btc::UtxoSelectionParameters },
+		UtxoSelectionParametersUpdated { params: utxo_selection::UtxoSelectionParameters },
 	}
 
 	#[pallet::call]
@@ -304,7 +304,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::update_consolidation_parameters())]
 		pub fn update_consolidation_parameters(
 			origin: OriginFor<T>,
-			params: cf_chains::btc::ConsolidationParameters,
+			params: utxo_selection::ConsolidationParameters,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
@@ -321,7 +321,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::update_consolidation_parameters())]
 		pub fn update_utxo_selection_parameters(
 			origin: OriginFor<T>,
-			params: cf_chains::btc::UtxoSelectionParameters,
+			params: utxo_selection::UtxoSelectionParameters,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 

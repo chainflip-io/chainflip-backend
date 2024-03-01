@@ -215,37 +215,6 @@ pub struct EpochStartData {
 	pub change_pubkey: AggKey,
 }
 
-#[derive(Encode, Decode, Default, PartialEq, Copy, Clone, TypeInfo, RuntimeDebug)]
-pub struct ConsolidationParameters {
-	/// Consolidate when total UTXO count reaches this threshold
-	pub consolidation_threshold: u32,
-	/// Consolidate this many UTXOs
-	pub consolidation_size: u32,
-}
-
-impl ConsolidationParameters {
-	#[cfg(test)]
-	fn new(consolidation_threshold: u32, consolidation_size: u32) -> ConsolidationParameters {
-		ConsolidationParameters { consolidation_threshold, consolidation_size }
-	}
-
-	pub fn are_valid(&self) -> bool {
-		self.consolidation_size <= self.consolidation_threshold && self.consolidation_size > 1
-	}
-}
-
-#[derive(Encode, Decode, Default, PartialEq, Copy, Clone, TypeInfo, RuntimeDebug)]
-pub struct UtxoSelectionParameters {
-	/// Max number of utxos can be selected.
-	pub selection_limit: u32,
-}
-
-impl UtxoSelectionParameters {
-	pub fn are_valid(&self) -> bool {
-		self.selection_limit > 1
-	}
-}
-
 #[derive(
 	Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize,
 )]
@@ -1434,24 +1403,6 @@ mod test {
 			BitcoinNetwork::try_from(BitcoinNetwork::Regtest.to_string().as_str()).unwrap(),
 			BitcoinNetwork::Regtest
 		);
-	}
-
-	#[test]
-	fn consolidation_parameters() {
-		// These are expected to be valid:
-		assert!(ConsolidationParameters::new(2, 2).are_valid());
-		assert!(ConsolidationParameters::new(10, 2).are_valid());
-		assert!(ConsolidationParameters::new(10, 10).are_valid());
-		assert!(ConsolidationParameters::new(200, 100).are_valid());
-		assert!(ConsolidationParameters::new(2, 2).are_valid());
-
-		// Invalid: size < threshold
-		assert!(!ConsolidationParameters::new(9, 10).are_valid());
-
-		// Invalid: size is too small
-		assert!(!ConsolidationParameters::new(0, 0).are_valid());
-		assert!(!ConsolidationParameters::new(1, 1).are_valid());
-		assert!(!ConsolidationParameters::new(0, 10).are_valid());
 	}
 
 	#[test]

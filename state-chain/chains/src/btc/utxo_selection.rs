@@ -1,6 +1,9 @@
+use codec::{Decode, Encode};
+use scale_info::TypeInfo;
+use sp_core::RuntimeDebug;
 use sp_std::{vec, vec::Vec};
 
-use super::{BitcoinFeeInfo, BtcAmount, ConsolidationParameters, Utxo};
+use super::{BitcoinFeeInfo, BtcAmount, Utxo};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum UtxoSelectionError {
@@ -10,44 +13,63 @@ pub enum UtxoSelectionError {
 	InsufficientFundsInAvailableUtxos,
 }
 
+#[derive(Encode, Decode, Default, PartialEq, Copy, Clone, TypeInfo, RuntimeDebug)]
+pub struct ConsolidationParameters {
+	/// Consolidate when total UTXO count reaches this threshold
+	pub consolidation_threshold: u32,
+	/// Consolidate this many UTXOs
+	pub consolidation_size: u32,
+}
+
+impl ConsolidationParameters {
+	#[cfg(test)]
+	fn new(consolidation_threshold: u32, consolidation_size: u32) -> ConsolidationParameters {
+		ConsolidationParameters { consolidation_threshold, consolidation_size }
+	}
+
+	pub fn are_valid(&self) -> bool {
+		self.consolidation_size <= self.consolidation_threshold && self.consolidation_size > 1
+	}
+}
+
+#[derive(Encode, Decode, Default, PartialEq, Copy, Clone, TypeInfo, RuntimeDebug)]
+pub struct UtxoSelectionParameters {
+	/// The maximum number of utxos that can be selected for inclusion in a transaction.
+	pub selection_limit: u32,
+}
+
+impl UtxoSelectionParameters {
+	pub fn are_valid(&self) -> bool {
+		self.selection_limit > 1
+	}
+}
+
 /// Attempt to select up to `selection_limit` number of uxtos that contains more than required
 /// amount. Prioritize small amounts first to avoid fragmentation.
 ///
-/// On success, the `(selected_utxos and accumulated_total)` is returned.
-/// On failure the appropriate error is returned, and `available_utxos` modified (sorted by
-/// `net_value()`).
+/// On success, the `(selected_utxos and accumulated_total)` is returned and available_utxos is
+/// modified, the selected utxos removed.
 ///
-/// In the case where the fee to spend the utxo is higher than the amount locked in the utxo, the
-/// algorithm will skip the selection of that utxo and will keep it in the list of available utxos
-/// for future use when the fee possibly comes down so that it is feasible to select these utxos.
+/// In the error case, the available_utxos may *also* be modified, it is expected that the caller
+/// would not persist the available_utxos in the error case.
 ///
 /// The algorithm for the utxo selection works as follows:
+///
 /// 1. Sort the available utxos according to their net value (amount - fees)
-/// Initializes the `first` and `last` to the first utxo whose net value > 0, effectively skipping
-/// all utxos whose fees are too high.
 ///
-/// 2. Find a optimal range such that `sum(utxo[first ..= last]) >= target_amount`
-/// When the selected range is < selection_limit, move the `first` index to the left
+/// 2. Initialize the `first` and `last` index to the first utxo with net value > 0.
 ///
-/// e.g. using a selection limit of 3
-/// Currently 2 utxos are selected. Move the start index to the left.
-/// | start
-/// 1 2 3 4 5 6 7 8 9 10
-///   |>| end
-/// New start points to "1" and new end shifts from 2 to "3".
+/// 3. Find a contiguous set of fewer than `selection_limit` utxos such that the total value exceeds
+///    the target amount.
 ///
-/// When the selection limit is reached, both the start and end pointer are moved.
-/// |>| start
-/// 1 2 3 4 5 6 7 8 9 10
-///     |>| end
-/// New start points to 2 and new end points to 4, keeping the selected utxos to the limit of 3.
+/// 4. If there are still few utxos than the limit, add one more utxo. This prevents fragmentation
+///    of the utxo set.
 ///
-/// In the worst case scenarios, the largest N utxos are selected.
+/// In the worst case scenario, the largest N utxos are selected.
 ///
-/// If after this step, the accumulated amount is still below the target, report as failure.
-/// Thought this is extremely unlikely to happen since we proactively consolidate our utxos.
-///
-/// 3. We then take 1 more utxo if within limit, to actively reduce fragmentation.
+/// An error is return if:
+/// - There is are no utxos with positive net value.
+/// - It is not possible to select enough contiguous utxos to meet the target amount.
 pub fn select_utxos_from_pool(
 	available_utxos: &mut Vec<Utxo>,
 	fee_info: &BitcoinFeeInfo,
@@ -60,16 +82,13 @@ pub fn select_utxos_from_pool(
 		None => available_utxos.len(),
 	};
 
-	// 1. Skip utxos whose fees are too high.
 	available_utxos.sort_by_key(|utxo| utxo.net_value(fee_info));
+
 	let mut last = available_utxos
 		.iter()
 		.position(|utxo| utxo.net_value(fee_info) > 0u64)
 		.ok_or(UtxoSelectionError::NoUtxoAvailableAfterFeeReduction)?;
 	let mut first = last;
-
-	// 2. Find the optimal `first` and `last` index, such that
-	// `sum(utxo[first ..= last]) >= target_amount`
 	let mut cumulative_amount = 0;
 
 	while last < available_utxos.len() {
@@ -88,20 +107,15 @@ pub fn select_utxos_from_pool(
 	}
 
 	if cumulative_amount < amount_to_be_spent {
-		// Failed to find utxos that contained target amount - extremely unlikely since we
-		// proactively consolidate out utxos.
 		Err(UtxoSelectionError::InsufficientFundsInAvailableUtxos)
 	} else {
-		// 3. Try to fit one more utxo in
 		if last < available_utxos.len() - 1 && last - first + 1 < selection_limit {
 			last += 1usize;
 			cumulative_amount += available_utxos[last].net_value(fee_info);
 		}
 
 		// Take all utxos from the `first` to `last` (inclusive).
-		let selected_utxos = available_utxos.splice(first..=last, []).collect();
-
-		Ok((selected_utxos, cumulative_amount))
+		Ok((available_utxos.splice(first..=last, []).collect(), cumulative_amount))
 	}
 }
 
@@ -289,5 +303,23 @@ mod tests {
 			Some(3),
 			Ok((vec![5_000, 7_680, 10_000], 22_446)),
 		);
+	}
+
+	#[test]
+	fn consolidation_parameters() {
+		// These are expected to be valid:
+		assert!(ConsolidationParameters::new(2, 2).are_valid());
+		assert!(ConsolidationParameters::new(10, 2).are_valid());
+		assert!(ConsolidationParameters::new(10, 10).are_valid());
+		assert!(ConsolidationParameters::new(200, 100).are_valid());
+		assert!(ConsolidationParameters::new(2, 2).are_valid());
+
+		// Invalid: size < threshold
+		assert!(!ConsolidationParameters::new(9, 10).are_valid());
+
+		// Invalid: size is too small
+		assert!(!ConsolidationParameters::new(0, 0).are_valid());
+		assert!(!ConsolidationParameters::new(1, 1).are_valid());
+		assert!(!ConsolidationParameters::new(0, 10).are_valid());
 	}
 }

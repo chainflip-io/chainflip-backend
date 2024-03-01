@@ -1,5 +1,7 @@
 #![cfg(test)]
-use cf_chains::btc::{api::UtxoSelectionType, deposit_address::DepositAddress, Utxo};
+use cf_chains::btc::{
+	api::UtxoSelectionType, deposit_address::DepositAddress, utxo_selection, Utxo,
+};
 use cf_traits::SafeMode;
 use frame_support::{assert_ok, traits::OriginTrait};
 
@@ -115,7 +117,7 @@ fn test_btc_utxo_consolidation() {
 		// Reduce consolidation parameters to make testing easier
 		assert_ok!(Environment::update_consolidation_parameters(
 			OriginTrait::root(),
-			cf_chains::btc::ConsolidationParameters {
+			utxo_selection::ConsolidationParameters {
 				consolidation_threshold: 2,
 				consolidation_size: 2,
 			}
@@ -169,7 +171,7 @@ fn test_btc_utxo_consolidation() {
 #[test]
 fn updating_consolidation_parameters() {
 	new_test_ext().execute_with(|| {
-		let valid_param = cf_chains::btc::ConsolidationParameters {
+		let valid_param = utxo_selection::ConsolidationParameters {
 			consolidation_threshold: 2,
 			consolidation_size: 2,
 		};
@@ -183,7 +185,7 @@ fn updating_consolidation_parameters() {
 		// Should fail with invalid parameters
 		assert!(Environment::update_consolidation_parameters(
 			OriginTrait::root(),
-			cf_chains::btc::ConsolidationParameters {
+			utxo_selection::ConsolidationParameters {
 				consolidation_threshold: 1,
 				consolidation_size: 2,
 			}
@@ -194,9 +196,10 @@ fn updating_consolidation_parameters() {
 
 #[test]
 fn can_update_utxo_selection_parameters() {
+	use cf_chains::btc::utxo_selection::UtxoSelectionParameters;
 	new_test_ext().execute_with(|| {
 		// Should work with valid parameters
-		let valid_param = cf_chains::btc::UtxoSelectionParameters { selection_limit: 10 };
+		let valid_param = UtxoSelectionParameters { selection_limit: 10 };
 		assert_ok!(
 			Environment::update_utxo_selection_parameters(OriginTrait::root(), valid_param,)
 		);
@@ -208,7 +211,7 @@ fn can_update_utxo_selection_parameters() {
 		// Should fail with invalid parameters
 		assert!(Environment::update_utxo_selection_parameters(
 			OriginTrait::root(),
-			cf_chains::btc::UtxoSelectionParameters { selection_limit: 0 }
+			UtxoSelectionParameters { selection_limit: 0 }
 		)
 		.is_err());
 	});
