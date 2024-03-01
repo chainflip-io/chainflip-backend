@@ -1415,6 +1415,8 @@ mod test {
 					(Asset::Flip, 1000000000000000000),
 					(Asset::Usdc, 0),
 					(Asset::Dot, 0),
+					(Asset::ArbEth, 0),
+					(Asset::ArbUsdc, 0),
 				]
 			}
 		))
