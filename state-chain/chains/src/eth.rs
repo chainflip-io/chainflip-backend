@@ -93,7 +93,7 @@ impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
 	fn estimate_ingress_fee(
 		&self,
 		asset: <Ethereum as Chain>::ChainAsset,
-		_multiplier: FixedU128,
+		_fee_multiplier: FixedU128,
 	) -> <Ethereum as Chain>::ChainAmount {
 		use fees::*;
 
@@ -111,7 +111,7 @@ impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
 	fn estimate_egress_fee(
 		&self,
 		asset: <Ethereum as Chain>::ChainAsset,
-		_multiplier: FixedU128,
+		_fee_multiplier: FixedU128,
 	) -> <Ethereum as Chain>::ChainAmount {
 		use fees::*;
 

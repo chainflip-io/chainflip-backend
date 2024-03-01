@@ -123,17 +123,17 @@ impl FeeEstimationApi<Bitcoin> for BitcoinTrackedData {
 	fn estimate_ingress_fee(
 		&self,
 		_asset: <Bitcoin as Chain>::ChainAsset,
-		multiplier: FixedU128,
+		fee_multiplier: FixedU128,
 	) -> <Bitcoin as Chain>::ChainAmount {
-		multiplier.saturating_mul_int(self.btc_fee_info.fee_per_input_utxo())
+		fee_multiplier.saturating_mul_int(self.btc_fee_info.fee_per_input_utxo())
 	}
 
 	fn estimate_egress_fee(
 		&self,
 		_asset: <Bitcoin as Chain>::ChainAsset,
-		multiplier: FixedU128,
+		fee_multiplier: FixedU128,
 	) -> <Bitcoin as Chain>::ChainAmount {
-		multiplier.saturating_mul_int(
+		fee_multiplier.saturating_mul_int(
 			self.btc_fee_info
 				.min_fee_required_per_tx()
 				.saturating_add(self.btc_fee_info.fee_per_output_utxo()),

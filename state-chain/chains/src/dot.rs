@@ -298,7 +298,7 @@ impl FeeEstimationApi<Polkadot> for PolkadotTrackedData {
 	fn estimate_ingress_fee(
 		&self,
 		_asset: <Polkadot as Chain>::ChainAsset,
-		_multiplier: FixedU128,
+		_fee_multiplier: FixedU128,
 	) -> <Polkadot as Chain>::ChainAmount {
 		use fee_constants::fetch::*;
 
@@ -308,7 +308,7 @@ impl FeeEstimationApi<Polkadot> for PolkadotTrackedData {
 	fn estimate_egress_fee(
 		&self,
 		_asset: <Polkadot as Chain>::ChainAsset,
-		_multiplier: FixedU128,
+		_fee_multiplier: FixedU128,
 	) -> <Polkadot as Chain>::ChainAmount {
 		use fee_constants::transfer::*;
 
