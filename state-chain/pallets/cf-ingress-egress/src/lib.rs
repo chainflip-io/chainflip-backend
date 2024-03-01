@@ -40,7 +40,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_runtime::traits::UniqueSaturatedInto;
+use sp_runtime::{FixedU128, traits::UniqueSaturatedInto};
 use sp_std::{vec, vec::Vec};
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -107,7 +107,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(6);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(7);
 
 /// Calls to the external chains that has failed to be broadcast/accepted by the target chain.
 /// User can use information stored here to query for relevant information to broadcast
@@ -482,6 +482,12 @@ pub mod pallet {
 		PrewitnessedDepositId,
 		PrewitnessedDeposit<T::TargetChain>,
 	>;
+
+	/// The fee multiplier value used when estimating ingress/egree fees
+	#[pallet::storage]
+	#[pallet::getter(fn fee_multiplier)]
+	pub type FeeMultiplier<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, FixedU128, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -1370,8 +1376,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> AmountAndFeesWithheld<T, I> {
 		let tracked_data = T::ChainTracking::get_tracked_data();
 		let fee_estimate = match ingress_or_egress {
-			IngressOrEgress::Ingress => tracked_data.estimate_ingress_fee(asset),
-			IngressOrEgress::Egress => tracked_data.estimate_egress_fee(asset),
+			IngressOrEgress::Ingress => tracked_data.estimate_ingress_fee(asset, Pallet::<T, I>::fee_multiplier()),
+			IngressOrEgress::Egress => tracked_data.estimate_egress_fee(asset, Pallet::<T, I>::fee_multiplier()),
 		};
 
 		let (amount_after_fees, fee_estimate) =

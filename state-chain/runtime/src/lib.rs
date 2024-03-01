@@ -1264,13 +1264,13 @@ impl_runtime_apis! {
 						generic_asset,
 						Asset::Eth,
 						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::get_tracked_data()
-							.estimate_ingress_fee(asset)
+							.estimate_ingress_fee(asset, pallet_cf_ingress_egress::Pallet::<Runtime, EthereumInstance>::fee_multiplier())
 					)
 				},
 				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::get_tracked_data()
-					.estimate_ingress_fee(asset)),
+					.estimate_ingress_fee(asset, pallet_cf_ingress_egress::Pallet::<Runtime, PolkadotInstance>::fee_multiplier())),
 				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::get_tracked_data()
-					.estimate_ingress_fee(asset).into()),
+					.estimate_ingress_fee(asset, pallet_cf_ingress_egress::Pallet::<Runtime, BitcoinInstance>::fee_multiplier()).into()),
 			}
 		}
 
@@ -1281,13 +1281,13 @@ impl_runtime_apis! {
 						generic_asset,
 						Asset::Eth,
 						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::get_tracked_data()
-							.estimate_egress_fee(asset)
+							.estimate_egress_fee(asset, pallet_cf_ingress_egress::Pallet::<Runtime, EthereumInstance>::fee_multiplier())
 					)
 				},
 				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::get_tracked_data()
-					.estimate_egress_fee(asset)),
+					.estimate_egress_fee(asset, pallet_cf_ingress_egress::Pallet::<Runtime, PolkadotInstance>::fee_multiplier())),
 				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::get_tracked_data()
-					.estimate_egress_fee(asset).into()),
+					.estimate_egress_fee(asset, pallet_cf_ingress_egress::Pallet::<Runtime, BitcoinInstance>::fee_multiplier()).into()),
 			}
 		}
 

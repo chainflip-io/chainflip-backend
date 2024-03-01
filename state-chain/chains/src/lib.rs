@@ -11,7 +11,7 @@ use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member, RuntimeDebug},
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, CheckedSub},
-		BoundedVec, DispatchError,
+		BoundedVec, DispatchError, FixedU128
 	},
 	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, StorageHasher,
 };
@@ -502,17 +502,17 @@ pub struct ChainState<C: Chain> {
 }
 
 pub trait FeeEstimationApi<C: Chain> {
-	fn estimate_ingress_fee(&self, asset: C::ChainAsset) -> C::ChainAmount;
+	fn estimate_ingress_fee(&self, asset: C::ChainAsset, multiplier: FixedU128) -> C::ChainAmount;
 
-	fn estimate_egress_fee(&self, asset: C::ChainAsset) -> C::ChainAmount;
+	fn estimate_egress_fee(&self, asset: C::ChainAsset, multiplier: FixedU128) -> C::ChainAmount;
 }
 
 impl<C: Chain> FeeEstimationApi<C> for () {
-	fn estimate_ingress_fee(&self, _asset: C::ChainAsset) -> C::ChainAmount {
+	fn estimate_ingress_fee(&self, _asset: C::ChainAsset, _multiplier: FixedU128) -> C::ChainAmount {
 		Default::default()
 	}
 
-	fn estimate_egress_fee(&self, _asset: C::ChainAsset) -> C::ChainAmount {
+	fn estimate_egress_fee(&self, _asset: C::ChainAsset, _multiplier: FixedU128) -> C::ChainAmount {
 		Default::default()
 	}
 }

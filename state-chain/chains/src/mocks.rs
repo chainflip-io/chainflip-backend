@@ -8,6 +8,8 @@ use cf_utilities::SliceToArray;
 use sp_core::{ConstBool, H160};
 use sp_std::marker::PhantomData;
 use std::cell::RefCell;
+use frame_support::sp_runtime::FixedU128;
+
 
 #[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockEthereum;
@@ -189,6 +191,7 @@ impl FeeEstimationApi<MockEthereum> for MockTrackedData {
 	fn estimate_ingress_fee(
 		&self,
 		_asset: <MockEthereum as Chain>::ChainAsset,
+		_multiplier: FixedU128,
 	) -> <MockEthereum as Chain>::ChainAmount {
 		todo!()
 	}
@@ -196,6 +199,7 @@ impl FeeEstimationApi<MockEthereum> for MockTrackedData {
 	fn estimate_egress_fee(
 		&self,
 		_asset: <MockEthereum as Chain>::ChainAsset,
+		_multiplier: FixedU128,
 	) -> <MockEthereum as Chain>::ChainAmount {
 		todo!("Unused for now.")
 	}

@@ -122,21 +122,23 @@ impl Default for BitcoinTrackedData {
 /// A constant multiplier applied to the fees.
 ///
 /// TODO: Allow this value to adjust based on the current fee deficit/surplus.
-const BTC_FEE_MULTIPLIER: FixedU128 = FixedU128::from_rational(3, 2);
+pub const BTC_FEE_MULTIPLIER: FixedU128 = FixedU128::from_rational(3, 2);
 
 impl FeeEstimationApi<Bitcoin> for BitcoinTrackedData {
 	fn estimate_ingress_fee(
 		&self,
 		_asset: <Bitcoin as Chain>::ChainAsset,
+		multiplier: FixedU128,
 	) -> <Bitcoin as Chain>::ChainAmount {
-		BTC_FEE_MULTIPLIER.saturating_mul_int(self.btc_fee_info.fee_per_input_utxo())
+		multiplier.saturating_mul_int(self.btc_fee_info.fee_per_input_utxo())
 	}
 
 	fn estimate_egress_fee(
 		&self,
 		_asset: <Bitcoin as Chain>::ChainAsset,
+		multiplier: FixedU128,
 	) -> <Bitcoin as Chain>::ChainAmount {
-		BTC_FEE_MULTIPLIER.saturating_mul_int(
+		multiplier.saturating_mul_int(
 			self.btc_fee_info
 				.min_fee_required_per_tx()
 				.saturating_add(self.btc_fee_info.fee_per_output_utxo()),

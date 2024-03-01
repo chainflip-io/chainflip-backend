@@ -17,10 +17,11 @@ pub use ethabi::{
 	Address, Hash as TxHash, Token, Uint, Word,
 };
 use evm::api::EvmReplayProtection;
-use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug};
+use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug, FixedU128};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{cmp::min, convert::TryInto, str};
+
 
 // Reference constants for the chain spec
 pub const CHAIN_ID_MAINNET: u64 = 1;
@@ -91,6 +92,7 @@ impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
 	fn estimate_ingress_fee(
 		&self,
 		asset: <Ethereum as Chain>::ChainAsset,
+		_multiplier: FixedU128,
 	) -> <Ethereum as Chain>::ChainAmount {
 		use fees::*;
 
@@ -108,6 +110,7 @@ impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
 	fn estimate_egress_fee(
 		&self,
 		asset: <Ethereum as Chain>::ChainAsset,
+		_multiplier: FixedU128,
 	) -> <Ethereum as Chain>::ChainAmount {
 		use fees::*;
 

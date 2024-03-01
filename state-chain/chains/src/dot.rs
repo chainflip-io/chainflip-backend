@@ -21,7 +21,7 @@ use frame_support::sp_runtime::{
 		AccountIdLookup, BlakeTwo256, DispatchInfoOf, Hash, SignedExtension, StaticLookup, Verify,
 	},
 	transaction_validity::{TransactionValidity, TransactionValidityError, ValidTransaction},
-	MultiAddress, MultiSignature,
+	MultiAddress, MultiSignature, FixedU128
 };
 use scale_info::TypeInfo;
 use sp_core::{sr25519, ConstBool, H256};
@@ -298,6 +298,7 @@ impl FeeEstimationApi<Polkadot> for PolkadotTrackedData {
 	fn estimate_ingress_fee(
 		&self,
 		_asset: <Polkadot as Chain>::ChainAsset,
+		_multiplier: FixedU128,
 	) -> <Polkadot as Chain>::ChainAmount {
 		use fee_constants::fetch::*;
 
@@ -307,6 +308,7 @@ impl FeeEstimationApi<Polkadot> for PolkadotTrackedData {
 	fn estimate_egress_fee(
 		&self,
 		_asset: <Polkadot as Chain>::ChainAsset,
+		_multiplier: FixedU128,
 	) -> <Polkadot as Chain>::ChainAmount {
 		use fee_constants::transfer::*;
 
@@ -1132,13 +1134,13 @@ mod test_polkadot_extrinsics {
 			median_tip: Default::default(),
 			runtime_version: Default::default(),
 		}
-		.estimate_ingress_fee(assets::dot::Asset::Dot);
+		.estimate_ingress_fee(assets::dot::Asset::Dot, 0.into());
 
 		let egress_fee = PolkadotTrackedData {
 			median_tip: Default::default(),
 			runtime_version: Default::default(),
 		}
-		.estimate_egress_fee(assets::dot::Asset::Dot);
+		.estimate_egress_fee(assets::dot::Asset::Dot, 0.into());
 
 		// The values are not important. This test serves more as a sanity check that
 		// the fees are valid, and a reference to compare against the actual fees. These values must
