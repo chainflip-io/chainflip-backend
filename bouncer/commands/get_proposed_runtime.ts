@@ -7,11 +7,14 @@
 //
 // For example: ./commands/get_proposed_runtime.ts 123
 
-import { getChainflipApi } from '../shared/utils';
 import fs from 'fs';
-const proposal_id = process.argv[2];
+import { getChainflipApi } from '../shared/utils';
+
+const proposalId = process.argv[2];
 const api = await getChainflipApi();
-let proposal = await api.query.governance.proposals(proposal_id);
-let call = proposal.unwrap().call;
-let extrinsic = api.registry.createType('Call', proposal.unwrap().call);
-await fs.writeFile("proposed_runtime.wasm", extrinsic.args[1].toU8a(), (err) => {if(err)console.log("error!"); else process.exit(0);});
+const proposal = await api.query.governance.proposals(proposalId);
+const extrinsic = api.registry.createType('Call', proposal.unwrap().call);
+await fs.writeFile('proposed_runtime.wasm', extrinsic.args[1].toU8a(), (err) => {
+  if (err) console.log('error!');
+  else process.exit(0);
+});
