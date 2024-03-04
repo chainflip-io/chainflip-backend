@@ -34,10 +34,16 @@ async function main(): Promise<void> {
   console.log('=== Performing initial Vault setup ===');
 
   // Step 1
+  console.log('Initializing Arbitrum');
+  const arbInitializationRequest = observeEvent('arbitrumVault:ChainInitialized', chainflip);
+  await submitGovernanceExtrinsic(chainflip.tx.arbitrumVault.initializeChain());
+  await arbInitializationRequest;
+
+  // Step 2
   console.log('Forcing rotation');
   await submitGovernanceExtrinsic(chainflip.tx.validator.forceRotation());
 
-  // Step 2
+  // Step 3
   console.log('Waiting for new keys');
 
   const dotActivationRequest = observeEvent(
@@ -45,6 +51,7 @@ async function main(): Promise<void> {
     chainflip,
   );
   const btcActivationRequest = observeEvent('bitcoinVault:AwaitingGovernanceActivation', chainflip);
+
   const arbActivationRequest = observeEvent(
     'arbitrumVault:AwaitingGovernanceActivation',
     chainflip,
@@ -53,7 +60,7 @@ async function main(): Promise<void> {
   const btcKey = (await btcActivationRequest).data.newPublicKey;
   const arbKey = (await arbActivationRequest).data.newPublicKey;
 
-  // Step 3
+  // Step 4
   console.log('Requesting Polkadot Vault creation');
   const createPolkadotVault = async () => {
     let vaultAddress: AddressOrPair | undefined;
@@ -82,7 +89,7 @@ async function main(): Promise<void> {
 
   const proxyAdded = observeEvent('proxy:ProxyAdded', polkadot);
 
-  // Step 4
+  // Step 5
   console.log('Rotating Proxy and Funding Accounts.');
   const rotateAndFund = async () => {
     let done = false;
@@ -126,7 +133,7 @@ async function main(): Promise<void> {
   await rotateAndFund();
   const vaultBlockNumber = (await proxyAdded).block;
 
-  // Step 5
+  // Step 6
   console.log('Inserting Arbitrum key in the contracts');
   const keyManagerAddress = getEvmContractAddress('Arbitrum', 'KEY_MANAGER');
   const web3 = new Web3(getEvmEndpoint('Arbitrum'));
@@ -144,7 +151,7 @@ async function main(): Promise<void> {
     .encodeABI();
   await signAndSendTxEvm('Arbitrum', keyManagerAddress, '0', txData);
 
-  // Step 6
+  // Step 7
   console.log('Registering Vaults with state chain');
   await submitGovernanceExtrinsic(
     chainflip.tx.environment.witnessPolkadotVaultCreation(vaultAddress, {
@@ -160,14 +167,7 @@ async function main(): Promise<void> {
   );
 
   await submitGovernanceExtrinsic(
-    chainflip.tx.environment.witnessInitializeArbitrumVault(
-      await arbClient.eth.getBlockNumber(),
-      getEvmContractAddress('Arbitrum', 'KEY_MANAGER'),
-      getEvmContractAddress('Arbitrum', 'VAULT'),
-      getEvmContractAddress('Arbitrum', 'ADDRESS_CHECKER'),
-      await arbClient.eth.getChainId(),
-      getEvmContractAddress('Arbitrum', 'ARBUSDC'),
-    ),
+    chainflip.tx.environment.witnessInitializeArbitrumVault(await arbClient.eth.getBlockNumber()),
   );
 
   // Confirmation
