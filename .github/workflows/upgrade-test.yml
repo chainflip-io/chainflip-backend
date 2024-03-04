@@ -157,10 +157,6 @@ jobs:
           MAIN_VERSION=$(./upgrade-to-bins/chainflip-node --version)
           echo $MAIN_VERSION
 
-      - name: Install node dependencies
-        working-directory: bouncer
-        run: pnpm install
-
       - name: Start a localnet from current release
         env:
           BINARY_ROOT_PATH: ./latest-release-bins
@@ -182,6 +178,7 @@ jobs:
           git checkout ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}
           git rev-parse HEAD
           cd bouncer
+          pnpm install
           ./run.sh
 
       # we need to be sure that when this fails, we catch the error, any panics etc. that occur
@@ -205,6 +202,7 @@ jobs:
           git checkout ${{ env.UPGRADE_TO_COMMIT }}
           git rev-parse HEAD
           cd bouncer
+          pnpm install
           ./tests/all_concurrent_tests.ts
 
       - name: Print old chainflip-engine logs
