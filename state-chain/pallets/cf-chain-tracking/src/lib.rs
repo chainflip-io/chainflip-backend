@@ -74,7 +74,7 @@ pub mod pallet {
 		/// The tracked state of this chain has been updated.
 		ChainStateUpdated { new_chain_state: ChainState<T::TargetChain> },
 		/// The fee multiplier for this chain has been updated
-		FeeMultiplierUpdated { new_fee_multiplier: FixedU128 }
+		FeeMultiplierUpdated { new_fee_multiplier: FixedU128 },
 	}
 
 	#[pallet::error]
