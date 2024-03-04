@@ -73,6 +73,8 @@ pub mod pallet {
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// The tracked state of this chain has been updated.
 		ChainStateUpdated { new_chain_state: ChainState<T::TargetChain> },
+		/// The fee multiplier for this chain has been updated
+		FeeMultiplierUpdated { new_fee_multiplier: FixedU128 }
 	}
 
 	#[pallet::error]
@@ -151,6 +153,7 @@ pub mod pallet {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			FeeMultiplier::<T, I>::put(new_fee_multiplier);
+			Self::deposit_event(Event::<T, I>::FeeMultiplierUpdated { new_fee_multiplier });
 
 			Ok(())
 		}
