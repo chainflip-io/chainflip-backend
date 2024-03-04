@@ -1133,7 +1133,7 @@ mod arbitrum_integration_migration {
 					[1u8; 20].into(),
 					[1u8; 20].into(),
 					[1u8; 20].into(),
-					arb::CHAIN_ID_GOERLI,
+					arb::CHAIN_ID_SEPOLIA,
 					[1u8; 20].into(),
 				)
 			} else if genesis_hash ==
@@ -1147,7 +1147,7 @@ mod arbitrum_integration_migration {
 					[2u8; 20].into(),
 					[2u8; 20].into(),
 					[2u8; 20].into(),
-					arb::CHAIN_ID_GOERLI,
+					arb::CHAIN_ID_SEPOLIA,
 					[2u8; 20].into(),
 				)
 			} else {

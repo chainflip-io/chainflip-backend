@@ -30,7 +30,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	arbusdc_token_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
 	arb_address_checker_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
 	ethereum_chain_id: cf_chains::eth::CHAIN_ID_GOERLI,
-	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_GOERLI,
+	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_SEPOLIA,
 	eth_init_agg_key: hex_literal::hex!(
 		"025fe47808af34826795b6dc483f95076cbd3779f420ea01d2e12396cdd049e224"
 	),
