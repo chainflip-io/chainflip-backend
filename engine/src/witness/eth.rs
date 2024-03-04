@@ -132,8 +132,8 @@ where
 	eth_safe_vault_source
 		.clone()
 		.key_manager_witnessing(process_call.clone(), eth_client.clone(), key_manager_address)
-		.continuous("KeyManager".to_string(), db.clone())
-		.logging("KeyManager")
+		.continuous("EthereumKeyManager".to_string(), db.clone())
+		.logging("EthereumKeyManager")
 		.spawn(scope);
 
 	eth_safe_vault_source
@@ -156,8 +156,8 @@ where
 			usdc_contract_address,
 		)
 		.await?
-		.continuous("USDCDeposits".to_string(), db.clone())
-		.logging("USDCDeposits")
+		.continuous("EthereumUSDCDeposits".to_string(), db.clone())
+		.logging("EthereumUSDCDeposits")
 		.spawn(scope);
 
 	eth_safe_vault_source_deposit_addresses
@@ -196,8 +196,8 @@ where
 			cf_primitives::ForeignChain::Ethereum,
 			supported_erc20_tokens,
 		)
-		.continuous("Vault".to_string(), db)
-		.logging("Vault")
+		.continuous("EthereumVault".to_string(), db)
+		.logging("EthereumVault")
 		.spawn(scope);
 
 	Ok(())

@@ -110,6 +110,7 @@ build-localnet() {
   if [[ $CI == true ]]; then
     sudo chmod -R 777 /tmp/chainflip
     sudo chmod -R 777 /tmp/solana
+    sudo chown -R $USER:$USER /tmp/solana
   else
     chmod -R 777 /tmp/chainflip
     chmod -R 777 /tmp/solana
@@ -131,7 +132,7 @@ build-localnet() {
   if which solana-test-validator; then
     echo "☀️ Waiting for Solana node to start"
     ./localnet/init/scripts/start-solana.sh
-    until curl -s http://localhost:8899 >> $DEBUG_OUTPUT_DESTINATION 2>&1; do sleep 1; done
+    check_endpoint_health -s http://localhost:8899 >> $DEBUG_OUTPUT_DESTINATION 2>&1
   else
     echo "☀️ Solana not installed, skipping..."
   fi

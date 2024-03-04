@@ -521,6 +521,11 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		SD::further_liquidity(self.current_tick).then_some(self.current_sqrt_price)
 	}
 
+	/// Returns the raw current sqrt price of the pool, without liquidity checks.
+	pub(super) fn raw_current_sqrt_price(&self) -> SqrtPriceQ64F96 {
+		self.current_sqrt_price
+	}
+
 	/// Calculates the fees owed to the specified position, resets the fees owed for that position
 	/// to zero, calls `try_debit` passing the Amounts required to add the `minted_liquidity` to the
 	/// position. If `try_debit` returns `Ok(t)` the position will be created if it didn't already

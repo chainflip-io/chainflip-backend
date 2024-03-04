@@ -12,8 +12,8 @@ mod weights;
 use crate::{
 	chainflip::{calculate_account_apy, Offence},
 	runtime_apis::{
-		AuctionState, DispatchErrorWithMessage, FailingWitnessValidators, LiquidityProviderInfo,
-		RuntimeApiAccountInfoV2, RuntimeApiPenalty,
+		AuctionState, BrokerInfo, DispatchErrorWithMessage, FailingWitnessValidators,
+		LiquidityProviderInfo, RuntimeApiPenalty, ScheduledSwap, ValidatorInfo,
 	},
 };
 use cf_amm::{
@@ -910,6 +910,7 @@ pub type UncheckedExtrinsic =
 pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, RuntimeCall, SignedExtra>;
+#[cfg(not(feature = "try-runtime"))]
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<
 	Runtime,
@@ -918,6 +919,20 @@ pub type Executive = frame_executive::Executive<
 	Runtime,
 	PalletExecutionOrder,
 	PalletMigrations,
+>;
+
+// NOTE: This should be a temporary workaround. When paritytech/polkadot-sdk#2560 is merged into our
+// substrate fork, we can remove this.
+#[cfg(feature = "try-runtime")]
+/// Executive: handles dispatch to the various modules.
+pub type Executive = frame_executive::Executive<
+	Runtime,
+	Block,
+	frame_system::ChainContext<Runtime>,
+	Runtime,
+	PalletExecutionOrder,
+	PalletMigrations,
+	AllPalletsWithoutSystem,
 >;
 
 pub type PalletExecutionOrder = (
@@ -1014,9 +1029,14 @@ type PalletMigrations = (
 );
 
 mod arbitrum_integration_migration {
+
 	use super::*;
 	use crate::{safe_mode, ArbitrumInstance, BitcoinInstance, EthereumInstance, PolkadotInstance};
+	use cf_chains::arb;
 	use cf_traits::SafeMode;
+	use eth::Address;
+
+	use sp_core::H256;
 	use sp_runtime::DispatchError;
 
 	mod old {
@@ -1047,7 +1067,12 @@ mod arbitrum_integration_migration {
 
 	impl OnRuntimeUpgrade for ArbitrumIntegration {
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			use cf_chains::assets::arb::Asset::ArbUsdc;
 			use frame_support::assert_ok;
+			use frame_system::pallet_prelude::BlockNumberFor;
+			use sp_runtime::traits::Zero;
+			use sp_std::str::FromStr;
+
 			assert_ok!(pallet_cf_environment::RuntimeSafeMode::<Runtime>::translate(
 				|maybe_old: Option<old::RuntimeSafeMode>| {
 					maybe_old.map(|old| {
@@ -1074,10 +1099,71 @@ mod arbitrum_integration_migration {
 				},
 			));
 
-			pallet_cf_vaults::ChainInitialized::<Runtime, EthereumInstance>::put(true);
-			pallet_cf_vaults::ChainInitialized::<Runtime, PolkadotInstance>::put(true);
-			pallet_cf_vaults::ChainInitialized::<Runtime, BitcoinInstance>::put(true);
-			pallet_cf_vaults::ChainInitialized::<Runtime, ArbitrumInstance>::put(false);
+			let genesis_hash =
+				frame_system::BlockHash::<Runtime>::get(BlockNumberFor::<Runtime>::zero());
+
+			let (
+				key_manager_address,
+				vault_address,
+				address_checker_address,
+				chain_id,
+				usdc_address,
+			): (Address, Address, Address, u64, Address) = if genesis_hash ==
+				// BERGHAIN MAINNET
+				H256::from_str(
+					"0x8b8c140b0af9db70686583e3f6bf2a59052bfe9584b97d20c45068281e976eb9",
+				)
+				.unwrap()
+			{
+				(
+					[0u8; 20].into(),
+					[0u8; 20].into(),
+					[0u8; 20].into(),
+					arb::CHAIN_ID_MAINNET,
+					[0u8; 20].into(),
+				)
+			} else if genesis_hash ==
+				// PERSEVERANCE
+				H256::from_str(
+					"0x46c8ca427e31ba73cbd1ad60500d4a7d173b1c80c9fb1afb76661d614f9c5cd7",
+				)
+				.unwrap()
+			{
+				(
+					[1u8; 20].into(),
+					[1u8; 20].into(),
+					[1u8; 20].into(),
+					arb::CHAIN_ID_GOERLI,
+					[1u8; 20].into(),
+				)
+			} else if genesis_hash ==
+				// SISYPHOS
+				H256::from_str(
+					"0xbeb780f634621c64012483ebbf39927eb236b63902e9a249a76af8ba4cf8a474",
+				)
+				.unwrap()
+			{
+				(
+					[2u8; 20].into(),
+					[2u8; 20].into(),
+					[2u8; 20].into(),
+					arb::CHAIN_ID_GOERLI,
+					[2u8; 20].into(),
+				)
+			} else {
+				panic!("runtime upgrade is being applied to unsupported chain");
+			};
+
+			pallet_cf_environment::ArbitrumKeyManagerAddress::<Runtime>::put(key_manager_address);
+			pallet_cf_environment::ArbitrumVaultAddress::<Runtime>::put(vault_address);
+			pallet_cf_environment::ArbitrumAddressCheckerAddress::<Runtime>::put(
+				address_checker_address,
+			);
+			pallet_cf_environment::ArbitrumChainId::<Runtime>::put(chain_id);
+			pallet_cf_environment::ArbitrumSupportedAssets::<Runtime>::insert(
+				ArbUsdc,
+				usdc_address,
+			);
 
 			Weight::zero()
 		}
@@ -1243,7 +1329,7 @@ impl_runtime_apis! {
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()
 		}
-		fn cf_account_info_v2(account_id: &AccountId) -> RuntimeApiAccountInfoV2 {
+		fn cf_validator_info(account_id: &AccountId) -> ValidatorInfo {
 			let is_current_backup = pallet_cf_validator::Backups::<Runtime>::get().contains_key(account_id);
 			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(account_id);
 			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode<_>>::is_qualified(account_id);
@@ -1254,7 +1340,7 @@ impl_runtime_apis! {
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(account_id);
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(account_id);
 			let restricted_balances = pallet_cf_funding::RestrictedBalances::<Runtime>::get(account_id);
-			RuntimeApiAccountInfoV2 {
+			ValidatorInfo {
 				balance: account_info.total(),
 				bond: account_info.bond(),
 				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(account_id).unwrap_or(0),
@@ -1477,28 +1563,32 @@ impl_runtime_apis! {
 			}
 		}
 
-
 		fn cf_liquidity_provider_info(
 			account_id: AccountId,
-		) -> Option<LiquidityProviderInfo> {
-			let role = Self::cf_account_role(account_id.clone())?;
-			if role != AccountRole::LiquidityProvider {
-				return None;
-			}
-
+		) -> LiquidityProviderInfo {
 			let refund_addresses = ForeignChain::iter().map(|chain| {
 				(chain, pallet_cf_lp::LiquidityRefundAddress::<Runtime>::get(&account_id, chain))
 			}).collect();
 
 			LiquidityPools::sweep(&account_id).unwrap();
 
-			Some(LiquidityProviderInfo {
+			LiquidityProviderInfo {
 				refund_addresses,
 				balances: Asset::all().map(|asset|
 					(asset, pallet_cf_lp::FreeBalances::<Runtime>::get(&account_id, asset).unwrap_or(0))
 				).collect(),
 				earned_fees: pallet_cf_lp::HistoricalEarnedFees::<Runtime>::get(&account_id),
-			})
+			}
+		}
+
+		fn cf_broker_info(
+			account_id: AccountId,
+		) -> BrokerInfo {
+			let earned_fees = Asset::all().map(|asset|
+				(asset, Swapping::earned_broker_fees(&account_id, asset))
+			).collect();
+
+			BrokerInfo { earned_fees }
 		}
 
 		fn cf_account_role(account_id: AccountId) -> Option<AccountRole> {
@@ -1621,6 +1711,21 @@ impl_runtime_apis! {
 			}
 
 			all_prewitnessed_swaps
+		}
+
+
+		fn cf_scheduled_swaps(base_asset: Asset, _quote_asset: Asset) -> Vec<ScheduledSwap> {
+
+			let current_block = System::block_number();
+
+			pallet_cf_swapping::SwapQueue::<Runtime>::iter().flat_map(|(block, swaps_for_block)| {
+
+				// In case `block` has already passed, the swaps will be re-tried at the next block:
+				let execute_at = core::cmp::max(block, current_block.saturating_add(1));
+
+				let swaps: Vec<_> = swaps_for_block.iter().filter(|swap| swap.from == base_asset || swap.to == base_asset).cloned().collect();
+				Swapping::get_scheduled_swap_legs(swaps, base_asset).unwrap().into_iter().map(move |swap| ScheduledSwap {swap, execute_at })
+			}).collect()
 		}
 
 		fn cf_failed_call_ethereum(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {

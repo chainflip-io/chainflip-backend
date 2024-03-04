@@ -261,11 +261,6 @@ impl Engine {
 							RuntimeCall::Environment(
 								pallet_cf_environment::Call::witness_initialize_arbitrum_vault {
 									block_number: 1,
-									key_manager_address: Default::default(),
-									vault_address: Default::default(),
-									address_checker_address: Default::default(),
-									chain_id: Default::default(),
-									arb_usdc_address: Default::default(),
 								},
 							),
 							pallet_cf_governance::RawOrigin::GovernanceApproval.into()

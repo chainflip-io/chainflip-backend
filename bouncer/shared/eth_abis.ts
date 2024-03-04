@@ -14,7 +14,7 @@ function loadContractCached(abiPath: string) {
     return cached;
   };
 }
-const CF_ETH_CONTRACT_ABI_TAG = 'v1.1.0';
+const CF_ETH_CONTRACT_ABI_TAG = 'v1.1.2';
 export const getErc20abi = loadContractCached(
   '../contract-interfaces/eth-contract-abis/IERC20.json',
 );

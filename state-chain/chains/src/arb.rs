@@ -45,6 +45,7 @@ impl Chain for Arbitrum {
 	type TransactionMetadata = evm::EvmTransactionMetadata;
 	type ReplayProtectionParams = Self::ChainAccount;
 	type ReplayProtection = evm::api::EvmReplayProtection;
+	type TransactionRef = H256;
 }
 
 impl PalletInstanceAlias for Arbitrum {

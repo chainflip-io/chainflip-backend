@@ -1,7 +1,7 @@
 version: "3.9"
 services:
   init:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.1.1-debug-spam-3-1-node-v1.1.1-debug-spam-3
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.1.2-${NODE_COUNT}
     container_name: init
     platform: linux/amd64
     volumes:
@@ -9,7 +9,7 @@ services:
     command: /bin/sh -c "cp -R /initial-state/* /localnet-initial-state"
 
   init-solana:
-    image: ghcr.io/chainflip-io/solana-localnet-ledger:0.1.0
+    image: ghcr.io/chainflip-io/solana-localnet-ledger:v0.1.1
     container_name: init-solana
     platform: linux/amd64
     volumes:
@@ -17,7 +17,7 @@ services:
     command: /bin/sh -c "cp -R /solana/ledger/* /test-ledger"
 
   arb-init:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/arbitrum-gizmo-shop:v1.1.1-debug-spam-3-1-node-v1.1.1-debug-spam-3
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/arbitrum-gizmo-shop:v1.1.2-${NODE_COUNT}
     restart: always
     container_name: arb-init
     pull_policy: always
@@ -33,7 +33,7 @@ services:
       - "/tmp/chainflip/data/redis-data:/data"
 
   geth:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v1.1.1-debug-spam-3-1-node-v1.1.1-debug-spam-3
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v1.1.2-${NODE_COUNT}
     container_name: geth
     platform: linux/amd64
     ports:
