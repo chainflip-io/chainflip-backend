@@ -824,6 +824,9 @@ mod tests {
 		assert_eq!(serialized_tx, expected_serialized_tx);
 	}
 
+	// TODO: We can have multiple transfer instructions in a single transaction. However, we need to check that
+	// there is no wayh to DoS us. I'm not sure if a transfer to the BPF bootloader for instance works. Using
+	// the web3 js I get an error that the account is read-only.
 	#[test]
 	fn create_nonced_transfer_token() {
 		let durable_nonce = Hash::from_str("A6hMhp72reGMkS5kNBaxaEXgNqn9H6woLsjy2Apz38MQ").unwrap();
@@ -874,7 +877,6 @@ mod tests {
 	}
 
 	// TODO: Do create_nonced_transfer with added createAssociatedTokenAccountIdempotentInstruction.
-	// TODO: Do create_nonced_rotate_agg_key with added nonceAuthorize rotation
 
 	#[test]
 	fn create_nonced_rotate_agg_key() {
@@ -915,7 +917,51 @@ mod tests {
 		assert_eq!(serialized_tx, expected_serialized_tx);
 	}
 
-	// TODO: Pull the discriminators from the contracts-interfaces
+	#[test]
+	fn create_nonced_rotate_agg_key_nonce_authorize() {
+		let durable_nonce = Hash::from_str("9aDAw5xKqTFBNxDHx89KuVdqV4fHD3gyR6AMGcBE3AkB").unwrap();
+		let vault_account = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
+		let vault_account_pubkey = vault_account.pubkey();
+		let new_vault_account_pubkey =
+			Pubkey::from_str("7x7wY9yfXjRmusDEfPPCreU4bP49kmH4mqjYUXNAXJoM").unwrap();
+		let nonce_account_pubkey =
+			Pubkey::from_str("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw").unwrap();
+		let data_account_pubkey =
+			Pubkey::from_str("5yhN4QzBFg9jKhLfVHcS5apMB7e3ftofCkzkNH6dZctC").unwrap();
+
+		let instructions = [
+			SystemProgramInstruction::advance_nonce_account(
+				&nonce_account_pubkey,
+				&vault_account_pubkey,
+			),
+			VaultProgram::get_instruction(
+				VaultProgram::RotateAggKey { transfer_funds: true },
+				vec![
+					AccountMeta::new(data_account_pubkey, false),
+					AccountMeta::new(vault_account_pubkey, true),
+					AccountMeta::new(new_vault_account_pubkey, false),
+					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
+				],
+			),
+			SystemProgramInstruction::nonce_authorize(
+				&nonce_account_pubkey,
+				&vault_account_pubkey,
+				&new_vault_account_pubkey,
+			),
+		];
+		let message = Message::new(&instructions, Some(&vault_account_pubkey));
+		let mut tx = Transaction::new_unsigned(message);
+		tx.sign(&[&vault_account], durable_nonce);
+		println!("{:?}", tx);
+
+		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
+		let expected_serialized_tx = hex_literal::hex!("01570cec66067d51900a3311c63b4a60e4f6d81043648e4301a5db61284a84692a6e7926cb77fb734db05a57dfeb34ff88cdb0266648fd455876ba21fdb6c4fd0a01000307f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19249f4e96507a68c8d673696ffd7e551091e62a0a603c6585b79d8707f807238656744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be543990044000000000000000000000000000000000000000000000000000000000000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000004acf654557d0c27ec71e80b3ed7d0a6f7baa05717b5bf6060e6b9e6f5d3a55327f5f6c977f9a9b493e601e02c2150521faf3602ca0de2998a72b0fb517e0c0ac0304030105000404000000060402000304094e518fabdda5d68b010402010024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be543990044").to_vec();
+		println!("tx:{:?}", hex::encode(serialized_tx.clone()));
+
+		assert_eq!(serialized_tx, expected_serialized_tx);
+	}
+
+	// TODO: Pull the discriminators from the contracts-interfaces and check them against the generated values
 	#[test]
 	fn test_function_discriminators() {
 		assert_eq!(

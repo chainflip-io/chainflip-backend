@@ -107,7 +107,7 @@ pub enum SystemProgramInstruction {
 	///   1. `[SIGNER]` Nonce authority
 	///
 	/// The `Pubkey` parameter identifies the entity to authorize
-	AuthorizeNonceAccount(Pubkey),
+	AuthorizeNonceAccount{new_authorized_pubkey: Pubkey},
 
 	/// Allocate space in a (possibly new) account without funding
 	///
@@ -200,6 +200,19 @@ impl SystemProgramInstruction {
 			// program id of the system program
 			Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
 			&Self::AdvanceNonceAccount,
+			account_metas,
+		)
+	}
+
+	pub fn nonce_authorize(nonce_pubkey: &Pubkey, authorized_pubkey: &Pubkey, new_authorized_pubkey: &Pubkey) -> Instruction {
+		let account_metas = vec![
+			AccountMeta::new(*nonce_pubkey, false),
+			AccountMeta::new_readonly(*authorized_pubkey, true),
+		];
+		Instruction::new_with_bincode(
+			// program id of the system program
+			Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
+			&Self::AuthorizeNonceAccount{ new_authorized_pubkey: *new_authorized_pubkey },
 			account_metas,
 		)
 	}
