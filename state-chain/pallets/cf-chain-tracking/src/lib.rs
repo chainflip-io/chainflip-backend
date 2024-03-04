@@ -11,7 +11,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 use cf_chains::{Chain, ChainState, FeeEstimationApi};
-use cf_traits::{Chainflip, GetBlockHeight};
+use cf_traits::{Chainflip, FeeCalculationApi, GetBlockHeight};
 use frame_support::{dispatch::DispatchResultWithPostInfo, pallet_prelude::*};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -163,9 +163,8 @@ impl<T: Config<I>, I: 'static> GetBlockHeight<T::TargetChain> for Pallet<T, I> {
 	}
 }
 
-impl<T: Config<I>, I: 'static> FeeEstimationApi<T::TargetChain> for Pallet<T, I> {
+impl<T: Config<I>, I: 'static> FeeCalculationApi<T::TargetChain> for Pallet<T, I> {
 	fn estimate_ingress_fee(
-		&self,
 		asset: <T::TargetChain as Chain>::ChainAsset,
 	) -> <T::TargetChain as Chain>::ChainAmount {
 		FeeMultiplier::<T, I>::get().saturating_mul_int(
@@ -177,7 +176,6 @@ impl<T: Config<I>, I: 'static> FeeEstimationApi<T::TargetChain> for Pallet<T, I>
 	}
 
 	fn estimate_egress_fee(
-		&self,
 		asset: <T::TargetChain as Chain>::ChainAsset,
 	) -> <T::TargetChain as Chain>::ChainAmount {
 		FeeMultiplier::<T, I>::get().saturating_mul_int(

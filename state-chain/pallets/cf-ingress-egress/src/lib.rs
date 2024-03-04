@@ -22,7 +22,7 @@ use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi, AddressDerivationError},
 	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
 	Chain, ChannelLifecycleHooks, ConsolidateCall, DepositChannel, ExecutexSwapAndCall,
-	FeeEstimationApi, FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
+	FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	Asset, BasisPoints, BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex, ForeignChain,
@@ -31,8 +31,8 @@ use cf_primitives::{
 use cf_traits::{
 	liquidity::{LpBalanceApi, LpDepositHandler},
 	AssetConverter, Broadcaster, CcmHandler, CcmSwapIds, Chainflip, DepositApi, DepositHandler,
-	EgressApi, EpochInfo, FeePayment, GetBlockHeight, NetworkEnvironmentProvider,
-	ScheduledEgressDetails, SwapDepositHandler,
+	EgressApi, EpochInfo, FeeCalculationApi, FeePayment, GetBlockHeight,
+	NetworkEnvironmentProvider, ScheduledEgressDetails, SwapDepositHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -40,7 +40,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_runtime::{traits::UniqueSaturatedInto, FixedU128};
+use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::{vec, vec::Vec};
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -348,7 +348,7 @@ pub mod pallet {
 			+ ConsolidateCall<Self::TargetChain>;
 
 		/// Get the latest chain state of the target chain.
-		type ChainTracking: GetBlockHeight<Self::TargetChain> + FeeEstimationApi<Self::TargetChain>;
+		type ChainTracking: GetBlockHeight<Self::TargetChain> + FeeCalculationApi<Self::TargetChain>;
 
 		/// A broadcaster instance.
 		type Broadcaster: Broadcaster<

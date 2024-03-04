@@ -1,6 +1,6 @@
 use cf_chains::Chain;
 
-use crate::GetBlockHeight;
+use crate::{FeeCalculationApi, GetBlockHeight};
 
 use super::{
 	block_height_provider::BlockHeightProvider, tracked_data_provider::TrackedDataProvider,
@@ -14,8 +14,14 @@ impl<C: Chain> GetBlockHeight<C> for ChainTracking<C> {
 	}
 }
 
-// impl<C: Chain> GetTrackedData<C> for ChainTracking<C> {
-// 	fn get_tracked_data() -> C::TrackedData {
-// 		TrackedDataProvider::<C>::get_tracked_data()
-// 	}
-// }
+impl<C: Chain> FeeCalculationApi<C> for ChainTracking<C> {
+	fn estimate_ingress_fee(_asset: C::ChainAsset) -> C::ChainAmount {
+		// TrackedDataProvider::<C>::estimate_ingress_fee(_asset)
+		Default::default()
+	}
+
+	fn estimate_egress_fee(_asset: C::ChainAsset) -> C::ChainAmount {
+		// TrackedDataProvider::<C>::estimate_egress_fee(_asset)
+		Default::default()
+	}
+}

@@ -22,7 +22,6 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use core::{cmp::max, mem::size_of};
 use frame_support::{
 	pallet_prelude::RuntimeDebug,
-	sp_runtime::{FixedPointNumber, FixedU128},
 	traits::{ConstBool, ConstU32},
 	BoundedVec,
 };

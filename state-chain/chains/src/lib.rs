@@ -11,7 +11,7 @@ use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member, RuntimeDebug},
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, CheckedSub},
-		BoundedVec, DispatchError, FixedU128,
+		BoundedVec, DispatchError,
 	},
 	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, StorageHasher,
 };

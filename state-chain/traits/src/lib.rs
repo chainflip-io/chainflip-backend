@@ -892,6 +892,12 @@ pub trait AuthoritiesCfeVersions {
 	fn percent_authorities_compatible_with_version(version: SemVer) -> Percent;
 }
 
+pub trait FeeCalculationApi<C: Chain> {
+	fn estimate_ingress_fee(asset: C::ChainAsset) -> C::ChainAmount;
+
+	fn estimate_egress_fee(asset: C::ChainAsset) -> C::ChainAmount;
+}
+
 pub trait CallDispatchFilter<RuntimeCall> {
 	fn should_dispatch(&self, call: &RuntimeCall) -> bool;
 }

@@ -17,9 +17,7 @@ pub use ethabi::{
 	Address, Hash as TxHash, Token, Uint, Word,
 };
 use evm::api::EvmReplayProtection;
-use frame_support::sp_runtime::{
-	traits::Zero, FixedPointNumber, FixedU128, FixedU64, RuntimeDebug,
-};
+use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{cmp::min, convert::TryInto, str};
