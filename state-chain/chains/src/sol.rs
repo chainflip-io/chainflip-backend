@@ -13,8 +13,10 @@ pub mod extra_types_for_testing;
 use thiserror::Error;
 
 use self::program_instructions::SystemProgramInstruction;
+// use self::spl_token_instructions::TokenInstruction;
 
 pub mod program_instructions;
+pub mod token_instructions;
 pub mod short_vec;
 
 pub const SIGNATURE_BYTES: usize = 64;
@@ -23,6 +25,7 @@ pub const HASH_BYTES: usize = 32;
 const MAX_BASE58_LEN: usize = 44;
 pub const SYSTEM_PROGRAM_ID: &str = "11111111111111111111111111111111";
 pub const TOKEN_PROGRAM_ID: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+pub const ASSOCIATED_TOKEN_PROGRAM_ID: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
 pub const VAULT_PROGRAM: &str = "632bJHVLPj6XPLVgrabFwxogtAQQ5zb8hwm9zqZuCcHo";
 pub const SYS_VAR_RECENT_BLOCKHASHES: &str = "SysvarRecentB1ockHashes11111111111111111111";
 
