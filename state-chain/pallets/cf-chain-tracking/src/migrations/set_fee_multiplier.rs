@@ -1,7 +1,9 @@
 use crate::*;
 use cf_chains::Bitcoin;
 use frame_support::traits::OnRuntimeUpgrade;
-use scale_info::prelude::vec;
+
+#[cfg(feature = "try-runtime")]
+use sp_std::prelude::Vec;
 
 pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 
@@ -29,7 +31,7 @@ impl<T: Config<Instance3, TargetChain = Bitcoin>> OnRuntimeUpgrade for Migration
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		Ok(vec![])
+		Ok(Default::default())
 	}
 
 	#[cfg(feature = "try-runtime")]
