@@ -1,24 +1,21 @@
 use crate::*;
 use cf_chains::Bitcoin;
 use frame_support::traits::OnRuntimeUpgrade;
+use scale_info::prelude::vec;
 
 pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 
 const BTC_FEE_MULTIPLIER: FixedU128 = FixedU128::from_rational(3, 2);
 
-// No need to migrate Eth or Dot, as the fee multiplier is not used there
+// No need to migrate Eth or Dot: default value for storage item is 1
 impl<T: Config<Instance1>> OnRuntimeUpgrade for Migration<T, Instance1> {
 	fn on_runtime_upgrade() -> Weight {
-		FeeMultiplier::<T, Instance1>::set(FixedU128::from_u32(1));
-
 		Weight::zero()
 	}
 }
 
 impl<T: Config<Instance2>> OnRuntimeUpgrade for Migration<T, Instance2> {
 	fn on_runtime_upgrade() -> Weight {
-		FeeMultiplier::<T, Instance2>::set(FixedU128::from_u32(1));
-
 		Weight::zero()
 	}
 }
