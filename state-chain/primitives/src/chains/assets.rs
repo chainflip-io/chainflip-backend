@@ -15,12 +15,27 @@
 //! ```
 
 macro_rules! assets {
-	(pub enum Asset {
-		$(($chain_mod:ident, $chain:ident, $chain_str:literal) => {
-			($gas_lowercase:ident, $gas_asset:ident) = $gas_value:literal (GAS_ASSET)
-			$(,($lowercase:ident, $asset:ident) = $value:literal)* $(,)?
-		}),*$(,)?
-	}) => {
+	(
+		$(
+			Chain {
+				variant: $chain_variant:ident,
+				member_and_module: $chain_member_and_module:ident,
+				json: $chain_json:literal,
+				assets: [
+					$(
+						Asset {
+							variant: $asset_variant:ident,
+							member: $asset_member:ident,
+							string: $asset_string:literal $((aliases: [$($asset_string_aliases:literal),+$(,)?]))?,
+							json: $asset_json:literal,
+							gas: $asset_gas:literal,
+							index: $asset_index:literal $(,)?
+						}
+					),+$(,)?
+				]$(,)?
+			}
+		),+$(,)?
+	) => {
 		pub mod any {
 			use strum_macros::EnumIter;
 			use codec::{MaxEncodedLen, Encode, Decode};
@@ -47,9 +62,8 @@ macro_rules! assets {
 			#[repr(u32)]
 			pub enum Asset {
 				$(
-					$gas_asset = $gas_value,
-					$($asset = $value,)*
-				)*
+					$($asset_variant = $asset_index,)+
+				)+
 			}
 			impl TryFrom<u32> for Asset {
 				type Error = &'static str;
@@ -57,9 +71,8 @@ macro_rules! assets {
 				fn try_from(n: u32) -> Result<Self, Self::Error> {
 					match n {
 						$(
-							x if x == Self::$gas_asset as u32 => Ok(Self::$gas_asset),
-							$(x if x == Self::$asset as u32 => Ok(Self::$asset),)*
-						)*
+							$(x if x == Self::$asset_variant as u32 => Ok(Self::$asset_variant),)+
+						)+
 						_ => Err("Invalid asset id"),
 					}
 				}
@@ -74,8 +87,8 @@ macro_rules! assets {
 				fn from(asset: Asset) -> Self {
 					match asset {
 						$(
-							Asset::$gas_asset $(| Asset::$asset)* => Self::$chain,
-						)*
+							$(Asset::$asset_variant)|+ => Self::$chain_variant,
+						)+
 					}
 				}
 			}
@@ -83,22 +96,20 @@ macro_rules! assets {
 				fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 					write!(f, "{}", match self {
 						$(
-							Asset::$gas_asset => stringify!($gas_asset),
 							$(
-								Asset::$asset => stringify!($asset),
-							)*
-						)*
-					}.to_uppercase())
+								Asset::$asset_variant => $asset_string,
+							)+
+						)+
+					})
 				}
 			}
 			impl core::str::FromStr for Asset {
 				type Err = &'static str;
 
 				fn from_str(s: &str) -> Result<Self, Self::Err> {
-					match s.to_lowercase().as_str() {
+					match s {
 						$(
-							stringify!($gas_lowercase) => Ok(Asset::$gas_asset),
-							$(stringify!($lowercase) => Ok(Asset::$asset),)*
+							$($asset_string $($(| $asset_string_aliases)+)? => Ok(Asset::$asset_variant),)*
 						)*
 						_ => Err("Unrecognized asset"),
 					}
@@ -112,20 +123,20 @@ macro_rules! assets {
 				#[derive(Copy, Clone, Serialize, Deserialize)]
 				#[derive(Debug, PartialEq, Eq, Hash, codec::Encode, codec::Decode, scale_info::TypeInfo, codec::MaxEncodedLen)] /* Remove these derives once PRO-1202 is done */
 				#[repr(u32)]
-				#[serde(rename_all = "UPPERCASE")]
 				pub enum SerdeAsset {
 					$(
-						$gas_asset = $gas_value,
-						$($asset = $value,)*
-					)*
+						$(
+							#[serde(rename = $asset_json)]
+							$asset_variant = $asset_index,
+						)+
+					)+
 				}
 				impl From<SerdeAsset> for super::Asset {
 					fn from(serde_asset: SerdeAsset) -> Self {
 						match serde_asset {
 							$(
-								SerdeAsset::$gas_asset => super::Asset::$gas_asset,
-								$(SerdeAsset::$asset => super::Asset::$asset,)*
-							)*
+								$(SerdeAsset::$asset_variant => super::Asset::$asset_variant,)+
+							)+
 						}
 					}
 				}
@@ -133,8 +144,7 @@ macro_rules! assets {
 					fn from(asset: super::Asset) -> Self {
 						match asset {
 							$(
-								super::Asset::$gas_asset => SerdeAsset::$gas_asset,
-								$(super::Asset::$asset => SerdeAsset::$asset,)*
+								$(super::Asset::$asset_variant => SerdeAsset::$asset_variant,)*
 							)*
 						}
 					}
@@ -169,17 +179,13 @@ macro_rules! assets {
 									chain: Some(serde_chain),
 									asset: serde_asset
 								} => {
-									let asset_chain = match serde_asset {
-										$(
-											SerdeAsset::$gas_asset $(| SerdeAsset::$asset)* => $crate::ForeignChain::$chain,
-										)*
-									};
+									let asset_chain = $crate::ForeignChain::from(super::Asset::from(serde_asset));
 
 									if asset_chain != serde_chain {
 										return Err(<<D as serde::Deserializer<'de>>::Error as serde::de::Error>::custom(lazy_format::lazy_format!("The asset '{asset}' does not exist on the '{serde_chain}' chain, but is instead a '{asset_chain}' asset. Either try using '{{\"chain\":\"{asset_chain}\", \"asset\":\"{asset}\"}}', or use a different asset (i.e. '{example_chain_asset}') ", asset = super::Asset::from(serde_asset), example_chain_asset = match serde_chain {
 											$(
-												$crate::ForeignChain::$chain => super::Asset::$gas_asset,
-											)*
+												$crate::ForeignChain::$chain_variant => super::Asset::from(super::super::$chain_member_and_module::GAS_ASSET),
+											)+
 										})))
 									} else {
 										serde_asset
@@ -233,16 +239,15 @@ macro_rules! assets {
 			)]
 			pub enum ForeignChainAndAsset {
 				$(
-					$chain(super::$chain_mod::Asset),
-				)*
+					$chain_variant(super::$chain_member_and_module::Asset),
+				)+
 			}
 			impl From<Asset> for ForeignChainAndAsset {
 				fn from(value: Asset) -> Self {
 					match value {
 						$(
-							Asset::$gas_asset => Self::$chain(super::$chain_mod::Asset::$gas_asset),
-							$(Asset::$asset => Self::$chain(super::$chain_mod::Asset::$asset),)*
-						)*
+							$(Asset::$asset_variant => Self::$chain_variant(super::$chain_member_and_module::Asset::$asset_variant),)+
+						)+
 					}
 				}
 			}
@@ -250,9 +255,8 @@ macro_rules! assets {
 				fn from(value: ForeignChainAndAsset) -> Self {
 					match value {
 						$(
-							ForeignChainAndAsset::$chain(super::$chain_mod::Asset::$gas_asset) => Self::$gas_asset,
-							$(ForeignChainAndAsset::$chain(super::$chain_mod::Asset::$asset) => Self::$asset,)*
-						)*
+							$(ForeignChainAndAsset::$chain_variant(super::$chain_member_and_module::Asset::$asset_variant) => Self::$asset_variant,)+
+						)+
 					}
 				}
 			}
@@ -260,26 +264,26 @@ macro_rules! assets {
 			#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
 			pub struct AssetMap<T> {
 				$(
-					#[serde(rename = $chain_str)]
-					pub $chain_mod: super::$chain_mod::AssetMap::<T>,
+					#[serde(rename = $chain_json)]
+					pub $chain_member_and_module: super::$chain_member_and_module::AssetMap::<T>,
 				)*
 			}
 			impl<T> AssetMap<T> {
 				pub fn from_fn<F: FnMut(Asset) -> T>(mut f: F) -> Self {
 					Self {
-						$($chain_mod: super::$chain_mod::AssetMap::<T>::from_fn(|asset| f(asset.into())),)*
+						$($chain_member_and_module: super::$chain_member_and_module::AssetMap::<T>::from_fn(|asset| f(asset.into())),)+
 					}
 				}
 
 				pub fn try_from_fn<E, F: FnMut(Asset) -> Result<T, E>>(mut f: F) -> Result<Self, E> {
 					Ok(Self {
-						$($chain_mod: super::$chain_mod::AssetMap::<T>::try_from_fn(|asset| f(asset.into()))?,)*
+						$($chain_member_and_module: super::$chain_member_and_module::AssetMap::<T>::try_from_fn(|asset| f(asset.into()))?,)+
 					})
 				}
 
 				pub fn map<R, F: FnMut(T) -> R>(self, mut f: F) -> AssetMap<R> {
 					AssetMap {
-						$($chain_mod: self.$chain_mod.map(&mut f),)*
+						$($chain_member_and_module: self.$chain_member_and_module.map(&mut f),)+
 					}
 				}
 
@@ -295,9 +299,8 @@ macro_rules! assets {
 				fn index_mut(&mut self, index: Asset) -> &mut T {
 					match index {
 						$(
-							Asset::$gas_asset => &mut self.$chain_mod.$gas_lowercase,
-							$(Asset::$asset => &mut self.$chain_mod.$lowercase,)*
-						)*
+							$(Asset::$asset_variant => &mut self.$chain_member_and_module.$asset_member,)+
+						)+
 					}
 				}
 			}
@@ -307,42 +310,56 @@ macro_rules! assets {
 				fn index(&self, index: Asset) -> &T {
 					match index {
 						$(
-							Asset::$gas_asset => &self.$chain_mod.$gas_lowercase,
-							$(Asset::$asset => &self.$chain_mod.$lowercase,)*
-						)*
+							$(Asset::$asset_variant => &self.$chain_member_and_module.$asset_member,)+
+						)+
 					}
 				}
 			}
 		}
 
 		$(
-			pub mod $chain_mod {
+			pub mod $chain_member_and_module {
 				use super::any;
 				use codec::{MaxEncodedLen, Encode, Decode};
 				use scale_info::TypeInfo;
 				use serde::{Serialize, Deserialize};
 
-				pub type Chain = $crate::chains::$chain;
-				pub const GAS_ASSET: Asset = Asset::$gas_asset;
+				pub type Chain = $crate::chains::$chain_variant;
+				pub const GAS_ASSET: Asset = {
+					let mut gas_asset = None;
+
+					$(
+						if $asset_gas {
+							assert!(gas_asset.is_none(), "Each chain can only have one gas asset.");
+							gas_asset = Some(Asset::$asset_variant);
+						}
+					)+
+
+					match gas_asset {
+						Some(gas_asset) => gas_asset,
+						None => panic!("Each chain must have exactly one gas asset.")
+					}
+				};
 
 				#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Hash, Serialize, Deserialize)]
 				pub enum Asset {
-					$gas_asset,
-					$($asset,)*
+					$(
+						#[serde(rename = $asset_json)]
+						$asset_variant,
+					)+
 				}
 				impl From<Asset> for any::Asset {
 					fn from(asset: Asset) -> Self {
 						match asset {
-							Asset::$gas_asset => any::Asset::$gas_asset,
 							$(
-								Asset::$asset => any::Asset::$asset,
-							)*
+								Asset::$asset_variant => any::Asset::$asset_variant,
+							)+
 						}
 					}
 				}
 				impl From<Asset> for $crate::ForeignChain {
 					fn from(_asset: Asset) -> Self {
-						Self::$chain
+						Self::$chain_variant
 					}
 				}
 				impl TryFrom<super::any::Asset> for Asset {
@@ -350,9 +367,8 @@ macro_rules! assets {
 
 					fn try_from(asset: super::any::Asset) -> Result<Self, Self::Error> {
 						match asset {
-							super::any::Asset::$gas_asset => Ok(Asset::$gas_asset),
 							$(
-								super::any::Asset::$asset => Ok(Asset::$asset),
+								super::any::Asset::$asset_variant => Ok(Asset::$asset_variant),
 							)*
 							_ => Err(AssetError::Unsupported),
 						}
@@ -365,32 +381,28 @@ macro_rules! assets {
 				}
 
 				#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
-				#[serde(rename_all = "UPPERCASE")]
 				pub struct AssetMap<T> {
-					pub $gas_lowercase: T,
 					$(
-						pub $lowercase: T,
-					)*
+						#[serde(rename = $asset_json)]
+						pub $asset_member: T,
+					)+
 				}
 				impl<T> AssetMap<T> {
 					pub fn from_fn<F: FnMut(Asset) -> T>(mut f: F) -> Self {
 						Self {
-							$gas_lowercase: f(Asset::$gas_asset),
-							$($lowercase: f(Asset::$asset),)*
+							$($asset_member: f(Asset::$asset_variant),)+
 						}
 					}
 
 					pub fn try_from_fn<E, F: FnMut(Asset) -> Result<T, E>>(mut f: F) -> Result<Self, E> {
 						Ok(Self {
-							$gas_lowercase: f(Asset::$gas_asset)?,
-							$($lowercase: f(Asset::$asset)?,)*
+							$($asset_member: f(Asset::$asset_variant)?,)+
 						})
 					}
 
 					pub fn map<R, F: FnMut(T) -> R>(self, mut f: F) -> AssetMap<R> {
 						AssetMap {
-							$gas_lowercase: f(self.$gas_lowercase),
-							$($lowercase: f(self.$lowercase),)*
+							$($asset_member: f(self.$asset_member),)+
 						}
 					}
 				}
@@ -403,25 +415,94 @@ macro_rules! assets {
 // !!!!!! IMPORTANT !!!!!!
 // Do not change these indices, or the orderings (as the orderings will effect some serde formats
 // (But not JSON), and the scale encoding)
-assets!(pub enum Asset {
+assets!(
 	// 0 is reserved for particular cross chain messaging scenarios where we want to pass
 	// through a message without making a swap.
-	(eth, Ethereum, "Ethereum") => {
-		(eth, Eth) = 1u32 (GAS_ASSET),
-		(flip, Flip) = 2u32,
-		(usdc, Usdc) = 3u32,
+	Chain {
+		variant: Ethereum,
+		member_and_module: eth,
+		json: "Ethereum",
+		assets: [
+			Asset {
+				variant: Eth,
+				member: eth,
+				string: "ETH" (aliases: ["Eth", "eth"]),
+				json: "ETH",
+				gas: true,
+				index: 1,
+			},
+			Asset {
+				variant: Flip,
+				member: flip,
+				string: "FLIP" (aliases: ["Flip", "flip"]),
+				json: "FLIP",
+				gas: false,
+				index: 2,
+			},
+			Asset {
+				variant: Usdc,
+				member: usdc,
+				string: "USDC" (aliases: ["Usdc", "usdc"]),
+				json: "USDC",
+				gas: false,
+				index: 3,
+			},
+		],
 	},
-	(dot, Polkadot, "Polkadot") => {
-		(dot, Dot) = 4u32 (GAS_ASSET),
+	Chain {
+		variant: Polkadot,
+		member_and_module: dot,
+		json: "Polkadot",
+		assets: [
+			Asset {
+				variant: Dot,
+				member: dot,
+				string: "DOT" (aliases: ["Dot", "dot"]),
+				json: "DOT",
+				gas: true,
+				index: 4,
+			},
+		],
 	},
-	(btc, Bitcoin, "Bitcoin") => {
-		(btc, Btc) = 5u32 (GAS_ASSET),
+	Chain {
+		variant: Bitcoin,
+		member_and_module: btc,
+		json: "Bitcoin",
+		assets: [
+			Asset {
+				variant: Btc,
+				member: btc,
+				string: "BTC" (aliases: ["Btc", "btc"]),
+				json: "BTC",
+				gas: true,
+				index: 5,
+			},
+		],
 	},
-	(arb, Arbitrum, "Arbitrum") => {
-		(eth, ArbEth) = 6u32 (GAS_ASSET),
-		(usdc, ArbUsdc) = 7u32,
-	},
-});
+    Chain {
+        variant: Arbitrum,
+        member_and_module: arb,
+        json: "Arbitrum",
+        assets: [
+			Asset {
+				variant: ArbEth,
+				member: eth,
+				string: "ETH" (aliases: ["Eth", "eth"]),
+				json: "ETH",
+				gas: true,
+				index: 6,
+			},
+            Asset {
+				variant: ArbUsdc,
+				member: usdc,
+				string: "USDC" (aliases: ["Usdc", "usdc"]),
+				json: "USDC",
+				gas: false,
+				index: 7,
+			}, 
+        ],
+    }
+);
 
 #[cfg(test)]
 mod test_assets {
