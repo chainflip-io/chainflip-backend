@@ -13,7 +13,7 @@ on:
 
 env:
   FORCE_COLOR: 1
-  SOLANA_VERSION: v1.17.22
+  SOLANA_VERSION: v1.18.3
 
 permissions:
   packages: read
@@ -43,7 +43,7 @@ jobs:
           scope: "@chainflip-io"
           cache-dependency-path: "bouncer/pnpm-lock.yaml"
 
-      - name: Set NPM registry
+      - name: Set NPM registry 🔧
         run: |
           pnpm set @chainflip-io:registry=https://npm.pkg.github.com/
           pnpm set //npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}
@@ -66,7 +66,7 @@ jobs:
         working-directory: bouncer
         run: pnpm install
 
-      - name: Install solana
+      - name: Install solana ☀️
         run: |
           sh -c "$(curl -sSfL https://release.solana.com/$SOLANA_VERSION/install)"
 
@@ -98,32 +98,38 @@ jobs:
           ./run.sh
 
       - name: Print chainflip-engine logs 🚗
-        if: failure() || cancelled()
+        if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/*/chainflip-engine.log
 
       - name: Print chainflip-node logs 📡
-        if: failure() || cancelled()
+        if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/*/chainflip-node.log
 
       - name: Print chainflip-broker-api logs 💼
-        if: failure() || cancelled()
+        if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/chainflip-broker-api.log
 
       - name: Print chainflip-lp-api logs 🤑
-        if: failure() || cancelled()
+        if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/chainflip-lp-api.log
 
       - name: Print localnet init debug logs 🕵️‍♂️
-        if: failure() || cancelled()
+        if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/debug.log
 
       - name: Print solana logs ☀️
-        if: failure() || cancelled()
+        if: always()
+        continue-on-error: true
         run: |
           cat /tmp/solana/solana.log
 

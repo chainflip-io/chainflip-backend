@@ -26,6 +26,7 @@ use frame_support::{
 };
 use itertools::Itertools;
 use sp_arithmetic::Permill;
+use sp_core::H160;
 use sp_std::iter;
 
 const GAS_BUDGET: AssetAmount = 1_000u128;
@@ -100,6 +101,7 @@ fn assert_failed_ccm(
 		reason,
 		destination_address: MockAddressConverter::to_encoded_address(destination_address),
 		deposit_metadata: ccm,
+		origin: SwapOrigin::Vault { tx_hash: Default::default() },
 	}));
 }
 
@@ -333,6 +335,7 @@ fn withdraw_broker_fees() {
 		assert_eq!(egresses.pop().expect("must exist").amount(), 200);
 		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::WithdrawalRequested {
 			egress_id: (ForeignChain::Ethereum, 1),
+			egress_asset: Asset::Eth,
 			egress_amount: 200,
 			destination_address: EncodedAddress::Eth(Default::default()),
 			egress_fee: 0,
@@ -2137,6 +2140,74 @@ fn deposit_address_ready_event_contain_correct_boost_fee_value() {
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::Swapping(Event::SwapDepositAddressReady { boost_fee: BOOST_FEE, .. })
+		);
+	});
+}
+
+#[test]
+fn test_get_scheduled_swap_legs() {
+	new_test_ext().execute_with(|| {
+		const SWAP_TYPE: SwapType = SwapType::Swap(ForeignChainAddress::Eth(H160::zero()));
+		const INIT_AMOUNT: AssetAmount = 1000;
+
+		let swaps: Vec<_> = [
+			(1, Asset::Flip, Asset::Usdc),
+			(2, Asset::Usdc, Asset::Flip),
+			(3, Asset::Btc, Asset::Eth),
+			(4, Asset::Flip, Asset::Btc),
+			(5, Asset::Eth, Asset::Flip),
+		]
+		.into_iter()
+		.map(|(id, from, to)| Swap::new(id, from, to, INIT_AMOUNT, SWAP_TYPE.clone()))
+		.collect();
+
+		SwapRate::set(2f64);
+		// The amount of USDC in the middle of swap (5):
+		const INTERMEDIATE_AMOUNT: AssetAmount = 2000;
+
+		// The test is more useful when these aren't equal:
+		assert_ne!(INIT_AMOUNT, INTERMEDIATE_AMOUNT);
+
+		assert_eq!(
+			Swapping::get_scheduled_swap_legs(swaps, Asset::Flip).unwrap(),
+			vec![
+				SwapLegInfo {
+					swap_id: 1,
+					base_asset: Asset::Flip,
+					quote_asset: Asset::Usdc,
+					side: Side::Sell,
+					amount: INIT_AMOUNT,
+					source_asset: None,
+					source_amount: None,
+				},
+				SwapLegInfo {
+					swap_id: 2,
+					base_asset: Asset::Flip,
+					quote_asset: Asset::Usdc,
+					side: Side::Buy,
+					amount: INIT_AMOUNT,
+					source_asset: None,
+					source_amount: None,
+				},
+				SwapLegInfo {
+					swap_id: 4,
+					base_asset: Asset::Flip,
+					quote_asset: Asset::Usdc,
+					side: Side::Sell,
+					amount: INIT_AMOUNT,
+					source_asset: None,
+					source_amount: None,
+				},
+				SwapLegInfo {
+					swap_id: 5,
+					base_asset: Asset::Flip,
+					quote_asset: Asset::Usdc,
+					side: Side::Buy,
+					amount: INTERMEDIATE_AMOUNT,
+					source_asset: Some(Asset::Eth),
+					source_amount: Some(INIT_AMOUNT),
+				},
+			]
 		);
 	});
 }

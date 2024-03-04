@@ -163,6 +163,7 @@ mod benchmarks {
 			signer_id,
 			tx_fee: TransactionFeeFor::<T, I>::benchmark_value(),
 			tx_metadata: TransactionMetadataFor::<T, I>::benchmark_value(),
+			transaction_ref: TransactionRefFor::<T, I>::benchmark_value(),
 		};
 
 		#[block]

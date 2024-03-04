@@ -319,6 +319,8 @@ pub mod pallet {
 		WitnessExecutionFailed { call_hash: CallHash, error: DispatchError },
 		/// A an external event has been pre-witnessed.
 		Prewitnessed { call: <T as Config>::RuntimeCall },
+		/// A witness call has failed.
+		PrewitnessExecutionFailed { call_hash: CallHash, error: DispatchError },
 	}
 
 	#[pallet::error]
@@ -489,13 +491,38 @@ pub mod pallet {
 		/// Simply emits an event to notify that this call has been witnessed. Implicitly signals
 		/// that we expect the same call to be witnessed at a later block.
 		#[pallet::call_index(2)]
-		#[pallet::weight(call.get_dispatch_info().weight)]
+		#[pallet::weight(T::WeightInfo::prewitness())]
 		pub fn prewitness(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			Self::deposit_event(Event::<T>::Prewitnessed { call: *call });
+			Ok(())
+		}
+
+		/// Emits an event to notify that this call has been witnessed. Then, it dispatches the call
+		/// using the prewitness threshold origin.
+		#[pallet::call_index(3)]
+		#[pallet::weight(call.get_dispatch_info().weight)]
+		pub fn prewitness_and_execute(
+			origin: OriginFor<T>,
+			call: Box<<T as Config>::RuntimeCall>,
+		) -> DispatchResult {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+			Self::deposit_event(Event::<T>::Prewitnessed { call: *call.clone() });
+
+			let call_hash = CallHash(call.blake2_256());
+			let _result = with_storage_layer(move || {
+				call.dispatch_bypass_filter(RawOrigin::PrewitnessThreshold.into())
+			})
+			.map_err(|e| {
+				Self::deposit_event(Event::<T>::PrewitnessExecutionFailed {
+					call_hash,
+					error: e.error,
+				});
+			});
+
 			Ok(())
 		}
 	}
@@ -509,6 +536,7 @@ pub mod pallet {
 	pub enum RawOrigin {
 		HistoricalActiveEpochWitnessThreshold,
 		CurrentEpochWitnessThreshold,
+		PrewitnessThreshold,
 	}
 }
 
@@ -599,6 +627,7 @@ where
 			Ok(raw_origin) => match raw_origin {
 				RawOrigin::HistoricalActiveEpochWitnessThreshold |
 				RawOrigin::CurrentEpochWitnessThreshold => Ok(()),
+				_ => Err(raw_origin.into()),
 			},
 			Err(o) => Err(o),
 		}
@@ -607,6 +636,39 @@ where
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<OuterOrigin, ()> {
 		Ok(RawOrigin::HistoricalActiveEpochWitnessThreshold.into())
+	}
+}
+
+/// Simple struct on which to implement EnsureOrigin for our pallet's custom origin type.
+///
+/// # Example:
+///
+/// ```ignore
+/// if let Ok(()) = EnsurePrewitnessed::ensure_origin(origin) {
+///     log::debug!("This extrinsic was called as a result of prewitness threshold consensus.");
+/// }
+/// ```
+pub struct EnsurePrewitnessed;
+
+impl<OuterOrigin> EnsureOrigin<OuterOrigin> for EnsurePrewitnessed
+where
+	OuterOrigin: Into<Result<RawOrigin, OuterOrigin>> + From<RawOrigin>,
+{
+	type Success = ();
+
+	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
+		match o.into() {
+			Ok(raw_origin) => match raw_origin {
+				RawOrigin::PrewitnessThreshold => Ok(()),
+				_ => Err(raw_origin.into()),
+			},
+			Err(o) => Err(o),
+		}
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin() -> Result<OuterOrigin, ()> {
+		Ok(RawOrigin::PrewitnessThreshold.into())
 	}
 }
 
