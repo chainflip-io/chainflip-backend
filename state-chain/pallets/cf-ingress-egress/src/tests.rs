@@ -19,8 +19,8 @@ use cf_traits::{
 		api_call::{MockEthAllBatch, MockEthEnvironment, MockEthereumApiCall},
 		block_height_provider::BlockHeightProvider,
 		ccm_handler::{CcmRequest, MockCcmHandler},
+		chain_tracking::ChainTracker,
 		funding_info::MockFundingInfo,
-		tracked_data_provider::TrackedDataProvider,
 	},
 	DepositApi, EgressApi, EpochInfo, FundingInfo, GetBlockHeight, ScheduledEgressDetails,
 };
@@ -30,6 +30,7 @@ use frame_support::{
 	weights::Weight,
 };
 use sp_core::H160;
+use sp_runtime::FixedU128;
 
 const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
 const BOB_ETH_ADDRESS: EthereumAddress = H160([101u8; 20]);
@@ -909,10 +910,7 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 
 	new_test_ext().execute_with(|| {
 		// Set Eth fees to some arbitrary value, high enough for our test swap
-		TrackedDataProvider::<Ethereum>::set_tracked_data(cf_chains::eth::EthereumTrackedData {
-			base_fee: 100,
-			priority_fee: 0,
-		});
+		ChainTracker::<Ethereum>::set_fee(FixedU128::from_float(100.0));
 
 		let (_id, address, ..) =
 			IngressEgress::request_liquidity_deposit_address(ALICE, ASSET, 0).unwrap();
@@ -941,10 +939,8 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 		));
 
 		// Set fees back to 0 and try the same swap
-		TrackedDataProvider::<Ethereum>::set_tracked_data(cf_chains::eth::EthereumTrackedData {
-			base_fee: 0,
-			priority_fee: 0,
-		});
+		ChainTracker::<Ethereum>::set_fee(FixedU128::from_float(0.0));
+
 		assert_ok!(IngressEgress::process_deposit_witnesses(
 			vec![deposit_detail],
 			Default::default(),
