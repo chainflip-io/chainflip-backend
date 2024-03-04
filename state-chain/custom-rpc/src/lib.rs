@@ -506,6 +506,9 @@ pub trait CustomApi {
 		hash: state_chain_runtime::Hash,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<FailingWitnessValidators>>;
+
+	#[method(name = "decode_runtime_event")]
+	fn cf_decode_runtime_events(&self, events: Vec<String>) -> RpcResult<Vec<String>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1276,6 +1279,22 @@ where
 			.runtime_api()
 			.cf_witness_count(self.unwrap_or_best(at), pallet_cf_witnesser::CallHash(hash.into()))
 			.map_err(to_rpc_error)
+	}
+
+	fn cf_decode_runtime_events(&self, events: Vec<String>) -> RpcResult<Vec<String>> {
+		let registry = state_chain_runtime::chainflip::RuntimeEventDecoder::new();
+		Ok(events
+			.into_iter()
+			.map(|event| {
+				if let Ok(data) = hex::decode(event) {
+					registry.decode_event_to_string(data).unwrap_or_else(|err| {
+						format!("Failed to decode RuntimeError. Error: {:?}", err)
+					})
+				} else {
+					"Invalid input, cannot decode into bytes".to_string()
+				}
+			})
+			.collect::<Vec<_>>())
 	}
 }
 

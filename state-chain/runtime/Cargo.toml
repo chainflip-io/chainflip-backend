@@ -24,7 +24,9 @@ serde = { version = '1.0.195', default_features = false, features = [
   'alloc',
   'derive',
 ] }
+
 ethabi = { default-features = false, version = '18.0' }
+scale-value = { default-features = false, version = '0.14.0', features = ['from-string', 'serde']}
 
 # Chainflip local dependencies
 cf-amm = { path = '../amm', default-features = false }
@@ -199,6 +201,7 @@ std = [
   'pallet-transaction-payment/std',
   'pallet-cf-cfe-interface/std',
   'scale-info/std',
+  'scale-value/std',
   'serde/std',
   'serde_json/std',
   'sp-api/std',

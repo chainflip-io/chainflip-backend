@@ -19,6 +19,8 @@ hex = '0.4.3'
 serde = { version = '1.0', features = ['derive'] }
 thiserror = "1.0"
 log = { version = '0.4' }
+scale-info = { version = '2.10.0', features = ['derive'] }
+scale-value = { version = '0.14.0' }
 
 cf-chains = { path = '../chains' }
 cf-primitives = { path = '../primitives' }
