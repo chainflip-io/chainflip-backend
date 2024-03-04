@@ -880,6 +880,7 @@ mod tests {
 	}
 
 	// TODO: Do create_nonced_transfer with added createAssociatedTokenAccountIdempotentInstruction.
+	// TODO: Test CCM calls after fixing the vault program itself, as it require account chnages.
 
 	#[test]
 	fn create_nonced_rotate_agg_key() {
@@ -964,7 +965,7 @@ mod tests {
 		assert_eq!(serialized_tx, expected_serialized_tx);
 	}
 
-	// TODO: Pull the discriminators from the contracts-interfaces and check them against the generated values
+	// TODO: Pull and compare discriminators and function from the contracts-interfaces
 	#[test]
 	fn test_function_discriminators() {
 		assert_eq!(
@@ -988,6 +989,18 @@ mod tests {
 				bump: 13
 			}),
 			vec![142u8, 36u8, 101u8, 143u8, 108u8, 89u8, 41u8, 140u8]
+		);
+		assert_eq!(
+			VaultProgram::function_discriminator(VaultProgram::ExecuteCcmNativeCall {
+				bump: 13, source_chain: 1, source_address: vec![2u8, 2u8, 67u8], message: vec![2u8], amount: 4
+			}),
+			vec![125u8, 5u8, 11u8, 227u8, 128u8, 66u8, 224u8, 178u8]
+		);
+		assert_eq!(
+			VaultProgram::function_discriminator(VaultProgram::ExecuteCcmTokenCall {
+				bump: 13, source_chain: 1, source_address: vec![2u8, 2u8, 67u8], message: vec![3u8], amount: 1
+			}),
+			vec![108u8, 184u8, 162u8, 123u8, 159u8, 222u8, 170u8, 35u8]
 		);
 	}
 

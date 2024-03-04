@@ -233,7 +233,8 @@ pub enum VaultProgram {
 	FetchNative { seed: Vec<u8>, bump: u8 },
 	RotateAggKey { transfer_funds: bool },
 	TransferTokens { seed: Vec<u8>, bump: u8, amount: u64, decimals: u8 },
-	// For now no CCM calls since it might not be needed
+	ExecuteCcmNativeCall {bump: u8,source_chain: u32,source_address: Vec<u8>,message: Vec<u8>,amount: u64},
+	ExecuteCcmTokenCall {bump: u8,source_chain: u32,source_address: Vec<u8>,message: Vec<u8>,amount: u64}
 }
 
 impl VaultProgram {
@@ -256,6 +257,8 @@ impl VaultProgram {
 			Self::FetchNative { seed: _, bump: _ } => "fetch_native",
 			Self::RotateAggKey { transfer_funds: _ } => "rotate_agg_key",
 			Self::TransferTokens { seed: _, bump: _, amount: _, decimals: _ } => "transfer_tokens",
+			Self::ExecuteCcmNativeCall { bump: _,source_chain: _,source_address: _,message: _,amount: _} => "execute_ccm_native_call",
+			Self::ExecuteCcmTokenCall { bump: _,source_chain: _,source_address: _,message: _,amount: _} => "execute_ccm_token_call",
 		}
 	}
 }
