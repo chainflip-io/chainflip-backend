@@ -48,6 +48,8 @@ pub struct PrewitnessedDeposit<C: Chain> {
 	pub asset: C::ChainAsset,
 	pub amount: C::ChainAmount,
 	pub deposit_address: C::ChainAccount,
+	pub block_height: C::ChainBlockNumber,
+	pub deposit_details: C::DepositDetails,
 }
 
 /// Enum wrapper for fetch and egress requests.
@@ -787,7 +789,7 @@ pub mod pallet {
 			block_height: TargetChainBlockNumber<T, I>,
 		) -> DispatchResult {
 			if T::EnsurePrewitnessed::ensure_origin(origin.clone()).is_ok() {
-				Self::add_prewitnessed_deposits(deposit_witnesses)?;
+				Self::add_prewitnessed_deposits(deposit_witnesses, block_height)?;
 			} else {
 				T::EnsureWitnessed::ensure_origin(origin)?;
 				Self::process_deposit_witnesses(deposit_witnesses, block_height)?;
@@ -1105,8 +1107,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn add_prewitnessed_deposits(
 		deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
+		block_height: TargetChainBlockNumber<T, I>,
 	) -> DispatchResult {
-		for DepositWitness { deposit_address, asset, amount, .. } in deposit_witnesses {
+		for DepositWitness { deposit_address, asset, amount, deposit_details } in deposit_witnesses
+		{
 			let id = PrewitnessedDepositIdCounter::<T, I>::mutate(|id| -> u64 {
 				*id = id.saturating_add(1);
 				*id
@@ -1118,7 +1122,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			PrewitnessedDeposits::<T, I>::insert(
 				deposit_channel_details.deposit_channel.channel_id,
 				id,
-				PrewitnessedDeposit { asset, amount, deposit_address },
+				PrewitnessedDeposit {
+					asset,
+					amount,
+					deposit_address,
+					block_height,
+					deposit_details,
+				},
 			);
 		}
 		Ok(())
