@@ -59,6 +59,7 @@ define_erc20!(
 	"$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IFLIP.json"
 );
 define_erc20!(usdc, Usdc, UsdcEvents, "$CF_ETH_CONTRACT_ABI_ROOT/IUSDC.json");
+define_erc20!(usdt, Usdt, UsdtEvents, "$CF_ETH_CONTRACT_ABI_ROOT/IUSDT.json");
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub async fn erc20_deposits<ProcessCall, ProcessingFut, EthRetryRpcClient, Events>(

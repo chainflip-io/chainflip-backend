@@ -18,6 +18,7 @@ pub const PROTOCOL_ID: &str = "flip-pers";
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("0485D65da68b2A6b48C3fA28D7CCAce196798B94"),
 	eth_usdc_address: hex_literal::hex!("07865c6e87b9f70255377e024ace6630c1eaa37f"),
+	eth_usdt_address: hex_literal::hex!("509Ee0d083DdF8AC028f2a56731412edD63223B9"),
 	state_chain_gateway_address: hex_literal::hex!("38AA40B7b5a70d738baBf6699a45DacdDBBEB3fc"),
 	key_manager_address: hex_literal::hex!("Aa4376388C6432d36CFF33198D9f80295482f120"),
 	eth_vault_address: hex_literal::hex!("40caFF3f3B6706Da904a7895e0fC7F7922437e9B"),

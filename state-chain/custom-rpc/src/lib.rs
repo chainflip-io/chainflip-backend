@@ -1399,6 +1399,7 @@ mod test {
 					(Asset::Flip, 1000000000000000000),
 					(Asset::Usdc, 0),
 					(Asset::Dot, 0),
+					(Asset::Usdt, 0),
 				]
 			}
 		))
@@ -1426,12 +1427,14 @@ mod test {
 					(Asset::Flip, u128::MAX / 2),
 					(Asset::Usdc, 0),
 					(Asset::Dot, 0),
+					(Asset::Usdt, 0),
 				],
 				earned_fees: any::AssetMap {
 					eth: eth::AssetMap {
 						eth: 0u32.into(),
 						flip: u64::MAX.into(),
 						usdc: (u64::MAX / 2 - 1).into(),
+						usdt: 0u32.into(),
 					},
 					btc: btc::AssetMap { btc: 0u32.into() },
 					dot: dot::AssetMap { dot: 0u32.into() },
@@ -1477,6 +1480,7 @@ mod test {
 						eth: Some(0u32.into()),
 						flip: None,
 						usdc: Some((u64::MAX / 2 - 1).into()),
+						usdt: None,
 					},
 					btc: btc::AssetMap { btc: Some(0u32.into()) },
 					dot: dot::AssetMap { dot: None },
@@ -1489,6 +1493,7 @@ mod test {
 						eth: 0u32.into(),
 						flip: u64::MAX.into(),
 						usdc: (u64::MAX / 2 - 1).into(),
+						usdt: 0u32.into(),
 					},
 					btc: btc::AssetMap { btc: 0u32.into() },
 					dot: dot::AssetMap { dot: 0u32.into() },
@@ -1498,6 +1503,7 @@ mod test {
 						eth: Some(0u32.into()),
 						flip: Some(AssetAmount::MAX.into()),
 						usdc: None,
+						usdt: None,
 					},
 					btc: btc::AssetMap { btc: Some(0u32.into()) },
 					dot: dot::AssetMap { dot: Some((u64::MAX / 2 - 1).into()) },
@@ -1507,6 +1513,7 @@ mod test {
 						eth: Some(0u32.into()),
 						usdc: None,
 						flip: Some(AssetAmount::MAX.into()),
+						usdt: None,
 					},
 					btc: btc::AssetMap { btc: Some(0u32.into()) },
 					dot: dot::AssetMap { dot: Some((u64::MAX / 2 - 1).into()) },
@@ -1521,6 +1528,7 @@ mod test {
 						eth: 0u32.into(),
 						usdc: (u64::MAX / 2 - 1).into(),
 						flip: AssetAmount::MAX.into(),
+						usdt: 0u32.into(),
 					},
 					btc: btc::AssetMap { btc: 0u32.into() },
 					dot: dot::AssetMap { dot: 0u32.into() },

@@ -18,6 +18,7 @@ pub const PROTOCOL_ID: &str = "flip-sisy";
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("2BbB561C6eaB74f358cA9e8a961E3A20CAE3D100"),
 	eth_usdc_address: hex_literal::hex!("07865c6e87b9f70255377e024ace6630c1eaa37f"),
+	eth_usdt_address: hex_literal::hex!("509Ee0d083DdF8AC028f2a56731412edD63223B9"),
 	state_chain_gateway_address: hex_literal::hex!("E8bE4B7F8a38C1913387c9C20B94402bc3Db9F70"),
 	key_manager_address: hex_literal::hex!("Aea44be51d86eA635D51cFB2Fd5EB17Fd2A322BC"),
 	eth_vault_address: hex_literal::hex!("C17CCec5015081EB2DF26d20A9e02c5484C1d641"),
