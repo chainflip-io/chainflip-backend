@@ -72,7 +72,3 @@ impl IntoForeignChainAddress<NoneChain> for ForeignChainAddress {
 		address
 	}
 }
-
-impl PalletInstanceAlias for NoneChainCrypto {
-	type Instance = ();
-}

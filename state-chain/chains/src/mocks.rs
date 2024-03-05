@@ -298,9 +298,14 @@ impl ChainCrypto for MockEthereumChainCrypto {
 		}
 	}
 }
-impl PalletInstanceAlias for MockEthereumChainCrypto {
-	type Instance = ();
-}
+
+decl_instance_aliases!(
+	MockEthereum => MockEthereumInstance, (),
+	MockEthereumChainCrypto => MockEthereumCryptoInstance, (),
+);
+impl_instance_alias_traits!(
+	MockEthereumChainCrypto => { MockEthereum },
+);
 
 impl_default_benchmark_value!(MockAggKey);
 impl_default_benchmark_value!([u8; 4]);
