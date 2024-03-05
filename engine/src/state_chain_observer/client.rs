@@ -303,13 +303,13 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 									let base_rpc_client = base_rpc_client.clone();
 									let block_info = *block_info;
 									async move {
-										Ok({
+										{
 											let block_compatibility = base_rpc_client
 												.check_block_compatibility(block_info)
 												.await?;
 
 											match block_compatibility.compatibility {
-											CfeCompatibility::Compatible => false,
+											CfeCompatibility::Compatible => Ok(false),
 											// We want the stream to continue as before
 											CfeCompatibility::NotYetCompatible => {
 												info!(
@@ -319,14 +319,14 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 														block_compatibility
 													)
 												);
-												true
+												Ok(true)
 											},
 											// Generally we cannot move from no longer compatible to
 											// compatible. We don't expect this to happen.
 											CfeCompatibility::NoLongerCompatible =>
-												return Err(CreateStateChainClientError::CompatibilityError(block_compatibility).into()),
+												Err(CreateStateChainClientError::CompatibilityError(block_compatibility).into())
 										}
-										})
+										}
 									}
 								})
 								.boxed();
