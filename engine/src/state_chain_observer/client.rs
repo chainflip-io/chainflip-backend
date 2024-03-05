@@ -288,9 +288,14 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 
 			match block_compatibility.compatibility {
 				CfeCompatibility::NoLongerCompatible =>
-					return Err(
-						CreateStateChainClientError::CompatibilityError(block_compatibility).into()
-					),
+					if error_on_incompatible_block {
+						return Err(CreateStateChainClientError::CompatibilityError(
+							block_compatibility,
+						)
+						.into());
+					} else {
+						block_stream
+					},
 				CfeCompatibility::NotYetCompatible => {
 					// TODO: After the whole "single binary CFE upgrade" is complete, we should be
 					// able to remove `wait_for_required_version` as we'll never wait. We'll always
@@ -388,6 +393,8 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 							CfeCompatibility::NoLongerCompatible => {
 								if error_on_incompatible_block {
 									break Err(CreateStateChainClientError::CompatibilityError(block_compatibility).into());
+								} else {
+									tracing::warn!("StateChain block number {} is no longer compatible.", block.number);
 								}
 							}
 							CfeCompatibility::NotYetCompatible => {
@@ -618,6 +625,10 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			scope,
 			base_rpc_client.clone(),
 			wait_for_required_version,
+			// We don't want the unfinalised stream to error on an incompatible block, as the
+			// unfinalised stream will hit the boundary first but we want to process as far as
+			// possible on the *finalised* stream, and pass out the block number contained in the
+			// error (where applicable) from the finalised stream back up to main.
 			false,
 			|base_rpc_client| base_rpc_client.subscribe_unfinalized_block_headers(),
 			|block_stream| futures::future::ready(Ok(block_stream)),
