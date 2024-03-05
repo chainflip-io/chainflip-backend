@@ -9,7 +9,6 @@ mod threshold_signing;
 
 mod account;
 mod authorities;
-mod events;
 mod funding;
 mod genesis;
 mod governance;

@@ -18,6 +18,7 @@ workspace = true
 
 [dependencies]
 hex-literal = "0.4.1"
+hex = '0.4.3'
 log = { version = '0.4.16', default-features = false }
 nanorand = { version = '0.7', default-features = false, features = ['wyrand'] }
 serde = { version = '1.0.195', default_features = false, features = [

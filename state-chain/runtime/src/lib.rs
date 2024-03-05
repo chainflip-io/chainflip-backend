@@ -3,6 +3,7 @@
 #![recursion_limit = "256"]
 pub mod chainflip;
 pub mod constants;
+pub mod event_encoder;
 pub mod migrations;
 pub mod runtime_apis;
 pub mod safe_mode;

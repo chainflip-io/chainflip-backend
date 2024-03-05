@@ -1282,7 +1282,7 @@ where
 	}
 
 	fn cf_decode_runtime_events(&self, events: Vec<String>) -> RpcResult<Vec<String>> {
-		let registry = state_chain_runtime::chainflip::RuntimeEventDecoder::new();
+		let registry = state_chain_runtime::event_encoder::RuntimeEventDecoder::new();
 		Ok(events
 			.into_iter()
 			.map(|event| {

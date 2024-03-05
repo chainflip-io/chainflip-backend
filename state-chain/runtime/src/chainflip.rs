@@ -14,7 +14,7 @@ use crate::{
 	BitcoinThresholdSigner, BlockNumber, Emissions, Environment, EthereumBroadcaster,
 	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, Hash, PolkadotBroadcaster,
 	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
-	RuntimeEvent, System, Validator, YEAR,
+	System, Validator, YEAR,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -64,7 +64,7 @@ use frame_support::{
 };
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
-use scale_info::{prelude::string::String, PortableRegistry, TypeInfo};
+use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
@@ -651,59 +651,4 @@ pub struct BlockUpdate<Data> {
 	// Also flatten is incompatible with u128, so AssetAmounts needs to be String type.
 	#[serde(flatten)]
 	pub data: Data,
-}
-
-#[derive(Encode, Decode, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Debug)]
-pub enum EventDecoderError {
-	FailedToDecodeFromScaleBytes,
-	FailedToDecodeFromString,
-	FailedToConvertIntoJson,
-}
-
-/// A struct that provides interface for decoding RuntimeEvents.
-pub struct RuntimeEventDecoder {
-	registry: PortableRegistry,
-	type_id: u32,
-}
-
-impl RuntimeEventDecoder {
-	/// Creates and returns an instance of a PortableRegistry, used for decoding Runtime Events.
-	pub fn new() -> Self {
-		// We can get the 'portable' type info using scale_info.
-		let meta = scale_info::MetaType::new::<RuntimeEvent>();
-		let mut registry = scale_info::Registry::new();
-		let id = registry.register_type(&meta).id;
-
-		Self { registry: PortableRegistry::from(registry), type_id: id }
-	}
-
-	pub fn decode_event_to_string(&self, data: Vec<u8>) -> Result<String, EventDecoderError> {
-		scale_value::scale::decode_as_type(&mut &*data, &self.type_id, &self.registry)
-			.map_err(|_| EventDecoderError::FailedToDecodeFromScaleBytes)
-			.map(|value| value.to_string())
-	}
-
-	pub fn decode_event_to_string_json(&self, data: Vec<u8>) -> Result<String, EventDecoderError> {
-		let value = scale_value::scale::decode_as_type(&mut &*data, &self.type_id, &self.registry)
-			.map_err(|_| EventDecoderError::FailedToDecodeFromScaleBytes)?;
-		value
-			.serialize(scale_value::serde::ValueSerializer)
-			.map_err(|_| EventDecoderError::FailedToConvertIntoJson)
-			.map(|value| value.to_string())
-	}
-
-	pub fn decode_event_from_string(
-		&self,
-		data: String,
-	) -> Result<scale_value::Value<()>, EventDecoderError> {
-		scale_value::stringify::from_str(&data)
-			.0
-			.map_err(|_| EventDecoderError::FailedToDecodeFromString)
-	}
-}
-
-impl Default for RuntimeEventDecoder {
-	fn default() -> Self {
-		Self::new()
-	}
 }
