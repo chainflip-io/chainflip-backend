@@ -16,7 +16,7 @@ use std::{
 };
 
 #[derive(Parser, Clone, Debug)]
-#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"), version_short = 'v')]
+#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"))]
 pub struct CLICommandLineOptions {
 	#[clap(short = 'c', long = "config-root", env = CONFIG_ROOT, default_value = DEFAULT_CONFIG_ROOT)]
 	pub config_root: String,
