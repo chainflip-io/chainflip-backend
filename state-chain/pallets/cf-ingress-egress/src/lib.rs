@@ -559,9 +559,6 @@ pub mod pallet {
 		FailedToBuildAllBatchCall {
 			error: AllBatchError,
 		},
-		ChannelOpeningFeePaid {
-			fee: T::Amount,
-		},
 		ChannelOpeningFeeSet {
 			fee: T::Amount,
 		},
@@ -1305,7 +1302,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	> {
 		let channel_opening_fee = ChannelOpeningFee::<T, I>::get();
 		T::FeePayment::try_burn_fee(requester, channel_opening_fee)?;
-		Self::deposit_event(Event::<T, I>::ChannelOpeningFeePaid { fee: channel_opening_fee });
 
 		let (deposit_channel, channel_id) = if let Some((channel_id, mut deposit_channel)) =
 			DepositChannelPool::<T, I>::drain().next()
