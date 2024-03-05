@@ -6,7 +6,8 @@ use cf_chains::{
 	CcmChannelMetadata, CcmDepositMetadata, SwapOrigin,
 };
 use cf_primitives::{
-	Asset, AssetAmount, ChannelId, ForeignChain, SwapId, SwapLeg, TransactionHash, STABLE_ASSET,
+	Asset, AssetAmount, ChannelId, FlipBalance, ForeignChain, SwapId, SwapLeg, TransactionHash,
+	STABLE_ASSET,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi};
@@ -311,6 +312,7 @@ pub mod pallet {
 			channel_metadata: Option<CcmChannelMetadata>,
 			source_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 			boost_fee: BasisPoints,
+			channel_opening_fee: FlipBalance,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
@@ -493,7 +495,7 @@ pub mod pallet {
 				);
 			}
 
-			let (channel_id, deposit_address, expiry_height) =
+			let (channel_id, deposit_address, expiry_height, channel_opening_fee) =
 				T::DepositHandler::request_swap_deposit_address(
 					source_asset,
 					destination_asset,
@@ -514,6 +516,7 @@ pub mod pallet {
 				channel_metadata,
 				source_chain_expiry_block: expiry_height,
 				boost_fee,
+				channel_opening_fee,
 			});
 
 			Ok(())

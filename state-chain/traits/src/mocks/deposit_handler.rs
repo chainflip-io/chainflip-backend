@@ -2,7 +2,7 @@ use crate::{Chainflip, DepositApi};
 use cf_chains::{
 	address::ForeignChainAddress, dot::PolkadotAccountId, CcmChannelMetadata, Chain, ForeignChain,
 };
-use cf_primitives::{chains::assets::any, BasisPoints, ChannelId};
+use cf_primitives::{chains::assets::any, BasisPoints, ChannelId, FlipBalance};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_std::marker::PhantomData;
@@ -44,7 +44,7 @@ impl<C: Chain, T: Chainflip> MockDepositHandler<C, T> {
 	fn get_new_deposit_address(
 		swap_or_lp: SwapOrLp,
 		asset: <C as Chain>::ChainAsset,
-	) -> (ChannelId, ForeignChainAddress) {
+	) -> (ChannelId, ForeignChainAddress, FlipBalance) {
 		let channel_id = <Self as MockPalletStorage>::mutate_value(
 			match swap_or_lp {
 				SwapOrLp::Swap => b"SWAP_INTENT_ID",
@@ -65,6 +65,7 @@ impl<C: Chain, T: Chainflip> MockDepositHandler<C, T> {
 				),
 				ForeignChain::Bitcoin => todo!("Bitcoin address"),
 			},
+			1u128,
 		)
 	}
 
@@ -85,10 +86,15 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 		source_asset: <C as cf_chains::Chain>::ChainAsset,
 		boost_fee: BasisPoints,
 	) -> Result<
-		(cf_primitives::ChannelId, ForeignChainAddress, <C as cf_chains::Chain>::ChainBlockNumber),
+		(
+			cf_primitives::ChannelId,
+			ForeignChainAddress,
+			<C as cf_chains::Chain>::ChainBlockNumber,
+			FlipBalance,
+		),
 		sp_runtime::DispatchError,
 	> {
-		let (channel_id, deposit_address) =
+		let (channel_id, deposit_address, channel_opening_fee) =
 			Self::get_new_deposit_address(SwapOrLp::Lp, source_asset);
 		<Self as MockPalletStorage>::mutate_value(b"LP_INGRESS_CHANNELS", |lp_channels| {
 			if lp_channels.is_none() {
@@ -103,7 +109,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 				});
 			}
 		});
-		Ok((channel_id, deposit_address, 0u32.into()))
+		Ok((channel_id, deposit_address, 0u32.into(), channel_opening_fee))
 	}
 
 	fn request_swap_deposit_address(
@@ -115,10 +121,10 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
 	) -> Result<
-		(cf_primitives::ChannelId, ForeignChainAddress, C::ChainBlockNumber),
+		(cf_primitives::ChannelId, ForeignChainAddress, C::ChainBlockNumber, FlipBalance),
 		sp_runtime::DispatchError,
 	> {
-		let (channel_id, deposit_address) =
+		let (channel_id, deposit_address, channel_opening_fee) =
 			Self::get_new_deposit_address(SwapOrLp::Swap, source_asset);
 		<Self as MockPalletStorage>::mutate_value(b"SWAP_INGRESS_CHANNELS", |swap_channels| {
 			if swap_channels.is_none() {
@@ -137,6 +143,6 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 				});
 			};
 		});
-		Ok((channel_id, deposit_address, 0u32.into()))
+		Ok((channel_id, deposit_address, 0u32.into(), channel_opening_fee))
 	}
 }

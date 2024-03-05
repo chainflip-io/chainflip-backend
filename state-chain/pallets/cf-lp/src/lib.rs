@@ -2,7 +2,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
-use cf_primitives::{Asset, AssetAmount, BasisPoints, ForeignChain};
+use cf_primitives::{Asset, AssetAmount, BasisPoints, FlipBalance, ForeignChain};
 use cf_traits::{
 	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi,
 	EgressApi, LpDepositHandler, PoolApi, ScheduledEgressDetails,
@@ -116,6 +116,7 @@ pub mod pallet {
 			account_id: T::AccountId,
 			deposit_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 			boost_fee: BasisPoints,
+			channel_opening_fee: FlipBalance,
 		},
 		WithdrawalEgressScheduled {
 			egress_id: EgressId,
@@ -182,7 +183,7 @@ pub mod pallet {
 				Error::<T>::NoLiquidityRefundAddressRegistered
 			);
 
-			let (channel_id, deposit_address, expiry_block) =
+			let (channel_id, deposit_address, expiry_block, channel_opening_fee) =
 				T::DepositHandler::request_liquidity_deposit_address(
 					account_id.clone(),
 					asset,
@@ -196,6 +197,7 @@ pub mod pallet {
 				account_id,
 				deposit_chain_expiry_block: expiry_block,
 				boost_fee,
+				channel_opening_fee,
 			});
 
 			Ok(())
