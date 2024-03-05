@@ -1,5 +1,5 @@
 use super::*;
-use cf_chains::{address::ToHumanreadableAddress, Chain, PalletInstanceAlias};
+use cf_chains::{address::ToHumanreadableAddress, instances::ChainInstanceFor, Chain};
 use cf_primitives::{chains::assets::any, AssetAmount, FlipBalance};
 use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi,
@@ -53,13 +53,13 @@ impl QueryApi {
 		Ok(Self { state_chain_client })
 	}
 
-	pub async fn get_open_swap_channels<C: Chain + PalletInstanceAlias>(
+	pub async fn get_open_swap_channels<C: Chain>(
 		&self,
 		block_hash: Option<state_chain_runtime::Hash>,
 	) -> Result<Vec<SwapChannelInfo<C>>, anyhow::Error>
 	where
 		state_chain_runtime::Runtime:
-			pallet_cf_ingress_egress::Config<C::Instance, TargetChain = C>,
+			pallet_cf_ingress_egress::Config<ChainInstanceFor<C>, TargetChain = C>,
 	{
 		let block_hash =
 			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_block().hash);
@@ -68,7 +68,7 @@ impl QueryApi {
 			self.state_chain_client
 				.storage_map::<pallet_cf_ingress_egress::DepositChannelLookup<
 					state_chain_runtime::Runtime,
-					C::Instance,
+					ChainInstanceFor<C>,
 				>, Vec<_>>(block_hash)
 				.map(|result| {
 					result.map(|channels| channels.into_iter().collect::<BTreeMap<_, _>>())

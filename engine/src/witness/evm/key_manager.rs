@@ -1,6 +1,7 @@
 use cf_chains::{
 	evm::{EvmCrypto, EvmTransactionMetadata, SchnorrVerificationComponents, TransactionFee},
-	Chain, PalletInstanceAlias,
+	instances::ChainInstanceFor,
+	Chain,
 };
 use cf_primitives::EpochIndex;
 use ethers::{
@@ -90,7 +91,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							..
 						}) => pallet_cf_vaults::Call::<
 							_,
-							<Inner::Chain as PalletInstanceAlias>::Instance,
+							ChainInstanceFor<Inner::Chain>,
 						>::vault_key_rotated_externally {
 							new_public_key: cf_chains::evm::AggKey::from_pubkey_compressed(
 								new_agg_key.serialize(),
@@ -134,7 +135,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							};
 							pallet_cf_broadcast::Call::<
 								_,
-								<Inner::Chain as PalletInstanceAlias>::Instance,
+								ChainInstanceFor<Inner::Chain>,
 							>::transaction_succeeded {
 								tx_out_id: SchnorrVerificationComponents {
 									s: sig_data.sig.into(),

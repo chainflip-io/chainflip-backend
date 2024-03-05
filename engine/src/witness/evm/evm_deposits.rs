@@ -3,7 +3,7 @@ use crate::{
 	witness::common::{RuntimeCallHasChain, RuntimeHasChain},
 };
 use anyhow::ensure;
-use cf_chains::PalletInstanceAlias;
+use cf_chains::instances::ChainInstanceFor;
 use cf_primitives::EpochIndex;
 use ethers::types::Bloom;
 use futures_core::Future;
@@ -110,7 +110,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							process_call(
 								pallet_cf_ingress_egress::Call::<
 									_,
-									<Inner::Chain as PalletInstanceAlias>::Instance,
+									ChainInstanceFor<Inner::Chain>,
 								>::process_deposits {
 									deposit_witnesses: ingresses
 										.into_iter()

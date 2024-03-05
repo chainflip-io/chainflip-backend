@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use cf_chains::PalletInstanceAlias;
+use cf_chains::instances::ChainInstanceFor;
 use cf_primitives::EpochIndex;
 use ethers::types::{Bloom, H160};
 use futures_core::Future;
@@ -133,7 +133,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					process_call(
 						pallet_cf_ingress_egress::Call::<
 							_,
-							<Inner::Chain as PalletInstanceAlias>::Instance,
+							ChainInstanceFor<Inner::Chain>,
 						>::process_deposits {
 							deposit_witnesses,
 							block_height: header.index,

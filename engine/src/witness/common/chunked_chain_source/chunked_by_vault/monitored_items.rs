@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use cf_chains::{ChainState, PalletInstanceAlias};
+use cf_chains::{instances::ChainInstanceFor, ChainState};
 use frame_support::CloneNoBound;
 use futures::Future;
 use futures_util::{stream, StreamExt};
@@ -84,7 +84,7 @@ where
 			state_chain_client
 				.storage_value::<pallet_cf_chain_tracking::CurrentChainState<
 					state_chain_runtime::Runtime,
-					<Inner::Chain as PalletInstanceAlias>::Instance,
+					ChainInstanceFor<Inner::Chain>,
 				>>(block_hash)
 				.await
 				.expect(STATE_CHAIN_CONNECTION)
