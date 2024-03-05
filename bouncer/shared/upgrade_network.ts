@@ -267,5 +267,3 @@ export async function upgradeNetworkPrebuilt(
 
   console.log('Upgrade complete.');
 }
-
-
