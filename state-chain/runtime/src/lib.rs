@@ -841,6 +841,7 @@ pub type UncheckedExtrinsic =
 pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, RuntimeCall, SignedExtra>;
+#[cfg(not(feature = "try-runtime"))]
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<
 	Runtime,
@@ -849,6 +850,20 @@ pub type Executive = frame_executive::Executive<
 	Runtime,
 	PalletExecutionOrder,
 	PalletMigrations,
+>;
+
+// NOTE: This should be a temporary workaround. When paritytech/polkadot-sdk#2560 is merged into our
+// substrate fork, we can remove this.
+#[cfg(feature = "try-runtime")]
+/// Executive: handles dispatch to the various modules.
+pub type Executive = frame_executive::Executive<
+	Runtime,
+	Block,
+	frame_system::ChainContext<Runtime>,
+	Runtime,
+	PalletExecutionOrder,
+	PalletMigrations,
+	AllPalletsWithoutSystem,
 >;
 
 pub type PalletExecutionOrder = (

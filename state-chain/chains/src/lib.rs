@@ -141,7 +141,7 @@ pub trait Chain: Member + Parameter {
 		+ Default;
 
 	/// The type representing the transaction hash for this particular chain
-	type TransactionRef: Member + Parameter;
+	type TransactionRef: Member + Parameter + BenchmarkValue;
 
 	/// Passed in to construct the replay protection.
 	type ReplayProtectionParams: Member + Parameter;
@@ -261,17 +261,15 @@ where
 pub trait TransactionMetadata<C: Chain> {
 	fn extract_metadata(transaction: &C::Transaction) -> Self;
 	fn verify_metadata(&self, expected_metadata: &Self) -> bool;
-	fn get_transaction_ref(&self) -> C::TransactionRef;
 }
 
-impl<C: Chain<TransactionRef = ()>> TransactionMetadata<C> for () {
+impl<C: Chain> TransactionMetadata<C> for () {
 	fn extract_metadata(_transaction: &C::Transaction) -> Self {
 		Default::default()
 	}
 	fn verify_metadata(&self, _expected_metadata: &Self) -> bool {
 		true
 	}
-	fn get_transaction_ref(&self) -> C::TransactionRef {}
 }
 
 /// Contains all the parameters required to fetch incoming transactions on an external chain.

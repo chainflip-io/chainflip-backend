@@ -57,6 +57,12 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		})
 	}
 
+	/// Returns the Range Order sub-pool's current price.
+	/// SwapDirection is ignored as the price are the same for both directions.
+	pub fn current_range_order_pool_price(&mut self) -> SqrtPriceQ64F96 {
+		self.range_orders.raw_current_sqrt_price()
+	}
+
 	/// Returns the current sqrt price for a given direction of swap. The price is measured in units
 	/// of the specified Pairs argument
 	pub fn current_sqrt_price(&mut self, order: Side) -> Option<SqrtPriceQ64F96> {

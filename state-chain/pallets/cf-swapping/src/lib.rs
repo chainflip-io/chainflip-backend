@@ -348,6 +348,7 @@ pub mod pallet {
 		/// A broker fee withdrawal has been requested.
 		WithdrawalRequested {
 			egress_id: EgressId,
+			egress_asset: Asset,
 			egress_amount: AssetAmount,
 			egress_fee: AssetAmount,
 			destination_address: EncodedAddress,
@@ -375,6 +376,7 @@ pub mod pallet {
 			reason: CcmFailReason,
 			destination_address: EncodedAddress,
 			deposit_metadata: CcmDepositMetadata,
+			origin: SwapOrigin,
 		},
 		MaximumSwapAmountSet {
 			asset: Asset,
@@ -550,6 +552,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::WithdrawalRequested {
 				egress_amount,
+				egress_asset: asset,
 				egress_fee: fee_withheld,
 				destination_address,
 				egress_id,
@@ -1115,6 +1118,7 @@ pub mod pallet {
 							reason,
 							destination_address: encoded_destination_address,
 							deposit_metadata,
+							origin: origin.clone(),
 						});
 						return Err(())
 					},

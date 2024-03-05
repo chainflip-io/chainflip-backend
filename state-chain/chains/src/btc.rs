@@ -7,7 +7,6 @@ extern crate alloc;
 use self::deposit_address::DepositAddress;
 use crate::{
 	Chain, ChainCrypto, DepositChannel, FeeEstimationApi, FeeRefundCalculator, RetryPolicy,
-	TransactionMetadata,
 };
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
@@ -18,7 +17,7 @@ use cf_primitives::{
 	chains::assets, NetworkEnvironment, DEFAULT_FEE_SATS_PER_KILOBYTE, INPUT_UTXO_SIZE_IN_BYTES,
 	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES, VAULT_UTXO_SIZE_IN_BYTES,
 };
-use cf_utilities::{ArrayCollect, SliceToArray};
+use cf_utilities::SliceToArray;
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::{cmp::max, mem::size_of};
 use frame_support::{
@@ -31,6 +30,7 @@ use itertools;
 use libsecp256k1::{curve::*, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_core::H256;
 use sp_io::hashing::sha2_256;
 use sp_std::{vec, vec::Vec};
 
@@ -56,7 +56,7 @@ pub type SigningPayload = [u8; 32];
 
 pub type Signature = [u8; 64];
 
-pub type Hash = [u8; 32];
+pub type Hash = H256;
 
 #[derive(
 	Copy,
@@ -235,34 +235,6 @@ impl ConsolidationParameters {
 	}
 }
 
-#[derive(
-	Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize,
-)]
-pub struct BitcoinTransactionMetadata {
-	pub tx_hash: Hash,
-}
-impl BitcoinTransactionMetadata {
-	/// It creates a tx_hash by reversing the provided hash
-	/// Btc softwares and explorers display blocks/txs hashes as big endian values, we need to
-	/// convert it to obtain a valid tx hash
-	pub fn new(hash: Hash) -> Self {
-		BitcoinTransactionMetadata { tx_hash: hash.iter().rev().copied().collect_array() }
-	}
-}
-impl<C: Chain<TransactionRef = Hash>> TransactionMetadata<C> for BitcoinTransactionMetadata {
-	fn extract_metadata(_transaction: &<C as Chain>::Transaction) -> Self {
-		Default::default()
-	}
-
-	fn verify_metadata(&self, _expected_metadata: &Self) -> bool {
-		true
-	}
-
-	fn get_transaction_ref(&self) -> <C as Chain>::TransactionRef {
-		self.tx_hash
-	}
-}
-
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
 	const GAS_ASSET: Self::ChainAsset = assets::btc::Asset::Btc;
@@ -279,7 +251,7 @@ impl Chain for Bitcoin {
 	type DepositChannelState = DepositAddress;
 	type DepositDetails = UtxoId;
 	type Transaction = BitcoinTransactionData;
-	type TransactionMetadata = BitcoinTransactionMetadata;
+	type TransactionMetadata = ();
 	// There is no need for replay protection on Bitcoin since it is a UTXO chain.
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
@@ -732,7 +704,7 @@ const SEQUENCE_NUMBER: [u8; 4] = (u32::MAX - 2).to_le_bytes();
 fn extend_with_inputs_outputs(bytes: &mut Vec<u8>, inputs: &[Utxo], outputs: &[BitcoinOutput]) {
 	bytes.extend(to_varint(inputs.len() as u64));
 	bytes.extend(inputs.iter().fold(Vec::<u8>::default(), |mut acc, input| {
-		acc.extend(input.id.tx_id);
+		acc.extend(input.id.tx_id.0);
 		acc.extend(input.id.vout.to_le_bytes());
 		acc.push(0);
 		acc.extend(SEQUENCE_NUMBER);
@@ -784,13 +756,13 @@ impl BitcoinTransaction {
 			!self.signatures.iter().any(|signature| signature == &[0u8; 64])
 	}
 
-	pub fn txid(&self) -> [u8; 32] {
+	pub fn txid(&self) -> Hash {
 		let mut id_bytes = Vec::default();
 		id_bytes.extend(VERSION);
 		extend_with_inputs_outputs(&mut id_bytes, &self.inputs, &self.outputs);
 		id_bytes.extend(&LOCKTIME);
 
-		sha2_256(&sha2_256(&id_bytes))
+		sha2_256(&sha2_256(&id_bytes)).into()
 	}
 
 	pub fn finalize(self) -> Vec<u8> {
@@ -838,7 +810,7 @@ impl BitcoinTransaction {
 			self.inputs
 				.iter()
 				.fold(Vec::<u8>::default(), |mut acc, input| {
-					acc.extend(input.id.tx_id);
+					acc.extend(input.id.tx_id.0);
 					acc.extend(input.id.vout.to_le_bytes());
 					acc
 				})
@@ -1332,7 +1304,8 @@ mod test {
 			id: UtxoId {
 				tx_id: hex_literal::hex!(
 					"4C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB5"
-				),
+				)
+				.into(),
 				vout: 1,
 			},
 			deposit_address: DepositAddress::new(pubkey_x, 123),
@@ -1463,17 +1436,5 @@ mod test {
 		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(30), Some(32));
 		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(40), Some(1200));
 		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(150), Some(1200));
-	}
-
-	#[test]
-	fn btc_transaction_hash_correctly_derived() {
-		let tx_out_id: Hash = [
-			0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-			24, 25, 26, 27, 28, 29, 30, 31,
-		];
-		let tx_metadata: BitcoinTransactionMetadata = BitcoinTransactionMetadata::new(tx_out_id);
-		for (i, item) in tx_out_id.iter().enumerate() {
-			assert_eq!(*item, tx_metadata.tx_hash[31 - i]);
-		}
 	}
 }

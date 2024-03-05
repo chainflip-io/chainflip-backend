@@ -66,9 +66,6 @@ impl TransactionMetadata<MockEthereum> for MockEthereumTransactionMetadata {
 	fn verify_metadata(&self, _expected_metadata: &Self) -> bool {
 		MOCK_VALID_METADATA.with(|cell| *cell.borrow())
 	}
-	fn get_transaction_ref(&self) -> <MockEthereum as Chain>::TransactionRef {
-		Default::default()
-	}
 }
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -105,7 +102,7 @@ impl Chain for MockEthereum {
 	type TransactionMetadata = MockEthereumTransactionMetadata;
 	type ReplayProtectionParams = ();
 	type ReplayProtection = EvmReplayProtection;
-	type TransactionRef = ();
+	type TransactionRef = u32;
 }
 
 impl ToHumanreadableAddress for u64 {

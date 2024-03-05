@@ -14,7 +14,7 @@ use cf_chains::{
 		MockEthereumChainCrypto, MockEthereumTransactionMetadata, MockThresholdSignature,
 		MockTransactionBuilder, ETH_TX_FEE, MOCK_TRANSACTION_OUT_ID, MOCK_TX_METADATA,
 	},
-	ChainCrypto, FeeRefundCalculator, TransactionMetadata as _,
+	ChainCrypto, FeeRefundCalculator,
 };
 use cf_traits::{
 	mocks::{
@@ -290,6 +290,7 @@ fn test_sigdata_with_no_match_is_noop() {
 				Default::default(),
 				ETH_TX_FEE,
 				MOCK_TX_METADATA,
+				0
 			),
 			Error::<Test, Instance1>::InvalidPayload
 		);
@@ -452,6 +453,7 @@ fn threshold_sign_and_broadcast_with_callback() {
 			Default::default(),
 			ETH_TX_FEE,
 			MOCK_TX_METADATA,
+			2
 		));
 		assert!(RequestSuccessCallbacks::<Test, Instance1>::get(broadcast_id).is_none());
 		let mut events = System::events();
@@ -460,7 +462,7 @@ fn threshold_sign_and_broadcast_with_callback() {
 			RuntimeEvent::Broadcaster(crate::Event::BroadcastSuccess {
 				broadcast_id,
 				transaction_out_id: api_call.tx_out_id,
-				transaction_ref: MOCK_TX_METADATA.get_transaction_ref(),
+				transaction_ref: 2,
 			})
 		);
 		assert_eq!(
@@ -612,6 +614,7 @@ fn retry_and_success_in_same_block() {
 								gas_used: Default::default(),
 							},
 							tx_metadata: Default::default(),
+							transaction_ref: 0,
 						},
 					),
 					Ok(()),
@@ -672,6 +675,7 @@ fn retry_with_threshold_signing_still_allows_late_success_witness_second_attempt
 				nominee,
 				ETH_TX_FEE,
 				MOCK_TX_METADATA,
+				0
 			));
 
 			assert_eq!(
@@ -905,6 +909,7 @@ fn witness_broadcast(tx_out_id: [u8; 4]) {
 		Default::default(),
 		ETH_TX_FEE,
 		MOCK_TX_METADATA,
+		0,
 	));
 }
 
@@ -990,6 +995,7 @@ fn aborted_broadcasts_can_still_succeed() {
 				Default::default(),
 				ETH_TX_FEE,
 				MOCK_TX_METADATA,
+				2
 			));
 
 			// Storage should be cleaned, event emitted.
@@ -997,7 +1003,7 @@ fn aborted_broadcasts_can_still_succeed() {
 				crate::Event::<Test, Instance1>::BroadcastSuccess {
 					broadcast_id,
 					transaction_out_id,
-					transaction_ref: MOCK_TX_METADATA.get_transaction_ref(),
+					transaction_ref: 2,
 				},
 			));
 			assert_broadcast_storage_cleaned_up(broadcast_id);
@@ -1146,12 +1152,13 @@ fn succeeded_broadcasts_will_not_retry() {
 				Default::default(),
 				ETH_TX_FEE,
 				MOCK_TX_METADATA,
+				3
 			));
 			System::assert_last_event(RuntimeEvent::Broadcaster(
 				crate::Event::<Test, Instance1>::BroadcastSuccess {
 					broadcast_id,
 					transaction_out_id,
-					transaction_ref: MOCK_TX_METADATA.get_transaction_ref(),
+					transaction_ref: 3,
 				},
 			));
 			broadcast_id
@@ -1257,6 +1264,7 @@ fn broadcast_is_retried_without_initial_nominee() {
 				Default::default(),
 				ETH_TX_FEE,
 				MOCK_TX_METADATA,
+				5
 			));
 
 			// Storage should be cleaned, event emitted.
@@ -1264,7 +1272,7 @@ fn broadcast_is_retried_without_initial_nominee() {
 				crate::Event::<Test, Instance1>::BroadcastSuccess {
 					broadcast_id,
 					transaction_out_id,
-					transaction_ref: MOCK_TX_METADATA.get_transaction_ref(),
+					transaction_ref: 5,
 				},
 			));
 			assert_broadcast_storage_cleaned_up(broadcast_id);

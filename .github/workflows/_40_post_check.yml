@@ -13,7 +13,7 @@ on:
 
 env:
   FORCE_COLOR: 1
-  SOLANA_VERSION: v1.17.22
+  SOLANA_VERSION: v1.18.3
 
 permissions:
   packages: read
@@ -43,7 +43,7 @@ jobs:
           scope: "@chainflip-io"
           cache-dependency-path: "bouncer/pnpm-lock.yaml"
 
-      - name: Set NPM registry
+      - name: Set NPM registry 🔧
         run: |
           pnpm set @chainflip-io:registry=https://npm.pkg.github.com/
           pnpm set //npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}
@@ -66,9 +66,9 @@ jobs:
         working-directory: bouncer
         run: pnpm install
 
-      # - name: Install solana
-      #   run: |
-      #     sh -c "$(curl -sSfL https://release.solana.com/$SOLANA_VERSION/install)"
+      - name: Install solana ☀️
+        run: |
+          sh -c "$(curl -sSfL https://release.solana.com/$SOLANA_VERSION/install)"
 
       - name: Start a localnet 🚀
         env:
@@ -98,32 +98,37 @@ jobs:
           ./run.sh
 
       - name: Print chainflip-engine logs 🚗
-        if: failure()
+        if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/*/chainflip-engine.log
 
       - name: Print chainflip-node logs 📡
-        if: failure()
+        if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/*/chainflip-node.log
 
       - name: Print chainflip-broker-api logs 💼
-        if: failure()
+        if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/chainflip-broker-api.log
 
       - name: Print chainflip-lp-api logs 🤑
-        if: failure()
+        if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/chainflip-lp-api.log
 
       - name: Print localnet init debug logs 🕵️‍♂️
-        if: failure()
+        if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/debug.log
 
       - name: Print solana logs ☀️
-        if: failure()
+        if: always()
         continue-on-error: true
         run: |
           cat /tmp/solana/solana.log
@@ -157,7 +162,7 @@ jobs:
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --rmi all --volumes --remove-orphans
 
       - name: Notify on failed bouncer 📢
-        if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main'
+        if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main' || failure() && contains(github.ref_name, 'release/') || cancelled() && contains(github.ref_name, 'release/')
         env:
           DISCORD_USERNAME: "HEUTE LEIDER NICHT"
           DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
@@ -165,5 +170,6 @@ jobs:
         with:
           args: |
             ❗️❗️❗️❗️ Sorry **${{ github.actor }}**, the Bouncer has rejected you ❗️❗️❗️❗️
+            The Bouncer has rejected the build on branch `${{ github.ref_name }}`
             👾 Link to job: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>
             #️⃣ Tagging: <@&939151218708709416>

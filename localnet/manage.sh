@@ -47,7 +47,18 @@ setup() {
 
   echo "🐳 Logging in to our Docker Registry. You'll need to create a Classic PAT with packages:read permissions"
   echo "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token"
+
+  set +e
+  # Attempt Docker login
   docker login ghcr.io
+  # Check the exit status of the previous command
+  if [ $? -ne 0 ]; then
+      echo "Docker login to ghcr.io failed. Please check your credentials (github PAT) and try again."
+      exit 1
+  fi
+  # Restore the previous errexit setting
+  set -eo pipefail
+
 
   touch localnet/.setup_complete
 }
@@ -59,6 +70,16 @@ get-workflow() {
     break
   done
   if [[ $WORKFLOW =~ build-localnet|recreate ]]; then
+    set +e
+    # Attempt Docker login
+    docker login ghcr.io
+    # Check the exit status of the previous command
+    if [ $? -ne 0 ]; then
+        echo "Docker login to ghcr.io failed. Please check your credentials (github PAT) and try again."
+        exit 1
+    fi
+    # Restore the previous errexit setting
+    set -eo pipefail
     echo "❓ Would you like to run a 1 or 3 node network? (Type 1 or 3)"
     read -r NODE_COUNT
     if [[ $NODE_COUNT == "1" ]]; then
@@ -110,6 +131,7 @@ build-localnet() {
   if [[ $CI == true ]]; then
     sudo chmod -R 777 /tmp/chainflip
     sudo chmod -R 777 /tmp/solana
+    sudo chown -R $USER:$USER /tmp/solana
   else
     chmod -R 777 /tmp/chainflip
     chmod -R 777 /tmp/solana
@@ -131,7 +153,7 @@ build-localnet() {
   if which solana-test-validator >>$DEBUG_OUTPUT_DESTINATION 2>&1; then
     echo "☀️ Waiting for Solana node to start"
     ./localnet/init/scripts/start-solana.sh
-    until curl -s http://localhost:8899 >> $DEBUG_OUTPUT_DESTINATION 2>&1; do sleep 1; done
+    check_endpoint_health -s http://localhost:8899 >> $DEBUG_OUTPUT_DESTINATION 2>&1
   else
     echo "☀️ Solana not installed, skipping..."
   fi

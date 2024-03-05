@@ -101,6 +101,7 @@ fn assert_failed_ccm(
 		reason,
 		destination_address: MockAddressConverter::to_encoded_address(destination_address),
 		deposit_metadata: ccm,
+		origin: SwapOrigin::Vault { tx_hash: Default::default() },
 	}));
 }
 
@@ -334,6 +335,7 @@ fn withdraw_broker_fees() {
 		assert_eq!(egresses.pop().expect("must exist").amount(), 200);
 		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::WithdrawalRequested {
 			egress_id: (ForeignChain::Ethereum, 1),
+			egress_asset: Asset::Eth,
 			egress_amount: 200,
 			destination_address: EncodedAddress::Eth(Default::default()),
 			egress_fee: 0,
