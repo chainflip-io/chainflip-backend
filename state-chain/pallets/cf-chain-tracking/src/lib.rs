@@ -11,7 +11,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 use cf_chains::{Chain, ChainState, FeeEstimationApi};
-use cf_traits::{Chainflip, FeeCalculationApi, GetBlockHeight};
+use cf_traits::{AdjustedFeeEstimationApi, Chainflip, GetBlockHeight};
 use frame_support::{dispatch::DispatchResultWithPostInfo, pallet_prelude::*};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -73,7 +73,7 @@ pub mod pallet {
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// The tracked state of this chain has been updated.
 		ChainStateUpdated { new_chain_state: ChainState<T::TargetChain> },
-		/// The fee multiplier for this chain has been updated
+		/// The fee multiplier for this chain has been updated.
 		FeeMultiplierUpdated { new_fee_multiplier: FixedU128 },
 	}
 
@@ -145,7 +145,7 @@ pub mod pallet {
 		///
 		/// Requires Governance.
 		#[pallet::call_index(1)]
-		#[pallet::weight(T::WeightInfo::update_fee_multiplier())]
+		#[pallet::weight(T::DbWeight::get().writes(1))]
 		pub fn update_fee_multiplier(
 			origin: OriginFor<T>,
 			new_fee_multiplier: FixedU128,
@@ -166,7 +166,7 @@ impl<T: Config<I>, I: 'static> GetBlockHeight<T::TargetChain> for Pallet<T, I> {
 	}
 }
 
-impl<T: Config<I>, I: 'static> FeeCalculationApi<T::TargetChain> for Pallet<T, I> {
+impl<T: Config<I>, I: 'static> AdjustedFeeEstimationApi<T::TargetChain> for Pallet<T, I> {
 	fn estimate_ingress_fee(
 		asset: <T::TargetChain as Chain>::ChainAsset,
 	) -> <T::TargetChain as Chain>::ChainAmount {

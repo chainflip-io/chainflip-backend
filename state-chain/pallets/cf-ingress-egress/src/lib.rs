@@ -30,8 +30,8 @@ use cf_primitives::{
 };
 use cf_traits::{
 	liquidity::{LpBalanceApi, LpDepositHandler},
-	AssetConverter, Broadcaster, CcmHandler, CcmSwapIds, Chainflip, DepositApi, DepositHandler,
-	EgressApi, EpochInfo, FeeCalculationApi, FeePayment, GetBlockHeight,
+	AdjustedFeeEstimationApi, AssetConverter, Broadcaster, CcmHandler, CcmSwapIds, Chainflip,
+	DepositApi, DepositHandler, EgressApi, EpochInfo, FeePayment, GetBlockHeight,
 	NetworkEnvironmentProvider, ScheduledEgressDetails, SwapDepositHandler,
 };
 use frame_support::{
@@ -348,7 +348,8 @@ pub mod pallet {
 			+ ConsolidateCall<Self::TargetChain>;
 
 		/// Get the latest chain state of the target chain.
-		type ChainTracking: GetBlockHeight<Self::TargetChain> + FeeCalculationApi<Self::TargetChain>;
+		type ChainTracking: GetBlockHeight<Self::TargetChain>
+			+ AdjustedFeeEstimationApi<Self::TargetChain>;
 
 		/// A broadcaster instance.
 		type Broadcaster: Broadcaster<

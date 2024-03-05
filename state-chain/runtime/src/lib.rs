@@ -29,7 +29,7 @@ use cf_chains::{
 	Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot, TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, NetworkEnvironment};
-use cf_traits::{AssetConverter, FeeCalculationApi, LpBalanceApi};
+use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi};
 use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;

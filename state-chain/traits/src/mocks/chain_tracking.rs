@@ -1,9 +1,8 @@
 use super::MockPallet;
 use crate::mocks::MockPalletStorage;
 use cf_chains::Chain;
-use sp_runtime::FixedU128;
 
-use crate::{FeeCalculationApi, GetBlockHeight};
+use crate::{AdjustedFeeEstimationApi, GetBlockHeight};
 
 use super::{
 	block_height_provider::BlockHeightProvider, tracked_data_provider::TrackedDataProvider,
@@ -18,7 +17,7 @@ impl<C: Chain> MockPallet for ChainTracker<C> {
 const TRACKED_FEE_KEY: &[u8] = b"TRACKED_FEE_DATA";
 
 impl<C: Chain> ChainTracker<C> {
-	pub fn set_fee(fee: FixedU128) {
+	pub fn set_fee(fee: C::ChainAmount) {
 		Self::put_value(TRACKED_FEE_KEY, fee);
 	}
 }
@@ -29,7 +28,7 @@ impl<C: Chain> GetBlockHeight<C> for ChainTracker<C> {
 	}
 }
 
-impl<C: Chain> FeeCalculationApi<C> for ChainTracker<C> {
+impl<C: Chain> AdjustedFeeEstimationApi<C> for ChainTracker<C> {
 	fn estimate_ingress_fee(_asset: C::ChainAsset) -> C::ChainAmount {
 		Self::get_value(TRACKED_FEE_KEY).unwrap_or_default()
 	}

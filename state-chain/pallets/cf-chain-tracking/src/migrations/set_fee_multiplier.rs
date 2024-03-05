@@ -9,22 +9,11 @@ pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 
 const BTC_FEE_MULTIPLIER: FixedU128 = FixedU128::from_rational(3, 2);
 
-// No need to migrate Eth or Dot: default value for storage item is 1
-impl<T: Config<Instance1>> OnRuntimeUpgrade for Migration<T, Instance1> {
-	fn on_runtime_upgrade() -> Weight {
-		Weight::zero()
-	}
-}
-
-impl<T: Config<Instance2>> OnRuntimeUpgrade for Migration<T, Instance2> {
-	fn on_runtime_upgrade() -> Weight {
-		Weight::zero()
-	}
-}
-
-impl<T: Config<Instance3, TargetChain = Bitcoin>> OnRuntimeUpgrade for Migration<T, Instance3> {
+impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		FeeMultiplier::<T, Instance3>::set(BTC_FEE_MULTIPLIER);
+		if T::TargetChain::NAME == "Bitcoin" {
+			FeeMultiplier::<T, I>::set(BTC_FEE_MULTIPLIER);
+		}
 
 		Weight::zero()
 	}
@@ -36,7 +25,12 @@ impl<T: Config<Instance3, TargetChain = Bitcoin>> OnRuntimeUpgrade for Migration
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
-		assert_eq!(FeeMultiplier::<T, Instance3>::get(), BTC_FEE_MULTIPLIER);
+		use frame_support::sp_runtime::traits::One;
+		if T::TargetChain::NAME == <Bitcoin as Chain>::NAME {
+			assert_eq!(FeeMultiplier::<T, I>::get(), BTC_FEE_MULTIPLIER);
+		} else {
+			assert_eq!(FeeMultiplier::<T, I>::get(), FixedU128::one());
+		}
 
 		Ok(())
 	}

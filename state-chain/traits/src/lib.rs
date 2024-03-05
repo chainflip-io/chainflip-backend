@@ -892,7 +892,7 @@ pub trait AuthoritiesCfeVersions {
 	fn percent_authorities_compatible_with_version(version: SemVer) -> Percent;
 }
 
-pub trait FeeCalculationApi<C: Chain> {
+pub trait AdjustedFeeEstimationApi<C: Chain> {
 	fn estimate_ingress_fee(asset: C::ChainAsset) -> C::ChainAmount;
 
 	fn estimate_egress_fee(asset: C::ChainAsset) -> C::ChainAmount;

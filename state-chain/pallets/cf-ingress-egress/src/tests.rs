@@ -30,7 +30,6 @@ use frame_support::{
 	weights::Weight,
 };
 use sp_core::H160;
-use sp_runtime::FixedU128;
 
 const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
 const BOB_ETH_ADDRESS: EthereumAddress = H160([101u8; 20]);
@@ -907,10 +906,12 @@ fn deposits_below_minimum_are_rejected() {
 fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 	const ASSET: cf_chains::assets::eth::Asset = eth::Asset::Eth;
 	const DEPOSIT_AMOUNT: u128 = 500;
+	const HIGH_FEE: u128 = DEPOSIT_AMOUNT * 2;
+	const LOW_FEE: u128 = DEPOSIT_AMOUNT / 10;
 
 	new_test_ext().execute_with(|| {
-		// Set Eth fees to some arbitrary value, high enough for our test swap
-		ChainTracker::<Ethereum>::set_fee(FixedU128::from_float(100.0));
+		// Set fee to be higher than the deposit value.
+		ChainTracker::<Ethereum>::set_fee(HIGH_FEE);
 
 		let (_id, address, ..) =
 			IngressEgress::request_liquidity_deposit_address(ALICE, ASSET, 0).unwrap();
@@ -928,34 +929,44 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 			Default::default(),
 		));
 		// Observe the DepositIgnored Event
-		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::DepositIgnored {
-				deposit_address,
-				asset: ASSET,
-				amount: DEPOSIT_AMOUNT,
-				deposit_details: (),
-				reason: DepositIgnoredReason::NotEnoughToPayFees,
-			},
-		));
+		assert!(
+			matches!(
+				cf_test_utilities::last_event::<Test>(),
+				RuntimeEvent::IngressEgress(crate::Event::<Test>::DepositIgnored {
+					asset: ASSET,
+					amount: DEPOSIT_AMOUNT,
+					deposit_details: (),
+					reason: DepositIgnoredReason::NotEnoughToPayFees,
+					..
+				},)
+			),
+			"Expected DepositIgnored Event, got: {:?}",
+			cf_test_utilities::last_event::<Test>()
+		);
 
-		// Set fees back to 0 and try the same swap
-		ChainTracker::<Ethereum>::set_fee(FixedU128::from_float(0.0));
+		// Set fees to less than the deposit amount and retry.
+		ChainTracker::<Ethereum>::set_fee(LOW_FEE);
 
 		assert_ok!(IngressEgress::process_deposit_witnesses(
 			vec![deposit_detail],
 			Default::default(),
 		));
 		// Observe the DepositReceived Event
-		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::DepositReceived {
-				deposit_address,
-				asset: ASSET,
-				amount: DEPOSIT_AMOUNT,
-				deposit_details: (),
-				ingress_fee: 0,
-				action: DepositAction::LiquidityProvision { lp_account: ALICE },
-			},
-		));
+		assert!(
+			matches!(
+				cf_test_utilities::last_event::<Test>(),
+				RuntimeEvent::IngressEgress(crate::Event::<Test>::DepositReceived {
+					asset: ASSET,
+					amount: DEPOSIT_AMOUNT,
+					deposit_details: (),
+					ingress_fee: LOW_FEE,
+					action: DepositAction::LiquidityProvision { lp_account: ALICE },
+					..
+				},)
+			),
+			"Expected DepositReceived Event, got: {:?}",
+			cf_test_utilities::last_event::<Test>()
+		);
 	});
 }
 

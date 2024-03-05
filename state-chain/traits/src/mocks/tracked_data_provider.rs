@@ -21,10 +21,10 @@ impl<C: Chain> TrackedDataProvider<C> {
 
 impl<C: Chain> FeeEstimationApi<C> for TrackedDataProvider<C> {
 	fn estimate_ingress_fee(&self, _asset: C::ChainAsset) -> C::ChainAmount {
-		Self::get_value(TRACKED_DATA_KEY).expect("TrackedData must be set explicitly in moks")
+		Self::get_value(TRACKED_DATA_KEY).expect("TrackedData must be set explicitly in mocks")
 	}
 
 	fn estimate_egress_fee(&self, _asset: C::ChainAsset) -> C::ChainAmount {
-		Self::get_value(TRACKED_DATA_KEY).expect("TrackedData must be set explicitly in moks")
+		Self::get_value(TRACKED_DATA_KEY).expect("TrackedData must be set explicitly in mocks")
 	}
 }
