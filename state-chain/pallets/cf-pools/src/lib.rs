@@ -7,10 +7,9 @@ use cf_amm::{
 	range_orders::{self, Liquidity},
 	PoolState,
 };
-use cf_chains::SwapType;
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
 use cf_traits::{
-	impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwapQueueApi, SwappingApi,
+	impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwapQueueApi, SwapType, SwappingApi,
 };
 use frame_support::{
 	dispatch::GetDispatchInfo,
@@ -276,10 +275,6 @@ pub mod pallet {
 	/// All the available pools.
 	#[pallet::storage]
 	pub type Pools<T: Config> = StorageMap<_, Twox64Concat, AssetPair, Pool<T>, OptionQuery>;
-
-	/// FLIP ready to be burned.
-	#[pallet::storage]
-	pub(super) type FlipToBurn<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
 	/// Interval at which we buy FLIP in order to burn it.
 	#[pallet::storage]
@@ -1054,12 +1049,6 @@ impl<T: Config> SwappingApi for Pallet<T> {
 			Ok(output_amount)
 		})
 	}
-
-	fn add_flip_to_burn(amount: AssetAmount) {
-		FlipToBurn::<T>::mutate(|total| {
-			total.saturating_accrue(amount);
-		});
-	}
 }
 
 impl<T: Config> PoolApi for Pallet<T> {
@@ -1067,12 +1056,6 @@ impl<T: Config> PoolApi for Pallet<T> {
 
 	fn sweep(who: &T::AccountId) -> DispatchResult {
 		Self::inner_sweep(who)
-	}
-}
-
-impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
-	fn take_flip_to_burn() -> AssetAmount {
-		FlipToBurn::<T>::take()
 	}
 }
 

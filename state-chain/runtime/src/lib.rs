@@ -585,7 +585,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type RewardsDistribution = chainflip::BlockAuthorRewardDistribution;
 	type CompoundingInterval = ConstU32<COMPOUNDING_INTERVAL>;
 	type EthEnvironment = EthEnvironment;
-	type FlipToBurn = LiquidityPools;
+	type FlipToBurn = Swapping;
 	type EgressHandler = pallet_cf_ingress_egress::Pallet<Runtime, EthereumInstance>;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
@@ -924,6 +924,7 @@ type PalletMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance2>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance3>,
 	// pallet_cf_pools::migrations::PalletMigration<Runtime>,
+	FlipToBurnMigration,
 );
 
 pub struct ThresholdSignatureRefactorMigration;
@@ -967,6 +968,20 @@ impl frame_support::traits::OnRuntimeUpgrade for ThresholdSignatureRefactorMigra
 		threshold_signature_refactor_migration::migrate_instance::<BitcoinInstance>();
 		threshold_signature_refactor_migration::migrate_instance::<PolkadotInstance>();
 
+		Default::default()
+	}
+}
+
+pub struct FlipToBurnMigration;
+
+impl frame_support::traits::OnRuntimeUpgrade for FlipToBurnMigration {
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		log::info!("⏫ Applying flip to burn migration.");
+		// Moving the FlipToBurn storage item from the pools pallet to the Swapping pallet.
+		cf_runtime_upgrade_utilities::move_pallet_storage::<
+			pallet_cf_pools::Pallet<Runtime>,
+			pallet_cf_swapping::Pallet<Runtime>,
+		>("FlipToBurn".as_bytes());
 		Default::default()
 	}
 }

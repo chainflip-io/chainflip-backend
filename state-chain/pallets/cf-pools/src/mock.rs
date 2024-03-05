@@ -1,8 +1,7 @@
 use crate::{self as pallet_cf_pools, PalletSafeMode};
-use cf_chains::SwapType;
 use cf_primitives::{Asset, AssetAmount};
 use cf_traits::{
-	impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleRegistry, LpBalanceApi,
+	impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleRegistry, LpBalanceApi, SwapType,
 };
 use frame_support::{derive_impl, parameter_types};
 use frame_system as system;

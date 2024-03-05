@@ -2235,10 +2235,10 @@ fn network_fee_swap_gets_burnt() {
 		const AMOUNT: AssetAmount = 100;
 
 		Swapping::schedule_swap(Asset::Usdc, Asset::Flip, AMOUNT, SwapType::NetworkFee);
-		assert_eq!(BurntFlip::get(), 0);
+		assert_eq!(FlipToBurn::<Test>::get(), 0);
 
 		Swapping::on_finalize(System::block_number() + SWAP_DELAY_BLOCKS as u64);
 		assert_swaps_queue_is_empty();
-		assert_eq!(BurntFlip::get(), AMOUNT);
+		assert_eq!(FlipToBurn::<Test>::get(), AMOUNT);
 	});
 }

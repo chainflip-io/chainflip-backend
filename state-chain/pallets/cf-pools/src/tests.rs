@@ -1,14 +1,12 @@
 use crate::{
 	self as pallet_cf_pools, mock::*, utilities, AskBidMap, AssetAmounts, AssetPair,
-	CollectedNetworkFee, Error, Event, FlipBuyInterval, FlipToBurn, LimitOrder, PoolInfo,
-	PoolOrders, PoolPairsMap, Pools, RangeOrder, RangeOrderSize, ScheduledLimitOrderUpdates,
-	STABLE_ASSET,
+	CollectedNetworkFee, Error, Event, FlipBuyInterval, LimitOrder, PoolInfo, PoolOrders,
+	PoolPairsMap, Pools, RangeOrder, RangeOrderSize, ScheduledLimitOrderUpdates, STABLE_ASSET,
 };
 use cf_amm::common::{price_at_tick, tick_at_price, Side, Tick, PRICE_FRACTIONAL_BITS};
-use cf_chains::SwapType;
 use cf_primitives::{chains::assets::any::Asset, AssetAmount, SwapOutput};
 use cf_test_utilities::{assert_events_match, assert_has_event, last_event};
-use cf_traits::{AssetConverter, SwappingApi};
+use cf_traits::{AssetConverter, SwapType, SwappingApi};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::U256;
@@ -82,7 +80,6 @@ fn test_buy_back_flip_no_funds_available() {
 		FlipBuyInterval::<Test>::set(5);
 		CollectedNetworkFee::<Test>::set(30);
 		LiquidityPools::on_initialize(8);
-		assert_eq!(FlipToBurn::<Test>::get(), 0);
 	});
 }
 
@@ -229,14 +226,12 @@ fn test_buy_back_flip() {
 		// The default buy interval is zero, and this means we don't buy back.
 		assert_eq!(FlipBuyInterval::<Test>::get(), 0);
 		LiquidityPools::on_initialize(1);
-		assert_eq!(FlipToBurn::<Test>::get(), 0);
 
 		// A non-zero buy interval
 		FlipBuyInterval::<Test>::set(INTERVAL);
 
 		// Nothing is bought if we're not at the interval.
 		LiquidityPools::on_initialize(INTERVAL * 3 - 1);
-		assert_eq!(0, FlipToBurn::<Test>::get());
 		assert_eq!(EXPECTED_COLLECTED_FEES, CollectedNetworkFee::<Test>::get());
 
 		// If we're at an interval, we should buy flip.
