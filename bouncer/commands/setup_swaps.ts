@@ -42,7 +42,7 @@ async function main(): Promise<void> {
     createLpPool('DOT', price.get('DOT')!),
     createLpPool('BTC', price.get('BTC')!),
     createLpPool('FLIP', price.get('FLIP')!),
-    createLpPool('USDT', price.get('FLIP')!),
+    createLpPool('USDT', price.get('USDT')!),
     // createLpPool('ARBETH', price.get('ARBETH')!),
     // createLpPool('ARBUSDC', price.get('ARBUSDC')!),
   ]);
@@ -53,7 +53,7 @@ async function main(): Promise<void> {
     provideLiquidity('DOT', deposits.get('DOT')!),
     provideLiquidity('BTC', deposits.get('BTC')!),
     provideLiquidity('FLIP', deposits.get('FLIP')!),
-    provideLiquidity('USDT', deposits.get('FLIP')!),
+    provideLiquidity('USDT', deposits.get('USDT')!),
     // provideLiquidity('ARBETH', deposits.get('ARBETH')!),
     // provideLiquidity('ARBUSDC', deposits.get('ARBUSDC')!),
   ]);

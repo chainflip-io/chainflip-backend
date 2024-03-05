@@ -84,6 +84,18 @@ where
 
 	eth_source_deposit_addresses
 		.clone()
+		.erc20_deposits::<_, _, _, UsdcEvents>(
+			witness_call.clone(),
+			eth_client.clone(),
+			Asset::Usdt,
+			env_params.usdt_contract_address,
+		)
+		.await?
+		.logging("witnessing USDTDeposits")
+		.spawn(scope);
+
+	eth_source_deposit_addresses
+		.clone()
 		.ethereum_deposits(
 			witness_call.clone(),
 			eth_client.clone(),

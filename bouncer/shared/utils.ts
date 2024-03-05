@@ -75,7 +75,7 @@ export function getEvmContractAddress(chain: Chain, contract: string): string {
 }
 
 // We use this instead of assetChains[asset] from the SDK because the SC strings are lowercase
-export function shortChainFomAsset(asset: Asset): string {
+export function shortChainFromAsset(asset: Asset): string {
   switch (asset) {
     case 'DOT':
       return 'Dot';
@@ -88,10 +88,10 @@ export function shortChainFomAsset(asset: Asset): string {
       return 'Btc';
     case 'ARBUSDC':
     case 'ARBETH':
-      return 'Arbitrum';
+      return 'Arb';
     case 'SOL':
     case 'SOLUSDC':
-      return 'Solana';
+      return 'Sol';
     default:
       throw new Error(`Unsupported asset: ${asset}`);
   }
@@ -476,6 +476,7 @@ export async function newAddress(
     case Assets.FLIP:
     case Assets.ETH:
     case Assets.USDC:
+    case 'USDT':
     case 'ARBETH':
     case 'ARBUSDC':
       rawAddress = newEvmAddress(seed);
@@ -500,6 +501,7 @@ export function chainFromAsset(asset: Asset): Chain {
     case 'ETH':
     case 'FLIP':
     case 'USDC':
+    case 'USDT':
       return 'Ethereum';
     case 'BTC':
       return 'Bitcoin';

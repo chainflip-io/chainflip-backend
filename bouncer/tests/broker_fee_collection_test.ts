@@ -15,7 +15,7 @@ import {
   observeBalanceIncrease,
   observeEvent,
   runWithTimeout,
-  shortChainFomAsset,
+  shortChainFromAsset,
   assetDecimals,
 } from '../shared/utils';
 import { getBalance } from '../shared/get_balance';
@@ -61,7 +61,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   const destinationAddress = await newAddress(swapAsset, seed ?? randomBytes(32).toString('hex'));
   const observeDestinationAddress =
     asset === Assets.DOT ? decodeDotAddressForContract(destinationAddress) : destinationAddress;
-  const destinationChain = shortChainFomAsset(swapAsset); // "ETH" -> "Eth"
+  const destinationChain = shortChainFromAsset(swapAsset); // "ETH" -> "Eth"
   console.log(`${asset} destinationAddress:`, destinationAddress);
   const observeSwapScheduledEvent = observeEvent(
     ':SwapScheduled',
@@ -133,7 +133,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   const withdrawalAddress = await newAddress(asset, seed ?? randomBytes(32).toString('hex'));
   const observeWithdrawalAddress =
     asset === Assets.DOT ? decodeDotAddressForContract(withdrawalAddress) : withdrawalAddress;
-  const chain = shortChainFomAsset(asset);
+  const chain = shortChainFromAsset(asset);
   console.log(`${chain} withdrawalAddress:`, withdrawalAddress);
   const balanceBeforeWithdrawal = await getBalance(asset, withdrawalAddress);
   console.log(
