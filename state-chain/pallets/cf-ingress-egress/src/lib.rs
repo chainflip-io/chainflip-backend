@@ -22,7 +22,7 @@ use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi, AddressDerivationError},
 	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
 	Chain, ChannelLifecycleHooks, ConsolidateCall, DepositChannel, ExecutexSwapAndCall,
-	FeeEstimationApi, FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
+	FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	Asset, BasisPoints, BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex, ForeignChain,
@@ -30,9 +30,9 @@ use cf_primitives::{
 };
 use cf_traits::{
 	liquidity::{LpBalanceApi, LpDepositHandler},
-	AssetConverter, Broadcaster, CcmHandler, CcmSwapIds, Chainflip, DepositApi, DepositHandler,
-	EgressApi, EpochInfo, FeePayment, GetBlockHeight, GetTrackedData, NetworkEnvironmentProvider,
-	ScheduledEgressDetails, SwapDepositHandler,
+	AdjustedFeeEstimationApi, AssetConverter, Broadcaster, CcmHandler, CcmSwapIds, Chainflip,
+	DepositApi, DepositHandler, EgressApi, EpochInfo, FeePayment, GetBlockHeight,
+	NetworkEnvironmentProvider, ScheduledEgressDetails, SwapDepositHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -350,7 +350,8 @@ pub mod pallet {
 			+ ConsolidateCall<Self::TargetChain>;
 
 		/// Get the latest chain state of the target chain.
-		type ChainTracking: GetBlockHeight<Self::TargetChain> + GetTrackedData<Self::TargetChain>;
+		type ChainTracking: GetBlockHeight<Self::TargetChain>
+			+ AdjustedFeeEstimationApi<Self::TargetChain>;
 
 		/// A broadcaster instance.
 		type Broadcaster: Broadcaster<
@@ -1378,10 +1379,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		asset: TargetChainAsset<T, I>,
 		available_amount: TargetChainAmount<T, I>,
 	) -> AmountAndFeesWithheld<T, I> {
-		let tracked_data = T::ChainTracking::get_tracked_data();
 		let fee_estimate = match ingress_or_egress {
-			IngressOrEgress::Ingress => tracked_data.estimate_ingress_fee(asset),
-			IngressOrEgress::Egress => tracked_data.estimate_egress_fee(asset),
+			IngressOrEgress::Ingress => T::ChainTracking::estimate_ingress_fee(asset),
+			IngressOrEgress::Egress => T::ChainTracking::estimate_egress_fee(asset),
 		};
 
 		let (amount_after_fees, fee_estimate) =
