@@ -406,6 +406,7 @@ pub trait BrokerApi: SignedExtrinsicApi {
 				egress_fee,
 				destination_address,
 				egress_id,
+				..
 			},
 		)) = events.iter().find(|event| {
 			matches!(

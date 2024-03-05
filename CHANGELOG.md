@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.2.1] - 2024-03-04
+
+### Features
+
+- Price impact protection for swaps ([#4547](https://github.com/chainflip-io/chainflip-backend/pull/4547))
+
 ## [1.2.0] - 2024-02-02
 
 ### Features

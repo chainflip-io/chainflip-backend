@@ -95,10 +95,7 @@ fn deposit_witnesses(
 							deposit_address: bitcoin_script.clone(),
 							asset: btc::Asset::Btc,
 							amount: tx_out.value.to_sat(),
-							deposit_details: UtxoId {
-								tx_id: tx.txid.as_raw_hash().to_byte_array(),
-								vout,
-							},
+							deposit_details: UtxoId { tx_id: tx.txid.to_byte_array().into(), vout },
 						}
 					})
 				})
