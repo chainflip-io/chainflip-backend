@@ -355,6 +355,14 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 		let (mut block_sender, block_receiver) = spmc::channel::<BlockInfo>(BLOCK_CAPACITY);
 
 		let latest_block = *processed_stream.cache();
+
+		{
+			let block_compatibility =
+				base_rpc_client.check_block_compatibility(latest_block).await?;
+
+			assert_eq!(block_compatibility.compatibility, CfeCompatibility::Compatible);
+		}
+
 		let (latest_block_sender, latest_block_watcher) =
 			tokio::sync::watch::channel::<BlockInfo>(latest_block);
 
