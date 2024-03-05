@@ -34,7 +34,7 @@ use cf_primitives::{BroadcastId, NetworkEnvironment};
 use cf_runtime_upgrade_utilities::VersionedMigration;
 use cf_traits::{AssetConverter, GetTrackedData, LpBalanceApi};
 use core::ops::Range;
-use frame_support::{instances::*, traits::OnRuntimeUpgrade};
+use frame_support::instances::*;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
@@ -49,9 +49,8 @@ use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use scale_info::prelude::string::String;
 use sp_std::collections::btree_map::BTreeMap;
 
-pub use cf_chains::{
-	arb::ArbitrumInstance, btc::BitcoinInstance, dot::PolkadotInstance, eth::EthereumInstance,
-	evm::EvmInstance,
+pub use cf_chains::instances::{
+	ArbitrumInstance, BitcoinInstance, EthereumInstance, EvmInstance, PolkadotInstance,
 };
 
 pub use frame_support::{
@@ -991,7 +990,7 @@ type PalletMigrations = (
 	// pallet_cf_validator::migrations::PalletMigration<Runtime>,
 	pallet_grandpa::migrations::MigrateV4ToV5<Runtime>,
 	pallet_cf_governance::migrations::PalletMigration<Runtime>,
-	// pallet_cf_tokenholder_governance::migrations::PalletMigration<Runtime>,
+	pallet_cf_tokenholder_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, EthereumInstance>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, BitcoinInstance>,
@@ -1000,8 +999,8 @@ type PalletMigrations = (
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	// pallet_cf_vaults::migrations::PalletMigration<Runtime, ArbitrumInstance>,
-	// TODO: Remove this after version 1.3 release.
-	ThresholdSignatureRefactorMigration,
+	migrations::arbitrum_integration::RenameEthereumToEvmThresholdSigner,
+	migrations::threshold_signature_refactor::Migration,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, EvmInstance>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, BitcoinInstance>,
@@ -1010,221 +1009,22 @@ type PalletMigrations = (
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	// pallet_cf_broadcast::migrations::PalletMigration<Runtime, ArbitrumInstance>,
 	pallet_cf_swapping::migrations::PalletMigration<Runtime>,
-	// pallet_cf_lp::migrations::PalletMigration<Runtime>,
+	pallet_cf_lp::migrations::PalletMigration<Runtime>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, EthereumInstance>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	// pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, ArbitrumInstance>,
-	// pallet_cf_pools::migrations::PalletMigration<Runtime>,
+	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
+	// TODO: After the Abitrum release, arbitrum_integration migrations and un-comment the
+	// Arbitrum-specific pallet migrations.
 	VersionedMigration<
 		pallet_cf_environment::Pallet<Runtime>,
-		arbitrum_integration_migration::ArbitrumIntegration,
+		migrations::arbitrum_integration::ArbitrumIntegration,
 		8,
 		9,
 	>,
 );
-
-mod arbitrum_integration_migration {
-
-	use super::*;
-	use crate::{safe_mode, ArbitrumInstance, BitcoinInstance, EthereumInstance, PolkadotInstance};
-	use cf_chains::arb;
-	use cf_traits::SafeMode;
-	use eth::Address;
-
-	use sp_core::H256;
-	use sp_runtime::DispatchError;
-
-	mod old {
-		use super::*;
-		use frame_support::pallet_prelude::*;
-		#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
-		pub struct RuntimeSafeMode {
-			pub emissions: pallet_cf_emissions::PalletSafeMode,
-			pub funding: pallet_cf_funding::PalletSafeMode,
-			pub swapping: pallet_cf_swapping::PalletSafeMode,
-			pub liquidity_provider: pallet_cf_lp::PalletSafeMode,
-			pub validator: pallet_cf_validator::PalletSafeMode,
-			pub pools: pallet_cf_pools::PalletSafeMode,
-			pub reputation: pallet_cf_reputation::PalletSafeMode,
-			pub threshold_signature_ethereum:
-				pallet_cf_threshold_signature::PalletSafeMode<EvmInstance>,
-			pub threshold_signature_bitcoin:
-				pallet_cf_threshold_signature::PalletSafeMode<BitcoinInstance>,
-			pub threshold_signature_polkadot:
-				pallet_cf_threshold_signature::PalletSafeMode<PolkadotInstance>,
-			pub broadcast_ethereum: pallet_cf_broadcast::PalletSafeMode<EthereumInstance>,
-			pub broadcast_bitcoin: pallet_cf_broadcast::PalletSafeMode<BitcoinInstance>,
-			pub broadcast_polkadot: pallet_cf_broadcast::PalletSafeMode<PolkadotInstance>,
-			pub witnesser: pallet_cf_witnesser::PalletSafeMode<WitnesserCallPermission>,
-		}
-	}
-	pub struct ArbitrumIntegration;
-
-	impl OnRuntimeUpgrade for ArbitrumIntegration {
-		fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			use cf_chains::assets::arb::Asset::ArbUsdc;
-			use frame_support::assert_ok;
-			use frame_system::pallet_prelude::BlockNumberFor;
-			use sp_runtime::traits::Zero;
-			use sp_std::str::FromStr;
-
-			assert_ok!(pallet_cf_environment::RuntimeSafeMode::<Runtime>::translate(
-				|maybe_old: Option<old::RuntimeSafeMode>| {
-					maybe_old.map(|old| {
-						safe_mode::RuntimeSafeMode {
-							emissions: old.emissions,
-							funding: old.funding,
-							swapping: old.swapping,
-							liquidity_provider: old.liquidity_provider,
-							validator: old.validator,
-							pools: old.pools,
-							reputation: old.reputation,
-							threshold_signature_ethereum: old.threshold_signature_ethereum,
-							threshold_signature_bitcoin: old.threshold_signature_bitcoin,
-							threshold_signature_polkadot: old.threshold_signature_polkadot,
-							broadcast_ethereum: old.broadcast_ethereum,
-							broadcast_bitcoin: old.broadcast_bitcoin,
-							broadcast_polkadot: old.broadcast_polkadot,
-							broadcast_arbitrum: <pallet_cf_broadcast::PalletSafeMode<
-								ArbitrumInstance,
-							> as SafeMode>::CODE_GREEN,
-							witnesser: old.witnesser,
-						}
-					})
-				},
-			));
-
-			let genesis_hash =
-				frame_system::BlockHash::<Runtime>::get(BlockNumberFor::<Runtime>::zero());
-
-			let (
-				key_manager_address,
-				vault_address,
-				address_checker_address,
-				chain_id,
-				usdc_address,
-			): (Address, Address, Address, u64, Address) = if genesis_hash ==
-				// BERGHAIN MAINNET
-				H256::from_str(
-					"0x8b8c140b0af9db70686583e3f6bf2a59052bfe9584b97d20c45068281e976eb9",
-				)
-				.unwrap()
-			{
-				(
-					[0u8; 20].into(),
-					[0u8; 20].into(),
-					[0u8; 20].into(),
-					arb::CHAIN_ID_MAINNET,
-					[0u8; 20].into(),
-				)
-			} else if genesis_hash ==
-				// PERSEVERANCE
-				H256::from_str(
-					"0x46c8ca427e31ba73cbd1ad60500d4a7d173b1c80c9fb1afb76661d614f9c5cd7",
-				)
-				.unwrap()
-			{
-				(
-					[1u8; 20].into(),
-					[1u8; 20].into(),
-					[1u8; 20].into(),
-					arb::CHAIN_ID_GOERLI,
-					[1u8; 20].into(),
-				)
-			} else if genesis_hash ==
-				// SISYPHOS
-				H256::from_str(
-					"0xbeb780f634621c64012483ebbf39927eb236b63902e9a249a76af8ba4cf8a474",
-				)
-				.unwrap()
-			{
-				(
-					[2u8; 20].into(),
-					[2u8; 20].into(),
-					[2u8; 20].into(),
-					arb::CHAIN_ID_GOERLI,
-					[2u8; 20].into(),
-				)
-			} else {
-				panic!("runtime upgrade is being applied to unsupported chain");
-			};
-
-			pallet_cf_environment::ArbitrumKeyManagerAddress::<Runtime>::put(key_manager_address);
-			pallet_cf_environment::ArbitrumVaultAddress::<Runtime>::put(vault_address);
-			pallet_cf_environment::ArbitrumAddressCheckerAddress::<Runtime>::put(
-				address_checker_address,
-			);
-			pallet_cf_environment::ArbitrumChainId::<Runtime>::put(chain_id);
-			pallet_cf_environment::ArbitrumSupportedAssets::<Runtime>::insert(
-				ArbUsdc,
-				usdc_address,
-			);
-
-			Weight::zero()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-			Ok(vec![])
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
-			Ok(())
-		}
-	}
-}
-
-pub struct ThresholdSignatureRefactorMigration;
-
-mod threshold_signature_refactor_migration {
-	use super::Runtime;
-	use cf_runtime_upgrade_utilities::move_pallet_storage;
-	use frame_support::traits::GetStorageVersion;
-
-	pub fn migrate_instance<I: 'static, J: 'static>()
-	where
-		Runtime: pallet_cf_threshold_signature::Config<I>,
-		Runtime: pallet_cf_vaults::Config<J>,
-	{
-		// The migration needs to be run *after* the vaults pallet migration (3 -> 4) and *before*
-		// the threshold signer pallet migration (4 -> 5).
-		if <pallet_cf_threshold_signature::Pallet::<Runtime, I> as GetStorageVersion>::on_chain_storage_version() == 4 &&
-			<pallet_cf_vaults::Pallet::<Runtime, J> as GetStorageVersion>::on_chain_storage_version() == 4 {
-
-				log::info!("✅ Applying threshold signature refactor storage migration.");
-				for storage_name in [
-					"CeremonyIdCounter",
-					"KeygenSlashAmount",
-					"Vaults",
-				] {
-					move_pallet_storage::<
-						pallet_cf_vaults::Pallet<Runtime, J>,
-						pallet_cf_threshold_signature::Pallet<Runtime, I>,
-					>(storage_name.as_bytes());
-				}
-			} else {
-				log::info!("⏭ Skipping threshold signature refactor migration.");
-			}
-	}
-}
-
-impl frame_support::traits::OnRuntimeUpgrade for ThresholdSignatureRefactorMigration {
-	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		log::info!("⏫ Applying threshold signature refactor storage migration.");
-		threshold_signature_refactor_migration::migrate_instance::<EvmInstance, EthereumInstance>();
-		threshold_signature_refactor_migration::migrate_instance::<BitcoinInstance, BitcoinInstance>(
-		);
-		threshold_signature_refactor_migration::migrate_instance::<
-			PolkadotInstance,
-			PolkadotInstance,
-		>();
-
-		Default::default()
-	}
-}
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
@@ -1515,14 +1315,14 @@ impl_runtime_apis! {
 					.estimate_ingress_fee(asset)),
 				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::get_tracked_data()
 					.estimate_ingress_fee(asset).into()),
-					ForeignChainAndAsset::Arbitrum(asset) => {
-						pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(
-							generic_asset,
-							Asset::ArbEth,
-							pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::get_tracked_data()
-								.estimate_ingress_fee(asset)
-						)
-					},
+				ForeignChainAndAsset::Arbitrum(asset) => {
+					pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(
+						generic_asset,
+						Asset::ArbEth,
+						pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::get_tracked_data()
+							.estimate_ingress_fee(asset)
+					)
+				},
 			}
 		}
 
