@@ -2,7 +2,7 @@ use crate::{
 	mock_eth::*, Call as PalletCall, ChannelAction, ChannelIdCounter, ChannelOpeningFee,
 	CrossChainMessage, DepositAction, DepositChannelLookup, DepositChannelPool,
 	DepositIgnoredReason, DepositWitness, DisabledEgressAssets, EgressDustLimit,
-	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
+	Event as PalletEvent, Event, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
 	MinimumDeposit, Pallet, PalletConfigUpdate, PrewitnessedDeposit, PrewitnessedDepositIdCounter,
 	PrewitnessedDeposits, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount,
 };
@@ -624,7 +624,7 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 		})
 		.then_process_events(|_, event| match event {
 			RuntimeEvent::IngressEgress(crate::Event::DepositWitnessRejected { .. }) |
-			RuntimeEvent::IngressEgress(crate::Event::DepositReceived { .. }) => Some(event),
+			RuntimeEvent::IngressEgress(crate::Event::DepositFinalised { .. }) => Some(event),
 			_ => None,
 		})
 		.inspect_context(|((expected_rejected_address, expected_accepted_address), emitted)| {
@@ -640,7 +640,7 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 			assert!(emitted.iter().any(|e| matches!(
 			e,
 			RuntimeEvent::IngressEgress(
-				crate::Event::DepositReceived {
+				crate::Event::DepositFinalised {
 					deposit_address,
 					..
 				}) if deposit_address == expected_accepted_address
@@ -890,7 +890,7 @@ fn deposits_below_minimum_are_rejected() {
 		// Flip deposit should succeed.
 		let (_, deposit_address) = request_address_and_deposit(LP_ACCOUNT, flip);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::DepositReceived {
+			crate::Event::<Test>::DepositFinalised {
 				deposit_address,
 				asset: flip,
 				amount: default_deposit_amount,
@@ -951,7 +951,7 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 		));
 		// Observe the DepositReceived Event
 		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::DepositReceived {
+			crate::Event::<Test>::DepositFinalised {
 				deposit_address,
 				asset: ASSET,
 				amount: DEPOSIT_AMOUNT,
@@ -1585,15 +1585,26 @@ fn should_cleanup_prewitnessed_deposits_when_channel_is_recycled() {
 			amount: DEPOSIT_AMOUNT,
 			deposit_details: (),
 		};
+
+		const TARGET_CHAIN_HEIGHT: u64 = 0;
 		let deposit_witnesses = vec![deposit_detail.clone()];
-		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses.clone(),));
+		assert_ok!(IngressEgress::add_prewitnessed_deposits(
+			deposit_witnesses.clone(),
+			TARGET_CHAIN_HEIGHT
+		));
 
 		// Check that the deposit is stored in the storage
 		let prewitnessed_deposit_id = PrewitnessedDepositIdCounter::<Test>::get();
 		let channel_id = ChannelIdCounter::<Test>::get();
 		assert_eq!(
 			PrewitnessedDeposits::<Test>::get(channel_id, prewitnessed_deposit_id),
-			Some(PrewitnessedDeposit { asset: ASSET, amount: DEPOSIT_AMOUNT, deposit_address })
+			Some(PrewitnessedDeposit {
+				asset: ASSET,
+				amount: DEPOSIT_AMOUNT,
+				deposit_address,
+				block_height: TARGET_CHAIN_HEIGHT,
+				deposit_details: ()
+			})
 		);
 
 		// Fast forward the block height to the recycle block of the created deposit channel
@@ -1630,8 +1641,16 @@ fn should_remove_prewitnessed_deposit_when_witnessed() {
 			amount: DEPOSIT_AMOUNT_1,
 			deposit_details: (),
 		}];
-		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses_1.clone()));
-		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses_1.clone()));
+
+		const TARGET_CHAIN_HEIGHT: u64 = 0;
+		assert_ok!(IngressEgress::add_prewitnessed_deposits(
+			deposit_witnesses_1.clone(),
+			TARGET_CHAIN_HEIGHT
+		));
+		assert_ok!(IngressEgress::add_prewitnessed_deposits(
+			deposit_witnesses_1.clone(),
+			TARGET_CHAIN_HEIGHT
+		));
 
 		// Submit another prewitness for the same address but a different amount
 		let deposit_witnesses_2 = vec![DepositWitness::<Ethereum> {
@@ -1640,7 +1659,10 @@ fn should_remove_prewitnessed_deposit_when_witnessed() {
 			amount: DEPOSIT_AMOUNT_2,
 			deposit_details: (),
 		}];
-		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses_2.clone()));
+		assert_ok!(IngressEgress::add_prewitnessed_deposits(
+			deposit_witnesses_2.clone(),
+			TARGET_CHAIN_HEIGHT
+		));
 
 		// Check that the deposits are in storage
 		let channel_id = ChannelIdCounter::<Test>::get();
@@ -1658,7 +1680,324 @@ fn should_remove_prewitnessed_deposit_when_witnessed() {
 		let prewitnessed_deposit_id = PrewitnessedDepositIdCounter::<Test>::get();
 		assert_eq!(
 			PrewitnessedDeposits::<Test>::get(channel_id, prewitnessed_deposit_id),
-			Some(PrewitnessedDeposit { asset: ASSET, amount: DEPOSIT_AMOUNT_2, deposit_address })
+			Some(PrewitnessedDeposit {
+				asset: ASSET,
+				amount: DEPOSIT_AMOUNT_2,
+				deposit_address,
+				block_height: TARGET_CHAIN_HEIGHT,
+				deposit_details: (),
+			})
 		);
 	});
+}
+
+mod boost {
+
+	use cf_chains::FeeEstimationApi;
+	use cf_primitives::AssetAmount;
+	use cf_traits::{
+		mocks::account_role_registry::MockAccountRoleRegistry, AccountRoleRegistry, LpBalanceApi,
+	};
+
+	use crate::{BoostRecords, DepositTracker, Event};
+
+	use super::*;
+
+	type AccountId = u64;
+	type DepositBalances = crate::DepositBalances<Test, ()>;
+
+	const BOOST_FEE_BPS: u16 = 10;
+
+	const LP_ACCOUNT: AccountId = 100;
+	const BOOSTER_ACCOUNT: AccountId = 101;
+
+	const INIT_B0OSTER_BALANCE: AssetAmount = 1_000_000_000;
+	const INIT_LP_BALANCE: AssetAmount = 0;
+
+	// The amount as computed by `setup`
+	const INGRESS_FEE: AssetAmount = 1_000_000;
+
+	fn get_lp_eth_balance(lp: &AccountId) -> AssetAmount {
+		let balances = <Test as crate::Config>::LpBalance::asset_balances(lp);
+
+		balances.iter().find(|(asset, _)| asset == &Asset::Eth).unwrap().1
+	}
+
+	fn request_deposit_address(account_id: u64) -> H160 {
+		let (_channel_id, deposit_address, ..) = IngressEgress::request_liquidity_deposit_address(
+			account_id,
+			eth::Asset::Eth,
+			BOOST_FEE_BPS,
+		)
+		.unwrap();
+
+		deposit_address.try_into().unwrap()
+	}
+
+	#[track_caller]
+	fn prewitness_deposit(deposit_address: H160, amount: AssetAmount) -> u64 {
+		assert_ok!(Pallet::<Test, _>::add_prewitnessed_deposits(
+			vec![DepositWitness::<Ethereum> {
+				deposit_address,
+				asset: eth::Asset::Eth,
+				amount,
+				deposit_details: (),
+			}],
+			0
+		),);
+
+		PrewitnessedDepositIdCounter::<Test, _>::get()
+	}
+
+	#[track_caller]
+	fn witness_deposit(deposit_address: H160, amount: AssetAmount) {
+		assert_ok!(Pallet::<Test, _>::process_deposit_witnesses(
+			vec![DepositWitness::<Ethereum> {
+				deposit_address,
+				asset: eth::Asset::Eth,
+				amount,
+				deposit_details: (),
+			}],
+			Default::default()
+		));
+	}
+
+	// Setup accounts and ensure that ingress fee is `INGRESS_FEE`
+	fn setup() {
+		assert_ok!(
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+				&LP_ACCOUNT.into(),
+			)
+		);
+		assert_ok!(
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+				&BOOSTER_ACCOUNT.into(),
+			)
+		);
+
+		DepositBalances::mutate(eth::Asset::Eth, |deposits| {
+			deposits.register_deposit(INIT_B0OSTER_BALANCE);
+			deposits.mark_as_fetched(INIT_B0OSTER_BALANCE);
+		});
+
+		assert_eq!(
+			DepositBalances::get(eth::Asset::Eth),
+			DepositTracker { fetched: INIT_B0OSTER_BALANCE, unfetched: 0 }
+		);
+
+		assert_ok!(<Test as crate::Config>::LpBalance::try_credit_account(
+			&BOOSTER_ACCOUNT,
+			Asset::Eth,
+			INIT_B0OSTER_BALANCE,
+		));
+
+		assert_eq!(get_lp_eth_balance(&BOOSTER_ACCOUNT), INIT_B0OSTER_BALANCE);
+		assert_eq!(get_lp_eth_balance(&LP_ACCOUNT), INIT_LP_BALANCE);
+
+		let tracked_data = cf_chains::eth::EthereumTrackedData { base_fee: 10, priority_fee: 10 };
+
+		TrackedDataProvider::<Ethereum>::set_tracked_data(tracked_data);
+		assert_eq!(tracked_data.estimate_ingress_fee(eth::Asset::Eth), INGRESS_FEE);
+	}
+
+	#[test]
+	fn basic_boosting() {
+		new_test_ext().execute_with(|| {
+			const DEPOSIT_AMOUNT: AssetAmount = 500_000_000;
+
+			setup();
+
+			// ==== LP sends funds to liquidity deposit address, which gets pre-witnessed ====
+			let deposit_address = request_deposit_address(LP_ACCOUNT);
+			let deposit_id = prewitness_deposit(deposit_address, DEPOSIT_AMOUNT);
+
+			// ======== The deposit is boosted by Booster ========
+			// - Booster's account is debited, but they keep the booster fee
+			// - LP's account is credited (as per channel's action)
+
+			assert_ok!(IngressEgress::boost_deposit(
+				RuntimeOrigin::signed(BOOSTER_ACCOUNT),
+				deposit_address,
+				deposit_id,
+			));
+
+			System::assert_last_event(RuntimeEvent::IngressEgress(Event::DepositBoosted {
+				booster_id: BOOSTER_ACCOUNT,
+				deposit_address,
+				asset: eth::Asset::Eth,
+				amount: DEPOSIT_AMOUNT,
+				deposit_details: (),
+				ingress_fee: INGRESS_FEE,
+				action: DepositAction::LiquidityProvision { lp_account: LP_ACCOUNT },
+			}));
+
+			// Deposit isn't fully witnessed yet, so there is no change to fetched balance
+			// apart from part of it being reserved as ingress fee:
+			assert_eq!(
+				DepositBalances::get(eth::Asset::Eth),
+				DepositTracker { fetched: INIT_B0OSTER_BALANCE - INGRESS_FEE, unfetched: 0 }
+			);
+
+			const BOOSTER_FEE: AssetAmount = DEPOSIT_AMOUNT * BOOST_FEE_BPS as u128 / 10_000;
+			assert_eq!(
+				get_lp_eth_balance(&BOOSTER_ACCOUNT),
+				INIT_B0OSTER_BALANCE - DEPOSIT_AMOUNT + BOOSTER_FEE
+			);
+
+			assert_eq!(get_lp_eth_balance(&LP_ACCOUNT), DEPOSIT_AMOUNT - BOOSTER_FEE - INGRESS_FEE);
+
+			// ======== Deposit is fully witnessed ========
+			witness_deposit(deposit_address, DEPOSIT_AMOUNT);
+
+			System::assert_last_event(RuntimeEvent::IngressEgress(Event::DepositFinalised {
+				deposit_address,
+				asset: eth::Asset::Eth,
+				amount: DEPOSIT_AMOUNT,
+				deposit_details: (),
+				ingress_fee: 0,
+				action: DepositAction::BoosterCredited { booster_id: BOOSTER_ACCOUNT },
+			}));
+
+			// The new deposit should now be reflected in the unfetched balance:
+			assert_eq!(
+				DepositBalances::get(eth::Asset::Eth),
+				DepositTracker {
+					fetched: INIT_B0OSTER_BALANCE - INGRESS_FEE,
+					unfetched: DEPOSIT_AMOUNT
+				}
+			);
+
+			assert_eq!(get_lp_eth_balance(&BOOSTER_ACCOUNT), INIT_B0OSTER_BALANCE + BOOSTER_FEE);
+
+			// Boosting is possible again:
+			let other_deposit_id = prewitness_deposit(deposit_address, DEPOSIT_AMOUNT);
+
+			assert_ok!(IngressEgress::boost_deposit(
+				RuntimeOrigin::signed(BOOSTER_ACCOUNT),
+				deposit_address,
+				other_deposit_id,
+			));
+		});
+	}
+
+	#[test]
+	fn multiple_deposits() {
+		new_test_ext().execute_with(|| {
+			setup();
+
+			const DEPOSIT_AMOUNT: AssetAmount = 500_000_000;
+			const OTHER_DEPOSIT_AMOUNT: AssetAmount = 100_000_000;
+
+			let deposit_address = request_deposit_address(LP_ACCOUNT);
+
+			let deposit_id = prewitness_deposit(deposit_address, DEPOSIT_AMOUNT);
+			let other_deposit_id = prewitness_deposit(deposit_address, OTHER_DEPOSIT_AMOUNT);
+
+			assert_ok!(IngressEgress::boost_deposit(
+				RuntimeOrigin::signed(BOOSTER_ACCOUNT),
+				deposit_address,
+				deposit_id,
+			));
+
+			// Boosting again should not be possible, even if it is for a
+			// different deposit id or from a different by:
+			for deposit_id in [deposit_id, other_deposit_id] {
+				for booster_id in [BOOSTER_ACCOUNT, LP_ACCOUNT] {
+					assert_err!(
+						IngressEgress::boost_deposit(
+							RuntimeOrigin::signed(booster_id),
+							deposit_address,
+							deposit_id,
+						),
+						crate::Error::<Test, _>::ChannelAlreadyBoosted
+					);
+				}
+			}
+
+			const BOOSTER_FEE: AssetAmount = DEPOSIT_AMOUNT * BOOST_FEE_BPS as u128 / 10_000;
+			assert_eq!(
+				get_lp_eth_balance(&BOOSTER_ACCOUNT),
+				INIT_B0OSTER_BALANCE - DEPOSIT_AMOUNT + BOOSTER_FEE
+			);
+			assert_eq!(get_lp_eth_balance(&LP_ACCOUNT), DEPOSIT_AMOUNT - INGRESS_FEE - BOOSTER_FEE);
+
+			// Unboosted amount comes first, should not consume the boost:
+			witness_deposit(deposit_address, OTHER_DEPOSIT_AMOUNT);
+
+			System::assert_last_event(RuntimeEvent::IngressEgress(Event::DepositFinalised {
+				deposit_address,
+				asset: eth::Asset::Eth,
+				amount: OTHER_DEPOSIT_AMOUNT,
+				deposit_details: (),
+				ingress_fee: INGRESS_FEE,
+				action: DepositAction::LiquidityProvision { lp_account: LP_ACCOUNT },
+			}));
+
+			// Booster's balance is unchanged:
+			assert_eq!(
+				get_lp_eth_balance(&BOOSTER_ACCOUNT),
+				INIT_B0OSTER_BALANCE - DEPOSIT_AMOUNT + BOOSTER_FEE
+			);
+
+			// LP receives their deposit without boost:
+			assert_eq!(
+				get_lp_eth_balance(&LP_ACCOUNT),
+				(DEPOSIT_AMOUNT - INGRESS_FEE - BOOSTER_FEE) + (OTHER_DEPOSIT_AMOUNT - INGRESS_FEE)
+			);
+
+			// Boosted deposit is finally witnessed:
+			witness_deposit(deposit_address, DEPOSIT_AMOUNT);
+
+			// Booster's gets credited:
+			assert_eq!(
+				get_lp_eth_balance(&BOOSTER_ACCOUNT),
+				(INIT_B0OSTER_BALANCE - DEPOSIT_AMOUNT + BOOSTER_FEE) + DEPOSIT_AMOUNT
+			);
+
+			// LP's balance is unchanged:
+			assert_eq!(
+				get_lp_eth_balance(&LP_ACCOUNT),
+				(DEPOSIT_AMOUNT - INGRESS_FEE - BOOSTER_FEE) + (OTHER_DEPOSIT_AMOUNT - INGRESS_FEE)
+			);
+
+			// Boosting is possible again:
+			let deposit_id = prewitness_deposit(deposit_address, DEPOSIT_AMOUNT);
+
+			assert_ok!(IngressEgress::boost_deposit(
+				RuntimeOrigin::signed(BOOSTER_ACCOUNT),
+				deposit_address,
+				deposit_id,
+			));
+		});
+	}
+
+	#[test]
+	fn boost_gets_cleared_on_channel_expiry() {
+		new_test_ext().execute_with(|| {
+			const DEPOSIT_AMOUNT: AssetAmount = 500_000_000;
+
+			setup();
+
+			let deposit_address = request_deposit_address(LP_ACCOUNT);
+
+			let deposit_id = prewitness_deposit(deposit_address, DEPOSIT_AMOUNT);
+
+			// There is a boost, but the deposit is never fully witnessed:
+			assert_ok!(IngressEgress::boost_deposit(
+				RuntimeOrigin::signed(BOOSTER_ACCOUNT),
+				deposit_address,
+				deposit_id,
+			));
+
+			let recycle_block = IngressEgress::expiry_and_recycle_block_height().2;
+
+			BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
+
+			assert!(BoostRecords::<Test, _>::get(&deposit_address).is_some());
+
+			IngressEgress::on_idle(recycle_block, Weight::MAX);
+
+			assert!(BoostRecords::<Test, _>::get(&deposit_address).is_none());
+		});
+	}
 }

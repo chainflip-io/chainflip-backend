@@ -538,9 +538,9 @@ impl DepositHandler<Bitcoin> for BtcDepositHandler {
 	fn on_deposit_made(
 		utxo_id: <Bitcoin as Chain>::DepositDetails,
 		amount: <Bitcoin as Chain>::ChainAmount,
-		channel: DepositChannel<Bitcoin>,
+		channel: &DepositChannel<Bitcoin>,
 	) {
-		Environment::add_bitcoin_utxo_to_list(amount, utxo_id, channel.state)
+		Environment::add_bitcoin_utxo_to_list(amount, utxo_id, channel.state.clone())
 	}
 }
 

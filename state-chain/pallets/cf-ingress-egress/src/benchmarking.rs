@@ -66,6 +66,8 @@ mod benchmarks {
 				asset: source_asset,
 				amount: deposit_amount,
 				deposit_address: deposit_address.clone(),
+				deposit_details: BenchmarkValue::benchmark_value(),
+				block_height: BenchmarkValue::benchmark_value(),
 			},
 		);
 
@@ -169,6 +171,8 @@ mod benchmarks {
 					asset: BenchmarkValue::benchmark_value(),
 					amount: BenchmarkValue::benchmark_value(),
 					deposit_address: BenchmarkValue::benchmark_value(),
+					deposit_details: BenchmarkValue::benchmark_value(),
+					block_height: BenchmarkValue::benchmark_value(),
 				},
 			);
 		}
@@ -179,6 +183,66 @@ mod benchmarks {
 		}
 
 		assert_eq!(PrewitnessedDeposits::<T, I>::iter().count(), 0);
+	}
+
+	#[benchmark]
+	fn boost_deposit() {
+		use cf_traits::AccountRoleRegistry;
+		use frame_support::traits::OnNewAccount;
+		use frame_system::RawOrigin;
+
+		const CHANNEL_ID: u64 = 0;
+
+		let booster: T::AccountId = whitelisted_caller();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&booster);
+		<T as Chainflip>::AccountRoleRegistry::register_as_liquidity_provider(&booster).unwrap();
+
+		let amount: TargetChainAmount<T, I> = 0u32.into();
+		let asset: TargetChainAsset<T, I> = BenchmarkValue::benchmark_value();
+
+		let deposit_channel =
+			DepositChannel::generate_new::<<T as Config<I>>::AddressDerivation>(CHANNEL_ID, asset)
+				.unwrap();
+
+		let deposit_address: TargetChainAccount<T, I> = BenchmarkValue::benchmark_value();
+
+		DepositChannelLookup::<T, I>::insert(
+			&deposit_address,
+			DepositChannelDetails {
+				deposit_channel,
+				opened_at: 0u32.into(),
+				expires_at: 0u32.into(),
+				action: ChannelAction::<T::AccountId>::LiquidityProvision {
+					lp_account: account("doogle", 0, 0),
+				},
+				boost_fee: 10,
+			},
+		);
+
+		const DEPOSIT_ID: u64 = 0;
+
+		PrewitnessedDeposits::<T, I>::insert(
+			0,
+			DEPOSIT_ID,
+			PrewitnessedDeposit {
+				asset,
+				amount,
+				deposit_address: deposit_address.clone(),
+				deposit_details: BenchmarkValue::benchmark_value(),
+				block_height: BenchmarkValue::benchmark_value(),
+			},
+		);
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T, I>::boost_deposit(
+				RawOrigin::Signed(booster).into(),
+				deposit_address.clone(),
+				DEPOSIT_ID
+			));
+		}
+
+		assert!(BoostRecords::<T, I>::get(&deposit_address).is_some());
 	}
 
 	#[cfg(test)]

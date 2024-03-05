@@ -827,7 +827,7 @@ pub trait DepositHandler<C: Chain> {
 	fn on_deposit_made(
 		_deposit_details: C::DepositDetails,
 		_amount: C::ChainAmount,
-		_channel: DepositChannel<C>,
+		_channel: &DepositChannel<C>,
 	) {
 	}
 }
