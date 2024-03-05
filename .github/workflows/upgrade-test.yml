@@ -173,9 +173,11 @@ jobs:
 
       - name: Run bouncer on latest release
         id: pre-upgrade-bouncer
+        # TEMP: It should be: # git checkout ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}
+        # But we need the fix for the broker test for 1.2 here for now
         run: |
           git fetch --all
-          git checkout ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}
+          git checkout release-1.2-broker-test-fix
           git rev-parse HEAD
           cd bouncer
           pnpm install
