@@ -287,33 +287,33 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 				base_rpc_client.check_block_compatibility(*block_stream.cache()).await?;
 
 			match block_compatibility.compatibility {
-				CfeCompatibility::NoLongerCompatible =>
-					if error_on_incompatible_block {
-						return Err(CreateStateChainClientError::CompatibilityError(
-							block_compatibility,
-						)
-						.into());
-					} else {
-						block_stream
-					},
-				CfeCompatibility::NotYetCompatible => {
+				CfeCompatibility::Compatible => block_stream,
+				CfeCompatibility::NoLongerCompatible if error_on_incompatible_block => {
+					return Err(CreateStateChainClientError::CompatibilityError(
+						block_compatibility,
+					)
+					.into());
+				},
+				// Either:
+				// - We're no longer compatible but we don't want to exit on error
+				// - We're not yet compatible and we're waiting for the required version
+				_ => {
 					// TODO: After the whole "single binary CFE upgrade" is complete, we should be
 					// able to remove `wait_for_required_version` as we'll never wait. We'll always
 					// return out the error and let the runner start the other version.
 					if wait_for_required_version {
-						let incompatible_blocks =
-							block_stream
-								.by_ref()
-								.try_take_while(|block_info| {
-									let base_rpc_client = base_rpc_client.clone();
-									let block_info = *block_info;
-									async move {
-										{
-											let block_compatibility = base_rpc_client
-												.check_block_compatibility(block_info)
-												.await?;
+						let incompatible_blocks = block_stream
+							.by_ref()
+							.try_take_while(|block_info| {
+								let base_rpc_client = base_rpc_client.clone();
+								let block_info = *block_info;
+								async move {
+									{
+										let block_compatibility = base_rpc_client
+											.check_block_compatibility(block_info)
+											.await?;
 
-											match block_compatibility.compatibility {
+										match block_compatibility.compatibility {
 											CfeCompatibility::Compatible => Ok(false),
 											// We want the stream to continue as before
 											CfeCompatibility::NotYetCompatible => {
@@ -329,12 +329,17 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 											// Generally we cannot move from no longer compatible to
 											// compatible. We don't expect this to happen.
 											CfeCompatibility::NoLongerCompatible =>
-												Err(CreateStateChainClientError::CompatibilityError(block_compatibility).into())
-										}
+												if error_on_incompatible_block {
+													Err(CreateStateChainClientError::CompatibilityError(block_compatibility).into())
+												} else {
+													tracing::warn!("StateChain block number {} is no longer compatible.", block_info.number);
+													Ok(true)
+												},
 										}
 									}
-								})
-								.boxed();
+								}
+							})
+							.boxed();
 
 						// Note underlying stream ends in Error, therefore it is guaranteed
 						// try_for_each will not exit successfully until a compatible block is found
@@ -352,7 +357,6 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 						.into());
 					}
 				},
-				CfeCompatibility::Compatible => block_stream,
 			}
 		};
 
