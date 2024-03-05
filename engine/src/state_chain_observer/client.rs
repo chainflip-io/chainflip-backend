@@ -548,7 +548,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 							// we can make this range exclusive because we've saved the cached block
 							// above, which we chain later.
 							let earlier_blocks_to_fetch =
-								start_from..finalized_block_stream.cache().number;
+								start_from..latest_block_from_cache.number;
 
 							let base_rpc_client = base_rpc_client.clone();
 							let mut start_from_headers = Box::pin(
