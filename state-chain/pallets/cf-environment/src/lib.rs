@@ -313,6 +313,7 @@ pub mod pallet {
 	pub struct GenesisConfig<T> {
 		pub flip_token_address: EthereumAddress,
 		pub eth_usdc_address: EthereumAddress,
+		pub eth_usdt_address: EthereumAddress,
 		pub state_chain_gateway_address: EthereumAddress,
 		pub key_manager_address: EthereumAddress,
 		pub eth_vault_address: EthereumAddress,

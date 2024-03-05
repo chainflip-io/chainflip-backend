@@ -406,6 +406,7 @@ assets!(pub enum Asset {
 		(Eth, eth) = 1u32 (GAS_ASSET),
 		(Flip, flip) = 2u32,
 		(Usdc, usdc) = 3u32,
+		(Usdt, usdt) = 10u32,
 	},
 	(dot, Polkadot, "Polkadot") => {
 		(Dot, dot) = 4u32 (GAS_ASSET),

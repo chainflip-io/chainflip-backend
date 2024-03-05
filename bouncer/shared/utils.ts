@@ -36,6 +36,8 @@ export function getEvmContractAddress(chain: Chain, contract: string): string {
           return process.env.ETH_FLIP_ADDRESS ?? '0x10C6E9530F1C1AF873a391030a1D9E8ed0630D26';
         case 'USDC':
           return process.env.ETH_USDC_ADDRESS ?? '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
+        case 'USDT':
+          return process.env.ETH_USDT_ADDRESS ?? '0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82';
         case 'CFTESTER':
           return '0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0';
         case 'GATEWAY':
@@ -80,6 +82,7 @@ export function shortChainFomAsset(asset: Asset): string {
     case 'ETH':
     case 'FLIP':
     case 'USDC':
+    case 'USDT':
       return 'Eth';
     case 'BTC':
       return 'Btc';
@@ -126,6 +129,7 @@ export function defaultAssetAmounts(asset: Asset): string {
     case 'DOT':
       return '50';
     case 'USDC':
+    case 'USDT':
     case 'ARBUSDC':
     case 'FLIP':
     case 'SOLUSDC':
@@ -145,6 +149,8 @@ export function assetContractId(asset: Asset): number {
       return assetConstants.Eth.contractId;
     case 'USDC':
       return assetConstants.Usdc.contractId;
+    case 'USDT':
+      return 10;
     case 'FLIP':
       return assetConstants.Flip.contractId;
     case 'DOT':
@@ -162,6 +168,8 @@ export function assetDecimals(asset: Asset): number {
       return assetConstants.Eth.decimals;
     case 'USDC':
       return assetConstants.Usdc.decimals;
+    case 'USDT':
+      return 6;
     case 'FLIP':
       return assetConstants.Flip.decimals;
     case 'DOT':
