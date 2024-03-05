@@ -32,7 +32,7 @@ impl<T: BenchmarkValue> BenchmarkValue for Vec<T> {
 
 impl BenchmarkValue for UtxoId {
 	fn benchmark_value() -> Self {
-		UtxoId { tx_id: [1u8; 32], vout: 1 }
+		UtxoId { tx_id: [1u8; 32].into(), vout: 1 }
 	}
 }
 

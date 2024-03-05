@@ -1592,15 +1592,26 @@ fn should_cleanup_prewitnessed_deposits_when_channel_is_recycled() {
 			amount: DEPOSIT_AMOUNT,
 			deposit_details: (),
 		};
+
+		const TARGET_CHAIN_HEIGHT: u64 = 0;
 		let deposit_witnesses = vec![deposit_detail.clone()];
-		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses.clone(),));
+		assert_ok!(IngressEgress::add_prewitnessed_deposits(
+			deposit_witnesses.clone(),
+			TARGET_CHAIN_HEIGHT
+		));
 
 		// Check that the deposit is stored in the storage
 		let prewitnessed_deposit_id = PrewitnessedDepositIdCounter::<Test>::get();
 		let channel_id = ChannelIdCounter::<Test>::get();
 		assert_eq!(
 			PrewitnessedDeposits::<Test>::get(channel_id, prewitnessed_deposit_id),
-			Some(PrewitnessedDeposit { asset: ASSET, amount: DEPOSIT_AMOUNT, deposit_address })
+			Some(PrewitnessedDeposit {
+				asset: ASSET,
+				amount: DEPOSIT_AMOUNT,
+				deposit_address,
+				block_height: TARGET_CHAIN_HEIGHT,
+				deposit_details: ()
+			})
 		);
 
 		// Fast forward the block height to the recycle block of the created deposit channel
@@ -1637,8 +1648,16 @@ fn should_remove_prewitnessed_deposit_when_witnessed() {
 			amount: DEPOSIT_AMOUNT_1,
 			deposit_details: (),
 		}];
-		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses_1.clone()));
-		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses_1.clone()));
+
+		const TARGET_CHAIN_HEIGHT: u64 = 0;
+		assert_ok!(IngressEgress::add_prewitnessed_deposits(
+			deposit_witnesses_1.clone(),
+			TARGET_CHAIN_HEIGHT
+		));
+		assert_ok!(IngressEgress::add_prewitnessed_deposits(
+			deposit_witnesses_1.clone(),
+			TARGET_CHAIN_HEIGHT
+		));
 
 		// Submit another prewitness for the same address but a different amount
 		let deposit_witnesses_2 = vec![DepositWitness::<Ethereum> {
@@ -1647,7 +1666,10 @@ fn should_remove_prewitnessed_deposit_when_witnessed() {
 			amount: DEPOSIT_AMOUNT_2,
 			deposit_details: (),
 		}];
-		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses_2.clone()));
+		assert_ok!(IngressEgress::add_prewitnessed_deposits(
+			deposit_witnesses_2.clone(),
+			TARGET_CHAIN_HEIGHT
+		));
 
 		// Check that the deposits are in storage
 		let channel_id = ChannelIdCounter::<Test>::get();
@@ -1665,7 +1687,13 @@ fn should_remove_prewitnessed_deposit_when_witnessed() {
 		let prewitnessed_deposit_id = PrewitnessedDepositIdCounter::<Test>::get();
 		assert_eq!(
 			PrewitnessedDeposits::<Test>::get(channel_id, prewitnessed_deposit_id),
-			Some(PrewitnessedDeposit { asset: ASSET, amount: DEPOSIT_AMOUNT_2, deposit_address })
+			Some(PrewitnessedDeposit {
+				asset: ASSET,
+				amount: DEPOSIT_AMOUNT_2,
+				deposit_address,
+				block_height: TARGET_CHAIN_HEIGHT,
+				deposit_details: (),
+			})
 		);
 	});
 }

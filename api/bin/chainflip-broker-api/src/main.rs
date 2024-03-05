@@ -6,8 +6,9 @@ use chainflip_api::{
 	self, clean_foreign_chain_address,
 	primitives::{AccountRole, Asset, BasisPoints, BlockNumber, CcmChannelMetadata, ChannelId},
 	settings::StateChain,
-	BrokerApi, OperatorApi, StateChainApi,
+	BrokerApi, OperatorApi, StateChainApi, WithdrawFeesDetail,
 };
+
 use clap::Parser;
 use futures::FutureExt;
 use jsonrpsee::{
@@ -56,6 +57,13 @@ pub trait Rpc {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<BrokerSwapDepositAddress>;
+
+	#[method(name = "withdraw_fees", aliases = ["broker_withdrawFees"])]
+	async fn withdraw_fees(
+		&self,
+		asset: Asset,
+		destination_address: String,
+	) -> RpcResult<WithdrawFeesDetail>;
 }
 
 pub struct RpcServerImpl {
@@ -107,6 +115,18 @@ impl RpcServer for RpcServerImpl {
 			)
 			.await
 			.map(BrokerSwapDepositAddress::from)?)
+	}
+
+	async fn withdraw_fees(
+		&self,
+		asset: Asset,
+		destination_address: String,
+	) -> RpcResult<WithdrawFeesDetail> {
+		Ok(self
+			.api
+			.broker_api()
+			.withdraw_fees(asset, clean_foreign_chain_address(asset.into(), &destination_address)?)
+			.await?)
 	}
 }
 

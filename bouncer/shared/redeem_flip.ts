@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { Assets, assetDecimals, executeRedemption, getRedemptionDelay } from '@chainflip-io/cli';
+import { Assets, executeRedemption, getRedemptionDelay } from '@chainflip/cli';
 import { HexString } from '@polkadot/util/types';
 import { Wallet, ethers } from 'ethers';
 import Keyring from '@polkadot/keyring';
@@ -16,13 +16,14 @@ import {
   chainFromAsset,
   getEvmEndpoint,
   getWhaleKey,
+  assetDecimals,
 } from './utils';
 
 export type RedeemAmount = 'Max' | { Exact: string };
 
 function intoFineAmount(amount: RedeemAmount): RedeemAmount {
   if (typeof amount === 'object' && amount.Exact) {
-    const fineAmount = amountToFineAmount(amount.Exact, assetDecimals.FLIP);
+    const fineAmount = amountToFineAmount(amount.Exact, assetDecimals('FLIP'));
     return { Exact: fineAmount };
   }
   return amount;
