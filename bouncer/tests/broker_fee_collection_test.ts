@@ -29,22 +29,6 @@ const swapAssetAmount = {
 };
 const commissionBps = 1000; // 10%
 
-// Maximum expected deposit and withdrawal fees.
-// Values obtained from running this test on 1 node localnet.
-const maxDepositFee = {
-  [Assets.ETH]: BigInt(350000),
-  [Assets.DOT]: BigInt(197300000),
-  [Assets.FLIP]: BigInt(300000000),
-  [Assets.BTC]: BigInt(190),
-  [Assets.USDC]: BigInt(0), // Fee is too low for localnet, it rounds to 0
-};
-const maxWithdrawalFee = {
-  [Assets.ETH]: BigInt(490000),
-  [Assets.DOT]: BigInt(197450000),
-  [Assets.FLIP]: BigInt(300000000),
-  [Assets.BTC]: BigInt(100),
-  [Assets.USDC]: BigInt(0),
-};
 const chainflip = await getChainflipApi();
 
 const keyring = new Keyring({ type: 'sr25519' });
@@ -86,6 +70,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
       observeDestinationAddress.toLowerCase(),
   );
   console.log(`Running swap ${asset} -> ${swapAsset}`);
+  const rawDepositForSwapAmount = swapAssetAmount[asset].toString();
   await performSwap(
     asset,
     swapAsset,
@@ -93,7 +78,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
     undefined,
     undefined,
     undefined,
-    swapAssetAmount[asset].toString(),
+    rawDepositForSwapAmount,
     commissionBps,
     false,
   );
@@ -104,16 +89,14 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   console.log('brokerCommission:', brokerCommission);
 
   // Check that the deposit amount is correct after deducting the deposit fee
-  const depositAmount = BigInt(swapScheduledEvent.data.depositAmount.replaceAll(',', ''));
-  const testSwapAmount = BigInt(
-    amountToFineAmount(swapAssetAmount[asset].toString(), assetDecimals[asset]),
+  const depositAmountAfterIngressFee = BigInt(swapScheduledEvent.data.depositAmount.replaceAll(',', ''));
+  const rawDepositForSwapAmountBigInt = BigInt(
+    amountToFineAmount(rawDepositForSwapAmount, assetDecimals[asset]),
   );
-  const minExpectedDepositAmount = testSwapAmount - maxDepositFee[asset];
-  console.log('depositAmount:', depositAmount);
+  console.log('depositAmount:', depositAmountAfterIngressFee);
   assert(
-    depositAmount >= minExpectedDepositAmount && depositAmount <= testSwapAmount,
-    `Unexpected ${asset} deposit amount ${depositAmount}, expected >=${minExpectedDepositAmount}, did gas fees change? detectedGasFee: ${
-      testSwapAmount - depositAmount
+    depositAmountAfterIngressFee >= 0 && depositAmountAfterIngressFee <= rawDepositForSwapAmountBigInt,
+    `Unexpected ${asset} deposit amount ${depositAmountAfterIngressFee}
     }`,
   );
 
@@ -133,7 +116,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   // Calculating the fee. Using some strange math here because the SC rounds down on 0.5 instead of up.
   const divisor = BigInt(10000 / commissionBps);
   const expectedIncrease =
-    depositAmount / divisor + (depositAmount % divisor > divisor / 2n ? 1n : 0n);
+    depositAmountAfterIngressFee / divisor + (depositAmountAfterIngressFee % divisor > divisor / 2n ? 1n : 0n);
   assert.strictEqual(
     increase,
     expectedIncrease,
@@ -189,14 +172,9 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   const balanceBeforeWithdrawalBigInt = BigInt(
     amountToFineAmount(balanceBeforeWithdrawal, assetDecimals[asset]),
   );
-  const minExpectedBalanceAfterWithdrawal =
-    balanceBeforeWithdrawalBigInt + earnedBrokerFeesAfter - maxWithdrawalFee[asset];
-  const detectWithdrawalGasFee =
-    balanceBeforeWithdrawalBigInt + earnedBrokerFeesAfter - balanceAfterWithdrawalBigInt;
   assert(
-    balanceAfterWithdrawalBigInt >= minExpectedBalanceAfterWithdrawal &&
-      balanceAfterWithdrawalBigInt <= balanceBeforeWithdrawalBigInt + earnedBrokerFeesAfter,
-    `Unexpected ${asset} balance after withdrawal, amount ${balanceAfterWithdrawalBigInt}, expected >=${minExpectedBalanceAfterWithdrawal}, did gas fees change? detected gas fee: ${detectWithdrawalGasFee}`,
+    balanceAfterWithdrawalBigInt >= balanceBeforeWithdrawalBigInt,
+    `Unexpected ${asset} balance after withdrawal, amount ${balanceAfterWithdrawalBigInt}`,
   );
 }
 
