@@ -66,6 +66,8 @@ mod benchmarks {
 				asset: source_asset,
 				amount: deposit_amount,
 				deposit_address: deposit_address.clone(),
+				deposit_details: BenchmarkValue::benchmark_value(),
+				block_height: BenchmarkValue::benchmark_value(),
 			},
 		);
 
@@ -169,6 +171,8 @@ mod benchmarks {
 					asset: BenchmarkValue::benchmark_value(),
 					amount: BenchmarkValue::benchmark_value(),
 					deposit_address: BenchmarkValue::benchmark_value(),
+					deposit_details: BenchmarkValue::benchmark_value(),
+					block_height: BenchmarkValue::benchmark_value(),
 				},
 			);
 		}
