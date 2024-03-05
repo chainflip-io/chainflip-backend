@@ -12,7 +12,7 @@ use chainflip_engine::{
 		self,
 		client::{
 			chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi,
-			storage_api::StorageApi, STATE_CHAIN_CONNECTION,
+			storage_api::StorageApi, CreateStateChainClientError, STATE_CHAIN_CONNECTION,
 		},
 	},
 	witness,
@@ -61,6 +61,8 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 					true,
 					true,
 					true,
+					// TODO: Pass this in from the CFE runner: PRO-935
+					None,
 				)
 				.await?;
 
@@ -221,4 +223,11 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 		.boxed()
 	})
 	.await
+	.inspect_err(|e| {
+		if let Some(CreateStateChainClientError::CompatibilityError(block_compatibility)) =
+			e.downcast_ref::<CreateStateChainClientError>()
+		{
+			tracing::info!("Block compatibility on shutdown: {:?}", block_compatibility);
+		}
+	})
 }
