@@ -16,8 +16,8 @@ use self::program_instructions::SystemProgramInstruction;
 // use self::spl_token_instructions::TokenInstruction;
 
 pub mod program_instructions;
-pub mod token_instructions;
 pub mod short_vec;
+pub mod token_instructions;
 
 pub const SIGNATURE_BYTES: usize = 64;
 pub const HASH_BYTES: usize = 32;
@@ -28,6 +28,7 @@ pub const TOKEN_PROGRAM_ID: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 pub const ASSOCIATED_TOKEN_PROGRAM_ID: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
 pub const VAULT_PROGRAM: &str = "632bJHVLPj6XPLVgrabFwxogtAQQ5zb8hwm9zqZuCcHo";
 pub const SYS_VAR_RECENT_BLOCKHASHES: &str = "SysvarRecentB1ockHashes11111111111111111111";
+pub const SYS_VAR_INSTRUCTIONS: &str = "Sysvar1nstructions1111111111111111111111111";
 
 /// An atomically-commited sequence of instructions.
 ///
@@ -721,7 +722,8 @@ mod tests {
 
 	use crate::sol::{
 		program_instructions::{SystemProgramInstruction, VaultProgram},
-		BorshDeserialize, BorshSerialize, SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID,
+		BorshDeserialize, BorshSerialize, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS,
+		TOKEN_PROGRAM_ID,
 	};
 
 	use super::{
@@ -827,9 +829,9 @@ mod tests {
 		assert_eq!(serialized_tx, expected_serialized_tx);
 	}
 
-	// TODO: We can have multiple transfer instructions in a single transaction. However, we need to check that
-	// there is no wayh to DoS us. I'm not sure if a transfer to the BPF bootloader for instance works. Using
-	// the web3 js I get an error that the account is read-only.
+	// TODO: We can have multiple transfer instructions in a single transaction. However, we need to
+	// check that there is no wayh to DoS us. I'm not sure if a transfer to the BPF bootloader for
+	// instance works. Using the web3 js I get an error that the account is read-only.
 	#[test]
 	fn create_nonced_transfer_token() {
 		let durable_nonce = Hash::from_str("A6hMhp72reGMkS5kNBaxaEXgNqn9H6woLsjy2Apz38MQ").unwrap();
@@ -879,8 +881,8 @@ mod tests {
 		assert_eq!(serialized_tx, expected_serialized_tx);
 	}
 
-	// TODO: Do create_nonced_transfer with added createAssociatedTokenAccountIdempotentInstruction.
-	// TODO: Test CCM calls after fixing the vault program itself, as it require account chnages.
+	// TODO: Do create_nonced_transfer and ccm_token_transfer with added createAssociatedTokenAccountIdempotentInstruction
+	//       or at least just the createAssociatedTokenAccountIdempotentInstruction.
 
 	#[test]
 	fn create_nonced_rotate_agg_key() {
@@ -965,6 +967,140 @@ mod tests {
 		assert_eq!(serialized_tx, expected_serialized_tx);
 	}
 
+	#[test]
+	fn create_nonced_ccm_native_transfer() {
+		let durable_nonce = Hash::from_str("FJzAoeurcnAKG7eNFhzixySntXkDzoEh2bcRNfKm1gsy").unwrap();
+		let vault_account = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
+		let vault_account_pubkey = vault_account.pubkey();
+		let nonce_account_pubkey =
+			Pubkey::from_str("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw").unwrap();
+		let to_pubkey = Pubkey::from_str("pyq7ySiH5RvKteu2vdXKC7SNyNDp9vNDkGXdHxSpPtu").unwrap();
+		let cf_receiver = Pubkey::from_str("NJusJ7itnSsh4jSi43i9MMKB9sF4VbNvdSwUA45gPE6").unwrap();
+		let amount: u64 = 1000000000;
+		let data_account_pubkey =
+			Pubkey::from_str("5yhN4QzBFg9jKhLfVHcS5apMB7e3ftofCkzkNH6dZctC").unwrap();
+
+		let instructions = [
+			SystemProgramInstruction::advance_nonce_account(
+				&nonce_account_pubkey,
+				&vault_account_pubkey,
+			),
+			SystemProgramInstruction::transfer(&vault_account_pubkey, &to_pubkey, amount),
+			VaultProgram::get_instruction(
+				VaultProgram::ExecuteCcmNativeCall {
+					source_chain: 1,
+					source_address: vec![11u8, 6u8, 152u8, 22u8, 3u8, 1u8],
+					message: vec![124u8, 29u8, 15u8, 7u8],
+					amount,
+				},
+				vec![
+					AccountMeta::new_readonly(data_account_pubkey, false),
+					AccountMeta::new_readonly(vault_account_pubkey, true),
+					AccountMeta::new(to_pubkey, false),
+					AccountMeta::new_readonly(cf_receiver, false),
+					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
+					AccountMeta::new_readonly(
+						Pubkey::from_str(SYS_VAR_INSTRUCTIONS).unwrap(),
+						false,
+					),
+				],
+			),
+		];
+		let message = Message::new(&instructions, Some(&vault_account_pubkey));
+		let mut tx = Transaction::new_unsigned(message);
+		tx.sign(&[&vault_account], durable_nonce);
+
+		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
+		let expected_serialized_tx = hex_literal::hex!("01e017f63e3e416a72d9fd368c0731e205c41bbf85a1283ddec3205b2a47b1242639cc76758e7179abe961bc8356e5d999342c6ffc0359592d638dd34cd6ddd20a01000609f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb0c4a8e3702f6e26d9d0c900c1461da4e3debef5743ce253bb9f0308a68c9442217eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19200000000000000000000000000000000000000000000000000000000000000000575731869899efe0bd5d9161ad9f1db7c582c48c0b4ea7cff6a637c55c7310706a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f0800000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000049f4e96507a68c8d673696ffd7e551091e62a0a603c6585b79d8707f807238654acf654557d0c27ec71e80b3ed7d0a6f7baa05717b5bf6060e6b9e6f5d3a5532d49f21c8621074e921e03bfa822094631b67b33facb1ad598841a5b91d2390080303030206000404000000030200010c0200000000ca9a3b000000000806070001040305267d050be38042e0b201000000060000000b0698160301040000007c1d0f0700ca9a3b00000000").to_vec();
+
+		assert_eq!(serialized_tx, expected_serialized_tx);
+		println!("tx:{:?}", hex::encode(serialized_tx));
+	}
+
+	// TODO: Finalize testing this one
+	#[test]
+	fn create_nonced_ccm_token_transfer() {
+		let durable_nonce = Hash::from_str("21ieQJ7hzDSG7ed4ZuuC52MbV7NwQhuXwUJaNwWyyT1G").unwrap();
+		let vault_account = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
+		let vault_account_pubkey = vault_account.pubkey();
+		let nonce_account_pubkey =
+			Pubkey::from_str("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw").unwrap();
+		let cf_receiver = Pubkey::from_str("NJusJ7itnSsh4jSi43i9MMKB9sF4VbNvdSwUA45gPE6").unwrap();
+		let amount: u64 = 10000000;
+		let data_account_pubkey =
+			Pubkey::from_str("5yhN4QzBFg9jKhLfVHcS5apMB7e3ftofCkzkNH6dZctC").unwrap();
+
+		let pda = Pubkey::from_str("495WG7zQn1bzyJGM4mnfv1YrHAV7gc4oL2TUjCVaSm48").unwrap();
+		// This is needed to derive the pda_ata to create the
+		// createAssociatedTokenAccountIdempotentInstruction but for now we just derive it manually
+		// outside this test. let to_pubkey =
+		// Pubkey::from_str("pyq7ySiH5RvKteu2vdXKC7SNyNDp9vNDkGXdHxSpPtu").unwrap();
+		let pda_ata = Pubkey::from_str("5wYQz35Z78R47ivfSxRwBbEw1zD6Jfq9q4njT8Qi6AXU").unwrap();
+		let to_ata = Pubkey::from_str("BaoP8fmdaScXPZUb4Q9kTJgEeHEdgWixCCD7rWssUTQh").unwrap();
+		let mint_pubkey = Pubkey::from_str("CTUNEAoLNJ6Bwg3z8KsGA3ASyG9S3TwyuPtorZ4m5T5N").unwrap();
+
+		let remaining_account =
+			Pubkey::from_str("2npYpAQcNWcZo85eB43DnSMyeeVCiks7g65YaWVKp8TX").unwrap();
+
+		// This would lack the idempotent account creating but that's fine for the test
+		let instructions = [
+			SystemProgramInstruction::advance_nonce_account(
+				&nonce_account_pubkey,
+				&vault_account_pubkey,
+			),
+			VaultProgram::get_instruction(
+				VaultProgram::TransferTokens {
+					seed: vec![118u8, 97u8, 117u8, 108u8, 116u8, 95u8, 112u8, 100u8, 97u8],
+					bump: 254,
+					amount,
+					decimals: 6,
+				},
+				vec![
+					AccountMeta::new_readonly(data_account_pubkey, false),
+					AccountMeta::new_readonly(vault_account_pubkey, true),
+					AccountMeta::new_readonly(pda, false),
+					AccountMeta::new(pda_ata, false),
+					AccountMeta::new(to_ata, false),
+					AccountMeta::new_readonly(mint_pubkey, false),
+					AccountMeta::new_readonly(Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(), false),
+					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
+				],
+			),
+			VaultProgram::get_instruction(
+				VaultProgram::ExecuteCcmTokenCall {
+					source_chain: 1,
+					source_address: vec![11u8, 6u8, 152u8, 22u8, 3u8, 1u8],
+					message: vec![124u8, 29u8, 15u8, 7u8],
+					amount,
+				},
+				vec![
+					AccountMeta::new_readonly(data_account_pubkey, false),
+					AccountMeta::new_readonly(vault_account_pubkey, true),
+					AccountMeta::new(to_ata, false),
+					AccountMeta::new_readonly(cf_receiver, false),
+					AccountMeta::new_readonly(Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(), false),
+					AccountMeta::new_readonly(mint_pubkey, false),
+					AccountMeta::new_readonly(
+						Pubkey::from_str(SYS_VAR_INSTRUCTIONS).unwrap(),
+						false,
+					),
+					AccountMeta::new(remaining_account, false),
+				],
+			),
+		];
+		let message = Message::new(&instructions, Some(&vault_account_pubkey));
+		let mut tx = Transaction::new_unsigned(message);
+		tx.sign(&[&vault_account], durable_nonce);
+		println!("{:?}", tx);
+
+		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
+		let expected_serialized_tx = hex_literal::hex!("0139dd41209fb8a15d59ef852c86c996544f072ba71e50a76547d850289f298717f7ce1a4257ae7680df69b25e30ad2ce8b59ac1cf0b4ac51c50f31e00ba18920f0100090ef79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921a98962b4689f93f09c8bbcf32aec09ab57e8ea65a02cc814e335cbf3e853ab64967a17984f76a0509a143d67958896b6538404776e00580b51b11b8a2cb0da39d3d7ad3c5e153468fadc47af02427884a8c2f202a31c035e4bad7afc0c30d5e00000000000000000000000000000000000000000000000000000000000000000575731869899efe0bd5d9161ad9f1db7c582c48c0b4ea7cff6a637c55c7310706a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f0800000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a92ea4cced9438d40dbe184857e9dd8ecf4b17a5b734071259f74080577033761d49f4e96507a68c8d673696ffd7e551091e62a0a603c6585b79d8707f807238654acf654557d0c27ec71e80b3ed7d0a6f7baa05717b5bf6060e6b9e6f5d3a5532aa38999c5d17b55eff053d0d21e19cfa7c54fa0040fba655bffa72cd50d73d650f0ac660d41ddbbc9c7b43d9692d9a076b60e80115dd79041327e372f318821703050301080004040000000c080b000a03040d09051f36b4eeaf4a557ebc090000007661756c745f706461fe8096980000000000060c080b000406090d0702266cb8a27b9fdeaa2301000000060000000b0698160301040000007c1d0f078096980000000000").to_vec();
+
+		println!("tx:{:?}", hex::encode(serialized_tx.clone()));
+
+		assert_eq!(serialized_tx, expected_serialized_tx);
+	}
+
 	// TODO: Pull and compare discriminators and function from the contracts-interfaces
 	#[test]
 	fn test_function_discriminators() {
@@ -992,13 +1128,19 @@ mod tests {
 		);
 		assert_eq!(
 			VaultProgram::function_discriminator(VaultProgram::ExecuteCcmNativeCall {
-				bump: 13, source_chain: 1, source_address: vec![2u8, 2u8, 67u8], message: vec![2u8], amount: 4
+				source_chain: 1,
+				source_address: vec![2u8, 2u8, 67u8],
+				message: vec![2u8],
+				amount: 4
 			}),
 			vec![125u8, 5u8, 11u8, 227u8, 128u8, 66u8, 224u8, 178u8]
 		);
 		assert_eq!(
 			VaultProgram::function_discriminator(VaultProgram::ExecuteCcmTokenCall {
-				bump: 13, source_chain: 1, source_address: vec![2u8, 2u8, 67u8], message: vec![3u8], amount: 1
+				source_chain: 1,
+				source_address: vec![2u8, 2u8, 67u8],
+				message: vec![3u8],
+				amount: 1
 			}),
 			vec![108u8, 184u8, 162u8, 123u8, 159u8, 222u8, 170u8, 35u8]
 		);

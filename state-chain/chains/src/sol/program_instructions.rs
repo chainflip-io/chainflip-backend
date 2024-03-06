@@ -107,7 +107,7 @@ pub enum SystemProgramInstruction {
 	///   1. `[SIGNER]` Nonce authority
 	///
 	/// The `Pubkey` parameter identifies the entity to authorize
-	AuthorizeNonceAccount{new_authorized_pubkey: Pubkey},
+	AuthorizeNonceAccount { new_authorized_pubkey: Pubkey },
 
 	/// Allocate space in a (possibly new) account without funding
 	///
@@ -204,7 +204,11 @@ impl SystemProgramInstruction {
 		)
 	}
 
-	pub fn nonce_authorize(nonce_pubkey: &Pubkey, authorized_pubkey: &Pubkey, new_authorized_pubkey: &Pubkey) -> Instruction {
+	pub fn nonce_authorize(
+		nonce_pubkey: &Pubkey,
+		authorized_pubkey: &Pubkey,
+		new_authorized_pubkey: &Pubkey,
+	) -> Instruction {
 		let account_metas = vec![
 			AccountMeta::new(*nonce_pubkey, false),
 			AccountMeta::new_readonly(*authorized_pubkey, true),
@@ -212,7 +216,7 @@ impl SystemProgramInstruction {
 		Instruction::new_with_bincode(
 			// program id of the system program
 			Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
-			&Self::AuthorizeNonceAccount{ new_authorized_pubkey: *new_authorized_pubkey },
+			&Self::AuthorizeNonceAccount { new_authorized_pubkey: *new_authorized_pubkey },
 			account_metas,
 		)
 	}
@@ -230,11 +234,31 @@ impl SystemProgramInstruction {
 
 #[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
 pub enum VaultProgram {
-	FetchNative { seed: Vec<u8>, bump: u8 },
-	RotateAggKey { transfer_funds: bool },
-	TransferTokens { seed: Vec<u8>, bump: u8, amount: u64, decimals: u8 },
-	ExecuteCcmNativeCall {bump: u8,source_chain: u32,source_address: Vec<u8>,message: Vec<u8>,amount: u64},
-	ExecuteCcmTokenCall {bump: u8,source_chain: u32,source_address: Vec<u8>,message: Vec<u8>,amount: u64}
+	FetchNative {
+		seed: Vec<u8>,
+		bump: u8,
+	},
+	RotateAggKey {
+		transfer_funds: bool,
+	},
+	TransferTokens {
+		seed: Vec<u8>,
+		bump: u8,
+		amount: u64,
+		decimals: u8,
+	},
+	ExecuteCcmNativeCall {
+		source_chain: u32,
+		source_address: Vec<u8>,
+		message: Vec<u8>,
+		amount: u64,
+	},
+	ExecuteCcmTokenCall {
+		source_chain: u32,
+		source_address: Vec<u8>,
+		message: Vec<u8>,
+		amount: u64,
+	},
 }
 
 impl VaultProgram {
@@ -257,8 +281,18 @@ impl VaultProgram {
 			Self::FetchNative { seed: _, bump: _ } => "fetch_native",
 			Self::RotateAggKey { transfer_funds: _ } => "rotate_agg_key",
 			Self::TransferTokens { seed: _, bump: _, amount: _, decimals: _ } => "transfer_tokens",
-			Self::ExecuteCcmNativeCall { bump: _,source_chain: _,source_address: _,message: _,amount: _} => "execute_ccm_native_call",
-			Self::ExecuteCcmTokenCall { bump: _,source_chain: _,source_address: _,message: _,amount: _} => "execute_ccm_token_call",
+			Self::ExecuteCcmNativeCall {
+				source_chain: _,
+				source_address: _,
+				message: _,
+				amount: _,
+			} => "execute_ccm_native_call",
+			Self::ExecuteCcmTokenCall {
+				source_chain: _,
+				source_address: _,
+				message: _,
+				amount: _,
+			} => "execute_ccm_token_call",
 		}
 	}
 }
