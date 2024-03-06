@@ -1014,7 +1014,7 @@ impl<T: Config> SwappingApi for Pallet<T> {
 					.2;
 
 				let swap_tick = common::tick_at_sqrt_price(
-					PoolState::<(T::AccountId, OrderId)>::swap_sqrt_price(
+					PoolState::<T::AccountId, OrderId>::swap_sqrt_price(
 						order,
 						input_amount,
 						output_amount,

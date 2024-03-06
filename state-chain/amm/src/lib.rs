@@ -560,7 +560,7 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityPr
 				quote_to_base.insert(order_id, tick);
 			}
 		}
-		PoolPairsMap { base: base_to_quote, quote: quote_to_base }
+		PoolPairsMap { base: quote_to_base, quote: base_to_quote }
 	}
 
 	pub fn limit_orders_info(&self) -> PoolPairsMap<BTreeMap<OrderId, Tick>> {
@@ -572,6 +572,6 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityPr
 		for (_, order_id, tick, _, _) in self.limit_orders.positions::<QuoteToBase>() {
 			quote_to_base.insert(order_id, tick);
 		}
-		PoolPairsMap { base: base_to_quote, quote: quote_to_base }
+		PoolPairsMap { base: quote_to_base, quote: base_to_quote }
 	}
 }
