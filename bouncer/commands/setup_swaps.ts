@@ -77,8 +77,9 @@ async function main(): Promise<void> {
   ]);
   console.log('=== Swaps Setup completed ===');
 
-  // For debugging purposes because I've seen fetches not going through
+  // For debugging purposes to check fetches go through
   // TODO: Fetches are not going through, they are stuck in the IngressEgress but transfers go through.
+  // TODO: Actually looks liike Arbitrum doesnt get initialized even after the initialize initializeChain
   // TO wait until Ramiz has finished the Arbitrum PR, it might just that my patch to start arbitrum is flawed
   console.log('=== Checking that Arbitrum Vaults fetch the funds ===');
   const arbitrumVault = getEvmContractAddress('Arbitrum', 'VAULT');

@@ -195,11 +195,8 @@ export function chainContractId(chain: Chain): number {
       return chainConstants.Bitcoin.contractId;
     case 'Polkadot':
       return chainConstants.Polkadot.contractId;
-<<<<<<< HEAD
     case 'Arbitrum':
       return 4;
-=======
->>>>>>> cde90d85cc58e754f033e10a685e3e94c85d7979
     default:
       throw new Error(`Unsupported chain: ${chain}`);
   }

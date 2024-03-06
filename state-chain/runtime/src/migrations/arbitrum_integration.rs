@@ -119,7 +119,7 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 					[1u8; 20].into(),
 					[1u8; 20].into(),
 					[1u8; 20].into(),
-					arb::CHAIN_ID_GOERLI,
+					arb::CHAIN_ID_SEPOLIA,
 					[1u8; 20].into(),
 				)
 			} else if genesis_hash ==
@@ -133,7 +133,7 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 					[2u8; 20].into(),
 					[2u8; 20].into(),
 					[2u8; 20].into(),
-					arb::CHAIN_ID_GOERLI,
+					arb::CHAIN_ID_SEPOLIA,
 					[2u8; 20].into(),
 				)
 			} else {
