@@ -8,7 +8,7 @@ use cf_amm::common::{price_at_tick, tick_at_price, Side, Tick, PRICE_FRACTIONAL_
 use cf_primitives::{chains::assets::any::Asset, AssetAmount, SwapOutput};
 use cf_test_utilities::{assert_events_match, assert_has_event, last_event};
 use cf_traits::{AssetConverter, SwappingApi};
-use frame_support::{assert_noop, assert_ok, traits::Hooks};
+use frame_support::{assert_err, assert_noop, assert_ok, traits::Hooks};
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::U256;
 use sp_runtime::Permill;
@@ -1079,6 +1079,38 @@ fn asset_conversion() {
 				to: Asset::Eth,
 				..
 			}),
+		);
+	});
+}
+
+#[test]
+fn handle_zero_liquidity_changes_set_range_order() {
+	new_test_ext().execute_with(|| {
+		const POSITION: core::ops::Range<Tick> = -887272..887272;
+		const FLIP: Asset = Asset::Flip;
+
+		// Create a new pool.
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			FLIP,
+			STABLE_ASSET,
+			Default::default(),
+			price_at_tick(0).unwrap(),
+		));
+
+		assert_err!(
+			LiquidityPools::set_range_order(
+				RuntimeOrigin::signed(ALICE),
+				FLIP,
+				STABLE_ASSET,
+				0,
+				Some(POSITION),
+				RangeOrderSize::AssetAmounts {
+					maximum: AssetAmounts { base: 1, quote: 0 },
+					minimum: AssetAmounts { base: 0, quote: 0 },
+				}
+			),
+			crate::Error::<Test>::InvalidSize
 		);
 	});
 }
