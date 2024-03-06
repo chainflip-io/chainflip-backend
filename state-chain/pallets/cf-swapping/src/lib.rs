@@ -59,16 +59,13 @@ pub struct Swap {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct SwapLegInfo {
 	pub swap_id: SwapId,
 	pub base_asset: Asset,
 	pub quote_asset: Asset,
 	pub side: Side,
 	pub amount: AssetAmount,
-	#[cfg_attr(feature = "std", serde(skip_serializing_if = "Option::is_none"))]
 	pub source_asset: Option<Asset>,
-	#[cfg_attr(feature = "std", serde(skip_serializing_if = "Option::is_none"))]
 	pub source_amount: Option<AssetAmount>,
 }
 

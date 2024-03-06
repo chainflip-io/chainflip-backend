@@ -13,7 +13,7 @@ use crate::{
 	chainflip::{calculate_account_apy, Offence},
 	runtime_apis::{
 		AuctionState, BrokerInfo, DispatchErrorWithMessage, FailingWitnessValidators,
-		LiquidityProviderInfo, RuntimeApiPenalty, ScheduledSwap, ValidatorInfo,
+		LiquidityProviderInfo, RuntimeApiPenalty, ValidatorInfo,
 	},
 };
 use cf_amm::{
@@ -39,7 +39,7 @@ use pallet_cf_pools::{
 	UnidirectionalPoolDepth,
 };
 use pallet_cf_reputation::ExclusionList;
-use pallet_cf_swapping::CcmSwapAmounts;
+use pallet_cf_swapping::{CcmSwapAmounts, SwapLegInfo};
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use scale_info::prelude::string::String;
@@ -1437,7 +1437,7 @@ impl_runtime_apis! {
 			all_prewitnessed_swaps
 		}
 
-		fn cf_scheduled_swaps(base_asset: Asset, _quote_asset: Asset) -> Vec<ScheduledSwap> {
+		fn cf_scheduled_swaps(base_asset: Asset, _quote_asset: Asset) -> Vec<(SwapLegInfo, BlockNumber)> {
 
 			let current_block = System::block_number();
 
@@ -1447,7 +1447,7 @@ impl_runtime_apis! {
 				let execute_at = core::cmp::max(block, current_block.saturating_add(1));
 
 				let swaps: Vec<_> = swaps_for_block.iter().filter(|swap| swap.from == base_asset || swap.to == base_asset).cloned().collect();
-				Swapping::get_scheduled_swap_legs(swaps, base_asset).unwrap().into_iter().map(move |swap| ScheduledSwap {swap, execute_at })
+				Swapping::get_scheduled_swap_legs(swaps, base_asset).unwrap().into_iter().map(move |swap| (swap, execute_at))
 			}).collect()
 	}
 

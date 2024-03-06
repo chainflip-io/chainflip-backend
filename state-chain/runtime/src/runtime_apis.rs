@@ -106,14 +106,6 @@ pub struct FailingWitnessValidators {
 	pub validators: Vec<(cf_primitives::AccountId, String, bool)>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-pub struct ScheduledSwap {
-	#[cfg_attr(feature = "std", serde(flatten))]
-	pub swap: SwapLegInfo,
-	pub execute_at: BlockNumber,
-}
-
 decl_runtime_apis!(
 	/// Definition for all runtime API interfaces.
 	pub trait CustomRuntimeApi {
@@ -197,7 +189,10 @@ decl_runtime_apis!(
 			quote_asset: Asset,
 			side: Side,
 		) -> Vec<AssetAmount>;
-		fn cf_scheduled_swaps(base_asset: Asset, quote_asset: Asset) -> Vec<ScheduledSwap>;
+		fn cf_scheduled_swaps(
+			base_asset: Asset,
+			quote_asset: Asset,
+		) -> Vec<(SwapLegInfo, BlockNumber)>;
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> LiquidityProviderInfo;
 		fn cf_broker_info(account_id: AccountId32) -> BrokerInfo;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
