@@ -2,7 +2,7 @@ use crate::{Chainflip, DepositApi};
 use cf_chains::{
 	address::ForeignChainAddress, dot::PolkadotAccountId, CcmChannelMetadata, Chain, ForeignChain,
 };
-use cf_primitives::{chains::assets::any, BasisPoints, ChannelId, FlipBalance};
+use cf_primitives::{chains::assets::any, BasisPoints, ChannelId};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_std::marker::PhantomData;
@@ -44,7 +44,7 @@ impl<C: Chain, T: Chainflip> MockDepositHandler<C, T> {
 	fn get_new_deposit_address(
 		swap_or_lp: SwapOrLp,
 		asset: <C as Chain>::ChainAsset,
-	) -> (ChannelId, ForeignChainAddress, FlipBalance) {
+	) -> (ChannelId, ForeignChainAddress, T::Amount) {
 		let channel_id = <Self as MockPalletStorage>::mutate_value(
 			match swap_or_lp {
 				SwapOrLp::Swap => b"SWAP_INTENT_ID",
@@ -65,7 +65,7 @@ impl<C: Chain, T: Chainflip> MockDepositHandler<C, T> {
 				),
 				ForeignChain::Bitcoin => todo!("Bitcoin address"),
 			},
-			1u128,
+			Default::default(),
 		)
 	}
 
@@ -80,6 +80,7 @@ impl<C: Chain, T: Chainflip> MockDepositHandler<C, T> {
 
 impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 	type AccountId = T::AccountId;
+	type Amount = T::Amount;
 
 	fn request_liquidity_deposit_address(
 		lp_account: Self::AccountId,
@@ -90,7 +91,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 			cf_primitives::ChannelId,
 			ForeignChainAddress,
 			<C as cf_chains::Chain>::ChainBlockNumber,
-			FlipBalance,
+			Self::Amount,
 		),
 		sp_runtime::DispatchError,
 	> {
@@ -121,7 +122,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
 	) -> Result<
-		(cf_primitives::ChannelId, ForeignChainAddress, C::ChainBlockNumber, FlipBalance),
+		(cf_primitives::ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount),
 		sp_runtime::DispatchError,
 	> {
 		let (channel_id, deposit_address, channel_opening_fee) =

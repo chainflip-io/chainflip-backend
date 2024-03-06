@@ -25,8 +25,8 @@ use cf_chains::{
 	FeeEstimationApi, FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	Asset, BasisPoints, BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex, FlipBalance,
-	ForeignChain, PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId,
+	Asset, BasisPoints, BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex, ForeignChain,
+	PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId,
 };
 use cf_traits::{
 	liquidity::{LpBalanceApi, LpDepositHandler},
@@ -558,6 +558,9 @@ pub mod pallet {
 		},
 		FailedToBuildAllBatchCall {
 			error: AllBatchError,
+		},
+		ChannelOpeningFeePaid {
+			fee: T::Amount,
 		},
 		ChannelOpeningFeeSet {
 			fee: T::Amount,
@@ -1297,11 +1300,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		action: ChannelAction<T::AccountId>,
 		boost_fee: BasisPoints,
 	) -> Result<
-		(ChannelId, TargetChainAccount<T, I>, TargetChainBlockNumber<T, I>, FlipBalance),
+		(ChannelId, TargetChainAccount<T, I>, TargetChainBlockNumber<T, I>, T::Amount),
 		DispatchError,
 	> {
 		let channel_opening_fee = ChannelOpeningFee::<T, I>::get();
 		T::FeePayment::try_burn_fee(requester, channel_opening_fee)?;
+		Self::deposit_event(Event::<T, I>::ChannelOpeningFeePaid { fee: channel_opening_fee });
 
 		let (deposit_channel, channel_id) = if let Some((channel_id, mut deposit_channel)) =
 			DepositChannelPool::<T, I>::drain().next()
@@ -1346,7 +1350,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 		);
 
-		Ok((channel_id, deposit_address, expiry_height, channel_opening_fee.into()))
+		Ok((channel_id, deposit_address, expiry_height, channel_opening_fee))
 	}
 
 	pub fn get_failed_call(broadcast_id: BroadcastId) -> Option<FailedForeignChainCall> {
@@ -1486,13 +1490,15 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 
 impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	type AccountId = T::AccountId;
+	type Amount = T::Amount;
+
 	// This should be callable by the LP pallet.
 	fn request_liquidity_deposit_address(
 		lp_account: T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
 		boost_fee: BasisPoints,
 	) -> Result<
-		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, FlipBalance),
+		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
 		let (channel_id, deposit_address, expiry_block, channel_opening_fee) = Self::open_channel(
@@ -1515,7 +1521,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
 	) -> Result<
-		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, FlipBalance),
+		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
 		let (channel_id, deposit_address, expiry_height, channel_opening_fee) = Self::open_channel(

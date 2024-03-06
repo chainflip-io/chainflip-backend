@@ -2,7 +2,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
-use cf_primitives::{Asset, AssetAmount, BasisPoints, FlipBalance, ForeignChain};
+use cf_primitives::{Asset, AssetAmount, BasisPoints, ForeignChain};
 use cf_traits::{
 	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi,
 	EgressApi, LpDepositHandler, PoolApi, ScheduledEgressDetails,
@@ -49,6 +49,7 @@ pub mod pallet {
 		type DepositHandler: DepositApi<
 			AnyChain,
 			AccountId = <Self as frame_system::Config>::AccountId,
+			Amount = <Self as Chainflip>::Amount,
 		>;
 
 		/// API for handling asset egress.
@@ -116,7 +117,7 @@ pub mod pallet {
 			account_id: T::AccountId,
 			deposit_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 			boost_fee: BasisPoints,
-			channel_opening_fee: FlipBalance,
+			channel_opening_fee: T::Amount,
 		},
 		WithdrawalEgressScheduled {
 			egress_id: EgressId,

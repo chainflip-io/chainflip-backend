@@ -436,6 +436,7 @@ macro_rules! impl_deposit_api_for_anychain {
 	( $t: ident, $(($chain: ident, $pallet: ident)),+ ) => {
 		impl DepositApi<AnyChain> for $t {
 			type AccountId = <Runtime as frame_system::Config>::AccountId;
+			type Amount = <Runtime as Chainflip>::Amount;
 
 			fn request_liquidity_deposit_address(
 				lp_account: Self::AccountId,

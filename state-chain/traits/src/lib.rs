@@ -51,8 +51,7 @@ pub trait Chainflip: frame_system::Config {
 		+ FixedPointOperand
 		+ MaybeSerializeDeserialize
 		+ Bounded
-		+ Sum<Self::Amount>
-		+ Into<u128>;
+		+ Sum<Self::Amount>;
 
 	/// An identity for a node
 	type ValidatorId: Member
@@ -681,13 +680,14 @@ pub trait FundingInfo {
 /// Allow pallets to open and expire deposit addresses.
 pub trait DepositApi<C: Chain> {
 	type AccountId;
+	type Amount;
 
 	/// Issues a channel id and deposit address for a new liquidity deposit.
 	fn request_liquidity_deposit_address(
 		lp_account: Self::AccountId,
 		source_asset: C::ChainAsset,
 		boost_fee: BasisPoints,
-	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber, FlipBalance), DispatchError>;
+	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount), DispatchError>;
 
 	/// Issues a channel id and deposit address for a new swap.
 	fn request_swap_deposit_address(
@@ -698,7 +698,7 @@ pub trait DepositApi<C: Chain> {
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
-	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber, FlipBalance), DispatchError>;
+	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount), DispatchError>;
 }
 
 pub trait AccountRoleRegistry<T: frame_system::Config> {

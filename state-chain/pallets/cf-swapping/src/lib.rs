@@ -6,8 +6,7 @@ use cf_chains::{
 	CcmChannelMetadata, CcmDepositMetadata, SwapOrigin,
 };
 use cf_primitives::{
-	Asset, AssetAmount, ChannelId, FlipBalance, ForeignChain, SwapId, SwapLeg, TransactionHash,
-	STABLE_ASSET,
+	Asset, AssetAmount, ChannelId, ForeignChain, SwapId, SwapLeg, TransactionHash, STABLE_ASSET,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi};
@@ -225,6 +224,7 @@ pub mod pallet {
 		type DepositHandler: DepositApi<
 			AnyChain,
 			AccountId = <Self as frame_system::Config>::AccountId,
+			Amount = <Self as Chainflip>::Amount,
 		>;
 
 		/// API for handling asset egress.
@@ -312,7 +312,7 @@ pub mod pallet {
 			channel_metadata: Option<CcmChannelMetadata>,
 			source_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 			boost_fee: BasisPoints,
-			channel_opening_fee: FlipBalance,
+			channel_opening_fee: T::Amount,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
