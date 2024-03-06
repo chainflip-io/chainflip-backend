@@ -510,7 +510,6 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 	new_test_ext().execute_with(|| {
 		let fee = 500_000u32;
 		let tick = 100;
-		let asset_pair = AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap();
 
 		// Create a new pool.
 		assert_ok!(LiquidityPools::new_pool(

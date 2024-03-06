@@ -742,7 +742,7 @@ pub mod pallet {
 				let current_tick = pool.pool_state.limit_orders_for_lp(&lp.clone())
 					[side.to_sold_pair()]
 				.get(&id)
-				.cloned();
+				.map(|order_details| order_details.0);
 				let tick = match (current_tick, option_tick) {
 					(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
 					(None, Some(tick)) | (Some(tick), None) => Ok(tick),
@@ -816,7 +816,7 @@ pub mod pallet {
 				let current_tick = pool.pool_state.limit_orders_for_lp(&lp.clone())
 					[side.to_sold_pair()]
 				.get(&id)
-				.cloned();
+				.map(|order_details| order_details.0);
 				let tick = match (current_tick, option_tick) {
 					(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
 					(None, Some(tick)) => Ok(tick),
@@ -1206,7 +1206,7 @@ impl<T: Config> Pallet<T> {
 			for (assets, limit_orders) in
 				pool.pool_state.limit_orders_for_lp(lp).as_ref().into_iter().collect::<Vec<_>>()
 			{
-				for (id, tick) in limit_orders {
+				for (id, (tick, _, _, _)) in limit_orders {
 					Self::inner_update_limit_order(
 						&mut pool,
 						lp,
@@ -1704,7 +1704,6 @@ impl<T: Config> Pallet<T> {
 		let pool = Pools::<T>::get(AssetPair::try_new::<T>(base_asset, quote_asset)?)
 			.ok_or(Error::<T>::PoolDoesNotExist)?;
 		let option_lp = option_lp.as_ref();
-		let lp = option_lp.unwrap();
 
 		Ok(PoolOrders {
 			limit_orders: AskBidMap::from_sell_map(
@@ -1713,14 +1712,10 @@ impl<T: Config> Pallet<T> {
 				} else {
 					pool.pool_state.limit_orders_info()
 				}
-				.map_with_pair(|assets, limit_orders| {
+				.map_with_pair(|_, limit_orders| {
 					limit_orders
 						.into_iter()
-						.filter_map(|(id, tick)| {
-							let (collected, position_info) = pool
-								.pool_state
-								.limit_order(&lp.clone(), id, assets.sell_order(), tick)
-								.unwrap();
+						.filter_map(|(id, (tick, lp, collected, position_info))| {
 							if position_info.amount.is_zero() {
 								None
 							} else {

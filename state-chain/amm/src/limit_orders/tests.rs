@@ -418,19 +418,20 @@ fn mint() {
 				(Collected::default(), PositionInfo::new(good))
 			);
 		}
-		let mut order_id = 0;
-		for bad in [MAX_FIXED_POOL_LIQUIDITY + 1, MAX_FIXED_POOL_LIQUIDITY + 2] {
+		for (order_id, bad) in [MAX_FIXED_POOL_LIQUIDITY + 1, MAX_FIXED_POOL_LIQUIDITY + 2]
+			.into_iter()
+			.enumerate()
+		{
 			let mut pool_state = PoolState::new(0).unwrap();
 			assert!(matches!(
 				pool_state.collect_and_mint::<SD>(
 					&LiquidityProvider::from([0; 32]),
-					order_id,
+					order_id as u64,
 					0,
 					bad
 				),
 				Err(PositionError::Other(MintError::MaximumLiquidity))
 			));
-			order_id += 1;
 		}
 	}
 

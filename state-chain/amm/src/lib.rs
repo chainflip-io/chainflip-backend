@@ -547,30 +547,40 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityPr
 	pub fn limit_orders_for_lp(
 		&self,
 		lp: &LiquidityProvider,
-	) -> PoolPairsMap<BTreeMap<OrderId, Tick>> {
+	) -> PoolPairsMap<BTreeMap<OrderId, (Tick, LiquidityProvider, Collected, PositionInfo)>> {
 		let mut base_to_quote: BTreeMap<_, _> = BTreeMap::new();
-		for (lp_, order_id, tick, _, _) in self.limit_orders.positions::<BaseToQuote>() {
+		for (lp_, order_id, tick, collected, position_info) in
+			self.limit_orders.positions::<BaseToQuote>()
+		{
 			if lp == &lp_ {
-				base_to_quote.insert(order_id, tick);
+				base_to_quote.insert(order_id, (tick, lp_, collected, position_info));
 			}
 		}
 		let mut quote_to_base: BTreeMap<_, _> = BTreeMap::new();
-		for (lp_, order_id, tick, _, _) in self.limit_orders.positions::<QuoteToBase>() {
+		for (lp_, order_id, tick, collected, position_info) in
+			self.limit_orders.positions::<QuoteToBase>()
+		{
 			if lp == &lp_ {
-				quote_to_base.insert(order_id, tick);
+				quote_to_base.insert(order_id, (tick, lp_, collected, position_info));
 			}
 		}
 		PoolPairsMap { base: quote_to_base, quote: base_to_quote }
 	}
 
-	pub fn limit_orders_info(&self) -> PoolPairsMap<BTreeMap<OrderId, Tick>> {
+	pub fn limit_orders_info(
+		&self,
+	) -> PoolPairsMap<BTreeMap<OrderId, (Tick, LiquidityProvider, Collected, PositionInfo)>> {
 		let mut base_to_quote: BTreeMap<_, _> = BTreeMap::new();
-		for (_, order_id, tick, _, _) in self.limit_orders.positions::<BaseToQuote>() {
-			base_to_quote.insert(order_id, tick);
+		for (lp, order_id, tick, collected, position_info) in
+			self.limit_orders.positions::<BaseToQuote>()
+		{
+			base_to_quote.insert(order_id, (tick, lp, collected, position_info));
 		}
 		let mut quote_to_base: BTreeMap<_, _> = BTreeMap::new();
-		for (_, order_id, tick, _, _) in self.limit_orders.positions::<QuoteToBase>() {
-			quote_to_base.insert(order_id, tick);
+		for (lp, order_id, tick, collected, position_info) in
+			self.limit_orders.positions::<QuoteToBase>()
+		{
+			quote_to_base.insert(order_id, (tick, lp, collected, position_info));
 		}
 		PoolPairsMap { base: quote_to_base, quote: base_to_quote }
 	}
