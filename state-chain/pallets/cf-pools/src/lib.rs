@@ -151,7 +151,7 @@ pub mod pallet {
 		// pub range_orders_cache: BTreeMap<T::AccountId, BTreeMap<OrderId, Range<Tick>>>,
 		/// A cache of all the limit orders that exist in the pool. This must be kept up to date
 		/// with the underlying pool. These are grouped by the asset the limit order is selling
-		pub limit_orders_cache: PoolPairsMap<BTreeMap<T::AccountId, BTreeMap<OrderId, Tick>>>,
+		// pub limit_orders_cache: PoolPairsMap<BTreeMap<T::AccountId, BTreeMap<OrderId, Tick>>>,
 		pub pool_state: PoolState<T::AccountId, OrderId>,
 	}
 
@@ -540,7 +540,7 @@ pub mod pallet {
 
 				*maybe_pool = Some(Pool {
 					// range_orders_cache: Default::default(),
-					limit_orders_cache: Default::default(),
+					// limit_orders_cache: Default::default(),
 					// range_orders_cache: Default::default(),
 					pool_state: PoolState::new(fee_hundredth_pips, initial_price).map_err(|e| {
 						match e {
@@ -668,8 +668,10 @@ pub mod pallet {
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
+				// let current_tick =
+				// 	pool.pool_state.clone().get_range_order_tick_for_lp(&lp.clone(), id);
 				let current_tick =
-					pool.pool_state.clone().get_range_order_tick_for_lp(&lp.clone(), id);
+					pool.pool_state.range_orders_for_lp(&lp.clone()).get(&id).cloned();
 				let tick_range = match (current_tick, option_tick_range) {
 					(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
 					(None, Some(tick_range)) => Ok(tick_range),
@@ -1196,15 +1198,15 @@ impl<T: Config> Pallet<T> {
 			// 	}
 			// }
 
-			for (assets, limit_orders_cache) in pool
+			for (assets, limit_orders) in pool
 				.pool_state
 				.limit_orders_for_lp(lp)
 				.as_ref()
 				.into_iter()
-				.map(|(assets, limit_orders_cache)| (assets, limit_orders_cache))
+				.map(|(assets, limit_orders)| (assets, limit_orders))
 				.collect::<Vec<_>>()
 			{
-				for (id, tick) in limit_orders_cache {
+				for (id, tick) in limit_orders {
 					Self::inner_update_limit_order(
 						&mut pool,
 						lp,
@@ -1741,47 +1743,67 @@ impl<T: Config> Pallet<T> {
 		let option_lp = option_lp.as_ref();
 		let lp = option_lp.unwrap();
 
-		let range_orders: Vec<(T::AccountId, OrderId, Range<Tick>)> = if let Some(lp) = option_lp {
-			pool.pool_state
-				.range_orders_for_lp(lp)
-				.into_iter()
-				.map(|(id, range)| (lp.clone(), id, range.clone()))
-				.collect::<Vec<_>>()
-		} else {
-			pool.pool_state
-				.range_orders()
-				.into_iter()
-				.map(|(lp, id, range, _, _)| (lp, id, range.clone()))
-				.collect::<Vec<_>>()
-		};
+		// let o = if let Some(maybe_lp) = option_lp {
+		// 	let range_orders = pool
+		// 		.pool_state
+		// 		.range_orders_for_lp(maybe_lp)
+		// 		.into_iter()
+		// 		.map(|(id, range)| (lp.clone(), id, range.clone()))
+		// 		.collect::<Vec<_>>();
+		// 	let limit_orders = pool
+		// 		.pool_state
+		// 		.limit_orders_for_lp(maybe_lp)
+		// 		.into_iter()
+		// 		.map(|(id, tick)| (maybe_lp.clone(), id, tick))
+		// 		.collect::<Vec<_>>();
+		// 	(range_orders, limit_orders)
+		// } else {
+		// 	let range_orders = pool
+		// 		.pool_state
+		// 		.range_orders()
+		// 		.into_iter()
+		// 		.map(|(lp, id, range, _, _)| (lp, id, range.clone()))
+		// 		.collect::<Vec<_>>();
+		// 	let sell_limit_orders = pool
+		// 		.pool_state
+		// 		.limit_orders(Side::Sell)
+		// 		.into_iter()
+		// 		.map(|(lp, id, tick, _, _)| (lp, id, tick))
+		// 		.collect::<Vec<_>>();
+		// 	let buy_limit_orders = pool
+		// 		.pool_state
+		// 		.limit_orders(Side::Buy)
+		// 		.into_iter()
+		// 		.map(|(lp, id, tick, _, _)| (lp, id, tick))
+		// 		.collect::<Vec<_>>();
+		// 	(range_orders, sell_limit_orders)
+		// };
 
-		let lp_1 = option_lp.unwrap();
-
-		let l = pool.pool_state.clone().limit_orders_for_lp(lp_1).map_with_pair(
-			|assets, limit_orders| {
-				limit_orders
-					.into_iter()
-					.map(move |(id, tick)| (lp_1.clone(), id, tick))
-					.filter_map(move |(lp, id, tick)| {
-						let (collected, position_info) = pool
-							.pool_state
-							.limit_order(&lp.clone(), id, assets.sell_order(), tick)
-							.unwrap();
-						if position_info.amount.is_zero() {
-							None
-						} else {
-							Some(LimitOrder::<T> {
-								lp: lp.clone(),
-								id: id.into(),
-								tick,
-								sell_amount: position_info.amount,
-								fees_earned: collected.accumulative_fees,
-								original_sell_amount: collected.original_amount,
-							})
-						}
-					})
-			},
-		);
+		// let limit_orders = pool.pool_state.clone().limit_orders_for_lp(lp).map_with_pair(
+		// 	|assets, limit_orders| {
+		// 		limt_orders
+		// 			.into_iter()
+		// 			.filter_map(|(id, tick)| {
+		// 				let (collected, position_info) = pool
+		// 					.pool_state
+		// 					.limit_order(&lp.clone(), id, assets.sell_order(), tick)
+		// 					.unwrap();
+		// 				if position_info.amount.is_zero() {
+		// 					None
+		// 				} else {
+		// 					Some(LimitOrder::<T> {
+		// 						lp: lp.clone(),
+		// 						id: id.into(),
+		// 						tick,
+		// 						sell_amount: position_info.amount,
+		// 						fees_earned: collected.accumulative_fees,
+		// 						original_sell_amount: collected.original_amount,
+		// 					})
+		// 				}
+		// 			})
+		// 			.collect();
+		// 	},
+		// );
 
 		// let limit_orders: Vec<(T::AccountId, OrderId, Tick)> = if let Some(lp) = option_lp {
 		// 	pool.pool_state
@@ -1798,62 +1820,207 @@ impl<T: Config> Pallet<T> {
 		// 		.collect::<Vec<_>>()
 		// };
 
+		// Limit orders
+		// let limit_orders = cf_utilities::conditional::conditional(
+		// 	option_lp,
+		// 	|maybe_lp| {
+		// 		pool.pool_state.clone().limit_orders_for_lp(lp).map_with_pair(
+		// 			|assets, limit_orders| {
+		// 				limit_orders
+		// 					.into_iter()
+		// 					.filter_map(|(id, tick)| {
+		// 						let (collected, position_info) = pool
+		// 							.pool_state
+		// 							.limit_order(&lp.clone(), id, assets.sell_order(), tick)
+		// 							.unwrap();
+		// 						if position_info.amount.is_zero() {
+		// 							None
+		// 						} else {
+		// 							Some(LimitOrder {
+		// 								lp: lp.clone(),
+		// 								id: id.into(),
+		// 								tick,
+		// 								sell_amount: position_info.amount,
+		// 								fees_earned: collected.accumulative_fees,
+		// 								original_sell_amount: collected.original_amount,
+		// 							})
+		// 						}
+		// 					})
+		// 					.collect::<Vec<LimitOrder<T>>>()
+		// 			},
+		// 		)
+		// 	},
+		// 	|()| {
+
+		// 	},
+		// );
+
+		// let limit_orders = cf_utilities::conditional::conditional(
+		// 	option_lp,
+		// 	|lp| {
+		// 		pool.pool_state.clone().limit_orders_for_lp(lp).map_with_pair(
+		// 			|assets, limit_orders| {
+		// 				limit_orders
+		// 					.into_iter()
+		// 					.map(|(id, tick)| (lp.clone(), id, tick))
+		// 					.collect::<Vec<_>>() // Add collect() to convert into Vec<LimitOrder<T>>.
+		// 			},
+		// 		)
+		// 	},
+		// 	|()| {
+		// 		let mut sell_limit_orders = pool
+		// 			.pool_state
+		// 			.limit_orders(Side::Sell)
+		// 			.into_iter()
+		// 			.map(|(lp, id, tick, _, _)| (lp, id, tick))
+		// 			.collect::<Vec<_>>();
+		// 		let mut buy_limit_orders = pool
+		// 			.pool_state
+		// 			.limit_orders(Side::Buy)
+		// 			.into_iter()
+		// 			.map(|(lp, id, tick, _, _)| (lp, id, tick))
+		// 			.collect::<Vec<_>>();
+
+		// 		sell_limit_orders.append(&mut buy_limit_orders)
+		// 	},
+		// );
+
+		// let limit_orders = if let Some(lp) = option_lp {
+		// 	pool.pool_state.clone().limit_orders_for_lp(lp)
+		// } else {
+		// 	let mut sell_limit_orders = pool
+		// 		.pool_state
+		// 		.limit_orders(Side::Sell)
+		// 		.into_iter()
+		// 		.map(|(lp, id, tick, _, _)| (lp, id, tick))
+		// 		.collect::<Vec<_>>();
+		// 	let mut buy_limit_orders = pool
+		// 		.pool_state
+		// 		.limit_orders(Side::Buy)
+		// 		.into_iter()
+		// 		.map(|(lp, id, tick, _, _)| (lp, id, tick))
+		// 		.collect::<Vec<_>>();
+		// 	PoolPairsMap { base: sell_limit_orders, quote: buy_limit_orders }
+		// };
+		// let sell_limit_orders = pool
+		// 	.pool_state
+		// 	.limit_orders(Side::Sell)
+		// 	.into_iter()
+		// 	.map(|(lp, id, tick, _, _)| (lp, id, tick))
+		// 	.collect::<Vec<_>>();
+		// let buy_limit_orders = pool
+		// 	.pool_state
+		// 	.limit_orders(Side::Buy)
+		// 	.into_iter()
+		// 	.map(|(lp, id, tick, _, _)| (lp, id, tick))
+		// 	.collect::<Vec<_>>();
+
+		// let limit = PoolPairsMap { base: sell_limit_orders, quote: buy_limit_orders };
+
+		// let limit_orders = if let Some(lp) = option_lp {
+		// 	pool.pool_state.limit_orders_for_lp(lp)
+		// } else {
+		// 	pool.pool_state.limit_orders_info()
+		// };
+
 		Ok(PoolOrders {
-			limit_orders: AskBidMap::from_sell_map(pool.limit_orders_cache.as_ref().map_with_pair(
-				|asset, limit_orders_cache| {
-					cf_utilities::conditional::conditional(
-						option_lp,
-						|lp| {
-							limit_orders_cache
-								.get(lp)
-								.into_iter()
-								.flatten()
-								.map(|(id, tick)| (lp.clone(), *id, *tick))
-						},
-						|()| {
-							limit_orders_cache.iter().flat_map(move |(lp, orders)| {
-								orders.iter().map({
-									let lp = lp.clone();
-									move |(id, tick)| (lp.clone(), *id, *tick)
+			// limit_orders:
+			// AskBidMap::from_sell_map(pool.limit_orders_cache.as_ref().map_with_pair( 	|asset,
+			// limit_orders_cache| { 		cf_utilities::conditional::conditional(
+			// 			option_lp,
+			// 			|lp| {
+			// 				limit_orders_cache
+			// 					.get(lp)
+			// 					.into_iter()
+			// 					.flatten()
+			// 					.map(|(id, tick)| (lp.clone(), *id, *tick))
+			// 			},
+			// 			|()| {
+			// 				limit_orders_cache.iter().flat_map(move |(lp, orders)| {
+			// 					orders.iter().map({
+			// 						let lp = lp.clone();
+			// 						move |(id, tick)| (lp.clone(), *id, *tick)
+			// 					})
+			// 				})
+			// 			},
+			// 		)
+			// 		.filter_map(|(lp, id, tick)| {
+			// 			let (collected, position_info) = pool
+			// 				.pool_state
+			// 				.limit_order(&lp.clone(), id, asset.sell_order(), tick)
+			// 				.unwrap();
+			// 			if position_info.amount.is_zero() {
+			// 				None
+			// 			} else {
+			// 				Some(LimitOrder {
+			// 					lp: lp.clone(),
+			// 					id: id.into(),
+			// 					tick,
+			// 					sell_amount: position_info.amount,
+			// 					fees_earned: collected.accumulative_fees,
+			// 					original_sell_amount: collected.original_amount,
+			// 				})
+			// 			}
+			// 		})
+			// 		.collect()
+			// 	},
+			// )),
+			limit_orders: AskBidMap::from_sell_map(
+				if let Some(lp) = option_lp {
+					pool.pool_state.limit_orders_for_lp(lp)
+				} else {
+					pool.pool_state.limit_orders_info()
+				}
+				.map_with_pair(|assets, limit_orders| {
+					limit_orders
+						.into_iter()
+						.filter_map(|(id, tick)| {
+							let (collected, position_info) = pool
+								.pool_state
+								.limit_order(&lp.clone(), id, assets.sell_order(), tick)
+								.unwrap();
+							if position_info.amount.is_zero() {
+								None
+							} else {
+								Some(LimitOrder {
+									lp: lp.clone(),
+									id: id.into(),
+									tick,
+									sell_amount: position_info.amount,
+									fees_earned: collected.accumulative_fees,
+									original_sell_amount: collected.original_amount,
 								})
-							})
-						},
-					)
-					.filter_map(|(lp, id, tick)| {
-						let (collected, position_info) = pool
-							.pool_state
-							.limit_order(&lp.clone(), id, asset.sell_order(), tick)
-							.unwrap();
-						if position_info.amount.is_zero() {
-							None
-						} else {
-							Some(LimitOrder {
-								lp: lp.clone(),
-								id: id.into(),
-								tick,
-								sell_amount: position_info.amount,
-								fees_earned: collected.accumulative_fees,
-								original_sell_amount: collected.original_amount,
-							})
-						}
-					})
-					.collect()
-				},
-			)),
-			range_orders: range_orders
-				.into_iter()
-				.map(|(lp, id, tick_range)| {
-					let (collected, position_info) =
-						pool.pool_state.range_order(&lp.clone(), id, tick_range.clone()).unwrap();
-					RangeOrder {
-						lp: lp.clone(),
-						id: id.into(),
-						range: tick_range.clone(),
-						liquidity: position_info.liquidity,
-						fees_earned: collected.accumulative_fees,
-					}
-				})
-				.collect(),
+							}
+						})
+						.collect::<Vec<LimitOrder<T>>>()
+				}),
+			),
+			range_orders: if let Some(lp) = option_lp {
+				pool.pool_state
+					.range_orders_for_lp(lp)
+					.into_iter()
+					.map(|(id, range)| (lp.clone(), id, range.clone()))
+					.collect::<Vec<_>>()
+			} else {
+				pool.pool_state
+					.range_orders()
+					.into_iter()
+					.map(|(lp, id, range, _, _)| (lp, id, range.clone()))
+					.collect::<Vec<_>>()
+			}
+			.into_iter()
+			.map(|(lp, id, tick_range)| {
+				let (collected, position_info) =
+					pool.pool_state.range_order(&lp.clone(), id, tick_range.clone()).unwrap();
+				RangeOrder {
+					lp: lp.clone(),
+					id: id.into(),
+					range: tick_range.clone(),
+					liquidity: position_info.liquidity,
+					fees_earned: collected.accumulative_fees,
+				}
+			})
+			.collect(),
 		})
 	}
 

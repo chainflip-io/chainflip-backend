@@ -496,48 +496,9 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityPr
 			)
 	}
 
-	pub fn get_range_order_tick_for_lp(
-		self,
+	pub fn range_orders_for_lp(
+		&self,
 		lp: &LiquidityProvider,
-		id: OrderId,
-	) -> Option<Range<Tick>> {
-		self.range_orders
-			.positions()
-			.find_map(|(lp_, id_, lower_tick, upper_tick, _, _)| {
-				if lp_ == *lp && id == id_ {
-					Some(Range { start: lower_tick, end: upper_tick })
-				} else {
-					None
-				}
-			})
-	}
-
-	// pub fn range_orders_for_lp<'a>(
-	// 	&'a self,
-	// 	lp: &'a LiquidityProvider,
-	// ) -> impl 'a
-	//        + Iterator<
-	// 	Item = (
-	// 		OrderId,
-	// 		core::ops::Range<Tick>,
-	// 		range_orders::Collected,
-	// 		range_orders::PositionInfo,
-	// 	),
-	// > {
-	// 	self.range_orders.positions().filter_map(
-	// 		move |(lp_, order_id, lower_tick, upper_tick, collected, position_info)| {
-	// 			if lp == &lp_ {
-	// 				Some((order_id, lower_tick..upper_tick, collected, position_info))
-	// 			} else {
-	// 				None
-	// 			}
-	// 		},
-	// 	).
-	// }
-
-	pub fn range_orders_for_lp<'a>(
-		&'a self,
-		lp: &'a LiquidityProvider,
 	) -> BTreeMap<OrderId, core::ops::Range<Tick>> {
 		let mut result: BTreeMap<_, _> = BTreeMap::new();
 		for (lp_, order_id, lower_tick, upper_tick, _, _) in self.range_orders.positions() {
@@ -548,9 +509,9 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityPr
 		result
 	}
 
-	pub fn limit_orders_for_lp<'a>(
-		&'a self,
-		lp: &'a LiquidityProvider,
+	pub fn limit_orders_for_lp(
+		&self,
+		lp: &LiquidityProvider,
 	) -> PoolPairsMap<BTreeMap<OrderId, Tick>> {
 		let mut base_to_quote: BTreeMap<_, _> = BTreeMap::new();
 		for (lp_, order_id, tick, _, _) in self.limit_orders.positions::<BaseToQuote>() {
@@ -563,6 +524,18 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityPr
 			if lp == &lp_ {
 				quote_to_base.insert(order_id, tick);
 			}
+		}
+		PoolPairsMap { base: base_to_quote, quote: quote_to_base }
+	}
+
+	pub fn limit_orders_info(&self) -> PoolPairsMap<BTreeMap<OrderId, Tick>> {
+		let mut base_to_quote: BTreeMap<_, _> = BTreeMap::new();
+		for (_, order_id, tick, _, _) in self.limit_orders.positions::<BaseToQuote>() {
+			base_to_quote.insert(order_id, tick);
+		}
+		let mut quote_to_base: BTreeMap<_, _> = BTreeMap::new();
+		for (_, order_id, tick, _, _) in self.limit_orders.positions::<QuoteToBase>() {
+			quote_to_base.insert(order_id, tick);
 		}
 		PoolPairsMap { base: base_to_quote, quote: quote_to_base }
 	}
