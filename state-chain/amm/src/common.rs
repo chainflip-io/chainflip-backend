@@ -2,7 +2,6 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::{U256, U512};
-use sp_std::collections::btree_map::BTreeMap;
 
 pub const ONE_IN_HUNDREDTH_PIPS: u32 = 1_000_000;
 pub const MAX_LP_FEE: u32 = ONE_IN_HUNDREDTH_PIPS / 2;

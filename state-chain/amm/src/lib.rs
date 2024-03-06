@@ -3,7 +3,7 @@
 pub mod test_utilities;
 mod tests;
 
-use core::{convert::Infallible, ops::Range};
+use core::convert::Infallible;
 
 use codec::{Decode, Encode};
 use common::{
@@ -508,7 +508,7 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityPr
 			})
 			.collect()
 	}
-
+	#[allow(clippy::type_complexity)]
 	pub fn collect_all_limit_orders(
 		&mut self,
 	) -> PoolPairsMap<

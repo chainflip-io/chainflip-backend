@@ -567,11 +567,6 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 			})
 		);
 
-		// let pallet_limit_orders = Pools::<Test>::get(asset_pair).unwrap().limit_orders_cache;
-		// assert_eq!(pallet_limit_orders.base[&ALICE][&0], 0);
-		// assert_eq!(pallet_limit_orders.base[&BOB][&0], tick);
-		// assert_eq!(pallet_limit_orders.quote[&BOB][&1], tick);
-
 		// Do some swaps to collect fees.
 		assert_eq!(
 			LiquidityPools::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 202_200).unwrap(),
@@ -593,9 +588,6 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 		// 100 swapped + 100 fee. The position is fully consumed.
 		assert_eq!(AliceCollectedUsdc::get(), 200u128);
 		assert_eq!(AliceDebitedEth::get(), 100u128);
-		// let pallet_limit_orders = Pools::<Test>::get(asset_pair).unwrap().limit_orders_cache;
-		// assert_eq!(pallet_limit_orders.base.get(&ALICE), None);
-		// assert_eq!(pallet_limit_orders.base.get(&BOB).unwrap().get(&0), Some(&100));
 
 		assert_has_event::<Test>(RuntimeEvent::LiquidityPools(Event::<Test>::LimitOrderUpdated {
 			lp: ALICE,

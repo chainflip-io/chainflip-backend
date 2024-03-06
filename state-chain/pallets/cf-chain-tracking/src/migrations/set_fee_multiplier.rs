@@ -1,5 +1,4 @@
 use crate::*;
-use cf_chains::Bitcoin;
 use frame_support::traits::OnRuntimeUpgrade;
 
 #[cfg(feature = "try-runtime")]
