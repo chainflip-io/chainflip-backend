@@ -20,7 +20,7 @@ use cf_chains::{
 	},
 	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
 	Chain, ChannelLifecycleHooks, ConsolidateCall, DepositChannel, ExecutexSwapAndCall,
-	FeeEstimationApi, FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
+	FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	Asset, BasisPoints, BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex, ForeignChain,
@@ -29,9 +29,9 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	liquidity::{LpBalanceApi, LpDepositHandler},
-	AssetConverter, Broadcaster, CcmHandler, CcmSwapIds, Chainflip, DepositApi, EgressApi,
-	EpochInfo, FeePayment, GetBlockHeight, GetTrackedData, NetworkEnvironmentProvider, OnDeposit,
-	ScheduledEgressDetails, SwapDepositHandler,
+	AdjustedFeeEstimationApi, AssetConverter, Broadcaster, CcmHandler, CcmSwapIds, Chainflip,
+	DepositApi, EgressApi, EpochInfo, FeePayment, GetBlockHeight, NetworkEnvironmentProvider,
+	OnDeposit, ScheduledEgressDetails, SwapDepositHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -49,6 +49,8 @@ pub struct PrewitnessedDeposit<C: Chain> {
 	pub asset: C::ChainAsset,
 	pub amount: C::ChainAmount,
 	pub deposit_address: C::ChainAccount,
+	pub block_height: C::ChainBlockNumber,
+	pub deposit_details: C::DepositDetails,
 }
 
 /// Enum wrapper for fetch and egress requests.
@@ -349,7 +351,8 @@ pub mod pallet {
 			+ ConsolidateCall<Self::TargetChain>;
 
 		/// Get the latest chain state of the target chain.
-		type ChainTracking: GetBlockHeight<Self::TargetChain> + GetTrackedData<Self::TargetChain>;
+		type ChainTracking: GetBlockHeight<Self::TargetChain>
+			+ AdjustedFeeEstimationApi<Self::TargetChain>;
 
 		/// A broadcaster instance.
 		type Broadcaster: Broadcaster<
@@ -788,7 +791,7 @@ pub mod pallet {
 			block_height: TargetChainBlockNumber<T, I>,
 		) -> DispatchResult {
 			if T::EnsurePrewitnessed::ensure_origin(origin.clone()).is_ok() {
-				Self::add_prewitnessed_deposits(deposit_witnesses)?;
+				Self::add_prewitnessed_deposits(deposit_witnesses, block_height)?;
 			} else {
 				T::EnsureWitnessed::ensure_origin(origin)?;
 				Self::process_deposit_witnesses(deposit_witnesses, block_height)?;
@@ -1106,8 +1109,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn add_prewitnessed_deposits(
 		deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
+		block_height: TargetChainBlockNumber<T, I>,
 	) -> DispatchResult {
-		for DepositWitness { deposit_address, asset, amount, .. } in deposit_witnesses {
+		for DepositWitness { deposit_address, asset, amount, deposit_details } in deposit_witnesses
+		{
 			let id = PrewitnessedDepositIdCounter::<T, I>::mutate(|id| -> u64 {
 				*id = id.saturating_add(1);
 				*id
@@ -1119,7 +1124,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			PrewitnessedDeposits::<T, I>::insert(
 				deposit_channel_details.deposit_channel.channel_id,
 				id,
-				PrewitnessedDeposit { asset, amount, deposit_address },
+				PrewitnessedDeposit {
+					asset,
+					amount,
+					deposit_address,
+					block_height,
+					deposit_details,
+				},
 			);
 		}
 		Ok(())
@@ -1373,10 +1384,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		asset: TargetChainAsset<T, I>,
 		available_amount: TargetChainAmount<T, I>,
 	) -> AmountAndFeesWithheld<T, I> {
-		let tracked_data = T::ChainTracking::get_tracked_data();
 		let fee_estimate = match ingress_or_egress {
-			IngressOrEgress::Ingress => tracked_data.estimate_ingress_fee(asset),
-			IngressOrEgress::Egress => tracked_data.estimate_egress_fee(asset),
+			IngressOrEgress::Ingress => T::ChainTracking::estimate_ingress_fee(asset),
+			IngressOrEgress::Egress => T::ChainTracking::estimate_egress_fee(asset),
 		};
 
 		let (amount_after_fees, fee_estimate) =

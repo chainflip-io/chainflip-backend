@@ -717,6 +717,7 @@ async fn run_the_sc_observer() {
 					false,
 					false,
 					false,
+					None,
 				)
 				.await
 				.unwrap();

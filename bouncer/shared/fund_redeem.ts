@@ -1,12 +1,12 @@
 import assert from 'assert';
 import { randomBytes } from 'crypto';
 import { HexString } from '@polkadot/util/types';
-import { assetDecimals } from '@chainflip-io/cli';
 import {
   fineAmountToAmount,
   newAddress,
   observeBalanceIncrease,
   getChainflipApi,
+  assetDecimals,
 } from '../shared/utils';
 import { getBalance } from '../shared/get_balance';
 import { fundFlip } from '../shared/fund_flip';
@@ -45,7 +45,7 @@ export async function testFundRedeem(providedSeed?: string) {
   const chainflip = await getChainflipApi();
   const redemptionTax = await chainflip.query.funding.redemptionTax();
   const redemptionTaxAmount = parseInt(
-    fineAmountToAmount(redemptionTax.toString(), assetDecimals.FLIP),
+    fineAmountToAmount(redemptionTax.toString(), assetDecimals('FLIP')),
   );
   console.log(`Redemption tax: ${redemptionTax} = ${redemptionTaxAmount} FLIP`);
 

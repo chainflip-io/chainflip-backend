@@ -27,12 +27,12 @@ use cf_chains::{
 	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
-	Arbitrum, Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, FeeEstimationApi, ForeignChain,
-	Polkadot, TransactionBuilder,
+	Arbitrum, Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot,
+	TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, NetworkEnvironment};
 use cf_runtime_upgrade_utilities::VersionedMigration;
-use cf_traits::{AssetConverter, GetTrackedData, LpBalanceApi};
+use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi};
 use core::ops::Range;
 use frame_support::instances::*;
 pub use frame_system::Call as SystemCall;
@@ -1307,20 +1307,16 @@ impl_runtime_apis! {
 					pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(
 						generic_asset,
 						Asset::Eth,
-						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::get_tracked_data()
-							.estimate_ingress_fee(asset)
+						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::estimate_ingress_fee(asset)
 					)
 				},
-				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::get_tracked_data()
-					.estimate_ingress_fee(asset)),
-				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::get_tracked_data()
-					.estimate_ingress_fee(asset).into()),
+				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::estimate_ingress_fee(asset)),
+				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::estimate_ingress_fee(asset).into()),
 				ForeignChainAndAsset::Arbitrum(asset) => {
 					pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(
 						generic_asset,
 						Asset::ArbEth,
-						pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::get_tracked_data()
-							.estimate_ingress_fee(asset)
+						pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::estimate_ingress_fee(asset)
 					)
 				},
 			}
@@ -1332,22 +1328,18 @@ impl_runtime_apis! {
 					pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(
 						generic_asset,
 						Asset::Eth,
-						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::get_tracked_data()
-							.estimate_egress_fee(asset)
+						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::estimate_egress_fee(asset)
 					)
 				},
-				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::get_tracked_data()
-					.estimate_egress_fee(asset)),
-				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::get_tracked_data()
-					.estimate_egress_fee(asset).into()),
-					ForeignChainAndAsset::Arbitrum(asset) => {
-						pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(
-							generic_asset,
-							Asset::ArbEth,
-							pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::get_tracked_data()
-								.estimate_egress_fee(asset)
-						)
-					},
+				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::estimate_egress_fee(asset)),
+				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::estimate_egress_fee(asset).into()),
+				ForeignChainAndAsset::Arbitrum(asset) => {
+					pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(
+						generic_asset,
+						Asset::ArbEth,
+						pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::estimate_egress_fee(asset)
+					)
+				},
 			}
 		}
 

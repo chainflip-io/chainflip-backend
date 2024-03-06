@@ -21,8 +21,8 @@ use cf_traits::{
 		api_call::{MockEthAllBatch, MockEthereumApiCall, MockEvmEnvironment},
 		block_height_provider::BlockHeightProvider,
 		ccm_handler::{CcmRequest, MockCcmHandler},
+		chain_tracking::ChainTracker,
 		funding_info::MockFundingInfo,
-		tracked_data_provider::TrackedDataProvider,
 	},
 	DepositApi, EgressApi, EpochInfo, FundingInfo, GetBlockHeight, ScheduledEgressDetails,
 };
@@ -911,13 +911,12 @@ fn deposits_below_minimum_are_rejected() {
 fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 	const ASSET: cf_chains::assets::eth::Asset = eth::Asset::Eth;
 	const DEPOSIT_AMOUNT: u128 = 500;
+	const HIGH_FEE: u128 = DEPOSIT_AMOUNT * 2;
+	const LOW_FEE: u128 = DEPOSIT_AMOUNT / 10;
 
 	new_test_ext().execute_with(|| {
-		// Set Eth fees to some arbitrary value, high enough for our test swap
-		TrackedDataProvider::<Ethereum>::set_tracked_data(cf_chains::eth::EthereumTrackedData {
-			base_fee: 100,
-			priority_fee: 0,
-		});
+		// Set fee to be higher than the deposit value.
+		ChainTracker::<Ethereum>::set_fee(HIGH_FEE);
 
 		let (_id, address, ..) =
 			IngressEgress::request_liquidity_deposit_address(ALICE, ASSET, 0).unwrap();
@@ -935,36 +934,44 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 			Default::default(),
 		));
 		// Observe the DepositIgnored Event
-		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::DepositIgnored {
-				deposit_address,
-				asset: ASSET,
-				amount: DEPOSIT_AMOUNT,
-				deposit_details: (),
-				reason: DepositIgnoredReason::NotEnoughToPayFees,
-			},
-		));
+		assert!(
+			matches!(
+				cf_test_utilities::last_event::<Test>(),
+				RuntimeEvent::IngressEgress(crate::Event::<Test>::DepositIgnored {
+					asset: ASSET,
+					amount: DEPOSIT_AMOUNT,
+					deposit_details: (),
+					reason: DepositIgnoredReason::NotEnoughToPayFees,
+					..
+				},)
+			),
+			"Expected DepositIgnored Event, got: {:?}",
+			cf_test_utilities::last_event::<Test>()
+		);
 
-		// Set fees back to 0 and try the same swap
-		TrackedDataProvider::<Ethereum>::set_tracked_data(cf_chains::eth::EthereumTrackedData {
-			base_fee: 0,
-			priority_fee: 0,
-		});
+		// Set fees to less than the deposit amount and retry.
+		ChainTracker::<Ethereum>::set_fee(LOW_FEE);
+
 		assert_ok!(IngressEgress::process_deposit_witnesses(
 			vec![deposit_detail],
 			Default::default(),
 		));
 		// Observe the DepositReceived Event
-		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::DepositReceived {
-				deposit_address,
-				asset: ASSET,
-				amount: DEPOSIT_AMOUNT,
-				deposit_details: (),
-				ingress_fee: 0,
-				action: DepositAction::LiquidityProvision { lp_account: ALICE },
-			},
-		));
+		assert!(
+			matches!(
+				cf_test_utilities::last_event::<Test>(),
+				RuntimeEvent::IngressEgress(crate::Event::<Test>::DepositReceived {
+					asset: ASSET,
+					amount: DEPOSIT_AMOUNT,
+					deposit_details: (),
+					ingress_fee: LOW_FEE,
+					action: DepositAction::LiquidityProvision { lp_account: ALICE },
+					..
+				},)
+			),
+			"Expected DepositReceived Event, got: {:?}",
+			cf_test_utilities::last_event::<Test>()
+		);
 	});
 }
 
@@ -1590,15 +1597,26 @@ fn should_cleanup_prewitnessed_deposits_when_channel_is_recycled() {
 			amount: DEPOSIT_AMOUNT,
 			deposit_details: (),
 		};
+
+		const TARGET_CHAIN_HEIGHT: u64 = 0;
 		let deposit_witnesses = vec![deposit_detail.clone()];
-		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses.clone(),));
+		assert_ok!(IngressEgress::add_prewitnessed_deposits(
+			deposit_witnesses.clone(),
+			TARGET_CHAIN_HEIGHT
+		));
 
 		// Check that the deposit is stored in the storage
 		let prewitnessed_deposit_id = PrewitnessedDepositIdCounter::<Test>::get();
 		let channel_id = ChannelIdCounter::<Test>::get();
 		assert_eq!(
 			PrewitnessedDeposits::<Test>::get(channel_id, prewitnessed_deposit_id),
-			Some(PrewitnessedDeposit { asset: ASSET, amount: DEPOSIT_AMOUNT, deposit_address })
+			Some(PrewitnessedDeposit {
+				asset: ASSET,
+				amount: DEPOSIT_AMOUNT,
+				deposit_address,
+				block_height: TARGET_CHAIN_HEIGHT,
+				deposit_details: ()
+			})
 		);
 
 		// Fast forward the block height to the recycle block of the created deposit channel
@@ -1635,8 +1653,16 @@ fn should_remove_prewitnessed_deposit_when_witnessed() {
 			amount: DEPOSIT_AMOUNT_1,
 			deposit_details: (),
 		}];
-		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses_1.clone()));
-		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses_1.clone()));
+
+		const TARGET_CHAIN_HEIGHT: u64 = 0;
+		assert_ok!(IngressEgress::add_prewitnessed_deposits(
+			deposit_witnesses_1.clone(),
+			TARGET_CHAIN_HEIGHT
+		));
+		assert_ok!(IngressEgress::add_prewitnessed_deposits(
+			deposit_witnesses_1.clone(),
+			TARGET_CHAIN_HEIGHT
+		));
 
 		// Submit another prewitness for the same address but a different amount
 		let deposit_witnesses_2 = vec![DepositWitness::<Ethereum> {
@@ -1645,7 +1671,10 @@ fn should_remove_prewitnessed_deposit_when_witnessed() {
 			amount: DEPOSIT_AMOUNT_2,
 			deposit_details: (),
 		}];
-		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses_2.clone()));
+		assert_ok!(IngressEgress::add_prewitnessed_deposits(
+			deposit_witnesses_2.clone(),
+			TARGET_CHAIN_HEIGHT
+		));
 
 		// Check that the deposits are in storage
 		let channel_id = ChannelIdCounter::<Test>::get();
@@ -1663,7 +1692,13 @@ fn should_remove_prewitnessed_deposit_when_witnessed() {
 		let prewitnessed_deposit_id = PrewitnessedDepositIdCounter::<Test>::get();
 		assert_eq!(
 			PrewitnessedDeposits::<Test>::get(channel_id, prewitnessed_deposit_id),
-			Some(PrewitnessedDeposit { asset: ASSET, amount: DEPOSIT_AMOUNT_2, deposit_address })
+			Some(PrewitnessedDeposit {
+				asset: ASSET,
+				amount: DEPOSIT_AMOUNT_2,
+				deposit_address,
+				block_height: TARGET_CHAIN_HEIGHT,
+				deposit_details: (),
+			})
 		);
 	});
 }

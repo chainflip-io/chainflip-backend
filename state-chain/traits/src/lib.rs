@@ -892,10 +892,6 @@ pub trait GetBlockHeight<C: Chain> {
 	fn get_block_height() -> C::ChainBlockNumber;
 }
 
-pub trait GetTrackedData<C: Chain> {
-	fn get_tracked_data() -> C::TrackedData;
-}
-
 pub trait CompatibleCfeVersions {
 	fn current_release_version() -> SemVer;
 }
@@ -903,6 +899,12 @@ pub trait CompatibleCfeVersions {
 pub trait AuthoritiesCfeVersions {
 	/// Returns the percentage of current authorities with their CFEs at the given version.
 	fn percent_authorities_compatible_with_version(version: SemVer) -> Percent;
+}
+
+pub trait AdjustedFeeEstimationApi<C: Chain> {
+	fn estimate_ingress_fee(asset: C::ChainAsset) -> C::ChainAmount;
+
+	fn estimate_egress_fee(asset: C::ChainAsset) -> C::ChainAmount;
 }
 
 pub trait CallDispatchFilter<RuntimeCall> {
