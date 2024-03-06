@@ -17,7 +17,7 @@ mod rotation_state;
 
 pub use auction_resolver::*;
 use cf_primitives::{
-	AuthorityCount, Ed25519PublicKey, EpochIndex, Ipv6Addr, SemVer,
+	AuthorityCount, CfeCompatibility, Ed25519PublicKey, EpochIndex, Ipv6Addr, SemVer,
 	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION, FLIPPERINOS_PER_FLIP,
 };
 use cf_traits::{
@@ -1419,7 +1419,8 @@ impl<T: Config> AuthoritiesCfeVersions for Pallet<T> {
 			current_authorities
 				.into_iter()
 				.filter(|validator_id| {
-					NodeCFEVersion::<T>::get(validator_id).is_compatible_with(version)
+					NodeCFEVersion::<T>::get(validator_id).compatibility_with_runtime(version) ==
+						CfeCompatibility::Compatible
 				})
 				.count() as u32,
 			authorities_count,

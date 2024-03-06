@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { Asset /* , broker */ } from '@chainflip/cli';
 import { Keyring } from '@polkadot/api';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
@@ -7,6 +8,10 @@ import {
   decodeDotAddressForContract,
   /* chainFromAsset, */ getChainflipApi,
 } from './utils';
+=======
+import { Asset, broker } from '@chainflip/cli';
+import { decodeDotAddressForContract, chainFromAsset } from './utils';
+>>>>>>> cde90d85cc58e754f033e10a685e3e94c85d7979
 
 const defaultCommissionBps = 100; // 1%
 const mutex = new Mutex();
