@@ -1482,7 +1482,7 @@ mod test {
 						eth: Some(0u32.into()),
 						flip: None,
 						usdc: Some((u64::MAX / 2 - 1).into()),
-						usdc: None,
+						usdt: None,
 					},
 					btc: btc::AssetMap { btc: Some(0u32.into()) },
 					dot: dot::AssetMap { dot: None },

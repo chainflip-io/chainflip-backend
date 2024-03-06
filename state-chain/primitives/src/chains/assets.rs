@@ -441,7 +441,7 @@ mod test_assets {
 		assert_eq!(any::Asset::try_from(3).unwrap(), any::Asset::Usdc);
 		assert_eq!(any::Asset::try_from(4).unwrap(), any::Asset::Dot);
 		assert_eq!(any::Asset::try_from(5).unwrap(), any::Asset::Btc);
-		assert_eq!(any::Asset::try_from(6).unwrap(), any::Asset::Usdt);
+		assert_eq!(any::Asset::try_from(10).unwrap(), any::Asset::Usdt);
 	}
 
 	#[test]

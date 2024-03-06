@@ -175,9 +175,9 @@ export async function testAllSwaps() {
     messageMetadata?: CcmDepositMetadata,
   ) {
     if (destAsset === 'BTC') {
-      Object.values(btcAddressTypes).forEach((btcAddrType) => {
-        allSwaps.push(functionCall(sourceAsset, destAsset, btcAddrType, messageMetadata));
-      });
+      // Object.values(btcAddressTypes).forEach((btcAddrType) => {
+      allSwaps.push(functionCall(sourceAsset, destAsset, 'P2PKH', messageMetadata));
+      // });
     } else {
       allSwaps.push(functionCall(sourceAsset, destAsset, undefined, messageMetadata));
     }
@@ -202,37 +202,36 @@ export async function testAllSwaps() {
   //   ).toString(),
   // );
 
+  const allAssets = [...Object.values(Assets), 'USDT'];
+
   // TODO: Remove this but for now skipping arbitrum swaps as they are not supported yet
-  // Object.values(Assets).forEach((sourceAsset) => {
-  //   if (sourceAsset === 'ARBETH' || sourceAsset === 'ARBUSDC') return;
+  allAssets.forEach((sourceAsset) => {
+    if (sourceAsset === 'ARBETH' || sourceAsset === 'ARBUSDC') return;
 
-  //   Object.values(Assets)
-  //     .filter(
-  //       (destAsset) =>
-  //         sourceAsset !== destAsset && destAsset !== 'ARBETH' && destAsset !== 'ARBUSDC',
-  //     )
-  //     .forEach((destAsset) => {
-  //       // Regular swaps
-  //       appendSwap(sourceAsset, destAsset, testSwap);
+    allAssets
+      .filter(
+        (destAsset) =>
+          sourceAsset !== destAsset && destAsset !== 'ARBETH' && destAsset !== 'ARBUSDC',
+      )
+      .forEach((destAsset) => {
+        // Regular swaps
+        appendSwap(sourceAsset, destAsset, testSwap);
 
-  //       if (chainFromAsset(sourceAsset) === chainFromAsset('ETH')) {
-  //         // Contract Swaps
-  //         appendSwap(sourceAsset, destAsset, testSwapViaContract);
+        // if (chainFromAsset(sourceAsset) === chainFromAsset('ETH')) {
+        //   // Contract Swaps
+        //   appendSwap(sourceAsset, destAsset, testSwapViaContract);
 
-  //         if (chainFromAsset(destAsset) === chainFromAsset('ETH')) {
-  //           // CCM contract swaps
-  //           appendSwap(sourceAsset, destAsset, testSwapViaContract, newCcmMetadata(sourceAsset));
-  //         }
-  //       }
-  //       if (chainFromAsset(destAsset) === chainFromAsset('ETH')) {
-  //         // CCM swaps
-  //         appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
-  //       }
-  //     });
-  // });
-
-  // appendSwap('USDT', 'DOT', testSwap);
-  appendSwap('DOT', 'USDT', testSwap);
+        //   if (chainFromAsset(destAsset) === chainFromAsset('ETH')) {
+        //     // CCM contract swaps
+        //     appendSwap(sourceAsset, destAsset, testSwapViaContract, newCcmMetadata(sourceAsset));
+        //   }
+        // }
+        if (chainFromAsset(destAsset) === chainFromAsset('ETH')) {
+          // CCM swaps
+          appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
+        }
+      });
+  });
 
   await Promise.all(allSwaps);
 
