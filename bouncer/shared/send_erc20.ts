@@ -17,11 +17,11 @@ export async function sendErc20(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const contract = new web3.eth.Contract(erc20abi as any, contractAddress);
-
   const decimals = await contract.methods.decimals().call();
   const symbol = await contract.methods.symbol().call();
 
   const fineAmount = amountToFineAmount(amount, decimals);
+
   const txData = contract.methods.transfer(destinationAddress, fineAmount).encodeABI();
 
   if (log) console.log('Transferring ' + amount + ' ' + symbol + ' to ' + destinationAddress);

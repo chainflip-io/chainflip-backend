@@ -181,7 +181,7 @@ export function assetDecimals(asset: Asset): number {
     case 'ARBETH':
       return 18;
     case 'ARBUSDC':
-      return assetConstants.Usdc.decimals;
+      return 6;
     default:
       throw new Error(`Unsupported asset: ${asset}`);
   }

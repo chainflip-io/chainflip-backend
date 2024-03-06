@@ -77,9 +77,6 @@ export function newCcmMetadata(
 ) {
   const message = ccmMessage ?? newAbiEncodedMessage();
   const cfParameters = newAbiEncodedMessage(cfParamsArray);
-  // TODO: Arbitrum has way higher fees, to check if this works. This should depend on
-  // the egress chain but it's annoying to get that value here. We'd rather set a fraction
-  // that works for all chains.
   const gasDiv = gasBudgetFraction ?? 2;
 
   const gasBudget = Math.floor(
