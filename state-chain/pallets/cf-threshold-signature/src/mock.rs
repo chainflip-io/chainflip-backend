@@ -8,7 +8,10 @@ use cf_chains::{
 	mocks::{MockAggKey, MockEthereumChainCrypto, MockThresholdSignature},
 	ChainCrypto,
 };
-use cf_primitives::{AuthorityCount, CeremonyId, FlipBalance, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH};
+use cf_primitives::{
+	AuthorityCount, CeremonyId, FlipBalance, ThresholdSignatureRequestId, FLIPPERINOS_PER_FLIP,
+	GENESIS_EPOCH,
+};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{cfe_interface_mock::MockCfeInterface, signer_nomination::MockNominator},
@@ -188,7 +191,14 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 pub struct MockVaultActivator;
 impl VaultActivator<MockEthereumChainCrypto> for MockVaultActivator {
 	type ValidatorId = <Test as Chainflip>::ValidatorId;
-	fn activate(_new_key: MockAggKey, _maybe_old_key: Option<MockAggKey>) {}
+	fn start_key_activation(
+		_new_key: MockAggKey,
+		_maybe_old_key: Option<MockAggKey>,
+	) -> Option<ThresholdSignatureRequestId> {
+		VAULT_ACTIVATION_STATUS.with(|value| *(value.borrow_mut()) = AsyncResult::Pending);
+		let ceremony_id = current_ceremony_id();
+		Some(ceremony_id as u32)
+	}
 
 	fn status() -> AsyncResult<()> {
 		VAULT_ACTIVATION_STATUS.with(|value| *value.borrow())
@@ -197,6 +207,10 @@ impl VaultActivator<MockEthereumChainCrypto> for MockVaultActivator {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(outcome: AsyncResult<()>) {
 		VAULT_ACTIVATION_STATUS.with(|value| *(value.borrow_mut()) = outcome)
+	}
+
+	fn activate_key() {
+		VAULT_ACTIVATION_STATUS.with(|value| *(value.borrow_mut()) = AsyncResult::Ready(()))
 	}
 }
 

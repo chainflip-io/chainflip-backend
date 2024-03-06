@@ -176,9 +176,9 @@ pub struct PoolState<LiquidityProvider: Ord, OrderId: Ord + Clone> {
 	liquidity_map: BTreeMap<Tick, TickDelta>,
 	positions: BTreeMap<(LiquidityProvider, OrderId, Tick, Tick), Position>,
 	/// Total fees earned over all time
-	total_fees_earned: PoolPairsMap<Amount>,
+	pub(super) total_fees_earned: PoolPairsMap<Amount>,
 	/// Total of all swap inputs over all time (not including fees)
-	total_swap_inputs: PoolPairsMap<Amount>,
+	pub(super) total_swap_inputs: PoolPairsMap<Amount>,
 	/// Total of all swap outputs over all time
 	total_swap_outputs: PoolPairsMap<Amount>,
 }
@@ -519,6 +519,11 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityPr
 	/// This function never panics
 	pub(super) fn current_sqrt_price<SD: SwapDirection>(&self) -> Option<SqrtPriceQ64F96> {
 		SD::further_liquidity(self.current_tick).then_some(self.current_sqrt_price)
+	}
+
+	/// Returns the raw current sqrt price of the pool, without liquidity checks.
+	pub(super) fn raw_current_sqrt_price(&self) -> SqrtPriceQ64F96 {
+		self.current_sqrt_price
 	}
 
 	/// Calculates the fees owed to the specified position, resets the fees owed for that position

@@ -106,7 +106,7 @@ async function incompatibleUpgradeNoBuild(
     console.log(e);
   }
 
-  await sleep(7000);
+  await sleep(20000);
 
   const output = execSync("ps aux | grep chainflip-node | grep -v grep | awk '{print $2}'");
   console.log('New node PID: ' + output.toString());

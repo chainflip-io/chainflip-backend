@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, ForeignChainAddress},
 	CcmChannelMetadata, CcmDepositMetadata, SwapOrigin,
@@ -55,6 +56,20 @@ pub struct Swap {
 	pub stable_amount: Option<AssetAmount>,
 	pub final_output: Option<AssetAmount>,
 	pub fee_taken: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+pub struct SwapLegInfo {
+	pub swap_id: SwapId,
+	pub base_asset: Asset,
+	pub quote_asset: Asset,
+	pub side: Side,
+	pub amount: AssetAmount,
+	#[cfg_attr(feature = "std", serde(skip_serializing_if = "Option::is_none"))]
+	pub source_asset: Option<Asset>,
+	#[cfg_attr(feature = "std", serde(skip_serializing_if = "Option::is_none"))]
+	pub source_amount: Option<AssetAmount>,
 }
 
 impl Swap {
@@ -241,7 +256,8 @@ pub mod pallet {
 
 	/// Scheduled Swaps
 	#[pallet::storage]
-	pub(crate) type SwapQueue<T: Config> =
+	#[pallet::getter(fn swap_queue)]
+	pub type SwapQueue<T: Config> =
 		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<Swap>, ValueQuery>;
 
 	/// The first block for which swaps haven't yet been processed
@@ -255,6 +271,7 @@ pub mod pallet {
 
 	/// Earned Fees by Brokers
 	#[pallet::storage]
+	#[pallet::getter(fn earned_broker_fees)]
 	pub(crate) type EarnedBrokerFees<T: Config> =
 		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
@@ -331,6 +348,7 @@ pub mod pallet {
 		/// A broker fee withdrawal has been requested.
 		WithdrawalRequested {
 			egress_id: EgressId,
+			egress_asset: Asset,
 			egress_amount: AssetAmount,
 			egress_fee: AssetAmount,
 			destination_address: EncodedAddress,
@@ -358,6 +376,7 @@ pub mod pallet {
 			reason: CcmFailReason,
 			destination_address: EncodedAddress,
 			deposit_metadata: CcmDepositMetadata,
+			origin: SwapOrigin,
 		},
 		MaximumSwapAmountSet {
 			asset: Asset,
@@ -533,6 +552,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::WithdrawalRequested {
 				egress_amount,
+				egress_asset: asset,
 				egress_fee: fee_withheld,
 				destination_address,
 				egress_id,
@@ -658,17 +678,60 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		// Transactional ensures that any failed swap will rollback all storage changes.
-		#[transactional]
-		fn process_swaps_for_block(block: BlockNumberFor<T>) -> Result<(), BatchExecutionError> {
-			let mut swaps = SwapQueue::<T>::take(block);
+		#[allow(clippy::result_unit_err)]
+		pub fn get_scheduled_swap_legs(
+			mut swaps: Vec<Swap>,
+			base_asset: Asset,
+		) -> Result<Vec<SwapLegInfo>, ()> {
+			Self::swap_into_stable_taking_network_fee(&mut swaps)
+				.map_err(|_| log::error!("Failed to simulate swaps"))?;
 
-			if swaps.is_empty() {
-				return Ok(())
-			}
+			Ok(swaps
+				.into_iter()
+				.filter_map(|swap| {
+					if swap.from == base_asset {
+						Some(SwapLegInfo {
+							swap_id: swap.swap_id,
+							base_asset,
+							// All swaps from `base_asset` have to go through the stable asset:
+							quote_asset: STABLE_ASSET,
+							side: Side::Sell,
+							amount: swap.amount,
+							source_asset: None,
+							source_amount: None,
+						})
+					} else if swap.to == base_asset {
+						// In case the swap is "simulated", the amount is just an estimate,
+						// so we additionally include `source_asset` and `source_amount`:
+						let (source_asset, source_amount) = if swap.from != STABLE_ASSET {
+							(Some(swap.from), Some(swap.amount))
+						} else {
+							(None, None)
+						};
 
-			// Swap into Stable asset first.
-			Self::do_group_and_swap(&mut swaps, SwapLeg::ToStable)?;
+						Some(SwapLegInfo {
+							swap_id: swap.swap_id,
+							base_asset,
+							// All swaps to `base_asset` have to go through the stable asset:
+							quote_asset: STABLE_ASSET,
+							side: Side::Buy,
+							// Safe to unwrap as we have swapped everything into the stable asset at
+							// this point
+							amount: swap.stable_amount.unwrap(),
+							source_asset,
+							source_amount,
+						})
+					} else {
+						None
+					}
+				})
+				.collect())
+		}
+
+		fn swap_into_stable_taking_network_fee(
+			swaps: &mut Vec<Swap>,
+		) -> Result<(), BatchExecutionError> {
+			Self::do_group_and_swap(swaps, SwapLeg::ToStable)?;
 
 			// Take NetworkFee for all swaps
 			for swap in swaps.iter_mut() {
@@ -679,6 +742,21 @@ pub mod pallet {
 				let stable_amount = swap.stable_amount.get_or_insert_with(Default::default);
 				*stable_amount = T::SwappingApi::take_network_fee(*stable_amount);
 			}
+
+			Ok(())
+		}
+
+		// Transactional ensures that any failed swap will rollback all storage changes.
+		#[transactional]
+		fn process_swaps_for_block(block: BlockNumberFor<T>) -> Result<(), BatchExecutionError> {
+			let mut swaps = SwapQueue::<T>::take(block);
+
+			if swaps.is_empty() {
+				return Ok(())
+			}
+
+			// Swap into Stable asset first, then take network fees:
+			Self::swap_into_stable_taking_network_fee(&mut swaps)?;
 
 			// Swap from Stable asset, and complete the swap logic.
 			Self::do_group_and_swap(&mut swaps, SwapLeg::FromStable)?;
@@ -819,8 +897,6 @@ pub mod pallet {
 
 			let bundle_input: AssetAmount =
 				swaps.iter().map(|swap| swap.swap_amount(direction).unwrap_or_default()).sum();
-
-			debug_assert!(bundle_input > 0, "Swap input of zero is invalid.");
 
 			// Process the swap leg as a bundle. No network fee is taken here.
 			let bundle_output = T::SwappingApi::swap_single_leg(
@@ -1060,6 +1136,7 @@ pub mod pallet {
 							reason,
 							destination_address: encoded_destination_address,
 							deposit_metadata,
+							origin: origin.clone(),
 						});
 						return Err(())
 					},

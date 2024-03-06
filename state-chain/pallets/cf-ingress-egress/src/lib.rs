@@ -15,24 +15,24 @@ mod tests;
 pub mod weights;
 
 use cf_runtime_utilities::log_or_panic;
-use frame_support::{pallet_prelude::OptionQuery, sp_runtime::SaturatedConversion, transactional};
+use frame_support::{pallet_prelude::OptionQuery, transactional};
 pub use weights::WeightInfo;
 
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi, AddressDerivationError},
 	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
 	Chain, ChannelLifecycleHooks, ConsolidateCall, DepositChannel, ExecutexSwapAndCall,
-	FeeEstimationApi, FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
+	FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	Asset, BasisPoints, BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex, ForeignChain,
-	SwapId, ThresholdSignatureRequestId,
+	PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId,
 };
 use cf_traits::{
 	liquidity::{LpBalanceApi, LpDepositHandler},
-	AssetConverter, Broadcaster, CcmHandler, CcmSwapIds, Chainflip, DepositApi, DepositHandler,
-	EgressApi, EpochInfo, FeePayment, GetBlockHeight, GetTrackedData, NetworkEnvironmentProvider,
-	ScheduledEgressDetails, SwapDepositHandler,
+	AdjustedFeeEstimationApi, AssetConverter, Broadcaster, CcmHandler, CcmSwapIds, Chainflip,
+	DepositApi, DepositHandler, EgressApi, EpochInfo, FeePayment, GetBlockHeight,
+	NetworkEnvironmentProvider, ScheduledEgressDetails, SwapDepositHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -42,6 +42,15 @@ use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::{vec, vec::Vec};
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct PrewitnessedDeposit<C: Chain> {
+	pub asset: C::ChainAsset,
+	pub amount: C::ChainAmount,
+	pub deposit_address: C::ChainAccount,
+	pub block_height: C::ChainBlockNumber,
+	pub deposit_details: C::DepositDetails,
+}
 
 /// Enum wrapper for fetch and egress requests.
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
@@ -144,6 +153,7 @@ pub mod pallet {
 		DefaultNoBound,
 	};
 	use frame_system::WeightInfo as SystemWeightInfo;
+	use sp_runtime::SaturatedConversion;
 	use sp_std::vec::Vec;
 
 	pub(crate) type ChannelRecycleQueue<T, I> =
@@ -340,7 +350,8 @@ pub mod pallet {
 			+ ConsolidateCall<Self::TargetChain>;
 
 		/// Get the latest chain state of the target chain.
-		type ChainTracking: GetBlockHeight<Self::TargetChain> + GetTrackedData<Self::TargetChain>;
+		type ChainTracking: GetBlockHeight<Self::TargetChain>
+			+ AdjustedFeeEstimationApi<Self::TargetChain>;
 
 		/// A broadcaster instance.
 		type Broadcaster: Broadcaster<
@@ -459,6 +470,22 @@ pub mod pallet {
 	pub type ChannelOpeningFee<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, T::Amount, ValueQuery>;
 
+	/// Stores the latest prewitnessed deposit id used.
+	#[pallet::storage]
+	pub type PrewitnessedDepositIdCounter<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, PrewitnessedDepositId, ValueQuery>;
+
+	/// Stores all deposits that have been prewitnessed but not yet finalised.
+	#[pallet::storage]
+	pub type PrewitnessedDeposits<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		ChannelId,
+		Twox64Concat,
+		PrewitnessedDepositId,
+		PrewitnessedDeposit<T::TargetChain>,
+	>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -566,35 +593,59 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		/// Recycle addresses if we can
 		fn on_idle(_n: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
-			let read_write_weight =
-				frame_support::weights::constants::RocksDbWeight::get().reads_writes(1, 1);
+			let mut used_weight = Weight::zero();
 
-			let maximum_recycle_number = remaining_weight
+			// Approximate weight calculation: r/w DepositChannelLookup + r PrewitnessedDeposits +
+			// w DepositChannelPool + 1 clear_prewitnessed_deposits
+			let recycle_weight_per_address =
+				frame_support::weights::constants::RocksDbWeight::get()
+					.reads_writes(2, 2)
+					.saturating_add(T::WeightInfo::clear_prewitnessed_deposits(1));
+
+			let maximum_addresses_to_recycle = remaining_weight
 				.ref_time()
-				.checked_div(read_write_weight.ref_time())
+				.checked_div(recycle_weight_per_address.ref_time())
 				.unwrap_or_default()
 				.saturated_into::<usize>();
 
-			let can_recycle = DepositChannelRecycleBlocks::<T, I>::mutate(|recycle_queue| {
-				Self::can_and_cannot_recycle(
-					recycle_queue,
-					maximum_recycle_number,
-					T::ChainTracking::get_block_height(),
-				)
-			});
+			let addresses_to_recycle =
+				DepositChannelRecycleBlocks::<T, I>::mutate(|recycle_queue| {
+					Self::take_recyclable_addresses(
+						recycle_queue,
+						maximum_addresses_to_recycle,
+						T::ChainTracking::get_block_height(),
+					)
+				});
 
-			for address in can_recycle.iter() {
+			// Add weight for the DepositChannelRecycleBlocks read/write plus the
+			// DepositChannelLookup read/writes in the for loop below
+			used_weight = used_weight.saturating_add(
+				frame_support::weights::constants::RocksDbWeight::get().reads_writes(
+					(addresses_to_recycle.len() + 1) as u64,
+					(addresses_to_recycle.len() + 1) as u64,
+				),
+			);
+
+			for address in addresses_to_recycle.iter() {
 				if let Some(details) = DepositChannelLookup::<T, I>::take(address) {
 					if let Some(state) = details.deposit_channel.state.maybe_recycle() {
 						DepositChannelPool::<T, I>::insert(
 							details.deposit_channel.channel_id,
 							DepositChannel { state, ..details.deposit_channel },
 						);
+						used_weight = used_weight.saturating_add(
+							frame_support::weights::constants::RocksDbWeight::get()
+								.reads_writes(0, 1),
+						);
 					}
+					let removed_deposits =
+						Self::clear_prewitnessed_deposits(details.deposit_channel.channel_id);
+					used_weight = used_weight.saturating_add(
+						T::WeightInfo::clear_prewitnessed_deposits(removed_deposits),
+					);
 				}
 			}
-
-			read_write_weight.saturating_mul(can_recycle.len() as u64)
+			used_weight
 		}
 
 		/// Take all scheduled Egress and send them out
@@ -608,7 +659,8 @@ pub mod pallet {
 			if let Ok(egress_transaction) =
 				<T::ChainApiCall as ConsolidateCall<T::TargetChain>>::consolidate_utxos()
 			{
-				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
+				let (broadcast_id, _) =
+					T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
 				Self::deposit_event(Event::<T, I>::UtxoConsolidation { broadcast_id });
 				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
 					broadcast_id,
@@ -729,7 +781,7 @@ pub mod pallet {
 
 		/// Called when funds have been deposited into the given address.
 		///
-		/// Requires `EnsureWitnessed` origin.
+		/// Requires `EnsurePrewitnessed` or `EnsureWitnessed` origin.
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::process_single_deposit().saturating_mul(deposit_witnesses.len() as u64))]
 		pub fn process_deposits(
@@ -737,28 +789,11 @@ pub mod pallet {
 			deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
 			block_height: TargetChainBlockNumber<T, I>,
 		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			for ref deposit_witness @ DepositWitness {
-				ref deposit_address,
-				asset,
-				amount,
-				ref deposit_details,
-			} in deposit_witnesses
-			{
-				Self::process_single_deposit(
-					deposit_address.clone(),
-					asset,
-					amount,
-					deposit_details.clone(),
-					block_height,
-				)
-				.unwrap_or_else(|e| {
-					Self::deposit_event(Event::<T, I>::DepositWitnessRejected {
-						reason: e,
-						deposit_witness: deposit_witness.clone(),
-					});
-				})
+			if T::EnsurePrewitnessed::ensure_origin(origin.clone()).is_ok() {
+				Self::add_prewitnessed_deposits(deposit_witnesses, block_height)?;
+			} else {
+				T::EnsureWitnessed::ensure_origin(origin)?;
+				Self::process_deposit_witnesses(deposit_witnesses, block_height)?;
 			}
 			Ok(())
 		}
@@ -870,19 +905,27 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	fn can_and_cannot_recycle(
+	fn take_recyclable_addresses(
 		channel_recycle_blocks: &mut ChannelRecycleQueue<T, I>,
-		maximum_recyclable_number: usize,
+		maximum_addresses_to_take: usize,
 		current_block_height: TargetChainBlockNumber<T, I>,
 	) -> Vec<TargetChainAccount<T, I>> {
 		let partition_point = sp_std::cmp::min(
 			channel_recycle_blocks.partition_point(|(block, _)| *block <= current_block_height),
-			maximum_recyclable_number,
+			maximum_addresses_to_take,
 		);
 		channel_recycle_blocks
 			.drain(..partition_point)
 			.map(|(_, address)| address)
 			.collect()
+	}
+
+	// Clears all prewitnessed deposits for a given channel, returning the number of items removed.
+	fn clear_prewitnessed_deposits(channel_id: ChannelId) -> u32 {
+		let item_count = PrewitnessedDeposits::<T, I>::iter_prefix(channel_id).count() as u32;
+		// TODO: find out why clear_prefix returns 0 and ignores the given limit.
+		let _removed = PrewitnessedDeposits::<T, I>::clear_prefix(channel_id, item_count, None);
+		item_count
 	}
 
 	/// Take all scheduled egress requests and send them out in an `AllBatch` call.
@@ -1035,6 +1078,63 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
+	fn process_deposit_witnesses(
+		deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
+		block_height: TargetChainBlockNumber<T, I>,
+	) -> DispatchResult {
+		for ref deposit_witness @ DepositWitness {
+			ref deposit_address,
+			asset,
+			amount,
+			ref deposit_details,
+		} in deposit_witnesses
+		{
+			Self::process_single_deposit(
+				deposit_address.clone(),
+				asset,
+				amount,
+				deposit_details.clone(),
+				block_height,
+			)
+			.unwrap_or_else(|e| {
+				Self::deposit_event(Event::<T, I>::DepositWitnessRejected {
+					reason: e,
+					deposit_witness: deposit_witness.clone(),
+				});
+			})
+		}
+		Ok(())
+	}
+
+	fn add_prewitnessed_deposits(
+		deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
+		block_height: TargetChainBlockNumber<T, I>,
+	) -> DispatchResult {
+		for DepositWitness { deposit_address, asset, amount, deposit_details } in deposit_witnesses
+		{
+			let id = PrewitnessedDepositIdCounter::<T, I>::mutate(|id| -> u64 {
+				*id = id.saturating_add(1);
+				*id
+			});
+
+			let deposit_channel_details = DepositChannelLookup::<T, I>::get(&deposit_address)
+				.ok_or(Error::<T, I>::InvalidDepositAddress)?;
+
+			PrewitnessedDeposits::<T, I>::insert(
+				deposit_channel_details.deposit_channel.channel_id,
+				id,
+				PrewitnessedDeposit {
+					asset,
+					amount,
+					deposit_address,
+					block_height,
+					deposit_details,
+				},
+			);
+		}
+		Ok(())
+	}
+
 	/// Completes a single deposit request.
 	#[transactional]
 	fn process_single_deposit(
@@ -1074,6 +1174,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				reason: DepositIgnoredReason::BelowMinimumDeposit,
 			});
 			return Ok(())
+		}
+
+		// Remove the prewitnessed deposit that matches this deposit
+		if let Some((prewitnessed_deposit_id, _)) =
+			PrewitnessedDeposits::<T, I>::iter_prefix(channel_id)
+				.find(|(_id, deposit)| deposit.amount == deposit_amount)
+		{
+			PrewitnessedDeposits::<T, I>::remove(channel_id, prewitnessed_deposit_id);
 		}
 
 		ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Fetch {
@@ -1271,10 +1379,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		asset: TargetChainAsset<T, I>,
 		available_amount: TargetChainAmount<T, I>,
 	) -> AmountAndFeesWithheld<T, I> {
-		let tracked_data = T::ChainTracking::get_tracked_data();
 		let fee_estimate = match ingress_or_egress {
-			IngressOrEgress::Ingress => tracked_data.estimate_ingress_fee(asset),
-			IngressOrEgress::Egress => tracked_data.estimate_egress_fee(asset),
+			IngressOrEgress::Ingress => T::ChainTracking::estimate_ingress_fee(asset),
+			IngressOrEgress::Egress => T::ChainTracking::estimate_egress_fee(asset),
 		};
 
 		let (amount_after_fees, fee_estimate) =

@@ -63,6 +63,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			ChainAccount = H160,
 			TransactionFee = TransactionFee,
 			TransactionMetadata = EvmTransactionMetadata,
+			TransactionRef = H256,
 		>,
 		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 			+ Send
@@ -142,6 +143,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								signer_id: from,
 								tx_fee: TransactionFee { effective_gas_price, gas_used },
 								tx_metadata,
+								transaction_ref: transaction.hash,
 							}
 							.into()
 						},
@@ -212,6 +214,7 @@ mod tests {
 						false,
 						false,
 						false,
+						None,
 					)
 					.await
 					.unwrap();

@@ -390,9 +390,9 @@ pub(super) struct PoolState<LiquidityProvider: Ord, OrderId: Ord + Clone> {
 	/// liquidity.
 	positions: PoolPairsMap<BTreeMap<(LiquidityProvider, OrderId, SqrtPriceQ64F96), Position>>,
 	/// Total fees earned over all time
-	total_fees_earned: PoolPairsMap<Amount>,
+	pub(super) total_fees_earned: PoolPairsMap<Amount>,
 	/// Total of all swap inputs over all time (not including fees)
-	total_swap_inputs: PoolPairsMap<Amount>,
+	pub(super) total_swap_inputs: PoolPairsMap<Amount>,
 	/// Total of all swap outputs over all time
 	total_swap_outputs: PoolPairsMap<Amount>,
 }

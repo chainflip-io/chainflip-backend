@@ -16,7 +16,7 @@ use std::{
 };
 
 #[derive(Parser, Clone, Debug)]
-#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"), version_short = 'v')]
+#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"))]
 pub struct CLICommandLineOptions {
 	#[clap(short = 'c', long = "config-root", env = CONFIG_ROOT, default_value = DEFAULT_CONFIG_ROOT)]
 	pub config_root: String,
@@ -76,11 +76,18 @@ pub struct SwapRequestParams {
 	/// Commission to the booster in basis points
 	pub boost_fee: Option<u16>,
 }
-
+#[derive(Parser, Clone, Debug)]
+pub struct WithdrawFeesParams {
+	/// Asset to withdraw ("ETH"|"DOT")
+	pub asset: Asset,
+	/// Egress asset address to receive withdrawn funds
+	pub destination_address: String,
+}
 #[derive(clap::Subcommand, Clone, Debug)]
 pub enum BrokerSubcommands {
 	/// Request a swap deposit address.
 	RequestSwapDepositAddress(SwapRequestParams),
+	WithdrawFees(WithdrawFeesParams),
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]

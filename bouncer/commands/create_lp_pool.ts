@@ -6,7 +6,7 @@
 // initial price in USDC
 // For example: ./commands/create_lp_pool.ts btc 10000
 
-import { Asset } from '@chainflip-io/cli';
+import { Asset } from '@chainflip/cli';
 import { createLpPool } from '../shared/create_lp_pool';
 import { runWithTimeout } from '../shared/utils';
 

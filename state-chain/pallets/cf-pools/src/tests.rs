@@ -7,7 +7,7 @@ use crate::{
 use cf_amm::common::{price_at_tick, tick_at_price, Side, Tick, PRICE_FRACTIONAL_BITS};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount, SwapOutput};
 use cf_test_utilities::{assert_events_match, assert_has_event, last_event};
-use cf_traits::AssetConverter;
+use cf_traits::{AssetConverter, SwappingApi};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::U256;
@@ -290,6 +290,10 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			Ok(PoolInfo {
 				limit_order_fee_hundredth_pips: old_fee,
 				range_order_fee_hundredth_pips: old_fee,
+				range_order_total_fees_earned: Default::default(),
+				limit_order_total_fees_earned: Default::default(),
+				range_total_swap_inputs: Default::default(),
+				limit_total_swap_inputs: Default::default(),
 			})
 		);
 
@@ -410,8 +414,19 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			Ok(PoolInfo {
 				limit_order_fee_hundredth_pips: new_fee,
 				range_order_fee_hundredth_pips: new_fee,
+				range_order_total_fees_earned: Default::default(),
+				limit_order_total_fees_earned: PoolPairsMap {
+					base: U256::from(4000),
+					quote: U256::from(3992)
+				},
+				range_total_swap_inputs: Default::default(),
+				limit_total_swap_inputs: PoolPairsMap {
+					base: U256::from(6000),
+					quote: U256::from(5988)
+				},
 			})
 		);
+
 		System::assert_has_event(RuntimeEvent::LiquidityPools(Event::<Test>::PoolFeeSet {
 			base_asset: Asset::Eth,
 			quote_asset: STABLE_ASSET,
@@ -640,6 +655,10 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 			Ok(PoolInfo {
 				limit_order_fee_hundredth_pips: old_fee,
 				range_order_fee_hundredth_pips: old_fee,
+				range_order_total_fees_earned: Default::default(),
+				limit_order_total_fees_earned: Default::default(),
+				range_total_swap_inputs: Default::default(),
+				limit_total_swap_inputs: Default::default(),
 			})
 		);
 
@@ -1061,5 +1080,126 @@ fn asset_conversion() {
 				..
 			}),
 		);
+	});
+}
+
+#[test]
+fn fees_are_getting_recorded() {
+	new_test_ext().execute_with(|| {
+		let range_1 = -100..100;
+
+		// Create a new pool.
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			Asset::Eth,
+			STABLE_ASSET,
+			Default::default(),
+			price_at_tick(0).unwrap(),
+		));
+
+		assert_ok!(LiquidityPools::set_range_order(
+			RuntimeOrigin::signed(ALICE),
+			Asset::Eth,
+			STABLE_ASSET,
+			0,
+			Some(range_1.clone()),
+			RangeOrderSize::Liquidity { liquidity: 100_000 },
+		));
+
+		MockBalance::assert_fees_recorded(&ALICE);
+
+		assert_ok!(LiquidityPools::set_limit_order(
+			RuntimeOrigin::signed(BOB),
+			Asset::Eth,
+			STABLE_ASSET,
+			Side::Sell,
+			6,
+			Some(100),
+			700_000,
+		));
+
+		MockBalance::assert_fees_recorded(&BOB);
+	});
+}
+
+#[test]
+fn test_maximum_slippage_limits() {
+	use cf_utilities::{assert_err, assert_ok};
+
+	new_test_ext().execute_with(|| {
+		let test_swaps = |size_limit_when_slippage_limit_is_hit| {
+			for (size, expected_output) in [
+				(0, 0),
+				(1, 0),
+				(100, 99),
+				(200, 199),
+				(250, 249),
+				(300, 299),
+				(400, 398),
+				(500, 497),
+				(1500, 1477),
+				(2500, 2439),
+				(3500, 3381),
+				(4500, 4306),
+				(5500, 5213),
+				(6500, 6103),
+				(7500, 6976),
+				(8500, 7834),
+				(9500, 8675),
+				(10500, 9502),
+				(11500, 10313),
+				(12500, 11111),
+				(13500, 11894),
+				(14500, 12663),
+				(15500, 13419),
+			] {
+				pallet_cf_pools::Pools::<Test>::remove(
+					AssetPair::new(Asset::Eth, Asset::Usdc).unwrap(),
+				);
+				assert_ok!(LiquidityPools::new_pool(
+					RuntimeOrigin::root(),
+					Asset::Eth,
+					STABLE_ASSET,
+					Default::default(),
+					price_at_tick(0).unwrap(),
+				));
+				assert_ok!(LiquidityPools::set_range_order(
+					RuntimeOrigin::signed(ALICE),
+					Asset::Eth,
+					STABLE_ASSET,
+					0,
+					Some(-10000..10000),
+					RangeOrderSize::Liquidity { liquidity: 100_000 },
+				));
+				let result = LiquidityPools::swap_single_leg(STABLE_ASSET, Asset::Eth, size);
+				if size < size_limit_when_slippage_limit_is_hit {
+					assert_eq!(expected_output, assert_ok!(result));
+				} else {
+					assert_err!(result);
+				}
+			}
+		};
+
+		test_swaps(u128::MAX);
+
+		assert_ok!(
+			LiquidityPools::set_maximum_relative_slippage(RuntimeOrigin::root(), Some(954),)
+		);
+
+		test_swaps(10500);
+
+		assert_ok!(LiquidityPools::set_maximum_relative_slippage(RuntimeOrigin::root(), None,));
+
+		test_swaps(u128::MAX);
+
+		assert_ok!(LiquidityPools::set_maximum_relative_slippage(RuntimeOrigin::root(), Some(10),));
+
+		test_swaps(300);
+
+		assert_ok!(
+			LiquidityPools::set_maximum_relative_slippage(RuntimeOrigin::root(), Some(300),)
+		);
+
+		test_swaps(3500);
 	});
 }

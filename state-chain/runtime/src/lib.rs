@@ -12,8 +12,8 @@ mod weights;
 use crate::{
 	chainflip::{calculate_account_apy, Offence},
 	runtime_apis::{
-		AuctionState, DispatchErrorWithMessage, FailingWitnessValidators, LiquidityProviderInfo,
-		RuntimeApiAccountInfoV2, RuntimeApiPenalty,
+		AuctionState, BrokerInfo, DispatchErrorWithMessage, FailingWitnessValidators,
+		LiquidityProviderInfo, RuntimeApiPenalty, ScheduledSwap, ValidatorInfo,
 	},
 };
 use cf_amm::{
@@ -26,11 +26,10 @@ use cf_chains::{
 	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
-	Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, FeeEstimationApi, ForeignChain, Polkadot,
-	TransactionBuilder,
+	Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot, TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, NetworkEnvironment};
-use cf_traits::{AssetConverter, GetTrackedData, LpBalanceApi};
+use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi};
 use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
@@ -493,7 +492,7 @@ impl pallet_grandpa::Config for Runtime {
 	type MaxNominators = ConstU32<0>;
 
 	type MaxSetIdSessionEntries = ConstU64<8>;
-	type KeyOwnerProof = <Historical as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
+	type KeyOwnerProof = sp_session::MembershipProof;
 	type EquivocationReportSystem = pallet_grandpa::EquivocationReportSystem<
 		Self,
 		GrandpaOffenceReporter<Self>,
@@ -840,6 +839,7 @@ pub type UncheckedExtrinsic =
 pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, RuntimeCall, SignedExtra>;
+#[cfg(not(feature = "try-runtime"))]
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<
 	Runtime,
@@ -848,6 +848,20 @@ pub type Executive = frame_executive::Executive<
 	Runtime,
 	PalletExecutionOrder,
 	PalletMigrations,
+>;
+
+// NOTE: This should be a temporary workaround. When paritytech/polkadot-sdk#2560 is merged into our
+// substrate fork, we can remove this.
+#[cfg(feature = "try-runtime")]
+/// Executive: handles dispatch to the various modules.
+pub type Executive = frame_executive::Executive<
+	Runtime,
+	Block,
+	frame_system::ChainContext<Runtime>,
+	Runtime,
+	PalletExecutionOrder,
+	PalletMigrations,
+	AllPalletsWithoutSystem,
 >;
 
 pub type PalletExecutionOrder = (
@@ -1070,7 +1084,7 @@ impl_runtime_apis! {
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()
 		}
-		fn cf_account_info_v2(account_id: &AccountId) -> RuntimeApiAccountInfoV2 {
+		fn cf_validator_info(account_id: &AccountId) -> ValidatorInfo {
 			let is_current_backup = pallet_cf_validator::Backups::<Runtime>::get().contains_key(account_id);
 			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(account_id);
 			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode<_>>::is_qualified(account_id);
@@ -1081,7 +1095,7 @@ impl_runtime_apis! {
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(account_id);
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(account_id);
 			let restricted_balances = pallet_cf_funding::RestrictedBalances::<Runtime>::get(account_id);
-			RuntimeApiAccountInfoV2 {
+			ValidatorInfo {
 				balance: account_info.total(),
 				bond: account_info.bond(),
 				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(account_id).unwrap_or(0),
@@ -1248,14 +1262,11 @@ impl_runtime_apis! {
 					pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(
 						generic_asset,
 						Asset::Eth,
-						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::get_tracked_data()
-							.estimate_ingress_fee(asset)
+						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::estimate_ingress_fee(asset)
 					)
 				},
-				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::get_tracked_data()
-					.estimate_ingress_fee(asset)),
-				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::get_tracked_data()
-					.estimate_ingress_fee(asset).into()),
+				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::estimate_ingress_fee(asset)),
+				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::estimate_ingress_fee(asset).into()),
 			}
 		}
 
@@ -1265,14 +1276,11 @@ impl_runtime_apis! {
 					pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(
 						generic_asset,
 						Asset::Eth,
-						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::get_tracked_data()
-							.estimate_egress_fee(asset)
+						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::estimate_egress_fee(asset)
 					)
 				},
-				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::get_tracked_data()
-					.estimate_egress_fee(asset)),
-				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::get_tracked_data()
-					.estimate_egress_fee(asset).into()),
+				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::estimate_egress_fee(asset)),
+				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::estimate_egress_fee(asset).into()),
 			}
 		}
 
@@ -1284,27 +1292,32 @@ impl_runtime_apis! {
 			}
 		}
 
-
 		fn cf_liquidity_provider_info(
 			account_id: AccountId,
-		) -> Option<LiquidityProviderInfo> {
-			let role = Self::cf_account_role(account_id.clone())?;
-			if role != AccountRole::LiquidityProvider {
-				return None;
-			}
-
+		) -> LiquidityProviderInfo {
 			let refund_addresses = ForeignChain::iter().map(|chain| {
 				(chain, pallet_cf_lp::LiquidityRefundAddress::<Runtime>::get(&account_id, chain))
 			}).collect();
 
 			LiquidityPools::sweep(&account_id).unwrap();
 
-			Some(LiquidityProviderInfo {
+			LiquidityProviderInfo {
 				refund_addresses,
 				balances: Asset::all().map(|asset|
 					(asset, pallet_cf_lp::FreeBalances::<Runtime>::get(&account_id, asset).unwrap_or(0))
 				).collect(),
-			})
+				earned_fees: pallet_cf_lp::HistoricalEarnedFees::<Runtime>::get(&account_id),
+			}
+		}
+
+		fn cf_broker_info(
+			account_id: AccountId,
+		) -> BrokerInfo {
+			let earned_fees = Asset::all().map(|asset|
+				(asset, Swapping::earned_broker_fees(&account_id, asset))
+			).collect();
+
+			BrokerInfo { earned_fees }
 		}
 
 		fn cf_account_role(account_id: AccountId) -> Option<AccountRole> {
@@ -1423,6 +1436,20 @@ impl_runtime_apis! {
 
 			all_prewitnessed_swaps
 		}
+
+		fn cf_scheduled_swaps(base_asset: Asset, _quote_asset: Asset) -> Vec<ScheduledSwap> {
+
+			let current_block = System::block_number();
+
+			pallet_cf_swapping::SwapQueue::<Runtime>::iter().flat_map(|(block, swaps_for_block)| {
+
+				// In case `block` has already passed, the swaps will be re-tried at the next block:
+				let execute_at = core::cmp::max(block, current_block.saturating_add(1));
+
+				let swaps: Vec<_> = swaps_for_block.iter().filter(|swap| swap.from == base_asset || swap.to == base_asset).cloned().collect();
+				Swapping::get_scheduled_swap_legs(swaps, base_asset).unwrap().into_iter().map(move |swap| ScheduledSwap {swap, execute_at })
+			}).collect()
+	}
 
 		fn cf_failed_call(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {
 			if EthereumIngressEgress::get_failed_call(broadcast_id).is_some() {

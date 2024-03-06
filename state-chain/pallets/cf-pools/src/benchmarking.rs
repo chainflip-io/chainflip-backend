@@ -213,13 +213,13 @@ mod benchmarks {
 			);
 		}
 
-		assert_eq!(
-			Pallet::<T>::pool_info(Asset::Eth, STABLE_ASSET),
-			Ok(PoolInfo {
-				limit_order_fee_hundredth_pips: fee,
-				range_order_fee_hundredth_pips: fee,
-			})
-		);
+		match Pallet::<T>::pool_info(Asset::Eth, STABLE_ASSET) {
+			Ok(pool_info) => {
+				assert_eq!(pool_info.limit_order_fee_hundredth_pips, fee);
+				assert_eq!(pool_info.range_order_fee_hundredth_pips, fee);
+			},
+			Err(_) => panic!("Pool not found"),
+		}
 	}
 
 	#[benchmark]
@@ -249,6 +249,18 @@ mod benchmarks {
 		);
 
 		assert!(!ScheduledLimitOrderUpdates::<T>::get(BlockNumberFor::<T>::from(5u32)).is_empty());
+	}
+
+	#[benchmark]
+	fn set_maximum_relative_slippage() {
+		let call = Call::<T>::set_maximum_relative_slippage { ticks: Some(1000) };
+
+		#[block]
+		{
+			assert_ok!(
+				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
+			);
+		}
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

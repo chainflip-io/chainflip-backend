@@ -46,6 +46,8 @@ pub type BroadcastId = u32;
 
 pub type SwapId = u64;
 
+pub type PrewitnessedDepositId = u64;
+
 /// The type of the Id given to threshold signature requests. Note a single request may
 /// result in multiple ceremonies, but only one ceremony should succeed.
 pub type ThresholdSignatureRequestId = u32;
@@ -232,11 +234,31 @@ pub struct SemVer {
 	pub minor: u8,
 	pub patch: u8,
 }
+
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub enum CfeCompatibility {
+	/// The version is currently compatible with the target.
+	Compatible,
+
+	/// The version is not yet compatible with the target. Should wait for the new version.
+	NotYetCompatible,
+
+	/// The version of the engine is no longer compatible with the runtime. Should switch to the
+	/// new version.
+	NoLongerCompatible,
+}
+
 impl SemVer {
-	/// Check if "self" is compatible with the target version.
-	/// This is true if the major and minor versions are the same.
-	pub fn is_compatible_with(&self, target: SemVer) -> bool {
-		self.major == target.major && self.minor == target.minor
+	pub fn compatibility_with_runtime(&self, version_runtime_requires: SemVer) -> CfeCompatibility {
+		if self.major == version_runtime_requires.major &&
+			self.minor == version_runtime_requires.minor
+		{
+			CfeCompatibility::Compatible
+		} else if self < &version_runtime_requires {
+			CfeCompatibility::NoLongerCompatible
+		} else {
+			CfeCompatibility::NotYetCompatible
+		}
 	}
 
 	pub fn is_more_recent_than(&self, other: SemVer) -> bool {

@@ -3,10 +3,12 @@ use cf_amm::{
 	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{eth::Address as EthereumAddress, Chain, ForeignChainAddress};
+use cf_chains::{
+	assets::any::AssetMap, eth::Address as EthereumAddress, Chain, ForeignChainAddress,
+};
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, BroadcastId, EpochIndex, FlipBalance, ForeignChain,
-	NetworkEnvironment, SemVer, SwapOutput,
+	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, FlipBalance,
+	ForeignChain, NetworkEnvironment, SemVer, SwapOutput,
 };
 use codec::{Decode, Encode};
 use core::ops::Range;
@@ -16,6 +18,7 @@ use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
 };
+use pallet_cf_swapping::SwapLegInfo;
 use pallet_cf_witnesser::CallHash;
 use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
@@ -39,7 +42,7 @@ pub enum ChainflipAccountStateWithPassive {
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
-pub struct RuntimeApiAccountInfoV2 {
+pub struct ValidatorInfo {
 	pub balance: u128,
 	pub bond: u128,
 	pub last_heartbeat: u32, // can *maybe* remove this - check with Andrew
@@ -75,6 +78,12 @@ pub struct AuctionState {
 pub struct LiquidityProviderInfo {
 	pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
 	pub balances: Vec<(Asset, AssetAmount)>,
+	pub earned_fees: AssetMap<AssetAmount>,
+}
+
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+pub struct BrokerInfo {
+	pub earned_fees: Vec<(Asset, AssetAmount)>,
 }
 
 #[derive(Debug, Decode, Encode, TypeInfo)]
@@ -95,6 +104,14 @@ impl From<DispatchError> for DispatchErrorWithMessage {
 pub struct FailingWitnessValidators {
 	pub failing_count: u32,
 	pub validators: Vec<(cf_primitives::AccountId, String, bool)>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+pub struct ScheduledSwap {
+	#[cfg_attr(feature = "std", serde(flatten))]
+	pub swap: SwapLegInfo,
+	pub execute_at: BlockNumber,
 }
 
 decl_runtime_apis!(
@@ -122,7 +139,7 @@ decl_runtime_apis!(
 		fn cf_flip_supply() -> (u128, u128);
 		fn cf_accounts() -> Vec<(AccountId32, VanityName)>;
 		fn cf_account_flip_balance(account_id: &AccountId32) -> u128;
-		fn cf_account_info_v2(account_id: &AccountId32) -> RuntimeApiAccountInfoV2;
+		fn cf_validator_info(account_id: &AccountId32) -> ValidatorInfo;
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)>;
 		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId32)>)>;
 		fn cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash;
@@ -180,7 +197,9 @@ decl_runtime_apis!(
 			quote_asset: Asset,
 			side: Side,
 		) -> Vec<AssetAmount>;
-		fn cf_liquidity_provider_info(account_id: AccountId32) -> Option<LiquidityProviderInfo>;
+		fn cf_scheduled_swaps(base_asset: Asset, quote_asset: Asset) -> Vec<ScheduledSwap>;
+		fn cf_liquidity_provider_info(account_id: AccountId32) -> LiquidityProviderInfo;
+		fn cf_broker_info(account_id: AccountId32) -> BrokerInfo;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
 		fn cf_asset_balances(account_id: AccountId32) -> Vec<(Asset, AssetAmount)>;
 		fn cf_redemption_tax() -> AssetAmount;
