@@ -1400,6 +1400,7 @@ mod test {
 					(Asset::Usdc, 0),
 					(Asset::Usdt, 0),
 					(Asset::Dot, 0),
+					(Asset::Usdt, 0),
 				]
 			}
 		))
@@ -1428,6 +1429,7 @@ mod test {
 					(Asset::Usdc, 0),
 					(Asset::Usdt, 0),
 					(Asset::Dot, 0),
+					(Asset::Usdt, 0),
 				],
 				earned_fees: any::AssetMap {
 					eth: eth::AssetMap {

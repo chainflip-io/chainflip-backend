@@ -14,7 +14,7 @@ use sp_runtime::DispatchError;
 pub const ETHEREUM_ETH_ADDRESS: [u8; 20] = [0xee; 20];
 pub const ETHEREUM_FLIP_ADDRESS: [u8; 20] = [0xcf; 20];
 pub const ETHEREUM_USDC_ADDRESS: [u8; 20] = [0x45; 20];
-pub const ETHEREUM_USDT_ADDRESS: [u8; 20] = [0x45; 20];
+pub const ETHEREUM_USDT_ADDRESS: [u8; 20] = [0xba; 20];
 #[derive(Encode, Decode, TypeInfo, Eq, PartialEq)]
 pub struct MockEthEnvironment;
 

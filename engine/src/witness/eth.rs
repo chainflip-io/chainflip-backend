@@ -99,7 +99,6 @@ where
 	let usdt_contract_address =
 		*supported_erc20_tokens.get(&eth::Asset::Usdt).context("USDT not supported")?;
 
-		
 	let supported_erc20_tokens: HashMap<H160, cf_primitives::Asset> = supported_erc20_tokens
 		.into_iter()
 		.map(|(asset, address)| (address, asset.into()))

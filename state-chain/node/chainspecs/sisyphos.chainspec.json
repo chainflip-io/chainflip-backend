@@ -20,6 +20,7 @@
       "environment": {
         "flipTokenAddress": "0x2bbb561c6eab74f358ca9e8a961e3a20cae3d100",
         "ethUsdcAddress": "0x07865c6e87b9f70255377e024ace6630c1eaa37f",
+        "ethUsdtAddress": "0x509Ee0d083DdF8AC028f2a56731412edD63223B9",
         "stateChainGatewayAddress": "0xe8be4b7f8a38c1913387c9c20b94402bc3db9f70",
         "keyManagerAddress": "0xaea44be51d86ea635d51cfb2fd5eb17fd2a322bc",
         "ethVaultAddress": "0xc17ccec5015081eb2df26d20a9e02c5484c1d641",
@@ -373,6 +374,10 @@
           ],
           [
             "Usdc",
+            1000000
+          ],
+          [
+            "Usdt",
             1000000
           ],
           [

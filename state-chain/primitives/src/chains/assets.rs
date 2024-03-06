@@ -441,6 +441,7 @@ mod test_assets {
 		assert_eq!(any::Asset::try_from(3).unwrap(), any::Asset::Usdc);
 		assert_eq!(any::Asset::try_from(4).unwrap(), any::Asset::Dot);
 		assert_eq!(any::Asset::try_from(5).unwrap(), any::Asset::Btc);
+		assert_eq!(any::Asset::try_from(6).unwrap(), any::Asset::Usdt);
 	}
 
 	#[test]
@@ -448,6 +449,7 @@ mod test_assets {
 		assert_conversion!(eth, Eth);
 		assert_conversion!(eth, Flip);
 		assert_conversion!(eth, Usdc);
+		assert_conversion!(eth, Usdt);
 		assert_conversion!(dot, Dot);
 		assert_conversion!(btc, Btc);
 
@@ -456,5 +458,6 @@ mod test_assets {
 		assert_incompatible!(dot, Flip);
 		assert_incompatible!(dot, Usdc);
 		assert_incompatible!(btc, Usdc);
+		assert_incompatible!(btc, Usdt);
 	}
 }

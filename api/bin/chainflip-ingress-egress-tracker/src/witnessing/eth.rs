@@ -15,7 +15,7 @@ use chainflip_engine::{
 	witness::{
 		common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder},
 		eth::{
-			erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents},
+			erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
 			EthSource,
 		},
 	},
@@ -84,7 +84,7 @@ where
 
 	eth_source_deposit_addresses
 		.clone()
-		.erc20_deposits::<_, _, _, UsdcEvents>(
+		.erc20_deposits::<_, _, _, UsdtEvents>(
 			witness_call.clone(),
 			eth_client.clone(),
 			Asset::Usdt,
