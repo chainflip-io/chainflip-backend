@@ -1,5 +1,5 @@
 import Web3 from 'web3';
-import { Asset } from '@chainflip-io/cli';
+import { Asset } from '@chainflip/cli';
 import { amountToFineAmount, chainFromAsset, getEvmEndpoint } from '../shared/utils';
 import { getEvmContractAddress } from './utils';
 import { signAndSendTxEvm } from './send_evm';

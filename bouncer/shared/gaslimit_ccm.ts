@@ -1,5 +1,5 @@
 import Web3 from 'web3';
-import { Asset, Assets, Chain } from '@chainflip-io/cli';
+import { Asset, Assets, Chain } from '@chainflip/cli';
 import { newCcmMetadata, prepareSwap } from './swapping';
 import {
   chainFromAsset,

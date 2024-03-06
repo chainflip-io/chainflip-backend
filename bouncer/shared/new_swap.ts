@@ -1,4 +1,4 @@
-import { Asset /* , broker */ } from '@chainflip-io/cli';
+import { Asset /* , broker */ } from '@chainflip/cli';
 import { Keyring } from '@polkadot/api';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { Mutex } from 'async-mutex';
@@ -24,26 +24,25 @@ export async function newSwap(
   messageMetadata?: CcmDepositMetadata,
   brokerCommissionBps = defaultCommissionBps,
 ): Promise<void> {
-  // const destinationAddress =
-  //   destAsset === 'DOT' ? decodeDotAddressForContract(destAddress) : destAddress;
-  // const brokerUrl = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:10997';
-  // await broker.requestSwapDepositAddress(
-  //   {
-  //     srcAsset: sourceAsset,
-  //     destAsset,
-  //     srcChain: chainFromAsset(sourceAsset),
-  //     destAddress: destinationAddress,
-  //     destChain: chainFromAsset(destAsset),
-  //     ccmMetadata: messageMetadata && {
-  //       message: messageMetadata.message as `0x${string}`,
-  //       gasBudget: messageMetadata.gasBudget.toString(),
+  //   const brokerUrl = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:10997';
+  //   await broker.requestSwapDepositAddress(
+  //     {
+  //       srcAsset: sourceAsset,
+  //       destAsset,
+  //       srcChain: chainFromAsset(sourceAsset),
+  //       destAddress: destinationAddress,
+  //       destChain: chainFromAsset(destAsset),
+  //       ccmMetadata: messageMetadata && {
+  //         message: messageMetadata.message as `0x${string}`,
+  //         gasBudget: messageMetadata.gasBudget.toString(),
+  //       },
   //     },
-  //   },
-  //   {
-  //     url: brokerUrl,
-  //     commissionBps: brokerCommissionBps,
-  //   },
-  // );
+  //     {
+  //       url: brokerUrl,
+  //       commissionBps: brokerCommissionBps,
+  //     },
+  //     'backspin',
+  //   );
 
   // NOTE: Bypassing broker since it's not supporting Arbitrum yet. Opening channels directly calling the SC.
   await cryptoWaitReady();

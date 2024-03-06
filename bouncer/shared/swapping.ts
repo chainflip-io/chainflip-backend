@@ -1,5 +1,5 @@
 import { randomAsHex, randomAsNumber } from '@polkadot/util-crypto';
-import { Asset, assetDecimals, Assets } from '@chainflip-io/cli';
+import { Asset, Assets } from '@chainflip/cli';
 import Web3 from 'web3';
 import { performSwap, SwapParams } from '../shared/perform_swap';
 import {
@@ -8,8 +8,8 @@ import {
   getEvmContractAddress,
   amountToFineAmount,
   defaultAssetAmounts,
-  assetToChain,
   ccmSupportedChains,
+  assetDecimals,
 } from '../shared/utils';
 import { BtcAddressType, btcAddressTypes } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
@@ -83,7 +83,7 @@ export function newCcmMetadata(
   const gasDiv = gasBudgetFraction ?? 2;
 
   const gasBudget = Math.floor(
-    Number(amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals[sourceAsset])) /
+    Number(amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals(sourceAsset))) /
       gasDiv,
   );
 
@@ -211,7 +211,23 @@ export async function testAllSwaps() {
   //              at ApiPromise.__internal__onProviderConnect (file:///home/albert/work/chainflip/backend_arbitrum/chainflip-backend/bouncer/node_modules/.pnpm/@polkadot+api@10.7.2/node_modules/@polkadot/api/base/Init.js:311:27)
   //              at processTicksAndRejections (node:internal/process/task_queues:96:5)
 
-  Object.values(Assets).forEach((sourceAsset) =>
+  await approveTokenVault(
+    'USDC',
+    (
+      BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals('USDC'))) * 9n
+    ).toString(),
+  );
+  await approveTokenVault(
+    'FLIP',
+    (
+      BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals('FLIP'))) * 9n
+    ).toString(),
+  );
+
+  // TODO: Remove this but for now skipping arbitrum swaps as they are not supported yet
+  Object.values(Assets).forEach((sourceAsset) => {
+    if (sourceAsset === 'ARBETH' || sourceAsset === 'ARBUSDC') return;
+
     Object.values(Assets)
       .filter((destAsset) => sourceAsset !== destAsset)
       .forEach((destAsset) => {
@@ -233,8 +249,8 @@ export async function testAllSwaps() {
         //   // CCM swaps
         //   appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
         // }
-      }),
-  );
+      });
+  });
 
   // appendSwap('ETH', 'ARBETH', testSwap, newCcmMetadata('ETH'));
   // appendSwap('ETH', 'ARBETH', testSwap);

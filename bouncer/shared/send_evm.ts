@@ -1,5 +1,5 @@
 import Web3 from 'web3';
-import { assetDecimals, approveVault, Chain } from '@chainflip-io/cli';
+import { approveVault, Chain } from '@chainflip/cli';
 import {
   amountToFineAmount,
   ethNonceMutex,
@@ -7,6 +7,7 @@ import {
   getEvmEndpoint,
   getWhaleKey,
   sleep,
+  assetDecimals,
 } from './utils';
 
 const nextEvmNonce: { [key in 'Ethereum' | 'Arbitrum']: number | undefined } = {
@@ -89,7 +90,7 @@ export async function sendEvmNative(
   ethAmount: string,
   log = true,
 ) {
-  const weiAmount = amountToFineAmount(ethAmount, assetDecimals.ETH);
+  const weiAmount = amountToFineAmount(ethAmount, assetDecimals('ETH'));
   await signAndSendTxEvm(chain, evmAddress, weiAmount, undefined, undefined, log);
 }
 
