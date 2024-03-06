@@ -436,12 +436,13 @@ macro_rules! impl_deposit_api_for_anychain {
 	( $t: ident, $(($chain: ident, $pallet: ident)),+ ) => {
 		impl DepositApi<AnyChain> for $t {
 			type AccountId = <Runtime as frame_system::Config>::AccountId;
+			type Amount = <Runtime as Chainflip>::Amount;
 
 			fn request_liquidity_deposit_address(
 				lp_account: Self::AccountId,
 				source_asset: Asset,
 				boost_fee: BasisPoints
-			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber), DispatchError> {
+			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber, FlipBalance), DispatchError> {
 				match source_asset.into() {
 					$(
 						ForeignChainAndAsset::$chain(source_asset) =>
@@ -449,7 +450,7 @@ macro_rules! impl_deposit_api_for_anychain {
 								lp_account,
 								source_asset,
 								boost_fee
-							).map(|(channel, address, block_number)| (channel, address, block_number.into())),
+							).map(|(channel, address, block_number, channel_opening_fee)| (channel, address, block_number.into(), channel_opening_fee)),
 					)+
 				}
 			}
@@ -462,7 +463,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadata>,
 				boost_fee: BasisPoints
-			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber), DispatchError> {
+			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber, FlipBalance), DispatchError> {
 				match source_asset.into() {
 					$(
 						ForeignChainAndAsset::$chain(source_asset) => $pallet::request_swap_deposit_address(
@@ -473,7 +474,7 @@ macro_rules! impl_deposit_api_for_anychain {
 							broker_id,
 							channel_metadata,
 							boost_fee
-						).map(|(channel, address, block_number)| (channel, address, block_number.into())),
+						).map(|(channel, address, block_number, channel_opening_fee)| (channel, address, block_number.into(), channel_opening_fee)),
 					)+
 				}
 			}
