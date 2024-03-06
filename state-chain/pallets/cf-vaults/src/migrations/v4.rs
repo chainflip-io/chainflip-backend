@@ -13,11 +13,9 @@ pub struct Migration<T, I>(PhantomData<(T, I)>);
 
 impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		if <T::Chain as Chain>::NAME == "Arbitrum" {
-			ChainInitialized::<T, I>::put(false);
-		} else {
-			ChainInitialized::<T, I>::put(true)
-		}
+		assert_ne!(<T::Chain as Chain>::NAME, "Arbitrum", "Arbitrum should not exist yet.");
+
+		ChainInitialized::<T, I>::put(true);
 		Default::default()
 	}
 
@@ -30,12 +28,7 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	#[cfg(feature = "try-runtime")]
 	#[allow(clippy::bool_assert_comparison)]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
-		assert!(!ChainInitialized::<T, I>::exists());
-		if <T::Chain as Chain>::NAME == "Arbitrum" {
-			assert_eq!(ChainInitialized::<T, I>::get(), false);
-		} else {
-			assert_eq!(ChainInitialized::<T, I>::get(), true);
-		}
+		assert!(ChainInitialized::<T, I>::exists());
 		Ok(())
 	}
 }

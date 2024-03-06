@@ -17,6 +17,7 @@ use frame_support::{
 	},
 	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, StorageHasher,
 };
+use instances::{ChainCryptoInstanceAlias, ChainInstanceAlias};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::{ConstU32, U256};
@@ -45,12 +46,13 @@ pub mod none;
 pub mod address;
 pub mod deposit_channel;
 pub use deposit_channel::*;
+pub mod instances;
 
 pub mod mocks;
 
 /// A trait representing all the types and constants that need to be implemented for supported
 /// blockchains.
-pub trait Chain: Member + Parameter {
+pub trait Chain: Member + Parameter + ChainInstanceAlias {
 	const NAME: &'static str;
 
 	const GAS_ASSET: Self::ChainAsset;
@@ -152,7 +154,7 @@ pub trait Chain: Member + Parameter {
 }
 
 /// Common crypto-related types and operations for some external chain.
-pub trait ChainCrypto: PalletInstanceAlias {
+pub trait ChainCrypto: ChainCryptoInstanceAlias {
 	type UtxoChain: Get<bool>;
 
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
@@ -203,11 +205,6 @@ pub trait ChainCrypto: PalletInstanceAlias {
 	/// broadcast
 	fn maybe_broadcast_barriers_on_rotation(rotation_broadcast_id: BroadcastId)
 		-> Vec<BroadcastId>;
-}
-
-/// Allows a type to be used as an alias for a pallet `Instance`.
-pub trait PalletInstanceAlias {
-	type Instance: Send + Sync + 'static;
 }
 
 /// Provides chain-specific replay protection data.

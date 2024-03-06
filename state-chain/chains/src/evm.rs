@@ -11,12 +11,9 @@ pub use ethabi::{
 	Address, Hash as TxHash, Token, Uint, Word,
 };
 use evm::tokenizable::Tokenizable;
-use frame_support::{
-	instances::Instance16,
-	sp_runtime::{
-		traits::{Hash, Keccak256},
-		RuntimeDebug,
-	},
+use frame_support::sp_runtime::{
+	traits::{Hash, Keccak256},
+	RuntimeDebug,
 };
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
@@ -89,11 +86,6 @@ impl ChainCrypto for EvmCrypto {
 		}
 	}
 }
-
-impl PalletInstanceAlias for EvmCrypto {
-	type Instance = Instance16;
-}
-pub type EvmInstance = <EvmCrypto as PalletInstanceAlias>::Instance;
 
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum AggKeyVerificationError {

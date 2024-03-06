@@ -351,7 +351,8 @@ mod tests {
 	use cf_chains::{
 		dot::PolkadotAccountId,
 		evm::{EvmTransactionMetadata, TransactionFee},
-		Chain, PalletInstanceAlias,
+		instances::ChainInstanceFor,
+		Chain,
 	};
 	use cf_primitives::{BroadcastId, NetworkEnvironment};
 	use chainflip_engine::state_chain_observer::client::{
@@ -468,22 +469,19 @@ mod tests {
 	}
 
 	#[allow(clippy::type_complexity)]
-	fn create_client<I>(
-		result: Option<(
-			BroadcastId,
-			<<state_chain_runtime::Runtime as pallet_cf_broadcast::Config<I::Instance>>::TargetChain as Chain>::ChainBlockNumber,
-		)>,
+	fn create_client<C: Chain>(
+		result: Option<(BroadcastId, C::ChainBlockNumber)>,
 	) -> MockStateChainClient
 	where
-		state_chain_runtime::Runtime: pallet_cf_broadcast::Config<I::Instance>,
-		I: PalletInstanceAlias + 'static,
+		state_chain_runtime::Runtime:
+			pallet_cf_broadcast::Config<ChainInstanceFor<C>, TargetChain = C>,
 	{
 		let mut client = MockStateChainClient::new();
 
 		client
 			.expect_storage_map_entry::<pallet_cf_broadcast::TransactionOutIdToBroadcastId<
 				state_chain_runtime::Runtime,
-				I::Instance,
+				ChainInstanceFor<C>,
 			>>()
 			.return_once(move |_, _| Ok(result));
 

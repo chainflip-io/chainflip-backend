@@ -128,7 +128,7 @@ where
 		.clone()
 		.key_manager_witnessing(process_call.clone(), arb_client.clone(), key_manager_address)
 		.continuous("ArbitrumKeyManager".to_string(), db.clone())
-		.logging("ArbitrumKeyManager")
+		.logging("KeyManager")
 		.spawn(scope);
 
 	arb_safe_vault_source_deposit_addresses
@@ -141,7 +141,7 @@ where
 		)
 		.await?
 		.continuous("ArbitrumUSDCDeposits".to_string(), db.clone())
-		.logging("ArbitrumUSDCDeposits")
+		.logging("USDCDeposits")
 		.spawn(scope);
 
 	arb_safe_vault_source_deposit_addresses
@@ -155,7 +155,7 @@ where
 		)
 		.await
 		.continuous("ArbitrumDeposits".to_string(), db.clone())
-		.logging("ArbitrumDeposits")
+		.logging("Deposits")
 		.spawn(scope);
 
 	arb_safe_vault_source
@@ -168,7 +168,7 @@ where
 			supported_arb_erc20_assets,
 		)
 		.continuous("ArbitrumVault".to_string(), db)
-		.logging("ArbitrumVault")
+		.logging("Vault")
 		.spawn(scope);
 
 	Ok(())
