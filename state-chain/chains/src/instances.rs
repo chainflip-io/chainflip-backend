@@ -16,6 +16,9 @@ pub trait PalletInstanceAlias {
 }
 
 /// Allows a type to be used as an alias for a [Chain] `Instance`.
+///
+/// Every [Chain] must have a corresponding [ChainCrypto] and therefore every ChainInstanceAlias
+/// implies a [ChainCryptoInstanceAlias].
 pub trait ChainInstanceAlias: ChainCryptoInstanceAlias + PalletInstanceAlias {
 	type Instance: Send + Sync + 'static;
 }
@@ -25,13 +28,15 @@ pub trait ChainCryptoInstanceAlias: PalletInstanceAlias {
 	type Instance: Send + Sync + 'static;
 }
 
-/// Declare instance aliases.
+/// Declare pallet instance aliases.
+///
+/// Syntax: `decl_instance_aliases!(<chain_or_crypto> => <type_alias>, <instance>);`
 ///
 /// # Example
 ///
 /// ```ignore
 /// decl_instance_aliases!(
-/// 	Ethereum => EthereumInstance, Instance1,
+///     Ethereum => EthereumInstance, Instance1,
 /// );
 /// ```
 ///
@@ -39,7 +44,7 @@ pub trait ChainCryptoInstanceAlias: PalletInstanceAlias {
 ///
 /// ```ignore
 /// impl PalletInstanceAlias for Ethereum {
-/// 	type Instance = Instance1;
+///     type Instance = Instance1;
 /// }
 /// // Equivalent to `pub type EthereumInstance = Instance1`
 /// pub type EthereumInstance = <Ethereum as PalletInstanceAlias>::Instance;
@@ -55,13 +60,16 @@ macro_rules! decl_instance_aliases {
 		)+
 	};
 }
+
 /// Implement instance alias traits for the given chain and crypto types.
+///
+/// Syntax: `impl_instance_alias_traits!(<crypto> => { <chain>,+ },+);`
 ///
 /// # Example
 ///
 /// ```ignore
 /// impl_instance_alias_traits!(
-/// 	EvmCrypto => { Ethereum },
+///     EvmCrypto => { Ethereum },
 /// );
 /// ```
 ///
@@ -70,17 +78,17 @@ macro_rules! decl_instance_aliases {
 /// ```ignore
 /// // Implements the alias for the crypto type.
 /// impl ChainCryptoInstanceAlias for EvmCrypto {
-/// 	type Instance = <EvmCrypto as PalletInstanceAlias>::Instance;
+///     type Instance = <EvmCrypto as PalletInstanceAlias>::Instance;
 /// }
 ///
 /// // Implements the alias for the chain type.
 /// impl ChainInstanceAlias for Ethereum {
-/// 	type Instance = <Ethereum as PalletInstanceAlias>::Instance;
+///     type Instance = <Ethereum as PalletInstanceAlias>::Instance;
 /// }
 ///
 /// // The ChainCryptoInstanceAlias for the chain references the Crypto instance's alias.
 /// impl ChainCryptoInstanceAlias for Ethereum {
-/// 	type Instance = <EvmCrypto as PalletInstanceAlias>::Instance;
+///     type Instance = <EvmCrypto as PalletInstanceAlias>::Instance;
 /// }
 /// ```
 #[macro_export]
