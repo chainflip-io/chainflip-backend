@@ -13,7 +13,6 @@ import { provideLiquidity } from '../shared/provide_liquidity';
 import { rangeOrder } from '../shared/range_order';
 import { getEvmNativeBalance } from '../shared/get_evm_native_balance';
 import { getErc20Balance } from '../shared/get_erc20_balance';
-import { number } from 'yargs';
 
 const deposits = new Map<Asset, number>([
   ['DOT', 10000],
