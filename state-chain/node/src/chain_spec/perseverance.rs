@@ -58,22 +58,20 @@ pub const SNOW_WHITE_SR25519: [u8; 32] =
 	hex_literal::hex!["84f131a66e88e3e5f8dce20d413cab3fbb13769a14a4c7b640b7222863ef353d"];
 
 pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8>>)> {
-	[
-		vec![
-			(
-				parse_account("cFMTNSQQVfBo2HqtekvhLPfZY764kuJDVFG1EvnnDGYxc3LRW"),
-				AccountRole::Broker,
-				1_000 * FLIPPERINOS_PER_FLIP,
-				Some(b"Chainflip Genesis Broker".to_vec()),
-			),
-			(
-				parse_account("cFN2sr3eDPoyp3G4CAg3EBRMo2VMoYJ7x3rBn51tmXsguYzMX"),
-				AccountRole::LiquidityProvider,
-				1_000 * FLIPPERINOS_PER_FLIP,
-				Some(b"Chainflip Genesis Liquidity Provider".to_vec()),
-			),
-		],
-	]
+	[vec![
+		(
+			parse_account("cFMTNSQQVfBo2HqtekvhLPfZY764kuJDVFG1EvnnDGYxc3LRW"),
+			AccountRole::Broker,
+			1_000 * FLIPPERINOS_PER_FLIP,
+			Some(b"Chainflip Genesis Broker".to_vec()),
+		),
+		(
+			parse_account("cFN2sr3eDPoyp3G4CAg3EBRMo2VMoYJ7x3rBn51tmXsguYzMX"),
+			AccountRole::LiquidityProvider,
+			1_000 * FLIPPERINOS_PER_FLIP,
+			Some(b"Chainflip Genesis Liquidity Provider".to_vec()),
+		),
+	]]
 	.into_iter()
 	.flatten()
 	.collect()
