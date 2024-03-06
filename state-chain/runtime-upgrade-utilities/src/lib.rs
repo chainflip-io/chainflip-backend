@@ -16,6 +16,22 @@ use frame_support::pallet_prelude::DispatchError;
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
+pub mod genesis_hashes {
+	use frame_support::sp_runtime::{testing::H256, traits::Zero};
+	use frame_system::pallet_prelude::BlockNumberFor;
+
+	pub const BERGHAIN: [u8; 32] =
+		hex_literal::hex!("8b8c140b0af9db70686583e3f6bf2a59052bfe9584b97d20c45068281e976eb9");
+	pub const PERSEVERANCE: [u8; 32] =
+		hex_literal::hex!("46c8ca427e31ba73cbd1ad60500d4a7d173b1c80c9fb1afb76661d614f9c5cd7");
+	pub const SISYPHOS: [u8; 32] =
+		hex_literal::hex!("beb780f634621c64012483ebbf39927eb236b63902e9a249a76af8ba4cf8a474");
+
+	pub fn genesis_hash<T: frame_system::Config<Hash = H256>>() -> [u8; 32] {
+		frame_system::BlockHash::<T>::get(BlockNumberFor::<T>::zero()).to_fixed_bytes()
+	}
+}
+
 /// A Runtime upgrade for a pallet that migrates the pallet from version `FROM` to version `TO`.
 ///
 /// In order for the runtime upgrade `U` to proceed, two conditions should be satisfied:

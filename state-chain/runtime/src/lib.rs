@@ -1025,6 +1025,7 @@ type PalletMigrations = (
 		9,
 	>,
 	// pallet_cf_pools::migrations::PalletMigration<Runtime>,
+	migrations::housekeeping::Migration,
 	FlipToBurnMigration,
 );
 

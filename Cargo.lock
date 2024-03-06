@@ -1493,6 +1493,8 @@ name = "cf-runtime-upgrade-utilities"
 version = "0.1.0"
 dependencies = [
  "frame-support",
+ "frame-system",
+ "hex-literal",
  "log",
  "parity-scale-codec",
  "sp-io 23.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.6+1)",

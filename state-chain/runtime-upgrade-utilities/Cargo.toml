@@ -10,9 +10,11 @@ workspace = true
 
 [dependencies]
 log = { version = '0.4.16', default-features = false }
+hex-literal = { version = '0.4.1', default-features = false }
 
 sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
 frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
+frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
 sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
 codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = false, features = [
     'derive',
