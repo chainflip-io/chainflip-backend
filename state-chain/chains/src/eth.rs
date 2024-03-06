@@ -25,6 +25,7 @@ use sp_std::{cmp::min, convert::TryInto, str};
 // Reference constants for the chain spec
 pub const CHAIN_ID_MAINNET: u64 = 1;
 pub const CHAIN_ID_ROPSTEN: u64 = 3;
+#[deprecated]
 pub const CHAIN_ID_GOERLI: u64 = 5;
 pub const CHAIN_ID_SEPOLIA: u64 = 11155111;
 pub const CHAIN_ID_KOVAN: u64 = 42;
