@@ -22,5 +22,13 @@ codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = 
 
 [features]
 default = ['std']
-std = ['frame-support/std', 'log/std', 'sp-std/std', 'sp-io/std']
+std = [
+    'codec/std',
+    'frame-support/std',
+    'frame-system/std',
+    'hex-literal/std',
+    'log/std',
+    'sp-std/std',
+    'sp-io/std',
+]
 try-runtime = ['frame-support/try-runtime']
