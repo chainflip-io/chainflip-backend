@@ -13,6 +13,8 @@ pub struct Config;
 pub const NETWORK_NAME: &str = "Chainflip-Sisyphos";
 pub const CHAIN_TYPE: ChainType = ChainType::Live;
 pub const NETWORK_ENVIRONMENT: NetworkEnvironment = NetworkEnvironment::Testnet;
+pub const PROTOCOL_ID: &str = "flip-sisy-2";
+
 pub const GENESIS_FUNDING_AMOUNT: FlipBalance = 1_000 * FLIPPERINOS_PER_FLIP;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
