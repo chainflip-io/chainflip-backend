@@ -10,13 +10,9 @@ import {
   defaultAssetAmounts,
   assetDecimals,
 } from '../shared/utils';
-import { BtcAddressType, btcAddressTypes } from '../shared/new_btc_address';
+import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
-import {
-  performSwapViaContract,
-  approveTokenVault,
-  ContractSwapParams,
-} from '../shared/contract_swap';
+import { performSwapViaContract, ContractSwapParams } from '../shared/contract_swap';
 
 enum SolidityType {
   Uint256 = 'uint256',
