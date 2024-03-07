@@ -6,4 +6,3 @@ if lsof -Pi :8899 -sTCP:LISTEN -t >/dev/null ; then
 fi
 ./setup_for_test.sh
 ./tests/all_concurrent_tests.ts $1
-./tests/broker_fee_collection_test.ts

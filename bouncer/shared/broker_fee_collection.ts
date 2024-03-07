@@ -9,18 +9,16 @@ import {
   amountToFineAmount,
   brokerMutex,
   decodeDotAddressForContract,
-  getChainflipApi,
   handleSubstrateError,
   newAddress,
   observeBalanceIncrease,
   observeEvent,
-  runWithTimeout,
   shortChainFomAsset,
   assetDecimals,
   hexStringToBytesArray,
 } from '../shared/utils';
 import { getBalance } from '../shared/get_balance';
-import { doPerformSwap, performSwap } from '../shared/perform_swap';
+import { doPerformSwap } from '../shared/perform_swap';
 import { ApiPromise, WsProvider } from '@polkadot/api';
 
 const swapAssetAmount = {
@@ -48,7 +46,7 @@ const chainflip = await ApiPromise.create({
 });
 
 const keyring = new Keyring({ type: 'sr25519' });
-const broker1 = keyring.createFromUri('//BROKER_FEE_TEST');
+const broker_fee_test = keyring.createFromUri('//BROKER_FEE_TEST');
 
 export async function submitBrokerWithdrawal(
   asset: Asset,
@@ -58,7 +56,7 @@ export async function submitBrokerWithdrawal(
   return brokerMutex.runExclusive(async () =>
     chainflip.tx.swapping
       .withdraw(asset, addressObject)
-      .signAndSend(broker1, { nonce: -1 }, handleSubstrateError(chainflip)),
+      .signAndSend(broker_fee_test, { nonce: -1 }, handleSubstrateError(chainflip)),
   );
 }
 
@@ -67,7 +65,7 @@ export async function submitBrokerWithdrawal(
 async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   // Check the broker fees before the swap
   const earnedBrokerFeesBefore = BigInt(
-    (await chainflip.query.swapping.earnedBrokerFees(broker1.address, asset)).toString(),
+    (await chainflip.query.swapping.earnedBrokerFees(broker_fee_test.address, asset)).toString(),
   );
   console.log(`${asset} earnedBrokerFeesBefore:`, earnedBrokerFeesBefore);
 
@@ -89,6 +87,8 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
 
   const rawDepositForSwapAmount = swapAssetAmount[asset].toString();
 
+  // we need to manually create the swap channel and observe the relative event
+  // because we want to use a separate broker to not interfere with other tests
   const addressPromise = observeEvent(
     'swapping:SwapDepositAddressReady',
     chainflip,
@@ -119,7 +119,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
       commissionBps,
       null,
       0
-    ).signAndSend(broker1, { nonce: -1 }, handleSubstrateError(chainflip));
+    ).signAndSend(broker_fee_test, { nonce: -1 }, handleSubstrateError(chainflip));
   });
   
   const res = (await addressPromise).data;
@@ -150,7 +150,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
 
   // Check that the detected increase in earned broker fees matches the swap event values and it is equal to the expected amount (after the deposit fee is accounted for)
   const earnedBrokerFeesAfter = BigInt(
-    (await chainflip.query.swapping.earnedBrokerFees(broker1.address, asset)).toString(),
+    (await chainflip.query.swapping.earnedBrokerFees(broker_fee_test.address, asset)).toString(),
   );
   console.log(`${asset} earnedBrokerFeesAfter:`, earnedBrokerFeesAfter);
   const increase = earnedBrokerFeesAfter - earnedBrokerFeesBefore;
@@ -234,16 +234,16 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   );
 }
 
-async function main(): Promise<void> {
+export async function testBrokerFeeCollection(): Promise<void> {
   console.log('\x1b[36m%s\x1b[0m', '=== Running broker fee collection test ===');
   await cryptoWaitReady();
 
   // Check account role
   const role = JSON.stringify(
-    await chainflip.query.accountRoles.accountRoles(broker1.address),
+    await chainflip.query.accountRoles.accountRoles(broker_fee_test.address),
   ).replaceAll('"', '');
   console.log('Broker role:', role);
-  console.log('Broker address:', broker1.address);
+  console.log('Broker address:', broker_fee_test.address);
   assert.strictEqual(role, 'Broker', `Broker has unexpected role: ${role}`);
 
   // Run the test for all assets at the same time (with different seeds so the eth addresses are different)
@@ -259,7 +259,3 @@ async function main(): Promise<void> {
   process.exit(0);
 }
 
-runWithTimeout(main(), 1200000).catch((error) => {
-  console.error(error);
-  process.exit(-1);
-});
