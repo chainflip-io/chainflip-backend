@@ -10,7 +10,7 @@
 import { runWithTimeout, getEvmContractAddress } from '../shared/utils';
 import { getErc20Balance } from '../shared/get_erc20_balance';
 
-async function getUsdcBalanceCommand(ethereumAddress: string) {
+async function getUsdtBalanceCommand(ethereumAddress: string) {
   const contractAddress = getEvmContractAddress('Ethereum', 'USDT');
   const balance = await getErc20Balance('Ethereum', ethereumAddress, contractAddress);
   console.log(balance);
@@ -19,7 +19,7 @@ async function getUsdcBalanceCommand(ethereumAddress: string) {
 
 const ethereumAddress = process.argv[2] ?? '0';
 
-runWithTimeout(getUsdcBalanceCommand(ethereumAddress), 5000).catch((error) => {
+runWithTimeout(getUsdtBalanceCommand(ethereumAddress), 5000).catch((error) => {
   console.error(error);
   process.exit(-1);
 });
