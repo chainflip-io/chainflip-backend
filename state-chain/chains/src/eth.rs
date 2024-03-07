@@ -51,6 +51,7 @@ impl Chain for Ethereum {
 	type ReplayProtection = EvmReplayProtection;
 	type TransactionRef = H256;
 }
+
 #[derive(
 	Copy,
 	Clone,
@@ -81,20 +82,12 @@ impl EthereumTrackedData {
 	}
 }
 
-mod fees {
-	// TODO: refine these constants.
-	pub const BASE_COST_PER_BATCH: u128 = 50_000;
-	pub const GAS_COST_PER_FETCH: u128 = 30_000;
-	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
-	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
-}
-
 impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
 	fn estimate_ingress_fee(
 		&self,
 		asset: <Ethereum as Chain>::ChainAsset,
 	) -> <Ethereum as Chain>::ChainAmount {
-		use fees::*;
+		use crate::evm::fees::*;
 
 		// Note: this is taking the egress cost of the swap in the ingress currency (and basing the
 		// cost on the ingress chain).
@@ -112,7 +105,7 @@ impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
 		&self,
 		asset: <Ethereum as Chain>::ChainAsset,
 	) -> <Ethereum as Chain>::ChainAmount {
-		use fees::*;
+		use crate::evm::fees::*;
 
 		let gas_cost_per_transfer = BASE_COST_PER_BATCH +
 			match asset {

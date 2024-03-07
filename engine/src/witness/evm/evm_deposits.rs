@@ -3,15 +3,15 @@ use crate::{
 	witness::common::{RuntimeCallHasChain, RuntimeHasChain},
 };
 use anyhow::ensure;
+use cf_chains::instances::ChainInstanceFor;
 use cf_primitives::EpochIndex;
 use ethers::types::Bloom;
 use futures_core::Future;
 use sp_core::H256;
-use state_chain_runtime::PalletInstanceAlias;
 
 use crate::witness::{
 	common::chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses,
-	eth::vault::VaultEvents,
+	evm::vault::VaultEvents,
 };
 
 use std::collections::BTreeMap;
@@ -110,7 +110,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							process_call(
 								pallet_cf_ingress_egress::Call::<
 									_,
-									<Inner::Chain as PalletInstanceAlias>::Instance,
+									ChainInstanceFor<Inner::Chain>,
 								>::process_deposits {
 									deposit_witnesses: ingresses
 										.into_iter()

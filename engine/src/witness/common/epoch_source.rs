@@ -11,12 +11,14 @@ use crate::{
 		STATE_CHAIN_CONNECTION,
 	},
 };
-use cf_chains::{Chain, ChainCrypto};
+use cf_chains::{
+	instances::{ChainInstanceFor, CryptoInstanceFor},
+	Chain, ChainCrypto,
+};
 use cf_primitives::{AccountId, EpochIndex};
 use futures::StreamExt;
 use futures_core::{Future, Stream};
 use futures_util::stream;
-use state_chain_runtime::PalletInstanceAlias;
 use utilities::{spmc, task_scope::Scope};
 
 use super::{ActiveAndFuture, ExternalChain, RuntimeHasChain};
@@ -422,7 +424,7 @@ impl<'a, 'env, StateChainClient: StorageApi + Send + Sync + 'static, Info, Histo
 				 match state_chain_client
 					.storage_map_entry::<pallet_cf_vaults::VaultStartBlockNumbers<
 						state_chain_runtime::Runtime,
-						<TChain as PalletInstanceAlias>::Instance,
+						ChainInstanceFor<TChain>,
 					>>(block_hash, &epoch)
 					.await
 					.expect(STATE_CHAIN_CONNECTION)
@@ -432,7 +434,7 @@ impl<'a, 'env, StateChainClient: StorageApi + Send + Sync + 'static, Info, Histo
 						state_chain_client
 						.storage_map_entry::<pallet_cf_threshold_signature::Keys<
 							state_chain_runtime::Runtime,
-							<TChain as PalletInstanceAlias>::Instance,
+							CryptoInstanceFor<TChain>,
 						>>(block_hash, &epoch)
 						.await
 						.expect(STATE_CHAIN_CONNECTION)
@@ -447,7 +449,7 @@ impl<'a, 'env, StateChainClient: StorageApi + Send + Sync + 'static, Info, Histo
 					state_chain_client
 						.storage_map_entry::<pallet_cf_threshold_signature::Keys<
 							state_chain_runtime::Runtime,
-							<TChain as PalletInstanceAlias>::Instance,
+							CryptoInstanceFor<TChain>,
 						>>(block_hash, &(epoch + 1))
 						.await
 						.expect(STATE_CHAIN_CONNECTION)
@@ -455,7 +457,7 @@ impl<'a, 'env, StateChainClient: StorageApi + Send + Sync + 'static, Info, Histo
 					state_chain_client
 						.storage_map_entry::<pallet_cf_vaults::VaultStartBlockNumbers<
 							state_chain_runtime::Runtime,
-							<TChain as PalletInstanceAlias>::Instance,
+							ChainInstanceFor<TChain>,
 						>>(block_hash, &(epoch + 1))
 						.await
 						.expect(STATE_CHAIN_CONNECTION)

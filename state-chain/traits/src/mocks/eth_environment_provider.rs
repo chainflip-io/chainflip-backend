@@ -1,10 +1,17 @@
-use cf_chains::evm::{api::EthEnvironmentProvider, Address};
+use cf_chains::{
+	evm::{api::EvmEnvironmentProvider, Address},
+	Chain,
+};
 
 /// A mock that just returns defaults for the KeyManager and Chain ID.
-pub struct MockEthEnvironment;
+pub struct MockEvmEnvironment;
 
-impl EthEnvironmentProvider for MockEthEnvironment {
-	fn contract_address(_contract: cf_chains::eth::api::EthereumContract) -> Address {
+impl<C: Chain> EvmEnvironmentProvider<C> for MockEvmEnvironment {
+	fn key_manager_address() -> Address {
+		Default::default()
+	}
+
+	fn vault_address() -> Address {
 		Default::default()
 	}
 
@@ -12,7 +19,7 @@ impl EthEnvironmentProvider for MockEthEnvironment {
 		Default::default()
 	}
 
-	fn token_address(_asset: cf_primitives::chains::assets::eth::Asset) -> Option<Address> {
+	fn token_address(_asset: <C as Chain>::ChainAsset) -> Option<Address> {
 		Some(Default::default())
 	}
 

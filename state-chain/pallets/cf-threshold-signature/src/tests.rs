@@ -41,7 +41,7 @@ macro_rules! assert_last_events {
 		let mut events = frame_system::Pallet::<Test>::events();
 		$(let event = events.pop().map(|e| e.event).unwrap();
 		assert!(
-			matches!(event, $crate::mock::RuntimeEvent::EthereumThresholdSigner($pat)),
+			matches!(event, $crate::mock::RuntimeEvent::EvmThresholdSigner($pat)),
 			"Unexpected event {:?}",
 			event
 		);)*
@@ -56,10 +56,10 @@ fn get_ceremony_context(
 	let CeremonyContext::<Test, Instance1> {
 		request_context: RequestContext { request_id, attempt_count, .. },
 		..
-	} = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+	} = EvmThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 	assert_eq!(request_id, expected_request_id);
 	assert_eq!(attempt_count, expected_attempt);
-	EthereumThresholdSigner::pending_ceremonies(ceremony_id)
+	EvmThresholdSigner::pending_ceremonies(ceremony_id)
 		.unwrap_or_else(|| panic!("Expected a ceremony with id {ceremony_id:?}"))
 }
 
@@ -88,7 +88,7 @@ type ValidatorId = <Test as Chainflip>::ValidatorId;
 
 impl MockCfe {
 	fn process_event(&self, event: MockCfeEvent<ValidatorId>) {
-		if let MockCfeEvent::EthThresholdSignatureRequest(ThresholdSignatureRequest {
+		if let MockCfeEvent::EvmThresholdSignatureRequest(ThresholdSignatureRequest {
 			ceremony_id,
 			epoch_index: _,
 			key,
@@ -100,7 +100,7 @@ impl MockCfe {
 				CfeBehaviour::Success => {
 					// Wrong request id is a no-op
 					assert_noop!(
-						EthereumThresholdSigner::signature_success(
+						EvmThresholdSigner::signature_success(
 							RuntimeOrigin::none(),
 							ceremony_id + 1,
 							sign(payload, key)
@@ -108,7 +108,7 @@ impl MockCfe {
 						Error::<Test, Instance1>::InvalidThresholdSignatureCeremonyId
 					);
 
-					assert_ok!(EthereumThresholdSigner::signature_success(
+					assert_ok!(EvmThresholdSigner::signature_success(
 						RuntimeOrigin::none(),
 						ceremony_id,
 						sign(payload, key),
@@ -117,7 +117,7 @@ impl MockCfe {
 				CfeBehaviour::ReportFailure(bad) => {
 					// Invalid ceremony id.
 					assert_noop!(
-						EthereumThresholdSigner::report_signature_failed(
+						EvmThresholdSigner::report_signature_failed(
 							RuntimeOrigin::signed(self.id),
 							ceremony_id * 2,
 							BTreeSet::from_iter(bad.clone()),
@@ -127,7 +127,7 @@ impl MockCfe {
 
 					// Unsolicited responses are rejected.
 					assert_noop!(
-						EthereumThresholdSigner::report_signature_failed(
+						EvmThresholdSigner::report_signature_failed(
 							RuntimeOrigin::signed(signatories.iter().max().unwrap() + 1),
 							ceremony_id,
 							BTreeSet::from_iter(bad.clone()),
@@ -135,7 +135,7 @@ impl MockCfe {
 						Error::<Test, Instance1>::InvalidThresholdSignatureRespondent
 					);
 
-					assert_ok!(EthereumThresholdSigner::report_signature_failed(
+					assert_ok!(EvmThresholdSigner::report_signature_failed(
 						RuntimeOrigin::signed(self.id),
 						ceremony_id,
 						BTreeSet::from_iter(bad.clone()),
@@ -143,7 +143,7 @@ impl MockCfe {
 
 					// Can't respond twice.
 					assert_noop!(
-						EthereumThresholdSigner::report_signature_failed(
+						EvmThresholdSigner::report_signature_failed(
 							RuntimeOrigin::signed(self.id),
 							ceremony_id,
 							BTreeSet::from_iter(bad.clone()),
@@ -170,17 +170,17 @@ fn happy_path_no_callback() {
 		.execute_with_consistency_checks(|| {
 			let ceremony_id = current_ceremony_id();
 			let CeremonyContext::<Test, Instance1> { request_context, .. } =
-				EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+				EvmThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			let cfe = MockCfe { id: 1, behaviour: CfeBehaviour::Success };
 
 			run_cfes_on_sc_events(&[cfe]);
 
 			// Request is complete
-			assert!(EthereumThresholdSigner::pending_ceremonies(ceremony_id).is_none());
+			assert!(EvmThresholdSigner::pending_ceremonies(ceremony_id).is_none());
 
 			// Signature is available
 			assert!(matches!(
-				EthereumThresholdSigner::signature(request_context.request_id),
+				EvmThresholdSigner::signature(request_context.request_id),
 				AsyncResult::Ready(..)
 			));
 
@@ -200,13 +200,13 @@ fn happy_path_with_callback() {
 		.execute_with_consistency_checks(|| {
 			let ceremony_id = current_ceremony_id();
 			let CeremonyContext::<Test, Instance1> { request_context, .. } =
-				EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+				EvmThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			let cfe = MockCfe { id: 1, behaviour: CfeBehaviour::Success };
 
 			run_cfes_on_sc_events(&[cfe]);
 
 			// Request is complete
-			assert!(EthereumThresholdSigner::pending_ceremonies(ceremony_id).is_none());
+			assert!(EvmThresholdSigner::pending_ceremonies(ceremony_id).is_none());
 
 			// Callback has triggered.
 			assert!(MockCallback::has_executed(request_context.request_id));
@@ -214,11 +214,11 @@ fn happy_path_with_callback() {
 			// Signature has been consumed.
 			assert!(
 				matches!(
-					EthereumThresholdSigner::signature(request_context.request_id),
+					EvmThresholdSigner::signature(request_context.request_id),
 					AsyncResult::Void
 				),
 				"Expected Void, got {:?}",
-				EthereumThresholdSigner::signature(request_context.request_id)
+				EvmThresholdSigner::signature(request_context.request_id)
 			);
 		});
 }
@@ -235,7 +235,7 @@ fn signature_success_can_only_succeed_once_per_request() {
 		.execute_with_consistency_checks(|| {
 			let ceremony_id = current_ceremony_id();
 			let CeremonyContext::<Test, Instance1> { request_context, .. } =
-				EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+				EvmThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			assert_eq!(MockCallback::times_called(), 0);
 			// report signature success
 			run_cfes_on_sc_events(&[MockCfe { id: 1, behaviour: CfeBehaviour::Success }]);
@@ -245,7 +245,7 @@ fn signature_success_can_only_succeed_once_per_request() {
 
 			// Submit the same success again
 			assert_err!(
-				EthereumThresholdSigner::signature_success(
+				EvmThresholdSigner::signature_success(
 					RuntimeOrigin::none(),
 					ceremony_id,
 					sign(*PAYLOAD, current_agg_key())
@@ -266,8 +266,8 @@ fn keygen_verification_ceremony_calls_callback_on_failure() {
 		.with_authorities(AUTHORITIES)
 		.with_nominees(NOMINEES)
 		.execute_with_consistency_checks(|| {
-			let EpochKey { key, .. } = EthereumThresholdSigner::active_epoch_key().unwrap();
-			let request_id = EthereumThresholdSigner::trigger_key_verification(
+			let EpochKey { key, .. } = EvmThresholdSigner::active_epoch_key().unwrap();
+			let request_id = EvmThresholdSigner::trigger_key_verification(
 				key,
 				NOMINEES.into_iter().collect(),
 				false,
@@ -308,7 +308,7 @@ fn fail_path_with_timeout() {
 			let CeremonyContext::<Test, Instance1> {
 				request_context: RequestContext { request_id, attempt_count, .. },
 				..
-			} = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+			} = EvmThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			let cfes = [
 				MockCfe { id: 1, behaviour: CfeBehaviour::Timeout },
 				MockCfe { id: 2, behaviour: CfeBehaviour::ReportFailure(vec![1]) },
@@ -321,17 +321,17 @@ fn fail_path_with_timeout() {
 
 			// Account 1 has 1 blame vote against it.
 			assert_eq!(
-				EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap().blame_counts,
+				EvmThresholdSigner::pending_ceremonies(ceremony_id).unwrap().blame_counts,
 				BTreeMap::from_iter([(1, 1)])
 			);
 
 			// Callback has *not* executed but is scheduled for a retry after the timeout has
 			// elapsed.
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
-				EthereumThresholdSigner::threshold_signature_response_timeout();
+				EvmThresholdSigner::threshold_signature_response_timeout();
 
 			assert!(!MockCallback::has_executed(request_id));
-			assert_eq!(EthereumThresholdSigner::ceremony_retry_queues(retry_block).len(), 1);
+			assert_eq!(EvmThresholdSigner::ceremony_retry_queues(retry_block).len(), 1);
 
 			// The offender has not yet been reported.
 			MockOffenceReporter::assert_reported(PalletOffence::ParticipateSigningFailed, vec![]);
@@ -341,11 +341,11 @@ fn fail_path_with_timeout() {
 			<AllPalletsWithSystem as OnInitialize<_>>::on_initialize(retry_block);
 
 			// Expect the retry queue for this block to be empty.
-			assert!(EthereumThresholdSigner::ceremony_retry_queues(retry_block).is_empty());
+			assert!(EvmThresholdSigner::ceremony_retry_queues(retry_block).is_empty());
 			// Another timeout should have been added for the new ceremony.
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
-				EthereumThresholdSigner::threshold_signature_response_timeout();
-			assert!(!EthereumThresholdSigner::ceremony_retry_queues(retry_block).is_empty());
+				EvmThresholdSigner::threshold_signature_response_timeout();
+			assert!(!EvmThresholdSigner::ceremony_retry_queues(retry_block).is_empty());
 
 			// Participant 1 was reported for not responding.
 			MockOffenceReporter::assert_reported(PalletOffence::ParticipateSigningFailed, vec![1]);
@@ -374,7 +374,7 @@ fn fail_path_due_to_report_signature_failed() {
 			let CeremonyContext::<Test, Instance1> {
 				request_context: RequestContext { request_id, attempt_count, .. },
 				..
-			} = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+			} = EvmThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			let cfes = [(1, vec![]), (2, vec![1]), (3, vec![1]), (4, vec![1]), (5, vec![1])]
 				.into_iter()
 				.map(|(id, report)| MockCfe { id, behaviour: CfeBehaviour::ReportFailure(report) })
@@ -384,31 +384,29 @@ fn fail_path_due_to_report_signature_failed() {
 			run_cfes_on_sc_events(&cfes[..]);
 			let next_block_retry = frame_system::Pallet::<Test>::current_block_number() + 1;
 			let timeout_block_for_next_retry =
-				next_block_retry + EthereumThresholdSigner::threshold_signature_response_timeout();
+				next_block_retry + EvmThresholdSigner::threshold_signature_response_timeout();
 
-			assert_eq!(EthereumThresholdSigner::ceremony_retry_queues(next_block_retry).len(), 1);
+			assert_eq!(EvmThresholdSigner::ceremony_retry_queues(next_block_retry).len(), 1);
 
 			// Account 1 has 4 blame votes against it. The other accounts have no votes against
 			// them.
 			assert_eq!(
-				EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap().blame_counts,
+				EvmThresholdSigner::pending_ceremonies(ceremony_id).unwrap().blame_counts,
 				BTreeMap::from_iter([(1, 4)])
 			);
 
 			// after the block is process, we of course have moved to the next block.
 			System::set_block_number(next_block_retry);
-			<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
-				next_block_retry,
-			);
+			<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(next_block_retry);
 
 			// We did reach the reporting threshold, participant 1 was reported.
 			MockOffenceReporter::assert_reported(PalletOffence::ParticipateSigningFailed, vec![1]);
 
 			assert!(!MockCallback::has_executed(request_id));
-			assert!(EthereumThresholdSigner::ceremony_retry_queues(next_block_retry).is_empty());
+			assert!(EvmThresholdSigner::ceremony_retry_queues(next_block_retry).is_empty());
 
 			assert_eq!(
-				EthereumThresholdSigner::ceremony_retry_queues(timeout_block_for_next_retry).len(),
+				EvmThresholdSigner::ceremony_retry_queues(timeout_block_for_next_retry).len(),
 				1
 			);
 
@@ -419,16 +417,17 @@ fn fail_path_due_to_report_signature_failed() {
 			);
 
 			System::set_block_number(timeout_block_for_next_retry);
-			<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
+			<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
 				timeout_block_for_next_retry,
 			);
-			assert!(EthereumThresholdSigner::ceremony_retry_queues(timeout_block_for_next_retry)
-				.is_empty());
+			assert!(
+				EvmThresholdSigner::ceremony_retry_queues(timeout_block_for_next_retry).is_empty()
+			);
 
 			assert_eq!(
-				EthereumThresholdSigner::ceremony_retry_queues(
+				EvmThresholdSigner::ceremony_retry_queues(
 					timeout_block_for_next_retry +
-						EthereumThresholdSigner::threshold_signature_response_timeout()
+						EvmThresholdSigner::threshold_signature_response_timeout()
 				)
 				.len(),
 				1
@@ -447,7 +446,7 @@ fn test_not_enough_signers_for_threshold_schedules_retry() {
 		.execute_with_consistency_checks(|| {
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
 				<Test as crate::Config<Instance1>>::CeremonyRetryDelay::get();
-			assert_eq!(EthereumThresholdSigner::request_retry_queues(retry_block).len(), 1);
+			assert_eq!(EvmThresholdSigner::request_retry_queues(retry_block).len(), 1);
 		});
 }
 
@@ -464,19 +463,19 @@ fn test_retries() {
 			let CeremonyContext::<Test, Instance1> {
 				request_context: RequestContext { request_id, attempt_count: first_attempt, .. },
 				..
-			} = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+			} = EvmThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 
 			// Retry should re-use the same key.
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
 				ThresholdSignatureResponseTimeout::<Test, _>::get();
-			<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(retry_block);
+			<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(retry_block);
 
 			let retry_ceremony_id = current_ceremony_id();
 			let CeremonyContext::<Test, Instance1> {
 				request_context:
 					RequestContext { request_id: request_id_2, attempt_count: second_attempt, .. },
 				..
-			} = EthereumThresholdSigner::pending_ceremonies(retry_ceremony_id).unwrap();
+			} = EvmThresholdSigner::pending_ceremonies(retry_ceremony_id).unwrap();
 			assert_eq!(request_id, request_id_2);
 			assert_eq!(second_attempt, first_attempt + 1);
 			assert_eq!(retry_ceremony_id, ceremony_id + 1);
@@ -496,15 +495,15 @@ fn test_retries_for_immutable_key() {
 			let CeremonyContext::<Test, Instance1> {
 				request_context: RequestContext { request_id, attempt_count: first_attempt, .. },
 				..
-			} = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+			} = EvmThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 
 			// Pretend the key has been updated to the next one.
-			EthereumThresholdSigner::activate_new_key(MockAggKey(*b"NEXT"));
+			EvmThresholdSigner::activate_new_key(MockAggKey(*b"NEXT"));
 
 			// Retry should re-use the original key.
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
 				ThresholdSignatureResponseTimeout::<Test, _>::get();
-			<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(retry_block);
+			<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(retry_block);
 
 			let retry_ceremony_id = current_ceremony_id();
 			let CeremonyContext::<Test, Instance1> {
@@ -512,7 +511,7 @@ fn test_retries_for_immutable_key() {
 					RequestContext { request_id: request_id_2, attempt_count: second_attempt, .. },
 				key,
 				..
-			} = EthereumThresholdSigner::pending_ceremonies(retry_ceremony_id).unwrap();
+			} = EvmThresholdSigner::pending_ceremonies(retry_ceremony_id).unwrap();
 			assert_eq!(request_id, request_id_2);
 			assert_eq!(second_attempt, first_attempt + 1);
 			assert_eq!(retry_ceremony_id, ceremony_id + 1);
@@ -536,7 +535,7 @@ mod unsigned_validation {
 				MockAggKey(*b"AKEY");
 
 			let participants: BTreeSet<u64> = BTreeSet::from_iter([1, 2, 3, 4, 5, 6]);
-			EthereumThresholdSigner::trigger_key_verification(
+			EvmThresholdSigner::trigger_key_verification(
 				CUSTOM_AGG_KEY,
 				participants,
 				false,
@@ -549,10 +548,10 @@ mod unsigned_validation {
 			let ceremony_id = current_ceremony_id();
 
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
-				EthereumThresholdSigner::threshold_signature_response_timeout();
+				EvmThresholdSigner::threshold_signature_response_timeout();
 
 			// Process retries.
-			<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(retry_block);
+			<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(retry_block);
 			assert!(CeremonyRetryQueues::<Test, Instance1>::take(retry_block).is_empty());
 			assert!(PendingCeremonies::<Test, Instance1>::take(ceremony_id).is_none());
 		});
@@ -568,10 +567,10 @@ mod unsigned_validation {
 			.execute_with_consistency_checks(|| {
 				const PAYLOAD: <MockEthereumChainCrypto as ChainCrypto>::Payload = *b"OHAI";
 
-				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
+				<EvmThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
 				let ceremony_id = current_ceremony_id();
 				let EpochKey { key: current_key, .. } =
-					EthereumThresholdSigner::active_epoch_key().unwrap();
+					EvmThresholdSigner::active_epoch_key().unwrap();
 
 				assert!(
 					Test::validate_unsigned(
@@ -584,7 +583,7 @@ mod unsigned_validation {
 					)
 					.is_ok(),
 					"Validation Failed: {:?} / {:?}",
-					EthereumThresholdSigner::active_epoch_key(),
+					EvmThresholdSigner::active_epoch_key(),
 					current_key
 				);
 			});
@@ -599,7 +598,7 @@ mod unsigned_validation {
 			.with_nominees(NOMINEES)
 			.execute_with_consistency_checks(|| {
 				const PAYLOAD: <MockEthereumChainCrypto as ChainCrypto>::Payload = *b"OHAI";
-				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
+				<EvmThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
 				assert_eq!(
 					Test::validate_unsigned(
 						TransactionSource::External,
@@ -644,7 +643,7 @@ mod unsigned_validation {
 	fn reject_invalid_call() {
 		new_test_ext().execute_with_consistency_checks(|| {
 			assert_eq!(
-				EthereumThresholdSigner::validate_unsigned(
+				EvmThresholdSigner::validate_unsigned(
 					TransactionSource::External,
 					&PalletCall::report_signature_failed {
 						ceremony_id: 0,
@@ -673,7 +672,7 @@ mod unsigned_validation {
 			.with_request(b"OHAI")
 			.execute_with_consistency_checks(|| {
 				let ceremony_id = current_ceremony_id();
-				EthereumThresholdSigner::report_signature_failed(
+				EvmThresholdSigner::report_signature_failed(
 					RuntimeOrigin::signed(NOMINEES[0]),
 					ceremony_id,
 					valid_blames.iter().cloned().chain(invalid_blames.clone()).collect(),
@@ -681,7 +680,7 @@ mod unsigned_validation {
 				.unwrap();
 
 				let CeremonyContext::<Test, Instance1> { blame_counts, .. } =
-					EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+					EvmThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 				let blamed: BTreeSet<_> = blame_counts.keys().cloned().collect();
 
 				assert_eq!(&valid_blames, &blamed);
@@ -753,7 +752,7 @@ mod failure_reporting {
 #[should_panic]
 fn start_panics_with_no_candidates() {
 	new_test_ext().execute_with(|| {
-		<EthereumThresholdSigner as KeyRotator>::keygen(BTreeSet::default(), GENESIS_EPOCH);
+		<EvmThresholdSigner as KeyRotator>::keygen(BTreeSet::default(), GENESIS_EPOCH);
 	});
 }
 
@@ -763,13 +762,13 @@ fn keygen_request_emitted() {
 
 	new_test_ext().execute_with(|| {
 		let rotation_epoch = <Test as Chainflip>::EpochInfo::epoch_index();
-		<EthereumThresholdSigner as KeyRotator>::keygen(btree_candidates.clone(), rotation_epoch);
+		<EvmThresholdSigner as KeyRotator>::keygen(btree_candidates.clone(), rotation_epoch);
 		// Confirm we have a new key rotation process running
-		assert_eq!(<EthereumThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
+		assert_eq!(<EvmThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
 		let events = MockCfeInterface::take_events::<ValidatorId>();
 		assert_eq!(
 			events[0],
-			MockCfeEvent::EthKeygenRequest(KeygenRequest {
+			MockCfeEvent::EvmKeygenRequest(KeygenRequest {
 				ceremony_id: current_ceremony_id(),
 				participants: btree_candidates.clone(),
 				epoch_index: rotation_epoch,
@@ -801,13 +800,13 @@ fn keygen_handover_request_emitted() {
 		});
 		let ceremony_id = current_ceremony_id();
 
-		<EthereumThresholdSigner as KeyRotator>::key_handover(
+		<EvmThresholdSigner as KeyRotator>::key_handover(
 			authorities.clone(),
 			candidates.clone(),
 			next_epoch,
 		);
 
-		assert_eq!(<EthereumThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
+		assert_eq!(<EvmThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
 		let events = MockCfeInterface::take_events::<ValidatorId>();
 		assert_eq!(
 			events[0],
@@ -816,7 +815,7 @@ fn keygen_handover_request_emitted() {
 				ceremony_id: ceremony_id + 1,
 				from_epoch: current_epoch,
 				to_epoch: next_epoch,
-				key_to_share: EthereumThresholdSigner::active_epoch_key().unwrap().key,
+				key_to_share: EvmThresholdSigner::active_epoch_key().unwrap().key,
 				sharing_participants: authorities.clone(),
 				receiving_participants: candidates.clone(),
 				new_key: Default::default()
@@ -828,7 +827,7 @@ fn keygen_handover_request_emitted() {
 				// It should be incremented when the request is made.
 				ceremony_id: ceremony_id + 1,
 				from_epoch: current_epoch,
-				key_to_share: EthereumThresholdSigner::active_epoch_key().unwrap().key,
+				key_to_share: EvmThresholdSigner::active_epoch_key().unwrap().key,
 				sharing_participants: authorities,
 				receiving_participants: candidates,
 				new_key: Default::default(),
@@ -845,8 +844,8 @@ fn start_panics_if_called_while_key_rotation_in_progress() {
 	let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
 
 	new_test_ext().execute_with(|| {
-		<EthereumThresholdSigner as KeyRotator>::keygen(btree_candidates.clone(), GENESIS_EPOCH);
-		<EthereumThresholdSigner as KeyRotator>::keygen(btree_candidates, GENESIS_EPOCH);
+		<EvmThresholdSigner as KeyRotator>::keygen(btree_candidates.clone(), GENESIS_EPOCH);
+		<EvmThresholdSigner as KeyRotator>::keygen(btree_candidates, GENESIS_EPOCH);
 	});
 }
 
@@ -856,18 +855,18 @@ fn keygen_success_triggers_keygen_verification() {
 
 	new_test_ext().execute_with(|| {
 		let rotation_epoch_index = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
-		<EthereumThresholdSigner as KeyRotator>::keygen(candidates.clone(), rotation_epoch_index);
+		<EvmThresholdSigner as KeyRotator>::keygen(candidates.clone(), rotation_epoch_index);
 		let ceremony_id = current_ceremony_id();
 
 		for candidate in &candidates {
-			assert_ok!(EthereumThresholdSigner::report_keygen_outcome(
+			assert_ok!(EvmThresholdSigner::report_keygen_outcome(
 				RuntimeOrigin::signed(*candidate),
 				ceremony_id,
 				Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER),
 			));
 		}
 
-		<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
+		<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
 
 		assert!(matches!(
 			PendingKeyRotation::<Test, _>::get().unwrap(),
@@ -889,21 +888,21 @@ fn handover_success_triggers_handover_verification() {
 			new_public_key: NEW_AGG_PUB_KEY_PRE_HANDOVER,
 		});
 
-		<EthereumThresholdSigner as KeyRotator>::key_handover(
+		<EvmThresholdSigner as KeyRotator>::key_handover(
 			authorities.clone(),
 			candidates.clone(),
 			rotation_epoch_index,
 		);
 
 		for candidate in &all_participants {
-			assert_ok!(EthereumThresholdSigner::report_key_handover_outcome(
+			assert_ok!(EvmThresholdSigner::report_key_handover_outcome(
 				RuntimeOrigin::signed(*candidate),
 				current_ceremony_id(),
 				Ok(NEW_AGG_PUB_KEY_POST_HANDOVER),
 			));
 		}
 
-		<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
+		<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
 
 		assert!(matches!(
 			PendingKeyRotation::<Test, _>::get().unwrap(),
@@ -915,14 +914,11 @@ fn handover_success_triggers_handover_verification() {
 fn keygen_failure(
 	bad_candidates: impl IntoIterator<Item = <Test as Chainflip>::ValidatorId> + Clone,
 ) {
-	EthereumThresholdSigner::keygen(
-		BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
-		GENESIS_EPOCH,
-	);
+	EvmThresholdSigner::keygen(BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()), GENESIS_EPOCH);
 
 	let ceremony_id = current_ceremony_id();
 
-	EthereumThresholdSigner::terminate_rotation(
+	EvmThresholdSigner::terminate_rotation(
 		bad_candidates.clone(),
 		PalletEvent::KeygenFailure(ceremony_id),
 	);
@@ -930,7 +926,7 @@ fn keygen_failure(
 	assert_eq!(last_event::<Test>(), PalletEvent::KeygenFailure(ceremony_id).into());
 
 	assert_eq!(
-		EthereumThresholdSigner::status(),
+		EvmThresholdSigner::status(),
 		AsyncResult::Ready(KeyRotationStatusOuter::Failed(
 			bad_candidates.clone().into_iter().collect()
 		))
@@ -954,12 +950,12 @@ fn keygen_called_after_keygen_failure_restarts_rotation_at_keygen() {
 	new_test_ext().execute_with(|| {
 		let rotation_epoch = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
 		keygen_failure([BOB, CHARLIE]);
-		EthereumThresholdSigner::keygen(
+		EvmThresholdSigner::keygen(
 			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
 			rotation_epoch,
 		);
 
-		assert_eq!(EthereumThresholdSigner::status(), AsyncResult::Pending);
+		assert_eq!(EvmThresholdSigner::status(), AsyncResult::Pending);
 
 		assert_eq!(
 			last_event::<Test>(),
@@ -983,7 +979,7 @@ fn keygen_verification_failure() {
 			let rotation_epoch_index = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
 			let keygen_ceremony_id = 12;
 
-			let _request_id = EthereumThresholdSigner::trigger_keygen_verification(
+			let _request_id = EvmThresholdSigner::trigger_keygen_verification(
 				keygen_ceremony_id,
 				NEW_AGG_PUB_KEY_PRE_HANDOVER,
 				participants.clone(),
@@ -1002,9 +998,9 @@ fn keygen_verification_failure() {
 				.collect::<Vec<_>>();
 			run_cfes_on_sc_events(&cfes);
 
-			<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
+			<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
 				frame_system::Pallet::<Test>::current_block_number() +
-					EthereumThresholdSigner::threshold_signature_response_timeout(),
+					EvmThresholdSigner::threshold_signature_response_timeout(),
 			);
 
 			println!("{:?}", System::events());
@@ -1015,7 +1011,7 @@ fn keygen_verification_failure() {
 			);
 			MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, blamed.clone());
 			assert_eq!(
-				EthereumThresholdSigner::status(),
+				EvmThresholdSigner::status(),
 				AsyncResult::Ready(KeyRotationStatusOuter::Failed(blamed.into_iter().collect()))
 			)
 		});
@@ -1025,7 +1021,7 @@ fn keygen_verification_failure() {
 fn no_active_rotation() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			EthereumThresholdSigner::report_keygen_outcome(
+			EvmThresholdSigner::report_keygen_outcome(
 				RuntimeOrigin::signed(ALICE),
 				1,
 				Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
@@ -1034,7 +1030,7 @@ fn no_active_rotation() {
 		);
 
 		assert_noop!(
-			EthereumThresholdSigner::report_keygen_outcome(
+			EvmThresholdSigner::report_keygen_outcome(
 				RuntimeOrigin::signed(ALICE),
 				1,
 				Err(Default::default())
@@ -1043,7 +1039,7 @@ fn no_active_rotation() {
 		);
 
 		assert_noop!(
-			EthereumThresholdSigner::report_key_handover_outcome(
+			EvmThresholdSigner::report_key_handover_outcome(
 				RuntimeOrigin::signed(ALICE),
 				1,
 				Err(Default::default())
@@ -1052,7 +1048,7 @@ fn no_active_rotation() {
 		);
 
 		assert_noop!(
-			EthereumThresholdSigner::report_key_handover_outcome(
+			EvmThresholdSigner::report_key_handover_outcome(
 				RuntimeOrigin::signed(ALICE),
 				1,
 				Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)
@@ -1065,13 +1061,13 @@ fn no_active_rotation() {
 #[test]
 fn cannot_report_keygen_success_twice() {
 	new_test_ext().execute_with(|| {
-		<EthereumThresholdSigner as KeyRotator>::keygen(
+		<EvmThresholdSigner as KeyRotator>::keygen(
 			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
 			GENESIS_EPOCH,
 		);
 		let ceremony_id = current_ceremony_id();
 
-		assert_ok!(EthereumThresholdSigner::report_keygen_outcome(
+		assert_ok!(EvmThresholdSigner::report_keygen_outcome(
 			RuntimeOrigin::signed(ALICE),
 			ceremony_id,
 			Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
@@ -1079,27 +1075,27 @@ fn cannot_report_keygen_success_twice() {
 
 		// Can't report twice.
 		assert_noop!(
-			EthereumThresholdSigner::report_keygen_outcome(
+			EvmThresholdSigner::report_keygen_outcome(
 				RuntimeOrigin::signed(ALICE),
 				ceremony_id,
 				Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
 			),
 			Error::<Test, _>::InvalidKeygenRespondent
 		);
-		assert_eq!(<EthereumThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
+		assert_eq!(<EvmThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
 	});
 }
 
 #[test]
 fn cannot_report_two_different_keygen_outcomes() {
 	new_test_ext().execute_with(|| {
-		<EthereumThresholdSigner as KeyRotator>::keygen(
+		<EvmThresholdSigner as KeyRotator>::keygen(
 			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
 			GENESIS_EPOCH,
 		);
 		let ceremony_id = current_ceremony_id();
 
-		assert_ok!(EthereumThresholdSigner::report_keygen_outcome(
+		assert_ok!(EvmThresholdSigner::report_keygen_outcome(
 			RuntimeOrigin::signed(ALICE),
 			ceremony_id,
 			Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
@@ -1107,27 +1103,27 @@ fn cannot_report_two_different_keygen_outcomes() {
 
 		// Can't report failure after reporting success
 		assert_noop!(
-			EthereumThresholdSigner::report_keygen_outcome(
+			EvmThresholdSigner::report_keygen_outcome(
 				RuntimeOrigin::signed(ALICE),
 				ceremony_id,
 				Err(BTreeSet::from_iter([BOB, CHARLIE]))
 			),
 			Error::<Test, _>::InvalidKeygenRespondent
 		);
-		assert_eq!(<EthereumThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
+		assert_eq!(<EvmThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
 	});
 }
 
 #[test]
 fn only_candidates_can_report_keygen_outcome() {
 	new_test_ext().execute_with(|| {
-		<EthereumThresholdSigner as KeyRotator>::keygen(
+		<EvmThresholdSigner as KeyRotator>::keygen(
 			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
 			GENESIS_EPOCH,
 		);
 		let ceremony_id = current_ceremony_id();
 
-		assert_ok!(EthereumThresholdSigner::report_keygen_outcome(
+		assert_ok!(EvmThresholdSigner::report_keygen_outcome(
 			RuntimeOrigin::signed(ALICE),
 			ceremony_id,
 			Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
@@ -1141,14 +1137,14 @@ fn only_candidates_can_report_keygen_outcome() {
 		.unwrap();
 		assert!(!ALL_CANDIDATES.contains(&non_candidate));
 		assert_noop!(
-			EthereumThresholdSigner::report_keygen_outcome(
+			EvmThresholdSigner::report_keygen_outcome(
 				RuntimeOrigin::signed(non_candidate),
 				ceremony_id,
 				Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
 			),
 			Error::<Test, _>::InvalidKeygenRespondent
 		);
-		assert_eq!(<EthereumThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
+		assert_eq!(<EvmThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
 	});
 }
 
@@ -1161,9 +1157,9 @@ fn can_only_blame_keygen_candidates() {
 		assert!(valid_blames.is_subset(&candidates));
 		assert!(invalid_blames.is_disjoint(&candidates));
 
-		<EthereumThresholdSigner as KeyRotator>::keygen(candidates, GENESIS_EPOCH);
+		<EvmThresholdSigner as KeyRotator>::keygen(candidates, GENESIS_EPOCH);
 
-		EthereumThresholdSigner::report_keygen_outcome(
+		EvmThresholdSigner::report_keygen_outcome(
 			RuntimeOrigin::signed(ALICE),
 			current_ceremony_id(),
 			// Report both the valid and invalid offenders
@@ -1186,13 +1182,13 @@ fn can_only_blame_keygen_candidates() {
 #[test]
 fn reporting_keygen_outcome_must_be_for_pending_ceremony_id() {
 	new_test_ext().execute_with(|| {
-		<EthereumThresholdSigner as KeyRotator>::keygen(
+		<EvmThresholdSigner as KeyRotator>::keygen(
 			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
 			GENESIS_EPOCH,
 		);
 		let ceremony_id = current_ceremony_id();
 
-		assert_ok!(EthereumThresholdSigner::report_keygen_outcome(
+		assert_ok!(EvmThresholdSigner::report_keygen_outcome(
 			RuntimeOrigin::signed(ALICE),
 			ceremony_id,
 			Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
@@ -1200,38 +1196,38 @@ fn reporting_keygen_outcome_must_be_for_pending_ceremony_id() {
 
 		// Ceremony id in the past (not the pending one we're waiting for)
 		assert_noop!(
-			EthereumThresholdSigner::report_keygen_outcome(
+			EvmThresholdSigner::report_keygen_outcome(
 				RuntimeOrigin::signed(ALICE),
 				ceremony_id - 1,
 				Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
 			),
 			Error::<Test, _>::InvalidKeygenCeremonyId
 		);
-		assert_eq!(<EthereumThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
+		assert_eq!(<EvmThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
 
 		// Ceremony id in the future
 		assert_noop!(
-			EthereumThresholdSigner::report_keygen_outcome(
+			EvmThresholdSigner::report_keygen_outcome(
 				RuntimeOrigin::signed(ALICE),
 				ceremony_id + 1,
 				Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
 			),
 			Error::<Test, _>::InvalidKeygenCeremonyId
 		);
-		assert_eq!(<EthereumThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
+		assert_eq!(<EvmThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
 	});
 }
 
 #[test]
 fn cannot_report_key_handover_outcome_when_awaiting_keygen() {
 	new_test_ext().execute_with(|| {
-		<EthereumThresholdSigner as KeyRotator>::keygen(
+		<EvmThresholdSigner as KeyRotator>::keygen(
 			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
 			<Test as Chainflip>::EpochInfo::epoch_index() + 1,
 		);
 
 		assert_noop!(
-			EthereumThresholdSigner::report_key_handover_outcome(
+			EvmThresholdSigner::report_key_handover_outcome(
 				RuntimeOrigin::signed(ALICE),
 				current_ceremony_id(),
 				Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)
@@ -1243,7 +1239,7 @@ fn cannot_report_key_handover_outcome_when_awaiting_keygen() {
 
 fn do_full_key_rotation() {
 	let rotation_epoch = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
-	<EthereumThresholdSigner as KeyRotator>::keygen(
+	<EvmThresholdSigner as KeyRotator>::keygen(
 		BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
 		rotation_epoch,
 	);
@@ -1251,22 +1247,22 @@ fn do_full_key_rotation() {
 
 	assert_eq!(KeygenResolutionPendingSince::<Test, _>::get(), 1);
 
-	assert_ok!(EthereumThresholdSigner::report_keygen_outcome(
+	assert_ok!(EvmThresholdSigner::report_keygen_outcome(
 		RuntimeOrigin::signed(ALICE),
 		keygen_ceremony_id,
 		Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
 	));
 
-	assert_eq!(<EthereumThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
+	assert_eq!(<EvmThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
 
-	<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
+	<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
 	// After on initialise we obviously still don't have enough votes.
 	// So nothing should have changed.
 	assert!(KeygenResolutionPendingSince::<Test, _>::exists());
-	assert_eq!(<EthereumThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
+	assert_eq!(<EvmThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
 
 	// Bob agrees.
-	assert_ok!(EthereumThresholdSigner::report_keygen_outcome(
+	assert_ok!(EvmThresholdSigner::report_keygen_outcome(
 		RuntimeOrigin::signed(BOB),
 		keygen_ceremony_id,
 		Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
@@ -1274,13 +1270,13 @@ fn do_full_key_rotation() {
 
 	// A resolution is still pending - we require 100% response rate.
 	assert!(KeygenResolutionPendingSince::<Test, _>::exists());
-	assert_eq!(<EthereumThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
-	<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
+	assert_eq!(<EvmThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
+	<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
 	assert!(KeygenResolutionPendingSince::<Test, _>::exists());
-	assert_eq!(<EthereumThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
+	assert_eq!(<EvmThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
 
 	// Charlie agrees.
-	assert_ok!(EthereumThresholdSigner::report_keygen_outcome(
+	assert_ok!(EvmThresholdSigner::report_keygen_outcome(
 		RuntimeOrigin::signed(CHARLIE),
 		keygen_ceremony_id,
 		Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
@@ -1288,7 +1284,7 @@ fn do_full_key_rotation() {
 
 	// This time we should have enough votes for consensus.
 	assert!(KeygenResolutionPendingSince::<Test, _>::exists());
-	assert_eq!(<EthereumThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
+	assert_eq!(<EvmThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
 	if let KeyRotationStatus::AwaitingKeygen {
 		ceremony_id: keygen_ceremony_id_from_status,
 		response_status,
@@ -1309,7 +1305,7 @@ fn do_full_key_rotation() {
 	} else {
 		panic!("Expected to be in AwaitingKeygen state");
 	}
-	<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
+	<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
 
 	assert!(matches!(
 		PendingKeyRotation::<Test, _>::get().unwrap(),
@@ -1323,7 +1319,7 @@ fn do_full_key_rotation() {
 	run_cfes_on_sc_events(&cfes);
 
 	assert_eq!(
-		<EthereumThresholdSigner as KeyRotator>::status(),
+		<EvmThresholdSigner as KeyRotator>::status(),
 		AsyncResult::Ready(KeyRotationStatusOuter::KeygenComplete)
 	);
 
@@ -1333,24 +1329,24 @@ fn do_full_key_rotation() {
 	));
 
 	const SHARING_PARTICIPANTS: [u64; 2] = [ALICE, BOB];
-	EthereumThresholdSigner::key_handover(
+	EvmThresholdSigner::key_handover(
 		BTreeSet::from(SHARING_PARTICIPANTS),
 		BTreeSet::from_iter(ALL_CANDIDATES.iter().copied()),
 		rotation_epoch,
 	);
-	assert_eq!(<EthereumThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
+	assert_eq!(<EvmThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
 
 	let handover_ceremony_id = current_ceremony_id();
 	for p in ALL_CANDIDATES {
-		assert_ok!(EthereumThresholdSigner::report_key_handover_outcome(
+		assert_ok!(EvmThresholdSigner::report_key_handover_outcome(
 			RuntimeOrigin::signed(*p),
 			handover_ceremony_id,
 			Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)
 		));
 	}
 
-	<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
-	assert_eq!(<EthereumThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
+	<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
+	assert_eq!(<EvmThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
 
 	assert_last_events!(
 		crate::Event::ThresholdSignatureRequest { .. },
@@ -1365,7 +1361,7 @@ fn do_full_key_rotation() {
 	run_cfes_on_sc_events(&cfes);
 
 	assert_eq!(
-		<EthereumThresholdSigner as KeyRotator>::status(),
+		<EvmThresholdSigner as KeyRotator>::status(),
 		AsyncResult::Ready(KeyRotationStatusOuter::KeyHandoverComplete)
 	);
 
@@ -1380,7 +1376,7 @@ fn do_full_key_rotation() {
 	));
 
 	// Called by validator pallet
-	EthereumThresholdSigner::activate_keys();
+	EvmThresholdSigner::activate_keys();
 
 	assert!(!KeygenResolutionPendingSince::<Test, _>::exists());
 	// Voting has been cleared.
@@ -1388,7 +1384,7 @@ fn do_full_key_rotation() {
 	assert!(!KeygenFailureVoters::<Test, _>::exists());
 
 	assert_eq!(
-		<EthereumThresholdSigner as KeyRotator>::status(),
+		<EvmThresholdSigner as KeyRotator>::status(),
 		AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete)
 	);
 	MockVaultActivator::set_activation_completed();
@@ -1396,7 +1392,7 @@ fn do_full_key_rotation() {
 	assert_last_events!(crate::Event::KeyRotationCompleted);
 	assert_eq!(PendingKeyRotation::<Test, _>::get(), Some(KeyRotationStatus::Complete));
 	assert_eq!(
-		EthereumThresholdSigner::status(),
+		EvmThresholdSigner::status(),
 		AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete)
 	);
 }
@@ -1409,7 +1405,7 @@ fn keygen_report_success() {
 #[test]
 fn keygen_report_failure() {
 	new_test_ext().execute_with(|| {
-		<EthereumThresholdSigner as KeyRotator>::keygen(
+		<EvmThresholdSigner as KeyRotator>::keygen(
 			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
 			GENESIS_EPOCH,
 		);
@@ -1417,19 +1413,19 @@ fn keygen_report_failure() {
 
 		assert_eq!(KeygenResolutionPendingSince::<Test, _>::get(), 1);
 
-		assert_ok!(EthereumThresholdSigner::report_keygen_outcome(
+		assert_ok!(EvmThresholdSigner::report_keygen_outcome(
 			RuntimeOrigin::signed(ALICE),
 			ceremony_id,
 			Err(BTreeSet::from_iter([CHARLIE]))
 		));
-		assert_eq!(<EthereumThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
+		assert_eq!(<EvmThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
 
-		<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
+		<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
 		assert!(KeygenResolutionPendingSince::<Test, _>::exists());
-		assert_eq!(<EthereumThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
+		assert_eq!(<EvmThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
 
 		// Bob agrees.
-		assert_ok!(EthereumThresholdSigner::report_keygen_outcome(
+		assert_ok!(EvmThresholdSigner::report_keygen_outcome(
 			RuntimeOrigin::signed(BOB),
 			ceremony_id,
 			Err(BTreeSet::from_iter([CHARLIE]))
@@ -1437,13 +1433,13 @@ fn keygen_report_failure() {
 
 		// A resolution is still pending - we expect 100% response rate.
 		assert!(KeygenResolutionPendingSince::<Test, _>::exists());
-		assert_eq!(<EthereumThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
-		<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
+		assert_eq!(<EvmThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
+		<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
 		assert!(KeygenResolutionPendingSince::<Test, _>::exists());
-		assert_eq!(<EthereumThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
+		assert_eq!(<EvmThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
 
 		// Charlie agrees.
-		assert_ok!(EthereumThresholdSigner::report_keygen_outcome(
+		assert_ok!(EvmThresholdSigner::report_keygen_outcome(
 			RuntimeOrigin::signed(CHARLIE),
 			ceremony_id,
 			Err(BTreeSet::from_iter([CHARLIE]))
@@ -1451,11 +1447,11 @@ fn keygen_report_failure() {
 
 		// This time we should have enough votes for consensus.
 		assert!(KeygenResolutionPendingSince::<Test, _>::exists());
-		assert_eq!(<EthereumThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
-		<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
+		assert_eq!(<EvmThresholdSigner as KeyRotator>::status(), AsyncResult::Pending);
+		<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
 		assert!(!KeygenResolutionPendingSince::<Test, _>::exists());
 		assert_eq!(
-			EthereumThresholdSigner::status(),
+			EvmThresholdSigner::status(),
 			AsyncResult::Ready(KeyRotationStatusOuter::Failed(BTreeSet::from([CHARLIE])))
 		);
 
@@ -1490,13 +1486,13 @@ where
 
 	// > 25 blocks later we should resolve an error.
 	assert!(PendingSince::exists());
-	<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
+	<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
 	assert!(PendingSince::exists());
-	<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
+	<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
 		MOCK_KEYGEN_RESPONSE_TIMEOUT,
 	);
 	assert!(PendingSince::exists());
-	<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
+	<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
 		MOCK_KEYGEN_RESPONSE_TIMEOUT + 1,
 	);
 	assert!(!PendingSince::exists());
@@ -1508,12 +1504,12 @@ where
 #[test]
 fn test_keygen_timeout_period() {
 	new_test_ext().execute_with(|| {
-		<EthereumThresholdSigner as KeyRotator>::keygen(
+		<EvmThresholdSigner as KeyRotator>::keygen(
 			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
 			GENESIS_EPOCH,
 		);
 		test_key_ceremony_timeout_period::<KeygenResolutionPendingSince<Test, _>, _>(
-			EthereumThresholdSigner::report_keygen_outcome,
+			EvmThresholdSigner::report_keygen_outcome,
 		)
 	});
 }
@@ -1525,9 +1521,9 @@ fn test_key_handover_timeout_period() {
 		PendingKeyRotation::<Test, _>::put(KeyRotationStatus::KeygenVerificationComplete {
 			new_public_key: Default::default(),
 		});
-		<EthereumThresholdSigner as KeyRotator>::key_handover(candidates.clone(), candidates, 2);
+		<EvmThresholdSigner as KeyRotator>::key_handover(candidates.clone(), candidates, 2);
 		test_key_ceremony_timeout_period::<KeyHandoverResolutionPendingSince<Test, _>, _>(
-			EthereumThresholdSigner::report_key_handover_outcome,
+			EvmThresholdSigner::report_key_handover_outcome,
 		)
 	});
 }
@@ -1553,7 +1549,7 @@ mod key_rotation {
 			let rotation_epoch_index = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
 
 			assert_noop!(
-				EthereumThresholdSigner::report_keygen_outcome(
+				EvmThresholdSigner::report_keygen_outcome(
 					RuntimeOrigin::signed(ALICE),
 					Default::default(),
 					Err(Default::default()),
@@ -1561,9 +1557,9 @@ mod key_rotation {
 				Error::<Test, _>::NoActiveRotation
 			);
 
-			<EthereumThresholdSigner as KeyRotator>::keygen(candidates.clone(), GENESIS_EPOCH);
+			<EvmThresholdSigner as KeyRotator>::keygen(candidates.clone(), GENESIS_EPOCH);
 			let ceremony_id = current_ceremony_id();
-			EthereumThresholdSigner::trigger_keygen_verification(
+			EvmThresholdSigner::trigger_keygen_verification(
 				ceremony_id,
 				NEW_AGG_PUB_KEY_PRE_HANDOVER,
 				candidates.clone(),
@@ -1576,7 +1572,7 @@ mod key_rotation {
 				.collect::<Vec<_>>();
 			run_cfes_on_sc_events(&cfes);
 
-			EthereumThresholdSigner::key_handover(
+			EvmThresholdSigner::key_handover(
 				authorities.clone(),
 				candidates.clone(),
 				rotation_epoch_index,
@@ -1584,14 +1580,14 @@ mod key_rotation {
 
 			// Note that we require all participants to respond
 			for candidate in authorities.union(&candidates) {
-				assert_ok!(EthereumThresholdSigner::report_key_handover_outcome(
+				assert_ok!(EvmThresholdSigner::report_key_handover_outcome(
 					RuntimeOrigin::signed(*candidate),
 					current_ceremony_id(),
 					key_handover_outcome.clone()
 				));
 			}
 
-			<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
+			<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
 		})
 	}
 
@@ -1631,8 +1627,8 @@ mod key_rotation {
 			run_cfes_on_sc_events(&cfes);
 
 			BlockHeightProvider::<MockEthereum>::set_block_height(HANDOVER_ACTIVATION_BLOCK);
-			EthereumThresholdSigner::activate_keys();
-			EthereumThresholdSigner::status();
+			EvmThresholdSigner::activate_keys();
+			EvmThresholdSigner::status();
 
 			assert!(matches!(
 				PendingKeyRotation::<Test, _>::get().unwrap(),
@@ -1652,21 +1648,21 @@ mod key_rotation {
 
 			// Start handover again, but successful this time.
 			let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
-			EthereumThresholdSigner::key_handover(
+			EvmThresholdSigner::key_handover(
 				btree_candidates.clone(),
 				btree_candidates.clone(),
 				<Test as Chainflip>::EpochInfo::epoch_index() + 1,
 			);
 
 			for candidate in btree_candidates {
-				assert_ok!(EthereumThresholdSigner::report_key_handover_outcome(
+				assert_ok!(EvmThresholdSigner::report_key_handover_outcome(
 					RuntimeOrigin::signed(candidate),
 					current_ceremony_id(),
 					Ok(NEW_AGG_PUB_KEY_POST_HANDOVER),
 				));
 			}
 
-			<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
+			<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
 
 			let cfes = [ALICE]
 				.iter()
@@ -1674,8 +1670,8 @@ mod key_rotation {
 				.collect::<Vec<_>>();
 			run_cfes_on_sc_events(&cfes);
 
-			EthereumThresholdSigner::activate_keys();
-			EthereumThresholdSigner::status();
+			EvmThresholdSigner::activate_keys();
+			EvmThresholdSigner::status();
 		});
 
 		final_checks(ext);
@@ -1716,9 +1712,9 @@ mod key_rotation {
 				.collect::<Vec<_>>();
 			run_cfes_on_sc_events(&cfes);
 
-			<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
+			<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
 				frame_system::Pallet::<Test>::current_block_number() +
-					EthereumThresholdSigner::threshold_signature_response_timeout(),
+					EvmThresholdSigner::threshold_signature_response_timeout(),
 			);
 
 			assert_last_events!(
@@ -1731,7 +1727,7 @@ mod key_rotation {
 
 			let offenders = BTreeSet::from_iter(offenders);
 			assert_eq!(
-				EthereumThresholdSigner::status(),
+				EvmThresholdSigner::status(),
 				AsyncResult::Ready(KeyRotationStatusOuter::Failed(offenders.clone()))
 			);
 
@@ -1753,11 +1749,11 @@ mod key_rotation {
 				new_public_key: NEW_AGG_PUB_KEY_POST_HANDOVER,
 			});
 			// Start ActivatingKeys
-			EthereumThresholdSigner::activate_keys();
+			EvmThresholdSigner::activate_keys();
 			assert_eq!(
 				PendingKeyRotation::<Test, _>::get().unwrap(),
 				KeyRotationStatus::AwaitingActivation {
-					request_id: Some(4),
+					request_ids: vec![4],
 					new_public_key: NEW_AGG_PUB_KEY_POST_HANDOVER
 				}
 			);
@@ -1766,10 +1762,10 @@ mod key_rotation {
 			assert_eq!(MockVaultActivator::status(), AsyncResult::Pending);
 
 			// Request is complete
-			assert_eq!(EthereumThresholdSigner::signature(4), AsyncResult::Void);
+			assert_eq!(EvmThresholdSigner::signature(4), AsyncResult::Void);
 
 			// Proceed to complete activation
-			EthereumThresholdSigner::status();
+			EvmThresholdSigner::status();
 
 			assert_eq!(MockVaultActivator::status(), AsyncResult::Ready(()));
 		});
@@ -1782,14 +1778,14 @@ fn set_keygen_response_timeout_works() {
 	new_test_ext_no_key().execute_with(|| {
 		let init_timeout = KeygenResponseTimeout::<Test, _>::get();
 
-		EthereumThresholdSigner::set_keygen_response_timeout(RuntimeOrigin::root(), init_timeout)
+		EvmThresholdSigner::set_keygen_response_timeout(RuntimeOrigin::root(), init_timeout)
 			.unwrap();
 
 		assert!(maybe_last_event::<Test>().is_none());
 
 		let new_timeout = init_timeout + 1;
 
-		EthereumThresholdSigner::set_keygen_response_timeout(RuntimeOrigin::root(), new_timeout)
+		EvmThresholdSigner::set_keygen_response_timeout(RuntimeOrigin::root(), new_timeout)
 			.unwrap();
 
 		assert_last_events!(crate::Event::KeygenResponseTimeoutUpdated { .. });
@@ -1826,39 +1822,39 @@ fn dont_slash_in_safe_mode() {
 fn can_recover_from_abort_key_rotation_after_failed_key_gen() {
 	new_test_ext().execute_with(|| {
 		let rotation_epoch = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
-		<EthereumThresholdSigner as KeyRotator>::keygen(
+		<EvmThresholdSigner as KeyRotator>::keygen(
 			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
 			rotation_epoch,
 		);
 		let keygen_ceremony_id = current_ceremony_id();
 
-		assert_ok!(EthereumThresholdSigner::report_keygen_outcome(
+		assert_ok!(EvmThresholdSigner::report_keygen_outcome(
 			RuntimeOrigin::signed(ALICE),
 			keygen_ceremony_id,
 			Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
 		));
-		assert_ok!(EthereumThresholdSigner::report_keygen_outcome(
+		assert_ok!(EvmThresholdSigner::report_keygen_outcome(
 			RuntimeOrigin::signed(BOB),
 			keygen_ceremony_id,
 			Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
 		));
-		assert_ok!(EthereumThresholdSigner::report_keygen_outcome(
+		assert_ok!(EvmThresholdSigner::report_keygen_outcome(
 			RuntimeOrigin::signed(CHARLIE),
 			keygen_ceremony_id,
 			Err(Default::default())
 		));
-		<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(2);
+		<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(2);
 		assert!(matches!(
 			PendingKeyRotation::<Test, _>::get(),
 			Some(KeyRotationStatus::Failed { .. })
 		));
 
 		// Abort by resetting key rotation state
-		EthereumThresholdSigner::reset_key_rotation();
+		EvmThresholdSigner::reset_key_rotation();
 
 		assert!(PendingKeyRotation::<Test, _>::get().is_none());
 		assert_eq!(KeygenResolutionPendingSince::<Test, _>::get(), 0);
-		assert_eq!(EthereumThresholdSigner::status(), AsyncResult::Void);
+		assert_eq!(EvmThresholdSigner::status(), AsyncResult::Void);
 
 		// Can restart the key rotation and succeed.
 		do_full_key_rotation();
@@ -1869,21 +1865,21 @@ fn can_recover_from_abort_key_rotation_after_failed_key_gen() {
 fn can_recover_from_abort_key_rotation_after_key_verification() {
 	new_test_ext().execute_with(|| {
 		let rotation_epoch = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
-		<EthereumThresholdSigner as KeyRotator>::keygen(
+		<EvmThresholdSigner as KeyRotator>::keygen(
 			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
 			rotation_epoch,
 		);
 		let keygen_ceremony_id = current_ceremony_id();
 
 		for p in ALL_CANDIDATES {
-			assert_ok!(EthereumThresholdSigner::report_keygen_outcome(
+			assert_ok!(EvmThresholdSigner::report_keygen_outcome(
 				RuntimeOrigin::signed(*p),
 				keygen_ceremony_id,
 				Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
 			));
 		}
 
-		<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
+		<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
 
 		let cfes = [ALICE]
 			.iter()
@@ -1897,11 +1893,11 @@ fn can_recover_from_abort_key_rotation_after_key_verification() {
 		));
 
 		// Abort the key rotation now
-		EthereumThresholdSigner::reset_key_rotation();
+		EvmThresholdSigner::reset_key_rotation();
 
 		assert!(PendingKeyRotation::<Test, _>::get().is_none());
 		assert_eq!(KeygenResolutionPendingSince::<Test, _>::get(), 0);
-		assert_eq!(EthereumThresholdSigner::status(), AsyncResult::Void);
+		assert_eq!(EvmThresholdSigner::status(), AsyncResult::Void);
 
 		// Can restart the key rotation and succeed.
 		do_full_key_rotation();
@@ -1912,20 +1908,20 @@ fn can_recover_from_abort_key_rotation_after_key_verification() {
 fn can_recover_from_abort_key_rotation_after_key_handover_failed() {
 	new_test_ext().execute_with(|| {
 		let rotation_epoch = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
-		<EthereumThresholdSigner as KeyRotator>::keygen(
+		<EvmThresholdSigner as KeyRotator>::keygen(
 			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
 			rotation_epoch,
 		);
 		let keygen_ceremony_id = current_ceremony_id();
 		for p in ALL_CANDIDATES {
-			assert_ok!(EthereumThresholdSigner::report_keygen_outcome(
+			assert_ok!(EvmThresholdSigner::report_keygen_outcome(
 				RuntimeOrigin::signed(*p),
 				keygen_ceremony_id,
 				Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
 			));
 		}
 
-		<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
+		<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
 
 		let cfes = [ALICE]
 			.iter()
@@ -1935,7 +1931,7 @@ fn can_recover_from_abort_key_rotation_after_key_handover_failed() {
 
 		// Key handover
 		const SHARING_PARTICIPANTS: [u64; 2] = [ALICE, BOB];
-		EthereumThresholdSigner::key_handover(
+		EvmThresholdSigner::key_handover(
 			BTreeSet::from(SHARING_PARTICIPANTS),
 			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
 			rotation_epoch,
@@ -1944,25 +1940,25 @@ fn can_recover_from_abort_key_rotation_after_key_handover_failed() {
 		let handover_ceremony_id = current_ceremony_id();
 
 		for p in ALL_CANDIDATES {
-			assert_ok!(EthereumThresholdSigner::report_key_handover_outcome(
+			assert_ok!(EvmThresholdSigner::report_key_handover_outcome(
 				RuntimeOrigin::signed(*p),
 				handover_ceremony_id,
 				Err(Default::default())
 			));
 		}
 
-		<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(2);
+		<EvmThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(2);
 		assert!(matches!(
 			PendingKeyRotation::<Test, _>::get(),
 			Some(KeyRotationStatus::KeyHandoverFailed { .. })
 		));
 
 		// Abort by resetting key rotation state
-		EthereumThresholdSigner::reset_key_rotation();
+		EvmThresholdSigner::reset_key_rotation();
 
 		assert!(PendingKeyRotation::<Test, _>::get().is_none());
 		assert_eq!(KeygenResolutionPendingSince::<Test, _>::get(), 0);
-		assert_eq!(EthereumThresholdSigner::status(), AsyncResult::Void);
+		assert_eq!(EvmThresholdSigner::status(), AsyncResult::Void);
 
 		// Can restart the key rotation and succeed.
 		do_full_key_rotation();
