@@ -21,6 +21,7 @@ macro_rules! assets {
 			Chain {
 				variant: $chain_variant:ident,
 				member_and_module: $chain_member_and_module:ident,
+				string: $chain_string:literal $((aliases: [$($chain_string_aliases:literal),+$(,)?]))?,
 				json: $chain_json:literal,
 				assets: [
 					$(
@@ -118,11 +119,22 @@ macro_rules! assets {
 				type Err = &'static str;
 
 				fn from_str(s: &str) -> Result<Self, Self::Err> {
-					match s {
-						$(
-							$($asset_string $($(| $asset_string_aliases)+)? => Ok(Asset::$asset_variant),)*
-						)*
-						_ => Err("Unrecognized asset"),
+					if let Some((prefix, suffix)) = s.split_once('-') {
+						match prefix {
+							$(
+								$chain_string => {
+									match suffix {
+										$(
+											$asset_string $($(|$asset_string_aliases)+)? => Ok(Self::$asset_variant),
+										)+
+										_ => Err(concat!("Unrecognized ", $chain_string, " asset"))
+									}
+								},
+							)+
+							_ => Err("Unrecognized chain")
+						}
+					} else {
+						Err("Unrecognized asset, expected the format \"<chain>:<asset>\"")
 					}
 				}
 			}
@@ -507,6 +519,7 @@ assets!(
 	Chain {
 		variant: Ethereum,
 		member_and_module: eth,
+		string: "Ethereum" (aliases: ["ETHEREUM", "ethereum"]),
 		json: "Ethereum",
 		assets: [
 			Asset {
@@ -541,6 +554,7 @@ assets!(
 	Chain {
 		variant: Polkadot,
 		member_and_module: dot,
+		string: "Polkadot" (aliases: ["POLKADOT", "polkadot"]),
 		json: "Polkadot",
 		assets: [
 			Asset {
@@ -557,6 +571,7 @@ assets!(
 	Chain {
 		variant: Bitcoin,
 		member_and_module: btc,
+		string: "Bitcoin" (aliases: ["BITCOIN", "bitcoin"]),
 		json: "Bitcoin",
 		assets: [
 			Asset {
@@ -570,11 +585,12 @@ assets!(
 			},
 		],
 	},
-    Chain {
-        variant: Arbitrum,
-        member_and_module: arb,
-        json: "Arbitrum",
-        assets: [
+	Chain {
+		variant: Arbitrum,
+		member_and_module: arb,
+		string: "Arbitrum" (aliases: ["ARBITRUM", "arbitrum"]),
+		json: "Arbitrum",
+		assets: [
 			Asset {
 				variant: ArbEth,
 				member: eth,
