@@ -208,49 +208,55 @@ export async function testAllSwaps() {
   //              at ApiPromise.__internal__onProviderConnect (file:///home/albert/work/chainflip/backend_arbitrum/chainflip-backend/bouncer/node_modules/.pnpm/@polkadot+api@10.7.2/node_modules/@polkadot/api/base/Init.js:311:27)
   //              at processTicksAndRejections (node:internal/process/task_queues:96:5)
 
+  // TODO: For now approving infinite tokens to avoid issues
   await approveTokenVault(
     'USDC',
     (
-      BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals('USDC'))) * 9n
+      BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals('USDC'))) * 100n
     ).toString(),
   );
   await approveTokenVault(
     'FLIP',
     (
-      BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals('FLIP'))) * 9n
+      BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals('FLIP'))) * 100n
     ).toString(),
   );
 
-  // TODO: Remove this but for now skipping arbitrum swaps as they are not supported yet
-  Object.values(Assets).forEach((sourceAsset) => {
-    if (sourceAsset === 'ARBETH' || sourceAsset === 'ARBUSDC') return;
+  // TODO: Remove this when SDK supports Arbitrum assets
+  const allAssets = [...Object.values(Assets), 'ARBETH', 'ARBUSDC'];
 
-    Object.values(Assets)
+  Object.values(allAssets).forEach((sourceAsset) => {
+    Object.values(allAssets)
       .filter((destAsset) => sourceAsset !== destAsset)
       .forEach((destAsset) => {
         // Regular swaps
         appendSwap(sourceAsset, destAsset, testSwap);
 
-        // // NOTE: I am using an old SDK so this ones don't work, even for non-Arbitrum assets
-        // // if (sourceAsset !== 'ARBETH' && sourceAsset !== 'ARBUSDC') {
-        // if (chainFromAsset(sourceAsset) === chainFromAsset('ETH')) {
-        //   // Contract Swaps
-        //   appendSwap(sourceAsset, destAsset, testSwapViaContract);
-        //   if (chainFromAsset(destAsset) === chainFromAsset('ETH')) {
-        //     // CCM contract swaps
-        //     appendSwap(sourceAsset, destAsset, testSwapViaContract, newCcmMetadata(sourceAsset));
-        //   }
-        // }
+        if (
+          chainFromAsset(sourceAsset) === chainFromAsset('ETH') &&
+          // TODO: Update this when SDK supports Arbitrum assets
+          chainFromAsset(destAsset) === chainFromAsset('ETH')
+          // || chainFromAsset(sourceAsset) === chainFromAsset('ARBETH')
+        ) {
+          // Contract Swaps
+          appendSwap(sourceAsset, destAsset, testSwapViaContract);
+          // TODO: Update to add Arbitrum contract swaps:
+          if (
+            chainFromAsset(destAsset) === chainFromAsset('ETH')
+            // TODO: Update this when SDK supports Arbitrum assets
+            // || chainFromAsset(destAsset) === chainFromAsset('ARBETH')
+          ) {
+            // CCM contract swaps
+            appendSwap(sourceAsset, destAsset, testSwapViaContract, newCcmMetadata(sourceAsset));
+          }
+        }
 
-        // if (ccmSupportedChains.includes(chainFromAsset(destAsset))) {
-        //   // CCM swaps
-        //   appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
-        // }
+        if (ccmSupportedChains.includes(chainFromAsset(destAsset))) {
+          // CCM swaps
+          appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
+        }
       });
   });
-
-  // appendSwap('ETH', 'ARBETH', testSwap, newCcmMetadata('ETH'));
-  // appendSwap('ETH', 'ARBETH', testSwap);
 
   await Promise.all(allSwaps);
 
