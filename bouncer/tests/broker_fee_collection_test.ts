@@ -4,12 +4,12 @@ import { randomBytes } from 'crypto';
 import Keyring from '@polkadot/keyring';
 import { Asset, Assets } from '@chainflip/cli';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
+import { ApiPromise, WsProvider } from '@polkadot/api';
 import {
   EgressId,
   amountToFineAmount,
   brokerMutex,
   decodeDotAddressForContract,
-  getChainflipApi,
   handleSubstrateError,
   newAddress,
   observeBalanceIncrease,
@@ -20,8 +20,7 @@ import {
   hexStringToBytesArray,
 } from '../shared/utils';
 import { getBalance } from '../shared/get_balance';
-import { doPerformSwap, performSwap } from '../shared/perform_swap';
-import { ApiPromise, WsProvider } from '@polkadot/api';
+import { doPerformSwap } from '../shared/perform_swap';
 
 const swapAssetAmount = {
   [Assets.ETH]: 1,
@@ -89,44 +88,45 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
 
   const rawDepositForSwapAmount = swapAssetAmount[asset].toString();
 
-  const addressPromise = observeEvent(
-    'swapping:SwapDepositAddressReady',
-    chainflip,
-    (event) => {
-      // Find deposit address for the right swap by looking at destination address:
-      const destAddressEvent = event.data.destinationAddress[shortChainFomAsset(swapAsset)];
-      if (!destAddressEvent) return false;
+  const addressPromise = observeEvent('swapping:SwapDepositAddressReady', chainflip, (event) => {
+    // Find deposit address for the right swap by looking at destination address:
+    const destAddressEvent = event.data.destinationAddress[shortChainFomAsset(swapAsset)];
+    if (!destAddressEvent) return false;
 
-      const destAssetMatches = event.data.destinationAsset.toUpperCase() === swapAsset;
-      const sourceAssetMatches = event.data.sourceAsset.toUpperCase() === asset;
-      const destAddressMatches =
-        destAddressEvent.toLowerCase() ===
-        observeDestinationAddress.toLowerCase();
+    const destAssetMatches = event.data.destinationAsset.toUpperCase() === swapAsset;
+    const sourceAssetMatches = event.data.sourceAsset.toUpperCase() === asset;
+    const destAddressMatches =
+      destAddressEvent.toLowerCase() === observeDestinationAddress.toLowerCase();
 
-
-      return destAddressMatches && destAssetMatches && sourceAssetMatches;
-    },
-  );
+    return destAddressMatches && destAssetMatches && sourceAssetMatches;
+  });
 
   const encodedEthAddr = chainflip.createType('EncodedAddress', {
     Eth: hexStringToBytesArray(destinationAddress),
   });
   brokerMutex.runExclusive(async () => {
-    await chainflip.tx.swapping.requestSwapDepositAddress(
-      asset,
-      swapAsset,
-      encodedEthAddr,
-      commissionBps,
-      null,
-      0
-    ).signAndSend(broker1, { nonce: -1 }, handleSubstrateError(chainflip));
+    await chainflip.tx.swapping
+      .requestSwapDepositAddress(asset, swapAsset, encodedEthAddr, commissionBps, null, 0)
+      .signAndSend(broker1, { nonce: -1 }, handleSubstrateError(chainflip));
   });
-  
+
   const res = (await addressPromise).data;
 
   const depositAddress = res.depositAddress[shortChainFomAsset(asset)];
   const channelId = Number(res.channelId);
-  await doPerformSwap({sourceAsset: asset, destAsset: swapAsset, destAddress: destinationAddress, depositAddress, channelId}, undefined, undefined, undefined, rawDepositForSwapAmount);
+  await doPerformSwap(
+    {
+      sourceAsset: asset,
+      destAsset: swapAsset,
+      destAddress: destinationAddress,
+      depositAddress,
+      channelId,
+    },
+    undefined,
+    undefined,
+    undefined,
+    rawDepositForSwapAmount,
+  );
 
   // Get values from the swap event
   const swapScheduledEvent = await observeSwapScheduledEvent;

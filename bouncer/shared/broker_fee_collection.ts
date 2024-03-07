@@ -4,6 +4,7 @@ import { randomBytes } from 'crypto';
 import Keyring from '@polkadot/keyring';
 import { Asset, Assets } from '@chainflip/cli';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
+import { ApiPromise, WsProvider } from '@polkadot/api';
 import {
   EgressId,
   amountToFineAmount,
@@ -19,7 +20,6 @@ import {
 } from '../shared/utils';
 import { getBalance } from '../shared/get_balance';
 import { doPerformSwap } from '../shared/perform_swap';
-import { ApiPromise, WsProvider } from '@polkadot/api';
 
 const swapAssetAmount = {
   [Assets.ETH]: 1,
@@ -46,7 +46,7 @@ const chainflip = await ApiPromise.create({
 });
 
 const keyring = new Keyring({ type: 'sr25519' });
-const broker_fee_test = keyring.createFromUri('//BROKER_FEE_TEST');
+const broker = keyring.createFromUri('//broker');
 
 export async function submitBrokerWithdrawal(
   asset: Asset,
@@ -56,7 +56,7 @@ export async function submitBrokerWithdrawal(
   return brokerMutex.runExclusive(async () =>
     chainflip.tx.swapping
       .withdraw(asset, addressObject)
-      .signAndSend(broker_fee_test, { nonce: -1 }, handleSubstrateError(chainflip)),
+      .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip)),
   );
 }
 
@@ -65,7 +65,7 @@ export async function submitBrokerWithdrawal(
 async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   // Check the broker fees before the swap
   const earnedBrokerFeesBefore = BigInt(
-    (await chainflip.query.swapping.earnedBrokerFees(broker_fee_test.address, asset)).toString(),
+    (await chainflip.query.swapping.earnedBrokerFees(broker.address, asset)).toString(),
   );
   console.log(`${asset} earnedBrokerFeesBefore:`, earnedBrokerFeesBefore);
 
@@ -89,44 +89,45 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
 
   // we need to manually create the swap channel and observe the relative event
   // because we want to use a separate broker to not interfere with other tests
-  const addressPromise = observeEvent(
-    'swapping:SwapDepositAddressReady',
-    chainflip,
-    (event) => {
-      // Find deposit address for the right swap by looking at destination address:
-      const destAddressEvent = event.data.destinationAddress[shortChainFomAsset(swapAsset)];
-      if (!destAddressEvent) return false;
+  const addressPromise = observeEvent('swapping:SwapDepositAddressReady', chainflip, (event) => {
+    // Find deposit address for the right swap by looking at destination address:
+    const destAddressEvent = event.data.destinationAddress[shortChainFomAsset(swapAsset)];
+    if (!destAddressEvent) return false;
 
-      const destAssetMatches = event.data.destinationAsset.toUpperCase() === swapAsset;
-      const sourceAssetMatches = event.data.sourceAsset.toUpperCase() === asset;
-      const destAddressMatches =
-        destAddressEvent.toLowerCase() ===
-        observeDestinationAddress.toLowerCase();
+    const destAssetMatches = event.data.destinationAsset.toUpperCase() === swapAsset;
+    const sourceAssetMatches = event.data.sourceAsset.toUpperCase() === asset;
+    const destAddressMatches =
+      destAddressEvent.toLowerCase() === observeDestinationAddress.toLowerCase();
 
-
-      return destAddressMatches && destAssetMatches && sourceAssetMatches;
-    },
-  );
+    return destAddressMatches && destAssetMatches && sourceAssetMatches;
+  });
 
   const encodedEthAddr = chainflip.createType('EncodedAddress', {
     Eth: hexStringToBytesArray(destinationAddress),
   });
   brokerMutex.runExclusive(async () => {
-    await chainflip.tx.swapping.requestSwapDepositAddress(
-      asset,
-      swapAsset,
-      encodedEthAddr,
-      commissionBps,
-      null,
-      0
-    ).signAndSend(broker_fee_test, { nonce: -1 }, handleSubstrateError(chainflip));
+    await chainflip.tx.swapping
+      .requestSwapDepositAddress(asset, swapAsset, encodedEthAddr, commissionBps, null, 0)
+      .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip));
   });
-  
+
   const res = (await addressPromise).data;
 
   const depositAddress = res.depositAddress[shortChainFomAsset(asset)];
   const channelId = Number(res.channelId);
-  await doPerformSwap({sourceAsset: asset, destAsset: swapAsset, destAddress: destinationAddress, depositAddress, channelId}, undefined, undefined, undefined, rawDepositForSwapAmount);
+  await doPerformSwap(
+    {
+      sourceAsset: asset,
+      destAsset: swapAsset,
+      destAddress: destinationAddress,
+      depositAddress,
+      channelId,
+    },
+    undefined,
+    undefined,
+    undefined,
+    rawDepositForSwapAmount,
+  );
 
   // Get values from the swap event
   const swapScheduledEvent = await observeSwapScheduledEvent;
@@ -150,7 +151,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
 
   // Check that the detected increase in earned broker fees matches the swap event values and it is equal to the expected amount (after the deposit fee is accounted for)
   const earnedBrokerFeesAfter = BigInt(
-    (await chainflip.query.swapping.earnedBrokerFees(broker_fee_test.address, asset)).toString(),
+    (await chainflip.query.swapping.earnedBrokerFees(broker.address, asset)).toString(),
   );
   console.log(`${asset} earnedBrokerFeesAfter:`, earnedBrokerFeesAfter);
   const increase = earnedBrokerFeesAfter - earnedBrokerFeesBefore;
@@ -240,10 +241,10 @@ export async function testBrokerFeeCollection(): Promise<void> {
 
   // Check account role
   const role = JSON.stringify(
-    await chainflip.query.accountRoles.accountRoles(broker_fee_test.address),
+    await chainflip.query.accountRoles.accountRoles(broker.address),
   ).replaceAll('"', '');
   console.log('Broker role:', role);
-  console.log('Broker address:', broker_fee_test.address);
+  console.log('Broker address:', broker.address);
   assert.strictEqual(role, 'Broker', `Broker has unexpected role: ${role}`);
 
   // Run the test for all assets at the same time (with different seeds so the eth addresses are different)
@@ -258,4 +259,3 @@ export async function testBrokerFeeCollection(): Promise<void> {
   console.log('\x1b[32m%s\x1b[0m', '=== Broker fee collection test complete ===');
   process.exit(0);
 }
-
