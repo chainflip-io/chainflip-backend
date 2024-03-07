@@ -6,7 +6,7 @@ use super::*;
 pub struct TapscriptPath {
 	pub salt: u32,
 	pub tweaked_pubkey_bytes: [u8; 33],
-	pub tapleaf_hash: Hash,
+	pub tapleaf_hash: [u8; 32],
 	pub unlock_script: BitcoinScript,
 }
 

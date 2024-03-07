@@ -1,5 +1,5 @@
 import { randomAsHex, randomAsNumber } from '@polkadot/util-crypto';
-import { Asset, assetDecimals, Assets } from '@chainflip-io/cli';
+import { Asset, Assets } from '@chainflip/cli';
 import Web3 from 'web3';
 import { performSwap, SwapParams } from '../shared/perform_swap';
 import {
@@ -8,6 +8,7 @@ import {
   getEvmContractAddress,
   amountToFineAmount,
   defaultAssetAmounts,
+  assetDecimals,
 } from '../shared/utils';
 import { BtcAddressType, btcAddressTypes } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
@@ -78,7 +79,7 @@ export function newCcmMetadata(
   const gasDiv = gasBudgetFraction ?? 100;
 
   const gasBudget = Math.floor(
-    Number(amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals[sourceAsset])) /
+    Number(amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals(sourceAsset))) /
       gasDiv,
   );
 
@@ -190,11 +191,15 @@ export async function testAllSwaps() {
   //     (numberAssetsEthereum - 1) + (numberAssets (BTC has 4 different types) - 1) = 2 + 7 = 9
   await approveTokenVault(
     'USDC',
-    (BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals.USDC)) * 9n).toString(),
+    (
+      BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals('USDC'))) * 9n
+    ).toString(),
   );
   await approveTokenVault(
     'FLIP',
-    (BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * 9n).toString(),
+    (
+      BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals('FLIP'))) * 9n
+    ).toString(),
   );
 
   // TODO: Remove this but for now skipping arbitrum swaps as they are not supported yet

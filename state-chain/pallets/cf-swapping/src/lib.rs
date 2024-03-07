@@ -224,6 +224,7 @@ pub mod pallet {
 		type DepositHandler: DepositApi<
 			AnyChain,
 			AccountId = <Self as frame_system::Config>::AccountId,
+			Amount = <Self as Chainflip>::Amount,
 		>;
 
 		/// API for handling asset egress.
@@ -311,6 +312,7 @@ pub mod pallet {
 			channel_metadata: Option<CcmChannelMetadata>,
 			source_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 			boost_fee: BasisPoints,
+			channel_opening_fee: T::Amount,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
@@ -348,6 +350,7 @@ pub mod pallet {
 		/// A broker fee withdrawal has been requested.
 		WithdrawalRequested {
 			egress_id: EgressId,
+			egress_asset: Asset,
 			egress_amount: AssetAmount,
 			egress_fee: AssetAmount,
 			destination_address: EncodedAddress,
@@ -492,7 +495,7 @@ pub mod pallet {
 				);
 			}
 
-			let (channel_id, deposit_address, expiry_height) =
+			let (channel_id, deposit_address, expiry_height, channel_opening_fee) =
 				T::DepositHandler::request_swap_deposit_address(
 					source_asset,
 					destination_asset,
@@ -513,6 +516,7 @@ pub mod pallet {
 				channel_metadata,
 				source_chain_expiry_block: expiry_height,
 				boost_fee,
+				channel_opening_fee,
 			});
 
 			Ok(())
@@ -551,6 +555,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::WithdrawalRequested {
 				egress_amount,
+				egress_asset: asset,
 				egress_fee: fee_withheld,
 				destination_address,
 				egress_id,

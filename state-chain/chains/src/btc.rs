@@ -17,12 +17,11 @@ use cf_primitives::{
 	chains::assets, NetworkEnvironment, DEFAULT_FEE_SATS_PER_KILOBYTE, INPUT_UTXO_SIZE_IN_BYTES,
 	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES, VAULT_UTXO_SIZE_IN_BYTES,
 };
-use cf_utilities::{ArrayCollect, SliceToArray};
+use cf_utilities::SliceToArray;
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::{cmp::max, mem::size_of};
 use frame_support::{
 	pallet_prelude::RuntimeDebug,
-	sp_runtime::{FixedPointNumber, FixedU128},
 	traits::{ConstBool, ConstU32},
 	BoundedVec,
 };
@@ -30,6 +29,7 @@ use itertools;
 use libsecp256k1::{curve::*, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_core::H256;
 use sp_io::hashing::sha2_256;
 use sp_std::{vec, vec::Vec};
 
@@ -55,7 +55,7 @@ pub type SigningPayload = [u8; 32];
 
 pub type Signature = [u8; 64];
 
-pub type Hash = [u8; 32];
+pub type Hash = H256;
 
 #[derive(
 	Copy,
@@ -119,28 +119,21 @@ impl Default for BitcoinTrackedData {
 	}
 }
 
-/// A constant multiplier applied to the fees.
-///
-/// TODO: Allow this value to adjust based on the current fee deficit/surplus.
-const BTC_FEE_MULTIPLIER: FixedU128 = FixedU128::from_rational(3, 2);
-
 impl FeeEstimationApi<Bitcoin> for BitcoinTrackedData {
 	fn estimate_ingress_fee(
 		&self,
 		_asset: <Bitcoin as Chain>::ChainAsset,
 	) -> <Bitcoin as Chain>::ChainAmount {
-		BTC_FEE_MULTIPLIER.saturating_mul_int(self.btc_fee_info.fee_per_input_utxo())
+		self.btc_fee_info.fee_per_input_utxo()
 	}
 
 	fn estimate_egress_fee(
 		&self,
 		_asset: <Bitcoin as Chain>::ChainAsset,
 	) -> <Bitcoin as Chain>::ChainAmount {
-		BTC_FEE_MULTIPLIER.saturating_mul_int(
-			self.btc_fee_info
-				.min_fee_required_per_tx()
-				.saturating_add(self.btc_fee_info.fee_per_output_utxo()),
-		)
+		self.btc_fee_info
+			.min_fee_required_per_tx()
+			.saturating_add(self.btc_fee_info.fee_per_output_utxo())
 	}
 }
 
@@ -234,19 +227,6 @@ impl ConsolidationParameters {
 	}
 }
 
-#[derive(
-	Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize,
-)]
-pub struct BitcoinTransactionHash(Hash);
-impl BitcoinTransactionHash {
-	/// It creates a tx_hash by reversing the provided hash
-	/// Btc softwares and explorers display blocks/txs hashes as big endian values, we need to
-	/// convert it to obtain a valid tx hash
-	pub fn new(hash: Hash) -> Self {
-		BitcoinTransactionHash(hash.iter().rev().copied().collect_array())
-	}
-}
-
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
 	const GAS_ASSET: Self::ChainAsset = assets::btc::Asset::Btc;
@@ -267,7 +247,7 @@ impl Chain for Bitcoin {
 	// There is no need for replay protection on Bitcoin since it is a UTXO chain.
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
-	type TransactionRef = BitcoinTransactionHash;
+	type TransactionRef = Hash;
 }
 
 #[derive(Clone, Copy, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
@@ -716,7 +696,7 @@ const SEQUENCE_NUMBER: [u8; 4] = (u32::MAX - 2).to_le_bytes();
 fn extend_with_inputs_outputs(bytes: &mut Vec<u8>, inputs: &[Utxo], outputs: &[BitcoinOutput]) {
 	bytes.extend(to_varint(inputs.len() as u64));
 	bytes.extend(inputs.iter().fold(Vec::<u8>::default(), |mut acc, input| {
-		acc.extend(input.id.tx_id);
+		acc.extend(input.id.tx_id.0);
 		acc.extend(input.id.vout.to_le_bytes());
 		acc.push(0);
 		acc.extend(SEQUENCE_NUMBER);
@@ -768,13 +748,13 @@ impl BitcoinTransaction {
 			!self.signatures.iter().any(|signature| signature == &[0u8; 64])
 	}
 
-	pub fn txid(&self) -> [u8; 32] {
+	pub fn txid(&self) -> Hash {
 		let mut id_bytes = Vec::default();
 		id_bytes.extend(VERSION);
 		extend_with_inputs_outputs(&mut id_bytes, &self.inputs, &self.outputs);
 		id_bytes.extend(&LOCKTIME);
 
-		sha2_256(&sha2_256(&id_bytes))
+		sha2_256(&sha2_256(&id_bytes)).into()
 	}
 
 	pub fn finalize(self) -> Vec<u8> {
@@ -822,7 +802,7 @@ impl BitcoinTransaction {
 			self.inputs
 				.iter()
 				.fold(Vec::<u8>::default(), |mut acc, input| {
-					acc.extend(input.id.tx_id);
+					acc.extend(input.id.tx_id.0);
 					acc.extend(input.id.vout.to_le_bytes());
 					acc
 				})
@@ -1316,7 +1296,8 @@ mod test {
 			id: UtxoId {
 				tx_id: hex_literal::hex!(
 					"4C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB5"
-				),
+				)
+				.into(),
 				vout: 1,
 			},
 			deposit_address: DepositAddress::new(pubkey_x, 123),

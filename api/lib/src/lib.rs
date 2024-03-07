@@ -123,6 +123,7 @@ impl StateChainApi {
 			false,
 			false,
 			false,
+			None,
 		)
 		.await?;
 
@@ -303,6 +304,7 @@ pub struct SwapDepositAddress {
 	pub issued_block: state_chain_runtime::BlockNumber,
 	pub channel_id: ChannelId,
 	pub source_chain_expiry_block: <AnyChain as cf_chains::Chain>::ChainBlockNumber,
+	pub channel_opening_fee: u128,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -365,6 +367,7 @@ pub trait BrokerApi: SignedExtrinsicApi {
 				deposit_address,
 				channel_id,
 				source_chain_expiry_block,
+				channel_opening_fee,
 				..
 			},
 		)) = events.iter().find(|event| {
@@ -380,6 +383,7 @@ pub trait BrokerApi: SignedExtrinsicApi {
 				issued_block: header.number,
 				channel_id: *channel_id,
 				source_chain_expiry_block: *source_chain_expiry_block,
+				channel_opening_fee: *channel_opening_fee,
 			})
 		} else {
 			bail!("No SwapDepositAddressReady event was found");
@@ -406,6 +410,7 @@ pub trait BrokerApi: SignedExtrinsicApi {
 				egress_fee,
 				destination_address,
 				egress_id,
+				..
 			},
 		)) = events.iter().find(|event| {
 			matches!(

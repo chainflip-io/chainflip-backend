@@ -77,4 +77,5 @@ By participating in the Bug Bounty Program, you acknowledge that you have read a
 Chainflip has commissioned the following audits of the code in this repository:
 
 - [Multisig TSS - Kudelski, Q1 2022](./audits/Multisig-Kudelski-Q1-2022.pdf)
-- [Trail of Bits - Q3 2023](https://github.com/trailofbits/publications/blob/master/reviews/2023-04-chainflip-securityreview.pdf)
+- [Trail of Bits - Q3 2023](./audits/2023-04-TrailOfBits-securityreview.pdf)
+- [Zellic - Q4 2023 -> Q1 2024](./audits/Chainflip_Backend_-_Zellic_Audit_Report.pdf)

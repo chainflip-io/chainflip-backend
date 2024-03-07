@@ -104,6 +104,7 @@ pub mod test {
 				}),
 				source_chain_expiry_block: 1_000u64,
 				boost_fee: 9u16,
+				channel_opening_fee: 1_000u128,
 			}),
 		);
 	}
