@@ -628,7 +628,7 @@ assets!(
 #[cfg(test)]
 mod test_assets {
 	use super::*;
-	use cf_utilities::{assert_ok, assert_err};
+	use cf_utilities::{assert_err, assert_ok};
 
 	macro_rules! assert_conversion {
 		($mod:ident, $asset:ident) => {
