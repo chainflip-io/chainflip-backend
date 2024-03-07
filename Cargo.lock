@@ -1497,6 +1497,7 @@ dependencies = [
  "hex-literal",
  "log",
  "parity-scale-codec",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.6+1)",
  "sp-io 23.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.6+1)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.6+1)",
 ]

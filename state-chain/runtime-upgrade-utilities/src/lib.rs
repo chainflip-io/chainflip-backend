@@ -17,8 +17,9 @@ use frame_support::pallet_prelude::DispatchError;
 use sp_std::vec::Vec;
 
 pub mod genesis_hashes {
-	use frame_support::sp_runtime::{testing::H256, traits::Zero};
+	use frame_support::sp_runtime::traits::Zero;
 	use frame_system::pallet_prelude::BlockNumberFor;
+	use sp_core::H256;
 
 	pub const BERGHAIN: [u8; 32] =
 		hex_literal::hex!("8b8c140b0af9db70686583e3f6bf2a59052bfe9584b97d20c45068281e976eb9");
