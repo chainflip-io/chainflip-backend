@@ -17,8 +17,8 @@
 macro_rules! assets {
 	(pub enum Asset {
 		$(($chain_mod:ident, $chain:ident, $chain_str:literal) => {
-			($gas_asset:ident, $gas_lowercase:ident) = $gas_value:literal (GAS_ASSET)
-			$(,($asset:ident, $lowercase:ident) = $value:literal)* $(,)?
+			($gas_lowercase:ident, $gas_asset:ident) = $gas_value:literal (GAS_ASSET)
+			$(,($lowercase:ident, $asset:ident) = $value:literal)* $(,)?
 		}),*$(,)?
 	}) => {
 		pub mod any {
@@ -407,19 +407,19 @@ assets!(pub enum Asset {
 	// 0 is reserved for particular cross chain messaging scenarios where we want to pass
 	// through a message without making a swap.
 	(eth, Ethereum, "Ethereum") => {
-		(Eth, eth) = 1u32 (GAS_ASSET),
-		(Flip, flip) = 2u32,
-		(Usdc, usdc) = 3u32,
+		(eth, Eth) = 1u32 (GAS_ASSET),
+		(flip, Flip) = 2u32,
+		(usdc, Usdc) = 3u32,
 	},
 	(dot, Polkadot, "Polkadot") => {
-		(Dot, dot) = 4u32 (GAS_ASSET),
+		(dot, Dot) = 4u32 (GAS_ASSET),
 	},
 	(btc, Bitcoin, "Bitcoin") => {
-		(Btc, btc) = 5u32 (GAS_ASSET),
+		(btc, Btc) = 5u32 (GAS_ASSET),
 	},
 	(arb, Arbitrum, "Arbitrum") => {
-		(ArbEth, eth) = 6u32 (GAS_ASSET),
-		(ArbUsdc, usdc) = 7u32,
+		(eth, ArbEth) = 6u32 (GAS_ASSET),
+		(usdc, ArbUsdc) = 7u32,
 	},
 });
 
