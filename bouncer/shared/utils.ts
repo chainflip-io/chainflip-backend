@@ -150,7 +150,7 @@ export function assetContractId(asset: Asset): number {
     case 'USDC':
       return assetConstants.Usdc.contractId;
     case 'USDT':
-      return assetConstants.Usdc.contractId;
+      return assetConstants.Usdt.contractId;
     case 'FLIP':
       return assetConstants.Flip.contractId;
     case 'DOT':
