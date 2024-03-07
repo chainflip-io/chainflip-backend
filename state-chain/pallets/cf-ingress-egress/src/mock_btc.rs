@@ -19,6 +19,7 @@ use cf_traits::{
 		asset_converter::MockAssetConverter,
 		broadcaster::MockBroadcaster,
 		ccm_handler::MockCcmHandler,
+		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
 		lp_balance::MockBalance,
 	},
@@ -134,7 +135,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Test {
 	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;
 	type CcmHandler = MockCcmHandler;
-	type ChainTracking = cf_traits::mocks::chain_tracking::ChainTracking<Bitcoin>;
+	type ChainTracking = ChainTracker<Bitcoin>;
 	type WeightInfo = ();
 	type NetworkEnvironment = MockNetworkEnvironmentProvider;
 	type AssetConverter = MockAssetConverter;

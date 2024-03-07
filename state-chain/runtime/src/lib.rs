@@ -26,11 +26,10 @@ use cf_chains::{
 	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
-	Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, FeeEstimationApi, ForeignChain, Polkadot,
-	TransactionBuilder,
+	Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot, TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, NetworkEnvironment};
-use cf_traits::{AssetConverter, GetTrackedData, LpBalanceApi};
+use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi};
 use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
@@ -338,6 +337,7 @@ parameter_types! {
 impl pallet_cf_pools::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type LpBalance = LiquidityProvider;
+	type SwapQueueApi = Swapping;
 	type NetworkFee = NetworkFee;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = ();
@@ -584,7 +584,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type RewardsDistribution = chainflip::BlockAuthorRewardDistribution;
 	type CompoundingInterval = ConstU32<COMPOUNDING_INTERVAL>;
 	type EthEnvironment = EthEnvironment;
-	type FlipToBurn = LiquidityPools;
+	type FlipToBurn = Swapping;
 	type EgressHandler = pallet_cf_ingress_egress::Pallet<Runtime, EthereumInstance>;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
@@ -938,6 +938,7 @@ type PalletMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance2>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance3>,
 	// pallet_cf_pools::migrations::PalletMigration<Runtime>,
+	FlipToBurnMigration,
 );
 
 pub struct ThresholdSignatureRefactorMigration;
@@ -982,6 +983,78 @@ impl frame_support::traits::OnRuntimeUpgrade for ThresholdSignatureRefactorMigra
 		threshold_signature_refactor_migration::migrate_instance::<PolkadotInstance>();
 
 		Default::default()
+	}
+}
+
+pub struct FlipToBurnMigration;
+
+impl frame_support::traits::OnRuntimeUpgrade for FlipToBurnMigration {
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		use frame_support::traits::{GetStorageVersion, StorageVersion};
+
+		if <pallet_cf_pools::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() == 2 &&
+			<pallet_cf_swapping::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version(
+			) == 2
+		{
+			log::info!("⏫ Applying FlipToBurn migration.");
+			// Moving the FlipToBurn storage item from the pools pallet to the Swapping pallet.
+			cf_runtime_upgrade_utilities::move_pallet_storage::<
+				pallet_cf_pools::Pallet<Runtime>,
+				pallet_cf_swapping::Pallet<Runtime>,
+			>("FlipToBurn".as_bytes());
+
+			// Bump the version of both pallets
+			StorageVersion::new(3).put::<pallet_cf_pools::Pallet<Runtime>>();
+			StorageVersion::new(3).put::<pallet_cf_swapping::Pallet<Runtime>>();
+		} else {
+			log::info!(
+				"⏭ Skipping FlipToBurn migration. {:?}, {:?}",
+				<pallet_cf_pools::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version(),
+				<pallet_cf_swapping::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version()
+			);
+		}
+		Default::default()
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::DispatchError> {
+		use codec::Encode;
+		use frame_support::{migrations::VersionedPostUpgradeData, traits::GetStorageVersion};
+
+		if <pallet_cf_pools::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() == 2
+		{
+			// The new FlipToBurn should be 0 before the upgrade.
+			frame_support::ensure!(
+				pallet_cf_swapping::FlipToBurn::<Runtime>::get() == 0,
+				"Incorrect pre-upgrade state for swapping FlipToBurn."
+			);
+			Ok(VersionedPostUpgradeData::MigrationExecuted(
+				pallet_cf_pools::migrations::old::FlipToBurn::<Runtime>::get().encode(),
+			)
+			.encode())
+		} else {
+			Ok(VersionedPostUpgradeData::Noop.encode())
+		}
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(state: Vec<u8>) -> Result<(), frame_support::sp_runtime::TryRuntimeError> {
+		use codec::Decode;
+		use frame_support::migrations::VersionedPostUpgradeData;
+
+		if let VersionedPostUpgradeData::MigrationExecuted(pre_upgrade_data) =
+			<VersionedPostUpgradeData>::decode(&mut &state[..])
+				.map_err(|_| "Failed to decode pre-upgrade state.")?
+		{
+			let pre_upgrade_flip_to_burn = <AssetAmount>::decode(&mut &pre_upgrade_data[..])
+				.map_err(|_| "Failed to decode FlipToBurn from pre-upgrade state.")?;
+
+			frame_support::ensure!(
+				pre_upgrade_flip_to_burn == pallet_cf_swapping::FlipToBurn::<Runtime>::get(),
+				"Pre-upgrade state does not match post-upgrade state for FlipToBurn."
+			);
+		}
+		Ok(())
 	}
 }
 
@@ -1263,14 +1336,11 @@ impl_runtime_apis! {
 					pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(
 						generic_asset,
 						Asset::Eth,
-						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::get_tracked_data()
-							.estimate_ingress_fee(asset)
+						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::estimate_ingress_fee(asset)
 					)
 				},
-				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::get_tracked_data()
-					.estimate_ingress_fee(asset)),
-				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::get_tracked_data()
-					.estimate_ingress_fee(asset).into()),
+				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::estimate_ingress_fee(asset)),
+				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::estimate_ingress_fee(asset).into()),
 			}
 		}
 
@@ -1280,14 +1350,11 @@ impl_runtime_apis! {
 					pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(
 						generic_asset,
 						Asset::Eth,
-						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::get_tracked_data()
-							.estimate_egress_fee(asset)
+						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::estimate_egress_fee(asset)
 					)
 				},
-				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::get_tracked_data()
-					.estimate_egress_fee(asset)),
-				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::get_tracked_data()
-					.estimate_egress_fee(asset).into()),
+				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::estimate_egress_fee(asset)),
+				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::estimate_egress_fee(asset).into()),
 			}
 		}
 
