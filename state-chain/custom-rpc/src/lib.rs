@@ -52,11 +52,11 @@ pub struct ScheduledSwap {
 	pub base_asset: Asset,
 	pub quote_asset: Asset,
 	pub side: Side,
-	pub amount: NumberOrHex,
+	pub amount: U256,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub source_asset: Option<Asset>,
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub source_amount: Option<NumberOrHex>,
+	pub source_amount: Option<U256>,
 	pub execute_at: BlockNumber,
 }
 
