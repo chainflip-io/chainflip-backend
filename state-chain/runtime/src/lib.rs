@@ -988,15 +988,6 @@ impl frame_support::traits::OnRuntimeUpgrade for ThresholdSignatureRefactorMigra
 
 pub struct FlipToBurnMigration;
 
-#[cfg(feature = "try-runtime")]
-mod old {
-	use super::*;
-
-	#[frame_support::storage_alias]
-	pub(crate) type FlipToBurn =
-		StorageValue<pallet_cf_pools, AssetAmount, frame_support::pallet_prelude::ValueQuery>;
-}
-
 impl frame_support::traits::OnRuntimeUpgrade for FlipToBurnMigration {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		use frame_support::traits::{GetStorageVersion, StorageVersion};
@@ -1037,8 +1028,10 @@ impl frame_support::traits::OnRuntimeUpgrade for FlipToBurnMigration {
 				pallet_cf_swapping::FlipToBurn::<Runtime>::get() == 0,
 				"Incorrect pre-upgrade state for swapping FlipToBurn."
 			);
-			Ok(VersionedPostUpgradeData::MigrationExecuted(old::FlipToBurn::get().encode())
-				.encode())
+			Ok(VersionedPostUpgradeData::MigrationExecuted(
+				pallet_cf_pools::migrations::old::FlipToBurn::<Runtime>::get().encode(),
+			)
+			.encode())
 		} else {
 			Ok(VersionedPostUpgradeData::Noop.encode())
 		}
@@ -1053,9 +1046,8 @@ impl frame_support::traits::OnRuntimeUpgrade for FlipToBurnMigration {
 			<VersionedPostUpgradeData>::decode(&mut &state[..])
 				.map_err(|_| "Failed to decode pre-upgrade state.")?
 		{
-			let pre_upgrade_flip_to_burn =
-				<AssetAmount as Decode>::decode(&mut &pre_upgrade_data[..])
-					.map_err(|_| "Failed to decode FlipToBurn from pre-upgrade state.")?;
+			let pre_upgrade_flip_to_burn = <AssetAmount>::decode(&mut &pre_upgrade_data[..])
+				.map_err(|_| "Failed to decode FlipToBurn from pre-upgrade state.")?;
 
 			frame_support::ensure!(
 				pre_upgrade_flip_to_burn == pallet_cf_swapping::FlipToBurn::<Runtime>::get(),
