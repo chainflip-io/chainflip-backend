@@ -46,7 +46,7 @@ const chainflip = await ApiPromise.create({
 });
 
 const keyring = new Keyring({ type: 'sr25519' });
-const broker = keyring.createFromUri('//broker');
+const broker = keyring.createFromUri('//BROKER_FEE_TEST');
 
 export async function submitBrokerWithdrawal(
   asset: Asset,
