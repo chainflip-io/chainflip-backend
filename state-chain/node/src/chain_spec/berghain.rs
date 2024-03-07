@@ -89,4 +89,8 @@ pub const AUCTION_PARAMETERS: SetSizeParameters =
 
 pub const BITCOIN_SAFETY_MARGIN: u64 = 2;
 pub const ETHEREUM_SAFETY_MARGIN: u64 = 6;
+<<<<<<< HEAD
 pub const ARBITRUM_SAFETY_MARGIN: u64 = 1;
+=======
+pub const ARBITRUM_SAFETY_MARGIN: u64 = 6; // TODO: to be set
+>>>>>>> a8d6959c2785391d6f0f72a8070d4416595054b5
