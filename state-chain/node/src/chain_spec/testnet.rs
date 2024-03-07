@@ -30,7 +30,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	eth_address_checker_address: hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512"),
 	arb_address_checker_address: hex_literal::hex!("9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"),
 	ethereum_chain_id: cf_chains::eth::CHAIN_ID_GOERLI,
-	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_SEPOLIA,
+	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_ARBITRUM_SEPOLIA,
 	eth_init_agg_key: hex_literal::hex!(
 		"02e61afd677cdfbec838c6f309deff0b2c6056f8a27f2c783b68bba6b30f667be6"
 	),
