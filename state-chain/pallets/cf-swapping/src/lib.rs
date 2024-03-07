@@ -9,7 +9,9 @@ use cf_primitives::{
 	Asset, AssetAmount, ChannelId, ForeignChain, SwapId, SwapLeg, TransactionHash, STABLE_ASSET,
 };
 use cf_runtime_utilities::log_or_panic;
-use cf_traits::{impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi};
+use cf_traits::{
+	impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi, SwapQueueApi, SwapType,
+};
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
@@ -34,18 +36,12 @@ pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 const BASIS_POINTS_PER_MILLION: u32 = 100;
 
 pub const SWAP_DELAY_BLOCKS: u32 = 2;
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum SwapType {
-	Swap(ForeignChainAddress),
-	CcmPrincipal(SwapId),
-	CcmGas(SwapId),
-}
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct Swap {
 	pub swap_id: SwapId,
@@ -297,6 +293,10 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn maximum_swap_amount)]
 	pub type MaximumSwapAmount<T: Config> = StorageMap<_, Twox64Concat, Asset, AssetAmount>;
+
+	/// FLIP ready to be burned.
+	#[pallet::storage]
+	pub type FlipToBurn<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -587,7 +587,7 @@ pub mod pallet {
 				Self::validate_destination_address(&destination_address, to)?;
 			let swap_origin = SwapOrigin::Vault { tx_hash };
 
-			let (swap_id, execute_at) = Self::schedule_swap_internal(
+			let (swap_id, execute_at) = Self::schedule_swap(
 				from,
 				to,
 				deposit_amount,
@@ -738,6 +738,11 @@ pub mod pallet {
 
 			// Take NetworkFee for all swaps
 			for swap in swaps.iter_mut() {
+				if swap.swap_type == SwapType::NetworkFee {
+					// Don't take network fee for network fee swaps
+					continue;
+				}
+
 				debug_assert!(
 					swap.stable_amount.is_some(),
 					"All swaps should have Stable amount set here"
@@ -817,6 +822,17 @@ pub mod pallet {
 						SwapType::CcmGas(ccm_id) => {
 							Self::handle_ccm_swap_result(*ccm_id, swap_output, CcmSwapLeg::Gas);
 						},
+						SwapType::NetworkFee =>
+							if swap.to == Asset::Flip {
+								FlipToBurn::<T>::mutate(|total| {
+									total.saturating_accrue(swap_output);
+								});
+							} else {
+								log_or_panic!(
+									"NetworkFee burning should not be in asset: {:?}",
+									swap.to
+								);
+							},
 					};
 				} else {
 					debug_assert!(false, "Swap is not completed yet!");
@@ -1011,45 +1027,6 @@ pub mod pallet {
 				log_or_panic!("CCM egress scheduling should never fail.");
 			}
 		}
-
-		/// Schedule the swap, assuming all checks already passed. Return swap_id along
-		/// with the block at which the swap is scheduled to be executed.
-		fn schedule_swap_internal(
-			from: Asset,
-			to: Asset,
-			amount: AssetAmount,
-			swap_type: SwapType,
-		) -> (u64, BlockNumberFor<T>) {
-			let swap_id = SwapIdCounter::<T>::mutate(|id| {
-				id.saturating_accrue(1);
-				*id
-			});
-			let (swap_amount, confiscated_amount) = match MaximumSwapAmount::<T>::get(from) {
-				Some(max) => (sp_std::cmp::min(amount, max), amount.saturating_sub(max)),
-				None => (amount, Zero::zero()),
-			};
-			if !confiscated_amount.is_zero() {
-				CollectedRejectedFunds::<T>::mutate(from, |fund| {
-					*fund = fund.saturating_add(confiscated_amount)
-				});
-				Self::deposit_event(Event::<T>::SwapAmountConfiscated {
-					swap_id,
-					source_asset: from,
-					destination_asset: to,
-					total_amount: amount,
-					confiscated_amount,
-				});
-			}
-
-			let execute_at = frame_system::Pallet::<T>::block_number() + SWAP_DELAY_BLOCKS.into();
-
-			SwapQueue::<T>::append(
-				execute_at,
-				Swap::new(swap_id, from, to, swap_amount, swap_type),
-			);
-
-			(swap_id, execute_at)
-		}
 	}
 
 	impl<T: Config> SwapDepositHandler for Pallet<T> {
@@ -1082,7 +1059,7 @@ pub mod pallet {
 				deposit_block_height,
 			};
 
-			let (swap_id, execute_at) = Self::schedule_swap_internal(
+			let (swap_id, execute_at) = Self::schedule_swap(
 				from,
 				to,
 				net_amount,
@@ -1157,7 +1134,7 @@ pub mod pallet {
 					swap_output.principal = Some(principal_swap_amount);
 					None
 				} else {
-					let (swap_id, execute_at) = Self::schedule_swap_internal(
+					let (swap_id, execute_at) = Self::schedule_swap(
 						source_asset,
 						destination_asset,
 						principal_swap_amount,
@@ -1178,7 +1155,7 @@ pub mod pallet {
 				};
 
 			let gas_swap_id = if let Some(other_gas_asset) = other_gas_asset {
-				let (swap_id, execute_at) = Self::schedule_swap_internal(
+				let (swap_id, execute_at) = Self::schedule_swap(
 					source_asset,
 					other_gas_asset,
 					gas_budget,
@@ -1229,5 +1206,56 @@ pub mod pallet {
 
 			Ok(CcmSwapIds { principal_swap_id, gas_swap_id })
 		}
+	}
+}
+
+impl<T: Config> SwapQueueApi for Pallet<T> {
+	type BlockNumber = BlockNumberFor<T>;
+
+	fn schedule_swap(
+		from: Asset,
+		to: Asset,
+		amount: AssetAmount,
+		swap_type: SwapType,
+	) -> (u64, Self::BlockNumber) {
+		let swap_id = SwapIdCounter::<T>::mutate(|id| {
+			id.saturating_accrue(1);
+			*id
+		});
+
+		// Do not limit the maximum swap amount for network fee swaps.
+		let swap_amount = if swap_type == SwapType::NetworkFee {
+			amount
+		} else {
+			let (swap_amount, confiscated_amount) = match MaximumSwapAmount::<T>::get(from) {
+				Some(max) => (sp_std::cmp::min(amount, max), amount.saturating_sub(max)),
+				None => (amount, Zero::zero()),
+			};
+			if !confiscated_amount.is_zero() {
+				CollectedRejectedFunds::<T>::mutate(from, |fund| {
+					*fund = fund.saturating_add(confiscated_amount)
+				});
+				Self::deposit_event(Event::<T>::SwapAmountConfiscated {
+					swap_id,
+					source_asset: from,
+					destination_asset: to,
+					total_amount: amount,
+					confiscated_amount,
+				});
+			}
+			swap_amount
+		};
+
+		let execute_at = frame_system::Pallet::<T>::block_number() + SWAP_DELAY_BLOCKS.into();
+
+		SwapQueue::<T>::append(execute_at, Swap::new(swap_id, from, to, swap_amount, swap_type));
+
+		(swap_id, execute_at)
+	}
+}
+
+impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
+	fn take_flip_to_burn() -> AssetAmount {
+		FlipToBurn::<T>::take()
 	}
 }
