@@ -189,7 +189,6 @@ macro_rules! assets {
 				enum SerdeAssetOptionalExplicitChain {
 					Implicit(serde_utils::SerdeImplicitChainAsset),
 					Explicit(serde_utils::SerdeExplicitChainAsset),
-					StructuredImplicit { asset: serde_utils::SerdeImplicitChainAsset }
 				}
 
 				impl Serialize for super::Asset {
@@ -204,7 +203,7 @@ macro_rules! assets {
 					   where D: serde::Deserializer<'de> {
 						<SerdeAssetOptionalExplicitChain as Deserialize<'de>>::deserialize(deserializer).map(|serde_asset_optional_explicit_chain| {
 							match serde_asset_optional_explicit_chain {
-								SerdeAssetOptionalExplicitChain::Implicit(implicit_chain_asset) | SerdeAssetOptionalExplicitChain::StructuredImplicit { asset: implicit_chain_asset } => implicit_chain_asset.into(),
+								SerdeAssetOptionalExplicitChain::Implicit(implicit_chain_asset) => implicit_chain_asset.into(),
 								SerdeAssetOptionalExplicitChain::Explicit(explicit_chain_asset) => explicit_chain_asset.into(),
 							}
 						})
@@ -730,6 +729,13 @@ mod test_assets {
 			assert_err!(serde_json::from_str::<T>("{\"chain\":\"ETHEREUM\",\"asset\":\"ETH\"}"));
 			assert_err!(serde_json::from_str::<T>("{\"chain\":\"ETHEREUM\",\"asset\":\"BTC\"}"));
 			assert_err!(serde_json::from_str::<T>("{\"chain\":\"ETHEREUM\",\"asset\":\"eth\"}"));
+
+			assert_err!(serde_json::from_str::<T>("{\"asset\":\"Eth\"}"));
+			assert_err!(serde_json::from_str::<T>("{\"asset\":\"Dot\"}"));
+			assert_err!(serde_json::from_str::<T>("{\"asset\":\"Btc\"}"));
+			assert_err!(serde_json::from_str::<T>("{\"asset\":\"ETH\"}"));
+			assert_err!(serde_json::from_str::<T>("{\"asset\":\"BTC\"}"));
+			assert_err!(serde_json::from_str::<T>("{\"asset\":\"eth\"}"));
 		}
 
 		explicit_chain_deserialization::<any::Asset>();
@@ -737,34 +743,7 @@ mod test_assets {
 
 		// Implicit Chain Deserialization
 
-		fn implicit_chain_deserialization<
-			T: DeserializeOwned + Debug + From<any::Asset> + Eq,
-		>() {
-			assert_eq!(
-				assert_ok!(serde_json::from_str::<T>("{\"asset\":\"ETH\"}")),
-				T::from(any::Asset::Eth)
-			);
-			assert_eq!(
-				assert_ok!(serde_json::from_str::<T>("{\"asset\":\"DOT\"}")),
-				T::from(any::Asset::Dot)
-			);
-			assert_eq!(
-				assert_ok!(serde_json::from_str::<T>("{\"asset\":\"BTC\"}")),
-				T::from(any::Asset::Btc)
-			);
-
-			assert_err!(serde_json::from_str::<T>("{\"asset\":\"MEH\"}"));
-			assert_err!(serde_json::from_str::<T>("{\"asset\":\"eTH\"}"));
-			assert_err!(serde_json::from_str::<T>("{\"asset\":\"DOt\"}"));
-			assert_err!(serde_json::from_str::<T>("{\"asset\":\"BtC\"}"));
-		}
-
-		implicit_chain_deserialization::<any::Asset>();
-		implicit_chain_deserialization::<any::OldAsset>();
-
-		// Unstructured Implicit Chain Deserialization
-
-		fn unstructured_implicit_chain_deserialization<T: DeserializeOwned + Debug + From<any::Asset> + Eq>() {
+		fn implicit_chain_deserialization<T: DeserializeOwned + Debug + From<any::Asset> + Eq>() {
 			assert_eq!(assert_ok!(serde_json::from_str::<T>("\"ETH\"")), T::from(any::Asset::Eth));
 			assert_eq!(assert_ok!(serde_json::from_str::<T>("\"DOT\"")), T::from(any::Asset::Dot));
 			assert_eq!(assert_ok!(serde_json::from_str::<T>("\"BTC\"")), T::from(any::Asset::Btc));
@@ -774,7 +753,7 @@ mod test_assets {
 			assert_err!(serde_json::from_str::<T>("\"bTc\""));
 		}
 
-		unstructured_implicit_chain_deserialization::<any::Asset>();
-		unstructured_implicit_chain_deserialization::<any::OldAsset>();
+		implicit_chain_deserialization::<any::Asset>();
+		implicit_chain_deserialization::<any::OldAsset>();
 	}
 }
