@@ -199,7 +199,7 @@ export async function testAllSwaps() {
     ).toString(),
   );
   await approveTokenVault(
-    'USDC',
+    'USDT',
     (
       BigInt(amountToFineAmount(defaultAssetAmounts('USDT'), assetDecimals('USDT'))) * 100n
     ).toString(),
