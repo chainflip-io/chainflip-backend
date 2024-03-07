@@ -27,6 +27,7 @@ const swapAssetAmount = {
   [Assets.FLIP]: 1000,
   [Assets.BTC]: 0.1,
   [Assets.USDC]: 1000,
+  ['USDT']: 1000,
 };
 const commissionBps = 1000; // 10%
 
@@ -179,7 +180,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
     amountToFineAmount(balanceBeforeWithdrawal, assetDecimals(asset)),
   );
   // Log the chain state for Ethereum assets to help debugging.
-  if (['FLIP', 'ETH', 'USDC'].includes(asset.toString())) {
+  if (['FLIP', 'ETH', 'USDC', 'USDT'].includes(asset.toString())) {
     const chainState = JSON.stringify(
       await chainflip.query.ethereumChainTracking.currentChainState(),
     );
@@ -210,6 +211,7 @@ async function main(): Promise<void> {
     testBrokerFees(Assets.DOT, randomBytes(32).toString('hex')),
     testBrokerFees(Assets.BTC, randomBytes(32).toString('hex')),
     testBrokerFees(Assets.USDC, randomBytes(32).toString('hex')),
+    testBrokerFees('USDT', randomBytes(32).toString('hex')),
   ]);
 
   console.log('\x1b[32m%s\x1b[0m', '=== Broker fee collection test complete ===');

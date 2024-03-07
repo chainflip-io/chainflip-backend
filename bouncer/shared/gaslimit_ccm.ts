@@ -320,6 +320,7 @@ export async function testGasLimitCcmSwaps() {
   const gasLimitSwapsDefault = [
     testGasLimitSwap('DOT', 'FLIP', undefined, getRandomGasConsumption()),
     testGasLimitSwap('ETH', 'USDC', undefined, getRandomGasConsumption()),
+    testGasLimitSwap('ETH', 'USDT', undefined, getRandomGasConsumption()),
     testGasLimitSwap('FLIP', 'ETH', undefined, getRandomGasConsumption()),
     testGasLimitSwap('BTC', 'ETH', undefined, getRandomGasConsumption()),
   ];
@@ -328,6 +329,7 @@ export async function testGasLimitCcmSwaps() {
   const gasLimitSwapsSufBudget = [
     testGasLimitSwap('DOT', 'FLIP', ' sufBudget', undefined, 750),
     testGasLimitSwap('ETH', 'USDC', ' sufBudget', undefined, 7500),
+    testGasLimitSwap('ETH', 'USDT', ' sufBudget', undefined, 7500),
     testGasLimitSwap('FLIP', 'ETH', ' sufBudget', undefined, 6000),
     testGasLimitSwap('BTC', 'ETH', ' sufBudget', undefined, 750),
   ];
@@ -336,6 +338,7 @@ export async function testGasLimitCcmSwaps() {
   const gasLimitSwapsInsufBudget = [
     testGasLimitSwap('DOT', 'FLIP', ' insufBudget', undefined, 10 ** 4),
     testGasLimitSwap('ETH', 'USDC', ' insufBudget', undefined, 10 ** 5),
+    testGasLimitSwap('ETH', 'USDT', ' insufBudget', undefined, 10 ** 5),
     testGasLimitSwap('FLIP', 'ETH', ' insufBudget', undefined, 10 ** 5),
     testGasLimitSwap('BTC', 'ETH', ' insufBudget', undefined, 10 ** 4),
   ];
@@ -345,6 +348,7 @@ export async function testGasLimitCcmSwaps() {
   const gasLimitSwapsNoBudget = [
     testGasLimitSwap('DOT', 'FLIP', ' noBudget', undefined, 10 ** 6),
     testGasLimitSwap('ETH', 'USDC', ' noBudget', undefined, 10 ** 8),
+    testGasLimitSwap('ETH', 'USDT', ' noBudget', undefined, 10 ** 8),
     testGasLimitSwap('FLIP', 'ETH', ' noBudget', undefined, 10 ** 6),
     testGasLimitSwap('BTC', 'ETH', ' noBudget', undefined, 10 ** 5),
   ];
