@@ -1,4 +1,4 @@
-lockfileVersion: '6.1'
+lockfileVersion: '6.0'
 
 settings:
   autoInstallPeers: true
@@ -6,8 +6,8 @@ settings:
 
 dependencies:
   '@chainflip/cli':
-    specifier: 1.3.0-alpha.0
-    version: 1.3.0-alpha.0(@polkadot/util-crypto@12.2.1)(@polkadot/util@12.2.1)(axios@1.3.5)(ethers@6.8.0)
+    specifier: 1.3.0-alpha.1
+    version: 1.3.0-alpha.1(@polkadot/util-crypto@12.2.1)(@polkadot/util@12.2.1)(axios@1.3.5)(ethers@6.8.0)
   '@iarna/toml':
     specifier: ^2.2.5
     version: 2.2.5
@@ -120,8 +120,8 @@ packages:
       regenerator-runtime: 0.14.1
     dev: false
 
-  /@chainflip/cli@1.3.0-alpha.0(@polkadot/util-crypto@12.2.1)(@polkadot/util@12.2.1)(axios@1.3.5)(ethers@6.8.0):
-    resolution: {integrity: sha512-PK9K+QUS2FltvF1idL+dnWwsGmT15L+is4MaiGs2ezwhXsa4kOQf9a9er13fGAbbNEDJ21IEKJtiocysQoNqWA==}
+  /@chainflip/cli@1.3.0-alpha.1(@polkadot/util-crypto@12.2.1)(@polkadot/util@12.2.1)(axios@1.3.5)(ethers@6.8.0):
+    resolution: {integrity: sha512-JruT8vhjgJPlUkhjdp93KuNNap7Ijm3bY+anvJiyqevXyzXcXb2LpgnnygjK+RN8mRqub3a1M7zC7P0FnGxMPA==}
     hasBin: true
     peerDependencies:
       '@polkadot/util': ^12.x
