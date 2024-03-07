@@ -5,7 +5,7 @@
 // It will create a zero to infinity range order for the currency and amount given
 // For example: ./commands/range_order.ts btc 10
 
-import { Asset } from '@chainflip-io/cli';
+import { Asset } from '@chainflip/cli';
 import { rangeOrder } from '../shared/range_order';
 import { runWithTimeout } from '../shared/utils';
 

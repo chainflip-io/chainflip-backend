@@ -1,4 +1,4 @@
-import { Asset, broker } from '@chainflip-io/cli';
+import { Asset, broker } from '@chainflip/cli';
 import { decodeDotAddressForContract, chainFromAsset } from './utils';
 
 const defaultCommissionBps = 100; // 1%
@@ -35,5 +35,6 @@ export async function newSwap(
       url: brokerUrl,
       commissionBps: brokerCommissionBps,
     },
+    'backspin',
   );
 }

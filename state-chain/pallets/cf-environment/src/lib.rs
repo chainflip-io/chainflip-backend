@@ -31,7 +31,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 pub mod migrations;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(8);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(9);
 
 const INITIAL_CONSOLIDATION_PARAMETERS: cf_chains::btc::ConsolidationParameters =
 	cf_chains::btc::ConsolidationParameters {
@@ -366,11 +366,6 @@ pub mod pallet {
 		pub fn witness_initialize_arbitrum_vault(
 			origin: OriginFor<T>,
 			block_number: u64,
-			key_manager_address: cf_chains::evm::Address,
-			vault_address: cf_chains::evm::Address,
-			address_checker_address: cf_chains::evm::Address,
-			chain_id: cf_chains::evm::api::EvmChainId,
-			arb_usdc_address: cf_chains::evm::Address,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
@@ -379,12 +374,6 @@ pub mod pallet {
 			// Witness the agg_key rotation manually in the vaults pallet for bitcoin
 			let dispatch_result =
 				T::ArbitrumVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
-
-			ArbitrumChainId::<T>::put(chain_id);
-			ArbitrumAddressCheckerAddress::<T>::put(address_checker_address);
-			ArbitrumVaultAddress::<T>::put(vault_address);
-			ArbitrumKeyManagerAddress::<T>::put(key_manager_address);
-			ArbitrumSupportedAssets::<T>::insert(ArbAsset::ArbUsdc, arb_usdc_address);
 
 			Self::deposit_event(Event::<T>::ArbitrumInitialized);
 

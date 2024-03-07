@@ -15,7 +15,10 @@ mod tests;
 
 use bitvec::prelude::*;
 use cf_primitives::EpochIndex;
-use cf_traits::{AccountRoleRegistry, CallDispatchFilter, Chainflip, EpochInfo, SafeMode};
+use cf_traits::{
+	offence_reporting::OffenceReporter, AccountRoleRegistry, CallDispatchFilter, Chainflip,
+	EpochInfo, SafeMode,
+};
 use cf_utilities::success_threshold_from_share_count;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -27,7 +30,7 @@ use frame_support::{
 	Hashable,
 };
 use scale_info::TypeInfo;
-use sp_std::prelude::*;
+use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum PalletSafeMode<CallPermission> {
@@ -69,11 +72,16 @@ pub trait WitnessDataExtraction {
 	fn combine_and_inject(&mut self, data: &mut [Vec<u8>]);
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum PalletOffence {
+	FailedToWitnessInTime,
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
+	use frame_system::pallet_prelude::{BlockNumberFor, *};
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
@@ -99,6 +107,19 @@ pub mod pallet {
 		/// Filter for dispatching witnessed calls.
 		type CallDispatchPermission: Parameter + CallDispatchFilter<<Self as Config>::RuntimeCall>;
 
+		/// Offences that can be reported in this runtime.
+		type Offence: From<PalletOffence>;
+
+		/// For reporting bad actors.
+		type OffenceReporter: OffenceReporter<
+			ValidatorId = Self::ValidatorId,
+			Offence = Self::Offence,
+		>;
+
+		/// Grace period to witness a call after it has been dispatched.
+		#[pallet::constant]
+		type LateWitnessGracePeriod: Get<BlockNumberFor<Self>>;
+
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
 	}
@@ -119,7 +140,7 @@ pub mod pallet {
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
-	/// A lookup mapping (epoch, call_hash) to a bitmask representing the votes for each authority.
+	/// A lookup mapping (epoch, call_hash) to a bit mask representing the votes for each authority.
 	#[pallet::storage]
 	pub type Votes<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, EpochIndex, Identity, CallHash, Vec<u8>>;
@@ -143,6 +164,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type WitnessedCallsScheduledForDispatch<T: Config> =
 		StorageValue<_, Vec<(EpochIndex, <T as Config>::RuntimeCall, CallHash)>, ValueQuery>;
+
+	/// Deadline for witnessing a call. Nodes that did not witness are punished.
+	#[pallet::storage]
+	pub type WitnessDeadline<T: Config> =
+		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<(EpochIndex, CallHash)>, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -249,6 +275,41 @@ pub mod pallet {
 			}
 			used_weight
 		}
+
+		fn on_finalize(n: BlockNumberFor<T>) {
+			// -- Punish nodes who haven't witnessed the call within the grace period. -- //
+			// Cache the authorities to avoid repeated storage lookups.
+			let mut authorities_cache = BTreeMap::new();
+			for (epoch, call_hash) in WitnessDeadline::<T>::take(n) {
+				if let Some(votes) = Votes::<T>::get(epoch, call_hash) {
+					let authorities = authorities_cache.entry(epoch).or_insert_with(|| {
+						T::EpochInfo::authorities_at_epoch(epoch).into_iter().collect::<Vec<_>>()
+					});
+					let failed_witnessers = BitVec::<u8, Msb0>::from_vec(votes)
+						.into_iter()
+						.enumerate()
+						.filter_map(
+							|(index, witnessed)| {
+								if witnessed {
+									None
+								} else {
+									authorities.get(index)
+								}
+							},
+						)
+						.cloned()
+						.collect::<Vec<_>>();
+
+					// Report these nodes for failed to witness in time.
+					if !failed_witnessers.is_empty() {
+						T::OffenceReporter::report_many(
+							PalletOffence::FailedToWitnessInTime,
+							failed_witnessers,
+						);
+					}
+				}
+			}
+		}
 	}
 
 	#[pallet::event]
@@ -258,6 +319,8 @@ pub mod pallet {
 		WitnessExecutionFailed { call_hash: CallHash, error: DispatchError },
 		/// A an external event has been pre-witnessed.
 		Prewitnessed { call: <T as Config>::RuntimeCall },
+		/// A witness call has failed.
+		PrewitnessExecutionFailed { call_hash: CallHash, error: DispatchError },
 	}
 
 	#[pallet::error]
@@ -295,7 +358,7 @@ pub mod pallet {
 		/// authorities have submitted an identical transaction. This can be thought of as a vote
 		/// for the encoded [Call](Config::Call) value.
 		///
-		/// This implementation uses a bitmask whereby each index to the bitmask represents an
+		/// This implementation uses a bit mask whereby each index to the bit mask represents an
 		/// authority account ID in the current Epoch.
 		///
 		/// **Note:**
@@ -349,7 +412,7 @@ pub mod pallet {
 						BitVec::<u8, Msb0>::repeat(false, num_authorities as usize).into_vec()
 					});
 
-					// Convert to an addressable bitmask
+					// Convert to an addressable bit mask
 					let bits = VoteMask::from_slice_mut(bytes);
 
 					let mut vote_count = bits.count_ones();
@@ -402,7 +465,7 @@ pub mod pallet {
 		/// This allows the root user to force through a witness call.
 		///
 		/// This can be useful when votes haven't reached the threshold because of witnesser
-		/// checkpointing issues or similar.
+		/// check-pointing issues or similar.
 		///
 		/// Note this does not protect against replays, so should be used with care.
 		#[pallet::call_index(1)]
@@ -428,13 +491,38 @@ pub mod pallet {
 		/// Simply emits an event to notify that this call has been witnessed. Implicitly signals
 		/// that we expect the same call to be witnessed at a later block.
 		#[pallet::call_index(2)]
-		#[pallet::weight(call.get_dispatch_info().weight)]
+		#[pallet::weight(T::WeightInfo::prewitness())]
 		pub fn prewitness(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			Self::deposit_event(Event::<T>::Prewitnessed { call: *call });
+			Ok(())
+		}
+
+		/// Emits an event to notify that this call has been witnessed. Then, it dispatches the call
+		/// using the prewitness threshold origin.
+		#[pallet::call_index(3)]
+		#[pallet::weight(call.get_dispatch_info().weight)]
+		pub fn prewitness_and_execute(
+			origin: OriginFor<T>,
+			call: Box<<T as Config>::RuntimeCall>,
+		) -> DispatchResult {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+			Self::deposit_event(Event::<T>::Prewitnessed { call: *call.clone() });
+
+			let call_hash = CallHash(call.blake2_256());
+			let _result = with_storage_layer(move || {
+				call.dispatch_bypass_filter(RawOrigin::PrewitnessThreshold.into())
+			})
+			.map_err(|e| {
+				Self::deposit_event(Event::<T>::PrewitnessExecutionFailed {
+					call_hash,
+					error: e.error,
+				});
+			});
+
 			Ok(())
 		}
 	}
@@ -448,6 +536,7 @@ pub mod pallet {
 	pub enum RawOrigin {
 		HistoricalActiveEpochWitnessThreshold,
 		CurrentEpochWitnessThreshold,
+		PrewitnessThreshold,
 	}
 }
 
@@ -478,21 +567,33 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::<T>::WitnessExecutionFailed { call_hash, error: e.error });
 		});
 		CallHashExecuted::<T>::insert(witnessed_at_epoch, call_hash, ());
+
+		// Add a deadline for witnessing this call. Nodes that don't witness after the deadlines are
+		// punished.
+		WitnessDeadline::<T>::append(
+			frame_system::Pallet::<T>::block_number() + T::LateWitnessGracePeriod::get(),
+			(witnessed_at_epoch, call_hash),
+		);
 	}
 
-	pub fn count_votes(callhash: CallHash) -> Option<Vec<(<T as Chainflip>::ValidatorId, bool)>> {
-		let current_epoch = T::EpochInfo::epoch_index();
-		let votes: BitVec<u8, Msb0> = BitVec::from_vec(Votes::<T>::get(current_epoch, callhash)?);
-		let authorities = T::EpochInfo::current_authorities();
-		let result: Vec<_> = votes
-			.iter()
-			// by_vals is needed to convert to true/false bool values.
-			.by_vals()
-			// authorities are stored in the same order as the votes
-			.zip(authorities)
-			.map(|(vote, account_id)| (account_id, vote))
-			.collect();
-		Some(result)
+	pub fn count_votes(
+		epoch: EpochIndex,
+		call_hash: CallHash,
+	) -> Option<Vec<(<T as Chainflip>::ValidatorId, bool)>> {
+		let votes: BitVec<u8, Msb0> = BitVec::from_vec(Votes::<T>::get(epoch, call_hash)?);
+
+		// Take authorities from the given epoch and match them with witnessing votes.
+		Some(
+			T::EpochInfo::authorities_at_epoch(epoch)
+				.into_iter()
+				.zip(
+					votes
+						.iter()
+						// by_vals is needed to convert to true/false bool values.
+						.by_vals(), // authorities are stored in the same order as the votes
+				)
+				.collect(),
+		)
 	}
 }
 
@@ -526,6 +627,7 @@ where
 			Ok(raw_origin) => match raw_origin {
 				RawOrigin::HistoricalActiveEpochWitnessThreshold |
 				RawOrigin::CurrentEpochWitnessThreshold => Ok(()),
+				_ => Err(raw_origin.into()),
 			},
 			Err(o) => Err(o),
 		}
@@ -534,6 +636,39 @@ where
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<OuterOrigin, ()> {
 		Ok(RawOrigin::HistoricalActiveEpochWitnessThreshold.into())
+	}
+}
+
+/// Simple struct on which to implement EnsureOrigin for our pallet's custom origin type.
+///
+/// # Example:
+///
+/// ```ignore
+/// if let Ok(()) = EnsurePrewitnessed::ensure_origin(origin) {
+///     log::debug!("This extrinsic was called as a result of prewitness threshold consensus.");
+/// }
+/// ```
+pub struct EnsurePrewitnessed;
+
+impl<OuterOrigin> EnsureOrigin<OuterOrigin> for EnsurePrewitnessed
+where
+	OuterOrigin: Into<Result<RawOrigin, OuterOrigin>> + From<RawOrigin>,
+{
+	type Success = ();
+
+	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
+		match o.into() {
+			Ok(raw_origin) => match raw_origin {
+				RawOrigin::PrewitnessThreshold => Ok(()),
+				_ => Err(raw_origin.into()),
+			},
+			Err(o) => Err(o),
+		}
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin() -> Result<OuterOrigin, ()> {
+		Ok(RawOrigin::PrewitnessThreshold.into())
 	}
 }
 

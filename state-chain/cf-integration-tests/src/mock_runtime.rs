@@ -8,9 +8,9 @@ use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::{Percent, Permill};
 use state_chain_runtime::{
 	chainflip::Offence, constants::common::*, opaque::SessionKeys, test_runner::*, AccountId,
-	AccountRolesConfig, ArbitrumChainTrackingConfig, EmissionsConfig, EthereumVaultConfig,
-	EvmThresholdSignerConfig, FlipConfig, FundingConfig, GovernanceConfig, ReputationConfig,
-	SessionConfig, ValidatorConfig,
+	AccountRolesConfig, ArbitrumChainTrackingConfig, ArbitrumVaultConfig, EmissionsConfig,
+	EthereumVaultConfig, EvmThresholdSignerConfig, FlipConfig, FundingConfig, GovernanceConfig,
+	ReputationConfig, SessionConfig, ValidatorConfig,
 };
 
 use cf_chains::{
@@ -76,6 +76,14 @@ impl Default for ExtBuilder {
 impl ExtBuilder {
 	pub fn accounts(mut self, accounts: Vec<(AccountId, AccountRole, FlipBalance)>) -> Self {
 		self.genesis_accounts = accounts;
+		self
+	}
+
+	pub fn with_additional_accounts(
+		mut self,
+		accounts: &[(AccountId, AccountRole, FlipBalance)],
+	) -> Self {
+		self.genesis_accounts.extend_from_slice(accounts);
 		self
 	}
 
@@ -163,7 +171,14 @@ impl ExtBuilder {
 				genesis_backups: Default::default(),
 				genesis_vanity_names: Default::default(),
 				blocks_per_epoch: self.blocks_per_epoch,
-				bond: self.genesis_accounts.iter().map(|(.., amount)| *amount).min().unwrap(),
+				bond: self
+					.genesis_accounts
+					.iter()
+					.filter_map(|(.., role, amount)| {
+						matches!(role, AccountRole::Validator).then_some(*amount)
+					})
+					.min()
+					.unwrap(),
 				redemption_period_as_percentage: Percent::from_percent(
 					REDEMPTION_PERIOD_AS_PERCENTAGE,
 				),
@@ -177,7 +192,14 @@ impl ExtBuilder {
 				auction_bid_cutoff_percentage: Percent::from_percent(0),
 				max_authority_set_contraction_percentage: DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 			},
-			ethereum_vault: EthereumVaultConfig { deployment_block: Some(0) },
+			ethereum_vault: EthereumVaultConfig {
+				deployment_block: Some(0),
+				chain_initialized: true,
+			},
+			arbitrum_vault: ArbitrumVaultConfig {
+				deployment_block: None,
+				chain_initialized: false,
+			},
 			emissions: EmissionsConfig {
 				current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
 				backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_PERBILL,
@@ -235,7 +257,6 @@ impl ExtBuilder {
 			polkadot_threshold_signer: Default::default(),
 			bitcoin_vault: Default::default(),
 			polkadot_vault: Default::default(),
-			arbitrum_vault: Default::default(),
 			environment: Default::default(),
 			liquidity_pools: Default::default(),
 			system: Default::default(),

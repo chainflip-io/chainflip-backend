@@ -72,7 +72,7 @@ impl PeerInfo {
 		ip: Ipv6Addr,
 		port: Port,
 	) -> Self {
-		let ed_public_key = ed25519_dalek::PublicKey::from_bytes(&ed_public_key.0).unwrap();
+		let ed_public_key = ed25519_dalek::VerifyingKey::from_bytes(&ed_public_key.0).unwrap();
 		let x_public_key = ed25519_public_key_to_x25519_public_key(&ed_public_key);
 
 		PeerInfo { account_id, pubkey: x_public_key, ip, port }
@@ -112,10 +112,13 @@ pub fn ed25519_secret_key_to_x25519_secret_key(
 }
 
 pub fn ed25519_public_key_to_x25519_public_key(
-	ed25519_pk: &ed25519_dalek::PublicKey,
+	ed25519_pk: &ed25519_dalek::VerifyingKey,
 ) -> x25519_dalek::PublicKey {
 	use curve25519_dalek::edwards::CompressedEdwardsY;
-	let ed_point = CompressedEdwardsY::from_slice(&ed25519_pk.to_bytes()).decompress().unwrap();
+	let ed_point = CompressedEdwardsY::from_slice(&ed25519_pk.to_bytes())
+		.expect("VerifyingKey::to_bytes returns 32 bytes.")
+		.decompress()
+		.unwrap();
 	let x_point = ed_point.to_montgomery();
 
 	x25519_dalek::PublicKey::from(x_point.to_bytes())

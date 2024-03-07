@@ -5,7 +5,7 @@ use sp_core::H256;
 
 use crate::{
 	eth::{
-		core_h256, retry_rpc::EthersRetrySubscribeApi, ConscientiousEthWebsocketBlockHeaderStream,
+		core_h256, retry_rpc::EthersRetrySubscribeApi, ConscientiousEvmWebsocketBlockHeaderStream,
 	},
 	witness::common::{
 		chain_source::{BoxChainStream, ChainClient, ChainSource, Header},
@@ -52,13 +52,13 @@ where
 	) -> (BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>, Self::Client) {
 		pub struct State<C> {
 			client: C,
-			stream: ConscientiousEthWebsocketBlockHeaderStream,
+			stream: ConscientiousEvmWebsocketBlockHeaderStream,
 		}
 
 		let client = self.client.clone();
 		let stream = client.subscribe_blocks().await;
 		(
-			Box::pin(stream::unfold(State { client, stream }, move |mut state| async move {
+			Box::pin(stream::unfold(State { client, stream }, |mut state| async move {
 				loop {
 					while let Ok(Some(header)) =
 						tokio::time::timeout(BLOCK_PULL_TIMEOUT, state.stream.next()).await

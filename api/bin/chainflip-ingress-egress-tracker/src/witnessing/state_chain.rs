@@ -3,23 +3,58 @@ use crate::{
 	utils::{get_broadcast_id, hex_encode_bytes},
 };
 use cf_chains::{
-	address::ToHumanreadableAddress, evm::SchnorrVerificationComponents, AnyChain, Arbitrum,
-	Bitcoin, Chain, Ethereum, Polkadot,
+	address::ToHumanreadableAddress,
+	dot::PolkadotTransactionId,
+	evm::{SchnorrVerificationComponents, H256},
+	AnyChain, Arbitrum, Bitcoin, Chain, Ethereum, Polkadot,
 };
-use cf_primitives::{Asset, BroadcastId, ForeignChain, NetworkEnvironment};
+use cf_primitives::{BroadcastId, ForeignChain, NetworkEnvironment};
 use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi,
 };
 use pallet_cf_ingress_egress::DepositWitness;
-use serde::Serialize;
-use utilities::rpc::NumberOrHex;
+use serde::{Serialize, Serializer};
+use utilities::{rpc::NumberOrHex, ArrayCollect};
+
+/// A wrapper type for bitcoin hashes that serializes the hash in reverse.
+#[derive(Debug)]
+struct BitcoinHash(pub H256);
+
+impl Serialize for BitcoinHash {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		H256(self.0.to_fixed_bytes().into_iter().rev().collect_array()).serialize(serializer)
+	}
+}
+
+struct DotSignature([u8; 64]);
+
+impl Serialize for DotSignature {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		format!("0x{}", hex::encode(self.0)).serialize(serializer)
+	}
+}
+
+#[derive(Serialize)]
+#[serde(untagged)]
+enum TransactionRef {
+	Bitcoin { hash: BitcoinHash },
+	Ethereum { hash: H256 },
+	Polkadot { transaction_id: PolkadotTransactionId },
+	Arbitrum { hash: H256 },
+}
 
 #[derive(Serialize)]
 #[serde(untagged)]
 enum TransactionId {
-	Bitcoin { hash: String },
+	Bitcoin { hash: BitcoinHash },
 	Ethereum { signature: SchnorrVerificationComponents },
-	Polkadot { signature: String },
+	Polkadot { signature: DotSignature },
 	Arbitrum { signature: SchnorrVerificationComponents },
 }
 
@@ -31,12 +66,13 @@ enum WitnessInformation {
 		#[serde(skip_serializing)]
 		deposit_address: String,
 		amount: NumberOrHex,
-		asset: Asset,
+		asset: cf_chains::assets::any::Asset,
 	},
 	Broadcast {
 		#[serde(skip_serializing)]
 		broadcast_id: BroadcastId,
 		tx_out_id: TransactionId,
+		tx_ref: TransactionRef,
 	},
 }
 
@@ -122,6 +158,25 @@ impl From<DepositInfo<Arbitrum>> for WitnessInformation {
 	}
 }
 
+async fn save_deposit_witnesses<S: Store, C: Chain>(
+	store: &mut S,
+	deposit_witnesses: Vec<DepositWitness<C>>,
+	block_height: <C as Chain>::ChainBlockNumber,
+	chainflip_network: NetworkEnvironment,
+) -> anyhow::Result<()>
+where
+	WitnessInformation:
+		From<(DepositWitness<C>, <C as Chain>::ChainBlockNumber, NetworkEnvironment)>,
+{
+	for witness in deposit_witnesses {
+		store
+			.save_to_array(&WitnessInformation::from((witness, block_height, chainflip_network)))
+			.await?;
+	}
+
+	Ok(())
+}
+
 pub async fn handle_call<S, StateChainClient>(
 	call: state_chain_runtime::RuntimeCall,
 	store: &mut S,
@@ -141,28 +196,14 @@ where
 			deposit_witnesses,
 			block_height,
 		}) =>
-			for witness in deposit_witnesses as Vec<DepositWitness<Ethereum>> {
-				store
-					.save_to_array(&WitnessInformation::from((
-						witness,
-						block_height,
-						chainflip_network,
-					)))
-					.await?;
-			},
+			save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network)
+				.await?,
 		BitcoinIngressEgress(IngressEgressCall::process_deposits {
 			deposit_witnesses,
 			block_height,
 		}) =>
-			for witness in deposit_witnesses as Vec<DepositWitness<Bitcoin>> {
-				store
-					.save_to_array(&WitnessInformation::from((
-						witness,
-						block_height,
-						chainflip_network,
-					)))
-					.await?;
-			},
+			save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network)
+				.await?,
 		PolkadotIngressEgress(IngressEgressCall::process_deposits {
 			deposit_witnesses,
 			block_height,
@@ -180,16 +221,13 @@ where
 			deposit_witnesses,
 			block_height,
 		}) =>
-			for witness in deposit_witnesses as Vec<DepositWitness<Arbitrum>> {
-				store
-					.save_to_array(&WitnessInformation::from((
-						witness,
-						block_height,
-						chainflip_network,
-					)))
-					.await?;
-			},
-		EthereumBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
+			save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network)
+				.await?,
+		EthereumBroadcaster(BroadcastCall::transaction_succeeded {
+			tx_out_id,
+			transaction_ref,
+			..
+		}) => {
 			let broadcast_id =
 				get_broadcast_id::<Ethereum, StateChainClient>(state_chain_client, &tx_out_id)
 					.await;
@@ -199,11 +237,16 @@ where
 					.save_singleton(&WitnessInformation::Broadcast {
 						broadcast_id,
 						tx_out_id: TransactionId::Ethereum { signature: tx_out_id },
+						tx_ref: TransactionRef::Ethereum { hash: transaction_ref },
 					})
 					.await?;
 			}
 		},
-		BitcoinBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
+		BitcoinBroadcaster(BroadcastCall::transaction_succeeded {
+			tx_out_id,
+			transaction_ref,
+			..
+		}) => {
 			let broadcast_id =
 				get_broadcast_id::<Bitcoin, StateChainClient>(state_chain_client, &tx_out_id).await;
 
@@ -211,14 +254,18 @@ where
 				store
 					.save_singleton(&WitnessInformation::Broadcast {
 						broadcast_id,
-						tx_out_id: TransactionId::Bitcoin {
-							hash: format!("0x{}", hex::encode(tx_out_id)),
-						},
+						tx_out_id: TransactionId::Bitcoin { hash: BitcoinHash(tx_out_id) },
+						tx_ref: TransactionRef::Bitcoin { hash: BitcoinHash(transaction_ref) },
 					})
 					.await?;
+				println!("{:?}", BitcoinHash(transaction_ref));
 			}
 		},
-		PolkadotBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
+		PolkadotBroadcaster(BroadcastCall::transaction_succeeded {
+			tx_out_id,
+			transaction_ref,
+			..
+		}) => {
 			let broadcast_id =
 				get_broadcast_id::<Polkadot, StateChainClient>(state_chain_client, &tx_out_id)
 					.await;
@@ -228,13 +275,18 @@ where
 					.save_singleton(&WitnessInformation::Broadcast {
 						broadcast_id,
 						tx_out_id: TransactionId::Polkadot {
-							signature: format!("0x{}", hex::encode(tx_out_id.aliased_ref())),
+							signature: DotSignature(*tx_out_id.aliased_ref()),
 						},
+						tx_ref: TransactionRef::Polkadot { transaction_id: transaction_ref },
 					})
 					.await?;
 			}
 		},
-		ArbitrumBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
+		ArbitrumBroadcaster(BroadcastCall::transaction_succeeded {
+			tx_out_id,
+			transaction_ref,
+			..
+		}) => {
 			let broadcast_id =
 				get_broadcast_id::<Arbitrum, StateChainClient>(state_chain_client, &tx_out_id)
 					.await;
@@ -244,6 +296,7 @@ where
 					.save_singleton(&WitnessInformation::Broadcast {
 						broadcast_id,
 						tx_out_id: TransactionId::Arbitrum { signature: tx_out_id },
+						tx_ref: TransactionRef::Arbitrum { hash: transaction_ref },
 					})
 					.await?;
 			}
@@ -298,6 +351,7 @@ mod tests {
 	use cf_chains::{
 		dot::PolkadotAccountId,
 		evm::{EvmTransactionMetadata, TransactionFee},
+		instances::ChainInstanceFor,
 		Chain,
 	};
 	use cf_primitives::{BroadcastId, NetworkEnvironment};
@@ -313,7 +367,6 @@ mod tests {
 	use mockall::mock;
 	use pallet_cf_ingress_egress::DepositWitness;
 	use sp_core::{storage::StorageKey, H160};
-	use state_chain_runtime::PalletInstanceAlias;
 	use std::collections::HashMap;
 
 	#[derive(Default)]
@@ -416,22 +469,19 @@ mod tests {
 	}
 
 	#[allow(clippy::type_complexity)]
-	fn create_client<I>(
-		result: Option<(
-			BroadcastId,
-			<<state_chain_runtime::Runtime as pallet_cf_broadcast::Config<I::Instance>>::TargetChain as Chain>::ChainBlockNumber,
-		)>,
+	fn create_client<C: Chain>(
+		result: Option<(BroadcastId, C::ChainBlockNumber)>,
 	) -> MockStateChainClient
 	where
-		state_chain_runtime::Runtime: pallet_cf_broadcast::Config<I::Instance>,
-		I: PalletInstanceAlias + 'static,
+		state_chain_runtime::Runtime:
+			pallet_cf_broadcast::Config<ChainInstanceFor<C>, TargetChain = C>,
 	{
 		let mut client = MockStateChainClient::new();
 
 		client
 			.expect_storage_map_entry::<pallet_cf_broadcast::TransactionOutIdToBroadcastId<
 				state_chain_runtime::Runtime,
-				I::Instance,
+				ChainInstanceFor<C>,
 			>>()
 			.return_once(move |_, _| Ok(result));
 
@@ -531,11 +581,8 @@ mod tests {
 		insta::assert_display_snapshot!(store
 			.storage
 			.get(
-				format!(
-					"deposit:Polkadot:{}",
-					format!("0x{}", hex::encode(polkadot_account_id.aliased_ref()))
-				)
-				.as_str()
+				format!("deposit:Polkadot:0x{}", hex::encode(polkadot_account_id.aliased_ref()))
+					.as_str()
 			)
 			.unwrap());
 		insta::assert_display_snapshot!(store
@@ -588,6 +635,7 @@ mod tests {
 						contract: H160::from([0; 20]),
 						gas_limit: None,
 					},
+					transaction_ref: Default::default(),
 				},
 			),
 			&mut store,
@@ -599,5 +647,27 @@ mod tests {
 
 		assert_eq!(store.storage.len(), 1);
 		insta::assert_display_snapshot!(store.storage.get("broadcast:Ethereum:1").unwrap());
+	}
+
+	#[test]
+	fn serialization_works_as_expected() {
+		let h = BitcoinHash(
+			[
+				0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+				23, 24, 25, 26, 27, 28, 29, 30, 31,
+			]
+			.into(),
+		);
+		let s = DotSignature([
+			0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+			24, 25, 26, 27, 28, 29, 30, 31, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+			16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+		]);
+
+		assert_eq!(
+			serde_json::to_string(&h).unwrap(),
+			"\"0x1f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100\""
+		);
+		assert_eq!(serde_json::to_string(&s).unwrap(), "\"0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f\"");
 	}
 }

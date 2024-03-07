@@ -24,7 +24,7 @@ use state_chain_runtime::{
 fn cannot_redeem_funds_out_of_redemption_period() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 3;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
@@ -124,7 +124,7 @@ fn cannot_redeem_funds_out_of_redemption_period() {
 #[test]
 fn funded_node_is_added_to_backups() {
 	const EPOCH_BLOCKS: u32 = 10_000_000;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		// As we run a rotation at genesis we will need accounts to support
 		// having 5 authorities as the default is 3 (Alice, Bob and Charlie)
@@ -148,7 +148,7 @@ fn backup_reward_is_calculated_linearly() {
 	const EPOCH_BLOCKS: u32 = 1_000;
 	const MAX_AUTHORITIES: u32 = 10;
 	const NUM_BACKUPS: u32 = 20;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
@@ -193,7 +193,7 @@ fn can_calculate_account_apy() {
 	const EPOCH_BLOCKS: u32 = 1_000;
 	const MAX_AUTHORITIES: u32 = 10;
 	const NUM_BACKUPS: u32 = 20;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
@@ -245,7 +245,7 @@ fn apy_can_be_above_100_percent() {
 	const EPOCH_BLOCKS: u32 = 1_000;
 	const MAX_AUTHORITIES: u32 = 2;
 	const NUM_BACKUPS: u32 = 2;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
@@ -280,7 +280,7 @@ fn backup_rewards_event_gets_emitted_on_heartbeat_interval() {
 	const EPOCH_BLOCKS: u32 = 1_000;
 	const NUM_BACKUPS: u32 = 20;
 	const MAX_AUTHORITIES: u32 = 100;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.accounts(
 			(0..MAX_AUTHORITIES as u8)

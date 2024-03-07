@@ -1,21 +1,24 @@
 use crate::chainflip::Offence;
 use cf_amm::{
-	common::{Amount, Tick},
+	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{eth::Address as EthereumAddress, Chain, ForeignChainAddress};
+use cf_chains::{
+	assets::any::AssetMap, eth::Address as EthereumAddress, Chain, ForeignChainAddress,
+};
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, BroadcastId, EpochIndex, ForeignChain, NetworkEnvironment,
-	SemVer, SwapOutput,
+	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, FlipBalance,
+	ForeignChain, NetworkEnvironment, SemVer, SwapOutput,
 };
 use codec::{Decode, Encode};
 use core::ops::Range;
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{
-	AskBidMap, AssetsMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPrice,
+	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
 };
+use pallet_cf_swapping::SwapLegInfo;
 use pallet_cf_witnesser::CallHash;
 use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
@@ -39,7 +42,7 @@ pub enum ChainflipAccountStateWithPassive {
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
-pub struct RuntimeApiAccountInfoV2 {
+pub struct ValidatorInfo {
 	pub balance: u128,
 	pub bond: u128,
 	pub last_heartbeat: u32, // can *maybe* remove this - check with Andrew
@@ -75,6 +78,12 @@ pub struct AuctionState {
 pub struct LiquidityProviderInfo {
 	pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
 	pub balances: Vec<(Asset, AssetAmount)>,
+	pub earned_fees: AssetMap<AssetAmount>,
+}
+
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+pub struct BrokerInfo {
+	pub earned_fees: Vec<(Asset, AssetAmount)>,
 }
 
 #[derive(Debug, Decode, Encode, TypeInfo)]
@@ -122,12 +131,16 @@ decl_runtime_apis!(
 		fn cf_flip_supply() -> (u128, u128);
 		fn cf_accounts() -> Vec<(AccountId32, VanityName)>;
 		fn cf_account_flip_balance(account_id: &AccountId32) -> u128;
-		fn cf_account_info_v2(account_id: &AccountId32) -> RuntimeApiAccountInfoV2;
+		fn cf_validator_info(account_id: &AccountId32) -> ValidatorInfo;
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)>;
 		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId32)>)>;
 		fn cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash;
 		fn cf_auction_state() -> AuctionState;
-		fn cf_pool_price(from: Asset, to: Asset) -> Option<PoolPrice>;
+		fn cf_pool_price(from: Asset, to: Asset) -> Option<PoolPriceV1>;
+		fn cf_pool_price_v2(
+			base_asset: Asset,
+			quote_asset: Asset,
+		) -> Result<PoolPriceV2, DispatchErrorWithMessage>;
 		fn cf_pool_simulate_swap(
 			from: Asset,
 			to: Asset,
@@ -150,7 +163,7 @@ decl_runtime_apis!(
 			base_asset: Asset,
 			quote_asset: Asset,
 			tick_range: Range<cf_amm::common::Tick>,
-		) -> Result<AssetsMap<Amount>, DispatchErrorWithMessage>;
+		) -> Result<PoolPairsMap<Amount>, DispatchErrorWithMessage>;
 		fn cf_pool_orderbook(
 			base_asset: Asset,
 			quote_asset: Asset,
@@ -166,13 +179,22 @@ decl_runtime_apis!(
 			quote_asset: Asset,
 			tick_range: Range<Tick>,
 			liquidity: Liquidity,
-		) -> Result<AssetsMap<Amount>, DispatchErrorWithMessage>;
+		) -> Result<PoolPairsMap<Amount>, DispatchErrorWithMessage>;
 
 		fn cf_max_swap_amount(asset: Asset) -> Option<AssetAmount>;
 		fn cf_min_deposit_amount(asset: Asset) -> AssetAmount;
 		fn cf_egress_dust_limit(asset: Asset) -> AssetAmount;
-		fn cf_prewitness_swaps(from: Asset, to: Asset) -> Option<Vec<AssetAmount>>;
-		fn cf_liquidity_provider_info(account_id: AccountId32) -> Option<LiquidityProviderInfo>;
+		fn cf_prewitness_swaps(
+			base_asset: Asset,
+			quote_asset: Asset,
+			side: Side,
+		) -> Vec<AssetAmount>;
+		fn cf_scheduled_swaps(
+			base_asset: Asset,
+			quote_asset: Asset,
+		) -> Vec<(SwapLegInfo, BlockNumber)>;
+		fn cf_liquidity_provider_info(account_id: AccountId32) -> LiquidityProviderInfo;
+		fn cf_broker_info(account_id: AccountId32) -> BrokerInfo;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
 		fn cf_asset_balances(account_id: AccountId32) -> Vec<(Asset, AssetAmount)>;
 		fn cf_redemption_tax() -> AssetAmount;
@@ -187,5 +209,6 @@ decl_runtime_apis!(
 		fn cf_egress_fee(asset: Asset) -> Option<AssetAmount>;
 		fn cf_witness_count(hash: CallHash) -> Option<FailingWitnessValidators>;
 		fn cf_witness_safety_margin(chain: ForeignChain) -> Option<u64>;
+		fn cf_channel_opening_fee(chain: ForeignChain) -> FlipBalance;
 	}
 );

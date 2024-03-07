@@ -3,12 +3,11 @@ use crate::{
 	witness::common::{RuntimeCallHasChain, RuntimeHasChain},
 };
 use anyhow::ensure;
-use cf_chains::Chain;
+use cf_chains::instances::ChainInstanceFor;
 use cf_primitives::EpochIndex;
 use ethers::types::Bloom;
 use futures_core::Future;
 use sp_core::H256;
-use state_chain_runtime::PalletInstanceAlias;
 
 use crate::witness::{
 	common::chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses,
@@ -59,7 +58,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		ProcessingFut: Future<Output = ()> + Send + 'static,
 		EthRetryRpcClient: EthersRetryRpcApi + AddressCheckerRetryRpcApi + Send + Sync + Clone,
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-		<Inner::Chain as Chain>::ChainCrypto: PalletInstanceAlias,
 		state_chain_runtime::RuntimeCall:
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
 	{
@@ -112,7 +110,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							process_call(
 								pallet_cf_ingress_egress::Call::<
 									_,
-									<Inner::Chain as PalletInstanceAlias>::Instance,
+									ChainInstanceFor<Inner::Chain>,
 								>::process_deposits {
 									deposit_witnesses: ingresses
 										.into_iter()
@@ -190,7 +188,7 @@ pub fn eth_ingresses_at_block<
 	addresses: Addresses,
 	native_events: Vec<FetchedNativeFilter>,
 ) -> Result<Vec<(H160, U256)>, anyhow::Error> {
-	let fetched_native_totals: BTreeMap<H160, _> = native_events
+	let fetched_native_totals: BTreeMap<_, _> = native_events
 		.into_iter()
 		.into_group_map_by(|f| f.sender)
 		.into_iter()

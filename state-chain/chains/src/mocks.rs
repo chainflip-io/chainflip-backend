@@ -23,9 +23,9 @@ pub enum ChainChoice {
 }
 
 thread_local! {
-	static MOCK_KEY_HANDOVER_IS_REQUIRED: RefCell<bool> = RefCell::new(true);
-	static MOCK_VALID_METADATA: RefCell<bool> = RefCell::new(true);
-	static MOCK_BROADCAST_BARRIERS: RefCell<ChainChoice> = RefCell::new(ChainChoice::Ethereum);
+	static MOCK_KEY_HANDOVER_IS_REQUIRED: RefCell<bool> = const { RefCell::new(true) };
+	static MOCK_VALID_METADATA: RefCell<bool> = const { RefCell::new(true) };
+	static MOCK_BROADCAST_BARRIERS: RefCell<ChainChoice> = const { RefCell::new(ChainChoice::Ethereum) };
 }
 
 pub struct MockKeyHandoverIsRequired;
@@ -109,6 +109,7 @@ impl Chain for MockEthereum {
 	type TransactionMetadata = MockEthereumTransactionMetadata;
 	type ReplayProtectionParams = ();
 	type ReplayProtection = EvmReplayProtection;
+	type TransactionRef = u32;
 }
 
 impl ToHumanreadableAddress for u64 {
@@ -298,6 +299,14 @@ impl ChainCrypto for MockEthereumChainCrypto {
 	}
 }
 
+decl_instance_aliases!(
+	MockEthereum => MockEthereumInstance, (),
+	MockEthereumChainCrypto => MockEthereumCryptoInstance, (),
+);
+impl_instance_alias_traits!(
+	MockEthereumChainCrypto => { MockEthereum },
+);
+
 impl_default_benchmark_value!(MockAggKey);
 impl_default_benchmark_value!([u8; 4]);
 impl_default_benchmark_value!(MockThresholdSignature<MockAggKey, [u8; 4]>);
@@ -359,7 +368,7 @@ impl<C: ChainCrypto + 'static> ApiCall<C> for MockApiCall<C> {
 }
 
 thread_local! {
-	pub static REQUIRES_REFRESH: std::cell::RefCell<bool> = RefCell::new(false);
+	pub static REQUIRES_REFRESH: std::cell::RefCell<bool> = const { RefCell::new(false) };
 }
 
 pub struct MockTransactionBuilder<C, Call>(PhantomData<(C, Call)>);

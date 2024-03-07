@@ -1,11 +1,10 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 pub mod address_derivation;
-pub mod all_keys_rotator;
-pub mod all_vault_activator;
 pub mod backup_node_rewards;
-pub mod chain_instances;
+pub mod cons_key_rotator;
 pub mod decompose_recompose;
 pub mod epoch_transition;
+pub mod evm_vault_activator;
 mod missed_authorship_slots;
 mod offences;
 mod signer_nomination;
@@ -13,7 +12,7 @@ use crate::{
 	impl_transaction_builder_for_evm_chain, AccountId, AccountRoles, ArbitrumChainTracking,
 	ArbitrumIngressEgress, Authorship, BitcoinChainTracking, BitcoinIngressEgress,
 	BitcoinThresholdSigner, BlockNumber, Emissions, Environment, EthereumBroadcaster,
-	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster,
+	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, Hash, PolkadotBroadcaster,
 	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
 	System, Validator, YEAR,
 };
@@ -24,6 +23,7 @@ use cf_chains::{
 		ForeignChainAddress,
 	},
 	arb::api::ArbitrumApi,
+	assets::any::ForeignChainAndAsset,
 	btc::{
 		api::{BitcoinApi, SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		Bitcoin, BitcoinCrypto, BitcoinFeeInfo, BitcoinTransactionData, UtxoId,
@@ -67,6 +67,7 @@ use frame_support::{
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
 use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
 pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
 use sp_std::prelude::*;
@@ -76,6 +77,7 @@ impl Chainflip for Runtime {
 	type Amount = FlipBalance;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
+	type EnsurePrewitnessed = pallet_cf_witnesser::EnsurePrewitnessed;
 	type EnsureWitnessedAtCurrentEpoch = pallet_cf_witnesser::EnsureWitnessedAtCurrentEpoch;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type EpochInfo = Validator;
@@ -521,20 +523,21 @@ macro_rules! impl_deposit_api_for_anychain {
 	( $t: ident, $(($chain: ident, $pallet: ident)),+ ) => {
 		impl DepositApi<AnyChain> for $t {
 			type AccountId = <Runtime as frame_system::Config>::AccountId;
+			type Amount = <Runtime as Chainflip>::Amount;
 
 			fn request_liquidity_deposit_address(
 				lp_account: Self::AccountId,
 				source_asset: Asset,
 				boost_fee: BasisPoints
-			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber), DispatchError> {
+			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber, FlipBalance), DispatchError> {
 				match source_asset.into() {
 					$(
-						ForeignChain::$chain =>
+						ForeignChainAndAsset::$chain(source_asset) =>
 							$pallet::request_liquidity_deposit_address(
 								lp_account,
-								source_asset.try_into().unwrap(),
+								source_asset,
 								boost_fee
-							).map(|(channel, address, block_number)| (channel, address, block_number.into())),
+							).map(|(channel, address, block_number, channel_opening_fee)| (channel, address, block_number.into(), channel_opening_fee)),
 					)+
 				}
 			}
@@ -547,18 +550,18 @@ macro_rules! impl_deposit_api_for_anychain {
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadata>,
 				boost_fee: BasisPoints
-			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber), DispatchError> {
+			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber, FlipBalance), DispatchError> {
 				match source_asset.into() {
 					$(
-						ForeignChain::$chain => $pallet::request_swap_deposit_address(
-							source_asset.try_into().unwrap(),
+						ForeignChainAndAsset::$chain(source_asset) => $pallet::request_swap_deposit_address(
+							source_asset,
 							destination_asset,
 							destination_address,
 							broker_commission_bps,
 							broker_id,
 							channel_metadata,
 							boost_fee
-						).map(|(channel, address, block_number)| (channel, address, block_number.into())),
+						).map(|(channel, address, block_number, channel_opening_fee)| (channel, address, block_number.into(), channel_opening_fee)),
 					)+
 				}
 			}
@@ -580,8 +583,8 @@ macro_rules! impl_egress_api_for_anychain {
 			) -> Result<ScheduledEgressDetails<AnyChain>, DispatchError> {
 				match asset.into() {
 					$(
-						ForeignChain::$chain => $pallet::schedule_egress(
-							asset.try_into().expect("Checked for asset compatibility"),
+						ForeignChainAndAsset::$chain(asset) => $pallet::schedule_egress(
+							asset,
 							amount.try_into().expect("Checked for amount compatibility"),
 							destination_address
 								.try_into()
@@ -697,7 +700,7 @@ pub fn calculate_account_apy(account_id: &AccountId) -> Option<u32> {
 		// Authority: reward is earned by authoring a block.
 		Some(
 			Emissions::current_authority_emission_per_block() * YEAR as u128 /
-				pallet_cf_validator::CurrentAuthorities::<Runtime>::decode_len()
+				pallet_cf_validator::CurrentAuthorities::<Runtime>::decode_non_dedup_len()
 					.expect("Current authorities must exists and non-empty.") as u128,
 		)
 	} else {
@@ -727,4 +730,14 @@ pub fn calculate_account_apy(account_id: &AccountId) -> Option<u32> {
 			.checked_mul_int(10_000u32)
 			.unwrap_or_default()
 	})
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug, Encode, Decode)]
+pub struct BlockUpdate<Data> {
+	pub block_hash: Hash,
+	pub block_number: BlockNumber,
+	// NOTE: Flatten requires Data types to be struct or map
+	// Also flatten is incompatible with u128, so AssetAmounts needs to be String type.
+	#[serde(flatten)]
+	pub data: Data,
 }

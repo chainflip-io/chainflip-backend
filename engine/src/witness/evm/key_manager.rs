@@ -1,5 +1,6 @@
 use cf_chains::{
 	evm::{EvmCrypto, EvmTransactionMetadata, SchnorrVerificationComponents, TransactionFee},
+	instances::ChainInstanceFor,
 	Chain,
 };
 use cf_primitives::EpochIndex;
@@ -9,7 +10,6 @@ use ethers::{
 };
 use futures_core::Future;
 use sp_core::{H160, H256};
-use state_chain_runtime::PalletInstanceAlias;
 use tracing::{info, trace};
 
 use super::{
@@ -64,6 +64,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			ChainAccount = H160,
 			TransactionFee = TransactionFee,
 			TransactionMetadata = EvmTransactionMetadata,
+			TransactionRef = H256,
 		>,
 		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 			+ Send
@@ -72,7 +73,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			+ 'static,
 		ProcessingFut: Future<Output = ()> + Send + 'static,
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-		<Inner::Chain as Chain>::ChainCrypto: PalletInstanceAlias,
 		state_chain_runtime::RuntimeCall:
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
 	{
@@ -91,7 +91,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							..
 						}) => pallet_cf_vaults::Call::<
 							_,
-							<Inner::Chain as PalletInstanceAlias>::Instance,
+							ChainInstanceFor<Inner::Chain>,
 						>::vault_key_rotated_externally {
 							new_public_key: cf_chains::evm::AggKey::from_pubkey_compressed(
 								new_agg_key.serialize(),
@@ -135,7 +135,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							};
 							pallet_cf_broadcast::Call::<
 								_,
-								<Inner::Chain as PalletInstanceAlias>::Instance,
+								ChainInstanceFor<Inner::Chain>,
 							>::transaction_succeeded {
 								tx_out_id: SchnorrVerificationComponents {
 									s: sig_data.sig.into(),
@@ -144,6 +144,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								signer_id: from,
 								tx_fee: TransactionFee { effective_gas_price, gas_used },
 								tx_metadata,
+								transaction_ref: transaction.hash,
 							}
 							.into()
 						},
@@ -214,6 +215,7 @@ mod tests {
 						false,
 						false,
 						false,
+						None,
 					)
 					.await
 					.unwrap();

@@ -8,7 +8,7 @@
 // Argument 3 is the destination address
 // For example: ./commands/new_swap.ts dot btc n1ocq2FF95qopwbEsjUTy3ZrawwXDJ6UsX
 
-import { Asset } from '@chainflip-io/cli';
+import { Asset } from '@chainflip/cli';
 import { runWithTimeout } from '../shared/utils';
 import { newSwap } from '../shared/new_swap';
 

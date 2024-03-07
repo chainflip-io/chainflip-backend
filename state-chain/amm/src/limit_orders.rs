@@ -32,8 +32,8 @@ use sp_std::vec::Vec;
 
 use crate::common::{
 	is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, sqrt_price_to_price,
-	tick_at_sqrt_price, Amount, OneToZero, Price, SetFeesError, SideMap, SqrtPriceQ64F96, Tick,
-	ZeroToOne, MAX_LP_FEE, ONE_IN_HUNDREDTH_PIPS, PRICE_FRACTIONAL_BITS,
+	tick_at_sqrt_price, Amount, BaseToQuote, PoolPairsMap, Price, QuoteToBase, SetFeesError,
+	SqrtPriceQ64F96, Tick, MAX_LP_FEE, ONE_IN_HUNDREDTH_PIPS, PRICE_FRACTIONAL_BITS,
 };
 
 // This is the maximum liquidity/amount of an asset that can be sold at a single tick/price. If an
@@ -205,13 +205,13 @@ pub(super) trait SwapDirection: crate::common::SwapDirection {
 		pools: &'_ mut BTreeMap<SqrtPriceQ64F96, FixedPool>,
 	) -> Option<sp_std::collections::btree_map::OccupiedEntry<'_, SqrtPriceQ64F96, FixedPool>>;
 }
-impl SwapDirection for ZeroToOne {
+impl SwapDirection for BaseToQuote {
 	fn input_amount_ceil(output: Amount, price: Price) -> Amount {
 		mul_div_ceil(output, U256::one() << PRICE_FRACTIONAL_BITS, price)
 	}
 
 	fn input_amount_floor(output: Amount, price: Price) -> Amount {
-		OneToZero::output_amount_floor(output, price)
+		QuoteToBase::output_amount_floor(output, price)
 	}
 
 	fn output_amount_floor(input: Amount, price: Price) -> Amount {
@@ -224,13 +224,13 @@ impl SwapDirection for ZeroToOne {
 		pools.last_entry()
 	}
 }
-impl SwapDirection for OneToZero {
+impl SwapDirection for QuoteToBase {
 	fn input_amount_ceil(output: Amount, price: Price) -> Amount {
 		mul_div_ceil(output, price, U256::one() << PRICE_FRACTIONAL_BITS)
 	}
 
 	fn input_amount_floor(output: Amount, price: Price) -> Amount {
-		ZeroToOne::output_amount_floor(output, price)
+		BaseToQuote::output_amount_floor(output, price)
 	}
 
 	fn output_amount_floor(input: Amount, price: Price) -> Amount {
@@ -381,19 +381,20 @@ pub(super) struct PoolState<LiquidityProvider: Ord> {
 	/// The ID the next FixedPool that is created will use.
 	next_pool_instance: u128,
 	/// All the FixedPools that have some liquidity. They are grouped into all those that are
-	/// selling asset `Zero` and all those that are selling asset `One` used the SideMap.
-	fixed_pools: SideMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,
+	/// selling asset `Base` and all those that are selling asset `Quote` used the PoolPairsMap.
+	fixed_pools: PoolPairsMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,
 	/// All the Positions that either are providing liquidity currently, or were providing
 	/// liquidity directly after the last time they where updated. They are grouped into all those
-	/// that are selling asset `Zero` and all those that are selling asset `One` used the SideMap.
-	/// Therefore there can be positions stored here that don't provide any liquidity.
-	positions: SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
+	/// that are selling asset `Base` and all those that are selling asset `Quote` used the
+	/// PoolPairsMap. Therefore there can be positions stored here that don't provide any
+	/// liquidity.
+	positions: PoolPairsMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
 	/// Total fees earned over all time
-	total_fees_earned: SideMap<Amount>,
+	pub(super) total_fees_earned: PoolPairsMap<Amount>,
 	/// Total of all swap inputs over all time (not including fees)
-	total_swap_inputs: SideMap<Amount>,
+	pub(super) total_swap_inputs: PoolPairsMap<Amount>,
 	/// Total of all swap outputs over all time
-	total_swap_outputs: SideMap<Amount>,
+	total_swap_outputs: PoolPairsMap<Amount>,
 }
 
 impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
@@ -441,38 +442,38 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		})
 	}
 
-	/// Runs collect for all positions in the pool. Returns a SideMap
+	/// Runs collect for all positions in the pool. Returns a PoolPairsMap
 	/// containing the state and fees collected from every position. The positions are grouped into
-	/// a SideMap by the asset they sell.
+	/// a PoolPairsMap by the asset they sell.
 	///
 	/// This function never panics.
 	#[allow(clippy::type_complexity)]
 	pub(super) fn collect_all(
 		&mut self,
-	) -> SideMap<Vec<(LiquidityProvider, Tick, Collected, PositionInfo)>> {
+	) -> PoolPairsMap<Vec<(LiquidityProvider, Tick, Collected, PositionInfo)>> {
 		// We must collect all positions before we can change the fee, otherwise the fee and swapped
 		// liquidity calculations would be wrong.
-		SideMap::from_array([
-			self.positions[!<OneToZero as crate::common::SwapDirection>::INPUT_SIDE]
+		PoolPairsMap::from_array([
+			self.positions[!<QuoteToBase as crate::common::SwapDirection>::INPUT_SIDE]
 				.keys()
 				.cloned()
 				.collect::<sp_std::vec::Vec<_>>()
 				.into_iter()
 				.map(|(sqrt_price, lp)| {
 					let (collected, position_info) =
-						self.inner_collect::<OneToZero>(&lp, sqrt_price).unwrap();
+						self.inner_collect::<QuoteToBase>(&lp, sqrt_price).unwrap();
 
 					(lp.clone(), tick_at_sqrt_price(sqrt_price), collected, position_info)
 				})
 				.collect(),
-			self.positions[!<ZeroToOne as crate::common::SwapDirection>::INPUT_SIDE]
+			self.positions[!<BaseToQuote as crate::common::SwapDirection>::INPUT_SIDE]
 				.keys()
 				.cloned()
 				.collect::<sp_std::vec::Vec<_>>()
 				.into_iter()
 				.map(|(sqrt_price, lp)| {
 					let (collected, position_info) =
-						self.inner_collect::<ZeroToOne>(&lp, sqrt_price).unwrap();
+						self.inner_collect::<BaseToQuote>(&lp, sqrt_price).unwrap();
 
 					(lp.clone(), tick_at_sqrt_price(sqrt_price), collected, position_info)
 				})
@@ -481,16 +482,17 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	}
 
 	/// Sets the fee for the pool. This will apply to future swaps. The fee may not be set
-	/// higher than 50%. Also runs collect for all positions in the pool. Returns a SideMap
+	/// higher than 50%. Also runs collect for all positions in the pool. Returns a PoolPairsMap
 	/// containing the state and fees collected from every position as part of the set_fees
-	/// operation. The positions are grouped into a SideMap by the asset they sell.
+	/// operation. The positions are grouped into a PoolPairsMap by the asset they sell.
 	///
 	/// This function never panics.
 	#[allow(clippy::type_complexity)]
 	pub(super) fn set_fees(
 		&mut self,
 		fee_hundredth_pips: u32,
-	) -> Result<SideMap<Vec<(LiquidityProvider, Tick, Collected, PositionInfo)>>, SetFeesError> {
+	) -> Result<PoolPairsMap<Vec<(LiquidityProvider, Tick, Collected, PositionInfo)>>, SetFeesError>
+	{
 		Self::validate_fees(fee_hundredth_pips)
 			.then_some(())
 			.ok_or(SetFeesError::InvalidFeeAmount)?;
@@ -509,8 +511,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 	/// Swaps the specified Amount into the other currency until sqrt_price_limit is reached (If
 	/// Some), and returns the resulting Amount and the remaining input Amount. The direction of the
-	/// swap is controlled by the generic type parameter `SD`, by setting it to `ZeroToOne` or
-	/// `OneToZero`. Note sqrt_price_limit is inclusive.
+	/// swap is controlled by the generic type parameter `SD`, by setting it to `BaseToQuote` or
+	/// `QuoteToBase`. Note sqrt_price_limit is inclusive.
 	///
 	/// This function never panics
 	pub(super) fn swap<SD: SwapDirection>(

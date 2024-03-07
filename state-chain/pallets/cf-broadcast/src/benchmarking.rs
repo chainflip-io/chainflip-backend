@@ -58,7 +58,6 @@ fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T
 #[instance_benchmarks]
 mod benchmarks {
 	use super::*;
-	use sp_std::vec;
 
 	#[benchmark]
 	fn on_initialize(t: Linear<1, 50>, r: Linear<1, 50>) {
@@ -129,7 +128,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn start_next_broadcast_attempt() {
-		let broadcast_id = Pallet::<T, I>::threshold_sign_and_broadcast(
+		let (broadcast_id, _) = Pallet::<T, I>::threshold_sign_and_broadcast(
 			BenchmarkValue::benchmark_value(),
 			None,
 			|_| None,
@@ -164,6 +163,7 @@ mod benchmarks {
 			signer_id,
 			tx_fee: TransactionFeeFor::<T, I>::benchmark_value(),
 			tx_metadata: TransactionMetadataFor::<T, I>::benchmark_value(),
+			transaction_ref: TransactionRefFor::<T, I>::benchmark_value(),
 		};
 
 		#[block]

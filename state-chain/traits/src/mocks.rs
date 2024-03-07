@@ -62,6 +62,7 @@ macro_rules! impl_mock_chainflip {
 			type ValidatorId = <$runtime as frame_system::Config>::AccountId;
 			type RuntimeCall = RuntimeCall;
 			type EnsureWitnessed = NeverFailingOriginCheck<Self>;
+			type EnsurePrewitnessed = NeverFailingOriginCheck<Self>;
 			type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
 			type EnsureGovernance = NeverFailingOriginCheck<Self>;
 			type EpochInfo = MockEpochInfo;

@@ -1,6 +1,5 @@
-use cf_chains::Chain;
+use cf_chains::instances::ChainInstanceFor;
 use pallet_cf_ingress_egress::DepositChannelDetails;
-use state_chain_runtime::PalletInstanceAlias;
 use std::sync::Arc;
 use utilities::task_scope::Scope;
 
@@ -16,7 +15,7 @@ use super::{builder::ChunkedByVaultBuilder, monitored_items::MonitoredSCItems, C
 pub type Addresses<Inner> = Vec<
 	DepositChannelDetails<
 		state_chain_runtime::Runtime,
-		<<Inner as ChunkedByVault>::Chain as PalletInstanceAlias>::Instance,
+		ChainInstanceFor<<Inner as ChunkedByVault>::Chain>,
 	>,
 >;
 
@@ -42,7 +41,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 		StateChainStream: StreamApi<IS_FINALIZED>,
 		StateChainClient: StorageApi + Send + Sync + 'static,
-		<Inner::Chain as Chain>::ChainCrypto: PalletInstanceAlias,
 	{
 		let state_chain_client_c = state_chain_client.clone();
 		ChunkedByVaultBuilder::new(
@@ -57,7 +55,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 						state_chain_client
 							.storage_map_values::<pallet_cf_ingress_egress::DepositChannelLookup<
 								state_chain_runtime::Runtime,
-								<Inner::Chain as PalletInstanceAlias>::Instance,
+								ChainInstanceFor<Inner::Chain>,
 							>>(block_hash)
 							.await
 							.expect(STATE_CHAIN_CONNECTION)

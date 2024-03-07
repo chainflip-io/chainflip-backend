@@ -12,6 +12,8 @@ use crate::address::EncodedAddress;
 #[cfg(feature = "runtime-benchmarks")]
 use crate::address::ForeignChainAddress;
 #[cfg(feature = "runtime-benchmarks")]
+use crate::dot::PolkadotTransactionId;
+#[cfg(feature = "runtime-benchmarks")]
 use crate::evm::{EvmFetchId, EvmTransactionMetadata};
 
 /// Ensure type specifies a value to be used for benchmarking purposes.
@@ -133,6 +135,13 @@ impl BenchmarkValue for EvmTransactionMetadata {
 			max_priority_fee_per_gas: Some(U256::zero()),
 			gas_limit: None,
 		}
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for PolkadotTransactionId {
+	fn benchmark_value() -> Self {
+		Self { block_number: 0u32, extrinsic_index: 0u32 }
 	}
 }
 

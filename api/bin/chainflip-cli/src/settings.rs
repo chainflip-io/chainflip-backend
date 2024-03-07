@@ -16,7 +16,7 @@ use std::{
 };
 
 #[derive(Parser, Clone, Debug)]
-#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"), version_short = 'v')]
+#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"))]
 pub struct CLICommandLineOptions {
 	#[clap(short = 'c', long = "config-root", env = CONFIG_ROOT, default_value = DEFAULT_CONFIG_ROOT)]
 	pub config_root: String,
@@ -75,16 +75,19 @@ pub struct SwapRequestParams {
 	pub broker_commission: u16,
 	/// Commission to the booster in basis points
 	pub boost_fee: Option<u16>,
-	/// Chain of the source asset ("Ethereum"|"Polkadot")
-	pub source_chain: Option<ForeignChain>,
-	/// Chain of the destination asset ("Ethereum"|"Polkadot")
-	pub destination_chain: Option<ForeignChain>,
 }
-
+#[derive(Parser, Clone, Debug)]
+pub struct WithdrawFeesParams {
+	/// Asset to withdraw ("ETH"|"DOT")
+	pub asset: Asset,
+	/// Egress asset address to receive withdrawn funds
+	pub destination_address: String,
+}
 #[derive(clap::Subcommand, Clone, Debug)]
 pub enum BrokerSubcommands {
 	/// Request a swap deposit address.
 	RequestSwapDepositAddress(SwapRequestParams),
+	WithdrawFees(WithdrawFeesParams),
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]
@@ -93,8 +96,6 @@ pub enum LiquidityProviderSubcommands {
 	RequestLiquidityDepositAddress {
 		/// Asset to deposit ("ETH"|"DOT")
 		asset: Asset,
-		/// Chain of the deposit asset ("Ethereum"|"Polkadot")
-		chain: Option<ForeignChain>,
 		boost_fee: Option<u16>,
 	},
 	/// Register a Liquidity Refund Address for the given chain. An address must be
@@ -285,6 +286,7 @@ mod tests {
 	}
 
 	#[test]
+	#[ignore = "Requires config file at root"]
 	fn init_default_config() {
 		set_test_env();
 
@@ -300,6 +302,7 @@ mod tests {
 	}
 
 	#[test]
+	#[ignore = "Requires config file at default root"]
 	fn test_all_command_line_options() {
 		// Fill the options with test values that will pass the parsing/validation.
 		// The test values need to be different from the default values set during `set_defaults()`

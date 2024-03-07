@@ -9,7 +9,6 @@ use sp_core::{
 	storage::{StorageData, StorageKey},
 	Bytes,
 };
-use sp_runtime::traits::BlakeTwo256;
 use sp_version::RuntimeVersion;
 use state_chain_runtime::SignedBlock;
 
@@ -133,11 +132,11 @@ pub trait BaseRpcApi {
 
 	async fn subscribe_finalized_block_headers(
 		&self,
-	) -> RpcResult<Subscription<sp_runtime::generic::Header<u32, BlakeTwo256>>>;
+	) -> RpcResult<Subscription<state_chain_runtime::Header>>;
 
 	async fn subscribe_unfinalized_block_headers(
 		&self,
-	) -> RpcResult<Subscription<sp_runtime::generic::Header<u32, BlakeTwo256>>>;
+	) -> RpcResult<Subscription<state_chain_runtime::Header>>;
 
 	async fn runtime_version(&self) -> RpcResult<RuntimeVersion>;
 
@@ -253,13 +252,13 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 
 	async fn subscribe_finalized_block_headers(
 		&self,
-	) -> RpcResult<Subscription<sp_runtime::generic::Header<u32, BlakeTwo256>>> {
+	) -> RpcResult<Subscription<state_chain_runtime::Header>> {
 		self.raw_rpc_client.subscribe_finalized_heads().await
 	}
 
 	async fn subscribe_unfinalized_block_headers(
 		&self,
-	) -> RpcResult<Subscription<sp_runtime::generic::Header<u32, BlakeTwo256>>> {
+	) -> RpcResult<Subscription<state_chain_runtime::Header>> {
 		self.raw_rpc_client.subscribe_new_heads().await
 	}
 

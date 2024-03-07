@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use cf_chains::ChainState;
-use state_chain_runtime::PalletInstanceAlias;
+use cf_chains::{instances::ChainInstanceFor, ChainState};
 
 use crate::{
 	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
@@ -33,7 +32,6 @@ impl<Inner: ChunkedByTime> ChunkedByTimeBuilder<Inner> {
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 		state_chain_runtime::RuntimeCall:
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
-		<Inner::Chain as Chain>::ChainCrypto: PalletInstanceAlias,
 	{
 		self.latest_then(move |epoch, header| {
 			let state_chain_client = state_chain_client.clone();
@@ -42,7 +40,7 @@ impl<Inner: ChunkedByTime> ChunkedByTimeBuilder<Inner> {
 				let call: Box<state_chain_runtime::RuntimeCall> = Box::new(
 					pallet_cf_chain_tracking::Call::<
 						state_chain_runtime::Runtime,
-						<Inner::Chain as PalletInstanceAlias>::Instance,
+						ChainInstanceFor<Inner::Chain>,
 					>::update_chain_state {
 						new_chain_state: ChainState {
 							block_height: header.index,

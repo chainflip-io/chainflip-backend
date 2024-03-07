@@ -6,7 +6,7 @@
 // For example: ./commands/setup_swaps.ts
 
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { Asset } from '@chainflip-io/cli';
+import { Asset } from '@chainflip/cli';
 import { runWithTimeout } from '../shared/utils';
 import { createLpPool } from '../shared/create_lp_pool';
 import { provideLiquidity } from '../shared/provide_liquidity';
@@ -52,6 +52,15 @@ async function main(): Promise<void> {
     provideLiquidity('FLIP', deposits.get('FLIP')!),
     // provideLiquidity('ARBETH', deposits.get('ARBETH')!),
     // provideLiquidity('ARBUSDC', deposits.get('ARBUSDC')!),
+  ]);
+
+  // also fund the boost account
+  await Promise.all([
+    provideLiquidity('USDC', deposits.get('USDC')!, false, '//LP_BOOST'),
+    provideLiquidity('ETH', deposits.get('ETH')!, false, '//LP_BOOST'),
+    provideLiquidity('DOT', deposits.get('DOT')!, false, '//LP_BOOST'),
+    provideLiquidity('BTC', deposits.get('BTC')!, false, '//LP_BOOST'),
+    provideLiquidity('FLIP', deposits.get('FLIP')!, false, '//LP_BOOST'),
   ]);
 
   await Promise.all([

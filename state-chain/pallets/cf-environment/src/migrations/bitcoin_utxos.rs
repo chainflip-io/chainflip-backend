@@ -6,14 +6,14 @@ pub struct Migration<T: Config>(PhantomData<T>);
 
 mod old {
 	use super::*;
-	use cf_chains::btc::{BitcoinScript, Hash};
+	use cf_chains::btc::BitcoinScript;
 
 	#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 	pub struct DepositAddress {
 		pub pubkey_x: [u8; 32],
 		pub salt: u32,
 		pub tweaked_pubkey_bytes: [u8; 33],
-		pub tapleaf_hash: Hash,
+		pub tapleaf_hash: [u8; 32],
 		pub unlock_script: BitcoinScript,
 	}
 

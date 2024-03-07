@@ -30,7 +30,6 @@ fn new_lp_account<T: Chainflip + Config>() -> T::AccountId {
 #[benchmarks]
 mod benchmarks {
 	use super::*;
-	use sp_std::vec;
 
 	#[benchmark]
 	fn update_buy_interval() {
@@ -137,7 +136,7 @@ mod benchmarks {
 			RawOrigin::Signed(caller.clone()),
 			Asset::Eth,
 			Asset::Usdc,
-			Order::Sell,
+			Side::Sell,
 			0,
 			Some(100),
 			IncreaseOrDecrease::Increase(1_000_000),
@@ -162,7 +161,7 @@ mod benchmarks {
 			RawOrigin::Signed(caller.clone()),
 			Asset::Eth,
 			Asset::Usdc,
-			Order::Sell,
+			Side::Sell,
 			0,
 			Some(100),
 			1_000,
@@ -185,7 +184,7 @@ mod benchmarks {
 			RawOrigin::Signed(caller.clone()).into(),
 			Asset::Eth,
 			Asset::Usdc,
-			Order::Buy,
+			Side::Buy,
 			0,
 			Some(0),
 			10_000,
@@ -194,7 +193,7 @@ mod benchmarks {
 			RawOrigin::Signed(caller.clone()).into(),
 			Asset::Eth,
 			Asset::Usdc,
-			Order::Sell,
+			Side::Sell,
 			1,
 			Some(0),
 			10_000,
@@ -214,13 +213,13 @@ mod benchmarks {
 			);
 		}
 
-		assert_eq!(
-			Pallet::<T>::pool_info(Asset::Eth, STABLE_ASSET),
-			Ok(PoolInfo {
-				limit_order_fee_hundredth_pips: fee,
-				range_order_fee_hundredth_pips: fee,
-			})
-		);
+		match Pallet::<T>::pool_info(Asset::Eth, STABLE_ASSET) {
+			Ok(pool_info) => {
+				assert_eq!(pool_info.limit_order_fee_hundredth_pips, fee);
+				assert_eq!(pool_info.range_order_fee_hundredth_pips, fee);
+			},
+			Err(_) => panic!("Pool not found"),
+		}
 	}
 
 	#[benchmark]
@@ -241,7 +240,7 @@ mod benchmarks {
 			Box::new(Call::<T>::set_limit_order {
 				base_asset: Asset::Eth,
 				quote_asset: Asset::Usdc,
-				side: Order::Sell,
+				side: Side::Sell,
 				id: 0,
 				option_tick: Some(0),
 				sell_amount: 100,
@@ -250,6 +249,18 @@ mod benchmarks {
 		);
 
 		assert!(!ScheduledLimitOrderUpdates::<T>::get(BlockNumberFor::<T>::from(5u32)).is_empty());
+	}
+
+	#[benchmark]
+	fn set_maximum_relative_slippage() {
+		let call = Call::<T>::set_maximum_relative_slippage { ticks: Some(1000) };
+
+		#[block]
+		{
+			assert_ok!(
+				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
+			);
+		}
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

@@ -2,15 +2,6 @@ mod chain_tracking;
 mod deposits;
 pub mod source;
 
-use std::sync::Arc;
-
-use bitcoin::BlockHash;
-use cf_chains::btc::{self, deposit_address::DepositAddress, BlockNumber, CHANGE_ADDRESS_SALT};
-use cf_primitives::{EpochIndex, NetworkEnvironment};
-use futures_core::Future;
-use secp256k1::hashes::Hash;
-use utilities::task_scope::Scope;
-
 use crate::{
 	btc::{
 		retry_rpc::{BtcRetryRpcApi, BtcRetryRpcClient},
@@ -23,7 +14,14 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED, UNFINALIZED},
 	},
 };
+use bitcoin::BlockHash;
+use cf_chains::btc::{self, deposit_address::DepositAddress, BlockNumber, CHANGE_ADDRESS_SALT};
+use cf_primitives::{EpochIndex, NetworkEnvironment};
+use futures_core::Future;
+use secp256k1::hashes::Hash;
 use source::BtcSource;
+use std::sync::Arc;
+use utilities::task_scope::Scope;
 
 use super::common::{
 	chain_source::{extension::ChainSourceExt, Header},
@@ -57,6 +55,7 @@ pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoric
 						.script_pubkey(),
 					tx_fee: tx.fee.unwrap_or_default().to_sat(),
 					tx_metadata: (),
+					transaction_ref: tx_hash,
 				},
 			),
 			epoch.index,
@@ -172,7 +171,7 @@ where
 			let process_call = process_call.clone();
 			move |epoch, header| process_egress(epoch, header, process_call.clone())
 		})
-		.continuous("All", db)
+		.continuous("Bitcoin".to_string(), db)
 		.logging("witnessing")
 		.spawn(scope);
 
@@ -187,7 +186,7 @@ fn success_witnesses<'a>(
 
 	for tx in txs {
 		let mut monitored = monitored_tx_hashes.clone();
-		let tx_hash = tx.txid.as_raw_hash().to_byte_array();
+		let tx_hash = tx.txid.to_byte_array().into();
 
 		if monitored.any(|&monitored_hash| monitored_hash == tx_hash) {
 			successful_witnesses.push((tx_hash, tx));
@@ -226,8 +225,7 @@ mod tests {
 			),
 		];
 
-		let tx_hashes =
-			txs.iter().map(|tx| tx.txid.to_raw_hash().to_byte_array()).collect::<Vec<_>>();
+		let tx_hashes = txs.iter().map(|tx| tx.txid.to_byte_array().into()).collect::<Vec<_>>();
 
 		// we're not monitoring for index 2, and they're out of order.
 		let monitored_hashes = [tx_hashes[3], tx_hashes[0], tx_hashes[1]];

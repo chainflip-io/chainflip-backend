@@ -141,6 +141,7 @@ pub enum KeyRotationStatus<T: Config<I>, I: 'static = ()> {
 	},
 	/// We are waiting for the key to be updated on the contract, and witnessed by the network.
 	AwaitingActivation {
+		request_ids: Vec<RequestId>,
 		new_public_key: AggKeyFor<T, I>,
 	},
 	/// The key has been successfully updated on the external chain, and/or funds rotated to new
@@ -156,7 +157,7 @@ pub enum KeyRotationStatus<T: Config<I>, I: 'static = ()> {
 	},
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
 
 const THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
 const KEYGEN_CEREMONY_RESPONSE_TIMEOUT_BLOCKS_DEFAULT: u32 = 90;

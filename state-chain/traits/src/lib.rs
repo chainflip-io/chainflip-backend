@@ -69,6 +69,8 @@ pub trait Chainflip: frame_system::Config {
 		+ IsType<<Self as frame_system::Config>::RuntimeCall>;
 
 	/// A type that allows us to check if a call was a result of witness consensus.
+	type EnsurePrewitnessed: EnsureOrigin<Self::RuntimeOrigin>;
+	/// A type that allows us to check if a call was a result of witness consensus.
 	type EnsureWitnessed: EnsureOrigin<Self::RuntimeOrigin>;
 	/// A type that allows us to check if a call was a result of witness consensus by the current
 	/// epoch.
@@ -95,6 +97,9 @@ pub trait EpochInfo {
 	/// The current authority set's validator ids
 	fn current_authorities() -> BTreeSet<Self::ValidatorId>;
 
+	/// The authority set for a given epoch
+	fn authorities_at_epoch(epoch: EpochIndex) -> BTreeSet<Self::ValidatorId>;
+
 	/// Get the current number of authorities
 	fn current_authority_count() -> AuthorityCount;
 
@@ -107,7 +112,7 @@ pub trait EpochInfo {
 	/// Authority count at a particular epoch.
 	fn authority_count_at_epoch(epoch: EpochIndex) -> Option<AuthorityCount>;
 
-	/// The bond amount for this epoch. Authorities can only redeem funds above this minumum
+	/// The bond amount for this epoch. Authorities can only redeem funds above this minimum
 	/// balance.
 	fn bond() -> Self::Amount;
 
@@ -192,15 +197,27 @@ pub trait VaultActivator<C: ChainCrypto> {
 
 	/// Activate key/s on particular chain/s. For example, setting the new key
 	/// on the contract for a smart contract chain.
-	fn activate(new_key: C::AggKey, maybe_old_key: Option<C::AggKey>) -> FirstVault;
+	/// Can also complete the activation if we don't require a signing ceremony
+	fn start_key_activation(
+		new_key: C::AggKey,
+		maybe_old_key: Option<C::AggKey>,
+	) -> Vec<StartKeyActivationResult>;
+
+	/// Final step of key activation which result in the vault activation (in case we need to wait
+	/// for the signing ceremony to complete)
+	fn activate_key();
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(_outcome: AsyncResult<()>);
 }
 
-pub enum FirstVault {
-	True,
-	False,
+#[derive(Clone, Eq, PartialEq)]
+pub enum StartKeyActivationResult {
+	FirstVault,
+	Normal(ThresholdSignatureRequestId),
+	ActivationTxNotRequired,
+	ActivationTxFailed,
+	ChainNotInitialized,
 }
 
 /// Handler for Epoch life cycle events.
@@ -499,7 +516,9 @@ pub trait Broadcaster<C: Chain> {
 	type Callback: UnfilteredDispatchable;
 
 	/// Request a threshold signature and then build and broadcast the outbound api call.
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId;
+	fn threshold_sign_and_broadcast(
+		api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId);
 
 	/// Like `threshold_sign_and_broadcast` but also registers a callback to be dispatched when the
 	/// signature accepted event has been witnessed.
@@ -511,7 +530,9 @@ pub trait Broadcaster<C: Chain> {
 
 	/// Request a threshold signature and then build and broadcast the outbound api call
 	/// specifically for a rotation tx..
-	fn threshold_sign_and_broadcast_rotation_tx(api_call: Self::ApiCall) -> BroadcastId;
+	fn threshold_sign_and_broadcast_rotation_tx(
+		api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId);
 
 	/// Resign a call, and update the signature data storage, but do not broadcast.
 	fn threshold_resign(broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId>;
@@ -668,13 +689,14 @@ pub trait FundingInfo {
 /// Allow pallets to open and expire deposit addresses.
 pub trait DepositApi<C: Chain> {
 	type AccountId;
+	type Amount;
 
 	/// Issues a channel id and deposit address for a new liquidity deposit.
 	fn request_liquidity_deposit_address(
 		lp_account: Self::AccountId,
 		source_asset: C::ChainAsset,
 		boost_fee: BasisPoints,
-	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber), DispatchError>;
+	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount), DispatchError>;
 
 	/// Issues a channel id and deposit address for a new swap.
 	fn request_swap_deposit_address(
@@ -685,7 +707,7 @@ pub trait DepositApi<C: Chain> {
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
-	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber), DispatchError>;
+	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount), DispatchError>;
 }
 
 pub trait AccountRoleRegistry<T: frame_system::Config> {
@@ -871,10 +893,6 @@ pub trait GetBlockHeight<C: Chain> {
 	fn get_block_height() -> C::ChainBlockNumber;
 }
 
-pub trait GetTrackedData<C: Chain> {
-	fn get_tracked_data() -> C::TrackedData;
-}
-
 pub trait CompatibleCfeVersions {
 	fn current_release_version() -> SemVer;
 }
@@ -882,6 +900,12 @@ pub trait CompatibleCfeVersions {
 pub trait AuthoritiesCfeVersions {
 	/// Returns the percentage of current authorities with their CFEs at the given version.
 	fn percent_authorities_compatible_with_version(version: SemVer) -> Percent;
+}
+
+pub trait AdjustedFeeEstimationApi<C: Chain> {
+	fn estimate_ingress_fee(asset: C::ChainAsset) -> C::ChainAmount;
+
+	fn estimate_egress_fee(asset: C::ChainAsset) -> C::ChainAmount;
 }
 
 pub trait CallDispatchFilter<RuntimeCall> {

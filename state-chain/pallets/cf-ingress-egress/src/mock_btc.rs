@@ -3,8 +3,7 @@ pub use crate::{self as pallet_cf_ingress_egress, Instance3};
 use cf_chains::btc::{deposit_address::DepositAddress, BitcoinTrackedData};
 pub use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError, ForeignChainAddress},
-	btc::api::BitcoinApi,
-	CcmDepositMetadata, Chain, ChainEnvironment, DepositChannel,
+	Chain,
 };
 pub use cf_primitives::{
 	chains::{assets, Bitcoin},
@@ -20,11 +19,13 @@ use cf_traits::{
 		asset_converter::MockAssetConverter,
 		broadcaster::MockBroadcaster,
 		ccm_handler::MockCcmHandler,
+		chain_tracking::ChainTracker,
+		fee_payment::MockFeePayment,
 		lp_balance::MockBalance,
 	},
 	NetworkEnvironmentProvider, OnDeposit, SwapDepositHandler,
 };
-use frame_support::traits::UnfilteredDispatchable;
+use frame_support::{derive_impl, traits::UnfilteredDispatchable};
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
@@ -38,6 +39,7 @@ frame_support::construct_runtime!(
 	}
 );
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -133,10 +135,11 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Test {
 	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;
 	type CcmHandler = MockCcmHandler;
-	type ChainTracking = cf_traits::mocks::chain_tracking::ChainTracking<Bitcoin>;
+	type ChainTracking = ChainTracker<Bitcoin>;
 	type WeightInfo = ();
 	type NetworkEnvironment = MockNetworkEnvironmentProvider;
 	type AssetConverter = MockAssetConverter;
+	type FeePayment = MockFeePayment<Self>;
 }
 
 impl_test_helpers! {

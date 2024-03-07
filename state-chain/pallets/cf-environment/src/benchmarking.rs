@@ -8,7 +8,6 @@ use frame_support::{assert_ok, traits::UnfilteredDispatchable};
 #[benchmarks]
 mod benchmarks {
 	use super::*;
-	use sp_std::vec;
 
 	#[benchmark]
 	fn update_safe_mode() {

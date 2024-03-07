@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
+use cf_primitives::CfeCompatibility;
 use codec::{Decode, Encode};
 use frame_support::{dispatch::DispatchInfo, pallet_prelude::InvalidTransaction};
 use itertools::Itertools;
@@ -413,7 +414,12 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			}
 			self.block_cache.push_back((
 				block_hash,
-				if self.base_rpc_client.check_block_compatibility(block_hash).await?.is_ok() {
+				if self
+					.base_rpc_client
+					.check_block_compatibility(block.block.header.clone().into())
+					.await?
+					.compatibility == CfeCompatibility::Compatible
+				{
 					Some((
 						block.block.header,
 						block.block.extrinsics,
@@ -566,6 +572,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 								matching_request.until_in_block_sender
 							{
 								let _result = until_in_block_sender.send(
+									#[allow(clippy::useless_asref)]
 									result.as_ref().map(Clone::clone).map_err(
 										|error| match error {
 											ExtrinsicError::Dispatch(dispatch_error) =>
