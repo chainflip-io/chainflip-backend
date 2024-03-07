@@ -32,6 +32,7 @@ use cf_chains::{
 };
 use cf_primitives::{BroadcastId, NetworkEnvironment};
 use cf_traits::{AssetConverter, GetTrackedData, LpBalanceApi};
+use codec::Encode;
 use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
@@ -1497,6 +1498,10 @@ impl_runtime_apis! {
 				ForeignChain::Bitcoin => pallet_cf_ingress_egress::Pallet::<Runtime, BitcoinInstance>::channel_opening_fee(),
 			}
 		}
+
+		fn cf_block_events() -> Vec<Vec<u8>> {
+			frame_system::Events::<Runtime>::get().into_iter().map(|event_record|event_record.event.encode()).collect::<Vec<_>>()
+		}
 	}
 
 	// END custom runtime APIs
@@ -1616,8 +1621,6 @@ impl_runtime_apis! {
 			_set_id: sp_consensus_grandpa::SetId,
 			authority_id: GrandpaId,
 		) -> Option<sp_consensus_grandpa::OpaqueKeyOwnershipProof> {
-			use codec::Encode;
-
 			Historical::prove((sp_consensus_grandpa::KEY_TYPE, authority_id))
 				.map(|p| p.encode())
 				.map(sp_consensus_grandpa::OpaqueKeyOwnershipProof::new)

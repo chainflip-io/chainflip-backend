@@ -507,8 +507,8 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<FailingWitnessValidators>>;
 
-	#[method(name = "decode_runtime_event")]
-	fn cf_decode_runtime_events(&self, events: Vec<String>) -> RpcResult<Vec<String>>;
+	#[method(name = "block_event")]
+	fn cf_get_events(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<Vec<String>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1281,18 +1281,20 @@ where
 			.map_err(to_rpc_error)
 	}
 
-	fn cf_decode_runtime_events(&self, events: Vec<String>) -> RpcResult<Vec<String>> {
-		let registry = state_chain_runtime::event_encoder::RuntimeEventDecoder::new();
+	fn cf_get_events(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<Vec<String>> {
+		let decoder = state_chain_runtime::event_encoder::RuntimeEventDecoder::new();
+		let events = self
+			.client
+			.runtime_api()
+			.cf_block_events(self.unwrap_or_best(at))
+			.map_err(to_rpc_error)?;
+
 		Ok(events
 			.into_iter()
 			.map(|event| {
-				if let Ok(data) = hex::decode(event) {
-					registry.decode_event_to_string(data).unwrap_or_else(|err| {
-						format!("Failed to decode RuntimeError. Error: {:?}", err)
-					})
-				} else {
-					"Invalid input, cannot decode into bytes".to_string()
-				}
+				decoder.decode_event_to_json(event).unwrap_or_else(|err| {
+					format!("Failed to decode RuntimeError. Error: {:?}", err)
+				})
 			})
 			.collect::<Vec<_>>())
 	}
