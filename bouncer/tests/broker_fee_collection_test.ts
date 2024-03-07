@@ -27,7 +27,7 @@ const swapAssetAmount = {
   [Assets.FLIP]: 1000,
   [Assets.BTC]: 0.1,
   [Assets.USDC]: 1000,
-  ['USDT']: 1000,
+  [Assets.USDT]: 1000,
 };
 const commissionBps = 1000; // 10%
 

@@ -175,9 +175,9 @@ export async function testAllSwaps() {
     messageMetadata?: CcmDepositMetadata,
   ) {
     if (destAsset === 'BTC') {
-      // Object.values(btcAddressTypes).forEach((btcAddrType) => {
-      allSwaps.push(functionCall(sourceAsset, destAsset, 'P2PKH', messageMetadata));
-      // });
+      Object.values(btcAddressTypes).forEach((btcAddrType) => {
+        allSwaps.push(functionCall(sourceAsset, destAsset, btcAddrType, messageMetadata));
+      });
     } else {
       allSwaps.push(functionCall(sourceAsset, destAsset, undefined, messageMetadata));
     }
@@ -185,47 +185,42 @@ export async function testAllSwaps() {
 
   console.log('=== Testing all swaps ===');
 
-  // Single approval of all the assets swapped in contractsSwaps to avoid overlapping async approvals.
-  // Set the allowance to the same amount of total asset swapped in contractsSwaps to avoid nonce issues.
-  // Total contract swap per ERC20 token = ccmContractSwaps + contractSwaps =
-  //     (numberAssetsEthereum - 1) + (numberAssets (BTC has 4 different types) - 1) = 2 + 7 = 9
-  // await approveTokenVault(
-  //   'USDC',
-  //   (
-  //     BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals('USDC'))) * 9n
-  //   ).toString(),
-  // );
-  // await approveTokenVault(
-  //   'FLIP',
-  //   (
-  //     BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals('FLIP'))) * 9n
-  //   ).toString(),
-  // );
+  // Doing effectively infinite approvals to make sure it doesn't fail.
+  await approveTokenVault(
+    'USDC',
+    (
+      BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals('USDC'))) * 100n
+    ).toString(),
+  );
+  await approveTokenVault(
+    'FLIP',
+    (
+      BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals('FLIP'))) * 100n
+    ).toString(),
+  );
+  await approveTokenVault(
+    'USDC',
+    (
+      BigInt(amountToFineAmount(defaultAssetAmounts('USDT'), assetDecimals('USDT'))) * 100n
+    ).toString(),
+  );
 
-  const allAssets = [...Object.values(Assets), 'USDT'];
-
-  // TODO: Remove this but for now skipping arbitrum swaps as they are not supported yet
-  allAssets.forEach((sourceAsset) => {
-    if (sourceAsset === 'ARBETH' || sourceAsset === 'ARBUSDC') return;
-
-    allAssets
-      .filter(
-        (destAsset) =>
-          sourceAsset !== destAsset && destAsset !== 'ARBETH' && destAsset !== 'ARBUSDC',
-      )
+  Object.values(Assets).forEach((sourceAsset) => {
+    Object.values(Assets)
+      .filter((destAsset) => sourceAsset !== destAsset)
       .forEach((destAsset) => {
         // Regular swaps
         appendSwap(sourceAsset, destAsset, testSwap);
 
-        // if (chainFromAsset(sourceAsset) === chainFromAsset('ETH')) {
-        //   // Contract Swaps
-        //   appendSwap(sourceAsset, destAsset, testSwapViaContract);
+        if (chainFromAsset(sourceAsset) === chainFromAsset('ETH')) {
+          // Contract Swaps
+          appendSwap(sourceAsset, destAsset, testSwapViaContract);
 
-        //   if (chainFromAsset(destAsset) === chainFromAsset('ETH')) {
-        //     // CCM contract swaps
-        //     appendSwap(sourceAsset, destAsset, testSwapViaContract, newCcmMetadata(sourceAsset));
-        //   }
-        // }
+          if (chainFromAsset(destAsset) === chainFromAsset('ETH')) {
+            // CCM contract swaps
+            appendSwap(sourceAsset, destAsset, testSwapViaContract, newCcmMetadata(sourceAsset));
+          }
+        }
         if (chainFromAsset(destAsset) === chainFromAsset('ETH')) {
           // CCM swaps
           appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
