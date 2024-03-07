@@ -26,7 +26,6 @@ std = [
     'codec/std',
     'frame-support/std',
     'frame-system/std',
-    'hex-literal/std',
     'log/std',
     'sp-std/std',
     'sp-io/std',
