@@ -164,7 +164,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 130,
+	spec_version: 131,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 12,
@@ -989,15 +989,81 @@ impl frame_support::traits::OnRuntimeUpgrade for ThresholdSignatureRefactorMigra
 
 pub struct FlipToBurnMigration;
 
+#[cfg(feature = "try-runtime")]
+mod old {
+	use super::*;
+
+	#[frame_support::storage_alias]
+	pub(crate) type FlipToBurn =
+		StorageValue<pallet_cf_pools, AssetAmount, frame_support::pallet_prelude::ValueQuery>;
+}
+
 impl frame_support::traits::OnRuntimeUpgrade for FlipToBurnMigration {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		log::info!("⏫ Applying flip to burn migration.");
-		// Moving the FlipToBurn storage item from the pools pallet to the Swapping pallet.
-		cf_runtime_upgrade_utilities::move_pallet_storage::<
-			pallet_cf_pools::Pallet<Runtime>,
-			pallet_cf_swapping::Pallet<Runtime>,
-		>("FlipToBurn".as_bytes());
+		use frame_support::traits::{GetStorageVersion, StorageVersion};
+
+		if <pallet_cf_pools::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() == 2 &&
+			<pallet_cf_swapping::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version(
+			) == 2
+		{
+			log::info!("⏫ Applying FlipToBurn migration.");
+			// Moving the FlipToBurn storage item from the pools pallet to the Swapping pallet.
+			cf_runtime_upgrade_utilities::move_pallet_storage::<
+				pallet_cf_pools::Pallet<Runtime>,
+				pallet_cf_swapping::Pallet<Runtime>,
+			>("FlipToBurn".as_bytes());
+
+			// Bump the version of both pallets
+			StorageVersion::new(3).put::<pallet_cf_pools::Pallet<Runtime>>();
+			StorageVersion::new(3).put::<pallet_cf_swapping::Pallet<Runtime>>();
+		} else {
+			log::info!(
+				"⏭ Skipping FlipToBurn migration. {:?}, {:?}",
+				<pallet_cf_pools::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version(),
+				<pallet_cf_swapping::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version()
+			);
+		}
 		Default::default()
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::DispatchError> {
+		use codec::Encode;
+		use frame_support::{migrations::VersionedPostUpgradeData, traits::GetStorageVersion};
+
+		if <pallet_cf_pools::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() == 2
+		{
+			// The new FlipToBurn should be 0 before the upgrade.
+			frame_support::ensure!(
+				pallet_cf_swapping::FlipToBurn::<Runtime>::get() == 0,
+				"Incorrect pre-upgrade state for swapping FlipToBurn."
+			);
+			Ok(VersionedPostUpgradeData::MigrationExecuted(old::FlipToBurn::get().encode())
+				.encode())
+		} else {
+			Ok(VersionedPostUpgradeData::Noop.encode())
+		}
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(state: Vec<u8>) -> Result<(), frame_support::sp_runtime::TryRuntimeError> {
+		use codec::Decode;
+		use frame_support::migrations::VersionedPostUpgradeData;
+
+		if let VersionedPostUpgradeData::MigrationExecuted(pre_upgrade_data) =
+			<VersionedPostUpgradeData>::decode(&mut &state[..])
+				.map_err(|_| "Failed to decode pre-upgrade state.")?
+		{
+			let pre_upgrade_flip_to_burn =
+				<AssetAmount as Decode>::decode(&mut &pre_upgrade_data[..])
+					.map_err(|_| "Failed to decode FlipToBurn from pre-upgrade state.")?;
+
+			frame_support::ensure!(
+				pre_upgrade_flip_to_burn == pallet_cf_swapping::FlipToBurn::<Runtime>::get(),
+				"Pre-upgrade state does not match post-upgrade state for FlipToBurn."
+			);
+		}
+		Ok(())
 	}
 }
 

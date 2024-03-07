@@ -36,7 +36,7 @@ pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 const BASIS_POINTS_PER_MILLION: u32 = 100;
 
@@ -295,7 +295,7 @@ pub mod pallet {
 
 	/// FLIP ready to be burned.
 	#[pallet::storage]
-	pub(super) type FlipToBurn<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
+	pub type FlipToBurn<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -825,13 +825,8 @@ pub mod pallet {
 									total.saturating_accrue(swap_output);
 								});
 							} else {
-								debug_assert!(
-									false,
+								log_or_panic!(
 									"NetworkFee burning should not be in asset: {:?}",
-									swap.to
-								);
-								log::error!(
-									"NetworkFee burning is not supported for asset: {:?}",
 									swap.to
 								);
 							},
