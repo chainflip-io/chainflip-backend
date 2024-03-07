@@ -1,4 +1,4 @@
-// This requirse the try-runtime cli to be installed globally
+// This requires the try-runtime cli to be installed globally
 // https://github.com/paritytech/try-runtime-cli
 
 import { ApiPromise } from '@polkadot/api';
