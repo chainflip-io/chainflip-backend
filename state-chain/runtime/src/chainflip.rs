@@ -166,7 +166,9 @@ impl EvmPriorityFee<Ethereum> for EthTransactionBuilder {
 		Some(U256::from(tracked_data.priority_fee))
 	}
 }
+
 impl EvmPriorityFee<Arbitrum> for ArbTransactionBuilder {
+	// Setting the priority fee to zero to prevent the CFE from setting a different value
 	fn get_priority_fee(_tracked_data: &<Arbitrum as Chain>::TrackedData) -> Option<U256> {
 		Some(U256::from(0))
 	}
