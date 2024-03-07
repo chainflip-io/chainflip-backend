@@ -75,34 +75,8 @@ async function main(): Promise<void> {
     rangeOrder('ARBETH', deposits.get('ARBETH')! * 0.9999),
     rangeOrder('ARBUSDC', deposits.get('ARBUSDC')! * 0.9999),
   ]);
+
   console.log('=== Swaps Setup completed ===');
-
-  // For debugging purposes to check fetches go through
-  // TODO: Fetches are not going through, they are stuck in the IngressEgress but transfers go through.
-  // TODO: Actually looks liike Arbitrum doesnt get initialized even after the initialize initializeChain
-  // TO wait until Ramiz has finished the Arbitrum PR, it might just that my patch to start arbitrum is flawed
-  console.log('=== Checking that Arbitrum Vaults fetch the funds ===');
-  const arbitrumVault = getEvmContractAddress('Arbitrum', 'VAULT');
-  const usdcContractAddress = getEvmContractAddress('Arbitrum', 'ARBUSDC');
-
-  let timeout = 0;
-  let arbVaultBalance = 0;
-  let usdcVaultBalance = 0;
-
-  while (arbVaultBalance <= 0 || usdcVaultBalance <= 0) {
-    arbVaultBalance = parseFloat(await getEvmNativeBalance('Arbitrum', arbitrumVault));
-    usdcVaultBalance = parseFloat(
-      await getErc20Balance('Arbitrum', arbitrumVault, usdcContractAddress),
-    );
-    console.log('arbVaultBalance', arbVaultBalance);
-    console.log('usdcVaultBalance', usdcVaultBalance);
-    await sleep(6000);
-    timeout += 1;
-    if (timeout > 10) {
-      throw new Error('Arbitrum Vaults do not have funds');
-    }
-  }
-  console.log('=== Arbitrum funds have been fetched to the Vault ===');
   process.exit(0);
 }
 
