@@ -47,14 +47,14 @@ pub trait WeightInfo {
 /// Weights for pallet_cf_threshold_signature using the Substrate node and recommended hardware.
 pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
-	/// Storage: `EthereumThresholdSigner::PendingCeremonies` (r:1 w:1)
-	/// Proof: `EthereumThresholdSigner::PendingCeremonies` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::RequestCallback` (r:1 w:0)
-	/// Proof: `EthereumThresholdSigner::RequestCallback` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::PendingRequestInstructions` (r:0 w:1)
-	/// Proof: `EthereumThresholdSigner::PendingRequestInstructions` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::Signature` (r:0 w:1)
-	/// Proof: `EthereumThresholdSigner::Signature` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EvmThresholdSigner::PendingCeremonies` (r:1 w:1)
+	/// Proof: `EvmThresholdSigner::PendingCeremonies` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EvmThresholdSigner::RequestCallback` (r:1 w:0)
+	/// Proof: `EvmThresholdSigner::RequestCallback` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EvmThresholdSigner::PendingRequestInstructions` (r:0 w:1)
+	/// Proof: `EvmThresholdSigner::PendingRequestInstructions` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EvmThresholdSigner::Signature` (r:0 w:1)
+	/// Proof: `EvmThresholdSigner::Signature` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	fn signature_success() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `410`
@@ -66,10 +66,10 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: Some(33), added: 2508, mode: `MaxEncodedLen`)
-	/// Storage: `EthereumThresholdSigner::PendingCeremonies` (r:1 w:1)
-	/// Proof: `EthereumThresholdSigner::PendingCeremonies` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::CeremonyRetryQueues` (r:1 w:1)
-	/// Proof: `EthereumThresholdSigner::CeremonyRetryQueues` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EvmThresholdSigner::PendingCeremonies` (r:1 w:1)
+	/// Proof: `EvmThresholdSigner::PendingCeremonies` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EvmThresholdSigner::CeremonyRetryQueues` (r:1 w:1)
+	/// Proof: `EvmThresholdSigner::CeremonyRetryQueues` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// The range of component `a` is `[1, 100]`.
 	fn report_signature_failed(_a: u32, ) -> Weight {
 		// Proof Size summary in bytes:
@@ -80,8 +80,8 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(3_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
 	}
-	/// Storage: `EthereumThresholdSigner::ThresholdSignatureResponseTimeout` (r:1 w:1)
-	/// Proof: `EthereumThresholdSigner::ThresholdSignatureResponseTimeout` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `EvmThresholdSigner::ThresholdSignatureResponseTimeout` (r:1 w:1)
+	/// Proof: `EvmThresholdSigner::ThresholdSignatureResponseTimeout` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	fn set_threshold_signature_timeout() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `136`
@@ -91,12 +91,12 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
-	/// Storage: `EthereumThresholdSigner::ThresholdSignatureResponseTimeout` (r:1 w:0)
-	/// Proof: `EthereumThresholdSigner::ThresholdSignatureResponseTimeout` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::CeremonyRetryQueues` (r:2 w:2)
-	/// Proof: `EthereumThresholdSigner::CeremonyRetryQueues` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::PendingCeremonies` (r:50 w:100)
-	/// Proof: `EthereumThresholdSigner::PendingCeremonies` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EvmThresholdSigner::ThresholdSignatureResponseTimeout` (r:1 w:0)
+	/// Proof: `EvmThresholdSigner::ThresholdSignatureResponseTimeout` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `EvmThresholdSigner::CeremonyRetryQueues` (r:2 w:2)
+	/// Proof: `EvmThresholdSigner::CeremonyRetryQueues` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EvmThresholdSigner::PendingCeremonies` (r:50 w:100)
+	/// Proof: `EvmThresholdSigner::PendingCeremonies` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
 	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// Storage: `Reputation::Penalties` (r:1 w:0)
@@ -111,8 +111,8 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// Proof: `Validator::HistoricalAuthorities` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `EthereumVault::CeremonyIdCounter` (r:1 w:1)
 	/// Proof: `EthereumVault::CeremonyIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::RequestRetryQueue` (r:1 w:0)
-	/// Proof: `EthereumThresholdSigner::RequestRetryQueue` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EvmThresholdSigner::RequestRetryQueue` (r:1 w:0)
+	/// Proof: `EvmThresholdSigner::RequestRetryQueue` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Validator::CurrentAuthorities` (r:1 w:0)
 	/// Proof: `Validator::CurrentAuthorities` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// The range of component `a` is `[10, 150]`.
@@ -166,7 +166,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(3))
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
-	// Storage: EthereumThresholdSigner Signature (r:1 w:1)
+	// Storage: EvmThresholdSigner Signature (r:1 w:1)
 	// Storage: EthereumVault PendingKeyRotation (r:0 w:1)
 	fn on_keygen_verification_result() -> Weight {
 		// Minimum execution time: 18_000 nanoseconds.
@@ -196,15 +196,15 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(27))
 	}
 	// Storage: EthereumVault PendingKeyRotation (r:1 w:1)
-	// Storage: EthereumThresholdSigner ThresholdSignatureRequestIdCounter (r:1 w:1)
+	// Storage: EvmThresholdSigner ThresholdSignatureRequestIdCounter (r:1 w:1)
 	// Storage: Validator CeremonyIdCounter (r:1 w:1)
-	// Storage: EthereumThresholdSigner ThresholdSignatureResponseTimeout (r:1 w:0)
-	// Storage: EthereumThresholdSigner CeremonyRetryQueues (r:1 w:1)
+	// Storage: EvmThresholdSigner ThresholdSignatureResponseTimeout (r:1 w:0)
+	// Storage: EvmThresholdSigner CeremonyRetryQueues (r:1 w:1)
 	// Storage: EthereumVault SuccessVoters (r:0 w:1)
 	// Storage: EthereumVault KeygenResolutionPendingSince (r:0 w:1)
-	// Storage: EthereumThresholdSigner Signature (r:0 w:1)
-	// Storage: EthereumThresholdSigner PendingCeremonies (r:0 w:1)
-	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
+	// Storage: EvmThresholdSigner Signature (r:0 w:1)
+	// Storage: EvmThresholdSigner PendingCeremonies (r:0 w:1)
+	// Storage: EvmThresholdSigner RequestCallback (r:0 w:1)
 	fn on_initialize_success() -> Weight {
 		// Minimum execution time: 74_000 nanoseconds.
 		Weight::from_parts(92_000_000, 0)
@@ -230,25 +230,25 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(27))
 	}
 	// Storage: EthereumVault PendingKeyRotation (r:1 w:1)
-	// Storage: EthereumThresholdSigner ThresholdSignatureRequestIdCounter (r:1 w:1)
+	// Storage: EvmThresholdSigner ThresholdSignatureRequestIdCounter (r:1 w:1)
 	// Storage: Validator CeremonyIdCounter (r:1 w:1)
-	// Storage: EthereumThresholdSigner ThresholdSignatureResponseTimeout (r:1 w:0)
-	// Storage: EthereumThresholdSigner CeremonyRetryQueues (r:1 w:1)
+	// Storage: EvmThresholdSigner ThresholdSignatureResponseTimeout (r:1 w:0)
+	// Storage: EvmThresholdSigner CeremonyRetryQueues (r:1 w:1)
 	// Storage: EthereumVault SuccessVoters (r:0 w:1)
 	// Storage: EthereumVault KeygenResolutionPendingSince (r:0 w:1)
-	// Storage: EthereumThresholdSigner Signature (r:0 w:1)
-	// Storage: EthereumThresholdSigner PendingCeremonies (r:0 w:1)
-	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
+	// Storage: EvmThresholdSigner Signature (r:0 w:1)
+	// Storage: EvmThresholdSigner PendingCeremonies (r:0 w:1)
+	// Storage: EvmThresholdSigner RequestCallback (r:0 w:1)
 	fn on_initialize_success() -> Weight {
 		// Minimum execution time: 74_000 nanoseconds.
 		Weight::from_parts(92_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(5))
 			.saturating_add(RocksDbWeight::get().writes(9))
 	}
-	// Storage: EthereumThresholdSigner PendingCeremonies (r:1 w:1)
-	// Storage: EthereumThresholdSigner RequestCallback (r:1 w:0)
-	// Storage: EthereumThresholdSigner PendingRequestInstructions (r:0 w:1)
-	// Storage: EthereumThresholdSigner Signature (r:0 w:1)
+	// Storage: EvmThresholdSigner PendingCeremonies (r:1 w:1)
+	// Storage: EvmThresholdSigner RequestCallback (r:1 w:0)
+	// Storage: EvmThresholdSigner PendingRequestInstructions (r:0 w:1)
+	// Storage: EvmThresholdSigner Signature (r:0 w:1)
 	fn signature_success() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `410`
@@ -260,10 +260,10 @@ impl WeightInfo for () {
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: Some(33), added: 2508, mode: `MaxEncodedLen`)
-	/// Storage: `EthereumThresholdSigner::PendingCeremonies` (r:1 w:1)
-	/// Proof: `EthereumThresholdSigner::PendingCeremonies` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::CeremonyRetryQueues` (r:1 w:1)
-	/// Proof: `EthereumThresholdSigner::CeremonyRetryQueues` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EvmThresholdSigner::PendingCeremonies` (r:1 w:1)
+	/// Proof: `EvmThresholdSigner::PendingCeremonies` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EvmThresholdSigner::CeremonyRetryQueues` (r:1 w:1)
+	/// Proof: `EvmThresholdSigner::CeremonyRetryQueues` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// The range of component `a` is `[1, 100]`.
 	fn report_signature_failed(_a: u32, ) -> Weight {
 		// Proof Size summary in bytes:
@@ -274,8 +274,8 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(3_u64))
 			.saturating_add(RocksDbWeight::get().writes(2_u64))
 	}
-	/// Storage: `EthereumThresholdSigner::ThresholdSignatureResponseTimeout` (r:1 w:1)
-	/// Proof: `EthereumThresholdSigner::ThresholdSignatureResponseTimeout` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `EvmThresholdSigner::ThresholdSignatureResponseTimeout` (r:1 w:1)
+	/// Proof: `EvmThresholdSigner::ThresholdSignatureResponseTimeout` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	fn set_threshold_signature_timeout() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `136`
@@ -285,12 +285,12 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
-	/// Storage: `EthereumThresholdSigner::ThresholdSignatureResponseTimeout` (r:1 w:0)
-	/// Proof: `EthereumThresholdSigner::ThresholdSignatureResponseTimeout` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::CeremonyRetryQueues` (r:2 w:2)
-	/// Proof: `EthereumThresholdSigner::CeremonyRetryQueues` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::PendingCeremonies` (r:50 w:100)
-	/// Proof: `EthereumThresholdSigner::PendingCeremonies` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EvmThresholdSigner::ThresholdSignatureResponseTimeout` (r:1 w:0)
+	/// Proof: `EvmThresholdSigner::ThresholdSignatureResponseTimeout` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `EvmThresholdSigner::CeremonyRetryQueues` (r:2 w:2)
+	/// Proof: `EvmThresholdSigner::CeremonyRetryQueues` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EvmThresholdSigner::PendingCeremonies` (r:50 w:100)
+	/// Proof: `EvmThresholdSigner::PendingCeremonies` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
 	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// Storage: `Reputation::Penalties` (r:1 w:0)
@@ -305,8 +305,8 @@ impl WeightInfo for () {
 	/// Proof: `Validator::HistoricalAuthorities` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `EthereumVault::CeremonyIdCounter` (r:1 w:1)
 	/// Proof: `EthereumVault::CeremonyIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumThresholdSigner::RequestRetryQueue` (r:1 w:0)
-	/// Proof: `EthereumThresholdSigner::RequestRetryQueue` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EvmThresholdSigner::RequestRetryQueue` (r:1 w:0)
+	/// Proof: `EvmThresholdSigner::RequestRetryQueue` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `Validator::CurrentAuthorities` (r:1 w:0)
 	/// Proof: `Validator::CurrentAuthorities` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// The range of component `a` is `[10, 150]`.
@@ -360,7 +360,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(3))
 			.saturating_add(RocksDbWeight::get().writes(2))
 	}
-	// Storage: EthereumThresholdSigner Signature (r:1 w:1)
+	// Storage: EvmThresholdSigner Signature (r:1 w:1)
 	// Storage: EthereumVault PendingKeyRotation (r:0 w:1)
 	fn on_keygen_verification_result() -> Weight {
 		// Minimum execution time: 18_000 nanoseconds.

@@ -290,14 +290,14 @@ impl ReconnectSubscriptionClient {
 
 #[async_trait::async_trait]
 pub trait ReconnectSubscribeApi {
-	async fn subscribe_blocks(&self) -> Result<ConscientiousEthWebsocketBlockHeaderStream>;
+	async fn subscribe_blocks(&self) -> Result<ConscientiousEvmWebsocketBlockHeaderStream>;
 }
 
-use crate::eth::ConscientiousEthWebsocketBlockHeaderStream;
+use crate::eth::ConscientiousEvmWebsocketBlockHeaderStream;
 
 #[async_trait::async_trait]
 impl ReconnectSubscribeApi for ReconnectSubscriptionClient {
-	async fn subscribe_blocks(&self) -> Result<ConscientiousEthWebsocketBlockHeaderStream> {
+	async fn subscribe_blocks(&self) -> Result<ConscientiousEvmWebsocketBlockHeaderStream> {
 		let web3 =
 			web3::Web3::new(web3::transports::WebSocket::new(self.ws_endpoint.as_ref()).await?);
 
@@ -318,7 +318,7 @@ impl ReconnectSubscribeApi for ReconnectSubscriptionClient {
 			bail!("Expected chain id {}, eth ws client returned {client_chain_id}.", self.chain_id)
 		}
 
-		ConscientiousEthWebsocketBlockHeaderStream::new(web3).await
+		ConscientiousEvmWebsocketBlockHeaderStream::new(web3).await
 	}
 }
 

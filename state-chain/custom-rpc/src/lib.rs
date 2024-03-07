@@ -527,11 +527,17 @@ pub trait CustomApi {
 	#[method(name = "supported_assets")]
 	fn cf_supported_assets(&self) -> RpcResult<HashMap<ForeignChain, Vec<OldAsset>>>;
 
-	#[method(name = "failed_call")]
-	fn cf_failed_call(
+	#[method(name = "failed_call_ethereum")]
+	fn cf_failed_call_ethereum(
 		&self,
 		broadcast_id: BroadcastId,
 	) -> RpcResult<Option<<cf_chains::Ethereum as Chain>::Transaction>>;
+
+	#[method(name = "failed_call_arbitrum")]
+	fn cf_failed_call_arbitrum(
+		&self,
+		broadcast_id: BroadcastId,
+	) -> RpcResult<Option<<cf_chains::Arbitrum as Chain>::Transaction>>;
 
 	#[method(name = "witness_count")]
 	fn cf_witness_count(
@@ -1298,13 +1304,23 @@ where
 		Ok(chain_to_asset)
 	}
 
-	fn cf_failed_call(
+	fn cf_failed_call_ethereum(
 		&self,
 		broadcast_id: BroadcastId,
 	) -> RpcResult<Option<<cf_chains::Ethereum as Chain>::Transaction>> {
 		self.client
 			.runtime_api()
-			.cf_failed_call(self.unwrap_or_best(None), broadcast_id)
+			.cf_failed_call_ethereum(self.unwrap_or_best(None), broadcast_id)
+			.map_err(to_rpc_error)
+	}
+
+	fn cf_failed_call_arbitrum(
+		&self,
+		broadcast_id: BroadcastId,
+	) -> RpcResult<Option<<cf_chains::Arbitrum as Chain>::Transaction>> {
+		self.client
+			.runtime_api()
+			.cf_failed_call_arbitrum(self.unwrap_or_best(None), broadcast_id)
 			.map_err(to_rpc_error)
 	}
 
@@ -1408,7 +1424,7 @@ where
 mod test {
 	use super::*;
 	use cf_primitives::{
-		chains::assets::{any, btc, dot, eth},
+		chains::assets::{any, arb, btc, dot, eth},
 		FLIPPERINOS_PER_FLIP,
 	};
 	use sp_core::H160;
@@ -1440,6 +1456,8 @@ mod test {
 					(Asset::Flip, 1000000000000000000),
 					(Asset::Usdc, 0),
 					(Asset::Dot, 0),
+					(Asset::ArbEth, 0),
+					(Asset::ArbUsdc, 0),
 				]
 			}
 		))
@@ -1460,6 +1478,10 @@ mod test {
 						Some(cf_chains::ForeignChainAddress::Dot(Default::default())),
 					),
 					(ForeignChain::Bitcoin, None),
+					(
+						ForeignChain::Arbitrum,
+						Some(cf_chains::ForeignChainAddress::Arb(H160::from([2; 20]))),
+					),
 				],
 				balances: vec![
 					(Asset::Eth, u128::MAX),
@@ -1467,6 +1489,8 @@ mod test {
 					(Asset::Flip, u128::MAX / 2),
 					(Asset::Usdc, 0),
 					(Asset::Dot, 0),
+					(Asset::ArbEth, 1),
+					(Asset::ArbUsdc, 2),
 				],
 				earned_fees: any::AssetMap {
 					eth: eth::AssetMap {
@@ -1476,6 +1500,7 @@ mod test {
 					},
 					btc: btc::AssetMap { btc: 0u32.into() },
 					dot: dot::AssetMap { dot: 0u32.into() },
+					arb: arb::AssetMap { eth: 1u32.into(), usdc: 2u32.into() },
 				},
 			},
 			cf_primitives::NetworkEnvironment::Mainnet,
@@ -1521,6 +1546,7 @@ mod test {
 					},
 					btc: btc::AssetMap { btc: Some(0u32.into()) },
 					dot: dot::AssetMap { dot: None },
+					arb: arb::AssetMap { eth: None, usdc: Some(0u32.into()) },
 				},
 				network_fee_hundredth_pips: Permill::from_percent(100),
 			},
@@ -1533,6 +1559,7 @@ mod test {
 					},
 					btc: btc::AssetMap { btc: 0u32.into() },
 					dot: dot::AssetMap { dot: 0u32.into() },
+					arb: arb::AssetMap { eth: 0u32.into(), usdc: u64::MAX.into() },
 				},
 				ingress_fees: any::AssetMap {
 					eth: eth::AssetMap {
@@ -1542,6 +1569,7 @@ mod test {
 					},
 					btc: btc::AssetMap { btc: Some(0u32.into()) },
 					dot: dot::AssetMap { dot: Some((u64::MAX / 2 - 1).into()) },
+					arb: arb::AssetMap { eth: Some(0u32.into()), usdc: None },
 				},
 				egress_fees: any::AssetMap {
 					eth: eth::AssetMap {
@@ -1551,11 +1579,13 @@ mod test {
 					},
 					btc: btc::AssetMap { btc: Some(0u32.into()) },
 					dot: dot::AssetMap { dot: Some((u64::MAX / 2 - 1).into()) },
+					arb: arb::AssetMap { eth: Some(0u32.into()), usdc: None },
 				},
 				witness_safety_margins: HashMap::from([
 					(ForeignChain::Bitcoin, Some(3u64)),
 					(ForeignChain::Ethereum, Some(3u64)),
 					(ForeignChain::Polkadot, None),
+					(ForeignChain::Arbitrum, None),
 				]),
 				egress_dust_limits: any::AssetMap {
 					eth: eth::AssetMap {
@@ -1565,11 +1595,13 @@ mod test {
 					},
 					btc: btc::AssetMap { btc: 0u32.into() },
 					dot: dot::AssetMap { dot: 0u32.into() },
+					arb: arb::AssetMap { eth: 0u32.into(), usdc: u64::MAX.into() },
 				},
 				channel_opening_fees: HashMap::from([
 					(ForeignChain::Bitcoin, 0u32.into()),
 					(ForeignChain::Ethereum, 1000u32.into()),
 					(ForeignChain::Polkadot, 1000u32.into()),
+					(ForeignChain::Arbitrum, 1000u32.into()),
 				]),
 			},
 			funding: FundingEnvironment {

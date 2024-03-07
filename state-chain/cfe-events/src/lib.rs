@@ -4,8 +4,8 @@
 mod tests;
 
 use cf_chains::{
-	btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, Bitcoin, Chain, ChainCrypto, Ethereum,
-	Polkadot,
+	btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, Arbitrum, Bitcoin, Chain, ChainCrypto,
+	Ethereum, Polkadot,
 };
 use cf_primitives::{BroadcastId, CeremonyId, Ed25519PublicKey, EpochIndex, Ipv6Addr, Port};
 
@@ -54,16 +54,17 @@ pub struct TxBroadcastRequest<ValidatorId, C: Chain> {
 
 #[derive(Clone, RuntimeDebug, Encode, Decode, PartialEq, Eq, TypeInfo)]
 pub enum CfeEvent<ValidatorId> {
-	EthThresholdSignatureRequest(ThresholdSignatureRequest<ValidatorId, EvmCrypto>),
+	EvmThresholdSignatureRequest(ThresholdSignatureRequest<ValidatorId, EvmCrypto>),
 	DotThresholdSignatureRequest(ThresholdSignatureRequest<ValidatorId, PolkadotCrypto>),
 	BtcThresholdSignatureRequest(ThresholdSignatureRequest<ValidatorId, BitcoinCrypto>),
-	EthKeygenRequest(KeygenRequest<ValidatorId>),
+	EvmKeygenRequest(KeygenRequest<ValidatorId>),
 	DotKeygenRequest(KeygenRequest<ValidatorId>),
 	BtcKeygenRequest(KeygenRequest<ValidatorId>),
 	BtcKeyHandoverRequest(KeyHandoverRequest<ValidatorId, BitcoinCrypto>),
 	EthTxBroadcastRequest(TxBroadcastRequest<ValidatorId, Ethereum>),
 	DotTxBroadcastRequest(TxBroadcastRequest<ValidatorId, Polkadot>),
 	BtcTxBroadcastRequest(TxBroadcastRequest<ValidatorId, Bitcoin>),
+	ArbTxBroadcastRequest(TxBroadcastRequest<ValidatorId, Arbitrum>),
 	PeerIdRegistered { account_id: ValidatorId, pubkey: Ed25519PublicKey, port: Port, ip: Ipv6Addr },
 	PeerIdDeregistered { account_id: ValidatorId, pubkey: Ed25519PublicKey },
 }

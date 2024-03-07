@@ -203,18 +203,22 @@ macro_rules! assets {
 						assert_eq!(assert_ok!(serde_json::to_string(&Asset::Eth)), "{\"chain\":\"Ethereum\",\"asset\":\"ETH\"}");
 						assert_eq!(assert_ok!(serde_json::to_string(&Asset::Dot)), "{\"chain\":\"Polkadot\",\"asset\":\"DOT\"}");
 						assert_eq!(assert_ok!(serde_json::to_string(&Asset::Btc)), "{\"chain\":\"Bitcoin\",\"asset\":\"BTC\"}");
+						assert_eq!(assert_ok!(serde_json::to_string(&Asset::ArbEth)), "{\"chain\":\"Arbitrum\",\"asset\":\"ARBETH\"}");
 
 						assert_eq!(assert_ok!(serde_json::from_str::<Asset>("{\"chain\":\"Ethereum\",\"asset\":\"ETH\"}")), Asset::Eth);
 						assert_eq!(assert_ok!(serde_json::from_str::<Asset>("{\"chain\":\"Polkadot\",\"asset\":\"DOT\"}")), Asset::Dot);
 						assert_eq!(assert_ok!(serde_json::from_str::<Asset>("{\"chain\":\"Bitcoin\",\"asset\":\"BTC\"}")), Asset::Btc);
+						assert_eq!(assert_ok!(serde_json::from_str::<Asset>("{\"chain\":\"Arbitrum\",\"asset\":\"ARBETH\"}")), Asset::ArbEth);
 
 						assert_eq!(assert_ok!(serde_json::from_str::<Asset>("{\"asset\":\"ETH\"}")), Asset::Eth);
 						assert_eq!(assert_ok!(serde_json::from_str::<Asset>("{\"asset\":\"DOT\"}")), Asset::Dot);
 						assert_eq!(assert_ok!(serde_json::from_str::<Asset>("{\"asset\":\"BTC\"}")), Asset::Btc);
+						assert_eq!(assert_ok!(serde_json::from_str::<Asset>("{\"asset\":\"ARBETH\"}")), Asset::ArbEth);
 
 						assert_eq!(assert_ok!(serde_json::from_str::<Asset>("\"ETH\"")), Asset::Eth);
 						assert_eq!(assert_ok!(serde_json::from_str::<Asset>("\"DOT\"")), Asset::Dot);
 						assert_eq!(assert_ok!(serde_json::from_str::<Asset>("\"BTC\"")), Asset::Btc);
+						assert_eq!(assert_ok!(serde_json::from_str::<Asset>("\"ARBETH\"")), Asset::ArbEth);
 					}
 				}
 			}
@@ -413,6 +417,10 @@ assets!(pub enum Asset {
 	(btc, Bitcoin, "Bitcoin") => {
 		(Btc, btc) = 5u32 (GAS_ASSET),
 	},
+	(arb, Arbitrum, "Arbitrum") => {
+		(ArbEth, eth) = 6u32 (GAS_ASSET),
+		(ArbUsdc, usdc) = 7u32,
+	},
 });
 
 #[cfg(test)]
@@ -440,6 +448,8 @@ mod test_assets {
 		assert_eq!(any::Asset::try_from(3).unwrap(), any::Asset::Usdc);
 		assert_eq!(any::Asset::try_from(4).unwrap(), any::Asset::Dot);
 		assert_eq!(any::Asset::try_from(5).unwrap(), any::Asset::Btc);
+		assert_eq!(any::Asset::try_from(6).unwrap(), any::Asset::ArbEth);
+		assert_eq!(any::Asset::try_from(7).unwrap(), any::Asset::ArbUsdc);
 	}
 
 	#[test]
@@ -449,6 +459,8 @@ mod test_assets {
 		assert_conversion!(eth, Usdc);
 		assert_conversion!(dot, Dot);
 		assert_conversion!(btc, Btc);
+		assert_conversion!(arb, ArbEth);
+		assert_conversion!(arb, ArbUsdc);
 
 		assert_incompatible!(eth, Dot);
 		assert_incompatible!(dot, Eth);

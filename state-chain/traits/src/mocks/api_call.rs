@@ -15,10 +15,10 @@ pub const ETHEREUM_ETH_ADDRESS: [u8; 20] = [0xee; 20];
 pub const ETHEREUM_FLIP_ADDRESS: [u8; 20] = [0xcf; 20];
 pub const ETHEREUM_USDC_ADDRESS: [u8; 20] = [0x45; 20];
 #[derive(Encode, Decode, TypeInfo, Eq, PartialEq)]
-pub struct MockEthEnvironment;
+pub struct MockEvmEnvironment;
 
 impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::ChainAccount>
-	for MockEthEnvironment
+	for MockEvmEnvironment
 {
 	fn lookup(asset: <Ethereum as Chain>::ChainAsset) -> Option<<Ethereum as Chain>::ChainAccount> {
 		match asset {
@@ -30,13 +30,13 @@ impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::Chai
 }
 
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Eq, Encode, Decode, TypeInfo)]
-pub enum MockEthereumApiCall<MockEthEnvironment> {
-	AllBatch(MockEthAllBatch<MockEthEnvironment>),
-	ExecutexSwapAndCall(MockEthExecutexSwapAndCall<MockEthEnvironment>),
-	TransferFallback(MockEthTransferFallback<MockEthEnvironment>),
+pub enum MockEthereumApiCall<MockEvmEnvironment> {
+	AllBatch(MockEthAllBatch<MockEvmEnvironment>),
+	ExecutexSwapAndCall(MockEthExecutexSwapAndCall<MockEvmEnvironment>),
+	TransferFallback(MockEthTransferFallback<MockEvmEnvironment>),
 }
 
-impl ApiCall<EvmCrypto> for MockEthereumApiCall<MockEthEnvironment> {
+impl ApiCall<EvmCrypto> for MockEthereumApiCall<MockEvmEnvironment> {
 	fn threshold_signature_payload(&self) -> <EvmCrypto as ChainCrypto>::Payload {
 		unimplemented!()
 	}
@@ -59,14 +59,14 @@ impl ApiCall<EvmCrypto> for MockEthereumApiCall<MockEthEnvironment> {
 }
 
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Default, Eq, Encode, Decode, TypeInfo)]
-pub struct MockEthAllBatch<MockEthEnvironment> {
+pub struct MockEthAllBatch<MockEvmEnvironment> {
 	pub nonce: <Ethereum as Chain>::ReplayProtection,
 	pub fetch_params: Vec<FetchAssetParams<Ethereum>>,
 	pub transfer_params: Vec<TransferAssetParams<Ethereum>>,
-	_phantom: PhantomData<MockEthEnvironment>,
+	_phantom: PhantomData<MockEvmEnvironment>,
 }
 
-impl MockEthAllBatch<MockEthEnvironment> {
+impl MockEthAllBatch<MockEvmEnvironment> {
 	pub fn set_success(success: bool) {
 		ALL_BATCH_SUCCESS.with(|cell| *cell.borrow_mut() = success);
 	}
@@ -77,7 +77,7 @@ thread_local! {
 	pub static SHOULD_CONSOLIDATE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
-impl AllBatch<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
+impl AllBatch<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
 		transfer_params: Vec<TransferAssetParams<Ethereum>>,
@@ -95,7 +95,7 @@ impl AllBatch<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 	}
 }
 
-impl cf_chains::ConsolidateCall<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
+impl cf_chains::ConsolidateCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 	fn consolidate_utxos() -> Result<Self, cf_chains::ConsolidationError> {
 		// Consolidation isn't necessary for Ethereum, but this implementation
 		// helps in testing some generic behaviour
@@ -114,17 +114,17 @@ impl cf_chains::ConsolidateCall<Ethereum> for MockEthereumApiCall<MockEthEnviron
 }
 
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Eq, Encode, Decode, TypeInfo)]
-pub struct MockEthExecutexSwapAndCall<MockEthEnvironment> {
+pub struct MockEthExecutexSwapAndCall<MockEvmEnvironment> {
 	nonce: <Ethereum as Chain>::ReplayProtection,
 	transfer_param: TransferAssetParams<Ethereum>,
 	source_chain: ForeignChain,
 	source_address: Option<ForeignChainAddress>,
 	gas_budget: <Ethereum as Chain>::ChainAmount,
 	message: Vec<u8>,
-	_phantom: PhantomData<MockEthEnvironment>,
+	_phantom: PhantomData<MockEvmEnvironment>,
 }
 
-impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
+impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 	fn new_unsigned(
 		transfer_param: TransferAssetParams<Ethereum>,
 		source_chain: ForeignChain,
@@ -132,7 +132,7 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 		gas_budget: <Ethereum as Chain>::ChainAmount,
 		message: Vec<u8>,
 	) -> Result<Self, DispatchError> {
-		if MockEthEnvironment::lookup(transfer_param.asset).is_none() {
+		if MockEvmEnvironment::lookup(transfer_param.asset).is_none() {
 			Err(DispatchError::CannotLookup)
 		} else {
 			Ok(Self::ExecutexSwapAndCall(MockEthExecutexSwapAndCall {
@@ -149,15 +149,15 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 }
 
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Eq, Encode, Decode, TypeInfo)]
-pub struct MockEthTransferFallback<MockEthEnvironment> {
+pub struct MockEthTransferFallback<MockEvmEnvironment> {
 	nonce: <Ethereum as Chain>::ReplayProtection,
 	transfer_param: TransferAssetParams<Ethereum>,
-	_phantom: PhantomData<MockEthEnvironment>,
+	_phantom: PhantomData<MockEvmEnvironment>,
 }
 
-impl TransferFallback<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
+impl TransferFallback<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 	fn new_unsigned(transfer_param: TransferAssetParams<Ethereum>) -> Result<Self, DispatchError> {
-		if MockEthEnvironment::lookup(transfer_param.asset).is_none() {
+		if MockEvmEnvironment::lookup(transfer_param.asset).is_none() {
 			Err(DispatchError::CannotLookup)
 		} else {
 			Ok(Self::TransferFallback(MockEthTransferFallback {

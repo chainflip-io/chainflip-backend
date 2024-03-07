@@ -1,9 +1,12 @@
 pub use super::{
 	common::*,
-	testnet::{BITCOIN_EXPIRY_BLOCKS, ETHEREUM_EXPIRY_BLOCKS, POLKADOT_EXPIRY_BLOCKS},
+	testnet::{
+		ARBITRUM_EXPIRY_BLOCKS, BITCOIN_EXPIRY_BLOCKS, ETHEREUM_EXPIRY_BLOCKS,
+		POLKADOT_EXPIRY_BLOCKS,
+	},
 };
 use super::{parse_account, StateChainEnvironment};
-use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_SEPOLIA};
+use cf_chains::dot::RuntimeVersion;
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use sc_service::ChainType;
 use sp_core::H256;
@@ -21,10 +24,15 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("dC27c60956cB065D19F08bb69a707E37b36d8086"),
 	eth_usdc_address: hex_literal::hex!("5fd84259d66Cd46123540766Be93DFE6D43130D7"),
 	state_chain_gateway_address: hex_literal::hex!("A34a967197Ee90BB7fb28e928388a573c5CFd099"),
-	key_manager_address: hex_literal::hex!("4981b1329F29E720642266fc6e172C3f78159dff"),
+	eth_key_manager_address: hex_literal::hex!("4981b1329F29E720642266fc6e172C3f78159dff"),
 	eth_vault_address: hex_literal::hex!("36eaD71325604DC15d35FAE584D7b50646D81753"),
 	eth_address_checker_address: hex_literal::hex!("58eaCD5A40EEbCbBCb660f178F9A46B1Ad63F846"),
-	ethereum_chain_id: CHAIN_ID_SEPOLIA,
+	arb_key_manager_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+	arb_vault_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+	arbusdc_token_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+	arb_address_checker_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+	ethereum_chain_id: cf_chains::eth::CHAIN_ID_SEPOLIA,
+	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_SEPOLIA,
 	eth_init_agg_key: hex_literal::hex!(
 		"021cf3c105fbc7112f3394c3e176463ec59600f1e7005ad8d68f66840264998667"
 	),
@@ -81,3 +89,4 @@ pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<
 
 pub const BITCOIN_SAFETY_MARGIN: u64 = 5;
 pub const ETHEREUM_SAFETY_MARGIN: u64 = 6;
+pub const ARBITRUM_SAFETY_MARGIN: u64 = 6; // TODO: to be set
