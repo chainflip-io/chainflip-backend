@@ -599,21 +599,22 @@ assets!(
 				gas: true,
 				index: 6,
 			},
-            Asset {
+			Asset {
 				variant: ArbUsdc,
 				member: usdc,
 				string: "USDC" (aliases: ["Usdc", "usdc"]),
 				json: "USDC",
 				gas: false,
 				index: 7,
-			}, 
-        ],
-    }
+			},
+		],
+	}
 );
 
 #[cfg(test)]
 mod test_assets {
 	use super::*;
+	use cf_utilities::{assert_ok, assert_err};
 
 	macro_rules! assert_conversion {
 		($mod:ident, $asset:ident) => {
@@ -655,5 +656,125 @@ mod test_assets {
 		assert_incompatible!(dot, Flip);
 		assert_incompatible!(dot, Usdc);
 		assert_incompatible!(btc, Usdc);
+	}
+
+	#[test]
+	fn test_asset_encoding() {
+		use core::{fmt::Debug, str::FromStr};
+		use serde::de::DeserializeOwned;
+
+		// FromStr
+
+		assert_eq!(assert_ok!(any::Asset::from_str("Ethereum-ETH")), any::Asset::Eth);
+		assert_eq!(assert_ok!(any::Asset::from_str("Polkadot-DOT")), any::Asset::Dot);
+		assert_eq!(assert_ok!(any::Asset::from_str("Bitcoin-BTC")), any::Asset::Btc);
+		assert_eq!(assert_ok!(any::Asset::from_str("Ethereum-eth")), any::Asset::Eth);
+		assert_eq!(assert_ok!(any::Asset::from_str("Ethereum-Eth")), any::Asset::Eth);
+		assert_eq!(assert_ok!(any::Asset::from_str("Arbitrum-Eth")), any::Asset::ArbEth);
+
+		assert_err!(any::Asset::from_str("Ethereum-BTC"));
+		assert_err!(any::Asset::from_str("Polkadot-USDC"));
+		assert_err!(any::Asset::from_str("Arbitrum-Btc"));
+		assert_err!(any::Asset::from_str("Terra-ETH"));
+
+		// Serialization
+
+		assert_eq!(
+			assert_ok!(serde_json::to_string(&any::Asset::Eth)),
+			"{\"chain\":\"Ethereum\",\"asset\":\"ETH\"}"
+		);
+		assert_eq!(
+			assert_ok!(serde_json::to_string(&any::Asset::Dot)),
+			"{\"chain\":\"Polkadot\",\"asset\":\"DOT\"}"
+		);
+		assert_eq!(
+			assert_ok!(serde_json::to_string(&any::Asset::Btc)),
+			"{\"chain\":\"Bitcoin\",\"asset\":\"BTC\"}"
+		);
+		assert_eq!(
+			assert_ok!(serde_json::to_string(&any::Asset::ArbEth)),
+			"{\"chain\":\"Arbitrum\",\"asset\":\"ETH\"}"
+		);
+
+		assert_eq!(assert_ok!(serde_json::to_string(&any::OldAsset::Eth)), "\"ETH\"");
+		assert_eq!(assert_ok!(serde_json::to_string(&any::OldAsset::Dot)), "\"DOT\"");
+		assert_eq!(assert_ok!(serde_json::to_string(&any::OldAsset::Btc)), "\"BTC\"");
+		assert_eq!(
+			assert_ok!(serde_json::to_string(&any::OldAsset::ArbEth)),
+			"{\"chain\":\"Arbitrum\",\"asset\":\"ETH\"}"
+		);
+
+		// Explicit Chain Deserialization
+
+		fn explicit_chain_deserialization<T: DeserializeOwned + Debug + From<any::Asset> + Eq>() {
+			assert_eq!(
+				assert_ok!(serde_json::from_str::<T>("{\"chain\":\"Ethereum\",\"asset\":\"ETH\"}")),
+				T::from(any::Asset::Eth)
+			);
+			assert_eq!(
+				assert_ok!(serde_json::from_str::<T>("{\"chain\":\"Polkadot\",\"asset\":\"DOT\"}")),
+				T::from(any::Asset::Dot)
+			);
+			assert_eq!(
+				assert_ok!(serde_json::from_str::<T>("{\"chain\":\"Bitcoin\",\"asset\":\"BTC\"}")),
+				T::from(any::Asset::Btc)
+			);
+			assert_eq!(
+				assert_ok!(serde_json::from_str::<T>("{\"chain\":\"Arbitrum\",\"asset\":\"ETH\"}")),
+				T::from(any::Asset::ArbEth)
+			);
+
+			assert_err!(serde_json::from_str::<T>("{\"chain\":\"Ethereum\",\"asset\":\"Eth\"}"));
+			assert_err!(serde_json::from_str::<T>("{\"chain\":\"Polkadot\",\"asset\":\"Dot\"}"));
+			assert_err!(serde_json::from_str::<T>("{\"chain\":\"Bitcoin\",\"asset\":\"Btc\"}"));
+			assert_err!(serde_json::from_str::<T>("{\"chain\":\"ETHEREUM\",\"asset\":\"ETH\"}"));
+			assert_err!(serde_json::from_str::<T>("{\"chain\":\"ETHEREUM\",\"asset\":\"BTC\"}"));
+			assert_err!(serde_json::from_str::<T>("{\"chain\":\"ETHEREUM\",\"asset\":\"eth\"}"));
+		}
+
+		explicit_chain_deserialization::<any::Asset>();
+		explicit_chain_deserialization::<any::OldAsset>();
+
+		// Implicit Chain Deserialization
+
+		fn implicit_chain_deserialization<
+			T: DeserializeOwned + Debug + From<any::Asset> + Eq,
+		>() {
+			assert_eq!(
+				assert_ok!(serde_json::from_str::<T>("{\"asset\":\"ETH\"}")),
+				T::from(any::Asset::Eth)
+			);
+			assert_eq!(
+				assert_ok!(serde_json::from_str::<T>("{\"asset\":\"DOT\"}")),
+				T::from(any::Asset::Dot)
+			);
+			assert_eq!(
+				assert_ok!(serde_json::from_str::<T>("{\"asset\":\"BTC\"}")),
+				T::from(any::Asset::Btc)
+			);
+
+			assert_err!(serde_json::from_str::<T>("{\"asset\":\"MEH\"}"));
+			assert_err!(serde_json::from_str::<T>("{\"asset\":\"eTH\"}"));
+			assert_err!(serde_json::from_str::<T>("{\"asset\":\"DOt\"}"));
+			assert_err!(serde_json::from_str::<T>("{\"asset\":\"BtC\"}"));
+		}
+
+		implicit_chain_deserialization::<any::Asset>();
+		implicit_chain_deserialization::<any::OldAsset>();
+
+		// Unstructured Implicit Chain Deserialization
+
+		fn unstructured_implicit_chain_deserialization<T: DeserializeOwned + Debug + From<any::Asset> + Eq>() {
+			assert_eq!(assert_ok!(serde_json::from_str::<T>("\"ETH\"")), T::from(any::Asset::Eth));
+			assert_eq!(assert_ok!(serde_json::from_str::<T>("\"DOT\"")), T::from(any::Asset::Dot));
+			assert_eq!(assert_ok!(serde_json::from_str::<T>("\"BTC\"")), T::from(any::Asset::Btc));
+
+			assert_err!(serde_json::from_str::<T>("\"eTh\""));
+			assert_err!(serde_json::from_str::<T>("\"dOt\""));
+			assert_err!(serde_json::from_str::<T>("\"bTc\""));
+		}
+
+		unstructured_implicit_chain_deserialization::<any::Asset>();
+		unstructured_implicit_chain_deserialization::<any::OldAsset>();
 	}
 }
