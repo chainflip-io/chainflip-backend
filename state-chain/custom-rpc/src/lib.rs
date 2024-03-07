@@ -9,8 +9,8 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets::any::{self, OldAsset},
-	AccountRole, Asset, AssetAmount, BroadcastId, ForeignChain, NetworkEnvironment, SemVer,
-	SwapOutput,
+	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, ForeignChain, NetworkEnvironment,
+	SemVer, SwapId, SwapOutput,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -22,6 +22,7 @@ use jsonrpsee::{
 };
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{AskBidMap, PoolInfo, PoolLiquidity, PoolPriceV1, UnidirectionalPoolDepth};
+use pallet_cf_swapping::SwapLegInfo;
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_api::ApiError;
@@ -35,7 +36,7 @@ use state_chain_runtime::{
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
 		BrokerInfo, CustomRuntimeApi, DispatchErrorWithMessage, FailingWitnessValidators,
-		LiquidityProviderInfo, ScheduledSwap, ValidatorInfo,
+		LiquidityProviderInfo, ValidatorInfo,
 	},
 	NetworkFee,
 };
@@ -44,6 +45,38 @@ use std::{
 	marker::PhantomData,
 	sync::Arc,
 };
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScheduledSwap {
+	pub swap_id: SwapId,
+	pub base_asset: Asset,
+	pub quote_asset: Asset,
+	pub side: Side,
+	pub amount: U256,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub source_asset: Option<Asset>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub source_amount: Option<U256>,
+	pub execute_at: BlockNumber,
+}
+
+impl ScheduledSwap {
+	fn new(
+		SwapLegInfo { swap_id, base_asset, quote_asset, side, amount, source_asset, source_amount}: SwapLegInfo,
+		execute_at: BlockNumber,
+	) -> Self {
+		ScheduledSwap {
+			swap_id,
+			base_asset,
+			quote_asset,
+			side,
+			amount: amount.into(),
+			source_asset,
+			source_amount: source_amount.map(Into::into),
+			execute_at,
+		}
+	}
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AssetWithAmount {
@@ -1175,7 +1208,11 @@ where
 			sink,
 			move |api, hash| {
 				Ok::<_, ApiError>(SwapResponse {
-					swaps: api.cf_scheduled_swaps(hash, base_asset, quote_asset)?,
+					swaps: api
+						.cf_scheduled_swaps(hash, base_asset, quote_asset)?
+						.into_iter()
+						.map(|(swap, execute_at)| ScheduledSwap::new(swap, execute_at))
+						.collect(),
 				})
 			},
 		)
@@ -1194,10 +1231,14 @@ where
 			.map_err(to_rpc_error)
 			.and_then(|result| result.map_err(map_dispatch_error))?;
 
-		self.client
+		Ok(self
+			.client
 			.runtime_api()
 			.cf_scheduled_swaps(self.unwrap_or_best(at), base_asset, quote_asset)
-			.map_err(to_rpc_error)
+			.map_err(to_rpc_error)?
+			.into_iter()
+			.map(|(swap, execute_at)| ScheduledSwap::new(swap, execute_at))
+			.collect())
 	}
 
 	fn cf_subscribe_prewitness_swaps(
