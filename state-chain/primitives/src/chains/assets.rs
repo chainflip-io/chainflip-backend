@@ -48,6 +48,21 @@ macro_rules! assets {
 			)+
 		)+
 
+		// Ensures at compile-time all implicit-chain assets use difference json names, as otherwise deserialization is ambiguous.
+		#[allow(dead_code, unused_variables)]
+		fn _force_non_overlapping_implicit_assets() {
+			match "" {
+				$(
+					$(
+						$(
+							$asset_json => { let $asset_legacy_encoding = (); },
+						)?
+					)+
+				)+
+				_ => {}
+			}
+		}
+
 		pub mod any {
 			use strum_macros::EnumIter;
 			use codec::{MaxEncodedLen, Encode, Decode};
