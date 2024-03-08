@@ -881,7 +881,7 @@ mod tests {
 		assert_eq!(serialized_tx, expected_serialized_tx);
 	}
 
-	// TODO: Do create_nonced_transfer and ccm_token_transfer with added createAssociatedTokenAccountIdempotentInstruction
+	// TODO: Do create_nonced_transfer_token and ccm_token_transfer both with added createAssociatedTokenAccountIdempotentInstruction
 	//       or at least just the createAssociatedTokenAccountIdempotentInstruction.
 
 	#[test]
