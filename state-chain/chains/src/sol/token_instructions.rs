@@ -64,13 +64,21 @@ impl AssociatedTokenAccountInstruction {
         token_mint_address: &Pubkey,
         associated_account_address: &Pubkey,
     ) -> Instruction {
-        // TODO: Implement this somewhere
+        // TODO: Implement this. This ends up being a a call to Pubkey::find_program_address
+        // (we can use try_find_program_address instead). In order to be able to do
+        // any token transfer we must have the ATA's. If we only do ATAs in the protocol
+        // then we just can't create associated token account idempotent which is certainly
+        // problematic. Therefore, we need to use owner addresses in the protocol and derive
+        // the ATA's from the owner addresses. In that scenario, we must do the derivation
+        // in the state chain since transactions such as token transfers require to have
+        // the ATA. I think there is no way to push this to the Engine. And then we either
+        // pass both the owner and ata to the engine or just the latter.
+
         // let associated_account_address = get_associated_token_address_with_program_id(
         //     wallet_address,
         //     token_mint_address,
         //     token_program_id,
         // );
-        // let instruction: AssociatedTokenAccountInstruction = AssociatedTokenAccountInstruction::CreateIdempotent;
         let account_metas = vec![
             AccountMeta::new(*funding_address, true),
             AccountMeta::new(*associated_account_address, false),
