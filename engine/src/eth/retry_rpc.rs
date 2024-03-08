@@ -261,13 +261,16 @@ impl<Rpc: EthRpcApi> EthersRetryRpcApi for EthRetryRpcClient<Rpc> {
 
 #[async_trait::async_trait]
 impl<Rpc: EthSigningRpcApi> EthersRetrySigningRpcApi for EthRetryRpcClient<Rpc> {
-	/// Estimates gas and then sends the transaction to the network.
+	/// Estimates gas, signs and then sends the transaction to the network.
 	async fn broadcast_transaction(
 		&self,
 		tx: cf_chains::evm::Transaction,
 	) -> anyhow::Result<TxHash> {
 		let log = RequestLog::new("broadcast_transaction".to_string(), Some(format!("{tx:?}")));
-		self.rpc_retry_client
+
+		// Estimate gas
+		let transaction_request = self
+			.rpc_retry_client
 			.request_with_limit(
 				Box::pin(move |client| {
 					let tx = tx.clone();
@@ -306,9 +309,43 @@ impl<Rpc: EthSigningRpcApi> EthersRetrySigningRpcApi for EthRetryRpcClient<Rpc> 
 								estimated_gas.saturating_mul(U256::from(4u64)) / 3u64
 							},
 						});
+						Ok(transaction_request)
+					})
+				}),
+				log.clone(),
+				MAX_BROADCAST_RETRIES,
+			)
+			.await?;
 
+		// Sign the transaction
+		let tx = self
+			.rpc_retry_client
+			.request_with_limit(
+				Box::pin(move |client| {
+					let transaction_request = transaction_request.clone();
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move {
 						client
-							.send_transaction(transaction_request)
+							.sign_transaction(transaction_request)
+							.await
+							.context("Failed to Sign ETH transaction")
+					})
+				}),
+				log.clone(),
+				// Only sign the transaction once
+				0,
+			)
+			.await?;
+
+		// Send the transaction
+		self.rpc_retry_client
+			.request_with_limit(
+				Box::pin(move |client| {
+					let tx = tx.clone();
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move {
+						client
+							.send_raw_transaction(tx)
 							.await
 							.context("Failed to send ETH transaction")
 					})

@@ -208,7 +208,11 @@ pub trait EthRpcApi: Send + Sync + Clone + 'static {
 pub trait EthSigningRpcApi: EthRpcApi {
 	fn address(&self) -> H160;
 
-	async fn send_transaction(&self, tx: Eip1559TransactionRequest) -> Result<TxHash>;
+	// Sign the transaction request and return the RLP encoded signed transaction bytes
+	async fn sign_transaction(&self, tx: Eip1559TransactionRequest) -> Result<Bytes>;
+
+	// Send an already signed RLP encoded transaction
+	async fn send_raw_transaction(&self, tx: Bytes) -> Result<TxHash>;
 }
 
 #[async_trait::async_trait]
@@ -260,17 +264,27 @@ impl EthSigningRpcApi for EthRpcSigningClient {
 		self.signer.address()
 	}
 
-	async fn send_transaction(&self, mut tx: Eip1559TransactionRequest) -> Result<TxHash> {
+	async fn sign_transaction(&self, mut tx: Eip1559TransactionRequest) -> Result<Bytes> {
 		tx.nonce = Some(self.get_next_nonce().await?);
+		let tx = TypedTransaction::Eip1559(tx);
 
-		let res = self.signer.send_transaction(tx, None).await;
-		if res.is_err() {
-			// Reset the nonce just in case (it will be re-requested during next broadcast)
-			tracing::warn!("Resetting eth broadcaster nonce due to error");
-			*self.nonce_info.lock().await = None;
+		self.signer
+			.signer()
+			.sign_transaction(&tx)
+			.await
+			.map_err(anyhow::Error::msg)
+			.map(|signature| tx.rlp_signed(&signature))
+	}
+
+	async fn send_raw_transaction(&self, tx: Bytes) -> Result<TxHash> {
+		match self.signer.inner().send_raw_transaction(tx).await {
+			Ok(pending_tx) => Ok(pending_tx.tx_hash()),
+			Err(e) => {
+				// Reset the nonce just in case (it will be re-requested during next broadcast)
+				*self.nonce_info.lock().await = None;
+				Err(anyhow::Error::new(e))
+			},
 		}
-
-		Ok(res?.tx_hash())
 	}
 }
 
