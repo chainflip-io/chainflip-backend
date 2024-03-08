@@ -89,4 +89,8 @@ pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<
 
 pub const BITCOIN_SAFETY_MARGIN: u64 = 5;
 pub const ETHEREUM_SAFETY_MARGIN: u64 = 6;
+<<<<<<< HEAD
 pub const ARBITRUM_SAFETY_MARGIN: u64 = 1;
+=======
+pub const ARBITRUM_SAFETY_MARGIN: u64 = 6; // TODO: to be set
+>>>>>>> 1b17c0f72fa06ffe32df30dc3dd9ca154c85fcfc

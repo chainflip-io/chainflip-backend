@@ -14,7 +14,32 @@ const proposalId = process.argv[2];
 const api = await getChainflipApi();
 const proposal = await api.query.governance.proposals(proposalId);
 const extrinsic = api.registry.createType('Call', proposal.unwrap().call);
-await fs.writeFile('proposed_runtime.wasm', extrinsic.args[1].toU8a(), (err) => {
+const raw = extrinsic.args[1].toU8a();
+const indicator = raw[0] && 3;
+let skip: number;
+switch (indicator) {
+  case 0: {
+    skip = 1;
+    break;
+  }
+  case 1: {
+    skip = 2;
+    break;
+  }
+  case 3: {
+    skip = 4;
+    break;
+  }
+  case 4: {
+    // eslint-disable-next-line no-bitwise
+    skip = (raw[0] >> 2) + 4;
+    break;
+  }
+  default: {
+    break;
+  }
+}
+await fs.writeFile('proposed_runtime.wasm', raw.slice(skip), (err) => {
   if (err) console.log('error!');
   else process.exit(0);
 });

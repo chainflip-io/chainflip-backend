@@ -166,6 +166,7 @@ impl EvmPriorityFee<Ethereum> for EthTransactionBuilder {
 		Some(U256::from(tracked_data.priority_fee))
 	}
 }
+<<<<<<< HEAD
 
 impl EvmPriorityFee<Arbitrum> for ArbTransactionBuilder {
 	// Setting the priority fee to zero to prevent the CFE from setting a different value
@@ -209,6 +210,45 @@ macro_rules! impl_transaction_builder_for_evm_chain {
 				}
 			}
 
+=======
+impl EvmPriorityFee<Arbitrum> for ArbTransactionBuilder {}
+
+pub struct EthTransactionBuilder;
+pub struct ArbTransactionBuilder;
+impl_transaction_builder_for_evm_chain!(
+	Ethereum,
+	EthTransactionBuilder,
+	EthereumApi<EvmEnvironment>,
+	EthereumChainTracking,
+	ETHEREUM_BASE_FEE_MULTIPLIER,
+	ETHEREUM_MAX_GAS_LIMIT
+);
+impl_transaction_builder_for_evm_chain!(
+	Arbitrum,
+	ArbTransactionBuilder,
+	ArbitrumApi<EvmEnvironment>,
+	ArbitrumChainTracking,
+	ARBITRUM_BASE_FEE_MULTIPLIER,
+	ARBITRUM_MAX_GAS_LIMIT
+);
+
+#[macro_export]
+macro_rules! impl_transaction_builder_for_evm_chain {
+	( $chain: ident, $transaction_builder: ident, $chain_api: ident <$env: ident>, $chain_tracking: ident, $base_fee_multiplier: expr, $max_gas_limit: expr ) => {
+		impl TransactionBuilder<$chain, $chain_api<$env>> for $transaction_builder {
+			fn build_transaction(
+				signed_call: &$chain_api<$env>,
+			) -> Transaction {
+				Transaction {
+					chain_id: signed_call.replay_protection().chain_id,
+					contract: signed_call.replay_protection().contract_address,
+					data: signed_call.chain_encoded(),
+					gas_limit: Self::calculate_gas_limit(signed_call),
+					..Default::default()
+				}
+			}
+
+>>>>>>> 1b17c0f72fa06ffe32df30dc3dd9ca154c85fcfc
 			fn refresh_unsigned_data(unsigned_tx: &mut Transaction) {
 				if let Some(ChainState { tracked_data, .. }) = $chain_tracking::chain_state() {
 					let max_fee_per_gas = tracked_data.max_fee_per_gas($base_fee_multiplier);
