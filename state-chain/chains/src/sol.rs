@@ -14,6 +14,7 @@ use thiserror::Error;
 
 use self::program_instructions::SystemProgramInstruction;
 
+pub mod compute_budget;
 pub mod program_instructions;
 pub mod short_vec;
 
@@ -27,6 +28,7 @@ pub const ASSOCIATED_TOKEN_PROGRAM_ID: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25e
 pub const VAULT_PROGRAM: &str = "632bJHVLPj6XPLVgrabFwxogtAQQ5zb8hwm9zqZuCcHo";
 pub const SYS_VAR_RECENT_BLOCKHASHES: &str = "SysvarRecentB1ockHashes11111111111111111111";
 pub const SYS_VAR_INSTRUCTIONS: &str = "Sysvar1nstructions1111111111111111111111111";
+pub const COMPUTE_BUDGET_PROGRAM: &str = "ComputeBudget111111111111111111111111111111";
 
 /// An atomically-commited sequence of instructions.
 ///
@@ -719,6 +721,7 @@ mod tests {
 	use core::str::FromStr;
 
 	use crate::sol::{
+		compute_budget::ComputeBudgetInstruction,
 		program_instructions::{SystemProgramInstruction, VaultProgram},
 		BorshDeserialize, BorshSerialize, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS,
 		TOKEN_PROGRAM_ID,
@@ -787,12 +790,38 @@ mod tests {
 	}
 
 	#[test]
+	fn create_nonced_transfer_cu_priority_fees() {
+		let durable_nonce = Hash::from_str("2GGxiEHwtWPGNKH5czvxRGvQTayRvCT1PFsA9yK2iMnq").unwrap();
+		let from_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
+		let from_pubkey = from_keypair.pubkey();
+		let nonce_account_pubkey =
+			Pubkey::from_str("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw").unwrap();
+		let to_pubkey = Pubkey::from_str("4MqL4qy2W1yXzuF3PiuSMehMbJzMuZEcBwVvrgtuhx7V").unwrap();
+		let compute_unit_price = 100_0000;
+		let compute_unit_limit = 300_000;
+		let lamports = 1_000_000;
+		let instructions = [
+			SystemProgramInstruction::advance_nonce_account(&nonce_account_pubkey, &from_pubkey),
+			ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
+			ComputeBudgetInstruction::set_compute_unit_limit(compute_unit_limit),
+			SystemProgramInstruction::transfer(&from_pubkey, &to_pubkey, lamports),
+		];
+		let message = Message::new(&instructions, Some(&from_pubkey));
+		let mut tx = Transaction::new_unsigned(message);
+		tx.sign(&[&from_keypair], durable_nonce);
+
+		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
+		let expected_serialized_tx = hex_literal::hex!("017036ecc82313548a7f1ef280b9d7c53f9747e23abcb4e76d86c8df6aa87e82d460ad7cea2e8d972a833d3e1802341448a99be200ad4648c454b9d5a5e2d5020d01000306f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19231e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd400000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000012c57218f6315b83818802f3522fe7e04c596ae4fe08841e7940bc2f958aaaea04030301050004040000000400090340420f000000000004000502e0930400030200020c0200000040420f0000000000").to_vec();
+		println!("tx:{:?}", hex::encode(serialized_tx.clone()));
+
+		assert_eq!(serialized_tx, expected_serialized_tx);
+	}
+
+	#[test]
 	fn create_nonced_fetch() {
 		let durable_nonce = Hash::from_str("E6E2bNxGcgFyqeVRT3FSjw7YFbbMAZVQC21ZLVwrztRm").unwrap();
 		let vault_account = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let vault_account_pubkey = vault_account.pubkey();
-		println!("vault:{:?}", vault_account_pubkey);
-
 		let nonce_account_pubkey =
 			Pubkey::from_str("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw").unwrap();
 		let data_account_pubkey =
@@ -828,8 +857,9 @@ mod tests {
 	}
 
 	// TODO: We can have multiple transfer instructions in a single transaction. However, we need to
-	// check that there is no wayh to DoS us. I'm not sure if a transfer to the BPF bootloader for
-	// instance works. Using the web3 js I get an error that the account is read-only.
+	// check that there is no way to DoS us. I'm not sure if a transfer to the BPF bootloader for
+	// instance works. Using the web3 js I get an error that the account is read-only. However, it
+	// could be that it's the SDK setting that address as not mutable.
 	#[test]
 	fn create_nonced_transfer_token() {
 		let durable_nonce = Hash::from_str("A6hMhp72reGMkS5kNBaxaEXgNqn9H6woLsjy2Apz38MQ").unwrap();
@@ -879,8 +909,9 @@ mod tests {
 		assert_eq!(serialized_tx, expected_serialized_tx);
 	}
 
-	// TODO: Do create_nonced_transfer_token and ccm_token_transfer both with added createAssociatedTokenAccountIdempotentInstruction
-	//       or at least just the createAssociatedTokenAccountIdempotentInstruction.
+	// TODO: Do create_nonced_transfer_token and ccm_token_transfer both with added
+	// createAssociatedTokenAccountIdempotentInstruction       or at least just the
+	// createAssociatedTokenAccountIdempotentInstruction.
 
 	#[test]
 	fn create_nonced_rotate_agg_key() {
