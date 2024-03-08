@@ -16,7 +16,6 @@ use self::program_instructions::SystemProgramInstruction;
 
 pub mod program_instructions;
 pub mod short_vec;
-pub mod token_instructions;
 
 pub const SIGNATURE_BYTES: usize = 64;
 pub const HASH_BYTES: usize = 32;
