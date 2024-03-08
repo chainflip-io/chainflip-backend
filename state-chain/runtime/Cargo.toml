@@ -26,7 +26,6 @@ serde = { version = '1.0.195', default_features = false, features = [
 ] }
 
 ethabi = { default-features = false, version = '18.0' }
-scale-value = { default-features = false, version = '0.14.0', features = ['serde']}
 
 # Chainflip local dependencies
 cf-amm = { path = '../amm', default-features = false }
@@ -104,9 +103,7 @@ sp-session = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "
 sp-std = { version = "8.0.0", git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
 sp-transaction-pool = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
 sp-version = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
-serde_json = { version = "1.0.111", default-features = false, features = [
-  "alloc",
-] }
+
 sp-genesis-builder = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
 
 frame-try-runtime = { optional = true, tag = 'chainflip-substrate-1.6+1', default-features = false, git = 'https://github.com/chainflip-io/polkadot-sdk.git' }
@@ -201,9 +198,7 @@ std = [
   'pallet-transaction-payment/std',
   'pallet-cf-cfe-interface/std',
   'scale-info/std',
-  'scale-value/std',
   'serde/std',
-  'serde_json/std',
   'sp-api/std',
   'sp-block-builder/std',
   'sp-consensus-aura/std',

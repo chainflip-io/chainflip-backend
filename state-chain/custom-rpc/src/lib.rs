@@ -45,6 +45,8 @@ use std::{
 	sync::Arc,
 };
 
+mod type_encoder;
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AssetWithAmount {
 	#[serde(flatten)]
@@ -507,8 +509,11 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<FailingWitnessValidators>>;
 
-	#[method(name = "block_event")]
-	fn cf_get_events(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<Vec<String>>;
+	#[method(name = "get_events")]
+	fn cf_get_events(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<scale_value::Value>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1281,21 +1286,20 @@ where
 			.map_err(to_rpc_error)
 	}
 
-	fn cf_get_events(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<Vec<String>> {
-		let decoder = state_chain_runtime::event_encoder::RuntimeEventDecoder::new();
+	fn cf_get_events(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<scale_value::Value>> {
+		let event_decoder = type_encoder::TypeDecoder::new::<state_chain_runtime::RuntimeEvent>();
 		let events = self
 			.client
 			.runtime_api()
-			.cf_block_events(self.unwrap_or_best(at))
+			.cf_get_events(self.unwrap_or_best(at))
 			.map_err(to_rpc_error)?;
 
 		Ok(events
 			.into_iter()
-			.map(|event| {
-				decoder.decode_event_to_json(event).unwrap_or_else(|err| {
-					format!("Failed to decode RuntimeError. Error: {:?}", err)
-				})
-			})
+			.map(|event| event_decoder.decode_data(event))
 			.collect::<Vec<_>>())
 	}
 }

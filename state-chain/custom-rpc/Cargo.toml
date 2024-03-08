@@ -8,6 +8,7 @@ edition = '2021'
 workspace = true
 
 [dependencies]
+codec = { package = 'parity-scale-codec', version = '3.6.1'}
 
 # Chainflip Runtime
 state-chain-runtime = { path = '../runtime' }
@@ -41,3 +42,6 @@ sc-client-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag 
 
 [dev-dependencies]
 insta = { version = "1.34.0", features = ["json"] }
+
+frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+pallet-cf-broadcast = { path = "../pallets/cf-broadcast" }

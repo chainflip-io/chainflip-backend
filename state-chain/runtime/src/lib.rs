@@ -3,7 +3,6 @@
 #![recursion_limit = "256"]
 pub mod chainflip;
 pub mod constants;
-pub mod event_encoder;
 pub mod migrations;
 pub mod runtime_apis;
 pub mod safe_mode;
@@ -1492,7 +1491,7 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_block_events() -> Vec<Vec<u8>> {
+		fn cf_get_events() -> Vec<Vec<u8>> {
 			frame_system::Events::<Runtime>::get().into_iter().map(|event_record|event_record.event.encode()).collect::<Vec<_>>()
 		}
 	}
