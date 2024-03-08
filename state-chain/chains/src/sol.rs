@@ -13,7 +13,6 @@ pub mod extra_types_for_testing;
 use thiserror::Error;
 
 use self::program_instructions::SystemProgramInstruction;
-// use self::spl_token_instructions::TokenInstruction;
 
 pub mod program_instructions;
 pub mod short_vec;
