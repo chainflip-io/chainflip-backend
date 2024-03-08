@@ -17,6 +17,7 @@ use self::program_instructions::SystemProgramInstruction;
 pub mod compute_budget;
 pub mod program_instructions;
 pub mod short_vec;
+pub mod token_instructions;
 
 pub const SIGNATURE_BYTES: usize = 64;
 pub const HASH_BYTES: usize = 32;
@@ -724,7 +725,7 @@ mod tests {
 		compute_budget::ComputeBudgetInstruction,
 		program_instructions::{SystemProgramInstruction, VaultProgram},
 		BorshDeserialize, BorshSerialize, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS,
-		TOKEN_PROGRAM_ID,
+		TOKEN_PROGRAM_ID, token_instructions::AssociatedTokenAccountInstruction,
 	};
 
 	use super::{
@@ -1046,7 +1047,6 @@ mod tests {
 		println!("tx:{:?}", hex::encode(serialized_tx));
 	}
 
-	// TODO: Finalize testing this one
 	#[test]
 	fn create_nonced_ccm_token_transfer() {
 		let durable_nonce = Hash::from_str("21ieQJ7hzDSG7ed4ZuuC52MbV7NwQhuXwUJaNwWyyT1G").unwrap();
@@ -1063,7 +1063,6 @@ mod tests {
 		// This is needed to derive the pda_ata to create the
 		// createAssociatedTokenAccountIdempotentInstruction but for now we just derive it manually
 		// outside this test. let to_pubkey =
-		// Pubkey::from_str("pyq7ySiH5RvKteu2vdXKC7SNyNDp9vNDkGXdHxSpPtu").unwrap();
 		let pda_ata = Pubkey::from_str("5wYQz35Z78R47ivfSxRwBbEw1zD6Jfq9q4njT8Qi6AXU").unwrap();
 		let to_ata = Pubkey::from_str("BaoP8fmdaScXPZUb4Q9kTJgEeHEdgWixCCD7rWssUTQh").unwrap();
 		let mint_pubkey = Pubkey::from_str("CTUNEAoLNJ6Bwg3z8KsGA3ASyG9S3TwyuPtorZ4m5T5N").unwrap();
@@ -1129,6 +1128,47 @@ mod tests {
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
 	}
+
+	#[test]
+	fn create_nonced_associated_token_account() {
+		let durable_nonce = Hash::from_str("3GY33ibbFkTSdXeXuPAh2NxGTwm1TfEFNKKG9XjxFa67").unwrap();
+		let vault_account = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
+		let vault_account_pubkey = vault_account.pubkey();
+		let nonce_account_pubkey =
+			Pubkey::from_str("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw").unwrap();
+
+		// This is needed to derive the pda_ata to create the
+		// createAssociatedTokenAccountIdempotentInstruction but for now we just derive it manually
+		let to = Pubkey::from_str("pyq7ySiH5RvKteu2vdXKC7SNyNDp9vNDkGXdHxSpPtu").unwrap();
+		let to_ata = Pubkey::from_str("EbarLzqEb9jf2ZHUdDf5nuBP52Ut3ddLZtYrGwKh3Bbd").unwrap();
+		let mint_pubkey = Pubkey::from_str("21ySx9qZoscVT8ViTZjcudCCJeThnXfLPe1sLvezqRCv").unwrap();
+
+		// This would lack the idempotent account creating but that's fine for the test
+		let instructions = [
+			SystemProgramInstruction::advance_nonce_account(
+				&nonce_account_pubkey,
+				&vault_account_pubkey,
+			),
+			AssociatedTokenAccountInstruction::create_associated_token_account_idempotent_instruction(
+				&vault_account_pubkey,
+				&to,
+				&mint_pubkey,
+				&to_ata
+			),
+		];
+		let message = Message::new(&instructions, Some(&vault_account_pubkey));
+		let mut tx = Transaction::new_unsigned(message);
+		tx.sign(&[&vault_account], durable_nonce);
+		println!("{:?}", tx);
+
+		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
+		let expected_serialized_tx = hex_literal::hex!("01eb287ff9329fbaf83592ec56709d52d3d7f7edcab7ab53fc8371acff871016c51dfadde692630545a91d6534095bb5697b5fb9ee17dc292552eabf9ab6e3390601000609f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d192ca03f3e6d6fd79aaf8ebd4ce053492a34f22d0edafbfa88a380848d9a4735150000000000000000000000000000000000000000000000000000000000000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90c4a8e3702f6e26d9d0c900c1461da4e3debef5743ce253bb9f0308a68c944220f1b83220b1108ea0e171b5391e6c0157370c8353516b74e962f855be6d787038c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f85921b22d7dfc8cdeba6027384563948d038a11eba06289de51a15c3d649d1f7e2c020303010400040400000008060002060703050101").to_vec();
+
+		println!("tx:{:?}", hex::encode(serialized_tx.clone()));
+
+		assert_eq!(serialized_tx, expected_serialized_tx);
+	}
+
 
 	// TODO: Pull and compare discriminators and function from the contracts-interfaces
 	#[test]
