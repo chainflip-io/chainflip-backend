@@ -7,12 +7,10 @@
 
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { Asset } from '@chainflip/cli';
-import { getEvmContractAddress, runWithTimeout, sleep } from '../shared/utils';
+import { runWithTimeout } from '../shared/utils';
 import { createLpPool } from '../shared/create_lp_pool';
 import { provideLiquidity } from '../shared/provide_liquidity';
 import { rangeOrder } from '../shared/range_order';
-import { getEvmNativeBalance } from '../shared/get_evm_native_balance';
-import { getErc20Balance } from '../shared/get_erc20_balance';
 
 const deposits = new Map<Asset, number>([
   ['DOT', 10000],
