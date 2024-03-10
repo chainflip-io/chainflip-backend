@@ -37,20 +37,5 @@ mod benchmarks {
 		assert_eq!(ConsolidationParameters::<T>::get(), INITIAL_UTXO_CONSOLIDATION_PARAMETERS);
 	}
 
-	#[benchmark]
-	fn update_utxo_selection_parameters() {
-		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
-		let call = Call::<T>::update_utxo_selection_parameters {
-			params: INITIAL_UTXO_SELECTION_PARAMETERS,
-		};
-
-		#[block]
-		{
-			assert_ok!(call.dispatch_bypass_filter(origin));
-		}
-
-		assert_eq!(UtxoSelectionParameters::<T>::get(), INITIAL_UTXO_SELECTION_PARAMETERS);
-	}
-
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);
 }

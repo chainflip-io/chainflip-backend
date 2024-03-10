@@ -32,18 +32,6 @@ impl ConsolidationParameters {
 	}
 }
 
-#[derive(Encode, Decode, Default, PartialEq, Copy, Clone, TypeInfo, RuntimeDebug)]
-pub struct UtxoSelectionParameters {
-	/// The maximum number of utxos that can be selected for inclusion in a transaction.
-	pub selection_limit: u32,
-}
-
-impl UtxoSelectionParameters {
-	pub fn are_valid(&self) -> bool {
-		self.selection_limit > 1
-	}
-}
-
 /// Attempt to select up to `selection_limit` number of uxtos that contains more than required
 /// amount. Prioritize small amounts first to avoid fragmentation.
 ///

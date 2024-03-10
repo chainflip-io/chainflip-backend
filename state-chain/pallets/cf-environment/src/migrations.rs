@@ -1,7 +1,5 @@
-mod utxo_selection_parameters;
-
 use crate::*;
-use cf_runtime_upgrade_utilities::VersionedMigration;
+use cf_runtime_upgrade_utilities::{migration_template::Migration, VersionedMigration};
 use frame_support::traits::OnRuntimeUpgrade;
 #[cfg(feature = "try-runtime")]
 use frame_support::{pallet_prelude::DispatchError, sp_runtime};
@@ -30,8 +28,7 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 	}
 }
 
-pub type PalletMigration<T> =
-	(VersionedMigration<crate::Pallet<T>, utxo_selection_parameters::Migration<T>, 8, 9>,);
+pub type PalletMigration<T> = (VersionedMigration<crate::Pallet<T>, Migration<T>, 7, 8>,);
 
 #[cfg(test)]
 mod tests {

@@ -28,16 +28,13 @@ pub mod weights;
 pub use weights::WeightInfo;
 pub mod migrations;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(9);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(8);
 
 const INITIAL_UTXO_CONSOLIDATION_PARAMETERS: utxo_selection::ConsolidationParameters =
 	utxo_selection::ConsolidationParameters {
 		consolidation_threshold: 200,
 		consolidation_size: 100,
 	};
-
-const INITIAL_UTXO_SELECTION_PARAMETERS: utxo_selection::UtxoSelectionParameters =
-	utxo_selection::UtxoSelectionParameters { selection_limit: 250 };
 
 type SignatureNonce = u64;
 
@@ -160,11 +157,6 @@ pub mod pallet {
 	pub type ConsolidationParameters<T> =
 		StorageValue<_, utxo_selection::ConsolidationParameters, ValueQuery>;
 
-	#[pallet::storage]
-	#[pallet::getter(fn utxo_selection_parameters)]
-	pub type UtxoSelectionParameters<T> =
-		StorageValue<_, utxo_selection::UtxoSelectionParameters, ValueQuery>;
-
 	// OTHER ENVIRONMENT ITEMS
 	#[pallet::storage]
 	#[pallet::getter(fn safe_mode)]
@@ -197,8 +189,6 @@ pub mod pallet {
 		RuntimeSafeModeUpdated { safe_mode: SafeModeUpdate<T> },
 		/// Utxo consolidation parameters has been updated
 		UtxoConsolidationParametersUpdated { params: utxo_selection::ConsolidationParameters },
-		/// Utxo selection parameters has been updated
-		UtxoSelectionParametersUpdated { params: utxo_selection::UtxoSelectionParameters },
 	}
 
 	#[pallet::call]
@@ -316,23 +306,6 @@ pub mod pallet {
 
 			Ok(())
 		}
-
-		#[pallet::call_index(5)]
-		#[pallet::weight(T::WeightInfo::update_consolidation_parameters())]
-		pub fn update_utxo_selection_parameters(
-			origin: OriginFor<T>,
-			params: utxo_selection::UtxoSelectionParameters,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-
-			ensure!(params.are_valid(), DispatchError::Other("Invalid parameters"));
-
-			UtxoSelectionParameters::<T>::set(params);
-
-			Self::deposit_event(Event::<T>::UtxoSelectionParametersUpdated { params });
-
-			Ok(())
-		}
 	}
 
 	#[pallet::genesis_config]
@@ -370,7 +343,6 @@ pub mod pallet {
 
 			BitcoinAvailableUtxos::<T>::set(vec![]);
 			ConsolidationParameters::<T>::set(INITIAL_UTXO_CONSOLIDATION_PARAMETERS);
-			UtxoSelectionParameters::<T>::set(INITIAL_UTXO_SELECTION_PARAMETERS);
 
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
 
@@ -482,7 +454,7 @@ impl<T: Config> Pallet<T> {
 						output_amount +
 							number_of_outputs * fee_per_output_utxo +
 							min_fee_required_per_tx,
-						Some(Self::utxo_selection_parameters().selection_limit),
+						Some(Self::consolidation_parameters().consolidation_threshold),
 					)
 					.map_err(|error| {
 						log::error!(

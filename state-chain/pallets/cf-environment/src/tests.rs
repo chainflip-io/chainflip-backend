@@ -195,29 +195,6 @@ fn updating_consolidation_parameters() {
 }
 
 #[test]
-fn can_update_utxo_selection_parameters() {
-	use cf_chains::btc::utxo_selection::UtxoSelectionParameters;
-	new_test_ext().execute_with(|| {
-		// Should work with valid parameters
-		let valid_param = UtxoSelectionParameters { selection_limit: 10 };
-		assert_ok!(
-			Environment::update_utxo_selection_parameters(OriginTrait::root(), valid_param,)
-		);
-
-		System::assert_last_event(RuntimeEvent::Environment(
-			crate::Event::<Test>::UtxoSelectionParametersUpdated { params: valid_param },
-		));
-
-		// Should fail with invalid parameters
-		assert!(Environment::update_utxo_selection_parameters(
-			OriginTrait::root(),
-			UtxoSelectionParameters { selection_limit: 0 }
-		)
-		.is_err());
-	});
-}
-
-#[test]
 fn update_safe_mode() {
 	new_test_ext().execute_with(|| {
 		// Default to GREEN

@@ -34,7 +34,6 @@ use core::marker::PhantomData;
 pub trait WeightInfo {
 	fn update_safe_mode() -> Weight;
 	fn update_consolidation_parameters() -> Weight;
-	fn update_utxo_selection_parameters() -> Weight;
 }
 
 /// Weights for pallet_cf_environment using the Substrate node and recommended hardware.
@@ -60,9 +59,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(8_000_000, 0)
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
-	fn update_utxo_selection_parameters() -> Weight {
-		Weight::from_parts(8_000_000, 0)
-	}
 }
 
 // For backwards compatibility and tests
@@ -86,8 +82,5 @@ impl WeightInfo for () {
 		// Minimum execution time: 7_000_000 picoseconds.
 		Weight::from_parts(8_000_000, 0)
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
-	}
-	fn update_utxo_selection_parameters() -> Weight {
-		Weight::from_parts(8_000_000, 0)
 	}
 }
