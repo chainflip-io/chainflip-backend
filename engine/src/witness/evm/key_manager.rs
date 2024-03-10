@@ -1,5 +1,7 @@
-use cf_chains::evm::{
-	EvmCrypto, EvmTransactionMetadata, SchnorrVerificationComponents, TransactionFee,
+use cf_chains::{
+	evm::{EvmCrypto, EvmTransactionMetadata, SchnorrVerificationComponents, TransactionFee},
+	instances::ChainInstanceFor,
+	Chain,
 };
 use cf_primitives::EpochIndex;
 use ethers::{
@@ -8,7 +10,6 @@ use ethers::{
 };
 use futures_core::Future;
 use sp_core::{H160, H256};
-use state_chain_runtime::PalletInstanceAlias;
 use tracing::{info, trace};
 
 use super::{
@@ -58,7 +59,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	where
 		// These are the types for EVM chains, so this adapter can be shared by all EVM chains.
 		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = Bloom>,
-		Inner::Chain: cf_chains::Chain<
+		Inner::Chain: Chain<
 			ChainCrypto = EvmCrypto,
 			ChainAccount = H160,
 			TransactionFee = TransactionFee,
@@ -90,7 +91,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							..
 						}) => pallet_cf_vaults::Call::<
 							_,
-							<Inner::Chain as PalletInstanceAlias>::Instance,
+							ChainInstanceFor<Inner::Chain>,
 						>::vault_key_rotated_externally {
 							new_public_key: cf_chains::evm::AggKey::from_pubkey_compressed(
 								new_agg_key.serialize(),
@@ -134,7 +135,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							};
 							pallet_cf_broadcast::Call::<
 								_,
-								<Inner::Chain as PalletInstanceAlias>::Instance,
+								ChainInstanceFor<Inner::Chain>,
 							>::transaction_succeeded {
 								tx_out_id: SchnorrVerificationComponents {
 									s: sig_data.sig.into(),
@@ -178,7 +179,7 @@ mod tests {
 	use sp_core::{H160, U256};
 	use utilities::task_scope::task_scope;
 
-	use super::super::eth_source::EthSource;
+	use super::super::source::EvmSource;
 
 	use crate::{
 		eth::{retry_rpc::EthRetryRpcClient, rpc::EthRpcClient},
@@ -214,6 +215,7 @@ mod tests {
 						false,
 						false,
 						false,
+						None,
 					)
 					.await
 					.unwrap();
@@ -224,7 +226,7 @@ mod tests {
 						.vaults::<Ethereum>()
 						.await;
 
-				EthSource::new(retry_client.clone())
+				EvmSource::<_, Ethereum>::new(retry_client.clone())
 					.chunk_by_vault(vault_source, scope)
 					.key_manager_witnessing(
 						|call, _| async move {

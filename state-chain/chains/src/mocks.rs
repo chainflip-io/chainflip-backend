@@ -1,6 +1,7 @@
 #![cfg(feature = "std")]
 
 use crate::{
+	address::IntoForeignChainAddress,
 	evm::{api::EvmReplayProtection, TransactionFee},
 	*,
 };
@@ -78,6 +79,12 @@ impl BenchmarkValue for MockEthereumTransactionMetadata {
 impl MockEthereumTransactionMetadata {
 	pub fn set_validity(valid: bool) {
 		MOCK_VALID_METADATA.with(|cell| *cell.borrow_mut() = valid);
+	}
+}
+
+impl IntoForeignChainAddress<MockEthereum> for u64 {
+	fn into_foreign_chain_address(address: u64) -> ForeignChainAddress {
+		ForeignChainAddress::Eth(H160::repeat_byte(address as u8))
 	}
 }
 
@@ -291,6 +298,14 @@ impl ChainCrypto for MockEthereumChainCrypto {
 		}
 	}
 }
+
+decl_instance_aliases!(
+	MockEthereum => MockEthereumInstance, (),
+	MockEthereumChainCrypto => MockEthereumCryptoInstance, (),
+);
+impl_instance_alias_traits!(
+	MockEthereumChainCrypto => { MockEthereum },
+);
 
 impl_default_benchmark_value!(MockAggKey);
 impl_default_benchmark_value!([u8; 4]);

@@ -2,7 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{evm::api::EthEnvironmentProvider, UpdateFlipSupply};
+use cf_chains::{eth::api::StateChainGatewayAddressProvider, UpdateFlipSupply};
 use cf_primitives::{AssetAmount, EgressId};
 use cf_traits::{
 	impl_pallet_safe_mode, BackupRewardsNotifier, BlockEmissions, Broadcaster, EgressApi,
@@ -39,7 +39,7 @@ impl_pallet_safe_mode!(PalletSafeMode; emissions_sync_enabled);
 pub mod pallet {
 
 	use super::*;
-	use cf_chains::{Chain, Ethereum};
+	use cf_chains::{eth::api::StateChainGatewayAddressProvider, Chain, Ethereum};
 	use frame_support::{pallet_prelude::*, DefaultNoBound};
 	use frame_system::pallet_prelude::OriginFor;
 
@@ -95,7 +95,7 @@ pub mod pallet {
 		type CompoundingInterval: Get<BlockNumberFor<Self>>;
 
 		/// Something that can provide the state chain gateway address.
-		type EthEnvironment: EthEnvironmentProvider;
+		type EthEnvironment: StateChainGatewayAddressProvider;
 
 		/// The interface for accessing the amount of Flip we want burn.
 		type FlipToBurn: FlipBurnInfo;

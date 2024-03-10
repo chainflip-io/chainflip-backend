@@ -22,7 +22,6 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use core::{cmp::max, mem::size_of};
 use frame_support::{
 	pallet_prelude::RuntimeDebug,
-	sp_runtime::{FixedPointNumber, FixedU128},
 	traits::{ConstBool, ConstU32},
 	BoundedVec,
 };
@@ -120,28 +119,21 @@ impl Default for BitcoinTrackedData {
 	}
 }
 
-/// A constant multiplier applied to the fees.
-///
-/// TODO: Allow this value to adjust based on the current fee deficit/surplus.
-const BTC_FEE_MULTIPLIER: FixedU128 = FixedU128::from_rational(3, 2);
-
 impl FeeEstimationApi<Bitcoin> for BitcoinTrackedData {
 	fn estimate_ingress_fee(
 		&self,
 		_asset: <Bitcoin as Chain>::ChainAsset,
 	) -> <Bitcoin as Chain>::ChainAmount {
-		BTC_FEE_MULTIPLIER.saturating_mul_int(self.btc_fee_info.fee_per_input_utxo())
+		self.btc_fee_info.fee_per_input_utxo()
 	}
 
 	fn estimate_egress_fee(
 		&self,
 		_asset: <Bitcoin as Chain>::ChainAsset,
 	) -> <Bitcoin as Chain>::ChainAmount {
-		BTC_FEE_MULTIPLIER.saturating_mul_int(
-			self.btc_fee_info
-				.min_fee_required_per_tx()
-				.saturating_add(self.btc_fee_info.fee_per_output_utxo()),
-		)
+		self.btc_fee_info
+			.min_fee_required_per_tx()
+			.saturating_add(self.btc_fee_info.fee_per_output_utxo())
 	}
 }
 

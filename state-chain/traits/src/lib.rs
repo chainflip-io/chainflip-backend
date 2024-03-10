@@ -201,7 +201,7 @@ pub trait VaultActivator<C: ChainCrypto> {
 	fn start_key_activation(
 		new_key: C::AggKey,
 		maybe_old_key: Option<C::AggKey>,
-	) -> Option<ThresholdSignatureRequestId>;
+	) -> Vec<StartKeyActivationResult>;
 
 	/// Final step of key activation which result in the vault activation (in case we need to wait
 	/// for the signing ceremony to complete)
@@ -209,6 +209,15 @@ pub trait VaultActivator<C: ChainCrypto> {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(_outcome: AsyncResult<()>);
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub enum StartKeyActivationResult {
+	FirstVault,
+	Normal(ThresholdSignatureRequestId),
+	ActivationTxNotRequired,
+	ActivationTxFailed,
+	ChainNotInitialized,
 }
 
 /// Handler for Epoch life cycle events.
@@ -680,13 +689,14 @@ pub trait FundingInfo {
 /// Allow pallets to open and expire deposit addresses.
 pub trait DepositApi<C: Chain> {
 	type AccountId;
+	type Amount;
 
 	/// Issues a channel id and deposit address for a new liquidity deposit.
 	fn request_liquidity_deposit_address(
 		lp_account: Self::AccountId,
 		source_asset: C::ChainAsset,
 		boost_fee: BasisPoints,
-	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber), DispatchError>;
+	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount), DispatchError>;
 
 	/// Issues a channel id and deposit address for a new swap.
 	fn request_swap_deposit_address(
@@ -697,7 +707,7 @@ pub trait DepositApi<C: Chain> {
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
-	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber), DispatchError>;
+	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount), DispatchError>;
 }
 
 pub trait AccountRoleRegistry<T: frame_system::Config> {
@@ -823,7 +833,7 @@ pub trait FlipBurnInfo {
 }
 
 /// The trait implementation is intentionally no-op by default
-pub trait DepositHandler<C: Chain> {
+pub trait OnDeposit<C: Chain> {
 	fn on_deposit_made(
 		_deposit_details: C::DepositDetails,
 		_amount: C::ChainAmount,
@@ -883,10 +893,6 @@ pub trait GetBlockHeight<C: Chain> {
 	fn get_block_height() -> C::ChainBlockNumber;
 }
 
-pub trait GetTrackedData<C: Chain> {
-	fn get_tracked_data() -> C::TrackedData;
-}
-
 pub trait CompatibleCfeVersions {
 	fn current_release_version() -> SemVer;
 }
@@ -894,6 +900,12 @@ pub trait CompatibleCfeVersions {
 pub trait AuthoritiesCfeVersions {
 	/// Returns the percentage of current authorities with their CFEs at the given version.
 	fn percent_authorities_compatible_with_version(version: SemVer) -> Percent;
+}
+
+pub trait AdjustedFeeEstimationApi<C: Chain> {
+	fn estimate_ingress_fee(asset: C::ChainAsset) -> C::ChainAmount;
+
+	fn estimate_egress_fee(asset: C::ChainAsset) -> C::ChainAmount;
 }
 
 pub trait CallDispatchFilter<RuntimeCall> {

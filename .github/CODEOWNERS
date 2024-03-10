@@ -1,19 +1,30 @@
 /bouncer/ @martin-chainflip
+
+/bouncer/shared/upgrade_network.ts @kylezs
+/bouncer/commands/upgrade_network.ts @kylezs
+.github/workflows/upgrade-test.yml @kylezs
+
 /state-chain/custom-rpc/ @chainflip-io/web
 /api/bin/chainflip-ingress-egress-tracker @chainflip-io/web
+
 /engine/config/CI/config/Settings.toml @chainflip-io/platform
 /localnet/ @chainflip-io/platform
-/engine/src/witness/ @kylezs @AlastairHolmes
-/engine/src/witness.rs @kylezs @AlastairHolmes
-/engine/multisig/ @msgmaxim
+
 /state-chain/pallets/cf-pools/ @AlastairHolmes
 /state-chain/amm/ @AlastairHolmes
+
 /state-chain/ @dandanlen
+
 /utilities/with_std/task_scope @AlastairHolmes
+
+/engine/multisig/ @msgmaxim
+/engine/src/p2p/ @msgmaxim
+/engine/src/p2p.rs @msgmaxim
+
 /engine/state_chain_observer/client/ @AlastairHolmes
+/engine/src/witness/ @kylezs @AlastairHolmes
+/engine/src/witness.rs @kylezs @AlastairHolmes
 /engine/src/eth/ @kylezs
 /engine/src/btc/ @kylezs
 /engine/src/dot/ @kylezs
-/engine/src/p2p/ @msgmaxim
-/engine/src/p2p.rs @msgmaxim
 /engine/src/retrier.rs @kylezs

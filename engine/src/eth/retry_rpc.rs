@@ -18,7 +18,7 @@ use std::{path::PathBuf, time::Duration};
 
 use super::{
 	rpc::{EthRpcClient, EthRpcSigningClient, ReconnectSubscriptionClient},
-	ConscientiousEthWebsocketBlockHeaderStream,
+	ConscientiousEvmWebsocketBlockHeaderStream,
 };
 use crate::eth::rpc::ReconnectSubscribeApi;
 use cf_chains::Ethereum;
@@ -322,12 +322,12 @@ impl<Rpc: EthSigningRpcApi> EthersRetrySigningRpcApi for EthRetryRpcClient<Rpc> 
 
 #[async_trait::async_trait]
 pub trait EthersRetrySubscribeApi {
-	async fn subscribe_blocks(&self) -> ConscientiousEthWebsocketBlockHeaderStream;
+	async fn subscribe_blocks(&self) -> ConscientiousEvmWebsocketBlockHeaderStream;
 }
 
 #[async_trait::async_trait]
 impl<Rpc: EthRpcApi> EthersRetrySubscribeApi for EthRetryRpcClient<Rpc> {
-	async fn subscribe_blocks(&self) -> ConscientiousEthWebsocketBlockHeaderStream {
+	async fn subscribe_blocks(&self) -> ConscientiousEvmWebsocketBlockHeaderStream {
 		self.sub_retry_client
 			.request(
 				Box::pin(move |client| {

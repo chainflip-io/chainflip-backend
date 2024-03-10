@@ -1,7 +1,7 @@
 use crate::{self as pallet_cf_pools, PalletSafeMode};
 use cf_primitives::{Asset, AssetAmount};
 use cf_traits::{
-	impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleRegistry, LpBalanceApi,
+	impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleRegistry, LpBalanceApi, SwapType,
 };
 use frame_support::{derive_impl, parameter_types};
 use frame_system as system;
@@ -73,6 +73,7 @@ parameter_types! {
 	pub static BobDebitedEth: AssetAmount = Default::default();
 	pub static BobDebitedUsdc: AssetAmount = Default::default();
 	pub static RecordedFees: BTreeMap<AccountId, (Asset, AssetAmount)> = BTreeMap::new();
+	pub static SwapQueue: Vec<MockSwap> = vec![];
 }
 pub struct MockBalance;
 impl LpBalanceApi for MockBalance {
@@ -140,10 +141,37 @@ impl MockBalance {
 	}
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MockSwap {
+	pub from: Asset,
+	pub to: Asset,
+	pub amount: AssetAmount,
+	pub swap_type: SwapType,
+}
+
+pub struct MockSwapQueueApi;
+
+impl pallet_cf_pools::SwapQueueApi for MockSwapQueueApi {
+	type BlockNumber = u128;
+
+	fn schedule_swap(
+		from: Asset,
+		to: Asset,
+		amount: AssetAmount,
+		swap_type: SwapType,
+	) -> (u64, Self::BlockNumber) {
+		SwapQueue::mutate(|queue| {
+			queue.push(MockSwap { from, to, amount, swap_type });
+		});
+		(SwapQueue::get().len() as u64, 0)
+	}
+}
+
 impl_mock_runtime_safe_mode!(pools: PalletSafeMode);
 impl pallet_cf_pools::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type LpBalance = MockBalance;
+	type SwapQueueApi = MockSwapQueueApi;
 	type NetworkFee = NetworkFee;
 	type SafeMode = MockRuntimeSafeMode;
 	type WeightInfo = ();
