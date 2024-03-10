@@ -1,6 +1,9 @@
 use super::*;
 use cf_runtime_utilities::{log_or_panic, StorageDecodeVariant};
-use cf_traits::{CfeMultisigRequest, KeyRotationStatusOuter, KeyRotator, VaultActivator};
+use cf_traits::{
+	CfeMultisigRequest, KeyRotationStatusOuter, KeyRotator, StartKeyActivationResult,
+	VaultActivator,
+};
 use cfe_events::{KeyHandoverRequest, KeygenRequest};
 use frame_support::{sp_runtime::traits::BlockNumberProvider, traits::PalletInfoAccess};
 
@@ -147,25 +150,28 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 						),
 					},
 				KeyRotationStatusVariant::AwaitingActivation => {
-					let (new_public_key, maybe_request_id) = match PendingKeyRotation::<T, I>::get()
-					{
-						Some(KeyRotationStatus::AwaitingActivation {
-							request_id,
-							new_public_key,
-						}) => (new_public_key, request_id),
-						_ => unreachable!(
-							"Unreachable because we are in the branch for the AwaitingActivation variant."
-						),
-					};
-
-					if let Some(request_id) = maybe_request_id {
-						// After the ceremony completes, it is consumed and Void is left
-						// behind. At this point we are sure the ceremony existed and succeded, we
-						// can activate the key
-						if Signature::<T, I>::get(request_id) == AsyncResult::Void {
-							T::VaultActivator::activate_key();
-						};
-					};
+					let new_public_key =
+						PendingKeyRotation::<T, I>::mutate(|pending_key_rotation| {
+							match pending_key_rotation {
+								Some(KeyRotationStatus::AwaitingActivation {
+									request_ids,
+									new_public_key,
+								}) => {
+									request_ids.retain(|request_id| {
+										if Signature::<T, I>::get(request_id) == AsyncResult::Void {
+											T::VaultActivator::activate_key();
+											false
+										} else {
+											true
+										}
+									});
+									*new_public_key
+								},
+								_ => unreachable!(
+									"Unreachable because we are in the branch for the AwaitingActivation variant."
+									),
+							}
+						});
 
 					let status = T::VaultActivator::status()
 						.replace_inner(KeyRotationStatusOuter::RotationComplete);
@@ -199,35 +205,56 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 		if let Some(KeyRotationStatus::<T, I>::KeyHandoverComplete { new_public_key }) =
 			PendingKeyRotation::<T, I>::get()
 		{
-			let maybe_active_epoch_key = Self::active_epoch_key();
-
-			match T::VaultActivator::start_key_activation(
+			let start_key_activation_results = T::VaultActivator::start_key_activation(
 				new_public_key,
-				maybe_active_epoch_key.map(|EpochKey { key, .. }| key),
-			) {
-				// If a request_id was returned we need to wait for the signing request to complete
-				// before ending the rotation succesfully
-				Some(request_id) => {
-					PendingKeyRotation::<T, I>::put(
-						KeyRotationStatus::<T, I>::AwaitingActivation {
-							request_id: Some(request_id),
-							new_public_key,
-						},
-					);
-				},
-				// if none was returned no ceremony is required and we can already complete the
-				// rotation/wait for governance extrinsic to activate the vault
-				None =>
-					if maybe_active_epoch_key.is_some() {
-						Self::activate_new_key(new_public_key);
-					} else {
-						PendingKeyRotation::<T, I>::put(
-							KeyRotationStatus::<T, I>::AwaitingActivation {
-								request_id: None,
-								new_public_key,
-							},
-						);
-					},
+				Self::active_epoch_key().map(|EpochKey { key, .. }| key),
+			);
+
+			// The case where none of the chains associated with this key are initialized, we mark
+			// the rotation complete without setting the key for the next epoch in the storage item.
+			if start_key_activation_results
+				.iter()
+				.all(|result| *result == StartKeyActivationResult::ChainNotInitialized)
+			{
+				PendingKeyRotation::<T, I>::put(KeyRotationStatus::Complete);
+				return;
+			}
+
+			// Get a list of request_ids for all chains activating under this key. We need to wait
+			// for all request ids to succeed before marking key rotation as complete
+			let request_ids = start_key_activation_results
+				.iter()
+				.filter_map(|start_key_activation_result| match start_key_activation_result {
+					StartKeyActivationResult::Normal(request_id) => Some(*request_id),
+					// All other cases we return None. Reasoning as follows:
+
+					// if activation tx is not required, we immediately rotate to the next vault.
+
+					// if Activation tx fails to construct, we still rotate to the next vault (Todo:
+					// we should probably handle the case where the tx fails to construct
+					// differently)
+
+					// If we are activating the chain and it is the first vault for the chain, we
+					// need to wait for governance to activate the chain. This case is handled
+					// below.
+					_ => None,
+				})
+				.collect::<Vec<_>>();
+
+			// If there are no request_ids to wait for and there is no chain for this key that is
+			// activating its first vault, we dont have to wait for anything and we can activate the
+			// key mark jey rotation as complete.
+			if request_ids.is_empty() &&
+				!start_key_activation_results
+					.into_iter()
+					.any(|result| result == StartKeyActivationResult::FirstVault)
+			{
+				Self::activate_new_key(new_public_key);
+			} else {
+				PendingKeyRotation::<T, I>::put(KeyRotationStatus::<T, I>::AwaitingActivation {
+					request_ids,
+					new_public_key,
+				});
 			}
 		} else {
 			log::error!("Vault activation called during wrong state.");

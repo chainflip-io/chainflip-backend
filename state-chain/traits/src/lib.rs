@@ -201,7 +201,7 @@ pub trait VaultActivator<C: ChainCrypto> {
 	fn start_key_activation(
 		new_key: C::AggKey,
 		maybe_old_key: Option<C::AggKey>,
-	) -> Option<ThresholdSignatureRequestId>;
+	) -> Vec<StartKeyActivationResult>;
 
 	/// Final step of key activation which result in the vault activation (in case we need to wait
 	/// for the signing ceremony to complete)
@@ -209,6 +209,15 @@ pub trait VaultActivator<C: ChainCrypto> {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(_outcome: AsyncResult<()>);
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub enum StartKeyActivationResult {
+	FirstVault,
+	Normal(ThresholdSignatureRequestId),
+	ActivationTxNotRequired,
+	ActivationTxFailed,
+	ChainNotInitialized,
 }
 
 /// Handler for Epoch life cycle events.
@@ -824,7 +833,7 @@ pub trait FlipBurnInfo {
 }
 
 /// The trait implementation is intentionally no-op by default
-pub trait DepositHandler<C: Chain> {
+pub trait OnDeposit<C: Chain> {
 	fn on_deposit_made(
 		_deposit_details: C::DepositDetails,
 		_amount: C::ChainAmount,

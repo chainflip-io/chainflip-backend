@@ -1,11 +1,5 @@
-mod contract_common;
-pub mod erc20_deposits;
-mod eth_chain_tracking;
-mod eth_source;
-mod ethereum_deposits;
-mod key_manager;
+mod chain_tracking;
 mod state_chain_gateway;
-pub mod vault;
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -25,11 +19,11 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED},
 		STATE_CHAIN_CONNECTION,
 	},
-	witness::eth::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents},
+	witness::evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents},
 };
 
-use super::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder};
-pub use eth_source::EthSource;
+use super::{common::epoch_source::EpochSourceBuilder, evm::source::EvmSource};
+use crate::witness::common::chain_source::extension::ChainSourceExt;
 
 use anyhow::{Context, Result};
 
@@ -101,7 +95,7 @@ where
 		.map(|(asset, address)| (address, asset.into()))
 		.collect();
 
-	let eth_source = EthSource::new(eth_client.clone()).strictly_monotonic().shared(scope);
+	let eth_source = EvmSource::new(eth_client.clone()).strictly_monotonic().shared(scope);
 
 	eth_source
 		.clone()

@@ -1,9 +1,9 @@
 use super::AddressDerivation;
-use crate::{Environment, EthEnvironment};
+use crate::{chainflip::EvmEnvironment, Environment};
 use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError},
 	eth::deposit_address::get_create_2_address,
-	evm::api::EthEnvironmentProvider,
+	evm::api::EvmEnvironmentProvider,
 	Chain, Ethereum,
 };
 use cf_primitives::{chains::assets::eth, ChannelId};
@@ -15,7 +15,7 @@ impl AddressDerivationApi<Ethereum> for AddressDerivation {
 	) -> Result<<Ethereum as Chain>::ChainAccount, AddressDerivationError> {
 		Ok(get_create_2_address(
 			Environment::eth_vault_address(),
-			EthEnvironment::token_address(source_asset),
+			<EvmEnvironment as EvmEnvironmentProvider<Ethereum>>::token_address(source_asset),
 			channel_id,
 		))
 	}

@@ -4,7 +4,9 @@ use core::{fmt::Display, iter::Step};
 
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 pub use address::ForeignChainAddress;
-use address::{AddressDerivationApi, AddressDerivationError, ToHumanreadableAddress};
+use address::{
+	AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress, ToHumanreadableAddress,
+};
 use cf_primitives::{AssetAmount, BroadcastId, ChannelId, EthAmount, TransactionHash};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
@@ -15,6 +17,7 @@ use frame_support::{
 	},
 	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, StorageHasher,
 };
+use instances::{ChainCryptoInstanceAlias, ChainInstanceAlias};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::{ConstU32, U256};
@@ -33,6 +36,7 @@ pub use frame_support::traits::Get;
 pub mod benchmarking_value;
 
 pub mod any;
+pub mod arb;
 pub mod btc;
 pub mod dot;
 pub mod eth;
@@ -42,12 +46,13 @@ pub mod none;
 pub mod address;
 pub mod deposit_channel;
 pub use deposit_channel::*;
+pub mod instances;
 
 pub mod mocks;
 
 /// A trait representing all the types and constants that need to be implemented for supported
 /// blockchains.
-pub trait Chain: Member + Parameter {
+pub trait Chain: Member + Parameter + ChainInstanceAlias {
 	const NAME: &'static str;
 
 	const GAS_ASSET: Self::ChainAsset;
@@ -114,7 +119,7 @@ pub trait Chain: Member + Parameter {
 		+ Ord
 		+ PartialOrd
 		+ TryFrom<ForeignChainAddress>
-		+ Into<ForeignChainAddress>
+		+ IntoForeignChainAddress<Self>
 		+ Unpin
 		+ ToHumanreadableAddress;
 
@@ -149,7 +154,7 @@ pub trait Chain: Member + Parameter {
 }
 
 /// Common crypto-related types and operations for some external chain.
-pub trait ChainCrypto {
+pub trait ChainCrypto: ChainCryptoInstanceAlias {
 	type UtxoChain: Get<bool>;
 
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.

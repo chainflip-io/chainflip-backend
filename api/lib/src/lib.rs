@@ -441,6 +441,7 @@ pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result
 		ForeignChain::Polkadot =>
 			EncodedAddress::Dot(PolkadotAccountId::from_str(address).map(|id| *id.aliased_ref())?),
 		ForeignChain::Bitcoin => EncodedAddress::Btc(address.as_bytes().to_vec()),
+		ForeignChain::Arbitrum => EncodedAddress::Arb(clean_hex_address(address)?),
 	})
 }
 

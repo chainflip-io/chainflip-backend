@@ -8,15 +8,17 @@ use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::{Percent, Permill};
 use state_chain_runtime::{
 	chainflip::Offence, constants::common::*, opaque::SessionKeys, test_runner::*, AccountId,
-	AccountRolesConfig, EmissionsConfig, EthereumThresholdSignerConfig, EthereumVaultConfig,
-	FlipConfig, FundingConfig, GovernanceConfig, ReputationConfig, SessionConfig, ValidatorConfig,
+	AccountRolesConfig, ArbitrumChainTrackingConfig, ArbitrumVaultConfig, EmissionsConfig,
+	EthereumVaultConfig, EvmThresholdSignerConfig, FlipConfig, FundingConfig, GovernanceConfig,
+	ReputationConfig, SessionConfig, ValidatorConfig,
 };
 
 use cf_chains::{
+	arb::ArbitrumTrackedData,
 	btc::{BitcoinFeeInfo, BitcoinTrackedData},
 	dot::{PolkadotTrackedData, RuntimeVersion},
 	eth::EthereumTrackedData,
-	Bitcoin, ChainState, Ethereum, Polkadot,
+	Arbitrum, Bitcoin, ChainState, Ethereum, Polkadot,
 };
 use state_chain_runtime::{
 	BitcoinChainTrackingConfig, EthereumChainTrackingConfig, PolkadotChainTrackingConfig,
@@ -190,7 +192,14 @@ impl ExtBuilder {
 				auction_bid_cutoff_percentage: Percent::from_percent(0),
 				max_authority_set_contraction_percentage: DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 			},
-			ethereum_vault: EthereumVaultConfig { deployment_block: Some(0) },
+			ethereum_vault: EthereumVaultConfig {
+				deployment_block: Some(0),
+				chain_initialized: true,
+			},
+			arbitrum_vault: ArbitrumVaultConfig {
+				deployment_block: None,
+				chain_initialized: false,
+			},
 			emissions: EmissionsConfig {
 				current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
 				backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_PERBILL,
@@ -231,8 +240,14 @@ impl ExtBuilder {
 					tracked_data: BitcoinTrackedData { btc_fee_info: BitcoinFeeInfo::new(0) },
 				},
 			},
+			arbitrum_chain_tracking: ArbitrumChainTrackingConfig {
+				init_chain_state: ChainState::<Arbitrum> {
+					block_height: 0,
+					tracked_data: ArbitrumTrackedData { base_fee: 100000u32.into() },
+				},
+			},
 			bitcoin_threshold_signer: Default::default(),
-			ethereum_threshold_signer: EthereumThresholdSignerConfig {
+			evm_threshold_signer: EvmThresholdSignerConfig {
 				key: Some(ethereum_vault_key),
 				keygen_response_timeout: 4,
 				threshold_signature_response_timeout: 4,
@@ -249,6 +264,7 @@ impl ExtBuilder {
 			bitcoin_ingress_egress: Default::default(),
 			polkadot_ingress_egress: Default::default(),
 			ethereum_ingress_egress: Default::default(),
+			arbitrum_ingress_egress: Default::default(),
 		})
 	}
 }

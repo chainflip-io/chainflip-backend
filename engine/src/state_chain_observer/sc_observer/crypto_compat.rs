@@ -7,7 +7,7 @@ use cf_chains::{
 use multisig::{
 	bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning, ChainSigning, CryptoScheme,
 };
-use state_chain_runtime::{BitcoinInstance, EthereumInstance, PolkadotInstance};
+use state_chain_runtime::{BitcoinInstance, EvmInstance, PolkadotInstance};
 
 /// Compatibility layer for converting between public keys generated using the [CryptoScheme] types
 /// and the on-chain representation as defined by [ChainCrypto].
@@ -17,7 +17,7 @@ pub trait CryptoCompat<S: ChainSigning<ChainCrypto = C>, C: ChainCrypto> {
 	) -> C::AggKey;
 }
 
-impl CryptoCompat<EthSigning, EvmCrypto> for EthereumInstance {
+impl CryptoCompat<EthSigning, EvmCrypto> for EvmInstance {
 	fn pubkey_to_aggkey(
 		pubkey: <<EthSigning as ChainSigning>::CryptoScheme as CryptoScheme>::PublicKey,
 	) -> <EvmCrypto as ChainCrypto>::AggKey {

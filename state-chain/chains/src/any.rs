@@ -1,4 +1,8 @@
-use crate::{address::ForeignChainAddress, none::NoneChainCrypto, Chain, FeeRefundCalculator};
+use crate::{
+	address::{ForeignChainAddress, IntoForeignChainAddress},
+	none::NoneChainCrypto,
+	Chain, FeeRefundCalculator,
+};
 
 use cf_primitives::{
 	chains::{assets, AnyChain},
@@ -33,5 +37,11 @@ impl FeeRefundCalculator<AnyChain> for () {
 		_fee_paid: <AnyChain as Chain>::TransactionFee,
 	) -> <AnyChain as Chain>::ChainAmount {
 		unimplemented!()
+	}
+}
+
+impl IntoForeignChainAddress<AnyChain> for ForeignChainAddress {
+	fn into_foreign_chain_address(address: ForeignChainAddress) -> ForeignChainAddress {
+		address
 	}
 }
