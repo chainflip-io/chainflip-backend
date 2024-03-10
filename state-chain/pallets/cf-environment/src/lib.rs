@@ -30,7 +30,7 @@ pub mod migrations;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(8);
 
-const INITIAL_UTXO_CONSOLIDATION_PARAMETERS: utxo_selection::ConsolidationParameters =
+const INITIAL_CONSOLIDATION_PARAMETERS: utxo_selection::ConsolidationParameters =
 	utxo_selection::ConsolidationParameters {
 		consolidation_threshold: 200,
 		consolidation_size: 100,
@@ -342,7 +342,7 @@ pub mod pallet {
 			PolkadotProxyAccountNonce::<T>::set(0);
 
 			BitcoinAvailableUtxos::<T>::set(vec![]);
-			ConsolidationParameters::<T>::set(INITIAL_UTXO_CONSOLIDATION_PARAMETERS);
+			ConsolidationParameters::<T>::set(INITIAL_CONSOLIDATION_PARAMETERS);
 
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
 
