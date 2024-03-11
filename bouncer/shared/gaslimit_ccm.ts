@@ -65,7 +65,7 @@ async function getEvmChainFees(chain: Chain) {
 
   const baseFee = Number(trackedData.baseFee.replace(/,/g, ''));
 
-  // Arbitrum doesn't have priorityFee
+  // Arbitrum doesn't have priority fee
   let priorityFee = 0;
   if (chain !== 'Arbitrum') {
     priorityFee = Number(trackedData.priorityFee.replace(/,/g, ''));
