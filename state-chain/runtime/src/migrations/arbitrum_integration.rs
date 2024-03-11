@@ -137,7 +137,14 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 					[2u8; 20].into(),
 				)
 			} else {
-				panic!("runtime upgrade is being applied to unsupported chain");
+				// Assume testnet
+				(
+					hex_literal::hex!("8e1308925a26cb5cF400afb402d67B3523473379").into(),
+					hex_literal::hex!("Ce5303b8e8BFCa9d1857976F300fb29928522c6F").into(),
+					hex_literal::hex!("84401CD7AbBeBB22ACb7aF2beCfd9bE56C30bcf1").into(),
+					412346,
+					hex_literal::hex!("1D55838a9EC169488D360783D65e6CD985007b72").into(),
+				)
 			};
 
 		pallet_cf_environment::ArbitrumKeyManagerAddress::<Runtime>::put(key_manager_address);
