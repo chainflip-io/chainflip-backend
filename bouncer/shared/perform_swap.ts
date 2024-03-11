@@ -82,7 +82,7 @@ export async function requestNewSwap(
   const channelId = Number(res.channelId);
 
   if (log) {
-    console.log(`${tag} Swap address: ${depositAddress}`);
+    console.log(`${tag} Deposit address: ${depositAddress}`);
     console.log(`${tag} Destination address is: ${channelDestAddress} Channel ID is: ${channelId}`);
   }
 

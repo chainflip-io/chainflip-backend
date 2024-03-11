@@ -116,7 +116,7 @@ async function testGasLimitSwap(
   if (CCM_CHAINS_NATIVE_ASSETS[destChain] !== sourceAsset) {
     gasSwapScheduledHandle = observeSwapScheduled(
       sourceAsset,
-      destChain === 'Ethereum' ? Assets.ETH : Assets.ARBETH,
+      destChain === 'Ethereum' ? Assets.ETH : ('ARBETH' as Asset),
       channelId,
       SwapType.CcmGas,
     );
@@ -394,8 +394,8 @@ export async function testGasLimitCcmSwaps() {
     testGasLimitSwap('ETH', 'ARBETH', ' insufBudget', undefined, 10 ** 4),
     testGasLimitSwap('FLIP', 'ARBUSDC', ' insufBudget', undefined, 10 ** 4),
     testGasLimitSwap('BTC', 'ARBUSDC', ' insufBudget', undefined, 10 ** 3),
-    testGasLimitSwap('ARBETH', 'ETH', ' sufBudget', undefined, 10 ** 4),
-    testGasLimitSwap('ARBUSDC', 'FLIP', ' sufBudget', undefined, 10 ** 3),
+    testGasLimitSwap('ARBETH', 'ETH', ' insufBudget', undefined, 10 ** 4),
+    testGasLimitSwap('ARBUSDC', 'FLIP', ' insufBudget', undefined, 10 ** 3),
   ];
 
   // This amount of gasLimitBudget will be swapped into very little gasLimitBudget. Not into zero as that will cause a debug_assert to
@@ -410,8 +410,8 @@ export async function testGasLimitCcmSwaps() {
     testGasLimitSwap('ETH', 'ARBETH', ' noBudget', undefined, 10 ** 8),
     testGasLimitSwap('FLIP', 'ARBUSDC', ' noBudget', undefined, 10 ** 6),
     testGasLimitSwap('BTC', 'ARBETH', ' noBudget', undefined, 10 ** 5),
-    testGasLimitSwap('ARBETH', 'ETH', ' sufBudget', undefined, 10 ** 6),
-    testGasLimitSwap('ARBUSDC', 'FLIP', ' sufBudget', undefined, 10 ** 5),
+    testGasLimitSwap('ARBETH', 'ETH', ' noBudget', undefined, 10 ** 6),
+    testGasLimitSwap('ARBUSDC', 'FLIP', ' noBudget', undefined, 10 ** 5),
   ];
 
   await Promise.all([
