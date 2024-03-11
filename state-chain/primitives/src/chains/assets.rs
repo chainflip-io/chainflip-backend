@@ -414,8 +414,8 @@ assets!(pub enum Asset {
 		(Btc, btc) = 5u32 (GAS_ASSET),
 	},
 	(sol, Solana, "Solana") => {
-		(Sol, sol) = 8u32 (GAS_ASSET),
-		(SolUsdc, solusdc) = 9u32,
+		(Sol, sol) = 9u32 (GAS_ASSET),
+		(SolUsdc, solusdc) = 10u32,
 	}
 });
 
