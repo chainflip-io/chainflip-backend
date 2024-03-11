@@ -104,7 +104,7 @@ export async function prepareSwap(
 
   let destAddress;
 
-  let tag = `[${(swapCount++).toString().padEnd(2, ' ')}: ${sourceAsset}->${destAsset}`;
+  let tag = `[${(swapCount++).toString().concat(':').padEnd(4, ' ')} ${sourceAsset}->${destAsset}`;
   tag += messageMetadata ? ' CCM' : '';
   tag += tagSuffix ? `${tagSuffix}]` : ']';
 
