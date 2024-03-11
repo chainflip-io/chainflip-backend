@@ -19,7 +19,7 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED},
 		STATE_CHAIN_CONNECTION,
 	},
-	witness::evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents},
+	witness::evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
 };
 
 use super::{common::epoch_source::EpochSourceBuilder, evm::source::EvmSource};
@@ -89,6 +89,9 @@ where
 
 	let flip_contract_address =
 		*supported_erc20_tokens.get(&eth::Asset::Flip).context("FLIP not supported")?;
+
+	let usdt_contract_address =
+		*supported_erc20_tokens.get(&eth::Asset::Usdt).context("USDT not supported")?;
 
 	let supported_erc20_tokens: HashMap<H160, cf_primitives::Asset> = supported_erc20_tokens
 		.into_iter()
@@ -171,6 +174,19 @@ where
 		.await?
 		.continuous("FlipDeposits".to_string(), db.clone())
 		.logging("FlipDeposits")
+		.spawn(scope);
+
+	eth_safe_vault_source_deposit_addresses
+		.clone()
+		.erc20_deposits::<_, _, _, UsdtEvents>(
+			process_call.clone(),
+			eth_client.clone(),
+			cf_primitives::chains::assets::eth::Asset::Usdt,
+			usdt_contract_address,
+		)
+		.await?
+		.continuous("USDTDeposits".to_string(), db.clone())
+		.logging("USDTDeposits")
 		.spawn(scope);
 
 	eth_safe_vault_source_deposit_addresses

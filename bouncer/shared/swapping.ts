@@ -14,8 +14,8 @@ import { BtcAddressType, btcAddressTypes } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import {
   performSwapViaContract,
-  approveTokenVault,
   ContractSwapParams,
+  approveTokenVault,
 } from '../shared/contract_swap';
 
 enum SolidityType {
@@ -185,32 +185,29 @@ export async function testAllSwaps() {
 
   console.log('=== Testing all swaps ===');
 
-  // Single approval of all the assets swapped in contractsSwaps to avoid overlapping async approvals.
-  // Set the allowance to the same amount of total asset swapped in contractsSwaps to avoid nonce issues.
-  // Total contract swap per ERC20 token = ccmContractSwaps + contractSwaps =
-  //     (numberAssetsEthereum - 1) + (numberAssets (BTC has 4 different types) - 1) = 2 + 7 = 9
+  // Doing effectively infinite approvals to make sure it doesn't fail.
   await approveTokenVault(
     'USDC',
     (
-      BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals('USDC'))) * 9n
+      BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals('USDC'))) * 100n
     ).toString(),
   );
   await approveTokenVault(
     'FLIP',
     (
-      BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals('FLIP'))) * 9n
+      BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals('FLIP'))) * 100n
+    ).toString(),
+  );
+  await approveTokenVault(
+    'USDT',
+    (
+      BigInt(amountToFineAmount(defaultAssetAmounts('USDT'), assetDecimals('USDT'))) * 100n
     ).toString(),
   );
 
-  // TODO: Remove this but for now skipping arbitrum swaps as they are not supported yet
   Object.values(Assets).forEach((sourceAsset) => {
-    if (sourceAsset === 'ARBETH' || sourceAsset === 'ARBUSDC') return;
-
     Object.values(Assets)
-      .filter(
-        (destAsset) =>
-          sourceAsset !== destAsset && destAsset !== 'ARBETH' && destAsset !== 'ARBUSDC',
-      )
+      .filter((destAsset) => sourceAsset !== destAsset)
       .forEach((destAsset) => {
         // Regular swaps
         appendSwap(sourceAsset, destAsset, testSwap);

@@ -4,6 +4,7 @@ use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 use sp_std::marker::PhantomData;
 
 pub mod arbitrum_integration;
+pub mod housekeeping;
 pub mod threshold_signature_refactor;
 
 #[cfg(feature = "try-runtime")]
