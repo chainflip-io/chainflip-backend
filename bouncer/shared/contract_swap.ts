@@ -133,7 +133,10 @@ export async function performSwapViaContract(
   }
 }
 
-export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC' | 'ARBUSDC', amount: string) {
+export async function approveTokenVault(
+  srcAsset: 'FLIP' | 'USDC' | 'USDT' | 'ARBUSDC',
+  amount: string,
+) {
   const chain = chainFromAsset(srcAsset as Asset);
 
   const wallet = Wallet.fromPhrase(getWhaleMnemonic(chain)).connect(

@@ -29,6 +29,7 @@ pub(super) struct EnvironmentParameters {
 	eth_address_checker_address: H160,
 	flip_contract_address: H160,
 	usdc_contract_address: H160,
+	usdt_contract_address: H160,
 	supported_erc20_tokens: HashMap<H160, cf_primitives::Asset>,
 	dot_genesis_hash: PolkadotHash,
 	pub chainflip_network: NetworkEnvironment,
@@ -71,6 +72,9 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 	let usdc_contract_address =
 		*supported_erc20_tokens.get(&Asset::Usdc).expect("USDC not supported");
 
+	let usdt_contract_address =
+		*supported_erc20_tokens.get(&Asset::Usdt).expect("USDT not supported");
+
 	let supported_erc20_tokens: HashMap<H160, cf_primitives::Asset> = supported_erc20_tokens
 		.into_iter()
 		.map(|(asset, address)| (address, asset.into()))
@@ -95,6 +99,7 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 		eth_vault_address,
 		flip_contract_address,
 		usdc_contract_address,
+		usdt_contract_address,
 		eth_address_checker_address,
 		supported_erc20_tokens,
 		dot_genesis_hash,

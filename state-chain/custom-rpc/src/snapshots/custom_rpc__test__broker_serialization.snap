@@ -1,5 +1,5 @@
 ---
 source: state-chain/custom-rpc/src/lib.rs
-expression: "serde_json::to_value(RpcAccountInfo::broker(0,\n            BrokerInfo {\n                earned_fees: vec![(Asset::Eth, 0), (Asset::Btc, 0),\n                    (Asset::Flip, 1000000000000000000), (Asset::Usdc, 0),\n                    (Asset::Dot, 0),],\n            })).unwrap()"
+expression: "serde_json::to_value(RpcAccountInfo::broker(0,\n            BrokerInfo {\n                earned_fees: vec![(Asset::Eth, 0), (Asset::Btc, 0),\n                    (Asset::Flip, 1000000000000000000), (Asset::Usdc, 0), (Asset::Usdt, 0),\n                    (Asset::Dot, 0),],\n            })).unwrap()"
 ---
-{"earned_fees":{"Bitcoin":{"BTC":"0x0"},"Ethereum":{"ETH":"0x0","FLIP":"0xde0b6b3a7640000","USDC":"0x0"},"Polkadot":{"DOT":"0x0"}},"flip_balance":"0x0","role":"broker"}
+{"earned_fees":{"Bitcoin":{"BTC":"0x0"},"Ethereum":{"ETH":"0x0","FLIP":"0xde0b6b3a7640000","USDC":"0x0","USDT":"0x0"},"Polkadot":{"DOT":"0x0"}},"flip_balance":"0x0","role":"broker"}
