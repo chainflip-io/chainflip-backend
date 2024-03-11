@@ -21,7 +21,7 @@ use super::common::epoch_source::EpochSourceBuilder;
 
 mod deposit_addresses;
 mod epoch_stream;
-mod tracked_data;
+mod sol_chain_tracking;
 mod zip_with_latest;
 
 const SOLANA_SIGNATURES_FOR_TRANSACTION_PAGE_SIZE: usize = 100;
@@ -65,7 +65,7 @@ where
 
 	let epoch_source = EpochSource::from(epoch_source);
 
-	scope.spawn(tracked_data::track_chain_state(
+	scope.spawn(sol_chain_tracking::track_chain_state(
 		epoch_stream(epoch_source.clone()).await,
 		Arc::clone(&sol_client),
 		process_call.clone(),

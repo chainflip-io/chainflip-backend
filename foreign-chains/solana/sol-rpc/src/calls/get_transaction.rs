@@ -6,7 +6,10 @@ use serde_json::json;
 use sol_prim::{Address, Amount, Signature, SlotNumber};
 
 use super::GetTransaction;
-use crate::{traits::Call, types::JsValue};
+use crate::{
+	traits::Call,
+	types::{Commitment, JsValue},
+};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,11 +38,30 @@ pub struct LoadedAddresses {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TokenBalance {
+	pub account_index: u64,
+	pub mint: JsValue,
+	pub owner: Option<JsValue>,
+	pub program_id: Option<JsValue>,
+	pub ui_token_amount: UiTokenAmount,
+}
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UiTokenAmount {
+	pub amount: JsValue,
+	pub decimals: u64,
+	pub ui_amount_string: JsValue,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TxMeta {
 	pub log_messages: Vec<String>,
 	pub err: Option<JsValue>,
 	pub pre_balances: Vec<Amount>,
 	pub post_balances: Vec<Amount>,
+	pub pre_token_balances: Option<Vec<TokenBalance>>,
+	pub post_token_balances: Option<Vec<TokenBalance>>,
 	pub fee: Amount,
 	pub loaded_addresses: LoadedAddresses,
 
@@ -72,7 +94,7 @@ impl Call for GetTransaction {
 
 impl GetTransaction {
 	pub fn for_signature(signature: Signature) -> Self {
-		Self { signature, commitment: Default::default() }
+		Self { signature, commitment: Commitment::Confirmed }
 	}
 }
 

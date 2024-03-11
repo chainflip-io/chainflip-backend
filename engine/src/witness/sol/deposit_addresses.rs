@@ -273,10 +273,14 @@ where
 		expires_at,
 	);
 	AddressSignatures::new(Arc::clone(&sol_client), address, kill_switch)
-		.max_page_size(SOLANA_SIGNATURES_FOR_TRANSACTION_PAGE_SIZE)
+		.page_size_limit(SOLANA_SIGNATURES_FOR_TRANSACTION_PAGE_SIZE)
 		.poll_interval(SOLANA_SIGNATURES_FOR_TRANSACTION_POLL_INTERVAL)
-		// // TODO: find a way to start from where we may have left
-		// .after_transaction(last_known_transaction)
+		// // TODO: find a way to start from where we may have left. We probably have two options:
+		// // 1) Store the last_tx in DB. For this we'd need a stored tx per channel
+		// .until_transaction(last_known_transaction)
+		// // 2) Store the last slot in DB. I don't think we can get away with storing a single
+		// //    slot number per all-channels. A load balancer (or simply Solana's speed) will screw
+		// us. // .starting_with_slot(last_witnessed block)
 		.starting_with_slot(opened_at)
 		.ending_with_slot(expires_at)
 		.into_stream()

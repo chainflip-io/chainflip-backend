@@ -35,7 +35,7 @@ impl AddressDerivationApi<Solana> for AddressDerivation {
 	> {
 		let vault_address = Environment::sol_vault_address();
 		match source_asset {
-			Asset::Sol => {
+			Asset::Sol | Asset::SolUsdc => {
 				let (pda, _bump) = DerivedAddressBuilder::from_address(vault_address)?
 					.chain_seed(VAULT_PDA_ASSET_SOL)?
 					.chain_seed(channel_id.to_ne_bytes())?

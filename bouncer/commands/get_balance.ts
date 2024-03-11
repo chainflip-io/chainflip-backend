@@ -1,5 +1,5 @@
 #!/usr/bin/env -S pnpm tsx
-import { Asset } from '@chainflip-io/cli';
+import { Asset } from '@chainflip/cli';
 import { getBalance as getBalanceShared } from '../shared/get_balance';
 
 async function getBalance(ccy: string, address: string) {

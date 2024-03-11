@@ -3,24 +3,19 @@ import { setTimeout as sleep } from 'timers/promises';
 import Client from 'bitcoin-core';
 import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
 import { Mutex } from 'async-mutex';
-import {
-  Chain,
-  Asset,
-  assetChains,
-  chainContractIds,
-  assetDecimals,
-  Assets,
-} from '@chainflip-io/cli';
+import { Chain, Asset, Assets, assetConstants, chainConstants } from '@chainflip/cli';
 import Web3 from 'web3';
 import { Connection, Keypair } from '@solana/web3.js';
-import { u8aToHex } from '@polkadot/util';
+import { base58Decode, base58Encode } from '@polkadot/util-crypto';
+import { hexToU8a, u8aToHex } from '@polkadot/util';
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
 import { newEvmAddress } from './new_evm_address';
 import { CcmDepositMetadata } from './new_swap';
-import { getCFTesterAbi } from './eth_abis';
+import { getCFTesterAbi } from './contract_interfaces';
 import { SwapParams } from './perform_swap';
+import { newSolAddress } from './new_sol_address';
 
 const cfTesterAbi = await getCFTesterAbi();
 
@@ -31,7 +26,7 @@ export const btcClientMutex = new Mutex();
 export const brokerMutex = new Mutex();
 export const snowWhiteMutex = new Mutex();
 
-export function getEvmContractAddress(chain: Chain, contract: string): string {
+export function getContractAddress(chain: Chain, contract: string): string {
   switch (chain) {
     case 'Ethereum':
       switch (contract) {
@@ -67,6 +62,8 @@ export function getEvmContractAddress(chain: Chain, contract: string): string {
       switch (contract) {
         case 'VAULT':
           return '632bJHVLPj6XPLVgrabFwxogtAQQ5zb8hwm9zqZuCcHo';
+        case 'DATA_ACCOUNT':
+          return '5yhN4QzBFg9jKhLfVHcS5apMB7e3ftofCkzkNH6dZctC';
         case 'SOLUSDC':
           return process.env.ARB_USDC_ADDRESS ?? '24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p';
         case 'CFTESTER':
@@ -80,7 +77,7 @@ export function getEvmContractAddress(chain: Chain, contract: string): string {
 }
 
 // We use this instead of assetChains[asset] from the SDK because the SC strings are lowercase
-export function assetToChain(asset: Asset): string {
+export function shortChainFomAsset(asset: Asset): string {
   switch (asset) {
     case 'DOT':
       return 'Dot';
@@ -92,12 +89,12 @@ export function assetToChain(asset: Asset): string {
       return 'Btc';
     case 'ARBUSDC':
     case 'ARBETH':
-      return 'Arbitrum';
+      return 'Arb';
     case 'SOL':
     case 'SOLUSDC':
-      return 'Solana';
+      return 'Sol';
     default:
-      return '';
+      throw new Error(`Unsupported asset: ${asset}`);
   }
 }
 
@@ -141,6 +138,63 @@ export function defaultAssetAmounts(asset: Asset): string {
       return '100';
     default:
       throw new Error(`Unsupported asset: ${asset}`);
+  }
+}
+
+export function assetContractId(asset: Asset): number {
+  switch (asset) {
+    case 'BTC':
+      return assetConstants.Btc.contractId;
+    case 'ETH':
+      return assetConstants.Eth.contractId;
+    case 'USDC':
+      return assetConstants.Usdc.contractId;
+    case 'FLIP':
+      return assetConstants.Flip.contractId;
+    case 'DOT':
+      return assetConstants.Dot.contractId;
+    case 'SOL':
+      return 9;
+    case 'SOLUSDC':
+      return 10;      
+    default:
+      throw new Error(`Unsupported asset: ${asset}`);
+  }
+}
+
+export function assetDecimals(asset: Asset): number {
+  switch (asset) {
+    case 'BTC':
+      return assetConstants.Btc.decimals;
+    case 'ETH':
+      return assetConstants.Eth.decimals;
+    case 'USDC':
+      return assetConstants.Usdc.decimals;
+    case 'FLIP':
+      return assetConstants.Flip.decimals;
+    case 'DOT':
+      return assetConstants.Dot.decimals;
+    case 'SOL':
+      return 9;
+    case 'SOLUSDC':
+      return 6;      
+    default:
+      throw new Error(`Unsupported asset: ${asset}`);
+  }
+}
+
+export function chainContractId(chain: Chain): number {
+  switch (chain) {
+    case 'Ethereum':
+      return chainConstants.Ethereum.contractId;
+    case 'Bitcoin':
+      return chainConstants.Bitcoin.contractId;
+    case 'Polkadot':
+      return chainConstants.Polkadot.contractId;
+    case 'Solana':
+      return 4;      
+    default:
+      throw new Error(`Unsupported chain: ${chain}`);
   }
 }
 
@@ -423,7 +477,6 @@ export async function newAddress(
   type?: BtcAddressType,
 ): Promise<string> {
   let rawAddress;
-
   switch (asset) {
     case Assets.FLIP:
     case Assets.ETH:
@@ -438,19 +491,36 @@ export async function newAddress(
     case Assets.BTC:
       rawAddress = await newBtcAddress(seed, type ?? 'P2PKH');
       break;
+    case "SOL":
+    case "SOLUSDC":
+      rawAddress = newSolAddress(seed);
+      break;
     default:
-      throw new Error('unexpected asset');
+      throw new Error(`Unsupported asset: ${asset}`);
   }
 
   return String(rawAddress).trim();
 }
 
 export function chainFromAsset(asset: Asset): Chain {
-  if (asset in assetChains) {
-    return assetChains[asset];
+  switch (asset) {
+    case 'DOT':
+      return 'Polkadot';
+    case 'ETH':
+    case 'FLIP':
+    case 'USDC':
+      return 'Ethereum';
+    case 'BTC':
+      return 'Bitcoin';
+    case 'ARBUSDC':
+    case 'ARBETH':
+      return 'Arbitrum';
+    case 'SOL':
+    case 'SOLUSDC':
+      return 'Solana';
+    default:
+      throw new Error(`Unsupported asset: ${asset}`);
   }
-
-  throw new Error('unexpected asset');
 }
 
 export function getEvmEndpoint(chain: Chain): string {
@@ -511,24 +581,6 @@ export function getWhaleKey(chain: Chain): string {
       );
     default:
       throw new Error(`${chain} does not have a whale key`);
-  }
-}
-
-export function chainShortNameFromAsset(asset: Asset): string {
-  switch (asset) {
-    case Assets.FLIP:
-    case Assets.ETH:
-    case Assets.USDC:
-      return 'Eth';
-    case Assets.DOT:
-      return 'Dot';
-    case Assets.BTC:
-      return 'Btc';
-    case 'ARBETH':
-    case 'ARBUSDC':
-      return 'Arb';
-    default:
-      throw new Error('unexpected asset');
   }
 }
 
@@ -646,10 +698,10 @@ export async function observeCcmReceived(
     address,
     'ReceivedxSwapAndCall',
     [
-      chainContractIds[chainFromAsset(sourceAsset)].toString(),
+      chainContractId(chainFromAsset(sourceAsset)).toString(),
       sourceAddress ?? null,
       messageMetadata.message,
-      getEvmContractAddress(chainFromAsset(destAsset), destAsset.toString()),
+      getContractAddress(chainFromAsset(destAsset), destAsset.toString()),
       '*',
       '*',
       '*',
@@ -687,6 +739,18 @@ export function hexPubkeyToFlipAddress(hexPubkey: string) {
   const keyring = new Keyring({ type: 'sr25519' });
   keyring.setSS58Format(2112);
   return keyring.encodeAddress(hexPubkey);
+}
+
+export function decodeSolAddress(address: string): string {
+  return u8aToHex(base58Decode(address));
+}
+
+export function encodeSolAddress(address: string): string {
+  return base58Encode(hexToU8a(address));
+}
+
+export function getEncodedSolAddress(address: string): string {
+  return /^0x[a-fA-F0-9]+$/.test(address) ? encodeSolAddress(address) : address;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -748,7 +812,7 @@ type SwapRate = {
 export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
   const chainflipApi = await getChainflipApi();
 
-  const fineFromAmount = amountToFineAmount(fromAmount, assetDecimals[from]);
+  const fineFromAmount = amountToFineAmount(fromAmount, assetDecimals(from));
   const hexPrice = (await chainflipApi.rpc(
     'cf_swap_rate',
     from,
@@ -757,7 +821,7 @@ export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
   )) as SwapRate;
 
   const finePriceOutput = parseInt(hexPrice.output);
-  const outputPrice = fineAmountToAmount(finePriceOutput.toString(), assetDecimals[to]);
+  const outputPrice = fineAmountToAmount(finePriceOutput.toString(), assetDecimals(to));
 
   return outputPrice;
 }

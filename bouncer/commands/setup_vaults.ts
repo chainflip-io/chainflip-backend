@@ -7,6 +7,13 @@
 // For example: ./commands/setup_vaults.ts
 
 import { AddressOrPair } from '@polkadot/api/types';
+import {
+  NonceAccount,
+  PublicKey,
+  SystemProgram,
+  Transaction,
+  TransactionInstruction,
+} from '@solana/web3.js';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import {
   getChainflipApi,
@@ -15,11 +22,19 @@ import {
   observeEvent,
   sleep,
   handleSubstrateError,
+  getSolConnection,
+  getContractAddress,
+  getSolWhaleKeyPair,
+  encodeSolAddress,
+  getEncodedSolAddress,
 } from '../shared/utils';
 import { aliceKeyringPair } from '../shared/polkadot_keyring';
+import { signAndSendTxSol } from '../shared/send_sol';
+import { getSolanaVaultIdl } from '../shared/contract_interfaces';
 
 async function main(): Promise<void> {
   const btcClient = getBtcClient();
+  // const solClient = getSolConnection();
   const alice = await aliceKeyringPair();
 
   const chainflip = await getChainflipApi();
@@ -39,8 +54,10 @@ async function main(): Promise<void> {
     chainflip,
   );
   const btcActivationRequest = observeEvent('bitcoinVault:AwaitingGovernanceActivation', chainflip);
+  // const solActivationRequest = observeEvent('solanaVault:AwaitingGovernanceActivation', chainflip);
   const dotKey = (await dotActivationRequest).data.newPublicKey;
   const btcKey = (await btcActivationRequest).data.newPublicKey;
+  // const solKey = (await solActivationRequest).data.newPublicKey;
 
   // Step 3
   console.log('Requesting Polkadot Vault creation');
@@ -113,9 +130,74 @@ async function main(): Promise<void> {
     }
   };
   await rotateAndFund();
-  const vaultBlockNumber = await (await proxyAdded).block;
+  const vaultBlockNumber = (await proxyAdded).block;
 
-  // Step 5
+  // // Step 5
+  // console.log('Inserting keys in the Solana program');
+  // const solKey = '0x25fcb03ab6435d106b5df1e677f3c6a10a7b22719deedeb3761c005e1306423d';
+
+  // const solanaVaultProgramId = new PublicKey(getContractAddress('Solana', 'VAULT'));
+  // const dataAccount = new PublicKey(getContractAddress('Solana', 'DATA_ACCOUNT'));
+  // const whaleKeypair = getSolWhaleKeyPair();
+  // const vaultIdl = await getSolanaVaultIdl();
+
+  // const discriminatorString = vaultIdl.instructions.find(
+  //   (instruction: { name: string }) => instruction.name === 'initialize',
+  // ).discriminator;
+  // const discriminator = new Uint8Array(JSON.parse(discriminatorString));
+
+  // const solKeyBuffer = Buffer.from(solKey.slice(2), 'hex');
+
+  // // Convert PublicKey to Buffer
+  // const dataBuffer = Buffer.concat([Buffer.from(discriminator.buffer), solKeyBuffer]);
+  // console.log('dataBuffer', dataBuffer);
+
+  // const tx = new Transaction().add(
+  //   new TransactionInstruction({
+  //     data: dataBuffer,
+  //     keys: [
+  //       { pubkey: dataAccount, isSigner: false, isWritable: true },
+  //       { pubkey: whaleKeypair.publicKey, isSigner: true, isWritable: false },
+  //       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+  //     ],
+  //     programId: solanaVaultProgramId,
+  //   }),
+  // );
+
+  // await signAndSendTxSol(tx);
+
+  // // For now just deriving the nonceAccounts from the whaleKeypair with index seeds
+  // const numberNonceAccounts = 10;
+  // const nonceAccounts = [];
+  // const nonceValues = [];
+  // for (let i = 0; i < numberNonceAccounts; i++) {
+  //   // Using the index stringified as the seed ('0', '1', '2' ...)
+  //   const seed = i.toString();
+  //   const nonceAccount = await PublicKey.createWithSeed(
+  //     whaleKeypair.publicKey,
+  //     seed,
+  //     SystemProgram.programId,
+  //   );
+  //   nonceAccounts.push(nonceAccount);
+
+  //   const nonceAccountInfo = await solClient.getAccountInfo(new PublicKey(nonceAccount));
+  //   const nonceValue = NonceAccount.fromAccountData(nonceAccountInfo!.data).nonce;
+  //   nonceValues.push(nonceValue);
+  // }
+
+  // const nonceAuthorizeTransaction = new Transaction();
+  // for (const nonceAccount of nonceAccounts) {
+  //   nonceAuthorizeTransaction.add(
+  //     SystemProgram.nonceAuthorize({
+  //       noncePubkey: new PublicKey(nonceAccount),
+  //       authorizedPubkey: whaleKeypair.publicKey,
+  //       newAuthorizedPubkey: new PublicKey(encodeSolAddress(solKey)),
+  //     }),
+  //   );
+  // }
+  // await signAndSendTxSol(nonceAuthorizeTransaction);
+
+  // Step 6
   console.log('Registering Vaults with state chain');
   await submitGovernanceExtrinsic(
     chainflip.tx.environment.witnessPolkadotVaultCreation(vaultAddress, {
@@ -129,6 +211,13 @@ async function main(): Promise<void> {
       btcKey,
     ),
   );
+
+  // TODO: This call should contain the new vault address,
+  // nonce accounts and probably nonce values
+  // await submitGovernanceExtrinsic(
+  //   chainflip.tx.environment.witnessInitializeSolanaVault(
+  //   ),
+  // );
 
   // Confirmation
   console.log('Waiting for new epoch...');

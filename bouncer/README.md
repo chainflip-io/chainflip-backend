@@ -19,7 +19,7 @@ following `.npmrc` file at your user home directory (`~/.npmrc`):
 
 ```
 //npm.pkg.github.com/:_authToken=ghp_YOUR-AUTH-TOKEN-HERE
-@chainflip-io:registry=https://npm.pkg.github.com/
+@chainflip:registry=https://npm.pkg.github.com/
 ```
 
 Then you need to install the dependencies:

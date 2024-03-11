@@ -1,14 +1,15 @@
 import { HexString } from '@polkadot/util/types';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { assetDecimals, fundStateChainAccount } from '@chainflip-io/cli';
+import { fundStateChainAccount } from '@chainflip/cli';
 import { Wallet, ethers } from 'ethers';
 import { getNextEvmNonce } from './send_evm';
 import {
-  getEvmContractAddress,
+  getContractAddress,
   hexPubkeyToFlipAddress,
   decodeFlipAddressForContract,
   getEvmEndpoint,
   getWhaleKey,
+  assetDecimals,
 } from './utils';
 import { observeEvent, getChainflipApi, amountToFineAmount } from '../shared/utils';
 import { approveErc20 } from './approve_erc20';
@@ -17,15 +18,15 @@ export async function fundFlip(scAddress: string, flipAmount: string) {
   const chainflip = await getChainflipApi();
   await cryptoWaitReady();
 
-  await approveErc20('FLIP', getEvmContractAddress('Ethereum', 'GATEWAY'), flipAmount);
+  await approveErc20('FLIP', getContractAddress('Ethereum', 'GATEWAY'), flipAmount);
 
-  const flipperinoAmount = amountToFineAmount(flipAmount, assetDecimals.FLIP);
+  const flipperinoAmount = amountToFineAmount(flipAmount, assetDecimals('FLIP'));
 
   const flipContractAddress =
-    process.env.ETH_FLIP_ADDRESS ?? getEvmContractAddress('Ethereum', 'FLIP');
+    process.env.ETH_FLIP_ADDRESS ?? getContractAddress('Ethereum', 'FLIP');
 
   const gatewayContractAddress =
-    process.env.ETH_GATEWAY_ADDRESS ?? getEvmContractAddress('Ethereum', 'GATEWAY');
+    process.env.ETH_GATEWAY_ADDRESS ?? getContractAddress('Ethereum', 'GATEWAY');
 
   const whaleKey = getWhaleKey('Ethereum');
   console.log('Approving ' + flipAmount + ' FLIP to State Chain Gateway');
@@ -39,7 +40,7 @@ export async function fundFlip(scAddress: string, flipAmount: string) {
     flipContractAddress,
   } as const;
   const txOptions = {
-    nonce: BigInt(await getNextEvmNonce('Ethereum')),
+    nonce: await getNextEvmNonce('Ethereum'),
   } as const;
 
   console.log('Funding ' + flipAmount + ' FLIP to ' + scAddress);
@@ -54,14 +55,14 @@ export async function fundFlip(scAddress: string, flipAmount: string) {
   }
   const receipt2 = await fundStateChainAccount(
     pubkey as HexString,
-    flipperinoAmount,
+    BigInt(flipperinoAmount),
     networkOptions,
     txOptions,
   );
 
   console.log(
     'Transaction complete, tx_hash: ' +
-      receipt2.transactionHash +
+      receipt2.hash +
       ' blockNumber: ' +
       receipt2.blockNumber +
       ' blockHash: ' +

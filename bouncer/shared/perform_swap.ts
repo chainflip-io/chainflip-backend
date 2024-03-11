@@ -1,5 +1,5 @@
 import { encodeAddress } from '@polkadot/util-crypto';
-import { Asset } from '@chainflip-io/cli';
+import { Asset } from '@chainflip/cli';
 import { newSwap } from './new_swap';
 import { send, sendViaCfTester } from './send';
 import { getBalance } from './get_balance';
@@ -8,7 +8,7 @@ import {
   observeBalanceIncrease,
   observeEvent,
   observeCcmReceived,
-  assetToChain,
+  shortChainFomAsset,
   observeSwapScheduled,
   observeSwapEvents,
   observeBroadcastSuccess,
@@ -51,7 +51,7 @@ export async function requestNewSwap(
     (event) => {
       // Find deposit address for the right swap by looking at destination address:
       const destAddressEvent = encodeDestinationAddress(
-        event.data.destinationAddress[assetToChain(destAsset)],
+        event.data.destinationAddress[shortChainFomAsset(destAsset)],
         destAsset,
       );
       if (!destAddressEvent) return false;
@@ -77,8 +77,8 @@ export async function requestNewSwap(
 
   const res = (await addressPromise).data;
 
-  const depositAddress = res.depositAddress[assetToChain(sourceAsset)];
-  const channelDestAddress = res.destinationAddress[assetToChain(destAsset)];
+  const depositAddress = res.depositAddress[shortChainFomAsset(sourceAsset)];
+  const channelDestAddress = res.destinationAddress[shortChainFomAsset(destAsset)];
   const channelId = Number(res.channelId);
 
   if (log) {

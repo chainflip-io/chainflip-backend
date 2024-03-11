@@ -1,22 +1,17 @@
-import {
-  Asset,
-  executeSwap,
-  ExecuteSwapParams,
-  approveVault,
-  assetDecimals,
-} from '@chainflip-io/cli';
+import { Asset, executeSwap, ExecuteSwapParams, approveVault } from '@chainflip/cli';
 import { Wallet, getDefaultProvider } from 'ethers';
 import {
   getChainflipApi,
   observeBalanceIncrease,
   observeEvent,
-  getEvmContractAddress,
+  getContractAddress,
   observeCcmReceived,
   amountToFineAmount,
   defaultAssetAmounts,
   chainFromAsset,
   getEvmEndpoint,
   getWhaleMnemonic,
+  assetDecimals,
 } from './utils';
 import { getNextEvmNonce } from './send_evm';
 import { getBalance } from './get_balance';
@@ -39,8 +34,8 @@ export async function executeContractSwap(
   const networkOptions = {
     signer: wallet,
     network: 'localnet',
-    vaultContractAddress: getEvmContractAddress(srcChain, 'VAULT'),
-    srcTokenContractAddress: getEvmContractAddress(srcChain, srcAsset),
+    vaultContractAddress: getContractAddress(srcChain, 'VAULT'),
+    srcTokenContractAddress: getContractAddress(srcChain, srcAsset),
   } as const;
   const txOptions = {
     nonce,
@@ -53,7 +48,7 @@ export async function executeContractSwap(
       destAsset,
       // It is important that this is large enough to result in
       // an amount larger than existential (e.g. on Polkadot):
-      amount: amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals[srcAsset]),
+      amount: amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals(srcAsset)),
       destAddress,
       srcAsset,
       srcChain,
@@ -149,13 +144,14 @@ export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC' | 'ARBUSDC', a
     approveVault(
       {
         amount,
+        srcChain: chainFromAsset(srcAsset as Asset),
         srcAsset,
       },
       {
         signer: wallet,
         network: 'localnet',
-        vaultContractAddress: getEvmContractAddress(chain, 'VAULT'),
-        srcTokenContractAddress: getEvmContractAddress(chain, srcAsset),
+        vaultContractAddress: getContractAddress(chain, 'VAULT'),
+        srcTokenContractAddress: getContractAddress(chain, srcAsset),
       },
       {
         nonce: nextNonce,

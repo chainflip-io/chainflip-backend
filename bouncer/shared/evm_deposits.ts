@@ -1,5 +1,5 @@
 import Web3 from 'web3';
-import { Asset, chainContractIds, assetContractIds, assetDecimals } from '@chainflip-io/cli';
+import { Asset } from '@chainflip/cli';
 import { doPerformSwap } from '../shared/perform_swap';
 import { prepareSwap, testSwap } from '../shared/swapping';
 import {
@@ -8,15 +8,18 @@ import {
   sleep,
   observeEvent,
   getChainflipApi,
-  getEvmContractAddress,
+  getContractAddress,
   decodeDotAddressForContract,
   defaultAssetAmounts,
   amountToFineAmount,
   chainFromAsset,
   getEvmEndpoint,
+  assetDecimals,
+  chainContractId,
+  assetContractId,
 } from '../shared/utils';
 import { signAndSendTxEvm } from './send_evm';
-import { getCFTesterAbi } from './eth_abis';
+import { getCFTesterAbi } from './contract_interfaces';
 
 const cfTesterAbi = await getCFTesterAbi();
 
@@ -77,19 +80,19 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
 
   const web3 = new Web3(getEvmEndpoint(chainFromAsset(sourceAsset)));
 
-  const cfTesterAddress = getEvmContractAddress(chainFromAsset(sourceAsset), 'CFTESTER');
+  const cfTesterAddress = getContractAddress(chainFromAsset(sourceAsset), 'CFTESTER');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const cfTesterContract = new web3.eth.Contract(cfTesterAbi as any, cfTesterAddress);
   const amount = BigInt(
-    amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals[sourceAsset]),
+    amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals(sourceAsset)),
   );
   const numSwaps = 2;
   const txData = cfTesterContract.methods
     .multipleContractSwap(
-      chainContractIds[chainFromAsset(destAsset)],
+      chainContractId(chainFromAsset(destAsset)),
       destAsset === 'DOT' ? decodeDotAddressForContract(destAddress) : destAddress,
-      assetContractIds[destAsset],
-      getEvmContractAddress(chainFromAsset(sourceAsset), sourceAsset),
+      assetContractId(destAsset),
+      getContractAddress(chainFromAsset(sourceAsset), sourceAsset),
       amount,
       '0x',
       numSwaps,

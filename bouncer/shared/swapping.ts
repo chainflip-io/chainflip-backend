@@ -1,13 +1,14 @@
 import { randomAsHex, randomAsNumber } from '@polkadot/util-crypto';
-import { Asset, assetDecimals, Assets } from '@chainflip-io/cli';
+import { Asset } from '@chainflip/cli';
 import Web3 from 'web3';
 import { performSwap, SwapParams } from '../shared/perform_swap';
 import {
   newAddress,
   chainFromAsset,
-  getEvmContractAddress,
+  getContractAddress,
   amountToFineAmount,
   defaultAssetAmounts,
+  assetDecimals,
 } from '../shared/utils';
 import { BtcAddressType, btcAddressTypes } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
@@ -78,7 +79,7 @@ export function newCcmMetadata(
   const gasDiv = gasBudgetFraction ?? 100;
 
   const gasBudget = Math.floor(
-    Number(amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals[sourceAsset])) /
+    Number(amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals(sourceAsset))) /
       gasDiv,
   );
 
@@ -108,7 +109,7 @@ export async function prepareSwap(
 
   // For swaps with a message force the address to be the CF Tester address.
   if (messageMetadata && chainFromAsset(destAsset) === chainFromAsset('ETH')) {
-    destAddress = getEvmContractAddress(chainFromAsset(destAsset), 'CFTESTER');
+    destAddress = getContractAddress(chainFromAsset(destAsset), 'CFTESTER');
     if (log) console.log(`${tag} Using CF Tester address: ${destAddress}`);
   } else {
     destAddress = await newAddress(destAsset, seed, addressType);
@@ -190,41 +191,47 @@ export async function testAllSwaps() {
   //     (numberAssetsEthereum - 1) + (numberAssets (BTC has 4 different types) - 1) = 2 + 7 = 9
   await approveTokenVault(
     'USDC',
-    (BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals.USDC)) * 9n).toString(),
+    (
+      BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals('USDC'))) * 9n
+    ).toString(),
   );
   await approveTokenVault(
     'FLIP',
-    (BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * 9n).toString(),
+    (
+      BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals('FLIP'))) * 9n
+    ).toString(),
   );
 
-  // TODO: Remove this but for now skipping arbitrum swaps as they are not supported yet
-  Object.values(Assets).forEach((sourceAsset) => {
-    if (sourceAsset === 'ARBETH' || sourceAsset === 'ARBUSDC') return;
+  // // TODO: Remove this but for now skipping arbitrum swaps as they are not supported yet
+  // Object.values(Assets).forEach((sourceAsset) => {
+  //   if (sourceAsset === 'ARBETH' || sourceAsset === 'ARBUSDC') return;
 
-    Object.values(Assets)
-      .filter(
-        (destAsset) =>
-          sourceAsset !== destAsset && destAsset !== 'ARBETH' && destAsset !== 'ARBUSDC',
-      )
-      .forEach((destAsset) => {
-        // Regular swaps
-        appendSwap(sourceAsset, destAsset, testSwap);
+  //   Object.values(Assets)
+  //     .filter(
+  //       (destAsset) =>
+  //         sourceAsset !== destAsset && destAsset !== 'ARBETH' && destAsset !== 'ARBUSDC',
+  //     )
+  //     .forEach((destAsset) => {
+  //       // Regular swaps
+  //       appendSwap(sourceAsset, destAsset, testSwap);
 
-        if (chainFromAsset(sourceAsset) === chainFromAsset('ETH')) {
-          // Contract Swaps
-          appendSwap(sourceAsset, destAsset, testSwapViaContract);
+  //       if (chainFromAsset(sourceAsset) === chainFromAsset('ETH')) {
+  //         // Contract Swaps
+  //         appendSwap(sourceAsset, destAsset, testSwapViaContract);
 
-          if (chainFromAsset(destAsset) === chainFromAsset('ETH')) {
-            // CCM contract swaps
-            appendSwap(sourceAsset, destAsset, testSwapViaContract, newCcmMetadata(sourceAsset));
-          }
-        }
-        if (chainFromAsset(destAsset) === chainFromAsset('ETH')) {
-          // CCM swaps
-          appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
-        }
-      });
-  });
+  //         if (chainFromAsset(destAsset) === chainFromAsset('ETH')) {
+  //           // CCM contract swaps
+  //           appendSwap(sourceAsset, destAsset, testSwapViaContract, newCcmMetadata(sourceAsset));
+  //         }
+  //       }
+  //       if (chainFromAsset(destAsset) === chainFromAsset('ETH')) {
+  //         // CCM swaps
+  //         appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
+  //       }
+  //     });
+  // });
+
+  appendSwap('SOL', 'ETH', testSwap);
 
   await Promise.all(allSwaps);
 

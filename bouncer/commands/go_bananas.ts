@@ -1,6 +1,6 @@
 #!/usr/bin/env -S pnpm tsx
 import axios from 'axios';
-import { Asset, assetDecimals } from '@chainflip-io/cli';
+import { Asset } from '@chainflip/cli';
 import bitcoin from 'bitcoinjs-lib';
 import { Tapleaf } from 'bitcoinjs-lib/src/types';
 import { blake2AsHex } from '@polkadot/util-crypto';
@@ -11,6 +11,7 @@ import {
   hexStringToBytesArray,
   sleep,
   fineAmountToAmount,
+  assetDecimals,
 } from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
 import { testSwap } from '../shared/swapping';
@@ -124,7 +125,7 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
             }
             const fees = fineAmountToAmount(
               BigInt(update.collected_fees.toString()).toString(10),
-              assetDecimals[ccy],
+              assetDecimals(ccy),
             );
             console.log(`Collected ${fees} ${ccy} in fees`);
           }
@@ -140,7 +141,7 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
             }
             const amount = fineAmountToAmount(
               BigInt(update.bought_amount.toString()).toString(10),
-              assetDecimals[buyCcy],
+              assetDecimals(buyCcy),
             );
             console.log(`Bought ${amount} ${buyCcy} for ${sellCcy}`);
           }
@@ -227,22 +228,22 @@ async function bananas() {
   await Promise.all([
     playLp(
       'ETH',
-      price.get('ETH')! * 10 ** (assetDecimals.USDC - assetDecimals.ETH),
+      price.get('ETH')! * 10 ** (assetDecimals('USDC') - assetDecimals('ETH')),
       liquidityUsdc,
     ),
     playLp(
       'BTC',
-      price.get('BTC')! * 10 ** (assetDecimals.USDC - assetDecimals.BTC),
+      price.get('BTC')! * 10 ** (assetDecimals('USDC') - assetDecimals('BTC')),
       liquidityUsdc,
     ),
     playLp(
       'DOT',
-      price.get('DOT')! * 10 ** (assetDecimals.USDC - assetDecimals.DOT),
+      price.get('DOT')! * 10 ** (assetDecimals('USDC') - assetDecimals('DOT')),
       liquidityUsdc,
     ),
     playLp(
       'FLIP',
-      price.get('FLIP')! * 10 ** (assetDecimals.USDC - assetDecimals.FLIP),
+      price.get('FLIP')! * 10 ** (assetDecimals('USDC') - assetDecimals('FLIP')),
       liquidityUsdc,
     ),
     playSwapper(),

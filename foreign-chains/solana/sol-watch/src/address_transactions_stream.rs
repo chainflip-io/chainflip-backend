@@ -6,7 +6,8 @@ use futures::{stream, Stream, TryStreamExt};
 use sol_prim::{Address, Signature, SlotNumber};
 use sol_rpc::{calls::GetSignaturesForAddress, traits::CallApi};
 
-const DEFAULT_MAX_PAGE_SIZE: usize = 100;
+// NOTE: Solana default is 1000 but setting it explicitly
+const DEFAULT_PAGE_SIZE_LIMIT: usize = 1000;
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(5);
 
 pub struct AddressSignatures<Api, K> {
@@ -14,8 +15,8 @@ pub struct AddressSignatures<Api, K> {
 	address: Address,
 	starting_with_slot: Option<SlotNumber>,
 	ending_with_slot: Option<SlotNumber>,
-	after_transaction: Option<Signature>,
-	max_page_size: usize,
+	until_transaction: Option<Signature>,
+	page_size_limit: usize,
 	poll_interval: Duration,
 
 	state: State,
@@ -29,8 +30,8 @@ impl<Api, K> AddressSignatures<Api, K> {
 			address,
 			starting_with_slot: None,
 			ending_with_slot: None,
-			after_transaction: None,
-			max_page_size: DEFAULT_MAX_PAGE_SIZE,
+			until_transaction: None,
+			page_size_limit: DEFAULT_PAGE_SIZE_LIMIT,
 			poll_interval: DEFAULT_POLL_INTERVAL,
 
 			state: State::GetHistory(Duration::ZERO, None),
@@ -44,11 +45,11 @@ impl<Api, K> AddressSignatures<Api, K> {
 	pub fn ending_with_slot(self, slot: SlotNumber) -> Self {
 		Self { ending_with_slot: Some(slot), ..self }
 	}
-	pub fn after_transaction(self, tx_id: Signature) -> Self {
-		Self { after_transaction: Some(tx_id), ..self }
+	pub fn until_transaction(self, tx_id: Signature) -> Self {
+		Self { until_transaction: Some(tx_id), ..self }
 	}
-	pub fn max_page_size(self, max_page_size: usize) -> Self {
-		Self { max_page_size, ..self }
+	pub fn page_size_limit(self, page_size_limit: usize) -> Self {
+		Self { page_size_limit, ..self }
 	}
 	pub fn poll_interval(self, poll_interval: Duration) -> Self {
 		Self { poll_interval, ..self }
@@ -61,7 +62,7 @@ where
 	K: Borrow<AtomicBool>,
 {
 	pub fn into_stream(mut self) -> impl Stream<Item = Result<Signature, Api::Error>> {
-		self.state = State::GetHistory(Duration::ZERO, self.after_transaction);
+		self.state = State::GetHistory(Duration::ZERO, self.until_transaction);
 		stream::try_unfold(self, Self::unfold).try_filter_map(|opt| async move { Ok(opt) })
 	}
 }
@@ -93,10 +94,10 @@ where
 					self.starting_with_slot,
 					self.ending_with_slot,
 					last_signature,
-					self.max_page_size,
+					self.page_size_limit,
 				)
 				.await?;
-				let last_signature = history.front().copied().or(last_signature);
+				let last_signature = history.back().copied().or(last_signature);
 				self.state = State::Drain(history, last_signature);
 
 				Some((None, self))
@@ -121,9 +122,9 @@ async fn get_transaction_history<Api>(
 	address: Address,
 	starting_with_slot: Option<SlotNumber>,
 	ending_with_slot: Option<SlotNumber>,
-	after_tx: Option<Signature>,
+	until_tx: Option<Signature>,
 
-	max_page_size: usize,
+	page_size_limit: usize,
 ) -> Result<(), Api::Error>
 where
 	Api: CallApi,
@@ -137,17 +138,18 @@ where
 			address,
 			starting_with_slot,
 			ending_with_slot,
-			after_tx,
+			until_tx,
 			before_tx,
-			max_page_size,
+			page_size_limit,
 		)
 		.await?;
 
-		before_tx = reference_signature;
-
-		if page_size != max_page_size {
+		// page_size should never be > max_page_size
+		if page_size != page_size_limit {
 			break Ok(())
 		}
+
+		before_tx = reference_signature;
 	}
 }
 
@@ -158,29 +160,46 @@ async fn get_single_page<Api>(
 	address: Address,
 	starting_with_slot: Option<SlotNumber>,
 	ending_with_slot: Option<SlotNumber>,
-	after_tx: Option<Signature>,
+	until_tx: Option<Signature>,
 	before_tx: Option<Signature>,
 
-	max_page_size: usize,
+	page_size_limit: usize,
 ) -> Result<(usize, Option<Signature>), Api::Error>
 where
 	Api: CallApi,
 {
 	let request = GetSignaturesForAddress {
 		before: before_tx,
-		until: after_tx,
-		limit: Some(max_page_size),
+		until: until_tx,
+		limit: Some(page_size_limit),
 		..GetSignaturesForAddress::for_address(address)
 	};
 	let page = call_api.call(request).await?;
 
-	// TODO: make sure the page is actually sorted by slot-number.
+	// TODO: Currently there is a bug with `getSignaturesForAddress` RPC method. Transactions in the
+	// same slot might not be ordered correctly for time of execution. This might be a problem when
+	// using "until" to stop the getSignaturesForAddress call.
+	// https://github.com/solana-labs/solana/issues/22456
+	// This is fixed in https://github.com/solana-labs/solana/pull/33419
+	// The fix will be live on v1.18, which should be Q2. We need to make sure it's done or we could
+	// either miss a transaction or double witness. Double witness is most likely not a problem
+	// because the State Chain will reject it (right?). If so, the downside is not too bad in normal
+	// scenarios as there shouldn't be two transactions in the same slot. Probably not worth the
+	// workaround.
 
-	let mut row_count = 0;
+	// TODO: make sure the page is actually sorted by slot-number. We are now sorting it in the
+	// rpc "process_response", we need to double check if it behaves well.
+
 	let mut reference_signature = None;
-	let signatures = page
-		// the page is sorted newest-to-oldest
-		.into_iter()
+	// Filtering out by slot number for when we reuse a channel, as we won't have the last
+	// transaction signature. We can use ending_with_slot for when a channel closes (althoght it
+	// is probably not be necessary)
+
+	// the page is sorted newest-to-oldest
+	let page_iter = page.into_iter();
+	let page_len = page_iter.clone().count();
+
+	let signatures = page_iter
 		// skip those entries `e` for which `e.slot` is strictly higher than `ending_with_slot`
 		// (if the latter is not specified — do not skip)
 		.skip_while(|e| ending_with_slot.map(|s| e.slot > s).unwrap_or(false))
@@ -188,13 +207,17 @@ where
 		// `starting_with_slot` (if the latter is not specified — take it anyway)
 		.take_while(|e| starting_with_slot.map(|s| e.slot >= s).unwrap_or(true))
 		.map(|e| {
-			row_count += 1;
 			reference_signature = Some(e.signature);
 
-			e.signature
-		});
+			e
+		})
+		// skip failed transactions only after the reference signature is set. This assumes that
+		// we will never need to parse failed transactions. E.g witnessing broadcasts we shouldn't
+		// do this We could use a bool or restructure it to be more flexible
+		.filter(|e| e.err.is_none())
+		.map(|e| e.signature);
 
 	output.extend(signatures);
 
-	Ok((row_count, reference_signature))
+	Ok((page_len, reference_signature))
 }

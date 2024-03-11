@@ -9,6 +9,7 @@ pub mod get_genesis_hash;
 pub mod get_latest_blockhash;
 pub mod get_signatures_for_address;
 pub mod get_slot;
+pub mod get_recent_prioritization_fees;
 pub mod get_transaction;
 
 #[derive(Debug, Clone)]
@@ -57,3 +58,12 @@ pub struct GetSignaturesForAddress {
 	pub limit: Option<usize>,
 	pub min_context_slot: Option<u64>,
 }
+
+#[derive(Debug, Clone)]
+pub struct GetSignatureStatuses {
+	pub signatures: Vec<Signature>,
+	pub search_transaction_history: bool,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct GetRecentPrioritizationFees {}

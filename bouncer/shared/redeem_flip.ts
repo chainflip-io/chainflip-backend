@@ -1,28 +1,29 @@
 import assert from 'assert';
-import { Assets, assetDecimals, executeRedemption, getRedemptionDelay } from '@chainflip-io/cli';
+import { Assets, executeRedemption, getRedemptionDelay } from '@chainflip/cli';
 import { HexString } from '@polkadot/util/types';
 import { Wallet, ethers } from 'ethers';
 import Keyring from '@polkadot/keyring';
 import { getNextEvmNonce } from './send_evm';
-import { getGatewayAbi } from './eth_abis';
+import { getGatewayAbi } from './contract_interfaces';
 import {
   sleep,
   observeEvent,
   handleSubstrateError,
-  getEvmContractAddress,
+  getContractAddress,
   getChainflipApi,
   amountToFineAmount,
   observeEVMEvent,
   chainFromAsset,
   getEvmEndpoint,
   getWhaleKey,
+  assetDecimals,
 } from './utils';
 
 export type RedeemAmount = 'Max' | { Exact: string };
 
 function intoFineAmount(amount: RedeemAmount): RedeemAmount {
   if (typeof amount === 'object' && amount.Exact) {
-    const fineAmount = amountToFineAmount(amount.Exact, assetDecimals.FLIP);
+    const fineAmount = amountToFineAmount(amount.Exact, assetDecimals('FLIP'));
     return { Exact: fineAmount };
   }
   return amount;
@@ -46,8 +47,8 @@ export async function redeemFlip(
   const networkOptions = {
     signer: ethWallet,
     network: 'localnet',
-    stateChainGatewayContractAddress: getEvmContractAddress('Ethereum', 'GATEWAY'),
-    flipContractAddress: getEvmContractAddress('Ethereum', 'FLIP'),
+    stateChainGatewayContractAddress: getContractAddress('Ethereum', 'GATEWAY'),
+    flipContractAddress: getContractAddress('Ethereum', 'FLIP'),
   } as const;
 
   const pendingRedemption = await chainflip.query.flip.pendingRedemptionsReserve(
@@ -78,7 +79,7 @@ export async function redeemFlip(
   await observeEVMEvent(
     chainFromAsset(Assets.FLIP),
     gatewayAbi,
-    getEvmContractAddress('Ethereum', 'GATEWAY'),
+    getContractAddress('Ethereum', 'GATEWAY'),
     'RedemptionRegistered',
     [accountIdHex, observeEventAmount, ethAddress, '*', '*', '*'],
   );
