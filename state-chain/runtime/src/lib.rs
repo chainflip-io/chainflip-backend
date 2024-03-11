@@ -986,7 +986,7 @@ type PalletMigrations = (
 	// DO NOT REMOVE `VersionUpdate`. THIS IS REQUIRED TO UPDATE THE VERSION FOR THE CFES EVERY
 	// UPGRADE
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
-	// pallet_cf_environment::migrations::PalletMigration<Runtime>,
+	pallet_cf_environment::migrations::PalletMigration<Runtime>,
 	pallet_cf_funding::migrations::PalletMigration<Runtime>,
 	// pallet_cf_validator::migrations::PalletMigration<Runtime>,
 	pallet_grandpa::migrations::MigrateV4ToV5<Runtime>,
