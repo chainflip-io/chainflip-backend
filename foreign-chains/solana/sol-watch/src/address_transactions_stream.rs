@@ -209,8 +209,13 @@ where
 		.map(|e| {
 			reference_signature = Some(e.signature);
 
-			e.signature
-		});
+			e
+		})
+		// skip failed transactions only after the reference signature is set. This assumes that
+		// we will never need to parse failed transactions. E.g witnessing broadcasts we shouldn't
+		// do this We could use a bool or restructure it to be more flexible
+		.filter(|e| e.err.is_none())
+		.map(|e| e.signature);
 
 	output.extend(signatures);
 
