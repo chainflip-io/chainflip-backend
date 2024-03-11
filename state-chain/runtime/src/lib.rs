@@ -1016,13 +1016,13 @@ type PalletMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	// pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, ArbitrumInstance>,
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
-	// TODO: After the Abitrum release, arbitrum_integration migrations and un-comment the
+	// TODO: After the Abitrum release, remove arbitrum_integration migrations and un-comment the
 	// Arbitrum-specific pallet migrations.
 	VersionedMigration<
 		pallet_cf_environment::Pallet<Runtime>,
 		migrations::arbitrum_integration::ArbitrumIntegration,
-		8,
 		9,
+		10,
 	>,
 	// pallet_cf_pools::migrations::PalletMigration<Runtime>,
 	migrations::housekeeping::Migration,
