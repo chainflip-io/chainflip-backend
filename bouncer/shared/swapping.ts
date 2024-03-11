@@ -200,6 +200,13 @@ export async function testAllSwaps() {
     ).toString(),
   );
 
+  await approveTokenVault(
+    'USDT',
+    (
+      BigInt(amountToFineAmount(defaultAssetAmounts('USDT'), assetDecimals('USDT'))) * 100n
+    ).toString(),
+  );
+
   // TODO: Remove this when SDK supports Arbitrum assets
   const allAssets = [...Object.values(Assets), 'ARBETH', 'ARBUSDC'];
 
