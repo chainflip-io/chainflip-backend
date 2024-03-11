@@ -4,7 +4,6 @@ import { randomBytes } from 'crypto';
 import Keyring from '@polkadot/keyring';
 import { Asset, Assets } from '@chainflip/cli';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { ApiPromise, WsProvider } from '@polkadot/api';
 import {
   EgressId,
   amountToFineAmount,
@@ -17,6 +16,7 @@ import {
   shortChainFomAsset,
   assetDecimals,
   hexStringToBytesArray,
+  getChainflipApi,
 } from '../shared/utils';
 import { getBalance } from '../shared/get_balance';
 import { doPerformSwap } from '../shared/perform_swap';
@@ -29,21 +29,8 @@ const swapAssetAmount = {
   [Assets.USDC]: 1000,
 };
 const commissionBps = 1000; // 10%
-const cfNodeEndpoint = process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944';
 
-const chainflip = await ApiPromise.create({
-  provider: new WsProvider(cfNodeEndpoint),
-  noInitWarn: true,
-  types: {
-    EncodedAddress: {
-      _enum: {
-        Eth: '[u8; 20]',
-        Dot: '[u8; 32]',
-        Btc: '[u8; 34]',
-      },
-    },
-  },
-});
+const chainflip = await getChainflipApi();
 
 const keyring = new Keyring({ type: 'sr25519' });
 const broker = keyring.createFromUri('//BROKER_FEE_TEST');
