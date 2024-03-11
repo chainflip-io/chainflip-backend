@@ -218,6 +218,7 @@ cf_test_utilities::impl_test_helpers! {
 			arbitrum_chain_id: ARB_CHAIN_ID,
 			flip_token_address: [0u8; 20].into(),
 			eth_usdc_address: [0x2; 20].into(),
+			eth_usdt_address: [0x2; 20].into(),
 			polkadot_genesis_hash: H256([0u8; 32]),
 			polkadot_vault_account_id: None,
 			network_environment: Default::default(),

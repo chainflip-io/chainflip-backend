@@ -16,12 +16,13 @@ pub const PROTOCOL_ID: &str = "flip-berghain";
 // These represent approximately 24 hours on mainnet block times
 pub const BITCOIN_EXPIRY_BLOCKS: u32 = 24 * 60 / 10;
 pub const ETHEREUM_EXPIRY_BLOCKS: u32 = 24 * 3600 / 14;
-pub const ARBITRUM_EXPIRY_BLOCKS: u32 = 24 * 3600 / 14; // TODO: to be set
+pub const ARBITRUM_EXPIRY_BLOCKS: u32 = 24 * 3600 * 4;
 pub const POLKADOT_EXPIRY_BLOCKS: u32 = 24 * 3600 / 6;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("826180541412D574cf1336d22c0C0a287822678A"),
 	eth_usdc_address: hex_literal::hex!("A0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
+	eth_usdt_address: hex_literal::hex!("dAC17F958D2ee523a2206206994597C13D831ec7"),
 	state_chain_gateway_address: hex_literal::hex!("6995Ab7c4D7F4B03f467Cf4c8E920427d9621DBd"),
 	eth_key_manager_address: hex_literal::hex!("cd351d3626Dc244730796A3168D315168eBf08Be"),
 	eth_vault_address: hex_literal::hex!("F5e10380213880111522dd0efD3dbb45b9f62Bcc"),
@@ -89,4 +90,4 @@ pub const AUCTION_PARAMETERS: SetSizeParameters =
 
 pub const BITCOIN_SAFETY_MARGIN: u64 = 2;
 pub const ETHEREUM_SAFETY_MARGIN: u64 = 6;
-pub const ARBITRUM_SAFETY_MARGIN: u64 = 6; // TODO: to be set
+pub const ARBITRUM_SAFETY_MARGIN: u64 = 1;

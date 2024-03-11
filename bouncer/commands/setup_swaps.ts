@@ -18,6 +18,7 @@ const deposits = new Map<Asset, number>([
   ['ARBETH', 100],
   ['BTC', 10],
   ['USDC', 1000000],
+  ['USDT', 100000],
   ['ARBUSDC', 1000000],
   ['FLIP', 10000],
 ]);
@@ -28,6 +29,7 @@ const price = new Map<Asset, number>([
   ['ARBETH', 1000],
   ['BTC', 10000],
   ['USDC', 1],
+  ['USDT', 1],
   ['ARBUSDC', 1],
   ['FLIP', 10],
 ]);
@@ -40,6 +42,7 @@ async function main(): Promise<void> {
     createLpPool('DOT', price.get('DOT')!),
     createLpPool('BTC', price.get('BTC')!),
     createLpPool('FLIP', price.get('FLIP')!),
+    createLpPool('USDT', price.get('USDT')!),
     // createLpPool('ARBETH', price.get('ARBETH')!),
     // createLpPool('ARBUSDC', price.get('ARBUSDC')!),
   ]);
@@ -50,6 +53,7 @@ async function main(): Promise<void> {
     provideLiquidity('DOT', deposits.get('DOT')!),
     provideLiquidity('BTC', deposits.get('BTC')!),
     provideLiquidity('FLIP', deposits.get('FLIP')!),
+    provideLiquidity('USDT', deposits.get('USDT')!),
     // provideLiquidity('ARBETH', deposits.get('ARBETH')!),
     // provideLiquidity('ARBUSDC', deposits.get('ARBUSDC')!),
   ]);
@@ -61,6 +65,7 @@ async function main(): Promise<void> {
     provideLiquidity('DOT', deposits.get('DOT')!, false, '//LP_BOOST'),
     provideLiquidity('BTC', deposits.get('BTC')!, false, '//LP_BOOST'),
     provideLiquidity('FLIP', deposits.get('FLIP')!, false, '//LP_BOOST'),
+    provideLiquidity('USDT', deposits.get('USDT')!, false, '//LP_BOOST'),
   ]);
 
   await Promise.all([
@@ -68,6 +73,7 @@ async function main(): Promise<void> {
     rangeOrder('DOT', deposits.get('DOT')! * 0.9999),
     rangeOrder('BTC', deposits.get('BTC')! * 0.9999),
     rangeOrder('FLIP', deposits.get('FLIP')! * 0.9999),
+    rangeOrder('USDT', deposits.get('USDT')! * 0.9999),
     // rangeOrder('ARBETH', deposits.get('ARBETH')! * 0.9999),
     // rangeOrder('ARBUSDC', deposits.get('ARBUSDC')! * 0.9999),
   ]);

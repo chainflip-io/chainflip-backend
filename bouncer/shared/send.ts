@@ -31,17 +31,8 @@ export async function send(asset: Asset, address: string, amount?: string, log =
     case 'DOT':
       await sendDot(address, amount ?? defaultAssetAmounts(asset));
       break;
-    case 'USDC': {
-      const contractAddress = getEvmContractAddress('Ethereum', asset);
-      await sendErc20(
-        'Ethereum',
-        address,
-        contractAddress,
-        amount ?? defaultAssetAmounts(asset),
-        log,
-      );
-      break;
-    }
+    case 'USDC':
+    case 'USDT':
     case 'FLIP': {
       const contractAddress = getEvmContractAddress('Ethereum', asset);
       await sendErc20(
