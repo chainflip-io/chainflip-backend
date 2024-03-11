@@ -852,6 +852,7 @@ pub mod pallet {
 				return Err(CcmFailReason::InsufficientDepositAmount)
 			}
 
+			// if the gas asset is different.
 			let output_gas_asset = ForeignChain::from(destination_asset).gas_asset();
 			let other_gas_asset = if source_asset == output_gas_asset || gas_budget.is_zero() {
 				None
