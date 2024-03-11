@@ -847,7 +847,10 @@ pub mod pallet {
 
 			let destination_chain: ForeignChain = destination_asset.into();
 			if !destination_chain.ccm_support() {
-				return Err(CcmFailReason::UnsupportedForTargetChain)
+				return Err(CcmFailReason::UnsupportedForTargetChain)} else if deposit_amount < gas_budget {	
+					return Err(CcmFailReason::InsufficientDepositAmount)	
+				}	
+	
 			let output_gas_asset = ForeignChain::from(destination_asset).gas_asset();
 			let other_gas_asset = if source_asset == output_gas_asset || gas_budget.is_zero() {
 			} else {
