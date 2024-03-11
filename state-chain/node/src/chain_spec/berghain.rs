@@ -16,7 +16,7 @@ pub const PROTOCOL_ID: &str = "flip-berghain";
 // These represent approximately 24 hours on mainnet block times
 pub const BITCOIN_EXPIRY_BLOCKS: u32 = 24 * 60 / 10;
 pub const ETHEREUM_EXPIRY_BLOCKS: u32 = 24 * 3600 / 14;
-pub const ARBITRUM_EXPIRY_BLOCKS: u32 = 24 * 3600 / 14; // TODO: to be set
+pub const ARBITRUM_EXPIRY_BLOCKS: u32 = 24 * 3600 * 4;
 pub const POLKADOT_EXPIRY_BLOCKS: u32 = 24 * 3600 / 6;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
@@ -90,4 +90,4 @@ pub const AUCTION_PARAMETERS: SetSizeParameters =
 
 pub const BITCOIN_SAFETY_MARGIN: u64 = 2;
 pub const ETHEREUM_SAFETY_MARGIN: u64 = 6;
-pub const ARBITRUM_SAFETY_MARGIN: u64 = 6; // TODO: to be set
+pub const ARBITRUM_SAFETY_MARGIN: u64 = 1;

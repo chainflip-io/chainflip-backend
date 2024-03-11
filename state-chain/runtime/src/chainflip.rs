@@ -147,13 +147,13 @@ impl cf_traits::WaivedFees for WaivedFees {
 /// We are willing to pay at most 2x the base fee. This is approximately the theoretical
 /// limit of the rate of increase of the base fee over 6 blocks (12.5% per block).
 const ETHEREUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(2, 1);
-/// TODO!!:We are willing to pay at most 2x the base fee. This is approximately the theoretical
-/// limit of the rate of increase of the base fee over 6 blocks (12.5% per block).
-const ARBITRUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(2, 1);
-// We arbitrarily set the MAX_GAS_LIMIT we are willing broadcast to 10M.
+/// For Arbitrum we could theoretically set the multiplier to 1 but we add
+/// a smaller multiplier for future proofing.
+const ARBITRUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(3, 2);
+// We arbitrarily set the MAX_GAS_LIMIT we are willing to broadcast to 10M.
 const ETHEREUM_MAX_GAS_LIMIT: u128 = 10_000_000;
-// We arbitrarily set the MAX_GAS_LIMIT we are willing broadcast to 10M.
-const ARBITRUM_MAX_GAS_LIMIT: u128 = 10_000_000;
+// We arbitrarily set the MAX_GAS_LIMIT we are willing to broadcast to 25M.
+const ARBITRUM_MAX_GAS_LIMIT: u128 = 25_000_000;
 
 pub trait EvmPriorityFee<C: Chain> {
 	fn get_priority_fee(_tracked_data: &C::TrackedData) -> Option<U256> {
@@ -166,7 +166,13 @@ impl EvmPriorityFee<Ethereum> for EthTransactionBuilder {
 		Some(U256::from(tracked_data.priority_fee))
 	}
 }
-impl EvmPriorityFee<Arbitrum> for ArbTransactionBuilder {}
+
+impl EvmPriorityFee<Arbitrum> for ArbTransactionBuilder {
+	// Setting the priority fee to zero to prevent the CFE from setting a different value
+	fn get_priority_fee(_tracked_data: &<Arbitrum as Chain>::TrackedData) -> Option<U256> {
+		Some(U256::from(0))
+	}
+}
 
 pub struct EthTransactionBuilder;
 pub struct ArbTransactionBuilder;

@@ -119,6 +119,14 @@ impl ForeignChain {
 			ForeignChain::Arbitrum => assets::any::Asset::ArbEth,
 		}
 	}
+	pub const fn ccm_support(self) -> bool {
+		match self {
+			ForeignChain::Ethereum => true,
+			ForeignChain::Polkadot => false,
+			ForeignChain::Bitcoin => false,
+			ForeignChain::Arbitrum => true,
+		}
+	}
 }
 
 #[test]
