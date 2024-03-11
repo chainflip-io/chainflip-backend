@@ -575,40 +575,74 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord + MinMax>
 	pub fn limit_orders_for_lp(
 		&self,
 		lp: &LiquidityProvider,
-	) -> PoolPairsMap<BTreeMap<OrderId, (Tick, LiquidityProvider, Collected, PositionInfo)>> {
-		let mut base_to_quote: BTreeMap<_, _> = BTreeMap::new();
-		for (lp_, order_id, tick, collected, position_info) in
-			self.limit_orders.positions::<BaseToQuote>()
-		{
-			if lp == &lp_ {
-				base_to_quote.insert(order_id, (tick, lp_, collected, position_info));
+	) -> PoolPairsMap<BTreeMap<OrderId, (Tick, LiquidityProvider)>> {
+		let mut result_base: BTreeMap<OrderId, (Tick, LiquidityProvider)> = BTreeMap::new();
+		let mut result_quote: BTreeMap<OrderId, (Tick, LiquidityProvider)> = BTreeMap::new();
+		let mut lower_bound_orders_base = self
+			.limit_orders
+			.positions
+			.base
+			.lower_bound(Bound::Included(&(lp.clone(), <OrderId as MinMax>::min(), U256::zero())));
+
+		while let Some(order) = lower_bound_orders_base.next() {
+			let (&(_, ref order_id, sqrt_price), _) = order;
+			result_base.insert(order_id.clone(), (tick_at_sqrt_price(sqrt_price), lp.clone()));
+			if let Some(highest) = self
+				.limit_orders
+				.positions
+				.base
+				.upper_bound(Bound::Included(&(
+					lp.clone(),
+					<OrderId as MinMax>::max(),
+					U256::max_value(),
+				)))
+				.peek_prev()
+			{
+				let ((_, order_id_, _), _) = highest;
+				if order_id == order_id_ {
+					break;
+				}
 			}
 		}
-		let mut quote_to_base: BTreeMap<_, _> = BTreeMap::new();
-		for (lp_, order_id, tick, collected, position_info) in
-			self.limit_orders.positions::<QuoteToBase>()
-		{
-			if lp == &lp_ {
-				quote_to_base.insert(order_id, (tick, lp_, collected, position_info));
+
+		let mut lower_bound_orders_quote = self
+			.limit_orders
+			.positions
+			.quote
+			.lower_bound(Bound::Included(&(lp.clone(), <OrderId as MinMax>::min(), U256::zero())));
+
+		while let Some(order) = lower_bound_orders_quote.next() {
+			let (&(_, ref order_id, sqrt_price), _) = order;
+			result_quote.insert(order_id.clone(), (tick_at_sqrt_price(sqrt_price), lp.clone()));
+			if let Some(highest) = self
+				.limit_orders
+				.positions
+				.quote
+				.upper_bound(Bound::Included(&(
+					lp.clone(),
+					<OrderId as MinMax>::max(),
+					U256::max_value(),
+				)))
+				.peek_prev()
+			{
+				let ((_, order_id_, _), _) = highest;
+				if order_id == order_id_ {
+					break;
+				}
 			}
 		}
-		PoolPairsMap { base: quote_to_base, quote: base_to_quote }
+
+		PoolPairsMap { base: result_base, quote: result_quote }
 	}
 
-	pub fn limit_orders_info(
-		&self,
-	) -> PoolPairsMap<BTreeMap<OrderId, (Tick, LiquidityProvider, Collected, PositionInfo)>> {
+	pub fn limit_orders_info(&self) -> PoolPairsMap<BTreeMap<OrderId, (Tick, LiquidityProvider)>> {
 		let mut base_to_quote: BTreeMap<_, _> = BTreeMap::new();
-		for (lp, order_id, tick, collected, position_info) in
-			self.limit_orders.positions::<BaseToQuote>()
-		{
-			base_to_quote.insert(order_id, (tick, lp, collected, position_info));
+		for (lp, order_id, tick, _, _) in self.limit_orders.positions::<BaseToQuote>() {
+			base_to_quote.insert(order_id, (tick, lp));
 		}
 		let mut quote_to_base: BTreeMap<_, _> = BTreeMap::new();
-		for (lp, order_id, tick, collected, position_info) in
-			self.limit_orders.positions::<QuoteToBase>()
-		{
-			quote_to_base.insert(order_id, (tick, lp, collected, position_info));
+		for (lp, order_id, tick, _, _) in self.limit_orders.positions::<QuoteToBase>() {
+			quote_to_base.insert(order_id, (tick, lp));
 		}
 		PoolPairsMap { base: quote_to_base, quote: base_to_quote }
 	}
