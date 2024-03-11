@@ -1206,7 +1206,7 @@ impl<T: Config> Pallet<T> {
 			for (assets, limit_orders) in
 				pool.pool_state.limit_orders_for_lp(lp).as_ref().into_iter().collect::<Vec<_>>()
 			{
-				for (id, (tick, _, _, _)) in limit_orders {
+				for (id, (tick, _)) in limit_orders {
 					Self::inner_update_limit_order(
 						&mut pool,
 						lp,
@@ -1712,10 +1712,14 @@ impl<T: Config> Pallet<T> {
 				} else {
 					pool.pool_state.limit_orders_info()
 				}
-				.map_with_pair(|_, limit_orders| {
+				.map_with_pair(|asset, limit_orders| {
 					limit_orders
 						.into_iter()
-						.filter_map(|(id, (tick, lp, collected, position_info))| {
+						.filter_map(|(id, (tick, lp))| {
+							let (collected, position_info) = pool
+								.pool_state
+								.limit_order(&lp.clone(), id, asset.sell_order(), tick)
+								.unwrap();
 							if position_info.amount.is_zero() {
 								None
 							} else {

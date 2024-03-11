@@ -326,7 +326,7 @@ impl<'a> From<&'a Position> for PositionInfo {
 
 /// Represents a single LP position
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize)]
-struct Position {
+pub struct Position {
 	/// Used to identify when the position was created and thereby determine if all the liquidity
 	/// in the position has been used or not. As once all the liquidity at a tick has been used,
 	/// the internal record of that tick/fixed pool is deleted, and if liquidity is added back

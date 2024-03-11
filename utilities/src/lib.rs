@@ -156,6 +156,23 @@ impl<Item: Copy> SliceToArray for [Item] {
 	}
 }
 
+/// A trait for types that have a minimum and maximum value.
+pub trait MinMax {
+	/// Returns the minimum value.
+	fn min() -> Self;
+	/// Returns the maximum value.
+	fn max() -> Self;
+}
+
+impl MinMax for u64 {
+	fn min() -> Self {
+		0
+	}
+	fn max() -> Self {
+		u64::MAX
+	}
+}
+
 /// Tests that `collect_array` doesn't drop any of the iterator's items. For example it is important
 /// to not copy an item, and then drop the copied instance.
 #[test]

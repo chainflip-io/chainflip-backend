@@ -1,20 +1,25 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(btree_cursors)]
 
 pub mod test_utilities;
 mod tests;
 
 use core::convert::Infallible;
 
+use cf_utilities::MinMax;
 use codec::{Decode, Encode};
 use common::{
 	is_sqrt_price_valid, price_to_sqrt_price, sqrt_price_to_price, tick_at_sqrt_price, Amount,
 	BaseToQuote, Pairs, PoolPairsMap, Price, QuoteToBase, SetFeesError, Side, SqrtPriceQ64F96,
-	SwapDirection, Tick,
+	SwapDirection, Tick, MAX_TICK, MIN_TICK,
 };
 use limit_orders::{Collected, PositionInfo};
 use range_orders::Liquidity;
 use scale_info::TypeInfo;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+
+use sp_core::U256;
+use sp_std::ops::Bound;
 
 use crate::common::{mul_div_floor, nth_root_of_integer_as_fixed_point};
 
@@ -23,7 +28,7 @@ pub mod limit_orders;
 pub mod range_orders;
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, serde::Serialize, serde::Deserialize)]
-pub struct PoolState<LiquidityProvider: Ord, OrderId: Ord + Clone> {
+pub struct PoolState<LiquidityProvider: Ord, OrderId: Ord + Clone + MinMax> {
 	limit_orders: limit_orders::PoolState<LiquidityProvider, OrderId>,
 	range_orders: range_orders::PoolState<LiquidityProvider, OrderId>,
 }
@@ -33,7 +38,9 @@ pub enum NewError {
 	RangeOrders(range_orders::NewError),
 }
 
-impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityProvider, OrderId> {
+impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord + MinMax>
+	PoolState<LiquidityProvider, OrderId>
+{
 	pub fn new(
 		fee_hundredth_pips: u32,
 		initial_range_order_price: Price,
@@ -536,9 +543,30 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityPr
 		lp: &LiquidityProvider,
 	) -> BTreeMap<OrderId, core::ops::Range<Tick>> {
 		let mut result: BTreeMap<_, _> = BTreeMap::new();
-		for (lp_, order_id, lower_tick, upper_tick, _, _) in self.range_orders.positions() {
-			if lp == &lp_ {
-				result.insert(order_id, lower_tick..upper_tick);
+		let mut lower_bound_orders = self.range_orders.positions.lower_bound(Bound::Included(&(
+			lp.clone(),
+			<OrderId as MinMax>::min(),
+			MIN_TICK,
+			MIN_TICK,
+		)));
+		while let Some(order) = lower_bound_orders.next() {
+			let (&(_, ref order_id, lower_tick, upper_tick), _) = order;
+			result.insert(order_id.clone(), lower_tick..upper_tick);
+			if let Some(highest) = self
+				.range_orders
+				.positions
+				.upper_bound(Bound::Included(&(
+					lp.clone(),
+					<OrderId as MinMax>::max(),
+					MAX_TICK,
+					MAX_TICK,
+				)))
+				.peek_prev()
+			{
+				let ((_, order_id_, _, _), _) = highest;
+				if order_id == order_id_ {
+					break;
+				}
 			}
 		}
 		result
