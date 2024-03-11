@@ -35,86 +35,73 @@ impl TypeDecoder {
 	}
 
 	fn unknown_type(bytes: Vec<u8>) -> scale_value::Value {
-		scale_value::Value::named_composite([(
-			"UnknownData",
-			scale_value::Value::string(hex::encode(bytes)),
-		)])
+		scale_value::Value::unnamed_variant(
+			"UnknownType",
+			[scale_value::Value::string(hex::encode(bytes))],
+		)
 	}
 }
 
 #[cfg(test)]
 pub mod test {
 	use super::*;
-	use cf_chains::{address::EncodedAddress, CcmChannelMetadata};
-	use cf_primitives::{AccountId, Asset};
-	use codec::Encode;
-	use sp_runtime::BoundedVec;
-	use state_chain_runtime::{EthereumInstance, Runtime, RuntimeEvent};
+	use cf_chains::{address::EncodedAddress, ForeignChain};
+	use cf_primitives::AccountId;
+	use codec::{Decode, Encode};
+	use sp_core::H256;
 
-	fn test_event_encoding(registry: &TypeDecoder, event: RuntimeEvent, output: String) {
-		let encoded = event.encode();
-		assert_eq!(registry.decode_data(encoded).to_string(), output);
+	#[derive(Debug, PartialEq, Encode, Decode, TypeInfo)]
+	enum TestEvent {
+		Inner(InnerEvent),
 	}
 
-	#[test]
-	fn can_decode_runtime_events() {
-		let registry = TypeDecoder::new::<RuntimeEvent>();
-
-		test_event_encoding(
-			&registry,
-			RuntimeEvent::System(frame_system::Event::<Runtime>::Remarked {
-				sender: AccountId::from([0xF0; 32]),
-				hash: [0xFF; 32].into(),
-			}),
-			"System (Remarked { sender: ((240, 240, 240, 240, 240, 240, 240, 240, 240, 240, 240, 240, 240, 240, 240, 240, 240, 240, 240, 240, 240, 240, 240, 240, 240, 240, 240, 240, 240, 240, 240, 240)), hash: ((255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255)) })".to_owned()
-		);
-
-		test_event_encoding(
-			&registry,
-			RuntimeEvent::EthereumBroadcaster(pallet_cf_broadcast::Event::<
-				Runtime,
-				EthereumInstance,
-			>::BroadcastSuccess {
-				broadcast_id: 123u32,
-				transaction_out_id: cf_chains::evm::SchnorrVerificationComponents {
-					s: [0xBB; 32],
-					k_times_g_address: [0xAA; 20],
-				},
-				transaction_ref: [0xCC; 32].into(),
-			}),
-			"EthereumBroadcaster (BroadcastSuccess { broadcast_id: 123, transaction_out_id: { s: (187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187), k_times_g_address: (170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170) }, transaction_ref: ((204, 204, 204, 204, 204, 204, 204, 204, 204, 204, 204, 204, 204, 204, 204, 204, 204, 204, 204, 204, 204, 204, 204, 204, 204, 204, 204, 204, 204, 204, 204, 204)) })".to_owned()
-		);
-
-		test_event_encoding(
-			&registry,
-			RuntimeEvent::Swapping(pallet_cf_swapping::Event::<Runtime>::SwapDepositAddressReady {
-				deposit_address: EncodedAddress::Eth([0xDD; 20]),
-				destination_address: EncodedAddress::Eth([0xDD; 20]),
-				source_asset: Asset::Flip,
-				destination_asset: Asset::Usdc,
-				channel_id: 55u64,
-				broker_commission_rate: 100u16,
-				channel_metadata: Some(CcmChannelMetadata {
-					message: BoundedVec::try_from(vec![0x00, 0x01, 0x02, 0x03, 0x04]).unwrap(),
-					gas_budget: 1_000_000u128,
-					cf_parameters: BoundedVec::try_from(vec![0x10, 0x11, 0x12, 0x13, 0x14])
-						.unwrap(),
-				}),
-				source_chain_expiry_block: 1_000u64,
-				boost_fee: 9u16,
-				channel_opening_fee: 1_000u128,
-			}),
-			"Swapping (SwapDepositAddressReady { deposit_address: Eth ((221, 221, 221, 221, 221, 221, 221, 221, 221, 221, 221, 221, 221, 221, 221, 221, 221, 221, 221, 221)), destination_address: Eth ((221, 221, 221, 221, 221, 221, 221, 221, 221, 221, 221, 221, 221, 221, 221, 221, 221, 221, 221, 221)), source_asset: Flip (), destination_asset: Usdc (), channel_id: 55, broker_commission_rate: 100, channel_metadata: Some ({ message: ((0, 1, 2, 3, 4)), gas_budget: 1000000, cf_parameters: ((16, 17, 18, 19, 20)) }), source_chain_expiry_block: 1000, boost_fee: 9, channel_opening_fee: 1000 })".to_owned(),
-		);
+	#[derive(Debug, PartialEq, Encode, Decode, TypeInfo)]
+	enum InnerEvent {
+		Unit,
+		Primitives { num: u32, text: String, byte_array: [u8; 32] },
+		SubstrateTypes { account_id: AccountId, hash: H256 },
+		EncodedAddress { eth: EncodedAddress, dot: EncodedAddress, btc: EncodedAddress },
+		ForeignChain { eth: ForeignChain, dot: ForeignChain, btc: ForeignChain, arb: ForeignChain },
+		// etc.
 	}
 
-	#[test]
-	fn can_return_unknown_events() {
-		assert_eq!(
-			TypeDecoder::new::<RuntimeEvent>()
-				.decode_data(vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06])
-				.to_string(),
-			"{ UnknownData: \"010203040506\" }".to_owned()
-		);
+	#[derive(Debug, PartialEq, Encode, Decode, TypeInfo)]
+	struct IncompatibleEvent(String);
+
+	macro_rules! test_event_encoding {
+		( $( $name:ident : $event:expr ),+ $(,)? ) => {
+			$(
+				#[test]
+				fn $name() {
+					let value = TypeDecoder::new::<TestEvent>().decode_data($event.encode());
+					insta::assert_json_snapshot!(value);
+				}
+			)+
+		};
+	}
+
+	test_event_encoding! {
+		unknown_event: IncompatibleEvent("what?".to_owned()),
+		unit_event: TestEvent::Inner(InnerEvent::Unit),
+		primitives: TestEvent::Inner(InnerEvent::Primitives {
+			num: 123u32,
+			text: "Hello".to_owned(),
+			byte_array: [0x02; 32],
+		}),
+		substrate_types: TestEvent::Inner(InnerEvent::SubstrateTypes {
+			account_id: AccountId::from([0x01; 32]),
+			hash: H256::from([0x02; 32]),
+		}),
+		external_address_types: TestEvent::Inner(InnerEvent::EncodedAddress {
+			eth: EncodedAddress::Eth([0x03; 20]),
+			dot: EncodedAddress::Dot([0x04; 32]),
+			btc: EncodedAddress::Btc(b"bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq".to_vec()),
+		}),
+		chains: TestEvent::Inner(InnerEvent::ForeignChain {
+			eth: ForeignChain::Ethereum,
+			dot: ForeignChain::Polkadot,
+			btc: ForeignChain::Bitcoin,
+			arb: ForeignChain::Arbitrum,
+		}),
 	}
 }
