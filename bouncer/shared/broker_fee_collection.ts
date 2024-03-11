@@ -13,7 +13,7 @@ import {
   newAddress,
   observeBalanceIncrease,
   observeEvent,
-  shortChainFomAsset,
+  shortChainFromAsset,
   assetDecimals,
   hexStringToBytesArray,
   getChainflipApi,
@@ -61,7 +61,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   const destinationAddress = await newAddress(swapAsset, seed ?? randomBytes(32).toString('hex'));
   const observeDestinationAddress =
     asset === Assets.DOT ? decodeDotAddressForContract(destinationAddress) : destinationAddress;
-  const destinationChain = shortChainFomAsset(swapAsset); // "ETH" -> "Eth"
+  const destinationChain = shortChainFromAsset(swapAsset); // "ETH" -> "Eth"
   console.log(`${asset} destinationAddress:`, destinationAddress);
   const observeSwapScheduledEvent = observeEvent(
     ':SwapScheduled',
@@ -78,7 +78,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   // because we want to use a separate broker to not interfere with other tests
   const addressPromise = observeEvent('swapping:SwapDepositAddressReady', chainflip, (event) => {
     // Find deposit address for the right swap by looking at destination address:
-    const destAddressEvent = event.data.destinationAddress[shortChainFomAsset(swapAsset)];
+    const destAddressEvent = event.data.destinationAddress[shortChainFromAsset(swapAsset)];
     if (!destAddressEvent) return false;
 
     const destAssetMatches = event.data.destinationAsset.toUpperCase() === swapAsset;
@@ -100,7 +100,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
 
   const res = (await addressPromise).data;
 
-  const depositAddress = res.depositAddress[shortChainFomAsset(asset)];
+  const depositAddress = res.depositAddress[shortChainFromAsset(asset)];
   const channelId = Number(res.channelId);
   await doPerformSwap(
     {
@@ -164,7 +164,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   const withdrawalAddress = await newAddress(asset, seed ?? randomBytes(32).toString('hex'));
   const observeWithdrawalAddress =
     asset === Assets.DOT ? decodeDotAddressForContract(withdrawalAddress) : withdrawalAddress;
-  const chain = shortChainFomAsset(asset);
+  const chain = shortChainFromAsset(asset);
   console.log(`${chain} withdrawalAddress:`, withdrawalAddress);
   const balanceBeforeWithdrawal = await getBalance(asset, withdrawalAddress);
   console.log(
