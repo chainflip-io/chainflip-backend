@@ -1631,7 +1631,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-api"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1677,7 +1677,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-broker-api"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "anyhow",
  "chainflip-api",
@@ -1697,7 +1697,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-cli"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "anyhow",
  "cf-chains",
@@ -1717,7 +1717,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-engine"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "anyhow",
  "async-broadcast 0.5.1",
@@ -1813,7 +1813,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-ingress-egress-tracker"
-version = "0.1.0"
+version = "1.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1849,7 +1849,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-lp-api"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "anyhow",
  "cf-primitives",
@@ -1874,7 +1874,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-node"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
@@ -12340,7 +12340,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "state-chain-runtime"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "cf-amm",
  "cf-chains",
