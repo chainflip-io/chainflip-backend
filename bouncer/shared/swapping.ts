@@ -186,29 +186,7 @@ export async function testAllSwaps() {
 
   console.log('=== Testing all swaps ===');
 
-  // TODO: Manually do token approvals and contract swaps.
-
-  // Single approval of all the assets swapped in contractsSwaps to avoid overlapping async approvals.
-  // Set the allowance to the same amount of total asset swapped in contractsSwaps to avoid nonce issues.
-  // Total contract swap per ERC20 token = ccmContractSwaps + contractSwaps =
-  //     (numberAssetsEthereum - 1) + (numberAssets (BTC has 4 different types) - 1) = 2 + 7 = 9
-  // await approveTokenVault(
-  //   'USDC',
-  //   (BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals.USDC)) * 9n).toString(),
-  // );
-  // await approveTokenVault(
-  //   'FLIP',
-  //   (BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * 9n).toString(),
-  // );
-
-  // NOTE: Sometimes getting this error. I think it's related to starting too many connections in parallel to the SC.
-  // This won't be a problem when the broker supports it.
-  //    RPC-CORE: getMetadata(at?: BlockHash): Metadata:: -32000: Client error: Execution failed: Other error happened while constructing the runtime: failed to instantiate a new WASM module instance: maximum concurrent instance limit of 32 reached
-  //    API/INIT: Error: FATAL: Unable to initialize the API: -32000: Client error: Execution failed: Other error happened while constructing the runtime: failed to instantiate a new WASM module instance: maximum concurrent instance limit of 32 reached
-  //              at ApiPromise.__internal__onProviderConnect (file:///home/albert/work/chainflip/backend_arbitrum/chainflip-backend/bouncer/node_modules/.pnpm/@polkadot+api@10.7.2/node_modules/@polkadot/api/base/Init.js:311:27)
-  //              at processTicksAndRejections (node:internal/process/task_queues:96:5)
-
-  // TODO: For now approving infinite tokens to avoid issues
+  // TODO: To update this once SDK supports Arbitrum
   await approveTokenVault(
     'USDC',
     (
