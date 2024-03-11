@@ -82,10 +82,10 @@ impl ArbitrumTrackedData {
 }
 
 pub mod fees {
-	pub const ARB_BASE_COST_PER_BATCH: u128 = 5_200_000;
-	pub const ARB_GAS_COST_PER_FETCH: u128 = 1_700_000;
-	pub const ARB_GAS_COST_PER_TRANSFER_NATIVE: u128 = 1_500_000;
-	pub const ARB_GAS_COST_PER_TRANSFER_TOKEN: u128 = 1_800_000;
+	pub const BASE_COST_PER_BATCH: u128 = 5_200_000;
+	pub const GAS_COST_PER_FETCH: u128 = 1_700_000;
+	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 1_500_000;
+	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 1_800_000;
 }
 
 impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {
@@ -97,10 +97,10 @@ impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {
 
 		// Note: this is taking the egress cost of the swap in the ingress currency (and basing the
 		// cost on the ingress chain).
-		let gas_cost_per_fetch = ARB_BASE_COST_PER_BATCH +
+		let gas_cost_per_fetch = BASE_COST_PER_BATCH +
 			match asset {
 				assets::arb::Asset::ArbEth => Zero::zero(),
-				assets::arb::Asset::ArbUsdc => ARB_GAS_COST_PER_FETCH,
+				assets::arb::Asset::ArbUsdc => GAS_COST_PER_FETCH,
 			};
 
 		self.base_fee.saturating_mul(gas_cost_per_fetch)
@@ -112,10 +112,10 @@ impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {
 	) -> <Arbitrum as Chain>::ChainAmount {
 		use crate::arb::fees::*;
 
-		let gas_cost_per_transfer = ARB_BASE_COST_PER_BATCH +
+		let gas_cost_per_transfer = BASE_COST_PER_BATCH +
 			match asset {
-				assets::arb::Asset::ArbEth => ARB_GAS_COST_PER_TRANSFER_NATIVE,
-				assets::arb::Asset::ArbUsdc => ARB_GAS_COST_PER_TRANSFER_TOKEN,
+				assets::arb::Asset::ArbEth => GAS_COST_PER_TRANSFER_NATIVE,
+				assets::arb::Asset::ArbUsdc => GAS_COST_PER_TRANSFER_TOKEN,
 			};
 
 		self.base_fee.saturating_mul(gas_cost_per_transfer)
