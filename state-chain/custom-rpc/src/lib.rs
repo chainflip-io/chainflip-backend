@@ -46,7 +46,7 @@ use std::{
 	sync::Arc,
 };
 
-mod type_encoder;
+mod type_decoder;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScheduledSwap {
@@ -1347,7 +1347,7 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<scale_value::Value>> {
-		let event_decoder = type_encoder::TypeDecoder::new::<state_chain_runtime::RuntimeEvent>();
+		let event_decoder = type_decoder::TypeDecoder::new::<state_chain_runtime::RuntimeEvent>();
 		let events = self
 			.client
 			.runtime_api()

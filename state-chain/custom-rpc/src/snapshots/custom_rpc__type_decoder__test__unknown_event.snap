@@ -1,5 +1,5 @@
 ---
-source: state-chain/custom-rpc/src/type_encoder.rs
+source: state-chain/custom-rpc/src/type_decoder.rs
 expression: value
 ---
 {
