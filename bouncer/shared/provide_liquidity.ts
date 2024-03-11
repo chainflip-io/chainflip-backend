@@ -8,7 +8,7 @@ import {
   decodeDotAddressForContract,
   handleSubstrateError,
   lpMutex,
-  shortChainFomAsset,
+  shortChainFromAsset,
   amountToFineAmount,
   isWithinOnePercent,
   chainFromAsset,
@@ -25,7 +25,7 @@ export async function provideLiquidity(
 ) {
   const chainflip = await getChainflipApi();
   await cryptoWaitReady();
-  const chain = shortChainFomAsset(ccy);
+  const chain = shortChainFromAsset(ccy);
 
   const keyring = new Keyring({ type: 'sr25519' });
   const lpUri = lpKey ?? (process.env.LP_URI || '//LP_1');

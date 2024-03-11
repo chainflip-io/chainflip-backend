@@ -15,7 +15,7 @@ import {
   observeBalanceIncrease,
   observeEvent,
   runWithTimeout,
-  shortChainFomAsset,
+  shortChainFromAsset,
   assetDecimals,
 } from '../shared/utils';
 import { getBalance } from '../shared/get_balance';
@@ -27,6 +27,7 @@ const swapAssetAmount = {
   [Assets.FLIP]: 1000,
   [Assets.BTC]: 0.1,
   [Assets.USDC]: 1000,
+  [Assets.USDT]: 1000,
 };
 const commissionBps = 1000; // 10%
 
@@ -61,7 +62,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   const destinationAddress = await newAddress(swapAsset, seed ?? randomBytes(32).toString('hex'));
   const observeDestinationAddress =
     asset === Assets.DOT ? decodeDotAddressForContract(destinationAddress) : destinationAddress;
-  const destinationChain = shortChainFomAsset(swapAsset); // "ETH" -> "Eth"
+  const destinationChain = shortChainFromAsset(swapAsset); // "ETH" -> "Eth"
   console.log(`${asset} destinationAddress:`, destinationAddress);
   const observeSwapScheduledEvent = observeEvent(
     ':SwapScheduled',
@@ -133,7 +134,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   const withdrawalAddress = await newAddress(asset, seed ?? randomBytes(32).toString('hex'));
   const observeWithdrawalAddress =
     asset === Assets.DOT ? decodeDotAddressForContract(withdrawalAddress) : withdrawalAddress;
-  const chain = shortChainFomAsset(asset);
+  const chain = shortChainFromAsset(asset);
   console.log(`${chain} withdrawalAddress:`, withdrawalAddress);
   const balanceBeforeWithdrawal = await getBalance(asset, withdrawalAddress);
   console.log(
@@ -179,7 +180,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
     amountToFineAmount(balanceBeforeWithdrawal, assetDecimals(asset)),
   );
   // Log the chain state for Ethereum assets to help debugging.
-  if (['FLIP', 'ETH', 'USDC'].includes(asset.toString())) {
+  if (['FLIP', 'ETH', 'USDC', 'USDT'].includes(asset.toString())) {
     const chainState = JSON.stringify(
       await chainflip.query.ethereumChainTracking.currentChainState(),
     );
@@ -210,6 +211,7 @@ async function main(): Promise<void> {
     testBrokerFees(Assets.DOT, randomBytes(32).toString('hex')),
     testBrokerFees(Assets.BTC, randomBytes(32).toString('hex')),
     testBrokerFees(Assets.USDC, randomBytes(32).toString('hex')),
+    testBrokerFees('USDT', randomBytes(32).toString('hex')),
   ]);
 
   console.log('\x1b[32m%s\x1b[0m', '=== Broker fee collection test complete ===');

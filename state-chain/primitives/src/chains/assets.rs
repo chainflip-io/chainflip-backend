@@ -406,6 +406,7 @@ assets!(pub enum Asset {
 		(Eth, eth) = 1u32 (GAS_ASSET),
 		(Flip, flip) = 2u32,
 		(Usdc, usdc) = 3u32,
+		(Usdt, usdt) = 8u32,
 	},
 	(dot, Polkadot, "Polkadot") => {
 		(Dot, dot) = 4u32 (GAS_ASSET),
@@ -447,6 +448,7 @@ mod test_assets {
 		assert_conversion!(eth, Eth);
 		assert_conversion!(eth, Flip);
 		assert_conversion!(eth, Usdc);
+		assert_conversion!(eth, Usdt);
 		assert_conversion!(dot, Dot);
 		assert_conversion!(btc, Btc);
 
