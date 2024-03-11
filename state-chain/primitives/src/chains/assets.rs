@@ -563,6 +563,15 @@ assets!(
 				index: 3,
 				legacy_encoding,
 			},
+			Asset {
+				variant: Usdt,
+				member: usdt,
+				string: "USDT" (aliases: ["Usdt", "usdt"]),
+				json: "USDT",
+				gas: false,
+				index: 8,
+				legacy_encoding,
+			},
 		],
 	},
 	Chain {
@@ -653,6 +662,7 @@ mod test_assets {
 		assert_eq!(any::Asset::try_from(5).unwrap(), any::Asset::Btc);
 		assert_eq!(any::Asset::try_from(6).unwrap(), any::Asset::ArbEth);
 		assert_eq!(any::Asset::try_from(7).unwrap(), any::Asset::ArbUsdc);
+		assert_eq!(any::Asset::try_from(8).unwrap(), any::Asset::Usdt);
 	}
 
 	#[test]
@@ -660,6 +670,7 @@ mod test_assets {
 		assert_conversion!(eth, Eth);
 		assert_conversion!(eth, Flip);
 		assert_conversion!(eth, Usdc);
+		assert_conversion!(eth, Usdt);
 		assert_conversion!(dot, Dot);
 		assert_conversion!(btc, Btc);
 		assert_conversion!(arb, ArbEth);
@@ -670,6 +681,7 @@ mod test_assets {
 		assert_incompatible!(dot, Flip);
 		assert_incompatible!(dot, Usdc);
 		assert_incompatible!(btc, Usdc);
+		assert_incompatible!(btc, Usdt);
 	}
 
 	#[test]
