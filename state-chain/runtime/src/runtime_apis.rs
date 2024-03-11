@@ -106,14 +106,6 @@ pub struct FailingWitnessValidators {
 	pub validators: Vec<(cf_primitives::AccountId, String, bool)>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-pub struct ScheduledSwap {
-	#[cfg_attr(feature = "std", serde(flatten))]
-	pub swap: SwapLegInfo,
-	pub execute_at: BlockNumber,
-}
-
 decl_runtime_apis!(
 	/// Definition for all runtime API interfaces.
 	pub trait CustomRuntimeApi {
@@ -197,16 +189,22 @@ decl_runtime_apis!(
 			quote_asset: Asset,
 			side: Side,
 		) -> Vec<AssetAmount>;
-		fn cf_scheduled_swaps(base_asset: Asset, quote_asset: Asset) -> Vec<ScheduledSwap>;
+		fn cf_scheduled_swaps(
+			base_asset: Asset,
+			quote_asset: Asset,
+		) -> Vec<(SwapLegInfo, BlockNumber)>;
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> LiquidityProviderInfo;
 		fn cf_broker_info(account_id: AccountId32) -> BrokerInfo;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
 		fn cf_asset_balances(account_id: AccountId32) -> Vec<(Asset, AssetAmount)>;
 		fn cf_redemption_tax() -> AssetAmount;
 		fn cf_network_environment() -> NetworkEnvironment;
-		fn cf_failed_call(
+		fn cf_failed_call_ethereum(
 			broadcast_id: BroadcastId,
 		) -> Option<<cf_chains::Ethereum as Chain>::Transaction>;
+		fn cf_failed_call_arbitrum(
+			broadcast_id: BroadcastId,
+		) -> Option<<cf_chains::Arbitrum as Chain>::Transaction>;
 		fn cf_ingress_fee(asset: Asset) -> Option<AssetAmount>;
 		fn cf_egress_fee(asset: Asset) -> Option<AssetAmount>;
 		fn cf_witness_count(hash: CallHash) -> Option<FailingWitnessValidators>;

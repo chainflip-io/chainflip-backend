@@ -178,13 +178,17 @@ mod test_all_batch {
 		}
 	}
 
-	impl EthEnvironmentProvider for MockEnvironment {
+	impl EvmEnvironmentProvider<Ethereum> for MockEnvironment {
 		fn token_address(asset: assets::eth::Asset) -> Option<eth::Address> {
 			Some(eth::Address::from_low_u64_be(asset as u64))
 		}
 
-		fn contract_address(contract: eth::api::EthereumContract) -> eth::Address {
-			eth::Address::from_low_u64_be(contract as u64)
+		fn key_manager_address() -> eth::Address {
+			eth::Address::from_low_u64_be(1)
+		}
+
+		fn vault_address() -> EvmAddress {
+			eth::Address::from_low_u64_be(2)
 		}
 
 		fn chain_id() -> super::EvmChainId {

@@ -1,8 +1,7 @@
 use super::*;
 use cf_chains::SetAggKeyWithAggKeyError;
-use cf_primitives::ThresholdSignatureRequestId;
 use cf_runtime_utilities::{log_or_panic, StorageDecodeVariant};
-use cf_traits::{GetBlockHeight, VaultActivator};
+use cf_traits::{GetBlockHeight, StartKeyActivationResult, VaultActivator};
 
 impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> for Pallet<T, I> {
 	type ValidatorId = T::ValidatorId;
@@ -26,10 +25,12 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 	fn start_key_activation(
 		new_public_key: AggKeyFor<T, I>,
 		maybe_old_public_key: Option<AggKeyFor<T, I>>,
-	) -> Option<ThresholdSignatureRequestId> {
-		if let Some(old_key) = maybe_old_public_key {
+	) -> Vec<StartKeyActivationResult> {
+		// If this storage item exists, it means this chain is already active we will rotate
+		// normally
+		if VaultStartBlockNumbers::<T, I>::iter_keys().next().is_some() {
 			match <T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
-				Some(old_key),
+				maybe_old_public_key,
 				new_public_key,
 			) {
 				Ok(activation_call) => {
@@ -43,29 +44,38 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 					PendingVaultActivation::<T, I>::put(
 						VaultActivationStatus::<T, I>::AwaitingActivation { new_public_key },
 					);
-					Some(tss_request_id)
+					vec![StartKeyActivationResult::Normal(tss_request_id)]
 				},
 				Err(SetAggKeyWithAggKeyError::NotRequired) => {
 					// This can happen if, for example, on a utxo chain there are no funds that
 					// need to be swept.
 					Self::activate_new_key_for_chain(T::ChainTracking::get_block_height());
-					None
+					vec![StartKeyActivationResult::ActivationTxNotRequired]
 				},
 				Err(SetAggKeyWithAggKeyError::Failed) => {
 					log_or_panic!(
 						"Unexpected failure during {} vault activation.",
 						<T::Chain as cf_chains::Chain>::NAME,
 					);
-					None
+					vec![StartKeyActivationResult::ActivationTxFailed]
 				},
 			}
-		} else {
-			// No active key means we are bootstrapping the vault.
+		}
+		// If the chain is not active yet, we check this flag to decide whether we want to activate
+		// this chain during this epoch rotation
+		else if ChainInitialized::<T, I>::get() {
+			// VaultStartBlockNumbers being empty means we are bootstrapping the vault.
 			PendingVaultActivation::<T, I>::put(
 				VaultActivationStatus::<T, I>::AwaitingActivation { new_public_key },
 			);
 			Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation { new_public_key });
-			None
+			vec![StartKeyActivationResult::FirstVault]
+		}
+		// The case where the ChainInitialized flag is not set, we skip activation for this chain
+		// and complete rotation since this chain is still not ready to be activated yet.
+		else {
+			PendingVaultActivation::<T, I>::put(VaultActivationStatus::<T, I>::Complete);
+			vec![StartKeyActivationResult::ChainNotInitialized]
 		}
 	}
 

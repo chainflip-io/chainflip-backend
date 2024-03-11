@@ -402,7 +402,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 								}
 							}
 							CfeCompatibility::NotYetCompatible => {
-								// We've either already returned a NotYetCompatible error, or we've waited until we're compatible. So we 
+								// We've either already returned a NotYetCompatible error, or we've waited until we're compatible. So we
 								// don't expect this case to happen.
 								break Err(CreateStateChainClientError::CompatibilityError(block_compatibility).into());
 							},

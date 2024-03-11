@@ -1,6 +1,6 @@
 pub use super::common::*;
 use super::StateChainEnvironment;
-use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_MAINNET};
+use cf_chains::dot::RuntimeVersion;
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use sc_service::ChainType;
 use sp_core::H256;
@@ -16,16 +16,23 @@ pub const PROTOCOL_ID: &str = "flip-berghain";
 // These represent approximately 24 hours on mainnet block times
 pub const BITCOIN_EXPIRY_BLOCKS: u32 = 24 * 60 / 10;
 pub const ETHEREUM_EXPIRY_BLOCKS: u32 = 24 * 3600 / 14;
+pub const ARBITRUM_EXPIRY_BLOCKS: u32 = 24 * 3600 / 14; // TODO: to be set
 pub const POLKADOT_EXPIRY_BLOCKS: u32 = 24 * 3600 / 6;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("826180541412D574cf1336d22c0C0a287822678A"),
 	eth_usdc_address: hex_literal::hex!("A0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
+	eth_usdt_address: hex_literal::hex!("dAC17F958D2ee523a2206206994597C13D831ec7"),
 	state_chain_gateway_address: hex_literal::hex!("6995Ab7c4D7F4B03f467Cf4c8E920427d9621DBd"),
-	key_manager_address: hex_literal::hex!("cd351d3626Dc244730796A3168D315168eBf08Be"),
+	eth_key_manager_address: hex_literal::hex!("cd351d3626Dc244730796A3168D315168eBf08Be"),
 	eth_vault_address: hex_literal::hex!("F5e10380213880111522dd0efD3dbb45b9f62Bcc"),
+	arb_key_manager_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+	arb_vault_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+	arbusdc_token_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
 	eth_address_checker_address: hex_literal::hex!("79001a5e762f3bEFC8e5871b42F6734e00498920"),
-	ethereum_chain_id: CHAIN_ID_MAINNET,
+	arb_address_checker_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+	ethereum_chain_id: cf_chains::arb::CHAIN_ID_MAINNET,
+	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_MAINNET,
 	eth_init_agg_key: hex_literal::hex!(
 		"022a1d7efa522ce746bc40a04016178ce38154be1f0537c6957bdeed17057bb955"
 	),
@@ -83,3 +90,4 @@ pub const AUCTION_PARAMETERS: SetSizeParameters =
 
 pub const BITCOIN_SAFETY_MARGIN: u64 = 2;
 pub const ETHEREUM_SAFETY_MARGIN: u64 = 6;
+pub const ARBITRUM_SAFETY_MARGIN: u64 = 6; // TODO: to be set

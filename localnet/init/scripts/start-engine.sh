@@ -8,6 +8,7 @@ source $LOCALNET_INIT_DIR/env/cfe.env
 $BINARY_ROOT_PATH/chainflip-engine \
   --config-root=$LOCALNET_INIT_DIR \
   --eth.private_key_file=./keys/$NODE_NAME/eth_private_key_file \
+  --arb.private_key_file=./keys/$NODE_NAME/eth_private_key_file \
   --state_chain.signing_key_file=./keys/$NODE_NAME/signing_key_file \
   --state_chain.ws_endpoint=ws://localhost:$SC_RPC_PORT \
   --p2p.node_key_file=./keys/$NODE_NAME/node_key_file \

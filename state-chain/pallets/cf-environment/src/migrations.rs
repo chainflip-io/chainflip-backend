@@ -1,5 +1,6 @@
 mod bitcoin_utxos;
 mod consolidation_parameters;
+mod usdt;
 
 use crate::*;
 use cf_runtime_upgrade_utilities::VersionedMigration;
@@ -34,6 +35,7 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 pub type PalletMigration<T> = (
 	VersionedMigration<crate::Pallet<T>, consolidation_parameters::Migration<T>, 6, 7>,
 	VersionedMigration<crate::Pallet<T>, bitcoin_utxos::Migration<T>, 7, 8>,
+	VersionedMigration<crate::Pallet<T>, usdt::Migration<T>, 8, 9>,
 );
 
 #[cfg(test)]

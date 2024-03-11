@@ -17,7 +17,7 @@ use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip,
 	mocks::{
 		address_converter::MockAddressConverter,
-		api_call::{MockEthEnvironment, MockEthereumApiCall},
+		api_call::{MockEthereumApiCall, MockEvmEnvironment},
 		asset_converter::MockAssetConverter,
 		broadcaster::MockBroadcaster,
 		ccm_handler::MockCcmHandler,
@@ -26,7 +26,7 @@ use cf_traits::{
 		lp_balance::MockBalance,
 		swap_deposit_handler::MockSwapDepositHandler,
 	},
-	DepositApi, DepositHandler, NetworkEnvironmentProvider,
+	DepositApi, NetworkEnvironmentProvider, OnDeposit,
 };
 use frame_support::{derive_impl, traits::UnfilteredDispatchable};
 use frame_system as system;
@@ -74,10 +74,10 @@ impl_mock_chainflip!(Test);
 impl_mock_callback!(RuntimeOrigin);
 
 pub struct MockDepositHandler;
-impl DepositHandler<Ethereum> for MockDepositHandler {}
+impl OnDeposit<Ethereum> for MockDepositHandler {}
 
 pub type MockEgressBroadcaster =
-	MockBroadcaster<(MockEthereumApiCall<MockEthEnvironment>, RuntimeCall)>;
+	MockBroadcaster<(MockEthereumApiCall<MockEvmEnvironment>, RuntimeCall)>;
 
 pub struct MockAddressDerivation;
 
@@ -117,7 +117,7 @@ impl crate::Config for Test {
 	type LpBalance = MockBalance;
 	type SwapDepositHandler =
 		MockSwapDepositHandler<(Ethereum, pallet_cf_ingress_egress::Pallet<Self>)>;
-	type ChainApiCall = MockEthereumApiCall<MockEthEnvironment>;
+	type ChainApiCall = MockEthereumApiCall<MockEvmEnvironment>;
 	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;
 	type CcmHandler = MockCcmHandler;

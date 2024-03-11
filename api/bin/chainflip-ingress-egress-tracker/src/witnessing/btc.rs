@@ -9,7 +9,7 @@ use chainflip_engine::{
 		StateChainClient,
 	},
 	witness::{
-		btc::{btc_source::BtcSource, process_egress},
+		btc::{process_egress, source::BtcSource},
 		common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder},
 	},
 };

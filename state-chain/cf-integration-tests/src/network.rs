@@ -18,8 +18,9 @@ use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 use sp_consensus_aura::SlotDuration;
 use sp_std::collections::btree_set::BTreeSet;
 use state_chain_runtime::{
-	AccountRoles, AllPalletsWithSystem, BitcoinInstance, LiquidityProvider, PalletExecutionOrder,
-	PolkadotInstance, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Validator, Weight,
+	AccountRoles, AllPalletsWithSystem, ArbitrumInstance, BitcoinInstance, LiquidityProvider,
+	PalletExecutionOrder, PolkadotInstance, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin,
+	Validator, Weight,
 };
 use std::{
 	cell::RefCell,
@@ -255,6 +256,16 @@ impl Engine {
 							pallet_cf_governance::RawOrigin::GovernanceApproval.into()
 						);
 					}
+					RuntimeEvent::ArbitrumVault(pallet_cf_vaults::Event::<_, ArbitrumInstance>::AwaitingGovernanceActivation { .. }) => {
+						queue_dispatch_extrinsic(
+							RuntimeCall::Environment(
+								pallet_cf_environment::Call::witness_initialize_arbitrum_vault {
+									block_number: 1,
+								},
+							),
+							pallet_cf_governance::RawOrigin::GovernanceApproval.into()
+						);
+					}
 				};
 			}
 
@@ -262,7 +273,7 @@ impl Engine {
 
 			for event in cfe_events {
 				match event {
-					CfeEvent::EthThresholdSignatureRequest(ThresholdSignatureRequest {
+					CfeEvent::EvmThresholdSignatureRequest(ThresholdSignatureRequest {
 						ceremony_id,
 						key,
 						signatories,
@@ -271,7 +282,7 @@ impl Engine {
 					}) =>
 						if signatories.contains(&self.node_id) {
 							queue_dispatch_extrinsic(
-								RuntimeCall::EthereumThresholdSigner(
+								RuntimeCall::EvmThresholdSigner(
 									pallet_cf_threshold_signature::Call::signature_success {
 										ceremony_id: *ceremony_id,
 										signature: self
@@ -339,10 +350,10 @@ impl Engine {
 								RuntimeOrigin::none(),
 							);
 						},
-					CfeEvent::EthKeygenRequest(req) =>
+					CfeEvent::EvmKeygenRequest(req) =>
 						if req.participants.contains(&self.node_id) {
 							queue_dispatch_extrinsic(
-								RuntimeCall::EthereumThresholdSigner(
+								RuntimeCall::EvmThresholdSigner(
 									pallet_cf_threshold_signature::Call::report_keygen_outcome {
 										ceremony_id: req.ceremony_id,
 										reported_outcome: Ok(self
@@ -478,7 +489,7 @@ pub fn dispatch_all_pending_extrinsics() {
 	PENDING_EXTRINSICS.with_borrow_mut(|v| {
 		v.drain(..).for_each(|(call, origin)| {
 			let expect_ok = match call {
-				RuntimeCall::EthereumThresholdSigner(..) |
+				RuntimeCall::EvmThresholdSigner(..) |
 				RuntimeCall::PolkadotThresholdSigner(..) |
 				RuntimeCall::BitcoinThresholdSigner(..) |
 				RuntimeCall::Environment(..) => {

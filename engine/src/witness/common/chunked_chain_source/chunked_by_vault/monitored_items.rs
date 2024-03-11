@@ -1,10 +1,9 @@
 use std::sync::Arc;
 
-use cf_chains::ChainState;
+use cf_chains::{instances::ChainInstanceFor, ChainState};
 use frame_support::CloneNoBound;
 use futures::Future;
 use futures_util::{stream, StreamExt};
-use state_chain_runtime::PalletInstanceAlias;
 use tokio::sync::watch;
 use utilities::{
 	loop_select,
@@ -85,7 +84,7 @@ where
 			state_chain_client
 				.storage_value::<pallet_cf_chain_tracking::CurrentChainState<
 					state_chain_runtime::Runtime,
-					<Inner::Chain as PalletInstanceAlias>::Instance,
+					ChainInstanceFor<Inner::Chain>,
 				>>(block_hash)
 				.await
 				.expect(STATE_CHAIN_CONNECTION)
@@ -168,7 +167,7 @@ where
 				struct State<Inner: ChunkedByVault, MonitoredItems, ItemFilter>
 				where
 					state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-					MonitoredItems: Send + Sync + 'static,
+										MonitoredItems: Send + Sync + 'static,
 					ItemFilter: Fn(Inner::Index, &MonitoredItems) -> MonitoredItems
 						+ Send
 						+ Sync
@@ -185,7 +184,7 @@ where
 				impl<Inner: ChunkedByVault, MonitoredItems, ItemFilter> State<Inner, MonitoredItems, ItemFilter>
 				where
 					state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-					MonitoredItems: Send + Sync + 'static,
+										MonitoredItems: Send + Sync + 'static,
 					ItemFilter: Fn(Inner::Index, &MonitoredItems) -> MonitoredItems
 						+ Send
 						+ Sync
