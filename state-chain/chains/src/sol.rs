@@ -857,10 +857,11 @@ mod tests {
 		assert_eq!(serialized_tx, expected_serialized_tx);
 	}
 
-	// TODO: We can have multiple transfer instructions in a single transaction. However, we need to
-	// check that there is no way to DoS us. I'm not sure if a transfer to the BPF bootloader for
-	// instance works. Using the web3 js I get an error that the account is read-only. However, it
-	// could be that it's the SDK setting that address as not mutable.
+	// While having a batch transfer is possible, lamport transfers to executable accounts will fail causing
+	// the whole batch (multiple instructions) to fail. For tokens, while the derived ata can't really
+	// be something else than the derived ata, it can be initiated wrongly or corrupted after creation, in
+	// which case the transfer will fail.  Therefore, to aim to have a batch transfer we must be able to
+	// resign them separately if they happen to fail
 	#[test]
 	fn create_nonced_transfer_token() {
 		let durable_nonce = Hash::from_str("A6hMhp72reGMkS5kNBaxaEXgNqn9H6woLsjy2Apz38MQ").unwrap();
