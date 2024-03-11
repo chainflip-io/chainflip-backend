@@ -1,5 +1,5 @@
 import Web3 from 'web3';
-import { Chain } from '@chainflip-io/cli/.';
+import { Chain } from '@chainflip/cli/.';
 import { signAndSendTxEvm } from './send_evm';
 import { amountToFineAmount, getEvmEndpoint } from './utils';
 import { getErc20abi } from './contract_interfaces';

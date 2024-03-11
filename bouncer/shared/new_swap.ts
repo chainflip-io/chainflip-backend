@@ -1,11 +1,12 @@
-import { Asset /* , broker */ } from '@chainflip-io/cli';
+import { Asset  /*, broker */ } from '@chainflip/cli';
 import { Keyring } from '@polkadot/api';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { Mutex } from 'async-mutex';
 import {
-  chainShortNameFromAsset,
   decodeDotAddressForContract,
-  /* chainFromAsset, */ getChainflipApi,
+  getChainflipApi,
+  /* chainFromAsset, */
+  shortChainFomAsset,
 } from './utils';
 
 const defaultCommissionBps = 100; // 1%
@@ -55,7 +56,7 @@ export async function newSwap(
   const brokerUri = process.env.BROKER_URI ?? '//BROKER_1';
   const broker = keyring.createFromUri(brokerUri);
 
-  const dstChain = chainShortNameFromAsset(destAsset);
+  const dstChain = shortChainFomAsset(destAsset);
 
   await mutex.runExclusive(async () => {
     await chainflip.tx.swapping

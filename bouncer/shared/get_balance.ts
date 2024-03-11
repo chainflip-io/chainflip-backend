@@ -1,4 +1,4 @@
-import { Asset } from '@chainflip-io/cli';
+import { Asset } from '@chainflip/cli';
 import { getContractAddress } from './utils';
 import { getBtcBalance } from './get_btc_balance';
 import { getDotBalance } from './get_dot_balance';

@@ -1,5 +1,4 @@
 import { Transaction, PublicKey } from '@solana/web3.js';
-import { assetDecimals } from '@chainflip-io/cli';
 import {
   createAssociatedTokenAccountIdempotentInstruction,
   createTransferInstruction,
@@ -7,6 +6,7 @@ import {
 } from '@solana/spl-token';
 import {
   amountToFineAmount,
+  assetDecimals,
   getContractAddress,
   getEncodedSolAddress,
   getSolWhaleKeyPair,
@@ -21,7 +21,7 @@ export async function sendSolUsdc(solAddress: string, usdcAmount: string, log = 
   const encodedSolAddress = new PublicKey(getEncodedSolAddress(solAddress));
   const receiverAta = getAssociatedTokenAddressSync(usdcMintPubKey, encodedSolAddress, true);
 
-  const usdcFineAmount = amountToFineAmount(usdcAmount, assetDecimals.SOLUSDC);
+  const usdcFineAmount = amountToFineAmount(usdcAmount, assetDecimals("SOLUSDC"));
 
   const transaction = new Transaction().add(
     createAssociatedTokenAccountIdempotentInstruction(

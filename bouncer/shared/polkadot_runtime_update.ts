@@ -4,13 +4,14 @@ import assert from 'assert';
 import { execSync } from 'child_process';
 
 import { blake2AsU8a } from '@polkadot/util-crypto';
-import { Asset, Assets, assetDecimals } from '@chainflip-io/cli';
+import { Asset, Assets } from '@chainflip/cli';
 import {
   getPolkadotApi,
   observeEvent,
   amountToFineAmount,
   sleep,
   observeBadEvents,
+  assetDecimals,
 } from '../shared/utils';
 import { specVersion, getNetworkRuntimeVersion } from './utils/spec_version';
 import { handleDispatchError, submitAndGetEvent } from '../shared/polkadot_utils';
@@ -72,7 +73,7 @@ export async function pushPolkadotRuntimeUpdate(wasmPath: string): Promise<void>
 
   // Submit the proposal
   const observeDemocracyStarted = observeEvent('democracy:Started', polkadot);
-  const amount = amountToFineAmount(PROPOSAL_AMOUNT, assetDecimals.DOT);
+  const amount = amountToFineAmount(PROPOSAL_AMOUNT, assetDecimals('DOT'));
   console.log(`Submitting proposal with amount: ${PROPOSAL_AMOUNT}`);
   const democracyStartedEvent = await submitAndGetEvent(
     polkadot.tx.democracy.propose({ Legacy: preimageHash }, amount),

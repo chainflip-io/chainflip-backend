@@ -2,13 +2,12 @@
 import assert from 'assert';
 import { randomBytes } from 'crypto';
 import Keyring from '@polkadot/keyring';
-import { Asset, Assets, assetDecimals } from '@chainflip-io/cli';
+import { Asset, Assets } from '@chainflip/cli';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import {
   EgressId,
   amountToFineAmount,
   brokerMutex,
-  chainShortNameFromAsset,
   decodeDotAddressForContract,
   getChainflipApi,
   handleSubstrateError,
@@ -16,6 +15,8 @@ import {
   observeBalanceIncrease,
   observeEvent,
   runWithTimeout,
+  shortChainFomAsset,
+  assetDecimals,
 } from '../shared/utils';
 import { getBalance } from '../shared/get_balance';
 import { performSwap } from '../shared/perform_swap';
@@ -76,7 +77,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   const destinationAddress = await newAddress(swapAsset, seed ?? randomBytes(32).toString('hex'));
   const observeDestinationAddress =
     asset === Assets.DOT ? decodeDotAddressForContract(destinationAddress) : destinationAddress;
-  const destinationChain = chainShortNameFromAsset(swapAsset); // "ETH" -> "Eth"
+  const destinationChain = shortChainFomAsset(swapAsset); // "ETH" -> "Eth"
   console.log(`${asset} destinationAddress:`, destinationAddress);
   const observeSwapScheduledEvent = observeEvent(
     ':SwapScheduled',
@@ -106,7 +107,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   // Check that the deposit amount is correct after deducting the deposit fee
   const depositAmount = BigInt(swapScheduledEvent.data.depositAmount.replaceAll(',', ''));
   const testSwapAmount = BigInt(
-    amountToFineAmount(swapAssetAmount[asset].toString(), assetDecimals[asset]),
+    amountToFineAmount(swapAssetAmount[asset].toString(), assetDecimals(asset)),
   );
   const minExpectedDepositAmount = testSwapAmount - maxDepositFee[asset];
   console.log('depositAmount:', depositAmount);
@@ -144,7 +145,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   const withdrawalAddress = await newAddress(asset, seed ?? randomBytes(32).toString('hex'));
   const observeWithdrawalAddress =
     asset === Assets.DOT ? decodeDotAddressForContract(withdrawalAddress) : withdrawalAddress;
-  const chain = chainShortNameFromAsset(asset);
+  const chain = shortChainFomAsset(asset);
   console.log(`${chain} withdrawalAddress:`, withdrawalAddress);
   const balanceBeforeWithdrawal = await getBalance(asset, withdrawalAddress);
   console.log(
@@ -184,10 +185,10 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   const balanceAfterWithdrawal = await getBalance(asset, withdrawalAddress);
   console.log(`${asset} Balance after withdrawal:`, balanceAfterWithdrawal);
   const balanceAfterWithdrawalBigInt = BigInt(
-    amountToFineAmount(balanceAfterWithdrawal, assetDecimals[asset]),
+    amountToFineAmount(balanceAfterWithdrawal, assetDecimals(asset)),
   );
   const balanceBeforeWithdrawalBigInt = BigInt(
-    amountToFineAmount(balanceBeforeWithdrawal, assetDecimals[asset]),
+    amountToFineAmount(balanceBeforeWithdrawal, assetDecimals(asset)),
   );
   const detectWithdrawalGasFee =
     balanceBeforeWithdrawalBigInt + earnedBrokerFeesAfter - balanceAfterWithdrawalBigInt;

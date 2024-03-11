@@ -1,6 +1,6 @@
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { Asset, chainContractIds, assetDecimals } from '@chainflip-io/cli';
+import { Asset } from '@chainflip/cli';
 import {
   observeEvent,
   newAddress,
@@ -8,18 +8,20 @@ import {
   decodeDotAddressForContract,
   handleSubstrateError,
   lpMutex,
-  assetToChain,
+  shortChainFomAsset,
   amountToFineAmount,
   isWithinOnePercent,
   chainFromAsset,
   decodeSolAddress,
+  chainContractId,
+  assetDecimals,
 } from '../shared/utils';
 import { send } from '../shared/send';
 
 export async function provideLiquidity(ccy: Asset, amount: number, waitForFinalization = false) {
   const chainflip = await getChainflipApi();
   await cryptoWaitReady();
-  const chain = assetToChain(ccy);
+  const chain = shortChainFomAsset(ccy);
 
   const keyring = new Keyring({ type: 'sr25519' });
   const lpUri = process.env.LP_URI || '//LP_1';
@@ -30,7 +32,7 @@ export async function provideLiquidity(ccy: Asset, amount: number, waitForFinali
     (
       await chainflip.query.liquidityProvider.liquidityRefundAddress(
         lp.address,
-        chainContractIds[chainFromAsset(ccy)],
+        chainContractId(chainFromAsset(ccy)),
       )
     ).toJSON() === null
   ) {
@@ -72,7 +74,7 @@ export async function provideLiquidity(ccy: Asset, amount: number, waitForFinali
       event.data.asset.toUpperCase() === ccy &&
       isWithinOnePercent(
         BigInt(event.data.amountCredited.replace(/,/g, '')),
-        BigInt(amountToFineAmount(String(amount), assetDecimals[ccy])),
+        BigInt(amountToFineAmount(String(amount), assetDecimals(ccy))),
       ),
     undefined,
     waitForFinalization,

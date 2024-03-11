@@ -1,5 +1,5 @@
 import Web3 from 'web3';
-import { Asset, assetDecimals } from '@chainflip-io/cli';
+import { Asset } from '@chainflip/cli';
 import { sendDot } from './send_dot';
 import { sendBtc } from './send_btc';
 import { sendErc20 } from './send_erc20';
@@ -10,6 +10,7 @@ import {
   amountToFineAmount,
   chainFromAsset,
   getEvmEndpoint,
+  assetDecimals,
 } from './utils';
 import { approveErc20 } from './approve_erc20';
 import { getCFTesterAbi } from './contract_interfaces';
@@ -90,7 +91,7 @@ export async function sendViaCfTester(asset: Asset, toAddress: string, amount?: 
   switch (asset) {
     case 'ETH':
       txData = cfTesterContract.methods.transferEth(toAddress).encodeABI();
-      value = amountToFineAmount(amount ?? defaultAssetAmounts(asset), assetDecimals[asset]);
+      value = amountToFineAmount(amount ?? defaultAssetAmounts(asset), assetDecimals(asset));
       break;
     case 'USDC':
     case 'FLIP': {
@@ -99,7 +100,7 @@ export async function sendViaCfTester(asset: Asset, toAddress: string, amount?: 
         .transferToken(
           toAddress,
           getContractAddress(chain, asset),
-          amountToFineAmount(amount ?? defaultAssetAmounts(asset), assetDecimals[asset]),
+          amountToFineAmount(amount ?? defaultAssetAmounts(asset), assetDecimals(asset)),
         )
         .encodeABI();
       break;
