@@ -359,6 +359,7 @@ export async function testGasLimitCcmSwaps() {
   const gasLimitSwapsDefault = [
     testGasLimitSwap('DOT', 'FLIP', undefined, getRandomGasConsumption('Ethereum')),
     testGasLimitSwap('ETH', 'USDC', undefined, getRandomGasConsumption('Ethereum')),
+    testGasLimitSwap('ETH', 'USDT', undefined, getRandomGasConsumption('Ethereum')),
     testGasLimitSwap('FLIP', 'ETH', undefined, getRandomGasConsumption('Ethereum')),
     testGasLimitSwap('BTC', 'ETH', undefined, getRandomGasConsumption('Ethereum')),
     testGasLimitSwap('DOT', 'ARBETH', undefined, getRandomGasConsumption('Arbitrum')),
@@ -372,6 +373,7 @@ export async function testGasLimitCcmSwaps() {
     testGasLimitSwap('DOT', 'FLIP', ' sufBudget', undefined, 750),
     testGasLimitSwap('ETH', 'USDC', ' sufBudget', undefined, 7500),
     testGasLimitSwap('FLIP', 'ETH', ' sufBudget', undefined, 5000),
+    testGasLimitSwap('ETH', 'USDT', ' sufBudget', undefined, 7500),
     testGasLimitSwap('BTC', 'ETH', ' sufBudget', undefined, 750),
     testGasLimitSwap('DOT', 'ARBUSDC', ' sufBudget', undefined, 100),
     testGasLimitSwap('ETH', 'ARBUSDC', ' sufBudget', undefined, 2000),
@@ -385,6 +387,7 @@ export async function testGasLimitCcmSwaps() {
   const gasLimitSwapsInsufBudget = [
     testGasLimitSwap('DOT', 'FLIP', ' insufBudget', undefined, 10 ** 4),
     testGasLimitSwap('ETH', 'USDC', ' insufBudget', undefined, 10 ** 5),
+    testGasLimitSwap('ETH', 'USDT', ' insufBudget', undefined, 10 ** 5),
     testGasLimitSwap('FLIP', 'ETH', ' insufBudget', undefined, 10 ** 5),
     testGasLimitSwap('BTC', 'ETH', ' insufBudget', undefined, 10 ** 4),
     testGasLimitSwap('DOT', 'ARBETH', ' insufBudget', undefined, 10 ** 3),
@@ -400,6 +403,7 @@ export async function testGasLimitCcmSwaps() {
   const gasLimitSwapsNoBudget = [
     testGasLimitSwap('DOT', 'FLIP', ' noBudget', undefined, 10 ** 6),
     testGasLimitSwap('ETH', 'USDC', ' noBudget', undefined, 10 ** 8),
+    testGasLimitSwap('ETH', 'USDT', ' noBudget', undefined, 10 ** 8),
     testGasLimitSwap('FLIP', 'ETH', ' noBudget', undefined, 10 ** 6),
     testGasLimitSwap('BTC', 'ETH', ' noBudget', undefined, 10 ** 5),
     testGasLimitSwap('DOT', 'ARBUSDC', ' noBudget', undefined, 10 ** 6),

@@ -386,6 +386,7 @@ pub mod pallet {
 	pub struct GenesisConfig<T> {
 		pub flip_token_address: EvmAddress,
 		pub eth_usdc_address: EvmAddress,
+		pub eth_usdt_address: EvmAddress,
 		pub state_chain_gateway_address: EvmAddress,
 		pub eth_key_manager_address: EvmAddress,
 		pub eth_vault_address: EvmAddress,
@@ -414,6 +415,7 @@ pub mod pallet {
 			EthereumChainId::<T>::set(self.ethereum_chain_id);
 			EthereumSupportedAssets::<T>::insert(EthAsset::Flip, self.flip_token_address);
 			EthereumSupportedAssets::<T>::insert(EthAsset::Usdc, self.eth_usdc_address);
+			EthereumSupportedAssets::<T>::insert(EthAsset::Usdt, self.eth_usdt_address);
 
 			PolkadotGenesisHash::<T>::set(self.polkadot_genesis_hash);
 			PolkadotVaultAccountId::<T>::set(self.polkadot_vault_account_id);

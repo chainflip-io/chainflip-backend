@@ -15,8 +15,8 @@ import { BtcAddressType, btcAddressTypes } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import {
   performSwapViaContract,
-  approveTokenVault,
   ContractSwapParams,
+  approveTokenVault,
 } from '../shared/contract_swap';
 
 enum SolidityType {
@@ -186,7 +186,7 @@ export async function testAllSwaps() {
 
   console.log('=== Testing all swaps ===');
 
-  // TODO: To update this once SDK supports Arbitrum
+  // Doing effectively infinite approvals to make sure it doesn't fail.
   await approveTokenVault(
     'USDC',
     (

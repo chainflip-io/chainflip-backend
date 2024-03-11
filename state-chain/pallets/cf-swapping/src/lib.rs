@@ -485,12 +485,8 @@ pub mod pallet {
 				Self::validate_destination_address(&destination_address, destination_asset)?;
 
 			if channel_metadata.is_some() {
-				// Currently only Ethereum supports CCM.
-				ensure!(
-					ForeignChain::Ethereum == destination_asset.into() ||
-						ForeignChain::Arbitrum == destination_asset.into(),
-					Error::<T>::CcmUnsupportedForTargetChain
-				);
+				let destination_chain: ForeignChain = destination_asset.into();
+				ensure!(destination_chain.ccm_support(), Error::<T>::CcmUnsupportedForTargetChain);
 			}
 
 			let (channel_id, deposit_address, expiry_height, channel_opening_fee) =
@@ -849,18 +845,11 @@ pub mod pallet {
 			let gas_budget = channel_metadata.gas_budget;
 			let principal_swap_amount = deposit_amount.saturating_sub(gas_budget);
 
-			if ForeignChain::Ethereum != destination_asset.into() &&
-				ForeignChain::Arbitrum != destination_asset.into()
-			{
+			let destination_chain: ForeignChain = destination_asset.into();
+			if !destination_chain.ccm_support() {
 				return Err(CcmFailReason::UnsupportedForTargetChain)
-			} else if deposit_amount < gas_budget {
-				return Err(CcmFailReason::InsufficientDepositAmount)
-			}
-
-			// if the gas asset is different.
 			let output_gas_asset = ForeignChain::from(destination_asset).gas_asset();
 			let other_gas_asset = if source_asset == output_gas_asset || gas_budget.is_zero() {
-				None
 			} else {
 				Some(output_gas_asset)
 			};

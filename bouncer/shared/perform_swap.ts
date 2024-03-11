@@ -8,7 +8,7 @@ import {
   observeBalanceIncrease,
   observeEvent,
   observeCcmReceived,
-  shortChainFomAsset,
+  shortChainFromAsset,
   observeSwapScheduled,
   observeSwapEvents,
   observeBroadcastSuccess,
@@ -51,7 +51,7 @@ export async function requestNewSwap(
     (event) => {
       // Find deposit address for the right swap by looking at destination address:
       const destAddressEvent = encodeDestinationAddress(
-        event.data.destinationAddress[shortChainFomAsset(destAsset)],
+        event.data.destinationAddress[shortChainFromAsset(destAsset)],
         destAsset,
       );
       if (!destAddressEvent) return false;
@@ -77,8 +77,8 @@ export async function requestNewSwap(
 
   const res = (await addressPromise).data;
 
-  const depositAddress = res.depositAddress[shortChainFomAsset(sourceAsset)];
-  const channelDestAddress = res.destinationAddress[shortChainFomAsset(destAsset)];
+  const depositAddress = res.depositAddress[shortChainFromAsset(sourceAsset)];
+  const channelDestAddress = res.destinationAddress[shortChainFromAsset(destAsset)];
   const channelId = Number(res.channelId);
 
   if (log) {
