@@ -8,6 +8,7 @@ pub mod evm_vault_activator;
 mod missed_authorship_slots;
 mod offences;
 mod signer_nomination;
+
 use crate::{
 	impl_transaction_builder_for_evm_chain, AccountId, AccountRoles, ArbitrumChainTracking,
 	ArbitrumIngressEgress, Authorship, BitcoinChainTracking, BitcoinIngressEgress,

@@ -210,5 +210,6 @@ decl_runtime_apis!(
 		fn cf_witness_count(hash: CallHash) -> Option<FailingWitnessValidators>;
 		fn cf_witness_safety_margin(chain: ForeignChain) -> Option<u64>;
 		fn cf_channel_opening_fee(chain: ForeignChain) -> FlipBalance;
+		fn cf_get_events() -> Vec<Vec<u8>>;
 	}
 );

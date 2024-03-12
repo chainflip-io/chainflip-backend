@@ -33,6 +33,7 @@ use cf_chains::{
 use cf_primitives::{BroadcastId, NetworkEnvironment};
 use cf_runtime_upgrade_utilities::VersionedMigration;
 use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi};
+use codec::Encode;
 use core::ops::Range;
 use frame_support::instances::*;
 pub use frame_system::Call as SystemCall;
@@ -1061,7 +1062,6 @@ impl frame_support::traits::OnRuntimeUpgrade for FlipToBurnMigration {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::DispatchError> {
-		use codec::Encode;
 		use frame_support::{migrations::VersionedPostUpgradeData, traits::GetStorageVersion};
 
 		if <pallet_cf_pools::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() == 2
@@ -1640,6 +1640,10 @@ impl_runtime_apis! {
 				ForeignChain::Arbitrum => pallet_cf_ingress_egress::Pallet::<Runtime, ArbitrumInstance>::channel_opening_fee(),
 			}
 		}
+
+		fn cf_get_events() -> Vec<Vec<u8>> {
+			frame_system::Events::<Runtime>::get().into_iter().map(|event_record|event_record.event.encode()).collect::<Vec<_>>()
+		}
 	}
 
 	// END custom runtime APIs
@@ -1759,8 +1763,6 @@ impl_runtime_apis! {
 			_set_id: sp_consensus_grandpa::SetId,
 			authority_id: GrandpaId,
 		) -> Option<sp_consensus_grandpa::OpaqueKeyOwnershipProof> {
-			use codec::Encode;
-
 			Historical::prove((sp_consensus_grandpa::KEY_TYPE, authority_id))
 				.map(|p| p.encode())
 				.map(sp_consensus_grandpa::OpaqueKeyOwnershipProof::new)

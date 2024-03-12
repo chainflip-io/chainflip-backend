@@ -1,0 +1,30 @@
+---
+source: state-chain/custom-rpc/src/type_decoder.rs
+expression: value
+---
+{
+  "name": "Inner",
+  "values": [
+    {
+      "name": "ForeignChain",
+      "values": {
+        "eth": {
+          "name": "Ethereum",
+          "values": []
+        },
+        "dot": {
+          "name": "Polkadot",
+          "values": []
+        },
+        "btc": {
+          "name": "Bitcoin",
+          "values": []
+        },
+        "arb": {
+          "name": "Arbitrum",
+          "values": []
+        }
+      }
+    }
+  ]
+}
