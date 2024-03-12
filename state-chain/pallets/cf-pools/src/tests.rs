@@ -6,7 +6,7 @@ use crate::{
 };
 use cf_amm::common::{price_at_tick, tick_at_price, Side, Tick, PRICE_FRACTIONAL_BITS};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount, SwapOutput};
-use cf_test_utilities::{assert_events_match, assert_has_event, last_event};
+use cf_test_utilities::{assert_events_match, last_event};
 use cf_traits::{AssetConverter, SwappingApi};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use frame_system::pallet_prelude::BlockNumberFor;
