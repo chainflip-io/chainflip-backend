@@ -570,7 +570,6 @@ assets!(
 				json: "USDT",
 				gas: false,
 				index: 8,
-				legacy_encoding,
 			},
 		],
 	},
