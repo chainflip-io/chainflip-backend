@@ -23,7 +23,7 @@ use cf_traits::{
 		fee_payment::MockFeePayment,
 		lp_balance::MockBalance,
 	},
-	DepositHandler, NetworkEnvironmentProvider, SwapDepositHandler,
+	NetworkEnvironmentProvider, OnDeposit, SwapDepositHandler,
 };
 use frame_support::{derive_impl, traits::UnfilteredDispatchable};
 use sp_core::H256;
@@ -70,7 +70,7 @@ impl_mock_chainflip!(Test);
 impl_mock_callback!(RuntimeOrigin);
 
 pub struct MockDepositHandler;
-impl DepositHandler<Bitcoin> for MockDepositHandler {}
+impl OnDeposit<Bitcoin> for MockDepositHandler {}
 
 pub struct MockSwapDepositHandlerBtc;
 impl SwapDepositHandler for MockSwapDepositHandlerBtc {

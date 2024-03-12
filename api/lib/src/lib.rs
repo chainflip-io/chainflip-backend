@@ -304,6 +304,7 @@ pub struct SwapDepositAddress {
 	pub issued_block: state_chain_runtime::BlockNumber,
 	pub channel_id: ChannelId,
 	pub source_chain_expiry_block: <AnyChain as cf_chains::Chain>::ChainBlockNumber,
+	pub channel_opening_fee: u128,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -366,6 +367,7 @@ pub trait BrokerApi: SignedExtrinsicApi {
 				deposit_address,
 				channel_id,
 				source_chain_expiry_block,
+				channel_opening_fee,
 				..
 			},
 		)) = events.iter().find(|event| {
@@ -381,6 +383,7 @@ pub trait BrokerApi: SignedExtrinsicApi {
 				issued_block: header.number,
 				channel_id: *channel_id,
 				source_chain_expiry_block: *source_chain_expiry_block,
+				channel_opening_fee: *channel_opening_fee,
 			})
 		} else {
 			bail!("No SwapDepositAddressReady event was found");
@@ -438,6 +441,7 @@ pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result
 		ForeignChain::Polkadot =>
 			EncodedAddress::Dot(PolkadotAccountId::from_str(address).map(|id| *id.aliased_ref())?),
 		ForeignChain::Bitcoin => EncodedAddress::Btc(address.as_bytes().to_vec()),
+		ForeignChain::Arbitrum => EncodedAddress::Arb(clean_hex_address(address)?),
 	})
 }
 

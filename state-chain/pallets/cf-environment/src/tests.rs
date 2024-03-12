@@ -1,5 +1,7 @@
 #![cfg(test)]
-use cf_chains::btc::{api::UtxoSelectionType, deposit_address::DepositAddress, Utxo};
+use cf_chains::btc::{
+	api::UtxoSelectionType, deposit_address::DepositAddress, utxo_selection, Utxo,
+};
 use cf_traits::SafeMode;
 use frame_support::{assert_ok, traits::OriginTrait};
 
@@ -11,8 +13,10 @@ use crate::mock::*;
 fn genesis_config() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(STATE_CHAIN_GATEWAY_ADDRESS, Environment::state_chain_gateway_address());
-		assert_eq!(KEY_MANAGER_ADDRESS, Environment::key_manager_address());
+		assert_eq!(ETH_KEY_MANAGER_ADDRESS, Environment::key_manager_address());
+		assert_eq!(ARB_KEY_MANAGER_ADDRESS, Environment::arb_key_manager_address());
 		assert_eq!(ETH_CHAIN_ID, Environment::ethereum_chain_id());
+		assert_eq!(ARB_CHAIN_ID, Environment::arbitrum_chain_id());
 	});
 }
 
@@ -80,7 +84,7 @@ fn test_btc_utxo_selection() {
 		assert_eq!(
 			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectAllForRotation)
 				.unwrap(),
-			(vec![utxo(5000000, 3), utxo(100000, 2), utxo(EXPECTED_CHANGE_AMOUNT, 0),], 5121870)
+			(vec![utxo(100000, 2), utxo(5000000, 3), utxo(EXPECTED_CHANGE_AMOUNT, 0)], 5121870)
 		);
 
 		// add some more utxos to the list
@@ -115,7 +119,7 @@ fn test_btc_utxo_consolidation() {
 		// Reduce consolidation parameters to make testing easier
 		assert_ok!(Environment::update_consolidation_parameters(
 			OriginTrait::root(),
-			cf_chains::btc::ConsolidationParameters {
+			utxo_selection::ConsolidationParameters {
 				consolidation_threshold: 2,
 				consolidation_size: 2,
 			}
@@ -169,19 +173,21 @@ fn test_btc_utxo_consolidation() {
 #[test]
 fn updating_consolidation_parameters() {
 	new_test_ext().execute_with(|| {
+		let valid_param = utxo_selection::ConsolidationParameters {
+			consolidation_threshold: 2,
+			consolidation_size: 2,
+		};
 		// Should work with valid parameters
-		assert_ok!(Environment::update_consolidation_parameters(
-			OriginTrait::root(),
-			cf_chains::btc::ConsolidationParameters {
-				consolidation_threshold: 2,
-				consolidation_size: 2,
-			}
+		assert_ok!(Environment::update_consolidation_parameters(OriginTrait::root(), valid_param,));
+
+		System::assert_last_event(RuntimeEvent::Environment(
+			crate::Event::<Test>::UtxoConsolidationParametersUpdated { params: valid_param },
 		));
 
 		// Should fail with invalid parameters
 		assert!(Environment::update_consolidation_parameters(
 			OriginTrait::root(),
-			cf_chains::btc::ConsolidationParameters {
+			utxo_selection::ConsolidationParameters {
 				consolidation_threshold: 1,
 				consolidation_size: 2,
 			}

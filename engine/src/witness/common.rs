@@ -2,10 +2,12 @@ pub mod chain_source;
 pub mod chunked_chain_source;
 pub mod epoch_source;
 
-use cf_chains::Chain;
+use cf_chains::{
+	instances::{ChainInstanceAlias, ChainInstanceFor, CryptoInstanceFor},
+	Chain,
+};
 use futures_core::{stream::BoxStream, Future, Stream};
 use futures_util::{stream, StreamExt};
-use state_chain_runtime::PalletInstanceAlias;
 
 use chain_source::ChainSource;
 
@@ -53,62 +55,45 @@ pub type BoxActiveAndFuture<'a, T> =
 	ActiveAndFuture<Box<dyn Iterator<Item = T> + Send + 'a>, BoxStream<'a, T>>;
 
 pub trait RuntimeHasChain<TChain: ExternalChain>:
-	pallet_cf_vaults::Config<<TChain as PalletInstanceAlias>::Instance, Chain = TChain>
+	pallet_cf_vaults::Config<ChainInstanceFor<TChain>, Chain = TChain>
 	+ pallet_cf_threshold_signature::Config<
-		<TChain as PalletInstanceAlias>::Instance,
+		CryptoInstanceFor<TChain>,
 		TargetChainCrypto = TChain::ChainCrypto,
-	> + pallet_cf_chain_tracking::Config<
-		<TChain as PalletInstanceAlias>::Instance,
-		TargetChain = TChain,
-	> + pallet_cf_ingress_egress::Config<
-		<TChain as PalletInstanceAlias>::Instance,
-		TargetChain = TChain,
-	> + pallet_cf_broadcast::Config<<TChain as PalletInstanceAlias>::Instance, TargetChain = TChain>
+	> + pallet_cf_chain_tracking::Config<ChainInstanceFor<TChain>, TargetChain = TChain>
+	+ pallet_cf_ingress_egress::Config<ChainInstanceFor<TChain>, TargetChain = TChain>
+	+ pallet_cf_broadcast::Config<ChainInstanceFor<TChain>, TargetChain = TChain>
 {
 }
 impl<TChain: ExternalChain> RuntimeHasChain<TChain> for state_chain_runtime::Runtime where
-	Self: pallet_cf_vaults::Config<<TChain as PalletInstanceAlias>::Instance, Chain = TChain>
+	Self: pallet_cf_vaults::Config<ChainInstanceFor<TChain>, Chain = TChain>
 		+ pallet_cf_threshold_signature::Config<
-			<TChain as PalletInstanceAlias>::Instance,
+			CryptoInstanceFor<TChain>,
 			TargetChainCrypto = TChain::ChainCrypto,
-		> + pallet_cf_chain_tracking::Config<
-			<TChain as PalletInstanceAlias>::Instance,
-			TargetChain = TChain,
-		> + pallet_cf_ingress_egress::Config<
-			<TChain as PalletInstanceAlias>::Instance,
-			TargetChain = TChain,
-		> + pallet_cf_broadcast::Config<<TChain as PalletInstanceAlias>::Instance, TargetChain = TChain>
+		> + pallet_cf_chain_tracking::Config<ChainInstanceFor<TChain>, TargetChain = TChain>
+		+ pallet_cf_ingress_egress::Config<ChainInstanceFor<TChain>, TargetChain = TChain>
+		+ pallet_cf_broadcast::Config<ChainInstanceFor<TChain>, TargetChain = TChain>
 {
 }
 
 pub trait RuntimeCallHasChain<Runtime: RuntimeHasChain<TChain>, TChain: ExternalChain>:
-	std::convert::From<pallet_cf_vaults::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>>
-	+ std::convert::From<
-		pallet_cf_chain_tracking::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
-	> + std::convert::From<
-		pallet_cf_broadcast::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
-	> + std::convert::From<
-		pallet_cf_ingress_egress::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
-	>
+	std::convert::From<pallet_cf_vaults::Call<Runtime, ChainInstanceFor<TChain>>>
+	+ std::convert::From<pallet_cf_chain_tracking::Call<Runtime, ChainInstanceFor<TChain>>>
+	+ std::convert::From<pallet_cf_broadcast::Call<Runtime, ChainInstanceFor<TChain>>>
+	+ std::convert::From<pallet_cf_ingress_egress::Call<Runtime, ChainInstanceFor<TChain>>>
 {
 }
 impl<Runtime: RuntimeHasChain<TChain>, TChain: ExternalChain> RuntimeCallHasChain<Runtime, TChain>
 	for state_chain_runtime::RuntimeCall
 where
-	Self: std::convert::From<
-			pallet_cf_vaults::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
-		> + std::convert::From<
-			pallet_cf_chain_tracking::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
-		> + std::convert::From<
-			pallet_cf_broadcast::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
-		> + std::convert::From<
-			pallet_cf_ingress_egress::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
-		>,
+	Self: std::convert::From<pallet_cf_vaults::Call<Runtime, ChainInstanceFor<TChain>>>
+		+ std::convert::From<pallet_cf_chain_tracking::Call<Runtime, ChainInstanceFor<TChain>>>
+		+ std::convert::From<pallet_cf_broadcast::Call<Runtime, ChainInstanceFor<TChain>>>
+		+ std::convert::From<pallet_cf_ingress_egress::Call<Runtime, ChainInstanceFor<TChain>>>,
 {
 }
 
-pub trait ExternalChain: Chain + PalletInstanceAlias {}
-impl<T: Chain + PalletInstanceAlias> ExternalChain for T {}
+pub trait ExternalChain: Chain + ChainInstanceAlias {}
+impl<T: Chain + ChainInstanceAlias> ExternalChain for T {}
 
 pub trait ExternalChainSource:
 	ChainSource<Index = <Self::Chain as Chain>::ChainBlockNumber>

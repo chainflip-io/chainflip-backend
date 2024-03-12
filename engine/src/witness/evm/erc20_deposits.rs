@@ -1,11 +1,11 @@
 use std::collections::HashSet;
 
+use cf_chains::instances::ChainInstanceFor;
 use cf_primitives::EpochIndex;
 use ethers::types::{Bloom, H160};
 use futures_core::Future;
 use pallet_cf_ingress_egress::DepositWitness;
 use sp_core::{H256, U256};
-use state_chain_runtime::PalletInstanceAlias;
 
 use crate::{
 	eth::retry_rpc::EthersRetryRpcApi,
@@ -59,6 +59,7 @@ define_erc20!(
 	"$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IFLIP.json"
 );
 define_erc20!(usdc, Usdc, UsdcEvents, "$CF_ETH_CONTRACT_ABI_ROOT/IUSDC.json");
+define_erc20!(usdt, Usdt, UsdtEvents, "$CF_ETH_CONTRACT_ABI_ROOT/IUSDT.json");
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub async fn erc20_deposits<ProcessCall, ProcessingFut, EthRetryRpcClient, Events>(
@@ -133,7 +134,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					process_call(
 						pallet_cf_ingress_egress::Call::<
 							_,
-							<Inner::Chain as PalletInstanceAlias>::Instance,
+							ChainInstanceFor<Inner::Chain>,
 						>::process_deposits {
 							deposit_witnesses,
 							block_height: header.index,

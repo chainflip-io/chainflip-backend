@@ -8,7 +8,9 @@ use cf_amm::{
 	PoolState,
 };
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
-use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwappingApi};
+use cf_traits::{
+	impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwapQueueApi, SwapType, SwappingApi,
+};
 use frame_support::{
 	dispatch::GetDispatchInfo,
 	pallet_prelude::*,
@@ -117,7 +119,7 @@ impl<T> AskBidMap<T> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -252,6 +254,8 @@ pub mod pallet {
 		/// Pallet responsible for managing Liquidity Providers.
 		type LpBalance: LpBalanceApi<AccountId = Self::AccountId>;
 
+		type SwapQueueApi: SwapQueueApi;
+
 		#[pallet::constant]
 		type NetworkFee: Get<Permill>;
 
@@ -270,10 +274,6 @@ pub mod pallet {
 	/// All the available pools.
 	#[pallet::storage]
 	pub type Pools<T: Config> = StorageMap<_, Twox64Concat, AssetPair, Pool<T>, OptionQuery>;
-
-	/// FLIP ready to be burned.
-	#[pallet::storage]
-	pub(super) type FlipToBurn<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
 	/// Interval at which we buy FLIP in order to burn it.
 	#[pallet::storage]
@@ -324,14 +324,12 @@ pub mod pallet {
 				{
 					weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 					if let Err(e) = CollectedNetworkFee::<T>::try_mutate(|collected_fee| {
-						let flip_to_burn = Self::swap_single_leg(
+						T::SwapQueueApi::schedule_swap(
 							any::Asset::Usdc,
 							any::Asset::Flip,
 							*collected_fee,
-						)?;
-						FlipToBurn::<T>::mutate(|total| {
-							total.saturating_accrue(flip_to_burn);
-						});
+							SwapType::NetworkFee,
+						);
 						collected_fee.set_zero();
 						Ok::<_, DispatchError>(())
 					}) {
@@ -1047,12 +1045,6 @@ impl<T: Config> PoolApi for Pallet<T> {
 
 	fn sweep(who: &T::AccountId) -> DispatchResult {
 		Self::inner_sweep(who)
-	}
-}
-
-impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
-	fn take_flip_to_burn() -> AssetAmount {
-		FlipToBurn::<T>::take()
 	}
 }
 

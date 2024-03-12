@@ -1,9 +1,12 @@
 use super::StateChainEnvironment;
 pub use super::{
 	common::*,
-	testnet::{BITCOIN_EXPIRY_BLOCKS, ETHEREUM_EXPIRY_BLOCKS, POLKADOT_EXPIRY_BLOCKS},
+	testnet::{
+		ARBITRUM_EXPIRY_BLOCKS, BITCOIN_EXPIRY_BLOCKS, ETHEREUM_EXPIRY_BLOCKS,
+		POLKADOT_EXPIRY_BLOCKS,
+	},
 };
-use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
+use cf_chains::dot::RuntimeVersion;
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use sc_service::ChainType;
 use sp_core::H256;
@@ -13,20 +16,28 @@ pub struct Config;
 pub const NETWORK_NAME: &str = "Chainflip-Sisyphos";
 pub const CHAIN_TYPE: ChainType = ChainType::Live;
 pub const NETWORK_ENVIRONMENT: NetworkEnvironment = NetworkEnvironment::Testnet;
-pub const PROTOCOL_ID: &str = "flip-sisy";
+pub const PROTOCOL_ID: &str = "flip-sisy-2";
+
+pub const GENESIS_FUNDING_AMOUNT: FlipBalance = 1_000 * FLIPPERINOS_PER_FLIP;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
-	flip_token_address: hex_literal::hex!("2BbB561C6eaB74f358cA9e8a961E3A20CAE3D100"),
-	eth_usdc_address: hex_literal::hex!("07865c6e87b9f70255377e024ace6630c1eaa37f"),
-	state_chain_gateway_address: hex_literal::hex!("E8bE4B7F8a38C1913387c9C20B94402bc3Db9F70"),
-	key_manager_address: hex_literal::hex!("Aea44be51d86eA635D51cFB2Fd5EB17Fd2A322BC"),
-	eth_vault_address: hex_literal::hex!("C17CCec5015081EB2DF26d20A9e02c5484C1d641"),
-	eth_address_checker_address: hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512"),
-	ethereum_chain_id: CHAIN_ID_GOERLI,
+	flip_token_address: hex_literal::hex!("cD079EAB6B5443b545788Fd210C8800FEADd87fa"),
+	eth_usdc_address: hex_literal::hex!("5fd84259d66Cd46123540766Be93DFE6D43130D7"),
+	eth_usdt_address: hex_literal::hex!("7169D38820dfd117C3FA1f22a697dBA58d90BA06"),
+	state_chain_gateway_address: hex_literal::hex!("1F7fE41C798cc7b1D34BdC8de2dDDA4a4bE744D9"),
+	eth_key_manager_address: hex_literal::hex!("22f5562e6859924Db082b8B248ea0C974f148a17"),
+	eth_vault_address: hex_literal::hex!("a94d6b1853F3cb611Ed3cCb701b4fdA5a9DACe85"),
+	eth_address_checker_address: hex_literal::hex!("638e16DD15588B81257eBe9676FA1a0175FDB70a"),
+	arb_key_manager_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+	arb_vault_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+	arbusdc_token_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+	arb_address_checker_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+	ethereum_chain_id: cf_chains::eth::CHAIN_ID_SEPOLIA,
+	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_SEPOLIA,
 	eth_init_agg_key: hex_literal::hex!(
-		"025fe47808af34826795b6dc483f95076cbd3779f420ea01d2e12396cdd049e224"
+		"025e790770ed8e79c08d68fa781b2848651f3e94ef8b1305a7fb6de782798735ad"
 	),
-	ethereum_deployment_block: 9572976u64,
+	ethereum_deployment_block: 5429873u64,
 	genesis_funding_amount: GENESIS_FUNDING_AMOUNT,
 	min_funding: MIN_FUNDING,
 	dot_genesis_hash: H256(hex_literal::hex!(
@@ -78,3 +89,4 @@ pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<
 
 pub const BITCOIN_SAFETY_MARGIN: u64 = 5;
 pub const ETHEREUM_SAFETY_MARGIN: u64 = 6;
+pub const ARBITRUM_SAFETY_MARGIN: u64 = 1;

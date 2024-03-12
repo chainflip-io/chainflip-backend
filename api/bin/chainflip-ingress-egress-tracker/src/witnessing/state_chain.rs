@@ -6,7 +6,7 @@ use cf_chains::{
 	address::ToHumanreadableAddress,
 	dot::PolkadotTransactionId,
 	evm::{SchnorrVerificationComponents, H256},
-	AnyChain, Bitcoin, Chain, Ethereum, Polkadot,
+	AnyChain, Arbitrum, Bitcoin, Chain, Ethereum, Polkadot,
 };
 use cf_primitives::{BroadcastId, ForeignChain, NetworkEnvironment};
 use chainflip_engine::state_chain_observer::client::{
@@ -46,6 +46,7 @@ enum TransactionRef {
 	Bitcoin { hash: BitcoinHash },
 	Ethereum { hash: H256 },
 	Polkadot { transaction_id: PolkadotTransactionId },
+	Arbitrum { hash: H256 },
 }
 
 #[derive(Serialize)]
@@ -54,6 +55,7 @@ enum TransactionId {
 	Bitcoin { hash: BitcoinHash },
 	Ethereum { signature: SchnorrVerificationComponents },
 	Polkadot { signature: DotSignature },
+	Arbitrum { signature: SchnorrVerificationComponents },
 }
 
 #[derive(Serialize)]
@@ -82,6 +84,7 @@ impl WitnessInformation {
 				TransactionId::Bitcoin { .. } => ForeignChain::Bitcoin,
 				TransactionId::Ethereum { .. } => ForeignChain::Ethereum,
 				TransactionId::Polkadot { .. } => ForeignChain::Polkadot,
+				TransactionId::Arbitrum { .. } => ForeignChain::Arbitrum,
 			},
 		}
 	}
@@ -144,6 +147,36 @@ impl From<DepositInfo<Polkadot>> for WitnessInformation {
 	}
 }
 
+impl From<DepositInfo<Arbitrum>> for WitnessInformation {
+	fn from((value, height, _): DepositInfo<Arbitrum>) -> Self {
+		Self::Deposit {
+			deposit_chain_block_height: height,
+			deposit_address: hex_encode_bytes(value.deposit_address.as_bytes()),
+			amount: value.amount.into(),
+			asset: value.asset.into(),
+		}
+	}
+}
+
+async fn save_deposit_witnesses<S: Store, C: Chain>(
+	store: &mut S,
+	deposit_witnesses: Vec<DepositWitness<C>>,
+	block_height: <C as Chain>::ChainBlockNumber,
+	chainflip_network: NetworkEnvironment,
+) -> anyhow::Result<()>
+where
+	WitnessInformation:
+		From<(DepositWitness<C>, <C as Chain>::ChainBlockNumber, NetworkEnvironment)>,
+{
+	for witness in deposit_witnesses {
+		store
+			.save_to_array(&WitnessInformation::from((witness, block_height, chainflip_network)))
+			.await?;
+	}
+
+	Ok(())
+}
+
 pub async fn handle_call<S, StateChainClient>(
 	call: state_chain_runtime::RuntimeCall,
 	store: &mut S,
@@ -163,28 +196,14 @@ where
 			deposit_witnesses,
 			block_height,
 		}) =>
-			for witness in deposit_witnesses as Vec<DepositWitness<Ethereum>> {
-				store
-					.save_to_array(&WitnessInformation::from((
-						witness,
-						block_height,
-						chainflip_network,
-					)))
-					.await?;
-			},
+			save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network)
+				.await?,
 		BitcoinIngressEgress(IngressEgressCall::process_deposits {
 			deposit_witnesses,
 			block_height,
 		}) =>
-			for witness in deposit_witnesses as Vec<DepositWitness<Bitcoin>> {
-				store
-					.save_to_array(&WitnessInformation::from((
-						witness,
-						block_height,
-						chainflip_network,
-					)))
-					.await?;
-			},
+			save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network)
+				.await?,
 		PolkadotIngressEgress(IngressEgressCall::process_deposits {
 			deposit_witnesses,
 			block_height,
@@ -198,6 +217,12 @@ where
 					)))
 					.await?;
 			},
+		ArbitrumIngressEgress(IngressEgressCall::process_deposits {
+			deposit_witnesses,
+			block_height,
+		}) =>
+			save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network)
+				.await?,
 		EthereumBroadcaster(BroadcastCall::transaction_succeeded {
 			tx_out_id,
 			transaction_ref,
@@ -257,10 +282,30 @@ where
 					.await?;
 			}
 		},
+		ArbitrumBroadcaster(BroadcastCall::transaction_succeeded {
+			tx_out_id,
+			transaction_ref,
+			..
+		}) => {
+			let broadcast_id =
+				get_broadcast_id::<Arbitrum, StateChainClient>(state_chain_client, &tx_out_id)
+					.await;
+
+			if let Some(broadcast_id) = broadcast_id {
+				store
+					.save_singleton(&WitnessInformation::Broadcast {
+						broadcast_id,
+						tx_out_id: TransactionId::Arbitrum { signature: tx_out_id },
+						tx_ref: TransactionRef::Arbitrum { hash: transaction_ref },
+					})
+					.await?;
+			}
+		},
 
 		EthereumIngressEgress(_) |
 		BitcoinIngressEgress(_) |
 		PolkadotIngressEgress(_) |
+		ArbitrumIngressEgress(_) |
 		System(_) |
 		Timestamp(_) |
 		Environment(_) |
@@ -278,15 +323,18 @@ where
 		EthereumChainTracking(_) |
 		BitcoinChainTracking(_) |
 		PolkadotChainTracking(_) |
+		ArbitrumChainTracking(_) |
 		EthereumVault(_) |
 		PolkadotVault(_) |
 		BitcoinVault(_) |
-		EthereumThresholdSigner(_) |
+		ArbitrumVault(_) |
+		EvmThresholdSigner(_) |
 		PolkadotThresholdSigner(_) |
 		BitcoinThresholdSigner(_) |
 		EthereumBroadcaster(_) |
 		PolkadotBroadcaster(_) |
 		BitcoinBroadcaster(_) |
+		ArbitrumBroadcaster(_) |
 		Swapping(_) |
 		LiquidityProvider(_) |
 		LiquidityPools(_) => {},
@@ -303,6 +351,7 @@ mod tests {
 	use cf_chains::{
 		dot::PolkadotAccountId,
 		evm::{EvmTransactionMetadata, TransactionFee},
+		instances::ChainInstanceFor,
 		Chain,
 	};
 	use cf_primitives::{BroadcastId, NetworkEnvironment};
@@ -318,7 +367,6 @@ mod tests {
 	use mockall::mock;
 	use pallet_cf_ingress_egress::DepositWitness;
 	use sp_core::{storage::StorageKey, H160};
-	use state_chain_runtime::PalletInstanceAlias;
 	use std::collections::HashMap;
 
 	#[derive(Default)]
@@ -421,22 +469,19 @@ mod tests {
 	}
 
 	#[allow(clippy::type_complexity)]
-	fn create_client<I>(
-		result: Option<(
-			BroadcastId,
-			<<state_chain_runtime::Runtime as pallet_cf_broadcast::Config<I::Instance>>::TargetChain as Chain>::ChainBlockNumber,
-		)>,
+	fn create_client<C: Chain>(
+		result: Option<(BroadcastId, C::ChainBlockNumber)>,
 	) -> MockStateChainClient
 	where
-		state_chain_runtime::Runtime: pallet_cf_broadcast::Config<I::Instance>,
-		I: PalletInstanceAlias + 'static,
+		state_chain_runtime::Runtime:
+			pallet_cf_broadcast::Config<ChainInstanceFor<C>, TargetChain = C>,
 	{
 		let mut client = MockStateChainClient::new();
 
 		client
 			.expect_storage_map_entry::<pallet_cf_broadcast::TransactionOutIdToBroadcastId<
 				state_chain_runtime::Runtime,
-				I::Instance,
+				ChainInstanceFor<C>,
 			>>()
 			.return_once(move |_, _| Ok(result));
 

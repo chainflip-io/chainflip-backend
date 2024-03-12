@@ -14,12 +14,10 @@ mod mock_eth;
 mod tests;
 pub mod weights;
 
-use cf_runtime_utilities::log_or_panic;
-use frame_support::{pallet_prelude::OptionQuery, transactional};
-pub use weights::WeightInfo;
-
 use cf_chains::{
-	address::{AddressConverter, AddressDerivationApi, AddressDerivationError},
+	address::{
+		AddressConverter, AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress,
+	},
 	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
 	Chain, ChannelLifecycleHooks, ConsolidateCall, DepositChannel, ExecutexSwapAndCall,
 	FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
@@ -28,20 +26,23 @@ use cf_primitives::{
 	Asset, BasisPoints, BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex, ForeignChain,
 	PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId,
 };
+use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	liquidity::{LpBalanceApi, LpDepositHandler},
 	AdjustedFeeEstimationApi, AssetConverter, Broadcaster, CcmHandler, CcmSwapIds, Chainflip,
-	DepositApi, DepositHandler, EgressApi, EpochInfo, FeePayment, GetBlockHeight,
-	NetworkEnvironmentProvider, ScheduledEgressDetails, SwapDepositHandler,
+	DepositApi, EgressApi, EpochInfo, FeePayment, GetBlockHeight, NetworkEnvironmentProvider,
+	OnDeposit, ScheduledEgressDetails, SwapDepositHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{traits::Zero, DispatchError, Saturating},
+	transactional,
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::{vec, vec::Vec};
+pub use weights::WeightInfo;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct PrewitnessedDeposit<C: Chain> {
@@ -146,7 +147,7 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::{ExecutexSwapAndCall, TransferFallback};
 	use cf_primitives::{BroadcastId, EpochIndex};
-	use cf_traits::LpDepositHandler;
+	use cf_traits::{LpDepositHandler, OnDeposit};
 	use core::marker::PhantomData;
 	use frame_support::{
 		traits::{ConstU128, EnsureOrigin, IsType},
@@ -361,7 +362,7 @@ pub mod pallet {
 		>;
 
 		/// Provides callbacks for deposit lifecycle events.
-		type DepositHandler: DepositHandler<Self::TargetChain>;
+		type DepositHandler: OnDeposit<Self::TargetChain>;
 
 		type NetworkEnvironment: NetworkEnvironmentProvider;
 
@@ -1232,7 +1233,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					..
 				} => DepositAction::Swap {
 					swap_id: T::SwapDepositHandler::schedule_swap_from_channel(
-						deposit_address.clone().into(),
+						<<T::TargetChain as Chain>::ChainAccount as IntoForeignChainAddress<
+							T::TargetChain,
+						>>::into_foreign_chain_address(deposit_address.clone()),
 						block_height.into(),
 						asset.into(),
 						destination_asset,
@@ -1262,7 +1265,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							},
 							SwapOrigin::DepositChannel {
 								deposit_address: T::AddressConverter::to_encoded_address(
-									deposit_address.clone().into(),
+									<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(
+										deposit_address.clone(),
+									),
 								),
 								channel_id,
 								deposit_block_height: block_height.into(),
@@ -1310,8 +1315,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		source_asset: TargetChainAsset<T, I>,
 		action: ChannelAction<T::AccountId>,
 		boost_fee: BasisPoints,
-	) -> Result<(ChannelId, TargetChainAccount<T, I>, TargetChainBlockNumber<T, I>), DispatchError>
-	{
+	) -> Result<
+		(ChannelId, TargetChainAccount<T, I>, TargetChainBlockNumber<T, I>, T::Amount),
+		DispatchError,
+	> {
 		let channel_opening_fee = ChannelOpeningFee::<T, I>::get();
 		T::FeePayment::try_burn_fee(requester, channel_opening_fee)?;
 		Self::deposit_event(Event::<T, I>::ChannelOpeningFeePaid { fee: channel_opening_fee });
@@ -1359,7 +1366,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 		);
 
-		Ok((channel_id, deposit_address, expiry_height))
+		Ok((channel_id, deposit_address, expiry_height, channel_opening_fee))
 	}
 
 	pub fn get_failed_call(broadcast_id: BroadcastId) -> Option<FailedForeignChainCall> {
@@ -1498,23 +1505,30 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 
 impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	type AccountId = T::AccountId;
+	type Amount = T::Amount;
+
 	// This should be callable by the LP pallet.
 	fn request_liquidity_deposit_address(
 		lp_account: T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
 		boost_fee: BasisPoints,
 	) -> Result<
-		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber),
+		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
-		let (channel_id, deposit_address, expiry_block) = Self::open_channel(
+		let (channel_id, deposit_address, expiry_block, channel_opening_fee) = Self::open_channel(
 			&lp_account,
 			source_asset,
 			ChannelAction::LiquidityProvision { lp_account: lp_account.clone() },
 			boost_fee,
 		)?;
 
-		Ok((channel_id, deposit_address.into(), expiry_block))
+		Ok((
+			channel_id,
+			<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(deposit_address),
+			expiry_block,
+			channel_opening_fee,
+		))
 	}
 
 	// This should only be callable by the broker.
@@ -1527,10 +1541,10 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
 	) -> Result<
-		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber),
+		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
-		let (channel_id, deposit_address, expiry_height) = Self::open_channel(
+		let (channel_id, deposit_address, expiry_height, channel_opening_fee) = Self::open_channel(
 			&broker_id,
 			source_asset,
 			match channel_metadata {
@@ -1549,6 +1563,11 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 			boost_fee,
 		)?;
 
-		Ok((channel_id, deposit_address.into(), expiry_height))
+		Ok((
+			channel_id,
+			<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(deposit_address),
+			expiry_height,
+			channel_opening_fee,
+		))
 	}
 }

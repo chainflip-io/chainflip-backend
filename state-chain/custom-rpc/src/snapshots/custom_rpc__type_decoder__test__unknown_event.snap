@@ -1,0 +1,10 @@
+---
+source: state-chain/custom-rpc/src/type_decoder.rs
+expression: value
+---
+{
+  "name": "UnknownType",
+  "values": [
+    "14776861743f"
+  ]
+}

@@ -1,6 +1,6 @@
-mod btc_chain_tracking;
-mod btc_deposits;
-pub mod btc_source;
+mod chain_tracking;
+mod deposits;
+pub mod source;
 
 use crate::{
 	btc::{
@@ -15,11 +15,11 @@ use crate::{
 	},
 };
 use bitcoin::BlockHash;
-use btc_source::BtcSource;
 use cf_chains::btc::{self, deposit_address::DepositAddress, BlockNumber, CHANGE_ADDRESS_SALT};
 use cf_primitives::{EpochIndex, NetworkEnvironment};
 use futures_core::Future;
 use secp256k1::hashes::Hash;
+use source::BtcSource;
 use std::sync::Arc;
 use utilities::task_scope::Scope;
 
@@ -201,7 +201,7 @@ mod tests {
 	use bitcoin::Amount;
 
 	use super::*;
-	use crate::witness::btc::btc_deposits::tests::{fake_transaction, fake_verbose_vouts};
+	use crate::witness::btc::deposits::tests::{fake_transaction, fake_verbose_vouts};
 
 	#[test]
 	fn witnesses_tx_hash_successfully() {

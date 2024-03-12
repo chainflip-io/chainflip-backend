@@ -52,6 +52,10 @@ mod old {
 			impl FromV1 for crate::ChainState<$chain> {
 				type OldType = Never;
 				fn from_v1(_: Self::OldType) -> Self {
+					log::error!(
+						"Attempted to migrate from an instance of {}",
+						core::any::type_name::<Self::OldType>()
+					);
 					unreachable!(
 						"We are not supposed to have an instance of {}",
 						core::any::type_name::<Self::OldType>()
@@ -62,6 +66,7 @@ mod old {
 	}
 	impl_unreachable_from_v1_for_chain!(cf_chains::Ethereum);
 	impl_unreachable_from_v1_for_chain!(cf_chains::Polkadot);
+	impl_unreachable_from_v1_for_chain!(cf_chains::Arbitrum);
 
 	pub mod btc {
 		use cf_chains::btc::{BitcoinFeeInfo, BitcoinTrackedData};
