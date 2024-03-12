@@ -563,6 +563,14 @@ assets!(
 				index: 3,
 				legacy_encoding,
 			},
+			Asset {
+				variant: Usdt,
+				member: usdt,
+				string: "USDT" (aliases: ["Usdt", "usdt"]),
+				json: "USDT",
+				gas: false,
+				index: 8,
+			},
 		],
 	},
 	Chain {
