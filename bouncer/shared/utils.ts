@@ -226,7 +226,7 @@ function getCachedSubstrateApi(defaultEndpoint: string) {
           _enum: {
             Eth: '[u8; 20]',
             Dot: '[u8; 32]',
-            Btc: '[u8; 34]',
+            Btc: 'Vec<u8>',
           },
         },
       },
