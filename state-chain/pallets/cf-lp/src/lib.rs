@@ -396,12 +396,14 @@ impl<T: Config> LpBalanceApi for Pallet<T> {
 		});
 	}
 
-	fn asset_balances(who: &Self::AccountId) -> Vec<(Asset, AssetAmount)> {
+	fn asset_balances(
+		who: &Self::AccountId,
+	) -> Result<Vec<(cf_primitives::Asset, u128)>, DispatchError> {
 		let mut balances: Vec<(Asset, AssetAmount)> = vec![];
-		T::PoolApi::sweep(who).unwrap();
+		T::PoolApi::sweep(who)?;
 		for asset in Asset::all() {
 			balances.push((asset, FreeBalances::<T>::get(who, asset).unwrap_or_default()));
 		}
-		balances
+		Ok(balances)
 	}
 }

@@ -810,7 +810,8 @@ where
 			.client
 			.runtime_api()
 			.cf_asset_balances(self.unwrap_or_best(at), account_id)
-			.map_err(to_rpc_error)?
+			.map_err(to_rpc_error)
+			.and_then(|result| result.map_err(map_dispatch_error))?
 			.into_iter()
 			.map(|(asset, balance)| AssetWithAmount { asset, amount: balance })
 			.collect::<Vec<_>>())
