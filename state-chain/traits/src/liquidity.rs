@@ -61,7 +61,6 @@ pub trait LpBalanceApi {
 	fn record_fees(who: &Self::AccountId, amount: AssetAmount, asset: Asset);
 
 	/// Returns the asset balances of the given account.
-	// fn asset_balances(who: &Self::AccountId) -> Vec<(Asset, AssetAmount)>;
 	fn asset_balances(who: &Self::AccountId) -> Result<Vec<(Asset, AssetAmount)>, DispatchError>;
 }
 
