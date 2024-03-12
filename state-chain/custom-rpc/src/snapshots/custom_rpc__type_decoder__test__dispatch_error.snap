@@ -1,0 +1,32 @@
+---
+source: state-chain/custom-rpc/src/type_decoder.rs
+expression: value
+---
+{
+  "name": "Inner",
+  "values": [
+    {
+      "name": "DispatchError",
+      "values": {
+        "module": {
+          "name": "Module",
+          "values": [
+            {
+              "index": 2,
+              "error": [
+                0,
+                1,
+                2,
+                3
+              ]
+            }
+          ]
+        },
+        "others": {
+          "name": "Other",
+          "values": []
+        }
+      }
+    }
+  ]
+}

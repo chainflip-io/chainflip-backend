@@ -46,9 +46,13 @@ impl TypeDecoder {
 pub mod test {
 	use super::*;
 	use cf_chains::{address::EncodedAddress, ForeignChain};
-	use cf_primitives::AccountId;
+	use cf_primitives::{
+		chains::assets::{any, btc, dot, eth},
+		AccountId,
+	};
 	use codec::{Decode, Encode};
 	use sp_core::H256;
+	use sp_runtime::{DispatchError, ModuleError};
 
 	#[derive(Debug, PartialEq, Encode, Decode, TypeInfo)]
 	enum TestEvent {
@@ -58,11 +62,12 @@ pub mod test {
 	#[derive(Debug, PartialEq, Encode, Decode, TypeInfo)]
 	enum InnerEvent {
 		Unit,
-		Primitives { num: u32, text: String, byte_array: [u8; 32] },
+		Primitives { num: u32, balance: u128, text: String, byte_array: [u8; 32] },
 		SubstrateTypes { account_id: AccountId, hash: H256 },
 		EncodedAddress { eth: EncodedAddress, dot: EncodedAddress, btc: EncodedAddress },
 		ForeignChain { eth: ForeignChain, dot: ForeignChain, btc: ForeignChain, arb: ForeignChain },
-		// etc.
+		Asset { any: any::Asset, eth: eth::Asset, btc: btc::Asset, dot: dot::Asset },
+		DispatchError { module: DispatchError, others: DispatchError },
 	}
 
 	#[derive(Debug, PartialEq, Encode, Decode, TypeInfo)]
@@ -85,6 +90,7 @@ pub mod test {
 		unit_event: TestEvent::Inner(InnerEvent::Unit),
 		primitives: TestEvent::Inner(InnerEvent::Primitives {
 			num: 123u32,
+			balance: 1_234_567_890_123u128,
 			text: "Hello".to_owned(),
 			byte_array: [0x02; 32],
 		}),
@@ -102,6 +108,20 @@ pub mod test {
 			dot: ForeignChain::Polkadot,
 			btc: ForeignChain::Bitcoin,
 			arb: ForeignChain::Arbitrum,
+		}),
+		assets: TestEvent::Inner(InnerEvent::Asset {
+			any: any::Asset::Flip,
+			eth: eth::Asset::Eth,
+			btc: btc::Asset::Btc,
+			dot: dot::Asset::Dot,
+		}),
+		dispatch_error: TestEvent::Inner(InnerEvent::DispatchError {
+			module: DispatchError::Module(ModuleError{
+				index: 2u8,
+				error: [0u8, 1u8, 2u8, 3u8],
+				message: Some("CustomPalletError")
+			}),
+			others: DispatchError::Other("Error Message")
 		}),
 	}
 }
