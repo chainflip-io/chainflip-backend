@@ -20,9 +20,9 @@ use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 use sp_consensus_aura::SlotDuration;
 use sp_std::collections::btree_set::BTreeSet;
 use state_chain_runtime::{
-	AccountRoles, AllPalletsWithSystem, ArbitrumInstance, BitcoinInstance, LiquidityProvider,
-	PalletExecutionOrder, PolkadotInstance, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin,
-	Validator, Weight,
+	AccountRoles, AllPalletsWithSystem, ArbitrumInstance, BitcoinInstance, Funding,
+	LiquidityProvider, PalletExecutionOrder, PolkadotInstance, Runtime, RuntimeCall, RuntimeEvent,
+	RuntimeOrigin, Validator, Weight,
 };
 use std::{
 	cell::RefCell,
@@ -109,10 +109,12 @@ impl ScGatewayContract {
 pub struct Cli;
 
 impl Cli {
+	#[track_caller]
 	pub fn start_bidding(account: &NodeId) {
 		assert_ok!(Funding::start_bidding(RuntimeOrigin::signed(account.clone())));
 	}
 
+	#[track_caller]
 	pub fn redeem(
 		account: &NodeId,
 		amount: RedemptionAmount<FlipBalance>,
@@ -126,6 +128,7 @@ impl Cli {
 		));
 	}
 
+	#[track_caller]
 	pub fn set_vanity_name(account: &NodeId, name: &str) {
 		assert_ok!(Validator::set_vanity_name(
 			RuntimeOrigin::signed(account.clone()),
@@ -133,10 +136,12 @@ impl Cli {
 		));
 	}
 
+	#[track_caller]
 	pub fn register_as_validator(account: &NodeId) {
 		assert_ok!(Validator::register_as_validator(OriginTrait::signed(account.clone()),));
 	}
 
+	#[track_caller]
 	pub fn rotate_keys(account: &NodeId) {
 		assert_ok!(Validator::set_keys(
 			RuntimeOrigin::signed(account.clone()),
@@ -145,6 +150,7 @@ impl Cli {
 		));
 	}
 
+	#[track_caller]
 	pub fn deregister_as_validator(account: &NodeId) {
 		assert_ok!(Validator::deregister_as_validator(OriginTrait::signed(account.clone()),));
 	}
@@ -760,9 +766,13 @@ pub fn fund_authorities_and_join_auction(
 }
 
 pub fn new_account(account_id: &AccountId, role: AccountRole) {
-	use cf_traits::Funding;
-
-	Flip::credit_funds(account_id, FLIPPERINOS_PER_FLIP);
+	let _ = Funding::funded(
+		pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
+		account_id.clone(),
+		FLIPPERINOS_PER_FLIP,
+		Default::default(),
+		Default::default(),
+	);
 	AccountRoles::on_new_account(account_id);
 	assert_ok!(AccountRoles::register_account_role(account_id, role));
 	assert_events_eq!(
