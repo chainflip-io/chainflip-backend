@@ -13,6 +13,7 @@ use cf_primitives::{
 	SemVer, SwapId, SwapOutput,
 };
 use cf_utilities::rpc::NumberOrHex;
+use codec::Encode;
 use core::ops::Range;
 use jsonrpsee::{
 	core::{error::SubscriptionClosed, RpcResult},
@@ -553,6 +554,10 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<scale_value::Value>>;
+
+	#[method(name = "get_system_events")]
+	fn cf_get_system_events(&self, at: Option<state_chain_runtime::Hash>)
+		-> RpcResult<Vec<String>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1357,6 +1362,19 @@ where
 		Ok(events
 			.into_iter()
 			.map(|event| event_decoder.decode_data(event))
+			.collect::<Vec<_>>())
+	}
+
+	fn cf_get_system_events(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<String>> {
+		Ok(self
+			.client
+			.runtime_api()
+			.cf_get_system_events(self.unwrap_or_best(at))
+			.into_iter()
+			.map(|event| hex::encode(event.encode()))
 			.collect::<Vec<_>>())
 	}
 }

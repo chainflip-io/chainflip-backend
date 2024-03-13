@@ -1644,6 +1644,12 @@ impl_runtime_apis! {
 		fn cf_get_events() -> Vec<Vec<u8>> {
 			frame_system::Events::<Runtime>::get().into_iter().map(|event_record|event_record.event.encode()).collect::<Vec<_>>()
 		}
+
+		fn cf_get_system_events() -> Vec<frame_system::Event<Runtime>> {
+			System::read_events_for_pallet::<
+				frame_system::Event<Runtime>,
+			>()
+		}
 	}
 
 	// END custom runtime APIs
