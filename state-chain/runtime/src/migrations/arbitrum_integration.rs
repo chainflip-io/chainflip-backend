@@ -2,7 +2,6 @@ use crate::{safe_mode, Runtime};
 use cf_chains::{arb, eth::Address};
 use cf_traits::SafeMode;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
-use sp_core::H256;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
 #[cfg(feature = "try-runtime")]
@@ -55,9 +54,6 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		use cf_chains::{assets::arb::Asset::ArbUsdc, instances::ArbitrumInstance};
 		use frame_support::assert_ok;
-		use frame_system::pallet_prelude::BlockNumberFor;
-		use sp_runtime::traits::Zero;
-		use sp_std::str::FromStr;
 
 		assert_ok!(pallet_cf_environment::RuntimeSafeMode::<Runtime>::translate(
 			|maybe_old: Option<old::RuntimeSafeMode>| {
@@ -85,21 +81,15 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 			},
 		));
 
-		let genesis_hash =
-			frame_system::BlockHash::<Runtime>::get(BlockNumberFor::<Runtime>::zero());
-
 		let (
 				key_manager_address,
 				vault_address,
 				address_checker_address,
 				chain_id,
 				usdc_address,
-			): (Address, Address, Address, u64, Address) = if genesis_hash ==
-				// BERGHAIN MAINNET
-				H256::from_str(
-					"0x8b8c140b0af9db70686583e3f6bf2a59052bfe9584b97d20c45068281e976eb9",
-				)
-				.unwrap()
+			): (Address, Address, Address, u64, Address) =
+		match cf_runtime_upgrade_utilities::genesis_hashes::genesis_hash::<Runtime>() {
+			cf_runtime_upgrade_utilities::genesis_hashes::BERGHAIN =>
 			{
 				(
 					[0u8; 20].into(),
@@ -108,12 +98,8 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 					arb::CHAIN_ID_MAINNET,
 					[0u8; 20].into(),
 				)
-			} else if genesis_hash ==
-				// PERSEVERANCE
-				H256::from_str(
-					"0x46c8ca427e31ba73cbd1ad60500d4a7d173b1c80c9fb1afb76661d614f9c5cd7",
-				)
-				.unwrap()
+			},
+			cf_runtime_upgrade_utilities::genesis_hashes::PERSEVERANCE =>
 			{
 				(
 					[1u8; 20].into(),
@@ -122,12 +108,8 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 					arb::CHAIN_ID_GOERLI,
 					[1u8; 20].into(),
 				)
-			} else if genesis_hash ==
-				// SISYPHOS
-				H256::from_str(
-					"0xbeb780f634621c64012483ebbf39927eb236b63902e9a249a76af8ba4cf8a474",
-				)
-				.unwrap()
+			},
+			cf_runtime_upgrade_utilities::genesis_hashes::SISYPHOS =>
 			{
 				(
 					[2u8; 20].into(),
@@ -136,7 +118,8 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 					arb::CHAIN_ID_GOERLI,
 					[2u8; 20].into(),
 				)
-			} else {
+			},
+			_ => {
 				// Assume testnet
 				(
 					hex_literal::hex!("8e1308925a26cb5cF400afb402d67B3523473379").into(),
@@ -145,7 +128,8 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 					412346,
 					hex_literal::hex!("1D55838a9EC169488D360783D65e6CD985007b72").into(),
 				)
-			};
+			}
+		};
 
 		pallet_cf_environment::ArbitrumKeyManagerAddress::<Runtime>::put(key_manager_address);
 		pallet_cf_environment::ArbitrumVaultAddress::<Runtime>::put(vault_address);
