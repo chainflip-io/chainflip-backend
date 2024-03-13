@@ -1,5 +1,5 @@
 use crate::*;
-use cf_chains::Bitcoin;
+
 use frame_support::traits::OnRuntimeUpgrade;
 
 #[cfg(feature = "try-runtime")]
@@ -25,6 +25,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
+		use cf_chains::Bitcoin;
 		use frame_support::sp_runtime::traits::One;
 		if T::TargetChain::NAME == <Bitcoin as Chain>::NAME {
 			assert_eq!(FeeMultiplier::<T, I>::get(), BTC_FEE_MULTIPLIER);

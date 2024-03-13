@@ -5,6 +5,11 @@ edition = '2021'
 name = "chainflip-engine"
 version = "1.4.0"
 
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "chainflip_engine"
+path = 'src/lib.rs'
+
 [package.metadata.deb]
 depends = "$auto, systemd"
 extended-description = """\
@@ -40,7 +45,9 @@ maintainer-scripts = "package/berghain"
 [lints]
 workspace = true
 
+
 [dependencies]
+libc = "0.2.153"
 anyhow = "1.0"
 async-broadcast = "0.5"
 async-channel = "1.7.1"
@@ -86,7 +93,6 @@ ed25519-dalek = "2.1"
 pin-project = "1.0.12"
 rand = "0.8.4"
 reqwest = { version = "0.11.4", features = ["rustls-tls"] }
-toml = "0.7.4"
 tracing = "0.1"
 x25519-dalek = { version = "2.0", features = ["serde"] }
 zmq = { git = "https://github.com/chainflip-io/rust-zmq.git", tag = "chainflip-v0.9.2+1", features = [
@@ -101,6 +107,8 @@ cf-chains = { path = "../state-chain/chains" }
 cf-primitives = { path = "../state-chain/primitives" }
 chainflip-node = { path = "../state-chain/node" }
 custom-rpc = { path = "../state-chain/custom-rpc" }
+engine-upgrade-utils = { path = "../engine-upgrade-utils" }
+engine-proc-macros = { path = "../engine-proc-macros" }
 multisig = { path = "multisig" }
 pallet-cf-account-roles = { path = "../state-chain/pallets/cf-account-roles" }
 pallet-cf-broadcast = { path = "../state-chain/pallets/cf-broadcast" }

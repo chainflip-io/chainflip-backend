@@ -1,0 +1,12 @@
+[package]
+name = "engine-runner"
+version = "0.1.0"
+authors = ["Kyle"]
+build = "build.rs"
+edition = "2021"
+
+[dependencies]
+# Ensures correct compilation order. We want to compile the engine first, then the runner.
+chainflip-engine = { path = "../engine" }
+engine-upgrade-utils = { path = "../engine-upgrade-utils" }
+engine-proc-macros = { path = "../engine-proc-macros" }
