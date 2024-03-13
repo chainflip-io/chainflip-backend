@@ -1,0 +1,24 @@
+[env]
+CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
+
+[tasks.build_engine]
+description = "Custom build shared 2."
+command = "cargo"
+args = ["make", "rename-build"]
+cwd = "./engine"
+workspace = false
+
+[tasks.build-all]
+description = "Builds the specific crate with custom script and the rest of the workspace."
+dependencies = ["build_engine"]
+command = "cargo"
+args = ["build", "--workspace", "--exclude", "engine"]
+workspace = false
+
+# Would create a release version of this too
+[tasks.build-all-release]
+description = "Builds the specific crate with custom script and the rest of the workspace in release mode."
+dependencies = ["build_engine"]
+command = "cargo"
+args = ["build", "--release", "--workspace", "--exclude", "engine"]
+workspace = false

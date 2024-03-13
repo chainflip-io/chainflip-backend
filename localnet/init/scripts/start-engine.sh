@@ -3,10 +3,16 @@
 # LOG_SUFFIX is optional. It can be used to differentiate between the logs of two engines, potentially with the same owner
 # e.g. in the case of an upgrade where we run two engines simultaneously.
 
+echo "Starting engine..."
+export DYLD_LIBRARY_PATH=oldVersion
+export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:oldVersion
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:oldVersion
+echo "DYLD_LIBRARY_PATH/LD_LIBRARY_PATH to find the engine dylib: $DYLD_LIBRARY_PATH"
+
 set -e
 DATETIME=$(date '+%Y-%m-%d_%H-%M-%S')
 source $LOCALNET_INIT_DIR/env/cfe.env
-$BINARY_ROOT_PATH/chainflip-engine \
+$BINARY_ROOT_PATH/engine-runner \
   --config-root=$LOCALNET_INIT_DIR \
   --eth.private_key_file=./keys/$NODE_NAME/eth_private_key_file \
   --arb.private_key_file=./keys/$NODE_NAME/eth_private_key_file \
