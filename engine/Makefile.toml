@@ -1,0 +1,5 @@
+[tasks.rename-build]
+description = "Runs a custom script after building the crate."
+dependencies = ["build"]
+command = "sh"
+args = ["-c", "./scripts/dylib_version.sh"]

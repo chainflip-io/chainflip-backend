@@ -1,0 +1,14 @@
+[package]
+authors = ["Chainflip team <https://github.com/chainflip-io>"]
+build = 'build.rs'
+edition = '2021'
+name = "engine-proc-macros"
+version = "1.4.0"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "2.0.52"
+quote = "1.0.35"
+proc-macro2 = "1.0.79"
