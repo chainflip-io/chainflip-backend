@@ -86,4 +86,5 @@ runtime-benchmarks = [
   'cf-primitives/runtime-benchmarks',
   'frame-support/runtime-benchmarks',
 ]
+
 runtime-integration-tests = ['std']
