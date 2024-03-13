@@ -22,7 +22,7 @@ export async function newSwap(
 
   await broker.requestSwapDepositAddress(
     {
-      // Workaround due to lack of SDK support for Arbitrum. Will be removed.
+      // Temporal workaround for ARB assets
       srcAsset: sourceAsset.replace('ARB', '') as Asset,
       destAsset: destAsset.replace('ARB', '') as Asset,
       srcChain: chainFromAsset(sourceAsset),
