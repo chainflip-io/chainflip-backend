@@ -1,5 +1,5 @@
 #!/usr/bin/env -S pnpm tsx
-import { ApiPromise, WsProvider } from '@polkadot/api';
+import { ApiPromise } from '@polkadot/api';
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { exec } from 'child_process';
@@ -9,29 +9,17 @@ import {
   hexStringToBytesArray,
   newAddress,
   observeEvent,
+  getChainflipApi,
 } from '../shared/utils';
 
 let chainflip: ApiPromise;
 
 async function main(): Promise<void> {
-  const cfNodeEndpoint = process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944';
   await cryptoWaitReady();
   const keyring = new Keyring({ type: 'sr25519' });
   const lpUri = process.env.LP_URI ?? '//LP_1';
   const lp = keyring.createFromUri(lpUri);
-  chainflip = await ApiPromise.create({
-    provider: new WsProvider(cfNodeEndpoint),
-    noInitWarn: true,
-    types: {
-      EncodedAddress: {
-        _enum: {
-          Eth: '[u8; 20]',
-          Dot: '[u8; 32]',
-          Btc: '[u8; 34]',
-        },
-      },
-    },
-  });
+  chainflip = await getChainflipApi();
 
   // Register Liquidity Refund Address before requesting reposit address.
   const encodedEthAddr = chainflip.createType('EncodedAddress', {
