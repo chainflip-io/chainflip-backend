@@ -266,7 +266,9 @@ impl EthSigningRpcApi for EthRpcSigningClient {
 
 	async fn sign_transaction(&self, mut tx: Eip1559TransactionRequest) -> Result<Bytes> {
 		tx.nonce = Some(self.get_next_nonce().await?);
-		let tx = TypedTransaction::Eip1559(tx);
+		let mut tx = TypedTransaction::Eip1559(tx);
+
+		self.signer.fill_transaction(&mut tx, None).await.map_err(anyhow::Error::msg)?;
 
 		self.signer
 			.signer()
@@ -282,7 +284,7 @@ impl EthSigningRpcApi for EthRpcSigningClient {
 			Err(e) => {
 				// Reset the nonce just in case (it will be re-requested during next broadcast)
 				*self.nonce_info.lock().await = None;
-				Err(anyhow::Error::new(e))
+				Err(e.into())
 			},
 		}
 	}
