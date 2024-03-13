@@ -9,12 +9,21 @@ echo "target_dir: $CARGO_MAKE_CRATE_TARGET_DIRECTORY"
 
 target_dir=$CARGO_MAKE_CRATE_TARGET_DIRECTORY
 
+echo "profile: $CARGO_MAKE_PROFILE"
+
 # Determine the profile subdirectory
 if [ "$CARGO_MAKE_PROFILE" == "development" ]; then
   profile_sub_dir="debug"
-else
+elif [ "$CARGO_MAKE_PROFILE" == "release" ]; then
   profile_sub_dir="release"
+elif [ "$CARGO_MAKE_PROFILE" == "production" ]; then
+  profile_sub_dir="production"
+else
+  echo "Unknown profile: $CARGO_MAKE_PROFILE" >&2
+  exit 1
 fi
+
+echo "profile_sub_dir: $profile_sub_dir"
 
 build_dir="$target_dir/$profile_sub_dir"
 
