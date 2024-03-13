@@ -855,12 +855,10 @@ construct_runtime!(
 		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
 		PolkadotChainTracking: pallet_cf_chain_tracking::<Instance2>,
 		BitcoinChainTracking: pallet_cf_chain_tracking::<Instance3>,
-		ArbitrumChainTracking: pallet_cf_chain_tracking::<Instance4>,
 
 		EthereumVault: pallet_cf_vaults::<Instance1>,
 		PolkadotVault: pallet_cf_vaults::<Instance2>,
 		BitcoinVault: pallet_cf_vaults::<Instance3>,
-		ArbitrumVault: pallet_cf_vaults::<Instance4>,
 
 		EvmThresholdSigner: pallet_cf_threshold_signature::<Instance16>,
 		PolkadotThresholdSigner: pallet_cf_threshold_signature::<Instance2>,
@@ -869,7 +867,6 @@ construct_runtime!(
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
 		PolkadotBroadcaster: pallet_cf_broadcast::<Instance2>,
 		BitcoinBroadcaster: pallet_cf_broadcast::<Instance3>,
-		ArbitrumBroadcaster: pallet_cf_broadcast::<Instance4>,
 
 		Swapping: pallet_cf_swapping,
 		LiquidityProvider: pallet_cf_lp,
@@ -877,11 +874,15 @@ construct_runtime!(
 		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
 		PolkadotIngressEgress: pallet_cf_ingress_egress::<Instance2>,
 		BitcoinIngressEgress: pallet_cf_ingress_egress::<Instance3>,
-		ArbitrumIngressEgress: pallet_cf_ingress_egress::<Instance4>,
 
 		LiquidityPools: pallet_cf_pools,
 
 		CfeInterface: pallet_cf_cfe_interface,
+
+		ArbitrumChainTracking: pallet_cf_chain_tracking::<Instance4>,
+		ArbitrumVault: pallet_cf_vaults::<Instance4>,
+		ArbitrumBroadcaster: pallet_cf_broadcast::<Instance4>,
+		ArbitrumIngressEgress: pallet_cf_ingress_egress::<Instance4>,
 	}
 );
 
@@ -956,27 +957,34 @@ pub type PalletExecutionOrder = (
 	Governance,
 	TokenholderGovernance,
 	Reputation,
+	// Chain Tracking
 	EthereumChainTracking,
 	PolkadotChainTracking,
 	BitcoinChainTracking,
 	ArbitrumChainTracking,
+	// Vaults
 	EthereumVault,
 	PolkadotVault,
 	BitcoinVault,
 	ArbitrumVault,
+	// Threshold Signers
 	EvmThresholdSigner,
 	PolkadotThresholdSigner,
 	BitcoinThresholdSigner,
+	// Broadcasters
 	EthereumBroadcaster,
 	PolkadotBroadcaster,
 	BitcoinBroadcaster,
 	ArbitrumBroadcaster,
+	// Swapping and Liquidity Provision
 	Swapping,
 	LiquidityProvider,
+	// Ingress Egress
 	EthereumIngressEgress,
 	PolkadotIngressEgress,
 	BitcoinIngressEgress,
 	ArbitrumIngressEgress,
+	// Liquidity Pools
 	LiquidityPools,
 );
 
