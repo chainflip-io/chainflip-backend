@@ -69,6 +69,7 @@ COPY rust-toolchain.toml .
 RUN rustup update \
     && cargo install cargo-deb \
     && cargo install cargo-audit \
+    && cargo install cargo-make \
     && rm rust-toolchain.toml
 
 RUN rustc --version && \
