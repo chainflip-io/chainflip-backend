@@ -1645,10 +1645,14 @@ impl_runtime_apis! {
 			frame_system::Events::<Runtime>::get().into_iter().map(|event_record|event_record.event.encode()).collect::<Vec<_>>()
 		}
 
-		fn cf_get_system_events() -> Vec<frame_system::Event<Runtime>> {
-			System::read_events_for_pallet::<
-				frame_system::Event<Runtime>,
-			>()
+		fn cf_get_system_events() -> Vec<frame_system::EventRecord<RuntimeEvent, Hash>> {
+			frame_system::Events::<Runtime>::get()
+			.into_iter()
+			.filter_map(|event_record|
+				if matches!(event_record.event, RuntimeEvent::System(..)){
+					Some(*event_record)
+				} else { None}
+			).collect::<Vec<_>>()
 		}
 	}
 

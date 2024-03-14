@@ -1373,6 +1373,7 @@ where
 			.client
 			.runtime_api()
 			.cf_get_system_events(self.unwrap_or_best(at))
+			.map_err(to_rpc_error)?
 			.into_iter()
 			.map(|event| hex::encode(event.encode()))
 			.collect::<Vec<_>>())
