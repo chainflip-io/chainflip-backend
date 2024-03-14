@@ -7,6 +7,7 @@ import { testMultipleMembersGovernance } from '../shared/multiple_members_govern
 import { testLpApi } from '../shared/lp_api_test';
 import { swapLessThanED } from '../shared/swap_less_than_existential_deposit_dot';
 import { testPolkadotRuntimeUpdate } from '../shared/polkadot_runtime_update';
+import { testBrokerFeeCollection } from '../shared/broker_fee_collection';
 
 async function runAllConcurrentTests() {
   // Specify the number of nodes via providing an argument to this script.
@@ -27,6 +28,7 @@ async function runAllConcurrentTests() {
     testFundRedeem('redeem'),
     testMultipleMembersGovernance(),
     testLpApi(),
+    testBrokerFeeCollection(),
   ];
 
   // Test that only work if there is more than one node

@@ -86,7 +86,8 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			"Current Epoch Vault should not exist!"
 		);
 		ensure!(
-			CurrentKeyEpoch::<T, I>::get().unwrap() == <T as Chainflip>::EpochInfo::epoch_index(),
+			CurrentKeyEpoch::<T, I>::get().unwrap_or_default() ==
+				<T as Chainflip>::EpochInfo::epoch_index(),
 			"CurrentKeyEpoch was not migrated!"
 		);
 		ensure!(

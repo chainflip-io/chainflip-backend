@@ -239,6 +239,15 @@ function getCachedSubstrateApi(defaultEndpoint: string) {
     api = await ApiPromise.create({
       provider: new WsProvider(endpoint),
       noInitWarn: true,
+      types: {
+        EncodedAddress: {
+          _enum: {
+            Eth: '[u8; 20]',
+            Dot: '[u8; 32]',
+            Btc: 'Vec<u8>',
+          },
+        },
+      },
     });
 
     return api;

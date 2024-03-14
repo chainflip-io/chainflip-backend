@@ -1,0 +1,51 @@
+---
+source: state-chain/custom-rpc/src/type_decoder.rs
+expression: value
+---
+{
+  "name": "Inner",
+  "values": [
+    {
+      "name": "Primitives",
+      "values": {
+        "num": 123,
+        "balance": 1234567890123,
+        "text": "Hello",
+        "byte_array": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      }
+    }
+  ]
+}

@@ -196,7 +196,9 @@ decl_runtime_apis!(
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> LiquidityProviderInfo;
 		fn cf_broker_info(account_id: AccountId32) -> BrokerInfo;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
-		fn cf_asset_balances(account_id: AccountId32) -> Vec<(Asset, AssetAmount)>;
+		fn cf_asset_balances(
+			account_id: AccountId32,
+		) -> Result<Vec<(Asset, u128)>, DispatchErrorWithMessage>;
 		fn cf_redemption_tax() -> AssetAmount;
 		fn cf_network_environment() -> NetworkEnvironment;
 		fn cf_failed_call_ethereum(
@@ -210,5 +212,6 @@ decl_runtime_apis!(
 		fn cf_witness_count(hash: CallHash) -> Option<FailingWitnessValidators>;
 		fn cf_witness_safety_margin(chain: ForeignChain) -> Option<u64>;
 		fn cf_channel_opening_fee(chain: ForeignChain) -> FlipBalance;
+		fn cf_get_events() -> Vec<Vec<u8>>;
 	}
 );
