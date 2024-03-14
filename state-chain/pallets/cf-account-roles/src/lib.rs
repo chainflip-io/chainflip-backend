@@ -13,7 +13,7 @@ use cf_traits::AccountRoleRegistry;
 use frame_support::{
 	error::BadOrigin,
 	pallet_prelude::DispatchResult,
-	traits::{EnsureOrigin, IsType, OnKilledAccount, OnNewAccount},
+	traits::{EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OnNewAccount},
 };
 use frame_system::{ensure_signed, pallet_prelude::OriginFor, RawOrigin};
 pub use pallet::*;
@@ -128,6 +128,7 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	// WARN: This is not protected by the Swapping feature flag.
 	// In most cases the correct function to use is `register_account_role`.
+	#[frame_support::transactional]
 	fn register_account_role_unprotected(
 		account_id: &T::AccountId,
 		account_role: AccountRole,
@@ -144,8 +145,9 @@ impl<T: Config> Pallet<T> {
 				Some(_) => Err(Error::<T>::AccountRoleAlreadyRegistered),
 				None => Err(Error::<T>::UnknownAccount),
 			}
-		})
-		.map_err(Into::into)
+		})?;
+		frame_system::Consumer::<T>::created(account_id)?;
+		Ok(())
 	}
 }
 
@@ -159,7 +161,6 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 		account_id: &T::AccountId,
 		account_role: AccountRole,
 	) -> DispatchResult {
-		<frame_system::Pallet<T>>::inc_consumers(account_id)?;
 		match account_role {
 			AccountRole::Broker | AccountRole::LiquidityProvider
 				if !SwappingEnabled::<T>::get() =>
