@@ -80,9 +80,7 @@ fn cfe_entrypoint() {
 		.block_on(async {
 			// Note: the greeting should only be printed in normal mode (i.e. not for short-lived
 			// commands like `--version`), so we execute it only after the settings have been parsed.
-			let result = utilities::print_start_and_end!(async run_main(settings, if start_from == NO_START_FROM { None } else { Some(start_from) }));
-			println!("Here's the result: {:?}", result);
-			result
+			utilities::print_start_and_end!(async run_main(settings, if start_from == NO_START_FROM { None } else { Some(start_from) }))
 		});
 
 	match result {
