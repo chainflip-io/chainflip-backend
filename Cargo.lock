@@ -1399,6 +1399,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cf-engine-dylib"
+version = "1.4.0"
+dependencies = [
+ "chainflip-engine",
+ "engine-proc-macros",
+ "engine-upgrade-utils",
+ "toml 0.8.10",
+]
+
+[[package]]
 name = "cf-integration-tests"
 version = "0.1.0"
 dependencies = [
@@ -3321,7 +3331,7 @@ dependencies = [
 name = "engine-runner"
 version = "0.1.0"
 dependencies = [
- "chainflip-engine",
+ "cf-engine-dylib",
  "engine-proc-macros",
  "engine-upgrade-utils",
 ]

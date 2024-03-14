@@ -25,7 +25,6 @@ pub mod eth;
 use crate::state_chain_observer::client::CreateStateChainClientError;
 use ::multisig::{bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
 use cf_primitives::CfeCompatibility;
-use engine_proc_macros::cfe_entrypoint;
 use state_chain_observer::client::{
 	chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 	STATE_CHAIN_CONNECTION,
@@ -43,26 +42,22 @@ use cf_chains::dot::PolkadotHash;
 use cf_primitives::AccountRole;
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
-use engine_upgrade_utils::{
-	rust_string_args, ExitStatus, ERROR_READING_SETTINGS, NO_START_FROM, SUCCESS,
-};
+use engine_upgrade_utils::{ExitStatus, ERROR_READING_SETTINGS, NO_START_FROM, SUCCESS};
 
 use futures::FutureExt;
-use libc::c_char;
 use std::{
 	sync::{atomic::AtomicBool, Arc},
 	time::Duration,
 };
 use utilities::{cached_stream::CachedStream, metrics, task_scope::task_scope};
 
-// The `cfe_entrypoint` macro adds the required C parameters to the function signature
-#[cfe_entrypoint]
-fn cfe_entrypoint() {
+pub fn settings_and_run_main(
+	settings_strings: Vec<String>,
+	start_from: state_chain_runtime::BlockNumber,
+) -> ExitStatus {
 	use_chainflip_account_id_encoding();
+	let opts = CommandLineOptions::parse_from(settings_strings);
 
-	let opts = CommandLineOptions::parse_from(rust_string_args(args, n_args));
-
-	// the settings directory from opts.config_root that we'll use to read the settings file
 	let settings = match Settings::new_with_settings_dir(DEFAULT_SETTINGS_DIR, opts)
 		.context("Error reading settings")
 	{
