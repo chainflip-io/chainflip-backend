@@ -1203,8 +1203,8 @@ impl_runtime_apis! {
 				})
 				.collect()
 		}
-		fn cf_asset_balances(account_id: AccountId) -> Vec<(Asset, u128)> {
-			LiquidityProvider::asset_balances(&account_id)
+		fn cf_asset_balances(account_id: AccountId) -> Result<Vec<(Asset, u128)>, DispatchErrorWithMessage> {
+			LiquidityProvider::asset_balances(&account_id).map_err(Into::into)
 		}
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()
