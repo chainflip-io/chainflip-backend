@@ -12,8 +12,9 @@ use cf_traits::{
 	AccountRoleRegistry, SafeMode, SetSafeMode,
 };
 use cf_utilities::success_threshold_from_share_count;
-use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
+use frame_support::{assert_err, assert_noop, assert_ok, traits::OriginTrait};
 use frame_system::RawOrigin;
+use sp_runtime::traits::BadOrigin;
 
 const ALICE: u64 = 100;
 const BOB: u64 = 101;
@@ -508,28 +509,17 @@ fn highest_bond() {
 #[test]
 fn test_setting_vanity_names_() {
 	new_test_ext().then_execute_with_checks(|| {
-<<<<<<< HEAD
-		let validators: &[u64] = &[123, 456, 789, 101112];
-		assert_ok!(ValidatorPallet::set_vanity_name(RuntimeOrigin::signed(validators[0]), "Test Validator 1".as_bytes().to_vec()));
-		assert_ok!(ValidatorPallet::set_vanity_name(RuntimeOrigin::signed(validators[2]), "Test Validator 2".as_bytes().to_vec()));
-		let vanity_names = crate::VanityNames::<Test>::get();
-		assert_eq!(sp_std::str::from_utf8(vanity_names.get(&validators[0]).unwrap()).unwrap(), "Test Validator 1");
-		assert_eq!(sp_std::str::from_utf8(vanity_names.get(&validators[2]).unwrap()).unwrap(), "Test Validator 2");
-		assert_noop!(ValidatorPallet::set_vanity_name(RuntimeOrigin::signed(validators[0]), [0xfe, 0xff].to_vec()), crate::Error::<Test>::InvalidCharactersInName);
-		assert_noop!(ValidatorPallet::set_vanity_name(RuntimeOrigin::signed(validators[0]), "Validator Name too longggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg".as_bytes().to_vec()), crate::Error::<Test>::NameTooLong);
-=======
 		// ALICE has already been added.
 		assert_eq!(crate::VanityNames::<Test>::get().len(), 1);
 
-		for (i, validator) in [123, 456, 789, 101112].iter().enumerate() {
-			let vanity = format!("Test Validator {i}");
-			<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(validator).unwrap();
+		for (i, account_id) in [123, 456, 789, 101112].iter().enumerate() {
+			let vanity = format!("Test Account {i}");
 			assert_ok!(ValidatorPallet::set_vanity_name(
-				RuntimeOrigin::signed(*validator),
+				RuntimeOrigin::signed(*account_id),
 				vanity.clone().into_bytes()
 			));
 			assert_eq!(
-				sp_std::str::from_utf8(crate::VanityNames::<Test>::get().get(validator).unwrap()).unwrap(),
+				sp_std::str::from_utf8(crate::VanityNames::<Test>::get().get(account_id).unwrap()).unwrap(),
 				vanity
 			);
 		}
@@ -547,7 +537,6 @@ fn test_setting_vanity_names_() {
 			),
 			crate::Error::<Test>::NameTooLong
 		);
->>>>>>> c5550d59f (fix: simplify implementation)
 	});
 }
 
