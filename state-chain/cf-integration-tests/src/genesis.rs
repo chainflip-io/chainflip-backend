@@ -49,12 +49,12 @@ fn state_of_genesis_is_as_expected() {
 			assert_eq!(
 				frame_system::Pallet::<Runtime>::providers(account),
 				1,
-				"Expected provider count to be incremented on genesis (in funding pallet)."
+				"Expected provider count to be incremented on genesis."
 			);
 			assert_eq!(
 				frame_system::Pallet::<Runtime>::consumers(account),
-				1,
-				"Expected consumer count to be incremented on genesis (in account roles pallet)."
+				2,
+				"Expected consumer count to be incremented twice on genesis: account roles and session pallets."
 			);
 		}
 
