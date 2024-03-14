@@ -559,7 +559,7 @@ pub trait CustomApi {
 	fn cf_get_system_events_encoded(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<String>>;
+	) -> RpcResult<Vec<sp_core::Bytes>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1372,14 +1372,14 @@ where
 	fn cf_get_system_events_encoded(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<String>> {
+	) -> RpcResult<Vec<sp_core::Bytes>> {
 		Ok(self
 			.client
 			.runtime_api()
 			.cf_get_events(self.unwrap_or_best(at), EventFilter::SystemOnly)
 			.map_err(to_rpc_error)?
 			.into_iter()
-			.map(|event| hex::encode(event.encode()))
+			.map(|event| event.encode().into())
 			.collect::<Vec<_>>())
 	}
 }
