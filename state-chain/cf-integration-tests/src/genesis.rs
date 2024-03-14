@@ -45,6 +45,19 @@ fn state_of_genesis_is_as_expected() {
 			"the validators are those expected at genesis"
 		);
 
+		for account in &accounts {
+			assert_eq!(
+				frame_system::Pallet::<Runtime>::providers(account),
+				1,
+				"Expected provider count to be incremented on genesis (in funding pallet)."
+			);
+			assert_eq!(
+				frame_system::Pallet::<Runtime>::consumers(account),
+				1,
+				"Expected consumer count to be incremented on genesis (in account roles pallet)."
+			);
+		}
+
 		assert_eq!(
 			Validator::blocks_per_epoch(),
 			BLOCKS_PER_EPOCH,
