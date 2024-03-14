@@ -395,7 +395,7 @@ impl pallet_cf_lp::Config for Runtime {
 impl pallet_cf_account_roles::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type WeightInfo = pallet_cf_account_roles::weights::PalletWeight<Runtime>;
+	type WeightInfo = ();
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
@@ -1133,7 +1133,6 @@ mod benches {
 		[pallet_cf_broadcast, EthereumBroadcaster]
 		[pallet_cf_chain_tracking, EthereumChainTracking]
 		[pallet_cf_swapping, Swapping]
-		[pallet_cf_account_roles, AccountRoles]
 		[pallet_cf_ingress_egress, EthereumIngressEgress]
 		[pallet_cf_lp, LiquidityProvider]
 		[pallet_cf_pools, LiquidityPools]
