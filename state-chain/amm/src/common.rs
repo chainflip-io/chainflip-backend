@@ -63,7 +63,20 @@ impl core::ops::Not for Side {
 	}
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[derive(
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	Hash,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	PartialOrd,
+	Ord,
+)]
 pub enum Pairs {
 	Base,
 	Quote,

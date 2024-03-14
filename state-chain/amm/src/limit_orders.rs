@@ -374,7 +374,7 @@ pub(super) struct FixedPool {
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, Serialize, Deserialize)]
-pub(super) struct PoolState<LiquidityProvider: Ord, OrderId: Ord + Clone> {
+pub struct PoolState<LiquidityProvider: Ord, OrderId: Ord + Clone> {
 	/// The percentage fee taken from swap inputs and earned by LPs. It is in units of 0.0001%.
 	/// I.e. 5000 means 0.5%.
 	pub(super) fee_hundredth_pips: u32,
@@ -398,6 +398,35 @@ pub(super) struct PoolState<LiquidityProvider: Ord, OrderId: Ord + Clone> {
 	total_swap_outputs: PoolPairsMap<Amount>,
 }
 
+pub mod old {
+	use super::*;
+
+	#[derive(Clone, Debug, TypeInfo, Encode, Decode, Serialize, Deserialize)]
+	pub struct PoolState<LiquidityProvider: Ord> {
+		/// The percentage fee taken from swap inputs and earned by LPs. It is in units of 0.0001%.
+		/// I.e. 5000 means 0.5%.
+		pub(super) fee_hundredth_pips: u32,
+		/// The ID the next FixedPool that is created will use.
+		pub next_pool_instance: u128,
+		/// All the FixedPools that have some liquidity. They are grouped into all those that are
+		/// selling asset `Base` and all those that are selling asset `Quote` used the
+		/// PoolPairsMap.
+		pub fixed_pools: PoolPairsMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,
+		/// All the Positions that either are providing liquidity currently, or were providing
+		/// liquidity directly after the last time they where updated. They are grouped into all
+		/// those that are selling asset `Base` and all those that are selling asset `Quote` used
+		/// the PoolPairsMap. Therefore there can be positions stored here that don't provide any
+		/// liquidity.
+		pub positions: PoolPairsMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
+		/// Total fees earned over all time
+		pub(super) total_fees_earned: PoolPairsMap<Amount>,
+		/// Total of all swap inputs over all time (not including fees)
+		pub(super) total_swap_inputs: PoolPairsMap<Amount>,
+		/// Total of all swap outputs over all time
+		pub total_swap_outputs: PoolPairsMap<Amount>,
+	}
+}
+
 impl<LiquidityProvider: Clone + Ord, OrderId: Ord + Clone> PoolState<LiquidityProvider, OrderId> {
 	/// Creates a new pool state with the given fee. The pool is created with no liquidity. The pool
 	/// may not be created with a fee higher than 50%.
@@ -417,6 +446,23 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Ord + Clone> PoolState<LiquidityPr
 			total_swap_inputs: Default::default(),
 			total_swap_outputs: Default::default(),
 		})
+	}
+
+	pub fn migrate(
+		old: old::PoolState<(LiquidityProvider, OrderId)>,
+		transformed_positions: PoolPairsMap<
+			BTreeMap<(LiquidityProvider, OrderId, SqrtPriceQ64F96), Position>,
+		>,
+	) -> Self {
+		Self {
+			fee_hundredth_pips: old.fee_hundredth_pips,
+			next_pool_instance: old.next_pool_instance,
+			fixed_pools: old.fixed_pools,
+			positions: transformed_positions,
+			total_fees_earned: old.total_fees_earned,
+			total_swap_inputs: old.total_swap_inputs,
+			total_swap_outputs: old.total_swap_outputs,
+		}
 	}
 
 	/// Creates an iterator over all positions

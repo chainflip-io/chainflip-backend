@@ -27,10 +27,19 @@ pub mod common;
 pub mod limit_orders;
 pub mod range_orders;
 
+pub mod old {
+	use super::*;
+	#[derive(Clone, Debug, TypeInfo, Encode, Decode, serde::Serialize, serde::Deserialize)]
+	pub struct PoolState<LiquidityProvider: Ord> {
+		pub limit_orders: limit_orders::old::PoolState<LiquidityProvider>,
+		pub range_orders: range_orders::old::PoolState<LiquidityProvider>,
+	}
+}
+
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub struct PoolState<LiquidityProvider: Ord, OrderId: Ord + Clone + MinMax> {
-	limit_orders: limit_orders::PoolState<LiquidityProvider, OrderId>,
-	range_orders: range_orders::PoolState<LiquidityProvider, OrderId>,
+	pub limit_orders: limit_orders::PoolState<LiquidityProvider, OrderId>,
+	pub range_orders: range_orders::PoolState<LiquidityProvider, OrderId>,
 }
 
 pub enum NewError {

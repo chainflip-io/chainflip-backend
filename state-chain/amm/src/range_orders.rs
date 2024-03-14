@@ -183,6 +183,23 @@ pub struct PoolState<LiquidityProvider: Ord, OrderId: Ord + Clone> {
 	total_swap_outputs: PoolPairsMap<Amount>,
 }
 
+pub mod old {
+	use super::*;
+	#[derive(Clone, Debug, TypeInfo, Encode, Decode, Serialize, Deserialize)]
+	pub struct PoolState<LiquidityProvider: Ord> {
+		pub fee_hundredth_pips: u32,
+		pub current_sqrt_price: SqrtPriceQ64F96,
+		pub current_tick: Tick,
+		pub current_liquidity: Liquidity,
+		pub global_fee_growth: PoolPairsMap<FeeGrowthQ128F128>,
+		pub liquidity_map: BTreeMap<Tick, TickDelta>,
+		pub positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
+		pub total_fees_earned: PoolPairsMap<Amount>,
+		pub total_swap_inputs: PoolPairsMap<Amount>,
+		pub total_swap_outputs: PoolPairsMap<Amount>,
+	}
+}
+
 pub(super) trait SwapDirection: crate::common::SwapDirection {
 	/// Given the current_tick determines if the current price can increase further i.e. that there
 	/// is possibly liquidity past the current price
@@ -482,6 +499,24 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityPr
 			total_swap_inputs: Default::default(),
 			total_swap_outputs: Default::default(),
 		})
+	}
+
+	pub fn migrate(
+		old: old::PoolState<(LiquidityProvider, OrderId)>,
+		new_positions: BTreeMap<(LiquidityProvider, OrderId, Tick, Tick), Position>,
+	) -> Self {
+		Self {
+			fee_hundredth_pips: old.fee_hundredth_pips,
+			current_sqrt_price: old.current_sqrt_price,
+			current_tick: old.current_tick,
+			current_liquidity: old.current_liquidity,
+			global_fee_growth: old.global_fee_growth,
+			liquidity_map: old.liquidity_map,
+			positions: new_positions,
+			total_fees_earned: old.total_fees_earned,
+			total_swap_inputs: old.total_swap_inputs,
+			total_swap_outputs: old.total_swap_outputs,
+		}
 	}
 
 	pub(super) fn collect_all(
