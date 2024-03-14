@@ -7,6 +7,7 @@
 // For example: ./commands/setup_vaults.ts
 
 import { AddressOrPair } from '@polkadot/api/types';
+import Web3 from 'web3';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import {
   getChainflipApi,
@@ -15,11 +16,16 @@ import {
   observeEvent,
   sleep,
   handleSubstrateError,
+  getEvmEndpoint,
+  getEvmContractAddress,
 } from '../shared/utils';
 import { aliceKeyringPair } from '../shared/polkadot_keyring';
+import { getKeyManagerAbi } from '../shared/eth_abis';
+import { signAndSendTxEvm } from '../shared/send_evm';
 
 async function main(): Promise<void> {
   const btcClient = getBtcClient();
+  const arbClient = new Web3(getEvmEndpoint('Arbitrum'));
   const alice = await aliceKeyringPair();
 
   const chainflip = await getChainflipApi();
@@ -28,10 +34,16 @@ async function main(): Promise<void> {
   console.log('=== Performing initial Vault setup ===');
 
   // Step 1
+  console.log('Initializing Arbitrum');
+  const arbInitializationRequest = observeEvent('arbitrumVault:ChainInitialized', chainflip);
+  await submitGovernanceExtrinsic(chainflip.tx.arbitrumVault.initializeChain());
+  await arbInitializationRequest;
+
+  // Step 2
   console.log('Forcing rotation');
   await submitGovernanceExtrinsic(chainflip.tx.validator.forceRotation());
 
-  // Step 2
+  // Step 3
   console.log('Waiting for new keys');
 
   const dotActivationRequest = observeEvent(
@@ -39,10 +51,16 @@ async function main(): Promise<void> {
     chainflip,
   );
   const btcActivationRequest = observeEvent('bitcoinVault:AwaitingGovernanceActivation', chainflip);
+
+  const arbActivationRequest = observeEvent(
+    'arbitrumVault:AwaitingGovernanceActivation',
+    chainflip,
+  );
   const dotKey = (await dotActivationRequest).data.newPublicKey;
   const btcKey = (await btcActivationRequest).data.newPublicKey;
+  const arbKey = (await arbActivationRequest).data.newPublicKey;
 
-  // Step 3
+  // Step 4
   console.log('Requesting Polkadot Vault creation');
   const createPolkadotVault = async () => {
     let vaultAddress: AddressOrPair | undefined;
@@ -71,7 +89,7 @@ async function main(): Promise<void> {
 
   const proxyAdded = observeEvent('proxy:ProxyAdded', polkadot);
 
-  // Step 4
+  // Step 5
   console.log('Rotating Proxy and Funding Accounts.');
   const rotateAndFund = async () => {
     let done = false;
@@ -113,9 +131,27 @@ async function main(): Promise<void> {
     }
   };
   await rotateAndFund();
-  const vaultBlockNumber = await (await proxyAdded).block;
+  const vaultBlockNumber = (await proxyAdded).block;
 
-  // Step 5
+  // Step 6
+  console.log('Inserting Arbitrum key in the contracts');
+  const keyManagerAddress = getEvmContractAddress('Arbitrum', 'KEY_MANAGER');
+  const web3 = new Web3(getEvmEndpoint('Arbitrum'));
+
+  const keyManagerContract = new web3.eth.Contract(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (await getKeyManagerAbi()) as any,
+    keyManagerAddress,
+  );
+  const txData = keyManagerContract.methods
+    .setAggKeyWithGovKey({
+      pubKeyX: arbKey.pubKeyX,
+      pubKeyYParity: arbKey.pubKeyYParity === 'Odd' ? 1 : 0,
+    })
+    .encodeABI();
+  await signAndSendTxEvm('Arbitrum', keyManagerAddress, '0', txData);
+
+  // Step 7
   console.log('Registering Vaults with state chain');
   await submitGovernanceExtrinsic(
     chainflip.tx.environment.witnessPolkadotVaultCreation(vaultAddress, {
@@ -130,9 +166,14 @@ async function main(): Promise<void> {
     ),
   );
 
+  await submitGovernanceExtrinsic(
+    chainflip.tx.environment.witnessInitializeArbitrumVault(await arbClient.eth.getBlockNumber()),
+  );
+
   // Confirmation
   console.log('Waiting for new epoch...');
   await observeEvent('validator:NewEpoch', chainflip);
+
   console.log('=== New Epoch ===');
   console.log('=== Vault Setup completed ===');
   process.exit(0);

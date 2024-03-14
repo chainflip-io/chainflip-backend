@@ -15,7 +15,7 @@ async function main() {
   const arbitrumAddress = process.argv[2];
   const arbAmount = process.argv[3].trim();
 
-  console.log('Transferring ' + arbAmount + ' ARB to ' + arbitrumAddress);
+  console.log('Transferring ' + arbAmount + ' ARBETH to ' + arbitrumAddress);
   await sendEvmNative('Arbitrum', arbitrumAddress, arbAmount);
 
   process.exit(0);

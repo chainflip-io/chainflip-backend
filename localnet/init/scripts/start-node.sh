@@ -29,6 +29,7 @@ $BINARY_ROOT_PATH/chainflip-node --chain=$CHAIN \
   --name=$NODE_NAME \
   --port=$PORT \
   --rpc-port=$RPC_PORT \
+  --rpc-max-connections=500 \
   --blocks-pruning=archive \
   --state-pruning=archive \
   --bootnodes=/ip4/127.0.0.1/tcp/30333/p2p/12D3KooWFD3YMDyQocSQBAx6VCcUruYihi6xYufduzf321FnvvoY \

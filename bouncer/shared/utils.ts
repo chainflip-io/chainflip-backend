@@ -24,12 +24,16 @@ export const btcClientMutex = new Mutex();
 export const brokerMutex = new Mutex();
 export const snowWhiteMutex = new Mutex();
 
+export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'];
+
 export function getEvmContractAddress(chain: Chain, contract: string): string {
   switch (chain) {
     case 'Ethereum':
       switch (contract) {
         case 'VAULT':
           return '0xb7a5bd0345ef1cc5e66bf61bdec17d2461fbd968';
+        case 'KEY_MANAGER':
+          return '0xa16E02E87b7454126E5E10d957A927A7F5B5d2be';
         case 'ETH':
           return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
         case 'FLIP':
@@ -49,6 +53,10 @@ export function getEvmContractAddress(chain: Chain, contract: string): string {
       switch (contract) {
         case 'VAULT':
           return '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
+        case 'KEY_MANAGER':
+          return '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+        case 'ADDRESS_CHECKER':
+          return '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
         case 'ARBETH':
           return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
         case 'ARBUSDC':
@@ -155,6 +163,10 @@ export function assetContractId(asset: Asset): number {
       return assetConstants.Flip.contractId;
     case 'DOT':
       return assetConstants.Dot.contractId;
+    case 'ARBETH':
+      return 6;
+    case 'ARBUSDC':
+      return 7;
     default:
       throw new Error(`Unsupported asset: ${asset}`);
   }
@@ -174,6 +186,10 @@ export function assetDecimals(asset: Asset): number {
       return assetConstants.Flip.decimals;
     case 'DOT':
       return assetConstants.Dot.decimals;
+    case 'ARBETH':
+      return 18;
+    case 'ARBUSDC':
+      return 6;
     default:
       throw new Error(`Unsupported asset: ${asset}`);
   }
@@ -187,6 +203,8 @@ export function chainContractId(chain: Chain): number {
       return chainConstants.Bitcoin.contractId;
     case 'Polkadot':
       return chainConstants.Polkadot.contractId;
+    case 'Arbitrum':
+      return 4;
     default:
       throw new Error(`Unsupported chain: ${chain}`);
   }
@@ -546,14 +564,10 @@ export function getSolConnection(): Connection {
 export function getWhaleMnemonic(chain: Chain): string {
   switch (chain) {
     case 'Ethereum':
+    case 'Arbitrum':
       return (
         process.env.ETH_USDC_WHALE_MNEMONIC ??
         'test test test test test test test test test test test junk'
-      );
-    case 'Arbitrum':
-      return (
-        process.env.ARB_WHALE_MNEMONIC ??
-        'indoor dish desk flag debris potato excuse depart ticket judge file exit'
       );
     default:
       throw new Error(`${chain} does not have a whale mnemonic`);
@@ -572,14 +586,10 @@ export function getSolWhaleKeyPair(): Keypair {
 export function getWhaleKey(chain: Chain): string {
   switch (chain) {
     case 'Ethereum':
+    case 'Arbitrum':
       return (
         process.env.ETH_USDC_WHALE ??
         '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
-      );
-    case 'Arbitrum':
-      return (
-        process.env.ARB_WHALE ??
-        '0xb6b15c8cb491557369f3c7d2c287b053eb229daa9c22138887752191c9520659'
       );
     default:
       throw new Error(`${chain} does not have a whale key`);

@@ -148,12 +148,10 @@ impl cf_traits::WaivedFees for WaivedFees {
 /// We are willing to pay at most 2x the base fee. This is approximately the theoretical
 /// limit of the rate of increase of the base fee over 6 blocks (12.5% per block).
 const ETHEREUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(2, 1);
-/// For Arbitrum we could theoretically set the multiplier to 1 but we add
-/// a smaller multiplier for future proofing.
+/// Arbitrum has smaller variability so we are willing to pay at most 1.5x the base fee.
 const ARBITRUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(3, 2);
-// We arbitrarily set the MAX_GAS_LIMIT we are willing to broadcast to 10M.
+// We arbitrarily set the MAX_GAS_LIMIT
 const ETHEREUM_MAX_GAS_LIMIT: u128 = 10_000_000;
-// We arbitrarily set the MAX_GAS_LIMIT we are willing to broadcast to 25M.
 const ARBITRUM_MAX_GAS_LIMIT: u128 = 25_000_000;
 
 pub trait EvmPriorityFee<C: Chain> {
