@@ -6,7 +6,7 @@ name = "chainflip-engine"
 version = "1.4.0"
 
 [lib]
-crate-type = ["cdylib", "lib"]
+crate-type = ["lib"]
 name = "chainflip_engine"
 path = 'src/lib.rs'
 
