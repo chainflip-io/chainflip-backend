@@ -27,7 +27,7 @@ pub fn cfe_entrypoint(_attr: TokenStream, item: TokenStream) -> TokenStream {
 		extern "C" fn #new_fn_name(
 			args: *mut *mut c_char,
 			n_args: u16,
-			start_from: state_chain_runtime::BlockNumber,
+			start_from: u32,
 		) -> ExitStatus {
 			// Insert the function body specified in the input function
 			#block
