@@ -36,8 +36,8 @@ use state_chain_runtime::{
 	chainflip::{BlockUpdate, Offence},
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
-		BrokerInfo, CustomRuntimeApi, DispatchErrorWithMessage, FailingWitnessValidators,
-		LiquidityProviderInfo, ValidatorInfo,
+		BrokerInfo, CustomRuntimeApi, DispatchErrorWithMessage, EventFilter,
+		FailingWitnessValidators, LiquidityProviderInfo, ValidatorInfo,
 	},
 	NetworkFee,
 };
@@ -555,9 +555,11 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<scale_value::Value>>;
 
-	#[method(name = "get_system_events")]
-	fn cf_get_system_events(&self, at: Option<state_chain_runtime::Hash>)
-		-> RpcResult<Vec<String>>;
+	#[method(name = "get_system_events_encoded")]
+	fn cf_get_system_events_encoded(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<String>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1352,27 +1354,29 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<scale_value::Value>> {
-		let event_decoder = type_decoder::TypeDecoder::new::<state_chain_runtime::RuntimeEvent>();
+		let event_decoder = type_decoder::TypeDecoder::new::<
+			frame_system::EventRecord<state_chain_runtime::RuntimeEvent, state_chain_runtime::Hash>,
+		>();
 		let events = self
 			.client
 			.runtime_api()
-			.cf_get_events(self.unwrap_or_best(at))
+			.cf_get_events(self.unwrap_or_best(at), EventFilter::AllEvents)
 			.map_err(to_rpc_error)?;
 
 		Ok(events
 			.into_iter()
-			.map(|event| event_decoder.decode_data(event))
+			.map(|event_record| event_decoder.decode_data(event_record.encode()))
 			.collect::<Vec<_>>())
 	}
 
-	fn cf_get_system_events(
+	fn cf_get_system_events_encoded(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<String>> {
 		Ok(self
 			.client
 			.runtime_api()
-			.cf_get_system_events(self.unwrap_or_best(at))
+			.cf_get_events(self.unwrap_or_best(at), EventFilter::SystemOnly)
 			.map_err(to_rpc_error)?
 			.into_iter()
 			.map(|event| hex::encode(event.encode()))
