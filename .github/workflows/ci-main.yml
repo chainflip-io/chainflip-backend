@@ -58,3 +58,10 @@ jobs:
       version: ci/${{ github.sha }}/
       environment: "development"
     secrets: inherit
+  upgrade-check:
+    needs: [build]
+    uses: ./.github/workflows/upgrade-test.yml
+    secrets: inherit
+    with:
+      upgrade-from-release: "perseverance"
+      upgrade-to-workflow-name: "ci-main.yml"
