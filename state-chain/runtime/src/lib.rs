@@ -12,7 +12,7 @@ mod weights;
 use crate::{
 	chainflip::{calculate_account_apy, Offence},
 	runtime_apis::{
-		AuctionState, BrokerInfo, DispatchErrorWithMessage, FailingWitnessValidators,
+		AuctionState, BrokerInfo, DispatchErrorWithMessage, EventFilter, FailingWitnessValidators,
 		LiquidityProviderInfo, RuntimeApiPenalty, ValidatorInfo,
 	},
 };
@@ -1649,8 +1649,19 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_get_events() -> Vec<Vec<u8>> {
-			frame_system::Events::<Runtime>::get().into_iter().map(|event_record|event_record.event.encode()).collect::<Vec<_>>()
+		fn cf_get_events(filter: EventFilter) -> Vec<frame_system::EventRecord<RuntimeEvent, Hash>> {
+			frame_system::Events::<Runtime>::get()
+				.into_iter()
+				.filter_map(|event_record|
+					if match &filter {
+						EventFilter::AllEvents => true,
+						EventFilter::SystemOnly => matches!(event_record.event, RuntimeEvent::System(..)),
+					} {
+						Some(*event_record)
+					} else {
+						None
+					}
+				).collect::<Vec<_>>()
 		}
 	}
 
