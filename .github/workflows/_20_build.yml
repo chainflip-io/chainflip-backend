@@ -42,6 +42,7 @@ jobs:
 
       - name: Build chainflip binaries
         run: |
+          export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:oldVersion
           cargo cf-build-${{ inputs.profile }} --locked
           sccache --show-stats
 
