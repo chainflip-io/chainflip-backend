@@ -43,19 +43,17 @@ pub fn engine_runner(input: TokenStream) -> TokenStream {
 	let mut versions = input_str
 		.split(',')
 		.map(|s| s.trim().trim_matches('"'))
-		.map(|i| i.replace('.', "_"));
+		.map(|i| i.replace('.', "_"))
+		.map(|version| {
+			(syn::Ident::new(&format!("cfe_entrypoint_v{}", version), Span::call_site()), version)
+		})
+		.map(|(ident, version)| (ident, format!("chainflip_engine_v{}", version), version));
 
-	let old_version = versions.next().expect("should be two versions provided");
-	let new_version = versions.next().expect("should be two versions provided");
+	let (old_version_fn_ident, old_dylib_name, old_version) =
+		versions.next().expect("should be two versions provided");
 
-	let old_func_name = format!("cfe_entrypoint_v{}", old_version);
-	let new_func_name = format!("cfe_entrypoint_v{}", new_version);
-
-	let old_version_fn_ident = syn::Ident::new(&old_func_name, Span::call_site());
-	let new_version_fn_ident = syn::Ident::new(&new_func_name, Span::call_site());
-
-	let old_dylib_name = format!("chainflip_engine_v{}", old_version);
-	let new_dylib_name = format!("chainflip_engine_v{}", new_version);
+	let (new_version_fn_ident, new_dylib_name, new_version) =
+		versions.next().expect("should be two versions provided");
 
 	let output = quote! {
 		// Define the entrypoints into each version of the engine
