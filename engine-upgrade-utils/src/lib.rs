@@ -77,7 +77,7 @@ impl Drop for CStrArray {
 		if let Some(n_args) = self.n_args {
 			unsafe {
 				for i in 0..n_args {
-					let c_string_ptr = *self.c_args.add(i.into());
+					let c_string_ptr = *self.c_args.add(i);
 					free(c_string_ptr as *mut libc::c_void)
 				}
 				free(self.c_args as *mut libc::c_void)
@@ -90,7 +90,7 @@ impl Drop for CStrArray {
 pub fn rust_string_args(args: *mut *mut c_char, n_args: usize) -> Vec<String> {
 	let mut str_args = Vec::new();
 	for i in 0..n_args {
-		let c_str = unsafe { std::ffi::CStr::from_ptr(*args.add(i.into())) };
+		let c_str = unsafe { std::ffi::CStr::from_ptr(*args.add(i)) };
 		let str_slice = c_str.to_str().unwrap().to_string();
 		str_args.push(str_slice);
 	}
