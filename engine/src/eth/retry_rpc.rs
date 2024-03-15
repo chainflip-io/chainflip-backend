@@ -362,10 +362,7 @@ pub trait EvmRetrySubscribeApi {
 }
 
 #[async_trait::async_trait]
-impl<Rpc> EvmRetrySubscribeApi for EvmRetryRpcClient<Rpc>
-where
-	Rpc: EvmRpcApi,
-{
+impl<Rpc: EvmRpcApi> EvmRetrySubscribeApi for EvmRetryRpcClient<Rpc> {
 	async fn subscribe_blocks(&self) -> ConscientiousEvmWebsocketBlockHeaderStream {
 		self.sub_retry_client
 			.request(
