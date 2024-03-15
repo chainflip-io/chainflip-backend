@@ -43,7 +43,7 @@ macro_rules! print_start_and_end {
 					},
 					Err(error) => {
 						println!("Exiting {} due to error: {error:?}", env!("CARGO_PKG_NAME"));
-						Err(error)
+						Err(utilities::logging::ErrorType::ExitStatus(error))
 					},
 				},
 				Err(panic) => {
@@ -54,10 +54,7 @@ macro_rules! print_start_and_end {
 						env!("CARGO_PKG_NAME"),
 						panic_str
 					);
-					Err(ExitStatus {
-						status_code: engine_upgrade_utils::PANIC,
-						at_block: NO_START_FROM,
-					})
+					Err(utilities::logging::ErrorType::Panic)
 				},
 			}
 		}
