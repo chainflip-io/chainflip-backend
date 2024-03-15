@@ -26,6 +26,66 @@ extern "C" {
 	fn free(ptr: *mut libc::c_void);
 }
 
+pub struct CStrArray {
+	c_args: *mut *mut c_char,
+	// Nnoe if the outer array isn't initialized
+	n_args: Option<usize>,
+}
+
+impl CStrArray {
+	pub fn new() -> Self {
+		CStrArray { c_args: std::ptr::null_mut(), n_args: None }
+	}
+
+	pub fn string_args_to_c_args(&mut self, string_args: Vec<String>) {
+		let ptrs_size = string_args.len() * size_of::<*mut c_char>();
+		let array_malloc = unsafe { malloc(ptrs_size as libc::size_t) };
+
+		if array_malloc.is_null() {
+			panic!("Failed to allocate memory for the Command Line Args array");
+		}
+
+		let c_array_ptr = array_malloc as *mut *mut c_char;
+		self.c_args = c_array_ptr;
+		self.n_args = Some(0);
+
+		for (i, rust_string_arg) in string_args.iter().enumerate() {
+			let c_string = CString::new(rust_string_arg.as_str()).unwrap();
+			let len = c_string.to_bytes_with_nul().len();
+
+			let c_string_ptr = unsafe { malloc(len * size_of::<c_char>()) };
+			if c_string_ptr.is_null() {
+				panic!("Failed to allocate memory for the Command Line Arg");
+			}
+			let c_string_ptr = c_string_ptr as *mut c_char;
+
+			unsafe {
+				std::ptr::copy_nonoverlapping(c_string.as_ptr(), c_string_ptr, len);
+				*c_array_ptr.add(i) = c_string_ptr;
+			}
+			self.n_args = Some(i + 1);
+		}
+	}
+
+	pub fn get_args(&mut self) -> (*mut *mut c_char, usize) {
+		(self.c_args, self.n_args.unwrap_or_default())
+	}
+}
+
+impl Drop for CStrArray {
+	fn drop(&mut self) {
+		if let Some(n_args) = self.n_args {
+			unsafe {
+				for i in 0..n_args {
+					let c_string_ptr = *self.c_args.add(i.into());
+					free(c_string_ptr as *mut libc::c_void)
+				}
+				free(self.c_args as *mut libc::c_void)
+			}
+		}
+	}
+}
+
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub fn rust_string_args(args: *mut *mut c_char, n_args: usize) -> Vec<String> {
 	let mut str_args = Vec::new();
@@ -37,52 +97,21 @@ pub fn rust_string_args(args: *mut *mut c_char, n_args: usize) -> Vec<String> {
 	str_args
 }
 
-pub fn string_args_to_c_args(str_args: Vec<String>) -> (*mut *mut c_char, usize) {
-	let n_args = str_args.len();
-
-	let ptrs_size = str_args.len() * size_of::<*mut c_char>();
-	let c_array_ptr = unsafe { malloc(ptrs_size as libc::size_t) as *mut *mut c_char };
-
-	if c_array_ptr.is_null() {
-		panic!("Failed to allocate memory for the Command Line Args array");
-	}
-
-	for (i, rust_string_arg) in str_args.iter().enumerate() {
-		let c_string = CString::new(rust_string_arg.as_str()).unwrap();
-		let len = c_string.to_bytes_with_nul().len();
-
-		let c_string_ptr = unsafe { malloc(len * size_of::<c_char>()) as *mut c_char };
-		if c_string_ptr.is_null() {
-			panic!("Failed to allocate memory for the Command Line Arg");
-			// clean up the previous allocations?
-		}
-
-		unsafe {
-			std::ptr::copy_nonoverlapping(c_string.as_ptr(), c_string_ptr, len);
-			*c_array_ptr.add(i) = c_string_ptr;
-		}
-	}
-	(c_array_ptr, n_args)
-}
-
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
-pub fn free_c_args(c_args: *mut *mut c_char, len: usize) {
-	unsafe {
-		for i in 0..len {
-			let c_string_ptr = *c_args.add(i.into());
-			free(c_string_ptr as *mut libc::c_void)
-		}
-		free(c_args as *mut libc::c_void)
-	}
+#[test]
+fn test_c_str_array_no_args() {
+	let mut c_args = CStrArray::new();
+	let (c_args, n_args) = c_args.get_args();
+	assert_eq!(rust_string_args(c_args, n_args), Vec::<String>::new());
 }
 
 #[test]
-fn test_rust_string_args() {
+fn test_c_str_array_with_args() {
 	let args = vec!["arg1".to_string(), "arg2".to_string()];
-	let c_args = string_args_to_c_args(args.clone());
-	let rust_args = rust_string_args(c_args.0, c_args.1);
-	assert_eq!(args, rust_args);
-	free_c_args(c_args.0, c_args.1);
 
-	assert_eq!(rust_string_args(std::ptr::null_mut(), 0), Vec::<String>::new());
+	let mut c_args = CStrArray::new();
+	c_args.string_args_to_c_args(args.clone());
+
+	let (c_args, n_args) = c_args.get_args();
+	let rust_args = rust_string_args(c_args, n_args);
+	assert_eq!(args, rust_args);
 }
