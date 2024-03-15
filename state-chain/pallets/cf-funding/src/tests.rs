@@ -11,7 +11,10 @@ use cf_traits::{
 use sp_core::H160;
 
 use crate::BoundRedeemAddress;
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{
+	assert_noop, assert_ok,
+	traits::{HandleLifetime, OriginTrait},
+};
 use pallet_cf_flip::{Bonder, FlipSlasher};
 use sp_runtime::{traits::BadOrigin, DispatchError};
 
@@ -1781,6 +1784,59 @@ fn cannot_redeem_to_non_restricted_address_with_balance_lower_than_restricted_fu
 				Default::default()
 			),
 			Error::<Test>::InsufficientUnrestrictedFunds
+		);
+	});
+}
+
+#[test]
+fn account_references_must_be_zero_for_full_redeem() {
+	const FUNDING_AMOUNT: FlipBalance = 100;
+	new_test_ext().execute_with(|| {
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			FUNDING_AMOUNT,
+			Default::default(),
+			Default::default()
+		));
+		assert_eq!(
+			frame_system::Pallet::<Test>::providers(&ALICE),
+			1,
+			"Funding pallet should increment the provider count on account creation."
+		);
+
+		frame_system::Consumer::<Test>::created(&ALICE).unwrap();
+
+		assert_noop!(
+			Funding::redeem(
+				OriginTrait::signed(ALICE),
+				RedemptionAmount::Max,
+				Default::default(),
+				Default::default()
+			),
+			Error::<Test>::AccountReferencesOutstanding,
+		);
+
+		frame_system::Consumer::<Test>::killed(&ALICE).unwrap();
+
+		assert_ok!(Funding::redeem(
+			OriginTrait::signed(ALICE),
+			RedemptionAmount::Max,
+			Default::default(),
+			Default::default()
+		),);
+
+		assert_ok!(Funding::redeemed(
+			RuntimeOrigin::root(),
+			ALICE,
+			FUNDING_AMOUNT,
+			Default::default()
+		),);
+
+		assert_eq!(
+			frame_system::Pallet::<Test>::providers(&ALICE),
+			0,
+			"Funding pallet should decrement the provider count on final redemption."
 		);
 	});
 }
