@@ -3331,6 +3331,7 @@ dependencies = [
 name = "engine-runner"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "cf-engine-dylib",
  "engine-proc-macros",
  "engine-upgrade-utils",
@@ -3340,6 +3341,7 @@ dependencies = [
 name = "engine-upgrade-utils"
 version = "1.0.0"
 dependencies = [
+ "anyhow",
  "libc",
 ]
 

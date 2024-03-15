@@ -37,7 +37,7 @@ impl CStrArray {
 		CStrArray { c_args: std::ptr::null_mut(), n_args: None }
 	}
 
-	pub fn string_args_to_c_args(&mut self, string_args: Vec<String>) {
+	pub fn string_args_to_c_args(&mut self, string_args: Vec<String>) -> anyhow::Result<()> {
 		let ptrs_size = string_args.len() * size_of::<*mut c_char>();
 		let array_malloc = unsafe { malloc(ptrs_size as libc::size_t) };
 
@@ -50,7 +50,7 @@ impl CStrArray {
 		self.n_args = Some(0);
 
 		for (i, rust_string_arg) in string_args.iter().enumerate() {
-			let c_string = CString::new(rust_string_arg.as_str()).unwrap();
+			let c_string = CString::new(rust_string_arg.as_str())?;
 			let len = c_string.to_bytes_with_nul().len();
 
 			let c_string_ptr = unsafe { malloc(len * size_of::<c_char>()) };
@@ -65,6 +65,7 @@ impl CStrArray {
 			}
 			self.n_args = Some(i + 1);
 		}
+		Ok(())
 	}
 
 	pub fn get_args(&mut self) -> (*mut *mut c_char, usize) {
@@ -109,7 +110,7 @@ fn test_c_str_array_with_args() {
 	let args = vec!["arg1".to_string(), "arg2".to_string()];
 
 	let mut c_args = CStrArray::new();
-	c_args.string_args_to_c_args(args.clone());
+	c_args.string_args_to_c_args(args.clone()).unwrap();
 
 	let (c_args, n_args) = c_args.get_args();
 	let rust_args = rust_string_args(c_args, n_args);
