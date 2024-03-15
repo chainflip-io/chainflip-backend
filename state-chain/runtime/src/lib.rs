@@ -1833,7 +1833,8 @@ impl_runtime_apis! {
 			// NOTE: intentional unwrap: we don't want to propagate the error backwards, and want to
 			// have a backtrace here. If any of the pre/post migration checks fail, we shall stop
 			// right here and right now.
-			let weight = Executive::try_runtime_upgrade(checks).unwrap();
+			let weight = Executive::try_runtime_upgrade(checks)
+				.inspect_err(|e| log::error!("try_runtime_upgrade failed with: {:?}", e)).unwrap();
 			(weight, BlockWeights::get().max_block)
 		}
 
