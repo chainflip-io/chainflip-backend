@@ -10,3 +10,4 @@ edition = "2021"
 cf-engine-dylib = { path = "../engine-dylib" }
 engine-upgrade-utils = { path = "../engine-upgrade-utils" }
 engine-proc-macros = { path = "../engine-proc-macros" }
+anyhow = "1.0"
