@@ -35,6 +35,8 @@ const ETHERS_RPC_TIMEOUT: Duration = Duration::from_millis(4 * 1000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
 const MAX_BROADCAST_RETRIES: Attempt = 2;
+// Only sign the transaction once
+const MAX_SIGNING_RETRIES: Attempt = 1;
 
 impl<Rpc: EthRpcApi> EthRetryRpcClient<Rpc> {
 	fn from_inner_clients<ClientFut: Future<Output = Rpc> + Send + 'static>(
@@ -332,8 +334,7 @@ impl<Rpc: EthSigningRpcApi> EthersRetrySigningRpcApi for EthRetryRpcClient<Rpc> 
 					})
 				}),
 				log.clone(),
-				// Only sign the transaction once
-				0,
+				MAX_SIGNING_RETRIES,
 			)
 			.await?;
 
