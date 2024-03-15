@@ -74,12 +74,12 @@ pub fn engine_runner(input: TokenStream) -> TokenStream {
 		// 2. If the new version is not yet compatible, run the old version. If it's no longer compatible, then this runner is too old and needs to be updated.
 		// 3. If the old version is no longer compatible, run the new version, as we've just done an upgrade, making the new version copmatible now.
 		// 4. If this new version completes, then we're done. The engine should be upgraded before this is the case.
-		fn main() {
+		fn main() -> anyhow::Result<()>{
 			println!("Starting engine runner...");
 			let env_args = std::env::args().collect::<Vec<String>>();
 
 			let mut c_str_array = engine_upgrade_utils::CStrArray::new();
-			c_str_array.string_args_to_c_args(env_args);
+			c_str_array.string_args_to_c_args(env_args)?;
 			let (c_args, n) = c_str_array.get_args();
 
 			let old_version = #old_version;
@@ -114,6 +114,7 @@ pub fn engine_runner(input: TokenStream) -> TokenStream {
 					println!("An error has occurred running the new version on first run with exit status: {:?}", exit_status_new_first);
 				}
 			}
+			Ok(())
 		}
 	};
 
