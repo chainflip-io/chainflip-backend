@@ -23,10 +23,14 @@ pub struct ConscientiousEvmWebsocketBlockHeaderStream {
 	stream: Option<
 		web3::api::SubscriptionStream<web3::transports::WebSocket, web3::types::BlockHeader>,
 	>,
+	chain_name: &'static str,
 }
 
 impl ConscientiousEvmWebsocketBlockHeaderStream {
-	pub async fn new(web3: web3::Web3<web3::transports::WebSocket>) -> Result<Self> {
+	pub async fn new(
+		web3: web3::Web3<web3::transports::WebSocket>,
+		chain_name: &'static str,
+	) -> Result<Self> {
 		Ok(Self {
 			stream: Some(
 				web3.eth_subscribe()
@@ -34,13 +38,14 @@ impl ConscientiousEvmWebsocketBlockHeaderStream {
 					.await
 					.context("Failed to subscribe to new heads with WS Client")?,
 			),
+			chain_name,
 		})
 	}
 }
 
 impl Drop for ConscientiousEvmWebsocketBlockHeaderStream {
 	fn drop(&mut self) {
-		tracing::warn!("Dropping the ETH WS connection");
+		tracing::warn!("Dropping the {} WS connection", self.chain_name);
 		self.stream.take().unwrap().unsubscribe().now_or_never();
 	}
 }

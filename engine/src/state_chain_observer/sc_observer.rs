@@ -28,7 +28,7 @@ use tracing::{debug, error, info, info_span, Instrument};
 use crate::{
 	btc::retry_rpc::BtcRetryRpcApi,
 	dot::retry_rpc::DotRetryRpcApi,
-	eth::retry_rpc::EthersRetrySigningRpcApi,
+	eth::retry_rpc::EvmRetrySigningRpcApi,
 	state_chain_observer::client::{
 		extrinsic_api::{
 			signed::{SignedExtrinsicApi, UntilFinalized},
@@ -237,7 +237,7 @@ pub async fn start<
 ) -> Result<(), anyhow::Error>
 where
 	BlockStream: StreamApi<FINALIZED>,
-	EthRpc: EthersRetrySigningRpcApi + Send + Sync + 'static,
+	EthRpc: EvmRetrySigningRpcApi + Send + Sync + 'static,
 	DotRpc: DotRetryRpcApi + Send + Sync + 'static,
 	BtcRpc: BtcRetryRpcApi + Send + Sync + 'static,
 	EthMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,

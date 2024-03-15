@@ -1,6 +1,7 @@
 pub mod address_checker;
 
 use anyhow::bail;
+
 use ethers::{prelude::*, signers::Signer, types::transaction::eip2718::TypedTransaction};
 use futures_core::Future;
 use utilities::redact_endpoint_secret::SecretUrl;
@@ -19,23 +20,25 @@ struct NonceInfo {
 }
 
 #[derive(Clone)]
-pub struct EthRpcClient {
+pub struct EvmRpcClient {
 	provider: Arc<Provider<Http>>,
+	chain_name: &'static str,
 }
 
-impl EthRpcClient {
+impl EvmRpcClient {
 	pub fn new(
 		http_endpoint: SecretUrl,
 		expected_chain_id: u64,
+		chain_name: &'static str,
 	) -> anyhow::Result<impl Future<Output = Self>> {
 		let provider = Arc::new(Provider::<Http>::try_from(http_endpoint.as_ref())?);
 
-		let client = EthRpcClient { provider };
+		let client = EvmRpcClient { provider, chain_name };
 
 		Ok(async move {
 			// We don't want to return an error here. Returning an error means that we'll exit the
-			// CFE. So on client creation we wait until we can be successfully connected to the ETH
-			// node. So the other chains are unaffected
+			// CFE. So on client creation we wait until we can be successfully connected to this EVM
+			// chain's node. So the other chains are unaffected
 			let mut poll_interval = make_periodic_tick(RPC_RETRY_CONNECTION_INTERVAL, true);
 			loop {
 				poll_interval.tick().await;
@@ -43,12 +46,12 @@ impl EthRpcClient {
 					Ok(chain_id) if chain_id == expected_chain_id.into() => break client,
 					Ok(chain_id) => {
 						tracing::error!(
-								"Connected to Ethereum node but with incorrect chain_id {chain_id}, expected {expected_chain_id} from {http_endpoint}. \
-								Please check your CFE configuration file...",
+								"Connected to {chain_name} node but with incorrect chain_id {chain_id}, expected {expected_chain_id} from {http_endpoint}. \
+								Please check your CFE configuration file...", 
 							);
 					},
 					Err(e) => tracing::error!(
-						"Cannot connect to an Ethereum node at {http_endpoint} with error: {e}. \
+						"Cannot connect to an {chain_name:?} node at {http_endpoint} with error: {e}. \
 							Please check your CFE configuration file. Retrying in {:?}...",
 						poll_interval.period()
 					),
@@ -59,7 +62,7 @@ impl EthRpcClient {
 }
 
 #[async_trait::async_trait]
-impl EthRpcApi for EthRpcClient {
+impl EvmRpcApi for EvmRpcClient {
 	async fn estimate_gas(&self, req: &Eip1559TransactionRequest) -> Result<U256> {
 		Ok(self
 			.provider
@@ -77,7 +80,10 @@ impl EthRpcApi for EthRpcClient {
 
 	async fn transaction_receipt(&self, tx_hash: TxHash) -> Result<TransactionReceipt> {
 		self.provider.get_transaction_receipt(tx_hash).await?.ok_or_else(|| {
-			anyhow!("Getting ETH transaction receipt for tx hash {tx_hash} returned None")
+			anyhow!(
+				"Getting {} transaction receipt for tx hash {tx_hash} returned None",
+				self.chain_name
+			)
 		})
 	}
 
@@ -86,13 +92,19 @@ impl EthRpcApi for EthRpcClient {
 	/// - Request succeeds, but doesn't return a block
 	async fn block(&self, block_number: U64) -> Result<Block<H256>> {
 		self.provider.get_block(block_number).await?.ok_or_else(|| {
-			anyhow!("Getting ETH block for block number {block_number} returned None")
+			anyhow!(
+				"Getting {} block for block number {block_number} returned None",
+				self.chain_name
+			)
 		})
 	}
 
 	async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>> {
 		self.provider.get_block_with_txs(block_number).await?.ok_or_else(|| {
-			anyhow!("Getting ETH block with txs for block number {block_number} returned None")
+			anyhow!(
+				"Getting {} block with txs for block number {block_number} returned None",
+				self.chain_name
+			)
 		})
 	}
 
@@ -106,32 +118,34 @@ impl EthRpcApi for EthRpcClient {
 	}
 
 	async fn get_transaction(&self, tx_hash: H256) -> Result<Transaction> {
-		self.provider
-			.get_transaction(tx_hash)
-			.await?
-			.ok_or_else(|| anyhow!("Getting ETH transaction for tx hash {tx_hash} returned None"))
+		self.provider.get_transaction(tx_hash).await?.ok_or_else(|| {
+			anyhow!("Getting {} transaction for tx hash {tx_hash} returned None", self.chain_name)
+		})
 	}
 }
 
 #[derive(Clone)]
-pub struct EthRpcSigningClient {
+pub struct EvmRpcSigningClient {
 	signer: SignerMiddleware<Arc<Provider<Http>>, LocalWallet>,
-	rpc_client: EthRpcClient,
+	rpc_client: EvmRpcClient,
 	nonce_info: Arc<Mutex<Option<NonceInfo>>>,
+	chain_name: &'static str,
 }
 
-impl EthRpcSigningClient {
+impl EvmRpcSigningClient {
 	pub fn new(
 		private_key_file: PathBuf,
 		http_endpoint: SecretUrl,
 		expected_chain_id: u64,
+		chain_name: &'static str,
 	) -> Result<impl Future<Output = Self>> {
-		let rpc_client_fut = EthRpcClient::new(http_endpoint, expected_chain_id)?;
+		let rpc_client_fut = EvmRpcClient::new(http_endpoint, expected_chain_id, chain_name)?;
 
-		let wallet =
-			read_clean_and_decode_hex_str_file(&private_key_file, "Ethereum Private Key", |key| {
-				ethers::signers::Wallet::from_str(key).map_err(anyhow::Error::new)
-			})?;
+		let wallet = read_clean_and_decode_hex_str_file(
+			&private_key_file,
+			"{chain_name} Private Key",
+			|key| ethers::signers::Wallet::from_str(key).map_err(anyhow::Error::new),
+		)?;
 
 		Ok(async move {
 			let rpc_client = rpc_client_fut.await;
@@ -140,7 +154,7 @@ impl EthRpcSigningClient {
 				rpc_client.provider.clone(),
 				wallet.with_chain_id(expected_chain_id),
 			);
-			Self { signer, nonce_info: Arc::new(Mutex::new(None)), rpc_client }
+			Self { signer, nonce_info: Arc::new(Mutex::new(None)), rpc_client, chain_name }
 		})
 	}
 
@@ -178,7 +192,7 @@ impl EthRpcSigningClient {
 }
 
 #[async_trait::async_trait]
-pub trait EthRpcApi: Send + Sync + Clone + 'static {
+pub trait EvmRpcApi: Send + Sync + Clone + 'static {
 	async fn estimate_gas(&self, req: &Eip1559TransactionRequest) -> Result<U256>;
 
 	async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>>;
@@ -205,14 +219,14 @@ pub trait EthRpcApi: Send + Sync + Clone + 'static {
 }
 
 #[async_trait::async_trait]
-pub trait EthSigningRpcApi: EthRpcApi {
+pub trait EvmSigningRpcApi: EvmRpcApi {
 	fn address(&self) -> H160;
 
 	async fn send_transaction(&self, tx: Eip1559TransactionRequest) -> Result<TxHash>;
 }
 
 #[async_trait::async_trait]
-impl EthRpcApi for EthRpcSigningClient {
+impl EvmRpcApi for EvmRpcSigningClient {
 	async fn estimate_gas(&self, req: &Eip1559TransactionRequest) -> Result<U256> {
 		self.rpc_client.estimate_gas(req).await
 	}
@@ -255,7 +269,7 @@ impl EthRpcApi for EthRpcSigningClient {
 }
 
 #[async_trait::async_trait]
-impl EthSigningRpcApi for EthRpcSigningClient {
+impl EvmSigningRpcApi for EvmRpcSigningClient {
 	fn address(&self) -> H160 {
 		self.signer.address()
 	}
@@ -266,7 +280,7 @@ impl EthSigningRpcApi for EthRpcSigningClient {
 		let res = self.signer.send_transaction(tx, None).await;
 		if res.is_err() {
 			// Reset the nonce just in case (it will be re-requested during next broadcast)
-			tracing::warn!("Resetting eth broadcaster nonce due to error");
+			tracing::warn!("Resetting {} broadcaster nonce due to error", self.chain_name);
 			*self.nonce_info.lock().await = None;
 		}
 
@@ -280,11 +294,16 @@ pub struct ReconnectSubscriptionClient {
 	ws_endpoint: SecretUrl,
 	// This value comes from the SC.
 	chain_id: web3::types::U256,
+	chain_name: &'static str,
 }
 
 impl ReconnectSubscriptionClient {
-	pub fn new(ws_endpoint: SecretUrl, chain_id: web3::types::U256) -> Self {
-		Self { ws_endpoint, chain_id }
+	pub fn new(
+		ws_endpoint: SecretUrl,
+		chain_id: web3::types::U256,
+		chain_name: &'static str,
+	) -> Self {
+		Self { ws_endpoint, chain_id, chain_name }
 	}
 }
 
@@ -303,11 +322,15 @@ impl ReconnectSubscribeApi for ReconnectSubscriptionClient {
 
 		let mut poll_interval = make_periodic_tick(SYNC_POLL_INTERVAL, false);
 
-		while let web3::types::SyncState::Syncing(info) =
-			web3.eth().syncing().await.context("Failure while syncing WS Eth client")?
+		while let web3::types::SyncState::Syncing(info) = web3
+			.eth()
+			.syncing()
+			.await
+			.context("Failure while syncing WS {self.chain_name} client")?
 		{
 			tracing::info!(
-				"Waiting for ETH node to sync. Sync state is: {info:?}. Checking again in {:?} ...",
+				"Waiting for {:?} node to sync. Sync state is: {info:?}. Checking again in {:?} ...",
+				self.chain_name,
 				poll_interval.period(),
 			);
 			poll_interval.tick().await;
@@ -315,10 +338,14 @@ impl ReconnectSubscribeApi for ReconnectSubscriptionClient {
 
 		let client_chain_id = web3.eth().chain_id().await.context("Failed to fetch chain id.")?;
 		if self.chain_id != client_chain_id {
-			bail!("Expected chain id {}, eth ws client returned {client_chain_id}.", self.chain_id)
+			bail!(
+				"Expected chain id {}, {} ws client returned {client_chain_id}.",
+				self.chain_id,
+				self.chain_name
+			)
 		}
 
-		ConscientiousEvmWebsocketBlockHeaderStream::new(web3).await
+		ConscientiousEvmWebsocketBlockHeaderStream::new(web3, self.chain_name).await
 	}
 }
 
@@ -334,10 +361,11 @@ mod tests {
 	async fn eth_rpc_test() {
 		let settings = Settings::new_test().unwrap();
 
-		let client = EthRpcSigningClient::new(
+		let client = EvmRpcSigningClient::new(
 			settings.eth.private_key_file,
 			settings.eth.nodes.primary.http_endpoint,
 			2u64,
+			"Ethereum",
 		)
 		.unwrap()
 		.await;

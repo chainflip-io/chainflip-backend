@@ -5,7 +5,7 @@ use chainflip_engine::{
 	btc::retry_rpc::BtcRetryRpcClient,
 	db::{KeyStore, PersistentKeyDB},
 	dot::retry_rpc::DotRetryRpcClient,
-	eth::{retry_rpc::EthRetryRpcClient, rpc::EthRpcSigningClient},
+	eth::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
 	health, p2p,
 	settings::{CommandLineOptions, Settings, DEFAULT_SETTINGS_DIR},
 	state_chain_observer::{
@@ -161,11 +161,14 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 						.await
 						.expect(STATE_CHAIN_CONNECTION),
 				);
-				EthRetryRpcClient::<EthRpcSigningClient>::new(
+				EvmRetryRpcClient::<EvmRpcSigningClient>::new(
 					scope,
 					settings.eth.private_key_file,
 					settings.eth.nodes,
 					expected_eth_chain_id,
+					"eth_rpc",
+					"eth_subscribe",
+					"Ethereum",
 				)?
 			};
 			let arb_client = {
@@ -177,11 +180,14 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 						.await
 						.expect(STATE_CHAIN_CONNECTION),
 				);
-				EthRetryRpcClient::<EthRpcSigningClient>::new(
+				EvmRetryRpcClient::<EvmRpcSigningClient>::new(
 					scope,
 					settings.arb.private_key_file,
 					settings.arb.nodes,
 					expected_arb_chain_id,
+					"arb_rpc",
+					"arb_subscribe",
+					"Arbitrum",
 				)?
 			};
 			let btc_client = {

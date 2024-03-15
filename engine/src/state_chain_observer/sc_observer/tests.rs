@@ -3,7 +3,7 @@ use std::{collections::BTreeSet, sync::Arc};
 use crate::{
 	btc::retry_rpc::mocks::MockBtcRetryRpcClient,
 	dot::retry_rpc::mocks::MockDotHttpRpcClient,
-	eth::retry_rpc::mocks::MockEthRetryRpcClient,
+	eth::retry_rpc::mocks::MockEvmRetryRpcClient,
 	state_chain_observer::{
 		client::{
 			extrinsic_api,
@@ -46,13 +46,13 @@ async fn start_sc_observer<
 >(
 	state_chain_client: MockStateChainClient,
 	sc_block_stream: BlockStream,
-	eth_rpc: MockEthRetryRpcClient,
+	eth_rpc: MockEvmRetryRpcClient,
 ) {
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
 		eth_rpc,
-		MockEthRetryRpcClient::new(),
+		MockEvmRetryRpcClient::new(),
 		MockDotHttpRpcClient::new(),
 		MockBtcRetryRpcClient::new(),
 		MockMultisigClientApi::new(),
@@ -100,7 +100,7 @@ async fn only_encodes_and_signs_when_specified() {
 			])
 		});
 
-	let mut eth_rpc_mock_broadcast = MockEthRetryRpcClient::new();
+	let mut eth_rpc_mock_broadcast = MockEvmRetryRpcClient::new();
 
 	// This doesn't always get called since the test can finish without the scope that spawns the
 	// broadcast task finishing.
@@ -109,7 +109,7 @@ async fn only_encodes_and_signs_when_specified() {
 		Ok(H256::from([1; 32]))
 	});
 
-	let mut eth_mock_clone = MockEthRetryRpcClient::new();
+	let mut eth_mock_clone = MockEvmRetryRpcClient::new();
 	eth_mock_clone.expect_clone().return_once(|| eth_rpc_mock_broadcast);
 
 	start_sc_observer(state_chain_client, StateChainStream::new(sc_block_stream), eth_mock_clone)
@@ -508,7 +508,7 @@ async fn should_process_initial_block_first() {
 		.in_sequence(&mut seq)
 		.return_once(move |_| Ok(vec![]));
 
-	let mut eth_rpc_mock_broadcast = MockEthRetryRpcClient::new();
+	let mut eth_rpc_mock_broadcast = MockEvmRetryRpcClient::new();
 
 	// This doesn't always get called since the test can finish without the scope that spawns the
 	// broadcast task finishing.
@@ -517,7 +517,7 @@ async fn should_process_initial_block_first() {
 		Ok(H256::from([1; 32]))
 	});
 
-	let mut eth_mock_clone = MockEthRetryRpcClient::new();
+	let mut eth_mock_clone = MockEvmRetryRpcClient::new();
 	eth_mock_clone.expect_clone().return_once(|| eth_rpc_mock_broadcast);
 
 	start_sc_observer(
@@ -725,8 +725,8 @@ async fn run_the_sc_observer() {
 			sc_observer::start(
 				state_chain_client,
 				sc_block_stream,
-				MockEthRetryRpcClient::new(),
-				MockEthRetryRpcClient::new(),
+				MockEvmRetryRpcClient::new(),
+				MockEvmRetryRpcClient::new(),
 				MockDotHttpRpcClient::new(),
 				MockBtcRetryRpcClient::new(),
 				MockMultisigClientApi::new(),

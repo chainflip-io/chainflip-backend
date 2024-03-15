@@ -10,7 +10,7 @@ use utilities::task_scope::Scope;
 
 use crate::{
 	db::PersistentKeyDB,
-	eth::{retry_rpc::EthRetryRpcClient, rpc::EthRpcSigningClient},
+	eth::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
 	state_chain_observer::client::{
 		chain_api::ChainApi,
 		extrinsic_api::signed::SignedExtrinsicApi,
@@ -32,7 +32,7 @@ use chainflip_node::chain_spec::berghain::ARBITRUM_SAFETY_MARGIN;
 
 pub async fn start<StateChainClient, StateChainStream, ProcessCall, ProcessingFut>(
 	scope: &Scope<'_, anyhow::Error>,
-	arb_client: EthRetryRpcClient<EthRpcSigningClient>,
+	arb_client: EvmRetryRpcClient<EvmRpcSigningClient>,
 	process_call: ProcessCall,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,

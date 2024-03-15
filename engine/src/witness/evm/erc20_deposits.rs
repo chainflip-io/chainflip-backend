@@ -8,7 +8,7 @@ use pallet_cf_ingress_egress::DepositWitness;
 use sp_core::{H256, U256};
 
 use crate::{
-	eth::retry_rpc::EthersRetryRpcApi,
+	eth::retry_rpc::EvmRetryRpcApi,
 	witness::common::{
 		chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses, RuntimeCallHasChain,
 		RuntimeHasChain,
@@ -62,10 +62,10 @@ define_erc20!(usdc, Usdc, UsdcEvents, "$CF_ETH_CONTRACT_ABI_ROOT/IUSDC.json");
 define_erc20!(usdt, Usdt, UsdtEvents, "$CF_ETH_CONTRACT_ABI_ROOT/IUSDT.json");
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
-	pub async fn erc20_deposits<ProcessCall, ProcessingFut, EthRetryRpcClient, Events>(
+	pub async fn erc20_deposits<ProcessCall, ProcessingFut, EvmRetryRpcClient, Events>(
 		self,
 		process_call: ProcessCall,
-		eth_rpc: EthRetryRpcClient,
+		eth_rpc: EvmRetryRpcClient,
 		asset: <Inner::Chain as cf_chains::Chain>::ChainAsset,
 		asset_contract_address: H160,
 	) -> Result<ChunkedByVaultBuilder<impl ChunkedByVault>, anyhow::Error>
@@ -79,7 +79,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			+ Clone
 			+ 'static,
 		ProcessingFut: Future<Output = ()> + Send + 'static,
-		EthRetryRpcClient: EthersRetryRpcApi + Send + Sync + Clone,
+		EvmRetryRpcClient: EvmRetryRpcApi + Send + Sync + Clone,
 		Events: std::fmt::Debug
 			+ ethers::contract::EthLogDecode
 			+ Send

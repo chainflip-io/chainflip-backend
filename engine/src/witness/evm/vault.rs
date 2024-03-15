@@ -2,7 +2,7 @@ use ethers::types::Bloom;
 use sp_core::H256;
 use std::collections::HashMap;
 
-use crate::eth::retry_rpc::EthersRetryRpcApi;
+use crate::eth::retry_rpc::EvmRetryRpcApi;
 
 use super::{
 	super::common::{
@@ -200,13 +200,13 @@ where
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub fn vault_witnessing<
-		EthRpcClient: EthersRetryRpcApi + ChainClient + Clone,
+		EvmRpcClient: EvmRetryRpcApi + ChainClient + Clone,
 		ProcessCall,
 		ProcessingFut,
 	>(
 		self,
 		process_call: ProcessCall,
-		eth_rpc: EthRpcClient,
+		eth_rpc: EvmRpcClient,
 		contract_address: EthereumAddress,
 		native_asset: Asset,
 		source_chain: ForeignChain,

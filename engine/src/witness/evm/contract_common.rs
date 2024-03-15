@@ -2,7 +2,7 @@ use ethers::abi::RawLog;
 
 use std::fmt::Debug;
 
-use crate::eth::retry_rpc::EthersRetryRpcApi;
+use crate::eth::retry_rpc::EvmRetryRpcApi;
 
 use super::super::common::chain_source::Header;
 use anyhow::{anyhow, Result};
@@ -47,14 +47,14 @@ impl<EventParameters: Debug + ethers::contract::EthLogDecode> Event<EventParamet
 	}
 }
 
-pub async fn events_at_block<EventParameters, EthRpcClient>(
+pub async fn events_at_block<EventParameters, EvmRpcClient>(
 	header: Header<u64, H256, Bloom>,
 	contract_address: H160,
-	eth_rpc: &EthRpcClient,
+	eth_rpc: &EvmRpcClient,
 ) -> Result<Vec<Event<EventParameters>>>
 where
 	EventParameters: std::fmt::Debug + ethers::contract::EthLogDecode + Send + Sync + 'static,
-	EthRpcClient: EthersRetryRpcApi,
+	EvmRpcClient: EvmRetryRpcApi,
 {
 	let mut contract_bloom = Bloom::default();
 	contract_bloom.accrue(BloomInput::Raw(&contract_address.0));

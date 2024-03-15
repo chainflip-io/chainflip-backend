@@ -20,7 +20,7 @@ use super::{
 	contract_common::events_at_block,
 };
 use crate::{
-	eth::retry_rpc::EthersRetryRpcApi,
+	eth::retry_rpc::EvmRetryRpcApi,
 	witness::common::{RuntimeCallHasChain, RuntimeHasChain},
 };
 use num_traits::Zero;
@@ -49,11 +49,11 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub fn key_manager_witnessing<
 		ProcessCall,
 		ProcessingFut,
-		EthRpcClient: EthersRetryRpcApi + ChainClient + Clone,
+		EvmRpcClient: EvmRetryRpcApi + ChainClient + Clone,
 	>(
 		self,
 		process_call: ProcessCall,
-		eth_rpc: EthRpcClient,
+		eth_rpc: EvmRpcClient,
 		contract_address: H160,
 	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
 	where
@@ -182,7 +182,7 @@ mod tests {
 	use super::super::source::EvmSource;
 
 	use crate::{
-		eth::{retry_rpc::EthRetryRpcClient, rpc::EthRpcClient},
+		eth::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcClient},
 		settings::{NodeContainer, WsHttpEndpoints},
 		state_chain_observer::client::StateChainClient,
 		witness::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSource},
@@ -193,7 +193,7 @@ mod tests {
 	async fn test_key_manager_witnesser() {
 		task_scope(|scope| {
 			async {
-				let retry_client = EthRetryRpcClient::<EthRpcClient>::new(
+				let retry_client = EvmRetryRpcClient::<EvmRpcClient>::new(
 					scope,
 					NodeContainer {
 						primary: WsHttpEndpoints {
@@ -203,6 +203,9 @@ mod tests {
 						backup: None,
 					},
 					U256::from(1337u64),
+					"eth_rpc",
+					"eth_subscribe",
+					"Ethereum",
 				)
 				.unwrap();
 

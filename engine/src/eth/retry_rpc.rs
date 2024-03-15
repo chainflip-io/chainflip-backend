@@ -9,7 +9,7 @@ use futures_core::Future;
 use utilities::task_scope::Scope;
 
 use crate::{
-	eth::rpc::{EthRpcApi, EthSigningRpcApi},
+	eth::rpc::{EvmRpcApi, EvmSigningRpcApi},
 	retrier::{Attempt, RequestLog, RetrierClient},
 	settings::{NodeContainer, WsHttpEndpoints},
 	witness::common::chain_source::{ChainClient, Header},
@@ -17,7 +17,7 @@ use crate::{
 use std::{path::PathBuf, time::Duration};
 
 use super::{
-	rpc::{EthRpcClient, EthRpcSigningClient, ReconnectSubscriptionClient},
+	rpc::{EvmRpcClient, EvmRpcSigningClient, ReconnectSubscriptionClient},
 	ConscientiousEvmWebsocketBlockHeaderStream,
 };
 use crate::eth::rpc::ReconnectSubscribeApi;
@@ -26,7 +26,7 @@ use cf_chains::Ethereum;
 use anyhow::{Context, Result};
 
 #[derive(Clone)]
-pub struct EthRetryRpcClient<Rpc: EthRpcApi> {
+pub struct EvmRetryRpcClient<Rpc: EvmRpcApi> {
 	rpc_retry_client: RetrierClient<Rpc>,
 	sub_retry_client: RetrierClient<ReconnectSubscriptionClient>,
 }
@@ -36,26 +36,31 @@ const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
 const MAX_BROADCAST_RETRIES: Attempt = 2;
 
-impl<Rpc: EthRpcApi> EthRetryRpcClient<Rpc> {
+impl<Rpc: EvmRpcApi> EvmRetryRpcClient<Rpc> {
 	fn from_inner_clients<ClientFut: Future<Output = Rpc> + Send + 'static>(
 		scope: &Scope<'_, anyhow::Error>,
 		nodes: NodeContainer<WsHttpEndpoints>,
 		expected_chain_id: U256,
 		rpc_client: ClientFut,
 		backup_rpc_client: Option<ClientFut>,
+		evm_rpc_client_name: &'static str,
+		evm_subscription_client_name: &'static str,
+		chain_name: &'static str,
 	) -> Self {
-		let sub_client =
-			ReconnectSubscriptionClient::new(nodes.primary.ws_endpoint, expected_chain_id);
+		let sub_client = ReconnectSubscriptionClient::new(
+			nodes.primary.ws_endpoint,
+			expected_chain_id,
+			chain_name,
+		);
 
-		let backup_sub_client = nodes
-			.backup
-			.as_ref()
-			.map(|ep| ReconnectSubscriptionClient::new(ep.ws_endpoint.clone(), expected_chain_id));
+		let backup_sub_client = nodes.backup.as_ref().map(|ep| {
+			ReconnectSubscriptionClient::new(ep.ws_endpoint.clone(), expected_chain_id, chain_name)
+		});
 
 		Self {
 			rpc_retry_client: RetrierClient::new(
 				scope,
-				"eth_rpc",
+				evm_rpc_client_name,
 				rpc_client,
 				backup_rpc_client,
 				ETHERS_RPC_TIMEOUT,
@@ -63,7 +68,7 @@ impl<Rpc: EthRpcApi> EthRetryRpcClient<Rpc> {
 			),
 			sub_retry_client: RetrierClient::new(
 				scope,
-				"eth_subscribe",
+				evm_subscription_client_name,
 				futures::future::ready(sub_client),
 				backup_sub_client.map(futures::future::ready),
 				ETHERS_RPC_TIMEOUT,
@@ -73,56 +78,87 @@ impl<Rpc: EthRpcApi> EthRetryRpcClient<Rpc> {
 	}
 }
 
-impl EthRetryRpcClient<EthRpcClient> {
+impl EvmRetryRpcClient<EvmRpcClient> {
 	pub fn new(
 		scope: &Scope<'_, anyhow::Error>,
 		nodes: NodeContainer<WsHttpEndpoints>,
 		expected_chain_id: U256,
+		evm_rpc_client_name: &'static str,
+		evm_subscription_client_name: &'static str,
+		chain_name: &'static str,
 	) -> Result<Self> {
-		let rpc_client =
-			EthRpcClient::new(nodes.primary.http_endpoint.clone(), expected_chain_id.as_u64())?;
-
-		let backup_rpc_client = nodes
-			.backup
-			.as_ref()
-			.map(|ep| EthRpcClient::new(ep.http_endpoint.clone(), expected_chain_id.as_u64()))
-			.transpose()?;
-
-		Ok(Self::from_inner_clients(scope, nodes, expected_chain_id, rpc_client, backup_rpc_client))
-	}
-}
-
-impl EthRetryRpcClient<EthRpcSigningClient> {
-	pub fn new(
-		scope: &Scope<'_, anyhow::Error>,
-		private_key_file: PathBuf,
-		nodes: NodeContainer<WsHttpEndpoints>,
-		expected_chain_id: U256,
-	) -> Result<Self> {
-		let rpc_client = EthRpcSigningClient::new(
-			private_key_file.clone(),
+		let rpc_client = EvmRpcClient::new(
 			nodes.primary.http_endpoint.clone(),
 			expected_chain_id.as_u64(),
+			chain_name,
 		)?;
 
 		let backup_rpc_client = nodes
 			.backup
 			.as_ref()
 			.map(|ep| {
-				EthRpcSigningClient::new(
+				EvmRpcClient::new(ep.http_endpoint.clone(), expected_chain_id.as_u64(), chain_name)
+			})
+			.transpose()?;
+
+		Ok(Self::from_inner_clients(
+			scope,
+			nodes,
+			expected_chain_id,
+			rpc_client,
+			backup_rpc_client,
+			evm_rpc_client_name,
+			evm_subscription_client_name,
+			chain_name,
+		))
+	}
+}
+
+impl EvmRetryRpcClient<EvmRpcSigningClient> {
+	pub fn new(
+		scope: &Scope<'_, anyhow::Error>,
+		private_key_file: PathBuf,
+		nodes: NodeContainer<WsHttpEndpoints>,
+		expected_chain_id: U256,
+		evm_rpc_client_name: &'static str,
+		evm_subscription_client_name: &'static str,
+		chain_name: &'static str,
+	) -> Result<Self> {
+		let rpc_client = EvmRpcSigningClient::new(
+			private_key_file.clone(),
+			nodes.primary.http_endpoint.clone(),
+			expected_chain_id.as_u64(),
+			chain_name,
+		)?;
+
+		let backup_rpc_client = nodes
+			.backup
+			.as_ref()
+			.map(|ep| {
+				EvmRpcSigningClient::new(
 					private_key_file.clone(),
 					ep.http_endpoint.clone(),
 					expected_chain_id.as_u64(),
+					chain_name,
 				)
 			})
 			.transpose()?;
 
-		Ok(Self::from_inner_clients(scope, nodes, expected_chain_id, rpc_client, backup_rpc_client))
+		Ok(Self::from_inner_clients(
+			scope,
+			nodes,
+			expected_chain_id,
+			rpc_client,
+			backup_rpc_client,
+			evm_rpc_client_name,
+			evm_subscription_client_name,
+			chain_name,
+		))
 	}
 }
 
 #[async_trait::async_trait]
-pub trait EthersRetryRpcApi: Clone {
+pub trait EvmRetryRpcApi: Clone {
 	async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log>;
 
 	async fn chain_id(&self) -> U256;
@@ -144,7 +180,7 @@ pub trait EthersRetryRpcApi: Clone {
 }
 
 #[async_trait::async_trait]
-pub trait EthersRetrySigningRpcApi: EthersRetryRpcApi {
+pub trait EvmRetrySigningRpcApi: EvmRetryRpcApi {
 	async fn broadcast_transaction(
 		&self,
 		tx: cf_chains::evm::Transaction,
@@ -152,7 +188,7 @@ pub trait EthersRetrySigningRpcApi: EthersRetryRpcApi {
 }
 
 #[async_trait::async_trait]
-impl<Rpc: EthRpcApi> EthersRetryRpcApi for EthRetryRpcClient<Rpc> {
+impl<Rpc: EvmRpcApi> EvmRetryRpcApi for EvmRetryRpcClient<Rpc> {
 	async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log> {
 		self.rpc_retry_client
 			.request(
@@ -260,7 +296,7 @@ impl<Rpc: EthRpcApi> EthersRetryRpcApi for EthRetryRpcClient<Rpc> {
 }
 
 #[async_trait::async_trait]
-impl<Rpc: EthSigningRpcApi> EthersRetrySigningRpcApi for EthRetryRpcClient<Rpc> {
+impl<Rpc: EvmSigningRpcApi> EvmRetrySigningRpcApi for EvmRetryRpcClient<Rpc> {
 	/// Estimates gas and then sends the transaction to the network.
 	async fn broadcast_transaction(
 		&self,
@@ -321,12 +357,15 @@ impl<Rpc: EthSigningRpcApi> EthersRetrySigningRpcApi for EthRetryRpcClient<Rpc> 
 }
 
 #[async_trait::async_trait]
-pub trait EthersRetrySubscribeApi {
+pub trait EvmRetrySubscribeApi {
 	async fn subscribe_blocks(&self) -> ConscientiousEvmWebsocketBlockHeaderStream;
 }
 
 #[async_trait::async_trait]
-impl<Rpc: EthRpcApi> EthersRetrySubscribeApi for EthRetryRpcClient<Rpc> {
+impl<Rpc> EvmRetrySubscribeApi for EvmRetryRpcClient<Rpc>
+where
+	Rpc: EvmRpcApi,
+{
 	async fn subscribe_blocks(&self) -> ConscientiousEvmWebsocketBlockHeaderStream {
 		self.sub_retry_client
 			.request(
@@ -341,7 +380,7 @@ impl<Rpc: EthRpcApi> EthersRetrySubscribeApi for EthRetryRpcClient<Rpc> {
 }
 
 #[async_trait::async_trait]
-impl<Rpc: EthRpcApi> ChainClient for EthRetryRpcClient<Rpc> {
+impl<Rpc: EvmRpcApi> ChainClient for EvmRetryRpcClient<Rpc> {
 	type Index = <Ethereum as cf_chains::Chain>::ChainBlockNumber;
 
 	type Hash = H256;
@@ -387,14 +426,14 @@ pub mod mocks {
 	use mockall::mock;
 
 	mock! {
-		pub EthRetryRpcClient {}
+		pub EvmRetryRpcClient {}
 
-		impl Clone for EthRetryRpcClient {
+		impl Clone for EvmRetryRpcClient {
 			fn clone(&self) -> Self;
 		}
 
 		#[async_trait::async_trait]
-		impl EthersRetrySigningRpcApi for EthRetryRpcClient {
+		impl EvmRetrySigningRpcApi for EvmRetryRpcClient {
 			async fn broadcast_transaction(
 				&self,
 				tx: cf_chains::evm::Transaction,
@@ -403,7 +442,7 @@ pub mod mocks {
 		}
 
 		#[async_trait::async_trait]
-		impl EthersRetryRpcApi for EthRetryRpcClient {
+		impl EvmRetryRpcApi for EvmRetryRpcClient {
 
 			async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log>;
 
@@ -442,11 +481,14 @@ mod tests {
 			async move {
 				let settings = Settings::new_test().unwrap();
 
-				let retry_client = EthRetryRpcClient::<EthRpcSigningClient>::new(
+				let retry_client = EvmRetryRpcClient::<EvmRpcSigningClient>::new(
 					scope,
 					settings.eth.private_key_file,
 					settings.eth.nodes,
 					U256::from(1337u64),
+					"eth_rpc",
+					"eth_subscribe",
+					"Ethereum",
 				)
 				.unwrap();
 

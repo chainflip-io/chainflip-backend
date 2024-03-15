@@ -1,4 +1,4 @@
-use crate::{eth::retry_rpc::EthersRetryRpcApi, witness::common::chain_source::Header};
+use crate::{eth::retry_rpc::EvmRetryRpcApi, witness::common::chain_source::Header};
 use cf_chains::eth::EthereumTrackedData;
 use ethers::types::Bloom;
 use sp_core::U256;
@@ -8,7 +8,7 @@ use super::super::common::chunked_chain_source::chunked_by_time::chain_tracking:
 use ethers::types::H256;
 
 #[async_trait::async_trait]
-impl<T: EthersRetryRpcApi + Send + Sync + Clone> GetTrackedData<cf_chains::Ethereum, H256, Bloom>
+impl<T: EvmRetryRpcApi + Send + Sync + Clone> GetTrackedData<cf_chains::Ethereum, H256, Bloom>
 	for T
 {
 	async fn get_tracked_data(
