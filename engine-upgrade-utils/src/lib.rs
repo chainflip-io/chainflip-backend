@@ -27,7 +27,7 @@ extern "C" {
 }
 
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-pub fn rust_string_args(args: *mut *mut c_char, n_args: u16) -> Vec<String> {
+pub fn rust_string_args(args: *mut *mut c_char, n_args: usize) -> Vec<String> {
 	let mut str_args = Vec::new();
 	for i in 0..n_args {
 		let c_str = unsafe { std::ffi::CStr::from_ptr(*args.add(i.into())) };
@@ -37,8 +37,8 @@ pub fn rust_string_args(args: *mut *mut c_char, n_args: u16) -> Vec<String> {
 	str_args
 }
 
-pub fn string_args_to_c_args(str_args: Vec<String>) -> (*mut *mut c_char, u16) {
-	let n_args = str_args.len() as u16;
+pub fn string_args_to_c_args(str_args: Vec<String>) -> (*mut *mut c_char, usize) {
+	let n_args = str_args.len();
 
 	let ptrs_size = str_args.len() * size_of::<*mut c_char>();
 	let c_array_ptr = unsafe { malloc(ptrs_size as libc::size_t) as *mut *mut c_char };
@@ -66,7 +66,7 @@ pub fn string_args_to_c_args(str_args: Vec<String>) -> (*mut *mut c_char, u16) {
 }
 
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-pub fn free_c_args(c_args: *mut *mut c_char, len: u16) {
+pub fn free_c_args(c_args: *mut *mut c_char, len: usize) {
 	unsafe {
 		for i in 0..len {
 			let c_string_ptr = *c_args.add(i.into());

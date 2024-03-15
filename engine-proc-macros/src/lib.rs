@@ -26,7 +26,7 @@ pub fn cfe_entrypoint(_attr: TokenStream, item: TokenStream) -> TokenStream {
 		#[no_mangle]
 		extern "C" fn #new_fn_name(
 			args: *mut *mut c_char,
-			n_args: u16,
+			n_args: usize,
 			start_from: u32,
 		) -> ExitStatus {
 			// Insert the function body specified in the input function
@@ -61,12 +61,12 @@ pub fn engine_runner(input: TokenStream) -> TokenStream {
 		// Define the entrypoints into each version of the engine
 		#[link(name = #old_dylib_name)]
 		extern "C" {
-			fn #old_version_fn_ident(args: *mut *mut engine_upgrade_utils::c_char, n_args: u16, start_from: u32) -> engine_upgrade_utils::ExitStatus;
+			fn #old_version_fn_ident(args: *mut *mut engine_upgrade_utils::c_char, n_args: usize, start_from: u32) -> engine_upgrade_utils::ExitStatus;
 		}
 
 		#[link(name = #new_dylib_name)]
 		extern "C" {
-			fn #new_version_fn_ident(args: *mut *mut engine_upgrade_utils::c_char, n_args: u16, start_from: u32) -> engine_upgrade_utils::ExitStatus;
+			fn #new_version_fn_ident(args: *mut *mut engine_upgrade_utils::c_char, n_args: usize, start_from: u32) -> engine_upgrade_utils::ExitStatus;
 		}
 
 		// Define the runner function.
