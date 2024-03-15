@@ -25,7 +25,7 @@ pub fn cfe_entrypoint(_attr: TokenStream, item: TokenStream) -> TokenStream {
 	let output = quote! {
 		#[no_mangle]
 		extern "C" fn #new_fn_name(
-			args: *mut *mut c_char,
+			args: *mut *mut engine_upgrade_utils::c_char,
 			n_args: usize,
 			start_from: u32,
 		) -> ExitStatus {
