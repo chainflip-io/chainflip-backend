@@ -32,11 +32,13 @@ pub struct CStrArray {
 	n_args: Option<usize>,
 }
 
-impl CStrArray {
-	pub fn new() -> Self {
-		CStrArray { c_args: std::ptr::null_mut(), n_args: None }
+impl Default for CStrArray {
+	fn default() -> Self {
+		Self { c_args: std::ptr::null_mut(), n_args: None }
 	}
+}
 
+impl CStrArray {
 	pub fn string_args_to_c_args(&mut self, string_args: Vec<String>) -> anyhow::Result<()> {
 		let ptrs_size = string_args.len() * size_of::<*mut c_char>();
 		let array_malloc = unsafe { malloc(ptrs_size as libc::size_t) };
@@ -100,7 +102,7 @@ pub fn rust_string_args(args: *mut *mut c_char, n_args: usize) -> Vec<String> {
 
 #[test]
 fn test_c_str_array_no_args() {
-	let mut c_args = CStrArray::new();
+	let mut c_args = CStrArray::default();
 	let (c_args, n_args) = c_args.get_args();
 	assert_eq!(rust_string_args(c_args, n_args), Vec::<String>::new());
 }
@@ -109,7 +111,7 @@ fn test_c_str_array_no_args() {
 fn test_c_str_array_with_args() {
 	let args = vec!["arg1".to_string(), "arg2".to_string()];
 
-	let mut c_args = CStrArray::new();
+	let mut c_args = CStrArray::default();
 	c_args.string_args_to_c_args(args.clone()).unwrap();
 
 	let (c_args, n_args) = c_args.get_args();

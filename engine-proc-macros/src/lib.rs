@@ -76,7 +76,7 @@ pub fn engine_runner(input: TokenStream) -> TokenStream {
 			println!("Starting engine runner...");
 			let env_args = std::env::args().collect::<Vec<String>>();
 
-			let mut c_str_array = engine_upgrade_utils::CStrArray::new();
+			let mut c_str_array = engine_upgrade_utils::CStrArray::default();
 			c_str_array.string_args_to_c_args(env_args)?;
 			let (c_args, n) = c_str_array.get_args();
 
