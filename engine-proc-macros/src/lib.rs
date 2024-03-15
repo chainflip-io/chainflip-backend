@@ -75,9 +75,12 @@ pub fn engine_runner(input: TokenStream) -> TokenStream {
 		// 3. If the old version is no longer compatible, run the new version, as we've just done an upgrade, making the new version copmatible now.
 		// 4. If this new version completes, then we're done. The engine should be upgraded before this is the case.
 		fn main() {
-			println!("Running engine runner.");
+			println!("Starting engine runner...");
 			let env_args = std::env::args().collect::<Vec<String>>();
 			let (c_args, n) = engine_upgrade_utils::string_args_to_c_args(env_args);
+
+			let old_version = #old_version;
+			let new_version = #new_version;
 
 			// Attempt to run the new version first
 			let exit_status_new_first = unsafe { #new_version_fn_ident(c_args, n, engine_upgrade_utils::NO_START_FROM) };
@@ -89,20 +92,23 @@ pub fn engine_runner(input: TokenStream) -> TokenStream {
 				},
 				engine_upgrade_utils::NOT_YET_COMPATIBLE => {
 					// The new version is not compatible yet, so run the old version
-					println!("The latest version is not yet compatible. Running the old version.");
+					println!("The latest version {new_version} is not yet compatible. Running the old version {old_version}...");
 					let exit_status_old = unsafe { #old_version_fn_ident(c_args, n, engine_upgrade_utils::NO_START_FROM) };
+
 					println!("Old version has exited with exit status: {:?}", exit_status_old);
 
 					// Check if we need to switch back to the new version
 					if exit_status_old.status_code == engine_upgrade_utils::NO_LONGER_COMPATIBLE {
-						println!("Switching to the new version after the old version is no longer compatible.");
+						println!("Switching to the new version {new_version} after the old version {old_version} is no longer compatible.");
 						// Attempt to run the new version again
 						let exit_status_new = unsafe { #new_version_fn_ident(c_args, n, exit_status_old.at_block) };
 						println!("New version has exited with exit status: {:?}", exit_status_new);
+					} else {
+						println!("An error has occurred running the old version with exit status: {:?}", exit_status_old);
 					}
 				},
 				_ => {
-					println!("An error has occurred running the new version on first run. Please check the logs.");
+					println!("An error has occurred running the new version on first run with exit status: {:?}", exit_status_new_first);
 				}
 			}
 
