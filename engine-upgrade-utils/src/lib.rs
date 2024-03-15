@@ -25,7 +25,7 @@ pub struct ExitStatus {
 
 #[link(name = "c")]
 extern "C" {
-	fn malloc(size: libc::size_t) -> *mut c_void;
+	fn malloc(size: usize) -> *mut c_void;
 	fn free(ptr: *mut c_void);
 }
 
@@ -44,7 +44,7 @@ impl Default for CStrArray {
 impl CStrArray {
 	pub fn string_args_to_c_args(&mut self, string_args: Vec<String>) -> anyhow::Result<()> {
 		let ptrs_size = string_args.len() * size_of::<*mut c_char>();
-		let array_malloc = unsafe { malloc(ptrs_size as libc::size_t) };
+		let array_malloc = unsafe { malloc(ptrs_size) };
 
 		if array_malloc.is_null() {
 			panic!("Failed to allocate memory for the Command Line Args array");
