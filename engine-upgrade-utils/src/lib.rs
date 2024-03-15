@@ -1,6 +1,9 @@
-pub use libc::c_char;
-use std::{ffi::CString, mem::size_of};
+use std::{
+	ffi::{c_void, CString},
+	mem::size_of,
+};
 
+pub use std::ffi::c_char;
 pub const NO_START_FROM: u32 = 0;
 
 // ====  Status codes ====
@@ -22,8 +25,8 @@ pub struct ExitStatus {
 
 #[link(name = "c")]
 extern "C" {
-	fn malloc(size: libc::size_t) -> *mut libc::c_void;
-	fn free(ptr: *mut libc::c_void);
+	fn malloc(size: libc::size_t) -> *mut c_void;
+	fn free(ptr: *mut c_void);
 }
 
 pub struct CStrArray {
@@ -81,9 +84,9 @@ impl Drop for CStrArray {
 			unsafe {
 				for i in 0..n_args {
 					let c_string_ptr = *self.c_args.add(i);
-					free(c_string_ptr as *mut libc::c_void)
+					free(c_string_ptr as *mut c_void)
 				}
-				free(self.c_args as *mut libc::c_void)
+				free(self.c_args as *mut c_void)
 			}
 		}
 	}
