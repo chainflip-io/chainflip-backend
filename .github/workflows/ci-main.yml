@@ -59,7 +59,7 @@ jobs:
       environment: "development"
     secrets: inherit
   upgrade-check:
-    needs: [build]
+    needs: [build-try-runtime]
     uses: ./.github/workflows/upgrade-test.yml
     secrets: inherit
     with:
