@@ -6,7 +6,7 @@ build = "build.rs"
 edition = "2021"
 
 [dependencies]
-# Ensures correct compilation order. We want to compile the engine first, then the runner.
+# Ensures correct compilation order. We want to compile the engine dylib first, then the runner.
 cf-engine-dylib = { path = "../engine-dylib" }
 engine-upgrade-utils = { path = "../engine-upgrade-utils" }
 engine-proc-macros = { path = "../engine-proc-macros" }

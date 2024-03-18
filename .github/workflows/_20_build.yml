@@ -62,7 +62,7 @@ jobs:
             ./target/${{ inputs.binary-subdir }}/chainflip-lp-api
             ./target/${{ inputs.binary-subdir }}/engine-runner
             ./target/${{ inputs.binary-subdir }}/chainflip-ingress-egress-tracker
-            ./target/${{ inputs.binary-subdir }}/libchainflip_engine_v1_3_0.so
+            ./target/${{ inputs.binary-subdir }}/libchainflip_engine_v*.so
 
 
       - name: Upload runtime artifacts
