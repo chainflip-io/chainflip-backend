@@ -1,13 +1,11 @@
 use crate::*;
 
-use cf_runtime_upgrade_utilities::{migration_template::Migration, VersionedMigration};
+use cf_runtime_upgrade_utilities::VersionedMigration;
 
-mod v1;
+mod lp_pools_state_change;
 
-pub type PalletMigration<T> = (
-	VersionedMigration<Pallet<T>, v1::Migration<T>, 1, 2>,
-	VersionedMigration<Pallet<T>, Migration<T>, 2, 3>,
-);
+pub type PalletMigration<T> =
+	(VersionedMigration<Pallet<T>, lp_pools_state_change::Migration<T>, 3, 4>,);
 
 #[cfg(feature = "try-runtime")]
 pub mod old {
