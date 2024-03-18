@@ -18,7 +18,7 @@ function createSnapshotFile(networkUrl: string, blockHash: string, stderrFile: s
   console.log('Writing snapshot to: ', snapshotOutputPath);
   try {
     execSync(
-      `try-runtime create-snapshot ${blockParam} --uri ${networkUrl} ${snapshotOutputPath} 2> ${stderrFile}`,
+      `try-runtime create-snapshot ${blockParam} --uri ${networkUrl} ${snapshotOutputPath} 2>> ${stderrFile}`,
       { env: { ...process.env, RUST_LOG: 'runtime::executive=debug' } },
     );
   } catch (e) {
@@ -27,8 +27,18 @@ function createSnapshotFile(networkUrl: string, blockHash: string, stderrFile: s
 }
 
 function tryRuntimeCommand(runtimePath: string, blockHash: 'latest' | string, networkUrl: string) {
+  const folderName = path.join(os.tmpdir(), 'chainflip/try-runtime-upgrade/');
+  try {
+    if (!fs.existsSync(folderName)) {
+      fs.mkdirSync(folderName);
+    }
+  } catch (err) {
+    console.error(err);
+  }
+
   const blockParam = blockHash === 'latest' ? 'live' : `live --at ${blockHash}`;
-  const stderrFile = path.join(os.tmpdir(), 'chainflip/try-runtime-upgrade/', `cmd-stderr-${Date.now()}.log`);
+  const stderrFile = path.join(folderName, `cmd-stderr-${Date.now()}.log`);
+
   try {
     execSync(
       // TODO: Replace pre-and-post with all after the SDK issue paritytech/polkadot-sdk#2560 is merged.
@@ -37,7 +47,7 @@ function tryRuntimeCommand(runtimePath: string, blockHash: 'latest' | string, ne
         --disable-spec-version-check \
         --disable-idempotency-checks \
         --checks pre-and-post ${blockParam} \
-        --uri ${networkUrl} 2> ${stderrFile}`,
+        --uri ${networkUrl} 2>> ${stderrFile}`,
       { env: { ...process.env, RUST_LOG: 'runtime::executive=debug' } },
     );
     console.log(`try-runtime success for blockParam ${blockParam}`);
