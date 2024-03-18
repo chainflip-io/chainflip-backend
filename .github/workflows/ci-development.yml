@@ -16,9 +16,9 @@ jobs:
   force-version-bump:
       uses: ./.github/workflows/_05_force_version_bump.yml
       secrets: inherit
-  # test:
-  #   uses: ./.github/workflows/_10_test.yml
-  #   secrets: inherit
+  test:
+    uses: ./.github/workflows/_10_test.yml
+    secrets: inherit
   coverage:
     uses: ./.github/workflows/_11_coverage.yml
     with:
@@ -29,25 +29,25 @@ jobs:
     secrets: inherit
     with:
       profile: "release"
-  # docker:
-  #   needs: [build]
-  #   uses: ./.github/workflows/_24_docker.yml
-  #   secrets: inherit
-  #   with:
-  #     network: "test"
-  #     environment: "development"
+  docker:
+    needs: [build]
+    uses: ./.github/workflows/_24_docker.yml
+    secrets: inherit
+    with:
+      network: "test"
+      environment: "development"
   package:
     needs: [build]
     uses: ./.github/workflows/_25_package.yml
     with:
       network: "test"
     secrets: inherit
-  # post-check:
-  #   needs: [build]
-  #   uses: ./.github/workflows/_40_post_check.yml
-  #   secrets: inherit
-  #   with:
-  #     full_bouncer: false
+  post-check:
+    needs: [build]
+    uses: ./.github/workflows/_40_post_check.yml
+    secrets: inherit
+    with:
+      full_bouncer: false
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml
