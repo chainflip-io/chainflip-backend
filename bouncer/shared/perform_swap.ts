@@ -82,7 +82,7 @@ export async function requestNewSwap(
   const channelId = Number(res.channelId);
 
   if (log) {
-    console.log(`${tag} Swap address: ${depositAddress}`);
+    console.log(`${tag} Deposit address: ${depositAddress}`);
     console.log(`${tag} Destination address is: ${channelDestAddress} Channel ID is: ${channelId}`);
   }
 
@@ -155,8 +155,12 @@ export async function performSwap(
 
   if (log)
     console.log(
-      `${tag} The args are:  ${sourceAsset} ${destAsset} ${destAddress} ${
-        messageMetadata ? `someMessage` : ''
+      `${tag} The args are: ${sourceAsset} ${destAsset} ${destAddress} ${
+        messageMetadata
+          ? messageMetadata.message.substring(0, 6) +
+            '...' +
+            messageMetadata.message.substring(messageMetadata.message.length - 4)
+          : ''
       }`,
     );
 

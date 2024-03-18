@@ -19,10 +19,12 @@ export async function newSwap(
   const destinationAddress =
     destAsset === 'DOT' ? decodeDotAddressForContract(destAddress) : destAddress;
   const brokerUrl = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:10997';
+
   await broker.requestSwapDepositAddress(
     {
-      srcAsset: sourceAsset,
-      destAsset,
+      // Temporal workaround for ARB assets
+      srcAsset: sourceAsset.replace('ARB', '') as Asset,
+      destAsset: destAsset.replace('ARB', '') as Asset,
       srcChain: chainFromAsset(sourceAsset),
       destAddress: destinationAddress,
       destChain: chainFromAsset(destAsset),

@@ -106,7 +106,8 @@ impl<T: Config<Instance3, TargetChain = Bitcoin>> OnRuntimeUpgrade for Migration
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let number_of_channels_in_lookup_pre_migration = <u32>::decode(&mut &state[..]).unwrap();
+		let number_of_channels_in_lookup_pre_migration = <u32>::decode(&mut &state[..])
+			.expect("Pre-migration should insert number of channels in lookup storage.");
 		ensure!(
 			DepositChannelLookup::<T, Instance3>::iter_keys().count() as u32 ==
 				number_of_channels_in_lookup_pre_migration,
