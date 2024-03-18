@@ -247,6 +247,15 @@ jobs:
           path: |
             /tmp/chainflip/*/chainflip-*.*log
 
+      - name: Upload Snapshot 💾
+        if: failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@v3
+        with:
+          name: failure-snapshot
+          path: |
+            /tmp/chainflip/snapshots/*.snap
+
       - name: Clean Up docker containers 🧹
         if: always()
         continue-on-error: true

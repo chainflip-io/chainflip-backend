@@ -8,13 +8,33 @@ import os from 'os';
 import fs from 'fs';
 import { compileBinaries } from './utils/compile_binaries';
 
-function tryRuntimeCommand(runtimePath: string, blockParam: string, networkUrl: string) {
+function createSnapshotFile(networkUrl: string, blockHash: string, stderrFile: string) {
+  const blockParam = blockHash === 'latest' ? '' : `--at ${blockHash}`;
+  const snapshotOutputPath = path.join(os.tmpdir(), 'chainflip/snapshots/', `snapshot-at-${blockHash}.snap`);
+  console.log('Writing snapshot to: ', snapshotOutputPath);
+  try {
+    execSync(
+      `try-runtime create-snapshot ${blockParam} --uri ${networkUrl} ${snapshotOutputPath} 2> ${stderrFile}`,
+      { env: { ...process.env, RUST_LOG: 'runtime::executive=debug' } },
+    );
+  } catch (e) {
+    console.error(`try-runtime create-snapshot failed: ${e}`);
+  }
+}
+
+function tryRuntimeCommand(runtimePath: string, blockHash: 'latest' | string, networkUrl: string) {
+  const blockParam = blockHash === 'latest' ? 'live' : `live --at ${blockHash}`;
   // Create a temporary file for capturing stderr
   const stderrFile = path.join(os.tmpdir(), `cmd-stderr-${Date.now()}`);
   try {
     execSync(
       // TODO: Replace pre-and-post with all after the SDK issue paritytech/polkadot-sdk#2560 is merged.
-      `try-runtime --runtime ${runtimePath} on-runtime-upgrade --disable-spec-version-check --disable-idempotency-checks --checks pre-and-post ${blockParam} --uri ${networkUrl} 2> ${stderrFile}`,
+      `try-runtime \
+        --runtime ${runtimePath} on-runtime-upgrade \
+        --disable-spec-version-check \
+        --disable-idempotency-checks \
+        --checks pre-and-post ${blockParam} \
+        --uri ${networkUrl} 2> ${stderrFile}`,
       { env: { ...process.env, RUST_LOG: 'runtime::executive=debug' } },
     );
     console.log(`try-runtime success for blockParam ${blockParam}`);
@@ -23,6 +43,8 @@ function tryRuntimeCommand(runtimePath: string, blockParam: string, networkUrl: 
     const stderrOutput = fs.readFileSync(stderrFile, 'utf8');
     console.error(e);
     console.error('Command failed: Command output:', stderrOutput);
+
+    createSnapshotFile(networkUrl, blockHash, stderrFile);
 
     fs.unlinkSync(stderrFile);
 
@@ -51,7 +73,7 @@ export async function tryRuntimeUpgrade(
     let blockHash = await api.rpc.chain.getBlockHash(blockNumber);
     while (!blockHash.eq(latestBlock)) {
       blockHash = await api.rpc.chain.getBlockHash(blockNumber);
-      tryRuntimeCommand(runtimePath, `live --at ${blockHash}`, networkUrl);
+      tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl);
 
       blockNumber++;
     }
@@ -63,17 +85,17 @@ export async function tryRuntimeUpgrade(
     let nextHash = await api.rpc.chain.getBlockHash();
 
     while (blocksProcessed < lastN) {
-      tryRuntimeCommand(runtimePath, `live --at ${nextHash}`, networkUrl);
+      tryRuntimeCommand(runtimePath, `${nextHash}`, networkUrl);
 
       const currentBlockHeader = await api.rpc.chain.getHeader(nextHash);
       nextHash = currentBlockHeader.parentHash;
       blocksProcessed++;
     }
   } else if (block === 'latest') {
-    tryRuntimeCommand(runtimePath, 'live', networkUrl);
+    tryRuntimeCommand(runtimePath, 'latest', networkUrl);
   } else {
     const blockHash = await api.rpc.chain.getBlockHash(block);
-    tryRuntimeCommand(runtimePath, `live --at ${blockHash}`, networkUrl);
+    tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl);
   }
 
   console.log('try-runtime upgrade successful.');
