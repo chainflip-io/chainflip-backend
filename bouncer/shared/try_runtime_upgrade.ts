@@ -10,7 +10,11 @@ import { compileBinaries } from './utils/compile_binaries';
 
 function createSnapshotFile(networkUrl: string, blockHash: string, stderrFile: string) {
   const blockParam = blockHash === 'latest' ? '' : `--at ${blockHash}`;
-  const snapshotOutputPath = path.join(os.tmpdir(), 'chainflip/snapshots/', `snapshot-at-${blockHash}.snap`);
+  const snapshotOutputPath = path.join(
+    os.tmpdir(),
+    'chainflip/snapshots/',
+    `snapshot-at-${blockHash}.snap`,
+  );
   console.log('Writing snapshot to: ', snapshotOutputPath);
   try {
     execSync(
