@@ -37,6 +37,10 @@ jobs:
         run: |
           echo "version=$(cargo read-manifest --manifest-path ${{ matrix.manifest }} | jq -r .version)" >> $GITHUB_OUTPUT
 
+      - name: Check systemd files and debian package config 👀
+        shell: bash
+        run: ./ci/scripts/check_engine_systemd_config.sh ${{ steps.cargo.outputs.version }}
+
       - name: Check tag version matches Cargo.toml 🕵️‍♂️
         shell: bash
         if: inputs.network == 'perseverance'
@@ -46,18 +50,14 @@ jobs:
             exit 1
           fi
 
-      - name: Check systemd files and debian package config 👀
-        shell: bash
-        run: ./ci/scripts/check_engine_systemd_config.sh ${{ steps.cargo.outputs.version }}
-
   check-changelog:
     runs-on: ubuntu-latest
+    if: inputs.network == 'perseverance'
     steps:
       - name: Checkout 🏁
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Check changelog 📝
-        if: inputs.network == 'perseverance'
         shell: bash
         run: ./ci/scripts/check_changelog.sh ${{ github.ref_name }}
 
