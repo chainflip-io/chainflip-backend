@@ -43,7 +43,7 @@ jobs:
 
       - name: Check tag version matches Cargo.toml 🕵️‍♂️
         shell: bash
-        if: inputs.network == 'perseverance'
+        if: inputs.network != 'sisyphos'
         run: |
           if [[ "${{ github.ref_name }}" != "${{ steps.cargo.outputs.version }}" ]]; then
             echo "Tag version (${{ github.ref_name }}) does not match version (${{ steps.cargo.outputs.version }}) in ${{ matrix.manifest }}"
@@ -52,7 +52,7 @@ jobs:
 
   check-changelog:
     runs-on: ubuntu-latest
-    if: inputs.network == 'perseverance'
+    if: inputs.network != 'sisyphos'
     steps:
       - name: Checkout 🏁
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
