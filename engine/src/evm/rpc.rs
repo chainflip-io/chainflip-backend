@@ -312,7 +312,7 @@ pub trait ReconnectSubscribeApi {
 	async fn subscribe_blocks(&self) -> Result<ConscientiousEvmWebsocketBlockHeaderStream>;
 }
 
-use crate::eth::ConscientiousEvmWebsocketBlockHeaderStream;
+use crate::evm::ConscientiousEvmWebsocketBlockHeaderStream;
 
 #[async_trait::async_trait]
 impl ReconnectSubscribeApi for ReconnectSubscriptionClient {

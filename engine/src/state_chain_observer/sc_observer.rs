@@ -28,7 +28,7 @@ use tracing::{debug, error, info, info_span, Instrument};
 use crate::{
 	btc::retry_rpc::BtcRetryRpcApi,
 	dot::retry_rpc::DotRetryRpcApi,
-	eth::retry_rpc::EvmRetrySigningRpcApi,
+	evm::retry_rpc::EvmRetrySigningRpcApi,
 	state_chain_observer::client::{
 		extrinsic_api::{
 			signed::{SignedExtrinsicApi, UntilFinalized},

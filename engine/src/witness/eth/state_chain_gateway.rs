@@ -10,7 +10,7 @@ use super::super::{
 	},
 	evm::contract_common::events_at_block,
 };
-use crate::eth::retry_rpc::EvmRetryRpcApi;
+use crate::evm::retry_rpc::EvmRetryRpcApi;
 use cf_primitives::EpochIndex;
 use futures_core::Future;
 

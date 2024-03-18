@@ -8,7 +8,7 @@ use pallet_cf_ingress_egress::DepositWitness;
 use sp_core::{H256, U256};
 
 use crate::{
-	eth::retry_rpc::EvmRetryRpcApi,
+	evm::retry_rpc::EvmRetryRpcApi,
 	witness::common::{
 		chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses, RuntimeCallHasChain,
 		RuntimeHasChain,

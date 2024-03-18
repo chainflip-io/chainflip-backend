@@ -11,7 +11,7 @@ use utilities::task_scope::Scope;
 
 use crate::{
 	db::PersistentKeyDB,
-	eth::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
+	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
 	state_chain_observer::client::{
 		chain_api::ChainApi,
 		extrinsic_api::signed::SignedExtrinsicApi,

@@ -2,7 +2,7 @@ use ethers::abi::RawLog;
 
 use std::fmt::Debug;
 
-use crate::eth::retry_rpc::EvmRetryRpcApi;
+use crate::evm::retry_rpc::EvmRetryRpcApi;
 
 use super::super::common::chain_source::Header;
 use anyhow::{anyhow, Result};

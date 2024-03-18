@@ -1,4 +1,4 @@
-use crate::{eth::retry_rpc::EvmRetryRpcApi, witness::common::chain_source::Header};
+use crate::{evm::retry_rpc::EvmRetryRpcApi, witness::common::chain_source::Header};
 use cf_chains::eth::EthereumTrackedData;
 use ethers::types::Bloom;
 use sp_core::U256;

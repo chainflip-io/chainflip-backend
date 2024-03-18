@@ -5,7 +5,7 @@ use chainflip_engine::{
 	btc::retry_rpc::BtcRetryRpcClient,
 	db::{KeyStore, PersistentKeyDB},
 	dot::retry_rpc::DotRetryRpcClient,
-	eth::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
+	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
 	health, p2p,
 	settings::{CommandLineOptions, Settings, DEFAULT_SETTINGS_DIR},
 	state_chain_observer::{

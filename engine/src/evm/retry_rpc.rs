@@ -9,7 +9,7 @@ use futures_core::Future;
 use utilities::task_scope::Scope;
 
 use crate::{
-	eth::rpc::{EvmRpcApi, EvmSigningRpcApi},
+	evm::rpc::{EvmRpcApi, EvmSigningRpcApi},
 	retrier::{Attempt, RequestLog, RetrierClient},
 	settings::{NodeContainer, WsHttpEndpoints},
 	witness::common::chain_source::{ChainClient, Header},
@@ -20,7 +20,7 @@ use super::{
 	rpc::{EvmRpcClient, EvmRpcSigningClient, ReconnectSubscriptionClient},
 	ConscientiousEvmWebsocketBlockHeaderStream,
 };
-use crate::eth::rpc::ReconnectSubscribeApi;
+use crate::evm::rpc::ReconnectSubscribeApi;
 use cf_chains::Ethereum;
 
 use anyhow::{Context, Result};

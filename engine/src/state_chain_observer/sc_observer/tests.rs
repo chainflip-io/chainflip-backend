@@ -3,7 +3,7 @@ use std::{collections::BTreeSet, sync::Arc};
 use crate::{
 	btc::retry_rpc::mocks::MockBtcRetryRpcClient,
 	dot::retry_rpc::mocks::MockDotHttpRpcClient,
-	eth::retry_rpc::mocks::MockEvmRetryRpcClient,
+	evm::retry_rpc::mocks::MockEvmRetryRpcClient,
 	state_chain_observer::{
 		client::{
 			extrinsic_api,

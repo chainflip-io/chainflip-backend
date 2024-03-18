@@ -2,7 +2,7 @@ use ethers::types::Bloom;
 use sp_core::H256;
 use std::collections::HashMap;
 
-use crate::eth::retry_rpc::EvmRetryRpcApi;
+use crate::evm::retry_rpc::EvmRetryRpcApi;
 
 use super::{
 	super::common::{

@@ -1,13 +1,13 @@
 use ethers::prelude::*;
 
-use crate::eth::rpc::{
+use crate::evm::rpc::{
 	address_checker::{AddressCheckerRpcApi, *},
 	EvmRpcApi,
 };
 
 use super::EvmRetryRpcClient;
 
-use crate::eth::retry_rpc::RequestLog;
+use crate::evm::retry_rpc::RequestLog;
 
 #[async_trait::async_trait]
 pub trait AddressCheckerRetryRpcApi {

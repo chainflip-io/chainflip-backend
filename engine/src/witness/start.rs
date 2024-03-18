@@ -6,7 +6,7 @@ use crate::{
 	btc::retry_rpc::BtcRetryRpcClient,
 	db::PersistentKeyDB,
 	dot::retry_rpc::DotRetryRpcClient,
-	eth::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
+	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi,
 		storage_api::StorageApi,

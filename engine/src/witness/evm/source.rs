@@ -5,7 +5,7 @@ use futures_util::stream;
 use sp_core::H256;
 
 use crate::{
-	eth::{core_h256, retry_rpc::EvmRetrySubscribeApi, ConscientiousEvmWebsocketBlockHeaderStream},
+	evm::{core_h256, retry_rpc::EvmRetrySubscribeApi, ConscientiousEvmWebsocketBlockHeaderStream},
 	witness::common::{
 		chain_source::{BoxChainStream, ChainClient, ChainSource, Header},
 		ExternalChain, ExternalChainSource,

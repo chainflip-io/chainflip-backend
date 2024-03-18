@@ -20,7 +20,7 @@ use super::{
 	contract_common::events_at_block,
 };
 use crate::{
-	eth::retry_rpc::EvmRetryRpcApi,
+	evm::retry_rpc::EvmRetryRpcApi,
 	witness::common::{RuntimeCallHasChain, RuntimeHasChain},
 };
 use num_traits::Zero;
@@ -182,7 +182,7 @@ mod tests {
 	use super::super::source::EvmSource;
 
 	use crate::{
-		eth::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcClient},
+		evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcClient},
 		settings::{NodeContainer, WsHttpEndpoints},
 		state_chain_observer::client::StateChainClient,
 		witness::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSource},

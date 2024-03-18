@@ -1,5 +1,5 @@
 use crate::{
-	eth::retry_rpc::address_checker::*,
+	evm::retry_rpc::address_checker::*,
 	witness::common::{RuntimeCallHasChain, RuntimeHasChain},
 };
 use anyhow::ensure;
@@ -20,7 +20,7 @@ use ethers::prelude::*;
 use itertools::Itertools;
 use sp_core::U256;
 
-use crate::eth::rpc::address_checker::*;
+use crate::evm::rpc::address_checker::*;
 
 use super::{contract_common::events_at_block, vault::FetchedNativeFilter};
 use crate::witness::common::chain_source::Header;
@@ -28,7 +28,7 @@ use crate::witness::common::chain_source::Header;
 use super::super::common::chunked_chain_source::chunked_by_vault::{
 	builder::ChunkedByVaultBuilder, ChunkedByVault,
 };
-use crate::eth::retry_rpc::EvmRetryRpcApi;
+use crate::evm::retry_rpc::EvmRetryRpcApi;
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	/// We track Ethereum deposits by checking the balance via our own deployed AddressChecker
@@ -226,7 +226,7 @@ pub fn eth_ingresses_at_block<
 #[cfg(test)]
 mod tests {
 	use crate::{
-		eth::{
+		evm::{
 			retry_rpc::{EvmRetryRpcApi, EvmRetryRpcClient},
 			rpc::EvmRpcClient,
 		},

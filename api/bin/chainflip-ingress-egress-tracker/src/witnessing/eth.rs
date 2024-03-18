@@ -5,7 +5,7 @@ use std::sync::Arc;
 use utilities::task_scope;
 
 use chainflip_engine::{
-	eth::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcClient},
+	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcClient},
 	settings::NodeContainer,
 	state_chain_observer::client::{
 		chain_api::ChainApi,
