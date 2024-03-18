@@ -25,6 +25,6 @@ jobs:
 
       - name: cargo cf-test-ci --locked
         run: |
-          export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:oldVersion
+          export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:old-engine-dylib
           cargo cf-test-ci --locked
           sccache --show-stats

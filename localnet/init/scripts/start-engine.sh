@@ -4,9 +4,9 @@
 # e.g. in the case of an upgrade where we run two engines simultaneously.
 
 echo "Starting engine..."
-export DYLD_LIBRARY_PATH=oldVersion
-export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:oldVersion
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:oldVersion
+export DYLD_LIBRARY_PATH=old-engine-dylib
+export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:old-engine-dylib
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:old-engine-dylib
 echo "DYLD_LIBRARY_PATH/LD_LIBRARY_PATH to find the engine dylib: $DYLD_LIBRARY_PATH"
 
 set -e

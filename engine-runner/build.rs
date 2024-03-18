@@ -9,8 +9,8 @@ fn main() {
 		.parent()
 		.unwrap(); // target/debug or target/release
 
-	// ./oldVersion from project root.
-	let old_version = build_dir.parent().unwrap().parent().unwrap().join("oldVersion");
+	// ./old-engine-dylib from project root.
+	let old_version = build_dir.parent().unwrap().parent().unwrap().join("old-engine-dylib");
 
 	let old_version_str = old_version.to_str().unwrap();
 
