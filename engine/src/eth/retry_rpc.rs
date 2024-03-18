@@ -29,6 +29,7 @@ use anyhow::{Context, Result};
 pub struct EvmRetryRpcClient<Rpc: EvmRpcApi> {
 	rpc_retry_client: RetrierClient<Rpc>,
 	sub_retry_client: RetrierClient<ReconnectSubscriptionClient>,
+	chain_name: &'static str,
 }
 
 const ETHERS_RPC_TIMEOUT: Duration = Duration::from_millis(4 * 1000);
@@ -74,6 +75,7 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcClient<Rpc> {
 				ETHERS_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
+			chain_name,
 		}
 	}
 }
@@ -303,10 +305,12 @@ impl<Rpc: EvmSigningRpcApi> EvmRetrySigningRpcApi for EvmRetryRpcClient<Rpc> {
 		tx: cf_chains::evm::Transaction,
 	) -> anyhow::Result<TxHash> {
 		let log = RequestLog::new("broadcast_transaction".to_string(), Some(format!("{tx:?}")));
+		let s = self.chain_name.to_owned();
 		self.rpc_retry_client
 			.request_with_limit(
 				Box::pin(move |client| {
 					let tx = tx.clone();
+					let s = s.clone();
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						let mut transaction_request = Eip1559TransactionRequest {
@@ -346,7 +350,7 @@ impl<Rpc: EvmSigningRpcApi> EvmRetrySigningRpcApi for EvmRetryRpcClient<Rpc> {
 						client
 							.send_transaction(transaction_request)
 							.await
-							.context("Failed to send ETH transaction")
+							.context(format!("Failed to send {} transaction", s))
 					})
 				}),
 				log,
