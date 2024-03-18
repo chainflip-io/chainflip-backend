@@ -169,7 +169,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 140,
+	spec_version: 141,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 12,
@@ -1025,7 +1025,7 @@ type PalletMigrations = (
 		9,
 		10,
 	>,
-	// pallet_cf_pools::migrations::PalletMigration<Runtime>,
+	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 	migrations::housekeeping::Migration,
 	FlipToBurnMigration,
 );
