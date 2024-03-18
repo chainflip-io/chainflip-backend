@@ -28,8 +28,7 @@ function createSnapshotFile(networkUrl: string, blockHash: string, stderrFile: s
 
 function tryRuntimeCommand(runtimePath: string, blockHash: 'latest' | string, networkUrl: string) {
   const blockParam = blockHash === 'latest' ? 'live' : `live --at ${blockHash}`;
-  // Create a temporary file for capturing stderr
-  const stderrFile = path.join(os.tmpdir(), `cmd-stderr-${Date.now()}`);
+  const stderrFile = path.join(os.tmpdir(), 'chainflip/try-runtime-upgrade/', `cmd-stderr-${Date.now()}.log`);
   try {
     execSync(
       // TODO: Replace pre-and-post with all after the SDK issue paritytech/polkadot-sdk#2560 is merged.
@@ -44,11 +43,13 @@ function tryRuntimeCommand(runtimePath: string, blockHash: 'latest' | string, ne
     console.log(`try-runtime success for blockParam ${blockParam}`);
   } catch (e) {
     console.error(`try-runtime failed for blockParam ${blockParam}`);
+
+    createSnapshotFile(networkUrl, blockHash, stderrFile);
+
     const stderrOutput = fs.readFileSync(stderrFile, 'utf8');
     console.error(e);
     console.error('Command failed: Command output:', stderrOutput);
 
-    createSnapshotFile(networkUrl, blockHash, stderrFile);
 
     fs.unlinkSync(stderrFile);
 
