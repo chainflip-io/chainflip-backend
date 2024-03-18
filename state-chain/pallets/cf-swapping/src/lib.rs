@@ -681,7 +681,7 @@ pub mod pallet {
 		#[pallet::call_index(9)]
 		#[pallet::weight(T::WeightInfo::deregister_as_broker())]
 		pub fn deregister_as_broker(who: OriginFor<T>, force: bool) -> DispatchResult {
-			let account_id = ensure_signed(who)?;
+			let account_id = T::AccountRoleRegistry::ensure_broker(who)?;
 
 			ensure!(
 				force ||

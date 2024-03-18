@@ -306,7 +306,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::deregister_lp_account())]
 		pub fn deregister_lp_account(who: OriginFor<T>, force: bool) -> DispatchResult {
 			const STABLE_ASSET: Asset = Asset::Usdc;
-			let account_id = ensure_signed(who)?;
+			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(who)?;
 
 			ensure!(
 				Asset::all().filter(|asset| *asset != STABLE_ASSET).all(|asset| {

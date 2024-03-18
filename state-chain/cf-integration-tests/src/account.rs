@@ -54,7 +54,7 @@ fn account_deletion_removes_relevant_storage_items() {
 				EthereumAddress::repeat_byte(0x22),
 				Default::default()
 			),
-			pallet_cf_funding::Error::<Runtime>::AccountReferencesOutstanding
+			pallet_cf_funding::Error::<Runtime>::AccountMustBeUnregistered
 		);
 
 		network::Cli::deregister_as_validator(&backup_node);

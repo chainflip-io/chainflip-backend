@@ -6,15 +6,12 @@ use cf_primitives::FlipBalance;
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::account_role_registry::MockAccountRoleRegistry, AccountInfo, AccountRoleRegistry,
-	Bonding, SetSafeMode, Slashing,
+	Bonding, Chainflip, SetSafeMode, Slashing,
 };
 use sp_core::H160;
 
 use crate::BoundRedeemAddress;
-use frame_support::{
-	assert_noop, assert_ok,
-	traits::{HandleLifetime, OriginTrait},
-};
+use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
 use pallet_cf_flip::{Bonder, FlipSlasher};
 use sp_runtime::{traits::BadOrigin, DispatchError};
 
@@ -502,7 +499,7 @@ fn can_only_redeem_during_auction_if_not_bidding() {
 		MockEpochInfo::set_is_auction_phase(true);
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
-			RedemptionAmount::Max,
+			(AMOUNT / 2).into(),
 			ETH_DUMMY_ADDR,
 			Default::default()
 		),);
@@ -1805,7 +1802,7 @@ fn account_references_must_be_zero_for_full_redeem() {
 			"Funding pallet should increment the provider count on account creation."
 		);
 
-		frame_system::Consumer::<Test>::created(&ALICE).unwrap();
+		<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE).unwrap();
 
 		assert_noop!(
 			Funding::redeem(
@@ -1814,10 +1811,10 @@ fn account_references_must_be_zero_for_full_redeem() {
 				Default::default(),
 				Default::default()
 			),
-			Error::<Test>::AccountReferencesOutstanding,
+			Error::<Test>::AccountMustBeUnregistered,
 		);
 
-		frame_system::Consumer::<Test>::killed(&ALICE).unwrap();
+		<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::deregister_as_validator(&ALICE).unwrap();
 
 		assert_ok!(Funding::redeem(
 			OriginTrait::signed(ALICE),

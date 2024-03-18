@@ -295,8 +295,8 @@ pub mod pallet {
 		/// The account is already bound to an executor address.
 		ExecutorAddressAlreadyBound,
 
-		/// The account cannot be reaped because it still has references outstanding.
-		AccountReferencesOutstanding,
+		/// The account cannot be reaped before it is unregstered.
+		AccountMustBeUnregistered,
 	}
 
 	#[pallet::call]
@@ -460,10 +460,9 @@ pub mod pallet {
 			if redeem_amount > Zero::zero() {
 				T::Flip::try_initiate_redemption(&account_id, redeem_amount)?;
 				if T::Flip::balance(&account_id).is_zero() {
-					// Check if this account can be reaped.
 					ensure!(
-						frame_system::Pallet::<T>::can_dec_provider(&account_id),
-						Error::<T>::AccountReferencesOutstanding
+						T::AccountRoleRegistry::is_unregistered(&account_id),
+						Error::<T>::AccountMustBeUnregistered
 					);
 				}
 

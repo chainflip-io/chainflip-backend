@@ -717,6 +717,10 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 
 	fn has_account_role(who: &T::AccountId, role: AccountRole) -> bool;
 
+	fn is_unregistered(who: &T::AccountId) -> bool {
+		Self::has_account_role(who, AccountRole::Unregistered)
+	}
+
 	fn register_as_broker(account_id: &T::AccountId) -> DispatchResult {
 		Self::register_account_role(account_id, AccountRole::Broker)
 	}

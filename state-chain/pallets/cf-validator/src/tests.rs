@@ -12,9 +12,8 @@ use cf_traits::{
 	AccountRoleRegistry, SafeMode, SetSafeMode,
 };
 use cf_utilities::success_threshold_from_share_count;
-use frame_support::{assert_err, assert_noop, assert_ok, traits::OriginTrait};
+use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
 use frame_system::RawOrigin;
-use sp_runtime::traits::BadOrigin;
 
 const ALICE: u64 = 100;
 const BOB: u64 = 101;
