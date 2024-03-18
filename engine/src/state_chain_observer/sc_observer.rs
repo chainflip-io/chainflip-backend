@@ -218,7 +218,7 @@ macro_rules! match_event {
 pub async fn start<
 	StateChainClient,
 	BlockStream,
-	EthRpc,
+	EvmRpc,
 	DotRpc,
 	BtcRpc,
 	EthMultisigClient,
@@ -227,8 +227,8 @@ pub async fn start<
 >(
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
-	eth_rpc: EthRpc,
-	arb_rpc: EthRpc,
+	eth_rpc: EvmRpc,
+	arb_rpc: EvmRpc,
 	dot_rpc: DotRpc,
 	btc_rpc: BtcRpc,
 	eth_multisig_client: EthMultisigClient,
@@ -237,7 +237,7 @@ pub async fn start<
 ) -> Result<(), anyhow::Error>
 where
 	BlockStream: StreamApi<FINALIZED>,
-	EthRpc: EvmRetrySigningRpcApi + Send + Sync + 'static,
+	EvmRpc: EvmRetrySigningRpcApi + Send + Sync + 'static,
 	DotRpc: DotRetryRpcApi + Send + Sync + 'static,
 	BtcRpc: BtcRetryRpcApi + Send + Sync + 'static,
 	EthMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,

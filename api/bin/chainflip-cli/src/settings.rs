@@ -3,7 +3,7 @@ pub use chainflip_engine::settings::StateChain;
 use chainflip_engine::{
 	constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT},
 	settings::{
-		resolve_settings_path, CfSettings, Eth, EthOptions, PathResolutionExpectation,
+		resolve_settings_path, CfSettings, EthOptions, Evm, PathResolutionExpectation,
 		StateChainOptions, DEFAULT_SETTINGS_DIR,
 	},
 };
@@ -215,7 +215,7 @@ fn account_role_parser(s: &str) -> Result<AccountRole, String> {
 pub struct CLISettings {
 	pub state_chain: StateChain,
 
-	pub eth: Eth,
+	pub eth: Evm,
 }
 
 impl CfSettings for CLISettings {
