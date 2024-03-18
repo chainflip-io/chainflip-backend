@@ -1,9 +1,9 @@
 [package]
 name = "engine-runner"
 version = "0.1.0"
-authors = ["Kyle"]
-build = "build.rs"
-edition = "2021"
+authors = ["Chainflip team <https://github.com/chainflip-io>"]
+build = 'build.rs'
+edition = '2021'
 
 # TODO: use cargo-deb variants to select the correct asset for the correct ubuntu version.
 # Namespacing the assets with a folder to select them.
