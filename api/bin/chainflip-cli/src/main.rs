@@ -88,6 +88,12 @@ async fn run_cli() -> Result<()> {
 						.await?;
 					println!("Withdrawal request successfull submitted: {}", withdraw_details);
 				},
+				Broker(BrokerSubcommands::RegisterAccount) => {
+					api.broker_api().register_account().await?;
+				},
+				Broker(BrokerSubcommands::DeregisterAccount { force }) => {
+					api.broker_api().deregister_account(force).await?;
+				},
 				LiquidityProvider(
 					LiquidityProviderSubcommands::RequestLiquidityDepositAddress {
 						asset,
@@ -109,6 +115,12 @@ async fn run_cli() -> Result<()> {
 						api.lp_api().register_liquidity_refund_address(lra_address).await?;
 					println!("Liquidity Refund address registered. Tx hash: {tx_hash}");
 				},
+				LiquidityProvider(LiquidityProviderSubcommands::RegisterAccount) => {
+					api.lp_api().register_account().await?;
+				},
+				LiquidityProvider(LiquidityProviderSubcommands::DeregisterAccount { force }) => {
+					api.lp_api().deregister_account(force).await?;
+				},
 				Redeem { amount, eth_address, executor_address } => {
 					request_redemption(api, amount, eth_address, executor_address).await?;
 				},
@@ -126,8 +138,8 @@ async fn run_cli() -> Result<()> {
 				},
 				RegisterAccountRole { role } => {
 					println!(
-					"Submitting `register-account-role` with role: {role:?}. This cannot be reversed for your account.",
-				);
+						"Submitting `register-account-role` with role: {role:?}. This cannot be reversed for your account.",
+					);
 					if !confirm_submit() {
 						return Ok(())
 					}

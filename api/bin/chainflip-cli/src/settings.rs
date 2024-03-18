@@ -82,6 +82,10 @@ pub enum BrokerSubcommands {
 	/// Request a swap deposit address.
 	RequestSwapDepositAddress(SwapRequestParams),
 	WithdrawFees(WithdrawFeesParams),
+	RegisterAccount,
+	DeregisterAccount {
+		force: bool,
+	},
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]
@@ -94,7 +98,14 @@ pub enum LiquidityProviderSubcommands {
 	},
 	/// Register a Liquidity Refund Address for the given chain. An address must be
 	/// registered to request a deposit address for the given chain.
-	RegisterLiquidityRefundAddress { chain: ForeignChain, address: String },
+	RegisterLiquidityRefundAddress {
+		chain: ForeignChain,
+		address: String,
+	},
+	RegisterAccount,
+	DeregisterAccount {
+		force: bool,
+	},
 }
 
 #[derive(Parser, Clone, Debug)]

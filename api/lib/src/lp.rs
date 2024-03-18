@@ -1,3 +1,4 @@
+use super::SimpleSubmissionApi;
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_amm::{
@@ -164,7 +165,7 @@ fn into_api_wait_for_result<T>(
 }
 
 #[async_trait]
-pub trait LpApi: SignedExtrinsicApi {
+pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 	async fn register_liquidity_refund_address(&self, address: EncodedAddress) -> Result<H256> {
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(RuntimeCall::from(
@@ -383,5 +384,17 @@ pub trait LpApi: SignedExtrinsicApi {
 			},
 			collect_limit_order_returns,
 		))
+	}
+
+	async fn register_account(&self) -> Result<H256> {
+		self.simple_submission_with_dry_run(pallet_cf_lp::Call::register_lp_account {})
+			.await
+			.context("Could not register liquidity provider")
+	}
+
+	async fn deregister_account(&self, force: bool) -> Result<H256> {
+		self.simple_submission_with_dry_run(pallet_cf_lp::Call::deregister_lp_account { force })
+			.await
+			.context("Could not de-register liquidity provider")
 	}
 }

@@ -337,7 +337,7 @@ impl fmt::Display for WithdrawFeesDetail {
 }
 
 #[async_trait]
-pub trait BrokerApi: SignedExtrinsicApi {
+pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 	async fn request_swap_deposit_address(
 		&self,
 		source_asset: Asset,
@@ -431,6 +431,19 @@ pub trait BrokerApi: SignedExtrinsicApi {
 			bail!("No WithdrawalRequested event was found");
 		}
 	}
+	async fn register_account(&self) -> Result<H256> {
+		self.simple_submission_with_dry_run(pallet_cf_swapping::Call::register_as_broker {})
+			.await
+			.context("Could not register as broker")
+	}
+	async fn deregister_account(&self, force: bool) -> Result<H256> {
+		self.simple_submission_with_dry_run(pallet_cf_swapping::Call::deregister_as_broker {
+			force,
+		})
+		.await
+		.context("Could not de-register as broker")
+	}
+}
 
 #[async_trait]
 pub(crate) trait SimpleSubmissionApi: SignedExtrinsicApi {
