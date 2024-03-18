@@ -7,7 +7,6 @@ version = "1.4.0"
 
 [lib]
 crate-type = ["cdylib"]
-# TODO: prebuild to check the name matces the version
 name = "chainflip_engine_v1_4_0"
 path = 'src/lib.rs'
 
