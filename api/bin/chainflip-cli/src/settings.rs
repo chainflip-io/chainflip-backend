@@ -82,8 +82,14 @@ pub enum BrokerSubcommands {
 	/// Request a swap deposit address.
 	RequestSwapDepositAddress(SwapRequestParams),
 	WithdrawFees(WithdrawFeesParams),
+	/// Register this account as a broker account.
 	RegisterAccount,
+	/// De-register this broker account.
 	DeregisterAccount {
+		#[clap(
+			help = "Force deregistration. If the account has any funds, they will be lost.",
+			long = "force"
+		)]
 		force: bool,
 	},
 }
@@ -98,14 +104,25 @@ pub enum LiquidityProviderSubcommands {
 	},
 	/// Register a Liquidity Refund Address for the given chain. An address must be
 	/// registered to request a deposit address for the given chain.
-	RegisterLiquidityRefundAddress {
-		chain: ForeignChain,
-		address: String,
-	},
+	RegisterLiquidityRefundAddress { chain: ForeignChain, address: String },
+	/// Register this account as a liquidity provider account.
 	RegisterAccount,
+	/// De-register this liquidity provider account.
 	DeregisterAccount {
+		#[clap(
+			help = "Force deregistration. If the account has any funds, they will be lost.",
+			long = "force"
+		)]
 		force: bool,
 	},
+}
+
+#[derive(clap::Subcommand, Clone, Debug)]
+pub enum ValidatorSubcommands {
+	/// Register this account as a validator account.
+	RegisterAccount,
+	/// De-register this validator account.
+	DeregisterAccount,
 }
 
 #[derive(Parser, Clone, Debug)]
@@ -116,6 +133,8 @@ pub enum CliCommand {
 	/// Liquidity provider specific commands
 	#[clap(subcommand, name = "lp")]
 	LiquidityProvider(LiquidityProviderSubcommands),
+	#[clap(subcommand)]
+	Validator(ValidatorSubcommands),
 	#[clap(
 		about = "Request a redemption. After requesting the redemption, please proceed to the  to complete the redeeming process."
 	)]

@@ -1,7 +1,7 @@
 #![feature(absolute_path)]
 use crate::settings::{
 	BrokerSubcommands, CLICommandLineOptions, CLISettings, CliCommand::*,
-	LiquidityProviderSubcommands,
+	LiquidityProviderSubcommands, ValidatorSubcommands,
 };
 use anyhow::{Context, Result};
 use api::{
@@ -9,6 +9,7 @@ use api::{
 	primitives::{RedemptionAmount, FLIP_DECIMALS},
 	queries::QueryApi,
 	AccountId32, BrokerApi, GovernanceApi, KeyPair, OperatorApi, StateChainApi, SwapDepositAddress,
+	ValidatorApi,
 };
 use cf_chains::eth::Address as EthereumAddress;
 use chainflip_api as api;
@@ -120,6 +121,14 @@ async fn run_cli() -> Result<()> {
 				},
 				LiquidityProvider(LiquidityProviderSubcommands::DeregisterAccount { force }) => {
 					api.lp_api().deregister_account(force).await?;
+				},
+				Validator(command) => match command {
+					ValidatorSubcommands::RegisterAccount => {
+						api.validator_api().register_account().await?;
+					},
+					ValidatorSubcommands::DeregisterAccount => {
+						api.validator_api().deregister_account().await?;
+					},
 				},
 				Redeem { amount, eth_address, executor_address } => {
 					request_redemption(api, amount, eth_address, executor_address).await?;

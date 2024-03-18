@@ -138,6 +138,10 @@ impl StateChainApi {
 		self.state_chain_client.clone()
 	}
 
+	pub fn validator_api(&self) -> Arc<impl ValidatorApi> {
+		self.state_chain_client.clone()
+	}
+
 	pub fn broker_api(&self) -> Arc<impl BrokerApi> {
 		self.state_chain_client.clone()
 	}
@@ -157,6 +161,22 @@ impl GovernanceApi for StateChainClient {}
 impl BrokerApi for StateChainClient {}
 #[async_trait]
 impl OperatorApi for StateChainClient {}
+#[async_trait]
+impl ValidatorApi for StateChainClient {}
+
+#[async_trait]
+pub trait ValidatorApi: SimpleSubmissionApi {
+	async fn register_account(&self) -> Result<H256> {
+		self.simple_submission_with_dry_run(pallet_cf_validator::Call::register_as_validator {})
+			.await
+			.context("Could not register as validator")
+	}
+	async fn deregister_account(&self) -> Result<H256> {
+		self.simple_submission_with_dry_run(pallet_cf_validator::Call::deregister_as_validator {})
+			.await
+			.context("Could not de-register as validator")
+	}
+}
 
 #[async_trait]
 pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseApi {
@@ -446,7 +466,7 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 }
 
 #[async_trait]
-pub(crate) trait SimpleSubmissionApi: SignedExtrinsicApi {
+pub trait SimpleSubmissionApi: SignedExtrinsicApi {
 	async fn simple_submission_with_dry_run<C>(&self, call: C) -> Result<H256>
 	where
 		C: Into<state_chain_runtime::RuntimeCall> + Clone + std::fmt::Debug + Send + Sync + 'static,
