@@ -17,7 +17,7 @@ use frame_system::{ensure_signed, pallet_prelude::OriginFor, RawOrigin, WeightIn
 pub use pallet::*;
 use sp_std::{marker::PhantomData, vec::Vec};
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[frame_support::pallet]
 pub mod pallet {

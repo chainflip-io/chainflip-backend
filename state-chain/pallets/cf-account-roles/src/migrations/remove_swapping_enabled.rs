@@ -3,6 +3,8 @@ use core::marker::PhantomData;
 #[cfg(feature = "try-runtime")]
 use frame_support::{ensure, sp_runtime::DispatchError};
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
+#[cfg(feature = "try-runtime")]
+use sp_std::vec::Vec;
 
 pub struct Migration<T: Config>(PhantomData<T>);
 
@@ -24,7 +26,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		ensure!(old::SwappingEnabled::<T>::get(), "SwappingEnabled should be true before upgrade.");
-		Ok(vec![])
+		Ok(Default::default())
 	}
 
 	#[cfg(feature = "try-runtime")]
