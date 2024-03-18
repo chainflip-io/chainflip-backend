@@ -5,6 +5,8 @@ authors = ["Kyle"]
 build = "build.rs"
 edition = "2021"
 
+# TODO: use cargo-deb variants to select the correct asset for the correct ubuntu version.
+# Namespacing the assets with a folder to select them.
 [package.metadata.deb]
 assets = [
     [
@@ -15,6 +17,7 @@ assets = [
     [
         "target/release/chainflip_engine_v1_4_0.so",
         # TODO: How to export the LD_LIBRARY_PATH to have this path.
+        # We can add it to the environment of the maintainer-scripts.
         "usr/lib/chainflip-engine/chainflip_engine_v1_4_0",
     ],
     [
