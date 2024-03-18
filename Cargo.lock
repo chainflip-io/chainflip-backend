@@ -1400,7 +1400,7 @@ dependencies = [
 
 [[package]]
 name = "cf-engine-dylib"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "chainflip-engine",
  "engine-proc-macros",

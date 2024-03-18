@@ -43,7 +43,7 @@ jobs:
       - name: Build chainflip binaries
         run: |
           export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:oldVersion
-          cargo cf-build-${{ inputs.profile }} --locked --exclude engine-runner --workspace
+          cargo cf-build-${{ inputs.profile }} --locked
           sccache --show-stats
 
       - name: ls directory
@@ -62,6 +62,7 @@ jobs:
             ./target/${{ inputs.binary-subdir }}/chainflip-broker-api
             ./target/${{ inputs.binary-subdir }}/chainflip-lp-api
             ./target/${{ inputs.binary-subdir }}/chainflip-ingress-egress-tracker
+            ./target/${{ inputs.binary-subdir }}/engine-runner
             ./target/${{ inputs.binary-subdir }}/libchainflip_engine_v*.so
 
 
