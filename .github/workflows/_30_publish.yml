@@ -126,7 +126,7 @@ jobs:
           echo "apt-get update" >> $GITHUB_STEP_SUMMARY
           echo "apt-get install chainflip-cli" >> $GITHUB_STEP_SUMMARY
           echo "apt-get install chainflip-node" >> $GITHUB_STEP_SUMMARY
-          echo "apt-get install chainflip-engine" >> $GITHUB_STEP_SUMMARY
+          # echo "apt-get install chainflip-engine" >> $GITHUB_STEP_SUMMARY
           echo "apt-get install chainflip-broker-api" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 

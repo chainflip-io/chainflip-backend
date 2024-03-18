@@ -41,10 +41,15 @@ jobs:
         run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
 
       - name: Build chainflip binaries
+        # cargo cf-build-${{ inputs.profile }} --locked
         run: |
           export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:oldVersion
-          cargo cf-build-${{ inputs.profile }} --locked
+          cargo cf-build-${{ inputs.profile }} --locked --exclude engine-runner --workspace
           sccache --show-stats
+
+      - name: ls directory
+        run: |
+          ls -la ./target/${{ inputs.binary-subdir }}
 
       - name: Upload binary artifacts
         uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
@@ -52,12 +57,13 @@ jobs:
           name: ${{ inputs.upload-name }}-ubuntu-${{ matrix.ubuntu_version }}
           path: |
             ./target/${{ inputs.binary-subdir }}/chainflip-node
-            ./target/${{ inputs.binary-subdir }}/chainflip-engine
             ./target/${{ inputs.binary-subdir }}/chainflip-cli
             ./target/${{ inputs.binary-subdir }}/generate-genesis-keys
             ./target/${{ inputs.binary-subdir }}/chainflip-broker-api
             ./target/${{ inputs.binary-subdir }}/chainflip-lp-api
             ./target/${{ inputs.binary-subdir }}/chainflip-ingress-egress-tracker
+            ./target/${{ inputs.binary-subdir }}/libchainflip_engine_v1_3_0.so
+
 
       - name: Upload runtime artifacts
         uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
