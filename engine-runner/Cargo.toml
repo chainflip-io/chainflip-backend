@@ -1,6 +1,6 @@
 [package]
 name = "engine-runner"
-version = "0.1.0"
+version = "1.4.0"
 authors = ["Chainflip team <https://github.com/chainflip-io>"]
 build = 'build.rs'
 edition = '2021'
@@ -16,8 +16,6 @@ assets = [
     ],
     [
         "target/release/chainflip_engine_v1_4_0.so",
-        # TODO: How to export the LD_LIBRARY_PATH to have this path.
-        # We can add it to the environment of the maintainer-scripts.
         "usr/lib/chainflip-engine/chainflip_engine_v1_4_0",
     ],
     [
