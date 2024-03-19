@@ -56,31 +56,34 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 			> = BTreeMap::new();
 			pool.range_orders_cache.iter().for_each(|(lp, range_orders)| {
 				range_orders.iter().for_each(|(id, tick_range)| {
-					let current_positions = pool
-						.pool_state
-						.range_orders
-						.positions
-						.get(&((lp.clone(), *id), tick_range.start, tick_range.end))
-						.unwrap();
-					transformed_range_order_positions.insert(
-						(lp.clone(), *id, tick_range.start, tick_range.end),
-						current_positions.clone(),
-					);
+					if let Some(positions) = pool.pool_state.range_orders.positions.get(&(
+						(lp.clone(), *id),
+						tick_range.start,
+						tick_range.end,
+					)) {
+						transformed_range_order_positions.insert(
+							(lp.clone(), *id, tick_range.start, tick_range.end),
+							positions.clone(),
+						);
+					}
 				});
 			});
 			pool.limit_orders_cache.as_ref().into_iter().for_each(|(assets, limit_orders)| {
 				limit_orders.iter().for_each(|(lp, limit_orders)| {
 					let mut orders: BTreeMap<_, _> = BTreeMap::new();
 					limit_orders.iter().for_each(|(id, tick)| {
-						let price = price_at_tick(*tick).unwrap();
-						let current_positions = pool.pool_state.limit_orders.positions[assets]
+						let price = price_at_tick(*tick).expect("a valid price tick");
+						if let Some(positions) = pool.pool_state.limit_orders.positions[assets]
 							.get(&(price, (lp.clone(), *id)))
-							.unwrap();
-						orders.insert((lp.clone(), *id, price), current_positions.clone());
+						{
+							orders.insert((lp.clone(), *id, price), positions.clone());
+						}
 					});
 					transformed_limit_orders.insert(assets, orders);
 				})
 			});
+			let no_orders: BTreeMap<(T::AccountId, OrderId, SqrtPriceQ64F96), LimitOrdersPosition> =
+				BTreeMap::new();
 			Pools::<T>::insert(
 				asset_pair,
 				Pool {
@@ -89,28 +92,19 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 							pool.pool_state.range_orders,
 							transformed_range_order_positions,
 						),
-						limit_orders: if transformed_limit_orders.get(&Pairs::Base).is_some() &&
-							transformed_limit_orders.get(&Pairs::Quote).is_some()
-						{
-							LimitOrdersPoolState::migrate(
-								pool.pool_state.limit_orders,
-								PoolPairsMap {
-									base: transformed_limit_orders
-										.get(&Pairs::Base)
-										.unwrap()
-										.clone(),
-									quote: transformed_limit_orders
-										.get(&Pairs::Quote)
-										.unwrap()
-										.clone(),
-								},
-							)
-						} else {
-							LimitOrdersPoolState::migrate(
-								pool.pool_state.limit_orders,
-								PoolPairsMap { base: BTreeMap::new(), quote: BTreeMap::new() },
-							)
-						},
+						limit_orders: LimitOrdersPoolState::migrate(
+							pool.pool_state.limit_orders,
+							PoolPairsMap {
+								base: transformed_limit_orders
+									.get(&Pairs::Base)
+									.unwrap_or(&no_orders)
+									.clone(),
+								quote: transformed_limit_orders
+									.get(&Pairs::Quote)
+									.unwrap_or(&no_orders)
+									.clone(),
+							},
+						),
 					},
 				},
 			);
