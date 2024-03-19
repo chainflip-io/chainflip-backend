@@ -82,8 +82,7 @@ jobs:
           mkdir -p /tmp/chainflip/dopey
           touch /tmp/chainflip/debug.log
           ls ${{ env.BINARY_ROOT_PATH }}
-          mkdir -p target/release/
-          mv ${{ env.BINARY_ROOT_PATH }}/libchainflip_engine_v*.so target/release/
+          mv ${{ env.BINARY_ROOT_PATH }}/libchainflip_engine_v*.so /usr/lib/
           chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
           chmod +x ${{ env.BINARY_ROOT_PATH }}/engine-runner
           touch ./localnet/.setup_complete
