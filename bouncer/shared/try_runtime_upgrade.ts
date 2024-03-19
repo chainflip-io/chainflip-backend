@@ -22,10 +22,7 @@ function createSnapshotFile(networkUrl: string, blockHash: string, logFolder: st
   const snapshotFolder = path.join(os.tmpdir(), 'chainflip/snapshots/');
   create_dir_if_not_exists(snapshotFolder);
   const blockParam = blockHash === 'latest' ? '' : `--at ${blockHash}`;
-  const snapshotOutputPath = path.join(
-    snapshotFolder,
-    `snapshot-at-${blockHash}.snap`,
-  );
+  const snapshotOutputPath = path.join(snapshotFolder, `snapshot-at-${blockHash}.snap`);
   const stderrFile = path.join(logFolder, `try-runtime-snapshot-${Date.now()}.log`);
 
   console.log('Writing snapshot to: ', snapshotOutputPath);
