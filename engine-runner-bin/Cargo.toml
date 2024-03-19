@@ -1,5 +1,6 @@
 [package]
 name = "engine-runner"
+# NB: When updating this version, you must update the debian assets appropriately too.
 version = "1.4.0"
 authors = ["Chainflip team <https://github.com/chainflip-io>"]
 build = 'build.rs'
