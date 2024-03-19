@@ -39,6 +39,8 @@ const lpApiTomlVersion = await tomlVersion(`${projectRoot}/api/bin/chainflip-lp-
 const apiLibTomlVersion = await tomlVersion(`${projectRoot}/api/lib/Cargo.toml`);
 const runnerTomlVersion = await tomlVersion(`${projectRoot}/engine-runner/Cargo.toml`);
 const dylibTomlVersion = await tomlVersion(`${projectRoot}/engine-dylib/Cargo.toml`);
+// The engine gets the version from this file
+const procMacroVersion = await tomlVersion(`${projectRoot}/engine-proc-macro/Cargo.toml`);
 
 const brokerTomlVersion = await tomlVersion(
   `${projectRoot}/api/bin/chainflip-broker-api/Cargo.toml`,

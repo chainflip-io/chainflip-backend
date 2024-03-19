@@ -9,7 +9,7 @@ use syn::{parse_macro_input, ItemFn};
 /// Generates a C compatible entrypoint namespacing with the version suffix so that the no_mangle
 /// names do not conflict when two shared libraries are used in the same process.
 #[proc_macro_attribute]
-pub fn cfe_entrypoint(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn cfe_entrypoint(_attrs: TokenStream, item: TokenStream) -> TokenStream {
 	// Parse the input function
 	let input_fn = parse_macro_input!(item as ItemFn);
 
