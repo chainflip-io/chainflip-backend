@@ -7,8 +7,8 @@ Restart=always
 RestartSec=30
 Type=simple
 
-ExecStart=/usr/bin/chainflip-engine1.3 --config-root /etc/chainflip/
-Environment=LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/chainflip-engine
+ExecStart=/usr/bin/chainflip-engine --config-root /etc/chainflip/
+Environment=LD_LIBRARY_PATH=/usr/lib/chainflip-engine
 
 LimitNOFILE=16000
 LimitNOFILESoft=16000

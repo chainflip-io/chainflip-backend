@@ -16,11 +16,11 @@ assets = [
     ],
     [
         "target/release/chainflip_engine_v1_4_0.so",
-        "usr/lib/chainflip-engine/chainflip_engine_v1_4_0",
+        "usr/lib/chainflip-engine/chainflip_engine_v1_4_0.so",
     ],
     [
-        "target/release/chainflip_engine_v1_3_0",
-        "usr/lib/chainflip-engine/chainflip_engine_v1_3_0",
+        "old-engine-dylib/chainflip_engine_v1_3_0.so",
+        "usr/lib/chainflip-engine/chainflip_engine_v1_3_0.so",
     ],
 ]
 

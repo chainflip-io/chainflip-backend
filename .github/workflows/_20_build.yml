@@ -43,7 +43,7 @@ jobs:
       - name: Build chainflip binaries
         run: |
           export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:old-engine-dylib
-          cargo cf-build-${{ inputs.profile }} --locked --exclude engine-runner --workspace
+          cargo cf-build-${{ inputs.profile }} --locked
           sccache --show-stats
 
       - name: ls directory
@@ -52,7 +52,7 @@ jobs:
 
       - name: Upload binary artifacts
         uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
-        # ./target/${{ inputs.binary-subdir }}/engine-runner
+        
         with:
           name: ${{ inputs.upload-name }}-ubuntu-${{ matrix.ubuntu_version }}
           path: |
@@ -63,6 +63,7 @@ jobs:
             ./target/${{ inputs.binary-subdir }}/chainflip-lp-api
             ./target/${{ inputs.binary-subdir }}/chainflip-ingress-egress-tracker
             ./target/${{ inputs.binary-subdir }}/libchainflip_engine_v*.so
+            ./target/${{ inputs.binary-subdir }}/engine-runner
 
 
       - name: Upload runtime artifacts

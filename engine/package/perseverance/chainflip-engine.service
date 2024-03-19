@@ -9,7 +9,7 @@ Type=simple
 
 ExecStart=/usr/bin/chainflip-engine --config-root /etc/chainflip/
 Environment=RUST_LOG="chainflip_engine=debug,multisig=debug,warn,chainflip_engine::p2p=error"
-Environment=LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/chainflip-engine
+Environment=LD_LIBRARY_PATH=/usr/lib/chainflip-engine
 LimitNOFILE=16000
 LimitNOFILESoft=16000
 
