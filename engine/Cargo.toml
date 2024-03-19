@@ -11,10 +11,10 @@ extended-description = """\
 Chainflip Validator Engine Package"""
 maintainer = "Chainflip Labs GmbH <dev@chainflip.io>"
 maintainer-scripts = "package/"
-name = "chainflip-engine1.3"
+name = "chainflip-engine-1.4"
 priority = "required"
 section = "rust"
-systemd-units = [{ unit-name = "chainflip-engine1.3", enable = false }]
+systemd-units = [{ unit-name = "chainflip-engine-1.4", enable = false }]
 assets = [
   [
     "target/release/chainflip-engine",
