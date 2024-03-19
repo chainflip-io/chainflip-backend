@@ -8,7 +8,7 @@ import os from 'os';
 import fs from 'fs';
 import { compileBinaries } from './utils/compile_binaries';
 
-function create_dir_if_not_exists(dir: string) {
+function createDirIfNotExists(dir: string) {
   try {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir);
