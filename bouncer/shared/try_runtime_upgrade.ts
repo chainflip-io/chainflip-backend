@@ -20,7 +20,7 @@ function createDirIfNotExists(dir: string) {
 
 function createSnapshotFile(networkUrl: string, blockHash: string, logFolder: string) {
   const snapshotFolder = path.join(os.tmpdir(), 'chainflip/snapshots/');
-  create_dir_if_not_exists(snapshotFolder);
+  createDirIfNotExists(snapshotFolder);
   const blockParam = blockHash === 'latest' ? '' : `--at ${blockHash}`;
   const snapshotOutputPath = path.join(snapshotFolder, `snapshot-at-${blockHash}.snap`);
   const stderrFile = path.join(logFolder, `try-runtime-snapshot-${Date.now()}.log`);
@@ -41,7 +41,7 @@ function createSnapshotFile(networkUrl: string, blockHash: string, logFolder: st
 
 function tryRuntimeCommand(runtimePath: string, blockHash: 'latest' | string, networkUrl: string) {
   const logFolder = path.join(os.tmpdir(), 'chainflip/try-runtime-upgrade/');
-  create_dir_if_not_exists(logFolder);
+  createDirIfNotExists(logFolder);
 
   const blockParam = blockHash === 'latest' ? 'live' : `live --at ${blockHash}`;
   const stderrFile = path.join(logFolder, `try-runtime-${Date.now()}.log`);
