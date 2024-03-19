@@ -8,36 +8,43 @@ import os from 'os';
 import fs from 'fs';
 import { compileBinaries } from './utils/compile_binaries';
 
-function createSnapshotFile(networkUrl: string, blockHash: string, stderrFile: string) {
+function createSnapshotFile(networkUrl: string, blockHash: string, logFolder: string) {
   const blockParam = blockHash === 'latest' ? '' : `--at ${blockHash}`;
   const snapshotOutputPath = path.join(
     os.tmpdir(),
     'chainflip/snapshots/',
     `snapshot-at-${blockHash}.snap`,
   );
+  const stderrFile = path.join(logFolder, `try-runtime-snapshot-${Date.now()}.log`);
+
   console.log('Writing snapshot to: ', snapshotOutputPath);
+
   try {
     execSync(
-      `try-runtime create-snapshot ${blockParam} --uri ${networkUrl} ${snapshotOutputPath} 2>> ${stderrFile}`,
+      `try-runtime create-snapshot ${blockParam} --uri ${networkUrl} ${snapshotOutputPath} 2> ${stderrFile}`,
       { env: { ...process.env, RUST_LOG: 'runtime::executive=debug' } },
     );
   } catch (e) {
     console.error(`try-runtime create-snapshot failed: ${e}`);
+    const stderrOutput = fs.readFileSync(stderrFile, 'utf8');
+    console.error('Command failed: Command output:', stderrOutput);
   }
 }
 
 function tryRuntimeCommand(runtimePath: string, blockHash: 'latest' | string, networkUrl: string) {
-  const folderName = path.join(os.tmpdir(), 'chainflip/try-runtime-upgrade/');
+  const logFolder = path.join(os.tmpdir(), 'chainflip/try-runtime-upgrade/');
   try {
-    if (!fs.existsSync(folderName)) {
-      fs.mkdirSync(folderName);
+    if (!fs.existsSync(logFolder)) {
+      fs.mkdirSync(logFolder);
     }
   } catch (err) {
     console.error(err);
   }
 
   const blockParam = blockHash === 'latest' ? 'live' : `live --at ${blockHash}`;
-  const stderrFile = path.join(folderName, `cmd-stderr-${Date.now()}.log`);
+  const stderrFile = path.join(logFolder, `try-runtime-${Date.now()}.log`);
+
+  console.log(`Errors will be logged to: ${logFolder}`);
 
   try {
     execSync(
@@ -47,19 +54,18 @@ function tryRuntimeCommand(runtimePath: string, blockHash: 'latest' | string, ne
         --disable-spec-version-check \
         --disable-idempotency-checks \
         --checks pre-and-post ${blockParam} \
-        --uri ${networkUrl} 2>> ${stderrFile}`,
+        --uri ${networkUrl} 2> ${stderrFile}`,
       { env: { ...process.env, RUST_LOG: 'runtime::executive=debug' } },
     );
     console.log(`try-runtime success for blockParam ${blockParam}`);
   } catch (e) {
     console.error(`try-runtime failed for blockParam ${blockParam}`);
 
-    createSnapshotFile(networkUrl, blockHash, stderrFile);
-
     const stderrOutput = fs.readFileSync(stderrFile, 'utf8');
     console.error(e);
     console.error('Command failed: Command output:', stderrOutput);
 
+    createSnapshotFile(networkUrl, blockHash, logFolder);
 
     fs.unlinkSync(stderrFile);
 
