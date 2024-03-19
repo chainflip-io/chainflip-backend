@@ -14,8 +14,13 @@ fi
 
 if [ $network == "berghain" ]; then
     RPC_ENDPOINT="https://mainnet-archive.chainflip.io"
+elif [ $network == "perseverance" ]; then
+    RPC_ENDPOINT="https://archive.perseverance.chainflip.io"
+elif [ $network == "sisyphos" ]; then
+    RPC_ENDPOINT="https://archive.sisyphos.chainflip.io"
 else
-    RPC_ENDPOINT="https://perseverance.chainflip.xyz"
+    echo "Invalid network"
+    exit 1
 fi
 
 live_runtime_version=$(curl -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "state_getRuntimeVersion", "params":[]}' $RPC_ENDPOINT | jq .result.specVersion)

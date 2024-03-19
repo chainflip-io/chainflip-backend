@@ -53,7 +53,8 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let number_of_channels_in_lookup_pre_migration = <u32>::decode(&mut &state[..]).unwrap();
+		let number_of_channels_in_lookup_pre_migration =
+			<u32>::decode(&mut &state[..]).expect("Pre-migration should encode a u32.");
 		ensure!(
 			DepositChannelLookup::<T, I>::iter_keys().count() as u32 ==
 				number_of_channels_in_lookup_pre_migration,
