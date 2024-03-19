@@ -4,6 +4,7 @@
 # e.g. in the case of an upgrade where we run two engines simultaneously.
 
 set -e
+DATETIME=$(date '+%Y-%m-%d_%H-%M-%S')
 source $LOCALNET_INIT_DIR/env/cfe.env
 $BINARY_ROOT_PATH/chainflip-engine \
   --config-root=$LOCALNET_INIT_DIR \
@@ -15,4 +16,4 @@ $BINARY_ROOT_PATH/chainflip-engine \
   --p2p.port=$P2P_PORT \
   --logging.command_server_port=$LOG_PORT \
   --signing.db_file=/tmp/chainflip/$NODE_NAME/$NODE_NAME.db \
-  --health_check.port=$HEALTH_PORT > /tmp/chainflip/$NODE_NAME/chainflip-engine$LOG_SUFFIX.log 2>&1 &
+  --health_check.port=$HEALTH_PORT > /tmp/chainflip/$NODE_NAME/chainflip-engine$LOG_SUFFIX.$DATETIME.log 2>&1 &
