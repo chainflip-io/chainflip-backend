@@ -174,7 +174,7 @@ pub struct PoolState<LiquidityProvider: Ord, OrderId: Ord + Clone> {
 	/// All the ticks that have at least one range order that starts or ends at it, i.e. those
 	/// ticks where liquidity_gross is non-zero.
 	liquidity_map: BTreeMap<Tick, TickDelta>,
-	pub(super) positions: BTreeMap<(LiquidityProvider, OrderId, Tick, Tick), Position>,
+	pub positions: BTreeMap<(LiquidityProvider, OrderId, Tick, Tick), Position>,
 	/// Total fees earned over all time
 	pub(super) total_fees_earned: PoolPairsMap<Amount>,
 	/// Total of all swap inputs over all time (not including fees)

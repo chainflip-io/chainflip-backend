@@ -116,6 +116,8 @@ impl Pairs {
 	MaxEncodedLen,
 	Serialize,
 	Deserialize,
+	Ord,
+	PartialOrd,
 )]
 pub struct PoolPairsMap<T> {
 	pub base: T,

@@ -388,8 +388,7 @@ pub struct PoolState<LiquidityProvider: Ord, OrderId: Ord + Clone> {
 	/// that are selling asset `Base` and all those that are selling asset `Quote` used the
 	/// PoolPairsMap. Therefore there can be positions stored here that don't provide any
 	/// liquidity.
-	pub(super) positions:
-		PoolPairsMap<BTreeMap<(LiquidityProvider, OrderId, SqrtPriceQ64F96), Position>>,
+	pub positions: PoolPairsMap<BTreeMap<(LiquidityProvider, OrderId, SqrtPriceQ64F96), Position>>,
 	/// Total fees earned over all time
 	pub(super) total_fees_earned: PoolPairsMap<Amount>,
 	/// Total of all swap inputs over all time (not including fees)
@@ -411,7 +410,7 @@ pub mod old {
 		/// All the FixedPools that have some liquidity. They are grouped into all those that are
 		/// selling asset `Base` and all those that are selling asset `Quote` used the
 		/// PoolPairsMap.
-		pub fixed_pools: PoolPairsMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,
+		pub(super) fixed_pools: PoolPairsMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,
 		/// All the Positions that either are providing liquidity currently, or were providing
 		/// liquidity directly after the last time they where updated. They are grouped into all
 		/// those that are selling asset `Base` and all those that are selling asset `Quote` used

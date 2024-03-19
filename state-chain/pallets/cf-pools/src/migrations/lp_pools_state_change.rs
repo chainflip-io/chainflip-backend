@@ -49,6 +49,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 				(T::AccountId, OrderId, Tick, Tick),
 				RangeOrdersPosition,
 			> = BTreeMap::new();
+			#[allow(clippy::type_complexity)]
 			let mut transformed_limit_orders: BTreeMap<
 				Pairs,
 				BTreeMap<(T::AccountId, OrderId, SqrtPriceQ64F96), LimitOrdersPosition>,
@@ -59,10 +60,10 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 						.pool_state
 						.range_orders
 						.positions
-						.get(&((lp.clone(), id.clone()), tick_range.start, tick_range.end))
+						.get(&((lp.clone(), *id), tick_range.start, tick_range.end))
 						.unwrap();
 					transformed_range_order_positions.insert(
-						(lp.clone(), id.clone(), tick_range.start, tick_range.end),
+						(lp.clone(), *id, tick_range.start, tick_range.end),
 						current_positions.clone(),
 					);
 				});
@@ -71,11 +72,11 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 				limit_orders.iter().for_each(|(lp, limit_orders)| {
 					let mut orders: BTreeMap<_, _> = BTreeMap::new();
 					limit_orders.iter().for_each(|(id, tick)| {
-						let price = price_at_tick(tick.clone()).unwrap();
+						let price = price_at_tick(*tick).unwrap();
 						let current_positions = pool.pool_state.limit_orders.positions[assets]
-							.get(&(price, (lp.clone(), id.clone())))
+							.get(&(price, (lp.clone(), *id)))
 							.unwrap();
-						orders.insert((lp.clone(), id.clone(), price), current_positions.clone());
+						orders.insert((lp.clone(), *id, price), current_positions.clone());
 					});
 					transformed_limit_orders.insert(assets, orders);
 				})
@@ -119,12 +120,42 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		Ok(Default::default())
+		let mut number_of_positions: BTreeMap<_, _> = BTreeMap::new();
+		old::Pools::<T>::iter().for_each(|(asset_pair, pool)| {
+			let range_orders_pos_amount = pool.pool_state.range_orders.positions.len() as u32;
+			let limit_orders_pos_amount = pool.pool_state.limit_orders.positions.base.len() as u32 +
+				pool.pool_state.limit_orders.positions.quote.len() as u32;
+			number_of_positions
+				.insert(asset_pair, (range_orders_pos_amount, limit_orders_pos_amount));
+		});
+		Ok(number_of_positions.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	#[allow(clippy::bool_assert_comparison)]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
+	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+		let number_of_old_pools: BTreeMap<AssetPair, (u32, u32)> =
+			<BTreeMap<AssetPair, (u32, u32)>>::decode(&mut &state[..])
+				.map_err(|_| "Failed to decode pre-upgrade state.")?;
+		Pools::<T>::iter().for_each(|(asset_pair, pool)| {
+			let range_orders_pos_amount = pool.pool_state.range_orders.positions.len() as u32;
+			let limit_orders_pos_amount = pool.pool_state.limit_orders.positions.base.len() as u32 +
+				pool.pool_state.limit_orders.positions.quote.len() as u32;
+			assert_eq!(
+				&(range_orders_pos_amount, limit_orders_pos_amount),
+				number_of_old_pools.get(&asset_pair).unwrap(),
+				"Positions not migrated"
+			);
+		});
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod migrations {
+
+	#[test]
+	fn test_migration_of_pools() {
+		// TODO: implement a test thats checks the migration of the pools
 	}
 }
