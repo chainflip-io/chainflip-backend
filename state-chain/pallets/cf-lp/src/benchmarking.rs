@@ -68,7 +68,7 @@ mod benchmarks {
 		assert_ok!(Pallet::<T>::register_lp_account(RawOrigin::Signed(caller.clone()).into()));
 
 		#[extrinsic_call]
-		deregister_lp_account(RawOrigin::Signed(caller.clone()), true);
+		deregister_lp_account(RawOrigin::Signed(caller.clone()));
 
 		assert!(T::AccountRoleRegistry::ensure_liquidity_provider(
 			RawOrigin::Signed(caller).into()

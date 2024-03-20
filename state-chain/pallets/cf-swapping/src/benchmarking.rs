@@ -71,7 +71,7 @@ mod benchmarks {
 		assert_ok!(Pallet::<T>::register_as_broker(RawOrigin::Signed(caller.clone()).into()));
 
 		#[extrinsic_call]
-		deregister_as_broker(RawOrigin::Signed(caller.clone()), true);
+		deregister_as_broker(RawOrigin::Signed(caller.clone()));
 
 		T::AccountRoleRegistry::ensure_broker(RawOrigin::Signed(caller).into())
 			.expect_err("Caller should no longer be registered as broker");
