@@ -12,7 +12,7 @@ function createTmpDirIfNotExists(dir: string): string {
   const tmpDir = path.join(os.tmpdir(), dir);
   try {
     if (!fs.existsSync(tmpDir)) {
-      fs.mkdirSync(tmpDir);
+      fs.mkdirSync(tmpDir, { recursive: true });
     }
   } catch (err) {
     console.error(err);
