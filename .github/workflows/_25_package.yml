@@ -51,8 +51,6 @@ jobs:
           # do we need to publish this in this step? target/release/libchainflip_engine*.so
           path: |
             target/debian/*.deb
-            
-            
 
       - name: Check if building changes any files
         run: |

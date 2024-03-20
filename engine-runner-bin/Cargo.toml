@@ -14,6 +14,8 @@ repository = 'https://github.com/chainflip-io/chainflip-backend'
 # Namespacing the assets with a folder to select them.
 [package.metadata.deb]
 assets = [
+    # target/release is a special path in target deb, it auto resolves to the correct path.
+    # thus old-engine-dylib requires a relative path to the old engine dylib directory.
     [
         "target/release/engine-runner",
         "usr/bin/chainflip-engine",
