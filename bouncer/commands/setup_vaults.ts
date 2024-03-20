@@ -246,6 +246,9 @@ async function main(): Promise<void> {
   );
 
   // TODO: We can insert program Vault account, nonces accounts and durable nonces in the runtime upgrade.
+  // Only issue reg. durable nonces is that they will need to be changed every time a new Solana tag is
+  // used since they are not deterministic. We could insert them in th governance extrinsic but that
+  // is unnecessary for production.
   // await submitGovernanceExtrinsic(
   //   chainflip.tx.environment.witnessInitializeSolanaVault(
   //   ),

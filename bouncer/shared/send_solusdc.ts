@@ -21,7 +21,7 @@ export async function sendSolUsdc(solAddress: string, usdcAmount: string, log = 
   const encodedSolAddress = new PublicKey(getEncodedSolAddress(solAddress));
   const receiverAta = getAssociatedTokenAddressSync(usdcMintPubKey, encodedSolAddress, true);
 
-  const usdcFineAmount = amountToFineAmount(usdcAmount, assetDecimals("SOLUSDC"));
+  const usdcFineAmount = amountToFineAmount(usdcAmount, assetDecimals('SOLUSDC'));
 
   const transaction = new Transaction().add(
     createAssociatedTokenAccountIdempotentInstruction(

@@ -5,5 +5,5 @@ export async function getSolBalance(address: string): Promise<string> {
   const connection = getSolConnection();
 
   const lamports = await connection.getBalance(new PublicKey(getEncodedSolAddress(address)));
-  return fineAmountToAmount(lamports.toString(), assetDecimals("SOL"));
+  return fineAmountToAmount(lamports.toString(), assetDecimals('SOL'));
 }
