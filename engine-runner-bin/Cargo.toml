@@ -15,7 +15,7 @@ repository = 'https://github.com/chainflip-io/chainflip-backend'
 [package.metadata.deb]
 assets = [
     [
-        "target/release/chainflip-runner",
+        "target/release/engine-runner",
         "usr/bin/chainflip-engine",
         "755",
     ],
