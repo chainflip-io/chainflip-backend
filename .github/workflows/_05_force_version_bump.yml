@@ -10,6 +10,9 @@ jobs:
       - name: Checkout backend
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
+      - name: Install pnpm
+        run: npm install -g pnpm
+
       - name: Configure NodeJS
         uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65
         with:

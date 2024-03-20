@@ -35,6 +35,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install pnpm
+        run: npm install -g pnpm
+
       - name: Configure NodeJS
         uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65
         with:
