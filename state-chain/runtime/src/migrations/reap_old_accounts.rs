@@ -1,5 +1,5 @@
 use crate::Runtime;
-use cf_primitives::AccountRole;
+use cf_primitives::{AccountRole, FLIPPERINOS_PER_FLIP};
 #[cfg(feature = "try-runtime")]
 use codec::Decode;
 use codec::Encode;
@@ -32,7 +32,7 @@ impl OnRuntimeUpgrade for Migration {
 					log::info!(
 						"💰 Account {}, has {}FLIP pending redemption. Skipping.",
 						account_id_hex,
-						total / 1_000_000_000_000_000_000
+						total / FLIPPERINOS_PER_FLIP
 					);
 					continue;
 				}
