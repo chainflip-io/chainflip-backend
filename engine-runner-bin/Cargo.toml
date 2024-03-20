@@ -20,13 +20,13 @@ assets = [
         "755",
     ],
     [
-        "target/release/chainflip_engine_v1_4_0.so",
-        "usr/lib/chainflip-engine/chainflip_engine_v1_4_0.so",
+        "target/release/libchainflip_engine_v1_4_0.so",
+        "usr/lib/chainflip-engine/libchainflip_engine_v1_4_0.so",
         "755",
     ],
     [
-        "old-engine-dylib/chainflip_engine_v1_3_0.so",
-        "usr/lib/chainflip-engine/chainflip_engine_v1_3_0.so",
+        "old-engine-dylib/libchainflip_engine_v1_3_0.so",
+        "usr/lib/chainflip-engine/libchainflip_engine_v1_3_0.so",
         "755",
     ],
 ]
