@@ -23,7 +23,7 @@ env:
 
 jobs:
   compile:
-    runs-on: nscloud-ubuntu-${{ matrix.ubuntu_version }}-amd64-2x4
+    runs-on: namespace-profile-rust-builder
     strategy:
       fail-fast: false
       matrix:
