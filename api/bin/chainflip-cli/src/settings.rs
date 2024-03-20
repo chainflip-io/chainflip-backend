@@ -85,13 +85,7 @@ pub enum BrokerSubcommands {
 	/// Register this account as a broker account.
 	RegisterAccount,
 	/// De-register this broker account.
-	DeregisterAccount {
-		#[clap(
-			help = "Force deregistration. If the account has any funds, they will be lost.",
-			long = "force"
-		)]
-		force: bool,
-	},
+	DeregisterAccount,
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]
@@ -108,13 +102,7 @@ pub enum LiquidityProviderSubcommands {
 	/// Register this account as a liquidity provider account.
 	RegisterAccount,
 	/// De-register this liquidity provider account.
-	DeregisterAccount {
-		#[clap(
-			help = "Force deregistration. If the account has any funds, they will be lost.",
-			long = "force"
-		)]
-		force: bool,
-	},
+	DeregisterAccount,
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]

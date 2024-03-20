@@ -304,7 +304,7 @@ pub mod pallet {
 
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::deregister_lp_account())]
-		pub fn deregister_lp_account(who: OriginFor<T>, force: bool) -> DispatchResult {
+		pub fn deregister_lp_account(who: OriginFor<T>) -> DispatchResult {
 			const STABLE_ASSET: Asset = Asset::Usdc;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(who)?;
 
@@ -316,7 +316,7 @@ pub mod pallet {
 				Error::<T>::OpenOrdersRemaining
 			);
 			ensure!(
-				force || Self::asset_balances(&account_id)?.iter().all(|(_, amount)| *amount == 0),
+				Self::asset_balances(&account_id)?.iter().all(|(_, amount)| *amount == 0),
 				Error::<T>::FundsRemaining
 			);
 

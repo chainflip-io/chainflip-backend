@@ -392,8 +392,8 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 			.context("Could not register liquidity provider")
 	}
 
-	async fn deregister_account(&self, force: bool) -> Result<H256> {
-		self.simple_submission_with_dry_run(pallet_cf_lp::Call::deregister_lp_account { force })
+	async fn deregister_account(&self) -> Result<H256> {
+		self.simple_submission_with_dry_run(pallet_cf_lp::Call::deregister_lp_account {})
 			.await
 			.context("Could not de-register liquidity provider")
 	}

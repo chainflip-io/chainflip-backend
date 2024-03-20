@@ -456,12 +456,10 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 			.await
 			.context("Could not register as broker")
 	}
-	async fn deregister_account(&self, force: bool) -> Result<H256> {
-		self.simple_submission_with_dry_run(pallet_cf_swapping::Call::deregister_as_broker {
-			force,
-		})
-		.await
-		.context("Could not de-register as broker")
+	async fn deregister_account(&self) -> Result<H256> {
+		self.simple_submission_with_dry_run(pallet_cf_swapping::Call::deregister_as_broker {})
+			.await
+			.context("Could not de-register as broker")
 	}
 }
 

@@ -680,13 +680,12 @@ pub mod pallet {
 		/// Account roles are immutable once registered.
 		#[pallet::call_index(9)]
 		#[pallet::weight(T::WeightInfo::deregister_as_broker())]
-		pub fn deregister_as_broker(who: OriginFor<T>, force: bool) -> DispatchResult {
+		pub fn deregister_as_broker(who: OriginFor<T>) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_broker(who)?;
 
 			ensure!(
-				force ||
-					EarnedBrokerFees::<T>::iter_prefix(&account_id)
-						.all(|(_asset, balance)| balance.is_zero()),
+				EarnedBrokerFees::<T>::iter_prefix(&account_id)
+					.all(|(_asset, balance)| balance.is_zero()),
 				Error::<T>::EarnedFeesNotWithdrawn,
 			);
 			let _ = EarnedBrokerFees::<T>::clear_prefix(&account_id, u32::MAX, None);

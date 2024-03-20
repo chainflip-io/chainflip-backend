@@ -93,8 +93,8 @@ async fn run_cli() -> Result<()> {
 					BrokerSubcommands::RegisterAccount => {
 						api.broker_api().register_account().await?;
 					},
-					BrokerSubcommands::DeregisterAccount { force } => {
-						api.broker_api().deregister_account(force).await?;
+					BrokerSubcommands::DeregisterAccount => {
+						api.broker_api().deregister_account().await?;
 					},
 				},
 				LiquidityProvider(subcommand) => match subcommand {
@@ -127,8 +127,8 @@ async fn run_cli() -> Result<()> {
 					LiquidityProviderSubcommands::RegisterAccount => {
 						api.lp_api().register_account().await?;
 					},
-					LiquidityProviderSubcommands::DeregisterAccount { force } => {
-						api.lp_api().deregister_account(force).await?;
+					LiquidityProviderSubcommands::DeregisterAccount => {
+						api.lp_api().deregister_account().await?;
 					},
 				},
 				Validator(subcommand) => match subcommand {
