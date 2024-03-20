@@ -188,31 +188,15 @@ pub mod old {
 
 	#[derive(Clone, Debug, TypeInfo, Encode, Decode, Serialize, Deserialize)]
 	pub struct PoolState<LiquidityProvider: Ord> {
-		/// The percentage fee taken from swap inputs and earned by LPs. It is in units of 0.0001%.
-		/// I.e. 5000 means 0.5%.
 		pub fee_hundredth_pips: u32,
-		/// Note the current_sqrt_price can reach MAX_SQRT_PRICE, but only if the tick is MAX_TICK
 		pub current_sqrt_price: SqrtPriceQ64F96,
-		/// This is the highest tick that represents a strictly lower price than the
-		/// current_sqrt_price. `current_tick` is the tick that when you swap BaseToQuote the
-		/// `current_sqrt_price` is moving towards (going down in literal value), and will cross
-		/// when `current_sqrt_price` reaches it. `current_tick + 1` is the tick the price is
-		/// moving towards (going up in literal value) when you swap QuoteToBase and will cross
-		/// when `current_sqrt_price` reaches it,
 		pub current_tick: Tick,
-		/// The total liquidity/depth at the `current_sqrt_price`
 		pub current_liquidity: Liquidity,
-		/// The total fees earned over all time per unit liquidity
 		pub global_fee_growth: PoolPairsMap<FeeGrowthQ128F128>,
-		/// All the ticks that have at least one range order that starts or ends at it, i.e. those
-		/// ticks where liquidity_gross is non-zero.
 		pub liquidity_map: BTreeMap<Tick, TickDelta>,
 		pub positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
-		/// Total fees earned over all time
 		pub total_fees_earned: PoolPairsMap<Amount>,
-		/// Total of all swap inputs over all time (not including fees)
 		pub total_swap_inputs: PoolPairsMap<Amount>,
-		/// Total of all swap outputs over all time
 		pub total_swap_outputs: PoolPairsMap<Amount>,
 	}
 }

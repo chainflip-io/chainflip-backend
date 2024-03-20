@@ -158,12 +158,6 @@ pub mod pallet {
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T))]
 	pub struct Pool<T: Config> {
-		/// A cache of all the range orders that exist in the pool. This must be kept up to date
-		/// with the underlying pool.
-		// pub range_orders_cache: BTreeMap<T::AccountId, BTreeMap<OrderId, Range<Tick>>>,
-		/// A cache of all the limit orders that exist in the pool. This must be kept up to date
-		/// with the underlying pool. These are grouped by the asset the limit order is selling
-		// pub limit_orders_cache: PoolPairsMap<BTreeMap<T::AccountId, BTreeMap<OrderId, Tick>>>,
 		pub pool_state: PoolState<T::AccountId, OrderId>,
 	}
 
@@ -551,9 +545,6 @@ pub mod pallet {
 				ensure!(maybe_pool.is_none(), Error::<T>::PoolAlreadyExists);
 
 				*maybe_pool = Some(Pool {
-					// range_orders_cache: Default::default(),
-					// limit_orders_cache: Default::default(),
-					// range_orders_cache: Default::default(),
 					pool_state: PoolState::new(fee_hundredth_pips, initial_price).map_err(|e| {
 						match e {
 							NewError::LimitOrders(limit_orders::NewError::InvalidFeeAmount) =>
@@ -680,8 +671,6 @@ pub mod pallet {
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
-				// let current_tick =
-				// 	pool.pool_state.clone().get_range_order_tick_for_lp(&lp.clone(), id);
 				let current_tick =
 					pool.pool_state.range_orders_for_lp(&lp.clone()).get(&id).cloned();
 				let tick_range = match (current_tick, option_tick_range) {
