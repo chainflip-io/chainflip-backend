@@ -8,13 +8,7 @@
 
 import { AddressOrPair } from '@polkadot/api/types';
 import Web3 from 'web3';
-import {
-  NonceAccount,
-  PublicKey,
-  SystemProgram,
-  Transaction,
-  TransactionInstruction,
-} from '@solana/web3.js';
+import { PublicKey, SystemProgram, Transaction, TransactionInstruction } from '@solana/web3.js';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import {
   getChainflipApi,
@@ -25,7 +19,6 @@ import {
   handleSubstrateError,
   getEvmEndpoint,
   getContractAddress,
-  getSolConnection,
   getSolWhaleKeyPair,
   encodeSolAddress,
 } from '../shared/utils';
@@ -37,7 +30,6 @@ import { signAndSendTxEvm } from '../shared/send_evm';
 async function main(): Promise<void> {
   const btcClient = getBtcClient();
   const arbClient = new Web3(getEvmEndpoint('Arbitrum'));
-  const solClient = getSolConnection();
   const alice = await aliceKeyringPair();
 
   const chainflip = await getChainflipApi();
