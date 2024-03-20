@@ -562,8 +562,9 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 					for submission in submissions {
 						if let Some(request) = requests.get_mut(&submission.request_id) {
 							request.pending_submissions.remove(&submission.id).unwrap();
-							self.submission_status_futures.remove((request.id, submission.id));
 						}
+						self.submission_status_futures
+							.remove((submission.request_id, submission.id));
 
 						// Note: It is technically possible for a hash collision to
 						// occur, but it is so unlikely it is effectively
