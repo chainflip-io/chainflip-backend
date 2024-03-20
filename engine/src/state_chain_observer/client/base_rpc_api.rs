@@ -140,11 +140,7 @@ pub trait BaseRpcApi {
 
 	async fn runtime_version(&self) -> RpcResult<RuntimeVersion>;
 
-	async fn dry_run(
-		&self,
-		extrinsic: Bytes,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Bytes>;
+	async fn dry_run(&self, extrinsic: Bytes) -> RpcResult<Bytes>;
 
 	async fn request_raw(
 		&self,
@@ -266,12 +262,8 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		self.raw_rpc_client.runtime_version(None).await
 	}
 
-	async fn dry_run(
-		&self,
-		extrinsic: Bytes,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Bytes> {
-		self.raw_rpc_client.dry_run(extrinsic, at).await
+	async fn dry_run(&self, extrinsic: Bytes) -> RpcResult<Bytes> {
+		self.raw_rpc_client.dry_run(extrinsic, None).await
 	}
 
 	async fn request_raw(
