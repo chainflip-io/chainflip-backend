@@ -2,12 +2,12 @@
 // INSTRUCTIONS
 //
 // This command takes two arguments.
-// It will redeem FLIP from the statechain account defined by the seed in the first argument to
-// the Ethereum address provided by the second argument. The amount of redeemed FLIP is given by
-// the third argument. The asset amount is interpreted as FLIP
+// It will redeem Flip from the statechain account defined by the seed in the first argument to
+// the Ethereum address provided by the second argument. The amount of redeemed Flip is given by
+// the third argument. The asset amount is interpreted as Flip
 //
 // For example: ./commands/redeem_flip.ts my_secret_seed 0xE16CCFc63368e8FC93f53ccE4e4f4b08c4C3E186 20
-// will redeem 20 FLIP to from cFPVP4AdJvXoU6cDRGAcEgKRuBtFBE4c1UomJWvdRZ9xBtbwA (derived from "my_secret_seed")
+// will redeem 20 Flip to from cFPVP4AdJvXoU6cDRGAcEgKRuBtFBE4c1UomJWvdRZ9xBtbwA (derived from "my_secret_seed")
 // to 0xE16CCFc63368e8FC93f53ccE4e4f4b08c4C3E186
 
 import { HexString } from '@polkadot/util/types';

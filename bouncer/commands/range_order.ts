@@ -3,14 +3,14 @@
 //
 // This command takes two arguments.
 // It will create a zero to infinity range order for the currency and amount given
-// For example: ./commands/range_order.ts btc 10
+// For example: ./commands/range_order.ts Btc 10
 
-import { Asset } from '@chainflip/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 import { rangeOrder } from '../shared/range_order';
 import { runWithTimeout } from '../shared/utils';
 
 async function main() {
-  const ccy = process.argv[2].toUpperCase() as Asset;
+  const ccy = process.argv[2] as Asset;
   const amount = parseFloat(process.argv[3].trim());
   await rangeOrder(ccy, amount);
   process.exit(0);

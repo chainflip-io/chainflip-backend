@@ -1,5 +1,5 @@
 import { encodeAddress } from '@polkadot/util-crypto';
-import { Asset } from '@chainflip/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 import { newSwap } from './new_swap';
 import { send, sendViaCfTester } from './send';
 import { getBalance } from './get_balance';
@@ -18,7 +18,7 @@ import { CcmDepositMetadata } from '../shared/new_swap';
 function encodeDestinationAddress(address: string, destAsset: Asset): string {
   let destAddress = address;
 
-  if (destAddress && destAsset === 'DOT') {
+  if (destAddress && destAsset === 'Dot') {
     destAddress = encodeAddress(destAddress);
   }
 
@@ -56,8 +56,8 @@ export async function requestNewSwap(
       );
       if (!destAddressEvent) return false;
 
-      const destAssetMatches = event.data.destinationAsset.toUpperCase() === destAsset;
-      const sourceAssetMatches = event.data.sourceAsset.toUpperCase() === sourceAsset;
+      const destAssetMatches = event.data.destinationAsset === destAsset;
+      const sourceAssetMatches = event.data.sourceAsset === sourceAsset;
       const destAddressMatches =
         destAddressEvent.toLowerCase() ===
         encodeDestinationAddress(destAddress, destAsset).toLowerCase();

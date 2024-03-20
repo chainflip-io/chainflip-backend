@@ -1,5 +1,5 @@
 #!/usr/bin/env -S pnpm tsx
-import { Asset } from '@chainflip/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 import { send } from '../shared/send';
 
-send(process.argv[2].toUpperCase() as Asset, process.argv[3]);
+send(process.argv[2] as Asset, process.argv[3]);
