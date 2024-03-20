@@ -196,7 +196,6 @@ async function main(): Promise<void> {
   // For now just deriving the nonceAccounts from the whaleKeypair with index seeds
   const numberNonceAccounts = 10;
   const nonceAccounts = [];
-  const nonceValues = [];
   for (let i = 0; i < numberNonceAccounts; i++) {
     // Using the index stringified as the seed ('0', '1', '2' ...)
     const seed = i.toString();
@@ -206,9 +205,6 @@ async function main(): Promise<void> {
       SystemProgram.programId,
     );
     nonceAccounts.push(nonceAccount);
-
-    const nonceAccountInfo = await solClient.getAccountInfo(new PublicKey(nonceAccount));
-    nonceValues.push(NonceAccount.fromAccountData(nonceAccountInfo!.data).nonce);
   }
 
   for (const nonceAccount of nonceAccounts) {
@@ -221,8 +217,6 @@ async function main(): Promise<void> {
     );
   }
   await signAndSendTxSol(tx);
-
-  console.log('nonceValues', nonceValues);
 
   // Step 7
   console.log('Registering Vaults with state chain');
