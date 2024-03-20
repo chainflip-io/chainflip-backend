@@ -114,6 +114,7 @@ pub struct SubmissionWatcher<
 	BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
 > {
 	scope: &'a Scope<'env, anyhow::Error>,
+	next_request_id: RequestID,
 	submissions_by_nonce: BTreeMap<Nonce, BTreeMap<SubmissionID, Submission>>,
 	#[allow(clippy::type_complexity)]
 	submission_status_futures:
@@ -159,6 +160,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		(
 			Self {
 				scope,
+				next_request_id: Default::default(),
 				submissions_by_nonce: Default::default(),
 				submission_status_futures: Default::default(),
 				signer,
@@ -333,7 +335,8 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		until_finalized_sender: oneshot::Sender<FinalizationResult>,
 		strategy: RequestStrategy,
 	) -> Result<(), anyhow::Error> {
-		let id = requests.keys().next_back().map(|id| id + 1).unwrap_or(0);
+		let id = self.next_request_id;
+		self.next_request_id += 1;
 		let request = requests
 			.try_insert(
 				id,
