@@ -71,7 +71,7 @@ pub trait PoolApi {
 	/// debited from their free balance)
 	fn sweep(who: &Self::AccountId) -> Result<(), DispatchError>;
 
-	///
+	/// Returns the number of open orders for the given account and pair.
 	fn open_order_count(
 		who: &Self::AccountId,
 		base_asset: Asset,
