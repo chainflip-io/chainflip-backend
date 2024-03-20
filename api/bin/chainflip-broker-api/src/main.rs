@@ -17,6 +17,7 @@ use jsonrpsee::{
 	server::ServerBuilder,
 };
 use serde::{Deserialize, Serialize};
+use sp_core::U256;
 use std::path::PathBuf;
 use tracing::log;
 
@@ -29,7 +30,7 @@ pub struct BrokerSwapDepositAddress {
 	pub issued_block: BlockNumber,
 	pub channel_id: ChannelId,
 	pub source_chain_expiry_block: NumberOrHex,
-	pub channel_opening_fee: u128,
+	pub channel_opening_fee: U256,
 }
 
 impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
@@ -39,7 +40,7 @@ impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
 			issued_block: value.issued_block,
 			channel_id: value.channel_id,
 			source_chain_expiry_block: NumberOrHex::from(value.source_chain_expiry_block),
-			channel_opening_fee: value.channel_opening_fee,
+			channel_opening_fee: U256::from(value.channel_opening_fee),
 		}
 	}
 }
