@@ -21,12 +21,12 @@ use cf_amm::{
 	range_orders::PoolState as RangeOrdersPoolState,
 };
 
+use cf_amm::old::PoolState as OldPoolState;
+
 pub struct Migration<T: Config>(PhantomData<T>);
 
 pub(crate) mod old {
 	use super::*;
-
-	use cf_amm::old::PoolState as OldPoolState;
 
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T))]
@@ -43,7 +43,6 @@ pub(crate) mod old {
 
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		log::info!("Migrating LP Pools state");
 		old::Pools::<T>::drain().for_each(|(asset_pair, pool)| {
 			let mut transformed_range_order_positions: BTreeMap<
 				(T::AccountId, OrderId, Tick, Tick),
@@ -114,42 +113,90 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		let mut number_of_positions: BTreeMap<_, _> = BTreeMap::new();
+		let mut old_pool_state: BTreeMap<AssetPair, old::Pool<T>> = BTreeMap::new();
 		old::Pools::<T>::iter().for_each(|(asset_pair, pool)| {
-			let range_orders_pos_amount = pool.pool_state.range_orders.positions.len() as u32;
-			let limit_orders_pos_amount = pool.pool_state.limit_orders.positions.base.len() as u32 +
-				pool.pool_state.limit_orders.positions.quote.len() as u32;
-			number_of_positions
-				.insert(asset_pair, (range_orders_pos_amount, limit_orders_pos_amount));
+			old_pool_state.insert(asset_pair, pool);
 		});
-		Ok(number_of_positions.encode())
+		Ok(old_pool_state.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	#[allow(clippy::bool_assert_comparison)]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let number_of_old_pools: BTreeMap<AssetPair, (u32, u32)> =
-			<BTreeMap<AssetPair, (u32, u32)>>::decode(&mut &state[..])
+		let old_pool_state: BTreeMap<AssetPair, old::Pool<T>> =
+			<BTreeMap<AssetPair, old::Pool<T>>>::decode(&mut &state[..])
 				.map_err(|_| "Failed to decode pre-upgrade state.")?;
+
 		Pools::<T>::iter().for_each(|(asset_pair, pool)| {
-			let range_orders_pos_amount = pool.pool_state.range_orders.positions.len() as u32;
-			let limit_orders_pos_amount = pool.pool_state.limit_orders.positions.base.len() as u32 +
-				pool.pool_state.limit_orders.positions.quote.len() as u32;
+			let old_pool = old_pool_state.get(&asset_pair).expect("pool should exist in old state");
+			let new_range_orders_state = pool.pool_state.range_orders;
+			let new_limit_orders_state = pool.pool_state.limit_orders;
+			let old_range_orders_state = &old_pool.pool_state.range_orders;
+			let old_limit_orders_state = &old_pool.pool_state.limit_orders;
+
 			assert_eq!(
-				&(range_orders_pos_amount, limit_orders_pos_amount),
-				number_of_old_pools.get(&asset_pair).unwrap(),
-				"Positions not migrated"
+				new_range_orders_state.positions.len(),
+				old_range_orders_state.positions.len(),
+				"Range orders positions count mismatch"
 			);
+
+			assert_eq!(
+				new_limit_orders_state.positions.base.len(),
+				old_limit_orders_state.positions.base.len(),
+				"Limit orders base positions count mismatch"
+			);
+
+			assert_eq!(
+				new_limit_orders_state.positions.quote.len(),
+				old_limit_orders_state.positions.quote.len(),
+				"Limit orders quote positions count mismatch"
+			);
+
+			old_range_orders_state.positions.iter().for_each(|(key, value)| {
+				let new_key: (T::AccountId, OrderId, Tick, Tick) =
+					(key.0 .0.clone(), key.0 .1, key.1, key.2);
+				assert_eq!(
+					new_range_orders_state
+						.positions
+						.get(&new_key)
+						.expect("positions to be available")
+						.encode(),
+					value.encode(),
+					"Range orders positions mismatch"
+				);
+			});
+
+			old_limit_orders_state.positions.base.iter().for_each(|(key, value)| {
+				let new_key: (T::AccountId, OrderId, SqrtPriceQ64F96) =
+					(key.1 .0.clone(), key.1 .1, key.0);
+				assert_eq!(
+					new_limit_orders_state
+						.positions
+						.base
+						.get(&new_key)
+						.expect("positions to be available")
+						.encode(),
+					value.encode(),
+					"Limit orders base positions mismatch"
+				);
+			});
+
+			old_limit_orders_state.positions.quote.iter().for_each(|(key, value)| {
+				let new_key: (T::AccountId, OrderId, SqrtPriceQ64F96) =
+					(key.1 .0.clone(), key.1 .1, key.0);
+				assert_eq!(
+					new_limit_orders_state
+						.positions
+						.quote
+						.get(&new_key)
+						.expect("positions to be available")
+						.encode(),
+					value.encode(),
+					"Limit orders quote positions mismatch"
+				);
+			});
 		});
+
 		Ok(())
-	}
-}
-
-#[cfg(test)]
-mod migrations {
-
-	#[test]
-	fn test_migration_of_pools() {
-		// TODO: implement a test thats checks the migration of the pools
 	}
 }
