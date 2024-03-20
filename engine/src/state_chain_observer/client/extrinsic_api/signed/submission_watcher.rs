@@ -17,7 +17,7 @@ use sp_runtime::{
 use state_chain_runtime::{BlockNumber, Nonce, UncheckedExtrinsic};
 use thiserror::Error;
 use tokio::sync::oneshot;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 use utilities::{
 	future_map::FutureMap,
 	task_scope::{self, Scope},
@@ -101,6 +101,7 @@ pub enum RequestStrategy {
 	AllowMultipleSubmissions,
 }
 
+#[derive(Debug)]
 pub struct Submission {
 	lifetime: std::ops::RangeTo<cf_primitives::BlockNumber>,
 	tx_hash: H256,
@@ -439,16 +440,26 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			warn!(target: "state_chain_client", request_id = request_id, submission_id = submission_id, "Block not found with hash {block_hash:?}");
 			None
 		} {
-			let (extrinsic_index, _extrinsic) = extrinsics
-				.iter()
-				.enumerate()
-				.find(|(_extrinsic_index, extrinsic)| {
+			info!(target: "state_chain_client", request_id = request_id, submission_id = submission_id, "Request found in unchecked block '{block_hash:?}' with tx_hash '{tx_hash:?}'");
+			let Some((extrinsic_index, _extrinsic)) =
+				extrinsics.iter().enumerate().find(|(_extrinsic_index, extrinsic)| {
 					tx_hash ==
 						<state_chain_runtime::Runtime as frame_system::Config>::Hashing::hash_of(
 							extrinsic,
 						)
 				})
-				.expect(SUBSTRATE_BEHAVIOUR);
+			else {
+				error!(target: "state_chain_client", request_id = request_id, submission_id = submission_id, "Submission not found in block '{block_hash:?}' with tx_hash '{tx_hash:?}', for the original request: {:?}", requests.get_mut(&request_id));
+				for (extrinsic_index, extrinsic) in extrinsics.iter().enumerate() {
+					error!(target: "state_chain_client", request_id = request_id, submission_id = submission_id, "Found extrinsic in block '{block_hash:?}' with index '{extrinsic_index:?}' and tx_hash '{tx_hash:?}'", tx_hash = <state_chain_runtime::Runtime as frame_system::Config>::Hashing::hash_of(
+						extrinsic,
+					));
+				}
+				error!(target: "state_chain_client", request_id = request_id, submission_id = submission_id, "All pending requests: {:?}", requests);
+				error!(target: "state_chain_client", request_id = request_id, submission_id = submission_id, "All pending submissions: {:?}", self.submissions_by_nonce);
+				error!(target: "state_chain_client", request_id = request_id, submission_id = submission_id, "Full block cache: {:?}", self.block_cache);
+				panic!("{SUBSTRATE_BEHAVIOUR}");
+			};
 
 			let extrinsic_events = events
 				.iter()
