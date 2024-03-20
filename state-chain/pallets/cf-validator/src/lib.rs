@@ -353,6 +353,8 @@ pub mod pallet {
 		RotationsDisabled,
 		/// Validators cannot deregister until they are no longer key holders.
 		StillKeyHolder,
+		/// Validators cannot deregister until they stop bidding in the auction.
+		StillBidding,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -777,6 +779,7 @@ pub mod pallet {
 				<T as frame_system::Config>::AccountId,
 			>>::from_ref(&account_id);
 
+			ensure!(!T::BidderProvider::is_bidder(validator_id), Error::<T>::StillBidding);
 			ensure!(
 				(LastExpiredEpoch::<T>::get()..=CurrentEpoch::<T>::get())
 					.all(|epoch| !HistoricalAuthorities::<T>::get(epoch).contains(validator_id)),

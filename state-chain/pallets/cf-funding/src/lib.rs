@@ -854,6 +854,10 @@ impl<T: Config> BidderProvider for Pallet<T> {
 			})
 			.collect()
 	}
+
+	fn is_bidder(validator_id: &Self::ValidatorId) -> bool {
+		ActiveBidder::<T>::get(validator_id)
+	}
 }
 
 /// Ensure we clean up account specific items that definitely won't be required once the account

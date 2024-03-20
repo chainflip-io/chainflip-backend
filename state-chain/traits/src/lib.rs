@@ -246,6 +246,11 @@ pub trait BidderProvider {
 			.filter(|Bid { ref bidder_id, .. }| Q::is_qualified(bidder_id))
 			.collect()
 	}
+	fn is_bidder(validator_id: &Self::ValidatorId) -> bool {
+		Self::get_bidders()
+			.iter()
+			.any(|Bid { ref bidder_id, .. }| bidder_id == validator_id)
+	}
 }
 
 pub trait OnAccountFunded {
