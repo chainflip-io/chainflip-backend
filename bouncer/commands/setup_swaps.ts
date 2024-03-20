@@ -21,6 +21,8 @@ const deposits = new Map<Asset, number>([
   ['ARBUSDC', 100000],
   ['USDT', 100000],
   ['FLIP', 10000],
+  ['SOL', 100],
+  ['SOLUSDC', 100000],
 ]);
 
 const price = new Map<Asset, number>([
@@ -32,6 +34,8 @@ const price = new Map<Asset, number>([
   ['USDT', 1],
   ['ARBUSDC', 1],
   ['FLIP', 10],
+  ['SOL', 100],
+  ['SOLUSDC', 1],
 ]);
 
 async function main(): Promise<void> {
@@ -45,6 +49,8 @@ async function main(): Promise<void> {
     createLpPool('USDT', price.get('USDT')!),
     createLpPool('ARBETH', price.get('ARBETH')!),
     createLpPool('ARBUSDC', price.get('ARBUSDC')!),
+    // createLpPool('SOL', price.get('SOL')!),
+    // createLpPool('SOLUSDC', price.get('SOLUSDC')!),
   ]);
 
   await Promise.all([
@@ -56,6 +62,8 @@ async function main(): Promise<void> {
     provideLiquidity('USDT', deposits.get('USDT')!),
     provideLiquidity('ARBETH', deposits.get('ARBETH')!),
     provideLiquidity('ARBUSDC', deposits.get('ARBUSDC')!),
+    // provideLiquidity('SOL', deposits.get('SOL')!),
+    // provideLiquidity('SOLUSDC', deposits.get('SOLUSDC')!),
   ]);
 
   // also fund the boost account
@@ -68,6 +76,8 @@ async function main(): Promise<void> {
     provideLiquidity('USDT', deposits.get('USDT')!, false, '//LP_BOOST'),
     provideLiquidity('ARBETH', deposits.get('ARBETH')!, false, '//LP_BOOST'),
     provideLiquidity('ARBUSDC', deposits.get('ARBUSDC')!, false, '//LP_BOOST'),
+    // provideLiquidity('SOL', deposits.get('SOL')!, false, '//LP_BOOST'),
+    // provideLiquidity('SOLUSDC', deposits.get('SOLUSDC')!, false, '//LP_BOOST'),
   ]);
 
   await Promise.all([
@@ -78,6 +88,8 @@ async function main(): Promise<void> {
     rangeOrder('USDT', deposits.get('USDT')! * 0.9999),
     rangeOrder('ARBETH', deposits.get('ARBETH')! * 0.9999),
     rangeOrder('ARBUSDC', deposits.get('ARBUSDC')! * 0.9999),
+    // rangeOrder('SOL', deposits.get('SOL')! * 0.9999),
+    // rangeOrder('SOLUSDC', deposits.get('SOLUSDC')! * 0.9999),
   ]);
 
   console.log('=== Swaps Setup completed ===');

@@ -4,7 +4,7 @@ import {
   getChainflipApi,
   observeBalanceIncrease,
   observeEvent,
-  getEvmContractAddress,
+  getContractAddress,
   observeCcmReceived,
   amountToFineAmount,
   defaultAssetAmounts,
@@ -34,8 +34,8 @@ export async function executeContractSwap(
   const networkOptions = {
     signer: wallet,
     network: 'localnet',
-    vaultContractAddress: getEvmContractAddress(srcChain, 'VAULT'),
-    srcTokenContractAddress: getEvmContractAddress(srcChain, srcAsset),
+    vaultContractAddress: getContractAddress(srcChain, 'VAULT'),
+    srcTokenContractAddress: getContractAddress(srcChain, srcAsset),
   } as const;
   const txOptions = {
     nonce,
@@ -153,8 +153,8 @@ export async function approveTokenVault(
       {
         signer: wallet,
         network: 'localnet',
-        vaultContractAddress: getEvmContractAddress(chain, 'VAULT'),
-        srcTokenContractAddress: getEvmContractAddress(chain, srcAsset),
+        vaultContractAddress: getContractAddress(chain, 'VAULT'),
+        srcTokenContractAddress: getContractAddress(chain, srcAsset),
       },
       {
         nonce: nextNonce,

@@ -22,7 +22,7 @@ export async function newSwap(
 
   await broker.requestSwapDepositAddress(
     {
-      // Temporal workaround for ARB assets
+      // Temporal workaround for ARB assets. Need the same for SOL.
       srcAsset: sourceAsset.replace('ARB', '') as Asset,
       destAsset: destAsset.replace('ARB', '') as Asset,
       srcChain: chainFromAsset(sourceAsset),
