@@ -3,8 +3,8 @@ pub use chainflip_engine::settings::StateChain;
 use chainflip_engine::{
 	constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT},
 	settings::{
-		resolve_settings_path, CfSettings, Eth, EthOptions, PathResolutionExpectation,
-		StateChainOptions, DEFAULT_SETTINGS_DIR,
+		resolve_settings_path, CfSettings, PathResolutionExpectation, StateChainOptions,
+		DEFAULT_SETTINGS_DIR,
 	},
 };
 use clap::Parser;
@@ -16,16 +16,13 @@ use std::{
 };
 
 #[derive(Parser, Clone, Debug)]
-#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"), version_short = 'v')]
+#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"))]
 pub struct CLICommandLineOptions {
 	#[clap(short = 'c', long = "config-root", env = CONFIG_ROOT, default_value = DEFAULT_CONFIG_ROOT)]
 	pub config_root: String,
 
 	#[clap(flatten)]
 	state_chain_opts: StateChainOptions,
-
-	#[clap(flatten)]
-	eth_opts: EthOptions,
 
 	#[clap(subcommand)]
 	pub cmd: CliCommand,
@@ -41,8 +38,6 @@ impl Source for CLICommandLineOptions {
 
 		self.state_chain_opts.insert_all(&mut map);
 
-		self.eth_opts.insert_all(&mut map);
-
 		Ok(map)
 	}
 }
@@ -53,7 +48,6 @@ impl Default for CLICommandLineOptions {
 		Self {
 			config_root: DEFAULT_CONFIG_ROOT.to_owned(),
 			state_chain_opts: StateChainOptions::default(),
-			eth_opts: EthOptions::default(),
 			// an arbitrary simple command
 			cmd: CliCommand::StopBidding {},
 		}
@@ -75,16 +69,19 @@ pub struct SwapRequestParams {
 	pub broker_commission: u16,
 	/// Commission to the booster in basis points
 	pub boost_fee: Option<u16>,
-	/// Chain of the source asset ("Ethereum"|"Polkadot")
-	pub source_chain: Option<ForeignChain>,
-	/// Chain of the destination asset ("Ethereum"|"Polkadot")
-	pub destination_chain: Option<ForeignChain>,
 }
-
+#[derive(Parser, Clone, Debug)]
+pub struct WithdrawFeesParams {
+	/// Asset to withdraw ("ETH"|"DOT")
+	pub asset: Asset,
+	/// Egress asset address to receive withdrawn funds
+	pub destination_address: String,
+}
 #[derive(clap::Subcommand, Clone, Debug)]
 pub enum BrokerSubcommands {
 	/// Request a swap deposit address.
 	RequestSwapDepositAddress(SwapRequestParams),
+	WithdrawFees(WithdrawFeesParams),
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]
@@ -93,8 +90,6 @@ pub enum LiquidityProviderSubcommands {
 	RequestLiquidityDepositAddress {
 		/// Asset to deposit ("ETH"|"DOT")
 		asset: Asset,
-		/// Chain of the deposit asset ("Ethereum"|"Polkadot")
-		chain: Option<ForeignChain>,
 		boost_fee: Option<u16>,
 	},
 	/// Register a Liquidity Refund Address for the given chain. An address must be
@@ -213,21 +208,12 @@ fn account_role_parser(s: &str) -> Result<AccountRole, String> {
 #[derive(Deserialize, Debug, Default)]
 pub struct CLISettings {
 	pub state_chain: StateChain,
-
-	pub eth: Eth,
 }
 
 impl CfSettings for CLISettings {
 	type CommandLineOptions = CLICommandLineOptions;
 
 	fn validate_settings(&mut self, config_root: &Path) -> Result<(), ConfigError> {
-		self.eth.validate_settings()?;
-		self.eth.private_key_file = resolve_settings_path(
-			config_root,
-			&self.eth.private_key_file,
-			Some(PathResolutionExpectation::ExistingFile),
-		)?;
-
 		self.state_chain.validate_settings()?;
 		self.state_chain.signing_key_file = resolve_settings_path(
 			config_root,
@@ -285,6 +271,7 @@ mod tests {
 	}
 
 	#[test]
+	#[ignore = "Requires config file at root"]
 	fn init_default_config() {
 		set_test_env();
 
@@ -296,10 +283,10 @@ mod tests {
 		.unwrap();
 
 		assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
-		assert_eq!(settings.eth.nodes.primary.ws_endpoint.as_ref(), "ws://localhost:8545");
 	}
 
 	#[test]
+	#[ignore = "Requires config file at default root"]
 	fn test_all_command_line_options() {
 		// Fill the options with test values that will pass the parsing/validation.
 		// The test values need to be different from the default values set during `set_defaults()`
@@ -311,14 +298,6 @@ mod tests {
 			state_chain_opts: StateChainOptions {
 				state_chain_ws_endpoint: Some("ws://endpoint:1234".to_owned()),
 				state_chain_signing_key_file: Some(PathBuf::from_str("signing_key_file").unwrap()),
-			},
-
-			eth_opts: EthOptions {
-				eth_ws_endpoint: Some("ws://endpoint2:1234".to_owned()),
-				eth_http_endpoint: Some("http://endpoint3:1234".to_owned()),
-				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
-				eth_backup_ws_endpoint: Some("ws://endpoint4:1234".to_owned()),
-				eth_backup_http_endpoint: Some("http://endpoint5:1234".to_owned()),
 			},
 
 			cmd: CliCommand::Rotate {}, // Not used in this test
@@ -336,25 +315,5 @@ mod tests {
 			opts.state_chain_opts.state_chain_signing_key_file.unwrap(),
 			settings.state_chain.signing_key_file
 		);
-		assert_eq!(
-			opts.eth_opts.eth_ws_endpoint.unwrap(),
-			settings.eth.nodes.primary.ws_endpoint.as_ref()
-		);
-		assert_eq!(
-			opts.eth_opts.eth_http_endpoint.unwrap(),
-			settings.eth.nodes.primary.http_endpoint.as_ref()
-		);
-
-		let eth_backup_node = settings.eth.nodes.backup.unwrap();
-		assert_eq!(
-			opts.eth_opts.eth_backup_ws_endpoint.unwrap(),
-			eth_backup_node.ws_endpoint.as_ref()
-		);
-		assert_eq!(
-			opts.eth_opts.eth_backup_http_endpoint.unwrap(),
-			eth_backup_node.http_endpoint.as_ref()
-		);
-
-		assert_eq!(opts.eth_opts.eth_private_key_file.unwrap(), settings.eth.private_key_file);
 	}
 }

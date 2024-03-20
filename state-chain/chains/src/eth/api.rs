@@ -2,11 +2,11 @@ use super::Ethereum;
 use crate::{
 	evm::{
 		api::{
-			all_batch, execute_x_swap_and_call, set_agg_key_with_agg_key,
-			set_comm_key_with_agg_key, set_gov_key_with_agg_key, transfer_fallback,
-			EthEnvironmentProvider, EvmCall, EvmReplayProtection, EvmTransactionBuilder, SigData,
+			all_batch, evm_all_batch_builder, execute_x_swap_and_call, set_agg_key_with_agg_key,
+			set_comm_key_with_agg_key, set_gov_key_with_agg_key, transfer_fallback, EvmCall,
+			EvmEnvironmentProvider, EvmReplayProtection, EvmTransactionBuilder, SigData,
 		},
-		EvmCrypto, EvmFetchId, SchnorrVerificationComponents,
+		EvmCrypto, SchnorrVerificationComponents,
 	},
 	*,
 };
@@ -115,14 +115,14 @@ impl<C: EvmCall + Parameter + 'static> ApiCall<EvmCrypto> for EvmTransactionBuil
 
 impl<E> SetAggKeyWithAggKey<EvmCrypto> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
+	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(
 		_old_key: Option<<EvmCrypto as ChainCrypto>::AggKey>,
 		new_key: <EvmCrypto as ChainCrypto>::AggKey,
 	) -> Result<Self, SetAggKeyWithAggKeyError> {
 		Ok(Self::SetAggKeyWithAggKey(EvmTransactionBuilder::new_unsigned(
-			E::replay_protection(E::contract_address(EthereumContract::KeyManager)),
+			E::replay_protection(E::key_manager_address()),
 			set_agg_key_with_agg_key::SetAggKeyWithAggKey::new(new_key),
 		)))
 	}
@@ -130,14 +130,14 @@ where
 
 impl<E> SetGovKeyWithAggKey<EvmCrypto> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
+	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(
 		_maybe_old_key: Option<<EvmCrypto as ChainCrypto>::GovKey>,
 		new_gov_key: <EvmCrypto as ChainCrypto>::GovKey,
 	) -> Result<Self, ()> {
 		Ok(Self::SetGovKeyWithAggKey(EvmTransactionBuilder::new_unsigned(
-			E::replay_protection(E::contract_address(EthereumContract::KeyManager)),
+			E::replay_protection(E::key_manager_address()),
 			set_gov_key_with_agg_key::SetGovKeyWithAggKey::new(new_gov_key),
 		)))
 	}
@@ -145,11 +145,11 @@ where
 
 impl<E> SetCommKeyWithAggKey<EvmCrypto> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
+	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(new_comm_key: <EvmCrypto as ChainCrypto>::GovKey) -> Self {
 		Self::SetCommKeyWithAggKey(EvmTransactionBuilder::new_unsigned(
-			E::replay_protection(E::contract_address(EthereumContract::KeyManager)),
+			E::replay_protection(E::key_manager_address()),
 			set_comm_key_with_agg_key::SetCommKeyWithAggKey::new(new_comm_key),
 		))
 	}
@@ -157,7 +157,7 @@ where
 
 impl<E> RegisterRedemption for EthereumApi<E>
 where
-	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
+	E: StateChainGatewayAddressProvider + ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(
 		node_id: &[u8; 32],
@@ -167,7 +167,7 @@ where
 		executor: Option<Address>,
 	) -> Self {
 		Self::RegisterRedemption(EvmTransactionBuilder::new_unsigned(
-			E::replay_protection(E::contract_address(EthereumContract::StateChainGateway)),
+			E::replay_protection(E::state_chain_gateway_address()),
 			register_redemption::RegisterRedemption::new(
 				node_id, amount, address, expiry, executor,
 			),
@@ -185,11 +185,11 @@ where
 
 impl<E> UpdateFlipSupply<EvmCrypto> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
+	E: StateChainGatewayAddressProvider + ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(new_total_supply: u128, block_number: u64) -> Self {
 		Self::UpdateFlipSupply(EvmTransactionBuilder::new_unsigned(
-			E::replay_protection(E::contract_address(EthereumContract::StateChainGateway)),
+			E::replay_protection(E::state_chain_gateway_address()),
 			update_flip_supply::UpdateFlipSupply::new(new_total_supply, block_number),
 		))
 	}
@@ -197,7 +197,7 @@ where
 
 impl<E> ConsolidateCall<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
+	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
 	fn consolidate_utxos() -> Result<Self, ConsolidationError> {
 		Err(ConsolidationError::NotRequired)
@@ -206,67 +206,24 @@ where
 
 impl<E> AllBatch<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
+	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
 		transfer_params: Vec<TransferAssetParams<Ethereum>>,
 	) -> Result<Self, AllBatchError> {
-		let mut fetch_only_params = vec![];
-		let mut fetch_deploy_params = vec![];
-		for FetchAssetParams { deposit_fetch_id, asset } in fetch_params {
-			if let Some(token_address) = E::token_address(asset) {
-				match deposit_fetch_id {
-					EvmFetchId::Fetch(contract_address) => {
-						debug_assert!(
-							asset != assets::eth::Asset::Eth,
-							"Eth should not be fetched. It is auto-fetched in the smart contract."
-						);
-						fetch_only_params.push(EncodableFetchAssetParams {
-							contract_address,
-							asset: token_address,
-						})
-					},
-					EvmFetchId::DeployAndFetch(channel_id) => fetch_deploy_params
-						.push(EncodableFetchDeployAssetParams { channel_id, asset: token_address }),
-					EvmFetchId::NotRequired => (),
-				};
-			} else {
-				return Err(AllBatchError::Other)
-			}
-		}
-		if fetch_only_params.is_empty() &&
-			fetch_deploy_params.is_empty() &&
-			transfer_params.is_empty()
-		{
-			Err(AllBatchError::NotRequired)
-		} else {
-			Ok(Self::AllBatch(EvmTransactionBuilder::new_unsigned(
-				E::replay_protection(E::contract_address(EthereumContract::Vault)),
-				all_batch::AllBatch::new(
-					fetch_deploy_params,
-					fetch_only_params,
-					transfer_params
-						.into_iter()
-						.map(|TransferAssetParams { asset, to, amount }| {
-							E::token_address(asset)
-								.map(|address| EncodableTransferAssetParams {
-									to,
-									amount,
-									asset: address,
-								})
-								.ok_or(AllBatchError::Other)
-						})
-						.collect::<Result<Vec<_>, _>>()?,
-				),
-			)))
-		}
+		Ok(Self::AllBatch(evm_all_batch_builder(
+			fetch_params,
+			transfer_params,
+			E::token_address,
+			E::replay_protection(E::vault_address()),
+		)?))
 	}
 }
 
 impl<E> ExecutexSwapAndCall<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
+	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(
 		transfer_param: TransferAssetParams<Ethereum>,
@@ -282,7 +239,7 @@ where
 		};
 
 		Ok(Self::ExecutexSwapAndCall(EvmTransactionBuilder::new_unsigned(
-			E::replay_protection(E::contract_address(EthereumContract::Vault)),
+			E::replay_protection(E::vault_address()),
 			execute_x_swap_and_call::ExecutexSwapAndCall::new(
 				transfer_param,
 				source_chain,
@@ -296,7 +253,7 @@ where
 
 impl<E> TransferFallback<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
+	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(transfer_param: TransferAssetParams<Ethereum>) -> Result<Self, DispatchError> {
 		let transfer_param = EncodableTransferAssetParams {
@@ -306,7 +263,7 @@ where
 		};
 
 		Ok(Self::TransferFallback(EvmTransactionBuilder::new_unsigned(
-			E::replay_protection(E::contract_address(EthereumContract::Vault)),
+			E::replay_protection(E::vault_address()),
 			transfer_fallback::TransferFallback::new(transfer_param),
 		)))
 	}
@@ -418,9 +375,6 @@ impl<E> EthereumApi<E> {
 	}
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum EthereumContract {
-	StateChainGateway,
-	KeyManager,
-	Vault,
+pub trait StateChainGatewayAddressProvider {
+	fn state_chain_gateway_address() -> Address;
 }

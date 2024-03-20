@@ -46,6 +46,9 @@ members = [
   'engine/multisig',
 ]
 
+[workspace.lints.clippy]
+blocks_in_conditions = "allow"
+thread-local-initializer-can-be-made-const = "allow"
 
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates
 # that are suspected to be CPU-intensive, and that are unlikely to require debugging (as some of

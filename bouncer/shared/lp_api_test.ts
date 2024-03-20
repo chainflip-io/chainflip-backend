@@ -1,4 +1,4 @@
-import { assetDecimals, Asset, Chain, Assets } from '@chainflip-io/cli';
+import { Asset, Chain, Assets } from '@chainflip/cli';
 import assert from 'assert';
 import {
   getChainflipApi,
@@ -10,6 +10,7 @@ import {
   observeBalanceIncrease,
   chainFromAsset,
   isWithinOnePercent,
+  assetDecimals,
 } from './utils';
 import { jsonRpc } from './json_rpc';
 import { provideLiquidity } from './provide_liquidity';
@@ -24,7 +25,7 @@ type RpcAsset = {
 const testAsset: Asset = 'ETH'; // TODO: Make these tests work with any asset
 const testRpcAsset: RpcAsset = { chain: chainFromAsset(testAsset), asset: testAsset };
 const testAmount = 0.1;
-const testAssetAmount = parseInt(amountToFineAmount(testAmount.toString(), assetDecimals.ETH));
+const testAssetAmount = parseInt(amountToFineAmount(testAmount.toString(), assetDecimals('ETH')));
 const amountToProvide = testAmount * 50; // Provide plenty of the asset for the tests
 const chainflip = await getChainflipApi();
 const testAddress = '0x1594300cbd587694affd70c933b9ee9155b186d9';
@@ -37,7 +38,7 @@ async function lpApiRpc(method: string, params: any[]): Promise<any> {
 
 async function provideLiquidityAndTestAssetBalances() {
   const fineAmountToProvide = parseInt(
-    amountToFineAmount(amountToProvide.toString(), assetDecimals.ETH),
+    amountToFineAmount(amountToProvide.toString(), assetDecimals('ETH')),
   );
   // We have to wait finalization here because the LP API server is using a finalized block stream (This may change in PRO-777 PR#3986)
   await provideLiquidity(testAsset, amountToProvide, true);
@@ -119,6 +120,7 @@ async function testLiquidityDeposit() {
 }
 
 async function testWithdrawAsset() {
+  console.log('=== Starting testWithdrawAsset ===');
   const oldBalance = await getBalance(testAsset, testAddress);
 
   const result = await lpApiRpc(`lp_withdraw_asset`, [
@@ -133,9 +135,11 @@ async function testWithdrawAsset() {
   assert(egressId > 0, `Unexpected egressId: ${egressId}`);
 
   await observeBalanceIncrease(testAsset, testAddress, oldBalance);
+  console.log('=== testWithdrawAsset complete ===');
 }
 
 async function testRegisterWithExistingLpAccount() {
+  console.log('=== Starting testWithdrawAsset ===');
   try {
     await lpApiRpc(`lp_register_account`, []);
     throw new Error(`Unexpected lp_register_account result`);
@@ -147,11 +151,13 @@ async function testRegisterWithExistingLpAccount() {
       throw new Error(`Unexpected lp_register_account error: ${error}`);
     }
   }
+  console.log('=== testRegisterWithExistingLpAccount complete ===');
 }
 
 /// Test lp_set_range_order and lp_update_range_order by minting, updating, and burning a range order.
 
 async function testRangeOrder() {
+  console.log('=== Starting testRangeOrder ===');
   const range = { start: 1, end: 2 };
   const orderId = 74398; // Arbitrary order id so it does not interfere with other tests
   const zeroAssetAmounts = {
@@ -245,19 +251,24 @@ async function testRangeOrder() {
     }
   });
   assert.strictEqual(matchBurn, true, `Expected burn of range order to decrease liquidity to 0`);
+
+  console.log('=== testRangeOrder complete ===');
 }
 
 async function testGetOpenSwapChannels() {
+  console.log('=== Starting testGetOpenSwapChannels ===');
   // TODO: Test with some SwapChannelInfo data
   const openSwapChannels = await lpApiRpc(`lp_get_open_swap_channels`, []);
   assert(openSwapChannels.ethereum, `Missing ethereum swap channel info`);
   assert(openSwapChannels.polkadot, `Missing polkadot swap channel info`);
   assert(openSwapChannels.bitcoin, `Missing bitcoin swap channel info`);
+  console.log('=== testGetOpenSwapChannels complete ===');
 }
 
 /// Test lp_set_limit_order and lp_update_limit_order by minting, updating, and burning a limit order.
 
 async function testLimitOrder() {
+  console.log('=== Starting testLimitOrder ===');
   const orderId = 98432; // Arbitrary order id so it does not interfere with other tests
   const tick = 2;
 
@@ -336,6 +347,8 @@ async function testLimitOrder() {
     }
   });
   assert.strictEqual(matchBurn, true, `Expected burn of limit order to decrease liquidity to 0`);
+
+  console.log('=== testLimitOrder complete ===');
 }
 
 /// Runs all of the LP commands via the LP API Json RPC Server that is running and checks that the returned data is as expected

@@ -12,6 +12,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use cf_primitives::{AccountRole, SemVer};
 use futures::{StreamExt, TryStreamExt};
 
+use cf_primitives::CfeCompatibility;
 use futures_core::future::BoxFuture;
 use futures_util::FutureExt;
 use jsonrpsee::core::RpcResult;
@@ -19,6 +20,7 @@ use sp_core::{Pair, H256};
 use state_chain_runtime::AccountId;
 use std::{pin::Pin, sync::Arc, time::Duration};
 use subxt::{backend::rpc::RpcClient, config::DefaultExtrinsicParamsBuilder};
+use thiserror::Error;
 use tokio::sync::watch;
 use tracing::{info, warn};
 
@@ -43,7 +45,7 @@ use self::{
 		signed::{signer, SignedExtrinsicApi, WaitFor, WaitForResult},
 		unsigned,
 	},
-	storage_api::StorageApi,
+	storage_api::{BlockCompatibility, StorageApi},
 	stream_api::{StateChainStream, StreamApi, FINALIZED, UNFINALIZED},
 };
 
@@ -67,7 +69,7 @@ lazy_static::lazy_static! {
 	};
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct BlockInfo {
 	pub parent_hash: state_chain_runtime::Hash,
 	pub hash: state_chain_runtime::Hash,
@@ -92,6 +94,12 @@ impl DefaultRpcClient {
 				})?,
 		))
 	}
+}
+
+#[derive(Error, Debug)]
+pub enum CreateStateChainClientError {
+	#[error("Compatibilty error")]
+	CompatibilityError(BlockCompatibility),
 }
 
 pub struct StateChainClient<
@@ -119,6 +127,7 @@ impl StateChainClient<extrinsic_api::signed::SignedExtrinsicClient> {
 		wait_for_required_role: bool,
 		wait_for_required_version: bool,
 		submit_cfe_version: bool,
+		start_from: Option<state_chain_runtime::BlockNumber>,
 	) -> Result<(impl StreamApi<FINALIZED> + Clone, impl StreamApi<UNFINALIZED> + Clone, Arc<Self>)>
 	{
 		Self::new_with_account(
@@ -129,6 +138,7 @@ impl StateChainClient<extrinsic_api::signed::SignedExtrinsicClient> {
 			wait_for_required_role,
 			wait_for_required_version,
 			submit_cfe_version,
+			start_from,
 		)
 		.await
 	}
@@ -161,6 +171,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		wait_for_required_role: bool,
 		wait_for_required_version: bool,
 		submit_cfe_version: bool,
+		start_from: Option<state_chain_runtime::BlockNumber>,
 	) -> Result<(impl StreamApi<FINALIZED> + Clone, impl StreamApi<UNFINALIZED> + Clone, Arc<Self>)>
 	{
 		Self::new(
@@ -176,6 +187,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				submit_cfe_version,
 			},
 			wait_for_required_version,
+			start_from,
 		)
 		.await
 	}
@@ -190,7 +202,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		wait_for_required_version: bool,
 	) -> Result<(impl StreamApi<FINALIZED> + Clone, impl StreamApi<UNFINALIZED> + Clone, Arc<Self>)>
 	{
-		Self::new(scope, base_rpc_client, (), wait_for_required_version).await
+		Self::new(scope, base_rpc_client, (), wait_for_required_version, None).await
 	}
 }
 
@@ -265,72 +277,99 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 				}
 			});
 
-		let incompatible_block_message = |block_version: SemVer, block: BlockInfo| {
-			lazy_format::lazy_format!(
-				"This version '{}' is incompatible with the current release '{block_version}' at block {}: {:?}.",
-				*CFE_VERSION,
-				block.number,
-				block.hash,
-			)
-		};
-
 		let mut processed_stream = {
 			let latest_block: BlockInfo = block_stream.next().await.unwrap()?;
+
 			let mut block_stream =
 				process_stream_fn(Box::pin(block_stream.make_try_cached(latest_block))).await?;
 
-			let latest_block = *block_stream.cache();
-			if wait_for_required_version {
-				let incompatible_blocks =
-					futures::stream::once(futures::future::ready(Ok::<_, anyhow::Error>(
-						latest_block,
-					)))
-					.chain(block_stream.by_ref())
-					.try_take_while(|block_info| {
-						let base_rpc_client = base_rpc_client.clone();
-						let block_info = *block_info;
-						async move {
-							Ok(
-								if let Err(block_version) = base_rpc_client
-									.check_block_compatibility(block_info.hash)
-									.await?
-								{
-									info!(
-										"{} WAITING for a compatible release version.",
-										incompatible_block_message(block_version, block_info)
-									);
-									true
-								} else {
-									false
-								},
-							)
-						}
-					})
-					.boxed();
+			let block_compatibility =
+				base_rpc_client.check_block_compatibility(*block_stream.cache()).await?;
 
-				// Note underlying stream ends in Error, therefore it is guaranteed try_for_each
-				// will not exit successfully until a compatible block is found
-				incompatible_blocks
-					.try_for_each(move |_| futures::future::ready(Ok::<_, anyhow::Error>(())))
-					.await?;
-			} else {
-				base_rpc_client.check_block_compatibility(latest_block.hash).await?.map_err(
-					|latest_block_version| {
-						anyhow::anyhow!(
-							"{}",
-							incompatible_block_message(latest_block_version, latest_block)
+			match block_compatibility.compatibility {
+				CfeCompatibility::Compatible => block_stream,
+				CfeCompatibility::NoLongerCompatible if error_on_incompatible_block => {
+					return Err(CreateStateChainClientError::CompatibilityError(
+						block_compatibility,
+					)
+					.into());
+				},
+				// Either:
+				// - We're no longer compatible but we don't want to exit on error
+				// - We're not yet compatible and we're waiting for the required version
+				_ => {
+					// TODO: After the whole "single binary CFE upgrade" is complete, we should be
+					// able to remove `wait_for_required_version` as we'll never wait. We'll always
+					// return out the error and let the runner start the other version.
+					if wait_for_required_version {
+						let incompatible_blocks = block_stream
+							.by_ref()
+							.try_take_while(|block_info| {
+								let base_rpc_client = base_rpc_client.clone();
+								let block_info = *block_info;
+								async move {
+									{
+										let block_compatibility = base_rpc_client
+											.check_block_compatibility(block_info)
+											.await?;
+
+										match block_compatibility.compatibility {
+											CfeCompatibility::Compatible => Ok(false),
+											// We want the stream to continue as before
+											CfeCompatibility::NotYetCompatible => {
+												info!(
+													"{} WAITING for a compatible release version.",
+													lazy_format::lazy_format!(
+														"Block compatibility: {:?}.",
+														block_compatibility
+													)
+												);
+												Ok(true)
+											},
+											// Generally we cannot move from no longer compatible to
+											// compatible. We don't expect this to happen.
+											CfeCompatibility::NoLongerCompatible =>
+												if error_on_incompatible_block {
+													Err(CreateStateChainClientError::CompatibilityError(block_compatibility).into())
+												} else {
+													tracing::warn!("StateChain block number {} is no longer compatible.", block_info.number);
+													Ok(true)
+												},
+										}
+									}
+								}
+							})
+							.boxed();
+
+						// Note underlying stream ends in Error, therefore it is guaranteed
+						// try_for_each will not exit successfully until a compatible block is found
+						incompatible_blocks
+							.try_for_each(move |_| {
+								futures::future::ready(Ok::<_, anyhow::Error>(()))
+							})
+							.await?;
+
+						block_stream
+					} else {
+						return Err(CreateStateChainClientError::CompatibilityError(
+							block_compatibility,
 						)
-					},
-				)?;
+						.into());
+					}
+				},
 			}
-
-			block_stream
 		};
 
 		const BLOCK_CAPACITY: usize = 10;
 		let (mut block_sender, block_receiver) = spmc::channel::<BlockInfo>(BLOCK_CAPACITY);
 
 		let latest_block = *processed_stream.cache();
+
+		assert_eq!(
+			base_rpc_client.check_block_compatibility(latest_block).await?.compatibility,
+			CfeCompatibility::Compatible
+		);
+
 		let (latest_block_sender, latest_block_watcher) =
 			tokio::sync::watch::channel::<BlockInfo>(latest_block);
 
@@ -348,17 +387,25 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 					let result_block = processed_stream.next().map(|option| option.unwrap()) => {
 						let block = result_block?;
 
-						match base_rpc_client.check_block_compatibility(block.hash).await? {
-							Ok(()) => {
+						let block_compatibility = base_rpc_client.check_block_compatibility(block).await?;
+						match block_compatibility.compatibility {
+							CfeCompatibility::Compatible => {
 								latest_block = block;
 								block_sender.send(block).await;
 								let _result = latest_block_sender.send(block);
 							},
-							Err(block_version) => {
+							CfeCompatibility::NoLongerCompatible => {
 								if error_on_incompatible_block {
-									break Err(anyhow!("{}", incompatible_block_message(block_version, block)));
+									break Err(CreateStateChainClientError::CompatibilityError(block_compatibility).into());
+								} else {
+									tracing::warn!("StateChain block number {} is no longer compatible.", block.number);
 								}
 							}
+							CfeCompatibility::NotYetCompatible => {
+								// We've either already returned a NotYetCompatible error, or we've waited until we're compatible. So we
+								// don't expect this case to happen.
+								break Err(CreateStateChainClientError::CompatibilityError(block_compatibility).into());
+							},
 						}
 					},
 					if let Some(block_stream_request) = block_stream_request_receiver.next() => {
@@ -384,7 +431,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			+ 'a,
 		base_rpc_client: Arc<BaseRpcClient>,
 	) -> utilities::try_cached_stream::InnerTryCachedStream<
-		impl futures::Stream<Item = Result<BlockInfo, anyhow::Error>> + Send + 'a,
+		impl futures::Stream<Item = Result<BlockInfo>> + Send + 'a,
 	> {
 		let latest_finalized_block: BlockInfo = *sparse_block_stream.cache();
 
@@ -452,6 +499,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 		base_rpc_client: Arc<BaseRpcClient>,
 		mut signed_extrinsic_client_builder: SignedExtrinsicClientBuilder,
 		wait_for_required_version: bool,
+		start_from: Option<state_chain_runtime::BlockNumber>,
 	) -> Result<(impl StreamApi<FINALIZED> + Clone, impl StreamApi<UNFINALIZED> + Clone, Arc<Self>)>
 	{
 		{
@@ -491,23 +539,77 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 
 					// Often `finalized_header` returns a significantly newer latest block than the
 					// stream returns so we move the stream forward to this block
-					{
-						let finalised_header_hash =
-							base_rpc_client.latest_finalized_block_hash().await?;
-						let finalised_header =
-							base_rpc_client.block_header(finalised_header_hash).await?;
-						if finalized_block_stream.cache().number < finalised_header.number {
-							let blocks_to_skip =
-								finalized_block_stream.cache().number + 1..=finalised_header.number;
-							for block_number in blocks_to_skip {
+					let finalized_hash = base_rpc_client.latest_finalized_block_hash().await?;
+					let finalized_header = base_rpc_client.block_header(finalized_hash).await?;
+
+					let base_rpc_client = base_rpc_client.clone();
+					let mut finalized_block_stream: Pin<
+						Box<
+							dyn TryCachedStream<
+									Ok = BlockInfo,
+									Error = anyhow::Error,
+									Item = Result<BlockInfo, anyhow::Error>,
+								> + Send,
+						>,
+					> = match start_from {
+						Some(start_from) if start_from < finalized_block_stream.cache().number => {
+							// save this to avoid fetching the same block again
+							let latest_block_from_cache = *finalized_block_stream.cache();
+
+							// we can make this range exclusive because we've saved the cached block
+							// above, which we chain later.
+							let earlier_blocks_to_fetch =
+								start_from..latest_block_from_cache.number;
+
+							let base_rpc_client = base_rpc_client.clone();
+							let mut start_from_headers = Box::pin(
+								futures::stream::iter(earlier_blocks_to_fetch)
+									.then(move |block_number| {
+										let base_rpc_client_c = base_rpc_client.clone();
+										async move {
+											let hash = base_rpc_client_c
+												.block_hash(block_number)
+												.await?
+												.ok_or_else(|| {
+													anyhow::anyhow!(
+														"Block number {} does not exist in the state chain",
+														block_number
+													)
+												})?;
+											Ok(base_rpc_client_c.block_header(hash).await?)
+										}
+									})
+									.map_ok(|header| -> BlockInfo { header.into() }),
+							);
+
+							let start_block = start_from_headers
+								.next()
+								.await
+								.expect("start_from is less than block stream cache number")?;
+
+							Box::pin(
+								start_from_headers
+									.chain(futures::stream::once(futures::future::ready(Ok(
+										latest_block_from_cache,
+									))))
+									.chain(finalized_block_stream)
+									.make_try_cached(start_block),
+							)
+						},
+						_ => {
+							// No need to fetch any earlier blocks, we just have to move the stream
+							// to the correct starting point.
+							let skip_to = start_from.unwrap_or(finalized_header.number);
+							for block_number in finalized_block_stream.cache().number + 1..skip_to {
 								assert_eq!(
 									finalized_block_stream.next().await.unwrap()?.number,
 									block_number,
 									"{SUBSTRATE_BEHAVIOUR}"
 								);
 							}
-						}
-					}
+							finalized_block_stream
+						},
+					};
 
 					signed_extrinsic_client_builder
 						.pre_compatibility(base_rpc_client.clone(), &mut finalized_block_stream)
@@ -527,6 +629,10 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			scope,
 			base_rpc_client.clone(),
 			wait_for_required_version,
+			// We don't want the unfinalised stream to error on an incompatible block, as the
+			// unfinalised stream will hit the boundary first but we want to process as far as
+			// possible on the *finalised* stream, and pass out the block number contained in the
+			// error (where applicable) from the finalised stream back up to main.
 			false,
 			|base_rpc_client| base_rpc_client.subscribe_unfinalized_block_headers(),
 			|block_stream| futures::future::ready(Ok(block_stream)),

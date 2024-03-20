@@ -4,7 +4,11 @@ version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
 edition = '2021'
 
+[lints]
+workspace = true
+
 [dependencies]
+codec = { package = 'parity-scale-codec', version = '3.6.1' }
 
 # Chainflip Runtime
 state-chain-runtime = { path = '../runtime' }
@@ -15,6 +19,9 @@ jsonrpsee = { version = "0.16.2", features = ["full"] }
 hex = '0.4.3'
 serde = { version = '1.0', features = ['derive'] }
 thiserror = "1.0"
+log = { version = '0.4' }
+scale-info = { version = '2.10.0', features = ['derive'] }
+scale-value = { version = '0.14.0' }
 
 cf-chains = { path = '../chains' }
 cf-primitives = { path = '../primitives' }
@@ -22,15 +29,17 @@ cf-utilities = { package = 'utilities', path = '../../utilities' }
 cf-amm = { path = '../amm' }
 pallet-cf-governance = { path = "../pallets/cf-governance" }
 pallet-cf-pools = { path = "../pallets/cf-pools" }
-pallet-cf-witnesser = { path = "../pallets/cf-witnesser"}
+pallet-cf-witnesser = { path = "../pallets/cf-witnesser" }
+pallet-cf-swapping = { path = "../pallets/cf-swapping" }
 
-sp-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3" }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3" }
-sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3" }
-sc-rpc-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3" }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3" }
-sc-client-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+3" }
+sp-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+sc-rpc-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+sc-client-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
 
 [dev-dependencies]
 insta = { version = "1.34.0", features = ["json"] }
-serde_json = "1.0"
+serde_json = { version = "1.0.111" }

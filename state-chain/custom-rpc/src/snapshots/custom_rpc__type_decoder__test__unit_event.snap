@@ -1,0 +1,13 @@
+---
+source: state-chain/custom-rpc/src/type_decoder.rs
+expression: value
+---
+{
+  "name": "Inner",
+  "values": [
+    {
+      "name": "Unit",
+      "values": []
+    }
+  ]
+}

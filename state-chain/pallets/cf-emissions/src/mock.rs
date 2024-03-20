@@ -2,21 +2,19 @@
 
 use crate::{self as pallet_cf_emissions, PalletSafeMode};
 use cf_chains::{
+	eth::api::StateChainGatewayAddressProvider,
 	mocks::{MockEthereum, MockEthereumChainCrypto},
 	ApiCall, ChainCrypto, Ethereum, UpdateFlipSupply,
 };
 use cf_primitives::{BroadcastId, FlipBalance, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
-	mocks::{
-		egress_handler::MockEgressHandler, eth_environment_provider::MockEthEnvironment,
-		flip_burn_info::MockFlipBurnInfo,
-	},
+	mocks::{egress_handler::MockEgressHandler, flip_burn_info::MockFlipBurnInfo},
 	Broadcaster, Issuance, RewardsDistribution, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	parameter_types, storage,
+	derive_impl, parameter_types, storage,
 	traits::{Imbalance, UnfilteredDispatchable},
 	StorageHasher, Twox64Concat,
 };
@@ -50,6 +48,7 @@ parameter_types! {
 	pub const SS58Prefix: u8 = 42;
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -168,9 +167,11 @@ impl Broadcaster<MockEthereum> for MockBroadcast {
 	type ApiCall = MockUpdateFlipSupply;
 	type Callback = MockCallback;
 
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId {
+	fn threshold_sign_and_broadcast(
+		api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		Self::call(api_call);
-		1
+		(1, 1)
 	}
 
 	fn threshold_sign_and_broadcast_with_callback(
@@ -181,7 +182,9 @@ impl Broadcaster<MockEthereum> for MockBroadcast {
 		unimplemented!()
 	}
 
-	fn threshold_sign_and_broadcast_rotation_tx(_api_call: Self::ApiCall) -> BroadcastId {
+	fn threshold_sign_and_broadcast_rotation_tx(
+		_api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		unimplemented!()
 	}
 
@@ -199,6 +202,14 @@ impl Broadcaster<MockEthereum> for MockBroadcast {
 	}
 }
 
+pub struct MockStateChainGatewayProvider;
+
+impl StateChainGatewayAddressProvider for MockStateChainGatewayProvider {
+	fn state_chain_gateway_address() -> cf_chains::eth::Address {
+		[0xcc; 20].into()
+	}
+}
+
 impl_mock_runtime_safe_mode! { emissions: PalletSafeMode }
 
 impl pallet_cf_emissions::Config for Test {
@@ -210,7 +221,7 @@ impl pallet_cf_emissions::Config for Test {
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 	type RewardsDistribution = MockRewardsDistribution;
 	type CompoundingInterval = HeartbeatBlockInterval;
-	type EthEnvironment = MockEthEnvironment;
+	type EthEnvironment = MockStateChainGatewayProvider;
 	type Broadcaster = MockBroadcast;
 	type FlipToBurn = MockFlipBurnInfo;
 	type SafeMode = MockRuntimeSafeMode;

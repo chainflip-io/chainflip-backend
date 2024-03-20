@@ -24,7 +24,7 @@ use sp_runtime::AccountId32;
 
 use sp_core::H256;
 use state_chain_runtime::{
-	AccountId, BitcoinInstance, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall,
+	AccountId, BitcoinInstance, EvmInstance, PolkadotInstance, Runtime, RuntimeCall,
 };
 use utilities::cached_stream::MakeCachedStream;
 
@@ -52,6 +52,7 @@ async fn start_sc_observer<
 		Arc::new(state_chain_client),
 		sc_block_stream,
 		eth_rpc,
+		MockEthRetryRpcClient::new(),
 		MockDotHttpRpcClient::new(),
 		MockBtcRetryRpcClient::new(),
 		MockMultisigClientApi::new(),
@@ -260,7 +261,7 @@ ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signat
 // depending on whether we are participating in the ceremony or not.
 #[tokio::test]
 async fn should_handle_signing_request_eth() {
-	should_handle_signing_request::<EvmCryptoScheme, EthereumInstance>().await;
+	should_handle_signing_request::<EvmCryptoScheme, EvmInstance>().await;
 }
 
 mod dot_signing {
@@ -363,7 +364,7 @@ where
 
 #[tokio::test]
 async fn should_handle_keygen_request_eth() {
-	should_handle_keygen_request::<EthSigning, EthereumInstance>().await;
+	should_handle_keygen_request::<EthSigning, EvmInstance>().await;
 }
 
 mod dot_keygen {
@@ -543,7 +544,7 @@ async fn test_get_ceremony_id_counters_with_events() {
 				nominee: AccountId32::new([1; 32]),
 				payload: Default::default(),
 			}),
-			CfeEvent::<Runtime>::EthThresholdSignatureRequest(ThresholdSignatureRequest::<
+			CfeEvent::<Runtime>::EvmThresholdSignatureRequest(ThresholdSignatureRequest::<
 				Runtime,
 				_,
 			> {
@@ -576,7 +577,7 @@ async fn test_get_ceremony_id_counters_with_events() {
 		],
 		// Test 2: 1 keygen request for each chain
 		vec![
-			CfeEvent::<Runtime>::EthKeygenRequest(KeygenRequest::<Runtime> {
+			CfeEvent::<Runtime>::EvmKeygenRequest(KeygenRequest::<Runtime> {
 				ceremony_id: ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
 				epoch_index: 1,
 				participants: Default::default(),
@@ -595,7 +596,7 @@ async fn test_get_ceremony_id_counters_with_events() {
 		// Test 3: 1 key handover request for BTC (and keygen requests for the other chains to
 		// avoid test complexity)
 		vec![
-			CfeEvent::<Runtime>::EthKeygenRequest(KeygenRequest::<Runtime> {
+			CfeEvent::<Runtime>::EvmKeygenRequest(KeygenRequest::<Runtime> {
 				ceremony_id: ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
 				epoch_index: 1,
 				participants: Default::default(),
@@ -651,7 +652,7 @@ async fn test_get_ceremony_id_counters_without_events() {
 	state_chain_client
 		.expect_storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
 			state_chain_runtime::Runtime,
-			state_chain_runtime::EthereumInstance,
+			state_chain_runtime::EvmInstance,
 		>>()
 		.with(eq(block_hash))
 		.once()
@@ -716,6 +717,7 @@ async fn run_the_sc_observer() {
 					false,
 					false,
 					false,
+					None,
 				)
 				.await
 				.unwrap();
@@ -723,6 +725,7 @@ async fn run_the_sc_observer() {
 			sc_observer::start(
 				state_chain_client,
 				sc_block_stream,
+				MockEthRetryRpcClient::new(),
 				MockEthRetryRpcClient::new(),
 				MockDotHttpRpcClient::new(),
 				MockBtcRetryRpcClient::new(),

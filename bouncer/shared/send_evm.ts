@@ -1,11 +1,13 @@
 import Web3 from 'web3';
-import { assetDecimals, approveVault, Chain } from '@chainflip-io/cli';
+import { approveVault, Chain } from '@chainflip/cli';
 import {
   amountToFineAmount,
   ethNonceMutex,
   arbNonceMutex,
   getEvmEndpoint,
   getWhaleKey,
+  sleep,
+  assetDecimals,
 } from './utils';
 
 const nextEvmNonce: { [key in 'Ethereum' | 'Arbitrum']: number | undefined } = {
@@ -50,7 +52,7 @@ export async function signAndSendTxEvm(
   to: string,
   value?: string,
   data?: string,
-  gas = 2000000,
+  gas = chain === 'Arbitrum' ? 5000000 : 200000,
   log = true,
 ) {
   const web3 = new Web3(getEvmEndpoint(chain));
@@ -64,7 +66,7 @@ export async function signAndSendTxEvm(
     signedTx.rawTransaction as string,
     (error) => {
       if (error) {
-        console.error('Ethereum transaction failure:', error);
+        console.error(`${chain} transaction failure:`, error);
       }
     },
   );
@@ -88,6 +90,22 @@ export async function sendEvmNative(
   ethAmount: string,
   log = true,
 ) {
-  const weiAmount = amountToFineAmount(ethAmount, assetDecimals.ETH);
+  const weiAmount = amountToFineAmount(ethAmount, assetDecimals('ETH'));
   await signAndSendTxEvm(chain, evmAddress, weiAmount, undefined, undefined, log);
+}
+
+export async function spamEvm(chain: Chain, periodMilisec: number, spam?: () => boolean) {
+  const continueSpam = spam ?? (() => true);
+
+  while (continueSpam()) {
+    signAndSendTxEvm(
+      chain,
+      '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+      '1',
+      undefined,
+      undefined,
+      false,
+    );
+    await sleep(periodMilisec);
+  }
 }

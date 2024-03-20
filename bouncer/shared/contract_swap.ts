@@ -1,10 +1,4 @@
-import {
-  Asset,
-  executeSwap,
-  ExecuteSwapParams,
-  approveVault,
-  assetDecimals,
-} from '@chainflip-io/cli';
+import { Asset, executeSwap, ExecuteSwapParams, approveVault } from '@chainflip/cli';
 import { Wallet, getDefaultProvider } from 'ethers';
 import {
   getChainflipApi,
@@ -17,6 +11,7 @@ import {
   chainFromAsset,
   getEvmEndpoint,
   getWhaleMnemonic,
+  assetDecimals,
 } from './utils';
 import { getNextEvmNonce } from './send_evm';
 import { getBalance } from './get_balance';
@@ -53,7 +48,7 @@ export async function executeContractSwap(
       destAsset,
       // It is important that this is large enough to result in
       // an amount larger than existential (e.g. on Polkadot):
-      amount: amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals[srcAsset]),
+      amount: amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals(srcAsset)),
       destAddress,
       srcAsset,
       srcChain,
@@ -138,7 +133,10 @@ export async function performSwapViaContract(
   }
 }
 
-export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC' | 'ARBUSDC', amount: string) {
+export async function approveTokenVault(
+  srcAsset: 'FLIP' | 'USDC' | 'USDT' | 'ARBUSDC',
+  amount: string,
+) {
   const chain = chainFromAsset(srcAsset as Asset);
 
   const wallet = Wallet.fromPhrase(getWhaleMnemonic(chain)).connect(
@@ -149,6 +147,7 @@ export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC' | 'ARBUSDC', a
     approveVault(
       {
         amount,
+        srcChain: chainFromAsset(srcAsset as Asset),
         srcAsset,
       },
       {

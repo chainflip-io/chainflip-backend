@@ -33,7 +33,7 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Download packages
-        uses: actions/download-artifact@7a1cd3216ca9260cd8022db641d960b1db4d1be4
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
         with:
           name: chainflip-backend-packages-ubuntu-${{ matrix.ubuntu_version }}
           path: packages
@@ -97,10 +97,6 @@ jobs:
           export AWS_SDK_LOAD_CONFIG=1
           gpg --no-default-keyring --keyring trustedkeys.gpg --keyserver keyserver.ubuntu.com --recv-keys ${{ env.GPG_KEY_ID }}
           aptly repo create -distribution=${{ steps.vars.outputs.codename }} local
-          if aptly mirror create chainflip-${{ inputs.environment }} https://${REPO_BASIC_AUTH}@${REPO_BUCKET}/${{ inputs.version }}${{ steps.vars.outputs.codename }} ${{ steps.vars.outputs.codename }} main; then
-            aptly mirror update chainflip-${{ inputs.environment }}
-            aptly repo import chainflip-${{ inputs.environment }} local 'Name'
-          fi
           aptly repo add local packages/*.deb
           aptly repo search local
 

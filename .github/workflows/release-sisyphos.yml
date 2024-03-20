@@ -12,6 +12,10 @@ jobs:
   pre-check:
     uses: ./.github/workflows/_01_pre_check.yml
     secrets: inherit
+  release-checks:
+    uses: ./.github/workflows/_03_release_checks.yml
+    with:
+      network: "sisyphos"
   test:
     uses: ./.github/workflows/_10_test.yml
     secrets: inherit

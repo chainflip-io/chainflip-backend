@@ -50,7 +50,7 @@ mod test_missed_authorship_slots {
 	use super::*;
 	use codec::Encode;
 	use frame_support::{
-		construct_runtime, parameter_types,
+		construct_runtime, derive_impl, parameter_types,
 		sp_runtime::{testing::UintAuthorityId, traits::IdentityLookup, BuildStorage, Digest},
 		traits::{ConstU32, ConstU64, OnInitialize},
 	};
@@ -71,6 +71,8 @@ mod test_missed_authorship_slots {
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
 	}
+
+	#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 	impl frame_system::Config for Test {
 		type BaseCallFilter = frame_support::traits::Everything;
 		type BlockWeights = ();

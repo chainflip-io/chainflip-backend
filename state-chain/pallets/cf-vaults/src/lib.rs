@@ -19,6 +19,7 @@ pub use pallet::*;
 use sp_std::prelude::*;
 
 mod benchmarking;
+pub mod migrations;
 
 mod vault_activator;
 
@@ -27,7 +28,7 @@ pub use weights::WeightInfo;
 mod mock;
 mod tests;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
 
 pub type PayloadFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::Payload;
 
@@ -107,6 +108,11 @@ pub mod pallet {
 	pub type PendingVaultActivation<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, VaultActivationStatus<T, I>>;
 
+	/// Whether this chain is initialized.
+	#[pallet::storage]
+	#[pallet::getter(fn vault_initialized)]
+	pub type ChainInitialized<T: Config<I>, I: 'static = ()> = StorageValue<_, bool, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -119,6 +125,7 @@ pub mod pallet {
 		AwaitingGovernanceActivation {
 			new_public_key: <<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 		},
+		ChainInitialized,
 	}
 
 	#[pallet::error]
@@ -131,21 +138,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		/// Deprecated! This extrinsic does nothing
-		#[pallet::call_index(3)]
-		#[pallet::weight(Weight::zero())]
-		pub fn vault_key_rotated(
-			origin: OriginFor<T>,
-			_block_number: ChainBlockNumberFor<T, I>,
-
-			// This field is primarily required to ensure the witness calls are unique per
-			// transaction (on the external chain)
-			_tx_id: TransactionInIdFor<T, I>,
-		) -> DispatchResultWithPostInfo {
-			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
-			Ok(().into())
-		}
-
 		/// The vault's key has been updated externally, outside of the rotation
 		/// cycle. This is an unexpected event as far as our chain is concerned, and
 		/// the only thing we can do is to halt and wait for further governance
@@ -183,16 +175,41 @@ pub mod pallet {
 
 			Ok(().into())
 		}
+
+		/// Sets the ChainInitialized flag to true for this chain so that the chain can be
+		/// initialized on the next epoch rotation
+		///
+		/// ## Events
+		///
+		/// - [ChainInitialized](Event::ChainInitialized)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(5)]
+		// This weight is not strictly correct but since it's a governance call, weight is
+		// irrelevant.
+		#[pallet::weight(Weight::zero())]
+		pub fn initialize_chain(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			ChainInitialized::<T, I>::put(true);
+
+			Self::deposit_event(Event::<T, I>::ChainInitialized);
+
+			Ok(().into())
+		}
 	}
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub deployment_block: Option<ChainBlockNumberFor<T, I>>,
+		pub chain_initialized: bool,
 	}
 
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
-			Self { deployment_block: None }
+			Self { deployment_block: None, chain_initialized: true }
 		}
 	}
 
@@ -207,6 +224,7 @@ pub mod pallet {
 			} else {
 				log::info!("No genesis vault key configured for {}.", Pallet::<T, I>::name());
 			}
+			ChainInitialized::<T, I>::put(self.chain_initialized);
 		}
 	}
 }

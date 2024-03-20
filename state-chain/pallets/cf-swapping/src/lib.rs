@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, ForeignChainAddress},
 	CcmChannelMetadata, CcmDepositMetadata, SwapOrigin,
@@ -8,7 +9,9 @@ use cf_primitives::{
 	Asset, AssetAmount, ChannelId, ForeignChain, SwapId, SwapLeg, TransactionHash, STABLE_ASSET,
 };
 use cf_runtime_utilities::log_or_panic;
-use cf_traits::{impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi};
+use cf_traits::{
+	impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi, SwapQueueApi, SwapType,
+};
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
@@ -33,18 +36,12 @@ pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 const BASIS_POINTS_PER_MILLION: u32 = 100;
 
 pub const SWAP_DELAY_BLOCKS: u32 = 2;
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum SwapType {
-	Swap(ForeignChainAddress),
-	CcmPrincipal(SwapId),
-	CcmGas(SwapId),
-}
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct Swap {
 	pub swap_id: SwapId,
@@ -55,6 +52,17 @@ pub struct Swap {
 	pub stable_amount: Option<AssetAmount>,
 	pub final_output: Option<AssetAmount>,
 	pub fee_taken: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub struct SwapLegInfo {
+	pub swap_id: SwapId,
+	pub base_asset: Asset,
+	pub quote_asset: Asset,
+	pub side: Side,
+	pub amount: AssetAmount,
+	pub source_asset: Option<Asset>,
+	pub source_amount: Option<AssetAmount>,
 }
 
 impl Swap {
@@ -176,6 +184,12 @@ pub enum CcmFailReason {
 	InsufficientDepositAmount,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum PalletConfigUpdate {
+	/// Set the maximum amount allowed to be put into a swap. Excess amounts are confiscated.
+	MaximumSwapAmount { asset: Asset, amount: Option<AssetAmount> },
+}
+
 impl_pallet_safe_mode! {
 	PalletSafeMode; swaps_enabled, withdrawals_enabled, deposits_enabled, broker_registration_enabled,
 }
@@ -189,6 +203,7 @@ pub mod pallet {
 		AccountRoleRegistry, CcmSwapIds, Chainflip, EgressApi, ScheduledEgressDetails,
 		SwapDepositHandler,
 	};
+	use frame_system::WeightInfo as SystemWeightInfo;
 
 	use super::*;
 
@@ -202,6 +217,7 @@ pub mod pallet {
 		type DepositHandler: DepositApi<
 			AnyChain,
 			AccountId = <Self as frame_system::Config>::AccountId,
+			Amount = <Self as Chainflip>::Amount,
 		>;
 
 		/// API for handling asset egress.
@@ -219,6 +235,12 @@ pub mod pallet {
 
 		/// The Weight information.
 		type WeightInfo: WeightInfo;
+
+		#[cfg(feature = "runtime-benchmarks")]
+		type FeePayment: cf_traits::FeePayment<
+			Amount = <Self as Chainflip>::Amount,
+			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
 	}
 
 	#[pallet::pallet]
@@ -228,7 +250,8 @@ pub mod pallet {
 
 	/// Scheduled Swaps
 	#[pallet::storage]
-	pub(crate) type SwapQueue<T: Config> =
+	#[pallet::getter(fn swap_queue)]
+	pub type SwapQueue<T: Config> =
 		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<Swap>, ValueQuery>;
 
 	/// The first block for which swaps haven't yet been processed
@@ -242,6 +265,7 @@ pub mod pallet {
 
 	/// Earned Fees by Brokers
 	#[pallet::storage]
+	#[pallet::getter(fn earned_broker_fees)]
 	pub(crate) type EarnedBrokerFees<T: Config> =
 		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
@@ -267,6 +291,10 @@ pub mod pallet {
 	#[pallet::getter(fn maximum_swap_amount)]
 	pub type MaximumSwapAmount<T: Config> = StorageMap<_, Twox64Concat, Asset, AssetAmount>;
 
+	/// FLIP ready to be burned.
+	#[pallet::storage]
+	pub type FlipToBurn<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -281,6 +309,7 @@ pub mod pallet {
 			channel_metadata: Option<CcmChannelMetadata>,
 			source_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 			boost_fee: BasisPoints,
+			channel_opening_fee: T::Amount,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
@@ -318,6 +347,7 @@ pub mod pallet {
 		/// A broker fee withdrawal has been requested.
 		WithdrawalRequested {
 			egress_id: EgressId,
+			egress_asset: Asset,
 			egress_amount: AssetAmount,
 			egress_fee: AssetAmount,
 			destination_address: EncodedAddress,
@@ -345,6 +375,7 @@ pub mod pallet {
 			reason: CcmFailReason,
 			destination_address: EncodedAddress,
 			deposit_metadata: CcmDepositMetadata,
+			origin: SwapOrigin,
 		},
 		MaximumSwapAmountSet {
 			asset: Asset,
@@ -454,14 +485,11 @@ pub mod pallet {
 				Self::validate_destination_address(&destination_address, destination_asset)?;
 
 			if channel_metadata.is_some() {
-				// Currently only Ethereum supports CCM.
-				ensure!(
-					ForeignChain::Ethereum == destination_asset.into(),
-					Error::<T>::CcmUnsupportedForTargetChain
-				);
+				let destination_chain: ForeignChain = destination_asset.into();
+				ensure!(destination_chain.ccm_support(), Error::<T>::CcmUnsupportedForTargetChain);
 			}
 
-			let (channel_id, deposit_address, expiry_height) =
+			let (channel_id, deposit_address, expiry_height, channel_opening_fee) =
 				T::DepositHandler::request_swap_deposit_address(
 					source_asset,
 					destination_asset,
@@ -482,6 +510,7 @@ pub mod pallet {
 				channel_metadata,
 				source_chain_expiry_block: expiry_height,
 				boost_fee,
+				channel_opening_fee,
 			});
 
 			Ok(())
@@ -520,6 +549,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::WithdrawalRequested {
 				egress_amount,
+				egress_asset: asset,
 				egress_fee: fee_withheld,
 				destination_address,
 				egress_id,
@@ -551,7 +581,7 @@ pub mod pallet {
 				Self::validate_destination_address(&destination_address, to)?;
 			let swap_origin = SwapOrigin::Vault { tx_hash };
 
-			let (swap_id, execute_at) = Self::schedule_swap_internal(
+			let (swap_id, execute_at) = Self::schedule_swap(
 				from,
 				to,
 				deposit_amount,
@@ -620,33 +650,104 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Sets the Maximum amount allowed in a single swap for an asset.
+		/// Apply a list of configuration updates to the pallet.
 		///
 		/// Requires Governance.
-		///
-		/// ## Events
-		///
-		/// - [On update](Event::MaximumSwapAmountSet)
-		#[pallet::call_index(7)]
-		#[pallet::weight(T::WeightInfo::set_maximum_swap_amount())]
-		pub fn set_maximum_swap_amount(
+		#[pallet::call_index(8)]
+		#[pallet::weight(<T as frame_system::Config>::SystemWeightInfo::set_storage(updates.len() as u32))]
+		pub fn update_pallet_config(
 			origin: OriginFor<T>,
-			asset: Asset,
-			amount: Option<AssetAmount>,
+			updates: BoundedVec<PalletConfigUpdate, ConstU32<10>>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			match amount {
-				Some(max) => MaximumSwapAmount::<T>::insert(asset, max),
-				None => MaximumSwapAmount::<T>::remove(asset),
-			};
+			for update in updates {
+				match update {
+					PalletConfigUpdate::MaximumSwapAmount { asset, amount } => {
+						MaximumSwapAmount::<T>::set(asset, amount);
+						Self::deposit_event(Event::<T>::MaximumSwapAmountSet { asset, amount });
+					},
+				}
+			}
 
-			Self::deposit_event(Event::<T>::MaximumSwapAmountSet { asset, amount });
 			Ok(())
 		}
 	}
 
 	impl<T: Config> Pallet<T> {
+		#[allow(clippy::result_unit_err)]
+		pub fn get_scheduled_swap_legs(
+			mut swaps: Vec<Swap>,
+			base_asset: Asset,
+		) -> Result<Vec<SwapLegInfo>, ()> {
+			Self::swap_into_stable_taking_network_fee(&mut swaps)
+				.map_err(|_| log::error!("Failed to simulate swaps"))?;
+
+			Ok(swaps
+				.into_iter()
+				.filter_map(|swap| {
+					if swap.from == base_asset {
+						Some(SwapLegInfo {
+							swap_id: swap.swap_id,
+							base_asset,
+							// All swaps from `base_asset` have to go through the stable asset:
+							quote_asset: STABLE_ASSET,
+							side: Side::Sell,
+							amount: swap.amount,
+							source_asset: None,
+							source_amount: None,
+						})
+					} else if swap.to == base_asset {
+						// In case the swap is "simulated", the amount is just an estimate,
+						// so we additionally include `source_asset` and `source_amount`:
+						let (source_asset, source_amount) = if swap.from != STABLE_ASSET {
+							(Some(swap.from), Some(swap.amount))
+						} else {
+							(None, None)
+						};
+
+						Some(SwapLegInfo {
+							swap_id: swap.swap_id,
+							base_asset,
+							// All swaps to `base_asset` have to go through the stable asset:
+							quote_asset: STABLE_ASSET,
+							side: Side::Buy,
+							// Safe to unwrap as we have swapped everything into the stable asset at
+							// this point
+							amount: swap.stable_amount.unwrap(),
+							source_asset,
+							source_amount,
+						})
+					} else {
+						None
+					}
+				})
+				.collect())
+		}
+
+		fn swap_into_stable_taking_network_fee(
+			swaps: &mut Vec<Swap>,
+		) -> Result<(), BatchExecutionError> {
+			Self::do_group_and_swap(swaps, SwapLeg::ToStable)?;
+
+			// Take NetworkFee for all swaps
+			for swap in swaps.iter_mut() {
+				if swap.swap_type == SwapType::NetworkFee {
+					// Don't take network fee for network fee swaps
+					continue;
+				}
+
+				debug_assert!(
+					swap.stable_amount.is_some(),
+					"All swaps should have Stable amount set here"
+				);
+				let stable_amount = swap.stable_amount.get_or_insert_with(Default::default);
+				*stable_amount = T::SwappingApi::take_network_fee(*stable_amount);
+			}
+
+			Ok(())
+		}
+
 		// Transactional ensures that any failed swap will rollback all storage changes.
 		#[transactional]
 		fn process_swaps_for_block(block: BlockNumberFor<T>) -> Result<(), BatchExecutionError> {
@@ -656,18 +757,8 @@ pub mod pallet {
 				return Ok(())
 			}
 
-			// Swap into Stable asset first.
-			Self::do_group_and_swap(&mut swaps, SwapLeg::ToStable)?;
-
-			// Take NetworkFee for all swaps
-			for swap in swaps.iter_mut() {
-				debug_assert!(
-					swap.stable_amount.is_some(),
-					"All swaps should have Stable amount set here"
-				);
-				let stable_amount = swap.stable_amount.get_or_insert_with(Default::default);
-				*stable_amount = T::SwappingApi::take_network_fee(*stable_amount);
-			}
+			// Swap into Stable asset first, then take network fees:
+			Self::swap_into_stable_taking_network_fee(&mut swaps)?;
 
 			// Swap from Stable asset, and complete the swap logic.
 			Self::do_group_and_swap(&mut swaps, SwapLeg::FromStable)?;
@@ -725,6 +816,17 @@ pub mod pallet {
 						SwapType::CcmGas(ccm_id) => {
 							Self::handle_ccm_swap_result(*ccm_id, swap_output, CcmSwapLeg::Gas);
 						},
+						SwapType::NetworkFee =>
+							if swap.to == Asset::Flip {
+								FlipToBurn::<T>::mutate(|total| {
+									total.saturating_accrue(swap_output);
+								});
+							} else {
+								log_or_panic!(
+									"NetworkFee burning should not be in asset: {:?}",
+									swap.to
+								);
+							},
 					};
 				} else {
 					debug_assert!(false, "Swap is not completed yet!");
@@ -743,7 +845,8 @@ pub mod pallet {
 			let gas_budget = channel_metadata.gas_budget;
 			let principal_swap_amount = deposit_amount.saturating_sub(gas_budget);
 
-			if ForeignChain::Ethereum != destination_asset.into() {
+			let destination_chain: ForeignChain = destination_asset.into();
+			if !destination_chain.ccm_support() {
 				return Err(CcmFailReason::UnsupportedForTargetChain)
 			} else if deposit_amount < gas_budget {
 				return Err(CcmFailReason::InsufficientDepositAmount)
@@ -808,8 +911,6 @@ pub mod pallet {
 
 			let bundle_input: AssetAmount =
 				swaps.iter().map(|swap| swap.swap_amount(direction).unwrap_or_default()).sum();
-
-			debug_assert!(bundle_input > 0, "Swap input of zero is invalid.");
 
 			// Process the swap leg as a bundle. No network fee is taken here.
 			let bundle_output = T::SwappingApi::swap_single_leg(
@@ -921,45 +1022,6 @@ pub mod pallet {
 				log_or_panic!("CCM egress scheduling should never fail.");
 			}
 		}
-
-		/// Schedule the swap, assuming all checks already passed. Return swap_id along
-		/// with the block at which the swap is scheduled to be executed.
-		fn schedule_swap_internal(
-			from: Asset,
-			to: Asset,
-			amount: AssetAmount,
-			swap_type: SwapType,
-		) -> (u64, BlockNumberFor<T>) {
-			let swap_id = SwapIdCounter::<T>::mutate(|id| {
-				id.saturating_accrue(1);
-				*id
-			});
-			let (swap_amount, confiscated_amount) = match MaximumSwapAmount::<T>::get(from) {
-				Some(max) => (sp_std::cmp::min(amount, max), amount.saturating_sub(max)),
-				None => (amount, Zero::zero()),
-			};
-			if !confiscated_amount.is_zero() {
-				CollectedRejectedFunds::<T>::mutate(from, |fund| {
-					*fund = fund.saturating_add(confiscated_amount)
-				});
-				Self::deposit_event(Event::<T>::SwapAmountConfiscated {
-					swap_id,
-					source_asset: from,
-					destination_asset: to,
-					total_amount: amount,
-					confiscated_amount,
-				});
-			}
-
-			let execute_at = frame_system::Pallet::<T>::block_number() + SWAP_DELAY_BLOCKS.into();
-
-			SwapQueue::<T>::append(
-				execute_at,
-				Swap::new(swap_id, from, to, swap_amount, swap_type),
-			);
-
-			(swap_id, execute_at)
-		}
 	}
 
 	impl<T: Config> SwapDepositHandler for Pallet<T> {
@@ -992,7 +1054,7 @@ pub mod pallet {
 				deposit_block_height,
 			};
 
-			let (swap_id, execute_at) = Self::schedule_swap_internal(
+			let (swap_id, execute_at) = Self::schedule_swap(
 				from,
 				to,
 				net_amount,
@@ -1049,6 +1111,7 @@ pub mod pallet {
 							reason,
 							destination_address: encoded_destination_address,
 							deposit_metadata,
+							origin: origin.clone(),
 						});
 						return Err(())
 					},
@@ -1066,7 +1129,7 @@ pub mod pallet {
 					swap_output.principal = Some(principal_swap_amount);
 					None
 				} else {
-					let (swap_id, execute_at) = Self::schedule_swap_internal(
+					let (swap_id, execute_at) = Self::schedule_swap(
 						source_asset,
 						destination_asset,
 						principal_swap_amount,
@@ -1087,7 +1150,7 @@ pub mod pallet {
 				};
 
 			let gas_swap_id = if let Some(other_gas_asset) = other_gas_asset {
-				let (swap_id, execute_at) = Self::schedule_swap_internal(
+				let (swap_id, execute_at) = Self::schedule_swap(
 					source_asset,
 					other_gas_asset,
 					gas_budget,
@@ -1138,5 +1201,56 @@ pub mod pallet {
 
 			Ok(CcmSwapIds { principal_swap_id, gas_swap_id })
 		}
+	}
+}
+
+impl<T: Config> SwapQueueApi for Pallet<T> {
+	type BlockNumber = BlockNumberFor<T>;
+
+	fn schedule_swap(
+		from: Asset,
+		to: Asset,
+		amount: AssetAmount,
+		swap_type: SwapType,
+	) -> (u64, Self::BlockNumber) {
+		let swap_id = SwapIdCounter::<T>::mutate(|id| {
+			id.saturating_accrue(1);
+			*id
+		});
+
+		// Do not limit the maximum swap amount for network fee swaps.
+		let swap_amount = if swap_type == SwapType::NetworkFee {
+			amount
+		} else {
+			let (swap_amount, confiscated_amount) = match MaximumSwapAmount::<T>::get(from) {
+				Some(max) => (sp_std::cmp::min(amount, max), amount.saturating_sub(max)),
+				None => (amount, Zero::zero()),
+			};
+			if !confiscated_amount.is_zero() {
+				CollectedRejectedFunds::<T>::mutate(from, |fund| {
+					*fund = fund.saturating_add(confiscated_amount)
+				});
+				Self::deposit_event(Event::<T>::SwapAmountConfiscated {
+					swap_id,
+					source_asset: from,
+					destination_asset: to,
+					total_amount: amount,
+					confiscated_amount,
+				});
+			}
+			swap_amount
+		};
+
+		let execute_at = frame_system::Pallet::<T>::block_number() + SWAP_DELAY_BLOCKS.into();
+
+		SwapQueue::<T>::append(execute_at, Swap::new(swap_id, from, to, swap_amount, swap_type));
+
+		(swap_id, execute_at)
+	}
+}
+
+impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
+	fn take_flip_to_burn() -> AssetAmount {
+		FlipToBurn::<T>::take()
 	}
 }

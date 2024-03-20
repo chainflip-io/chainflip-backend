@@ -4,14 +4,14 @@ use cf_traits::{offence_reporting::OffenceReporter, EpochInfo, ThresholdSignerNo
 use pallet_cf_threshold_signature::PalletOffence;
 use pallet_cf_validator::{CurrentAuthorities, CurrentEpoch, HistoricalAuthorities};
 use sp_runtime::AccountId32;
-use state_chain_runtime::{EthereumInstance, Reputation, Runtime, Validator};
+use state_chain_runtime::{EvmInstance, Reputation, Runtime, Validator};
 
 type RuntimeThresholdSignerNomination =
-	<Runtime as pallet_cf_threshold_signature::Config<EthereumInstance>>::ThresholdSignerNomination;
+	<Runtime as pallet_cf_threshold_signature::Config<EvmInstance>>::ThresholdSignerNomination;
 
 #[test]
 fn threshold_signer_nomination_respects_epoch() {
-	super::genesis::default().build().execute_with(|| {
+	super::genesis::with_test_defaults().build().execute_with(|| {
 		let genesis_authorities = Validator::current_authorities();
 		let genesis_epoch = Validator::epoch_index();
 
@@ -76,7 +76,7 @@ fn test_not_nominated_for_offence<F: Fn(crate::AccountId)>(penalise: F) {
 
 #[test]
 fn nodes_who_failed_to_sign_excluded_from_threshold_nomination() {
-	super::genesis::default().build().execute_with(|| {
+	super::genesis::with_test_defaults().build().execute_with(|| {
 		test_not_nominated_for_offence(|node_id| {
 			Reputation::report(PalletOffence::ParticipateSigningFailed, node_id)
 		});

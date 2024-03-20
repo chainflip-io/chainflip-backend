@@ -1,10 +1,6 @@
 on:
   workflow_call:
     inputs:
-      tag:
-        type: string
-        required: false
-        default: ${{ github.ref_name }}
       network:
         type: string
         required: false
@@ -15,7 +11,6 @@ env:
 
 jobs:
   check-version:
-#    runs-on: ubuntu-latest
     runs-on: [nscloud-ubuntu-22.04-amd64-2x4]
     strategy:
       matrix:
@@ -42,42 +37,31 @@ jobs:
         run: |
           echo "version=$(cargo read-manifest --manifest-path ${{ matrix.manifest }} | jq -r .version)" >> $GITHUB_OUTPUT
 
+      - name: Check systemd files and debian package config 👀
+        shell: bash
+        run: ./ci/scripts/check_engine_systemd_config.sh ${{ steps.cargo.outputs.version }}
+
       - name: Check tag version matches Cargo.toml 🕵️‍♂️
         shell: bash
+        if: inputs.network != 'sisyphos'
         run: |
-          if [[ "${{ inputs.tag }}" != "${{ steps.cargo.outputs.version }}" ]]; then
-            echo "Tag version (${{ inputs.tag }}) does not match version (${{ steps.cargo.outputs.version }}) in ${{ matrix.manifest }}"
+          if [[ "${{ github.ref_name }}" != "${{ steps.cargo.outputs.version }}" ]]; then
+            echo "Tag version (${{ github.ref_name }}) does not match version (${{ steps.cargo.outputs.version }}) in ${{ matrix.manifest }}"
             exit 1
           fi
 
-      - name: Check systemd files and debian package config 👀
-        shell: bash
-        run: ./ci/scripts/check_engine_systemd_config.sh ${{ inputs.tag }}
-
-  check-engine-systemd:
-#    runs-on: ubuntu-latest
-    runs-on: [nscloud-ubuntu-22.04-amd64-2x4]
-    steps:
-      - name: Checkout 🏁
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-
-      - name: Check systemd files and debian package config 👀
-        shell: bash
-        run: ./ci/scripts/check_engine_systemd_config.sh ${{ inputs.tag }}
-
   check-changelog:
-#    runs-on: ubuntu-latest
     runs-on: [nscloud-ubuntu-22.04-amd64-2x4]
+    if: inputs.network != 'sisyphos'
     steps:
       - name: Checkout 🏁
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Check changelog 📝
         shell: bash
-        run: ./ci/scripts/check_changelog.sh ${{ inputs.tag }}
+        run: ./ci/scripts/check_changelog.sh ${{ github.ref_name }}
 
   check-runtime-spec-version:
-#    runs-on: ubuntu-latest
     runs-on: [nscloud-ubuntu-22.04-amd64-2x4]
     steps:
       - name: Checkout 🏁

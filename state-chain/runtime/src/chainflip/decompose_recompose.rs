@@ -34,6 +34,8 @@ impl WitnessDataExtraction for RuntimeCall {
 				let fee_info = mem::take(&mut new_chain_state.tracked_data.median_tip);
 				Some(fee_info.encode())
 			},
+			// Since there is no priority fee in Arbitrum, we do not extract anything from the chain
+			// tracking witness data.
 			_ => None,
 		}
 	}
@@ -177,6 +179,7 @@ mod tests {
 						},
 					},
 				}),
+			ForeignChain::Arbitrum => unimplemented!(),
 		}
 	}
 
@@ -185,6 +188,7 @@ mod tests {
 		test_medians::<Ethereum>();
 		test_medians::<Bitcoin>();
 		test_medians::<Polkadot>();
+		// we dont test medians for Arbitrum since there is no priority fee in arbitrum
 	}
 
 	#[track_caller]

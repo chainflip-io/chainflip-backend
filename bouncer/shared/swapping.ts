@@ -1,5 +1,5 @@
 import { randomAsHex, randomAsNumber } from '@polkadot/util-crypto';
-import { Asset, assetDecimals, Assets } from '@chainflip-io/cli';
+import { Asset, Assets } from '@chainflip/cli';
 import Web3 from 'web3';
 import { performSwap, SwapParams } from '../shared/perform_swap';
 import {
@@ -8,13 +8,15 @@ import {
   getEvmContractAddress,
   amountToFineAmount,
   defaultAssetAmounts,
+  ccmSupportedChains,
+  assetDecimals,
 } from '../shared/utils';
 import { BtcAddressType, btcAddressTypes } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import {
   performSwapViaContract,
-  approveTokenVault,
   ContractSwapParams,
+  approveTokenVault,
 } from '../shared/contract_swap';
 
 enum SolidityType {
@@ -75,10 +77,10 @@ export function newCcmMetadata(
 ) {
   const message = ccmMessage ?? newAbiEncodedMessage();
   const cfParameters = newAbiEncodedMessage(cfParamsArray);
-  const gasDiv = gasBudgetFraction ?? 100;
+  const gasDiv = gasBudgetFraction ?? 2;
 
   const gasBudget = Math.floor(
-    Number(amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals[sourceAsset])) /
+    Number(amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals(sourceAsset))) /
       gasDiv,
   );
 
@@ -102,12 +104,12 @@ export async function prepareSwap(
 
   let destAddress;
 
-  let tag = `[${(swapCount++).toString().padEnd(2, ' ')}: ${sourceAsset}->${destAsset}`;
+  let tag = `[${(swapCount++).toString().concat(':').padEnd(4, ' ')} ${sourceAsset}->${destAsset}`;
   tag += messageMetadata ? ' CCM' : '';
   tag += tagSuffix ? `${tagSuffix}]` : ']';
 
   // For swaps with a message force the address to be the CF Tester address.
-  if (messageMetadata && chainFromAsset(destAsset) === chainFromAsset('ETH')) {
+  if (messageMetadata && ccmSupportedChains.includes(chainFromAsset(destAsset))) {
     destAddress = getEvmContractAddress(chainFromAsset(destAsset), 'CFTESTER');
     if (log) console.log(`${tag} Using CF Tester address: ${destAddress}`);
   } else {
@@ -184,42 +186,57 @@ export async function testAllSwaps() {
 
   console.log('=== Testing all swaps ===');
 
-  // Single approval of all the assets swapped in contractsSwaps to avoid overlapping async approvals.
-  // Set the allowance to the same amount of total asset swapped in contractsSwaps to avoid nonce issues.
-  // Total contract swap per ERC20 token = ccmContractSwaps + contractSwaps =
-  //     (numberAssetsEthereum - 1) + (numberAssets (BTC has 4 different types) - 1) = 2 + 7 = 9
+  // Doing effectively infinite approvals to make sure it doesn't fail.
   await approveTokenVault(
     'USDC',
-    (BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals.USDC)) * 9n).toString(),
+    (
+      BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals('USDC'))) * 100n
+    ).toString(),
   );
   await approveTokenVault(
     'FLIP',
-    (BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * 9n).toString(),
+    (
+      BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals('FLIP'))) * 100n
+    ).toString(),
   );
 
-  // TODO: Remove this but for now skipping arbitrum swaps as they are not supported yet
-  Object.values(Assets).forEach((sourceAsset) => {
-    if (sourceAsset === 'ARBETH' || sourceAsset === 'ARBUSDC') return;
+  await approveTokenVault(
+    'USDT',
+    (
+      BigInt(amountToFineAmount(defaultAssetAmounts('USDT'), assetDecimals('USDT'))) * 100n
+    ).toString(),
+  );
 
-    Object.values(Assets)
-      .filter(
-        (destAsset) =>
-          sourceAsset !== destAsset && destAsset !== 'ARBETH' && destAsset !== 'ARBUSDC',
-      )
+  // TODO: Remove this when SDK supports Arbitrum assets
+  const allAssets = [...Object.values(Assets), 'ARBETH', 'ARBUSDC'];
+
+  Object.values(allAssets).forEach((sourceAsset) => {
+    Object.values(allAssets)
+      .filter((destAsset) => sourceAsset !== destAsset)
       .forEach((destAsset) => {
         // Regular swaps
         appendSwap(sourceAsset, destAsset, testSwap);
 
-        if (chainFromAsset(sourceAsset) === chainFromAsset('ETH')) {
+        if (
+          chainFromAsset(sourceAsset) === chainFromAsset('ETH') &&
+          // TODO: Update this when SDK supports Arbitrum assets
+          chainFromAsset(destAsset) === chainFromAsset('ETH')
+          // || chainFromAsset(sourceAsset) === chainFromAsset('ARBETH')
+        ) {
           // Contract Swaps
           appendSwap(sourceAsset, destAsset, testSwapViaContract);
-
-          if (chainFromAsset(destAsset) === chainFromAsset('ETH')) {
+          // TODO: Update to add Arbitrum contract swaps:
+          if (
+            chainFromAsset(destAsset) === chainFromAsset('ETH')
+            // TODO: Update this when SDK supports Arbitrum assets
+            // || chainFromAsset(destAsset) === chainFromAsset('ARBETH')
+          ) {
             // CCM contract swaps
             appendSwap(sourceAsset, destAsset, testSwapViaContract, newCcmMetadata(sourceAsset));
           }
         }
-        if (chainFromAsset(destAsset) === chainFromAsset('ETH')) {
+
+        if (ccmSupportedChains.includes(chainFromAsset(destAsset))) {
           // CCM swaps
           appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
         }

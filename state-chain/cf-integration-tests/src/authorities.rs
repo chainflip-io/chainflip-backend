@@ -12,8 +12,8 @@ use cf_traits::{AsyncResult, EpochInfo, KeyRotationStatusOuter, KeyRotator};
 use pallet_cf_environment::SafeModeUpdate;
 use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
 use state_chain_runtime::{
-	BitcoinThresholdSigner, Environment, EthereumInstance, EthereumThresholdSigner, Flip,
-	PolkadotInstance, PolkadotThresholdSigner, Runtime, RuntimeOrigin, Validator,
+	BitcoinThresholdSigner, Environment, EvmInstance, EvmThresholdSigner, Flip, PolkadotInstance,
+	PolkadotThresholdSigner, Runtime, RuntimeOrigin, Validator,
 };
 
 // Helper function that creates a network, funds backup nodes, and have them join the auction.
@@ -58,7 +58,7 @@ pub fn fund_authorities_and_join_auction(
 fn authority_rotates_with_correct_sequence() {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
@@ -113,6 +113,9 @@ fn authority_rotates_with_correct_sequence() {
 				RotationPhase::ActivatingKeys(..)
 			));
 
+			// Wait for an extra block to allow TSS to complete, we switch to RotationComplete once
+			// that's done
+			testnet.move_forward_blocks(1);
 			assert_eq!(
 				AllVaults::status(),
 				AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete),
@@ -154,7 +157,7 @@ fn authorities_earn_rewards_for_authoring_blocks() {
 	// Reduce our validating set and hence the number of nodes we need to have a backup
 	// set
 	const MAX_AUTHORITIES: AuthorityCount = 3;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
@@ -198,7 +201,7 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 	// Reduce our validating set and hence the number of nodes we need to have a backup
 	// set
 	const MAX_AUTHORITIES: AuthorityCount = 10;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
@@ -263,7 +266,7 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 fn authority_rotation_can_succeed_after_aborted_by_safe_mode() {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
@@ -318,7 +321,7 @@ fn authority_rotation_cannot_be_aborted_after_key_handover_and_completes_even_on
 {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
@@ -361,7 +364,7 @@ fn authority_rotation_cannot_be_aborted_after_key_handover_and_completes_even_on
 fn authority_rotation_can_recover_after_keygen_fails() {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
@@ -380,9 +383,9 @@ fn authority_rotation_can_recover_after_keygen_fails() {
 			));
 			assert_eq!(AllVaults::status(), AsyncResult::Pending);
 			backup_nodes.iter().for_each(|validator| {
-				assert_ok!(EthereumThresholdSigner::report_keygen_outcome(
+				assert_ok!(EvmThresholdSigner::report_keygen_outcome(
 					RuntimeOrigin::signed(validator.clone()),
-					EthereumThresholdSigner::ceremony_id_counter(),
+					EvmThresholdSigner::ceremony_id_counter(),
 					Err(BTreeSet::default()),
 				));
 				assert_ok!(PolkadotThresholdSigner::report_keygen_outcome(
@@ -409,7 +412,7 @@ fn authority_rotation_can_recover_after_keygen_fails() {
 fn authority_rotation_can_recover_after_key_handover_fails() {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
@@ -435,17 +438,17 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 					Err(BTreeSet::default()),
 				));
 				assert_err!(
-					EthereumThresholdSigner::report_key_handover_outcome(
+					EvmThresholdSigner::report_key_handover_outcome(
 						RuntimeOrigin::signed(validator.clone()),
-						EthereumThresholdSigner::ceremony_id_counter(),
+						EvmThresholdSigner::ceremony_id_counter(),
 						Err(BTreeSet::default()),
 					),
-					pallet_cf_threshold_signature::Error::<Runtime, EthereumInstance>::InvalidRotationStatus
+					pallet_cf_threshold_signature::Error::<Runtime, EvmInstance>::InvalidRotationStatus
 				);
 				assert_err!(
 					PolkadotThresholdSigner::report_key_handover_outcome(
 						RuntimeOrigin::signed(validator.clone()),
-						EthereumThresholdSigner::ceremony_id_counter(),
+						EvmThresholdSigner::ceremony_id_counter(),
 						Err(BTreeSet::default()),
 					),
 					pallet_cf_threshold_signature::Error::<Runtime, PolkadotInstance>::InvalidRotationStatus
@@ -477,7 +480,7 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 fn can_move_through_multiple_epochs() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()

@@ -2,16 +2,17 @@
 
 use super::*;
 use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue};
-use cf_primitives::Asset;
-use cf_traits::AccountRoleRegistry;
+use cf_primitives::{Asset, FLIPPERINOS_PER_FLIP};
+use cf_traits::{AccountRoleRegistry, FeePayment};
 use frame_benchmarking::v2::*;
 use frame_support::{assert_ok, traits::OnNewAccount};
 use frame_system::RawOrigin;
 
-#[benchmarks]
+#[benchmarks(
+	where <T::FeePayment as cf_traits::FeePayment>::Amount: From<u128>
+)]
 mod benchmarks {
 	use super::*;
-	use sp_std::vec;
 
 	#[benchmark]
 	fn request_liquidity_deposit_address() {
@@ -22,6 +23,8 @@ mod benchmarks {
 			RawOrigin::Signed(caller.clone()).into(),
 			EncodedAddress::Eth(Default::default()),
 		));
+		// A non-zero balance is required to pay for the channel opening fee.
+		T::FeePayment::mint_to_account(&caller, (5 * FLIPPERINOS_PER_FLIP).into());
 
 		#[extrinsic_call]
 		request_liquidity_deposit_address(RawOrigin::Signed(caller), Asset::Eth, 0);

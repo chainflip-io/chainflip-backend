@@ -290,6 +290,7 @@ fn test_sigdata_with_no_match_is_noop() {
 				Default::default(),
 				ETH_TX_FEE,
 				MOCK_TX_METADATA,
+				0
 			),
 			Error::<Test, Instance1>::InvalidPayload
 		);
@@ -435,7 +436,7 @@ fn threshold_sign_and_broadcast_with_callback() {
 			tx_out_id: MOCK_TRANSACTION_OUT_ID,
 		};
 
-		let broadcast_id =
+		let (broadcast_id, _) =
 			Broadcaster::threshold_sign_and_broadcast(api_call.clone(), Some(MockCallback), |_| {
 				None
 			});
@@ -452,6 +453,7 @@ fn threshold_sign_and_broadcast_with_callback() {
 			Default::default(),
 			ETH_TX_FEE,
 			MOCK_TX_METADATA,
+			2
 		));
 		assert!(RequestSuccessCallbacks::<Test, Instance1>::get(broadcast_id).is_none());
 		let mut events = System::events();
@@ -459,7 +461,8 @@ fn threshold_sign_and_broadcast_with_callback() {
 			events.pop().expect("an event").event,
 			RuntimeEvent::Broadcaster(crate::Event::BroadcastSuccess {
 				broadcast_id,
-				transaction_out_id: api_call.tx_out_id
+				transaction_out_id: api_call.tx_out_id,
+				transaction_ref: 2,
 			})
 		);
 		assert_eq!(
@@ -497,7 +500,7 @@ fn ensure_retries_are_skipped_during_safe_mode() {
 			MockCfe::respond(Scenario::BroadcastFailure);
 			let next_block = System::block_number() + 1;
 			assert_eq!(
-				DelayedBroadcastRetryQueue::<Test, Instance1>::decode_len(next_block),
+				DelayedBroadcastRetryQueue::<Test, Instance1>::decode_non_dedup_len(next_block),
 				Some(2)
 			);
 			<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
@@ -506,7 +509,10 @@ fn ensure_retries_are_skipped_during_safe_mode() {
 		.then_execute_with(|_| {
 			let target = System::block_number() +
 				<<Test as crate::Config<Instance1>>::SafeModeBlockMargin as Get<u64>>::get();
-			assert_eq!(DelayedBroadcastRetryQueue::<Test, Instance1>::decode_len(target), Some(2));
+			assert_eq!(
+				DelayedBroadcastRetryQueue::<Test, Instance1>::decode_non_dedup_len(target),
+				Some(2)
+			);
 		});
 }
 
@@ -541,7 +547,7 @@ fn callback_is_called_upon_broadcast_failure() {
 			sig: Default::default(),
 			tx_out_id: MOCK_TRANSACTION_OUT_ID,
 		};
-		let broadcast_id =
+		let (broadcast_id, _) =
 			Broadcaster::threshold_sign_and_broadcast(api_call.clone(), None, |_| {
 				Some(MockCallback)
 			});
@@ -608,6 +614,7 @@ fn retry_and_success_in_same_block() {
 								gas_used: Default::default(),
 							},
 							tx_metadata: Default::default(),
+							transaction_ref: 0,
 						},
 					),
 					Ok(()),
@@ -668,6 +675,7 @@ fn retry_with_threshold_signing_still_allows_late_success_witness_second_attempt
 				nominee,
 				ETH_TX_FEE,
 				MOCK_TX_METADATA,
+				0
 			));
 
 			assert_eq!(
@@ -880,7 +888,7 @@ fn initiate_and_sign_broadcast(
 	api_call: &MockApiCall<MockEthereumChainCrypto>,
 	tx_type: TxType,
 ) -> BroadcastId {
-	let broadcast_id = match tx_type {
+	let (broadcast_id, _) = match tx_type {
 		TxType::Normal => <Broadcaster as BroadcasterTrait<
 			<Test as Config<Instance1>>::TargetChain,
 		>>::threshold_sign_and_broadcast((*api_call).clone()),
@@ -901,6 +909,7 @@ fn witness_broadcast(tx_out_id: [u8; 4]) {
 		Default::default(),
 		ETH_TX_FEE,
 		MOCK_TX_METADATA,
+		0,
 	));
 }
 
@@ -948,7 +957,9 @@ fn broadcast_can_be_aborted_due_to_time_out() {
 				crate::Event::<Test, Instance1>::BroadcastAborted { broadcast_id },
 			));
 			assert!(AbortedBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
-			assert!(FailedBroadcasters::<Test, Instance1>::decode_len(broadcast_id).is_none());
+			assert!(
+				FailedBroadcasters::<Test, Instance1>::decode_non_dedup_len(broadcast_id).is_none()
+			);
 		});
 }
 
@@ -972,7 +983,9 @@ fn aborted_broadcasts_can_still_succeed() {
 			System::assert_last_event(RuntimeEvent::Broadcaster(
 				crate::Event::<Test, Instance1>::BroadcastAborted { broadcast_id },
 			));
-			assert!(FailedBroadcasters::<Test, Instance1>::decode_len(broadcast_id).is_none());
+			assert!(
+				FailedBroadcasters::<Test, Instance1>::decode_non_dedup_len(broadcast_id).is_none()
+			);
 			assert!(AbortedBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
 
 			// Broadcast can still be reported as successful
@@ -982,6 +995,7 @@ fn aborted_broadcasts_can_still_succeed() {
 				Default::default(),
 				ETH_TX_FEE,
 				MOCK_TX_METADATA,
+				2
 			));
 
 			// Storage should be cleaned, event emitted.
@@ -989,6 +1003,7 @@ fn aborted_broadcasts_can_still_succeed() {
 				crate::Event::<Test, Instance1>::BroadcastSuccess {
 					broadcast_id,
 					transaction_out_id,
+					transaction_ref: 2,
 				},
 			));
 			assert_broadcast_storage_cleaned_up(broadcast_id);
@@ -1027,7 +1042,10 @@ fn broadcast_retry_delay_works() {
 			target = System::block_number() + delay;
 
 			let next_block = System::block_number() + 1;
-			assert_eq!(DelayedBroadcastRetryQueue::<Test, Instance1>::decode_len(next_block), None);
+			assert_eq!(
+				DelayedBroadcastRetryQueue::<Test, Instance1>::decode_non_dedup_len(next_block),
+				None
+			);
 			assert!(
 				DelayedBroadcastRetryQueue::<Test, Instance1>::get(target).contains(&broadcast_id),
 			);
@@ -1041,8 +1059,12 @@ fn broadcast_retry_delay_works() {
 		.then_execute_at_block(target, |_| {})
 		.then_execute_with(|_| {
 			let next_block = System::block_number() + 1;
-			assert!(DelayedBroadcastRetryQueue::<Test, Instance1>::decode_len(next_block).is_none());
-			assert!(DelayedBroadcastRetryQueue::<Test, Instance1>::decode_len(target).is_none());
+			assert!(DelayedBroadcastRetryQueue::<Test, Instance1>::decode_non_dedup_len(
+				next_block
+			)
+			.is_none());
+			assert!(DelayedBroadcastRetryQueue::<Test, Instance1>::decode_non_dedup_len(target)
+				.is_none());
 
 			assert_transaction_broadcast_request_event(broadcast_id, tx_out_id);
 		});
@@ -1130,11 +1152,13 @@ fn succeeded_broadcasts_will_not_retry() {
 				Default::default(),
 				ETH_TX_FEE,
 				MOCK_TX_METADATA,
+				3
 			));
 			System::assert_last_event(RuntimeEvent::Broadcaster(
 				crate::Event::<Test, Instance1>::BroadcastSuccess {
 					broadcast_id,
 					transaction_out_id,
+					transaction_ref: 3,
 				},
 			));
 			broadcast_id
@@ -1240,6 +1264,7 @@ fn broadcast_is_retried_without_initial_nominee() {
 				Default::default(),
 				ETH_TX_FEE,
 				MOCK_TX_METADATA,
+				5
 			));
 
 			// Storage should be cleaned, event emitted.
@@ -1247,6 +1272,7 @@ fn broadcast_is_retried_without_initial_nominee() {
 				crate::Event::<Test, Instance1>::BroadcastSuccess {
 					broadcast_id,
 					transaction_out_id,
+					transaction_ref: 5,
 				},
 			));
 			assert_broadcast_storage_cleaned_up(broadcast_id);

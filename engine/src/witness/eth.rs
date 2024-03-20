@@ -1,11 +1,5 @@
-mod contract_common;
-pub mod erc20_deposits;
-mod eth_chain_tracking;
-mod eth_source;
-mod ethereum_deposits;
-mod key_manager;
+mod chain_tracking;
 mod state_chain_gateway;
-pub mod vault;
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -25,11 +19,11 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED},
 		STATE_CHAIN_CONNECTION,
 	},
-	witness::eth::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents},
+	witness::evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
 };
 
-use super::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder};
-pub use eth_source::EthSource;
+use super::{common::epoch_source::EpochSourceBuilder, evm::source::EvmSource};
+use crate::witness::common::chain_source::extension::ChainSourceExt;
 
 use anyhow::{Context, Result};
 
@@ -96,12 +90,15 @@ where
 	let flip_contract_address =
 		*supported_erc20_tokens.get(&eth::Asset::Flip).context("FLIP not supported")?;
 
+	let usdt_contract_address =
+		*supported_erc20_tokens.get(&eth::Asset::Usdt).context("USDT not supported")?;
+
 	let supported_erc20_tokens: HashMap<H160, cf_primitives::Asset> = supported_erc20_tokens
 		.into_iter()
 		.map(|(asset, address)| (address, asset.into()))
 		.collect();
 
-	let eth_source = EthSource::new(eth_client.clone()).strictly_monotonic().shared(scope);
+	let eth_source = EvmSource::new(eth_client.clone()).strictly_monotonic().shared(scope);
 
 	eth_source
 		.clone()
@@ -177,6 +174,19 @@ where
 		.await?
 		.continuous("FlipDeposits".to_string(), db.clone())
 		.logging("FlipDeposits")
+		.spawn(scope);
+
+	eth_safe_vault_source_deposit_addresses
+		.clone()
+		.erc20_deposits::<_, _, _, UsdtEvents>(
+			process_call.clone(),
+			eth_client.clone(),
+			cf_primitives::chains::assets::eth::Asset::Usdt,
+			usdt_contract_address,
+		)
+		.await?
+		.continuous("USDTDeposits".to_string(), db.clone())
+		.logging("USDTDeposits")
 		.spawn(scope);
 
 	eth_safe_vault_source_deposit_addresses

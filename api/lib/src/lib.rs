@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc};
+use std::{fmt, str::FromStr, sync::Arc};
 
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
@@ -10,14 +10,14 @@ use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId, SemVer};
 use futures::FutureExt;
 use pallet_cf_governance::ExecutionMode;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
+pub use sp_core::crypto::AccountId32;
 use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair, H256};
+pub use state_chain_runtime::chainflip::BlockUpdate;
 use state_chain_runtime::{opaque::SessionKeys, RuntimeCall};
 use zeroize::Zeroize;
-
-pub use sp_core::crypto::AccountId32;
 pub mod primitives {
 	pub use cf_primitives::*;
 	pub use pallet_cf_governance::ProposalId;
@@ -123,6 +123,7 @@ impl StateChainApi {
 			false,
 			false,
 			false,
+			None,
 		)
 		.await?;
 
@@ -303,6 +304,36 @@ pub struct SwapDepositAddress {
 	pub issued_block: state_chain_runtime::BlockNumber,
 	pub channel_id: ChannelId,
 	pub source_chain_expiry_block: <AnyChain as cf_chains::Chain>::ChainBlockNumber,
+	pub channel_opening_fee: u128,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct WithdrawFeesDetail {
+	pub tx_hash: H256,
+	pub egress_id: (ForeignChain, u64),
+	pub egress_amount: u128,
+	pub egress_fee: u128,
+	pub destination_address: String,
+}
+
+impl fmt::Display for WithdrawFeesDetail {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(
+			f,
+			"\
+			Tx hash: {:?}\n\
+			Egress id: {:?}\n\
+			Egress amount: {}\n\
+			Egress fee: {}\n\
+			Destination address: {}\n\
+			",
+			self.tx_hash,
+			self.egress_id,
+			self.egress_amount,
+			self.egress_fee,
+			self.destination_address,
+		)
+	}
 }
 
 #[async_trait]
@@ -336,6 +367,7 @@ pub trait BrokerApi: SignedExtrinsicApi {
 				deposit_address,
 				channel_id,
 				source_chain_expiry_block,
+				channel_opening_fee,
 				..
 			},
 		)) = events.iter().find(|event| {
@@ -351,9 +383,52 @@ pub trait BrokerApi: SignedExtrinsicApi {
 				issued_block: header.number,
 				channel_id: *channel_id,
 				source_chain_expiry_block: *source_chain_expiry_block,
+				channel_opening_fee: *channel_opening_fee,
 			})
 		} else {
 			bail!("No SwapDepositAddressReady event was found");
+		}
+	}
+	async fn withdraw_fees(
+		&self,
+		asset: Asset,
+		destination_address: EncodedAddress,
+	) -> Result<WithdrawFeesDetail> {
+		let (tx_hash, events, ..) = self
+			.submit_signed_extrinsic(RuntimeCall::from(pallet_cf_swapping::Call::withdraw {
+				asset,
+				destination_address,
+			}))
+			.await
+			.until_in_block()
+			.await
+			.context("Request to withdraw broker fee for ${asset} failed.")?;
+
+		if let Some(state_chain_runtime::RuntimeEvent::Swapping(
+			pallet_cf_swapping::Event::WithdrawalRequested {
+				egress_amount,
+				egress_fee,
+				destination_address,
+				egress_id,
+				..
+			},
+		)) = events.iter().find(|event| {
+			matches!(
+				event,
+				state_chain_runtime::RuntimeEvent::Swapping(
+					pallet_cf_swapping::Event::WithdrawalRequested { .. }
+				)
+			)
+		}) {
+			Ok(WithdrawFeesDetail {
+				tx_hash,
+				egress_id: *egress_id,
+				egress_amount: *egress_amount,
+				egress_fee: *egress_fee,
+				destination_address: destination_address.to_string(),
+			})
+		} else {
+			bail!("No WithdrawalRequested event was found");
 		}
 	}
 }
@@ -366,6 +441,7 @@ pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result
 		ForeignChain::Polkadot =>
 			EncodedAddress::Dot(PolkadotAccountId::from_str(address).map(|id| *id.aliased_ref())?),
 		ForeignChain::Bitcoin => EncodedAddress::Btc(address.as_bytes().to_vec()),
+		ForeignChain::Arbitrum => EncodedAddress::Arb(clean_hex_address(address)?),
 	})
 }
 
@@ -397,16 +473,13 @@ impl Serialize for KeyPair {
 ///
 /// This key is used for secure communication between Validators.
 pub fn generate_node_key() -> Result<(KeyPair, libp2p_identity::PeerId)> {
-	use rand_v7::SeedableRng;
-
-	let mut rng = rand_v7::rngs::StdRng::from_entropy();
-	let keypair = ed25519_dalek::Keypair::generate(&mut rng);
-	let libp2p_keypair = libp2p_identity::Keypair::ed25519_from_bytes(keypair.secret.to_bytes())?;
+	let signing_keypair = ed25519_dalek::SigningKey::generate(&mut rand::thread_rng());
+	let libp2p_keypair = libp2p_identity::Keypair::ed25519_from_bytes(signing_keypair.to_bytes())?;
 
 	Ok((
 		KeyPair {
-			secret_key: keypair.secret.as_bytes().to_vec(),
-			public_key: keypair.public.to_bytes().to_vec(),
+			secret_key: signing_keypair.to_bytes().to_vec(),
+			public_key: signing_keypair.verifying_key().to_bytes().to_vec(),
 		},
 		libp2p_keypair.public().to_peer_id(),
 	))

@@ -1,0 +1,69 @@
+name: Cherry-Pick to Release Branch
+
+on:
+  pull_request:
+    branches:
+      - main
+      - fix/*
+    types:
+      - closed
+
+run-name: Cherry pick `${{ github.event.pull_request.title }}` to release branch
+
+jobs:
+  cherry-pick:
+    if: ${{ (github.event.pull_request.merged == true) && (contains(github.event.pull_request.labels.*.name, 'non-breaking')) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v3
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config --global user.name 'GitHub Action'
+          git config --global user.email 'action@github.com'
+
+      - name: Cherry-pick commit
+        run: |
+          set -x
+          git fetch --all
+          COMMIT_SHA=$(git rev-parse HEAD)
+          echo "COMMIT_SHA=$COMMIT_SHA" >> $GITHUB_ENV
+          
+          RELEASE_BRANCH="release/$(git branch -r | grep 'origin/release/[0-9]\+\.[0-9]' | sed 's/.*release\///' | sort -V | tail -n1)"
+          echo "RELEASE_BRANCH=$RELEASE_BRANCH" >> $GITHUB_ENV
+          
+          git checkout $RELEASE_BRANCH
+          
+          git cherry-pick -x $COMMIT_SHA
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v3
+        with:
+          token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
+          commit-message: Cherry-picked from ${{ env.COMMIT_SHA }}
+          title: "Cherry-Pick ${{ env.COMMIT_SHA }} to ${{ env.RELEASE_BRANCH }}"
+          body: |
+            This is an automated cherry-pick of ${{ env.COMMIT_SHA }} to ${{ env.RELEASE_BRANCH }}.
+            Please review and merge if appropriate.
+            Original PR: ${{ github.event.pull_request.html_url }}
+          branch: pick/non-breaking
+          base: '${{ env.RELEASE_BRANCH }}'
+          reviewers: 'martin-chainflip'
+          labels: cherry-pick
+          branch-suffix: timestamp
+          delete-branch: true
+
+      - name: Notify on failed cherry-pick
+        if: failure() || cancelled()
+        env:
+          DISCORD_USERNAME: "Release Picker"
+          DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
+        uses: Ilshidur/action-discord@0.3.2
+        with:
+          args: |
+            🍒⚠️ Sorry **${{ github.actor }}**, The attempt to cherry-pick `${{ env.COMMIT_SHA }}` on to `${{ env.RELEASE_BRANCH }}` was unsuccessful
+            Please check the [GitHub job](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) to see what went wrong.

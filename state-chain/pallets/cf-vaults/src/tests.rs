@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use crate::{mock::*, PendingVaultActivation, VaultActivationStatus};
+use crate::{mock::*, PendingVaultActivation, VaultActivationStatus, VaultStartBlockNumbers};
 use cf_chains::mocks::{MockAggKey, MockEthereum};
 use cf_test_utilities::last_event;
 use cf_traits::{
@@ -42,7 +42,7 @@ fn test_vault_key_rotated_externally_triggers_code_red() {
 #[test]
 fn key_unavailable_on_activate_returns_governance_event() {
 	new_test_ext_no_key().execute_with(|| {
-		VaultsPallet::activate(NEW_AGG_PUBKEY, None);
+		VaultsPallet::start_key_activation(NEW_AGG_PUBKEY, None);
 
 		assert_last_event!(crate::Event::AwaitingGovernanceActivation { .. });
 
@@ -57,7 +57,7 @@ fn when_set_agg_key_with_agg_key_not_required_we_skip_to_completion() {
 	new_test_ext().execute_with(|| {
 		MockSetAggKeyWithAggKey::set_required(false);
 
-		VaultsPallet::activate(NEW_AGG_PUBKEY, Some(Default::default()));
+		VaultsPallet::start_key_activation(NEW_AGG_PUBKEY, Some(Default::default()));
 
 		assert!(matches!(
 			PendingVaultActivation::<Test, _>::get().unwrap(),
@@ -70,8 +70,9 @@ fn when_set_agg_key_with_agg_key_not_required_we_skip_to_completion() {
 fn vault_start_block_number_is_set_correctly() {
 	new_test_ext_no_key().execute_with(|| {
 		BlockHeightProvider::<MockEthereum>::set_block_height(1000);
-		VaultsPallet::activate(NEW_AGG_PUBKEY, Some(Default::default()));
-
+		VaultStartBlockNumbers::<Test, _>::insert(MockEpochInfo::epoch_index(), 0);
+		VaultsPallet::start_key_activation(NEW_AGG_PUBKEY, Some(Default::default()));
+		VaultsPallet::activate_key();
 		assert_eq!(
 			crate::VaultStartBlockNumbers::<Test, _>::get(
 				MockEpochInfo::epoch_index().saturating_add(1)

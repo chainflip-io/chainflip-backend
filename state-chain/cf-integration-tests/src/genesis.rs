@@ -8,14 +8,12 @@ use crate::mock_runtime::{
 use super::*;
 use cf_primitives::AccountRole;
 use cf_traits::{AccountInfo, EpochInfo, QualifyNode};
-use state_chain_runtime::{
-	BitcoinThresholdSigner, EthereumThresholdSigner, PolkadotThresholdSigner,
-};
+use state_chain_runtime::{BitcoinThresholdSigner, EvmThresholdSigner, PolkadotThresholdSigner};
 pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 
 const BLOCKS_PER_EPOCH: u32 = 1000;
 
-pub fn default() -> ExtBuilder {
+pub fn with_test_defaults() -> ExtBuilder {
 	ExtBuilder::default()
 		.accounts(vec![
 			(AccountId::from(ALICE), AccountRole::Validator, GENESIS_BALANCE),
@@ -30,7 +28,7 @@ pub fn default() -> ExtBuilder {
 
 #[test]
 fn state_of_genesis_is_as_expected() {
-	default().build().execute_with(|| {
+	with_test_defaults().build().execute_with(|| {
 		// Confirmation that we have our assumed state at block 1
 		assert_eq!(Flip::total_issuance(), TOTAL_ISSUANCE, "we have issued the total issuance");
 
@@ -68,7 +66,7 @@ fn state_of_genesis_is_as_expected() {
 
 		assert_eq!(Emissions::last_supply_update_block(), 0, "no emissions");
 
-		assert_eq!(EthereumThresholdSigner::ceremony_id_counter(), 0, "no key generation requests");
+		assert_eq!(EvmThresholdSigner::ceremony_id_counter(), 0, "no key generation requests");
 		assert_eq!(PolkadotThresholdSigner::ceremony_id_counter(), 0, "no key generation requests");
 		assert_eq!(BitcoinThresholdSigner::ceremony_id_counter(), 0, "no key generation requests");
 

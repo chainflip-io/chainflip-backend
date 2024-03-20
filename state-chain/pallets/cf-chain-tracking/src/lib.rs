@@ -10,16 +10,25 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_chains::{Chain, ChainState};
-use cf_traits::{Chainflip, GetBlockHeight, GetTrackedData};
+use cf_chains::{Chain, ChainState, FeeEstimationApi};
+use cf_traits::{AdjustedFeeEstimationApi, Chainflip, GetBlockHeight};
 use frame_support::{dispatch::DispatchResultWithPostInfo, pallet_prelude::*};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
+use sp_runtime::{FixedPointNumber, FixedU128};
 use sp_std::marker::PhantomData;
 
 const NO_CHAIN_STATE: &str = "Chain state should be set at genesis and never removed.";
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+pub struct GetOne;
+
+impl Get<FixedU128> for GetOne {
+	fn get() -> FixedU128 {
+		FixedU128::from_u32(1)
+	}
+}
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -53,11 +62,19 @@ pub mod pallet {
 	pub type CurrentChainState<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, ChainState<T::TargetChain>>;
 
+	/// The fee multiplier value used when estimating ingress/egree fees
+	#[pallet::storage]
+	#[pallet::getter(fn fee_multiplier)]
+	pub type FeeMultiplier<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, FixedU128, ValueQuery, GetOne>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// The tracked state of this chain has been updated.
 		ChainStateUpdated { new_chain_state: ChainState<T::TargetChain> },
+		/// The fee multiplier for this chain has been updated.
+		FeeMultiplierUpdated { new_fee_multiplier: FixedU128 },
 	}
 
 	#[pallet::error]
@@ -123,6 +140,23 @@ pub mod pallet {
 
 			Ok(().into())
 		}
+
+		/// Update the fee multiplier with the provided value
+		///
+		/// Requires Governance.
+		#[pallet::call_index(1)]
+		#[pallet::weight(T::DbWeight::get().writes(1))]
+		pub fn update_fee_multiplier(
+			origin: OriginFor<T>,
+			new_fee_multiplier: FixedU128,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			FeeMultiplier::<T, I>::put(new_fee_multiplier);
+			Self::deposit_event(Event::<T, I>::FeeMultiplierUpdated { new_fee_multiplier });
+
+			Ok(())
+		}
 	}
 }
 
@@ -132,8 +166,26 @@ impl<T: Config<I>, I: 'static> GetBlockHeight<T::TargetChain> for Pallet<T, I> {
 	}
 }
 
-impl<T: Config<I>, I: 'static> GetTrackedData<T::TargetChain> for Pallet<T, I> {
-	fn get_tracked_data() -> <T::TargetChain as Chain>::TrackedData {
-		CurrentChainState::<T, I>::get().expect(NO_CHAIN_STATE).tracked_data
+impl<T: Config<I>, I: 'static> AdjustedFeeEstimationApi<T::TargetChain> for Pallet<T, I> {
+	fn estimate_ingress_fee(
+		asset: <T::TargetChain as Chain>::ChainAsset,
+	) -> <T::TargetChain as Chain>::ChainAmount {
+		FeeMultiplier::<T, I>::get().saturating_mul_int(
+			CurrentChainState::<T, I>::get()
+				.expect(NO_CHAIN_STATE)
+				.tracked_data
+				.estimate_ingress_fee(asset),
+		)
+	}
+
+	fn estimate_egress_fee(
+		asset: <T::TargetChain as Chain>::ChainAsset,
+	) -> <T::TargetChain as Chain>::ChainAmount {
+		FeeMultiplier::<T, I>::get().saturating_mul_int(
+			CurrentChainState::<T, I>::get()
+				.expect(NO_CHAIN_STATE)
+				.tracked_data
+				.estimate_egress_fee(asset),
+		)
 	}
 }

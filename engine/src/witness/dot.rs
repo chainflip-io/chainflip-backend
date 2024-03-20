@@ -4,7 +4,7 @@ mod dot_source;
 
 use cf_chains::dot::{
 	PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash, PolkadotSignature,
-	PolkadotUncheckedExtrinsic,
+	PolkadotTransactionId, PolkadotUncheckedExtrinsic,
 };
 use cf_primitives::{EpochIndex, PolkadotBlockNumber};
 use futures_core::Future;
@@ -158,6 +158,10 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 								signer_id: epoch.info.0,
 								tx_fee,
 								tx_metadata: (),
+								transaction_ref: PolkadotTransactionId {
+									block_number: header.index,
+									extrinsic_index
+								}
 							}
 							.into(),
 							epoch.index,
@@ -290,7 +294,7 @@ fn proxy_addeds(
 					continue
 				}
 
-				tracing::info!("Witnessing ProxyAdded. new delegatee: {delegatee:?} at block number {block_number} and extrinsic_index; {extrinsic_index}");
+				tracing::info!("Witnessing ProxyAdded. new delegatee: {delegatee} at block number {block_number} and extrinsic_index; {extrinsic_index}");
 
 				extrinsic_indices.insert(extrinsic_index);
 			}

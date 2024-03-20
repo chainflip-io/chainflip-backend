@@ -1,5 +1,5 @@
 import { encodeAddress } from '@polkadot/util-crypto';
-import { Asset } from '@chainflip-io/cli';
+import { Asset } from '@chainflip/cli';
 import { newSwap } from './new_swap';
 import { send, sendViaCfTester } from './send';
 import { getBalance } from './get_balance';
@@ -8,7 +8,7 @@ import {
   observeBalanceIncrease,
   observeEvent,
   observeCcmReceived,
-  assetToChain,
+  shortChainFromAsset,
   observeSwapScheduled,
   observeSwapEvents,
   observeBroadcastSuccess,
@@ -51,7 +51,7 @@ export async function requestNewSwap(
     (event) => {
       // Find deposit address for the right swap by looking at destination address:
       const destAddressEvent = encodeDestinationAddress(
-        event.data.destinationAddress[assetToChain(destAsset)],
+        event.data.destinationAddress[shortChainFromAsset(destAsset)],
         destAsset,
       );
       if (!destAddressEvent) return false;
@@ -77,12 +77,12 @@ export async function requestNewSwap(
 
   const res = (await addressPromise).data;
 
-  const depositAddress = res.depositAddress[assetToChain(sourceAsset)];
-  const channelDestAddress = res.destinationAddress[assetToChain(destAsset)];
+  const depositAddress = res.depositAddress[shortChainFromAsset(sourceAsset)];
+  const channelDestAddress = res.destinationAddress[shortChainFromAsset(destAsset)];
   const channelId = Number(res.channelId);
 
   if (log) {
-    console.log(`${tag} Swap address: ${depositAddress}`);
+    console.log(`${tag} Deposit address: ${depositAddress}`);
     console.log(`${tag} Destination address is: ${channelDestAddress} Channel ID is: ${channelId}`);
   }
 
@@ -155,8 +155,12 @@ export async function performSwap(
 
   if (log)
     console.log(
-      `${tag} The args are:  ${sourceAsset} ${destAsset} ${destAddress} ${
-        messageMetadata ? `someMessage` : ''
+      `${tag} The args are: ${sourceAsset} ${destAsset} ${destAddress} ${
+        messageMetadata
+          ? messageMetadata.message.substring(0, 6) +
+            '...' +
+            messageMetadata.message.substring(messageMetadata.message.length - 4)
+          : ''
       }`,
     );
 

@@ -1,9 +1,12 @@
 pub use super::{
 	common::*,
-	testnet::{BITCOIN_EXPIRY_BLOCKS, ETHEREUM_EXPIRY_BLOCKS, POLKADOT_EXPIRY_BLOCKS},
+	testnet::{
+		ARBITRUM_EXPIRY_BLOCKS, BITCOIN_EXPIRY_BLOCKS, ETHEREUM_EXPIRY_BLOCKS,
+		POLKADOT_EXPIRY_BLOCKS,
+	},
 };
 use super::{parse_account, StateChainEnvironment};
-use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
+use cf_chains::dot::RuntimeVersion;
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use sc_service::ChainType;
 use sp_core::H256;
@@ -13,20 +16,28 @@ pub struct Config;
 pub const NETWORK_NAME: &str = "Chainflip-Perseverance";
 pub const CHAIN_TYPE: ChainType = ChainType::Live;
 pub const NETWORK_ENVIRONMENT: NetworkEnvironment = NetworkEnvironment::Testnet;
-pub const PROTOCOL_ID: &str = "flip-pers";
+pub const PROTOCOL_ID: &str = "flip-pers-2";
+
+pub const GENESIS_FUNDING_AMOUNT: FlipBalance = 1_000 * FLIPPERINOS_PER_FLIP;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
-	flip_token_address: hex_literal::hex!("0485D65da68b2A6b48C3fA28D7CCAce196798B94"),
-	eth_usdc_address: hex_literal::hex!("07865c6e87b9f70255377e024ace6630c1eaa37f"),
-	state_chain_gateway_address: hex_literal::hex!("38AA40B7b5a70d738baBf6699a45DacdDBBEB3fc"),
-	key_manager_address: hex_literal::hex!("Aa4376388C6432d36CFF33198D9f80295482f120"),
-	eth_vault_address: hex_literal::hex!("40caFF3f3B6706Da904a7895e0fC7F7922437e9B"),
-	eth_address_checker_address: hex_literal::hex!("6Ab555596F452Ba302163d1cBFEFfDFCA7423F07"),
-	ethereum_chain_id: CHAIN_ID_GOERLI,
+	flip_token_address: hex_literal::hex!("dC27c60956cB065D19F08bb69a707E37b36d8086"),
+	eth_usdc_address: hex_literal::hex!("1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"),
+	eth_usdt_address: hex_literal::hex!("7169D38820dfd117C3FA1f22a697dBA58d90BA06"),
+	state_chain_gateway_address: hex_literal::hex!("A34a967197Ee90BB7fb28e928388a573c5CFd099"),
+	eth_key_manager_address: hex_literal::hex!("4981b1329F29E720642266fc6e172C3f78159dff"),
+	eth_vault_address: hex_literal::hex!("36eaD71325604DC15d35FAE584D7b50646D81753"),
+	eth_address_checker_address: hex_literal::hex!("58eaCD5A40EEbCbBCb660f178F9A46B1Ad63F846"),
+	arb_key_manager_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+	arb_vault_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+	arbusdc_token_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+	arb_address_checker_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+	ethereum_chain_id: cf_chains::eth::CHAIN_ID_SEPOLIA,
+	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_ARBITRUM_SEPOLIA,
 	eth_init_agg_key: hex_literal::hex!(
-		"02661d4b647d4b49660976ad402f4890cb8f2f4d872dfa5e1c5f33b1da53f4a637"
+		"021cf3c105fbc7112f3394c3e176463ec59600f1e7005ad8d68f66840264998667"
 	),
-	ethereum_deployment_block: 9595582u64,
+	ethereum_deployment_block: 5429883u64,
 	genesis_funding_amount: GENESIS_FUNDING_AMOUNT,
 	min_funding: MIN_FUNDING,
 	dot_genesis_hash: H256(hex_literal::hex!(
@@ -58,49 +69,25 @@ pub const SNOW_WHITE_SR25519: [u8; 32] =
 	hex_literal::hex!["84f131a66e88e3e5f8dce20d413cab3fbb13769a14a4c7b640b7222863ef353d"];
 
 pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8>>)> {
-	[
-		vec![
-			(
-				parse_account("cFMTNSQQVfBo2HqtekvhLPfZY764kuJDVFG1EvnnDGYxc3LRW"),
-				AccountRole::Broker,
-				1_000 * FLIPPERINOS_PER_FLIP,
-				Some(b"Chainflip Genesis Broker".to_vec()),
-			),
-			(
-				parse_account("cFN2sr3eDPoyp3G4CAg3EBRMo2VMoYJ7x3rBn51tmXsguYzMX"),
-				AccountRole::LiquidityProvider,
-				1_000 * FLIPPERINOS_PER_FLIP,
-				Some(b"Chainflip Genesis Liquidity Provider".to_vec()),
-			),
-		],
-		phoenix_accounts(),
-	]
+	[vec![
+		(
+			parse_account("cFMTNSQQVfBo2HqtekvhLPfZY764kuJDVFG1EvnnDGYxc3LRW"),
+			AccountRole::Broker,
+			1_000 * FLIPPERINOS_PER_FLIP,
+			Some(b"Chainflip Genesis Broker".to_vec()),
+		),
+		(
+			parse_account("cFN2sr3eDPoyp3G4CAg3EBRMo2VMoYJ7x3rBn51tmXsguYzMX"),
+			AccountRole::LiquidityProvider,
+			1_000 * FLIPPERINOS_PER_FLIP,
+			Some(b"Chainflip Genesis Liquidity Provider".to_vec()),
+		),
+	]]
 	.into_iter()
 	.flatten()
 	.collect()
 }
 
-#[ignore = "Only used as a convenience."]
-#[test]
-fn print_total() {
-	let s = phoenix_accounts().iter().map(|(_, _, s, _)| *s).sum::<u128>();
-	println!("{s} / {}", s / FLIPPERINOS_PER_FLIP);
-}
-
-// Remember to add some extra funds to the dwarves to ensure they remain in the authority set.
-fn phoenix_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8>>)> {
-	include!("perseverance.snapshot")
-		.into_iter()
-		.map(|(addr, name, balance): (&str, &str, u128)| {
-			(
-				parse_account(addr),
-				AccountRole::Validator,
-				balance,
-				if name.is_empty() { None } else { Some(name.as_bytes().to_vec()) },
-			)
-		})
-		.collect::<Vec<_>>()
-}
-
 pub const BITCOIN_SAFETY_MARGIN: u64 = 5;
 pub const ETHEREUM_SAFETY_MARGIN: u64 = 6;
+pub const ARBITRUM_SAFETY_MARGIN: u64 = 1;

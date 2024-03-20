@@ -12,14 +12,14 @@ pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 
 mod old {
 	use super::*;
-	use cf_chains::btc::{BitcoinScript, Hash, ScriptPubkey};
+	use cf_chains::btc::{BitcoinScript, ScriptPubkey};
 
 	#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 	pub struct DepositAddress {
 		pub pubkey_x: [u8; 32],
 		pub salt: u32,
 		pub tweaked_pubkey_bytes: [u8; 33],
-		pub tapleaf_hash: Hash,
+		pub tapleaf_hash: [u8; 32],
 		pub unlock_script: BitcoinScript,
 	}
 
@@ -106,7 +106,8 @@ impl<T: Config<Instance3, TargetChain = Bitcoin>> OnRuntimeUpgrade for Migration
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let number_of_channels_in_lookup_pre_migration = <u32>::decode(&mut &state[..]).unwrap();
+		let number_of_channels_in_lookup_pre_migration = <u32>::decode(&mut &state[..])
+			.expect("Pre-migration should insert number of channels in lookup storage.");
 		ensure!(
 			DepositChannelLookup::<T, Instance3>::iter_keys().count() as u32 ==
 				number_of_channels_in_lookup_pre_migration,

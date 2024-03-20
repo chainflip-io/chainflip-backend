@@ -10,6 +10,7 @@ use cf_traits::{
 
 use sp_std::vec;
 
+use cf_chains::assets::any::AssetMap;
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -48,6 +49,7 @@ pub mod pallet {
 		type DepositHandler: DepositApi<
 			AnyChain,
 			AccountId = <Self as frame_system::Config>::AccountId,
+			Amount = <Self as Chainflip>::Amount,
 		>;
 
 		/// API for handling asset egress.
@@ -65,6 +67,12 @@ pub mod pallet {
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
+
+		#[cfg(feature = "runtime-benchmarks")]
+		type FeePayment: cf_traits::FeePayment<
+			Amount = <Self as Chainflip>::Amount,
+			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
 	}
 
 	#[pallet::error]
@@ -109,6 +117,7 @@ pub mod pallet {
 			account_id: T::AccountId,
 			deposit_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 			boost_fee: BasisPoints,
+			channel_opening_fee: T::Amount,
 		},
 		WithdrawalEgressScheduled {
 			egress_id: EgressId,
@@ -138,6 +147,11 @@ pub mod pallet {
 	/// Storage for user's free balances/ DoubleMap: (AccountId, Asset) => Balance
 	pub type FreeBalances<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, T::AccountId, Identity, Asset, AssetAmount>;
+
+	#[pallet::storage]
+	/// Historical earned fees for an account. Map: AccountId => AssetAmount
+	pub type HistoricalEarnedFees<T: Config> =
+		StorageMap<_, Twox64Concat, T::AccountId, AssetMap<AssetAmount>, ValueQuery>;
 
 	/// Stores the registered energency withdrawal address for an Account
 	#[pallet::storage]
@@ -170,7 +184,7 @@ pub mod pallet {
 				Error::<T>::NoLiquidityRefundAddressRegistered
 			);
 
-			let (channel_id, deposit_address, expiry_block) =
+			let (channel_id, deposit_address, expiry_block, channel_opening_fee) =
 				T::DepositHandler::request_liquidity_deposit_address(
 					account_id.clone(),
 					asset,
@@ -184,6 +198,7 @@ pub mod pallet {
 				account_id,
 				deposit_chain_expiry_block: expiry_block,
 				boost_fee,
+				channel_opening_fee,
 			});
 
 			Ok(())
@@ -375,12 +390,20 @@ impl<T: Config> LpBalanceApi for Pallet<T> {
 		Ok(())
 	}
 
-	fn asset_balances(who: &Self::AccountId) -> Vec<(Asset, AssetAmount)> {
+	fn record_fees(account_id: &Self::AccountId, amount: AssetAmount, asset: Asset) {
+		HistoricalEarnedFees::<T>::mutate(account_id, |fees| {
+			fees[asset] = fees[asset].saturating_add(amount);
+		});
+	}
+
+	fn asset_balances(
+		who: &Self::AccountId,
+	) -> Result<Vec<(cf_primitives::Asset, u128)>, DispatchError> {
 		let mut balances: Vec<(Asset, AssetAmount)> = vec![];
-		T::PoolApi::sweep(who).unwrap();
+		T::PoolApi::sweep(who)?;
 		for asset in Asset::all() {
 			balances.push((asset, FreeBalances::<T>::get(who, asset).unwrap_or_default()));
 		}
-		balances
+		Ok(balances)
 	}
 }

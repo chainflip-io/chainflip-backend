@@ -32,7 +32,6 @@ fn on_initialize_setup<T: Config>(should_mint: bool) -> BlockNumberFor<T> {
 #[benchmarks]
 mod benchmarks {
 	use super::*;
-	use sp_std::vec;
 
 	#[benchmark]
 	fn update_backup_node_emission_inflation() {

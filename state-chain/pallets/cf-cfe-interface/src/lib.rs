@@ -1,13 +1,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
+pub mod migrations;
 mod weights;
 
 pub use weights::PalletWeight;
 use weights::WeightInfo;
 
 use cf_chains::{
-	btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, Bitcoin, Ethereum, Polkadot,
+	btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, Arbitrum, Bitcoin, Ethereum, Polkadot,
 };
 use cf_primitives::{Ed25519PublicKey, Ipv6Addr, Port};
 use cf_traits::{CfeBroadcastRequest, CfeMultisigRequest, CfePeerRegistration, Chainflip};
@@ -20,7 +21,7 @@ use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::vec::Vec;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 pub type EventId = u64;
 
@@ -67,11 +68,11 @@ pub mod pallet {
 
 impl<T: Config> CfeMultisigRequest<T, EvmCrypto> for Pallet<T> {
 	fn keygen_request(req: KeygenRequest<T>) {
-		CfeEvents::<T>::append(CfeEvent::<T>::EthKeygenRequest(req))
+		CfeEvents::<T>::append(CfeEvent::<T>::EvmKeygenRequest(req))
 	}
 
 	fn signature_request(req: ThresholdSignatureRequest<T, EvmCrypto>) {
-		CfeEvents::<T>::append(CfeEvent::<T>::EthThresholdSignatureRequest(req))
+		CfeEvents::<T>::append(CfeEvent::<T>::EvmThresholdSignatureRequest(req))
 	}
 }
 
@@ -114,6 +115,12 @@ impl<T: Config> CfeBroadcastRequest<T, Bitcoin> for Pallet<T> {
 impl<T: Config> CfeBroadcastRequest<T, Ethereum> for Pallet<T> {
 	fn tx_broadcast_request(req: TxBroadcastRequest<T, Ethereum>) {
 		CfeEvents::<T>::append(CfeEvent::<T>::EthTxBroadcastRequest(req))
+	}
+}
+
+impl<T: Config> CfeBroadcastRequest<T, Arbitrum> for Pallet<T> {
+	fn tx_broadcast_request(req: TxBroadcastRequest<T, Arbitrum>) {
+		CfeEvents::<T>::append(CfeEvent::<T>::ArbTxBroadcastRequest(req))
 	}
 }
 

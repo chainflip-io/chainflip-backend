@@ -4,14 +4,16 @@ use super::*;
 
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::v2::*;
-use frame_support::traits::{Hooks, OnNewAccount};
+use frame_support::{
+	assert_ok,
+	traits::{Hooks, OnNewAccount},
+};
 use frame_system::RawOrigin;
 use sp_std::{boxed::Box, collections::btree_set::BTreeSet};
 
 #[benchmarks]
 mod benchmarks {
 	use super::*;
-	use sp_std::vec;
 
 	#[benchmark]
 	fn witness_at_epoch() {
@@ -29,6 +31,18 @@ mod benchmarks {
 
 		let call_hash = CallHash(Hashable::blake2_256(&call));
 		assert!(Votes::<T>::contains_key(epoch, call_hash));
+	}
+
+	#[benchmark]
+	fn prewitness() {
+		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
+		let call: Box<<T as Config>::RuntimeCall> =
+			Box::new(frame_system::Call::remark { remark: vec![] }.into());
+
+		#[block]
+		{
+			assert_ok!(Call::<T>::prewitness { call }.dispatch_bypass_filter(origin));
+		}
 	}
 
 	#[benchmark]

@@ -17,7 +17,7 @@ mod rotation_state;
 
 pub use auction_resolver::*;
 use cf_primitives::{
-	AuthorityCount, Ed25519PublicKey, EpochIndex, Ipv6Addr, SemVer,
+	AuthorityCount, CfeCompatibility, Ed25519PublicKey, EpochIndex, Ipv6Addr, SemVer,
 	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION, FLIPPERINOS_PER_FLIP,
 };
 use cf_traits::{
@@ -848,8 +848,12 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		CurrentAuthorities::<T>::get()
 	}
 
+	fn authorities_at_epoch(epoch: u32) -> BTreeSet<Self::ValidatorId> {
+		HistoricalAuthorities::<T>::get(epoch)
+	}
+
 	fn current_authority_count() -> AuthorityCount {
-		CurrentAuthorities::<T>::decode_len().unwrap_or_default() as AuthorityCount
+		CurrentAuthorities::<T>::decode_non_dedup_len().unwrap_or_default() as AuthorityCount
 	}
 
 	fn authority_index(
@@ -879,7 +883,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	}
 
 	fn authority_count_at_epoch(epoch_index: EpochIndex) -> Option<AuthorityCount> {
-		HistoricalAuthorities::<T>::decode_len(epoch_index).map(|l| l as AuthorityCount)
+		HistoricalAuthorities::<T>::decode_non_dedup_len(epoch_index).map(|l| l as AuthorityCount)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -1415,7 +1419,8 @@ impl<T: Config> AuthoritiesCfeVersions for Pallet<T> {
 			current_authorities
 				.into_iter()
 				.filter(|validator_id| {
-					NodeCFEVersion::<T>::get(validator_id).is_compatible_with(version)
+					NodeCFEVersion::<T>::get(validator_id).compatibility_with_runtime(version) ==
+						CfeCompatibility::Compatible
 				})
 				.count() as u32,
 			authorities_count,

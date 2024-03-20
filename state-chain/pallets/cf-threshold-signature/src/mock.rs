@@ -5,8 +5,6 @@ use crate::{
 	EnsureThresholdSigned, Origin, Pallet, PalletOffence, PendingCeremonies, RequestId,
 };
 use cf_chains::{
-	btc,
-	evm::SchnorrVerificationComponents,
 	mocks::{MockAggKey, MockEthereumChainCrypto, MockThresholdSignature},
 	ChainCrypto,
 };
@@ -14,10 +12,12 @@ use cf_primitives::{AuthorityCount, CeremonyId, FlipBalance, FLIPPERINOS_PER_FLI
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{cfe_interface_mock::MockCfeInterface, signer_nomination::MockNominator},
-	AccountRoleRegistry, AsyncResult, KeyProvider, Slashing, ThresholdSigner, VaultActivator,
+	AccountRoleRegistry, AsyncResult, KeyProvider, Slashing, StartKeyActivationResult,
+	ThresholdSigner, VaultActivator,
 };
 use codec::{Decode, Encode};
 pub use frame_support::{
+	derive_impl,
 	instances::Instance1,
 	parameter_types,
 	traits::{EnsureOrigin, UnfilteredDispatchable},
@@ -30,16 +30,11 @@ type Block = frame_system::mocking::MockBlock<Test>;
 
 pub type ValidatorId = u64;
 
-pub const ETH_DUMMY_SIG: SchnorrVerificationComponents =
-	SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
-
-pub const BTC_DUMMY_SIG: btc::Signature = [0xcf; 64];
-
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
 	pub enum Test {
 		System: frame_system,
-		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
+		EvmThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
 	}
 );
 
@@ -48,6 +43,7 @@ parameter_types! {
 	pub const SS58Prefix: u8 = 42;
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -103,7 +99,7 @@ impl MockCallback<MockEthereumChainCrypto> {
 		match self {
 			Self::Regular(request_id, _) => {
 				assert!(matches!(
-					<EthereumThresholdSigner as ThresholdSigner<_>>::signature_result(request_id),
+					<EvmThresholdSigner as ThresholdSigner<_>>::signature_result(request_id),
 					AsyncResult::Ready(..)
 				));
 				CALL_DISPATCHED.with(|cell| *(cell.borrow_mut()) = Some(request_id));
@@ -193,7 +189,14 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 pub struct MockVaultActivator;
 impl VaultActivator<MockEthereumChainCrypto> for MockVaultActivator {
 	type ValidatorId = <Test as Chainflip>::ValidatorId;
-	fn activate(_new_key: MockAggKey, _maybe_old_key: Option<MockAggKey>) {}
+	fn start_key_activation(
+		_new_key: MockAggKey,
+		_maybe_old_key: Option<MockAggKey>,
+	) -> Vec<StartKeyActivationResult> {
+		VAULT_ACTIVATION_STATUS.with(|value| *(value.borrow_mut()) = AsyncResult::Pending);
+		let ceremony_id = current_ceremony_id();
+		vec![StartKeyActivationResult::Normal(ceremony_id as u32)]
+	}
 
 	fn status() -> AsyncResult<()> {
 		VAULT_ACTIVATION_STATUS.with(|value| *value.borrow())
@@ -202,6 +205,10 @@ impl VaultActivator<MockEthereumChainCrypto> for MockVaultActivator {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(outcome: AsyncResult<()>) {
 		VAULT_ACTIVATION_STATUS.with(|value| *(value.borrow_mut()) = outcome)
+	}
+
+	fn activate_key() {
+		VAULT_ACTIVATION_STATUS.with(|value| *(value.borrow_mut()) = AsyncResult::Ready(()))
 	}
 }
 
@@ -289,13 +296,13 @@ impl TestHelper for TestRunner<()> {
 			let initial_ceremony_id = current_ceremony_id();
 			// Initiate request
 			let request_id =
-				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(*message);
+				<EvmThresholdSigner as ThresholdSigner<_>>::request_signature(*message);
 			let ceremony_id = current_ceremony_id();
 
-			let maybe_pending_ceremony = EthereumThresholdSigner::pending_ceremonies(ceremony_id);
+			let maybe_pending_ceremony = EvmThresholdSigner::pending_ceremonies(ceremony_id);
 			assert!(
 				maybe_pending_ceremony.is_some() !=
-					EthereumThresholdSigner::pending_requests(request_id).is_some(),
+					EvmThresholdSigner::pending_requests(request_id).is_some(),
 					"The request should be either a pending ceremony OR a pending request at this point"
 			);
 			if let Some(pending_ceremony) = maybe_pending_ceremony {
@@ -308,7 +315,7 @@ impl TestHelper for TestRunner<()> {
 				assert_eq!(current_ceremony_id(), initial_ceremony_id);
 			}
 
-			assert!(matches!(EthereumThresholdSigner::signature(request_id), AsyncResult::Pending));
+			assert!(matches!(EvmThresholdSigner::signature(request_id), AsyncResult::Pending));
 		})
 	}
 
@@ -320,15 +327,15 @@ impl TestHelper for TestRunner<()> {
 		self.execute_with(|| {
 			// Initiate request
 			let request_id =
-				EthereumThresholdSigner::request_signature_with_callback(*message, callback_gen);
+				EvmThresholdSigner::request_signature_with_callback(*message, callback_gen);
 			let ceremony_id = current_ceremony_id();
-			let pending = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+			let pending = EvmThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			assert_eq!(
 				pending.remaining_respondents,
 				BTreeSet::from_iter(MockNominator::get_nominees().unwrap_or_default())
 			);
-			assert!(matches!(EthereumThresholdSigner::signature(request_id), AsyncResult::Pending));
-			assert!(EthereumThresholdSigner::request_callback(request_id).is_some());
+			assert!(matches!(EvmThresholdSigner::signature(request_id), AsyncResult::Pending));
+			assert!(EvmThresholdSigner::request_callback(request_id).is_some());
 		})
 	}
 
@@ -367,7 +374,7 @@ cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
 		system:Default::default(),
-		ethereum_threshold_signer: EthereumThresholdSignerConfig {
+		evm_threshold_signer: EvmThresholdSignerConfig {
 			key: Some(GENESIS_AGG_PUB_KEY),
 			threshold_signature_response_timeout: 1,
 			keygen_response_timeout: MOCK_KEYGEN_RESPONSE_TIMEOUT,

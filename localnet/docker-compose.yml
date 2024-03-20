@@ -1,0 +1,162 @@
+version: "3.9"
+services:
+  init:
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.1.2-usdt-${NODE_COUNT}
+    container_name: init
+    platform: linux/amd64
+    volumes:
+      - "/tmp/chainflip/data:/localnet-initial-state"
+    command: /bin/sh -c "cp -R /initial-state/* /localnet-initial-state"
+
+  init-solana:
+    image: ghcr.io/chainflip-io/solana-localnet-ledger:v0.1.1
+    container_name: init-solana
+    platform: linux/amd64
+    volumes:
+      - "/tmp/solana/test-ledger:/test-ledger"
+    command: /bin/sh -c "cp -R /solana/ledger/* /test-ledger"
+
+  arb-init:
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/arbitrum-gizmo-shop:v1.1.2-usdt-${NODE_COUNT}
+    restart: always
+    container_name: arb-init
+    pull_policy: always
+    platform: linux/amd64
+    environment:
+      ARB_ENDPOINT: "http://sequencer:8547"
+
+  redis:
+    image: redis:6.2.6
+    ports:
+      - "6379:6379"
+    volumes:
+      - "/tmp/chainflip/data/redis-data:/data"
+
+  geth:
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v1.1.2-usdt-${NODE_COUNT}
+    container_name: geth
+    platform: linux/amd64
+    ports:
+      - "8545:8545"
+      - "8551:8551"
+      - "8546:8546"
+      - "30303:30303"
+    volumes:
+      - "/tmp/chainflip/data/l1data:/datadir"
+      - "/tmp/chainflip/data/l1keystore:/keystore"
+      - "/tmp/chainflip/data/config:/config"
+
+  sequencer:
+    image: offchainlabs/nitro-node:v2.0.14-2baa834-dev
+    user: root
+    platform: linux/amd64
+    ports:
+      - "8547:8547"
+      - "8548:8548"
+      - "9642:9642"
+    volumes:
+      - "/tmp/chainflip/data/seqdata:/home/user/.arbitrum/local/nitro"
+      - "/tmp/chainflip/data/config:/config"
+    command: --conf.file /config/sequencer_config.json --node.feed.output.enable --node.feed.output.port 9642  --http.api net,web3,eth,txpool,debug --node.seq-coordinator.my-url  ws://sequencer:8548 --graphql.enable --graphql.vhosts * --graphql.corsdomain *
+    depends_on:
+      - geth
+      - redis
+
+  staker-unsafe:
+    image: offchainlabs/nitro-node:v2.0.14-2baa834-dev
+    user: root
+    platform: linux/amd64
+    ports:
+      - "8047:8547"
+      - "8048:8548"
+    volumes:
+      - "/tmp/chainflip/data/unsafestaker-data:/home/user/.arbitrum/local/nitro"
+      - "/tmp/chainflip/data/l1keystore:/home/user/l1keystore"
+      - "/tmp/chainflip/data/config:/config"
+    command: --conf.file /config/unsafe_staker_config.json
+    depends_on:
+      - sequencer
+      - redis
+
+  poster:
+    image: offchainlabs/nitro-node:v2.0.14-2baa834-dev
+    user: root
+    platform: linux/amd64
+    ports:
+      - "8147:8547"
+      - "8148:8548"
+    volumes:
+      - "/tmp/chainflip/data/poster-data:/home/user/.arbitrum/local/nitro"
+      - "/tmp/chainflip/data/l1keystore:/home/user/l1keystore"
+      - "/tmp/chainflip/data/config:/config"
+    command: --conf.file /config/poster_config.json
+    depends_on:
+      - geth
+      - redis
+
+  polkadot:
+    container_name: polkadot
+    platform: linux/amd64
+    image: ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot:v1.0.0
+    pull_policy: always
+    stop_grace_period: 5s
+    stop_signal: SIGINT
+    volumes:
+      - ./init/polkadot/chainspec.dev.v1.0.0.json:/polkadot/chainspec.json
+    environment:
+      - RUST_BACKTRACE=full
+    command:
+      - --alice
+      - --blocks-pruning=archive
+      - --chain=/polkadot/chainspec.json
+      - --force-authoring
+      - --name=PolkaDocker
+      - --rpc-cors=all
+      - --rpc-external
+      - --rpc-methods=unsafe
+      - --state-pruning=archive
+      - --validator
+      - --rpc-max-connections=100000
+      - --max-runtime-instances=256
+      - --wasmtime-instantiation-strategy=recreate-instance-copy-on-write
+    ports:
+      - 9947:9944
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl",
+          "-H 'Content-Type: application/json;'",
+          "-d '{\"id\":1, \"jsonrpc\":\"2.0\", \"method\": \"chain_getBlockHash\", \"params\" : [0]}'",
+          "http://localhost:9947"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  bitcoin:
+    image: ghcr.io/chainflip-io/chainflip-bitcoin-regtest:v24.0.1
+    platform: linux/amd64
+    pull_policy: always
+    container_name: bitcoin
+    restart: unless-stopped
+    ports:
+      - 8332:8332
+      - 3002:3002
+    stop_signal: SIGINT
+    stop_grace_period: 5s
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl",
+          "--user flip:flip",
+          "-H 'Content-Type: text/plain;'",
+          "-d '{\"jsonrpc\":\"1.0\", \"id\": \"1\", \"method\": \"getblockchaininfo\", \"params\" : []}'",
+          "http://127.0.0.1:8332"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s

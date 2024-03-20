@@ -4,8 +4,6 @@ pub mod deposit_address;
 pub mod utxo_selection;
 
 extern crate alloc;
-use core::{cmp::max, mem::size_of};
-
 use self::deposit_address::DepositAddress;
 use crate::{
 	Chain, ChainCrypto, DepositChannel, FeeEstimationApi, FeeRefundCalculator, RetryPolicy,
@@ -21,9 +19,9 @@ use cf_primitives::{
 };
 use cf_utilities::SliceToArray;
 use codec::{Decode, Encode, MaxEncodedLen};
+use core::{cmp::max, mem::size_of};
 use frame_support::{
 	pallet_prelude::RuntimeDebug,
-	sp_runtime::{FixedPointNumber, FixedU128},
 	traits::{ConstBool, ConstU32},
 	BoundedVec,
 };
@@ -31,6 +29,7 @@ use itertools;
 use libsecp256k1::{curve::*, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_core::H256;
 use sp_io::hashing::sha2_256;
 use sp_std::{vec, vec::Vec};
 
@@ -56,7 +55,7 @@ pub type SigningPayload = [u8; 32];
 
 pub type Signature = [u8; 64];
 
-pub type Hash = [u8; 32];
+pub type Hash = H256;
 
 #[derive(
 	Copy,
@@ -120,28 +119,21 @@ impl Default for BitcoinTrackedData {
 	}
 }
 
-/// A constant multiplier applied to the fees.
-///
-/// TODO: Allow this value to adjust based on the current fee deficit/surplus.
-const BTC_FEE_MULTIPLIER: FixedU128 = FixedU128::from_rational(3, 2);
-
 impl FeeEstimationApi<Bitcoin> for BitcoinTrackedData {
 	fn estimate_ingress_fee(
 		&self,
 		_asset: <Bitcoin as Chain>::ChainAsset,
 	) -> <Bitcoin as Chain>::ChainAmount {
-		BTC_FEE_MULTIPLIER.saturating_mul_int(self.btc_fee_info.fee_per_input_utxo())
+		self.btc_fee_info.fee_per_input_utxo()
 	}
 
 	fn estimate_egress_fee(
 		&self,
 		_asset: <Bitcoin as Chain>::ChainAsset,
 	) -> <Bitcoin as Chain>::ChainAmount {
-		BTC_FEE_MULTIPLIER.saturating_mul_int(
-			self.btc_fee_info
-				.min_fee_required_per_tx()
-				.saturating_add(self.btc_fee_info.fee_per_output_utxo()),
-		)
+		self.btc_fee_info
+			.min_fee_required_per_tx()
+			.saturating_add(self.btc_fee_info.fee_per_output_utxo())
 	}
 }
 
@@ -216,25 +208,6 @@ pub struct EpochStartData {
 	pub change_pubkey: AggKey,
 }
 
-#[derive(Encode, Decode, Default, PartialEq, Copy, Clone, TypeInfo, RuntimeDebug)]
-pub struct ConsolidationParameters {
-	/// Consolidate when total UTXO count reaches this threshold
-	pub consolidation_threshold: u32,
-	/// Consolidate this many UTXOs
-	pub consolidation_size: u32,
-}
-
-impl ConsolidationParameters {
-	#[cfg(test)]
-	fn new(consolidation_threshold: u32, consolidation_size: u32) -> ConsolidationParameters {
-		ConsolidationParameters { consolidation_threshold, consolidation_size }
-	}
-
-	pub fn are_valid(&self) -> bool {
-		self.consolidation_size <= self.consolidation_threshold && (self.consolidation_size > 1)
-	}
-}
-
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
 	const GAS_ASSET: Self::ChainAsset = assets::btc::Asset::Btc;
@@ -255,6 +228,7 @@ impl Chain for Bitcoin {
 	// There is no need for replay protection on Bitcoin since it is a UTXO chain.
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
+	type TransactionRef = Hash;
 }
 
 #[derive(Clone, Copy, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
@@ -393,8 +367,14 @@ pub enum Error {
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct Utxo {
 	pub id: UtxoId,
-	pub amount: u64,
+	pub amount: BtcAmount,
 	pub deposit_address: DepositAddress,
+}
+
+impl Utxo {
+	pub fn net_value(&self, fee_info: &BitcoinFeeInfo) -> BtcAmount {
+		self.amount.saturating_sub(fee_info.fee_for_utxo(self))
+	}
 }
 
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
@@ -657,7 +637,7 @@ impl ScriptPubkey {
 		) -> Option<ScriptPubkey> {
 			let (hrp, data, variant) = bech32::decode(address).ok()?;
 			if hrp == network.bech32_and_bech32m_address_hrp() {
-				let version = data.get(0)?.to_u8();
+				let version = data.first()?.to_u8();
 				let program = Vec::from_base32(&data[1..]).ok()?;
 				match (version, variant, program.len() as u32) {
 					(SEGWIT_VERSION_ZERO, Variant::Bech32, 20) =>
@@ -700,21 +680,17 @@ const LOCKTIME: [u8; 4] = 0u32.to_le_bytes();
 const VERSION: [u8; 4] = 2u32.to_le_bytes();
 const SEQUENCE_NUMBER: [u8; 4] = (u32::MAX - 2).to_le_bytes();
 
-fn extend_with_inputs_outputs(
-	bytes: &mut Vec<u8>,
-	inputs: &Vec<Utxo>,
-	outputs: &Vec<BitcoinOutput>,
-) {
+fn extend_with_inputs_outputs(bytes: &mut Vec<u8>, inputs: &[Utxo], outputs: &[BitcoinOutput]) {
 	bytes.extend(to_varint(inputs.len() as u64));
 	bytes.extend(inputs.iter().fold(Vec::<u8>::default(), |mut acc, input| {
-		acc.extend(input.id.tx_id);
+		acc.extend(input.id.tx_id.0);
 		acc.extend(input.id.vout.to_le_bytes());
 		acc.push(0);
 		acc.extend(SEQUENCE_NUMBER);
 		acc
 	}));
 
-	outputs.as_slice().btc_encode_to(bytes);
+	outputs.btc_encode_to(bytes);
 }
 
 impl BitcoinTransaction {
@@ -759,13 +735,13 @@ impl BitcoinTransaction {
 			!self.signatures.iter().any(|signature| signature == &[0u8; 64])
 	}
 
-	pub fn txid(&self) -> [u8; 32] {
+	pub fn txid(&self) -> Hash {
 		let mut id_bytes = Vec::default();
 		id_bytes.extend(VERSION);
 		extend_with_inputs_outputs(&mut id_bytes, &self.inputs, &self.outputs);
 		id_bytes.extend(&LOCKTIME);
 
-		sha2_256(&sha2_256(&id_bytes))
+		sha2_256(&sha2_256(&id_bytes)).into()
 	}
 
 	pub fn finalize(self) -> Vec<u8> {
@@ -813,7 +789,7 @@ impl BitcoinTransaction {
 			self.inputs
 				.iter()
 				.fold(Vec::<u8>::default(), |mut acc, input| {
-					acc.extend(input.id.tx_id);
+					acc.extend(input.id.tx_id.0);
 					acc.extend(input.id.vout.to_le_bytes());
 					acc
 				})
@@ -1307,7 +1283,8 @@ mod test {
 			id: UtxoId {
 				tx_id: hex_literal::hex!(
 					"4C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB5"
-				),
+				)
+				.into(),
 				vout: 1,
 			},
 			deposit_address: DepositAddress::new(pubkey_x, 123),
@@ -1407,22 +1384,6 @@ mod test {
 			BitcoinNetwork::try_from(BitcoinNetwork::Regtest.to_string().as_str()).unwrap(),
 			BitcoinNetwork::Regtest
 		);
-	}
-
-	#[test]
-	fn consolidation_parameters() {
-		// These are expected to be valid:
-		assert!(ConsolidationParameters::new(2, 2).are_valid());
-		assert!(ConsolidationParameters::new(10, 2).are_valid());
-		assert!(ConsolidationParameters::new(10, 10).are_valid());
-		assert!(ConsolidationParameters::new(200, 100).are_valid());
-
-		// Invalid: size < threshold
-		assert!(!ConsolidationParameters::new(9, 10).are_valid());
-		// Invalid: size is too small
-		assert!(!ConsolidationParameters::new(0, 0).are_valid());
-		assert!(!ConsolidationParameters::new(1, 1).are_valid());
-		assert!(!ConsolidationParameters::new(0, 10).are_valid());
 	}
 
 	#[test]

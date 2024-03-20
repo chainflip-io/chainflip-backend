@@ -1,4 +1,4 @@
-// This requirse the try-runtime cli to be installed globally
+// This requires the try-runtime cli to be installed globally
 // https://github.com/paritytech/try-runtime-cli
 
 import { ApiPromise } from '@polkadot/api';
@@ -13,7 +13,9 @@ function tryRuntimeCommand(runtimePath: string, blockParam: string, networkUrl: 
   const stderrFile = path.join(os.tmpdir(), `cmd-stderr-${Date.now()}`);
   try {
     execSync(
-      `try-runtime --runtime ${runtimePath} on-runtime-upgrade --disable-spec-version-check --disable-idempotency-checks --checks all ${blockParam} --uri ${networkUrl} 2> ${stderrFile}`,
+      // TODO: Replace pre-and-post with all after the SDK issue paritytech/polkadot-sdk#2560 is merged.
+      `try-runtime --runtime ${runtimePath} on-runtime-upgrade --disable-spec-version-check --disable-idempotency-checks --checks pre-and-post ${blockParam} --uri ${networkUrl} 2> ${stderrFile}`,
+      { env: { ...process.env, RUST_LOG: 'runtime::executive=debug' } },
     );
     console.log(`try-runtime success for blockParam ${blockParam}`);
   } catch (e) {

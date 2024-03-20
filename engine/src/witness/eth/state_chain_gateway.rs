@@ -3,12 +3,12 @@ use ethers::{prelude::abigen, types::Bloom};
 use sp_core::{H160, H256};
 use tracing::{info, trace};
 
-use super::{
-	super::common::{
+use super::super::{
+	common::{
 		chain_source::ChainClient,
 		chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
 	},
-	contract_common::events_at_block,
+	evm::contract_common::events_at_block,
 };
 use crate::eth::retry_rpc::EthersRetryRpcApi;
 use cf_primitives::EpochIndex;

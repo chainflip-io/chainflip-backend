@@ -166,7 +166,8 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			broadcasts_with_failed_broadcasters,
 			broadcast_retry_queue,
 			timeout_broadcasts,
-		} = MigrationVerification::<T>::decode(&mut &state[..]).unwrap();
+		} = MigrationVerification::<T>::decode(&mut &state[..])
+			.expect("Pre-migration should encode valid MigrationVerification");
 
 		// Ensure all failed broadcasters storage are migrated.
 		broadcasts_with_failed_broadcasters.into_iter().for_each(
@@ -270,8 +271,8 @@ mod migration_tests {
 			assert_eq!(failed_1, failed_broadcasters);
 			assert_eq!(failed_2, failed_broadcasters);
 
-			assert_eq!(FailedBroadcasters::<Test, Instance1>::decode_len(1), Some(3));
-			assert_eq!(FailedBroadcasters::<Test, Instance1>::decode_len(2), Some(3));
+			assert_eq!(FailedBroadcasters::<Test, Instance1>::decode_non_dedup_len(1), Some(3));
+			assert_eq!(FailedBroadcasters::<Test, Instance1>::decode_non_dedup_len(2), Some(3));
 		});
 	}
 

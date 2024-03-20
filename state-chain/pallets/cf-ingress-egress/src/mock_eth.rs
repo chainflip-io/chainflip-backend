@@ -4,29 +4,31 @@ use crate::{DepositBalances, DepositWitness};
 use cf_chains::eth::EthereumTrackedData;
 pub use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError, ForeignChainAddress},
-	eth::{api::EthereumApi, Address as EthereumAddress},
-	CcmDepositMetadata, Chain, ChainEnvironment, DepositChannel,
+	eth::Address as EthereumAddress,
+	CcmDepositMetadata, Chain,
 };
 use cf_primitives::ChannelId;
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
-	Asset, AssetAmount,
+	Asset,
 };
 use cf_test_utilities::{impl_test_helpers, TestExternalities};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip,
 	mocks::{
 		address_converter::MockAddressConverter,
-		api_call::{MockEthEnvironment, MockEthereumApiCall},
+		api_call::{MockEthereumApiCall, MockEvmEnvironment},
 		asset_converter::MockAssetConverter,
 		broadcaster::MockBroadcaster,
 		ccm_handler::MockCcmHandler,
+		chain_tracking::ChainTracker,
+		fee_payment::MockFeePayment,
 		lp_balance::MockBalance,
 		swap_deposit_handler::MockSwapDepositHandler,
 	},
-	DepositApi, DepositHandler, NetworkEnvironmentProvider,
+	DepositApi, NetworkEnvironmentProvider, OnDeposit,
 };
-use frame_support::traits::{OriginTrait, UnfilteredDispatchable};
+use frame_support::{derive_impl, traits::UnfilteredDispatchable};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup, Zero};
@@ -41,6 +43,7 @@ frame_support::construct_runtime!(
 	}
 );
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -71,10 +74,10 @@ impl_mock_chainflip!(Test);
 impl_mock_callback!(RuntimeOrigin);
 
 pub struct MockDepositHandler;
-impl DepositHandler<Ethereum> for MockDepositHandler {}
+impl OnDeposit<Ethereum> for MockDepositHandler {}
 
 pub type MockEgressBroadcaster =
-	MockBroadcaster<(MockEthereumApiCall<MockEthEnvironment>, RuntimeCall)>;
+	MockBroadcaster<(MockEthereumApiCall<MockEvmEnvironment>, RuntimeCall)>;
 
 pub struct MockAddressDerivation;
 
@@ -114,14 +117,15 @@ impl crate::Config for Test {
 	type LpBalance = MockBalance;
 	type SwapDepositHandler =
 		MockSwapDepositHandler<(Ethereum, pallet_cf_ingress_egress::Pallet<Self>)>;
-	type ChainApiCall = MockEthereumApiCall<MockEthEnvironment>;
+	type ChainApiCall = MockEthereumApiCall<MockEvmEnvironment>;
 	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;
 	type CcmHandler = MockCcmHandler;
-	type ChainTracking = cf_traits::mocks::chain_tracking::ChainTracking<Ethereum>;
+	type ChainTracking = ChainTracker<Ethereum>;
 	type WeightInfo = ();
 	type NetworkEnvironment = MockNetworkEnvironmentProvider;
 	type AssetConverter = MockAssetConverter;
+	type FeePayment = MockFeePayment<Self>;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
@@ -164,24 +168,24 @@ impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
 		let (requests, amounts): (Vec<_>, Vec<_>) = requests.iter().cloned().unzip();
 
 		self.request_deposit_addresses(&requests[..])
-			.then_apply_extrinsics(move |channels| {
+			.then_execute_at_next_block(move |channels| {
 				channels
-					.iter()
+					.into_iter()
 					.zip(amounts)
-					.filter_map(|((request, _channel_id, deposit_address), amount)| {
-						(!amount.is_zero()).then_some((
-							OriginTrait::none(),
-							RuntimeCall::from(pallet_cf_ingress_egress::Call::process_deposits {
-								deposit_witnesses: vec![DepositWitness {
-									deposit_address: *deposit_address,
+					.map(|((request, channel_id, deposit_address), amount)| {
+						if !amount.is_zero() {
+							IngressEgress::process_deposit_witnesses(
+								vec![DepositWitness {
+									deposit_address,
 									asset: request.source_asset(),
 									amount,
 									deposit_details: Default::default(),
 								}],
-								block_height: Default::default(),
-							}),
-							Ok(()),
-						))
+								Default::default(),
+							)
+							.unwrap();
+						}
+						(request, channel_id, deposit_address)
 					})
 					.collect::<Vec<_>>()
 			})
