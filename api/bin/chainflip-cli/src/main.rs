@@ -59,70 +59,79 @@ async fn run_cli() -> Result<()> {
 		async move {
 			let api = StateChainApi::connect(scope, cli_settings.state_chain).await?;
 			match command_line_opts.cmd {
-				Broker(BrokerSubcommands::RequestSwapDepositAddress(params)) => {
-					let SwapDepositAddress { address, .. } = api
-						.broker_api()
-						.request_swap_deposit_address(
-							params.source_asset,
-							params.destination_asset,
-							chainflip_api::clean_foreign_chain_address(
-								params.destination_asset.into(),
-								&params.destination_address,
-							)?,
-							params.broker_commission,
-							None,
-							params.boost_fee,
-						)
-						.await?;
-					println!("Deposit Address: {address}");
+				Broker(subcommand) => match subcommand {
+					BrokerSubcommands::RequestSwapDepositAddress(params) => {
+						let SwapDepositAddress { address, .. } = api
+							.broker_api()
+							.request_swap_deposit_address(
+								params.source_asset,
+								params.destination_asset,
+								chainflip_api::clean_foreign_chain_address(
+									params.destination_asset.into(),
+									&params.destination_address,
+								)?,
+								params.broker_commission,
+								None,
+								params.boost_fee,
+							)
+							.await?;
+						println!("Deposit Address: {address}");
+					},
+					BrokerSubcommands::WithdrawFees(params) => {
+						let withdraw_details = api
+							.broker_api()
+							.withdraw_fees(
+								params.asset,
+								chainflip_api::clean_foreign_chain_address(
+									params.asset.into(),
+									&params.destination_address,
+								)?,
+							)
+							.await?;
+						println!("Withdrawal request successfull submitted: {}", withdraw_details);
+					},
+					BrokerSubcommands::RegisterAccount => {
+						api.broker_api().register_account().await?;
+					},
+					BrokerSubcommands::DeregisterAccount { force } => {
+						api.broker_api().deregister_account(force).await?;
+					},
 				},
-				Broker(BrokerSubcommands::WithdrawFees(params)) => {
-					let withdraw_details = api
-						.broker_api()
-						.withdraw_fees(
-							params.asset,
-							chainflip_api::clean_foreign_chain_address(
-								params.asset.into(),
-								&params.destination_address,
-							)?,
-						)
-						.await?;
-					println!("Withdrawal request successfull submitted: {}", withdraw_details);
-				},
-				Broker(BrokerSubcommands::RegisterAccount) => {
-					api.broker_api().register_account().await?;
-				},
-				Broker(BrokerSubcommands::DeregisterAccount { force }) => {
-					api.broker_api().deregister_account(force).await?;
-				},
-				LiquidityProvider(
+				LiquidityProvider(subcommand) => match subcommand {
 					LiquidityProviderSubcommands::RequestLiquidityDepositAddress {
 						asset,
 						boost_fee,
+					} => {
+						let address = api
+							.lp_api()
+							.request_liquidity_deposit_address(
+								asset,
+								api::WaitFor::InBlock,
+								boost_fee,
+							)
+							.await?
+							.unwrap_details();
+						println!("Deposit Address: {address}");
 					},
-				) => {
-					let address = api
-						.lp_api()
-						.request_liquidity_deposit_address(asset, api::WaitFor::InBlock, boost_fee)
-						.await?
-						.unwrap_details();
-					println!("Deposit Address: {address}");
+
+					LiquidityProviderSubcommands::RegisterLiquidityRefundAddress {
+						chain,
+						address,
+					} => {
+						let lra_address =
+							chainflip_api::clean_foreign_chain_address(chain, &address)?;
+						let tx_hash =
+							api.lp_api().register_liquidity_refund_address(lra_address).await?;
+						println!("Liquidity Refund address registered. Tx hash: {tx_hash}");
+					},
+					LiquidityProviderSubcommands::RegisterAccount => {
+						api.lp_api().register_account().await?;
+					},
+					LiquidityProviderSubcommands::DeregisterAccount { force } => {
+						api.lp_api().deregister_account(force).await?;
+					},
 				},
-				LiquidityProvider(
-					LiquidityProviderSubcommands::RegisterLiquidityRefundAddress { chain, address },
-				) => {
-					let lra_address = chainflip_api::clean_foreign_chain_address(chain, &address)?;
-					let tx_hash =
-						api.lp_api().register_liquidity_refund_address(lra_address).await?;
-					println!("Liquidity Refund address registered. Tx hash: {tx_hash}");
-				},
-				LiquidityProvider(LiquidityProviderSubcommands::RegisterAccount) => {
-					api.lp_api().register_account().await?;
-				},
-				LiquidityProvider(LiquidityProviderSubcommands::DeregisterAccount { force }) => {
-					api.lp_api().deregister_account(force).await?;
-				},
-				Validator(command) => match command {
+				Validator(subcommand) => match subcommand {
 					ValidatorSubcommands::RegisterAccount => {
 						api.validator_api().register_account().await?;
 					},
