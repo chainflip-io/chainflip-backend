@@ -127,8 +127,9 @@ impl OnRuntimeUpgrade for Migration {
 				.map_err(|_| DispatchError::Other("Failed to decode accounts to reap"))?;
 		for account_id in accounts_to_reap {
 			ensure!(
-				!pallet_cf_flip::Account::<Runtime>::contains_key(&account_id) |
-					pallet_cf_funding::PendingRedemptions::<Runtime>::contains_key(&account_id),
+				pallet_cf_funding::PendingRedemptions::<Runtime>::contains_key(&account_id) ||
+					(!pallet_cf_flip::Account::<Runtime>::contains_key(&account_id) &&
+						!frame_system::Pallet::<Runtime>::account_exists(&account_id)),
 				"Account was not reaped",
 			);
 		}
