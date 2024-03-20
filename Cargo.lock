@@ -1687,6 +1687,7 @@ dependencies = [
  "hex",
  "jsonrpsee 0.16.3",
  "serde",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.6+1)",
  "sp-rpc",
  "substrate-build-script-utils",
  "tokio",
