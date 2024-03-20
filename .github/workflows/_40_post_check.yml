@@ -73,14 +73,14 @@ jobs:
       - name: Start a localnet 🚀
         env:
           BINARY_ROOT_PATH: .
-          DEBUG_OUTPUT_DESTINATION: /tmp/chainflip/debug.*log
+          DEBUG_OUTPUT_DESTINATION: /tmp/chainflip/debug.log
         run: |
           set -x
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           mkdir -p /tmp/chainflip/bashful
           mkdir -p /tmp/chainflip/doc
           mkdir -p /tmp/chainflip/dopey
-          touch /tmp/chainflip/debug.*log
+          touch /tmp/chainflip/debug.log
           chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
           touch ./localnet/.setup_complete
           ./localnet/manage.sh
