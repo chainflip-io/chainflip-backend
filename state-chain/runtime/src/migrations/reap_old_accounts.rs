@@ -54,7 +54,6 @@ impl OnRuntimeUpgrade for Migration {
 								frame_system::Consumer::<Runtime>::created(&account_id).expect("Can only fail if no providers or too many consumers, checked above.");
 								pallet_cf_lp::Pallet::<Runtime>::deregister_lp_account(
 									OriginTrait::signed(account_id.clone()),
-									false,
 								)
 							},
 							AccountRole::Broker => {
@@ -62,7 +61,6 @@ impl OnRuntimeUpgrade for Migration {
 								frame_system::Consumer::<Runtime>::created(&account_id).expect("Can only fail if no providers or too many consumers, checked above.");
 								pallet_cf_swapping::Pallet::<Runtime>::deregister_as_broker(
 									OriginTrait::signed(account_id.clone()),
-									false,
 								)
 							},
 						}
