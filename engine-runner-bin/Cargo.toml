@@ -1,10 +1,14 @@
 [package]
 name = "engine-runner"
+description = "The central runner for the chainflip engine, it requires two shared library versions to run."
 # NB: When updating this version, you must update the debian assets appropriately too.
 version = "1.4.0"
 authors = ["Chainflip team <https://github.com/chainflip-io>"]
 build = 'build.rs'
 edition = '2021'
+license = '<TODO>'
+publish = false
+repository = 'https://github.com/chainflip-io/chainflip-backend'
 
 # TODO: use cargo-deb variants to select the correct asset for the correct ubuntu version.
 # Namespacing the assets with a folder to select them.
