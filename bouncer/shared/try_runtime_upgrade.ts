@@ -21,17 +21,24 @@ function createTmpDirIfNotExists(dir: string): string {
   return tmpDir;
 }
 
+function logStreamFor(fileName: string) {
+  return fs.createWriteStream(
+    path.join(createTmpDirIfNotExists('chainflip/logs/try-runtime/'), fileName),
+  );
+}
+
 function createSnapshotFile(networkUrl: string, blockHash: string) {
   const snapshotFolder = createTmpDirIfNotExists('chainflip/snapshots/');
   const snapshotOutputPath = path.join(snapshotFolder, `snapshot-at-${blockHash}.snap`);
   const blockParam = blockHash === 'latest' ? '' : `--at ${blockHash}`;
+  const logStream = logStreamFor(`create-snapshot-${blockHash}.log`);
 
   console.log('Writing snapshot to: ', snapshotOutputPath);
 
   try {
     execSync(
       `try-runtime create-snapshot ${blockParam} --uri ${networkUrl} ${snapshotOutputPath}`,
-      { env: { ...process.env, RUST_LOG: 'runtime::executive=debug' }, stdio: [0, 1, 1] },
+      { env: { ...process.env, RUST_LOG: 'runtime::executive=debug' }, stdio: [0, 1, logStream] },
     );
   } catch (e) {
     console.error(`try-runtime create-snapshot failed.`);
@@ -40,6 +47,7 @@ function createSnapshotFile(networkUrl: string, blockHash: string) {
 
 function tryRuntimeCommand(runtimePath: string, blockHash: 'latest' | string, networkUrl: string) {
   const blockParam = blockHash === 'latest' ? 'live' : `live --at ${blockHash}`;
+  const logStream = logStreamFor(`try-runtime-${blockHash}.log`);
 
   try {
     execSync(
@@ -50,7 +58,7 @@ function tryRuntimeCommand(runtimePath: string, blockHash: 'latest' | string, ne
         --disable-idempotency-checks \
         --checks pre-and-post ${blockParam} \
         --uri ${networkUrl}`,
-      { env: { ...process.env, RUST_LOG: 'runtime::executive=debug' }, stdio: [0, 1, 1] },
+      { env: { ...process.env, RUST_LOG: 'runtime::executive=debug' }, stdio: [0, 1, logStream] },
     );
     console.log(`try-runtime success for blockParam ${blockParam}`);
   } catch (e) {
