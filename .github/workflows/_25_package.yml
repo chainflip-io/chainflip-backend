@@ -39,7 +39,7 @@ jobs:
       - name: Build global packages
         run: |
           cargo deb -v --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ inputs.network }}
-          # cargo deb -v --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ inputs.network }}
+          cargo deb -v --no-build --no-strip -p engine-runner --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ inputs.network }}
           cargo deb -v --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.get-date.outputs.date }}"
           cargo deb -v --no-build --no-strip -p chainflip-broker-api --deb-revision "${{ steps.get-date.outputs.date }}"
           cargo deb -v --no-build --no-strip -p chainflip-lp-api --deb-revision "${{ steps.get-date.outputs.date }}"
@@ -48,9 +48,10 @@ jobs:
         uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
         with:
           name: chainflip-backend-packages-ubuntu-${{ matrix.ubuntu_version }}
+          # do we need to publish this in this step? target/release/libchainflip_engine*.so
           path: |
             target/debian/*.deb
-            target/release/libchainflip_engine*.so
+            
 
       - name: Check if building changes any files
         run: |

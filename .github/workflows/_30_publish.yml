@@ -37,6 +37,9 @@ jobs:
           name: chainflip-backend-packages-ubuntu-${{ matrix.ubuntu_version }}
           path: packages
 
+      - name: ls packages
+        run: ls packages
+
       - name: Get commit SHA, distribution codename
         id: vars
         run: |
