@@ -23,7 +23,7 @@ jobs:
         run: cargo fmt --all -- --check
 
   audit:
-    runs-on: nscloud-ubuntu-22.04-amd64-2x4
+    runs-on: nscloud-ubuntu-22.04-amd64-4x16
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-20.04-44"
       credentials:
@@ -36,7 +36,7 @@ jobs:
         run: cargo cf-audit
 
   cargo-clippy:
-    runs-on: nscloud-ubuntu-22.04-amd64-8x16
+    runs-on: namespace-profile-rust-builder
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-20.04-44"
       credentials:
@@ -51,7 +51,7 @@ jobs:
         run: cargo cf-clippy-ci
 
   lint-bouncer:
-    runs-on: nscloud-ubuntu-22.04-amd64-2x4
+    runs-on: ubuntu-22.04
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-20.04-44"
       credentials:
@@ -91,7 +91,7 @@ jobs:
         run: pnpm eslint:check
 
   lint-ci-workflows:
-    runs-on: nscloud-ubuntu-22.04-amd64-2x4
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -103,7 +103,7 @@ jobs:
         shell: bash
 
   lint-dockerfiles:
-    runs-on: nscloud-ubuntu-22.04-amd64-2x4
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         dockerfile:
