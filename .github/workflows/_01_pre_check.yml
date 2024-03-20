@@ -9,7 +9,7 @@ env:
 
 jobs:
   cargo-fmt:
-    runs-on: [hetzner]
+    runs-on: [ubuntu-latest]
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-20.04-44"
       credentials:
@@ -23,7 +23,7 @@ jobs:
         run: cargo fmt --all -- --check
 
   audit:
-    runs-on: [hetzner]
+    runs-on: [ubuntu-latest]
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-20.04-44"
       credentials:
@@ -36,7 +36,7 @@ jobs:
         run: cargo cf-audit
 
   cargo-clippy:
-    runs-on: [hetzner]
+    runs-on: [ubuntu-latest]
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-20.04-44"
       credentials:

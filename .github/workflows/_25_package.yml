@@ -11,7 +11,7 @@ env:
 
 jobs:
   packages:
-    runs-on: [hetzner]
+    runs-on: [ubuntu-latest]
     strategy:
       fail-fast: false
       matrix:
