@@ -11,7 +11,7 @@ env:
 
 jobs:
   check-version:
-    runs-on: [nscloud-ubuntu-22.04-amd64-2x4]
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         manifest:
@@ -51,7 +51,7 @@ jobs:
           fi
 
   check-changelog:
-    runs-on: [nscloud-ubuntu-22.04-amd64-2x4]
+    runs-on: ubuntu-22.04
     if: inputs.network != 'sisyphos'
     steps:
       - name: Checkout 🏁
@@ -62,7 +62,7 @@ jobs:
         run: ./ci/scripts/check_changelog.sh ${{ github.ref_name }}
 
   check-runtime-spec-version:
-    runs-on: [nscloud-ubuntu-22.04-amd64-2x4]
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout 🏁
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11

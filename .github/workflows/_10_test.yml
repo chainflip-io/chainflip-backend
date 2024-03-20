@@ -10,7 +10,6 @@ env:
 
 jobs:
   unit-tests:
-#    runs-on: [hetzner]
     runs-on: namespace-profile-rust-builder
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-20.04-44"
@@ -29,11 +28,6 @@ jobs:
 
       - name: Setup sccache
         run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
-
-      # - name: Setup Rust cache
-      #   uses: namespacelabs/nscloud-cache-action@v1
-      #   with:
-      #     cache: rust
 
       - name: cargo cf-test-ci --locked
         run: |

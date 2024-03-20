@@ -15,8 +15,7 @@ permissions:
   contents: read
 jobs:
   prerelease:
-#    runs-on: ubuntu-latest
-    runs-on: [nscloud-ubuntu-22.04-amd64-2x4]
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11

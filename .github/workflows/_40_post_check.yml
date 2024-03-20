@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   bouncer:
-    runs-on: [digitalocean]
+    runs-on: digitalocean
     timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
       - name: Checkout chainflip-backend

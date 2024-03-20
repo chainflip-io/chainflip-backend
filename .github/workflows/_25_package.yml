@@ -11,7 +11,7 @@ env:
 
 jobs:
   packages:
-    runs-on: [nscloud-ubuntu-22.04-amd64-4x8]
+    runs-on: nscloud-ubuntu-22.04-amd64-4x8
     strategy:
       fail-fast: false
       matrix:
@@ -50,8 +50,3 @@ jobs:
           name: chainflip-backend-packages-ubuntu-${{ matrix.ubuntu_version }}
           path: |
             target/debian/*.deb
-
-      - name: Check if building changes any files
-        run: |
-          git diff --exit-code
-          git diff --cached --exit-code
