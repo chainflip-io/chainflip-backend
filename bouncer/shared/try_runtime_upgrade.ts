@@ -30,8 +30,8 @@ function createSnapshotFile(networkUrl: string, blockHash: string) {
 
   try {
     execSync(
-      `try-runtime create-snapshot ${blockParam} --uri ${networkUrl} ${snapshotOutputPath} 2>&1`,
-      { env: { ...process.env, RUST_LOG: 'runtime::executive=debug' }, stdio: 'inherit' },
+      `try-runtime create-snapshot ${blockParam} --uri ${networkUrl} ${snapshotOutputPath}`,
+      { env: { ...process.env, RUST_LOG: 'runtime::executive=debug' }, stdio: [0, 1, 1] },
     );
   } catch (e) {
     console.error(`try-runtime create-snapshot failed.`);
@@ -49,9 +49,8 @@ function tryRuntimeCommand(runtimePath: string, blockHash: 'latest' | string, ne
         --disable-spec-version-check \
         --disable-idempotency-checks \
         --checks pre-and-post ${blockParam} \
-        --uri ${networkUrl} \
-        2>&1`,
-      { env: { ...process.env, RUST_LOG: 'runtime::executive=debug' }, stdio: 'inherit' },
+        --uri ${networkUrl}`,
+      { env: { ...process.env, RUST_LOG: 'runtime::executive=debug' }, stdio: [0, 1, 1] },
     );
     console.log(`try-runtime success for blockParam ${blockParam}`);
   } catch (e) {
