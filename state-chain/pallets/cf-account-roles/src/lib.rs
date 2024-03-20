@@ -88,8 +88,8 @@ pub mod pallet {
 impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 	/// Register the account role for some account id.
 	///
-	/// Fails if an account type has already been registered for this account id.
-	/// Or if Swapping is not yet enabled.
+	/// Fails if an account role has already been registered for this account id, or if the account
+	/// doesn't exist.
 	#[frame_support::transactional]
 	fn register_account_role(
 		account_id: &T::AccountId,

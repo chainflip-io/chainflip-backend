@@ -155,9 +155,7 @@ async fn run_cli() -> Result<()> {
 					get_bound_executor_address(api.query_api()).await?;
 				},
 				RegisterAccountRole { role } => {
-					println!(
-						"Submitting `register-account-role` with role: {role:?}. This cannot be reversed for your account.",
-					);
+					println!("Submitting `register-account-role` with role: {role:?}.",);
 					if !confirm_submit() {
 						return Ok(())
 					}
