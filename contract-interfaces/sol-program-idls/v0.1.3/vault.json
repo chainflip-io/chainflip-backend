@@ -179,11 +179,6 @@
           "isSigner": true
         },
         {
-          "name": "ccmPda",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "receiverNative",
           "isMut": true,
           "isSigner": false
@@ -197,13 +192,14 @@
           "name": "systemProgram",
           "isMut": false,
           "isSigner": false
+        },
+        {
+          "name": "instructionSysvar",
+          "isMut": false,
+          "isSigner": false
         }
       ],
       "args": [
-        {
-          "name": "bump",
-          "type": "u8"
-        },
         {
           "name": "sourceChain",
           "type": "u32"
@@ -238,11 +234,6 @@
           "isSigner": true
         },
         {
-          "name": "ccmPda",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "receiverTokenAccount",
           "isMut": true,
           "isSigner": false
@@ -261,13 +252,14 @@
           "name": "mint",
           "isMut": false,
           "isSigner": false
+        },
+        {
+          "name": "instructionSysvar",
+          "isMut": false,
+          "isSigner": false
         }
       ],
       "args": [
-        {
-          "name": "bump",
-          "type": "u8"
-        },
         {
           "name": "sourceChain",
           "type": "u32"

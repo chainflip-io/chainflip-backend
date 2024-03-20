@@ -6,11 +6,6 @@
       "name": "cfReceiveToken",
       "accounts": [
         {
-          "name": "cfPdaSigner",
-          "isMut": false,
-          "isSigner": true
-        },
-        {
           "name": "receiverTokenAccount",
           "isMut": true,
           "isSigner": false
@@ -22,6 +17,11 @@
         },
         {
           "name": "mint",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "instructionSysvar",
           "isMut": false,
           "isSigner": false
         }
@@ -49,17 +49,17 @@
       "name": "cfReceiveNative",
       "accounts": [
         {
-          "name": "cfPdaSigner",
-          "isMut": false,
-          "isSigner": true
-        },
-        {
           "name": "receiverNative",
           "isMut": true,
           "isSigner": false
         },
         {
           "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "instructionSysvar",
           "isMut": false,
           "isSigner": false
         }
@@ -88,11 +88,6 @@
     {
       "name": "ReceivedCCM",
       "fields": [
-        {
-          "name": "signer",
-          "type": "publicKey",
-          "index": false
-        },
         {
           "name": "sourceChain",
           "type": "u32",
