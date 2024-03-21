@@ -77,7 +77,7 @@ pub fn engine_runner(_input: TokenStream) -> TokenStream {
 			let env_args = std::env::args().collect::<Vec<String>>();
 
 			let mut c_str_array = engine_upgrade_utils::CStrArray::default();
-			c_str_array.string_args_to_c_args(env_args)?;
+			c_str_array.string_args_to_c_args(env_args.clone())?;
 			let (c_args, n) = c_str_array.get_args();
 
 			let old_version = #old_version;
@@ -94,7 +94,11 @@ pub fn engine_runner(_input: TokenStream) -> TokenStream {
 				engine_upgrade_utils::NOT_YET_COMPATIBLE => {
 					// The new version is not compatible yet, so run the old version
 					println!("The latest version {new_version} is not yet compatible. Running the old version {old_version}...");
-					let exit_status_old = unsafe { #old_version_fn_ident(c_args, n, engine_upgrade_utils::NO_START_FROM) };
+					let mut old_c_str_args = engine_upgrade_utils::CStrArray::default();
+					let compatible_args = engine_upgrade_utils::args_compatible_with_old(env_args);
+					old_c_str_args.string_args_to_c_args(compatible_args)?;
+					let (old_c_args, old_n) = old_c_str_args.get_args();
+					let exit_status_old = unsafe { #old_version_fn_ident(old_c_args, old_n, engine_upgrade_utils::NO_START_FROM) };
 
 					println!("Old version has exited with exit status: {:?}", exit_status_old);
 
