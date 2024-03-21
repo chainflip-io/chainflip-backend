@@ -1,5 +1,6 @@
 use crate::*;
-use frame_support::{migration::move_prefix, traits::OnRuntimeUpgrade};
+// use frame_support::{migration::move_prefix, traits::OnRuntimeUpgrade};
+use frame_support::traits::OnRuntimeUpgrade;
 pub struct Migration<T>(PhantomData<T>);
 
 mod old {
@@ -23,17 +24,18 @@ impl<T: pallet::Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		let slippage = old::MaximumRelativeSlippage::<T>::get().unwrap();
+		let slippage = old::MaximumRelativeSlippage::<T>::get();
 
 		Ok(slippage.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let slippage = <u32>::decode(&mut &state[..]).expect("Pre-migration should encode a u32.");
+		let slippage =
+			Option::<u32>::decode(&mut &state[..]).expect("Pre-migration should encode a u32.");
 
 		ensure!(
-			MaximumRelativePriceImpact::<T>::get().unwrap() == slippage,
+			MaximumRelativePriceImpact::<T>::get() == slippage,
 			"DepositChannelLookup migration failed."
 		);
 
