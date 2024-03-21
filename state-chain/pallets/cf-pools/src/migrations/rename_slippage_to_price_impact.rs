@@ -1,5 +1,4 @@
 use crate::*;
-// use frame_support::{migration::move_prefix, traits::OnRuntimeUpgrade};
 use frame_support::traits::OnRuntimeUpgrade;
 pub struct Migration<T>(PhantomData<T>);
 

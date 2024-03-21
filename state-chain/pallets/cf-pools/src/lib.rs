@@ -968,8 +968,8 @@ pub mod pallet {
 		/// price, and both the pool price before and after the swap. If the limit is exceeded the
 		/// swap will fail and will be retried in the next block.
 		#[pallet::call_index(9)]
-		#[pallet::weight(T::WeightInfo::set_maximum_relative_price_impact())]
-		pub fn set_maximum_relative_price_impact(
+		#[pallet::weight(T::WeightInfo::set_maximum_price_impact())]
+		pub fn set_maximum_price_impact(
 			origin: OriginFor<T>,
 			ticks: Option<u32>,
 		) -> DispatchResult {
