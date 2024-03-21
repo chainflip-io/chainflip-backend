@@ -400,18 +400,28 @@ where
 							let half_max = max_sleep_duration(initial_request_timeout, attempt) / 2;
 							let sleep_duration = half_max + rand::thread_rng().gen_range(Duration::default()..half_max);
 
-							let error_message = format!("Retrier {name}: Error for request `{request_log}` with id `{request_id}`, attempt `{attempt}`: {e}. Delaying for {:?}", sleep_duration);
-							if attempt == 0 && !matches!(retry_limit, RetryLimit::Limit(1)) {
-								tracing::warn!(error_message);
-							} else {
-								tracing::error!(error_message);
+							let attempt_number = attempt.saturating_add(1);
+							match retry_limit {
+								// Log it as an error on any attempt after the first or if there's only one attempt.
+								RetryLimit::Limit(max_attempts) if attempt_number >= max_attempts => {
+									tracing::error!("Retrier {name}: Error for request `{request_log}` with id `{request_id}`, final attempt `{attempt_number}/{max_attempts}`: {e:#}");
+								},
+								RetryLimit::Limit(max_attempts) if attempt > 0 =>{
+									tracing::error!("Retrier {name}: Error for request `{request_log}` with id `{request_id}`, attempt `{attempt_number}/{max_attempts}`: {e:#}. Delaying for {sleep_duration:?}");
+								},
+								RetryLimit::Limit(max_attempts) => {
+									tracing::warn!("Retrier {name}: Error for request `{request_log}` with id `{request_id}`, attempt `{attempt_number}/{max_attempts}`: {e:#}. Delaying for {sleep_duration:?}");
+								},
+								_=>{
+									tracing::warn!("Retrier {name}: Error for request `{request_log}` with id `{request_id}`, `attempt {attempt_number}/∞`: {e:#}. Delaying for {sleep_duration:?}");
+								}
 							}
 
 							// Delay the request before the next retry.
 							retry_delays.push(Box::pin(
 								async move {
 									tokio::time::sleep(sleep_duration).await;
-									// pass in primary or secondary so we know which client to use.
+									// Pass in primary or secondary so we know which client to use.
 									(request_id, request_log, attempt, retry_limit, primary_or_secondary)
 								}
 							));
