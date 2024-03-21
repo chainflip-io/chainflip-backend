@@ -1033,11 +1033,11 @@ impl<T: Config> SwappingApi for Pallet<T> {
 					core::cmp::min(core::cmp::max(tick_before, swap_tick), tick_after)
 				};
 
-				if let Some(maximum_relative_price_impact) = MaximumPriceImpact::<T>::get() {
+				if let Some(maximum_price_impact) = MaximumPriceImpact::<T>::get() {
 					if core::cmp::min(
 						bounded_swap_tick.abs_diff(tick_after),
 						bounded_swap_tick.abs_diff(tick_before),
-					) > maximum_relative_price_impact
+					) > maximum_price_impact
 					{
 						return Err(Error::<T>::InsufficientLiquidity.into());
 					}
