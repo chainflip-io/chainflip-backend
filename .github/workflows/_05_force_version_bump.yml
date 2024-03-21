@@ -4,10 +4,13 @@ on:
 
 jobs:
   force-version-bump:
-    runs-on: [digitalocean]
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout backend
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Install pnpm
+        run: npm install -g pnpm
 
       - name: Configure NodeJS
         uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65
@@ -20,10 +23,10 @@ jobs:
       - name: Download latest release binaries
         uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
         with:
-              workflow: release-perseverance.yml
-              name: chainflip-backend-bin-ubuntu-22.04
-              github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
-              path: latest-release-bins
+          workflow: release-perseverance.yml
+          name: chainflip-backend-bin-ubuntu-22.04
+          github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
+          path: latest-release-bins
       - name: Permissions for latest binaries
         run: |
             chmod +x ./latest-release-bins/chainflip-*

@@ -15,7 +15,7 @@ env:
 
 jobs:
   unit-tests:
-    runs-on: [hetzner]
+    runs-on: namespace-profile-rust-builder
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-20.04-44"
       credentials:
@@ -34,7 +34,7 @@ jobs:
           sccache --show-stats
 
   coverage:
-    runs-on: [hetzner]
+    runs-on: namespace-profile-rust-builder
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-20.04-44"
       credentials:
