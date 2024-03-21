@@ -112,14 +112,33 @@ async function incompatibleUpgradeNoBuild(
   console.log('New node PID: ' + output.toString());
 
   // Restart the engines
-  execSync(
-    `INIT_RUN=false LOG_SUFFIX="-upgrade" NODE_COUNT=${nodeCount} SELECTED_NODES=${selectedNodesSep} LOCALNET_INIT_DIR=${localnetInitPath} BINARY_ROOT_PATH=${binaryPath} ${localnetInitPath}/scripts/start-all-engines.sh`,
-  );
+  execSync(`${localnetInitPath}/scripts/start-all-engines.sh`, {
+    stdio: 'inherit',
+    env: {
+      ...process.env,
+      INIT_RUN: 'false',
+      LOG_SUFFIX: '-upgrade',
+      NODE_COUNT: nodeCount,
+      SELECTED_NODES: selectedNodesSep,
+      LOCALNET_INIT_DIR: localnetInitPath,
+      BINARY_ROOT_PATH: binaryPath,
+    },
+  });
 
   console.log('Starting new broker and lp-api.');
 
-  execSync(`KEYS_DIR=${KEYS_DIR} ${localnetInitPath}/scripts/start-broker-api.sh ${binaryPath}`);
-  execSync(`KEYS_DIR=${KEYS_DIR} ${localnetInitPath}/scripts/start-lp-api.sh ${binaryPath}`);
+  try {
+    execSync(`KEYS_DIR=${KEYS_DIR} ${localnetInitPath}/scripts/start-broker-api.sh ${binaryPath}`);
+  } catch (e) {
+    console.error('Error while starting Broker Api: ');
+    console.log(e.stderr);
+  }
+  try {
+    execSync(`KEYS_DIR=${KEYS_DIR} ${localnetInitPath}/scripts/start-lp-api.sh ${binaryPath}`);
+  } catch (e) {
+    console.error('Error while starting LP Api: ');
+    console.log(e.stderr);
+  }
 
   await sleep(20000);
 
