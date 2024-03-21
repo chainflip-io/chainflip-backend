@@ -40,7 +40,7 @@ pub trait WeightInfo {
 	fn set_limit_order() -> Weight;
 	fn set_pool_fees() -> Weight;
 	fn schedule_limit_order_update() -> Weight;
-	fn set_maximum_relative_slippage() -> Weight;
+	fn set_maximum_relative_price_impact() -> Weight;
 }
 
 /// Weights for pallet_cf_pools using the Substrate node and recommended hardware.
@@ -181,7 +181,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	}
 	/// Storage: `LiquidityPools::MaximumRelativeSlippage` (r:0 w:1)
 	/// Proof: `LiquidityPools::MaximumRelativeSlippage` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn set_maximum_relative_slippage() -> Weight {
+	fn set_maximum_relative_price_impact() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
@@ -328,7 +328,7 @@ impl WeightInfo for () {
 	}
 	/// Storage: `LiquidityPools::MaximumRelativeSlippage` (r:0 w:1)
 	/// Proof: `LiquidityPools::MaximumRelativeSlippage` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn set_maximum_relative_slippage() -> Weight {
+	fn set_maximum_relative_price_impact() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`

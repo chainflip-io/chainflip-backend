@@ -289,9 +289,9 @@ pub mod pallet {
 	pub(super) type ScheduledLimitOrderUpdates<T: Config> =
 		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<LimitOrderUpdate<T>>, ValueQuery>;
 
-	/// Maximum relative slippage for a single swap, measured in number of ticks.
+	/// Maximum relative price impact for a single swap, measured in number of ticks.
 	#[pallet::storage]
-	pub(super) type MaximumRelativeSlippage<T: Config> = StorageValue<_, u32, OptionQuery>;
+	pub(super) type MaximumRelativePriceImpact<T: Config> = StorageValue<_, u32, OptionQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -968,13 +968,13 @@ pub mod pallet {
 		/// price, and both the pool price before and after the swap. If the limit is exceeded the
 		/// swap will fail and will be retried in the next block.
 		#[pallet::call_index(9)]
-		#[pallet::weight(T::WeightInfo::set_maximum_relative_slippage())]
-		pub fn set_maximum_relative_slippage(
+		#[pallet::weight(T::WeightInfo::set_maximum_relative_price_impact())]
+		pub fn set_maximum_relative_price_impact(
 			origin: OriginFor<T>,
 			ticks: Option<u32>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			MaximumRelativeSlippage::<T>::set(ticks);
+			MaximumRelativePriceImpact::<T>::set(ticks);
 			Ok(())
 		}
 	}
@@ -1033,11 +1033,11 @@ impl<T: Config> SwappingApi for Pallet<T> {
 					core::cmp::min(core::cmp::max(tick_before, swap_tick), tick_after)
 				};
 
-				if let Some(maximum_relative_slippage) = MaximumRelativeSlippage::<T>::get() {
+				if let Some(maximum_relative_price_impact) = MaximumRelativePriceImpact::<T>::get() {
 					if core::cmp::min(
 						bounded_swap_tick.abs_diff(tick_after),
 						bounded_swap_tick.abs_diff(tick_before),
-					) > maximum_relative_slippage
+					) > maximum_relative_price_impact
 					{
 						return Err(Error::<T>::InsufficientLiquidity.into());
 					}
