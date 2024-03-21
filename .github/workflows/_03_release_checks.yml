@@ -71,8 +71,12 @@ jobs:
         shell: bash
         run: ./ci/scripts/check_runtime_spec_version.sh berghain
 
+  notify-discord-on-failure:
+    runs-on: ubuntu-22.04
+    needs: [check-version, check-changelog, check-runtime-spec-version]
+    if: ${{ failure() }}
+    steps:
       - name: Notify on failed bouncer 📢
-        if: failure()
         env:
           DISCORD_USERNAME: "WaBouncer"
           DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_RELEASE }}
@@ -80,6 +84,6 @@ jobs:
         with:
           args: |
             ❗️❗️❗️❗️ Hey **${{ github.actor }}**, seems like our CI just took a detour through the land of broken builds. ❗️❗️❗️❗️
-            There was an issue with release checks on branch `${{ github.ref_name }}`
+            There was an issue with release checks on `${{ github.ref_name }}`
             🔗 Link to job: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>
-            #️⃣ Tagging: <@&704658689302462605>
+            #️⃣ Tagging: <@704658689302462605>

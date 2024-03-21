@@ -16,6 +16,7 @@ jobs:
     uses: ./.github/workflows/_03_release_checks.yml
     with:
       network: "sisyphos"
+    secrets: inherit
   test:
     uses: ./.github/workflows/_10_test.yml
     secrets: inherit
