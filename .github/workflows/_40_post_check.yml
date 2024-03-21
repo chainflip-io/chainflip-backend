@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   bouncer:
-    runs-on: [digitalocean]
+    runs-on: digitalocean
     timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
       - name: Checkout chainflip-backend
@@ -101,37 +101,37 @@ jobs:
         if: always()
         continue-on-error: true
         run: |
-          cat /tmp/chainflip/*/chainflip-engine.log
+          cat /tmp/chainflip/*/chainflip-engine.*log
 
       - name: Print chainflip-node logs 📡
         if: always()
         continue-on-error: true
         run: |
-          cat /tmp/chainflip/*/chainflip-node.log
+          cat /tmp/chainflip/*/chainflip-node.*log
 
       - name: Print chainflip-broker-api logs 💼
         if: always()
         continue-on-error: true
         run: |
-          cat /tmp/chainflip/chainflip-broker-api.log
+          cat /tmp/chainflip/chainflip-broker-api.*log
 
       - name: Print chainflip-lp-api logs 🤑
         if: always()
         continue-on-error: true
         run: |
-          cat /tmp/chainflip/chainflip-lp-api.log
+          cat /tmp/chainflip/chainflip-lp-api.*log
 
       - name: Print localnet init debug logs 🕵️‍♂️
         if: always()
         continue-on-error: true
         run: |
-          cat /tmp/chainflip/debug.log
+          cat /tmp/chainflip/debug.*log
 
       - name: Print solana logs ☀️
         if: always()
         continue-on-error: true
         run: |
-          cat /tmp/solana/solana.log
+          cat /tmp/solana/solana.*log
 
       - name: Upload Localnet Logs 💾
         if: always()
@@ -140,10 +140,10 @@ jobs:
         with:
           name: localnet-logs
           path: |
-            /tmp/chainflip/*/chainflip-*.log
-            /tmp/chainflip/chainflip-*.log
-            /tmp/chainflip/debug.log
-            /tmp/solana/*.log
+            /tmp/chainflip/*/chainflip-*.*log
+            /tmp/chainflip/chainflip-*.*log
+            /tmp/chainflip/debug.*log
+            /tmp/solana/*.*log
 
       - name: List /tmp/chainflip 📂
         if: always()

@@ -12,7 +12,7 @@ mod weights;
 use crate::{
 	chainflip::{calculate_account_apy, Offence},
 	runtime_apis::{
-		AuctionState, BrokerInfo, DispatchErrorWithMessage, FailingWitnessValidators,
+		AuctionState, BrokerInfo, DispatchErrorWithMessage, EventFilter, FailingWitnessValidators,
 		LiquidityProviderInfo, RuntimeApiPenalty, ValidatorInfo,
 	},
 };
@@ -33,6 +33,7 @@ use cf_chains::{
 use cf_primitives::{BroadcastId, NetworkEnvironment};
 use cf_runtime_upgrade_utilities::VersionedMigration;
 use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi};
+use codec::Encode;
 use core::ops::Range;
 use frame_support::instances::*;
 pub use frame_system::Call as SystemCall;
@@ -168,7 +169,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 130,
+	spec_version: 140,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 12,
@@ -854,12 +855,10 @@ construct_runtime!(
 		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
 		PolkadotChainTracking: pallet_cf_chain_tracking::<Instance2>,
 		BitcoinChainTracking: pallet_cf_chain_tracking::<Instance3>,
-		ArbitrumChainTracking: pallet_cf_chain_tracking::<Instance4>,
 
 		EthereumVault: pallet_cf_vaults::<Instance1>,
 		PolkadotVault: pallet_cf_vaults::<Instance2>,
 		BitcoinVault: pallet_cf_vaults::<Instance3>,
-		ArbitrumVault: pallet_cf_vaults::<Instance4>,
 
 		EvmThresholdSigner: pallet_cf_threshold_signature::<Instance16>,
 		PolkadotThresholdSigner: pallet_cf_threshold_signature::<Instance2>,
@@ -868,7 +867,6 @@ construct_runtime!(
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
 		PolkadotBroadcaster: pallet_cf_broadcast::<Instance2>,
 		BitcoinBroadcaster: pallet_cf_broadcast::<Instance3>,
-		ArbitrumBroadcaster: pallet_cf_broadcast::<Instance4>,
 
 		Swapping: pallet_cf_swapping,
 		LiquidityProvider: pallet_cf_lp,
@@ -876,11 +874,15 @@ construct_runtime!(
 		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
 		PolkadotIngressEgress: pallet_cf_ingress_egress::<Instance2>,
 		BitcoinIngressEgress: pallet_cf_ingress_egress::<Instance3>,
-		ArbitrumIngressEgress: pallet_cf_ingress_egress::<Instance4>,
 
 		LiquidityPools: pallet_cf_pools,
 
 		CfeInterface: pallet_cf_cfe_interface,
+
+		ArbitrumChainTracking: pallet_cf_chain_tracking::<Instance4>,
+		ArbitrumVault: pallet_cf_vaults::<Instance4>,
+		ArbitrumBroadcaster: pallet_cf_broadcast::<Instance4>,
+		ArbitrumIngressEgress: pallet_cf_ingress_egress::<Instance4>,
 	}
 );
 
@@ -955,27 +957,34 @@ pub type PalletExecutionOrder = (
 	Governance,
 	TokenholderGovernance,
 	Reputation,
+	// Chain Tracking
 	EthereumChainTracking,
 	PolkadotChainTracking,
 	BitcoinChainTracking,
 	ArbitrumChainTracking,
+	// Vaults
 	EthereumVault,
 	PolkadotVault,
 	BitcoinVault,
 	ArbitrumVault,
+	// Threshold Signers
 	EvmThresholdSigner,
 	PolkadotThresholdSigner,
 	BitcoinThresholdSigner,
+	// Broadcasters
 	EthereumBroadcaster,
 	PolkadotBroadcaster,
 	BitcoinBroadcaster,
 	ArbitrumBroadcaster,
+	// Swapping and Liquidity Provision
 	Swapping,
 	LiquidityProvider,
+	// Ingress Egress
 	EthereumIngressEgress,
 	PolkadotIngressEgress,
 	BitcoinIngressEgress,
 	ArbitrumIngressEgress,
+	// Liquidity Pools
 	LiquidityPools,
 );
 
@@ -1016,13 +1025,13 @@ type PalletMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	// pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, ArbitrumInstance>,
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
-	// TODO: After the Abitrum release, arbitrum_integration migrations and un-comment the
+	// TODO: After the Abitrum release, remove arbitrum_integration migrations and un-comment the
 	// Arbitrum-specific pallet migrations.
 	VersionedMigration<
 		pallet_cf_environment::Pallet<Runtime>,
 		migrations::arbitrum_integration::ArbitrumIntegration,
-		8,
 		9,
+		10,
 	>,
 	// pallet_cf_pools::migrations::PalletMigration<Runtime>,
 	migrations::housekeeping::Migration,
@@ -1061,7 +1070,6 @@ impl frame_support::traits::OnRuntimeUpgrade for FlipToBurnMigration {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::DispatchError> {
-		use codec::Encode;
 		use frame_support::{migrations::VersionedPostUpgradeData, traits::GetStorageVersion};
 
 		if <pallet_cf_pools::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() == 2
@@ -1195,8 +1203,8 @@ impl_runtime_apis! {
 				})
 				.collect()
 		}
-		fn cf_asset_balances(account_id: AccountId) -> Vec<(Asset, u128)> {
-			LiquidityProvider::asset_balances(&account_id)
+		fn cf_asset_balances(account_id: AccountId) -> Result<Vec<(Asset, u128)>, DispatchErrorWithMessage> {
+			LiquidityProvider::asset_balances(&account_id).map_err(Into::into)
 		}
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()
@@ -1640,6 +1648,21 @@ impl_runtime_apis! {
 				ForeignChain::Arbitrum => pallet_cf_ingress_egress::Pallet::<Runtime, ArbitrumInstance>::channel_opening_fee(),
 			}
 		}
+
+		fn cf_get_events(filter: EventFilter) -> Vec<frame_system::EventRecord<RuntimeEvent, Hash>> {
+			frame_system::Events::<Runtime>::get()
+				.into_iter()
+				.filter_map(|event_record|
+					if match &filter {
+						EventFilter::AllEvents => true,
+						EventFilter::SystemOnly => matches!(event_record.event, RuntimeEvent::System(..)),
+					} {
+						Some(*event_record)
+					} else {
+						None
+					}
+				).collect::<Vec<_>>()
+		}
 	}
 
 	// END custom runtime APIs
@@ -1759,8 +1782,6 @@ impl_runtime_apis! {
 			_set_id: sp_consensus_grandpa::SetId,
 			authority_id: GrandpaId,
 		) -> Option<sp_consensus_grandpa::OpaqueKeyOwnershipProof> {
-			use codec::Encode;
-
 			Historical::prove((sp_consensus_grandpa::KEY_TYPE, authority_id))
 				.map(|p| p.encode())
 				.map(sp_consensus_grandpa::OpaqueKeyOwnershipProof::new)
@@ -1823,7 +1844,8 @@ impl_runtime_apis! {
 			// NOTE: intentional unwrap: we don't want to propagate the error backwards, and want to
 			// have a backtrace here. If any of the pre/post migration checks fail, we shall stop
 			// right here and right now.
-			let weight = Executive::try_runtime_upgrade(checks).unwrap();
+			let weight = Executive::try_runtime_upgrade(checks)
+				.inspect_err(|e| log::error!("try_runtime_upgrade failed with: {:?}", e)).unwrap();
 			(weight, BlockWeights::get().max_block)
 		}
 

@@ -6,7 +6,7 @@ use cf_chains::{
 	btc::{
 		api::{SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		deposit_address::DepositAddress,
-		utxo_selection::{select_utxos_for_consolidation, select_utxos_from_pool},
+		utxo_selection::{self, select_utxos_for_consolidation, select_utxos_from_pool},
 		Bitcoin, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
@@ -31,10 +31,10 @@ pub mod weights;
 pub use weights::WeightInfo;
 pub mod migrations;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(9);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(10);
 
-const INITIAL_CONSOLIDATION_PARAMETERS: cf_chains::btc::ConsolidationParameters =
-	cf_chains::btc::ConsolidationParameters {
+const INITIAL_CONSOLIDATION_PARAMETERS: utxo_selection::ConsolidationParameters =
+	utxo_selection::ConsolidationParameters {
 		consolidation_threshold: 200,
 		consolidation_size: 100,
 	};
@@ -160,7 +160,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn consolidation_parameters)]
 	pub type ConsolidationParameters<T> =
-		StorageValue<_, cf_chains::btc::ConsolidationParameters, ValueQuery>;
+		StorageValue<_, utxo_selection::ConsolidationParameters, ValueQuery>;
 
 	// ARBITRUM CHAIN RELATED ENVIRONMENT ITEMS
 	#[pallet::storage]
@@ -226,8 +226,8 @@ pub mod pallet {
 		BitcoinBlockNumberSetForVault { block_number: cf_chains::btc::BlockNumber },
 		/// The Safe Mode settings for the chain has been updated
 		RuntimeSafeModeUpdated { safe_mode: SafeModeUpdate<T> },
-		/// UTXO consolidation parameters has been updated
-		UtxoConsolidationParametersUpdated { params: cf_chains::btc::ConsolidationParameters },
+		/// Utxo consolidation parameters has been updated
+		UtxoConsolidationParametersUpdated { params: utxo_selection::ConsolidationParameters },
 		/// Arbitrum Initialized: contract addresses have been set, first key activated
 		ArbitrumInitialized,
 	}
@@ -243,7 +243,7 @@ pub mod pallet {
 		/// vault creation transaction was witnessed in. This extrinsic should complete the Polkadot
 		/// initiation process and the vault should rotate successfully.
 		///
-		/// ## Events
+		/// ## Events
 		///
 		/// - [PolkadotVaultCreationCallInitiated](Event::PolkadotVaultCreationCallInitiated)
 		///
@@ -335,7 +335,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::update_consolidation_parameters())]
 		pub fn update_consolidation_parameters(
 			origin: OriginFor<T>,
-			params: cf_chains::btc::ConsolidationParameters,
+			params: utxo_selection::ConsolidationParameters,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
@@ -516,7 +516,7 @@ impl<T: Config> Pallet<T> {
 			UtxoSelectionType::SelectAllForRotation => {
 				let spendable_utxos: Vec<_> = BitcoinAvailableUtxos::<T>::take()
 					.into_iter()
-					.filter(|utxo| utxo.amount > bitcoin_fee_info.fee_for_utxo(utxo))
+					.filter(|utxo| utxo.net_value(&bitcoin_fee_info) > 0u64)
 					.collect();
 
 				if spendable_utxos.is_empty() {
@@ -526,10 +526,11 @@ impl<T: Config> Pallet<T> {
 			},
 			UtxoSelectionType::SelectForConsolidation =>
 				BitcoinAvailableUtxos::<T>::try_mutate(|available_utxos| {
-					let params = Self::consolidation_parameters();
-
-					let utxos_to_consolidate =
-						select_utxos_for_consolidation(available_utxos, &bitcoin_fee_info, params);
+					let utxos_to_consolidate = select_utxos_for_consolidation(
+						available_utxos,
+						&bitcoin_fee_info,
+						Self::consolidation_parameters(),
+					);
 
 					if utxos_to_consolidate.is_empty() {
 						Err(())
@@ -546,9 +547,14 @@ impl<T: Config> Pallet<T> {
 						output_amount +
 							number_of_outputs * fee_per_output_utxo +
 							min_fee_required_per_tx,
+						Some(Self::consolidation_parameters().consolidation_threshold),
 					)
-					.ok_or_else(|| {
-						log::error!("Unable to select desired amount from available utxos.");
+					.map_err(|error| {
+						log::error!(
+							"Unable to select desired amount from available utxos. Error: {:?}",
+							error
+						);
+						error
 					})
 				})
 				.ok()

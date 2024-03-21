@@ -3,7 +3,7 @@ authors = ["Chainflip team <https://github.com/chainflip-io>"]
 build = 'build.rs'
 edition = '2021'
 name = "chainflip-engine"
-version = "1.3.0"
+version = "1.4.0"
 
 [package.metadata.deb]
 depends = "$auto, systemd"
@@ -11,14 +11,14 @@ extended-description = """\
 Chainflip Validator Engine Package"""
 maintainer = "Chainflip Labs GmbH <dev@chainflip.io>"
 maintainer-scripts = "package/"
-name = "chainflip-engine1.2"
+name = "chainflip-engine-1.4"
 priority = "required"
 section = "rust"
-systemd-units = [{ unit-name = "chainflip-engine1.2", enable = false }]
+systemd-units = [{ unit-name = "chainflip-engine-1.4", enable = false }]
 assets = [
   [
     "target/release/chainflip-engine",
-    "usr/bin/chainflip-engine1.2",
+    "usr/bin/chainflip-engine1.3",
     "755",
   ],
 ]

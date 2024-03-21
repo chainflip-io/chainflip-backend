@@ -17,6 +17,7 @@ use jsonrpsee::{
 	server::ServerBuilder,
 };
 use serde::{Deserialize, Serialize};
+use sp_core::U256;
 use std::path::PathBuf;
 use tracing::log;
 
@@ -29,7 +30,7 @@ pub struct BrokerSwapDepositAddress {
 	pub issued_block: BlockNumber,
 	pub channel_id: ChannelId,
 	pub source_chain_expiry_block: NumberOrHex,
-	pub channel_opening_fee: u128,
+	pub channel_opening_fee: U256,
 }
 
 impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
@@ -39,7 +40,7 @@ impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
 			issued_block: value.issued_block,
 			channel_id: value.channel_id,
 			source_chain_expiry_block: NumberOrHex::from(value.source_chain_expiry_block),
-			channel_opening_fee: value.channel_opening_fee,
+			channel_opening_fee: U256::from(value.channel_opening_fee),
 		}
 	}
 }
@@ -142,6 +143,12 @@ pub struct BrokerOptions {
 	)]
 	pub port: u16,
 	#[clap(
+		long = "max_connections",
+		default_value = "100",
+		help = "The maximum number of conncurrent websocket connections to accept."
+	)]
+	pub max_connections: u32,
+	#[clap(
 		long = "state_chain.ws_endpoint",
 		default_value = "ws://localhost:9944",
 		help = "The state chain node's RPC endpoint."
@@ -166,7 +173,10 @@ async fn main() -> anyhow::Result<()> {
 
 	task_scope(|scope| {
 		async move {
-			let server = ServerBuilder::default().build(format!("0.0.0.0:{}", opts.port)).await?;
+			let server = ServerBuilder::default()
+				.max_connections(opts.max_connections)
+				.build(format!("0.0.0.0:{}", opts.port))
+				.await?;
 			let server_addr = server.local_addr()?;
 			let server = server.start(RpcServerImpl::new(scope, opts).await?.into_rpc())?;
 

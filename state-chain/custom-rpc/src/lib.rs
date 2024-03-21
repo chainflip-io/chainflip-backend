@@ -13,6 +13,7 @@ use cf_primitives::{
 	SemVer, SwapId, SwapOutput,
 };
 use cf_utilities::rpc::NumberOrHex;
+use codec::Encode;
 use core::ops::Range;
 use jsonrpsee::{
 	core::{error::SubscriptionClosed, RpcResult},
@@ -35,8 +36,8 @@ use state_chain_runtime::{
 	chainflip::{BlockUpdate, Offence},
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
-		BrokerInfo, CustomRuntimeApi, DispatchErrorWithMessage, FailingWitnessValidators,
-		LiquidityProviderInfo, ValidatorInfo,
+		BrokerInfo, CustomRuntimeApi, DispatchErrorWithMessage, EventFilter,
+		FailingWitnessValidators, LiquidityProviderInfo, ValidatorInfo,
 	},
 	NetworkFee,
 };
@@ -45,6 +46,8 @@ use std::{
 	marker::PhantomData,
 	sync::Arc,
 };
+
+mod type_decoder;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScheduledSwap {
@@ -545,6 +548,18 @@ pub trait CustomApi {
 		hash: state_chain_runtime::Hash,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<FailingWitnessValidators>>;
+
+	#[method(name = "get_events")]
+	fn cf_get_events(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<scale_value::Value>>;
+
+	#[method(name = "get_system_events_encoded")]
+	fn cf_get_system_events_encoded(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<sp_core::Bytes>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -802,7 +817,8 @@ where
 			.client
 			.runtime_api()
 			.cf_asset_balances(self.unwrap_or_best(at), account_id)
-			.map_err(to_rpc_error)?
+			.map_err(to_rpc_error)
+			.and_then(|result| result.map_err(map_dispatch_error))?
 			.into_iter()
 			.map(|(asset, balance)| AssetWithAmount { asset, amount: balance })
 			.collect::<Vec<_>>())
@@ -1333,6 +1349,39 @@ where
 			.runtime_api()
 			.cf_witness_count(self.unwrap_or_best(at), pallet_cf_witnesser::CallHash(hash.into()))
 			.map_err(to_rpc_error)
+	}
+
+	fn cf_get_events(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<scale_value::Value>> {
+		let event_decoder = type_decoder::TypeDecoder::new::<
+			frame_system::EventRecord<state_chain_runtime::RuntimeEvent, state_chain_runtime::Hash>,
+		>();
+		let events = self
+			.client
+			.runtime_api()
+			.cf_get_events(self.unwrap_or_best(at), EventFilter::AllEvents)
+			.map_err(to_rpc_error)?;
+
+		Ok(events
+			.into_iter()
+			.map(|event_record| event_decoder.decode_data(event_record.encode()))
+			.collect::<Vec<_>>())
+	}
+
+	fn cf_get_system_events_encoded(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<sp_core::Bytes>> {
+		Ok(self
+			.client
+			.runtime_api()
+			.cf_get_events(self.unwrap_or_best(at), EventFilter::SystemOnly)
+			.map_err(to_rpc_error)?
+			.into_iter()
+			.map(|event| event.encode().into())
+			.collect::<Vec<_>>())
 	}
 }
 
