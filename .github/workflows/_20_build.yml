@@ -48,7 +48,7 @@ jobs:
       - name: Build chainflip binaries 🏗️
         run: |
           export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:old-engine-dylib
-          RUST_LOG=cargo=debug cargo cf-build-${{ inputs.profile }} --locked --verbose
+          cargo cf-build-${{ inputs.profile }} --locked
           sccache --show-stats
 
       - name: ls directory
