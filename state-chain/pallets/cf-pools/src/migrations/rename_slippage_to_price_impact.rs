@@ -11,13 +11,13 @@ mod old {
 
 impl<T: pallet::Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> Weight {
-		// let price_impact: Option<u32> = old::MaximumRelativeSlippage::<T>::get();
-		// MaximumRelativePriceImpact::<T>::set(price_impact);
+		let price_impact: Option<u32> = old::MaximumRelativeSlippage::<T>::get();
+		MaximumRelativePriceImpact::<T>::set(price_impact);
 		// old::MaximumRelativeSlippage::<T>::move_prefix(
 		// 	b"MaximumRelativeSlippage",
 		// 	b"MaximumRelativePriceImpact",
 		// );
-		move_prefix(b"MaximumRelativeSlippage", b"MaximumRelativePriceImpact");
+		// move_prefix(b"MaximumRelativeSlippage", b"MaximumRelativePriceImpact");
 		Weight::zero()
 	}
 
