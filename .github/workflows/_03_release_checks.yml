@@ -60,3 +60,26 @@ jobs:
       - name: Check changelog 📝
         shell: bash
         run: ./ci/scripts/check_changelog.sh ${{ github.ref_name }}
+
+  check-runtime-spec-version:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Check runtime spec version against Berghain 🕵️‍♂️
+        shell: bash
+        run: ./ci/scripts/check_runtime_spec_version.sh berghain
+
+      - name: Notify on failed bouncer 📢
+        if: failure()
+        env:
+          DISCORD_USERNAME: "WaBouncer"
+          DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_RELEASE }}
+        uses: Ilshidur/action-discord@0c4b27844ba47cb1c7bee539c8eead5284ce9fa9
+        with:
+          args: |
+            ❗️❗️❗️❗️ Hey **${{ github.actor }}**, seems like our CI just took a detour through the land of broken builds. ❗️❗️❗️❗️
+            There was an issue with release checks on branch `${{ github.ref_name }}`
+            🔗 Link to job: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>
+            #️⃣ Tagging: <@&704658689302462605>
