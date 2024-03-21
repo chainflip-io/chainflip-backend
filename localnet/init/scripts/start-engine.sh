@@ -4,9 +4,17 @@
 # e.g. in the case of an upgrade where we run two engines simultaneously.
 
 echo "Starting engine..."
-export DYLD_LIBRARY_PATH=oldVersion
-export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:oldVersion
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:oldVersion
+if [ -n "$DYLD_LIBRARY_PATH" ]; then
+    export DYLD_LIBRARY_PATH="$DYLD_LIBRARY_PATH:old-engine-dylib"
+else
+    export DYLD_LIBRARY_PATH="old-engine-dylib"
+fi
+if [ -n "$LD_LIBRARY_PATH" ]; then
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:old-engine-dylib"
+else
+    export LD_LIBRARY_PATH="old-engine-dylib"
+fi
+
 echo "DYLD_LIBRARY_PATH/LD_LIBRARY_PATH to find the engine dylib: $DYLD_LIBRARY_PATH"
 
 set -e
