@@ -1,13 +1,13 @@
 use ethers::prelude::*;
 
-use crate::eth::rpc::{
+use crate::evm::rpc::{
 	address_checker::{AddressCheckerRpcApi, *},
-	EthRpcApi,
+	EvmRpcApi,
 };
 
-use super::EthRetryRpcClient;
+use super::EvmRetryRpcClient;
 
-use crate::eth::retry_rpc::RequestLog;
+use crate::evm::retry_rpc::RequestLog;
 
 #[async_trait::async_trait]
 pub trait AddressCheckerRetryRpcApi {
@@ -27,7 +27,7 @@ pub trait AddressCheckerRetryRpcApi {
 }
 
 #[async_trait::async_trait]
-impl<Rpc: EthRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApi for EthRetryRpcClient<Rpc> {
+impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApi for EvmRetryRpcClient<Rpc> {
 	async fn address_states(
 		&self,
 		block_hash: H256,
