@@ -51,6 +51,8 @@ use std::{
 };
 use utilities::{cached_stream::CachedStream, metrics, task_scope::task_scope};
 
+use utilities::logging::ErrorType;
+
 pub fn settings_and_run_main(
 	settings_strings: Vec<String>,
 	start_from: state_chain_runtime::BlockNumber,
@@ -80,7 +82,9 @@ pub fn settings_and_run_main(
 
 	match result {
 		Ok(()) => ExitStatus { status_code: SUCCESS, at_block: NO_START_FROM },
-		Err(exit_status) => exit_status,
+		Err(ErrorType::ExitStatus(exit_status)) => exit_status,
+		Err(ErrorType::Panic) =>
+			ExitStatus { status_code: engine_upgrade_utils::PANIC, at_block: NO_START_FROM },
 	}
 }
 

@@ -3,6 +3,12 @@ use std::{
 	mem::size_of,
 };
 
+// !!!!!!! These constants are used to check the versions across several crates and build scripts.
+// !!!!!!! These should be the first things changed when bumping the version, as it will check the
+// rest of the places the version needs changing on build.
+pub const OLD_VERSION: &str = "1.3.0";
+pub const NEW_VERSION: &str = "1.4.0";
+
 pub use std::ffi::c_char;
 pub const NO_START_FROM: u32 = 0;
 

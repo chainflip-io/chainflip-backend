@@ -6,10 +6,12 @@ use proc_macro2::Span;
 use quote::quote;
 use syn::{parse_macro_input, ItemFn};
 
+use engine_upgrade_utils::{NEW_VERSION, OLD_VERSION};
+
 /// Generates a C compatible entrypoint namespacing with the version suffix so that the no_mangle
 /// names do not conflict when two shared libraries are used in the same process.
 #[proc_macro_attribute]
-pub fn cfe_entrypoint(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn cfe_entrypoint(_attrs: TokenStream, item: TokenStream) -> TokenStream {
 	// Parse the input function
 	let input_fn = parse_macro_input!(item as ItemFn);
 
@@ -38,11 +40,9 @@ pub fn cfe_entrypoint(_attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
-pub fn engine_runner(input: TokenStream) -> TokenStream {
-	let input_str = input.to_string();
-	let mut versions = input_str
-		.split(',')
-		.map(|s| s.trim().trim_matches('"'))
+pub fn engine_runner(_input: TokenStream) -> TokenStream {
+	let mut versions = [OLD_VERSION, NEW_VERSION]
+		.iter()
 		.map(|i| i.replace('.', "_"))
 		.map(|version| {
 			(syn::Ident::new(&format!("cfe_entrypoint_v{}", version), Span::call_site()), version)

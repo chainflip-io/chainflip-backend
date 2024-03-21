@@ -9,6 +9,13 @@ pub struct LoggingSettings {
 	pub command_server_port: Port,
 }
 
+use engine_upgrade_utils::ExitStatus;
+
+pub enum ErrorType {
+	ExitStatus(ExitStatus),
+	Panic,
+}
+
 #[macro_export]
 macro_rules! print_start_and_end {
 	(async $e:expr) => {
