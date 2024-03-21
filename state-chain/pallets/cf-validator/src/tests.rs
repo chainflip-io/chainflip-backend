@@ -12,8 +12,12 @@ use cf_traits::{
 	AccountRoleRegistry, SafeMode, SetSafeMode,
 };
 use cf_utilities::success_threshold_from_share_count;
-use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
+use frame_support::{
+	assert_noop, assert_ok,
+	traits::{HandleLifetime, OriginTrait},
+};
 use frame_system::RawOrigin;
+use sp_runtime::testing::UintAuthorityId;
 
 const ALICE: u64 = 100;
 const BOB: u64 = 101;
@@ -508,14 +512,34 @@ fn highest_bond() {
 #[test]
 fn test_setting_vanity_names_() {
 	new_test_ext().then_execute_with_checks(|| {
-		let validators: &[u64] = &[123, 456, 789, 101112];
-		assert_ok!(ValidatorPallet::set_vanity_name(RuntimeOrigin::signed(validators[0]), "Test Validator 1".as_bytes().to_vec()));
-		assert_ok!(ValidatorPallet::set_vanity_name(RuntimeOrigin::signed(validators[2]), "Test Validator 2".as_bytes().to_vec()));
-		let vanity_names = crate::VanityNames::<Test>::get();
-		assert_eq!(sp_std::str::from_utf8(vanity_names.get(&validators[0]).unwrap()).unwrap(), "Test Validator 1");
-		assert_eq!(sp_std::str::from_utf8(vanity_names.get(&validators[2]).unwrap()).unwrap(), "Test Validator 2");
-		assert_noop!(ValidatorPallet::set_vanity_name(RuntimeOrigin::signed(validators[0]), [0xfe, 0xff].to_vec()), crate::Error::<Test>::InvalidCharactersInName);
-		assert_noop!(ValidatorPallet::set_vanity_name(RuntimeOrigin::signed(validators[0]), "Validator Name too longggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg".as_bytes().to_vec()), crate::Error::<Test>::NameTooLong);
+		// ALICE has already been added.
+		assert_eq!(crate::VanityNames::<Test>::get().len(), 1);
+
+		for (i, account_id) in [123, 456, 789, 101112].iter().enumerate() {
+			let vanity = format!("Test Account {i}");
+			assert_ok!(ValidatorPallet::set_vanity_name(
+				RuntimeOrigin::signed(*account_id),
+				vanity.clone().into_bytes()
+			));
+			assert_eq!(
+				sp_std::str::from_utf8(crate::VanityNames::<Test>::get().get(account_id).unwrap()).unwrap(),
+				vanity
+			);
+		}
+
+		assert_eq!(crate::VanityNames::<Test>::get().len(), 5);
+
+		assert_noop!(
+			ValidatorPallet::set_vanity_name(RuntimeOrigin::signed(1), [0xfe, 0xff].to_vec()),
+			crate::Error::<Test>::InvalidCharactersInName
+		);
+		assert_noop!(
+			ValidatorPallet::set_vanity_name(
+				RuntimeOrigin::signed(1),
+				"Validator Name too longggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg".as_bytes().to_vec()
+			),
+			crate::Error::<Test>::NameTooLong
+		);
 	});
 }
 
@@ -1174,5 +1198,45 @@ fn qualification_by_cfe_version() {
 			}
 		));
 		assert!(!QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
+	});
+}
+
+#[test]
+fn validator_registration_and_deregistration() {
+	new_test_ext().execute_with(|| {
+		// Register as validator
+		assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(ALICE),));
+		frame_system::Provider::<Test>::created(&ALICE).unwrap(); // session keys requires a provider ref.
+		assert!(!pallet_session::NextKeys::<Test>::contains_key(ALICE));
+		assert_ok!(ValidatorPallet::set_keys(
+			RuntimeOrigin::signed(ALICE),
+			MockSessionKeys::from(UintAuthorityId(ALICE)),
+			Default::default(),
+		));
+		assert_ok!(ValidatorPallet::set_vanity_name(
+			RuntimeOrigin::signed(ALICE),
+			b"ALICE".to_vec()
+		));
+
+		assert!(VanityNames::<Test>::get().contains_key(&ALICE));
+		assert!(pallet_session::NextKeys::<Test>::contains_key(ALICE));
+
+		// Deregistration is blocked while the validator is a bidder.
+		MockBidderProvider::set_bids(vec![Bid { bidder_id: ALICE, amount: 100 }]);
+		assert_noop!(
+			ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(ALICE),),
+			Error::<Test>::StillBidding
+		);
+
+		// Stop bidding, deregistration should be possible.
+		MockBidderProvider::set_bids(vec![]);
+		assert_ok!(ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(ALICE),));
+
+		// State should be cleaned up.
+		assert!(!pallet_session::NextKeys::<Test>::contains_key(ALICE));
+		assert!(VanityNames::<Test>::get().contains_key(&ALICE));
+		// Vanity name persists until the acocunt is killed.
+		frame_system::Provider::<Test>::killed(&ALICE).unwrap();
+		assert!(!VanityNames::<Test>::get().contains_key(&ALICE));
 	});
 }

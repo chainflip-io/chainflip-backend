@@ -35,6 +35,7 @@ pub trait WeightInfo {
 	fn request_liquidity_deposit_address() -> Weight;
 	fn withdraw_asset() -> Weight;
 	fn register_lp_account() -> Weight;
+	fn deregister_lp_account() -> Weight;
 	fn register_liquidity_refund_address() -> Weight;
 }
 
@@ -94,6 +95,15 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:1)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: Some(33), added: 2508, mode: `MaxEncodedLen`)
 	fn register_lp_account() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `358`
+		//  Estimated: `3498`
+		// Minimum execution time: 17_098_000 picoseconds.
+		Weight::from_parts(17_244_000, 3498)
+			.saturating_add(T::DbWeight::get().reads(2_u64))
+			.saturating_add(T::DbWeight::get().writes(1_u64))
+	}
+	fn deregister_lp_account() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `358`
 		//  Estimated: `3498`
@@ -172,6 +182,15 @@ impl WeightInfo for () {
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:1)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: Some(33), added: 2508, mode: `MaxEncodedLen`)
 	fn register_lp_account() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `358`
+		//  Estimated: `3498`
+		// Minimum execution time: 17_098_000 picoseconds.
+		Weight::from_parts(17_244_000, 3498)
+			.saturating_add(RocksDbWeight::get().reads(2_u64))
+			.saturating_add(RocksDbWeight::get().writes(1_u64))
+	}
+	fn deregister_lp_account() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `358`
 		//  Estimated: `3498`

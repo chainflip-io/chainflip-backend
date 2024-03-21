@@ -294,6 +294,9 @@ pub mod pallet {
 
 		/// The account is already bound to an executor address.
 		ExecutorAddressAlreadyBound,
+
+		/// The account cannot be reaped before it is unregstered.
+		AccountMustBeUnregistered,
 	}
 
 	#[pallet::call]
@@ -456,6 +459,12 @@ pub mod pallet {
 			// Update the account balance.
 			if redeem_amount > Zero::zero() {
 				T::Flip::try_initiate_redemption(&account_id, redeem_amount)?;
+				if T::Flip::balance(&account_id).is_zero() {
+					ensure!(
+						T::AccountRoleRegistry::is_unregistered(&account_id),
+						Error::<T>::AccountMustBeUnregistered
+					);
+				}
 
 				// Send the transaction.
 				let contract_expiry =
@@ -844,6 +853,10 @@ impl<T: Config> BidderProvider for Pallet<T> {
 				}
 			})
 			.collect()
+	}
+
+	fn is_bidder(validator_id: &Self::ValidatorId) -> bool {
+		ActiveBidder::<T>::get(validator_id)
 	}
 }
 

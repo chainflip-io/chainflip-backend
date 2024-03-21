@@ -395,7 +395,7 @@ impl pallet_cf_lp::Config for Runtime {
 impl pallet_cf_account_roles::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type WeightInfo = pallet_cf_account_roles::weights::PalletWeight<Runtime>;
+	type WeightInfo = ();
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
@@ -479,12 +479,11 @@ impl frame_system::Config for Runtime {
 	/// What to do if an account is fully reaped from the system.
 	type OnKilledAccount = (
 		pallet_cf_flip::BurnFlipAccount<Self>,
-		pallet_cf_validator::DeletePeerMapping<Self>,
-		pallet_cf_validator::DeleteVanityName<Self>,
 		GrandpaOffenceReporter<Self>,
 		Funding,
 		AccountRoles,
 		Reputation,
+		pallet_cf_validator::RemoveVanityNames<Self>,
 	);
 	/// The data to be stored in an account.
 	type AccountData = ();
@@ -920,7 +919,7 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	PalletExecutionOrder,
-	PalletMigrations,
+	AllMigrations,
 >;
 
 // NOTE: This should be a temporary workaround. When paritytech/polkadot-sdk#2560 is merged into our
@@ -933,7 +932,7 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	PalletExecutionOrder,
-	PalletMigrations,
+	AllMigrations,
 	AllPalletsWithoutSystem,
 >;
 
@@ -988,15 +987,18 @@ pub type PalletExecutionOrder = (
 	LiquidityPools,
 );
 
-// Pallet Migrations for each pallet.
-// We use the executive pallet because the `pre_upgrade` and `post_upgrade` hooks are noops
-// for tuple migrations (like these).
-type PalletMigrations = (
+/// Contains:
+/// - The VersionUpdate migration. Don't remove this.
+/// - Individual pallet migrations. Don't remove these unless there's a good reason. Prefer to
+///   disbable these at the pallet level.
+/// - Other migrations: remove these if they are no longer needed.
+type AllMigrations = (
 	// DO NOT REMOVE `VersionUpdate`. THIS IS REQUIRED TO UPDATE THE VERSION FOR THE CFES EVERY
 	// UPGRADE
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	pallet_cf_environment::migrations::PalletMigration<Runtime>,
 	pallet_cf_funding::migrations::PalletMigration<Runtime>,
+	pallet_cf_account_roles::migrations::PalletMigration<Runtime>,
 	// pallet_cf_validator::migrations::PalletMigration<Runtime>,
 	pallet_grandpa::migrations::MigrateV4ToV5<Runtime>,
 	pallet_cf_governance::migrations::PalletMigration<Runtime>,
@@ -1024,6 +1026,7 @@ type PalletMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	// pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, ArbitrumInstance>,
+	// pallet_cf_pools::migrations::PalletMigration<Runtime>,
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 	// TODO: After the Abitrum release, remove arbitrum_integration migrations and un-comment the
 	// Arbitrum-specific pallet migrations.
@@ -1033,9 +1036,9 @@ type PalletMigrations = (
 		9,
 		10,
 	>,
-	// pallet_cf_pools::migrations::PalletMigration<Runtime>,
-	migrations::housekeeping::Migration,
 	FlipToBurnMigration,
+	migrations::housekeeping::Migration,
+	migrations::reap_old_accounts::Migration,
 );
 
 pub struct FlipToBurnMigration;
@@ -1134,7 +1137,6 @@ mod benches {
 		[pallet_cf_broadcast, EthereumBroadcaster]
 		[pallet_cf_chain_tracking, EthereumChainTracking]
 		[pallet_cf_swapping, Swapping]
-		[pallet_cf_account_roles, AccountRoles]
 		[pallet_cf_ingress_egress, EthereumIngressEgress]
 		[pallet_cf_lp, LiquidityProvider]
 		[pallet_cf_pools, LiquidityPools]
