@@ -433,6 +433,7 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Ord + Clone> PoolState<LiquidityPr
 		})
 	}
 
+	// TODO: Can be deleted after migration.
 	pub fn migrate(
 		old: old::PoolState<(LiquidityProvider, OrderId)>,
 		transformed_positions: PoolPairsMap<
@@ -448,6 +449,15 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Ord + Clone> PoolState<LiquidityPr
 			total_swap_inputs: old.total_swap_inputs,
 			total_swap_outputs: old.total_swap_outputs,
 		}
+	}
+
+	pub fn is_state_migrated(self, old: &old::PoolState<(LiquidityProvider, OrderId)>) -> bool {
+		self.fee_hundredth_pips == old.fee_hundredth_pips &&
+			self.next_pool_instance == old.next_pool_instance &&
+			self.fixed_pools.encode() == old.fixed_pools.encode() &&
+			self.total_fees_earned == old.total_fees_earned &&
+			self.total_swap_inputs == old.total_swap_inputs &&
+			self.total_swap_outputs == old.total_swap_outputs
 	}
 
 	/// Creates an iterator over all positions

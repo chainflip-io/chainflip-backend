@@ -8,7 +8,6 @@ use frame_support::traits::OnRuntimeUpgrade;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
 
 use crate::common::Pairs;
-use cf_amm::common::price_at_tick;
 
 #[cfg(feature = "try-runtime")]
 use frame_support::pallet_prelude::DispatchError;
@@ -48,39 +47,41 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 				(T::AccountId, OrderId, Tick, Tick),
 				RangeOrdersPosition,
 			> = BTreeMap::new();
+
 			#[allow(clippy::type_complexity)]
 			let mut transformed_limit_orders: BTreeMap<
 				Pairs,
 				BTreeMap<(T::AccountId, OrderId, SqrtPriceQ64F96), LimitOrdersPosition>,
 			> = BTreeMap::new();
-			pool.range_orders_cache.iter().for_each(|(lp, range_orders)| {
-				range_orders.iter().for_each(|(id, tick_range)| {
-					if let Some(positions) = pool.pool_state.range_orders.positions.get(&(
-						(lp.clone(), *id),
-						tick_range.start,
-						tick_range.end,
-					)) {
-						transformed_range_order_positions.insert(
-							(lp.clone(), *id, tick_range.start, tick_range.end),
-							positions.clone(),
-						);
-					}
-				});
+
+			pool.pool_state.limit_orders.positions.base.iter().for_each(|(key, value)| {
+				let price = key.0;
+				let lp = key.1 .0.clone();
+				let id = key.1 .1;
+				transformed_limit_orders
+					.entry(Pairs::Base)
+					.or_insert_with(BTreeMap::new)
+					.insert((lp.clone(), id, price), value.clone());
 			});
-			pool.limit_orders_cache.as_ref().into_iter().for_each(|(assets, limit_orders)| {
-				limit_orders.iter().for_each(|(lp, limit_orders)| {
-					let mut orders: BTreeMap<_, _> = BTreeMap::new();
-					limit_orders.iter().for_each(|(id, tick)| {
-						let price = price_at_tick(*tick).expect("a valid price tick");
-						if let Some(positions) = pool.pool_state.limit_orders.positions[assets]
-							.get(&(price, (lp.clone(), *id)))
-						{
-							orders.insert((lp.clone(), *id, price), positions.clone());
-						}
-					});
-					transformed_limit_orders.insert(assets, orders);
-				})
+
+			pool.pool_state.limit_orders.positions.quote.iter().for_each(|(key, value)| {
+				let price = key.0;
+				let lp = key.1 .0.clone();
+				let id = key.1 .1;
+				transformed_limit_orders
+					.entry(Pairs::Quote)
+					.or_insert_with(BTreeMap::new)
+					.insert((lp.clone(), id, price), value.clone());
 			});
+
+			pool.pool_state.range_orders.positions.iter().for_each(|(key, value)| {
+				let lp = key.0 .0.clone();
+				let id = key.0 .1;
+				let start = key.1;
+				let end = key.2;
+				transformed_range_order_positions.insert((lp, id, start, end), value.clone());
+			});
+
 			let no_orders: BTreeMap<(T::AccountId, OrderId, SqrtPriceQ64F96), LimitOrdersPosition> =
 				BTreeMap::new();
 			Pools::<T>::insert(
@@ -129,10 +130,20 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 		Pools::<T>::iter().for_each(|(asset_pair, pool)| {
 			let old_pool = old_pool_state.get(&asset_pair).expect("pool should exist in old state");
-			let new_range_orders_state = pool.pool_state.range_orders;
-			let new_limit_orders_state = pool.pool_state.limit_orders;
-			let old_range_orders_state = &old_pool.pool_state.range_orders;
+			let new_range_orders_state = pool.pool_state.range_orders.clone();
+			let new_limit_orders_state = pool.pool_state.limit_orders.clone();
+			let old_range_orders_state = &old_pool.clone().pool_state.range_orders;
 			let old_limit_orders_state = &old_pool.pool_state.limit_orders;
+
+			assert!(
+				pool.pool_state.range_orders.is_state_migrated(old_range_orders_state),
+				"Range orders state should be migrated"
+			);
+
+			assert!(
+				pool.pool_state.limit_orders.is_state_migrated(old_limit_orders_state),
+				"Limit orders state should be migrated"
+			);
 
 			assert_eq!(
 				new_range_orders_state.positions.len(),

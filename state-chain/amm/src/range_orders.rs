@@ -502,6 +502,7 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityPr
 		})
 	}
 
+	// TODO: Can be deleted after migration.
 	pub fn migrate(
 		old: old::PoolState<(LiquidityProvider, OrderId)>,
 		new_positions: BTreeMap<(LiquidityProvider, OrderId, Tick, Tick), Position>,
@@ -518,6 +519,19 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityPr
 			total_swap_inputs: old.total_swap_inputs,
 			total_swap_outputs: old.total_swap_outputs,
 		}
+	}
+
+	// TODO: Delete after migration.
+	pub fn is_state_migrated(&self, old: &old::PoolState<(LiquidityProvider, OrderId)>) -> bool {
+		self.fee_hundredth_pips == old.fee_hundredth_pips &&
+			self.current_sqrt_price == old.current_sqrt_price &&
+			self.current_tick == old.current_tick &&
+			self.current_liquidity == old.current_liquidity &&
+			self.global_fee_growth == old.global_fee_growth &&
+			self.liquidity_map.encode() == old.liquidity_map.encode() &&
+			self.total_fees_earned == old.total_fees_earned &&
+			self.total_swap_inputs == old.total_swap_inputs &&
+			self.total_swap_outputs == old.total_swap_outputs
 	}
 
 	pub(super) fn collect_all(
