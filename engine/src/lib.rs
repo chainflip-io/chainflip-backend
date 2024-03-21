@@ -70,7 +70,7 @@ pub fn settings_and_run_main(
 		},
 	};
 
-	let result = tokio::runtime::Builder::new_current_thread()
+	match tokio::runtime::Builder::new_current_thread()
 		.enable_all()
 		.build()
 		.unwrap()
@@ -78,9 +78,7 @@ pub fn settings_and_run_main(
 			// Note: the greeting should only be printed in normal mode (i.e. not for short-lived
 			// commands like `--version`), so we execute it only after the settings have been parsed.
 			utilities::print_start_and_end!(async run_main(settings, if start_from == NO_START_FROM { None } else { Some(start_from) }))
-		});
-
-	match result {
+		}) {
 		Ok(()) => ExitStatus { status_code: SUCCESS, at_block: NO_START_FROM },
 		Err(ErrorType::ExitStatus(exit_status)) => exit_status,
 		Err(ErrorType::Panic) =>
