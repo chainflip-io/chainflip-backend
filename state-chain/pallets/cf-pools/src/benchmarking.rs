@@ -253,7 +253,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn set_maximum_relative_slippage() {
-		let call = Call::<T>::set_maximum_relative_slippage { ticks: Some(1000) };
+		let call = Call::<T>::set_maximum_relative_price_impact { ticks: Some(1000) };
 
 		#[block]
 		{

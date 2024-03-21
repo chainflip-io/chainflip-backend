@@ -119,7 +119,7 @@ impl<T> AskBidMap<T> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -1033,7 +1033,8 @@ impl<T: Config> SwappingApi for Pallet<T> {
 					core::cmp::min(core::cmp::max(tick_before, swap_tick), tick_after)
 				};
 
-				if let Some(maximum_relative_price_impact) = MaximumRelativePriceImpact::<T>::get() {
+				if let Some(maximum_relative_price_impact) = MaximumRelativePriceImpact::<T>::get()
+				{
 					if core::cmp::min(
 						bounded_swap_tick.abs_diff(tick_after),
 						bounded_swap_tick.abs_diff(tick_before),

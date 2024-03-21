@@ -1184,23 +1184,28 @@ fn test_maximum_slippage_limits() {
 
 		test_swaps(u128::MAX);
 
-		assert_ok!(
-			LiquidityPools::set_maximum_relative_slippage(RuntimeOrigin::root(), Some(954),)
-		);
+		assert_ok!(LiquidityPools::set_maximum_relative_price_impact(
+			RuntimeOrigin::root(),
+			Some(954),
+		));
 
 		test_swaps(10500);
 
-		assert_ok!(LiquidityPools::set_maximum_relative_slippage(RuntimeOrigin::root(), None,));
+		assert_ok!(LiquidityPools::set_maximum_relative_price_impact(RuntimeOrigin::root(), None,));
 
 		test_swaps(u128::MAX);
 
-		assert_ok!(LiquidityPools::set_maximum_relative_slippage(RuntimeOrigin::root(), Some(10),));
+		assert_ok!(LiquidityPools::set_maximum_relative_price_impact(
+			RuntimeOrigin::root(),
+			Some(10),
+		));
 
 		test_swaps(300);
 
-		assert_ok!(
-			LiquidityPools::set_maximum_relative_slippage(RuntimeOrigin::root(), Some(300),)
-		);
+		assert_ok!(LiquidityPools::set_maximum_relative_price_impact(
+			RuntimeOrigin::root(),
+			Some(300),
+		));
 
 		test_swaps(3500);
 	});
