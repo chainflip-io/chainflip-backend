@@ -228,7 +228,7 @@ impl From<SwapOutput> for RpcSwapOutput {
 	}
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Copy)]
 pub struct RpcPoolInfo {
 	#[serde(flatten)]
 	pub pool_info: PoolInfo,
@@ -243,7 +243,7 @@ impl From<PoolInfo> for RpcPoolInfo {
 
 #[derive(Serialize, Deserialize)]
 pub struct PoolsEnvironment {
-	pub fees: HashMap<ForeignChain, HashMap<cf_chains::assets::any::OldAsset, Option<RpcPoolInfo>>>,
+	pub fees: any::AssetMap<Option<RpcPoolInfo>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -1111,19 +1111,15 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<PoolsEnvironment> {
-		let mut fees = HashMap::new();
-
-		for asset in Asset::all() {
-			if asset == Asset::Usdc {
-				continue
-			}
-
-			let info = self.cf_pool_info(asset, Asset::Usdc, at).ok().map(Into::into);
-
-			fees.entry(asset.into()).or_insert_with(HashMap::new).insert(asset.into(), info);
-		}
-
-		Ok(PoolsEnvironment { fees })
+		Ok(PoolsEnvironment {
+			fees: any::AssetMap::from_fn(|asset| {
+				if asset == Asset::Usdc {
+					None
+				} else {
+					self.cf_pool_info(asset, Asset::Usdc, at).ok().map(Into::into)
+				}
+			}),
+		})
 	}
 
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment> {
@@ -1584,24 +1580,28 @@ mod test {
 				redemption_tax: 0u32.into(),
 				minimum_funding_amount: 0u32.into(),
 			},
-			pools: PoolsEnvironment {
-				fees: HashMap::from([(
-					ForeignChain::Ethereum,
-					HashMap::from([(
-						Asset::Flip.into(),
-						Some(
-							PoolInfo {
-								limit_order_fee_hundredth_pips: 0,
-								range_order_fee_hundredth_pips: 100,
-								range_order_total_fees_earned: Default::default(),
-								limit_order_total_fees_earned: Default::default(),
-								range_total_swap_inputs: Default::default(),
-								limit_total_swap_inputs: Default::default(),
-							}
-							.into(),
-						),
-					)]),
-				)]),
+			pools: {
+				let pool_info: RpcPoolInfo = PoolInfo {
+					limit_order_fee_hundredth_pips: 0,
+					range_order_fee_hundredth_pips: 100,
+					range_order_total_fees_earned: Default::default(),
+					limit_order_total_fees_earned: Default::default(),
+					range_total_swap_inputs: Default::default(),
+					limit_total_swap_inputs: Default::default(),
+				}
+				.into();
+				PoolsEnvironment {
+					fees: any::AssetMap {
+						eth: eth::AssetMap {
+							eth: None,
+							usdc: None,
+							flip: Some(pool_info),
+							usdt: Some(pool_info),
+						},
+						btc: btc::AssetMap { btc: Some(pool_info) },
+						dot: dot::AssetMap { dot: Some(pool_info) },
+					},
+				}
 			},
 		};
 
