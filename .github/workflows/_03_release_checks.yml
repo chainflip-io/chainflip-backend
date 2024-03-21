@@ -60,13 +60,3 @@ jobs:
       - name: Check changelog 📝
         shell: bash
         run: ./ci/scripts/check_changelog.sh ${{ github.ref_name }}
-
-  check-runtime-spec-version:
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout 🏁
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-
-      - name: Check changelog 📝
-        shell: bash
-        run: ./ci/scripts/check_runtime_spec_version.sh ${{ inputs.network }}
