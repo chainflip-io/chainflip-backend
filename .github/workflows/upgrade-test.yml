@@ -255,12 +255,12 @@ jobs:
           path: |
             /tmp/chainflip/logs/try-runtime/*.log
 
-      - name: Upload Snapshot 💾
+      - name: Upload Snapshots 💾
         if: failure()
         continue-on-error: true
         uses: actions/upload-artifact@v3
         with:
-          name: failure-snapshot
+          name: failure-snapshots
           path: |
             /tmp/chainflip/snapshots/*.snap
 
