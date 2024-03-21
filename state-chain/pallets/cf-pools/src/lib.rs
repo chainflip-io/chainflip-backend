@@ -291,7 +291,7 @@ pub mod pallet {
 
 	/// Maximum relative price impact for a single swap, measured in number of ticks.
 	#[pallet::storage]
-	pub(super) type MaximumRelativePriceImpact<T: Config> = StorageValue<_, u32, OptionQuery>;
+	pub(super) type MaximumPriceImpact<T: Config> = StorageValue<_, u32, OptionQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -974,7 +974,7 @@ pub mod pallet {
 			ticks: Option<u32>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			MaximumRelativePriceImpact::<T>::set(ticks);
+			MaximumPriceImpact::<T>::set(ticks);
 			Ok(())
 		}
 	}
@@ -1033,8 +1033,7 @@ impl<T: Config> SwappingApi for Pallet<T> {
 					core::cmp::min(core::cmp::max(tick_before, swap_tick), tick_after)
 				};
 
-				if let Some(maximum_relative_price_impact) = MaximumRelativePriceImpact::<T>::get()
-				{
+				if let Some(maximum_relative_price_impact) = MaximumPriceImpact::<T>::get() {
 					if core::cmp::min(
 						bounded_swap_tick.abs_diff(tick_after),
 						bounded_swap_tick.abs_diff(tick_before),

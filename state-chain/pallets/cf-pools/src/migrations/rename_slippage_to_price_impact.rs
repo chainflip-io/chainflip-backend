@@ -13,12 +13,9 @@ mod old {
 impl<T: pallet::Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> Weight {
 		let price_impact: Option<u32> = old::MaximumRelativeSlippage::<T>::get();
-		MaximumRelativePriceImpact::<T>::set(price_impact);
-		// old::MaximumRelativeSlippage::<T>::move_prefix(
-		// 	b"MaximumRelativeSlippage",
-		// 	b"MaximumRelativePriceImpact",
-		// );
-		// move_prefix(b"MaximumRelativeSlippage", b"MaximumRelativePriceImpact");
+		MaximumPriceImpact::<T>::set(price_impact);
+		old::MaximumRelativeSlippage::<T>::kill();
+
 		Weight::zero()
 	}
 
@@ -35,7 +32,7 @@ impl<T: pallet::Config> OnRuntimeUpgrade for Migration<T> {
 			Option::<u32>::decode(&mut &state[..]).expect("Pre-migration should encode a u32.");
 
 		ensure!(
-			MaximumRelativePriceImpact::<T>::get() == slippage,
+			MaximumPriceImpact::<T>::get() == slippage,
 			"DepositChannelLookup migration failed."
 		);
 
@@ -61,7 +58,6 @@ mod migration_tests {
 				crate::migrations::rename_slippage_to_price_impact::Migration::<Test>::pre_upgrade(
 				)
 				.unwrap();
-			println!("{:?}", old::MaximumRelativeSlippage::<Test>::get());
 			// Perform runtime migration.
 			crate::migrations::rename_slippage_to_price_impact::Migration::<Test>::on_runtime_upgrade();
 
@@ -72,8 +68,7 @@ mod migration_tests {
 			.unwrap();
 
 			// Verify data is correctly migrated into new storage.
-			let price_impact = MaximumRelativePriceImpact::<Test>::get();
-			println!("{:?}", price_impact);
+			let price_impact = MaximumPriceImpact::<Test>::get();
 			assert!(price_impact.is_some());
 
 			assert_eq!(price_impact.unwrap(), 100);
