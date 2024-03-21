@@ -57,6 +57,7 @@ fn account_deletion_removes_relevant_storage_items() {
 			pallet_cf_funding::Error::<Runtime>::AccountMustBeUnregistered
 		);
 
+		network::Cli::stop_bidding(&backup_node);
 		network::Cli::deregister_as_validator(&backup_node);
 
 		network::Cli::redeem(

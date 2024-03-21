@@ -115,6 +115,11 @@ impl Cli {
 	}
 
 	#[track_caller]
+	pub fn stop_bidding(account: &NodeId) {
+		assert_ok!(Funding::stop_bidding(RuntimeOrigin::signed(account.clone())));
+	}
+
+	#[track_caller]
 	pub fn redeem(
 		account: &NodeId,
 		amount: RedemptionAmount<FlipBalance>,

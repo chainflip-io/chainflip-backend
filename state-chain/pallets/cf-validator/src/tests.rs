@@ -12,8 +12,12 @@ use cf_traits::{
 	AccountRoleRegistry, SafeMode, SetSafeMode,
 };
 use cf_utilities::success_threshold_from_share_count;
-use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
+use frame_support::{
+	assert_noop, assert_ok,
+	traits::{HandleLifetime, OriginTrait},
+};
 use frame_system::RawOrigin;
+use sp_runtime::testing::UintAuthorityId;
 
 const ALICE: u64 = 100;
 const BOB: u64 = 101;
@@ -1194,5 +1198,45 @@ fn qualification_by_cfe_version() {
 			}
 		));
 		assert!(!QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
+	});
+}
+
+#[test]
+fn validator_registration_and_deregistration() {
+	new_test_ext().execute_with(|| {
+		// Register as validator
+		assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(ALICE),));
+		frame_system::Provider::<Test>::created(&ALICE).unwrap(); // session keys requires a provider ref.
+		assert!(!pallet_session::NextKeys::<Test>::contains_key(ALICE));
+		assert_ok!(ValidatorPallet::set_keys(
+			RuntimeOrigin::signed(ALICE),
+			MockSessionKeys::from(UintAuthorityId(ALICE)),
+			Default::default(),
+		));
+		assert_ok!(ValidatorPallet::set_vanity_name(
+			RuntimeOrigin::signed(ALICE),
+			b"ALICE".to_vec()
+		));
+
+		assert!(VanityNames::<Test>::get().contains_key(&ALICE));
+		assert!(pallet_session::NextKeys::<Test>::contains_key(ALICE));
+
+		// Deregistration is blocked while the validator is a bidder.
+		MockBidderProvider::set_bids(vec![Bid { bidder_id: ALICE, amount: 100 }]);
+		assert_noop!(
+			ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(ALICE),),
+			Error::<Test>::StillBidding
+		);
+
+		// Stop bidding, deregistration should be possible.
+		MockBidderProvider::set_bids(vec![]);
+		assert_ok!(ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(ALICE),));
+
+		// State should be cleaned up.
+		assert!(!pallet_session::NextKeys::<Test>::contains_key(ALICE));
+		assert!(VanityNames::<Test>::get().contains_key(&ALICE));
+		// Vanity name persists until the acocunt is killed.
+		frame_system::Provider::<Test>::killed(&ALICE).unwrap();
+		assert!(!VanityNames::<Test>::get().contains_key(&ALICE));
 	});
 }
