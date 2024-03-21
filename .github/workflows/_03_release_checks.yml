@@ -74,7 +74,7 @@ jobs:
   notify-discord-on-failure:
     runs-on: ubuntu-22.04
     needs: [check-version, check-changelog, check-runtime-spec-version]
-    if: ${{ failure() }}
+    if: failure()
     steps:
       - name: Notify on failed bouncer 📢
         env:
