@@ -51,23 +51,31 @@ jobs:
 
       - name: Build chainflip binaries 🏗️
         run: |
-          export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:oldVersion
-          cargo cf-build-${{ inputs.profile }} --locked
+          export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:old-engine-dylib
+          RUST_LOG=cargo=debug cargo cf-build-${{ inputs.profile }} --locked --verbose
+          sccache --show-stats
 
-      - name: Upload binary artifacts 📤
+      - name: ls directory
+        run: |
+          ls -la ./target/${{ inputs.binary-subdir }}
+
+      - name: Upload binary artifacts
         uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
+        
         with:
           name: ${{ inputs.upload-name }}-ubuntu-${{ matrix.ubuntu_version }}
           path: |
             ./target/${{ inputs.binary-subdir }}/chainflip-node
-            ./target/${{ inputs.binary-subdir }}/chainflip-engine
             ./target/${{ inputs.binary-subdir }}/chainflip-cli
             ./target/${{ inputs.binary-subdir }}/generate-genesis-keys
             ./target/${{ inputs.binary-subdir }}/chainflip-broker-api
             ./target/${{ inputs.binary-subdir }}/chainflip-lp-api
             ./target/${{ inputs.binary-subdir }}/chainflip-ingress-egress-tracker
+            ./target/${{ inputs.binary-subdir }}/libchainflip_engine_v*.so
+            ./target/${{ inputs.binary-subdir }}/engine-runner
 
-      - name: Upload runtime artifacts 📤
+
+      - name: Upload runtime artifacts
         uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
         if: ${{ matrix.ubuntu_version == '22.04' }} # Only upload runtime once as it is the same for both versions
         with:
