@@ -547,33 +547,35 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord + MinMax>
 			)
 	}
 
-	pub fn range_orders_for_lp(
+	/// Returns the range orders info for a given liquidity provider. Works as a replacement for the
+	/// former range_orders_cache.
+	pub fn range_orders_info_for_lp(
 		&self,
 		lp: &LiquidityProvider,
 	) -> BTreeMap<OrderId, core::ops::Range<Tick>> {
-		let mut result: BTreeMap<_, _> = BTreeMap::new();
-		let mut lower_bound_orders = self.range_orders.positions.lower_bound(Bound::Included(&(
-			lp.clone(),
-			<OrderId as MinMax>::min(),
-			MIN_TICK,
-			MIN_TICK,
-		)));
+		PoolState::<LiquidityProvider, OrderId>::collect_map_in_range(
+			Bound::Included(&(lp.clone(), <OrderId as MinMax>::min(), MIN_TICK, MIN_TICK)),
+			Bound::Included(&(lp.clone(), <OrderId as MinMax>::max(), MAX_TICK, MAX_TICK)),
+			self.range_orders.positions.clone(),
+		)
+		.into_keys()
+		.map(|k| (k.1, k.2..k.3))
+		.collect()
+	}
+
+	/// Collects the elements of a given map between defined bounds.
+	fn collect_map_in_range<K: Ord + Clone, V: Clone>(
+		start_bound: Bound<&K>,
+		end_bound: Bound<&K>,
+		positions: BTreeMap<K, V>,
+	) -> BTreeMap<K, V> {
+		let mut result: BTreeMap<K, V> = BTreeMap::new();
+		let mut lower_bound_orders = positions.lower_bound(start_bound);
 		while let Some(order) = lower_bound_orders.next() {
-			let (&(_, ref order_id, lower_tick, upper_tick), _) = order;
-			result.insert(order_id.clone(), lower_tick..upper_tick);
-			if let Some(highest) = self
-				.range_orders
-				.positions
-				.upper_bound(Bound::Included(&(
-					lp.clone(),
-					<OrderId as MinMax>::max(),
-					MAX_TICK,
-					MAX_TICK,
-				)))
-				.peek_prev()
-			{
-				let ((_, order_id_, _, _), _) = highest;
-				if order_id == order_id_ {
+			let (key, value) = order;
+			result.insert(key.clone(), value.clone());
+			if let Some((last_key, _)) = positions.upper_bound(end_bound).peek_prev() {
+				if key == last_key {
 					break;
 				}
 			}
@@ -581,78 +583,45 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord + MinMax>
 		result
 	}
 
-	pub fn limit_orders_for_lp(
+	/// Returns the limit orders info for a given liquidity provider. Works as a replacement for the
+	/// former limit_orders_cache.
+	pub fn limit_orders_info_for_lp(
 		&self,
 		lp: &LiquidityProvider,
 	) -> PoolPairsMap<BTreeMap<OrderId, (Tick, LiquidityProvider)>> {
-		let mut result_base: BTreeMap<OrderId, (Tick, LiquidityProvider)> = BTreeMap::new();
-		let mut result_quote: BTreeMap<OrderId, (Tick, LiquidityProvider)> = BTreeMap::new();
-		let mut lower_bound_orders_base = self
-			.limit_orders
-			.positions
-			.base
-			.lower_bound(Bound::Included(&(lp.clone(), <OrderId as MinMax>::min(), U256::zero())));
-
-		while let Some(order) = lower_bound_orders_base.next() {
-			let (&(_, ref order_id, sqrt_price), _) = order;
-			result_base.insert(order_id.clone(), (tick_at_sqrt_price(sqrt_price), lp.clone()));
-			if let Some(highest) = self
-				.limit_orders
-				.positions
-				.base
-				.upper_bound(Bound::Included(&(
-					lp.clone(),
-					<OrderId as MinMax>::max(),
-					U256::max_value(),
-				)))
-				.peek_prev()
-			{
-				let ((_, order_id_, _), _) = highest;
-				if order_id == order_id_ {
-					break;
-				}
-			}
+		PoolPairsMap {
+			base: PoolState::<LiquidityProvider, OrderId>::collect_map_in_range(
+				Bound::Included(&(lp.clone(), <OrderId as MinMax>::min(), U256::zero())),
+				Bound::Included(&(lp.clone(), <OrderId as MinMax>::max(), U256::max_value())),
+				self.limit_orders.positions.base.clone(),
+			)
+			.into_keys()
+			.map(|k| (k.1, (tick_at_sqrt_price(k.2), k.0)))
+			.collect(),
+			quote: PoolState::<LiquidityProvider, OrderId>::collect_map_in_range(
+				Bound::Included(&(lp.clone(), <OrderId as MinMax>::min(), U256::zero())),
+				Bound::Included(&(lp.clone(), <OrderId as MinMax>::max(), U256::max_value())),
+				self.limit_orders.positions.quote.clone(),
+			)
+			.into_keys()
+			.map(|k| (k.1, (tick_at_sqrt_price(k.2), k.0)))
+			.collect(),
 		}
-
-		let mut lower_bound_orders_quote = self
-			.limit_orders
-			.positions
-			.quote
-			.lower_bound(Bound::Included(&(lp.clone(), <OrderId as MinMax>::min(), U256::zero())));
-
-		while let Some(order) = lower_bound_orders_quote.next() {
-			let (&(_, ref order_id, sqrt_price), _) = order;
-			result_quote.insert(order_id.clone(), (tick_at_sqrt_price(sqrt_price), lp.clone()));
-			if let Some(highest) = self
-				.limit_orders
-				.positions
-				.quote
-				.upper_bound(Bound::Included(&(
-					lp.clone(),
-					<OrderId as MinMax>::max(),
-					U256::max_value(),
-				)))
-				.peek_prev()
-			{
-				let ((_, order_id_, _), _) = highest;
-				if order_id == order_id_ {
-					break;
-				}
-			}
-		}
-
-		PoolPairsMap { base: result_base, quote: result_quote }
 	}
 
+	/// Returns all the limit orders info.
 	pub fn limit_orders_info(&self) -> PoolPairsMap<BTreeMap<OrderId, (Tick, LiquidityProvider)>> {
-		let mut base_to_quote: BTreeMap<_, _> = BTreeMap::new();
-		for (lp, order_id, tick, _, _) in self.limit_orders.positions::<BaseToQuote>() {
-			base_to_quote.insert(order_id, (tick, lp));
+		PoolPairsMap {
+			base: self
+				.limit_orders
+				.positions::<QuoteToBase>()
+				.map(|(lp, orders_id, tick, _, _)| (orders_id, (tick, lp)))
+				.collect(),
+			quote: self
+				.limit_orders
+				.positions::<BaseToQuote>()
+				.map(|(lp, orders_id, tick, _, _)| (orders_id, (tick, lp)))
+				.collect(),
 		}
-		let mut quote_to_base: BTreeMap<_, _> = BTreeMap::new();
-		for (lp, order_id, tick, _, _) in self.limit_orders.positions::<QuoteToBase>() {
-			quote_to_base.insert(order_id, (tick, lp));
-		}
-		PoolPairsMap { base: quote_to_base, quote: base_to_quote }
 	}
 }
