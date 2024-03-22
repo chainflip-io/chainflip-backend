@@ -1,6 +1,18 @@
 # Use the official Bitcoin Core image as the base image
 FROM --platform=linux/amd64 ruimarinho/bitcoin-core:24.0.1
 
+ARG BUILD_DATETIME
+ARG VCS_REF
+
+LABEL org.opencontainers.image.authors="dev@chainflip.io"
+LABEL org.opencontainers.image.vendor="Chainflip Labs GmbH"
+LABEL org.opencontainers.image.title="chainflip/bitcoin"
+LABEL org.opencontainers.image.source="https://github.com/chainflip-io/chainflip-backend/blob/${VCS_REF}/ci/docker/development/bitcoin/Dockerfile"
+LABEL org.opencontainers.image.revision="${VCS_REF}"
+LABEL org.opencontainers.image.created="${BUILD_DATETIME}"
+LABEL org.opencontainers.image.environment="development"
+LABEL org.opencontainers.image.documentation="https://github.com/chainflip-io/chainflip-backend"
+
 # add electrs apt repo
 RUN gpg --keyserver hkp://keyserver.ubuntu.com --recv-keys 3D9E81D3CA76CDCBE768C4B4DC6B4F8E60B8CF4C
 RUN gpg --keyserver hkp://keyserver.ubuntu.com --recv-keys BC528686B50D79E339D3721CEB3E94ADBE1229CF

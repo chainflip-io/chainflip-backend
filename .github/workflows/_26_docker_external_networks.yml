@@ -1,0 +1,73 @@
+on:
+  workflow_call:
+    inputs:
+      network:
+        description: The network image to build
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  FORCE_COLOR: 1
+
+jobs:
+  get-date-time:
+    runs-on: ubuntu-22.04
+    outputs:
+      date: ${{ steps.date.outputs.date }}
+      time: ${{ steps.date.outputs.time }}
+    steps:
+      - name: Get the date and time
+        id: date
+        run: |
+          echo "date=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
+          echo "time=$(date +'%H:%M:%S')" >> "$GITHUB_OUTPUT"
+
+  private-images:
+    needs: [get-date-time]
+    runs-on: nscloud-ubuntu-22.04-amd64-8x16
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Install and configure Namespace CLI 📟
+        uses: namespacelabs/nscloud-setup@v0
+
+      - name: Set up Namespace Buildx 👷
+        uses: namespacelabs/nscloud-setup-buildx-action@v0
+
+      - name: Docker meta 📄
+        id: meta
+        uses: docker/metadata-action@31cebacef4805868f9ce9a0cb03ee36c32df2ac4
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ inputs.network }}
+          flavor: |
+            latest=true
+          tags: |
+            type=raw,value=${{ github.sha }}
+            type=ref,event=branch
+            type=ref,event=pr
+
+      - name: Login to Github Container Registry 🔑
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push 🏗️🫸
+        uses: docker/build-push-action@4a13e500e55cf31b7a5d59a38ab2040ab0f42f56
+        with:
+          context: ./ci/docker/development/${{ inputs.network }}
+          push: true
+          load: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          file: ./ci/docker/development/${{ inputs.network }}/Dockerfile
+          build-args: |
+            BUILD_DATETIME=${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}
+            VCS_REF=${{ github.sha }}
