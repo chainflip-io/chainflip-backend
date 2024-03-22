@@ -825,6 +825,17 @@ export function compareSemVer(version1: string, version2: string) {
   return 'equal';
 }
 
+export function parseAssetString(input: string): Asset {
+  // TODO: Temporal workaround: To remove once SDK supports Arbitrum
+  const allAssets = [...Object.values(Assets), 'ArbEth' as Asset, 'ArbUsdc' as Asset];
+  const foundAsset = allAssets.find((asset) => asset.toLowerCase() === input.toLowerCase());
+
+  if (foundAsset) {
+    return foundAsset as Asset;
+  }
+  throw new Error(`Unsupported asset: ${input}`);
+}
+
 type SwapRate = {
   intermediary: string;
   output: string;

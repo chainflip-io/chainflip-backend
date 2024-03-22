@@ -6,14 +6,12 @@
 // initial price in USDC
 // For example: ./commands/create_lp_pool.ts btc 10000
 
-import { InternalAsset as Asset } from '@chainflip/cli';
 import { createLpPool } from '../shared/create_lp_pool';
-import { runWithTimeout } from '../shared/utils';
+import { parseAssetString, runWithTimeout } from '../shared/utils';
 
 async function main() {
-  const ccy = process.argv[2] as Asset;
   const initialPrice = parseFloat(process.argv[3]);
-  await createLpPool(ccy, initialPrice);
+  await createLpPool(parseAssetString(process.argv[2]), initialPrice);
   process.exit(0);
 }
 
