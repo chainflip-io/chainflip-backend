@@ -90,7 +90,7 @@ export async function sendEvmNative(
   ethAmount: string,
   log = true,
 ) {
-  const weiAmount = amountToFineAmount(ethAmount, assetDecimals('ETH'));
+  const weiAmount = amountToFineAmount(ethAmount, assetDecimals('Eth'));
   await signAndSendTxEvm(chain, evmAddress, weiAmount, undefined, undefined, log);
 }
 

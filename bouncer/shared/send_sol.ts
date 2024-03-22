@@ -58,7 +58,7 @@ export async function signAndSendIxsSol(
 }
 
 export async function sendSol(solAddress: string, solAmount: string, log = true) {
-  const lamportsAmount = amountToFineAmount(solAmount, 9); // assetDecimals.SOL when available
+  const lamportsAmount = amountToFineAmount(solAmount, 9); // assetDecimals.Sol when available
   const transaction = new Transaction().add(
     SystemProgram.transfer({
       fromPubkey: getSolWhaleKeyPair().publicKey,

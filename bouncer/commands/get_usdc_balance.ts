@@ -11,7 +11,7 @@ import { runWithTimeout, getEvmContractAddress } from '../shared/utils';
 import { getErc20Balance } from '../shared/get_erc20_balance';
 
 async function getUsdcBalanceCommand(ethereumAddress: string) {
-  const contractAddress = getEvmContractAddress('Ethereum', 'USDC');
+  const contractAddress = getEvmContractAddress('Ethereum', 'Usdc');
   const balance = await getErc20Balance('Ethereum', ethereumAddress, contractAddress);
   console.log(balance);
   process.exit(0);

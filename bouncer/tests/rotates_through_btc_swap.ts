@@ -6,12 +6,12 @@ import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 async function rotatesThroughBtcSwap() {
   const chainflip = await getChainflipApi();
 
-  const tag = `BTC -> DOT (through rotation)`;
-  const address = await newAddress('DOT', 'foo');
+  const tag = `Btc -> Dot (through rotation)`;
+  const address = await newAddress('Dot', 'foo');
 
-  console.log('Generated DOT address: ' + address);
+  console.log('Generated Dot address: ' + address);
 
-  const swapParams = await requestNewSwap('BTC', 'DOT', address, tag);
+  const swapParams = await requestNewSwap('Btc', 'Dot', address, tag);
 
   await submitGovernanceExtrinsic(chainflip.tx.validator.forceRotation());
   console.log(`Vault rotation initiated. Awaiting new epoch.`);
@@ -22,8 +22,8 @@ async function rotatesThroughBtcSwap() {
 }
 
 async function swapAfterRotation() {
-  const sourceAsset = 'DOT';
-  const destAsset = 'BTC';
+  const sourceAsset = 'Dot';
+  const destAsset = 'Btc';
 
   const address = await newAddress(destAsset, 'bar');
   const tag = `${sourceAsset} -> ${destAsset} (after rotation)`;

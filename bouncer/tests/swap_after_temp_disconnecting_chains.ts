@@ -19,7 +19,7 @@ try {
     connectContainerToNetwork(container, networkName);
   });
 
-  await Promise.all([testSwap('DOT', 'BTC'), testSwap('BTC', 'FLIP'), testSwap('ETH', 'USDC')]);
+  await Promise.all([testSwap('Dot', 'Btc'), testSwap('Btc', 'Flip'), testSwap('Eth', 'Usdc')]);
 
   console.log('=== Test complete ===');
 
