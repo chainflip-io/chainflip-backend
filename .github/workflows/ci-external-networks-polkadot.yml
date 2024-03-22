@@ -2,19 +2,19 @@ name: Polkadot Dev Image 🐳
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/_26_docker_external_networks.yml
-      - .github/workflows/ci-polkadot.yml
-      - ./ci/docker/development/polkadot/*
-  pull_request:
-    branches:
-      - main
-    paths:
-      - ./.github/workflows/_26_docker_external_networks.yml
-      - ./.github/workflows/ci-polkadot.yml
-      - ./ci/docker/development/polkadot/*
+  #   branches:
+  #     - main
+  #   paths:
+  #     - .github/workflows/_26_docker_external_networks.yml
+  #     - .github/workflows/ci-polkadot.yml
+  #     - ./ci/docker/development/polkadot/*
+  # pull_request:
+  #   branches:
+  #     - main
+  #   paths:
+  #     - ./.github/workflows/_26_docker_external_networks.yml
+  #     - ./.github/workflows/ci-polkadot.yml
+  #     - ./ci/docker/development/polkadot/*
 
 jobs:
   build-polkadot-dev-image:

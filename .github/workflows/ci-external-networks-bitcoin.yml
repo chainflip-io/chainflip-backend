@@ -2,19 +2,19 @@ name: Bitcoin Dev Image 🐳
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/_26_docker_external_networks.yml
-      - .github/workflows/ci-bitcoin.yml
-      - ./ci/docker/development/bitcoin/*
-  pull_request:
-    branches:
-      - main
-    paths:
-      - ./.github/workflows/_26_docker_external_networks.yml
-      - ./.github/workflows/ci-bitcoin.yml
-      - ./ci/docker/development/bitcoin/*
+  #   branches:
+  #     - main
+  #   paths:
+  #     - .github/workflows/_26_docker_external_networks.yml
+  #     - .github/workflows/ci-bitcoin.yml
+  #     - ./ci/docker/development/bitcoin/*
+  # pull_request:
+  #   branches:
+  #     - main
+  #   paths:
+  #     - ./.github/workflows/_26_docker_external_networks.yml
+  #     - ./.github/workflows/ci-bitcoin.yml
+  #     - ./ci/docker/development/bitcoin/*
 
 jobs:
   build-bitcoin-dev-image:
