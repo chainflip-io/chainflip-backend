@@ -12,6 +12,7 @@ import {
   sleep,
   fineAmountToAmount,
   assetDecimals,
+  chainFromAsset,
 } from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
 import { testSwap } from '../shared/swapping';
@@ -39,9 +40,14 @@ type AmountChange = null | {
   Increase?: number;
 };
 
+type ComplexAsset = {
+  chain: string;
+  asset: string;
+};
+
 type LimitOrderResponse = {
-  base_asset: string;
-  quote_asset: string;
+  base_asset: string | ComplexAsset;
+  quote_asset: string | ComplexAsset;
   side: string;
   id: number;
   tick: number;
@@ -102,12 +108,12 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
     const result = await Promise.all([
       call(
         'lp_set_limit_order',
-        [asset, 'USDC', 'buy', 1, buyTick, '0x' + BigInt(liquidityFine).toString(16)],
+        [{chain: chainFromAsset(asset), asset: asset}, 'USDC', 'buy', 1, buyTick, '0x' + BigInt(liquidityFine).toString(16)],
         `Buy ${asset}`,
       ),
       call(
         'lp_set_limit_order',
-        [asset, 'USDC', 'sell', 1, sellTick, '0x' + BigInt(liquidityFine / price).toString(16)],
+        [{chain: chainFromAsset(asset), asset: asset}, 'USDC', 'sell', 1, sellTick, '0x' + BigInt(liquidityFine / price).toString(16)],
         `Sell ${asset}`,
       ),
     ]);
@@ -119,9 +125,19 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
           if (BigInt(update.collected_fees) > BigInt(0)) {
             let ccy;
             if (update.side === 'buy') {
-              ccy = update.base_asset.toUpperCase() as Asset;
+              let asset = update.base_asset;
+              if(typeof asset === "string") {
+                ccy = asset.toUpperCase() as Asset;
+              } else {
+                ccy = asset.asset.toUpperCase() as Asset;
+              }
             } else {
-              ccy = update.quote_asset.toUpperCase() as Asset;
+              let asset = update.quote_asset;
+              if(typeof asset === "string") {
+                ccy = asset.toUpperCase() as Asset;
+              } else {
+                ccy = asset.asset.toUpperCase() as Asset;
+              }
             }
             const fees = fineAmountToAmount(
               BigInt(update.collected_fees.toString()).toString(10),
@@ -133,11 +149,27 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
             let buyCcy;
             let sellCcy;
             if (update.side === 'buy') {
-              buyCcy = update.base_asset.toUpperCase() as Asset;
-              sellCcy = update.quote_asset.toUpperCase() as Asset;
+              if(typeof update.base_asset === "string") {
+                buyCcy = update.base_asset.toUpperCase() as Asset;
+              } else {
+                buyCcy = update.base_asset.asset.toUpperCase() as Asset;
+              }
+              if(typeof update.quote_asset === "string") {
+                sellCcy = update.quote_asset.toUpperCase() as Asset;
+              } else {
+                sellCcy = update.quote_asset.asset.toUpperCase() as Asset;
+              }
             } else {
-              buyCcy = update.quote_asset.toUpperCase() as Asset;
-              sellCcy = update.base_asset.toUpperCase() as Asset;
+              if(typeof update.quote_asset === "string") {
+                buyCcy = update.quote_asset.toUpperCase() as Asset;
+              } else {
+                buyCcy = update.quote_asset.asset.toUpperCase() as Asset;
+              }
+              if(typeof update.base_asset === "string") {
+                sellCcy = update.base_asset.toUpperCase() as Asset;
+              } else {
+                sellCcy = update.base_asset.asset.toUpperCase() as Asset;
+              }
             }
             const amount = fineAmountToAmount(
               BigInt(update.bought_amount.toString()).toString(10),
@@ -154,15 +186,15 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
 
 async function launchTornado() {
   const chainflip = await getChainflipApi();
-  const epoch = (await chainflip.query.bitcoinVault.currentVaultEpoch()).toJSON()! as number;
+  const epoch = (await chainflip.query.bitcoinThresholdSigner.currentKeyEpoch()).toJSON()! as number;
   const pubkey = (
-    (await chainflip.query.bitcoinVault.vaults(epoch)).toJSON()!.publicKey.current as string
+    (await chainflip.query.bitcoinThresholdSigner.keys(epoch)).toJSON()!.current as string
   ).substring(2);
   const salt =
     ((await chainflip.query.bitcoinIngressEgress.channelIdCounter()).toJSON()! as number) + 1;
   const btcAddress = predictBtcAddress(pubkey, salt);
   // shuffle
-  const assets: Asset[] = ['ETH', 'USDC', 'FLIP', 'DOT'];
+  const assets: Asset[] = ['ETH', 'USDC', 'FLIP', 'DOT', 'USDT'];
   for (let i = 0; i < 10; i++) {
     const index1 = Math.floor(Math.random() * assets.length);
     const index2 = Math.floor(Math.random() * assets.length);
@@ -184,11 +216,12 @@ const swapAmount = new Map<Asset, string>([
   ['ETH', '0.03'],
   ['BTC', '0.006'],
   ['USDC', '30'],
+  ['USDT', '12'],
   ['FLIP', '3'],
 ]);
 
 async function playSwapper() {
-  const assets: Asset[] = ['ETH', 'BTC', 'USDC', 'FLIP', 'DOT'];
+  const assets: Asset[] = ['ETH', 'BTC', 'USDC', 'FLIP', 'DOT', 'USDT'];
   for (;;) {
     const src = assets.at(Math.floor(Math.random() * assets.length))!;
     const dest = assets
@@ -204,6 +237,7 @@ const price = new Map<Asset, number>([
   ['ETH', 1000],
   ['BTC', 10000],
   ['USDC', 1],
+  ['USDT', 1],
   ['FLIP', 10],
 ]);
 
@@ -214,6 +248,7 @@ async function bananas() {
     createLpPool('ETH', price.get('ETH')!),
     createLpPool('DOT', price.get('DOT')!),
     createLpPool('BTC', price.get('BTC')!),
+    createLpPool('USDT', price.get('USDT')!),
     createLpPool('FLIP', price.get('FLIP')!),
   ]);
 
@@ -223,6 +258,7 @@ async function bananas() {
     provideLiquidity('DOT', (2 * liquidityUsdc) / price.get('DOT')!),
     provideLiquidity('BTC', (2 * liquidityUsdc) / price.get('BTC')!),
     provideLiquidity('FLIP', (2 * liquidityUsdc) / price.get('FLIP')!),
+    provideLiquidity('USDT', (2 * liquidityUsdc) / price.get('USDT')!),
   ]);
 
   await Promise.all([
@@ -244,6 +280,11 @@ async function bananas() {
     playLp(
       'FLIP',
       price.get('FLIP')! * 10 ** (assetDecimals('USDC') - assetDecimals('FLIP')),
+      liquidityUsdc,
+    ),
+    playLp(
+      'USDT',
+      price.get('USDT')! * 10 ** (assetDecimals('USDC') - assetDecimals('USDT')),
       liquidityUsdc,
     ),
     playSwapper(),
