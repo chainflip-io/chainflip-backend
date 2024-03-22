@@ -1,0 +1,27 @@
+name: External Networks Dev Images CI 🐳
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/_26_docker_external_networks.yml
+      - ci/docker/development/bitcoin/*
+      - ci/docker/development/polkadot/*
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/_26_docker_external_networks.yml
+      - ci/docker/development/bitcoin/*
+      - ci/docker/development/polkadot/*
+
+jobs:
+  build-polkadot-dev-image:
+    uses: ./.github/workflows/_26_docker_external_networks.yml
+    with:
+      network: polkadot
+  build-bitcoin-dev-image:
+    uses: ./.github/workflows/_26_docker_external_networks.yml
+    with:
+      network: bitcoin
