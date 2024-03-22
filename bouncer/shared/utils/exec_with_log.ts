@@ -1,8 +1,7 @@
-import { execSync, spawnSync } from 'child_process';
+import { execSync } from 'child_process';
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
-import { assert } from 'console';
 
 export const DEFAULT_LOG_ROOT = 'chainflip/logs/';
 
@@ -41,15 +40,15 @@ export function execWithLog(
 ): { success: boolean } {
   let success = false;
   withFileStreamTo(initLogFile(`${commandAlias}.log`), (file) => {
-    const result = spawnSync(command, {
-      env: { ...process.env, ...additionalEnv },
-      stdio: [0, file, file],
-    });
-    if (result.error) {
-      console.error(`${commandAlias} failed: ${result.error}`);
-    } else {
+    try {
+      execSync(`${command} 2>&1`, {
+        env: { ...process.env, ...additionalEnv },
+        stdio: [0, file, file],
+      });
       console.debug(`${commandAlias} succeeded`);
       success = true;
+    } catch (e) {
+      console.error(`${commandAlias} failed: ${e}`);
     }
   });
   return { success };
