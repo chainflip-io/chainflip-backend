@@ -63,6 +63,9 @@ RUN curl -fsSL https://github.com/mozilla/sccache/releases/download/${SCCACHE_VE
     cp /tmp/sccache-${SCCACHE_VER}-x86_64-unknown-linux-musl/sccache /usr/local/cargo/bin/sccache && \
     rm -rf /tmp/sccache.tar.gz /tmp/sccache-${SCCACHE_VER}-x86_64-unknown-linux-musl
 
+# Install sudo and add ci user
+RUN apt-get update && apt-get install -y sudo && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /
 
 COPY rust-toolchain.toml .
