@@ -418,6 +418,8 @@ pub mod pallet {
 		BrokerRegistrationDisabled,
 		/// Broker commission bps is limited to 1000 points.
 		BrokerCommissionBpsTooHigh,
+		/// Brokers should withdraw their earned fees before deregistering.
+		EarnedFeesNotWithdrawn,
 	}
 
 	#[pallet::hooks]
@@ -669,6 +671,26 @@ pub mod pallet {
 					},
 				}
 			}
+
+			Ok(())
+		}
+
+		/// Register the account as a Broker.
+		///
+		/// Account roles are immutable once registered.
+		#[pallet::call_index(9)]
+		#[pallet::weight(T::WeightInfo::deregister_as_broker())]
+		pub fn deregister_as_broker(who: OriginFor<T>) -> DispatchResult {
+			let account_id = T::AccountRoleRegistry::ensure_broker(who)?;
+
+			ensure!(
+				EarnedBrokerFees::<T>::iter_prefix(&account_id)
+					.all(|(_asset, balance)| balance.is_zero()),
+				Error::<T>::EarnedFeesNotWithdrawn,
+			);
+			let _ = EarnedBrokerFees::<T>::clear_prefix(&account_id, u32::MAX, None);
+
+			T::AccountRoleRegistry::deregister_as_broker(&account_id)?;
 
 			Ok(())
 		}

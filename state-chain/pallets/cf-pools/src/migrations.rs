@@ -1,11 +1,13 @@
-use crate::*;
+pub mod rename_slippage_to_price_impact;
+use crate::{Config, Pallet};
 
 use cf_runtime_upgrade_utilities::VersionedMigration;
-
 mod lp_pools_state_change;
 
-pub type PalletMigration<T> =
-	(VersionedMigration<Pallet<T>, lp_pools_state_change::Migration<T>, 3, 4>,);
+pub type PalletMigration<T> = (
+	VersionedMigration<Pallet<T>, lp_pools_state_change::Migration<T>, 3, 4>,
+	VersionedMigration<Pallet<T>, rename_slippage_to_price_impact::Migration<T>, 3, 4>,
+);
 
 #[cfg(feature = "try-runtime")]
 pub mod old {

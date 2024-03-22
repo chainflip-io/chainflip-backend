@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use crate::{mock::*, *};
-use frame_support::{assert_noop, assert_ok, traits::HandleLifetime};
+use frame_support::traits::HandleLifetime;
 use frame_system::Provider;
 
 const ALICE: u64 = 1;
@@ -11,7 +11,6 @@ const CHARLIE: u64 = 3;
 #[test]
 fn test_ensure_origin_struct() {
 	new_test_ext().execute_with(|| {
-		SwappingEnabled::<Test>::put(true);
 		// Root and none should be invalid.
 		EnsureBroker::<Test>::ensure_origin(OriginFor::<Test>::root()).unwrap_err();
 		EnsureBroker::<Test>::ensure_origin(OriginFor::<Test>::none()).unwrap_err();
@@ -57,7 +56,6 @@ fn test_ensure_origin_struct() {
 #[test]
 fn test_ensure_origin_fn() {
 	new_test_ext().execute_with(|| {
-		SwappingEnabled::<Test>::put(true);
 		// Root and none should be invalid.
 		ensure_broker::<Test>(OriginFor::<Test>::root()).unwrap_err();
 		ensure_broker::<Test>(OriginFor::<Test>::none()).unwrap_err();
@@ -121,24 +119,5 @@ fn test_ensure_origin_fn() {
 			OriginFor::<Test>::signed(CHARLIE),
 		)
 		.unwrap();
-	});
-}
-
-#[test]
-fn cannot_register_swapping_roles_if_swapping_disabled() {
-	new_test_ext().execute_with(|| {
-		assert!(!SwappingEnabled::<Test>::get());
-
-		// As if the account is already funded.
-		AccountRoles::<Test>::insert(ALICE, AccountRole::Unregistered);
-
-		assert_noop!(Pallet::<Test>::register_as_broker(&ALICE), Error::<Test>::SwappingDisabled);
-		assert_noop!(
-			Pallet::<Test>::register_as_liquidity_provider(&ALICE),
-			Error::<Test>::SwappingDisabled
-		);
-
-		// We can still register as a validator.
-		assert_ok!(Pallet::<Test>::register_as_validator(&ALICE));
 	});
 }

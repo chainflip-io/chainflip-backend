@@ -285,7 +285,7 @@ logs() {
   select SERVICE in node engine broker lp polkadot geth bitcoin solana poster sequencer staker debug redis all ingress-egress-tracker; do
     if [[ $SERVICE == "all" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow
-      tail -f /tmp/chainflip/chainflip-*.log
+      tail -f /tmp/chainflip/*/chainflip-*.log
     fi
     if [[ $SERVICE == "polkadot" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow polkadot
@@ -310,20 +310,20 @@ logs() {
     fi
     if [[ $SERVICE == "node" ]] || [[ $SERVICE == "engine" ]]; then
       select NODE in bashful doc dopey; do
-        tail -f /tmp/chainflip/$NODE/chainflip-$SERVICE.log
+        tail -f /tmp/chainflip/$NODE/chainflip-$SERVICE.*log
       done
     fi
     if [[ $SERVICE == "broker" ]]; then
-      tail -f /tmp/chainflip/chainflip-broker-api.log
+      tail -f /tmp/chainflip/chainflip-broker-api.*log
     fi
     if [[ $SERVICE == "lp" ]]; then
-      tail -f /tmp/chainflip/chainflip-lp-api.log
+      tail -f /tmp/chainflip/chainflip-lp-api.*log
     fi
     if [[ $SERVICE == "ingress-egress-tracker" ]]; then
-      tail -f /tmp/chainflip/chainflip-ingress-egress-tracker.log
+      tail -f /tmp/chainflip/chainflip-ingress-egress-tracker.*log
     fi
     if [[ $SERVICE == "solana" ]]; then
-      tail -f /tmp/solana/solana.log
+      tail -f /tmp/solana/solana.*log
     fi
     if [[ $SERVICE == "debug" ]]; then
       cat /tmp/chainflip/debug.log

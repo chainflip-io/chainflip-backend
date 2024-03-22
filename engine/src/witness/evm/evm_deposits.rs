@@ -1,5 +1,5 @@
 use crate::{
-	eth::retry_rpc::address_checker::*,
+	evm::retry_rpc::address_checker::*,
 	witness::common::{RuntimeCallHasChain, RuntimeHasChain},
 };
 use anyhow::ensure;
@@ -20,7 +20,7 @@ use ethers::prelude::*;
 use itertools::Itertools;
 use sp_core::U256;
 
-use crate::eth::rpc::address_checker::*;
+use crate::evm::rpc::address_checker::*;
 
 use super::{contract_common::events_at_block, vault::FetchedNativeFilter};
 use crate::witness::common::chain_source::Header;
@@ -28,7 +28,7 @@ use crate::witness::common::chain_source::Header;
 use super::super::common::chunked_chain_source::chunked_by_vault::{
 	builder::ChunkedByVaultBuilder, ChunkedByVault,
 };
-use crate::eth::retry_rpc::EthersRetryRpcApi;
+use crate::evm::retry_rpc::EvmRetryRpcApi;
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	/// We track Ethereum deposits by checking the balance via our own deployed AddressChecker
@@ -38,10 +38,10 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	///   standard transfers since the `to` field would not be set
 	/// We do *not* officially support ETH deposited using Ethereum/Solidity's self-destruct.
 	/// See [below](`eth_ingresses_at_block`) for more details.
-	pub async fn ethereum_deposits<ProcessCall, ProcessingFut, EthRetryRpcClient>(
+	pub async fn ethereum_deposits<ProcessCall, ProcessingFut, EvmRetryRpcClient>(
 		self,
 		process_call: ProcessCall,
-		eth_rpc: EthRetryRpcClient,
+		eth_rpc: EvmRetryRpcClient,
 		native_asset: <Inner::Chain as cf_chains::Chain>::ChainAsset,
 		address_checker_address: H160,
 		vault_address: H160,
@@ -56,7 +56,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			+ Clone
 			+ 'static,
 		ProcessingFut: Future<Output = ()> + Send + 'static,
-		EthRetryRpcClient: EthersRetryRpcApi + AddressCheckerRetryRpcApi + Send + Sync + Clone,
+		EvmRetryRpcClient: EvmRetryRpcApi + AddressCheckerRetryRpcApi + Send + Sync + Clone,
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 		state_chain_runtime::RuntimeCall:
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
@@ -141,15 +141,15 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	}
 }
 
-async fn address_states<EthRetryRpcClient>(
-	eth_rpc: &EthRetryRpcClient,
+async fn address_states<EvmRetryRpcClient>(
+	eth_rpc: &EvmRetryRpcClient,
 	address_checker_address: H160,
 	parent_hash: H256,
 	hash: H256,
 	addresses: Vec<H160>,
 ) -> Result<impl Iterator<Item = (H160, (AddressState, AddressState))>, anyhow::Error>
 where
-	EthRetryRpcClient: AddressCheckerRetryRpcApi + Send + Sync + Clone,
+	EvmRetryRpcClient: AddressCheckerRetryRpcApi + Send + Sync + Clone,
 {
 	let previous_address_states = eth_rpc
 		.address_states(parent_hash, address_checker_address, addresses.clone())
@@ -226,9 +226,9 @@ pub fn eth_ingresses_at_block<
 #[cfg(test)]
 mod tests {
 	use crate::{
-		eth::{
-			retry_rpc::{EthRetryRpcClient, EthersRetryRpcApi},
-			rpc::EthRpcClient,
+		evm::{
+			retry_rpc::{EvmRetryRpcApi, EvmRetryRpcClient},
+			rpc::EvmRpcClient,
 		},
 		settings::Settings,
 		witness::common::chain_source::Header,
@@ -318,10 +318,13 @@ mod tests {
 					"e7f1725E7734CE288F8367e1Bb143E90bb3F0512".parse::<Address>().unwrap();
 
 				let settings = Settings::new_test().unwrap();
-				let client = EthRetryRpcClient::<EthRpcClient>::new(
+				let client = EvmRetryRpcClient::<EvmRpcClient>::new(
 					scope,
 					settings.eth.nodes,
 					U256::from(1337u64),
+					"eth_rpc",
+					"eth_subscribe",
+					"Ethereum",
 				)
 				.unwrap();
 

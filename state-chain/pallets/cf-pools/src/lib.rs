@@ -295,9 +295,9 @@ pub mod pallet {
 	pub(super) type ScheduledLimitOrderUpdates<T: Config> =
 		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<LimitOrderUpdate<T>>, ValueQuery>;
 
-	/// Maximum relative slippage for a single swap, measured in number of ticks.
+	/// Maximum relative price impact for a single swap, measured in number of ticks.
 	#[pallet::storage]
-	pub(super) type MaximumRelativeSlippage<T: Config> = StorageValue<_, u32, OptionQuery>;
+	pub(super) type MaximumPriceImpact<T: Config> = StorageValue<_, u32, OptionQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -959,13 +959,13 @@ pub mod pallet {
 		/// price, and both the pool price before and after the swap. If the limit is exceeded the
 		/// swap will fail and will be retried in the next block.
 		#[pallet::call_index(9)]
-		#[pallet::weight(T::WeightInfo::set_maximum_relative_slippage())]
-		pub fn set_maximum_relative_slippage(
+		#[pallet::weight(T::WeightInfo::set_maximum_price_impact())]
+		pub fn set_maximum_price_impact(
 			origin: OriginFor<T>,
 			ticks: Option<u32>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			MaximumRelativeSlippage::<T>::set(ticks);
+			MaximumPriceImpact::<T>::set(ticks);
 			Ok(())
 		}
 	}
@@ -1024,11 +1024,11 @@ impl<T: Config> SwappingApi for Pallet<T> {
 					core::cmp::min(core::cmp::max(tick_before, swap_tick), tick_after)
 				};
 
-				if let Some(maximum_relative_slippage) = MaximumRelativeSlippage::<T>::get() {
+				if let Some(maximum_price_impact) = MaximumPriceImpact::<T>::get() {
 					if core::cmp::min(
 						bounded_swap_tick.abs_diff(tick_after),
 						bounded_swap_tick.abs_diff(tick_before),
-					) > maximum_relative_slippage
+					) > maximum_price_impact
 					{
 						return Err(Error::<T>::InsufficientLiquidity.into());
 					}
@@ -1047,6 +1047,17 @@ impl<T: Config> PoolApi for Pallet<T> {
 
 	fn sweep(who: &T::AccountId) -> DispatchResult {
 		Self::inner_sweep(who)
+	}
+
+	fn open_order_count(
+		who: &Self::AccountId,
+		base_asset: Asset,
+		quote_asset: Asset,
+	) -> Result<u32, DispatchError> {
+		let pool_orders = Self::pool_orders(base_asset, quote_asset, Some(who.clone()))?;
+		Ok(pool_orders.limit_orders.asks.len() as u32 +
+			pool_orders.limit_orders.bids.len() as u32 +
+			pool_orders.range_orders.len() as u32)
 	}
 }
 

@@ -65,6 +65,19 @@ mod benchmarks {
 	}
 
 	#[benchmark]
+	fn deregister_as_broker() {
+		let caller: T::AccountId = whitelisted_caller();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		assert_ok!(Pallet::<T>::register_as_broker(RawOrigin::Signed(caller.clone()).into()));
+
+		#[extrinsic_call]
+		deregister_as_broker(RawOrigin::Signed(caller.clone()));
+
+		T::AccountRoleRegistry::ensure_broker(RawOrigin::Signed(caller).into())
+			.expect_err("Caller should no longer be registered as broker");
+	}
+
+	#[benchmark]
 	fn schedule_swap_from_contract() {
 		let deposit_amount = 1_000;
 

@@ -387,13 +387,13 @@ export async function observeSwapEvents(
             }
             break;
           case swapExecutedEvent:
-            if (Number(expectedEvent.data.swapId) === Number(swapId)) {
+            if (expectedEvent.data.swapId === swapId) {
               expectedMethod = swapEgressScheduled;
               console.log(`${tag} swap executed, with id: ${swapId}`);
             }
             break;
           case swapEgressScheduled:
-            if (Number(expectedEvent.data.swapId) === Number(swapId)) {
+            if (expectedEvent.data.swapId === swapId) {
               expectedMethod = batchBroadcastRequested;
               egressId = expectedEvent.data.egressId as EgressId;
               console.log(`${tag} swap egress scheduled with id: (${egressId[0]}, ${egressId[1]})`);
