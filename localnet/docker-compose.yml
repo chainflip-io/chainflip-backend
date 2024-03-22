@@ -97,7 +97,7 @@ services:
   polkadot:
     container_name: polkadot
     platform: linux/amd64
-    image: ghcr.io/chainflip-io/chainflip-backend/polkadot:v1.0.0
+    image: ghcr.io/chainflip-io/chainflip-backend/polkadot:latest
     pull_policy: always
     stop_grace_period: 5s
     stop_signal: SIGINT
@@ -134,7 +134,7 @@ services:
       start_period: 20s
 
   bitcoin:
-    image: ghcr.io/chainflip-io/chainflip-backend/bitcoin:v24.0.1
+    image: ghcr.io/chainflip-io/chainflip-backend/bitcoin:latest
     platform: linux/amd64
     pull_policy: always
     container_name: bitcoin

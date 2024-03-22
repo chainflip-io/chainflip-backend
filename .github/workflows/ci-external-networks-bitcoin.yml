@@ -1,4 +1,7 @@
 name: External Networks CI - Bitcoin 🪙
+concurrency:
+  group: ${{ github.ref }}-external-networks-bitcoin
+  cancel-in-progress: true
 
 on:
   push:
