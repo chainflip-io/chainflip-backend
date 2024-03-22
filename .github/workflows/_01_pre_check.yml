@@ -11,13 +11,27 @@ jobs:
   cargo-fmt:
     runs-on: nscloud-ubuntu-22.04-amd64-2x4
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-20.04-44"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-22.04-45"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+      env:
+        NSC_CACHE_PATH: ${{ env.NSC_CACHE_PATH }} # env.NSC_CACHE_PATH contains the path to Cache Volume directory, that is `/cache`.
+      volumes:
+        - /cache:/cache # Where the Cache Volume is mounted.
+      options: --cap-add=SYS_ADMIN # Required to by nscloud-cache-action to call `mount`.
+
     steps:
-      - name: Checkout
+      - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Setup sccache 🚀
+        run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
+
+      - name: Setup Rust cache 🦀💰
+        uses: namespacelabs/nscloud-cache-action@v1
+        with:
+          cache: rust
 
       - name: Check Format
         run: cargo fmt --all -- --check
@@ -25,29 +39,57 @@ jobs:
   audit:
     runs-on: nscloud-ubuntu-22.04-amd64-4x16
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-20.04-44"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-22.04-45"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+      env:
+        NSC_CACHE_PATH: ${{ env.NSC_CACHE_PATH }} # env.NSC_CACHE_PATH contains the path to Cache Volume directory, that is `/cache`.
+      volumes:
+        - /cache:/cache # Where the Cache Volume is mounted.
+      options: --cap-add=SYS_ADMIN # Required to by nscloud-cache-action to call `mount`.
+
     steps:
-      - name: Checkout
+      - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-      - name: cargo audit
+
+      - name: Setup sccache 🚀
+        run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
+
+      - name: Setup Rust cache 🦀💰
+        uses: namespacelabs/nscloud-cache-action@v1
+        with:
+          cache: rust
+
+      - name: cargo audit 🕵️‍♂️
         run: cargo cf-audit
 
   cargo-clippy:
     runs-on: namespace-profile-rust-builder
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-20.04-44"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-22.04-45"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+      env:
+        NSC_CACHE_PATH: ${{ env.NSC_CACHE_PATH }} # env.NSC_CACHE_PATH contains the path to Cache Volume directory, that is `/cache`.
+      volumes:
+        - /cache:/cache # Where the Cache Volume is mounted.
+      options: --cap-add=SYS_ADMIN # Required to by nscloud-cache-action to call `mount`.
+
     steps:
-      - name: Checkout
+      - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-      - name: Setup sccache
+
+      - name: Setup sccache 🚀
         run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
-      - name: Check Linting
+
+      - name: Setup Rust cache 🦀💰
+        uses: namespacelabs/nscloud-cache-action@v1
+        with:
+          cache: rust
+
+      - name: Check Linting 📝
         run: cargo cf-clippy-ci
 
   lint-bouncer:
@@ -61,10 +103,10 @@ jobs:
       - name: Checkout chainflip-backend
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
-      - name: Install pnpm
+      - name: Install pnpm 💿
         run: npm install -g pnpm
 
-      - name: Configure NodeJS
+      - name: Configure NodeJS 🛠️
         uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65
         with:
           node-version: 18
@@ -73,30 +115,30 @@ jobs:
           scope: "@chainflip-io"
           cache-dependency-path: "bouncer/pnpm-lock.yaml"
 
-      - name: Set NPM registry
+      - name: Set NPM registry 🍭
         run: |
           pnpm set @chainflip-io:registry=https://npm.pkg.github.com/
           pnpm set //npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install node dependencies
+      - name: Install node dependencies 📦
         working-directory: bouncer
         run: pnpm install
 
-      - name: Run prettier check
+      - name: Run prettier check 🎨
         working-directory: bouncer
         run: pnpm prettier:check
 
-      - name: Run eslint check
+      - name: Run eslint check 📝
         working-directory: bouncer
         run: pnpm eslint:check
 
   lint-ci-workflows:
     runs-on: ubuntu-22.04
     steps:
-      - name: Checkout
+      - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
-      - name: Check workflow files
+      - name: Check workflow files 📝
         run: |
           bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
           ./actionlint -color -shellcheck=
@@ -123,7 +165,7 @@ jobs:
           - dockerfile: chainflip-ingress-egress-tracker
             environment: development
     steps:
-      - name: Checkout 🏁
+      - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Login to DockerHub 🔑

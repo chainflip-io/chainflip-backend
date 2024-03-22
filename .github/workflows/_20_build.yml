@@ -40,10 +40,10 @@ jobs:
       options: --cap-add=SYS_ADMIN # Required to by nscloud-cache-action to call `mount`.
 
     steps:
-      - name: Checkout
+      - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
-      - name: Setup sccache
+      - name: Setup sccache 🚀
         run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
 
       - name: Setup Rust cache 🦀💰
@@ -51,12 +51,12 @@ jobs:
         with:
           cache: rust
 
-      - name: Build chainflip binaries
+      - name: Build chainflip binaries 🏗️
         run: |
           cargo cf-build-${{ inputs.profile }} --locked
           sccache --show-stats
 
-      - name: Upload binary artifacts
+      - name: Upload binary artifacts 📤
         uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
         with:
           name: ${{ inputs.upload-name }}-ubuntu-${{ matrix.ubuntu_version }}
@@ -69,7 +69,7 @@ jobs:
             ./target/${{ inputs.binary-subdir }}/chainflip-lp-api
             ./target/${{ inputs.binary-subdir }}/chainflip-ingress-egress-tracker
 
-      - name: Upload runtime artifacts
+      - name: Upload runtime artifacts 📤
         uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
         if: ${{ matrix.ubuntu_version == '22.04' }} # Only upload runtime once as it is the same for both versions
         with:

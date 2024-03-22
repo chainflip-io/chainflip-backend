@@ -27,10 +27,10 @@ env:
 
 jobs:
   terraform-benchmarks-runner:
-    name: Terrafrom ${{ github.event.inputs.command }}
+    name: Terrafrom ${{ github.event.inputs.command }} 🔮
     runs-on: ubuntu-20.04
     steps:
-      - name: Checkout chainflip-platform-monorepo
+      - name: Checkout chainflip-platform-monorepo 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
         with:
           repository: chainflip-io/chainflip-platform-monorepo
@@ -42,13 +42,13 @@ jobs:
           terraform_version: 1.1.7
           terraform_wrapper: false
 
-      - name: Configure AWS credentials using OIDC
+      - name: Configure AWS credentials using OIDC 🪪
         uses: aws-actions/configure-aws-credentials@010d0da01d0b5a38af31e9c3470dbfdabdecca3a
         with:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
 
-      - name: Generate Terraform Variables
+      - name: Generate Terraform Variables 🧙‍♂️
         id: tfvars
         run: |
           runner_registration_token=$(curl -sX POST -H "Authorization: token ${{ env.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}" https://api.github.com/orgs/chainflip-io/actions/runners/registration-token | jq .token --raw-output)
@@ -60,53 +60,53 @@ jobs:
           echo "TF_VAR_runner_custom_labels=$runner_custom_labels" >> $GITHUB_ENV
         working-directory: ./aws/Workloads/benchmarks-github-runner
 
-      - name: Terraform Init
+      - name: Terraform Init 🚀
         id: init
         run: |
           terraform init
         working-directory: ./aws/Workloads/benchmarks-github-runner
 
-      - name: Terraform Workspace
+      - name: Terraform Workspace 🏠
         id: workspace
         run:
           terraform workspace new ${{ github.event.inputs.benchmark_machine_spec }} || terraform workspace select ${{ github.event.inputs.benchmark_machine_spec
           }}
         working-directory: ./aws/Workloads/benchmarks-github-runner
 
-      - name: Terraform Validate
+      - name: Terraform Validate 🔍
         if: github.event.inputs.command == 'apply'
         id: validate
         run: terraform validate -no-color
         working-directory: ./aws/Workloads/benchmarks-github-runner
 
-      - name: Terraform Plan
+      - name: Terraform Plan 🗺️
         if: github.event.inputs.command == 'apply'
         id: plan
         run: >
           terraform plan -no-color -out tfplan
         working-directory: ./aws/Workloads/benchmarks-github-runner
 
-      - name: Terraform Apply
+      - name: Terraform Apply 🚀
         id: apply
         if: github.event.inputs.command == 'apply'
         run: >
           terraform apply -no-color -auto-approve "tfplan"
         working-directory: ./aws/Workloads/benchmarks-github-runner
 
-      - name: Get EC2 Instance ID
+      - name: Get EC2 Instance ID 🆔
         id: get-ec2-id
         if: github.event.inputs.command == 'destroy'
         run: echo "instance_id=$(terraform output ec2_id | tr -d '"')" >> $GITHUB_OUTPUT
         working-directory: ./aws/Workloads/benchmarks-github-runner
 
-      - name: Terraform Destroy
+      - name: Terraform Destroy 🧨
         id: destroy
         if: github.event.inputs.command == 'destroy'
         run: >
           terraform destroy -no-color -auto-approve
         working-directory: ./aws/Workloads/benchmarks-github-runner
 
-      - name: Terraform Workspace
+      - name: Terraform Workspace Cleanup 🧹
         id: destroy-workspace
         if: github.event.inputs.command == 'destroy'
         run: |
@@ -114,7 +114,7 @@ jobs:
           terraform workspace delete ${{ github.event.inputs.benchmark_machine_spec }}
         working-directory: ./aws/Workloads/benchmarks-github-runner
 
-      - name: Remove Runner from GitHub
+      - name: Remove Runner from GitHub 🚮
         if: github.event.inputs.command == 'destroy'
         run: |
           echo Removing instance: ${{ steps.get-ec2-id.outputs.instance_id }}

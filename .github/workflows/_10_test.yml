@@ -12,7 +12,7 @@ jobs:
   unit-tests:
     runs-on: namespace-profile-rust-builder
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-20.04-44"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-22.04-44"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -23,13 +23,18 @@ jobs:
       options: --cap-add=SYS_ADMIN # Required to by nscloud-cache-action to call `mount`.
 
     steps:
-      - name: Checkout
+      - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
-      - name: Setup sccache
+      - name: Setup sccache 🚀
         run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
 
-      - name: cargo cf-test-ci --locked
+      - name: Setup Rust cache 🦀💰
+        uses: namespacelabs/nscloud-cache-action@v1
+        with:
+          cache: rust
+
+      - name: Run tests 🧪
         run: |
           cargo cf-test-ci --locked
           sccache --show-stats

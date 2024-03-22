@@ -13,10 +13,15 @@ jobs:
         ubuntu_version: [20.04]
         profile: [release, production]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-${{ matrix.ubuntu_version }}-44"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-${{ matrix.ubuntu_version }}-45"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+      env:
+        NSC_CACHE_PATH: ${{ env.NSC_CACHE_PATH }}
+      volumes:
+        - /cache:/cache
+      options: --cap-add=SYS_ADMIN
     steps:
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11

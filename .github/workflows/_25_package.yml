@@ -17,26 +17,31 @@ jobs:
       matrix:
         ubuntu_version: [20.04, 22.04]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-${{ matrix.ubuntu_version }}-44"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-${{ matrix.ubuntu_version }}-45"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+      env:
+        NSC_CACHE_PATH: ${{ env.NSC_CACHE_PATH }}
+      volumes:
+        - /cache:/cache
+      options: --cap-add=SYS_ADMIN
     steps:
-      - name: Checkout
+      - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
-      - name: Download binaries from same run
+      - name: Download binaries from same run 📥
         uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
         with:
           name: chainflip-backend-bin-ubuntu-${{ matrix.ubuntu_version }}
           path: ./target/release
 
-      - name: Get date
+      - name: Get date 📅
         id: get-date
         run: |
           echo "date=$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
 
-      - name: Build global packages
+      - name: Build global packages 🌍
         run: |
           cargo deb -v --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ inputs.network }}
           cargo deb -v --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ inputs.network }}
@@ -44,7 +49,7 @@ jobs:
           cargo deb -v --no-build --no-strip -p chainflip-broker-api --deb-revision "${{ steps.get-date.outputs.date }}"
           cargo deb -v --no-build --no-strip -p chainflip-lp-api --deb-revision "${{ steps.get-date.outputs.date }}"
 
-      - name: Upload packages
+      - name: Upload packages 📤
         uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
         with:
           name: chainflip-backend-packages-ubuntu-${{ matrix.ubuntu_version }}
