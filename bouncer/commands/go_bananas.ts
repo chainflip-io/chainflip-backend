@@ -12,6 +12,8 @@ import {
   sleep,
   fineAmountToAmount,
   assetDecimals,
+  chainFromAsset,
+  stateChainAssetFromAsset,
 } from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
 import { testSwap } from '../shared/swapping';
@@ -102,12 +104,38 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
     const result = await Promise.all([
       call(
         'lp_set_limit_order',
-        [asset, 'Usdc', 'buy', 1, buyTick, '0x' + BigInt(liquidityFine).toString(16)],
+        [
+          {
+            chain: chainFromAsset(asset),
+            asset: stateChainAssetFromAsset(asset),
+          },
+          {
+            chain: 'Ethereum',
+            asset: 'USDC',
+          },
+          'buy',
+          1,
+          buyTick,
+          '0x' + BigInt(liquidityFine).toString(16),
+        ],
         `Buy ${asset}`,
       ),
       call(
         'lp_set_limit_order',
-        [asset, 'Usdc', 'sell', 1, sellTick, '0x' + BigInt(liquidityFine / price).toString(16)],
+        [
+          {
+            chain: chainFromAsset(asset),
+            asset: stateChainAssetFromAsset(asset),
+          },
+          {
+            chain: 'Ethereum',
+            asset: 'USDC',
+          },
+          'sell',
+          1,
+          sellTick,
+          '0x' + BigInt(liquidityFine / price).toString(16),
+        ],
         `Sell ${asset}`,
       ),
     ]);

@@ -88,7 +88,6 @@ export function getEvmContractAddress(chain: Chain, contract: string): string {
   }
 }
 
-// We use this instead of assetChains[asset] from the SDK because the SC strings are lowercase
 export function shortChainFromAsset(asset: Asset): string {
   switch (asset) {
     case 'Dot':
@@ -220,6 +219,13 @@ export function chainContractId(chain: Chain): number {
 export function stateChainAssetFromAsset(asset: Asset): string {
   if (assetConstants[asset]) {
     return assetConstants[asset].asset;
+  }
+  // TODO: Temporal workaround: To remove once SDK supports Arbitrum
+  if (asset === 'ArbEth') {
+    return 'ETH';
+  }
+  if (asset === 'ArbUsdc') {
+    return 'USDC';
   }
   throw new Error(`Unsupported asset: ${asset}`);
 }
@@ -829,8 +835,14 @@ export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
   const fineFromAmount = amountToFineAmount(fromAmount, assetDecimals(from));
   const hexPrice = (await chainflipApi.rpc(
     'cf_swap_rate',
-    stateChainAssetFromAsset(from),
-    stateChainAssetFromAsset(to),
+    {
+      chain: chainFromAsset(from),
+      asset: stateChainAssetFromAsset(from),
+    },
+    {
+      chain: chainFromAsset(to),
+      asset: stateChainAssetFromAsset(to),
+    },
     Number(fineFromAmount).toString(16),
   )) as SwapRate;
 

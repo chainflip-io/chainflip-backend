@@ -245,5 +245,4 @@ export async function testBrokerFeeCollection(): Promise<void> {
   ]);
 
   console.log('\x1b[32m%s\x1b[0m', '=== Broker fee collection test complete ===');
-  process.exit(0);
 }

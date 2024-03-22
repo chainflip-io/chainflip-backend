@@ -1,4 +1,4 @@
-import { InternalAsset as Asset, Asset as SCAsset, broker, assetConstants } from '@chainflip/cli';
+import { InternalAsset as Asset, Asset as SCAsset, broker } from '@chainflip/cli';
 import { decodeDotAddressForContract, chainFromAsset, stateChainAssetFromAsset } from './utils';
 
 const defaultCommissionBps = 100; // 1%
@@ -22,14 +22,8 @@ export async function newSwap(
 
   await broker.requestSwapDepositAddress(
     {
-      // TODO: Temporal workaround: To remove once SDK supports Arbitrum
-      srcAsset: (assetConstants[sourceAsset]
-        ? stateChainAssetFromAsset(sourceAsset)
-        : sourceAsset.toUpperCase().replace('ARB', '')) as SCAsset,
-      // TODO: Temporal workaround: To remove once SDK supports Arbitrum
-      destAsset: assetConstants[destAsset]
-        ? assetConstants[destAsset].asset
-        : (destAsset.toUpperCase().replace('ARB', '') as SCAsset),
+      srcAsset: stateChainAssetFromAsset(sourceAsset) as SCAsset,
+      destAsset: stateChainAssetFromAsset(destAsset) as SCAsset,
       srcChain: chainFromAsset(sourceAsset),
       destAddress: destinationAddress,
       destChain: chainFromAsset(destAsset),

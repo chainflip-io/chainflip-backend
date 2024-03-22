@@ -115,7 +115,7 @@ async function testLiquidityDeposit() {
     'liquidityProvider:AccountCredited',
     chainflip,
     (event) =>
-      event.data.asse === testAsset &&
+      event.data.asset === testAsset &&
       isWithinOnePercent(
         BigInt(event.data.amountCredited.replace(/,/g, '')),
         BigInt(testAssetAmount),

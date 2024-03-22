@@ -208,10 +208,10 @@ export async function testAllSwaps() {
   );
 
   // TODO: Remove this when SDK supports Arbitrum assets
-  const allInternalAssets = [...Object.values(Assets), 'ArbEth' as Asset, 'ArbUsdc' as Asset];
+  const allAssets = [...Object.values(Assets), 'ArbEth' as Asset, 'ArbUsdc' as Asset];
 
-  Object.values(allInternalAssets).forEach((sourceAsset) => {
-    Object.values(allInternalAssets)
+  Object.values(allAssets).forEach((sourceAsset) => {
+    Object.values(allAssets)
       .filter((destAsset) => sourceAsset !== destAsset)
       .forEach((destAsset) => {
         // Regular swaps
