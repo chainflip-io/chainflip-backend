@@ -46,6 +46,11 @@ jobs:
       - name: Setup sccache
         run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
 
+      - name: Setup Rust cache 🦀💰
+        uses: namespacelabs/nscloud-cache-action@v1
+        with:
+          cache: rust
+
       - name: Build chainflip binaries
         run: |
           cargo cf-build-${{ inputs.profile }} --locked
