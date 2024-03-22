@@ -1,20 +1,16 @@
-FROM ubuntu:22.04
+FROM ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot-base:v1.0.0
+
 ARG BUILD_DATETIME
 ARG VCS_REF
 
 LABEL org.opencontainers.image.authors="dev@chainflip.io"
 LABEL org.opencontainers.image.vendor="Chainflip Labs GmbH"
-LABEL org.opencontainers.image.title="chainflip/chainflip-lp-api"
-LABEL org.opencontainers.image.source="https://github.com/chainflip-io/chainflip-backend/blob/${VCS_REF}/ci/docker/development/chainflip-lp-api.Dockerfile"
+LABEL org.opencontainers.image.title="chainflip/polkadot"
+LABEL org.opencontainers.image.source="https://github.com/chainflip-io/chainflip-backend/blob/${VCS_REF}/ci/docker/development/polkadot/Dockerfile"
 LABEL org.opencontainers.image.revision="${VCS_REF}"
 LABEL org.opencontainers.image.created="${BUILD_DATETIME}"
 LABEL org.opencontainers.image.environment="development"
 LABEL org.opencontainers.image.documentation="https://github.com/chainflip-io/chainflip-backend"
 
-COPY chainflip-lp-api /usr/local/bin/chainflip-lp-api
 
-WORKDIR /etc/chainflip
-
-RUN chmod +x /usr/local/bin/chainflip-lp-api
-
-CMD ["/usr/local/bin/chainflip-lp-api"]
+COPY chainspec.dev.v1.0.0.json /polkadot/chainspec.json
