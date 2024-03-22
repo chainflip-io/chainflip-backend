@@ -1,4 +1,4 @@
-name: External Networks CI - Polkadot 🔴
+name: External Networks CI - Polkadot 🟠
 concurrency:
   group: ${{ github.ref }}-external-networks-polkadot
   cancel-in-progress: true
