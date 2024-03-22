@@ -131,10 +131,18 @@ async function incompatibleUpgradeNoBuild(
 
   await sleep(20000);
 
-  const brokerPID = execSync('lsof -t -i:10997');
-  console.log('New broker PID: ' + brokerPID.toString());
-  const lpApiPID = execSync('lsof -t -i:10589');
-  console.log('New LP API PID: ' + lpApiPID.toString());
+  for (const [process, port] of [
+    ['broker-api', 10997],
+    ['lp-api', 10589],
+  ]) {
+    try {
+      const pid = execSync(`lsof -t -i:${port}`);
+      console.log(`New ${process} PID: ${pid.toString()}`);
+    } catch (e) {
+      console.error(`Error starting ${process}: ${e}`);
+      throw e;
+    }
+  }
 
   console.log('Started new broker and lp-api.');
 }
