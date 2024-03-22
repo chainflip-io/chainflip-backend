@@ -1,8 +1,7 @@
-ARG POLKADOT_VERSION=v1.0.0
+FROM ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot-base:v1.0.0
+
 ARG BUILD_DATETIME
 ARG VCS_REF
-
-FROM ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot-base:${POLKADOT_VERSION}
 
 LABEL org.opencontainers.image.authors="dev@chainflip.io"
 LABEL org.opencontainers.image.vendor="Chainflip Labs GmbH"
@@ -14,4 +13,4 @@ LABEL org.opencontainers.image.environment="development"
 LABEL org.opencontainers.image.documentation="https://github.com/chainflip-io/chainflip-backend"
 
 
-COPY chainspec.dev.${POLKADOT_VERSION}.json /polkadot/chainspec.json
+COPY chainspec.dev.v1.0.0.json /polkadot/chainspec.json
