@@ -10,7 +10,7 @@ import { runWithTimeout } from '../shared/utils';
 import { provideLiquidity } from '../shared/provide_liquidity';
 
 async function main() {
-  const ccy = process.argv[2] as Asset;
+  const ccy = parseAssetString(process.argv[2]);
   const amount = parseFloat(process.argv[3]);
   await provideLiquidity(ccy, amount);
   process.exit(0);
