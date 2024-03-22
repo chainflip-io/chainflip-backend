@@ -1137,6 +1137,7 @@ mod benches {
 		[pallet_cf_broadcast, EthereumBroadcaster]
 		[pallet_cf_chain_tracking, EthereumChainTracking]
 		[pallet_cf_swapping, Swapping]
+		[pallet_cf_account_roles, AccountRoles]
 		[pallet_cf_ingress_egress, EthereumIngressEgress]
 		[pallet_cf_lp, LiquidityProvider]
 		[pallet_cf_pools, LiquidityPools]
