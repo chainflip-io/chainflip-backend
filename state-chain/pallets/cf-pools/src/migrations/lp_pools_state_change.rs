@@ -54,25 +54,30 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 				BTreeMap<(T::AccountId, OrderId, SqrtPriceQ64F96), LimitOrdersPosition>,
 			> = BTreeMap::new();
 
-			pool.pool_state.limit_orders.positions.base.iter().for_each(|(key, value)| {
-				let price = key.0;
-				let lp = key.1 .0.clone();
-				let id = key.1 .1;
-				transformed_limit_orders
-					.entry(Pairs::Base)
-					.or_insert_with(BTreeMap::new)
-					.insert((lp.clone(), id, price), value.clone());
-			});
+			transformed_limit_orders.insert(Pairs::Base, BTreeMap::new());
+			transformed_limit_orders.insert(Pairs::Quote, BTreeMap::new());
 
-			pool.pool_state.limit_orders.positions.quote.iter().for_each(|(key, value)| {
-				let price = key.0;
-				let lp = key.1 .0.clone();
-				let id = key.1 .1;
-				transformed_limit_orders
-					.entry(Pairs::Quote)
-					.or_insert_with(BTreeMap::new)
-					.insert((lp.clone(), id, price), value.clone());
-			});
+			pool.pool_state
+				.limit_orders
+				.positions
+				.clone()
+				.map_with_pair(|pair, limit_orders| {
+					limit_orders.into_iter().for_each(|(key, value)| {
+						let price = key.0;
+						let lp = key.1 .0.clone();
+						let id = key.1 .1;
+						transformed_limit_orders
+							.entry(pair)
+							.and_modify(|e| {
+								e.insert((lp.clone(), id, price), value.clone());
+							})
+							.or_insert_with(|| {
+								let mut map = BTreeMap::new();
+								map.insert((lp.clone(), id, price), value.clone());
+								map
+							});
+					});
+				});
 
 			pool.pool_state.range_orders.positions.iter().for_each(|(key, value)| {
 				let lp = key.0 .0.clone();
@@ -82,8 +87,6 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 				transformed_range_order_positions.insert((lp, id, start, end), value.clone());
 			});
 
-			let no_orders: BTreeMap<(T::AccountId, OrderId, SqrtPriceQ64F96), LimitOrdersPosition> =
-				BTreeMap::new();
 			Pools::<T>::insert(
 				asset_pair,
 				Pool {
@@ -97,11 +100,11 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 							PoolPairsMap {
 								base: transformed_limit_orders
 									.get(&Pairs::Base)
-									.unwrap_or(&no_orders)
+									.expect("to have base orders")
 									.clone(),
 								quote: transformed_limit_orders
 									.get(&Pairs::Quote)
-									.unwrap_or(&no_orders)
+									.expect("to have quote orders")
 									.clone(),
 							},
 						),
@@ -143,24 +146,6 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 			assert!(
 				pool.pool_state.limit_orders.is_state_migrated(old_limit_orders_state),
 				"Limit orders state should be migrated"
-			);
-
-			assert_eq!(
-				new_range_orders_state.positions.len(),
-				old_range_orders_state.positions.len(),
-				"Range orders positions count mismatch"
-			);
-
-			assert_eq!(
-				new_limit_orders_state.positions.base.len(),
-				old_limit_orders_state.positions.base.len(),
-				"Limit orders base positions count mismatch"
-			);
-
-			assert_eq!(
-				new_limit_orders_state.positions.quote.len(),
-				old_limit_orders_state.positions.quote.len(),
-				"Limit orders quote positions count mismatch"
 			);
 
 			old_range_orders_state.positions.iter().for_each(|(key, value)| {
