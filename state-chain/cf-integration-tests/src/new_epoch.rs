@@ -1,9 +1,15 @@
 use super::*;
 use crate::genesis::GENESIS_BALANCE;
+use cf_chains::btc::{
+	deposit_address::DepositAddress, utxo_selection::ConsolidationParameters, BtcAmount, Utxo,
+	UtxoId, CHANGE_ADDRESS_SALT,
+};
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
-use cf_traits::EpochInfo;
+use cf_traits::{EpochInfo, KeyProvider};
+use frame_support::traits::UnfilteredDispatchable;
+use pallet_cf_environment::BitcoinAvailableUtxos;
 use pallet_cf_validator::RotationPhase;
-use state_chain_runtime::Validator;
+use state_chain_runtime::{BitcoinThresholdSigner, Environment, RuntimeEvent, Validator};
 
 #[test]
 fn auction_repeats_after_failure_because_of_liveness() {
@@ -215,6 +221,173 @@ fn epoch_rotates() {
 				ChainflipAccountState::Backup,
 				get_validator_state(&late_funder),
 				"late funder should be a backup node"
+			);
+		});
+}
+
+fn utxo(amount: BtcAmount, salt: u32, pub_key: Option<[u8; 32]>) -> Utxo {
+	Utxo {
+		amount,
+		id: Default::default(),
+		deposit_address: DepositAddress::new(pub_key.unwrap_or_default(), salt),
+	}
+}
+
+fn add_utxo_amount(utxo: Utxo) {
+	Environment::add_bitcoin_utxo_to_list(utxo.amount, utxo.id, utxo.deposit_address);
+}
+
+#[test]
+fn bitcoin_utxos_are_sent_to_current_vault_or_discarded() {
+	const EPOCH_BLOCKS: BlockNumber = 100;
+	const MAX_AUTHORITIES: AuthorityCount = 5;
+	super::genesis::with_test_defaults()
+		.blocks_per_epoch(EPOCH_BLOCKS)
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, _) =
+				crate::network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
+
+			testnet.move_to_the_next_epoch();
+			testnet.move_to_the_next_epoch();
+			assert_eq!(Validator::current_epoch(), 3);
+
+			let (epoch_2, epoch_3) = if let Some(cf_traits::EpochKey {
+				key: cf_chains::btc::AggKey { previous: Some(prev_key), current },
+				..
+			}) = BitcoinThresholdSigner::active_epoch_key()
+			{
+				(prev_key, current)
+			} else {
+				unreachable!("Bitcoin vault key for epoch 0 and 1 must exist.");
+			};
+
+			// 	update_consolidation_parameters
+			assert_ok!(RuntimeCall::Environment(
+				pallet_cf_environment::Call::update_consolidation_parameters {
+					params: ConsolidationParameters {
+						consolidation_threshold: 10,
+						consolidation_size: 2,
+					}
+				}
+			)
+			.clone()
+			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
+
+			// Add some bitcoin utxos.
+			add_utxo_amount(utxo(31_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)));
+			add_utxo_amount(utxo(32_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)));
+			add_utxo_amount(utxo(33_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)));
+			add_utxo_amount(utxo(34_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)));
+
+			testnet.move_forward_blocks(1);
+			// Nothing changes.
+			assert_eq!(BitcoinAvailableUtxos::<Runtime>::decode_len(), Some(4));
+
+			// Add utxos from previous epoch
+			add_utxo_amount(utxo(21_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)));
+			add_utxo_amount(utxo(22_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)));
+			add_utxo_amount(utxo(23_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)));
+			add_utxo_amount(utxo(24_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)));
+
+			testnet.move_forward_blocks(1);
+
+			// 2 utxos from previous vault are sent to the current vault.
+			assert_eq!(
+				BitcoinAvailableUtxos::<Runtime>::get(),
+				vec![
+					utxo(31_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+					utxo(32_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+					utxo(33_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+					utxo(34_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+					utxo(23_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+					utxo(24_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+				]
+			);
+
+			System::assert_has_event(RuntimeEvent::Environment(
+				pallet_cf_environment::Event::UtxoTransferred {
+					broadcast_id: 1,
+					total_amount: 42_999_817,
+				},
+			));
+
+			// These are discarded
+			add_utxo_amount(utxo(1_000_000, 0, None));
+			add_utxo_amount(utxo(2_000_000, 0, None));
+			add_utxo_amount(utxo(3_000_000, 0, None));
+
+			testnet.move_forward_blocks(1);
+
+			// Last epoch's utxo has been transferred to the current vault
+			assert_eq!(
+				BitcoinAvailableUtxos::<Runtime>::get(),
+				vec![
+					utxo(31_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+					utxo(32_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+					utxo(33_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+					utxo(34_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+					Utxo {
+						id: UtxoId {
+							tx_id: hex_literal::hex!(
+								"d7ee4b2c95f67a0454a3c4e9774c057075e649100284cf62a4b8c6f3925a1d26"
+							)
+							.into(),
+							vout: 0,
+						},
+						amount: 42_999_817,
+						deposit_address: DepositAddress { pubkey_x: epoch_3, script_path: None }
+					},
+				]
+			);
+			System::assert_has_event(RuntimeEvent::Environment(
+				pallet_cf_environment::Event::UtxoTransferred {
+					broadcast_id: 2,
+					total_amount: 46_999_817,
+				},
+			));
+			System::assert_has_event(RuntimeEvent::Environment(
+				pallet_cf_environment::Event::StaleUtxoDiscarded {
+					utxos: vec![
+						utxo(1_000_000, 0, None),
+						utxo(2_000_000, 0, None),
+						utxo(3_000_000, 0, None),
+					],
+				},
+			));
+
+			testnet.move_forward_blocks(1);
+
+			assert_eq!(
+				BitcoinAvailableUtxos::<Runtime>::get(),
+				vec![
+					utxo(31_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+					utxo(32_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+					utxo(33_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+					utxo(34_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+					Utxo {
+						id: UtxoId {
+							tx_id: hex_literal::hex!(
+								"d7ee4b2c95f67a0454a3c4e9774c057075e649100284cf62a4b8c6f3925a1d26"
+							)
+							.into(),
+							vout: 0,
+						},
+						amount: 42_999_817,
+						deposit_address: DepositAddress { pubkey_x: epoch_3, script_path: None }
+					},
+					Utxo {
+						id: UtxoId {
+							tx_id: hex_literal::hex!(
+								"5edf11df7cec1b6957e2ed603b2e93a72b5cb3c6e3e7b7094e54ccc77a4fe8d7"
+							)
+							.into(),
+							vout: 0,
+						},
+						amount: 46_999_817,
+						deposit_address: DepositAddress { pubkey_x: epoch_3, script_path: None }
+					},
+				]
 			);
 		});
 }

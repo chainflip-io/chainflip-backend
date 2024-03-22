@@ -228,6 +228,9 @@ impl pallet_cf_environment::Config for Runtime {
 	type BitcoinVaultKeyWitnessedHandler = BitcoinVault;
 	type ArbitrumVaultKeyWitnessedHandler = ArbitrumVault;
 	type BitcoinFeeInfo = chainflip::BitcoinFeeGetter;
+	type BitcoinKeyProvider = BitcoinThresholdSigner;
+	type BitcoinCall = cf_chains::btc::api::BitcoinApi<BtcEnvironment>;
+	type BitcoinBroadcaster = BitcoinBroadcaster;
 	type RuntimeSafeMode = RuntimeSafeMode;
 	type CurrentReleaseVersion = CurrentReleaseVersion;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
