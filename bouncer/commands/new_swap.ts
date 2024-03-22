@@ -13,8 +13,8 @@ import { runWithTimeout } from '../shared/utils';
 import { newSwap } from '../shared/new_swap';
 
 async function newSwapCommand() {
-  const sourceAsset = process.argv[2] as Asset;
-  const destAsset = process.argv[3] as Asset;
+  const sourceAsset = parseAssetString(process.argv[2]);
+  const destAsset = parseAssetString(process.argv[3]);
   const destAddress = process.argv[4];
 
   console.log(`Requesting swap ${sourceAsset} -> ${destAsset}`);
