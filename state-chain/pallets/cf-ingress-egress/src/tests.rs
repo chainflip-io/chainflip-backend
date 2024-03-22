@@ -1485,9 +1485,9 @@ fn consolidation_tx_gets_broadcasted_on_finalize() {
 
 		IngressEgress::on_finalize(1);
 
-		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
-			crate::Event::UtxoConsolidation { broadcast_id: 1 },
-		));
+		assert_has_event::<Test>(RuntimeEvent::IngressEgress(crate::Event::UtxoConsolidation {
+			broadcast_id: 1,
+		}));
 	});
 }
 
