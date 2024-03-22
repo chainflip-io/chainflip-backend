@@ -69,9 +69,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install pnpm
-        run: npm install -g pnpm
-
       - name: Configure NodeJS
         uses: actions/setup-node@v3
         with:
@@ -173,7 +170,7 @@ jobs:
           mkdir -p /tmp/chainflip/bashful
           mkdir -p /tmp/chainflip/doc
           mkdir -p /tmp/chainflip/dopey
-          touch /tmp/chainflip/debug.*log
+          touch /tmp/chainflip/debug.log
           chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
           touch ./localnet/.setup_complete
           ./localnet/manage.sh
@@ -243,7 +240,7 @@ jobs:
       - name: Print localnet init debug logs 🕵️‍♂️
         if: always()
         run: |
-          cat /tmp/chainflip/debug.*log
+          cat /tmp/chainflip/debug.log
 
       - name: Upload Localnet Logs 💾
         if: always()
