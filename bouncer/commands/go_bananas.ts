@@ -108,12 +108,26 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
     const result = await Promise.all([
       call(
         'lp_set_limit_order',
-        [{chain: chainFromAsset(asset), asset: asset}, 'USDC', 'buy', 1, buyTick, '0x' + BigInt(liquidityFine).toString(16)],
+        [
+          { chain: chainFromAsset(asset), asset },
+          'USDC',
+          'buy',
+          1,
+          buyTick,
+          '0x' + BigInt(liquidityFine).toString(16),
+        ],
         `Buy ${asset}`,
       ),
       call(
         'lp_set_limit_order',
-        [{chain: chainFromAsset(asset), asset: asset}, 'USDC', 'sell', 1, sellTick, '0x' + BigInt(liquidityFine / price).toString(16)],
+        [
+          { chain: chainFromAsset(asset), asset },
+          'USDC',
+          'sell',
+          1,
+          sellTick,
+          '0x' + BigInt(liquidityFine / price).toString(16),
+        ],
         `Sell ${asset}`,
       ),
     ]);
@@ -125,19 +139,15 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
           if (BigInt(update.collected_fees) > BigInt(0)) {
             let ccy;
             if (update.side === 'buy') {
-              let asset = update.base_asset;
-              if(typeof asset === "string") {
-                ccy = asset.toUpperCase() as Asset;
+              if (typeof update.base_asset === 'string') {
+                ccy = update.base_asset.toUpperCase() as Asset;
               } else {
-                ccy = asset.asset.toUpperCase() as Asset;
+                ccy = update.base_asset.asset.toUpperCase() as Asset;
               }
+            } else if (typeof update.base_asset === 'string') {
+              ccy = update.base_asset.toUpperCase() as Asset;
             } else {
-              let asset = update.quote_asset;
-              if(typeof asset === "string") {
-                ccy = asset.toUpperCase() as Asset;
-              } else {
-                ccy = asset.asset.toUpperCase() as Asset;
-              }
+              ccy = update.base_asset.asset.toUpperCase() as Asset;
             }
             const fees = fineAmountToAmount(
               BigInt(update.collected_fees.toString()).toString(10),
@@ -149,23 +159,23 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
             let buyCcy;
             let sellCcy;
             if (update.side === 'buy') {
-              if(typeof update.base_asset === "string") {
+              if (typeof update.base_asset === 'string') {
                 buyCcy = update.base_asset.toUpperCase() as Asset;
               } else {
                 buyCcy = update.base_asset.asset.toUpperCase() as Asset;
               }
-              if(typeof update.quote_asset === "string") {
+              if (typeof update.quote_asset === 'string') {
                 sellCcy = update.quote_asset.toUpperCase() as Asset;
               } else {
                 sellCcy = update.quote_asset.asset.toUpperCase() as Asset;
               }
             } else {
-              if(typeof update.quote_asset === "string") {
+              if (typeof update.quote_asset === 'string') {
                 buyCcy = update.quote_asset.toUpperCase() as Asset;
               } else {
                 buyCcy = update.quote_asset.asset.toUpperCase() as Asset;
               }
-              if(typeof update.base_asset === "string") {
+              if (typeof update.base_asset === 'string') {
                 sellCcy = update.base_asset.toUpperCase() as Asset;
               } else {
                 sellCcy = update.base_asset.asset.toUpperCase() as Asset;
@@ -186,7 +196,9 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
 
 async function launchTornado() {
   const chainflip = await getChainflipApi();
-  const epoch = (await chainflip.query.bitcoinThresholdSigner.currentKeyEpoch()).toJSON()! as number;
+  const epoch = (
+    await chainflip.query.bitcoinThresholdSigner.currentKeyEpoch()
+  ).toJSON()! as number;
   const pubkey = (
     (await chainflip.query.bitcoinThresholdSigner.keys(epoch)).toJSON()!.current as string
   ).substring(2);
