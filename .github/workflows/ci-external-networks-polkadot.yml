@@ -1,4 +1,4 @@
-name: External Networks Dev Images CI 🐳
+name: External Networks CI - Polkadot 🔴
 
 on:
   push:
