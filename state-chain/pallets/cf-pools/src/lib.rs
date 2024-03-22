@@ -132,7 +132,7 @@ impl<T> AskBidMap<T> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
 
 #[frame_support::pallet]
 pub mod pallet {
