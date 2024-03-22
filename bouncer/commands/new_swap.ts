@@ -8,8 +8,7 @@
 // Argument 3 is the destination address
 // For example: ./commands/new_swap.ts Dot Btc n1ocq2FF95qopwbEsjUTy3ZrawwXDJ6UsX
 
-import { InternalAsset as Asset } from '@chainflip/cli';
-import { runWithTimeout } from '../shared/utils';
+import { parseAssetString, runWithTimeout } from '../shared/utils';
 import { newSwap } from '../shared/new_swap';
 
 async function newSwapCommand() {

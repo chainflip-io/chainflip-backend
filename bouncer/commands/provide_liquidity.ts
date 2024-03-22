@@ -5,8 +5,7 @@
 // It will fund liquidity of the given currency and amount
 // For example: ./commands/provide_liquidity.ts Btc 1.5
 
-import { InternalAsset as Asset } from '@chainflip/cli';
-import { runWithTimeout } from '../shared/utils';
+import { parseAssetString, runWithTimeout } from '../shared/utils';
 import { provideLiquidity } from '../shared/provide_liquidity';
 
 async function main() {
