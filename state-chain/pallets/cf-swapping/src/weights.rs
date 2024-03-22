@@ -35,6 +35,7 @@ pub trait WeightInfo {
 	fn request_swap_deposit_address() -> Weight;
 	fn withdraw() -> Weight;
 	fn register_as_broker() -> Weight;
+	fn deregister_as_broker() -> Weight;
 	fn schedule_swap_from_contract() -> Weight;
 	fn ccm_deposit() -> Weight;
 }
@@ -95,6 +96,15 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:1)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: Some(33), added: 2508, mode: `MaxEncodedLen`)
 	fn register_as_broker() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `693`
+		//  Estimated: `3498`
+		// Minimum execution time: 21_675_000 picoseconds.
+		Weight::from_parts(21_980_000, 3498)
+			.saturating_add(T::DbWeight::get().reads(3_u64))
+			.saturating_add(T::DbWeight::get().writes(1_u64))
+	}
+	fn deregister_as_broker() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `693`
 		//  Estimated: `3498`
@@ -196,6 +206,15 @@ impl WeightInfo for () {
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:1)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: Some(33), added: 2508, mode: `MaxEncodedLen`)
 	fn register_as_broker() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `693`
+		//  Estimated: `3498`
+		// Minimum execution time: 21_675_000 picoseconds.
+		Weight::from_parts(21_980_000, 3498)
+			.saturating_add(RocksDbWeight::get().reads(3_u64))
+			.saturating_add(RocksDbWeight::get().writes(1_u64))
+	}
+	fn deregister_as_broker() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `693`
 		//  Estimated: `3498`

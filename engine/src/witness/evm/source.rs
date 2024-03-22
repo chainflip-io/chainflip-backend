@@ -1,12 +1,11 @@
+use cf_chains::evm::EvmCrypto;
 use ethers::types::Bloom;
 use futures::stream::StreamExt;
 use futures_util::stream;
 use sp_core::H256;
 
 use crate::{
-	eth::{
-		core_h256, retry_rpc::EthersRetrySubscribeApi, ConscientiousEvmWebsocketBlockHeaderStream,
-	},
+	evm::{core_h256, retry_rpc::EvmRetrySubscribeApi, ConscientiousEvmWebsocketBlockHeaderStream},
 	witness::common::{
 		chain_source::{BoxChainStream, ChainClient, ChainSource, Header},
 		ExternalChain, ExternalChainSource,
@@ -20,10 +19,10 @@ pub struct EvmSource<Client, EvmChain> {
 	_phantom: std::marker::PhantomData<EvmChain>,
 }
 
-impl<
-		C: EthersRetrySubscribeApi + ChainClient<Index = u64, Hash = H256, Data = Bloom> + Clone,
-		EvmChain: ExternalChain,
-	> EvmSource<C, EvmChain>
+impl<C, EvmChain> EvmSource<C, EvmChain>
+where
+	EvmChain: ExternalChain<ChainCrypto = EvmCrypto>,
+	C: EvmRetrySubscribeApi + ChainClient<Index = u64, Hash = H256, Data = Bloom> + Clone,
 {
 	pub fn new(client: C) -> Self {
 		Self { client, _phantom: std::marker::PhantomData }
@@ -39,8 +38,8 @@ const RESTART_STREAM_DELAY: Duration = Duration::from_secs(6);
 #[async_trait::async_trait]
 impl<C, EvmChain> ChainSource for EvmSource<C, EvmChain>
 where
-	C: EthersRetrySubscribeApi + ChainClient<Index = u64, Hash = H256, Data = Bloom> + Clone,
-	EvmChain: ExternalChain,
+	EvmChain: ExternalChain<ChainCrypto = EvmCrypto>,
+	C: EvmRetrySubscribeApi + ChainClient<Index = u64, Hash = H256, Data = Bloom> + Clone,
 {
 	type Index = <C as ChainClient>::Index;
 	type Hash = <C as ChainClient>::Hash;
@@ -94,8 +93,8 @@ where
 
 impl<C, EvmChain> ExternalChainSource for EvmSource<C, EvmChain>
 where
-	C: EthersRetrySubscribeApi + ChainClient<Index = u64, Hash = H256, Data = Bloom> + Clone,
-	EvmChain: ExternalChain<ChainBlockNumber = u64>,
+	EvmChain: ExternalChain<ChainBlockNumber = u64, ChainCrypto = EvmCrypto>,
+	C: EvmRetrySubscribeApi + ChainClient<Index = u64, Hash = H256, Data = Bloom> + Clone,
 {
 	type Chain = EvmChain;
 }

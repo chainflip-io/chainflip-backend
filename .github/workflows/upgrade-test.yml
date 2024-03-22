@@ -40,7 +40,7 @@ permissions:
 
 jobs:
   upgrade_test:
-    runs-on: [digitalocean]
+    runs-on: digitalocean
     # conservatively 1.5 hours. 2 bouncer runs need to occur.
     timeout-minutes: 90
     steps:
@@ -68,6 +68,9 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install pnpm
+        run: npm install -g pnpm
 
       - name: Configure NodeJS
         uses: actions/setup-node@v3
@@ -160,7 +163,7 @@ jobs:
       - name: Start a localnet from current release
         env:
           BINARY_ROOT_PATH: ./latest-release-bins
-          DEBUG_OUTPUT_DESTINATION: /tmp/chainflip/debug.log
+          DEBUG_OUTPUT_DESTINATION: /tmp/chainflip/debug.*log
         # TEMP: It should be: # git checkout ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}
         # But we need the fix for the broker test for 1.2 here for now
         run: |
@@ -170,7 +173,7 @@ jobs:
           mkdir -p /tmp/chainflip/bashful
           mkdir -p /tmp/chainflip/doc
           mkdir -p /tmp/chainflip/dopey
-          touch /tmp/chainflip/debug.log
+          touch /tmp/chainflip/debug.*log
           chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
           touch ./localnet/.setup_complete
           ./localnet/manage.sh
@@ -215,32 +218,32 @@ jobs:
       - name: Print old chainflip-engine logs
         if: failure()
         run: |
-          cat /tmp/chainflip/*/chainflip-engine.log
+          cat /tmp/chainflip/*/chainflip-engine.*log
 
       - name: Print new chainflip-engine logs
         if: failure()
         run: |
-          cat /tmp/chainflip/*/chainflip-engine-upgrade.log
+          cat /tmp/chainflip/*/chainflip-engine-upgrade.*log
 
       - name: Print chainflip-node logs
         if: failure()
         run: |
-          cat /tmp/chainflip/*/chainflip-node.log
+          cat /tmp/chainflip/*/chainflip-node.*log
 
       - name: Print broker logs
         if: failure()
         run: |
-          cat /tmp/chainflip/chainflip-broker-api.log
+          cat /tmp/chainflip/chainflip-broker-api.*log
 
       - name: Print lp-api logs
         if: failure()
         run: |
-          cat /tmp/chainflip/chainflip-lp-api.log
+          cat /tmp/chainflip/chainflip-lp-api.*log
 
       - name: Print localnet init debug logs 🕵️‍♂️
         if: always()
         run: |
-          cat /tmp/chainflip/debug.log
+          cat /tmp/chainflip/debug.*log
 
       - name: Upload Localnet Logs 💾
         if: always()
@@ -249,7 +252,7 @@ jobs:
         with:
           name: localnet-logs
           path: |
-            /tmp/chainflip/*/chainflip-*.log
+            /tmp/chainflip/*/chainflip-*.*log
 
       - name: Clean Up docker containers 🧹
         if: always()

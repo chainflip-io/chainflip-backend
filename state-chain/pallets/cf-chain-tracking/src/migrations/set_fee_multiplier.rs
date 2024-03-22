@@ -12,7 +12,7 @@ const BTC_FEE_MULTIPLIER: FixedU128 = FixedU128::from_rational(3, 2);
 
 impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		if T::TargetChain::NAME == "Bitcoin" {
+		if T::TargetChain::NAME == <Bitcoin as Chain>::NAME {
 			FeeMultiplier::<T, I>::set(BTC_FEE_MULTIPLIER);
 		}
 

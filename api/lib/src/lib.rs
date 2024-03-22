@@ -138,6 +138,10 @@ impl StateChainApi {
 		self.state_chain_client.clone()
 	}
 
+	pub fn validator_api(&self) -> Arc<impl ValidatorApi> {
+		self.state_chain_client.clone()
+	}
+
 	pub fn broker_api(&self) -> Arc<impl BrokerApi> {
 		self.state_chain_client.clone()
 	}
@@ -157,6 +161,22 @@ impl GovernanceApi for StateChainClient {}
 impl BrokerApi for StateChainClient {}
 #[async_trait]
 impl OperatorApi for StateChainClient {}
+#[async_trait]
+impl ValidatorApi for StateChainClient {}
+
+#[async_trait]
+pub trait ValidatorApi: SimpleSubmissionApi {
+	async fn register_account(&self) -> Result<H256> {
+		self.simple_submission_with_dry_run(pallet_cf_validator::Call::register_as_validator {})
+			.await
+			.context("Could not register as validator")
+	}
+	async fn deregister_account(&self) -> Result<H256> {
+		self.simple_submission_with_dry_run(pallet_cf_validator::Call::deregister_as_validator {})
+			.await
+			.context("Could not de-register as validator")
+	}
+}
 
 #[async_trait]
 pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseApi {
@@ -204,7 +224,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 				RuntimeCall::from(pallet_cf_swapping::Call::register_as_broker {}),
 			AccountRole::LiquidityProvider =>
 				RuntimeCall::from(pallet_cf_lp::Call::register_lp_account {}),
-			AccountRole::Unregistered => bail!("Cannot register account role None"),
+			AccountRole::Unregistered => bail!("Cannot register account role {:?}", role),
 		};
 
 		let (tx_hash, ..) = self
@@ -337,7 +357,7 @@ impl fmt::Display for WithdrawFeesDetail {
 }
 
 #[async_trait]
-pub trait BrokerApi: SignedExtrinsicApi {
+pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 	async fn request_swap_deposit_address(
 		&self,
 		source_asset: Asset,
@@ -431,7 +451,32 @@ pub trait BrokerApi: SignedExtrinsicApi {
 			bail!("No WithdrawalRequested event was found");
 		}
 	}
+	async fn register_account(&self) -> Result<H256> {
+		self.simple_submission_with_dry_run(pallet_cf_swapping::Call::register_as_broker {})
+			.await
+			.context("Could not register as broker")
+	}
+	async fn deregister_account(&self) -> Result<H256> {
+		self.simple_submission_with_dry_run(pallet_cf_swapping::Call::deregister_as_broker {})
+			.await
+			.context("Could not de-register as broker")
+	}
 }
+
+#[async_trait]
+pub trait SimpleSubmissionApi: SignedExtrinsicApi {
+	async fn simple_submission_with_dry_run<C>(&self, call: C) -> Result<H256>
+	where
+		C: Into<state_chain_runtime::RuntimeCall> + Clone + std::fmt::Debug + Send + Sync + 'static,
+	{
+		let (tx_hash, ..) =
+			self.submit_signed_extrinsic_with_dry_run(call).await?.until_in_block().await?;
+		Ok(tx_hash)
+	}
+}
+
+#[async_trait]
+impl<T: SignedExtrinsicApi + Sized + Send + Sync + 'static> SimpleSubmissionApi for T {}
 
 /// Sanitize the given address (hex or base58) and turn it into a EncodedAddress of the given
 /// chain.

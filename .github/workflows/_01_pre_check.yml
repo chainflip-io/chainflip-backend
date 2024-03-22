@@ -9,7 +9,7 @@ env:
 
 jobs:
   cargo-fmt:
-    runs-on: [hetzner]
+    runs-on: nscloud-ubuntu-22.04-amd64-2x4
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-20.04-44"
       credentials:
@@ -23,7 +23,7 @@ jobs:
         run: cargo fmt --all -- --check
 
   audit:
-    runs-on: [hetzner]
+    runs-on: nscloud-ubuntu-22.04-amd64-4x16
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-20.04-44"
       credentials:
@@ -36,7 +36,7 @@ jobs:
         run: cargo cf-audit
 
   cargo-clippy:
-    runs-on: [hetzner]
+    runs-on: namespace-profile-rust-builder
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-20.04-44"
       credentials:
@@ -51,7 +51,7 @@ jobs:
         run: cargo cf-clippy-ci
 
   lint-bouncer:
-    runs-on: [hetzner]
+    runs-on: ubuntu-22.04
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-20.04-44"
       credentials:
@@ -60,6 +60,9 @@ jobs:
     steps:
       - name: Checkout chainflip-backend
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Install pnpm
+        run: npm install -g pnpm
 
       - name: Configure NodeJS
         uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65
@@ -88,7 +91,7 @@ jobs:
         run: pnpm eslint:check
 
   lint-ci-workflows:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -100,7 +103,7 @@ jobs:
         shell: bash
 
   lint-dockerfiles:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         dockerfile:
@@ -123,7 +126,13 @@ jobs:
       - name: Checkout 🏁
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
+      - name: Login to DockerHub 🔑
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
+        with:
+          username: ${{ secrets.CF_DOCKERHUB_USERNAME }}
+          password: ${{ secrets.CF_DOCKERHUB_TOKEN }}
+
       - name: Lint 🐳🔬
-        uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4bfde3cf
+        uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: ci/docker/${{ matrix.environment }}/${{ matrix.dockerfile }}.Dockerfile

@@ -1,6 +1,6 @@
 self-hosted-runner:
   # Labels of self-hosted runner in array of strings.
-  labels: [hetzner, digitalocean]
+  labels: [hetzner, digitalocean, nscloud-ubuntu-22.04-amd64-2x4, nscloud-ubuntu-22.04-amd64-2x4, nscloud-ubuntu-22.04-amd64-4x8, namespace-profile-rust-builder, nscloud-ubuntu-22.04-amd64-32x64, nscloud-ubuntu-22.04-amd64-8x16, nscloud-ubuntu-22.04-amd64-4x16]
 # Configuration variables in array of strings defined in your repository or
 # organization. `null` means disabling configuration variables check.
 # Empty array means no configuration variable is allowed.

@@ -3,8 +3,8 @@ pub use chainflip_engine::settings::StateChain;
 use chainflip_engine::{
 	constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT},
 	settings::{
-		resolve_settings_path, CfSettings, Eth, EthOptions, PathResolutionExpectation,
-		StateChainOptions, DEFAULT_SETTINGS_DIR,
+		resolve_settings_path, CfSettings, PathResolutionExpectation, StateChainOptions,
+		DEFAULT_SETTINGS_DIR,
 	},
 };
 use clap::Parser;
@@ -24,9 +24,6 @@ pub struct CLICommandLineOptions {
 	#[clap(flatten)]
 	state_chain_opts: StateChainOptions,
 
-	#[clap(flatten)]
-	eth_opts: EthOptions,
-
 	#[clap(subcommand)]
 	pub cmd: CliCommand,
 }
@@ -41,8 +38,6 @@ impl Source for CLICommandLineOptions {
 
 		self.state_chain_opts.insert_all(&mut map);
 
-		self.eth_opts.insert_all(&mut map);
-
 		Ok(map)
 	}
 }
@@ -53,7 +48,6 @@ impl Default for CLICommandLineOptions {
 		Self {
 			config_root: DEFAULT_CONFIG_ROOT.to_owned(),
 			state_chain_opts: StateChainOptions::default(),
-			eth_opts: EthOptions::default(),
 			// an arbitrary simple command
 			cmd: CliCommand::StopBidding {},
 		}
@@ -88,6 +82,10 @@ pub enum BrokerSubcommands {
 	/// Request a swap deposit address.
 	RequestSwapDepositAddress(SwapRequestParams),
 	WithdrawFees(WithdrawFeesParams),
+	/// Register this account as a broker account.
+	RegisterAccount,
+	/// De-register this broker account.
+	DeregisterAccount,
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]
@@ -101,6 +99,18 @@ pub enum LiquidityProviderSubcommands {
 	/// Register a Liquidity Refund Address for the given chain. An address must be
 	/// registered to request a deposit address for the given chain.
 	RegisterLiquidityRefundAddress { chain: ForeignChain, address: String },
+	/// Register this account as a liquidity provider account.
+	RegisterAccount,
+	/// De-register this liquidity provider account.
+	DeregisterAccount,
+}
+
+#[derive(clap::Subcommand, Clone, Debug)]
+pub enum ValidatorSubcommands {
+	/// Register this account as a validator account.
+	RegisterAccount,
+	/// De-register this validator account.
+	DeregisterAccount,
 }
 
 #[derive(Parser, Clone, Debug)]
@@ -111,6 +121,8 @@ pub enum CliCommand {
 	/// Liquidity provider specific commands
 	#[clap(subcommand, name = "lp")]
 	LiquidityProvider(LiquidityProviderSubcommands),
+	#[clap(subcommand)]
+	Validator(ValidatorSubcommands),
 	#[clap(
 		about = "Request a redemption. After requesting the redemption, please proceed to the  to complete the redeeming process."
 	)]
@@ -214,21 +226,12 @@ fn account_role_parser(s: &str) -> Result<AccountRole, String> {
 #[derive(Deserialize, Debug, Default)]
 pub struct CLISettings {
 	pub state_chain: StateChain,
-
-	pub eth: Eth,
 }
 
 impl CfSettings for CLISettings {
 	type CommandLineOptions = CLICommandLineOptions;
 
 	fn validate_settings(&mut self, config_root: &Path) -> Result<(), ConfigError> {
-		self.eth.validate_settings()?;
-		self.eth.private_key_file = resolve_settings_path(
-			config_root,
-			&self.eth.private_key_file,
-			Some(PathResolutionExpectation::ExistingFile),
-		)?;
-
 		self.state_chain.validate_settings()?;
 		self.state_chain.signing_key_file = resolve_settings_path(
 			config_root,
@@ -298,7 +301,6 @@ mod tests {
 		.unwrap();
 
 		assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
-		assert_eq!(settings.eth.nodes.primary.ws_endpoint.as_ref(), "ws://localhost:8545");
 	}
 
 	#[test]
@@ -316,14 +318,6 @@ mod tests {
 				state_chain_signing_key_file: Some(PathBuf::from_str("signing_key_file").unwrap()),
 			},
 
-			eth_opts: EthOptions {
-				eth_ws_endpoint: Some("ws://endpoint2:1234".to_owned()),
-				eth_http_endpoint: Some("http://endpoint3:1234".to_owned()),
-				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
-				eth_backup_ws_endpoint: Some("ws://endpoint4:1234".to_owned()),
-				eth_backup_http_endpoint: Some("http://endpoint5:1234".to_owned()),
-			},
-
 			cmd: CliCommand::Rotate {}, // Not used in this test
 		};
 
@@ -339,25 +333,5 @@ mod tests {
 			opts.state_chain_opts.state_chain_signing_key_file.unwrap(),
 			settings.state_chain.signing_key_file
 		);
-		assert_eq!(
-			opts.eth_opts.eth_ws_endpoint.unwrap(),
-			settings.eth.nodes.primary.ws_endpoint.as_ref()
-		);
-		assert_eq!(
-			opts.eth_opts.eth_http_endpoint.unwrap(),
-			settings.eth.nodes.primary.http_endpoint.as_ref()
-		);
-
-		let eth_backup_node = settings.eth.nodes.backup.unwrap();
-		assert_eq!(
-			opts.eth_opts.eth_backup_ws_endpoint.unwrap(),
-			eth_backup_node.ws_endpoint.as_ref()
-		);
-		assert_eq!(
-			opts.eth_opts.eth_backup_http_endpoint.unwrap(),
-			eth_backup_node.http_endpoint.as_ref()
-		);
-
-		assert_eq!(opts.eth_opts.eth_private_key_file.unwrap(), settings.eth.private_key_file);
 	}
 }

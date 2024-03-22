@@ -44,6 +44,7 @@ pub trait WeightInfo {
 	fn rotation_phase_keygen(a: u32, ) -> Weight;
 	fn rotation_phase_activating_keys(a: u32, ) -> Weight;
 	fn register_as_validator() -> Weight;
+	fn deregister_as_validator() -> Weight;
 }
 
 /// Weights for pallet_cf_validator using the Substrate node and recommended hardware.
@@ -333,6 +334,15 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(3_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
+	fn deregister_as_validator() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `730`
+		//  Estimated: `3498`
+		// Minimum execution time: 26_532_000 picoseconds.
+		Weight::from_parts(27_069_000, 3498)
+			.saturating_add(T::DbWeight::get().reads(3_u64))
+			.saturating_add(T::DbWeight::get().writes(1_u64))
+	}
 }
 
 // For backwards compatibility and tests
@@ -613,6 +623,15 @@ impl WeightInfo for () {
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:1)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: Some(33), added: 2508, mode: `MaxEncodedLen`)
 	fn register_as_validator() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `730`
+		//  Estimated: `3498`
+		// Minimum execution time: 26_532_000 picoseconds.
+		Weight::from_parts(27_069_000, 3498)
+			.saturating_add(RocksDbWeight::get().reads(3_u64))
+			.saturating_add(RocksDbWeight::get().writes(1_u64))
+	}
+	fn deregister_as_validator() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `730`
 		//  Estimated: `3498`

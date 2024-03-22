@@ -13,6 +13,7 @@ use cf_primitives::{
 	SemVer, SwapId, SwapOutput,
 };
 use cf_utilities::rpc::NumberOrHex;
+use codec::Encode;
 use core::ops::Range;
 use jsonrpsee::{
 	core::{error::SubscriptionClosed, RpcResult},
@@ -35,8 +36,8 @@ use state_chain_runtime::{
 	chainflip::{BlockUpdate, Offence},
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
-		BrokerInfo, CustomRuntimeApi, DispatchErrorWithMessage, FailingWitnessValidators,
-		LiquidityProviderInfo, ValidatorInfo,
+		BrokerInfo, CustomRuntimeApi, DispatchErrorWithMessage, EventFilter,
+		FailingWitnessValidators, LiquidityProviderInfo, ValidatorInfo,
 	},
 	NetworkFee,
 };
@@ -230,7 +231,7 @@ impl From<SwapOutput> for RpcSwapOutput {
 	}
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Copy)]
 pub struct RpcPoolInfo {
 	#[serde(flatten)]
 	pub pool_info: PoolInfo,
@@ -245,7 +246,7 @@ impl From<PoolInfo> for RpcPoolInfo {
 
 #[derive(Serialize, Deserialize)]
 pub struct PoolsEnvironment {
-	pub fees: HashMap<ForeignChain, HashMap<cf_chains::assets::any::OldAsset, Option<RpcPoolInfo>>>,
+	pub fees: any::AssetMap<Option<RpcPoolInfo>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -553,6 +554,12 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<scale_value::Value>>;
+
+	#[method(name = "get_system_events_encoded")]
+	fn cf_get_system_events_encoded(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<sp_core::Bytes>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1126,19 +1133,15 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<PoolsEnvironment> {
-		let mut fees = HashMap::new();
-
-		for asset in Asset::all() {
-			if asset == Asset::Usdc {
-				continue
-			}
-
-			let info = self.cf_pool_info(asset, Asset::Usdc, at).ok().map(Into::into);
-
-			fees.entry(asset.into()).or_insert_with(HashMap::new).insert(asset.into(), info);
-		}
-
-		Ok(PoolsEnvironment { fees })
+		Ok(PoolsEnvironment {
+			fees: any::AssetMap::from_fn(|asset| {
+				if asset == Asset::Usdc {
+					None
+				} else {
+					self.cf_pool_info(asset, Asset::Usdc, at).ok().map(Into::into)
+				}
+			}),
+		})
 	}
 
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment> {
@@ -1348,16 +1351,32 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<scale_value::Value>> {
-		let event_decoder = type_decoder::TypeDecoder::new::<state_chain_runtime::RuntimeEvent>();
+		let event_decoder = type_decoder::TypeDecoder::new::<
+			frame_system::EventRecord<state_chain_runtime::RuntimeEvent, state_chain_runtime::Hash>,
+		>();
 		let events = self
 			.client
 			.runtime_api()
-			.cf_get_events(self.unwrap_or_best(at))
+			.cf_get_events(self.unwrap_or_best(at), EventFilter::AllEvents)
 			.map_err(to_rpc_error)?;
 
 		Ok(events
 			.into_iter()
-			.map(|event| event_decoder.decode_data(event))
+			.map(|event_record| event_decoder.decode_data(event_record.encode()))
+			.collect::<Vec<_>>())
+	}
+
+	fn cf_get_system_events_encoded(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<sp_core::Bytes>> {
+		Ok(self
+			.client
+			.runtime_api()
+			.cf_get_events(self.unwrap_or_best(at), EventFilter::SystemOnly)
+			.map_err(to_rpc_error)?
+			.into_iter()
+			.map(|event| event.encode().into())
 			.collect::<Vec<_>>())
 	}
 }
@@ -1642,24 +1661,29 @@ mod test {
 				redemption_tax: 0u32.into(),
 				minimum_funding_amount: 0u32.into(),
 			},
-			pools: PoolsEnvironment {
-				fees: HashMap::from([(
-					ForeignChain::Ethereum,
-					HashMap::from([(
-						Asset::Flip.into(),
-						Some(
-							PoolInfo {
-								limit_order_fee_hundredth_pips: 0,
-								range_order_fee_hundredth_pips: 100,
-								range_order_total_fees_earned: Default::default(),
-								limit_order_total_fees_earned: Default::default(),
-								range_total_swap_inputs: Default::default(),
-								limit_total_swap_inputs: Default::default(),
-							}
-							.into(),
-						),
-					)]),
-				)]),
+			pools: {
+				let pool_info: RpcPoolInfo = PoolInfo {
+					limit_order_fee_hundredth_pips: 0,
+					range_order_fee_hundredth_pips: 100,
+					range_order_total_fees_earned: Default::default(),
+					limit_order_total_fees_earned: Default::default(),
+					range_total_swap_inputs: Default::default(),
+					limit_total_swap_inputs: Default::default(),
+				}
+				.into();
+				PoolsEnvironment {
+					fees: any::AssetMap {
+						eth: eth::AssetMap {
+							eth: None,
+							usdc: None,
+							flip: Some(pool_info),
+							usdt: Some(pool_info),
+						},
+						btc: btc::AssetMap { btc: Some(pool_info) },
+						dot: dot::AssetMap { dot: Some(pool_info) },
+						arb: arb::AssetMap { eth: Some(pool_info), usdc: Some(pool_info) },
+					},
+				}
 			},
 		};
 
