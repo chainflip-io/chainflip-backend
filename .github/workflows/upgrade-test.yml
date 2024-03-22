@@ -246,14 +246,14 @@ jobs:
           path: |
             /tmp/chainflip/*/chainflip-*.*log
 
-      - name: Upload Try-Runtime Logs 💾
+      - name: Upload Chainflip Logs 💾
         if: always()
         continue-on-error: true
         uses: actions/upload-artifact@v3
         with:
-          name: try-runtime-logs
+          name: chainflip-logs
           path: |
-            /tmp/chainflip/logs/try-runtime/*.log
+            /tmp/chainflip/logs/*.log
 
       - name: Upload Snapshots 💾
         if: failure()
