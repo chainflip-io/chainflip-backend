@@ -143,6 +143,12 @@ pub struct BrokerOptions {
 	)]
 	pub port: u16,
 	#[clap(
+		long = "max_connections",
+		default_value = "100",
+		help = "The maximum number of conncurrent websocket connections to accept."
+	)]
+	pub max_connections: u32,
+	#[clap(
 		long = "state_chain.ws_endpoint",
 		default_value = "ws://localhost:9944",
 		help = "The state chain node's RPC endpoint."
@@ -167,7 +173,10 @@ async fn main() -> anyhow::Result<()> {
 
 	task_scope(|scope| {
 		async move {
-			let server = ServerBuilder::default().build(format!("0.0.0.0:{}", opts.port)).await?;
+			let server = ServerBuilder::default()
+				.max_connections(opts.max_connections)
+				.build(format!("0.0.0.0:{}", opts.port))
+				.await?;
 			let server_addr = server.local_addr()?;
 			let server = server.start(RpcServerImpl::new(scope, opts).await?.into_rpc())?;
 
