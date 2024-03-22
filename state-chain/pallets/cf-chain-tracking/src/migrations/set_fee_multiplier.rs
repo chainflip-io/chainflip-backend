@@ -1,8 +1,7 @@
 use crate::*;
+use cf_chains::Bitcoin;
 use frame_support::traits::OnRuntimeUpgrade;
 
-#[cfg(feature = "try-runtime")]
-use cf_chains::Bitcoin;
 #[cfg(feature = "try-runtime")]
 use sp_std::prelude::Vec;
 
