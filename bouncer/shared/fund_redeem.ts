@@ -42,6 +42,8 @@ async function redeemAndObserve(
 // checking that the balance has increased the expected amount.
 // If no seed is provided, a random one is generated.
 export async function testFundRedeem(providedSeed?: string) {
+  console.log('=== Starting Fund/Redeem test ===');
+
   const chainflip = await getChainflipApi();
   const redemptionTax = await chainflip.query.funding.redemptionTax();
   const redemptionTaxAmount = parseInt(
@@ -88,4 +90,6 @@ export async function testFundRedeem(providedSeed?: string) {
       expectedRedeemAllAmount - expectedRedeemGasFeeFlip * 2
     } - ${expectedRedeemAllAmount}. Did fees change?`,
   );
+
+  console.log('=== Fund/Redeem test complete ===');
 }

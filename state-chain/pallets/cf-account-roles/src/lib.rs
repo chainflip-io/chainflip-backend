@@ -5,19 +5,20 @@ mod benchmarking;
 mod mock;
 mod tests;
 
-pub mod weights;
-use weights::WeightInfo;
+pub mod migrations;
 
 use cf_primitives::AccountRole;
 use cf_traits::AccountRoleRegistry;
 use frame_support::{
 	error::BadOrigin,
-	pallet_prelude::DispatchResult,
-	traits::{EnsureOrigin, IsType, OnKilledAccount, OnNewAccount},
+	pallet_prelude::{DispatchResult, StorageVersion},
+	traits::{EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OnNewAccount},
 };
-use frame_system::{ensure_signed, pallet_prelude::OriginFor, RawOrigin};
+use frame_system::{ensure_signed, pallet_prelude::OriginFor, RawOrigin, WeightInfo};
 pub use pallet::*;
 use sp_std::{marker::PhantomData, vec::Vec};
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -32,14 +33,8 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	pub struct Pallet<T>(PhantomData<T>);
-
-	// TODO: Remove once swapping is enabled and stabilised.
-	// Acts to flag the swapping features. If there are no Broker accounts or
-	// LP accounts, then the swapping features are disabled.
-	#[pallet::storage]
-	#[pallet::getter(fn swapping_enabled)]
-	pub type SwappingEnabled<T: Config> = StorageValue<_, bool, ValueQuery>;
 
 	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	// !!!!!!!!!!!!!!!!!!!! IMPORTANT: Care must be taken when changing this !!!!!!!!!!!!!!!!!!!!
@@ -53,6 +48,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		AccountRoleRegistered { account_id: T::AccountId, role: AccountRole },
+		AccountRoleDeregistered { account_id: T::AccountId, role: AccountRole },
 	}
 
 	#[pallet::error]
@@ -61,8 +57,6 @@ pub mod pallet {
 		UnknownAccount,
 		/// The account already has a registered role.
 		AccountRoleAlreadyRegistered,
-		/// Initially when swapping features are deployed to the chain, they will be disabled.
-		SwappingDisabled,
 	}
 
 	#[pallet::genesis_config]
@@ -79,55 +73,26 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
-			let mut should_enable_swapping = false;
 			for (account, role) in &self.initial_account_roles {
-				AccountRoles::<T>::insert(account, role);
-				if *role == AccountRole::LiquidityProvider || *role == AccountRole::Broker {
-					should_enable_swapping = true;
-				}
-			}
-			if should_enable_swapping {
-				SwappingEnabled::<T>::put(true);
+				Pallet::<T>::register_account_role(account, *role)
+					.expect("Genesis account role registration should not fail.");
 			}
 		}
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		// TODO: Remove this function after the feature is deployed and stabilised.
-		// Once the swapping features are enabled, they can't be disabled.
-		// If they have been enabled, it's possible accounts have already registered as Brokers or
-		// LPs. Thus, disabling this flag is not an indicator of whether the public can swap.
-		// Governance can bypass this by calling `gov_register_account_role`.
-		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::enable_swapping())]
-		pub fn enable_swapping(origin: OriginFor<T>) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			SwappingEnabled::<T>::put(true);
-			Ok(())
-		}
-
-		// TODO: Remove this function after swapping is deployed and stabilised.
-		/// Bypass the Swapping Enabled check. This allows governance to enable swapping
-		/// features for some controlled accounts.
-		#[pallet::call_index(1)]
-		#[pallet::weight(T::WeightInfo::gov_register_account_role())]
-		pub fn gov_register_account_role(
-			origin: OriginFor<T>,
-			account: T::AccountId,
-			role: AccountRole,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::register_account_role_unprotected(&account, role)?;
-			Ok(())
-		}
+		// Don't remove this block: it ensures we keep an extrinsic index for the pallet.
 	}
 }
 
-impl<T: Config> Pallet<T> {
-	// WARN: This is not protected by the Swapping feature flag.
-	// In most cases the correct function to use is `register_account_role`.
-	fn register_account_role_unprotected(
+impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
+	/// Register the account role for some account id.
+	///
+	/// Fails if an account role has already been registered for this account id, or if the account
+	/// doesn't exist.
+	#[frame_support::transactional]
+	fn register_account_role(
 		account_id: &T::AccountId,
 		account_role: AccountRole,
 	) -> DispatchResult {
@@ -143,26 +108,34 @@ impl<T: Config> Pallet<T> {
 				Some(_) => Err(Error::<T>::AccountRoleAlreadyRegistered),
 				None => Err(Error::<T>::UnknownAccount),
 			}
-		})
-		.map_err(Into::into)
+		})?;
+		frame_system::Consumer::<T>::created(account_id)?;
+		Ok(())
 	}
-}
 
-impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
-	/// Register the account role for some account id.
+	/// Deregister the account role for some account id.
 	///
-	/// Fails if an account type has already been registered for this account id.
-	/// Or if Swapping is not yet enabled.
-	fn register_account_role(
+	/// This is required in order to be able to redeem all funds. Callers should ensure that any
+	/// state associated with the account is cleaned up before calling this function. For example:
+	/// LPs should withdraw all liquidity.
+	#[frame_support::transactional]
+	fn deregister_account_role(
 		account_id: &T::AccountId,
 		account_role: AccountRole,
 	) -> DispatchResult {
-		match account_role {
-			AccountRole::Broker | AccountRole::LiquidityProvider
-				if !SwappingEnabled::<T>::get() =>
-				Err(Error::<T>::SwappingDisabled.into()),
-			_ => Self::register_account_role_unprotected(account_id, account_role),
-		}
+		AccountRoles::<T>::try_mutate(account_id, |role| {
+			role.replace(AccountRole::Unregistered)
+				.filter(|r| *r == account_role)
+				.ok_or(Error::<T>::UnknownAccount)
+		})?;
+		<frame_system::Pallet<T>>::dec_consumers(account_id);
+
+		Self::deposit_event(Event::AccountRoleDeregistered {
+			account_id: account_id.clone(),
+			role: account_role,
+		});
+
+		Ok(())
 	}
 
 	fn has_account_role(id: &T::AccountId, role: AccountRole) -> bool {

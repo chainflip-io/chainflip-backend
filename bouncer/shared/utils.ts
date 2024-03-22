@@ -215,7 +215,7 @@ export function chainContractId(chain: Chain): number {
   }
 }
 
-// State Chain uses non-unique string identifiers for assets
+// State Chain uses non-unique string identifiers for assets.
 export function stateChainAssetFromAsset(asset: Asset): string {
   if (assetConstants[asset]) {
     return assetConstants[asset].asset;
@@ -407,13 +407,13 @@ export async function observeSwapEvents(
             }
             break;
           case swapExecutedEvent:
-            if (Number(expectedEvent.data.swapId) === Number(swapId)) {
+            if (expectedEvent.data.swapId === swapId) {
               expectedMethod = swapEgressScheduled;
               console.log(`${tag} swap executed, with id: ${swapId}`);
             }
             break;
           case swapEgressScheduled:
-            if (Number(expectedEvent.data.swapId) === Number(swapId)) {
+            if (expectedEvent.data.swapId === swapId) {
               expectedMethod = batchBroadcastRequested;
               egressId = expectedEvent.data.egressId as EgressId;
               console.log(`${tag} swap egress scheduled with id: (${egressId[0]}, ${egressId[1]})`);

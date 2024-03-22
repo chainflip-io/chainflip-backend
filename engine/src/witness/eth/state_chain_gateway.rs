@@ -10,7 +10,7 @@ use super::super::{
 	},
 	evm::contract_common::events_at_block,
 };
-use crate::eth::retry_rpc::EthersRetryRpcApi;
+use crate::evm::retry_rpc::EvmRetryRpcApi;
 use cf_primitives::EpochIndex;
 use futures_core::Future;
 
@@ -23,13 +23,13 @@ use anyhow::Result;
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub fn state_chain_gateway_witnessing<
-		EthRpcClient: EthersRetryRpcApi + ChainClient + Clone,
+		EvmRpcClient: EvmRetryRpcApi + ChainClient + Clone,
 		ProcessCall,
 		ProcessingFut,
 	>(
 		self,
 		process_call: ProcessCall,
-		eth_rpc: EthRpcClient,
+		eth_rpc: EvmRpcClient,
 		contract_address: H160,
 	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
 	where

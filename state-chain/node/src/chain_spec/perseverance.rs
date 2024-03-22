@@ -23,7 +23,7 @@ pub const GENESIS_FUNDING_AMOUNT: FlipBalance = 1_000 * FLIPPERINOS_PER_FLIP;
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("dC27c60956cB065D19F08bb69a707E37b36d8086"),
 	eth_usdc_address: hex_literal::hex!("1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"),
-	eth_usdt_address: hex_literal::hex!("7169D38820dfd117C3FA1f22a697dBA58d90BA06"),
+	eth_usdt_address: hex_literal::hex!("27cea6eb8a21aae05eb29c91c5ca10592892f584"),
 	state_chain_gateway_address: hex_literal::hex!("A34a967197Ee90BB7fb28e928388a573c5CFd099"),
 	eth_key_manager_address: hex_literal::hex!("4981b1329F29E720642266fc6e172C3f78159dff"),
 	eth_vault_address: hex_literal::hex!("36eaD71325604DC15d35FAE584D7b50646D81753"),

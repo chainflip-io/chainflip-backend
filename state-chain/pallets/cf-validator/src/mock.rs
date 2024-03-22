@@ -60,7 +60,7 @@ impl frame_system::Config for Test {
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
 	type OnNewAccount = ();
-	type OnKilledAccount = ();
+	type OnKilledAccount = crate::RemoveVanityNames<Self>;
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();

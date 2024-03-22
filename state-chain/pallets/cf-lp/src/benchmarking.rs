@@ -62,6 +62,21 @@ mod benchmarks {
 	}
 
 	#[benchmark]
+	fn deregister_lp_account() {
+		let caller: T::AccountId = whitelisted_caller();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		assert_ok!(Pallet::<T>::register_lp_account(RawOrigin::Signed(caller.clone()).into()));
+
+		#[extrinsic_call]
+		deregister_lp_account(RawOrigin::Signed(caller.clone()));
+
+		assert!(T::AccountRoleRegistry::ensure_liquidity_provider(
+			RawOrigin::Signed(caller).into()
+		)
+		.is_err());
+	}
+
+	#[benchmark]
 	fn register_liquidity_refund_address() {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);

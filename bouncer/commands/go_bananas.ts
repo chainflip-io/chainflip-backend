@@ -1,6 +1,6 @@
 #!/usr/bin/env -S pnpm tsx
 import axios from 'axios';
-import { InternalAsset as Asset } from '@chainflip/cli';
+import { InternalAsset as Asset, Chain, getInternalAsset } from '@chainflip/cli';
 import bitcoin from 'bitcoinjs-lib';
 import { Tapleaf } from 'bitcoinjs-lib/src/types';
 import { blake2AsHex } from '@polkadot/util-crypto';
@@ -42,8 +42,14 @@ type AmountChange = null | {
 };
 
 type LimitOrderResponse = {
-  base_asset: string;
-  quote_asset: string;
+  base_asset: {
+    chain: string;
+    asset: Asset;
+  };
+  quote_asset: {
+    chain: string;
+    asset: Asset;
+  };
   side: string;
   id: number;
   tick: number;
@@ -92,6 +98,33 @@ function predictDotAddress(pubkey: string, salt: number): string {
 
 function price2tick(price: number): number {
   return Math.round(Math.log(Math.sqrt(price)) / Math.log(Math.sqrt(1.0001)));
+}
+
+// Workaround needed because legacy assets are returned as strings.
+export function assetFromStateChainAsset(
+  stateChainAsset:
+    | {
+        asset: Asset | string;
+        chain: Chain | string;
+      }
+    | string,
+): Asset {
+  //  DOT, BTC and Ethereum assets
+  if (typeof stateChainAsset === 'string') {
+    return (stateChainAsset.charAt(0) + stateChainAsset.slice(1).toLowerCase()) as Asset;
+  }
+
+  // TODO: Temporal workaround: To remove once SDK supports Arbitrum
+  if (stateChainAsset.chain === 'Arbitrum') {
+    if (stateChainAsset.asset === 'ETH') {
+      return 'ArbEth' as Asset;
+    }
+    if (stateChainAsset.asset === 'USDC') {
+      return 'ArbUsdc' as Asset;
+    }
+  }
+
+  return getInternalAsset(stateChainAsset);
 }
 
 async function playLp(asset: Asset, price: number, liquidity: number) {
@@ -147,9 +180,9 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
           if (BigInt(update.collected_fees) > BigInt(0)) {
             let ccy;
             if (update.side === 'buy') {
-              ccy = update.base_asset as Asset;
+              ccy = assetFromStateChainAsset(update.base_asset);
             } else {
-              ccy = update.quote_asset as Asset;
+              ccy = assetFromStateChainAsset(update.quote_asset);
             }
             const fees = fineAmountToAmount(
               BigInt(update.collected_fees.toString()).toString(10),
@@ -161,11 +194,11 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
             let buyCcy;
             let sellCcy;
             if (update.side === 'buy') {
-              buyCcy = update.base_asset as Asset;
-              sellCcy = update.quote_asset as Asset;
+              buyCcy = assetFromStateChainAsset(update.base_asset);
+              sellCcy = assetFromStateChainAsset(update.quote_asset);
             } else {
-              buyCcy = update.quote_asset as Asset;
-              sellCcy = update.base_asset as Asset;
+              buyCcy = assetFromStateChainAsset(update.quote_asset);
+              sellCcy = assetFromStateChainAsset(update.base_asset);
             }
             const amount = fineAmountToAmount(
               BigInt(update.bought_amount.toString()).toString(10),
@@ -182,15 +215,17 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
 
 async function launchTornado() {
   const chainflip = await getChainflipApi();
-  const epoch = (await chainflip.query.bitcoinVault.currentVaultEpoch()).toJSON()! as number;
+  const epoch = (
+    await chainflip.query.bitcoinThresholdSigner.currentKeyEpoch()
+  ).toJSON()! as number;
   const pubkey = (
-    (await chainflip.query.bitcoinVault.vaults(epoch)).toJSON()!.publicKey.current as string
+    (await chainflip.query.bitcoinThresholdSigner.keys(epoch)).toJSON()!.current as string
   ).substring(2);
   const salt =
     ((await chainflip.query.bitcoinIngressEgress.channelIdCounter()).toJSON()! as number) + 1;
   const btcAddress = predictBtcAddress(pubkey, salt);
   // shuffle
-  const assets: Asset[] = ['Eth', 'Usdc', 'Flip', 'Dot'];
+  const assets: Asset[] = ['Eth', 'Usdc', 'Flip', 'Dot', 'Usdt', 'ArbEth', 'ArbUsdc'];
   for (let i = 0; i < 10; i++) {
     const index1 = Math.floor(Math.random() * assets.length);
     const index2 = Math.floor(Math.random() * assets.length);
@@ -212,11 +247,14 @@ const swapAmount = new Map<Asset, string>([
   ['Eth', '0.03'],
   ['Btc', '0.006'],
   ['Usdc', '30'],
+  ['Usdt', '12'],
   ['Flip', '3'],
+  ['ArbEth', '0.03'],
+  ['ArbUsdc', '30'],
 ]);
 
 async function playSwapper() {
-  const assets: Asset[] = ['Eth', 'Btc', 'Usdc', 'Flip', 'Dot'];
+  const assets: Asset[] = ['Eth', 'Btc', 'Usdc', 'Flip', 'Dot', 'Usdt', 'ArbEth', 'ArbUsdc'];
   for (;;) {
     const src = assets.at(Math.floor(Math.random() * assets.length))!;
     const dest = assets
@@ -232,7 +270,10 @@ const price = new Map<Asset, number>([
   ['Eth', 1000],
   ['Btc', 10000],
   ['Usdc', 1],
+  ['Usdt', 1],
   ['Flip', 10],
+  ['ArbEth', 1000],
+  ['ArbUsdc', 1],
 ]);
 
 async function bananas() {
@@ -243,6 +284,9 @@ async function bananas() {
     createLpPool('Dot', price.get('Dot')!),
     createLpPool('Btc', price.get('Btc')!),
     createLpPool('Flip', price.get('Flip')!),
+    createLpPool('Usdt', price.get('Usdt')!),
+    createLpPool('ArbEth', price.get('ArbEth')!),
+    createLpPool('ArbUsdc', price.get('ArbUsdc')!),
   ]);
 
   await Promise.all([
@@ -251,6 +295,9 @@ async function bananas() {
     provideLiquidity('Dot', (2 * liquidityUsdc) / price.get('Dot')!),
     provideLiquidity('Btc', (2 * liquidityUsdc) / price.get('Btc')!),
     provideLiquidity('Flip', (2 * liquidityUsdc) / price.get('Flip')!),
+    provideLiquidity('Usdt', (2 * liquidityUsdc) / price.get('Usdt')!),
+    provideLiquidity('ArbEth', (2 * liquidityUsdc) / price.get('ArbEth')!),
+    provideLiquidity('ArbUsdc', (2 * liquidityUsdc) / price.get('ArbUsdc')!),
   ]);
 
   await Promise.all([
@@ -272,6 +319,21 @@ async function bananas() {
     playLp(
       'Flip',
       price.get('Flip')! * 10 ** (assetDecimals('Usdc') - assetDecimals('Flip')),
+      liquidityUsdc,
+    ),
+    playLp(
+      'Usdt',
+      price.get('Usdt')! * 10 ** (assetDecimals('Usdc') - assetDecimals('Usdt')),
+      liquidityUsdc,
+    ),
+    playLp(
+      'ArbEth',
+      price.get('ArbEth')! * 10 ** (assetDecimals('Usdc') - assetDecimals('ArbEth')),
+      liquidityUsdc,
+    ),
+    playLp(
+      'ArbUsdc',
+      price.get('ArbUsdc')! * 10 ** (assetDecimals('Usdc') - assetDecimals('ArbUsdc')),
       liquidityUsdc,
     ),
     playSwapper(),
