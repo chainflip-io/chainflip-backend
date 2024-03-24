@@ -22,9 +22,9 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
       env:
-        NSC_CACHE_PATH: ${{ env.NSC_CACHE_PATH }}
+        NSC_CACHE_PATH: ${{ env.NSC_CACHE_PATH }}-ubuntu-${{ matrix.ubuntu_version }}
       volumes:
-        - /cache:/cache
+        - /cache:/cache-ubuntu-${{ matrix.ubuntu_version }}
       options: --cap-add=SYS_ADMIN
     steps:
       - name: Checkout 🛒
