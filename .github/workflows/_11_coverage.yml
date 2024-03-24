@@ -22,16 +22,21 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
       env:
-        NSC_CACHE_PATH: ${{ env.NSC_CACHE_PATH }}
+        NSC_CACHE_PATH: ubuntu-22.04
       volumes:
-        - /cache:/cache
-      options: --cap-add=SYS_ADMIN
+        - /cache:/cache-ubuntu-22.04 # Where the Cache Volume is mounted.
+      options: --cap-add=SYS_ADMIN # Required to by nscloud-cache-action to call `mount`.
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Setup sccache 🚀
         run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
+
+      - name: Setup Rust cache 🦀💰
+        uses: namespacelabs/nscloud-cache-action@v1
+        with:
+          cache: rust
 
       - name: cargo cf-test-ci --locked
         run: |
@@ -46,11 +51,10 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
       env:
-        NSC_CACHE_PATH: ubuntu-22.04 
+        NSC_CACHE_PATH: ubuntu-22.04
       volumes:
         - /cache:/cache-ubuntu-22.04 # Where the Cache Volume is mounted.
       options: --cap-add=SYS_ADMIN # Required to by nscloud-cache-action to call `mount`.
-
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
