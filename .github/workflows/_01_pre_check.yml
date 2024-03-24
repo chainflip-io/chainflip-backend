@@ -37,7 +37,7 @@ jobs:
         run: cargo fmt --all -- --check
 
   audit:
-    runs-on: nscloud-ubuntu-22.04-amd64-4x8
+    runs-on: ubuntu-22.04
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-22.04-45"
       credentials:
@@ -47,6 +47,14 @@ jobs:
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Setup sccache 🚀
+        run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
+
+      - name: Setup Rust cache 🦀💰
+        uses: namespacelabs/nscloud-cache-action@v1
+        with:
+          cache: rust
 
       - name: cargo audit 🕵️‍♂️
         run: cargo cf-audit
