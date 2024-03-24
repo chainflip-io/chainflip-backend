@@ -37,7 +37,7 @@ jobs:
         run: cargo fmt --all -- --check
 
   audit:
-    runs-on: nscloud-ubuntu-22.04-amd64-4x8
+    runs-on: hetzner
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-22.04-45"
       credentials:
