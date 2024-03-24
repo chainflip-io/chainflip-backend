@@ -17,7 +17,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
       env:
-        NSC_CACHE_PATH: ${{ env.NSC_CACHE_PATH }}-ubuntu-22.04 # env.NSC_CACHE_PATH contains the path to Cache Volume directory, that is `/cache`.
+        NSC_CACHE_PATH: ubuntu-22.04 
       volumes:
         - /cache:/cache-ubuntu-22.04 # Where the Cache Volume is mounted.
       options: --cap-add=SYS_ADMIN # Required to by nscloud-cache-action to call `mount`.

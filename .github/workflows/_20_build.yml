@@ -34,7 +34,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
       env:
-        NSC_CACHE_PATH: ${{ env.NSC_CACHE_PATH }}-ubuntu-${{ matrix.ubuntu_version }} # env.NSC_CACHE_PATH contains the path to Cache Volume directory, that is `/cache`.
+        NSC_CACHE_PATH: ubuntu-${{ matrix.ubuntu_version }}
       volumes:
         - /cache:/cache-ubuntu-${{ matrix.ubuntu_version }} # Where the Cache Volume is mounted.
       options: --cap-add=SYS_ADMIN # Required to by nscloud-cache-action to call `mount`.
