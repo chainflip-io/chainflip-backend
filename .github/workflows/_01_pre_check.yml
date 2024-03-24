@@ -61,8 +61,11 @@ jobs:
         with:
           cache: rust
 
+      - name: Clear audit cache
+        run: rm -rf ~/.cargo/advisory-db
+
       - name: cargo audit 🕵️‍♂️
-        run: cargo cf-audit -D /tmp/tmp-advisory-db
+        run: cargo cf-audit
 
   cargo-clippy:
     runs-on: namespace-profile-rust-builder
