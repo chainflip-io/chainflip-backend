@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: nscloud-ubuntu-22.04-amd64-4x8
+    runs-on: namespace-profile-rust-builder
     strategy:
       matrix:
         ubuntu_version: [20.04]
@@ -42,7 +42,7 @@ jobs:
             ./target/${{ matrix.profile }}/chainflip-node
 
   benchmarks:
-    runs-on: nscloud-ubuntu-22.04-amd64-4x8
+    runs-on: namespace-profile-rust-builder
     needs: [build]
     timeout-minutes: 120
     strategy:

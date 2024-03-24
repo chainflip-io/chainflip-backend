@@ -28,7 +28,7 @@ jobs:
 
   private-images:
     needs: [get-date-time]
-    runs-on: nscloud-ubuntu-22.04-amd64-8x16
+    runs-on: namespace-profile-rust-builder
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
