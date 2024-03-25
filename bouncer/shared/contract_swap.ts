@@ -1,4 +1,9 @@
-import { Asset, executeSwap, ExecuteSwapParams, approveVault } from '@chainflip/cli';
+import {
+  InternalAsset as Asset,
+  executeSwap,
+  ExecuteSwapParams,
+  approveVault,
+} from '@chainflip/cli';
 import { Wallet, getDefaultProvider } from 'ethers';
 import {
   getChainflipApi,
@@ -12,6 +17,7 @@ import {
   getEvmEndpoint,
   getWhaleMnemonic,
   assetDecimals,
+  stateChainAssetFromAsset,
 } from './utils';
 import { getNextEvmNonce } from './send_evm';
 import { getBalance } from './get_balance';
@@ -45,12 +51,12 @@ export async function executeContractSwap(
   const receipt = await executeSwap(
     {
       destChain,
-      destAsset,
+      destAsset: stateChainAssetFromAsset(destAsset),
       // It is important that this is large enough to result in
       // an amount larger than existential (e.g. on Polkadot):
       amount: amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals(srcAsset)),
       destAddress,
-      srcAsset,
+      srcAsset: stateChainAssetFromAsset(srcAsset),
       srcChain,
       ccmMetadata: messageMetadata && {
         gasBudget: messageMetadata.gasBudget.toString(),
@@ -93,8 +99,8 @@ export async function performSwapViaContract(
     const receipt = await executeContractSwap(sourceAsset, destAsset, destAddress, messageMetadata);
     await observeEvent('swapping:SwapScheduled', api, (event) => {
       if ('Vault' in event.data.origin) {
-        const sourceAssetMatches = sourceAsset === (event.data.sourceAsset.toUpperCase() as Asset);
-        const destAssetMatches = destAsset === (event.data.destinationAsset.toUpperCase() as Asset);
+        const sourceAssetMatches = sourceAsset === (event.data.sourceAsset as Asset);
+        const destAssetMatches = destAsset === (event.data.destinationAsset as Asset);
         const txHashMatches = event.data.origin.Vault.txHash === receipt.hash;
         return sourceAssetMatches && destAssetMatches && txHashMatches;
       }
@@ -134,7 +140,7 @@ export async function performSwapViaContract(
 }
 
 export async function approveTokenVault(
-  srcAsset: 'FLIP' | 'USDC' | 'USDT' | 'ARBUSDC',
+  srcAsset: 'Flip' | 'Usdc' | 'Usdt' | 'ArbUsdc',
   amount: string,
 ) {
   const chain = chainFromAsset(srcAsset as Asset);
@@ -143,12 +149,17 @@ export async function approveTokenVault(
     getDefaultProvider(getEvmEndpoint(chain)),
   );
 
+  // TODO: To remove when Arbitrum is supported in the SDK
+  if (chain !== 'Ethereum' || srcAsset === 'ArbUsdc') {
+    throw new Error('Arbitrum is not supported for token approvals');
+  }
+
   await getNextEvmNonce(chain, (nextNonce) =>
     approveVault(
       {
         amount,
-        srcChain: chainFromAsset(srcAsset as Asset),
-        srcAsset,
+        srcChain: chain,
+        srcAsset: stateChainAssetFromAsset(srcAsset),
       },
       {
         signer: wallet,

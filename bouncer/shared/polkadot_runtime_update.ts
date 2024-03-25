@@ -4,7 +4,7 @@ import assert from 'assert';
 import { execSync } from 'child_process';
 
 import { blake2AsU8a } from '@polkadot/util-crypto';
-import { Asset, Assets } from '@chainflip/cli';
+import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import {
   getPolkadotApi,
   observeEvent,
@@ -73,7 +73,7 @@ export async function pushPolkadotRuntimeUpdate(wasmPath: string): Promise<void>
 
   // Submit the proposal
   const observeDemocracyStarted = observeEvent('democracy:Started', polkadot);
-  const amount = amountToFineAmount(PROPOSAL_AMOUNT, assetDecimals('DOT'));
+  const amount = amountToFineAmount(PROPOSAL_AMOUNT, assetDecimals('Dot'));
   console.log(`Submitting proposal with amount: ${PROPOSAL_AMOUNT}`);
   const democracyStartedEvent = await submitAndGetEvent(
     polkadot.tx.democracy.propose({ Legacy: preimageHash }, amount),
@@ -192,18 +192,18 @@ export async function bumpAndBuildPolkadotRuntime(): Promise<[string, number]> {
 }
 
 async function randomPolkadotSwap(): Promise<void> {
-  const assets: Asset[] = [Assets.BTC, Assets.ETH, Assets.USDC, Assets.FLIP];
+  const assets: Asset[] = [Assets.Btc, Assets.Eth, Assets.Usdc, Assets.Flip];
   const randomAsset = assets[Math.floor(Math.random() * assets.length)];
 
   let sourceAsset: Asset;
   let destAsset: Asset;
 
   if (Math.random() < 0.5) {
-    sourceAsset = Assets.DOT;
+    sourceAsset = Assets.Dot;
     destAsset = randomAsset;
   } else {
     sourceAsset = randomAsset;
-    destAsset = Assets.DOT;
+    destAsset = Assets.Dot;
   }
 
   await testSwap(sourceAsset, destAsset, undefined, undefined, undefined, undefined, false);

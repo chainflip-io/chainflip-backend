@@ -6,5 +6,5 @@ export async function getEvmNativeBalance(chain: Chain, address: string): Promis
   const web3 = new Web3(getEvmEndpoint(chain));
 
   const weiBalance: string = await web3.eth.getBalance(address);
-  return fineAmountToAmount(weiBalance, assetDecimals('ETH'));
+  return fineAmountToAmount(weiBalance, assetDecimals('Eth'));
 }

@@ -11,7 +11,7 @@ import { runWithTimeout, getContractAddress } from '../shared/utils';
 import { getErc20Balance } from '../shared/get_erc20_balance';
 
 async function getUsdcBalanceCommand(arbitrumAddress: string) {
-  const contractAddress = getContractAddress('Arbitrum', 'ARBUSDC');
+  const contractAddress = getContractAddress('Arbitrum', 'ArbUsdc');
   const balance = await getErc20Balance('Arbitrum', arbitrumAddress, contractAddress);
   console.log(balance);
   process.exit(0);

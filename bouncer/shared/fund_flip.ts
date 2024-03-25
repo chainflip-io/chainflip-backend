@@ -18,18 +18,18 @@ export async function fundFlip(scAddress: string, flipAmount: string) {
   const chainflip = await getChainflipApi();
   await cryptoWaitReady();
 
-  await approveErc20('FLIP', getContractAddress('Ethereum', 'GATEWAY'), flipAmount);
+  await approveErc20('Flip', getContractAddress('Ethereum', 'GATEWAY'), flipAmount);
 
-  const flipperinoAmount = amountToFineAmount(flipAmount, assetDecimals('FLIP'));
+  const flipperinoAmount = amountToFineAmount(flipAmount, assetDecimals('Flip'));
 
   const flipContractAddress =
-    process.env.ETH_FLIP_ADDRESS ?? getContractAddress('Ethereum', 'FLIP');
+    process.env.ETH_FLIP_ADDRESS ?? getContractAddress('Ethereum', 'Flip');
 
   const gatewayContractAddress =
     process.env.ETH_GATEWAY_ADDRESS ?? getContractAddress('Ethereum', 'GATEWAY');
 
   const whaleKey = getWhaleKey('Ethereum');
-  console.log('Approving ' + flipAmount + ' FLIP to State Chain Gateway');
+  console.log('Approving ' + flipAmount + ' Flip to State Chain Gateway');
 
   const wallet = new Wallet(whaleKey, ethers.getDefaultProvider(getEvmEndpoint('Ethereum')));
 
@@ -43,7 +43,7 @@ export async function fundFlip(scAddress: string, flipAmount: string) {
     nonce: await getNextEvmNonce('Ethereum'),
   } as const;
 
-  console.log('Funding ' + flipAmount + ' FLIP to ' + scAddress);
+  console.log('Funding ' + flipAmount + ' Flip to ' + scAddress);
   let pubkey = scAddress;
   try {
     pubkey = decodeFlipAddressForContract(scAddress);

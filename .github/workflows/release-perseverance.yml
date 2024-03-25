@@ -10,6 +10,7 @@ concurrency:
 jobs:
   release-checks:
     uses: ./.github/workflows/_03_release_checks.yml
+    secrets: inherit
   build:
     needs: [release-checks]
     uses: ./.github/workflows/_20_build.yml

@@ -6,12 +6,12 @@ use cf_primitives::FlipBalance;
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::account_role_registry::MockAccountRoleRegistry, AccountInfo, AccountRoleRegistry,
-	Bonding, SetSafeMode, Slashing,
+	Bonding, Chainflip, SetSafeMode, Slashing,
 };
 use sp_core::H160;
 
 use crate::BoundRedeemAddress;
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
 use pallet_cf_flip::{Bonder, FlipSlasher};
 use sp_runtime::{traits::BadOrigin, DispatchError};
 
@@ -499,7 +499,7 @@ fn can_only_redeem_during_auction_if_not_bidding() {
 		MockEpochInfo::set_is_auction_phase(true);
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
-			RedemptionAmount::Max,
+			(AMOUNT / 2).into(),
 			ETH_DUMMY_ADDR,
 			Default::default()
 		),);
@@ -1781,6 +1781,59 @@ fn cannot_redeem_to_non_restricted_address_with_balance_lower_than_restricted_fu
 				Default::default()
 			),
 			Error::<Test>::InsufficientUnrestrictedFunds
+		);
+	});
+}
+
+#[test]
+fn account_references_must_be_zero_for_full_redeem() {
+	const FUNDING_AMOUNT: FlipBalance = 100;
+	new_test_ext().execute_with(|| {
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			FUNDING_AMOUNT,
+			Default::default(),
+			Default::default()
+		));
+		assert_eq!(
+			frame_system::Pallet::<Test>::providers(&ALICE),
+			1,
+			"Funding pallet should increment the provider count on account creation."
+		);
+
+		<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE).unwrap();
+
+		assert_noop!(
+			Funding::redeem(
+				OriginTrait::signed(ALICE),
+				RedemptionAmount::Max,
+				Default::default(),
+				Default::default()
+			),
+			Error::<Test>::AccountMustBeUnregistered,
+		);
+
+		<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::deregister_as_validator(&ALICE).unwrap();
+
+		assert_ok!(Funding::redeem(
+			OriginTrait::signed(ALICE),
+			RedemptionAmount::Max,
+			Default::default(),
+			Default::default()
+		),);
+
+		assert_ok!(Funding::redeemed(
+			RuntimeOrigin::root(),
+			ALICE,
+			FUNDING_AMOUNT,
+			Default::default()
+		),);
+
+		assert_eq!(
+			frame_system::Pallet::<Test>::providers(&ALICE),
+			0,
+			"Funding pallet should decrement the provider count on final redemption."
 		);
 	});
 }

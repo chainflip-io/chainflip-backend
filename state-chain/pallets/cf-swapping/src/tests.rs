@@ -18,7 +18,7 @@ use cf_traits::{
 		address_converter::MockAddressConverter,
 		egress_handler::{MockEgressHandler, MockEgressParameter},
 	},
-	CcmHandler, SetSafeMode, SwapDepositHandler, SwappingApi,
+	AccountRoleRegistry, CcmHandler, Chainflip, SetSafeMode, SwapDepositHandler, SwappingApi,
 };
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
@@ -2242,5 +2242,36 @@ fn network_fee_swap_gets_burnt() {
 		Swapping::on_finalize(System::block_number() + SWAP_DELAY_BLOCKS as u64);
 		assert_swaps_queue_is_empty();
 		assert_eq!(FlipToBurn::<Test>::get(), AMOUNT);
+	});
+}
+
+#[test]
+fn register_and_deregister_account() {
+	new_test_ext().execute_with(|| {
+		<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::ensure_broker(
+			OriginTrait::signed(ALICE),
+		)
+		.expect("ALICE was registered in test setup.");
+
+		// Earn some fees.
+		EarnedBrokerFees::<Test>::insert(ALICE, Asset::Eth, 100);
+
+		assert_noop!(
+			Swapping::deregister_as_broker(OriginTrait::signed(ALICE)),
+			Error::<Test>::EarnedFeesNotWithdrawn,
+		);
+
+		assert_ok!(Swapping::withdraw(
+			OriginTrait::signed(ALICE),
+			Asset::Eth,
+			EncodedAddress::Eth(Default::default()),
+		));
+		assert_ok!(Swapping::deregister_as_broker(OriginTrait::signed(ALICE)),);
+
+		assert!(!EarnedBrokerFees::<Test>::contains_key(ALICE, Asset::Eth));
+		<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::ensure_broker(
+			OriginTrait::signed(ALICE),
+		)
+		.expect_err("ALICE should be deregistered.");
 	});
 }

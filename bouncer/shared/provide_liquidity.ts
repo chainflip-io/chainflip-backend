@@ -1,6 +1,6 @@
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { Asset } from '@chainflip/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 import {
   observeEvent,
   newAddress,
@@ -56,13 +56,13 @@ export async function provideLiquidity(
   let eventHandle = observeEvent(
     'liquidityProvider:LiquidityDepositAddressReady',
     chainflip,
-    (event) => event.data.asset.toUpperCase() === ccy,
+    (event) => event.data.asset === ccy,
   );
 
   console.log('Requesting ' + ccy + ' deposit address');
   await lpMutex.runExclusive(async () => {
     await chainflip.tx.liquidityProvider
-      .requestLiquidityDepositAddress(ccy.toLowerCase(), null)
+      .requestLiquidityDepositAddress(ccy, null)
       .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
   });
 
@@ -74,7 +74,7 @@ export async function provideLiquidity(
     'liquidityProvider:AccountCredited',
     chainflip,
     (event) =>
-      event.data.asset.toUpperCase() === ccy &&
+      event.data.asset === ccy &&
       isWithinOnePercent(
         BigInt(event.data.amountCredited.replace(/,/g, '')),
         BigInt(amountToFineAmount(String(amount), assetDecimals(ccy))),

@@ -1,6 +1,6 @@
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { Asset } from '@chainflip/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 import {
   observeEvent,
   getChainflipApi,
@@ -31,9 +31,7 @@ export async function rangeOrder(ccy: Asset, amount: number) {
     'liquidityPools:RangeOrderUpdated',
     chainflip,
     (event) =>
-      event.data.lp === lp.address &&
-      event.data.baseAsset.toUpperCase() === ccy &&
-      event.data.id === String(0),
+      event.data.lp === lp.address && event.data.baseAsset === ccy && event.data.id === String(0),
   );
   await lpMutex.runExclusive(async () => {
     await chainflip.tx.liquidityPools

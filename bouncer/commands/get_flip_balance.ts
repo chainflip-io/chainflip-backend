@@ -11,7 +11,7 @@ import { runWithTimeout, getContractAddress } from '../shared/utils';
 import { getErc20Balance } from '../shared/get_erc20_balance';
 
 async function getFlipBalanceCommand(ethereumAddress: string) {
-  const contractAddress = getContractAddress('Ethereum', 'FLIP');
+  const contractAddress = getContractAddress('Ethereum', 'Flip');
   const balance = await getErc20Balance('Ethereum', ethereumAddress, contractAddress);
   console.log(balance);
   process.exit(0);

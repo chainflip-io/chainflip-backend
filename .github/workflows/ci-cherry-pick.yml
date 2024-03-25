@@ -13,7 +13,7 @@ run-name: Cherry pick `${{ github.event.pull_request.title }}` to release branch
 jobs:
   cherry-pick:
     if: ${{ (github.event.pull_request.merged == true) && (contains(github.event.pull_request.labels.*.name, 'non-breaking')) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout branch
         uses: actions/checkout@v3
@@ -32,12 +32,12 @@ jobs:
           git fetch --all
           COMMIT_SHA=$(git rev-parse HEAD)
           echo "COMMIT_SHA=$COMMIT_SHA" >> $GITHUB_ENV
-          
+
           RELEASE_BRANCH="release/$(git branch -r | grep 'origin/release/[0-9]\+\.[0-9]' | sed 's/.*release\///' | sort -V | tail -n1)"
           echo "RELEASE_BRANCH=$RELEASE_BRANCH" >> $GITHUB_ENV
-          
+
           git checkout $RELEASE_BRANCH
-          
+
           git cherry-pick -x $COMMIT_SHA
 
       - name: Create Pull Request

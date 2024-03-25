@@ -64,7 +64,7 @@ export async function signAndSendIxsSol(
 }
 
 export async function sendSol(solAddress: string, solAmount: string, log = true) {
-  const lamportsAmount = amountToFineAmount(solAmount, assetDecimals('SOL'));
+  const lamportsAmount = amountToFineAmount(solAmount, assetDecimals('Sol'));
 
   const transaction = new Transaction().add(
     SystemProgram.transfer({

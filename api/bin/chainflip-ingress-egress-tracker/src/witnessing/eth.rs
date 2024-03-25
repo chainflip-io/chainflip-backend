@@ -5,7 +5,7 @@ use std::sync::Arc;
 use utilities::task_scope;
 
 use chainflip_engine::{
-	eth::{retry_rpc::EthRetryRpcClient, rpc::EthRpcClient},
+	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcClient},
 	settings::NodeContainer,
 	state_chain_observer::client::{
 		chain_api::ChainApi,
@@ -46,7 +46,14 @@ where
 	let eth_client = {
 		let nodes = NodeContainer { primary: settings.eth.clone(), backup: None };
 
-		EthRetryRpcClient::<EthRpcClient>::new(scope, nodes, env_params.eth_chain_id.into())?
+		EvmRetryRpcClient::<EvmRpcClient>::new(
+			scope,
+			nodes,
+			env_params.eth_chain_id.into(),
+			"eth_rpc",
+			"eth_subscribe",
+			"Ethereum",
+		)?
 	};
 
 	let vaults = epoch_source.vaults::<Ethereum>().await;

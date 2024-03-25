@@ -6,7 +6,7 @@ use crate::{
 	btc::retry_rpc::BtcRetryRpcClient,
 	db::PersistentKeyDB,
 	dot::retry_rpc::DotRetryRpcClient,
-	eth::{retry_rpc::EthRetryRpcClient, rpc::EthRpcSigningClient},
+	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi,
 		storage_api::StorageApi,
@@ -27,8 +27,8 @@ use anyhow::Result;
 // point it means that on start up this will block, and the state chain observer will not start.
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
-	eth_client: EthRetryRpcClient<EthRpcSigningClient>,
-	arb_client: EthRetryRpcClient<EthRpcSigningClient>,
+	eth_client: EvmRetryRpcClient<EvmRpcSigningClient>,
+	arb_client: EvmRetryRpcClient<EvmRpcSigningClient>,
 	btc_client: BtcRetryRpcClient,
 	dot_client: DotRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,

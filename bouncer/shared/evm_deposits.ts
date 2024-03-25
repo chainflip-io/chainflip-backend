@@ -1,5 +1,5 @@
 import Web3 from 'web3';
-import { Asset } from '@chainflip/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 import { doPerformSwap } from '../shared/perform_swap';
 import { prepareSwap, testSwap } from '../shared/swapping';
 import {
@@ -57,7 +57,7 @@ async function testSuccessiveNativeDeposits(sourceAsset: Asset, destAsset: Asset
       if ('DepositChannel' in event.data.origin) {
         const channelMatches =
           Number(event.data.origin.DepositChannel.channelId) === swapParams.channelId;
-        const assetMatches = sourceAsset === (event.data.sourceAsset.toUpperCase() as Asset);
+        const assetMatches = sourceAsset === (event.data.sourceAsset as Asset);
         return channelMatches && assetMatches;
       }
       return false;
@@ -74,7 +74,7 @@ async function testSuccessiveNativeDeposits(sourceAsset: Asset, destAsset: Asset
   await observingSwapScheduled;
 }
 
-// Not supporting BTC to avoid adding more unnecessary complexity with address encoding.
+// Not supporting Btc to avoid adding more unnecessary complexity with address encoding.
 async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset) {
   const { destAddress, tag } = await prepareSwap(sourceAsset, destAsset);
 
@@ -90,7 +90,7 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
   const txData = cfTesterContract.methods
     .multipleContractSwap(
       chainContractId(chainFromAsset(destAsset)),
-      destAsset === 'DOT' ? decodeDotAddressForContract(destAddress) : destAddress,
+      destAsset === 'Dot' ? decodeDotAddressForContract(destAddress) : destAddress,
       assetContractId(destAsset),
       getContractAddress(chainFromAsset(sourceAsset), sourceAsset),
       amount,
@@ -141,28 +141,28 @@ export async function testEvmDeposits() {
   console.log('=== Testing EVM Deposits ===');
 
   const depositTests = Promise.all([
-    testDepositEvm('ETH', 'DOT'),
-    testDepositEvm('FLIP', 'BTC'),
-    testDepositEvm('ARBETH', 'DOT'),
-    testDepositEvm('ARBUSDC', 'BTC'),
+    testDepositEvm('Eth', 'Dot'),
+    testDepositEvm('Flip', 'Btc'),
+    testDepositEvm('ArbEth', 'Dot'),
+    testDepositEvm('ArbUsdc', 'Btc'),
   ]);
 
   const duplicatedDepositTest = Promise.all([
-    testSuccessiveNativeDeposits('ETH', 'DOT'),
-    testSuccessiveNativeDeposits('ETH', 'BTC'),
-    testSuccessiveNativeDeposits('ETH', 'FLIP'),
-    testSuccessiveNativeDeposits('ETH', 'USDC'),
-    testSuccessiveNativeDeposits('ARBETH', 'DOT'),
-    testSuccessiveNativeDeposits('ARBETH', 'BTC'),
-    testSuccessiveNativeDeposits('ARBETH', 'FLIP'),
-    testSuccessiveNativeDeposits('ARBETH', 'USDC'),
+    testSuccessiveNativeDeposits('Eth', 'Dot'),
+    testSuccessiveNativeDeposits('Eth', 'Btc'),
+    testSuccessiveNativeDeposits('Eth', 'Flip'),
+    testSuccessiveNativeDeposits('Eth', 'Usdc'),
+    testSuccessiveNativeDeposits('ArbEth', 'Dot'),
+    testSuccessiveNativeDeposits('ArbEth', 'Btc'),
+    testSuccessiveNativeDeposits('ArbEth', 'Flip'),
+    testSuccessiveNativeDeposits('ArbEth', 'Usdc'),
   ]);
 
   const multipleTxSwapsTest = Promise.all([
-    testTxMultipleContractSwaps('ETH', 'DOT'),
-    testTxMultipleContractSwaps('ETH', 'FLIP'),
-    testTxMultipleContractSwaps('ARBETH', 'DOT'),
-    testTxMultipleContractSwaps('ARBETH', 'FLIP'),
+    testTxMultipleContractSwaps('Eth', 'Dot'),
+    testTxMultipleContractSwaps('Eth', 'Flip'),
+    testTxMultipleContractSwaps('ArbEth', 'Dot'),
+    testTxMultipleContractSwaps('ArbEth', 'Flip'),
   ]);
 
   await Promise.all([depositTests, duplicatedDepositTest, multipleTxSwapsTest]);

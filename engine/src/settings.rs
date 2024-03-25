@@ -88,14 +88,14 @@ impl<NodeConfig: ValidateSettings> NodeContainer<NodeConfig> {
 }
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
-pub struct Eth {
+pub struct Evm {
 	#[serde(flatten)]
 	pub nodes: NodeContainer<WsHttpEndpoints>,
 	#[serde(deserialize_with = "deser_path")]
 	pub private_key_file: PathBuf,
 }
 
-impl Eth {
+impl Evm {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
 		self.nodes.validate()
 	}
@@ -185,10 +185,10 @@ pub struct Settings {
 	pub node_p2p: P2P,
 	pub state_chain: StateChain,
 	// External Chain settings
-	pub eth: Eth,
+	pub eth: Evm,
 	pub dot: Dot,
 	pub btc: Btc,
-	pub arb: Eth,
+	pub arb: Evm,
 
 	pub health_check: Option<HealthCheck>,
 	pub prometheus: Option<Prometheus>,

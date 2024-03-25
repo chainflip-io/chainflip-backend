@@ -6,90 +6,90 @@
 // For example: ./commands/setup_swaps.ts
 
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { Asset } from '@chainflip/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 import { runWithTimeout } from '../shared/utils';
 import { createLpPool } from '../shared/create_lp_pool';
 import { provideLiquidity } from '../shared/provide_liquidity';
 import { rangeOrder } from '../shared/range_order';
 
 const deposits = new Map<Asset, number>([
-  ['DOT', 10000],
-  ['ETH', 100],
-  ['ARBETH', 100],
-  ['BTC', 10],
-  ['USDC', 1000000],
-  ['ARBUSDC', 100000],
-  ['USDT', 100000],
-  ['FLIP', 10000],
-  ['SOL', 100],
-  ['SOLUSDC', 100000],
+  ['Dot', 10000],
+  ['Eth', 100],
+  ['ArbEth', 100],
+  ['Btc', 10],
+  ['Usdc', 1000000],
+  ['ArbUsdc', 100000],
+  ['Usdt', 100000],
+  ['Flip', 10000],
+  ['Sol', 100],
+  ['SolUsdc', 100000],
 ]);
 
 const price = new Map<Asset, number>([
-  ['DOT', 10],
-  ['ETH', 1000],
-  ['ARBETH', 1000],
-  ['BTC', 10000],
-  ['USDC', 1],
-  ['USDT', 1],
-  ['ARBUSDC', 1],
-  ['FLIP', 10],
-  ['SOL', 100],
-  ['SOLUSDC', 1],
+  ['Dot', 10],
+  ['Eth', 1000],
+  ['ArbEth', 1000],
+  ['Btc', 10000],
+  ['Usdc', 1],
+  ['Usdt', 1],
+  ['ArbUsdc', 1],
+  ['Flip', 10],
+  ['Sol', 100],
+  ['SolUsdc', 1],
 ]);
 
 async function main(): Promise<void> {
   await cryptoWaitReady();
 
   await Promise.all([
-    createLpPool('ETH', price.get('ETH')!),
-    createLpPool('DOT', price.get('DOT')!),
-    createLpPool('BTC', price.get('BTC')!),
-    createLpPool('FLIP', price.get('FLIP')!),
-    createLpPool('USDT', price.get('USDT')!),
-    createLpPool('ARBETH', price.get('ARBETH')!),
-    createLpPool('ARBUSDC', price.get('ARBUSDC')!),
-    // createLpPool('SOL', price.get('SOL')!),
-    // createLpPool('SOLUSDC', price.get('SOLUSDC')!),
+    createLpPool('Eth', price.get('Eth')!),
+    createLpPool('Dot', price.get('Dot')!),
+    createLpPool('Btc', price.get('Btc')!),
+    createLpPool('Flip', price.get('Flip')!),
+    createLpPool('Usdt', price.get('Usdt')!),
+    createLpPool('ArbEth', price.get('ArbEth')!),
+    createLpPool('ArbUsdc', price.get('ArbUsdc')!),
+    // createLpPool('Sol', price.get('Sol')!),
+    // createLpPool('SolUsdc', price.get('SolUsdc')!),
   ]);
 
   await Promise.all([
-    provideLiquidity('USDC', deposits.get('USDC')!),
-    provideLiquidity('ETH', deposits.get('ETH')!),
-    provideLiquidity('DOT', deposits.get('DOT')!),
-    provideLiquidity('BTC', deposits.get('BTC')!),
-    provideLiquidity('FLIP', deposits.get('FLIP')!),
-    provideLiquidity('USDT', deposits.get('USDT')!),
-    provideLiquidity('ARBETH', deposits.get('ARBETH')!),
-    provideLiquidity('ARBUSDC', deposits.get('ARBUSDC')!),
-    // provideLiquidity('SOL', deposits.get('SOL')!),
-    // provideLiquidity('SOLUSDC', deposits.get('SOLUSDC')!),
+    provideLiquidity('Usdc', deposits.get('Usdc')!),
+    provideLiquidity('Eth', deposits.get('Eth')!),
+    provideLiquidity('Dot', deposits.get('Dot')!),
+    provideLiquidity('Btc', deposits.get('Btc')!),
+    provideLiquidity('Flip', deposits.get('Flip')!),
+    provideLiquidity('Usdt', deposits.get('Usdt')!),
+    provideLiquidity('ArbEth', deposits.get('ArbEth')!),
+    provideLiquidity('ArbUsdc', deposits.get('ArbUsdc')!),
+    // provideLiquidity('Sol', deposits.get('Sol')!),
+    // provideLiquidity('SolUsdc', deposits.get('SolUsdc')!),
   ]);
 
   // also fund the boost account
   await Promise.all([
-    provideLiquidity('USDC', deposits.get('USDC')!, false, '//LP_BOOST'),
-    provideLiquidity('ETH', deposits.get('ETH')!, false, '//LP_BOOST'),
-    provideLiquidity('DOT', deposits.get('DOT')!, false, '//LP_BOOST'),
-    provideLiquidity('BTC', deposits.get('BTC')!, false, '//LP_BOOST'),
-    provideLiquidity('FLIP', deposits.get('FLIP')!, false, '//LP_BOOST'),
-    provideLiquidity('USDT', deposits.get('USDT')!, false, '//LP_BOOST'),
-    provideLiquidity('ARBETH', deposits.get('ARBETH')!, false, '//LP_BOOST'),
-    provideLiquidity('ARBUSDC', deposits.get('ARBUSDC')!, false, '//LP_BOOST'),
-    // provideLiquidity('SOL', deposits.get('SOL')!, false, '//LP_BOOST'),
-    // provideLiquidity('SOLUSDC', deposits.get('SOLUSDC')!, false, '//LP_BOOST'),
+    provideLiquidity('Usdc', deposits.get('Usdc')!, false, '//LP_BOOST'),
+    provideLiquidity('Eth', deposits.get('Eth')!, false, '//LP_BOOST'),
+    provideLiquidity('Dot', deposits.get('Dot')!, false, '//LP_BOOST'),
+    provideLiquidity('Btc', deposits.get('Btc')!, false, '//LP_BOOST'),
+    provideLiquidity('Flip', deposits.get('Flip')!, false, '//LP_BOOST'),
+    provideLiquidity('Usdt', deposits.get('Usdt')!, false, '//LP_BOOST'),
+    provideLiquidity('ArbEth', deposits.get('ArbEth')!, false, '//LP_BOOST'),
+    provideLiquidity('ArbUsdc', deposits.get('ArbUsdc')!, false, '//LP_BOOST'),
+    // provideLiquidity('Sol', deposits.get('Sol')!, false, '//LP_BOOST'),
+    // provideLiquidity('SolUsdc', deposits.get('SolUsdc')!, false, '//LP_BOOST'),
   ]);
 
   await Promise.all([
-    rangeOrder('ETH', deposits.get('ETH')! * 0.9999),
-    rangeOrder('DOT', deposits.get('DOT')! * 0.9999),
-    rangeOrder('BTC', deposits.get('BTC')! * 0.9999),
-    rangeOrder('FLIP', deposits.get('FLIP')! * 0.9999),
-    rangeOrder('USDT', deposits.get('USDT')! * 0.9999),
-    rangeOrder('ARBETH', deposits.get('ARBETH')! * 0.9999),
-    rangeOrder('ARBUSDC', deposits.get('ARBUSDC')! * 0.9999),
-    // rangeOrder('SOL', deposits.get('SOL')! * 0.9999),
-    // rangeOrder('SOLUSDC', deposits.get('SOLUSDC')! * 0.9999),
+    rangeOrder('Eth', deposits.get('Eth')! * 0.9999),
+    rangeOrder('Dot', deposits.get('Dot')! * 0.9999),
+    rangeOrder('Btc', deposits.get('Btc')! * 0.9999),
+    rangeOrder('Flip', deposits.get('Flip')! * 0.9999),
+    rangeOrder('Usdt', deposits.get('Usdt')! * 0.9999),
+    rangeOrder('ArbEth', deposits.get('ArbEth')! * 0.9999),
+    rangeOrder('ArbUsdc', deposits.get('ArbUsdc')! * 0.9999),
+    // rangeOrder('Sol', deposits.get('Sol')! * 0.9999),
+    // rangeOrder('SolUsdc', deposits.get('SolUsdc')! * 0.9999),
   ]);
 
   console.log('=== Swaps Setup completed ===');
