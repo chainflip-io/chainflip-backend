@@ -100,7 +100,7 @@ jobs:
           extension-matching: disable
           rename-to: try-runtime
           chmod: 0755
-
+ 
       - name: Get upgrade-from-commit
         uses: ./.github/actions/get-workflow-commit
         id: get-upgrade-from-commit
