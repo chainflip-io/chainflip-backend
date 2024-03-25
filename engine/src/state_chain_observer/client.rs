@@ -59,7 +59,7 @@ const SUBSTRATE_BEHAVIOUR: &str = "Unexpected state chain node behaviour";
 const SYNC_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
 /// Enough time for a state chain transaction to make it into a (unfinalised) block
-const CFE_VERSION_SUBMIT_TIMEOUT: Duration = Duration::from_secs(30);
+const CFE_VERSION_SUBMIT_TIMEOUT: Duration = Duration::from_secs(60);
 
 lazy_static::lazy_static! {
 	static ref CFE_VERSION: SemVer = SemVer {
