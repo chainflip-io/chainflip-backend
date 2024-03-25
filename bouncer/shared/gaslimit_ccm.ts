@@ -44,8 +44,6 @@ const CCM_CHAINS_NATIVE_ASSETS: Record<string, Asset> = {
   // Solana: 'Sol',
 };
 
-let stopObservingCcmReceived = false;
-
 function gasTestCcmMetadata(sourceAsset: Asset, gasToConsume: number, gasBudgetFraction?: number) {
   const web3 = new Web3();
 
@@ -215,6 +213,8 @@ async function testGasLimitSwap(
     gasConsumption + MIN_BASE_GAS_OVERHEAD[destChain] + byteLength * GAS_PER_BYTE;
   // This is a very rough approximation for the gas limit required. A buffer is added to account for that.
   if (minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER[destChain] >= gasLimitBudget) {
+    let stopObservingCcmReceived = false;
+
     observeCcmReceived(
       sourceAsset,
       destAsset,
