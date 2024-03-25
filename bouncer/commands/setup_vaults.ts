@@ -157,6 +157,7 @@ async function main(): Promise<void> {
     .encodeABI();
   await signAndSendTxEvm('Arbitrum', keyManagerAddress, '0', txData);
 
+  // Temporal solution when running the bouncer without the Solana node
   let solanaIsRunning = false;
   try {
     const solClient = getSolConnection();

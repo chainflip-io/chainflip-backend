@@ -33,6 +33,9 @@ export async function send(asset: Asset, address: string, amount?: string, log =
     case 'Dot':
       await sendDot(address, amount ?? defaultAssetAmounts(asset));
       break;
+    case 'SOL':
+      await sendSol(address, amount ?? defaultAssetAmounts(asset));
+      break;
     case 'Usdc':
     case 'Usdt':
     case 'Flip': {
