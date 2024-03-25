@@ -8,7 +8,7 @@ jobs:
   cargo-fmt:
     runs-on: namespace-profile-rust-builder
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-22.04-46"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-22.04-48"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -33,7 +33,7 @@ jobs:
   audit:
     runs-on: ubuntu-22.04
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-22.04-46"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-22.04-48"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -48,7 +48,7 @@ jobs:
   cargo-clippy:
     runs-on: namespace-profile-rust-builder
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-22.04-46"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-22.04-48"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -73,7 +73,7 @@ jobs:
   lint-bouncer:
     runs-on: ubuntu-22.04
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-22.04-46"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-22.04-48"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
