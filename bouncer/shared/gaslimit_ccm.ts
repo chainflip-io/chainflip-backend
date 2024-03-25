@@ -44,8 +44,6 @@ const CCM_CHAINS_NATIVE_ASSETS: Record<string, Asset> = {
   // Solana: 'Sol',
 };
 
-let stopObservingCcmReceived = false;
-
 function gasTestCcmMetadata(sourceAsset: Asset, gasToConsume: number, gasBudgetFraction?: number) {
   const web3 = new Web3();
 
@@ -215,6 +213,8 @@ async function testGasLimitSwap(
     gasConsumption + MIN_BASE_GAS_OVERHEAD[destChain] + byteLength * GAS_PER_BYTE;
   // This is a very rough approximation for the gas limit required. A buffer is added to account for that.
   if (minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER[destChain] >= gasLimitBudget) {
+    let stopObservingCcmReceived = false;
+
     observeCcmReceived(
       sourceAsset,
       destAsset,
@@ -390,12 +390,12 @@ export async function testGasLimitCcmSwaps() {
     testGasLimitSwap('Eth', 'Usdt', ' insufBudget', undefined, 10 ** 5),
     testGasLimitSwap('Flip', 'Eth', ' insufBudget', undefined, 10 ** 5),
     testGasLimitSwap('Btc', 'Eth', ' insufBudget', undefined, 10 ** 4),
-    testGasLimitSwap('Dot', 'ArbEth', ' insufBudget', undefined, 10 ** 3),
+    testGasLimitSwap('Dot', 'ArbEth', ' insufBudget', undefined, 10 ** 4),
     testGasLimitSwap('Eth', 'ArbEth', ' insufBudget', undefined, 10 ** 4),
     testGasLimitSwap('Flip', 'ArbUsdc', ' insufBudget', undefined, 10 ** 4),
-    testGasLimitSwap('Btc', 'ArbUsdc', ' insufBudget', undefined, 10 ** 3),
-    testGasLimitSwap('ArbEth', 'Eth', ' insufBudget', undefined, 10 ** 4),
-    testGasLimitSwap('ArbUsdc', 'Flip', ' insufBudget', undefined, 10 ** 3),
+    testGasLimitSwap('Btc', 'ArbUsdc', ' insufBudget', undefined, 10 ** 4),
+    testGasLimitSwap('ArbEth', 'Eth', ' insufBudget', undefined, 10 ** 5),
+    testGasLimitSwap('ArbUsdc', 'Flip', ' insufBudget', undefined, 10 ** 4),
   ];
 
   // This amount of gasLimitBudget will be swapped into very little gasLimitBudget. Not into zero as that will cause a debug_assert to
