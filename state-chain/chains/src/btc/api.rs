@@ -112,8 +112,9 @@ where
 		_maybe_old_key: Option<<BitcoinCrypto as ChainCrypto>::AggKey>,
 		_new_key: <BitcoinCrypto as ChainCrypto>::AggKey,
 	) -> Result<Self, SetAggKeyWithAggKeyError> {
-		// Utxo key update now happens gradually over the new epoch. This prevents sending too
-		// many utxos within the same transaction which may cause threshold signing to fail.
+		// Utxo transfer into the new vault now happens gradually over the new epoch as part of
+		// consolidation. This prevents sending too many utxos within the same transaction
+		// which may cause threshold signing to fail.
 		Err(SetAggKeyWithAggKeyError::NotRequired)
 	}
 }

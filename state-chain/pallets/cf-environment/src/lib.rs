@@ -241,14 +241,6 @@ pub mod pallet {
 		StaleUtxosDiscarded { utxos: Vec<Utxo> },
 	}
 
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// Sweep the current utxo storage and:
-		/// 1. Transfer a limited number of utxos from the previous vault into the current vault.
-		/// 2. Any utxos from earlier than the previous vault are discarded.
-		fn on_finalize(_block_number: BlockNumberFor<T>) {}
-	}
-
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Manually initiates Polkadot vault key rotation completion steps so Epoch rotation can be
