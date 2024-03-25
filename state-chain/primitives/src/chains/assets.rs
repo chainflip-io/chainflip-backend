@@ -149,7 +149,7 @@ macro_rules! assets {
 							_ => Err("Unrecognized chain")
 						}
 					} else {
-						Err("Unrecognized asset, expected the format \"<chain>:<asset>\"")
+						Err("Unrecognized asset, expected the format \"<chain>-<asset>\"")
 					}
 				}
 			}
