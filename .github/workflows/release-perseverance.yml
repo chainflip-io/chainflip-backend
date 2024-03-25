@@ -18,6 +18,15 @@ jobs:
     with:
       profile: "production"
       binary-subdir: "production"
+  # Used in upgrade-test job
+  build-try-runtime:
+    needs: [release-checks]
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      profile: "try-runtime"
+      upload-name: "chainflip-backend-bin-try-runtime"
+      binary-subdir: release
   docker:
     needs: [build]
     uses: ./.github/workflows/_24_docker.yml
