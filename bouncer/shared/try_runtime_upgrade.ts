@@ -23,7 +23,7 @@ function createSnapshotFile(networkUrl: string, blockHash: string) {
 function tryRuntimeCommand(runtimePath: string, blockHash: 'latest' | string, networkUrl: string) {
   const blockParam = blockHash === 'latest' ? 'live' : `live --at ${blockHash}`;
 
-  const { success } = execWithRustLog(
+  execWithRustLog(
     `try-runtime \
         --runtime ${runtimePath} on-runtime-upgrade \
         --disable-spec-version-check \
@@ -32,11 +32,12 @@ function tryRuntimeCommand(runtimePath: string, blockHash: 'latest' | string, ne
         --uri ${networkUrl}`,
     `try-runtime-${blockHash}`,
     'runtime::executive=debug',
+    (success) => {
+      if (!success) {
+        createSnapshotFile(networkUrl, blockHash);
+      }
+    },
   );
-
-  if (!success) {
-    createSnapshotFile(networkUrl, blockHash);
-  }
 }
 
 // 4 options:

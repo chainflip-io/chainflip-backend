@@ -37,8 +37,8 @@ export function execWithLog(
   command: string,
   commandAlias: string,
   additionalEnv: Record<string, string> = {},
-): { success: boolean } {
-  let success = false;
+  callback?: (success: boolean) => void,
+) {
   withFileStreamTo(initLogFile(`${commandAlias}.log`), (file) => {
     try {
       execSync(`${command} 2>&1`, {
@@ -46,18 +46,19 @@ export function execWithLog(
         stdio: [0, file, file],
       });
       console.debug(`${commandAlias} succeeded`);
-      success = true;
+      callback?.(true);
     } catch (e) {
       console.error(`${commandAlias} failed: ${e}`);
+      callback?.(false);
     }
   });
-  return { success };
 }
 
 export function execWithRustLog(
   command: string,
   logFileName: string,
   logLevel: string | undefined = 'info',
-): { success: boolean } {
-  return execWithLog(command, logFileName, { RUST_LOG: logLevel });
+  callback?: (success: boolean) => void,
+) {
+  execWithLog(command, logFileName, { RUST_LOG: logLevel }, callback);
 }
