@@ -223,3 +223,61 @@ fn test_sqrt_price_to_price() {
 	);
 	assert!(sqrt_price_to_price(MIN_SQRT_PRICE) < sqrt_price_to_price(MAX_SQRT_PRICE));
 }
+
+#[test]
+fn test_collect_in_range() {
+	let data_map: BTreeMap<(u64, u32), (u64, u32)> = vec![
+		((2, 2), (2, 2)),
+		((3, 3), (3, 3)),
+		((4, 4), (4, 4)),
+		((5, 5), (5, 5)),
+		((6, 6), (6, 6)),
+		((7, 7), (7, 7)),
+		((8, 8), (8, 8)),
+		((9, 9), (9, 9)),
+	]
+	.into_iter()
+	.collect();
+
+	// Collects an inclusive range of elements for the map by defined bounds.
+	assert_eq!(
+		PoolState::collect_map_in_range::<(u64, u32), (u64, u32)>(
+			Bound::Included(&(4, 4)),
+			Bound::Included(&(7, 7)),
+			data_map.clone(),
+		),
+		vec![((4, 4), (4, 4)), ((5, 5), (5, 5)), ((6, 6), (6, 6)), ((7, 7), (7, 7)),]
+			.into_iter()
+			.collect()
+	);
+
+	// Collects till the end if the upper bound is higher then the last element.
+	assert_eq!(
+		PoolState::collect_map_in_range::<(u64, u32), (u64, u32)>(
+			Bound::Included(&(5, 5)),
+			Bound::Included(&(12, 12)),
+			data_map.clone(),
+		),
+		vec![
+			((5, 5), (5, 5)),
+			((6, 6), (6, 6)),
+			((7, 7), (7, 7)),
+			((8, 8), (8, 8)),
+			((9, 9), (9, 9)),
+		]
+		.into_iter()
+		.collect()
+	);
+
+	// Collects from the first element if the lower bound is lower then the first element.
+	assert_eq!(
+		PoolState::collect_map_in_range::<(u64, u32), (u64, u32)>(
+			Bound::Included(&(1, 1)),
+			Bound::Included(&(5, 5)),
+			data_map,
+		),
+		vec![((2, 2), (2, 2)), ((3, 3), (3, 3)), ((4, 4), (4, 4)), ((5, 5), (5, 5)),]
+			.into_iter()
+			.collect()
+	);
+}

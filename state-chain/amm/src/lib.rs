@@ -563,7 +563,8 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord + MinMax>
 		.collect()
 	}
 
-	/// Collects the elements of a given map between defined bounds.
+	/// Collects the elements of a given BTreeMap between two defined Bound. The bounds are
+	/// inclusive.
 	fn collect_map_in_range<K: Ord + Clone, V: Clone>(
 		start_bound: Bound<&K>,
 		end_bound: Bound<&K>,
