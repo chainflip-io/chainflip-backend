@@ -14,14 +14,14 @@ import {
 import { signAndSendTxSol } from './send_sol';
 
 export async function sendSolUsdc(solAddress: string, usdcAmount: string, log = true) {
-  const usdcMintPubKey = new PublicKey(getContractAddress('Solana', 'SOLUSDC'));
+  const usdcMintPubKey = new PublicKey(getContractAddress('Solana', 'SolUsdc'));
 
   const whaleKeypair = getSolWhaleKeyPair();
   const whaleAta = getAssociatedTokenAddressSync(usdcMintPubKey, whaleKeypair.publicKey, false);
   const encodedSolAddress = new PublicKey(getEncodedSolAddress(solAddress));
   const receiverAta = getAssociatedTokenAddressSync(usdcMintPubKey, encodedSolAddress, true);
 
-  const usdcFineAmount = amountToFineAmount(usdcAmount, assetDecimals('SOLUSDC'));
+  const usdcFineAmount = amountToFineAmount(usdcAmount, assetDecimals('SolUsdc'));
 
   const transaction = new Transaction().add(
     createAssociatedTokenAccountIdempotentInstruction(

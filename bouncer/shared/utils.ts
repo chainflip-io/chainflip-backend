@@ -176,9 +176,9 @@ export function assetContractId(asset: Asset): number {
       return 6;
     case 'ArbUsdc':
       return 7;
-    case 'SOL':
+    case 'Sol':
       return 9;
-    case 'SOLUSDC':
+    case 'SolUsdc':
       return 10;
     default:
       throw new Error(`Unsupported asset: ${asset}`);
@@ -203,9 +203,9 @@ export function assetDecimals(asset: Asset): number {
       return 18;
     case 'ArbUsdc':
       return 6;
-    case 'SOL':
+    case 'Sol':
       return 9;
-    case 'SOLUSDC':
+    case 'SolUsdc':
       return 6;
     default:
       throw new Error(`Unsupported asset: ${asset}`);
@@ -548,8 +548,8 @@ export async function newAddress(
     case Assets.Btc:
       rawAddress = await newBtcAddress(seed, type ?? 'P2PKH');
       break;
-    case 'SOL':
-    case 'SOLUSDC':
+    case 'Sol':
+    case 'SolUsdc':
       rawAddress = newSolAddress(seed);
       break;
     default:

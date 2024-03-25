@@ -40,10 +40,10 @@ export async function getBalance(asset: Asset, address: string): Promise<string>
     case 'Btc':
       result = (await getBtcBalance(address)).toString().trim();
       break;
-    case 'SOL':
+    case 'Sol':
       result = await getSolBalance(address);
       break;
-    case 'SOLUSDC':
+    case 'SolUsdc':
       result = await getSolUsdcBalance(address);
       break;
     default:

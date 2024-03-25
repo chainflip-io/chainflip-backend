@@ -57,7 +57,7 @@ export async function send(asset: Asset, address: string, amount?: string, log =
       );
       break;
     }
-    case 'SOLUSDC':
+    case 'SolUsdc':
       await sendSolUsdc(address, amount ?? defaultAssetAmounts(asset));
       break;
     default:

@@ -10,12 +10,12 @@ import {
 
 export async function getSolUsdcBalance(address: string): Promise<string> {
   const connection = getSolConnection();
-  const usdcMintPubKey = new PublicKey(getContractAddress('Solana', 'SOLUSDC'));
+  const usdcMintPubKey = new PublicKey(getContractAddress('Solana', 'SolUsdc'));
 
   const encodedSolAddress = new PublicKey(getEncodedSolAddress(address));
   const ata = getAssociatedTokenAddressSync(usdcMintPubKey, encodedSolAddress, true);
 
   const accountInfo = await connection.getAccountInfo(ata);
   const usdcFineAmount = accountInfo ? (await getAccount(connection, ata)).amount : '0';
-  return fineAmountToAmount(usdcFineAmount.toString(), assetDecimals('SOLUSDC'));
+  return fineAmountToAmount(usdcFineAmount.toString(), assetDecimals('SolUsdc'));
 }
