@@ -65,8 +65,7 @@ RUN rustup update \
     && rm rust-toolchain.toml
 
 RUN rustc --version && \
-    cargo --version && \
-    sccache --version
+    cargo --version
 
 RUN groupadd ci \
     && useradd -m -g ci ci
