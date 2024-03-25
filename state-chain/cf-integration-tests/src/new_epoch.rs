@@ -266,7 +266,7 @@ fn bitcoin_utxos_are_sent_to_current_vault_or_discarded() {
 			assert_ok!(RuntimeCall::Environment(
 				pallet_cf_environment::Call::update_consolidation_parameters {
 					params: ConsolidationParameters {
-						consolidation_threshold: 10,
+						consolidation_threshold: 5,
 						consolidation_size: 2,
 					}
 				}
@@ -281,6 +281,7 @@ fn bitcoin_utxos_are_sent_to_current_vault_or_discarded() {
 			add_utxo_amount(utxo(34_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)));
 
 			testnet.move_forward_blocks(1);
+
 			// Nothing changes.
 			assert_eq!(BitcoinAvailableUtxos::<Runtime>::decode_len(), Some(4));
 
@@ -305,17 +306,13 @@ fn bitcoin_utxos_are_sent_to_current_vault_or_discarded() {
 				]
 			);
 
-			System::assert_has_event(RuntimeEvent::Environment(
-				pallet_cf_environment::Event::UtxoTransferred {
-					broadcast_id: 1,
-					total_amount: 42_999_817,
-				},
-			));
-
 			// These are discarded
 			add_utxo_amount(utxo(1_000_000, 0, None));
 			add_utxo_amount(utxo(2_000_000, 0, None));
 			add_utxo_amount(utxo(3_000_000, 0, None));
+
+			// Add 1 more epoch 3 utxo to trigger consolidation.
+			add_utxo_amount(utxo(35_000_000, 0, Some(epoch_3)));
 
 			testnet.move_forward_blocks(1);
 
@@ -323,10 +320,9 @@ fn bitcoin_utxos_are_sent_to_current_vault_or_discarded() {
 			assert_eq!(
 				BitcoinAvailableUtxos::<Runtime>::get(),
 				vec![
-					utxo(31_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
-					utxo(32_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
 					utxo(33_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
 					utxo(34_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+					utxo(35_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
 					Utxo {
 						id: UtxoId {
 							tx_id: hex_literal::hex!(
@@ -341,13 +337,7 @@ fn bitcoin_utxos_are_sent_to_current_vault_or_discarded() {
 				]
 			);
 			System::assert_has_event(RuntimeEvent::Environment(
-				pallet_cf_environment::Event::UtxoTransferred {
-					broadcast_id: 2,
-					total_amount: 46_999_817,
-				},
-			));
-			System::assert_has_event(RuntimeEvent::Environment(
-				pallet_cf_environment::Event::StaleUtxoDiscarded {
+				pallet_cf_environment::Event::StaleUtxosDiscarded {
 					utxos: vec![
 						utxo(1_000_000, 0, None),
 						utxo(2_000_000, 0, None),
@@ -358,13 +348,12 @@ fn bitcoin_utxos_are_sent_to_current_vault_or_discarded() {
 
 			testnet.move_forward_blocks(1);
 
+			// 2 more utxos from epoch 3 has been consolidated together with the remaining utxo from
+			// epoch 2.
 			assert_eq!(
 				BitcoinAvailableUtxos::<Runtime>::get(),
 				vec![
-					utxo(31_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
-					utxo(32_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
-					utxo(33_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
-					utxo(34_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+					utxo(35_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
 					Utxo {
 						id: UtxoId {
 							tx_id: hex_literal::hex!(
@@ -379,12 +368,56 @@ fn bitcoin_utxos_are_sent_to_current_vault_or_discarded() {
 					Utxo {
 						id: UtxoId {
 							tx_id: hex_literal::hex!(
-								"5edf11df7cec1b6957e2ed603b2e93a72b5cb3c6e3e7b7094e54ccc77a4fe8d7"
+								"c8e86e5a47151acf2b53b8b0c856e7547f03ade163ccc00a5d97d6009631ff07"
 							)
 							.into(),
 							vout: 0,
 						},
-						amount: 46_999_817,
+						// (consolidation)31 + 32 + (old_utxo)23 + 24 = 110
+						amount: 109_999_701,
+						deposit_address: DepositAddress { pubkey_x: epoch_3, script_path: None }
+					},
+				]
+			);
+
+			testnet.move_forward_blocks(2);
+
+			assert_eq!(
+				BitcoinAvailableUtxos::<Runtime>::get(),
+				vec![
+					utxo(35_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+					Utxo {
+						id: UtxoId {
+							tx_id: hex_literal::hex!(
+								"d7ee4b2c95f67a0454a3c4e9774c057075e649100284cf62a4b8c6f3925a1d26"
+							)
+							.into(),
+							vout: 0,
+						},
+						amount: 42_999_817,
+						deposit_address: DepositAddress { pubkey_x: epoch_3, script_path: None }
+					},
+					Utxo {
+						id: UtxoId {
+							tx_id: hex_literal::hex!(
+								"c8e86e5a47151acf2b53b8b0c856e7547f03ade163ccc00a5d97d6009631ff07"
+							)
+							.into(),
+							vout: 0,
+						},
+						amount: 109_999_701,
+						deposit_address: DepositAddress { pubkey_x: epoch_3, script_path: None }
+					},
+					Utxo {
+						id: UtxoId {
+							tx_id: hex_literal::hex!(
+								"ec405cb038340498f20108442c242d81c061790e300f07259a746337253c82b8"
+							)
+							.into(),
+							vout: 0,
+						},
+						// (consolidation): 33 + 34 = 67
+						amount: 66_999_817,
 						deposit_address: DepositAddress { pubkey_x: epoch_3, script_path: None }
 					},
 				]

@@ -1,9 +1,8 @@
 #![cfg(test)]
 
 use cf_chains::btc::{
-	api::{BitcoinApi, TransferUtxoCall, UtxoSelectionType},
-	deposit_address::DepositAddress,
-	utxo_selection, AggKey, BtcAmount, Utxo, CHANGE_ADDRESS_SALT,
+	api::UtxoSelectionType, deposit_address::DepositAddress, utxo_selection, AggKey, BtcAmount,
+	Utxo, CHANGE_ADDRESS_SALT,
 };
 use cf_traits::{EpochKey, SafeMode};
 use frame_support::{assert_ok, traits::OriginTrait};
@@ -213,145 +212,155 @@ fn update_safe_mode() {
 }
 
 #[test]
-fn can_send_utxo_to_current_vault_and_discard_stale_utxos() {
-	let epoch_1 = || [0xFE; 32];
-	let epoch_2 = || [0xAA; 32];
-	let epoch_3 = || [0xBB; 32];
+fn can_consolidate_utxo_to_current_vault_and_discard_stale_utxos() {
+	let epoch_1 = [0xFE; 32];
+	let epoch_2 = [0xAA; 32];
+	let epoch_3 = [0xBB; 32];
 
 	let epoch_2_utxos = vec![
-		utxo(1_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2())),
-		utxo(2_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2())),
-		utxo(3_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2())),
-		utxo(4_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2())),
+		utxo(1_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+		utxo(2_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+		utxo(3_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+		utxo(4_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
 	];
 	let epoch_3_utxos = vec![
-		utxo(5_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3())),
-		utxo(6_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3())),
-		utxo(7_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3())),
+		utxo(5_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+		utxo(6_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+		utxo(7_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
 	];
 	let to_discard_utxo = vec![utxo(8_000_000, 1, None), utxo(9_000_000, 2, None)];
 
-	new_test_ext()
-		.execute_with(|| {
-			// Set current key to epoch 2, and transfer limit to 2 utxo at a time.
-			CurrentBitcoinKey::set(Some(agg_key(epoch_2(), Some(epoch_1()))));
-			ConsolidationParameters::<Test>::set(utxo_selection::ConsolidationParameters {
-				consolidation_threshold: 10,
-				consolidation_size: 2,
-			});
-
-			BitcoinAvailableUtxos::<Test>::set(epoch_2_utxos.clone());
-		})
-		.then_execute_at_next_block(|_| {})
-		.then_execute_with(|_| {
-			// no changes to utxo since all utxo are part of the current vault.
-			assert_eq!(BitcoinAvailableUtxos::<Test>::get(), epoch_2_utxos);
-
-			// Rotate key into the next vault
-			CurrentBitcoinKey::set(Some(agg_key(epoch_3(), Some(epoch_2()))));
-
-			BitcoinAvailableUtxos::<Test>::mutate(|utxos| {
-				utxos.append(&mut epoch_3_utxos.clone());
-
-				// These should be discarded.
-				utxos.append(&mut to_discard_utxo.clone());
-			});
-			assert_eq!(BitcoinAvailableUtxos::<Test>::decode_len(), Some(9));
-		})
-		.then_execute_at_next_block(|_| {})
-		.then_execute_with(|_| {
-			// Only 2 Utxos from previous vault are sent to the current Vault. Remaining are
-			// appended to the back.
-			let (sent_utxos, total_amount) = Environment::calculate_utxos_and_change(vec![
-				utxo(1_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2())),
-				utxo(2_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2())),
-			])
-			.unwrap();
-
-			System::assert_has_event(RuntimeEvent::Environment(crate::Event::StaleUtxoDiscarded {
-				utxos: to_discard_utxo,
-			}));
-			System::assert_has_event(RuntimeEvent::Environment(crate::Event::UtxoTransferred {
-				broadcast_id: 1,
-				total_amount,
-			}));
-
-			assert_eq!(
-				BitcoinAvailableUtxos::<Test>::get(),
-				vec![
-					utxo(5_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3())),
-					utxo(6_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3())),
-					utxo(7_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3())),
-					utxo(3_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2())),
-					utxo(4_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2())),
-				]
-			);
-
-			assert_eq!(
-				MockBitcoinBroadcaster::take_pending_api_calls(),
-				vec![BitcoinApi::transfer_utxo(epoch_2(), epoch_3(), sent_utxos, total_amount,)]
-			);
-		})
-		.then_execute_at_next_block(|_| {})
-		.then_execute_with(|_| {
-			// Send the remaining 2 utxos from previous vault.
-			let (sent_utxos, total_amount) = Environment::calculate_utxos_and_change(vec![
-				utxo(3_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2())),
-				utxo(4_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2())),
-			])
-			.unwrap();
-
-			System::assert_has_event(RuntimeEvent::Environment(crate::Event::UtxoTransferred {
-				broadcast_id: 2,
-				total_amount,
-			}));
-
-			assert_eq!(BitcoinAvailableUtxos::<Test>::get(), epoch_3_utxos);
-
-			assert_eq!(
-				MockBitcoinBroadcaster::take_pending_api_calls(),
-				vec![BitcoinApi::transfer_utxo(epoch_2(), epoch_3(), sent_utxos, total_amount,)]
-			);
+	new_test_ext().execute_with(|| {
+		// Set current key to epoch 2, and transfer limit to 2 utxo at a time.
+		CurrentBitcoinKey::set(Some(agg_key(epoch_2, Some(epoch_1))));
+		ConsolidationParameters::<Test>::set(utxo_selection::ConsolidationParameters {
+			consolidation_threshold: 5,
+			consolidation_size: 2,
 		});
+
+		BitcoinAvailableUtxos::<Test>::set(epoch_2_utxos.clone());
+
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			None
+		);
+
+		// no changes to utxo since all utxo are part of the current vault.
+		assert_eq!(BitcoinAvailableUtxos::<Test>::get(), epoch_2_utxos);
+
+		// Rotate key into the next vault
+		CurrentBitcoinKey::set(Some(agg_key(epoch_3, Some(epoch_2))));
+
+		BitcoinAvailableUtxos::<Test>::mutate(|utxos| {
+			utxos.append(&mut epoch_3_utxos.clone());
+
+			// These should be discarded.
+			utxos.append(&mut to_discard_utxo.clone());
+		});
+		assert_eq!(BitcoinAvailableUtxos::<Test>::decode_len(), Some(9));
+
+		// Only 2 Utxos from previous vault are sent to the current Vault. Remaining are
+		// appended to the back.
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			Environment::calculate_utxos_and_change(vec![
+				utxo(1_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+				utxo(2_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+			])
+		);
+
+		System::assert_has_event(RuntimeEvent::Environment(crate::Event::StaleUtxosDiscarded {
+			utxos: to_discard_utxo,
+		}));
+
+		assert_eq!(
+			BitcoinAvailableUtxos::<Test>::get(),
+			vec![
+				utxo(5_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+				utxo(6_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+				utxo(7_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+				utxo(3_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+				utxo(4_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+			]
+		);
+
+		// Add more utxos to current vault so it's over consolidation threshold.
+		BitcoinAvailableUtxos::<Test>::append(utxo(8_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)));
+		BitcoinAvailableUtxos::<Test>::append(utxo(9_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)));
+		BitcoinAvailableUtxos::<Test>::append(utxo(10_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)));
+
+		// Consolidate from current vault + remaining 2 utxos from previous vault.
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			Environment::calculate_utxos_and_change(vec![
+				utxo(3_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+				utxo(4_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+				utxo(5_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+				utxo(6_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+			]),
+		);
+
+		assert_eq!(
+			BitcoinAvailableUtxos::<Test>::get(),
+			vec![
+				utxo(7_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+				utxo(8_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+				utxo(9_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+				utxo(10_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3))
+			]
+		);
+	});
 }
 
 #[test]
 fn do_nothing_with_no_key_set() {
-	let epoch_1 = || [0xFE; 32];
-	let epoch_2 = || [0xAA; 32];
-	let epoch_3 = || [0xBB; 32];
-	new_test_ext()
-		.execute_with(|| {
-			BitcoinAvailableUtxos::<Test>::set(vec![
-				utxo(1_000_000, CHANGE_ADDRESS_SALT, Some(epoch_1())),
-				utxo(2_000_000, CHANGE_ADDRESS_SALT, Some(epoch_1())),
-				utxo(3_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2())),
-				utxo(4_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2())),
-				utxo(5_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3())),
-				utxo(6_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3())),
-			]);
-		})
-		.then_execute_at_next_block(|_| {})
-		.then_execute_with(|_| {
-			// No changes if vault key is not set
-			assert_eq!(crate::BitcoinAvailableUtxos::<Test>::decode_len(), Some(6));
-			CurrentBitcoinKey::set(Some(agg_key(epoch_2(), None)));
-		})
-		.then_execute_at_next_block(|_| {})
-		.then_execute_with(|_| {
-			assert_eq!(crate::BitcoinAvailableUtxos::<Test>::decode_len(), Some(6));
+	let epoch_1 = [0xFE; 32];
+	let epoch_2 = [0xAA; 32];
+	let epoch_3 = [0xBB; 32];
+	new_test_ext().execute_with(|| {
+		BitcoinAvailableUtxos::<Test>::set(vec![
+			utxo(1_000_000, CHANGE_ADDRESS_SALT, Some(epoch_1)),
+			utxo(2_000_000, CHANGE_ADDRESS_SALT, Some(epoch_1)),
+			utxo(3_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+			utxo(4_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+			utxo(5_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+			utxo(6_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+		]);
 
-			// Only transfer and discard stale utxos when previous key is available.
-			CurrentBitcoinKey::set(Some(agg_key(epoch_3(), Some(epoch_2()))));
-		})
-		.then_execute_at_next_block(|_| {})
-		.then_execute_with(|_| {
-			assert_eq!(
-				BitcoinAvailableUtxos::<Test>::get(),
-				vec![
-					utxo(5_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3())),
-					utxo(6_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3())),
-				]
-			)
-		});
+		// No changes if vault key is not set
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			None,
+		);
+		assert_eq!(crate::BitcoinAvailableUtxos::<Test>::decode_len(), Some(6));
+
+		// Set key for current vault.
+		CurrentBitcoinKey::set(Some(agg_key(epoch_2, None)));
+
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			None,
+		);
+
+		assert_eq!(crate::BitcoinAvailableUtxos::<Test>::decode_len(), Some(6));
+
+		// Only transfer and discard stale utxos when previous key is available.
+		CurrentBitcoinKey::set(Some(agg_key(epoch_3, Some(epoch_2))));
+
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			Environment::calculate_utxos_and_change(vec![
+				utxo(3_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+				utxo(4_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+			]),
+		);
+
+		assert_eq!(
+			BitcoinAvailableUtxos::<Test>::get(),
+			vec![
+				utxo(5_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+				utxo(6_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+			]
+		);
+	});
 }

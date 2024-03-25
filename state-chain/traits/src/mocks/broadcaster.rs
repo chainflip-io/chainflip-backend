@@ -130,10 +130,6 @@ impl<
 		Self::get_value(b"API_CALLS").unwrap_or(Default::default())
 	}
 
-	pub fn take_pending_api_calls() -> Vec<A> {
-		Self::take_value(b"API_CALLS").unwrap_or(Default::default())
-	}
-
 	pub fn take_success_pending_callbacks() -> Vec<C> {
 		Self::pending_success_callbacks(Self::take_storage)
 	}

@@ -16,38 +16,6 @@ pub enum BitcoinApi<Environment: 'static> {
 	#[codec(skip)]
 	_Phantom(PhantomData<Environment>, Never),
 }
-
-/// A Bitcoin exclusive Api call, used to rotate Utxos from the previous Vault into the current
-/// vault.
-pub trait TransferUtxoCall: ApiCall<BitcoinCrypto> {
-	fn transfer_utxo(
-		old_key: [u8; 32],
-		new_key: [u8; 32],
-		utxos: Vec<Utxo>,
-		change_amount: BtcAmount,
-	) -> Self;
-}
-
-impl<E> TransferUtxoCall for BitcoinApi<E> {
-	fn transfer_utxo(
-		old_key: [u8; 32],
-		new_key: [u8; 32],
-		utxos: Vec<Utxo>,
-		change_amount: BtcAmount,
-	) -> Self {
-		// We will use the bitcoin address derived with the salt of 0 as the vault address.
-		let new_vault_change_script =
-			DepositAddress::new(new_key, CHANGE_ADDRESS_SALT).script_pubkey();
-
-		Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
-			&AggKey { current: old_key, previous: None },
-			new_key,
-			utxos,
-			vec![BitcoinOutput { amount: change_amount, script_pubkey: new_vault_change_script }],
-		))
-	}
-}
-
 pub type SelectedUtxosAndChangeAmount = (Vec<Utxo>, BtcAmount);
 
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]

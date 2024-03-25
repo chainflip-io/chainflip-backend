@@ -5,7 +5,7 @@
 
 use cf_chains::{
 	btc::{
-		api::{SelectedUtxosAndChangeAmount, TransferUtxoCall, UtxoSelectionType},
+		api::{SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		deposit_address::DepositAddress,
 		utxo_selection::{self, select_utxos_for_consolidation, select_utxos_from_pool},
 		Bitcoin, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
@@ -19,8 +19,7 @@ use cf_primitives::{
 	NetworkEnvironment, SemVer,
 };
 use cf_traits::{
-	Broadcaster, CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider, NetworkEnvironmentProvider,
-	SafeMode,
+	CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider, NetworkEnvironmentProvider, SafeMode,
 };
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
@@ -64,7 +63,7 @@ pub enum SafeModeUpdate<T: Config> {
 pub mod pallet {
 	use super::*;
 	use cf_chains::{btc::Utxo, Arbitrum};
-	use cf_primitives::{BroadcastId, TxId};
+	use cf_primitives::TxId;
 	use cf_traits::VaultKeyWitnessedHandler;
 	use frame_support::DefaultNoBound;
 
@@ -83,14 +82,6 @@ pub mod pallet {
 
 		/// For getting the current active AggKey. Used for rotating Utxos from previous vault.
 		type BitcoinKeyProvider: KeyProvider<<Bitcoin as Chain>::ChainCrypto>;
-		/// For constructing the UTXO transfer call.
-		type BitcoinCall: TransferUtxoCall;
-		/// A broadcaster instance.
-		type BitcoinBroadcaster: Broadcaster<
-			Bitcoin,
-			ApiCall = Self::BitcoinCall,
-			Callback = <Self as cf_traits::Chainflip>::RuntimeCall,
-		>;
 
 		/// The runtime's safe mode is stored in this pallet.
 		type RuntimeSafeMode: cf_traits::SafeMode + Member + Parameter + Default;
@@ -246,10 +237,8 @@ pub mod pallet {
 		UtxoConsolidationParametersUpdated { params: utxo_selection::ConsolidationParameters },
 		/// Arbitrum Initialized: contract addresses have been set, first key activated
 		ArbitrumInitialized,
-		/// Some Utxos has been sent from the previous vault into the current vault.
-		UtxoTransferred { broadcast_id: BroadcastId, total_amount: BtcAmount },
 		/// Some Utxo from before the previous epochs are discarded from storage.
-		StaleUtxoDiscarded { utxos: Vec<Utxo> },
+		StaleUtxosDiscarded { utxos: Vec<Utxo> },
 	}
 
 	#[pallet::hooks]
@@ -257,70 +246,7 @@ pub mod pallet {
 		/// Sweep the current utxo storage and:
 		/// 1. Transfer a limited number of utxos from the previous vault into the current vault.
 		/// 2. Any utxos from earlier than the previous vault are discarded.
-		fn on_finalize(_block_number: BlockNumberFor<T>) {
-			if let Some(cf_traits::EpochKey {
-				key: cf_chains::btc::AggKey { previous: Some(prev_key), current },
-				..
-			}) = T::BitcoinKeyProvider::active_epoch_key()
-			{
-				let (to_send, stale) = BitcoinAvailableUtxos::<T>::mutate(|utxos| {
-					let (mut should_transfer, stale): (Vec<Utxo>, Vec<Utxo>) = utxos
-						.extract_if(|utxo| utxo.deposit_address.pubkey_x != current)
-						.partition(|utxo| utxo.deposit_address.pubkey_x == prev_key);
-
-					let to_send = if !should_transfer.is_empty() {
-						// Only send up to certain limit number of utxo at a time.
-						// Return the rest to storage.
-						let limit = Self::consolidation_parameters().consolidation_size;
-						let mut counter = 0u32;
-						let to_send = should_transfer
-							.extract_if(|_| {
-								if counter < limit {
-									counter += 1;
-									true
-								} else {
-									false
-								}
-							})
-							.collect::<Vec<_>>();
-						utxos.append(&mut should_transfer);
-						to_send
-					} else {
-						Default::default()
-					};
-
-					(to_send, stale)
-				});
-
-				// Stale utxos are removed from storage and discarded
-				if !stale.is_empty() {
-					Self::deposit_event(Event::<T>::StaleUtxoDiscarded { utxos: stale });
-				}
-
-				// Utxos from the previous vault are rotated into the new vault.
-				if !to_send.is_empty() {
-					// Send out the Utxos into the new vault.
-					if let Some((post_fee_utxos, change_amount)) =
-						Self::calculate_utxos_and_change(to_send)
-					{
-						Self::deposit_event(Event::<T>::UtxoTransferred {
-							broadcast_id: T::BitcoinBroadcaster::threshold_sign_and_broadcast(
-								T::BitcoinCall::transfer_utxo(
-									prev_key,
-									current,
-									post_fee_utxos,
-									change_amount,
-								),
-							)
-							.0,
-							total_amount: change_amount,
-						});
-					} else {
-						log::warn!("Some Utxo are discarded, instead of being transferred to the new Vault, because the total net value is less than estimated fee.");
-					}
-				}
-			}
-		}
+		fn on_finalize(_block_number: BlockNumberFor<T>) {}
 	}
 
 	#[pallet::call]
@@ -591,17 +517,50 @@ impl<T: Config> Pallet<T> {
 		match utxo_selection_type {
 			UtxoSelectionType::SelectForConsolidation =>
 				BitcoinAvailableUtxos::<T>::try_mutate(|available_utxos| {
-					let utxos_to_consolidate = select_utxos_for_consolidation(
-						available_utxos,
-						&bitcoin_fee_info,
-						Self::consolidation_parameters(),
-					);
+					let mut old_utxos = if let Some(cf_traits::EpochKey {
+						key: cf_chains::btc::AggKey { previous: Some(prev_key), current },
+						..
+					}) = T::BitcoinKeyProvider::active_epoch_key()
+					{
+						let (old_utxos, stale): (Vec<Utxo>, Vec<Utxo>) = available_utxos
+							.extract_if(|utxo| utxo.deposit_address.pubkey_x != current)
+							.partition(|utxo| utxo.deposit_address.pubkey_x == prev_key);
 
-					if utxos_to_consolidate.is_empty() {
-						Err(())
+						// Stale utxos are removed from storage and discarded
+						if !stale.is_empty() {
+							Self::deposit_event(Event::<T>::StaleUtxosDiscarded { utxos: stale });
+						}
+						old_utxos
 					} else {
-						Self::calculate_utxos_and_change(utxos_to_consolidate).ok_or(())
+						Default::default()
+					};
+
+					// Only send up to certain limit number of utxo at a time.
+					// The rest are returned to storage after consolidation.
+					let consolidation_parameter = Self::consolidation_parameters();
+					let mut to_send = old_utxos
+						.drain(
+							..sp_std::cmp::min(
+								old_utxos.len(),
+								consolidation_parameter.consolidation_size as usize,
+							),
+						)
+						.collect::<Vec<_>>();
+
+					// If consolidation is required, add into the same batch
+					if available_utxos.len() > consolidation_parameter.consolidation_size as usize {
+						// Consolidate utxos from current and previous vault.
+						to_send.append(&mut select_utxos_for_consolidation(
+							available_utxos,
+							&bitcoin_fee_info,
+							consolidation_parameter,
+						));
 					}
+
+					// unsent old utxos are returned to storage.
+					available_utxos.append(&mut old_utxos);
+
+					Self::calculate_utxos_and_change(to_send).ok_or(())
 				})
 				.ok(),
 			UtxoSelectionType::Some { output_amount, number_of_outputs } =>
@@ -635,6 +594,10 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn calculate_utxos_and_change(spendable_utxos: Vec<Utxo>) -> Option<(Vec<Utxo>, BtcAmount)> {
+		if spendable_utxos.is_empty() {
+			return None
+		}
+
 		let bitcoin_fee_info = T::BitcoinFeeInfo::bitcoin_fee_info();
 		let min_fee_required_per_tx = bitcoin_fee_info.min_fee_required_per_tx();
 		let fee_per_output_utxo = bitcoin_fee_info.fee_per_output_utxo();
