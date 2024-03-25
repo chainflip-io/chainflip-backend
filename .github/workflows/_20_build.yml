@@ -16,9 +16,6 @@ on:
 
 env:
   FORCE_COLOR: 1
-  SCCACHE_CACHE_SIZE: 32G
-  SCCACHE_VERSION: v0.4.1
-  SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
   COMMIT_HASH: ${{ github.sha }}
 
 jobs:
@@ -43,9 +40,6 @@ jobs:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
-      # - name: Setup sccache 🚀
-      #   run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
-
       - name: Setup Rust cache 🦀💰
         uses: namespacelabs/nscloud-cache-action@v1
         with:
@@ -54,7 +48,6 @@ jobs:
       - name: Build chainflip binaries 🏗️
         run: |
           cargo cf-build-${{ inputs.profile }} --locked
-          # sccache --show-stats
 
       - name: Upload binary artifacts 📤
         uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32

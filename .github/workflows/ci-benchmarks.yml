@@ -26,13 +26,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
-      - name: Setup sccache
-        run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
-
       - name: Build with benchmarks
         run: |
           cargo build --profile=${{ matrix.profile }} --locked --features runtime-benchmarks -p chainflip-node
-          sccache --show-stats
 
       - name: Upload chainflip-node binary artifact with benchmarks
         uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
