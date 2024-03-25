@@ -161,11 +161,9 @@ jobs:
         env:
           BINARY_ROOT_PATH: ./latest-release-bins
           DEBUG_OUTPUT_DESTINATION: /tmp/chainflip/debug.*log
-        # TEMP: It should be: # git checkout ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}
-        # But we need the fix for the broker test for 1.2 here for now
         run: |
           git fetch --all
-          git checkout release-1.2-broker-test-fix
+          git checkout ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}
           set -x
           mkdir -p /tmp/chainflip/bashful
           mkdir -p /tmp/chainflip/doc
@@ -177,11 +175,9 @@ jobs:
 
       - name: Run bouncer on latest release
         id: pre-upgrade-bouncer
-        # TEMP: It should be: # git checkout ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}
-        # But we need the fix for the broker test for 1.2 here for now
         run: |
           git fetch --all
-          git checkout release-1.2-broker-test-fix
+          git checkout ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}
           git rev-parse HEAD
           cd bouncer
           pnpm install
