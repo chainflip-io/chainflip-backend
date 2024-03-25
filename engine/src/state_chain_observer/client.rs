@@ -910,7 +910,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 						)?
 						.submit_and_watch()
 						.await?
-						.wait_for_in_block()
+						.wait_for_finalized()
 						.await
 				})
 				.await
