@@ -294,8 +294,8 @@ fn can_consolidate_old_utxo_only() {
 		assert_eq!(
 			BitcoinAvailableUtxos::<Test>::get(),
 			vec![
-				utxo(21_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
 				utxo(3_000_000, CHANGE_ADDRESS_SALT, Some(epoch_1)),
+				utxo(21_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
 			]
 		);
 

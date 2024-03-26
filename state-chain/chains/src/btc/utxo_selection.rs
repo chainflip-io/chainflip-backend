@@ -108,6 +108,7 @@ pub fn select_utxos_from_pool(
 }
 
 /// Attempt to select Utxos to ne consolidated into the current vault.
+///
 /// There are 2 situation where utxos need to be consolidated:
 /// 1. When the number of Utxos available is >= `consolidation_threshold` - here we consolidate the
 ///    utxos into the current vault, reducing the number of utxos and future fees.
@@ -140,20 +141,15 @@ pub fn select_utxos_for_consolidation(
 		// Transfer old utxos into the current vault. Remaining utxos must be > consolidation_size.
 		// Utxos are pre-filtered. Only utxos that belong to current or previous vaults are
 		// remaining.
-		let mut prev_utxos = spendable
+		let old_utxos = spendable
 			.extract_if(|utxo: &mut Utxo| utxo.deposit_address.pubkey_x != current_key)
+			.take(consolidation_parameter.consolidation_size as usize)
 			.collect::<Vec<_>>();
 
-		let mut remaining = prev_utxos.split_off(sp_std::cmp::min(
-			prev_utxos.len(),
-			consolidation_parameter.consolidation_size as usize,
-		));
-
 		available_utxos.append(&mut spendable);
-		available_utxos.append(&mut remaining);
 		available_utxos.append(&mut dust);
 
-		prev_utxos
+		old_utxos
 	}
 }
 
@@ -340,7 +336,7 @@ mod tests {
 	#[test]
 	fn test_consolidation_path_1() {
 		let key1 = [0xAA; 32];
-		let key2 = [0xAA; 32];
+		let key2 = [0xBB; 32];
 		let fee_info = BitcoinFeeInfo { sats_per_kilobyte: 1_000 };
 		let parameter = ConsolidationParameters::new(4, 2);
 

@@ -237,7 +237,7 @@ pub mod pallet {
 		UtxoConsolidationParametersUpdated { params: utxo_selection::ConsolidationParameters },
 		/// Arbitrum Initialized: contract addresses have been set, first key activated
 		ArbitrumInitialized,
-		/// Some Utxo from before the previous epochs are discarded from storage.
+		/// Some unspendable Utxos are discarded from storage.
 		StaleUtxosDiscarded { utxos: Vec<Utxo> },
 	}
 
@@ -514,7 +514,6 @@ impl<T: Config> Pallet<T> {
 						..
 					}) = T::BitcoinKeyProvider::active_epoch_key()
 					{
-						// pre-filter out stale utxos
 						let stale = available_utxos
 							.extract_if(|utxo| {
 								utxo.deposit_address.pubkey_x != current_key &&
