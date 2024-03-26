@@ -5,10 +5,6 @@ on:
 
 env:
   FORCE_COLOR: 1
-  RUSTC_WRAPPER: sccache
-  SCCACHE_CACHE_SIZE: 32G
-  SCCACHE_VERSION: v0.4.1
-  SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
 
 jobs:
   test:
