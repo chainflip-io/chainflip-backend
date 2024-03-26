@@ -2261,10 +2261,11 @@ fn transaction_fees_are_collected() {
 
 		Swapping::on_finalize(System::block_number() + SWAP_DELAY_BLOCKS as u64);
 		assert_swaps_queue_is_empty();
-		assert!(
+		assert_eq!(
 			MockTransactionFeeHandler::<Ethereum>::get_withheld_transaction_fees(
 				cf_chains::assets::eth::GAS_ASSET
-			) > 0
+			),
+			AMOUNT
 		);
 	});
 }

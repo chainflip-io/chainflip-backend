@@ -9,7 +9,7 @@ use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		address_converter::MockAddressConverter, deposit_handler::MockDepositHandler,
-		egress_handler::MockEgressHandler,
+		egress_handler::MockEgressHandler, transaction_fee_handler::MockTransactionFeeHandler,
 	},
 	AccountRoleRegistry, SwappingApi,
 };
@@ -148,6 +148,7 @@ impl pallet_cf_swapping::Config for Test {
 	type WeightInfo = MockWeightInfo;
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = MockFeePayment<Self>;
+	type TransactionFeeHandler = MockTransactionFeeHandler<AnyChain>;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
