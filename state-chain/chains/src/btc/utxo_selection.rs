@@ -110,14 +110,15 @@ pub fn select_utxos_from_pool(
 pub fn select_utxos_for_consolidation(
 	available_utxos: &mut Vec<Utxo>,
 	fee_info: &BitcoinFeeInfo,
-	params: ConsolidationParameters,
+	selection_threshold: usize,
+	selection_limit: usize,
 ) -> Vec<Utxo> {
 	let (mut spendable, mut dust) = available_utxos
 		.drain(..)
 		.partition::<Vec<_>, _>(|utxo| utxo.net_value(fee_info) > 0u64);
 
-	if spendable.len() >= params.consolidation_threshold as usize {
-		let mut remaining = spendable.split_off(params.consolidation_size as usize);
+	if spendable.len() >= selection_threshold {
+		let mut remaining = spendable.split_off(selection_limit);
 		// put remaining and dust back:
 		available_utxos.append(&mut remaining);
 		available_utxos.append(&mut dust);

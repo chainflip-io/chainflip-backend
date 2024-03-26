@@ -539,15 +539,15 @@ impl<T: Config> Pallet<T> {
 						)
 						.collect::<Vec<_>>();
 
-					// If consolidation is required, add into the same batch
-					if available_utxos.len() > consolidation_parameter.consolidation_size as usize {
-						// Consolidate utxos from current and previous vault.
-						to_send.append(&mut select_utxos_for_consolidation(
-							available_utxos,
-							&bitcoin_fee_info,
-							consolidation_parameter,
-						));
-					}
+					// Use remaining space for consolidation.
+					let remaining_space = (consolidation_parameter.consolidation_size as usize)
+						.saturating_sub(to_send.len());
+					to_send.append(&mut select_utxos_for_consolidation(
+						available_utxos,
+						&bitcoin_fee_info,
+						consolidation_parameter.consolidation_threshold as usize,
+						remaining_space,
+					));
 
 					// unsent old utxos are returned to storage.
 					available_utxos.append(&mut old_utxos);

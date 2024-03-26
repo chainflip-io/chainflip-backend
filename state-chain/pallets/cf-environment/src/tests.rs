@@ -218,17 +218,18 @@ fn can_consolidate_utxo_to_current_vault_and_discard_stale_utxos() {
 	let epoch_3 = [0xBB; 32];
 
 	let epoch_2_utxos = vec![
-		utxo(1_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
-		utxo(2_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
-		utxo(3_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
-		utxo(4_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+		utxo(21_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+		utxo(22_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+		utxo(23_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
 	];
 	let epoch_3_utxos = vec![
-		utxo(5_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
-		utxo(6_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
-		utxo(7_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+		utxo(31_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+		utxo(32_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+		utxo(33_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+		utxo(34_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+		utxo(35_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
 	];
-	let to_discard_utxo = vec![utxo(8_000_000, 1, None), utxo(9_000_000, 2, None)];
+	let to_discard_utxo = vec![utxo(1_000_000, 1, None), utxo(2_000_000, 2, None)];
 
 	new_test_ext().execute_with(|| {
 		// Set current key to epoch 2, and transfer limit to 2 utxo at a time.
@@ -257,15 +258,16 @@ fn can_consolidate_utxo_to_current_vault_and_discard_stale_utxos() {
 			// These should be discarded.
 			utxos.append(&mut to_discard_utxo.clone());
 		});
-		assert_eq!(BitcoinAvailableUtxos::<Test>::decode_len(), Some(9));
+		assert_eq!(BitcoinAvailableUtxos::<Test>::decode_len(), Some(10));
 
+		// Consolidate from current vault takes priority. No consolidation can happen this block.
 		// Only 2 Utxos from previous vault are sent to the current Vault. Remaining are
 		// appended to the back.
 		assert_eq!(
 			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
 			Environment::calculate_utxos_and_change(vec![
-				utxo(1_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
-				utxo(2_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+				utxo(21_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+				utxo(22_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
 			])
 		);
 
@@ -276,38 +278,95 @@ fn can_consolidate_utxo_to_current_vault_and_discard_stale_utxos() {
 		assert_eq!(
 			BitcoinAvailableUtxos::<Test>::get(),
 			vec![
-				utxo(5_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
-				utxo(6_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
-				utxo(7_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
-				utxo(3_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
-				utxo(4_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+				utxo(31_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+				utxo(32_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+				utxo(33_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+				utxo(34_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+				utxo(35_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+				utxo(23_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
 			]
 		);
 
-		// Add more utxos to current vault so it's over consolidation threshold.
-		BitcoinAvailableUtxos::<Test>::append(utxo(8_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)));
-		BitcoinAvailableUtxos::<Test>::append(utxo(9_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)));
-		BitcoinAvailableUtxos::<Test>::append(utxo(10_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)));
-
-		// Consolidate from current vault + remaining 2 utxos from previous vault.
+		// Transfer old utxo and consolidate within the same transaction.
 		assert_eq!(
 			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
 			Environment::calculate_utxos_and_change(vec![
-				utxo(3_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
-				utxo(4_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
-				utxo(5_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
-				utxo(6_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+				utxo(23_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+				utxo(31_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
 			]),
 		);
 
 		assert_eq!(
 			BitcoinAvailableUtxos::<Test>::get(),
 			vec![
-				utxo(7_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
-				utxo(8_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
-				utxo(9_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
-				utxo(10_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3))
+				utxo(32_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+				utxo(33_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+				utxo(34_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+				utxo(35_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
 			]
+		);
+
+		// Utxos from epoch 3 is now below the threshold.
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			None,
+		);
+	});
+}
+
+#[test]
+fn can_consolidate_old_utxo_only() {
+	let epoch_1 = [0xFE; 32];
+	let epoch_2 = [0xAA; 32];
+
+	new_test_ext().execute_with(|| {
+		// Set current key to epoch 2, and transfer limit to 2 utxo at a time.
+		CurrentBitcoinKey::set(Some(agg_key(epoch_2, Some(epoch_1))));
+		ConsolidationParameters::<Test>::set(utxo_selection::ConsolidationParameters {
+			consolidation_threshold: 5,
+			consolidation_size: 2,
+		});
+
+		BitcoinAvailableUtxos::<Test>::set(vec![
+			utxo(1_000_000, CHANGE_ADDRESS_SALT, Some(epoch_1)),
+			utxo(2_000_000, CHANGE_ADDRESS_SALT, Some(epoch_1)),
+			utxo(3_000_000, CHANGE_ADDRESS_SALT, Some(epoch_1)),
+			utxo(21_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+		]);
+
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			Environment::calculate_utxos_and_change(vec![
+				utxo(1_000_000, CHANGE_ADDRESS_SALT, Some(epoch_1)),
+				utxo(2_000_000, CHANGE_ADDRESS_SALT, Some(epoch_1)),
+			])
+		);
+
+		assert_eq!(
+			BitcoinAvailableUtxos::<Test>::get(),
+			vec![
+				utxo(21_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+				utxo(3_000_000, CHANGE_ADDRESS_SALT, Some(epoch_1)),
+			]
+		);
+
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			Environment::calculate_utxos_and_change(vec![utxo(
+				3_000_000,
+				CHANGE_ADDRESS_SALT,
+				Some(epoch_1)
+			),]),
+		);
+
+		assert_eq!(
+			BitcoinAvailableUtxos::<Test>::get(),
+			vec![utxo(21_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),]
+		);
+
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			None,
 		);
 	});
 }
