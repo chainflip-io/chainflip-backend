@@ -154,4 +154,5 @@ pub enum SwapType {
 	CcmPrincipal(SwapId),
 	CcmGas(SwapId),
 	NetworkFee,
+	TransactionFee,
 }

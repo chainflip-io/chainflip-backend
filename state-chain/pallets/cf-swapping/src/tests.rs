@@ -9,7 +9,7 @@ use cf_chains::{
 	address::{to_encoded_address, AddressConverter, EncodedAddress, ForeignChainAddress},
 	btc::{BitcoinNetwork, ScriptPubkey},
 	dot::PolkadotAccountId,
-	AnyChain, CcmChannelMetadata, CcmDepositMetadata,
+	AnyChain, CcmChannelMetadata, CcmDepositMetadata, Ethereum,
 };
 use cf_primitives::{Asset, AssetAmount, BasisPoints, ForeignChain, NetworkEnvironment};
 use cf_test_utilities::assert_event_sequence;
@@ -17,6 +17,7 @@ use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
 		egress_handler::{MockEgressHandler, MockEgressParameter},
+		transaction_fee_handler::MockTransactionFeeHandler,
 	},
 	AccountRoleRegistry, CcmHandler, Chainflip, SetSafeMode, SwapDepositHandler, SwappingApi,
 };
@@ -2242,6 +2243,29 @@ fn network_fee_swap_gets_burnt() {
 		Swapping::on_finalize(System::block_number() + SWAP_DELAY_BLOCKS as u64);
 		assert_swaps_queue_is_empty();
 		assert_eq!(FlipToBurn::<Test>::get(), AMOUNT);
+	});
+}
+
+#[test]
+fn transaction_fees_are_collected() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: AssetAmount = 100;
+
+		Swapping::schedule_swap(Asset::Flip, Asset::Eth, AMOUNT, SwapType::TransactionFee);
+		assert_eq!(
+			MockTransactionFeeHandler::<Ethereum>::get_withheld_transaction_fees(
+				cf_chains::assets::eth::GAS_ASSET
+			),
+			0
+		);
+
+		Swapping::on_finalize(System::block_number() + SWAP_DELAY_BLOCKS as u64);
+		assert_swaps_queue_is_empty();
+		assert!(
+			MockTransactionFeeHandler::<Ethereum>::get_withheld_transaction_fees(
+				cf_chains::assets::eth::GAS_ASSET
+			) > 0
+		);
 	});
 }
 
