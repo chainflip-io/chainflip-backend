@@ -256,7 +256,7 @@ jobs:
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --rmi all --volumes --remove-orphans
 
       - name: Notify on failed upgrade test 🚨
-        if: always() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main'
+        if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main'
         env:
           DISCORD_USERNAME: "Upgrade Test"
           DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
