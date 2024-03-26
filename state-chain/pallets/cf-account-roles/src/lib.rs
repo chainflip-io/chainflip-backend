@@ -153,15 +153,6 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 			AccountRole::Broker => ensure_broker::<T>(origin),
 		}
 	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn register_account(account_id: &T::AccountId, role: AccountRole) {
-		AccountRoles::<T>::insert(account_id, role);
-	}
-	#[cfg(feature = "runtime-benchmarks")]
-	fn get_account_role(account_id: &T::AccountId) -> AccountRole {
-		AccountRoles::<T>::get(account_id).unwrap_or_default()
-	}
 }
 
 impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {

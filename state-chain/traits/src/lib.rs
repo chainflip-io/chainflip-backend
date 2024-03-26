@@ -766,12 +766,6 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 	fn ensure_validator(origin: T::RuntimeOrigin) -> Result<T::AccountId, BadOrigin> {
 		Self::ensure_account_role(origin, AccountRole::Validator)
 	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn register_account(account_id: &T::AccountId, role: AccountRole);
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn get_account_role(account_id: &T::AccountId) -> AccountRole;
 }
 
 #[derive(
