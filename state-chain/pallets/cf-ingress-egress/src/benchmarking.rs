@@ -1,7 +1,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use crate::DisabledEgressAssets;
+use crate::{BoostStatus, DisabledEgressAssets};
 use cf_chains::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
 	DepositChannel,
@@ -57,6 +57,7 @@ mod benchmarks {
 					lp_account: account("doogle", 0, 0),
 				},
 				boost_fee: 0,
+				boost_status: BoostStatus::NotBoosted,
 			},
 		);
 		PrewitnessedDeposits::<T, I>::insert(
@@ -108,6 +109,7 @@ mod benchmarks {
 						lp_account: account("doogle", 0, 0),
 					},
 					boost_fee: 0,
+					boost_status: BoostStatus::NotBoosted,
 				};
 			channel.deposit_channel.state.on_fetch_scheduled();
 			DepositChannelLookup::<T, I>::insert(deposit_address.clone(), channel);

@@ -37,6 +37,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 					expires_at: old_channel.expires_at,
 					action: old_channel.action,
 					boost_fee: 0,
+					boost_status: BoostStatus::NotBoosted,
 				})
 			},
 		);

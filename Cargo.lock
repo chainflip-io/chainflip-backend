@@ -1395,6 +1395,7 @@ dependencies = [
  "sp-runtime 24.0.0",
  "sp-std 8.0.0",
  "ss58-registry",
+ "strum 0.24.1",
  "utilities",
 ]
 
@@ -7509,6 +7510,8 @@ dependencies = [
  "sp-io 23.0.0",
  "sp-runtime 24.0.0",
  "sp-std 8.0.0",
+ "strum 0.24.1",
+ "strum_macros 0.24.3",
 ]
 
 [[package]]

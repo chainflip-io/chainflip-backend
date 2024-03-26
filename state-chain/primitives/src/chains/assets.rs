@@ -435,6 +435,7 @@ macro_rules! assets {
 				use codec::{MaxEncodedLen, Encode, Decode};
 				use scale_info::TypeInfo;
 				use serde::{Serialize, Deserialize};
+				use strum_macros::EnumIter;
 
 				pub type Chain = $crate::chains::$chain_variant;
 				pub const GAS_ASSET: Asset = {
@@ -453,7 +454,7 @@ macro_rules! assets {
 					}
 				};
 
-				#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Hash, Serialize, Deserialize)]
+				#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Hash, Serialize, Deserialize, EnumIter)]
 				pub enum Asset {
 					$(
 						#[serde(rename = $asset_json)]

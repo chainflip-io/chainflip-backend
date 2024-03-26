@@ -63,7 +63,7 @@ impl AssetConverter for MockAssetConverter {
 		}
 
 		Some((
-			input.unique_saturated_into(),
+			available_input_amount.checked_sub(&input.unique_saturated_into()).unwrap(),
 			Self::get_price(input_asset, output_asset)
 				.map(|price| price * input)?
 				.unique_saturated_into(),
