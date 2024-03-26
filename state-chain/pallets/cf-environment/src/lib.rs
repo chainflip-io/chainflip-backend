@@ -8,7 +8,7 @@ use cf_chains::{
 		api::{SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		deposit_address::DepositAddress,
 		utxo_selection::{self, select_utxos_for_consolidation, select_utxos_from_pool},
-		Bitcoin, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
+		AggKey, Bitcoin, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
@@ -508,53 +508,34 @@ impl<T: Config> Pallet<T> {
 
 		match utxo_selection_type {
 			UtxoSelectionType::SelectForConsolidation =>
-				BitcoinAvailableUtxos::<T>::try_mutate(|available_utxos| {
-					let mut old_utxos = if let Some(cf_traits::EpochKey {
-						key: cf_chains::btc::AggKey { previous: Some(prev_key), current },
+				BitcoinAvailableUtxos::<T>::mutate(|available_utxos| {
+					if let Some(cf_traits::EpochKey {
+						key: AggKey { previous: Some(prev_key), current: current_key },
 						..
 					}) = T::BitcoinKeyProvider::active_epoch_key()
 					{
-						let (old_utxos, stale): (Vec<Utxo>, Vec<Utxo>) = available_utxos
-							.extract_if(|utxo| utxo.deposit_address.pubkey_x != current)
-							.partition(|utxo| utxo.deposit_address.pubkey_x == prev_key);
+						// pre-filter out stale utxos
+						let stale = available_utxos
+							.extract_if(|utxo| {
+								utxo.deposit_address.pubkey_x != current_key &&
+									utxo.deposit_address.pubkey_x != prev_key
+							})
+							.collect::<Vec<_>>();
 
-						// Stale utxos are removed from storage and discarded
 						if !stale.is_empty() {
 							Self::deposit_event(Event::<T>::StaleUtxosDiscarded { utxos: stale });
 						}
-						old_utxos
+
+						Self::calculate_utxos_and_change(select_utxos_for_consolidation(
+							current_key,
+							available_utxos,
+							&bitcoin_fee_info,
+							Self::consolidation_parameters(),
+						))
 					} else {
-						Default::default()
-					};
-
-					// Only send up to certain limit number of utxo at a time.
-					// The rest are returned to storage after consolidation.
-					let consolidation_parameter = Self::consolidation_parameters();
-					let mut to_send = old_utxos
-						.drain(
-							..sp_std::cmp::min(
-								old_utxos.len(),
-								consolidation_parameter.consolidation_size as usize,
-							),
-						)
-						.collect::<Vec<_>>();
-
-					// Use remaining space for consolidation.
-					let remaining_space = (consolidation_parameter.consolidation_size as usize)
-						.saturating_sub(to_send.len());
-					to_send.append(&mut select_utxos_for_consolidation(
-						available_utxos,
-						&bitcoin_fee_info,
-						consolidation_parameter.consolidation_threshold as usize,
-						remaining_space,
-					));
-
-					// unsent old utxos are returned to storage.
-					available_utxos.append(&mut old_utxos);
-
-					Self::calculate_utxos_and_change(to_send).ok_or(())
-				})
-				.ok(),
+						None
+					}
+				}),
 			UtxoSelectionType::Some { output_amount, number_of_outputs } =>
 				BitcoinAvailableUtxos::<T>::try_mutate(|available_utxos| {
 					select_utxos_from_pool(
@@ -563,7 +544,7 @@ impl<T: Config> Pallet<T> {
 						output_amount +
 							number_of_outputs * fee_per_output_utxo +
 							min_fee_required_per_tx,
-						Some(Self::consolidation_parameters().consolidation_threshold),
+						Some(Self::consolidation_parameters().consolidation_size),
 					)
 					.map_err(|error| {
 						log::error!(
