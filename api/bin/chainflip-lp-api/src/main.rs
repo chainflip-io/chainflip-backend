@@ -11,7 +11,7 @@ use chainflip_api::{
 		ApiWaitForResult, LpApi, PoolPairsMap, Side, Tick,
 	},
 	primitives::{
-		chains::{assets::any::OldAsset, Bitcoin, Ethereum, Polkadot},
+		chains::{Bitcoin, Ethereum, Polkadot},
 		AccountRole, Asset, ForeignChain, Hash, RedemptionAmount,
 	},
 	settings::StateChain,
@@ -94,7 +94,7 @@ pub mod rpc_types {
 
 	#[derive(Serialize, Deserialize, Clone)]
 	pub struct AssetBalance {
-		pub asset: OldAsset,
+		pub asset: Asset,
 		pub balance: NumberOrHex,
 	}
 }
@@ -223,8 +223,8 @@ pub struct OrderFills {
 pub enum OrderFilled {
 	LimitOrder {
 		lp: AccountId,
-		base_asset: OldAsset,
-		quote_asset: OldAsset,
+		base_asset: Asset,
+		quote_asset: Asset,
 		side: Side,
 		id: U256,
 		tick: Tick,
@@ -235,8 +235,8 @@ pub enum OrderFilled {
 	},
 	RangeOrder {
 		lp: AccountId,
-		base_asset: OldAsset,
-		quote_asset: OldAsset,
+		base_asset: Asset,
+		quote_asset: Asset,
 		id: U256,
 		range: Range<Tick>,
 		fees: PoolPairsMap<U256>,
@@ -311,7 +311,7 @@ impl RpcServer for RpcServerImpl {
 			lp_asset_balances
 				.entry(asset.into())
 				.or_default()
-				.push(AssetBalance { asset: asset.into(), balance: amount.into() });
+				.push(AssetBalance { asset, balance: amount.into() });
 		}
 		Ok(lp_asset_balances)
 	}
@@ -599,8 +599,8 @@ where
 									} else {
 										Some(OrderFilled::LimitOrder {
 											lp,
-											base_asset: asset_pair.assets().base.into(),
-											quote_asset: asset_pair.assets().quote.into(),
+											base_asset: asset_pair.assets().base,
+											quote_asset: asset_pair.assets().quote,
 											side,
 											id: id.into(),
 											tick,
@@ -645,8 +645,8 @@ where
 								} else {
 									Some(OrderFilled::RangeOrder {
 										lp: lp.clone(),
-										base_asset: asset_pair.assets().base.into(),
-										quote_asset: asset_pair.assets().quote.into(),
+										base_asset: asset_pair.assets().base,
+										quote_asset: asset_pair.assets().quote,
 										id: id.into(),
 										range: range.clone(),
 										fees: fees.map(|fees| fees),

@@ -8,9 +8,8 @@ use cf_chains::{
 	Chain,
 };
 use cf_primitives::{
-	chains::assets::any::{self, OldAsset},
-	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, ForeignChain, NetworkEnvironment,
-	SemVer, SwapId, SwapOutput,
+	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, ForeignChain,
+	NetworkEnvironment, SemVer, SwapId, SwapOutput,
 };
 use cf_utilities::rpc::NumberOrHex;
 use codec::Encode;
@@ -281,16 +280,16 @@ pub struct RpcEnvironment {
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct PoolPriceV2 {
-	pub base_asset: OldAsset,
-	pub quote_asset: OldAsset,
+	pub base_asset: Asset,
+	pub quote_asset: Asset,
 	#[serde(flatten)]
 	pub price: pallet_cf_pools::PoolPriceV2,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct RpcPrewitnessedSwap {
-	pub base_asset: OldAsset,
-	pub quote_asset: OldAsset,
+	pub base_asset: Asset,
+	pub quote_asset: Asset,
 	pub side: Side,
 	pub amounts: Vec<U256>,
 }
@@ -528,7 +527,7 @@ pub trait CustomApi {
 	) -> RpcResult<RpcPrewitnessedSwap>;
 
 	#[method(name = "supported_assets")]
-	fn cf_supported_assets(&self) -> RpcResult<HashMap<ForeignChain, Vec<OldAsset>>>;
+	fn cf_supported_assets(&self) -> RpcResult<HashMap<ForeignChain, Vec<Asset>>>;
 
 	#[method(name = "failed_call_ethereum")]
 	fn cf_failed_call_ethereum(
@@ -900,8 +899,8 @@ where
 	) -> RpcResult<PoolPriceV2> {
 		let hash = self.unwrap_or_best(at);
 		Ok(PoolPriceV2 {
-			base_asset: base_asset.into(),
-			quote_asset: quote_asset.into(),
+			base_asset,
+			quote_asset,
 			price: self
 				.client
 				.runtime_api()
@@ -1196,11 +1195,7 @@ where
 				api.cf_pool_price_v2(hash, base_asset, quote_asset)
 					.map_err(to_rpc_error)
 					.and_then(|result| result.map_err(map_dispatch_error))
-					.map(|price| PoolPriceV2 {
-						base_asset: base_asset.into(),
-						quote_asset: quote_asset.into(),
-						price,
-					})
+					.map(|price| PoolPriceV2 { base_asset, quote_asset, price })
 			},
 		)
 	}
@@ -1272,8 +1267,8 @@ where
 			sink,
 			move |api, hash| {
 				Ok::<RpcPrewitnessedSwap, jsonrpsee::core::Error>(RpcPrewitnessedSwap {
-					base_asset: base_asset.into(),
-					quote_asset: quote_asset.into(),
+					base_asset,
+					quote_asset,
 					side,
 					amounts: api
 						.cf_prewitness_swaps(hash, base_asset, quote_asset, side)
@@ -1294,8 +1289,8 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcPrewitnessedSwap> {
 		Ok(RpcPrewitnessedSwap {
-			base_asset: base_asset.into(),
-			quote_asset: quote_asset.into(),
+			base_asset,
+			quote_asset,
 			side,
 			amounts: self
 				.client
@@ -1308,10 +1303,10 @@ where
 		})
 	}
 
-	fn cf_supported_assets(&self) -> RpcResult<HashMap<ForeignChain, Vec<OldAsset>>> {
-		let mut chain_to_asset: HashMap<ForeignChain, Vec<OldAsset>> = HashMap::new();
+	fn cf_supported_assets(&self) -> RpcResult<HashMap<ForeignChain, Vec<Asset>>> {
+		let mut chain_to_asset: HashMap<ForeignChain, Vec<Asset>> = HashMap::new();
 		Asset::all().for_each(|asset| {
-			chain_to_asset.entry((asset).into()).or_default().push(asset.into());
+			chain_to_asset.entry((asset).into()).or_default().push(asset);
 		});
 		Ok(chain_to_asset)
 	}
