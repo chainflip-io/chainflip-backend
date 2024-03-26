@@ -17,52 +17,52 @@ jobs:
   prerelease:
     runs-on: ubuntu-22.04
     steps:
-      - name: Checkout
+      - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
-      - name: Download binaries
+      - name: Download binaries 📥
         uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
         with:
           name: chainflip-backend-bin-ubuntu-22.04
           path: assets/bin
 
-      - name: Remove non production binaries
+      - name: Remove non production binaries 🗑
         run: |
           rm -f assets/bin/chainflip-engine-databases
           rm -f assets/bin/chainflip-ingress-egress-tracker
           rm -f assets/bin/generate-genesis-keys
 
-      - name: Download packages
+      - name: Download packages 📥
         uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
         with:
           name: chainflip-backend-packages-ubuntu-22.04
           path: assets/debian
 
-      - name: Download runtime
+      - name: Download runtime 📥
         uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
         with:
           name: chainflip-node-runtime-production
           path: assets/runtime
 
-      - name: Download public images
+      - name: Download public images 📥
         uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
         with:
           name: chainflip-backend-public-images
           path: assets/docker/public
 
-      - name: Download private images
+      - name: Download private images 📥
         uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
         with:
           name: chainflip-backend-private-images
           path: assets/docker/private
 
-      - name: Configure AWS credentials using OIDC
+      - name: Configure AWS credentials using OIDC 🪪
         uses: aws-actions/configure-aws-credentials@010d0da01d0b5a38af31e9c3470dbfdabdecca3a
         with:
           aws-region: eu-central-1
           role-to-assume: arn:aws:iam::771478732399:role/chainflip-github-bot
 
-      - name: Upload packages to s3 pre-release bucket
+      - name: Upload packages to s3 pre-release bucket 📤
         run: |
           aws s3 cp assets s3://chainflip-mainnet-prerelease/${{ inputs.version }}/ --recursive
           aws s3 cp state-chain/node/chainspecs/${{ inputs.network }}.chainspec.raw.json s3://chainflip-mainnet-prerelease/${{ inputs.version }}/chainspecs/${{ inputs.network }}.chainspec.json

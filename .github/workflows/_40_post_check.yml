@@ -24,7 +24,7 @@ jobs:
     runs-on: digitalocean
     timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
-      - name: Checkout chainflip-backend
+      - name: Checkout chainflip-backend 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Login to Github Container Registry 🔑
@@ -34,7 +34,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Configure NodeJS
+      - name: Configure NodeJS 🛠️
         uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65
         with:
           node-version: 18

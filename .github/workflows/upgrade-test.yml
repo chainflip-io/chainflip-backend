@@ -44,17 +44,17 @@ jobs:
     # conservatively 1.5 hours. 2 bouncer runs need to occur.
     timeout-minutes: 90
     steps:
-      - name: Checkout chainflip-backend
-        uses: actions/checkout@v3
+      - name: Checkout chainflip-backend 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
-      - name: Get upgrade-to-commit SHA
+      - name: Get upgrade-to-commit SHA 📜
         uses: ./.github/actions/get-workflow-commit
         id: get-upgrade-to-commit
         with:
           workflow-name: ${{ inputs.upgrade-to-workflow-name }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set upgrade-to-commit
+      - name: Set upgrade-to-commit 📲
         run: |
           if [ -z "${{ inputs.upgrade-to-commit }}" ]; then
             echo "UPGRADE_TO_COMMIT=${{ steps.get-upgrade-to-commit.outputs.commit-sha }}" >> $GITHUB_ENV
@@ -63,14 +63,14 @@ jobs:
           fi
 
       - name: Login to Github Container Registry 🔑
-        uses: docker/login-action@v2
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Configure NodeJS
-        uses: actions/setup-node@v3
+      - name: Configure NodeJS 🛠️
+        uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65
         with:
           node-version: 18
           cache: "pnpm"
@@ -78,21 +78,21 @@ jobs:
           scope: "@chainflip-io"
           cache-dependency-path: "bouncer/pnpm-lock.yaml"
 
-      - name: Set NPM registry
+      - name: Set NPM registry 🔧
         run: |
           pnpm set @chainflip-io:registry=https://npm.pkg.github.com/
           pnpm set //npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install system packages
+      - name: Install system packages 💿
         run: |
           sudo apt update
           sudo apt install -y bc xxd
 
-      - name: Install wscat
+      - name: Install wscat 🐈
         run: |
           npm install -g wscat
 
-      - name: Download try-runtime binary
+      - name: Download try-runtime binary 📥
         uses: jaxxstorm/action-install-gh-release@v1.10.0
         with:
           repo: paritytech/try-runtime-cli
@@ -101,18 +101,18 @@ jobs:
           rename-to: try-runtime
           chmod: 0755
 
-      - name: Get upgrade-from-commit
+      - name: Get upgrade-from-commit 📜
         uses: ./.github/actions/get-workflow-commit
         id: get-upgrade-from-commit
         with:
           workflow-name: release-${{ inputs.upgrade-from-release }}.yml
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: echo upgrade from commit
+      - name: echo upgrade from commit 🔊
         run: |
           echo "The upgrade-from-commit is: ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}"
 
-      - name: Download latest release binaries
+      - name: Download latest release binaries 📥
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: release-${{ inputs.upgrade-from-release }}.yml
@@ -120,18 +120,18 @@ jobs:
           github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
           path: latest-release-bins
 
-      - name: Permissions for latest binaries
+      - name: Permissions for latest binaries 🛡️
         run: |
           chmod +x ./latest-release-bins/chainflip-*
 
-      - name: Version of the latest release
+      - name: Get version of the latest release ✍️
         run: |
           set -x
           RELEASE_VERSION=$(./latest-release-bins/chainflip-engine --version)
           echo $RELEASE_VERSION
           echo "RELEASE_VERSION=${RELEASE_VERSION}" >> $GITHUB_ENV
 
-      - name: Download latest main binaries
+      - name: Download latest main binaries 📥
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: ${{ inputs.upgrade-to-workflow-name }}
@@ -139,7 +139,7 @@ jobs:
           path: upgrade-to-bins
           commit: ${{ env.UPGRADE_TO_COMMIT }}
 
-      - name: Download latest main runtime
+      - name: Download latest main runtime 📥
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: ${{ inputs.upgrade-to-workflow-name }}
@@ -147,17 +147,17 @@ jobs:
           path: main-runtime
           commit: ${{ env.UPGRADE_TO_COMMIT }}
 
-      - name: Permissions for latest binaries
+      - name: Permissions for latest binaries 🛡️
         run: |
           chmod +x ./upgrade-to-bins/chainflip-*
 
-      - name: Version of latest main
+      - name: Get version of latest main ✍️
         run: |
           set -x
           MAIN_VERSION=$(./upgrade-to-bins/chainflip-node --version)
           echo $MAIN_VERSION
 
-      - name: Start a localnet from current release
+      - name: Start a localnet from current release 🚀
         env:
           BINARY_ROOT_PATH: ./latest-release-bins
           DEBUG_OUTPUT_DESTINATION: /tmp/chainflip/debug.*log
@@ -173,7 +173,7 @@ jobs:
           touch ./localnet/.setup_complete
           ./localnet/manage.sh
 
-      - name: Run bouncer on latest release
+      - name: Run bouncer on latest release 🙅‍♂️
         id: pre-upgrade-bouncer
         run: |
           git fetch --all
@@ -185,7 +185,7 @@ jobs:
 
       # we need to be sure that when this fails, we catch the error, any panics etc. that occur
       # TODO: Run swaps simultaneously to the upgrade - we could do that inside the `upgrade_network` command itself.
-      - name: Upgrade network
+      - name: Upgrade network 🚀
         shell: bash
         id: upgrade-network
         run: |
@@ -199,7 +199,7 @@ jobs:
             --localnet_init ./../localnet/init \
             --oldVersion "${{ env.RELEASE_VERSION }}"
 
-      - name: Run bouncer after upgrade
+      - name: Run bouncer after upgrade 🙅‍♂️
         id: post-upgrade-bouncer
         run: |
           git checkout ${{ env.UPGRADE_TO_COMMIT }}
@@ -208,28 +208,28 @@ jobs:
           pnpm install
           ./tests/all_concurrent_tests.ts
 
-      - name: Print old chainflip-engine logs
-        if: failure()
+      - name: Print chainflip-engine logs 🚗
+        if: always()
         run: |
           cat /tmp/chainflip/*/chainflip-engine.*log
 
-      - name: Print new chainflip-engine logs
-        if: failure()
+      - name: Print new chainflip-engine logs 🚗
+        if: always()
         run: |
           cat /tmp/chainflip/*/chainflip-engine-upgrade.*log
 
-      - name: Print chainflip-node logs
-        if: failure()
+      - name: Print chainflip-node logs 📡
+        if: always()
         run: |
           cat /tmp/chainflip/*/chainflip-node.*log
 
-      - name: Print broker logs
-        if: failure()
+      - name: Print chainflip-broker-api logs 💼
+        if: always()
         run: |
           cat /tmp/chainflip/chainflip-broker-api.*log
 
-      - name: Print lp-api logs
-        if: failure()
+      - name: Print chainflip-lp-api logs 🤑
+        if: always()
         run: |
           cat /tmp/chainflip/chainflip-lp-api.*log
 
@@ -255,8 +255,8 @@ jobs:
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --rmi all --volumes --remove-orphans
 
-      - name: Notify on failed upgrade test
-        if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main'
+      - name: Notify on failed upgrade test 🚨
+        if: always() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main'
         env:
           DISCORD_USERNAME: "Upgrade Test"
           DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
