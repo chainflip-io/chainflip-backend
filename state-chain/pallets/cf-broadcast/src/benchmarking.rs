@@ -90,8 +90,8 @@ mod benchmarks {
 
 	#[benchmark]
 	fn transaction_failed() {
-		let caller: T::AccountId = whitelisted_caller();
-		T::AccountRoleRegistry::register_account_role(&caller, AccountRole::Validator).unwrap();
+		let caller =
+			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Validator).unwrap();
 		let broadcast_id = 15;
 		insert_transaction_broadcast_attempt::<T, I>(Some(caller.clone().into()), broadcast_id);
 		frame_system::Pallet::<T>::set_block_number(10u32.into());

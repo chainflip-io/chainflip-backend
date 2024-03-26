@@ -2,7 +2,7 @@
 
 use super::*;
 use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue};
-use cf_primitives::{Asset, FLIPPERINOS_PER_FLIP};
+use cf_primitives::{AccountRole, Asset, FLIPPERINOS_PER_FLIP};
 use cf_traits::{AccountRoleRegistry, FeePayment};
 use frame_benchmarking::v2::*;
 use frame_support::{assert_ok, traits::OnNewAccount};
@@ -16,9 +16,10 @@ mod benchmarks {
 
 	#[benchmark]
 	fn request_liquidity_deposit_address() {
-		let caller: T::AccountId = whitelisted_caller();
-		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		<T as Chainflip>::AccountRoleRegistry::register_as_liquidity_provider(&caller).unwrap();
+		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::LiquidityProvider,
+		)
+		.unwrap();
 		assert_ok!(Pallet::<T>::register_liquidity_refund_address(
 			RawOrigin::Signed(caller.clone()).into(),
 			EncodedAddress::Eth(Default::default()),
@@ -32,9 +33,10 @@ mod benchmarks {
 
 	#[benchmark]
 	fn withdraw_asset() {
-		let caller: T::AccountId = whitelisted_caller();
-		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_liquidity_provider(&caller));
+		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::LiquidityProvider,
+		)
+		.unwrap();
 		assert_ok!(Pallet::<T>::try_credit_account(&caller, Asset::Eth, 1_000_000,));
 
 		#[extrinsic_call]
@@ -52,6 +54,7 @@ mod benchmarks {
 	fn register_lp_account() {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		frame_system::Pallet::<T>::inc_providers(&caller);
 
 		#[extrinsic_call]
 		register_lp_account(RawOrigin::Signed(caller.clone()));
@@ -63,9 +66,10 @@ mod benchmarks {
 
 	#[benchmark]
 	fn deregister_lp_account() {
-		let caller: T::AccountId = whitelisted_caller();
-		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		assert_ok!(Pallet::<T>::register_lp_account(RawOrigin::Signed(caller.clone()).into()));
+		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::LiquidityProvider,
+		)
+		.unwrap();
 
 		#[extrinsic_call]
 		deregister_lp_account(RawOrigin::Signed(caller.clone()));
@@ -78,9 +82,10 @@ mod benchmarks {
 
 	#[benchmark]
 	fn register_liquidity_refund_address() {
-		let caller: T::AccountId = whitelisted_caller();
-		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_liquidity_provider(&caller));
+		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::LiquidityProvider,
+		)
+		.unwrap();
 
 		#[extrinsic_call]
 		register_liquidity_refund_address(

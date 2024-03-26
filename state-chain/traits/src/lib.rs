@@ -766,6 +766,18 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 	fn ensure_validator(origin: T::RuntimeOrigin) -> Result<T::AccountId, BadOrigin> {
 		Self::ensure_account_role(origin, AccountRole::Validator)
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn whitelisted_caller_with_role(role: AccountRole) -> Result<T::AccountId, DispatchError> {
+		use frame_support::traits::OnNewAccount;
+		let caller = frame_benchmarking::whitelisted_caller::<T::AccountId>();
+		if frame_system::Pallet::<T>::providers(&caller) == 0u32 {
+			frame_system::Pallet::<T>::inc_providers(&caller);
+		}
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		Self::register_account_role(&caller, role)?;
+		Ok(caller.clone())
+	}
 }
 
 #[derive(

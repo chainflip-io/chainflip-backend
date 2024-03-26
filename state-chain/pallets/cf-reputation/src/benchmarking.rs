@@ -2,6 +2,7 @@
 
 use super::*;
 
+use cf_primitives::AccountRole;
 use cf_traits::{AccountRoleRegistry, EpochInfo};
 use frame_benchmarking::v2::*;
 use frame_support::{
@@ -67,9 +68,10 @@ mod benchmarks {
 
 	#[benchmark]
 	fn heartbeat() {
-		let caller: T::AccountId = whitelisted_caller();
-		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		T::AccountRoleRegistry::register_as_validator(&caller).unwrap();
+		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Validator,
+		)
+		.unwrap();
 		let validator_id: T::ValidatorId = caller.clone().into();
 
 		#[extrinsic_call]
