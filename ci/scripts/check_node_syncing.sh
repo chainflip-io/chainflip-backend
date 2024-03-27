@@ -1,8 +1,11 @@
 #!/bin/bash
 
-# Initialize variables
-NETWORK=""
-BINARY_ROOT_PATH=""
+# Node RPC endpoint
+NODE_RPC_URL="http://localhost:9944"
+
+# Initialize counters
+counter=0
+connection_attempts=0
 
 # Define color codes
 RED='\033[0;31m'
@@ -11,12 +14,7 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# Default Node RPC endpoint
-NODE_RPC_URL="http://localhost:9944"
-
-# Initialize counter
-counter=0
-
+# Other initializations...
 CHAINDATA_PATH="/tmp/chainflip/chaindata"
 SYNC_MODE="warp"
 REQUIRED_BINARIES="chainflip-node"
@@ -79,35 +77,43 @@ sleep 10
 
 while true; do
   # Fetch the number of peers using system_health RPC call
-  peers=$(curl -s -H "Content-Type: application/json" --data '{"jsonrpc":"2.0", "method":"system_health", "params":[], "id":1}' $NODE_RPC_URL | jq -r '.result.peers // empty')
+  response=$(curl -s -H "Content-Type: application/json" --data '{"jsonrpc":"2.0", "method":"system_health", "params":[], "id":1}' $NODE_RPC_URL)
+  if [[ -z "$response" ]]; then
+    # Increment connection_attempts if curl command fails (no response)
+    ((connection_attempts++))
+    echo -e "${YELLOW}Warning: Attempt $connection_attempts failed to connect to the node.${NC}"
 
-  # Check if the peers variable is a number
-  if ! [[ $peers =~ ^[0-9]+$ ]]; then
-    echo -e "${RED}⚠️ Failed to fetch the number of peers or received an invalid response.${NC}"
-    # Optionally, you can choose to break or exit here if consistent fetching is critical
-    # exit 1
-  elif [ "$peers" -eq 0 ]; then
-    # Increment counter if no peers
-    ((counter++))
-    echo -e "${YELLOW}🚫 No peers found, counter=$counter${NC}"
-  else
-    # Reset counter and indicate success when peers are connected
-    if [ $counter -ne 0 ]; then
-      echo -e "${GREEN}✅ Success: Peers are now connected after $counter seconds of no connections.${NC}"
+    if [ "$connection_attempts" -ge 10 ]; then
+      echo -e "${RED}🚨 Error: Failed to connect to the node after 10 attempts.${NC}"
       cleanup
-      exit 0
+      exit 1
+    fi
+  else
+    # Reset connection_attempts counter on successful connection
+    connection_attempts=0
+    peers=$(echo $response | jq -r '.result.peers // empty')
+
+    # Proceed with the rest of your script...
+    if ! [[ $peers =~ ^[0-9]+$ ]]; then
+      echo -e "${RED}⚠️ Failed to fetch the number of peers or received an invalid response.${NC}"
+    elif [ "$peers" -eq 0 ]; then
+      ((counter++))
+      echo -e "${YELLOW}🚫 No peers found, counter=$counter${NC}"
     else
-      echo -e "${GREEN}✅ Success: Peers are connected.${NC}"
+      if [ $counter -ne 0 ]; then
+        echo -e "${GREEN}✅ Success: Peers are now connected after $counter seconds of no connections.${NC}"
+      else
+        echo -e "${GREEN}✅ Success: Peers are connected.${NC}"
+      fi
       cleanup
       exit 0
     fi
-  fi
 
-  # Check if counter has reached 60 seconds (1 minute)
-  if [ "$counter" -ge 60 ]; then
-    echo -e "${RED}🚨 Error: No peers connected for 60 seconds.${NC}"
-    cleanup
-    exit 1
+    if [ "$counter" -ge 60 ]; then
+      echo -e "${RED}🚨 Error: No peers connected for 60 seconds.${NC}"
+      cleanup
+      exit 1
+    fi
   fi
   # Sleep for 1 second before the next check
   sleep 1

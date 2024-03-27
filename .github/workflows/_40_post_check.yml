@@ -189,6 +189,16 @@ jobs:
         with:
           name: chainflip-backend-bin-ubuntu-22.04
 
+      - name: Make Binaries Executable 🛠️
+        run: |
+          chmod +x chainflip-*
+
       - name: Run Test 🧪
         shell: bash
         run: ./ci/scripts/check_node_syncing.sh --network ${{ matrix.network }} --binary-root-path .
+
+      - name: Print logs 📜
+        if: always()
+        continue-on-error: true
+        run: |
+          cat /tmp/chainflip-node.log
