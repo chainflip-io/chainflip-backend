@@ -109,12 +109,12 @@ while true; do
       exit 0
     fi
 
-    if [ "$counter" -ge 60 ]; then
+    if [ "$counter" -ge 6 ]; then
       echo -e "${RED}🚨 Error: No peers connected for 60 seconds.${NC}"
       cleanup
       exit 1
     fi
   fi
-  # Sleep for 1 second before the next check
-  sleep 1
+  # Sleep for 10 second before the next check
+  sleep 10
 done
