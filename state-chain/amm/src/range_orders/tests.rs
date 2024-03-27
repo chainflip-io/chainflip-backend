@@ -9,7 +9,8 @@ use crate::{common::Pairs, test_utilities::rng_u256_inclusive_bound};
 use super::*;
 
 type LiquidityProvider = cf_primitives::AccountId;
-type PoolState = super::PoolState<LiquidityProvider>;
+type OrderId = u64;
+type PoolState = super::PoolState<LiquidityProvider, OrderId>;
 
 #[test]
 fn max_liquidity() {
@@ -88,6 +89,7 @@ fn maximum_liquidity_swap() {
 			pool_state
 				.collect_and_mint(
 					&LiquidityProvider::from([0; 32]),
+					1,
 					lower_tick,
 					upper_tick,
 					Size::Liquidity { liquidity: MAX_TICK_GROSS_LIQUIDITY },
