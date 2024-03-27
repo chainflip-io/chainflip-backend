@@ -18,6 +18,8 @@ fn can_create_new_trading_pool() {
 		let unstable_asset = Asset::Eth;
 		let default_price = price_at_tick(0).unwrap();
 
+		let asset_pair = AssetPair::new(unstable_asset, STABLE_ASSET).unwrap();
+
 		// While the pool does not exist, no info can be obtained.
 		assert!(Pools::<Test>::get(AssetPair::new(unstable_asset, STABLE_ASSET).unwrap()).is_none());
 
@@ -25,8 +27,7 @@ fn can_create_new_trading_pool() {
 		assert_noop!(
 			LiquidityPools::new_pool(
 				RuntimeOrigin::root(),
-				unstable_asset,
-				STABLE_ASSET,
+				asset_pair,
 				1_000_000u32,
 				default_price,
 			),
@@ -36,27 +37,19 @@ fn can_create_new_trading_pool() {
 		// Create a new pool.
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
-			unstable_asset,
-			STABLE_ASSET,
+			asset_pair,
 			500_000u32,
 			default_price,
 		));
 		System::assert_last_event(RuntimeEvent::LiquidityPools(Event::<Test>::NewPoolCreated {
-			base_asset: unstable_asset,
-			quote_asset: STABLE_ASSET,
+			asset_pair,
 			fee_hundredth_pips: 500_000u32,
 			initial_price: default_price,
 		}));
 
 		// Cannot create duplicate pool
 		assert_noop!(
-			LiquidityPools::new_pool(
-				RuntimeOrigin::root(),
-				unstable_asset,
-				STABLE_ASSET,
-				0u32,
-				default_price
-			),
+			LiquidityPools::new_pool(RuntimeOrigin::root(), asset_pair, 0u32, default_price),
 			Error::<Test>::PoolAlreadyExists
 		);
 	});
@@ -67,12 +60,12 @@ fn test_buy_back_flip_no_funds_available() {
 	new_test_ext().execute_with(|| {
 		let unstable_asset = Asset::Eth;
 		let default_price = price_at_tick(0).unwrap();
+		let asset_pair = AssetPair::new(unstable_asset, STABLE_ASSET).unwrap();
 
 		// Create a new pool.
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
-			unstable_asset,
-			STABLE_ASSET,
+			asset_pair,
 			500_000u32,
 			default_price,
 		));
@@ -88,19 +81,18 @@ fn test_buy_back_flip_2() {
 	new_test_ext().execute_with(|| {
 		const POSITION: core::ops::Range<Tick> = -100_000..100_000;
 		const FLIP: Asset = Asset::Flip;
+		let asset_pair = AssetPair::new(FLIP, STABLE_ASSET).unwrap();
 
 		// Create a new pool.
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
-			FLIP,
-			STABLE_ASSET,
+			asset_pair,
 			Default::default(),
 			price_at_tick(0).unwrap(),
 		));
 		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(ALICE),
-			FLIP,
-			STABLE_ASSET,
+			asset_pair,
 			0,
 			Some(POSITION),
 			RangeOrderSize::AssetAmounts {
@@ -118,8 +110,7 @@ fn test_buy_back_flip_2() {
 		);
 		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(ALICE),
-			FLIP,
-			STABLE_ASSET,
+			asset_pair,
 			0,
 			Some(POSITION),
 			RangeOrderSize::Liquidity { liquidity: 0 }
@@ -135,19 +126,18 @@ fn test_sweeping() {
 		const POSITION_0_SIZE: AssetAmount = 100_000;
 		const POSITION_1_SIZE: AssetAmount = 90_000;
 		const SWAP_AMOUNT: AssetAmount = 50_000;
+		let asset_pair = AssetPair::new(ETH, STABLE_ASSET).unwrap();
 
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
-			ETH,
-			STABLE_ASSET,
+			asset_pair,
 			Default::default(),
 			price_at_tick(0).unwrap(),
 		));
 
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(ALICE),
-			ETH,
-			STABLE_ASSET,
+			asset_pair,
 			Side::Buy,
 			0,
 			Some(TICK),
@@ -168,8 +158,7 @@ fn test_sweeping() {
 
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(ALICE),
-			ETH,
-			STABLE_ASSET,
+			asset_pair,
 			Side::Sell,
 			1,
 			Some(TICK),
@@ -190,19 +179,19 @@ fn test_buy_back_flip() {
 		const FLIP_PRICE_IN_USDC: u128 = 10;
 		const FLIP: Asset = Asset::Flip;
 
+		let asset_pair = AssetPair::new(FLIP, STABLE_ASSET).unwrap();
+
 		// Create a new pool.
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
-			FLIP,
-			STABLE_ASSET,
+			asset_pair,
 			Default::default(),
 			price_at_tick(0).unwrap(),
 		));
 		for side in [Side::Buy, Side::Sell] {
 			assert_ok!(LiquidityPools::set_limit_order(
 				RuntimeOrigin::signed(ALICE),
-				FLIP,
-				STABLE_ASSET,
+				asset_pair,
 				side,
 				0,
 				Some(
@@ -279,11 +268,11 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 	new_test_ext().execute_with(|| {
 		let old_fee = 400_000u32;
 		let new_fee = 100_000u32;
+		let asset_pair = AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap();
 		// Create a new pool.
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			old_fee,
 			price_at_tick(0).unwrap(),
 		));
@@ -302,8 +291,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 		// Setup liquidity for the pool with 2 LPer
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(ALICE),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			Side::Sell,
 			0,
 			Some(0),
@@ -311,8 +299,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(ALICE),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			Side::Buy,
 			1,
 			Some(0),
@@ -320,8 +307,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(BOB),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			Side::Sell,
 			0,
 			Some(0),
@@ -329,8 +315,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(BOB),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			Side::Buy,
 			1,
 			Some(0),
@@ -396,12 +381,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 		);
 
 		// Updates the fees to the new value and collect any fees on current positions.
-		assert_ok!(LiquidityPools::set_pool_fees(
-			RuntimeOrigin::root(),
-			Asset::Eth,
-			STABLE_ASSET,
-			new_fee
-		));
+		assert_ok!(LiquidityPools::set_pool_fees(RuntimeOrigin::root(), asset_pair, new_fee));
 
 		// All Lpers' fees and bought amount are Collected and accredited.
 		// Fee and swaps are calculated proportional to the liquidity amount.
@@ -430,8 +410,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 		);
 
 		System::assert_has_event(RuntimeEvent::LiquidityPools(Event::<Test>::PoolFeeSet {
-			base_asset: Asset::Eth,
-			quote_asset: STABLE_ASSET,
+			asset_pair,
 			fee_hundredth_pips: new_fee,
 		}));
 
@@ -492,12 +471,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 		AliceCollectedUsdc::set(0u128);
 		BobCollectedEth::set(0u128);
 		BobCollectedUsdc::set(0u128);
-		assert_ok!(LiquidityPools::set_pool_fees(
-			RuntimeOrigin::root(),
-			Asset::Eth,
-			STABLE_ASSET,
-			new_fee
-		));
+		assert_ok!(LiquidityPools::set_pool_fees(RuntimeOrigin::root(), asset_pair, new_fee));
 
 		// No fees are collected.
 		assert_eq!(AliceCollectedEth::get(), 0u128);
@@ -517,8 +491,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 		// Create a new pool.
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			fee,
 			price_at_tick(0).unwrap(),
 		));
@@ -526,8 +499,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 		// Setup liquidity for the pool with 2 LPer
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(ALICE),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			Side::Sell,
 			0,
 			Some(0),
@@ -535,8 +507,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(BOB),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			Side::Sell,
 			0,
 			Some(tick),
@@ -544,8 +515,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(BOB),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			Side::Buy,
 			1,
 			Some(tick),
@@ -585,12 +555,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 		);
 
 		// Updates the fees to the new value and collect any fees on current positions.
-		assert_ok!(LiquidityPools::set_pool_fees(
-			RuntimeOrigin::root(),
-			Asset::Eth,
-			STABLE_ASSET,
-			0u32
-		));
+		assert_ok!(LiquidityPools::set_pool_fees(RuntimeOrigin::root(), asset_pair, 0u32));
 
 		// 100 swapped + 100 fee. The position is fully consumed.
 		assert_eq!(AliceCollectedUsdc::get(), 200u128);
@@ -601,8 +566,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 
 		assert_has_event::<Test>(RuntimeEvent::LiquidityPools(Event::<Test>::LimitOrderUpdated {
 			lp: ALICE,
-			base_asset: Asset::Eth,
-			quote_asset: STABLE_ASSET,
+			asset_pair,
 			side: Side::Sell,
 			id: 0,
 			tick: 0,
@@ -613,8 +577,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 		}));
 		assert_has_event::<Test>(RuntimeEvent::LiquidityPools(Event::<Test>::LimitOrderUpdated {
 			lp: BOB,
-			base_asset: Asset::Eth,
-			quote_asset: STABLE_ASSET,
+			asset_pair,
 			side: Side::Sell,
 			id: 0,
 			tick: 100,
@@ -625,8 +588,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 		}));
 		assert_has_event::<Test>(RuntimeEvent::LiquidityPools(Event::<Test>::LimitOrderUpdated {
 			lp: BOB,
-			base_asset: Asset::Eth,
-			quote_asset: STABLE_ASSET,
+			asset_pair,
 			side: Side::Buy,
 			id: 1,
 			tick: 100,
@@ -644,11 +606,11 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 		let range = -100..100;
 		let old_fee = 400_000u32;
 		let new_fee = 100_000u32;
+		let asset_pair = AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap();
 		// Create a new pool.
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			old_fee,
 			price_at_tick(0).unwrap(),
 		));
@@ -667,16 +629,14 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 		// Setup liquidity for the pool with 2 LPer with range orders
 		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(ALICE),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			0,
 			Some(range.clone()),
 			RangeOrderSize::Liquidity { liquidity: 1_000_000 },
 		));
 		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(BOB),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			0,
 			Some(range.clone()),
 			RangeOrderSize::Liquidity { liquidity: 1_000_000 },
@@ -693,12 +653,7 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 		);
 
 		// Updates the fees to the new value. No fee is collected for range orders.
-		assert_ok!(LiquidityPools::set_pool_fees(
-			RuntimeOrigin::root(),
-			Asset::Eth,
-			STABLE_ASSET,
-			new_fee
-		));
+		assert_ok!(LiquidityPools::set_pool_fees(RuntimeOrigin::root(), asset_pair, new_fee));
 		assert_eq!(AliceCollectedEth::get(), 0u128);
 		assert_eq!(AliceCollectedUsdc::get(), 0u128);
 		assert_eq!(BobCollectedEth::get(), 0u128);
@@ -734,16 +689,14 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 		// Cash out the liquidity will payout earned fee
 		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(ALICE),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			0,
 			Some(range.clone()),
 			RangeOrderSize::Liquidity { liquidity: 0 },
 		));
 		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(BOB),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			0,
 			Some(range.clone()),
 			RangeOrderSize::Liquidity { liquidity: 0 },
@@ -767,18 +720,17 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 fn can_execute_scheduled_limit_order() {
 	new_test_ext().execute_with(|| {
 		let order_id = 0;
+		let asset_pair = AssetPair::new(Asset::Flip, STABLE_ASSET).unwrap();
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
-			Asset::Flip,
-			STABLE_ASSET,
+			asset_pair,
 			400_000u32,
 			price_at_tick(0).unwrap(),
 		));
 		assert_ok!(LiquidityPools::schedule_limit_order_update(
 			RuntimeOrigin::signed(ALICE),
 			Box::new(pallet_cf_pools::Call::<Test>::set_limit_order {
-				base_asset: Asset::Flip,
-				quote_asset: STABLE_ASSET,
+				asset_pair,
 				side: Side::Buy,
 				id: order_id,
 				option_tick: Some(100),
@@ -814,12 +766,12 @@ fn can_execute_scheduled_limit_order() {
 #[test]
 fn schedule_rejects_unsupported_calls() {
 	new_test_ext().execute_with(|| {
+		let asset_pair = AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap();
 		assert_noop!(
 			LiquidityPools::schedule_limit_order_update(
 				RuntimeOrigin::signed(ALICE),
 				Box::new(pallet_cf_pools::Call::<Test>::set_pool_fees {
-					base_asset: Asset::Eth,
-					quote_asset: STABLE_ASSET,
+					asset_pair,
 					fee_hundredth_pips: 0,
 				}),
 				6
@@ -836,8 +788,7 @@ fn cant_schedule_in_the_past() {
 			LiquidityPools::schedule_limit_order_update(
 				RuntimeOrigin::signed(ALICE),
 				Box::new(pallet_cf_pools::Call::<Test>::set_limit_order {
-					base_asset: Asset::Flip,
-					quote_asset: STABLE_ASSET,
+					asset_pair: AssetPair::new(Asset::Flip, STABLE_ASSET).unwrap(),
 					side: Side::Buy,
 					id: 0,
 					option_tick: Some(0),
@@ -855,12 +806,12 @@ fn can_get_all_pool_orders() {
 	new_test_ext().execute_with(|| {
 		let range_1 = -100..100;
 		let range_2 = -234..234;
+		let asset_pair = AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap();
 
 		// Create a new pool.
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			Default::default(),
 			price_at_tick(0).unwrap(),
 		));
@@ -868,32 +819,28 @@ fn can_get_all_pool_orders() {
 		// Setup liquidity for the pool with 2 LPer, each has limit and range orders.
 		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(ALICE),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			0,
 			Some(range_1.clone()),
 			RangeOrderSize::Liquidity { liquidity: 100_000 },
 		));
 		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(ALICE),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			1,
 			Some(range_2.clone()),
 			RangeOrderSize::Liquidity { liquidity: 200_000 },
 		));
 		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(BOB),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			2,
 			Some(range_1.clone()),
 			RangeOrderSize::Liquidity { liquidity: 300_000 },
 		));
 		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(BOB),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			3,
 			Some(range_2.clone()),
 			RangeOrderSize::Liquidity { liquidity: 400_000 },
@@ -901,8 +848,7 @@ fn can_get_all_pool_orders() {
 
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(ALICE),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			Side::Sell,
 			4,
 			Some(100),
@@ -910,8 +856,7 @@ fn can_get_all_pool_orders() {
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(ALICE),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			Side::Sell,
 			5,
 			Some(1000),
@@ -919,8 +864,7 @@ fn can_get_all_pool_orders() {
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(ALICE),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			Side::Sell,
 			6,
 			Some(100),
@@ -928,8 +872,7 @@ fn can_get_all_pool_orders() {
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(ALICE),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			Side::Buy,
 			7,
 			Some(1000),
@@ -1013,19 +956,19 @@ fn can_get_all_pool_orders() {
 #[test]
 fn asset_conversion() {
 	new_test_ext().execute_with(|| {
+		let asset_pair = AssetPair::new(Asset::Flip, STABLE_ASSET).unwrap();
 		// Create pools
 		for asset in [Asset::Eth, Asset::Flip] {
+			let asset_pair = AssetPair::new(asset, STABLE_ASSET).unwrap();
 			assert_ok!(LiquidityPools::new_pool(
 				RuntimeOrigin::root(),
-				asset,
-				STABLE_ASSET,
+				asset_pair,
 				Default::default(),
 				price_at_tick(0).unwrap(),
 			));
 			assert_ok!(LiquidityPools::set_range_order(
 				RuntimeOrigin::signed(ALICE),
-				asset,
-				STABLE_ASSET,
+				asset_pair,
 				0,
 				Some(-100..100),
 				RangeOrderSize::Liquidity { liquidity: 100_000_000_000_000_000 },
@@ -1089,20 +1032,19 @@ fn asset_conversion() {
 fn fees_are_getting_recorded() {
 	new_test_ext().execute_with(|| {
 		let range_1 = -100..100;
+		let asset_pair = AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap();
 
 		// Create a new pool.
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			Default::default(),
 			price_at_tick(0).unwrap(),
 		));
 
 		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(ALICE),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			0,
 			Some(range_1.clone()),
 			RangeOrderSize::Liquidity { liquidity: 100_000 },
@@ -1112,8 +1054,7 @@ fn fees_are_getting_recorded() {
 
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(BOB),
-			Asset::Eth,
-			STABLE_ASSET,
+			asset_pair,
 			Side::Sell,
 			6,
 			Some(100),
@@ -1129,6 +1070,7 @@ fn test_maximum_slippage_limits() {
 	use cf_utilities::{assert_err, assert_ok};
 
 	new_test_ext().execute_with(|| {
+		let asset_pair = AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap();
 		let test_swaps = |size_limit_when_slippage_limit_is_hit| {
 			for (size, expected_output) in [
 				(0, 0),
@@ -1160,15 +1102,13 @@ fn test_maximum_slippage_limits() {
 				);
 				assert_ok!(LiquidityPools::new_pool(
 					RuntimeOrigin::root(),
-					Asset::Eth,
-					STABLE_ASSET,
+					asset_pair,
 					Default::default(),
 					price_at_tick(0).unwrap(),
 				));
 				assert_ok!(LiquidityPools::set_range_order(
 					RuntimeOrigin::signed(ALICE),
-					Asset::Eth,
-					STABLE_ASSET,
+					asset_pair,
 					0,
 					Some(-10000..10000),
 					RangeOrderSize::Liquidity { liquidity: 100_000 },

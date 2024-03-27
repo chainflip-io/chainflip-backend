@@ -418,8 +418,7 @@ pub mod pallet {
 			buy_interval: BlockNumberFor<T>,
 		},
 		NewPoolCreated {
-			base_asset: Asset,
-			quote_asset: Asset,
+			asset_pair: AssetPair,
 			fee_hundredth_pips: u32,
 			initial_price: Price,
 		},
@@ -428,8 +427,7 @@ pub mod pallet {
 		/// price/range of the order.
 		RangeOrderUpdated {
 			lp: T::AccountId,
-			base_asset: Asset,
-			quote_asset: Asset,
+			asset_pair: AssetPair,
 			id: OrderId,
 			tick_range: core::ops::Range<Tick>,
 			size_change: Option<IncreaseOrDecrease<RangeOrderChange>>,
@@ -441,8 +439,7 @@ pub mod pallet {
 		/// price of the order.
 		LimitOrderUpdated {
 			lp: T::AccountId,
-			base_asset: Asset,
-			quote_asset: Asset,
+			asset_pair: AssetPair,
 			side: Side,
 			id: OrderId,
 			tick: Tick,
@@ -461,8 +458,7 @@ pub mod pallet {
 			output_amount: AssetAmount,
 		},
 		PoolFeeSet {
-			base_asset: Asset,
-			quote_asset: Asset,
+			asset_pair: AssetPair,
 			fee_hundredth_pips: u32,
 		},
 		/// A scheduled update to a limit order succeeded.
@@ -527,14 +523,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::new_pool())]
 		pub fn new_pool(
 			origin: OriginFor<T>,
-			base_asset: any::Asset,
-			quote_asset: any::Asset,
+			asset_pair: AssetPair,
 			fee_hundredth_pips: u32,
 			initial_price: Price,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-
-			let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
 			Pools::<T>::try_mutate(asset_pair, |maybe_pool| {
 				ensure!(maybe_pool.is_none(), Error::<T>::PoolAlreadyExists);
 
@@ -557,8 +550,7 @@ pub mod pallet {
 			})?;
 
 			Self::deposit_event(Event::<T>::NewPoolCreated {
-				base_asset,
-				quote_asset,
+				asset_pair,
 				fee_hundredth_pips,
 				initial_price,
 			});
@@ -577,8 +569,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::update_range_order())]
 		pub fn update_range_order(
 			origin: OriginFor<T>,
-			base_asset: Asset,
-			quote_asset: Asset,
+			asset_pair: AssetPair,
 			id: OrderId,
 			option_tick_range: Option<core::ops::Range<Tick>>,
 			size_change: IncreaseOrDecrease<RangeOrderSize>,
@@ -588,7 +579,7 @@ pub mod pallet {
 				Error::<T>::UpdatingRangeOrdersDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
+			Self::try_mutate_order(&lp, asset_pair, |pool| {
 				let tick_range = match (
 					pool.range_orders_cache
 						.get(&lp)
@@ -603,7 +594,7 @@ pub mod pallet {
 							let withdrawn_asset_amounts = Self::inner_update_range_order(
 								pool,
 								&lp,
-								asset_pair,
+								&asset_pair,
 								id,
 								previous_tick_range,
 								IncreaseOrDecrease::Decrease(range_orders::Size::Liquidity {
@@ -614,7 +605,7 @@ pub mod pallet {
 							Self::inner_update_range_order(
 								pool,
 								&lp,
-								asset_pair,
+								&asset_pair,
 								id,
 								new_tick_range.clone(),
 								IncreaseOrDecrease::Increase(range_orders::Size::Amount {
@@ -631,7 +622,7 @@ pub mod pallet {
 				Self::inner_update_range_order(
 					pool,
 					&lp,
-					asset_pair,
+					&asset_pair,
 					id,
 					tick_range,
 					size_change.map(|size| match size {
@@ -658,8 +649,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_range_order())]
 		pub fn set_range_order(
 			origin: OriginFor<T>,
-			base_asset: Asset,
-			quote_asset: Asset,
+			asset_pair: AssetPair,
 			id: OrderId,
 			option_tick_range: Option<core::ops::Range<Tick>>,
 			size: RangeOrderSize,
@@ -669,7 +659,7 @@ pub mod pallet {
 				Error::<T>::UpdatingRangeOrdersDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
+			Self::try_mutate_order(&lp, asset_pair, |pool| {
 				let tick_range = match (
 					pool.range_orders_cache
 						.get(&lp)
@@ -683,7 +673,7 @@ pub mod pallet {
 						Self::inner_update_range_order(
 							pool,
 							&lp,
-							asset_pair,
+							&asset_pair,
 							id,
 							previous_tick_range.clone(),
 							IncreaseOrDecrease::Decrease(range_orders::Size::Liquidity {
@@ -698,7 +688,7 @@ pub mod pallet {
 				Self::inner_update_range_order(
 					pool,
 					&lp,
-					asset_pair,
+					&asset_pair,
 					id,
 					tick_range,
 					IncreaseOrDecrease::Increase(match size {
@@ -729,8 +719,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::update_limit_order())]
 		pub fn update_limit_order(
 			origin: OriginFor<T>,
-			base_asset: any::Asset,
-			quote_asset: any::Asset,
+			asset_pair: AssetPair,
 			side: Side,
 			id: OrderId,
 			option_tick: Option<Tick>,
@@ -741,7 +730,7 @@ pub mod pallet {
 				Error::<T>::UpdatingLimitOrdersDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
+			Self::try_mutate_order(&lp, asset_pair, |pool| {
 				let tick = match (
 					pool.limit_orders_cache[side.to_sold_pair()]
 						.get(&lp)
@@ -756,7 +745,7 @@ pub mod pallet {
 							let withdrawn_asset_amount = Self::inner_update_limit_order(
 								pool,
 								&lp,
-								asset_pair,
+								&asset_pair,
 								side,
 								id,
 								previous_tick,
@@ -766,7 +755,7 @@ pub mod pallet {
 							Self::inner_update_limit_order(
 								pool,
 								&lp,
-								asset_pair,
+								&asset_pair,
 								side,
 								id,
 								new_tick,
@@ -781,7 +770,7 @@ pub mod pallet {
 				Self::inner_update_limit_order(
 					pool,
 					&lp,
-					asset_pair,
+					&asset_pair,
 					side,
 					id,
 					tick,
@@ -805,8 +794,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_limit_order())]
 		pub fn set_limit_order(
 			origin: OriginFor<T>,
-			base_asset: any::Asset,
-			quote_asset: any::Asset,
+			asset_pair: AssetPair,
 			side: Side,
 			id: OrderId,
 			option_tick: Option<Tick>,
@@ -817,7 +805,7 @@ pub mod pallet {
 				Error::<T>::UpdatingLimitOrdersDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
+			Self::try_mutate_order(&lp, asset_pair, |pool| {
 				let tick = match (
 					pool.limit_orders_cache[side.to_sold_pair()]
 						.get(&lp)
@@ -831,7 +819,7 @@ pub mod pallet {
 						Self::inner_update_limit_order(
 							pool,
 							&lp,
-							asset_pair,
+							&asset_pair,
 							side,
 							id,
 							previous_tick,
@@ -845,7 +833,7 @@ pub mod pallet {
 				Self::inner_update_limit_order(
 					pool,
 					&lp,
-					asset_pair,
+					&asset_pair,
 					side,
 					id,
 					tick,
@@ -873,8 +861,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_pool_fees())]
 		pub fn set_pool_fees(
 			origin: OriginFor<T>,
-			base_asset: Asset,
-			quote_asset: Asset,
+			asset_pair: AssetPair,
 			fee_hundredth_pips: u32,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
@@ -882,8 +869,7 @@ pub mod pallet {
 				PoolState::<(T::AccountId, OrderId)>::validate_fees(fee_hundredth_pips),
 				Error::<T>::InvalidFeeAmount
 			);
-			let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
-			Self::try_mutate_pool(asset_pair, |asset_pair: &AssetPair, pool| {
+			Self::try_mutate_pool(asset_pair, |pool| {
 				pool.pool_state
 					.set_fees(fee_hundredth_pips)
 					.map_err(|_| Error::<T>::InvalidFeeAmount)?
@@ -892,7 +878,7 @@ pub mod pallet {
 						{
 							Self::process_limit_order_update(
 								pool,
-								asset_pair,
+								&asset_pair,
 								&lp,
 								asset.sell_order(),
 								id,
@@ -906,11 +892,7 @@ pub mod pallet {
 					})
 			})?;
 
-			Self::deposit_event(Event::<T>::PoolFeeSet {
-				base_asset,
-				quote_asset,
-				fee_hundredth_pips,
-			});
+			Self::deposit_event(Event::<T>::PoolFeeSet { asset_pair, fee_hundredth_pips });
 
 			Ok(())
 		}
@@ -1001,7 +983,7 @@ impl<T: Config> SwappingApi for Pallet<T> {
 	) -> Result<AssetAmount, DispatchError> {
 		let (asset_pair, order) =
 			AssetPair::from_swap(from, to).ok_or(Error::<T>::PoolDoesNotExist)?;
-		Self::try_mutate_pool(asset_pair, |_asset_pair, pool| {
+		Self::try_mutate_pool(asset_pair, |pool| {
 			let output_amount = if input_amount == 0 {
 				0
 			} else {
@@ -1476,8 +1458,7 @@ impl<T: Config> Pallet<T> {
 		if !zero_change || collected_fees != Default::default() {
 			Self::deposit_event(Event::<T>::RangeOrderUpdated {
 				lp: lp.clone(),
-				base_asset: asset_pair.assets().base,
-				quote_asset: asset_pair.assets().quote,
+				asset_pair: asset_pair.clone(),
 				id,
 				tick_range,
 				size_change: {
@@ -1522,28 +1503,26 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	fn try_mutate_pool<
-		R,
-		E: From<pallet::Error<T>>,
-		F: FnOnce(&AssetPair, &mut Pool<T>) -> Result<R, E>,
-	>(
+	fn try_mutate_pool<R, E: From<pallet::Error<T>>, F: FnOnce(&mut Pool<T>) -> Result<R, E>>(
 		asset_pair: AssetPair,
 		f: F,
 	) -> Result<R, E> {
 		Pools::<T>::try_mutate(asset_pair, |maybe_pool| {
 			let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
-			f(&asset_pair, pool)
+			f(pool)
 		})
 	}
 
-	fn try_mutate_order<R, F: FnOnce(&AssetPair, &mut Pool<T>) -> Result<R, DispatchError>>(
+	fn try_mutate_order<R, F: FnOnce(&mut Pool<T>) -> Result<R, DispatchError>>(
 		lp: &T::AccountId,
-		base_asset: any::Asset,
-		quote_asset: any::Asset,
+		asset_pair: AssetPair,
 		f: F,
 	) -> Result<R, DispatchError> {
-		T::LpBalance::ensure_has_refund_address_for_pair(lp, base_asset, quote_asset)?;
-		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
+		T::LpBalance::ensure_has_refund_address_for_pair(
+			lp,
+			asset_pair.assets.base,
+			asset_pair.assets.quote,
+		)?;
 		Self::inner_sweep(lp)?;
 		Self::try_mutate_pool(asset_pair, f)
 	}
@@ -1918,8 +1897,7 @@ impl<T: Config> Pallet<T> {
 		{
 			Self::deposit_event(Event::<T>::LimitOrderUpdated {
 				lp: lp.clone(),
-				base_asset: asset_pair.assets().base,
-				quote_asset: asset_pair.assets().quote,
+				asset_pair: asset_pair.clone(),
 				side: order,
 				id,
 				tick,
