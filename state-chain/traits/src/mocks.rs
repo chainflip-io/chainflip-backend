@@ -33,9 +33,11 @@ pub mod reputation_resetter;
 pub mod safe_mode;
 pub mod signer_nomination;
 pub mod swap_deposit_handler;
+pub mod swap_queue_api;
 pub mod threshold_signer;
 pub mod time_source;
 pub mod tracked_data_provider;
+pub mod transaction_fee_handler;
 pub mod waived_fees_mock;
 
 #[macro_export]

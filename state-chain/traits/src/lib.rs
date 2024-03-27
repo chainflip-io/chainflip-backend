@@ -951,12 +951,14 @@ pub trait AssetConverter {
 		desired_output_amount: Amount,
 	) -> Option<Amount>;
 
-	fn convert_asset_to_approximate_output<
-		Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy,
-	>(
+	fn calculate_asset_conversion<Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy>(
 		input_asset: impl Into<Asset>,
 		available_input_amount: Amount,
 		output_asset: impl Into<Asset>,
 		desired_output_amount: Amount,
-	) -> Option<(Amount, Amount)>;
+	) -> Option<Amount>;
+}
+
+pub trait TransactionFeeApi<C: Chain> {
+	fn accrue_transaction_fee(asset: C::ChainAsset, amount: C::ChainAmount);
 }
