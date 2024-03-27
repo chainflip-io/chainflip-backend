@@ -467,7 +467,7 @@ build_histogram_vec_struct!(
 	"cfe_ceremony_duration",
 	"Measure the duration of a ceremony in seconds",
 	["chain", "ceremony_type"],
-	(vec![2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0])
+	(vec![32.0, 64.0, 72.0, 80.0, 88.0, 96.0, 104.0, 112.0, 120.0, 250.0, 300.0, 350.0])
 );
 build_gauge_vec_struct!(
 	CEREMONY_TIMEOUT_MISSING_MSG,
@@ -484,7 +484,7 @@ build_histogram_vec_struct!(
 	"Measure the duration of a stage in seconds",
 	["chain", "stage", "phase"], //phase can be either receiving or processing
 	["chain"],
-	(vec![2.0, 3.0, 5.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0])
+	(vec![2.0, 5.0, 20.0, 25.0, 27.0, 30.0, 35.0, 40.0, 60.0])
 );
 build_counter_vec_struct!(
 	STAGE_FAILING,
@@ -634,7 +634,6 @@ mod test {
 					metrics.stage_duration.observe(&["stage1", "receiving"], Duration::new(780, 0));
 					metrics.stage_duration.observe(&["stage1", "processing"], Duration::new(78, 0));
 					metrics.stage_failing.inc(&["stage3", "NotEnoughMessages"]);
-
 					//This request does nothing, the ceremony is still ongoning so there is no deletion
 					request_test("metrics", reqwest::StatusCode::OK, 
 r#"# HELP cfe_ceremony_bad_msg Count all the bad msgs processed during a ceremony
@@ -642,16 +641,18 @@ r#"# HELP cfe_ceremony_bad_msg Count all the bad msgs processed during a ceremon
 cfe_ceremony_bad_msg{chain="Chain1",reason="AA"} 1
 # HELP cfe_ceremony_duration Measure the duration of a ceremony in seconds
 # TYPE cfe_ceremony_duration histogram
-cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="2"} 0
-cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="4"} 0
-cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="8"} 0
-cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="16"} 0
 cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="32"} 0
 cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="64"} 0
-cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="128"} 0
-cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="256"} 0
-cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="512"} 0
-cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="1024"} 1
+cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="72"} 0
+cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="80"} 0
+cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="88"} 0
+cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="96"} 0
+cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="104"} 0
+cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="112"} 0
+cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="120"} 0
+cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="250"} 0
+cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="300"} 0
+cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="350"} 0
 cfe_ceremony_duration_bucket{ceremony_type="Keygen",chain="Chain1",le="+Inf"} 1
 cfe_ceremony_duration_sum{ceremony_type="Keygen",chain="Chain1"} 999
 cfe_ceremony_duration_count{ceremony_type="Keygen",chain="Chain1"} 1
@@ -668,26 +669,26 @@ cfe_stage_completing{chain="Chain1",stage="stage2"} 1
 # HELP cfe_stage_duration Measure the duration of a stage in seconds
 # TYPE cfe_stage_duration histogram
 cfe_stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="2"} 0
-cfe_stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="3"} 0
 cfe_stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="5"} 0
-cfe_stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="8"} 0
-cfe_stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="10"} 0
-cfe_stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="15"} 0
 cfe_stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="20"} 0
 cfe_stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="25"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="27"} 0
 cfe_stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="30"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="35"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="40"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="60"} 0
 cfe_stage_duration_bucket{chain="Chain1",phase="processing",stage="stage1",le="+Inf"} 1
 cfe_stage_duration_sum{chain="Chain1",phase="processing",stage="stage1"} 78
 cfe_stage_duration_count{chain="Chain1",phase="processing",stage="stage1"} 1
 cfe_stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="2"} 0
-cfe_stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="3"} 0
 cfe_stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="5"} 0
-cfe_stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="8"} 0
-cfe_stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="10"} 0
-cfe_stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="15"} 0
 cfe_stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="20"} 0
 cfe_stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="25"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="27"} 0
 cfe_stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="30"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="35"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="40"} 0
+cfe_stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="60"} 0
 cfe_stage_duration_bucket{chain="Chain1",phase="receiving",stage="stage1",le="+Inf"} 1
 cfe_stage_duration_sum{chain="Chain1",phase="receiving",stage="stage1"} 780
 cfe_stage_duration_count{chain="Chain1",phase="receiving",stage="stage1"} 1
@@ -695,6 +696,8 @@ cfe_stage_duration_count{chain="Chain1",phase="receiving",stage="stage1"} 1
 # TYPE cfe_stage_failing counter
 cfe_stage_failing{chain="Chain1",reason="NotEnoughMessages",stage="stage3"} 1
 "#).await;
+// 	(vec![2.0, 5.0, 20.0, 25.0, 27.0, 30.0, 35.0, 40.0, 60.0])
+
 
 					//End of ceremony
 				}
