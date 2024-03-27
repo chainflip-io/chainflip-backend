@@ -2,6 +2,19 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.3.2] - 2024-03-27
+
+### Features
+
+- Add chainspecs of all network to docker 📜🐳 ([#4705](https://github.com/chainflip-io/chainflip-backend/issues/4705))
+- Remove backcompat asset encoding from rpcs (and make them line up with newer Asset encoding) ([#4710](https://github.com/chainflip-io/chainflip-backend/issues/4710)
+
+### Fixes
+
+- Typo in the error message ([#4694](https://github.com/chainflip-io/chainflip-backend/issues/4694))
+- Cherry-pick correct chainspecs for sisyphos and perseverance ([#4703](https://github.com/chainflip-io/chainflip-backend/issues/4703))
+- Continuous adapter ([#4707](https://github.com/chainflip-io/chainflip-backend/issues/4707))
+
 ## [1.3.1] - 2024-03-22
 
 - Logging: LP-API panic reported in submission watcher ([#4664](https://github.com/chainflip-io/chainflip-backend/issues/4664))
