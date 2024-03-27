@@ -206,7 +206,7 @@ decl_runtime_apis!(
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
 		fn cf_asset_balances(
 			account_id: AccountId32,
-		) -> Result<Vec<(Asset, u128)>, DispatchErrorWithMessage>;
+		) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage>;
 		fn cf_redemption_tax() -> AssetAmount;
 		fn cf_network_environment() -> NetworkEnvironment;
 		fn cf_failed_call_ethereum(
