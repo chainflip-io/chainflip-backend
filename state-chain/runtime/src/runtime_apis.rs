@@ -196,7 +196,9 @@ decl_runtime_apis!(
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> LiquidityProviderInfo;
 		fn cf_broker_info(account_id: AccountId32) -> BrokerInfo;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
-		fn cf_asset_balances(account_id: AccountId32) -> Vec<(Asset, AssetAmount)>;
+		fn cf_asset_balances(
+			account_id: AccountId32,
+		) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage>;
 		fn cf_redemption_tax() -> AssetAmount;
 		fn cf_network_environment() -> NetworkEnvironment;
 		fn cf_failed_call(

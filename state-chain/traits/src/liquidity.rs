@@ -1,10 +1,9 @@
-use cf_chains::address::ForeignChainAddress;
+use cf_chains::{address::ForeignChainAddress, assets::any::AssetMap};
 use cf_primitives::{Asset, AssetAmount, BasisPoints, ChannelId, SwapId};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
-use sp_std::vec::Vec;
 
 pub trait SwapDepositHandler {
 	type AccountId;
@@ -61,7 +60,7 @@ pub trait LpBalanceApi {
 	fn record_fees(who: &Self::AccountId, amount: AssetAmount, asset: Asset);
 
 	/// Returns the asset balances of the given account.
-	fn asset_balances(who: &Self::AccountId) -> Vec<(Asset, AssetAmount)>;
+	fn asset_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError>;
 }
 
 pub trait PoolApi {

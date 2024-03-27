@@ -18,8 +18,8 @@ use utilities::task_scope;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwapChannelInfo<C: Chain> {
 	deposit_address: <C::ChainAccount as ToHumanreadableAddress>::Humanreadable,
-	source_asset: any::OldAsset,
-	destination_asset: any::OldAsset,
+	source_asset: any::Asset,
+	destination_asset: any::Asset,
 }
 
 pub struct PreUpdateStatus {
@@ -88,8 +88,8 @@ impl QueryApi {
 					destination_asset, ..
 				} => Some(SwapChannelInfo {
 					deposit_address: deposit_channel.address.to_humanreadable(network_environment),
-					source_asset: Into::<Asset>::into(deposit_channel.asset).into(),
-					destination_asset: (*destination_asset).into(),
+					source_asset: deposit_channel.asset.into(),
+					destination_asset: *destination_asset,
 				}),
 				_ => None,
 			})

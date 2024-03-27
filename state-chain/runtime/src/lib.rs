@@ -21,7 +21,7 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	assets::any::ForeignChainAndAsset,
+	assets::any::{AssetMap, ForeignChainAndAsset},
 	btc::{BitcoinCrypto, BitcoinRetryPolicy},
 	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
@@ -1152,8 +1152,8 @@ impl_runtime_apis! {
 				})
 				.collect()
 		}
-		fn cf_asset_balances(account_id: AccountId) -> Vec<(Asset, u128)> {
-			LiquidityProvider::asset_balances(&account_id)
+		fn cf_asset_balances(account_id: AccountId) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage> {
+			LiquidityProvider::asset_balances(&account_id).map_err(Into::into)
 		}
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()

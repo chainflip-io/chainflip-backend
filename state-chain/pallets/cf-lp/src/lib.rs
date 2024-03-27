@@ -14,7 +14,6 @@ use cf_chains::assets::any::AssetMap;
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_std::vec::Vec;
 
 mod benchmarking;
 
@@ -396,12 +395,8 @@ impl<T: Config> LpBalanceApi for Pallet<T> {
 		});
 	}
 
-	fn asset_balances(who: &Self::AccountId) -> Vec<(Asset, AssetAmount)> {
-		let mut balances: Vec<(Asset, AssetAmount)> = vec![];
-		T::PoolApi::sweep(who).unwrap();
-		for asset in Asset::all() {
-			balances.push((asset, FreeBalances::<T>::get(who, asset).unwrap_or_default()));
-		}
-		balances
+	fn asset_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError> {
+		T::PoolApi::sweep(who)?;
+		Ok(AssetMap::from_fn(|asset| FreeBalances::<T>::get(who, asset).unwrap_or_default()))
 	}
 }
