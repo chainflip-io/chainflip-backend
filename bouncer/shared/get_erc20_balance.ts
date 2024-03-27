@@ -1,7 +1,7 @@
 import Web3 from 'web3';
 import { Chain } from '@chainflip/cli/.';
 import { fineAmountToAmount, getEvmEndpoint } from './utils';
-import { getErc20abi } from './eth_abis';
+import { getErc20abi } from './contract_interfaces';
 
 const erc20abi = await getErc20abi();
 

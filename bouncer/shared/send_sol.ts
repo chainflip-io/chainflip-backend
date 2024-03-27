@@ -5,7 +5,13 @@ import {
   TransactionInstruction,
   ComputeBudgetProgram,
 } from '@solana/web3.js';
-import { amountToFineAmount, getSolConnection, getSolWhaleKeyPair } from './utils';
+import {
+  amountToFineAmount,
+  assetDecimals,
+  getEncodedSolAddress,
+  getSolConnection,
+  getSolWhaleKeyPair,
+} from './utils';
 
 export async function signAndSendTxSol(transaction: Transaction, log = true) {
   const connection = getSolConnection();
@@ -58,11 +64,12 @@ export async function signAndSendIxsSol(
 }
 
 export async function sendSol(solAddress: string, solAmount: string, log = true) {
-  const lamportsAmount = amountToFineAmount(solAmount, 9); // assetDecimals.Sol when available
+  const lamportsAmount = amountToFineAmount(solAmount, assetDecimals('Sol'));
+
   const transaction = new Transaction().add(
     SystemProgram.transfer({
       fromPubkey: getSolWhaleKeyPair().publicKey,
-      toPubkey: new PublicKey(solAddress),
+      toPubkey: new PublicKey(getEncodedSolAddress(solAddress)),
       lamports: BigInt(lamportsAmount),
     }),
   );

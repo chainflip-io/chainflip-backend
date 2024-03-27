@@ -12,6 +12,7 @@ import {
   amountToFineAmount,
   isWithinOnePercent,
   chainFromAsset,
+  decodeSolAddress,
   chainContractId,
   assetDecimals,
 } from '../shared/utils';
@@ -41,7 +42,8 @@ export async function provideLiquidity(
     ).toJSON() === null
   ) {
     let refundAddress = await newAddress(ccy, 'LP_1');
-    refundAddress = ccy === 'Dot' ? decodeDotAddressForContract(refundAddress) : refundAddress;
+    refundAddress = chain === 'Dot' ? decodeDotAddressForContract(refundAddress) : refundAddress;
+    refundAddress = chain === 'Sol' ? decodeSolAddress(refundAddress) : refundAddress;
 
     console.log('Registering Liquidity Refund Address for ' + ccy + ': ' + refundAddress);
     await lpMutex.runExclusive(async () => {
