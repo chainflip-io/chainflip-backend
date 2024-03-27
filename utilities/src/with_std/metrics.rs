@@ -696,8 +696,6 @@ cfe_stage_duration_count{chain="Chain1",phase="receiving",stage="stage1"} 1
 # TYPE cfe_stage_failing counter
 cfe_stage_failing{chain="Chain1",reason="NotEnoughMessages",stage="stage3"} 1
 "#).await;
-// 	(vec![2.0, 5.0, 20.0, 25.0, 27.0, 30.0, 35.0, 40.0, 60.0])
-
 
 					//End of ceremony
 				}
