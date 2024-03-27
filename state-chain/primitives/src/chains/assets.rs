@@ -105,7 +105,7 @@ macro_rules! assets {
 				}
 			}
 			impl Asset {
-				pub fn all() -> impl Iterator<Item = Self> + 'static {
+				pub fn all() -> impl Iterator<Item = Self> + Clone + 'static {
 					use strum::IntoEnumIterator;
 					Self::iter()
 				}
@@ -346,7 +346,7 @@ macro_rules! assets {
 					}).ok()
 				}
 
-				pub fn iter(&self) -> impl Iterator<Item = (Asset, &T)> {
+				pub fn iter(&self) -> impl Iterator<Item = (Asset, &T)> + Clone {
 					Asset::all().map(|asset| {
 						(asset, &self[asset])
 					})
@@ -381,6 +381,9 @@ macro_rules! assets {
 				use codec::{MaxEncodedLen, Encode, Decode};
 				use scale_info::TypeInfo;
 				use serde::{Serialize, Deserialize};
+				use strum_macros::EnumIter;
+				use core::ops::IndexMut;
+				use core::ops::Index;
 
 				pub type Chain = $crate::chains::$chain_variant;
 				pub const GAS_ASSET: Asset = {
@@ -399,7 +402,21 @@ macro_rules! assets {
 					}
 				};
 
-				#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Hash, Serialize, Deserialize)]
+				#[derive(
+					Copy,
+					Clone,
+					Debug,
+					PartialEq,
+					Eq,
+					Encode,
+					Decode,
+					TypeInfo,
+					MaxEncodedLen,
+					Hash,
+					Serialize,
+					Deserialize,
+					EnumIter
+				)]
 				pub enum Asset {
 					$(
 						#[serde(rename = $asset_json)]
@@ -432,6 +449,12 @@ macro_rules! assets {
 						}
 					}
 				}
+				impl Asset {
+					pub fn all() -> impl Iterator<Item = Self> + Clone + 'static {
+						use strum::IntoEnumIterator;
+						Self::iter()
+					}
+				}
 
 				#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
 				pub enum AssetError {
@@ -461,6 +484,27 @@ macro_rules! assets {
 					pub fn map<R, F: FnMut(T) -> R>(self, mut f: F) -> AssetMap<R> {
 						AssetMap {
 							$($asset_member: f(self.$asset_member),)+
+						}
+					}
+
+					pub fn iter(&self) -> impl Iterator<Item = (Asset, &T)> + Clone {
+						Asset::all().map(|asset| {
+							(asset, &self[asset])
+						})
+					}
+				}
+				impl<T> IndexMut<Asset> for AssetMap<T> {
+					fn index_mut(&mut self, index: Asset) -> &mut T {
+						match index {
+							$(Asset::$asset_variant => &mut self.$asset_member,)+
+						}
+					}
+				}
+				impl<T> Index<Asset> for AssetMap<T> {
+					type Output = T;
+					fn index(&self, index: Asset) -> &T {
+						match index {
+							$(Asset::$asset_variant => &self.$asset_member,)+
 						}
 					}
 				}
@@ -728,5 +772,60 @@ mod test_assets {
 		assert_err!(serde_json::from_str::<any::Asset>("\"eTh\""));
 		assert_err!(serde_json::from_str::<any::Asset>("\"dOt\""));
 		assert_err!(serde_json::from_str::<any::Asset>("\"bTc\""));
+	}
+
+	#[test]
+	fn test_maps() {
+		macro_rules! generic_tests {
+			($($module:ident ($example_variant:ident $(,$example_variants:ident)*)),+) => {
+				const VALUE: u32 = 5;
+
+				$({
+					let asset_map = $module::AssetMap::from_fn(|_asset| VALUE);
+
+					for asset in $module::Asset::all() {
+						assert_eq!(VALUE, asset_map[asset]);
+					}
+
+					for ((key_asset, value), asset) in asset_map.iter().zip($module::Asset::all()) {
+						assert_eq!(key_asset, asset);
+						assert_eq!(VALUE, *value);
+					}
+
+					for (key, value) in $module::AssetMap::from_fn(|asset| asset).iter() {
+						assert_eq!(key, *value);
+					}
+
+					{
+
+						let mut asset_map = $module::AssetMap::<u32>::default();
+
+						asset_map[$module::Asset::$example_variant] = VALUE;
+
+						assert_eq!(asset_map[$module::Asset::$example_variant], VALUE);
+						$(
+							assert_eq!(asset_map[$module::Asset::$example_variants], u32::default());
+						)*
+
+						asset_map[$module::Asset::$example_variant] = u32::default();
+						assert_eq!(asset_map[$module::Asset::$example_variant], u32::default());
+
+						assert_eq!(asset_map, $module::AssetMap::<u32>::default());
+					}
+
+				}
+			)+
+			};
+		}
+
+		generic_tests!(
+			any(Eth, Btc, Usdc),
+			eth(Eth, Usdc),
+			btc(Btc),
+			dot(Dot),
+			arb(ArbEth, ArbUsdc)
+		);
+
+		assert_ok!(any::AssetMap::try_from_iter(any::AssetMap::from_fn(|_asset| 1u32).iter()));
 	}
 }
