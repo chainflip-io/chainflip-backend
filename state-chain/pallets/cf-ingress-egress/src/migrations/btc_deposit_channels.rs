@@ -90,6 +90,7 @@ impl<T: Config<Instance3, TargetChain = Bitcoin>> OnRuntimeUpgrade for Migration
 					expires_at: old_channel.expires_at,
 					action: old_channel.action,
 					boost_fee: 0,
+					boost_status: BoostStatus::NotBoosted,
 				})
 			},
 		);

@@ -38,6 +38,7 @@ serde = { version = '1.0.195', default-features = false, features = [
 log = { version = '0.4.16', default-features = false }
 itertools = { version = '0.11.0', default-features = false }
 arrayref = '0.3.6'
+strum = { default-features = false, version = '0.24' }
 
 # Substrate packages
 ss58-registry = { version = '1.41', optional = true }
@@ -81,6 +82,7 @@ std = [
   'sp-io/std',
   'dep:ss58-registry',
   'dep:anyhow',
+  'strum/std',
 ]
 runtime-benchmarks = [
   'cf-primitives/runtime-benchmarks',
