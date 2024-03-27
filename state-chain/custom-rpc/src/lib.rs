@@ -374,7 +374,7 @@ pub trait CustomApi {
 		&self,
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<AssetWithAmount>>;
+	) -> RpcResult<any::AssetMap<U256>>;
 	#[method(name = "penalties")]
 	fn cf_penalties(
 		&self,
@@ -527,7 +527,7 @@ pub trait CustomApi {
 	) -> RpcResult<RpcPrewitnessedSwap>;
 
 	#[method(name = "supported_assets")]
-	fn cf_supported_assets(&self) -> RpcResult<HashMap<ForeignChain, Vec<Asset>>>;
+	fn cf_supported_assets(&self) -> RpcResult<Vec<Asset>>;
 
 	#[method(name = "failed_call_ethereum")]
 	fn cf_failed_call_ethereum(
@@ -811,16 +811,16 @@ where
 		&self,
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<AssetWithAmount>> {
-		Ok(self
-			.client
+	) -> RpcResult<any::AssetMap<U256>> {
+		self.client
 			.runtime_api()
 			.cf_asset_balances(self.unwrap_or_best(at), account_id)
 			.map_err(to_rpc_error)
-			.and_then(|result| result.map_err(map_dispatch_error))?
-			.into_iter()
-			.map(|(asset, balance)| AssetWithAmount { asset, amount: balance })
-			.collect::<Vec<_>>())
+			.and_then(|result| {
+				result
+					.map(|asset_balances| asset_balances.map(Into::into))
+					.map_err(map_dispatch_error)
+			})
 	}
 
 	fn cf_penalties(
@@ -1303,12 +1303,8 @@ where
 		})
 	}
 
-	fn cf_supported_assets(&self) -> RpcResult<HashMap<ForeignChain, Vec<Asset>>> {
-		let mut chain_to_asset: HashMap<ForeignChain, Vec<Asset>> = HashMap::new();
-		Asset::all().for_each(|asset| {
-			chain_to_asset.entry((asset).into()).or_default().push(asset);
-		});
-		Ok(chain_to_asset)
+	fn cf_supported_assets(&self) -> RpcResult<Vec<Asset>> {
+		Ok(Asset::all().collect())
 	}
 
 	fn cf_failed_call_ethereum(

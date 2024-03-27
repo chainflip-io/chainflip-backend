@@ -345,6 +345,12 @@ macro_rules! assets {
 						iter.clone().find(|(asset, _t)| *asset == required_asset).ok_or(()).map(|x| x.1)
 					}).ok()
 				}
+
+				pub fn iter(&self) -> impl Iterator<Item = (Asset, &T)> {
+					Asset::all().map(|asset| {
+						(asset, &self[asset])
+					})
+				}
 			}
 
 			impl<T> IndexMut<Asset> for AssetMap<T> {

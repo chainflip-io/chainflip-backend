@@ -11,7 +11,7 @@ use chainflip_api::{
 		ApiWaitForResult, LpApi, PoolPairsMap, Side, Tick,
 	},
 	primitives::{
-		chains::{Bitcoin, Ethereum, Polkadot},
+		chains::{assets::any::AssetMap, Bitcoin, Ethereum, Polkadot},
 		AccountRole, Asset, ForeignChain, Hash, RedemptionAmount,
 	},
 	settings::StateChain,
@@ -29,10 +29,10 @@ use jsonrpsee::{
 	SubscriptionSink,
 };
 use pallet_cf_pools::{AssetPair, IncreaseOrDecrease, OrderId, RangeOrderSize};
-use rpc_types::{AssetBalance, OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
+use rpc_types::{OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
 use sp_core::U256;
 use std::{
-	collections::{BTreeMap, HashMap, HashSet},
+	collections::{HashMap, HashSet},
 	ops::Range,
 	path::PathBuf,
 	sync::Arc,
@@ -90,12 +90,6 @@ pub mod rpc_types {
 		pub ethereum: Vec<SwapChannelInfo<Ethereum>>,
 		pub bitcoin: Vec<SwapChannelInfo<Bitcoin>>,
 		pub polkadot: Vec<SwapChannelInfo<Polkadot>>,
-	}
-
-	#[derive(Serialize, Deserialize, Clone)]
-	pub struct AssetBalance {
-		pub asset: Asset,
-		pub balance: NumberOrHex,
 	}
 }
 
@@ -177,7 +171,7 @@ pub trait Rpc {
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>>;
 
 	#[method(name = "asset_balances")]
-	async fn asset_balances(&self) -> RpcResult<BTreeMap<ForeignChain, Vec<AssetBalance>>>;
+	async fn asset_balances(&self) -> RpcResult<AssetMap<U256>>;
 
 	#[method(name = "get_open_swap_channels")]
 	async fn get_open_swap_channels(&self) -> RpcResult<OpenSwapChannels>;
@@ -294,9 +288,8 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	/// Returns a list of all assets and their free balance in json format
-	async fn asset_balances(&self) -> RpcResult<BTreeMap<ForeignChain, Vec<AssetBalance>>> {
-		let cf_asset_balances = self
-			.api
+	async fn asset_balances(&self) -> RpcResult<AssetMap<U256>> {
+		self.api
 			.state_chain_client
 			.base_rpc_client
 			.raw_rpc_client
@@ -304,16 +297,7 @@ impl RpcServer for RpcServerImpl {
 				self.api.state_chain_client.account_id(),
 				Some(self.api.state_chain_client.latest_finalized_block().hash),
 			)
-			.await?;
-
-		let mut lp_asset_balances: BTreeMap<ForeignChain, Vec<AssetBalance>> = BTreeMap::new();
-		for custom_rpc::AssetWithAmount { asset, amount } in cf_asset_balances {
-			lp_asset_balances
-				.entry(asset.into())
-				.or_default()
-				.push(AssetBalance { asset, balance: amount.into() });
-		}
-		Ok(lp_asset_balances)
+			.await
 	}
 
 	async fn update_range_order(
