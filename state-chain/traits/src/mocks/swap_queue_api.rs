@@ -36,10 +36,7 @@ impl SwapQueueApi for MockSwapQueueApi {
 		swap_type: SwapType,
 	) -> (u64, Self::BlockNumber) {
 		Self::mutate_value(SWAP_QUEUE, |queue: &mut Option<Vec<MockSwap>>| {
-			match queue {
-				Some(queue) => queue.push(MockSwap { from, to, amount, swap_type }),
-				None => *queue = Some(vec![MockSwap { from, to, amount, swap_type }]),
-			};
+			queue.get_or_insert(vec![]).push(MockSwap { from, to, amount, swap_type });
 		});
 		(Self::get_value::<Vec<MockSwap>>(SWAP_QUEUE).unwrap().len() as u64, 0)
 	}

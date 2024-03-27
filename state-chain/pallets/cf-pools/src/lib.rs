@@ -1970,7 +1970,7 @@ impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
 	}
 
 	/// Calculate the amount of input asset needed to get the desired amount of output asset,
-	/// subject to an available input amount, desired output amount and network fee. The actual
+	/// subject to an available input amount and network fee. The actual
 	/// output amount is not guaranteed to be close to the desired amount.
 	///
 	/// Returns the input amount needed to get the desired output.
@@ -1992,7 +1992,7 @@ impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
 		let input_asset = input_asset.into();
 		let output_asset = output_asset.into();
 		if input_asset == output_asset {
-			return Some(available_input_amount.saturating_sub(desired_output_amount))
+			return Some(available_input_amount.min(desired_output_amount))
 		}
 
 		let available_output_amount = with_transaction_unchecked(|| {

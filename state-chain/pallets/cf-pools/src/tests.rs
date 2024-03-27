@@ -1059,6 +1059,23 @@ fn asset_conversion() {
 			LiquidityPools::calculate_asset_conversion(Asset::Flip, AVAILABLE, Asset::Eth, DESIRED)
 				.unwrap();
 		assert!(required > 0 && required <= AVAILABLE);
+
+		// Same asset and desired output is available.
+		assert_eq!(
+			LiquidityPools::calculate_asset_conversion(Asset::Eth, AVAILABLE, Asset::Eth, DESIRED),
+			Some(DESIRED)
+		);
+
+		// Same asset and desired output is not fully available.
+		assert_eq!(
+			LiquidityPools::calculate_asset_conversion(
+				Asset::Eth,
+				DESIRED,
+				Asset::Eth,
+				DESIRED * 2
+			),
+			Some(DESIRED)
+		);
 	});
 }
 

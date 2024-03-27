@@ -1407,11 +1407,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				fee_estimate,
 			)
 			.unwrap_or_else(|| {
-				log::warn!(
-						"Unable to convert input to gas for input of {:?} ${:?}. Ignoring transaction fees.",
-						available_amount,
-						asset,
-					);
+				log::warn!("Unable to convert input to gas for input of {available_amount:?} ${asset:?}. Ignoring transaction fees.");
 				<T::TargetChain as Chain>::ChainAmount::zero()
 			});
 
