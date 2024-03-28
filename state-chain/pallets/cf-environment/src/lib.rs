@@ -543,7 +543,7 @@ impl<T: Config> Pallet<T> {
 						output_amount +
 							number_of_outputs * fee_per_output_utxo +
 							min_fee_required_per_tx,
-						Some(Self::consolidation_parameters().consolidation_size),
+						Some(Self::consolidation_parameters().consolidation_threshold),
 					)
 					.map_err(|error| {
 						log::error!(
