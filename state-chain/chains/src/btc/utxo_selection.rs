@@ -1,7 +1,7 @@
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_core::RuntimeDebug;
-use sp_std::{vec, vec::Vec};
+use sp_std::vec::Vec;
 
 use super::{BitcoinFeeInfo, BtcAmount, Utxo};
 
@@ -107,27 +107,49 @@ pub fn select_utxos_from_pool(
 	}
 }
 
+/// Attempt to select Utxos to ne consolidated into the current vault.
+///
+/// There are 2 situation where utxos need to be consolidated:
+/// 1. When the number of Utxos available is >= `consolidation_threshold` - here we consolidate the
+///    utxos into the current vault, reducing the number of utxos and future fees.
+/// 2. When there are utxos from the previous vault. We consolidate these utxos to the current
+///    vault.
+///
+/// Utxos that have a zero (or below) net value (amount - fees) are ignored. They will eventually
+/// become stale if the fees do not come down, and is discarded when they are no longer usable.
 pub fn select_utxos_for_consolidation(
+	current_key: [u8; 32],
 	available_utxos: &mut Vec<Utxo>,
 	fee_info: &BitcoinFeeInfo,
-	params: ConsolidationParameters,
+	consolidation_parameter: ConsolidationParameters,
 ) -> Vec<Utxo> {
+	// filter out utxos whose net value is 0
 	let (mut spendable, mut dust) = available_utxos
 		.drain(..)
 		.partition::<Vec<_>, _>(|utxo| utxo.net_value(fee_info) > 0u64);
 
-	if spendable.len() >= params.consolidation_threshold as usize {
-		let mut remaining = spendable.split_off(params.consolidation_size as usize);
+	if spendable.len() >= consolidation_parameter.consolidation_threshold as usize {
+		// Take a limited number of utxos to be consolidated. Return the rest to storage.
+		let mut remaining =
+			spendable.split_off(consolidation_parameter.consolidation_size as usize);
+
 		// put remaining and dust back:
 		available_utxos.append(&mut remaining);
 		available_utxos.append(&mut dust);
 		spendable
 	} else {
-		// Not strictly necessary (the caller is expected roll back the change), but
-		// let's put everything back just as a precaution:
+		// Transfer old utxos into the current vault. Remaining utxos must be > consolidation_size.
+		// Utxos are pre-filtered. Only utxos that belong to current or previous vaults are
+		// remaining.
+		let old_utxos = spendable
+			.extract_if(|utxo: &mut Utxo| utxo.deposit_address.pubkey_x != current_key)
+			.take(consolidation_parameter.consolidation_size as usize)
+			.collect::<Vec<_>>();
+
 		available_utxos.append(&mut spendable);
 		available_utxos.append(&mut dust);
-		vec![]
+
+		old_utxos
 	}
 }
 
@@ -180,14 +202,14 @@ mod tests {
 		};
 	}
 
-	fn build_utxo(amount: BtcAmount, salt: u32) -> Utxo {
+	fn build_utxo(amount: BtcAmount, salt: u32, key: Option<[u8; 32]>) -> Utxo {
 		Utxo {
 			id: UtxoId::default(),
 			amount,
 			deposit_address: DepositAddress::new(
-				hex_literal::hex!(
+				key.unwrap_or(hex_literal::hex!(
 					"0000111122223333444455556666777788889999AAAABBBBCCCCDDDDEEEEFFFF"
-				),
+				)),
 				salt,
 			),
 		}
@@ -197,7 +219,7 @@ mod tests {
 		[1100u64, 250u64, 5000u64, 80u64, 150u64, 200u64, 190u64, 410u64, 10000u64, 7680u64]
 			.iter()
 			.zip(0u32..)
-			.map(|x| build_utxo(*x.0, x.1))
+			.map(|x| build_utxo(*x.0, x.1, None))
 			.collect()
 	}
 
@@ -309,5 +331,89 @@ mod tests {
 		assert!(!ConsolidationParameters::new(0, 0).are_valid());
 		assert!(!ConsolidationParameters::new(1, 1).are_valid());
 		assert!(!ConsolidationParameters::new(0, 10).are_valid());
+	}
+
+	#[test]
+	fn test_consolidation_path_1() {
+		let key1 = [0xAA; 32];
+		let key2 = [0xBB; 32];
+		let fee_info = BitcoinFeeInfo { sats_per_kilobyte: 1_000 };
+		let parameter = ConsolidationParameters::new(4, 2);
+
+		let mut utxos = vec![
+			build_utxo(1, 0, Some(key1)),
+			build_utxo(1_000, 0, Some(key1)),
+			build_utxo(2_000, 0, Some(key2)),
+			build_utxo(3_000, 0, Some(key1)),
+			build_utxo(4_000, 0, Some(key2)),
+		];
+		assert_eq!(
+			select_utxos_for_consolidation(key1, &mut utxos, &fee_info, parameter,),
+			vec![build_utxo(1_000, 0, Some(key1)), build_utxo(2_000, 0, Some(key2))]
+		);
+		assert_eq!(
+			utxos,
+			vec![
+				build_utxo(3_000, 0, Some(key1)),
+				build_utxo(4_000, 0, Some(key2)),
+				build_utxo(1, 0, Some(key1)),
+			]
+		);
+	}
+
+	#[test]
+	fn test_consolidation_no_consolidation() {
+		let key1 = [0xAA; 32];
+		let fee_info = BitcoinFeeInfo { sats_per_kilobyte: 1_000 };
+		let parameter = ConsolidationParameters::new(10, 2);
+
+		let mut utxos = vec![
+			build_utxo(1, 0, Some(key1)),
+			build_utxo(1_000, 0, Some(key1)),
+			build_utxo(2_000, 0, Some(key1)),
+			build_utxo(3_000, 0, Some(key1)),
+			build_utxo(4_000, 0, Some(key1)),
+		];
+		assert_eq!(select_utxos_for_consolidation(key1, &mut utxos, &fee_info, parameter,), vec![]);
+
+		assert_eq!(
+			utxos,
+			vec![
+				build_utxo(1_000, 0, Some(key1)),
+				build_utxo(2_000, 0, Some(key1)),
+				build_utxo(3_000, 0, Some(key1)),
+				build_utxo(4_000, 0, Some(key1)),
+				build_utxo(1, 0, Some(key1)),
+			]
+		);
+	}
+
+	#[test]
+	fn test_consolidation_partial_previous_utxos() {
+		let key1 = [0xAA; 32];
+		let key2 = [0xBB; 32];
+		let fee_info = BitcoinFeeInfo { sats_per_kilobyte: 1_000 };
+		let parameter = ConsolidationParameters::new(10, 2);
+
+		let mut utxos = vec![
+			build_utxo(1, 0, Some(key1)),
+			build_utxo(1_000, 0, Some(key1)),
+			build_utxo(2_000, 0, Some(key2)),
+			build_utxo(3_000, 0, Some(key2)),
+			build_utxo(4_000, 0, Some(key2)),
+		];
+		assert_eq!(
+			select_utxos_for_consolidation(key1, &mut utxos, &fee_info, parameter,),
+			vec![build_utxo(2_000, 0, Some(key2)), build_utxo(3_000, 0, Some(key2)),]
+		);
+
+		assert_eq!(
+			utxos,
+			vec![
+				build_utxo(1_000, 0, Some(key1)),
+				build_utxo(4_000, 0, Some(key2)),
+				build_utxo(1, 0, Some(key1)),
+			]
+		);
 	}
 }

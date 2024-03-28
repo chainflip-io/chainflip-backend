@@ -663,10 +663,6 @@ pub mod pallet {
 				let (broadcast_id, _) =
 					T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
 				Self::deposit_event(Event::<T, I>::UtxoConsolidation { broadcast_id });
-				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
-					broadcast_id,
-					egress_ids: Default::default(),
-				});
 			};
 
 			// Egress all scheduled Cross chain messages
