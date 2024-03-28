@@ -875,8 +875,10 @@ pub mod pallet {
 			}
 
 			weight +
-				T::Weights::on_initialize(T::EpochInfo::current_authority_count(), num_retries) +
-				T::Weights::report_offenders(num_offenders as AuthorityCount)
+				T::Weights::on_initialize_no_keygen(
+					T::EpochInfo::current_authority_count(),
+					num_retries,
+				) + T::Weights::report_offenders(num_offenders as AuthorityCount)
 		}
 	}
 
@@ -1347,7 +1349,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					"Can't have success unless all candidates responded"
 				);
 				on_success_outcome(new_public_key);
-				T::Weights::on_initialize_success()
+				T::Weights::on_initialize_keygen_success_no_pending_sig_ceremonies()
 			},
 			Err(offenders) => {
 				let offenders_len = offenders.len();
@@ -1359,7 +1361,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					Default::default()
 				};
 				on_failure_outcome(offenders);
-				T::Weights::on_initialize_failure(offenders_len as u32)
+				T::Weights::on_initialize_keygen_failure_no_pending_sig_ceremonies(
+					offenders_len as u32,
+				)
 			},
 		};
 		PendingSince::kill();
