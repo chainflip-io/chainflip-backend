@@ -70,7 +70,7 @@ pub fn settings_and_run_main(
 		},
 	};
 
-	match tokio::runtime::Builder::new_current_thread()
+	match tokio::runtime::Builder::new_multi_thread()
 		.enable_all()
 		.build()
 		.unwrap()
