@@ -1251,18 +1251,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 
 			// For each fee tier, get the amount that the pool is boosting and the boost fee
-			let (provided_amount, fee) = BoostPools::<T, I>::mutate(asset, boost_tier, |pool| {
+			let (boosted_amount, fee) = BoostPools::<T, I>::mutate(asset, boost_tier, |pool| {
 				let pool = match pool {
-					Some(pool)
-						if pool.get_available_amount() == TargetChainAmount::<T, I>::from(0u32) =>
-					{
+					Some(pool) if pool.get_available_amount() == Zero::zero() => {
 						return Ok::<_, DispatchError>((0u32.into(), 0u32.into()));
 					},
-					Some(pool) => pool,
 					None => {
 						// Pool not existing for some reason is equivalent to not having funds:
 						return Ok::<_, DispatchError>((0u32.into(), 0u32.into()));
 					},
+					Some(pool) => pool,
 				};
 
 				let full_amount_fee = Self::compute_fee(remaining_amount, boost_tier as u16);
@@ -1274,17 +1272,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				if pool.get_available_amount() >= required_amount.saturating_sub(full_amount_fee) {
 					pool.use_funds_for_boosting(boost_id, required_amount, full_amount_fee)?;
-					Ok((required_amount, full_amount_fee))
+					Ok((remaining_amount, full_amount_fee))
 				} else {
 					let provided_amount = pool.get_available_amount();
 					let fee = Self::compute_fee(provided_amount, boost_tier as u16);
 					pool.use_funds_for_boosting(boost_id, provided_amount, fee)?;
 
-					Ok((provided_amount, fee))
+					Ok((provided_amount.saturating_add(fee), fee))
 				}
 			})?;
 
-			remaining_amount.saturating_reduce(provided_amount.saturating_add(fee));
+			remaining_amount.saturating_reduce(boosted_amount);
 			total_fee_amount.saturating_accrue(fee);
 
 			if remaining_amount == 0u32.into() {
@@ -1372,7 +1370,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					},
 					Err(err) => {
 						log::debug!(
-							"Deposit (id: {id}) of {amount:?} {asset:?} could not be boosted: {err:?}"
+							"Deposit (id: {id}) of {amount:?} {asset:?} and boost fee {boost_fee} could not be boosted: {err:?}"
 						);
 					},
 				}
@@ -1549,17 +1547,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				deposits.register_deposit(deposit_amount)
 			});
 
-			for fee_tier in used_pools {
-				BoostPools::<T, I>::mutate(asset, fee_tier, |maybe_pool| {
+			for boost_tier in used_pools {
+				BoostPools::<T, I>::mutate(asset, boost_tier, |maybe_pool| {
 					if let Some(pool) = maybe_pool {
-						for (booster_id, amount) in pool.on_finalised_deposit(boost_id) {
+						for (booster_id, finalised_withdrawn_amount) in
+							pool.on_finalised_deposit(boost_id)
+						{
 							if let Err(err) = T::LpBalance::try_credit_account(
 								&booster_id,
 								asset.into(),
-								amount.into(),
+								finalised_withdrawn_amount.into(),
 							) {
 								log_or_panic!(
-									"Failed to credit booster account {} after unlock of {amount:?} {asset:?}: {:?}",
+									"Failed to credit booster account {} after unlock of {finalised_withdrawn_amount:?} {asset:?}: {:?}",
 									booster_id, err
 								);
 							}

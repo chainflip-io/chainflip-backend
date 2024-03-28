@@ -84,8 +84,8 @@ pub struct BoostPool<AccountId, C: Chain> {
 	amounts: BTreeMap<AccountId, ScaledAmount<C>>,
 	// Boosted deposits awaiting finalisation and how much of them is owed to which booster
 	pending_boosts: BTreeMap<BoostId, BTreeMap<AccountId, ScaledAmount<C>>>,
-	// Stores booster who have indicated that they want to stop boosting along with
-	// the pending deposits they have to wait to be finalised
+	// Stores boosters who have indicated that they want to stop boosting along with
+	// the pending deposits that they have to wait to be finalised
 	pending_withdrawals: BTreeMap<AccountId, BTreeSet<BoostId>>,
 }
 
@@ -127,10 +127,10 @@ where
 	pub(crate) fn use_funds_for_boosting(
 		&mut self,
 		boost_id: BoostId,
-		amount_needed: C::ChainAmount,
+		required_amount: C::ChainAmount,
 		boost_fee: C::ChainAmount,
 	) -> Result<(), &'static str> {
-		let amount_needed = ScaledAmount::from_chain_amount(amount_needed);
+		let amount_needed = ScaledAmount::from_chain_amount(required_amount);
 		let fees = ScaledAmount::from_chain_amount(boost_fee);
 
 		let current_total_active_amount = self.available_amount;
@@ -143,7 +143,8 @@ where
 		let mut amounts = self.amounts.iter_mut();
 
 		// We must have at least one entry because the available amount is non-zero:
-		let first_entry = amounts.next().ok_or("No boost amount entries found")?;
+		let (first_booster_account, first_booster_amount) =
+			amounts.next().ok_or("No boost amount entries found")?;
 
 		let mut total_contributed = ScaledAmount::<C>::default();
 		let mut to_receive_recorded = ScaledAmount::default();
@@ -189,8 +190,8 @@ where
 		// to negate any rounding errors made so far:
 		let remaining_required = amount_needed.saturating_sub(total_contributed);
 		let remaining_to_receive = amount_to_receive.saturating_sub(to_receive_recorded);
-		first_entry.1.saturating_reduce(remaining_required);
-		boosters_to_receive.insert(first_entry.0.clone(), remaining_to_receive);
+		first_booster_amount.saturating_reduce(remaining_required);
+		boosters_to_receive.insert(first_booster_account.clone(), remaining_to_receive);
 
 		// For every active booster, record how much of this particular deposit they are owed,
 		// (which is their pool share at the time of boosting):
@@ -233,16 +234,16 @@ where
 		unlocked_funds
 	}
 
-	pub fn on_lost_deposit(&mut self, deposit_id: BoostId) {
-		let Some(booster_contributions) = self.pending_boosts.remove(&deposit_id) else {
-			log_or_panic!("Failed to find boost record for a lost deposit: {deposit_id}");
+	pub fn on_lost_deposit(&mut self, boost_id: BoostId) {
+		let Some(booster_contributions) = self.pending_boosts.remove(&boost_id) else {
+			log_or_panic!("Failed to find boost record for a lost deposit: {boost_id}");
 			return;
 		};
 
 		for booster_id in booster_contributions.keys() {
 			if let Some(pending_deposits) = self.pending_withdrawals.get_mut(booster_id) {
-				if !pending_deposits.remove(&deposit_id) {
-					log::warn!("Withdrawing booster contributed to boost {deposit_id}, but it is not in pending withdrawals");
+				if !pending_deposits.remove(&boost_id) {
+					log::warn!("Withdrawing booster contributed to boost {boost_id}, but it is not in pending withdrawals");
 				}
 
 				if pending_deposits.is_empty() {
