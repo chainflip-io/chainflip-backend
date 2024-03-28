@@ -335,7 +335,11 @@ pub mod pallet {
 
 			for asset in TargetChainAsset::<T, I>::iter() {
 				for pool_tier in BoostPoolTier::iter() {
-					BoostPools::<T, I>::set(asset, pool_tier, Some(BoostPool::default()));
+					BoostPools::<T, I>::set(
+						asset,
+						pool_tier,
+						Some(BoostPool::new(pool_tier as BasisPoints)),
+					);
 				}
 			}
 
@@ -1263,23 +1267,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					Some(pool) => pool,
 				};
 
-				let full_amount_fee = Self::compute_fee(remaining_amount, boost_tier as u16);
-
-				// How much is needed after pool's fee is deducted:
-				let required_amount = remaining_amount.saturating_sub(full_amount_fee);
-
 				used_pools.push(boost_tier);
 
-				if pool.get_available_amount() >= required_amount.saturating_sub(full_amount_fee) {
-					pool.use_funds_for_boosting(boost_id, required_amount, full_amount_fee)?;
-					Ok((remaining_amount, full_amount_fee))
-				} else {
-					let provided_amount = pool.get_available_amount();
-					let fee = Self::compute_fee(provided_amount, boost_tier as u16);
-					pool.use_funds_for_boosting(boost_id, provided_amount, fee)?;
-
-					Ok((provided_amount.saturating_add(fee), fee))
-				}
+				pool.provide_funds_for_boosting(boost_id, remaining_amount).map_err(Into::into)
 			})?;
 
 			remaining_amount.saturating_reduce(boosted_amount);
@@ -1632,11 +1622,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 
 		Ok(())
-	}
-
-	fn compute_fee(amount: TargetChainAmount<T, I>, fee: BasisPoints) -> TargetChainAmount<T, I> {
-		const BASIS_POINTS_PER_MILLION: u32 = 100;
-		Permill::from_parts(fee as u32 * BASIS_POINTS_PER_MILLION) * amount
 	}
 
 	fn expiry_and_recycle_block_height(

@@ -1,7 +1,6 @@
 use super::*;
 use cf_chains::Ethereum;
 use cf_primitives::{AssetAmount, EthAmount, FLIPPERINOS_PER_FLIP};
-use frame_support::assert_ok;
 
 use sp_std::collections::btree_set::BTreeSet;
 
@@ -85,7 +84,7 @@ fn test_scaled_amount() {
 
 #[test]
 fn adding_funds() {
-	let mut pool = TestPool::default();
+	let mut pool = TestPool::new(5);
 
 	pool.add_funds(BOOSTER_1, 1000);
 	check_pool(&pool, [(BOOSTER_1, 1000)]);
@@ -99,7 +98,7 @@ fn adding_funds() {
 
 #[test]
 fn withdrawing_funds() {
-	let mut pool = TestPool::default();
+	let mut pool = TestPool::new(5);
 	pool.add_funds(BOOSTER_1, 1000);
 	pool.add_funds(BOOSTER_2, 1000);
 	pool.add_funds(BOOSTER_3, 1000);
@@ -119,7 +118,7 @@ fn withdrawing_funds() {
 
 #[test]
 fn withdrawing_twice_is_no_op() {
-	let mut pool = TestPool::default();
+	let mut pool = TestPool::new(0);
 	pool.add_funds(BOOSTER_1, 1000);
 	pool.add_funds(BOOSTER_2, 1000);
 
@@ -135,14 +134,14 @@ fn withdrawing_twice_is_no_op() {
 
 #[test]
 fn boosting_with_fees() {
-	let mut pool = TestPool::default();
+	let mut pool = TestPool::new(100);
 
 	pool.add_funds(BOOSTER_1, 1000);
 	pool.add_funds(BOOSTER_2, 2000);
 
 	check_pool(&pool, [(BOOSTER_1, 1000), (BOOSTER_2, 2000)]);
 
-	assert_ok!(pool.use_funds_for_boosting(BOOST_1, 1000, 10));
+	assert_eq!(pool.provide_funds_for_boosting(BOOST_1, 1010), Ok((1010, 10)));
 
 	// The recorded amounts include fees (1 is missing due to rounding errors in *test* code)
 	check_pending_boosts(&pool, [(BOOST_1, vec![(BOOSTER_1, 333 + 3), (BOOSTER_2, 667 + 6)])]);
@@ -154,12 +153,12 @@ fn boosting_with_fees() {
 
 #[test]
 fn adding_funds_during_pending_withdrawal_from_same_booster() {
-	let mut pool = TestPool::default();
+	let mut pool = TestPool::new(0);
 
 	pool.add_funds(BOOSTER_1, 1000);
 	pool.add_funds(BOOSTER_2, 1000);
 
-	assert_ok!(pool.use_funds_for_boosting(BOOST_1, 1000, 0));
+	assert_eq!(pool.provide_funds_for_boosting(BOOST_1, 1000), Ok((1000, 0)));
 	check_pool(&pool, [(BOOSTER_1, 500), (BOOSTER_2, 500)]);
 	check_pending_boosts(&pool, [(BOOST_1, vec![(BOOSTER_1, 500), (BOOSTER_2, 500)])]);
 
@@ -182,11 +181,11 @@ fn adding_funds_during_pending_withdrawal_from_same_booster() {
 
 #[test]
 fn withdrawing_funds_before_finalisation() {
-	let mut pool = TestPool::default();
+	let mut pool = TestPool::new(0);
 	pool.add_funds(BOOSTER_1, 1000);
 	pool.add_funds(BOOSTER_2, 1000);
 
-	assert_ok!(pool.use_funds_for_boosting(BOOST_1, 1000, 0));
+	assert_eq!(pool.provide_funds_for_boosting(BOOST_1, 1000), Ok((1000, 0)));
 	check_pool(&pool, [(BOOSTER_1, 500), (BOOSTER_2, 500)]);
 
 	// Only some of the funds are available immediately, and some are in pending withdrawals:
@@ -199,10 +198,11 @@ fn withdrawing_funds_before_finalisation() {
 
 #[test]
 fn adding_funds_with_pending_withdrawals() {
-	let mut pool = TestPool::default();
+	let mut pool = TestPool::new(0);
 	pool.add_funds(BOOSTER_1, 1000);
 	pool.add_funds(BOOSTER_2, 1000);
-	assert_ok!(pool.use_funds_for_boosting(BOOST_1, 1000, 0));
+
+	assert_eq!(pool.provide_funds_for_boosting(BOOST_1, 1000), Ok((1000, 0)));
 
 	check_pool(&pool, [(BOOSTER_1, 500), (BOOSTER_2, 500)]);
 
@@ -219,22 +219,22 @@ fn adding_funds_with_pending_withdrawals() {
 
 #[test]
 fn deposit_is_lost_no_withdrawal() {
-	let mut pool = TestPool::default();
+	let mut pool = TestPool::new(0);
 	pool.add_funds(BOOSTER_1, 1000);
 	pool.add_funds(BOOSTER_2, 1000);
 	check_pool(&pool, [(BOOSTER_1, 1000), (BOOSTER_2, 1000)]);
 
-	assert_ok!(pool.use_funds_for_boosting(BOOST_1, 1000, 0));
+	assert_eq!(pool.provide_funds_for_boosting(BOOST_1, 1000), Ok((1000, 0)));
 	pool.on_lost_deposit(BOOST_1);
 	check_pool(&pool, [(BOOSTER_1, 500), (BOOSTER_2, 500)]);
 }
 
 #[test]
 fn deposit_is_lost_while_withdrawing() {
-	let mut pool = TestPool::default();
+	let mut pool = TestPool::new(0);
 	pool.add_funds(BOOSTER_1, 1000);
 	pool.add_funds(BOOSTER_2, 1000);
-	assert_ok!(pool.use_funds_for_boosting(BOOST_1, 1000, 0));
+	assert_eq!(pool.provide_funds_for_boosting(BOOST_1, 1000), Ok((1000, 0)));
 	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok(500));
 
 	check_pool(&pool, [(BOOSTER_2, 500)]);
@@ -251,12 +251,12 @@ fn deposit_is_lost_while_withdrawing() {
 
 #[test]
 fn partially_losing_pending_withdrawals() {
-	let mut pool = TestPool::default();
+	let mut pool = TestPool::new(0);
 	pool.add_funds(BOOSTER_1, 1000);
 	pool.add_funds(BOOSTER_2, 1000);
 
-	assert_ok!(pool.use_funds_for_boosting(BOOST_1, 500, 0));
-	assert_ok!(pool.use_funds_for_boosting(BOOST_2, 1000, 0));
+	assert_eq!(pool.provide_funds_for_boosting(BOOST_1, 500), Ok((500, 0)));
+	assert_eq!(pool.provide_funds_for_boosting(BOOST_2, 1000), Ok((1000, 0)));
 
 	check_pool(&pool, [(BOOSTER_1, 250), (BOOSTER_2, 250)]);
 
@@ -297,12 +297,12 @@ fn partially_losing_pending_withdrawals() {
 
 #[test]
 fn booster_joins_then_funds_lost() {
-	let mut pool = TestPool::default();
+	let mut pool = TestPool::new(0);
 	pool.add_funds(BOOSTER_1, 1000);
 	pool.add_funds(BOOSTER_2, 1000);
 
-	assert_ok!(pool.use_funds_for_boosting(BOOST_1, 500, 0));
-	assert_ok!(pool.use_funds_for_boosting(BOOST_2, 1000, 0));
+	assert_eq!(pool.provide_funds_for_boosting(BOOST_1, 500), Ok((500, 0)));
+	assert_eq!(pool.provide_funds_for_boosting(BOOST_2, 1000), Ok((1000, 0)));
 
 	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok(250));
 	check_pool(&pool, [(BOOSTER_2, 250)]);
@@ -324,12 +324,12 @@ fn booster_joins_then_funds_lost() {
 
 #[test]
 fn booster_joins_between_boosts() {
-	let mut pool = TestPool::default();
+	let mut pool = TestPool::new(200);
 	pool.add_funds(BOOSTER_1, 1000);
 	pool.add_funds(BOOSTER_2, 1000);
 
-	assert_ok!(pool.use_funds_for_boosting(BOOST_1, 490, 10));
-	check_pool(&pool, [(BOOSTER_1, 755), (BOOSTER_2, 755)]); // why do t
+	assert_eq!(pool.provide_funds_for_boosting(BOOST_1, 500), Ok((500, 10)));
+	check_pool(&pool, [(BOOSTER_1, 755), (BOOSTER_2, 755)]);
 	check_pending_boosts(&pool, [(BOOST_1, vec![(BOOSTER_1, 250), (BOOSTER_2, 250)])]);
 
 	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok(755));
@@ -341,7 +341,7 @@ fn booster_joins_between_boosts() {
 
 	// The amount used for boosting from a given booster is proportional
 	// to their share in the available pool:
-	assert_ok!(pool.use_funds_for_boosting(BOOST_2, 980, 20));
+	assert_eq!(pool.provide_funds_for_boosting(BOOST_2, 1000), Ok((1000, 20)));
 	check_pool(&pool, [(BOOSTER_2, 486), (BOOSTER_3, 1288)]);
 	check_pending_boosts(
 		&pool,
@@ -382,13 +382,13 @@ fn booster_joins_between_boosts() {
 #[test]
 fn small_rewards_accumulate() {
 	// Booster 2 only owns a small fraction of the pool:
-	let mut pool = TestPool::default();
+	let mut pool = TestPool::new(100);
 	pool.add_funds(BOOSTER_1, 1000);
 	pool.add_funds(BOOSTER_2, 50);
 
 	const SMALL_DEPOSIT: AssetAmount = 500;
 
-	assert_ok!(pool.use_funds_for_boosting(BOOST_1, SMALL_DEPOSIT, 5));
+	assert_eq!(pool.provide_funds_for_boosting(BOOST_1, SMALL_DEPOSIT), Ok((SMALL_DEPOSIT, 5)));
 	assert_eq!(pool.on_finalised_deposit(BOOST_1), vec![]);
 
 	// BOOSTER 2 earns ~0.25 (it is rounded down when converted to AssetAmount,
@@ -397,7 +397,10 @@ fn small_rewards_accumulate() {
 
 	// 4 more boost like that and BOOSTER 2 should have withdrawable fees:
 	for boost_id in 1..=4 {
-		assert_ok!(pool.use_funds_for_boosting(boost_id, SMALL_DEPOSIT, 5));
+		assert_eq!(
+			pool.provide_funds_for_boosting(boost_id, SMALL_DEPOSIT),
+			Ok((SMALL_DEPOSIT, 5))
+		);
 		assert_eq!(pool.on_finalised_deposit(boost_id), vec![]);
 	}
 
@@ -407,10 +410,10 @@ fn small_rewards_accumulate() {
 
 #[test]
 fn use_max_available_amount() {
-	let mut pool = TestPool::default();
+	let mut pool = TestPool::new(100);
 	pool.add_funds(BOOSTER_1, 1000);
 
-	assert_ok!(pool.use_funds_for_boosting(BOOST_1, 1000, 10));
+	assert_eq!(pool.provide_funds_for_boosting(BOOST_1, 1010), Ok((1010, 10)));
 
 	check_pool(&pool, [(BOOSTER_1, 0)]);
 

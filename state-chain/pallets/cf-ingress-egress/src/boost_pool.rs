@@ -23,6 +23,12 @@ impl<C: Chain> Default for ScaledAmount<C> {
 	}
 }
 
+impl<C: Chain> PartialOrd for ScaledAmount<C> {
+	fn partial_cmp(&self, other: &Self) -> Option<scale_info::prelude::cmp::Ordering> {
+		self.val.partial_cmp(&other.val)
+	}
+}
+
 impl<C: Chain> Copy for ScaledAmount<C> {}
 
 impl<C: Chain> From<ScaledAmount<C>> for u128 {
@@ -76,8 +82,18 @@ impl<C: Chain> ScaledAmount<C> {
 	}
 }
 
+fn compute_fee<C: Chain>(amount: ScaledAmount<C>, fee: BasisPoints) -> ScaledAmount<C> {
+	const BASIS_POINTS_PER_MILLION: u32 = 100;
+	ScaledAmount {
+		val: Permill::from_parts(fee as u32 * BASIS_POINTS_PER_MILLION) * amount.val,
+		_phantom: PhantomData,
+	}
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct BoostPool<AccountId, C: Chain> {
+	// Fee charged by the pool
+	fee_bps: BasisPoints,
 	// Total available amount (not currently used in any boost)
 	available_amount: ScaledAmount<C>,
 	// Mapping from booster to the available amount they own in `available_amount`
@@ -89,22 +105,22 @@ pub struct BoostPool<AccountId, C: Chain> {
 	pending_withdrawals: BTreeMap<AccountId, BTreeSet<BoostId>>,
 }
 
-impl<AccountId, C: Chain> Default for BoostPool<AccountId, C> {
-	fn default() -> Self {
+impl<AccountId, C: Chain> BoostPool<AccountId, C>
+where
+	AccountId: PartialEq + Ord + Clone + core::fmt::Debug,
+	for<'a> &'a AccountId: PartialEq,
+	C::ChainAmount: PartialOrd,
+{
+	pub(crate) fn new(fee_bps: BasisPoints) -> Self {
 		Self {
+			fee_bps,
 			available_amount: Default::default(),
 			amounts: Default::default(),
 			pending_boosts: Default::default(),
 			pending_withdrawals: Default::default(),
 		}
 	}
-}
 
-impl<AccountId, C: Chain> BoostPool<AccountId, C>
-where
-	AccountId: PartialEq + Ord + Clone + core::fmt::Debug,
-	for<'a> &'a AccountId: PartialEq,
-{
 	fn add_funds_inner(&mut self, account_id: AccountId, added_amount: ScaledAmount<C>) {
 		// To keep things simple, we assume that the booster no longer wants to withdraw
 		// if they add more funds:
@@ -122,22 +138,46 @@ where
 		self.available_amount.into_chain_amount()
 	}
 
-	/// Records `amount_needed` as being used for boosting and to be re-distributed
-	/// among current boosters (along with the fee) upon finalisation
-	pub(crate) fn use_funds_for_boosting(
+	pub(crate) fn provide_funds_for_boosting(
 		&mut self,
 		boost_id: BoostId,
-		required_amount: C::ChainAmount,
-		boost_fee: C::ChainAmount,
-	) -> Result<(), &'static str> {
-		let amount_needed = ScaledAmount::from_chain_amount(required_amount);
-		let fees = ScaledAmount::from_chain_amount(boost_fee);
+		amount_to_boost: C::ChainAmount,
+	) -> Result<(C::ChainAmount, C::ChainAmount), &'static str> {
+		let amount_to_boost = ScaledAmount::<C>::from_chain_amount(amount_to_boost);
+		let full_amount_fee = compute_fee(amount_to_boost, self.fee_bps);
 
+		let required_amount = amount_to_boost.saturating_sub(full_amount_fee);
+
+		let (provided_amount, fee_amount) = if self.available_amount >= required_amount {
+			(required_amount, full_amount_fee)
+		} else {
+			let provided_amount = self.available_amount;
+			let fee = compute_fee(provided_amount, self.fee_bps);
+
+			(provided_amount, fee)
+		};
+
+		self.use_funds_for_boosting(boost_id, provided_amount, fee_amount)?;
+
+		Ok((
+			provided_amount.saturating_add(fee_amount).into_chain_amount(),
+			fee_amount.into_chain_amount(),
+		))
+	}
+
+	/// Records `amount_needed` as being used for boosting and to be re-distributed
+	/// among current boosters (along with the fee) upon finalisation
+	fn use_funds_for_boosting(
+		&mut self,
+		boost_id: BoostId,
+		required_amount: ScaledAmount<C>,
+		boost_fee: ScaledAmount<C>,
+	) -> Result<(), &'static str> {
 		let current_total_active_amount = self.available_amount;
 
 		self.available_amount = self
 			.available_amount
-			.checked_sub(amount_needed)
+			.checked_sub(required_amount)
 			.ok_or("Not enough active funds")?;
 
 		let mut amounts = self.amounts.iter_mut();
@@ -149,12 +189,12 @@ where
 		let mut total_contributed = ScaledAmount::<C>::default();
 		let mut to_receive_recorded = ScaledAmount::default();
 
-		let amount_to_receive = amount_needed.saturating_add(fees);
+		let amount_to_receive = required_amount.saturating_add(boost_fee);
 
 		let mut boosters_to_receive: BTreeMap<_, _> = amounts
 			.map(|(booster_id, amount)| {
 				let booster_contribution = multiply_by_rational_with_rounding(
-					amount_needed.into(),
+					required_amount.into(),
 					(*amount).into(),
 					current_total_active_amount.into(),
 					Rounding::NearestPrefDown,
@@ -188,7 +228,7 @@ where
 
 		// Compute the amount for the first contributor working backwards from the amount needed
 		// to negate any rounding errors made so far:
-		let remaining_required = amount_needed.saturating_sub(total_contributed);
+		let remaining_required = required_amount.saturating_sub(total_contributed);
 		let remaining_to_receive = amount_to_receive.saturating_sub(to_receive_recorded);
 		first_booster_amount.saturating_reduce(remaining_required);
 		boosters_to_receive.insert(first_booster_account.clone(), remaining_to_receive);
