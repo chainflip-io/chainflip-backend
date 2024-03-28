@@ -70,15 +70,15 @@ pub struct PrewitnessedDeposit<C: Chain> {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, EnumIter)]
 #[repr(u16)]
 pub enum BoostPoolTier {
+	FiveBps = 5,
 	TenBps = 10,
 	ThirtyBps = 30,
-	FiftyBps = 50,
 }
 
 type BoostId = u64;
 
 const SORTED_BOOST_TIERS: [BoostPoolTier; 3] =
-	[BoostPoolTier::TenBps, BoostPoolTier::ThirtyBps, BoostPoolTier::FiftyBps];
+	[BoostPoolTier::FiveBps, BoostPoolTier::TenBps, BoostPoolTier::ThirtyBps];
 
 /// Enum wrapper for fetch and egress requests.
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
