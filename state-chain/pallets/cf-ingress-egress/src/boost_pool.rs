@@ -82,14 +82,6 @@ impl<C: Chain> ScaledAmount<C> {
 	}
 }
 
-fn compute_fee<C: Chain>(amount: ScaledAmount<C>, fee: BasisPoints) -> ScaledAmount<C> {
-	const BASIS_POINTS_PER_MILLION: u32 = 100;
-	ScaledAmount {
-		val: Permill::from_parts(fee as u32 * BASIS_POINTS_PER_MILLION) * amount.val,
-		_phantom: PhantomData,
-	}
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct BoostPool<AccountId, C: Chain> {
 	// Fee charged by the pool
@@ -121,6 +113,15 @@ where
 		}
 	}
 
+	fn compute_fee(&self, amount_to_boost: ScaledAmount<C>) -> ScaledAmount<C> {
+		const BASIS_POINTS_PER_MILLION: u32 = 100;
+		ScaledAmount {
+			val: Permill::from_parts(self.fee_bps as u32 * BASIS_POINTS_PER_MILLION) *
+				amount_to_boost.val,
+			_phantom: PhantomData,
+		}
+	}
+
 	fn add_funds_inner(&mut self, account_id: AccountId, added_amount: ScaledAmount<C>) {
 		// To keep things simple, we assume that the booster no longer wants to withdraw
 		// if they add more funds:
@@ -144,7 +145,7 @@ where
 		amount_to_boost: C::ChainAmount,
 	) -> Result<(C::ChainAmount, C::ChainAmount), &'static str> {
 		let amount_to_boost = ScaledAmount::<C>::from_chain_amount(amount_to_boost);
-		let full_amount_fee = compute_fee(amount_to_boost, self.fee_bps);
+		let full_amount_fee = self.compute_fee(amount_to_boost);
 
 		let required_amount = amount_to_boost.saturating_sub(full_amount_fee);
 
@@ -152,7 +153,7 @@ where
 			(required_amount, full_amount_fee)
 		} else {
 			let provided_amount = self.available_amount;
-			let fee = compute_fee(provided_amount, self.fee_bps);
+			let fee = self.compute_fee(provided_amount);
 
 			(provided_amount, fee)
 		};
@@ -304,7 +305,7 @@ where
 		let pending_deposits: BTreeSet<_> = self
 			.pending_boosts
 			.iter()
-			.filter(|(_, owned_amounts)| owned_amounts.contains_key(&booster_id))
+			.filter(|(_, owed_amounts)| owed_amounts.contains_key(&booster_id))
 			.map(|(boost_id, _)| *boost_id)
 			.collect();
 
