@@ -85,3 +85,73 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 		Ok(())
 	}
 }
+
+#[cfg(test)]
+mod migration_tests {
+
+	#[test]
+	fn test_migration() {
+		use cf_chains::btc::{
+			deposit_address::{DepositAddress, TapscriptPath},
+			BitcoinScript, ScriptPubkey,
+		};
+
+		use self::mock_btc::new_test_ext;
+
+		use super::*;
+		use crate::mock_btc::*;
+
+		new_test_ext().execute_with(|| {
+			let address1 = ScriptPubkey::Taproot([0u8; 32]);
+			let address2 = ScriptPubkey::Taproot([1u8; 32]);
+
+			// Insert mock data into old storage
+			old::DepositChannelLookup::insert(address1.clone(), mock_deposit_channel_details());
+			old::DepositChannelLookup::insert(address2.clone(), mock_deposit_channel_details());
+
+			#[cfg(feature = "try-runtime")]
+		let state: Vec<u8> =
+			crate::migrations::deposit_channels_with_boost_fee::Migration::<Test, _>::pre_upgrade()
+				.unwrap();
+
+			// Perform runtime migration.
+			crate::migrations::deposit_channels_with_boost_fee::Migration::<Test, _>::on_runtime_upgrade();
+
+			#[cfg(feature = "try-runtime")]
+			crate::migrations::deposit_channels_with_boost_fee::Migration::<Test, _>::post_upgrade(
+				state,
+			)
+			.unwrap();
+
+			// Verify data is correctly migrated into new storage.
+			for address in [address1, address2] {
+				let channel = DepositChannelLookup::<Test, Instance3>::get(address);
+				assert!(channel.is_some());
+				assert_eq!(channel.unwrap().boost_status, BoostStatus::NotBoosted);
+			}
+		});
+
+		fn mock_deposit_channel_details() -> old::DepositChannelDetails<Test, Instance3> {
+			old::DepositChannelDetails::<Test, _> {
+				deposit_channel: DepositChannel {
+					channel_id: 123,
+					address: ScriptPubkey::Taproot([0u8; 32]).clone(),
+					asset: <Bitcoin as Chain>::ChainAsset::Btc,
+					state: DepositAddress {
+						pubkey_x: [1u8; 32],
+						script_path: Some(TapscriptPath {
+							salt: 123,
+							tweaked_pubkey_bytes: [2u8; 33],
+							tapleaf_hash: [3u8; 32],
+							unlock_script: BitcoinScript::new(Default::default()),
+						}),
+					},
+				},
+				opened_at: Default::default(),
+				expires_at: Default::default(),
+				action: ChannelAction::LiquidityProvision { lp_account: Default::default() },
+				boost_fee: 0,
+			}
+		}
+	}
+}
