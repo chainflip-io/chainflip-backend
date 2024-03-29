@@ -16,9 +16,6 @@ on:
 
 env:
   FORCE_COLOR: 1
-  SCCACHE_CACHE_SIZE: 32G
-  SCCACHE_VERSION: v0.4.1
-  SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
   COMMIT_HASH: ${{ github.sha }}
 
 jobs:
@@ -29,29 +26,34 @@ jobs:
       matrix:
         ubuntu_version: [20.04, 22.04]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-${{ matrix.ubuntu_version }}-44"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-${{ matrix.ubuntu_version }}-48"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
       env:
-        NSC_CACHE_PATH: ${{ env.NSC_CACHE_PATH }} # env.NSC_CACHE_PATH contains the path to Cache Volume directory, that is `/cache`.
+        NSC_CACHE_PATH: ubuntu-${{ matrix.ubuntu_version }}
       volumes:
-        - /cache:/cache # Where the Cache Volume is mounted.
+        - /cache:/cache-ubuntu-${{ matrix.ubuntu_version }} # Where the Cache Volume is mounted.
       options: --cap-add=SYS_ADMIN # Required to by nscloud-cache-action to call `mount`.
 
     steps:
-      - name: Checkout
+      - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
-      - name: Setup sccache
-        run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
+      - name: Setup Rust cache 🦀💰
+        uses: namespacelabs/nscloud-cache-action@v1
+        with:
+          cache: rust
 
-      - name: Build chainflip binaries
+      # This is a workaround for the issue with Git ownership that prevents cargo from executing git commands to get commit hash for `--version`
+      - name: Configure Git 🛠️
+        run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+
+      - name: Build chainflip binaries 🏗️
         run: |
           cargo cf-build-${{ inputs.profile }} --locked
-          sccache --show-stats
 
-      - name: Upload binary artifacts
+      - name: Upload binary artifacts 📤
         uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
         with:
           name: ${{ inputs.upload-name }}-ubuntu-${{ matrix.ubuntu_version }}
@@ -64,7 +66,7 @@ jobs:
             ./target/${{ inputs.binary-subdir }}/chainflip-lp-api
             ./target/${{ inputs.binary-subdir }}/chainflip-ingress-egress-tracker
 
-      - name: Upload runtime artifacts
+      - name: Upload runtime artifacts 📤
         uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
         if: ${{ matrix.ubuntu_version == '22.04' }} # Only upload runtime once as it is the same for both versions
         with:

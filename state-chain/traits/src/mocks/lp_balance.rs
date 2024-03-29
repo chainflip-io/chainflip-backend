@@ -1,5 +1,5 @@
 use crate::{LpBalanceApi, LpDepositHandler};
-use cf_chains::assets::any::Asset;
+use cf_chains::assets::any::{Asset, AssetMap};
 use cf_primitives::AssetAmount;
 use sp_runtime::{
 	traits::{CheckedSub, Saturating},
@@ -81,13 +81,13 @@ impl LpBalanceApi for MockBalance {
 	}
 
 	fn record_fees(_who: &Self::AccountId, _amount: AssetAmount, _asset: Asset) {}
+
 	fn asset_balances(
 		who: &Self::AccountId,
-	) -> Result<Vec<(Asset, AssetAmount)>, sp_runtime::DispatchError> {
-		Ok(Asset::all()
-			.map(|asset| {
-				(asset, Self::get_storage(FREE_BALANCES, (who, asset)).unwrap_or_default())
-			})
-			.collect())
+	) -> Result<AssetMap<AssetAmount>, sp_runtime::DispatchError> {
+		Ok(AssetMap::try_from_iter(Asset::all().map(|asset| {
+			(asset, Self::get_storage(FREE_BALANCES, (who, asset)).unwrap_or_default())
+		}))
+		.unwrap())
 	}
 }

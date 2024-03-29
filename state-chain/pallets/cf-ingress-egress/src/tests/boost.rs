@@ -29,10 +29,10 @@ const INIT_FETCHED_DEPOSITS: AssetAmount = 2 * INIT_B0OSTER_ETH_BALANCE;
 const INGRESS_FEE: AssetAmount = 1_000_000;
 
 fn get_lp_balance(lp: &AccountId, asset: eth::Asset) -> AssetAmount {
-	let asset: Asset = asset.into();
+	// let asset: Asset = ;
 	let balances = <Test as crate::Config>::LpBalance::asset_balances(lp).unwrap();
 
-	balances.iter().find(|(stored_asset, _)| stored_asset == &asset).unwrap().1
+	balances[asset.into()]
 }
 
 fn get_lp_eth_balance(lp: &AccountId) -> AssetAmount {

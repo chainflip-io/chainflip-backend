@@ -44,8 +44,8 @@ jobs:
         uses: peter-evans/create-pull-request@v3
         with:
           token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
-          commit-message: Cherry-picked from ${{ env.COMMIT_SHA }}
-          title: "Cherry-Pick ${{ env.COMMIT_SHA }} to ${{ env.RELEASE_BRANCH }}"
+          commit-message: "pick: ${{ env.COMMIT_SHA }} to ${{ env.RELEASE_BRANCH }}"
+          title: "${{ github.event.pull_request.title }}"
           body: |
             This is an automated cherry-pick of ${{ env.COMMIT_SHA }} to ${{ env.RELEASE_BRANCH }}.
             Please review and merge if appropriate.
