@@ -14,6 +14,7 @@ use thiserror::Error;
 
 use self::program_instructions::SystemProgramInstruction;
 
+pub mod bpf_loader_instructions;
 pub mod compute_budget;
 pub mod program_instructions;
 pub mod short_vec;
@@ -32,7 +33,7 @@ pub const SYS_VAR_RECENT_BLOCKHASHES: &str = "SysvarRecentB1ockHashes11111111111
 pub const SYS_VAR_INSTRUCTIONS: &str = "Sysvar1nstructions1111111111111111111111111";
 pub const SYS_VAR_RENT: &str = "SysvarRent111111111111111111111111111111111";
 pub const SYS_VAR_CLOCK: &str = "SysvarC1ock11111111111111111111111111111111";
-pub const BPF_UPGRADE_LOADER_ID: &str = "BPFLoaderUpgradeab1e11111111111111111111111";
+pub const BPF_LOADER_UPGRADEABLE_ID: &str = "BPFLoaderUpgradeab1e11111111111111111111111";
 pub const COMPUTE_BUDGET_PROGRAM: &str = "ComputeBudget111111111111111111111111111111";
 
 // Chainflip addresses - can be constants on a per-chain basis inserted on runtime upgrade.
@@ -48,6 +49,8 @@ pub const VAULT_TOKEN_PDA_SEED: [u8; 9] =
 pub const VAULT_TOKEN_PDA_BUMP: u8 = 255;
 pub const VAULT_TOKEN_PDA_ACCOUNT: &str = "9j17hjg8wR2uFxJAJDAFahwsgTCNx35sc5qXSxDmuuF6";
 pub const UPGRADE_MANAGER_PROGRAM: &str = "274BzCz5RPHJZsxdcSGySahz4qAWqwSDcmz1YEKkGaZC";
+pub const UPGRADE_MANAGER_PROGRAM_DATA_ACCOUNT: &str =
+	"CAGADTb6bdpm4L4esntbLQovDyg6Wutiot2DNkMR8wZa";
 pub const UPGRADE_MANAGER_PDA_SIGNER_SEED: [u8; 6] = [115u8, 105u8, 103u8, 110u8, 101u8, 114u8];
 pub const UPGRADE_MANAGER_PDA_SIGNER_BUMP: u8 = 255;
 pub const UPGRADE_MANAGER_PDA_SIGNER: &str = "2SAhe89c1umM2JvCnmqCEnY8UCQtNPEKGe7UXA8KSQqH";
@@ -744,16 +747,17 @@ mod tests {
 	use core::str::FromStr;
 
 	use crate::sol::{
+		bpf_loader_instructions::set_upgrade_authority,
 		compute_budget::ComputeBudgetInstruction,
 		program_instructions::{
 			ProgramInstruction, SystemProgramInstruction, UpgradeManagerProgram, VaultProgram,
 		},
 		token_instructions::AssociatedTokenAccountInstruction,
-		BorshDeserialize, BorshSerialize, BPF_UPGRADE_LOADER_ID, NONCE_ACCOUNT_0,
+		BorshDeserialize, BorshSerialize, BPF_LOADER_UPGRADEABLE_ID, NONCE_ACCOUNT_0,
 		SYSTEM_PROGRAM_ID, SYS_VAR_CLOCK, SYS_VAR_INSTRUCTIONS, SYS_VAR_RENT, TOKEN_PROGRAM_ID,
 		UPGRADE_MANAGER_PDA_SIGNER, UPGRADE_MANAGER_PDA_SIGNER_BUMP,
-		UPGRADE_MANAGER_PDA_SIGNER_SEED, VAULT_PROGRAM, VAULT_PROGRAM_DATA_ACCOUNT,
-		VAULT_PROGRAM_DATA_ADDRESS,
+		UPGRADE_MANAGER_PDA_SIGNER_SEED, UPGRADE_MANAGER_PROGRAM_DATA_ACCOUNT, VAULT_PROGRAM,
+		VAULT_PROGRAM_DATA_ACCOUNT, VAULT_PROGRAM_DATA_ADDRESS, VAULT_TOKEN_PDA_SEED,
 	};
 
 	use super::{
@@ -1018,8 +1022,52 @@ mod tests {
 		assert_eq!(serialized_tx, expected_serialized_tx);
 	}
 
-	// TODO: Create create_full_rotation => create_nonced_rotate_agg_key_nonce_authorize +
-	// upgradeAuthorityInstruction of upgradeManager fn create_full_rotation() {
+	// Full rotation: Use nonce, rotate agg key, transfer nonce authority and transfer upgrade
+	// manager's upgrade authority
+	#[test]
+	fn create_full_rotation() {
+		let durable_nonce = Hash::from_str("CW1aUc4krwqNiMfZ9J4D7wWHd5GXCZFkBNJYJg3tRd1Y").unwrap();
+		let vault_account = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
+		let vault_account_pubkey = vault_account.pubkey();
+		let new_vault_account_pubkey =
+			Pubkey::from_str("7x7wY9yfXjRmusDEfPPCreU4bP49kmH4mqjYUXNAXJoM").unwrap();
+
+		let instructions = [
+			SystemProgramInstruction::advance_nonce_account(
+				&Pubkey::from_str(NONCE_ACCOUNT_0).unwrap(),
+				&vault_account_pubkey,
+			),
+			ProgramInstruction::get_instruction(
+				&VaultProgram::RotateAggKey { transfer_funds: true },
+				vec![
+					AccountMeta::new(Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(), false),
+					AccountMeta::new(vault_account_pubkey, true),
+					AccountMeta::new(new_vault_account_pubkey, false),
+					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
+				],
+			),
+			SystemProgramInstruction::nonce_authorize(
+				&Pubkey::from_str(NONCE_ACCOUNT_0).unwrap(),
+				&vault_account_pubkey,
+				&new_vault_account_pubkey,
+			),
+			set_upgrade_authority(
+				Pubkey::from_str(UPGRADE_MANAGER_PROGRAM_DATA_ACCOUNT).unwrap(),
+				&vault_account_pubkey,
+				Some(&new_vault_account_pubkey),
+			),
+		];
+		let message = Message::new(&instructions, Some(&vault_account_pubkey));
+		let mut tx = Transaction::new_unsigned(message);
+		tx.sign(&[&vault_account], durable_nonce);
+		println!("{:?}", tx);
+
+		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
+		let expected_serialized_tx = hex_literal::hex!("0128a89d46dff9335b82344a3c186c431346826eaf051c7f679e4bd34bb2a9d1e6a852001183d48b83222dea5b0c12bb6107c93fc6e36739be650261a44e85660b01000409f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1924a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b6744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be543990044a5cfec75730f8780ded36a7c8ae1dcc60d84e1a830765fc6108e7b40402e4951000000000000000000000000000000000000000000000000000000000000000002a8f6914e88a1b0e210153ef763ae2b00c2b93d16c124d2c0537a100480000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293caadf0d6118bacf2a2a5c3d141e72c8733db3de162cc364a7f779b7bb4670e59f0405030107000404000000080402000305094e518fabdda5d68b010502010024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be54399004406030400030404000000").to_vec();
+		println!("tx:{:?}", hex::encode(serialized_tx.clone()));
+
+		assert_eq!(serialized_tx, expected_serialized_tx);
+	}
 
 	#[test]
 	fn create_nonced_ccm_native_transfer() {
@@ -1099,7 +1147,7 @@ mod tests {
 			),
 			ProgramInstruction::get_instruction(
 				&VaultProgram::TransferTokens {
-					seed: vec![118u8, 97u8, 117u8, 108u8, 116u8, 95u8, 112u8, 100u8, 97u8],
+					seed: VAULT_TOKEN_PDA_SEED.to_vec(),
 					bump: 254,
 					amount,
 					decimals: 6,
@@ -1195,7 +1243,7 @@ mod tests {
 						false,
 					),
 					AccountMeta::new_readonly(
-						Pubkey::from_str(BPF_UPGRADE_LOADER_ID).unwrap(),
+						Pubkey::from_str(BPF_LOADER_UPGRADEABLE_ID).unwrap(),
 						false,
 					),
 				],
