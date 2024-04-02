@@ -71,9 +71,10 @@ export async function initializeSolanaPrograms(solKey: string) {
   const solKeyBuffer = Buffer.from(solKey.slice(2), 'hex');
   const newAggKey = new PublicKey(encodeSolAddress(solKey));
 
+  // Initialize Vault program
   const tx = new Transaction().add(
     new TransactionInstruction({
-      data: Buffer.concat([Buffer.from(discriminator.buffer), solKeyBuffer]),
+      data: Buffer.concat([Buffer.from(discriminator.buffer), solKeyBuffer, solKeyBuffer]),
       keys: [
         { pubkey: dataAccount, isSigner: false, isWritable: true },
         { pubkey: whaleKeypair.publicKey, isSigner: true, isWritable: false },
@@ -101,6 +102,7 @@ export async function initializeSolanaPrograms(solKey: string) {
       accountInfo.data &&
       NonceAccount.fromAccountData(accountInfo.data) !== null
     ) {
+      // Set nonce authority to the new AggKey
       tx.add(
         SystemProgram.nonceAuthorize({
           noncePubkey: new PublicKey(nonceAccountPubKey),
