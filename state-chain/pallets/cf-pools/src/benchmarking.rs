@@ -48,8 +48,7 @@ mod benchmarks {
 	#[benchmark]
 	fn new_pool() {
 		let call = Call::<T>::new_pool {
-			base_asset: Asset::Eth,
-			quote_asset: Asset::Usdc,
+			asset_pair: AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap(),
 			fee_hundredth_pips: 0u32,
 			initial_price: price_at_tick(0).unwrap(),
 		};
@@ -69,8 +68,7 @@ mod benchmarks {
 		let caller = new_lp_account::<T>();
 		assert_ok!(Pallet::<T>::new_pool(
 			T::EnsureGovernance::try_successful_origin().unwrap(),
-			Asset::Eth,
-			Asset::Usdc,
+			AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap(),
 			0,
 			price_at_tick(0).unwrap()
 		));
@@ -80,8 +78,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		update_range_order(
 			RawOrigin::Signed(caller.clone()),
-			Asset::Eth,
-			Asset::Usdc,
+			AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap(),
 			0,
 			Some(-100..100),
 			IncreaseOrDecrease::Increase(RangeOrderSize::AssetAmounts {
@@ -96,8 +93,7 @@ mod benchmarks {
 		let caller = new_lp_account::<T>();
 		assert_ok!(Pallet::<T>::new_pool(
 			T::EnsureGovernance::try_successful_origin().unwrap(),
-			Asset::Eth,
-			Asset::Usdc,
+			AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap(),
 			0,
 			price_at_tick(0).unwrap()
 		));
@@ -107,8 +103,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		set_range_order(
 			RawOrigin::Signed(caller.clone()),
-			Asset::Eth,
-			Asset::Usdc,
+			AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap(),
 			0,
 			Some(-100..100),
 			RangeOrderSize::AssetAmounts {
@@ -123,8 +118,7 @@ mod benchmarks {
 		let caller = new_lp_account::<T>();
 		assert_ok!(Pallet::<T>::new_pool(
 			T::EnsureGovernance::try_successful_origin().unwrap(),
-			Asset::Eth,
-			Asset::Usdc,
+			AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap(),
 			0,
 			price_at_tick(0).unwrap()
 		));
@@ -134,8 +128,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		update_limit_order(
 			RawOrigin::Signed(caller.clone()),
-			Asset::Eth,
-			Asset::Usdc,
+			AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap(),
 			Side::Sell,
 			0,
 			Some(100),
@@ -148,8 +141,7 @@ mod benchmarks {
 		let caller = new_lp_account::<T>();
 		assert_ok!(Pallet::<T>::new_pool(
 			T::EnsureGovernance::try_successful_origin().unwrap(),
-			Asset::Eth,
-			Asset::Usdc,
+			AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap(),
 			0,
 			price_at_tick(0).unwrap()
 		));
@@ -159,8 +151,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		set_limit_order(
 			RawOrigin::Signed(caller.clone()),
-			Asset::Eth,
-			Asset::Usdc,
+			AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap(),
 			Side::Sell,
 			0,
 			Some(100),
@@ -173,8 +164,7 @@ mod benchmarks {
 		let caller = new_lp_account::<T>();
 		assert_ok!(Pallet::<T>::new_pool(
 			T::EnsureGovernance::try_successful_origin().unwrap(),
-			Asset::Eth,
-			Asset::Usdc,
+			AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap(),
 			0,
 			price_at_tick(0).unwrap()
 		));
@@ -182,8 +172,7 @@ mod benchmarks {
 		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Usdc, 1_000_000,));
 		assert_ok!(Pallet::<T>::set_limit_order(
 			RawOrigin::Signed(caller.clone()).into(),
-			Asset::Eth,
-			Asset::Usdc,
+			AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap(),
 			Side::Buy,
 			0,
 			Some(0),
@@ -191,8 +180,7 @@ mod benchmarks {
 		));
 		assert_ok!(Pallet::<T>::set_limit_order(
 			RawOrigin::Signed(caller.clone()).into(),
-			Asset::Eth,
-			Asset::Usdc,
+			AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap(),
 			Side::Sell,
 			1,
 			Some(0),
@@ -201,8 +189,7 @@ mod benchmarks {
 		assert_ok!(Pallet::<T>::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 1_000));
 		let fee = 1_000;
 		let call = Call::<T>::set_pool_fees {
-			base_asset: Asset::Eth,
-			quote_asset: Asset::Usdc,
+			asset_pair: AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap(),
 			fee_hundredth_pips: fee,
 		};
 
@@ -227,8 +214,7 @@ mod benchmarks {
 		let caller = new_lp_account::<T>();
 		assert_ok!(Pallet::<T>::new_pool(
 			T::EnsureGovernance::try_successful_origin().unwrap(),
-			Asset::Eth,
-			Asset::Usdc,
+			AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap(),
 			0,
 			price_at_tick(0).unwrap()
 		));
@@ -238,8 +224,7 @@ mod benchmarks {
 		schedule_limit_order_update(
 			RawOrigin::Signed(caller.clone()),
 			Box::new(Call::<T>::set_limit_order {
-				base_asset: Asset::Eth,
-				quote_asset: Asset::Usdc,
+				asset_pair: AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap(),
 				side: Side::Sell,
 				id: 0,
 				option_tick: Some(0),

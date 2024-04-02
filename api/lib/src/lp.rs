@@ -11,7 +11,7 @@ use chainflip_engine::state_chain_observer::client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock, WaitFor, WaitForResult},
 	StateChainClient,
 };
-use pallet_cf_pools::{IncreaseOrDecrease, OrderId, RangeOrderSize};
+use pallet_cf_pools::{AssetPair, IncreaseOrDecrease, OrderId, RangeOrderSize};
 use serde::{Deserialize, Serialize};
 use sp_core::{H256, U256};
 use state_chain_runtime::RuntimeCall;
@@ -89,14 +89,13 @@ fn collect_range_order_returns(
 					liquidity_total,
 					collected_fees,
 					tick_range,
-					base_asset,
-					quote_asset,
+					asset_pair,
 					id,
 					..
 				},
 			) => Some(types::RangeOrder {
-				base_asset: base_asset.into(),
-				quote_asset: quote_asset.into(),
+				base_asset: asset_pair.base().into(),
+				quote_asset: asset_pair.quote().into(),
 				id: id.into(),
 				size_change: size_change.map(|increase_or_decrese| {
 					increase_or_decrese.map(|range_order_change| types::RangeOrderChange {
@@ -126,15 +125,14 @@ fn collect_limit_order_returns(
 					collected_fees,
 					bought_amount,
 					tick,
-					base_asset,
-					quote_asset,
+					asset_pair,
 					side,
 					id,
 					..
 				},
 			) => Some(types::LimitOrder {
-				base_asset: base_asset.into(),
-				quote_asset: quote_asset.into(),
+				base_asset: asset_pair.base().into(),
+				quote_asset: asset_pair.quote().into(),
 				side,
 				id: id.into(),
 				tick,
@@ -259,8 +257,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 
 	async fn update_range_order(
 		&self,
-		base_asset: Asset,
-		quote_asset: Asset,
+		asset_pair: AssetPair,
 		id: OrderId,
 		option_tick_range: Option<Range<Tick>>,
 		size_change: IncreaseOrDecrease<RangeOrderSize>,
@@ -270,8 +267,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		Ok(into_api_wait_for_result(
 			self.submit_signed_extrinsic_wait_for(
 				pallet_cf_pools::Call::update_range_order {
-					base_asset,
-					quote_asset,
+					asset_pair,
 					id,
 					option_tick_range,
 					size_change,
@@ -285,8 +281,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 
 	async fn set_range_order(
 		&self,
-		base_asset: Asset,
-		quote_asset: Asset,
+		asset_pair: AssetPair,
 		id: OrderId,
 		option_tick_range: Option<Range<Tick>>,
 		size: RangeOrderSize,
@@ -295,13 +290,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		// Submit the mint order
 		Ok(into_api_wait_for_result(
 			self.submit_signed_extrinsic_wait_for(
-				pallet_cf_pools::Call::set_range_order {
-					base_asset,
-					quote_asset,
-					id,
-					option_tick_range,
-					size,
-				},
+				pallet_cf_pools::Call::set_range_order { asset_pair, id, option_tick_range, size },
 				wait_for,
 			)
 			.await?,
@@ -312,8 +301,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 	#[allow(clippy::too_many_arguments)]
 	async fn update_limit_order(
 		&self,
-		base_asset: Asset,
-		quote_asset: Asset,
+		asset_pair: AssetPair,
 		side: Side,
 		id: OrderId,
 		option_tick: Option<Tick>,
@@ -323,8 +311,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 	) -> Result<ApiWaitForResult<Vec<types::LimitOrder>>> {
 		self.scheduled_or_immediate(
 			pallet_cf_pools::Call::update_limit_order {
-				base_asset,
-				quote_asset,
+				asset_pair,
 				side,
 				id,
 				option_tick,
@@ -339,8 +326,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 	#[allow(clippy::too_many_arguments)]
 	async fn set_limit_order(
 		&self,
-		base_asset: Asset,
-		quote_asset: Asset,
+		asset_pair: AssetPair,
 		side: Side,
 		id: OrderId,
 		option_tick: Option<Tick>,
@@ -350,8 +336,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 	) -> Result<ApiWaitForResult<Vec<types::LimitOrder>>> {
 		self.scheduled_or_immediate(
 			pallet_cf_pools::Call::set_limit_order {
-				base_asset,
-				quote_asset,
+				asset_pair,
 				side,
 				id,
 				option_tick,

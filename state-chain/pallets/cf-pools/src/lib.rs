@@ -42,7 +42,20 @@ impl_pallet_safe_mode!(PalletSafeMode; range_order_update_enabled, limit_order_u
 
 // TODO Add custom serialize/deserialize and encode/decode implementations that preserve canonical
 // nature.
-#[derive(Copy, Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEq, Eq, Hash)]
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	PartialEq,
+	Eq,
+	Hash,
+	Serialize,
+	Deserialize,
+)]
 pub struct AssetPair {
 	assets: PoolPairsMap<Asset>,
 }
@@ -82,6 +95,22 @@ impl AssetPair {
 
 	pub fn assets(&self) -> PoolPairsMap<Asset> {
 		self.assets
+	}
+
+	pub fn base(&self) -> Asset {
+		self.assets.base
+	}
+
+	pub fn quote(&self) -> Asset {
+		self.assets.quote
+	}
+
+	pub fn side(&self) -> Option<Side> {
+		match self.assets {
+			PoolPairsMap { base: STABLE_ASSET, quote: _ } => Some(Side::Buy),
+			PoolPairsMap { base: _, quote: STABLE_ASSET } => Some(Side::Sell),
+			_ => None,
+		}
 	}
 }
 
@@ -1458,7 +1487,7 @@ impl<T: Config> Pallet<T> {
 		if !zero_change || collected_fees != Default::default() {
 			Self::deposit_event(Event::<T>::RangeOrderUpdated {
 				lp: lp.clone(),
-				asset_pair: asset_pair.clone(),
+				asset_pair: *asset_pair,
 				id,
 				tick_range,
 				size_change: {
@@ -1897,7 +1926,7 @@ impl<T: Config> Pallet<T> {
 		{
 			Self::deposit_event(Event::<T>::LimitOrderUpdated {
 				lp: lp.clone(),
-				asset_pair: asset_pair.clone(),
+				asset_pair: *asset_pair,
 				side: order,
 				id,
 				tick,

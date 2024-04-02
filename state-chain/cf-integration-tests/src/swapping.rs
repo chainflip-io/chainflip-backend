@@ -39,7 +39,7 @@ use pallet_cf_broadcast::{
 };
 use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall};
 use pallet_cf_lp::HistoricalEarnedFees;
-use pallet_cf_pools::{OrderId, RangeOrderSize};
+use pallet_cf_pools::{AssetPair, OrderId, RangeOrderSize};
 use pallet_cf_swapping::{CcmIdCounter, SWAP_DELAY_BLOCKS};
 use sp_core::U256;
 use state_chain_runtime::{
@@ -56,18 +56,17 @@ const DORIS: AccountId = AccountId::new([0x11; 32]);
 const ZION: AccountId = AccountId::new([0x22; 32]);
 
 fn new_pool(unstable_asset: Asset, fee_hundredth_pips: u32, initial_price: Price) {
+	let asset_pair = AssetPair::new(unstable_asset, STABLE_ASSET).unwrap();
 	assert_ok!(LiquidityPools::new_pool(
 		pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
-		unstable_asset,
-		STABLE_ASSET,
+		asset_pair,
 		fee_hundredth_pips,
 		initial_price,
 	));
 	assert_events_eq!(
 		Runtime,
 		RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::NewPoolCreated {
-			base_asset: unstable_asset,
-			quote_asset: STABLE_ASSET,
+			asset_pair,
 			fee_hundredth_pips,
 			initial_price,
 		},)
@@ -107,8 +106,7 @@ fn set_range_order(
 	});
 	assert_ok!(LiquidityPools::set_range_order(
 		RuntimeOrigin::signed(account_id.clone()),
-		base_asset,
-		quote_asset,
+		AssetPair::new(base_asset, quote_asset).unwrap(),
 		id,
 		range,
 		RangeOrderSize::Liquidity { liquidity },
@@ -139,31 +137,33 @@ fn set_range_order(
 
 fn set_limit_order(
 	account_id: &AccountId,
-	sell_asset: Asset,
-	buy_asset: Asset,
+	asset_pair: AssetPair,
 	id: OrderId,
 	tick: Option<Tick>,
 	sell_amount: AssetAmount,
 ) {
-	let (asset_pair, order) = pallet_cf_pools::AssetPair::from_swap(sell_asset, buy_asset).unwrap();
+	// let (asset_pair, order) = pallet_cf_pools::AssetPair::from_swap(sell_asset,
+	// buy_asset).unwrap();
+	let order = asset_pair.side();
 
-	let sell_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, sell_asset).unwrap_or_default();
-	let buy_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, buy_asset).unwrap_or_default();
+	let sell_balance = pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, asset_pair.base())
+		.unwrap_or_default();
+	let buy_balance = pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, asset_pair.quote())
+		.unwrap_or_default();
 	assert_ok!(LiquidityPools::set_limit_order(
 		RuntimeOrigin::signed(account_id.clone()),
-		asset_pair.assets().base,
-		asset_pair.assets().quote,
-		order,
+		asset_pair,
+		order.unwrap(),
 		id,
 		tick,
 		sell_amount,
 	));
 	let new_sell_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, sell_asset).unwrap_or_default();
+		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, asset_pair.base())
+			.unwrap_or_default();
 	let new_buy_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, buy_asset).unwrap_or_default();
+		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, asset_pair.quote())
+			.unwrap_or_default();
 
 	assert_eq!(new_sell_balance, sell_balance - sell_amount);
 	assert_eq!(new_buy_balance, buy_balance);
@@ -173,7 +173,7 @@ fn set_limit_order(
 			Runtime,
 			RuntimeEvent::LiquidityProvider(pallet_cf_lp::Event::AccountDebited {
 				account_id: account_id.clone(),
-				asset: sell_asset,
+				asset: asset_pair.base(),
 				amount_debited: sell_balance - new_sell_balance,
 			},)
 		);
@@ -212,10 +212,10 @@ fn basic_pool_setup_provision_and_swap() {
 		credit_account(&DORIS, Asset::Usdc, 1_000_000);
 		assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS));
 
-		set_limit_order(&DORIS, Asset::Eth, Asset::Usdc, 0, Some(0), 500_000);
+		set_limit_order(&DORIS, AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap(), 0, Some(0), 500_000);
 		set_range_order(&DORIS, Asset::Eth, Asset::Usdc, 0, Some(-10..10), 1_000_000);
 
-		set_limit_order(&DORIS, Asset::Flip, Asset::Usdc, 0, Some(0), 500_000);
+		set_limit_order(&DORIS, AssetPair::new(Asset::Flip, STABLE_ASSET).unwrap(), 0, Some(0), 500_000);
 		set_range_order(&DORIS, Asset::Flip, Asset::Usdc, 0, Some(-10..10), 1_000_000);
 
 		assert_ok!(Swapping::request_swap_deposit_address(

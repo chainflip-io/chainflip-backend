@@ -956,7 +956,6 @@ fn can_get_all_pool_orders() {
 #[test]
 fn asset_conversion() {
 	new_test_ext().execute_with(|| {
-		let asset_pair = AssetPair::new(Asset::Flip, STABLE_ASSET).unwrap();
 		// Create pools
 		for asset in [Asset::Eth, Asset::Flip] {
 			let asset_pair = AssetPair::new(asset, STABLE_ASSET).unwrap();

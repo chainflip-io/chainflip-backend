@@ -131,8 +131,7 @@ pub trait Rpc {
 	#[method(name = "update_range_order")]
 	async fn update_range_order(
 		&self,
-		base_asset: Asset,
-		quote_asset: Asset,
+		asset_pair: AssetPair,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
@@ -142,8 +141,7 @@ pub trait Rpc {
 	#[method(name = "set_range_order")]
 	async fn set_range_order(
 		&self,
-		base_asset: Asset,
-		quote_asset: Asset,
+		asset_pair: AssetPair,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size: RangeOrderSizeJson,
@@ -153,8 +151,7 @@ pub trait Rpc {
 	#[method(name = "update_limit_order")]
 	async fn update_limit_order(
 		&self,
-		base_asset: Asset,
-		quote_asset: Asset,
+		asset_pair: AssetPair,
 		side: Side,
 		id: OrderIdJson,
 		tick: Option<Tick>,
@@ -166,8 +163,7 @@ pub trait Rpc {
 	#[method(name = "set_limit_order")]
 	async fn set_limit_order(
 		&self,
-		base_asset: Asset,
-		quote_asset: Asset,
+		asset_pair: AssetPair,
 		side: Side,
 		id: OrderIdJson,
 		tick: Option<Tick>,
@@ -318,8 +314,7 @@ impl RpcServer for RpcServerImpl {
 
 	async fn update_range_order(
 		&self,
-		base_asset: Asset,
-		quote_asset: Asset,
+		asset_pair: AssetPair,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
@@ -329,8 +324,7 @@ impl RpcServer for RpcServerImpl {
 			.api
 			.lp_api()
 			.update_range_order(
-				base_asset,
-				quote_asset,
+				asset_pair,
 				id.try_into()?,
 				tick_range,
 				size_change.try_map(|size| size.try_into())?,
@@ -341,8 +335,7 @@ impl RpcServer for RpcServerImpl {
 
 	async fn set_range_order(
 		&self,
-		base_asset: Asset,
-		quote_asset: Asset,
+		asset_pair: AssetPair,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size: RangeOrderSizeJson,
@@ -352,8 +345,7 @@ impl RpcServer for RpcServerImpl {
 			.api
 			.lp_api()
 			.set_range_order(
-				base_asset,
-				quote_asset,
+				asset_pair,
 				id.try_into()?,
 				tick_range,
 				size.try_into()?,
@@ -364,8 +356,7 @@ impl RpcServer for RpcServerImpl {
 
 	async fn update_limit_order(
 		&self,
-		base_asset: Asset,
-		quote_asset: Asset,
+		asset_pair: AssetPair,
 		side: Side,
 		id: OrderIdJson,
 		tick: Option<Tick>,
@@ -377,8 +368,7 @@ impl RpcServer for RpcServerImpl {
 			.api
 			.lp_api()
 			.update_limit_order(
-				base_asset,
-				quote_asset,
+				asset_pair,
 				side,
 				id.try_into()?,
 				tick,
@@ -391,8 +381,7 @@ impl RpcServer for RpcServerImpl {
 
 	async fn set_limit_order(
 		&self,
-		base_asset: Asset,
-		quote_asset: Asset,
+		asset_pair: AssetPair,
 		side: Side,
 		id: OrderIdJson,
 		tick: Option<Tick>,
@@ -404,8 +393,7 @@ impl RpcServer for RpcServerImpl {
 			.api
 			.lp_api()
 			.set_limit_order(
-				base_asset,
-				quote_asset,
+				asset_pair,
 				side,
 				id.try_into()?,
 				tick,
@@ -520,12 +508,11 @@ where
 				match &event_record.event {
 					chainflip_api::primitives::state_chain_runtime::RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::RangeOrderUpdated {
 						lp,
-						base_asset,
-						quote_asset,
+						asset_pair,
 						id,
 						..
 					}) => {
-						Some((lp.clone(), AssetPair::new(*base_asset, *quote_asset).unwrap(), *id))
+						Some((lp.clone(), asset_pair, *id))
 					},
 					_ => {
 						None
@@ -537,13 +524,12 @@ where
 				match &event_record.event {
 					chainflip_api::primitives::state_chain_runtime::RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LimitOrderUpdated {
 						lp,
-						base_asset,
-						quote_asset,
+						asset_pair,
 						side,
 						id,
 						..
 					}) => {
-						Some((lp.clone(), AssetPair::new(*base_asset, *quote_asset).unwrap(), *side, *id))
+						Some((lp.clone(), asset_pair, *side, *id))
 					},
 					_ => {
 						None
@@ -564,7 +550,7 @@ where
 								move |((lp, id), tick, collected, position_info)| {
 									let (fees, sold, bought) = {
 										let option_previous_order_state = if updated_limit_orders
-											.contains(&(lp.clone(), *asset_pair, side, id))
+											.contains(&(lp.clone(), asset_pair, side, id))
 										{
 											None
 										} else {
@@ -617,7 +603,7 @@ where
 							move |((lp, id), range, collected, position_info)| {
 								let fees = {
 									let option_previous_order_state = if updated_range_orders
-										.contains(&(lp.clone(), *asset_pair, id))
+										.contains(&(lp.clone(), asset_pair, id))
 									{
 										None
 									} else {
