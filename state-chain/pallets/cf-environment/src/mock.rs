@@ -2,14 +2,14 @@
 
 use crate::{self as pallet_cf_environment, Decode, Encode, TypeInfo};
 use cf_chains::{
-	btc::{AggKey, BitcoinCrypto, BitcoinFeeInfo},
+	btc::{BitcoinCrypto, BitcoinFeeInfo},
 	dot::{api::CreatePolkadotVault, PolkadotCrypto},
 	eth, ApiCall, Arbitrum, Bitcoin, Chain, ChainCrypto, Polkadot,
 };
 use cf_primitives::{BroadcastId, SemVer, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
-	Broadcaster, EpochKey, GetBitcoinFeeInfo, KeyProvider, VaultKeyWitnessedHandler,
+	mocks::key_provider::MockKeyProvider, Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
 };
 use frame_support::{derive_impl, parameter_types, traits::UnfilteredDispatchable};
 use sp_core::{H160, H256};
@@ -166,7 +166,6 @@ parameter_types! {
 		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
 		patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
 	};
-	pub static CurrentBitcoinKey: Option<EpochKey<AggKey>> = None;
 }
 
 pub struct MockBitcoinFeeInfo;
@@ -176,15 +175,10 @@ impl GetBitcoinFeeInfo for MockBitcoinFeeInfo {
 	}
 }
 
-pub struct MockBitcoinKeyProvider;
-impl KeyProvider<BitcoinCrypto> for MockBitcoinKeyProvider {
-	fn active_epoch_key() -> Option<EpochKey<AggKey>> {
-		CurrentBitcoinKey::get()
-	}
-}
-
 impl_pallet_safe_mode!(MockPalletSafeMode; flag1, flag2);
 impl_mock_runtime_safe_mode!(mock: MockPalletSafeMode);
+
+pub type MockBitcoinKeyProvider = MockKeyProvider<BitcoinCrypto>;
 
 impl pallet_cf_environment::Config for Test {
 	type RuntimeEvent = RuntimeEvent;

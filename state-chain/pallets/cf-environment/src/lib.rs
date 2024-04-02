@@ -525,12 +525,15 @@ impl<T: Config> Pallet<T> {
 							Self::deposit_event(Event::<T>::StaleUtxosDiscarded { utxos: stale });
 						}
 
-						Self::calculate_utxos_and_change(select_utxos_for_consolidation(
+						let selected_utxo = select_utxos_for_consolidation(
 							current_key,
 							available_utxos,
 							&bitcoin_fee_info,
 							Self::consolidation_parameters(),
-						))
+						);
+
+						Self::calculate_utxos_and_change(&selected_utxo[..])
+							.map(|change_amount| (selected_utxo, change_amount))
 					} else {
 						None
 					}
@@ -565,7 +568,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn calculate_utxos_and_change(spendable_utxos: Vec<Utxo>) -> Option<(Vec<Utxo>, BtcAmount)> {
+	fn calculate_utxos_and_change(spendable_utxos: &[Utxo]) -> Option<BtcAmount> {
 		if spendable_utxos.is_empty() {
 			return None
 		}
@@ -586,7 +589,6 @@ impl<T: Config> Pallet<T> {
 			.map(|utxo| utxo.amount)
 			.sum::<u64>()
 			.checked_sub(total_fee)
-			.map(|change_amount| (spendable_utxos, change_amount))
 	}
 }
 
