@@ -64,10 +64,13 @@ impl Default for CStrArray {
 	}
 }
 
+fn malloc_size<T: Sized>(number_of_ts: usize) -> *mut c_void {
+	unsafe { malloc(size_of::<T>() * number_of_ts) }
+}
+
 impl CStrArray {
 	pub fn string_args_to_c_args(&mut self, string_args: Vec<String>) -> anyhow::Result<()> {
-		let ptrs_size = string_args.len() * size_of::<*mut c_char>();
-		let array_malloc = unsafe { malloc(ptrs_size) };
+		let array_malloc = malloc_size::<*mut c_char>(string_args.len());
 
 		if array_malloc.is_null() {
 			panic!("Failed to allocate memory for the Command Line Args array");
@@ -80,7 +83,7 @@ impl CStrArray {
 			let c_string = CString::new(rust_string_arg.as_str())?;
 			let len = c_string.to_bytes_with_nul().len();
 
-			let c_string_ptr = unsafe { malloc(len * size_of::<c_char>()) };
+			let c_string_ptr = malloc_size::<c_char>(len);
 			if c_string_ptr.is_null() {
 				panic!("Failed to allocate memory for the Command Line Arg");
 			}
