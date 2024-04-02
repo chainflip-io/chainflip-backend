@@ -142,8 +142,6 @@ fn set_limit_order(
 	tick: Option<Tick>,
 	sell_amount: AssetAmount,
 ) {
-	// let (asset_pair, order) = pallet_cf_pools::AssetPair::from_swap(sell_asset,
-	// buy_asset).unwrap();
 	let order = asset_pair.side();
 
 	let sell_balance = pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, asset_pair.base())
