@@ -21,12 +21,12 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Configure Git
-        run: |
-          git config --global user.name 'GitHub Action'
-          git config --global user.email 'action@github.com'
+      - name: Setup Git 🛠️
+        uses: ./.github/actions/setup-git
+        with:
+          ssh-private-key: ${{ secrets.CF_GITHUB_BOT_SSH_PRIVATE_KEY }}
 
-      - name: Cherry-pick commit
+      - name: Cherry-pick commit 🍒
         run: |
           set -x
           git fetch --all
@@ -40,12 +40,12 @@ jobs:
 
           git cherry-pick -x $COMMIT_SHA
 
-      - name: Create Pull Request
+      - name: Create Pull Request 🐂
         uses: peter-evans/create-pull-request@v3
         with:
           token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
-          commit-message: Cherry-picked from ${{ env.COMMIT_SHA }}
-          title: "Cherry-Pick ${{ env.COMMIT_SHA }} to ${{ env.RELEASE_BRANCH }}"
+          commit-message: "pick: ${{ env.COMMIT_SHA }} to ${{ env.RELEASE_BRANCH }}"
+          title: "${{ github.event.pull_request.title }}"
           body: |
             This is an automated cherry-pick of ${{ env.COMMIT_SHA }} to ${{ env.RELEASE_BRANCH }}.
             Please review and merge if appropriate.

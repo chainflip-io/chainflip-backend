@@ -23,12 +23,12 @@ async function redeemAndObserve(
   redeemEthAddress: HexString,
   redeemAmount: RedeemAmount,
 ): Promise<number> {
-  const initBalance = await getBalance('FLIP', redeemEthAddress);
-  console.log(`Initial ERC20-FLIP balance: ${initBalance}`);
+  const initBalance = await getBalance('Flip', redeemEthAddress);
+  console.log(`Initial ERC20-Flip balance: ${initBalance}`);
 
   await redeemFlip(seed, redeemEthAddress, redeemAmount);
 
-  const newBalance = await observeBalanceIncrease('FLIP', redeemEthAddress, initBalance);
+  const newBalance = await observeBalanceIncrease('Flip', redeemEthAddress, initBalance);
   const balanceIncrease = newBalance - parseFloat(initBalance);
   console.log(
     `Redemption success! New balance: ${newBalance.toString()}, Increase: ${balanceIncrease}`,
@@ -37,8 +37,8 @@ async function redeemAndObserve(
   return balanceIncrease;
 }
 
-// Uses the seed to generate a new SC address and ETH address.
-// It then funds the SC address with FLIP, and redeems the FLIP to the ETH address
+// Uses the seed to generate a new SC address and Eth address.
+// It then funds the SC address with Flip, and redeems the Flip to the Eth address
 // checking that the balance has increased the expected amount.
 // If no seed is provided, a random one is generated.
 export async function testFundRedeem(providedSeed?: string) {
@@ -47,16 +47,16 @@ export async function testFundRedeem(providedSeed?: string) {
   const chainflip = await getChainflipApi();
   const redemptionTax = await chainflip.query.funding.redemptionTax();
   const redemptionTaxAmount = parseInt(
-    fineAmountToAmount(redemptionTax.toString(), assetDecimals('FLIP')),
+    fineAmountToAmount(redemptionTax.toString(), assetDecimals('Flip')),
   );
-  console.log(`Redemption tax: ${redemptionTax} = ${redemptionTaxAmount} FLIP`);
+  console.log(`Redemption tax: ${redemptionTax} = ${redemptionTaxAmount} Flip`);
 
   const seed = providedSeed ?? randomBytes(32).toString('hex');
   const fundAmount = 1000;
   const redeemSCAddress = await newStatechainAddress(seed);
-  const redeemEthAddress = await newAddress('ETH', seed);
-  console.log(`FLIP Redeem address: ${redeemSCAddress}`);
-  console.log(`ETH  Redeem address: ${redeemEthAddress}`);
+  const redeemEthAddress = await newAddress('Eth', seed);
+  console.log(`Flip Redeem address: ${redeemSCAddress}`);
+  console.log(`Eth  Redeem address: ${redeemEthAddress}`);
 
   // Fund the SC address for the tests
   await fundFlip(redeemSCAddress, fundAmount.toString());

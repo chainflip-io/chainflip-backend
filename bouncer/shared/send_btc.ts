@@ -11,7 +11,7 @@ export async function sendBtc(address: string, amount: number | string) {
     wallet: 'whale',
   });
 
-  // BTC client has a limit on the number of concurrent requests
+  // Btc client has a limit on the number of concurrent requests
   const txid = await btcClientMutex.runExclusive(async () =>
     client.sendToAddress(address, amount, '', '', false, true, null, 'unset', null, 1),
   );

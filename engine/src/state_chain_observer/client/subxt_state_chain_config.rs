@@ -10,6 +10,7 @@ impl Config for StateChainConfig {
 	type Signature = state_chain_runtime::Signature;
 	type Hasher = subxt::ext::sp_runtime::traits::BlakeTwo256; // Requires subxt's custom Hash trait
 	type Header = subxt::ext::sp_runtime::generic::Header<u32, Self::Hasher>; // Requires subxt's custom Header trait
+	type AssetId = u32; // Not used - we don't use pallet-assets
 	type ExtrinsicParams = signed_extensions::AnyOf<
 		Self,
 		(
@@ -18,7 +19,7 @@ impl Config for StateChainConfig {
 			signed_extensions::CheckNonce,
 			signed_extensions::CheckGenesis<Self>,
 			signed_extensions::CheckMortality<Self>,
-			signed_extensions::ChargeAssetTxPayment,
+			signed_extensions::ChargeAssetTxPayment<Self>,
 			signed_extensions::ChargeTransactionPayment,
 		),
 	>;

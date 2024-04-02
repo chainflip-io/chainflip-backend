@@ -13,7 +13,7 @@ Our practices must be:
 - As unambiguous as possible. It should be clear how and when the practice applies. If necessary they should include clarifying examples. Ideally these examples would be from our codebase, and include links to PRs and issues.
 - Well-reasoned. Otherwise we will likely alienate some developers. As such each practice should be justified using logic, principles, ideals, and other practices.
 
-# Maintainence
+# Maintenance
 
 Create an issue on this repository regarding the modification to / problem with the practices, provide a justification for the change, and add the <span style="color:rgb(0,255,0)">practices</span> label. We intentionally chose not to burden ourselves with a formal process to agree on modifications to the practices, but it is expected the whole team be given the opportinity to comment, a majority of the team should agree to a change, and those who disagreed are satisfied with the resolution. Once the modification is agreed on by the team, create a pull request to modify this document. That pull request should contain changes that ensure the codebase matches the new practices if applicable.
 
@@ -43,7 +43,7 @@ Each commit should be well named. While writing the occasional "ARGHHH" commit m
 
 ### Self review
 
-Before requesting a review, developers are encouraged to conduct a thorough self-review of their own work. The approach to self-reviewing should be the same approach taken to reviewing the work of others. Investigate assumptions are being made, look for bugs, try and break it, think about how it could be structured to read better. Often you'll be able to find ways to improve your own code before the reviewer does.
+Before requesting a review, developers are encouraged to conduct a thorough self-review of their own work. The approach to self-reviewing should be the same approach taken to reviewing the work of others. Investigate assumptions being made, look for bugs, try and break it, think about how it could be structured to read better. Often you'll be able to find ways to improve your own code before the reviewer does.
 
 ## Correctness
 

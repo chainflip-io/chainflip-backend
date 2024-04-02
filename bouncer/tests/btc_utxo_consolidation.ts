@@ -43,8 +43,8 @@ async function test() {
   const consolidationThreshold = initialUtxos.count + 2;
 
   // Add 2 utxo which should later trigger consolidation as per the parameters above:
-  await provideLiquidity('BTC', 2);
-  await provideLiquidity('BTC', 3);
+  await provideLiquidity('Btc', 2);
+  await provideLiquidity('Btc', 3);
 
   const amountBeforeConsolidation = (await queryUtxos()).amount;
   console.log(`Total amount in BTC vault is: ${amountBeforeConsolidation}`);
@@ -99,7 +99,7 @@ async function test() {
   assert(utxos.count === 2, 'should have 2 total utxos');
   assert(
     utxos.amount === amountBeforeConsolidation - Number(feeDeficit),
-    'total BTC amount should remain unchanged',
+    'total Btc amount should remain unchanged',
   );
 
   // Clean up after the test to minimise conflicts with any other tests

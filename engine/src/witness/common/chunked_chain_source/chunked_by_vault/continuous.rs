@@ -77,8 +77,8 @@ where
 					let mut processed_inverse = processed_indices.clone();
 					processed_inverse.invert();
 					processed_inverse.set_range(..epoch.info.1, false);
-					let highest_processed = processed_indices.iter(true).last().map_or(epoch.info.1, |highest_processed| std::cmp::max(highest_processed, epoch.info.1));
-					processed_inverse.set_range(highest_processed.., false);
+					let next_unprocessed = processed_indices.iter(true).last().map_or(epoch.info.1, |highest_processed| std::cmp::max(Step::forward(highest_processed, 1), epoch.info.1));
+					processed_inverse.set_range(next_unprocessed.., false);
 					processed_inverse
 				};
 
@@ -98,9 +98,9 @@ where
 
 							loop_select!(
 								let header = chain_stream.next_or_pending() => {
-									let highest_processed = processed_indices.iter(true).last().map_or(epoch.info.1, |highest_processed| std::cmp::max(highest_processed, epoch.info.1));
-									if highest_processed < header.index {
-										for unprocessed_index in Step::forward(highest_processed, 1)..header.index {
+									let next_unprocessed = processed_indices.iter(true).last().map_or(epoch.info.1, |highest_processed| std::cmp::max(Step::forward(highest_processed, 1), epoch.info.1));
+									if next_unprocessed < header.index {
+										for unprocessed_index in next_unprocessed..header.index {
 											if inprogress_indices.len() < MAXIMUM_CONCURRENT_INPROGRESS {
 												inprogress_indices.insert(unprocessed_index, {
 													let chain_client = chain_client.clone();
