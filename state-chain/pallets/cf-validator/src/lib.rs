@@ -10,6 +10,7 @@ mod helpers;
 
 pub mod weights;
 pub use weights::WeightInfo;
+pub mod migrations;
 
 mod auction_resolver;
 mod benchmarking;
@@ -34,7 +35,7 @@ use frame_support::{
 		traits::{BlockNumberProvider, One, Saturating, UniqueSaturatedInto, Zero},
 		Percent, Permill,
 	},
-	traits::{EstimateNextSessionRotation, OnKilledAccount},
+	traits::EstimateNextSessionRotation,
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -68,6 +69,8 @@ pub enum PalletConfigUpdate {
 type RuntimeRotationState<T> =
 	RotationState<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+
 // Might be better to add the enum inside a struct rather than struct inside enum
 #[derive(Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
 #[scale_info(skip_type_params(T))]
@@ -82,7 +85,6 @@ pub enum RotationPhase<T: Config> {
 }
 
 type ValidatorIdOf<T> = <T as Chainflip>::ValidatorId;
-type VanityName = Vec<u8>;
 
 type BackupMap<T> = BTreeMap<ValidatorIdOf<T>, <T as Chainflip>::Amount>;
 
@@ -90,8 +92,6 @@ type BackupMap<T> = BTreeMap<ValidatorIdOf<T>, <T as Chainflip>::Amount>;
 pub enum PalletOffence {
 	MissedAuthorshipSlot,
 }
-
-pub const MAX_LENGTH_FOR_VANITY_NAME: usize = 64;
 
 impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled);
 
@@ -104,6 +104,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
+	#[pallet::storage_version(PALLET_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -195,12 +196,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type CurrentAuthorities<T: Config> =
 		StorageValue<_, BTreeSet<ValidatorIdOf<T>>, ValueQuery>;
-
-	/// Vanity names of the validators stored as a Map with the current validator IDs as key.
-	#[pallet::storage]
-	#[pallet::getter(fn vanity_names)]
-	pub type VanityNames<T: Config> =
-		StorageValue<_, BTreeMap<T::AccountId, VanityName>, ValueQuery>;
 
 	/// The bond of the current epoch.
 	#[pallet::storage]
@@ -315,8 +310,6 @@ pub mod pallet {
 		PeerIdRegistered(T::AccountId, Ed25519PublicKey, Port, Ipv6Addr),
 		/// A authority has unregistered her current PeerId \[account_id, public_key\]
 		PeerIdUnregistered(T::AccountId, Ed25519PublicKey),
-		/// Vanity Name for a node has been set \[account_id, vanity_name\]
-		VanityNameSet(T::AccountId, VanityName),
 		/// An auction has a set of winners \[winners, bond\]
 		AuctionCompleted(Vec<ValidatorIdOf<T>>, T::Amount),
 		/// Some pallet configuration has been updated.
@@ -335,10 +328,6 @@ pub mod pallet {
 		InvalidAccountPeerMappingSignature,
 		/// Invalid redemption period.
 		InvalidRedemptionPeriod,
-		/// Vanity name length exceeds the limit of 64 characters.
-		NameTooLong,
-		/// Invalid characters in the name.
-		InvalidCharactersInName,
 		/// Invalid minimum authority set size.
 		InvalidAuthoritySetMinSize,
 		/// Auction parameters are invalid.
@@ -723,39 +712,6 @@ pub mod pallet {
 			})
 		}
 
-		/// Allow a node to set a "Vanity Name" for themselves. This is functionally
-		/// useless but can be used to make the network a bit more friendly for
-		/// observers. Names are required to be <= MAX_LENGTH_FOR_VANITY_NAME (64)
-		/// UTF-8 bytes.
-		///
-		/// The dispatch origin of this function must be signed.
-		///
-		/// ## Events
-		///
-		/// - [VanityNameSet](Event::VanityNameSet)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_system::error::BadOrigin)
-		/// - [NameTooLong](Error::NameTooLong)
-		/// - [InvalidCharactersInName](Error::InvalidCharactersInName)
-		///
-		/// ## Dependencies
-		///
-		/// - None
-		#[pallet::call_index(5)]
-		#[pallet::weight(T::ValidatorWeightInfo::set_vanity_name())]
-		pub fn set_vanity_name(origin: OriginFor<T>, name: Vec<u8>) -> DispatchResultWithPostInfo {
-			let account_id = ensure_signed(origin)?;
-			ensure!(name.len() <= MAX_LENGTH_FOR_VANITY_NAME, Error::<T>::NameTooLong);
-			ensure!(sp_std::str::from_utf8(&name).is_ok(), Error::<T>::InvalidCharactersInName);
-			let mut vanity_names = VanityNames::<T>::get();
-			vanity_names.insert(account_id.clone(), name.clone());
-			VanityNames::<T>::put(vanity_names);
-			Self::deposit_event(Event::VanityNameSet(account_id, name));
-			Ok(().into())
-		}
-
 		#[pallet::call_index(6)]
 		#[pallet::weight(T::ValidatorWeightInfo::register_as_validator())]
 		pub fn register_as_validator(origin: OriginFor<T>) -> DispatchResult {
@@ -803,7 +759,6 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config> {
 		pub genesis_authorities: BTreeSet<ValidatorIdOf<T>>,
 		pub genesis_backups: BackupMap<T>,
-		pub genesis_vanity_names: BTreeMap<T::AccountId, VanityName>,
 		pub blocks_per_epoch: BlockNumberFor<T>,
 		pub bond: T::Amount,
 		pub redemption_period_as_percentage: Percent,
@@ -819,7 +774,6 @@ pub mod pallet {
 			Self {
 				genesis_authorities: Default::default(),
 				genesis_backups: Default::default(),
-				genesis_vanity_names: Default::default(),
 				blocks_per_epoch: Zero::zero(),
 				bond: Default::default(),
 				redemption_period_as_percentage: Zero::zero(),
@@ -846,7 +800,6 @@ pub mod pallet {
 			RedemptionPeriodAsPercentage::<T>::set(self.redemption_period_as_percentage);
 			BackupRewardNodePercentage::<T>::set(self.backup_reward_node_percentage);
 			AuthoritySetMinSize::<T>::set(self.authority_set_min_size);
-			VanityNames::<T>::put(&self.genesis_vanity_names);
 			MaxAuthoritySetContractionPercentage::<T>::set(
 				self.max_authority_set_contraction_percentage,
 			);
@@ -1426,14 +1379,6 @@ impl<T: Config> AuthoritiesCfeVersions for Pallet<T> {
 				.count() as u32,
 			authorities_count,
 		)
-	}
-}
-
-pub struct RemoveVanityNames<T>(PhantomData<T>);
-
-impl<T: Config> OnKilledAccount<T::AccountId> for RemoveVanityNames<T> {
-	fn on_killed_account(who: &T::AccountId) {
-		let _ = VanityNames::<T>::try_mutate(|vanity_names| vanity_names.remove(who).ok_or(()));
 	}
 }
 

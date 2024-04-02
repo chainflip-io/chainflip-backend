@@ -5,6 +5,8 @@ mod benchmarking;
 mod mock;
 mod tests;
 
+pub mod weights;
+pub use weights::WeightInfo;
 pub mod migrations;
 
 use cf_primitives::AccountRole;
@@ -14,11 +16,15 @@ use frame_support::{
 	pallet_prelude::{DispatchResult, StorageVersion},
 	traits::{EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OnNewAccount},
 };
-use frame_system::{ensure_signed, pallet_prelude::OriginFor, RawOrigin, WeightInfo};
-pub use pallet::*;
-use sp_std::{marker::PhantomData, vec::Vec};
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+use frame_system::{ensure_signed, pallet_prelude::OriginFor, RawOrigin};
+pub use pallet::*;
+use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, vec::Vec};
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+pub const MAX_LENGTH_FOR_VANITY_NAME: usize = 64;
+
+pub type VanityName = Vec<u8>;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -33,6 +39,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::without_storage_info]
 	#[pallet::storage_version(PALLET_VERSION)]
 	pub struct Pallet<T>(PhantomData<T>);
 
@@ -44,11 +51,25 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type AccountRoles<T: Config> = StorageMap<_, Identity, T::AccountId, AccountRole>;
 
+	/// Vanity names of the validators stored as a Map with the current validator IDs as key.
+	#[pallet::storage]
+	#[pallet::getter(fn vanity_names)]
+	pub type VanityNames<T: Config> =
+		StorageValue<_, BTreeMap<T::AccountId, VanityName>, ValueQuery>; // TODO JAMIE: Migration for this
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		AccountRoleRegistered { account_id: T::AccountId, role: AccountRole },
-		AccountRoleDeregistered { account_id: T::AccountId, role: AccountRole },
+		AccountRoleRegistered {
+			account_id: T::AccountId,
+			role: AccountRole,
+		},
+		AccountRoleDeregistered {
+			account_id: T::AccountId,
+			role: AccountRole,
+		},
+		/// Vanity Name for a node has been set \[account_id, vanity_name\]
+		VanityNameSet(T::AccountId, VanityName),
 	}
 
 	#[pallet::error]
@@ -57,16 +78,24 @@ pub mod pallet {
 		UnknownAccount,
 		/// The account already has a registered role.
 		AccountRoleAlreadyRegistered,
+		/// Vanity name length exceeds the limit of 64 characters.
+		NameTooLong,
+		/// Invalid characters in the name.
+		InvalidCharactersInName,
 	}
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub initial_account_roles: Vec<(T::AccountId, AccountRole)>,
+		pub genesis_vanity_names: BTreeMap<T::AccountId, VanityName>,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { initial_account_roles: Default::default() }
+			Self {
+				initial_account_roles: Default::default(),
+				genesis_vanity_names: Default::default(),
+			}
 		}
 	}
 
@@ -77,12 +106,44 @@ pub mod pallet {
 				Pallet::<T>::register_account_role(account, *role)
 					.expect("Genesis account role registration should not fail.");
 			}
+			VanityNames::<T>::put(&self.genesis_vanity_names);
 		}
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		// Don't remove this block: it ensures we keep an extrinsic index for the pallet.
+		/// Allow a node to set a "Vanity Name" for themselves. This is functionally
+		/// useless but can be used to make the network a bit more friendly for
+		/// observers. Names are required to be <= MAX_LENGTH_FOR_VANITY_NAME (64)
+		/// UTF-8 bytes.
+		///
+		/// The dispatch origin of this function must be signed.
+		///
+		/// ## Events
+		///
+		/// - [VanityNameSet](Event::VanityNameSet)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::error::BadOrigin)
+		/// - [NameTooLong](Error::NameTooLong)
+		/// - [InvalidCharactersInName](Error::InvalidCharactersInName)
+		///
+		/// ## Dependencies
+		///
+		/// - None
+		#[pallet::call_index(0)]
+		#[pallet::weight(T::WeightInfo::set_vanity_name())]
+		pub fn set_vanity_name(origin: OriginFor<T>, name: Vec<u8>) -> DispatchResultWithPostInfo {
+			let account_id = ensure_signed(origin)?;
+			ensure!(name.len() <= MAX_LENGTH_FOR_VANITY_NAME, Error::<T>::NameTooLong);
+			ensure!(sp_std::str::from_utf8(&name).is_ok(), Error::<T>::InvalidCharactersInName);
+			let mut vanity_names = VanityNames::<T>::get();
+			vanity_names.insert(account_id.clone(), name.clone());
+			VanityNames::<T>::put(vanity_names);
+			Self::deposit_event(Event::VanityNameSet(account_id, name));
+			Ok(().into())
+		}
 	}
 }
 
@@ -167,6 +228,7 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
 	fn on_killed_account(who: &T::AccountId) {
 		AccountRoles::<T>::remove(who);
+		let _ = VanityNames::<T>::try_mutate(|vanity_names| vanity_names.remove(who).ok_or(()));
 	}
 }
 

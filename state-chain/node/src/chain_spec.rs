@@ -548,6 +548,7 @@ fn testnet_genesis(
 				.iter()
 				.map(|(id, role, ..)| (id.clone(), *role))
 				.collect::<Vec<_>>(),
+			genesis_vanity_names,
 		},
 		validator: state_chain_runtime::ValidatorConfig {
 			genesis_authorities: authority_ids.clone(),
@@ -561,7 +562,6 @@ fn testnet_genesis(
 					}
 				})
 				.collect::<_>(),
-			genesis_vanity_names,
 			blocks_per_epoch,
 			redemption_period_as_percentage,
 			backup_reward_node_percentage: Percent::from_percent(33),

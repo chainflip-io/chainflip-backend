@@ -5,9 +5,10 @@ use cf_chains::eth::Address as EthereumAddress;
 use cf_primitives::GENESIS_EPOCH;
 use cf_traits::EpochInfo;
 use frame_support::assert_noop;
+use pallet_cf_account_roles::VanityNames;
 use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 use pallet_cf_reputation::Reputations;
-use pallet_cf_validator::{AccountPeerMapping, MappedPeers, VanityNames};
+use pallet_cf_validator::{AccountPeerMapping, MappedPeers};
 use state_chain_runtime::{Funding, Reputation, Runtime, Validator};
 
 #[test]
