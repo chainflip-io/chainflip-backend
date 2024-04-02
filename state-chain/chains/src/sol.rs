@@ -27,6 +27,7 @@ pub const SYSTEM_PROGRAM_ID: &str = "11111111111111111111111111111111";
 pub const TOKEN_PROGRAM_ID: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 pub const ASSOCIATED_TOKEN_PROGRAM_ID: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
 pub const VAULT_PROGRAM: &str = "632bJHVLPj6XPLVgrabFwxogtAQQ5zb8hwm9zqZuCcHo";
+pub const UPGRADE_MANAGER_PROGRAM: &str = "274BzCz5RPHJZsxdcSGySahz4qAWqwSDcmz1YEKkGaZC";
 pub const SYS_VAR_RECENT_BLOCKHASHES: &str = "SysvarRecentB1ockHashes11111111111111111111";
 pub const SYS_VAR_INSTRUCTIONS: &str = "Sysvar1nstructions1111111111111111111111111";
 pub const COMPUTE_BUDGET_PROGRAM: &str = "ComputeBudget111111111111111111111111111111";
@@ -723,9 +724,12 @@ mod tests {
 
 	use crate::sol::{
 		compute_budget::ComputeBudgetInstruction,
-		program_instructions::{SystemProgramInstruction, VaultProgram},
+		program_instructions::{
+			ProgramInstruction, SystemProgramInstruction, UpgradeManagerProgram, VaultProgram,
+		},
+		token_instructions::AssociatedTokenAccountInstruction,
 		BorshDeserialize, BorshSerialize, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS,
-		TOKEN_PROGRAM_ID, token_instructions::AssociatedTokenAccountInstruction,
+		TOKEN_PROGRAM_ID,
 	};
 
 	use super::{
@@ -834,8 +838,8 @@ mod tests {
 				&nonce_account_pubkey,
 				&vault_account_pubkey,
 			),
-			VaultProgram::get_instruction(
-				VaultProgram::FetchNative { seed: vec![11u8, 12u8, 13u8, 55u8], bump: 249 },
+			ProgramInstruction::get_instruction(
+				&VaultProgram::FetchNative { seed: vec![11u8, 12u8, 13u8, 55u8], bump: 249 },
 				vec![
 					AccountMeta::new_readonly(data_account_pubkey, false),
 					AccountMeta::new_readonly(vault_account_pubkey, true),
@@ -857,11 +861,11 @@ mod tests {
 		assert_eq!(serialized_tx, expected_serialized_tx);
 	}
 
-	// While having a batch transfer is possible, lamport transfers to executable accounts will fail causing
-	// the whole batch (multiple instructions) to fail. For tokens, while the derived ata can't really
-	// be something else than the derived ata, it can be initiated wrongly or corrupted after creation, in
-	// which case the transfer will fail.  Therefore, to aim to have a batch transfer we must be able to
-	// resign them separately if they happen to fail
+	// While having a batch transfer is possible, lamport transfers to executable accounts will fail
+	// causing the whole batch (multiple instructions) to fail. For tokens, while the derived ata
+	// can't really be something else than the derived ata, it can be initiated wrongly or corrupted
+	// after creation, in which case the transfer will fail.  Therefore, to aim to have a batch
+	// transfer we must be able to resign them separately if they happen to fail
 	#[test]
 	fn create_nonced_transfer_token() {
 		let durable_nonce = Hash::from_str("A6hMhp72reGMkS5kNBaxaEXgNqn9H6woLsjy2Apz38MQ").unwrap();
@@ -880,8 +884,8 @@ mod tests {
 				&nonce_account_pubkey,
 				&vault_account_pubkey,
 			),
-			VaultProgram::get_instruction(
-				VaultProgram::TransferTokens {
+			ProgramInstruction::get_instruction(
+				&VaultProgram::TransferTokens {
 					seed: vec![11u8, 13u8, 55u8],
 					bump: 255,
 					amount: 2,
@@ -932,8 +936,8 @@ mod tests {
 				&nonce_account_pubkey,
 				&vault_account_pubkey,
 			),
-			VaultProgram::get_instruction(
-				VaultProgram::RotateAggKey { transfer_funds: true },
+			ProgramInstruction::get_instruction(
+				&VaultProgram::RotateAggKey { transfer_funds: true },
 				vec![
 					AccountMeta::new(data_account_pubkey, false),
 					AccountMeta::new(vault_account_pubkey, true),
@@ -971,8 +975,8 @@ mod tests {
 				&nonce_account_pubkey,
 				&vault_account_pubkey,
 			),
-			VaultProgram::get_instruction(
-				VaultProgram::RotateAggKey { transfer_funds: true },
+			ProgramInstruction::get_instruction(
+				&VaultProgram::RotateAggKey { transfer_funds: true },
 				vec![
 					AccountMeta::new(data_account_pubkey, false),
 					AccountMeta::new(vault_account_pubkey, true),
@@ -1017,8 +1021,8 @@ mod tests {
 				&vault_account_pubkey,
 			),
 			SystemProgramInstruction::transfer(&vault_account_pubkey, &to_pubkey, amount),
-			VaultProgram::get_instruction(
-				VaultProgram::ExecuteCcmNativeCall {
+			ProgramInstruction::get_instruction(
+				&VaultProgram::ExecuteCcmNativeCall {
 					source_chain: 1,
 					source_address: vec![11u8, 6u8, 152u8, 22u8, 3u8, 1u8],
 					message: vec![124u8, 29u8, 15u8, 7u8],
@@ -1077,8 +1081,8 @@ mod tests {
 				&nonce_account_pubkey,
 				&vault_account_pubkey,
 			),
-			VaultProgram::get_instruction(
-				VaultProgram::TransferTokens {
+			ProgramInstruction::get_instruction(
+				&VaultProgram::TransferTokens {
 					seed: vec![118u8, 97u8, 117u8, 108u8, 116u8, 95u8, 112u8, 100u8, 97u8],
 					bump: 254,
 					amount,
@@ -1095,8 +1099,8 @@ mod tests {
 					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
 				],
 			),
-			VaultProgram::get_instruction(
-				VaultProgram::ExecuteCcmTokenCall {
+			ProgramInstruction::get_instruction(
+				&VaultProgram::ExecuteCcmTokenCall {
 					source_chain: 1,
 					source_address: vec![11u8, 6u8, 152u8, 22u8, 3u8, 1u8],
 					message: vec![124u8, 29u8, 15u8, 7u8],
@@ -1170,18 +1174,17 @@ mod tests {
 		assert_eq!(serialized_tx, expected_serialized_tx);
 	}
 
-
 	// TODO: Pull and compare discriminators and function from the contracts-interfaces
 	#[test]
 	fn test_function_discriminators() {
 		assert_eq!(
-			VaultProgram::function_discriminator(VaultProgram::RotateAggKey {
+			VaultProgram::function_discriminator(&VaultProgram::RotateAggKey {
 				transfer_funds: true
 			}),
 			vec![78u8, 81u8, 143u8, 171u8, 221u8, 165u8, 214u8, 139u8]
 		);
 		assert_eq!(
-			VaultProgram::function_discriminator(VaultProgram::TransferTokens {
+			VaultProgram::function_discriminator(&VaultProgram::TransferTokens {
 				seed: vec![34u8, 27u8, 77u8],
 				bump: 2,
 				amount: 6,
@@ -1190,14 +1193,14 @@ mod tests {
 			vec![54u8, 180u8, 238u8, 175u8, 74u8, 85u8, 126u8, 188u8]
 		);
 		assert_eq!(
-			VaultProgram::function_discriminator(VaultProgram::FetchNative {
+			VaultProgram::function_discriminator(&VaultProgram::FetchNative {
 				seed: vec![1u8, 2u8, 3u8],
 				bump: 13
 			}),
 			vec![142u8, 36u8, 101u8, 143u8, 108u8, 89u8, 41u8, 140u8]
 		);
 		assert_eq!(
-			VaultProgram::function_discriminator(VaultProgram::ExecuteCcmNativeCall {
+			VaultProgram::function_discriminator(&VaultProgram::ExecuteCcmNativeCall {
 				source_chain: 1,
 				source_address: vec![2u8, 2u8, 67u8],
 				message: vec![2u8],
@@ -1206,13 +1209,28 @@ mod tests {
 			vec![125u8, 5u8, 11u8, 227u8, 128u8, 66u8, 224u8, 178u8]
 		);
 		assert_eq!(
-			VaultProgram::function_discriminator(VaultProgram::ExecuteCcmTokenCall {
+			VaultProgram::function_discriminator(&VaultProgram::ExecuteCcmTokenCall {
 				source_chain: 1,
 				source_address: vec![2u8, 2u8, 67u8],
 				message: vec![3u8],
 				amount: 1
 			}),
 			vec![108u8, 184u8, 162u8, 123u8, 159u8, 222u8, 170u8, 35u8]
+		);
+		assert_eq!(
+			UpgradeManagerProgram::function_discriminator(
+				&UpgradeManagerProgram::UpgradeVaultProgram { seed: vec![31u8, 1u8, 5u8], bump: 3 }
+			),
+			vec![72u8, 211u8, 76u8, 189u8, 84u8, 176u8, 62u8, 101u8]
+		);
+		assert_eq!(
+			UpgradeManagerProgram::function_discriminator(
+				&UpgradeManagerProgram::TransferVaultUpgradeAuthority {
+					seed: vec![1u8, 5u8, 7u8],
+					bump: 3,
+				}
+			),
+			vec![114u8, 247u8, 72u8, 110u8, 145u8, 65u8, 236u8, 153u8]
 		);
 	}
 
@@ -1221,8 +1239,8 @@ mod tests {
 		println!(
 			"{:?}",
 			hex::encode(
-				VaultProgram::get_instruction(
-					VaultProgram::FetchNative { seed: vec![1u8, 2u8, 3u8], bump: 255 },
+				ProgramInstruction::get_instruction(
+					&VaultProgram::FetchNative { seed: vec![1u8, 2u8, 3u8], bump: 255 },
 					vec![],
 				)
 				.data

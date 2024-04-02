@@ -1,5 +1,6 @@
 use super::{
-	vec, vec::Vec, AccountMeta, FromStr, Instruction, Pubkey, SYSTEM_PROGRAM_ID, VAULT_PROGRAM,
+	vec, vec::Vec, AccountMeta, FromStr, Instruction, Pubkey, SYSTEM_PROGRAM_ID,
+	UPGRADE_MANAGER_PROGRAM, VAULT_PROGRAM,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use frame_support::sp_io::hashing::sha2_256;
@@ -261,10 +262,21 @@ pub enum VaultProgram {
 	},
 }
 
-impl VaultProgram {
-	pub fn get_instruction(self, accounts: Vec<AccountMeta>) -> Instruction {
-		let mut instruction =
-			Instruction::new_with_borsh(Pubkey::from_str(VAULT_PROGRAM).unwrap(), &self, accounts);
+#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
+pub enum UpgradeManagerProgram {
+	UpgradeVaultProgram { seed: Vec<u8>, bump: u8 },
+	TransferVaultUpgradeAuthority { seed: Vec<u8>, bump: u8 },
+}
+
+pub trait ProgramInstruction: BorshSerialize {
+	fn get_program_id(&self) -> &str;
+
+	fn get_instruction(&self, accounts: Vec<AccountMeta>) -> Instruction {
+		let mut instruction = Instruction::new_with_borsh(
+			Pubkey::from_str(self.get_program_id()).unwrap(),
+			&self,
+			accounts,
+		);
 		instruction.data.remove(0);
 		let mut data = self.function_discriminator();
 		data.append(&mut instruction.data);
@@ -272,11 +284,19 @@ impl VaultProgram {
 		instruction
 	}
 
-	pub fn function_discriminator(self) -> Vec<u8> {
+	fn function_discriminator(&self) -> Vec<u8> {
 		sha2_256((String::from_str("global:").unwrap() + self.call_name()).as_bytes())[..8].to_vec()
 	}
 
-	pub fn call_name(&self) -> &str {
+	fn call_name(&self) -> &str;
+}
+
+impl ProgramInstruction for VaultProgram {
+	fn get_program_id(&self) -> &str {
+		VAULT_PROGRAM
+	}
+
+	fn call_name(&self) -> &str {
 		match self {
 			Self::FetchNative { seed: _, bump: _ } => "fetch_native",
 			Self::RotateAggKey { transfer_funds: _ } => "rotate_agg_key",
@@ -293,6 +313,20 @@ impl VaultProgram {
 				message: _,
 				amount: _,
 			} => "execute_ccm_token_call",
+		}
+	}
+}
+
+impl ProgramInstruction for UpgradeManagerProgram {
+	fn get_program_id(&self) -> &str {
+		UPGRADE_MANAGER_PROGRAM
+	}
+
+	fn call_name(&self) -> &str {
+		match self {
+			Self::UpgradeVaultProgram { seed: _, bump: _ } => "upgrade_vault_program",
+			Self::TransferVaultUpgradeAuthority { seed: _, bump: _ } =>
+				"transfer_vault_upgrade_authority",
 		}
 	}
 }
