@@ -25,6 +25,10 @@
         {
           "name": "newAggKey",
           "type": "publicKey"
+        },
+        {
+          "name": "newGovKey",
+          "type": "publicKey"
         }
       ],
       "programFunctionName": "initialize",
@@ -62,6 +66,29 @@
       ],
       "programFunctionName": "rotate_agg_key",
       "discriminator": "[78, 81, 143, 171, 221, 165, 214, 139]"
+    },
+    {
+      "name": "setGovKeyWithAggKey",
+      "accounts": [
+        {
+          "name": "dataAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "aggKey",
+          "isMut": false,
+          "isSigner": true
+        }
+      ],
+      "args": [
+        {
+          "name": "newGovKey",
+          "type": "publicKey"
+        }
+      ],
+      "programFunctionName": "set_gov_key_with_agg_key",
+      "discriminator": "[66, 64, 58, 40, 15, 75, 215, 162]"
     },
     {
       "name": "fetchNative",
@@ -304,11 +331,18 @@
   "accounts": [
     {
       "name": "DataAccount",
+      "docs": [
+        "* ****************************************************************************\n * *************************** IMPORTANT NOTE *********************************\n * ****************************************************************************\n * Upgrade Manager imports and reads this struct. If the vault is upgraded\n * and the DataAccount struct is modified we need to check the compatibility\n * with the new program. Also, if we were to ever upgrade this program and\n * create a new Data account in a different address, the upgrade manager could\n * use the old one, which would be problematic because it would read old keys.\n *\n * The easiest approach on upgrade is keeping the DataAccount unchanged and use\n * a new account struct for any new data that is required. Also, to not change\n * the DATA_ACCOUNT_SEED nor allow for a creation of multiple DataAccounts.\n *\n *\n *        DO NOT MODIFY THIS WITHOUT UNDERSTANDING THE CONSEQUENCES!\n * ****************************************************************************\n * ****************************************************************************"
+      ],
       "type": {
         "kind": "struct",
         "fields": [
           {
             "name": "aggKey",
+            "type": "publicKey"
+          },
+          {
+            "name": "govKey",
             "type": "publicKey"
           }
         ]

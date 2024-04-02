@@ -3,6 +3,36 @@
   "name": "cf_tester",
   "instructions": [
     {
+      "name": "initialize",
+      "accounts": [
+        {
+          "name": "dataAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "initializer",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "newAggKey",
+          "type": "publicKey"
+        },
+        {
+          "name": "newGovKey",
+          "type": "publicKey"
+        }
+      ]
+    },
+    {
       "name": "cfReceiveToken",
       "accounts": [
         {
@@ -82,6 +112,24 @@
           "type": "u64"
         }
       ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "DataAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "aggKey",
+            "type": "publicKey"
+          },
+          {
+            "name": "govKey",
+            "type": "publicKey"
+          }
+        ]
+      }
     }
   ],
   "events": [
