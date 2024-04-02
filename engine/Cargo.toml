@@ -14,7 +14,6 @@ path = 'src/lib.rs'
 workspace = true
 
 [dependencies]
-libc = "0.2.153"
 anyhow = "1.0"
 async-broadcast = "0.5"
 async-channel = "1.7.1"
