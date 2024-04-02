@@ -80,6 +80,10 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return '632bJHVLPj6XPLVgrabFwxogtAQQ5zb8hwm9zqZuCcHo';
         case 'DATA_ACCOUNT':
           return '5yhN4QzBFg9jKhLfVHcS5apMB7e3ftofCkzkNH6dZctC';
+        case 'UPGRADE_MANAGER':
+          return '274BzCz5RPHJZsxdcSGySahz4qAWqwSDcmz1YEKkGaZC';
+        case 'UPGRADE_MANAGER_SIGNER':
+          return '2SAhe89c1umM2JvCnmqCEnY8UCQtNPEKGe7UXA8KSQqH';
         case 'SolUsdc':
           return process.env.ARB_USDC_ADDRESS ?? '24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p';
         case 'CFTESTER':
