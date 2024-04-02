@@ -80,6 +80,11 @@ jobs:
         run: >
           rm ./chainflip-node
 
+      - name: Setup Git 🛠️
+        uses: ./.github/actions/setup-git
+        with:
+          ssh-private-key: ${{ secrets.CF_GITHUB_BOT_SSH_PRIVATE_KEY }}
+
       - name: Make a pull request with the changed weight files 🕯️
         uses: peter-evans/create-pull-request@153407881ec5c347639a548ade7d8ad1d6740e38
         with:
@@ -89,4 +94,4 @@ jobs:
           body: "This pull request was opened automatically. Close it if you think it was opened in error."
           branch: auto/benchmark-results
           delete-branch: true
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
