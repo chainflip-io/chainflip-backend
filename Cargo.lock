@@ -1767,7 +1767,6 @@ dependencies = [
  "jsonrpsee 0.16.3",
  "lazy_format",
  "lazy_static",
- "libc",
  "mockall",
  "multisig",
  "num-bigint",
@@ -3341,7 +3340,6 @@ name = "engine-upgrade-utils"
 version = "1.0.0"
 dependencies = [
  "anyhow",
- "libc",
 ]
 
 [[package]]
