@@ -9,10 +9,10 @@ jobs:
       - name: Checkout backend
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
-      - name: Install pnpm
+      - name: Install pnpm 💿
         run: npm install -g pnpm
 
-      - name: Configure NodeJS
+      - name: Configure NodeJS 🛠️
         uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65
         with:
           node-version: 18
@@ -27,10 +27,12 @@ jobs:
           name: chainflip-backend-bin-ubuntu-22.04
           github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
           path: latest-release-bins
-      - name: Permissions for latest binaries
+
+      - name: Permissions for latest binaries 🚓
         run: |
             chmod +x ./latest-release-bins/chainflip-*
-      - name: Version of the latest release
+
+      - name: Get version of the latest release ✍️
         run: |
             set -x
             echo $(pwd)
@@ -38,11 +40,11 @@ jobs:
             echo $RELEASE_VERSION
             echo "RELEASE_VERSION=${RELEASE_VERSION}" >> $GITHUB_ENV
 
-      - name: Install node dependencies
+      - name: Install node dependencies 📦
         working-directory: bouncer
         run: pnpm install
 
-      - name: Check the version of the branch is greater than the current release
+      - name: Check the version of the branch is greater than the current release 🔍
         working-directory: bouncer
         run: |
             set -x

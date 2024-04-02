@@ -931,7 +931,7 @@ pub mod pallet {
 		/// - [InvalidThresholdSignatureCeremonyId](sp_runtime::traits::InvalidThresholdSignatureCeremonyId)
 		/// - [BadOrigin](sp_runtime::traits::BadOrigin)
 		#[pallet::call_index(0)]
-		#[pallet::weight(T::Weights::signature_success())]
+		#[pallet::weight((T::Weights::signature_success(), DispatchClass::Operational))]
 		pub fn signature_success(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
@@ -984,7 +984,7 @@ pub mod pallet {
 		/// - [InvalidThresholdSignatureCeremonyId](Error::InvalidThresholdSignatureCeremonyId)
 		/// - [InvalidThresholdSignatureRespondent](Error::InvalidThresholdSignatureRespondent)
 		#[pallet::call_index(1)]
-		#[pallet::weight(T::Weights::report_signature_failed(offenders.len() as u32))]
+		#[pallet::weight((T::Weights::report_signature_failed(offenders.len() as u32), DispatchClass::Operational))]
 		pub fn report_signature_failed(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
@@ -1072,7 +1072,7 @@ pub mod pallet {
 		///
 		/// - [Threshold Signer Trait](ThresholdSigner)
 		#[pallet::call_index(3)]
-		#[pallet::weight(T::Weights::report_keygen_outcome())]
+		#[pallet::weight((T::Weights::report_keygen_outcome(), DispatchClass::Operational))]
 		pub fn report_keygen_outcome(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
@@ -1091,7 +1091,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::Weights::report_keygen_outcome())]
+		#[pallet::weight((T::Weights::report_keygen_outcome(), DispatchClass::Operational))]
 		pub fn report_key_handover_outcome(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,

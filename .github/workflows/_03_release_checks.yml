@@ -22,7 +22,7 @@ jobs:
           - api/bin/chainflip-lp-api/Cargo.toml
           - state-chain/runtime/Cargo.toml
     steps:
-      - name: Checkout 🏁
+      - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Install Rust 🦀
@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-22.04
     if: inputs.network != 'sisyphos'
     steps:
-      - name: Checkout 🏁
+      - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Check changelog 📝
@@ -64,7 +64,7 @@ jobs:
   check-runtime-spec-version:
     runs-on: ubuntu-22.04
     steps:
-      - name: Checkout 🏁
+      - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Check runtime spec version against Berghain 🕵️‍♂️

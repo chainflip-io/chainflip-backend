@@ -44,12 +44,11 @@ impl<T> ApiWaitForResult<T> {
 
 pub mod types {
 	use super::*;
-	use cf_chains::assets::any::OldAsset;
 
 	#[derive(Serialize, Deserialize, Clone)]
 	pub struct RangeOrder {
-		pub base_asset: OldAsset,
-		pub quote_asset: OldAsset,
+		pub base_asset: Asset,
+		pub quote_asset: Asset,
 		pub id: U256,
 		pub tick_range: Range<Tick>,
 		pub liquidity_total: U256,
@@ -65,8 +64,8 @@ pub mod types {
 
 	#[derive(Serialize, Deserialize, Clone)]
 	pub struct LimitOrder {
-		pub base_asset: OldAsset,
-		pub quote_asset: OldAsset,
+		pub base_asset: Asset,
+		pub quote_asset: Asset,
 		pub side: Side,
 		pub id: U256,
 		pub tick: Tick,

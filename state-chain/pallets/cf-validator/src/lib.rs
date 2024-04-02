@@ -587,7 +587,7 @@ pub mod pallet {
 		///
 		/// - [Session Pallet](pallet_session::Config)
 		#[pallet::call_index(2)]
-		#[pallet::weight(< T as pallet_session::Config >::WeightInfo::set_keys())] // TODO: check if this is really valid
+		#[pallet::weight((< T as pallet_session::Config >::WeightInfo::set_keys(), DispatchClass::Operational))]
 		pub fn set_keys(
 			origin: OriginFor<T>,
 			keys: T::Keys,
@@ -616,7 +616,7 @@ pub mod pallet {
 		///
 		/// - None
 		#[pallet::call_index(3)]
-		#[pallet::weight(T::ValidatorWeightInfo::register_peer_id())]
+		#[pallet::weight((T::ValidatorWeightInfo::register_peer_id(), DispatchClass::Operational))]
 		pub fn register_peer_id(
 			origin: OriginFor<T>,
 			peer_id: Ed25519PublicKey,
@@ -701,7 +701,7 @@ pub mod pallet {
 		///
 		/// - None
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::ValidatorWeightInfo::cfe_version())]
+		#[pallet::weight((T::ValidatorWeightInfo::cfe_version(), DispatchClass::Operational))]
 		pub fn cfe_version(
 			origin: OriginFor<T>,
 			new_version: Version,

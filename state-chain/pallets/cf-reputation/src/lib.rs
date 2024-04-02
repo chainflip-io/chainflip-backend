@@ -306,7 +306,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::heartbeat())]
+		#[pallet::weight((T::WeightInfo::heartbeat(), DispatchClass::Operational))]
 		pub fn heartbeat(origin: OriginFor<T>) -> DispatchResult {
 			let validator_id: T::ValidatorId =
 				T::AccountRoleRegistry::ensure_validator(origin)?.into();
