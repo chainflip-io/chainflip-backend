@@ -52,16 +52,15 @@ extern "C" {
 	fn malloc(size: usize) -> *mut c_void;
 	fn free(ptr: *mut c_void);
 }
-
 pub struct CStrArray {
 	c_args: *mut *mut c_char,
 	// Nnoe if the outer array isn't initialized
-	n_args: Option<usize>,
+	n_args: usize,
 }
 
 impl Default for CStrArray {
 	fn default() -> Self {
-		Self { c_args: std::ptr::null_mut(), n_args: None }
+		Self { c_args: std::ptr::null_mut(), n_args: 0 }
 	}
 }
 
@@ -76,7 +75,6 @@ impl CStrArray {
 
 		let c_array_ptr = array_malloc as *mut *mut c_char;
 		self.c_args = c_array_ptr;
-		self.n_args = Some(0);
 
 		for (i, rust_string_arg) in string_args.iter().enumerate() {
 			let c_string = CString::new(rust_string_arg.as_str())?;
@@ -92,21 +90,21 @@ impl CStrArray {
 				std::ptr::copy_nonoverlapping(c_string.as_ptr(), c_string_ptr, len);
 				*c_array_ptr.add(i) = c_string_ptr;
 			}
-			self.n_args = Some(i + 1);
+			self.n_args = i + 1;
 		}
 		Ok(())
 	}
 
 	pub fn get_args(&mut self) -> (*mut *mut c_char, usize) {
-		(self.c_args, self.n_args.unwrap_or_default())
+		(self.c_args, self.n_args)
 	}
 }
 
 impl Drop for CStrArray {
 	fn drop(&mut self) {
-		if let Some(n_args) = self.n_args {
+		if !self.c_args.is_null() {
 			unsafe {
-				for i in 0..n_args {
+				for i in 0..self.n_args {
 					let c_string_ptr = *self.c_args.add(i);
 					free(c_string_ptr as *mut c_void)
 				}
