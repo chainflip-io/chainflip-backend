@@ -10,7 +10,7 @@ use cf_primitives::AccountRole;
 use cf_traits::{AccountRoleRegistry, KeyRotationStatusOuter, SafeMode, SetSafeMode};
 use frame_benchmarking::v2::*;
 use frame_support::{
-	assert_err, assert_ok,
+	assert_ok,
 	sp_runtime::{Digest, DigestItem},
 	storage_alias,
 	traits::{OnNewAccount, UnfilteredDispatchable},

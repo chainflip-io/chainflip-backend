@@ -5,10 +5,7 @@ use super::*;
 use cf_primitives::AccountRole;
 use cf_traits::{AccountRoleRegistry, EpochInfo};
 use frame_benchmarking::v2::*;
-use frame_support::{
-	assert_ok,
-	traits::{OnNewAccount, UnfilteredDispatchable},
-};
+use frame_support::{assert_ok, traits::UnfilteredDispatchable};
 use frame_system::RawOrigin;
 
 const MAX_VALIDATOR_COUNT: u32 = 150;
