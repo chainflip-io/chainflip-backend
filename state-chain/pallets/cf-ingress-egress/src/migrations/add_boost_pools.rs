@@ -96,8 +96,6 @@ mod migration_tests {
 			BitcoinScript, ScriptPubkey,
 		};
 
-		use self::mock_btc::new_test_ext;
-
 		use super::*;
 		use crate::mock_btc::*;
 

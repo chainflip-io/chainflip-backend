@@ -710,7 +710,10 @@ pub mod pallet {
 						for pool_tier in pools {
 							BoostPools::<T, I>::mutate(deposit_channel.asset, pool_tier, |pool| {
 								if let Some(pool) = pool {
-									pool.on_lost_deposit(boost_id);
+									let affected_boosters_count = pool.on_lost_deposit(boost_id);
+									used_weight.saturating_accrue(T::WeightInfo::on_lost_deposit(
+										affected_boosters_count as u32,
+									));
 								} else {
 									log_or_panic!(
 										"Pool must exist: ({pool_tier:?}, {:?})",
@@ -863,8 +866,11 @@ pub mod pallet {
 		/// Called when funds have been deposited into the given address.
 		///
 		/// Requires `EnsurePrewitnessed` or `EnsureWitnessed` origin.
+		///
+		/// We calculate weight assuming the most expensive code path is taken, i.e. the deposit
+		/// had been boosted and is now being finalised
 		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::process_single_deposit().saturating_mul(deposit_witnesses.len() as u64))]
+		#[pallet::weight(T::WeightInfo::boost_finalised().saturating_mul(deposit_witnesses.len() as u64))]
 		pub fn process_deposits(
 			origin: OriginFor<T>,
 			deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
@@ -984,7 +990,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(7)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::add_boost_funds())]
 		pub fn add_boost_funds(
 			origin: OriginFor<T>,
 			asset: TargetChainAsset<T, I>,
@@ -1009,7 +1015,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(8)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::stop_boosting())]
 		pub fn stop_boosting(
 			origin: OriginFor<T>,
 			asset: TargetChainAsset<T, I>,
@@ -1549,7 +1555,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								finalised_withdrawn_amount.into(),
 							) {
 								log_or_panic!(
-									"Failed to credit booster account {} after unlock of {finalised_withdrawn_amount:?} {asset:?}: {:?}",
+									"Failed to credit booster account {:?} after unlock of {finalised_withdrawn_amount:?} {asset:?}: {:?}",
 									booster_id, err
 								);
 							}

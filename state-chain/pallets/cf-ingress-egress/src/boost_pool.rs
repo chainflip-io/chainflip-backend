@@ -275,10 +275,11 @@ where
 		unlocked_funds
 	}
 
-	pub fn on_lost_deposit(&mut self, boost_id: BoostId) {
+	// Returns the number of boosters affected
+	pub fn on_lost_deposit(&mut self, boost_id: BoostId) -> usize {
 		let Some(booster_contributions) = self.pending_boosts.remove(&boost_id) else {
 			log_or_panic!("Failed to find boost record for a lost deposit: {boost_id}");
-			return;
+			return 0;
 		};
 
 		for booster_id in booster_contributions.keys() {
@@ -292,6 +293,8 @@ where
 				}
 			}
 		}
+
+		booster_contributions.len()
 	}
 
 	// Return the amount immediately available for booster
