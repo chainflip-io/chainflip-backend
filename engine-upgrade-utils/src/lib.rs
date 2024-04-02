@@ -52,6 +52,9 @@ extern "C" {
 	fn malloc(size: usize) -> *mut c_void;
 	fn free(ptr: *mut c_void);
 }
+
+#[repr(C)]
+#[derive(Clone)]
 pub struct CStrArray {
 	c_args: *mut *mut c_char,
 	// Nnoe if the outer array isn't initialized
@@ -98,8 +101,14 @@ impl CStrArray {
 		Ok(())
 	}
 
-	pub fn get_args(&mut self) -> (*mut *mut c_char, usize) {
-		(self.c_args, self.n_args)
+	pub fn rust_string_args(&self) -> Vec<String> {
+		let mut str_args = Vec::new();
+		for i in 0..self.n_args {
+			let c_str = unsafe { std::ffi::CStr::from_ptr(*self.c_args.add(i)) };
+			let str_slice = c_str.to_str().unwrap().to_string();
+			str_args.push(str_slice);
+		}
+		str_args
 	}
 }
 
@@ -117,32 +126,16 @@ impl Drop for CStrArray {
 	}
 }
 
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
-pub fn rust_string_args(args: *mut *mut c_char, n_args: usize) -> Vec<String> {
-	let mut str_args = Vec::new();
-	for i in 0..n_args {
-		let c_str = unsafe { std::ffi::CStr::from_ptr(*args.add(i)) };
-		let str_slice = c_str.to_str().unwrap().to_string();
-		str_args.push(str_slice);
-	}
-	str_args
-}
-
 #[test]
 fn test_c_str_array_no_args() {
-	let mut c_args = CStrArray::default();
-	let (c_args, n_args) = c_args.get_args();
-	assert_eq!(rust_string_args(c_args, n_args), Vec::<String>::new());
+	let c_args = CStrArray::default();
+	assert!(c_args.rust_string_args().is_empty());
 }
 
 #[test]
 fn test_c_str_array_with_args() {
 	let args = vec!["arg1".to_string(), "arg2".to_string()];
-
 	let mut c_args = CStrArray::default();
 	c_args.string_args_to_c_args(args.clone()).unwrap();
-
-	let (c_args, n_args) = c_args.get_args();
-	let rust_args = rust_string_args(c_args, n_args);
-	assert_eq!(args, rust_args);
+	assert_eq!(c_args.rust_string_args(), args);
 }

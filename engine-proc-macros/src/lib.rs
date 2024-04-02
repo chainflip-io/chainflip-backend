@@ -27,8 +27,7 @@ pub fn cfe_entrypoint(_attrs: TokenStream, item: TokenStream) -> TokenStream {
 	let output = quote! {
 		#[no_mangle]
 		extern "C" fn #new_fn_name(
-			args: *mut *mut engine_upgrade_utils::c_char,
-			n_args: usize,
+			c_args: CStrArray,
 			start_from: u32,
 		) -> ExitStatus {
 			// Insert the function body specified in the input function
@@ -59,12 +58,12 @@ pub fn engine_runner(_input: TokenStream) -> TokenStream {
 		// Define the entrypoints into each version of the engine
 		#[link(name = #old_dylib_name)]
 		extern "C" {
-			fn #old_version_fn_ident(args: *mut *mut engine_upgrade_utils::c_char, n_args: usize, start_from: u32) -> engine_upgrade_utils::ExitStatus;
+			fn #old_version_fn_ident(c_args: CStrArray, start_from: u32) -> engine_upgrade_utils::ExitStatus;
 		}
 
 		#[link(name = #new_dylib_name)]
 		extern "C" {
-			fn #new_version_fn_ident(args: *mut *mut engine_upgrade_utils::c_char, n_args: usize, start_from: u32) -> engine_upgrade_utils::ExitStatus;
+			fn #new_version_fn_ident(c_args: CStrArray, start_from: u32) -> engine_upgrade_utils::ExitStatus;
 		}
 
 		// Define the runner function.
@@ -78,13 +77,12 @@ pub fn engine_runner(_input: TokenStream) -> TokenStream {
 
 			let mut c_str_array = engine_upgrade_utils::CStrArray::default();
 			c_str_array.string_args_to_c_args(env_args.clone())?;
-			let (c_args, n) = c_str_array.get_args();
 
 			let old_version = #old_version;
 			let new_version = #new_version;
 
 			// Attempt to run the new version first
-			let exit_status_new_first = unsafe { #new_version_fn_ident(c_args, n, engine_upgrade_utils::NO_START_FROM) };
+			let exit_status_new_first = unsafe { #new_version_fn_ident(c_str_array.clone(), engine_upgrade_utils::NO_START_FROM) };
 			println!("The new version has exited with exit status: {:?}", exit_status_new_first);
 
 			match exit_status_new_first.status_code {
@@ -97,8 +95,7 @@ pub fn engine_runner(_input: TokenStream) -> TokenStream {
 					let mut old_c_str_args = engine_upgrade_utils::CStrArray::default();
 					let compatible_args = engine_upgrade_utils::args_compatible_with_old(env_args);
 					old_c_str_args.string_args_to_c_args(compatible_args)?;
-					let (old_c_args, old_n) = old_c_str_args.get_args();
-					let exit_status_old = unsafe { #old_version_fn_ident(old_c_args, old_n, engine_upgrade_utils::NO_START_FROM) };
+					let exit_status_old = unsafe { #old_version_fn_ident(old_c_str_args, engine_upgrade_utils::NO_START_FROM) };
 
 					println!("Old version has exited with exit status: {:?}", exit_status_old);
 
@@ -106,7 +103,7 @@ pub fn engine_runner(_input: TokenStream) -> TokenStream {
 					if exit_status_old.status_code == engine_upgrade_utils::NO_LONGER_COMPATIBLE {
 						println!("Switching to the new version {new_version} after the old version {old_version} is no longer compatible.");
 						// Attempt to run the new version again
-						let exit_status_new = unsafe { #new_version_fn_ident(c_args, n, exit_status_old.at_block) };
+						let exit_status_new = unsafe { #new_version_fn_ident(c_str_array, exit_status_old.at_block) };
 						println!("New version has exited with exit status: {:?}", exit_status_new);
 					} else {
 						println!("An error has occurred running the old version with exit status: {:?}", exit_status_old);
