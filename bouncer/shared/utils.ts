@@ -77,9 +77,9 @@ export function getContractAddress(chain: Chain, contract: string): string {
     case 'Solana':
       switch (contract) {
         case 'VAULT':
-          return '632bJHVLPj6XPLVgrabFwxogtAQQ5zb8hwm9zqZuCcHo';
+          return '8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf';
         case 'DATA_ACCOUNT':
-          return '5yhN4QzBFg9jKhLfVHcS5apMB7e3ftofCkzkNH6dZctC';
+          return '623nEsyGYWKYggY1yHxQFJiBarL9jdWdrMr7ASiCKP6a';
         case 'UPGRADE_MANAGER':
           return '274BzCz5RPHJZsxdcSGySahz4qAWqwSDcmz1YEKkGaZC';
         case 'UPGRADE_MANAGER_SIGNER':
@@ -87,7 +87,7 @@ export function getContractAddress(chain: Chain, contract: string): string {
         case 'SolUsdc':
           return process.env.ARB_USDC_ADDRESS ?? '24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p';
         case 'CFTESTER':
-          return 'NJusJ7itnSsh4jSi43i9MMKB9sF4VbNvdSwUA45gPE6';
+          return '8pBPaVfTAcjLeNfC187Fkvi9b1XEFhRNJ95BQXXVksmH';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }

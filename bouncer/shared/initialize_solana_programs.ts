@@ -1,5 +1,3 @@
-#!/usr/bin/env -S pnpm tsx
-
 import {
   NonceAccount,
   PublicKey,
