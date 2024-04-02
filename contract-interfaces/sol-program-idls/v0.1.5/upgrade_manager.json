@@ -1,0 +1,125 @@
+{
+  "version": "0.1.0",
+  "name": "upgrade_manager",
+  "instructions": [
+    {
+      "name": "upgradeVaultProgram",
+      "accounts": [
+        {
+          "name": "vaultDataAccount",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "govKey",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "programDataAddress",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "programAddress",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "bufferAddress",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "spillAddress",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "sysvarRent",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "sysvarClock",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "signerPda",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "bpfLoaderUpgradeable",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "seed",
+          "type": "bytes"
+        },
+        {
+          "name": "bump",
+          "type": "u8"
+        }
+      ],
+      "programFunctionName": "upgrade_vault_program",
+      "discriminator": "[72, 211, 76, 189, 84, 176, 62, 101]"
+    },
+    {
+      "name": "transferVaultUpgradeAuthority",
+      "accounts": [
+        {
+          "name": "vaultDataAccount",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "aggKey",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "programDataAddress",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "programAddress",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "newAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "signerPda",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "bpfLoaderUpgradeable",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "seed",
+          "type": "bytes"
+        },
+        {
+          "name": "bump",
+          "type": "u8"
+        }
+      ],
+      "programFunctionName": "transfer_vault_upgrade_authority",
+      "discriminator": "[114, 247, 72, 110, 145, 65, 236, 153]"
+    }
+  ]
+}
