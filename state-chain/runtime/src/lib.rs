@@ -243,6 +243,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
+	type IngressEgressFeeHandler = chainflip::IngressEgressFeeHandler;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
@@ -308,6 +309,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
+	type SwapQueueApi = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
@@ -327,6 +329,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
+	type SwapQueueApi = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
@@ -346,6 +349,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
+	type SwapQueueApi = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
@@ -365,6 +369,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
+	type SwapQueueApi = Swapping;
 }
 
 parameter_types! {
