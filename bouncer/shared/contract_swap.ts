@@ -3,6 +3,7 @@ import {
   executeSwap,
   ExecuteSwapParams,
   approveVault,
+  Asset as SCAsset,
 } from '@chainflip/cli';
 import { Wallet, getDefaultProvider } from 'ethers';
 import {
@@ -149,17 +150,12 @@ export async function approveTokenVault(
     getDefaultProvider(getEvmEndpoint(chain)),
   );
 
-  // TODO: To remove when Arbitrum is supported in the SDK
-  if (chain !== 'Ethereum' || srcAsset === 'ArbUsdc') {
-    throw new Error('Arbitrum is not supported for token approvals');
-  }
-
   await getNextEvmNonce(chain, (nextNonce) =>
     approveVault(
       {
         amount,
         srcChain: chain,
-        srcAsset: stateChainAssetFromAsset(srcAsset),
+        srcAsset: stateChainAssetFromAsset(srcAsset) as SCAsset,
       },
       {
         signer: wallet,
