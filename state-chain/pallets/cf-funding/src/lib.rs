@@ -353,7 +353,7 @@ pub mod pallet {
 		/// pending redemption are inaccessible and are not counted towards a Validator's Auction
 		/// Bid.
 		#[pallet::call_index(1)]
-		#[pallet::weight({ if matches!(amount, RedemptionAmount::Exact(_)) { T::WeightInfo::redeem() } else { T::WeightInfo::redeem_all() }})]
+		#[pallet::weight(T::WeightInfo::redeem())]
 		pub fn redeem(
 			origin: OriginFor<T>,
 			amount: RedemptionAmount<FlipBalance<T>>,

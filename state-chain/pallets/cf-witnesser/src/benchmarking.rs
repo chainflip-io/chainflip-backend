@@ -2,12 +2,10 @@
 
 use super::*;
 
+use cf_primitives::AccountRole;
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::v2::*;
-use frame_support::{
-	assert_ok,
-	traits::{Hooks, OnNewAccount},
-};
+use frame_support::{assert_ok, traits::Hooks};
 use frame_system::RawOrigin;
 use sp_std::{boxed::Box, collections::btree_set::BTreeSet};
 
@@ -17,10 +15,9 @@ mod benchmarks {
 
 	#[benchmark]
 	fn witness_at_epoch() {
-		let caller: T::AccountId = whitelisted_caller();
+		let caller =
+			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Validator).unwrap();
 		let validator_id: T::ValidatorId = caller.clone().into();
-		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		T::AccountRoleRegistry::register_as_validator(&caller).unwrap();
 		let call: <T as Config>::RuntimeCall = frame_system::Call::remark { remark: vec![] }.into();
 		let epoch = T::EpochInfo::epoch_index();
 
