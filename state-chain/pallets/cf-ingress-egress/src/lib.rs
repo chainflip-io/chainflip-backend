@@ -36,9 +36,9 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	liquidity::{LpBalanceApi, LpDepositHandler},
-	AdjustedFeeEstimationApi, AssetConverter, Broadcaster, CcmHandler, CcmSwapIds, Chainflip,
-	DepositApi, EgressApi, EpochInfo, FeePayment, GetBlockHeight, NetworkEnvironmentProvider,
-	OnDeposit, ScheduledEgressDetails, SwapDepositHandler,
+	AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter, Broadcaster, CcmHandler,
+	CcmSwapIds, Chainflip, DepositApi, EgressApi, EpochInfo, FeePayment, GetBlockHeight,
+	NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails, SwapDepositHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -997,8 +997,6 @@ pub mod pallet {
 			amount: TargetChainAmount<T, I>,
 			pool_tier: BoostPoolTier,
 		) -> DispatchResult {
-			use cf_traits::AccountRoleRegistry;
-
 			let booster = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			T::LpBalance::try_debit_account(&booster, asset.into(), amount.into())?;
@@ -1021,8 +1019,6 @@ pub mod pallet {
 			asset: TargetChainAsset<T, I>,
 			pool_tier: BoostPoolTier,
 		) -> DispatchResult {
-			use cf_traits::AccountRoleRegistry;
-
 			let booster = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			let unlocked_amount = BoostPools::<T, I>::mutate(asset, pool_tier, |pool| {
@@ -1246,7 +1242,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn try_boosting(
 		asset: TargetChainAsset<T, I>,
 		required_amount: TargetChainAmount<T, I>,
-		max_boost_fee: BasisPoints,
+		max_boost_fee_bps: BasisPoints,
 		boost_id: u64,
 	) -> Result<(Vec<BoostPoolTier>, TargetChainAmount<T, I>), DispatchError> {
 		let mut remaining_amount = required_amount;
@@ -1256,7 +1252,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let mut used_pools = vec![];
 
 		for boost_tier in SORTED_BOOST_TIERS {
-			if boost_tier as u16 > max_boost_fee {
+			if boost_tier as u16 > max_boost_fee_bps {
 				break
 			}
 

@@ -303,7 +303,7 @@ mod benchmarks {
 
 		// `stop_boosting` has linear complexity w.r.t. the number of pending boosts,
 		// and this seems like a reasonable estimate:
-		const PENDING_BOOSTS_COUNT: usize = 100;
+		const PENDING_BOOSTS_COUNT: usize = 50;
 
 		for _ in 0..PENDING_BOOSTS_COUNT {
 			prewitness_deposit::<T, I>(&lp_account, asset, FEE_TIER);
