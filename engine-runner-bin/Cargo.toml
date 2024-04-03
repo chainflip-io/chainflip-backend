@@ -27,8 +27,8 @@ assets = [
     # The old version gets put into target/release by the package github actions workflow.
     # It downloads the correct version from the releases page.
     [
-        "target/release/libchainflip_engine_v1_3_0.so",
-        "usr/lib/chainflip-engine/libchainflip_engine_v1_3_0.so",
+        "target/release/libchainflip_engine_v1_3_3.so",
+        "usr/lib/chainflip-engine/libchainflip_engine_v1_3_3.so",
         "755",
     ],
 ]
