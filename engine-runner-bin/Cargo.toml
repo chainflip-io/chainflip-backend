@@ -2,7 +2,7 @@
 name = "engine-runner"
 description = "The central runner for the chainflip engine, it requires two shared library versions to run."
 # NB: When updating this version, you must update the debian assets appropriately too.
-version = "1.4.0"
+version = "1.3.3"
 authors = ["Chainflip team <https://github.com/chainflip-io>"]
 build = 'build.rs'
 edition = '2021'
