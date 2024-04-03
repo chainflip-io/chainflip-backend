@@ -37,10 +37,11 @@ pub const BPF_LOADER_UPGRADEABLE_ID: &str = "BPFLoaderUpgradeab1e111111111111111
 pub const COMPUTE_BUDGET_PROGRAM: &str = "ComputeBudget111111111111111111111111111111";
 
 // Chainflip addresses - can be constants on a per-chain basis inserted on runtime upgrade.
-// Addresses and bumpts can be derived from the seeds. However, most of them are a one-time
-// thing so it might make sense to include them as constants. The token vault ata's for each of
-// the tokens can be derived on the fly but we might want to also store them as constants for
-// simplicity.
+// Addresses and bumps can be derived from the seeds. However, for most of them there is no
+// need to rederive them every time so we could include them as constants. The token vault 
+// ata's for each of the tokens can be derived on the fly but we might want to also store 
+// them as constants for simplicity. Initial nonce account hashes should probably also be
+// inserted on chain genesis but won't be constant.
 pub const VAULT_PROGRAM: &str = "8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf";
 pub const VAULT_PROGRAM_DATA_ADDRESS: &str = "3oEKmL4nsw6RDZWhkYTdCUmjxDrzVkm1cWayPsvn3p57";
 pub const VAULT_PROGRAM_DATA_ACCOUNT: &str = "623nEsyGYWKYggY1yHxQFJiBarL9jdWdrMr7ASiCKP6a";
