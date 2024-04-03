@@ -15,7 +15,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-COPY --chown=1000:1000 chainflip-engine /usr/local/bin/chainflip-engine
+# Copy the runner bniary and the dylib files.
+COPY engine-runner /usr/local/bin/chainflip-engine
+COPY old-engine-dylib/libchainflip_engine_v*.so /usr/local/lib/
+COPY libchainflip_engine_v*.so /usr/local/lib/
+
 
 WORKDIR /etc/chainflip
 

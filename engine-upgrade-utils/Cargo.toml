@@ -1,0 +1,8 @@
+[package]
+authors = ["Chainflip team <https://github.com/chainflip-io>"]
+edition = '2021'
+name = "engine-upgrade-utils"
+version = "1.0.0"
+
+[dependencies]
+anyhow = "1.0"
