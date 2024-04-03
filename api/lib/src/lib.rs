@@ -283,13 +283,11 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 	}
 
 	async fn set_vanity_name(&self, name: String) -> Result<()> {
-		if name.len() > MAX_LENGTH_FOR_VANITY_NAME {
-			bail!("Name too long. Max length is {} characters.", MAX_LENGTH_FOR_VANITY_NAME,);
-		}
-
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(pallet_cf_account_roles::Call::set_vanity_name {
-				name: name.as_bytes().to_vec(),
+				name: name.into_bytes().try_into().or_else(|_| {
+					bail!("Name too long. Max length is {} characters.", MAX_LENGTH_FOR_VANITY_NAME,)
+				})?,
 			})
 			.await
 			.until_in_block()

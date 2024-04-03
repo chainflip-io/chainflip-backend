@@ -78,9 +78,12 @@ pub use pallet_timestamp::Call as TimestampCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
-use sp_runtime::traits::{
-	AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor, One,
-	OpaqueKeys, UniqueSaturatedInto, Verify,
+use sp_runtime::{
+	traits::{
+		AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor,
+		One, OpaqueKeys, UniqueSaturatedInto, Verify,
+	},
+	BoundedVec,
 };
 
 use frame_support::genesis_builder_helper::{build_config, create_default_config};
@@ -1054,9 +1057,9 @@ impl frame_support::traits::OnRuntimeUpgrade for VanityNamesMigration {
 			log::info!("⏫ Applying VanityNames migration.");
 			// Moving the VanityNames storage item from the validators pallet to the account roles pallet.
 			cf_runtime_upgrade_utilities::move_pallet_storage::<
-			pallet_cf_validator::Pallet<Runtime>,
-			pallet_cf_account_roles::Pallet<Runtime>,
-			>("VanityNames".as_bytes());
+				pallet_cf_validator::Pallet<Runtime>,
+				pallet_cf_account_roles::Pallet<Runtime>,
+			>(b"VanityNames");
 
 			// Bump the version of both pallets
 			StorageVersion::new(1).put::<pallet_cf_validator::Pallet<Runtime>>();
@@ -1096,14 +1099,13 @@ impl frame_support::traits::OnRuntimeUpgrade for VanityNamesMigration {
 	fn post_upgrade(state: Vec<u8>) -> Result<(), frame_support::sp_runtime::TryRuntimeError> {
 		use codec::Decode;
 		use frame_support::migrations::VersionedPostUpgradeData;
-		use pallet_cf_account_roles::VanityName;
 
 		if let VersionedPostUpgradeData::MigrationExecuted(pre_upgrade_data) =
 			<VersionedPostUpgradeData>::decode(&mut &state[..])
 				.map_err(|_| "Failed to decode pre-upgrade state.")?
 		{
 			let pre_upgrade_vanity_names =
-				<BTreeMap<AccountId, VanityName>>::decode(&mut &pre_upgrade_data[..])
+				<BTreeMap<AccountId, BoundedVec<u8, _>>>::decode(&mut &pre_upgrade_data[..])
 					.map_err(|_| "Failed to decode VanityNames from pre-upgrade state.")?;
 
 			frame_support::ensure!(
@@ -1275,7 +1277,7 @@ impl_runtime_apis! {
 			let mut vanity_names = AccountRoles::vanity_names();
 			frame_system::Account::<Runtime>::iter_keys()
 				.map(|account_id| {
-					let vanity_name = vanity_names.remove(&account_id).unwrap_or_default();
+					let vanity_name = vanity_names.remove(&account_id).unwrap_or_default().into();
 					(account_id, vanity_name)
 				})
 				.collect()
@@ -1702,12 +1704,9 @@ impl_runtime_apis! {
 				validators: vec![],
 			};
 			let voting_validators = Witnesser::count_votes(<Runtime as Chainflip>::EpochInfo::current_epoch(), hash);
-			let vanity_names: BTreeMap<AccountId, Vec<u8>> = pallet_cf_account_roles::VanityNames::<Runtime>::get();
+			let vanity_names: BTreeMap<AccountId, BoundedVec<u8, _>> = pallet_cf_account_roles::VanityNames::<Runtime>::get();
 			voting_validators?.iter().for_each(|(val, voted)| {
-				let vanity = match vanity_names.get(val) {
-					Some(vanity_name) => { vanity_name.clone() },
-					None => { vec![] }
-				};
+				let vanity = vanity_names.get(val).cloned().unwrap_or_default();
 				if !voted {
 					result.failing_count += 1;
 				}

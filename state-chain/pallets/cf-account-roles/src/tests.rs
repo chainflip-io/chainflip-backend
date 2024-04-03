@@ -135,30 +135,30 @@ fn test_setting_vanity_names_() {
 			let vanity = format!("Test Account {i}");
 			assert_ok!(AccountRolesPallet::set_vanity_name(
 				RuntimeOrigin::signed(*account_id),
-				vanity.clone().into_bytes()
+				vanity.clone().into_bytes().try_into().unwrap()
 			));
 			assert_eq!(
-				sp_std::str::from_utf8(VanityNames::<Test>::get().get(account_id).unwrap()).unwrap(),
+				sp_std::str::from_utf8(VanityNames::<Test>::get().get(account_id).unwrap())
+					.unwrap(),
 				vanity
 			);
 		}
 		assert_eq!(VanityNames::<Test>::get().len(), ACCOUNT_IDS.len());
 
-		// Test invalid vanity names
-		assert_noop!(
-			AccountRolesPallet::set_vanity_name(RuntimeOrigin::signed(1), [0xfe, 0xff].to_vec()),
-			Error::<Test>::InvalidCharactersInName
-		);
 		assert_noop!(
 			AccountRolesPallet::set_vanity_name(
 				RuntimeOrigin::signed(1),
-				"Validator Name too longggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg".as_bytes().to_vec()
+				BoundedVec::try_from(vec![0xfe, 0xff]).unwrap()
 			),
-			Error::<Test>::NameTooLong
+			Error::<Test>::InvalidCharactersInName
 		);
 
 		// Test removal of a vanity name
 		AccountRolesPallet::on_killed_account(&ACCOUNT_IDS[0]);
-		assert_eq!(VanityNames::<Test>::get().len(), ACCOUNT_IDS.len()-1, "Vanity name should of been removed when account was killed");
+		assert_eq!(
+			VanityNames::<Test>::get().len(),
+			ACCOUNT_IDS.len() - 1,
+			"Vanity name should of been removed when account was killed"
+		);
 	});
 }

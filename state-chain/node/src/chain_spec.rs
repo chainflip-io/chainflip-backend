@@ -39,7 +39,7 @@ use utilities::clean_hex_address;
 
 use sp_runtime::{
 	traits::{IdentifyAccount, Verify},
-	Percent, Permill,
+	BoundedVec, Percent, Permill,
 };
 
 pub mod berghain;
@@ -541,6 +541,12 @@ fn testnet_genesis(
 			.all(|id| all_accounts.iter().any(|(acc_id, ..)| acc_id == id)),
 		"Found a vanity name for non-genesis account."
 	);
+
+	let genesis_vanity_names = genesis_vanity_names
+		.into_iter()
+		.map(|(id, name)| BoundedVec::try_from(name).map(|bounded_name| (id, bounded_name)))
+		.collect::<Result<BTreeMap<_, _>, _>>()
+		.expect("Vanity names should be valid utf8 and within length bounds.");
 
 	serde_json::to_value(state_chain_runtime::RuntimeGenesisConfig {
 		account_roles: state_chain_runtime::AccountRolesConfig {

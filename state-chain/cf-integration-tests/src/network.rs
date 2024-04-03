@@ -137,7 +137,7 @@ impl Cli {
 	pub fn set_vanity_name(account: &NodeId, name: &str) {
 		assert_ok!(AccountRoles::set_vanity_name(
 			RuntimeOrigin::signed(account.clone()),
-			name.as_bytes().to_vec()
+			name.as_bytes().to_vec().try_into().unwrap()
 		));
 	}
 

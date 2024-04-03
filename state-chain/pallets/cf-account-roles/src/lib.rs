@@ -15,16 +15,18 @@ use frame_support::{
 	error::BadOrigin,
 	pallet_prelude::{DispatchResult, StorageVersion},
 	traits::{EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OnNewAccount},
+	BoundedVec,
 };
+use sp_core::ConstU32;
 
 use frame_system::{ensure_signed, pallet_prelude::OriginFor, RawOrigin};
 pub use pallet::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, vec::Vec};
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
-pub const MAX_LENGTH_FOR_VANITY_NAME: usize = 64;
+pub const MAX_LENGTH_FOR_VANITY_NAME: u32 = 64;
 
-pub type VanityName = Vec<u8>;
+type VanityName = BoundedVec<u8, ConstU32<MAX_LENGTH_FOR_VANITY_NAME>>;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -68,8 +70,11 @@ pub mod pallet {
 			account_id: T::AccountId,
 			role: AccountRole,
 		},
-		/// Vanity Name for a node has been set \[account_id, vanity_name\]
-		VanityNameSet(T::AccountId, VanityName),
+		/// Vanity Name for a node has been set.
+		VanityNameSet {
+			account_id: T::AccountId,
+			name: VanityName,
+		},
 	}
 
 	#[pallet::error]
@@ -78,8 +83,6 @@ pub mod pallet {
 		UnknownAccount,
 		/// The account already has a registered role.
 		AccountRoleAlreadyRegistered,
-		/// Vanity name length exceeds the limit of 64 characters.
-		NameTooLong,
 		/// Invalid characters in the name.
 		InvalidCharactersInName,
 	}
@@ -126,22 +129,19 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_system::error::BadOrigin)
-		/// - [NameTooLong](Error::NameTooLong)
 		/// - [InvalidCharactersInName](Error::InvalidCharactersInName)
-		///
-		/// ## Dependencies
-		///
-		/// - None
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::set_vanity_name())]
-		pub fn set_vanity_name(origin: OriginFor<T>, name: Vec<u8>) -> DispatchResultWithPostInfo {
+		pub fn set_vanity_name(
+			origin: OriginFor<T>,
+			name: VanityName,
+		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
-			ensure!(name.len() <= MAX_LENGTH_FOR_VANITY_NAME, Error::<T>::NameTooLong);
 			ensure!(sp_std::str::from_utf8(&name).is_ok(), Error::<T>::InvalidCharactersInName);
-			let mut vanity_names = VanityNames::<T>::get();
-			vanity_names.insert(account_id.clone(), name.clone());
-			VanityNames::<T>::put(vanity_names);
-			Self::deposit_event(Event::VanityNameSet(account_id, name));
+			VanityNames::<T>::mutate(|vanity_names| {
+				vanity_names.insert(account_id.clone(), name.clone());
+			});
+			Self::deposit_event(Event::VanityNameSet { account_id, name });
 			Ok(().into())
 		}
 	}
