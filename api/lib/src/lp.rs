@@ -93,8 +93,8 @@ fn collect_range_order_returns(
 					..
 				},
 			) => Some(types::RangeOrder {
-				base_asset: asset_pair.base().into(),
-				quote_asset: asset_pair.quote().into(),
+				base_asset: asset_pair.base(),
+				quote_asset: asset_pair.quote(),
 				id: id.into(),
 				size_change: size_change.map(|increase_or_decrese| {
 					increase_or_decrese.map(|range_order_change| types::RangeOrderChange {
@@ -130,8 +130,8 @@ fn collect_limit_order_returns(
 					..
 				},
 			) => Some(types::LimitOrder {
-				base_asset: asset_pair.base().into(),
-				quote_asset: asset_pair.quote().into(),
+				base_asset: asset_pair.base(),
+				quote_asset: asset_pair.quote(),
 				side,
 				id: id.into(),
 				tick,
