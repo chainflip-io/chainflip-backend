@@ -1,4 +1,5 @@
 use crate::{self as pallet_cf_pools, PalletSafeMode};
+use cf_chains::assets::any::AssetMap;
 use cf_primitives::{Asset, AssetAmount};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode, mocks::swap_queue_api::MockSwapQueueApi,
@@ -132,7 +133,7 @@ impl LpBalanceApi for MockBalance {
 
 	fn asset_balances(
 		_who: &Self::AccountId,
-	) -> Result<std::vec::Vec<(cf_primitives::Asset, u128)>, sp_runtime::DispatchError> {
+	) -> Result<AssetMap<AssetAmount>, sp_runtime::DispatchError> {
 		unreachable!()
 	}
 }

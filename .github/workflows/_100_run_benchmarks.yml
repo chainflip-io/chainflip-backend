@@ -52,7 +52,7 @@ jobs:
         "${{ github.event.inputs.benchmark_machine_spec }}",
       ]
     steps:
-      - name: Checkout
+      - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Fetch chainflip-node with benchmarks from ${{ inputs.commit_sha }}
@@ -66,21 +66,26 @@ jobs:
           search_artifacts: true
           check_artifacts: true
 
-      - name: Update permissions on chainflip-node
+      - name: Update permissions on chainflip-node 🚓
         run: chmod +x ./chainflip-node
 
-      - name: Run benchmarks
+      - name: Run benchmarks 📏
         run: >
           ./state-chain/scripts/benchmark-all.sh
           --binary ./chainflip-node
           --steps ${{ github.event.inputs.steps }}
           --repetitions ${{ github.event.inputs.repetitions }}
 
-      - name: Cleanup
+      - name: Cleanup 🧹
         run: >
           rm ./chainflip-node
 
-      - name: Make a pull request with the changed weight files
+      - name: Setup Git 🛠️
+        uses: ./.github/actions/setup-git
+        with:
+          ssh-private-key: ${{ secrets.CF_GITHUB_BOT_SSH_PRIVATE_KEY }}
+
+      - name: Make a pull request with the changed weight files 🕯️
         uses: peter-evans/create-pull-request@153407881ec5c347639a548ade7d8ad1d6740e38
         with:
           base: ${{ inputs.base_branch_name }}
@@ -89,4 +94,4 @@ jobs:
           body: "This pull request was opened automatically. Close it if you think it was opened in error."
           branch: auto/benchmark-results
           delete-branch: true
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
