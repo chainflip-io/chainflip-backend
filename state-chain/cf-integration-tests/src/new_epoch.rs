@@ -1,9 +1,17 @@
 use super::*;
 use crate::genesis::GENESIS_BALANCE;
+use cf_chains::btc::{
+	deposit_address::DepositAddress, utxo_selection::ConsolidationParameters, BitcoinFeeInfo,
+	BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
+};
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
-use cf_traits::EpochInfo;
+use cf_traits::{EpochInfo, KeyProvider};
+use frame_support::traits::UnfilteredDispatchable;
+use pallet_cf_environment::BitcoinAvailableUtxos;
 use pallet_cf_validator::RotationPhase;
-use state_chain_runtime::Validator;
+use state_chain_runtime::{
+	BitcoinInstance, BitcoinThresholdSigner, Environment, RuntimeEvent, Validator,
+};
 
 #[test]
 fn auction_repeats_after_failure_because_of_liveness() {
@@ -215,6 +223,224 @@ fn epoch_rotates() {
 				ChainflipAccountState::Backup,
 				get_validator_state(&late_funder),
 				"late funder should be a backup node"
+			);
+		});
+}
+
+fn utxo(amount: BtcAmount, salt: u32, pub_key: Option<[u8; 32]>) -> Utxo {
+	Utxo {
+		amount,
+		id: Default::default(),
+		deposit_address: DepositAddress::new(pub_key.unwrap_or_default(), salt),
+	}
+}
+
+fn add_utxo_amount(utxo: Utxo) {
+	Environment::add_bitcoin_utxo_to_list(utxo.amount, utxo.id, utxo.deposit_address);
+}
+
+#[test]
+fn can_consolidate_bitcoin_utxos() {
+	const EPOCH_BLOCKS: BlockNumber = 100;
+	const MAX_AUTHORITIES: AuthorityCount = 5;
+	const CONSOLIDATION_SIZE: u32 = 2;
+	super::genesis::with_test_defaults()
+		.blocks_per_epoch(EPOCH_BLOCKS)
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, _) =
+				crate::network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
+
+			testnet.move_to_the_next_epoch();
+			testnet.move_to_the_next_epoch();
+			assert_eq!(Validator::current_epoch(), 3);
+
+			let (epoch_2, epoch_3) = if let Some(cf_traits::EpochKey {
+				key: cf_chains::btc::AggKey { previous: Some(prev_key), current },
+				..
+			}) = BitcoinThresholdSigner::active_epoch_key()
+			{
+				(prev_key, current)
+			} else {
+				unreachable!("Bitcoin vault key for epoch 0 and 1 must exist.");
+			};
+
+			// 	update_consolidation_parameters
+			assert_ok!(RuntimeCall::Environment(
+				pallet_cf_environment::Call::update_consolidation_parameters {
+					params: ConsolidationParameters {
+						consolidation_threshold: 5,
+						consolidation_size: CONSOLIDATION_SIZE,
+					}
+				}
+			)
+			.clone()
+			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
+
+			let bitcoin_fee_info: BitcoinFeeInfo =
+				pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::chain_state()
+					.expect("There should always be a chain state.")
+					.tracked_data
+					.btc_fee_info;
+			let expected_consolidation_fee = bitcoin_fee_info.min_fee_required_per_tx() // base fee
+				+ CONSOLIDATION_SIZE as BtcAmount * bitcoin_fee_info.fee_per_input_utxo() // consolidation inputs
+				+ bitcoin_fee_info.fee_per_output_utxo(); // change output
+
+			// Add some bitcoin utxos.
+			add_utxo_amount(utxo(31_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)));
+			add_utxo_amount(utxo(32_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)));
+			add_utxo_amount(utxo(33_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)));
+			add_utxo_amount(utxo(34_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)));
+
+			testnet.move_forward_blocks(1);
+
+			// Nothing changes.
+			assert_eq!(BitcoinAvailableUtxos::<Runtime>::decode_len(), Some(4));
+
+			// Add utxos
+			add_utxo_amount(utxo(21_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)));
+			add_utxo_amount(utxo(22_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)));
+			add_utxo_amount(utxo(23_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)));
+			add_utxo_amount(utxo(35_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)));
+
+			testnet.move_forward_blocks(1);
+
+			// Consolidate 2 utxos.
+			assert_eq!(
+				BitcoinAvailableUtxos::<Runtime>::get(),
+				vec![
+					utxo(33_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+					utxo(34_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+					utxo(21_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+					utxo(22_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+					utxo(23_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+					utxo(35_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+				]
+			);
+
+			// These are discarded
+			add_utxo_amount(utxo(1_000_000, 0, None));
+			add_utxo_amount(utxo(2_000_000, 0, None));
+			add_utxo_amount(utxo(3_000_000, 0, None));
+
+			testnet.move_forward_blocks(1);
+
+			assert_eq!(
+				BitcoinAvailableUtxos::<Runtime>::get(),
+				vec![
+					utxo(21_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+					utxo(22_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+					utxo(23_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+					utxo(35_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+					Utxo {
+						id: UtxoId {
+							tx_id: hex_literal::hex!(
+								"583c4f12102fc4bea1af47d14f9d0b90fca0783af1c5d03d894a44be5ae165bc"
+							)
+							.into(),
+							vout: 0,
+						},
+						amount: 31_000_000 + 32_000_000 - expected_consolidation_fee,
+						deposit_address: DepositAddress { pubkey_x: epoch_3, script_path: None }
+					},
+				]
+			);
+			System::assert_has_event(RuntimeEvent::Environment(
+				pallet_cf_environment::Event::StaleUtxosDiscarded {
+					utxos: vec![
+						utxo(1_000_000, 0, None),
+						utxo(2_000_000, 0, None),
+						utxo(3_000_000, 0, None),
+					],
+				},
+			));
+
+			testnet.move_forward_blocks(1);
+
+			// 2 more utxos has been consolidated.
+			assert_eq!(
+				BitcoinAvailableUtxos::<Runtime>::get(),
+				vec![
+					utxo(23_000_000, CHANGE_ADDRESS_SALT, Some(epoch_2)),
+					utxo(35_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+					Utxo {
+						id: UtxoId {
+							tx_id: hex_literal::hex!(
+								"583c4f12102fc4bea1af47d14f9d0b90fca0783af1c5d03d894a44be5ae165bc"
+							)
+							.into(),
+							vout: 0,
+						},
+						amount: 31_000_000 + 32_000_000 - expected_consolidation_fee,
+						deposit_address: DepositAddress { pubkey_x: epoch_3, script_path: None }
+					},
+					Utxo {
+						id: UtxoId {
+							tx_id: hex_literal::hex!(
+								"7412bc12c3e68a975c910f998afb9ac4b7de1426474642f2067727183dfe6c26"
+							)
+							.into(),
+							vout: 0,
+						},
+						amount: 33_000_000 + 34_000_000 - expected_consolidation_fee,
+						deposit_address: DepositAddress { pubkey_x: epoch_3, script_path: None }
+					},
+				]
+			);
+
+			// Increase the threshold so only previous utxos are sent
+			assert_ok!(RuntimeCall::Environment(
+				pallet_cf_environment::Call::update_consolidation_parameters {
+					params: ConsolidationParameters {
+						consolidation_threshold: 10,
+						consolidation_size: 5,
+					}
+				}
+			)
+			.clone()
+			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
+
+			testnet.move_forward_blocks(1);
+
+			// Only 1 utxo from epoch 2 is consolidated
+			assert_eq!(
+				BitcoinAvailableUtxos::<Runtime>::get(),
+				vec![
+					utxo(35_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)),
+					Utxo {
+						id: UtxoId {
+							tx_id: hex_literal::hex!(
+								"583c4f12102fc4bea1af47d14f9d0b90fca0783af1c5d03d894a44be5ae165bc"
+							)
+							.into(),
+							vout: 0,
+						},
+						amount: 31_000_000 + 32_000_000 - expected_consolidation_fee,
+						deposit_address: DepositAddress { pubkey_x: epoch_3, script_path: None }
+					},
+					Utxo {
+						id: UtxoId {
+							tx_id: hex_literal::hex!(
+								"7412bc12c3e68a975c910f998afb9ac4b7de1426474642f2067727183dfe6c26"
+							)
+							.into(),
+							vout: 0,
+						},
+						amount: 33_000_000 + 34_000_000 - expected_consolidation_fee,
+						deposit_address: DepositAddress { pubkey_x: epoch_3, script_path: None }
+					},
+					Utxo {
+						id: UtxoId {
+							tx_id: hex_literal::hex!(
+								"2e80638a37518a081ff08a6b81e522dc68c1d46496ffcde64516489935150ecf"
+							)
+							.into(),
+							vout: 0,
+						},
+						amount: 21_000_000 + 22_000_000 - expected_consolidation_fee,
+						deposit_address: DepositAddress { pubkey_x: epoch_3, script_path: None }
+					},
+				]
 			);
 		});
 }
