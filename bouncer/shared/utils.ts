@@ -169,9 +169,9 @@ export function assetContractId(asset: Asset): number {
     case 'Dot':
       return assetConstants.Dot.contractId;
     case 'ArbEth':
-      return 6;
+      return assetConstants.ArbEth.contractId;
     case 'ArbUsdc':
-      return 7;
+      return assetConstants.ArbUsdc.contractId;
     default:
       throw new Error(`Unsupported asset: ${asset}`);
   }
@@ -192,9 +192,9 @@ export function assetDecimals(asset: Asset): number {
     case 'Dot':
       return assetConstants.Dot.decimals;
     case 'ArbEth':
-      return 18;
+      return assetConstants.ArbEth.decimals;
     case 'ArbUsdc':
-      return 6;
+      return assetConstants.ArbUsdc.decimals;
     default:
       throw new Error(`Unsupported asset: ${asset}`);
   }
@@ -209,7 +209,7 @@ export function chainContractId(chain: Chain): number {
     case 'Polkadot':
       return chainConstants.Polkadot.contractId;
     case 'Arbitrum':
-      return 4;
+      return chainConstants.Arbitrum.contractId;
     default:
       throw new Error(`Unsupported chain: ${chain}`);
   }
@@ -219,13 +219,6 @@ export function chainContractId(chain: Chain): number {
 export function stateChainAssetFromAsset(asset: Asset): string {
   if (assetConstants[asset]) {
     return assetConstants[asset].asset;
-  }
-  // TODO: Temporal workaround: To remove once SDK supports Arbitrum
-  if (asset === 'ArbEth') {
-    return 'ETH';
-  }
-  if (asset === 'ArbUsdc') {
-    return 'USDC';
   }
   throw new Error(`Unsupported asset: ${asset}`);
 }
@@ -523,9 +516,9 @@ export async function newAddress(
     case Assets.Flip:
     case Assets.Eth:
     case Assets.Usdc:
-    case 'Usdt':
-    case 'ArbEth':
-    case 'ArbUsdc':
+    case Assets.Usdt:
+    case Assets.ArbEth:
+    case Assets.ArbUsdc:
       rawAddress = newEvmAddress(seed);
       break;
     case Assets.Dot:

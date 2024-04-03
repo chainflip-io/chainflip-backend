@@ -114,7 +114,7 @@ async function testGasLimitSwap(
   if (CCM_CHAINS_NATIVE_ASSETS[destChain] !== sourceAsset) {
     gasSwapScheduledHandle = observeSwapScheduled(
       sourceAsset,
-      destChain === 'Ethereum' ? Assets.Eth : ('ArbEth' as Asset),
+      destChain === 'Ethereum' ? Assets.Eth : Assets.ArbEth,
       channelId,
       SwapType.CcmGas,
     );
