@@ -2,14 +2,14 @@
 
 use crate::{self as pallet_cf_environment, Decode, Encode, TypeInfo};
 use cf_chains::{
-	btc::BitcoinFeeInfo,
+	btc::{BitcoinCrypto, BitcoinFeeInfo},
 	dot::{api::CreatePolkadotVault, PolkadotCrypto},
 	eth, ApiCall, Arbitrum, Bitcoin, Chain, ChainCrypto, Polkadot,
 };
 use cf_primitives::{BroadcastId, SemVer, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
-	Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
+	mocks::key_provider::MockKeyProvider, Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
 };
 use frame_support::{derive_impl, parameter_types, traits::UnfilteredDispatchable};
 use sp_core::{H160, H256};
@@ -178,12 +178,15 @@ impl GetBitcoinFeeInfo for MockBitcoinFeeInfo {
 impl_pallet_safe_mode!(MockPalletSafeMode; flag1, flag2);
 impl_mock_runtime_safe_mode!(mock: MockPalletSafeMode);
 
+pub type MockBitcoinKeyProvider = MockKeyProvider<BitcoinCrypto>;
+
 impl pallet_cf_environment::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
 	type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;
 	type ArbitrumVaultKeyWitnessedHandler = MockArbitrumVaultKeyWitnessedHandler;
 	type BitcoinFeeInfo = MockBitcoinFeeInfo;
+	type BitcoinKeyProvider = MockBitcoinKeyProvider;
 	type RuntimeSafeMode = MockRuntimeSafeMode;
 	type CurrentReleaseVersion = CurrentReleaseVersion;
 	type WeightInfo = ();
