@@ -1,4 +1,6 @@
+import Web3 from 'web3';
 import {
+  Connection,
   NonceAccount,
   PublicKey,
   SystemProgram,
@@ -12,9 +14,30 @@ import {
   getSolConnection,
 } from '../shared/utils';
 import { signAndSendTxSol } from '../shared/send_sol';
-import { getSolanaVaultIdl } from '../shared/contract_interfaces';
+import { getSolanaVaultIdl, getKeyManagerAbi } from '../shared/contract_interfaces';
+import { signAndSendTxEvm } from '../shared/send_evm';
 
-export async function initializeSolanaPrograms(solKey: string) {
+export async function initializeArbitrumContracts(
+  arbClient: Web3,
+  arbKey: { pubKeyX: string; pubKeyYParity: string },
+) {
+  const keyManagerAddress = getContractAddress('Arbitrum', 'KEY_MANAGER');
+
+  const keyManagerContract = new arbClient.eth.Contract(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (await getKeyManagerAbi()) as any,
+    keyManagerAddress,
+  );
+  const txData = keyManagerContract.methods
+    .setAggKeyWithGovKey({
+      pubKeyX: arbKey.pubKeyX,
+      pubKeyYParity: arbKey.pubKeyYParity === 'Odd' ? 1 : 0,
+    })
+    .encodeABI();
+  await signAndSendTxEvm('Arbitrum', keyManagerAddress, '0', txData);
+}
+
+export async function initializeSolanaPrograms(solClient: Connection, solKey: string) {
   function createUpgradeAuthorityInstruction(
     programId: PublicKey,
     upgradeAuthority: PublicKey,
@@ -50,7 +73,15 @@ export async function initializeSolanaPrograms(solKey: string) {
     });
   }
 
-  console.log('Inserting Solana key in the contracts');
+  // Temporal workaround if running the bouncer without the Solana node
+  try {
+    await solClient.getGenesisHash();
+  } catch (e) {
+    console.log('Solana not running, skipping key initialization');
+    return;
+  }
+
+  console.log('Initializing Solana programs');
 
   const solanaVaultProgramId = new PublicKey(getContractAddress('Solana', 'VAULT'));
   const solanaUpgradeManagerProgramId = new PublicKey(
