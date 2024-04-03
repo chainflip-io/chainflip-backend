@@ -10,8 +10,7 @@ use std::{
 // Should also check that the compatibility function below `args_compatible_with_old` is correct.
 pub const OLD_VERSION: &str = "1.3.0";
 
-// This is set to 1.3.3 because we don't have an old version for the engine at this point. 
-// As 
+// This is set to 1.3.3 because we don't have an old version for the engine at this point.
 pub const NEW_VERSION: &str = "1.3.3";
 
 // Sometimes we need to remove arguments that are valid for the new version but not for the old
