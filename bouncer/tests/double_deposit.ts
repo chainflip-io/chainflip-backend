@@ -23,7 +23,7 @@ async function main(): Promise<void> {
 
   // Register Liquidity Refund Address before requesting reposit address.
   const encodedEthAddr = chainflip.createType('EncodedAddress', {
-    Eth: hexStringToBytesArray(await newAddress('ETH', 'LP_1')),
+    Eth: hexStringToBytesArray(await newAddress('Eth', 'LP_1')),
   });
   await chainflip.tx.liquidityProvider
     .registerLiquidityRefundAddress(encodedEthAddr)
@@ -37,7 +37,7 @@ async function main(): Promise<void> {
       (event) => event.data.depositAddress.Eth,
     )
   ).data.depositAddress.Eth as string;
-  console.log('ETH ingress address: ' + ethIngressKey);
+  console.log('Eth ingress address: ' + ethIngressKey);
   await sleep(8000); // sleep for 8 seconds to give the engine a chance to start witnessing
   exec(
     'pnpm tsx  ./commands/send_eth.ts ' + ethIngressKey + ' 10',

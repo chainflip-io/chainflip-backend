@@ -623,7 +623,7 @@ pub mod pallet {
 		///
 		/// - [InvalidBroadcastId](Error::InvalidBroadcastId)
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::WeightInfo::transaction_failed())]
+		#[pallet::weight((T::WeightInfo::transaction_failed(), DispatchClass::Operational))]
 		pub fn transaction_failed(
 			origin: OriginFor<T>,
 			broadcast_id: BroadcastId,

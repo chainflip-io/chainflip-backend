@@ -1,5 +1,5 @@
 import { randomAsHex, randomAsNumber } from '@polkadot/util-crypto';
-import { Asset, Assets } from '@chainflip/cli';
+import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import Web3 from 'web3';
 import { performSwap, SwapParams } from '../shared/perform_swap';
 import {
@@ -175,7 +175,7 @@ export async function testAllSwaps() {
     functionCall: typeof testSwap | typeof testSwapViaContract,
     messageMetadata?: CcmDepositMetadata,
   ) {
-    if (destAsset === 'BTC') {
+    if (destAsset === 'Btc') {
       Object.values(btcAddressTypes).forEach((btcAddrType) => {
         allSwaps.push(functionCall(sourceAsset, destAsset, btcAddrType, messageMetadata));
       });
@@ -188,27 +188,27 @@ export async function testAllSwaps() {
 
   // Doing effectively infinite approvals to make sure it doesn't fail.
   await approveTokenVault(
-    'USDC',
+    'Usdc',
     (
-      BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals('USDC'))) * 100n
+      BigInt(amountToFineAmount(defaultAssetAmounts('Usdc'), assetDecimals('Usdc'))) * 100n
     ).toString(),
   );
   await approveTokenVault(
-    'FLIP',
+    'Flip',
     (
-      BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals('FLIP'))) * 100n
+      BigInt(amountToFineAmount(defaultAssetAmounts('Flip'), assetDecimals('Flip'))) * 100n
     ).toString(),
   );
 
   await approveTokenVault(
-    'USDT',
+    'Usdt',
     (
-      BigInt(amountToFineAmount(defaultAssetAmounts('USDT'), assetDecimals('USDT'))) * 100n
+      BigInt(amountToFineAmount(defaultAssetAmounts('Usdt'), assetDecimals('Usdt'))) * 100n
     ).toString(),
   );
 
   // TODO: Remove this when SDK supports Arbitrum assets
-  const allAssets = [...Object.values(Assets), 'ARBETH', 'ARBUSDC'];
+  const allAssets = [...Object.values(Assets), 'ArbEth' as Asset, 'ArbUsdc' as Asset];
 
   Object.values(allAssets).forEach((sourceAsset) => {
     Object.values(allAssets)
@@ -218,18 +218,18 @@ export async function testAllSwaps() {
         appendSwap(sourceAsset, destAsset, testSwap);
 
         if (
-          chainFromAsset(sourceAsset) === chainFromAsset('ETH') &&
+          chainFromAsset(sourceAsset) === chainFromAsset('Eth') &&
           // TODO: Update this when SDK supports Arbitrum assets
-          chainFromAsset(destAsset) === chainFromAsset('ETH')
-          // || chainFromAsset(sourceAsset) === chainFromAsset('ARBETH')
+          chainFromAsset(destAsset) === chainFromAsset('Eth')
+          // || chainFromAsset(sourceAsset) === chainFromAsset('ArbEth')
         ) {
           // Contract Swaps
           appendSwap(sourceAsset, destAsset, testSwapViaContract);
           // TODO: Update to add Arbitrum contract swaps:
           if (
-            chainFromAsset(destAsset) === chainFromAsset('ETH')
+            chainFromAsset(destAsset) === chainFromAsset('Eth')
             // TODO: Update this when SDK supports Arbitrum assets
-            // || chainFromAsset(destAsset) === chainFromAsset('ARBETH')
+            // || chainFromAsset(destAsset) === chainFromAsset('ArbEth')
           ) {
             // CCM contract swaps
             appendSwap(sourceAsset, destAsset, testSwapViaContract, newCcmMetadata(sourceAsset));

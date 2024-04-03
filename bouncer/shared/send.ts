@@ -1,5 +1,5 @@
 import Web3 from 'web3';
-import { Asset } from '@chainflip/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 import { sendDot } from './send_dot';
 import { sendBtc } from './send_btc';
 import { sendErc20 } from './send_erc20';
@@ -19,21 +19,21 @@ const cfTesterAbi = await getCFTesterAbi();
 
 export async function send(asset: Asset, address: string, amount?: string, log = true) {
   switch (asset) {
-    case 'BTC':
+    case 'Btc':
       await sendBtc(address, amount ?? defaultAssetAmounts(asset));
       break;
-    case 'ETH':
+    case 'Eth':
       await sendEvmNative('Ethereum', address, amount ?? defaultAssetAmounts(asset), log);
       break;
-    case 'ARBETH':
+    case 'ArbEth':
       await sendEvmNative('Arbitrum', address, amount ?? defaultAssetAmounts(asset), log);
       break;
-    case 'DOT':
+    case 'Dot':
       await sendDot(address, amount ?? defaultAssetAmounts(asset));
       break;
-    case 'USDC':
-    case 'USDT':
-    case 'FLIP': {
+    case 'Usdc':
+    case 'Usdt':
+    case 'Flip': {
       const contractAddress = getEvmContractAddress('Ethereum', asset);
       await sendErc20(
         'Ethereum',
@@ -44,7 +44,7 @@ export async function send(asset: Asset, address: string, amount?: string, log =
       );
       break;
     }
-    case 'ARBUSDC': {
+    case 'ArbUsdc': {
       const contractAddress = getEvmContractAddress('Arbitrum', asset);
       await sendErc20(
         'Arbitrum',
@@ -72,12 +72,12 @@ export async function sendViaCfTester(asset: Asset, toAddress: string, amount?: 
   let txData;
   let value = '0';
   switch (asset) {
-    case 'ETH':
+    case 'Eth':
       txData = cfTesterContract.methods.transferEth(toAddress).encodeABI();
       value = amountToFineAmount(amount ?? defaultAssetAmounts(asset), assetDecimals(asset));
       break;
-    case 'USDC':
-    case 'FLIP': {
+    case 'Usdc':
+    case 'Flip': {
       await approveErc20(asset, cfTesterAddress, amount ?? defaultAssetAmounts(asset));
       txData = cfTesterContract.methods
         .transferToken(

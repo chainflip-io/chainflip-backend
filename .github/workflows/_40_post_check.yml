@@ -24,7 +24,7 @@ jobs:
     runs-on: digitalocean
     timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
-      - name: Checkout chainflip-backend
+      - name: Checkout chainflip-backend 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Login to Github Container Registry 🔑
@@ -34,7 +34,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Configure NodeJS
+      - name: Configure NodeJS 🛠️
         uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65
         with:
           node-version: 18
@@ -125,7 +125,7 @@ jobs:
         if: always()
         continue-on-error: true
         run: |
-          cat /tmp/chainflip/debug.*log
+          cat /tmp/chainflip/debug.log
 
       - name: Print solana logs ☀️
         if: always()
@@ -173,3 +173,32 @@ jobs:
             The Bouncer has rejected the build on branch `${{ github.ref_name }}`
             👾 Link to job: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>
             #️⃣ Tagging: <@&939151218708709416>
+
+  chainspec-compatibility:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        network: [sisyphos, perseverance, berghain]
+    steps:
+      - name: Checkout chainflip-backend 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Download Binaries 📥
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+        with:
+          name: chainflip-backend-bin-ubuntu-22.04
+
+      - name: Make Binaries Executable 🛠️
+        run: |
+          chmod +x chainflip-*
+
+      - name: Run Test 🧪
+        shell: bash
+        run: ./ci/scripts/check_node_syncing.sh --network ${{ matrix.network }} --binary-root-path .
+
+      - name: Print logs 📜
+        if: always()
+        continue-on-error: true
+        run: |
+          cat /tmp/chainflip-node.log

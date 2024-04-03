@@ -22,7 +22,7 @@ use cf_amm::{
 };
 use cf_chains::{
 	arb::api::ArbitrumApi,
-	assets::any::ForeignChainAndAsset,
+	assets::any::{AssetMap, ForeignChainAndAsset},
 	btc::{BitcoinCrypto, BitcoinRetryPolicy},
 	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
@@ -424,7 +424,7 @@ impl pallet_session::historical::Config for Runtime {
 	type FullIdentificationOf = ();
 }
 
-const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
+const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(50);
 
 parameter_types! {
 	pub const Version: RuntimeVersion = VERSION;
@@ -1138,6 +1138,7 @@ mod benches {
 		[pallet_cf_broadcast, EthereumBroadcaster]
 		[pallet_cf_chain_tracking, EthereumChainTracking]
 		[pallet_cf_swapping, Swapping]
+		[pallet_cf_account_roles, AccountRoles]
 		[pallet_cf_ingress_egress, EthereumIngressEgress]
 		[pallet_cf_lp, LiquidityProvider]
 		[pallet_cf_pools, LiquidityPools]
@@ -1206,7 +1207,7 @@ impl_runtime_apis! {
 				})
 				.collect()
 		}
-		fn cf_asset_balances(account_id: AccountId) -> Result<Vec<(Asset, u128)>, DispatchErrorWithMessage> {
+		fn cf_asset_balances(account_id: AccountId) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage> {
 			LiquidityProvider::asset_balances(&account_id).map_err(Into::into)
 		}
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {

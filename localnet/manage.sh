@@ -326,7 +326,7 @@ logs() {
       tail -f /tmp/solana/solana.*log
     fi
     if [[ $SERVICE == "debug" ]]; then
-      cat /tmp/chainflip/debug.*log
+      cat /tmp/chainflip/debug.log
     fi
     break
   done

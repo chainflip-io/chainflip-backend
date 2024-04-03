@@ -18,7 +18,7 @@ async function main(): Promise<void> {
       (event) => event.data.depositAddress.Eth,
     )
   ).data.depositAddress.Eth as string;
-  console.log(`Found ETH address: ${ethIngressKey}`);
+  console.log(`Found Eth address: ${ethIngressKey}`);
 
   exec(
     `pnpm tsx ./commands/send_eth.ts ${ethIngressKey} 10`,

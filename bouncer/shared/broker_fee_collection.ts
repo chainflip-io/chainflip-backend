@@ -2,7 +2,7 @@
 import assert from 'assert';
 import { randomBytes } from 'crypto';
 import Keyring from '@polkadot/keyring';
-import { Asset, Assets } from '@chainflip/cli';
+import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import {
   EgressId,
@@ -22,11 +22,12 @@ import { getBalance } from '../shared/get_balance';
 import { doPerformSwap } from '../shared/perform_swap';
 
 const swapAssetAmount = {
-  [Assets.ETH]: 1,
-  [Assets.DOT]: 1000,
-  [Assets.FLIP]: 1000,
-  [Assets.BTC]: 0.1,
-  [Assets.USDC]: 1000,
+  [Assets.Eth]: 1,
+  [Assets.Dot]: 1000,
+  [Assets.Flip]: 1000,
+  [Assets.Btc]: 0.1,
+  [Assets.Usdc]: 1000,
+  [Assets.Usdt]: 1000,
 };
 const commissionBps = 1000; // 10%
 
@@ -57,11 +58,11 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   console.log(`${asset} earnedBrokerFeesBefore:`, earnedBrokerFeesBefore);
 
   // Run a swap
-  const swapAsset = asset === Assets.USDC ? Assets.FLIP : Assets.USDC;
+  const swapAsset = asset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
   const destinationAddress = await newAddress(swapAsset, seed ?? randomBytes(32).toString('hex'));
   const observeDestinationAddress =
-    asset === Assets.DOT ? decodeDotAddressForContract(destinationAddress) : destinationAddress;
-  const destinationChain = shortChainFromAsset(swapAsset); // "ETH" -> "Eth"
+    asset === Assets.Dot ? decodeDotAddressForContract(destinationAddress) : destinationAddress;
+  const destinationChain = shortChainFromAsset(swapAsset); // "Eth" -> "Eth"
   console.log(`${asset} destinationAddress:`, destinationAddress);
   const observeSwapScheduledEvent = observeEvent(
     ':SwapScheduled',
@@ -81,8 +82,8 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
     const destAddressEvent = event.data.destinationAddress[shortChainFromAsset(swapAsset)];
     if (!destAddressEvent) return false;
 
-    const destAssetMatches = event.data.destinationAsset.toUpperCase() === swapAsset;
-    const sourceAssetMatches = event.data.sourceAsset.toUpperCase() === asset;
+    const destAssetMatches = event.data.destinationAsset === swapAsset;
+    const sourceAssetMatches = event.data.sourceAsset === asset;
     const destAddressMatches =
       destAddressEvent.toLowerCase() === observeDestinationAddress.toLowerCase();
 
@@ -163,7 +164,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   // Withdraw the broker fees
   const withdrawalAddress = await newAddress(asset, seed ?? randomBytes(32).toString('hex'));
   const observeWithdrawalAddress =
-    asset === Assets.DOT ? decodeDotAddressForContract(withdrawalAddress) : withdrawalAddress;
+    asset === Assets.Dot ? decodeDotAddressForContract(withdrawalAddress) : withdrawalAddress;
   const chain = shortChainFromAsset(asset);
   console.log(`${chain} withdrawalAddress:`, withdrawalAddress);
   const balanceBeforeWithdrawal = await getBalance(asset, withdrawalAddress);
@@ -210,7 +211,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
     amountToFineAmount(balanceBeforeWithdrawal, assetDecimals(asset)),
   );
   // Log the chain state for Ethereum assets to help debugging.
-  if (['FLIP', 'ETH', 'USDC'].includes(asset.toString())) {
+  if (['Flip', 'Eth', 'Usdc'].includes(asset.toString())) {
     const chainState = JSON.stringify(
       await chainflip.query.ethereumChainTracking.currentChainState(),
     );
@@ -236,13 +237,12 @@ export async function testBrokerFeeCollection(): Promise<void> {
 
   // Run the test for all assets at the same time (with different seeds so the eth addresses are different)
   await Promise.all([
-    testBrokerFees(Assets.FLIP, randomBytes(32).toString('hex')),
-    testBrokerFees(Assets.ETH, randomBytes(32).toString('hex')),
-    testBrokerFees(Assets.DOT, randomBytes(32).toString('hex')),
-    testBrokerFees(Assets.BTC, randomBytes(32).toString('hex')),
-    testBrokerFees(Assets.USDC, randomBytes(32).toString('hex')),
+    testBrokerFees(Assets.Flip, randomBytes(32).toString('hex')),
+    testBrokerFees(Assets.Eth, randomBytes(32).toString('hex')),
+    testBrokerFees(Assets.Dot, randomBytes(32).toString('hex')),
+    testBrokerFees(Assets.Btc, randomBytes(32).toString('hex')),
+    testBrokerFees(Assets.Usdc, randomBytes(32).toString('hex')),
   ]);
 
   console.log('\x1b[32m%s\x1b[0m', '=== Broker fee collection test complete ===');
-  process.exit(0);
 }

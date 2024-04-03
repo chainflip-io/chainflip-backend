@@ -97,12 +97,10 @@ services:
   polkadot:
     container_name: polkadot
     platform: linux/amd64
-    image: ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot:v1.0.0
+    image: ghcr.io/chainflip-io/chainflip-backend/polkadot:357aa6af70b3d57fe0a9df1fe1815f704e59db07
     pull_policy: always
     stop_grace_period: 5s
     stop_signal: SIGINT
-    volumes:
-      - ./init/polkadot/chainspec.dev.v1.0.0.json:/polkadot/chainspec.json
     environment:
       - RUST_BACKTRACE=full
     command:
@@ -136,7 +134,7 @@ services:
       start_period: 20s
 
   bitcoin:
-    image: ghcr.io/chainflip-io/chainflip-bitcoin-regtest:v24.0.1
+    image: ghcr.io/chainflip-io/chainflip-backend/bitcoin:357aa6af70b3d57fe0a9df1fe1815f704e59db07
     platform: linux/amd64
     pull_policy: always
     container_name: bitcoin

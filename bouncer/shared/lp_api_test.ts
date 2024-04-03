@@ -1,4 +1,4 @@
-import { Asset, Chain, Assets } from '@chainflip/cli';
+import { Chain, InternalAssets as Assets } from '@chainflip/cli';
 import assert from 'assert';
 import {
   getChainflipApi,
@@ -11,6 +11,7 @@ import {
   chainFromAsset,
   isWithinOnePercent,
   assetDecimals,
+  stateChainAssetFromAsset,
 } from './utils';
 import { jsonRpc } from './json_rpc';
 import { provideLiquidity } from './provide_liquidity';
@@ -18,14 +19,19 @@ import { sendEvmNative } from './send_evm';
 import { getBalance } from './get_balance';
 
 type RpcAsset = {
-  asset: Asset;
+  asset: string;
   chain: Chain;
 };
 
-const testAsset: Asset = 'ETH'; // TODO: Make these tests work with any asset
-const testRpcAsset: RpcAsset = { chain: chainFromAsset(testAsset), asset: testAsset };
+const testAsset = Assets.Eth; // TODO: Make these tests work with any asset
+const testRpcAsset: RpcAsset = {
+  chain: chainFromAsset(testAsset),
+  asset: stateChainAssetFromAsset(testAsset),
+};
 const testAmount = 0.1;
-const testAssetAmount = parseInt(amountToFineAmount(testAmount.toString(), assetDecimals('ETH')));
+const testAssetAmount = parseInt(
+  amountToFineAmount(testAmount.toString(), assetDecimals(testAsset)),
+);
 const amountToProvide = testAmount * 50; // Provide plenty of the asset for the tests
 const chainflip = await getChainflipApi();
 const testAddress = '0x1594300cbd587694affd70c933b9ee9155b186d9';
@@ -38,7 +44,7 @@ async function lpApiRpc(method: string, params: any[]): Promise<any> {
 
 async function provideLiquidityAndTestAssetBalances() {
   const fineAmountToProvide = parseInt(
-    amountToFineAmount(amountToProvide.toString(), assetDecimals('ETH')),
+    amountToFineAmount(amountToProvide.toString(), assetDecimals('Eth')),
   );
   // We have to wait finalization here because the LP API server is using a finalized block stream (This may change in PRO-777 PR#3986)
   await provideLiquidity(testAsset, amountToProvide, true);
@@ -48,9 +54,7 @@ async function provideLiquidityAndTestAssetBalances() {
   let ethBalance = 0;
   do {
     const balances = await lpApiRpc(`lp_asset_balances`, []);
-    ethBalance = parseInt(
-      balances.Ethereum.filter((el) => el.asset === 'ETH').map((el) => el.balance)[0],
-    );
+    ethBalance = parseInt(balances.Ethereum.Eth);
     retryCount++;
     if (retryCount > 14) {
       throw new Error(
@@ -109,7 +113,7 @@ async function testLiquidityDeposit() {
     'liquidityProvider:AccountCredited',
     chainflip,
     (event) =>
-      event.data.asset.toUpperCase() === testAsset.toUpperCase() &&
+      event.data.asset === testAsset &&
       isWithinOnePercent(
         BigInt(event.data.amountCredited.replace(/,/g, '')),
         BigInt(testAssetAmount),
@@ -170,7 +174,7 @@ async function testRangeOrder() {
   // Cleanup after any unfinished previous test so it does not interfere with this test
   await lpApiRpc(`lp_set_range_order`, [
     testRpcAsset,
-    Assets.USDC,
+    'USDC',
     orderId,
     range,
     zeroAssetAmounts,
@@ -181,7 +185,7 @@ async function testRangeOrder() {
   const mintRangeOrder = (
     await lpApiRpc(`lp_set_range_order`, [
       testRpcAsset,
-      Assets.USDC,
+      'USDC',
       orderId,
       range,
       {
@@ -203,7 +207,7 @@ async function testRangeOrder() {
   const updateRangeOrder = (
     await lpApiRpc(`lp_update_range_order`, [
       testRpcAsset,
-      Assets.USDC,
+      'USDC',
       orderId,
       range,
       {
@@ -233,7 +237,7 @@ async function testRangeOrder() {
   const burnRangeOrder = (
     await lpApiRpc(`lp_set_range_order`, [
       testRpcAsset,
-      Assets.USDC,
+      'USDC',
       orderId,
       range,
       zeroAssetAmounts,
@@ -273,13 +277,13 @@ async function testLimitOrder() {
   const tick = 2;
 
   // Cleanup after any unfinished previous test so it does not interfere with this test
-  await lpApiRpc(`lp_set_limit_order`, [testRpcAsset, Assets.USDC, 'sell', orderId, tick, 0]);
+  await lpApiRpc(`lp_set_limit_order`, [testRpcAsset, 'USDC', 'sell', orderId, tick, 0]);
 
   // Mint a limit order
   const mintLimitOrder = (
     await lpApiRpc(`lp_set_limit_order`, [
       testRpcAsset,
-      Assets.USDC,
+      'USDC',
       'sell',
       orderId,
       tick,
@@ -303,7 +307,7 @@ async function testLimitOrder() {
   const updateLimitOrder = (
     await lpApiRpc(`lp_update_limit_order`, [
       testRpcAsset,
-      Assets.USDC,
+      'USDC',
       'sell',
       orderId,
       tick,
@@ -332,7 +336,7 @@ async function testLimitOrder() {
 
   // Burn the limit order
   const burnLimitOrder = (
-    await lpApiRpc(`lp_set_limit_order`, [testRpcAsset, Assets.USDC, 'sell', orderId, tick, 0])
+    await lpApiRpc(`lp_set_limit_order`, [testRpcAsset, 'USDC', 'sell', orderId, tick, 0])
   ).tx_details.response;
 
   assert(burnLimitOrder.length >= 1, `Empty burn limit order result`);
