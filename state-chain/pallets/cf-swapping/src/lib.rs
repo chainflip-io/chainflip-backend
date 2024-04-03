@@ -10,8 +10,8 @@ use cf_primitives::{
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi, SwapQueueApi, SwapType,
-	TransactionFeeApi,
+	impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi, IngressEgressFeeApi,
+	SwapQueueApi, SwapType,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -243,7 +243,7 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
 
-		type TransactionFeeHandler: TransactionFeeApi<AnyChain>;
+		type IngressEgressFeeHandler: IngressEgressFeeApi<AnyChain>;
 	}
 
 	#[pallet::pallet]
@@ -852,15 +852,15 @@ pub mod pallet {
 									swap.to
 								);
 							},
-						SwapType::TransactionFee => {
+						SwapType::IngressEgressFee => {
 							if swap.to == ForeignChain::from(swap.to).gas_asset() {
-								T::TransactionFeeHandler::accrue_transaction_fee(
+								T::IngressEgressFeeHandler::accrue_withheld_fee(
 									swap.to,
 									swap_output,
 								);
 							} else {
 								log_or_panic!(
-									"TransactionFee swap should not be to non-gas asset: {:?}",
+									"IngressEgressFee swap should not be to non-gas asset: {:?}",
 									swap.to
 								);
 							}

@@ -243,7 +243,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
-	type TransactionFeeHandler = chainflip::TransactionFeeHandler;
+	type IngressEgressFeeHandler = chainflip::IngressEgressFeeHandler;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {

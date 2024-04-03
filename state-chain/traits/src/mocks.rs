@@ -23,6 +23,7 @@ pub mod eth_environment_provider;
 pub mod fee_payment;
 pub mod flip_burn_info;
 pub mod funding_info;
+pub mod ingress_egress_fee_handler;
 pub mod key_provider;
 pub mod key_rotator;
 pub mod lp_balance;
@@ -37,7 +38,6 @@ pub mod swap_queue_api;
 pub mod threshold_signer;
 pub mod time_source;
 pub mod tracked_data_provider;
-pub mod transaction_fee_handler;
 pub mod waived_fees_mock;
 
 #[macro_export]

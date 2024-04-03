@@ -30,9 +30,9 @@ use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	liquidity::{LpBalanceApi, LpDepositHandler},
 	AdjustedFeeEstimationApi, AssetConverter, Broadcaster, CcmHandler, CcmSwapIds, Chainflip,
-	DepositApi, EgressApi, EpochInfo, FeePayment, GetBlockHeight, NetworkEnvironmentProvider,
-	OnDeposit, ScheduledEgressDetails, SwapDepositHandler, SwapQueueApi, SwapType,
-	TransactionFeeApi,
+	DepositApi, EgressApi, EpochInfo, FeePayment, GetBlockHeight, IngressEgressFeeApi,
+	NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails, SwapDepositHandler,
+	SwapQueueApi, SwapType,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -1397,7 +1397,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let amount_after_fees = if asset == <T::TargetChain as Chain>::GAS_ASSET {
 			// No need to schedule a swap for gas, it's already in the gas asset.
-			Self::accrue_transaction_fee(asset, sp_std::cmp::min(fee_estimate, available_amount));
+			Self::accrue_withheld_fee(asset, sp_std::cmp::min(fee_estimate, available_amount));
 			available_amount.saturating_sub(fee_estimate)
 		} else {
 			let transaction_fee = T::AssetConverter::calculate_asset_conversion(
@@ -1407,7 +1407,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				fee_estimate,
 			)
 			.unwrap_or_else(|| {
-				log::warn!("Unable to convert input to gas for input of {available_amount:?} ${asset:?}. Ignoring transaction fees.");
+				log::warn!("Unable to convert input to gas for input of {available_amount:?} ${asset:?}. Ignoring ingress egress fees.");
 				<T::TargetChain as Chain>::ChainAmount::zero()
 			});
 
@@ -1416,7 +1416,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					asset.into(),
 					<T::TargetChain as Chain>::GAS_ASSET.into(),
 					transaction_fee.into(),
-					SwapType::TransactionFee,
+					SwapType::IngressEgressFee,
 				);
 			}
 			available_amount.saturating_sub(transaction_fee)
@@ -1578,8 +1578,8 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	}
 }
 
-impl<T: Config<I>, I: 'static> TransactionFeeApi<T::TargetChain> for Pallet<T, I> {
-	fn accrue_transaction_fee(
+impl<T: Config<I>, I: 'static> IngressEgressFeeApi<T::TargetChain> for Pallet<T, I> {
+	fn accrue_withheld_fee(
 		_asset: <T::TargetChain as Chain>::ChainAsset,
 		fee: TargetChainAmount<T, I>,
 	) {

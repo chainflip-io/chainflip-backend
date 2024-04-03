@@ -959,6 +959,6 @@ pub trait AssetConverter {
 	) -> Option<Amount>;
 }
 
-pub trait TransactionFeeApi<C: Chain> {
-	fn accrue_transaction_fee(asset: C::ChainAsset, amount: C::ChainAmount);
+pub trait IngressEgressFeeApi<C: Chain> {
+	fn accrue_withheld_fee(asset: C::ChainAsset, amount: C::ChainAmount);
 }

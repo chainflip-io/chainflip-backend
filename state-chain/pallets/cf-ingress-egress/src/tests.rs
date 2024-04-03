@@ -1710,7 +1710,7 @@ fn should_remove_prewitnessed_deposit_when_witnessed() {
 
 fn test_transaction_fee_is_withheld_or_scheduled_for_swap(test_function: impl Fn(eth::Asset)) {
 	new_test_ext().execute_with(|| {
-		// Set the Gas (Transaction Fee) via ChainTracker
+		// Set the Gas (ingress egress Fee) via ChainTracker
 		const GAS_FEE: u128 = DEFAULT_DEPOSIT_AMOUNT / 10;
 		ChainTracker::<cf_chains::Ethereum>::set_fee(GAS_FEE);
 
@@ -1726,7 +1726,7 @@ fn test_transaction_fee_is_withheld_or_scheduled_for_swap(test_function: impl Fn
 		assert_eq!(
 			WithheldTransactionFees::<Test, _>::get(eth::Asset::Eth),
 			GAS_FEE,
-			"Expected transaction fee to be withheld for gas asset"
+			"Expected ingress egress fee to be withheld for gas asset"
 		);
 
 		// All other assets should schedule a swap to the gas asset
@@ -1741,19 +1741,19 @@ fn test_transaction_fee_is_withheld_or_scheduled_for_swap(test_function: impl Fn
 					from: cf_primitives::Asset::Flip,
 					to: cf_primitives::Asset::Eth,
 					amount: GAS_FEE,
-					swap_type: SwapType::TransactionFee
+					swap_type: SwapType::IngressEgressFee
 				},
 				MockSwap {
 					from: cf_primitives::Asset::Usdc,
 					to: cf_primitives::Asset::Eth,
 					amount: GAS_FEE,
-					swap_type: SwapType::TransactionFee
+					swap_type: SwapType::IngressEgressFee
 				},
 				MockSwap {
 					from: cf_primitives::Asset::Usdt,
 					to: cf_primitives::Asset::Eth,
 					amount: GAS_FEE,
-					swap_type: SwapType::TransactionFee
+					swap_type: SwapType::IngressEgressFee
 				}
 			]
 		);
