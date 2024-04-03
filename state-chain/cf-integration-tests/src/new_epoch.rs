@@ -1,15 +1,17 @@
 use super::*;
 use crate::genesis::GENESIS_BALANCE;
 use cf_chains::btc::{
-	deposit_address::DepositAddress, utxo_selection::ConsolidationParameters, BtcAmount, Utxo,
-	UtxoId, CHANGE_ADDRESS_SALT,
+	deposit_address::DepositAddress, utxo_selection::ConsolidationParameters, BitcoinFeeInfo,
+	BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 };
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
 use cf_traits::{EpochInfo, KeyProvider};
 use frame_support::traits::UnfilteredDispatchable;
 use pallet_cf_environment::BitcoinAvailableUtxos;
 use pallet_cf_validator::RotationPhase;
-use state_chain_runtime::{BitcoinThresholdSigner, Environment, RuntimeEvent, Validator};
+use state_chain_runtime::{
+	BitcoinInstance, BitcoinThresholdSigner, Environment, RuntimeEvent, Validator,
+};
 
 #[test]
 fn auction_repeats_after_failure_because_of_liveness() {
@@ -241,6 +243,7 @@ fn add_utxo_amount(utxo: Utxo) {
 fn can_consolidate_bitcoin_utxos() {
 	const EPOCH_BLOCKS: BlockNumber = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 5;
+	const CONSOLIDATION_SIZE: u32 = 2;
 	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.build()
@@ -267,12 +270,21 @@ fn can_consolidate_bitcoin_utxos() {
 				pallet_cf_environment::Call::update_consolidation_parameters {
 					params: ConsolidationParameters {
 						consolidation_threshold: 5,
-						consolidation_size: 2,
+						consolidation_size: CONSOLIDATION_SIZE,
 					}
 				}
 			)
 			.clone()
 			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
+
+			let bitcoin_fee_info: BitcoinFeeInfo =
+				pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::chain_state()
+					.expect("There should always be a chain state.")
+					.tracked_data
+					.btc_fee_info;
+			let expected_consolidation_fee = bitcoin_fee_info.min_fee_required_per_tx() // base fee
+				+ CONSOLIDATION_SIZE as BtcAmount * bitcoin_fee_info.fee_per_input_utxo() // consolidation inputs
+				+ bitcoin_fee_info.fee_per_output_utxo(); // change output
 
 			// Add some bitcoin utxos.
 			add_utxo_amount(utxo(31_000_000, CHANGE_ADDRESS_SALT, Some(epoch_3)));
@@ -323,12 +335,12 @@ fn can_consolidate_bitcoin_utxos() {
 					Utxo {
 						id: UtxoId {
 							tx_id: hex_literal::hex!(
-								"55f909eb7b3c89505f74cc808b9a61e5c7736d35c2e3c1882324577175763ddc"
+								"583c4f12102fc4bea1af47d14f9d0b90fca0783af1c5d03d894a44be5ae165bc"
 							)
 							.into(),
 							vout: 0,
 						},
-						amount: 62_999_817, // 31 + 32
+						amount: 31_000_000 + 32_000_000 - expected_consolidation_fee,
 						deposit_address: DepositAddress { pubkey_x: epoch_3, script_path: None }
 					},
 				]
@@ -354,29 +366,29 @@ fn can_consolidate_bitcoin_utxos() {
 					Utxo {
 						id: UtxoId {
 							tx_id: hex_literal::hex!(
-								"55f909eb7b3c89505f74cc808b9a61e5c7736d35c2e3c1882324577175763ddc"
+								"583c4f12102fc4bea1af47d14f9d0b90fca0783af1c5d03d894a44be5ae165bc"
 							)
 							.into(),
 							vout: 0,
 						},
-						amount: 62_999_817, // 31 + 32 = 63
+						amount: 31_000_000 + 32_000_000 - expected_consolidation_fee,
 						deposit_address: DepositAddress { pubkey_x: epoch_3, script_path: None }
 					},
 					Utxo {
 						id: UtxoId {
 							tx_id: hex_literal::hex!(
-								"ec405cb038340498f20108442c242d81c061790e300f07259a746337253c82b8"
+								"7412bc12c3e68a975c910f998afb9ac4b7de1426474642f2067727183dfe6c26"
 							)
 							.into(),
 							vout: 0,
 						},
-						amount: 66_999_817, // 33 + 34 = 67
+						amount: 33_000_000 + 34_000_000 - expected_consolidation_fee,
 						deposit_address: DepositAddress { pubkey_x: epoch_3, script_path: None }
 					},
 				]
 			);
 
-			// Increase the threshold so only pervious utxos are sent
+			// Increase the threshold so only previous utxos are sent
 			assert_ok!(RuntimeCall::Environment(
 				pallet_cf_environment::Call::update_consolidation_parameters {
 					params: ConsolidationParameters {
@@ -398,34 +410,34 @@ fn can_consolidate_bitcoin_utxos() {
 					Utxo {
 						id: UtxoId {
 							tx_id: hex_literal::hex!(
-								"55f909eb7b3c89505f74cc808b9a61e5c7736d35c2e3c1882324577175763ddc"
+								"583c4f12102fc4bea1af47d14f9d0b90fca0783af1c5d03d894a44be5ae165bc"
 							)
 							.into(),
 							vout: 0,
 						},
-						amount: 62_999_817, // 31 + 32 = 63
+						amount: 31_000_000 + 32_000_000 - expected_consolidation_fee,
 						deposit_address: DepositAddress { pubkey_x: epoch_3, script_path: None }
 					},
 					Utxo {
 						id: UtxoId {
 							tx_id: hex_literal::hex!(
-								"ec405cb038340498f20108442c242d81c061790e300f07259a746337253c82b8"
+								"7412bc12c3e68a975c910f998afb9ac4b7de1426474642f2067727183dfe6c26"
 							)
 							.into(),
 							vout: 0,
 						},
-						amount: 66_999_817, // 33 + 34 = 67
+						amount: 33_000_000 + 34_000_000 - expected_consolidation_fee,
 						deposit_address: DepositAddress { pubkey_x: epoch_3, script_path: None }
 					},
 					Utxo {
 						id: UtxoId {
 							tx_id: hex_literal::hex!(
-								"d7ee4b2c95f67a0454a3c4e9774c057075e649100284cf62a4b8c6f3925a1d26"
+								"2e80638a37518a081ff08a6b81e522dc68c1d46496ffcde64516489935150ecf"
 							)
 							.into(),
 							vout: 0,
 						},
-						amount: 42_999_817, // 21 + 22 = 43
+						amount: 21_000_000 + 22_000_000 - expected_consolidation_fee,
 						deposit_address: DepositAddress { pubkey_x: epoch_3, script_path: None }
 					},
 				]
