@@ -1197,7 +1197,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::<T, I>::DepositFetchesScheduled { channel_id, asset });
 
 		let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
-			Self::withhold_transaction_fee(
+			Self::withhold_ingress_or_egress_fee(
 				IngressOrEgress::Ingress,
 				deposit_channel_details.deposit_channel.asset,
 				deposit_amount,
@@ -1385,7 +1385,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Returns the remaining amount after the fee has been withheld, and the fee itself, both
 	/// measured in units of the input asset. A swap may be scheduled to convert the fee into the
 	/// gas asset.
-	fn withhold_transaction_fee(
+	fn withhold_ingress_or_egress_fee(
 		ingress_or_egress: IngressOrEgress,
 		asset: TargetChainAsset<T, I>,
 		available_amount: TargetChainAmount<T, I>,
@@ -1464,7 +1464,11 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 				},
 				None => {
 					let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
-						Self::withhold_transaction_fee(IngressOrEgress::Egress, asset, amount);
+						Self::withhold_ingress_or_egress_fee(
+							IngressOrEgress::Egress,
+							asset,
+							amount,
+						);
 
 					if amount_after_fees >=
 						EgressDustLimit::<T, I>::get(asset).unique_saturated_into() ||

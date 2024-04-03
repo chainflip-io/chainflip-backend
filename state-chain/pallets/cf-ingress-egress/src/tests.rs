@@ -1708,7 +1708,9 @@ fn should_remove_prewitnessed_deposit_when_witnessed() {
 	});
 }
 
-fn test_transaction_fee_is_withheld_or_scheduled_for_swap(test_function: impl Fn(eth::Asset)) {
+fn test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(
+	test_function: impl Fn(eth::Asset),
+) {
 	new_test_ext().execute_with(|| {
 		// Set the Gas (ingress egress Fee) via ChainTracker
 		const GAS_FEE: u128 = DEFAULT_DEPOSIT_AMOUNT / 10;
@@ -1772,14 +1774,14 @@ fn egress_transaction_fee_is_withheld_or_scheduled_for_swap() {
 		.unwrap();
 	}
 
-	test_transaction_fee_is_withheld_or_scheduled_for_swap(egress_function)
+	test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(egress_function)
 }
 
 #[test]
-fn ingress_transaction_fee_is_withheld_or_scheduled_for_swap() {
+fn ingress_fee_is_withheld_or_scheduled_for_swap() {
 	fn ingress_function(asset: eth::Asset) {
 		request_address_and_deposit(1u64, asset);
 	}
 
-	test_transaction_fee_is_withheld_or_scheduled_for_swap(ingress_function)
+	test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(ingress_function)
 }
