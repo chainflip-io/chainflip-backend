@@ -335,6 +335,7 @@ pub mod pallet {
 			egress_amount: AssetAmount,
 			swap_output: AssetAmount,
 			intermediate_amount: Option<AssetAmount>,
+			swap_type: SwapType,
 		},
 		/// A swap egress has been scheduled.
 		SwapEgressScheduled {
@@ -409,7 +410,6 @@ pub mod pallet {
 		CcmInsufficientDepositAmount,
 		/// The provided address could not be decoded.
 		InvalidDestinationAddress,
-
 		/// Withdrawals are disabled due to Safe Mode.
 		WithdrawalsDisabled,
 		/// Swap deposits are disabled due to Safe Mode.
@@ -796,6 +796,7 @@ pub mod pallet {
 						egress_amount: swap_output,
 						swap_output,
 						intermediate_amount: swap.intermediate_amount(),
+						swap_type: swap.swap_type.clone(),
 					});
 					// Handle swap completion logic.
 					match &swap.swap_type {

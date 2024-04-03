@@ -1367,6 +1367,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 					swap_input: 99_000,
 					swap_output: 9,
 					intermediate_amount: None,
+					swap_type: SwapType::CcmPrincipal(1),
 				}),
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					swap_id: 2,
@@ -1377,6 +1378,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 					swap_input: 1_000,
 					swap_output: 0,
 					intermediate_amount: None,
+					swap_type: SwapType::CcmGas(1),
 				}),
 			);
 
