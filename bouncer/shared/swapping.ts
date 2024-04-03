@@ -214,26 +214,19 @@ export async function testAllSwaps() {
         // Regular swaps
         appendSwap(sourceAsset, destAsset, testSwap);
 
-        if (
-          chainFromAsset(sourceAsset) === chainFromAsset('Eth') &&
-          // TODO: Update this when SDK supports Arbitrum assets
-          chainFromAsset(destAsset) === chainFromAsset('Eth')
-          // || chainFromAsset(sourceAsset) === chainFromAsset('ArbEth')
-        ) {
+        const sourceChain = chainFromAsset(sourceAsset);
+        const destChain = chainFromAsset(destAsset);
+
+        if (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') {
           // Contract Swaps
           appendSwap(sourceAsset, destAsset, testSwapViaContract);
-          // TODO: Update to add Arbitrum contract swaps:
-          if (
-            chainFromAsset(destAsset) === chainFromAsset('Eth')
-            // TODO: Update this when SDK supports Arbitrum assets
-            // || chainFromAsset(destAsset) === chainFromAsset('ArbEth')
-          ) {
+          if (destChain === 'Ethereum' || destChain === 'Arbitrum') {
             // CCM contract swaps
             appendSwap(sourceAsset, destAsset, testSwapViaContract, newCcmMetadata(sourceAsset));
           }
         }
 
-        if (ccmSupportedChains.includes(chainFromAsset(destAsset))) {
+        if (ccmSupportedChains.includes(destChain)) {
           // CCM swaps
           appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
         }
