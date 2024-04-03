@@ -7,7 +7,7 @@ use crate::{traits::Call, types::Commitment};
 
 impl<M> GetFeeForMessage<M> {
 	pub fn new(message: M) -> Self {
-		Self { message, commitment: Commitment::Confirmed }
+		Self { message, commitment: Default::default() }
 	}
 }
 

@@ -24,7 +24,7 @@ impl GetSignaturesForAddress {
 	pub fn for_address(address: Address) -> Self {
 		Self {
 			address,
-			commitment: Commitment::Confirmed,
+			commitment: Default::default(),
 			before: None,
 			until: None,
 			limit: None,

@@ -94,7 +94,7 @@ impl Call for GetTransaction {
 
 impl GetTransaction {
 	pub fn for_signature(signature: Signature) -> Self {
-		Self { signature, commitment: Commitment::Confirmed }
+		Self { signature, commitment: Default::default() }
 	}
 }
 
