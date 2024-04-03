@@ -8,7 +8,7 @@ use std::{
 // rest of the places the version needs changing on build using the build scripts in each of the
 // relevant crates.
 // Should also check that the compatibility function below `args_compatible_with_old` is correct.
-pub const OLD_VERSION: &str = "1.3.0";
+pub const OLD_VERSION: &str = "1.3.3";
 pub const NEW_VERSION: &str = "1.4.0";
 
 // Sometimes we need to remove arguments that are valid for the new version but not for the old
