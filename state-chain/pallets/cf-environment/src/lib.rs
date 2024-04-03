@@ -532,8 +532,11 @@ impl<T: Config> Pallet<T> {
 							Self::consolidation_parameters(),
 						);
 
-						Self::calculate_utxos_and_change(&selected_utxo[..])
-							.map(|change_amount| (selected_utxo, change_amount))
+						Self::consolidation_transaction_change_amount(
+							&selected_utxo[..],
+							&bitcoin_fee_info,
+						)
+						.map(|change_amount| (selected_utxo, change_amount))
 					} else {
 						None
 					}
@@ -568,27 +571,19 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn calculate_utxos_and_change(spendable_utxos: &[Utxo]) -> Option<BtcAmount> {
+	fn consolidation_transaction_change_amount(
+		spendable_utxos: &[Utxo],
+		fee_info: &cf_chains::btc::BitcoinFeeInfo,
+	) -> Option<BtcAmount> {
 		if spendable_utxos.is_empty() {
 			return None
 		}
 
-		let bitcoin_fee_info = T::BitcoinFeeInfo::bitcoin_fee_info();
-		let min_fee_required_per_tx = bitcoin_fee_info.min_fee_required_per_tx();
-		let fee_per_output_utxo = bitcoin_fee_info.fee_per_output_utxo();
-
-		let total_fee = spendable_utxos
-			.iter()
-			.map(|utxo| bitcoin_fee_info.fee_for_utxo(utxo))
-			.sum::<u64>() +
-			fee_per_output_utxo +
-			min_fee_required_per_tx;
-
-		spendable_utxos
-			.iter()
-			.map(|utxo| utxo.amount)
-			.sum::<u64>()
-			.checked_sub(total_fee)
+		spendable_utxos.iter().map(|utxo| utxo.amount).sum::<BtcAmount>().checked_sub(
+			fee_info.fee_per_input_utxo() * spendable_utxos.len() as BtcAmount +
+				fee_info.min_fee_required_per_tx() +
+				fee_info.fee_per_output_utxo(),
+		)
 	}
 }
 
