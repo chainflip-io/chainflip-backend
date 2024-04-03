@@ -76,7 +76,6 @@ jobs:
       matrix:
         target:
           - chainflip-node
-          - chainflip-engine
           - chainflip-cli
           - chainflip-broker-api
           - chainflip-lp-api
@@ -164,7 +163,6 @@ jobs:
       matrix:
         target:
           - chainflip-node
-          - chainflip-engine
           - chainflip-cli
           - chainflip-broker-api
           - chainflip-lp-api

@@ -42,6 +42,7 @@ members = [
   'engine/generate-genesis-keys',
   # we don't have a runner for 1.3. only a dylib
   # 'engine-runner-bin',
+  'engine-dylib',
   'engine-upgrade-utils',
   'engine-proc-macros',
   'utilities',
