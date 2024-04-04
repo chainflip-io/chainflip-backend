@@ -652,7 +652,6 @@ pub mod pallet {
 		fn on_finalize(_n: BlockNumberFor<T>) {
 			// Send all fetch/transfer requests as a batch. Revert storage if failed.
 			if let Err(error) = Self::do_egress_scheduled_fetch_transfer() {
-				log::error!("Ingress-Egress failed to send BatchAll. Error: {error:?}");
 				Self::deposit_event(Event::<T, I>::FailedToBuildAllBatchCall { error });
 			}
 
