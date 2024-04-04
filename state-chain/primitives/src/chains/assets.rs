@@ -68,8 +68,8 @@ macro_rules! assets {
 			use codec::{MaxEncodedLen, Encode, Decode};
 			use scale_info::TypeInfo;
 			use serde::{Serialize, Deserialize};
-			use core::ops::IndexMut;
-			use core::ops::Index;
+			use core::ops::{Index, IndexMut};
+			use core::iter::FromIterator;
 
 			#[derive(
 				Copy,
@@ -373,6 +373,15 @@ macro_rules! assets {
 					}
 				}
 			}
+
+			impl<T: Default> FromIterator<(Asset, T)> for AssetMap<T> {
+				fn from_iter<I: IntoIterator<Item = (Asset, T)>>(iter: I) -> Self {
+					iter.into_iter().fold(Self::default(), |mut map, (asset, value)| {
+						map[asset] = value;
+						map
+					})
+				}
+			}
 		}
 
 		$(
@@ -508,8 +517,16 @@ macro_rules! assets {
 						}
 					}
 				}
-			}
 
+				impl<T: Default> FromIterator<(Asset, T)> for AssetMap<T> {
+					fn from_iter<I: IntoIterator<Item = (Asset, T)>>(iter: I) -> Self {
+						iter.into_iter().fold(Self::default(), |mut map, (asset, value)| {
+							map[asset] = value;
+							map
+						})
+					}
+				}
+			}
 		)*
 	}
 }
@@ -772,6 +789,23 @@ mod test_assets {
 		assert_err!(serde_json::from_str::<any::Asset>("\"eTh\""));
 		assert_err!(serde_json::from_str::<any::Asset>("\"dOt\""));
 		assert_err!(serde_json::from_str::<any::Asset>("\"bTc\""));
+	}
+
+	#[test]
+	fn asset_map_from_iterator() {
+		assert_eq!(
+			eth::AssetMap::from_iter(vec![(eth::Asset::Eth, 1), (eth::Asset::Flip, 2),]),
+			eth::AssetMap { eth: 1, flip: 2, usdc: 0, usdt: 0 }
+		);
+		assert_eq!(any::AssetMap::<u128>::from_iter(vec![]), Default::default());
+		assert_eq!(
+			any::AssetMap::from_iter(vec![(any::Asset::Eth, 1), (any::Asset::Dot, 2),]),
+			any::AssetMap {
+				eth: eth::AssetMap { eth: 1, flip: 0, usdc: 0, usdt: 0 },
+				dot: dot::AssetMap { dot: 2 },
+				..Default::default()
+			}
+		);
 	}
 
 	#[test]
