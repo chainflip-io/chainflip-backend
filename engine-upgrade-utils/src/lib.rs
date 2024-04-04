@@ -72,7 +72,6 @@ fn malloc_size<T: Sized>(number_of_ts: usize) -> *mut c_void {
 }
 
 impl TryFrom<Vec<String>> for CStrArray {
-
 	type Error = anyhow::Error;
 
 	fn try_from(string_args: Vec<String>) -> Result<Self, Self::Error> {
@@ -107,7 +106,6 @@ impl TryFrom<Vec<String>> for CStrArray {
 }
 
 impl CStrArray {
-
 	pub fn to_rust_strings(&self) -> Vec<String> {
 		let mut str_args = Vec::new();
 		for i in 0..self.n_args {
@@ -142,7 +140,7 @@ fn test_c_str_array_no_args() {
 #[test]
 fn test_c_str_array_with_args() {
 	let args = vec!["arg1".to_string(), "arg2".to_string()];
-	
+
 	let c_args: CStrArray = args.clone().try_into().unwrap();
 	assert_eq!(c_args.to_rust_strings(), args);
 }
