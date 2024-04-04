@@ -22,7 +22,7 @@ basic_auth_user = "username"
 basic_auth_password = "password"
 
 [arb.rpc]
-ws_endpoint = "ws://localhost:8547"
+ws_endpoint = "ws://localhost:8548"
 http_endpoint = "http://localhost:8547"
 
 [health_check]
