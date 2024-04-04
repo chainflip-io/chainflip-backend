@@ -1093,6 +1093,15 @@ pub mod tests {
 		);
 
 		assert_eq!(
+			opts.arb_opts.arb_ws_endpoint.unwrap(),
+			settings.arb.nodes.primary.ws_endpoint.as_ref()
+		);
+		assert_eq!(
+			opts.arb_opts.arb_http_endpoint.unwrap(),
+			settings.arb.nodes.primary.http_endpoint.as_ref()
+		);
+
+		assert_eq!(
 			opts.health_check_hostname.unwrap(),
 			settings.health_check.as_ref().unwrap().hostname
 		);
