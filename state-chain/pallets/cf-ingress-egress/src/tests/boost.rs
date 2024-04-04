@@ -106,23 +106,19 @@ fn setup() {
 		DepositTracker { fetched: TOTAL_DEPOSITS, unfetched: 0 }
 	);
 
-	assert_ok!(<Test as crate::Config>::LpBalance::try_credit_account(
-		&BOOSTER_1,
-		Asset::Eth,
-		INIT_BOOSTER_ETH_BALANCE,
-	));
+	for asset in eth::Asset::all() {
+		assert_ok!(<Test as crate::Config>::LpBalance::try_credit_account(
+			&BOOSTER_1,
+			asset.into(),
+			INIT_BOOSTER_ETH_BALANCE,
+		));
 
-	assert_ok!(<Test as crate::Config>::LpBalance::try_credit_account(
-		&BOOSTER_1,
-		Asset::Flip,
-		INIT_BOOSTER_FLIP_BALANCE,
-	));
-
-	assert_ok!(<Test as crate::Config>::LpBalance::try_credit_account(
-		&BOOSTER_2,
-		Asset::Eth,
-		INIT_BOOSTER_ETH_BALANCE,
-	));
+		assert_ok!(<Test as crate::Config>::LpBalance::try_credit_account(
+			&BOOSTER_2,
+			asset.into(),
+			INIT_BOOSTER_ETH_BALANCE,
+		));
+	}
 
 	assert_eq!(get_lp_eth_balance(&BOOSTER_1), INIT_BOOSTER_ETH_BALANCE);
 	assert_eq!(get_lp_eth_balance(&BOOSTER_2), INIT_BOOSTER_ETH_BALANCE);
@@ -267,81 +263,93 @@ fn can_boost_non_eth_asset() {
 	// that the assumption didn't leak anywhere into non-test
 	// code, showing that other assets can be boosted without
 	// unexpectedly affecting Eth.
-	new_test_ext().execute_with(|| {
-		let asset = eth::Asset::Flip;
-		assert_ne!(asset, eth::Asset::Eth);
 
-		const BOOSTER_AMOUNT_1: AssetAmount = 500_000_000;
-		const DEPOSIT_AMOUNT: AssetAmount = 200_000_000;
-
-		const BOOST_FEE: AssetAmount = DEPOSIT_AMOUNT / 1000;
-
-		setup();
-
-		assert_ok!(IngressEgress::add_boost_funds(
-			RuntimeOrigin::signed(BOOSTER_1),
-			eth::Asset::Flip,
-			BOOSTER_AMOUNT_1,
-			BoostPoolTier::TenBps
-		));
-
-		let (_channel_id, deposit_address) = request_deposit_address(LP_ACCOUNT, asset, 30);
-
-		assert_eq!(get_lp_balance(&LP_ACCOUNT, asset), 0);
-		assert_eq!(get_lp_balance(&LP_ACCOUNT, eth::Asset::Eth), 0);
-
-		// Set the prices to ensure that ingress fee does not default to 0
-		{
-			use mocks::asset_converter::MockAssetConverter;
-			MockAssetConverter::set_price(Asset::Eth, Asset::Flip, 1u32.into());
-			MockAssetConverter::set_price(Asset::Flip, Asset::Eth, 1u32.into());
+	for asset in eth::Asset::all() {
+		if asset != eth::Asset::Eth {
+			test_for_asset(asset);
 		}
+	}
 
-		// After prewitnessing, the deposit is boosted and LP is credited
+	#[track_caller]
+	fn test_for_asset(asset: eth::Asset) {
+		new_test_ext().execute_with(|| {
+			assert_ne!(asset, eth::Asset::Eth);
 
-		const LP_AMOUNT_AFTER_BOOST: AssetAmount = DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE;
-		{
-			prewitness_deposit(deposit_address, asset, DEPOSIT_AMOUNT);
+			const BOOSTER_AMOUNT_1: AssetAmount = 500_000_000;
+			const DEPOSIT_AMOUNT: AssetAmount = 200_000_000;
 
-			assert_eq!(
-				get_lp_balance(&BOOSTER_1, asset),
-				INIT_BOOSTER_FLIP_BALANCE - BOOSTER_AMOUNT_1
-			);
+			const BOOST_FEE: AssetAmount = DEPOSIT_AMOUNT / 1000;
 
-			assert_eq!(
-				get_available_amount(asset, BoostPoolTier::TenBps),
-				BOOSTER_AMOUNT_1 - DEPOSIT_AMOUNT + BOOST_FEE
-			);
+			setup();
 
-			assert_eq!(get_lp_balance(&LP_ACCOUNT, asset), LP_AMOUNT_AFTER_BOOST);
-			assert_eq!(get_lp_balance(&LP_ACCOUNT, eth::Asset::Eth), 0);
-		}
-
-		// After deposit is finalised, it is credited to the correct boost pool:
-		{
-			witness_deposit(deposit_address, asset, DEPOSIT_AMOUNT);
-			assert_eq!(get_lp_balance(&LP_ACCOUNT, asset), LP_AMOUNT_AFTER_BOOST);
-			assert_eq!(get_lp_balance(&LP_ACCOUNT, eth::Asset::Eth), 0);
-
-			assert_eq!(
-				get_available_amount(asset, BoostPoolTier::TenBps),
-				BOOSTER_AMOUNT_1 + BOOST_FEE
-			);
-
-			assert_eq!(get_available_amount(eth::Asset::Eth, BoostPoolTier::TenBps), 0);
-		}
-
-		// Booster stops boosting and receives funds in the correct asset:
-		{
-			assert_ok!(IngressEgress::stop_boosting(
+			assert_ok!(IngressEgress::add_boost_funds(
 				RuntimeOrigin::signed(BOOSTER_1),
 				asset,
+				BOOSTER_AMOUNT_1,
 				BoostPoolTier::TenBps
 			));
-			assert_eq!(get_lp_balance(&BOOSTER_1, asset), INIT_BOOSTER_FLIP_BALANCE + BOOST_FEE);
-			assert_eq!(get_lp_balance(&BOOSTER_1, eth::Asset::Eth), INIT_BOOSTER_ETH_BALANCE);
-		}
-	});
+
+			let (_channel_id, deposit_address) = request_deposit_address(LP_ACCOUNT, asset, 30);
+
+			assert_eq!(get_lp_balance(&LP_ACCOUNT, asset), 0);
+			assert_eq!(get_lp_balance(&LP_ACCOUNT, eth::Asset::Eth), 0);
+
+			// Set the prices to ensure that ingress fee does not default to 0
+			{
+				use mocks::asset_converter::MockAssetConverter;
+				MockAssetConverter::set_price(Asset::Eth, asset.into(), 1u32.into());
+				MockAssetConverter::set_price(asset.into(), Asset::Eth, 1u32.into());
+			}
+
+			// After prewitnessing, the deposit is boosted and LP is credited
+
+			const LP_AMOUNT_AFTER_BOOST: AssetAmount = DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE;
+			{
+				prewitness_deposit(deposit_address, asset, DEPOSIT_AMOUNT);
+
+				assert_eq!(
+					get_lp_balance(&BOOSTER_1, asset),
+					INIT_BOOSTER_FLIP_BALANCE - BOOSTER_AMOUNT_1
+				);
+
+				assert_eq!(
+					get_available_amount(asset, BoostPoolTier::TenBps),
+					BOOSTER_AMOUNT_1 - DEPOSIT_AMOUNT + BOOST_FEE
+				);
+
+				assert_eq!(get_lp_balance(&LP_ACCOUNT, asset), LP_AMOUNT_AFTER_BOOST);
+				assert_eq!(get_lp_balance(&LP_ACCOUNT, eth::Asset::Eth), 0);
+			}
+
+			// After deposit is finalised, it is credited to the correct boost pool:
+			{
+				witness_deposit(deposit_address, asset, DEPOSIT_AMOUNT);
+				assert_eq!(get_lp_balance(&LP_ACCOUNT, asset), LP_AMOUNT_AFTER_BOOST);
+				assert_eq!(get_lp_balance(&LP_ACCOUNT, eth::Asset::Eth), 0);
+
+				assert_eq!(
+					get_available_amount(asset, BoostPoolTier::TenBps),
+					BOOSTER_AMOUNT_1 + BOOST_FEE
+				);
+
+				assert_eq!(get_available_amount(eth::Asset::Eth, BoostPoolTier::TenBps), 0);
+			}
+
+			// Booster stops boosting and receives funds in the correct asset:
+			{
+				assert_ok!(IngressEgress::stop_boosting(
+					RuntimeOrigin::signed(BOOSTER_1),
+					asset,
+					BoostPoolTier::TenBps
+				));
+				assert_eq!(
+					get_lp_balance(&BOOSTER_1, asset),
+					INIT_BOOSTER_FLIP_BALANCE + BOOST_FEE
+				);
+				assert_eq!(get_lp_balance(&BOOSTER_1, eth::Asset::Eth), INIT_BOOSTER_ETH_BALANCE);
+			}
+		});
+	}
 }
 
 #[test]
