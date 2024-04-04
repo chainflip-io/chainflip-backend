@@ -38,6 +38,7 @@ engine:
       ws_endpoint: ""
       signing_key_file: /etc/chainflip/keys/signing_key_file
     eth:
+     # Using Ethereum's private key for simplicity
       private_key_file: /etc/chainflip/keys/ethereum_key_file
       rpc:
         ws_endpoint: ""
