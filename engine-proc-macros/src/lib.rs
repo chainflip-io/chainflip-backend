@@ -72,11 +72,10 @@ pub fn engine_runner(_input: TokenStream) -> TokenStream {
 			println!("Starting engine runner...");
 			let env_args = std::env::args().collect::<Vec<String>>();
 
-			let mut c_str_array = engine_upgrade_utils::CStrArray::default();
-			c_str_array.string_args_to_c_args(env_args.clone())?;
-
 			let old_version = #old_version;
 			let new_version = #new_version;
+
+			let c_str_array: CStrArray = env_args.clone().try_into()?;
 
 			// Attempt to run the new version first
 			let exit_status_new_first = unsafe { #new_version_fn_ident(c_str_array.clone(), engine_upgrade_utils::NO_START_FROM) };
@@ -89,10 +88,8 @@ pub fn engine_runner(_input: TokenStream) -> TokenStream {
 				engine_upgrade_utils::NOT_YET_COMPATIBLE => {
 					// The new version is not compatible yet, so run the old version
 					println!("The latest version {new_version} is not yet compatible. Running the old version {old_version}...");
-					let mut old_c_str_args = engine_upgrade_utils::CStrArray::default();
 					let compatible_args = engine_upgrade_utils::args_compatible_with_old(env_args);
-					old_c_str_args.string_args_to_c_args(compatible_args)?;
-					let exit_status_old = unsafe { #old_version_fn_ident(old_c_str_args, engine_upgrade_utils::NO_START_FROM) };
+					let exit_status_old = unsafe { #old_version_fn_ident(compatible_args.try_into()?, engine_upgrade_utils::NO_START_FROM) };
 
 					println!("Old version has exited with exit status: {:?}", exit_status_old);
 
