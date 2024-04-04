@@ -1,19 +1,19 @@
 use crate::{
-	mock::*, pallet, ActiveBidder, BoundExecutorAddress, Error, EthereumAddress,
-	PendingRedemptions, RedemptionAmount, RedemptionTax, RestrictedAddresses, RestrictedBalances,
+	mock::*, pallet, BoundExecutorAddress, Error, EthereumAddress, PendingRedemptions,
+	RedemptionAmount, RedemptionTax, RestrictedAddresses, RestrictedBalances,
 };
 use cf_primitives::FlipBalance;
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::account_role_registry::MockAccountRoleRegistry, AccountInfo, AccountRoleRegistry,
-	Bonding, Chainflip, SetSafeMode, Slashing,
+	BidderProvider, Bonding, Chainflip, SetSafeMode, Slashing,
 };
 use sp_core::H160;
 
 use crate::BoundRedeemAddress;
 use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
 use pallet_cf_flip::{Bonder, FlipSlasher};
-use sp_runtime::{traits::BadOrigin, DispatchError};
+use sp_runtime::DispatchError;
 
 type FlipError = pallet_cf_flip::Error<Test>;
 
@@ -24,8 +24,8 @@ const TX_HASH: pallet::EthTransactionHash = [211u8; 32];
 #[test]
 fn genesis_nodes_are_bidding_by_default() {
 	new_test_ext().execute_with(|| {
-		assert!(ActiveBidder::<Test>::contains_key(&CHARLIE));
-		assert!(!ActiveBidder::<Test>::contains_key(&ALICE));
+		assert!(MockBidderProvider::is_bidder(&CHARLIE));
+		assert!(!MockBidderProvider::is_bidder(&ALICE));
 	});
 }
 
@@ -392,75 +392,6 @@ fn cannot_redeem_bond() {
 }
 
 #[test]
-fn test_start_and_stop_bidding() {
-	new_test_ext().execute_with(|| {
-		MockEpochInfo::add_authorities(ALICE);
-		const AMOUNT: u128 = 100;
-
-		assert_ok!(Funding::funded(
-			RuntimeOrigin::root(),
-			ALICE,
-			AMOUNT,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
-
-		// Not yet registered as validator.
-		assert_noop!(Funding::stop_bidding(RuntimeOrigin::signed(ALICE)), BadOrigin);
-		assert_noop!(Funding::start_bidding(RuntimeOrigin::signed(ALICE)), BadOrigin);
-
-		assert!(!ActiveBidder::<Test>::get(ALICE));
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
-			&ALICE
-		));
-
-		assert!(!ActiveBidder::<Test>::get(ALICE));
-
-		assert_noop!(
-			Funding::stop_bidding(RuntimeOrigin::signed(ALICE)),
-			<Error<Test>>::AlreadyNotBidding
-		);
-
-		assert!(!ActiveBidder::<Test>::get(ALICE));
-
-		assert_ok!(Funding::start_bidding(RuntimeOrigin::signed(ALICE)));
-
-		assert!(ActiveBidder::<Test>::get(ALICE));
-
-		assert_noop!(
-			Funding::start_bidding(RuntimeOrigin::signed(ALICE)),
-			<Error<Test>>::AlreadyBidding
-		);
-
-		MockEpochInfo::set_is_auction_phase(true);
-		assert_noop!(
-			Funding::stop_bidding(RuntimeOrigin::signed(ALICE)),
-			<Error<Test>>::AuctionPhase
-		);
-		assert!(ActiveBidder::<Test>::get(ALICE));
-
-		// Can stop bidding if outside of auction phase
-		MockEpochInfo::set_is_auction_phase(false);
-		assert_ok!(Funding::stop_bidding(RuntimeOrigin::signed(ALICE)));
-		assert!(!ActiveBidder::<Test>::get(ALICE));
-
-		assert_event_sequence!(
-			Test,
-			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
-			RuntimeEvent::Funding(crate::Event::Funded {
-				account_id: ALICE,
-				tx_hash: TX_HASH,
-				funds_added: AMOUNT,
-				total_balance: AMOUNT
-			}),
-			RuntimeEvent::Funding(crate::Event::StartedBidding { account_id: ALICE }),
-			RuntimeEvent::Funding(crate::Event::StoppedBidding { account_id: ALICE })
-		);
-	});
-}
-
-#[test]
 fn can_only_redeem_during_auction_if_not_bidding() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 45;
@@ -476,8 +407,9 @@ fn can_only_redeem_during_auction_if_not_bidding() {
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
 			&ALICE
 		));
-		assert_ok!(Funding::start_bidding(RuntimeOrigin::signed(ALICE)));
-		assert!(ActiveBidder::<Test>::get(ALICE));
+
+		MockBidderProvider::add_bidder(ALICE, AMOUNT);
+		assert!(MockBidderProvider::is_bidder(&ALICE));
 
 		// Redeeming is not allowed because Alice is bidding in the auction phase.
 		assert_noop!(
@@ -487,13 +419,13 @@ fn can_only_redeem_during_auction_if_not_bidding() {
 				ETH_DUMMY_ADDR,
 				Default::default()
 			),
-			<Error<Test>>::AuctionPhase
+			BIDDING_ERR
 		);
 
 		// Stop bidding for Alice (must be done outside of the auction phase)
 		MockEpochInfo::set_is_auction_phase(false);
-		assert_ok!(Funding::stop_bidding(RuntimeOrigin::signed(ALICE)));
-		assert!(!ActiveBidder::<Test>::get(ALICE));
+		MockBidderProvider::remove_bidder(ALICE);
+		assert!(!MockBidderProvider::is_bidder(&ALICE));
 
 		// Alice should be able to redeem while in the auction phase because she is not bidding
 		MockEpochInfo::set_is_auction_phase(true);

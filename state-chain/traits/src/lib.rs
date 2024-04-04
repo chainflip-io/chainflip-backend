@@ -251,6 +251,7 @@ pub trait BidderProvider {
 			.iter()
 			.any(|Bid { ref bidder_id, .. }| bidder_id == validator_id)
 	}
+	fn ensure_not_bidding(validator_id: &Self::ValidatorId) -> DispatchResult;
 }
 
 pub trait OnAccountFunded {

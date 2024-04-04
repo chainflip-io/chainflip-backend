@@ -80,7 +80,7 @@ fn cannot_redeem_funds_out_of_redemption_period() {
 						ETH_DUMMY_ADDR,
 						Default::default()
 					),
-					Error::<Runtime>::AuctionPhase
+					pallet_cf_validator::Error::<Runtime>::StillBidding
 				);
 			}
 

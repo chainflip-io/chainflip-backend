@@ -57,6 +57,7 @@ cf-test-utilities = { path = '../../test-utilities' }
 sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
 sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
 lazy_static = "1.4"
+pallet-cf-flip = { path = '../cf-flip' }
 
 [features]
 default = ['std']

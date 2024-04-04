@@ -190,7 +190,6 @@ impl pallet_cf_validator::Config for Runtime {
 	type KeyRotator =
 		cons_key_rotator!(EvmThresholdSigner, PolkadotThresholdSigner, BitcoinThresholdSigner);
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
-	type BidderProvider = pallet_cf_funding::Pallet<Self>;
 	type KeygenQualification = (
 		Reputation,
 		(
@@ -209,6 +208,7 @@ impl pallet_cf_validator::Config for Runtime {
 	);
 	type OffenceReporter = Reputation;
 	type Bonder = Bonder<Runtime>;
+	type Flip = Flip;
 	type SafeMode = RuntimeSafeMode;
 	type ReputationResetter = Reputation;
 	type CfePeerRegistration = CfeInterface;
@@ -582,6 +582,7 @@ impl pallet_cf_funding::Config for Runtime {
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EvmInstance>;
 	type RegisterRedemption = EthereumApi<EvmEnvironment>;
 	type TimeSource = Timestamp;
+	type BidderProvider = Validator;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = pallet_cf_funding::weights::PalletWeight<Runtime>;
 }
@@ -1217,7 +1218,7 @@ impl_runtime_apis! {
 			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(account_id);
 			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode<_>>::is_qualified(account_id);
 			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(account_id);
-			let is_bidding = pallet_cf_funding::ActiveBidder::<Runtime>::get(account_id);
+			let is_bidding = pallet_cf_validator::ActiveBidder::<Runtime>::get(account_id);
 			let bound_redeem_address = pallet_cf_funding::BoundRedeemAddress::<Runtime>::get(account_id);
 			let apy_bp = calculate_account_apy(account_id);
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(account_id);
@@ -1273,7 +1274,7 @@ impl_runtime_apis! {
 			)
 			.and_then(|resolver| {
 				resolver.resolve_auction(
-					<Runtime as pallet_cf_validator::Config>::BidderProvider::get_qualified_bidders::<<Runtime as pallet_cf_validator::Config>::KeygenQualification>(),
+					Validator::get_qualified_bidders::<<Runtime as pallet_cf_validator::Config>::KeygenQualification>(),
 					Validator::auction_bid_cutoff_percentage(),
 				)
 			})

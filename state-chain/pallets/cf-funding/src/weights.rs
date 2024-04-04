@@ -37,13 +37,12 @@ pub trait WeightInfo {
 	fn redeem_all() -> Weight;
 	fn redeemed() -> Weight;
 	fn redemption_expired() -> Weight;
-	fn stop_bidding() -> Weight;
-	fn start_bidding() -> Weight;
 	fn update_minimum_funding() -> Weight;
 	fn update_redemption_tax() -> Weight;
 	fn bind_redeem_address() -> Weight;
 	fn update_restricted_addresses(a: u32, b: u32, c: u32, ) -> Weight;
 	fn bind_executor_address() -> Weight;
+	fn deprecated_call() -> Weight;
 }
 
 /// Weights for pallet_cf_funding using the Substrate node and recommended hardware.
@@ -266,44 +265,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(6_u64))
 			.saturating_add(T::DbWeight::get().writes(5_u64))
 	}
-	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
-	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: Some(33), added: 2508, mode: `MaxEncodedLen`)
-	/// Storage: `Validator::CurrentRotationPhase` (r:1 w:0)
-	/// Proof: `Validator::CurrentRotationPhase` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::CurrentEpochStartedAt` (r:1 w:0)
-	/// Proof: `Validator::CurrentEpochStartedAt` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::RedemptionPeriodAsPercentage` (r:1 w:0)
-	/// Proof: `Validator::RedemptionPeriodAsPercentage` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::BlocksPerEpoch` (r:1 w:0)
-	/// Proof: `Validator::BlocksPerEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Funding::ActiveBidder` (r:1 w:1)
-	/// Proof: `Funding::ActiveBidder` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn stop_bidding() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `1267`
-		//  Estimated: `4732`
-		// Minimum execution time: 41_671_000 picoseconds.
-		Weight::from_parts(43_536_000, 4732)
-			.saturating_add(T::DbWeight::get().reads(7_u64))
-			.saturating_add(T::DbWeight::get().writes(1_u64))
-	}
-	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
-	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: Some(33), added: 2508, mode: `MaxEncodedLen`)
-	/// Storage: `Funding::ActiveBidder` (r:1 w:1)
-	/// Proof: `Funding::ActiveBidder` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn start_bidding() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `904`
-		//  Estimated: `4369`
-		// Minimum execution time: 28_239_000 picoseconds.
-		Weight::from_parts(28_550_000, 4369)
-			.saturating_add(T::DbWeight::get().reads(3_u64))
-			.saturating_add(T::DbWeight::get().writes(1_u64))
-	}
+	
 	/// Storage: `Funding::RedemptionTax` (r:1 w:0)
 	/// Proof: `Funding::RedemptionTax` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// Storage: `Funding::MinimumFunding` (r:0 w:1)
@@ -374,6 +336,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(15_571_000, 3601)
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
+	}
+	fn deprecated_call() -> Weight {
+		Weight::from_parts(0, 0)
 	}
 }
 
@@ -596,44 +561,6 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(6_u64))
 			.saturating_add(RocksDbWeight::get().writes(5_u64))
 	}
-	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
-	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: Some(33), added: 2508, mode: `MaxEncodedLen`)
-	/// Storage: `Validator::CurrentRotationPhase` (r:1 w:0)
-	/// Proof: `Validator::CurrentRotationPhase` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::CurrentEpochStartedAt` (r:1 w:0)
-	/// Proof: `Validator::CurrentEpochStartedAt` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::RedemptionPeriodAsPercentage` (r:1 w:0)
-	/// Proof: `Validator::RedemptionPeriodAsPercentage` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::BlocksPerEpoch` (r:1 w:0)
-	/// Proof: `Validator::BlocksPerEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Funding::ActiveBidder` (r:1 w:1)
-	/// Proof: `Funding::ActiveBidder` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn stop_bidding() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `1267`
-		//  Estimated: `4732`
-		// Minimum execution time: 41_671_000 picoseconds.
-		Weight::from_parts(43_536_000, 4732)
-			.saturating_add(RocksDbWeight::get().reads(7_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
-	}
-	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
-	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: Some(33), added: 2508, mode: `MaxEncodedLen`)
-	/// Storage: `Funding::ActiveBidder` (r:1 w:1)
-	/// Proof: `Funding::ActiveBidder` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn start_bidding() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `904`
-		//  Estimated: `4369`
-		// Minimum execution time: 28_239_000 picoseconds.
-		Weight::from_parts(28_550_000, 4369)
-			.saturating_add(RocksDbWeight::get().reads(3_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
-	}
 	/// Storage: `Funding::RedemptionTax` (r:1 w:0)
 	/// Proof: `Funding::RedemptionTax` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// Storage: `Funding::MinimumFunding` (r:0 w:1)
@@ -704,5 +631,8 @@ impl WeightInfo for () {
 		Weight::from_parts(15_571_000, 3601)
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
+	}
+	fn deprecated_call() -> Weight {
+		Weight::from_parts(0, 0)
 	}
 }

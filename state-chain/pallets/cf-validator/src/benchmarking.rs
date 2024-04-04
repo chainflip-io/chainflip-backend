@@ -359,5 +359,30 @@ mod benchmarks {
 		));
 	}
 
+	#[benchmark]
+	fn stop_bidding() {
+		let caller: T::AccountId = whitelisted_caller();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		T::AccountRoleRegistry::register_as_validator(&caller).unwrap();
+		ActiveBidder::<T>::insert(caller.clone(), true);
+
+		#[extrinsic_call]
+		stop_bidding(RawOrigin::Signed(caller.clone()));
+
+		assert!(!ActiveBidder::<T>::get(caller));
+	}
+
+	#[benchmark]
+	fn start_bidding() {
+		let caller: T::AccountId = whitelisted_caller();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		T::AccountRoleRegistry::register_as_validator(&caller).unwrap();
+		ActiveBidder::<T>::insert(caller.clone(), false);
+
+		#[extrinsic_call]
+		start_bidding(RawOrigin::Signed(caller.clone()));
+
+		assert!(ActiveBidder::<T>::get(caller));
+	}
 	// NOTE: Test suite not included due to missing Funding and Reputation pallet in `mock::Test`.
 }

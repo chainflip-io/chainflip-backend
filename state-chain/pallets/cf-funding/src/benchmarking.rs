@@ -2,11 +2,11 @@
 
 use super::*;
 
-use cf_traits::{AccountRoleRegistry, Chainflip};
+use cf_traits::Chainflip;
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
-	traits::{EnsureOrigin, OnNewAccount, UnfilteredDispatchable},
+	traits::{EnsureOrigin, UnfilteredDispatchable},
 };
 use frame_system::RawOrigin;
 
@@ -165,32 +165,6 @@ mod benchmarks {
 		}
 
 		assert!(!PendingRedemptions::<T>::contains_key(&caller));
-	}
-
-	#[benchmark]
-	fn stop_bidding() {
-		let caller: T::AccountId = whitelisted_caller();
-		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		T::AccountRoleRegistry::register_as_validator(&caller).unwrap();
-		ActiveBidder::<T>::insert(caller.clone(), true);
-
-		#[extrinsic_call]
-		stop_bidding(RawOrigin::Signed(caller.clone()));
-
-		assert!(!ActiveBidder::<T>::get(caller));
-	}
-
-	#[benchmark]
-	fn start_bidding() {
-		let caller: T::AccountId = whitelisted_caller();
-		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		T::AccountRoleRegistry::register_as_validator(&caller).unwrap();
-		ActiveBidder::<T>::insert(caller.clone(), false);
-
-		#[extrinsic_call]
-		start_bidding(RawOrigin::Signed(caller.clone()));
-
-		assert!(ActiveBidder::<T>::get(caller));
 	}
 
 	#[benchmark]

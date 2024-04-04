@@ -1,19 +1,18 @@
 use crate as pallet_cf_funding;
 use crate::PalletSafeMode;
 use cf_chains::{evm::EvmCrypto, ApiCall, Chain, ChainCrypto, Ethereum};
-use cf_primitives::{AccountRole, BroadcastId, ThresholdSignatureRequestId};
+use cf_primitives::{BroadcastId, FlipBalance, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
-	mocks::time_source, AccountRoleRegistry, Broadcaster, WaivedFees,
+	mocks::time_source, AccountRoleRegistry, Bid, BidderProvider, Broadcaster, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::cell::RefCell;
 use frame_support::{derive_impl, parameter_types, traits::UnfilteredDispatchable};
-use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
-	AccountId32, Permill,
+	AccountId32, DispatchError, DispatchResult, Permill,
 };
 use std::time::Duration;
 
@@ -65,10 +64,6 @@ impl frame_system::Config for Test {
 impl_mock_chainflip!(Test);
 
 parameter_types! {
-	pub const CeremonyRetryDelay: BlockNumberFor<Test> = 1;
-}
-
-parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
 
@@ -77,7 +72,7 @@ impl_mock_waived_fees!(AccountId, RuntimeCall);
 
 impl pallet_cf_flip::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Balance = u128;
+	type Balance = FlipBalance;
 	type BlocksPerDay = BlocksPerDay;
 	type OnAccountFunded = MockOnAccountFunded;
 	type WeightInfo = ();
@@ -193,6 +188,39 @@ impl Broadcaster<Ethereum> for MockBroadcaster {
 	}
 }
 
+parameter_types! {
+	pub static Bids: Vec<Bid<AccountId, FlipBalance>> = Default::default();
+}
+
+pub const BIDDING_ERR: DispatchError =
+	DispatchError::Other("The given validator is an active bidder");
+pub struct MockBidderProvider;
+impl MockBidderProvider {
+	pub fn add_bidder(bidder_id: AccountId, amount: FlipBalance) {
+		Bids::mutate(|bids| bids.push(Bid { bidder_id, amount }));
+	}
+	pub fn remove_bidder(bidder_id: AccountId) {
+		Bids::mutate(|bids| bids.retain(|bid| bid.bidder_id != bidder_id));
+	}
+}
+
+impl BidderProvider for MockBidderProvider {
+	type ValidatorId = AccountId;
+	type Amount = FlipBalance;
+
+	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
+		Bids::get()
+	}
+
+	fn ensure_not_bidding(validator_id: &Self::ValidatorId) -> DispatchResult {
+		frame_support::ensure!(
+			!Bids::get().into_iter().any(|bid| bid.bidder_id == *validator_id),
+			BIDDING_ERR
+		);
+		Ok(())
+	}
+}
+
 impl_mock_runtime_safe_mode! { funding: PalletSafeMode }
 impl pallet_cf_funding::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -203,6 +231,7 @@ impl pallet_cf_funding::Config for Test {
 	type Broadcaster = MockBroadcaster;
 	type ThresholdCallable = RuntimeCall;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
+	type BidderProvider = MockBidderProvider;
 	type SafeMode = MockRuntimeSafeMode;
 	type RegisterRedemption = MockRegisterRedemption;
 }
@@ -223,13 +252,14 @@ cf_test_utilities::impl_test_helpers! {
 		system: Default::default(),
 		flip: FlipConfig { total_issuance: 1_000_000, daily_slashing_rate: Permill::from_perthousand(1)},
 		funding: FundingConfig {
-			genesis_accounts: vec![(CHARLIE, AccountRole::Validator, MIN_FUNDING)],
+			genesis_accounts: vec![(CHARLIE, MIN_FUNDING)],
 			redemption_tax: REDEMPTION_TAX,
 			minimum_funding: MIN_FUNDING,
 			redemption_ttl: Duration::from_secs(REDEMPTION_TTL_SECS),
 		},
 	},
 	|| {
+		Bids::set(vec![Bid{ bidder_id: CHARLIE, amount: MIN_FUNDING}]);
 		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&CHARLIE)
 			.unwrap();
 	}

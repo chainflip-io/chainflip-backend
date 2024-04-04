@@ -45,6 +45,8 @@ pub trait WeightInfo {
 	fn rotation_phase_activating_keys(a: u32, ) -> Weight;
 	fn register_as_validator() -> Weight;
 	fn deregister_as_validator() -> Weight;
+	fn start_bidding() -> Weight;
+	fn stop_bidding() -> Weight;
 }
 
 /// Weights for pallet_cf_validator using the Substrate node and recommended hardware.
@@ -343,6 +345,12 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(3_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
+	fn start_bidding() -> Weight {
+		Weight::from_parts(1_000_000, 0)
+	}
+	fn stop_bidding() -> Weight {
+		Weight::from_parts(1_000_000, 0)
+	}
 }
 
 // For backwards compatibility and tests
@@ -639,5 +647,11 @@ impl WeightInfo for () {
 		Weight::from_parts(27_069_000, 3498)
 			.saturating_add(RocksDbWeight::get().reads(3_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
+	}
+	fn start_bidding() -> Weight {
+		Weight::from_parts(1_000_000, 0)
+	}
+	fn stop_bidding() -> Weight {
+		Weight::from_parts(1_000_000, 0)
 	}
 }
