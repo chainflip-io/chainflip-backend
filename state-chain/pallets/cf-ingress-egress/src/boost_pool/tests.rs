@@ -457,8 +457,8 @@ fn handling_rounding_errors() {
 	assert_eq!(
 		&pool
 			.amounts
-			.iter()
-			.map(|(_, scaled_amount)| scaled_amount.val)
+			.values()
+			.map(|scaled_amount| scaled_amount.val)
 			.collect::<Vec<_>>(),
 		&EXPECTED_REMAINING_AMOUNTS
 	);
@@ -478,8 +478,8 @@ fn handling_rounding_errors() {
 
 	assert_eq!(
 		&pool.pending_boosts[&BOOST_1]
-			.iter()
-			.map(|(_, scaled_amount)| scaled_amount.val)
+			.values()
+			.map(|scaled_amount| scaled_amount.val)
 			.collect::<Vec<_>>(),
 		&EXPECTED_AMOUNTS_TO_RECEIVE
 	);

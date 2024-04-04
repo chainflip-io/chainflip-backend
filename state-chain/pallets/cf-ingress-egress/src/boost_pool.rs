@@ -179,7 +179,7 @@ where
 		self.available_amount = self
 			.available_amount
 			.checked_sub(required_amount)
-			.ok_or("Not enough active funds")?;
+			.ok_or("Not enough available funds")?;
 
 		let mut total_contributed = ScaledAmount::<C>::default();
 		let mut to_receive_recorded = ScaledAmount::default();
@@ -241,9 +241,9 @@ where
 		if let Some((lucky_id, amount)) = self.amounts.iter_mut().nth(lucky_index) {
 			amount.saturating_accrue(excess_contributed);
 
-			boosters_to_receive
-				.get_mut(lucky_id)
-				.map(|amount| amount.saturating_accrue(remaining_to_receive));
+			if let Some(amount) = boosters_to_receive.get_mut(lucky_id) {
+				amount.saturating_accrue(remaining_to_receive)
+			}
 		}
 
 		// For every active booster, record how much of this particular deposit they are owed,

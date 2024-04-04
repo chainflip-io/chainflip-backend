@@ -36,10 +36,10 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	liquidity::{LpBalanceApi, LpDepositHandler},
-	AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter, Broadcaster, CcmHandler, CcmSwapIds, Chainflip,
-	DepositApi, EgressApi, EpochInfo, FeePayment, GetBlockHeight, IngressEgressFeeApi,
-	NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails, SwapDepositHandler,
-	SwapQueueApi, SwapType,
+	AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter, Broadcaster, CcmHandler,
+	CcmSwapIds, Chainflip, DepositApi, EgressApi, EpochInfo, FeePayment, GetBlockHeight,
+	IngressEgressFeeApi, NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails,
+	SwapDepositHandler, SwapQueueApi, SwapType,
 };
 use frame_support::{
 	pallet_prelude::*,
