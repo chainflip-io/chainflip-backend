@@ -51,8 +51,8 @@ use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId};
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
-	EpochInfo, Heartbeat, Issuance, KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode,
-	RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
+	EpochInfo, Heartbeat, IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady, OnDeposit,
+	QualifyNode, RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
 };
 use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
@@ -742,3 +742,30 @@ pub struct BlockUpdate<Data> {
 	#[serde(flatten)]
 	pub data: Data,
 }
+
+#[macro_export]
+macro_rules! impl_ingress_egress_fee_api_for_anychain {
+	( $t: ident, $(($chain: ident, $pallet: ident)),+ ) => {
+		impl IngressEgressFeeApi<AnyChain> for $t {
+			fn accrue_withheld_fee(asset: Asset, fee: <AnyChain as Chain>::ChainAmount) {
+				match asset.into() {
+					$(
+						ForeignChainAndAsset::$chain(asset) => $pallet::accrue_withheld_fee(
+							asset,
+							fee.try_into().expect("Checked for amount compatibility"),
+						),
+					)+
+				}
+			}
+		}
+	}
+}
+
+pub struct IngressEgressFeeHandler;
+impl_ingress_egress_fee_api_for_anychain!(
+	IngressEgressFeeHandler,
+	(Ethereum, EthereumIngressEgress),
+	(Polkadot, PolkadotIngressEgress),
+	(Bitcoin, BitcoinIngressEgress),
+	(Arbitrum, ArbitrumIngressEgress)
+);

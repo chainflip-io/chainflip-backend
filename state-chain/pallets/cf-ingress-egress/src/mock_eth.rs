@@ -25,6 +25,7 @@ use cf_traits::{
 		fee_payment::MockFeePayment,
 		lp_balance::MockBalance,
 		swap_deposit_handler::MockSwapDepositHandler,
+		swap_queue_api::MockSwapQueueApi,
 	},
 	DepositApi, NetworkEnvironmentProvider, OnDeposit,
 };
@@ -126,6 +127,7 @@ impl crate::Config for Test {
 	type NetworkEnvironment = MockNetworkEnvironmentProvider;
 	type AssetConverter = MockAssetConverter;
 	type FeePayment = MockFeePayment<Self>;
+	type SwapQueueApi = MockSwapQueueApi;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

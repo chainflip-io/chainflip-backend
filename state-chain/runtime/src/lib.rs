@@ -228,6 +228,7 @@ impl pallet_cf_environment::Config for Runtime {
 	type BitcoinVaultKeyWitnessedHandler = BitcoinVault;
 	type ArbitrumVaultKeyWitnessedHandler = ArbitrumVault;
 	type BitcoinFeeInfo = chainflip::BitcoinFeeGetter;
+	type BitcoinKeyProvider = BitcoinThresholdSigner;
 	type RuntimeSafeMode = RuntimeSafeMode;
 	type CurrentReleaseVersion = CurrentReleaseVersion;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
@@ -243,6 +244,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
+	type IngressEgressFeeHandler = chainflip::IngressEgressFeeHandler;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
@@ -308,6 +310,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
+	type SwapQueueApi = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
@@ -327,6 +330,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
+	type SwapQueueApi = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
@@ -346,6 +350,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
+	type SwapQueueApi = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
@@ -365,6 +370,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
+	type SwapQueueApi = Swapping;
 }
 
 parameter_types! {
@@ -1026,7 +1032,7 @@ type AllMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	// pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, ArbitrumInstance>,
-	// pallet_cf_pools::migrations::PalletMigration<Runtime>,
+	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 	// TODO: After the Abitrum release, remove arbitrum_integration migrations and un-comment the
 	// Arbitrum-specific pallet migrations.

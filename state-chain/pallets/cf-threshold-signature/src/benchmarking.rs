@@ -3,7 +3,7 @@
 use super::*;
 
 use cf_chains::{benchmarking_value::BenchmarkValue, ChainCrypto};
-use cf_primitives::GENESIS_EPOCH;
+use cf_primitives::{AccountRole, GENESIS_EPOCH};
 use cf_runtime_utilities::StorageDecodeVariant;
 use cf_traits::{
 	AccountRoleRegistry, Chainflip, CurrentEpochIndex, KeyRotationStatusOuter, ThresholdSigner,
@@ -28,11 +28,10 @@ where
 {
 	CurrentAuthorities::<T>::put(authorities.clone().collect::<BTreeSet<_>>());
 	for validator_id in authorities {
-		<T as frame_system::Config>::OnNewAccount::on_new_account(validator_id.into_ref());
-		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(
-			&validator_id.clone().into()
-		));
 		let account_id = validator_id.into_ref();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(account_id);
+		frame_system::Pallet::<T>::inc_providers(account_id);
+		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(account_id));
 		whitelist_account!(account_id);
 		assert_ok!(pallet_cf_reputation::Pallet::<T>::heartbeat(
 			RawOrigin::Signed(account_id.clone()).into()
@@ -261,9 +260,8 @@ mod benchmarks {
 
 	#[benchmark]
 	fn report_keygen_outcome() {
-		let caller: T::AccountId = whitelisted_caller();
-		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		T::AccountRoleRegistry::register_as_validator(&caller).unwrap();
+		let caller =
+			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Validator).unwrap();
 
 		let keygen_participants = generate_authority_set::<T, I>(150, caller.clone().into());
 		PendingKeyRotation::<T, I>::put(KeyRotationStatus::<T, I>::AwaitingKeygen {
