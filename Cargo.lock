@@ -7503,6 +7503,7 @@ dependencies = [
  "frame-system",
  "hex-literal",
  "log",
+ "nanorand",
  "pallet-cf-governance",
  "parity-scale-codec",
  "scale-info",

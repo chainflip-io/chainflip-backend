@@ -174,43 +174,44 @@ where
 		required_amount: ScaledAmount<C>,
 		boost_fee: ScaledAmount<C>,
 	) -> Result<(), &'static str> {
-		let current_total_active_amount = self.available_amount;
+		let current_total_available_amount = self.available_amount;
 
 		self.available_amount = self
 			.available_amount
 			.checked_sub(required_amount)
 			.ok_or("Not enough active funds")?;
 
-		let mut amounts = self.amounts.iter_mut();
-
-		// We must have at least one entry because the available amount is non-zero:
-		let (first_booster_account, first_booster_amount) =
-			amounts.next().ok_or("No boost amount entries found")?;
-
 		let mut total_contributed = ScaledAmount::<C>::default();
 		let mut to_receive_recorded = ScaledAmount::default();
 
 		let amount_to_receive = required_amount.saturating_add(boost_fee);
 
-		let mut boosters_to_receive: BTreeMap<_, _> = amounts
+		let mut boosters_to_receive: BTreeMap<_, _> = self
+			.amounts
+			.iter_mut()
 			.map(|(booster_id, amount)| {
+				// Round deducted amount up to ensure that rounding errors don't affect our
+				// ability to contribute required amount (note that the result can never be
+				// greater than boosters `amount` since we checked that required_amount <=
+				// total_available_amount)
 				let booster_contribution = multiply_by_rational_with_rounding(
 					required_amount.into(),
 					(*amount).into(),
-					current_total_active_amount.into(),
-					Rounding::NearestPrefDown,
+					current_total_available_amount.into(),
+					Rounding::Up,
 				)
 				// booster's amount is always <= total amount so default due to overflow should be
 				// impossible
 				.unwrap_or_default()
 				.into();
 
-				// Same as above, but also includes fees:
+				// Same as above, but also includes fees (note, however, that we round down
+				// to ensure that we don't distribute more than we have)
 				let booster_to_receive = multiply_by_rational_with_rounding(
 					amount_to_receive.into(),
 					(*amount).into(),
-					current_total_active_amount.into(),
-					Rounding::NearestPrefDown,
+					current_total_available_amount.into(),
+					Rounding::Down,
 				)
 				// booster's amount is always <= total amount so default due to overflow should be
 				// impossible
@@ -227,12 +228,23 @@ where
 			})
 			.collect();
 
-		// Compute the amount for the first contributor working backwards from the amount needed
-		// to negate any rounding errors made so far:
-		let remaining_required = required_amount.saturating_sub(total_contributed);
+		// This shouldn't saturate due to rounding contributions up:
+		let excess_contributed = total_contributed.saturating_sub(required_amount);
+		// This shouldn't saturate due to rounding amounts to receive down:
 		let remaining_to_receive = amount_to_receive.saturating_sub(to_receive_recorded);
-		first_booster_amount.saturating_reduce(remaining_required);
-		boosters_to_receive.insert(first_booster_account.clone(), remaining_to_receive);
+
+		// Some "lucky" booster will receive both of the above (inconsequential) amounts to
+		// ensure that we correctly account for every single atomic unit even in presence
+		// of rounding errors:
+		use nanorand::{Rng, WyRand};
+		let lucky_index = WyRand::new_seed(boost_id).generate_range(0..self.amounts.len());
+		if let Some((lucky_id, amount)) = self.amounts.iter_mut().nth(lucky_index) {
+			amount.saturating_accrue(excess_contributed);
+
+			boosters_to_receive
+				.get_mut(lucky_id)
+				.map(|amount| amount.saturating_accrue(remaining_to_receive));
+		}
 
 		// For every active booster, record how much of this particular deposit they are owed,
 		// (which is their pool share at the time of boosting):

@@ -425,3 +425,57 @@ fn use_max_available_amount() {
 
 	check_pool(&pool, [(BOOSTER_1, 1210)]);
 }
+
+#[test]
+fn handling_rounding_errors() {
+	type C = Ethereum;
+	const FEE_BPS: u16 = 100;
+	let mut pool = TestPool::new(100);
+
+	const DEPOSIT_AMOUNT: AssetAmount = 1;
+	// A number of boosters that would lead to rounding errors:
+	const BOOSTER_COUNT: u32 = 7;
+	const BOOSTER_FUNDS: AssetAmount = 1;
+
+	for booster_id in 1..=BOOSTER_COUNT {
+		pool.add_funds(booster_id, BOOSTER_FUNDS);
+	}
+
+	assert_eq!(pool.provide_funds_for_boosting(BOOST_1, DEPOSIT_AMOUNT), Ok((DEPOSIT_AMOUNT, 0)));
+
+	// Note that one of the values is larger than the rest, due to how we handle rounding errors:
+	const EXPECTED_REMAINING_AMOUNTS: [u128; 7] = [858, 858, 858, 858, 858, 862, 858];
+
+	assert_eq!(
+		&pool
+			.amounts
+			.iter()
+			.map(|(_, scaled_amount)| scaled_amount.val)
+			.collect::<Vec<_>>(),
+		&EXPECTED_REMAINING_AMOUNTS
+	);
+
+	// Despite rounding errors, we the total available amount in the pool is as expected:
+	let deposit_amount = ScaledAmount::<C>::from_chain_amount(DEPOSIT_AMOUNT).val;
+	{
+		let booster_funds = ScaledAmount::<C>::from_chain_amount(BOOSTER_FUNDS).val;
+		let fee = deposit_amount * FEE_BPS as u128 / 10_000;
+		let expected_total_amount = BOOSTER_COUNT as u128 * booster_funds - deposit_amount + fee;
+
+		assert_eq!(EXPECTED_REMAINING_AMOUNTS.into_iter().sum::<u128>(), expected_total_amount);
+	}
+
+	// Again, one of the values is larger than the rest due to rounding errors:
+	const EXPECTED_AMOUNTS_TO_RECEIVE: [u128; 7] = [142, 142, 142, 142, 142, 148, 142];
+
+	assert_eq!(
+		&pool.pending_boosts[&BOOST_1]
+			.iter()
+			.map(|(_, scaled_amount)| scaled_amount.val)
+			.collect::<Vec<_>>(),
+		&EXPECTED_AMOUNTS_TO_RECEIVE
+	);
+
+	// Despite rounding errors, the total amount to receive is as expected:
+	assert_eq!(EXPECTED_AMOUNTS_TO_RECEIVE.into_iter().sum::<u128>(), deposit_amount);
+}
