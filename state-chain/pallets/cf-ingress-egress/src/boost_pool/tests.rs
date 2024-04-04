@@ -89,47 +89,50 @@ fn adding_funds() {
 	pool.add_funds(BOOSTER_1, 1000);
 	check_pool(&pool, [(BOOSTER_1, 1000)]);
 
-	pool.add_funds(BOOSTER_1, 1000);
-	check_pool(&pool, [(BOOSTER_1, 2000)]);
+	pool.add_funds(BOOSTER_1, 500);
+	check_pool(&pool, [(BOOSTER_1, 1500)]);
 
-	pool.add_funds(BOOSTER_2, 1000);
-	check_pool(&pool, [(BOOSTER_1, 2000), (BOOSTER_2, 1000)]);
+	pool.add_funds(BOOSTER_2, 800);
+	check_pool(&pool, [(BOOSTER_1, 1500), (BOOSTER_2, 800)]);
 }
 
 #[test]
 fn withdrawing_funds() {
 	let mut pool = TestPool::new(5);
 	pool.add_funds(BOOSTER_1, 1000);
-	pool.add_funds(BOOSTER_2, 1000);
-	pool.add_funds(BOOSTER_3, 1000);
-	check_pool(&pool, [(BOOSTER_1, 1000), (BOOSTER_2, 1000), (BOOSTER_3, 1000)]);
+	pool.add_funds(BOOSTER_2, 900);
+	pool.add_funds(BOOSTER_3, 800);
+	check_pool(&pool, [(BOOSTER_1, 1000), (BOOSTER_2, 900), (BOOSTER_3, 800)]);
 
 	// No pending to receive, should be able to withdraw in full
 	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok(1000));
-	check_pool(&pool, [(BOOSTER_2, 1000), (BOOSTER_3, 1000)]);
+	check_pool(&pool, [(BOOSTER_2, 900), (BOOSTER_3, 800)]);
 	check_pending_withdrawals(&pool, []);
 
-	assert_eq!(pool.stop_boosting(BOOSTER_2), Ok(1000));
-	check_pool(&pool, [(BOOSTER_3, 1000)]);
+	assert_eq!(pool.stop_boosting(BOOSTER_2), Ok(900));
+	check_pool(&pool, [(BOOSTER_3, 800)]);
 
-	assert_eq!(pool.stop_boosting(BOOSTER_3), Ok(1000));
+	assert_eq!(pool.stop_boosting(BOOSTER_3), Ok(800));
 	check_pool(&pool, []);
 }
 
 #[test]
 fn withdrawing_twice_is_no_op() {
+	const AMOUNT_1: AssetAmount = 1000;
+	const AMOUNT_2: AssetAmount = 750;
+
 	let mut pool = TestPool::new(0);
-	pool.add_funds(BOOSTER_1, 1000);
-	pool.add_funds(BOOSTER_2, 1000);
+	pool.add_funds(BOOSTER_1, AMOUNT_1);
+	pool.add_funds(BOOSTER_2, AMOUNT_2);
 
-	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok(1000));
+	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok(AMOUNT_1));
 
-	check_pool(&pool, [(BOOSTER_2, 1000)]);
+	check_pool(&pool, [(BOOSTER_2, AMOUNT_2)]);
 
 	assert!(pool.stop_boosting(BOOSTER_1).is_err());
 
 	// No changes:
-	check_pool(&pool, [(BOOSTER_2, 1000)]);
+	check_pool(&pool, [(BOOSTER_2, AMOUNT_2)]);
 }
 
 #[test]
@@ -153,19 +156,24 @@ fn boosting_with_fees() {
 
 #[test]
 fn adding_funds_during_pending_withdrawal_from_same_booster() {
+	const AMOUNT_1: AssetAmount = 1000;
+	const AMOUNT_2: AssetAmount = 3000;
+	const DEPOSIT_AMOUNT: AssetAmount = 2000;
+
 	let mut pool = TestPool::new(0);
 
-	pool.add_funds(BOOSTER_1, 1000);
-	pool.add_funds(BOOSTER_2, 1000);
+	pool.add_funds(BOOSTER_1, AMOUNT_1);
+	pool.add_funds(BOOSTER_2, AMOUNT_2);
 
-	assert_eq!(pool.provide_funds_for_boosting(BOOST_1, 1000), Ok((1000, 0)));
-	check_pool(&pool, [(BOOSTER_1, 500), (BOOSTER_2, 500)]);
-	check_pending_boosts(&pool, [(BOOST_1, vec![(BOOSTER_1, 500), (BOOSTER_2, 500)])]);
+	assert_eq!(pool.provide_funds_for_boosting(BOOST_1, DEPOSIT_AMOUNT), Ok((DEPOSIT_AMOUNT, 0)));
+	check_pool(&pool, [(BOOSTER_1, 500), (BOOSTER_2, 1500)]);
+
+	check_pending_boosts(&pool, [(BOOST_1, vec![(BOOSTER_1, 500), (BOOSTER_2, 1500)])]);
 
 	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok(500));
 
-	check_pool(&pool, [(BOOSTER_2, 500)]);
-	check_pending_boosts(&pool, [(BOOST_1, vec![(BOOSTER_1, 500), (BOOSTER_2, 500)])]);
+	check_pool(&pool, [(BOOSTER_2, 1500)]);
+	check_pending_boosts(&pool, [(BOOST_1, vec![(BOOSTER_1, 500), (BOOSTER_2, 1500)])]);
 	check_pending_withdrawals(&pool, [(BOOSTER_1, vec![BOOST_1])]);
 
 	// Booster 1 has a pending withdrawal, but they add more funds, so we assume they
@@ -176,7 +184,7 @@ fn adding_funds_during_pending_withdrawal_from_same_booster() {
 	// Booster 1 is no longer withdrawing, so pending funds go into available pool
 	// on finalisation:
 	assert_eq!(pool.on_finalised_deposit(BOOST_1), vec![]);
-	check_pool(&pool, [(BOOSTER_1, 1500), (BOOSTER_2, 1000)]);
+	check_pool(&pool, [(BOOSTER_1, 1500), (BOOSTER_2, AMOUNT_2)]);
 }
 
 #[test]
