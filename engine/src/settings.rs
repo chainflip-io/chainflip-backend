@@ -901,9 +901,9 @@ pub mod tests {
 	fn all_settings_tests() {
 		settings_valid_if_only_all_the_environment_set();
 
-		// test_init_config_with_testing_config();
+		test_init_config_with_testing_config();
 
-		// test_base_config_path_command_line_option();
+		test_base_config_path_command_line_option();
 
 		test_all_command_line_options();
 	}
