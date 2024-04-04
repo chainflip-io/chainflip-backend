@@ -455,11 +455,7 @@ fn handling_rounding_errors() {
 	const EXPECTED_REMAINING_AMOUNTS: [u128; 7] = [858, 858, 858, 858, 858, 862, 858];
 
 	assert_eq!(
-		&pool
-			.amounts
-			.values()
-			.map(|scaled_amount| scaled_amount.val)
-			.collect::<Vec<_>>(),
+		&pool.amounts.values().map(|scaled_amount| scaled_amount.val).collect::<Vec<_>>(),
 		&EXPECTED_REMAINING_AMOUNTS
 	);
 
