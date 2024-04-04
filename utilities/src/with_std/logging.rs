@@ -9,10 +9,9 @@ pub struct LoggingSettings {
 	pub command_server_port: Port,
 }
 
-use engine_upgrade_utils::ExitStatus;
-
+#[derive(Debug)]
 pub enum ErrorType {
-	ExitStatus(ExitStatus),
+	Error(anyhow::Error),
 	Panic,
 }
 
@@ -50,7 +49,7 @@ macro_rules! print_start_and_end {
 					},
 					Err(error) => {
 						println!("Exiting {} due to error: {error:?}", env!("CARGO_PKG_NAME"));
-						Err(utilities::logging::ErrorType::ExitStatus(error))
+						Err(utilities::logging::ErrorType::Error(error))
 					},
 				},
 				Err(panic) => {

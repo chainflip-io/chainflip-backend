@@ -80,7 +80,30 @@ pub fn settings_and_run_main(
 			utilities::print_start_and_end!(async run_main(settings, if start_from == NO_START_FROM { None } else { Some(start_from) }))
 		}) {
 		Ok(()) => ExitStatus { status_code: SUCCESS, at_block: NO_START_FROM },
-		Err(ErrorType::ExitStatus(exit_status)) => exit_status,
+		Err(ErrorType::Error(e)) => {
+			if let Some(CreateStateChainClientError::CompatibilityError(block_compatibility)) =
+				e.downcast_ref::<CreateStateChainClientError>()
+			{
+				match block_compatibility.compatibility {
+					// we're no longer compatible, so we want to pass on the start to the one that is
+					// now compatible so that it can start from that number, ensuring we don't miss any blocks.
+					CfeCompatibility::NoLongerCompatible => ExitStatus {
+						status_code: engine_upgrade_utils::NO_LONGER_COMPATIBLE,
+						at_block: block_compatibility.at_block.number,
+					},
+					CfeCompatibility::NotYetCompatible => ExitStatus {
+						status_code: engine_upgrade_utils::NOT_YET_COMPATIBLE,
+						at_block: NO_START_FROM,
+					},
+					_ => {
+						unreachable!("We should never get here");
+					},
+				}
+			} else {
+				tracing::error!("Unknown error: {:?}", e);
+				ExitStatus { status_code: engine_upgrade_utils::UNKNOWN_ERROR, at_block: NO_START_FROM }
+			}
+		},
 		Err(ErrorType::Panic) =>
 			ExitStatus { status_code: engine_upgrade_utils::PANIC, at_block: NO_START_FROM },
 	}
@@ -89,7 +112,7 @@ pub fn settings_and_run_main(
 async fn run_main(
 	settings: Settings,
 	start_from: Option<state_chain_runtime::BlockNumber>,
-) -> anyhow::Result<(), ExitStatus> {
+) -> anyhow::Result<()> {
 	task_scope(|scope| {
 		async move {
 			let mut start_logger_server_fn =
@@ -269,30 +292,4 @@ async fn run_main(
 		.boxed()
 	})
 	.await
-	.map_err(|e| {
-		if let Some(CreateStateChainClientError::CompatibilityError(block_compatibility)) =
-			e.downcast_ref::<CreateStateChainClientError>()
-		{
-			// Create exit status!
-			match block_compatibility.compatibility {
-				// we're no longer compatible, so we want to pass on the start to the one that is
-				// now compatible
-				CfeCompatibility::NoLongerCompatible => ExitStatus {
-					status_code: engine_upgrade_utils::NO_LONGER_COMPATIBLE,
-					at_block: block_compatibility.at_block.number,
-				},
-				CfeCompatibility::NotYetCompatible => ExitStatus {
-					status_code: engine_upgrade_utils::NOT_YET_COMPATIBLE,
-					at_block: NO_START_FROM,
-				},
-				_ => {
-					// return error?
-					unreachable!("We should never get here");
-				},
-			}
-		} else {
-			tracing::error!("Unknown error: {:?}", e);
-			ExitStatus { status_code: engine_upgrade_utils::UNKNOWN_ERROR, at_block: NO_START_FROM }
-		}
-	})
 }
