@@ -5,5 +5,5 @@ use engine_upgrade_utils::{CStrArray, ExitStatus};
 // The `cfe_entrypoint` macro adds the required C parameters to the function signature
 #[cfe_entrypoint]
 fn cfe_entrypoint() {
-	settings_and_run_main(c_args.rust_string_args(), start_from)
+	settings_and_run_main(c_args.to_rust_strings(), start_from)
 }
