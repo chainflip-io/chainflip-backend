@@ -152,7 +152,7 @@ pub mod pallet {
 		StorageDoubleMap<_, Twox64Concat, T::AccountId, Identity, Asset, AssetAmount>;
 
 	#[pallet::storage]
-	/// Historical earned fees for an account. Map: AccountId => AssetAmount
+	/// Historical earned fees for an account.
 	pub type HistoricalEarnedFees<T: Config> =
 		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
