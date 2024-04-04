@@ -834,11 +834,11 @@ pub mod tests {
 	use utilities::assert_ok;
 
 	use crate::constants::{
-		ARB_HTTP_ENDPOINT, ARB_WS_ENDPOINT, BTC_BACKUP_HTTP_ENDPOINT, BTC_BACKUP_RPC_PASSWORD,
-		BTC_BACKUP_RPC_USER, BTC_HTTP_ENDPOINT, BTC_RPC_PASSWORD, BTC_RPC_USER,
-		DOT_BACKUP_HTTP_ENDPOINT, DOT_BACKUP_WS_ENDPOINT, DOT_HTTP_ENDPOINT, DOT_WS_ENDPOINT,
-		ETH_BACKUP_HTTP_ENDPOINT, ETH_BACKUP_WS_ENDPOINT, ETH_HTTP_ENDPOINT, ETH_WS_ENDPOINT,
-		NODE_P2P_IP_ADDRESS, ARB_BACKUP_HTTP_ENDPOINT, ARB_BACKUP_WS_ENDPOINT
+		ARB_BACKUP_HTTP_ENDPOINT, ARB_BACKUP_WS_ENDPOINT, ARB_HTTP_ENDPOINT, ARB_WS_ENDPOINT,
+		BTC_BACKUP_HTTP_ENDPOINT, BTC_BACKUP_RPC_PASSWORD, BTC_BACKUP_RPC_USER, BTC_HTTP_ENDPOINT,
+		BTC_RPC_PASSWORD, BTC_RPC_USER, DOT_BACKUP_HTTP_ENDPOINT, DOT_BACKUP_WS_ENDPOINT,
+		DOT_HTTP_ENDPOINT, DOT_WS_ENDPOINT, ETH_BACKUP_HTTP_ENDPOINT, ETH_BACKUP_WS_ENDPOINT,
+		ETH_HTTP_ENDPOINT, ETH_WS_ENDPOINT, NODE_P2P_IP_ADDRESS,
 	};
 
 	use super::*;
@@ -1073,11 +1073,11 @@ pub mod tests {
 		assert!(settings.eth.private_key_file.ends_with("eth_private_key_2"));
 
 		assert_eq!(
-			opts.arb_opts.arb_ws_endpoint.unwrap(),
+			opts.arb_opts.arb_ws_endpoint.clone().unwrap(),
 			settings.arb.nodes.primary.ws_endpoint.as_ref()
 		);
 		assert_eq!(
-			opts.arb_opts.arb_http_endpoint.unwrap(),
+			opts.arb_opts.arb_http_endpoint.clone().unwrap(),
 			settings.arb.nodes.primary.http_endpoint.as_ref()
 		);
 
