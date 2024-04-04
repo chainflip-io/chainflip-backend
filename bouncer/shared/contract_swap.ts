@@ -4,6 +4,7 @@ import {
   ExecuteSwapParams,
   approveVault,
   Asset as SCAsset,
+  Chains,
 } from '@chainflip/cli';
 import { Wallet, getDefaultProvider } from 'ethers';
 import {
@@ -46,7 +47,7 @@ export async function executeContractSwap(
   } as const;
   const txOptions = {
     nonce,
-    gasLimit: 200000n,
+    gasLimit: srcChain === Chains.Arbitrum ? 10000000n : 200000n,
   } as const;
 
   const receipt = await executeSwap(
@@ -139,11 +140,13 @@ export async function performSwapViaContract(
     throw new Error(`${tag} ${err}`);
   }
 }
+export async function approveTokenVault(srcAsset: Asset, amount: string) {
+  const erc20Assets = ['Flip', 'Usdc', 'Usdt', 'ArbUsdc'];
 
-export async function approveTokenVault(
-  srcAsset: 'Flip' | 'Usdc' | 'Usdt' | 'ArbUsdc',
-  amount: string,
-) {
+  if (!erc20Assets.includes(srcAsset)) {
+    throw new Error(`Unsupported asset, not an ERC20: ${srcAsset}`);
+  }
+
   const chain = chainFromAsset(srcAsset as Asset);
 
   const wallet = Wallet.fromPhrase(getWhaleMnemonic(chain)).connect(

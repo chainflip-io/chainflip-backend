@@ -187,25 +187,16 @@ export async function testAllSwaps() {
   console.log('=== Testing all swaps ===');
 
   // Doing effectively infinite approvals to make sure it doesn't fail.
-  await approveTokenVault(
-    'Usdc',
-    (
-      BigInt(amountToFineAmount(defaultAssetAmounts('Usdc'), assetDecimals('Usdc'))) * 100n
-    ).toString(),
-  );
-  await approveTokenVault(
-    'Flip',
-    (
-      BigInt(amountToFineAmount(defaultAssetAmounts('Flip'), assetDecimals('Flip'))) * 100n
-    ).toString(),
-  );
-
-  await approveTokenVault(
-    'Usdt',
-    (
-      BigInt(amountToFineAmount(defaultAssetAmounts('Usdt'), assetDecimals('Usdt'))) * 100n
-    ).toString(),
-  );
+  const erc20Assets: Asset[] = ['Usdc', 'Usdt', 'Flip', 'ArbUsdc'];
+  for (const erc20Asset of erc20Assets) {
+    await approveTokenVault(
+      erc20Asset,
+      (
+        BigInt(amountToFineAmount(defaultAssetAmounts(erc20Asset), assetDecimals(erc20Asset))) *
+        100n
+      ).toString(),
+    );
+  }
 
   Object.values(Assets).forEach((sourceAsset) => {
     Object.values(Assets)
