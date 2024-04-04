@@ -6,8 +6,8 @@ settings:
 
 dependencies:
   '@chainflip/cli':
-    specifier: 1.3.0-beta.1
-    version: 1.3.0-beta.1(@polkadot/util-crypto@12.2.1)(@polkadot/util@12.2.1)(axios@1.3.5)(ethers@6.8.0)
+    specifier: 1.3.0
+    version: 1.3.0(@polkadot/util-crypto@12.2.1)(@polkadot/util@12.2.1)(axios@1.3.5)(ethers@6.8.0)
   '@iarna/toml':
     specifier: ^2.2.5
     version: 2.2.5
@@ -125,8 +125,8 @@ packages:
       regenerator-runtime: 0.14.1
     dev: false
 
-  /@chainflip/cli@1.3.0-beta.1(@polkadot/util-crypto@12.2.1)(@polkadot/util@12.2.1)(axios@1.3.5)(ethers@6.8.0):
-    resolution: {integrity: sha512-MZYMmATGFwXepZM84tljj6Kt7AB6xS1ZLoG4JJDQsA2E3fK0FaVd4eXc+vCx9EOostrH7MLnU1ed9ly3Nznvcw==}
+  /@chainflip/cli@1.3.0(@polkadot/util-crypto@12.2.1)(@polkadot/util@12.2.1)(axios@1.3.5)(ethers@6.8.0):
+    resolution: {integrity: sha512-OuT7yh9ze0BJ1ueCYZbgUjL4Inc+XMZ9kdP1tunMBiG/bWSuf7S1+doZ8ubLgFDWG/67teTUwR66XpR7VglpCw==}
     hasBin: true
     peerDependencies:
       '@polkadot/util': ^12.x
