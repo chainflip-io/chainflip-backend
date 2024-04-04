@@ -71,8 +71,12 @@ fn malloc_size<T: Sized>(number_of_ts: usize) -> *mut c_void {
 	unsafe { malloc(size_of::<T>() * number_of_ts) }
 }
 
-impl CStrArray {
-	pub fn string_args_to_c_args(&mut self, string_args: Vec<String>) -> anyhow::Result<()> {
+impl TryFrom<Vec<String>> for CStrArray {
+
+	type Error = anyhow::Error;
+
+	fn try_from(string_args: Vec<String>) -> Result<Self, Self::Error> {
+		let mut c_str_array = CStrArray::default();
 		let array_malloc = malloc_size::<*mut c_char>(string_args.len());
 
 		if array_malloc.is_null() {
@@ -80,7 +84,7 @@ impl CStrArray {
 		}
 
 		let c_array_ptr = array_malloc as *mut *mut c_char;
-		self.c_args = c_array_ptr;
+		c_str_array.c_args = c_array_ptr;
 
 		for (i, rust_string_arg) in string_args.iter().enumerate() {
 			let c_string = CString::new(rust_string_arg.as_str())?;
@@ -96,12 +100,15 @@ impl CStrArray {
 				std::ptr::copy_nonoverlapping(c_string.as_ptr(), c_string_ptr, len);
 				*c_array_ptr.add(i) = c_string_ptr;
 			}
-			self.n_args = i + 1;
+			c_str_array.n_args = i + 1;
 		}
-		Ok(())
+		Ok(c_str_array)
 	}
+}
 
-	pub fn rust_string_args(&self) -> Vec<String> {
+impl CStrArray {
+
+	pub fn to_rust_strings(&self) -> Vec<String> {
 		let mut str_args = Vec::new();
 		for i in 0..self.n_args {
 			let c_str = unsafe { std::ffi::CStr::from_ptr(*self.c_args.add(i)) };
@@ -129,13 +136,13 @@ impl Drop for CStrArray {
 #[test]
 fn test_c_str_array_no_args() {
 	let c_args = CStrArray::default();
-	assert!(c_args.rust_string_args().is_empty());
+	assert!(c_args.to_rust_strings().is_empty());
 }
 
 #[test]
 fn test_c_str_array_with_args() {
 	let args = vec!["arg1".to_string(), "arg2".to_string()];
-	let mut c_args = CStrArray::default();
-	c_args.string_args_to_c_args(args.clone()).unwrap();
-	assert_eq!(c_args.rust_string_args(), args);
+	
+	let c_args: CStrArray = args.clone().try_into().unwrap();
+	assert_eq!(c_args.to_rust_strings(), args);
 }
