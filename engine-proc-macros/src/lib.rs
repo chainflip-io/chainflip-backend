@@ -40,19 +40,16 @@ pub fn cfe_entrypoint(_attrs: TokenStream, item: TokenStream) -> TokenStream {
 
 #[proc_macro]
 pub fn engine_runner(_input: TokenStream) -> TokenStream {
-	let mut versions = [OLD_VERSION, NEW_VERSION]
-		.iter()
-		.map(|i| i.replace('.', "_"))
-		.map(|version| {
-			(syn::Ident::new(&format!("cfe_entrypoint_v{}", version), Span::call_site()), version)
-		})
-		.map(|(ident, version)| (ident, format!("chainflip_engine_v{}", version), version));
-
-	let (old_version_fn_ident, old_dylib_name, old_version) =
-		versions.next().expect("should be two versions provided");
-
-	let (new_version_fn_ident, new_dylib_name, new_version) =
-		versions.next().expect("should be two versions provided");
+	let [(old_version_fn_ident, old_dylib_name, old_version), (new_version_fn_ident, new_dylib_name, new_version)] =
+		[OLD_VERSION, NEW_VERSION]
+			.map(|i| i.replace('.', "_"))
+			.map(|version| {
+				(
+					syn::Ident::new(&format!("cfe_entrypoint_v{}", version), Span::call_site()),
+					version,
+				)
+			})
+			.map(|(ident, version)| (ident, format!("chainflip_engine_v{}", version), version));
 
 	let output = quote! {
 		// Define the entrypoints into each version of the engine
