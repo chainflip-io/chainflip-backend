@@ -325,6 +325,9 @@ mod benchmarks {
 		);
 	}
 
+	// This benchmark is currently not used (since we use the more computationally expensive
+	// boost_finalised instead), but it is useful to keep around even if just to show that
+	// boosting a deposit is relatively cheap.
 	#[benchmark]
 	fn deposit_boosted() {
 		const FEE_TIER: BoostPoolTier = BoostPoolTier::FiveBps;
