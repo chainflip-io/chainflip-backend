@@ -22,6 +22,7 @@ use cf_traits::{
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
 		lp_balance::MockBalance,
+		swap_queue_api::MockSwapQueueApi,
 	},
 	NetworkEnvironmentProvider, OnDeposit, SwapDepositHandler,
 };
@@ -140,6 +141,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Test {
 	type NetworkEnvironment = MockNetworkEnvironmentProvider;
 	type AssetConverter = MockAssetConverter;
 	type FeePayment = MockFeePayment<Self>;
+	type SwapQueueApi = MockSwapQueueApi;
 }
 
 impl_test_helpers! {

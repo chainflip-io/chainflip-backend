@@ -22,7 +22,7 @@ use cf_amm::{
 };
 use cf_chains::{
 	arb::api::ArbitrumApi,
-	assets::any::ForeignChainAndAsset,
+	assets::any::{AssetMap, ForeignChainAndAsset},
 	btc::{BitcoinCrypto, BitcoinRetryPolicy},
 	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
@@ -78,9 +78,12 @@ pub use pallet_timestamp::Call as TimestampCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
-use sp_runtime::traits::{
-	AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor, One,
-	OpaqueKeys, UniqueSaturatedInto, Verify,
+use sp_runtime::{
+	traits::{
+		AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor,
+		One, OpaqueKeys, UniqueSaturatedInto, Verify,
+	},
+	BoundedVec,
 };
 
 use frame_support::genesis_builder_helper::{build_config, create_default_config};
@@ -228,6 +231,7 @@ impl pallet_cf_environment::Config for Runtime {
 	type BitcoinVaultKeyWitnessedHandler = BitcoinVault;
 	type ArbitrumVaultKeyWitnessedHandler = ArbitrumVault;
 	type BitcoinFeeInfo = chainflip::BitcoinFeeGetter;
+	type BitcoinKeyProvider = BitcoinThresholdSigner;
 	type RuntimeSafeMode = RuntimeSafeMode;
 	type CurrentReleaseVersion = CurrentReleaseVersion;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
@@ -243,6 +247,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
+	type IngressEgressFeeHandler = chainflip::IngressEgressFeeHandler;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
@@ -308,6 +313,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
+	type SwapQueueApi = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
@@ -327,6 +333,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
+	type SwapQueueApi = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
@@ -346,6 +353,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
+	type SwapQueueApi = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
@@ -365,6 +373,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
+	type SwapQueueApi = Swapping;
 }
 
 parameter_types! {
@@ -423,7 +432,7 @@ impl pallet_session::historical::Config for Runtime {
 	type FullIdentificationOf = ();
 }
 
-const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
+const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(50);
 
 parameter_types! {
 	pub const Version: RuntimeVersion = VERSION;
@@ -483,7 +492,6 @@ impl frame_system::Config for Runtime {
 		Funding,
 		AccountRoles,
 		Reputation,
-		pallet_cf_validator::RemoveVanityNames<Self>,
 	);
 	/// The data to be stored in an account.
 	type AccountData = ();
@@ -1026,7 +1034,7 @@ type AllMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	// pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, ArbitrumInstance>,
-	// pallet_cf_pools::migrations::PalletMigration<Runtime>,
+	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 	// TODO: After the Abitrum release, remove arbitrum_integration migrations and un-comment the
 	// Arbitrum-specific pallet migrations.
@@ -1039,7 +1047,81 @@ type AllMigrations = (
 	FlipToBurnMigration,
 	migrations::housekeeping::Migration,
 	migrations::reap_old_accounts::Migration,
+	VanityNamesMigration,
 );
+
+pub struct VanityNamesMigration;
+
+impl frame_support::traits::OnRuntimeUpgrade for VanityNamesMigration {
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		use frame_support::traits::{GetStorageVersion, StorageVersion};
+
+		if <pallet_cf_validator::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() == 0 &&
+			<pallet_cf_account_roles::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version(
+			) == 1
+		{
+			log::info!("⏫ Applying VanityNames migration.");
+			// Moving the VanityNames storage item from the validators pallet to the account roles pallet.
+			cf_runtime_upgrade_utilities::move_pallet_storage::<
+				pallet_cf_validator::Pallet<Runtime>,
+				pallet_cf_account_roles::Pallet<Runtime>,
+			>(b"VanityNames");
+
+			// Bump the version of both pallets
+			StorageVersion::new(1).put::<pallet_cf_validator::Pallet<Runtime>>();
+			StorageVersion::new(2).put::<pallet_cf_account_roles::Pallet<Runtime>>();
+		} else {
+			log::info!(
+				"⏭ Skipping VanityNames migration. {:?}, {:?}",
+				<pallet_cf_validator::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version(),
+				<pallet_cf_account_roles::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version()
+			);
+		}
+		Default::default()
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::DispatchError> {
+		use frame_support::{migrations::VersionedPostUpgradeData, traits::GetStorageVersion};
+
+		if <pallet_cf_validator::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() ==
+			0
+		{
+			// The new VanityNames item should be empty before the upgrade.
+			frame_support::ensure!(
+				pallet_cf_account_roles::VanityNames::<Runtime>::get().is_empty(),
+				"Incorrect pre-upgrade state for pallet account roles VanityNames."
+			);
+			Ok(VersionedPostUpgradeData::MigrationExecuted(
+				pallet_cf_validator::migrations::old::VanityNames::<Runtime>::get().encode(),
+			)
+			.encode())
+		} else {
+			Ok(VersionedPostUpgradeData::Noop.encode())
+		}
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(state: Vec<u8>) -> Result<(), frame_support::sp_runtime::TryRuntimeError> {
+		use codec::Decode;
+		use frame_support::migrations::VersionedPostUpgradeData;
+
+		if let VersionedPostUpgradeData::MigrationExecuted(pre_upgrade_data) =
+			<VersionedPostUpgradeData>::decode(&mut &state[..])
+				.map_err(|_| "Failed to decode pre-upgrade state.")?
+		{
+			let pre_upgrade_vanity_names =
+				<BTreeMap<AccountId, BoundedVec<u8, _>>>::decode(&mut &pre_upgrade_data[..])
+					.map_err(|_| "Failed to decode VanityNames from pre-upgrade state.")?;
+
+			frame_support::ensure!(
+				pre_upgrade_vanity_names == pallet_cf_account_roles::VanityNames::<Runtime>::get(),
+				"Pre-upgrade state does not match post-upgrade state for VanityNames."
+			);
+		}
+		Ok(())
+	}
+}
 
 pub struct FlipToBurnMigration;
 
@@ -1198,15 +1280,15 @@ impl_runtime_apis! {
 			(Flip::total_issuance(), Flip::offchain_funds())
 		}
 		fn cf_accounts() -> Vec<(AccountId, Vec<u8>)> {
-			let mut vanity_names = Validator::vanity_names();
+			let mut vanity_names = AccountRoles::vanity_names();
 			frame_system::Account::<Runtime>::iter_keys()
 				.map(|account_id| {
-					let vanity_name = vanity_names.remove(&account_id).unwrap_or_default();
+					let vanity_name = vanity_names.remove(&account_id).unwrap_or_default().into();
 					(account_id, vanity_name)
 				})
 				.collect()
 		}
-		fn cf_asset_balances(account_id: AccountId) -> Result<Vec<(Asset, u128)>, DispatchErrorWithMessage> {
+		fn cf_asset_balances(account_id: AccountId) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage> {
 			LiquidityProvider::asset_balances(&account_id).map_err(Into::into)
 		}
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
@@ -1628,12 +1710,9 @@ impl_runtime_apis! {
 				validators: vec![],
 			};
 			let voting_validators = Witnesser::count_votes(<Runtime as Chainflip>::EpochInfo::current_epoch(), hash);
-			let vanity_names: BTreeMap<AccountId, Vec<u8>> = pallet_cf_validator::VanityNames::<Runtime>::get();
+			let vanity_names: BTreeMap<AccountId, BoundedVec<u8, _>> = pallet_cf_account_roles::VanityNames::<Runtime>::get();
 			voting_validators?.iter().for_each(|(val, voted)| {
-				let vanity = match vanity_names.get(val) {
-					Some(vanity_name) => { vanity_name.clone() },
-					None => { vec![] }
-				};
+				let vanity = vanity_names.get(val).cloned().unwrap_or_default();
 				if !voted {
 					result.failing_count += 1;
 				}

@@ -1,7 +1,9 @@
 use crate::{self as pallet_cf_pools, PalletSafeMode};
+use cf_chains::assets::any::AssetMap;
 use cf_primitives::{Asset, AssetAmount};
 use cf_traits::{
-	impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleRegistry, LpBalanceApi, SwapType,
+	impl_mock_chainflip, impl_mock_runtime_safe_mode, mocks::swap_queue_api::MockSwapQueueApi,
+	AccountRoleRegistry, LpBalanceApi,
 };
 use frame_support::{derive_impl, parameter_types};
 use frame_system as system;
@@ -73,7 +75,6 @@ parameter_types! {
 	pub static BobDebitedEth: AssetAmount = Default::default();
 	pub static BobDebitedUsdc: AssetAmount = Default::default();
 	pub static RecordedFees: BTreeMap<AccountId, (Asset, AssetAmount)> = BTreeMap::new();
-	pub static SwapQueue: Vec<MockSwap> = vec![];
 }
 pub struct MockBalance;
 impl LpBalanceApi for MockBalance {
@@ -132,7 +133,7 @@ impl LpBalanceApi for MockBalance {
 
 	fn asset_balances(
 		_who: &Self::AccountId,
-	) -> Result<std::vec::Vec<(cf_primitives::Asset, u128)>, sp_runtime::DispatchError> {
+	) -> Result<AssetMap<AssetAmount>, sp_runtime::DispatchError> {
 		unreachable!()
 	}
 }
@@ -140,32 +141,6 @@ impl LpBalanceApi for MockBalance {
 impl MockBalance {
 	pub fn assert_fees_recorded(who: &AccountId) {
 		assert!(RecordedFees::get().contains_key(who), "Fees not recorded for {:?}", who);
-	}
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MockSwap {
-	pub from: Asset,
-	pub to: Asset,
-	pub amount: AssetAmount,
-	pub swap_type: SwapType,
-}
-
-pub struct MockSwapQueueApi;
-
-impl pallet_cf_pools::SwapQueueApi for MockSwapQueueApi {
-	type BlockNumber = u128;
-
-	fn schedule_swap(
-		from: Asset,
-		to: Asset,
-		amount: AssetAmount,
-		swap_type: SwapType,
-	) -> (u64, Self::BlockNumber) {
-		SwapQueue::mutate(|queue| {
-			queue.push(MockSwap { from, to, amount, swap_type });
-		});
-		(SwapQueue::get().len() as u64, 0)
 	}
 }
 

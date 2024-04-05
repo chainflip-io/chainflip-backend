@@ -177,9 +177,9 @@ export function assetContractId(asset: Asset): number {
     case 'Dot':
       return assetConstants.Dot.contractId;
     case 'ArbEth':
-      return 6;
+      return assetConstants.ArbEth.contractId;
     case 'ArbUsdc':
-      return 7;
+      return assetConstants.ArbUsdc.contractId;
     case 'Sol':
       return 9;
     case 'SolUsdc':
@@ -204,9 +204,9 @@ export function assetDecimals(asset: Asset): number {
     case 'Dot':
       return assetConstants.Dot.decimals;
     case 'ArbEth':
-      return 18;
+      return assetConstants.ArbEth.decimals;
     case 'ArbUsdc':
-      return 6;
+      return assetConstants.ArbUsdc.decimals;
     case 'Sol':
       return 9;
     case 'SolUsdc':
@@ -225,9 +225,24 @@ export function chainContractId(chain: Chain): number {
     case 'Polkadot':
       return chainConstants.Polkadot.contractId;
     case 'Arbitrum':
-      return 4;
+      return chainConstants.Arbitrum.contractId;
     case 'Solana':
       return 5;
+    default:
+      throw new Error(`Unsupported chain: ${chain}`);
+  }
+}
+
+export function chainGasAsset(chain: Chain): Asset {
+  switch (chain) {
+    case 'Ethereum':
+      return Assets.Eth;
+    case 'Bitcoin':
+      return Assets.Btc;
+    case 'Polkadot':
+      return Assets.Dot;
+    case 'Arbitrum':
+      return Assets.ArbEth;
     default:
       throw new Error(`Unsupported chain: ${chain}`);
   }
@@ -237,13 +252,6 @@ export function chainContractId(chain: Chain): number {
 export function stateChainAssetFromAsset(asset: Asset): string {
   if (assetConstants[asset]) {
     return assetConstants[asset].asset;
-  }
-  // TODO: Temporal workaround: To remove once SDK supports Arbitrum
-  if (asset === 'ArbEth') {
-    return 'ETH';
-  }
-  if (asset === 'ArbUsdc') {
-    return 'USDC';
   }
   throw new Error(`Unsupported asset: ${asset}`);
 }
@@ -541,9 +549,9 @@ export async function newAddress(
     case Assets.Flip:
     case Assets.Eth:
     case Assets.Usdc:
-    case 'Usdt':
-    case 'ArbEth':
-    case 'ArbUsdc':
+    case Assets.Usdt:
+    case Assets.ArbEth:
+    case Assets.ArbUsdc:
       rawAddress = newEvmAddress(seed);
       break;
     case Assets.Dot:
@@ -860,9 +868,9 @@ export function compareSemVer(version1: string, version2: string) {
 }
 
 export function parseAssetString(input: string): Asset {
-  // TODO: Temporal workaround: To remove once SDK supports Arbitrum
-  const allAssets = [...Object.values(Assets), 'ArbEth' as Asset, 'ArbUsdc' as Asset];
-  const foundAsset = allAssets.find((asset) => asset.toLowerCase() === input.toLowerCase());
+  const foundAsset = Object.values(Assets).find(
+    (asset) => asset.toLowerCase() === input.toLowerCase(),
+  );
 
   if (foundAsset) {
     return foundAsset as Asset;

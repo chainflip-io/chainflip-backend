@@ -3,6 +3,7 @@ import { InternalAsset as Asset, InternalAssets as Assets, Chain } from '@chainf
 import { newCcmMetadata, prepareSwap } from './swapping';
 import {
   chainFromAsset,
+  chainGasAsset,
   getChainflipApi,
   getEvmEndpoint,
   observeBadEvents,
@@ -37,14 +38,6 @@ const GAS_PER_BYTE = 17;
 // MIN_FEE is the priority fee for Ethereum and baseFee for Arbitrum, since those are the fees that increase here upon spamming.
 const MIN_FEE: Record<string, number> = { Ethereum: 1000000000, Arbitrum: 100000000 };
 const LOOP_TIMEOUT = 15;
-
-const CCM_CHAINS_NATIVE_ASSETS: Record<string, Asset> = {
-  Ethereum: 'Eth',
-  Arbitrum: 'ArbEth',
-  // Solana: 'Sol',
-};
-
-let stopObservingCcmReceived = false;
 
 function gasTestCcmMetadata(sourceAsset: Asset, gasToConsume: number, gasBudgetFraction?: number) {
   const web3 = new Web3();
@@ -113,10 +106,10 @@ async function testGasLimitSwap(
 
   let gasSwapScheduledHandle;
 
-  if (CCM_CHAINS_NATIVE_ASSETS[destChain] !== sourceAsset) {
+  if (chainGasAsset(destChain as Chain) !== sourceAsset) {
     gasSwapScheduledHandle = observeSwapScheduled(
       sourceAsset,
-      destChain === 'Ethereum' ? Assets.Eth : ('ArbEth' as Asset),
+      destChain === 'Ethereum' ? Assets.Eth : Assets.ArbEth,
       channelId,
       SwapType.CcmGas,
     );
@@ -196,7 +189,7 @@ async function testGasLimitSwap(
 
   let egressBudgetAmount;
 
-  if (CCM_CHAINS_NATIVE_ASSETS[destChain] === sourceAsset) {
+  if (chainGasAsset(destChain as Chain) === sourceAsset) {
     egressBudgetAmount = messageMetadata.gasBudget;
   } else {
     const {
@@ -215,6 +208,8 @@ async function testGasLimitSwap(
     gasConsumption + MIN_BASE_GAS_OVERHEAD[destChain] + byteLength * GAS_PER_BYTE;
   // This is a very rough approximation for the gas limit required. A buffer is added to account for that.
   if (minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER[destChain] >= gasLimitBudget) {
+    let stopObservingCcmReceived = false;
+
     observeCcmReceived(
       sourceAsset,
       destAsset,
@@ -390,12 +385,12 @@ export async function testGasLimitCcmSwaps() {
     testGasLimitSwap('Eth', 'Usdt', ' insufBudget', undefined, 10 ** 5),
     testGasLimitSwap('Flip', 'Eth', ' insufBudget', undefined, 10 ** 5),
     testGasLimitSwap('Btc', 'Eth', ' insufBudget', undefined, 10 ** 4),
-    testGasLimitSwap('Dot', 'ArbEth', ' insufBudget', undefined, 10 ** 3),
+    testGasLimitSwap('Dot', 'ArbEth', ' insufBudget', undefined, 10 ** 4),
     testGasLimitSwap('Eth', 'ArbEth', ' insufBudget', undefined, 10 ** 4),
     testGasLimitSwap('Flip', 'ArbUsdc', ' insufBudget', undefined, 10 ** 4),
-    testGasLimitSwap('Btc', 'ArbUsdc', ' insufBudget', undefined, 10 ** 3),
-    testGasLimitSwap('ArbEth', 'Eth', ' insufBudget', undefined, 10 ** 4),
-    testGasLimitSwap('ArbUsdc', 'Flip', ' insufBudget', undefined, 10 ** 3),
+    testGasLimitSwap('Btc', 'ArbUsdc', ' insufBudget', undefined, 10 ** 4),
+    testGasLimitSwap('ArbEth', 'Eth', ' insufBudget', undefined, 10 ** 5),
+    testGasLimitSwap('ArbUsdc', 'Flip', ' insufBudget', undefined, 10 ** 4),
   ];
 
   // This amount of gasLimitBudget will be swapped into very little gasLimitBudget. Not into zero as that will cause a debug_assert to
