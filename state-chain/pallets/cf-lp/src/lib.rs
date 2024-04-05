@@ -421,7 +421,7 @@ impl<T: Config> LpBalanceApi for Pallet<T> {
 	}
 
 	fn record_fees(account_id: &Self::AccountId, amount: AssetAmount, asset: Asset) {
-		HistoricalEarnedFees::<T>::mutate(account_id, &asset, |balance| {
+		HistoricalEarnedFees::<T>::mutate(account_id, asset, |balance| {
 			balance.saturating_add(amount)
 		});
 	}
