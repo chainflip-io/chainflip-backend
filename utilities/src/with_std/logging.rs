@@ -54,11 +54,10 @@ macro_rules! print_start_and_end {
 				},
 				Err(panic) => {
 					// We'll never catch a panic since we use sp-panic-handler which set up a panic hook and abort the process
-					let panic_str = panic.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| panic.downcast_ref::<String>().cloned());
 					println!(
 						"Exiting {} due to panic: {:#?}",
 						env!("CARGO_PKG_NAME"),
-						panic_str
+						panic.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| panic.downcast_ref::<String>().cloned())
 					);
 					Err(utilities::logging::ErrorType::Panic)
 				},
