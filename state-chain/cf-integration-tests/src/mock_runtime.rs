@@ -169,7 +169,6 @@ impl ExtBuilder {
 					})
 					.collect(),
 				genesis_backups: Default::default(),
-				genesis_vanity_names: Default::default(),
 				blocks_per_epoch: self.blocks_per_epoch,
 				bond: self
 					.genesis_accounts
@@ -212,6 +211,7 @@ impl ExtBuilder {
 					.iter()
 					.map(|(id, role, _)| (id.clone(), *role))
 					.collect(),
+				genesis_vanity_names: Default::default(),
 			},
 			ethereum_chain_tracking: EthereumChainTrackingConfig {
 				init_chain_state: ChainState::<Ethereum> {
