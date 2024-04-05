@@ -55,7 +55,7 @@ impl AssetConverter for MockAssetConverter {
 		}
 
 		let required_input = Self::get_price(input_asset, output_asset)
-			.map(|price| desired_output_amount.into() / price)?;
+			.map(|price| desired_output_amount.into() * price)?;
 
 		if required_input > available_input_amount.into() {
 			return Some(available_input_amount)
