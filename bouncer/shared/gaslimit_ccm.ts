@@ -3,6 +3,7 @@ import { InternalAsset as Asset, InternalAssets as Assets, Chain } from '@chainf
 import { newCcmMetadata, prepareSwap } from './swapping';
 import {
   chainFromAsset,
+  chainGasAsset,
   getChainflipApi,
   getEvmEndpoint,
   observeBadEvents,
@@ -37,12 +38,6 @@ const GAS_PER_BYTE = 17;
 // MIN_FEE is the priority fee for Ethereum and baseFee for Arbitrum, since those are the fees that increase here upon spamming.
 const MIN_FEE: Record<string, number> = { Ethereum: 1000000000, Arbitrum: 100000000 };
 const LOOP_TIMEOUT = 15;
-
-const CCM_CHAINS_NATIVE_ASSETS: Record<string, Asset> = {
-  Ethereum: 'Eth',
-  Arbitrum: 'ArbEth',
-  // Solana: 'Sol',
-};
 
 function gasTestCcmMetadata(sourceAsset: Asset, gasToConsume: number, gasBudgetFraction?: number) {
   const web3 = new Web3();
@@ -111,7 +106,7 @@ async function testGasLimitSwap(
 
   let gasSwapScheduledHandle;
 
-  if (CCM_CHAINS_NATIVE_ASSETS[destChain] !== sourceAsset) {
+  if (chainGasAsset(destChain as Chain) !== sourceAsset) {
     gasSwapScheduledHandle = observeSwapScheduled(
       sourceAsset,
       destChain === 'Ethereum' ? Assets.Eth : Assets.ArbEth,
@@ -194,7 +189,7 @@ async function testGasLimitSwap(
 
   let egressBudgetAmount;
 
-  if (CCM_CHAINS_NATIVE_ASSETS[destChain] === sourceAsset) {
+  if (chainGasAsset(destChain as Chain) === sourceAsset) {
     egressBudgetAmount = messageMetadata.gasBudget;
   } else {
     const {

@@ -215,6 +215,21 @@ export function chainContractId(chain: Chain): number {
   }
 }
 
+export function chainGasAsset(chain: Chain): Asset {
+  switch (chain) {
+    case 'Ethereum':
+      return Assets.Eth;
+    case 'Bitcoin':
+      return Assets.Btc;
+    case 'Polkadot':
+      return Assets.Dot;
+    case 'Arbitrum':
+      return Assets.ArbEth;
+    default:
+      throw new Error(`Unsupported chain: ${chain}`);
+  }
+}
+
 // State Chain uses non-unique string identifiers for assets.
 export function stateChainAssetFromAsset(asset: Asset): string {
   if (assetConstants[asset]) {

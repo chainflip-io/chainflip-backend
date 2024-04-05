@@ -13,11 +13,7 @@ import {
 } from '../shared/utils';
 import { BtcAddressType, btcAddressTypes } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
-import {
-  performSwapViaContract,
-  ContractSwapParams,
-  approveTokenVault,
-} from '../shared/contract_swap';
+import { performSwapViaContract, ContractSwapParams } from '../shared/contract_swap';
 
 enum SolidityType {
   Uint256 = 'uint256',
@@ -186,24 +182,12 @@ export async function testAllSwaps() {
 
   console.log('=== Testing all swaps ===');
 
-  // Doing effectively infinite approvals to make sure it doesn't fail.
-  const erc20Assets: Asset[] = ['Usdc', 'Usdt', 'Flip', 'ArbUsdc'];
-  for (const erc20Asset of erc20Assets) {
-    await approveTokenVault(
-      erc20Asset,
-      (
-        BigInt(amountToFineAmount(defaultAssetAmounts(erc20Asset), assetDecimals(erc20Asset))) *
-        100n
-      ).toString(),
-    );
-  }
-
   Object.values(Assets).forEach((sourceAsset) => {
     Object.values(Assets)
       .filter((destAsset) => sourceAsset !== destAsset)
       .forEach((destAsset) => {
         // Regular swaps
-        // appendSwap(sourceAsset, destAsset, testSwap);
+        appendSwap(sourceAsset, destAsset, testSwap);
 
         const sourceChain = chainFromAsset(sourceAsset);
         const destChain = chainFromAsset(destAsset);
@@ -219,7 +203,7 @@ export async function testAllSwaps() {
 
         if (ccmSupportedChains.includes(destChain)) {
           // CCM swaps
-          // appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
+          appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
         }
       });
   });
