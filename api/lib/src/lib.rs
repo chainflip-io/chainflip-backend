@@ -261,7 +261,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 
 	async fn stop_bidding(&self) -> Result<()> {
 		let (tx_hash, ..) = self
-			.submit_signed_extrinsic(pallet_cf_funding::Call::stop_bidding {})
+			.submit_signed_extrinsic(pallet_cf_validator::Call::stop_bidding {})
 			.await
 			.until_in_block()
 			.await
@@ -272,7 +272,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 
 	async fn start_bidding(&self) -> Result<()> {
 		let (tx_hash, ..) = self
-			.submit_signed_extrinsic(pallet_cf_funding::Call::start_bidding {})
+			.submit_signed_extrinsic(pallet_cf_validator::Call::start_bidding {})
 			.await
 			.until_in_block()
 			.await
