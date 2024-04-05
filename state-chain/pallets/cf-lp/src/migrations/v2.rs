@@ -3,7 +3,6 @@ use sp_std::marker::PhantomData;
 
 #[cfg(feature = "try-runtime")]
 use frame_support::pallet_prelude::DispatchError;
-#[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
 use crate::{Config, HistoricalEarnedFees, Pallet};
