@@ -81,7 +81,6 @@ jobs:
           mkdir -p /tmp/chainflip/doc
           mkdir -p /tmp/chainflip/dopey
           touch /tmp/chainflip/debug.log
-          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
           ls ${{ env.BINARY_ROOT_PATH }}
           sudo cp ${{ env.BINARY_ROOT_PATH }}/libchainflip_engine_v*.so /usr/lib/
           chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
