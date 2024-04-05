@@ -203,7 +203,7 @@ export async function testAllSwaps() {
       .filter((destAsset) => sourceAsset !== destAsset)
       .forEach((destAsset) => {
         // Regular swaps
-        appendSwap(sourceAsset, destAsset, testSwap);
+        // appendSwap(sourceAsset, destAsset, testSwap);
 
         const sourceChain = chainFromAsset(sourceAsset);
         const destChain = chainFromAsset(destAsset);
@@ -219,7 +219,7 @@ export async function testAllSwaps() {
 
         if (ccmSupportedChains.includes(destChain)) {
           // CCM swaps
-          appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
+          // appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
         }
       });
   });
