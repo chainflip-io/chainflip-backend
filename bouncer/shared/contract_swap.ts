@@ -39,6 +39,7 @@ export async function executeContractSwap(
   const destChain = chainFromAsset(destAsset);
 
   const nonce = await getNextEvmNonce(srcChain);
+  console.log(`TX ${srcChain} Nonce`, nonce, '(contract swap)');
   const networkOptions = {
     signer: wallet,
     network: 'localnet',

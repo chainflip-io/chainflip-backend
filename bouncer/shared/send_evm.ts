@@ -59,6 +59,7 @@ export async function signAndSendTxEvm(
   const whaleKey = getWhaleKey(chain);
 
   const nonce = await getNextEvmNonce(chain);
+  console.log(`TX ${chain} Nonce`, nonce);
   const tx = { to, data, gas, nonce, value };
 
   const signedTx = await web3.eth.accounts.signTransaction(tx, whaleKey);
