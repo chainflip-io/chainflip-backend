@@ -10,57 +10,52 @@ use frame_support::{
 };
 use frame_system::RawOrigin;
 
+fn fund_with_minimum<T: Config>(account_id: &T::AccountId) {
+	assert_ok!(Call::<T>::funded {
+		account_id: account_id.clone(),
+		amount: MinimumFunding::<T>::get(),
+		funder: Default::default(),
+		tx_hash: Default::default()
+	}
+	.dispatch_bypass_filter(T::EnsureWitnessed::try_successful_origin().unwrap()));
+}
+
+fn request_max_redemption<T: Config>(account_id: &T::AccountId) {
+	assert_ok!(Call::<T>::redeem {
+		amount: RedemptionAmount::Max,
+		address: Default::default(),
+		executor: Default::default(),
+	}
+	.dispatch_bypass_filter(RawOrigin::Signed(account_id.clone()).into()));
+}
+
 #[benchmarks]
 mod benchmarks {
 	use super::*;
 
 	#[benchmark]
 	fn funded() {
-		let amount: T::Amount = T::Amount::from(100u32);
-		let withdrawal_address: EthereumAddress = Default::default();
-		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 		let caller: T::AccountId = whitelisted_caller();
-
-		let call = Call::<T>::funded {
-			account_id: caller.clone(),
-			amount,
-			funder: withdrawal_address,
-			tx_hash,
-		};
-		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
 
 		#[block]
 		{
-			assert_ok!(call.dispatch_bypass_filter(origin));
+			fund_with_minimum::<T>(&caller);
 		}
 
-		assert_eq!(T::Flip::balance(&caller), amount);
+		assert_eq!(T::Flip::balance(&caller), MinimumFunding::<T>::get());
 	}
 
 	#[benchmark]
 	fn redeem() {
-		// If we redeem an amount which takes us below the minimum balance, the redemption
-		// will fail.
-		let balance_to_redeem = RedemptionAmount::Exact(T::Amount::from(2u32));
-		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
-		let withdrawal_address: EthereumAddress = Default::default();
-
 		let caller: T::AccountId = whitelisted_caller();
-		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
 
-		let call = Call::<T>::funded {
-			account_id: caller.clone(),
-			amount: MinimumFunding::<T>::get() * T::Amount::from(2u32),
-			funder: withdrawal_address,
-			tx_hash,
-		};
-		assert_ok!(call.dispatch_bypass_filter(origin));
+		fund_with_minimum::<T>(&caller);
 
 		#[extrinsic_call]
 		redeem(
 			RawOrigin::Signed(caller.clone()),
-			balance_to_redeem,
-			withdrawal_address,
+			RedemptionAmount::Max,
+			Default::default(),
 			Default::default(),
 		);
 
@@ -68,61 +63,18 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn redeem_all() {
-		let withdrawal_address: EthereumAddress = Default::default();
-		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
-		let caller: T::AccountId = whitelisted_caller();
-		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
-
-		assert_ok!(Call::<T>::funded {
-			account_id: caller.clone(),
-			amount: MinimumFunding::<T>::get(),
-			funder: withdrawal_address,
-			tx_hash
-		}
-		.dispatch_bypass_filter(origin));
-
-		let call = Call::<T>::redeem {
-			amount: RedemptionAmount::Max,
-			address: withdrawal_address,
-			executor: Default::default(),
-		};
-
-		#[block]
-		{
-			assert_ok!(call.dispatch_bypass_filter(RawOrigin::Signed(caller.clone()).into()));
-		}
-
-		assert!(PendingRedemptions::<T>::contains_key(&caller));
-	}
-
-	#[benchmark]
 	fn redeemed() {
-		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
-		let withdrawal_address: EthereumAddress = Default::default();
-
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
-		let funds = MinimumFunding::<T>::get() * T::Amount::from(10u32);
 
-		assert_ok!(Call::<T>::funded {
+		fund_with_minimum::<T>(&caller);
+		request_max_redemption::<T>(&caller);
+
+		let call = Call::<T>::redeemed {
 			account_id: caller.clone(),
-			amount: funds,
-			funder: withdrawal_address,
-			tx_hash
-		}
-		.dispatch_bypass_filter(origin.clone()));
-
-		// Push a redemption
-		let redeemed_amount = funds / T::Amount::from(2u32);
-		assert_ok!(Pallet::<T>::redeem(
-			RawOrigin::Signed(caller.clone()).into(),
-			RedemptionAmount::Exact(redeemed_amount),
-			withdrawal_address,
-			Default::default()
-		));
-
-		let call = Call::<T>::redeemed { account_id: caller.clone(), redeemed_amount, tx_hash };
+			redeemed_amount: MinimumFunding::<T>::get(),
+			tx_hash: Default::default(),
+		};
 
 		#[block]
 		{
@@ -134,27 +86,11 @@ mod benchmarks {
 
 	#[benchmark]
 	fn redemption_expired() {
-		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
-		let withdrawal_address: EthereumAddress = Default::default();
-
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
 
-		assert_ok!(Call::<T>::funded {
-			account_id: caller.clone(),
-			amount: MinimumFunding::<T>::get(),
-			funder: withdrawal_address,
-			tx_hash
-		}
-		.dispatch_bypass_filter(origin.clone()));
-
-		// Push a redemption
-		assert_ok!(Pallet::<T>::redeem(
-			RawOrigin::Signed(caller.clone()).into(),
-			RedemptionAmount::Max,
-			withdrawal_address,
-			Default::default()
-		));
+		fund_with_minimum::<T>(&caller);
+		request_max_redemption::<T>(&caller);
 
 		let call =
 			Call::<T>::redemption_expired { account_id: caller.clone(), block_number: 2u32.into() };

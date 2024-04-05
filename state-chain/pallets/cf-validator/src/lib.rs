@@ -807,7 +807,9 @@ pub mod pallet {
 				Error::<T>::StillKeyHolder
 			);
 
-			<pallet_session::Pallet<T>>::purge_keys(origin)?;
+			// This can only error if the validator didn't register any keys, in which case we want
+			// to continue with the deregistration anyway.
+			let _ = pallet_session::Pallet::<T>::purge_keys(origin);
 
 			if let Some((peer_id, _, _)) = AccountPeerMapping::<T>::take(&account_id) {
 				MappedPeers::<T>::remove(peer_id);

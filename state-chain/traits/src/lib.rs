@@ -769,10 +769,16 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn register_account(account_id: &T::AccountId, role: AccountRole);
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn get_account_role(account_id: &T::AccountId) -> AccountRole;
+	fn whitelisted_caller_with_role(role: AccountRole) -> Result<T::AccountId, DispatchError> {
+		use frame_support::traits::OnNewAccount;
+		let caller = frame_benchmarking::whitelisted_caller::<T::AccountId>();
+		if frame_system::Pallet::<T>::providers(&caller) == 0u32 {
+			frame_system::Pallet::<T>::inc_providers(&caller);
+		}
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		Self::register_account_role(&caller, role)?;
+		Ok(caller.clone())
+	}
 }
 
 #[derive(
@@ -952,12 +958,14 @@ pub trait AssetConverter {
 		desired_output_amount: Amount,
 	) -> Option<Amount>;
 
-	fn convert_asset_to_approximate_output<
-		Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy,
-	>(
+	fn calculate_asset_conversion<Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy>(
 		input_asset: impl Into<Asset>,
 		available_input_amount: Amount,
 		output_asset: impl Into<Asset>,
 		desired_output_amount: Amount,
-	) -> Option<(Amount, Amount)>;
+	) -> Option<Amount>;
+}
+
+pub trait IngressEgressFeeApi<C: Chain> {
+	fn accrue_withheld_fee(asset: C::ChainAsset, amount: C::ChainAmount);
 }

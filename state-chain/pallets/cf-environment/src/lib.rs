@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(extract_if)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -7,16 +8,19 @@ use cf_chains::{
 		api::{SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		deposit_address::DepositAddress,
 		utxo_selection::{self, select_utxos_for_consolidation, select_utxos_from_pool},
-		Bitcoin, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
+		AggKey, Bitcoin, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
+	Chain,
 };
 use cf_primitives::{
 	chains::assets::{arb::Asset as ArbAsset, eth::Asset as EthAsset},
 	NetworkEnvironment, SemVer,
 };
-use cf_traits::{CompatibleCfeVersions, GetBitcoinFeeInfo, NetworkEnvironmentProvider, SafeMode};
+use cf_traits::{
+	CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider, NetworkEnvironmentProvider, SafeMode,
+};
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -75,6 +79,9 @@ pub mod pallet {
 		type BitcoinVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Bitcoin>;
 		/// On new key witnessed handler for Arbitrum
 		type ArbitrumVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Arbitrum>;
+
+		/// For getting the current active AggKey. Used for rotating Utxos from previous vault.
+		type BitcoinKeyProvider: KeyProvider<<Bitcoin as Chain>::ChainCrypto>;
 
 		/// The runtime's safe mode is stored in this pallet.
 		type RuntimeSafeMode: cf_traits::SafeMode + Member + Parameter + Default;
@@ -230,6 +237,8 @@ pub mod pallet {
 		UtxoConsolidationParametersUpdated { params: utxo_selection::ConsolidationParameters },
 		/// Arbitrum Initialized: contract addresses have been set, first key activated
 		ArbitrumInitialized,
+		/// Some unspendable Utxos are discarded from storage.
+		StaleUtxosDiscarded { utxos: Vec<Utxo> },
 	}
 
 	#[pallet::call]
@@ -497,48 +506,41 @@ impl<T: Config> Pallet<T> {
 		let min_fee_required_per_tx = bitcoin_fee_info.min_fee_required_per_tx();
 		let fee_per_output_utxo = bitcoin_fee_info.fee_per_output_utxo();
 
-		let calculate_utxos_and_change = |spendable_utxos: Vec<_>| {
-			let total_fee = spendable_utxos
-				.iter()
-				.map(|utxo| bitcoin_fee_info.fee_for_utxo(utxo))
-				.sum::<u64>() + fee_per_output_utxo +
-				min_fee_required_per_tx;
-
-			spendable_utxos
-				.iter()
-				.map(|utxo| utxo.amount)
-				.sum::<u64>()
-				.checked_sub(total_fee)
-				.map(|change_amount| (spendable_utxos, change_amount))
-		};
-
 		match utxo_selection_type {
-			UtxoSelectionType::SelectAllForRotation => {
-				let spendable_utxos: Vec<_> = BitcoinAvailableUtxos::<T>::take()
-					.into_iter()
-					.filter(|utxo| utxo.net_value(&bitcoin_fee_info) > 0u64)
-					.collect();
-
-				if spendable_utxos.is_empty() {
-					return None
-				}
-				calculate_utxos_and_change(spendable_utxos)
-			},
 			UtxoSelectionType::SelectForConsolidation =>
-				BitcoinAvailableUtxos::<T>::try_mutate(|available_utxos| {
-					let utxos_to_consolidate = select_utxos_for_consolidation(
-						available_utxos,
-						&bitcoin_fee_info,
-						Self::consolidation_parameters(),
-					);
+				BitcoinAvailableUtxos::<T>::mutate(|available_utxos| {
+					if let Some(cf_traits::EpochKey {
+						key: AggKey { previous: Some(prev_key), current: current_key },
+						..
+					}) = T::BitcoinKeyProvider::active_epoch_key()
+					{
+						let stale = available_utxos
+							.extract_if(|utxo| {
+								utxo.deposit_address.pubkey_x != current_key &&
+									utxo.deposit_address.pubkey_x != prev_key
+							})
+							.collect::<Vec<_>>();
 
-					if utxos_to_consolidate.is_empty() {
-						Err(())
+						if !stale.is_empty() {
+							Self::deposit_event(Event::<T>::StaleUtxosDiscarded { utxos: stale });
+						}
+
+						let selected_utxo = select_utxos_for_consolidation(
+							current_key,
+							available_utxos,
+							&bitcoin_fee_info,
+							Self::consolidation_parameters(),
+						);
+
+						Self::consolidation_transaction_change_amount(
+							&selected_utxo[..],
+							&bitcoin_fee_info,
+						)
+						.map(|change_amount| (selected_utxo, change_amount))
 					} else {
-						calculate_utxos_and_change(utxos_to_consolidate).ok_or(())
+						None
 					}
-				})
-				.ok(),
+				}),
 			UtxoSelectionType::Some { output_amount, number_of_outputs } =>
 				BitcoinAvailableUtxos::<T>::try_mutate(|available_utxos| {
 					select_utxos_from_pool(
@@ -567,6 +569,21 @@ impl<T: Config> Pallet<T> {
 					)
 				}),
 		}
+	}
+
+	fn consolidation_transaction_change_amount(
+		spendable_utxos: &[Utxo],
+		fee_info: &cf_chains::btc::BitcoinFeeInfo,
+	) -> Option<BtcAmount> {
+		if spendable_utxos.is_empty() {
+			return None
+		}
+
+		spendable_utxos.iter().map(|utxo| utxo.amount).sum::<BtcAmount>().checked_sub(
+			fee_info.fee_per_input_utxo() * spendable_utxos.len() as BtcAmount +
+				fee_info.min_fee_required_per_tx() +
+				fee_info.fee_per_output_utxo(),
+		)
 	}
 }
 

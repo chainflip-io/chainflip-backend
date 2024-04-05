@@ -6,6 +6,7 @@ use pallet_cf_funding::Config as FundingConfig;
 use pallet_cf_reputation::Config as ReputationConfig;
 use pallet_session::Config as SessionConfig;
 
+use cf_primitives::AccountRole;
 use cf_traits::{AccountRoleRegistry, KeyRotationStatusOuter, SafeMode, SetSafeMode};
 use frame_benchmarking::v2::*;
 use frame_support::{
@@ -122,9 +123,11 @@ mod benchmarks {
 
 	#[benchmark]
 	fn cfe_version() {
-		let caller: T::AccountId = whitelisted_caller();
-		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&caller));
+		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Validator,
+		)
+		.unwrap();
+
 		let version = SemVer { major: 1, minor: 2, patch: 3 };
 
 		#[extrinsic_call]
@@ -136,9 +139,11 @@ mod benchmarks {
 
 	#[benchmark]
 	fn register_peer_id() {
-		let caller: T::AccountId = account("doogle", 0, 0);
-		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&caller));
+		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Validator,
+		)
+		.unwrap();
+
 		let pair: p2p_crypto::Public = RuntimeAppPublic::generate_pair(None);
 		let signature: Ed25519Signature = pair.sign(&caller.encode()).unwrap().into();
 		let public_key: Ed25519PublicKey = pair.into();
@@ -335,6 +340,7 @@ mod benchmarks {
 	#[benchmark]
 	fn register_as_validator() {
 		let caller: T::AccountId = whitelisted_caller();
+		frame_system::Pallet::<T>::inc_providers(&caller);
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 
 		#[extrinsic_call]
@@ -347,16 +353,18 @@ mod benchmarks {
 
 	#[benchmark]
 	fn deregister_as_validator() {
-		let caller: T::AccountId = whitelisted_caller();
-		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		let _ = Pallet::<T>::register_as_validator(RawOrigin::Signed(caller.clone()).into());
+		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Validator,
+		)
+		.unwrap();
 
 		#[extrinsic_call]
 		deregister_as_validator(RawOrigin::Signed(caller.clone()));
 
-		assert_ok!(<T as Chainflip>::AccountRoleRegistry::ensure_validator(
+		assert!(<T as Chainflip>::AccountRoleRegistry::ensure_validator(
 			RawOrigin::Signed(caller).into()
-		));
+		)
+		.is_err());
 	}
 
 	#[benchmark]

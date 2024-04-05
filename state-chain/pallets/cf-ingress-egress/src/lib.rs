@@ -30,8 +30,9 @@ use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	liquidity::{LpBalanceApi, LpDepositHandler},
 	AdjustedFeeEstimationApi, AssetConverter, Broadcaster, CcmHandler, CcmSwapIds, Chainflip,
-	DepositApi, EgressApi, EpochInfo, FeePayment, GetBlockHeight, NetworkEnvironmentProvider,
-	OnDeposit, ScheduledEgressDetails, SwapDepositHandler,
+	DepositApi, EgressApi, EpochInfo, FeePayment, GetBlockHeight, IngressEgressFeeApi,
+	NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails, SwapDepositHandler,
+	SwapQueueApi, SwapType,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -147,7 +148,7 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::{ExecutexSwapAndCall, TransferFallback};
 	use cf_primitives::{BroadcastId, EpochIndex};
-	use cf_traits::{LpDepositHandler, OnDeposit};
+	use cf_traits::{LpDepositHandler, OnDeposit, SwapQueueApi};
 	use core::marker::PhantomData;
 	use frame_support::{
 		traits::{ConstU128, EnsureOrigin, IsType},
@@ -374,6 +375,8 @@ pub mod pallet {
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
+
+		type SwapQueueApi: SwapQueueApi;
 	}
 
 	/// Lookup table for addresses to corresponding deposit channels.
@@ -653,7 +656,6 @@ pub mod pallet {
 		fn on_finalize(_n: BlockNumberFor<T>) {
 			// Send all fetch/transfer requests as a batch. Revert storage if failed.
 			if let Err(error) = Self::do_egress_scheduled_fetch_transfer() {
-				log::error!("Ingress-Egress failed to send BatchAll. Error: {error:?}");
 				Self::deposit_event(Event::<T, I>::FailedToBuildAllBatchCall { error });
 			}
 
@@ -663,10 +665,6 @@ pub mod pallet {
 				let (broadcast_id, _) =
 					T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
 				Self::deposit_event(Event::<T, I>::UtxoConsolidation { broadcast_id });
-				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
-					broadcast_id,
-					egress_ids: Default::default(),
-				});
 			};
 
 			// Egress all scheduled Cross chain messages
@@ -1194,7 +1192,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::<T, I>::DepositFetchesScheduled { channel_id, asset });
 
 		let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
-			Self::withhold_transaction_fee(
+			Self::withhold_ingress_or_egress_fee(
 				IngressOrEgress::Ingress,
 				deposit_channel_details.deposit_channel.asset,
 				deposit_amount,
@@ -1380,8 +1378,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Withholds the fee for a given amount.
 	///
 	/// Returns the remaining amount after the fee has been withheld, and the fee itself, both
-	/// measured in units of the input asset.
-	fn withhold_transaction_fee(
+	/// measured in units of the input asset. A swap may be scheduled to convert the fee into the
+	/// gas asset.
+	fn withhold_ingress_or_egress_fee(
 		ingress_or_egress: IngressOrEgress,
 		asset: TargetChainAsset<T, I>,
 		available_amount: TargetChainAmount<T, I>,
@@ -1391,30 +1390,32 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			IngressOrEgress::Egress => T::ChainTracking::estimate_egress_fee(asset),
 		};
 
-		let (amount_after_fees, fee_estimate) =
-			T::AssetConverter::convert_asset_to_approximate_output(
+		let amount_after_fees = if asset == <T::TargetChain as Chain>::GAS_ASSET {
+			// No need to schedule a swap for gas, it's already in the gas asset.
+			Self::accrue_withheld_fee(asset, sp_std::cmp::min(fee_estimate, available_amount));
+			available_amount.saturating_sub(fee_estimate)
+		} else {
+			let transaction_fee = T::AssetConverter::calculate_asset_conversion(
 				asset,
 				available_amount,
 				<T::TargetChain as Chain>::GAS_ASSET,
 				fee_estimate,
 			)
 			.unwrap_or_else(|| {
-				log::warn!(
-					"Unable to convert input to gas for input of {:?} ${:?}. Ignoring transaction fees.",
-					available_amount,
-					asset,
-				);
-				(available_amount, Zero::zero())
+				log::warn!("Unable to convert input to gas for input of {available_amount:?} ${asset:?}. Ignoring ingress egress fees.");
+				<T::TargetChain as Chain>::ChainAmount::zero()
 			});
 
-		WithheldTransactionFees::<T, I>::mutate(<T::TargetChain as Chain>::GAS_ASSET, |fees| {
-			fees.saturating_accrue(fee_estimate);
-		});
-		// Since we credit the fees to the withheld fees, we need to take these from somewhere, ie.
-		// we effectively have transfered them from the vault.
-		DepositBalances::<T, I>::mutate(<T::TargetChain as Chain>::GAS_ASSET, |tracker| {
-			tracker.register_transfer(fee_estimate);
-		});
+			if !transaction_fee.is_zero() {
+				T::SwapQueueApi::schedule_swap(
+					asset.into(),
+					<T::TargetChain as Chain>::GAS_ASSET.into(),
+					transaction_fee.into(),
+					SwapType::IngressEgressFee,
+				);
+			}
+			available_amount.saturating_sub(transaction_fee)
+		};
 
 		AmountAndFeesWithheld::<T, I> {
 			amount_after_fees,
@@ -1458,7 +1459,11 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 				},
 				None => {
 					let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
-						Self::withhold_transaction_fee(IngressOrEgress::Egress, asset, amount);
+						Self::withhold_ingress_or_egress_fee(
+							IngressOrEgress::Egress,
+							asset,
+							amount,
+						);
 
 					if amount_after_fees >=
 						EgressDustLimit::<T, I>::get(asset).unique_saturated_into() ||
@@ -1569,5 +1574,23 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 			expiry_height,
 			channel_opening_fee,
 		))
+	}
+}
+
+impl<T: Config<I>, I: 'static> IngressEgressFeeApi<T::TargetChain> for Pallet<T, I> {
+	fn accrue_withheld_fee(
+		_asset: <T::TargetChain as Chain>::ChainAsset,
+		fee: TargetChainAmount<T, I>,
+	) {
+		if !fee.is_zero() {
+			WithheldTransactionFees::<T, I>::mutate(<T::TargetChain as Chain>::GAS_ASSET, |fees| {
+				fees.saturating_accrue(fee);
+			});
+			// Since we credit the fees to the withheld fees, we need to take these from somewhere,
+			// ie. we effectively have transferred them from the vault.
+			DepositBalances::<T, I>::mutate(<T::TargetChain as Chain>::GAS_ASSET, |tracker| {
+				tracker.register_transfer(fee);
+			});
+		}
 	}
 }

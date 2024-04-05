@@ -14,7 +14,6 @@ async-trait = "0.1.73"
 bitcoin = { version = "0.30.0", features = ["serde"] }
 futures = "0.3.28"
 hex = "0.4.3"
-reqwest = { version = "0.11.18", features = ["json"] }
 serde = "1.0.195"
 serde_json = "1.0"
 tokio = "1.29.1"
