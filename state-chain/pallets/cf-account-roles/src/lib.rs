@@ -57,7 +57,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn vanity_names)]
 	pub type VanityNames<T: Config> =
-		StorageValue<_, BTreeMap<T::AccountId, VanityName>, ValueQuery>; // TODO JAMIE: Migration for this
+		StorageValue<_, BTreeMap<T::AccountId, VanityName>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
