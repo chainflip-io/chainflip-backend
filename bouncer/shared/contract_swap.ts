@@ -149,7 +149,7 @@ export async function performSwapViaContract(
           destAsset,
           destAddress,
           messageMetadata,
-          Wallet.fromPhrase(mnemonic).address.toLowerCase(),
+          wallet.address.toLowerCase(),
         )
       : Promise.resolve();
 
