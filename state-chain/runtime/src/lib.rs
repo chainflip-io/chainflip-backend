@@ -991,7 +991,7 @@ pub type PalletExecutionOrder = (
 /// Contains:
 /// - The VersionUpdate migration. Don't remove this.
 /// - Individual pallet migrations. Don't remove these unless there's a good reason. Prefer to
-///   disbable these at the pallet level.
+///   disable these at the pallet level.
 /// - Other migrations: remove these if they are no longer needed.
 type AllMigrations = (
 	// DO NOT REMOVE `VersionUpdate`. THIS IS REQUIRED TO UPDATE THE VERSION FOR THE CFES EVERY
@@ -1038,6 +1038,7 @@ type AllMigrations = (
 		10,
 	>,
 	FlipToBurnMigration,
+	ActiveBidderMigration,
 	migrations::housekeeping::Migration,
 	migrations::reap_old_accounts::Migration,
 );
@@ -1107,6 +1108,76 @@ impl frame_support::traits::OnRuntimeUpgrade for FlipToBurnMigration {
 			frame_support::ensure!(
 				pre_upgrade_flip_to_burn == pallet_cf_swapping::FlipToBurn::<Runtime>::get(),
 				"Pre-upgrade state does not match post-upgrade state for FlipToBurn."
+			);
+		}
+		Ok(())
+	}
+}
+
+pub struct ActiveBidderMigration;
+
+impl frame_support::traits::OnRuntimeUpgrade for ActiveBidderMigration {
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		use frame_support::traits::{GetStorageVersion, StorageVersion};
+
+		if <pallet_cf_funding::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() ==
+			3 &&
+			<pallet_cf_validator::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version(
+			) == 0
+		{
+			log::info!("🔨 Applying ActiveBidder migration.");
+			// Moving the ActiveBidder storage from Fund -> Validator pallet.
+			cf_runtime_upgrade_utilities::move_pallet_storage::<
+				pallet_cf_funding::Pallet<Runtime>,
+				pallet_cf_validator::Pallet<Runtime>,
+			>("ActiveBidder".as_bytes());
+
+			// Bump the version of both pallets
+			StorageVersion::new(4).put::<pallet_cf_funding::Pallet<Runtime>>();
+			StorageVersion::new(1).put::<pallet_cf_validator::Pallet<Runtime>>();
+		} else {
+			log::info!(
+				"⏭ Skipping ActiveBidder migration. {:?}, {:?}",
+				<pallet_cf_funding::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version(),
+				<pallet_cf_validator::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version()
+			);
+		}
+		Default::default()
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::DispatchError> {
+		use frame_support::{migrations::VersionedPostUpgradeData, traits::GetStorageVersion};
+
+		if <pallet_cf_funding::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() ==
+			3
+		{
+			Ok(VersionedPostUpgradeData::MigrationExecuted(
+				pallet_cf_funding::migrations::old::ActiveBidder::<Runtime>::iter()
+					.collect::<Vec<_>>()
+					.encode(),
+			)
+			.encode())
+		} else {
+			Ok(VersionedPostUpgradeData::Noop.encode())
+		}
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(state: Vec<u8>) -> Result<(), frame_support::sp_runtime::TryRuntimeError> {
+		use codec::Decode;
+		use frame_support::migrations::VersionedPostUpgradeData;
+
+		if let VersionedPostUpgradeData::MigrationExecuted(pre_upgrade_data) =
+			<VersionedPostUpgradeData>::decode(&mut &state[..])
+				.map_err(|_| "Failed to decode pre-upgrade state.")?
+		{
+			let bidders = <Vec<(AccountId, bool)>>::decode(&mut &pre_upgrade_data[..])
+				.map_err(|_| "Failed to decode ActiveBidders from pre-upgrade state.")?;
+
+			frame_support::ensure!(
+				bidders == pallet_cf_validator::ActiveBidder::<Runtime>::iter().collect::<Vec<_>>(),
+				"Pre-upgrade state does not match post-upgrade state for ActiveBidders."
 			);
 		}
 		Ok(())

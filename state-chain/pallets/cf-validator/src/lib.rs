@@ -93,6 +93,7 @@ pub enum PalletOffence {
 }
 
 pub const MAX_LENGTH_FOR_VANITY_NAME: usize = 64;
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled, start_bidding_enabled, stop_bidding_enabled);
 
@@ -104,6 +105,7 @@ pub mod pallet {
 	use pallet_session::WeightInfo as SessionWeightInfo;
 
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
