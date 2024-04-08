@@ -3,6 +3,8 @@ on:
   push:
     branches:
       - 'release/[0-9]+.[0-9]+'
+      # TEMP: Just for this branch, to build the 1.3 dylib for the 1.4 release.
+      - release-1.3-dylib
 
 concurrency:
   group: ${{ github.ref }}-release-sisyphos
