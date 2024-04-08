@@ -42,7 +42,6 @@ pub trait WeightInfo {
 	fn bind_redeem_address() -> Weight;
 	fn update_restricted_addresses(a: u32, b: u32, c: u32, ) -> Weight;
 	fn bind_executor_address() -> Weight;
-	fn deprecated_call() -> Weight;
 }
 
 /// Weights for pallet_cf_funding using the Substrate node and recommended hardware.
@@ -337,9 +336,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
-	fn deprecated_call() -> Weight {
-		Weight::from_parts(0, 0)
-	}
 }
 
 // For backwards compatibility and tests
@@ -631,8 +627,5 @@ impl WeightInfo for () {
 		Weight::from_parts(15_571_000, 3601)
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
-	}
-	fn deprecated_call() -> Weight {
-		Weight::from_parts(0, 0)
 	}
 }

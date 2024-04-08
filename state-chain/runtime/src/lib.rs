@@ -1047,9 +1047,10 @@ type AllMigrations = (
 	FlipToBurnMigration,
 	migrations::housekeeping::Migration,
 	migrations::reap_old_accounts::Migration,
-	// Validator version 0 -> 1
+	// NOTE: Do not change this validator pallet migration order:
+	// Migrate Validator pallet from version 0 -> 1
 	VanityNamesMigration,
-	// Validator version 1 -> 2
+	// Migrate Validator pallet from version 1 -> 2
 	migrations::active_bidders::Migration,
 );
 

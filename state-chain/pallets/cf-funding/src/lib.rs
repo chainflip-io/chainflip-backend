@@ -564,7 +564,7 @@ pub mod pallet {
 		/// This call is now deprecated.
 		/// The functionality has been moved to the Validator pallet
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::WeightInfo::deprecated_call())]
+		#[pallet::weight(Weight::from_parts(0, 0))]
 		pub fn stop_bidding(_origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			Err(DispatchError::Other("Deprecated").into())
 		}
@@ -572,7 +572,7 @@ pub mod pallet {
 		/// This call is now deprecated.
 		/// The functionality has been moved to the Validator pallet
 		#[pallet::call_index(5)]
-		#[pallet::weight(T::WeightInfo::deprecated_call())]
+		#[pallet::weight(Weight::from_parts(0, 0))]
 		pub fn start_bidding(_origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			Err(DispatchError::Other("Deprecated").into())
 		}
