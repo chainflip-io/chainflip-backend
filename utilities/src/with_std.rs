@@ -13,7 +13,9 @@ pub mod rle_bitmap;
 pub mod spmc;
 pub mod task_scope;
 pub mod unending_stream;
+use crate::rpc::NumberOrHex;
 pub use unending_stream::UnendingStream;
+
 pub mod cached_stream;
 pub mod logging;
 pub mod redact_endpoint_secret;
@@ -41,6 +43,12 @@ pub fn try_convert_u256_to<T: TryFrom<U256> + std::fmt::Display>(
 			"Error converting amount to {}. Please use a valid hex string as input.",
 			type_name::<T>()
 		)
+	})
+}
+
+pub fn try_parse_number_or_hex(amount: NumberOrHex) -> anyhow::Result<u128> {
+	u128::try_from(amount).map_err(|_| {
+		anyhow!("Error parsing amount to u128. Please use a valid number or hex string as input.")
 	})
 }
 

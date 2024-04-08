@@ -11,6 +11,7 @@ use cf_primitives::{
 	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, ForeignChain,
 	NetworkEnvironment, SemVer, SwapId, SwapOutput,
 };
+use cf_utilities::{rpc::NumberOrHex, try_parse_number_or_hex};
 use codec::Encode;
 use core::ops::Range;
 use jsonrpsee::{
@@ -23,7 +24,7 @@ use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{AskBidMap, PoolInfo, PoolLiquidity, PoolPriceV1, UnidirectionalPoolDepth};
 use pallet_cf_swapping::SwapLegInfo;
 use sc_client_api::{BlockchainEvents, HeaderBackend};
-use serde::{Deserialize, Serialize};
+use serde::{de, Deserialize, Serialize};
 use sp_api::ApiError;
 use sp_core::U256;
 use sp_runtime::{
@@ -401,8 +402,17 @@ pub trait CustomApi {
 		quote_asset: Asset,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<PoolPriceV2>;
+	#[deprecated(note = "Use `swap_rate_v2` instead.")]
 	#[method(name = "swap_rate")]
 	fn cf_pool_swap_rate(
+		&self,
+		from_asset: Asset,
+		to_asset: Asset,
+		amount: NumberOrHex,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcSwapOutput>;
+	#[method(name = "swap_rate_v2")]
+	fn cf_pool_swap_rate_v2(
 		&self,
 		from_asset: Asset,
 		to_asset: Asset,
@@ -898,6 +908,25 @@ where
 	}
 
 	fn cf_pool_swap_rate(
+		&self,
+		from_asset: Asset,
+		to_asset: Asset,
+		amount: NumberOrHex,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcSwapOutput> {
+		let amount = try_parse_number_or_hex(amount).map_err(|e| anyhow::anyhow!(e))?;
+		if amount == 0 {
+			return Err(anyhow::anyhow!("Swap input amount cannot be zero.").into());
+		}
+		self.client
+			.runtime_api()
+			.cf_pool_simulate_swap(self.unwrap_or_best(at), from_asset, to_asset, amount)
+			.map_err(to_rpc_error)
+			.and_then(|result| result.map_err(map_dispatch_error))
+			.map(RpcSwapOutput::from)
+	}
+
+	fn cf_pool_swap_rate_v2(
 		&self,
 		from_asset: Asset,
 		to_asset: Asset,

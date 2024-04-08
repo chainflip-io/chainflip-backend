@@ -1,7 +1,9 @@
+use crate::rpc_types::OrderIdJson;
 use cf_primitives::{AccountId, AssetAmount, BasisPoints, BlockNumber, EgressId};
 use cf_utilities::{
+	rpc::NumberOrHex,
 	task_scope::{task_scope, Scope},
-	try_convert_u256_to,
+	try_convert_u256_to, try_parse_number_or_hex,
 };
 use chainflip_api::{
 	self,
@@ -113,8 +115,18 @@ pub trait Rpc {
 		address: &str,
 	) -> RpcResult<Hash>;
 
+	#[deprecated(note = "Use withdraw_asset_v2 instead")]
 	#[method(name = "withdraw_asset")]
 	async fn withdraw_asset(
+		&self,
+		amount: NumberOrHex,
+		asset: Asset,
+		destination_address: &str,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<EgressId>>;
+
+	#[method(name = "withdraw_asset_v2")]
+	async fn withdraw_asset_v2(
 		&self,
 		amount: U256,
 		asset: Asset,
@@ -122,8 +134,20 @@ pub trait Rpc {
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<EgressId>>;
 
+	#[deprecated(note = "Use update_range_order_v2 instead")]
 	#[method(name = "update_range_order")]
 	async fn update_range_order(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		id: OrderIdJson,
+		tick_range: Option<Range<Tick>>,
+		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>>;
+
+	#[method(name = "update_range_order_v2")]
+	async fn update_range_order_v2(
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
@@ -133,8 +157,20 @@ pub trait Rpc {
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>>;
 
+	#[deprecated(note = "Use set_range_order_v2 instead")]
 	#[method(name = "set_range_order")]
 	async fn set_range_order(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		id: OrderIdJson,
+		tick_range: Option<Range<Tick>>,
+		size: RangeOrderSizeJson,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>>;
+
+	#[method(name = "set_range_order_v2")]
+	async fn set_range_order_v2(
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
@@ -144,8 +180,22 @@ pub trait Rpc {
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>>;
 
+	#[deprecated(note = "Use update_limit_order_v2 instead")]
 	#[method(name = "update_limit_order")]
 	async fn update_limit_order(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
+		id: OrderIdJson,
+		tick: Option<Tick>,
+		amount_change: IncreaseOrDecrease<NumberOrHex>,
+		dispatch_at: Option<BlockNumber>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>>;
+
+	#[method(name = "update_limit_order_v2")]
+	async fn update_limit_order_v2(
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
@@ -157,8 +207,22 @@ pub trait Rpc {
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>>;
 
+	#[deprecated(note = "Use set_limit_order_v2 instead")]
 	#[method(name = "set_limit_order")]
 	async fn set_limit_order(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
+		id: OrderIdJson,
+		tick: Option<Tick>,
+		sell_amount: NumberOrHex,
+		dispatch_at: Option<BlockNumber>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>>;
+
+	#[method(name = "set_limit_order_v2")]
+	async fn set_limit_order_v2(
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
@@ -267,6 +331,29 @@ impl RpcServer for RpcServerImpl {
 	/// Returns an egress id
 	async fn withdraw_asset(
 		&self,
+		amount: NumberOrHex,
+		asset: Asset,
+		destination_address: &str,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<EgressId>> {
+		let destination_address =
+			chainflip_api::clean_foreign_chain_address(asset.into(), destination_address)?;
+
+		Ok(self
+			.api
+			.lp_api()
+			.withdraw_asset(
+				try_parse_number_or_hex(amount)?,
+				asset,
+				destination_address,
+				wait_for.unwrap_or_default(),
+			)
+			.await?)
+	}
+
+	/// Returns an egress id
+	async fn withdraw_asset_v2(
+		&self,
 		amount: U256,
 		asset: Asset,
 		destination_address: &str,
@@ -304,6 +391,29 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
+		id: OrderIdJson,
+		tick_range: Option<Range<Tick>>,
+		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>> {
+		Ok(self
+			.api
+			.lp_api()
+			.update_range_order(
+				base_asset,
+				quote_asset,
+				id.try_into()?,
+				tick_range,
+				size_change.try_map(|size| size.try_into())?,
+				wait_for.unwrap_or_default(),
+			)
+			.await?)
+	}
+
+	async fn update_range_order_v2(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
 		id: U256,
 		tick_range: Option<Range<Tick>>,
 		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
@@ -327,6 +437,29 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
+		id: OrderIdJson,
+		tick_range: Option<Range<Tick>>,
+		size: RangeOrderSizeJson,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>> {
+		Ok(self
+			.api
+			.lp_api()
+			.set_range_order(
+				base_asset,
+				quote_asset,
+				id.try_into()?,
+				tick_range,
+				size.try_into()?,
+				wait_for.unwrap_or_default(),
+			)
+			.await?)
+	}
+
+	async fn set_range_order_v2(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
 		id: U256,
 		tick_range: Option<Range<Tick>>,
 		size: RangeOrderSizeJson,
@@ -347,6 +480,33 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	async fn update_limit_order(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
+		id: OrderIdJson,
+		tick: Option<Tick>,
+		amount_change: IncreaseOrDecrease<NumberOrHex>,
+		dispatch_at: Option<BlockNumber>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>> {
+		Ok(self
+			.api
+			.lp_api()
+			.update_limit_order(
+				base_asset,
+				quote_asset,
+				side,
+				id.try_into()?,
+				tick,
+				amount_change.try_map(try_parse_number_or_hex)?,
+				dispatch_at,
+				wait_for.unwrap_or_default(),
+			)
+			.await?)
+	}
+
+	async fn update_limit_order_v2(
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
@@ -378,6 +538,33 @@ impl RpcServer for RpcServerImpl {
 		base_asset: Asset,
 		quote_asset: Asset,
 		side: Side,
+		id: OrderIdJson,
+		tick: Option<Tick>,
+		sell_amount: NumberOrHex,
+		dispatch_at: Option<BlockNumber>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>> {
+		Ok(self
+			.api
+			.lp_api()
+			.set_limit_order(
+				base_asset,
+				quote_asset,
+				side,
+				id.try_into()?,
+				tick,
+				try_parse_number_or_hex(sell_amount)?,
+				dispatch_at,
+				wait_for.unwrap_or_default(),
+			)
+			.await?)
+	}
+
+	async fn set_limit_order_v2(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
 		id: U256,
 		tick: Option<Tick>,
 		sell_amount: U256,
@@ -391,7 +578,7 @@ impl RpcServer for RpcServerImpl {
 				base_asset,
 				quote_asset,
 				side,
-				try_convert_u256_to::<u64>(id)?,
+				try_convert_u256_to::<OrderId>(id)?,
 				tick,
 				try_convert_u256_to(sell_amount)?,
 				dispatch_at,
