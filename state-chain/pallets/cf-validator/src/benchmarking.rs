@@ -366,7 +366,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		stop_bidding(RawOrigin::Signed(caller.clone()));
 
-		assert!(!ActiveBidder::<T>::get().contains(&caller));
+		assert!(!Pallet::<T>::is_bidding(&caller));
 	}
 
 	#[benchmark]
@@ -379,7 +379,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		start_bidding(RawOrigin::Signed(caller.clone()));
 
-		assert!(ActiveBidder::<T>::get().contains(&caller));
+		assert!(Pallet::<T>::is_bidding(&caller));
 	}
 	// NOTE: Test suite not included due to missing Funding and Reputation pallet in `mock::Test`.
 }

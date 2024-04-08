@@ -1302,7 +1302,7 @@ impl_runtime_apis! {
 			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(account_id);
 			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode<_>>::is_qualified(account_id);
 			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(account_id);
-			let is_bidding = pallet_cf_validator::ActiveBidder::<Runtime>::get().contains(account_id);
+			let is_bidding = Validator::is_bidding(account_id);
 			let bound_redeem_address = pallet_cf_funding::BoundRedeemAddress::<Runtime>::get(account_id);
 			let apy_bp = calculate_account_apy(account_id);
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(account_id);

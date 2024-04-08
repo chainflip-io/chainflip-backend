@@ -444,7 +444,7 @@ fn register_peer_id() {
 fn rerun_auction_if_not_enough_participants() {
 	new_test_ext()
 		.execute_with(|| {
-			// Unqualify one of the auction winners
+			// Un-qualify one of the auction winners
 			// Change the auction parameters to simulate a shortage in available candidates
 			set_default_test_bids();
 			let num_bidders = ValidatorPallet::get_active_bids().len() as u32;
@@ -1235,22 +1235,22 @@ fn test_start_and_stop_bidding() {
 		assert_noop!(ValidatorPallet::stop_bidding(RuntimeOrigin::signed(ALICE)), BadOrigin);
 		assert_noop!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(ALICE)), BadOrigin);
 
-		assert!(!ValidatorPallet::active_bidder().contains(&ALICE));
+		assert!(!ValidatorPallet::is_bidding(&ALICE));
 
 		assert_ok!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE));
 
-		assert!(!ValidatorPallet::active_bidder().contains(&ALICE));
+		assert!(!ValidatorPallet::is_bidding(&ALICE));
 
 		assert_noop!(
 			ValidatorPallet::stop_bidding(RuntimeOrigin::signed(ALICE)),
 			<Error<Test>>::AlreadyNotBidding
 		);
 
-		assert!(!ValidatorPallet::active_bidder().contains(&ALICE));
+		assert!(!ValidatorPallet::is_bidding(&ALICE));
 
 		assert_ok!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(ALICE)));
 
-		assert!(ValidatorPallet::active_bidder().contains(&ALICE));
+		assert!(ValidatorPallet::is_bidding(&ALICE));
 
 		assert_noop!(
 			ValidatorPallet::start_bidding(RuntimeOrigin::signed(ALICE)),
@@ -1262,12 +1262,12 @@ fn test_start_and_stop_bidding() {
 			ValidatorPallet::stop_bidding(RuntimeOrigin::signed(ALICE)),
 			<Error<Test>>::AuctionPhase
 		);
-		assert!(ValidatorPallet::active_bidder().contains(&ALICE));
+		assert!(ValidatorPallet::is_bidding(&ALICE));
 
 		// Can stop bidding if outside of auction phase
 		MockEpochInfo::set_is_auction_phase(false);
 		assert_ok!(ValidatorPallet::stop_bidding(RuntimeOrigin::signed(ALICE)));
-		assert!(!ValidatorPallet::active_bidder().contains(&ALICE));
+		assert!(!ValidatorPallet::is_bidding(&ALICE));
 
 		assert_event_sequence!(
 			Test,

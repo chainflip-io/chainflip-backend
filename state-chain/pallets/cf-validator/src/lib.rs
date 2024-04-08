@@ -744,12 +744,11 @@ pub mod pallet {
 		#[pallet::weight(T::ValidatorWeightInfo::deregister_as_validator())]
 		pub fn deregister_as_validator(origin: OriginFor<T>) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin.clone())?;
+			ensure!(!Self::is_bidding(&account_id), Error::<T>::StillBidding);
 
 			let validator_id = <ValidatorIdOf<T> as IsType<
 				<T as frame_system::Config>::AccountId,
 			>>::from_ref(&account_id);
-
-			Self::ensure_can_redeem(validator_id)?;
 
 			ensure!(
 				(LastExpiredEpoch::<T>::get()..=CurrentEpoch::<T>::get())
@@ -1315,6 +1314,10 @@ impl<T: Config> Pallet<T> {
 			.filter(|Bid { ref bidder_id, .. }| Q::is_qualified(bidder_id))
 			.collect()
 	}
+
+	pub fn is_bidding(account_id: &T::AccountId) -> bool {
+		ActiveBidder::<T>::get().contains(account_id)
+	}
 }
 
 pub struct EpochHistory<T>(PhantomData<T>);
@@ -1516,11 +1519,14 @@ impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByCfeVersi
 impl<T: Config> RedemptionCheck for Pallet<T> {
 	type ValidatorId = ValidatorIdOf<T>;
 	fn ensure_can_redeem(validator_id: &Self::ValidatorId) -> DispatchResult {
-		ensure!(
-			!ActiveBidder::<T>::get()
-				.contains(<ValidatorIdOf<T> as IsType<T::AccountId>>::into_ref(validator_id)),
-			Error::<T>::StillBidding
-		);
+		if Self::is_auction_phase() {
+			ensure!(
+				!ActiveBidder::<T>::get()
+					.contains(<ValidatorIdOf<T> as IsType<T::AccountId>>::into_ref(validator_id)),
+				Error::<T>::StillBidding
+			);
+		}
+
 		Ok(())
 	}
 }

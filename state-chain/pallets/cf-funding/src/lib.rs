@@ -17,8 +17,8 @@ mod tests;
 
 use cf_chains::{eth::Address as EthereumAddress, RegisterRedemption};
 use cf_traits::{
-	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, EpochInfo,
-	FeePayment, Funding,
+	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
+	Funding,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -343,9 +343,7 @@ pub mod pallet {
 			ensure!(T::SafeMode::get().redeem_enabled, Error::<T>::RedeemDisabled);
 
 			// Not allowed to redeem if we are an active bidder in the auction phase
-			if T::EpochInfo::is_auction_phase() {
-				T::RedemptionChecker::ensure_can_redeem(&account_id)?;
-			}
+			T::RedemptionChecker::ensure_can_redeem(&account_id)?;
 
 			// The redemption must be executed before a new one can be requested.
 			ensure!(
