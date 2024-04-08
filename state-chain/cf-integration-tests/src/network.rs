@@ -135,9 +135,9 @@ impl Cli {
 
 	#[track_caller]
 	pub fn set_vanity_name(account: &NodeId, name: &str) {
-		assert_ok!(Validator::set_vanity_name(
+		assert_ok!(AccountRoles::set_vanity_name(
 			RuntimeOrigin::signed(account.clone()),
-			name.as_bytes().to_vec()
+			name.as_bytes().to_vec().try_into().unwrap()
 		));
 	}
 

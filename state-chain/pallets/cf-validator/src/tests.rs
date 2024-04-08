@@ -510,40 +510,6 @@ fn highest_bond() {
 }
 
 #[test]
-fn test_setting_vanity_names_() {
-	new_test_ext().then_execute_with_checks(|| {
-		// ALICE has already been added.
-		assert_eq!(crate::VanityNames::<Test>::get().len(), 1);
-
-		for (i, account_id) in [123, 456, 789, 101112].iter().enumerate() {
-			let vanity = format!("Test Account {i}");
-			assert_ok!(ValidatorPallet::set_vanity_name(
-				RuntimeOrigin::signed(*account_id),
-				vanity.clone().into_bytes()
-			));
-			assert_eq!(
-				sp_std::str::from_utf8(crate::VanityNames::<Test>::get().get(account_id).unwrap()).unwrap(),
-				vanity
-			);
-		}
-
-		assert_eq!(crate::VanityNames::<Test>::get().len(), 5);
-
-		assert_noop!(
-			ValidatorPallet::set_vanity_name(RuntimeOrigin::signed(1), [0xfe, 0xff].to_vec()),
-			crate::Error::<Test>::InvalidCharactersInName
-		);
-		assert_noop!(
-			ValidatorPallet::set_vanity_name(
-				RuntimeOrigin::signed(1),
-				"Validator Name too longggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg".as_bytes().to_vec()
-			),
-			crate::Error::<Test>::NameTooLong
-		);
-	});
-}
-
-#[test]
 fn test_missing_author_punishment() {
 	let (expected_authority_index, authored_authority_index) = (1usize, 3usize);
 	new_test_ext()
@@ -1213,12 +1179,7 @@ fn validator_registration_and_deregistration() {
 			MockSessionKeys::from(UintAuthorityId(ALICE)),
 			Default::default(),
 		));
-		assert_ok!(ValidatorPallet::set_vanity_name(
-			RuntimeOrigin::signed(ALICE),
-			b"ALICE".to_vec()
-		));
 
-		assert!(VanityNames::<Test>::get().contains_key(&ALICE));
 		assert!(pallet_session::NextKeys::<Test>::contains_key(ALICE));
 
 		// Deregistration is blocked while the validator is a bidder.
@@ -1234,9 +1195,5 @@ fn validator_registration_and_deregistration() {
 
 		// State should be cleaned up.
 		assert!(!pallet_session::NextKeys::<Test>::contains_key(ALICE));
-		assert!(VanityNames::<Test>::get().contains_key(&ALICE));
-		// Vanity name persists until the acocunt is killed.
-		frame_system::Provider::<Test>::killed(&ALICE).unwrap();
-		assert!(!VanityNames::<Test>::get().contains_key(&ALICE));
 	});
 }

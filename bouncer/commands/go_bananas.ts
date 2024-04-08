@@ -114,16 +114,6 @@ export function assetFromStateChainAsset(
     return (stateChainAsset.charAt(0) + stateChainAsset.slice(1).toLowerCase()) as Asset;
   }
 
-  // TODO: Temporal workaround: To remove once SDK supports Arbitrum
-  if (stateChainAsset.chain === 'Arbitrum') {
-    if (stateChainAsset.asset === 'ETH') {
-      return 'ArbEth' as Asset;
-    }
-    if (stateChainAsset.asset === 'USDC') {
-      return 'ArbUsdc' as Asset;
-    }
-  }
-
   return getInternalAsset(stateChainAsset);
 }
 
