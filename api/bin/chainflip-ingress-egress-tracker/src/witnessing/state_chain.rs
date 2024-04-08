@@ -14,7 +14,8 @@ use chainflip_engine::state_chain_observer::client::{
 };
 use pallet_cf_ingress_egress::DepositWitness;
 use serde::{Serialize, Serializer};
-use utilities::{rpc::NumberOrHex, ArrayCollect};
+use sp_core::U256;
+use utilities::ArrayCollect;
 
 /// A wrapper type for bitcoin hashes that serializes the hash in reverse.
 #[derive(Debug)]
@@ -65,7 +66,7 @@ enum WitnessInformation {
 		deposit_chain_block_height: <AnyChain as Chain>::ChainBlockNumber,
 		#[serde(skip_serializing)]
 		deposit_address: String,
-		amount: NumberOrHex,
+		amount: U256,
 		asset: cf_chains::assets::any::Asset,
 	},
 	Broadcast {
