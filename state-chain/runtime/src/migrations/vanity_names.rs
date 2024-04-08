@@ -1,9 +1,5 @@
 use crate::{AccountId, Runtime};
-use frame_support::{
-	traits::{GetStorageVersion, StorageVersion},
-	BoundedVec,
-};
-use sp_std::{collections::btree_map::BTreeMap, prelude::*};
+use frame_support::traits::{GetStorageVersion, StorageVersion};
 
 pub struct Migration;
 
@@ -59,14 +55,17 @@ impl frame_support::traits::OnRuntimeUpgrade for Migration {
 	fn post_upgrade(state: Vec<u8>) -> Result<(), frame_support::sp_runtime::TryRuntimeError> {
 		use codec::Decode;
 		use frame_support::migrations::VersionedPostUpgradeData;
+		use sp_std::collections::btree_map::BTreeMap;
 
 		if let VersionedPostUpgradeData::MigrationExecuted(pre_upgrade_data) =
 			<VersionedPostUpgradeData>::decode(&mut &state[..])
 				.map_err(|_| "Failed to decode pre-upgrade state.")?
 		{
 			let pre_upgrade_vanity_names =
-				<BTreeMap<AccountId, BoundedVec<u8, _>>>::decode(&mut &pre_upgrade_data[..])
-					.map_err(|_| "Failed to decode VanityNames from pre-upgrade state.")?;
+				<BTreeMap<AccountId, frame_support::BoundedVec<u8, _>>>::decode(
+					&mut &pre_upgrade_data[..],
+				)
+				.map_err(|_| "Failed to decode VanityNames from pre-upgrade state.")?;
 
 			frame_support::ensure!(
 				pre_upgrade_vanity_names == pallet_cf_account_roles::VanityNames::<Runtime>::get(),
