@@ -1,4 +1,4 @@
-use cf_primitives::{AccountId, BasisPoints, BlockNumber, EgressId};
+use cf_primitives::{AccountId, AssetAmount, BasisPoints, BlockNumber, EgressId};
 use cf_utilities::{
 	task_scope::{task_scope, Scope},
 	try_convert_u256_to,
@@ -279,7 +279,7 @@ impl RpcServer for RpcServerImpl {
 			.api
 			.lp_api()
 			.withdraw_asset(
-				try_convert_u256_to::<u128>(amount)?,
+				try_convert_u256_to::<AssetAmount>(amount)?,
 				asset,
 				destination_address,
 				wait_for.unwrap_or_default(),
@@ -315,7 +315,7 @@ impl RpcServer for RpcServerImpl {
 			.update_range_order(
 				base_asset,
 				quote_asset,
-				try_convert_u256_to::<u64>(id)?,
+				try_convert_u256_to::<OrderId>(id)?,
 				tick_range,
 				size_change.try_map(|size| size.try_into())?,
 				wait_for.unwrap_or_default(),
@@ -338,7 +338,7 @@ impl RpcServer for RpcServerImpl {
 			.set_range_order(
 				base_asset,
 				quote_asset,
-				try_convert_u256_to::<u64>(id)?,
+				try_convert_u256_to::<OrderId>(id)?,
 				tick_range,
 				size.try_into()?,
 				wait_for.unwrap_or_default(),
@@ -364,7 +364,7 @@ impl RpcServer for RpcServerImpl {
 				base_asset,
 				quote_asset,
 				side,
-				try_convert_u256_to::<u64>(id)?,
+				try_convert_u256_to::<OrderId>(id)?,
 				tick,
 				amount_change.try_map(try_convert_u256_to)?,
 				dispatch_at,
