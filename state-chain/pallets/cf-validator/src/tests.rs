@@ -5,11 +5,8 @@ use core::ops::Range;
 use crate::{mock::*, Error, *};
 use cf_test_utilities::{assert_event_sequence, last_event};
 use cf_traits::{
-	mocks::{
-		funding_info::MockFundingInfo, key_rotator::MockKeyRotatorA,
-		reputation_resetter::MockReputationResetter,
-	},
-	AccountRoleRegistry, Funding, SafeMode, SetSafeMode,
+	mocks::{key_rotator::MockKeyRotatorA, reputation_resetter::MockReputationResetter},
+	AccountRoleRegistry, SafeMode, SetSafeMode,
 };
 use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
@@ -83,7 +80,7 @@ fn simple_rotation_state(
 
 fn add_bids(bids: Vec<Bid<ValidatorId, Amount>>) {
 	bids.into_iter().for_each(|bid| {
-		Flip::credit_funds(&bid.bidder_id, bid.amount);
+		MockFlip::credit_funds(&bid.bidder_id, bid.amount);
 		// Some account might have already registered, so it's Ok if this fails.
 		let _ = <<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&bid.bidder_id);
 		assert_ok!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(bid.bidder_id)));
@@ -127,10 +124,10 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 	new_test_ext()
 		.execute_with(|| {
 			// Stop all current bidders
-			ValidatorPallet::get_bidders().into_iter().for_each(|v| {
+			ValidatorPallet::get_active_bids().into_iter().for_each(|v| {
 				assert_ok!(ValidatorPallet::stop_bidding(RuntimeOrigin::signed(v.bidder_id)));
 			});
-			assert_eq!(ValidatorPallet::get_bidders().len(), 0);
+			assert_eq!(ValidatorPallet::get_active_bids().len(), 0);
 		})
 		// Move forward past the epoch boundary, the auction will be failing
 		.then_advance_n_blocks_and_execute_with_checks(EPOCH_DURATION + 100, || {
@@ -450,7 +447,7 @@ fn rerun_auction_if_not_enough_participants() {
 			// Unqualify one of the auction winners
 			// Change the auction parameters to simulate a shortage in available candidates
 			set_default_test_bids();
-			let num_bidders = ValidatorPallet::get_bidders().len() as u32;
+			let num_bidders = ValidatorPallet::get_active_bids().len() as u32;
 
 			assert_ok!(ValidatorPallet::update_pallet_config(
 				RuntimeOrigin::root(),
@@ -470,7 +467,7 @@ fn rerun_auction_if_not_enough_participants() {
 			));
 			// Assert that we still in the idle phase
 			assert_rotation_phase_matches!(RotationPhase::<Test>::Idle);
-			let num_bidders = ValidatorPallet::get_bidders().len() as u32;
+			let num_bidders = ValidatorPallet::get_active_bids().len() as u32;
 			assert_ok!(ValidatorPallet::update_pallet_config(
 				RuntimeOrigin::root(),
 				PalletConfigUpdate::AuctionParameters {
@@ -757,7 +754,7 @@ fn test_expect_validator_register_fails() {
 				percentage: Percent::from_percent(60),
 			},
 		));
-		MockFundingInfo::<Test>::credit_funds(&ID, Percent::from_percent(40) * GENESIS_BOND);
+		MockFlip::credit_funds(&ID, Percent::from_percent(40) * GENESIS_BOND);
 		// Reduce the set size target to the current authority count.
 		assert_ok!(Pallet::<Test>::update_pallet_config(
 			RawOrigin::Root.into(),
@@ -786,7 +783,7 @@ fn test_expect_validator_register_fails() {
 		));
 		// It should be possible to register now since the actual size is below the target.
 		assert_ok!(Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ID)));
-		MockFundingInfo::<Test>::credit_funds(&ID, Percent::from_percent(20) * GENESIS_BOND);
+		MockFlip::credit_funds(&ID, Percent::from_percent(20) * GENESIS_BOND);
 		// Trying to register again passes the funding check but fails for other reasons.
 		assert_noop!(
 			Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ID)),
@@ -1275,28 +1272,28 @@ fn test_start_and_stop_bidding() {
 		MockEpochInfo::add_authorities(ALICE);
 		const AMOUNT: u128 = 100;
 
-		Flip::credit_funds(&ALICE, AMOUNT);
+		MockFlip::credit_funds(&ALICE, AMOUNT);
 
 		// Not yet registered as validator.
 		assert_noop!(ValidatorPallet::stop_bidding(RuntimeOrigin::signed(ALICE)), BadOrigin);
 		assert_noop!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(ALICE)), BadOrigin);
 
-		assert!(!ActiveBidder::<Test>::get(ALICE));
+		assert!(!ValidatorPallet::active_bidder().contains(&ALICE));
 
 		assert_ok!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE));
 
-		assert!(!ActiveBidder::<Test>::get(ALICE));
+		assert!(!ValidatorPallet::active_bidder().contains(&ALICE));
 
 		assert_noop!(
 			ValidatorPallet::stop_bidding(RuntimeOrigin::signed(ALICE)),
 			<Error<Test>>::AlreadyNotBidding
 		);
 
-		assert!(!ActiveBidder::<Test>::get(ALICE));
+		assert!(!ValidatorPallet::active_bidder().contains(&ALICE));
 
 		assert_ok!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(ALICE)));
 
-		assert!(ActiveBidder::<Test>::get(ALICE));
+		assert!(ValidatorPallet::active_bidder().contains(&ALICE));
 
 		assert_noop!(
 			ValidatorPallet::start_bidding(RuntimeOrigin::signed(ALICE)),
@@ -1308,12 +1305,12 @@ fn test_start_and_stop_bidding() {
 			ValidatorPallet::stop_bidding(RuntimeOrigin::signed(ALICE)),
 			<Error<Test>>::AuctionPhase
 		);
-		assert!(ActiveBidder::<Test>::get(ALICE));
+		assert!(ValidatorPallet::active_bidder().contains(&ALICE));
 
 		// Can stop bidding if outside of auction phase
 		MockEpochInfo::set_is_auction_phase(false);
 		assert_ok!(ValidatorPallet::stop_bidding(RuntimeOrigin::signed(ALICE)));
-		assert!(!ActiveBidder::<Test>::get(ALICE));
+		assert!(!ValidatorPallet::active_bidder().contains(&ALICE));
 
 		assert_event_sequence!(
 			Test,

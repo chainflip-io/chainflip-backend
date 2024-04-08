@@ -372,12 +372,12 @@ mod benchmarks {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		T::AccountRoleRegistry::register_as_validator(&caller).unwrap();
-		ActiveBidder::<T>::insert(caller.clone(), true);
+		ActiveBidder::<T>::set(BTreeSet::from([caller.clone()]));
 
 		#[extrinsic_call]
 		stop_bidding(RawOrigin::Signed(caller.clone()));
 
-		assert!(!ActiveBidder::<T>::get(caller));
+		assert!(!ActiveBidder::<T>::get().contains(&caller));
 	}
 
 	#[benchmark]
@@ -385,12 +385,12 @@ mod benchmarks {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		T::AccountRoleRegistry::register_as_validator(&caller).unwrap();
-		ActiveBidder::<T>::insert(caller.clone(), false);
+		ActiveBidder::<T>::set(Default::default());
 
 		#[extrinsic_call]
 		start_bidding(RawOrigin::Signed(caller.clone()));
 
-		assert!(ActiveBidder::<T>::get(caller));
+		assert!(ActiveBidder::<T>::get().contains(&caller));
 	}
 	// NOTE: Test suite not included due to missing Funding and Reputation pallet in `mock::Test`.
 }

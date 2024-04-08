@@ -10,7 +10,7 @@ use cf_traits::{
 		cfe_interface_mock::MockCfeInterface, key_rotator::MockKeyRotatorA,
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
 	},
-	AccountRoleRegistry, WaivedFees,
+	AccountRoleRegistry,
 };
 use frame_support::{construct_runtime, derive_impl, parameter_types};
 use sp_core::H256;
@@ -30,12 +30,13 @@ pub const MIN_AUTHORITY_SIZE: u32 = 1;
 pub const MAX_AUTHORITY_SIZE: u32 = WINNING_BIDS.len() as u32;
 pub const MAX_AUTHORITY_SET_EXPANSION: u32 = WINNING_BIDS.len() as u32;
 
+pub type MockFlip = MockFundingInfo<Test>;
+
 construct_runtime!(
 	pub struct Test {
 		System: frame_system,
 		ValidatorPallet: pallet_cf_validator,
 		Session: pallet_session,
-		Flip: pallet_cf_flip,
 	}
 );
 
@@ -162,22 +163,6 @@ impl Bonding for MockBonder {
 pub type MockOffenceReporter =
 	cf_traits::mocks::offence_reporting::MockOffenceReporter<ValidatorId, PalletOffence>;
 
-parameter_types! {
-	pub const BlocksPerDay: u64 = 14400;
-}
-
-cf_traits::impl_mock_waived_fees!(ValidatorId, RuntimeCall);
-cf_traits::impl_mock_on_account_funded!(ValidatorId, FlipBalance);
-
-impl pallet_cf_flip::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
-	type Balance = FlipBalance;
-	type BlocksPerDay = BlocksPerDay;
-	type OnAccountFunded = MockOnAccountFunded;
-	type WeightInfo = ();
-	type WaivedFees = WaivedFeesMock;
-}
-
 impl_mock_runtime_safe_mode!(validator: PalletSafeMode);
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -189,7 +174,6 @@ impl Config for Test {
 	type Bonder = MockBonder;
 	type ReputationResetter = MockReputationResetter<Self>;
 	type KeygenQualification = QualifyAll<ValidatorId>;
-	type Flip = Flip;
 	type SafeMode = MockRuntimeSafeMode;
 	type ValidatorWeightInfo = ();
 	type CfePeerRegistration = MockCfeInterface;
@@ -244,7 +228,6 @@ cf_test_utilities::impl_test_helpers! {
 			auction_bid_cutoff_percentage: Percent::from_percent(0),
 			max_authority_set_contraction_percentage: DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 		},
-		flip: FlipConfig { total_issuance: 1_000_000_000_000, daily_slashing_rate: Permill::from_perthousand(1)},
 	},
 	||{
 		assert_eq!(

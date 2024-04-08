@@ -7670,7 +7670,6 @@ dependencies = [
  "lazy_static",
  "log",
  "nanorand",
- "pallet-cf-flip",
  "pallet-cf-funding",
  "pallet-cf-reputation",
  "pallet-cf-vaults",

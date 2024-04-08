@@ -17,8 +17,8 @@ mod tests;
 
 use cf_chains::{eth::Address as EthereumAddress, RegisterRedemption};
 use cf_traits::{
-	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, BidderProvider, Broadcaster,
-	Chainflip, EpochInfo, FeePayment, Funding,
+	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, EpochInfo,
+	FeePayment, Funding,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -59,6 +59,7 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::eth::Ethereum;
 	use cf_primitives::BroadcastId;
+	use cf_traits::RedemptionCheck;
 	use frame_support::{pallet_prelude::*, Parameter};
 	use frame_system::pallet_prelude::*;
 
@@ -98,7 +99,7 @@ pub mod pallet {
 
 		/// The Flip token implementation.
 		type Flip: Funding<AccountId = <Self as frame_system::Config>::AccountId, Balance = Self::Amount>
-			+ AccountInfo<Self>
+			+ AccountInfo<AccountId = Self::AccountId, Amount = Self::Amount>
 			+ FeePayment<Amount = Self::Amount, AccountId = <Self as frame_system::Config>::AccountId>;
 
 		type Broadcaster: Broadcaster<Ethereum, ApiCall = Self::RegisterRedemption>;
@@ -113,7 +114,7 @@ pub mod pallet {
 		type TimeSource: UnixTime;
 
 		/// Provide information on current bidders
-		type BidderProvider: BidderProvider<ValidatorId = Self::AccountId, Amount = Self::Amount>;
+		type RedemptionChecker: RedemptionCheck<ValidatorId = Self::AccountId>;
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;
@@ -343,7 +344,7 @@ pub mod pallet {
 
 			// Not allowed to redeem if we are an active bidder in the auction phase
 			if T::EpochInfo::is_auction_phase() {
-				T::BidderProvider::ensure_not_bidding(&account_id)?;
+				T::RedemptionChecker::ensure_can_redeem(&account_id)?;
 			}
 
 			// The redemption must be executed before a new one can be requested.

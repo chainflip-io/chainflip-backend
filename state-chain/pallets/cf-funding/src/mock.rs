@@ -4,7 +4,7 @@ use cf_chains::{evm::EvmCrypto, ApiCall, Chain, ChainCrypto, Ethereum};
 use cf_primitives::{BroadcastId, FlipBalance, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
-	mocks::time_source, AccountRoleRegistry, Bid, BidderProvider, Broadcaster, WaivedFees,
+	mocks::time_source, AccountRoleRegistry, Broadcaster, RedemptionCheck, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::cell::RefCell;
@@ -14,6 +14,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	AccountId32, DispatchError, DispatchResult, Permill,
 };
+use sp_std::collections::btree_set::BTreeSet;
 use std::time::Duration;
 
 // Use a realistic account id for compatibility with `RegisterRedemption`.
@@ -189,34 +190,18 @@ impl Broadcaster<Ethereum> for MockBroadcaster {
 }
 
 parameter_types! {
-	pub static Bids: Vec<Bid<AccountId, FlipBalance>> = Default::default();
+	pub static Bidders: BTreeSet<AccountId> = Default::default();
 }
 
 pub const BIDDING_ERR: DispatchError =
 	DispatchError::Other("The given validator is an active bidder");
-pub struct MockBidderProvider;
-impl MockBidderProvider {
-	pub fn add_bidder(bidder_id: AccountId, amount: FlipBalance) {
-		Bids::mutate(|bids| bids.push(Bid { bidder_id, amount }));
-	}
-	pub fn remove_bidder(bidder_id: AccountId) {
-		Bids::mutate(|bids| bids.retain(|bid| bid.bidder_id != bidder_id));
-	}
-}
+pub struct MockRedemptionChecker;
 
-impl BidderProvider for MockBidderProvider {
+impl RedemptionCheck for MockRedemptionChecker {
 	type ValidatorId = AccountId;
-	type Amount = FlipBalance;
 
-	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
-		Bids::get()
-	}
-
-	fn ensure_not_bidding(validator_id: &Self::ValidatorId) -> DispatchResult {
-		frame_support::ensure!(
-			!Bids::get().into_iter().any(|bid| bid.bidder_id == *validator_id),
-			BIDDING_ERR
-		);
+	fn ensure_can_redeem(validator_id: &Self::ValidatorId) -> DispatchResult {
+		frame_support::ensure!(!Bidders::get().contains(validator_id), BIDDING_ERR);
 		Ok(())
 	}
 }
@@ -231,7 +216,7 @@ impl pallet_cf_funding::Config for Test {
 	type Broadcaster = MockBroadcaster;
 	type ThresholdCallable = RuntimeCall;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
-	type BidderProvider = MockBidderProvider;
+	type RedemptionChecker = MockRedemptionChecker;
 	type SafeMode = MockRuntimeSafeMode;
 	type RegisterRedemption = MockRegisterRedemption;
 }
@@ -259,7 +244,7 @@ cf_test_utilities::impl_test_helpers! {
 		},
 	},
 	|| {
-		Bids::set(vec![Bid{ bidder_id: CHARLIE, amount: MIN_FUNDING}]);
+		Bidders::set(BTreeSet::from([CHARLIE]));
 		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&CHARLIE)
 			.unwrap();
 	}

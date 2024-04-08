@@ -102,8 +102,8 @@ pub use cf_primitives::{
 	SwapOutput,
 };
 pub use cf_traits::{
-	AccountInfo, BidderProvider, CcmHandler, Chainflip, EpochInfo, PoolApi, QualifyNode,
-	SessionKeysRegistered, SwappingApi,
+	AccountInfo, CcmHandler, Chainflip, EpochInfo, PoolApi, QualifyNode, SessionKeysRegistered,
+	SwappingApi,
 };
 // Required for genesis config.
 pub use pallet_cf_validator::SetSizeParameters;
@@ -208,7 +208,6 @@ impl pallet_cf_validator::Config for Runtime {
 	);
 	type OffenceReporter = Reputation;
 	type Bonder = Bonder<Runtime>;
-	type Flip = Flip;
 	type SafeMode = RuntimeSafeMode;
 	type ReputationResetter = Reputation;
 	type CfePeerRegistration = CfeInterface;
@@ -588,7 +587,7 @@ impl pallet_cf_funding::Config for Runtime {
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EvmInstance>;
 	type RegisterRedemption = EthereumApi<EvmEnvironment>;
 	type TimeSource = Timestamp;
-	type BidderProvider = Validator;
+	type RedemptionChecker = Validator;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = pallet_cf_funding::weights::PalletWeight<Runtime>;
 }
@@ -1044,7 +1043,7 @@ type AllMigrations = (
 		10,
 	>,
 	FlipToBurnMigration,
-	ActiveBidderMigration,
+	migrations::active_bidders::Migration,
 	migrations::housekeeping::Migration,
 	migrations::reap_old_accounts::Migration,
 );
@@ -1114,76 +1113,6 @@ impl frame_support::traits::OnRuntimeUpgrade for FlipToBurnMigration {
 			frame_support::ensure!(
 				pre_upgrade_flip_to_burn == pallet_cf_swapping::FlipToBurn::<Runtime>::get(),
 				"Pre-upgrade state does not match post-upgrade state for FlipToBurn."
-			);
-		}
-		Ok(())
-	}
-}
-
-pub struct ActiveBidderMigration;
-
-impl frame_support::traits::OnRuntimeUpgrade for ActiveBidderMigration {
-	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		use frame_support::traits::{GetStorageVersion, StorageVersion};
-
-		if <pallet_cf_funding::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() ==
-			3 &&
-			<pallet_cf_validator::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version(
-			) == 0
-		{
-			log::info!("🔨 Applying ActiveBidder migration.");
-			// Moving the ActiveBidder storage from Fund -> Validator pallet.
-			cf_runtime_upgrade_utilities::move_pallet_storage::<
-				pallet_cf_funding::Pallet<Runtime>,
-				pallet_cf_validator::Pallet<Runtime>,
-			>("ActiveBidder".as_bytes());
-
-			// Bump the version of both pallets
-			StorageVersion::new(4).put::<pallet_cf_funding::Pallet<Runtime>>();
-			StorageVersion::new(1).put::<pallet_cf_validator::Pallet<Runtime>>();
-		} else {
-			log::info!(
-				"⏭ Skipping ActiveBidder migration. {:?}, {:?}",
-				<pallet_cf_funding::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version(),
-				<pallet_cf_validator::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version()
-			);
-		}
-		Default::default()
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::DispatchError> {
-		use frame_support::{migrations::VersionedPostUpgradeData, traits::GetStorageVersion};
-
-		if <pallet_cf_funding::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() ==
-			3
-		{
-			Ok(VersionedPostUpgradeData::MigrationExecuted(
-				pallet_cf_funding::migrations::old::ActiveBidder::<Runtime>::iter()
-					.collect::<Vec<_>>()
-					.encode(),
-			)
-			.encode())
-		} else {
-			Ok(VersionedPostUpgradeData::Noop.encode())
-		}
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(state: Vec<u8>) -> Result<(), frame_support::sp_runtime::TryRuntimeError> {
-		use codec::Decode;
-		use frame_support::migrations::VersionedPostUpgradeData;
-
-		if let VersionedPostUpgradeData::MigrationExecuted(pre_upgrade_data) =
-			<VersionedPostUpgradeData>::decode(&mut &state[..])
-				.map_err(|_| "Failed to decode pre-upgrade state.")?
-		{
-			let bidders = <Vec<(AccountId, bool)>>::decode(&mut &pre_upgrade_data[..])
-				.map_err(|_| "Failed to decode ActiveBidders from pre-upgrade state.")?;
-
-			frame_support::ensure!(
-				bidders == pallet_cf_validator::ActiveBidder::<Runtime>::iter().collect::<Vec<_>>(),
-				"Pre-upgrade state does not match post-upgrade state for ActiveBidders."
 			);
 		}
 		Ok(())
@@ -1295,7 +1224,7 @@ impl_runtime_apis! {
 			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(account_id);
 			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode<_>>::is_qualified(account_id);
 			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(account_id);
-			let is_bidding = pallet_cf_validator::ActiveBidder::<Runtime>::get(account_id);
+			let is_bidding = pallet_cf_validator::ActiveBidder::<Runtime>::get().contains(account_id);
 			let bound_redeem_address = pallet_cf_funding::BoundRedeemAddress::<Runtime>::get(account_id);
 			let apy_bp = calculate_account_apy(account_id);
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(account_id);

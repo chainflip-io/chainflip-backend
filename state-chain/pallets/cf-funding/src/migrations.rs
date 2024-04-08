@@ -4,7 +4,6 @@ use cf_runtime_upgrade_utilities::VersionedMigration;
 
 pub type PalletMigration<T> = (VersionedMigration<crate::Pallet<T>, v3::Migration<T>, 2, 3>,);
 
-#[cfg(feature = "try-runtime")]
 pub mod old {
 	use crate::*;
 	use frame_support::{pallet_prelude::ValueQuery, Blake2_128Concat};

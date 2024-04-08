@@ -22,9 +22,9 @@ use cf_primitives::{
 };
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AccountInfo, AsyncResult,
-	AuthoritiesCfeVersions, Bid, BidderProvider, Bonding, CfePeerRegistration, Chainflip,
-	EpochInfo, EpochTransitionHandler, ExecutionCondition, FundingInfo, HistoricalEpoch,
-	KeyRotator, MissedAuthorshipSlots, OnAccountFunded, QualifyNode, ReputationResetter,
+	AuthoritiesCfeVersions, Bid, Bonding, CfePeerRegistration, Chainflip, EpochInfo,
+	EpochTransitionHandler, ExecutionCondition, FundingInfo, HistoricalEpoch, KeyRotator,
+	MissedAuthorshipSlots, OnAccountFunded, QualifyNode, RedemptionCheck, ReputationResetter,
 	SetSafeMode,
 };
 
@@ -141,9 +141,6 @@ pub mod pallet {
 
 		/// This is used to reset the validator's reputation
 		type ReputationResetter: ReputationResetter<ValidatorId = ValidatorIdOf<Self>>;
-
-		/// The Flip token implementation.
-		type Flip: AccountInfo<Self>;
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode> + SetSafeMode<PalletSafeMode>;
@@ -295,11 +292,10 @@ pub mod pallet {
 	pub(super) type MaxAuthoritySetContractionPercentage<T: Config> =
 		StorageValue<_, Percent, ValueQuery>;
 
-	/// Store the list of funded accounts and whether or not they are a active bidder.
+	/// Store the list of accounts that are active bidders.
 	#[pallet::storage]
 	#[pallet::getter(fn active_bidder)]
-	pub type ActiveBidder<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, bool, ValueQuery>;
+	pub type ActiveBidder<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -799,7 +795,7 @@ pub mod pallet {
 				<T as frame_system::Config>::AccountId,
 			>>::from_ref(&account_id);
 
-			Self::ensure_not_bidding(validator_id)?;
+			Self::ensure_can_redeem(validator_id)?;
 
 			ensure!(
 				(LastExpiredEpoch::<T>::get()..=CurrentEpoch::<T>::get())
@@ -847,11 +843,12 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [ActiveBidder](Event::ActiveBidder)
+		/// - [StoppedBidding](Event::StoppedBidding)
 		///
 		/// ## Errors
 		///
 		/// - [AlreadyNotBidding](Error::AlreadyNotBidding)
+		/// - [DuringAuctionPhase](Error::AuctionPhase)
 		#[pallet::call_index(9)]
 		#[pallet::weight(T::ValidatorWeightInfo::stop_bidding())]
 		pub fn stop_bidding(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
@@ -861,13 +858,8 @@ pub mod pallet {
 
 			ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
 
-			ActiveBidder::<T>::try_mutate(&account_id, |is_active_bidder| {
-				if *is_active_bidder {
-					*is_active_bidder = false;
-					Ok(())
-				} else {
-					Err(Error::<T>::AlreadyNotBidding)
-				}
+			ActiveBidder::<T>::try_mutate(|bidders| {
+				bidders.remove(&account_id).then_some(()).ok_or(Error::<T>::AlreadyNotBidding)
 			})?;
 			Self::deposit_event(Event::StoppedBidding { account_id });
 			Ok(().into())
@@ -1067,7 +1059,7 @@ impl<T: Config> Pallet<T> {
 			new_epoch,
 			&new_authorities,
 			rotation_state.bond,
-			Self::get_bidders()
+			Self::get_active_bids()
 				.into_iter()
 				.filter_map(|Bid { bidder_id, amount }| {
 					if !new_authorities.contains(&bidder_id) {
@@ -1176,7 +1168,7 @@ impl<T: Config> Pallet<T> {
 				));
 				debug_assert!(!auction_outcome.winners.is_empty());
 				debug_assert!({
-					let bids = Self::get_bidders()
+					let bids = Self::get_active_bids()
 						.into_iter()
 						.map(|bid| (bid.bidder_id, bid.amount))
 						.collect::<BTreeMap<_, _>>();
@@ -1347,14 +1339,30 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Returns an error if the account is already bidding.
 	fn activate_bidding(account_id: &T::AccountId) -> Result<(), Error<T>> {
-		ActiveBidder::<T>::try_mutate(account_id, |is_active_bidder| {
-			if *is_active_bidder {
-				Err(Error::AlreadyBidding)
-			} else {
-				*is_active_bidder = true;
-				Ok(())
-			}
+		ActiveBidder::<T>::try_mutate(|active_bidders| {
+			active_bidders
+				.insert(account_id.clone())
+				.then_some(())
+				.ok_or(Error::AlreadyBidding)
 		})
+	}
+
+	pub fn get_active_bids() -> Vec<Bid<ValidatorIdOf<T>, T::Amount>> {
+		ActiveBidder::<T>::get()
+			.into_iter()
+			.map(|bidder_id| Bid {
+				bidder_id: <ValidatorIdOf<T> as IsType<T::AccountId>>::from_ref(&bidder_id).clone(),
+				amount: T::FundingInfo::balance(&bidder_id),
+			})
+			.collect()
+	}
+
+	pub fn get_qualified_bidders<Q: QualifyNode<ValidatorIdOf<T>>>(
+	) -> Vec<Bid<ValidatorIdOf<T>, T::Amount>> {
+		Self::get_active_bids()
+			.into_iter()
+			.filter(|Bid { ref bidder_id, .. }| Q::is_qualified(bidder_id))
+			.collect()
 	}
 }
 
@@ -1532,7 +1540,7 @@ pub struct RemoveVanityNames<T>(PhantomData<T>);
 
 impl<T: Config> OnKilledAccount<T::AccountId> for RemoveVanityNames<T> {
 	fn on_killed_account(who: &T::AccountId) {
-		ActiveBidder::<T>::remove(who);
+		ActiveBidder::<T>::mutate(|bidders| bidders.remove(who));
 		let _ = VanityNames::<T>::try_mutate(|vanity_names| vanity_names.remove(who).ok_or(()));
 	}
 }
@@ -1555,33 +1563,14 @@ impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByCfeVersi
 	}
 }
 
-impl<T: Config + Chainflip> BidderProvider for Pallet<T> {
+impl<T: Config> RedemptionCheck for Pallet<T> {
 	type ValidatorId = ValidatorIdOf<T>;
-	type Amount = T::Amount;
-
-	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
-		ActiveBidder::<T>::iter()
-			.filter_map(|(bidder_id, active)| {
-				if active {
-					let amount = T::Flip::balance(&bidder_id);
-					Some(Bid {
-						bidder_id: <ValidatorIdOf<T> as IsType<T::AccountId>>::from_ref(&bidder_id)
-							.clone(),
-						amount,
-					})
-				} else {
-					None
-				}
-			})
-			.collect()
-	}
-
-	fn is_bidder(validator_id: &Self::ValidatorId) -> bool {
-		ActiveBidder::<T>::get(<ValidatorIdOf<T> as IsType<T::AccountId>>::into_ref(validator_id))
-	}
-
-	fn ensure_not_bidding(validator_id: &Self::ValidatorId) -> DispatchResult {
-		ensure!(!Self::is_bidder(validator_id), Error::<T>::StillBidding);
+	fn ensure_can_redeem(validator_id: &Self::ValidatorId) -> DispatchResult {
+		ensure!(
+			!ActiveBidder::<T>::get()
+				.contains(<ValidatorIdOf<T> as IsType<T::AccountId>>::into_ref(validator_id)),
+			Error::<T>::StillBidding
+		);
 		Ok(())
 	}
 }

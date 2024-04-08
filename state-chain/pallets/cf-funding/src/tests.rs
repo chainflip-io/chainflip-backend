@@ -6,9 +6,10 @@ use cf_primitives::FlipBalance;
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::account_role_registry::MockAccountRoleRegistry, AccountInfo, AccountRoleRegistry,
-	BidderProvider, Bonding, Chainflip, SetSafeMode, Slashing,
+	Bonding, Chainflip, RedemptionCheck, SetSafeMode, Slashing,
 };
 use sp_core::H160;
+use sp_std::collections::btree_set::BTreeSet;
 
 use crate::BoundRedeemAddress;
 use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
@@ -24,8 +25,9 @@ const TX_HASH: pallet::EthTransactionHash = [211u8; 32];
 #[test]
 fn genesis_nodes_are_bidding_by_default() {
 	new_test_ext().execute_with(|| {
-		assert!(MockBidderProvider::is_bidder(&CHARLIE));
-		assert!(!MockBidderProvider::is_bidder(&ALICE));
+		let bidders = Bidders::get();
+		assert!(bidders.contains(&CHARLIE));
+		assert!(!bidders.contains(&ALICE));
 	});
 }
 
@@ -408,8 +410,8 @@ fn can_only_redeem_during_auction_if_not_bidding() {
 			&ALICE
 		));
 
-		MockBidderProvider::add_bidder(ALICE, AMOUNT);
-		assert!(MockBidderProvider::is_bidder(&ALICE));
+		Bidders::set(BTreeSet::from([ALICE]));
+		assert!(MockRedemptionChecker::ensure_can_redeem(&ALICE).is_err());
 
 		// Redeeming is not allowed because Alice is bidding in the auction phase.
 		assert_noop!(
@@ -424,8 +426,8 @@ fn can_only_redeem_during_auction_if_not_bidding() {
 
 		// Stop bidding for Alice (must be done outside of the auction phase)
 		MockEpochInfo::set_is_auction_phase(false);
-		MockBidderProvider::remove_bidder(ALICE);
-		assert!(!MockBidderProvider::is_bidder(&ALICE));
+		Bidders::set(Default::default());
+		assert_ok!(MockRedemptionChecker::ensure_can_redeem(&ALICE));
 
 		// Alice should be able to redeem while in the auction phase because she is not bidding
 		MockEpochInfo::set_is_auction_phase(true);
