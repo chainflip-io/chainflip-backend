@@ -998,17 +998,24 @@ pub type PalletExecutionOrder = (
 /// Contains:
 /// - The VersionUpdate migration. Don't remove this.
 /// - Individual pallet migrations. Don't remove these unless there's a good reason. Prefer to
-///   disbable these at the pallet level.
-/// - Other migrations: remove these if they are no longer needed.
+///   disable these at the pallet level (ie. set it to () or PhantomData).
+/// - Release-specific migrations: remove these if they are no longer needed.
 type AllMigrations = (
 	// DO NOT REMOVE `VersionUpdate`. THIS IS REQUIRED TO UPDATE THE VERSION FOR THE CFES EVERY
 	// UPGRADE
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
+	PalletMigrations,
+	MigrationsForV1_4,
+);
+
+/// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
+/// comment out or remove pallet migrations. Prefer to delete the migration at the pallet level and
+/// replace with a dummy migration.
+type PalletMigrations = (
 	pallet_cf_environment::migrations::PalletMigration<Runtime>,
 	pallet_cf_funding::migrations::PalletMigration<Runtime>,
 	pallet_cf_account_roles::migrations::PalletMigration<Runtime>,
 	// pallet_cf_validator::migrations::PalletMigration<Runtime>,
-	pallet_grandpa::migrations::MigrateV4ToV5<Runtime>,
 	pallet_cf_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_tokenholder_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, EthereumInstance>,
@@ -1019,8 +1026,9 @@ type AllMigrations = (
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	// pallet_cf_vaults::migrations::PalletMigration<Runtime, ArbitrumInstance>,
+	// This is not a pallet migration but needs to be applied after the vaults and before the
+	// treshold signers migrations. TODO: Remove this after the 1.4 release.
 	migrations::arbitrum_integration::RenameEthereumToEvmThresholdSigner,
-	migrations::threshold_signature_refactor::Migration,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, EvmInstance>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, BitcoinInstance>,
@@ -1036,163 +1044,21 @@ type AllMigrations = (
 	// pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, ArbitrumInstance>,
 	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
-	// TODO: After the Abitrum release, remove arbitrum_integration migrations and un-comment the
-	// Arbitrum-specific pallet migrations.
+);
+
+// TODO: After this  release, remember to un-comment the
+// Arbitrum-specific pallet migrations.
+type MigrationsForV1_4 = (
 	VersionedMigration<
 		pallet_cf_environment::Pallet<Runtime>,
 		migrations::arbitrum_integration::ArbitrumIntegration,
 		9,
 		10,
 	>,
-	FlipToBurnMigration,
 	migrations::housekeeping::Migration,
 	migrations::reap_old_accounts::Migration,
-	VanityNamesMigration,
+	migrations::vanity_names::Migration,
 );
-
-pub struct VanityNamesMigration;
-
-impl frame_support::traits::OnRuntimeUpgrade for VanityNamesMigration {
-	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		use frame_support::traits::{GetStorageVersion, StorageVersion};
-
-		if <pallet_cf_validator::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() == 0 &&
-			<pallet_cf_account_roles::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version(
-			) == 1
-		{
-			log::info!("⏫ Applying VanityNames migration.");
-			// Moving the VanityNames storage item from the validators pallet to the account roles pallet.
-			cf_runtime_upgrade_utilities::move_pallet_storage::<
-				pallet_cf_validator::Pallet<Runtime>,
-				pallet_cf_account_roles::Pallet<Runtime>,
-			>(b"VanityNames");
-
-			// Bump the version of both pallets
-			StorageVersion::new(1).put::<pallet_cf_validator::Pallet<Runtime>>();
-			StorageVersion::new(2).put::<pallet_cf_account_roles::Pallet<Runtime>>();
-		} else {
-			log::info!(
-				"⏭ Skipping VanityNames migration. {:?}, {:?}",
-				<pallet_cf_validator::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version(),
-				<pallet_cf_account_roles::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version()
-			);
-		}
-		Default::default()
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::DispatchError> {
-		use frame_support::{migrations::VersionedPostUpgradeData, traits::GetStorageVersion};
-
-		if <pallet_cf_validator::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() ==
-			0
-		{
-			// The new VanityNames item should be empty before the upgrade.
-			frame_support::ensure!(
-				pallet_cf_account_roles::VanityNames::<Runtime>::get().is_empty(),
-				"Incorrect pre-upgrade state for pallet account roles VanityNames."
-			);
-			Ok(VersionedPostUpgradeData::MigrationExecuted(
-				pallet_cf_validator::migrations::old::VanityNames::<Runtime>::get().encode(),
-			)
-			.encode())
-		} else {
-			Ok(VersionedPostUpgradeData::Noop.encode())
-		}
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(state: Vec<u8>) -> Result<(), frame_support::sp_runtime::TryRuntimeError> {
-		use codec::Decode;
-		use frame_support::migrations::VersionedPostUpgradeData;
-
-		if let VersionedPostUpgradeData::MigrationExecuted(pre_upgrade_data) =
-			<VersionedPostUpgradeData>::decode(&mut &state[..])
-				.map_err(|_| "Failed to decode pre-upgrade state.")?
-		{
-			let pre_upgrade_vanity_names =
-				<BTreeMap<AccountId, BoundedVec<u8, _>>>::decode(&mut &pre_upgrade_data[..])
-					.map_err(|_| "Failed to decode VanityNames from pre-upgrade state.")?;
-
-			frame_support::ensure!(
-				pre_upgrade_vanity_names == pallet_cf_account_roles::VanityNames::<Runtime>::get(),
-				"Pre-upgrade state does not match post-upgrade state for VanityNames."
-			);
-		}
-		Ok(())
-	}
-}
-
-pub struct FlipToBurnMigration;
-
-impl frame_support::traits::OnRuntimeUpgrade for FlipToBurnMigration {
-	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		use frame_support::traits::{GetStorageVersion, StorageVersion};
-
-		if <pallet_cf_pools::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() == 2 &&
-			<pallet_cf_swapping::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version(
-			) == 2
-		{
-			log::info!("⏫ Applying FlipToBurn migration.");
-			// Moving the FlipToBurn storage item from the pools pallet to the Swapping pallet.
-			cf_runtime_upgrade_utilities::move_pallet_storage::<
-				pallet_cf_pools::Pallet<Runtime>,
-				pallet_cf_swapping::Pallet<Runtime>,
-			>("FlipToBurn".as_bytes());
-
-			// Bump the version of both pallets
-			StorageVersion::new(3).put::<pallet_cf_pools::Pallet<Runtime>>();
-			StorageVersion::new(3).put::<pallet_cf_swapping::Pallet<Runtime>>();
-		} else {
-			log::info!(
-				"⏭ Skipping FlipToBurn migration. {:?}, {:?}",
-				<pallet_cf_pools::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version(),
-				<pallet_cf_swapping::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version()
-			);
-		}
-		Default::default()
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::DispatchError> {
-		use frame_support::{migrations::VersionedPostUpgradeData, traits::GetStorageVersion};
-
-		if <pallet_cf_pools::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() == 2
-		{
-			// The new FlipToBurn should be 0 before the upgrade.
-			frame_support::ensure!(
-				pallet_cf_swapping::FlipToBurn::<Runtime>::get() == 0,
-				"Incorrect pre-upgrade state for swapping FlipToBurn."
-			);
-			Ok(VersionedPostUpgradeData::MigrationExecuted(
-				pallet_cf_pools::migrations::old::FlipToBurn::<Runtime>::get().encode(),
-			)
-			.encode())
-		} else {
-			Ok(VersionedPostUpgradeData::Noop.encode())
-		}
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(state: Vec<u8>) -> Result<(), frame_support::sp_runtime::TryRuntimeError> {
-		use codec::Decode;
-		use frame_support::migrations::VersionedPostUpgradeData;
-
-		if let VersionedPostUpgradeData::MigrationExecuted(pre_upgrade_data) =
-			<VersionedPostUpgradeData>::decode(&mut &state[..])
-				.map_err(|_| "Failed to decode pre-upgrade state.")?
-		{
-			let pre_upgrade_flip_to_burn = <AssetAmount>::decode(&mut &pre_upgrade_data[..])
-				.map_err(|_| "Failed to decode FlipToBurn from pre-upgrade state.")?;
-
-			frame_support::ensure!(
-				pre_upgrade_flip_to_burn == pallet_cf_swapping::FlipToBurn::<Runtime>::get(),
-				"Pre-upgrade state does not match post-upgrade state for FlipToBurn."
-			);
-		}
-		Ok(())
-	}
-}
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]

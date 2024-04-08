@@ -25,7 +25,6 @@ use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
-	pallet_prelude::Weight,
 	sp_runtime::{
 		traits::{CheckedSub, UniqueSaturatedInto, Zero},
 		Saturating,

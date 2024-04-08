@@ -108,18 +108,13 @@ mod migration_tests {
 			old::DepositChannelLookup::insert(address2.clone(), mock_deposit_channel_details());
 
 			#[cfg(feature = "try-runtime")]
-		let state: Vec<u8> =
-			crate::migrations::deposit_channels_with_boost_fee::Migration::<Test, _>::pre_upgrade()
-				.unwrap();
+			let state: Vec<u8> = super::Migration::<Test, _>::pre_upgrade().unwrap();
 
 			// Perform runtime migration.
-			crate::migrations::deposit_channels_with_boost_fee::Migration::<Test, _>::on_runtime_upgrade();
+			super::Migration::<Test, _>::on_runtime_upgrade();
 
 			#[cfg(feature = "try-runtime")]
-			crate::migrations::deposit_channels_with_boost_fee::Migration::<Test, _>::post_upgrade(
-				state,
-			)
-			.unwrap();
+			super::Migration::<Test, _>::post_upgrade(state).unwrap();
 
 			// Verify data is correctly migrated into new storage.
 			for address in [address1, address2] {

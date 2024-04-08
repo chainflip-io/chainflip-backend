@@ -6,7 +6,7 @@ use sp_std::marker::PhantomData;
 pub mod arbitrum_integration;
 pub mod housekeeping;
 pub mod reap_old_accounts;
-pub mod threshold_signature_refactor;
+pub mod vanity_names;
 
 #[cfg(feature = "try-runtime")]
 use sp_std::{vec, vec::Vec};

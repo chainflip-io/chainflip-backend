@@ -1,5 +1,4 @@
-pub mod v3;
+use crate::Pallet;
+use cf_runtime_upgrade_utilities::PlaceholderMigration;
 
-use cf_runtime_upgrade_utilities::VersionedMigration;
-
-pub type PalletMigration<T> = (VersionedMigration<crate::Pallet<T>, v3::Migration<T>, 2, 3>,);
+pub type PalletMigration<T> = PlaceholderMigration<Pallet<T>, 3>;
