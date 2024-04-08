@@ -142,7 +142,7 @@ pub mod tests {
 		btc::{deposit_address::DepositAddress, ScriptPubkey},
 		DepositChannel,
 	};
-	use pallet_cf_ingress_egress::ChannelAction;
+	use pallet_cf_ingress_egress::{BoostStatus, ChannelAction};
 	use rand::{seq::SliceRandom, Rng, SeedableRng};
 	use sp_runtime::AccountId32;
 
@@ -180,6 +180,7 @@ pub mod tests {
 				lp_account: AccountId32::new([0xab; 32]),
 			},
 			boost_fee: 0,
+			boost_status: BoostStatus::NotBoosted,
 		}
 	}
 

@@ -35,7 +35,6 @@ pub trait WeightInfo {
 	fn update_pallet_config() -> Weight;
 	fn cfe_version() -> Weight;
 	fn register_peer_id() -> Weight;
-	fn set_vanity_name() -> Weight;
 	fn expire_epoch(a: u32, ) -> Weight;
 	fn missed_authorship_slots(m: u32, ) -> Weight;
 	fn rotation_phase_idle() -> Weight;
@@ -94,17 +93,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(365_000_000, 4333)
 			.saturating_add(T::DbWeight::get().reads(4_u64))
 			.saturating_add(T::DbWeight::get().writes(3_u64))
-	}
-	/// Storage: `Validator::VanityNames` (r:1 w:1)
-	/// Proof: `Validator::VanityNames` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn set_vanity_name() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `735`
-		//  Estimated: `2220`
-		// Minimum execution time: 132_000_000 picoseconds.
-		Weight::from_parts(142_000_000, 2220)
-			.saturating_add(T::DbWeight::get().reads(1_u64))
-			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
 	/// Storage: `Validator::HistoricalAuthorities` (r:1 w:0)
 	/// Proof: `Validator::HistoricalAuthorities` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -418,17 +406,6 @@ impl WeightInfo for () {
 		Weight::from_parts(365_000_000, 4333)
 			.saturating_add(RocksDbWeight::get().reads(4_u64))
 			.saturating_add(RocksDbWeight::get().writes(3_u64))
-	}
-	/// Storage: `Validator::VanityNames` (r:1 w:1)
-	/// Proof: `Validator::VanityNames` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn set_vanity_name() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `735`
-		//  Estimated: `2220`
-		// Minimum execution time: 132_000_000 picoseconds.
-		Weight::from_parts(142_000_000, 2220)
-			.saturating_add(RocksDbWeight::get().reads(1_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `Validator::HistoricalAuthorities` (r:1 w:0)
 	/// Proof: `Validator::HistoricalAuthorities` (`max_values`: None, `max_size`: None, mode: `Measured`)

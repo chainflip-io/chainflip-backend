@@ -9,7 +9,7 @@ impl frame_support::traits::OnRuntimeUpgrade for Migration {
 		if <pallet_cf_funding::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() ==
 			3 &&
 			<pallet_cf_validator::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version(
-			) == 0
+			) == 1
 		{
 			log::info!("🔨 Applying ActiveBidder migration.");
 
@@ -22,7 +22,7 @@ impl frame_support::traits::OnRuntimeUpgrade for Migration {
 
 			// Bump the version of both pallets
 			StorageVersion::new(4).put::<pallet_cf_funding::Pallet<Runtime>>();
-			StorageVersion::new(1).put::<pallet_cf_validator::Pallet<Runtime>>();
+			StorageVersion::new(2).put::<pallet_cf_validator::Pallet<Runtime>>();
 		} else {
 			log::info!(
 				"⏭ Skipping ActiveBidder migration. {:?}, {:?}",

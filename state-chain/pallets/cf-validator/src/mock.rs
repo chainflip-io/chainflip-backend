@@ -63,7 +63,7 @@ impl frame_system::Config for Test {
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
 	type OnNewAccount = ();
-	type OnKilledAccount = crate::RemoveVanityNames<Self>;
+	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
@@ -211,10 +211,6 @@ cf_test_utilities::impl_test_helpers! {
 		validator_pallet: ValidatorPalletConfig {
 			genesis_authorities: BTreeSet::from(GENESIS_AUTHORITIES),
 			genesis_backups: Default::default(),
-			genesis_vanity_names: BTreeMap::from_iter([(
-				GENESIS_AUTHORITIES[0],
-				"Alice ✅".as_bytes().to_vec(),
-			)]),
 			blocks_per_epoch: EPOCH_DURATION,
 			bond: GENESIS_BOND,
 			redemption_period_as_percentage: REDEMPTION_PERCENTAGE_AT_GENESIS,
@@ -230,10 +226,6 @@ cf_test_utilities::impl_test_helpers! {
 		},
 	},
 	||{
-		assert_eq!(
-			VanityNames::<Test>::get().get(&GENESIS_AUTHORITIES[0]).unwrap(),
-			&"Alice ✅".as_bytes().to_vec()
-		);
 		for account_id in all_validators()
 		{
 			<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&account_id).unwrap();
