@@ -124,7 +124,6 @@ impl StateChainApi {
 			AccountRole::Unregistered,
 			false,
 			false,
-			false,
 			None,
 		)
 		.await?;
