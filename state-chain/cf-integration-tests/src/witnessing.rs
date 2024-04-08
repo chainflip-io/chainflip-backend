@@ -71,7 +71,7 @@ fn can_punish_failed_witnesser() {
 			for node in &new_authorities {
 				network::new_account(node, AccountRole::Validator);
 				network::setup_account_and_peer_mapping(node);
-				let _ = Validator::start_bidding(RuntimeOrigin::signed(node.clone()));
+				assert_ok!(Validator::start_bidding(RuntimeOrigin::signed(node.clone())));
 			}
 			// Have current authorities stop bidding, so the next epoch will use the new set of
 			// Authorities.
