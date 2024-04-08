@@ -1,7 +1,4 @@
-use cf_utilities::{
-	rpc::NumberOrHex,
-	task_scope::{task_scope, Scope},
-};
+use cf_utilities::task_scope::{task_scope, Scope};
 use chainflip_api::{
 	self, clean_foreign_chain_address,
 	primitives::{AccountRole, Asset, BasisPoints, BlockNumber, CcmChannelMetadata, ChannelId},
