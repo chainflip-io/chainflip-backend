@@ -575,18 +575,18 @@ mod tests {
 
 		assert_eq!(store.storage.len(), 3);
 		println!("{:?}", store.storage);
-		insta::assert_display_snapshot!(store
+		insta::assert_snapshot!(store
 			.storage
 			.get(format!("deposit:Ethereum:{}", eth_address_str1.to_lowercase()).as_str())
 			.unwrap());
-		insta::assert_display_snapshot!(store
+		insta::assert_snapshot!(store
 			.storage
 			.get(
 				format!("deposit:Polkadot:0x{}", hex::encode(polkadot_account_id.aliased_ref()))
 					.as_str()
 			)
 			.unwrap());
-		insta::assert_display_snapshot!(store
+		insta::assert_snapshot!(store
 			.storage
 			.get(format!("deposit:Ethereum:{}", eth_address_str2.to_lowercase()).as_str())
 			.unwrap());
@@ -610,7 +610,7 @@ mod tests {
 		.await
 		.expect("failed to handle call");
 		assert_eq!(store.storage.len(), 3);
-		insta::assert_display_snapshot!(store
+		insta::assert_snapshot!(store
 			.storage
 			.get(format!("deposit:Ethereum:{}", eth_address_str1.to_lowercase()).as_str())
 			.unwrap());
@@ -647,7 +647,7 @@ mod tests {
 		.expect("failed to handle call");
 
 		assert_eq!(store.storage.len(), 1);
-		insta::assert_display_snapshot!(store.storage.get("broadcast:Ethereum:1").unwrap());
+		insta::assert_snapshot!(store.storage.get("broadcast:Ethereum:1").unwrap());
 	}
 
 	#[test]

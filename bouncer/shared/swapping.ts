@@ -13,11 +13,7 @@ import {
 } from '../shared/utils';
 import { BtcAddressType, btcAddressTypes } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
-import {
-  performSwapViaContract,
-  ContractSwapParams,
-  approveTokenVault,
-} from '../shared/contract_swap';
+import { performSwapViaContract, ContractSwapParams } from '../shared/contract_swap';
 
 enum SolidityType {
   Uint256 = 'uint256',
@@ -186,57 +182,26 @@ export async function testAllSwaps() {
 
   console.log('=== Testing all swaps ===');
 
-  // Doing effectively infinite approvals to make sure it doesn't fail.
-  await approveTokenVault(
-    'Usdc',
-    (
-      BigInt(amountToFineAmount(defaultAssetAmounts('Usdc'), assetDecimals('Usdc'))) * 100n
-    ).toString(),
-  );
-  await approveTokenVault(
-    'Flip',
-    (
-      BigInt(amountToFineAmount(defaultAssetAmounts('Flip'), assetDecimals('Flip'))) * 100n
-    ).toString(),
-  );
-
-  await approveTokenVault(
-    'Usdt',
-    (
-      BigInt(amountToFineAmount(defaultAssetAmounts('Usdt'), assetDecimals('Usdt'))) * 100n
-    ).toString(),
-  );
-
-  // TODO: Remove this when SDK supports Arbitrum assets
-  const allAssets = [...Object.values(Assets), 'ArbEth' as Asset, 'ArbUsdc' as Asset];
-
-  Object.values(allAssets).forEach((sourceAsset) => {
-    Object.values(allAssets)
+  Object.values(Assets).forEach((sourceAsset) => {
+    Object.values(Assets)
       .filter((destAsset) => sourceAsset !== destAsset)
       .forEach((destAsset) => {
         // Regular swaps
         appendSwap(sourceAsset, destAsset, testSwap);
 
-        if (
-          chainFromAsset(sourceAsset) === chainFromAsset('Eth') &&
-          // TODO: Update this when SDK supports Arbitrum assets
-          chainFromAsset(destAsset) === chainFromAsset('Eth')
-          // || chainFromAsset(sourceAsset) === chainFromAsset('ArbEth')
-        ) {
+        const sourceChain = chainFromAsset(sourceAsset);
+        const destChain = chainFromAsset(destAsset);
+
+        if (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') {
           // Contract Swaps
           appendSwap(sourceAsset, destAsset, testSwapViaContract);
-          // TODO: Update to add Arbitrum contract swaps:
-          if (
-            chainFromAsset(destAsset) === chainFromAsset('Eth')
-            // TODO: Update this when SDK supports Arbitrum assets
-            // || chainFromAsset(destAsset) === chainFromAsset('ArbEth')
-          ) {
+          if (destChain === 'Ethereum' || destChain === 'Arbitrum') {
             // CCM contract swaps
             appendSwap(sourceAsset, destAsset, testSwapViaContract, newCcmMetadata(sourceAsset));
           }
         }
 
-        if (ccmSupportedChains.includes(chainFromAsset(destAsset))) {
+        if (ccmSupportedChains.includes(destChain)) {
           // CCM swaps
           appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
         }

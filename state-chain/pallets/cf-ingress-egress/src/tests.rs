@@ -1,6 +1,8 @@
+mod boost;
+
 use crate::{
-	mock_eth::*, Call as PalletCall, ChannelAction, ChannelIdCounter, ChannelOpeningFee,
-	CrossChainMessage, DepositAction, DepositChannelLookup, DepositChannelPool,
+	mock_eth::*, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
+	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLookup, DepositChannelPool,
 	DepositIgnoredReason, DepositWitness, DisabledEgressAssets, EgressDustLimit,
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
 	MinimumDeposit, Pallet, PalletConfigUpdate, PrewitnessedDeposit, PrewitnessedDepositIdCounter,
@@ -634,7 +636,7 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 		})
 		.then_process_events(|_, event| match event {
 			RuntimeEvent::IngressEgress(crate::Event::DepositWitnessRejected { .. }) |
-			RuntimeEvent::IngressEgress(crate::Event::DepositReceived { .. }) => Some(event),
+			RuntimeEvent::IngressEgress(crate::Event::DepositFinalised { .. }) => Some(event),
 			_ => None,
 		})
 		.inspect_context(|((expected_rejected_address, expected_accepted_address), emitted)| {
@@ -650,7 +652,7 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 			assert!(emitted.iter().any(|e| matches!(
 			e,
 			RuntimeEvent::IngressEgress(
-				crate::Event::DepositReceived {
+				crate::Event::DepositFinalised {
 					deposit_address,
 					..
 				}) if deposit_address == expected_accepted_address
@@ -900,7 +902,7 @@ fn deposits_below_minimum_are_rejected() {
 		// Flip deposit should succeed.
 		let (_, deposit_address) = request_address_and_deposit(LP_ACCOUNT, flip);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::DepositReceived {
+			crate::Event::<Test>::DepositFinalised {
 				deposit_address,
 				asset: flip,
 				amount: default_deposit_amount,
@@ -965,7 +967,7 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 		assert!(
 			matches!(
 				cf_test_utilities::last_event::<Test>(),
-				RuntimeEvent::IngressEgress(crate::Event::<Test>::DepositReceived {
+				RuntimeEvent::IngressEgress(crate::Event::<Test>::DepositFinalised {
 					asset: ASSET,
 					amount: DEPOSIT_AMOUNT,
 					deposit_details: (),
@@ -1620,7 +1622,7 @@ fn should_cleanup_prewitnessed_deposits_when_channel_is_recycled() {
 				amount: DEPOSIT_AMOUNT,
 				deposit_address,
 				block_height: TARGET_CHAIN_HEIGHT,
-				deposit_details: ()
+				deposit_details: (),
 			})
 		);
 
