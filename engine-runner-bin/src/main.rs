@@ -73,11 +73,6 @@ fn main() -> anyhow::Result<()> {
 			}
 		},
 		_ => {
-			println!("Running the old engine just for fun...");
-			let output = unsafe {
-				old::cfe_entrypoint(c_str_array.clone(), engine_upgrade_utils::NO_START_FROM)
-			};
-			println!("Old version exit status: {:?}", output);
 			println!(
 				"An error has occurred running the new version on first run with exit status: {:?}",
 				exit_status_new_first
