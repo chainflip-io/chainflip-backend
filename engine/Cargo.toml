@@ -74,7 +74,6 @@ cf-primitives = { path = "../state-chain/primitives" }
 chainflip-node = { path = "../state-chain/node" }
 custom-rpc = { path = "../state-chain/custom-rpc" }
 engine-upgrade-utils = { path = "../engine-upgrade-utils" }
-engine-proc-macros = { path = "../engine-proc-macros" }
 multisig = { path = "multisig" }
 pallet-cf-account-roles = { path = "../state-chain/pallets/cf-account-roles" }
 pallet-cf-broadcast = { path = "../state-chain/pallets/cf-broadcast" }

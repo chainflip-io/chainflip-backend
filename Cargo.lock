@@ -1748,7 +1748,6 @@ dependencies = [
  "custom-rpc",
  "dyn-clone",
  "ed25519-dalek",
- "engine-proc-macros",
  "engine-upgrade-utils",
  "ethbloom",
  "ethereum",
