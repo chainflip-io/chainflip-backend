@@ -1,6 +1,6 @@
 use std::{fs, path::Path};
 
-use engine_upgrade_utils::{NEW_VERSION, OLD_VERSION};
+use engine_upgrade_utils::{NEW_VERSION, OLD_VERSION, ENGINE_LIB_PREFIX};
 
 fn main() {
 	// === Ensure the runner runs the linker checks at compile time ===
@@ -28,8 +28,8 @@ fn main() {
 	let old_version_suffix = OLD_VERSION.replace('.', "_");
 	let new_version_suffix = NEW_VERSION.replace('.', "_");
 
-	println!("cargo:rustc-link-lib=dylib=chainflip_engine_v{}", old_version_suffix);
-	println!("cargo:rustc-link-lib=dylib=chainflip_engine_v{}", new_version_suffix);
+	println!("cargo:rustc-link-lib=dylib={}{}", ENGINE_LIB_PREFIX, old_version_suffix);
+	println!("cargo:rustc-link-lib=dylib={}{}", ENGINE_LIB_PREFIX, new_version_suffix);
 
 	// ===  Sanity check that the the assets have an item with the matching version. ===
 

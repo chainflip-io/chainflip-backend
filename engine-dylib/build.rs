@@ -1,6 +1,6 @@
 use std::{fs, path::Path};
 
-use engine_upgrade_utils::NEW_VERSION;
+use engine_upgrade_utils::{NEW_VERSION, ENGINE_LIB_PREFIX};
 
 // We want to enforce the fact that the package version, and the version suffix on the dylib
 // matches at compile time.
@@ -28,7 +28,7 @@ fn main() {
 	let lib_name = lib_name.as_str().unwrap();
 	assert_eq!(
 		lib_name,
-		format!("chainflip_engine_v{}", version_suffix),
+		format!("{}{}", ENGINE_LIB_PREFIX, version_suffix),
 		"lib name version suffix should match package version"
 	);
 }
