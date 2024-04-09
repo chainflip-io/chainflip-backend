@@ -56,8 +56,8 @@ extern "C" {
 #[repr(C)]
 #[derive(Clone)]
 pub struct CStrArray {
+	// Null pointer if the array isn't initialised.
 	c_args: *mut *mut c_char,
-	// Nnoe if the outer array isn't initialized
 	n_args: usize,
 }
 
