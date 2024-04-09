@@ -1,4 +1,6 @@
-use crate::{Config, CurrentReleaseVersion, Get, Pallet};
+use crate::{Config, Pallet};
+#[cfg(feature = "try-runtime")]
+use crate::{CurrentReleaseVersion, Get};
 use cf_runtime_upgrade_utilities::PlaceholderMigration;
 use frame_support::traits::OnRuntimeUpgrade;
 #[cfg(feature = "try-runtime")]
