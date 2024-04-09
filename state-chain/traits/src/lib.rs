@@ -96,10 +96,10 @@ pub trait EpochInfo {
 	fn last_expired_epoch() -> EpochIndex;
 
 	/// The current authority set's validator ids
-	fn current_authorities() -> BTreeSet<Self::ValidatorId>;
+	fn current_authorities() -> Vec<Self::ValidatorId>;
 
 	/// The authority set for a given epoch
-	fn authorities_at_epoch(epoch: EpochIndex) -> BTreeSet<Self::ValidatorId>;
+	fn authorities_at_epoch(epoch: EpochIndex) -> Vec<Self::ValidatorId>;
 
 	/// Get the current number of authorities
 	fn current_authority_count() -> AuthorityCount;
@@ -123,11 +123,11 @@ pub trait EpochInfo {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_authority_info_for_epoch(
 		epoch_index: EpochIndex,
-		new_authorities: BTreeSet<Self::ValidatorId>,
+		new_authorities: Vec<Self::ValidatorId>,
 	);
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_authorities(authorities: BTreeSet<Self::ValidatorId>);
+	fn set_authorities(authorities: Vec<Self::ValidatorId>);
 }
 
 pub struct CurrentEpochIndex<T>(PhantomData<T>);
@@ -623,7 +623,7 @@ pub trait HistoricalEpoch {
 	type EpochIndex;
 	type Amount;
 	/// All validators which were in an epoch's authority set.
-	fn epoch_authorities(epoch: Self::EpochIndex) -> BTreeSet<Self::ValidatorId>;
+	fn epoch_authorities(epoch: Self::EpochIndex) -> Vec<Self::ValidatorId>;
 	/// The bond for an epoch
 	fn epoch_bond(epoch: Self::EpochIndex) -> Self::Amount;
 	/// The unexpired epochs for which a node was in the authority set.

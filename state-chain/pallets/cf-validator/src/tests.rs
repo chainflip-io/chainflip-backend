@@ -49,7 +49,7 @@ macro_rules! assert_default_rotation_outcome {
 		assert_eq!(Bond::<Test>::get(), EXPECTED_BOND, "bond should be updated");
 		assert_eq!(
 			ValidatorPallet::current_authorities(),
-			BTreeSet::from_iter(WINNING_BIDS.into_iter().map(|bid| bid.bidder_id))
+			WINNING_BIDS.into_iter().map(|bid| bid.bidder_id).collect::<Vec<_>>()
 		);
 	};
 }
@@ -195,7 +195,7 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 	new_test_ext()
 		.then_execute_with_checks(|| {
 			assert_eq!(
-				CurrentAuthorities::<Test>::get(),
+				CurrentAuthorities::<Test>::get().into_iter().collect::<BTreeSet<u64>>(),
 				genesis_set,
 				"the current authorities should be the genesis authorities"
 			);
@@ -204,7 +204,7 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 		})
 		.then_advance_n_blocks_and_execute_with_checks(EPOCH_DURATION, || {
 			assert_eq!(
-				ValidatorPallet::current_authorities(),
+				ValidatorPallet::current_authorities().into_iter().collect::<BTreeSet<u64>>(),
 				genesis_set,
 				"we should still be validating with the genesis authorities"
 			);
@@ -230,7 +230,7 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 fn genesis() {
 	new_test_ext().then_execute_with_checks(|| {
 		assert_eq!(
-			CurrentAuthorities::<Test>::get(),
+			CurrentAuthorities::<Test>::get().into_iter().collect::<BTreeSet<u64>>(),
 			BTreeSet::from(GENESIS_AUTHORITIES),
 			"We should have a set of validators at genesis"
 		);
@@ -513,15 +513,15 @@ fn highest_bond() {
 	new_test_ext().then_execute_with_checks(|| {
 		// Epoch 1
 		EpochHistory::<Test>::activate_epoch(&ALICE, 1);
-		HistoricalAuthorities::<Test>::insert(1, BTreeSet::from([ALICE]));
+		HistoricalAuthorities::<Test>::insert(1, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(1, 10);
 		// Epoch 2
 		EpochHistory::<Test>::activate_epoch(&ALICE, 2);
-		HistoricalAuthorities::<Test>::insert(2, BTreeSet::from([ALICE]));
+		HistoricalAuthorities::<Test>::insert(2, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(2, 30);
 		// Epoch 3
 		EpochHistory::<Test>::activate_epoch(&ALICE, 3);
-		HistoricalAuthorities::<Test>::insert(3, BTreeSet::from([ALICE]));
+		HistoricalAuthorities::<Test>::insert(3, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(3, 20);
 		// Expect the bond of epoch 2
 		assert_eq!(EpochHistory::<Test>::active_bond(&ALICE), 30);
@@ -1074,7 +1074,7 @@ fn can_calculate_percentage_cfe_at_target_version() {
 			let _ = ValidatorPallet::register_as_validator(RuntimeOrigin::signed(*id));
 			assert_ok!(ValidatorPallet::cfe_version(RuntimeOrigin::signed(*id), initial_version,));
 		});
-		CurrentAuthorities::<Test>::set(BTreeSet::from(authorities));
+		CurrentAuthorities::<Test>::set(Vec::from(authorities));
 
 		assert_eq!(
 			ValidatorPallet::percent_authorities_compatible_with_version(initial_version),
@@ -1100,7 +1100,7 @@ fn can_calculate_percentage_cfe_at_target_version() {
 		);
 
 		// Change authorities
-		CurrentAuthorities::<Test>::set(BTreeSet::from(authorities));
+		CurrentAuthorities::<Test>::set(Vec::from(authorities));
 		assert_eq!(
 			ValidatorPallet::percent_authorities_compatible_with_version(initial_version),
 			Percent::from_percent(0)

@@ -195,6 +195,6 @@ cf_test_utilities::impl_test_helpers! {
 	||{
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE));
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&BOB));
-		<Test as Chainflip>::EpochInfo::next_epoch(BTreeSet::from([ALICE]));
+		<Test as Chainflip>::EpochInfo::next_epoch(Vec::from([ALICE]));
 	}
 }

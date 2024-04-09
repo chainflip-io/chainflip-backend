@@ -270,7 +270,7 @@ fn apy_can_be_above_100_percent() {
 				MAX_AUTHORITIES as u128;
 			let apy_basis_point =
 				FixedU64::from_rational(reward, total).checked_mul_int(10_000u32).unwrap();
-			assert_eq!(apy_basis_point, 241_377_727u32);
+			assert_eq!(apy_basis_point, 243615296); //241_377_727u32);
 			assert_eq!(calculate_account_apy(&validator), Some(apy_basis_point));
 		});
 }

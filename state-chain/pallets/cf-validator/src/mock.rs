@@ -239,8 +239,8 @@ macro_rules! assert_invariants {
 		assert_eq!(
 			<ValidatorPallet as EpochInfo>::current_authorities()
 				.into_iter()
-				.collect::<Vec<_>>(),
-			Session::validators(),
+				.collect::<BTreeSet<_>>(),
+			Session::validators().into_iter().collect::<BTreeSet<_>>(),
 			"Authorities out of sync at block {:?}. RotationPhase: {:?}",
 			System::block_number(),
 			ValidatorPallet::current_rotation_phase(),
