@@ -125,7 +125,6 @@ impl StateChainClient<extrinsic_api::signed::SignedExtrinsicClient> {
 		signing_key_file: &std::path::Path,
 		required_role: AccountRole,
 		wait_for_required_role: bool,
-		wait_for_required_version: bool,
 		submit_cfe_version: bool,
 		start_from: Option<state_chain_runtime::BlockNumber>,
 	) -> Result<(impl StreamApi<FINALIZED> + Clone, impl StreamApi<UNFINALIZED> + Clone, Arc<Self>)>
@@ -136,7 +135,6 @@ impl StateChainClient<extrinsic_api::signed::SignedExtrinsicClient> {
 			signing_key_file,
 			required_role,
 			wait_for_required_role,
-			wait_for_required_version,
 			submit_cfe_version,
 			start_from,
 		)
@@ -148,13 +146,11 @@ impl StateChainClient<()> {
 	pub async fn connect_without_account<'a>(
 		scope: &Scope<'a, anyhow::Error>,
 		ws_endpoint: &str,
-		wait_for_required_version: bool,
 	) -> Result<(impl StreamApi<FINALIZED> + Clone, impl StreamApi<UNFINALIZED> + Clone, Arc<Self>)>
 	{
 		Self::new_without_account(
 			scope,
 			DefaultRpcClient::connect(ws_endpoint).await?.into(),
-			wait_for_required_version,
 		)
 		.await
 	}
@@ -169,7 +165,6 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		signing_key_file: &std::path::Path,
 		required_role: AccountRole,
 		wait_for_required_role: bool,
-		wait_for_required_version: bool,
 		submit_cfe_version: bool,
 		start_from: Option<state_chain_runtime::BlockNumber>,
 	) -> Result<(impl StreamApi<FINALIZED> + Clone, impl StreamApi<UNFINALIZED> + Clone, Arc<Self>)>
@@ -186,7 +181,6 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				wait_for_required_role,
 				submit_cfe_version,
 			},
-			wait_for_required_version,
 			start_from,
 		)
 		.await
@@ -199,10 +193,9 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 	pub async fn new_without_account<'a>(
 		scope: &Scope<'a, anyhow::Error>,
 		base_rpc_client: Arc<BaseRpcClient>,
-		wait_for_required_version: bool,
 	) -> Result<(impl StreamApi<FINALIZED> + Clone, impl StreamApi<UNFINALIZED> + Clone, Arc<Self>)>
 	{
-		Self::new(scope, base_rpc_client, (), wait_for_required_version, None).await
+		Self::new(scope, base_rpc_client, (), None).await
 	}
 }
 
@@ -219,7 +212,6 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 	>(
 		scope: &Scope<'_, anyhow::Error>,
 		base_rpc_client: Arc<BaseRpcClient>,
-		wait_for_required_version: bool,
 		error_on_incompatible_block: bool,
 		new_stream_fn: NewStreamFn,
 		process_stream_fn: ProcessStreamFn,
@@ -280,7 +272,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 		let mut processed_stream = {
 			let latest_block: BlockInfo = block_stream.next().await.unwrap()?;
 
-			let mut block_stream =
+			let block_stream =
 				process_stream_fn(Box::pin(block_stream.make_try_cached(latest_block))).await?;
 
 			let block_compatibility =
@@ -298,64 +290,10 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 				// - We're no longer compatible but we don't want to exit on error
 				// - We're not yet compatible and we're waiting for the required version
 				_ => {
-					// TODO: After the whole "single binary CFE upgrade" is complete, we should be
-					// able to remove `wait_for_required_version` as we'll never wait. We'll always
-					// return out the error and let the runner start the other version.
-					if wait_for_required_version {
-						let incompatible_blocks = block_stream
-							.by_ref()
-							.try_take_while(|block_info| {
-								let base_rpc_client = base_rpc_client.clone();
-								let block_info = *block_info;
-								async move {
-									{
-										let block_compatibility = base_rpc_client
-											.check_block_compatibility(block_info)
-											.await?;
-
-										match block_compatibility.compatibility {
-											CfeCompatibility::Compatible => Ok(false),
-											// We want the stream to continue as before
-											CfeCompatibility::NotYetCompatible => {
-												info!(
-													"{} WAITING for a compatible release version.",
-													lazy_format::lazy_format!(
-														"Block compatibility: {:?}.",
-														block_compatibility
-													)
-												);
-												Ok(true)
-											},
-											// Generally we cannot move from no longer compatible to
-											// compatible. We don't expect this to happen.
-											CfeCompatibility::NoLongerCompatible =>
-												if error_on_incompatible_block {
-													Err(CreateStateChainClientError::CompatibilityError(block_compatibility).into())
-												} else {
-													tracing::warn!("StateChain block number {} is no longer compatible.", block_info.number);
-													Ok(true)
-												},
-										}
-									}
-								}
-							})
-							.boxed();
-
-						// Note underlying stream ends in Error, therefore it is guaranteed
-						// try_for_each will not exit successfully until a compatible block is found
-						incompatible_blocks
-							.try_for_each(move |_| {
-								futures::future::ready(Ok::<_, anyhow::Error>(()))
-							})
-							.await?;
-
-						block_stream
-					} else {
-						return Err(CreateStateChainClientError::CompatibilityError(
-							block_compatibility,
-						)
-						.into());
-					}
+					return Err(CreateStateChainClientError::CompatibilityError(
+						block_compatibility,
+					)
+					.into());
 				},
 			}
 		};
@@ -498,7 +436,6 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 		scope: &Scope<'a, anyhow::Error>,
 		base_rpc_client: Arc<BaseRpcClient>,
 		mut signed_extrinsic_client_builder: SignedExtrinsicClientBuilder,
-		wait_for_required_version: bool,
 		start_from: Option<state_chain_runtime::BlockNumber>,
 	) -> Result<(impl StreamApi<FINALIZED> + Clone, impl StreamApi<UNFINALIZED> + Clone, Arc<Self>)>
 	{
@@ -522,7 +459,6 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 		) = Self::create_block_stream(
 			scope,
 			base_rpc_client.clone(),
-			wait_for_required_version,
 			true,
 			|base_rpc_client| base_rpc_client.subscribe_finalized_block_headers(),
 			|sparse_finalized_block_stream| {
@@ -628,7 +564,6 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 		) = Self::create_block_stream(
 			scope,
 			base_rpc_client.clone(),
-			wait_for_required_version,
 			// We don't want the unfinalised stream to error on an incompatible block, as the
 			// unfinalised stream will hit the boundary first but we want to process as far as
 			// possible on the *finalised* stream, and pass out the block number contained in the

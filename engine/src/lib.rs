@@ -127,8 +127,6 @@ async fn run_main(
 					&settings.state_chain.signing_key_file,
 					AccountRole::Validator,
 					true,
-					// TODO: remove wait for required version entirely
-					false,
 					true,
 					start_from,
 				)
