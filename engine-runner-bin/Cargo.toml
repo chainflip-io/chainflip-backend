@@ -20,6 +20,9 @@ assets = [
         "usr/bin/chainflip-engine",
         "755",
     ],
+    # Note: These are namespaced by `chainflip-engine`. Since this is a custom path (unlike /usr/lib), we need
+    # to specify this. We do this in the `chainflip-engine.service` files, so the user does not need to set it
+    # manually.
     [
         "target/release/libchainflip_engine_v1_4_0.so",
         "usr/lib/chainflip-engine/libchainflip_engine_v1_4_0.so",
