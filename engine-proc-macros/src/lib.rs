@@ -6,7 +6,7 @@ use proc_macro2::Span;
 use quote::quote;
 use syn::{parse_macro_input, ItemFn};
 
-use engine_upgrade_utils::{NEW_VERSION, OLD_VERSION};
+use engine_upgrade_utils::{NEW_VERSION, OLD_VERSION, ENGINE_LIB_PREFIX, ENGINE_ENTRYPOINT_PREFIX};
 
 /// Generates a C compatible entrypoint namespacing with the version suffix so that the no_mangle
 /// names do not conflict when two shared libraries are used in the same process.
@@ -20,7 +20,7 @@ pub fn cfe_entrypoint(_attrs: TokenStream, item: TokenStream) -> TokenStream {
 
 	// Construct the new function name
 	let new_fn_name =
-		syn::Ident::new(&format!("cfe_entrypoint_v{}", version), input_fn.sig.ident.span());
+		syn::Ident::new(&format!("{}{}", ENGINE_ENTRYPOINT_PREFIX, version), input_fn.sig.ident.span());
 
 	let block = input_fn.block;
 
@@ -45,11 +45,11 @@ pub fn engine_runner(_input: TokenStream) -> TokenStream {
 			.map(|i| i.replace('.', "_"))
 			.map(|version| {
 				(
-					syn::Ident::new(&format!("cfe_entrypoint_v{}", version), Span::call_site()),
+					syn::Ident::new(&format!("{}{}", ENGINE_ENTRYPOINT_PREFIX, version), Span::call_site()),
 					version,
 				)
 			})
-			.map(|(ident, version)| (ident, format!("chainflip_engine_v{}", version), version));
+			.map(|(ident, version)| (ident, format!("{}{}", ENGINE_LIB_PREFIX, version), version));
 
 	let output = quote! {
 		// Define the entrypoints into each version of the engine

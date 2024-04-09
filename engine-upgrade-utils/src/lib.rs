@@ -11,6 +11,11 @@ use std::{
 pub const OLD_VERSION: &str = "1.3.3";
 pub const NEW_VERSION: &str = "1.4.0";
 
+pub const ENGINE_LIB_PREFIX: &str = "chainflip_engine_v";
+
+pub const ENGINE_ENTRYPOINT_PREFIX: &str = "cfe_entrypoint_v";
+
+
 // Sometimes we need to remove arguments that are valid for the new version but not for the old
 // version.
 // The args that are required for 1.4 but *not* 1.3 are:
