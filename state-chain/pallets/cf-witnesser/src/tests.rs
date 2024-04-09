@@ -543,18 +543,29 @@ fn can_punish_failed_witnesser() {
 
 			assert!(CallHashExecuted::<Test>::contains_key(epoch, call_hash));
 			assert_eq!(WitnessDeadline::<Test>::get(target), vec![(epoch, call_hash)]);
+			System::assert_has_event(RuntimeEvent::Witnesser(
+				crate::Event::<Test>::CallDispatched { call_hash },
+			));
 
 			// Before the deadline is set, no one has been reported.
 			OffenceReporter::assert_reported(PalletOffence::FailedToWitnessInTime, vec![]);
 			call_hash
 		})
-		.then_execute_at_block(target, |_| {})
-		.then_execute_with(|_| {
+		.then_execute_at_block(target, |call_hash| call_hash)
+		.then_execute_with(|call_hash| {
 			// After deadline has passed, all nodes that are late are reported.
 			OffenceReporter::assert_reported(
 				PalletOffence::FailedToWitnessInTime,
 				success_threshold..100u64,
 			);
+
+			System::assert_has_event(RuntimeEvent::Witnesser(
+				crate::Event::<Test>::ReportedWitnessingFailures {
+					call_hash,
+					block_number: System::block_number() - GracePeriod::get(),
+					accounts: (success_threshold..100u64).collect(),
+				},
+			));
 
 			// storage is cleaned up.
 			assert_eq!(WitnessDeadline::<Test>::decode_len(target), None);
