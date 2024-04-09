@@ -54,11 +54,17 @@ extern "C" {
 }
 
 #[repr(C)]
-#[derive(Clone)]
 pub struct CStrArray {
 	// Null pointer if the array isn't initialised.
 	c_args: *mut *mut c_char,
 	n_args: usize,
+}
+
+impl Clone for CStrArray {
+	fn clone(&self) -> Self {
+		let strings = self.to_rust_strings();
+		strings.clone().try_into().unwrap()
+	}
 }
 
 impl Default for CStrArray {
@@ -76,6 +82,9 @@ impl TryFrom<Vec<String>> for CStrArray {
 
 	fn try_from(string_args: Vec<String>) -> Result<Self, Self::Error> {
 		let mut c_str_array = CStrArray::default();
+		if string_args.is_empty() {
+			return Ok(c_str_array);
+		}
 		let array_malloc = malloc_size::<*mut c_char>(string_args.len());
 
 		if array_malloc.is_null() {
@@ -142,5 +151,11 @@ fn test_c_str_array_with_args() {
 	let args = vec!["arg1".to_string(), "arg2".to_string()];
 
 	let c_args: CStrArray = args.clone().try_into().unwrap();
+	// check the Clone/drop implementations
+	{
+		let c_args_2: CStrArray = c_args.clone();
+		drop(c_args_2);
+	}
+
 	assert_eq!(c_args.to_rust_strings(), args);
 }
