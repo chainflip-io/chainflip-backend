@@ -2,6 +2,8 @@ use crate::{AccountId, Runtime};
 use frame_support::traits::{GetStorageVersion, StorageVersion};
 use sp_std::collections::btree_set::BTreeSet;
 
+#[cfg(feature = "try-runtime")]
+use sp_std::vec::Vec;
 pub struct Migration;
 
 impl frame_support::traits::OnRuntimeUpgrade for Migration {
@@ -25,7 +27,7 @@ impl frame_support::traits::OnRuntimeUpgrade for Migration {
 			StorageVersion::new(2).put::<pallet_cf_validator::Pallet<Runtime>>();
 		} else {
 			log::info!(
-				"⏭ Skipping ActiveBidder migration. {:?}, {:?}",
+				"⏭ Skipping ActiveBidder migration. Funding version: {:?}, Validator Version: {:?}",
 				<pallet_cf_funding::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version(),
 				<pallet_cf_validator::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version()
 			);

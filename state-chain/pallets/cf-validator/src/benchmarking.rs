@@ -360,7 +360,8 @@ mod benchmarks {
 	fn stop_bidding() {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		T::AccountRoleRegistry::register_as_validator(&caller).unwrap();
+		frame_system::Pallet::<T>::inc_providers(&caller);
+		assert_ok!(T::AccountRoleRegistry::register_as_validator(&caller));
 		ActiveBidder::<T>::set(BTreeSet::from([caller.clone()]));
 
 		#[extrinsic_call]
@@ -373,7 +374,8 @@ mod benchmarks {
 	fn start_bidding() {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		T::AccountRoleRegistry::register_as_validator(&caller).unwrap();
+		frame_system::Pallet::<T>::inc_providers(&caller);
+		assert_ok!(T::AccountRoleRegistry::register_as_validator(&caller));
 		ActiveBidder::<T>::set(Default::default());
 
 		#[extrinsic_call]
