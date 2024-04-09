@@ -1,24 +1,12 @@
-use std::{fs, path::Path};
-
-use engine_upgrade_utils::{NEW_VERSION, ENGINE_LIB_PREFIX};
+use engine_upgrade_utils::{
+	build_helpers::toml_with_package_version, ENGINE_LIB_PREFIX, NEW_VERSION,
+};
 
 // We want to enforce the fact that the package version, and the version suffix on the dylib
 // matches at compile time.
 // e.g. if version is `1.4.0` then the dylib lib name should be: `chainflip_engine_v1_4_0`
 fn main() {
-	let manifest_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
-	let manifest_contents = fs::read_to_string(manifest_path).expect("Could not read Cargo.toml");
-
-	let cargo_toml: toml::Value =
-		toml::from_str(&manifest_contents).expect("Could not parse Cargo.toml");
-
-	// Get the version from the Cargo.toml
-	let version = cargo_toml
-		.get("package")
-		.and_then(|p| p.get("version"))
-		.unwrap()
-		.as_str()
-		.unwrap();
+	let (cargo_toml, version) = toml_with_package_version();
 
 	assert_eq!(version, NEW_VERSION);
 

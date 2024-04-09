@@ -1406,7 +1406,6 @@ dependencies = [
  "chainflip-engine",
  "engine-proc-macros",
  "engine-upgrade-utils",
- "toml 0.8.10",
 ]
 
 [[package]]
@@ -1814,7 +1813,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
- "toml 0.8.10",
  "tracing",
  "url",
  "utilities",
@@ -3321,7 +3319,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.55",
- "toml 0.8.10",
 ]
 
 [[package]]
@@ -3332,7 +3329,6 @@ dependencies = [
  "cf-engine-dylib",
  "engine-proc-macros",
  "engine-upgrade-utils",
- "toml 0.8.10",
 ]
 
 [[package]]
@@ -3340,6 +3336,7 @@ name = "engine-upgrade-utils"
 version = "1.0.0"
 dependencies = [
  "anyhow",
+ "toml 0.8.10",
 ]
 
 [[package]]

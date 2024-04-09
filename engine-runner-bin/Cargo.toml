@@ -67,5 +67,4 @@ engine-proc-macros = { path = "../engine-proc-macros" }
 anyhow = "1.0"
 
 [build-dependencies]
-toml = "0.8.10"
 engine-upgrade-utils = { path = "../engine-upgrade-utils" }

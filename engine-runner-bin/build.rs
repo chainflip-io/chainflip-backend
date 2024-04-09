@@ -1,6 +1,6 @@
-use std::{fs, path::Path};
-
-use engine_upgrade_utils::{NEW_VERSION, OLD_VERSION, ENGINE_LIB_PREFIX};
+use engine_upgrade_utils::{
+	build_helpers::toml_with_package_version, ENGINE_LIB_PREFIX, NEW_VERSION, OLD_VERSION,
+};
 
 fn main() {
 	// === Ensure the runner runs the linker checks at compile time ===
@@ -33,19 +33,7 @@ fn main() {
 
 	// ===  Sanity check that the the assets have an item with the matching version. ===
 
-	let manifest_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
-	let manifest_contents = fs::read_to_string(manifest_path).expect("Could not read Cargo.toml");
-
-	let cargo_toml: toml::Value =
-		toml::from_str(&manifest_contents).expect("Could not parse Cargo.toml");
-
-	// Get the version from the Cargo.toml
-	let package_version = cargo_toml
-		.get("package")
-		.and_then(|p| p.get("version"))
-		.unwrap()
-		.as_str()
-		.unwrap();
+	let (cargo_toml, package_version) = toml_with_package_version();
 
 	assert_eq!(package_version, NEW_VERSION);
 
@@ -65,7 +53,11 @@ fn main() {
 	let mut flat_deb_assets = deb_assets.iter().flatten();
 
 	let mut check_version_suffix = |suffix: &String| {
-		assert!(flat_deb_assets.any(|item| item.contains(suffix)), "Expected to find a deb asset with the version suffix: {}", suffix);
+		assert!(
+			flat_deb_assets.any(|item| item.contains(suffix)),
+			"Expected to find a deb asset with the version suffix: {}",
+			suffix
+		);
 	};
 
 	check_version_suffix(&new_version_suffix);

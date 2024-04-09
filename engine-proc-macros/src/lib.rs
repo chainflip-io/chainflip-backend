@@ -5,7 +5,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, ItemForeignMod};
 
-use engine_upgrade_utils::{NEW_VERSION, OLD_VERSION, ENGINE_LIB_PREFIX};
+use engine_upgrade_utils::{ENGINE_LIB_PREFIX, NEW_VERSION, OLD_VERSION};
 
 #[proc_macro_attribute]
 pub fn link_engine_library_version(args: TokenStream, item: TokenStream) -> TokenStream {
