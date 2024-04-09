@@ -148,11 +148,7 @@ impl StateChainClient<()> {
 		ws_endpoint: &str,
 	) -> Result<(impl StreamApi<FINALIZED> + Clone, impl StreamApi<UNFINALIZED> + Clone, Arc<Self>)>
 	{
-		Self::new_without_account(
-			scope,
-			DefaultRpcClient::connect(ws_endpoint).await?.into(),
-		)
-		.await
+		Self::new_without_account(scope, DefaultRpcClient::connect(ws_endpoint).await?.into()).await
 	}
 }
 
