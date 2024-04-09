@@ -33,7 +33,7 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 				maybe_old_public_key,
 				new_public_key,
 			) {
-				Ok(activation_call) => {
+				Ok(Some(activation_call)) => {
 					// we need to sign and submit the rotation call
 					// reporting back the request_id of the tss such that we can complete the
 					// rotation when that request is completed
@@ -46,7 +46,7 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 					);
 					vec![StartKeyActivationResult::Normal(tss_request_id)]
 				},
-				Err(SetAggKeyWithAggKeyError::NotRequired) => {
+				Ok(None) => {
 					// This can happen if, for example, on a utxo chain there are no funds that
 					// need to be swept.
 					Self::activate_new_key_for_chain(T::ChainTracking::get_block_height());

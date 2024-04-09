@@ -907,7 +907,7 @@ fn can_handle_failed_vault_transfer() {
 				},
 			));
 
-			System::assert_last_event(RuntimeEvent::EthereumIngressEgress(
+			System::assert_has_event(RuntimeEvent::EthereumIngressEgress(
 				pallet_cf_ingress_egress::Event::<Runtime, Instance1>::TransferFallbackRequested {
 					asset,
 					amount,
