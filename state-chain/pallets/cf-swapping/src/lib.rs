@@ -10,7 +10,8 @@ use cf_primitives::{
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi, SwapQueueApi, SwapType,
+	impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi, IngressEgressFeeApi,
+	SwapQueueApi, SwapType,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -241,6 +242,8 @@ pub mod pallet {
 			Amount = <Self as Chainflip>::Amount,
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
+
+		type IngressEgressFeeHandler: IngressEgressFeeApi<AnyChain>;
 	}
 
 	#[pallet::pallet]
@@ -335,6 +338,7 @@ pub mod pallet {
 			egress_amount: AssetAmount,
 			swap_output: AssetAmount,
 			intermediate_amount: Option<AssetAmount>,
+			swap_type: SwapType,
 		},
 		/// A swap egress has been scheduled.
 		SwapEgressScheduled {
@@ -796,6 +800,7 @@ pub mod pallet {
 						egress_amount: swap_output,
 						swap_output,
 						intermediate_amount: swap.intermediate_amount(),
+						swap_type: swap.swap_type.clone(),
 					});
 					// Handle swap completion logic.
 					match &swap.swap_type {
@@ -849,6 +854,19 @@ pub mod pallet {
 									swap.to
 								);
 							},
+						SwapType::IngressEgressFee => {
+							if swap.to == ForeignChain::from(swap.to).gas_asset() {
+								T::IngressEgressFeeHandler::accrue_withheld_fee(
+									swap.to,
+									swap_output,
+								);
+							} else {
+								log_or_panic!(
+									"IngressEgressFee swap should not be to non-gas asset: {:?}",
+									swap.to
+								);
+							}
+						},
 					};
 				} else {
 					debug_assert!(false, "Swap is not completed yet!");

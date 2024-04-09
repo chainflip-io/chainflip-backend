@@ -48,6 +48,7 @@ pub mod none;
 pub mod address;
 pub mod deposit_channel;
 pub use deposit_channel::*;
+use strum::IntoEnumIterator;
 pub mod instances;
 
 pub mod mocks;
@@ -110,6 +111,7 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 		+ FullCodec
 		+ Into<cf_primitives::Asset>
 		+ Into<cf_primitives::ForeignChain>
+		+ IntoEnumIterator
 		+ Unpin;
 
 	type ChainAccount: Member

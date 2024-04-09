@@ -1,4 +1,4 @@
-use cf_runtime_upgrade_utilities::{migration_template, VersionedMigration};
+use crate::Pallet;
+use cf_runtime_upgrade_utilities::PlaceholderMigration;
 
-pub type PalletMigration<T> =
-	(VersionedMigration<crate::Pallet<T>, migration_template::Migration<T>, 0, 1>,);
+pub type PalletMigration<T> = PlaceholderMigration<Pallet<T>, 0>;

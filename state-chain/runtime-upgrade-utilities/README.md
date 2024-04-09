@@ -104,3 +104,11 @@ This crate provides a `VersionedMigration` type that can be used to structure su
        VersionedMigration<crate::Pallet<T>, purge_old_values::Migration, 3, 4>,
    );
    ```
+
+7. When removing migrations, it can be helpful to leave a placeholder migration to avoid deleting the boilerplate. For example, if the above migrations were no longer needed, we could remove them and leave a placeholder at the latest pallet version, like this:
+
+   ```rust
+   use cf_runtime_upgrade_utilities::PlaceholderMigration;
+
+   type PalletMigration<T> = PlaceholderMigration<crate::Pallet<T>, 4>;
+   ```

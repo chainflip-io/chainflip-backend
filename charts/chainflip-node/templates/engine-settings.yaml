@@ -26,6 +26,10 @@ data:
     ws_endpoint = "{{ .Values.engine.settings.eth.rpc.ws_endpoint | default "ws://geth-node-service:8546" }}"
     http_endpoint = "{{ .Values.engine.settings.eth.rpc.http_endpoint | default "http://geth-node-service:8545" }}"
 
+    [arb.rpc]
+    ws_endpoint = "{{ .Values.engine.settings.arb.rpc.ws_endpoint | default "ws://geth-node-service:8548" }}"
+    http_endpoint = "{{ .Values.engine.settings.arb.rpc.http_endpoint | default "http://geth-node-service:8547" }}"
+
     [health_check]
     hostname = "{{ .Values.engine.settings.health_check.hostname }}"
     port = {{ .Values.engine.settings.health_check.port }}

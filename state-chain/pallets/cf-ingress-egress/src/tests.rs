@@ -1,10 +1,13 @@
+mod boost;
+
 use crate::{
-	mock_eth::*, Call as PalletCall, ChannelAction, ChannelIdCounter, ChannelOpeningFee,
-	CrossChainMessage, DepositAction, DepositChannelLookup, DepositChannelPool,
+	mock_eth::*, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
+	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLookup, DepositChannelPool,
 	DepositIgnoredReason, DepositWitness, DisabledEgressAssets, EgressDustLimit,
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
 	MinimumDeposit, Pallet, PalletConfigUpdate, PrewitnessedDeposit, PrewitnessedDepositIdCounter,
 	PrewitnessedDeposits, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount,
+	WithheldTransactionFees,
 };
 use cf_chains::{
 	address::{AddressConverter, IntoForeignChainAddress},
@@ -19,12 +22,15 @@ use cf_traits::{
 		self,
 		address_converter::MockAddressConverter,
 		api_call::{MockEthAllBatch, MockEthereumApiCall, MockEvmEnvironment},
+		asset_converter::MockAssetConverter,
 		block_height_provider::BlockHeightProvider,
 		ccm_handler::{CcmRequest, MockCcmHandler},
 		chain_tracking::ChainTracker,
 		funding_info::MockFundingInfo,
+		swap_queue_api::{MockSwap, MockSwapQueueApi},
 	},
 	DepositApi, EgressApi, EpochInfo, FundingInfo, GetBlockHeight, ScheduledEgressDetails,
+	SwapType,
 };
 use frame_support::{
 	assert_err, assert_ok,
@@ -37,6 +43,7 @@ const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
 const BOB_ETH_ADDRESS: EthereumAddress = H160([101u8; 20]);
 const ETH_ETH: eth::Asset = eth::Asset::Eth;
 const ETH_FLIP: eth::Asset = eth::Asset::Flip;
+const DEFAULT_DEPOSIT_AMOUNT: u128 = 1_000;
 
 #[track_caller]
 fn expect_size_of_address_pool(size: usize) {
@@ -218,7 +225,7 @@ fn request_address_and_deposit(
 	assert_ok!(IngressEgress::process_single_deposit(
 		address,
 		asset,
-		1_000,
+		DEFAULT_DEPOSIT_AMOUNT,
 		(),
 		Default::default()
 	));
@@ -629,7 +636,7 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 		})
 		.then_process_events(|_, event| match event {
 			RuntimeEvent::IngressEgress(crate::Event::DepositWitnessRejected { .. }) |
-			RuntimeEvent::IngressEgress(crate::Event::DepositReceived { .. }) => Some(event),
+			RuntimeEvent::IngressEgress(crate::Event::DepositFinalised { .. }) => Some(event),
 			_ => None,
 		})
 		.inspect_context(|((expected_rejected_address, expected_accepted_address), emitted)| {
@@ -645,7 +652,7 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 			assert!(emitted.iter().any(|e| matches!(
 			e,
 			RuntimeEvent::IngressEgress(
-				crate::Event::DepositReceived {
+				crate::Event::DepositFinalised {
 					deposit_address,
 					..
 				}) if deposit_address == expected_accepted_address
@@ -895,7 +902,7 @@ fn deposits_below_minimum_are_rejected() {
 		// Flip deposit should succeed.
 		let (_, deposit_address) = request_address_and_deposit(LP_ACCOUNT, flip);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::DepositReceived {
+			crate::Event::<Test>::DepositFinalised {
 				deposit_address,
 				asset: flip,
 				amount: default_deposit_amount,
@@ -960,7 +967,7 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 		assert!(
 			matches!(
 				cf_test_utilities::last_event::<Test>(),
-				RuntimeEvent::IngressEgress(crate::Event::<Test>::DepositReceived {
+				RuntimeEvent::IngressEgress(crate::Event::<Test>::DepositFinalised {
 					asset: ASSET,
 					amount: DEPOSIT_AMOUNT,
 					deposit_details: (),
@@ -1485,9 +1492,9 @@ fn consolidation_tx_gets_broadcasted_on_finalize() {
 
 		IngressEgress::on_finalize(1);
 
-		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
-			crate::Event::BatchBroadcastRequested { broadcast_id: 1, egress_ids: vec![] },
-		));
+		assert_has_event::<Test>(RuntimeEvent::IngressEgress(crate::Event::UtxoConsolidation {
+			broadcast_id: 1,
+		}));
 	});
 }
 
@@ -1615,7 +1622,7 @@ fn should_cleanup_prewitnessed_deposits_when_channel_is_recycled() {
 				amount: DEPOSIT_AMOUNT,
 				deposit_address,
 				block_height: TARGET_CHAIN_HEIGHT,
-				deposit_details: ()
+				deposit_details: (),
 			})
 		);
 
@@ -1701,4 +1708,82 @@ fn should_remove_prewitnessed_deposit_when_witnessed() {
 			})
 		);
 	});
+}
+
+fn test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(
+	test_function: impl Fn(eth::Asset),
+) {
+	new_test_ext().execute_with(|| {
+		// Set the Gas (ingress egress Fee) via ChainTracker
+		const GAS_FEE: u128 = DEFAULT_DEPOSIT_AMOUNT / 10;
+		ChainTracker::<cf_chains::Ethereum>::set_fee(GAS_FEE);
+
+		// Set the price of all non-gas assets to 1:1 with Eth so it makes the test easier
+		MockAssetConverter::set_price(cf_primitives::Asset::Flip, cf_primitives::Asset::Eth, 1u128);
+		MockAssetConverter::set_price(cf_primitives::Asset::Usdc, cf_primitives::Asset::Eth, 1u128);
+		MockAssetConverter::set_price(cf_primitives::Asset::Usdt, cf_primitives::Asset::Eth, 1u128);
+
+		// Should not schedule a swap because it is already the gas asset, but should withhold the
+		// fee immediately.
+		test_function(eth::Asset::Eth);
+		assert!(MockSwapQueueApi::get_swap_queue().is_empty());
+		assert_eq!(
+			WithheldTransactionFees::<Test, _>::get(eth::Asset::Eth),
+			GAS_FEE,
+			"Expected ingress egress fee to be withheld for gas asset"
+		);
+
+		// All other assets should schedule a swap to the gas asset
+		test_function(eth::Asset::Flip);
+		test_function(eth::Asset::Usdc);
+		test_function(eth::Asset::Usdt);
+
+		assert_eq!(
+			MockSwapQueueApi::get_swap_queue(),
+			vec![
+				MockSwap {
+					from: cf_primitives::Asset::Flip,
+					to: cf_primitives::Asset::Eth,
+					amount: GAS_FEE,
+					swap_type: SwapType::IngressEgressFee
+				},
+				MockSwap {
+					from: cf_primitives::Asset::Usdc,
+					to: cf_primitives::Asset::Eth,
+					amount: GAS_FEE,
+					swap_type: SwapType::IngressEgressFee
+				},
+				MockSwap {
+					from: cf_primitives::Asset::Usdt,
+					to: cf_primitives::Asset::Eth,
+					amount: GAS_FEE,
+					swap_type: SwapType::IngressEgressFee
+				}
+			]
+		);
+	});
+}
+
+#[test]
+fn egress_transaction_fee_is_withheld_or_scheduled_for_swap() {
+	fn egress_function(asset: eth::Asset) {
+		<IngressEgress as EgressApi<Ethereum>>::schedule_egress(
+			asset,
+			DEFAULT_DEPOSIT_AMOUNT,
+			Default::default(),
+			None,
+		)
+		.unwrap();
+	}
+
+	test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(egress_function)
+}
+
+#[test]
+fn ingress_fee_is_withheld_or_scheduled_for_swap() {
+	fn ingress_function(asset: eth::Asset) {
+		request_address_and_deposit(1u64, asset);
+	}
+
+	test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(ingress_function)
 }

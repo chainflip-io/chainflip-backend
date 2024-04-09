@@ -1976,23 +1976,21 @@ impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
 		.map(|swap_output| swap_output.output.unique_saturated_into())
 	}
 
-	/// Try to convert the input asset to the output asset, subject to an available input amount and
-	/// desired output amount. The actual output amount is not guaranteed to be close to the desired
-	/// amount.
+	/// Calculate the amount of input asset needed to get the desired amount of output asset,
+	/// subject to an available input amount and network fee. The actual
+	/// output amount is not guaranteed to be close to the desired amount.
 	///
-	/// Returns the remaining input amount and the resultant output amount.
-	fn convert_asset_to_approximate_output<
-		Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy,
-	>(
+	/// Returns the input amount needed to get the desired output.
+	fn calculate_asset_conversion<Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy>(
 		input_asset: impl Into<Asset>,
 		available_input_amount: Amount,
 		output_asset: impl Into<Asset>,
 		desired_output_amount: Amount,
-	) -> Option<(Amount, Amount)> {
+	) -> Option<Amount> {
 		use frame_support::sp_runtime::helpers_128bit::multiply_by_rational_with_rounding;
 
 		if desired_output_amount.is_zero() {
-			return Some((available_input_amount, Zero::zero()))
+			return Some(Amount::zero())
 		}
 		if available_input_amount.is_zero() {
 			return None
@@ -2001,14 +1999,7 @@ impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
 		let input_asset = input_asset.into();
 		let output_asset = output_asset.into();
 		if input_asset == output_asset {
-			if desired_output_amount < available_input_amount {
-				return Some((
-					available_input_amount.saturating_sub(desired_output_amount),
-					desired_output_amount,
-				))
-			} else {
-				return Some((Zero::zero(), available_input_amount))
-			}
+			return Some(available_input_amount.min(desired_output_amount))
 		}
 
 		let available_output_amount = with_transaction_unchecked(|| {
@@ -2034,20 +2025,9 @@ impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
 			)
 			.defensive_proof(
 				"Unexpected overflow occurred during asset conversion. Please report this to Chainflip Labs."
-			)?;
+			)?.min(available_input_amount.into());
 
-			Some((
-				available_input_amount
-					.saturating_sub(input_amount_to_convert.unique_saturated_into()),
-				Self::swap_with_network_fee(
-					input_asset,
-					output_asset,
-					sp_std::cmp::min(input_amount_to_convert, available_input_amount.into()),
-				)
-				.ok()?
-				.output
-				.unique_saturated_into(),
-			))
+			Some(input_amount_to_convert.unique_saturated_into())
 		}
 	}
 }

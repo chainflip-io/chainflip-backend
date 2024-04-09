@@ -3,20 +3,21 @@
 use super::*;
 use cf_amm::common::price_at_tick;
 use cf_chains::ForeignChainAddress;
-use cf_primitives::Asset;
+use cf_primitives::{AccountRole, Asset};
 use cf_traits::{AccountRoleRegistry, LpBalanceApi};
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
 	sp_runtime::traits::One,
-	traits::{EnsureOrigin, OnNewAccount, UnfilteredDispatchable},
+	traits::{EnsureOrigin, UnfilteredDispatchable},
 };
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 
 fn new_lp_account<T: Chainflip + Config>() -> T::AccountId {
-	let caller: T::AccountId = whitelisted_caller();
-	<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-	T::AccountRoleRegistry::register_as_liquidity_provider(&caller).unwrap();
+	let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+		AccountRole::LiquidityProvider,
+	)
+	.unwrap();
 	for address in [
 		ForeignChainAddress::Eth(Default::default()),
 		ForeignChainAddress::Dot(Default::default()),
