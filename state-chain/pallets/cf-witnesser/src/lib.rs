@@ -30,7 +30,6 @@ use frame_support::{
 	Hashable,
 };
 use scale_info::TypeInfo;
-use sp_runtime::Saturating;
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -309,8 +308,9 @@ pub mod pallet {
 						);
 						Self::deposit_event(Event::<T>::ReportedWitnessingFailures {
 							call_hash,
-							block_number: frame_system::Pallet::<T>::block_number()
-								.saturating_sub(T::LateWitnessGracePeriod::get()),
+							// Safe because n is always inserted using current +
+							// T::LateWitnessGracePeriod::get()
+							block_number: n - T::LateWitnessGracePeriod::get(),
 							accounts: failed_witnessers,
 						});
 					}

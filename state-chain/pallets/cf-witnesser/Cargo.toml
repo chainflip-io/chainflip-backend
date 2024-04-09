@@ -40,7 +40,6 @@ frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git",
 frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
 frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
 sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
 
 [dev-dependencies]
 cf-test-utilities = { path = '../../test-utilities' }
@@ -62,7 +61,6 @@ std = [
   'hex/std',
   'scale-info/std',
   'sp-std/std',
-  'sp-runtime/std',
 ]
 runtime-benchmarks = [
   'cf-primitives/runtime-benchmarks',
