@@ -24,7 +24,7 @@ use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{AskBidMap, PoolInfo, PoolLiquidity, PoolPriceV1, UnidirectionalPoolDepth};
 use pallet_cf_swapping::SwapLegInfo;
 use sc_client_api::{BlockchainEvents, HeaderBackend};
-use serde::{de, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use sp_api::ApiError;
 use sp_core::U256;
 use sp_runtime::{
