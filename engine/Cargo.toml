@@ -137,7 +137,6 @@ serde_path_to_error = "*"
 
 [build-dependencies]
 substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-toml = "0.8.10"
 engine-upgrade-utils = { path = "../engine-upgrade-utils" }
 
 [features]

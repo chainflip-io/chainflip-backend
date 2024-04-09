@@ -18,4 +18,3 @@ engine-upgrade-utils = { path = "../engine-upgrade-utils" }
 
 [build-dependencies]
 engine-upgrade-utils = { path = "../engine-upgrade-utils" }
-toml = "0.8.10"
