@@ -41,6 +41,9 @@ use std::{
 
 use tracing::log;
 
+pub type LegacyRangeOrderSizeJson = RangeOrderSizeJson<NumberOrHex>;
+pub type NewRangeOrderSizeJson = RangeOrderSizeJson<U256>;
+
 /// Contains RPC interface types that differ from internal types.
 pub mod rpc_types {
 	use super::*;
@@ -60,14 +63,14 @@ pub mod rpc_types {
 	}
 
 	#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-	pub enum RangeOrderSizeJson {
-		AssetAmounts { maximum: PoolPairsMap<U256>, minimum: PoolPairsMap<U256> },
-		Liquidity { liquidity: U256 },
+	pub enum RangeOrderSizeJson<T: TryInto<u128>> {
+		AssetAmounts { maximum: PoolPairsMap<T>, minimum: PoolPairsMap<T> },
+		Liquidity { liquidity: T },
 	}
-	impl TryFrom<RangeOrderSizeJson> for RangeOrderSize {
+	impl<T: TryInto<u128>> TryFrom<RangeOrderSizeJson<T>> for RangeOrderSize {
 		type Error = anyhow::Error;
 
-		fn try_from(value: RangeOrderSizeJson) -> Result<Self, Self::Error> {
+		fn try_from(value: RangeOrderSizeJson<T>) -> Result<Self, Self::Error> {
 			Ok(match value {
 				RangeOrderSizeJson::AssetAmounts { maximum, minimum } =>
 					RangeOrderSize::AssetAmounts {
@@ -142,7 +145,7 @@ pub trait Rpc {
 		quote_asset: Asset,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
-		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
+		size_change: IncreaseOrDecrease<LegacyRangeOrderSizeJson>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>>;
 
@@ -153,7 +156,7 @@ pub trait Rpc {
 		quote_asset: Asset,
 		id: U256,
 		tick_range: Option<Range<Tick>>,
-		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
+		size_change: IncreaseOrDecrease<NewRangeOrderSizeJson>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>>;
 
@@ -165,7 +168,7 @@ pub trait Rpc {
 		quote_asset: Asset,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
-		size: RangeOrderSizeJson,
+		size: LegacyRangeOrderSizeJson,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>>;
 
@@ -176,7 +179,7 @@ pub trait Rpc {
 		quote_asset: Asset,
 		id: U256,
 		tick_range: Option<Range<Tick>>,
-		size: RangeOrderSizeJson,
+		size: NewRangeOrderSizeJson,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>>;
 
@@ -393,7 +396,7 @@ impl RpcServer for RpcServerImpl {
 		quote_asset: Asset,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
-		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
+		size_change: IncreaseOrDecrease<LegacyRangeOrderSizeJson>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>> {
 		Ok(self
@@ -416,7 +419,7 @@ impl RpcServer for RpcServerImpl {
 		quote_asset: Asset,
 		id: U256,
 		tick_range: Option<Range<Tick>>,
-		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
+		size_change: IncreaseOrDecrease<NewRangeOrderSizeJson>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>> {
 		Ok(self
@@ -439,7 +442,7 @@ impl RpcServer for RpcServerImpl {
 		quote_asset: Asset,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
-		size: RangeOrderSizeJson,
+		size: LegacyRangeOrderSizeJson,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>> {
 		Ok(self
@@ -462,7 +465,7 @@ impl RpcServer for RpcServerImpl {
 		quote_asset: Asset,
 		id: U256,
 		tick_range: Option<Range<Tick>>,
-		size: RangeOrderSizeJson,
+		size: NewRangeOrderSizeJson,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>> {
 		Ok(self
