@@ -84,12 +84,12 @@ impl SetAggKeyWithAggKey<MockEthereumChainCrypto> for MockSetAggKeyWithAggKey {
 	fn new_unsigned(
 		old_key: Option<<<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::AggKey>,
 		new_key: <<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-	) -> Result<Self, SetAggKeyWithAggKeyError> {
+	) -> Result<Option<Self>, SetAggKeyWithAggKeyError> {
 		if !SET_AGG_KEY_WITH_AGG_KEY_REQUIRED.with(|cell| *cell.borrow()) {
-			return Err(SetAggKeyWithAggKeyError::NotRequired)
+			return Ok(None)
 		}
 
-		Ok(Self { old_key: old_key.ok_or(SetAggKeyWithAggKeyError::Failed)?, new_key })
+		Ok(Some(Self { old_key: old_key.ok_or(SetAggKeyWithAggKeyError::Failed)?, new_key }))
 	}
 }
 
