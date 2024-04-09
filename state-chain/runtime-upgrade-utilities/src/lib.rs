@@ -48,6 +48,36 @@ pub struct VersionedMigration<
 	const TO: u16,
 >(PhantomData<(P, U)>);
 
+/// A placeholder migration that does nothing. Useful too allow us to keep the boilerplate in the
+/// runtime consistent.
+pub struct PlaceholderMigration<
+	P: PalletInfoAccess + GetStorageVersion<CurrentStorageVersion = StorageVersion>,
+	const AT: u16,
+>(PhantomData<P>);
+
+impl<P, const AT: u16> OnRuntimeUpgrade for PlaceholderMigration<P, AT>
+where
+	P: PalletInfoAccess + GetStorageVersion<CurrentStorageVersion = StorageVersion>,
+{
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		if <P as GetStorageVersion>::on_chain_storage_version() == AT {
+			log::info!(
+				"👌 {}: Placeholder migration at pallet storage version {:?}. Nothing to do.",
+				P::name(),
+				AT,
+			);
+		} else {
+			log::warn!(
+				"🚨 {}: Placeholder migration at pallet storage version {:?} but storage version is {:?}.",
+				P::name(),
+				AT,
+				<P as GetStorageVersion>::on_chain_storage_version(),
+			);
+		}
+		Default::default()
+	}
+}
+
 /// A helper enum to wrap the pre_upgrade bytes like an Option before passing them to post_upgrade.
 /// This enum is used rather than an Option to make the API clearer to the developer.
 #[derive(Encode, Decode)]

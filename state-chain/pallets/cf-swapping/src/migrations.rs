@@ -1,6 +1,4 @@
-mod schedule_swaps;
+use crate::Pallet;
+use cf_runtime_upgrade_utilities::PlaceholderMigration;
 
-use cf_runtime_upgrade_utilities::VersionedMigration;
-
-pub type PalletMigration<T> =
-	(VersionedMigration<crate::Pallet<T>, schedule_swaps::Migration<T>, 1, 2>,);
+pub type PalletMigration<T> = PlaceholderMigration<Pallet<T>, 3>;
