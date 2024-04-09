@@ -63,6 +63,11 @@ fn main() {
 		.unwrap();
 
 	let mut flat_deb_assets = deb_assets.iter().flatten();
-	assert!(flat_deb_assets.any(|item| item.contains(&new_version_suffix)));
-	assert!(flat_deb_assets.any(|item| item.contains(&old_version_suffix)));
+
+	let mut check_version_suffix = |suffix: &String| {
+		assert!(flat_deb_assets.any(|item| item.contains(suffix)), "Expected to find a deb asset with the version suffix: {}", suffix);
+	};
+
+	check_version_suffix(&new_version_suffix);
+	check_version_suffix(&old_version_suffix);
 }
