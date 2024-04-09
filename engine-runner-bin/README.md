@@ -4,7 +4,7 @@ This README describes how the Chainflip Engine (CFE) actually runs and how the c
 
 The Chainflip Engine as it is run by a validator, consists of 3 build artefacts:
 
-1. The `enginer-runner` binary.
+1. The `engine-runner` binary.
 2. A shared library of the old [engine-dylib](./../engine-dylib/). This is fetched from the previous release build when a release is built. Or directly from the repo ([`old-engine-dylib](./../old-engine-dylib/)) for localnets
 3. A shared library of the new [engine-dylib](./../engine-dylib/). This is built during the `cargo build` of the current version.
 
