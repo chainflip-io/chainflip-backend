@@ -18,7 +18,7 @@ use cf_traits::{
 		signer_nomination::MockNominator,
 	},
 	AccountRoleRegistry, AsyncResult, Chainflip, EpochInfo, EpochKey, KeyProvider,
-	KeyRotationStatusOuter, KeyRotator, SetSafeMode, VaultActivator,
+	KeyRotationStatusOuter, KeyRotator, SetSafeMode,
 };
 pub use frame_support::traits::Get;
 
@@ -1632,7 +1632,6 @@ mod key_rotation {
 
 			BlockHeightProvider::<MockEthereum>::set_block_height(HANDOVER_ACTIVATION_BLOCK);
 			EthereumThresholdSigner::activate_keys();
-			EthereumThresholdSigner::status();
 
 			assert!(matches!(
 				PendingKeyRotation::<Test, _>::get().unwrap(),
@@ -1675,7 +1674,6 @@ mod key_rotation {
 			run_cfes_on_sc_events(&cfes);
 
 			EthereumThresholdSigner::activate_keys();
-			EthereumThresholdSigner::status();
 		});
 
 		final_checks(ext);
@@ -1743,37 +1741,6 @@ mod key_rotation {
 			// Can restart the key rotation and succeed.
 			do_full_key_rotation();
 		});
-	}
-
-	#[test]
-	fn wait_for_activating_key_tss_before_completing_rotation() {
-		let ext = setup(Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)).execute_with(|| {
-			// KeyHandoverComplete
-			PendingKeyRotation::<Test, _>::put(KeyRotationStatus::KeyHandoverComplete {
-				new_public_key: NEW_AGG_PUB_KEY_POST_HANDOVER,
-			});
-			// Start ActivatingKeys
-			EthereumThresholdSigner::activate_keys();
-			assert_eq!(
-				PendingKeyRotation::<Test, _>::get().unwrap(),
-				KeyRotationStatus::AwaitingActivation {
-					request_id: Some(4),
-					new_public_key: NEW_AGG_PUB_KEY_POST_HANDOVER
-				}
-			);
-
-			// Vault activation started and it is now pending
-			assert_eq!(MockVaultActivator::status(), AsyncResult::Pending);
-
-			// Request is complete
-			assert_eq!(EthereumThresholdSigner::signature(4), AsyncResult::Void);
-
-			// Proceed to complete activation
-			EthereumThresholdSigner::status();
-
-			assert_eq!(MockVaultActivator::status(), AsyncResult::Ready(()));
-		});
-		final_checks(ext);
 	}
 }
 
