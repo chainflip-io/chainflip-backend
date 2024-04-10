@@ -26,7 +26,10 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	pallet_prelude::{ensure, DispatchResult, RuntimeDebug},
-	sp_runtime::traits::{One, Saturating},
+	sp_runtime::{
+		traits::{One, Saturating},
+		DispatchError,
+	},
 	traits::{Defensive, Get, OriginTrait, StorageVersion, UnfilteredDispatchable},
 	Twox64Concat,
 };
@@ -632,6 +635,31 @@ pub mod pallet {
 
 			Self::handle_broadcast_failure(broadcast_id, reporter.into())?;
 			Ok(().into())
+		}
+
+		#[pallet::call_index(5)]
+		#[pallet::weight(Weight::zero())]
+		pub fn resign_aborted_broadcast(
+			origin: OriginFor<T>,
+			broadcast_id: BroadcastId,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			ensure!(
+				AbortedBroadcasts::<T, I>::mutate(|aborted: &mut Vec<u32>| {
+					// Convert to BTreeSet to remove duplicates.
+					let mut unique_ids = BTreeSet::<u32>::from_iter(aborted.iter().copied());
+					let removed = unique_ids.remove(&broadcast_id);
+					*aborted = Vec::from_iter(unique_ids.into_iter());
+					removed
+				}),
+				"Broadcast is not in the aborted list."
+			);
+			let api_call = Self::clean_up_broadcast_storage(broadcast_id)
+				.ok_or("No threshold signature data")?;
+
+			PendingBroadcasts::<T, I>::mutate(|pending| pending.insert(broadcast_id));
+			Self::threshold_sign(api_call, broadcast_id, true);
+			Ok(())
 		}
 	}
 }
