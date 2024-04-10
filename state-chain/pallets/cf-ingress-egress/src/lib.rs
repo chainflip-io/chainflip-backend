@@ -821,7 +821,7 @@ pub mod pallet {
 				match current_epoch.saturating_sub(call.original_epoch) {
 					// The call is stale, clean up storage.
 					n if n >= 2 => {
-						T::Broadcaster::clean_up_broadcast_storage(call.broadcast_id);
+						T::Broadcaster::expire_broadcast(call.broadcast_id);
 						Self::deposit_event(Event::<T, I>::FailedForeignChainCallExpired {
 							broadcast_id: call.broadcast_id,
 						});

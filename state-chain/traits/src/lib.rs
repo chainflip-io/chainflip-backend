@@ -531,8 +531,8 @@ pub trait Broadcaster<C: Chain> {
 	/// The caller must manage storage cleanup, so signatures are not stored indefinitely.
 	fn threshold_sign(api_call: Self::ApiCall) -> (BroadcastId, ThresholdSignatureRequestId);
 
-	/// Clean up storage data related to a broadcast ID.
-	fn clean_up_broadcast_storage(broadcast_id: BroadcastId);
+	/// Removes all data associated with a broadcast.
+	fn expire_broadcast(broadcast_id: BroadcastId);
 }
 
 /// The heartbeat of the network
