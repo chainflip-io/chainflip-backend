@@ -24,7 +24,7 @@ pub mod genesis_hashes {
 	pub const BERGHAIN: [u8; 32] =
 		hex_literal::hex!("8b8c140b0af9db70686583e3f6bf2a59052bfe9584b97d20c45068281e976eb9");
 	pub const PERSEVERANCE: [u8; 32] =
-		hex_literal::hex!("46c8ca427e31ba73cbd1ad60500d4a7d173b1c80c9fb1afb76661d614f9c5cd7");
+		hex_literal::hex!("7a5d4db858ada1d20ed6ded4933c33313fc9673e5fffab560d0ca714782f2080");
 	pub const SISYPHOS: [u8; 32] =
 		hex_literal::hex!("beb780f634621c64012483ebbf39927eb236b63902e9a249a76af8ba4cf8a474");
 
