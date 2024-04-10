@@ -8,8 +8,9 @@ use cf_traits::{
 	},
 	AccountRoleRegistry, LpBalanceApi,
 };
+use sp_std::collections::btree_map::BTreeMap;
 
-use crate::{BoostId, BoostPoolTier, BoostPools, DepositTracker, Event};
+use crate::{BoostId, BoostPoolId, BoostPoolTier, BoostPools, DepositTracker, Event};
 
 type AccountId = u64;
 type DepositBalances = crate::DepositBalances<Test, ()>;
@@ -179,10 +180,17 @@ fn basic_passive_boosting() {
 		const LP_BALANCE_AFTER_BOOST: AssetAmount =
 			INIT_LP_BALANCE + DEPOSIT_AMOUNT - POOL_1_FEE - POOL_2_FEE - INGRESS_FEE;
 		{
+			const POOL_1_CONTRIBUTION: AssetAmount = BOOSTER_AMOUNT_1 + POOL_1_FEE;
+			const POOL_2_CONTRIBUTION: AssetAmount = DEPOSIT_AMOUNT - POOL_1_CONTRIBUTION;
+
 			System::assert_last_event(RuntimeEvent::IngressEgress(Event::DepositBoosted {
 				deposit_address,
 				asset: ASSET,
-				amount: DEPOSIT_AMOUNT,
+				amounts: BTreeMap::from_iter(vec![
+					(BoostPoolTier::FiveBps, POOL_1_CONTRIBUTION),
+					(BoostPoolTier::TenBps, POOL_2_CONTRIBUTION),
+				]),
+				channel_id,
 				deposit_details: (),
 				ingress_fee: INGRESS_FEE,
 				boost_fee: POOL_1_FEE + POOL_2_FEE,
@@ -194,9 +202,6 @@ fn basic_passive_boosting() {
 				deposit_id,
 				[BoostPoolTier::FiveBps, BoostPoolTier::TenBps],
 			);
-
-			const POOL_1_CONTRIBUTION: AssetAmount = BOOSTER_AMOUNT_1 + POOL_1_FEE;
-			const POOL_2_CONTRIBUTION: AssetAmount = DEPOSIT_AMOUNT - POOL_1_CONTRIBUTION;
 
 			// Channel action is immediately executed (LP gets credited in this case):
 			assert_eq!(get_lp_eth_balance(&LP_ACCOUNT), LP_BALANCE_AFTER_BOOST);
@@ -652,6 +657,7 @@ fn insufficient_funds_for_boost() {
 		));
 
 		let (_channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, 10);
+		System::reset_events();
 		let _deposit_id = prewitness_deposit(deposit_address, eth::Asset::Eth, DEPOSIT_AMOUNT);
 
 		// The deposit is pre-witnessed, but no channel action took place:
@@ -659,6 +665,12 @@ fn insufficient_funds_for_boost() {
 			assert_not_boosted(deposit_address);
 			assert_eq!(get_lp_eth_balance(&LP_ACCOUNT), INIT_LP_BALANCE);
 		}
+
+		System::assert_last_event(RuntimeEvent::IngressEgress(Event::InsufficientBoostLiquidity {
+			boost_id: 1,
+			asset: eth::Asset::Eth,
+			amount_attempted: DEPOSIT_AMOUNT,
+		}));
 
 		// When the deposit is finalised, it is processed as normal:
 		{
@@ -718,5 +730,46 @@ fn lost_funds_are_acknowledged_by_boost_pool() {
 				Vec::<BoostId>::new()
 			);
 		}
+	});
+}
+
+#[test]
+fn test_add_boost_funds() {
+	new_test_ext().execute_with(|| {
+		const BOOST_FUNDS: AssetAmount = 500_000_000;
+
+		setup();
+
+		// Should have all funds in the lp account and non in the pool yet.
+		assert_eq!(
+			BoostPools::<Test>::get(eth::Asset::Eth, BoostPoolTier::FiveBps)
+				.unwrap()
+				.get_available_amount_for_account(&BOOSTER_1),
+			None
+		);
+		assert_eq!(get_lp_eth_balance(&BOOSTER_1), INIT_BOOSTER_ETH_BALANCE);
+
+		// Add some of the LP funds to the boost pool
+		assert_ok!(IngressEgress::add_boost_funds(
+			RuntimeOrigin::signed(BOOSTER_1),
+			eth::Asset::Eth,
+			BOOST_FUNDS,
+			BoostPoolTier::FiveBps
+		));
+
+		// Should see some of the funds in the pool now and some funds missing from the LP account
+		assert_eq!(
+			BoostPools::<Test>::get(eth::Asset::Eth, BoostPoolTier::FiveBps)
+				.unwrap()
+				.get_available_amount_for_account(&BOOSTER_1),
+			Some(BOOST_FUNDS)
+		);
+		assert_eq!(get_lp_eth_balance(&BOOSTER_1), INIT_BOOSTER_ETH_BALANCE - BOOST_FUNDS);
+
+		System::assert_last_event(RuntimeEvent::IngressEgress(Event::BoostFundsAdded {
+			account_id: BOOSTER_1,
+			boost_pool: BoostPoolId { asset: eth::Asset::Eth, tier: BoostPoolTier::FiveBps },
+			amount: BOOST_FUNDS,
+		}));
 	});
 }

@@ -48,7 +48,7 @@ use frame_support::{
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_runtime::traits::UniqueSaturatedInto;
-use sp_std::{vec, vec::Vec};
+use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 use strum_macros::EnumIter;
 pub use weights::WeightInfo;
 
@@ -68,12 +68,24 @@ pub struct PrewitnessedDeposit<C: Chain> {
 }
 
 // TODO: use u16 directly so we can dynamically add/remove pools?
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, EnumIter)]
+#[derive(
+	Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo, EnumIter,
+)]
 #[repr(u16)]
 pub enum BoostPoolTier {
 	FiveBps = 5,
 	TenBps = 10,
 	ThirtyBps = 30,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct BoostPoolId<C: Chain> {
+	asset: C::ChainAsset,
+	tier: BoostPoolTier,
+}
+pub struct BoostOutput<C: Chain> {
+	contributions: BTreeMap<BoostPoolTier, C::ChainAmount>,
+	total_fee: C::ChainAmount,
 }
 
 type BoostId = u64;
@@ -183,7 +195,7 @@ pub mod pallet {
 	};
 	use frame_system::WeightInfo as SystemWeightInfo;
 	use sp_runtime::SaturatedConversion;
-	use sp_std::vec::Vec;
+	use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 	pub(crate) type ChannelRecycleQueue<T, I> =
 		Vec<(TargetChainBlockNumber<T, I>, TargetChainAccount<T, I>)>;
@@ -626,13 +638,30 @@ pub mod pallet {
 		DepositBoosted {
 			deposit_address: TargetChainAccount<T, I>,
 			asset: TargetChainAsset<T, I>,
-			amount: TargetChainAmount<T, I>,
+			amounts: BTreeMap<BoostPoolTier, TargetChainAmount<T, I>>,
 			deposit_details: <T::TargetChain as Chain>::DepositDetails,
+			channel_id: ChannelId,
 			// Ingress fee in the deposit asset. i.e. *NOT* the gas asset, if the deposit asset is
 			// a non-gas asset.
 			ingress_fee: TargetChainAmount<T, I>,
 			boost_fee: TargetChainAmount<T, I>,
 			action: DepositAction<T::AccountId>,
+		},
+		BoostFundsAdded {
+			account_id: T::AccountId,
+			boost_pool: BoostPoolId<T::TargetChain>,
+			amount: TargetChainAmount<T, I>,
+		},
+		AccountStoppedBoosting {
+			account_id: T::AccountId,
+			boost_pool: BoostPoolId<T::TargetChain>,
+			account_available_amount: TargetChainAmount<T, I>,
+			account_in_use_amounts: BTreeMap<BoostId, TargetChainAmount<T, I>>,
+		},
+		InsufficientBoostLiquidity {
+			boost_id: BoostId,
+			asset: TargetChainAsset<T, I>,
+			amount_attempted: TargetChainAmount<T, I>,
 		},
 	}
 
@@ -995,17 +1024,23 @@ pub mod pallet {
 			amount: TargetChainAmount<T, I>,
 			pool_tier: BoostPoolTier,
 		) -> DispatchResult {
-			let booster = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			T::LpBalance::try_debit_account(&booster, asset.into(), amount.into())?;
+			T::LpBalance::try_debit_account(&account_id, asset.into(), amount.into())?;
 
 			BoostPools::<T, I>::mutate(asset, pool_tier, |pool| {
 				let pool =
 					pool.as_mut().ok_or_else(|| DispatchError::from("Boost pool must exist"))?;
-				pool.add_funds(booster, amount);
+				pool.add_funds(account_id.clone(), amount);
 
 				Ok::<(), DispatchError>(())
 			})?;
+
+			Self::deposit_event(Event::<T, I>::BoostFundsAdded {
+				account_id,
+				boost_pool: BoostPoolId { asset, tier: pool_tier },
+				amount,
+			});
 
 			Ok(())
 		}
@@ -1019,14 +1054,23 @@ pub mod pallet {
 		) -> DispatchResult {
 			let booster = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			let unlocked_amount = BoostPools::<T, I>::mutate(asset, pool_tier, |pool| {
-				let pool =
-					pool.as_mut().ok_or_else(|| DispatchError::from("Boost pool must exist"))?;
+			let (unlocked_amount, account_in_use_amounts) =
+				BoostPools::<T, I>::mutate(asset, pool_tier, |pool| {
+					let pool = pool
+						.as_mut()
+						.ok_or_else(|| DispatchError::from("Boost pool must exist"))?;
 
-				pool.stop_boosting(booster.clone())
-			})?;
+					pool.stop_boosting(booster.clone())
+				})?;
 
 			T::LpBalance::try_credit_account(&booster, asset.into(), unlocked_amount.into())?;
+
+			Self::deposit_event(Event::AccountStoppedBoosting {
+				account_id: booster,
+				boost_pool: BoostPoolId { asset, tier: pool_tier },
+				account_available_amount: unlocked_amount,
+				account_in_use_amounts,
+			});
 
 			Ok(())
 		}
@@ -1235,19 +1279,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	/// Returns participating pools and the total boost fee if successful
+	/// Returns a list of contributions from the used pools and the total boost fee.
 	#[transactional]
 	fn try_boosting(
 		asset: TargetChainAsset<T, I>,
 		required_amount: TargetChainAmount<T, I>,
 		max_boost_fee_bps: BasisPoints,
 		boost_id: u64,
-	) -> Result<(Vec<BoostPoolTier>, TargetChainAmount<T, I>), DispatchError> {
+	) -> Result<BoostOutput<T::TargetChain>, DispatchError> {
 		let mut remaining_amount = required_amount;
 
 		let mut total_fee_amount: TargetChainAmount<T, I> = 0u32.into();
 
-		let mut used_pools = vec![];
+		let mut used_pools = BTreeMap::new();
 
 		for boost_tier in SORTED_BOOST_TIERS {
 			if boost_tier as u16 > max_boost_fee_bps {
@@ -1267,20 +1311,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					Some(pool) => pool,
 				};
 
-				used_pools.push(boost_tier);
-
 				pool.provide_funds_for_boosting(boost_id, remaining_amount).map_err(Into::into)
 			})?;
+
+			if !boosted_amount.is_zero() {
+				used_pools.insert(boost_tier, boosted_amount);
+			}
 
 			remaining_amount.saturating_reduce(boosted_amount);
 			total_fee_amount.saturating_accrue(fee);
 
 			if remaining_amount == 0u32.into() {
-				return Ok((used_pools, total_fee_amount));
+				return Ok(BoostOutput { contributions: used_pools, total_fee: total_fee_amount });
 			}
 		}
 
-		Err("insufficient boost funds".into())
+		Err("Insufficient boost funds".into())
 	}
 
 	fn add_prewitnessed_deposits(
@@ -1321,11 +1367,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// Only boost on non-zero fee and if the channel isn't already boosted:
 			if boost_fee > 0 && !matches!(boost_status, BoostStatus::Boosted { .. }) {
 				match Self::try_boosting(asset, amount, boost_fee, id) {
-					Ok((used_pools, boost_fee_amount)) => {
+					Ok(BoostOutput { contributions: used_pools, total_fee: boost_fee_amount }) => {
 						DepositChannelLookup::<T, I>::mutate(&deposit_address, |details| {
 							if let Some(details) = details {
-								details.boost_status =
-									BoostStatus::Boosted { boost_id: id, pools: used_pools };
+								details.boost_status = BoostStatus::Boosted {
+									boost_id: id,
+									pools: used_pools.keys().cloned().collect(),
+								};
 							}
 						});
 
@@ -1351,7 +1399,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						Self::deposit_event(Event::DepositBoosted {
 							deposit_address: deposit_address.clone(),
 							asset,
-							amount,
+							amounts: used_pools,
+							channel_id,
 							deposit_details: deposit_details.clone(),
 							ingress_fee,
 							boost_fee: boost_fee_amount,
@@ -1359,6 +1408,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						});
 					},
 					Err(err) => {
+						Self::deposit_event(Event::InsufficientBoostLiquidity {
+							boost_id: id,
+							asset,
+							amount_attempted: amount,
+						});
 						log::debug!(
 							"Deposit (id: {id}) of {amount:?} {asset:?} and boost fee {boost_fee} could not be boosted: {err:?}"
 						);

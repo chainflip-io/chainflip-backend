@@ -309,30 +309,46 @@ where
 		booster_contributions.len()
 	}
 
-	// Return the amount immediately available for booster
-	pub fn stop_boosting(&mut self, booster_id: AccountId) -> Result<C::ChainAmount, &'static str> {
+	// Return the amount immediately available for the booster and a list of all pending boosts that
+	// the booster is still a part of.
+	#[allow(clippy::type_complexity)]
+	pub fn stop_boosting(
+		&mut self,
+		booster_id: AccountId,
+	) -> Result<(C::ChainAmount, BTreeMap<BoostId, C::ChainAmount>), &'static str> {
 		let Some(booster_active_amount) = self.amounts.remove(&booster_id) else {
 			return Err("Account not found in boost pool")
 		};
 
 		self.available_amount.saturating_reduce(booster_active_amount);
 
-		let pending_deposits: BTreeSet<_> = self
+		let pending_deposits: BTreeMap<_, _> = self
 			.pending_boosts
 			.iter()
-			.filter(|(_, owed_amounts)| owed_amounts.contains_key(&booster_id))
-			.map(|(boost_id, _)| *boost_id)
+			.filter_map(|(boost_id, owed_amounts)| {
+				owed_amounts
+					.get(&booster_id)
+					.map(|amount| (*boost_id, amount.into_chain_amount()))
+			})
 			.collect();
 
 		if !pending_deposits.is_empty() {
-			self.pending_withdrawals.insert(booster_id, pending_deposits);
+			self.pending_withdrawals
+				.insert(booster_id, pending_deposits.keys().cloned().collect());
 		}
 
-		Ok(booster_active_amount.into_chain_amount())
+		Ok((booster_active_amount.into_chain_amount(), pending_deposits.into()))
 	}
 
 	#[cfg(test)]
 	pub fn get_pending_boosts(&self) -> Vec<BoostId> {
 		self.pending_boosts.keys().copied().collect()
+	}
+	#[cfg(test)]
+	pub fn get_available_amount_for_account(
+		&self,
+		account_id: &AccountId,
+	) -> Option<C::ChainAmount> {
+		self.amounts.get(account_id).copied().map(|a| a.into_chain_amount())
 	}
 }
