@@ -2,6 +2,13 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.3.3] - 2024-04-10
+
+### Fixes
+
+- Revert "fix: Wait for ThresholdSignature success before switching to NewKeysActivated ([#4534](https://github.com/chainflip-io/chainflip-backend/issues/4534))
+- Runtime upgrade triggers resign of failed eth broadcast 3348
+
 ## [1.3.2] - 2024-03-27
 
 ### Features
