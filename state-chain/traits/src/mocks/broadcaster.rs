@@ -77,7 +77,7 @@ impl<
 	}
 
 	/// Clean up storage data related to a broadcast ID.
-	fn clean_up_broadcast_storage(_broadcast_id: BroadcastId) {}
+	fn expire_broadcast(_broadcast_id: BroadcastId) {}
 
 	fn threshold_sign_and_broadcast_rotation_tx(
 		api_call: Self::ApiCall,

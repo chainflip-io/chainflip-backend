@@ -130,7 +130,7 @@ impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
 	}
 
 	/// Clean up storage data related to a broadcast ID.
-	fn clean_up_broadcast_storage(_broadcast_id: BroadcastId) {
+	fn expire_broadcast(_broadcast_id: BroadcastId) {
 		unimplemented!()
 	}
 }

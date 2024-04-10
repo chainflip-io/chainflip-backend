@@ -955,8 +955,10 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 			.map(|(api_call, _signature)| Self::threshold_sign(api_call, broadcast_id, false))
 	}
 
-	/// Clean up storage data related to a broadcast ID.
-	fn clean_up_broadcast_storage(broadcast_id: BroadcastId) {
+	fn expire_broadcast(broadcast_id: BroadcastId) {
+		// These would otherwise be cleaned up when the broadacst succeeds or aborts.
+		RequestSuccessCallbacks::<T, I>::remove(broadcast_id);
+		RequestFailureCallbacks::<T, I>::remove(broadcast_id);
 		Self::clean_up_broadcast_storage(broadcast_id);
 	}
 
