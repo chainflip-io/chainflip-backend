@@ -232,6 +232,7 @@ fn basic_passive_boosting() {
 				deposit_details: (),
 				ingress_fee: 0,
 				action: DepositAction::BoostersCredited,
+				channel_id,
 			}));
 
 			assert_eq!(PrewitnessedDeposits::<Test>::get(channel_id, deposit_id), None);

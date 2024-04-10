@@ -337,7 +337,7 @@ where
 				.insert(booster_id, pending_deposits.keys().cloned().collect());
 		}
 
-		Ok((booster_active_amount.into_chain_amount(), pending_deposits.into()))
+		Ok((booster_active_amount.into_chain_amount(), pending_deposits))
 	}
 
 	#[cfg(test)]

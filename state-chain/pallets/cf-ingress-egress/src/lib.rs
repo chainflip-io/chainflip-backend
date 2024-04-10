@@ -565,6 +565,7 @@ pub mod pallet {
 			// a non-gas asset.
 			ingress_fee: TargetChainAmount<T, I>,
 			action: DepositAction<T::AccountId>,
+			channel_id: ChannelId,
 		},
 		AssetEgressStatusChanged {
 			asset: TargetChainAsset<T, I>,
@@ -1626,6 +1627,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				deposit_details,
 				ingress_fee: 0u32.into(),
 				action: DepositAction::BoostersCredited,
+				channel_id,
 			});
 		} else {
 			// If the deposit isn't boosted, we don't care which prewitness deposit we remove
@@ -1671,6 +1673,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					deposit_details,
 					ingress_fee: fees_withheld,
 					action: deposit_action,
+					channel_id,
 				});
 			}
 		}
