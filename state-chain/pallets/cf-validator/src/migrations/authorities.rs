@@ -1,20 +1,47 @@
 use crate::{Config, CurrentAuthorities, HistoricalAuthorities, ValidatorIdOf};
 use core::marker::PhantomData;
 use frame_support::{sp_runtime::DispatchError, traits::OnRuntimeUpgrade, weights::Weight};
-use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
+use sp_std::vec::Vec;
 
 pub struct Migration<T: Config>(PhantomData<T>);
 
+mod old {
+	use crate::{Config, Pallet, *};
+
+	use cf_primitives::EpochIndex;
+	use frame_support::{pallet_prelude::ValueQuery, Twox64Concat};
+
+	#[frame_support::storage_alias(pallet_name)]
+	pub type CurrentAuthorities<T: Config> =
+		StorageValue<Pallet<T>, BTreeSet<ValidatorIdOf<T>>, ValueQuery>;
+
+	#[frame_support::storage_alias(pallet_name)]
+	pub type HistoricalAuthorities<T: Config> =
+		StorageMap<Pallet<T>, Twox64Concat, EpochIndex, BTreeSet<ValidatorIdOf<T>>, ValueQuery>;
+}
+
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		let _result =
-			CurrentAuthorities::<T>::translate::<BTreeSet<ValidatorIdOf<T>>, _>(|btree| {
-				Some(btree.unwrap().into_iter().collect::<Vec<ValidatorIdOf<T>>>())
-			});
+		let authoritites = old::CurrentAuthorities::<T>::take();
+		CurrentAuthorities::<T>::put(authoritites.into_iter().collect::<Vec<ValidatorIdOf<T>>>());
+		old::CurrentAuthorities::<T>::kill();
 
-		HistoricalAuthorities::<T>::translate::<BTreeSet<ValidatorIdOf<T>>, _>(
-			|_epoch_index, btree| Some(btree.into_iter().collect::<Vec<ValidatorIdOf<T>>>()),
-		);
+		let historical_authorities = old::HistoricalAuthorities::<T>::drain();
+		for (epoch, btree) in historical_authorities {
+			HistoricalAuthorities::<T>::set(
+				epoch,
+				btree.into_iter().collect::<Vec<ValidatorIdOf<T>>>(),
+			);
+		}
+
+		// let _result =
+		// 	CurrentAuthorities::<T>::translate::<BTreeSet<ValidatorIdOf<T>>, _>(|btree| {
+		// 		Some(btree.unwrap().into_iter().collect::<Vec<ValidatorIdOf<T>>>())
+		// 	});
+
+		// HistoricalAuthorities::<T>::translate::<BTreeSet<ValidatorIdOf<T>>, _>(
+		// 	|_epoch_index, btree| Some(btree.into_iter().collect::<Vec<ValidatorIdOf<T>>>()),
+		// );
 
 		Weight::zero()
 	}
