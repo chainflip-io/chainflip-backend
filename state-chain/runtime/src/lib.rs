@@ -848,7 +848,7 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	PalletExecutionOrder,
-	PalletMigrations,
+	(PalletMigrations, ResignFailedEthereumBroadcast),
 >;
 
 // NOTE: This should be a temporary workaround. When paritytech/polkadot-sdk#2560 is merged into our
