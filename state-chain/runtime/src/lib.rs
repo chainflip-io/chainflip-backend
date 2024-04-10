@@ -163,7 +163,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 131,
+	spec_version: 133,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 12,
@@ -861,9 +861,73 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	PalletExecutionOrder,
-	PalletMigrations,
+	(PalletMigrations, ResignFailedEthereumBroadcast),
 	AllPalletsWithoutSystem,
 >;
+
+#[cfg(feature = "try-runtime")]
+use frame_support::sp_runtime::DispatchError;
+pub struct ResignFailedEthereumBroadcast;
+
+const FAILED_BROADCAST_ID_BERGHAIN: u32 = 3348;
+const FAILED_BROADCAST_ID_PERSEVERANCE: u32 = 136;
+
+pub const BERGHAIN: [u8; 32] =
+	hex_literal::hex!("8b8c140b0af9db70686583e3f6bf2a59052bfe9584b97d20c45068281e976eb9");
+pub const PERSEVERANCE: [u8; 32] =
+	hex_literal::hex!("7a5d4db858ada1d20ed6ded4933c33313fc9673e5fffab560d0ca714782f2080");
+
+fn failed_broadcast_id() -> Option<u32> {
+	match frame_system::BlockHash::<Runtime>::get(0).to_fixed_bytes() {
+		PERSEVERANCE => Some(FAILED_BROADCAST_ID_PERSEVERANCE),
+		BERGHAIN => Some(FAILED_BROADCAST_ID_BERGHAIN),
+		_ => None,
+	}
+}
+
+impl frame_support::traits::OnRuntimeUpgrade for ResignFailedEthereumBroadcast {
+	fn on_runtime_upgrade() -> Weight {
+		fn resign_eth(broadcast_id: u32) {
+			match pallet_cf_broadcast::Pallet::<Runtime, EthereumInstance>::resign_aborted_broadcast(
+				broadcast_id,
+			) {
+				Ok(id) => log::info!("✅ Requested new signature for failed broadcast {broadcast_id}. Threshold signature id: {id}"),
+				Err(e) => log::error!("❌ Failed to resign broadcast {broadcast_id}: {e:?}"),
+			};
+		}
+
+		if let Some(id) = failed_broadcast_id() {
+			resign_eth(id);
+		}
+
+		Default::default()
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+		if let Some(id) = failed_broadcast_id() {
+			if !pallet_cf_broadcast::ThresholdSignatureData::<Runtime, EthereumInstance>::contains_key(id) {
+				log::warn!("Broadcast {id} does not exist. Remove this migration.");
+			}
+		}
+		Ok(Default::default())
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
+		if let Some(id) = match frame_system::BlockHash::<Runtime>::get(0).to_fixed_bytes() {
+			PERSEVERANCE => Some(FAILED_BROADCAST_ID_PERSEVERANCE),
+			BERGHAIN => Some(FAILED_BROADCAST_ID_BERGHAIN),
+			_ => None,
+		} {
+			frame_support::ensure!(
+				!pallet_cf_broadcast::ThresholdSignatureData::<Runtime, EthereumInstance>::contains_key(id),
+				"Broadcast {id} was not removed.",
+			);
+		}
+		Ok(())
+	}
+}
 
 pub type PalletExecutionOrder = (
 	System,
