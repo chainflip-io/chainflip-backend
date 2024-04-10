@@ -163,7 +163,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 133,
+	spec_version: 134,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 12,
@@ -848,7 +848,7 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	PalletExecutionOrder,
-	PalletMigrations,
+	(PalletMigrations, ResignFailedEthereumBroadcast),
 >;
 
 // NOTE: This should be a temporary workaround. When paritytech/polkadot-sdk#2560 is merged into our
