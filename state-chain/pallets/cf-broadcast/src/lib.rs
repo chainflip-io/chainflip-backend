@@ -568,6 +568,7 @@ pub mod pallet {
 			}
 
 			if let Some(callback) = RequestSuccessCallbacks::<T, I>::take(broadcast_id) {
+				RequestFailureCallbacks::<T, I>::remove(broadcast_id);
 				Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
 					broadcast_id,
 					result: callback.dispatch_bypass_filter(origin.clone()).map(|_| ()).map_err(
