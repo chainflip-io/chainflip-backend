@@ -1,4 +1,4 @@
-use crate::{Config, CurrentAuthorities, ValidatorIdOf};
+use crate::{Config, CurrentAuthorities, HistoricalAuthorities, ValidatorIdOf};
 use core::marker::PhantomData;
 use frame_support::{sp_runtime::DispatchError, traits::OnRuntimeUpgrade, weights::Weight};
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
@@ -13,6 +13,11 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		if result.is_err() {
 			println!("ERROR DURING MIGRATION");
 		}
+
+        HistoricalAuthorities::<T>::translate::<BTreeSet<ValidatorIdOf<T>>, _>(|_epoch_index, btree| {
+			Some(btree.into_iter().collect::<Vec<ValidatorIdOf<T>>>())
+		});
+
 		Weight::zero()
 	}
 
