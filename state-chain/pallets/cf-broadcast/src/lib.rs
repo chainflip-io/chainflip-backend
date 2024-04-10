@@ -758,30 +758,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					&api_call,
 					&broadcast_data.threshold_signature_payload,
 				) {
-					// We update the initiated_at here since as the tx is resigned and broadcast, it
-					// is not possible for it to be successfully broadcasted before this point.
-					// This `initiated_at` block will be associated with the new transaction_out_id
-					// so should not interfere with witnessing the previous one.
-					let initiated_at = T::ChainTracking::get_block_height();
-
 					Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid { broadcast_id });
-
-					let threshold_signature_payload = api_call.threshold_signature_payload();
-					T::ThresholdSigner::request_signature_with_callback(
-						threshold_signature_payload.clone(),
-						|threshold_request_id| {
-							Call::on_signature_ready {
-								threshold_request_id,
-								threshold_signature_payload,
-								api_call: Box::new(api_call),
-								broadcast_id,
-								initiated_at,
-								should_broadcast: true,
-							}
-							.into()
-						},
-					);
-
+					Self::threshold_sign(api_call, broadcast_id, true);
 					log::info!(
 						"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
 						broadcast_id
