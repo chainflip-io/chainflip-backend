@@ -14,9 +14,9 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 			println!("ERROR DURING MIGRATION");
 		}
 
-        HistoricalAuthorities::<T>::translate::<BTreeSet<ValidatorIdOf<T>>, _>(|_epoch_index, btree| {
-			Some(btree.into_iter().collect::<Vec<ValidatorIdOf<T>>>())
-		});
+		HistoricalAuthorities::<T>::translate::<BTreeSet<ValidatorIdOf<T>>, _>(
+			|_epoch_index, btree| Some(btree.into_iter().collect::<Vec<ValidatorIdOf<T>>>()),
+		);
 
 		Weight::zero()
 	}
