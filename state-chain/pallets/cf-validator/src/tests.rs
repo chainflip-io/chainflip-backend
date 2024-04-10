@@ -1257,7 +1257,8 @@ fn test_start_and_stop_bidding() {
 			<Error<Test>>::AlreadyBidding
 		);
 
-		MockEpochInfo::set_is_auction_phase(true);
+		CurrentRotationPhase::<Test>::set(RotationPhase::KeygensInProgress(Default::default()));
+
 		assert_noop!(
 			ValidatorPallet::stop_bidding(RuntimeOrigin::signed(ALICE)),
 			<Error<Test>>::AuctionPhase
@@ -1265,7 +1266,8 @@ fn test_start_and_stop_bidding() {
 		assert!(ValidatorPallet::is_bidding(&ALICE));
 
 		// Can stop bidding if outside of auction phase
-		MockEpochInfo::set_is_auction_phase(false);
+		CurrentRotationPhase::<Test>::set(RotationPhase::Idle);
+
 		assert_ok!(ValidatorPallet::stop_bidding(RuntimeOrigin::signed(ALICE)));
 		assert!(!ValidatorPallet::is_bidding(&ALICE));
 
@@ -1274,5 +1276,64 @@ fn test_start_and_stop_bidding() {
 			RuntimeEvent::ValidatorPallet(crate::Event::StartedBidding { account_id: ALICE }),
 			RuntimeEvent::ValidatorPallet(crate::Event::StoppedBidding { account_id: ALICE })
 		);
+	});
+}
+
+#[test]
+fn can_determine_is_auction_phase() {
+	new_test_ext().execute_with(|| {
+		// is auction phase if not RotationPhases::Idle
+		[
+			RotationPhase::KeygensInProgress(Default::default()),
+			RotationPhase::KeyHandoversInProgress(Default::default()),
+			RotationPhase::ActivatingKeys(Default::default()),
+			RotationPhase::NewKeysActivated(Default::default()),
+			RotationPhase::SessionRotating(Default::default()),
+		]
+		.into_iter()
+		.for_each(|phase| {
+			CurrentRotationPhase::<Test>::set(phase);
+			assert!(ValidatorPallet::is_auction_phase());
+		});
+
+		CurrentRotationPhase::<Test>::set(RotationPhase::Idle);
+		assert!(!ValidatorPallet::is_auction_phase());
+
+		// In Idle phase, must be within certain % of epoch progress.
+		CurrentEpochStartedAt::<Test>::set(1_000);
+		BlocksPerEpoch::<Test>::set(100);
+		RedemptionPeriodAsPercentage::<Test>::set(Percent::from_percent(85));
+
+		// First block of auction phase = 1_000 + 100 * 85% = 1085
+		System::set_block_number(1084);
+		assert!(!ValidatorPallet::is_auction_phase());
+
+		System::set_block_number(1085);
+		assert!(ValidatorPallet::is_auction_phase());
+	});
+}
+
+#[test]
+fn redemption_check_works() {
+	new_test_ext().execute_with(|| {
+		let validator = WINNING_BIDS[0].bidder_id;
+
+		// Not in auction + not bidding = Can redeem
+		CurrentRotationPhase::<Test>::set(RotationPhase::Idle);
+		ActiveBidder::<Test>::set(Default::default());
+		assert_ok!(ValidatorPallet::ensure_can_redeem(&validator));
+
+		// In Auction + not bidding = Can redeem
+		CurrentRotationPhase::<Test>::set(RotationPhase::KeygensInProgress(Default::default()));
+		assert_ok!(ValidatorPallet::ensure_can_redeem(&validator));
+
+		// Not in Auction + bidding = Can redeem
+		CurrentRotationPhase::<Test>::set(RotationPhase::Idle);
+		ActiveBidder::<Test>::mutate(|bidders| bidders.insert(validator));
+		assert_ok!(ValidatorPallet::ensure_can_redeem(&validator));
+
+		// Auction Phase + bidding = Cannot redeem
+		CurrentRotationPhase::<Test>::set(RotationPhase::KeygensInProgress(Default::default()));
+		assert_noop!(ValidatorPallet::ensure_can_redeem(&validator), Error::<Test>::StillBidding);
 	});
 }

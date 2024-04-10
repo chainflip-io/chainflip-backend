@@ -11,7 +11,6 @@ macro_rules! impl_mock_epoch_info {
 			pub static BOND: std::cell::RefCell<$balance> = std::cell::RefCell::new(0);
 			pub static EPOCH: std::cell::RefCell<$epoch_index> = std::cell::RefCell::new(0);
 			pub static LAST_EXPIRED_EPOCH: std::cell::RefCell<$epoch_index> = std::cell::RefCell::new(Default::default());
-			pub static AUCTION_PHASE: std::cell::RefCell<bool> = std::cell::RefCell::new(false);
 			pub static EPOCH_AUTHORITY_COUNT: std::cell::RefCell<std::collections::HashMap<$epoch_index, $authority_count>> = std::cell::RefCell::new(Default::default());
 		}
 
@@ -43,10 +42,6 @@ macro_rules! impl_mock_epoch_info {
 			/// Set the epoch.
 			pub fn set_epoch(epoch: $epoch_index) {
 				EPOCH.with(|cell| *(cell.borrow_mut()) = epoch);
-			}
-
-			pub fn set_is_auction_phase(is_auction: bool) {
-				AUCTION_PHASE.with(|cell| *(cell.borrow_mut()) = is_auction);
 			}
 
 			pub fn set_last_expired_epoch(epoch_index: $epoch_index) {
@@ -129,10 +124,6 @@ macro_rules! impl_mock_epoch_info {
 
 			fn epoch_index() -> $epoch_index {
 				EPOCH.with(|cell| *cell.borrow())
-			}
-
-			fn is_auction_phase() -> bool {
-				AUCTION_PHASE.with(|cell| *cell.borrow())
 			}
 
 			#[cfg(feature = "runtime-benchmarks")]

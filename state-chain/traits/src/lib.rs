@@ -120,9 +120,6 @@ pub trait EpochInfo {
 	/// The current epoch we are in
 	fn epoch_index() -> EpochIndex;
 
-	/// Are we in the auction phase of the epoch?
-	fn is_auction_phase() -> bool;
-
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_authority_info_for_epoch(
 		epoch_index: EpochIndex,

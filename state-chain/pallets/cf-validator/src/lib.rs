@@ -809,7 +809,7 @@ pub mod pallet {
 
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 
-			ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
+			ensure!(!Self::is_auction_phase(), Error::<T>::AuctionPhase);
 
 			ActiveBidder::<T>::try_mutate(|bidders| {
 				bidders.remove(&account_id).then_some(()).ok_or(Error::<T>::AlreadyNotBidding)
@@ -927,17 +927,6 @@ impl<T: Config> EpochInfo for Pallet<T> {
 
 	fn epoch_index() -> EpochIndex {
 		CurrentEpoch::<T>::get()
-	}
-
-	fn is_auction_phase() -> bool {
-		if CurrentRotationPhase::<T>::get() != RotationPhase::Idle {
-			return true
-		}
-
-		// start + ((epoch * percentage) / 100)
-		CurrentEpochStartedAt::<T>::get()
-			.saturating_add(RedemptionPeriodAsPercentage::<T>::get() * BlocksPerEpoch::<T>::get()) <=
-			frame_system::Pallet::<T>::current_block_number()
 	}
 
 	fn authority_count_at_epoch(epoch_index: EpochIndex) -> Option<AuthorityCount> {
@@ -1317,6 +1306,17 @@ impl<T: Config> Pallet<T> {
 
 	pub fn is_bidding(account_id: &T::AccountId) -> bool {
 		ActiveBidder::<T>::get().contains(account_id)
+	}
+
+	pub fn is_auction_phase() -> bool {
+		if CurrentRotationPhase::<T>::get() != RotationPhase::Idle {
+			return true
+		}
+
+		// current_block > start + ((epoch * epoch%_can_redeem))
+		CurrentEpochStartedAt::<T>::get()
+			.saturating_add(RedemptionPeriodAsPercentage::<T>::get() * BlocksPerEpoch::<T>::get()) <=
+			frame_system::Pallet::<T>::current_block_number()
 	}
 }
 

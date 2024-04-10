@@ -6,10 +6,9 @@ use cf_primitives::FlipBalance;
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::account_role_registry::MockAccountRoleRegistry, AccountInfo, AccountRoleRegistry,
-	Bonding, Chainflip, RedemptionCheck, SetSafeMode, Slashing,
+	Bonding, Chainflip, SetSafeMode, Slashing,
 };
 use sp_core::H160;
-use sp_std::collections::btree_set::BTreeSet;
 
 use crate::BoundRedeemAddress;
 use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
@@ -21,15 +20,6 @@ type FlipError = pallet_cf_flip::Error<Test>;
 const ETH_DUMMY_ADDR: EthereumAddress = H160([42u8; 20]);
 const ETH_ZERO_ADDRESS: EthereumAddress = H160([0u8; 20]);
 const TX_HASH: pallet::EthTransactionHash = [211u8; 32];
-
-#[test]
-fn genesis_nodes_are_bidding_by_default() {
-	new_test_ext().execute_with(|| {
-		let bidders = Bidders::get();
-		assert!(bidders.contains(&CHARLIE));
-		assert!(!bidders.contains(&ALICE));
-	});
-}
 
 #[test]
 fn funded_amount_is_added_and_subtracted() {
@@ -394,10 +384,9 @@ fn cannot_redeem_bond() {
 }
 
 #[test]
-fn can_only_redeem_during_auction_if_not_bidding() {
+fn can_only_redeem_if_redemption_check_passes() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 45;
-		MockEpochInfo::set_is_auction_phase(true);
 
 		assert_ok!(Funding::funded(
 			RuntimeOrigin::root(),
@@ -410,10 +399,9 @@ fn can_only_redeem_during_auction_if_not_bidding() {
 			&ALICE
 		));
 
-		Bidders::set(BTreeSet::from([ALICE]));
-		assert!(MockRedemptionChecker::ensure_can_redeem(&ALICE).is_err());
+		CanRedeem::set(false);
 
-		// Redeeming is not allowed because Alice is bidding in the auction phase.
+		// Redeem fails of RedemptionCheck fails.
 		assert_noop!(
 			Funding::redeem(
 				RuntimeOrigin::signed(ALICE),
@@ -424,13 +412,9 @@ fn can_only_redeem_during_auction_if_not_bidding() {
 			BIDDING_ERR
 		);
 
-		// Stop bidding for Alice (must be done outside of the auction phase)
-		MockEpochInfo::set_is_auction_phase(false);
-		Bidders::set(Default::default());
-		assert_ok!(MockRedemptionChecker::ensure_can_redeem(&ALICE));
+		// Can redeem now
+		CanRedeem::set(true);
 
-		// Alice should be able to redeem while in the auction phase because she is not bidding
-		MockEpochInfo::set_is_auction_phase(true);
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			(AMOUNT / 2).into(),

@@ -14,7 +14,6 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	AccountId32, DispatchError, DispatchResult, Permill,
 };
-use sp_std::collections::btree_set::BTreeSet;
 use std::time::Duration;
 
 // Use a realistic account id for compatibility with `RegisterRedemption`.
@@ -190,7 +189,7 @@ impl Broadcaster<Ethereum> for MockBroadcaster {
 }
 
 parameter_types! {
-	pub static Bidders: BTreeSet<AccountId> = Default::default();
+	pub static CanRedeem: bool = true;
 }
 
 pub const BIDDING_ERR: DispatchError =
@@ -200,8 +199,8 @@ pub struct MockRedemptionChecker;
 impl RedemptionCheck for MockRedemptionChecker {
 	type ValidatorId = AccountId;
 
-	fn ensure_can_redeem(validator_id: &Self::ValidatorId) -> DispatchResult {
-		frame_support::ensure!(!Bidders::get().contains(validator_id), BIDDING_ERR);
+	fn ensure_can_redeem(_validator_id: &Self::ValidatorId) -> DispatchResult {
+		frame_support::ensure!(CanRedeem::get(), BIDDING_ERR);
 		Ok(())
 	}
 }
@@ -244,7 +243,6 @@ cf_test_utilities::impl_test_helpers! {
 		},
 	},
 	|| {
-		Bidders::set(BTreeSet::from([CHARLIE]));
 		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&CHARLIE)
 			.unwrap();
 	}
