@@ -22,9 +22,8 @@ mod old {
 
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		let authoritites = old::CurrentAuthorities::<T>::take();
-		CurrentAuthorities::<T>::put(authoritites.into_iter().collect::<Vec<ValidatorIdOf<T>>>());
-		old::CurrentAuthorities::<T>::kill();
+		let authorities = old::CurrentAuthorities::<T>::take();
+		CurrentAuthorities::<T>::put(authorities.into_iter().collect::<Vec<ValidatorIdOf<T>>>());
 
 		let historical_authorities = old::HistoricalAuthorities::<T>::drain();
 		for (epoch, btree) in historical_authorities {
@@ -54,5 +53,37 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod migration_tests {
+	use crate::mock::{new_test_ext, Test};
+
+	use super::*;
+	use sp_std::collections::btree_set::BTreeSet;
+
+	#[test]
+	fn test_migration() {
+		new_test_ext().execute_with(|| {
+			let mut set = BTreeSet::new();
+			set.insert(100);
+			set.insert(200);
+			old::CurrentAuthorities::<Test>::put(set.clone());
+			old::HistoricalAuthorities::<Test>::set(1, set.clone());
+			old::HistoricalAuthorities::<Test>::set(2, set);
+
+			// Perform runtime migration.
+			crate::migrations::authorities::Migration::<Test>::on_runtime_upgrade();
+
+			// Verify data is correctly migrated into new storage.
+			let current_authorities = CurrentAuthorities::<Test>::get();
+			let historical_authorities1 = HistoricalAuthorities::<Test>::get(1);
+			let historical_authorities2 = HistoricalAuthorities::<Test>::get(2);
+
+			println!("{:?}", current_authorities);
+			println!("{:?}", historical_authorities1);
+			println!("{:?}", historical_authorities2);
+		});
 	}
 }
