@@ -638,6 +638,9 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Resign and optionally re-broadcast a request that was previously aborted.
+		///
+		/// Requires governance origin.
 		#[pallet::call_index(5)]
 		#[pallet::weight(Weight::zero())]
 		pub fn resign_aborted_broadcast(
