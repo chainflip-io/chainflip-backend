@@ -643,6 +643,7 @@ pub mod pallet {
 		pub fn resign_aborted_broadcast(
 			origin: OriginFor<T>,
 			broadcast_id: BroadcastId,
+			request_broadcast: bool,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(
@@ -659,7 +660,7 @@ pub mod pallet {
 				.ok_or("No threshold signature data")?;
 
 			PendingBroadcasts::<T, I>::mutate(|pending| pending.insert(broadcast_id));
-			Self::threshold_sign(api_call, broadcast_id, true);
+			Self::threshold_sign(api_call, broadcast_id, request_broadcast);
 			Ok(())
 		}
 	}
