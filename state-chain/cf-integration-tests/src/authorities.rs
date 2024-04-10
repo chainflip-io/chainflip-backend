@@ -113,9 +113,6 @@ fn authority_rotates_with_correct_sequence() {
 				RotationPhase::ActivatingKeys(..)
 			));
 
-			// Wait for an extra block to allow TSS to complete, we switch to RotationComplete once
-			// that's done
-			testnet.move_forward_blocks(1);
 			assert_eq!(
 				AllVaults::status(),
 				AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete),

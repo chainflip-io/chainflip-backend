@@ -141,7 +141,6 @@ pub enum KeyRotationStatus<T: Config<I>, I: 'static = ()> {
 	},
 	/// We are waiting for the key to be updated on the contract, and witnessed by the network.
 	AwaitingActivation {
-		request_id: Option<RequestId>,
 		new_public_key: AggKeyFor<T, I>,
 	},
 	/// The key has been successfully updated on the external chain, and/or funds rotated to new

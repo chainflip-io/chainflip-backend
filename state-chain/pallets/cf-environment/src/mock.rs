@@ -101,9 +101,7 @@ impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
 	type ApiCall = MockCreatePolkadotVault;
 	type Callback = MockCallback;
 
-	fn threshold_sign_and_broadcast(
-		_api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
+	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> BroadcastId {
 		unimplemented!()
 	}
 
@@ -115,9 +113,7 @@ impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
 		unimplemented!()
 	}
 
-	fn threshold_sign_and_broadcast_rotation_tx(
-		_api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
+	fn threshold_sign_and_broadcast_rotation_tx(_api_call: Self::ApiCall) -> BroadcastId {
 		unimplemented!()
 	}
 

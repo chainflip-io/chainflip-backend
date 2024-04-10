@@ -42,7 +42,7 @@ fn bitcoin_broadcast_delay_works() {
 			)
 			.unwrap();
 
-			let (broadcast_id, _) =
+			let broadcast_id =
 				<BitcoinBroadcaster as Broadcaster<Bitcoin>>::threshold_sign_and_broadcast(
 					bitcoin_call,
 				);

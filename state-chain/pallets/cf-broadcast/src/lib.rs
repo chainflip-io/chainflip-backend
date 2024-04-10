@@ -669,7 +669,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		maybe_failed_callback_generator: impl FnOnce(
 			BroadcastId,
 		) -> Option<<T as Config<I>>::BroadcastCallable>,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
+	) -> BroadcastId {
 		let broadcast_id = Self::next_broadcast_id();
 
 		PendingBroadcasts::<T, I>::append(broadcast_id);
@@ -681,7 +681,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			RequestFailureCallbacks::<T, I>::insert(broadcast_id, callback);
 		}
 
-		(broadcast_id, Self::threshold_sign(api_call, broadcast_id, true))
+		let _threshold_signature_id = Self::threshold_sign(api_call, broadcast_id, true);
+
+		broadcast_id
 	}
 
 	/// Signs a API call, use `Call::on_signature_ready` as the callback, and returns the signature
@@ -925,9 +927,7 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 	type ApiCall = T::ApiCall;
 	type Callback = <T as Config<I>>::BroadcastCallable;
 
-	fn threshold_sign_and_broadcast(
-		api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId {
 		Self::threshold_sign_and_broadcast(api_call, None, |_| None)
 	}
 
@@ -936,7 +936,7 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 		success_callback: Option<Self::Callback>,
 		failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
 	) -> BroadcastId {
-		Self::threshold_sign_and_broadcast(api_call, success_callback, failed_callback_generator).0
+		Self::threshold_sign_and_broadcast(api_call, success_callback, failed_callback_generator)
 	}
 
 	fn threshold_sign(api_call: Self::ApiCall) -> (BroadcastId, ThresholdSignatureRequestId) {
@@ -954,11 +954,8 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 		Self::clean_up_broadcast_storage(broadcast_id);
 	}
 
-	fn threshold_sign_and_broadcast_rotation_tx(
-		api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		let (broadcast_id, request_id) =
-			<Self as Broadcaster<_>>::threshold_sign_and_broadcast(api_call);
+	fn threshold_sign_and_broadcast_rotation_tx(api_call: Self::ApiCall) -> BroadcastId {
+		let broadcast_id = <Self as Broadcaster<_>>::threshold_sign_and_broadcast(api_call);
 
 		if let Some(earliest_pending_broadcast_id) = PendingBroadcasts::<T, I>::get()
 			.first()
@@ -970,7 +967,6 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 					}
 				}
 		}
-
-		(broadcast_id, request_id)
+		broadcast_id
 	}
 }
