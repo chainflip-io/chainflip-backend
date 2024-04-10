@@ -564,7 +564,7 @@ pub mod pallet {
 				);
 			}
 
-			if let Some(callback) = RequestSuccessCallbacks::<T, I>::get(broadcast_id) {
+			if let Some(callback) = RequestSuccessCallbacks::<T, I>::take(broadcast_id) {
 				Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
 					broadcast_id,
 					result: callback.dispatch_bypass_filter(origin.clone()).map(|_| ()).map_err(
@@ -637,14 +637,13 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub fn clean_up_broadcast_storage(broadcast_id: BroadcastId) {
+	pub fn clean_up_broadcast_storage(broadcast_id: BroadcastId) -> Option<ApiCallFor<T, I>> {
 		AwaitingBroadcast::<T, I>::remove(broadcast_id);
 		TransactionMetadata::<T, I>::remove(broadcast_id);
-		RequestSuccessCallbacks::<T, I>::remove(broadcast_id);
-		RequestFailureCallbacks::<T, I>::remove(broadcast_id);
-		if let Some((api_call, _)) = ThresholdSignatureData::<T, I>::take(broadcast_id) {
+		ThresholdSignatureData::<T, I>::take(broadcast_id).map(|(api_call, _)| {
 			TransactionOutIdToBroadcastId::<T, I>::remove(api_call.transaction_out_id());
-		}
+			api_call
+		})
 	}
 
 	pub fn remove_pending_broadcast(broadcast_id: &BroadcastId) {
@@ -906,8 +905,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					},
 				),
 			});
+			RequestSuccessCallbacks::<T, I>::remove(broadcast_id);
+			Self::clean_up_broadcast_storage(broadcast_id);
 		}
-		RequestSuccessCallbacks::<T, I>::remove(broadcast_id);
 
 		Self::deposit_event(Event::<T, I>::BroadcastAborted { broadcast_id });
 		Self::remove_pending_broadcast(&broadcast_id);
