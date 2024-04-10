@@ -1,5 +1,6 @@
 use super::{
-	vec, vec::Vec, AccountMeta, FromStr, Instruction, Pubkey, SYSTEM_PROGRRAM_ID, VAULT_PROGRAM,
+	vec, vec::Vec, AccountMeta, FromStr, Instruction, Pubkey, SYSTEM_PROGRAM_ID,
+	UPGRADE_MANAGER_PROGRAM, VAULT_PROGRAM,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use frame_support::sp_io::hashing::sha2_256;
@@ -107,7 +108,7 @@ pub enum SystemProgramInstruction {
 	///   1. `[SIGNER]` Nonce authority
 	///
 	/// The `Pubkey` parameter identifies the entity to authorize
-	AuthorizeNonceAccount(Pubkey),
+	AuthorizeNonceAccount { new_authorized_pubkey: Pubkey },
 
 	/// Allocate space in a (possibly new) account without funding
 	///
@@ -198,8 +199,25 @@ impl SystemProgramInstruction {
 		];
 		Instruction::new_with_bincode(
 			// program id of the system program
-			Pubkey::from_str(SYSTEM_PROGRRAM_ID).unwrap(),
+			Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
 			&Self::AdvanceNonceAccount,
+			account_metas,
+		)
+	}
+
+	pub fn nonce_authorize(
+		nonce_pubkey: &Pubkey,
+		authorized_pubkey: &Pubkey,
+		new_authorized_pubkey: &Pubkey,
+	) -> Instruction {
+		let account_metas = vec![
+			AccountMeta::new(*nonce_pubkey, false),
+			AccountMeta::new_readonly(*authorized_pubkey, true),
+		];
+		Instruction::new_with_bincode(
+			// program id of the system program
+			Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
+			&Self::AuthorizeNonceAccount { new_authorized_pubkey: *new_authorized_pubkey },
 			account_metas,
 		)
 	}
@@ -208,7 +226,7 @@ impl SystemProgramInstruction {
 		let account_metas =
 			vec![AccountMeta::new(*from_pubkey, true), AccountMeta::new(*to_pubkey, false)];
 		Instruction::new_with_bincode(
-			Pubkey::from_str(SYSTEM_PROGRRAM_ID).unwrap(),
+			Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
 			&Self::Transfer { lamports },
 			account_metas,
 		)
@@ -217,25 +235,98 @@ impl SystemProgramInstruction {
 
 #[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
 pub enum VaultProgram {
-	FetchSol { seed: Vec<u8>, bump: u8 },
+	FetchNative {
+		seed: Vec<u8>,
+		bump: u8,
+	},
+	RotateAggKey {
+		transfer_funds: bool,
+	},
+	TransferTokens {
+		seed: Vec<u8>,
+		bump: u8,
+		amount: u64,
+		decimals: u8,
+	},
+	ExecuteCcmNativeCall {
+		source_chain: u32,
+		source_address: Vec<u8>,
+		message: Vec<u8>,
+		amount: u64,
+	},
+	ExecuteCcmTokenCall {
+		source_chain: u32,
+		source_address: Vec<u8>,
+		message: Vec<u8>,
+		amount: u64,
+	},
 }
 
-impl VaultProgram {
-	pub fn get_instruction(self, accounts: Vec<AccountMeta>) -> Instruction {
-		let mut instruction =
-			Instruction::new_with_borsh(Pubkey::from_str(VAULT_PROGRAM).unwrap(), &self, accounts);
+#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
+pub enum UpgradeManagerProgram {
+	UpgradeVaultProgram { seed: Vec<u8>, bump: u8 },
+	TransferVaultUpgradeAuthority { seed: Vec<u8>, bump: u8 },
+}
+
+pub trait ProgramInstruction: BorshSerialize {
+	fn get_program_id(&self) -> &str;
+
+	fn get_instruction(&self, accounts: Vec<AccountMeta>) -> Instruction {
+		let mut instruction = Instruction::new_with_borsh(
+			Pubkey::from_str(self.get_program_id()).unwrap(),
+			&self,
+			accounts,
+		);
 		instruction.data.remove(0);
-		let mut data =
-			sha2_256((String::from_str("global:").unwrap() + self.call_name()).as_bytes())[..8]
-				.to_vec();
+		let mut data = self.function_discriminator();
 		data.append(&mut instruction.data);
 		instruction.data = data;
 		instruction
 	}
 
-	pub fn call_name(&self) -> &str {
+	fn function_discriminator(&self) -> Vec<u8> {
+		sha2_256(("global:".to_string() + self.call_name()).as_bytes())[..8].to_vec()
+	}
+
+	fn call_name(&self) -> &str;
+}
+
+impl ProgramInstruction for VaultProgram {
+	fn get_program_id(&self) -> &str {
+		VAULT_PROGRAM
+	}
+
+	fn call_name(&self) -> &str {
 		match self {
-			Self::FetchSol { seed: _, bump: _ } => "fetch_sol",
+			Self::FetchNative { seed: _, bump: _ } => "fetch_native",
+			Self::RotateAggKey { transfer_funds: _ } => "rotate_agg_key",
+			Self::TransferTokens { seed: _, bump: _, amount: _, decimals: _ } => "transfer_tokens",
+			Self::ExecuteCcmNativeCall {
+				source_chain: _,
+				source_address: _,
+				message: _,
+				amount: _,
+			} => "execute_ccm_native_call",
+			Self::ExecuteCcmTokenCall {
+				source_chain: _,
+				source_address: _,
+				message: _,
+				amount: _,
+			} => "execute_ccm_token_call",
+		}
+	}
+}
+
+impl ProgramInstruction for UpgradeManagerProgram {
+	fn get_program_id(&self) -> &str {
+		UPGRADE_MANAGER_PROGRAM
+	}
+
+	fn call_name(&self) -> &str {
+		match self {
+			Self::UpgradeVaultProgram { seed: _, bump: _ } => "upgrade_vault_program",
+			Self::TransferVaultUpgradeAuthority { seed: _, bump: _ } =>
+				"transfer_vault_upgrade_authority",
 		}
 	}
 }
