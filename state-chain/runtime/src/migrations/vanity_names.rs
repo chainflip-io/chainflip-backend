@@ -5,7 +5,7 @@ pub struct Migration;
 
 impl frame_support::traits::OnRuntimeUpgrade for Migration {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		if <pallet_cf_validator::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() == 0 &&
+		if <pallet_cf_validator::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() == 1 &&
 			<pallet_cf_account_roles::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version(
 			) == 1
 		{
@@ -17,7 +17,7 @@ impl frame_support::traits::OnRuntimeUpgrade for Migration {
 			>(b"VanityNames");
 
 			// Bump the version of both pallets
-			StorageVersion::new(1).put::<pallet_cf_validator::Pallet<Runtime>>();
+			StorageVersion::new(2).put::<pallet_cf_validator::Pallet<Runtime>>();
 			StorageVersion::new(2).put::<pallet_cf_account_roles::Pallet<Runtime>>();
 		} else {
 			log::info!(

@@ -3,7 +3,7 @@ use cf_runtime_upgrade_utilities::VersionedMigration;
 mod authorities;
 
 pub type PalletMigration<T> =
-	(VersionedMigration<crate::Pallet<T>, authorities::Migration<T>, 1, 2>,);
+	(VersionedMigration<crate::Pallet<T>, authorities::Migration<T>, 0, 1>,);
 
 #[cfg(feature = "try-runtime")]
 pub mod old {

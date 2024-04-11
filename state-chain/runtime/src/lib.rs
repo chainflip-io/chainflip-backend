@@ -1015,7 +1015,7 @@ type PalletMigrations = (
 	pallet_cf_environment::migrations::PalletMigration<Runtime>,
 	pallet_cf_funding::migrations::PalletMigration<Runtime>,
 	pallet_cf_account_roles::migrations::PalletMigration<Runtime>,
-	// pallet_cf_validator::migrations::PalletMigration<Runtime>,
+	pallet_cf_validator::migrations::PalletMigration<Runtime>,
 	pallet_cf_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_tokenholder_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, EthereumInstance>,
@@ -1055,8 +1055,8 @@ type MigrationsForV1_4 = (
 		9,
 		10,
 	>,
-	migrations::housekeeping::Migration,
-	migrations::reap_old_accounts::Migration,
+	// migrations::housekeeping::Migration,
+	// migrations::reap_old_accounts::Migration,
 	// NOTE: Do not change this validator pallet migration order:
 	// Migrate Validator pallet from version 0 -> 1
 	migrations::vanity_names::Migration,

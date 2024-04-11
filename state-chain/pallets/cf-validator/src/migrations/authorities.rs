@@ -1,4 +1,5 @@
 use crate::{Config, CurrentAuthorities, HistoricalAuthorities, ValidatorIdOf};
+use codec::{Decode, Encode};
 use core::marker::PhantomData;
 use frame_support::{sp_runtime::DispatchError, traits::OnRuntimeUpgrade, weights::Weight};
 use sp_std::vec::Vec;
@@ -33,25 +34,24 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 			);
 		}
 
-		// let _result =
-		// 	CurrentAuthorities::<T>::translate::<BTreeSet<ValidatorIdOf<T>>, _>(|btree| {
-		// 		Some(btree.unwrap().into_iter().collect::<Vec<ValidatorIdOf<T>>>())
-		// 	});
-
-		// HistoricalAuthorities::<T>::translate::<BTreeSet<ValidatorIdOf<T>>, _>(
-		// 	|_epoch_index, btree| Some(btree.into_iter().collect::<Vec<ValidatorIdOf<T>>>()),
-		// );
-
+		log::info!("⏫ Applying Authorities migration");
 		Weight::zero()
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		Ok(Default::default())
+		let authorities = old::CurrentAuthorities::<T>::get();
+		Ok(authorities.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
+	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+		use frame_support::ensure;
+
+		let previous = <Vec<ValidatorIdOf<T>>>::decode(&mut &state[..]).unwrap();
+		let current = CurrentAuthorities::<T>::get();
+
+		ensure!(previous == current, "Authorities are not the same!");
 		Ok(())
 	}
 }
