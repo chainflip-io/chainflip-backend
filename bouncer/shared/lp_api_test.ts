@@ -17,6 +17,7 @@ import { jsonRpc } from './json_rpc';
 import { provideLiquidity } from './provide_liquidity';
 import { sendEvmNative } from './send_evm';
 import { getBalance } from './get_balance';
+import test from 'node:test';
 
 type RpcAsset = {
   asset: string;
@@ -123,12 +124,14 @@ async function testLiquidityDeposit() {
   await observeAccountCreditedEvent;
 }
 
-async function testWithdrawAsset() {
+async function testWithdrawAsset(version: string) {
   console.log('=== Starting testWithdrawAsset ===');
   const oldBalance = await getBalance(testAsset, testAddress);
 
-  const result = await lpApiRpc(`lp_withdraw_asset`, [
-    testAssetAmount,
+  let version_subfix = version === 'V2' ? '_v2' : '';
+
+  const result = await lpApiRpc(`lp_withdraw_asset` + version_subfix, [
+    testAssetAmount.toString(16),
     testRpcAsset,
     testAddress,
     'InBlock',
@@ -160,19 +163,21 @@ async function testRegisterWithExistingLpAccount() {
 
 /// Test lp_set_range_order and lp_update_range_order by minting, updating, and burning a range order.
 
-async function testRangeOrder() {
+async function testRangeOrder(version: string) {
   console.log('=== Starting testRangeOrder ===');
   const range = { start: 1, end: 2 };
-  const orderId = 74398; // Arbitrary order id so it does not interfere with other tests
+  let version_subfix = version === 'V2' ? '_v2' : '';
+  let zero = '0x0';
+  const orderId = (74398).toString(16); // Arbitrary order id so it does not interfere with other tests
   const zeroAssetAmounts = {
     AssetAmounts: {
-      maximum: { base: 0, quote: 0 },
-      minimum: { base: 0, quote: 0 },
+      maximum: { base: zero, quote: zero },
+      minimum: { base: zero, quote: zero },
     },
   };
 
   // Cleanup after any unfinished previous test so it does not interfere with this test
-  await lpApiRpc(`lp_set_range_order`, [
+  await lpApiRpc(`lp_set_range_order` + version_subfix, [
     testRpcAsset,
     'USDC',
     orderId,
@@ -190,8 +195,8 @@ async function testRangeOrder() {
       range,
       {
         AssetAmounts: {
-          maximum: { base: testAssetAmount, quote: 0 },
-          minimum: { base: 0, quote: 0 },
+          maximum: { base: testAssetAmount.toString(16), quote: zero },
+          minimum: { base: zero, quote: zero },
         },
       },
       'InBlock',
@@ -205,7 +210,7 @@ async function testRangeOrder() {
 
   // Update the range order
   const updateRangeOrder = (
-    await lpApiRpc(`lp_update_range_order`, [
+    await lpApiRpc(`lp_update_range_order` + version_subfix, [
       testRpcAsset,
       'USDC',
       orderId,
@@ -213,8 +218,8 @@ async function testRangeOrder() {
       {
         increase: {
           AssetAmounts: {
-            maximum: { base: testAssetAmount, quote: 0 },
-            minimum: { base: 0, quote: 0 },
+            maximum: { base: testAssetAmount.toString(16), quote: zero },
+            minimum: { base: zero, quote: zero },
           },
         },
       },
@@ -235,7 +240,7 @@ async function testRangeOrder() {
 
   // Burn the range order
   const burnRangeOrder = (
-    await lpApiRpc(`lp_set_range_order`, [
+    await lpApiRpc(`lp_set_range_order` + version_subfix, [
       testRpcAsset,
       'USDC',
       orderId,
@@ -271,23 +276,26 @@ async function testGetOpenSwapChannels() {
 
 /// Test lp_set_limit_order and lp_update_limit_order by minting, updating, and burning a limit order.
 
-async function testLimitOrder() {
+async function testLimitOrder(version: string) {
   console.log('=== Starting testLimitOrder ===');
-  const orderId = 98432; // Arbitrary order id so it does not interfere with other tests
   const tick = 2;
 
+  let version_subfix = version === 'V2' ? '_v2' : '';
+  let zero = '0x0';
+  const orderId = (98432).toString(16); // Arbitrary order id so it does not interfere with other tests
+
   // Cleanup after any unfinished previous test so it does not interfere with this test
-  await lpApiRpc(`lp_set_limit_order`, [testRpcAsset, 'USDC', 'sell', orderId, tick, 0]);
+  await lpApiRpc(`lp_set_limit_order`, [testRpcAsset, 'USDC', 'sell', orderId, tick, zero]);
 
   // Mint a limit order
   const mintLimitOrder = (
-    await lpApiRpc(`lp_set_limit_order`, [
+    await lpApiRpc(`lp_set_limit_order` + version_subfix, [
       testRpcAsset,
       'USDC',
       'sell',
       orderId,
       tick,
-      testAssetAmount,
+      testAssetAmount.toString(16),
     ])
   ).tx_details.response;
   assert(mintLimitOrder.length >= 1, `Empty mint limit order result`);
@@ -305,14 +313,14 @@ async function testLimitOrder() {
 
   // Update the limit order
   const updateLimitOrder = (
-    await lpApiRpc(`lp_update_limit_order`, [
+    await lpApiRpc(`lp_update_limit_order` + version_subfix, [
       testRpcAsset,
       'USDC',
       'sell',
       orderId,
       tick,
       {
-        increase: testAssetAmount,
+        increase: testAssetAmount.toString(16),
       },
     ])
   ).tx_details.response;
@@ -336,7 +344,7 @@ async function testLimitOrder() {
 
   // Burn the limit order
   const burnLimitOrder = (
-    await lpApiRpc(`lp_set_limit_order`, [testRpcAsset, 'USDC', 'sell', orderId, tick, 0])
+    await lpApiRpc(`lp_set_limit_order` + version_subfix, [testRpcAsset, 'USDC', 'sell', orderId, tick, zero])
   ).tx_details.response;
 
   assert(burnLimitOrder.length >= 1, `Empty burn limit order result`);
@@ -362,13 +370,27 @@ export async function testLpApi() {
   // Provide the amount of liquidity needed for the tests
   await provideLiquidityAndTestAssetBalances();
 
+  // V1 Test Scenario
+  console.log('=== Starting V1 Test Scenario ===');
   await Promise.all([
     testRegisterLiquidityRefundAddress(),
     testLiquidityDeposit(),
-    testWithdrawAsset(),
+    testWithdrawAsset("V1"),
     testRegisterWithExistingLpAccount(),
-    testRangeOrder(),
-    testLimitOrder(),
+    testRangeOrder("V1"),
+    testLimitOrder("V1"),
+    testGetOpenSwapChannels(),
+  ]);
+
+  // V2 Test Scenario
+  console.log('=== Starting V2 Test Scenario ===');
+  await Promise.all([
+    testRegisterLiquidityRefundAddress(),
+    testLiquidityDeposit(),
+    testWithdrawAsset("V2"),
+    testRegisterWithExistingLpAccount(),
+    testRangeOrder("V2"),
+    testLimitOrder("V2"),
     testGetOpenSwapChannels(),
   ]);
 
