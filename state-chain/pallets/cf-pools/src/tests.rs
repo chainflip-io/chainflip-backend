@@ -1123,6 +1123,18 @@ fn test_maximum_slippage_limits() {
 	use cf_utilities::{assert_err, assert_ok};
 
 	new_test_ext().execute_with(|| {
+		let base_asset = Asset::Eth;
+		let asset_pair = AssetPair::new(base_asset, STABLE_ASSET).unwrap();
+
+		// Ensure price are configured per pool
+		let asset_pair_2 = AssetPair::new(Asset::Btc, STABLE_ASSET).unwrap();
+		assert_ok!(LiquidityPools::set_maximum_price_impact(
+			RuntimeOrigin::root(),
+			asset_pair_2.assets().base,
+			STABLE_ASSET,
+			Some(1)
+		));
+
 		let test_swaps = |size_limit_when_slippage_limit_is_hit| {
 			for (size, expected_output) in [
 				(0, 0),
@@ -1149,19 +1161,17 @@ fn test_maximum_slippage_limits() {
 				(14500, 12663),
 				(15500, 13419),
 			] {
-				pallet_cf_pools::Pools::<Test>::remove(
-					AssetPair::new(Asset::Eth, Asset::Usdc).unwrap(),
-				);
+				pallet_cf_pools::Pools::<Test>::remove(asset_pair);
 				assert_ok!(LiquidityPools::new_pool(
 					RuntimeOrigin::root(),
-					Asset::Eth,
+					base_asset,
 					STABLE_ASSET,
 					Default::default(),
 					price_at_tick(0).unwrap(),
 				));
 				assert_ok!(LiquidityPools::set_range_order(
 					RuntimeOrigin::signed(ALICE),
-					Asset::Eth,
+					base_asset,
 					STABLE_ASSET,
 					0,
 					Some(-10000..10000),
@@ -1178,19 +1188,39 @@ fn test_maximum_slippage_limits() {
 
 		test_swaps(u128::MAX);
 
-		assert_ok!(LiquidityPools::set_maximum_price_impact(RuntimeOrigin::root(), Some(954),));
+		assert_ok!(LiquidityPools::set_maximum_price_impact(
+			RuntimeOrigin::root(),
+			base_asset,
+			STABLE_ASSET,
+			Some(954)
+		));
 
 		test_swaps(10500);
 
-		assert_ok!(LiquidityPools::set_maximum_price_impact(RuntimeOrigin::root(), None,));
+		assert_ok!(LiquidityPools::set_maximum_price_impact(
+			RuntimeOrigin::root(),
+			base_asset,
+			STABLE_ASSET,
+			None
+		));
 
 		test_swaps(u128::MAX);
 
-		assert_ok!(LiquidityPools::set_maximum_price_impact(RuntimeOrigin::root(), Some(10),));
+		assert_ok!(LiquidityPools::set_maximum_price_impact(
+			RuntimeOrigin::root(),
+			base_asset,
+			STABLE_ASSET,
+			Some(10)
+		));
 
 		test_swaps(300);
 
-		assert_ok!(LiquidityPools::set_maximum_price_impact(RuntimeOrigin::root(), Some(300),));
+		assert_ok!(LiquidityPools::set_maximum_price_impact(
+			RuntimeOrigin::root(),
+			base_asset,
+			STABLE_ASSET,
+			Some(300)
+		));
 
 		test_swaps(3500);
 	});

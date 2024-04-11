@@ -289,9 +289,11 @@ pub mod pallet {
 	pub(super) type ScheduledLimitOrderUpdates<T: Config> =
 		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<LimitOrderUpdate<T>>, ValueQuery>;
 
-	/// Maximum relative price impact for a single swap, measured in number of ticks.
+	/// Maximum price impact for a single swap, measured in number of ticks. Configurable
+	/// for each pool.
 	#[pallet::storage]
-	pub(super) type MaximumPriceImpact<T: Config> = StorageValue<_, u32, OptionQuery>;
+	pub(super) type MaximumPriceImpact<T: Config> =
+		StorageMap<_, Twox64Concat, AssetPair, u32, OptionQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -971,10 +973,14 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_maximum_price_impact())]
 		pub fn set_maximum_price_impact(
 			origin: OriginFor<T>,
+			base_asset: Asset,
+			quote_asset: Asset,
 			ticks: Option<u32>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			MaximumPriceImpact::<T>::set(ticks);
+
+			let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
+			MaximumPriceImpact::<T>::mutate(asset_pair, |limit| *limit = ticks);
 			Ok(())
 		}
 	}
@@ -1033,7 +1039,7 @@ impl<T: Config> SwappingApi for Pallet<T> {
 					core::cmp::min(core::cmp::max(tick_before, swap_tick), tick_after)
 				};
 
-				if let Some(maximum_price_impact) = MaximumPriceImpact::<T>::get() {
+				if let Some(maximum_price_impact) = MaximumPriceImpact::<T>::get(asset_pair) {
 					if core::cmp::min(
 						bounded_swap_tick.abs_diff(tick_after),
 						bounded_swap_tick.abs_diff(tick_before),

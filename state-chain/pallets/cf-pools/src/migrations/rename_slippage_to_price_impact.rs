@@ -12,7 +12,11 @@ mod old {
 impl<T: pallet::Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> Weight {
 		let price_impact: Option<u32> = old::MaximumRelativeSlippage::<T>::get();
-		MaximumPriceImpact::<T>::set(price_impact);
+
+		Pools::<T>::iter_keys().for_each(|asset_pair| {
+			MaximumPriceImpact::<T>::mutate(asset_pair, |limit| *limit = price_impact);
+		});
+
 		old::MaximumRelativeSlippage::<T>::kill();
 
 		Weight::zero()
@@ -30,10 +34,9 @@ impl<T: pallet::Config> OnRuntimeUpgrade for Migration<T> {
 		let slippage =
 			Option::<u32>::decode(&mut &state[..]).expect("Pre-migration should encode a u32.");
 
-		ensure!(
-			MaximumPriceImpact::<T>::get() == slippage,
-			"DepositChannelLookup migration failed."
-		);
+		Pools::<T>::iter_keys().for_each(|asset_pair| {
+			assert_eq!(MaximumPriceImpact::<T>::get(asset_pair), slippage);
+		});
 
 		Ok(())
 	}
@@ -41,16 +44,30 @@ impl<T: pallet::Config> OnRuntimeUpgrade for Migration<T> {
 
 #[cfg(test)]
 mod migration_tests {
-	use crate::mock::Test;
+	use crate::mock::{RuntimeOrigin, Test};
 
 	use self::mock::new_test_ext;
-
 	use super::*;
+	use frame_support::assert_ok;
 
 	#[test]
 	fn test_migration() {
 		new_test_ext().execute_with(|| {
-			old::MaximumRelativeSlippage::<Test>::put(100);
+			let limit = 100u32;
+			old::MaximumRelativeSlippage::<Test>::put(limit);
+
+			let base_asset = Asset::Eth;
+			let asset_pair = AssetPair::try_new::<Test>(base_asset, STABLE_ASSET)
+				.expect("Asset pair must succeed.");
+			let default_price = cf_amm::common::price_at_tick(0).unwrap();
+
+			assert_ok!(Pallet::<Test>::new_pool(
+				RuntimeOrigin::root(),
+				base_asset,
+				STABLE_ASSET,
+				500_000u32,
+				default_price,
+			));
 
 			#[cfg(feature = "try-runtime")]
 			let state: Vec<u8> =
@@ -67,10 +84,7 @@ mod migration_tests {
 			.unwrap();
 
 			// Verify data is correctly migrated into new storage.
-			let price_impact = MaximumPriceImpact::<Test>::get();
-			assert!(price_impact.is_some());
-
-			assert_eq!(price_impact.unwrap(), 100);
+			assert_eq!(MaximumPriceImpact::<Test>::get(asset_pair), Some(limit));
 		});
 	}
 }

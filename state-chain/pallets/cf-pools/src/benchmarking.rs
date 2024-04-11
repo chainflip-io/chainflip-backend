@@ -254,7 +254,11 @@ mod benchmarks {
 
 	#[benchmark]
 	fn set_maximum_price_impact() {
-		let call = Call::<T>::set_maximum_price_impact { ticks: Some(1000) };
+		let base_asset = Asset::Eth;
+		let quote_asset = Asset::Usdc;
+		let limit = 1_000u32;
+		let call =
+			Call::<T>::set_maximum_price_impact { base_asset, quote_asset, ticks: Some(limit) };
 
 		#[block]
 		{
@@ -262,6 +266,10 @@ mod benchmarks {
 				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
 			);
 		}
+
+		let asset_pair =
+			AssetPair::try_new::<T>(base_asset, quote_asset).expect("Asset Pair must succeed");
+		assert_eq!(MaximumPriceImpact::<T>::get(asset_pair), Some(limit));
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
