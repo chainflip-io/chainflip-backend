@@ -871,7 +871,6 @@ pub struct ResignFailedEthereumBroadcast;
 
 const FAILED_BROADCAST_ID_BERGHAIN: u32 = 3348;
 const FAILED_BROADCAST_ID_PERSEVERANCE: u32 = 113;
-const FAILED_BROADCAST_ID_SISYPHOS: u32 = 93;
 
 pub const BERGHAIN: [u8; 32] =
 	hex_literal::hex!("8b8c140b0af9db70686583e3f6bf2a59052bfe9584b97d20c45068281e976eb9");
@@ -882,7 +881,7 @@ pub const SISYPHOS: [u8; 32] =
 
 fn failed_broadcast_id() -> Option<u32> {
 	match frame_system::BlockHash::<Runtime>::get(0).to_fixed_bytes() {
-		SISYPHOS => Some(FAILED_BROADCAST_ID_SISYPHOS),
+		SISYPHOS => None,
 		PERSEVERANCE => Some(FAILED_BROADCAST_ID_PERSEVERANCE),
 		BERGHAIN => Some(FAILED_BROADCAST_ID_BERGHAIN),
 		_ => None,
