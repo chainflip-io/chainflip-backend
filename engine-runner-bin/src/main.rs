@@ -31,7 +31,6 @@ mod new {
 // 4. If this new version completes, then we're done. The engine should be upgraded before this is
 //    the case.
 fn main() -> anyhow::Result<()> {
-	println!("Starting engine runner...");
 	let env_args = std::env::args().collect::<Vec<String>>();
 
 	let c_str_array: CStrArray = env_args.clone().try_into()?;
