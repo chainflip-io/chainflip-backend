@@ -313,7 +313,6 @@ pub trait ChainEnvironment<
 
 pub enum SetAggKeyWithAggKeyError {
 	Failed,
-	NotRequired,
 }
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
@@ -321,7 +320,7 @@ pub trait SetAggKeyWithAggKey<C: ChainCrypto>: ApiCall<C> {
 	fn new_unsigned(
 		maybe_old_key: Option<<C as ChainCrypto>::AggKey>,
 		new_key: <C as ChainCrypto>::AggKey,
-	) -> Result<Self, SetAggKeyWithAggKeyError>;
+	) -> Result<Option<Self>, SetAggKeyWithAggKeyError>;
 }
 
 #[allow(clippy::result_unit_err)]
