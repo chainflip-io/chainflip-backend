@@ -28,7 +28,7 @@ fn can_create_new_trading_pool() {
 
 		// Fee must be appropriate
 		assert_noop!(
-			LiquidityPools::new_pool(
+			LiquidityPools::new_pool_v2(
 				RuntimeOrigin::root(),
 				asset_pair,
 				1_000_000u32,
@@ -38,7 +38,7 @@ fn can_create_new_trading_pool() {
 		);
 
 		// Create a new pool.
-		assert_ok!(LiquidityPools::new_pool(
+		assert_ok!(LiquidityPools::new_pool_v2(
 			RuntimeOrigin::root(),
 			asset_pair,
 			500_000u32,
@@ -52,7 +52,7 @@ fn can_create_new_trading_pool() {
 
 		// Cannot create duplicate pool
 		assert_noop!(
-			LiquidityPools::new_pool(RuntimeOrigin::root(), asset_pair, 0u32, default_price),
+			LiquidityPools::new_pool_v2(RuntimeOrigin::root(), asset_pair, 0u32, default_price),
 			Error::<Test>::PoolAlreadyExists
 		);
 	});
@@ -66,7 +66,7 @@ fn test_buy_back_flip_no_funds_available() {
 		let asset_pair = AssetPair::new(unstable_asset, STABLE_ASSET).unwrap();
 
 		// Create a new pool.
-		assert_ok!(LiquidityPools::new_pool(
+		assert_ok!(LiquidityPools::new_pool_v2(
 			RuntimeOrigin::root(),
 			asset_pair,
 			500_000u32,
@@ -87,7 +87,7 @@ fn test_buy_back_flip_2() {
 		let asset_pair = AssetPair::new(FLIP, STABLE_ASSET).unwrap();
 
 		// Create a new pool.
-		assert_ok!(LiquidityPools::new_pool(
+		assert_ok!(LiquidityPools::new_pool_v2(
 			RuntimeOrigin::root(),
 			asset_pair,
 			Default::default(),
@@ -131,7 +131,7 @@ fn test_sweeping() {
 		const SWAP_AMOUNT: AssetAmount = 50_000;
 		let asset_pair = AssetPair::new(ETH, STABLE_ASSET).unwrap();
 
-		assert_ok!(LiquidityPools::new_pool(
+		assert_ok!(LiquidityPools::new_pool_v2(
 			RuntimeOrigin::root(),
 			asset_pair,
 			Default::default(),
@@ -185,7 +185,7 @@ fn test_buy_back_flip() {
 		let asset_pair = AssetPair::new(FLIP, STABLE_ASSET).unwrap();
 
 		// Create a new pool.
-		assert_ok!(LiquidityPools::new_pool(
+		assert_ok!(LiquidityPools::new_pool_v2(
 			RuntimeOrigin::root(),
 			asset_pair,
 			Default::default(),
@@ -275,7 +275,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 		let new_fee = 100_000u32;
 		let asset_pair = AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap();
 		// Create a new pool.
-		assert_ok!(LiquidityPools::new_pool(
+		assert_ok!(LiquidityPools::new_pool_v2(
 			RuntimeOrigin::root(),
 			asset_pair,
 			old_fee,
@@ -494,7 +494,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 		let asset_pair = AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap();
 
 		// Create a new pool.
-		assert_ok!(LiquidityPools::new_pool(
+		assert_ok!(LiquidityPools::new_pool_v2(
 			RuntimeOrigin::root(),
 			asset_pair,
 			fee,
@@ -613,7 +613,7 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 		let new_fee = 100_000u32;
 		let asset_pair = AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap();
 		// Create a new pool.
-		assert_ok!(LiquidityPools::new_pool(
+		assert_ok!(LiquidityPools::new_pool_v2(
 			RuntimeOrigin::root(),
 			asset_pair,
 			old_fee,
@@ -726,7 +726,7 @@ fn can_execute_scheduled_limit_order() {
 	new_test_ext().execute_with(|| {
 		let order_id = 0;
 		let asset_pair = AssetPair::new(Asset::Flip, STABLE_ASSET).unwrap();
-		assert_ok!(LiquidityPools::new_pool(
+		assert_ok!(LiquidityPools::new_pool_v2(
 			RuntimeOrigin::root(),
 			asset_pair,
 			400_000u32,
@@ -814,7 +814,7 @@ fn can_get_all_pool_orders() {
 		let asset_pair = AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap();
 
 		// Create a new pool.
-		assert_ok!(LiquidityPools::new_pool(
+		assert_ok!(LiquidityPools::new_pool_v2(
 			RuntimeOrigin::root(),
 			asset_pair,
 			Default::default(),
@@ -964,7 +964,7 @@ fn asset_conversion() {
 		// Create pools
 		for asset in [Asset::Eth, Asset::Flip] {
 			let asset_pair = AssetPair::new(asset, STABLE_ASSET).unwrap();
-			assert_ok!(LiquidityPools::new_pool(
+			assert_ok!(LiquidityPools::new_pool_v2(
 				RuntimeOrigin::root(),
 				asset_pair,
 				Default::default(),
@@ -1028,7 +1028,7 @@ fn fees_are_getting_recorded() {
 		let asset_pair = AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap();
 
 		// Create a new pool.
-		assert_ok!(LiquidityPools::new_pool(
+		assert_ok!(LiquidityPools::new_pool_v2(
 			RuntimeOrigin::root(),
 			asset_pair,
 			Default::default(),
@@ -1093,7 +1093,7 @@ fn test_maximum_slippage_limits() {
 				pallet_cf_pools::Pools::<Test>::remove(
 					AssetPair::new(Asset::Eth, Asset::Usdc).unwrap(),
 				);
-				assert_ok!(LiquidityPools::new_pool(
+				assert_ok!(LiquidityPools::new_pool_v2(
 					RuntimeOrigin::root(),
 					asset_pair,
 					Default::default(),

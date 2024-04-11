@@ -154,9 +154,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
 pub mod pallet {
 	use cf_amm::{
 		common::Tick,
-		limit_orders,
 		range_orders::{self, Liquidity},
-		NewError,
 	};
 	use cf_traits::{AccountRoleRegistry, LpBalanceApi};
 	use frame_system::pallet_prelude::BlockNumberFor;
@@ -552,39 +550,14 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::new_pool())]
 		pub fn new_pool(
 			origin: OriginFor<T>,
-			asset_pair: AssetPair,
+			base_asset: any::Asset,
+			quote_asset: any::Asset,
 			fee_hundredth_pips: u32,
 			initial_price: Price,
 		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			Pools::<T>::try_mutate(asset_pair, |maybe_pool| {
-				ensure!(maybe_pool.is_none(), Error::<T>::PoolAlreadyExists);
-
-				*maybe_pool = Some(Pool {
-					range_orders_cache: Default::default(),
-					limit_orders_cache: Default::default(),
-					pool_state: PoolState::new(fee_hundredth_pips, initial_price).map_err(|e| {
-						match e {
-							NewError::LimitOrders(limit_orders::NewError::InvalidFeeAmount) =>
-								Error::<T>::InvalidFeeAmount,
-							NewError::RangeOrders(range_orders::NewError::InvalidFeeAmount) =>
-								Error::<T>::InvalidFeeAmount,
-							NewError::RangeOrders(range_orders::NewError::InvalidInitialPrice) =>
-								Error::<T>::InvalidInitialPrice,
-						}
-					})?,
-				});
-
-				Ok::<_, Error<T>>(())
-			})?;
-
-			Self::deposit_event(Event::<T>::NewPoolCreated {
-				asset_pair,
-				fee_hundredth_pips,
-				initial_price,
-			});
-
-			Ok(())
+			let asset_pair =
+				AssetPair::new(base_asset, quote_asset).ok_or(Error::<T>::PoolDoesNotExist)?;
+			Self::new_pool_version(origin, asset_pair, fee_hundredth_pips, initial_price)
 		}
 
 		/// Optionally move the order to a different range and then increase or decrease its amount
@@ -988,6 +961,31 @@ pub mod pallet {
 			MaximumPriceImpact::<T>::set(ticks);
 			Ok(())
 		}
+
+		/// Create a new pool.
+		/// Requires Governance.
+		///
+		/// ## Events
+		///
+		/// - [On success](Event::NewPoolCreated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::BadOrigin)
+		/// - [InvalidFeeAmount](pallet_cf_pools::Error::InvalidFeeAmount)
+		/// - [InvalidTick](pallet_cf_pools::Error::InvalidTick)
+		/// - [InvalidInitialPrice](pallet_cf_pools::Error::InvalidInitialPrice)
+		/// - [PoolAlreadyExists](pallet_cf_pools::Error::PoolAlreadyExists)
+		#[pallet::call_index(10)]
+		#[pallet::weight(T::WeightInfo::new_pool())]
+		pub fn new_pool_v2(
+			origin: OriginFor<T>,
+			asset_pair: AssetPair,
+			fee_hundredth_pips: u32,
+			initial_price: Price,
+		) -> DispatchResult {
+			Self::new_pool_version(origin, asset_pair, fee_hundredth_pips, initial_price)
+		}
 	}
 }
 
@@ -1210,7 +1208,46 @@ pub struct PoolPriceV2 {
 	pub range_order: SqrtPriceQ64F96,
 }
 
+use cf_amm::NewError;
+
 impl<T: Config> Pallet<T> {
+	fn new_pool_version(
+		origin: OriginFor<T>,
+		asset_pair: AssetPair,
+		fee_hundredth_pips: u32,
+		initial_price: Price,
+	) -> DispatchResult {
+		T::EnsureGovernance::ensure_origin(origin)?;
+		Pools::<T>::try_mutate(asset_pair, |maybe_pool| {
+			ensure!(maybe_pool.is_none(), Error::<T>::PoolAlreadyExists);
+
+			*maybe_pool = Some(Pool {
+				range_orders_cache: Default::default(),
+				limit_orders_cache: Default::default(),
+				pool_state: PoolState::new(fee_hundredth_pips, initial_price).map_err(
+					|e| match e {
+						NewError::LimitOrders(limit_orders::NewError::InvalidFeeAmount) =>
+							Error::<T>::InvalidFeeAmount,
+						NewError::RangeOrders(range_orders::NewError::InvalidFeeAmount) =>
+							Error::<T>::InvalidFeeAmount,
+						NewError::RangeOrders(range_orders::NewError::InvalidInitialPrice) =>
+							Error::<T>::InvalidInitialPrice,
+					},
+				)?,
+			});
+
+			Ok::<_, Error<T>>(())
+		})?;
+
+		Self::deposit_event(Event::<T>::NewPoolCreated {
+			asset_pair,
+			fee_hundredth_pips,
+			initial_price,
+		});
+
+		Ok(())
+	}
+
 	fn inner_sweep(lp: &T::AccountId) -> DispatchResult {
 		// Collect to avoid undefined behaviour (See StorsgeMap::iter_keys documentation)
 		for asset_pair in Pools::<T>::iter_keys().collect::<Vec<_>>() {

@@ -48,7 +48,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn new_pool() {
-		let call = Call::<T>::new_pool {
+		let call = Call::<T>::new_pool_v2 {
 			asset_pair: AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap(),
 			fee_hundredth_pips: 0u32,
 			initial_price: price_at_tick(0).unwrap(),
@@ -67,7 +67,7 @@ mod benchmarks {
 	#[benchmark]
 	fn update_range_order() {
 		let caller = new_lp_account::<T>();
-		assert_ok!(Pallet::<T>::new_pool(
+		assert_ok!(Pallet::<T>::new_pool_v2(
 			T::EnsureGovernance::try_successful_origin().unwrap(),
 			AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap(),
 			0,
@@ -92,7 +92,7 @@ mod benchmarks {
 	#[benchmark]
 	fn set_range_order() {
 		let caller = new_lp_account::<T>();
-		assert_ok!(Pallet::<T>::new_pool(
+		assert_ok!(Pallet::<T>::new_pool_v2(
 			T::EnsureGovernance::try_successful_origin().unwrap(),
 			AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap(),
 			0,
@@ -117,7 +117,7 @@ mod benchmarks {
 	#[benchmark]
 	fn update_limit_order() {
 		let caller = new_lp_account::<T>();
-		assert_ok!(Pallet::<T>::new_pool(
+		assert_ok!(Pallet::<T>::new_pool_v2(
 			T::EnsureGovernance::try_successful_origin().unwrap(),
 			AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap(),
 			0,
@@ -140,7 +140,7 @@ mod benchmarks {
 	#[benchmark]
 	fn set_limit_order() {
 		let caller = new_lp_account::<T>();
-		assert_ok!(Pallet::<T>::new_pool(
+		assert_ok!(Pallet::<T>::new_pool_v2(
 			T::EnsureGovernance::try_successful_origin().unwrap(),
 			AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap(),
 			0,
@@ -163,7 +163,7 @@ mod benchmarks {
 	#[benchmark]
 	fn set_pool_fees() {
 		let caller = new_lp_account::<T>();
-		assert_ok!(Pallet::<T>::new_pool(
+		assert_ok!(Pallet::<T>::new_pool_v2(
 			T::EnsureGovernance::try_successful_origin().unwrap(),
 			AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap(),
 			0,
@@ -213,7 +213,7 @@ mod benchmarks {
 	#[benchmark]
 	fn schedule_limit_order_update() {
 		let caller = new_lp_account::<T>();
-		assert_ok!(Pallet::<T>::new_pool(
+		assert_ok!(Pallet::<T>::new_pool_v2(
 			T::EnsureGovernance::try_successful_origin().unwrap(),
 			AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap(),
 			0,

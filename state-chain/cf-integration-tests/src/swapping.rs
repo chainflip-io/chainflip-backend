@@ -57,7 +57,7 @@ const ZION: AccountId = AccountId::new([0x22; 32]);
 
 fn new_pool(unstable_asset: Asset, fee_hundredth_pips: u32, initial_price: Price) {
 	let asset_pair = AssetPair::new(unstable_asset, STABLE_ASSET).unwrap();
-	assert_ok!(LiquidityPools::new_pool(
+	assert_ok!(LiquidityPools::new_pool_v2(
 		pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
 		asset_pair,
 		fee_hundredth_pips,
