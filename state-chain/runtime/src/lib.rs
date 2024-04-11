@@ -870,7 +870,7 @@ use frame_support::sp_runtime::DispatchError;
 pub struct ResignFailedEthereumBroadcast;
 
 const FAILED_BROADCAST_ID_BERGHAIN: u32 = 3348;
-const FAILED_BROADCAST_ID_PERSEVERANCE: u32 = 136;
+const FAILED_BROADCAST_ID_PERSEVERANCE: u32 = 113;
 
 pub const BERGHAIN: [u8; 32] =
 	hex_literal::hex!("8b8c140b0af9db70686583e3f6bf2a59052bfe9584b97d20c45068281e976eb9");

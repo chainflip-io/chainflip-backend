@@ -713,7 +713,25 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		PendingBroadcasts::<T, I>::mutate(|pending| pending.insert(broadcast_id));
 
-		Ok(Self::threshold_sign(api_call, broadcast_id, true))
+		Ok({
+			// Identical to Self::threshold_sign except `delayed`.
+			let initiated_at = T::ChainTracking::get_block_height();
+			let threshold_signature_payload = api_call.threshold_signature_payload();
+			T::ThresholdSigner::request_signature_with_callback_delayed(
+				threshold_signature_payload.clone(),
+				|threshold_request_id| {
+					Call::on_signature_ready {
+						threshold_request_id,
+						threshold_signature_payload,
+						api_call: Box::new(api_call),
+						broadcast_id,
+						initiated_at,
+						should_broadcast: true,
+					}
+					.into()
+				},
+			)
+		})
 	}
 
 	/// Signs a API call, use `Call::on_signature_ready` as the callback, and returns the signature
