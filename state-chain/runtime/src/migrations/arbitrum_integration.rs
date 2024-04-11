@@ -1,5 +1,5 @@
 use crate::{safe_mode, Runtime};
-use cf_chains::{arb, eth::Address};
+use cf_chains::{arb::ArbitrumTrackedData, eth::Address, ChainState};
 use cf_traits::SafeMode;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 #[cfg(feature = "try-runtime")]
@@ -82,54 +82,59 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 		));
 
 		let (
-				key_manager_address,
-				vault_address,
-				address_checker_address,
-				chain_id,
-				usdc_address,
-			): (Address, Address, Address, u64, Address) =
-		match cf_runtime_upgrade_utilities::genesis_hashes::genesis_hash::<Runtime>() {
-			cf_runtime_upgrade_utilities::genesis_hashes::BERGHAIN =>
-			{
-				(
-					[0u8; 20].into(),
-					[0u8; 20].into(),
-					[0u8; 20].into(),
-					arb::CHAIN_ID_MAINNET,
-					[0u8; 20].into(),
-				)
-			},
-			cf_runtime_upgrade_utilities::genesis_hashes::PERSEVERANCE =>
-			{
-				(
-					[1u8; 20].into(),
-					[1u8; 20].into(),
-					[1u8; 20].into(),
-					arb::CHAIN_ID_ARBITRUM_SEPOLIA,
-					[1u8; 20].into(),
-				)
-			},
-			cf_runtime_upgrade_utilities::genesis_hashes::SISYPHOS =>
-			{
-				(
-					[2u8; 20].into(),
-					[2u8; 20].into(),
-					[2u8; 20].into(),
-					arb::CHAIN_ID_ARBITRUM_SEPOLIA,
-					[2u8; 20].into(),
-				)
-			},
-			_ => {
-				// Assume testnet
-				(
-					hex_literal::hex!("8e1308925a26cb5cF400afb402d67B3523473379").into(),
-					hex_literal::hex!("Ce5303b8e8BFCa9d1857976F300fb29928522c6F").into(),
-					hex_literal::hex!("84401CD7AbBeBB22ACb7aF2beCfd9bE56C30bcf1").into(),
-					412346,
-					hex_literal::hex!("1D55838a9EC169488D360783D65e6CD985007b72").into(),
-				)
-			}
-		};
+			key_manager_address,
+			vault_address,
+			address_checker_address,
+			chain_id,
+			usdc_address,
+			start_block_number,
+		): (Address, Address, Address, u64, Address, u64) =
+			match cf_runtime_upgrade_utilities::genesis_hashes::genesis_hash::<Runtime>() {
+				cf_runtime_upgrade_utilities::genesis_hashes::BERGHAIN => {
+					panic!("Need to set up arbitrum integration for Berghain");
+					// (
+					// 	[0u8; 20].into(),
+					// 	[0u8; 20].into(),
+					// 	[0u8; 20].into(),
+					// 	arb::CHAIN_ID_MAINNET,
+					// 	[0u8; 20].into(),
+					// 	0,
+					// )
+				},
+				cf_runtime_upgrade_utilities::genesis_hashes::PERSEVERANCE => {
+					panic!("Need to set up arbitrum integration for Perseverance");
+					// (
+					// 	[1u8; 20].into(),
+					// 	[1u8; 20].into(),
+					// 	[1u8; 20].into(),
+					// 	arb::CHAIN_ID_ARBITRUM_SEPOLIA,
+					// 	[1u8; 20].into(),
+					// 	0,
+					// )
+				},
+				cf_runtime_upgrade_utilities::genesis_hashes::SISYPHOS => {
+					panic!("Need to set up arbitrum integration for Sisyphos");
+					// (
+					// 	[2u8; 20].into(),
+					// 	[2u8; 20].into(),
+					// 	[2u8; 20].into(),
+					// 	arb::CHAIN_ID_ARBITRUM_SEPOLIA,
+					// 	[2u8; 20].into(),
+					// 	0,
+					// )
+				},
+				_ => {
+					// Assume testnet
+					(
+						hex_literal::hex!("8e1308925a26cb5cF400afb402d67B3523473379").into(),
+						hex_literal::hex!("Ce5303b8e8BFCa9d1857976F300fb29928522c6F").into(),
+						hex_literal::hex!("84401CD7AbBeBB22ACb7aF2beCfd9bE56C30bcf1").into(),
+						412346,
+						hex_literal::hex!("1D55838a9EC169488D360783D65e6CD985007b72").into(),
+						0,
+					)
+				},
+			};
 
 		pallet_cf_environment::ArbitrumKeyManagerAddress::<Runtime>::put(key_manager_address);
 		pallet_cf_environment::ArbitrumVaultAddress::<Runtime>::put(vault_address);
@@ -138,6 +143,10 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 		);
 		pallet_cf_environment::ArbitrumChainId::<Runtime>::put(chain_id);
 		pallet_cf_environment::ArbitrumSupportedAssets::<Runtime>::insert(ArbUsdc, usdc_address);
+		pallet_cf_chain_tracking::CurrentChainState::<Runtime, ArbitrumInstance>::put(ChainState {
+			block_height: start_block_number,
+			tracked_data: ArbitrumTrackedData { base_fee: 0 },
+		});
 
 		Weight::zero()
 	}
