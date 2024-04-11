@@ -23,6 +23,7 @@ mod old {
 
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		log::info!("⏫ Applying Authorities migration");
 		let authorities = old::CurrentAuthorities::<T>::take();
 		CurrentAuthorities::<T>::put(authorities.into_iter().collect::<Vec<ValidatorIdOf<T>>>());
 
@@ -33,8 +34,6 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 				btree.into_iter().collect::<Vec<ValidatorIdOf<T>>>(),
 			);
 		}
-
-		log::info!("⏫ Applying Authorities migration");
 		Weight::zero()
 	}
 
@@ -71,7 +70,7 @@ mod migration_tests {
 			set.insert(200);
 			old::CurrentAuthorities::<Test>::put(set.clone());
 			old::HistoricalAuthorities::<Test>::set(1, set.clone());
-			old::HistoricalAuthorities::<Test>::set(2, set);
+			old::HistoricalAuthorities::<Test>::set(2, set.clone());
 
 			// Perform runtime migration.
 			crate::migrations::authorities::Migration::<Test>::on_runtime_upgrade();
@@ -81,9 +80,9 @@ mod migration_tests {
 			let historical_authorities1 = HistoricalAuthorities::<Test>::get(1);
 			let historical_authorities2 = HistoricalAuthorities::<Test>::get(2);
 
-			println!("{:?}", current_authorities);
-			println!("{:?}", historical_authorities1);
-			println!("{:?}", historical_authorities2);
+			assert_eq!(set.clone().into_iter().collect::<Vec<u64>>(), current_authorities);
+			assert_eq!(set.clone().into_iter().collect::<Vec<u64>>(), historical_authorities1);
+			assert_eq!(set.into_iter().collect::<Vec<u64>>(), historical_authorities2);
 		});
 	}
 }
