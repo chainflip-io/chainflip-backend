@@ -48,7 +48,11 @@ use frame_support::{
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_runtime::traits::UniqueSaturatedInto;
-use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
+use sp_std::{
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	vec,
+	vec::Vec,
+};
 use strum_macros::EnumIter;
 pub use weights::WeightInfo;
 
@@ -84,11 +88,11 @@ pub struct BoostPoolId<C: Chain> {
 	tier: BoostPoolTier,
 }
 pub struct BoostOutput<C: Chain> {
-	contributions: BTreeMap<BoostPoolTier, C::ChainAmount>,
+	used_pools: BTreeMap<BoostPoolTier, C::ChainAmount>,
 	total_fee: C::ChainAmount,
 }
 
-type BoostId = u64;
+type BoostId = PrewitnessedDepositId;
 
 const SORTED_BOOST_TIERS: [BoostPoolTier; 3] =
 	[BoostPoolTier::FiveBps, BoostPoolTier::TenBps, BoostPoolTier::ThirtyBps];
@@ -271,7 +275,7 @@ pub mod pallet {
 		LiquidityProvision { lp_account: AccountId },
 		CcmTransfer { principal_swap_id: Option<SwapId>, gas_swap_id: Option<SwapId> },
 		NoAction,
-		BoostersCredited,
+		BoostersCredited { boost_id: BoostId },
 	}
 
 	/// Tracks funds that are owned by the vault and available for egress.
@@ -641,6 +645,7 @@ pub mod pallet {
 			asset: TargetChainAsset<T, I>,
 			amounts: BTreeMap<BoostPoolTier, TargetChainAmount<T, I>>,
 			deposit_details: <T::TargetChain as Chain>::DepositDetails,
+			boost_id: BoostId,
 			channel_id: ChannelId,
 			// Ingress fee in the deposit asset. i.e. *NOT* the gas asset, if the deposit asset is
 			// a non-gas asset.
@@ -653,16 +658,17 @@ pub mod pallet {
 			boost_pool: BoostPoolId<T::TargetChain>,
 			amount: TargetChainAmount<T, I>,
 		},
-		AccountStoppedBoosting {
+		StoppedBoosting {
 			account_id: T::AccountId,
 			boost_pool: BoostPoolId<T::TargetChain>,
-			account_available_amount: TargetChainAmount<T, I>,
-			account_in_use_amounts: BTreeMap<BoostId, TargetChainAmount<T, I>>,
+			unlocked_amount: TargetChainAmount<T, I>,
+			pending_boosts: BTreeSet<BoostId>,
 		},
 		InsufficientBoostLiquidity {
-			boost_id: BoostId,
+			prewitnessed_deposit_id: PrewitnessedDepositId,
 			asset: TargetChainAsset<T, I>,
 			amount_attempted: TargetChainAmount<T, I>,
+			channel_id: ChannelId,
 		},
 	}
 
@@ -1055,7 +1061,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let booster = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			let (unlocked_amount, account_in_use_amounts) =
+			let (unlocked_amount, pending_boosts) =
 				BoostPools::<T, I>::mutate(asset, pool_tier, |pool| {
 					let pool = pool
 						.as_mut()
@@ -1066,11 +1072,11 @@ pub mod pallet {
 
 			T::LpBalance::try_credit_account(&booster, asset.into(), unlocked_amount.into())?;
 
-			Self::deposit_event(Event::AccountStoppedBoosting {
+			Self::deposit_event(Event::StoppedBoosting {
 				account_id: booster,
 				boost_pool: BoostPoolId { asset, tier: pool_tier },
-				account_available_amount: unlocked_amount,
-				account_in_use_amounts,
+				unlocked_amount,
+				pending_boosts,
 			});
 
 			Ok(())
@@ -1323,7 +1329,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			total_fee_amount.saturating_accrue(fee);
 
 			if remaining_amount == 0u32.into() {
-				return Ok(BoostOutput { contributions: used_pools, total_fee: total_fee_amount });
+				return Ok(BoostOutput { used_pools, total_fee: total_fee_amount });
 			}
 		}
 
@@ -1342,10 +1348,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				continue;
 			}
 
-			let id = PrewitnessedDepositIdCounter::<T, I>::mutate(|id| -> u64 {
-				*id = id.saturating_add(1);
-				*id
-			});
+			let prewitnessed_deposit_id =
+				PrewitnessedDepositIdCounter::<T, I>::mutate(|id| -> u64 {
+					*id = id.saturating_add(1);
+					*id
+				});
 
 			let DepositChannelDetails { deposit_channel, action, boost_fee, boost_status, .. } =
 				DepositChannelLookup::<T, I>::get(&deposit_address)
@@ -1355,7 +1362,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			PrewitnessedDeposits::<T, I>::insert(
 				channel_id,
-				id,
+				prewitnessed_deposit_id,
 				PrewitnessedDeposit {
 					asset,
 					amount,
@@ -1367,12 +1374,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			// Only boost on non-zero fee and if the channel isn't already boosted:
 			if boost_fee > 0 && !matches!(boost_status, BoostStatus::Boosted { .. }) {
-				match Self::try_boosting(asset, amount, boost_fee, id) {
-					Ok(BoostOutput { contributions: used_pools, total_fee: boost_fee_amount }) => {
+				match Self::try_boosting(asset, amount, boost_fee, prewitnessed_deposit_id) {
+					Ok(BoostOutput { used_pools, total_fee: boost_fee_amount }) => {
 						DepositChannelLookup::<T, I>::mutate(&deposit_address, |details| {
 							if let Some(details) = details {
 								details.boost_status = BoostStatus::Boosted {
-									boost_id: id,
+									boost_id: prewitnessed_deposit_id,
 									pools: used_pools.keys().cloned().collect(),
 								};
 							}
@@ -1401,6 +1408,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							deposit_address: deposit_address.clone(),
 							asset,
 							amounts: used_pools,
+							boost_id: prewitnessed_deposit_id,
 							channel_id,
 							deposit_details: deposit_details.clone(),
 							ingress_fee,
@@ -1410,12 +1418,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					},
 					Err(err) => {
 						Self::deposit_event(Event::InsufficientBoostLiquidity {
-							boost_id: id,
+							prewitnessed_deposit_id,
 							asset,
 							amount_attempted: amount,
+							channel_id,
 						});
 						log::debug!(
-							"Deposit (id: {id}) of {amount:?} {asset:?} and boost fee {boost_fee} could not be boosted: {err:?}"
+							"Deposit (id: {prewitnessed_deposit_id}) of {amount:?} {asset:?} and boost fee {boost_fee} could not be boosted: {err:?}"
 						);
 					},
 				}
@@ -1626,7 +1635,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				amount: deposit_amount,
 				deposit_details,
 				ingress_fee: 0u32.into(),
-				action: DepositAction::BoostersCredited,
+				action: DepositAction::BoostersCredited { boost_id },
 				channel_id,
 			});
 		} else {
