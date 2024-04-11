@@ -1187,6 +1187,47 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	fn inner_request_signature_delayed(
+		payload: PayloadFor<T, I>,
+		request_type: RequestType<
+			<T::TargetChainCrypto as ChainCrypto>::AggKey,
+			BTreeSet<T::ValidatorId>,
+		>,
+	) -> RequestId {
+		let request_id = ThresholdSignatureRequestIdCounter::<T, I>::mutate(|id| {
+			*id += 1;
+			*id
+		});
+
+		// *** CHANGE: Copied from Err branch in inner_request_signature
+		// *** Equivalent to retry for SignersUnavailable
+		// *** Only differences are:
+		// *** - No event emitted (because no error)
+		// *** - Delay of 1 block instead of CeremonyRetryDelay
+		PendingRequestInstructions::<T, I>::insert(
+			request_id,
+			RequestInstruction {
+				request_context: RequestContext { request_id, payload, attempt_count: 0 },
+				request_type,
+			},
+		);
+		RequestRetryQueue::<T, I>::append(
+			frame_system::Pallet::<T>::current_block_number()
+				.saturating_add(frame_support::sp_runtime::traits::One::one()),
+			request_id,
+		);
+		// *** REPLACES:
+		// Self::new_ceremony_attempt(RequestInstruction {
+		// 	request_context: RequestContext { request_id, payload, attempt_count: 0 },
+		// 	request_type,
+		// });
+		// *** END CHANGE ***
+
+		Signature::<T, I>::insert(request_id, AsyncResult::Pending);
+
+		request_id
+	}
+
 	/// Initiate a new signature request, returning the request id.
 	fn inner_request_signature(
 		payload: PayloadFor<T, I>,
@@ -1551,6 +1592,30 @@ where
 		);
 
 		Self::inner_request_signature(payload, request_type)
+	}
+
+	// Identical to request_signature_with_callback, but with delayed = true.
+	fn request_signature_with_callback_delayed(
+		payload: <T::TargetChainCrypto as ChainCrypto>::Payload,
+		callback_generator: impl FnOnce(RequestId) -> Self::Callback,
+	) -> RequestId {
+		let request_type = Self::active_epoch_key().defensive_map_or_else(
+			|| RequestType::SpecificKey(Default::default(), Default::default()),
+			|EpochKey { key, epoch_index, .. }| RequestType::SpecificKey(key, epoch_index),
+		);
+
+		// *** CHANGE
+		// *** Everything except this is identical to request_signature_with_callback.
+		let request_id = Self::inner_request_signature_delayed(payload, request_type);
+		// *** END CHANGE
+
+		Self::register_callback(request_id, callback_generator(request_id)).unwrap_or_else(|e| {
+			log::error!(
+				"Unable to register threshold signature callback. This should not be possible. Error: '{:?}'",
+				e
+			);
+		});
+		request_id
 	}
 
 	fn register_callback(

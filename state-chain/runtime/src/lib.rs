@@ -163,7 +163,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 134,
+	spec_version: 135,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 12,
@@ -870,15 +870,18 @@ use frame_support::sp_runtime::DispatchError;
 pub struct ResignFailedEthereumBroadcast;
 
 const FAILED_BROADCAST_ID_BERGHAIN: u32 = 3348;
-const FAILED_BROADCAST_ID_PERSEVERANCE: u32 = 136;
+const FAILED_BROADCAST_ID_PERSEVERANCE: u32 = 113;
 
 pub const BERGHAIN: [u8; 32] =
 	hex_literal::hex!("8b8c140b0af9db70686583e3f6bf2a59052bfe9584b97d20c45068281e976eb9");
 pub const PERSEVERANCE: [u8; 32] =
 	hex_literal::hex!("7a5d4db858ada1d20ed6ded4933c33313fc9673e5fffab560d0ca714782f2080");
+pub const SISYPHOS: [u8; 32] =
+	hex_literal::hex!("7db0684f891ad10fa919c801f9a9f030c0f6831aafa105b1a68e47803f91f2b6");
 
 fn failed_broadcast_id() -> Option<u32> {
 	match frame_system::BlockHash::<Runtime>::get(0).to_fixed_bytes() {
+		SISYPHOS => None,
 		PERSEVERANCE => Some(FAILED_BROADCAST_ID_PERSEVERANCE),
 		BERGHAIN => Some(FAILED_BROADCAST_ID_BERGHAIN),
 		_ => None,
@@ -898,6 +901,8 @@ impl frame_support::traits::OnRuntimeUpgrade for ResignFailedEthereumBroadcast {
 
 		if let Some(id) = failed_broadcast_id() {
 			resign_eth(id);
+		} else {
+			log::info!("✅ No broadcasts to re-sign.");
 		}
 
 		Default::default()
@@ -915,11 +920,7 @@ impl frame_support::traits::OnRuntimeUpgrade for ResignFailedEthereumBroadcast {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
-		if let Some(id) = match frame_system::BlockHash::<Runtime>::get(0).to_fixed_bytes() {
-			PERSEVERANCE => Some(FAILED_BROADCAST_ID_PERSEVERANCE),
-			BERGHAIN => Some(FAILED_BROADCAST_ID_BERGHAIN),
-			_ => None,
-		} {
+		if let Some(id) = failed_broadcast_id() {
 			frame_support::ensure!(
 				!pallet_cf_broadcast::ThresholdSignatureData::<Runtime, EthereumInstance>::contains_key(id),
 				"Broadcast {id} was not removed.",

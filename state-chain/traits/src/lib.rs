@@ -454,6 +454,14 @@ where
 		request_id
 	}
 
+	/// Temporary workaround to allow scheduling signatures during a runtime upgrade.
+	fn request_signature_with_callback_delayed(
+		payload: C::Payload,
+		callback_generator: impl FnOnce(ThresholdSignatureRequestId) -> Self::Callback,
+	) -> ThresholdSignatureRequestId {
+		Self::request_signature_with_callback(payload, callback_generator)
+	}
+
 	/// Helper function to enable benchmarking of the broadcast pallet
 	#[cfg(feature = "runtime-benchmarks")]
 	fn insert_signature(
