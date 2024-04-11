@@ -1055,8 +1055,8 @@ type MigrationsForV1_4 = (
 		9,
 		10,
 	>,
-	// migrations::housekeeping::Migration,
-	// migrations::reap_old_accounts::Migration,
+	migrations::housekeeping::Migration,
+	migrations::reap_old_accounts::Migration,
 	// NOTE: Do not change this validator pallet migration order:
 	// Migrate Validator pallet from version 0 -> 1
 	migrations::vanity_names::Migration,
