@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use cf_primitives::{AccountId, BasisPoints, BlockNumber, EgressId};
 use cf_utilities::{
 	rpc::NumberOrHex,
@@ -125,6 +126,17 @@ pub trait Rpc {
 	#[method(name = "update_range_order")]
 	async fn update_range_order(
 		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		id: OrderIdJson,
+		tick_range: Option<Range<Tick>>,
+		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>>;
+
+	#[method(name = "update_range_order_v2")]
+	async fn update_range_order_v2(
+		&self,
 		asset_pair: AssetPair,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
@@ -135,6 +147,17 @@ pub trait Rpc {
 	#[method(name = "set_range_order")]
 	async fn set_range_order(
 		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		id: OrderIdJson,
+		tick_range: Option<Range<Tick>>,
+		size: RangeOrderSizeJson,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>>;
+
+	#[method(name = "set_range_order_v2")]
+	async fn set_range_order_v2(
+		&self,
 		asset_pair: AssetPair,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
@@ -144,6 +167,19 @@ pub trait Rpc {
 
 	#[method(name = "update_limit_order")]
 	async fn update_limit_order(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
+		id: OrderIdJson,
+		tick: Option<Tick>,
+		amount_change: IncreaseOrDecrease<NumberOrHex>,
+		dispatch_at: Option<BlockNumber>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>>;
+
+	#[method(name = "update_limit_order_v2")]
+	async fn update_limit_order_v2(
 		&self,
 		asset_pair: AssetPair,
 		side: Side,
@@ -156,6 +192,19 @@ pub trait Rpc {
 
 	#[method(name = "set_limit_order")]
 	async fn set_limit_order(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
+		id: OrderIdJson,
+		tick: Option<Tick>,
+		sell_amount: NumberOrHex,
+		dispatch_at: Option<BlockNumber>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>>;
+
+	#[method(name = "set_limit_order_v2")]
+	async fn set_limit_order_v2(
 		&self,
 		asset_pair: AssetPair,
 		side: Side,
@@ -298,6 +347,32 @@ impl RpcServer for RpcServerImpl {
 
 	async fn update_range_order(
 		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		id: OrderIdJson,
+		tick_range: Option<Range<Tick>>,
+		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>> {
+		if let Some(asset_pair) = AssetPair::new(base_asset, quote_asset) {
+			Ok(self
+				.api
+				.lp_api()
+				.update_range_order(
+					asset_pair,
+					id.try_into()?,
+					tick_range,
+					size_change.try_map(|size| size.try_into())?,
+					wait_for.unwrap_or_default(),
+				)
+				.await?)
+		} else {
+			Err(anyhow!("Invalid asset pair").into())
+		}
+	}
+
+	async fn update_range_order_v2(
+		&self,
 		asset_pair: AssetPair,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
@@ -319,6 +394,32 @@ impl RpcServer for RpcServerImpl {
 
 	async fn set_range_order(
 		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		id: OrderIdJson,
+		tick_range: Option<Range<Tick>>,
+		size: RangeOrderSizeJson,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<RangeOrder>>> {
+		if let Some(asset_pair) = AssetPair::new(base_asset, quote_asset) {
+			Ok(self
+				.api
+				.lp_api()
+				.set_range_order(
+					asset_pair,
+					id.try_into()?,
+					tick_range,
+					size.try_into()?,
+					wait_for.unwrap_or_default(),
+				)
+				.await?)
+		} else {
+			Err(anyhow!("Invalid asset pair").into())
+		}
+	}
+
+	async fn set_range_order_v2(
+		&self,
 		asset_pair: AssetPair,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
@@ -339,6 +440,36 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	async fn update_limit_order(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
+		id: OrderIdJson,
+		tick: Option<Tick>,
+		amount_change: IncreaseOrDecrease<NumberOrHex>,
+		dispatch_at: Option<BlockNumber>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>> {
+		if let Some(asset_pair) = AssetPair::new(base_asset, quote_asset) {
+			Ok(self
+				.api
+				.lp_api()
+				.update_limit_order(
+					asset_pair,
+					side,
+					id.try_into()?,
+					tick,
+					amount_change.try_map(try_parse_number_or_hex)?,
+					dispatch_at,
+					wait_for.unwrap_or_default(),
+				)
+				.await?)
+		} else {
+			Err(anyhow!("Invalid asset pair").into())
+		}
+	}
+
+	async fn update_limit_order_v2(
 		&self,
 		asset_pair: AssetPair,
 		side: Side,
@@ -364,6 +495,36 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	async fn set_limit_order(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
+		id: OrderIdJson,
+		tick: Option<Tick>,
+		sell_amount: NumberOrHex,
+		dispatch_at: Option<BlockNumber>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>> {
+		if let Some(asset_pair) = AssetPair::new(base_asset, quote_asset) {
+			Ok(self
+				.api
+				.lp_api()
+				.set_limit_order(
+					asset_pair,
+					side,
+					id.try_into()?,
+					tick,
+					try_parse_number_or_hex(sell_amount)?,
+					dispatch_at,
+					wait_for.unwrap_or_default(),
+				)
+				.await?)
+		} else {
+			Err(anyhow!("Invalid asset pair").into())
+		}
+	}
+
+	async fn set_limit_order_v2(
 		&self,
 		asset_pair: AssetPair,
 		side: Side,
