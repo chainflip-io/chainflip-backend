@@ -648,8 +648,9 @@ pub mod pallet {
 			boost_id: BoostId,
 			channel_id: ChannelId,
 			// Ingress fee in the deposit asset. i.e. *NOT* the gas asset, if the deposit asset is
-			// a non-gas asset.
+			// a non-gas asset. The ingress fee is taken *after* the boost fee.
 			ingress_fee: TargetChainAmount<T, I>,
+			// Total fee the user paid for their deposit to be boosted.
 			boost_fee: TargetChainAmount<T, I>,
 			action: DepositAction<T::AccountId>,
 		},
