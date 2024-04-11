@@ -661,7 +661,11 @@ pub mod pallet {
 		StoppedBoosting {
 			account_id: T::AccountId,
 			boost_pool: BoostPoolId<T::TargetChain>,
+			// When we stop boosting, the amount in the pool that isn't currently pending
+			// finalisation can be returned immediately.
 			unlocked_amount: TargetChainAmount<T, I>,
+			// The ids of the boosts that are pending finalisation, such that the funds can then be
+			// returned to the user's free balance when the finalisation occurs.
 			pending_boosts: BTreeSet<BoostId>,
 		},
 		InsufficientBoostLiquidity {
