@@ -163,7 +163,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 134,
+	spec_version: 135,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 12,
@@ -898,6 +898,8 @@ impl frame_support::traits::OnRuntimeUpgrade for ResignFailedEthereumBroadcast {
 
 		if let Some(id) = failed_broadcast_id() {
 			resign_eth(id);
+		} else {
+			log::info!("✅ No broadcasts to re-sign.");
 		}
 
 		Default::default()
