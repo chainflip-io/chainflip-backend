@@ -27,10 +27,9 @@ impl<T: pallet::Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		ensure!(
-			old::MaximumRelativeSlippage::<T>::exists(),
-			"Pre-migration should have a slippage value."
-		);
+		if !old::MaximumRelativeSlippage::<T>::exists() {
+			log::info!("No slippage value is set, nothing will be migrated.");
+		}
 		let slippage = old::MaximumRelativeSlippage::<T>::get();
 
 		Ok(slippage.encode())
