@@ -71,7 +71,7 @@ impl<
 		)
 	}
 
-	fn threshold_resign(
+	fn re_sign_aborted_broadcast(
 		broadcast_id: BroadcastId,
 		_request_broadcast: bool,
 	) -> Result<ThresholdSignatureRequestId, sp_runtime::DispatchError> {

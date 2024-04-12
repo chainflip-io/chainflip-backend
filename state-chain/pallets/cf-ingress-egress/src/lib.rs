@@ -827,22 +827,25 @@ pub mod pallet {
 						});
 					},
 					// Previous epoch, signature is invalid. Re-sign but don't broadcast.
-					1 => match T::Broadcaster::threshold_resign(call.broadcast_id, false) {
-						Ok(threshold_signature_id) => {
-							Self::deposit_event(Event::<T, I>::FailedForeignChainCallResigned {
-								broadcast_id: call.broadcast_id,
-								threshold_signature_id,
-							});
-							FailedForeignChainCalls::<T, I>::append(current_epoch, call);
+					1 =>
+						match T::Broadcaster::re_sign_aborted_broadcast(call.broadcast_id, false) {
+							Ok(threshold_signature_id) => {
+								Self::deposit_event(
+									Event::<T, I>::FailedForeignChainCallResigned {
+										broadcast_id: call.broadcast_id,
+										threshold_signature_id,
+									},
+								);
+								FailedForeignChainCalls::<T, I>::append(current_epoch, call);
+							},
+							Err(e) => {
+								log_or_panic!(
+									"Failed CCM call for broadcast {} not re-signed: {:?}",
+									call.broadcast_id,
+									e
+								);
+							},
 						},
-						Err(e) => {
-							log_or_panic!(
-								"Failed CCM call for broadcast {} not re-signed: {:?}",
-								call.broadcast_id,
-								e
-							);
-						},
-					},
 					// Current epoch, shouldn't be possible.
 					_ => {
 						log_or_panic!(
