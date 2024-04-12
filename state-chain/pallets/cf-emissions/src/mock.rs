@@ -190,6 +190,7 @@ impl Broadcaster<MockEthereum> for MockBroadcast {
 
 	fn re_sign_aborted_broadcast(
 		_broadcast_id: BroadcastId,
+		_request_broadcast: bool,
 	) -> Option<ThresholdSignatureRequestId> {
 		unimplemented!()
 	}
