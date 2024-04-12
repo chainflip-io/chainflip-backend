@@ -996,7 +996,7 @@ pub mod pallet {
 
 			for (asset, ticks) in limits {
 				let asset_pair = AssetPair::try_new::<T>(asset, STABLE_ASSET)?;
-				MaximumPriceImpact::<T>::set(&asset_pair, ticks);
+				MaximumPriceImpact::<T>::set(asset_pair, ticks);
 				Self::deposit_event(Event::<T>::PriceImpactLimitSet { asset_pair, limit: ticks });
 			}
 
