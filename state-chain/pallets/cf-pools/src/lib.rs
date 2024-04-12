@@ -484,6 +484,11 @@ pub mod pallet {
 			order_id: OrderId,
 			dispatch_at: BlockNumberFor<T>,
 		},
+		/// The Price Impact limit has been set for a pool
+		PriceImpactLimitSet {
+			assets: Vec<Asset>,
+			ticks: Option<u32>,
+		},
 	}
 
 	#[pallet::call]
@@ -965,22 +970,25 @@ pub mod pallet {
 			}
 		}
 
-		/// Sets the allowed percentage increase (in number of ticks) of the price of the brought
+		/// Sets the allowed change (in number of ticks) to the price of the brought
 		/// asset during a swap. Note this limit applies to the difference between the swap's mean
 		/// price, and both the pool price before and after the swap. If the limit is exceeded the
 		/// swap will fail and will be retried in the next block.
 		#[pallet::call_index(9)]
-		#[pallet::weight(T::WeightInfo::set_maximum_price_impact())]
+		#[pallet::weight(T::WeightInfo::set_maximum_price_impact(assets.len() as u32))]
 		pub fn set_maximum_price_impact(
 			origin: OriginFor<T>,
-			base_asset: Asset,
-			quote_asset: Asset,
+			assets: Vec<Asset>,
 			ticks: Option<u32>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
+			for asset in assets.clone() {
+				let asset_pair = AssetPair::try_new::<T>(asset, STABLE_ASSET)?;
+				MaximumPriceImpact::<T>::mutate(asset_pair, |limit| *limit = ticks);
+			}
 
-			let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
-			MaximumPriceImpact::<T>::mutate(asset_pair, |limit| *limit = ticks);
+			Self::deposit_event(Event::<T>::PriceImpactLimitSet { assets, ticks });
+
 			Ok(())
 		}
 	}

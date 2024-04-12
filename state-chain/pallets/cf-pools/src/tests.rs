@@ -1124,15 +1124,21 @@ fn test_maximum_slippage_limits() {
 
 	new_test_ext().execute_with(|| {
 		let base_asset = Asset::Eth;
+		let unrelated_asset = Asset::Btc;
 		let asset_pair = AssetPair::new(base_asset, STABLE_ASSET).unwrap();
 
 		// Ensure price are configured per pool
-		let asset_pair_2 = AssetPair::new(Asset::Btc, STABLE_ASSET).unwrap();
 		assert_ok!(LiquidityPools::set_maximum_price_impact(
 			RuntimeOrigin::root(),
-			asset_pair_2.assets().base,
-			STABLE_ASSET,
-			Some(1)
+			vec![unrelated_asset],
+			Some(1),
+		));
+
+		System::assert_last_event(RuntimeEvent::LiquidityPools(
+			crate::Event::<Test>::PriceImpactLimitSet {
+				assets: vec![unrelated_asset],
+				ticks: Some(1),
+			},
 		));
 
 		let test_swaps = |size_limit_when_slippage_limit_is_hit| {
@@ -1190,8 +1196,7 @@ fn test_maximum_slippage_limits() {
 
 		assert_ok!(LiquidityPools::set_maximum_price_impact(
 			RuntimeOrigin::root(),
-			base_asset,
-			STABLE_ASSET,
+			vec![base_asset],
 			Some(954)
 		));
 
@@ -1199,8 +1204,7 @@ fn test_maximum_slippage_limits() {
 
 		assert_ok!(LiquidityPools::set_maximum_price_impact(
 			RuntimeOrigin::root(),
-			base_asset,
-			STABLE_ASSET,
+			vec![base_asset],
 			None
 		));
 
@@ -1208,8 +1212,7 @@ fn test_maximum_slippage_limits() {
 
 		assert_ok!(LiquidityPools::set_maximum_price_impact(
 			RuntimeOrigin::root(),
-			base_asset,
-			STABLE_ASSET,
+			vec![base_asset],
 			Some(10)
 		));
 
@@ -1217,8 +1220,7 @@ fn test_maximum_slippage_limits() {
 
 		assert_ok!(LiquidityPools::set_maximum_price_impact(
 			RuntimeOrigin::root(),
-			base_asset,
-			STABLE_ASSET,
+			vec![base_asset],
 			Some(300)
 		));
 

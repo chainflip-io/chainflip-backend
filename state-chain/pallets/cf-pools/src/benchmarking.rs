@@ -253,12 +253,10 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn set_maximum_price_impact() {
-		let base_asset = Asset::Eth;
-		let quote_asset = Asset::Usdc;
+	fn set_maximum_price_impact(n: Linear<1, 6>) {
+		let assets = (0..n).map(|_| Asset::Eth).collect::<Vec<_>>();
 		let limit = 1_000u32;
-		let call =
-			Call::<T>::set_maximum_price_impact { base_asset, quote_asset, ticks: Some(limit) };
+		let call = Call::<T>::set_maximum_price_impact { assets, ticks: Some(limit) };
 
 		#[block]
 		{
@@ -268,7 +266,7 @@ mod benchmarks {
 		}
 
 		let asset_pair =
-			AssetPair::try_new::<T>(base_asset, quote_asset).expect("Asset Pair must succeed");
+			AssetPair::try_new::<T>(Asset::Eth, STABLE_ASSET).expect("Asset Pair must succeed");
 		assert_eq!(MaximumPriceImpact::<T>::get(asset_pair), Some(limit));
 	}
 
