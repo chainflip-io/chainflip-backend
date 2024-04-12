@@ -233,16 +233,23 @@ export async function testBrokerFeeCollection(): Promise<void> {
   ).replaceAll('"', '');
   console.log('Broker role:', role);
   console.log('Broker address:', broker.address);
-  assert.strictEqual(role, 'Broker', `Broker has unexpected role: ${role}`);
 
-  // Run the test for all assets at the same time (with different seeds so the eth addresses are different)
-  await Promise.all([
-    testBrokerFees(Assets.Flip, randomBytes(32).toString('hex')),
-    testBrokerFees(Assets.Eth, randomBytes(32).toString('hex')),
-    testBrokerFees(Assets.Dot, randomBytes(32).toString('hex')),
-    testBrokerFees(Assets.Btc, randomBytes(32).toString('hex')),
-    testBrokerFees(Assets.Usdc, randomBytes(32).toString('hex')),
-  ]);
+  // TODO: This is a temporary workaround to skip the test if the broker role is null, which is the case
+  // in the upgrade test, since 1.3 doesn't have the broker role set, this test was written after that.
+  // PRO-1317
+  if (role === null) {
+    console.log('No broker with this role, skipping test');
+  } else {
+    assert.strictEqual(role, 'Broker', `Broker has unexpected role: ${role}`);
+    // Run the test for all assets at the same time (with different seeds so the eth addresses are different)
+    await Promise.all([
+      testBrokerFees(Assets.Flip, randomBytes(32).toString('hex')),
+      testBrokerFees(Assets.Eth, randomBytes(32).toString('hex')),
+      testBrokerFees(Assets.Dot, randomBytes(32).toString('hex')),
+      testBrokerFees(Assets.Btc, randomBytes(32).toString('hex')),
+      testBrokerFees(Assets.Usdc, randomBytes(32).toString('hex')),
+    ]);
 
-  console.log('\x1b[32m%s\x1b[0m', '=== Broker fee collection test complete ===');
+    console.log('\x1b[32m%s\x1b[0m', '=== Broker fee collection test complete ===');
+  }
 }
