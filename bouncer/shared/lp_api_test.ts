@@ -128,9 +128,10 @@ async function testWithdrawAsset(version: string) {
   const oldBalance = await getBalance(testAsset, testAddress);
 
   const versionSubfix = version === 'V2' ? '_v2' : '';
+  const amount = version === 'V2' ? testAssetAmount.toString(16) : testAssetAmount;
 
   const result = await lpApiRpc(`lp_withdraw_asset` + versionSubfix, [
-    testAssetAmount.toString(16),
+    amount,
     testRpcAsset,
     testAddress,
     'InBlock',
@@ -165,9 +166,12 @@ async function testRegisterWithExistingLpAccount() {
 async function testRangeOrder(version: string) {
   console.log('=== Starting testRangeOrder ===');
   const range = { start: 1, end: 2 };
+
+  // Setup api version specific constants
   const versionSubfix = version === 'V2' ? '_v2' : '';
-  const zero = '0x0';
-  const orderId = (74398).toString(16); // Arbitrary order id so it does not interfere with other tests
+  const zero = version === 'V2' ? '0x0' : 0;
+  const orderId = version === 'V2' ? (74398).toString(16) : 74398; // Arbitrary order id so it does not interfere with other tests
+  const amount = version === 'V2' ? testAssetAmount.toString(16) : testAssetAmount;
   const zeroAssetAmounts = {
     AssetAmounts: {
       maximum: { base: zero, quote: zero },
@@ -194,7 +198,7 @@ async function testRangeOrder(version: string) {
       range,
       {
         AssetAmounts: {
-          maximum: { base: testAssetAmount.toString(16), quote: zero },
+          maximum: { base: amount, quote: zero },
           minimum: { base: zero, quote: zero },
         },
       },
@@ -217,7 +221,7 @@ async function testRangeOrder(version: string) {
       {
         increase: {
           AssetAmounts: {
-            maximum: { base: testAssetAmount.toString(16), quote: zero },
+            maximum: { base: amount, quote: zero },
             minimum: { base: zero, quote: zero },
           },
         },
@@ -279,9 +283,11 @@ async function testLimitOrder(version: string) {
   console.log('=== Starting testLimitOrder ===');
   const tick = 2;
 
+  // Setup api version specific constants
   const versionSubfix = version === 'V2' ? '_v2' : '';
-  const zero = '0x0';
-  const orderId = (98432).toString(16); // Arbitrary order id so it does not interfere with other tests
+  const zero = version === 'V2' ? '0x0' : 0;
+  const orderId = version === 'V2' ? (98432).toString(16) : 98432; // Arbitrary order id so it does not interfere with other tests
+  const amount = version === 'V2' ? testAssetAmount.toString(16) : testAssetAmount;
 
   // Cleanup after any unfinished previous test so it does not interfere with this test
   await lpApiRpc(`lp_set_limit_order`, [testRpcAsset, 'USDC', 'sell', orderId, tick, zero]);
@@ -294,7 +300,7 @@ async function testLimitOrder(version: string) {
       'sell',
       orderId,
       tick,
-      testAssetAmount.toString(16),
+      amount,
     ])
   ).tx_details.response;
   assert(mintLimitOrder.length >= 1, `Empty mint limit order result`);
@@ -319,7 +325,7 @@ async function testLimitOrder(version: string) {
       orderId,
       tick,
       {
-        increase: testAssetAmount.toString(16),
+        increase: amount,
       },
     ])
   ).tx_details.response;
@@ -369,6 +375,7 @@ export async function testLpApi() {
   // Provide the amount of liquidity needed for the tests
   await provideLiquidityAndTestAssetBalances();
 
+  // TODO: This can be removed once the LP API is updated and the old version is removed.
   // V1 Test Scenario
   console.log('=== Starting V1 Test Scenario ===');
   await Promise.all([
