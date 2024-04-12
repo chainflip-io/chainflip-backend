@@ -1,19 +1,18 @@
 use crate as pallet_cf_funding;
 use crate::PalletSafeMode;
 use cf_chains::{evm::EvmCrypto, ApiCall, Chain, ChainCrypto, Ethereum};
-use cf_primitives::{AccountRole, BroadcastId, ThresholdSignatureRequestId};
+use cf_primitives::{BroadcastId, FlipBalance, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
-	mocks::time_source, AccountRoleRegistry, Broadcaster, WaivedFees,
+	mocks::time_source, AccountRoleRegistry, Broadcaster, RedemptionCheck, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::cell::RefCell;
 use frame_support::{derive_impl, parameter_types, traits::UnfilteredDispatchable};
-use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
-	AccountId32, Permill,
+	AccountId32, DispatchError, DispatchResult, Permill,
 };
 use std::time::Duration;
 
@@ -65,10 +64,6 @@ impl frame_system::Config for Test {
 impl_mock_chainflip!(Test);
 
 parameter_types! {
-	pub const CeremonyRetryDelay: BlockNumberFor<Test> = 1;
-}
-
-parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
 
@@ -77,7 +72,7 @@ impl_mock_waived_fees!(AccountId, RuntimeCall);
 
 impl pallet_cf_flip::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Balance = u128;
+	type Balance = FlipBalance;
 	type BlocksPerDay = BlocksPerDay;
 	type OnAccountFunded = MockOnAccountFunded;
 	type WeightInfo = ();
@@ -193,6 +188,23 @@ impl Broadcaster<Ethereum> for MockBroadcaster {
 	}
 }
 
+parameter_types! {
+	pub static CanRedeem: bool = true;
+}
+
+pub const BIDDING_ERR: DispatchError =
+	DispatchError::Other("The given validator is an active bidder");
+pub struct MockRedemptionChecker;
+
+impl RedemptionCheck for MockRedemptionChecker {
+	type ValidatorId = AccountId;
+
+	fn ensure_can_redeem(_validator_id: &Self::ValidatorId) -> DispatchResult {
+		frame_support::ensure!(CanRedeem::get(), BIDDING_ERR);
+		Ok(())
+	}
+}
+
 impl_mock_runtime_safe_mode! { funding: PalletSafeMode }
 impl pallet_cf_funding::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -203,6 +215,7 @@ impl pallet_cf_funding::Config for Test {
 	type Broadcaster = MockBroadcaster;
 	type ThresholdCallable = RuntimeCall;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
+	type RedemptionChecker = MockRedemptionChecker;
 	type SafeMode = MockRuntimeSafeMode;
 	type RegisterRedemption = MockRegisterRedemption;
 }
@@ -223,7 +236,7 @@ cf_test_utilities::impl_test_helpers! {
 		system: Default::default(),
 		flip: FlipConfig { total_issuance: 1_000_000, daily_slashing_rate: Permill::from_perthousand(1)},
 		funding: FundingConfig {
-			genesis_accounts: vec![(CHARLIE, AccountRole::Validator, MIN_FUNDING)],
+			genesis_accounts: vec![(CHARLIE, MIN_FUNDING)],
 			redemption_tax: REDEMPTION_TAX,
 			minimum_funding: MIN_FUNDING,
 			redemption_ttl: Duration::from_secs(REDEMPTION_TTL_SECS),

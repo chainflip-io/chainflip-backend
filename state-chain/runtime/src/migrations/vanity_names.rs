@@ -21,7 +21,7 @@ impl frame_support::traits::OnRuntimeUpgrade for Migration {
 			StorageVersion::new(2).put::<pallet_cf_account_roles::Pallet<Runtime>>();
 		} else {
 			log::info!(
-				"⏭ Skipping VanityNames migration. {:?}, {:?}",
+				"⏭ Skipping VanityNames migration. Validator version: {:?}, AccountRoles version: {:?}",
 				<pallet_cf_validator::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version(),
 				<pallet_cf_account_roles::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version()
 			);

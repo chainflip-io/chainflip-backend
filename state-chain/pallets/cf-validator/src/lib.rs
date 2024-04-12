@@ -22,10 +22,11 @@ use cf_primitives::{
 	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION, FLIPPERINOS_PER_FLIP,
 };
 use cf_traits::{
-	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, AuthoritiesCfeVersions,
-	Bid, BidderProvider, Bonding, CfePeerRegistration, Chainflip, EpochInfo,
+	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AccountInfo, AsyncResult,
+	AuthoritiesCfeVersions, Bid, Bonding, CfePeerRegistration, Chainflip, EpochInfo,
 	EpochTransitionHandler, ExecutionCondition, FundingInfo, HistoricalEpoch, KeyRotator,
-	MissedAuthorshipSlots, OnAccountFunded, QualifyNode, ReputationResetter, SetSafeMode,
+	MissedAuthorshipSlots, OnAccountFunded, QualifyNode, RedemptionCheck, ReputationResetter,
+	SetSafeMode,
 };
 
 use cf_utilities::Port;
@@ -35,7 +36,7 @@ use frame_support::{
 		traits::{BlockNumberProvider, One, Saturating, UniqueSaturatedInto, Zero},
 		Percent, Permill,
 	},
-	traits::EstimateNextSessionRotation,
+	traits::{EstimateNextSessionRotation, OnKilledAccount},
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -69,8 +70,6 @@ pub enum PalletConfigUpdate {
 type RuntimeRotationState<T> =
 	RotationState<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
-
 // Might be better to add the enum inside a struct rather than struct inside enum
 #[derive(Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
 #[scale_info(skip_type_params(T))]
@@ -93,7 +92,9 @@ pub enum PalletOffence {
 	MissedAuthorshipSlot,
 }
 
-impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+
+impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled, start_bidding_enabled, stop_bidding_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -124,12 +125,6 @@ pub mod pallet {
 
 		/// For retrieving missed authorship slots.
 		type MissedAuthorshipSlots: MissedAuthorshipSlots;
-
-		/// Used to get the list of bidding nodes in order initialise the backup set post-rotation.
-		type BidderProvider: BidderProvider<
-			ValidatorId = <Self as Chainflip>::ValidatorId,
-			Amount = Self::Amount,
-		>;
 
 		/// Criteria that need to be fulfilled to qualify as a validator node (authority or backup).
 		type KeygenQualification: QualifyNode<<Self as Chainflip>::ValidatorId>;
@@ -290,6 +285,11 @@ pub mod pallet {
 	pub(super) type MaxAuthoritySetContractionPercentage<T: Config> =
 		StorageValue<_, Percent, ValueQuery>;
 
+	/// Store the list of accounts that are active bidders.
+	#[pallet::storage]
+	#[pallet::getter(fn active_bidder)]
+	pub type ActiveBidder<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -314,6 +314,10 @@ pub mod pallet {
 		AuctionCompleted(Vec<ValidatorIdOf<T>>, T::Amount),
 		/// Some pallet configuration has been updated.
 		PalletConfigUpdated { update: PalletConfigUpdate },
+		/// An account has stopped bidding and will no longer take part in auctions.
+		StoppedBidding { account_id: T::AccountId },
+		/// A previously non-bidding account has started bidding.
+		StartedBidding { account_id: T::AccountId },
 	}
 
 	#[pallet::error]
@@ -344,6 +348,16 @@ pub mod pallet {
 		StillKeyHolder,
 		/// Validators cannot deregister until they stop bidding in the auction.
 		StillBidding,
+		/// Start Bidding is disabled due to Safe Mode.
+		StartBiddingDisabled,
+		/// Stop Bidding is disabled due to Safe Mode.
+		StopBiddingDisabled,
+		/// Can't stop bidding an account if it's already not bidding.
+		AlreadyNotBidding,
+		/// Can only start bidding if not already bidding.
+		AlreadyBidding,
+		/// We are in the auction phase
+		AuctionPhase,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -730,12 +744,12 @@ pub mod pallet {
 		#[pallet::weight(T::ValidatorWeightInfo::deregister_as_validator())]
 		pub fn deregister_as_validator(origin: OriginFor<T>) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin.clone())?;
+			ensure!(!Self::is_bidding(&account_id), Error::<T>::StillBidding);
 
 			let validator_id = <ValidatorIdOf<T> as IsType<
 				<T as frame_system::Config>::AccountId,
 			>>::from_ref(&account_id);
 
-			ensure!(!T::BidderProvider::is_bidder(validator_id), Error::<T>::StillBidding);
 			ensure!(
 				(LastExpiredEpoch::<T>::get()..=CurrentEpoch::<T>::get())
 					.all(|epoch| !HistoricalAuthorities::<T>::get(epoch).contains(validator_id)),
@@ -754,6 +768,54 @@ pub mod pallet {
 			T::AccountRoleRegistry::deregister_as_validator(&account_id)?;
 
 			Ok(())
+		}
+
+		/// Signals a non-bidding node's intent to start bidding, and participate in the
+		/// next auction. Should only be called if the account is in a non-bidding state.
+		///
+		/// ## Events
+		///
+		/// - [StartedBidding](Event::StartedBidding)
+		///
+		/// ## Errors
+		///
+		/// - [AlreadyBidding](Error::AlreadyBidding)
+		#[pallet::call_index(8)]
+		#[pallet::weight(T::ValidatorWeightInfo::start_bidding())]
+		pub fn start_bidding(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			ensure!(T::SafeMode::get().start_bidding_enabled, Error::<T>::StartBiddingDisabled);
+			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
+			Self::activate_bidding(&account_id)?;
+			Self::deposit_event(Event::StartedBidding { account_id });
+			Ok(().into())
+		}
+
+		/// Signals a node's intent to withdraw their funds after the next auction and desist
+		/// from future auctions. Should only be called by accounts that are not already not
+		/// bidding.
+		///
+		/// ## Events
+		///
+		/// - [StoppedBidding](Event::StoppedBidding)
+		///
+		/// ## Errors
+		///
+		/// - [AlreadyNotBidding](Error::AlreadyNotBidding)
+		/// - [DuringAuctionPhase](Error::AuctionPhase)
+		#[pallet::call_index(9)]
+		#[pallet::weight(T::ValidatorWeightInfo::stop_bidding())]
+		pub fn stop_bidding(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			ensure!(T::SafeMode::get().stop_bidding_enabled, Error::<T>::StopBiddingDisabled);
+
+			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
+
+			ensure!(!Self::is_auction_phase(), Error::<T>::AuctionPhase);
+
+			ActiveBidder::<T>::try_mutate(|bidders| {
+				bidders.remove(&account_id).then_some(()).ok_or(Error::<T>::AlreadyNotBidding)
+			})?;
+			Self::deposit_event(Event::StoppedBidding { account_id });
+			Ok(().into())
 		}
 	}
 
@@ -813,6 +875,15 @@ pub mod pallet {
 
 			AuctionBidCutoffPercentage::<T>::set(self.auction_bid_cutoff_percentage);
 
+			self.genesis_authorities.iter().for_each(|v| {
+				Pallet::<T>::activate_bidding(ValidatorIdOf::<T>::into_ref(v))
+					.expect("The account was just created so this can't fail.")
+			});
+			self.genesis_backups.keys().for_each(|v| {
+				Pallet::<T>::activate_bidding(ValidatorIdOf::<T>::into_ref(v))
+					.expect("The account was just created so this can't fail.")
+			});
+
 			Pallet::<T>::initialise_new_epoch(
 				GENESIS_EPOCH,
 				&self.genesis_authorities,
@@ -856,17 +927,6 @@ impl<T: Config> EpochInfo for Pallet<T> {
 
 	fn epoch_index() -> EpochIndex {
 		CurrentEpoch::<T>::get()
-	}
-
-	fn is_auction_phase() -> bool {
-		if CurrentRotationPhase::<T>::get() != RotationPhase::Idle {
-			return true
-		}
-
-		// start + ((epoch * percentage) / 100)
-		CurrentEpochStartedAt::<T>::get()
-			.saturating_add(RedemptionPeriodAsPercentage::<T>::get() * BlocksPerEpoch::<T>::get()) <=
-			frame_system::Pallet::<T>::current_block_number()
 	}
 
 	fn authority_count_at_epoch(epoch_index: EpochIndex) -> Option<AuthorityCount> {
@@ -938,7 +998,7 @@ impl<T: Config> Pallet<T> {
 			new_epoch,
 			&new_authorities,
 			rotation_state.bond,
-			T::BidderProvider::get_bidders()
+			Self::get_active_bids()
 				.into_iter()
 				.filter_map(|Bid { bidder_id, amount }| {
 					if !new_authorities.contains(&bidder_id) {
@@ -1036,7 +1096,7 @@ impl<T: Config> Pallet<T> {
 		)
 		.and_then(|resolver| {
 			resolver.resolve_auction(
-				T::BidderProvider::get_qualified_bidders::<T::KeygenQualification>(),
+				Self::get_qualified_bidders::<T::KeygenQualification>(),
 				AuctionBidCutoffPercentage::<T>::get(),
 			)
 		}) {
@@ -1047,7 +1107,7 @@ impl<T: Config> Pallet<T> {
 				));
 				debug_assert!(!auction_outcome.winners.is_empty());
 				debug_assert!({
-					let bids = T::BidderProvider::get_bidders()
+					let bids = Self::get_active_bids()
 						.into_iter()
 						.map(|bid| (bid.bidder_id, bid.amount))
 						.collect::<BTreeMap<_, _>>();
@@ -1211,6 +1271,52 @@ impl<T: Config> Pallet<T> {
 	/// The smallest number of parties that can generate a signature.
 	fn current_consensus_success_threshold() -> AuthorityCount {
 		cf_utilities::success_threshold_from_share_count(Self::current_authority_count())
+	}
+
+	/// Sets the `active` flag associated with the account to true, signalling that the account
+	/// wishes to participate in auctions, to become a network authority.
+	///
+	/// Returns an error if the account is already bidding.
+	fn activate_bidding(account_id: &T::AccountId) -> Result<(), Error<T>> {
+		ActiveBidder::<T>::try_mutate(|active_bidders| {
+			active_bidders
+				.insert(account_id.clone())
+				.then_some(())
+				.ok_or(Error::AlreadyBidding)
+		})
+	}
+
+	pub fn get_active_bids() -> Vec<Bid<ValidatorIdOf<T>, T::Amount>> {
+		ActiveBidder::<T>::get()
+			.into_iter()
+			.map(|bidder_id| Bid {
+				bidder_id: <ValidatorIdOf<T> as IsType<T::AccountId>>::from_ref(&bidder_id).clone(),
+				amount: T::FundingInfo::balance(&bidder_id),
+			})
+			.collect()
+	}
+
+	pub fn get_qualified_bidders<Q: QualifyNode<ValidatorIdOf<T>>>(
+	) -> Vec<Bid<ValidatorIdOf<T>, T::Amount>> {
+		Self::get_active_bids()
+			.into_iter()
+			.filter(|Bid { ref bidder_id, .. }| Q::is_qualified(bidder_id))
+			.collect()
+	}
+
+	pub fn is_bidding(account_id: &T::AccountId) -> bool {
+		ActiveBidder::<T>::get().contains(account_id)
+	}
+
+	pub fn is_auction_phase() -> bool {
+		if CurrentRotationPhase::<T>::get() != RotationPhase::Idle {
+			return true
+		}
+
+		// current_block > start + ((epoch * epoch%_can_redeem))
+		CurrentEpochStartedAt::<T>::get()
+			.saturating_add(RedemptionPeriodAsPercentage::<T>::get() * BlocksPerEpoch::<T>::get()) <=
+			frame_system::Pallet::<T>::current_block_number()
 	}
 }
 
@@ -1384,6 +1490,14 @@ impl<T: Config> AuthoritiesCfeVersions for Pallet<T> {
 	}
 }
 
+pub struct RemoveVanityNames<T>(PhantomData<T>);
+
+impl<T: Config> OnKilledAccount<T::AccountId> for RemoveVanityNames<T> {
+	fn on_killed_account(who: &T::AccountId) {
+		ActiveBidder::<T>::mutate(|bidders| bidders.remove(who));
+	}
+}
+
 pub struct QualifyByCfeVersion<T>(PhantomData<T>);
 
 impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByCfeVersion<T> {
@@ -1399,5 +1513,20 @@ impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByCfeVersi
 			.into_iter()
 			.filter(|id| NodeCFEVersion::<T>::get(id) >= min_version)
 			.collect()
+	}
+}
+
+impl<T: Config> RedemptionCheck for Pallet<T> {
+	type ValidatorId = ValidatorIdOf<T>;
+	fn ensure_can_redeem(validator_id: &Self::ValidatorId) -> DispatchResult {
+		if Self::is_auction_phase() {
+			ensure!(
+				!ActiveBidder::<T>::get()
+					.contains(<ValidatorIdOf<T> as IsType<T::AccountId>>::into_ref(validator_id)),
+				Error::<T>::StillBidding
+			);
+		}
+
+		Ok(())
 	}
 }

@@ -90,7 +90,7 @@ impl DepositAddress {
 }
 
 impl ChannelLifecycleHooks for DepositAddress {
-	// Default implentations are fine.
+	// Default implementations are fine.
 }
 
 #[test]
