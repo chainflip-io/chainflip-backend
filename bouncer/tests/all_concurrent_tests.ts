@@ -51,6 +51,7 @@ runWithTimeout(runAllConcurrentTests(), 1000000)
     process.exit(0);
   })
   .catch((error) => {
+    console.error!("All concurrent tests timed out. Exiting.")
     console.error(error);
     process.exit(-1);
   });
