@@ -893,7 +893,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		FailedBroadcasters::<T, I>::remove(broadcast_id);
 
 		// Call the failed callback and clean up the callback storage.
-		if let Some(callback) = RequestFailureCallbacks::<T, I>::take(broadcast_id) {
+		if let Some(callback) = RequestFailureCallbacks::<T, I>::get(broadcast_id) {
 			Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
 				broadcast_id,
 				result: callback.dispatch_bypass_filter(OriginTrait::root()).map(|_| ()).map_err(
@@ -906,8 +906,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					},
 				),
 			});
-			RequestSuccessCallbacks::<T, I>::remove(broadcast_id);
-			Self::clean_up_broadcast_storage(broadcast_id);
 		}
 
 		Self::deposit_event(Event::<T, I>::BroadcastAborted { broadcast_id });
