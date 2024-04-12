@@ -1,5 +1,9 @@
 use crate::{safe_mode, Runtime};
-use cf_chains::{arb::ArbitrumTrackedData, eth::Address, ChainState};
+use cf_chains::{
+	arb::{self, ArbitrumTrackedData},
+	eth::Address,
+	ChainState,
+};
 use cf_traits::SafeMode;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 #[cfg(feature = "try-runtime")]
