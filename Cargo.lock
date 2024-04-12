@@ -1399,6 +1399,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cf-engine-dylib"
+version = "1.4.3"
+dependencies = [
+ "chainflip-engine",
+ "engine-proc-macros",
+ "engine-upgrade-utils",
+]
+
+[[package]]
 name = "cf-integration-tests"
 version = "0.1.0"
 dependencies = [
