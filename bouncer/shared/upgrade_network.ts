@@ -77,7 +77,7 @@ async function incompatibleUpgradeNoBuild(
     'Check that the old engine has now shut down, and that the new engine is now running.',
   );
 
-  // Wait for the old broker and lp-api to shut down, and ensure the runtime upgrade is finalised.
+  // Ensure the runtime upgrade is finalised.
   await sleep(20000);
 
   console.log('Killing the old node.');
@@ -88,7 +88,7 @@ async function incompatibleUpgradeNoBuild(
   // let them shutdown
   await sleep(2000);
 
-  console.log('Stopped old broker and lp-api. Starting the new ones.');
+  console.log('Old broker and LP-API have crashed since we killed the node.');
 
   console.log('Starting the new node');
 

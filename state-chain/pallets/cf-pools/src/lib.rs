@@ -289,9 +289,11 @@ pub mod pallet {
 	pub(super) type ScheduledLimitOrderUpdates<T: Config> =
 		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<LimitOrderUpdate<T>>, ValueQuery>;
 
-	/// Maximum relative price impact for a single swap, measured in number of ticks.
+	/// Maximum price impact for a single swap, measured in number of ticks. Configurable
+	/// for each pool.
 	#[pallet::storage]
-	pub(super) type MaximumPriceImpact<T: Config> = StorageValue<_, u32, OptionQuery>;
+	pub(super) type MaximumPriceImpact<T: Config> =
+		StorageMap<_, Twox64Concat, AssetPair, u32, OptionQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -481,6 +483,11 @@ pub mod pallet {
 			lp: T::AccountId,
 			order_id: OrderId,
 			dispatch_at: BlockNumberFor<T>,
+		},
+		/// The Price Impact limit has been set for a pool.
+		PriceImpactLimitSet {
+			asset_pair: AssetPair,
+			limit: Option<u32>,
 		},
 	}
 
@@ -963,18 +970,36 @@ pub mod pallet {
 			}
 		}
 
-		/// Sets the allowed percentage increase (in number of ticks) of the price of the brought
-		/// asset during a swap. Note this limit applies to the difference between the swap's mean
-		/// price, and both the pool price before and after the swap. If the limit is exceeded the
-		/// swap will fail and will be retried in the next block.
+		/// Sets per-pool limits (in number of ticks) that determine the allowed change in price of
+		/// the bought asset during a swap.
+		///
+		/// Note that due to how the limit is applied, total measured price impact of a swap can
+		/// exceed the limit. The limit is applied to whichever is *smaller* out of the following
+		/// two metrics:
+		/// - The number of ticks between a swap's mean execution price and the pool price *before*
+		///   the swap.
+		/// - The number of ticks between a swap's mean execution price and the pool price *after*
+		///   the swap.
+		///
+		/// This ensures that small outlying pockets of liquidity cannot individually trigger the
+		/// limit. If the limit is exceeded the swap will fail and will be retried in the next
+		/// block.
+		///
+		/// Setting the limit to `None` disables it.
 		#[pallet::call_index(9)]
-		#[pallet::weight(T::WeightInfo::set_maximum_price_impact())]
+		#[pallet::weight(T::WeightInfo::set_maximum_price_impact(limits.len() as u32))]
 		pub fn set_maximum_price_impact(
 			origin: OriginFor<T>,
-			ticks: Option<u32>,
+			limits: BoundedVec<(Asset, Option<u32>), ConstU32<10>>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			MaximumPriceImpact::<T>::set(ticks);
+
+			for (asset, ticks) in limits {
+				let asset_pair = AssetPair::try_new::<T>(asset, STABLE_ASSET)?;
+				MaximumPriceImpact::<T>::set(asset_pair, ticks);
+				Self::deposit_event(Event::<T>::PriceImpactLimitSet { asset_pair, limit: ticks });
+			}
+
 			Ok(())
 		}
 	}
@@ -1033,7 +1058,7 @@ impl<T: Config> SwappingApi for Pallet<T> {
 					core::cmp::min(core::cmp::max(tick_before, swap_tick), tick_after)
 				};
 
-				if let Some(maximum_price_impact) = MaximumPriceImpact::<T>::get() {
+				if let Some(maximum_price_impact) = MaximumPriceImpact::<T>::get(asset_pair) {
 					if core::cmp::min(
 						bounded_swap_tick.abs_diff(tick_after),
 						bounded_swap_tick.abs_diff(tick_before),

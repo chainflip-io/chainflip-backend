@@ -12,7 +12,7 @@ use cf_traits::{
 };
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use frame_system::pallet_prelude::BlockNumberFor;
-use sp_core::U256;
+use sp_core::{bounded_vec, U256};
 use sp_runtime::Permill;
 
 #[test]
@@ -1123,6 +1123,23 @@ fn test_maximum_slippage_limits() {
 	use cf_utilities::{assert_err, assert_ok};
 
 	new_test_ext().execute_with(|| {
+		const BASE_ASSET: Asset = Asset::Eth;
+		const OTHER_ASSET: Asset = Asset::Btc;
+
+		let asset_pair = AssetPair::new(BASE_ASSET, STABLE_ASSET).unwrap();
+
+		// Ensure limits are configured per pool: this limit should be ignored during testing.
+		assert_ok!(LiquidityPools::set_maximum_price_impact(
+			RuntimeOrigin::root(),
+			bounded_vec![(OTHER_ASSET, Some(1))],
+		));
+		System::assert_last_event(RuntimeEvent::LiquidityPools(
+			crate::Event::<Test>::PriceImpactLimitSet {
+				asset_pair: AssetPair::new(OTHER_ASSET, STABLE_ASSET).unwrap(),
+				limit: Some(1),
+			},
+		));
+
 		let test_swaps = |size_limit_when_slippage_limit_is_hit| {
 			for (size, expected_output) in [
 				(0, 0),
@@ -1149,19 +1166,17 @@ fn test_maximum_slippage_limits() {
 				(14500, 12663),
 				(15500, 13419),
 			] {
-				pallet_cf_pools::Pools::<Test>::remove(
-					AssetPair::new(Asset::Eth, Asset::Usdc).unwrap(),
-				);
+				pallet_cf_pools::Pools::<Test>::remove(asset_pair);
 				assert_ok!(LiquidityPools::new_pool(
 					RuntimeOrigin::root(),
-					Asset::Eth,
+					BASE_ASSET,
 					STABLE_ASSET,
 					Default::default(),
 					price_at_tick(0).unwrap(),
 				));
 				assert_ok!(LiquidityPools::set_range_order(
 					RuntimeOrigin::signed(ALICE),
-					Asset::Eth,
+					BASE_ASSET,
 					STABLE_ASSET,
 					0,
 					Some(-10000..10000),
@@ -1178,19 +1193,31 @@ fn test_maximum_slippage_limits() {
 
 		test_swaps(u128::MAX);
 
-		assert_ok!(LiquidityPools::set_maximum_price_impact(RuntimeOrigin::root(), Some(954),));
+		assert_ok!(LiquidityPools::set_maximum_price_impact(
+			RuntimeOrigin::root(),
+			bounded_vec![(BASE_ASSET, Some(954))]
+		));
 
 		test_swaps(10500);
 
-		assert_ok!(LiquidityPools::set_maximum_price_impact(RuntimeOrigin::root(), None,));
+		assert_ok!(LiquidityPools::set_maximum_price_impact(
+			RuntimeOrigin::root(),
+			bounded_vec![(BASE_ASSET, None)]
+		));
 
 		test_swaps(u128::MAX);
 
-		assert_ok!(LiquidityPools::set_maximum_price_impact(RuntimeOrigin::root(), Some(10),));
+		assert_ok!(LiquidityPools::set_maximum_price_impact(
+			RuntimeOrigin::root(),
+			bounded_vec![(BASE_ASSET, Some(10))]
+		));
 
 		test_swaps(300);
 
-		assert_ok!(LiquidityPools::set_maximum_price_impact(RuntimeOrigin::root(), Some(300),));
+		assert_ok!(LiquidityPools::set_maximum_price_impact(
+			RuntimeOrigin::root(),
+			bounded_vec![(BASE_ASSET, Some(300))]
+		));
 
 		test_swaps(3500);
 	});

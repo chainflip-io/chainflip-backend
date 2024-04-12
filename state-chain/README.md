@@ -10,59 +10,20 @@ Follow these steps to get started :hammer_and_wrench:
 
 First, complete the [basic Rust setup instructions](./doc/rust-setup.md).
 
-### Makefile
-
-Use Rust's native `cargo` command to build and launch the template node:
-
-```sh
-cargo run --release -- --dev --tmp
-```
-
 ### Build
 
-The `cargo run` command will perform an initial build. Use the following command to build the node without launching it:
+Use the following command to build the node without launching it:
 
 ```sh
-cargo build --release
-```
-
-### Chain Specification Docs
-
-Docs on custom chain specifications can be found at <https://docs.substrate.io/main-docs/build/chain-spec/>.
-
-In order to create a custom chain specification use `./target/release/chainflip-node build-spec --help` to find out how.
-
-### Benchmark
-
-To benchmark the node for a production release you can run:
-
-```sh
-./state-chain/scripts/benchmark-all.sh
-```
-
-This script is building the node, executing the benchmarks, updating the weight files and guide you through adding the diff of any benchmark.
-
-### Embedded Docs
-
-Once the project has been built, the following command can be used to explore all parameters and subcommands:
-
-```sh
-./target/release/chainflip-node -h
+cargo cf-build-release
 ```
 
 ## Run
 
-The provided `cargo run` command will launch a temporary node and its state will be discarded after you terminate the
-process. After the project has been built, there are other ways to launch the node.
+Once the project has been built, the following command can be used to explore all parameters and subcommands:
 
-### Configuration
-
-For local development you need to set the following env vars:
-
-```bash
-export STATE_CHAIN_GATEWAY_ADDRESS="0x..."
-export KEY_MANAGER_ADDRESS="0x..."
-export ETHEREUM_CHAIN_ID=4
+```sh
+./target/release/chainflip-node --help
 ```
 
 ### Single-Node Development Chain
@@ -73,7 +34,7 @@ This command will start the single-node development chain with persistent state:
 ./target/release/chainflip-node --dev
 ```
 
-Purge the development chain's state:
+Purging the development chain's state:
 
 ```bash
 ./target/release/chainflip-node purge-chain --dev
@@ -85,13 +46,41 @@ Start the development chain with detailed logging:
 RUST_LOG=debug RUST_BACKTRACE=1 ./target/release/chainflip-node -lruntime=debug --dev
 ```
 
+> See the section on localnets in the top-level [README](../README.md#localnet) file.
+
+### Connecting to a live network
+
+You can connect to a live network by specifying the appropriate *raw* chainspec.
+
+For example, for perseverance testnet:
+
+```sh
+./target/release/chainflip-node --chain=./state-chain/node/chainspecs/perseverance.chainspec.raw.json
+```
+
 ### Multi-Node Local Testnet
 
 With a little effort you can run a local testnet [using docker compose](doc/docker-compose).
 
-## Template Structure
+### Benchmark
 
-A Substrate project such as this consists of a number of components that are spread across a few directories.
+To benchmark the node for a production release you need to build with the runtime-benchmarks feature enable.
+
+```sh
+cargo cf-build-benchmarks
+```
+
+After that you can run:
+
+```sh
+./state-chain/scripts/benchmark-all.sh
+```
+
+This will run the benchmarks and update the weights files for each pallet.
+
+## Components
+
+Chainflip's State Chain is build using Substrate and the directory structure is based on common substrate conventions.
 
 ### Node
 
@@ -177,29 +166,3 @@ A FRAME pallet is compromised of a number of blockchain primitives:
 - Errors: When a dispatchable fails, it returns an error.
 - Config: The `Config` configuration interface is used to define the types and parameters upon
   which a FRAME pallet depends.
-
-### Run in Docker
-
-First, install [Docker](https://docs.docker.com/get-docker/) and
-[Docker Compose](https://docs.docker.com/compose/install/).
-
-Then run the following command to start a single node development chain.
-
-```bash
-./scripts/docker_run.sh
-```
-
-This command will firstly compile your code, and then start a local development network. You can also replace the
-default command (`cargo build --release && ./target/release/chainflip-node --dev --ws-external`)
-by appending your own. A few useful ones are as follow.
-
-```bash
-# Run Substrate node without re-compiling
-./scripts/docker_run.sh ./target/release/chainflip-node --dev --ws-external
-
-# Purge the local dev chain
-./scripts/docker_run.sh ./target/release/chainflip-node purge-chain --dev
-
-# Check whether the code is compilable
-./scripts/docker_run.sh cargo check
-```
