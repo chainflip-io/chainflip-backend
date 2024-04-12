@@ -1,0 +1,21 @@
+[Unit]
+Description=Chainflip Validator Engine
+After=chainflip-node.service
+
+[Service]
+Restart=always
+RestartSec=30
+Type=simple
+
+<<<<<<<< HEAD:engine-runner-bin/package/sisyphos/chainflip-engine1.3.service
+ExecStart=/usr/bin/chainflip-engine1.3 --config-root /etc/chainflip/
+========
+ExecStart=/usr/bin/chainflip-engine --config-root /etc/chainflip/
+Environment=LD_LIBRARY_PATH=/usr/lib/chainflip-engine
+>>>>>>>> 8f28007a5 (feat: single binary CFE upgrades):engine-runner-bin/package/sisyphos/chainflip-engine.service
+
+LimitNOFILE=16000
+LimitNOFILESoft=16000
+
+[Install]
+WantedBy=multi-user.target

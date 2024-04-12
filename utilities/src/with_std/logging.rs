@@ -9,48 +9,59 @@ pub struct LoggingSettings {
 	pub command_server_port: Port,
 }
 
+#[derive(Debug)]
+pub enum ErrorType {
+	Error(anyhow::Error),
+	Panic,
+}
+
 #[macro_export]
 macro_rules! print_start_and_end {
 	(async $e:expr) => {
 		$crate::print_start_and_end!(@ ::std::panic::AssertUnwindSafe($e).catch_unwind().await);
-		()
 	};
 	($e:expr) => {
 		$crate::print_start_and_end!(@ ::std::panic::catch_unwind(::std::panic::AssertUnwindSafe(|| $e)));
 	};
 	(@ $e:expr) => {
-		println!(
-			"Starting {} v{} ({})",
-			env!("CARGO_PKG_NAME"),
-			env!("CARGO_PKG_VERSION"),
-			$crate::internal_lazy_format!(if let Some(repository_link) = $crate::repository_link() => ("CI Build: \"{}\"", repository_link) else => ("Non-CI Build"))
-		);
-		println!(
-			"
-			 ██████╗██╗  ██╗ █████╗ ██╗███╗   ██╗███████╗██╗     ██╗██████╗
-			██╔════╝██║  ██║██╔══██╗██║████╗  ██║██╔════╝██║     ██║██╔══██╗
-			██║     ███████║███████║██║██╔██╗ ██║█████╗  ██║     ██║██████╔╝
-			██║     ██╔══██║██╔══██║██║██║╚██╗██║██╔══╝  ██║     ██║██╔═══╝
-			╚██████╗██║  ██║██║  ██║██║██║ ╚████║██║     ███████╗██║██║
-			 ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝╚═╝     ╚══════╝╚═╝╚═╝
-			"
-		);
+		{
+			println!(
+				"Starting {} v{} ({})",
+				env!("CARGO_PKG_NAME"),
+				env!("CARGO_PKG_VERSION"),
+				$crate::internal_lazy_format!(if let Some(repository_link) = $crate::repository_link() => ("CI Build: \"{}\"", repository_link) else => ("Non-CI Build"))
+			);
+			println!(
+				"
+				 ██████╗██╗  ██╗ █████╗ ██╗███╗   ██╗███████╗██╗     ██╗██████╗
+				██╔════╝██║  ██║██╔══██╗██║████╗  ██║██╔════╝██║     ██║██╔══██╗
+				██║     ███████║███████║██║██╔██╗ ██║█████╗  ██║     ██║██████╔╝
+				██║     ██╔══██║██╔══██║██║██║╚██╗██║██╔══╝  ██║     ██║██╔═══╝
+				╚██████╗██║  ██║██║  ██║██║██║ ╚████║██║     ███████╗██║██║
+				 ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝╚═╝     ╚══════╝╚═╝╚═╝
+				"
+			);
 
-		match $e {
-			Ok(result) => match result {
-				Ok(_) => {},
-				Err(error) => {
-					println!("Exiting {} due to error: {error:?}", env!("CARGO_PKG_NAME"));
+			match $e {
+				Ok(result) => match result {
+					Ok(_) => {
+						Ok(())
+					},
+					Err(error) => {
+						println!("Exiting {} due to error: {error:?}", env!("CARGO_PKG_NAME"));
+						Err(utilities::logging::ErrorType::Error(error))
+					},
 				},
-			},
-			Err(panic) => {
-				// We'll never catch a panic since we use sp-panic-handler which set up a panic hook and abort the process
-				println!(
-					"Exiting {} due to panic: {:#?}",
-					env!("CARGO_PKG_NAME"),
-					panic.downcast_ref::<&str>().map(|str| *str).or_else(|| panic.downcast_ref::<String>().map(String::as_str))
-				);
-			},
+				Err(panic) => {
+					// We'll never catch a panic since we use sp-panic-handler which set up a panic hook and abort the process
+					println!(
+						"Exiting {} due to panic: {:#?}",
+						env!("CARGO_PKG_NAME"),
+						panic.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| panic.downcast_ref::<String>().cloned())
+					);
+					Err(utilities::logging::ErrorType::Panic)
+				},
+			}
 		}
 	};
 }
