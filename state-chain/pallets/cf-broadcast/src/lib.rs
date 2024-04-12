@@ -36,7 +36,7 @@ use frame_support::{
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
 use scale_info::TypeInfo;
-use sp_std::{collections::btree_set::BTreeSet, marker, marker::PhantomData, prelude::*, vec::Vec};
+use sp_std::{collections::btree_set::BTreeSet, marker, marker::PhantomData, prelude::*};
 pub use weights::WeightInfo;
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -299,7 +299,7 @@ pub mod pallet {
 	/// after many retries.
 	#[pallet::storage]
 	#[pallet::getter(fn aborted_broadcasts)]
-	pub type AbortedBroadcasts<T, I = ()> = StorageValue<_, Vec<BroadcastId>, ValueQuery>;
+	pub type AbortedBroadcasts<T, I = ()> = StorageValue<_, BTreeSet<BroadcastId>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -347,6 +347,10 @@ pub mod pallet {
 		InvalidBroadcastId,
 		/// A threshold signature was expected but not available.
 		ThresholdSignatureUnavailable,
+		/// Only aborted broadcasts can be re-signed.
+		BroadcastNotAborted,
+		/// The broadcast's api call is no longer available.
+		ApiCallUnavailable,
 	}
 
 	#[pallet::hooks]
@@ -638,7 +642,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Resign and optionally re-broadcast a request that was previously aborted.
+		/// Re-sign and optionally re-broadcast a request that was previously aborted.
 		///
 		/// Requires governance origin.
 		#[pallet::call_index(5)]
@@ -649,21 +653,7 @@ pub mod pallet {
 			request_broadcast: bool,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			ensure!(
-				AbortedBroadcasts::<T, I>::mutate(|aborted: &mut Vec<u32>| {
-					// Convert to BTreeSet to remove duplicates.
-					let mut unique_ids = BTreeSet::<u32>::from_iter(aborted.iter().copied());
-					let removed = unique_ids.remove(&broadcast_id);
-					*aborted = Vec::from_iter(unique_ids.into_iter());
-					removed
-				}),
-				"Broadcast is not in the aborted list."
-			);
-			let api_call = Self::clean_up_broadcast_storage(broadcast_id)
-				.ok_or("No threshold signature data")?;
-
-			PendingBroadcasts::<T, I>::mutate(|pending| pending.insert(broadcast_id));
-			Self::threshold_sign(api_call, broadcast_id, request_broadcast);
+			Self::threshold_resign(broadcast_id, request_broadcast)?;
 			Ok(())
 		}
 	}
@@ -955,9 +945,19 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 		(broadcast_id, Self::threshold_sign(api_call, broadcast_id, false))
 	}
 
-	fn threshold_resign(broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId> {
-		ThresholdSignatureData::<T, I>::get(broadcast_id)
-			.map(|(api_call, _signature)| Self::threshold_sign(api_call, broadcast_id, false))
+	fn threshold_resign(
+		broadcast_id: BroadcastId,
+		request_broadcast: bool,
+	) -> Result<ThresholdSignatureRequestId, DispatchError> {
+		ensure!(
+			AbortedBroadcasts::<T, I>::mutate(|aborted| { aborted.remove(&broadcast_id) }),
+			Error::<T, I>::BroadcastNotAborted
+		);
+		let api_call = Self::clean_up_broadcast_storage(broadcast_id)
+			.ok_or(Error::<T, I>::ApiCallUnavailable)?;
+
+		PendingBroadcasts::<T, I>::mutate(|pending| pending.insert(broadcast_id));
+		Ok(Self::threshold_sign(api_call, broadcast_id, request_broadcast))
 	}
 
 	fn expire_broadcast(broadcast_id: BroadcastId) {
