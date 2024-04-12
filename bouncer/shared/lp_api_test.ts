@@ -349,7 +349,14 @@ async function testLimitOrder(version: string) {
 
   // Burn the limit order
   const burnLimitOrder = (
-    await lpApiRpc(`lp_set_limit_order` + versionSubfix, [testRpcAsset, 'USDC', 'sell', orderId, tick, zero])
+    await lpApiRpc(`lp_set_limit_order` + versionSubfix, [
+      testRpcAsset,
+      'USDC',
+      'sell',
+      orderId,
+      tick,
+      zero,
+    ])
   ).tx_details.response;
 
   assert(burnLimitOrder.length >= 1, `Empty burn limit order result`);
@@ -381,10 +388,10 @@ export async function testLpApi() {
   await Promise.all([
     testRegisterLiquidityRefundAddress(),
     testLiquidityDeposit(),
-    testWithdrawAsset("V1"),
+    testWithdrawAsset('V1'),
     testRegisterWithExistingLpAccount(),
-    testRangeOrder("V1"),
-    testLimitOrder("V1"),
+    testRangeOrder('V1'),
+    testLimitOrder('V1'),
     testGetOpenSwapChannels(),
   ]);
 
@@ -393,10 +400,10 @@ export async function testLpApi() {
   await Promise.all([
     testRegisterLiquidityRefundAddress(),
     testLiquidityDeposit(),
-    testWithdrawAsset("V2"),
+    testWithdrawAsset('V2'),
     testRegisterWithExistingLpAccount(),
-    testRangeOrder("V2"),
-    testLimitOrder("V2"),
+    testRangeOrder('V2'),
+    testLimitOrder('V2'),
     testGetOpenSwapChannels(),
   ]);
 
