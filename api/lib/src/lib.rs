@@ -176,6 +176,16 @@ pub trait ValidatorApi: SimpleSubmissionApi {
 			.await
 			.context("Could not de-register as validator")
 	}
+	async fn stop_bidding(&self) -> Result<H256> {
+		self.simple_submission_with_dry_run(pallet_cf_validator::Call::stop_bidding {})
+			.await
+			.context("Could not stop bidding")
+	}
+	async fn start_bidding(&self) -> Result<H256> {
+		self.simple_submission_with_dry_run(pallet_cf_validator::Call::start_bidding {})
+			.await
+			.context("Could not start bidding")
+	}
 }
 
 #[async_trait]
@@ -257,29 +267,6 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 			.await?;
 
 		Ok(tx_hash)
-	}
-
-	async fn stop_bidding(&self) -> Result<()> {
-		let (tx_hash, ..) = self
-			.submit_signed_extrinsic(pallet_cf_validator::Call::stop_bidding {})
-			.await
-			.until_in_block()
-			.await
-			.context("Could not stop bidding")?;
-		println!("Account stopped bidding, in tx {tx_hash:#x}.");
-		Ok(())
-	}
-
-	async fn start_bidding(&self) -> Result<()> {
-		let (tx_hash, ..) = self
-			.submit_signed_extrinsic(pallet_cf_validator::Call::start_bidding {})
-			.await
-			.until_in_block()
-			.await
-			.context("Could not start bidding")?;
-		println!("Account started bidding at tx {tx_hash:#x}.");
-
-		Ok(())
 	}
 
 	async fn set_vanity_name(&self, name: String) -> Result<()> {
