@@ -524,8 +524,9 @@ pub trait Broadcaster<C: Chain> {
 		api_call: Self::ApiCall,
 	) -> (BroadcastId, ThresholdSignatureRequestId);
 
-	/// Reequest a new threshold signature and optionally also re-request the broadcast.
-	fn threshold_resign(
+	/// Request a new threshold signature for a previously aborted broadcast's payload, optionally
+	/// also requesting the validators to send the transaction.
+	fn re_sign_aborted_broadcast(
 		broadcast_id: BroadcastId,
 		request_broadcast: bool,
 	) -> Result<ThresholdSignatureRequestId, DispatchError>;

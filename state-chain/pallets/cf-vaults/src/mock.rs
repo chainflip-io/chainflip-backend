@@ -159,7 +159,7 @@ impl Broadcaster<MockEthereum> for MockBroadcaster {
 		Self::threshold_sign_and_broadcast(api_call)
 	}
 
-	fn threshold_resign(_broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId> {
+	fn re_sign_aborted_broadcast(_broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId> {
 		unimplemented!()
 	}
 

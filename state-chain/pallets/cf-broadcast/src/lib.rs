@@ -653,7 +653,7 @@ pub mod pallet {
 			request_broadcast: bool,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::threshold_resign(broadcast_id, request_broadcast)?;
+			Self::re_sign_aborted_broadcast(broadcast_id, request_broadcast)?;
 			Ok(())
 		}
 	}
@@ -945,7 +945,7 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 		(broadcast_id, Self::threshold_sign(api_call, broadcast_id, false))
 	}
 
-	fn threshold_resign(
+	fn re_sign_aborted_broadcast(
 		broadcast_id: BroadcastId,
 		request_broadcast: bool,
 	) -> Result<ThresholdSignatureRequestId, DispatchError> {

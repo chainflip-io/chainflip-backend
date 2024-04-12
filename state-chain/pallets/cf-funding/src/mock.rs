@@ -174,7 +174,9 @@ impl Broadcaster<Ethereum> for MockBroadcaster {
 		unimplemented!()
 	}
 
-	fn threshold_resign(_broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId> {
+	fn re_sign_aborted_broadcast(
+		_broadcast_id: BroadcastId,
+	) -> Option<ThresholdSignatureRequestId> {
 		unimplemented!()
 	}
 
