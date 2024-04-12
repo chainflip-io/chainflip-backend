@@ -91,10 +91,10 @@ pub struct BoostPool<AccountId, C: Chain> {
 	// Mapping from booster to the available amount they own in `available_amount`
 	amounts: BTreeMap<AccountId, ScaledAmount<C>>,
 	// Boosted deposits awaiting finalisation and how much of them is owed to which booster
-	pending_boosts: BTreeMap<BoostId, BTreeMap<AccountId, ScaledAmount<C>>>,
+	pending_boosts: BTreeMap<PrewitnessedDepositId, BTreeMap<AccountId, ScaledAmount<C>>>,
 	// Stores boosters who have indicated that they want to stop boosting along with
 	// the pending deposits that they have to wait to be finalised
-	pending_withdrawals: BTreeMap<AccountId, BTreeSet<BoostId>>,
+	pending_withdrawals: BTreeMap<AccountId, BTreeSet<PrewitnessedDepositId>>,
 }
 
 impl<AccountId, C: Chain> BoostPool<AccountId, C>
@@ -122,17 +122,17 @@ where
 		}
 	}
 
-	fn add_funds_inner(&mut self, account_id: AccountId, added_amount: ScaledAmount<C>) {
+	fn add_funds_inner(&mut self, booster_id: AccountId, added_amount: ScaledAmount<C>) {
 		// To keep things simple, we assume that the booster no longer wants to withdraw
 		// if they add more funds:
-		self.pending_withdrawals.remove(&account_id);
+		self.pending_withdrawals.remove(&booster_id);
 
-		self.amounts.entry(account_id).or_default().saturating_accrue(added_amount);
+		self.amounts.entry(booster_id).or_default().saturating_accrue(added_amount);
 		self.available_amount.saturating_accrue(added_amount);
 	}
 
-	pub(crate) fn add_funds(&mut self, account_id: AccountId, added_amount: C::ChainAmount) {
-		self.add_funds_inner(account_id, ScaledAmount::from_chain_amount(added_amount));
+	pub(crate) fn add_funds(&mut self, booster_id: AccountId, added_amount: C::ChainAmount) {
+		self.add_funds_inner(booster_id, ScaledAmount::from_chain_amount(added_amount));
 	}
 
 	pub(crate) fn get_available_amount(&self) -> C::ChainAmount {
@@ -141,7 +141,7 @@ where
 
 	pub(crate) fn provide_funds_for_boosting(
 		&mut self,
-		boost_id: BoostId,
+		prewitnessed_deposit_id: PrewitnessedDepositId,
 		amount_to_boost: C::ChainAmount,
 	) -> Result<(C::ChainAmount, C::ChainAmount), &'static str> {
 		let amount_to_boost = ScaledAmount::<C>::from_chain_amount(amount_to_boost);
@@ -158,7 +158,7 @@ where
 			(provided_amount, fee)
 		};
 
-		self.use_funds_for_boosting(boost_id, provided_amount, fee_amount)?;
+		self.use_funds_for_boosting(prewitnessed_deposit_id, provided_amount, fee_amount)?;
 
 		Ok((
 			provided_amount.saturating_add(fee_amount).into_chain_amount(),
@@ -170,7 +170,7 @@ where
 	/// among current boosters (along with the fee) upon finalisation
 	fn use_funds_for_boosting(
 		&mut self,
-		boost_id: BoostId,
+		prewitnessed_deposit_id: PrewitnessedDepositId,
 		required_amount: ScaledAmount<C>,
 		boost_fee: ScaledAmount<C>,
 	) -> Result<(), &'static str> {
@@ -237,7 +237,8 @@ where
 		// ensure that we correctly account for every single atomic unit even in presence
 		// of rounding errors:
 		use nanorand::{Rng, WyRand};
-		let lucky_index = WyRand::new_seed(boost_id).generate_range(0..self.amounts.len());
+		let lucky_index =
+			WyRand::new_seed(prewitnessed_deposit_id).generate_range(0..self.amounts.len());
 		if let Some((lucky_id, amount)) = self.amounts.iter_mut().nth(lucky_index) {
 			amount.saturating_accrue(excess_contributed);
 
@@ -249,7 +250,7 @@ where
 		// For every active booster, record how much of this particular deposit they are owed,
 		// (which is their pool share at the time of boosting):
 		self.pending_boosts
-			.try_insert(boost_id, boosters_to_receive)
+			.try_insert(prewitnessed_deposit_id, boosters_to_receive)
 			.map_err(|_| "Pending boost id already exists")?;
 
 		Ok(())
@@ -257,9 +258,9 @@ where
 
 	pub(crate) fn on_finalised_deposit(
 		&mut self,
-		boost_id: BoostId,
+		prewitnessed_deposit_id: PrewitnessedDepositId,
 	) -> Vec<(AccountId, C::ChainAmount)> {
-		let Some(boost_contributions) = self.pending_boosts.remove(&boost_id) else {
+		let Some(boost_contributions) = self.pending_boosts.remove(&prewitnessed_deposit_id) else {
 			// The deposit hadn't been boosted
 			return vec![];
 		};
@@ -270,8 +271,8 @@ where
 			// Depending on whether the booster is withdrawing, add deposits to
 			// their free balance or back to the available boost pool:
 			if let Some(pending_deposits) = self.pending_withdrawals.get_mut(&booster_id) {
-				if !pending_deposits.remove(&boost_id) {
-					log::warn!("Withdrawing booster contributed to boost {boost_id}, but it is not in pending withdrawals");
+				if !pending_deposits.remove(&prewitnessed_deposit_id) {
+					log::warn!("Withdrawing booster contributed to boost {prewitnessed_deposit_id}, but it is not in pending withdrawals");
 				}
 
 				if pending_deposits.is_empty() {
@@ -288,16 +289,19 @@ where
 	}
 
 	// Returns the number of boosters affected
-	pub fn on_lost_deposit(&mut self, boost_id: BoostId) -> usize {
-		let Some(booster_contributions) = self.pending_boosts.remove(&boost_id) else {
-			log_or_panic!("Failed to find boost record for a lost deposit: {boost_id}");
+	pub fn on_lost_deposit(&mut self, prewitnessed_deposit_id: PrewitnessedDepositId) -> usize {
+		let Some(booster_contributions) = self.pending_boosts.remove(&prewitnessed_deposit_id)
+		else {
+			log_or_panic!(
+				"Failed to find boost record for a lost deposit: {prewitnessed_deposit_id}"
+			);
 			return 0;
 		};
 
 		for booster_id in booster_contributions.keys() {
 			if let Some(pending_deposits) = self.pending_withdrawals.get_mut(booster_id) {
-				if !pending_deposits.remove(&boost_id) {
-					log::warn!("Withdrawing booster contributed to boost {boost_id}, but it is not in pending withdrawals");
+				if !pending_deposits.remove(&prewitnessed_deposit_id) {
+					log::warn!("Withdrawing booster contributed to boost {prewitnessed_deposit_id}, but it is not in pending withdrawals");
 				}
 
 				if pending_deposits.is_empty() {
@@ -314,7 +318,7 @@ where
 	pub fn stop_boosting(
 		&mut self,
 		booster_id: AccountId,
-	) -> Result<(C::ChainAmount, BTreeSet<BoostId>), &'static str> {
+	) -> Result<(C::ChainAmount, BTreeSet<PrewitnessedDepositId>), &'static str> {
 		let Some(booster_active_amount) = self.amounts.remove(&booster_id) else {
 			return Err("Account not found in boost pool")
 		};
@@ -325,7 +329,7 @@ where
 			.pending_boosts
 			.iter()
 			.filter(|(_, owed_amounts)| owed_amounts.contains_key(&booster_id))
-			.map(|(boost_id, _)| *boost_id)
+			.map(|(prewitnessed_deposit_id, _)| *prewitnessed_deposit_id)
 			.collect();
 
 		if !pending_deposits.is_empty() {
@@ -336,14 +340,14 @@ where
 	}
 
 	#[cfg(test)]
-	pub fn get_pending_boosts(&self) -> Vec<BoostId> {
+	pub fn get_pending_boosts(&self) -> Vec<PrewitnessedDepositId> {
 		self.pending_boosts.keys().copied().collect()
 	}
 	#[cfg(test)]
 	pub fn get_available_amount_for_account(
 		&self,
-		account_id: &AccountId,
+		booster_id: &AccountId,
 	) -> Option<C::ChainAmount> {
-		self.amounts.get(account_id).copied().map(|a| a.into_chain_amount())
+		self.amounts.get(booster_id).copied().map(|a| a.into_chain_amount())
 	}
 }

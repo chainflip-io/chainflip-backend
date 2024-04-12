@@ -12,8 +12,8 @@ const BOOSTER_1: AccountId = 1;
 const BOOSTER_2: AccountId = 2;
 const BOOSTER_3: AccountId = 3;
 
-const BOOST_1: BoostId = 1;
-const BOOST_2: BoostId = 2;
+const BOOST_1: PrewitnessedDepositId = 1;
+const BOOST_2: PrewitnessedDepositId = 2;
 
 #[track_caller]
 pub fn check_pool(pool: &TestPool, amounts: impl IntoIterator<Item = (AccountId, Amount)>) {
@@ -34,7 +34,7 @@ pub fn check_pool(pool: &TestPool, amounts: impl IntoIterator<Item = (AccountId,
 #[track_caller]
 fn check_pending_boosts(
 	pool: &TestPool,
-	boosts: impl IntoIterator<Item = (BoostId, Vec<(AccountId, Amount)>)>,
+	boosts: impl IntoIterator<Item = (PrewitnessedDepositId, Vec<(AccountId, Amount)>)>,
 ) {
 	let expected_boosts: BTreeMap<_, _> = boosts.into_iter().collect();
 
@@ -44,8 +44,8 @@ fn check_pending_boosts(
 		"mismatch in pending boosts ids"
 	);
 
-	for (boost_id, boost_amounts) in &pool.pending_boosts {
-		let expected_amounts = &expected_boosts[boost_id];
+	for (prewitnessed_deposit_id, boost_amounts) in &pool.pending_boosts {
+		let expected_amounts = &expected_boosts[prewitnessed_deposit_id];
 
 		assert_eq!(
 			BTreeMap::from_iter(expected_amounts.iter().copied()),
@@ -59,11 +59,13 @@ fn check_pending_boosts(
 #[track_caller]
 fn check_pending_withdrawals(
 	pool: &TestPool,
-	withdrawals: impl IntoIterator<Item = (AccountId, Vec<BoostId>)>,
+	withdrawals: impl IntoIterator<Item = (AccountId, Vec<PrewitnessedDepositId>)>,
 ) {
 	let expected_withdrawals: BTreeMap<_, BTreeSet<_>> = withdrawals
 		.into_iter()
-		.map(|(account_id, boost_ids)| (account_id, boost_ids.into_iter().collect()))
+		.map(|(account_id, prewitnessed_deposit_ids)| {
+			(account_id, prewitnessed_deposit_ids.into_iter().collect())
+		})
 		.collect();
 
 	assert_eq!(pool.pending_withdrawals, expected_withdrawals, "mismatch in pending withdrawals");
@@ -404,12 +406,12 @@ fn small_rewards_accumulate() {
 	check_pool(&pool, [(BOOSTER_1, 1004), (BOOSTER_2, 50)]);
 
 	// 4 more boost like that and BOOSTER 2 should have withdrawable fees:
-	for boost_id in 1..=4 {
+	for prewitnessed_deposit_id in 1..=4 {
 		assert_eq!(
-			pool.provide_funds_for_boosting(boost_id, SMALL_DEPOSIT),
+			pool.provide_funds_for_boosting(prewitnessed_deposit_id, SMALL_DEPOSIT),
 			Ok((SMALL_DEPOSIT, 5))
 		);
-		assert_eq!(pool.on_finalised_deposit(boost_id), vec![]);
+		assert_eq!(pool.on_finalised_deposit(prewitnessed_deposit_id), vec![]);
 	}
 
 	// Note the increase in Booster 2's balance:

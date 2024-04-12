@@ -58,7 +58,7 @@ pub use weights::WeightInfo;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum BoostStatus {
-	Boosted { boost_id: BoostId, pools: Vec<BoostPoolTier> },
+	Boosted { prewitnessed_deposit_id: PrewitnessedDepositId, pools: Vec<BoostPoolTier> },
 	NotBoosted,
 }
 
@@ -91,8 +91,6 @@ pub struct BoostOutput<C: Chain> {
 	used_pools: BTreeMap<BoostPoolTier, C::ChainAmount>,
 	total_fee: C::ChainAmount,
 }
-
-type BoostId = PrewitnessedDepositId;
 
 const SORTED_BOOST_TIERS: [BoostPoolTier; 3] =
 	[BoostPoolTier::FiveBps, BoostPoolTier::TenBps, BoostPoolTier::ThirtyBps];
@@ -275,7 +273,7 @@ pub mod pallet {
 		LiquidityProvision { lp_account: AccountId },
 		CcmTransfer { principal_swap_id: Option<SwapId>, gas_swap_id: Option<SwapId> },
 		NoAction,
-		BoostersCredited { boost_id: BoostId },
+		BoostersCredited { prewitnessed_deposit_id: PrewitnessedDepositId },
 	}
 
 	/// Tracks funds that are owned by the vault and available for egress.
@@ -645,7 +643,7 @@ pub mod pallet {
 			asset: TargetChainAsset<T, I>,
 			amounts: BTreeMap<BoostPoolTier, TargetChainAmount<T, I>>,
 			deposit_details: <T::TargetChain as Chain>::DepositDetails,
-			boost_id: BoostId,
+			prewitnessed_deposit_id: PrewitnessedDepositId,
 			channel_id: ChannelId,
 			// Ingress fee in the deposit asset. i.e. *NOT* the gas asset, if the deposit asset is
 			// a non-gas asset. The ingress fee is taken *after* the boost fee.
@@ -655,19 +653,19 @@ pub mod pallet {
 			action: DepositAction<T::AccountId>,
 		},
 		BoostFundsAdded {
-			account_id: T::AccountId,
+			booster_id: T::AccountId,
 			boost_pool: BoostPoolId<T::TargetChain>,
 			amount: TargetChainAmount<T, I>,
 		},
 		StoppedBoosting {
-			account_id: T::AccountId,
+			booster_id: T::AccountId,
 			boost_pool: BoostPoolId<T::TargetChain>,
 			// When we stop boosting, the amount in the pool that isn't currently pending
 			// finalisation can be returned immediately.
 			unlocked_amount: TargetChainAmount<T, I>,
 			// The ids of the boosts that are pending finalisation, such that the funds can then be
 			// returned to the user's free balance when the finalisation occurs.
-			pending_boosts: BTreeSet<BoostId>,
+			pending_boosts: BTreeSet<PrewitnessedDepositId>,
 		},
 		InsufficientBoostLiquidity {
 			prewitnessed_deposit_id: PrewitnessedDepositId,
@@ -750,11 +748,12 @@ pub mod pallet {
 					let removed_deposits =
 						Self::clear_prewitnessed_deposits(deposit_channel.channel_id);
 
-					if let BoostStatus::Boosted { boost_id, pools } = boost_status {
+					if let BoostStatus::Boosted { prewitnessed_deposit_id, pools } = boost_status {
 						for pool_tier in pools {
 							BoostPools::<T, I>::mutate(deposit_channel.asset, pool_tier, |pool| {
 								if let Some(pool) = pool {
-									let affected_boosters_count = pool.on_lost_deposit(boost_id);
+									let affected_boosters_count =
+										pool.on_lost_deposit(prewitnessed_deposit_id);
 									used_weight.saturating_accrue(T::WeightInfo::on_lost_deposit(
 										affected_boosters_count as u32,
 									));
@@ -1036,20 +1035,20 @@ pub mod pallet {
 			amount: TargetChainAmount<T, I>,
 			pool_tier: BoostPoolTier,
 		) -> DispatchResult {
-			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+			let booster_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			T::LpBalance::try_debit_account(&account_id, asset.into(), amount.into())?;
+			T::LpBalance::try_debit_account(&booster_id, asset.into(), amount.into())?;
 
 			BoostPools::<T, I>::mutate(asset, pool_tier, |pool| {
 				let pool =
 					pool.as_mut().ok_or_else(|| DispatchError::from("Boost pool must exist"))?;
-				pool.add_funds(account_id.clone(), amount);
+				pool.add_funds(booster_id.clone(), amount);
 
 				Ok::<(), DispatchError>(())
 			})?;
 
 			Self::deposit_event(Event::<T, I>::BoostFundsAdded {
-				account_id,
+				booster_id,
 				boost_pool: BoostPoolId { asset, tier: pool_tier },
 				amount,
 			});
@@ -1078,7 +1077,7 @@ pub mod pallet {
 			T::LpBalance::try_credit_account(&booster, asset.into(), unlocked_amount.into())?;
 
 			Self::deposit_event(Event::StoppedBoosting {
-				account_id: booster,
+				booster_id: booster,
 				boost_pool: BoostPoolId { asset, tier: pool_tier },
 				unlocked_amount,
 				pending_boosts,
@@ -1297,7 +1296,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		asset: TargetChainAsset<T, I>,
 		required_amount: TargetChainAmount<T, I>,
 		max_boost_fee_bps: BasisPoints,
-		boost_id: u64,
+		prewitnessed_deposit_id: PrewitnessedDepositId,
 	) -> Result<BoostOutput<T::TargetChain>, DispatchError> {
 		let mut remaining_amount = required_amount;
 
@@ -1323,7 +1322,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					Some(pool) => pool,
 				};
 
-				pool.provide_funds_for_boosting(boost_id, remaining_amount).map_err(Into::into)
+				pool.provide_funds_for_boosting(prewitnessed_deposit_id, remaining_amount)
+					.map_err(Into::into)
 			})?;
 
 			if !boosted_amount.is_zero() {
@@ -1384,7 +1384,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						DepositChannelLookup::<T, I>::mutate(&deposit_address, |details| {
 							if let Some(details) = details {
 								details.boost_status = BoostStatus::Boosted {
-									boost_id: prewitnessed_deposit_id,
+									prewitnessed_deposit_id,
 									pools: used_pools.keys().cloned().collect(),
 								};
 							}
@@ -1413,7 +1413,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							deposit_address: deposit_address.clone(),
 							asset,
 							amounts: used_pools,
-							boost_id: prewitnessed_deposit_id,
+							prewitnessed_deposit_id,
 							channel_id,
 							deposit_details: deposit_details.clone(),
 							ingress_fee,
@@ -1570,35 +1570,36 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			&deposit_channel_details.deposit_channel,
 		);
 
-		let maybe_boost_to_process = if let BoostStatus::Boosted { boost_id, pools } =
-			deposit_channel_details.boost_status
-		{
-			// We are expecting a boost, but check if the amount is matching
-			match PrewitnessedDeposits::<T, I>::get(channel_id, boost_id) {
-				Some(boosted_deposit) if boosted_deposit.amount == deposit_amount => {
-					// Deposit matches boosted deposit, process as boosted
-					Some((boost_id, pools))
-				},
-				Some(_) => {
-					// Boosted deposit is found but the amounts didn't match, the deposit
-					// should be processed as not boosted.
-					None
-				},
-				None => {
-					log_or_panic!("Could not find deposit by boost id: {boost_id}");
-					// This is unexpected since we always add a prewitnessed deposit at the
-					// same time as boosting it! Because we won't be able to confirm if the
-					// amount is correct, we fallback to processing the deposit as not boosted.
-					None
-				},
-			}
-		} else {
-			// The channel is not even boosted, so we process the deposit as not boosted
-			None
-		};
+		let maybe_boost_to_process =
+			if let BoostStatus::Boosted { prewitnessed_deposit_id, pools } =
+				deposit_channel_details.boost_status
+			{
+				// We are expecting a boost, but check if the amount is matching
+				match PrewitnessedDeposits::<T, I>::get(channel_id, prewitnessed_deposit_id) {
+					Some(boosted_deposit) if boosted_deposit.amount == deposit_amount => {
+						// Deposit matches boosted deposit, process as boosted
+						Some((prewitnessed_deposit_id, pools))
+					},
+					Some(_) => {
+						// Boosted deposit is found but the amounts didn't match, the deposit
+						// should be processed as not boosted.
+						None
+					},
+					None => {
+						log_or_panic!("Could not find deposit by prewitness deposit id: {prewitnessed_deposit_id}");
+						// This is unexpected since we always add a prewitnessed deposit at the
+						// same time as boosting it! Because we won't be able to confirm if the
+						// amount is correct, we fallback to processing the deposit as not boosted.
+						None
+					},
+				}
+			} else {
+				// The channel is not even boosted, so we process the deposit as not boosted
+				None
+			};
 
-		if let Some((boost_id, used_pools)) = maybe_boost_to_process {
-			PrewitnessedDeposits::<T, I>::remove(channel_id, boost_id);
+		if let Some((prewitnessed_deposit_id, used_pools)) = maybe_boost_to_process {
+			PrewitnessedDeposits::<T, I>::remove(channel_id, prewitnessed_deposit_id);
 
 			// Note that ingress fee is not payed here, as it has already been payed at the time
 			// of boosting
@@ -1610,7 +1611,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				BoostPools::<T, I>::mutate(asset, boost_tier, |maybe_pool| {
 					if let Some(pool) = maybe_pool {
 						for (booster_id, finalised_withdrawn_amount) in
-							pool.on_finalised_deposit(boost_id)
+							pool.on_finalised_deposit(prewitnessed_deposit_id)
 						{
 							if let Err(err) = T::LpBalance::try_credit_account(
 								&booster_id,
@@ -1640,7 +1641,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				amount: deposit_amount,
 				deposit_details,
 				ingress_fee: 0u32.into(),
-				action: DepositAction::BoostersCredited { boost_id },
+				action: DepositAction::BoostersCredited { prewitnessed_deposit_id },
 				channel_id,
 			});
 		} else {
