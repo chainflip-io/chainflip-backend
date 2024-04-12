@@ -39,6 +39,7 @@ members = [
   'state-chain/primitives',
   'state-chain/cfe-events',
   'engine',
+  'engine-dylib',
   'engine/generate-genesis-keys',
   'engine-runner-bin',
   'engine-upgrade-utils',
