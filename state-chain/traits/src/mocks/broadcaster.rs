@@ -71,9 +71,12 @@ impl<
 		)
 	}
 
-	fn threshold_resign(broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId> {
+	fn threshold_resign(
+		broadcast_id: BroadcastId,
+		_request_broadcast: bool,
+	) -> Result<ThresholdSignatureRequestId, sp_runtime::DispatchError> {
 		Self::put_value(b"RESIGNED_CALLBACKS", broadcast_id);
-		Some(Self::next_threshold_id())
+		Ok(Self::next_threshold_id())
 	}
 
 	/// Clean up storage data related to a broadcast ID.
