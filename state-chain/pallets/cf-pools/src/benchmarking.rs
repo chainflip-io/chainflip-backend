@@ -254,9 +254,15 @@ mod benchmarks {
 
 	#[benchmark]
 	fn set_maximum_price_impact(n: Linear<1, 6>) {
-		let assets = (0..n).map(|_| Asset::Eth).collect::<Vec<_>>();
-		let limit = 1_000u32;
-		let call = Call::<T>::set_maximum_price_impact { assets, ticks: Some(limit) };
+		const LIMIT: u32 = 1_000;
+		let limits = Asset::all()
+			.filter(|asset| *asset != STABLE_ASSET)
+			.take(n as usize)
+			.zip(sp_std::iter::repeat(Some(LIMIT)))
+			.collect::<Vec<_>>()
+			.try_into()
+			.unwrap();
+		let call = Call::<T>::set_maximum_price_impact { limits };
 
 		#[block]
 		{
@@ -265,9 +271,15 @@ mod benchmarks {
 			);
 		}
 
-		let asset_pair =
-			AssetPair::try_new::<T>(Asset::Eth, STABLE_ASSET).expect("Asset Pair must succeed");
-		assert_eq!(MaximumPriceImpact::<T>::get(asset_pair), Some(limit));
+		for (i, asset) in Asset::all().filter(|asset| *asset != STABLE_ASSET).enumerate() {
+			let asset_pair =
+				AssetPair::try_new::<T>(asset, STABLE_ASSET).expect("Asset Pair must succeed");
+			if (i as u32) < n {
+				assert_eq!(MaximumPriceImpact::<T>::get(asset_pair), Some(LIMIT));
+			} else {
+				assert_eq!(MaximumPriceImpact::<T>::get(asset_pair), None);
+			}
+		}
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

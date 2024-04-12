@@ -12,7 +12,7 @@ use cf_traits::{
 };
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use frame_system::pallet_prelude::BlockNumberFor;
-use sp_core::U256;
+use sp_core::{bounded_vec, U256};
 use sp_runtime::Permill;
 
 #[test]
@@ -1123,21 +1123,20 @@ fn test_maximum_slippage_limits() {
 	use cf_utilities::{assert_err, assert_ok};
 
 	new_test_ext().execute_with(|| {
-		let base_asset = Asset::Eth;
-		let unrelated_asset = Asset::Btc;
-		let asset_pair = AssetPair::new(base_asset, STABLE_ASSET).unwrap();
+		const BASE_ASSET: Asset = Asset::Eth;
+		const OTHER_ASSET: Asset = Asset::Btc;
 
-		// Ensure price are configured per pool
+		let asset_pair = AssetPair::new(BASE_ASSET, STABLE_ASSET).unwrap();
+
+		// Ensure limits are configured per pool: this limit should be ignored during testing.
 		assert_ok!(LiquidityPools::set_maximum_price_impact(
 			RuntimeOrigin::root(),
-			vec![unrelated_asset],
-			Some(1),
+			bounded_vec![(OTHER_ASSET, Some(1))],
 		));
-
 		System::assert_last_event(RuntimeEvent::LiquidityPools(
 			crate::Event::<Test>::PriceImpactLimitSet {
-				assets: vec![unrelated_asset],
-				ticks: Some(1),
+				asset_pair: AssetPair::new(OTHER_ASSET, STABLE_ASSET).unwrap(),
+				limit: Some(1),
 			},
 		));
 
@@ -1170,14 +1169,14 @@ fn test_maximum_slippage_limits() {
 				pallet_cf_pools::Pools::<Test>::remove(asset_pair);
 				assert_ok!(LiquidityPools::new_pool(
 					RuntimeOrigin::root(),
-					base_asset,
+					BASE_ASSET,
 					STABLE_ASSET,
 					Default::default(),
 					price_at_tick(0).unwrap(),
 				));
 				assert_ok!(LiquidityPools::set_range_order(
 					RuntimeOrigin::signed(ALICE),
-					base_asset,
+					BASE_ASSET,
 					STABLE_ASSET,
 					0,
 					Some(-10000..10000),
@@ -1196,32 +1195,28 @@ fn test_maximum_slippage_limits() {
 
 		assert_ok!(LiquidityPools::set_maximum_price_impact(
 			RuntimeOrigin::root(),
-			vec![base_asset],
-			Some(954)
+			bounded_vec![(BASE_ASSET, Some(954))]
 		));
 
 		test_swaps(10500);
 
 		assert_ok!(LiquidityPools::set_maximum_price_impact(
 			RuntimeOrigin::root(),
-			vec![base_asset],
-			None
+			bounded_vec![(BASE_ASSET, None)]
 		));
 
 		test_swaps(u128::MAX);
 
 		assert_ok!(LiquidityPools::set_maximum_price_impact(
 			RuntimeOrigin::root(),
-			vec![base_asset],
-			Some(10)
+			bounded_vec![(BASE_ASSET, Some(10))]
 		));
 
 		test_swaps(300);
 
 		assert_ok!(LiquidityPools::set_maximum_price_impact(
 			RuntimeOrigin::root(),
-			vec![base_asset],
-			Some(300)
+			bounded_vec![(BASE_ASSET, Some(300))]
 		));
 
 		test_swaps(3500);

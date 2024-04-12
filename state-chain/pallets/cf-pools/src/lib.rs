@@ -484,10 +484,10 @@ pub mod pallet {
 			order_id: OrderId,
 			dispatch_at: BlockNumberFor<T>,
 		},
-		/// The Price Impact limit has been set for a pool
+		/// The Price Impact limit has been set for a pool.
 		PriceImpactLimitSet {
-			assets: Vec<Asset>,
-			ticks: Option<u32>,
+			asset_pair: AssetPair,
+			limit: Option<u32>,
 		},
 	}
 
@@ -984,20 +984,21 @@ pub mod pallet {
 		/// This ensures that small outlying pockets of liquidity cannot individually trigger the
 		/// limit. If the limit is exceeded the swap will fail and will be retried in the next
 		/// block.
+		///
+		/// Setting the limit to `None` disables it.
 		#[pallet::call_index(9)]
-		#[pallet::weight(T::WeightInfo::set_maximum_price_impact(assets.len() as u32))]
+		#[pallet::weight(T::WeightInfo::set_maximum_price_impact(limits.len() as u32))]
 		pub fn set_maximum_price_impact(
 			origin: OriginFor<T>,
-			assets: Vec<Asset>,
-			ticks: Option<u32>,
+			limits: BoundedVec<(Asset, Option<u32>), ConstU32<10>>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			for asset in assets.clone() {
-				let asset_pair = AssetPair::try_new::<T>(asset, STABLE_ASSET)?;
-				MaximumPriceImpact::<T>::mutate(asset_pair, |limit| *limit = ticks);
-			}
 
-			Self::deposit_event(Event::<T>::PriceImpactLimitSet { assets, ticks });
+			for (asset, ticks) in limits {
+				let asset_pair = AssetPair::try_new::<T>(asset, STABLE_ASSET)?;
+				MaximumPriceImpact::<T>::set(&asset_pair, ticks);
+				Self::deposit_event(Event::<T>::PriceImpactLimitSet { asset_pair, limit: ticks });
+			}
 
 			Ok(())
 		}
