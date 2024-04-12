@@ -1,5 +1,9 @@
 use crate::{safe_mode, Runtime};
-use cf_chains::{arb::ArbitrumTrackedData, eth::Address, ChainState};
+use cf_chains::{
+	arb::{self, ArbitrumTrackedData},
+	eth::Address,
+	ChainState,
+};
 use cf_traits::SafeMode;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 #[cfg(feature = "try-runtime")]
@@ -91,37 +95,37 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 		): (Address, Address, Address, u64, Address, u64) =
 			match cf_runtime_upgrade_utilities::genesis_hashes::genesis_hash::<Runtime>() {
 				cf_runtime_upgrade_utilities::genesis_hashes::BERGHAIN => {
-					panic!("Need to set up arbitrum integration for Berghain");
-					// (
-					// 	[0u8; 20].into(),
-					// 	[0u8; 20].into(),
-					// 	[0u8; 20].into(),
-					// 	arb::CHAIN_ID_MAINNET,
-					// 	[0u8; 20].into(),
-					// 	0,
-					// )
+					log::warn!("Need to set up arbitrum integration for Berghain");
+					(
+						[0u8; 20].into(),
+						[0u8; 20].into(),
+						[0u8; 20].into(),
+						arb::CHAIN_ID_MAINNET,
+						[0u8; 20].into(),
+						0,
+					)
 				},
 				cf_runtime_upgrade_utilities::genesis_hashes::PERSEVERANCE => {
-					panic!("Need to set up arbitrum integration for Perseverance");
-					// (
-					// 	[1u8; 20].into(),
-					// 	[1u8; 20].into(),
-					// 	[1u8; 20].into(),
-					// 	arb::CHAIN_ID_ARBITRUM_SEPOLIA,
-					// 	[1u8; 20].into(),
-					// 	0,
-					// )
+					log::warn!("Need to set up arbitrum integration for Perseverance");
+					(
+						[1u8; 20].into(),
+						[1u8; 20].into(),
+						[1u8; 20].into(),
+						arb::CHAIN_ID_ARBITRUM_SEPOLIA,
+						[1u8; 20].into(),
+						0,
+					)
 				},
 				cf_runtime_upgrade_utilities::genesis_hashes::SISYPHOS => {
-					panic!("Need to set up arbitrum integration for Sisyphos");
-					// (
-					// 	[2u8; 20].into(),
-					// 	[2u8; 20].into(),
-					// 	[2u8; 20].into(),
-					// 	arb::CHAIN_ID_ARBITRUM_SEPOLIA,
-					// 	[2u8; 20].into(),
-					// 	0,
-					// )
+					log::warn!("Need to set up arbitrum integration for Sisyphos");
+					(
+						[2u8; 20].into(),
+						[2u8; 20].into(),
+						[2u8; 20].into(),
+						arb::CHAIN_ID_ARBITRUM_SEPOLIA,
+						[2u8; 20].into(),
+						0,
+					)
 				},
 				_ => {
 					// Assume testnet
