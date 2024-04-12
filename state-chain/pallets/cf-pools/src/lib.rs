@@ -970,10 +970,20 @@ pub mod pallet {
 			}
 		}
 
-		/// Sets the allowed change (in number of ticks) to the price of the brought
-		/// asset during a swap. Note this limit applies to the difference between the swap's mean
-		/// price, and both the pool price before and after the swap. If the limit is exceeded the
-		/// swap will fail and will be retried in the next block.
+		/// Sets per-pool limits (in number of ticks) that determine the allowed change in price of
+		/// the bought asset during a swap.
+		///
+		/// Note that due to how the limit is applied, total measured price impact of a swap can
+		/// exceed the limit. The limit is applied to whichever is *smaller* out of the following
+		/// two metrics:
+		/// - The number of ticks between a swap's mean execution price and the pool price *before*
+		///   the swap.
+		/// - The number of ticks between a swap's mean execution price and the pool price *after*
+		///   the swap.
+		///
+		/// This ensures that small outlying pockets of liquidity cannot individually trigger the
+		/// limit. If the limit is exceeded the swap will fail and will be retried in the next
+		/// block.
 		#[pallet::call_index(9)]
 		#[pallet::weight(T::WeightInfo::set_maximum_price_impact(assets.len() as u32))]
 		pub fn set_maximum_price_impact(
