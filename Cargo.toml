@@ -40,7 +40,8 @@ members = [
   'state-chain/cfe-events',
   'engine',
   'engine/generate-genesis-keys',
-  'engine-runner-bin',
+  # We don't need a runner for 1.3
+  # 'engine-runner-bin',
   'engine-upgrade-utils',
   'engine-proc-macros',
   'utilities',
