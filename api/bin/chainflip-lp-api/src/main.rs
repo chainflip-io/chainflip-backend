@@ -247,6 +247,14 @@ pub trait Rpc {
 	async fn request_redemption(
 		&self,
 		redeem_address: EthereumAddress,
+		exact_amount: Option<NumberOrHex>,
+		executor_address: Option<EthereumAddress>,
+	) -> RpcResult<Hash>;
+
+	#[method(name = "request_redemption_v2")]
+	async fn request_redemption_v2(
+		&self,
+		redeem_address: EthereumAddress,
 		exact_amount: Option<U256>,
 		executor_address: Option<EthereumAddress>,
 	) -> RpcResult<Hash>;
@@ -611,6 +619,24 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	async fn request_redemption(
+		&self,
+		redeem_address: EthereumAddress,
+		exact_amount: Option<NumberOrHex>,
+		executor_address: Option<EthereumAddress>,
+	) -> RpcResult<Hash> {
+		let redeem_amount = if let Some(number_or_hex) = exact_amount {
+			RedemptionAmount::Exact(try_parse_number_or_hex(number_or_hex)?)
+		} else {
+			RedemptionAmount::Max
+		};
+		Ok(self
+			.api
+			.operator_api()
+			.request_redemption(redeem_amount, redeem_address, executor_address)
+			.await?)
+	}
+
+	async fn request_redemption_v2(
 		&self,
 		redeem_address: EthereumAddress,
 		exact_amount: Option<U256>,
