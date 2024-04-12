@@ -304,8 +304,15 @@ pub mod pallet {
 					if !failed_witnessers.is_empty() {
 						T::OffenceReporter::report_many(
 							PalletOffence::FailedToWitnessInTime,
-							failed_witnessers,
+							failed_witnessers.clone(),
 						);
+						Self::deposit_event(Event::<T>::ReportedWitnessingFailures {
+							call_hash,
+							// Safe because n is always inserted using current +
+							// T::LateWitnessGracePeriod::get()
+							block_number: n - T::LateWitnessGracePeriod::get(),
+							accounts: failed_witnessers,
+						});
 					}
 				}
 			}
@@ -321,6 +328,14 @@ pub mod pallet {
 		Prewitnessed { call: <T as Config>::RuntimeCall },
 		/// A witness call has failed.
 		PrewitnessExecutionFailed { call_hash: CallHash, error: DispatchError },
+		/// One or more node(s) has been reported for the offence of "FailedToWitnessInTime".
+		ReportedWitnessingFailures {
+			call_hash: CallHash,
+			block_number: BlockNumberFor<T>,
+			accounts: Vec<<T as Chainflip>::ValidatorId>,
+		},
+		/// A witnessed call has been dispatched.
+		CallDispatched { call_hash: CallHash },
 	}
 
 	#[pallet::error]
@@ -567,6 +582,7 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::<T>::WitnessExecutionFailed { call_hash, error: e.error });
 		});
 		CallHashExecuted::<T>::insert(witnessed_at_epoch, call_hash, ());
+		Self::deposit_event(Event::<T>::CallDispatched { call_hash });
 
 		// Add a deadline for witnessing this call. Nodes that don't witness after the deadlines are
 		// punished.

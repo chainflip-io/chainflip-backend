@@ -135,9 +135,9 @@ impl Cli {
 
 	#[track_caller]
 	pub fn set_vanity_name(account: &NodeId, name: &str) {
-		assert_ok!(Validator::set_vanity_name(
+		assert_ok!(AccountRoles::set_vanity_name(
 			RuntimeOrigin::signed(account.clone()),
-			name.as_bytes().to_vec()
+			name.as_bytes().to_vec().try_into().unwrap()
 		));
 	}
 
@@ -363,10 +363,14 @@ impl Engine {
 								RuntimeCall::BitcoinThresholdSigner(
 									pallet_cf_threshold_signature::Call::signature_success {
 										ceremony_id: *ceremony_id,
-										signature: vec![self
-											.btc_threshold_signer
-											.borrow()
-											.sign_with_key(*key, &(payload[0].1.clone()))],
+										signature: payload
+											.iter()
+											.map(|p| {
+												self.btc_threshold_signer
+													.borrow()
+													.sign_with_key(*key, &(p.1))
+											})
+											.collect::<Vec<_>>(),
 									},
 								),
 								RuntimeOrigin::none(),

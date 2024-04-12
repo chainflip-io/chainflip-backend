@@ -26,7 +26,7 @@ pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled);
 
@@ -152,9 +152,9 @@ pub mod pallet {
 		StorageDoubleMap<_, Twox64Concat, T::AccountId, Identity, Asset, AssetAmount>;
 
 	#[pallet::storage]
-	/// Historical earned fees for an account. Map: AccountId => AssetAmount
+	/// Historical earned fees for an account.
 	pub type HistoricalEarnedFees<T: Config> =
-		StorageMap<_, Twox64Concat, T::AccountId, AssetMap<AssetAmount>, ValueQuery>;
+		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
 	/// Stores the registered energency withdrawal address for an Account
 	#[pallet::storage]
@@ -321,7 +321,7 @@ pub mod pallet {
 
 			let _ = FreeBalances::<T>::clear_prefix(&account_id, u32::MAX, None);
 			let _ = LiquidityRefundAddress::<T>::clear_prefix(&account_id, u32::MAX, None);
-			HistoricalEarnedFees::<T>::remove(&account_id);
+			let _ = HistoricalEarnedFees::<T>::clear_prefix(&account_id, u32::MAX, None);
 
 			T::AccountRoleRegistry::deregister_as_liquidity_provider(&account_id)?;
 
@@ -421,8 +421,8 @@ impl<T: Config> LpBalanceApi for Pallet<T> {
 	}
 
 	fn record_fees(account_id: &Self::AccountId, amount: AssetAmount, asset: Asset) {
-		HistoricalEarnedFees::<T>::mutate(account_id, |fees| {
-			fees[asset] = fees[asset].saturating_add(amount);
+		HistoricalEarnedFees::<T>::mutate(account_id, asset, |balance| {
+			balance.saturating_add(amount)
 		});
 	}
 

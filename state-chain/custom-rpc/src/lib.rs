@@ -1476,14 +1476,12 @@ mod test {
 
 	#[test]
 	fn test_no_account_serialization() {
-		insta::assert_display_snapshot!(
-			serde_json::to_value(RpcAccountInfo::unregistered(0)).unwrap()
-		);
+		insta::assert_snapshot!(serde_json::to_value(RpcAccountInfo::unregistered(0)).unwrap());
 	}
 
 	#[test]
 	fn test_broker_serialization() {
-		insta::assert_display_snapshot!(serde_json::to_value(RpcAccountInfo::broker(
+		insta::assert_snapshot!(serde_json::to_value(RpcAccountInfo::broker(
 			0,
 			BrokerInfo {
 				earned_fees: vec![
@@ -1546,7 +1544,7 @@ mod test {
 			0,
 		);
 
-		insta::assert_display_snapshot!(serde_json::to_value(lp).unwrap());
+		insta::assert_snapshot!(serde_json::to_value(lp).unwrap());
 	}
 
 	#[test]
@@ -1570,7 +1568,7 @@ mod test {
 			)]),
 		});
 
-		insta::assert_display_snapshot!(serde_json::to_value(validator).unwrap());
+		insta::assert_snapshot!(serde_json::to_value(validator).unwrap());
 	}
 
 	#[test]
@@ -1678,6 +1676,6 @@ mod test {
 			},
 		};
 
-		insta::assert_display_snapshot!(serde_json::to_value(env).unwrap());
+		insta::assert_snapshot!(serde_json::to_value(env).unwrap());
 	}
 }

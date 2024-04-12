@@ -1,10 +1,10 @@
-mod usdt;
-
-use crate::*;
-use cf_runtime_upgrade_utilities::VersionedMigration;
+use crate::{Config, CurrentReleaseVersion, Get, Pallet};
+use cf_runtime_upgrade_utilities::PlaceholderMigration;
 use frame_support::traits::OnRuntimeUpgrade;
 #[cfg(feature = "try-runtime")]
 use frame_support::{pallet_prelude::DispatchError, sp_runtime};
+#[cfg(feature = "try-runtime")]
+use sp_std::vec::Vec;
 
 pub struct VersionUpdate<T: Config>(sp_std::marker::PhantomData<T>);
 
@@ -22,7 +22,7 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
 		frame_support::ensure!(
-			crate::CurrentReleaseVersion::<T>::get() == <T as Config>::CurrentReleaseVersion::get(),
+			CurrentReleaseVersion::<T>::get() == <T as Config>::CurrentReleaseVersion::get(),
 			"Expect storage to be the new version after upgrade."
 		);
 
@@ -30,11 +30,12 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 	}
 }
 
-pub type PalletMigration<T> = (VersionedMigration<crate::Pallet<T>, usdt::Migration<T>, 8, 9>,);
+pub type PalletMigration<T> = PlaceholderMigration<Pallet<T>, 9>;
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::SemVer;
 
 	use crate::mock::{new_test_ext, Test};
 

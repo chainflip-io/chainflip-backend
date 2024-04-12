@@ -3,8 +3,8 @@
 use super::*;
 
 use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue};
-use cf_primitives::FLIPPERINOS_PER_FLIP;
-use cf_traits::{AccountRoleRegistry, FeePayment};
+use cf_primitives::{AccountRole, FLIPPERINOS_PER_FLIP};
+use cf_traits::{AccountRoleRegistry, Chainflip, FeePayment};
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
@@ -20,9 +20,10 @@ mod benchmarks {
 
 	#[benchmark]
 	fn request_swap_deposit_address() {
-		let caller: T::AccountId = whitelisted_caller();
-		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		assert_ok!(T::AccountRoleRegistry::register_as_broker(&caller));
+		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Broker,
+		)
+		.unwrap();
 		// A non-zero balance is required to pay for the channel opening fee.
 		T::FeePayment::mint_to_account(&caller, (5 * FLIPPERINOS_PER_FLIP).into());
 
@@ -43,9 +44,10 @@ mod benchmarks {
 
 	#[benchmark]
 	fn withdraw() {
-		let caller: T::AccountId = whitelisted_caller();
-		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		assert_ok!(T::AccountRoleRegistry::register_as_broker(&caller));
+		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Broker,
+		)
+		.unwrap();
 		EarnedBrokerFees::<T>::insert(caller.clone(), Asset::Eth, 200);
 
 		#[extrinsic_call]
@@ -55,6 +57,7 @@ mod benchmarks {
 	#[benchmark]
 	fn register_as_broker() {
 		let caller: T::AccountId = whitelisted_caller();
+		frame_system::Pallet::<T>::inc_providers(&caller);
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 
 		#[extrinsic_call]
@@ -66,9 +69,10 @@ mod benchmarks {
 
 	#[benchmark]
 	fn deregister_as_broker() {
-		let caller: T::AccountId = whitelisted_caller();
-		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		assert_ok!(Pallet::<T>::register_as_broker(RawOrigin::Signed(caller.clone()).into()));
+		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Broker,
+		)
+		.unwrap();
 
 		#[extrinsic_call]
 		deregister_as_broker(RawOrigin::Signed(caller.clone()));

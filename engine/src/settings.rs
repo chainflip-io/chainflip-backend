@@ -256,6 +256,12 @@ pub struct ArbOptions {
 	pub arb_ws_endpoint: Option<String>,
 	#[clap(long = "arb.rpc.http_endpoint")]
 	pub arb_http_endpoint: Option<String>,
+
+	#[clap(long = "arb.backup_rpc.ws_endpoint")]
+	pub arb_backup_ws_endpoint: Option<String>,
+	#[clap(long = "arb.backup_rpc.http_endpoint")]
+	pub arb_backup_http_endpoint: Option<String>,
+
 	#[clap(long = "arb.private_key_file")]
 	pub arb_private_key_file: Option<PathBuf>,
 }
@@ -751,8 +757,16 @@ impl DotOptions {
 impl ArbOptions {
 	/// Inserts all the Arb Options into the given map (if Some)
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
-		insert_command_line_option(map, "arb.ws_node_endpoint", &self.arb_ws_endpoint);
-		insert_command_line_option(map, "arb.http_node_endpoint", &self.arb_http_endpoint);
+		insert_command_line_option(map, "arb.rpc.ws_endpoint", &self.arb_ws_endpoint);
+		insert_command_line_option(map, "arb.rpc.http_endpoint", &self.arb_http_endpoint);
+
+		insert_command_line_option(map, "arb.backup_rpc.ws_endpoint", &self.arb_backup_ws_endpoint);
+		insert_command_line_option(
+			map,
+			"arb.backup_rpc.http_endpoint",
+			&self.arb_backup_http_endpoint,
+		);
+
 		insert_command_line_option_path(map, ARB_PRIVATE_KEY_FILE, &self.arb_private_key_file);
 	}
 }
@@ -820,11 +834,11 @@ pub mod tests {
 	use utilities::assert_ok;
 
 	use crate::constants::{
-		ARB_HTTP_ENDPOINT, ARB_WS_ENDPOINT, BTC_BACKUP_HTTP_ENDPOINT, BTC_BACKUP_RPC_PASSWORD,
-		BTC_BACKUP_RPC_USER, BTC_HTTP_ENDPOINT, BTC_RPC_PASSWORD, BTC_RPC_USER,
-		DOT_BACKUP_HTTP_ENDPOINT, DOT_BACKUP_WS_ENDPOINT, DOT_HTTP_ENDPOINT, DOT_WS_ENDPOINT,
-		ETH_BACKUP_HTTP_ENDPOINT, ETH_BACKUP_WS_ENDPOINT, ETH_HTTP_ENDPOINT, ETH_WS_ENDPOINT,
-		NODE_P2P_IP_ADDRESS,
+		ARB_BACKUP_HTTP_ENDPOINT, ARB_BACKUP_WS_ENDPOINT, ARB_HTTP_ENDPOINT, ARB_WS_ENDPOINT,
+		BTC_BACKUP_HTTP_ENDPOINT, BTC_BACKUP_RPC_PASSWORD, BTC_BACKUP_RPC_USER, BTC_HTTP_ENDPOINT,
+		BTC_RPC_PASSWORD, BTC_RPC_USER, DOT_BACKUP_HTTP_ENDPOINT, DOT_BACKUP_WS_ENDPOINT,
+		DOT_HTTP_ENDPOINT, DOT_WS_ENDPOINT, ETH_BACKUP_HTTP_ENDPOINT, ETH_BACKUP_WS_ENDPOINT,
+		ETH_HTTP_ENDPOINT, ETH_WS_ENDPOINT, NODE_P2P_IP_ADDRESS,
 	};
 
 	use super::*;
@@ -875,9 +889,10 @@ pub mod tests {
 		DOT_BACKUP_HTTP_ENDPOINT =>
 		"https://second.my_fake_polkadot_rpc:443/<secret_key>",
 
-		ARB_HTTP_ENDPOINT => "http://localhost:8548",
-		ARB_WS_ENDPOINT => "ws://localhost:8548"
-
+		ARB_HTTP_ENDPOINT => "http://localhost:8547",
+		ARB_WS_ENDPOINT => "ws://localhost:8548",
+		ARB_BACKUP_HTTP_ENDPOINT => "http://second.localhost:8547",
+		ARB_BACKUP_WS_ENDPOINT => "ws://second.localhost:8548"
 	}
 
 	// We do them like this so they run sequentially, which is necessary so the environment doesn't
@@ -900,6 +915,7 @@ pub mod tests {
 			.expect("Check that the test environment is set correctly");
 		assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
 		assert_eq!(settings.eth.nodes.primary.http_endpoint.as_ref(), "http://localhost:8545");
+		assert_eq!(settings.arb.nodes.primary.http_endpoint.as_ref(), "http://localhost:8547");
 		assert_eq!(
 			settings.dot.nodes.primary.ws_endpoint.as_ref(),
 			"wss://my_fake_polkadot_rpc:443/<secret_key>"
@@ -911,6 +927,10 @@ pub mod tests {
 		assert_eq!(
 			settings.dot.nodes.backup.unwrap().ws_endpoint.as_ref(),
 			"wss://second.my_fake_polkadot_rpc:443/<secret_key>"
+		);
+		assert_eq!(
+			settings.arb.nodes.backup.unwrap().http_endpoint.as_ref(),
+			"http://second.localhost:8547"
 		);
 	}
 
@@ -1001,6 +1021,8 @@ pub mod tests {
 			arb_opts: ArbOptions {
 				arb_ws_endpoint: Some("ws://endpoint:4321".to_owned()),
 				arb_http_endpoint: Some("http://endpoint:4321".to_owned()),
+				arb_backup_ws_endpoint: Some("ws://second_endpoint:4321".to_owned()),
+				arb_backup_http_endpoint: Some("http://second_endpoint:4321".to_owned()),
 				arb_private_key_file: Some(PathBuf::from_str("keys/eth_private_key_2").unwrap()),
 			},
 			health_check_hostname: Some("health_check_hostname".to_owned()),
@@ -1051,6 +1073,26 @@ pub mod tests {
 		assert!(settings.eth.private_key_file.ends_with("eth_private_key_2"));
 
 		assert_eq!(
+			opts.arb_opts.arb_ws_endpoint.clone().unwrap(),
+			settings.arb.nodes.primary.ws_endpoint.as_ref()
+		);
+		assert_eq!(
+			opts.arb_opts.arb_http_endpoint.clone().unwrap(),
+			settings.arb.nodes.primary.http_endpoint.as_ref()
+		);
+
+		let arb_backup_node = settings.arb.nodes.backup.unwrap();
+		assert_eq!(
+			opts.arb_opts.arb_backup_ws_endpoint.unwrap(),
+			arb_backup_node.ws_endpoint.as_ref()
+		);
+		assert_eq!(
+			opts.arb_opts.arb_backup_http_endpoint.unwrap(),
+			arb_backup_node.http_endpoint.as_ref()
+		);
+
+		assert!(settings.arb.private_key_file.ends_with("eth_private_key_2"));
+		assert_eq!(
 			opts.dot_opts.dot_ws_endpoint.unwrap(),
 			settings.dot.nodes.primary.ws_endpoint.as_ref()
 		);
@@ -1090,6 +1132,15 @@ pub mod tests {
 		assert_eq!(
 			opts.btc_opts.btc_backup_basic_auth_password.unwrap(),
 			btc_backup_node.basic_auth_password
+		);
+
+		assert_eq!(
+			opts.arb_opts.arb_ws_endpoint.unwrap(),
+			settings.arb.nodes.primary.ws_endpoint.as_ref()
+		);
+		assert_eq!(
+			opts.arb_opts.arb_http_endpoint.unwrap(),
+			settings.arb.nodes.primary.http_endpoint.as_ref()
 		);
 
 		assert_eq!(

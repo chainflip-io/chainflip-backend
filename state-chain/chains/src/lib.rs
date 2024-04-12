@@ -48,6 +48,7 @@ pub mod none;
 pub mod address;
 pub mod deposit_channel;
 pub use deposit_channel::*;
+use strum::IntoEnumIterator;
 pub mod instances;
 
 pub mod mocks;
@@ -110,6 +111,7 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 		+ FullCodec
 		+ Into<cf_primitives::Asset>
 		+ Into<cf_primitives::ForeignChain>
+		+ IntoEnumIterator
 		+ Unpin;
 
 	type ChainAccount: Member
@@ -311,7 +313,6 @@ pub trait ChainEnvironment<
 
 pub enum SetAggKeyWithAggKeyError {
 	Failed,
-	NotRequired,
 }
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
@@ -319,7 +320,7 @@ pub trait SetAggKeyWithAggKey<C: ChainCrypto>: ApiCall<C> {
 	fn new_unsigned(
 		maybe_old_key: Option<<C as ChainCrypto>::AggKey>,
 		new_key: <C as ChainCrypto>::AggKey,
-	) -> Result<Self, SetAggKeyWithAggKeyError>;
+	) -> Result<Option<Self>, SetAggKeyWithAggKeyError>;
 }
 
 #[allow(clippy::result_unit_err)]

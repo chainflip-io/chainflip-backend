@@ -8,8 +8,8 @@ use cf_chains::{
 };
 use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId, SemVer};
 use futures::FutureExt;
+use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
-use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use serde::{Deserialize, Serialize};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
@@ -283,13 +283,11 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 	}
 
 	async fn set_vanity_name(&self, name: String) -> Result<()> {
-		if name.len() > MAX_LENGTH_FOR_VANITY_NAME {
-			bail!("Name too long. Max length is {} characters.", MAX_LENGTH_FOR_VANITY_NAME,);
-		}
-
 		let (tx_hash, ..) = self
-			.submit_signed_extrinsic(pallet_cf_validator::Call::set_vanity_name {
-				name: name.as_bytes().to_vec(),
+			.submit_signed_extrinsic(pallet_cf_account_roles::Call::set_vanity_name {
+				name: name.into_bytes().try_into().or_else(|_| {
+					bail!("Name too long. Max length is {} characters.", MAX_LENGTH_FOR_VANITY_NAME,)
+				})?,
 			})
 			.await
 			.until_in_block()

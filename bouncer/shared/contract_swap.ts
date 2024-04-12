@@ -3,8 +3,10 @@ import {
   executeSwap,
   ExecuteSwapParams,
   approveVault,
+  Asset as SCAsset,
+  Chains,
 } from '@chainflip/cli';
-import { Wallet, getDefaultProvider } from 'ethers';
+import { HDNodeWallet, Wallet, getDefaultProvider } from 'ethers';
 import {
   getChainflipApi,
   observeBalanceIncrease,
@@ -15,28 +17,26 @@ import {
   defaultAssetAmounts,
   chainFromAsset,
   getEvmEndpoint,
-  getWhaleMnemonic,
   assetDecimals,
   stateChainAssetFromAsset,
+  chainGasAsset,
 } from './utils';
-import { getNextEvmNonce } from './send_evm';
 import { getBalance } from './get_balance';
 import { CcmDepositMetadata } from '../shared/new_swap';
+import { send } from './send';
+
+const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'ArbUsdc'];
 
 export async function executeContractSwap(
   srcAsset: Asset,
   destAsset: Asset,
   destAddress: string,
+  wallet: HDNodeWallet,
   messageMetadata?: CcmDepositMetadata,
 ): ReturnType<typeof executeSwap> {
   const srcChain = chainFromAsset(srcAsset);
-  const wallet = Wallet.fromPhrase(getWhaleMnemonic(srcChain)).connect(
-    getDefaultProvider(getEvmEndpoint(srcChain)),
-  );
-
   const destChain = chainFromAsset(destAsset);
 
-  const nonce = await getNextEvmNonce(srcChain);
   const networkOptions = {
     signer: wallet,
     network: 'localnet',
@@ -44,8 +44,8 @@ export async function executeContractSwap(
     srcTokenContractAddress: getEvmContractAddress(srcChain, srcAsset),
   } as const;
   const txOptions = {
-    nonce,
-    gasLimit: 200000n,
+    // This is run with fresh addresses to prevent nonce issues. Will be 1 for ERC20s.
+    gasLimit: srcChain === Chains.Arbitrum ? 10000000n : 200000n,
   } as const;
 
   const receipt = await executeSwap(
@@ -87,16 +87,50 @@ export async function performSwapViaContract(
 
   const tag = swapTag ?? '';
 
+  const srcChain = chainFromAsset(sourceAsset);
+
+  // Generate a new wallet for each contract swap to prevent nonce issues when running in parallel
+  // with other swaps via deposit channels.
+  const mnemonic = Wallet.createRandom().mnemonic?.phrase ?? '';
+  if (mnemonic === '') {
+    throw new Error('Failed to create random mnemonic');
+  }
+  const wallet = Wallet.fromPhrase(mnemonic).connect(getDefaultProvider(getEvmEndpoint(srcChain)));
+
   try {
+    // Fund new key with native asset and asset to swap.
+    await send(chainGasAsset(srcChain), wallet.address);
+    await send(sourceAsset, wallet.address);
+
+    if (erc20Assets.includes(sourceAsset)) {
+      // Doing effectively infinite approvals to make sure it doesn't fail.
+      // eslint-disable-next-line @typescript-eslint/no-use-before-define
+      await approveTokenVault(
+        sourceAsset,
+        (
+          BigInt(amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals(sourceAsset))) *
+          100n
+        ).toString(),
+        wallet,
+      );
+    }
+
     const oldBalance = await getBalance(destAsset, destAddress);
     console.log(`${tag} Old balance: ${oldBalance}`);
     console.log(
       `${tag} Executing (${sourceAsset}) contract swap to(${destAsset}) ${destAddress}. Current balance: ${oldBalance}`,
     );
+
     // To uniquely identify the contractSwap, we need to use the TX hash. This is only known
     // after sending the transaction, so we send it first and observe the events afterwards.
     // There are still multiple blocks of safety margin inbetween before the event is emitted
-    const receipt = await executeContractSwap(sourceAsset, destAsset, destAddress, messageMetadata);
+    const receipt = await executeContractSwap(
+      sourceAsset,
+      destAsset,
+      destAddress,
+      wallet,
+      messageMetadata,
+    );
     await observeEvent('swapping:SwapScheduled', api, (event) => {
       if ('Vault' in event.data.origin) {
         const sourceAssetMatches = sourceAsset === (event.data.sourceAsset as Asset);
@@ -115,7 +149,7 @@ export async function performSwapViaContract(
           destAsset,
           destAddress,
           messageMetadata,
-          Wallet.fromPhrase(getWhaleMnemonic(chainFromAsset(sourceAsset))).address.toLowerCase(),
+          wallet.address.toLowerCase(),
         )
       : Promise.resolve();
 
@@ -138,38 +172,28 @@ export async function performSwapViaContract(
     throw new Error(`${tag} ${err}`);
   }
 }
-
-export async function approveTokenVault(
-  srcAsset: 'Flip' | 'Usdc' | 'Usdt' | 'ArbUsdc',
-  amount: string,
-) {
-  const chain = chainFromAsset(srcAsset as Asset);
-
-  const wallet = Wallet.fromPhrase(getWhaleMnemonic(chain)).connect(
-    getDefaultProvider(getEvmEndpoint(chain)),
-  );
-
-  // TODO: To remove when Arbitrum is supported in the SDK
-  if (chain !== 'Ethereum' || srcAsset === 'ArbUsdc') {
-    throw new Error('Arbitrum is not supported for token approvals');
+export async function approveTokenVault(srcAsset: Asset, amount: string, wallet: HDNodeWallet) {
+  if (!erc20Assets.includes(srcAsset)) {
+    throw new Error(`Unsupported asset, not an ERC20: ${srcAsset}`);
   }
 
-  await getNextEvmNonce(chain, (nextNonce) =>
-    approveVault(
-      {
-        amount,
-        srcChain: chain,
-        srcAsset: stateChainAssetFromAsset(srcAsset),
-      },
-      {
-        signer: wallet,
-        network: 'localnet',
-        vaultContractAddress: getEvmContractAddress(chain, 'VAULT'),
-        srcTokenContractAddress: getEvmContractAddress(chain, srcAsset),
-      },
-      {
-        nonce: nextNonce,
-      },
-    ),
+  const chain = chainFromAsset(srcAsset as Asset);
+
+  await approveVault(
+    {
+      amount,
+      srcChain: chain,
+      srcAsset: stateChainAssetFromAsset(srcAsset) as SCAsset,
+    },
+    {
+      signer: wallet,
+      network: 'localnet',
+      vaultContractAddress: getEvmContractAddress(chain, 'VAULT'),
+      srcTokenContractAddress: getEvmContractAddress(chain, srcAsset),
+    },
+    // This is run with fresh addresses to prevent nonce issues
+    {
+      nonce: 0,
+    },
   );
 }

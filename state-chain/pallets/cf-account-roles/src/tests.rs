@@ -1,8 +1,10 @@
 #![cfg(test)]
 
 use crate::{mock::*, *};
-use frame_support::traits::HandleLifetime;
+use frame_support::{assert_noop, assert_ok, traits::HandleLifetime};
 use frame_system::Provider;
+
+type AccountRolesPallet = Pallet<Test>;
 
 const ALICE: u64 = 1;
 const BOB: u64 = 2;
@@ -35,9 +37,9 @@ fn test_ensure_origin_struct() {
 		EnsureBroker::<Test>::ensure_origin(OriginFor::<Test>::signed(CHARLIE)).unwrap_err();
 
 		// Upgrade the accounts.
-		Pallet::<Test>::register_as_broker(&ALICE).unwrap();
-		Pallet::<Test>::register_as_validator(&BOB).unwrap();
-		Pallet::<Test>::register_as_liquidity_provider(&CHARLIE).unwrap();
+		AccountRolesPallet::register_as_broker(&ALICE).unwrap();
+		AccountRolesPallet::register_as_validator(&BOB).unwrap();
+		AccountRolesPallet::register_as_liquidity_provider(&CHARLIE).unwrap();
 
 		// Each account should validate as the correct account type and fail otherwise.
 		EnsureBroker::<Test>::ensure_origin(OriginFor::<Test>::signed(ALICE)).unwrap();
@@ -80,9 +82,9 @@ fn test_ensure_origin_fn() {
 		ensure_broker::<Test>(OriginFor::<Test>::signed(CHARLIE)).unwrap_err();
 
 		// Upgrade the accounts.
-		Pallet::<Test>::register_as_broker(&ALICE).unwrap();
-		Pallet::<Test>::register_as_validator(&BOB).unwrap();
-		Pallet::<Test>::register_as_liquidity_provider(&CHARLIE).unwrap();
+		AccountRolesPallet::register_as_broker(&ALICE).unwrap();
+		AccountRolesPallet::register_as_validator(&BOB).unwrap();
+		AccountRolesPallet::register_as_liquidity_provider(&CHARLIE).unwrap();
 
 		// Each account should validate as the correct account type and fail otherwise.
 		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_broker(OriginFor::<Test>::signed(
@@ -119,5 +121,44 @@ fn test_ensure_origin_fn() {
 			OriginFor::<Test>::signed(CHARLIE),
 		)
 		.unwrap();
+	});
+}
+
+#[test]
+fn test_setting_vanity_names_() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(VanityNames::<Test>::get().len(), 0, "Vanity names should be empty before test");
+
+		// Set vanity names for 4 accounts
+		const ACCOUNT_IDS: [u64; 4] = [123, 456, 789, 101112];
+		for (i, account_id) in ACCOUNT_IDS.iter().enumerate() {
+			let vanity = format!("Test Account {i}");
+			assert_ok!(AccountRolesPallet::set_vanity_name(
+				RuntimeOrigin::signed(*account_id),
+				vanity.clone().into_bytes().try_into().unwrap()
+			));
+			assert_eq!(
+				sp_std::str::from_utf8(VanityNames::<Test>::get().get(account_id).unwrap())
+					.unwrap(),
+				vanity
+			);
+		}
+		assert_eq!(VanityNames::<Test>::get().len(), ACCOUNT_IDS.len());
+
+		assert_noop!(
+			AccountRolesPallet::set_vanity_name(
+				RuntimeOrigin::signed(1),
+				BoundedVec::try_from(vec![0xfe, 0xff]).unwrap()
+			),
+			Error::<Test>::InvalidCharactersInName
+		);
+
+		// Test removal of a vanity name
+		AccountRolesPallet::on_killed_account(&ACCOUNT_IDS[0]);
+		assert_eq!(
+			VanityNames::<Test>::get().len(),
+			ACCOUNT_IDS.len() - 1,
+			"Vanity name should of been removed when account was killed"
+		);
 	});
 }

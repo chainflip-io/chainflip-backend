@@ -24,7 +24,7 @@ pub mod genesis_hashes {
 	pub const BERGHAIN: [u8; 32] =
 		hex_literal::hex!("8b8c140b0af9db70686583e3f6bf2a59052bfe9584b97d20c45068281e976eb9");
 	pub const PERSEVERANCE: [u8; 32] =
-		hex_literal::hex!("46c8ca427e31ba73cbd1ad60500d4a7d173b1c80c9fb1afb76661d614f9c5cd7");
+		hex_literal::hex!("7a5d4db858ada1d20ed6ded4933c33313fc9673e5fffab560d0ca714782f2080");
 	pub const SISYPHOS: [u8; 32] =
 		hex_literal::hex!("beb780f634621c64012483ebbf39927eb236b63902e9a249a76af8ba4cf8a474");
 
@@ -47,6 +47,36 @@ pub struct VersionedMigration<
 	const FROM: u16,
 	const TO: u16,
 >(PhantomData<(P, U)>);
+
+/// A placeholder migration that does nothing. Useful too allow us to keep the boilerplate in the
+/// runtime consistent.
+pub struct PlaceholderMigration<
+	P: PalletInfoAccess + GetStorageVersion<CurrentStorageVersion = StorageVersion>,
+	const AT: u16,
+>(PhantomData<P>);
+
+impl<P, const AT: u16> OnRuntimeUpgrade for PlaceholderMigration<P, AT>
+where
+	P: PalletInfoAccess + GetStorageVersion<CurrentStorageVersion = StorageVersion>,
+{
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		if <P as GetStorageVersion>::on_chain_storage_version() == AT {
+			log::info!(
+				"👌 {}: Placeholder migration at pallet storage version {:?}. Nothing to do.",
+				P::name(),
+				AT,
+			);
+		} else {
+			log::warn!(
+				"🚨 {}: Placeholder migration at pallet storage version {:?} but storage version is {:?}.",
+				P::name(),
+				AT,
+				<P as GetStorageVersion>::on_chain_storage_version(),
+			);
+		}
+		Default::default()
+	}
+}
 
 /// A helper enum to wrap the pre_upgrade bytes like an Option before passing them to post_upgrade.
 /// This enum is used rather than an Option to make the API clearer to the developer.

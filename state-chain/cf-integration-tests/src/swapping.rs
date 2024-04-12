@@ -210,7 +210,9 @@ fn basic_pool_setup_provision_and_swap() {
 		credit_account(&DORIS, Asset::Eth, 1_000_000);
 		credit_account(&DORIS, Asset::Flip, 1_000_000);
 		credit_account(&DORIS, Asset::Usdc, 1_000_000);
-		assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS));
+		assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Eth));
+		assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Flip));
+		assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Usdc));
 
 		set_limit_order(&DORIS, Asset::Eth, Asset::Usdc, 0, Some(0), 500_000);
 		set_range_order(&DORIS, Asset::Eth, Asset::Usdc, 0, Some(-10..10), 1_000_000);
@@ -302,7 +304,9 @@ fn basic_pool_setup_provision_and_swap() {
 			) if egress_ids.contains(&egress_id) => ()
 		);
 
-		assert!(HistoricalEarnedFees::<Runtime>::contains_key(&DORIS));
+		assert!(HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Eth));
+		assert!(HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Flip));
+		assert!(HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Usdc));
 	});
 }
 
@@ -905,7 +909,7 @@ fn can_handle_failed_vault_transfer() {
 				},
 			));
 
-			System::assert_last_event(RuntimeEvent::EthereumIngressEgress(
+			System::assert_has_event(RuntimeEvent::EthereumIngressEgress(
 				pallet_cf_ingress_egress::Event::<Runtime, Instance1>::TransferFallbackRequested {
 					asset,
 					amount,

@@ -120,11 +120,11 @@ where
 	fn new_unsigned(
 		_old_key: Option<<EvmCrypto as ChainCrypto>::AggKey>,
 		new_key: <EvmCrypto as ChainCrypto>::AggKey,
-	) -> Result<Self, SetAggKeyWithAggKeyError> {
-		Ok(Self::SetAggKeyWithAggKey(EvmTransactionBuilder::new_unsigned(
+	) -> Result<Option<Self>, SetAggKeyWithAggKeyError> {
+		Ok(Some(Self::SetAggKeyWithAggKey(EvmTransactionBuilder::new_unsigned(
 			E::replay_protection(E::key_manager_address()),
 			set_agg_key_with_agg_key::SetAggKeyWithAggKey::new(new_key),
-		)))
+		))))
 	}
 }
 

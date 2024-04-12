@@ -1,6 +1,6 @@
 use cf_primitives::{Asset, AssetAmount};
 use frame_support::sp_runtime::traits::UniqueSaturatedInto;
-use sp_runtime::traits::{AtLeast32BitUnsigned, Zero};
+use sp_runtime::traits::AtLeast32BitUnsigned;
 
 use crate::AssetConverter;
 
@@ -34,39 +34,33 @@ impl AssetConverter for MockAssetConverter {
 			.map(|price| (price * desired_output_amount.into()).unique_saturated_into())
 	}
 
-	fn convert_asset_to_approximate_output<
-		Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy,
-	>(
+	fn calculate_asset_conversion<Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy>(
 		input_asset: impl Into<Asset>,
 		available_input_amount: Amount,
 		output_asset: impl Into<Asset>,
 		desired_output_amount: Amount,
-	) -> Option<(Amount, Amount)> {
-		let input_asset = input_asset.into();
-		let output_asset = output_asset.into();
-		// the following check is copied from the implementation in the pool pallet
-		if input_asset == output_asset {
-			if desired_output_amount < available_input_amount {
-				return Some((
-					available_input_amount.saturating_sub(desired_output_amount),
-					desired_output_amount,
-				))
-			} else {
-				return Some((Zero::zero(), available_input_amount))
-			}
+	) -> Option<Amount> {
+		// The following check is copied from the implementation in the pool pallet
+		if desired_output_amount.is_zero() {
+			return Some(Amount::zero())
 		}
-		let input = Self::get_price(output_asset, input_asset)
-			.map(|price| price * desired_output_amount.into())?;
-
-		if input > available_input_amount.into() {
+		if available_input_amount.is_zero() {
 			return None
 		}
 
-		Some((
-			input.unique_saturated_into(),
-			Self::get_price(input_asset, output_asset)
-				.map(|price| price * input)?
-				.unique_saturated_into(),
-		))
+		let input_asset = input_asset.into();
+		let output_asset = output_asset.into();
+		if input_asset == output_asset {
+			return Some(available_input_amount.saturating_sub(desired_output_amount))
+		}
+
+		let required_input = Self::get_price(input_asset, output_asset)
+			.map(|price| desired_output_amount.into() * price)?;
+
+		if required_input > available_input_amount.into() {
+			return Some(available_input_amount)
+		}
+
+		Some(required_input.unique_saturated_into())
 	}
 }

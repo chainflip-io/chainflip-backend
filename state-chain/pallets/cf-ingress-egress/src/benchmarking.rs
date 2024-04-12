@@ -1,13 +1,19 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use crate::DisabledEgressAssets;
+use crate::{BoostStatus, DisabledEgressAssets};
 use cf_chains::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
 	DepositChannel,
 };
+use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::v2::*;
-use frame_support::{assert_ok, traits::OriginTrait};
+use frame_support::{
+	assert_ok,
+	traits::{OnNewAccount, OriginTrait},
+};
+use frame_system::RawOrigin;
+use strum::IntoEnumIterator;
 
 pub(crate) type TargetChainBlockNumber<T, I> =
 	<<T as Config<I>>::TargetChain as Chain>::ChainBlockNumber;
@@ -57,6 +63,7 @@ mod benchmarks {
 					lp_account: account("doogle", 0, 0),
 				},
 				boost_fee: 0,
+				boost_status: BoostStatus::NotBoosted,
 			},
 		);
 		PrewitnessedDeposits::<T, I>::insert(
@@ -108,6 +115,7 @@ mod benchmarks {
 						lp_account: account("doogle", 0, 0),
 					},
 					boost_fee: 0,
+					boost_status: BoostStatus::NotBoosted,
 				};
 			channel.deposit_channel.state.on_fetch_scheduled();
 			DepositChannelLookup::<T, I>::insert(deposit_address.clone(), channel);
@@ -161,6 +169,275 @@ mod benchmarks {
 		);
 	}
 
+	fn setup_booster_account<T: Config<I>, I>(
+		asset: TargetChainAsset<T, I>,
+		seed: u32,
+	) -> T::AccountId {
+		let caller: T::AccountId = account("booster", 0, seed);
+
+		// TODO: remove once https://github.com/chainflip-io/chainflip-backend/pull/4716 is merged
+		if frame_system::Pallet::<T>::providers(&caller) == 0u32 {
+			frame_system::Pallet::<T>::inc_providers(&caller);
+		}
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_liquidity_provider(&caller));
+		assert_ok!(T::LpBalance::try_credit_account(&caller, asset.into(), 1_000_000,));
+
+		// A non-zero balance is required to pay for the channel opening fee.
+		T::FeePayment::mint_to_account(&caller, u32::MAX.into());
+
+		assert_ok!(T::LpBalance::try_credit_account(
+			&caller,
+			asset.into(),
+			5_000_000_000_000_000_000u128
+		));
+
+		caller
+	}
+
+	#[benchmark]
+	fn add_boost_funds() {
+		use strum::IntoEnumIterator;
+		let amount: TargetChainAmount<T, I> = 1000u32.into();
+
+		const FEE_TIER: BoostPoolTier = BoostPoolTier::FiveBps;
+		let asset = TargetChainAsset::<T, I>::iter().next().unwrap();
+
+		let lp_account = setup_booster_account::<T, I>(asset, 0);
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T, I>::add_boost_funds(
+				RawOrigin::Signed(lp_account.clone()).into(),
+				asset,
+				amount,
+				FEE_TIER
+			));
+		}
+
+		assert_eq!(
+			BoostPools::<T, I>::get(asset, FEE_TIER).unwrap().get_available_amount(),
+			amount
+		);
+	}
+
+	fn prewitness_deposit<T: pallet::Config<I>, I>(
+		lp_account: &T::AccountId,
+		asset: TargetChainAsset<T, I>,
+		fee_tier: BoostPoolTier,
+	) -> TargetChainAccount<T, I> {
+		let (_channel_id, deposit_address, ..) = Pallet::<T, I>::open_channel(
+			lp_account,
+			asset,
+			ChannelAction::LiquidityProvision { lp_account: lp_account.clone() },
+			fee_tier as u16,
+		)
+		.unwrap();
+
+		assert_ok!(Pallet::<T, I>::add_prewitnessed_deposits(
+			vec![DepositWitness::<T::TargetChain> {
+				deposit_address: deposit_address.clone(),
+				asset,
+				amount: TargetChainAmount::<T, I>::from(1000u32),
+				deposit_details: BenchmarkValue::benchmark_value()
+			}],
+			BenchmarkValue::benchmark_value()
+		),);
+
+		deposit_address
+	}
+
+	#[benchmark]
+	fn on_lost_deposit(n: Linear<1, 100>) {
+		const FEE_TIER: BoostPoolTier = BoostPoolTier::FiveBps;
+		use strum::IntoEnumIterator;
+		let asset = TargetChainAsset::<T, I>::iter().next().unwrap();
+
+		let boosters: Vec<_> = (0..n).map(|i| setup_booster_account::<T, I>(asset, i)).collect();
+
+		for booster_id in &boosters {
+			assert_ok!(Pallet::<T, I>::add_boost_funds(
+				RawOrigin::Signed(booster_id.clone()).into(),
+				asset,
+				1_000_000u32.into(),
+				FEE_TIER
+			));
+		}
+
+		prewitness_deposit::<T, I>(&boosters[0], asset, FEE_TIER);
+
+		// Worst-case scenario is when all boosters withdraw funds while
+		// waiting for the deposit to be finalised:
+		for booster_id in &boosters {
+			assert_ok!(Pallet::<T, I>::stop_boosting(
+				RawOrigin::Signed(booster_id.clone()).into(),
+				asset,
+				FEE_TIER
+			));
+		}
+
+		let boost_id = PrewitnessedDepositIdCounter::<T, I>::get();
+
+		#[block]
+		{
+			BoostPools::<T, I>::mutate(asset, FEE_TIER, |pool| {
+				// This depends on the number of boosters who contributed to it:
+				pool.as_mut().unwrap().on_lost_deposit(boost_id);
+			});
+		}
+	}
+
+	#[benchmark]
+	fn stop_boosting() {
+		const FEE_TIER: BoostPoolTier = BoostPoolTier::FiveBps;
+		let asset = TargetChainAsset::<T, I>::iter().next().unwrap();
+
+		let lp_account = setup_booster_account::<T, I>(asset, 0);
+
+		assert_ok!(Pallet::<T, I>::add_boost_funds(
+			RawOrigin::Signed(lp_account.clone()).into(),
+			asset,
+			1_000_000u32.into(),
+			FEE_TIER
+		));
+
+		// `stop_boosting` has linear complexity w.r.t. the number of pending boosts,
+		// and this seems like a reasonable estimate:
+		const PENDING_BOOSTS_COUNT: usize = 50;
+
+		for _ in 0..PENDING_BOOSTS_COUNT {
+			prewitness_deposit::<T, I>(&lp_account, asset, FEE_TIER);
+		}
+
+		#[block]
+		{
+			// This depends on the number active boosts:
+			assert_ok!(Pallet::<T, I>::stop_boosting(
+				RawOrigin::Signed(lp_account).into(),
+				asset,
+				FEE_TIER
+			));
+		}
+
+		assert_eq!(
+			BoostPools::<T, I>::get(asset, FEE_TIER).unwrap().get_available_amount(),
+			0u32.into()
+		);
+	}
+
+	// This benchmark is currently not used (since we use the more computationally expensive
+	// boost_finalised instead), but it is useful to keep around even if just to show that
+	// boosting a deposit is relatively cheap.
+	#[benchmark]
+	fn deposit_boosted() {
+		const FEE_TIER: BoostPoolTier = BoostPoolTier::FiveBps;
+		let asset = TargetChainAsset::<T, I>::iter().next().unwrap();
+
+		const BOOSTER_COUNT: u32 = 100;
+
+		let boosters: Vec<_> =
+			(0..BOOSTER_COUNT).map(|i| setup_booster_account::<T, I>(asset, i)).collect();
+
+		for booster_id in &boosters {
+			assert_ok!(Pallet::<T, I>::add_boost_funds(
+				RawOrigin::Signed(booster_id.clone()).into(),
+				asset,
+				1_000_000u32.into(),
+				FEE_TIER
+			));
+		}
+
+		let (_channel_id, deposit_address, ..) = Pallet::<T, I>::open_channel(
+			&boosters[0],
+			asset,
+			ChannelAction::LiquidityProvision { lp_account: boosters[0].clone() },
+			FEE_TIER as u16,
+		)
+		.unwrap();
+
+		let amount_before =
+			BoostPools::<T, I>::get(asset, FEE_TIER).unwrap().get_available_amount();
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T, I>::add_prewitnessed_deposits(
+				vec![DepositWitness::<T::TargetChain> {
+					deposit_address,
+					asset,
+					amount: TargetChainAmount::<T, I>::from(1000u32),
+					deposit_details: BenchmarkValue::benchmark_value()
+				}],
+				BenchmarkValue::benchmark_value()
+			),);
+		}
+
+		// This would fail if the deposit didn't get boosted:
+		assert!(
+			BoostPools::<T, I>::get(asset, FEE_TIER).unwrap().get_available_amount() <
+				amount_before
+		)
+	}
+
+	#[benchmark]
+	fn boost_finalised() {
+		use sp_runtime::Percent;
+		const FEE_TIER: BoostPoolTier = BoostPoolTier::FiveBps;
+		use strum::IntoEnumIterator;
+		let asset = TargetChainAsset::<T, I>::iter().next().unwrap();
+
+		const BOOSTER_COUNT: usize = 100;
+
+		let boosters: Vec<_> = (0..BOOSTER_COUNT)
+			.map(|i| setup_booster_account::<T, I>(asset, i as u32))
+			.collect();
+
+		for booster_id in &boosters {
+			assert_ok!(Pallet::<T, I>::add_boost_funds(
+				RawOrigin::Signed(booster_id.clone()).into(),
+				asset,
+				1_000_000u32.into(),
+				FEE_TIER
+			));
+		}
+
+		let deposit_address = prewitness_deposit::<T, I>(&boosters[0], asset, FEE_TIER);
+
+		// Finalisation is more expensive the more boosters are withdrawing, as that requires
+		// storage access to update their balances for each withdrawing booster. It is overly
+		// pessimistic to assume all will be withdrawing, so we assume only `PERCENT_WITHDRAWING`
+		// do so:
+		const PERCENT_WITHDRAWING: Percent = Percent::from_percent(30);
+		let withdrawing_count: usize = PERCENT_WITHDRAWING * BOOSTER_COUNT;
+
+		for booster_id in boosters.iter().take(withdrawing_count) {
+			assert_ok!(Pallet::<T, I>::stop_boosting(
+				RawOrigin::Signed(booster_id.clone()).into(),
+				asset,
+				FEE_TIER
+			));
+		}
+
+		let amount_before =
+			BoostPools::<T, I>::get(asset, FEE_TIER).unwrap().get_available_amount();
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T, I>::process_single_deposit(
+				deposit_address,
+				asset,
+				1_000u32.into(),
+				BenchmarkValue::benchmark_value(),
+				BenchmarkValue::benchmark_value()
+			));
+		}
+
+		// Balance should increase due to boost finalisation:
+		assert!(
+			BoostPools::<T, I>::get(asset, FEE_TIER).unwrap().get_available_amount() >
+				amount_before
+		)
+	}
+
 	#[benchmark]
 	fn clear_prewitnessed_deposits(n: Linear<1, 255>) {
 		for i in 0..n {
@@ -207,6 +484,21 @@ mod benchmarks {
 		});
 		new_test_ext().execute_with(|| {
 			_clear_prewitnessed_deposits::<Test, ()>(100, true);
+		});
+		new_test_ext().execute_with(|| {
+			_add_boost_funds::<Test, ()>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_on_lost_deposit::<Test, ()>(100, true);
+		});
+		new_test_ext().execute_with(|| {
+			_stop_boosting::<Test, ()>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_deposit_boosted::<Test, ()>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_boost_finalised::<Test, ()>(true);
 		});
 	}
 }
