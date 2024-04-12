@@ -1,5 +1,8 @@
 use crate::*;
 use frame_support::traits::OnRuntimeUpgrade;
+
+/// Renames slippage to price impact and changes the storage from a value to a map of asset ->
+/// limit.
 pub struct Migration<T>(PhantomData<T>);
 
 mod old {
@@ -14,7 +17,7 @@ impl<T: pallet::Config> OnRuntimeUpgrade for Migration<T> {
 		let price_impact: Option<u32> = old::MaximumRelativeSlippage::<T>::get();
 
 		Pools::<T>::iter_keys().for_each(|asset_pair| {
-			MaximumPriceImpact::<T>::mutate(asset_pair, |limit| *limit = price_impact);
+			MaximumPriceImpact::<T>::set(asset_pair, price_impact);
 		});
 
 		old::MaximumRelativeSlippage::<T>::kill();
@@ -24,6 +27,10 @@ impl<T: pallet::Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+		ensure!(
+			old::MaximumRelativeSlippage::<T>::exists(),
+			"Pre-migration should have a slippage value."
+		);
 		let slippage = old::MaximumRelativeSlippage::<T>::get();
 
 		Ok(slippage.encode())
@@ -70,18 +77,12 @@ mod migration_tests {
 			));
 
 			#[cfg(feature = "try-runtime")]
-			let state: Vec<u8> =
-				crate::migrations::rename_slippage_to_price_impact::Migration::<Test>::pre_upgrade(
-				)
-				.unwrap();
+			let state: Vec<u8> = crate::migrations::v4::Migration::<Test>::pre_upgrade().unwrap();
 			// Perform runtime migration.
-			crate::migrations::rename_slippage_to_price_impact::Migration::<Test>::on_runtime_upgrade();
+			crate::migrations::v4::Migration::<Test>::on_runtime_upgrade();
 
 			#[cfg(feature = "try-runtime")]
-			crate::migrations::rename_slippage_to_price_impact::Migration::<Test>::post_upgrade(
-				state,
-			)
-			.unwrap();
+			crate::migrations::v4::Migration::<Test>::post_upgrade(state).unwrap();
 
 			// Verify data is correctly migrated into new storage.
 			assert_eq!(MaximumPriceImpact::<Test>::get(asset_pair), Some(limit));
