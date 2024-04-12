@@ -17,7 +17,6 @@ import { jsonRpc } from './json_rpc';
 import { provideLiquidity } from './provide_liquidity';
 import { sendEvmNative } from './send_evm';
 import { getBalance } from './get_balance';
-import test from 'node:test';
 
 type RpcAsset = {
   asset: string;
@@ -128,9 +127,9 @@ async function testWithdrawAsset(version: string) {
   console.log('=== Starting testWithdrawAsset ===');
   const oldBalance = await getBalance(testAsset, testAddress);
 
-  let version_subfix = version === 'V2' ? '_v2' : '';
+  const versionSubfix = version === 'V2' ? '_v2' : '';
 
-  const result = await lpApiRpc(`lp_withdraw_asset` + version_subfix, [
+  const result = await lpApiRpc(`lp_withdraw_asset` + versionSubfix, [
     testAssetAmount.toString(16),
     testRpcAsset,
     testAddress,
@@ -166,8 +165,8 @@ async function testRegisterWithExistingLpAccount() {
 async function testRangeOrder(version: string) {
   console.log('=== Starting testRangeOrder ===');
   const range = { start: 1, end: 2 };
-  let version_subfix = version === 'V2' ? '_v2' : '';
-  let zero = '0x0';
+  const versionSubfix = version === 'V2' ? '_v2' : '';
+  const zero = '0x0';
   const orderId = (74398).toString(16); // Arbitrary order id so it does not interfere with other tests
   const zeroAssetAmounts = {
     AssetAmounts: {
@@ -177,7 +176,7 @@ async function testRangeOrder(version: string) {
   };
 
   // Cleanup after any unfinished previous test so it does not interfere with this test
-  await lpApiRpc(`lp_set_range_order` + version_subfix, [
+  await lpApiRpc(`lp_set_range_order` + versionSubfix, [
     testRpcAsset,
     'USDC',
     orderId,
@@ -210,7 +209,7 @@ async function testRangeOrder(version: string) {
 
   // Update the range order
   const updateRangeOrder = (
-    await lpApiRpc(`lp_update_range_order` + version_subfix, [
+    await lpApiRpc(`lp_update_range_order` + versionSubfix, [
       testRpcAsset,
       'USDC',
       orderId,
@@ -240,7 +239,7 @@ async function testRangeOrder(version: string) {
 
   // Burn the range order
   const burnRangeOrder = (
-    await lpApiRpc(`lp_set_range_order` + version_subfix, [
+    await lpApiRpc(`lp_set_range_order` + versionSubfix, [
       testRpcAsset,
       'USDC',
       orderId,
@@ -280,8 +279,8 @@ async function testLimitOrder(version: string) {
   console.log('=== Starting testLimitOrder ===');
   const tick = 2;
 
-  let version_subfix = version === 'V2' ? '_v2' : '';
-  let zero = '0x0';
+  const versionSubfix = version === 'V2' ? '_v2' : '';
+  const zero = '0x0';
   const orderId = (98432).toString(16); // Arbitrary order id so it does not interfere with other tests
 
   // Cleanup after any unfinished previous test so it does not interfere with this test
@@ -289,7 +288,7 @@ async function testLimitOrder(version: string) {
 
   // Mint a limit order
   const mintLimitOrder = (
-    await lpApiRpc(`lp_set_limit_order` + version_subfix, [
+    await lpApiRpc(`lp_set_limit_order` + versionSubfix, [
       testRpcAsset,
       'USDC',
       'sell',
@@ -313,7 +312,7 @@ async function testLimitOrder(version: string) {
 
   // Update the limit order
   const updateLimitOrder = (
-    await lpApiRpc(`lp_update_limit_order` + version_subfix, [
+    await lpApiRpc(`lp_update_limit_order` + versionSubfix, [
       testRpcAsset,
       'USDC',
       'sell',
@@ -344,7 +343,7 @@ async function testLimitOrder(version: string) {
 
   // Burn the limit order
   const burnLimitOrder = (
-    await lpApiRpc(`lp_set_limit_order` + version_subfix, [testRpcAsset, 'USDC', 'sell', orderId, tick, zero])
+    await lpApiRpc(`lp_set_limit_order` + versionSubfix, [testRpcAsset, 'USDC', 'sell', orderId, tick, zero])
   ).tx_details.response;
 
   assert(burnLimitOrder.length >= 1, `Empty burn limit order result`);
