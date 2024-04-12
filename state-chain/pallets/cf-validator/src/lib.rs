@@ -82,7 +82,7 @@ pub enum RotationPhase<T: Config> {
 	KeyHandoversInProgress(RuntimeRotationState<T>),
 	ActivatingKeys(RuntimeRotationState<T>),
 	NewKeysActivated(RuntimeRotationState<T>),
-	SessionRotating(RuntimeRotationState<T>),
+	SessionRotating(Vec<ValidatorIdOf<T>>, <T as Chainflip>::Amount),
 }
 
 type ValidatorIdOf<T> = <T as Chainflip>::ValidatorId;
@@ -961,7 +961,7 @@ impl<T: Config> pallet_session::ShouldEndSession<BlockNumberFor<T>> for Pallet<T
 	fn should_end_session(_now: BlockNumberFor<T>) -> bool {
 		matches!(
 			CurrentRotationPhase::<T>::get(),
-			RotationPhase::NewKeysActivated(_) | RotationPhase::SessionRotating(_)
+			RotationPhase::NewKeysActivated(_) | RotationPhase::SessionRotating(..)
 		)
 	}
 }
@@ -976,7 +976,10 @@ impl<T: Config> Pallet<T> {
 	/// Note this function is not benchmarked - it is only ever triggered via the session pallet,
 	/// which at the time of writing uses `T::BlockWeights::get().max_block` ie. it implicitly fills
 	/// the block.
-	fn transition_to_next_epoch(rotation_state: RuntimeRotationState<T>) {
+	fn transition_to_next_epoch(
+		new_authorities: Vec<ValidatorIdOf<T>>,
+		bond: <T as Chainflip>::Amount,
+	) {
 		log::debug!(target: "cf-validator", "Starting new epoch");
 
 		// Update epoch numbers.
@@ -991,21 +994,10 @@ impl<T: Config> Pallet<T> {
 			old_epoch,
 		);
 
-		let mut new_authorities: Vec<<T as Chainflip>::ValidatorId> =
-			rotation_state.authority_candidates().into_iter().collect();
-		let hash = frame_system::Pallet::<T>::block_hash(
-			frame_system::Pallet::<T>::current_block_number(),
-		);
-
-		let mut buf: [u8; 8] = [0; 8];
-		buf.copy_from_slice(&hash.as_ref()[..8]);
-
-		let seed_from_hash: u64 = u64::from_be_bytes(buf);
-		WyRand::new_seed(seed_from_hash).shuffle(&mut new_authorities);
 		Self::initialise_new_epoch(
 			new_epoch,
 			&new_authorities,
-			rotation_state.bond,
+			bond,
 			Self::get_active_bids()
 				.into_iter()
 				.filter_map(|Bid { bidder_id, amount }| {
@@ -1379,11 +1371,23 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<ValidatorIdOf<T>>> {
 		match CurrentRotationPhase::<T>::get() {
 			RotationPhase::NewKeysActivated(rotation_state) => {
-				let next_authorities = rotation_state.authority_candidates();
-				Self::set_rotation_phase(RotationPhase::SessionRotating(rotation_state));
-				Some(next_authorities.into_iter().collect())
+				let mut next_authorities: Vec<ValidatorIdOf<T>> =
+					rotation_state.authority_candidates().into_iter().collect();
+
+				let hash = frame_system::Pallet::<T>::parent_hash();
+				let mut buf: [u8; 8] = [0; 8];
+				buf.copy_from_slice(&hash.as_ref()[..8]);
+				let seed_from_hash: u64 = u64::from_be_bytes(buf);
+				WyRand::new_seed(seed_from_hash).shuffle(&mut next_authorities);
+
+				Self::set_rotation_phase(RotationPhase::SessionRotating(
+					next_authorities.clone(),
+					rotation_state.bond,
+				));
+
+				Some(next_authorities)
 			},
-			RotationPhase::SessionRotating(_) => {
+			RotationPhase::SessionRotating(..) => {
 				Self::set_rotation_phase(RotationPhase::Idle);
 				None
 			},
@@ -1406,8 +1410,9 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 
 	/// The session is starting
 	fn start_session(_start_index: SessionIndex) {
-		if let RotationPhase::SessionRotating(rotation_state) = CurrentRotationPhase::<T>::get() {
-			Pallet::<T>::transition_to_next_epoch(rotation_state)
+		if let RotationPhase::SessionRotating(authorities, bond) = CurrentRotationPhase::<T>::get()
+		{
+			Pallet::<T>::transition_to_next_epoch(authorities, bond)
 		}
 	}
 }
