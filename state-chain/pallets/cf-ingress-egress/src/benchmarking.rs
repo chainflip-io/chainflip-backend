@@ -276,13 +276,13 @@ mod benchmarks {
 			));
 		}
 
-		let boost_id = PrewitnessedDepositIdCounter::<T, I>::get();
+		let prewitnessed_deposit_id = PrewitnessedDepositIdCounter::<T, I>::get();
 
 		#[block]
 		{
 			BoostPools::<T, I>::mutate(asset, FEE_TIER, |pool| {
 				// This depends on the number of boosters who contributed to it:
-				pool.as_mut().unwrap().on_lost_deposit(boost_id);
+				pool.as_mut().unwrap().on_lost_deposit(prewitnessed_deposit_id);
 			});
 		}
 	}

@@ -1,15 +1,16 @@
 use super::*;
 
 use cf_chains::FeeEstimationApi;
-use cf_primitives::{AssetAmount, BasisPoints};
+use cf_primitives::{AssetAmount, BasisPoints, PrewitnessedDepositId};
 use cf_traits::{
 	mocks::{
 		account_role_registry::MockAccountRoleRegistry, tracked_data_provider::TrackedDataProvider,
 	},
 	AccountRoleRegistry, LpBalanceApi,
 };
+use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
-use crate::{BoostId, BoostPoolTier, BoostPools, DepositTracker, Event};
+use crate::{BoostPoolId, BoostPoolTier, BoostPools, DepositTracker, Event};
 
 type AccountId = u64;
 type DepositBalances = crate::DepositBalances<Test, ()>;
@@ -169,7 +170,7 @@ fn basic_passive_boosting() {
 		// ==== LP sends funds to liquidity deposit address, which gets pre-witnessed ====
 		assert_eq!(get_lp_eth_balance(&LP_ACCOUNT), INIT_LP_BALANCE);
 		let (channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, 30);
-		let deposit_id = prewitness_deposit(deposit_address, ASSET, DEPOSIT_AMOUNT);
+		let prewitnessed_deposit_id = prewitness_deposit(deposit_address, ASSET, DEPOSIT_AMOUNT);
 		// All of BOOSTER_AMOUNT_1 should be used:
 		const POOL_1_FEE: AssetAmount = BOOSTER_AMOUNT_1 * BoostPoolTier::FiveBps as u128 / 10_000;
 		// Only part of BOOSTER_AMOUNT_2 should be used:
@@ -179,10 +180,18 @@ fn basic_passive_boosting() {
 		const LP_BALANCE_AFTER_BOOST: AssetAmount =
 			INIT_LP_BALANCE + DEPOSIT_AMOUNT - POOL_1_FEE - POOL_2_FEE - INGRESS_FEE;
 		{
+			const POOL_1_CONTRIBUTION: AssetAmount = BOOSTER_AMOUNT_1 + POOL_1_FEE;
+			const POOL_2_CONTRIBUTION: AssetAmount = DEPOSIT_AMOUNT - POOL_1_CONTRIBUTION;
+
 			System::assert_last_event(RuntimeEvent::IngressEgress(Event::DepositBoosted {
 				deposit_address,
 				asset: ASSET,
-				amount: DEPOSIT_AMOUNT,
+				amounts: BTreeMap::from_iter(vec![
+					(BoostPoolTier::FiveBps, POOL_1_CONTRIBUTION),
+					(BoostPoolTier::TenBps, POOL_2_CONTRIBUTION),
+				]),
+				channel_id,
+				prewitnessed_deposit_id,
 				deposit_details: (),
 				ingress_fee: INGRESS_FEE,
 				boost_fee: POOL_1_FEE + POOL_2_FEE,
@@ -191,12 +200,9 @@ fn basic_passive_boosting() {
 
 			assert_boosted(
 				deposit_address,
-				deposit_id,
+				prewitnessed_deposit_id,
 				[BoostPoolTier::FiveBps, BoostPoolTier::TenBps],
 			);
-
-			const POOL_1_CONTRIBUTION: AssetAmount = BOOSTER_AMOUNT_1 + POOL_1_FEE;
-			const POOL_2_CONTRIBUTION: AssetAmount = DEPOSIT_AMOUNT - POOL_1_CONTRIBUTION;
 
 			// Channel action is immediately executed (LP gets credited in this case):
 			assert_eq!(get_lp_eth_balance(&LP_ACCOUNT), LP_BALANCE_AFTER_BOOST);
@@ -226,10 +232,14 @@ fn basic_passive_boosting() {
 				amount: DEPOSIT_AMOUNT,
 				deposit_details: (),
 				ingress_fee: 0,
-				action: DepositAction::BoostersCredited,
+				action: DepositAction::BoostersCredited { prewitnessed_deposit_id },
+				channel_id,
 			}));
 
-			assert_eq!(PrewitnessedDeposits::<Test>::get(channel_id, deposit_id), None);
+			assert_eq!(
+				PrewitnessedDeposits::<Test>::get(channel_id, prewitnessed_deposit_id),
+				None
+			);
 
 			assert_eq!(
 				get_available_amount(ASSET, BoostPoolTier::FiveBps),
@@ -370,7 +380,7 @@ fn stop_boosting() {
 		));
 
 		let (_channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, 30);
-		let _deposit_id = prewitness_deposit(deposit_address, eth::Asset::Eth, DEPOSIT_AMOUNT);
+		let deposit_id = prewitness_deposit(deposit_address, eth::Asset::Eth, DEPOSIT_AMOUNT);
 
 		assert_eq!(get_lp_eth_balance(&BOOSTER_1), INIT_BOOSTER_ETH_BALANCE - BOOSTER_AMOUNT_1);
 
@@ -388,6 +398,13 @@ fn stop_boosting() {
 			INIT_BOOSTER_ETH_BALANCE - BOOSTER_AMOUNT_1 + AVAILABLE_BOOST_AMOUNT
 		);
 
+		System::assert_last_event(RuntimeEvent::IngressEgress(Event::StoppedBoosting {
+			booster_id: BOOSTER_1,
+			boost_pool: BoostPoolId { asset: eth::Asset::Eth, tier: BoostPoolTier::TenBps },
+			unlocked_amount: AVAILABLE_BOOST_AMOUNT,
+			pending_boosts: BTreeSet::from_iter(vec![deposit_id]),
+		}));
+
 		// Deposit is finalised, the booster gets their remaining funds from the pool:
 		witness_deposit(deposit_address, eth::Asset::Eth, DEPOSIT_AMOUNT);
 		assert_eq!(get_lp_eth_balance(&BOOSTER_1), INIT_BOOSTER_ETH_BALANCE + BOOST_FEE);
@@ -397,12 +414,12 @@ fn stop_boosting() {
 #[track_caller]
 fn assert_boosted(
 	deposit_address: H160,
-	boost_id: BoostId,
+	prewitnessed_deposit_id: PrewitnessedDepositId,
 	pools: impl IntoIterator<Item = BoostPoolTier>,
 ) {
 	assert_eq!(
 		DepositChannelLookup::<Test>::get(deposit_address).unwrap().boost_status,
-		BoostStatus::Boosted { boost_id, pools: Vec::from_iter(pools.into_iter()) }
+		BoostStatus::Boosted { prewitnessed_deposit_id, pools: Vec::from_iter(pools.into_iter()) }
 	);
 }
 
@@ -651,14 +668,22 @@ fn insufficient_funds_for_boost() {
 			BoostPoolTier::FiveBps
 		));
 
-		let (_channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, 10);
-		let _deposit_id = prewitness_deposit(deposit_address, eth::Asset::Eth, DEPOSIT_AMOUNT);
+		let (channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, 10);
+		System::reset_events();
+		let deposit_id = prewitness_deposit(deposit_address, eth::Asset::Eth, DEPOSIT_AMOUNT);
 
 		// The deposit is pre-witnessed, but no channel action took place:
 		{
 			assert_not_boosted(deposit_address);
 			assert_eq!(get_lp_eth_balance(&LP_ACCOUNT), INIT_LP_BALANCE);
 		}
+
+		System::assert_last_event(RuntimeEvent::IngressEgress(Event::InsufficientBoostLiquidity {
+			prewitnessed_deposit_id: deposit_id,
+			asset: eth::Asset::Eth,
+			amount_attempted: DEPOSIT_AMOUNT,
+			channel_id,
+		}));
 
 		// When the deposit is finalised, it is processed as normal:
 		{
@@ -691,7 +716,10 @@ fn lost_funds_are_acknowledged_by_boost_pool() {
 
 		assert_eq!(
 			DepositChannelLookup::<Test>::get(deposit_address).unwrap().boost_status,
-			BoostStatus::Boosted { boost_id: deposit_id, pools: vec![BoostPoolTier::FiveBps] }
+			BoostStatus::Boosted {
+				prewitnessed_deposit_id: deposit_id,
+				pools: vec![BoostPoolTier::FiveBps]
+			}
 		);
 
 		assert_eq!(get_lp_eth_balance(&LP_ACCOUNT), DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE);
@@ -711,12 +739,51 @@ fn lost_funds_are_acknowledged_by_boost_pool() {
 			IngressEgress::on_idle(recycle_block, Weight::MAX);
 			assert_eq!(PrewitnessedDeposits::<Test>::get(channel_id, deposit_id), None);
 
-			assert_eq!(
-				BoostPools::<Test>::get(eth::Asset::Eth, BoostPoolTier::FiveBps)
-					.unwrap()
-					.get_pending_boosts(),
-				Vec::<BoostId>::new()
-			);
+			assert!(BoostPools::<Test>::get(eth::Asset::Eth, BoostPoolTier::FiveBps)
+				.unwrap()
+				.get_pending_boosts()
+				.is_empty());
 		}
+	});
+}
+
+#[test]
+fn test_add_boost_funds() {
+	new_test_ext().execute_with(|| {
+		const BOOST_FUNDS: AssetAmount = 500_000_000;
+
+		setup();
+
+		// Should have all funds in the lp account and non in the pool yet.
+		assert_eq!(
+			BoostPools::<Test>::get(eth::Asset::Eth, BoostPoolTier::FiveBps)
+				.unwrap()
+				.get_available_amount_for_account(&BOOSTER_1),
+			None
+		);
+		assert_eq!(get_lp_eth_balance(&BOOSTER_1), INIT_BOOSTER_ETH_BALANCE);
+
+		// Add some of the LP funds to the boost pool
+		assert_ok!(IngressEgress::add_boost_funds(
+			RuntimeOrigin::signed(BOOSTER_1),
+			eth::Asset::Eth,
+			BOOST_FUNDS,
+			BoostPoolTier::FiveBps
+		));
+
+		// Should see some of the funds in the pool now and some funds missing from the LP account
+		assert_eq!(
+			BoostPools::<Test>::get(eth::Asset::Eth, BoostPoolTier::FiveBps)
+				.unwrap()
+				.get_available_amount_for_account(&BOOSTER_1),
+			Some(BOOST_FUNDS)
+		);
+		assert_eq!(get_lp_eth_balance(&BOOSTER_1), INIT_BOOSTER_ETH_BALANCE - BOOST_FUNDS);
+
+		System::assert_last_event(RuntimeEvent::IngressEgress(Event::BoostFundsAdded {
+			booster_id: BOOSTER_1,
+			boost_pool: BoostPoolId { asset: eth::Asset::Eth, tier: BoostPoolTier::FiveBps },
+			amount: BOOST_FUNDS,
+		}));
 	});
 }
