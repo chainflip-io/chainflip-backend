@@ -1,14 +1,14 @@
 use crate as pallet_cf_funding;
 use crate::PalletSafeMode;
 use cf_chains::{evm::EvmCrypto, ApiCall, Chain, ChainCrypto, Ethereum};
-use cf_primitives::{BroadcastId, FlipBalance, ThresholdSignatureRequestId};
+use cf_primitives::FlipBalance;
 use cf_traits::{
-	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
-	mocks::time_source, AccountRoleRegistry, Broadcaster, RedemptionCheck, WaivedFees,
+	impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
+	mocks::{broadcaster::MockBroadcaster, time_source},
+	AccountRoleRegistry, RedemptionCheck, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use core::cell::RefCell;
-use frame_support::{derive_impl, parameter_types, traits::UnfilteredDispatchable};
+use frame_support::{derive_impl, parameter_types};
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
@@ -82,13 +82,6 @@ impl pallet_cf_flip::Config for Test {
 cf_traits::impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
 cf_traits::impl_mock_on_account_funded!(AccountId, u128);
 
-pub struct MockBroadcaster;
-
-thread_local! {
-	pub static REDEMPTION_BROADCAST_REQUESTS: RefCell<Vec<<Ethereum as Chain>::ChainAmount>> =
-		const { RefCell::new(vec![]) };
-}
-
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockRegisterRedemption {
 	amount: <Ethereum as Chain>::ChainAmount,
@@ -135,57 +128,6 @@ impl ApiCall<EvmCrypto> for MockRegisterRedemption {
 	}
 }
 
-impl MockBroadcaster {
-	pub fn received_requests() -> Vec<<Ethereum as Chain>::ChainAmount> {
-		REDEMPTION_BROADCAST_REQUESTS.with(|cell| cell.borrow().clone())
-	}
-}
-
-impl_mock_callback!(RuntimeOrigin);
-
-impl Broadcaster<Ethereum> for MockBroadcaster {
-	type ApiCall = MockRegisterRedemption;
-	type Callback = MockCallback;
-
-	fn threshold_sign_and_broadcast(
-		api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		REDEMPTION_BROADCAST_REQUESTS.with(|cell| {
-			cell.borrow_mut().push(api_call.amount);
-		});
-		(0, 0)
-	}
-
-	fn threshold_sign_and_broadcast_with_callback(
-		_api_call: Self::ApiCall,
-		_success_callback: Option<Self::Callback>,
-		_failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
-	) -> BroadcastId {
-		unimplemented!()
-	}
-
-	fn threshold_sign_and_broadcast_rotation_tx(
-		_api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		unimplemented!()
-	}
-
-	fn re_sign_aborted_broadcast(
-		_broadcast_id: BroadcastId,
-	) -> Option<ThresholdSignatureRequestId> {
-		unimplemented!()
-	}
-
-	fn threshold_sign(_api_call: Self::ApiCall) -> (BroadcastId, ThresholdSignatureRequestId) {
-		unimplemented!()
-	}
-
-	/// Clean up storage data related to a broadcast ID.
-	fn expire_broadcast(_broadcast_id: BroadcastId) {
-		unimplemented!()
-	}
-}
-
 parameter_types! {
 	pub static CanRedeem: bool = true;
 }
@@ -204,13 +146,16 @@ impl RedemptionCheck for MockRedemptionChecker {
 }
 
 impl_mock_runtime_safe_mode! { funding: PalletSafeMode }
+
+pub type MockFundingBroadcaster = MockBroadcaster<(MockRegisterRedemption, RuntimeCall)>;
+
 impl pallet_cf_funding::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type TimeSource = time_source::Mock;
 	type Flip = Flip;
 	type WeightInfo = ();
 	type FunderId = AccountId;
-	type Broadcaster = MockBroadcaster;
+	type Broadcaster = MockFundingBroadcaster;
 	type ThresholdCallable = RuntimeCall;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type RedemptionChecker = MockRedemptionChecker;

@@ -6,18 +6,17 @@ use cf_chains::{
 	mocks::{MockEthereum, MockEthereumChainCrypto},
 	ApiCall, ChainCrypto, Ethereum, UpdateFlipSupply,
 };
-use cf_primitives::{BroadcastId, FlipBalance, ThresholdSignatureRequestId};
+use cf_primitives::FlipBalance;
 use cf_traits::{
-	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
-	mocks::{egress_handler::MockEgressHandler, flip_burn_info::MockFlipBurnInfo},
-	Broadcaster, Issuance, RewardsDistribution, WaivedFees,
+	impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
+	mocks::{
+		broadcaster::MockBroadcaster, egress_handler::MockEgressHandler,
+		flip_burn_info::MockFlipBurnInfo,
+	},
+	Issuance, RewardsDistribution, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{
-	derive_impl, parameter_types, storage,
-	traits::{Imbalance, UnfilteredDispatchable},
-	StorageHasher, Twox64Concat,
-};
+use frame_support::{derive_impl, parameter_types, traits::Imbalance};
 use frame_system as system;
 use scale_info::TypeInfo;
 use sp_arithmetic::Permill;
@@ -76,7 +75,6 @@ impl system::Config for Test {
 }
 
 impl_mock_chainflip!(Test);
-impl_mock_callback!(RuntimeOrigin);
 
 parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
@@ -150,61 +148,6 @@ impl ApiCall<MockEthereumChainCrypto> for MockUpdateFlipSupply {
 	}
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct MockBroadcast;
-
-impl MockBroadcast {
-	pub fn call(outgoing: MockUpdateFlipSupply) {
-		storage::hashed::put(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcast", &outgoing);
-	}
-
-	pub fn get_called() -> Option<MockUpdateFlipSupply> {
-		storage::hashed::get(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcast")
-	}
-}
-
-impl Broadcaster<MockEthereum> for MockBroadcast {
-	type ApiCall = MockUpdateFlipSupply;
-	type Callback = MockCallback;
-
-	fn threshold_sign_and_broadcast(
-		api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		Self::call(api_call);
-		(1, 1)
-	}
-
-	fn threshold_sign_and_broadcast_with_callback(
-		_api_call: Self::ApiCall,
-		_success_callback: Option<Self::Callback>,
-		_failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
-	) -> BroadcastId {
-		unimplemented!()
-	}
-
-	fn threshold_sign_and_broadcast_rotation_tx(
-		_api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		unimplemented!()
-	}
-
-	fn re_sign_aborted_broadcast(
-		_broadcast_id: BroadcastId,
-		_request_broadcast: bool,
-	) -> Option<ThresholdSignatureRequestId> {
-		unimplemented!()
-	}
-
-	fn threshold_sign(_api_call: Self::ApiCall) -> (BroadcastId, ThresholdSignatureRequestId) {
-		unimplemented!()
-	}
-
-	/// Clean up storage data related to a broadcast ID.
-	fn expire_broadcast(_broadcast_id: BroadcastId) {
-		unimplemented!()
-	}
-}
-
 pub struct MockStateChainGatewayProvider;
 
 impl StateChainGatewayAddressProvider for MockStateChainGatewayProvider {
@@ -214,6 +157,8 @@ impl StateChainGatewayAddressProvider for MockStateChainGatewayProvider {
 }
 
 impl_mock_runtime_safe_mode! { emissions: PalletSafeMode }
+
+pub type MockEmissionsBroadcaster = MockBroadcaster<(MockUpdateFlipSupply, RuntimeCall)>;
 
 impl pallet_cf_emissions::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -225,7 +170,7 @@ impl pallet_cf_emissions::Config for Test {
 	type RewardsDistribution = MockRewardsDistribution;
 	type CompoundingInterval = HeartbeatBlockInterval;
 	type EthEnvironment = MockStateChainGatewayProvider;
-	type Broadcaster = MockBroadcast;
+	type Broadcaster = MockEmissionsBroadcaster;
 	type FlipToBurn = MockFlipBurnInfo;
 	type SafeMode = MockRuntimeSafeMode;
 	type EgressHandler = MockEgressHandler<Ethereum>;

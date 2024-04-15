@@ -8,14 +8,14 @@ use cf_chains::{
 	mocks::{MockEthereum, MockEthereumChainCrypto},
 	ApiCall, SetAggKeyWithAggKeyError,
 };
-use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{
-	impl_mock_callback, impl_mock_chainflip,
-	mocks::{block_height_provider::BlockHeightProvider, cfe_interface_mock::MockCfeInterface},
+	impl_mock_chainflip,
+	mocks::{
+		block_height_provider::BlockHeightProvider, broadcaster::MockBroadcaster,
+		cfe_interface_mock::MockCfeInterface,
+	},
 };
-use frame_support::{
-	construct_runtime, derive_impl, parameter_types, traits::UnfilteredDispatchable, StorageHasher,
-};
+use frame_support::{construct_runtime, derive_impl, parameter_types};
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
@@ -64,7 +64,6 @@ impl frame_system::Config for Test {
 }
 
 impl_mock_chainflip!(Test);
-impl_mock_callback!(RuntimeOrigin);
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockSetAggKeyWithAggKey {
@@ -122,57 +121,6 @@ impl ApiCall<MockEthereumChainCrypto> for MockSetAggKeyWithAggKey {
 	}
 }
 
-pub struct MockBroadcaster;
-
-impl MockBroadcaster {
-	pub fn send_broadcast() {
-		storage::hashed::put(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcaster", &());
-	}
-
-	pub fn broadcast_sent() -> bool {
-		storage::hashed::exists(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcaster")
-	}
-}
-
-impl Broadcaster<MockEthereum> for MockBroadcaster {
-	type ApiCall = MockSetAggKeyWithAggKey;
-	type Callback = MockCallback;
-
-	fn threshold_sign_and_broadcast(
-		_api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		Self::send_broadcast();
-		(1, 1)
-	}
-
-	fn threshold_sign_and_broadcast_with_callback(
-		_api_call: Self::ApiCall,
-		_success_callback: Option<Self::Callback>,
-		_failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
-	) -> BroadcastId {
-		unimplemented!()
-	}
-
-	fn threshold_sign_and_broadcast_rotation_tx(
-		api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		Self::threshold_sign_and_broadcast(api_call)
-	}
-
-	fn re_sign_aborted_broadcast(_broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId> {
-		unimplemented!()
-	}
-
-	fn threshold_sign(_api_call: Self::ApiCall) -> (BroadcastId, ThresholdSignatureRequestId) {
-		unimplemented!()
-	}
-
-	/// Clean up storage data related to a broadcast ID.
-	fn expire_broadcast(_broadcast_id: BroadcastId) {
-		unimplemented!()
-	}
-}
-
 parameter_types! {
 	pub const KeygenResponseGracePeriod: u64 = 25;
 }
@@ -210,7 +158,7 @@ impl pallet_cf_vaults::Config for Test {
 	type Chain = MockEthereum;
 	type SetAggKeyWithAggKey = MockSetAggKeyWithAggKey;
 	type WeightInfo = ();
-	type Broadcaster = MockBroadcaster;
+	type Broadcaster = MockBroadcaster<(MockSetAggKeyWithAggKey, RuntimeCall)>;
 	type SafeMode = MockRuntimeSafeMode;
 	type ChainTracking = BlockHeightProvider<MockEthereum>;
 	type CfeMultisigRequest = MockCfeInterface;
