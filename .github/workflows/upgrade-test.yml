@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       upgrade-from-release:
-        description: 'The release we want to upgrade *from*: "perseverance" or "berghain"'
+        description: 'The release we want to upgrade *from*: "sisyphos", "perseverance" or "berghain"'
         required: true
         default: 'perseverance'
       upgrade-to-workflow-name:
@@ -29,7 +29,6 @@ on:
         type: string
         description: 'Commit to run the upgrade test against. Leave blank to use latest successful workflow run.'
         required: false
-
 
 env:
   FORCE_COLOR: 1
