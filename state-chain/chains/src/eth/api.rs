@@ -14,7 +14,7 @@ use ethabi::{Address, Uint};
 use evm::api::common::*;
 use frame_support::{
 	sp_runtime::{
-		traits::{Hash, Keccak256, UniqueSaturatedInto},
+		traits::{Hash, Keccak256},
 		DispatchError,
 	},
 	CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound,
@@ -172,14 +172,6 @@ where
 				node_id, amount, address, expiry, executor,
 			),
 		))
-	}
-
-	fn amount(&self) -> u128 {
-		match self {
-			EthereumApi::RegisterRedemption(tx_builder) =>
-				tx_builder.call.amount.unique_saturated_into(),
-			_ => unreachable!(),
-		}
 	}
 }
 
