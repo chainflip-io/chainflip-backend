@@ -2,7 +2,7 @@
 // INSTRUCTIONS
 //
 // This command takes one argument
-// It will take the provided seed turn it into a new polkadot address and return the address
+// It will take the provided seed turn it into a new solana address and return the address
 // For example: ./commands/new_sol_address.ts foobar
 // returns: 5Dd1drBHuBzHK7qGWzGQ2iR2KnbYZJbYuUfc88v5Cv4juWci
 
