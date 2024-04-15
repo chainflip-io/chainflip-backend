@@ -223,6 +223,10 @@ where
 		}) =>
 			save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network)
 				.await?,
+		SolanaIngressEgress(IngressEgressCall::process_deposits {
+			deposit_witnesses: _,
+			block_height: _,
+		}) => todo!(),
 		EthereumBroadcaster(BroadcastCall::transaction_succeeded {
 			tx_out_id,
 			transaction_ref,
@@ -301,11 +305,17 @@ where
 					.await?;
 			}
 		},
+		SolanaBroadcaster(BroadcastCall::transaction_succeeded {
+			tx_out_id: _,
+			transaction_ref: _,
+			..
+		}) => todo!(),
 
 		EthereumIngressEgress(_) |
 		BitcoinIngressEgress(_) |
 		PolkadotIngressEgress(_) |
 		ArbitrumIngressEgress(_) |
+		SolanaIngressEgress(_) |
 		System(_) |
 		Timestamp(_) |
 		Environment(_) |
@@ -324,17 +334,21 @@ where
 		BitcoinChainTracking(_) |
 		PolkadotChainTracking(_) |
 		ArbitrumChainTracking(_) |
+		SolanaChainTracking(_) |
 		EthereumVault(_) |
 		PolkadotVault(_) |
 		BitcoinVault(_) |
 		ArbitrumVault(_) |
+		SolanaVault(_) |
 		EvmThresholdSigner(_) |
 		PolkadotThresholdSigner(_) |
 		BitcoinThresholdSigner(_) |
+		SolanaThresholdSigner(_) |
 		EthereumBroadcaster(_) |
 		PolkadotBroadcaster(_) |
 		BitcoinBroadcaster(_) |
 		ArbitrumBroadcaster(_) |
+		SolanaBroadcaster(_) |
 		Swapping(_) |
 		LiquidityProvider(_) |
 		LiquidityPools(_) => {},

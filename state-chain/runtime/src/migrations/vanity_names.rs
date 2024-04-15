@@ -1,9 +1,11 @@
-use crate::{AccountId, Runtime};
-use frame_support::{
-	traits::{GetStorageVersion, StorageVersion},
-	BoundedVec,
-};
-use sp_std::{collections::btree_map::BTreeMap, prelude::*};
+#[cfg(feature = "try-runtime")]
+use crate::AccountId;
+use crate::Runtime;
+use frame_support::traits::{GetStorageVersion, StorageVersion};
+#[cfg(feature = "try-runtime")]
+use frame_support::BoundedVec;
+#[cfg(feature = "try-runtime")]
+use sp_std::collections::btree_map::BTreeMap;
 
 pub struct Migration;
 

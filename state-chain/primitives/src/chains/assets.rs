@@ -637,6 +637,22 @@ assets!(
 				index: 7,
 			},
 		],
+	},
+	Chain {
+		variant: Solana,
+		member_and_module: sol,
+		string: "Solana" (aliases: ["SOLANA", "solana"]),
+		json: "Solana",
+		assets: [
+			Asset {
+				variant: Sol,
+				member: sol,
+				string: "SOL" (aliases: ["Sol", "sol"]),
+				json: "SOL",
+				gas: true,
+				index: 9,
+			},
+		],
 	}
 );
 
@@ -669,6 +685,7 @@ mod test_assets {
 		assert_eq!(any::Asset::try_from(6).unwrap(), any::Asset::ArbEth);
 		assert_eq!(any::Asset::try_from(7).unwrap(), any::Asset::ArbUsdc);
 		assert_eq!(any::Asset::try_from(8).unwrap(), any::Asset::Usdt);
+		assert_eq!(any::Asset::try_from(9).unwrap(), any::Asset::Sol);
 	}
 
 	#[test]
@@ -681,6 +698,7 @@ mod test_assets {
 		assert_conversion!(btc, Btc);
 		assert_conversion!(arb, ArbEth);
 		assert_conversion!(arb, ArbUsdc);
+		assert_conversion!(sol, Sol);
 
 		assert_incompatible!(eth, Dot);
 		assert_incompatible!(dot, Eth);
@@ -702,11 +720,13 @@ mod test_assets {
 		assert_eq!(assert_ok!(any::Asset::from_str("Ethereum-eth")), any::Asset::Eth);
 		assert_eq!(assert_ok!(any::Asset::from_str("Ethereum-Eth")), any::Asset::Eth);
 		assert_eq!(assert_ok!(any::Asset::from_str("Arbitrum-Eth")), any::Asset::ArbEth);
+		assert_eq!(assert_ok!(any::Asset::from_str("Solana-Sol")), any::Asset::Sol);
 
 		assert_err!(any::Asset::from_str("Ethereum-BTC"));
 		assert_err!(any::Asset::from_str("Polkadot-USDC"));
 		assert_err!(any::Asset::from_str("Arbitrum-Btc"));
 		assert_err!(any::Asset::from_str("Terra-ETH"));
+		assert_err!(any::Asset::from_str("Solana-BTC"));
 
 		// Serialization
 
@@ -725,6 +745,10 @@ mod test_assets {
 		assert_eq!(
 			assert_ok!(serde_json::to_string(&any::Asset::ArbEth)),
 			"{\"chain\":\"Arbitrum\",\"asset\":\"ETH\"}"
+		);
+		assert_eq!(
+			assert_ok!(serde_json::to_string(&any::Asset::Sol)),
+			"{\"chain\":\"Solana\",\"asset\":\"SOL\"}"
 		);
 
 		// Explicit Chain Deserialization
@@ -752,6 +776,12 @@ mod test_assets {
 				"{\"chain\":\"Arbitrum\",\"asset\":\"ETH\"}"
 			)),
 			any::Asset::ArbEth
+		);
+		assert_eq!(
+			assert_ok!(serde_json::from_str::<any::Asset>(
+				"{\"chain\":\"Solana\",\"asset\":\"SOL\"}"
+			)),
+			any::Asset::Sol
 		);
 
 		assert_err!(serde_json::from_str::<any::Asset>(
@@ -785,10 +815,13 @@ mod test_assets {
 		assert_eq!(assert_ok!(serde_json::from_str::<any::Asset>("\"ETH\"")), any::Asset::Eth);
 		assert_eq!(assert_ok!(serde_json::from_str::<any::Asset>("\"DOT\"")), any::Asset::Dot);
 		assert_eq!(assert_ok!(serde_json::from_str::<any::Asset>("\"BTC\"")), any::Asset::Btc);
+		assert_eq!(assert_ok!(serde_json::from_str::<any::Asset>("\"ARB\"")), any::Asset::ArbEth);
+		assert_eq!(assert_ok!(serde_json::from_str::<any::Asset>("\"SOL\"")), any::Asset::Sol);
 
 		assert_err!(serde_json::from_str::<any::Asset>("\"eTh\""));
 		assert_err!(serde_json::from_str::<any::Asset>("\"dOt\""));
 		assert_err!(serde_json::from_str::<any::Asset>("\"bTc\""));
+		assert_err!(serde_json::from_str::<any::Asset>("\"sOl\""));
 	}
 
 	#[test]
@@ -857,7 +890,8 @@ mod test_assets {
 			eth(Eth, Usdc),
 			btc(Btc),
 			dot(Dot),
-			arb(ArbEth, ArbUsdc)
+			arb(ArbEth, ArbUsdc),
+			sol(Sol)
 		);
 
 		assert_ok!(any::AssetMap::try_from_iter(any::AssetMap::from_fn(|_asset| 1u32).iter()));

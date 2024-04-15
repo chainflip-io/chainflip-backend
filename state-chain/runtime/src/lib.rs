@@ -27,7 +27,8 @@ use cf_chains::{
 	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
-	Arbitrum, Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot,
+	sol::SolanaCrypto,
+	Arbitrum, Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot, Solana,
 	TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, NetworkEnvironment};
@@ -52,6 +53,7 @@ use sp_std::collections::btree_map::BTreeMap;
 
 pub use cf_chains::instances::{
 	ArbitrumInstance, BitcoinInstance, EthereumInstance, EvmInstance, PolkadotInstance,
+	SolanaInstance,
 };
 
 pub use frame_support::{
@@ -114,7 +116,7 @@ pub use pallet_cf_validator::SetSizeParameters;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, evm_vault_activator::EvmVaultActivator,
 	BroadcastReadyProvider, BtcEnvironment, ChainAddressConverter, ChainflipHeartbeat,
-	DotEnvironment, EvmEnvironment, TokenholderGovernanceBroadcaster,
+	DotEnvironment, EvmEnvironment, SolEnvironment, TokenholderGovernanceBroadcaster,
 };
 use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
 
@@ -294,6 +296,17 @@ impl pallet_cf_vaults::Config<Instance4> for Runtime {
 	type CfeMultisigRequest = CfeInterface;
 }
 
+impl pallet_cf_vaults::Config<Instance5> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Chain = Solana;
+	type SetAggKeyWithAggKey = cf_chains::sol::api::SolanaApi<SolEnvironment>;
+	type Broadcaster = SolanaBroadcaster;
+	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
+	type ChainTracking = SolanaChainTracking;
+	type SafeMode = RuntimeSafeMode;
+	type CfeMultisigRequest = CfeInterface;
+}
+
 use chainflip::address_derivation::AddressDerivation;
 
 impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
@@ -370,6 +383,26 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type CcmHandler = Swapping;
 	type ChainTracking = ArbitrumChainTracking;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
+	type NetworkEnvironment = Environment;
+	type AssetConverter = LiquidityPools;
+	type FeePayment = Flip;
+	type SwapQueueApi = Swapping;
+}
+
+impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type TargetChain = Solana;
+	type AddressDerivation = AddressDerivation;
+	type AddressConverter = ChainAddressConverter;
+	type LpBalance = LiquidityProvider;
+	type SwapDepositHandler = Swapping;
+	type ChainApiCall = cf_chains::sol::api::SolanaApi<chainflip::SolEnvironment>;
+	type Broadcaster = SolanaBroadcaster;
+	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
+	type DepositHandler = chainflip::DepositHandler;
+	type ChainTracking = SolanaChainTracking;
+	type CcmHandler = Swapping;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
@@ -716,6 +749,22 @@ impl pallet_cf_threshold_signature::Config<Instance3> for Runtime {
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
 
+impl pallet_cf_threshold_signature::Config<Instance5> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Offence = chainflip::Offence;
+	type RuntimeOrigin = RuntimeOrigin;
+	type ThresholdCallable = RuntimeCall;
+	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
+	type TargetChainCrypto = SolanaCrypto;
+	type VaultActivator = SolanaVault;
+	type OffenceReporter = Reputation;
+	type CeremonyRetryDelay = ConstU32<1>;
+	type SafeMode = RuntimeSafeMode;
+	type Slasher = FlipSlasher<Self>;
+	type CfeMultisigRequest = CfeInterface;
+	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
+}
+
 impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
@@ -812,6 +861,30 @@ impl pallet_cf_broadcast::Config<Instance4> for Runtime {
 	type CfeBroadcastRequest = CfeInterface;
 }
 
+impl pallet_cf_broadcast::Config<Instance5> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type RuntimeOrigin = RuntimeOrigin;
+	type BroadcastCallable = RuntimeCall;
+	type Offence = chainflip::Offence;
+	type TargetChain = Solana;
+	type ApiCall = cf_chains::sol::api::SolanaApi<SolEnvironment>;
+	type ThresholdSigner = SolanaThresholdSigner;
+	type TransactionBuilder = chainflip::SolanaTransactionBuilder;
+	type BroadcastSignerNomination = chainflip::RandomSignerNomination;
+	type OffenceReporter = Reputation;
+	type EnsureThresholdSigned =
+		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, SolanaInstance>;
+	type BroadcastReadyProvider = BroadcastReadyProvider;
+	type BroadcastTimeout = ConstU32<{ 90 * MINUTES }>;
+	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
+	type SafeMode = RuntimeSafeMode;
+	type SafeModeBlockMargin = ConstU32<10>;
+	type ChainTracking = SolanaChainTracking;
+	type RetryPolicy = DefaultRetryPolicy;
+	type CfeBroadcastRequest = CfeInterface;
+}
+
 impl pallet_cf_chain_tracking::Config<Instance1> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Ethereum;
@@ -833,6 +906,12 @@ impl pallet_cf_chain_tracking::Config<Instance3> for Runtime {
 impl pallet_cf_chain_tracking::Config<Instance4> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Arbitrum;
+	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
+}
+
+impl pallet_cf_chain_tracking::Config<Instance5> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type TargetChain = Solana;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
@@ -890,6 +969,12 @@ construct_runtime!(
 		ArbitrumVault: pallet_cf_vaults::<Instance4>,
 		ArbitrumBroadcaster: pallet_cf_broadcast::<Instance4>,
 		ArbitrumIngressEgress: pallet_cf_ingress_egress::<Instance4>,
+
+		SolanaChainTracking: pallet_cf_chain_tracking::<Instance5>,
+		SolanaVault: pallet_cf_vaults::<Instance5>,
+		SolanaThresholdSigner: pallet_cf_threshold_signature::<Instance5>,
+		SolanaBroadcaster: pallet_cf_broadcast::<Instance5>,
+		SolanaIngressEgress: pallet_cf_ingress_egress::<Instance5>,
 	}
 );
 
@@ -969,20 +1054,24 @@ pub type PalletExecutionOrder = (
 	PolkadotChainTracking,
 	BitcoinChainTracking,
 	ArbitrumChainTracking,
+	SolanaChainTracking,
 	// Vaults
 	EthereumVault,
 	PolkadotVault,
 	BitcoinVault,
 	ArbitrumVault,
+	SolanaVault,
 	// Threshold Signers
 	EvmThresholdSigner,
 	PolkadotThresholdSigner,
 	BitcoinThresholdSigner,
+	SolanaThresholdSigner,
 	// Broadcasters
 	EthereumBroadcaster,
 	PolkadotBroadcaster,
 	BitcoinBroadcaster,
 	ArbitrumBroadcaster,
+	SolanaBroadcaster,
 	// Swapping and Liquidity Provision
 	Swapping,
 	LiquidityProvider,
@@ -991,6 +1080,7 @@ pub type PalletExecutionOrder = (
 	PolkadotIngressEgress,
 	BitcoinIngressEgress,
 	ArbitrumIngressEgress,
+	SolanaIngressEgress,
 	// Liquidity Pools
 	LiquidityPools,
 );
@@ -1022,28 +1112,41 @@ type PalletMigrations = (
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	// pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, ArbitrumInstance>,
+	// pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, EthereumInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	// pallet_cf_vaults::migrations::PalletMigration<Runtime, ArbitrumInstance>,
+	// pallet_cf_vaults::migrations::PalletMigration<Runtime, SolanaInstance>,
 	// This is not a pallet migration but needs to be applied after the vaults and before the
 	// treshold signers migrations. TODO: Remove this after the 1.4 release.
 	migrations::arbitrum_integration::RenameEthereumToEvmThresholdSigner,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, EvmInstance>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, BitcoinInstance>,
+	//pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, EthereumInstance>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	// pallet_cf_broadcast::migrations::PalletMigration<Runtime, ArbitrumInstance>,
+	// pallet_cf_broadcast::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_swapping::migrations::PalletMigration<Runtime>,
 	pallet_cf_lp::migrations::PalletMigration<Runtime>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, EthereumInstance>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	// pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, ArbitrumInstance>,
+	// pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
+	// TODO: After this migration is run, remember to un-comment the
+	// Solana-specific pallet migrations.
+	VersionedMigration<
+		pallet_cf_environment::Pallet<Runtime>,
+		migrations::arbitrum_integration::SolanaIntegration,
+		10,
+		11,
+	>,
 );
 
 // TODO: After this  release, remember to un-comment the
@@ -1320,6 +1423,7 @@ impl_runtime_apis! {
 				ForeignChainAndAsset::Polkadot(asset) => MinimumDeposit::<Runtime, PolkadotInstance>::get(asset),
 				ForeignChainAndAsset::Bitcoin(asset) => MinimumDeposit::<Runtime, BitcoinInstance>::get(asset).into(),
 				ForeignChainAndAsset::Arbitrum(asset) => MinimumDeposit::<Runtime, ArbitrumInstance>::get(asset),
+				ForeignChainAndAsset::Solana(asset) => MinimumDeposit::<Runtime, SolanaInstance>::get(asset),
 			}
 		}
 
@@ -1331,7 +1435,7 @@ impl_runtime_apis! {
 				ForeignChainAndAsset::Polkadot(asset) => EgressDustLimit::<Runtime, PolkadotInstance>::get(asset),
 				ForeignChainAndAsset::Bitcoin(asset) => EgressDustLimit::<Runtime, BitcoinInstance>::get(asset),
 				ForeignChainAndAsset::Arbitrum(asset) => EgressDustLimit::<Runtime, ArbitrumInstance>::get(asset),
-
+				ForeignChainAndAsset::Solana(asset) => EgressDustLimit::<Runtime, SolanaInstance>::get(asset),
 			}
 		}
 
@@ -1353,6 +1457,8 @@ impl_runtime_apis! {
 						pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::estimate_ingress_fee(asset)
 					)
 				},
+				ForeignChainAndAsset::Solana(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, SolanaInstance>::
+				estimate_ingress_fee(asset)),
 			}
 		}
 
@@ -1374,6 +1480,8 @@ impl_runtime_apis! {
 						pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::estimate_egress_fee(asset)
 					)
 				},
+				ForeignChainAndAsset::Solana(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, SolanaInstance>::
+				estimate_egress_fee(asset)),
 			}
 		}
 
@@ -1383,6 +1491,7 @@ impl_runtime_apis! {
 				ForeignChain::Ethereum => pallet_cf_ingress_egress::Pallet::<Runtime, EthereumInstance>::witness_safety_margin(),
 				ForeignChain::Polkadot => pallet_cf_ingress_egress::Pallet::<Runtime, PolkadotInstance>::witness_safety_margin().map(Into::into),
 				ForeignChain::Arbitrum => pallet_cf_ingress_egress::Pallet::<Runtime, ArbitrumInstance>::witness_safety_margin(),
+				ForeignChain::Solana => pallet_cf_ingress_egress::Pallet::<Runtime, EthereumInstance>::witness_safety_margin(),
 			}
 		}
 
@@ -1594,6 +1703,7 @@ impl_runtime_apis! {
 				ForeignChain::Polkadot => pallet_cf_ingress_egress::Pallet::<Runtime, PolkadotInstance>::channel_opening_fee(),
 				ForeignChain::Bitcoin => pallet_cf_ingress_egress::Pallet::<Runtime, BitcoinInstance>::channel_opening_fee(),
 				ForeignChain::Arbitrum => pallet_cf_ingress_egress::Pallet::<Runtime, ArbitrumInstance>::channel_opening_fee(),
+				ForeignChain::Solana => pallet_cf_ingress_egress::Pallet::<Runtime, SolanaInstance>::channel_opening_fee(),
 			}
 		}
 

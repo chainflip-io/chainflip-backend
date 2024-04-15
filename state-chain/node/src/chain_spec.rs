@@ -3,7 +3,8 @@ use cf_chains::{
 	assets::btc,
 	btc::BITCOIN_DUST_LIMIT,
 	dot::{PolkadotAccountId, PolkadotHash},
-	Arbitrum, ChainState,
+	sol::{SolAddress, SolTrackedData},
+	Arbitrum, ChainState, Solana,
 };
 use cf_primitives::{
 	AccountRole, AuthorityCount, NetworkEnvironment, DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
@@ -99,6 +100,7 @@ pub struct StateChainEnvironment {
 	dot_genesis_hash: PolkadotHash,
 	dot_vault_account_id: Option<PolkadotAccountId>,
 	dot_runtime_version: RuntimeVersion,
+	sol_vault_address: SolAddress,
 }
 
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
@@ -135,6 +137,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(FromStr::from_str, ETH_DEPLOYMENT_BLOCK, ethereum_deployment_block);
 	from_env_var!(FromStr::from_str, GENESIS_FUNDING, genesis_funding_amount);
 	from_env_var!(FromStr::from_str, MIN_FUNDING, min_funding);
+	from_env_var!(FromStr::from_str, SOL_VAULT_ADDRESS, sol_vault_address);
 
 	let dot_genesis_hash = match env::var("DOT_GENESIS_HASH") {
 		Ok(s) => hex_decode::<32>(&s).unwrap().into(),
@@ -178,6 +181,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 			spec_version: dot_spec_version,
 			transaction_version: dot_transaction_version,
 		},
+		sol_vault_address,
 	}
 }
 
@@ -238,6 +242,7 @@ pub fn inner_cf_development_config(
 		dot_genesis_hash,
 		dot_vault_account_id,
 		dot_runtime_version,
+		sol_vault_address,
 	} = get_environment_or_defaults(testnet::ENV);
 	Ok(ChainSpec::builder(wasm_binary, None)
 		.with_name("CF Develop")
@@ -268,6 +273,7 @@ pub fn inner_cf_development_config(
 				arbitrum_chain_id,
 				polkadot_genesis_hash: dot_genesis_hash,
 				polkadot_vault_account_id: dot_vault_account_id,
+				sol_vault_address,
 				network_environment: NetworkEnvironment::Development,
 				..Default::default()
 			},
@@ -295,9 +301,11 @@ pub fn inner_cf_development_config(
 			devnet::ETHEREUM_EXPIRY_BLOCKS,
 			devnet::ARBITRUM_EXPIRY_BLOCKS,
 			devnet::POLKADOT_EXPIRY_BLOCKS,
+			devnet::SOLANA_EXPIRY_BLOCKS,
 			devnet::BITCOIN_SAFETY_MARGIN,
 			devnet::ETHEREUM_SAFETY_MARGIN,
 			devnet::ARBITRUM_SAFETY_MARGIN,
+			devnet::SOLANA_SAFETY_MARGIN,
 			devnet::AUCTION_BID_CUTOFF_PERCENTAGE,
 		))
 		.build())
@@ -339,6 +347,7 @@ macro_rules! network_spec {
 					dot_genesis_hash,
 					dot_vault_account_id,
 					dot_runtime_version,
+					sol_vault_address,
 				} = env_override.unwrap_or(ENV);
 				let protocol_id = format!(
 					"{}-{}",
@@ -399,6 +408,7 @@ macro_rules! network_spec {
 							arbitrum_chain_id,
 							polkadot_genesis_hash: dot_genesis_hash,
 							polkadot_vault_account_id: dot_vault_account_id.clone(),
+							sol_vault_address,
 							network_environment: NETWORK_ENVIRONMENT,
 							..Default::default()
 						},
@@ -425,9 +435,11 @@ macro_rules! network_spec {
 						ETHEREUM_EXPIRY_BLOCKS,
 						ARBITRUM_EXPIRY_BLOCKS,
 						POLKADOT_EXPIRY_BLOCKS,
+						SOLANA_EXPIRY_BLOCKS,
 						BITCOIN_SAFETY_MARGIN,
 						ETHEREUM_SAFETY_MARGIN,
 						ARBITRUM_SAFETY_MARGIN,
+						SOLANA_SAFETY_MARGIN,
 						AUCTION_BID_CUTOFF_PERCENTAGE,
 					))
 					.build())
@@ -475,9 +487,11 @@ fn testnet_genesis(
 	ethereum_deposit_channel_lifetime: u32,
 	arbitrum_deposit_channel_lifetime: u32,
 	polkadot_deposit_channel_lifetime: u32,
+	solana_deposit_channel_lifetime: u32,
 	bitcoin_safety_margin: u64,
 	ethereum_safety_margin: u64,
 	arbitrum_safety_margin: u64,
+	solana_safety_margin: u64,
 	auction_bid_cutoff_percentage: Percent,
 ) -> serde_json::Value {
 	// Sanity Checks
@@ -634,6 +648,11 @@ fn testnet_genesis(
 			chain_initialized: false,
 		},
 
+		solana_vault: state_chain_runtime::SolanaVaultConfig {
+			deployment_block: None,
+			chain_initialized: false,
+		},
+
 		evm_threshold_signer: state_chain_runtime::EvmThresholdSignerConfig {
 			key: Some(cf_chains::evm::AggKey::from_pubkey_compressed(eth_init_agg_key)),
 			keygen_response_timeout: keygen_ceremony_timeout_blocks,
@@ -647,6 +666,12 @@ fn testnet_genesis(
 			..Default::default()
 		},
 		bitcoin_threshold_signer: state_chain_runtime::BitcoinThresholdSignerConfig {
+			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
+			keygen_response_timeout: keygen_ceremony_timeout_blocks,
+			amount_to_slash: FLIPPERINOS_PER_FLIP,
+			..Default::default()
+		},
+		solana_threshold_signer: state_chain_runtime::SolanaThresholdSignerConfig {
 			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
 			keygen_response_timeout: keygen_ceremony_timeout_blocks,
 			amount_to_slash: FLIPPERINOS_PER_FLIP,
@@ -689,6 +714,12 @@ fn testnet_genesis(
 				tracked_data: ArbitrumTrackedData { base_fee: 100000000u32.into() },
 			},
 		},
+		solana_chain_tracking: state_chain_runtime::SolanaChainTrackingConfig {
+			init_chain_state: ChainState::<Solana> {
+				block_height: 0,
+				tracked_data: SolTrackedData { ingress_fee: None, egress_fee: None },
+			},
+		},
 		// Channel lifetimes are set to ~2 hours at average block times.
 		bitcoin_ingress_egress: state_chain_runtime::BitcoinIngressEgressConfig {
 			deposit_channel_lifetime: bitcoin_deposit_channel_lifetime.into(),
@@ -707,6 +738,11 @@ fn testnet_genesis(
 		arbitrum_ingress_egress: state_chain_runtime::ArbitrumIngressEgressConfig {
 			deposit_channel_lifetime: arbitrum_deposit_channel_lifetime.into(),
 			witness_safety_margin: Some(arbitrum_safety_margin),
+			..Default::default()
+		},
+		solana_ingress_egress: state_chain_runtime::SolanaIngressEgressConfig {
+			deposit_channel_lifetime: solana_deposit_channel_lifetime as u64,
+			witness_safety_margin: Some(solana_safety_margin),
 			..Default::default()
 		},
 		// We can't use ..Default::default() here because chain tracking panics on default (by
