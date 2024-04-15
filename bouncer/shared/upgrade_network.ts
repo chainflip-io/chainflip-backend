@@ -121,11 +121,12 @@ async function incompatibleUpgradeNoBuild(
     },
   );
 
-  console.log('Starting new broker and lp-api.');
-
   if (newVersion.includes('1.4')) {
     await setupArbVault();
   }
+
+  console.log('Starting new broker and lp-api.');
+
   execWithLog(`${localnetInitPath}/scripts/start-broker-api.sh ${binaryPath}`, 'start-broker-api', {
     KEYS_DIR,
   });
