@@ -1,13 +1,10 @@
 //! Program instructions
 use super::{
-	vec, vec::Vec, AccountMeta, FromStr, Instruction, Pubkey, ASSOCIATED_TOKEN_PROGRAM_ID,
+	vec, AccountMeta, FromStr, Instruction, Pubkey, ASSOCIATED_TOKEN_PROGRAM_ID,
 	SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID,
 };
 
 use borsh::{BorshDeserialize, BorshSerialize};
-use frame_support::sp_io::hashing::sha2_256;
-use scale_info::prelude::string::String;
-use serde::{Deserialize, Serialize};
 
 // https://docs.rs/spl-associated-token-account/2.3.0/src/spl_associated_token_account/instruction.rs.html#1-161
 

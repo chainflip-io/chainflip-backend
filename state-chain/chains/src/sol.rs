@@ -854,7 +854,7 @@ mod tests {
 	}
 
 	#[test]
-	fn create_nonced_fetch() {
+	fn create_nonced_fetch_native() {
 		let durable_nonce = Hash::from_str("E6E2bNxGcgFyqeVRT3FSjw7YFbbMAZVQC21ZLVwrztRm").unwrap();
 		let vault_account = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let vault_account_pubkey = vault_account.pubkey();
@@ -872,9 +872,8 @@ mod tests {
 						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
 						false,
 					),
-					AccountMeta::new_readonly(vault_account_pubkey, true),
+					AccountMeta::new(vault_account_pubkey, true),
 					AccountMeta::new(pda, false),
-					AccountMeta::new(vault_account_pubkey, false),
 					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
 				],
 			),
@@ -885,7 +884,7 @@ mod tests {
 		println!("{:?}", tx);
 
 		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
-		let expected_serialized_tx = hex_literal::hex!("01cb415864dda43c51f6abe5bacf7d6af6df970e214d516bb5d5b399667b3bc4b2f0449fc23f0e5e4e3c0d3f4b751d157794e954ef006cc933ddfbed12f5eef70401000407f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d192b9cd0bfce0d0c993da26980648022f34b2e9a33794312b94eb3f8cad440e3e6b000000000000000000000000000000000000000000000000000000000000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000004a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e48900020303010400040400000006050500020003118e24658f6c59298c040000000b0c0d37f9").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("018876d689319695f4e695d1bc6dc71b36cb7e81093d7122aa6153de24aeafe251d589f63321272cb2f195f81acf5617b16994bcdbdc070cfd459a2f76d0c4650701000407f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d192b9cd0bfce0d0c993da26980648022f34b2e9a33794312b94eb3f8cad440e3e6b000000000000000000000000000000000000000000000000000000000000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000004a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e489000203030104000404000000060405000203118e24658f6c59298c040000000b0c0d37f9").to_vec();
 		println!("tx:{:?}", hex::encode(serialized_tx.clone()));
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
@@ -943,10 +942,6 @@ mod tests {
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
 	}
-
-	// TODO: Do create_nonced_transfer_token and ccm_token_transfer both with added
-	// createAssociatedTokenAccountIdempotentInstruction or at least just the
-	// createAssociatedTokenAccountIdempotentInstruction.
 
 	#[test]
 	fn create_nonced_rotate_agg_key() {
@@ -1295,6 +1290,68 @@ mod tests {
 
 		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
 		let expected_serialized_tx = hex_literal::hex!("01eb287ff9329fbaf83592ec56709d52d3d7f7edcab7ab53fc8371acff871016c51dfadde692630545a91d6534095bb5697b5fb9ee17dc292552eabf9ab6e3390601000609f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d192ca03f3e6d6fd79aaf8ebd4ce053492a34f22d0edafbfa88a380848d9a4735150000000000000000000000000000000000000000000000000000000000000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90c4a8e3702f6e26d9d0c900c1461da4e3debef5743ce253bb9f0308a68c944220f1b83220b1108ea0e171b5391e6c0157370c8353516b74e962f855be6d787038c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f85921b22d7dfc8cdeba6027384563948d038a11eba06289de51a15c3d649d1f7e2c020303010400040400000008060002060703050101").to_vec();
+
+		println!("tx:{:?}", hex::encode(serialized_tx.clone()));
+
+		assert_eq!(serialized_tx, expected_serialized_tx);
+	}
+
+	#[test]
+	fn create_nonced_token_transfer() {
+		let durable_nonce = Hash::from_str("3GY33ibbFkTSdXeXuPAh2NxGTwm1TfEFNKKG9XjxFa67").unwrap();
+		let vault_account = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
+		let vault_account_pubkey = vault_account.pubkey();
+
+		// This is needed to derive the pda_ata to create the
+		// createAssociatedTokenAccountIdempotentInstruction but for now we just derive it manually
+		let to = Pubkey::from_str("pyq7ySiH5RvKteu2vdXKC7SNyNDp9vNDkGXdHxSpPtu").unwrap();
+		let to_ata = Pubkey::from_str("EbarLzqEb9jf2ZHUdDf5nuBP52Ut3ddLZtYrGwKh3Bbd").unwrap();
+		let mint_pubkey = Pubkey::from_str("21ySx9qZoscVT8ViTZjcudCCJeThnXfLPe1sLvezqRCv").unwrap();
+
+		let pda = Pubkey::from_str("4vu4dPEProgyq74GGGga1TzU2CRPGiUvAYXAuQtGDkQg").unwrap();
+		let pda_ata = Pubkey::from_str("E9STTd2omULF1tgnBGLKxDwp3aGQLGu2gPNJP1X74baz").unwrap();
+
+		// This would lack the idempotent account creating but that's fine for the test
+		let instructions = [
+			SystemProgramInstruction::advance_nonce_account(
+				&Pubkey::from_str(NONCE_ACCOUNT_0).unwrap(),
+				&vault_account_pubkey,
+			),
+			AssociatedTokenAccountInstruction::create_associated_token_account_idempotent_instruction(
+				&vault_account_pubkey,
+				&to,
+				&mint_pubkey,
+				&to_ata
+			),
+			ProgramInstruction::get_instruction(
+				&VaultProgram::TransferTokens {
+					seed: vec![11u8, 13u8, 55u8],
+					bump: 255,
+					amount: 2,
+					decimals: 6,
+				},
+			vec![
+				AccountMeta::new_readonly(
+					Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+					false,
+				),
+				AccountMeta::new_readonly(vault_account_pubkey, true),
+				AccountMeta::new_readonly(pda, false),
+				AccountMeta::new(pda_ata, false),
+				AccountMeta::new(to_ata, false),
+				AccountMeta::new_readonly(mint_pubkey, false),
+				AccountMeta::new_readonly(Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(), false),
+				AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
+			],
+			),
+		];
+		let message = Message::new(&instructions, Some(&vault_account_pubkey));
+		let mut tx = Transaction::new_unsigned(message);
+		tx.sign(&[&vault_account], durable_nonce);
+		println!("{:?}", tx);
+
+		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
+		let expected_serialized_tx = hex_literal::hex!("01a8c7eff4426cc22da3fba5296dd5bae777028f804f0af0be8ba081a10329eff1e53bb8a27d11cc55b17f8c3a4eb9ea7b2ffc80e5d0c5a44f60def7f7edd12a070100090df79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d192c3515c23bd1334395f5287ae617ff54b3f0022f310bec911976af027ec2d6613ca03f3e6d6fd79aaf8ebd4ce053492a34f22d0edafbfa88a380848d9a4735150000000000000000000000000000000000000000000000000000000000000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90c4a8e3702f6e26d9d0c900c1461da4e3debef5743ce253bb9f0308a68c944220f1b83220b1108ea0e171b5391e6c0157370c8353516b74e962f855be6d787033a61b6018e9850816bc3943e22d74fe40f676a06b12e80c8104d709baa2101d94a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c8c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f85921b22d7dfc8cdeba6027384563948d038a11eba06289de51a15c3d649d1f7e2c03040301050004040000000c0600030708040601010b080a000902030806041936b4eeaf4a557ebc030000000b0d37ff020000000000000006").to_vec();
 
 		println!("tx:{:?}", hex::encode(serialized_tx.clone()));
 
