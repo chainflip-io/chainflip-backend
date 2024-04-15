@@ -94,8 +94,6 @@ pub enum PalletOffence {
 	MissedAuthorshipSlot,
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
-
 impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled, start_bidding_enabled, stop_bidding_enabled);
 
 #[frame_support::pallet]

@@ -13,11 +13,23 @@ pub type PalletMigration<T> = (
 		{ vanity_name_migration::APPLY_AT_VALIDATOR_STORAGE_VERSION - 1 },
 		{ vanity_name_migration::APPLY_AT_VALIDATOR_STORAGE_VERSION },
 	>,
+	VersionedMigration<
+		Pallet<T>,
+		NoopRuntimeUpgrade,
+		{ active_bidders_migration::APPLY_AT_VALIDATOR_STORAGE_VERSION - 1 },
+		{ active_bidders_migration::APPLY_AT_VALIDATOR_STORAGE_VERSION },
+	>,
 );
 
 pub mod vanity_name_migration {
 	pub const APPLY_AT_VALIDATOR_STORAGE_VERSION: u16 = 2;
 }
+
+pub mod active_bidders_migration {
+	pub const APPLY_AT_VALIDATOR_STORAGE_VERSION: u16 = 3;
+}
+
+
 
 #[cfg(feature = "try-runtime")]
 pub mod old {

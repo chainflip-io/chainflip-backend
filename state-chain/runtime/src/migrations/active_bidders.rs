@@ -1,6 +1,8 @@
 use crate::{AccountId, Runtime};
 use frame_support::traits::{GetStorageVersion, StorageVersion};
 use sp_std::collections::btree_set::BTreeSet;
+use pallet_cf_funding::migrations::active_bidders_migration::APPLY_AT_FUNDING_STORAGE_VERSION;
+use pallet_cf_validator::migrations::active_bidders_migration::APPLY_AT_VALIDATOR_STORAGE_VERSION;
 
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
@@ -8,10 +10,9 @@ pub struct Migration;
 
 impl frame_support::traits::OnRuntimeUpgrade for Migration {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		if <pallet_cf_funding::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() ==
-			3 &&
+		if <pallet_cf_funding::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() == APPLY_AT_VALIDATOR_STORAGE_VERSION &&
 			<pallet_cf_validator::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version(
-			) == 1
+			) == APPLY_AT_FUNDING_STORAGE_VERSION
 		{
 			log::info!("🔨 Applying ActiveBidder migration.");
 
@@ -40,8 +41,8 @@ impl frame_support::traits::OnRuntimeUpgrade for Migration {
 		use codec::Encode;
 		use frame_support::migrations::VersionedPostUpgradeData;
 
-		if <pallet_cf_funding::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() ==
-			3
+		if <pallet_cf_funding::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() <
+			APPLY_AT_FUNDING_STORAGE_VERSION
 		{
 			Ok(VersionedPostUpgradeData::MigrationExecuted(
 				pallet_cf_funding::migrations::old::ActiveBidder::<Runtime>::iter()

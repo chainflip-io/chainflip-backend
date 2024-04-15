@@ -1,7 +1,18 @@
 use crate::Pallet;
-use cf_runtime_upgrade_utilities::PlaceholderMigration;
+use cf_runtime_upgrade_utilities::{NoopRuntimeUpgrade, VersionedMigration};
 
-pub type PalletMigration<T> = PlaceholderMigration<Pallet<T>, 3>;
+pub type PalletMigration<T> = (
+	VersionedMigration<
+		Pallet<T>,
+		NoopRuntimeUpgrade,
+		{ active_bidders_migration::APPLY_AT_FUNDING_STORAGE_VERSION - 1 },
+		{ active_bidders_migration::APPLY_AT_FUNDING_STORAGE_VERSION },
+	>,
+);
+
+pub mod active_bidders_migration {
+	pub const APPLY_AT_FUNDING_STORAGE_VERSION: u16 = 4;
+}
 
 pub mod old {
 	use crate::*;

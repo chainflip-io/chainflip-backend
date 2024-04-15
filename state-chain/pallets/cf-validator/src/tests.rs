@@ -47,9 +47,10 @@ macro_rules! assert_default_rotation_outcome {
 		assert_rotation_phase_matches!(RotationPhase::Idle);
 		assert_epoch_index(GENESIS_EPOCH + 1);
 		assert_eq!(Bond::<Test>::get(), EXPECTED_BOND, "bond should be updated");
+		// Use BTreeSet to ignore ordering.
 		assert_eq!(
-			ValidatorPallet::current_authorities(),
-			WINNING_BIDS.into_iter().map(|bid| bid.bidder_id).collect::<Vec<_>>()
+			ValidatorPallet::current_authorities().into_iter().collect::<BTreeSet<u64>>(),
+			WINNING_BIDS.into_iter().map(|bid| bid.bidder_id).collect::<BTreeSet<_>>()
 		);
 	};
 }
@@ -65,17 +66,6 @@ fn assert_rotation_aborted() {
 		}),
 		RuntimeEvent::ValidatorPallet(Event::RotationAborted)
 	);
-}
-
-fn simple_rotation_state(
-	auction_winners: Vec<u64>,
-	bond: Option<u128>,
-) -> RuntimeRotationState<Test> {
-	RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
-		winners: auction_winners,
-		bond: bond.unwrap_or(100),
-		losers: LOSING_BIDS.into_iter().map(|bid| bid.bidder_id).collect(),
-	})
 }
 
 fn add_bids(bids: Vec<Bid<ValidatorId, Amount>>) {
@@ -1276,7 +1266,7 @@ fn can_determine_is_auction_phase() {
 			RotationPhase::KeyHandoversInProgress(Default::default()),
 			RotationPhase::ActivatingKeys(Default::default()),
 			RotationPhase::NewKeysActivated(Default::default()),
-			RotationPhase::SessionRotating(Default::default()),
+			RotationPhase::SessionRotating(Default::default(), Default::default()),
 		]
 		.into_iter()
 		.for_each(|phase| {
@@ -1337,7 +1327,7 @@ fn validator_set_change_propagates_to_session_pallet() {
 			);
 			CurrentRotationPhase::put(RotationPhase::<Test>::NewKeysActivated(
 				RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
-					winners: AUCTION_WINNERS.to_vec(),
+					winners: WINNING_BIDS.map(|bidder| bidder.bidder_id).to_vec(),
 					losers: vec![],
 					bond: EXPECTED_BOND,
 				}),
