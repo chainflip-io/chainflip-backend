@@ -21,19 +21,15 @@ env:
 jobs:
   compile:
     runs-on: namespace-profile-rust-builder
-    strategy:
-      fail-fast: false
-      matrix:
-        ubuntu_version: [20.04, 22.04]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-${{ matrix.ubuntu_version }}-48"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-22.04-48"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
       env:
-        NSC_CACHE_PATH: ubuntu-${{ matrix.ubuntu_version }}
+        NSC_CACHE_PATH: ubuntu-22.04
       volumes:
-        - /cache:/cache-ubuntu-${{ matrix.ubuntu_version }} # Where the Cache Volume is mounted.
+        - /cache:/cache # Where the Cache Volume is mounted.
       options: --cap-add=SYS_ADMIN # Required to by nscloud-cache-action to call `mount`.
 
     steps:
@@ -56,7 +52,7 @@ jobs:
       - name: Upload binary artifacts 📤
         uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
         with:
-          name: ${{ inputs.upload-name }}-ubuntu-${{ matrix.ubuntu_version }}
+          name: ${{ inputs.upload-name }}
           path: |
             ./target/${{ inputs.binary-subdir }}/chainflip-node
             ./target/${{ inputs.binary-subdir }}/chainflip-engine
@@ -68,7 +64,6 @@ jobs:
 
       - name: Upload runtime artifacts 📤
         uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
-        if: ${{ matrix.ubuntu_version == '22.04' }} # Only upload runtime once as it is the same for both versions
         with:
           name: chainflip-node-runtime-${{ inputs.profile }}
           path: |

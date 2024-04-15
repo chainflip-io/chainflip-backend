@@ -60,7 +60,7 @@ jobs:
         with:
           workflow: ci-benchmarks.yml
           workflow_conclusion: completed
-          name: chainflip-node-ubuntu-20.04-benchmarks-${{ inputs.profile }}
+          name: chainflip-node-benchmarks-${{ inputs.profile }}
           commit: ${{ inputs.commit_sha }}
           github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
           search_artifacts: true
