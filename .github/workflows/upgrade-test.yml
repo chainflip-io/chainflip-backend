@@ -27,7 +27,7 @@ on:
         default: "ci-main.yml"
       upgrade-to-commit:
         type: string
-        description: "Commit to run the upgrade test against. Leave blank to use the latest workflow run."
+        description: "Commit to run the upgrade test against. Leave blank to use the latest successful workflow run."
         required: false
 
 env:
