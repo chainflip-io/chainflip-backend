@@ -3,13 +3,38 @@
   "name": "cf_tester",
   "instructions": [
     {
-      "name": "cfReceiveToken",
+      "name": "initialize",
       "accounts": [
         {
-          "name": "cfPdaSigner",
-          "isMut": false,
+          "name": "dataAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "initializer",
+          "isMut": true,
           "isSigner": true
         },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "newAggKey",
+          "type": "publicKey"
+        },
+        {
+          "name": "newGovKey",
+          "type": "publicKey"
+        }
+      ]
+    },
+    {
+      "name": "cfReceiveToken",
+      "accounts": [
         {
           "name": "receiverTokenAccount",
           "isMut": true,
@@ -22,6 +47,11 @@
         },
         {
           "name": "mint",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "instructionSysvar",
           "isMut": false,
           "isSigner": false
         }
@@ -49,17 +79,17 @@
       "name": "cfReceiveNative",
       "accounts": [
         {
-          "name": "cfPdaSigner",
-          "isMut": false,
-          "isSigner": true
-        },
-        {
           "name": "receiverNative",
           "isMut": true,
           "isSigner": false
         },
         {
           "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "instructionSysvar",
           "isMut": false,
           "isSigner": false
         }
@@ -84,15 +114,28 @@
       ]
     }
   ],
+  "accounts": [
+    {
+      "name": "DataAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "aggKey",
+            "type": "publicKey"
+          },
+          {
+            "name": "govKey",
+            "type": "publicKey"
+          }
+        ]
+      }
+    }
+  ],
   "events": [
     {
       "name": "ReceivedCCM",
       "fields": [
-        {
-          "name": "signer",
-          "type": "publicKey",
-          "index": false
-        },
         {
           "name": "sourceChain",
           "type": "u32",
