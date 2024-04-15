@@ -205,6 +205,7 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install
+          ./commands/setup_swaps.ts
           ./tests/all_concurrent_tests.ts
 
       - name: Print chainflip-engine logs 🚗
