@@ -440,8 +440,6 @@ pub trait RegisterRedemption: ApiCall<<Ethereum as Chain>::ChainCrypto> {
 		expiry: u64,
 		executor: Option<eth::Address>,
 	) -> Self;
-
-	fn amount(&self) -> u128;
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq, TypeInfo)]

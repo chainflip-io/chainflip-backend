@@ -104,10 +104,6 @@ impl cf_chains::RegisterRedemption for MockRegisterRedemption {
 	) -> Self {
 		Self { amount }
 	}
-
-	fn amount(&self) -> u128 {
-		self.amount
-	}
 }
 
 impl ApiCall<EvmCrypto> for MockRegisterRedemption {
