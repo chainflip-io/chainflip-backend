@@ -1325,3 +1325,26 @@ fn redemption_check_works() {
 		assert_noop!(ValidatorPallet::ensure_can_redeem(&validator), Error::<Test>::StillBidding);
 	});
 }
+
+#[test]
+fn validator_set_change_propagates_to_session_pallet() {
+	new_test_ext()
+		// Set some new authorities different from the old ones.
+		.then_execute_with_checks(|| {
+			assert!(
+				Pallet::<Test>::current_authorities() ==
+					pallet_session::Pallet::<Test>::validators()
+			);
+			CurrentRotationPhase::put(RotationPhase::<Test>::NewKeysActivated(
+				RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
+					winners: AUCTION_WINNERS.to_vec(),
+					losers: vec![],
+					bond: EXPECTED_BOND,
+				}),
+			));
+		})
+		// Run until the new epoch.
+		.then_process_blocks_until(|_| CurrentRotationPhase::<Test>::get() == RotationPhase::Idle)
+		// Do the consistency checks.
+		.then_execute_with_checks(|| {});
+}

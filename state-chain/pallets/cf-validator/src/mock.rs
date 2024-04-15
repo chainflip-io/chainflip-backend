@@ -237,10 +237,8 @@ cf_test_utilities::impl_test_helpers! {
 macro_rules! assert_invariants {
 	() => {
 		assert_eq!(
-			<ValidatorPallet as EpochInfo>::current_authorities()
-				.into_iter()
-				.collect::<BTreeSet<_>>(),
-			Session::validators().into_iter().collect::<BTreeSet<_>>(),
+			<ValidatorPallet as EpochInfo>::current_authorities(),
+			Session::validators(),
 			"Authorities out of sync at block {:?}. RotationPhase: {:?}",
 			System::block_number(),
 			ValidatorPallet::current_rotation_phase(),
@@ -290,6 +288,7 @@ impl<Ctx: Clone> TestHelper for TestRunner<Ctx> {
 	) -> TestRunner<R> {
 		self.then_execute_with(|_| System::current_block_number() + blocks)
 			.then_process_blocks_until(|execution_block| {
+				assert_invariants!();
 				System::current_block_number() == execution_block - 1
 			})
 			.then_execute_at_next_block(|_| {
