@@ -5,31 +5,21 @@ mod authorities;
 
 pub type PalletMigration<T> = (
 	VersionedMigration<Pallet<T>, authorities::Migration<T>, 0, 1>,
-	// Migration 1 -> 2 is in the runtime/src/lib.rs `VanityNamesMigration`
-	// This ensures the storage version bump.
-	VersionedMigration<
-		Pallet<T>,
-		NoopRuntimeUpgrade,
-		{ vanity_name_migration::APPLY_AT_VALIDATOR_STORAGE_VERSION - 1 },
-		{ vanity_name_migration::APPLY_AT_VALIDATOR_STORAGE_VERSION },
-	>,
-	VersionedMigration<
-		Pallet<T>,
-		NoopRuntimeUpgrade,
-		{ active_bidders_migration::APPLY_AT_VALIDATOR_STORAGE_VERSION - 1 },
-		{ active_bidders_migration::APPLY_AT_VALIDATOR_STORAGE_VERSION },
-	>,
+	// Migrations 1 -> 3 are in the runtime/src/lib.rs:
+	// - VanityNamesMigration
+	// - ActiveBiddersMigration
+	// This ensures the storage version bumps.
+	VersionedMigration<Pallet<T>, NoopRuntimeUpgrade, 1, 2>,
+	VersionedMigration<Pallet<T>, NoopRuntimeUpgrade, 2, 3>,
 );
 
 pub mod vanity_name_migration {
-	pub const APPLY_AT_VALIDATOR_STORAGE_VERSION: u16 = 2;
+	pub const APPLY_AT_VALIDATOR_STORAGE_VERSION: u16 = 3;
 }
 
 pub mod active_bidders_migration {
 	pub const APPLY_AT_VALIDATOR_STORAGE_VERSION: u16 = 3;
 }
-
-
 
 #[cfg(feature = "try-runtime")]
 pub mod old {

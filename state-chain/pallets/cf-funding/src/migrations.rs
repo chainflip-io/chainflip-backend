@@ -5,8 +5,10 @@ pub type PalletMigration<T> = (
 	VersionedMigration<
 		Pallet<T>,
 		NoopRuntimeUpgrade,
-		{ active_bidders_migration::APPLY_AT_FUNDING_STORAGE_VERSION - 1 },
-		{ active_bidders_migration::APPLY_AT_FUNDING_STORAGE_VERSION },
+		// Migration 3 ->. 4 is in the runtime/src/lib.rs:
+		// - ActiveBiddersMigration
+		3,
+		4,
 	>,
 );
 
