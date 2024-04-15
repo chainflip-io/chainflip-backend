@@ -673,6 +673,9 @@ pub mod pallet {
 			amount_attempted: TargetChainAmount<T, I>,
 			channel_id: ChannelId,
 		},
+		BoostPoolCreated {
+			boost_pool: BoostPoolId<T::TargetChain>,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
