@@ -121,6 +121,8 @@ async function main(): Promise<void> {
 }
 
 runWithTimeout(main(), 15 * 60 * 1000).catch((error) => {
-  console.error(error);
-  process.exit(-1);
+  console.error('upgrade_network exiting due to error: ', error);
+  if (process.exitCode === 0) {
+    process.exitCode = -1;
+  }
 });

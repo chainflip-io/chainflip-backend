@@ -6,13 +6,13 @@ on:
       upgrade-from-release:
         description: 'The release we want to upgrade *from*: "sisyphos", "perseverance" or "berghain"'
         required: true
-        default: 'perseverance'
+        default: "perseverance"
       upgrade-to-workflow-name:
-        description: 'Name of the workflow to pull the upgrade-to artefacts from'
+        description: "Name of the workflow to pull the upgrade-to artefacts from"
         required: true
-        default: 'ci-main.yml'
+        default: "ci-main.yml"
       upgrade-to-commit:
-        description: 'Commit to run the upgrade test against. Leave blank to use latest successful workflow run.'
+        description: "Commit to run the upgrade test against. Leave blank to use the latest workflow run."
         required: false
 
   workflow_call:
@@ -20,14 +20,14 @@ on:
       upgrade-from-release:
         type: string
         description: 'The release we want to upgrade *from*: "perseverance" or "berghain"'
-        default: 'perseverance'
+        default: "perseverance"
       upgrade-to-workflow-name:
         type: string
-        description: 'Name of the workflow to pull the upgrade-to artefacts from'
-        default: 'ci-main.yml'
+        description: "Name of the workflow to pull the upgrade-to artefacts from"
+        default: "ci-main.yml"
       upgrade-to-commit:
         type: string
-        description: 'Commit to run the upgrade test against. Leave blank to use latest successful workflow run.'
+        description: "Commit to run the upgrade test against. Leave blank to use the latest successful workflow run."
         required: false
 
 env:
@@ -246,6 +246,24 @@ jobs:
           name: localnet-logs
           path: |
             /tmp/chainflip/*/chainflip-*.*log
+
+      - name: Upload Chainflip Logs 💾
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v3
+        with:
+          name: chainflip-logs
+          path: |
+            /tmp/chainflip/logs/*.log
+
+      - name: Upload Snapshots 💾
+        if: failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@v3
+        with:
+          name: failure-snapshots
+          path: |
+            /tmp/chainflip/snapshots/*.snap
 
       - name: Clean Up docker containers 🧹
         if: always()
