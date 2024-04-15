@@ -92,7 +92,8 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 			chain_id,
 			usdc_address,
 			start_block_number,
-		): (Address, Address, Address, u64, Address, u64) =
+			deposit_channel_lifetime,
+		): (Address, Address, Address, u64, Address, u64, u64) =
 			match cf_runtime_upgrade_utilities::genesis_hashes::genesis_hash::<Runtime>() {
 				cf_runtime_upgrade_utilities::genesis_hashes::BERGHAIN => {
 					log::warn!("Need to set up arbitrum integration for Berghain");
@@ -103,6 +104,8 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 						arb::CHAIN_ID_MAINNET,
 						[0u8; 20].into(),
 						0,
+						// state-chain/node/src/chain_spec/berghain.rs
+						24 * 3600 * 4,
 					)
 				},
 				cf_runtime_upgrade_utilities::genesis_hashes::PERSEVERANCE => {
@@ -114,6 +117,8 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 						arb::CHAIN_ID_ARBITRUM_SEPOLIA,
 						[1u8; 20].into(),
 						0,
+						// state-chain/node/src/chain_spec/perseverance.rs
+						2 * 60 * 60 * 4,
 					)
 				},
 				cf_runtime_upgrade_utilities::genesis_hashes::SISYPHOS => {
@@ -125,6 +130,8 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 						arb::CHAIN_ID_ARBITRUM_SEPOLIA,
 						[2u8; 20].into(),
 						0,
+						// state-chain/node/src/chain_spec/sisyphos.rs
+						2 * 60 * 60 * 4,
 					)
 				},
 				_ => {
@@ -136,6 +143,8 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 						412346,
 						hex_literal::hex!("1D55838a9EC169488D360783D65e6CD985007b72").into(),
 						0,
+						// state-chain/node/src/chain_spec/testnet.rs
+						2 * 60 * 60 * 4,
 					)
 				},
 			};
@@ -151,6 +160,10 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 			block_height: start_block_number,
 			tracked_data: ArbitrumTrackedData { base_fee: 0 },
 		});
+		pallet_cf_ingress_egress::DepositChannelLifetime::<Runtime, ArbitrumInstance>::put(
+			deposit_channel_lifetime,
+		);
+		pallet_cf_ingress_egress::WitnessSafetyMargin::<Runtime, ArbitrumInstance>::put(1);
 
 		Weight::zero()
 	}
