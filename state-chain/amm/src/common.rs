@@ -19,6 +19,23 @@ pub type SqrtPriceQ64F96 = U256;
 /// The number of fractional bits used by `SqrtPriceQ64F96`.
 pub const SQRT_PRICE_FRACTIONAL_BITS: u32 = 96;
 
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+pub struct PoolPriceV1 {
+	pub price: Price,
+	pub sqrt_price: SqrtPriceQ64F96,
+	pub tick: Tick,
+}
+
+impl PoolPriceV1 {
+	pub fn from_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Self {
+		Self {
+			price: sqrt_price_to_price(sqrt_price),
+			sqrt_price,
+			tick: tick_at_sqrt_price(sqrt_price),
+		}
+	}
+}
+
 #[derive(Debug)]
 pub enum SetFeesError {
 	/// Fee must be between 0 - 50%

@@ -8,8 +8,8 @@ use core::convert::Infallible;
 use codec::{Decode, Encode};
 use common::{
 	is_sqrt_price_valid, price_to_sqrt_price, sqrt_price_to_price, tick_at_sqrt_price, Amount,
-	BaseToQuote, Pairs, PoolPairsMap, Price, QuoteToBase, SetFeesError, Side, SqrtPriceQ64F96,
-	SwapDirection, Tick,
+	BaseToQuote, Pairs, PoolPairsMap, PoolPriceV1, Price, QuoteToBase, SetFeesError, Side,
+	SqrtPriceQ64F96, SwapDirection, Tick,
 };
 use limit_orders::{Collected, PositionInfo};
 use range_orders::Liquidity;
@@ -431,14 +431,18 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn limit_order_depth(
 		&mut self,
 		range: core::ops::Range<Tick>,
-	) -> Result<PoolPairsMap<(Option<Price>, Amount)>, limit_orders::DepthError> {
+	) -> Result<PoolPairsMap<(Option<PoolPriceV1>, Amount)>, limit_orders::DepthError> {
 		Ok(PoolPairsMap {
 			base: (
-				self.limit_orders.current_sqrt_price::<QuoteToBase>(),
+				self.limit_orders
+					.current_sqrt_price::<QuoteToBase>()
+					.map(PoolPriceV1::from_sqrt_price),
 				self.limit_orders.depth::<QuoteToBase>(range.clone())?,
 			),
 			quote: (
-				self.limit_orders.current_sqrt_price::<BaseToQuote>(),
+				self.limit_orders
+					.current_sqrt_price::<BaseToQuote>()
+					.map(PoolPriceV1::from_sqrt_price),
 				self.limit_orders.depth::<BaseToQuote>(range)?,
 			),
 		})
@@ -447,14 +451,18 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn range_order_depth(
 		&self,
 		range: core::ops::Range<Tick>,
-	) -> Result<PoolPairsMap<(Option<Price>, Amount)>, range_orders::DepthError> {
+	) -> Result<PoolPairsMap<(Option<PoolPriceV1>, Amount)>, range_orders::DepthError> {
 		self.range_orders.depth(range.start, range.end).map(|assets| PoolPairsMap {
 			base: (
-				self.range_orders.current_sqrt_price::<QuoteToBase>().map(sqrt_price_to_price),
+				self.range_orders
+					.current_sqrt_price::<QuoteToBase>()
+					.map(PoolPriceV1::from_sqrt_price),
 				assets[Pairs::Base],
 			),
 			quote: (
-				self.range_orders.current_sqrt_price::<BaseToQuote>().map(sqrt_price_to_price),
+				self.range_orders
+					.current_sqrt_price::<BaseToQuote>()
+					.map(PoolPriceV1::from_sqrt_price),
 				assets[Pairs::Quote],
 			),
 		})

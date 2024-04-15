@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use core::ops::Range;
 
+pub use cf_amm::common::PoolPriceV1;
 use cf_amm::{
 	common::{self, Amount, PoolPairsMap, Price, Side, SqrtPriceQ64F96, Tick},
 	limit_orders::{self, Collected, PositionInfo},
@@ -1185,7 +1186,7 @@ pub struct PoolLiquidity {
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
 pub struct UnidirectionalSubPoolDepth {
 	/// The current price in this sub pool, in the given direction of swaps.
-	pub price: Option<Price>,
+	pub price: Option<PoolPriceV1>,
 	/// The approximate amount of assets available to be sold in the specified price range.
 	pub depth: Amount,
 }
@@ -1208,13 +1209,6 @@ pub struct PoolOrder {
 pub struct PoolOrderbook {
 	pub bids: Vec<PoolOrder>,
 	pub asks: Vec<PoolOrder>,
-}
-
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
-pub struct PoolPriceV1 {
-	pub price: Price,
-	pub sqrt_price: SqrtPriceQ64F96,
-	pub tick: Tick,
 }
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode, TypeInfo, PartialEq, Eq, Debug)]
