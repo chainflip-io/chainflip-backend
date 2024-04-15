@@ -6,12 +6,12 @@ use cf_chains::{
 	dot::{api::CreatePolkadotVault, PolkadotCrypto},
 	eth, ApiCall, Arbitrum, Bitcoin, Chain, ChainCrypto, Polkadot,
 };
-use cf_primitives::{BroadcastId, SemVer, ThresholdSignatureRequestId};
+use cf_primitives::SemVer;
 use cf_traits::{
-	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
-	mocks::key_provider::MockKeyProvider, Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
+	impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
+	mocks::key_provider::MockKeyProvider, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
 };
-use frame_support::{derive_impl, parameter_types, traits::UnfilteredDispatchable};
+use frame_support::{derive_impl, parameter_types};
 use sp_core::{H160, H256};
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
@@ -94,48 +94,6 @@ impl ApiCall<PolkadotCrypto> for MockCreatePolkadotVault {
 	}
 }
 
-impl_mock_callback!(RuntimeOrigin);
-
-pub struct MockPolkadotBroadcaster;
-impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
-	type ApiCall = MockCreatePolkadotVault;
-	type Callback = MockCallback;
-
-	fn threshold_sign_and_broadcast(
-		_api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		unimplemented!()
-	}
-
-	fn threshold_sign_and_broadcast_with_callback(
-		_api_call: Self::ApiCall,
-		_success_callback: Option<Self::Callback>,
-		_failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
-	) -> BroadcastId {
-		unimplemented!()
-	}
-
-	fn threshold_sign_and_broadcast_rotation_tx(
-		_api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		unimplemented!()
-	}
-
-	fn re_sign_aborted_broadcast(
-		_broadcast_id: BroadcastId,
-	) -> Option<ThresholdSignatureRequestId> {
-		unimplemented!()
-	}
-
-	fn threshold_sign(_api_call: Self::ApiCall) -> (BroadcastId, ThresholdSignatureRequestId) {
-		unimplemented!()
-	}
-
-	/// Clean up storage data related to a broadcast ID.
-	fn expire_broadcast(_broadcast_id: BroadcastId) {
-		unimplemented!()
-	}
-}
 pub struct MockPolkadotVaultKeyWitnessedHandler;
 impl VaultKeyWitnessedHandler<Polkadot> for MockPolkadotVaultKeyWitnessedHandler {
 	fn on_first_key_activated(
@@ -144,6 +102,7 @@ impl VaultKeyWitnessedHandler<Polkadot> for MockPolkadotVaultKeyWitnessedHandler
 		unimplemented!()
 	}
 }
+
 pub struct MockBitcoinVaultKeyWitnessedHandler;
 impl VaultKeyWitnessedHandler<Bitcoin> for MockBitcoinVaultKeyWitnessedHandler {
 	fn on_first_key_activated(

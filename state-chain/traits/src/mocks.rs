@@ -9,7 +9,6 @@ pub mod api_call;
 pub mod asset_converter;
 pub mod block_height_provider;
 pub mod broadcaster;
-pub mod callback;
 pub mod ccm_handler;
 pub mod ceremony_id_provider;
 pub mod cfe_interface_mock;
