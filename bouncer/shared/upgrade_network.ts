@@ -8,6 +8,7 @@ import { compareSemVer, sleep } from './utils';
 import { bumpSpecVersionAgainstNetwork } from './utils/spec_version';
 import { compileBinaries } from './utils/compile_binaries';
 import { submitRuntimeUpgradeWithRestrictions } from './submit_runtime_upgrade';
+import { setupArbVault } from './setup_arb_vault';
 
 async function readPackageTomlVersion(projectRoot: string): Promise<string> {
   const data = await fs.readFile(path.join(projectRoot, '/state-chain/runtime/Cargo.toml'), 'utf8');
@@ -48,6 +49,7 @@ async function incompatibleUpgradeNoBuild(
   binaryPath: string,
   runtimePath: string,
   numberOfNodes: 1 | 3,
+  newVersion: string,
 ) {
   let selectedNodes;
   if (numberOfNodes === 1) {
@@ -118,6 +120,10 @@ async function incompatibleUpgradeNoBuild(
 
   console.log('Starting new broker and lp-api.');
 
+  if (newVersion.includes('1.4')) {
+    await setupArbVault();
+  }
+
   execSync(`KEYS_DIR=${KEYS_DIR} ${localnetInitPath}/scripts/start-broker-api.sh ${binaryPath}`);
   execSync(`KEYS_DIR=${KEYS_DIR} ${localnetInitPath}/scripts/start-lp-api.sh ${binaryPath}`);
 
@@ -136,6 +142,7 @@ async function incompatibleUpgrade(
   localnetInitPath: string,
   nextVersionWorkspacePath: string,
   numberOfNodes: 1 | 3,
+  newVersion: string,
 ) {
   await bumpSpecVersionAgainstNetwork(
     `${nextVersionWorkspacePath}/state-chain/runtime/src/lib.rs`,
@@ -149,6 +156,7 @@ async function incompatibleUpgrade(
     `${nextVersionWorkspacePath}/target/release`,
     `${nextVersionWorkspacePath}/target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm`,
     numberOfNodes,
+    newVersion,
   );
 }
 
@@ -206,6 +214,7 @@ export async function upgradeNetworkGit(
       `${currentVersionWorkspacePath}/localnet/init`,
       nextVersionWorkspacePath,
       numberOfNodes,
+      toTomlVersion,
     );
   }
 
@@ -259,7 +268,13 @@ export async function upgradeNetworkPrebuilt(
 
   if (!isCompatible) {
     console.log('The versions are incompatible.');
-    await incompatibleUpgradeNoBuild(localnetInitPath, binariesPath, runtimePath, numberOfNodes);
+    await incompatibleUpgradeNoBuild(
+      localnetInitPath,
+      binariesPath,
+      runtimePath,
+      numberOfNodes,
+      nodeVersion,
+    );
   } else {
     console.log('The versions are compatible.');
     await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, true);
