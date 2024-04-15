@@ -1,13 +1,7 @@
 import Web3 from 'web3';
-import {
-  getChainflipApi,
-  getEvmContractAddress,
-  getEvmEndpoint,
-  observeEvent,
-} from '../shared/utils';
-import { getKeyManagerAbi } from '../shared/eth_abis';
+import { getChainflipApi, getEvmEndpoint, observeEvent } from '../shared/utils';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
-import { signAndSendTxEvm } from '../shared/send_evm';
+import { initializeArbitrumChain, initializeArbitrumContracts } from './initialize_new_chains';
 
 // This cuts out the pieces of arb activation from `bouncer/commands/setup_vaults.ts`
 // So we can use it for the upgrade test.
@@ -17,10 +11,7 @@ export async function setupArbVault(): Promise<void> {
   const arbClient = new Web3(getEvmEndpoint('Arbitrum'));
 
   // Step 1
-  console.log('Initializing Arbitrum');
-  const arbInitializationRequest = observeEvent('arbitrumVault:ChainInitialized', chainflip);
-  await submitGovernanceExtrinsic(chainflip.tx.arbitrumVault.initializeChain());
-  await arbInitializationRequest;
+  await initializeArbitrumChain(chainflip);
 
   // Step 2
   console.log('Forcing rotation');
@@ -36,22 +27,7 @@ export async function setupArbVault(): Promise<void> {
 
   // Step 4
   console.log('Inserting Arbitrum key in the contracts');
-  const keyManagerAddress = getEvmContractAddress('Arbitrum', 'KEY_MANAGER');
-  const web3 = new Web3(getEvmEndpoint('Arbitrum'));
-
-  const keyManagerContract = new web3.eth.Contract(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (await getKeyManagerAbi()) as any,
-    keyManagerAddress,
-  );
-  const txData = keyManagerContract.methods
-    .setAggKeyWithGovKey({
-      pubKeyX: arbKey.pubKeyX,
-      pubKeyYParity: arbKey.pubKeyYParity === 'Odd' ? 1 : 0,
-    })
-    .encodeABI();
-
-  await signAndSendTxEvm('Arbitrum', keyManagerAddress, '0', txData);
+  await initializeArbitrumContracts(arbClient, arbKey);
 
   await submitGovernanceExtrinsic(
     chainflip.tx.environment.witnessInitializeArbitrumVault(await arbClient.eth.getBlockNumber()),
