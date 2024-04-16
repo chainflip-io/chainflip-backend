@@ -101,11 +101,17 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
 
   const solKeyBuffer = Buffer.from(solKey.slice(2), 'hex');
   const newAggKey = new PublicKey(encodeSolAddress(solKey));
+  const tokenVaultPda = new PublicKey(getContractAddress('Solana', 'TOKEN_VAULT_PDA'));
 
   // Initialize Vault program
   const tx = new Transaction().add(
     new TransactionInstruction({
-      data: Buffer.concat([Buffer.from(discriminator.buffer), solKeyBuffer, solKeyBuffer]),
+      data: Buffer.concat([
+        Buffer.from(discriminator.buffer),
+        solKeyBuffer,
+        solKeyBuffer,
+        tokenVaultPda.toBuffer(),
+      ]),
       keys: [
         { pubkey: dataAccount, isSigner: false, isWritable: true },
         { pubkey: whaleKeypair.publicKey, isSigner: true, isWritable: false },
