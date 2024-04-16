@@ -53,7 +53,6 @@ async function incompatibleUpgradeNoBuild(
   numberOfNodes: 1 | 3,
   newVersion: string,
 ) {
-
   const chainflip = await getChainflipApi();
 
   const SELECTED_NODES = numberOfNodes === 1 ? 'bashful' : 'bashful doc dopey';
@@ -84,12 +83,14 @@ async function incompatibleUpgradeNoBuild(
   await sleep(10000);
 
   // We're going to take down the node, so we don't want them to be suspended.
-  await submitGovernanceExtrinsic(chainflip.tx.reputation.setPenalty("MissedAuthorshipSlot", {
-    reputation: 100,
-    suspension: 0
-  }));
+  await submitGovernanceExtrinsic(
+    chainflip.tx.reputation.setPenalty('MissedAuthorshipSlot', {
+      reputation: 100,
+      suspension: 0,
+    }),
+  );
 
-  console.log("Submitted extrinsic to set suspension for MissedAuthorship slot to 0");
+  console.log('Submitted extrinsic to set suspension for MissedAuthorship slot to 0');
   // Ensure extrinsic gets in.
   await sleep(12000);
 
@@ -119,10 +120,12 @@ async function incompatibleUpgradeNoBuild(
   await sleep(20000);
 
   // Set missed authorship suspension back to 100/150 after nodes back up.
-  await submitGovernanceExtrinsic(chainflip.tx.reputation.setPenalty("MissedAuthorshipSlot", {
-    reputation: 100,
-    suspension: 150,
-  }));
+  await submitGovernanceExtrinsic(
+    chainflip.tx.reputation.setPenalty('MissedAuthorshipSlot', {
+      reputation: 100,
+      suspension: 150,
+    }),
+  );
 
   const output = execSync("ps aux | grep chainflip-node | grep -v grep | awk '{print $2}'");
   console.log('New node PID: ' + output.toString());
