@@ -1,7 +1,7 @@
 //! Program instructions
 use super::{
-	vec, AccountMeta, FromStr, Instruction, Pubkey, ASSOCIATED_TOKEN_PROGRAM_ID,
-	SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID,
+	vec, AccountMeta, FromStr, Instruction, Pubkey, ASSOCIATED_TOKEN_PROGRAM_ID, SYSTEM_PROGRAM_ID,
+	TOKEN_PROGRAM_ID,
 };
 
 use borsh::{BorshDeserialize, BorshSerialize};

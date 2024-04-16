@@ -285,9 +285,8 @@ pub trait ProgramInstruction: BorshSerialize {
 	}
 
 	fn function_discriminator(&self) -> Vec<u8> {
-		sha2_256((String::from_str("global:").unwrap() + self.call_name()).as_bytes())[..8]
-		.to_vec()
-		}
+		sha2_256((String::from_str("global:").unwrap() + self.call_name()).as_bytes())[..8].to_vec()
+	}
 
 	fn call_name(&self) -> &str;
 }
