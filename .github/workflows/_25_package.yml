@@ -18,7 +18,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
       env:
-        NSC_CACHE_PATH: ubuntu-22.04
+        NSC_CACHE_PATH: "/cache"
       volumes:
         - /cache:/cache
       options: --cap-add=SYS_ADMIN
