@@ -4,12 +4,13 @@ import * as toml from 'toml';
 import path from 'path';
 import { SemVerLevel, bumpReleaseVersion } from './bump_release_version';
 import { simpleRuntimeUpgrade } from './simple_runtime_upgrade';
-import { compareSemVer, sleep } from './utils';
+import { compareSemVer, getChainflipApi, sleep } from './utils';
 import { bumpSpecVersionAgainstNetwork } from './utils/spec_version';
 import { compileBinaries } from './utils/compile_binaries';
 import { submitRuntimeUpgradeWithRestrictions } from './submit_runtime_upgrade';
 import { execWithLog } from './utils/exec_with_log';
 import { setupArbVault } from './setup_arb_vault';
+import { submitGovernanceExtrinsic } from './cf_governance';
 
 async function readPackageTomlVersion(projectRoot: string): Promise<string> {
   const data = await fs.readFile(path.join(projectRoot, '/state-chain/runtime/Cargo.toml'), 'utf8');
@@ -52,6 +53,9 @@ async function incompatibleUpgradeNoBuild(
   numberOfNodes: 1 | 3,
   newVersion: string,
 ) {
+
+  const chainflip = await getChainflipApi();
+
   const SELECTED_NODES = numberOfNodes === 1 ? 'bashful' : 'bashful doc dopey';
 
   console.log('Starting all the engines');
@@ -77,7 +81,17 @@ async function incompatibleUpgradeNoBuild(
   );
 
   // Ensure the runtime upgrade is finalised.
-  await sleep(20000);
+  await sleep(10000);
+
+  // We're going to take down the node, so we don't want them to be suspended.
+  await submitGovernanceExtrinsic(chainflip.tx.reputation.setPenalty("MissedAuthorshipSlot", {
+    reputation: 100,
+    suspension: 0
+  }));
+
+  console.log("Submitted extrinsic to set suspension for MissedAuthorship slot to 0");
+  // Ensure extrinsic gets in.
+  await sleep(12000);
 
   console.log('Killing the old node.');
   execSync(`kill $(ps aux | grep chainflip-node | grep -v grep | awk '{print $2}')`);
@@ -103,6 +117,12 @@ async function incompatibleUpgradeNoBuild(
   });
 
   await sleep(20000);
+
+  // Set missed authorship suspension back to 100/150 after nodes back up.
+  await submitGovernanceExtrinsic(chainflip.tx.reputation.setPenalty("MissedAuthorshipSlot", {
+    reputation: 100,
+    suspension: 150,
+  }));
 
   const output = execSync("ps aux | grep chainflip-node | grep -v grep | awk '{print $2}'");
   console.log('New node PID: ' + output.toString());
