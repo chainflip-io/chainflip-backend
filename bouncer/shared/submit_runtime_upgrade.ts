@@ -54,7 +54,6 @@ export async function submitRuntimeUpgradeWithRestrictions(
   }
 
   console.log('Runtime upgrade completed.');
-  chainflip.disconnect();
 }
 
 export async function submitRuntimeUpgradeWasmPath(wasmPath: string) {
