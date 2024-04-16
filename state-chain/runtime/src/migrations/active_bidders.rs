@@ -1,5 +1,5 @@
 use crate::{AccountId, Runtime};
-use frame_support::traits::{GetStorageVersion, StorageVersion};
+use frame_support::traits::GetStorageVersion;
 use pallet_cf_funding::migrations::active_bidders_migration::APPLY_AT_FUNDING_STORAGE_VERSION;
 use pallet_cf_validator::migrations::active_bidders_migration::APPLY_AT_VALIDATOR_STORAGE_VERSION;
 use sp_std::collections::btree_set::BTreeSet;
