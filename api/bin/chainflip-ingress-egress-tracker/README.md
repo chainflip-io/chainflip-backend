@@ -33,7 +33,7 @@ The default configuration can be overwritten with the following env variables:
 The tracker will insert deposit information for deposit addresses into Redis
 with the key format `deposit:$CHAIN:$ADDRESS`. For Polkadot, `ADDRESS` will be
 hex-encoded. Ethereum and Bitcoin addresses will have their expected formats.
-The data will be a JSON string of the `Depsoit` variant of the
+The data will be a JSON string of the `Deposit` variant of the
 `WitnessInformation` enum found in the
 [state chain witnessing module](./src/witnessing/state_chain.rs). Check the
 snapshots for concrete and up-to-date examples.

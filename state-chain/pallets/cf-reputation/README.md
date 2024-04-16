@@ -20,7 +20,7 @@ Once every heartbeat interval, this pallet divides nodes into nodes that are 'on
 - Node: A node on in our network - may be a CurrentAuthority, HistoricalAuthority, Backup.
 - Heartbeat: An extrinsic submitted by each node to signal their liveness.
 - Heartbeat interval: The duration, measured in blocks, after which we consider a node to be offline if no heartbeat is received.
-- Online: A node is considered online if its most recent hearbeat was at most `heartbeat_interval` blocks ago.
+- Online: A node is considered online if its most recent heartbeat was at most `heartbeat_interval` blocks ago.
 - Offline: A node is considered offline if its most recent heartbeat was more than `heartbeat_interval` blocks ago.
 - Online Blocks: We count the number of blocks for which a validator has been online, based on heartbeat submissions.
 - Reputation points: A measure of how diligently a node has been fulfilling its duties.
