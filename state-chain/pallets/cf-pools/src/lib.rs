@@ -593,10 +593,14 @@ pub mod pallet {
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
-				let tick_range = match (
-					pool.clone().pool_state.range_orders_info_for_lp(&lp).get(&id).cloned(),
-					option_tick_range,
-				) {
+				let current_tick = pool
+					.pool_state
+					.range_orders
+					.positions_by_lp(&lp)
+					.filter(|(_, order_id, _, _, _, _)| *order_id == id)
+					.next()
+					.map(|(_, _, tick_1, tick_2, _, _)| (tick_1..tick_2));
+				let tick_range = match (current_tick, option_tick_range) {
 					(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
 					(None, Some(tick_range)) | (Some(tick_range), None) => Ok(tick_range.clone()),
 					(Some(previous_tick_range), Some(new_tick_range)) => {
@@ -671,8 +675,13 @@ pub mod pallet {
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
-				let current_tick =
-					pool.pool_state.range_orders_info_for_lp(&lp.clone()).get(&id).cloned();
+				let current_tick = pool
+					.pool_state
+					.range_orders
+					.positions_by_lp(&lp)
+					.filter(|(_, order_id, _, _, _, _)| *order_id == id)
+					.next()
+					.map(|(_, _, tick_1, tick_2, _, _)| (tick_1..tick_2));
 				let tick_range = match (current_tick, option_tick_range) {
 					(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
 					(None, Some(tick_range)) => Ok(tick_range),
@@ -1195,17 +1204,21 @@ impl<T: Config> Pallet<T> {
 		// Collect to avoid undefined behaviour (See StorsgeMap::iter_keys documentation)
 		for asset_pair in Pools::<T>::iter_keys().collect::<Vec<_>>() {
 			let mut pool = Pools::<T>::get(asset_pair).unwrap();
+			let read_pool = Pools::<T>::get(asset_pair).unwrap();
 
-			for (id, range) in pool.pool_state.range_orders_info_for_lp(lp) {
+			for (_, id, tick_1, tick_2, _, _) in
+				read_pool.pool_state.range_orders.positions_by_lp(lp)
+			{
 				Self::inner_update_range_order(
 					&mut pool,
 					lp,
 					&asset_pair,
 					id,
-					range.clone(),
+					tick_1..tick_2,
 					IncreaseOrDecrease::Decrease(range_orders::Size::Liquidity { liquidity: 0 }),
 					false,
 				)?;
+				Pools::<T>::insert(asset_pair, pool.clone()); // Update the pool in the storage
 			}
 
 			for (assets, limit_orders) in pool
@@ -1747,27 +1760,28 @@ impl<T: Config> Pallet<T> {
 			),
 			range_orders: if let Some(lp) = option_lp {
 				pool.pool_state
-					.range_orders_info_for_lp(lp)
-					.into_iter()
-					.map(|(id, range)| (lp.clone(), id, range.clone()))
+					.range_orders
+					.positions_by_lp(lp)
+					.map(|(lp, id, tick_1, tick_2, collected, position_info)| {
+						(lp.clone(), id, tick_1..tick_2, collected, position_info)
+					})
 					.collect::<Vec<_>>()
 			} else {
 				pool.pool_state
-					.range_orders()
-					.map(|(lp, id, range, _, _)| (lp, id, range.clone()))
+					.range_orders
+					.positions()
+					.map(|(lp, id, tick_1, tick_2, collected, position_info)| {
+						(lp.clone(), id, tick_1..tick_2, collected, position_info)
+					})
 					.collect::<Vec<_>>()
 			}
 			.into_iter()
-			.map(|(lp, id, tick_range)| {
-				let (collected, position_info) =
-					pool.pool_state.range_order(&lp.clone(), id, tick_range.clone()).unwrap();
-				RangeOrder {
-					lp: lp.clone(),
-					id: id.into(),
-					range: tick_range.clone(),
-					liquidity: position_info.liquidity,
-					fees_earned: collected.accumulative_fees,
-				}
+			.map(|(lp, id, tick_range, collected, position_info)| RangeOrder {
+				lp: lp.clone(),
+				id: id.into(),
+				range: tick_range.clone(),
+				liquidity: position_info.liquidity,
+				fees_earned: collected.accumulative_fees,
 			})
 			.collect(),
 		})

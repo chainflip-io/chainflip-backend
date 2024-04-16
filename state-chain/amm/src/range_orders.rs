@@ -23,8 +23,10 @@
 mod tests;
 
 use serde::{Deserialize, Serialize};
-use sp_std::{collections::btree_map::BTreeMap, convert::Infallible, vec::Vec};
+use sp_std::{collections::btree_map::BTreeMap, convert::Infallible, ops::Bound, vec::Vec};
 
+use crate::collect_map_in_range;
+use cf_utilities::MinMax;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_core::{U256, U512};
@@ -454,7 +456,9 @@ impl<'a> From<&'a Position> for PositionInfo {
 	}
 }
 
-impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityProvider, OrderId> {
+impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord + MinMax>
+	PoolState<LiquidityProvider, OrderId>
+{
 	/// Creates a new pool with the specified fee and initial price. The pool is created with no
 	/// liquidity, it must be added using the `PoolState::collect_and_mint` function.
 	///
@@ -1134,7 +1138,7 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityPr
 	/// Returns an iterator over all positions
 	///
 	/// This function never panics.
-	pub(super) fn positions(
+	pub fn positions(
 		&self,
 	) -> impl '_ + Iterator<Item = (LiquidityProvider, OrderId, Tick, Tick, Collected, PositionInfo)>
 	{
@@ -1155,6 +1159,41 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord> PoolState<LiquidityPr
 				PositionInfo::from(&position),
 			)
 		})
+	}
+
+	/// Returns an iterator over all positions by a given liquidity provider
+	///
+	/// This function never panics.
+	pub fn positions_by_lp(
+		&self,
+		lp: &LiquidityProvider,
+	) -> impl '_ + Iterator<Item = (LiquidityProvider, OrderId, Tick, Tick, Collected, PositionInfo)>
+	{
+		let positions_by_lp =
+			collect_map_in_range::<(LiquidityProvider, OrderId, Tick, Tick), Position>(
+				Bound::Included(&(lp.clone(), <OrderId as MinMax>::min(), MIN_TICK, MIN_TICK)),
+				Bound::Included(&(lp.clone(), <OrderId as MinMax>::max(), MAX_TICK, MAX_TICK)),
+				self.positions.clone(),
+			);
+		positions_by_lp
+			.into_iter()
+			.map(|((lp, order_id, lower_tick, upper_tick), position)| {
+				let mut position = position.clone();
+				(
+					lp.clone(),
+					order_id.clone(),
+					lower_tick,
+					upper_tick,
+					position.collect_fees(
+						self,
+						lower_tick,
+						self.liquidity_map.get(&lower_tick).unwrap(),
+						upper_tick,
+						self.liquidity_map.get(&upper_tick).unwrap(),
+					),
+					PositionInfo::from(&position),
+				)
+			})
 	}
 
 	/// Returns the current value of a position i.e. the assets you would receive by burning the

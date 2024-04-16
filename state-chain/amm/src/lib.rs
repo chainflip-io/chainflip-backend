@@ -626,3 +626,33 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord + MinMax>
 		}
 	}
 }
+
+/// Collects the elements of a given BTreeMap between two defined Bound. The bounds are
+/// inclusive.
+pub(crate) fn collect_map_in_range<K: Ord + Clone, V: Clone>(
+	start_bound: Bound<&K>,
+	end_bound: Bound<&K>,
+	positions: BTreeMap<K, V>,
+) -> BTreeMap<K, V> {
+	let mut result: BTreeMap<K, V> = BTreeMap::new();
+	let mut lower_bound_orders = positions.lower_bound(start_bound);
+	while let Some(order) = lower_bound_orders.next() {
+		let (key, value) = order;
+		result.insert(key.clone(), value.clone());
+		if let Some((last_key, _)) = positions.upper_bound(end_bound).peek_prev() {
+			if key == last_key {
+				break;
+			}
+		}
+	}
+	result
+}
+
+// pub(crate) fn collect_map_in_range_as_iter<K: Ord + Clone, V: Clone>(
+// 	start_bound: Bound<&K>,
+// 	end_bound: Bound<&K>,
+// 	positions: BTreeMap<K, V>,
+// ) -> impl '_ + Iterator<Item = (K, V)> {
+// 	let mut lower_bound_orders = positions.lower_bound(start_bound);
+// 	let upper_bound_orders = positions.upper_bound(end_bound);
+// }
