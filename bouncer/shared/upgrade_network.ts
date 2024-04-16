@@ -85,7 +85,7 @@ async function incompatibleUpgradeNoBuild(
   console.log('Killed old node');
 
   // let them shutdown
-  await sleep(2000);
+  await sleep(4000);
 
   console.log('Old broker and LP-API have crashed since we killed the node.');
 
@@ -94,7 +94,7 @@ async function incompatibleUpgradeNoBuild(
   const KEYS_DIR = `${localnetInitPath}/keys`;
 
   execWithLog(`${localnetInitPath}/scripts/start-all-nodes.sh`, 'start-all-nodes', {
-    INIT_RPC_PORT: `${9944}`,
+    INIT_RPC_PORT: `9944`,
     KEYS_DIR,
     NODE_COUNT: nodeCount,
     SELECTED_NODES,
@@ -120,6 +120,8 @@ async function incompatibleUpgradeNoBuild(
       BINARY_ROOT_PATH: binaryPath,
     },
   );
+
+  await sleep(4000);
 
   if (newVersion.includes('1.4')) {
     await setupArbVault();
