@@ -11,7 +11,6 @@ use frame_system as system;
 use scale_info::TypeInfo;
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
-use sp_std::collections::btree_set::BTreeSet;
 
 type AccountId = u64;
 
@@ -116,7 +115,7 @@ cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig::default(),
 	||{
-		MockEpochInfo::next_epoch(BTreeSet::from(GENESIS_AUTHORITIES));
+		MockEpochInfo::next_epoch(Vec::from(GENESIS_AUTHORITIES));
 		for id in GENESIS_AUTHORITIES.iter().chain(&[DEIRDRE]) {
 			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id)
 				.unwrap();

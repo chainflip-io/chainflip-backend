@@ -213,7 +213,8 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 fn ready_to_abort_broadcast(broadcast_id: BroadcastId) -> u64 {
 	// Mock when all the possible broadcasts have failed another broadcast, and are
 	// therefore aborted.
-	let mut validators = MockEpochInfo::current_authorities();
+	let mut validators =
+		MockEpochInfo::current_authorities().into_iter().collect::<BTreeSet<u64>>();
 	let nominee = validators.pop_first().unwrap();
 	FailedBroadcasters::<Test, Instance1>::insert(broadcast_id, validators);
 	nominee

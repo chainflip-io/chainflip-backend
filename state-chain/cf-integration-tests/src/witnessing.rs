@@ -96,7 +96,10 @@ fn can_punish_failed_witnesser() {
 			// New epoch uses the new authorities.
 			testnet.move_to_the_next_epoch();
 			assert_eq!(Validator::current_epoch(), epoch + 1);
-			assert_eq!(Validator::current_authorities(), new_authorities);
+			assert_eq!(
+				Validator::current_authorities().into_iter().collect::<BTreeSet<AccountId32>>(),
+				new_authorities
+			);
 
 			// After deadline has passed, the correct set of authority nodes are reported.
 			assert_eq!(

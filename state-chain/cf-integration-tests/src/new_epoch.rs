@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use super::*;
 use crate::genesis::GENESIS_BALANCE;
 use cf_chains::btc::{
@@ -186,8 +188,8 @@ fn epoch_rotates() {
 
 			genesis_nodes.append(&mut backup_nodes);
 			assert_eq!(
-						Validator::current_authorities(),
-						genesis_nodes,
+						Validator::current_authorities().into_iter().collect::<BTreeSet<AccountId32>>(),
+						genesis_nodes.into_iter().collect::<BTreeSet<AccountId32>>(),
 						"the new winners should be those genesis authorities and the backup nodes that have keys set"
 					);
 
