@@ -115,10 +115,13 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
     }),
   );
 
-  // Deriving the nonceAccounts with index seeds to find all deployed nonce accounts
-  for (let i = 0; i < 7; i++) {
+  // Set nonce authority to the new AggKey
+  const numberOfNonceAccounts = 7;
+  for (let i = 0; i < numberOfNonceAccounts; i++) {
     // Using the index stringified as the seed ('0', '1', '2' ...)
     const seed = i.toString();
+
+    // Deriving the nonceAccounts with index seeds to find the nonce accounts
     const nonceAccountPubKey = await PublicKey.createWithSeed(
       whaleKeypair.publicKey,
       seed,
