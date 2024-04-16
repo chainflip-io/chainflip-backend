@@ -43,7 +43,7 @@ async function redeemAndObserve(
 export async function testFundRedeem(providedSeed?: string) {
   console.log('=== Starting Fund/Redeem test ===');
 
-  const chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipApi();
   const redemptionTax = await chainflip.query.funding.redemptionTax();
   const redemptionTaxAmount = parseInt(
     fineAmountToAmount(redemptionTax.toString(), assetDecimals('Flip')),
