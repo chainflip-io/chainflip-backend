@@ -1,18 +1,12 @@
 import Web3 from 'web3';
 import {
   Connection,
-  NonceAccount,
   PublicKey,
   SystemProgram,
   Transaction,
   TransactionInstruction,
 } from '@solana/web3.js';
-import {
-  getContractAddress,
-  getSolWhaleKeyPair,
-  encodeSolAddress,
-  getSolConnection,
-} from '../shared/utils';
+import { getContractAddress, getSolWhaleKeyPair, encodeSolAddress } from '../shared/utils';
 import { signAndSendTxSol } from '../shared/send_sol';
 import { getSolanaVaultIdl, getKeyManagerAbi } from '../shared/contract_interfaces';
 import { signAndSendTxEvm } from '../shared/send_evm';
@@ -122,7 +116,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
   );
 
   // Deriving the nonceAccounts with index seeds to find all deployed nonce accounts
-  for (let i = 0; ; i++) {
+  for (let i = 0; i < 7; i++) {
     // Using the index stringified as the seed ('0', '1', '2' ...)
     const seed = i.toString();
     const nonceAccountPubKey = await PublicKey.createWithSeed(
@@ -131,25 +125,14 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
       SystemProgram.programId,
     );
 
-    const accountInfo = await getSolConnection().getAccountInfo(nonceAccountPubKey);
-
-    // If accountInfo or accountInfo.data is not present, or nonceAccount is null, break the loop
-    if (
-      accountInfo &&
-      accountInfo.data &&
-      NonceAccount.fromAccountData(accountInfo.data) !== null
-    ) {
-      // Set nonce authority to the new AggKey
-      tx.add(
-        SystemProgram.nonceAuthorize({
-          noncePubkey: new PublicKey(nonceAccountPubKey),
-          authorizedPubkey: whaleKeypair.publicKey,
-          newAuthorizedPubkey: newAggKey,
-        }),
-      );
-    } else {
-      break;
-    }
+    // Set nonce authority to the new AggKey
+    tx.add(
+      SystemProgram.nonceAuthorize({
+        noncePubkey: new PublicKey(nonceAccountPubKey),
+        authorizedPubkey: whaleKeypair.publicKey,
+        newAuthorizedPubkey: newAggKey,
+      }),
+    );
   }
   // Set Vault's upgrade authority to Upgrade manager's PDA
   tx.add(
