@@ -138,6 +138,14 @@ async fn run_cli() -> Result<()> {
 					ValidatorSubcommands::DeregisterAccount => {
 						api.validator_api().deregister_account().await?;
 					},
+					ValidatorSubcommands::StopBidding {} => {
+						let tx_hash = api.validator_api().stop_bidding().await?;
+						println!("Account stopped bidding, in tx {tx_hash:#x}.");
+					},
+					ValidatorSubcommands::StartBidding {} => {
+						let tx_hash = api.validator_api().start_bidding().await?;
+						println!("Account started bidding at tx {tx_hash:#x}.");
+					},
 				},
 				Redeem { amount, eth_address, executor_address } => {
 					request_redemption(api, amount, eth_address, executor_address).await?;
@@ -167,10 +175,12 @@ async fn run_cli() -> Result<()> {
 					println!("Session key rotated at tx {tx_hash:#x}.");
 				},
 				StopBidding {} => {
-					api.operator_api().stop_bidding().await?;
+					let tx_hash = api.validator_api().stop_bidding().await?;
+					println!("Account stopped bidding, in tx {tx_hash:#x}.");
 				},
 				StartBidding {} => {
-					api.operator_api().start_bidding().await?;
+					let tx_hash = api.validator_api().start_bidding().await?;
+					println!("Account started bidding at tx {tx_hash:#x}.");
 				},
 				VanityName { name } => {
 					api.operator_api().set_vanity_name(name).await?;

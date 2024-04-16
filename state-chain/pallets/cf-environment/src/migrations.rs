@@ -37,7 +37,7 @@ pub type PalletMigration<T> = PlaceholderMigration<Pallet<T>, 9>;
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::SemVer;
+	use crate::{CurrentReleaseVersion, SemVer};
 
 	use crate::mock::{new_test_ext, Test};
 

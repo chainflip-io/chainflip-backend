@@ -13,7 +13,7 @@ If you haven't yet installed the [Github Cli](https://cli.github.com/) you will 
 
 If you have already installed and configured the Github Cli, then the script will list the available tags.
 
-Choose the tag you want to download, for example `my-tag`. This will download the interface definitons to the appropriate directory.
+Choose the tag you want to download, for example `my-tag`. This will download the interface definitions to the appropriate directory.
 
 In order to ensure that binaries and unit tests compile against a specific ABI tag, update the tag environment variables in `.cargo/config.toml`:
 

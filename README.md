@@ -133,15 +133,17 @@ After set up completion, you will see the following:
 3) destroy
 4) logs
 5) yeet
+6) bouncer
 ```
 
-> **Note:** All chaindata and signing DBs will be under`/tmp/chainflip`
+> **Note:** All chain data and signing DBs will be under`/tmp/chainflip`
 
 - **build** - Create a new testnet using a path to the binaries you provide.
 - **recreate** - This will simply run destroy, followed by build. You have the option to change the path to the binaries.
-- **destroy** - Destroy your current Localnet and deletes chaindata.
+- **destroy** - Destroy your current Localnet and deletes chain data.
 - **logs** - Tail the logs for your current Localnet.
 - **yeet** - Destroy your current Localnet, and remove all data including docker images. You should use this if you are getting some weird caching issues.
+- **bouncer** - Run the bouncer e2e test suite against the localnet. This test is run in our CI.
 
 ### Log Filtering in the Chainflip Engine
 

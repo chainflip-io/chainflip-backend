@@ -19,11 +19,11 @@ use state_chain_runtime::{
 // Helper function that creates a network, funds backup nodes, and have them join the auction.
 pub fn fund_authorities_and_join_auction(
 	num_backups: AuthorityCount,
-) -> (network::Network, BTreeSet<NodeId>, BTreeSet<NodeId>) {
+) -> (network::Network, Vec<NodeId>, Vec<NodeId>) {
 	// Create MAX_AUTHORITIES backup nodes and fund them above our genesis
 	// authorities The result will be our newly created nodes will be authorities
 	// and the genesis authorities will become backup nodes
-	let genesis_authorities: BTreeSet<AccountId32> = Validator::current_authorities();
+	let genesis_authorities: Vec<AccountId32> = Validator::current_authorities();
 	let (mut testnet, init_backup_nodes) =
 		network::Network::create(num_backups as u8, &genesis_authorities);
 
@@ -217,7 +217,8 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 			let current_authorities = Validator::current_authorities();
 
 			assert_eq!(
-				init_backup_nodes, current_authorities,
+				init_backup_nodes.into_iter().collect::<BTreeSet<AccountId32>>(),
+				current_authorities.clone().into_iter().collect::<BTreeSet<AccountId32>>(),
 				"our new initial backup nodes should be the new authorities"
 			);
 
@@ -234,7 +235,8 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 				Validator::highest_funded_qualified_backup_nodes_lookup();
 
 			assert_eq!(
-				genesis_authorities, highest_funded_backup_nodes,
+				genesis_authorities.into_iter().collect::<BTreeSet<AccountId32>>(),
+				highest_funded_backup_nodes,
 				"the genesis authorities should now be the backup nodes"
 			);
 

@@ -19,11 +19,7 @@ env:
 
 jobs:
   build-deb:
-    runs-on: ubuntu-${{ matrix.ubuntu_version }}
-    strategy:
-      fail-fast: false
-      matrix:
-        ubuntu_version: [20.04, 22.04]
+    runs-on: ubuntu-22.04
     permissions:
       id-token: write
       contents: read
@@ -34,7 +30,7 @@ jobs:
       - name: Download packages 📥
         uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
         with:
-          name: chainflip-backend-packages-ubuntu-${{ matrix.ubuntu_version }}
+          name: chainflip-backend-packages
           path: packages
 
       - name: Get commit SHA, distribution codename ⌨️

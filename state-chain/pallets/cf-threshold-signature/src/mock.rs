@@ -282,7 +282,7 @@ impl TestHelper for TestRunner<()> {
 
 	fn with_authorities(self, validators: impl IntoIterator<Item = u64>) -> Self {
 		self.execute_with(|| {
-			let validators = BTreeSet::from_iter(validators);
+			let validators = Vec::from_iter(validators);
 			for id in &validators {
 				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id)
 					.unwrap();
@@ -382,7 +382,7 @@ cf_test_utilities::impl_test_helpers! {
 			_instance: PhantomData,
 	} },
 	|| {
-		let authorities = BTreeSet::from([ALICE, BOB, CHARLIE]);
+		let authorities = Vec::from([ALICE, BOB, CHARLIE]);
 		for id in &authorities {
 			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id)
 				.unwrap();

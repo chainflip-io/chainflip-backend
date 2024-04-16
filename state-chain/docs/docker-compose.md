@@ -22,7 +22,7 @@ cf-substrate-node-alice_1    | Jan 15 14:34:29.715INFO 🏷  Local node identity
 
 Note which of the named nodes this ID corresponds to (*Alice*, in this case) - we will make this our bootstrap node.
 
-Now, open the `docker-compose` config generated above and for each of the *other* nodes in the config, add `--bootnodes /ip4/${bootnode-ip-address}/tcp/30333/p2p/${bootnode-peer-id}` to the end of the command, replacing `${boootnode-ip-address}` and `${bootnode-peer-id}` with the bootstrap node's ip and the id from the log. It should look like this:
+Now, open the `docker-compose` config generated above and for each of the *other* nodes in the config, add `--bootnodes /ip4/${bootnode-ip-address}/tcp/30333/p2p/${bootnode-peer-id}` to the end of the command, replacing `${bootnode-ip-address}` and `${bootnode-peer-id}` with the bootstrap node's ip and the id from the log. It should look like this:
 
 ```yaml
   command: ./target/release/chainflip-node --dev --ws-external --eve --bootnodes /ip4/172.28.0.2/tcp/30333/p2p/12D3KooWJo19xzLH4QFxCo8YE6ZHbA9L8SH6MZbLGaWRC4UZLQj5

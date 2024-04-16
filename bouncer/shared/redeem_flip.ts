@@ -4,12 +4,12 @@ import { HexString } from '@polkadot/util/types';
 import { Wallet, ethers } from 'ethers';
 import Keyring from '@polkadot/keyring';
 import { getNextEvmNonce } from './send_evm';
-import { getGatewayAbi } from './eth_abis';
+import { getGatewayAbi } from './contract_interfaces';
 import {
   sleep,
   observeEvent,
   handleSubstrateError,
-  getEvmContractAddress,
+  getContractAddress,
   getChainflipApi,
   amountToFineAmount,
   observeEVMEvent,
@@ -47,8 +47,8 @@ export async function redeemFlip(
   const networkOptions = {
     signer: ethWallet,
     network: 'localnet',
-    stateChainGatewayContractAddress: getEvmContractAddress('Ethereum', 'GATEWAY'),
-    flipContractAddress: getEvmContractAddress('Ethereum', 'Flip'),
+    stateChainGatewayContractAddress: getContractAddress('Ethereum', 'GATEWAY'),
+    flipContractAddress: getContractAddress('Ethereum', 'Flip'),
   } as const;
 
   const pendingRedemption = await chainflip.query.flip.pendingRedemptionsReserve(
@@ -79,7 +79,7 @@ export async function redeemFlip(
   await observeEVMEvent(
     chainFromAsset(Assets.Flip),
     gatewayAbi,
-    getEvmContractAddress('Ethereum', 'GATEWAY'),
+    getContractAddress('Ethereum', 'GATEWAY'),
     'RedemptionRegistered',
     [accountIdHex, observeEventAmount, ethAddress, '*', '*', '*'],
   );

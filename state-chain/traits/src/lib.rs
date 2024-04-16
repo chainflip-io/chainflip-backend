@@ -82,7 +82,8 @@ pub trait Chainflip: frame_system::Config {
 	/// For registering and checking account roles.
 	type AccountRoleRegistry: AccountRoleRegistry<Self>;
 	/// For checking nodes' current balances.
-	type FundingInfo: FundingInfo<AccountId = Self::AccountId, Balance = Self::Amount>;
+	type FundingInfo: FundingInfo<AccountId = Self::AccountId, Balance = Self::Amount>
+		+ AccountInfo<AccountId = Self::AccountId, Amount = Self::Amount>;
 }
 
 pub trait EpochInfo {
@@ -95,10 +96,10 @@ pub trait EpochInfo {
 	fn last_expired_epoch() -> EpochIndex;
 
 	/// The current authority set's validator ids
-	fn current_authorities() -> BTreeSet<Self::ValidatorId>;
+	fn current_authorities() -> Vec<Self::ValidatorId>;
 
 	/// The authority set for a given epoch
-	fn authorities_at_epoch(epoch: EpochIndex) -> BTreeSet<Self::ValidatorId>;
+	fn authorities_at_epoch(epoch: EpochIndex) -> Vec<Self::ValidatorId>;
 
 	/// Get the current number of authorities
 	fn current_authority_count() -> AuthorityCount;
@@ -119,17 +120,14 @@ pub trait EpochInfo {
 	/// The current epoch we are in
 	fn epoch_index() -> EpochIndex;
 
-	/// Are we in the auction phase of the epoch?
-	fn is_auction_phase() -> bool;
-
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_authority_info_for_epoch(
 		epoch_index: EpochIndex,
-		new_authorities: BTreeSet<Self::ValidatorId>,
+		new_authorities: Vec<Self::ValidatorId>,
 	);
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_authorities(authorities: BTreeSet<Self::ValidatorId>);
+	fn set_authorities(authorities: Vec<Self::ValidatorId>);
 }
 
 pub struct CurrentEpochIndex<T>(PhantomData<T>);
@@ -233,24 +231,9 @@ pub trait ReputationResetter {
 	fn reset_reputation(validator: &Self::ValidatorId);
 }
 
-/// Providing bidders for an auction
-pub trait BidderProvider {
-	type ValidatorId: Ord;
-	type Amount;
-	/// Provide a list of validators whose accounts are in the `bidding` state.
-	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
-	fn get_qualified_bidders<Q: QualifyNode<Self::ValidatorId>>(
-	) -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
-		Self::get_bidders()
-			.into_iter()
-			.filter(|Bid { ref bidder_id, .. }| Q::is_qualified(bidder_id))
-			.collect()
-	}
-	fn is_bidder(validator_id: &Self::ValidatorId) -> bool {
-		Self::get_bidders()
-			.iter()
-			.any(|Bid { ref bidder_id, .. }| bidder_id == validator_id)
-	}
+pub trait RedemptionCheck {
+	type ValidatorId;
+	fn ensure_can_redeem(validator_id: &Self::ValidatorId) -> DispatchResult;
 }
 
 pub trait OnAccountFunded {
@@ -291,15 +274,17 @@ pub trait Funding {
 	fn revert_redemption(account_id: &Self::AccountId) -> Result<(), DispatchError>;
 }
 
-pub trait AccountInfo<T: Chainflip> {
+pub trait AccountInfo {
+	type AccountId;
+	type Amount;
 	/// Returns the account's total Flip balance.
-	fn balance(account_id: &T::AccountId) -> T::Amount;
+	fn balance(account_id: &Self::AccountId) -> Self::Amount;
 
 	/// Returns the bond on the account.
-	fn bond(account_id: &T::AccountId) -> T::Amount;
+	fn bond(account_id: &Self::AccountId) -> Self::Amount;
 
 	/// Returns the account's liquid funds, net of the bond.
-	fn liquid_funds(account_id: &T::AccountId) -> T::Amount;
+	fn liquid_funds(account_id: &Self::AccountId) -> Self::Amount;
 }
 
 /// Trait for managing token issuance.
@@ -638,7 +623,7 @@ pub trait HistoricalEpoch {
 	type EpochIndex;
 	type Amount;
 	/// All validators which were in an epoch's authority set.
-	fn epoch_authorities(epoch: Self::EpochIndex) -> BTreeSet<Self::ValidatorId>;
+	fn epoch_authorities(epoch: Self::EpochIndex) -> Vec<Self::ValidatorId>;
 	/// The bond for an epoch
 	fn epoch_bond(epoch: Self::EpochIndex) -> Self::Amount;
 	/// The unexpired epochs for which a node was in the authority set.

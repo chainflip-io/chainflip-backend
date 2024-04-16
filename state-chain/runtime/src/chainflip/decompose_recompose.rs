@@ -135,7 +135,7 @@ mod tests {
 	use frame_support::{assert_ok, traits::Get, Hashable};
 	use pallet_cf_chain_tracking::CurrentChainState;
 	use pallet_cf_witnesser::CallHash;
-	use sp_std::{collections::btree_set::BTreeSet, iter};
+	use sp_std::iter;
 
 	const BLOCK_HEIGHT: u64 = 1_000;
 	const BASE_FEE: u128 = 40;
@@ -241,8 +241,7 @@ mod tests {
 
 			let calls = [1u32, 100, 12, 10, 9, 11].map(chain_tracking_call_with_fee::<Ethereum>);
 
-			let authorities =
-				(0..calls.len()).map(|i| [i as u8; 32].into()).collect::<BTreeSet<_>>();
+			let authorities = (0..calls.len()).map(|i| [i as u8; 32].into()).collect::<Vec<_>>();
 			let current_epoch = 1;
 			pallet_cf_validator::CurrentEpoch::<Runtime>::put(current_epoch);
 			pallet_cf_validator::HistoricalAuthorities::<Runtime>::insert(

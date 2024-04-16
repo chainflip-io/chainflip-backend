@@ -141,7 +141,11 @@ impl ExtBuilder {
 				daily_slashing_rate: Permill::from_perthousand(1),
 			},
 			funding: FundingConfig {
-				genesis_accounts: self.genesis_accounts.clone(),
+				genesis_accounts: self
+					.genesis_accounts
+					.iter()
+					.map(|(id, _role, amount)| (id.clone(), *amount))
+					.collect::<Vec<_>>(),
 				redemption_tax: MIN_FUNDING / 2,
 				minimum_funding: MIN_FUNDING,
 				redemption_ttl: core::time::Duration::from_secs(REDEMPTION_TTL_SECS),

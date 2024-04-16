@@ -607,7 +607,10 @@ fn testnet_genesis(
 		},
 		flip: state_chain_runtime::FlipConfig { total_issuance, daily_slashing_rate },
 		funding: state_chain_runtime::FundingConfig {
-			genesis_accounts: Vec::from_iter(all_accounts.clone()),
+			genesis_accounts: Vec::from_iter(all_accounts.clone())
+				.into_iter()
+				.map(|(id, _role, amount)| (id, amount))
+				.collect::<Vec<_>>(),
 			minimum_funding,
 			redemption_tax,
 			redemption_ttl: core::time::Duration::from_secs(redemption_ttl_secs),

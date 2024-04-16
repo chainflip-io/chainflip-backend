@@ -11,7 +11,7 @@ import {
   getChainflipApi,
   observeBalanceIncrease,
   observeEvent,
-  getEvmContractAddress,
+  getContractAddress,
   observeCcmReceived,
   amountToFineAmount,
   defaultAssetAmounts,
@@ -40,8 +40,8 @@ export async function executeContractSwap(
   const networkOptions = {
     signer: wallet,
     network: 'localnet',
-    vaultContractAddress: getEvmContractAddress(srcChain, 'VAULT'),
-    srcTokenContractAddress: getEvmContractAddress(srcChain, srcAsset),
+    vaultContractAddress: getContractAddress(srcChain, 'VAULT'),
+    srcTokenContractAddress: getContractAddress(srcChain, srcAsset),
   } as const;
   const txOptions = {
     // This is run with fresh addresses to prevent nonce issues. Will be 1 for ERC20s.
@@ -188,8 +188,8 @@ export async function approveTokenVault(srcAsset: Asset, amount: string, wallet:
     {
       signer: wallet,
       network: 'localnet',
-      vaultContractAddress: getEvmContractAddress(chain, 'VAULT'),
-      srcTokenContractAddress: getEvmContractAddress(chain, srcAsset),
+      vaultContractAddress: getContractAddress(chain, 'VAULT'),
+      srcTokenContractAddress: getContractAddress(chain, srcAsset),
     },
     // This is run with fresh addresses to prevent nonce issues
     {

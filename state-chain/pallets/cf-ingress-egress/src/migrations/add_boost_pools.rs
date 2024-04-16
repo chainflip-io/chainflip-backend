@@ -59,6 +59,9 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 					pool_tier,
 					Some(BoostPool::new(pool_tier as BasisPoints)),
 				);
+				Pallet::<T, I>::deposit_event(Event::BoostPoolCreated {
+					boost_pool: BoostPoolId { asset, tier: pool_tier },
+				});
 			}
 		}
 

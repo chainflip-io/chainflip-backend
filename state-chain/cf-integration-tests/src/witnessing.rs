@@ -71,12 +71,12 @@ fn can_punish_failed_witnesser() {
 			for node in &new_authorities {
 				network::new_account(node, AccountRole::Validator);
 				network::setup_account_and_peer_mapping(node);
-				let _ = Funding::start_bidding(RuntimeOrigin::signed(node.clone()));
+				assert_ok!(Validator::start_bidding(RuntimeOrigin::signed(node.clone())));
 			}
 			// Have current authorities stop bidding, so the next epoch will use the new set of
 			// Authorities.
 			Validator::current_authorities().into_iter().for_each(|v| {
-				assert_ok!(Funding::stop_bidding(RuntimeOrigin::signed(v.clone())));
+				assert_ok!(Validator::stop_bidding(RuntimeOrigin::signed(v.clone())));
 			});
 
 			// Witness at the end of epoch, so the grace period ends in the next epoch
@@ -96,7 +96,10 @@ fn can_punish_failed_witnesser() {
 			// New epoch uses the new authorities.
 			testnet.move_to_the_next_epoch();
 			assert_eq!(Validator::current_epoch(), epoch + 1);
-			assert_eq!(Validator::current_authorities(), new_authorities);
+			assert_eq!(
+				Validator::current_authorities().into_iter().collect::<BTreeSet<AccountId32>>(),
+				new_authorities
+			);
 
 			// After deadline has passed, the correct set of authority nodes are reported.
 			assert_eq!(
