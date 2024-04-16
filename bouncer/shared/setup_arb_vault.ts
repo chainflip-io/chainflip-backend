@@ -38,5 +38,4 @@ export async function setupArbVault(): Promise<void> {
 
   console.log('=== New Epoch ===');
   console.log('=== Vault Setup completed ===');
-  chainflip.disconnect();
 }
