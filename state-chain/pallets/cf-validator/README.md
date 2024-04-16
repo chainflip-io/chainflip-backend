@@ -7,7 +7,7 @@ Validator nodes fall into different categories:
 - **Authority** Nodes are responsible for block authorship, signing ceremonies and witnessing. A portion of their funds
   are bonded and may be slashed according to the reputation system. Authorities earn Flip rewards at a rate that is
   fixed for the duration of the epoch.
-- **Backup** Nodes are incentivised to remain available to participate in the next keygen ceremony. Note, only the highest funded Backup nodes receive rewards, accoding to a ratio against the number of authorities, set in the runtime.
+- **Backup** Nodes are incentivised to remain available to participate in the next keygen ceremony. Note, only the highest funded Backup nodes receive rewards, according to a ratio against the number of authorities, set in the runtime.
 
 To qualify as a Validator Node, the following conditions must be met:
 
@@ -25,7 +25,7 @@ bonded and may be required to participate in signing ceremonies using expiring k
 rewards, unless they happen to be among the highest funded backup nodes. However note that being a historical authority is not a prerequisite for
 becoming a backup node.
 
-Any node that fulfils the qualificaton conditions will be considered for inclusion in the set of backup nodes. The size
+Any node that fulfils the qualification conditions will be considered for inclusion in the set of backup nodes. The size
 of this set is limited (as of writing, the limit is 33% of the authority set size), and prioritised according to highest
 balance. Backup nodes earn rewards proportionally to their funds, at a rate that increases quadratically as their balance
 approaches the current epoch's bond.

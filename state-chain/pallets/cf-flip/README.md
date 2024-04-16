@@ -20,7 +20,7 @@ off-chain or in on-chain reserves.
 - Mint: The act of creating new funds out of thin air.
 - Burn: The act of destroying funds.
 - Account: On-chain funds that belong to some externally-owned account, identified by an `AccountId`.
-- Reserve: On-chain funds assigned to some internall-owned reserve, identified by a `ReserveId`. Reserves can be thought
+- Reserve: On-chain funds assigned to some internal-owned reserve, identified by a `ReserveId`. Reserves can be thought
   of as on-chain accounts, however unlike accounts they have no public key associated. Reserves can be used to allocate
   funds internally, for example to set aside funds to be distributed as rewards, or for use as a treasury.
 - On-Chain Funds: Funds that are known to be in on-chain accounts or reserves.
