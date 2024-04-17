@@ -149,7 +149,6 @@ async function incompatibleUpgradeNoBuild(
 
   if (newVersion.includes('1.4')) {
     await setupArbVault();
-    await setupSwaps();
   }
 
   console.log('Starting new broker and lp-api.');
@@ -162,7 +161,7 @@ async function incompatibleUpgradeNoBuild(
     KEYS_DIR,
   });
 
-  await sleep(20000);
+  await sleep(10000);
 
   for (const [process, port] of [
     ['broker-api', 10997],
@@ -175,6 +174,10 @@ async function incompatibleUpgradeNoBuild(
       console.error(`Error starting ${process}: ${e}`);
       throw e;
     }
+  }
+
+  if (newVersion.includes('1.4')) {
+    await setupSwaps();
   }
 
   console.log('Started new broker and lp-api.');
