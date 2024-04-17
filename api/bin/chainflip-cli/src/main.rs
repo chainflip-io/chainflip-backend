@@ -6,7 +6,7 @@ use crate::settings::{
 use anyhow::{Context, Result};
 use api::{
 	lp::LpApi,
-	primitives::{RedemptionAmount, FLIP_DECIMALS},
+	primitives::{Beneficiary, RedemptionAmount, FLIP_DECIMALS},
 	queries::QueryApi,
 	AccountId32, BrokerApi, GovernanceApi, KeyPair, OperatorApi, StateChainApi, SwapDepositAddress,
 	ValidatorApi,
@@ -17,7 +17,7 @@ use chainflip_api::primitives::state_chain_runtime;
 use clap::Parser;
 use futures::FutureExt;
 use serde::Serialize;
-use std::{io::Write, path::PathBuf, sync::Arc};
+use std::{io::Write, path::PathBuf, str::FromStr, sync::Arc};
 use utilities::{clean_hex_address, round_f64, task_scope::task_scope};
 mod settings;
 
@@ -69,7 +69,22 @@ async fn run_cli() -> Result<()> {
 									params.destination_asset.into(),
 									&params.destination_address,
 								)?,
-								api::BrokerFeeBps::Single(params.broker_commission),
+								api::BrokerFees::Multiple(vec![
+									Beneficiary {
+										account: AccountId32::from_str(
+											"cFJWxzSP35vz6EnsWfp6tejZfnpeQ1ra3NHXXbrxSEn4GvsJ3",
+										)
+										.unwrap(),
+										bps: params.broker_commission,
+									},
+									Beneficiary {
+										account: AccountId32::from_str(
+											"cFM8kRvLBXagj6ZXvrt7wCM4jGmHvb5842jTtXXg3mRHjrvKy",
+										)
+										.unwrap(),
+										bps: params.broker_commission,
+									},
+								]),
 								None,
 								params.boost_fee,
 							)

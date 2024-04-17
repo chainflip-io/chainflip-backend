@@ -6,8 +6,8 @@ use cf_chains::{
 	CcmChannelMetadata, CcmDepositMetadata, SwapOrigin,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, BrokerFeeBps, ChannelId, ForeignChain, SwapId, SwapLeg,
-	TransactionHash, STABLE_ASSET,
+	AccountRole, Asset, AssetAmount, Beneficiary, BrokerFees, ChannelId, ForeignChain, SwapId,
+	SwapLeg, TransactionHash, STABLE_ASSET,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -309,11 +309,12 @@ pub mod pallet {
 			source_asset: Asset,
 			destination_asset: Asset,
 			channel_id: ChannelId,
-			broker_commission_rate: BrokerFeeBps<T::AccountId>,
+			broker_commission_rate: BasisPoints,
 			channel_metadata: Option<CcmChannelMetadata>,
 			source_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 			boost_fee: BasisPoints,
 			channel_opening_fee: T::Amount,
+			beneficiaries: Vec<Beneficiary<T::AccountId>>,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
@@ -482,29 +483,40 @@ pub mod pallet {
 			source_asset: Asset,
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
-			broker_commission_bps: BrokerFeeBps<T::AccountId>,
+			broker_commission_bps: BrokerFees<T::AccountId>,
 			channel_metadata: Option<CcmChannelMetadata>,
 			boost_fee: BasisPoints,
 		) -> DispatchResult {
 			ensure!(T::SafeMode::get().deposits_enabled, Error::<T>::DepositsDisabled);
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
+			let mut broker_fees: Vec<Beneficiary<T::AccountId>> = vec![];
+			let total_bps: BasisPoints;
 			match broker_commission_bps {
-				BrokerFeeBps::Single(broker_bps) => {
+				BrokerFees::Single(broker_bps) => {
 					ensure!(broker_bps <= 1000, Error::<T>::BrokerCommissionBpsTooHigh);
+					total_bps = broker_bps;
+					if broker_bps > 0 {
+						broker_fees.push(Beneficiary { account: broker.clone(), bps: broker_bps });
+					}
 				},
-				BrokerFeeBps::Multiple(ref fees_bps) => {
+				BrokerFees::Multiple(ref fees_bps) => {
 					for element in fees_bps.clone() {
 						// we need to check that all provided Account are registered as broker
 						ensure!(
 							T::AccountRoleRegistry::has_account_role(
-								&element.0,
+								&element.account,
 								AccountRole::Broker
 							),
 							Error::<T>::SubBrokerAccountIsNotABroker
 						);
 					}
-					let total_bps = fees_bps.iter().fold(0, |acc, element| acc + element.1);
+					total_bps = fees_bps.iter().fold(0, |acc, element| acc + element.bps);
 					ensure!(total_bps <= 1000, Error::<T>::BrokerCommissionBpsTooHigh);
+					broker_fees = (*fees_bps)
+						.clone()
+						.into_iter()
+						.filter(|elem| elem.bps > 0)
+						.collect::<Vec<_>>();
 				},
 			}
 
@@ -521,7 +533,7 @@ pub mod pallet {
 					source_asset,
 					destination_asset,
 					destination_address_internal,
-					broker_commission_bps.clone(),
+					broker_fees.clone(),
 					broker,
 					channel_metadata.clone(),
 					boost_fee,
@@ -533,11 +545,12 @@ pub mod pallet {
 				source_asset,
 				destination_asset,
 				channel_id,
-				broker_commission_rate: broker_commission_bps,
+				broker_commission_rate: total_bps,
 				channel_metadata,
 				source_chain_expiry_block: expiry_height,
 				boost_fee,
 				channel_opening_fee,
+				beneficiaries: broker_fees,
 			});
 
 			Ok(())
@@ -1096,20 +1109,15 @@ pub mod pallet {
 			to: Asset,
 			amount: AssetAmount,
 			destination_address: ForeignChainAddress,
-			broker_id: Self::AccountId,
-			broker_commission_bps: BrokerFeeBps<Self::AccountId>,
+			broker_commission_bps: Vec<Beneficiary<Self::AccountId>>,
 			channel_id: ChannelId,
 		) -> SwapId {
 			// Permill maxes out at 100% so this is safe.
-			let fee = match broker_commission_bps {
-				BrokerFeeBps::Single(bps) =>
-					Permill::from_parts(bps as u32 * BASIS_POINTS_PER_MILLION) * amount,
-				BrokerFeeBps::Multiple(ref vec_broker) =>
-					Permill::from_parts(
-						vec_broker.iter().fold(0, |acc, bps| acc + bps.1) as u32 *
-							BASIS_POINTS_PER_MILLION,
-					) * amount,
-			};
+			let fee: u128 = Permill::from_parts(
+				broker_commission_bps.iter().fold(0, |acc, entry| acc + entry.bps) as u32 *
+					BASIS_POINTS_PER_MILLION,
+			) * amount;
+
 			assert!(fee <= amount, "Broker fee cannot be more than the amount");
 
 			let net_amount = amount.saturating_sub(fee);
@@ -1129,21 +1137,12 @@ pub mod pallet {
 				SwapType::Swap(destination_address.clone()),
 			);
 
-			match broker_commission_bps {
-				BrokerFeeBps::Single(_) => {
-					EarnedBrokerFees::<T>::mutate(&broker_id, from, |earned_fees| {
-						earned_fees.saturating_accrue(fee)
-					});
-				},
-				BrokerFeeBps::Multiple(ref vec_broker) =>
-					for elem in vec_broker {
-						EarnedBrokerFees::<T>::mutate(&elem.0, from, |earned_fees| {
-							earned_fees.saturating_accrue(
-								Permill::from_parts(elem.1 as u32 * BASIS_POINTS_PER_MILLION) *
-									amount,
-							)
-						});
-					},
+			for elem in broker_commission_bps {
+				EarnedBrokerFees::<T>::mutate(&elem.account, from, |earned_fees| {
+					earned_fees.saturating_accrue(
+						Permill::from_parts(elem.bps as u32 * BASIS_POINTS_PER_MILLION) * amount,
+					)
+				});
 			}
 
 			Self::deposit_event(Event::<T>::SwapScheduled {

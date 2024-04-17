@@ -323,27 +323,13 @@ fn is_more_recent_semver() {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
-pub enum BrokerFeeBps<T> {
+#[serde(untagged)]
+pub enum BrokerFees<Id> {
 	Single(BasisPoints),
-	Multiple(Vec<(T, BasisPoints)>),
+	Multiple(Vec<Beneficiary<Id>>),
 }
-
-// #[derive(Debug, PartialEq, Eq)]
-// struct ParseBrokerFeeError;
-
-// impl FromStr for BrokerFeeBps<> {
-// 	type Err = ParseBrokerFeeError;
-// 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-// 		match s.chars().next().unwrap() {
-// 			//multiple brokers/subbrokers
-// 			"[" => {
-
-// 			},
-// 			//single broker
-// 			_ => {
-// 				let bps = s.parse::<u16>().map_err(|_| ParseBrokerFeeError)?;
-// 				Ok(BrokerFeeBps::Single(bps))
-// 			}
-// 		}
-// 	}
-// }
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+pub struct Beneficiary<Id> {
+	pub account: Id,
+	pub bps: BasisPoints,
+}

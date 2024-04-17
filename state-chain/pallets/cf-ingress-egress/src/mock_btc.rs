@@ -9,7 +9,7 @@ pub use cf_primitives::{
 	chains::{assets, Bitcoin},
 	Asset, AssetAmount,
 };
-use cf_primitives::{ChannelId, SwapId};
+use cf_primitives::{Beneficiary, ChannelId, SwapId};
 use cf_test_utilities::impl_test_helpers;
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip,
@@ -84,8 +84,7 @@ impl SwapDepositHandler for MockSwapDepositHandlerBtc {
 		_to: Asset,
 		_amount: AssetAmount,
 		_destination_address: ForeignChainAddress,
-		_broker_id: Self::AccountId,
-		_broker_commission_bps: cf_primitives::BrokerFeeBps<Self::AccountId>,
+		_broker_commission_bps: Vec<Beneficiary<Self::AccountId>>,
 		_channel_id: ChannelId,
 	) -> SwapId {
 		unimplemented!()

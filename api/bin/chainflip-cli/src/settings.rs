@@ -1,6 +1,6 @@
 use chainflip_api::{
 	primitives::{state_chain_runtime, AccountRole, Asset, ForeignChain},
-	BasisPoints, //BrokerFeeBps,
+	BasisPoints,
 };
 pub use chainflip_engine::settings::StateChain;
 use chainflip_engine::{
@@ -69,8 +69,7 @@ pub struct SwapRequestParams {
 	/// Egress asset address to receive funds after the swap
 	pub destination_address: String,
 	/// Commission to the broker in basis points
-	pub broker_commission: BasisPoints, /* BrokerFeeBps<<state_chain_runtime::Runtime as
-	                                     * frame_system::Config>::AccountId>, */
+	pub broker_commission: BasisPoints,
 	/// Commission to the booster in basis points
 	pub boost_fee: Option<u16>,
 }

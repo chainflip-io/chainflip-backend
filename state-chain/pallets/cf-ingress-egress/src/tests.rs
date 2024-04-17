@@ -486,7 +486,7 @@ fn can_process_ccm_deposit() {
 			from_asset,
 			to_asset,
 			destination_address.clone(),
-			cf_primitives::BrokerFeeBps::Single(0),
+			vec![],
 			1,
 			Some(channel_metadata),
 			0,

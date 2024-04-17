@@ -225,7 +225,7 @@ fn basic_pool_setup_provision_and_swap() {
 			Asset::Eth,
 			Asset::Flip,
 			EncodedAddress::Eth([1u8; 20]),
-			cf_primitives::BrokerFeeBps::Single(0),
+			cf_primitives::BrokerFees::Single(0),
 			None,
 			0u16,
 		));
@@ -329,7 +329,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 			Asset::Flip,
 			Asset::Usdc,
 			EncodedAddress::Eth([0x02; 20]),
-			cf_primitives::BrokerFeeBps::Single(0),
+			cf_primitives::BrokerFees::Single(0),
 			Some(message),
 			0u16
 		));

@@ -9,7 +9,7 @@ use chainflip_api::{
 		ChannelId,
 	},
 	settings::StateChain,
-	BrokerApi, BrokerFeeBps, OperatorApi, StateChainApi, WithdrawFeesDetail,
+	BrokerApi, BrokerFees, OperatorApi, StateChainApi, WithdrawFeesDetail,
 };
 use clap::Parser;
 use futures::FutureExt;
@@ -58,7 +58,7 @@ pub trait Rpc {
 		source_asset: Asset,
 		destination_asset: Asset,
 		destination_address: String,
-		broker_commission_bps: BrokerFeeBps<
+		broker_commission_bps: BrokerFees<
 			<state_chain_runtime::Runtime as frame_system::Config>::AccountId,
 		>,
 		channel_metadata: Option<CcmChannelMetadata>,
@@ -105,7 +105,7 @@ impl RpcServer for RpcServerImpl {
 		source_asset: Asset,
 		destination_asset: Asset,
 		destination_address: String,
-		broker_commission_bps: BrokerFeeBps<
+		broker_commission_bps: BrokerFees<
 			<state_chain_runtime::Runtime as frame_system::Config>::AccountId,
 		>,
 		channel_metadata: Option<CcmChannelMetadata>,
