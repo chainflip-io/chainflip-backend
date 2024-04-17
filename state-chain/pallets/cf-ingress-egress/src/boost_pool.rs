@@ -135,7 +135,7 @@ where
 		self.add_funds_inner(booster_id, ScaledAmount::from_chain_amount(added_amount));
 	}
 
-	pub(crate) fn get_available_amount(&self) -> C::ChainAmount {
+	pub fn get_available_amount(&self) -> C::ChainAmount {
 		self.available_amount.into_chain_amount()
 	}
 
