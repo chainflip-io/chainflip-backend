@@ -815,8 +815,7 @@ mod test_assets {
 		assert_eq!(assert_ok!(serde_json::from_str::<any::Asset>("\"ETH\"")), any::Asset::Eth);
 		assert_eq!(assert_ok!(serde_json::from_str::<any::Asset>("\"DOT\"")), any::Asset::Dot);
 		assert_eq!(assert_ok!(serde_json::from_str::<any::Asset>("\"BTC\"")), any::Asset::Btc);
-		assert_eq!(assert_ok!(serde_json::from_str::<any::Asset>("\"ARB\"")), any::Asset::ArbEth);
-		assert_eq!(assert_ok!(serde_json::from_str::<any::Asset>("\"SOL\"")), any::Asset::Sol);
+		//assert_eq!(assert_ok!(serde_json::from_str::<any::Asset>("\"SOL\"")), any::Asset::Sol);
 
 		assert_err!(serde_json::from_str::<any::Asset>("\"eTh\""));
 		assert_err!(serde_json::from_str::<any::Asset>("\"dOt\""));

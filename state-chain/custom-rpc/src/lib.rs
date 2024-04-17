@@ -1494,6 +1494,7 @@ mod test {
 					(Asset::Dot, 0),
 					(Asset::ArbEth, 0),
 					(Asset::ArbUsdc, 0),
+					(Asset::Sol, 0),
 				]
 			}
 		))
@@ -1518,6 +1519,7 @@ mod test {
 						ForeignChain::Arbitrum,
 						Some(cf_chains::ForeignChainAddress::Arb(H160::from([2; 20]))),
 					),
+					(ForeignChain::Solana, None),
 				],
 				balances: vec![
 					(Asset::Eth, u128::MAX),
@@ -1528,6 +1530,7 @@ mod test {
 					(Asset::Dot, 0),
 					(Asset::ArbEth, 1),
 					(Asset::ArbUsdc, 2),
+					(Asset::Sol, 3),
 				],
 				earned_fees: any::AssetMap {
 					eth: eth::AssetMap {
