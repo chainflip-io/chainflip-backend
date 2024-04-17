@@ -347,8 +347,8 @@ pub mod pallet {
 		InvalidBroadcastId,
 		/// A threshold signature was expected but not available.
 		ThresholdSignatureUnavailable,
-		/// Only aborted broadcasts can be re-signed.
-		BroadcastNotAborted,
+		/// Pending broadcasts cannot be re-signed.
+		BroadcastStillPending,
 		/// The broadcast's api call is no longer available.
 		ApiCallUnavailable,
 	}
@@ -642,7 +642,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Re-sign and optionally re-broadcast a request that was previously aborted.
+		/// Re-sign and optionally re-send a broadcast request.
 		///
 		/// Requires governance origin.
 		#[pallet::call_index(5)]
@@ -653,7 +653,7 @@ pub mod pallet {
 			request_broadcast: bool,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::re_sign_aborted_broadcast(broadcast_id, request_broadcast)?;
+			Self::re_sign_broadcast(broadcast_id, request_broadcast)?;
 			Ok(())
 		}
 	}
@@ -943,18 +943,26 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 		(broadcast_id, Self::threshold_sign(api_call, broadcast_id, false))
 	}
 
-	fn re_sign_aborted_broadcast(
+	fn re_sign_broadcast(
 		broadcast_id: BroadcastId,
 		request_broadcast: bool,
 	) -> Result<ThresholdSignatureRequestId, DispatchError> {
-		ensure!(
-			AbortedBroadcasts::<T, I>::mutate(|aborted| { aborted.remove(&broadcast_id) }),
-			Error::<T, I>::BroadcastNotAborted
-		);
+		AbortedBroadcasts::<T, I>::mutate(|aborted| {
+			aborted.remove(&broadcast_id);
+		});
 		let api_call = Self::clean_up_broadcast_storage(broadcast_id)
 			.ok_or(Error::<T, I>::ApiCallUnavailable)?;
 
-		PendingBroadcasts::<T, I>::mutate(|pending| pending.insert(broadcast_id));
+		PendingBroadcasts::<T, I>::try_mutate(|pending| {
+			if pending.contains(&broadcast_id) {
+				Err(Error::<T, I>::BroadcastStillPending)
+			} else {
+				if request_broadcast {
+					pending.insert(broadcast_id);
+				}
+				Ok(())
+			}
+		})?;
 		Ok(Self::threshold_sign(api_call, broadcast_id, request_broadcast))
 	}
 
