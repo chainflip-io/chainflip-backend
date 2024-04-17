@@ -19,9 +19,9 @@ use cf_chains::{
 	ChainCrypto, DepositChannel, Ethereum, SwapOrigin,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId, ChannelId,
-	Ed25519PublicKey, EgressCounter, EgressId, EpochIndex, FlipBalance, ForeignChain, Ipv6Addr,
-	NetworkEnvironment, SemVer, SwapId, ThresholdSignatureRequestId,
+	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId, BrokerFeeBps,
+	ChannelId, Ed25519PublicKey, EgressCounter, EgressId, EpochIndex, FlipBalance, ForeignChain,
+	Ipv6Addr, NetworkEnvironment, SemVer, SwapId, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -693,7 +693,7 @@ pub trait DepositApi<C: Chain> {
 		source_asset: C::ChainAsset,
 		destination_asset: Asset,
 		destination_address: ForeignChainAddress,
-		broker_commission_bps: BasisPoints,
+		broker_commission_bps: BrokerFeeBps<Self::AccountId>,
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,

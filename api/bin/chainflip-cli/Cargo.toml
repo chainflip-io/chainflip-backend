@@ -25,5 +25,8 @@ cf-chains = { path = "../../../state-chain/chains" }
 utilities = { path = "../../../utilities" }
 custom-rpc = { path = "../../../state-chain/custom-rpc" }
 
+# Substrate
+frame-system = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.6+1' }
+
 [build-dependencies]
 substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.6+1' }

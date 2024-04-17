@@ -14,7 +14,6 @@ use sp_std::{
 	cmp::{Ord, PartialOrd},
 	vec::Vec,
 };
-
 pub mod chains;
 
 pub use chains::{assets::any::Asset, ForeignChain};
@@ -322,3 +321,29 @@ fn is_more_recent_semver() {
 	ensure_left_is_more_recent(ver(1, 0, 0), ver(0, 2, 2));
 	ensure_left_is_more_recent(ver(1, 1, 0), ver(1, 0, 2));
 }
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+pub enum BrokerFeeBps<T> {
+	Single(BasisPoints),
+	Multiple(Vec<(T, BasisPoints)>),
+}
+
+// #[derive(Debug, PartialEq, Eq)]
+// struct ParseBrokerFeeError;
+
+// impl FromStr for BrokerFeeBps<> {
+// 	type Err = ParseBrokerFeeError;
+// 	fn from_str(s: &str) -> Result<Self, Self::Err> {
+// 		match s.chars().next().unwrap() {
+// 			//multiple brokers/subbrokers
+// 			"[" => {
+
+// 			},
+// 			//single broker
+// 			_ => {
+// 				let bps = s.parse::<u16>().map_err(|_| ParseBrokerFeeError)?;
+// 				Ok(BrokerFeeBps::Single(bps))
+// 			}
+// 		}
+// 	}
+// }

@@ -1,5 +1,5 @@
 use cf_chains::Chain;
-use cf_primitives::SwapId;
+use cf_primitives::{BrokerFeeBps, SwapId};
 
 use crate::{EgressApi, SwapDepositHandler};
 
@@ -20,7 +20,7 @@ where
 		amount: cf_primitives::AssetAmount,
 		destination_address: cf_chains::ForeignChainAddress,
 		_broker_id: Self::AccountId,
-		_broker_commission_bps: cf_primitives::BasisPoints,
+		_broker_commission_bps: BrokerFeeBps<Self::AccountId>,
 		_channel_id: cf_primitives::ChannelId,
 	) -> SwapId {
 		let _ = E::schedule_egress(

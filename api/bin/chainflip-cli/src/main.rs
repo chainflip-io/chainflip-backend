@@ -19,7 +19,6 @@ use futures::FutureExt;
 use serde::Serialize;
 use std::{io::Write, path::PathBuf, sync::Arc};
 use utilities::{clean_hex_address, round_f64, task_scope::task_scope};
-
 mod settings;
 
 #[tokio::main]
@@ -70,7 +69,7 @@ async fn run_cli() -> Result<()> {
 									params.destination_asset.into(),
 									&params.destination_address,
 								)?,
-								params.broker_commission,
+								api::BrokerFeeBps::Single(params.broker_commission),
 								None,
 								params.boost_fee,
 							)

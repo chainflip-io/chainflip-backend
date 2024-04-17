@@ -6,7 +6,7 @@ use cf_chains::{
 	address::EncodedAddress, dot::PolkadotAccountId, evm::to_evm_address, AnyChain,
 	CcmChannelMetadata, ForeignChain,
 };
-use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId, SemVer};
+pub use cf_primitives::{AccountRole, Asset, BasisPoints, BrokerFeeBps, ChannelId, SemVer};
 use futures::FutureExt;
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
@@ -348,7 +348,9 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		source_asset: Asset,
 		destination_asset: Asset,
 		destination_address: EncodedAddress,
-		broker_commission_bps: BasisPoints,
+		broker_commission_bps: BrokerFeeBps<
+			<state_chain_runtime::Runtime as frame_system::Config>::AccountId,
+		>,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 	) -> Result<SwapDepositAddress> {

@@ -4,11 +4,13 @@ use cf_utilities::{
 };
 use chainflip_api::{
 	self, clean_foreign_chain_address,
-	primitives::{AccountRole, Asset, BasisPoints, BlockNumber, CcmChannelMetadata, ChannelId},
+	primitives::{
+		state_chain_runtime, AccountRole, Asset, BasisPoints, BlockNumber, CcmChannelMetadata,
+		ChannelId,
+	},
 	settings::StateChain,
-	BrokerApi, OperatorApi, StateChainApi, WithdrawFeesDetail,
+	BrokerApi, BrokerFeeBps, OperatorApi, StateChainApi, WithdrawFeesDetail,
 };
-
 use clap::Parser;
 use futures::FutureExt;
 use jsonrpsee::{
@@ -56,7 +58,9 @@ pub trait Rpc {
 		source_asset: Asset,
 		destination_asset: Asset,
 		destination_address: String,
-		broker_commission_bps: BasisPoints,
+		broker_commission_bps: BrokerFeeBps<
+			<state_chain_runtime::Runtime as frame_system::Config>::AccountId,
+		>,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<BrokerSwapDepositAddress>;
@@ -101,7 +105,9 @@ impl RpcServer for RpcServerImpl {
 		source_asset: Asset,
 		destination_asset: Asset,
 		destination_address: String,
-		broker_commission_bps: BasisPoints,
+		broker_commission_bps: BrokerFeeBps<
+			<state_chain_runtime::Runtime as frame_system::Config>::AccountId,
+		>,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<BrokerSwapDepositAddress> {

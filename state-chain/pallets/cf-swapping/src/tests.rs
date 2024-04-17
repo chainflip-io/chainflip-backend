@@ -117,7 +117,7 @@ fn insert_swaps(swaps: &[Swap]) {
 				swap.amount,
 				destination_address.clone(),
 				broker_id as u64,
-				2,
+				cf_primitives::BrokerFeeBps::Single(2),
 				1,
 			);
 		}
@@ -152,7 +152,7 @@ fn request_swap_success_with_valid_parameters() {
 			Asset::Eth,
 			Asset::Usdc,
 			EncodedAddress::Eth(Default::default()),
-			0,
+			cf_primitives::BrokerFeeBps::Single(0),
 			None,
 			0
 		));
@@ -201,7 +201,7 @@ fn expect_earned_fees_to_be_recorded() {
 			100,
 			ForeignChainAddress::Eth([2; 20].into()),
 			ALICE,
-			200,
+			cf_primitives::BrokerFeeBps::Single(200),
 			1,
 		);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 2);
@@ -213,7 +213,7 @@ fn expect_earned_fees_to_be_recorded() {
 			100,
 			ForeignChainAddress::Eth([2; 20].into()),
 			ALICE,
-			200,
+			cf_primitives::BrokerFeeBps::Single(200),
 			1,
 		);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 4);
@@ -233,7 +233,7 @@ fn cannot_swap_with_incorrect_destination_address_type() {
 			10,
 			ForeignChainAddress::Eth([2; 20].into()),
 			ALICE,
-			2,
+			cf_primitives::BrokerFeeBps::Single(2),
 			1,
 		);
 
@@ -251,7 +251,7 @@ fn expect_swap_id_to_be_emitted() {
 				Asset::Eth,
 				Asset::Usdc,
 				EncodedAddress::Eth(Default::default()),
-				0,
+				cf_primitives::BrokerFeeBps::Single(0),
 				None,
 				0
 			));
@@ -266,7 +266,7 @@ fn expect_swap_id_to_be_emitted() {
 				AMOUNT,
 				ForeignChainAddress::Eth(Default::default()),
 				ALICE,
-				0,
+				cf_primitives::BrokerFeeBps::Single(0),
 				1,
 			);
 			// 3. Process swaps -> SwapExecuted, SwapEgressScheduled
@@ -445,7 +445,7 @@ fn rejects_invalid_swap_deposit() {
 				Asset::Btc,
 				Asset::Eth,
 				EncodedAddress::Dot(Default::default()),
-				0,
+				cf_primitives::BrokerFeeBps::Single(0),
 				Some(ccm.clone()),
 				0
 			),
@@ -458,7 +458,7 @@ fn rejects_invalid_swap_deposit() {
 				Asset::Eth,
 				Asset::Dot,
 				EncodedAddress::Dot(Default::default()),
-				0,
+				cf_primitives::BrokerFeeBps::Single(0),
 				Some(ccm),
 				0
 			),
@@ -522,7 +522,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 			Asset::Dot,
 			Asset::Eth,
 			EncodedAddress::Eth(Default::default()),
-			0,
+			cf_primitives::BrokerFeeBps::Single(0),
 			Some(request_ccm),
 			0
 		));
@@ -946,7 +946,7 @@ fn swap_by_deposit_happy_path() {
 			amount,
 			ForeignChainAddress::Eth(Default::default()),
 			Default::default(),
-			Default::default(),
+			cf_primitives::BrokerFeeBps::Single(0),
 			1,
 		);
 
@@ -1403,7 +1403,7 @@ fn can_handle_swaps_with_zero_outputs() {
 				100,
 				eth_address.clone(),
 				Default::default(),
-				0,
+				cf_primitives::BrokerFeeBps::Single(0),
 				0,
 			);
 			Swapping::schedule_swap_from_channel(
@@ -1414,7 +1414,7 @@ fn can_handle_swaps_with_zero_outputs() {
 				1,
 				eth_address,
 				Default::default(),
-				0,
+				cf_primitives::BrokerFeeBps::Single(0),
 				0,
 			);
 
@@ -1499,7 +1499,7 @@ fn swap_excess_are_confiscated_ccm_via_deposit() {
 			from,
 			to,
 			EncodedAddress::Eth(Default::default()),
-			0,
+			cf_primitives::BrokerFeeBps::Single(0),
 			Some(request_ccm),
 			0,
 		));
@@ -1693,7 +1693,7 @@ fn swap_excess_are_confiscated_for_swap_via_deposit() {
 			amount,
 			ForeignChainAddress::Eth(Default::default()),
 			ALICE,
-			0,
+			cf_primitives::BrokerFeeBps::Single(0),
 			0,
 		);
 
@@ -1898,7 +1898,7 @@ fn swap_with_custom_broker_fee(
 		amount,
 		ForeignChainAddress::Eth([2; 20].into()),
 		ALICE,
-		broker_fee,
+		cf_primitives::BrokerFeeBps::Single(broker_fee),
 		1,
 	);
 }
@@ -1997,7 +1997,7 @@ fn broker_bps_is_limited() {
 				Asset::Eth,
 				Asset::Usdc,
 				EncodedAddress::Eth(Default::default()),
-				1001,
+				cf_primitives::BrokerFeeBps::Single(1001),
 				None,
 				0,
 			),
@@ -2136,7 +2136,7 @@ fn deposit_address_ready_event_contain_correct_boost_fee_value() {
 			Asset::Eth,
 			Asset::Usdc,
 			EncodedAddress::Eth(Default::default()),
-			0,
+			cf_primitives::BrokerFeeBps::Single(0),
 			None,
 			BOOST_FEE
 		));

@@ -249,7 +249,7 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 						source_asset,
 						destination_asset.into(),
 						destination_address.clone(),
-						Default::default(),
+						cf_primitives::BrokerFeeBps::Single(0),
 						BROKER,
 						None,
 						0,

@@ -32,7 +32,7 @@ mod benchmarks {
 			source_asset: Asset::Eth,
 			destination_asset: Asset::Usdc,
 			destination_address: EncodedAddress::benchmark_value(),
-			broker_commission_bps: 0,
+			broker_commission_bps: cf_primitives::BrokerFeeBps::Single(0),
 			boost_fee: 0,
 			channel_metadata: None,
 		};
