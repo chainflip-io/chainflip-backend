@@ -74,7 +74,7 @@ async function incompatibleUpgradeNoBuild(
 
   console.log('Engines started');
 
-  await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, false);
+  await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, true);
 
   console.log(
     'Check that the old engine has now shut down, and that the new engine is now running.',
