@@ -24,7 +24,7 @@ use core::convert::Infallible;
 
 use cf_utilities::MinMax;
 use serde::{Deserialize, Serialize};
-use sp_std::{collections::btree_map::BTreeMap, ops::Bound};
+use sp_std::collections::btree_map::BTreeMap;
 
 use crate::{collect_map_in_range, common::Pairs};
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -528,36 +528,40 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Ord + Clone + MinMax>
 		lp: &LiquidityProvider,
 		pairs: Pairs,
 	) -> impl '_ + Iterator<Item = (LiquidityProvider, OrderId, Tick, Collected, PositionInfo)> {
-		let positions_by_lp =
-			collect_map_in_range::<(LiquidityProvider, OrderId, SqrtPriceQ64F96), Position>(
-				Bound::Included(&(lp.clone(), <OrderId as MinMax>::min(), U256::zero())),
-				Bound::Included(&(lp.clone(), <OrderId as MinMax>::max(), U256::max_value())),
-				self.positions[pairs].clone(),
-			);
-		positions_by_lp.into_iter().map(move |((lp, order_id, sqrt_price), position)| {
-			let (collected, option_position) = match pairs {
-				Pairs::Quote => Self::collect_from_position::<BaseToQuote>(
-					position.clone(),
-					self.fixed_pools[pairs].get(&sqrt_price),
-					sqrt_price_to_price(sqrt_price),
-					self.fee_hundredth_pips,
-				),
-				Pairs::Base => Self::collect_from_position::<QuoteToBase>(
-					position.clone(),
-					self.fixed_pools[pairs].get(&sqrt_price),
-					sqrt_price_to_price(sqrt_price),
-					self.fee_hundredth_pips,
-				),
-			};
-			(
-				lp.clone(),
-				order_id.clone(),
-				tick_at_sqrt_price(sqrt_price),
-				collected,
-				option_position
-					.map_or(Default::default(), |position| PositionInfo::from(&position)),
-			)
-		})
+		let from = (lp.clone(), <OrderId as MinMax>::min(), U256::zero());
+		let to = (lp.clone(), <OrderId as MinMax>::max(), U256::max_value());
+		let positions_by_lp = collect_map_in_range::<
+			(LiquidityProvider, OrderId, SqrtPriceQ64F96),
+			Position,
+		>(&from, &to, &self.positions[pairs]);
+		positions_by_lp
+			.into_iter()
+			.map(move |((lp, order_id, sqrt_price), position)| {
+				let (collected, option_position) = match pairs {
+					Pairs::Quote => Self::collect_from_position::<BaseToQuote>(
+						position.clone(),
+						self.fixed_pools[pairs].get(sqrt_price),
+						sqrt_price_to_price(*sqrt_price),
+						self.fee_hundredth_pips,
+					),
+					Pairs::Base => Self::collect_from_position::<QuoteToBase>(
+						position.clone(),
+						self.fixed_pools[pairs].get(sqrt_price),
+						sqrt_price_to_price(*sqrt_price),
+						self.fee_hundredth_pips,
+					),
+				};
+				(
+					lp.clone(),
+					order_id.clone(),
+					tick_at_sqrt_price(*sqrt_price),
+					collected,
+					option_position
+						.map_or(Default::default(), |position| PositionInfo::from(&position)),
+				)
+			})
+			.collect::<Vec<_>>()
+			.into_iter()
 	}
 
 	/// Runs collect for all positions in the pool. Returns a PoolPairsMap

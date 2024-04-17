@@ -1,5 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(btree_cursors)]
 
 pub mod test_utilities;
 mod tests;
@@ -16,9 +15,7 @@ use common::{
 use limit_orders::{Collected, PositionInfo};
 use range_orders::Liquidity;
 use scale_info::TypeInfo;
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
-
-use sp_std::ops::Bound;
+use sp_std::{collections::btree_map::BTreeMap, ops::Bound::Included, vec::Vec};
 
 use crate::common::{mul_div_floor, nth_root_of_integer_as_fixed_point};
 
@@ -549,30 +546,13 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord + MinMax>
 
 /// Collects the elements of a given BTreeMap between two defined Bound. The bounds are
 /// inclusive.
-pub(crate) fn collect_map_in_range<K: Ord + Clone, V: Clone>(
-	start_bound: Bound<&K>,
-	end_bound: Bound<&K>,
-	positions: BTreeMap<K, V>,
-) -> BTreeMap<K, V> {
-	let mut result: BTreeMap<K, V> = BTreeMap::new();
-	let mut lower_bound_orders = positions.lower_bound(start_bound);
-	while let Some(order) = lower_bound_orders.next() {
-		let (key, value) = order;
-		result.insert(key.clone(), value.clone());
-		if let Some((last_key, _)) = positions.upper_bound(end_bound).peek_prev() {
-			if key == last_key {
-				break;
-			}
-		}
-	}
-	result
+pub(crate) fn collect_map_in_range<'a, K: Ord + Clone, V: Clone>(
+	start: &'a K,
+	end: &'a K,
+	positions: &'a BTreeMap<K, V>,
+) -> impl 'a + Iterator<Item = (&'a K, &'a V)> {
+	positions
+		.range((Included(start), Included(end)))
+		.collect::<Vec<_>>()
+		.into_iter()
 }
-
-// pub(crate) fn collect_map_in_range_as_iter<K: Ord + Clone, V: Clone>(
-// 	start_bound: Bound<&K>,
-// 	end_bound: Bound<&K>,
-// 	positions: BTreeMap<K, V>,
-// ) -> impl '_ + Iterator<Item = (K, V)> {
-// 	let mut lower_bound_orders = positions.lower_bound(start_bound);
-// 	let upper_bound_orders = positions.upper_bound(end_bound);
-// }

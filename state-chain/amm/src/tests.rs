@@ -243,43 +243,32 @@ fn test_collect_in_range() {
 
 	// Collects an inclusive range of elements for the map by defined bounds.
 	assert_eq!(
-		collect_map_in_range::<(u64, u32), (u64, u32)>(
-			Bound::Included(&(4, 4)),
-			Bound::Included(&(7, 7)),
-			data_map.clone(),
-		),
-		vec![((4, 4), (4, 4)), ((5, 5), (5, 5)), ((6, 6), (6, 6)), ((7, 7), (7, 7)),]
-			.into_iter()
-			.collect()
+		collect_map_in_range::<(u64, u32), (u64, u32)>(&(4, 4), &(7, 7), &data_map)
+			.collect::<Vec<_>>(),
+		vec![(&(4, 4), &(4, 4)), (&(5, 5), &(5, 5)), (&(6, 6), &(6, 6)), (&(7, 7), &(7, 7)),]
 	);
 
 	// Collects till the end if the upper bound is higher then the last element.
 	assert_eq!(
-		collect_map_in_range::<(u64, u32), (u64, u32)>(
-			Bound::Included(&(5, 5)),
-			Bound::Included(&(12, 12)),
-			data_map.clone(),
-		),
+		collect_map_in_range::<(u64, u32), (u64, u32)>(&(5, 5), &(12, 12), &data_map,)
+			.collect::<Vec<_>>(),
 		vec![
-			((5, 5), (5, 5)),
-			((6, 6), (6, 6)),
-			((7, 7), (7, 7)),
-			((8, 8), (8, 8)),
-			((9, 9), (9, 9)),
+			(&(5, 5), &(5, 5)),
+			(&(6, 6), &(6, 6)),
+			(&(7, 7), &(7, 7)),
+			(&(8, 8), &(8, 8)),
+			(&(9, 9), &(9, 9)),
 		]
 		.into_iter()
-		.collect()
+		.collect::<Vec<_>>()
 	);
 
-	// Collects from the first element if the lower bound is lower then the first element.
+	// // Collects from the first element if the lower bound is lower then the first element.
 	assert_eq!(
-		collect_map_in_range::<(u64, u32), (u64, u32)>(
-			Bound::Included(&(1, 1)),
-			Bound::Included(&(5, 5)),
-			data_map,
-		),
-		vec![((2, 2), (2, 2)), ((3, 3), (3, 3)), ((4, 4), (4, 4)), ((5, 5), (5, 5)),]
+		collect_map_in_range::<(u64, u32), (u64, u32)>(&(1, 1), &(5, 5), &data_map,)
+			.collect::<Vec<_>>(),
+		vec![(&(2, 2), &(2, 2)), (&(3, 3), &(3, 3)), (&(4, 4), &(4, 4)), (&(5, 5), &(5, 5)),]
 			.into_iter()
-			.collect()
+			.collect::<Vec<_>>()
 	);
 }

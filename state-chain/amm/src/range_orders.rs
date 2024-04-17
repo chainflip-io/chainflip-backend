@@ -23,7 +23,7 @@
 mod tests;
 
 use serde::{Deserialize, Serialize};
-use sp_std::{collections::btree_map::BTreeMap, convert::Infallible, ops::Bound, vec::Vec};
+use sp_std::{collections::btree_map::BTreeMap, convert::Infallible, vec::Vec};
 
 use crate::collect_map_in_range;
 use cf_utilities::MinMax;
@@ -1169,12 +1169,12 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord + MinMax>
 		lp: &LiquidityProvider,
 	) -> impl '_ + Iterator<Item = (LiquidityProvider, OrderId, Tick, Tick, Collected, PositionInfo)>
 	{
-		let positions_by_lp =
-			collect_map_in_range::<(LiquidityProvider, OrderId, Tick, Tick), Position>(
-				Bound::Included(&(lp.clone(), <OrderId as MinMax>::min(), MIN_TICK, MIN_TICK)),
-				Bound::Included(&(lp.clone(), <OrderId as MinMax>::max(), MAX_TICK, MAX_TICK)),
-				self.positions.clone(),
-			);
+		let from = (lp.clone(), <OrderId as MinMax>::min(), MIN_TICK, MIN_TICK);
+		let to = (lp.clone(), <OrderId as MinMax>::max(), MAX_TICK, MAX_TICK);
+		let positions_by_lp = collect_map_in_range::<
+			(LiquidityProvider, OrderId, Tick, Tick),
+			Position,
+		>(&from, &to, &self.positions);
 		positions_by_lp
 			.into_iter()
 			.map(|((lp, order_id, lower_tick, upper_tick), position)| {
@@ -1182,18 +1182,20 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord + MinMax>
 				(
 					lp.clone(),
 					order_id.clone(),
-					lower_tick,
-					upper_tick,
+					lower_tick.to_owned(),
+					upper_tick.to_owned(),
 					position.collect_fees(
 						self,
-						lower_tick,
-						self.liquidity_map.get(&lower_tick).unwrap(),
-						upper_tick,
-						self.liquidity_map.get(&upper_tick).unwrap(),
+						*lower_tick,
+						self.liquidity_map.get(lower_tick).unwrap(),
+						*upper_tick,
+						self.liquidity_map.get(upper_tick).unwrap(),
 					),
 					PositionInfo::from(&position),
 				)
 			})
+			.collect::<Vec<_>>()
+			.into_iter()
 	}
 
 	/// Returns the current value of a position i.e. the assets you would receive by burning the
