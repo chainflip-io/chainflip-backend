@@ -1,5 +1,5 @@
 pub use crate::{self as pallet_cf_ingress_egress};
-use crate::{DepositBalances, DepositWitness};
+use crate::{DepositBalances, DepositWitness, Instance1, PalletSafeMode};
 
 use cf_chains::eth::EthereumTrackedData;
 pub use cf_chains::{
@@ -14,7 +14,7 @@ pub use cf_primitives::{
 };
 use cf_test_utilities::{impl_test_helpers, TestExternalities};
 use cf_traits::{
-	impl_mock_callback, impl_mock_chainflip,
+	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		address_converter::MockAddressConverter,
 		api_call::{MockEthereumApiCall, MockEvmEnvironment},
@@ -40,7 +40,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 frame_support::construct_runtime!(
 	pub enum Test {
 		System: frame_system,
-		IngressEgress: pallet_cf_ingress_egress,
+		IngressEgress: pallet_cf_ingress_egress::<Instance1>,
 	}
 );
 
@@ -109,7 +109,9 @@ impl NetworkEnvironmentProvider for MockNetworkEnvironmentProvider {
 	}
 }
 
-impl crate::Config for Test {
+impl_mock_runtime_safe_mode! { ingress_egress_ethereum: PalletSafeMode<Instance1> }
+
+impl crate::Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Ethereum;
@@ -117,7 +119,7 @@ impl crate::Config for Test {
 	type AddressConverter = MockAddressConverter;
 	type LpBalance = MockBalance;
 	type SwapDepositHandler =
-		MockSwapDepositHandler<(Ethereum, pallet_cf_ingress_egress::Pallet<Self>)>;
+		MockSwapDepositHandler<(Ethereum, pallet_cf_ingress_egress::Pallet<Self, Instance1>)>;
 	type ChainApiCall = MockEthereumApiCall<MockEvmEnvironment>;
 	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;
@@ -128,6 +130,7 @@ impl crate::Config for Test {
 	type AssetConverter = MockAssetConverter;
 	type FeePayment = MockFeePayment<Self>;
 	type SwapQueueApi = MockSwapQueueApi;
+	type SafeMode = MockRuntimeSafeMode;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
@@ -149,9 +152,9 @@ impl_test_helpers! {
 	}
 }
 
-type TestChainAccount = <<Test as crate::Config>::TargetChain as Chain>::ChainAccount;
-type TestChainAmount = <<Test as crate::Config>::TargetChain as Chain>::ChainAmount;
-type TestChainAsset = <<Test as crate::Config>::TargetChain as Chain>::ChainAsset;
+type TestChainAccount = <<Test as crate::Config<Instance1>>::TargetChain as Chain>::ChainAccount;
+type TestChainAmount = <<Test as crate::Config<Instance1>>::TargetChain as Chain>::ChainAmount;
+type TestChainAsset = <<Test as crate::Config<Instance1>>::TargetChain as Chain>::ChainAsset;
 
 pub trait RequestAddressAndDeposit {
 	fn request_address_and_deposit(

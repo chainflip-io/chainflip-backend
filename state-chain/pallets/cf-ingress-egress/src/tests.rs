@@ -34,6 +34,7 @@ use cf_traits::{
 };
 use frame_support::{
 	assert_err, assert_ok,
+	instances::Instance1,
 	traits::{Hooks, OriginTrait},
 	weights::Weight,
 };
@@ -48,7 +49,7 @@ const DEFAULT_DEPOSIT_AMOUNT: u128 = 1_000;
 #[track_caller]
 fn expect_size_of_address_pool(size: usize) {
 	assert_eq!(
-		DepositChannelPool::<Test>::iter_keys().count(),
+		DepositChannelPool::<Test, Instance1>::iter_keys().count(),
 		size,
 		"Address pool size is incorrect!"
 	);
@@ -60,9 +61,9 @@ fn blacklisted_asset_will_not_egress_via_batch_all() {
 		let asset = ETH_ETH;
 
 		// Cannot egress assets that are blacklisted.
-		assert!(DisabledEgressAssets::<Test>::get(asset).is_none());
+		assert!(DisabledEgressAssets::<Test, Instance1>::get(asset).is_none());
 		assert_ok!(IngressEgress::enable_or_disable_egress(RuntimeOrigin::root(), asset, true));
-		assert!(DisabledEgressAssets::<Test>::get(asset).is_some());
+		assert!(DisabledEgressAssets::<Test, Instance1>::get(asset).is_some());
 		System::assert_last_event(RuntimeEvent::IngressEgress(
 			crate::Event::AssetEgressStatusChanged { asset, disabled: true },
 		));
@@ -75,7 +76,7 @@ fn blacklisted_asset_will_not_egress_via_batch_all() {
 
 		// The egress has not been sent
 		assert_eq!(
-			ScheduledEgressFetchOrTransfer::<Test>::get(),
+			ScheduledEgressFetchOrTransfer::<Test, Instance1>::get(),
 			vec![FetchOrTransfer::<Ethereum>::Transfer {
 				asset,
 				amount: 1_000,
@@ -86,7 +87,7 @@ fn blacklisted_asset_will_not_egress_via_batch_all() {
 
 		// re-enable the asset for Egress
 		assert_ok!(IngressEgress::enable_or_disable_egress(RuntimeOrigin::root(), asset, false));
-		assert!(DisabledEgressAssets::<Test>::get(asset).is_none());
+		assert!(DisabledEgressAssets::<Test, Instance1>::get(asset).is_none());
 		System::assert_last_event(RuntimeEvent::IngressEgress(
 			crate::Event::AssetEgressStatusChanged { asset, disabled: false },
 		));
@@ -94,7 +95,7 @@ fn blacklisted_asset_will_not_egress_via_batch_all() {
 		IngressEgress::on_finalize(1);
 
 		// The egress should be sent now
-		assert!(ScheduledEgressFetchOrTransfer::<Test>::get().is_empty());
+		assert!(ScheduledEgressFetchOrTransfer::<Test, Instance1>::get().is_empty());
 	});
 }
 
@@ -113,7 +114,7 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 			},
 		};
 
-		assert!(DisabledEgressAssets::<Test>::get(asset).is_none());
+		assert!(DisabledEgressAssets::<Test, Instance1>::get(asset).is_none());
 		assert_ok!(IngressEgress::enable_or_disable_egress(RuntimeOrigin::root(), asset, true));
 
 		// Eth should be blocked while Flip can be sent
@@ -134,7 +135,7 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 
 		// The egress has not been sent
 		assert_eq!(
-			ScheduledEgressCcm::<Test>::get(),
+			ScheduledEgressCcm::<Test, Instance1>::get(),
 			vec![CrossChainMessage {
 				egress_id: (ForeignChain::Ethereum, 1),
 				asset,
@@ -154,7 +155,7 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 		IngressEgress::on_finalize(2);
 
 		// The egress should be sent now
-		assert!(ScheduledEgressCcm::<Test>::get().is_empty());
+		assert!(ScheduledEgressCcm::<Test, Instance1>::get().is_empty());
 	});
 }
 
@@ -164,14 +165,14 @@ fn egress_below_minimum_deposit_ignored() {
 		const MIN_EGRESS: u128 = 1_000;
 		const AMOUNT: u128 = MIN_EGRESS - 1;
 
-		EgressDustLimit::<Test>::set(ETH_ETH, MIN_EGRESS);
+		EgressDustLimit::<Test, Instance1>::set(ETH_ETH, MIN_EGRESS);
 
 		assert_err!(
 			IngressEgress::schedule_egress(ETH_ETH, AMOUNT, ALICE_ETH_ADDRESS, None),
 			crate::Error::<Test, _>::BelowEgressDustLimit
 		);
 
-		assert!(ScheduledEgressFetchOrTransfer::<Test>::get().is_empty());
+		assert!(ScheduledEgressFetchOrTransfer::<Test, Instance1>::get().is_empty());
 	});
 }
 
@@ -184,7 +185,7 @@ fn can_schedule_swap_egress_to_batch() {
 		assert_ok!(IngressEgress::schedule_egress(ETH_FLIP, 4_000, BOB_ETH_ADDRESS, None));
 
 		assert_eq!(
-			ScheduledEgressFetchOrTransfer::<Test>::get(),
+			ScheduledEgressFetchOrTransfer::<Test, Instance1>::get(),
 			vec![
 				FetchOrTransfer::<Ethereum>::Transfer {
 					asset: ETH_ETH,
@@ -235,14 +236,14 @@ fn request_address_and_deposit(
 #[test]
 fn can_schedule_deposit_fetch() {
 	new_test_ext().execute_with(|| {
-		assert!(ScheduledEgressFetchOrTransfer::<Test>::get().is_empty());
+		assert!(ScheduledEgressFetchOrTransfer::<Test, Instance1>::get().is_empty());
 
 		request_address_and_deposit(1u64, eth::Asset::Eth);
 		request_address_and_deposit(2u64, eth::Asset::Eth);
 		request_address_and_deposit(3u64, eth::Asset::Flip);
 
 		assert!(matches!(
-			&ScheduledEgressFetchOrTransfer::<Test>::get()[..],
+			&ScheduledEgressFetchOrTransfer::<Test, Instance1>::get()[..],
 			&[
 				FetchOrTransfer::<Ethereum>::Fetch { asset: ETH_ETH, .. },
 				FetchOrTransfer::<Ethereum>::Fetch { asset: ETH_ETH, .. },
@@ -257,7 +258,7 @@ fn can_schedule_deposit_fetch() {
 		request_address_and_deposit(4u64, eth::Asset::Eth);
 
 		assert!(matches!(
-			&ScheduledEgressFetchOrTransfer::<Test>::get()[..],
+			&ScheduledEgressFetchOrTransfer::<Test, Instance1>::get()[..],
 			&[
 				FetchOrTransfer::<Ethereum>::Fetch { asset: ETH_ETH, .. },
 				FetchOrTransfer::<Ethereum>::Fetch { asset: ETH_ETH, .. },
@@ -305,7 +306,7 @@ fn on_finalize_can_send_batch_all() {
 			},
 		));
 
-		assert!(ScheduledEgressFetchOrTransfer::<Test>::get().is_empty());
+		assert!(ScheduledEgressFetchOrTransfer::<Test, Instance1>::get().is_empty());
 	});
 }
 
@@ -330,13 +331,13 @@ fn all_batch_apicall_creation_failure_should_rollback_storage() {
 		MockEthAllBatch::<MockEvmEnvironment>::set_success(false);
 		request_address_and_deposit(4u64, eth::Asset::Usdc);
 
-		let scheduled_requests = ScheduledEgressFetchOrTransfer::<Test>::get();
+		let scheduled_requests = ScheduledEgressFetchOrTransfer::<Test, Instance1>::get();
 
 		// Try to send the scheduled egresses via Allbatch apicall. Will fail and so should rollback
 		// the ScheduledEgressFetchOrTransfer
 		IngressEgress::on_finalize(1);
 
-		assert_eq!(ScheduledEgressFetchOrTransfer::<Test>::get(), scheduled_requests);
+		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, Instance1>::get(), scheduled_requests);
 	});
 }
 
@@ -432,11 +433,11 @@ fn create_new_address_while_pool_is_empty() {
 		BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
 		IngressEgress::on_idle(1, Weight::MAX);
 
-		assert_eq!(ChannelIdCounter::<Test>::get(), 2);
+		assert_eq!(ChannelIdCounter::<Test, Instance1>::get(), 2);
 		request_address_and_deposit(3u64, eth::Asset::Eth);
-		assert_eq!(ChannelIdCounter::<Test>::get(), 2);
+		assert_eq!(ChannelIdCounter::<Test, Instance1>::get(), 2);
 		IngressEgress::on_finalize(1);
-		assert_eq!(ChannelIdCounter::<Test>::get(), 2);
+		assert_eq!(ChannelIdCounter::<Test, Instance1>::get(), 2);
 	});
 }
 
@@ -445,7 +446,7 @@ fn reused_address_channel_id_matches() {
 	new_test_ext().execute_with(|| {
 		const CHANNEL_ID: ChannelId = 0;
 		let new_channel = DepositChannel::<Ethereum>::generate_new::<
-			<Test as crate::Config>::AddressDerivation,
+			<Test as crate::Config<Instance1>>::AddressDerivation,
 		>(CHANNEL_ID, eth::Asset::Eth)
 		.unwrap();
 		DepositChannelPool::<Test, _>::insert(CHANNEL_ID, new_channel.clone());
@@ -496,7 +497,7 @@ fn can_process_ccm_deposit() {
 		let deposit_address: TargetChainAccount<Test, _> = deposit_address.try_into().unwrap();
 
 		assert_eq!(
-			DepositChannelLookup::<Test>::get(deposit_address).unwrap().opened_at,
+			DepositChannelLookup::<Test, Instance1>::get(deposit_address).unwrap().opened_at,
 			BlockHeightProvider::<MockEthereum>::get_block_height()
 		);
 
@@ -555,8 +556,8 @@ fn can_egress_ccm() {
 			Some((ccm.clone(), GAS_BUDGET))
 		).expect("Egress should succeed");
 
-		assert!(ScheduledEgressFetchOrTransfer::<Test>::get().is_empty());
-		assert_eq!(ScheduledEgressCcm::<Test>::get(), vec![
+		assert!(ScheduledEgressFetchOrTransfer::<Test, Instance1>::get().is_empty());
+		assert_eq!(ScheduledEgressCcm::<Test, Instance1>::get(), vec![
 			CrossChainMessage {
 				egress_id,
 				asset: destination_asset,
@@ -587,7 +588,7 @@ fn can_egress_ccm() {
 		).unwrap()]);
 
 		// Storage should be cleared
-		assert_eq!(ScheduledEgressCcm::<Test>::decode_len(), Some(0));
+		assert_eq!(ScheduledEgressCcm::<Test, Instance1>::decode_len(), Some(0));
 	});
 }
 
@@ -746,13 +747,13 @@ fn multi_use_deposit_same_block() {
 					DepositWitness {
 						deposit_address,
 						asset,
-						amount: MinimumDeposit::<Test>::get(asset) + DEPOSIT_AMOUNT,
+						amount: MinimumDeposit::<Test, Instance1>::get(asset) + DEPOSIT_AMOUNT,
 						deposit_details: Default::default(),
 					},
 					DepositWitness {
 						deposit_address,
 						asset,
-						amount: MinimumDeposit::<Test>::get(asset) + DEPOSIT_AMOUNT,
+						amount: MinimumDeposit::<Test, Instance1>::get(asset) + DEPOSIT_AMOUNT,
 						deposit_details: Default::default(),
 					},
 				],
@@ -845,7 +846,7 @@ fn can_set_minimum_deposit() {
 	new_test_ext().execute_with(|| {
 		let asset = eth::Asset::Eth;
 		let minimum_deposit = 1_500u128;
-		assert_eq!(MinimumDeposit::<Test>::get(asset), 0);
+		assert_eq!(MinimumDeposit::<Test, Instance1>::get(asset), 0);
 		// Set the new minimum deposits
 		assert_ok!(IngressEgress::update_pallet_config(
 			RuntimeOrigin::root(),
@@ -854,10 +855,10 @@ fn can_set_minimum_deposit() {
 				.unwrap()
 		));
 
-		assert_eq!(MinimumDeposit::<Test>::get(asset), minimum_deposit);
+		assert_eq!(MinimumDeposit::<Test, Instance1>::get(asset), minimum_deposit);
 
 		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::MinimumDepositSet { asset, minimum_deposit },
+			crate::Event::<Test, Instance1>::MinimumDepositSet { asset, minimum_deposit },
 		));
 	});
 }
@@ -889,7 +890,7 @@ fn deposits_below_minimum_are_rejected() {
 		// Observe that eth deposit gets rejected.
 		let (_, deposit_address) = request_address_and_deposit(0, eth);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::DepositIgnored {
+			crate::Event::<Test, Instance1>::DepositIgnored {
 				deposit_address,
 				asset: eth,
 				amount: default_deposit_amount,
@@ -902,7 +903,7 @@ fn deposits_below_minimum_are_rejected() {
 		// Flip deposit should succeed.
 		let (channel_id, deposit_address) = request_address_and_deposit(LP_ACCOUNT, flip);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::DepositFinalised {
+			crate::Event::<Test, Instance1>::DepositFinalised {
 				deposit_address,
 				asset: flip,
 				amount: default_deposit_amount,
@@ -945,7 +946,7 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 		assert!(
 			matches!(
 				cf_test_utilities::last_event::<Test>(),
-				RuntimeEvent::IngressEgress(crate::Event::<Test>::DepositIgnored {
+				RuntimeEvent::IngressEgress(crate::Event::<Test, Instance1>::DepositIgnored {
 					asset: ASSET,
 					amount: DEPOSIT_AMOUNT,
 					deposit_details: (),
@@ -968,7 +969,7 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 		assert!(
 			matches!(
 				cf_test_utilities::last_event::<Test>(),
-				RuntimeEvent::IngressEgress(crate::Event::<Test>::DepositFinalised {
+				RuntimeEvent::IngressEgress(crate::Event::<Test, Instance1>::DepositFinalised {
 					asset: ASSET,
 					amount: DEPOSIT_AMOUNT,
 					deposit_details: (),
@@ -1107,7 +1108,10 @@ fn channel_reuse_with_different_assets() {
 #[test]
 fn ingress_finalisation_succeeds_after_channel_expired_but_not_recycled() {
 	new_test_ext().execute_with(|| {
-		assert!(ScheduledEgressFetchOrTransfer::<Test>::get().is_empty(), "Is empty after genesis");
+		assert!(
+			ScheduledEgressFetchOrTransfer::<Test, Instance1>::get().is_empty(),
+			"Is empty after genesis"
+		);
 
 		request_address_and_deposit(ALICE, eth::Asset::Eth);
 
@@ -1119,7 +1123,7 @@ fn ingress_finalisation_succeeds_after_channel_expired_but_not_recycled() {
 
 		IngressEgress::on_finalize(1);
 
-		assert!(ScheduledEgressFetchOrTransfer::<Test>::get().is_empty(),);
+		assert!(ScheduledEgressFetchOrTransfer::<Test, Instance1>::get().is_empty(),);
 	});
 }
 
@@ -1148,7 +1152,7 @@ fn can_store_failed_vault_transfers() {
 			},
 		));
 		assert_eq!(
-			FailedForeignChainCalls::<Test>::get(epoch),
+			FailedForeignChainCalls::<Test, Instance1>::get(epoch),
 			vec![FailedForeignChainCall { broadcast_id, original_epoch: epoch }]
 		);
 	});
@@ -1333,16 +1337,16 @@ fn failed_ccm_is_stored() {
 	new_test_ext().execute_with(|| {
 		let epoch = MockEpochInfo::epoch_index();
 		let broadcast_id = 1;
-		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch), vec![]);
+		assert_eq!(FailedForeignChainCalls::<Test, Instance1>::get(epoch), vec![]);
 
 		assert_ok!(IngressEgress::ccm_broadcast_failed(RuntimeOrigin::root(), broadcast_id,));
 
 		assert_eq!(
-			FailedForeignChainCalls::<Test>::get(epoch),
+			FailedForeignChainCalls::<Test, Instance1>::get(epoch),
 			vec![FailedForeignChainCall { broadcast_id, original_epoch: epoch }]
 		);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::CcmBroadcastFailed { broadcast_id },
+			crate::Event::<Test, Instance1>::CcmBroadcastFailed { broadcast_id },
 		));
 	});
 }
@@ -1354,7 +1358,7 @@ fn on_finalize_handles_failed_calls() {
 		let epoch = 1u32;
 		MockEpochInfo::set_epoch(epoch);
 		let destination_address = [0xcf; 20].into();
-		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch), vec![]);
+		assert_eq!(FailedForeignChainCalls::<Test, Instance1>::get(epoch), vec![]);
 
 		assert_ok!(IngressEgress::vault_transfer_failed(
 			RuntimeOrigin::root(),
@@ -1366,7 +1370,7 @@ fn on_finalize_handles_failed_calls() {
 		assert_ok!(IngressEgress::ccm_broadcast_failed(RuntimeOrigin::root(), 13,));
 
 		assert_eq!(
-			FailedForeignChainCalls::<Test>::get(epoch),
+			FailedForeignChainCalls::<Test, Instance1>::get(epoch),
 			vec![
 				FailedForeignChainCall { broadcast_id: 1, original_epoch: epoch },
 				FailedForeignChainCall { broadcast_id: 12, original_epoch: epoch },
@@ -1378,7 +1382,7 @@ fn on_finalize_handles_failed_calls() {
 		IngressEgress::on_finalize(0);
 
 		assert_eq!(
-			FailedForeignChainCalls::<Test>::get(epoch),
+			FailedForeignChainCalls::<Test, Instance1>::get(epoch),
 			vec![
 				FailedForeignChainCall { broadcast_id: 1, original_epoch: epoch },
 				FailedForeignChainCall { broadcast_id: 12, original_epoch: epoch },
@@ -1392,39 +1396,39 @@ fn on_finalize_handles_failed_calls() {
 		// Resign 1 call per block
 		IngressEgress::on_finalize(1);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::FailedForeignChainCallResigned {
+			crate::Event::<Test, Instance1>::FailedForeignChainCallResigned {
 				broadcast_id: 13,
 				threshold_signature_id: 2,
 			},
 		));
 		assert_eq!(MockEgressBroadcaster::resigned_call(), Some(13u32));
 		assert_eq!(
-			FailedForeignChainCalls::<Test>::get(epoch),
+			FailedForeignChainCalls::<Test, Instance1>::get(epoch),
 			vec![
 				FailedForeignChainCall { broadcast_id: 1, original_epoch: epoch },
 				FailedForeignChainCall { broadcast_id: 12, original_epoch: epoch },
 			]
 		);
 		assert_eq!(
-			FailedForeignChainCalls::<Test>::get(epoch + 1),
+			FailedForeignChainCalls::<Test, Instance1>::get(epoch + 1),
 			vec![FailedForeignChainCall { broadcast_id: 13, original_epoch: epoch }]
 		);
 
 		// Resign the 2nd call
 		IngressEgress::on_finalize(2);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::FailedForeignChainCallResigned {
+			crate::Event::<Test, Instance1>::FailedForeignChainCallResigned {
 				broadcast_id: 12,
 				threshold_signature_id: 3,
 			},
 		));
 		assert_eq!(MockEgressBroadcaster::resigned_call(), Some(12u32));
 		assert_eq!(
-			FailedForeignChainCalls::<Test>::get(epoch),
+			FailedForeignChainCalls::<Test, Instance1>::get(epoch),
 			vec![FailedForeignChainCall { broadcast_id: 1, original_epoch: epoch }]
 		);
 		assert_eq!(
-			FailedForeignChainCalls::<Test>::get(epoch + 1),
+			FailedForeignChainCalls::<Test, Instance1>::get(epoch + 1),
 			vec![
 				FailedForeignChainCall { broadcast_id: 13, original_epoch: epoch },
 				FailedForeignChainCall { broadcast_id: 12, original_epoch: epoch }
@@ -1433,15 +1437,15 @@ fn on_finalize_handles_failed_calls() {
 		// Resign the last call
 		IngressEgress::on_finalize(3);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::FailedForeignChainCallResigned {
+			crate::Event::<Test, Instance1>::FailedForeignChainCallResigned {
 				broadcast_id: 1,
 				threshold_signature_id: 4,
 			},
 		));
 		assert_eq!(MockEgressBroadcaster::resigned_call(), Some(1u32));
-		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch), vec![]);
+		assert_eq!(FailedForeignChainCalls::<Test, Instance1>::get(epoch), vec![]);
 		assert_eq!(
-			FailedForeignChainCalls::<Test>::get(epoch + 1),
+			FailedForeignChainCalls::<Test, Instance1>::get(epoch + 1),
 			vec![
 				FailedForeignChainCall { broadcast_id: 13, original_epoch: epoch },
 				FailedForeignChainCall { broadcast_id: 12, original_epoch: epoch },
@@ -1453,11 +1457,11 @@ fn on_finalize_handles_failed_calls() {
 		MockEpochInfo::set_epoch(epoch + 2);
 		IngressEgress::on_finalize(4);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::FailedForeignChainCallExpired { broadcast_id: 1 },
+			crate::Event::<Test, Instance1>::FailedForeignChainCallExpired { broadcast_id: 1 },
 		));
-		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch), vec![]);
+		assert_eq!(FailedForeignChainCalls::<Test, Instance1>::get(epoch), vec![]);
 		assert_eq!(
-			FailedForeignChainCalls::<Test>::get(epoch + 1),
+			FailedForeignChainCalls::<Test, Instance1>::get(epoch + 1),
 			vec![
 				FailedForeignChainCall { broadcast_id: 13, original_epoch: epoch },
 				FailedForeignChainCall { broadcast_id: 12, original_epoch: epoch }
@@ -1466,22 +1470,22 @@ fn on_finalize_handles_failed_calls() {
 
 		IngressEgress::on_finalize(5);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::FailedForeignChainCallExpired { broadcast_id: 12 },
+			crate::Event::<Test, Instance1>::FailedForeignChainCallExpired { broadcast_id: 12 },
 		));
 		assert_eq!(
-			FailedForeignChainCalls::<Test>::get(epoch + 1),
+			FailedForeignChainCalls::<Test, Instance1>::get(epoch + 1),
 			vec![FailedForeignChainCall { broadcast_id: 13, original_epoch: epoch }]
 		);
 
 		IngressEgress::on_finalize(6);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::FailedForeignChainCallExpired { broadcast_id: 13 },
+			crate::Event::<Test, Instance1>::FailedForeignChainCallExpired { broadcast_id: 13 },
 		));
 
 		// All calls are culled from storage.
-		assert!(!FailedForeignChainCalls::<Test>::contains_key(epoch));
-		assert!(!FailedForeignChainCalls::<Test>::contains_key(epoch + 1));
-		assert!(!FailedForeignChainCalls::<Test>::contains_key(epoch + 2));
+		assert!(!FailedForeignChainCalls::<Test, Instance1>::contains_key(epoch));
+		assert!(!FailedForeignChainCalls::<Test, Instance1>::contains_key(epoch + 1));
+		assert!(!FailedForeignChainCalls::<Test, Instance1>::contains_key(epoch + 2));
 	});
 }
 
@@ -1503,20 +1507,20 @@ fn consolidation_tx_gets_broadcasted_on_finalize() {
 fn all_batch_errors_are_logged_as_event() {
 	new_test_ext()
 		.execute_with(|| {
-			ScheduledEgressFetchOrTransfer::<Test>::set(vec![
-				FetchOrTransfer::<Ethereum>::Transfer {
-					asset: ETH_ETH,
-					amount: 1_000,
-					destination_address: ALICE_ETH_ADDRESS,
-					egress_id: (ForeignChain::Ethereum, 1),
-				},
-			]);
+			ScheduledEgressFetchOrTransfer::<Test, Instance1>::set(vec![FetchOrTransfer::<
+				Ethereum,
+			>::Transfer {
+				asset: ETH_ETH,
+				amount: 1_000,
+				destination_address: ALICE_ETH_ADDRESS,
+				egress_id: (ForeignChain::Ethereum, 1),
+			}]);
 			MockEthAllBatch::set_success(false);
 		})
 		.then_execute_at_next_block(|_| {})
 		.then_execute_with(|_| {
 			System::assert_last_event(RuntimeEvent::IngressEgress(
-				crate::Event::<Test>::FailedToBuildAllBatchCall {
+				crate::Event::<Test, Instance1>::FailedToBuildAllBatchCall {
 					error: cf_chains::AllBatchError::UnsupportedToken,
 				},
 			));
@@ -1614,10 +1618,10 @@ fn should_cleanup_prewitnessed_deposits_when_channel_is_recycled() {
 		));
 
 		// Check that the deposit is stored in the storage
-		let prewitnessed_deposit_id = PrewitnessedDepositIdCounter::<Test>::get();
-		let channel_id = ChannelIdCounter::<Test>::get();
+		let prewitnessed_deposit_id = PrewitnessedDepositIdCounter::<Test, Instance1>::get();
+		let channel_id = ChannelIdCounter::<Test, Instance1>::get();
 		assert_eq!(
-			PrewitnessedDeposits::<Test>::get(channel_id, prewitnessed_deposit_id),
+			PrewitnessedDeposits::<Test, Instance1>::get(channel_id, prewitnessed_deposit_id),
 			Some(PrewitnessedDeposit {
 				asset: ASSET,
 				amount: DEPOSIT_AMOUNT,
@@ -1635,7 +1639,10 @@ fn should_cleanup_prewitnessed_deposits_when_channel_is_recycled() {
 		IngressEgress::on_idle(Default::default(), Weight::MAX);
 
 		// Check that the prewitnessed deposit is removed from the storage
-		assert_eq!(PrewitnessedDeposits::<Test>::get(channel_id, prewitnessed_deposit_id), None);
+		assert_eq!(
+			PrewitnessedDeposits::<Test, Instance1>::get(channel_id, prewitnessed_deposit_id),
+			None
+		);
 	});
 }
 
@@ -1685,8 +1692,11 @@ fn should_remove_prewitnessed_deposit_when_witnessed() {
 		));
 
 		// Check that the deposits are in storage
-		let channel_id = ChannelIdCounter::<Test>::get();
-		assert_eq!(PrewitnessedDeposits::<Test>::iter_prefix_values(channel_id).count(), 3);
+		let channel_id = ChannelIdCounter::<Test, Instance1>::get();
+		assert_eq!(
+			PrewitnessedDeposits::<Test, Instance1>::iter_prefix_values(channel_id).count(),
+			3
+		);
 
 		// Witness one of the deposits
 		assert_ok!(Pallet::<Test, _>::process_deposit_witnesses(
@@ -1696,10 +1706,13 @@ fn should_remove_prewitnessed_deposit_when_witnessed() {
 
 		// Check that one of the deposits was removed and the other 2 remain.
 		// we don't care which one of the two with the same amount was removed.
-		assert_eq!(PrewitnessedDeposits::<Test>::iter_prefix_values(channel_id).count(), 2);
-		let prewitnessed_deposit_id = PrewitnessedDepositIdCounter::<Test>::get();
 		assert_eq!(
-			PrewitnessedDeposits::<Test>::get(channel_id, prewitnessed_deposit_id),
+			PrewitnessedDeposits::<Test, Instance1>::iter_prefix_values(channel_id).count(),
+			2
+		);
+		let prewitnessed_deposit_id = PrewitnessedDepositIdCounter::<Test, Instance1>::get();
+		assert_eq!(
+			PrewitnessedDeposits::<Test, Instance1>::get(channel_id, prewitnessed_deposit_id),
 			Some(PrewitnessedDeposit {
 				asset: ASSET,
 				amount: DEPOSIT_AMOUNT_2,
