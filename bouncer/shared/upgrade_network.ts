@@ -11,6 +11,7 @@ import { submitRuntimeUpgradeWithRestrictions } from './submit_runtime_upgrade';
 import { execWithLog } from './utils/exec_with_log';
 import { setupArbVault } from './setup_arb_vault';
 import { submitGovernanceExtrinsic } from './cf_governance';
+import { setupSwaps } from './setup_swaps';
 
 async function readPackageTomlVersion(projectRoot: string): Promise<string> {
   const data = await fs.readFile(path.join(projectRoot, '/state-chain/runtime/Cargo.toml'), 'utf8');
@@ -148,6 +149,7 @@ async function incompatibleUpgradeNoBuild(
 
   if (newVersion.includes('1.4')) {
     await setupArbVault();
+    await setupSwaps();
   }
 
   console.log('Starting new broker and lp-api.');
