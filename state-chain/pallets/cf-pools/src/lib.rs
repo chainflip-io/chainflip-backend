@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use core::ops::Range;
 
+use crate::common::Pairs;
 use cf_amm::{
 	common::{self, Amount, PoolPairsMap, Price, Side, SqrtPriceQ64F96, Tick},
 	limit_orders::{self, Collected, PositionInfo},
@@ -597,8 +598,7 @@ pub mod pallet {
 					.pool_state
 					.range_orders
 					.positions_by_lp(&lp)
-					.filter(|(_, order_id, _, _, _, _)| *order_id == id)
-					.next()
+					.find(|(_, order_id, _, _, _, _)| *order_id == id)
 					.map(|(_, _, tick_1, tick_2, _, _)| (tick_1..tick_2));
 				let tick_range = match (current_tick, option_tick_range) {
 					(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
@@ -679,8 +679,7 @@ pub mod pallet {
 					.pool_state
 					.range_orders
 					.positions_by_lp(&lp)
-					.filter(|(_, order_id, _, _, _, _)| *order_id == id)
-					.next()
+					.find(|(_, order_id, _, _, _, _)| *order_id == id)
 					.map(|(_, _, tick_1, tick_2, _, _)| (tick_1..tick_2));
 				let tick_range = match (current_tick, option_tick_range) {
 					(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
@@ -748,10 +747,12 @@ pub mod pallet {
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
-				let current_tick = pool.pool_state.limit_orders_info_for_lp(&lp.clone())
-					[side.to_sold_pair()]
-				.get(&id)
-				.map(|order_details| order_details.0);
+				let current_tick = pool
+					.pool_state
+					.limit_orders
+					.positions_by_lp(&lp, side.to_sold_pair())
+					.find(|(_, order_id, _, _, _)| *order_id == id)
+					.map(|(_, _, tick, _, _)| tick);
 				let tick = match (current_tick, option_tick) {
 					(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
 					(None, Some(tick)) | (Some(tick), None) => Ok(tick),
@@ -822,10 +823,12 @@ pub mod pallet {
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
-				let current_tick = pool.pool_state.limit_orders_info_for_lp(&lp.clone())
-					[side.to_sold_pair()]
-				.get(&id)
-				.map(|order_details| order_details.0);
+				let current_tick = pool
+					.pool_state
+					.limit_orders
+					.positions_by_lp(&lp, side.to_sold_pair())
+					.find(|(_, order_id, _, _, _)| *order_id == id)
+					.map(|(_, _, tick, _, _)| tick);
 				let tick = match (current_tick, option_tick) {
 					(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
 					(None, Some(tick)) => Ok(tick),
@@ -1221,21 +1224,17 @@ impl<T: Config> Pallet<T> {
 				Pools::<T>::insert(asset_pair, pool.clone()); // Update the pool in the storage
 			}
 
-			for (assets, limit_orders) in pool
-				.pool_state
-				.limit_orders_info_for_lp(lp)
-				.as_ref()
-				.into_iter()
-				.collect::<Vec<_>>()
-			{
-				for (id, (tick, _)) in limit_orders {
+			for side in [Pairs::Base, Pairs::Quote] {
+				for (_, id, tick, _, _) in
+					read_pool.pool_state.limit_orders.positions_by_lp(lp, side)
+				{
 					Self::inner_update_limit_order(
 						&mut pool,
 						lp,
 						&asset_pair,
-						assets.sell_order(),
-						*id,
-						*tick,
+						side.sell_order(),
+						id,
+						tick,
 						IncreaseOrDecrease::Decrease(Default::default()),
 						false,
 					)?;
@@ -1730,18 +1729,36 @@ impl<T: Config> Pallet<T> {
 		Ok(PoolOrders {
 			limit_orders: AskBidMap::from_sell_map(
 				if let Some(lp) = option_lp {
-					pool.pool_state.limit_orders_info_for_lp(lp)
+					PoolPairsMap {
+						base: pool
+							.pool_state
+							.limit_orders
+							.positions_by_lp(lp, Pairs::Base)
+							.collect::<Vec<_>>(),
+						quote: pool
+							.pool_state
+							.limit_orders
+							.positions_by_lp(lp, Pairs::Quote)
+							.collect::<Vec<_>>(),
+					}
 				} else {
-					pool.pool_state.limit_orders_info()
+					PoolPairsMap {
+						base: pool
+							.pool_state
+							.limit_orders
+							.positions_by_pair(Pairs::Base)
+							.collect::<Vec<_>>(),
+						quote: pool
+							.pool_state
+							.limit_orders
+							.positions_by_pair(Pairs::Quote)
+							.collect::<Vec<_>>(),
+					}
 				}
-				.map_with_pair(|asset, limit_orders| {
+				.map_with_pair(|_, limit_orders| {
 					limit_orders
 						.into_iter()
-						.filter_map(|(id, (tick, lp))| {
-							let (collected, position_info) = pool
-								.pool_state
-								.limit_order(&lp.clone(), id, asset.sell_order(), tick)
-								.unwrap();
+						.filter_map(|(lp, id, tick, collected, position_info)| {
 							if position_info.amount.is_zero() {
 								None
 							} else {

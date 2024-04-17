@@ -22,9 +22,11 @@ mod tests;
 
 use core::convert::Infallible;
 
+use cf_utilities::MinMax;
 use serde::{Deserialize, Serialize};
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::{collections::btree_map::BTreeMap, ops::Bound};
 
+use crate::{collect_map_in_range, common::Pairs};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_core::{U256, U512};
@@ -412,7 +414,9 @@ pub mod old {
 	}
 }
 
-impl<LiquidityProvider: Clone + Ord, OrderId: Ord + Clone> PoolState<LiquidityProvider, OrderId> {
+impl<LiquidityProvider: Clone + Ord, OrderId: Ord + Clone + MinMax>
+	PoolState<LiquidityProvider, OrderId>
+{
 	/// Creates a new pool state with the given fee. The pool is created with no liquidity. The pool
 	/// may not be created with a fee higher than 50%.
 	///
@@ -485,6 +489,75 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Ord + Clone> PoolState<LiquidityPr
 						.map_or(Default::default(), |position| PositionInfo::from(&position)),
 				)
 			})
+	}
+
+	pub fn positions_by_pair(
+		&self,
+		pairs: Pairs,
+	) -> impl '_ + Iterator<Item = (LiquidityProvider, OrderId, Tick, Collected, PositionInfo)> {
+		let positions = self.positions[pairs].clone();
+		positions.into_iter().map(move |((lp, order_id, sqrt_price), position)| {
+			let (collected, option_position) = match pairs {
+				Pairs::Quote => Self::collect_from_position::<BaseToQuote>(
+					position.clone(),
+					self.fixed_pools[pairs].get(&sqrt_price),
+					sqrt_price_to_price(sqrt_price),
+					self.fee_hundredth_pips,
+				),
+				Pairs::Base => Self::collect_from_position::<QuoteToBase>(
+					position.clone(),
+					self.fixed_pools[pairs].get(&sqrt_price),
+					sqrt_price_to_price(sqrt_price),
+					self.fee_hundredth_pips,
+				),
+			};
+
+			(
+				lp.clone(),
+				order_id.clone(),
+				tick_at_sqrt_price(sqrt_price),
+				collected,
+				option_position
+					.map_or(Default::default(), |position| PositionInfo::from(&position)),
+			)
+		})
+	}
+
+	pub fn positions_by_lp(
+		&self,
+		lp: &LiquidityProvider,
+		pairs: Pairs,
+	) -> impl '_ + Iterator<Item = (LiquidityProvider, OrderId, Tick, Collected, PositionInfo)> {
+		let positions_by_lp =
+			collect_map_in_range::<(LiquidityProvider, OrderId, SqrtPriceQ64F96), Position>(
+				Bound::Included(&(lp.clone(), <OrderId as MinMax>::min(), U256::zero())),
+				Bound::Included(&(lp.clone(), <OrderId as MinMax>::max(), U256::max_value())),
+				self.positions[pairs].clone(),
+			);
+		positions_by_lp.into_iter().map(move |((lp, order_id, sqrt_price), position)| {
+			let (collected, option_position) = match pairs {
+				Pairs::Quote => Self::collect_from_position::<BaseToQuote>(
+					position.clone(),
+					self.fixed_pools[pairs].get(&sqrt_price),
+					sqrt_price_to_price(sqrt_price),
+					self.fee_hundredth_pips,
+				),
+				Pairs::Base => Self::collect_from_position::<QuoteToBase>(
+					position.clone(),
+					self.fixed_pools[pairs].get(&sqrt_price),
+					sqrt_price_to_price(sqrt_price),
+					self.fee_hundredth_pips,
+				),
+			};
+			(
+				lp.clone(),
+				order_id.clone(),
+				tick_at_sqrt_price(sqrt_price),
+				collected,
+				option_position
+					.map_or(Default::default(), |position| PositionInfo::from(&position)),
+			)
+		})
 	}
 
 	/// Runs collect for all positions in the pool. Returns a PoolPairsMap

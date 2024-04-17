@@ -8,6 +8,8 @@ use crate::{
 	range_orders::Liquidity,
 };
 
+use crate::collect_map_in_range;
+
 use super::*;
 
 type LiquidityProvider = cf_primitives::AccountId;
@@ -241,7 +243,7 @@ fn test_collect_in_range() {
 
 	// Collects an inclusive range of elements for the map by defined bounds.
 	assert_eq!(
-		PoolState::collect_map_in_range::<(u64, u32), (u64, u32)>(
+		collect_map_in_range::<(u64, u32), (u64, u32)>(
 			Bound::Included(&(4, 4)),
 			Bound::Included(&(7, 7)),
 			data_map.clone(),
@@ -253,7 +255,7 @@ fn test_collect_in_range() {
 
 	// Collects till the end if the upper bound is higher then the last element.
 	assert_eq!(
-		PoolState::collect_map_in_range::<(u64, u32), (u64, u32)>(
+		collect_map_in_range::<(u64, u32), (u64, u32)>(
 			Bound::Included(&(5, 5)),
 			Bound::Included(&(12, 12)),
 			data_map.clone(),
@@ -271,7 +273,7 @@ fn test_collect_in_range() {
 
 	// Collects from the first element if the lower bound is lower then the first element.
 	assert_eq!(
-		PoolState::collect_map_in_range::<(u64, u32), (u64, u32)>(
+		collect_map_in_range::<(u64, u32), (u64, u32)>(
 			Bound::Included(&(1, 1)),
 			Bound::Included(&(5, 5)),
 			data_map,

@@ -11,14 +11,13 @@ use codec::{Decode, Encode};
 use common::{
 	is_sqrt_price_valid, price_to_sqrt_price, sqrt_price_to_price, tick_at_sqrt_price, Amount,
 	BaseToQuote, Pairs, PoolPairsMap, Price, QuoteToBase, SetFeesError, Side, SqrtPriceQ64F96,
-	SwapDirection, Tick, MAX_TICK, MIN_TICK,
+	SwapDirection, Tick,
 };
 use limit_orders::{Collected, PositionInfo};
 use range_orders::Liquidity;
 use scale_info::TypeInfo;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
-use sp_core::U256;
 use sp_std::ops::Bound;
 
 use crate::common::{mul_div_floor, nth_root_of_integer_as_fixed_point};
@@ -545,85 +544,6 @@ impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord + MinMax>
 			range_orders::PoolState::<LiquidityProvider, OrderId>::validate_fees(
 				fee_hundredth_pips,
 			)
-	}
-
-	/// Returns the range orders info for a given liquidity provider. Works as a replacement for the
-	/// former range_orders_cache.
-	pub fn range_orders_info_for_lp(
-		&self,
-		lp: &LiquidityProvider,
-	) -> BTreeMap<OrderId, core::ops::Range<Tick>> {
-		PoolState::<LiquidityProvider, OrderId>::collect_map_in_range(
-			Bound::Included(&(lp.clone(), <OrderId as MinMax>::min(), MIN_TICK, MIN_TICK)),
-			Bound::Included(&(lp.clone(), <OrderId as MinMax>::max(), MAX_TICK, MAX_TICK)),
-			self.range_orders.positions.clone(),
-		)
-		.into_keys()
-		.map(|k| (k.1, k.2..k.3))
-		.collect()
-	}
-
-	/// Collects the elements of a given BTreeMap between two defined Bound. The bounds are
-	/// inclusive.
-	fn collect_map_in_range<K: Ord + Clone, V: Clone>(
-		start_bound: Bound<&K>,
-		end_bound: Bound<&K>,
-		positions: BTreeMap<K, V>,
-	) -> BTreeMap<K, V> {
-		let mut result: BTreeMap<K, V> = BTreeMap::new();
-		let mut lower_bound_orders = positions.lower_bound(start_bound);
-		while let Some(order) = lower_bound_orders.next() {
-			let (key, value) = order;
-			result.insert(key.clone(), value.clone());
-			if let Some((last_key, _)) = positions.upper_bound(end_bound).peek_prev() {
-				if key == last_key {
-					break;
-				}
-			}
-		}
-		result
-	}
-
-	/// Returns the limit orders info for a given liquidity provider. Works as a replacement for the
-	/// former limit_orders_cache.
-	pub fn limit_orders_info_for_lp(
-		&self,
-		lp: &LiquidityProvider,
-	) -> PoolPairsMap<BTreeMap<OrderId, (Tick, LiquidityProvider)>> {
-		PoolPairsMap {
-			base: PoolState::<LiquidityProvider, OrderId>::collect_map_in_range(
-				Bound::Included(&(lp.clone(), <OrderId as MinMax>::min(), U256::zero())),
-				Bound::Included(&(lp.clone(), <OrderId as MinMax>::max(), U256::max_value())),
-				self.limit_orders.positions.base.clone(),
-			)
-			.into_keys()
-			.map(|k| (k.1, (tick_at_sqrt_price(k.2), k.0)))
-			.collect(),
-			quote: PoolState::<LiquidityProvider, OrderId>::collect_map_in_range(
-				Bound::Included(&(lp.clone(), <OrderId as MinMax>::min(), U256::zero())),
-				Bound::Included(&(lp.clone(), <OrderId as MinMax>::max(), U256::max_value())),
-				self.limit_orders.positions.quote.clone(),
-			)
-			.into_keys()
-			.map(|k| (k.1, (tick_at_sqrt_price(k.2), k.0)))
-			.collect(),
-		}
-	}
-
-	/// Returns all the limit orders info.
-	pub fn limit_orders_info(&self) -> PoolPairsMap<BTreeMap<OrderId, (Tick, LiquidityProvider)>> {
-		PoolPairsMap {
-			base: self
-				.limit_orders
-				.positions::<QuoteToBase>()
-				.map(|(lp, orders_id, tick, _, _)| (orders_id, (tick, lp)))
-				.collect(),
-			quote: self
-				.limit_orders
-				.positions::<BaseToQuote>()
-				.map(|(lp, orders_id, tick, _, _)| (orders_id, (tick, lp)))
-				.collect(),
-		}
 	}
 }
 
