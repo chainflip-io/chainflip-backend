@@ -526,7 +526,7 @@ pub trait Broadcaster<C: Chain> {
 
 	/// Request a new threshold signature for a previously aborted broadcast's payload, optionally
 	/// also requesting the validators to send the transaction.
-	fn re_sign_aborted_broadcast(
+	fn re_sign_broadcast(
 		broadcast_id: BroadcastId,
 		request_broadcast: bool,
 	) -> Result<ThresholdSignatureRequestId, DispatchError>;

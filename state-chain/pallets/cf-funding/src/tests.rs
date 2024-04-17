@@ -303,7 +303,7 @@ fn redemption_cannot_occur_without_funding_first() {
 			RuntimeEvent::Funding(crate::Event::RedemptionRequested {
 				account_id: ALICE,
 				amount: REDEEMED_AMOUNT,
-				broadcast_id: 0,
+				broadcast_id: 1,
 				expiry_time: 10,
 			}),
 			RuntimeEvent::System(frame_system::Event::KilledAccount { account: ALICE }),
