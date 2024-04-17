@@ -1143,7 +1143,7 @@ type PalletMigrations = (
 	// Solana-specific pallet migrations.
 	VersionedMigration<
 		pallet_cf_environment::Pallet<Runtime>,
-		migrations::arbitrum_integration::SolanaIntegration,
+		migrations::solana_integration::SolanaIntegration,
 		10,
 		11,
 	>,
