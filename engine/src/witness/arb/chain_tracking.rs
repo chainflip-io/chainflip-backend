@@ -28,6 +28,7 @@ impl<T: EvmRetryRpcApi + Send + Sync + Clone> GetTrackedData<cf_chains::Arbitrum
 			base_fee: (*context!(fee_history.base_fee_per_gas.first())?)
 				.try_into()
 				.expect("Base fee should fit u128"),
+			gas_estimate: 0,
 		})
 	}
 }

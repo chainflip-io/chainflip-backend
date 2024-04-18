@@ -63,6 +63,7 @@ impl Chain for Arbitrum {
 #[codec(mel_bound())]
 pub struct ArbitrumTrackedData {
 	pub base_fee: <Arbitrum as Chain>::ChainAmount,
+	pub gas_estimate: <Arbitrum as Chain>::ChainAmount,
 }
 
 impl Default for ArbitrumTrackedData {
