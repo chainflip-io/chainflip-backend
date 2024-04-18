@@ -24,6 +24,7 @@ use pallet_cf_witnesser::CallHash;
 use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
+use sp_core::U256;
 use sp_runtime::DispatchError;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
@@ -160,6 +161,7 @@ decl_runtime_apis!(
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
+			limit_orders: Option<Vec<(i32, U256)>>,
 		) -> Result<SwapOutput, DispatchErrorWithMessage>;
 		fn cf_pool_info(
 			base_asset: Asset,
