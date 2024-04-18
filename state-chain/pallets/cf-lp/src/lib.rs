@@ -26,16 +26,27 @@ pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
+use cf_chains::address::EncodedAddress;
+
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
-	use cf_chains::{address::EncodedAddress, Chain};
+	use cf_chains::Chain;
 	use cf_primitives::{ChannelId, EgressId};
 
 	use super::*;
+
+	/// AccountOrAddress is a enum that can represent an internal account or an external address.
+	/// This is used to represent the destination address for an egress during a withdrawal or an
+	/// internal account to move funds internally.
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
+	pub enum AccountOrAddress<AccountId> {
+		Internal(AccountId),
+		External(EncodedAddress),
+	}
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -209,6 +220,8 @@ pub mod pallet {
 
 		/// For when the user wants to withdraw their free balances out of the chain.
 		/// Requires a valid foreign chain address.
+		/// Note: This is a V1 version of the withdraw_asset call. The V2 version is recommended.
+		#[deprecated(note = "Use withdraw_asset_v2 instead")]
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::withdraw_asset())]
 		pub fn withdraw_asset(
@@ -217,44 +230,12 @@ pub mod pallet {
 			asset: Asset,
 			destination_address: EncodedAddress,
 		) -> DispatchResult {
-			ensure!(T::SafeMode::get().withdrawal_enabled, Error::<T>::WithdrawalsDisabled);
-			if amount > 0 {
-				let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-
-				let destination_address_internal =
-					T::AddressConverter::try_from_encoded_address(destination_address.clone())
-						.map_err(|_| Error::<T>::InvalidEgressAddress)?;
-
-				// Check validity of Chain and Asset
-				ensure!(
-					destination_address_internal.chain() == ForeignChain::from(asset),
-					Error::<T>::InvalidEgressAddress
-				);
-
-				// Sweep earned fees
-				T::PoolApi::sweep(&account_id)?;
-
-				// Debit the asset from the account.
-				Self::try_debit_account(&account_id, asset, amount)?;
-
-				let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
-					T::EgressHandler::schedule_egress(
-						asset,
-						amount,
-						destination_address_internal,
-						None,
-					)
-					.map_err(Into::into)?;
-
-				Self::deposit_event(Event::<T>::WithdrawalEgressScheduled {
-					egress_id,
-					asset,
-					amount: egress_amount,
-					destination_address,
-					fee: fee_withheld,
-				});
-			}
-			Ok(())
+			Self::withdraw_asset_inner(
+				origin,
+				amount,
+				asset,
+				AccountOrAddress::External(destination_address),
+			)
 		}
 
 		/// Register the account as a Liquidity Provider.
@@ -327,6 +308,90 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		/// For when the user wants to withdraw or move their free balances. Requires a valid
+		/// foreign chain address or an internal account. If an address is provided, the assets are
+		/// getting withdrawn to the external chain. If an account is provided, the assets are
+		/// getting moved internally.
+		/// Note: This is a V2 version of the withdraw_asset call. The V1 version is deprecated.
+		#[pallet::call_index(6)]
+		#[pallet::weight(T::WeightInfo::withdraw_asset())]
+		pub fn withdraw_asset_v2(
+			origin: OriginFor<T>,
+			amount: AssetAmount,
+			asset: Asset,
+			destination: AccountOrAddress<T::AccountId>,
+		) -> DispatchResult {
+			Self::withdraw_asset_inner(origin, amount, asset, destination)
+		}
+	}
+}
+
+impl<T: Config> Pallet<T> {
+	pub fn withdraw_asset_inner(
+		origin: OriginFor<T>,
+		amount: AssetAmount,
+		asset: Asset,
+		destination: AccountOrAddress<T::AccountId>,
+	) -> DispatchResult {
+		ensure!(T::SafeMode::get().withdrawal_enabled, Error::<T>::WithdrawalsDisabled);
+		if amount > 0 {
+			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+
+			match destination {
+				AccountOrAddress::Internal(destination_account) => {
+					// Sweep earned fees
+					T::PoolApi::sweep(&account_id)?;
+
+					// Debit the asset from the account.
+					Self::try_debit_account(&account_id, asset, amount)?;
+
+					// Credit the asset to the destination account.
+					Self::try_credit_account(&destination_account, asset, amount)?;
+
+					Self::deposit_event(Event::<T>::AccountCredited {
+						account_id: destination_account,
+						asset,
+						amount_credited: amount,
+					});
+				},
+				AccountOrAddress::External(destination_address) => {
+					let destination_address_internal =
+						T::AddressConverter::try_from_encoded_address(destination_address.clone())
+							.map_err(|_| Error::<T>::InvalidEgressAddress)?;
+
+					// Check validity of Chain and Asset
+					ensure!(
+						destination_address_internal.chain() == ForeignChain::from(asset),
+						Error::<T>::InvalidEgressAddress
+					);
+
+					// Sweep earned fees
+					T::PoolApi::sweep(&account_id)?;
+
+					// Debit the asset from the account.
+					Self::try_debit_account(&account_id, asset, amount)?;
+
+					let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
+						T::EgressHandler::schedule_egress(
+							asset,
+							amount,
+							destination_address_internal,
+							None,
+						)
+						.map_err(Into::into)?;
+
+					Self::deposit_event(Event::<T>::WithdrawalEgressScheduled {
+						egress_id,
+						asset,
+						amount: egress_amount,
+						destination_address,
+						fee: fee_withheld,
+					});
+				},
+			}
+		}
+		Ok(())
 	}
 }
 

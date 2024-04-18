@@ -1,4 +1,4 @@
-use crate::{mock::*, Error, FreeBalances, LiquidityRefundAddress};
+use crate::{mock::*, AccountOrAddress, Error, FreeBalances, LiquidityRefundAddress};
 
 use cf_chains::{address::EncodedAddress, ForeignChainAddress};
 use cf_primitives::{AccountId, Asset, AssetAmount, ForeignChain};
@@ -57,6 +57,25 @@ fn liquidity_providers_can_withdraw_asset() {
 		));
 
 		assert_eq!(FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth), Some(900));
+	});
+}
+
+#[test]
+fn liquidity_providers_can_move_assets_internally() {
+	new_test_ext().execute_with(|| {
+		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, 1_000);
+		// Check if the LP accounts have the correct initial balances.
+		assert_eq!(FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth), Some(1_000));
+		assert_eq!(FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT_2), Asset::Eth), None);
+		assert_ok!(LiquidityProvider::withdraw_asset_v2(
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			100,
+			Asset::Eth,
+			AccountOrAddress::Internal(LP_ACCOUNT_2.into()),
+		));
+		// Expect the balances to be moved between the LP accounts.
+		assert_eq!(FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth), Some(900));
+		assert_eq!(FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT_2), Asset::Eth), Some(100));
 	});
 }
 
