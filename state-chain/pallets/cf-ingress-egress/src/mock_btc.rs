@@ -84,7 +84,7 @@ impl SwapDepositHandler for MockSwapDepositHandlerBtc {
 		_to: Asset,
 		_amount: AssetAmount,
 		_destination_address: ForeignChainAddress,
-		_broker_commission_bps: Vec<Beneficiary<Self::AccountId>>,
+		_broker_commission: Vec<Beneficiary<Self::AccountId>>,
 		_channel_id: ChannelId,
 	) -> SwapId {
 		unimplemented!()

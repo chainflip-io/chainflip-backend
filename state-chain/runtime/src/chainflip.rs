@@ -547,7 +547,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				source_asset: Asset,
 				destination_asset: Asset,
 				destination_address: ForeignChainAddress,
-				broker_commission_bps: Vec<Beneficiary<Self::AccountId>>,
+				broker_commission: Vec<Beneficiary<Self::AccountId>>,
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadata>,
 				boost_fee: BasisPoints
@@ -558,7 +558,7 @@ macro_rules! impl_deposit_api_for_anychain {
 							source_asset,
 							destination_asset,
 							destination_address,
-							broker_commission_bps,
+							broker_commission,
 							broker_id,
 							channel_metadata,
 							boost_fee

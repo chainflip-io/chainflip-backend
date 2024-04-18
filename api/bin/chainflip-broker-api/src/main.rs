@@ -58,7 +58,7 @@ pub trait Rpc {
 		source_asset: Asset,
 		destination_asset: Asset,
 		destination_address: String,
-		broker_commission_bps: BrokerFees<
+		broker_commission: BrokerFees<
 			<state_chain_runtime::Runtime as frame_system::Config>::AccountId,
 		>,
 		channel_metadata: Option<CcmChannelMetadata>,
@@ -105,7 +105,7 @@ impl RpcServer for RpcServerImpl {
 		source_asset: Asset,
 		destination_asset: Asset,
 		destination_address: String,
-		broker_commission_bps: BrokerFees<
+		broker_commission: BrokerFees<
 			<state_chain_runtime::Runtime as frame_system::Config>::AccountId,
 		>,
 		channel_metadata: Option<CcmChannelMetadata>,
@@ -118,7 +118,7 @@ impl RpcServer for RpcServerImpl {
 				source_asset,
 				destination_asset,
 				clean_foreign_chain_address(destination_asset.into(), &destination_address)?,
-				broker_commission_bps,
+				broker_commission,
 				channel_metadata,
 				boost_fee,
 			)

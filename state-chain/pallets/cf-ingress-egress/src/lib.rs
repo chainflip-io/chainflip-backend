@@ -252,7 +252,7 @@ pub mod pallet {
 		Swap {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
-			broker_commission_bps: Vec<Beneficiary<AccountId>>,
+			broker_commission: Vec<Beneficiary<AccountId>>,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
@@ -1454,7 +1454,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ChannelAction::Swap {
 				destination_address,
 				destination_asset,
-				broker_commission_bps,
+				broker_commission,
 				..
 			} => DepositAction::Swap {
 				swap_id: T::SwapDepositHandler::schedule_swap_from_channel(
@@ -1466,7 +1466,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					destination_asset,
 					amount_after_fees.into(),
 					destination_address,
-					broker_commission_bps,
+					broker_commission,
 					channel_id,
 				),
 			},
@@ -1944,7 +1944,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		source_asset: TargetChainAsset<T, I>,
 		destination_asset: Asset,
 		destination_address: ForeignChainAddress,
-		broker_commission_bps: Vec<Beneficiary<Self::AccountId>>,
+		broker_commission: Vec<Beneficiary<Self::AccountId>>,
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
@@ -1964,7 +1964,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 				None => ChannelAction::Swap {
 					destination_asset,
 					destination_address,
-					broker_commission_bps,
+					broker_commission,
 				},
 			},
 			boost_fee,

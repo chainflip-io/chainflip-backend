@@ -348,7 +348,7 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		source_asset: Asset,
 		destination_asset: Asset,
 		destination_address: EncodedAddress,
-		broker_commission_bps: BrokerFees<
+		broker_commission: BrokerFees<
 			<state_chain_runtime::Runtime as frame_system::Config>::AccountId,
 		>,
 		channel_metadata: Option<CcmChannelMetadata>,
@@ -360,7 +360,7 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 					source_asset,
 					destination_asset,
 					destination_address,
-					broker_commission_bps,
+					broker_commission,
 					channel_metadata,
 					boost_fee: boost_fee.unwrap_or_default(),
 				},

@@ -17,7 +17,7 @@ pub trait SwapDepositHandler {
 		to: Asset,
 		amount: AssetAmount,
 		destination_address: ForeignChainAddress,
-		broker_commission_bps: Vec<Beneficiary<Self::AccountId>>,
+		broker_commission: Vec<Beneficiary<Self::AccountId>>,
 		channel_id: ChannelId,
 	) -> SwapId;
 }

@@ -693,7 +693,7 @@ pub trait DepositApi<C: Chain> {
 		source_asset: C::ChainAsset,
 		destination_asset: Asset,
 		destination_address: ForeignChainAddress,
-		broker_commission_bps: Vec<Beneficiary<Self::AccountId>>,
+		broker_commission: Vec<Beneficiary<Self::AccountId>>,
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,

@@ -483,7 +483,7 @@ pub mod pallet {
 			source_asset: Asset,
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
-			broker_commission_bps: BrokerFees<T::AccountId>,
+			broker_commission: BrokerFees<T::AccountId>,
 			channel_metadata: Option<CcmChannelMetadata>,
 			boost_fee: BasisPoints,
 		) -> DispatchResult {
@@ -491,7 +491,7 @@ pub mod pallet {
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
 			let mut broker_fees: Vec<Beneficiary<T::AccountId>> = vec![];
 			let total_bps: BasisPoints;
-			match broker_commission_bps {
+			match broker_commission {
 				BrokerFees::Single(broker_bps) => {
 					ensure!(broker_bps <= 1000, Error::<T>::BrokerCommissionBpsTooHigh);
 					total_bps = broker_bps;
@@ -1109,12 +1109,12 @@ pub mod pallet {
 			to: Asset,
 			amount: AssetAmount,
 			destination_address: ForeignChainAddress,
-			broker_commission_bps: Vec<Beneficiary<Self::AccountId>>,
+			broker_commission: Vec<Beneficiary<Self::AccountId>>,
 			channel_id: ChannelId,
 		) -> SwapId {
 			// Permill maxes out at 100% so this is safe.
 			let fee: u128 = Permill::from_parts(
-				broker_commission_bps.iter().fold(0, |acc, entry| acc + entry.bps) as u32 *
+				broker_commission.iter().fold(0, |acc, entry| acc + entry.bps) as u32 *
 					BASIS_POINTS_PER_MILLION,
 			) * amount;
 
@@ -1137,7 +1137,7 @@ pub mod pallet {
 				SwapType::Swap(destination_address.clone()),
 			);
 
-			for elem in broker_commission_bps {
+			for elem in broker_commission {
 				EarnedBrokerFees::<T>::mutate(&elem.account, from, |earned_fees| {
 					earned_fees.saturating_accrue(
 						Permill::from_parts(elem.bps as u32 * BASIS_POINTS_PER_MILLION) * amount,
