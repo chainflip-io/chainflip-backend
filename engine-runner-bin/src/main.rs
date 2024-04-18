@@ -33,7 +33,7 @@ mod new {
 fn main() -> anyhow::Result<()> {
 	let env_args = std::env::args().collect::<Vec<String>>();
 
-	let c_str_array: CStrArray = env_args.clone().try_into()?;
+	let c_str_array = CStrArray::from_rust_strings(&env_args)?;
 
 	// Attempt to run the new version first
 	let exit_status_new_first =
@@ -50,7 +50,7 @@ fn main() -> anyhow::Result<()> {
 			let compatible_args = engine_upgrade_utils::args_compatible_with_old(env_args);
 			let exit_status_old = unsafe {
 				old::cfe_entrypoint(
-					compatible_args.try_into()?,
+					CStrArray::from_rust_strings(&compatible_args)?,
 					engine_upgrade_utils::NO_START_FROM,
 				)
 			};

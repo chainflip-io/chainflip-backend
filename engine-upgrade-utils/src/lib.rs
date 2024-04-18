@@ -67,7 +67,7 @@ pub struct CStrArray {
 impl Clone for CStrArray {
 	fn clone(&self) -> Self {
 		let strings = self.to_rust_strings();
-		strings.clone().try_into().unwrap()
+		CStrArray::from_rust_strings(&strings).unwrap()
 	}
 }
 
@@ -89,10 +89,8 @@ fn malloc_size<T: Sized>(number_of_ts: usize) -> *mut T {
 	alloc as *mut T
 }
 
-impl TryFrom<Vec<String>> for CStrArray {
-	type Error = anyhow::Error;
-
-	fn try_from(string_args: Vec<String>) -> Result<Self, Self::Error> {
+impl CStrArray {
+	pub fn from_rust_strings(string_args: &[String]) -> anyhow::Result<Self> {
 		let mut c_str_array = CStrArray::default();
 		if string_args.is_empty() {
 			return Ok(c_str_array);
@@ -113,9 +111,7 @@ impl TryFrom<Vec<String>> for CStrArray {
 		}
 		Ok(c_str_array)
 	}
-}
 
-impl CStrArray {
 	pub fn to_rust_strings(&self) -> Vec<String> {
 		(0..self.n_args)
 			.map(|i| {
@@ -150,10 +146,10 @@ fn test_c_str_array_no_args() {
 fn test_c_str_array_with_args() {
 	let args = vec!["arg1".to_string(), "arg2".to_string()];
 
-	let c_args: CStrArray = args.clone().try_into().unwrap();
+	let c_args = CStrArray::from_rust_strings(&args).unwrap();
 	// check the Clone/drop implementations
 	{
-		let c_args_2: CStrArray = c_args.clone();
+		let c_args_2 = c_args.clone();
 		drop(c_args_2);
 	}
 
