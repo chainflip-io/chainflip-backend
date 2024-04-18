@@ -129,3 +129,82 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 		Ok(())
 	}
 }
+
+#[cfg(test)]
+mod migration_tests {
+	use sp_core::H160;
+
+	#[test]
+	fn test_migration() {
+		use super::*;
+		use crate::mock_btc::*;
+		use cf_chains::btc::{
+			deposit_address::{DepositAddress, TapscriptPath},
+			BitcoinScript, ScriptPubkey,
+		};
+
+		new_test_ext().execute_with(|| {
+			let address1 = ScriptPubkey::Taproot([0u8; 32]);
+			let address2 = ScriptPubkey::Taproot([1u8; 32]);
+			let broker_address = 10u64;
+			let mock_deposit_channel_details = || -> old::DepositChannelDetails<Test, Instance3> {
+				old::DepositChannelDetails::<Test, _> {
+					deposit_channel: DepositChannel {
+						channel_id: 123,
+						address: ScriptPubkey::Taproot([0u8; 32]).clone(),
+						asset: <Bitcoin as Chain>::ChainAsset::Btc,
+						state: DepositAddress {
+							pubkey_x: [1u8; 32],
+							script_path: Some(TapscriptPath {
+								salt: 123,
+								tweaked_pubkey_bytes: [2u8; 33],
+								tapleaf_hash: [3u8; 32],
+								unlock_script: BitcoinScript::new(Default::default()),
+							}),
+						},
+					},
+					opened_at: Default::default(),
+					expires_at: Default::default(),
+					action: old::ChannelAction::Swap {
+						destination_asset: Asset::Eth,
+						destination_address: ForeignChainAddress::Eth(H160([5u8; 20])),
+						broker_id: broker_address,
+						broker_commission_bps: 15,
+					},
+					boost_fee: 0,
+					boost_status: BoostStatus::NotBoosted,
+				}
+			};
+
+			// Insert mock data into old storage
+			old::DepositChannelLookup::insert(address1.clone(), mock_deposit_channel_details());
+			old::DepositChannelLookup::insert(address2.clone(), mock_deposit_channel_details());
+
+			#[cfg(feature = "try-runtime")]
+			let state: Vec<u8> = super::Migration::<Test, _>::pre_upgrade().unwrap();
+
+			// Perform runtime migration.
+			super::Migration::<Test, _>::on_runtime_upgrade();
+
+			#[cfg(feature = "try-runtime")]
+			super::Migration::<Test, _>::post_upgrade(state).unwrap();
+
+			// Verify data is correctly migrated into new storage.
+			for address in [address1, address2] {
+				let channel = DepositChannelLookup::<Test, Instance3>::get(address);
+				assert!(channel.is_some());
+				assert_eq!(
+					channel.unwrap().action,
+					ChannelAction::Swap {
+						destination_asset: Asset::Eth,
+						destination_address: ForeignChainAddress::Eth(H160([5u8; 20])),
+						broker_commission_bps: vec![Beneficiary {
+							account: broker_address,
+							bps: 15
+						}]
+					}
+				);
+			}
+		});
+	}
+}
