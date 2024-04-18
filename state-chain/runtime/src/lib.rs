@@ -36,7 +36,11 @@ use cf_runtime_upgrade_utilities::VersionedMigration;
 use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi};
 use codec::Encode;
 use core::ops::Range;
-use frame_support::instances::*;
+use frame_support::{
+	instances::*,
+	sp_runtime::{AccountId32, TransactionOutcome},
+	storage::with_transaction,
+};
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{ChannelAction, DepositWitness, OwedAmount, TargetChainAsset};
@@ -78,13 +82,13 @@ use pallet_session::historical as session_historical;
 pub use pallet_timestamp::Call as TimestampCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
+use sp_core::{crypto::KeyTypeId, OpaqueMetadata, U256};
 use sp_runtime::{
 	traits::{
 		AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor,
 		One, OpaqueKeys, UniqueSaturatedInto, Verify,
 	},
-	BoundedVec,
+	BoundedVec, DispatchError,
 };
 
 use frame_support::genesis_builder_helper::{build_config, create_default_config};
@@ -1265,8 +1269,36 @@ impl_runtime_apis! {
 		///
 		/// Note: This function must only be called through RPC, because RPC has its own storage buffer
 		/// layer and would not affect on-chain storage.
-		fn cf_pool_simulate_swap(from: Asset, to:Asset, amount: AssetAmount) -> Result<SwapOutput, DispatchErrorWithMessage> {
-			LiquidityPools::swap_with_network_fee(from, to, amount).map_err(Into::into)
+		fn cf_pool_simulate_swap(
+			from: Asset,
+			to: Asset,
+			amount: AssetAmount,
+			limit_orders: Option<Vec<(i32, U256)>>,
+		) -> Result<SwapOutput, DispatchErrorWithMessage> {
+			let limit_orders = match limit_orders {
+				Some(orders) => orders,
+				None => return LiquidityPools::swap_with_network_fee(from, to, amount).map_err(Into::into),
+			};
+
+			let (asset_pair, order) = AssetPair::from_swap(from, to).ok_or(DispatchErrorWithMessage::Other(DispatchError::Other("Invalid asset pair")))?;
+
+			with_transaction(|| {
+				let result = pallet_cf_pools::Pools::<Runtime>::try_mutate(asset_pair, |maybe_pool| {
+					let pool = maybe_pool.as_mut().ok_or(DispatchErrorWithMessage::Other(DispatchError::Other("Pool not found")))?;
+
+					for (id, (tick, amount)) in limit_orders.into_iter().enumerate() {
+						let account_id = AccountId32::new([0; 32]);
+						pool.pool_state.collect_and_mint_limit_order(&(account_id, id as u64), order, tick, amount)
+							.map_err(|_| DispatchErrorWithMessage::Other(DispatchError::Other("Failed to set limit order")))?;
+					}
+
+					Ok::<_, DispatchErrorWithMessage>(())
+				}).and_then(|_| {
+					LiquidityPools::swap_with_network_fee(from, to, amount).map_err(Into::into)
+				});
+
+				TransactionOutcome::Rollback(result)
+			})
 		}
 
 		fn cf_pool_info(base_asset: Asset, quote_asset: Asset) -> Result<PoolInfo, DispatchErrorWithMessage> {
