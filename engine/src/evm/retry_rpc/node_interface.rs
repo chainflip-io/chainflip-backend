@@ -1,7 +1,7 @@
 use ethers::prelude::*;
 
 use crate::evm::rpc::{
-	address_checker::{NodeInterfaceRpcApi, *},
+	node_interface::{NodeInterfaceRpcApi, *},
 	EvmRpcApi,
 };
 
