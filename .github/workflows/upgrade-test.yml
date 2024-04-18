@@ -188,6 +188,7 @@ jobs:
         shell: bash
         id: upgrade-network
         run: |
+          git fetch --all
           git checkout ${{ github.sha }}
           git rev-parse HEAD
           cd bouncer
