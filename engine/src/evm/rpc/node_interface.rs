@@ -1,4 +1,7 @@
 use ethers::prelude::*;
+// use ethers::types::U64;
+use sp_core::H160;
+use std::str::FromStr;
 
 use anyhow::{Ok, Result};
 
@@ -22,7 +25,7 @@ pub trait NodeInterfaceRpcApi {
 		destination_address: H160,
 		contract_creation: bool,
 		tx_data: Bytes,
-	) -> Result<(U64, U64, U256, U256)>;
+	) -> Result<(u64, u64, U256, U256)>;
 }
 
 #[async_trait::async_trait]
@@ -32,8 +35,8 @@ impl NodeInterfaceRpcApi for EvmRpcClient {
 		destination_address: H160,
 		contract_creation: bool,
 		tx_data: Bytes,
-	) -> Result<(U64, U64, U256, U256)> {
-		Ok(NodeInterface::new(H160::from_str(NODE_INTERFACE_ADDRESS), self.provider.clone())
+	) -> Result<(u64, u64, U256, U256)> {
+		Ok(NodeInterface::new(H160::from_str(NODE_INTERFACE_ADDRESS).unwrap(), self.provider.clone())
 			.gas_estimate_components(destination_address, contract_creation, tx_data)
 			.call()
 			.await?)
@@ -47,7 +50,7 @@ impl NodeInterfaceRpcApi for EvmRpcSigningClient {
 		destination_address: H160,
 		contract_creation: bool,
 		tx_data: Bytes,
-	) -> Result<Vec<U256>> {
+	) -> Result<(u64, u64, U256, U256)> {
 		self.rpc_client.gas_estimate_components(destination_address, contract_creation, tx_data).await
 	}
 }

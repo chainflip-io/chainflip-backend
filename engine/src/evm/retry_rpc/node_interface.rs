@@ -1,7 +1,7 @@
 use ethers::prelude::*;
 
 use crate::evm::rpc::{
-	node_interface::{NodeInterfaceRpcApi, *},
+	node_interface::NodeInterfaceRpcApi,
 	EvmRpcApi,
 };
 
@@ -16,7 +16,7 @@ pub trait NodeInterfaceRetryRpcApi {
 		destination_address: H160,
 		contract_creation: bool,
 		tx_data: Bytes,
-	) -> Result<(U64, U64, U256, U256)>;
+	) -> (u64, u64, U256, U256);
 }
 
 #[async_trait::async_trait]
@@ -26,10 +26,11 @@ impl<Rpc: EvmRpcApi + NodeInterfaceRpcApi> NodeInterfaceRetryRpcApi for EvmRetry
 		destination_address: H160,
 		contract_creation: bool,
 		tx_data: Bytes,
-	) -> Result<(U64, U64, U256, U256)> {
+	) -> (u64, u64, U256, U256) {
 		self.rpc_retry_client
 			.request(
 				Box::pin(move |client| {
+					let tx_data = tx_data.clone();
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						client.gas_estimate_components(destination_address, contract_creation, tx_data).await
@@ -37,7 +38,7 @@ impl<Rpc: EvmRpcApi + NodeInterfaceRpcApi> NodeInterfaceRetryRpcApi for EvmRetry
 				}),
 				RequestLog::new(
 					"gas_estimate_components".to_string(),
-					Some(format!("{destination_address:?}, {contract_creation:?}, {tx_data:?}")),
+					Some(format!("{destination_address:?}, {contract_creation:?}")),
 				),
 			)
 			.await

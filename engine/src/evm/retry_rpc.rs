@@ -1,4 +1,5 @@
 pub mod address_checker;
+pub mod node_interface;
 
 use ethers::{
 	prelude::*,
