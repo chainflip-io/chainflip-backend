@@ -274,17 +274,10 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			let block_compatibility =
 				base_rpc_client.check_block_compatibility(*block_stream.cache()).await?;
 
+			// TODO: It's possible we shutdown on CFE start up if the unfinalised stream is incompatible (by returning an error here)
+			// even if the finalised stream is compatible. PRO-1334
 			match block_compatibility.compatibility {
 				CfeCompatibility::Compatible => block_stream,
-				CfeCompatibility::NoLongerCompatible if error_on_incompatible_block => {
-					return Err(CreateStateChainClientError::CompatibilityError(
-						block_compatibility,
-					)
-					.into());
-				},
-				// Either:
-				// - We're no longer compatible but we don't want to exit on error
-				// - We're not yet compatible and we're waiting for the required version
 				_ => {
 					return Err(CreateStateChainClientError::CompatibilityError(
 						block_compatibility,
