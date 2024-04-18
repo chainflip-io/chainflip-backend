@@ -291,6 +291,7 @@ function getCachedSubstrateApi(defaultEndpoint: string) {
         EncodedAddress: {
           _enum: {
             Eth: '[u8; 20]',
+            Arb: '[u8; 20]',
             Dot: '[u8; 32]',
             Btc: 'Vec<u8>',
           },

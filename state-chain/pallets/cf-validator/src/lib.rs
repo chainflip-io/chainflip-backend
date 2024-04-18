@@ -28,7 +28,6 @@ use cf_traits::{
 	MissedAuthorshipSlots, OnAccountFunded, QualifyNode, RedemptionCheck, ReputationResetter,
 	SetSafeMode,
 };
-
 use cf_utilities::Port;
 use frame_support::{
 	pallet_prelude::*,
@@ -39,6 +38,7 @@ use frame_support::{
 	traits::{EstimateNextSessionRotation, OnKilledAccount},
 };
 use frame_system::pallet_prelude::*;
+use nanorand::{Rng, WyRand};
 pub use pallet::*;
 use sp_core::ed25519;
 use sp_std::{
@@ -70,6 +70,8 @@ pub enum PalletConfigUpdate {
 type RuntimeRotationState<T> =
 	RotationState<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
+
 // Might be better to add the enum inside a struct rather than struct inside enum
 #[derive(Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
 #[scale_info(skip_type_params(T))]
@@ -80,7 +82,7 @@ pub enum RotationPhase<T: Config> {
 	KeyHandoversInProgress(RuntimeRotationState<T>),
 	ActivatingKeys(RuntimeRotationState<T>),
 	NewKeysActivated(RuntimeRotationState<T>),
-	SessionRotating(RuntimeRotationState<T>),
+	SessionRotating(Vec<ValidatorIdOf<T>>, <T as Chainflip>::Amount),
 }
 
 type ValidatorIdOf<T> = <T as Chainflip>::ValidatorId;
@@ -91,8 +93,6 @@ type BackupMap<T> = BTreeMap<ValidatorIdOf<T>, <T as Chainflip>::Amount>;
 pub enum PalletOffence {
 	MissedAuthorshipSlot,
 }
-
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled, start_bidding_enabled, stop_bidding_enabled);
 
@@ -189,8 +189,7 @@ pub mod pallet {
 
 	/// A set of the current authorities.
 	#[pallet::storage]
-	pub type CurrentAuthorities<T: Config> =
-		StorageValue<_, BTreeSet<ValidatorIdOf<T>>, ValueQuery>;
+	pub type CurrentAuthorities<T: Config> = StorageValue<_, Vec<ValidatorIdOf<T>>, ValueQuery>;
 
 	/// The bond of the current epoch.
 	#[pallet::storage]
@@ -227,7 +226,7 @@ pub mod pallet {
 	/// A map between an epoch and the set of authorities (participating in this epoch).
 	#[pallet::storage]
 	pub type HistoricalAuthorities<T: Config> =
-		StorageMap<_, Twox64Concat, EpochIndex, BTreeSet<ValidatorIdOf<T>>, ValueQuery>;
+		StorageMap<_, Twox64Concat, EpochIndex, Vec<ValidatorIdOf<T>>, ValueQuery>;
 
 	/// A map between an epoch and the bonded balance (MAB)
 	#[pallet::storage]
@@ -413,8 +412,6 @@ pub mod pallet {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
 					match T::KeyRotator::status() {
 						AsyncResult::Ready(KeyRotationStatusOuter::KeyHandoverComplete) => {
-							let new_authorities = rotation_state.authority_candidates();
-							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities);
 							T::KeyRotator::activate_keys();
 							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
 						},
@@ -886,7 +883,7 @@ pub mod pallet {
 
 			Pallet::<T>::initialise_new_epoch(
 				GENESIS_EPOCH,
-				&self.genesis_authorities,
+				&self.genesis_authorities.iter().cloned().collect(),
 				self.bond,
 				self.genesis_backups.clone(),
 			);
@@ -902,11 +899,11 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		LastExpiredEpoch::<T>::get()
 	}
 
-	fn current_authorities() -> BTreeSet<Self::ValidatorId> {
+	fn current_authorities() -> Vec<Self::ValidatorId> {
 		CurrentAuthorities::<T>::get()
 	}
 
-	fn authorities_at_epoch(epoch: u32) -> BTreeSet<Self::ValidatorId> {
+	fn authorities_at_epoch(epoch: u32) -> Vec<Self::ValidatorId> {
 		HistoricalAuthorities::<T>::get(epoch)
 	}
 
@@ -936,7 +933,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_authority_info_for_epoch(
 		epoch_index: EpochIndex,
-		new_authorities: BTreeSet<Self::ValidatorId>,
+		new_authorities: Vec<Self::ValidatorId>,
 	) {
 		for (i, authority) in new_authorities.iter().enumerate() {
 			AuthorityIndex::<T>::insert(epoch_index, authority, i as AuthorityCount);
@@ -946,7 +943,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_authorities(authorities: BTreeSet<Self::ValidatorId>) {
+	fn set_authorities(authorities: Vec<Self::ValidatorId>) {
 		CurrentAuthorities::<T>::put(authorities);
 	}
 }
@@ -962,7 +959,7 @@ impl<T: Config> pallet_session::ShouldEndSession<BlockNumberFor<T>> for Pallet<T
 	fn should_end_session(_now: BlockNumberFor<T>) -> bool {
 		matches!(
 			CurrentRotationPhase::<T>::get(),
-			RotationPhase::NewKeysActivated(_) | RotationPhase::SessionRotating(_)
+			RotationPhase::NewKeysActivated(_) | RotationPhase::SessionRotating(..)
 		)
 	}
 }
@@ -977,7 +974,10 @@ impl<T: Config> Pallet<T> {
 	/// Note this function is not benchmarked - it is only ever triggered via the session pallet,
 	/// which at the time of writing uses `T::BlockWeights::get().max_block` ie. it implicitly fills
 	/// the block.
-	fn transition_to_next_epoch(rotation_state: RuntimeRotationState<T>) {
+	fn transition_to_next_epoch(
+		new_authorities: Vec<ValidatorIdOf<T>>,
+		bond: <T as Chainflip>::Amount,
+	) {
 		log::debug!(target: "cf-validator", "Starting new epoch");
 
 		// Update epoch numbers.
@@ -992,12 +992,10 @@ impl<T: Config> Pallet<T> {
 			old_epoch,
 		);
 
-		let new_authorities = rotation_state.authority_candidates();
-
 		Self::initialise_new_epoch(
 			new_epoch,
 			&new_authorities,
-			rotation_state.bond,
+			bond,
 			Self::get_active_bids()
 				.into_iter()
 				.filter_map(|Bid { bidder_id, amount }| {
@@ -1034,7 +1032,7 @@ impl<T: Config> Pallet<T> {
 	/// expiries etc. that relate to the state of previous epochs.
 	fn initialise_new_epoch(
 		new_epoch: EpochIndex,
-		new_authorities: &BTreeSet<ValidatorIdOf<T>>,
+		new_authorities: &Vec<ValidatorIdOf<T>>,
 		new_bond: T::Amount,
 		backup_map: BackupMap<T>,
 	) {
@@ -1326,7 +1324,7 @@ impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 	type ValidatorId = ValidatorIdOf<T>;
 	type EpochIndex = EpochIndex;
 	type Amount = T::Amount;
-	fn epoch_authorities(epoch: Self::EpochIndex) -> BTreeSet<Self::ValidatorId> {
+	fn epoch_authorities(epoch: Self::EpochIndex) -> Vec<Self::ValidatorId> {
 		HistoricalAuthorities::<T>::get(epoch)
 	}
 
@@ -1371,11 +1369,23 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<ValidatorIdOf<T>>> {
 		match CurrentRotationPhase::<T>::get() {
 			RotationPhase::NewKeysActivated(rotation_state) => {
-				let next_authorities = rotation_state.authority_candidates();
-				Self::set_rotation_phase(RotationPhase::SessionRotating(rotation_state));
-				Some(next_authorities.into_iter().collect())
+				let mut next_authorities: Vec<ValidatorIdOf<T>> =
+					rotation_state.authority_candidates().into_iter().collect();
+
+				let hash = frame_system::Pallet::<T>::parent_hash();
+				let mut buf: [u8; 8] = [0; 8];
+				buf.copy_from_slice(&hash.as_ref()[..8]);
+				let seed_from_hash: u64 = u64::from_be_bytes(buf);
+				WyRand::new_seed(seed_from_hash).shuffle(&mut next_authorities);
+
+				Self::set_rotation_phase(RotationPhase::SessionRotating(
+					next_authorities.clone(),
+					rotation_state.bond,
+				));
+
+				Some(next_authorities)
 			},
-			RotationPhase::SessionRotating(_) => {
+			RotationPhase::SessionRotating(..) => {
 				Self::set_rotation_phase(RotationPhase::Idle);
 				None
 			},
@@ -1398,8 +1408,9 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 
 	/// The session is starting
 	fn start_session(_start_index: SessionIndex) {
-		if let RotationPhase::SessionRotating(rotation_state) = CurrentRotationPhase::<T>::get() {
-			Pallet::<T>::transition_to_next_epoch(rotation_state)
+		if let RotationPhase::SessionRotating(authorities, bond) = CurrentRotationPhase::<T>::get()
+		{
+			Pallet::<T>::transition_to_next_epoch(authorities, bond)
 		}
 	}
 }

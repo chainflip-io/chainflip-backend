@@ -577,10 +577,7 @@ impl Network {
 
 	// Create a network which includes the authorities in genesis of number of nodes
 	// and return a network and sorted list of nodes within
-	pub fn create(
-		number_of_backup_nodes: u8,
-		existing_nodes: &BTreeSet<NodeId>,
-	) -> (Self, BTreeSet<NodeId>) {
+	pub fn create(number_of_backup_nodes: u8, existing_nodes: &Vec<NodeId>) -> (Self, Vec<NodeId>) {
 		let mut network: Network = Default::default();
 
 		// Include any nodes already *created* to the test network
@@ -591,10 +588,10 @@ impl Network {
 		}
 
 		// Create the backup nodes
-		let mut backup_nodes = BTreeSet::new();
+		let mut backup_nodes = Vec::new();
 		for _ in 0..number_of_backup_nodes {
 			let node_id = network.create_engine();
-			backup_nodes.insert(node_id.clone());
+			backup_nodes.push(node_id.clone());
 		}
 
 		(network, backup_nodes)
@@ -740,11 +737,11 @@ impl Network {
 // Helper function that creates a network, funds backup nodes, and have them join the auction.
 pub fn fund_authorities_and_join_auction(
 	max_authorities: AuthorityCount,
-) -> (network::Network, BTreeSet<NodeId>, BTreeSet<NodeId>) {
+) -> (network::Network, Vec<NodeId>, Vec<NodeId>) {
 	// Create MAX_AUTHORITIES backup nodes and fund them above our genesis
 	// authorities The result will be our newly created nodes will be authorities
 	// and the genesis authorities will become backup nodes
-	let genesis_authorities: BTreeSet<AccountId32> = Validator::current_authorities();
+	let genesis_authorities: Vec<AccountId32> = Validator::current_authorities();
 	let (mut testnet, init_backup_nodes) =
 		network::Network::create(max_authorities as u8, &genesis_authorities);
 

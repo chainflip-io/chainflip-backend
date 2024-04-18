@@ -26,7 +26,7 @@ where
 	T: frame_system::Config + pallet_cf_validator::Config + pallet_cf_reputation::Config,
 	I: Clone + Iterator<Item = <T as Chainflip>::ValidatorId>,
 {
-	CurrentAuthorities::<T>::put(authorities.clone().collect::<BTreeSet<_>>());
+	CurrentAuthorities::<T>::put(authorities.clone().collect::<Vec<_>>());
 	for validator_id in authorities {
 		let account_id = validator_id.into_ref();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(account_id);
@@ -203,7 +203,7 @@ mod benchmarks {
 		let key = <T::TargetChainCrypto as ChainCrypto>::AggKey::benchmark_value();
 		let current_epoch = CurrentEpochIndex::<T>::get();
 		<Pallet<T, I> as KeyProvider<T::TargetChainCrypto>>::set_key(key, current_epoch);
-		CurrentAuthorities::<T>::put(BTreeSet::<<T as Chainflip>::ValidatorId>::new());
+		CurrentAuthorities::<T>::put(Vec::<<T as Chainflip>::ValidatorId>::new());
 
 		// These attempts will fail because there are no authorities to do the signing.
 		for _ in 0..r {

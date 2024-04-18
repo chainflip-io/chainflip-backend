@@ -50,7 +50,10 @@ where
 				let _result = response_sender.send((receiver, inner_client.clone()));
 
 				loop_select!(
+					// We have received a request to start a new shared stream.
 					if let Some(response_sender) = request_receiver.next() => {
+						// Create a new receiver and send it to the requester, so that we can then pass
+						// future items we receive from the inner_stream into it.
 						let receiver = sender.receiver();
 						let _result = response_sender.send((receiver, inner_client.clone()));
 					} else disable,

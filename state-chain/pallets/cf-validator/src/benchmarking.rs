@@ -167,7 +167,7 @@ mod benchmarks {
 		HistoricalBonds::<T>::insert(OLD_EPOCH, amount);
 		HistoricalBonds::<T>::insert(EPOCH_TO_EXPIRE, amount);
 
-		let authorities: BTreeSet<_> = (0..a).map(|id| account("hello", id, id)).collect();
+		let authorities: Vec<_> = (0..a).map(|id| account("hello", id, id)).collect();
 
 		HistoricalAuthorities::<T>::insert(OLD_EPOCH, authorities.clone());
 		HistoricalAuthorities::<T>::insert(EPOCH_TO_EXPIRE, authorities.clone());
