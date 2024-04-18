@@ -2,7 +2,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
-use cf_primitives::{Asset, AssetAmount, BasisPoints, ForeignChain};
+use cf_primitives::{AccountRole, Asset, AssetAmount, BasisPoints, ForeignChain};
 use cf_traits::{
 	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi,
 	EgressApi, LpDepositHandler, PoolApi, ScheduledEgressDetails,
@@ -108,6 +108,8 @@ pub mod pallet {
 		OpenOrdersRemaining,
 		/// The account still has funds remaining in the free balances.
 		FundsRemaining,
+		/// The destination account is not a liquidity provider.
+		DestinationAccountNotLiquidityProvider,
 	}
 
 	#[pallet::event]
@@ -226,8 +228,6 @@ pub mod pallet {
 
 		/// For when the user wants to withdraw their free balances out of the chain.
 		/// Requires a valid foreign chain address.
-		/// Note: This is a V1 version of the withdraw_asset call. The V2 version is recommended.
-		#[deprecated(note = "Use withdraw_asset_v2 instead")]
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::withdraw_asset())]
 		pub fn withdraw_asset(
@@ -236,7 +236,7 @@ pub mod pallet {
 			asset: Asset,
 			destination_address: EncodedAddress,
 		) -> DispatchResult {
-			Self::withdraw_asset_inner(
+			Self::move_or_withdrawal(
 				origin,
 				amount,
 				asset,
@@ -315,26 +315,24 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// For when the user wants to withdraw or move their free balances. Requires a valid
-		/// foreign chain address or an internal account. If an address is provided, the assets are
-		/// getting withdrawn to the external chain. If an account is provided, the assets are
-		/// getting moved internally.
-		/// Note: This is a V2 version of the withdraw_asset call. The V1 version is deprecated.
+		/// For when the user wants to move their free balances to another lp account. Requires a
+		/// valid internal account. If an account is provided, the assets are getting moved
+		/// internally.
 		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::withdraw_asset())]
-		pub fn withdraw_asset_v2(
+		pub fn move_asset(
 			origin: OriginFor<T>,
 			amount: AssetAmount,
 			asset: Asset,
-			destination: AccountOrAddress<T::AccountId>,
+			destination: T::AccountId,
 		) -> DispatchResult {
-			Self::withdraw_asset_inner(origin, amount, asset, destination)
+			Self::move_or_withdrawal(origin, amount, asset, AccountOrAddress::Internal(destination))
 		}
 	}
 }
 
 impl<T: Config> Pallet<T> {
-	pub fn withdraw_asset_inner(
+	pub fn move_or_withdrawal(
 		origin: OriginFor<T>,
 		amount: AssetAmount,
 		asset: Asset,
@@ -346,6 +344,14 @@ impl<T: Config> Pallet<T> {
 
 			match destination {
 				AccountOrAddress::Internal(destination_account) => {
+					// Check if the destination account has the role liquidity provider.
+					ensure!(
+						T::AccountRoleRegistry::has_account_role(
+							&destination_account,
+							AccountRole::LiquidityProvider,
+						),
+						Error::<T>::DestinationAccountNotLiquidityProvider
+					);
 					// Sweep earned fees
 					T::PoolApi::sweep(&account_id)?;
 
