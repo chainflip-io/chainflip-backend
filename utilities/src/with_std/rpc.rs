@@ -8,15 +8,6 @@ pub enum NumberOrHex {
 	Hex(U256),
 }
 
-impl From<NumberOrHex> for U256 {
-	fn from(value: NumberOrHex) -> Self {
-		match value {
-			NumberOrHex::Number(n) => n.into(),
-			NumberOrHex::Hex(n) => n,
-		}
-	}
-}
-
 impl Serialize for NumberOrHex {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
