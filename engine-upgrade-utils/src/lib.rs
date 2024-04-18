@@ -116,7 +116,7 @@ impl CStrArray {
 		(0..self.n_args)
 			.map(|i| {
 				let c_str = unsafe { std::ffi::CStr::from_ptr(*self.c_args.add(i)) };
-				c_str.to_str().unwrap().to_string()
+				c_str.to_str().expect("We can only get a CStrArray from parsing valid utf8").to_string()
 			})
 			.collect()
 	}
