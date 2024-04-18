@@ -71,12 +71,6 @@ impl Clone for CStrArray {
 	}
 }
 
-impl Default for CStrArray {
-	fn default() -> Self {
-		Self { c_args: std::ptr::null_mut(), n_args: 0 }
-	}
-}
-
 fn malloc_size<T: Sized>(number_of_ts: usize) -> *mut T {
 	let alloc = unsafe { malloc(size_of::<T>() * number_of_ts) };
 
@@ -91,7 +85,7 @@ fn malloc_size<T: Sized>(number_of_ts: usize) -> *mut T {
 
 impl CStrArray {
 	pub fn from_rust_strings(string_args: &[String]) -> anyhow::Result<Self> {
-		let mut c_str_array = CStrArray::default();
+		let mut c_str_array = Self { c_args: std::ptr::null_mut(), n_args: 0 };
 		if string_args.is_empty() {
 			return Ok(c_str_array);
 		}
@@ -138,7 +132,7 @@ impl Drop for CStrArray {
 
 #[test]
 fn test_c_str_array_no_args() {
-	let c_args = CStrArray::default();
+	let c_args = CStrArray::from_rust_strings(&[]).unwrap();
 	assert!(c_args.to_rust_strings().is_empty());
 }
 
