@@ -114,13 +114,10 @@ impl TryFrom<Vec<String>> for CStrArray {
 
 impl CStrArray {
 	pub fn to_rust_strings(&self) -> Vec<String> {
-		let mut str_args = Vec::new();
-		for i in 0..self.n_args {
+		(0..self.n_args).map(|i| {
 			let c_str = unsafe { std::ffi::CStr::from_ptr(*self.c_args.add(i)) };
-			let str_slice = c_str.to_str().unwrap().to_string();
-			str_args.push(str_slice);
-		}
-		str_args
+			c_str.to_str().unwrap().to_string()
+		}).collect()
 	}
 }
 
