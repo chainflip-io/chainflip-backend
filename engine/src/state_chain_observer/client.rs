@@ -274,8 +274,9 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			let block_compatibility =
 				base_rpc_client.check_block_compatibility(*block_stream.cache()).await?;
 
-			// TODO: It's possible we shutdown on CFE start up if the unfinalised stream is incompatible (by returning an error here)
-			// even if the finalised stream is compatible. PRO-1334
+			// TODO: It's possible we shutdown on CFE start up if the unfinalised stream is
+			// incompatible (by returning an error here) even if the finalised stream is compatible.
+			// PRO-1334
 			match block_compatibility.compatibility {
 				CfeCompatibility::Compatible => block_stream,
 				_ => {

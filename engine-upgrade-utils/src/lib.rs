@@ -81,7 +81,10 @@ fn malloc_size<T: Sized>(number_of_ts: usize) -> *mut T {
 	let alloc = unsafe { malloc(size_of::<T>() * number_of_ts) };
 
 	if alloc.is_null() {
-		panic!("Failed to allocate memory of type {} and length {number_of_ts}", std::any::type_name::<T>());
+		panic!(
+			"Failed to allocate memory of type {} and length {number_of_ts}",
+			std::any::type_name::<T>()
+		);
 	}
 	alloc as *mut T
 }
@@ -114,10 +117,12 @@ impl TryFrom<Vec<String>> for CStrArray {
 
 impl CStrArray {
 	pub fn to_rust_strings(&self) -> Vec<String> {
-		(0..self.n_args).map(|i| {
-			let c_str = unsafe { std::ffi::CStr::from_ptr(*self.c_args.add(i)) };
-			c_str.to_str().unwrap().to_string()
-		}).collect()
+		(0..self.n_args)
+			.map(|i| {
+				let c_str = unsafe { std::ffi::CStr::from_ptr(*self.c_args.add(i)) };
+				c_str.to_str().unwrap().to_string()
+			})
+			.collect()
 	}
 }
 
