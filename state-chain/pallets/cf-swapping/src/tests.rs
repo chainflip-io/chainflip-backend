@@ -192,6 +192,8 @@ fn process_all_swaps() {
 fn expect_earned_fees_to_be_recorded() {
 	new_test_ext().execute_with(|| {
 		const ALICE: u64 = 2_u64;
+		const BOB: u64 = 3_u64;
+
 		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
 			ForeignChainAddress::Eth([2; 20].into()),
 			Default::default(),
@@ -214,6 +216,18 @@ fn expect_earned_fees_to_be_recorded() {
 			1,
 		);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 4);
+		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
+			ForeignChainAddress::Eth([2; 20].into()),
+			Default::default(),
+			Asset::Eth,
+			Asset::Usdc,
+			100,
+			ForeignChainAddress::Eth([2; 20].into()),
+			vec![Beneficiary { account: ALICE, bps: 200 }, Beneficiary { account: BOB, bps: 200 }],
+			1,
+		);
+		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Eth), 2);
+		assert_eq!(EarnedBrokerFees::<Test>::get(BOB, cf_primitives::Asset::Eth), 2);
 	});
 }
 
