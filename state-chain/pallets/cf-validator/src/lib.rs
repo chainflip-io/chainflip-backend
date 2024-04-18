@@ -10,6 +10,7 @@ mod helpers;
 
 pub mod weights;
 pub use weights::WeightInfo;
+pub mod migrations;
 
 mod auction_resolver;
 mod benchmarking;
@@ -17,15 +18,16 @@ mod rotation_state;
 
 pub use auction_resolver::*;
 use cf_primitives::{
-	AuthorityCount, EpochIndex, SemVer, DEFAULT_MAX_AUTHORITY_SET_CONTRACTION, FLIPPERINOS_PER_FLIP,
+	AuthorityCount, CfeCompatibility, Ed25519PublicKey, EpochIndex, Ipv6Addr, SemVer,
+	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION, FLIPPERINOS_PER_FLIP,
 };
 use cf_traits::{
-	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, AuthoritiesCfeVersions,
-	Bid, BidderProvider, Bonding, Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition,
-	FundingInfo, HistoricalEpoch, MissedAuthorshipSlots, OnAccountFunded, QualifyNode,
-	ReputationResetter, SetSafeMode, VaultRotator,
+	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AccountInfo, AsyncResult,
+	AuthoritiesCfeVersions, Bid, Bonding, CfePeerRegistration, Chainflip, EpochInfo,
+	EpochTransitionHandler, ExecutionCondition, FundingInfo, HistoricalEpoch, KeyRotator,
+	MissedAuthorshipSlots, OnAccountFunded, QualifyNode, RedemptionCheck, ReputationResetter,
+	SetSafeMode,
 };
-
 use cf_utilities::Port;
 use frame_support::{
 	pallet_prelude::*,
@@ -36,6 +38,7 @@ use frame_support::{
 	traits::{EstimateNextSessionRotation, OnKilledAccount},
 };
 use frame_system::pallet_prelude::*;
+use nanorand::{Rng, WyRand};
 pub use pallet::*;
 use sp_core::ed25519;
 use sp_std::{
@@ -48,9 +51,8 @@ use crate::rotation_state::RotationState;
 type SessionIndex = u32;
 
 type Version = SemVer;
-type Ed25519PublicKey = ed25519::Public;
+
 type Ed25519Signature = ed25519::Signature;
-pub type Ipv6Addr = u128;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletConfigUpdate {
@@ -68,6 +70,8 @@ pub enum PalletConfigUpdate {
 type RuntimeRotationState<T> =
 	RotationState<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
+
 // Might be better to add the enum inside a struct rather than struct inside enum
 #[derive(Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
 #[scale_info(skip_type_params(T))]
@@ -78,11 +82,10 @@ pub enum RotationPhase<T: Config> {
 	KeyHandoversInProgress(RuntimeRotationState<T>),
 	ActivatingKeys(RuntimeRotationState<T>),
 	NewKeysActivated(RuntimeRotationState<T>),
-	SessionRotating(RuntimeRotationState<T>),
+	SessionRotating(Vec<ValidatorIdOf<T>>, <T as Chainflip>::Amount),
 }
 
 type ValidatorIdOf<T> = <T as Chainflip>::ValidatorId;
-type VanityName = Vec<u8>;
 
 type BackupMap<T> = BTreeMap<ValidatorIdOf<T>, <T as Chainflip>::Amount>;
 
@@ -91,19 +94,18 @@ pub enum PalletOffence {
 	MissedAuthorshipSlot,
 }
 
-pub const MAX_LENGTH_FOR_VANITY_NAME: usize = 64;
-
-impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled);
+impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled, start_bidding_enabled, stop_bidding_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{AccountRoleRegistry, VaultStatus};
+	use cf_traits::{AccountRoleRegistry, KeyRotationStatusOuter};
 	use frame_support::sp_runtime::app_crypto::RuntimePublic;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
+	#[pallet::storage_version(PALLET_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -119,16 +121,10 @@ pub mod pallet {
 		/// A handler for epoch lifecycle events
 		type EpochTransitionHandler: EpochTransitionHandler;
 
-		type VaultRotator: VaultRotator<ValidatorId = ValidatorIdOf<Self>>;
+		type KeyRotator: KeyRotator<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// For retrieving missed authorship slots.
 		type MissedAuthorshipSlots: MissedAuthorshipSlots;
-
-		/// Used to get the list of bidding nodes in order initialise the backup set post-rotation.
-		type BidderProvider: BidderProvider<
-			ValidatorId = <Self as Chainflip>::ValidatorId,
-			Amount = Self::Amount,
-		>;
 
 		/// Criteria that need to be fulfilled to qualify as a validator node (authority or backup).
 		type KeygenQualification: QualifyNode<<Self as Chainflip>::ValidatorId>;
@@ -147,6 +143,8 @@ pub mod pallet {
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode> + SetSafeMode<PalletSafeMode>;
+
+		type CfePeerRegistration: CfePeerRegistration<Self>;
 
 		/// Benchmark weights.
 		type ValidatorWeightInfo: WeightInfo;
@@ -189,16 +187,9 @@ pub mod pallet {
 	#[pallet::getter(fn current_rotation_phase)]
 	pub type CurrentRotationPhase<T: Config> = StorageValue<_, RotationPhase<T>, ValueQuery>;
 
-	/// A set of the current authorites.
+	/// A set of the current authorities.
 	#[pallet::storage]
-	pub type CurrentAuthorities<T: Config> =
-		StorageValue<_, BTreeSet<ValidatorIdOf<T>>, ValueQuery>;
-
-	/// Vanity names of the validators stored as a Map with the current validator IDs as key.
-	#[pallet::storage]
-	#[pallet::getter(fn vanity_names)]
-	pub type VanityNames<T: Config> =
-		StorageValue<_, BTreeMap<T::AccountId, VanityName>, ValueQuery>;
+	pub type CurrentAuthorities<T: Config> = StorageValue<_, Vec<ValidatorIdOf<T>>, ValueQuery>;
 
 	/// The bond of the current epoch.
 	#[pallet::storage]
@@ -235,7 +226,7 @@ pub mod pallet {
 	/// A map between an epoch and the set of authorities (participating in this epoch).
 	#[pallet::storage]
 	pub type HistoricalAuthorities<T: Config> =
-		StorageMap<_, Twox64Concat, EpochIndex, BTreeSet<ValidatorIdOf<T>>, ValueQuery>;
+		StorageMap<_, Twox64Concat, EpochIndex, Vec<ValidatorIdOf<T>>, ValueQuery>;
 
 	/// A map between an epoch and the bonded balance (MAB)
 	#[pallet::storage]
@@ -293,6 +284,11 @@ pub mod pallet {
 	pub(super) type MaxAuthoritySetContractionPercentage<T: Config> =
 		StorageValue<_, Percent, ValueQuery>;
 
+	/// Store the list of accounts that are active bidders.
+	#[pallet::storage]
+	#[pallet::getter(fn active_bidder)]
+	pub type ActiveBidder<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -313,12 +309,14 @@ pub mod pallet {
 		PeerIdRegistered(T::AccountId, Ed25519PublicKey, Port, Ipv6Addr),
 		/// A authority has unregistered her current PeerId \[account_id, public_key\]
 		PeerIdUnregistered(T::AccountId, Ed25519PublicKey),
-		/// Vanity Name for a node has been set \[account_id, vanity_name\]
-		VanityNameSet(T::AccountId, VanityName),
 		/// An auction has a set of winners \[winners, bond\]
 		AuctionCompleted(Vec<ValidatorIdOf<T>>, T::Amount),
 		/// Some pallet configuration has been updated.
 		PalletConfigUpdated { update: PalletConfigUpdate },
+		/// An account has stopped bidding and will no longer take part in auctions.
+		StoppedBidding { account_id: T::AccountId },
+		/// A previously non-bidding account has started bidding.
+		StartedBidding { account_id: T::AccountId },
 	}
 
 	#[pallet::error]
@@ -333,10 +331,6 @@ pub mod pallet {
 		InvalidAccountPeerMappingSignature,
 		/// Invalid redemption period.
 		InvalidRedemptionPeriod,
-		/// Vanity name length exceeds the limit of 64 characters.
-		NameTooLong,
-		/// Invalid characters in the name.
-		InvalidCharactersInName,
 		/// Invalid minimum authority set size.
 		InvalidAuthoritySetMinSize,
 		/// Auction parameters are invalid.
@@ -349,6 +343,20 @@ pub mod pallet {
 		NotEnoughFunds,
 		/// Rotations are currently disabled through SafeMode.
 		RotationsDisabled,
+		/// Validators cannot deregister until they are no longer key holders.
+		StillKeyHolder,
+		/// Validators cannot deregister until they stop bidding in the auction.
+		StillBidding,
+		/// Start Bidding is disabled due to Safe Mode.
+		StartBiddingDisabled,
+		/// Stop Bidding is disabled due to Safe Mode.
+		StopBiddingDisabled,
+		/// Can't stop bidding an account if it's already not bidding.
+		AlreadyNotBidding,
+		/// Can only start bidding if not already bidding.
+		AlreadyBidding,
+		/// We are in the auction phase
+		AuctionPhase,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -378,11 +386,11 @@ pub mod pallet {
 				},
 				RotationPhase::KeygensInProgress(mut rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
-					match T::VaultRotator::status() {
-						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
+					match T::KeyRotator::status() {
+						AsyncResult::Ready(KeyRotationStatusOuter::KeygenComplete) => {
 							Self::try_start_key_handover(rotation_state, block_number);
 						},
-						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
+						AsyncResult::Ready(KeyRotationStatusOuter::Failed(offenders)) => {
 							rotation_state.ban(offenders);
 							Self::try_restart_keygen(rotation_state);
 						},
@@ -402,14 +410,12 @@ pub mod pallet {
 				},
 				RotationPhase::KeyHandoversInProgress(mut rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
-					match T::VaultRotator::status() {
-						AsyncResult::Ready(VaultStatus::KeyHandoverComplete) => {
-							let new_authorities = rotation_state.authority_candidates();
-							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities);
-							T::VaultRotator::activate();
+					match T::KeyRotator::status() {
+						AsyncResult::Ready(KeyRotationStatusOuter::KeyHandoverComplete) => {
+							T::KeyRotator::activate_keys();
 							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
 						},
-						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
+						AsyncResult::Ready(KeyRotationStatusOuter::Failed(offenders)) => {
 							// NOTE: we distinguish between candidates (nodes currently selected to become next authorities)
 							// and non-candidates (current authorities *not* currently selected to become next authorities).
 							// The outcome of this failure depends on whether any of the candidates caused it:
@@ -446,8 +452,8 @@ pub mod pallet {
 				}
 				RotationPhase::ActivatingKeys(rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
-					match T::VaultRotator::status() {
-						AsyncResult::Ready(VaultStatus::RotationComplete) => {
+					match T::KeyRotator::status() {
+						AsyncResult::Ready(KeyRotationStatusOuter::RotationComplete) => {
 							Self::set_rotation_phase(RotationPhase::NewKeysActivated(
 								rotation_state,
 							));
@@ -581,7 +587,7 @@ pub mod pallet {
 		///
 		/// - [Session Pallet](pallet_session::Config)
 		#[pallet::call_index(2)]
-		#[pallet::weight(< T as pallet_session::Config >::WeightInfo::set_keys())] // TODO: check if this is really valid
+		#[pallet::weight((< T as pallet_session::Config >::WeightInfo::set_keys(), DispatchClass::Operational))]
 		pub fn set_keys(
 			origin: OriginFor<T>,
 			keys: T::Keys,
@@ -610,7 +616,7 @@ pub mod pallet {
 		///
 		/// - None
 		#[pallet::call_index(3)]
-		#[pallet::weight(T::ValidatorWeightInfo::register_peer_id())]
+		#[pallet::weight((T::ValidatorWeightInfo::register_peer_id(), DispatchClass::Operational))]
 		pub fn register_peer_id(
 			origin: OriginFor<T>,
 			peer_id: Ed25519PublicKey,
@@ -662,11 +668,23 @@ pub mod pallet {
 
 			AccountPeerMapping::<T>::insert(&account_id, (peer_id, port, ip_address));
 
+			let validator_id = <ValidatorIdOf<T> as IsType<
+				<T as frame_system::Config>::AccountId,
+			>>::from_ref(&account_id);
+
+			T::CfePeerRegistration::peer_registered(
+				validator_id.clone(),
+				peer_id,
+				port,
+				ip_address,
+			);
+
+			// TODO: Consider removing this
 			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id, port, ip_address));
 			Ok(().into())
 		}
 
-		/// Allow a validator to report their current cfe version. Update storage and emmit event if
+		/// Allow a validator to report their current cfe version. Update storage and emit event if
 		/// version is different from storage.
 		///
 		/// The dispatch origin of this function must be signed.
@@ -683,7 +701,7 @@ pub mod pallet {
 		///
 		/// - None
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::ValidatorWeightInfo::cfe_version())]
+		#[pallet::weight((T::ValidatorWeightInfo::cfe_version(), DispatchClass::Operational))]
 		pub fn cfe_version(
 			origin: OriginFor<T>,
 			new_version: Version,
@@ -705,39 +723,6 @@ pub mod pallet {
 			})
 		}
 
-		/// Allow a node to set a "Vanity Name" for themselves. This is functionally
-		/// useless but can be used to make the network a bit more friendly for
-		/// observers. Names are required to be <= MAX_LENGTH_FOR_VANITY_NAME (64)
-		/// UTF-8 bytes.
-		///
-		/// The dispatch origin of this function must be signed.
-		///
-		/// ## Events
-		///
-		/// - [VanityNameSet](Event::VanityNameSet)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_system::error::BadOrigin)
-		/// - [NameTooLong](Error::NameTooLong)
-		/// - [InvalidCharactersInName](Error::InvalidCharactersInName)
-		///
-		/// ## Dependencies
-		///
-		/// - None
-		#[pallet::call_index(5)]
-		#[pallet::weight(T::ValidatorWeightInfo::set_vanity_name())]
-		pub fn set_vanity_name(origin: OriginFor<T>, name: Vec<u8>) -> DispatchResultWithPostInfo {
-			let account_id = ensure_signed(origin)?;
-			ensure!(name.len() <= MAX_LENGTH_FOR_VANITY_NAME, Error::<T>::NameTooLong);
-			ensure!(sp_std::str::from_utf8(&name).is_ok(), Error::<T>::InvalidCharactersInName);
-			let mut vanity_names = VanityNames::<T>::get();
-			vanity_names.insert(account_id.clone(), name.clone());
-			VanityNames::<T>::put(vanity_names);
-			Self::deposit_event(Event::VanityNameSet(account_id, name));
-			Ok(().into())
-		}
-
 		#[pallet::call_index(6)]
 		#[pallet::weight(T::ValidatorWeightInfo::register_as_validator())]
 		pub fn register_as_validator(origin: OriginFor<T>) -> DispatchResult {
@@ -751,13 +736,90 @@ pub mod pallet {
 			}
 			T::AccountRoleRegistry::register_as_validator(&account_id)
 		}
+
+		#[pallet::call_index(7)]
+		#[pallet::weight(T::ValidatorWeightInfo::deregister_as_validator())]
+		pub fn deregister_as_validator(origin: OriginFor<T>) -> DispatchResult {
+			let account_id = T::AccountRoleRegistry::ensure_validator(origin.clone())?;
+			ensure!(!Self::is_bidding(&account_id), Error::<T>::StillBidding);
+
+			let validator_id = <ValidatorIdOf<T> as IsType<
+				<T as frame_system::Config>::AccountId,
+			>>::from_ref(&account_id);
+
+			ensure!(
+				(LastExpiredEpoch::<T>::get()..=CurrentEpoch::<T>::get())
+					.all(|epoch| !HistoricalAuthorities::<T>::get(epoch).contains(validator_id)),
+				Error::<T>::StillKeyHolder
+			);
+
+			// This can only error if the validator didn't register any keys, in which case we want
+			// to continue with the deregistration anyway.
+			let _ = pallet_session::Pallet::<T>::purge_keys(origin);
+
+			if let Some((peer_id, _, _)) = AccountPeerMapping::<T>::take(&account_id) {
+				MappedPeers::<T>::remove(peer_id);
+				T::CfePeerRegistration::peer_deregistered(validator_id.clone(), peer_id);
+			}
+
+			T::AccountRoleRegistry::deregister_as_validator(&account_id)?;
+
+			Ok(())
+		}
+
+		/// Signals a non-bidding node's intent to start bidding, and participate in the
+		/// next auction. Should only be called if the account is in a non-bidding state.
+		///
+		/// ## Events
+		///
+		/// - [StartedBidding](Event::StartedBidding)
+		///
+		/// ## Errors
+		///
+		/// - [AlreadyBidding](Error::AlreadyBidding)
+		#[pallet::call_index(8)]
+		#[pallet::weight(T::ValidatorWeightInfo::start_bidding())]
+		pub fn start_bidding(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			ensure!(T::SafeMode::get().start_bidding_enabled, Error::<T>::StartBiddingDisabled);
+			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
+			Self::activate_bidding(&account_id)?;
+			Self::deposit_event(Event::StartedBidding { account_id });
+			Ok(().into())
+		}
+
+		/// Signals a node's intent to withdraw their funds after the next auction and desist
+		/// from future auctions. Should only be called by accounts that are not already not
+		/// bidding.
+		///
+		/// ## Events
+		///
+		/// - [StoppedBidding](Event::StoppedBidding)
+		///
+		/// ## Errors
+		///
+		/// - [AlreadyNotBidding](Error::AlreadyNotBidding)
+		/// - [DuringAuctionPhase](Error::AuctionPhase)
+		#[pallet::call_index(9)]
+		#[pallet::weight(T::ValidatorWeightInfo::stop_bidding())]
+		pub fn stop_bidding(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			ensure!(T::SafeMode::get().stop_bidding_enabled, Error::<T>::StopBiddingDisabled);
+
+			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
+
+			ensure!(!Self::is_auction_phase(), Error::<T>::AuctionPhase);
+
+			ActiveBidder::<T>::try_mutate(|bidders| {
+				bidders.remove(&account_id).then_some(()).ok_or(Error::<T>::AlreadyNotBidding)
+			})?;
+			Self::deposit_event(Event::StoppedBidding { account_id });
+			Ok(().into())
+		}
 	}
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub genesis_authorities: BTreeSet<ValidatorIdOf<T>>,
 		pub genesis_backups: BackupMap<T>,
-		pub genesis_vanity_names: BTreeMap<T::AccountId, VanityName>,
 		pub blocks_per_epoch: BlockNumberFor<T>,
 		pub bond: T::Amount,
 		pub redemption_period_as_percentage: Percent,
@@ -773,7 +835,6 @@ pub mod pallet {
 			Self {
 				genesis_authorities: Default::default(),
 				genesis_backups: Default::default(),
-				genesis_vanity_names: Default::default(),
 				blocks_per_epoch: Zero::zero(),
 				bond: Default::default(),
 				redemption_period_as_percentage: Zero::zero(),
@@ -800,7 +861,6 @@ pub mod pallet {
 			RedemptionPeriodAsPercentage::<T>::set(self.redemption_period_as_percentage);
 			BackupRewardNodePercentage::<T>::set(self.backup_reward_node_percentage);
 			AuthoritySetMinSize::<T>::set(self.authority_set_min_size);
-			VanityNames::<T>::put(&self.genesis_vanity_names);
 			MaxAuthoritySetContractionPercentage::<T>::set(
 				self.max_authority_set_contraction_percentage,
 			);
@@ -812,9 +872,18 @@ pub mod pallet {
 
 			AuctionBidCutoffPercentage::<T>::set(self.auction_bid_cutoff_percentage);
 
+			self.genesis_authorities.iter().for_each(|v| {
+				Pallet::<T>::activate_bidding(ValidatorIdOf::<T>::into_ref(v))
+					.expect("The account was just created so this can't fail.")
+			});
+			self.genesis_backups.keys().for_each(|v| {
+				Pallet::<T>::activate_bidding(ValidatorIdOf::<T>::into_ref(v))
+					.expect("The account was just created so this can't fail.")
+			});
+
 			Pallet::<T>::initialise_new_epoch(
 				GENESIS_EPOCH,
-				&self.genesis_authorities,
+				&self.genesis_authorities.iter().cloned().collect(),
 				self.bond,
 				self.genesis_backups.clone(),
 			);
@@ -830,12 +899,16 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		LastExpiredEpoch::<T>::get()
 	}
 
-	fn current_authorities() -> BTreeSet<Self::ValidatorId> {
+	fn current_authorities() -> Vec<Self::ValidatorId> {
 		CurrentAuthorities::<T>::get()
 	}
 
+	fn authorities_at_epoch(epoch: u32) -> Vec<Self::ValidatorId> {
+		HistoricalAuthorities::<T>::get(epoch)
+	}
+
 	fn current_authority_count() -> AuthorityCount {
-		CurrentAuthorities::<T>::decode_len().unwrap_or_default() as AuthorityCount
+		CurrentAuthorities::<T>::decode_non_dedup_len().unwrap_or_default() as AuthorityCount
 	}
 
 	fn authority_index(
@@ -853,31 +926,25 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		CurrentEpoch::<T>::get()
 	}
 
-	fn is_auction_phase() -> bool {
-		if CurrentRotationPhase::<T>::get() != RotationPhase::Idle {
-			return true
-		}
-
-		// start + ((epoch * percentage) / 100)
-		CurrentEpochStartedAt::<T>::get()
-			.saturating_add(RedemptionPeriodAsPercentage::<T>::get() * BlocksPerEpoch::<T>::get()) <=
-			frame_system::Pallet::<T>::current_block_number()
-	}
-
 	fn authority_count_at_epoch(epoch_index: EpochIndex) -> Option<AuthorityCount> {
-		HistoricalAuthorities::<T>::decode_len(epoch_index).map(|l| l as AuthorityCount)
+		HistoricalAuthorities::<T>::decode_non_dedup_len(epoch_index).map(|l| l as AuthorityCount)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_authority_info_for_epoch(
 		epoch_index: EpochIndex,
-		new_authorities: BTreeSet<Self::ValidatorId>,
+		new_authorities: Vec<Self::ValidatorId>,
 	) {
 		for (i, authority) in new_authorities.iter().enumerate() {
 			AuthorityIndex::<T>::insert(epoch_index, authority, i as AuthorityCount);
 			HistoricalActiveEpochs::<T>::append(authority, epoch_index);
 		}
 		HistoricalAuthorities::<T>::insert(epoch_index, new_authorities);
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_authorities(authorities: Vec<Self::ValidatorId>) {
+		CurrentAuthorities::<T>::put(authorities);
 	}
 }
 
@@ -892,7 +959,7 @@ impl<T: Config> pallet_session::ShouldEndSession<BlockNumberFor<T>> for Pallet<T
 	fn should_end_session(_now: BlockNumberFor<T>) -> bool {
 		matches!(
 			CurrentRotationPhase::<T>::get(),
-			RotationPhase::NewKeysActivated(_) | RotationPhase::SessionRotating(_)
+			RotationPhase::NewKeysActivated(_) | RotationPhase::SessionRotating(..)
 		)
 	}
 }
@@ -907,7 +974,10 @@ impl<T: Config> Pallet<T> {
 	/// Note this function is not benchmarked - it is only ever triggered via the session pallet,
 	/// which at the time of writing uses `T::BlockWeights::get().max_block` ie. it implicitly fills
 	/// the block.
-	fn transition_to_next_epoch(rotation_state: RuntimeRotationState<T>) {
+	fn transition_to_next_epoch(
+		new_authorities: Vec<ValidatorIdOf<T>>,
+		bond: <T as Chainflip>::Amount,
+	) {
 		log::debug!(target: "cf-validator", "Starting new epoch");
 
 		// Update epoch numbers.
@@ -922,13 +992,11 @@ impl<T: Config> Pallet<T> {
 			old_epoch,
 		);
 
-		let new_authorities = rotation_state.authority_candidates();
-
 		Self::initialise_new_epoch(
 			new_epoch,
 			&new_authorities,
-			rotation_state.bond,
-			T::BidderProvider::get_bidders()
+			bond,
+			Self::get_active_bids()
 				.into_iter()
 				.filter_map(|Bid { bidder_id, amount }| {
 					if !new_authorities.contains(&bidder_id) {
@@ -964,7 +1032,7 @@ impl<T: Config> Pallet<T> {
 	/// expiries etc. that relate to the state of previous epochs.
 	fn initialise_new_epoch(
 		new_epoch: EpochIndex,
-		new_authorities: &BTreeSet<ValidatorIdOf<T>>,
+		new_authorities: &Vec<ValidatorIdOf<T>>,
 		new_bond: T::Amount,
 		backup_map: BackupMap<T>,
 	) {
@@ -998,7 +1066,7 @@ impl<T: Config> Pallet<T> {
 			target: "cf-validator",
 			"Aborting rotation at phase: {:?}.", CurrentRotationPhase::<T>::get()
 		);
-		T::VaultRotator::reset_vault_rotation();
+		T::KeyRotator::reset_key_rotation();
 		Self::set_rotation_phase(RotationPhase::Idle);
 		Self::deposit_event(Event::<T>::RotationAborted);
 	}
@@ -1026,7 +1094,7 @@ impl<T: Config> Pallet<T> {
 		)
 		.and_then(|resolver| {
 			resolver.resolve_auction(
-				T::BidderProvider::get_qualified_bidders::<T::KeygenQualification>(),
+				Self::get_qualified_bidders::<T::KeygenQualification>(),
 				AuctionBidCutoffPercentage::<T>::get(),
 			)
 		}) {
@@ -1037,7 +1105,7 @@ impl<T: Config> Pallet<T> {
 				));
 				debug_assert!(!auction_outcome.winners.is_empty());
 				debug_assert!({
-					let bids = T::BidderProvider::get_bidders()
+					let bids = Self::get_active_bids()
 						.into_iter()
 						.map(|bid| (bid.bidder_id, bid.amount))
 						.collect::<BTreeMap<_, _>>();
@@ -1075,7 +1143,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn try_restart_keygen(rotation_state: RuntimeRotationState<T>) {
-		T::VaultRotator::reset_vault_rotation();
+		T::KeyRotator::reset_key_rotation();
 		Self::try_start_keygen(rotation_state);
 	}
 
@@ -1098,7 +1166,7 @@ impl<T: Config> Pallet<T> {
 			);
 			Self::abort_rotation();
 		} else {
-			T::VaultRotator::keygen(candidates, rotation_state.new_epoch_index);
+			T::KeyRotator::keygen(candidates, rotation_state.new_epoch_index);
 			Self::set_rotation_phase(RotationPhase::KeygensInProgress(rotation_state));
 			log::info!(target: "cf-validator", "Vault rotation initiated.");
 		}
@@ -1124,7 +1192,7 @@ impl<T: Config> Pallet<T> {
 			&authority_candidates,
 			block_number.unique_saturated_into(),
 		) {
-			T::VaultRotator::key_handover(
+			T::KeyRotator::key_handover(
 				sharing_participants,
 				authority_candidates,
 				rotation_state.new_epoch_index,
@@ -1202,6 +1270,52 @@ impl<T: Config> Pallet<T> {
 	fn current_consensus_success_threshold() -> AuthorityCount {
 		cf_utilities::success_threshold_from_share_count(Self::current_authority_count())
 	}
+
+	/// Sets the `active` flag associated with the account to true, signalling that the account
+	/// wishes to participate in auctions, to become a network authority.
+	///
+	/// Returns an error if the account is already bidding.
+	fn activate_bidding(account_id: &T::AccountId) -> Result<(), Error<T>> {
+		ActiveBidder::<T>::try_mutate(|active_bidders| {
+			active_bidders
+				.insert(account_id.clone())
+				.then_some(())
+				.ok_or(Error::AlreadyBidding)
+		})
+	}
+
+	pub fn get_active_bids() -> Vec<Bid<ValidatorIdOf<T>, T::Amount>> {
+		ActiveBidder::<T>::get()
+			.into_iter()
+			.map(|bidder_id| Bid {
+				bidder_id: <ValidatorIdOf<T> as IsType<T::AccountId>>::from_ref(&bidder_id).clone(),
+				amount: T::FundingInfo::balance(&bidder_id),
+			})
+			.collect()
+	}
+
+	pub fn get_qualified_bidders<Q: QualifyNode<ValidatorIdOf<T>>>(
+	) -> Vec<Bid<ValidatorIdOf<T>, T::Amount>> {
+		Self::get_active_bids()
+			.into_iter()
+			.filter(|Bid { ref bidder_id, .. }| Q::is_qualified(bidder_id))
+			.collect()
+	}
+
+	pub fn is_bidding(account_id: &T::AccountId) -> bool {
+		ActiveBidder::<T>::get().contains(account_id)
+	}
+
+	pub fn is_auction_phase() -> bool {
+		if CurrentRotationPhase::<T>::get() != RotationPhase::Idle {
+			return true
+		}
+
+		// current_block > start + ((epoch * epoch%_can_redeem))
+		CurrentEpochStartedAt::<T>::get()
+			.saturating_add(RedemptionPeriodAsPercentage::<T>::get() * BlocksPerEpoch::<T>::get()) <=
+			frame_system::Pallet::<T>::current_block_number()
+	}
 }
 
 pub struct EpochHistory<T>(PhantomData<T>);
@@ -1210,7 +1324,7 @@ impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 	type ValidatorId = ValidatorIdOf<T>;
 	type EpochIndex = EpochIndex;
 	type Amount = T::Amount;
-	fn epoch_authorities(epoch: Self::EpochIndex) -> BTreeSet<Self::ValidatorId> {
+	fn epoch_authorities(epoch: Self::EpochIndex) -> Vec<Self::ValidatorId> {
 		HistoricalAuthorities::<T>::get(epoch)
 	}
 
@@ -1255,11 +1369,23 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<ValidatorIdOf<T>>> {
 		match CurrentRotationPhase::<T>::get() {
 			RotationPhase::NewKeysActivated(rotation_state) => {
-				let next_authorities = rotation_state.authority_candidates();
-				Self::set_rotation_phase(RotationPhase::SessionRotating(rotation_state));
-				Some(next_authorities.into_iter().collect())
+				let mut next_authorities: Vec<ValidatorIdOf<T>> =
+					rotation_state.authority_candidates().into_iter().collect();
+
+				let hash = frame_system::Pallet::<T>::parent_hash();
+				let mut buf: [u8; 8] = [0; 8];
+				buf.copy_from_slice(&hash.as_ref()[..8]);
+				let seed_from_hash: u64 = u64::from_be_bytes(buf);
+				WyRand::new_seed(seed_from_hash).shuffle(&mut next_authorities);
+
+				Self::set_rotation_phase(RotationPhase::SessionRotating(
+					next_authorities.clone(),
+					rotation_state.bond,
+				));
+
+				Some(next_authorities)
 			},
-			RotationPhase::SessionRotating(_) => {
+			RotationPhase::SessionRotating(..) => {
 				Self::set_rotation_phase(RotationPhase::Idle);
 				None
 			},
@@ -1282,8 +1408,9 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 
 	/// The session is starting
 	fn start_session(_start_index: SessionIndex) {
-		if let RotationPhase::SessionRotating(rotation_state) = CurrentRotationPhase::<T>::get() {
-			Pallet::<T>::transition_to_next_epoch(rotation_state)
+		if let RotationPhase::SessionRotating(authorities, bond) = CurrentRotationPhase::<T>::get()
+		{
+			Pallet::<T>::transition_to_next_epoch(authorities, bond)
 		}
 	}
 }
@@ -1310,29 +1437,6 @@ impl<T: Config> EstimateNextSessionRotation<BlockNumberFor<T>> for Pallet<T> {
 			Some(CurrentEpochStartedAt::<T>::get() + BlocksPerEpoch::<T>::get()),
 			T::DbWeight::get().reads(2),
 		)
-	}
-}
-
-pub struct DeletePeerMapping<T: Config>(PhantomData<T>);
-
-/// Implementation of `OnKilledAccount` ensures that we reconcile any flip dust remaining in the
-/// account by burning it.
-impl<T: Config> OnKilledAccount<T::AccountId> for DeletePeerMapping<T> {
-	fn on_killed_account(account_id: &T::AccountId) {
-		if let Some((peer_id, _, _)) = AccountPeerMapping::<T>::take(account_id) {
-			MappedPeers::<T>::remove(peer_id);
-			Pallet::<T>::deposit_event(Event::PeerIdUnregistered(account_id.clone(), peer_id));
-		}
-	}
-}
-
-pub struct DeleteVanityName<T: Config>(PhantomData<T>);
-
-impl<T: Config> OnKilledAccount<T::AccountId> for DeleteVanityName<T> {
-	fn on_killed_account(account_id: &T::AccountId) {
-		let mut vanity_names = VanityNames::<T>::get();
-		vanity_names.remove(account_id);
-		VanityNames::<T>::put(vanity_names);
 	}
 }
 
@@ -1388,11 +1492,20 @@ impl<T: Config> AuthoritiesCfeVersions for Pallet<T> {
 			current_authorities
 				.into_iter()
 				.filter(|validator_id| {
-					NodeCFEVersion::<T>::get(validator_id).is_compatible_with(version)
+					NodeCFEVersion::<T>::get(validator_id).compatibility_with_runtime(version) ==
+						CfeCompatibility::Compatible
 				})
 				.count() as u32,
 			authorities_count,
 		)
+	}
+}
+
+pub struct RemoveVanityNames<T>(PhantomData<T>);
+
+impl<T: Config> OnKilledAccount<T::AccountId> for RemoveVanityNames<T> {
+	fn on_killed_account(who: &T::AccountId) {
+		ActiveBidder::<T>::mutate(|bidders| bidders.remove(who));
 	}
 }
 
@@ -1411,5 +1524,20 @@ impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByCfeVersi
 			.into_iter()
 			.filter(|id| NodeCFEVersion::<T>::get(id) >= min_version)
 			.collect()
+	}
+}
+
+impl<T: Config> RedemptionCheck for Pallet<T> {
+	type ValidatorId = ValidatorIdOf<T>;
+	fn ensure_can_redeem(validator_id: &Self::ValidatorId) -> DispatchResult {
+		if Self::is_auction_phase() {
+			ensure!(
+				!ActiveBidder::<T>::get()
+					.contains(<ValidatorIdOf<T> as IsType<T::AccountId>>::into_ref(validator_id)),
+				Error::<T>::StillBidding
+			);
+		}
+
+		Ok(())
 	}
 }

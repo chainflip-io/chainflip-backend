@@ -58,31 +58,7 @@ This crate provides a `VersionedMigration` type that can be used to structure su
        (VersionedMigration<crate::Pallet<T>, my_migration::Migration<T>, 0, 1>,);
    ```
 
-4. Now create `migrations/my_migration.rs` with an implementation of `OnRuntimeUpgrade`:
-
-   ```rust
-   use crate::*;
-   use sp_std::marker::PhantomData;
-
-   /// My first migration.
-   pub struct Migration<T: Config>(PhantomData<T>);
-
-   impl<T: Config> OnRuntimeUpgrade for Migration<T> {
-       fn on_runtime_upgrade() -> frame_support::weights::Weight {
-           todo!()
-       }
-
-       #[cfg(feature = "try-runtime")]
-       fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-           todo!()
-       }
-
-       #[cfg(feature = "try-runtime")]
-       fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
-           todo!()
-       }
-   }
-   ```
+4. Now create `migrations/my_migration.rs` with an implementation of `OnRuntimeUpgrade`. You can use the `src/migration_template.rs` included in this crate as a starting point.
 
 5. If this is the first migration for this pallet, ensure that the `PalletMigration` for this pallet is added to the tuple of PalletMigrations in `state-chain/runtime/src/lib.rs`. Remember to add all the pallet's instances!
 
@@ -127,4 +103,12 @@ This crate provides a `VersionedMigration` type that can be used to structure su
        VersionedMigration<crate::Pallet<T>, change_storage_type_b::Migration, 2, 3>,
        VersionedMigration<crate::Pallet<T>, purge_old_values::Migration, 3, 4>,
    );
+   ```
+
+7. When removing migrations, it can be helpful to leave a placeholder migration to avoid deleting the boilerplate. For example, if the above migrations were no longer needed, we could remove them and leave a placeholder at the latest pallet version, like this:
+
+   ```rust
+   use cf_runtime_upgrade_utilities::PlaceholderMigration;
+
+   type PalletMigration<T> = PlaceholderMigration<crate::Pallet<T>, 4>;
    ```

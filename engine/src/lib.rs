@@ -4,7 +4,6 @@
 #![feature(extract_if)]
 #![feature(map_try_insert)]
 #![feature(step_trait)]
-#![feature(result_option_inspect)]
 
 pub mod common;
 pub mod constants;
@@ -21,4 +20,4 @@ pub mod witness;
 // Blockchains
 pub mod btc;
 pub mod dot;
-pub mod eth;
+pub mod evm;

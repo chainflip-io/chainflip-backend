@@ -3,18 +3,17 @@
 //
 // This command takes four arguments.
 // It will request a new swap with the provided parameters
-// Argument 1 is the source currency ("btc", "eth", "dot" or "usdc")
-// Argument 2 is the destination currency ("btc", "eth", "dot" or "usdc")
+// Argument 1 is the source currency ("Btc", "Eth", "Dot" or "Usdc")
+// Argument 2 is the destination currency ("Btc", "Eth", "Dot" or "Usdc")
 // Argument 3 is the destination address
-// For example: ./commands/new_swap.ts dot btc n1ocq2FF95qopwbEsjUTy3ZrawwXDJ6UsX
+// For example: ./commands/new_swap.ts Dot Btc n1ocq2FF95qopwbEsjUTy3ZrawwXDJ6UsX
 
-import { Asset } from '@chainflip-io/cli';
-import { runWithTimeout } from '../shared/utils';
+import { parseAssetString, runWithTimeout } from '../shared/utils';
 import { newSwap } from '../shared/new_swap';
 
 async function newSwapCommand() {
-  const sourceAsset = process.argv[2].toUpperCase() as Asset;
-  const destAsset = process.argv[3].toUpperCase() as Asset;
+  const sourceAsset = parseAssetString(process.argv[2]);
+  const destAsset = parseAssetString(process.argv[3]);
   const destAddress = process.argv[4];
 
   console.log(`Requesting swap ${sourceAsset} -> ${destAsset}`);

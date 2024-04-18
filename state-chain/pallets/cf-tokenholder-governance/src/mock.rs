@@ -6,7 +6,7 @@ use cf_traits::{
 	CommKeyBroadcaster, WaivedFees,
 };
 use codec::{Decode, Encode};
-use frame_support::{parameter_types, traits::HandleLifetime};
+use frame_support::{derive_impl, parameter_types, traits::HandleLifetime};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
@@ -33,6 +33,7 @@ parameter_types! {
 	pub const EnactmentDelay: BlockNumberFor<Test> = 20;
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();

@@ -15,7 +15,7 @@ type PoolState = super::PoolState<LiquidityProvider>;
 
 #[test]
 fn test_basic_swaps() {
-	fn inner(order: Order) {
+	fn inner(order: Side) {
 		{
 			let mut pool_state = PoolState {
 				limit_orders: limit_orders::PoolState::new(0).unwrap(),
@@ -50,9 +50,9 @@ fn test_basic_swaps() {
 		}
 
 		{
-			let initial_sqrt_price = match order.to_sold_side() {
-				Side::Zero => MAX_SQRT_PRICE,
-				Side::One => MIN_SQRT_PRICE,
+			let initial_sqrt_price = match order.to_sold_pair() {
+				Pairs::Base => MAX_SQRT_PRICE,
+				Pairs::Quote => MIN_SQRT_PRICE,
 			};
 			let mut pool_state = PoolState {
 				limit_orders: limit_orders::PoolState::new(0).unwrap(),
@@ -82,16 +82,16 @@ fn test_basic_swaps() {
 			assert_eq!(
 				pool_state.swap(order, Amount::MAX, None),
 				(
-					minted_amounts[!order.to_sold_side()] - 1, /* -1 is due to rounding down */
-					Amount::MAX - minted_amounts[!order.to_sold_side()]
+					minted_amounts[!order.to_sold_pair()] - 1, /* -1 is due to rounding down */
+					Amount::MAX - minted_amounts[!order.to_sold_pair()]
 				)
 			);
 		}
 
 		{
-			let initial_sqrt_price = match order.to_sold_side() {
-				Side::Zero => MAX_SQRT_PRICE,
-				Side::One => MIN_SQRT_PRICE,
+			let initial_sqrt_price = match order.to_sold_pair() {
+				Pairs::Base => MAX_SQRT_PRICE,
+				Pairs::Quote => MIN_SQRT_PRICE,
 			};
 			let mut pool_state = PoolState {
 				limit_orders: limit_orders::PoolState::new(0).unwrap(),
@@ -133,21 +133,21 @@ fn test_basic_swaps() {
 			assert_eq!(
 				pool_state.swap(order, Amount::MAX, None),
 				(
-					limit_order_liquidity + range_order_minted_amounts[!order.to_sold_side()] - 1, /* -1 is due
+					limit_order_liquidity + range_order_minted_amounts[!order.to_sold_pair()] - 1, /* -1 is due
 					                                                                                * to rounding
 					                                                                                * down */
 					Amount::MAX -
 						(limit_order_liquidity +
-							range_order_minted_amounts[!order.to_sold_side()]) -
+							range_order_minted_amounts[!order.to_sold_pair()]) -
 						1 /* -1 is due to rounding down */
 				)
 			);
 		}
 
 		{
-			let initial_sqrt_price = match order.to_sold_side() {
-				Side::Zero => MAX_SQRT_PRICE,
-				Side::One => MIN_SQRT_PRICE,
+			let initial_sqrt_price = match order.to_sold_pair() {
+				Pairs::Base => MAX_SQRT_PRICE,
+				Pairs::Quote => MIN_SQRT_PRICE,
 			};
 			let mut pool_state = PoolState {
 				limit_orders: limit_orders::PoolState::new(0).unwrap(),
@@ -193,19 +193,19 @@ fn test_basic_swaps() {
 			assert_eq!(
 				pool_state.swap(order, Amount::MAX, None),
 				(
-					limit_order_liquidity + range_order_minted_amounts[!order.to_sold_side()] - 2, /* -2 is due
+					limit_order_liquidity + range_order_minted_amounts[!order.to_sold_pair()] - 2, /* -2 is due
 					                                                                                * to rounding
 					                                                                                * down */
 					Amount::MAX -
 						(limit_order_liquidity +
-							range_order_minted_amounts[!order.to_sold_side()])
+							range_order_minted_amounts[!order.to_sold_pair()])
 				)
 			);
 		}
 	}
 
-	inner(Order::Sell);
-	inner(Order::Buy);
+	inner(Side::Sell);
+	inner(Side::Buy);
 }
 
 #[test]

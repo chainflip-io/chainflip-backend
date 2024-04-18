@@ -1,6 +1,6 @@
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { Asset, assetChains, chainContractIds, assetDecimals } from '@chainflip-io/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 import {
   observeEvent,
   newAddress,
@@ -8,19 +8,28 @@ import {
   decodeDotAddressForContract,
   handleSubstrateError,
   lpMutex,
-  assetToChain,
+  shortChainFromAsset,
   amountToFineAmount,
   isWithinOnePercent,
+  chainFromAsset,
+  decodeSolAddress,
+  chainContractId,
+  assetDecimals,
 } from '../shared/utils';
 import { send } from '../shared/send';
 
-export async function provideLiquidity(ccy: Asset, amount: number, waitForFinalization = false) {
+export async function provideLiquidity(
+  ccy: Asset,
+  amount: number,
+  waitForFinalization = false,
+  lpKey?: string,
+) {
   const chainflip = await getChainflipApi();
   await cryptoWaitReady();
-  const chain = assetToChain(ccy);
+  const chain = shortChainFromAsset(ccy);
 
   const keyring = new Keyring({ type: 'sr25519' });
-  const lpUri = process.env.LP_URI || '//LP_1';
+  const lpUri = lpKey ?? (process.env.LP_URI || '//LP_1');
   const lp = keyring.createFromUri(lpUri);
 
   // If no liquidity refund address is registered, then do that now
@@ -28,12 +37,13 @@ export async function provideLiquidity(ccy: Asset, amount: number, waitForFinali
     (
       await chainflip.query.liquidityProvider.liquidityRefundAddress(
         lp.address,
-        chainContractIds[assetChains[ccy]],
+        chainContractId(chainFromAsset(ccy)),
       )
     ).toJSON() === null
   ) {
-    let refundAddress = await newAddress(chain.toUpperCase() as Asset, 'LP_1');
-    refundAddress = ccy === 'DOT' ? decodeDotAddressForContract(refundAddress) : refundAddress;
+    let refundAddress = await newAddress(ccy, 'LP_1');
+    refundAddress = chain === 'Dot' ? decodeDotAddressForContract(refundAddress) : refundAddress;
+    refundAddress = chain === 'Sol' ? decodeSolAddress(refundAddress) : refundAddress;
 
     console.log('Registering Liquidity Refund Address for ' + ccy + ': ' + refundAddress);
     await lpMutex.runExclusive(async () => {
@@ -46,13 +56,13 @@ export async function provideLiquidity(ccy: Asset, amount: number, waitForFinali
   let eventHandle = observeEvent(
     'liquidityProvider:LiquidityDepositAddressReady',
     chainflip,
-    (event) => event.data.asset.toUpperCase() === ccy,
+    (event) => event.data.asset === ccy,
   );
 
   console.log('Requesting ' + ccy + ' deposit address');
   await lpMutex.runExclusive(async () => {
     await chainflip.tx.liquidityProvider
-      .requestLiquidityDepositAddress(ccy.toLowerCase())
+      .requestLiquidityDepositAddress(ccy, null)
       .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
   });
 
@@ -64,15 +74,15 @@ export async function provideLiquidity(ccy: Asset, amount: number, waitForFinali
     'liquidityProvider:AccountCredited',
     chainflip,
     (event) =>
-      event.data.asset.toUpperCase() === ccy &&
+      event.data.asset === ccy &&
       isWithinOnePercent(
         BigInt(event.data.amountCredited.replace(/,/g, '')),
-        BigInt(amountToFineAmount(String(amount), assetDecimals[ccy])),
+        BigInt(amountToFineAmount(String(amount), assetDecimals(ccy))),
       ),
     undefined,
     waitForFinalization,
   );
-  send(ccy, ingressAddress, String(amount));
+  await send(ccy, ingressAddress, String(amount));
 
   await eventHandle;
 }

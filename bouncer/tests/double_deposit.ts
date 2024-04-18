@@ -1,5 +1,5 @@
 #!/usr/bin/env -S pnpm tsx
-import { ApiPromise, WsProvider } from '@polkadot/api';
+import { ApiPromise } from '@polkadot/api';
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { exec } from 'child_process';
@@ -9,39 +9,27 @@ import {
   hexStringToBytesArray,
   newAddress,
   observeEvent,
+  getChainflipApi,
 } from '../shared/utils';
 
 let chainflip: ApiPromise;
 
 async function main(): Promise<void> {
-  const cfNodeEndpoint = process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944';
   await cryptoWaitReady();
   const keyring = new Keyring({ type: 'sr25519' });
   const lpUri = process.env.LP_URI ?? '//LP_1';
   const lp = keyring.createFromUri(lpUri);
-  chainflip = await ApiPromise.create({
-    provider: new WsProvider(cfNodeEndpoint),
-    noInitWarn: true,
-    types: {
-      EncodedAddress: {
-        _enum: {
-          Eth: '[u8; 20]',
-          Dot: '[u8; 32]',
-          Btc: '[u8; 34]',
-        },
-      },
-    },
-  });
+  chainflip = await getChainflipApi();
 
   // Register Liquidity Refund Address before requesting reposit address.
   const encodedEthAddr = chainflip.createType('EncodedAddress', {
-    Eth: hexStringToBytesArray(await newAddress('ETH', 'LP_1')),
+    Eth: hexStringToBytesArray(await newAddress('Eth', 'LP_1')),
   });
   await chainflip.tx.liquidityProvider
     .registerLiquidityRefundAddress(encodedEthAddr)
     .signAndSend(lp);
 
-  await chainflip.tx.liquidityProvider.requestLiquidityDepositAddress('Eth').signAndSend(lp);
+  await chainflip.tx.liquidityProvider.requestLiquidityDepositAddress('Eth', null).signAndSend(lp);
   const ethIngressKey = (
     await observeEvent(
       'liquidityProvider:LiquidityDepositAddressReady',
@@ -49,7 +37,7 @@ async function main(): Promise<void> {
       (event) => event.data.depositAddress.Eth,
     )
   ).data.depositAddress.Eth as string;
-  console.log('ETH ingress address: ' + ethIngressKey);
+  console.log('Eth ingress address: ' + ethIngressKey);
   await sleep(8000); // sleep for 8 seconds to give the engine a chance to start witnessing
   exec(
     'pnpm tsx  ./commands/send_eth.ts ' + ethIngressKey + ' 10',

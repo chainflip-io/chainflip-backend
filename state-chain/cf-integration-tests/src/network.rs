@@ -2,28 +2,35 @@ use super::*;
 
 use crate::threshold_signing::{BtcThresholdSigner, DotThresholdSigner, EthThresholdSigner};
 
+use cf_chains::address::EncodedAddress;
 use cf_primitives::{AccountRole, BlockNumber, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
-use cf_traits::{AccountRoleRegistry, EpochInfo, VaultRotator};
+use cf_test_utilities::assert_events_eq;
+use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo, KeyRotator};
+use cfe_events::{KeyHandoverRequest, ThresholdSignatureRequest};
 use chainflip_node::test_account_from_seed;
-use codec::Encode;
+use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::UnfilteredDispatchable,
 	inherent::ProvideInherent,
 	pallet_prelude::InherentData,
-	traits::{IntegrityTest, OnFinalize, OnIdle},
+	traits::{
+		IntegrityTest, OnFinalize, OnIdle, OnNewAccount, OriginTrait, UnfilteredDispatchable,
+	},
 };
 use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 use sp_consensus_aura::SlotDuration;
 use sp_std::collections::btree_set::BTreeSet;
 use state_chain_runtime::{
-	AccountRoles, AllPalletsWithSystem, BitcoinInstance, PolkadotInstance, Runtime, RuntimeCall,
-	RuntimeEvent, RuntimeOrigin, Validator, Weight,
+	AccountRoles, AllPalletsWithSystem, ArbitrumInstance, BitcoinInstance, Funding,
+	LiquidityProvider, PalletExecutionOrder, PolkadotInstance, Runtime, RuntimeCall, RuntimeEvent,
+	RuntimeOrigin, Validator, Weight,
 };
 use std::{
 	cell::RefCell,
 	collections::{HashMap, VecDeque},
 	rc::Rc,
 };
+
+type CfeEvent = cfe_events::CfeEvent<<Runtime as Chainflip>::ValidatorId>;
 
 // TODO: Can we use the actual events here?
 // Events from ethereum contract
@@ -102,10 +109,17 @@ impl ScGatewayContract {
 pub struct Cli;
 
 impl Cli {
+	#[track_caller]
 	pub fn start_bidding(account: &NodeId) {
-		assert_ok!(Funding::start_bidding(RuntimeOrigin::signed(account.clone())));
+		assert_ok!(Validator::start_bidding(RuntimeOrigin::signed(account.clone())));
 	}
 
+	#[track_caller]
+	pub fn stop_bidding(account: &NodeId) {
+		assert_ok!(Validator::stop_bidding(RuntimeOrigin::signed(account.clone())));
+	}
+
+	#[track_caller]
 	pub fn redeem(
 		account: &NodeId,
 		amount: RedemptionAmount<FlipBalance>,
@@ -119,18 +133,31 @@ impl Cli {
 		));
 	}
 
+	#[track_caller]
 	pub fn set_vanity_name(account: &NodeId, name: &str) {
-		assert_ok!(Validator::set_vanity_name(
+		assert_ok!(AccountRoles::set_vanity_name(
 			RuntimeOrigin::signed(account.clone()),
-			name.as_bytes().to_vec()
+			name.as_bytes().to_vec().try_into().unwrap()
 		));
 	}
 
+	#[track_caller]
 	pub fn register_as_validator(account: &NodeId) {
-		assert_ok!(<AccountRoles as AccountRoleRegistry<Runtime>>::register_account_role(
-			account,
-			AccountRole::Validator
+		assert_ok!(Validator::register_as_validator(OriginTrait::signed(account.clone()),));
+	}
+
+	#[track_caller]
+	pub fn rotate_keys(account: &NodeId) {
+		assert_ok!(Validator::set_keys(
+			RuntimeOrigin::signed(account.clone()),
+			SessionKeys::decode(&mut &[0xcf; 64][..]).unwrap(),
+			Default::default()
 		));
+	}
+
+	#[track_caller]
+	pub fn deregister_as_validator(account: &NodeId) {
+		assert_ok!(Validator::deregister_as_validator(OriginTrait::signed(account.clone()),));
 	}
 }
 
@@ -215,10 +242,12 @@ impl Engine {
 
 	// Handle events coming in from the state chain
 	// TODO have this abstracted out
-	fn handle_state_chain_events(&mut self, events: &[RuntimeEvent]) {
+	fn handle_state_chain_events(&mut self, events: &[RuntimeEvent], cfe_events: &[CfeEvent]) {
 		if self.live {
 			// Being a CurrentAuthority we would respond to certain events
 			if self.state() == ChainflipAccountState::CurrentAuthority {
+				// Note: these aren't events that the engine normally responds to, but
+				// we process them here due to the way integration tests are set up
 				on_events! {
 					events,
 					RuntimeEvent::Validator(
@@ -227,73 +256,7 @@ impl Engine {
 							self.dot_threshold_signer.borrow_mut().use_proposed_key();
 							self.btc_threshold_signer.borrow_mut().use_proposed_key();
 					}
-					RuntimeEvent::EthereumThresholdSigner(
-						// A signature request
-						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
-							ceremony_id,
-							key,
-							payload,
-							..
-						}) => {
-							queue_dispatch_extrinsic(
-								RuntimeCall::EthereumThresholdSigner(
-									pallet_cf_threshold_signature::Call::signature_success{
-										ceremony_id: *ceremony_id,
-										signature: self.eth_threshold_signer.borrow().sign_with_key(*key, payload.as_fixed_bytes()),
-									}
-								),
-								RuntimeOrigin::none()
-							);
-					}
 
-					RuntimeEvent::PolkadotThresholdSigner(
-						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
-							ceremony_id,
-							key,
-							payload,
-							..
-						}) => {
-							// Only sign if the signing key is up-to-date
-							if self.dot_threshold_signer.borrow().is_key_valid(key){
-								queue_dispatch_extrinsic(
-									RuntimeCall::PolkadotThresholdSigner(
-										pallet_cf_threshold_signature::Call::signature_success{
-											ceremony_id: *ceremony_id,
-											signature: self.dot_threshold_signer.borrow().sign_with_key(*key, payload),
-										}
-									),
-									RuntimeOrigin::none()
-								);
-							} else {
-								let mut offenders = BTreeSet::new();
-								offenders.insert(self.node_id.clone());
-								queue_dispatch_extrinsic(
-									RuntimeCall::PolkadotThresholdSigner(
-										pallet_cf_threshold_signature::Call::report_signature_failed{
-											ceremony_id: *ceremony_id,
-											offenders,
-										}
-									),
-									RuntimeOrigin::signed(self.node_id.clone())
-								);
-							}
-					}
-					RuntimeEvent::BitcoinThresholdSigner(
-						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
-							ceremony_id,
-							key,
-							payload,
-							..
-						}) => {
-							queue_dispatch_extrinsic(
-								RuntimeCall::BitcoinThresholdSigner(
-									pallet_cf_threshold_signature::Call::signature_success{
-										ceremony_id: *ceremony_id,
-										signature: vec![self.btc_threshold_signer.borrow().sign_with_key(*key, &(payload[0].1.clone()))],
-									}
-								), RuntimeOrigin::none()
-							);
-					}
 					RuntimeEvent::PolkadotVault(pallet_cf_vaults::Event::<_, PolkadotInstance>::AwaitingGovernanceActivation { .. }) => {
 						queue_dispatch_extrinsic(
 							RuntimeCall::Environment(pallet_cf_environment::Call::witness_polkadot_vault_creation {
@@ -315,59 +278,179 @@ impl Engine {
 							pallet_cf_governance::RawOrigin::GovernanceApproval.into()
 						);
 					}
+					RuntimeEvent::ArbitrumVault(pallet_cf_vaults::Event::<_, ArbitrumInstance>::AwaitingGovernanceActivation { .. }) => {
+						queue_dispatch_extrinsic(
+							RuntimeCall::Environment(
+								pallet_cf_environment::Call::witness_initialize_arbitrum_vault {
+									block_number: 1,
+								},
+							),
+							pallet_cf_governance::RawOrigin::GovernanceApproval.into()
+						);
+					}
 				};
 			}
 
-			// Being funded we would be required to respond to keygen requests
-			on_events!(
-				events,
-				RuntimeEvent::EthereumVault(
-					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, .. }) => {
-						if participants.contains(&self.node_id) {
-							queue_dispatch_extrinsic(RuntimeCall::EthereumVault(
-									pallet_cf_vaults::Call::report_keygen_outcome {
-										ceremony_id: *ceremony_id,
-										reported_outcome: Ok(self.eth_threshold_signer.borrow_mut().propose_new_key()),
-									}
-								), RuntimeOrigin::signed(self.node_id.clone()));
-						}
-				}
-				RuntimeEvent::PolkadotVault(
-					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, .. }) => {
-						if participants.contains(&self.node_id) {
-							queue_dispatch_extrinsic(RuntimeCall::PolkadotVault(
-									pallet_cf_vaults::Call::report_keygen_outcome {
-										ceremony_id: *ceremony_id,
-										reported_outcome: Ok(self.dot_threshold_signer.borrow_mut().propose_new_key()),
-									}
-								), RuntimeOrigin::signed(self.node_id.clone()));
-						}
-				}
+			use cfe_events::CfeEvent;
 
-				RuntimeEvent::BitcoinVault(
-					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, .. }) => {
-						if participants.contains(&self.node_id) {
-							queue_dispatch_extrinsic(RuntimeCall::BitcoinVault(
-								pallet_cf_vaults::Call::report_keygen_outcome {
-									ceremony_id: *ceremony_id,
-									reported_outcome: Ok(self.btc_threshold_signer.borrow_mut().propose_new_key()),
-								}
-							), RuntimeOrigin::signed(self.node_id.clone()));
-						}
-				}
-				RuntimeEvent::BitcoinVault(
-					pallet_cf_vaults::Event::KeyHandoverRequest {ceremony_id, sharing_participants, receiving_participants, .. }) => {
-						let all_participants = sharing_participants.union(receiving_participants).cloned().collect::<BTreeSet<_>>();
+			for event in cfe_events {
+				match event {
+					CfeEvent::EvmThresholdSignatureRequest(ThresholdSignatureRequest {
+						ceremony_id,
+						key,
+						signatories,
+						payload,
+						..
+					}) =>
+						if signatories.contains(&self.node_id) {
+							queue_dispatch_extrinsic(
+								RuntimeCall::EvmThresholdSigner(
+									pallet_cf_threshold_signature::Call::signature_success {
+										ceremony_id: *ceremony_id,
+										signature: self
+											.eth_threshold_signer
+											.borrow()
+											.sign_with_key(*key, payload.as_fixed_bytes()),
+									},
+								),
+								RuntimeOrigin::none(),
+							);
+						},
+					CfeEvent::DotThresholdSignatureRequest(ThresholdSignatureRequest {
+						ceremony_id,
+						key,
+						signatories,
+						payload,
+						..
+					}) =>
+						if signatories.contains(&self.node_id) {
+							if self.dot_threshold_signer.borrow().is_key_valid(key) {
+								queue_dispatch_extrinsic(
+									RuntimeCall::PolkadotThresholdSigner(
+										pallet_cf_threshold_signature::Call::signature_success {
+											ceremony_id: *ceremony_id,
+											signature: self
+												.dot_threshold_signer
+												.borrow()
+												.sign_with_key(*key, payload),
+										},
+									),
+									RuntimeOrigin::none(),
+								);
+							} else {
+								let mut offenders = BTreeSet::new();
+								offenders.insert(self.node_id.clone());
+								queue_dispatch_extrinsic(
+								RuntimeCall::PolkadotThresholdSigner(
+									pallet_cf_threshold_signature::Call::report_signature_failed {
+										ceremony_id: *ceremony_id,
+										offenders,
+									},
+								),
+								RuntimeOrigin::signed(self.node_id.clone()),
+							);
+							}
+						},
+					CfeEvent::BtcThresholdSignatureRequest(ThresholdSignatureRequest {
+						ceremony_id,
+						key,
+						signatories,
+						payload,
+						..
+					}) =>
+						if signatories.contains(&self.node_id) {
+							queue_dispatch_extrinsic(
+								RuntimeCall::BitcoinThresholdSigner(
+									pallet_cf_threshold_signature::Call::signature_success {
+										ceremony_id: *ceremony_id,
+										signature: payload
+											.iter()
+											.map(|p| {
+												self.btc_threshold_signer
+													.borrow()
+													.sign_with_key(*key, &(p.1))
+											})
+											.collect::<Vec<_>>(),
+									},
+								),
+								RuntimeOrigin::none(),
+							);
+						},
+					CfeEvent::EvmKeygenRequest(req) =>
+						if req.participants.contains(&self.node_id) {
+							queue_dispatch_extrinsic(
+								RuntimeCall::EvmThresholdSigner(
+									pallet_cf_threshold_signature::Call::report_keygen_outcome {
+										ceremony_id: req.ceremony_id,
+										reported_outcome: Ok(self
+											.eth_threshold_signer
+											.borrow_mut()
+											.propose_new_key()),
+									},
+								),
+								RuntimeOrigin::signed(self.node_id.clone()),
+							);
+						},
+					CfeEvent::DotKeygenRequest(req) =>
+						if req.participants.contains(&self.node_id) {
+							queue_dispatch_extrinsic(
+								RuntimeCall::PolkadotThresholdSigner(
+									pallet_cf_threshold_signature::Call::report_keygen_outcome {
+										ceremony_id: req.ceremony_id,
+										reported_outcome: Ok(self
+											.dot_threshold_signer
+											.borrow_mut()
+											.propose_new_key()),
+									},
+								),
+								RuntimeOrigin::signed(self.node_id.clone()),
+							);
+						},
+					CfeEvent::BtcKeygenRequest(req) =>
+						if req.participants.contains(&self.node_id) {
+							queue_dispatch_extrinsic(
+								RuntimeCall::BitcoinThresholdSigner(
+									pallet_cf_threshold_signature::Call::report_keygen_outcome {
+										ceremony_id: req.ceremony_id,
+										reported_outcome: Ok(self
+											.btc_threshold_signer
+											.borrow_mut()
+											.propose_new_key()),
+									},
+								),
+								RuntimeOrigin::signed(self.node_id.clone()),
+							);
+						},
+					CfeEvent::BtcKeyHandoverRequest(KeyHandoverRequest {
+						ceremony_id,
+						sharing_participants,
+						receiving_participants,
+						..
+					}) => {
+						let all_participants = sharing_participants
+							.union(receiving_participants)
+							.cloned()
+							.collect::<BTreeSet<_>>();
 						if all_participants.contains(&self.node_id) {
-							queue_dispatch_extrinsic(RuntimeCall::BitcoinVault(
-								pallet_cf_vaults::Call::report_key_handover_outcome {
-									ceremony_id: *ceremony_id,
-									reported_outcome: Ok(self.btc_threshold_signer.borrow_mut().propose_new_key()),
-								}
-							), RuntimeOrigin::signed(self.node_id.clone()));
+							queue_dispatch_extrinsic(
+								RuntimeCall::BitcoinThresholdSigner(
+									pallet_cf_threshold_signature::Call::report_key_handover_outcome {
+										ceremony_id: *ceremony_id,
+										reported_outcome: Ok(self
+											.btc_threshold_signer
+											.borrow_mut()
+											.propose_new_key()),
+									},
+								),
+								RuntimeOrigin::signed(self.node_id.clone()),
+							);
 						}
+					},
+					_ => {
+						// ignored
+					},
 				}
-			);
+			}
 		}
 	}
 }
@@ -409,7 +492,6 @@ pub(crate) fn setup_peer_mapping(node_id: &NodeId) {
 pub struct Network {
 	engines: HashMap<NodeId, Engine>,
 	pub state_chain_gateway_contract: ScGatewayContract,
-	node_counter: u32,
 
 	// Used to initialised the threshold signers of the engines added
 	pub eth_threshold_signer: Rc<RefCell<EthThresholdSigner>>,
@@ -433,7 +515,7 @@ pub fn dispatch_all_pending_extrinsics() {
 	PENDING_EXTRINSICS.with_borrow_mut(|v| {
 		v.drain(..).for_each(|(call, origin)| {
 			let expect_ok = match call {
-				RuntimeCall::EthereumThresholdSigner(..) |
+				RuntimeCall::EvmThresholdSigner(..) |
 				RuntimeCall::PolkadotThresholdSigner(..) |
 				RuntimeCall::BitcoinThresholdSigner(..) |
 				RuntimeCall::Environment(..) => {
@@ -476,11 +558,6 @@ pub fn dispatch_all_pending_extrinsics() {
 }
 
 impl Network {
-	pub fn next_node_id(&mut self) -> NodeId {
-		self.node_counter += 1;
-		[self.node_counter as u8; 32].into()
-	}
-
 	pub fn live_nodes(&self) -> Vec<NodeId> {
 		self.engines
 			.iter()
@@ -500,10 +577,7 @@ impl Network {
 
 	// Create a network which includes the authorities in genesis of number of nodes
 	// and return a network and sorted list of nodes within
-	pub fn create(
-		number_of_backup_nodes: u8,
-		existing_nodes: &BTreeSet<NodeId>,
-	) -> (Self, BTreeSet<NodeId>) {
+	pub fn create(number_of_backup_nodes: u8, existing_nodes: &Vec<NodeId>) -> (Self, Vec<NodeId>) {
 		let mut network: Network = Default::default();
 
 		// Include any nodes already *created* to the test network
@@ -514,10 +588,10 @@ impl Network {
 		}
 
 		// Create the backup nodes
-		let mut backup_nodes = BTreeSet::new();
+		let mut backup_nodes = Vec::new();
 		for _ in 0..number_of_backup_nodes {
 			let node_id = network.create_engine();
-			backup_nodes.insert(node_id);
+			backup_nodes.push(node_id.clone());
 		}
 
 		(network, backup_nodes)
@@ -528,7 +602,7 @@ impl Network {
 	}
 
 	pub fn create_engine(&mut self) -> NodeId {
-		let node_id = self.next_node_id();
+		let node_id = NodeId::from([self.engines.len() as u8; 32]);
 		self.add_engine(&node_id);
 		node_id
 	}
@@ -561,6 +635,13 @@ impl Network {
 		if target > current_block {
 			self.move_forward_blocks(target - current_block - 1)
 		}
+	}
+
+	/// Move to the next heartbeat interval block.
+	pub fn move_to_next_heartbeat_block(&mut self) {
+		self.move_forward_blocks(
+			HEARTBEAT_BLOCK_INTERVAL - System::block_number() % HEARTBEAT_BLOCK_INTERVAL,
+		);
 	}
 
 	// Submits heartbeat for keep alive.
@@ -618,7 +699,7 @@ impl Network {
 
 			// Initialize
 			System::initialize(&block_number, &System::block_hash(block_number), &digest);
-			AllPalletsWithSystem::on_initialize(block_number);
+			PalletExecutionOrder::on_initialize(block_number);
 
 			// Inherents
 			assert_ok!(state_chain_runtime::Timestamp::create_inherent(&inherent_data)
@@ -635,7 +716,7 @@ impl Network {
 			);
 
 			// We must finalise this to clear the previous author which is otherwise cached
-			AllPalletsWithSystem::on_finalize(block_number);
+			PalletExecutionOrder::on_finalize(block_number);
 			AllPalletsWithSystem::integrity_test();
 
 			// Engine reacts to events from the State Chain.
@@ -643,9 +724,85 @@ impl Network {
 				.into_iter()
 				.map(|e| e.event)
 				.collect::<Vec<RuntimeEvent>>();
+
+			let cfe_events = state_chain_runtime::CfeInterface::get_cfe_events();
+
 			for engine in self.engines.values_mut() {
-				engine.handle_state_chain_events(&events);
+				engine.handle_state_chain_events(&events, &cfe_events);
 			}
 		}
+	}
+}
+
+// Helper function that creates a network, funds backup nodes, and have them join the auction.
+pub fn fund_authorities_and_join_auction(
+	max_authorities: AuthorityCount,
+) -> (network::Network, Vec<NodeId>, Vec<NodeId>) {
+	// Create MAX_AUTHORITIES backup nodes and fund them above our genesis
+	// authorities The result will be our newly created nodes will be authorities
+	// and the genesis authorities will become backup nodes
+	let genesis_authorities: Vec<AccountId32> = Validator::current_authorities();
+	let (mut testnet, init_backup_nodes) =
+		network::Network::create(max_authorities as u8, &genesis_authorities);
+
+	pallet_cf_flip::OffchainFunds::<Runtime>::set(u128::MAX);
+
+	// An initial balance which is greater than the genesis balances
+	// We intend for these initially backup nodes to win the auction
+	const INITIAL_FUNDING: FlipBalance = genesis::GENESIS_BALANCE * 2;
+	for node in &init_backup_nodes {
+		testnet.state_chain_gateway_contract.fund_account(
+			node.clone(),
+			INITIAL_FUNDING,
+			GENESIS_EPOCH,
+		);
+	}
+
+	// Allow the funds to be registered, initialise the account keys and peer
+	// ids, register as a validator, then start bidding.
+	testnet.move_forward_blocks(2);
+
+	for node in &init_backup_nodes {
+		network::Cli::register_as_validator(node);
+		network::setup_account_and_peer_mapping(node);
+		network::Cli::start_bidding(node);
+	}
+
+	(testnet, genesis_authorities, init_backup_nodes)
+}
+
+pub fn new_account(account_id: &AccountId, role: AccountRole) {
+	let _ = Funding::funded(
+		pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
+		account_id.clone(),
+		FLIPPERINOS_PER_FLIP,
+		Default::default(),
+		Default::default(),
+	);
+	AccountRoles::on_new_account(account_id);
+	assert_ok!(AccountRoles::register_account_role(account_id, role));
+	assert_events_eq!(
+		Runtime,
+		RuntimeEvent::AccountRoles(pallet_cf_account_roles::Event::AccountRoleRegistered {
+			account_id: account_id.clone(),
+			role,
+		})
+	);
+	if role == AccountRole::LiquidityProvider {
+		register_refund_addresses(account_id);
+	}
+	System::reset_events();
+}
+
+pub fn register_refund_addresses(account_id: &AccountId) {
+	for encoded_address in [
+		EncodedAddress::Eth(Default::default()),
+		EncodedAddress::Dot(Default::default()),
+		EncodedAddress::Btc("bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw".as_bytes().to_vec()),
+	] {
+		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
+			RuntimeOrigin::signed(account_id.clone()),
+			encoded_address
+		));
 	}
 }

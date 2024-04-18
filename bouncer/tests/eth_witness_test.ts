@@ -10,7 +10,7 @@ async function main(): Promise<void> {
   const lp = keyring.createFromUri(lpUri);
 
   console.log('Requesting ETH deposit address');
-  await chainflip.tx.liquidityProvider.requestLiquidityDepositAddress('Eth').signAndSend(lp);
+  await chainflip.tx.liquidityProvider.requestLiquidityDepositAddress('Eth', null).signAndSend(lp);
   const ethIngressKey = (
     await observeEvent(
       'liquidityProvider:LiquidityDepositAddressReady',
@@ -18,7 +18,7 @@ async function main(): Promise<void> {
       (event) => event.data.depositAddress.Eth,
     )
   ).data.depositAddress.Eth as string;
-  console.log(`Found ETH address: ${ethIngressKey}`);
+  console.log(`Found Eth address: ${ethIngressKey}`);
 
   exec(
     `pnpm tsx ./commands/send_eth.ts ${ethIngressKey} 10`,

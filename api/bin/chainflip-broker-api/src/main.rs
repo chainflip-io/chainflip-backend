@@ -4,12 +4,12 @@ use cf_utilities::{
 };
 use chainflip_api::{
 	self, clean_foreign_chain_address,
-	primitives::{AccountRole, BasisPoints, BlockNumber, CcmChannelMetadata, ChannelId},
+	primitives::{AccountRole, Asset, BasisPoints, BlockNumber, CcmChannelMetadata, ChannelId},
 	settings::StateChain,
-	BrokerApi, OperatorApi, StateChainApi,
+	BrokerApi, OperatorApi, StateChainApi, WithdrawFeesDetail,
 };
+
 use clap::Parser;
-use custom_rpc::RpcAsset;
 use futures::FutureExt;
 use jsonrpsee::{
 	core::{async_trait, RpcResult},
@@ -17,6 +17,7 @@ use jsonrpsee::{
 	server::ServerBuilder,
 };
 use serde::{Deserialize, Serialize};
+use sp_core::U256;
 use std::path::PathBuf;
 use tracing::log;
 
@@ -29,6 +30,7 @@ pub struct BrokerSwapDepositAddress {
 	pub issued_block: BlockNumber,
 	pub channel_id: ChannelId,
 	pub source_chain_expiry_block: NumberOrHex,
+	pub channel_opening_fee: U256,
 }
 
 impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
@@ -38,6 +40,7 @@ impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
 			issued_block: value.issued_block,
 			channel_id: value.channel_id,
 			source_chain_expiry_block: NumberOrHex::from(value.source_chain_expiry_block),
+			channel_opening_fee: U256::from(value.channel_opening_fee),
 		}
 	}
 }
@@ -50,12 +53,20 @@ pub trait Rpc {
 	#[method(name = "request_swap_deposit_address", aliases = ["broker_requestSwapDepositAddress"])]
 	async fn request_swap_deposit_address(
 		&self,
-		source_asset: RpcAsset,
-		destination_asset: RpcAsset,
+		source_asset: Asset,
+		destination_asset: Asset,
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
 		channel_metadata: Option<CcmChannelMetadata>,
+		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<BrokerSwapDepositAddress>;
+
+	#[method(name = "withdraw_fees", aliases = ["broker_withdrawFees"])]
+	async fn withdraw_fees(
+		&self,
+		asset: Asset,
+		destination_address: String,
+	) -> RpcResult<WithdrawFeesDetail>;
 }
 
 pub struct RpcServerImpl {
@@ -87,25 +98,38 @@ impl RpcServer for RpcServerImpl {
 
 	async fn request_swap_deposit_address(
 		&self,
-		source_asset: RpcAsset,
-		destination_asset: RpcAsset,
+		source_asset: Asset,
+		destination_asset: Asset,
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
 		channel_metadata: Option<CcmChannelMetadata>,
+		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<BrokerSwapDepositAddress> {
-		let destination_asset = destination_asset.try_into()?;
 		Ok(self
 			.api
 			.broker_api()
 			.request_swap_deposit_address(
-				source_asset.try_into()?,
+				source_asset,
 				destination_asset,
 				clean_foreign_chain_address(destination_asset.into(), &destination_address)?,
 				broker_commission_bps,
 				channel_metadata,
+				boost_fee,
 			)
 			.await
 			.map(BrokerSwapDepositAddress::from)?)
+	}
+
+	async fn withdraw_fees(
+		&self,
+		asset: Asset,
+		destination_address: String,
+	) -> RpcResult<WithdrawFeesDetail> {
+		Ok(self
+			.api
+			.broker_api()
+			.withdraw_fees(asset, clean_foreign_chain_address(asset.into(), &destination_address)?)
+			.await?)
 	}
 }
 
@@ -118,6 +142,12 @@ pub struct BrokerOptions {
 		help = "The port number on which the broker will listen for connections. Use 0 to assign a random port."
 	)]
 	pub port: u16,
+	#[clap(
+		long = "max_connections",
+		default_value = "100",
+		help = "The maximum number of conncurrent websocket connections to accept."
+	)]
+	pub max_connections: u32,
 	#[clap(
 		long = "state_chain.ws_endpoint",
 		default_value = "ws://localhost:9944",
@@ -143,7 +173,10 @@ async fn main() -> anyhow::Result<()> {
 
 	task_scope(|scope| {
 		async move {
-			let server = ServerBuilder::default().build(format!("0.0.0.0:{}", opts.port)).await?;
+			let server = ServerBuilder::default()
+				.max_connections(opts.max_connections)
+				.build(format!("0.0.0.0:{}", opts.port))
+				.await?;
 			let server_addr = server.local_addr()?;
 			let server = server.start(RpcServerImpl::new(scope, opts).await?.into_rpc())?;
 

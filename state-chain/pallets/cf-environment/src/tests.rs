@@ -1,166 +1,98 @@
 #![cfg(test)]
-use cf_chains::btc::{api::UtxoSelectionType, deposit_address::DepositAddress, Utxo};
+
+use cf_chains::btc::{
+	api::UtxoSelectionType, deposit_address::DepositAddress, utxo_selection, AggKey,
+	BitcoinFeeInfo, BtcAmount, Utxo, CHANGE_ADDRESS_SALT,
+};
 use cf_traits::SafeMode;
 use frame_support::{assert_ok, traits::OriginTrait};
 
-use crate::{RuntimeSafeMode, SafeModeUpdate};
+use crate::{
+	mock::*, BitcoinAvailableUtxos, ConsolidationParameters, RuntimeSafeMode, SafeModeUpdate,
+};
 
-use crate::mock::*;
+fn utxo(amount: BtcAmount, salt: u32, pub_key: Option<[u8; 32]>) -> Utxo {
+	Utxo {
+		amount,
+		id: Default::default(),
+		deposit_address: DepositAddress::new(pub_key.unwrap_or_default(), salt),
+	}
+}
+
+fn utxo_with_key(pub_key: [u8; 32]) -> Utxo {
+	utxo(1_000_000, CHANGE_ADDRESS_SALT, Some(pub_key))
+}
+
+fn add_utxo_amount(amount: BtcAmount, salt: u32) {
+	Environment::add_bitcoin_utxo_to_list(
+		amount,
+		Default::default(),
+		DepositAddress::new(Default::default(), salt),
+	);
+}
 
 #[test]
 fn genesis_config() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(STATE_CHAIN_GATEWAY_ADDRESS, Environment::state_chain_gateway_address());
-		assert_eq!(KEY_MANAGER_ADDRESS, Environment::key_manager_address());
+		assert_eq!(ETH_KEY_MANAGER_ADDRESS, Environment::key_manager_address());
+		assert_eq!(ARB_KEY_MANAGER_ADDRESS, Environment::arb_key_manager_address());
 		assert_eq!(ETH_CHAIN_ID, Environment::ethereum_chain_id());
+		assert_eq!(ARB_CHAIN_ID, Environment::arbitrum_chain_id());
 	});
-}
-
-fn add_utxo_amount(amount: crate::BtcAmount) {
-	Environment::add_bitcoin_utxo_to_list(
-		amount,
-		Default::default(),
-		DepositAddress::new(Default::default(), Default::default()),
-	);
 }
 
 #[test]
 fn test_btc_utxo_selection() {
-	let utxo = |amount| Utxo {
-		amount,
-		id: Default::default(),
-		deposit_address: DepositAddress::new(Default::default(), Default::default()),
-	};
-
 	new_test_ext().execute_with(|| {
-		// returns none when there are no utxos available for selection
-		assert_eq!(
-			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectAllForRotation),
-			None
-		);
-
 		// add some UTXOs to the available utxos list.
-		add_utxo_amount(10000);
-		add_utxo_amount(5000);
-		add_utxo_amount(100000);
-		add_utxo_amount(5000000);
-		add_utxo_amount(25000);
+		add_utxo_amount(10000, 0);
+		add_utxo_amount(5000, 1);
+		add_utxo_amount(100000, 2);
+		add_utxo_amount(5000000, 3);
+		add_utxo_amount(25000, 4);
 		// dust amount should be ignored in all cases
 		let dust_amount = {
 			use cf_traits::GetBitcoinFeeInfo;
-			<Test as crate::Config>::BitcoinFeeInfo::bitcoin_fee_info().fee_per_input_utxo
+			<Test as crate::Config>::BitcoinFeeInfo::bitcoin_fee_info().fee_per_input_utxo()
 		};
-		add_utxo_amount(dust_amount);
+		add_utxo_amount(dust_amount, 5);
 
 		// select some utxos for a tx
 
 		// the default fee is 10 satoshi per byte.
 		// inputs are 78 bytes
+		// vault inputs are 58 bytes
 		// outputs are 51 bytes
-		// transactions have a 12 byte base size
-		// the fee for 3 inputs and 2 outputs is thus:
-		// 10*(16 + 3*78 + 2*51) = 3520 satoshi
+		// transactions have a 16 byte base size
+		// the fee for these 3 inputs and 2 outputs is thus:
+		// 10*(16 + 58 + 2*78 + 2*51) = 3320 satoshi
 		// the expected change is:
-		// 5000 + 10000 + 25000 - 12000 - 3520 = 24480 satoshi
-		const EXPECTED_CHANGE_AMOUNT: crate::BtcAmount = 24480;
+		// 5000 + 10000 + 25000 - 12000 - 3320 = 24680 satoshi
+		const EXPECTED_CHANGE_AMOUNT: crate::BtcAmount = 24680;
 		assert_eq!(
 			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::Some {
 				output_amount: 12000,
 				number_of_outputs: 2
 			})
 			.unwrap(),
-			(vec![utxo(5000), utxo(10000), utxo(25000)], EXPECTED_CHANGE_AMOUNT)
+			(
+				vec![utxo(5000, 1, None), utxo(10000, 0, None), utxo(25000, 4, None)],
+				EXPECTED_CHANGE_AMOUNT
+			)
 		);
-
-		// add the change utxo back to the available utxo list
-		add_utxo_amount(EXPECTED_CHANGE_AMOUNT);
-
-		// select all remaining utxos
-		assert_eq!(
-			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectAllForRotation)
-				.unwrap(),
-			(vec![utxo(5000000), utxo(100000), utxo(EXPECTED_CHANGE_AMOUNT),], 5121470)
-		);
-
-		// add some more utxos to the list
-		add_utxo_amount(5000);
-		add_utxo_amount(15000);
 
 		// request a larger amount than what is available
 		assert!(Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::Some {
-			output_amount: 20100,
+			output_amount: 5100001,
 			number_of_outputs: 1
 		})
 		.is_none());
 
 		// Ensure the previous failure didn't wipe the utxo list
 		assert_eq!(
-			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectAllForRotation)
-				.unwrap(),
-			(vec![utxo(5000), utxo(15000),], 17770)
-		);
-	});
-}
-
-#[test]
-fn test_btc_utxo_consolidation() {
-	new_test_ext().execute_with(|| {
-		let utxo = |amount| Utxo {
-			amount,
-			id: Default::default(),
-			deposit_address: DepositAddress::new(Default::default(), Default::default()),
-		};
-
-		// Reduce consolidation parameters to make testing easier
-		assert_ok!(Environment::update_consolidation_parameters(
-			OriginTrait::root(),
-			cf_chains::btc::ConsolidationParameters {
-				consolidation_threshold: 2,
-				consolidation_size: 2,
-			}
-		));
-
-		assert_eq!(
-			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
-			None
-		);
-
-		let dust_amount = {
-			use cf_traits::GetBitcoinFeeInfo;
-			<Test as crate::Config>::BitcoinFeeInfo::bitcoin_fee_info().fee_per_input_utxo
-		};
-
-		add_utxo_amount(10000);
-		// Some utxos exist, but it won't be enough for consolidation:
-		assert_eq!(
-			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
-			None
-		);
-		assert_eq!(crate::BitcoinAvailableUtxos::<Test>::decode_len(), Some(1));
-
-		// Dust utxo does not count:
-		add_utxo_amount(dust_amount);
-		assert_eq!(
-			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
-			None
-		);
-		assert_eq!(crate::BitcoinAvailableUtxos::<Test>::decode_len(), Some(2));
-
-		add_utxo_amount(20000);
-		add_utxo_amount(30000);
-
-		assert_eq!(crate::BitcoinAvailableUtxos::<Test>::decode_len(), Some(4));
-
-		// Should select two UTXOs, with all funds (minus fees) going back to us as change
-		assert_eq!(
-			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
-			Some((vec![utxo(10000), utxo(20000)], 27770))
-		);
-
-		// Any utxo that didn't get consolidated should still be available:
-		assert_eq!(
-			crate::BitcoinAvailableUtxos::<Test>::get(),
-			vec![utxo(30000), utxo(dust_amount)]
+			BitcoinAvailableUtxos::<Test>::get(),
+			vec![utxo(dust_amount, 5, None), utxo(100000, 2, None), utxo(5000000, 3, None)],
 		);
 	});
 }
@@ -168,19 +100,21 @@ fn test_btc_utxo_consolidation() {
 #[test]
 fn updating_consolidation_parameters() {
 	new_test_ext().execute_with(|| {
+		let valid_param = utxo_selection::ConsolidationParameters {
+			consolidation_threshold: 2,
+			consolidation_size: 2,
+		};
 		// Should work with valid parameters
-		assert_ok!(Environment::update_consolidation_parameters(
-			OriginTrait::root(),
-			cf_chains::btc::ConsolidationParameters {
-				consolidation_threshold: 2,
-				consolidation_size: 2,
-			}
+		assert_ok!(Environment::update_consolidation_parameters(OriginTrait::root(), valid_param,));
+
+		System::assert_last_event(RuntimeEvent::Environment(
+			crate::Event::<Test>::UtxoConsolidationParametersUpdated { params: valid_param },
 		));
 
 		// Should fail with invalid parameters
 		assert!(Environment::update_consolidation_parameters(
 			OriginTrait::root(),
-			cf_chains::btc::ConsolidationParameters {
+			utxo_selection::ConsolidationParameters {
 				consolidation_threshold: 1,
 				consolidation_size: 2,
 			}
@@ -218,4 +152,227 @@ fn update_safe_mode() {
 			},
 		));
 	});
+}
+
+#[test]
+fn can_discard_stale_utxos() {
+	let epoch_1 = [0xFE; 32];
+	let epoch_2 = [0xAA; 32];
+	let epoch_3 = [0xBB; 32];
+	let epoch_4 = [0xDD; 32];
+	new_test_ext().execute_with(|| {
+		// Do not discard utxo if `previous` key is not set.
+		MockBitcoinKeyProvider::add_key(AggKey { current: epoch_2, previous: None });
+		ConsolidationParameters::<Test>::set(utxo_selection::ConsolidationParameters {
+			consolidation_threshold: 5,
+			consolidation_size: 2,
+		});
+
+		BitcoinAvailableUtxos::<Test>::set(vec![
+			utxo_with_key(epoch_1),
+			utxo_with_key(epoch_1),
+			utxo_with_key(epoch_1),
+			utxo_with_key(epoch_3),
+			utxo_with_key(epoch_3),
+			utxo_with_key(epoch_3),
+		]);
+
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			None
+		);
+
+		// No consolidation. Epoch 1 utxos are discarded
+		MockBitcoinKeyProvider::add_key(AggKey { current: epoch_3, previous: Some(epoch_2) });
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			None
+		);
+
+		System::assert_has_event(RuntimeEvent::Environment(crate::Event::StaleUtxosDiscarded {
+			utxos: vec![utxo_with_key(epoch_1), utxo_with_key(epoch_1), utxo_with_key(epoch_1)],
+		}));
+
+		// Can consolidate and discard at the same time
+		BitcoinAvailableUtxos::<Test>::append(utxo_with_key(epoch_1));
+
+		MockBitcoinKeyProvider::add_key(AggKey { current: epoch_4, previous: Some(epoch_3) });
+		assert!(Environment::select_and_take_bitcoin_utxos(
+			UtxoSelectionType::SelectForConsolidation
+		)
+		.is_some());
+		System::assert_has_event(RuntimeEvent::Environment(crate::Event::StaleUtxosDiscarded {
+			utxos: vec![utxo_with_key(epoch_1)],
+		}));
+	});
+}
+
+#[test]
+fn can_consolidate_current_and_prev_utxos() {
+	let epoch_1 = [0xAA; 32];
+	let epoch_2 = [0xBB; 32];
+	const CONSOLIDATION_SIZE: u32 = 4;
+	new_test_ext().execute_with(|| {
+		MockBitcoinKeyProvider::add_key(AggKey { current: epoch_2, previous: Some(epoch_1) });
+		ConsolidationParameters::<Test>::set(utxo_selection::ConsolidationParameters {
+			consolidation_threshold: 5,
+			consolidation_size: CONSOLIDATION_SIZE,
+		});
+
+		BitcoinAvailableUtxos::<Test>::set(vec![
+			utxo_with_key(epoch_1),
+			utxo_with_key(epoch_1),
+			utxo_with_key(epoch_1),
+			utxo_with_key(epoch_2),
+			utxo_with_key(epoch_2),
+		]);
+
+		// Consolidate from storage. Take the first 4 utxos.
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation)
+				.unwrap()
+				.0
+				.len(),
+			CONSOLIDATION_SIZE as usize
+		);
+
+		assert_eq!(BitcoinAvailableUtxos::<Test>::get(), vec![utxo_with_key(epoch_2),]);
+
+		// Do nothing now that the number of utxos are below threshold.
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			None,
+		);
+	});
+}
+
+#[test]
+fn can_consolidate_old_utxo_only() {
+	let epoch_1 = [0xFE; 32];
+	let epoch_2 = [0xAA; 32];
+	const CONSOLIDATION_SIZE: u32 = 2;
+
+	new_test_ext().execute_with(|| {
+		// Set current key to epoch 2, and transfer limit to 2 utxo at a time.
+		MockBitcoinKeyProvider::add_key(AggKey { current: epoch_2, previous: Some(epoch_1) });
+		ConsolidationParameters::<Test>::set(utxo_selection::ConsolidationParameters {
+			consolidation_threshold: 10,
+			consolidation_size: CONSOLIDATION_SIZE,
+		});
+
+		BitcoinAvailableUtxos::<Test>::set(vec![
+			utxo_with_key(epoch_1),
+			utxo_with_key(epoch_1),
+			utxo_with_key(epoch_1),
+			utxo_with_key(epoch_2),
+		]);
+
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation)
+				.unwrap()
+				.0
+				.len(),
+			CONSOLIDATION_SIZE as usize,
+		);
+
+		assert_eq!(
+			BitcoinAvailableUtxos::<Test>::get(),
+			vec![utxo_with_key(epoch_1), utxo_with_key(epoch_2),]
+		);
+
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation)
+				.unwrap()
+				.0,
+			vec![utxo_with_key(epoch_1)],
+		);
+
+		assert_eq!(BitcoinAvailableUtxos::<Test>::get(), vec![utxo_with_key(epoch_2)]);
+
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			None,
+		);
+	});
+}
+
+#[test]
+fn do_nothing_with_no_key_set() {
+	let epoch_1 = [0xFE; 32];
+	let epoch_2 = [0xAA; 32];
+	let epoch_3 = [0xBB; 32];
+	new_test_ext().execute_with(|| {
+		BitcoinAvailableUtxos::<Test>::set(vec![
+			utxo_with_key(epoch_1),
+			utxo_with_key(epoch_1),
+			utxo_with_key(epoch_2),
+			utxo_with_key(epoch_2),
+			utxo_with_key(epoch_3),
+			utxo_with_key(epoch_3),
+		]);
+
+		// No changes if vault key is not set
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			None,
+		);
+		assert_eq!(crate::BitcoinAvailableUtxos::<Test>::decode_len(), Some(6));
+
+		// Set key for current vault.
+		MockBitcoinKeyProvider::add_key(AggKey { current: epoch_2, previous: None });
+
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			None,
+		);
+
+		assert_eq!(crate::BitcoinAvailableUtxos::<Test>::decode_len(), Some(6));
+
+		// Only consolidate and discard stale utxos when previous key is available.
+		MockBitcoinKeyProvider::add_key(AggKey { current: epoch_3, previous: Some(epoch_2) });
+
+		// Utxos from epoch 1 are discarded, those from epoch 2 are consolidated.
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation)
+				.unwrap()
+				.0,
+			vec![utxo_with_key(epoch_2), utxo_with_key(epoch_2),],
+		);
+
+		System::assert_has_event(RuntimeEvent::Environment(crate::Event::StaleUtxosDiscarded {
+			utxos: vec![utxo_with_key(epoch_1), utxo_with_key(epoch_1)],
+		}));
+
+		assert_eq!(
+			BitcoinAvailableUtxos::<Test>::get(),
+			vec![utxo_with_key(epoch_3), utxo_with_key(epoch_3),]
+		);
+	});
+}
+
+#[test]
+fn test_consolidation_change_amount() {
+	const INPUT_AMOUNT: BtcAmount = 10_000;
+	const NUM_INPUTS: usize = 3;
+
+	let utxos = std::iter::repeat_with(|| utxo(INPUT_AMOUNT, 0, None))
+		.take(NUM_INPUTS)
+		.collect::<Vec<_>>();
+
+	let fee_info = BitcoinFeeInfo::new(100);
+	assert_eq!(
+		crate::Pallet::<Test>::consolidation_transaction_change_amount(&utxos[..], &fee_info)
+			.unwrap(),
+		INPUT_AMOUNT * NUM_INPUTS as BtcAmount - // total available amount
+			fee_info.min_fee_required_per_tx() - // base fee
+			fee_info.fee_per_output_utxo() - // fee for the change output
+			NUM_INPUTS as u64 * fee_info.fee_per_input_utxo() // fee for each input
+	);
+
+	// If fees are too high, we cannot consolidate.
+	assert!(crate::Pallet::<Test>::consolidation_transaction_change_amount(
+		&utxos[..],
+		&BitcoinFeeInfo::new(100_000),
+	)
+	.is_none());
 }

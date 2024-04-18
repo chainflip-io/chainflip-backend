@@ -1,12 +1,11 @@
-//! Benchmarking setup for pallet-template
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
 
-use frame_benchmarking::benchmarks;
+use frame_benchmarking::v2::*;
 use frame_support::{
-	dispatch::UnfilteredDispatchable,
-	traits::{EnsureOrigin, OnInitialize},
+	assert_ok,
+	traits::{EnsureOrigin, OnInitialize, UnfilteredDispatchable},
 };
 
 use codec::Encode;
@@ -30,48 +29,73 @@ fn on_initialize_setup<T: Config>(should_mint: bool) -> BlockNumberFor<T> {
 	}
 }
 
-benchmarks! {
-	// Benchmark for the backup node emission inflation update extrinsic
-	update_backup_node_emission_inflation {
-		let call = Call::<T>::update_backup_node_emission_inflation{inflation: INFLATION_RATE};
-	}: {
-		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
-	}
-	verify {
+#[benchmarks]
+mod benchmarks {
+	use super::*;
+
+	#[benchmark]
+	fn update_backup_node_emission_inflation() {
+		let call = Call::<T>::update_backup_node_emission_inflation { inflation: INFLATION_RATE };
+		#[block]
+		{
+			assert_ok!(
+				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
+			);
+		}
+
 		assert_eq!(BackupNodeEmissionInflation::<T>::get(), INFLATION_RATE);
 	}
-	update_current_authority_emission_inflation {
-		let call = Call::<T>::update_current_authority_emission_inflation{inflation: INFLATION_RATE};
-	}: {
-		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
-	}
-	verify {
+
+	#[benchmark]
+	fn update_current_authority_emission_inflation() {
+		let call =
+			Call::<T>::update_current_authority_emission_inflation { inflation: INFLATION_RATE };
+
+		#[block]
+		{
+			assert_ok!(
+				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
+			);
+		}
+
 		assert_eq!(CurrentAuthorityEmissionInflation::<T>::get(), INFLATION_RATE);
 	}
-	rewards_minted {
+
+	#[benchmark]
+	fn rewards_minted() {
 		let block_number = on_initialize_setup::<T>(true);
-	}: {
-		Pallet::<T>::on_initialize(block_number);
-	}
-	rewards_not_minted {
-		let block_number = on_initialize_setup::<T>(false);
-	}: {
-		Pallet::<T>::on_initialize(block_number);
-	}
-	verify {}
-	update_supply_update_interval {
-		let call = Call::<T>::update_supply_update_interval { value: SUPPLY_UPDATE_INTERVAL.into() };
-	}: {
-		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
-	}
-	verify {
-		 let supply_update_interval = Pallet::<T>::supply_update_interval();
-		 assert_eq!(supply_update_interval, (100_u32).into());
+
+		#[block]
+		{
+			Pallet::<T>::on_initialize(block_number);
+		}
 	}
 
-	impl_benchmark_test_suite!(
-		Pallet,
-		crate::mock::new_test_ext(),
-		crate::mock::Test,
-	);
+	#[benchmark]
+	fn rewards_not_minted() {
+		let block_number = on_initialize_setup::<T>(false);
+
+		#[block]
+		{
+			Pallet::<T>::on_initialize(block_number);
+		}
+	}
+
+	#[benchmark]
+	fn update_supply_update_interval() {
+		let call =
+			Call::<T>::update_supply_update_interval { value: SUPPLY_UPDATE_INTERVAL.into() };
+
+		#[block]
+		{
+			assert_ok!(
+				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
+			);
+		}
+
+		let supply_update_interval = Pallet::<T>::supply_update_interval();
+		assert_eq!(supply_update_interval, (100_u32).into());
+	}
+
+	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }

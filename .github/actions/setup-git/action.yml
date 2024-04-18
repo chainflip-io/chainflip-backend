@@ -1,0 +1,23 @@
+name: Setup Git
+description: Set up Git configuration
+inputs:
+  ssh-private-key:
+    description: 'The SSH private key to use for Git operations'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Import SSH key 🔑
+      uses: webfactory/ssh-agent@v0.9.0
+      with:
+          ssh-private-key: ${{ inputs.ssh-private-key }}
+    - name: Config Git 🛠
+      shell: bash
+      run: |
+        echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINiFBr1ixKLrG8EbWyeBiZaE7IB6PSODpUJH624v8kKw" >> /tmp/signingkey.pub
+        git config --global user.email "dev@chainflip.io"
+        git config --global user.name "Flippy"
+        git config --global commit.gpgsign true
+        git config --global gpg.format ssh
+        git config --global user.signingkey /tmp/signingkey.pub

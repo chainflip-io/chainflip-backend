@@ -256,12 +256,16 @@ pub enum Difficulty {
 }
 
 /// Transaction type when the verbose flag is used.
+/// We don't currently include the transaction version here, because according
+/// to the specifications it should be a signed 32bit integer, but on BTC testnet,
+/// block 000000002f4830471b6b346578546615c031b99da5e7fabeac119b63f1843f82 contains
+/// a transaction with a version of 4294967295 which cannot be parsed into i32.
+/// Since we don't currently use this value, it is removed for now.
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VerboseTransaction {
 	pub txid: Txid,
 	pub hash: Txid,
-	pub version: Version,
 	pub size: usize,
 	pub vsize: usize,
 	pub weight: usize,
@@ -496,6 +500,16 @@ mod tests {
 	use utilities::testing::logging::init_test_logger;
 
 	use super::*;
+
+	#[tokio::test]
+	async fn test_nonstandard_version_tx() {
+		// This is block 000000002f4830471b6b346578546615c031b99da5e7fabeac119b63f1843f82 from the
+		// BTC testnet, which contains a transaction with version 4294967295 (violating specs that
+		// say transaction versions should be of type i32)
+		let block_data: &str = r#"{"hash":"000000002f4830471b6b346578546615c031b99da5e7fabeac119b63f1843f82","confirmations":19,"height":2575399,"version":536870914,"versionHex":"20000002","merkleroot":"be9df28c845cc1b8decaf2deed6772635321545923fd574cc58f2d4236bb6cf2","time":1706003363,"mediantime":1706000623,"nonce":104215386,"bits":"1d00ffff","difficulty":1,"chainwork":"000000000000000000000000000000000000000000000ca7ec1003d61879bb4f","nTx":2,"previousblockhash":"0000000000000007596e9d6ef8cb689081aa1a5429f8e5eb9c698b3850e10c9c","nextblockhash":"000000000000001a5a90462e80afc4540e02cd614172087843448b2ee0ecbb7d","strippedsize":259,"size":295,"weight":1072,"tx":[{"txid":"83ea376943aec104539ebd68a8dc23e3850896a93662c7032efd1c2eb22d9279","hash":"81e0923655f882241d9114ccfd787b9f56ad022eec7a96e4ddc0c2c591cf1c56","version":2,"size":149,"vsize":122,"weight":488,"locktime":0,"vin":[{"coinbase":"03274c2700","txinwitness":["0000000000000000000000000000000000000000000000000000000000000000"],"sequence":4294967295}],"vout":[{"value":0.01220703,"n":0,"scriptPubKey":{"asm":"1","desc":"raw(51)#8lvh9jxk","hex":"51","type":"nonstandard"}},{"value":0.00000000,"n":1,"scriptPubKey":{"asm":"OP_RETURN aa21a9ed50aae21ecb1c76811929da5971b501b393b68d3b0fc722366651c7f157ad4ae9","desc":"raw(6a24aa21a9ed50aae21ecb1c76811929da5971b501b393b68d3b0fc722366651c7f157ad4ae9)#gyrgewjq","hex":"6a24aa21a9ed50aae21ecb1c76811929da5971b501b393b68d3b0fc722366651c7f157ad4ae9","type":"nulldata"}}],"hex":"020000000001010000000000000000000000000000000000000000000000000000000000000000ffffffff0503274c2700ffffffff025fa012000000000001510000000000000000266a24aa21a9ed50aae21ecb1c76811929da5971b501b393b68d3b0fc722366651c7f157ad4ae90120000000000000000000000000000000000000000000000000000000000000000000000000"},{"txid":"5839f20446d7b9446e82c00117ee3699fa84154e970d57f09add60deef2eaa18","hash":"5839f20446d7b9446e82c00117ee3699fa84154e970d57f09add60deef2eaa18","version":4294967295,"size":65,"vsize":65,"weight":260,"locktime":0,"vin":[{"txid":"29e8adaf19cbc2b5dfdfc04eba3e73b47203c6bd1243dd9905843ca31b718973","vout":0,"scriptSig":{"asm":"1 OP_CHECKSEQUENCEVERIFY","hex":"51b2"},"sequence":1}],"vout":[{"value":0.00000000,"n":0,"scriptPubKey":{"asm":"OP_RETURN -42","desc":"raw(6a01aa)#fae3nleu","hex":"6a01aa","type":"nulldata"}}],"fee":0.00065535,"hex":"ffffffff017389711ba33c840599dd4312bdc60372b4733eba4ec0dfdfb5c2cb19afade829000000000251b201000000010000000000000000036a01aa00000000"}]}"#;
+		let jd = &mut serde_json::Deserializer::from_str(block_data);
+		let _result: VerboseBlock = serde_path_to_error::deserialize(jd).unwrap();
+	}
 
 	#[tokio::test]
 	#[ignore = "requires local node, useful for manual testing"]

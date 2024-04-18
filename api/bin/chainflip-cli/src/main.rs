@@ -1,23 +1,23 @@
 #![feature(absolute_path)]
-use anyhow::{Context, Result};
-use clap::Parser;
-use custom_rpc::RpcAsset;
-use futures::FutureExt;
-use serde::Serialize;
-use std::{io::Write, path::PathBuf, sync::Arc};
-
 use crate::settings::{
 	BrokerSubcommands, CLICommandLineOptions, CLISettings, CliCommand::*,
-	LiquidityProviderSubcommands,
+	LiquidityProviderSubcommands, ValidatorSubcommands,
 };
+use anyhow::{Context, Result};
 use api::{
 	lp::LpApi,
 	primitives::{RedemptionAmount, FLIP_DECIMALS},
 	queries::QueryApi,
 	AccountId32, BrokerApi, GovernanceApi, KeyPair, OperatorApi, StateChainApi, SwapDepositAddress,
+	ValidatorApi,
 };
 use cf_chains::eth::Address as EthereumAddress;
 use chainflip_api as api;
+use chainflip_api::primitives::state_chain_runtime;
+use clap::Parser;
+use futures::FutureExt;
+use serde::Serialize;
+use std::{io::Write, path::PathBuf, sync::Arc};
 use utilities::{clean_hex_address, round_f64, task_scope::task_scope};
 
 mod settings;
@@ -59,44 +59,93 @@ async fn run_cli() -> Result<()> {
 		async move {
 			let api = StateChainApi::connect(scope, cli_settings.state_chain).await?;
 			match command_line_opts.cmd {
-				Broker(BrokerSubcommands::RequestSwapDepositAddress(params)) => {
-					let destination_asset =
-						RpcAsset::try_from((params.destination_asset, params.destination_chain))?
-							.try_into()?;
-					let SwapDepositAddress { address, .. } = api
-						.broker_api()
-						.request_swap_deposit_address(
-							RpcAsset::try_from((params.source_asset, params.source_chain))?
-								.try_into()?,
-							destination_asset,
-							chainflip_api::clean_foreign_chain_address(
-								destination_asset.into(),
-								&params.destination_address,
-							)?,
-							params.broker_commission,
-							None,
-						)
-						.await?;
-					println!("Deposit Address: {address}");
+				Broker(subcommand) => match subcommand {
+					BrokerSubcommands::RequestSwapDepositAddress(params) => {
+						let SwapDepositAddress { address, .. } = api
+							.broker_api()
+							.request_swap_deposit_address(
+								params.source_asset,
+								params.destination_asset,
+								chainflip_api::clean_foreign_chain_address(
+									params.destination_asset.into(),
+									&params.destination_address,
+								)?,
+								params.broker_commission,
+								None,
+								params.boost_fee,
+							)
+							.await?;
+						println!("Deposit Address: {address}");
+					},
+					BrokerSubcommands::WithdrawFees(params) => {
+						let withdraw_details = api
+							.broker_api()
+							.withdraw_fees(
+								params.asset,
+								chainflip_api::clean_foreign_chain_address(
+									params.asset.into(),
+									&params.destination_address,
+								)?,
+							)
+							.await?;
+						println!("Withdrawal request successfull submitted: {}", withdraw_details);
+					},
+					BrokerSubcommands::RegisterAccount => {
+						api.broker_api().register_account().await?;
+					},
+					BrokerSubcommands::DeregisterAccount => {
+						api.broker_api().deregister_account().await?;
+					},
 				},
-				LiquidityProvider(
-					LiquidityProviderSubcommands::RequestLiquidityDepositAddress { asset, chain },
-				) => {
-					let asset = RpcAsset::try_from((asset, chain))?;
-					let address = api
-						.lp_api()
-						.request_liquidity_deposit_address(asset.try_into()?, api::WaitFor::InBlock)
-						.await?
-						.unwrap_details();
-					println!("Deposit Address: {address}");
+				LiquidityProvider(subcommand) => match subcommand {
+					LiquidityProviderSubcommands::RequestLiquidityDepositAddress {
+						asset,
+						boost_fee,
+					} => {
+						let address = api
+							.lp_api()
+							.request_liquidity_deposit_address(
+								asset,
+								api::WaitFor::InBlock,
+								boost_fee,
+							)
+							.await?
+							.unwrap_details();
+						println!("Deposit Address: {address}");
+					},
+
+					LiquidityProviderSubcommands::RegisterLiquidityRefundAddress {
+						chain,
+						address,
+					} => {
+						let lra_address =
+							chainflip_api::clean_foreign_chain_address(chain, &address)?;
+						let tx_hash =
+							api.lp_api().register_liquidity_refund_address(lra_address).await?;
+						println!("Liquidity Refund address registered. Tx hash: {tx_hash}");
+					},
+					LiquidityProviderSubcommands::RegisterAccount => {
+						api.lp_api().register_account().await?;
+					},
+					LiquidityProviderSubcommands::DeregisterAccount => {
+						api.lp_api().deregister_account().await?;
+					},
 				},
-				LiquidityProvider(
-					LiquidityProviderSubcommands::RegisterLiquidityRefundAddress { chain, address },
-				) => {
-					let lra_address = chainflip_api::clean_foreign_chain_address(chain, &address)?;
-					let tx_hash =
-						api.lp_api().register_liquidity_refund_address(lra_address).await?;
-					println!("Liquidity Refund address registered. Tx hash: {tx_hash}");
+				Validator(subcommand) => match subcommand {
+					ValidatorSubcommands::RegisterAccount => {
+						api.validator_api().register_account().await?;
+					},
+					ValidatorSubcommands::DeregisterAccount => {
+						api.validator_api().deregister_account().await?;
+					},
+					ValidatorSubcommands::StopBidding {} => {
+						let tx_hash = api.validator_api().stop_bidding().await?;
+						println!("Account stopped bidding, in tx {tx_hash:#x}.");
+					},
+					ValidatorSubcommands::StartBidding {} => {
+						let tx_hash = api.validator_api().start_bidding().await?;
+						println!("Account started bidding at tx {tx_hash:#x}.");
+					},
 				},
 				Redeem { amount, eth_address, executor_address } => {
 					request_redemption(api, amount, eth_address, executor_address).await?;
@@ -114,9 +163,7 @@ async fn run_cli() -> Result<()> {
 					get_bound_executor_address(api.query_api()).await?;
 				},
 				RegisterAccountRole { role } => {
-					println!(
-					"Submitting `register-account-role` with role: {role:?}. This cannot be reversed for your account.",
-				);
+					println!("Submitting `register-account-role` with role: {role:?}.",);
 					if !confirm_submit() {
 						return Ok(())
 					}
@@ -128,10 +175,12 @@ async fn run_cli() -> Result<()> {
 					println!("Session key rotated at tx {tx_hash:#x}.");
 				},
 				StopBidding {} => {
-					api.operator_api().stop_bidding().await?;
+					let tx_hash = api.validator_api().stop_bidding().await?;
+					println!("Account stopped bidding, in tx {tx_hash:#x}.");
 				},
 				StartBidding {} => {
-					api.operator_api().start_bidding().await?;
+					let tx_hash = api.validator_api().start_bidding().await?;
+					println!("Account started bidding at tx {tx_hash:#x}.");
 				},
 				VanityName { name } => {
 					api.operator_api().set_vanity_name(name).await?;
@@ -141,6 +190,9 @@ async fn run_cli() -> Result<()> {
 					api.governance_api().force_rotation().await?;
 				},
 				GenerateKeys { .. } => unreachable!("GenerateKeys is handled above"),
+				CountWitnesses { hash } => {
+					count_witnesses(api.query_api(), hash).await?;
+				},
 			};
 			Ok(())
 		}
@@ -280,6 +332,21 @@ async fn pre_update_check(api: QueryApi) -> Result<()> {
 	println!("A rotation is occurring: {}", can_update.rotation);
 	if let Some(blocks) = can_update.next_block_in {
 		println!("Your validator will produce a block in {} blocks", blocks);
+	}
+
+	Ok(())
+}
+
+async fn count_witnesses(api: QueryApi, hash: state_chain_runtime::Hash) -> Result<()> {
+	let result = api.check_witnesses(None, hash).await?;
+	match result {
+		Some(value) => {
+			println!("Number of authorities who failed to witness it: {}", value.failing_count);
+			println!("List of witness votes:\n {:?}", value.validators);
+		},
+		None => {
+			println!("The hash you provided lead to no results")
+		},
 	}
 
 	Ok(())

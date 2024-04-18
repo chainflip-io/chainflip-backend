@@ -314,12 +314,19 @@ impl FeeEstimationApi<Polkadot> for PolkadotTrackedData {
 	}
 }
 
+#[derive(
+	Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize,
+)]
+pub struct PolkadotTransactionId {
+	pub block_number: PolkadotBlockNumber,
+	pub extrinsic_index: u32,
+}
+
 impl Chain for Polkadot {
 	const NAME: &'static str = "Polkadot";
 	const GAS_ASSET: Self::ChainAsset = assets::dot::Asset::Dot;
 
 	type ChainCrypto = PolkadotCrypto;
-
 	type ChainBlockNumber = PolkadotBlockNumber;
 	type ChainAmount = PolkadotBalance;
 	type TrackedData = PolkadotTrackedData;
@@ -334,6 +341,7 @@ impl Chain for Polkadot {
 	type TransactionMetadata = ();
 	type ReplayProtectionParams = ResetProxyAccountNonce;
 	type ReplayProtection = PolkadotReplayProtection;
+	type TransactionRef = PolkadotTransactionId;
 }
 
 pub type ResetProxyAccountNonce = bool;
@@ -348,6 +356,7 @@ impl ChannelLifecycleHooks for PolkadotChannelState {
 	}
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PolkadotCrypto;
 impl ChainCrypto for PolkadotCrypto {
 	type UtxoChain = ConstBool<false>;
@@ -357,6 +366,7 @@ impl ChainCrypto for PolkadotCrypto {
 	type ThresholdSignature = PolkadotSignature;
 	type TransactionInId = TxId;
 	type TransactionOutId = PolkadotSignature;
+	type KeyHandoverIsRequired = ConstBool<false>;
 
 	type GovKey = PolkadotPublicKey;
 
@@ -503,30 +513,13 @@ pub enum SystemCall {}
 pub enum BalancesCall {
 	/// Transfer some liquid free balance to another account.
 	///
-	/// `transfer` will set the `FreeBalance` of the sender and receiver.
+	/// `transfer_allow_death` will set the `FreeBalance` of the sender and receiver.
 	/// If the sender's account is below the existential deposit as a result
 	/// of the transfer, the account will be reaped.
 	///
 	/// The dispatch origin for this call must be `Signed` by the transactor.
-	///
-	/// # <weight>
-	/// - Dependent on arguments but not critical, given proper implementations for input config
-	///   types. See related functions below.
-	/// - It contains a limited number of reads and writes internally and no complex computation.
-	///
-	/// Related functions:
-	///
-	///   - `ensure_can_withdraw` is always called internally but has a bounded complexity.
-	///   - Transferring balances to accounts that did not exist before will cause
-	///     `T::OnNewAccount::on_new_account` to be called.
-	///   - Removing enough funds from an account will trigger `T::DustRemoval::on_unbalanced`.
-	///   - `transfer_keep_alive` works the same way as `transfer`, but has an additional check
-	///     that the transfer will not kill the origin account.
-	/// ---------------------------------
-	/// - Origin account is already in memory, so no DB operations for them.
-	/// # </weight>
 	#[codec(index = 0u8)]
-	transfer {
+	transfer_allow_death {
 		#[allow(missing_docs)]
 		dest: PolkadotAccountIdLookup,
 		#[allow(missing_docs)]
@@ -995,8 +988,8 @@ impl BenchmarkValueExtended for PolkadotChannelId {
 	}
 }
 
-#[cfg(debug_assertions)]
-pub const TEST_RUNTIME_VERSION: RuntimeVersion =
+#[cfg(test)]
+pub(crate) const TEST_RUNTIME_VERSION: RuntimeVersion =
 	RuntimeVersion { spec_version: 9340, transaction_version: 16 };
 
 #[cfg(test)]
@@ -1097,7 +1090,7 @@ mod test_polkadot_extrinsics {
 		let account_id_2: PolkadotAccountId = keypair_2.public_key();
 
 		let test_runtime_call: PolkadotRuntimeCall =
-			PolkadotRuntimeCall::Balances(BalancesCall::transfer {
+			PolkadotRuntimeCall::Balances(BalancesCall::transfer_allow_death {
 				dest: PolkadotAccountIdLookup::from(account_id_2),
 				value: 35_000_000_000u128, //0.035 WND
 			});

@@ -2,12 +2,15 @@
 #![feature(const_option)]
 #![feature(step_trait)]
 #![cfg_attr(any(feature = "test-utils", test), feature(closure_track_caller))]
-#![feature(array_methods)]
+#![feature(async_fn_track_caller)]
 
 #[cfg(feature = "std")]
 mod with_std;
 #[cfg(feature = "std")]
 pub use with_std::*;
+
+mod without_std;
+pub use without_std::*;
 
 #[cfg(any(feature = "test-utils", test))]
 pub mod testing;

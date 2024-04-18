@@ -3,56 +3,118 @@ import { setTimeout as sleep } from 'timers/promises';
 import Client from 'bitcoin-core';
 import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
 import { Mutex } from 'async-mutex';
-import { Chain, Asset, assetChains, chainContractIds, assetDecimals } from '@chainflip-io/cli';
+import {
+  Chain,
+  InternalAsset as Asset,
+  InternalAssets as Assets,
+  assetConstants,
+  chainConstants,
+} from '@chainflip/cli';
 import Web3 from 'web3';
-import { u8aToHex } from '@polkadot/util';
+import { Connection, Keypair } from '@solana/web3.js';
+import { base58Decode, base58Encode } from '@polkadot/util-crypto';
+import { hexToU8a, u8aToHex } from '@polkadot/util';
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
-import { newEthAddress } from './new_eth_address';
+import { newEvmAddress } from './new_evm_address';
 import { CcmDepositMetadata } from './new_swap';
-import { getCFTesterAbi } from './eth_abis';
+import { getCFTesterAbi } from './contract_interfaces';
 import { SwapParams } from './perform_swap';
+import { newSolAddress } from './new_sol_address';
 
 const cfTesterAbi = await getCFTesterAbi();
 
 export const lpMutex = new Mutex();
 export const ethNonceMutex = new Mutex();
+export const arbNonceMutex = new Mutex();
 export const btcClientMutex = new Mutex();
 export const brokerMutex = new Mutex();
 export const snowWhiteMutex = new Mutex();
 
-export function getEthContractAddress(contract: string): string {
-  switch (contract) {
-    case 'VAULT':
-      return '0xb7a5bd0345ef1cc5e66bf61bdec17d2461fbd968';
-    case 'ETH':
-      return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
-    case 'FLIP':
-      return process.env.ETH_FLIP_ADDRESS ?? '0x10C6E9530F1C1AF873a391030a1D9E8ed0630D26';
-    case 'USDC':
-      return process.env.ETH_USDC_ADDRESS ?? '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
-    case 'CFTESTER':
-      return '0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0';
-    case 'GATEWAY':
-      return process.env.ETH_GATEWAY_ADDRESS ?? '0xeEBe00Ac0756308ac4AaBfD76c05c4F3088B8883';
+export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'];
+
+export function getContractAddress(chain: Chain, contract: string): string {
+  switch (chain) {
+    case 'Ethereum':
+      switch (contract) {
+        case 'VAULT':
+          return '0xb7a5bd0345ef1cc5e66bf61bdec17d2461fbd968';
+        case 'KEY_MANAGER':
+          return '0xa16E02E87b7454126E5E10d957A927A7F5B5d2be';
+        case 'Eth':
+          return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+        case 'Flip':
+          return process.env.ETH_FLIP_ADDRESS ?? '0x10C6E9530F1C1AF873a391030a1D9E8ed0630D26';
+        case 'Usdc':
+          return process.env.ETH_USDC_ADDRESS ?? '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
+        case 'Usdt':
+          return process.env.ETH_USDT_ADDRESS ?? '0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82';
+        case 'CFTESTER':
+          return '0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0';
+        case 'GATEWAY':
+          return process.env.ETH_GATEWAY_ADDRESS ?? '0xeEBe00Ac0756308ac4AaBfD76c05c4F3088B8883';
+        default:
+          throw new Error(`Unsupported contract: ${contract}`);
+      }
+    case 'Arbitrum':
+      switch (contract) {
+        case 'VAULT':
+          return '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
+        case 'KEY_MANAGER':
+          return '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+        case 'ADDRESS_CHECKER':
+          return '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
+        case 'ArbEth':
+          return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+        case 'ArbUsdc':
+          return process.env.ARB_USDC_ADDRESS ?? '0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9';
+        case 'CFTESTER':
+          return '0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82';
+        default:
+          throw new Error(`Unsupported contract: ${contract}`);
+      }
+    case 'Solana':
+      switch (contract) {
+        case 'VAULT':
+          return '8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf';
+        case 'DATA_ACCOUNT':
+          return '623nEsyGYWKYggY1yHxQFJiBarL9jdWdrMr7ASiCKP6a';
+        case 'UPGRADE_MANAGER':
+          return '274BzCz5RPHJZsxdcSGySahz4qAWqwSDcmz1YEKkGaZC';
+        case 'UPGRADE_MANAGER_SIGNER':
+          return '2SAhe89c1umM2JvCnmqCEnY8UCQtNPEKGe7UXA8KSQqH';
+        case 'SolUsdc':
+          return process.env.ARB_USDC_ADDRESS ?? '24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p';
+        case 'CFTESTER':
+          return '8pBPaVfTAcjLeNfC187Fkvi9b1XEFhRNJ95BQXXVksmH';
+        default:
+          throw new Error(`Unsupported contract: ${contract}`);
+      }
     default:
-      throw new Error(`Unsupported contract: ${contract}`);
+      throw new Error(`Unsupported chain: ${chain}`);
   }
 }
 
-export function assetToChain(asset: Asset): string {
+export function shortChainFromAsset(asset: Asset): string {
   switch (asset) {
-    case 'DOT':
+    case 'Dot':
       return 'Dot';
-    case 'ETH':
-    case 'FLIP':
-    case 'USDC':
+    case 'Eth':
+    case 'Flip':
+    case 'Usdc':
+    case 'Usdt':
       return 'Eth';
-    case 'BTC':
+    case 'Btc':
       return 'Btc';
+    case 'ArbUsdc':
+    case 'ArbEth':
+      return 'Arb';
+    case 'Sol':
+    case 'SolUsdc':
+      return 'Sol';
     default:
-      return '';
+      throw new Error(`Unsupported asset: ${asset}`);
   }
 }
 
@@ -80,18 +142,118 @@ export function fineAmountToAmount(fineAmount: string, decimals: number): string
 
 export function defaultAssetAmounts(asset: Asset): string {
   switch (asset) {
-    case 'BTC':
+    case 'Btc':
       return '0.05';
-    case 'ETH':
+    case 'Eth':
+    case 'ArbEth':
       return '5';
-    case 'DOT':
+    case 'Dot':
       return '50';
-    case 'USDC':
-    case 'FLIP':
+    case 'Usdc':
+    case 'Usdt':
+    case 'ArbUsdc':
+    case 'Flip':
+    case 'SolUsdc':
       return '500';
+    case 'Sol':
+      return '100';
     default:
       throw new Error(`Unsupported asset: ${asset}`);
   }
+}
+
+export function assetContractId(asset: Asset): number {
+  switch (asset) {
+    case 'Btc':
+      return assetConstants.Btc.contractId;
+    case 'Eth':
+      return assetConstants.Eth.contractId;
+    case 'Usdc':
+      return assetConstants.Usdc.contractId;
+    case 'Usdt':
+      return assetConstants.Usdt.contractId;
+    case 'Flip':
+      return assetConstants.Flip.contractId;
+    case 'Dot':
+      return assetConstants.Dot.contractId;
+    case 'ArbEth':
+      return assetConstants.ArbEth.contractId;
+    case 'ArbUsdc':
+      return assetConstants.ArbUsdc.contractId;
+    case 'Sol':
+      return 9;
+    case 'SolUsdc':
+      return 10;
+    default:
+      throw new Error(`Unsupported asset: ${asset}`);
+  }
+}
+
+export function assetDecimals(asset: Asset): number {
+  switch (asset) {
+    case 'Btc':
+      return assetConstants.Btc.decimals;
+    case 'Eth':
+      return assetConstants.Eth.decimals;
+    case 'Usdc':
+      return assetConstants.Usdc.decimals;
+    case 'Usdt':
+      return assetConstants.Usdt.decimals;
+    case 'Flip':
+      return assetConstants.Flip.decimals;
+    case 'Dot':
+      return assetConstants.Dot.decimals;
+    case 'ArbEth':
+      return assetConstants.ArbEth.decimals;
+    case 'ArbUsdc':
+      return assetConstants.ArbUsdc.decimals;
+    case 'Sol':
+      return 9;
+    case 'SolUsdc':
+      return 6;
+    default:
+      throw new Error(`Unsupported asset: ${asset}`);
+  }
+}
+
+export function chainContractId(chain: Chain): number {
+  switch (chain) {
+    case 'Ethereum':
+      return chainConstants.Ethereum.contractId;
+    case 'Bitcoin':
+      return chainConstants.Bitcoin.contractId;
+    case 'Polkadot':
+      return chainConstants.Polkadot.contractId;
+    case 'Arbitrum':
+      return chainConstants.Arbitrum.contractId;
+    case 'Solana':
+      return 5;
+    default:
+      throw new Error(`Unsupported chain: ${chain}`);
+  }
+}
+
+export function chainGasAsset(chain: Chain): Asset {
+  switch (chain) {
+    case 'Ethereum':
+      return Assets.Eth;
+    case 'Bitcoin':
+      return Assets.Btc;
+    case 'Polkadot':
+      return Assets.Dot;
+    case 'Arbitrum':
+      return Assets.ArbEth;
+    default:
+      throw new Error(`Unsupported chain: ${chain}`);
+  }
+}
+
+// State Chain uses non-unique string identifiers for assets.
+export function stateChainAssetFromAsset(asset: Asset): string {
+  if (assetConstants[asset]) {
+    return assetConstants[asset].asset;
+  }
+  throw new Error(`Unsupported asset: ${asset}`);
 }
 
 export const runWithTimeout = async <T>(promise: Promise<T>, millis: number): Promise<T> => {
@@ -123,6 +285,16 @@ function getCachedSubstrateApi(defaultEndpoint: string) {
     api = await ApiPromise.create({
       provider: new WsProvider(endpoint),
       noInitWarn: true,
+      types: {
+        EncodedAddress: {
+          _enum: {
+            Eth: '[u8; 20]',
+            Arb: '[u8; 20]',
+            Dot: '[u8; 32]',
+            Btc: 'Vec<u8>',
+          },
+        },
+      },
     });
 
     return api;
@@ -204,7 +376,7 @@ export async function observeEvent(
   return result as Event;
 }
 
-type EgressId = [Chain, number];
+export type EgressId = [Chain, number];
 type BroadcastId = [Chain, number];
 // Observe multiple events related to the same swap that could be emitted in the same block
 export async function observeSwapEvents(
@@ -245,8 +417,8 @@ export async function observeSwapEvents(
             if ('DepositChannel' in expectedEvent.data.origin) {
               if (
                 Number(expectedEvent.data.origin.DepositChannel.channelId) === channelId &&
-                sourceAsset === (expectedEvent.data.sourceAsset.toUpperCase() as Asset) &&
-                destAsset === (expectedEvent.data.destinationAsset.toUpperCase() as Asset) &&
+                sourceAsset === (expectedEvent.data.sourceAsset as Asset) &&
+                destAsset === (expectedEvent.data.destinationAsset as Asset) &&
                 swapType
                   ? expectedEvent.data.swapType[swapType] !== undefined
                   : true &&
@@ -262,13 +434,13 @@ export async function observeSwapEvents(
             }
             break;
           case swapExecutedEvent:
-            if (Number(expectedEvent.data.swapId) === Number(swapId)) {
+            if (expectedEvent.data.swapId === swapId) {
               expectedMethod = swapEgressScheduled;
               console.log(`${tag} swap executed, with id: ${swapId}`);
             }
             break;
           case swapEgressScheduled:
-            if (Number(expectedEvent.data.swapId) === Number(swapId)) {
+            if (expectedEvent.data.swapId === swapId) {
               expectedMethod = batchBroadcastRequested;
               egressId = expectedEvent.data.egressId as EgressId;
               console.log(`${tag} swap egress scheduled with id: (${egressId[0]}, ${egressId[1]})`);
@@ -314,12 +486,12 @@ export async function observeSwapScheduled(
   return observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
     if ('DepositChannel' in event.data.origin) {
       const channelMatches = Number(event.data.origin.DepositChannel.channelId) === channelId;
-      const sourceAssetMatches = sourceAsset === (event.data.sourceAsset.toUpperCase() as Asset);
-      const destAssetMatches = destAsset === (event.data.destinationAsset.toUpperCase() as Asset);
+      const sourceAssetMatches = sourceAsset === (event.data.sourceAsset as Asset);
+      const destAssetMatches = destAsset === (event.data.destinationAsset as Asset);
       const swapTypeMatches = swapType ? event.data.swapType[swapType] !== undefined : true;
       return channelMatches && sourceAssetMatches && destAssetMatches && swapTypeMatches;
     }
-    // Otherwise it was a swap scheduled by interacting with the ETH smart contract
+    // Otherwise it was a swap scheduled by interacting with the Eth smart contract
     return false;
   });
 }
@@ -375,30 +547,104 @@ export async function newAddress(
   let rawAddress;
 
   switch (asset) {
-    case 'FLIP':
-    case 'ETH':
-    case 'USDC':
-      rawAddress = newEthAddress(seed);
+    case Assets.Flip:
+    case Assets.Eth:
+    case Assets.Usdc:
+    case Assets.Usdt:
+    case Assets.ArbEth:
+    case Assets.ArbUsdc:
+      rawAddress = newEvmAddress(seed);
       break;
-    case 'DOT':
+    case Assets.Dot:
       rawAddress = await newDotAddress(seed);
       break;
-    case 'BTC':
+    case Assets.Btc:
       rawAddress = await newBtcAddress(seed, type ?? 'P2PKH');
       break;
+    case 'Sol':
+    case 'SolUsdc':
+      rawAddress = newSolAddress(seed);
+      break;
     default:
-      throw new Error('unexpected asset');
+      throw new Error(`Unsupported asset: ${asset}`);
   }
 
   return String(rawAddress).trim();
 }
 
 export function chainFromAsset(asset: Asset): Chain {
-  if (asset in assetChains) {
-    return assetChains[asset];
+  switch (asset) {
+    case 'Dot':
+      return 'Polkadot';
+    case 'Eth':
+    case 'Flip':
+    case 'Usdc':
+    case 'Usdt':
+      return 'Ethereum';
+    case 'Btc':
+      return 'Bitcoin';
+    case 'ArbUsdc':
+    case 'ArbEth':
+      return 'Arbitrum';
+    case 'Sol':
+    case 'SolUsdc':
+      return 'Solana';
+    default:
+      throw new Error(`Unsupported asset: ${asset}`);
   }
+}
 
-  throw new Error('unexpected asset');
+export function getEvmEndpoint(chain: Chain): string {
+  switch (chain) {
+    case 'Ethereum':
+      return process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
+    case 'Arbitrum':
+      return process.env.ARB_ENDPOINT ?? 'http://127.0.0.1:8547';
+    default:
+      throw new Error(`${chain} is not a supported EVM chain`);
+  }
+}
+
+export function getSolConnection(): Connection {
+  return new Connection(process.env.SOL_ENDPOINT ?? 'http://0.0.0.0:8899', {
+    commitment: 'confirmed',
+    wsEndpoint: 'ws://0.0.0.0:8900/',
+  });
+}
+
+export function getWhaleMnemonic(chain: Chain): string {
+  switch (chain) {
+    case 'Ethereum':
+    case 'Arbitrum':
+      return (
+        process.env.ETH_USDC_WHALE_MNEMONIC ??
+        'test test test test test test test test test test test junk'
+      );
+    default:
+      throw new Error(`${chain} does not have a whale mnemonic`);
+  }
+}
+export function getSolWhaleKeyPair(): Keypair {
+  const secretKey = [
+    6, 151, 150, 20, 145, 210, 176, 113, 98, 200, 192, 80, 73, 63, 133, 232, 208, 124, 81, 213, 117,
+    199, 196, 243, 219, 33, 79, 217, 157, 69, 205, 140, 247, 157, 94, 2, 111, 18, 237, 198, 68, 58,
+    83, 75, 44, 221, 80, 114, 35, 57, 137, 180, 21, 215, 89, 101, 115, 231, 67, 243, 229, 179, 134,
+    251,
+  ];
+  return Keypair.fromSecretKey(new Uint8Array(secretKey));
+}
+
+export function getWhaleKey(chain: Chain): string {
+  switch (chain) {
+    case 'Ethereum':
+    case 'Arbitrum':
+      return (
+        process.env.ETH_USDC_WHALE ??
+        '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+      );
+    default:
+      throw new Error(`${chain} does not have a whale key`);
+  }
 }
 
 export async function observeBalanceIncrease(
@@ -422,8 +668,9 @@ export async function observeFetch(asset: Asset, address: string): Promise<void>
   for (let i = 0; i < 120; i++) {
     const balance = Number(await getBalance(asset as Asset, address));
     if (balance === 0) {
-      if (assetToChain(asset) === 'Eth') {
-        const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
+      const chain = chainFromAsset(asset);
+      if (chain === 'Ethereum' || chain === 'Arbitrum') {
+        const web3 = new Web3(getEvmEndpoint(chain));
         if ((await web3.eth.getCode(address)) === '0x') {
           throw new Error('Eth address has no bytecode');
         }
@@ -444,6 +691,7 @@ type EVMEvent = {
   returnValues: any;
 };
 export async function observeEVMEvent(
+  chain: Chain,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contractAbi: any,
   address: string,
@@ -452,7 +700,7 @@ export async function observeEVMEvent(
   stopObserveEvent?: () => boolean,
   initialBlockNumber?: number,
 ): Promise<EVMEvent | undefined> {
-  const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
+  const web3 = new Web3(getEvmEndpoint(chain));
   const contract = new web3.eth.Contract(contractAbi, address);
   let initBlockNumber = initialBlockNumber ?? (await web3.eth.getBlockNumber());
   const stopObserve = stopObserveEvent ?? (() => false);
@@ -508,14 +756,15 @@ export async function observeCcmReceived(
   stopObserveEvent?: () => boolean,
 ): Promise<EVMEvent | undefined> {
   return observeEVMEvent(
+    chainFromAsset(destAsset),
     cfTesterAbi,
     address,
     'ReceivedxSwapAndCall',
     [
-      chainContractIds[assetChains[sourceAsset]].toString(),
+      chainContractId(chainFromAsset(sourceAsset)).toString(),
       sourceAddress ?? null,
       messageMetadata.message,
-      getEthContractAddress(destAsset.toString()),
+      getContractAddress(chainFromAsset(destAsset), destAsset.toString()),
       '*',
       '*',
       '*',
@@ -553,6 +802,18 @@ export function hexPubkeyToFlipAddress(hexPubkey: string) {
   const keyring = new Keyring({ type: 'sr25519' });
   keyring.setSS58Format(2112);
   return keyring.encodeAddress(hexPubkey);
+}
+
+export function decodeSolAddress(address: string): string {
+  return u8aToHex(base58Decode(address));
+}
+
+export function encodeSolAddress(address: string): string {
+  return base58Encode(hexToU8a(address));
+}
+
+export function getEncodedSolAddress(address: string): string {
+  return /^0x[a-fA-F0-9]+$/.test(address) ? encodeSolAddress(address) : address;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -607,6 +868,17 @@ export function compareSemVer(version1: string, version2: string) {
   return 'equal';
 }
 
+export function parseAssetString(input: string): Asset {
+  const foundAsset = Object.values(Assets).find(
+    (asset) => asset.toLowerCase() === input.toLowerCase(),
+  );
+
+  if (foundAsset) {
+    return foundAsset as Asset;
+  }
+  throw new Error(`Unsupported asset: ${input}`);
+}
+
 type SwapRate = {
   intermediary: string;
   output: string;
@@ -614,16 +886,22 @@ type SwapRate = {
 export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
   const chainflipApi = await getChainflipApi();
 
-  const fineFromAmount = amountToFineAmount(fromAmount, assetDecimals[from]);
+  const fineFromAmount = amountToFineAmount(fromAmount, assetDecimals(from));
   const hexPrice = (await chainflipApi.rpc(
     'cf_swap_rate',
-    from,
-    to,
+    {
+      chain: chainFromAsset(from),
+      asset: stateChainAssetFromAsset(from),
+    },
+    {
+      chain: chainFromAsset(to),
+      asset: stateChainAssetFromAsset(to),
+    },
     Number(fineFromAmount).toString(16),
   )) as SwapRate;
 
   const finePriceOutput = parseInt(hexPrice.output);
-  const outputPrice = fineAmountToAmount(finePriceOutput.toString(), assetDecimals[to]);
+  const outputPrice = fineAmountToAmount(finePriceOutput.toString(), assetDecimals(to));
 
   return outputPrice;
 }

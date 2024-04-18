@@ -5,6 +5,7 @@
 //
 // PRE-REQUISITES:
 // - cargo workspaces must be installed - `cargo install cargo-workspaces`
+// - You must have the `try-runtime-cli` installed: https://paritytech.github.io/try-runtime-cli/try_runtime/
 //
 // Subcommands:
 // git: Upgrades a bouncer network from the commit currently running on localnet to the provided git reference (commit, branch, tag).
@@ -120,6 +121,8 @@ async function main(): Promise<void> {
 }
 
 runWithTimeout(main(), 15 * 60 * 1000).catch((error) => {
-  console.error(error);
-  process.exit(-1);
+  console.error('upgrade_network exiting due to error: ', error);
+  if (process.exitCode === 0) {
+    process.exitCode = -1;
+  }
 });

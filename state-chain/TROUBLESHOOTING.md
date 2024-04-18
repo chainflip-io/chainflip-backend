@@ -1,6 +1,6 @@
 # Substrate Troubleshooting
 
-This is a living document with tips, gotchas and general subtrate-related wizardry. If you ever get stuck with an incomprehensible compiler error, before spending the day turning in circles, come here first and see if someone else has already encountered the same issue.
+This is a living document with tips, gotchas and general substrate-related wizardry. If you ever get stuck with an incomprehensible compiler error, before spending the day turning in circles, come here first and see if someone else has already encountered the same issue.
 
 Please add anything you think will save your colleagues' precious time.
 
@@ -10,18 +10,33 @@ As of yet there is no real structure - this isn't intended to be a document to r
 
 ## Runtime upgrades / Try-runtime
 
-First, build the runtime node with `try-runtime` enabled.
+First, download and install the [`try-runtime-cli`](https://paritytech.github.io/try-runtime-cli/try_runtime/):
+
+```bash copy
+cargo install --git https://github.com/paritytech/try-runtime-cli --locked
+```
+
+You need to build the runtime with `try-runtime` enabled.
 
 ```bash copy
 cargo build --release --features=try-runtime
 ```
 
-Now you can run your tests aginst using an appropriate public rpc node. For example for perseverance:
+Now you can run your tests against a public rpc node. 
+To test against Perseverance (Our canary testnet):
 
 ```bash copy
-./target/release/chainflip-node try-runtime \
+try-runtime \
     --runtime ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm \
     on-runtime-upgrade live --uri wss://perseverance.chainflip.xyz:443
+```
+
+To test try-runtime against Berghain (Our Mainnet):
+
+```bash copy
+try-runtime \
+    --runtime ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm \
+    on-runtime-upgrade live --uri wss://mainnet-rpc.chainflip.io:443
 ```
 
 If you have trouble connecting to the remote rpc node, you can run a local rpc node and connect to that instead. First connect a local node to the network with some rpc optimisations:
@@ -39,7 +54,7 @@ If you have trouble connecting to the remote rpc node, you can run a local rpc n
 Once the node has synced, in another terminal window, run the checks as above:
 
 ```bash copy
-./target/release/chainflip-node try-runtime \
+try-runtime \
     --runtime ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm \
     on-runtime-upgrade live --uri ws://localhost:9944
 ```
@@ -71,7 +86,7 @@ Make sure to add `my-pallet/try-runtime` in the runtime's Cargo.toml, otherwise 
 ### Compile the node with benchmark features enabled
 
 ```bash
-cargo cf-build-with-benchmarks
+cargo cf-build-benchmarks
 ```
 
 ### Generating weight files
@@ -79,7 +94,7 @@ cargo cf-build-with-benchmarks
 To generate or update a single weight file for pallet run:
 
 ```bash
-source state-chain/scripts/benchmark.sh {palletname e.x: broadcast}
+source state-chain/scripts/benchmark.sh {pallet_name e.x: broadcast}
 ```
 
 ### Chainflip-Node is not compiling with benchmark features enabled
@@ -142,7 +157,7 @@ error[E0432]: unresolved import `sp_core::to_substrate_wasm_fn_return_value`
 To execute the benchmarks as tests run:
 
 ```bash
-cargo cf-test-all
+cargo cf-test
 ```
 
 > **NOTE:**  When you run your benchmark with the tests it's **NOT** running against the runtime but against the mocks. If the behaviour of the mocks doesn't match the behaviour of the runtime, it's possible that tests will fail despite benchmarks succeeding, or that benchmarks will fail despite the tests succeeding.
@@ -169,8 +184,7 @@ There are grey areas. For example, it's acceptable to panic on any condition tha
 
 ### Benchmark whitelist
 
-When writing benchmarks, storage keys can be •whitelisted• for reads and/or writes, meaning reading/writing to the
-whitelisted key is ignored. This is confusing since mostly this is used in the context of whitelisting *account*
+When writing benchmarks, storage keys can be •*whitelisted*• for reads and/or writes, meaning reading/writing to the whitelisted key is ignored. This is confusing since mostly this is used in the context of whitelisting *account*
 storage, which is easy to confuse with whitelisting the actual account.
 
 See [this PR](https://github.com/paritytech/substrate/pull/6815) for a decent explanation.
@@ -191,6 +205,9 @@ name = 'my-crate'
 my-dep = { version = "1", default-features = false }
 my-optional-dep = { version = "1", optional = true }
 
+[dev-dependencies]
+test-only-dep = { version = "1" }
+
 [features]
 std = ['my-dep/std', 'my-optional-dep']
 ```
@@ -198,6 +215,8 @@ std = ['my-dep/std', 'my-optional-dep']
 It means that, by default, `my-crate` will pull in `my-dep` without any default features activated, and will *not* pull in `my-optional-dep` at all.
 
 However if you compile `my-crate` with feature `std`, then it will pull `my-dep` *and* `my-optional-dep` with `std` feature activated.
+
+For dependencies only used for testing (e.g. for mock and unit tests, under the [dev-dependencies] section), it should not have the `default-features = false` and should not be included in the std feature.
 
 ## Substrate storage: Separation of front overlay and backend. Feat clear_prefix()
 

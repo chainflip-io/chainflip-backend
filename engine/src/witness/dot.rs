@@ -4,12 +4,13 @@ mod dot_source;
 
 use cf_chains::dot::{
 	PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash, PolkadotSignature,
-	PolkadotUncheckedExtrinsic,
+	PolkadotTransactionId, PolkadotUncheckedExtrinsic,
 };
 use cf_primitives::{EpochIndex, PolkadotBlockNumber};
 use futures_core::Future;
 use state_chain_runtime::PolkadotInstance;
 use subxt::{
+	backend::legacy::rpc_methods::Bytes,
 	config::PolkadotConfig,
 	events::{EventDetails, Phase, StaticEvent},
 	utils::AccountId32,
@@ -25,7 +26,10 @@ use crate::{
 	db::PersistentKeyDB,
 	dot::retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
 	state_chain_observer::client::{
-		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
+		extrinsic_api::signed::SignedExtrinsicApi,
+		storage_api::StorageApi,
+		stream_api::{StreamApi, FINALIZED},
+		STATE_CHAIN_CONNECTION,
 	},
 	witness::common::chain_source::extension::ChainSourceExt,
 };
@@ -35,7 +39,6 @@ pub use dot_source::{DotFinalisedSource, DotUnfinalisedSource};
 use super::common::{
 	chain_source::Header,
 	epoch_source::{EpochSourceBuilder, Vault},
-	STATE_CHAIN_CONNECTION,
 };
 
 // To generate the metadata file, use the subxt-cli tool (`cargo install subxt-cli`):
@@ -97,7 +100,7 @@ pub async fn proxy_added_witnessing(
 	header: Header<PolkadotBlockNumber, PolkadotHash, Vec<(Phase, EventWrapper)>>,
 ) -> (Vec<(Phase, EventWrapper)>, BTreeSet<u32>) {
 	let events = header.data;
-	let proxy_added_broadcasts = proxy_addeds(header.index, &events, &epoch.info.1);
+	let proxy_added_broadcasts = proxy_addeds(header.index, &events, &epoch.info.0);
 
 	(events, proxy_added_broadcasts)
 }
@@ -133,8 +136,7 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 	// To guarantee witnessing egress, we are interested in all extrinsics that were successful
 	extrinsic_indices.extend(extrinsic_success_indices(&events));
 
-	let extrinsics: Vec<subxt::rpc::types::ChainBlockExtrinsic> =
-		dot_client.extrinsics(header.hash).await;
+	let extrinsics: Vec<Bytes> = dot_client.extrinsics(header.hash).await;
 
 	for (extrinsic_index, tx_fee) in transaction_fee_paids(&extrinsic_indices, &events) {
 		let xt = extrinsics.get(extrinsic_index as usize).expect(
@@ -153,9 +155,13 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 						process_call(
 							pallet_cf_broadcast::Call::<_, PolkadotInstance>::transaction_succeeded {
 								tx_out_id: signature,
-								signer_id: epoch.info.1,
+								signer_id: epoch.info.0,
 								tx_fee,
 								tx_metadata: (),
+								transaction_ref: PolkadotTransactionId {
+									block_number: header.index,
+									extrinsic_index
+								}
 							}
 							.into(),
 							epoch.index,
@@ -178,7 +184,7 @@ pub async fn start<StateChainClient, ProcessCall, ProcessingFut>(
 	dot_client: DotRetryRpcClient,
 	process_call: ProcessCall,
 	state_chain_client: Arc<StateChainClient>,
-	state_chain_stream: impl StateChainStreamApi + Clone,
+	state_chain_stream: impl StreamApi<FINALIZED> + Clone,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
@@ -217,7 +223,7 @@ where
 		)
 		.await;
 
-	let vaults = epoch_source.vaults().await;
+	let vaults = epoch_source.vaults::<cf_chains::Polkadot>().await;
 
 	// Full witnessing
 	DotFinalisedSource::new(dot_client.clone())
@@ -288,7 +294,7 @@ fn proxy_addeds(
 					continue
 				}
 
-				tracing::info!("Witnessing ProxyAdded. new delegatee: {delegatee:?} at block number {block_number} and extrinsic_index; {extrinsic_index}");
+				tracing::info!("Witnessing ProxyAdded. new delegatee: {delegatee} at block number {block_number} and extrinsic_index; {extrinsic_index}");
 
 				extrinsic_indices.insert(extrinsic_index);
 			}

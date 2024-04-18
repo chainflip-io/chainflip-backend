@@ -1,42 +1,59 @@
 version: "3.9"
 services:
   init:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.0.0-${NODE_COUNT}
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.1.2-usdt-${NODE_COUNT}
     container_name: init
     platform: linux/amd64
     volumes:
       - "/tmp/chainflip/data:/localnet-initial-state"
     command: /bin/sh -c "cp -R /initial-state/* /localnet-initial-state"
 
+  init-solana:
+    image: ghcr.io/chainflip-io/solana-localnet-ledger:v0.1.5
+    container_name: init-solana
+    platform: linux/amd64
+    volumes:
+      - "/tmp/solana/test-ledger:/test-ledger"
+    command: /bin/sh -c "cp -R /solana/ledger/* /test-ledger"
+
+  arb-init:
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/arbitrum-gizmo-shop:v1.1.2-usdt-${NODE_COUNT}
+    restart: always
+    container_name: arb-init
+    pull_policy: always
+    platform: linux/amd64
+    environment:
+      ARB_ENDPOINT: "http://sequencer:8547"
+
   redis:
     image: redis:6.2.6
     ports:
-      - "127.0.0.1:6379:6379"
+      - "6379:6379"
     volumes:
       - "/tmp/chainflip/data/redis-data:/data"
 
   geth:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v1.0.0-${NODE_COUNT}
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v1.1.2-usdt-${NODE_COUNT}
     container_name: geth
     platform: linux/amd64
     ports:
-      - "127.0.0.1:8545:8545"
-      - "127.0.0.1:8551:8551"
-      - "127.0.0.1:8546:8546"
-      - "127.0.0.1:30303:30303"
+      - "8545:8545"
+      - "8551:8551"
+      - "8546:8546"
+      - "30303:30303"
     volumes:
       - "/tmp/chainflip/data/l1data:/datadir"
       - "/tmp/chainflip/data/l1keystore:/keystore"
       - "/tmp/chainflip/data/config:/config"
 
   sequencer:
-    pid: host # allow debugging
     image: offchainlabs/nitro-node:v2.0.14-2baa834-dev
+    user: root
     platform: linux/amd64
     ports:
-      - "127.0.0.1:8547:8547"
-      - "127.0.0.1:8548:8548"
-      - "127.0.0.1:9642:9642"
+      - "8547:8547"
+      - "8548:8548"
+      - "9642:9642"
     volumes:
       - "/tmp/chainflip/data/seqdata:/home/user/.arbitrum/local/nitro"
       - "/tmp/chainflip/data/config:/config"
@@ -46,12 +63,12 @@ services:
       - redis
 
   staker-unsafe:
-    pid: host # allow debugging
     image: offchainlabs/nitro-node:v2.0.14-2baa834-dev
+    user: root
     platform: linux/amd64
     ports:
-      - "127.0.0.1:8047:8547"
-      - "127.0.0.1:8048:8548"
+      - "8047:8547"
+      - "8048:8548"
     volumes:
       - "/tmp/chainflip/data/unsafestaker-data:/home/user/.arbitrum/local/nitro"
       - "/tmp/chainflip/data/l1keystore:/home/user/l1keystore"
@@ -62,12 +79,12 @@ services:
       - redis
 
   poster:
-    pid: host # allow debugging
     image: offchainlabs/nitro-node:v2.0.14-2baa834-dev
+    user: root
     platform: linux/amd64
     ports:
-      - "127.0.0.1:8147:8547"
-      - "127.0.0.1:8148:8548"
+      - "8147:8547"
+      - "8148:8548"
     volumes:
       - "/tmp/chainflip/data/poster-data:/home/user/.arbitrum/local/nitro"
       - "/tmp/chainflip/data/l1keystore:/home/user/l1keystore"
@@ -80,12 +97,10 @@ services:
   polkadot:
     container_name: polkadot
     platform: linux/amd64
-    image: ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot:v1.0.0
+    image: ghcr.io/chainflip-io/chainflip-backend/polkadot:357aa6af70b3d57fe0a9df1fe1815f704e59db07
     pull_policy: always
     stop_grace_period: 5s
     stop_signal: SIGINT
-    volumes:
-      - ./init/polkadot/chainspec.dev.v1.0.0.json:/polkadot/chainspec.json
     environment:
       - RUST_BACKTRACE=full
     command:
@@ -119,7 +134,7 @@ services:
       start_period: 20s
 
   bitcoin:
-    image: ghcr.io/chainflip-io/chainflip-bitcoin-regtest:v24.0.1
+    image: ghcr.io/chainflip-io/chainflip-backend/bitcoin:357aa6af70b3d57fe0a9df1fe1815f704e59db07
     platform: linux/amd64
     pull_policy: always
     container_name: bitcoin

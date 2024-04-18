@@ -8,15 +8,15 @@ pub struct ErrorDecoder {
 
 impl Default for ErrorDecoder {
 	fn default() -> Self {
-		let metadata = frame_support::metadata::RuntimeMetadataPrefixed::decode(
+		let metadata = frame_metadata::RuntimeMetadataPrefixed::decode(
 			&mut state_chain_runtime::Runtime::metadata_at_version(15)
 				.expect("Version 15 should be supported by the runtime.")
 				.as_slice(),
 		)
 		.expect("Runtime metadata should be valid.");
 
-		let metadata: frame_support::metadata::v15::RuntimeMetadataV15 = match metadata.1 {
-			frame_support::metadata::RuntimeMetadata::V15(metadata) => metadata,
+		let metadata: frame_metadata::v15::RuntimeMetadataV15 = match metadata.1 {
+			frame_metadata::RuntimeMetadata::V15(metadata) => metadata,
 			_ => {
 				panic!("If this breaks change the version above to match new metadata version, and update
 		the test below like you should have.");
@@ -110,7 +110,7 @@ mod tests {
 
 	#[test]
 	fn check_metadata_version() {
-		let metadata = frame_support::metadata::RuntimeMetadataPrefixed::decode(
+		let metadata = frame_metadata::RuntimeMetadataPrefixed::decode(
 			&mut state_chain_runtime::Runtime::metadata_at_version(15)
 				.expect("Version 15 should be supported by the runtime.")
 				.as_slice(),
@@ -118,7 +118,7 @@ mod tests {
 		.expect("Runtime metadata should be valid.");
 
 		match metadata.1 {
-			frame_support::metadata::RuntimeMetadata::V15(..) => {},
+			frame_metadata::RuntimeMetadata::V15(..) => {},
 			_ => {
 				panic!(
 					"If this breaks change this test to match new metadata version, and update the code above like you should have."

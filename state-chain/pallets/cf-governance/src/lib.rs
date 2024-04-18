@@ -7,12 +7,12 @@ pub mod migrations;
 use cf_traits::{AuthoritiesCfeVersions, CompatibleCfeVersions};
 use codec::{Codec, Decode, Encode};
 use frame_support::{
-	dispatch::{GetDispatchInfo, UnfilteredDispatchable, Weight},
+	dispatch::GetDispatchInfo,
 	ensure,
-	pallet_prelude::DispatchResultWithPostInfo,
+	pallet_prelude::{DispatchResultWithPostInfo, Weight},
 	sp_runtime::{DispatchError, Percent, TransactionOutcome},
 	storage::with_transaction,
-	traits::{EnsureOrigin, Get, OnRuntimeUpgrade, StorageVersion, UnixTime},
+	traits::{EnsureOrigin, Get, StorageVersion, UnfilteredDispatchable, UnixTime},
 };
 pub use pallet::*;
 use sp_std::{boxed::Box, ops::Add, vec::Vec};
@@ -25,12 +25,20 @@ pub use weights::WeightInfo;
 /// Hash over (call, nonce, runtime_version)
 pub type GovCallHash = [u8; 32];
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
+
+macro_rules! ensure_governance_member {
+	($origin:ident) => {{
+		let account_id = ensure_signed($origin)?;
+		ensure!(Members::<T>::get().contains(&account_id), Error::<T>::NotMember);
+		account_id
+	}};
+}
 
 pub type ProposalId = u32;
 /// Implements the functionality of the Chainflip governance.
@@ -229,19 +237,18 @@ pub mod pallet {
 		///
 		/// - [NotMember](Error::NotMember)
 		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::propose_governance_extrinsic())]
+		#[pallet::weight((T::WeightInfo::propose_governance_extrinsic(), DispatchClass::Operational))]
 		pub fn propose_governance_extrinsic(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::RuntimeCall>,
 			execution: ExecutionMode,
 		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			ensure!(Members::<T>::get().contains(&who), Error::<T>::NotMember);
+			let account_id = ensure_governance_member!(origin);
 
 			let id = Self::push_proposal(call, execution);
 			Self::deposit_event(Event::Proposed(id));
 
-			Self::inner_approve(who, id)?;
+			Self::inner_approve(account_id, id)?;
 
 			// Governance member don't pay fees
 			Ok(Pays::No.into())
@@ -264,10 +271,18 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::new_membership_set())]
 		pub fn new_membership_set(
 			origin: OriginFor<T>,
-			accounts: Vec<T::AccountId>,
+			new_members: BTreeSet<T::AccountId>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			Members::<T>::set(accounts.into_iter().collect());
+			Members::<T>::mutate(|old_members| {
+				for member in old_members.difference(&new_members) {
+					<frame_system::Pallet<T>>::dec_sufficients(member);
+				}
+				for member in new_members.difference(old_members) {
+					<frame_system::Pallet<T>>::inc_sufficients(member);
+				}
+				*old_members = new_members;
+			});
 			Ok(().into())
 		}
 
@@ -319,14 +334,13 @@ pub mod pallet {
 		/// - [ProposalNotFound](Error::ProposalNotFound)
 		/// - [AlreadyApproved](Error::AlreadyApproved)
 		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::approve())]
+		#[pallet::weight((T::WeightInfo::approve(), DispatchClass::Operational))]
 		pub fn approve(
 			origin: OriginFor<T>,
 			approved_id: ProposalId,
 		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			ensure!(Members::<T>::get().contains(&who), Error::<T>::NotMember);
-			Self::inner_approve(who, approved_id)?;
+			let account_id = ensure_governance_member!(origin);
+			Self::inner_approve(account_id, approved_id)?;
 			// Governance members don't pay transaction fees
 			Ok(Pays::No.into())
 		}
@@ -391,7 +405,7 @@ pub mod pallet {
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		/// - [CallHashNotWhitelisted](Error::CallHashNotWhitelisted)
 		#[pallet::call_index(6)]
-		#[pallet::weight(T::WeightInfo::submit_govkey_call().saturating_add(call.get_dispatch_info().weight))]
+		#[pallet::weight((T::WeightInfo::submit_govkey_call().saturating_add(call.get_dispatch_info().weight), DispatchClass::Operational))]
 		pub fn submit_govkey_call(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::RuntimeCall>,
@@ -424,8 +438,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			approved_id: ProposalId,
 		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			ensure!(Members::<T>::get().contains(&who), Error::<T>::NotMember);
+			ensure_governance_member!(origin);
 			if let Some(call) = PreAuthorisedGovCalls::<T>::take(approved_id) {
 				if let Ok(call) = <T as Config>::RuntimeCall::decode(&mut &(*call)) {
 					Self::deposit_event(match Self::dispatch_governance_call(call) {
@@ -460,6 +473,9 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
+			for member in &self.members {
+				<frame_system::Pallet<T>>::inc_sufficients(member);
+			}
 			Members::<T>::set(self.members.clone());
 			ExpiryTime::<T>::set(self.expiry_span);
 		}
@@ -517,7 +533,7 @@ impl<T: Config> Pallet<T> {
 		})?;
 
 		if proposal.approved.len() >
-			(Members::<T>::decode_len().ok_or(Error::<T>::DecodeMembersLenFailed)? / 2)
+			(Members::<T>::decode_non_dedup_len().ok_or(Error::<T>::DecodeMembersLenFailed)? / 2)
 		{
 			if proposal.execution == ExecutionMode::Manual {
 				PreAuthorisedGovCalls::<T>::insert(approved_id, proposal.call);

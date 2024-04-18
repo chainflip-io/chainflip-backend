@@ -1,5 +1,5 @@
 use codec::{Decode, Encode};
-use frame_support::RuntimeDebug;
+use frame_support::pallet_prelude::RuntimeDebug;
 use scale_info::TypeInfo;
 
 /// A result type for asynchronous operations.
@@ -31,6 +31,14 @@ impl<R> AsyncResult<R> {
 		match self {
 			AsyncResult::Ready(r) => r,
 			_ => panic!("AsyncResult not Ready!"),
+		}
+	}
+
+	pub fn replace_inner<S>(self, inner: S) -> AsyncResult<S> {
+		match self {
+			AsyncResult::Ready(_) => AsyncResult::Ready(inner),
+			AsyncResult::Pending => AsyncResult::Pending,
+			AsyncResult::Void => AsyncResult::Void,
 		}
 	}
 }

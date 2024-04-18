@@ -4,7 +4,7 @@ import fs from 'fs';
 import toml from '@iarna/toml';
 import { compareSemVer } from '../shared/utils';
 import { jsonRpc } from '../shared/json_rpc';
-import { bumpSpecVersion } from '../shared/utils/bump_spec_version';
+import { specVersion } from '../shared/utils/spec_version';
 
 const projectRoot = process.argv[2];
 const engineReleaseVersion = process.argv[3];
@@ -68,7 +68,7 @@ const releaseSpecVersion = Number(
 );
 console.log(`Release spec version: ${releaseSpecVersion}`);
 
-const specVersionInToml = bumpSpecVersion(`${projectRoot}/state-chain/runtime/src/lib.rs`, true);
+const specVersionInToml = specVersion(`${projectRoot}/state-chain/runtime/src/lib.rs`, 'read');
 console.log(`Spec version in TOML: ${specVersionInToml}`);
 
 if (specVersionInToml >= releaseSpecVersion) {

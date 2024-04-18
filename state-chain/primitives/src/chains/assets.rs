@@ -13,196 +13,637 @@
 //!
 //! assert_eq!(any::Asset::Flip, any::Asset::from(eth::Asset::Flip));
 //! ```
-use super::*;
 
-use serde::{Deserialize, Serialize};
+macro_rules! assets {
+	(@ legacy_encoding) => {};
+	(
+		$(
+			Chain {
+				variant: $chain_variant:ident,
+				member_and_module: $chain_member_and_module:ident,
+				string: $chain_string:literal $((aliases: [$($chain_string_aliases:literal),+$(,)?]))?,
+				json: $chain_json:literal,
+				assets: [
+					$(
+						Asset {
+							variant: $asset_variant:ident,
+							member: $asset_member:ident,
+							string: $asset_string:literal $((aliases: [$($asset_string_aliases:literal),+$(,)?]))?,
+							json: $asset_json:literal,
+							gas: $asset_gas:literal,
+							index: $asset_index:literal
+							$(,$asset_legacy_encoding:tt)?$(,)?
+						}
+					),+$(,)?
+				]$(,)?
+			}
+		),+$(,)?
+	) => {
+		// This forces $asset_legacy_encoding to only ever possibly be `legacy_encoding`. This allows
+		// the option legacy_enoding to be an optional, but also be fixed and referenceable without
+		// needing a full incremental tt muncher.
+		$(
+			$(
+				$(assets!(@ $asset_legacy_encoding);)?
+			)+
+		)+
 
-use strum_macros::EnumIter;
-
-/// Defines all Assets, and the Chain each asset belongs to.
-/// There's a unique 1:1 relationship between an Asset and a Chain.
-pub mod any {
-	use core::str::FromStr;
-
-	use super::*;
-	pub type Chain = AnyChain;
-
-	/// A token or currency that can be swapped natively in the Chainflip AMM.
-	#[derive(
-		Copy,
-		Clone,
-		Debug,
-		PartialEq,
-		Eq,
-		Encode,
-		Decode,
-		TypeInfo,
-		MaxEncodedLen,
-		Hash,
-		PartialOrd,
-		Ord,
-		EnumIter,
-		Serialize,
-		Deserialize,
-	)]
-	#[repr(u32)]
-	#[serde(rename_all = "UPPERCASE")]
-	// !!!!!! IMPORTANT !!!!!!
-	// Do not change these indices.
-	pub enum Asset {
-		// 0 is reserved for particular cross chain messaging scenarios where we want to pass
-		// through a message without making a swap.
-		Eth = 1u32,
-		Flip = 2u32,
-		Usdc = 3u32,
-		Dot = 4u32,
-		Btc = 5u32,
-	}
-
-	impl TryFrom<u32> for Asset {
-		type Error = &'static str;
-
-		fn try_from(n: u32) -> Result<Self, Self::Error> {
-			match n {
-				x if x == Self::Eth as u32 => Ok(Self::Eth),
-				x if x == Self::Flip as u32 => Ok(Self::Flip),
-				x if x == Self::Usdc as u32 => Ok(Self::Usdc),
-				x if x == Self::Dot as u32 => Ok(Self::Dot),
-				x if x == Self::Btc as u32 => Ok(Self::Btc),
-				_ => Err("Invalid asset id"),
+		// Ensures at compile-time all implicit-chain assets use difference json names, as otherwise deserialization is ambiguous.
+		#[allow(dead_code, unused_variables)]
+		fn _force_non_overlapping_implicit_assets() {
+			match "" {
+				$(
+					$(
+						$(
+							$asset_json => { let $asset_legacy_encoding = (); },
+						)?
+					)+
+				)+
+				_ => {}
 			}
 		}
-	}
 
-	impl Asset {
-		pub fn all() -> Vec<Self> {
-			use strum::IntoEnumIterator;
-			Self::iter().collect()
-		}
-	}
+		pub mod any {
+			use strum_macros::EnumIter;
+			use codec::{MaxEncodedLen, Encode, Decode};
+			use scale_info::TypeInfo;
+			use serde::{Serialize, Deserialize};
+			use core::ops::{Index, IndexMut};
+			use core::iter::FromIterator;
 
-	impl From<Asset> for ForeignChain {
-		fn from(asset: Asset) -> Self {
-			match asset {
-				Asset::Eth => Self::Ethereum,
-				Asset::Flip => Self::Ethereum,
-				Asset::Usdc => Self::Ethereum,
-				Asset::Dot => Self::Polkadot,
-				Asset::Btc => Self::Bitcoin,
-			}
-		}
-	}
-
-	impl FromStr for Asset {
-		type Err = &'static str;
-
-		fn from_str(s: &str) -> Result<Self, Self::Err> {
-			match s.to_lowercase().as_str() {
-				"eth" => Ok(Asset::Eth),
-				"flip" => Ok(Asset::Flip),
-				"usdc" => Ok(Asset::Usdc),
-				"dot" => Ok(Asset::Dot),
-				"btc" => Ok(Asset::Btc),
-				_ => Err("Unrecognized asset"),
-			}
-		}
-	}
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum AssetError {
-	Unsupported,
-}
-
-/// Defines the assets types for a chain and some useful conversion traits. See the module level
-/// docs for more detail.
-macro_rules! chain_assets {
-	( $mod:ident, $chain:ident, $( $asset:ident ),+ ) => {
-		/// Chain-specific assets types.
-		pub mod $mod {
-			use $crate::chains::*;
-			use $crate::chains::assets::*;
-
-			pub type Chain = $chain;
-
-			#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Hash, serde::Serialize, serde::Deserialize)]
+			#[derive(
+				Copy,
+				Clone,
+				Debug,
+				PartialEq,
+				Eq,
+				Encode,
+				Decode,
+				TypeInfo,
+				MaxEncodedLen,
+				Hash,
+				PartialOrd,
+				Ord,
+				EnumIter,
+			)]
+			#[repr(u32)]
 			pub enum Asset {
 				$(
-					$asset,
+					$($asset_variant = $asset_index,)+
 				)+
 			}
+			impl TryFrom<u32> for Asset {
+				type Error = &'static str;
 
-			pub const GAS_ASSET: Asset = [
-				$(
-					Asset::$asset,
-				)+
-			][0];
-
-			impl From<Asset> for any::Asset {
+				fn try_from(n: u32) -> Result<Self, Self::Error> {
+					match n {
+						$(
+							$(x if x == Self::$asset_variant as u32 => Ok(Self::$asset_variant),)+
+						)+
+						_ => Err("Invalid asset id"),
+					}
+				}
+			}
+			impl Asset {
+				pub fn all() -> impl Iterator<Item = Self> + Clone + 'static {
+					use strum::IntoEnumIterator;
+					Self::iter()
+				}
+			}
+			impl From<Asset> for $crate::ForeignChain {
 				fn from(asset: Asset) -> Self {
 					match asset {
 						$(
-							Asset::$asset => any::Asset::$asset,
+							$(Asset::$asset_variant)|+ => Self::$chain_variant,
 						)+
 					}
 				}
 			}
-
-			impl AsRef<any::Asset> for Asset {
-				fn as_ref(&self) -> &any::Asset {
-					match self {
+			impl core::fmt::Display for Asset {
+				fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+					write!(f, "{}", match self {
 						$(
-							Asset::$asset => &any::Asset::$asset,
+							$(
+								Asset::$asset_variant => $asset_string,
+							)+
 						)+
+					})
+				}
+			}
+			impl core::str::FromStr for Asset {
+				type Err = &'static str;
+
+				fn from_str(s: &str) -> Result<Self, Self::Err> {
+					if let Some((prefix, suffix)) = s.split_once('-') {
+						match prefix {
+							$(
+								$chain_string => {
+									match suffix {
+										$(
+											$asset_string $($(|$asset_string_aliases)+)? => Ok(Self::$asset_variant),
+										)+
+										_ => Err(concat!("Unrecognized ", $chain_string, " asset"))
+									}
+								},
+							)+
+							_ => Err("Unrecognized chain")
+						}
+					} else {
+						Err("Unrecognized asset, expected the format \"<chain>-<asset>\"")
 					}
 				}
 			}
 
-			impl TryFrom<any::Asset> for Asset {
-				type Error = AssetError;
+			pub(super) mod serde_impls {
+				use serde::{Serialize, Deserialize};
 
-				fn try_from(asset: any::Asset) -> Result<Self, Self::Error> {
-					match asset {
+				#[derive(Serialize, Deserialize)]
+				#[serde(untagged)]
+				#[serde(
+					expecting = r#"Expected a valid asset specifier. Assets should be specified as upper-case strings, e.g. `"ETH"`, and can be optionally distinguished by chain, e.g. `{ chain: "Ethereum", asset: "ETH" }."#
+				)]
+				enum SerdeAssetOptionalExplicitChain {
+					Implicit(serde_utils::SerdeImplicitChainAsset),
+					Explicit(serde_utils::SerdeExplicitChainAsset),
+				}
+
+				impl Serialize for super::Asset {
+					fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+						where S: serde::Serializer
+					{
+						Serialize::serialize(&SerdeAssetOptionalExplicitChain::Explicit((*self).into()), serializer)
+					}
+				}
+				impl<'de> Deserialize<'de> for super::Asset {
+					fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+					   where D: serde::Deserializer<'de> {
+						<SerdeAssetOptionalExplicitChain as Deserialize<'de>>::deserialize(deserializer).map(|serde_asset_optional_explicit_chain| {
+							match serde_asset_optional_explicit_chain {
+								SerdeAssetOptionalExplicitChain::Implicit(implicit_chain_asset) => implicit_chain_asset.into(),
+								SerdeAssetOptionalExplicitChain::Explicit(explicit_chain_asset) => explicit_chain_asset.into(),
+							}
+						})
+					}
+				}
+
+				mod serde_utils {
+					use serde::{Serialize, Deserialize};
+					use super::super::super::any;
+
+					$(
+						mod $chain_member_and_module {
+							use serde::{Serialize, Deserialize};
+
+							#[derive(Serialize, Deserialize)]
+							pub enum SerdeChain {
+								#[serde(rename = $chain_json)]
+								$chain_variant
+							}
+						}
+					)+
+
+					#[derive(Serialize, Deserialize)]
+					#[serde(untagged)]
+					pub(super) enum SerdeExplicitChainAsset {
 						$(
-							any::Asset::$asset => Ok(Asset::$asset),
+							$chain_variant{ chain: $chain_member_and_module::SerdeChain, asset: super::super::super::$chain_member_and_module::Asset }
+						),+
+					}
+					impl From<any::Asset> for SerdeExplicitChainAsset {
+						fn from(value: any::Asset) -> Self {
+							match value {
+								$(
+									$(
+										any::Asset::$asset_variant => Self::$chain_variant { chain: $chain_member_and_module::SerdeChain::$chain_variant, asset: super::super::super::$chain_member_and_module::Asset::$asset_variant },
+									)+
+								)+
+							}
+						}
+					}
+					impl From<SerdeExplicitChainAsset> for any::Asset {
+						fn from(value: SerdeExplicitChainAsset) -> any::Asset {
+							match value {
+								$(
+									$(
+										SerdeExplicitChainAsset::$chain_variant { chain: _, asset: super::super::super::$chain_member_and_module::Asset::$asset_variant } => Self::$asset_variant,
+									)+
+								)+
+							}
+						}
+					}
+
+					#[derive(Serialize, Deserialize)]
+					#[repr(u32)]
+					pub(super) enum SerdeImplicitChainAsset {
+						$(
+							$(
+								$(
+									#[serde(rename = $asset_json)]
+									// IMPORTANT: This doc attribute is needed so we can only include variants/assets that have the `legacy_encoding`` option.
+									#[doc = stringify!($asset_legacy_encoding)]
+									$asset_variant = $asset_index,
+								)?
+							)+
 						)+
-						_ => Err(AssetError::Unsupported),
+					}
+					impl TryFrom<any::Asset> for SerdeImplicitChainAsset {
+						type Error = ();
+
+						#[allow(unreachable_patterns)]
+						#[allow(unused_variables)]
+						fn try_from(value: any::Asset) -> Result<Self, Self::Error> {
+							match value {
+								$(
+									$(
+										$(
+											any::Asset::$asset_variant => { let $asset_legacy_encoding = (); Ok(Self::$asset_variant) },
+										)?
+									)+
+								)+
+								_ => Err(())
+							}
+						}
+					}
+					impl From<SerdeImplicitChainAsset> for any::Asset {
+						#[allow(unused_variables)]
+						fn from(value: SerdeImplicitChainAsset) -> Self {
+							match value {
+								$(
+									$(
+										$(
+											SerdeImplicitChainAsset::$asset_variant => { let $asset_legacy_encoding = (); Self::$asset_variant },
+										)?
+									)+
+								)+
+							}
+						}
 					}
 				}
 			}
 
-			impl From<Asset> for ForeignChain {
-				fn from(_asset: Asset) -> Self {
-					ForeignChain::$chain
-				}
-			}
-
-			#[test]
-			fn consistency_check() {
+			#[derive(
+				Copy,
+				Clone,
+				Debug,
+				PartialEq,
+				Eq,
+				Hash,
+			)]
+			pub enum ForeignChainAndAsset {
 				$(
-					assert_eq!(
-						ForeignChain::from(any::Asset::from(Asset::$asset)),
-						ForeignChain::from(Asset::$asset),
-						"Inconsistent asset type definition. Asset {} defined in {}, but mapped to chain {:?}",
-						stringify!($asset),
-						stringify!($mod),
-						ForeignChain::from(any::Asset::from(Asset::$asset)),
-					);
+					$chain_variant(super::$chain_member_and_module::Asset),
 				)+
 			}
+			impl From<Asset> for ForeignChainAndAsset {
+				fn from(value: Asset) -> Self {
+					match value {
+						$(
+							$(Asset::$asset_variant => Self::$chain_variant(super::$chain_member_and_module::Asset::$asset_variant),)+
+						)+
+					}
+				}
+			}
+			impl From<ForeignChainAndAsset> for Asset {
+				fn from(value: ForeignChainAndAsset) -> Self {
+					match value {
+						$(
+							$(ForeignChainAndAsset::$chain_variant(super::$chain_member_and_module::Asset::$asset_variant) => Self::$asset_variant,)+
+						)+
+					}
+				}
+			}
+
+			#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
+			pub struct AssetMap<T> {
+				$(
+					#[serde(rename = $chain_json)]
+					pub $chain_member_and_module: super::$chain_member_and_module::AssetMap::<T>,
+				)*
+			}
+			impl<T> AssetMap<T> {
+				pub fn from_fn<F: FnMut(Asset) -> T>(mut f: F) -> Self {
+					Self {
+						$($chain_member_and_module: super::$chain_member_and_module::AssetMap::<T>::from_fn(|asset| f(asset.into())),)+
+					}
+				}
+
+				pub fn try_from_fn<E, F: FnMut(Asset) -> Result<T, E>>(mut f: F) -> Result<Self, E> {
+					Ok(Self {
+						$($chain_member_and_module: super::$chain_member_and_module::AssetMap::<T>::try_from_fn(|asset| f(asset.into()))?,)+
+					})
+				}
+
+				pub fn map<R, F: FnMut(T) -> R>(self, mut f: F) -> AssetMap<R> {
+					AssetMap {
+						$($chain_member_and_module: self.$chain_member_and_module.map(&mut f),)+
+					}
+				}
+
+				/// TODO: Remove this function, once PRO-1202 is complete
+				pub fn try_from_iter<Iter: Iterator<Item = (Asset, T)> + Clone>(iter: Iter) -> Option<Self> {
+					Self::try_from_fn(|required_asset| {
+						iter.clone().find(|(asset, _t)| *asset == required_asset).ok_or(()).map(|x| x.1)
+					}).ok()
+				}
+
+				pub fn iter(&self) -> impl Iterator<Item = (Asset, &T)> + Clone {
+					Asset::all().map(|asset| {
+						(asset, &self[asset])
+					})
+				}
+			}
+
+			impl<T> IndexMut<Asset> for AssetMap<T> {
+				fn index_mut(&mut self, index: Asset) -> &mut T {
+					match index {
+						$(
+							$(Asset::$asset_variant => &mut self.$chain_member_and_module.$asset_member,)+
+						)+
+					}
+				}
+			}
+
+			impl<T> Index<Asset> for AssetMap<T> {
+				type Output = T;
+				fn index(&self, index: Asset) -> &T {
+					match index {
+						$(
+							$(Asset::$asset_variant => &self.$chain_member_and_module.$asset_member,)+
+						)+
+					}
+				}
+			}
+
+			impl<T: Default> FromIterator<(Asset, T)> for AssetMap<T> {
+				fn from_iter<I: IntoIterator<Item = (Asset, T)>>(iter: I) -> Self {
+					iter.into_iter().fold(Self::default(), |mut map, (asset, value)| {
+						map[asset] = value;
+						map
+					})
+				}
+			}
 		}
-	};
+
+		$(
+			pub mod $chain_member_and_module {
+				use super::any;
+				use codec::{MaxEncodedLen, Encode, Decode};
+				use scale_info::TypeInfo;
+				use serde::{Serialize, Deserialize};
+				use strum_macros::EnumIter;
+				use core::ops::IndexMut;
+				use core::ops::Index;
+
+				pub type Chain = $crate::chains::$chain_variant;
+				pub const GAS_ASSET: Asset = {
+					let mut gas_asset = None;
+
+					$(
+						if $asset_gas {
+							assert!(gas_asset.is_none(), "Each chain can only have one gas asset.");
+							gas_asset = Some(Asset::$asset_variant);
+						}
+					)+
+
+					match gas_asset {
+						Some(gas_asset) => gas_asset,
+						None => panic!("Each chain must have exactly one gas asset.")
+					}
+				};
+
+				#[derive(
+					Copy,
+					Clone,
+					Debug,
+					PartialEq,
+					Eq,
+					Encode,
+					Decode,
+					TypeInfo,
+					MaxEncodedLen,
+					Hash,
+					Serialize,
+					Deserialize,
+					EnumIter
+				)]
+				pub enum Asset {
+					$(
+						#[serde(rename = $asset_json)]
+						$asset_variant,
+					)+
+				}
+				impl From<Asset> for any::Asset {
+					fn from(asset: Asset) -> Self {
+						match asset {
+							$(
+								Asset::$asset_variant => any::Asset::$asset_variant,
+							)+
+						}
+					}
+				}
+				impl From<Asset> for $crate::ForeignChain {
+					fn from(_asset: Asset) -> Self {
+						Self::$chain_variant
+					}
+				}
+				impl TryFrom<super::any::Asset> for Asset {
+					type Error = AssetError;
+
+					fn try_from(asset: super::any::Asset) -> Result<Self, Self::Error> {
+						match asset {
+							$(
+								super::any::Asset::$asset_variant => Ok(Asset::$asset_variant),
+							)*
+							_ => Err(AssetError::Unsupported),
+						}
+					}
+				}
+				impl Asset {
+					pub fn all() -> impl Iterator<Item = Self> + Clone + 'static {
+						use strum::IntoEnumIterator;
+						Self::iter()
+					}
+				}
+
+				#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
+				pub enum AssetError {
+					Unsupported,
+				}
+
+				#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
+				pub struct AssetMap<T> {
+					$(
+						#[serde(rename = $asset_json)]
+						pub $asset_member: T,
+					)+
+				}
+				impl<T> AssetMap<T> {
+					pub fn from_fn<F: FnMut(Asset) -> T>(mut f: F) -> Self {
+						Self {
+							$($asset_member: f(Asset::$asset_variant),)+
+						}
+					}
+
+					pub fn try_from_fn<E, F: FnMut(Asset) -> Result<T, E>>(mut f: F) -> Result<Self, E> {
+						Ok(Self {
+							$($asset_member: f(Asset::$asset_variant)?,)+
+						})
+					}
+
+					pub fn map<R, F: FnMut(T) -> R>(self, mut f: F) -> AssetMap<R> {
+						AssetMap {
+							$($asset_member: f(self.$asset_member),)+
+						}
+					}
+
+					pub fn iter(&self) -> impl Iterator<Item = (Asset, &T)> + Clone {
+						Asset::all().map(|asset| {
+							(asset, &self[asset])
+						})
+					}
+				}
+				impl<T> IndexMut<Asset> for AssetMap<T> {
+					fn index_mut(&mut self, index: Asset) -> &mut T {
+						match index {
+							$(Asset::$asset_variant => &mut self.$asset_member,)+
+						}
+					}
+				}
+				impl<T> Index<Asset> for AssetMap<T> {
+					type Output = T;
+					fn index(&self, index: Asset) -> &T {
+						match index {
+							$(Asset::$asset_variant => &self.$asset_member,)+
+						}
+					}
+				}
+
+				impl<T: Default> FromIterator<(Asset, T)> for AssetMap<T> {
+					fn from_iter<I: IntoIterator<Item = (Asset, T)>>(iter: I) -> Self {
+						iter.into_iter().fold(Self::default(), |mut map, (asset, value)| {
+							map[asset] = value;
+							map
+						})
+					}
+				}
+			}
+		)*
+	}
 }
 
-// Defines each chain's Asset enum.
-// Must be consistent with the mapping defined in any::Asset
-chain_assets!(eth, Ethereum, Eth, Flip, Usdc);
-chain_assets!(dot, Polkadot, Dot);
-chain_assets!(btc, Bitcoin, Btc);
+// !!!!!! IMPORTANT !!!!!!
+// Do not change these indices, or the orderings (as the orderings will effect some serde formats
+// (But not JSON), and the scale encoding)
+assets!(
+	// 0 is reserved for particular cross chain messaging scenarios where we want to pass
+	// through a message without making a swap.
+	Chain {
+		variant: Ethereum,
+		member_and_module: eth,
+		string: "Ethereum" (aliases: ["ETHEREUM", "ethereum"]),
+		json: "Ethereum",
+		assets: [
+			Asset {
+				variant: Eth,
+				member: eth,
+				string: "ETH" (aliases: ["Eth", "eth"]),
+				json: "ETH",
+				gas: true,
+				index: 1,
+				legacy_encoding,
+			},
+			Asset {
+				variant: Flip,
+				member: flip,
+				string: "FLIP" (aliases: ["Flip", "flip"]),
+				json: "FLIP",
+				gas: false,
+				index: 2,
+				legacy_encoding,
+			},
+			Asset {
+				variant: Usdc,
+				member: usdc,
+				string: "USDC" (aliases: ["Usdc", "usdc"]),
+				json: "USDC",
+				gas: false,
+				index: 3,
+				legacy_encoding,
+			},
+			Asset {
+				variant: Usdt,
+				member: usdt,
+				string: "USDT" (aliases: ["Usdt", "usdt"]),
+				json: "USDT",
+				gas: false,
+				index: 8,
+			},
+		],
+	},
+	Chain {
+		variant: Polkadot,
+		member_and_module: dot,
+		string: "Polkadot" (aliases: ["POLKADOT", "polkadot"]),
+		json: "Polkadot",
+		assets: [
+			Asset {
+				variant: Dot,
+				member: dot,
+				string: "DOT" (aliases: ["Dot", "dot"]),
+				json: "DOT",
+				gas: true,
+				index: 4,
+				legacy_encoding,
+			},
+		],
+	},
+	Chain {
+		variant: Bitcoin,
+		member_and_module: btc,
+		string: "Bitcoin" (aliases: ["BITCOIN", "bitcoin"]),
+		json: "Bitcoin",
+		assets: [
+			Asset {
+				variant: Btc,
+				member: btc,
+				string: "BTC" (aliases: ["Btc", "btc"]),
+				json: "BTC",
+				gas: true,
+				index: 5,
+				legacy_encoding,
+			},
+		],
+	},
+	Chain {
+		variant: Arbitrum,
+		member_and_module: arb,
+		string: "Arbitrum" (aliases: ["ARBITRUM", "arbitrum"]),
+		json: "Arbitrum",
+		assets: [
+			Asset {
+				variant: ArbEth,
+				member: eth,
+				string: "ETH" (aliases: ["Eth", "eth"]),
+				json: "ETH",
+				gas: true,
+				index: 6,
+			},
+			Asset {
+				variant: ArbUsdc,
+				member: usdc,
+				string: "USDC" (aliases: ["Usdc", "usdc"]),
+				json: "USDC",
+				gas: false,
+				index: 7,
+			},
+		],
+	}
+);
 
 #[cfg(test)]
 mod test_assets {
 	use super::*;
+	use cf_utilities::{assert_err, assert_ok};
 
 	macro_rules! assert_conversion {
 		($mod:ident, $asset:ident) => {
@@ -219,12 +660,15 @@ mod test_assets {
 
 	#[test]
 	fn asset_id_to_asset() {
-		assert!(Asset::try_from(0).is_err());
-		assert_eq!(Asset::try_from(1).unwrap(), Asset::Eth);
-		assert_eq!(Asset::try_from(2).unwrap(), Asset::Flip);
-		assert_eq!(Asset::try_from(3).unwrap(), Asset::Usdc);
-		assert_eq!(Asset::try_from(4).unwrap(), Asset::Dot);
-		assert_eq!(Asset::try_from(5).unwrap(), Asset::Btc);
+		assert!(any::Asset::try_from(0).is_err());
+		assert_eq!(any::Asset::try_from(1).unwrap(), any::Asset::Eth);
+		assert_eq!(any::Asset::try_from(2).unwrap(), any::Asset::Flip);
+		assert_eq!(any::Asset::try_from(3).unwrap(), any::Asset::Usdc);
+		assert_eq!(any::Asset::try_from(4).unwrap(), any::Asset::Dot);
+		assert_eq!(any::Asset::try_from(5).unwrap(), any::Asset::Btc);
+		assert_eq!(any::Asset::try_from(6).unwrap(), any::Asset::ArbEth);
+		assert_eq!(any::Asset::try_from(7).unwrap(), any::Asset::ArbUsdc);
+		assert_eq!(any::Asset::try_from(8).unwrap(), any::Asset::Usdt);
 	}
 
 	#[test]
@@ -232,13 +676,190 @@ mod test_assets {
 		assert_conversion!(eth, Eth);
 		assert_conversion!(eth, Flip);
 		assert_conversion!(eth, Usdc);
+		assert_conversion!(eth, Usdt);
 		assert_conversion!(dot, Dot);
 		assert_conversion!(btc, Btc);
+		assert_conversion!(arb, ArbEth);
+		assert_conversion!(arb, ArbUsdc);
 
 		assert_incompatible!(eth, Dot);
 		assert_incompatible!(dot, Eth);
 		assert_incompatible!(dot, Flip);
 		assert_incompatible!(dot, Usdc);
 		assert_incompatible!(btc, Usdc);
+		assert_incompatible!(btc, Usdt);
+	}
+
+	#[test]
+	fn test_asset_encoding() {
+		use core::str::FromStr;
+
+		// FromStr
+
+		assert_eq!(assert_ok!(any::Asset::from_str("Ethereum-ETH")), any::Asset::Eth);
+		assert_eq!(assert_ok!(any::Asset::from_str("Polkadot-DOT")), any::Asset::Dot);
+		assert_eq!(assert_ok!(any::Asset::from_str("Bitcoin-BTC")), any::Asset::Btc);
+		assert_eq!(assert_ok!(any::Asset::from_str("Ethereum-eth")), any::Asset::Eth);
+		assert_eq!(assert_ok!(any::Asset::from_str("Ethereum-Eth")), any::Asset::Eth);
+		assert_eq!(assert_ok!(any::Asset::from_str("Arbitrum-Eth")), any::Asset::ArbEth);
+
+		assert_err!(any::Asset::from_str("Ethereum-BTC"));
+		assert_err!(any::Asset::from_str("Polkadot-USDC"));
+		assert_err!(any::Asset::from_str("Arbitrum-Btc"));
+		assert_err!(any::Asset::from_str("Terra-ETH"));
+
+		// Serialization
+
+		assert_eq!(
+			assert_ok!(serde_json::to_string(&any::Asset::Eth)),
+			"{\"chain\":\"Ethereum\",\"asset\":\"ETH\"}"
+		);
+		assert_eq!(
+			assert_ok!(serde_json::to_string(&any::Asset::Dot)),
+			"{\"chain\":\"Polkadot\",\"asset\":\"DOT\"}"
+		);
+		assert_eq!(
+			assert_ok!(serde_json::to_string(&any::Asset::Btc)),
+			"{\"chain\":\"Bitcoin\",\"asset\":\"BTC\"}"
+		);
+		assert_eq!(
+			assert_ok!(serde_json::to_string(&any::Asset::ArbEth)),
+			"{\"chain\":\"Arbitrum\",\"asset\":\"ETH\"}"
+		);
+
+		// Explicit Chain Deserialization
+
+		assert_eq!(
+			assert_ok!(serde_json::from_str::<any::Asset>(
+				"{\"chain\":\"Ethereum\",\"asset\":\"ETH\"}"
+			)),
+			any::Asset::Eth
+		);
+		assert_eq!(
+			assert_ok!(serde_json::from_str::<any::Asset>(
+				"{\"chain\":\"Polkadot\",\"asset\":\"DOT\"}"
+			)),
+			any::Asset::Dot
+		);
+		assert_eq!(
+			assert_ok!(serde_json::from_str::<any::Asset>(
+				"{\"chain\":\"Bitcoin\",\"asset\":\"BTC\"}"
+			)),
+			any::Asset::Btc
+		);
+		assert_eq!(
+			assert_ok!(serde_json::from_str::<any::Asset>(
+				"{\"chain\":\"Arbitrum\",\"asset\":\"ETH\"}"
+			)),
+			any::Asset::ArbEth
+		);
+
+		assert_err!(serde_json::from_str::<any::Asset>(
+			"{\"chain\":\"Ethereum\",\"asset\":\"Eth\"}"
+		));
+		assert_err!(serde_json::from_str::<any::Asset>(
+			"{\"chain\":\"Polkadot\",\"asset\":\"Dot\"}"
+		));
+		assert_err!(serde_json::from_str::<any::Asset>(
+			"{\"chain\":\"Bitcoin\",\"asset\":\"Btc\"}"
+		));
+		assert_err!(serde_json::from_str::<any::Asset>(
+			"{\"chain\":\"ETHEREUM\",\"asset\":\"ETH\"}"
+		));
+		assert_err!(serde_json::from_str::<any::Asset>(
+			"{\"chain\":\"ETHEREUM\",\"asset\":\"BTC\"}"
+		));
+		assert_err!(serde_json::from_str::<any::Asset>(
+			"{\"chain\":\"ETHEREUM\",\"asset\":\"eth\"}"
+		));
+
+		assert_err!(serde_json::from_str::<any::Asset>("{\"asset\":\"Eth\"}"));
+		assert_err!(serde_json::from_str::<any::Asset>("{\"asset\":\"Dot\"}"));
+		assert_err!(serde_json::from_str::<any::Asset>("{\"asset\":\"Btc\"}"));
+		assert_err!(serde_json::from_str::<any::Asset>("{\"asset\":\"ETH\"}"));
+		assert_err!(serde_json::from_str::<any::Asset>("{\"asset\":\"BTC\"}"));
+		assert_err!(serde_json::from_str::<any::Asset>("{\"asset\":\"eth\"}"));
+
+		// Implicit Chain Deserialization
+
+		assert_eq!(assert_ok!(serde_json::from_str::<any::Asset>("\"ETH\"")), any::Asset::Eth);
+		assert_eq!(assert_ok!(serde_json::from_str::<any::Asset>("\"DOT\"")), any::Asset::Dot);
+		assert_eq!(assert_ok!(serde_json::from_str::<any::Asset>("\"BTC\"")), any::Asset::Btc);
+
+		assert_err!(serde_json::from_str::<any::Asset>("\"eTh\""));
+		assert_err!(serde_json::from_str::<any::Asset>("\"dOt\""));
+		assert_err!(serde_json::from_str::<any::Asset>("\"bTc\""));
+	}
+
+	#[test]
+	fn asset_map_from_iterator() {
+		assert_eq!(
+			eth::AssetMap::from_iter(vec![(eth::Asset::Eth, 1), (eth::Asset::Flip, 2),]),
+			eth::AssetMap { eth: 1, flip: 2, usdc: 0, usdt: 0 }
+		);
+		assert_eq!(any::AssetMap::<u128>::from_iter(vec![]), Default::default());
+		assert_eq!(
+			any::AssetMap::from_iter(vec![(any::Asset::Eth, 1), (any::Asset::Dot, 2),]),
+			any::AssetMap {
+				eth: eth::AssetMap { eth: 1, flip: 0, usdc: 0, usdt: 0 },
+				dot: dot::AssetMap { dot: 2 },
+				..Default::default()
+			}
+		);
+	}
+
+	#[test]
+	fn test_maps() {
+		macro_rules! generic_tests {
+			($($module:ident ($example_variant:ident $(,$example_variants:ident)*)),+) => {
+				const VALUE: u32 = 5;
+
+				$({
+					let asset_map = $module::AssetMap::from_fn(|_asset| VALUE);
+
+					for asset in $module::Asset::all() {
+						assert_eq!(VALUE, asset_map[asset]);
+					}
+
+					for ((key_asset, value), asset) in asset_map.iter().zip($module::Asset::all()) {
+						assert_eq!(key_asset, asset);
+						assert_eq!(VALUE, *value);
+					}
+
+					for (key, value) in $module::AssetMap::from_fn(|asset| asset).iter() {
+						assert_eq!(key, *value);
+					}
+
+					{
+
+						let mut asset_map = $module::AssetMap::<u32>::default();
+
+						asset_map[$module::Asset::$example_variant] = VALUE;
+
+						assert_eq!(asset_map[$module::Asset::$example_variant], VALUE);
+						$(
+							assert_eq!(asset_map[$module::Asset::$example_variants], u32::default());
+						)*
+
+						asset_map[$module::Asset::$example_variant] = u32::default();
+						assert_eq!(asset_map[$module::Asset::$example_variant], u32::default());
+
+						assert_eq!(asset_map, $module::AssetMap::<u32>::default());
+					}
+
+				}
+			)+
+			};
+		}
+
+		generic_tests!(
+			any(Eth, Btc, Usdc),
+			eth(Eth, Usdc),
+			btc(Btc),
+			dot(Dot),
+			arb(ArbEth, ArbUsdc)
+		);
+
+		assert_ok!(any::AssetMap::try_from_iter(any::AssetMap::from_fn(|_asset| 1u32).iter()));
 	}
 }

@@ -43,7 +43,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - name: Checkout 🏁
+      - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       - name: Get version from branch name
         id: version
@@ -60,7 +60,7 @@ jobs:
     outputs:
       dockerfile_path: ${{ steps.dockerfile.outputs.dockerfile_path }}
     steps:
-      - name: Set dockerfile name
+      - name: Set dockerfile name 📄
         id: dockerfile
         run: |
           if [[ "${{ inputs.environment }}" == "production" || "${{ inputs.network }}" == "sisyphos" || "${{ inputs.network }}" == "perseverance" ]] ; then
@@ -85,21 +85,21 @@ jobs:
           - chainflip-engine-databases
         docker-repo:
           - ghcr.io/${{ github.repository }}
-    runs-on: ubuntu-22.04
+    runs-on: namespace-profile-rust-builder
     steps:
-      - name: Checkout 🏁
+      - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Download binaries 📥
-        uses: actions/download-artifact@7a1cd3216ca9260cd8022db641d960b1db4d1be4
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
         with:
-          name: chainflip-backend-bin-ubuntu-22.04
+          name: chainflip-backend-bin
 
-      - name: Set up QEMU 🧞
-        uses: docker/setup-qemu-action@68827325e0b33c7199eb31dd4e31fbe9023e06e3
+      - name: Install and configure Namespace CLI 📟
+        uses: namespacelabs/nscloud-setup@v0
 
-      - name: Set up Docker Buildx 🪄
-        uses: docker/setup-buildx-action@f95db51fddba0c2d1ec667646a06c2ce06100226
+      - name: Set up Namespace Buildx 👷
+        uses: namespacelabs/nscloud-setup-buildx-action@v0
 
       - name: Docker meta 📄
         id: meta
@@ -116,7 +116,9 @@ jobs:
             type=ref,event=branch
             type=ref,event=tag,prefix=${{ inputs.network }}-
             type=raw,value=${{ needs.get-version-from-branch-name.outputs.version }},prefix=${{ inputs.network }}-,enable=${{ needs.get-version-from-branch-name.outputs.version != '0.0.0' }}
+            type=raw,value=${{ needs.get-version-from-branch-name.outputs.version }},enable=${{ needs.get-version-from-branch-name.outputs.version != '0.0.0' }}
             type=ref,event=pr
+            type=raw,value=${{ github.sha }},prefix=iet-,enable=${{ matrix.target == 'chainflip-ingress-egress-tracker' && github.ref_name == 'main' }}
 
       - name: Login to Github Container Registry 🔑
         uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
@@ -138,7 +140,6 @@ jobs:
           build-args: |
             BUILD_DATETIME=${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}
             VCS_REF=${{ github.sha }}
-            CHAINSPEC=${{ inputs.network }}
 
       - name: Save tags to tar 📦
         if: inputs.save_tags != ''
@@ -150,7 +151,7 @@ jobs:
 
       - name: Upload image 📤
         if: inputs.save_tags != ''
-        uses: actions/upload-artifact@c7d193f32edcb7bfad88892161225aeda64e9392
+        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
         with:
           name: chainflip-backend-private-images
           path: private
@@ -169,21 +170,21 @@ jobs:
           - chainflip-lp-api
         docker-repo:
           - chainfliplabs
-    runs-on: ubuntu-22.04
+    runs-on: namespace-profile-rust-builder
     steps:
-      - name: Checkout 🏁
+      - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Download binaries 📥
-        uses: actions/download-artifact@7a1cd3216ca9260cd8022db641d960b1db4d1be4
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
         with:
-          name: chainflip-backend-bin-ubuntu-22.04
+          name: chainflip-backend-bin
 
-      - name: Set up QEMU 🧞
-        uses: docker/setup-qemu-action@68827325e0b33c7199eb31dd4e31fbe9023e06e3
+      - name: Install and configure Namespace CLI 📟
+        uses: namespacelabs/nscloud-setup@v0
 
-      - name: Set up Docker Buildx 🪄
-        uses: docker/setup-buildx-action@f95db51fddba0c2d1ec667646a06c2ce06100226
+      - name: Set up Namespace Buildx 👷
+        uses: namespacelabs/nscloud-setup-buildx-action@v0
 
       - name: Docker meta 📄
         id: meta
@@ -200,6 +201,7 @@ jobs:
             type=ref,event=branch
             type=ref,event=tag,prefix=${{ inputs.network }}-
             type=raw,value=${{ needs.get-version-from-branch-name.outputs.version }},prefix=${{ inputs.network }}-,enable=${{ needs.get-version-from-branch-name.outputs.version != '0.0.0' }}
+            type=raw,value=${{ needs.get-version-from-branch-name.outputs.version }},enable=${{ needs.get-version-from-branch-name.outputs.version != '0.0.0' }}
             type=ref,event=pr
 
       - name: Login to DockerHub 🔑
@@ -221,7 +223,6 @@ jobs:
           build-args: |
             BUILD_DATETIME=${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}
             VCS_REF=${{ github.sha }}
-            CHAINSPEC=${{ inputs.network }}
 
       - name: Save image 📦
         if: inputs.save_tags != ''
@@ -233,7 +234,7 @@ jobs:
 
       - name: Upload image 📤
         if: inputs.save_tags != ''
-        uses: actions/upload-artifact@c7d193f32edcb7bfad88892161225aeda64e9392
+        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
         with:
           name: chainflip-backend-public-images
           path: public

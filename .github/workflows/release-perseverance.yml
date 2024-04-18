@@ -10,12 +10,16 @@ concurrency:
 jobs:
   release-checks:
     uses: ./.github/workflows/_03_release_checks.yml
-  bins:
-    needs: [release-checks]
-    uses: ./.github/workflows/_02_retrieve-bins.yml
     secrets: inherit
+  build:
+    needs: [release-checks]
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      profile: "production"
+      binary-subdir: "production"
   docker:
-    needs: [bins]
+    needs: [build]
     uses: ./.github/workflows/_24_docker.yml
     with:
       network: "perseverance"
@@ -23,7 +27,7 @@ jobs:
       publish_public_images: true
     secrets: inherit
   package:
-    needs: [bins]
+    needs: [build]
     uses: ./.github/workflows/_25_package.yml
     with:
       network: "perseverance"

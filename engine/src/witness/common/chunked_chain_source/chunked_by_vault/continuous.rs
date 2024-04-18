@@ -76,9 +76,9 @@ where
 				let unprocessed_indices = {
 					let mut processed_inverse = processed_indices.clone();
 					processed_inverse.invert();
-					processed_inverse.set_range(..epoch.info.0.active_from_block, false);
-					let highest_processed = processed_indices.iter(true).last().map_or(epoch.info.0.active_from_block, |highest_processed| std::cmp::max(highest_processed, epoch.info.0.active_from_block));
-					processed_inverse.set_range(highest_processed.., false);
+					processed_inverse.set_range(..epoch.info.1, false);
+					let next_unprocessed = processed_indices.iter(true).last().map_or(epoch.info.1, |highest_processed| std::cmp::max(Step::forward(highest_processed, 1), epoch.info.1));
+					processed_inverse.set_range(next_unprocessed.., false);
 					processed_inverse
 				};
 
@@ -87,11 +87,20 @@ where
 					stream::unfold(
 						(chain_stream.fuse(), chain_client.clone(), epoch, unprocessed_indices, inprogress_indices, processed_indices),
 						move |(mut chain_stream, chain_client, mut epoch, mut unprocessed_indices, mut inprogress_indices, mut processed_indices)| async move {
+							let is_epoch_complete = |processed_indices: &RleBitmap<Self::Index>, end: Self::Index| {
+								processed_indices.is_superset(&{
+									let mut bitmap = RleBitmap::new(true);
+									bitmap.set_range(..epoch.info.1, false);
+									bitmap.set_range(end.., false);
+									bitmap
+								})
+							};
+
 							loop_select!(
 								let header = chain_stream.next_or_pending() => {
-									let highest_processed = processed_indices.iter(true).last().map_or(epoch.info.0.active_from_block, |highest_processed| std::cmp::max(highest_processed, epoch.info.0.active_from_block));
-									if highest_processed < header.index {
-										for unprocessed_index in Step::forward(highest_processed, 1)..header.index {
+									let next_unprocessed = processed_indices.iter(true).last().map_or(epoch.info.1, |highest_processed| std::cmp::max(Step::forward(highest_processed, 1), epoch.info.1));
+									if next_unprocessed < header.index {
+										for unprocessed_index in next_unprocessed..header.index {
 											if inprogress_indices.len() < MAXIMUM_CONCURRENT_INPROGRESS {
 												inprogress_indices.insert(unprocessed_index, {
 													let chain_client = chain_client.clone();
@@ -113,12 +122,10 @@ where
 
 									break Some((header, (chain_stream, chain_client, epoch, unprocessed_indices, inprogress_indices, processed_indices)))
 								},
-								if epoch.historic_signal.get().is_some() && processed_indices.is_superset(&{
-									let mut bitmap = RleBitmap::new(true);
-									bitmap.set_range(..epoch.info.0.active_from_block, false);
-									bitmap.set_range(epoch.historic_signal.get().unwrap().0.., false);
-									bitmap
-								}) => break None,
+								// Allows the stream to exit while waiting for blocks, if the epoch becomes historic
+								if let true = epoch.historic_signal.clone().wait().map(|(_, historic_at, _)| is_epoch_complete(&processed_indices, historic_at)) => {
+									break None
+								} else disable then if is_epoch_complete(&processed_indices, epoch.historic_signal.get().unwrap().1) => break None,
 								let (_, header) = inprogress_indices.next_or_pending() => {
 									processed_indices.set(header.index, true);
 									let _result = self.store.store(epoch.index, &processed_indices);

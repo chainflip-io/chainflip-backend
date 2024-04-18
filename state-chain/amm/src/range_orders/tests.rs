@@ -4,7 +4,7 @@ use rand::{prelude::Distribution, Rng, SeedableRng};
 
 #[cfg(feature = "slow-tests")]
 use crate::common::MIN_SQRT_PRICE;
-use crate::{common::Side, test_utilities::rng_u256_inclusive_bound};
+use crate::{common::Pairs, test_utilities::rng_u256_inclusive_bound};
 
 use super::*;
 
@@ -59,14 +59,14 @@ fn r_non_zero() {
 #[test]
 fn output_amounts_bounded() {
 	// Note these values are significant over-estimates of the maximum output amount
-	OneToZero::output_amount_delta_floor(
+	QuoteToBase::output_amount_delta_floor(
 		sqrt_price_at_tick(MIN_TICK),
 		sqrt_price_at_tick(MAX_TICK),
 		MAX_TICK_GROSS_LIQUIDITY,
 	)
 	.checked_mul((1 + MAX_TICK - MIN_TICK).into())
 	.unwrap();
-	ZeroToOne::output_amount_delta_floor(
+	BaseToQuote::output_amount_delta_floor(
 		sqrt_price_at_tick(MAX_TICK),
 		sqrt_price_at_tick(MIN_TICK),
 		MAX_TICK_GROSS_LIQUIDITY,
@@ -82,7 +82,7 @@ fn maximum_liquidity_swap() {
 
 	let mut pool_state = PoolState::new(0, MIN_SQRT_PRICE).unwrap();
 
-	let minted_amounts: SideMap<Amount> = (MIN_TICK..0)
+	let minted_amounts: PoolPairsMap<Amount> = (MIN_TICK..0)
 		.map(|lower_tick| (lower_tick, -lower_tick))
 		.map(|(lower_tick, upper_tick)| {
 			pool_state
@@ -98,9 +98,9 @@ fn maximum_liquidity_swap() {
 		})
 		.fold(Default::default(), |acc, x| acc + x);
 
-	let (output, _remaining) = pool_state.swap::<OneToZero>(Amount::MAX, None);
+	let (output, _remaining) = pool_state.swap::<QuoteToBase>(Amount::MAX, None);
 
-	assert!(((minted_amounts[Side::Zero] - (MAX_TICK - MIN_TICK) /* Maximum rounding down by one per swap iteration */)..minted_amounts[Side::Zero]).contains(&output));
+	assert!(((minted_amounts[Pairs::Base] - (MAX_TICK - MIN_TICK) /* Maximum rounding down by one per swap iteration */)..minted_amounts[Pairs::Base]).contains(&output));
 }
 
 #[test]
@@ -157,7 +157,7 @@ fn test_amounts_to_liquidity() {
 						pool_state.inner_amounts_to_liquidity(lower, upper, amounts);
 
 					let maximum_error_from_rounding_amount =
-						[amounts[Side::Zero], amounts[Side::One]]
+						[amounts[Pairs::Base], amounts[Pairs::Quote]]
 							.into_iter()
 							.filter(|amount| !amount.is_zero())
 							.map(|amount| {

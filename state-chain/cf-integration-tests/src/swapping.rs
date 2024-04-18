@@ -1,7 +1,12 @@
 //! Contains tests related to liquidity, pools and swapping
+use std::vec;
+
 use crate::{
 	genesis,
-	network::{setup_account_and_peer_mapping, Cli, Network},
+	network::{
+		fund_authorities_and_join_auction, new_account, register_refund_addresses,
+		setup_account_and_peer_mapping, Cli, Network,
+	},
 	witness_call,
 };
 use cf_amm::{
@@ -13,35 +18,38 @@ use cf_chains::{
 	assets::eth::Asset as EthAsset,
 	eth::{api::EthereumApi, EthereumTrackedData},
 	evm::TransactionFee,
-	CcmChannelMetadata, CcmDepositMetadata, Chain, ChainState, Ethereum, ExecutexSwapAndCall,
-	ForeignChain, ForeignChainAddress, SwapOrigin, TransactionBuilder, TransferAssetParams,
+	CcmChannelMetadata, CcmDepositMetadata, Chain, ChainState, DefaultRetryPolicy, Ethereum,
+	ExecutexSwapAndCall, ForeignChain, ForeignChainAddress, RetryPolicy, SwapOrigin,
+	TransactionBuilder, TransferAssetParams,
 };
 use cf_primitives::{
-	AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, GENESIS_EPOCH, STABLE_ASSET,
+	AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, FLIPPERINOS_PER_FLIP,
+	GENESIS_EPOCH, STABLE_ASSET,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match};
-use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo, LpBalanceApi};
+use cf_traits::{Chainflip, EpochInfo, LpBalanceApi};
 use frame_support::{
 	assert_ok,
 	instances::Instance1,
-	traits::{OnFinalize, OnIdle, OnNewAccount},
+	traits::{OnFinalize, OnIdle},
 };
 use pallet_cf_broadcast::{
-	AwaitingBroadcast, BroadcastAttemptId, BroadcastIdCounter, RequestFailureCallbacks,
-	RequestSuccessCallbacks, ThresholdSignatureData, TransactionSigningAttempt,
+	AwaitingBroadcast, BroadcastIdCounter, RequestFailureCallbacks, RequestSuccessCallbacks,
+	ThresholdSignatureData,
 };
 use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall};
+use pallet_cf_lp::HistoricalEarnedFees;
 use pallet_cf_pools::{OrderId, RangeOrderSize};
-use pallet_cf_swapping::CcmIdCounter;
+use pallet_cf_swapping::{CcmIdCounter, SWAP_DELAY_BLOCKS};
 use sp_core::U256;
 use state_chain_runtime::{
 	chainflip::{
-		address_derivation::AddressDerivation, ChainAddressConverter, EthEnvironment,
-		EthTransactionBuilder,
+		address_derivation::AddressDerivation, ChainAddressConverter, EthTransactionBuilder,
+		EvmEnvironment,
 	},
-	AccountRoles, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
-	EthereumInstance, LiquidityPools, LiquidityProvider, Runtime, RuntimeCall, RuntimeEvent,
-	RuntimeOrigin, Swapping, System, Timestamp, Validator, Weight, Witnesser,
+	EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress, EthereumInstance,
+	LiquidityPools, LiquidityProvider, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping,
+	System, Timestamp, Validator, Weight, Witnesser,
 };
 
 const DORIS: AccountId = AccountId::new([0x11; 32]);
@@ -65,32 +73,6 @@ fn new_pool(unstable_asset: Asset, fee_hundredth_pips: u32, initial_price: Price
 		},)
 	);
 	System::reset_events();
-}
-
-fn new_account(account_id: &AccountId, role: AccountRole) {
-	AccountRoles::on_new_account(account_id);
-	assert_ok!(AccountRoles::register_account_role(account_id, role));
-	assert_events_eq!(
-		Runtime,
-		RuntimeEvent::AccountRoles(pallet_cf_account_roles::Event::AccountRoleRegistered {
-			account_id: account_id.clone(),
-			role,
-		})
-	);
-	System::reset_events();
-}
-
-fn register_refund_addressses(account_id: &AccountId) {
-	for encoded_address in [
-		EncodedAddress::Eth(Default::default()),
-		EncodedAddress::Dot(Default::default()),
-		EncodedAddress::Btc("bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw".as_bytes().to_vec()),
-	] {
-		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
-			RuntimeOrigin::signed(account_id.clone()),
-			encoded_address
-		));
-	}
 }
 
 fn credit_account(account_id: &AccountId, asset: Asset, amount: AssetAmount) {
@@ -202,8 +184,6 @@ fn set_limit_order(
 
 fn setup_pool_and_accounts(assets: Vec<Asset>) {
 	new_account(&DORIS, AccountRole::LiquidityProvider);
-	register_refund_addressses(&DORIS);
-
 	new_account(&ZION, AccountRole::Broker);
 
 	for asset in assets {
@@ -216,23 +196,29 @@ fn setup_pool_and_accounts(assets: Vec<Asset>) {
 
 #[test]
 fn basic_pool_setup_provision_and_swap() {
-	super::genesis::default().build().execute_with(|| {
-		new_pool(Asset::Eth, 0u32, price_at_tick(0).unwrap());
-		new_pool(Asset::Flip, 0u32, price_at_tick(0).unwrap());
+	super::genesis::with_test_defaults()
+	.with_additional_accounts(&[
+		(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
+		(ZION, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+	])
+	.build()
+	.execute_with(|| {
+		new_pool(Asset::Eth, 0, price_at_tick(0).unwrap());
+		new_pool(Asset::Flip, 0, price_at_tick(0).unwrap());
+		register_refund_addresses(&DORIS);
 
-		new_account(&DORIS, AccountRole::LiquidityProvider);
-		register_refund_addressses(&DORIS);
 		credit_account(&DORIS, Asset::Eth, 1_000_000);
 		credit_account(&DORIS, Asset::Flip, 1_000_000);
 		credit_account(&DORIS, Asset::Usdc, 1_000_000);
+		assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Eth));
+		assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Flip));
+		assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Usdc));
 
 		set_limit_order(&DORIS, Asset::Eth, Asset::Usdc, 0, Some(0), 500_000);
 		set_range_order(&DORIS, Asset::Eth, Asset::Usdc, 0, Some(-10..10), 1_000_000);
 
 		set_limit_order(&DORIS, Asset::Flip, Asset::Usdc, 0, Some(0), 500_000);
 		set_range_order(&DORIS, Asset::Flip, Asset::Usdc, 0, Some(-10..10), 1_000_000);
-
-		new_account(&ZION, AccountRole::Broker);
 
 		assert_ok!(Swapping::request_swap_deposit_address(
 			RuntimeOrigin::signed(ZION.clone()),
@@ -241,6 +227,7 @@ fn basic_pool_setup_provision_and_swap() {
 			EncodedAddress::Eth([1u8; 20]),
 			0u16,
 			None,
+			0u16,
 		));
 
 		let deposit_address = <AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
@@ -272,6 +259,9 @@ fn basic_pool_setup_provision_and_swap() {
 		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
 		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(2);
 		state_chain_runtime::AllPalletsWithoutSystem::on_idle(3, Weight::from_parts(1_000_000_000_000, 0));
+		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
+		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(3);
+		state_chain_runtime::AllPalletsWithoutSystem::on_idle(4, Weight::from_parts(1_000_000_000_000, 0));
 
 		let (.., egress_id) = assert_events_match!(
 			Runtime,
@@ -313,12 +303,16 @@ fn basic_pool_setup_provision_and_swap() {
 				},
 			) if egress_ids.contains(&egress_id) => ()
 		);
+
+		assert!(HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Eth));
+		assert!(HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Flip));
+		assert!(HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Usdc));
 	});
 }
 
 #[test]
 fn can_process_ccm_via_swap_deposit_address() {
-	super::genesis::default().build().execute_with(|| {
+	super::genesis::with_test_defaults().build().execute_with(|| {
 		// Setup pool and liquidity
 		setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip]);
 
@@ -337,6 +331,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 			EncodedAddress::Eth([0x02; 20]),
 			0u16,
 			Some(message),
+			0u16
 		));
 
 		// Deposit funds for the ccm.
@@ -369,6 +364,10 @@ fn can_process_ccm_via_swap_deposit_address() {
 		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
 		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(2);
 		state_chain_runtime::AllPalletsWithoutSystem::on_idle(3, Weight::from_parts(1_000_000_000_000, 0));
+
+		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
+		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(3);
+		state_chain_runtime::AllPalletsWithoutSystem::on_idle(4, Weight::from_parts(1_000_000_000_000, 0));
 
 		let (.., egress_id) = assert_events_match!(
 			Runtime,
@@ -421,7 +420,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 
 #[test]
 fn can_process_ccm_via_direct_deposit() {
-	super::genesis::default().build().execute_with(|| {
+	super::genesis::with_test_defaults().build().execute_with(|| {
 		setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip]);
 
 		let gas_budget = 100;
@@ -457,6 +456,10 @@ fn can_process_ccm_via_direct_deposit() {
 		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
 		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(2);
 		state_chain_runtime::AllPalletsWithoutSystem::on_idle(3, Weight::from_parts(1_000_000_000_000, 0));
+
+		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
+		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(3);
+		state_chain_runtime::AllPalletsWithoutSystem::on_idle(4, Weight::from_parts(1_000_000_000_000, 0));
 
 		let (.., egress_id) = assert_events_match!(
 			Runtime,
@@ -509,7 +512,7 @@ fn can_process_ccm_via_direct_deposit() {
 
 #[test]
 fn failed_swaps_are_rolled_back() {
-	super::genesis::default().build().execute_with(|| {
+	super::genesis::with_test_defaults().build().execute_with(|| {
 		setup_pool_and_accounts(vec![Asset::Eth, Asset::Btc]);
 
 		// Get current pool's liquidity
@@ -553,8 +556,10 @@ fn failed_swaps_are_rolled_back() {
 		);
 		System::reset_events();
 
+		let swaps_scheduled_at = System::block_number() + SWAP_DELAY_BLOCKS;
+
 		// Usdc -> Flip swap will fail. All swaps are stalled.
-		Swapping::on_finalize(1);
+		Swapping::on_finalize(swaps_scheduled_at);
 
 		assert_events_match!(
 			Runtime,
@@ -581,7 +586,7 @@ fn failed_swaps_are_rolled_back() {
 
 		// Subsequent swaps will also fail. No swaps should be processed and the Pool liquidity
 		// shouldn't be drained.
-		Swapping::on_finalize(2);
+		Swapping::on_finalize(swaps_scheduled_at + 1);
 		assert_eq!(
 			Some(eth_price),
 			LiquidityPools::current_price(Asset::Eth, STABLE_ASSET)
@@ -597,7 +602,7 @@ fn failed_swaps_are_rolled_back() {
 		setup_pool_and_accounts(vec![Asset::Flip]);
 		System::reset_events();
 
-		Swapping::on_finalize(3);
+		Swapping::on_finalize(swaps_scheduled_at + 2);
 
 		assert_ne!(
 			Some(eth_price),
@@ -666,7 +671,7 @@ fn failed_swaps_are_rolled_back() {
 
 #[test]
 fn ethereum_ccm_can_calculate_gas_limits() {
-	super::genesis::default().build().execute_with(|| {
+	super::genesis::with_test_defaults().build().execute_with(|| {
 		let chain_state = ChainState::<Ethereum> {
 			block_height: 1,
 			tracked_data: EthereumTrackedData {
@@ -683,7 +688,7 @@ fn ethereum_ccm_can_calculate_gas_limits() {
 		assert_eq!(EthereumChainTracking::chain_state(), Some(chain_state));
 
 		let make_ccm_call = |gas_budget: u128| {
-			<EthereumApi<EthEnvironment> as ExecutexSwapAndCall<Ethereum>>::new_unsigned(
+			<EthereumApi<EvmEnvironment> as ExecutexSwapAndCall<Ethereum>>::new_unsigned(
 				TransferAssetParams::<Ethereum> {
 					asset: EthAsset::Flip,
 					amount: 1_000,
@@ -735,36 +740,18 @@ fn ethereum_ccm_can_calculate_gas_limits() {
 fn can_resign_failed_ccm() {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
 			// Setup environments, and rotate into the next epoch.
-			let (mut testnet, backup_nodes) =
-				Network::create(10, &Validator::current_authorities());
-			for node in &backup_nodes {
-				testnet.state_chain_gateway_contract.fund_account(
-					node.clone(),
-					genesis::GENESIS_BALANCE,
-					GENESIS_EPOCH,
-				);
-			}
-			testnet.move_forward_blocks(1);
-			for node in backup_nodes.clone() {
-				Cli::register_as_validator(&node);
-				setup_account_and_peer_mapping(&node);
-				Cli::start_bidding(&node);
-			}
+			let (mut testnet, _genesis, _backup_nodes) =
+				fund_authorities_and_join_auction(MAX_AUTHORITIES);
 
 			testnet.move_to_the_next_epoch();
-			let tx_out_id = AwaitingBroadcast::<Runtime, Instance1>::get(BroadcastAttemptId {
-				broadcast_id: 1,
-				attempt_count: 0,
-			})
-			.unwrap()
-			.broadcast_attempt
-			.transaction_out_id;
+			let tx_out_id =
+				AwaitingBroadcast::<Runtime, Instance1>::get(1).unwrap().transaction_out_id;
 
 			for node in Validator::current_authorities() {
 				// Broadcast success for id 1, which is the rotation transaction.
@@ -780,6 +767,7 @@ fn can_resign_failed_ccm() {
 								gas_used: Default::default()
 							},
 							tx_metadata: Default::default(),
+							transaction_ref: Default::default()
 						}
 					)),
 					<Runtime as Chainflip>::EpochInfo::current_epoch()
@@ -811,25 +799,29 @@ fn can_resign_failed_ccm() {
 			let starting_epoch = Validator::current_epoch();
 			testnet.move_forward_blocks(3);
 			let broadcast_id = BroadcastIdCounter::<Runtime, Instance1>::get();
-			let mut broadcast_attempt_id = BroadcastAttemptId { broadcast_id, attempt_count: 0 };
 
 			// Fail the broadcast
 			for _ in Validator::current_authorities() {
-				let TransactionSigningAttempt { broadcast_attempt: _attempt, nominee } =
-					AwaitingBroadcast::<Runtime, Instance1>::get(broadcast_attempt_id)
-						.unwrap_or_else(|| {
-							panic!(
-								"Failed to get the transaction signing attempt for {:?}.",
-								broadcast_attempt_id,
-							)
-						});
+				let nominee = AwaitingBroadcast::<Runtime, Instance1>::get(broadcast_id)
+					.unwrap_or_else(|| {
+						panic!(
+							"Failed to get the transaction signing attempt for {:?}.",
+							broadcast_id,
+						)
+					})
+					.nominee
+					.unwrap();
 
-				assert_ok!(EthereumBroadcaster::transaction_signing_failure(
+				assert_ok!(EthereumBroadcaster::transaction_failed(
 					RuntimeOrigin::signed(nominee),
-					broadcast_attempt_id,
+					broadcast_id,
 				));
-				testnet.move_forward_blocks(1);
-				broadcast_attempt_id = broadcast_attempt_id.peek_next();
+				testnet.move_forward_blocks(
+					DefaultRetryPolicy::next_attempt_delay(EthereumBroadcaster::attempt_count(
+						broadcast_id,
+					))
+					.unwrap(),
+				);
 			}
 
 			// Upon broadcast failure, the Failure callback is called, and failed CCM is stored.
@@ -878,7 +870,7 @@ fn can_resign_failed_ccm() {
 fn can_handle_failed_vault_transfer() {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
-	super::genesis::default()
+	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
@@ -917,7 +909,7 @@ fn can_handle_failed_vault_transfer() {
 				},
 			));
 
-			System::assert_last_event(RuntimeEvent::EthereumIngressEgress(
+			System::assert_has_event(RuntimeEvent::EthereumIngressEgress(
 				pallet_cf_ingress_egress::Event::<Runtime, Instance1>::TransferFallbackRequested {
 					asset,
 					amount,

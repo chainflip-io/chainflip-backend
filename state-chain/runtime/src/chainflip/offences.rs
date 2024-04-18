@@ -1,6 +1,6 @@
 use crate::Runtime;
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::RuntimeDebug;
+use frame_support::pallet_prelude::RuntimeDebug;
 use pallet_cf_reputation::OffenceList;
 use pallet_grandpa::EquivocationOffence;
 use scale_info::TypeInfo;
@@ -34,6 +34,8 @@ pub enum Offence {
 	GrandpaEquivocation,
 	/// A node failed to participate in key handover.
 	ParticipateKeyHandoverFailed,
+	/// A authority failed to Witness a call in time.
+	FailedToWitnessInTime,
 }
 
 /// Nodes should be excluded from keygen if they have been reported for any of the offences in this
@@ -68,15 +70,9 @@ impl From<pallet_cf_threshold_signature::PalletOffence> for Offence {
 		match offences {
 			pallet_cf_threshold_signature::PalletOffence::ParticipateSigningFailed =>
 				Self::ParticipateSigningFailed,
-		}
-	}
-}
-
-impl From<pallet_cf_vaults::PalletOffence> for Offence {
-	fn from(offences: pallet_cf_vaults::PalletOffence) -> Self {
-		match offences {
-			pallet_cf_vaults::PalletOffence::FailedKeygen => Self::ParticipateKeygenFailed,
-			pallet_cf_vaults::PalletOffence::FailedKeyHandover =>
+			pallet_cf_threshold_signature::PalletOffence::FailedKeygen =>
+				Self::ParticipateKeygenFailed,
+			pallet_cf_threshold_signature::PalletOffence::FailedKeyHandover =>
 				Self::ParticipateKeyHandoverFailed,
 		}
 	}
@@ -86,6 +82,15 @@ impl From<pallet_cf_validator::PalletOffence> for Offence {
 	fn from(offences: pallet_cf_validator::PalletOffence) -> Self {
 		match offences {
 			pallet_cf_validator::PalletOffence::MissedAuthorshipSlot => Self::MissedAuthorshipSlot,
+		}
+	}
+}
+
+impl From<pallet_cf_witnesser::PalletOffence> for Offence {
+	fn from(offences: pallet_cf_witnesser::PalletOffence) -> Self {
+		match offences {
+			pallet_cf_witnesser::PalletOffence::FailedToWitnessInTime =>
+				Self::FailedToWitnessInTime,
 		}
 	}
 }

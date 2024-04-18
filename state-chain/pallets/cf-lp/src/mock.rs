@@ -5,6 +5,8 @@ use cf_chains::{
 	AnyChain, Chain, Ethereum,
 };
 use cf_primitives::{chains::assets, AccountId, ChannelId};
+#[cfg(feature = "runtime-benchmarks")]
+use cf_traits::mocks::fee_payment::MockFeePayment;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
@@ -13,7 +15,9 @@ use cf_traits::{
 	},
 	AccountRoleRegistry,
 };
-use frame_support::{assert_ok, parameter_types, sp_runtime::app_crypto::sp_core::H160};
+use frame_support::{
+	assert_ok, derive_impl, parameter_types, sp_runtime::app_crypto::sp_core::H160,
+};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -58,6 +62,7 @@ parameter_types! {
 	pub const SS58Prefix: u8 = 42;
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -99,6 +104,8 @@ impl crate::Config for Test {
 	type SafeMode = MockRuntimeSafeMode;
 	type WeightInfo = ();
 	type PoolApi = Self;
+	#[cfg(feature = "runtime-benchmarks")]
+	type FeePayment = MockFeePayment<Self>;
 }
 
 pub const LP_ACCOUNT: [u8; 32] = [1u8; 32];

@@ -1,20 +1,21 @@
 use anyhow::Context;
 use cf_chains::dot::PolkadotHash;
-use cf_primitives::{AccountRole, SemVer};
+use cf_primitives::AccountRole;
 use chainflip_engine::{
 	btc::retry_rpc::BtcRetryRpcClient,
 	db::{KeyStore, PersistentKeyDB},
 	dot::retry_rpc::DotRetryRpcClient,
-	eth::{retry_rpc::EthRetryRpcClient, rpc::EthRpcSigningClient},
+	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
 	health, p2p,
 	settings::{CommandLineOptions, Settings, DEFAULT_SETTINGS_DIR},
 	state_chain_observer::{
 		self,
 		client::{
-			chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
+			chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi,
+			storage_api::StorageApi, CreateStateChainClientError, STATE_CHAIN_CONNECTION,
 		},
 	},
-	witness::{self, common::STATE_CHAIN_CONNECTION},
+	witness,
 };
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
@@ -24,15 +25,7 @@ use std::{
 	sync::{atomic::AtomicBool, Arc},
 	time::Duration,
 };
-use utilities::{metrics, task_scope::task_scope, CachedStream};
-
-lazy_static::lazy_static! {
-	static ref CFE_VERSION: SemVer = SemVer {
-		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
-		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
-		patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
-	};
-}
+use utilities::{cached_stream::CachedStream, metrics, task_scope::task_scope};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -66,7 +59,10 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 					&settings.state_chain.signing_key_file,
 					AccountRole::Validator,
 					true,
-					Some((*CFE_VERSION, true)),
+					true,
+					true,
+					// TODO: Pass this in from the CFE runner: PRO-935
+					None,
 				)
 				.await?;
 
@@ -101,11 +97,11 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 				dot_incoming_receiver,
 				btc_outgoing_sender,
 				btc_incoming_receiver,
-				peer_update_sender,
 				p2p_ready_receiver,
 				p2p_fut,
 			) = p2p::start(
 				state_chain_client.clone(),
+				state_chain_stream.clone(),
 				settings.node_p2p.clone(),
 				state_chain_stream.cache().hash,
 			)
@@ -114,19 +110,21 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 
 			scope.spawn(p2p_fut);
 
+			// Use the ceremony id counters from before the initial block so the SCO can process the
+			// events from the initial block.
+			let ceremony_id_counters = state_chain_observer::get_ceremony_id_counters_before_block(
+				state_chain_stream.cache().hash,
+				state_chain_client.clone(),
+			)
+			.await?;
+
 			let (eth_multisig_client, eth_multisig_client_backend_future) =
 				chainflip_engine::multisig::start_client::<EthSigning>(
 					state_chain_client.account_id(),
 					KeyStore::new(db.clone()),
 					eth_incoming_receiver,
 					eth_outgoing_sender,
-					state_chain_client
-						.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
-							state_chain_runtime::Runtime,
-							state_chain_runtime::EthereumInstance,
-						>>(state_chain_stream.cache().hash)
-						.await
-						.context("Failed to get Ethereum CeremonyIdCounter from SC")?,
+					ceremony_id_counters.ethereum,
 				);
 
 			scope.spawn(eth_multisig_client_backend_future);
@@ -137,13 +135,7 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 					KeyStore::new(db.clone()),
 					dot_incoming_receiver,
 					dot_outgoing_sender,
-					state_chain_client
-						.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
-							state_chain_runtime::Runtime,
-							state_chain_runtime::PolkadotInstance,
-						>>(state_chain_stream.cache().hash)
-						.await
-						.context("Failed to get Polkadot CeremonyIdCounter from SC")?,
+					ceremony_id_counters.polkadot,
 				);
 
 			scope.spawn(dot_multisig_client_backend_future);
@@ -154,13 +146,7 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 					KeyStore::new(db.clone()),
 					btc_incoming_receiver,
 					btc_outgoing_sender,
-					state_chain_client
-						.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
-							state_chain_runtime::Runtime,
-							state_chain_runtime::BitcoinInstance,
-						>>(state_chain_stream.cache().hash)
-						.await
-						.context("Failed to get Bitcoin CeremonyIdCounter from SC")?,
+					ceremony_id_counters.bitcoin,
 				);
 
 			scope.spawn(btc_multisig_client_backend_future);
@@ -175,11 +161,33 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 						.await
 						.expect(STATE_CHAIN_CONNECTION),
 				);
-				EthRetryRpcClient::<EthRpcSigningClient>::new(
+				EvmRetryRpcClient::<EvmRpcSigningClient>::new(
 					scope,
 					settings.eth.private_key_file,
 					settings.eth.nodes,
 					expected_eth_chain_id,
+					"eth_rpc",
+					"eth_subscribe",
+					"Ethereum",
+				)?
+			};
+			let arb_client = {
+				let expected_arb_chain_id = web3::types::U256::from(
+					state_chain_client
+						.storage_value::<pallet_cf_environment::ArbitrumChainId<state_chain_runtime::Runtime>>(
+							state_chain_client.latest_finalized_block().hash,
+						)
+						.await
+						.expect(STATE_CHAIN_CONNECTION),
+				);
+				EvmRetryRpcClient::<EvmRpcSigningClient>::new(
+					scope,
+					settings.arb.private_key_file,
+					settings.arb.nodes,
+					expected_arb_chain_id,
+					"arb_rpc",
+					"arb_subscribe",
+					"Arbitrum",
 				)?
 			};
 			let btc_client = {
@@ -208,6 +216,7 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 			witness::start::start(
 				scope,
 				eth_client.clone(),
+				arb_client.clone(),
 				btc_client.clone(),
 				dot_client.clone(),
 				state_chain_client.clone(),
@@ -219,14 +228,14 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 
 			scope.spawn(state_chain_observer::start(
 				state_chain_client.clone(),
-				state_chain_stream.clone(),
+				state_chain_stream,
 				eth_client,
+				arb_client,
 				dot_client,
 				btc_client,
 				eth_multisig_client,
 				dot_multisig_client,
 				btc_multisig_client,
-				peer_update_sender,
 			));
 
 			p2p_ready_receiver.await.unwrap();
@@ -238,4 +247,11 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 		.boxed()
 	})
 	.await
+	.inspect_err(|e| {
+		if let Some(CreateStateChainClientError::CompatibilityError(block_compatibility)) =
+			e.downcast_ref::<CreateStateChainClientError>()
+		{
+			tracing::info!("Block compatibility on shutdown: {:?}", block_compatibility);
+		}
+	})
 }

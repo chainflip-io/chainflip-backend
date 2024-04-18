@@ -1,8 +1,7 @@
 use frame_support::{
 	assert_noop, assert_ok,
-	dispatch::UnfilteredDispatchable,
 	pallet_prelude::DispatchResult,
-	traits::{IntegrityTest, OnFinalize, OnIdle, OnInitialize},
+	traits::{IntegrityTest, OnFinalize, OnIdle, OnInitialize, UnfilteredDispatchable},
 	weights::Weight,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -295,6 +294,7 @@ mod test_examples {
 		type SS58Prefix = ConstU16<42>;
 		type OnSetCode = ();
 		type MaxConsumers = frame_support::traits::ConstU32<5>;
+		type RuntimeTask = ();
 	}
 
 	impl HasAllPallets for Test {

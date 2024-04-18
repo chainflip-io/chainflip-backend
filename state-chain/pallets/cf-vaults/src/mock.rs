@@ -5,29 +5,22 @@ use std::cell::RefCell;
 use super::*;
 use crate as pallet_cf_vaults;
 use cf_chains::{
-	btc,
-	evm::SchnorrVerificationComponents,
-	mocks::{MockAggKey, MockEthereum, MockEthereumChainCrypto},
+	mocks::{MockEthereum, MockEthereumChainCrypto},
 	ApiCall, SetAggKeyWithAggKeyError,
 };
-use cf_primitives::{BroadcastId, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH};
+use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{
-	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode,
-	mocks::{block_height_provider::BlockHeightProvider, threshold_signer::MockThresholdSigner},
-	AccountRoleRegistry,
+	impl_mock_callback, impl_mock_chainflip,
+	mocks::{block_height_provider::BlockHeightProvider, cfe_interface_mock::MockCfeInterface},
 };
 use frame_support::{
-	construct_runtime, parameter_types, traits::UnfilteredDispatchable, StorageHasher,
+	construct_runtime, derive_impl, parameter_types, traits::UnfilteredDispatchable, StorageHasher,
 };
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
-pub type ValidatorId = u64;
-
 thread_local! {
-	pub static BAD_VALIDATORS: RefCell<Vec<ValidatorId>> = RefCell::new(vec![]);
-	pub static SET_AGG_KEY_WITH_AGG_KEY_REQUIRED: RefCell<bool> = RefCell::new(true);
-	pub static SLASHES: RefCell<Vec<u64>> = RefCell::new(Default::default());
+	pub static SET_AGG_KEY_WITH_AGG_KEY_REQUIRED: RefCell<bool> = const { RefCell::new(true) };
 }
 
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -43,11 +36,7 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
 
-pub const ETH_DUMMY_SIG: SchnorrVerificationComponents =
-	SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
-
-pub const BTC_DUMMY_SIG: btc::Signature = [0xcf; 64];
-
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -95,12 +84,12 @@ impl SetAggKeyWithAggKey<MockEthereumChainCrypto> for MockSetAggKeyWithAggKey {
 	fn new_unsigned(
 		old_key: Option<<<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::AggKey>,
 		new_key: <<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-	) -> Result<Self, SetAggKeyWithAggKeyError> {
+	) -> Result<Option<Self>, SetAggKeyWithAggKeyError> {
 		if !SET_AGG_KEY_WITH_AGG_KEY_REQUIRED.with(|cell| *cell.borrow()) {
-			return Err(SetAggKeyWithAggKeyError::NotRequired)
+			return Ok(None)
 		}
 
-		Ok(Self { old_key: old_key.ok_or(SetAggKeyWithAggKeyError::Failed)?, new_key })
+		Ok(Some(Self { old_key: old_key.ok_or(SetAggKeyWithAggKeyError::Failed)?, new_key }))
 	}
 }
 
@@ -149,9 +138,11 @@ impl Broadcaster<MockEthereum> for MockBroadcaster {
 	type ApiCall = MockSetAggKeyWithAggKey;
 	type Callback = MockCallback;
 
-	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> BroadcastId {
+	fn threshold_sign_and_broadcast(
+		_api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		Self::send_broadcast();
-		1
+		(1, 1)
 	}
 
 	fn threshold_sign_and_broadcast_with_callback(
@@ -162,7 +153,9 @@ impl Broadcaster<MockEthereum> for MockBroadcaster {
 		unimplemented!()
 	}
 
-	fn threshold_sign_and_broadcast_rotation_tx(api_call: Self::ApiCall) -> BroadcastId {
+	fn threshold_sign_and_broadcast_rotation_tx(
+		api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		Self::threshold_sign_and_broadcast(api_call)
 	}
 
@@ -184,95 +177,55 @@ parameter_types! {
 	pub const KeygenResponseGracePeriod: u64 = 25;
 }
 
-pub type MockOffenceReporter =
-	cf_traits::mocks::offence_reporting::MockOffenceReporter<ValidatorId, PalletOffence>;
+#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, PartialEq, Eq, RuntimeDebug)]
+pub enum MockRuntimeSafeMode {
+	CodeRed,
+	CodeGreen,
+}
 
-pub struct MockSlasher;
+impl SafeMode for MockRuntimeSafeMode {
+	const CODE_GREEN: Self = MockRuntimeSafeMode::CodeGreen;
+	const CODE_RED: Self = MockRuntimeSafeMode::CodeRed;
+}
 
-impl MockSlasher {
-	pub fn slash_count(validator_id: ValidatorId) -> usize {
-		SLASHES.with(|slashes| slashes.borrow().iter().filter(|id| **id == validator_id).count())
+thread_local! {
+	pub static SAFE_MODE: RefCell<MockRuntimeSafeMode> = const { RefCell::new(MockRuntimeSafeMode::CodeGreen) };
+}
+
+//pub struct MockRuntimeSafeMode;
+impl SetSafeMode<MockRuntimeSafeMode> for MockRuntimeSafeMode {
+	fn set_safe_mode(mode: MockRuntimeSafeMode) {
+		SAFE_MODE.with(|safe_mode| *(safe_mode.borrow_mut()) = mode);
 	}
 }
 
-impl Slashing for MockSlasher {
-	type AccountId = ValidatorId;
-	type BlockNumber = u64;
-	type Balance = u128;
-
-	fn slash(validator_id: &Self::AccountId, _blocks: Self::BlockNumber) {
-		// Count those slashes
-		SLASHES.with(|count| {
-			count.borrow_mut().push(*validator_id);
-		});
-	}
-
-	fn slash_balance(account_id: &Self::AccountId, _amount: FlipBalance) {
-		// Count those slashes
-		SLASHES.with(|count| {
-			count.borrow_mut().push(*account_id);
-		});
-	}
-
-	fn calculate_slash_amount(
-		_account_id: &Self::AccountId,
-		_blocks: Self::BlockNumber,
-	) -> Self::Balance {
-		unimplemented!()
+impl Get<MockRuntimeSafeMode> for MockRuntimeSafeMode {
+	fn get() -> MockRuntimeSafeMode {
+		SAFE_MODE.with(|safe_mode| safe_mode.borrow().clone())
 	}
 }
-
-impl_mock_runtime_safe_mode! { vault: PalletSafeMode<()> }
 
 impl pallet_cf_vaults::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Offence = PalletOffence;
 	type Chain = MockEthereum;
-	type RuntimeCall = RuntimeCall;
-	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
-	type ThresholdSigner = MockThresholdSigner<MockEthereumChainCrypto, RuntimeCall>;
-	type OffenceReporter = MockOffenceReporter;
 	type SetAggKeyWithAggKey = MockSetAggKeyWithAggKey;
 	type WeightInfo = ();
 	type Broadcaster = MockBroadcaster;
 	type SafeMode = MockRuntimeSafeMode;
-	type Slasher = MockSlasher;
 	type ChainTracking = BlockHeightProvider<MockEthereum>;
+	type CfeMultisigRequest = MockCfeInterface;
 }
-
-pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
-pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
-pub const CHARLIE: <Test as frame_system::Config>::AccountId = 789u64;
-pub const GENESIS_AGG_PUB_KEY: MockAggKey = MockAggKey(*b"genk");
-pub const NEW_AGG_PUB_KEY_PRE_HANDOVER: MockAggKey = MockAggKey(*b"next");
-pub const NEW_AGG_PUB_KEY_POST_HANDOVER: MockAggKey = MockAggKey(*b"hand");
-
-pub const MOCK_KEYGEN_RESPONSE_TIMEOUT: u64 = 25;
 
 cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
 		system: Default::default(),
 		vaults_pallet: VaultsPalletConfig {
-			vault_key: Some(GENESIS_AGG_PUB_KEY),
-			deployment_block: 0,
-			keygen_response_timeout: MOCK_KEYGEN_RESPONSE_TIMEOUT,
-			amount_to_slash: FLIPPERINOS_PER_FLIP,
+			deployment_block: Some(0),
+			chain_initialized: true,
 		},
 	},
-	|| {
-		let authorities = BTreeSet::from([ALICE, BOB, CHARLIE]);
-		for id in &authorities {
-			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id)
-				.unwrap();
-		}
-		MockEpochInfo::set_epoch(GENESIS_EPOCH);
-		MockEpochInfo::set_epoch_authority_count(
-			GENESIS_EPOCH,
-			authorities.len() as AuthorityCount,
-		);
-		MockEpochInfo::set_authorities(authorities);
-	},
+	|| {},
 }
 
 pub(crate) fn new_test_ext_no_key() -> TestRunner<()> {

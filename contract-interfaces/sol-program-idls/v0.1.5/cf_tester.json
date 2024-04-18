@@ -1,0 +1,183 @@
+{
+  "version": "0.1.0",
+  "name": "cf_tester",
+  "instructions": [
+    {
+      "name": "initialize",
+      "accounts": [
+        {
+          "name": "dataAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "initializer",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "newAggKey",
+          "type": "publicKey"
+        },
+        {
+          "name": "newGovKey",
+          "type": "publicKey"
+        }
+      ]
+    },
+    {
+      "name": "cfReceiveToken",
+      "accounts": [
+        {
+          "name": "receiverTokenAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "mint",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "instructionSysvar",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "sourceChain",
+          "type": "u32"
+        },
+        {
+          "name": "sourceAddress",
+          "type": "bytes"
+        },
+        {
+          "name": "message",
+          "type": "bytes"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "cfReceiveNative",
+      "accounts": [
+        {
+          "name": "receiverNative",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "instructionSysvar",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "sourceChain",
+          "type": "u32"
+        },
+        {
+          "name": "sourceAddress",
+          "type": "bytes"
+        },
+        {
+          "name": "message",
+          "type": "bytes"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "DataAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "aggKey",
+            "type": "publicKey"
+          },
+          {
+            "name": "govKey",
+            "type": "publicKey"
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "name": "ReceivedCCM",
+      "fields": [
+        {
+          "name": "sourceChain",
+          "type": "u32",
+          "index": false
+        },
+        {
+          "name": "sourceAddress",
+          "type": "bytes",
+          "index": false
+        },
+        {
+          "name": "message",
+          "type": "bytes",
+          "index": false
+        },
+        {
+          "name": "amount",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "remainingPubkeys",
+          "type": {
+            "vec": "publicKey"
+          },
+          "index": false
+        },
+        {
+          "name": "remainingIsSigner",
+          "type": {
+            "vec": "bool"
+          },
+          "index": false
+        },
+        {
+          "name": "remainingIsWritable",
+          "type": {
+            "vec": "bool"
+          },
+          "index": false
+        }
+      ]
+    }
+  ]
+}

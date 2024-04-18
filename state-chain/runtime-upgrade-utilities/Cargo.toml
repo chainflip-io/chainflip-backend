@@ -5,17 +5,34 @@ edition = '2021'
 authors = ['Chainflip <https://chainflip.io>']
 description = 'Chainflip utilities for runtime upgrades.'
 
+[lints]
+workspace = true
+
 [dependencies]
 log = { version = '0.4.16', default-features = false }
+hex-literal = { version = '0.4.1', default-features = false }
 
-sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+5", default-features = false }
-frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+5", default-features = false }
-sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+5", default-features = false }
+sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
+frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
+frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
+sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
 codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = false, features = [
     'derive',
 ] }
 
 [features]
 default = ['std']
-std = ['frame-support/std', 'log/std', 'sp-std/std', 'sp-io/std']
+std = [
+    'codec/std',
+    'frame-support/std',
+    'frame-system/std',
+    'log/std',
+    'sp-std/std',
+    'sp-io/std',
+]
 try-runtime = ['frame-support/try-runtime']
+runtime-benchmarks = [
+    'frame-support/runtime-benchmarks',
+    'frame-system/runtime-benchmarks',
+]

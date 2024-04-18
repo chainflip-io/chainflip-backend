@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use cf_primitives::{CfeCompatibility, SemVer};
 use codec::{Decode, FullCodec};
 use frame_support::{
 	storage::{
@@ -12,7 +13,7 @@ use jsonrpsee::core::RpcResult;
 use sp_core::storage::StorageKey;
 use utilities::context;
 
-use super::SUBSTRATE_BEHAVIOUR;
+use super::{BlockInfo, CFE_VERSION, SUBSTRATE_BEHAVIOUR};
 
 /// This trait extracts otherwise private type information about Substrate storage double maps
 pub trait StorageDoubleMapAssociatedTypes {
@@ -82,7 +83,7 @@ impl<
 	}
 
 	fn _prefix_hash() -> StorageKey {
-		StorageKey(Self::prefix_hash())
+		StorageKey(Self::prefix_hash().to_vec())
 	}
 
 	fn key_from_storage_key(storage_key: &StorageKey) -> Self::Key {
@@ -353,6 +354,37 @@ impl<
 		self.base_rpc_client.storage_map::<StorageMap, _>(block_hash).await
 	}
 }
+
+#[derive(Debug)]
+pub struct BlockCompatibility {
+	pub compatibility: CfeCompatibility,
+	pub cfe_version: SemVer,
+	pub cfe_version_required: SemVer,
+	pub at_block: BlockInfo,
+}
+
+#[async_trait]
+pub trait CheckBlockCompatibility: StorageApi {
+	async fn check_block_compatibility(
+		&self,
+		at_block: BlockInfo,
+	) -> RpcResult<BlockCompatibility> {
+		let version_runtime_requires = self
+			.storage_value::<pallet_cf_environment::CurrentReleaseVersion<state_chain_runtime::Runtime>>(
+				at_block.hash,
+			)
+			.await?;
+
+		Ok(BlockCompatibility {
+			compatibility: CFE_VERSION.compatibility_with_runtime(version_runtime_requires),
+			cfe_version: *CFE_VERSION,
+			cfe_version_required: version_runtime_requires,
+			at_block,
+		})
+	}
+}
+#[async_trait]
+impl<T: StorageApi + Send + Sync + 'static> CheckBlockCompatibility for T {}
 
 #[cfg(test)]
 mod tests {

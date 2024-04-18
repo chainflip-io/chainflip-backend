@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(extract_if)]
+#![feature(map_try_insert)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -7,36 +8,92 @@ mod benchmarking;
 
 pub mod migrations;
 #[cfg(test)]
-mod mock;
+mod mock_btc;
+#[cfg(test)]
+mod mock_eth;
 #[cfg(test)]
 mod tests;
 pub mod weights;
-use cf_runtime_utilities::log_or_panic;
-use frame_support::{pallet_prelude::OptionQuery, sp_runtime::SaturatedConversion, transactional};
-pub use weights::WeightInfo;
+
+mod boost_pool;
+
+use boost_pool::BoostPool;
+
+use frame_support::{pallet_prelude::OptionQuery, transactional};
 
 use cf_chains::{
-	address::{AddressConverter, AddressDerivationApi, AddressDerivationError},
+	address::{
+		AddressConverter, AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress,
+	},
 	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
 	Chain, ChannelLifecycleHooks, ConsolidateCall, DepositChannel, ExecutexSwapAndCall,
-	FeeEstimationApi, FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
+	FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	Asset, AssetAmount, BasisPoints, BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex,
-	ForeignChain, ThresholdSignatureRequestId,
+	Asset, BasisPoints, BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex, ForeignChain,
+	PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId,
 };
+use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	liquidity::LpBalanceApi, AssetConverter, Broadcaster, CcmHandler, Chainflip, DepositApi,
-	DepositHandler, EgressApi, EpochInfo, GetBlockHeight, GetTrackedData,
-	NetworkEnvironmentProvider, SwapDepositHandler,
+	liquidity::{LpBalanceApi, LpDepositHandler},
+	AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter, Broadcaster, CcmHandler,
+	CcmSwapIds, Chainflip, DepositApi, EgressApi, EpochInfo, FeePayment, GetBlockHeight,
+	IngressEgressFeeApi, NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails,
+	SwapDepositHandler, SwapQueueApi, SwapType,
 };
 use frame_support::{
 	pallet_prelude::*,
-	sp_runtime::{traits::Zero, DispatchError, Saturating, TransactionOutcome},
+	sp_runtime::{traits::Zero, DispatchError, Permill, Saturating},
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_std::{vec, vec::Vec};
+use sp_runtime::traits::UniqueSaturatedInto;
+use sp_std::{
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	vec,
+	vec::Vec,
+};
+use strum_macros::EnumIter;
+pub use weights::WeightInfo;
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum BoostStatus {
+	Boosted { prewitnessed_deposit_id: PrewitnessedDepositId, pools: Vec<BoostPoolTier> },
+	NotBoosted,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct PrewitnessedDeposit<C: Chain> {
+	pub asset: C::ChainAsset,
+	pub amount: C::ChainAmount,
+	pub deposit_address: C::ChainAccount,
+	pub block_height: C::ChainBlockNumber,
+	pub deposit_details: C::DepositDetails,
+}
+
+// TODO: use u16 directly so we can dynamically add/remove pools?
+#[derive(
+	Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo, EnumIter,
+)]
+#[repr(u16)]
+pub enum BoostPoolTier {
+	FiveBps = 5,
+	TenBps = 10,
+	ThirtyBps = 30,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct BoostPoolId<C: Chain> {
+	asset: C::ChainAsset,
+	tier: BoostPoolTier,
+}
+pub struct BoostOutput<C: Chain> {
+	used_pools: BTreeMap<BoostPoolTier, C::ChainAmount>,
+	total_fee: C::ChainAmount,
+}
+
+const SORTED_BOOST_TIERS: [BoostPoolTier; 3] =
+	[BoostPoolTier::FiveBps, BoostPoolTier::TenBps, BoostPoolTier::ThirtyBps];
 
 /// Enum wrapper for fetch and egress requests.
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
@@ -95,7 +152,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(7);
 
 /// Calls to the external chains that has failed to be broadcast/accepted by the target chain.
 /// User can use information stored here to query for relevant information to broadcast
@@ -109,18 +166,38 @@ pub struct FailedForeignChainCall {
 	pub original_epoch: EpochIndex,
 }
 
+#[derive(
+	CloneNoBound,
+	RuntimeDebugNoBound,
+	PartialEqNoBound,
+	EqNoBound,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+)]
+#[scale_info(skip_type_params(T, I))]
+pub enum PalletConfigUpdate<T: Config<I>, I: 'static = ()> {
+	/// Set the fixed fee that is burned when opening a channel, denominated in Flipperinos.
+	ChannelOpeningFee { fee: T::Amount },
+	/// Set the minimum deposit allowed for a particular asset.
+	SetMinimumDeposit { asset: TargetChainAsset<T, I>, minimum_deposit: TargetChainAmount<T, I> },
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use cf_chains::{ExecutexSwapAndCall, TransferFallback};
 	use cf_primitives::{BroadcastId, EpochIndex};
+	use cf_traits::{LpDepositHandler, OnDeposit, SwapQueueApi};
 	use core::marker::PhantomData;
 	use frame_support::{
-		storage::with_transaction,
-		traits::{EnsureOrigin, IsType},
+		traits::{ConstU128, EnsureOrigin, IsType},
 		DefaultNoBound,
 	};
-	use sp_std::vec::Vec;
+	use frame_system::WeightInfo as SystemWeightInfo;
+	use sp_runtime::SaturatedConversion;
+	use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 	pub(crate) type ChannelRecycleQueue<T, I> =
 		Vec<(TargetChainBlockNumber<T, I>, TargetChainAccount<T, I>)>;
@@ -140,9 +217,7 @@ pub mod pallet {
 		pub deposit_details: C::DepositDetails,
 	}
 
-	#[derive(
-		CloneNoBound, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen,
-	)]
+	#[derive(CloneNoBound, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T, I))]
 	pub struct DepositChannelDetails<T: Config<I>, I: 'static> {
 		pub deposit_channel: DepositChannel<T::TargetChain>,
@@ -155,11 +230,20 @@ pub mod pallet {
 
 		/// The action to be taken when the DepositChannel is deposited to.
 		pub action: ChannelAction<T::AccountId>,
+		/// The boost fee
+		pub boost_fee: BasisPoints,
+		/// Boost status, indicating whether there is pending boost on the channel
+		pub boost_status: BoostStatus,
 	}
 
 	pub enum IngressOrEgress {
 		Ingress,
 		Egress,
+	}
+
+	pub struct AmountAndFeesWithheld<T: Config<I>, I: 'static> {
+		pub amount_after_fees: TargetChainAmount<T, I>,
+		pub fees_withheld: TargetChainAmount<T, I>,
 	}
 
 	/// Determines the action to take when a deposit is made to a channel.
@@ -181,6 +265,18 @@ pub mod pallet {
 		},
 	}
 
+	/// Contains identifying information about the particular actions that have occurred for a
+	/// particular deposit.
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	pub enum DepositAction<AccountId> {
+		Swap { swap_id: SwapId },
+		LiquidityProvision { lp_account: AccountId },
+		CcmTransfer { principal_swap_id: Option<SwapId>, gas_swap_id: Option<SwapId> },
+		NoAction,
+		BoostersCredited { prewitnessed_deposit_id: PrewitnessedDepositId },
+	}
+
+	/// Tracks funds that are owned by the vault and available for egress.
 	#[derive(
 		CloneNoBound,
 		DefaultNoBound,
@@ -231,11 +327,16 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub deposit_channel_lifetime: TargetChainBlockNumber<T, I>,
 		pub witness_safety_margin: Option<TargetChainBlockNumber<T, I>>,
+		pub dust_limits: Vec<(TargetChainAsset<T, I>, TargetChainAmount<T, I>)>,
 	}
 
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
-			Self { deposit_channel_lifetime: Default::default(), witness_safety_margin: None }
+			Self {
+				deposit_channel_lifetime: Default::default(),
+				witness_safety_margin: None,
+				dust_limits: Default::default(),
+			}
 		}
 	}
 
@@ -244,6 +345,22 @@ pub mod pallet {
 		fn build(&self) {
 			DepositChannelLifetime::<T, I>::put(self.deposit_channel_lifetime);
 			WitnessSafetyMargin::<T, I>::set(self.witness_safety_margin);
+
+			use strum::IntoEnumIterator;
+
+			for asset in TargetChainAsset::<T, I>::iter() {
+				for pool_tier in BoostPoolTier::iter() {
+					BoostPools::<T, I>::set(
+						asset,
+						pool_tier,
+						Some(BoostPool::new(pool_tier as BasisPoints)),
+					);
+				}
+			}
+
+			for (asset, dust_limit) in self.dust_limits.clone() {
+				EgressDustLimit::<T, I>::set(asset, dust_limit.unique_saturated_into());
+			}
 		}
 	}
 
@@ -273,7 +390,8 @@ pub mod pallet {
 		type AddressConverter: AddressConverter;
 
 		/// Pallet responsible for managing Liquidity Providers.
-		type LpBalance: LpBalanceApi<AccountId = Self::AccountId>;
+		type LpBalance: LpBalanceApi<AccountId = Self::AccountId>
+			+ LpDepositHandler<AccountId = Self::AccountId>;
 
 		/// For scheduling swaps.
 		type SwapDepositHandler: SwapDepositHandler<AccountId = Self::AccountId>;
@@ -288,7 +406,8 @@ pub mod pallet {
 			+ ConsolidateCall<Self::TargetChain>;
 
 		/// Get the latest chain state of the target chain.
-		type ChainTracking: GetBlockHeight<Self::TargetChain> + GetTrackedData<Self::TargetChain>;
+		type ChainTracking: GetBlockHeight<Self::TargetChain>
+			+ AdjustedFeeEstimationApi<Self::TargetChain>;
 
 		/// A broadcaster instance.
 		type Broadcaster: Broadcaster<
@@ -298,25 +417,41 @@ pub mod pallet {
 		>;
 
 		/// Provides callbacks for deposit lifecycle events.
-		type DepositHandler: DepositHandler<Self::TargetChain>;
+		type DepositHandler: OnDeposit<Self::TargetChain>;
 
 		type NetworkEnvironment: NetworkEnvironmentProvider;
 
 		/// Allows assets to be converted through the AMM.
 		type AssetConverter: AssetConverter;
 
+		/// For paying the channel opening fee.
+		type FeePayment: FeePayment<Amount = Self::Amount, AccountId = Self::AccountId>;
+
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
+
+		type SwapQueueApi: SwapQueueApi;
 	}
 
 	/// Lookup table for addresses to corresponding deposit channels.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	pub type DepositChannelLookup<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
 		TargetChainAccount<T, I>,
 		DepositChannelDetails<T, I>,
 		OptionQuery,
+	>;
+
+	#[pallet::storage]
+	pub(super) type BoostPools<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		TargetChainAsset<T, I>,
+		Twox64Concat,
+		BoostPoolTier,
+		BoostPool<T::AccountId, T::TargetChain>,
 	>;
 
 	/// Stores the latest channel id used to generate an address.
@@ -354,6 +489,16 @@ pub mod pallet {
 	pub type MinimumDeposit<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, TargetChainAmount<T, I>, ValueQuery>;
 
+	/// Defines the minimum amount aka. dust limit for a single egress i.e. *not* of a batch, but
+	/// the outputs of each individual egress within that batch. If not set, defaults to 1.
+	///
+	/// This is required for bitcoin, for example, where any amount below 600 satoshis is considered
+	/// dust and will be rejected by miners.
+	#[pallet::storage]
+	#[pallet::getter(fn egress_dust_limit)]
+	pub type EgressDustLimit<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, u128, ValueQuery, ConstU128<1>>;
+
 	#[pallet::storage]
 	pub type DepositChannelLifetime<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, TargetChainBlockNumber<T, I>, ValueQuery>;
@@ -379,6 +524,7 @@ pub mod pallet {
 	// Determines the number of block confirmations is required for a block on
 	// an external chain before CFE can submit any witness extrinsics for it.
 	#[pallet::storage]
+	#[pallet::getter(fn witness_safety_margin)]
 	pub type WitnessSafetyMargin<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, TargetChainBlockNumber<T, I>, OptionQuery>;
 
@@ -387,24 +533,45 @@ pub mod pallet {
 	pub type WithheldTransactionFees<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, TargetChainAmount<T, I>, ValueQuery>;
 
+	/// The fixed fee charged for opening a channel, in Flipperinos.
+	#[pallet::storage]
+	#[pallet::getter(fn channel_opening_fee)]
+	pub type ChannelOpeningFee<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, T::Amount, ValueQuery>;
+
+	/// Stores the latest prewitnessed deposit id used.
+	#[pallet::storage]
+	pub type PrewitnessedDepositIdCounter<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, PrewitnessedDepositId, ValueQuery>;
+
+	/// Stores all deposits that have been prewitnessed but not yet finalised.
+	#[pallet::storage]
+	pub type PrewitnessedDeposits<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		ChannelId,
+		Twox64Concat,
+		PrewitnessedDepositId,
+		PrewitnessedDeposit<T::TargetChain>,
+	>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		DepositReceived {
+		DepositFinalised {
 			deposit_address: TargetChainAccount<T, I>,
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
 			deposit_details: <T::TargetChain as Chain>::DepositDetails,
+			// Ingress fee in the deposit asset. i.e. *NOT* the gas asset, if the deposit asset is
+			// a non-gas asset.
+			ingress_fee: TargetChainAmount<T, I>,
+			action: DepositAction<T::AccountId>,
+			channel_id: ChannelId,
 		},
 		AssetEgressStatusChanged {
 			asset: TargetChainAsset<T, I>,
 			disabled: bool,
-		},
-		EgressScheduled {
-			id: EgressId,
-			asset: TargetChainAsset<T, I>,
-			amount: AssetAmount,
-			destination_address: TargetChainAccount<T, I>,
 		},
 		CcmBroadcastRequested {
 			broadcast_id: BroadcastId,
@@ -462,8 +629,56 @@ pub mod pallet {
 		UtxoConsolidation {
 			broadcast_id: BroadcastId,
 		},
+		FailedToBuildAllBatchCall {
+			error: AllBatchError,
+		},
+		ChannelOpeningFeePaid {
+			fee: T::Amount,
+		},
+		ChannelOpeningFeeSet {
+			fee: T::Amount,
+		},
+		DepositBoosted {
+			deposit_address: TargetChainAccount<T, I>,
+			asset: TargetChainAsset<T, I>,
+			amounts: BTreeMap<BoostPoolTier, TargetChainAmount<T, I>>,
+			deposit_details: <T::TargetChain as Chain>::DepositDetails,
+			prewitnessed_deposit_id: PrewitnessedDepositId,
+			channel_id: ChannelId,
+			// Ingress fee in the deposit asset. i.e. *NOT* the gas asset, if the deposit asset is
+			// a non-gas asset. The ingress fee is taken *after* the boost fee.
+			ingress_fee: TargetChainAmount<T, I>,
+			// Total fee the user paid for their deposit to be boosted.
+			boost_fee: TargetChainAmount<T, I>,
+			action: DepositAction<T::AccountId>,
+		},
+		BoostFundsAdded {
+			booster_id: T::AccountId,
+			boost_pool: BoostPoolId<T::TargetChain>,
+			amount: TargetChainAmount<T, I>,
+		},
+		StoppedBoosting {
+			booster_id: T::AccountId,
+			boost_pool: BoostPoolId<T::TargetChain>,
+			// When we stop boosting, the amount in the pool that isn't currently pending
+			// finalisation can be returned immediately.
+			unlocked_amount: TargetChainAmount<T, I>,
+			// The ids of the boosts that are pending finalisation, such that the funds can then be
+			// returned to the user's free balance when the finalisation occurs.
+			pending_boosts: BTreeSet<PrewitnessedDepositId>,
+		},
+		InsufficientBoostLiquidity {
+			prewitnessed_deposit_id: PrewitnessedDepositId,
+			asset: TargetChainAsset<T, I>,
+			amount_attempted: TargetChainAmount<T, I>,
+			channel_id: ChannelId,
+		},
+		BoostPoolCreated {
+			boost_pool: BoostPoolId<T::TargetChain>,
+		},
 	}
 
+	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
 		/// The deposit address is not valid. It may have expired or may never have been issued.
@@ -478,59 +693,104 @@ pub mod pallet {
 		MissingBitcoinVault,
 		/// Channel ID is too large for Bitcoin address derivation
 		BitcoinChannelIdTooLarge,
+		/// The amount is below the minimum egress amount.
+		BelowEgressDustLimit,
 	}
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		/// Recycle addresses if we can
 		fn on_idle(_n: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
-			let read_write_weight =
-				frame_support::weights::constants::RocksDbWeight::get().reads_writes(1, 1);
+			let mut used_weight = Weight::zero();
 
-			let maximum_recycle_number = remaining_weight
+			// Approximate weight calculation: r/w DepositChannelLookup + r PrewitnessedDeposits +
+			// w DepositChannelPool + 1 clear_prewitnessed_deposits
+			let recycle_weight_per_address =
+				frame_support::weights::constants::RocksDbWeight::get()
+					.reads_writes(2, 2)
+					.saturating_add(T::WeightInfo::clear_prewitnessed_deposits(1));
+
+			let maximum_addresses_to_recycle = remaining_weight
 				.ref_time()
-				.checked_div(read_write_weight.ref_time())
+				.checked_div(recycle_weight_per_address.ref_time())
 				.unwrap_or_default()
 				.saturated_into::<usize>();
 
-			let can_recycle = DepositChannelRecycleBlocks::<T, I>::mutate(|recycle_queue| {
-				Self::can_and_cannot_recycle(
-					recycle_queue,
-					maximum_recycle_number,
-					T::ChainTracking::get_block_height(),
-				)
-			});
+			let addresses_to_recycle =
+				DepositChannelRecycleBlocks::<T, I>::mutate(|recycle_queue| {
+					Self::take_recyclable_addresses(
+						recycle_queue,
+						maximum_addresses_to_recycle,
+						T::ChainTracking::get_block_height(),
+					)
+				});
 
-			for address in can_recycle.iter() {
-				if let Some(details) = DepositChannelLookup::<T, I>::take(address) {
-					if let Some(state) = details.deposit_channel.state.maybe_recycle() {
+			// Add weight for the DepositChannelRecycleBlocks read/write plus the
+			// DepositChannelLookup read/writes in the for loop below
+			used_weight = used_weight.saturating_add(
+				frame_support::weights::constants::RocksDbWeight::get().reads_writes(
+					(addresses_to_recycle.len() + 1) as u64,
+					(addresses_to_recycle.len() + 1) as u64,
+				),
+			);
+
+			for address in addresses_to_recycle.iter() {
+				if let Some(DepositChannelDetails { deposit_channel, boost_status, .. }) =
+					DepositChannelLookup::<T, I>::take(address)
+				{
+					if let Some(state) = deposit_channel.state.maybe_recycle() {
 						DepositChannelPool::<T, I>::insert(
-							details.deposit_channel.channel_id,
-							DepositChannel { state, ..details.deposit_channel },
+							deposit_channel.channel_id,
+							DepositChannel { state, ..deposit_channel },
+						);
+						used_weight = used_weight.saturating_add(
+							frame_support::weights::constants::RocksDbWeight::get()
+								.reads_writes(0, 1),
 						);
 					}
+					let removed_deposits =
+						Self::clear_prewitnessed_deposits(deposit_channel.channel_id);
+
+					if let BoostStatus::Boosted { prewitnessed_deposit_id, pools } = boost_status {
+						for pool_tier in pools {
+							BoostPools::<T, I>::mutate(deposit_channel.asset, pool_tier, |pool| {
+								if let Some(pool) = pool {
+									let affected_boosters_count =
+										pool.on_lost_deposit(prewitnessed_deposit_id);
+									used_weight.saturating_accrue(T::WeightInfo::on_lost_deposit(
+										affected_boosters_count as u32,
+									));
+								} else {
+									log_or_panic!(
+										"Pool must exist: ({pool_tier:?}, {:?})",
+										deposit_channel.asset
+									);
+								}
+							});
+						}
+					}
+
+					used_weight = used_weight.saturating_add(
+						T::WeightInfo::clear_prewitnessed_deposits(removed_deposits),
+					);
 				}
 			}
-
-			read_write_weight.saturating_mul(can_recycle.len() as u64)
+			used_weight
 		}
 
 		/// Take all scheduled Egress and send them out
 		fn on_finalize(_n: BlockNumberFor<T>) {
 			// Send all fetch/transfer requests as a batch. Revert storage if failed.
-			if let Err(e) = with_transaction(|| Self::do_egress_scheduled_fetch_transfer()) {
-				log::error!("Ingress-Egress failed to send BatchAll. Error: {e:?}");
+			if let Err(error) = Self::do_egress_scheduled_fetch_transfer() {
+				Self::deposit_event(Event::<T, I>::FailedToBuildAllBatchCall { error });
 			}
 
 			if let Ok(egress_transaction) =
 				<T::ChainApiCall as ConsolidateCall<T::TargetChain>>::consolidate_utxos()
 			{
-				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
+				let (broadcast_id, _) =
+					T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
 				Self::deposit_event(Event::<T, I>::UtxoConsolidation { broadcast_id });
-				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
-					broadcast_id,
-					egress_ids: Default::default(),
-				});
 			};
 
 			// Egress all scheduled Cross chain messages
@@ -539,9 +799,17 @@ pub mod pallet {
 			// Process failed external chain calls: re-sign or cull storage.
 			// Take 1 call per block to avoid weight spike.
 			let current_epoch = T::EpochInfo::epoch_index();
-			if let Some(call) =
-				FailedForeignChainCalls::<T, I>::mutate(current_epoch.saturating_sub(1), Vec::pop)
-			{
+			if let Some(call) = FailedForeignChainCalls::<T, I>::mutate_exists(
+				current_epoch.saturating_sub(1),
+				|calls| {
+					let next_call = calls.as_mut().and_then(Vec::pop);
+					if calls.as_ref().map(Vec::len).unwrap_or_default() == 0 {
+						// Ensures we remove the storage if there are no more calls.
+						*calls = None;
+					}
+					next_call
+				},
+			) {
 				match current_epoch.saturating_sub(call.original_epoch) {
 					// The call is stale, clean up storage.
 					n if n >= 2 => {
@@ -551,7 +819,7 @@ pub mod pallet {
 						});
 					},
 					// Previous epoch, signature is invalid. Re-sign and store.
-					n if n == 1 => {
+					1 => {
 						if let Some(threshold_signature_id) =
 							T::Broadcaster::threshold_resign(call.broadcast_id)
 						{
@@ -638,58 +906,23 @@ pub mod pallet {
 
 		/// Called when funds have been deposited into the given address.
 		///
-		/// Requires `EnsureWitnessed` origin.
+		/// Requires `EnsurePrewitnessed` or `EnsureWitnessed` origin.
+		///
+		/// We calculate weight assuming the most expensive code path is taken, i.e. the deposit
+		/// had been boosted and is now being finalised
 		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::process_single_deposit().saturating_mul(deposit_witnesses.len() as u64))]
+		#[pallet::weight(T::WeightInfo::boost_finalised().saturating_mul(deposit_witnesses.len() as u64))]
 		pub fn process_deposits(
 			origin: OriginFor<T>,
 			deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
 			block_height: TargetChainBlockNumber<T, I>,
 		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			for ref deposit_witness @ DepositWitness {
-				ref deposit_address,
-				asset,
-				amount,
-				ref deposit_details,
-			} in deposit_witnesses
-			{
-				Self::process_single_deposit(
-					deposit_address.clone(),
-					asset,
-					amount,
-					deposit_details.clone(),
-					block_height,
-				)
-				.unwrap_or_else(|e| {
-					Self::deposit_event(Event::<T, I>::DepositWitnessRejected {
-						reason: e,
-						deposit_witness: deposit_witness.clone(),
-					});
-				})
+			if T::EnsurePrewitnessed::ensure_origin(origin.clone()).is_ok() {
+				Self::add_prewitnessed_deposits(deposit_witnesses, block_height)?;
+			} else {
+				T::EnsureWitnessed::ensure_origin(origin)?;
+				Self::process_deposit_witnesses(deposit_witnesses, block_height)?;
 			}
-			Ok(())
-		}
-
-		/// Sets the minimum deposit amount allowed for an asset.
-		/// Requires governance
-		///
-		/// ## Events
-		///
-		/// - [on_success](Event::MinimumDepositSet)
-		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::set_minimum_deposit())]
-		pub fn set_minimum_deposit(
-			origin: OriginFor<T>,
-			asset: TargetChainAsset<T, I>,
-			minimum_deposit: TargetChainAmount<T, I>,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-
-			MinimumDeposit::<T, I>::insert(asset, minimum_deposit);
-
-			Self::deposit_event(Event::<T, I>::MinimumDepositSet { asset, minimum_deposit });
 			Ok(())
 		}
 
@@ -765,18 +998,108 @@ pub mod pallet {
 			Self::deposit_event(Event::<T, I>::CcmBroadcastFailed { broadcast_id });
 			Ok(())
 		}
+
+		/// Apply a list of configuration updates to the pallet.
+		///
+		/// Requires Governance.
+		#[pallet::call_index(6)]
+		#[pallet::weight(<T as frame_system::Config>::SystemWeightInfo::set_storage(updates.len() as u32))]
+		pub fn update_pallet_config(
+			origin: OriginFor<T>,
+			updates: BoundedVec<PalletConfigUpdate<T, I>, ConstU32<10>>,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			for update in updates {
+				match update {
+					PalletConfigUpdate::<T, I>::ChannelOpeningFee { fee } => {
+						let fee = fee.unique_saturated_into();
+						ChannelOpeningFee::<T, I>::set(fee);
+						Self::deposit_event(Event::<T, I>::ChannelOpeningFeeSet { fee });
+					},
+					PalletConfigUpdate::<T, I>::SetMinimumDeposit { asset, minimum_deposit } => {
+						MinimumDeposit::<T, I>::insert(asset, minimum_deposit);
+						Self::deposit_event(Event::<T, I>::MinimumDepositSet {
+							asset,
+							minimum_deposit,
+						});
+					},
+				}
+			}
+
+			Ok(())
+		}
+
+		#[pallet::call_index(7)]
+		#[pallet::weight(T::WeightInfo::add_boost_funds())]
+		pub fn add_boost_funds(
+			origin: OriginFor<T>,
+			asset: TargetChainAsset<T, I>,
+			amount: TargetChainAmount<T, I>,
+			pool_tier: BoostPoolTier,
+		) -> DispatchResult {
+			let booster_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+
+			T::LpBalance::try_debit_account(&booster_id, asset.into(), amount.into())?;
+
+			BoostPools::<T, I>::mutate(asset, pool_tier, |pool| {
+				let pool =
+					pool.as_mut().ok_or_else(|| DispatchError::from("Boost pool must exist"))?;
+				pool.add_funds(booster_id.clone(), amount);
+
+				Ok::<(), DispatchError>(())
+			})?;
+
+			Self::deposit_event(Event::<T, I>::BoostFundsAdded {
+				booster_id,
+				boost_pool: BoostPoolId { asset, tier: pool_tier },
+				amount,
+			});
+
+			Ok(())
+		}
+
+		#[pallet::call_index(8)]
+		#[pallet::weight(T::WeightInfo::stop_boosting())]
+		pub fn stop_boosting(
+			origin: OriginFor<T>,
+			asset: TargetChainAsset<T, I>,
+			pool_tier: BoostPoolTier,
+		) -> DispatchResult {
+			let booster = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+
+			let (unlocked_amount, pending_boosts) =
+				BoostPools::<T, I>::mutate(asset, pool_tier, |pool| {
+					let pool = pool
+						.as_mut()
+						.ok_or_else(|| DispatchError::from("Boost pool must exist"))?;
+
+					pool.stop_boosting(booster.clone())
+				})?;
+
+			T::LpBalance::try_credit_account(&booster, asset.into(), unlocked_amount.into())?;
+
+			Self::deposit_event(Event::StoppedBoosting {
+				booster_id: booster,
+				boost_pool: BoostPoolId { asset, tier: pool_tier },
+				unlocked_amount,
+				pending_boosts,
+			});
+
+			Ok(())
+		}
 	}
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	fn can_and_cannot_recycle(
+	fn take_recyclable_addresses(
 		channel_recycle_blocks: &mut ChannelRecycleQueue<T, I>,
-		maximum_recyclable_number: usize,
+		maximum_addresses_to_take: usize,
 		current_block_height: TargetChainBlockNumber<T, I>,
 	) -> Vec<TargetChainAccount<T, I>> {
 		let partition_point = sp_std::cmp::min(
 			channel_recycle_blocks.partition_point(|(block, _)| *block <= current_block_height),
-			maximum_recyclable_number,
+			maximum_addresses_to_take,
 		);
 		channel_recycle_blocks
 			.drain(..partition_point)
@@ -784,10 +1107,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.collect()
 	}
 
+	// Clears all prewitnessed deposits for a given channel, returning the number of items removed.
+	fn clear_prewitnessed_deposits(channel_id: ChannelId) -> u32 {
+		let item_count = PrewitnessedDeposits::<T, I>::iter_prefix(channel_id).count() as u32;
+		// TODO: find out why clear_prefix returns 0 and ignores the given limit.
+		let _removed = PrewitnessedDeposits::<T, I>::clear_prefix(channel_id, item_count, None);
+		item_count
+	}
+
 	/// Take all scheduled egress requests and send them out in an `AllBatch` call.
 	///
 	/// Note: Egress transactions with Blacklisted assets are not sent, and kept in storage.
-	fn do_egress_scheduled_fetch_transfer() -> TransactionOutcome<DispatchResult> {
+	#[transactional]
+	fn do_egress_scheduled_fetch_transfer() -> Result<(), AllBatchError> {
 		let batch_to_send: Vec<_> =
 			ScheduledEgressFetchOrTransfer::<T, I>::mutate(|requests: &mut Vec<_>| {
 				// Filter out disabled assets and requests that are not ready to be egressed.
@@ -829,7 +1161,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			});
 
 		if batch_to_send.is_empty() {
-			return TransactionOutcome::Commit(Ok(()))
+			return Ok(())
 		}
 
 		let mut fetch_params = vec![];
@@ -863,15 +1195,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					egress_ids.push(egress_id);
 					transfer_params.push(TransferAssetParams {
 						asset,
-						amount: Self::withhold_transaction_fee(
-							IngressOrEgress::Egress,
-							asset,
-							amount,
-						),
+						amount,
 						to: destination_address,
-					});
-					DepositBalances::<T, I>::mutate(asset, |tracker| {
-						tracker.register_transfer(amount);
 					});
 				},
 			}
@@ -892,12 +1217,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					broadcast_id,
 					egress_ids,
 				});
-				TransactionOutcome::Commit(Ok(()))
+				Ok(())
 			},
-			Err(AllBatchError::NotRequired) => TransactionOutcome::Commit(Ok(())),
-			Err(AllBatchError::Other) => TransactionOutcome::Rollback(Err(DispatchError::Other(
-				"AllBatch ApiCall creation failed, rolled back storage",
-			))),
+			Err(AllBatchError::NotRequired) => Ok(()),
+			Err(other) => Err(other),
 		}
 	}
 
@@ -942,6 +1265,254 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
+	fn process_deposit_witnesses(
+		deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
+		block_height: TargetChainBlockNumber<T, I>,
+	) -> DispatchResult {
+		for ref deposit_witness @ DepositWitness {
+			ref deposit_address,
+			asset,
+			amount,
+			ref deposit_details,
+		} in deposit_witnesses
+		{
+			Self::process_single_deposit(
+				deposit_address.clone(),
+				asset,
+				amount,
+				deposit_details.clone(),
+				block_height,
+			)
+			.unwrap_or_else(|e| {
+				Self::deposit_event(Event::<T, I>::DepositWitnessRejected {
+					reason: e,
+					deposit_witness: deposit_witness.clone(),
+				});
+			})
+		}
+		Ok(())
+	}
+
+	/// Returns a list of contributions from the used pools and the total boost fee.
+	#[transactional]
+	fn try_boosting(
+		asset: TargetChainAsset<T, I>,
+		required_amount: TargetChainAmount<T, I>,
+		max_boost_fee_bps: BasisPoints,
+		prewitnessed_deposit_id: PrewitnessedDepositId,
+	) -> Result<BoostOutput<T::TargetChain>, DispatchError> {
+		let mut remaining_amount = required_amount;
+
+		let mut total_fee_amount: TargetChainAmount<T, I> = 0u32.into();
+
+		let mut used_pools = BTreeMap::new();
+
+		for boost_tier in SORTED_BOOST_TIERS {
+			if boost_tier as u16 > max_boost_fee_bps {
+				break
+			}
+
+			// For each fee tier, get the amount that the pool is boosting and the boost fee
+			let (boosted_amount, fee) = BoostPools::<T, I>::mutate(asset, boost_tier, |pool| {
+				let pool = match pool {
+					Some(pool) if pool.get_available_amount() == Zero::zero() => {
+						return Ok::<_, DispatchError>((0u32.into(), 0u32.into()));
+					},
+					None => {
+						// Pool not existing for some reason is equivalent to not having funds:
+						return Ok::<_, DispatchError>((0u32.into(), 0u32.into()));
+					},
+					Some(pool) => pool,
+				};
+
+				pool.provide_funds_for_boosting(prewitnessed_deposit_id, remaining_amount)
+					.map_err(Into::into)
+			})?;
+
+			if !boosted_amount.is_zero() {
+				used_pools.insert(boost_tier, boosted_amount);
+			}
+
+			remaining_amount.saturating_reduce(boosted_amount);
+			total_fee_amount.saturating_accrue(fee);
+
+			if remaining_amount == 0u32.into() {
+				return Ok(BoostOutput { used_pools, total_fee: total_fee_amount });
+			}
+		}
+
+		Err("Insufficient boost funds".into())
+	}
+
+	fn add_prewitnessed_deposits(
+		deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
+		block_height: TargetChainBlockNumber<T, I>,
+	) -> DispatchResult {
+		for DepositWitness { deposit_address, asset, amount, deposit_details } in deposit_witnesses
+		{
+			if amount < MinimumDeposit::<T, I>::get(asset) {
+				// We do not process/record pre-witnessed deposits for amounts smaller
+				// than MinimumDeposit to match how this is done on finalisation
+				continue;
+			}
+
+			let prewitnessed_deposit_id =
+				PrewitnessedDepositIdCounter::<T, I>::mutate(|id| -> u64 {
+					*id = id.saturating_add(1);
+					*id
+				});
+
+			let DepositChannelDetails { deposit_channel, action, boost_fee, boost_status, .. } =
+				DepositChannelLookup::<T, I>::get(&deposit_address)
+					.ok_or(Error::<T, I>::InvalidDepositAddress)?;
+
+			let channel_id = deposit_channel.channel_id;
+
+			PrewitnessedDeposits::<T, I>::insert(
+				channel_id,
+				prewitnessed_deposit_id,
+				PrewitnessedDeposit {
+					asset,
+					amount,
+					deposit_address: deposit_address.clone(),
+					block_height,
+					deposit_details: deposit_details.clone(),
+				},
+			);
+
+			// Only boost on non-zero fee and if the channel isn't already boosted:
+			if boost_fee > 0 && !matches!(boost_status, BoostStatus::Boosted { .. }) {
+				match Self::try_boosting(asset, amount, boost_fee, prewitnessed_deposit_id) {
+					Ok(BoostOutput { used_pools, total_fee: boost_fee_amount }) => {
+						DepositChannelLookup::<T, I>::mutate(&deposit_address, |details| {
+							if let Some(details) = details {
+								details.boost_status = BoostStatus::Boosted {
+									prewitnessed_deposit_id,
+									pools: used_pools.keys().cloned().collect(),
+								};
+							}
+						});
+
+						let amount_after_boost_fee = amount.saturating_sub(boost_fee_amount);
+
+						// Note that ingress fee is deducted at the time of boosting rather than the
+						// time the deposit is finalised (which allows us to perform the channel
+						// action immediately):
+						let AmountAndFeesWithheld { amount_after_fees, fees_withheld: ingress_fee } =
+							Self::withhold_ingress_or_egress_fee(
+								IngressOrEgress::Ingress,
+								asset,
+								amount_after_boost_fee,
+							);
+
+						let action = Self::perform_channel_action(
+							action,
+							deposit_channel,
+							amount_after_fees,
+							block_height,
+						)?;
+
+						Self::deposit_event(Event::DepositBoosted {
+							deposit_address: deposit_address.clone(),
+							asset,
+							amounts: used_pools,
+							prewitnessed_deposit_id,
+							channel_id,
+							deposit_details: deposit_details.clone(),
+							ingress_fee,
+							boost_fee: boost_fee_amount,
+							action,
+						});
+					},
+					Err(err) => {
+						Self::deposit_event(Event::InsufficientBoostLiquidity {
+							prewitnessed_deposit_id,
+							asset,
+							amount_attempted: amount,
+							channel_id,
+						});
+						log::debug!(
+							"Deposit (id: {prewitnessed_deposit_id}) of {amount:?} {asset:?} and boost fee {boost_fee} could not be boosted: {err:?}"
+						);
+					},
+				}
+			}
+		}
+		Ok(())
+	}
+
+	fn perform_channel_action(
+		action: ChannelAction<T::AccountId>,
+		DepositChannel { asset, address: deposit_address, channel_id, .. }: DepositChannel<
+			T::TargetChain,
+		>,
+		amount_after_fees: TargetChainAmount<T, I>,
+		block_height: TargetChainBlockNumber<T, I>,
+	) -> Result<DepositAction<T::AccountId>, DispatchError> {
+		let action = match action {
+			ChannelAction::LiquidityProvision { lp_account, .. } => {
+				T::LpBalance::add_deposit(&lp_account, asset.into(), amount_after_fees.into())?;
+
+				DepositAction::LiquidityProvision { lp_account }
+			},
+			ChannelAction::Swap {
+				destination_address,
+				destination_asset,
+				broker_id,
+				broker_commission_bps,
+				..
+			} => DepositAction::Swap {
+				swap_id: T::SwapDepositHandler::schedule_swap_from_channel(
+					<<T::TargetChain as Chain>::ChainAccount as IntoForeignChainAddress<
+						T::TargetChain,
+					>>::into_foreign_chain_address(deposit_address.clone()),
+					block_height.into(),
+					asset.into(),
+					destination_asset,
+					amount_after_fees.into(),
+					destination_address,
+					broker_id,
+					broker_commission_bps,
+					channel_id,
+				),
+			},
+			ChannelAction::CcmTransfer {
+				destination_asset,
+				destination_address,
+				channel_metadata,
+				..
+			} => {
+				if let Ok(CcmSwapIds { principal_swap_id, gas_swap_id }) =
+					T::CcmHandler::on_ccm_deposit(
+						asset.into(),
+						amount_after_fees.into(),
+						destination_asset,
+						destination_address,
+						CcmDepositMetadata {
+							source_chain: asset.into(),
+							source_address: None,
+							channel_metadata,
+						},
+						SwapOrigin::DepositChannel {
+							deposit_address: T::AddressConverter::to_encoded_address(
+								<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(
+									deposit_address.clone(),
+								),
+							),
+							channel_id,
+							deposit_block_height: block_height.into(),
+						},
+					) {
+					DepositAction::CcmTransfer { principal_swap_id, gas_swap_id }
+				} else {
+					DepositAction::NoAction
+				}
+			},
+		};
+
+		Ok(action)
+	}
+
 	/// Completes a single deposit request.
 	#[transactional]
 	fn process_single_deposit(
@@ -970,6 +1541,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Error::<T, I>::AssetMismatch
 		);
 
+		// TODO: only apply this check if the deposit hasn't been boosted
+		// already (in case MinimumDeposit increases after some small deposit
+		// is boosted)?
+
 		if deposit_amount < MinimumDeposit::<T, I>::get(asset) {
 			// If the deposit amount is below the minimum allowed, the deposit is ignored.
 			// TODO: track these funds somewhere, for example add them to the withheld fees.
@@ -991,86 +1566,134 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 		Self::deposit_event(Event::<T, I>::DepositFetchesScheduled { channel_id, asset });
 
-		let net_deposit_amount = Self::withhold_transaction_fee(
-			IngressOrEgress::Ingress,
-			deposit_channel_details.deposit_channel.asset,
-			deposit_amount,
-		);
-
 		// Add the deposit to the balance.
 		T::DepositHandler::on_deposit_made(
 			deposit_details.clone(),
 			deposit_amount,
-			deposit_channel_details.deposit_channel,
+			&deposit_channel_details.deposit_channel,
 		);
-		DepositBalances::<T, I>::mutate(asset, |deposits| {
-			deposits.register_deposit(net_deposit_amount)
-		});
 
-		if net_deposit_amount.is_zero() {
-			Self::deposit_event(Event::<T, I>::DepositIgnored {
-				deposit_address,
-				asset,
-				amount: deposit_amount,
-				deposit_details,
-				reason: DepositIgnoredReason::NotEnoughToPayFees,
-			});
-		} else {
-			match deposit_channel_details.action {
-				ChannelAction::LiquidityProvision { lp_account, .. } =>
-					T::LpBalance::try_credit_account(
-						&lp_account,
-						asset.into(),
-						net_deposit_amount.into(),
-					)?,
-				ChannelAction::Swap {
-					destination_address,
-					destination_asset,
-					broker_id,
-					broker_commission_bps,
-					..
-				} => T::SwapDepositHandler::schedule_swap_from_channel(
-					deposit_address.clone().into(),
-					block_height.into(),
-					asset.into(),
-					destination_asset,
-					net_deposit_amount.into(),
-					destination_address,
-					broker_id,
-					broker_commission_bps,
-					channel_id,
-				),
-				ChannelAction::CcmTransfer {
-					destination_asset,
-					destination_address,
-					channel_metadata,
-					..
-				} => T::CcmHandler::on_ccm_deposit(
-					asset.into(),
-					net_deposit_amount.into(),
-					destination_asset,
-					destination_address,
-					CcmDepositMetadata {
-						source_chain: asset.into(),
-						source_address: None,
-						channel_metadata,
+		let maybe_boost_to_process =
+			if let BoostStatus::Boosted { prewitnessed_deposit_id, pools } =
+				deposit_channel_details.boost_status
+			{
+				// We are expecting a boost, but check if the amount is matching
+				match PrewitnessedDeposits::<T, I>::get(channel_id, prewitnessed_deposit_id) {
+					Some(boosted_deposit) if boosted_deposit.amount == deposit_amount => {
+						// Deposit matches boosted deposit, process as boosted
+						Some((prewitnessed_deposit_id, pools))
 					},
-					SwapOrigin::DepositChannel {
-						deposit_address: T::AddressConverter::to_encoded_address(
-							deposit_address.clone().into(),
-						),
-						channel_id,
-						deposit_block_height: block_height.into(),
+					Some(_) => {
+						// Boosted deposit is found but the amounts didn't match, the deposit
+						// should be processed as not boosted.
+						None
 					},
-				),
+					None => {
+						log_or_panic!("Could not find deposit by prewitness deposit id: {prewitnessed_deposit_id}");
+						// This is unexpected since we always add a prewitnessed deposit at the
+						// same time as boosting it! Because we won't be able to confirm if the
+						// amount is correct, we fallback to processing the deposit as not boosted.
+						None
+					},
+				}
+			} else {
+				// The channel is not even boosted, so we process the deposit as not boosted
+				None
 			};
 
-			Self::deposit_event(Event::DepositReceived {
+		if let Some((prewitnessed_deposit_id, used_pools)) = maybe_boost_to_process {
+			PrewitnessedDeposits::<T, I>::remove(channel_id, prewitnessed_deposit_id);
+
+			// Note that ingress fee is not payed here, as it has already been payed at the time
+			// of boosting
+			DepositBalances::<T, I>::mutate(asset, |deposits| {
+				deposits.register_deposit(deposit_amount)
+			});
+
+			for boost_tier in used_pools {
+				BoostPools::<T, I>::mutate(asset, boost_tier, |maybe_pool| {
+					if let Some(pool) = maybe_pool {
+						for (booster_id, finalised_withdrawn_amount) in
+							pool.on_finalised_deposit(prewitnessed_deposit_id)
+						{
+							if let Err(err) = T::LpBalance::try_credit_account(
+								&booster_id,
+								asset.into(),
+								finalised_withdrawn_amount.into(),
+							) {
+								log_or_panic!(
+									"Failed to credit booster account {:?} after unlock of {finalised_withdrawn_amount:?} {asset:?}: {:?}",
+									booster_id, err
+								);
+							}
+						}
+					}
+				});
+			}
+
+			// This allows the channel to be boosted again:
+			DepositChannelLookup::<T, I>::mutate(&deposit_address, |details| {
+				if let Some(details) = details {
+					details.boost_status = BoostStatus::NotBoosted;
+				}
+			});
+
+			Self::deposit_event(Event::DepositFinalised {
 				deposit_address,
 				asset,
 				amount: deposit_amount,
 				deposit_details,
+				ingress_fee: 0u32.into(),
+				action: DepositAction::BoostersCredited { prewitnessed_deposit_id },
+				channel_id,
 			});
+		} else {
+			// If the deposit isn't boosted, we don't care which prewitness deposit we remove
+			// (in case there are multiple on the channel), as long is the amounts match:
+			if let Some((prewitnessed_deposit_id, _)) =
+				PrewitnessedDeposits::<T, I>::iter_prefix(channel_id)
+					.find(|(_id, deposit)| deposit.amount == deposit_amount)
+			{
+				PrewitnessedDeposits::<T, I>::remove(channel_id, prewitnessed_deposit_id);
+			}
+
+			let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
+				Self::withhold_ingress_or_egress_fee(
+					IngressOrEgress::Ingress,
+					deposit_channel_details.deposit_channel.asset,
+					deposit_amount,
+				);
+
+			DepositBalances::<T, I>::mutate(asset, |deposits| {
+				deposits.register_deposit(amount_after_fees)
+			});
+
+			if amount_after_fees.is_zero() {
+				Self::deposit_event(Event::<T, I>::DepositIgnored {
+					deposit_address,
+					asset,
+					amount: deposit_amount,
+					deposit_details,
+					reason: DepositIgnoredReason::NotEnoughToPayFees,
+				});
+			} else {
+				let deposit_action = Self::perform_channel_action(
+					deposit_channel_details.action,
+					deposit_channel_details.deposit_channel,
+					amount_after_fees,
+					block_height,
+				)?;
+
+				Self::deposit_event(Event::DepositFinalised {
+					deposit_address,
+					asset,
+					amount: deposit_amount,
+					deposit_details,
+					ingress_fee: fees_withheld,
+					action: deposit_action,
+					channel_id,
+				});
+			}
 		}
 
 		Ok(())
@@ -1090,12 +1713,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Opens a channel for the given asset and registers it with the given action.
 	///
 	/// May re-use an existing deposit address, depending on chain configuration.
+	///
+	/// The requester must have enough FLIP available to pay the channel opening fee.
 	#[allow(clippy::type_complexity)]
 	fn open_channel(
+		requester: &T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
 		action: ChannelAction<T::AccountId>,
-	) -> Result<(ChannelId, TargetChainAccount<T, I>, TargetChainBlockNumber<T, I>), DispatchError>
-	{
+		boost_fee: BasisPoints,
+	) -> Result<
+		(ChannelId, TargetChainAccount<T, I>, TargetChainBlockNumber<T, I>, T::Amount),
+		DispatchError,
+	> {
+		let channel_opening_fee = ChannelOpeningFee::<T, I>::get();
+		T::FeePayment::try_burn_fee(requester, channel_opening_fee)?;
+		Self::deposit_event(Event::<T, I>::ChannelOpeningFeePaid { fee: channel_opening_fee });
+
 		let (deposit_channel, channel_id) = if let Some((channel_id, mut deposit_channel)) =
 			DepositChannelPool::<T, I>::drain().next()
 		{
@@ -1135,10 +1768,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				opened_at: current_height,
 				expires_at: expiry_height,
 				action,
+				boost_fee,
+				boost_status: BoostStatus::NotBoosted,
 			},
 		);
 
-		Ok((channel_id, deposit_address, expiry_height))
+		Ok((channel_id, deposit_address, expiry_height, channel_opening_fee))
 	}
 
 	pub fn get_failed_call(broadcast_id: BroadcastId) -> Option<FailedForeignChainCall> {
@@ -1151,104 +1786,163 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Withholds the fee for a given amount.
 	///
-	/// Returns the remaining amount after the fee has been withheld.
-	fn withhold_transaction_fee(
+	/// Returns the remaining amount after the fee has been withheld, and the fee itself, both
+	/// measured in units of the input asset. A swap may be scheduled to convert the fee into the
+	/// gas asset.
+	fn withhold_ingress_or_egress_fee(
 		ingress_or_egress: IngressOrEgress,
 		asset: TargetChainAsset<T, I>,
 		available_amount: TargetChainAmount<T, I>,
-	) -> TargetChainAmount<T, I> {
-		let tracked_data = T::ChainTracking::get_tracked_data();
+	) -> AmountAndFeesWithheld<T, I> {
 		let fee_estimate = match ingress_or_egress {
-			IngressOrEgress::Ingress => tracked_data.estimate_ingress_fee(asset),
-			IngressOrEgress::Egress => tracked_data.estimate_egress_fee(asset),
+			IngressOrEgress::Ingress => T::ChainTracking::estimate_ingress_fee(asset),
+			IngressOrEgress::Egress => T::ChainTracking::estimate_egress_fee(asset),
 		};
 
-		let (remaining_amount, fee_estimate) =
-			T::AssetConverter::convert_asset_to_approximate_output(
+		let amount_after_fees = if asset == <T::TargetChain as Chain>::GAS_ASSET {
+			// No need to schedule a swap for gas, it's already in the gas asset.
+			Self::accrue_withheld_fee(asset, sp_std::cmp::min(fee_estimate, available_amount));
+			available_amount.saturating_sub(fee_estimate)
+		} else {
+			let transaction_fee = T::AssetConverter::calculate_asset_conversion(
 				asset,
 				available_amount,
 				<T::TargetChain as Chain>::GAS_ASSET,
 				fee_estimate,
 			)
 			.unwrap_or_else(|| {
-				log::warn!(
-					"Unable to convert input to gas for input of {:?} ${:?}. Ignoring transaction fees.",
-					available_amount,
-					asset,
-				);
-				(available_amount, Zero::zero())
+				log::warn!("Unable to convert input to gas for input of {available_amount:?} ${asset:?}. Ignoring ingress egress fees.");
+				<T::TargetChain as Chain>::ChainAmount::zero()
 			});
 
-		WithheldTransactionFees::<T, I>::mutate(<T::TargetChain as Chain>::GAS_ASSET, |fees| {
-			fees.saturating_accrue(fee_estimate);
-		});
+			if !transaction_fee.is_zero() {
+				T::SwapQueueApi::schedule_swap(
+					asset.into(),
+					<T::TargetChain as Chain>::GAS_ASSET.into(),
+					transaction_fee.into(),
+					SwapType::IngressEgressFee,
+				);
+			}
+			available_amount.saturating_sub(transaction_fee)
+		};
 
-		remaining_amount
+		AmountAndFeesWithheld::<T, I> {
+			amount_after_fees,
+			fees_withheld: available_amount.saturating_sub(amount_after_fees),
+		}
 	}
 }
 
 impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
+	type EgressError = Error<T, I>;
+
 	fn schedule_egress(
 		asset: TargetChainAsset<T, I>,
 		amount: TargetChainAmount<T, I>,
 		destination_address: TargetChainAccount<T, I>,
 		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, TargetChainAmount<T, I>)>,
-	) -> EgressId {
-		let egress_counter = EgressIdCounter::<T, I>::mutate(|id| {
-			*id = id.saturating_add(1);
-			*id
-		});
-		let egress_id = (<T as Config<I>>::TargetChain::get(), egress_counter);
-		match maybe_ccm_with_gas_budget {
-			Some((
-				CcmDepositMetadata { source_chain, source_address, channel_metadata },
-				gas_budget,
-			)) => ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
-				egress_id,
-				asset,
-				amount,
-				destination_address: destination_address.clone(),
-				message: channel_metadata.message,
-				cf_parameters: channel_metadata.cf_parameters,
-				source_chain,
-				source_address,
-				gas_budget,
-			}),
-			None => ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<
-				T::TargetChain,
-			>::Transfer {
-				asset,
-				destination_address: destination_address.clone(),
-				amount,
-				egress_id,
-			}),
-		}
+	) -> Result<ScheduledEgressDetails<T::TargetChain>, Error<T, I>> {
+		let result = EgressIdCounter::<T, I>::try_mutate(|id_counter| {
+			*id_counter = id_counter.saturating_add(1);
+			let egress_id = (<T as Config<I>>::TargetChain::get(), *id_counter);
 
-		Self::deposit_event(Event::<T, I>::EgressScheduled {
-			id: egress_id,
-			asset,
-			amount: amount.into(),
-			destination_address,
+			match maybe_ccm_with_gas_budget {
+				Some((
+					CcmDepositMetadata { source_chain, source_address, channel_metadata },
+					gas_budget,
+				)) => {
+					ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
+						egress_id,
+						asset,
+						amount,
+						destination_address: destination_address.clone(),
+						message: channel_metadata.message,
+						cf_parameters: channel_metadata.cf_parameters,
+						source_chain,
+						source_address,
+						gas_budget,
+					});
+
+					// The ccm gas budget is already in terms of the swap asset.
+					Ok(ScheduledEgressDetails::new(*id_counter, amount, gas_budget))
+				},
+				None => {
+					let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
+						Self::withhold_ingress_or_egress_fee(
+							IngressOrEgress::Egress,
+							asset,
+							amount,
+						);
+
+					if amount_after_fees >=
+						EgressDustLimit::<T, I>::get(asset).unique_saturated_into() ||
+						// We always want to benchmark the success case.
+						cfg!(all(feature = "runtime-benchmarks", not(test)))
+					{
+						let egress_details = ScheduledEgressDetails::new(
+							*id_counter,
+							amount_after_fees,
+							fees_withheld,
+						);
+
+						ScheduledEgressFetchOrTransfer::<T, I>::append({
+							FetchOrTransfer::<T::TargetChain>::Transfer {
+								asset,
+								destination_address: destination_address.clone(),
+								amount: amount_after_fees,
+								egress_id: egress_details.egress_id,
+							}
+						});
+
+						Ok(egress_details)
+					} else {
+						// TODO: Consider tracking the ignored egresses somewhere.
+						// For example, store the egress and try it again later when fees have
+						// dropped?
+						Err(Error::<T, I>::BelowEgressDustLimit)
+					}
+				},
+			}
 		});
 
-		egress_id
+		if let Ok(ScheduledEgressDetails { egress_amount, .. }) = result {
+			// Only the egress_amount will be transferred. The fee was converted to the native
+			// asset and will be consumed in terms of the native asset.
+			DepositBalances::<T, I>::mutate(asset, |tracker| {
+				tracker.register_transfer(egress_amount);
+			});
+		};
+
+		result
 	}
 }
 
 impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	type AccountId = T::AccountId;
+	type Amount = T::Amount;
+
 	// This should be callable by the LP pallet.
 	fn request_liquidity_deposit_address(
 		lp_account: T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
+		boost_fee: BasisPoints,
 	) -> Result<
-		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber),
+		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
-		let (channel_id, deposit_address, expiry_block) =
-			Self::open_channel(source_asset, ChannelAction::LiquidityProvision { lp_account })?;
+		let (channel_id, deposit_address, expiry_block, channel_opening_fee) = Self::open_channel(
+			&lp_account,
+			source_asset,
+			ChannelAction::LiquidityProvision { lp_account: lp_account.clone() },
+			boost_fee,
+		)?;
 
-		Ok((channel_id, deposit_address.into(), expiry_block))
+		Ok((
+			channel_id,
+			<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(deposit_address),
+			expiry_block,
+			channel_opening_fee,
+		))
 	}
 
 	// This should only be callable by the broker.
@@ -1259,11 +1953,13 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		broker_commission_bps: BasisPoints,
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
+		boost_fee: BasisPoints,
 	) -> Result<
-		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber),
+		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
-		let (channel_id, deposit_address, expiry_height) = Self::open_channel(
+		let (channel_id, deposit_address, expiry_height, channel_opening_fee) = Self::open_channel(
+			&broker_id,
 			source_asset,
 			match channel_metadata {
 				Some(msg) => ChannelAction::CcmTransfer {
@@ -1275,11 +1971,35 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 					destination_asset,
 					destination_address,
 					broker_commission_bps,
-					broker_id,
+					broker_id: broker_id.clone(),
 				},
 			},
+			boost_fee,
 		)?;
 
-		Ok((channel_id, deposit_address.into(), expiry_height))
+		Ok((
+			channel_id,
+			<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(deposit_address),
+			expiry_height,
+			channel_opening_fee,
+		))
+	}
+}
+
+impl<T: Config<I>, I: 'static> IngressEgressFeeApi<T::TargetChain> for Pallet<T, I> {
+	fn accrue_withheld_fee(
+		_asset: <T::TargetChain as Chain>::ChainAsset,
+		fee: TargetChainAmount<T, I>,
+	) {
+		if !fee.is_zero() {
+			WithheldTransactionFees::<T, I>::mutate(<T::TargetChain as Chain>::GAS_ASSET, |fees| {
+				fees.saturating_accrue(fee);
+			});
+			// Since we credit the fees to the withheld fees, we need to take these from somewhere,
+			// ie. we effectively have transferred them from the vault.
+			DepositBalances::<T, I>::mutate(<T::TargetChain as Chain>::GAS_ASSET, |tracker| {
+				tracker.register_transfer(fee);
+			});
+		}
 	}
 }

@@ -12,6 +12,7 @@ pub mod broadcaster;
 pub mod callback;
 pub mod ccm_handler;
 pub mod ceremony_id_provider;
+pub mod cfe_interface_mock;
 pub mod chain_tracking;
 pub mod deposit_handler;
 pub mod egress_handler;
@@ -20,8 +21,11 @@ pub mod ensure_witnessed;
 pub mod epoch_info;
 pub mod eth_environment_provider;
 pub mod fee_payment;
+pub mod flip_burn_info;
 pub mod funding_info;
+pub mod ingress_egress_fee_handler;
 pub mod key_provider;
+pub mod key_rotator;
 pub mod lp_balance;
 pub mod offence_reporting;
 pub mod on_account_funded;
@@ -30,10 +34,10 @@ pub mod reputation_resetter;
 pub mod safe_mode;
 pub mod signer_nomination;
 pub mod swap_deposit_handler;
+pub mod swap_queue_api;
 pub mod threshold_signer;
 pub mod time_source;
 pub mod tracked_data_provider;
-pub mod vault_rotator;
 pub mod waived_fees_mock;
 
 #[macro_export]
@@ -60,6 +64,7 @@ macro_rules! impl_mock_chainflip {
 			type ValidatorId = <$runtime as frame_system::Config>::AccountId;
 			type RuntimeCall = RuntimeCall;
 			type EnsureWitnessed = NeverFailingOriginCheck<Self>;
+			type EnsurePrewitnessed = NeverFailingOriginCheck<Self>;
 			type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
 			type EnsureGovernance = NeverFailingOriginCheck<Self>;
 			type EpochInfo = MockEpochInfo;
@@ -77,8 +82,15 @@ trait MockPalletStorage {
 	fn put_storage<K: Encode, V: Encode>(store: &[u8], k: K, v: V);
 	fn get_storage<K: Encode, V: Decode + Sized>(store: &[u8], k: K) -> Option<V>;
 	fn take_storage<K: Encode, V: Decode + Sized>(store: &[u8], k: K) -> Option<V>;
-	fn put_value<V: Encode>(store: &[u8], v: V);
-	fn get_value<V: Decode + Sized>(store: &[u8]) -> Option<V>;
+	fn put_value<V: Encode>(store: &[u8], v: V) {
+		Self::put_storage(store, (), v);
+	}
+	fn get_value<V: Decode + Sized>(store: &[u8]) -> Option<V> {
+		Self::get_storage(store, ())
+	}
+	fn take_value<V: Decode + Sized>(store: &[u8]) -> Option<V> {
+		Self::take_storage(store, ())
+	}
 	fn mutate_storage<
 		K: Encode,
 		E: EncodeLike<K>,
@@ -134,21 +146,6 @@ impl<T: MockPallet> MockPalletStorage for T {
 		storage::hashed::take(
 			&<Twox64Concat as StorageHasher>::hash,
 			&storage_key(Self::PREFIX, store, k),
-		)
-	}
-
-	fn put_value<V: Encode>(store: &[u8], v: V) {
-		storage::hashed::put(
-			&<Twox64Concat as StorageHasher>::hash,
-			&storage_key(Self::PREFIX, store, ()),
-			&v,
-		)
-	}
-
-	fn get_value<V: Decode + Sized>(store: &[u8]) -> Option<V> {
-		storage::hashed::get(
-			&<Twox64Concat as StorageHasher>::hash,
-			&storage_key(Self::PREFIX, store, ()),
 		)
 	}
 }

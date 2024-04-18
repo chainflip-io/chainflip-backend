@@ -1,11 +1,12 @@
-use crate::{mock::*, FreeBalances, LiquidityRefundAddress};
+use crate::{mock::*, Error, FreeBalances, LiquidityRefundAddress};
 
 use cf_chains::{address::EncodedAddress, ForeignChainAddress};
-use cf_primitives::{AccountId, Asset, ForeignChain};
+use cf_primitives::{AccountId, Asset, AssetAmount, ForeignChain};
 
 use cf_test_utilities::assert_events_match;
-use cf_traits::SetSafeMode;
-use frame_support::{assert_noop, assert_ok, error::BadOrigin};
+use cf_traits::{AccountRoleRegistry, Chainflip, LpBalanceApi, LpDepositHandler, SetSafeMode};
+use frame_support::{assert_noop, assert_ok, error::BadOrigin, traits::OriginTrait};
+use sp_runtime::AccountId32;
 
 #[test]
 fn egress_chain_and_asset_must_match() {
@@ -76,6 +77,7 @@ fn cannot_deposit_and_withdrawal_during_safe_mode() {
 			LiquidityProvider::request_liquidity_deposit_address(
 				RuntimeOrigin::signed(LP_ACCOUNT.into()),
 				Asset::Eth,
+				0
 			),
 			crate::Error::<Test>::LiquidityDepositDisabled,
 		);
@@ -98,6 +100,7 @@ fn cannot_deposit_and_withdrawal_during_safe_mode() {
 		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			Asset::Eth,
+			0
 		));
 
 		assert_ok!(LiquidityProvider::withdraw_asset(
@@ -166,6 +169,7 @@ fn cannot_request_deposit_address_without_registering_liquidity_refund_address()
 		assert_noop!(LiquidityProvider::request_liquidity_deposit_address(
 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			Asset::Eth,
+			0,
 		), crate::Error::<Test>::NoLiquidityRefundAddressRegistered);
 
 		// Register EWA
@@ -178,14 +182,17 @@ fn cannot_request_deposit_address_without_registering_liquidity_refund_address()
 		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			Asset::Eth,
+			0,
 		));
 		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			Asset::Flip,
+			0,
 		));
 		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			Asset::Usdc,
+			0,
 		));
 		assert_events_match!(Test, RuntimeEvent::LiquidityProvider(crate::Event::LiquidityDepositAddressReady {
 			..
@@ -200,10 +207,100 @@ fn cannot_request_deposit_address_without_registering_liquidity_refund_address()
 		assert_noop!(LiquidityProvider::request_liquidity_deposit_address(
 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			Asset::Btc,
+			0,
 		), crate::Error::<Test>::NoLiquidityRefundAddressRegistered);
 		assert_noop!(LiquidityProvider::request_liquidity_deposit_address(
 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			Asset::Dot,
+			0,
 		), crate::Error::<Test>::NoLiquidityRefundAddressRegistered);
+	});
+}
+
+#[test]
+fn deposit_address_ready_event_contain_correct_boost_fee_value() {
+	new_test_ext().execute_with(|| {
+		const BOOST_FEE1: u16 = 0;
+		const BOOST_FEE2: u16 = 50;
+		const BOOST_FEE3: u16 = 100;
+
+		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			EncodedAddress::Eth([0x01; 20])
+		));
+
+		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			Asset::Eth,
+			BOOST_FEE1,
+		));
+		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			Asset::Flip,
+			BOOST_FEE2,
+		));
+		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			Asset::Usdc,
+			BOOST_FEE3,
+		));
+		assert_events_match!(Test, RuntimeEvent::LiquidityProvider(crate::Event::LiquidityDepositAddressReady {
+			boost_fee: BOOST_FEE1,
+			..
+		}) => (),
+		RuntimeEvent::LiquidityProvider(crate::Event::LiquidityDepositAddressReady {
+			boost_fee: BOOST_FEE2,
+			..
+		}) => (),
+		RuntimeEvent::LiquidityProvider(crate::Event::LiquidityDepositAddressReady {
+			boost_fee: BOOST_FEE3,
+			..
+		}) => ());
+	});
+}
+
+#[test]
+fn account_registration_and_deregistration() {
+	new_test_ext().execute_with(|| {
+		const DEPOSIT_AMOUNT: AssetAmount = 1_000;
+		const LP_ACCOUNT_ID: AccountId = AccountId32::new(LP_ACCOUNT);
+
+		<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::ensure_liquidity_provider(OriginTrait::signed(
+			LP_ACCOUNT_ID,
+		))
+		.expect("LP_ACCOUNT registered at genesis.");
+		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
+			OriginTrait::signed(LP_ACCOUNT_ID),
+			EncodedAddress::Eth([0x01; 20])
+		));
+		assert_ok!(<LiquidityProvider as LpDepositHandler>::add_deposit(
+			&LP_ACCOUNT_ID,
+			Asset::Eth,
+			DEPOSIT_AMOUNT
+		));
+
+		assert_noop!(
+			LiquidityProvider::deregister_lp_account(OriginTrait::signed(LP_ACCOUNT_ID)),
+			Error::<Test>::FundsRemaining,
+		);
+
+		assert_ok!(LiquidityProvider::withdraw_asset(
+			OriginTrait::signed(LP_ACCOUNT_ID),
+			DEPOSIT_AMOUNT,
+			Asset::Eth,
+			EncodedAddress::Eth(Default::default()),
+		));
+
+		assert_ok!(
+			LiquidityProvider::deregister_lp_account(OriginTrait::signed(LP_ACCOUNT_ID)),
+		);
+
+		assert!(
+			LiquidityRefundAddress::<Test>::get(&LP_ACCOUNT_ID, ForeignChain::Ethereum).is_none()
+		);
+		assert!(<LiquidityProvider as LpBalanceApi>::asset_balances(&LP_ACCOUNT_ID)
+			.unwrap()
+			.iter()
+			.all(|(_, amount)| *amount == 0));
 	});
 }

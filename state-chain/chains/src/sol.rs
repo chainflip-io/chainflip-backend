@@ -1091,9 +1091,9 @@ mod tests {
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
 
-		for i in 1..NONCE_ACCOUNTS.len() {
+		for (i, nonce_account) in NONCE_ACCOUNTS.iter().enumerate().skip(1) {
 			instructions.push(SystemProgramInstruction::nonce_authorize(
-				&Pubkey::from_str(NONCE_ACCOUNTS[i]).unwrap(),
+				&Pubkey::from_str(nonce_account).unwrap(),
 				&vault_account_pubkey,
 				&new_vault_account_pubkey,
 			));

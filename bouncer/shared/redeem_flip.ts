@@ -1,25 +1,29 @@
 import assert from 'assert';
-import { assetDecimals, executeRedemption, getRedemptionDelay } from '@chainflip-io/cli';
+import { InternalAssets as Assets, executeRedemption, getRedemptionDelay } from '@chainflip/cli';
 import { HexString } from '@polkadot/util/types';
 import { Wallet, ethers } from 'ethers';
 import Keyring from '@polkadot/keyring';
-import { getNextEthNonce } from './send_eth';
-import { getGatewayAbi } from './eth_abis';
+import { getNextEvmNonce } from './send_evm';
+import { getGatewayAbi } from './contract_interfaces';
 import {
   sleep,
   observeEvent,
   handleSubstrateError,
-  getEthContractAddress,
+  getContractAddress,
   getChainflipApi,
   amountToFineAmount,
   observeEVMEvent,
+  chainFromAsset,
+  getEvmEndpoint,
+  getWhaleKey,
+  assetDecimals,
 } from './utils';
 
 export type RedeemAmount = 'Max' | { Exact: string };
 
 function intoFineAmount(amount: RedeemAmount): RedeemAmount {
   if (typeof amount === 'object' && amount.Exact) {
-    const fineAmount = amountToFineAmount(amount.Exact, assetDecimals.FLIP);
+    const fineAmount = amountToFineAmount(amount.Exact, assetDecimals('Flip'));
     return { Exact: fineAmount };
   }
   return amount;
@@ -37,15 +41,14 @@ export async function redeemFlip(
   keyring.setSS58Format(2112);
   const flipWallet = keyring.createFromUri('//' + flipSeed);
   const accountIdHex: HexString = `0x${Buffer.from(flipWallet.publicKey).toString('hex')}`;
-  const ethWallet = new Wallet(
-    process.env.ETH_USDC_WHALE ??
-      '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
-  ).connect(ethers.getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
+  const ethWallet = new Wallet(getWhaleKey('Ethereum')).connect(
+    ethers.getDefaultProvider(getEvmEndpoint('Ethereum')),
+  );
   const networkOptions = {
     signer: ethWallet,
     network: 'localnet',
-    stateChainGatewayContractAddress: getEthContractAddress('GATEWAY'),
-    flipContractAddress: getEthContractAddress('FLIP'),
+    stateChainGatewayContractAddress: getContractAddress('Ethereum', 'GATEWAY'),
+    flipContractAddress: getContractAddress('Ethereum', 'Flip'),
   } as const;
 
   const pendingRedemption = await chainflip.query.flip.pendingRedemptionsReserve(
@@ -73,14 +76,13 @@ export async function redeemFlip(
 
   console.log('Waiting for redemption to be registered');
   const observeEventAmount = flipperinoRedeemAmount === 'Max' ? '*' : flipperinoRedeemAmount.Exact;
-  await observeEVMEvent(gatewayAbi, getEthContractAddress('GATEWAY'), 'RedemptionRegistered', [
-    accountIdHex,
-    observeEventAmount,
-    ethAddress,
-    '*',
-    '*',
-    '*',
-  ]);
+  await observeEVMEvent(
+    chainFromAsset(Assets.Flip),
+    gatewayAbi,
+    getContractAddress('Ethereum', 'GATEWAY'),
+    'RedemptionRegistered',
+    [accountIdHex, observeEventAmount, ethAddress, '*', '*', '*'],
+  );
 
   const delay = await getRedemptionDelay(networkOptions);
   console.log(`Waiting for ${delay}s before we can execute redemption`);
@@ -88,7 +90,7 @@ export async function redeemFlip(
 
   console.log(`Executing redemption`);
 
-  const nonce = await getNextEthNonce();
+  const nonce = await getNextEvmNonce('Ethereum');
 
   const redemptionExecutedHandle = observeEvent(
     'funding:RedemptionSettled',

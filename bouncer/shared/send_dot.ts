@@ -1,9 +1,14 @@
-import { assetDecimals } from '@chainflip-io/cli';
-import { polkadotSigningMutex, sleep, amountToFineAmount, getPolkadotApi } from './utils';
+import {
+  polkadotSigningMutex,
+  sleep,
+  amountToFineAmount,
+  getPolkadotApi,
+  assetDecimals,
+} from './utils';
 import { aliceKeyringPair } from './polkadot_keyring';
 
 export async function sendDot(address: string, amount: string) {
-  const planckAmount = amountToFineAmount(amount, assetDecimals.DOT);
+  const planckAmount = amountToFineAmount(amount, assetDecimals('Dot'));
   const alice = await aliceKeyringPair();
   const polkadot = await getPolkadotApi();
 

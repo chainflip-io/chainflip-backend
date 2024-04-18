@@ -3,9 +3,9 @@ use super::{
 	UPGRADE_MANAGER_PROGRAM, VAULT_PROGRAM,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
-use frame_support::sp_io::hashing::sha2_256;
 use scale_info::prelude::string::String;
 use serde::{Deserialize, Serialize};
+use sp_io::hashing::sha2_256;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum SystemProgramInstruction {

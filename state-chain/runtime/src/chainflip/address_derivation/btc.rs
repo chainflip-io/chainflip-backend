@@ -1,5 +1,5 @@
 use super::AddressDerivation;
-use crate::BitcoinVault;
+use crate::BitcoinThresholdSigner;
 use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError},
 	btc::deposit_address::DepositAddress,
@@ -33,7 +33,7 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 
 		let channel_state = DepositAddress::new(
 			// TODO: The key should be passed as an argument (or maybe KeyProvider type arg).
-			BitcoinVault::active_epoch_key()
+			BitcoinThresholdSigner::active_epoch_key()
 				.ok_or(AddressDerivationError::MissingBitcoinVault)?
 				.key
 				.current,
@@ -50,24 +50,21 @@ fn test_address_generation() {
 	use cf_chains::Bitcoin;
 	use cf_primitives::chains::assets::btc;
 	use cf_utilities::assert_ok;
+	use pallet_cf_threshold_signature::{CurrentKeyEpoch, Keys};
 	use pallet_cf_validator::CurrentEpoch;
-	use pallet_cf_vaults::{CurrentVaultEpoch, Vault, Vaults};
 
-	frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+	sp_io::TestExternalities::new_empty().execute_with(|| {
 		CurrentEpoch::<Runtime>::set(1);
-		Vaults::<Runtime, crate::BitcoinInstance>::insert(
+		Keys::<Runtime, crate::BitcoinInstance>::insert(
 			1,
-			Vault::<Bitcoin> {
-				public_key: cf_chains::btc::AggKey {
-					previous: None,
-					current: hex_literal::hex!(
-						"9fe94d03955ff4cc5dec97fa5f0dc564ae5ab63012e76dbe84c87c1c83460b48"
-					),
-				},
-				active_from_block: 1,
+			cf_chains::btc::AggKey {
+				previous: None,
+				current: hex_literal::hex!(
+					"9fe94d03955ff4cc5dec97fa5f0dc564ae5ab63012e76dbe84c87c1c83460b48"
+				),
 			},
 		);
-		CurrentVaultEpoch::<Runtime, crate::BitcoinInstance>::put(1);
+		CurrentKeyEpoch::<Runtime, crate::BitcoinInstance>::put(1);
 		assert_ok!(<AddressDerivation as AddressDerivationApi<Bitcoin>>::generate_address(
 			btc::Asset::Btc,
 			1

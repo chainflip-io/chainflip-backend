@@ -1,16 +1,17 @@
+use super::SimpleSubmissionApi;
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_amm::{
-	common::{Amount, Order, Side, SideMap, Tick},
+	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::address::EncodedAddress;
-use cf_primitives::{Asset, AssetAmount, BlockNumber, EgressId};
+use cf_primitives::{Asset, AssetAmount, BasisPoints, BlockNumber, EgressId};
 use chainflip_engine::state_chain_observer::client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock, WaitFor, WaitForResult},
 	StateChainClient,
 };
-use pallet_cf_pools::{AssetsMap, IncreaseOrDecrease, OrderId, RangeOrderSize};
+use pallet_cf_pools::{IncreaseOrDecrease, OrderId, RangeOrderSize};
 use serde::{Deserialize, Serialize};
 use sp_core::{H256, U256};
 use state_chain_runtime::RuntimeCall;
@@ -43,6 +44,7 @@ impl<T> ApiWaitForResult<T> {
 
 pub mod types {
 	use super::*;
+
 	#[derive(Serialize, Deserialize, Clone)]
 	pub struct RangeOrder {
 		pub base_asset: Asset,
@@ -50,21 +52,21 @@ pub mod types {
 		pub id: U256,
 		pub tick_range: Range<Tick>,
 		pub liquidity_total: U256,
-		pub collected_fees: AssetsMap<U256>,
+		pub collected_fees: PoolPairsMap<U256>,
 		pub size_change: Option<IncreaseOrDecrease<RangeOrderChange>>,
 	}
 
 	#[derive(Serialize, Deserialize, Clone)]
 	pub struct RangeOrderChange {
 		pub liquidity: U256,
-		pub amounts: AssetsMap<U256>,
+		pub amounts: PoolPairsMap<U256>,
 	}
 
 	#[derive(Serialize, Deserialize, Clone)]
 	pub struct LimitOrder {
 		pub base_asset: Asset,
 		pub quote_asset: Asset,
-		pub side: Order,
+		pub side: Side,
 		pub id: U256,
 		pub tick: Tick,
 		pub sell_amount_total: U256,
@@ -162,7 +164,7 @@ fn into_api_wait_for_result<T>(
 }
 
 #[async_trait]
-pub trait LpApi: SignedExtrinsicApi {
+pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 	async fn register_liquidity_refund_address(&self, address: EncodedAddress) -> Result<H256> {
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(RuntimeCall::from(
@@ -179,10 +181,14 @@ pub trait LpApi: SignedExtrinsicApi {
 		&self,
 		asset: Asset,
 		wait_for: WaitFor,
+		boost_fee: Option<BasisPoints>,
 	) -> Result<ApiWaitForResult<EncodedAddress>> {
 		let wait_for_result = self
 			.submit_signed_extrinsic_wait_for(
-				pallet_cf_lp::Call::request_liquidity_deposit_address { asset },
+				pallet_cf_lp::Call::request_liquidity_deposit_address {
+					asset,
+					boost_fee: boost_fee.unwrap_or_default(),
+				},
 				wait_for,
 			)
 			.await?;
@@ -307,7 +313,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		side: Order,
+		side: Side,
 		id: OrderId,
 		option_tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<AssetAmount>,
@@ -334,7 +340,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		side: Order,
+		side: Side,
 		id: OrderId,
 		option_tick: Option<Tick>,
 		sell_amount: AssetAmount,
@@ -377,5 +383,17 @@ pub trait LpApi: SignedExtrinsicApi {
 			},
 			collect_limit_order_returns,
 		))
+	}
+
+	async fn register_account(&self) -> Result<H256> {
+		self.simple_submission_with_dry_run(pallet_cf_lp::Call::register_lp_account {})
+			.await
+			.context("Could not register liquidity provider")
+	}
+
+	async fn deregister_account(&self) -> Result<H256> {
+		self.simple_submission_with_dry_run(pallet_cf_lp::Call::deregister_lp_account {})
+			.await
+			.context("Could not de-register liquidity provider")
 	}
 }

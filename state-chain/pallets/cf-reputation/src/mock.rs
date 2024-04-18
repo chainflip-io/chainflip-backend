@@ -2,7 +2,7 @@ use super::*;
 use crate::{self as pallet_cf_reputation, PalletSafeMode};
 use cf_primitives::FlipBalance;
 use cf_traits::{impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleRegistry, Slashing};
-use frame_support::{assert_ok, construct_runtime, parameter_types};
+use frame_support::{assert_ok, construct_runtime, derive_impl, parameter_types};
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
@@ -14,6 +14,7 @@ type ValidatorId = u64;
 
 thread_local! {
 	pub static SLASHES: RefCell<Vec<u64>> = RefCell::new(Default::default());
+	pub static HEARTBEATS: RefCell<u32> = RefCell::new(Default::default());
 }
 
 construct_runtime!(
@@ -29,6 +30,7 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -114,12 +116,22 @@ impl Slashing for MockSlasher {
 pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
 
+/// Counts the number of heartbeats.
 pub struct MockHeartbeat;
+
+impl MockHeartbeat {
+	pub fn heartbeats() -> u32 {
+		HEARTBEATS.with(|heartbeats| *heartbeats.borrow())
+	}
+}
+
 impl Heartbeat for MockHeartbeat {
 	type ValidatorId = ValidatorId;
 	type BlockNumber = u64;
 
-	fn on_heartbeat_interval() {}
+	fn on_heartbeat_interval() {
+		HEARTBEATS.with(|heartbeats| *heartbeats.borrow_mut() += 1);
+	}
 }
 
 #[derive(
@@ -183,6 +195,6 @@ cf_test_utilities::impl_test_helpers! {
 	||{
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE));
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&BOB));
-		<Test as Chainflip>::EpochInfo::next_epoch(BTreeSet::from([ALICE]));
+		<Test as Chainflip>::EpochInfo::next_epoch(Vec::from([ALICE]));
 	}
 }

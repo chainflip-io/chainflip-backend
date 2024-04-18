@@ -1,6 +1,7 @@
-pub mod remove_expiries;
+use crate::Pallet;
+use cf_runtime_upgrade_utilities::{PlaceholderMigration, VersionedMigration};
 
-use cf_runtime_upgrade_utilities::VersionedMigration;
+mod v2;
 
 pub type PalletMigration<T> =
-	(VersionedMigration<crate::Pallet<T>, remove_expiries::Migration<T>, 0, 1>,);
+	(VersionedMigration<Pallet<T>, v2::Migration<T>, 1, 2>, PlaceholderMigration<Pallet<T>, 2>);

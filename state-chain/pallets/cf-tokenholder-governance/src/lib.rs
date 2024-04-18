@@ -2,12 +2,7 @@
 use cf_chains::{eth::Address, ForeignChain};
 use cf_traits::{BroadcastAnyChainGovKey, Chainflip, CommKeyBroadcaster, FeePayment, FundingInfo};
 use codec::{Decode, Encode};
-use frame_support::{
-	dispatch::Weight,
-	pallet_prelude::*,
-	traits::{OnRuntimeUpgrade, StorageVersion},
-	RuntimeDebugNoBound,
-};
+use frame_support::{pallet_prelude::*, traits::StorageVersion, RuntimeDebugNoBound};
 use sp_std::{cmp::PartialEq, vec, vec::Vec};
 
 pub use pallet::*;
@@ -217,7 +212,7 @@ pub mod pallet {
 		/// - [ProposalDoesntExist](Error::ProposalDoesntExist)
 		/// - [AlreadyBacked](Error::AlreadyBacked)
 		#[pallet::call_index(1)]
-		#[pallet::weight(T::WeightInfo::back_proposal(Backers::<T>::decode_len(proposal).unwrap_or_default() as u32))]
+		#[pallet::weight(T::WeightInfo::back_proposal(Backers::<T>::decode_non_dedup_len(proposal).unwrap_or_default() as u32))]
 		pub fn back_proposal(
 			origin: OriginFor<T>,
 			proposal: Proposal,

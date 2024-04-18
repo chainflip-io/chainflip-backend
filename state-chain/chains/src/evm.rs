@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use sp_core::ConstBool;
 use sp_std::{convert::TryFrom, str, vec};
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EvmCrypto;
 
 impl ChainCrypto for EvmCrypto {
@@ -30,9 +31,10 @@ impl ChainCrypto for EvmCrypto {
 	type Payload = H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
 	type TransactionInId = H256;
-	// We can't use the hash since we don't know it for the Evm, as we must select an individaul
+	// We can't use the hash since we don't know it for the Evm, as we must select an individual
 	// authority to sign the transaction.
 	type TransactionOutId = Self::ThresholdSignature;
+	type KeyHandoverIsRequired = ConstBool<false>;
 	type GovKey = Address;
 
 	fn verify_threshold_signature(
@@ -379,7 +381,9 @@ pub struct EvmTransactionMetadata {
 	pub gas_limit: Option<Uint>,
 }
 
-impl<C: Chain<Transaction = Transaction>> TransactionMetadata<C> for EvmTransactionMetadata {
+impl<C: Chain<Transaction = Transaction, TransactionRef = H256>> TransactionMetadata<C>
+	for EvmTransactionMetadata
+{
 	fn extract_metadata(transaction: &<C as Chain>::Transaction) -> Self {
 		Self {
 			contract: transaction.contract,
@@ -560,18 +564,14 @@ impl ChannelLifecycleHooks for DeploymentStatus {
 				true
 			},
 			Self::Deployed => false,
-			Self::Undeployed => {
-				#[cfg(debug_assertions)]
-				{
+			Self::Undeployed =>
+				if cfg!(debug_assertions) {
 					panic!("Cannot finalize fetch to an undeployed address")
-				}
-				#[cfg(not(debug_assertions))]
-				{
+				} else {
 					log::error!("Cannot finalize fetch to an undeployed address");
 					*self = Self::Deployed;
 					false
-				}
-			},
+				},
 		}
 	}
 

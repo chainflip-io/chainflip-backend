@@ -1,33 +1,25 @@
 use crate::{
-	mock::*, pallet, ActiveBidder, BoundExecutorAddress, Error, EthereumAddress,
-	PendingRedemptions, RedemptionAmount, RedemptionTax, RestrictedAddresses, RestrictedBalances,
+	mock::*, pallet, BoundExecutorAddress, Error, EthereumAddress, PendingRedemptions,
+	RedemptionAmount, RedemptionTax, RestrictedAddresses, RestrictedBalances,
 };
 use cf_primitives::FlipBalance;
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::account_role_registry::MockAccountRoleRegistry, AccountInfo, AccountRoleRegistry,
-	Bonding, SetSafeMode,
+	Bonding, Chainflip, SetSafeMode, Slashing,
 };
 use sp_core::H160;
 
 use crate::BoundRedeemAddress;
-use frame_support::{assert_noop, assert_ok};
-use pallet_cf_flip::Bonder;
-use sp_runtime::{traits::BadOrigin, DispatchError};
+use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
+use pallet_cf_flip::{Bonder, FlipSlasher};
+use sp_runtime::DispatchError;
 
 type FlipError = pallet_cf_flip::Error<Test>;
 
 const ETH_DUMMY_ADDR: EthereumAddress = H160([42u8; 20]);
 const ETH_ZERO_ADDRESS: EthereumAddress = H160([0u8; 20]);
 const TX_HASH: pallet::EthTransactionHash = [211u8; 32];
-
-#[test]
-fn genesis_nodes_are_bidding_by_default() {
-	new_test_ext().execute_with(|| {
-		assert!(ActiveBidder::<Test>::contains_key(&CHARLIE));
-		assert!(!ActiveBidder::<Test>::contains_key(&ALICE));
-	});
-}
 
 #[test]
 fn funded_amount_is_added_and_subtracted() {
@@ -392,79 +384,9 @@ fn cannot_redeem_bond() {
 }
 
 #[test]
-fn test_start_and_stop_bidding() {
-	new_test_ext().execute_with(|| {
-		MockEpochInfo::add_authorities(ALICE);
-		const AMOUNT: u128 = 100;
-
-		assert_ok!(Funding::funded(
-			RuntimeOrigin::root(),
-			ALICE,
-			AMOUNT,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
-
-		// Not yet registered as validator.
-		assert_noop!(Funding::stop_bidding(RuntimeOrigin::signed(ALICE)), BadOrigin);
-		assert_noop!(Funding::start_bidding(RuntimeOrigin::signed(ALICE)), BadOrigin);
-
-		assert!(!ActiveBidder::<Test>::get(ALICE));
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
-			&ALICE
-		));
-
-		assert!(!ActiveBidder::<Test>::get(ALICE));
-
-		assert_noop!(
-			Funding::stop_bidding(RuntimeOrigin::signed(ALICE)),
-			<Error<Test>>::AlreadyNotBidding
-		);
-
-		assert!(!ActiveBidder::<Test>::get(ALICE));
-
-		assert_ok!(Funding::start_bidding(RuntimeOrigin::signed(ALICE)));
-
-		assert!(ActiveBidder::<Test>::get(ALICE));
-
-		assert_noop!(
-			Funding::start_bidding(RuntimeOrigin::signed(ALICE)),
-			<Error<Test>>::AlreadyBidding
-		);
-
-		MockEpochInfo::set_is_auction_phase(true);
-		assert_noop!(
-			Funding::stop_bidding(RuntimeOrigin::signed(ALICE)),
-			<Error<Test>>::AuctionPhase
-		);
-		assert!(ActiveBidder::<Test>::get(ALICE));
-
-		// Can stop bidding if outside of auction phase
-		MockEpochInfo::set_is_auction_phase(false);
-		assert_ok!(Funding::stop_bidding(RuntimeOrigin::signed(ALICE)));
-		assert!(!ActiveBidder::<Test>::get(ALICE));
-
-		assert_event_sequence!(
-			Test,
-			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
-			RuntimeEvent::Funding(crate::Event::Funded {
-				account_id: ALICE,
-				tx_hash: TX_HASH,
-				funds_added: AMOUNT,
-				total_balance: AMOUNT
-			}),
-			RuntimeEvent::Funding(crate::Event::StartedBidding { account_id: ALICE }),
-			RuntimeEvent::Funding(crate::Event::StoppedBidding { account_id: ALICE })
-		);
-	});
-}
-
-#[test]
-fn can_only_redeem_during_auction_if_not_bidding() {
+fn can_only_redeem_if_redemption_check_passes() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 45;
-		MockEpochInfo::set_is_auction_phase(true);
 
 		assert_ok!(Funding::funded(
 			RuntimeOrigin::root(),
@@ -476,10 +398,10 @@ fn can_only_redeem_during_auction_if_not_bidding() {
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
 			&ALICE
 		));
-		assert_ok!(Funding::start_bidding(RuntimeOrigin::signed(ALICE)));
-		assert!(ActiveBidder::<Test>::get(ALICE));
 
-		// Redeeming is not allowed because Alice is bidding in the auction phase.
+		CanRedeem::set(false);
+
+		// Redeem fails of RedemptionCheck fails.
 		assert_noop!(
 			Funding::redeem(
 				RuntimeOrigin::signed(ALICE),
@@ -487,19 +409,15 @@ fn can_only_redeem_during_auction_if_not_bidding() {
 				ETH_DUMMY_ADDR,
 				Default::default()
 			),
-			<Error<Test>>::AuctionPhase
+			BIDDING_ERR
 		);
 
-		// Stop bidding for Alice (must be done outside of the auction phase)
-		MockEpochInfo::set_is_auction_phase(false);
-		assert_ok!(Funding::stop_bidding(RuntimeOrigin::signed(ALICE)));
-		assert!(!ActiveBidder::<Test>::get(ALICE));
+		// Can redeem now
+		CanRedeem::set(true);
 
-		// Alice should be able to redeem while in the auction phase because she is not bidding
-		MockEpochInfo::set_is_auction_phase(true);
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
-			RedemptionAmount::Max,
+			(AMOUNT / 2).into(),
 			ETH_DUMMY_ADDR,
 			Default::default()
 		),);
@@ -616,6 +534,74 @@ fn redemption_expiry_removes_redemption() {
 			Default::default()
 		));
 	});
+}
+
+#[test]
+fn restore_restricted_balance_when_redemption_expires() {
+	const TOTAL_FUNDS: u128 = 100;
+	const RESTRICTED_AMOUNT: u128 = 60;
+	const RESTRICTED_ADDRESS: EthereumAddress = EthereumAddress::repeat_byte(0x02);
+
+	#[track_caller]
+	fn do_test(redeem_amount: RedemptionAmount<u128>) {
+		new_test_ext().execute_with(|| {
+			RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS, ());
+			assert_ok!(Funding::funded(
+				RuntimeOrigin::root(),
+				ALICE,
+				RESTRICTED_AMOUNT,
+				RESTRICTED_ADDRESS,
+				TX_HASH
+			));
+			assert_ok!(Funding::funded(
+				RuntimeOrigin::root(),
+				ALICE,
+				TOTAL_FUNDS - RESTRICTED_AMOUNT,
+				ETH_DUMMY_ADDR,
+				TX_HASH
+			));
+			assert_ok!(Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				redeem_amount,
+				RESTRICTED_ADDRESS,
+				Default::default()
+			));
+
+			// Restricted funds and total balance should have been reduced.
+			assert!(Flip::total_balance_of(&ALICE) < TOTAL_FUNDS);
+
+			assert_ok!(Funding::redemption_expired(
+				RuntimeOrigin::root(),
+				ALICE,
+				Default::default()
+			));
+
+			assert_eq!(
+				Flip::total_balance_of(&ALICE),
+				TOTAL_FUNDS - REDEMPTION_TAX,
+				"Expected the full balance, minus redemption tax, to be restored to the account"
+			);
+			let new_restricted_balance = *RestrictedBalances::<Test>::get(&ALICE)
+				.get(&RESTRICTED_ADDRESS)
+				.expect("Expected the restricted balance to be restored to the restricted address");
+			assert_eq!(
+				new_restricted_balance,
+				RESTRICTED_AMOUNT - REDEMPTION_TAX,
+				"Expected the restricted balance to be restored excluding the redemption tax",
+			);
+		});
+	}
+
+	// Redeem all.
+	do_test(RedemptionAmount::Max);
+	// Redeem more than the restricted balance.
+	do_test(RedemptionAmount::Exact(RESTRICTED_AMOUNT + REDEMPTION_TAX * 2));
+	// Redeem exactly the restricted balance.
+	do_test(RedemptionAmount::Exact(RESTRICTED_AMOUNT));
+	// Redeem a little less than the restricted balance.
+	do_test(RedemptionAmount::Exact(RESTRICTED_AMOUNT - 1));
+	// Redeem signficantly less than the restricted balance.
+	do_test(RedemptionAmount::Exact(RESTRICTED_AMOUNT - REDEMPTION_TAX * 2));
 }
 
 #[test]
@@ -1607,6 +1593,165 @@ fn detect_wrong_executor_address() {
 				Some(WRONG_EXECUTOR_ADDRESS)
 			),
 			Error::<Test>::ExecutorBindingRestrictionViolated
+		);
+	});
+}
+
+#[test]
+fn can_redeem_if_balance_lower_than_restricted_funds() {
+	new_test_ext().execute_with(|| {
+		const RESTRICTED_ADDRESS_1: EthereumAddress = H160([0x01; 20]);
+		const RESTRICTED_ADDRESS_2: EthereumAddress = H160([0x02; 20]);
+		const DEBIT_AMOUNT: u128 = 50;
+		const RESTRICTED_AMOUNT: u128 = 150;
+		const REDEEM_AMOUNT: u128 = 60;
+		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_1, ());
+		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_2, ());
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			RESTRICTED_AMOUNT,
+			RESTRICTED_ADDRESS_1,
+			TX_HASH
+		));
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			RESTRICTED_AMOUNT,
+			RESTRICTED_ADDRESS_2,
+			TX_HASH
+		));
+
+		// we want to have a balance < sum of restricted balances
+		FlipSlasher::<Test>::slash_balance(&ALICE, DEBIT_AMOUNT);
+
+		// redemption towards a non restricted address fails
+		assert_noop!(
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				REDEEM_AMOUNT.into(),
+				H160([0x05; 20]),
+				Default::default()
+			),
+			Error::<Test>::InsufficientUnrestrictedFunds
+		);
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			REDEEM_AMOUNT.into(),
+			RESTRICTED_ADDRESS_1,
+			Default::default()
+		));
+		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, REDEEM_AMOUNT, TX_HASH));
+		assert_eq!(
+			RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS_1),
+			Some(&(RESTRICTED_AMOUNT - REDEEM_AMOUNT - REDEMPTION_TAX))
+		);
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			RedemptionAmount::Max,
+			RESTRICTED_ADDRESS_1,
+			Default::default()
+		));
+		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, 80, TX_HASH));
+		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS_1), None);
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			RedemptionAmount::Max,
+			RESTRICTED_ADDRESS_2,
+			Default::default()
+		));
+
+		// we are able to withdraw the whole balance
+		assert_eq!(Flip::balance(&ALICE), 0);
+		// the last restricted address still has some balance in it (sum of initial restricted
+		// balances - initial account balance)
+		assert_eq!(
+			RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS_2),
+			Some(&(DEBIT_AMOUNT))
+		);
+	});
+}
+
+#[test]
+fn cannot_redeem_to_non_restricted_address_with_balance_lower_than_restricted_funds() {
+	new_test_ext().execute_with(|| {
+		const RESTRICTED_ADDRESS_1: EthereumAddress = H160([0x01; 20]);
+		const DEBIT_AMOUNT: u128 = 50;
+		const RESTRICTED_AMOUNT: u128 = 150;
+		const REDEEM_AMOUNT: u128 = 60;
+		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_1, ());
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			RESTRICTED_AMOUNT,
+			RESTRICTED_ADDRESS_1,
+			TX_HASH
+		));
+
+		// we want to have a balance < sum of restricted balances
+		FlipSlasher::<Test>::slash_balance(&ALICE, DEBIT_AMOUNT);
+
+		assert_noop!(
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				REDEEM_AMOUNT.into(),
+				H160([0x05; 20]),
+				Default::default()
+			),
+			Error::<Test>::InsufficientUnrestrictedFunds
+		);
+	});
+}
+
+#[test]
+fn account_references_must_be_zero_for_full_redeem() {
+	const FUNDING_AMOUNT: FlipBalance = 100;
+	new_test_ext().execute_with(|| {
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			FUNDING_AMOUNT,
+			Default::default(),
+			Default::default()
+		));
+		assert_eq!(
+			frame_system::Pallet::<Test>::providers(&ALICE),
+			1,
+			"Funding pallet should increment the provider count on account creation."
+		);
+
+		<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE).unwrap();
+
+		assert_noop!(
+			Funding::redeem(
+				OriginTrait::signed(ALICE),
+				RedemptionAmount::Max,
+				Default::default(),
+				Default::default()
+			),
+			Error::<Test>::AccountMustBeUnregistered,
+		);
+
+		<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::deregister_as_validator(&ALICE).unwrap();
+
+		assert_ok!(Funding::redeem(
+			OriginTrait::signed(ALICE),
+			RedemptionAmount::Max,
+			Default::default(),
+			Default::default()
+		),);
+
+		assert_ok!(Funding::redeemed(
+			RuntimeOrigin::root(),
+			ALICE,
+			FUNDING_AMOUNT,
+			Default::default()
+		),);
+
+		assert_eq!(
+			frame_system::Pallet::<Test>::providers(&ALICE),
+			0,
+			"Funding pallet should decrement the provider count on final redemption."
 		);
 	});
 }

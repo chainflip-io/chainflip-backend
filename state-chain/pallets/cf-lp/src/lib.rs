@@ -2,12 +2,15 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
-use cf_primitives::{Asset, AssetAmount, ForeignChain};
+use cf_primitives::{Asset, AssetAmount, BasisPoints, ForeignChain};
 use cf_traits::{
 	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi,
-	EgressApi, PoolApi,
+	EgressApi, LpDepositHandler, PoolApi, ScheduledEgressDetails,
 };
 
+use sp_std::vec;
+
+use cf_chains::assets::any::AssetMap;
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -23,7 +26,7 @@ pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled);
 
@@ -45,6 +48,7 @@ pub mod pallet {
 		type DepositHandler: DepositApi<
 			AnyChain,
 			AccountId = <Self as frame_system::Config>::AccountId,
+			Amount = <Self as Chainflip>::Amount,
 		>;
 
 		/// API for handling asset egress.
@@ -62,6 +66,12 @@ pub mod pallet {
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
+
+		#[cfg(feature = "runtime-benchmarks")]
+		type FeePayment: cf_traits::FeePayment<
+			Amount = <Self as Chainflip>::Amount,
+			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
 	}
 
 	#[pallet::error]
@@ -83,6 +93,10 @@ pub mod pallet {
 		LiquidityDepositDisabled,
 		/// Withdrawals are disabled due to Safe Mode.
 		WithdrawalsDisabled,
+		/// The account still has open orders remaining.
+		OpenOrdersRemaining,
+		/// The account still has funds remaining in the free balances.
+		FundsRemaining,
 	}
 
 	#[pallet::event]
@@ -105,17 +119,25 @@ pub mod pallet {
 			// account the funds will be credited to upon deposit
 			account_id: T::AccountId,
 			deposit_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
+			boost_fee: BasisPoints,
+			channel_opening_fee: T::Amount,
 		},
 		WithdrawalEgressScheduled {
 			egress_id: EgressId,
 			asset: Asset,
 			amount: AssetAmount,
 			destination_address: EncodedAddress,
+			fee: AssetAmount,
 		},
 		LiquidityRefundAddressRegistered {
 			account_id: T::AccountId,
 			chain: ForeignChain,
 			address: ForeignChainAddress,
+		},
+		LiquidityDepositCredited {
+			account_id: T::AccountId,
+			asset: Asset,
+			amount_credited: AssetAmount,
 		},
 	}
 
@@ -128,6 +150,11 @@ pub mod pallet {
 	/// Storage for user's free balances/ DoubleMap: (AccountId, Asset) => Balance
 	pub type FreeBalances<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, T::AccountId, Identity, Asset, AssetAmount>;
+
+	#[pallet::storage]
+	/// Historical earned fees for an account.
+	pub type HistoricalEarnedFees<T: Config> =
+		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
 	/// Stores the registered energency withdrawal address for an Account
 	#[pallet::storage]
@@ -149,6 +176,7 @@ pub mod pallet {
 		pub fn request_liquidity_deposit_address(
 			origin: OriginFor<T>,
 			asset: Asset,
+			boost_fee: BasisPoints,
 		) -> DispatchResult {
 			ensure!(T::SafeMode::get().deposit_enabled, Error::<T>::LiquidityDepositDisabled);
 
@@ -159,8 +187,12 @@ pub mod pallet {
 				Error::<T>::NoLiquidityRefundAddressRegistered
 			);
 
-			let (channel_id, deposit_address, expiry_block) =
-				T::DepositHandler::request_liquidity_deposit_address(account_id.clone(), asset)?;
+			let (channel_id, deposit_address, expiry_block, channel_opening_fee) =
+				T::DepositHandler::request_liquidity_deposit_address(
+					account_id.clone(),
+					asset,
+					boost_fee,
+				)?;
 
 			Self::deposit_event(Event::LiquidityDepositAddressReady {
 				channel_id,
@@ -168,6 +200,8 @@ pub mod pallet {
 				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
 				account_id,
 				deposit_chain_expiry_block: expiry_block,
+				boost_fee,
+				channel_opening_fee,
 			});
 
 			Ok(())
@@ -203,18 +237,21 @@ pub mod pallet {
 				// Debit the asset from the account.
 				Self::try_debit_account(&account_id, asset, amount)?;
 
-				let egress_id = T::EgressHandler::schedule_egress(
-					asset,
-					amount,
-					destination_address_internal,
-					None,
-				);
+				let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
+					T::EgressHandler::schedule_egress(
+						asset,
+						amount,
+						destination_address_internal,
+						None,
+					)
+					.map_err(Into::into)?;
 
 				Self::deposit_event(Event::<T>::WithdrawalEgressScheduled {
 					egress_id,
 					asset,
-					amount,
+					amount: egress_amount,
 					destination_address,
+					fee: fee_withheld,
 				});
 			}
 			Ok(())
@@ -263,6 +300,53 @@ pub mod pallet {
 			});
 			Ok(())
 		}
+
+		#[pallet::call_index(5)]
+		#[pallet::weight(T::WeightInfo::deregister_lp_account())]
+		pub fn deregister_lp_account(who: OriginFor<T>) -> DispatchResult {
+			const STABLE_ASSET: Asset = Asset::Usdc;
+			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(who)?;
+
+			ensure!(
+				Asset::all().filter(|asset| *asset != STABLE_ASSET).all(|asset| {
+					T::PoolApi::open_order_count(&account_id, asset, STABLE_ASSET)
+						.unwrap_or_default() == 0
+				}),
+				Error::<T>::OpenOrdersRemaining
+			);
+			ensure!(
+				Self::asset_balances(&account_id)?.iter().all(|(_, amount)| *amount == 0),
+				Error::<T>::FundsRemaining
+			);
+
+			let _ = FreeBalances::<T>::clear_prefix(&account_id, u32::MAX, None);
+			let _ = LiquidityRefundAddress::<T>::clear_prefix(&account_id, u32::MAX, None);
+			let _ = HistoricalEarnedFees::<T>::clear_prefix(&account_id, u32::MAX, None);
+
+			T::AccountRoleRegistry::deregister_as_liquidity_provider(&account_id)?;
+
+			Ok(())
+		}
+	}
+}
+
+impl<T: Config> LpDepositHandler for Pallet<T> {
+	type AccountId = <T as frame_system::Config>::AccountId;
+
+	fn add_deposit(
+		account_id: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> frame_support::pallet_prelude::DispatchResult {
+		Self::try_credit_account(account_id, asset, amount)?;
+
+		Self::deposit_event(Event::LiquidityDepositCredited {
+			account_id: account_id.clone(),
+			asset,
+			amount_credited: amount,
+		});
+
+		Ok(())
 	}
 }
 
@@ -334,5 +418,16 @@ impl<T: Config> LpBalanceApi for Pallet<T> {
 			amount_debited: amount,
 		});
 		Ok(())
+	}
+
+	fn record_fees(account_id: &Self::AccountId, amount: AssetAmount, asset: Asset) {
+		HistoricalEarnedFees::<T>::mutate(account_id, asset, |balance| {
+			balance.saturating_add(amount)
+		});
+	}
+
+	fn asset_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError> {
+		T::PoolApi::sweep(who)?;
+		Ok(AssetMap::from_fn(|asset| FreeBalances::<T>::get(who, asset).unwrap_or_default()))
 	}
 }

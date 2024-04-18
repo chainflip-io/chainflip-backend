@@ -12,6 +12,11 @@ jobs:
   pre-check:
     uses: ./.github/workflows/_01_pre_check.yml
     secrets: inherit
+  release-checks:
+    uses: ./.github/workflows/_03_release_checks.yml
+    with:
+      network: "sisyphos"
+    secrets: inherit
   test:
     uses: ./.github/workflows/_10_test.yml
     secrets: inherit
@@ -27,6 +32,15 @@ jobs:
     with:
       profile: "production"
       binary-subdir: "production"
+  # Used to test upgrades to this version from the latest release
+  build-try-runtime:
+    needs: [test]
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      profile: "try-runtime"
+      upload-name: "chainflip-backend-bin-try-runtime"
+      binary-subdir: release
   docker:
     needs: [build]
     uses: ./.github/workflows/_24_docker.yml
@@ -44,6 +58,8 @@ jobs:
     needs: [build]
     uses: ./.github/workflows/_40_post_check.yml
     secrets: inherit
+    with:
+      full_bouncer: true
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml

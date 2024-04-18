@@ -1,4 +1,5 @@
 use super::*;
+use crate::address::IntoForeignChainAddress;
 use frame_support::traits::ConstBool;
 
 /// A Chain that can't be constructed.
@@ -23,6 +24,7 @@ impl Chain for NoneChain {
 	type TransactionMetadata = ();
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
+	type TransactionRef = ();
 }
 
 impl FeeRefundCalculator<NoneChain> for () {
@@ -33,6 +35,8 @@ impl FeeRefundCalculator<NoneChain> for () {
 		unimplemented!()
 	}
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NoneChainCrypto;
 impl ChainCrypto for NoneChainCrypto {
 	type UtxoChain = ConstBool<false>;
@@ -41,6 +45,7 @@ impl ChainCrypto for NoneChainCrypto {
 	type ThresholdSignature = ();
 	type TransactionInId = ();
 	type TransactionOutId = ();
+	type KeyHandoverIsRequired = ConstBool<false>;
 	type GovKey = ();
 
 	fn verify_threshold_signature(
@@ -59,5 +64,11 @@ impl ChainCrypto for NoneChainCrypto {
 		_rotation_broadcast_id: BroadcastId,
 	) -> Vec<BroadcastId> {
 		unimplemented!()
+	}
+}
+
+impl IntoForeignChainAddress<NoneChain> for ForeignChainAddress {
+	fn into_foreign_chain_address(address: ForeignChainAddress) -> ForeignChainAddress {
+		address
 	}
 }

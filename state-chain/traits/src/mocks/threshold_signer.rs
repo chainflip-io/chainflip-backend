@@ -4,7 +4,7 @@ use super::{MockPallet, MockPalletStorage};
 use cf_chains::ChainCrypto;
 use cf_primitives::{EpochIndex, ThresholdSignatureRequestId};
 use codec::{Decode, Encode};
-use frame_support::{dispatch::UnfilteredDispatchable, traits::OriginTrait};
+use frame_support::traits::{OriginTrait, UnfilteredDispatchable};
 use sp_std::collections::btree_set::BTreeSet;
 use std::marker::PhantomData;
 
@@ -91,22 +91,6 @@ where
 		);
 		Self::put_storage(REQUEST, req_id, payload);
 		Self::put_value(LAST_REQ_ID, req_id);
-		req_id
-	}
-
-	fn request_verification_signature(
-		payload: <C as ChainCrypto>::Payload,
-		participants: BTreeSet<Self::ValidatorId>,
-		key: <C as ChainCrypto>::AggKey,
-		epoch_index: EpochIndex,
-		on_signature_ready: impl FnOnce(ThresholdSignatureRequestId) -> Self::Callback,
-	) -> ThresholdSignatureRequestId {
-		Self::put_value(
-			KEY_VERIFICATION_REQUEST,
-			VerificationParams::<C> { participants, key, epoch_index },
-		);
-		let req_id = Self::request_signature(payload);
-		Self::register_callback(req_id, on_signature_ready(req_id)).unwrap();
 		req_id
 	}
 

@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use cf_primitives::SemVer;
+use cf_primitives::CfeCompatibility;
 use codec::{Decode, Encode};
 use frame_support::{dispatch::DispatchInfo, pallet_prelude::InvalidTransaction};
 use itertools::Itertools;
@@ -17,7 +17,7 @@ use sp_runtime::{
 use state_chain_runtime::{BlockNumber, Nonce, UncheckedExtrinsic};
 use thiserror::Error;
 use tokio::sync::oneshot;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 use utilities::{
 	future_map::FutureMap,
 	task_scope::{self, Scope},
@@ -28,7 +28,7 @@ use crate::state_chain_observer::client::{
 	base_rpc_api,
 	error_decoder::{DispatchError, ErrorDecoder},
 	extrinsic_api::common::invalid_err_obj,
-	storage_api::StorageApi,
+	storage_api::{CheckBlockCompatibility, StorageApi},
 	SUBSTRATE_BEHAVIOUR,
 };
 
@@ -101,7 +101,9 @@ pub enum RequestStrategy {
 	AllowMultipleSubmissions,
 }
 
+#[derive(Debug)]
 pub struct Submission {
+	id: SubmissionID,
 	lifetime: std::ops::RangeTo<cf_primitives::BlockNumber>,
 	tx_hash: H256,
 	request_id: RequestID,
@@ -113,7 +115,8 @@ pub struct SubmissionWatcher<
 	BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
 > {
 	scope: &'a Scope<'env, anyhow::Error>,
-	submissions_by_nonce: BTreeMap<Nonce, BTreeMap<SubmissionID, Submission>>,
+	next_request_id: RequestID,
+	submissions_by_nonce: BTreeMap<Nonce, Vec<Submission>>,
 	#[allow(clippy::type_complexity)]
 	submission_status_futures:
 		FutureMap<(RequestID, SubmissionID), task_scope::ScopedJoinHandle<Option<(H256, H256)>>>,
@@ -135,7 +138,6 @@ pub struct SubmissionWatcher<
 	)>,
 	base_rpc_client: Arc<BaseRpcClient>,
 	error_decoder: ErrorDecoder,
-	check_unfinalized_version: Option<SemVer>,
 }
 
 pub enum SubmissionLogicError {
@@ -155,11 +157,11 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		genesis_hash: state_chain_runtime::Hash,
 		extrinsic_lifetime: BlockNumber,
 		base_rpc_client: Arc<BaseRpcClient>,
-		check_unfinalized_version: Option<SemVer>,
 	) -> (Self, BTreeMap<RequestID, Request>) {
 		(
 			Self {
 				scope,
+				next_request_id: Default::default(),
 				submissions_by_nonce: Default::default(),
 				submission_status_futures: Default::default(),
 				signer,
@@ -172,7 +174,6 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				block_cache: Default::default(),
 				base_rpc_client,
 				error_decoder: Default::default(),
-				check_unfinalized_version,
 			},
 			// Return an empty requests map. This is done so that initial state of the requests
 			// matches the submission watchers state. The requests must be stored outside of
@@ -225,10 +226,12 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			match self.base_rpc_client.submit_and_watch_extrinsic(signed_extrinsic).await {
 				Ok(mut transaction_status_stream) => {
 					request.pending_submissions.insert(request.next_submission_id, nonce);
-					self.submissions_by_nonce.entry(nonce).or_default().insert(
-						request.next_submission_id,
-						Submission { lifetime, tx_hash, request_id: request.id },
-					);
+					self.submissions_by_nonce.entry(nonce).or_default().push(Submission {
+						id: request.next_submission_id,
+						lifetime,
+						tx_hash,
+						request_id: request.id,
+					});
 					self.submission_status_futures.insert(
 						(request.id, request.next_submission_id),
 						self.scope.spawn_with_handle(async move {
@@ -335,7 +338,8 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		until_finalized_sender: oneshot::Sender<FinalizationResult>,
 		strategy: RequestStrategy,
 	) -> Result<(), anyhow::Error> {
-		let id = requests.keys().next_back().map(|id| id + 1).unwrap_or(0);
+		let id = self.next_request_id;
+		self.next_request_id += 1;
 		let request = requests
 			.try_insert(
 				id,
@@ -404,58 +408,64 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 	) -> Result<(), anyhow::Error> {
 		if let Some((header, extrinsics, events)) = if let Some((
 			_,
-			cached_compatbile_block_details,
+			cached_compatible_block_details,
 		)) = self
 			.block_cache
 			.iter()
 			.find(|(cached_block_hash, ..)| block_hash == *cached_block_hash)
 		{
-			cached_compatbile_block_details.as_ref()
+			cached_compatible_block_details.as_ref()
 		} else if let Some(block) = self.base_rpc_client.block(block_hash).await? {
-			let compatible_or_unchecked_version =
-				if let Some(check_unfinalized_version) = self.check_unfinalized_version {
-					check_unfinalized_version.is_compatible_with(
-						self.base_rpc_client
-							.storage_value::<pallet_cf_environment::CurrentReleaseVersion<
-								state_chain_runtime::Runtime,
-							>>(block_hash)
-							.await?,
-					)
-				} else {
-					true
-				};
-
-			let compatible_block_details = if compatible_or_unchecked_version {
-				let events = self
-					.base_rpc_client
-					.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(block_hash)
-					.await?;
-
-				Some((block.block.header, block.block.extrinsics, events))
-			} else {
-				None
-			};
-
 			if self.block_cache.len() >= 4 {
 				self.block_cache.pop_front();
 			}
-			self.block_cache.push_back((block_hash, compatible_block_details));
+			self.block_cache.push_back((
+				block_hash,
+				if self
+					.base_rpc_client
+					.check_block_compatibility(block.block.header.clone().into())
+					.await?
+					.compatibility == CfeCompatibility::Compatible
+				{
+					Some((
+						block.block.header,
+						block.block.extrinsics,
+						self.base_rpc_client
+							.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(
+								block_hash,
+							)
+							.await?,
+					))
+				} else {
+					None
+				},
+			));
 
 			self.block_cache.back().unwrap().1.as_ref()
 		} else {
 			warn!(target: "state_chain_client", request_id = request_id, submission_id = submission_id, "Block not found with hash {block_hash:?}");
 			None
 		} {
-			let (extrinsic_index, _extrinsic) = extrinsics
-				.iter()
-				.enumerate()
-				.find(|(_extrinsic_index, extrinsic)| {
+			info!(target: "state_chain_client", request_id = request_id, submission_id = submission_id, "Request found in unchecked block '{block_hash:?}' with tx_hash '{tx_hash:?}'");
+			let Some((extrinsic_index, _extrinsic)) =
+				extrinsics.iter().enumerate().find(|(_extrinsic_index, extrinsic)| {
 					tx_hash ==
 						<state_chain_runtime::Runtime as frame_system::Config>::Hashing::hash_of(
 							extrinsic,
 						)
 				})
-				.expect(SUBSTRATE_BEHAVIOUR);
+			else {
+				error!(target: "state_chain_client", request_id = request_id, submission_id = submission_id, "Submission not found in block '{block_hash:?}' with tx_hash '{tx_hash:?}', for the original request: {:?}", requests.get_mut(&request_id));
+				for (extrinsic_index, extrinsic) in extrinsics.iter().enumerate() {
+					error!(target: "state_chain_client", request_id = request_id, submission_id = submission_id, "Found extrinsic in block '{block_hash:?}' with index '{extrinsic_index:?}' and tx_hash '{tx_hash:?}'", tx_hash = <state_chain_runtime::Runtime as frame_system::Config>::Hashing::hash_of(
+						extrinsic,
+					));
+				}
+				error!(target: "state_chain_client", request_id = request_id, submission_id = submission_id, "All pending requests: {:?}", requests);
+				error!(target: "state_chain_client", request_id = request_id, submission_id = submission_id, "All pending submissions: {:?}", self.submissions_by_nonce);
+				error!(target: "state_chain_client", request_id = request_id, submission_id = submission_id, "Full block cache: {:?}", self.block_cache);
+				panic!("{SUBSTRATE_BEHAVIOUR}");
+			};
 
 			let extrinsic_events = events
 				.iter()
@@ -549,11 +559,12 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 					let mut optional_extrinsic_events = Some(extrinsic_events);
 
-					for (submission_id, submission) in submissions {
+					for submission in submissions {
 						if let Some(request) = requests.get_mut(&submission.request_id) {
-							request.pending_submissions.remove(&submission_id).unwrap();
-							self.submission_status_futures.remove((request.id, submission_id));
+							request.pending_submissions.remove(&submission.id).unwrap();
 						}
+						self.submission_status_futures
+							.remove((submission.request_id, submission.id));
 
 						// Note: It is technically possible for a hash collision to
 						// occur, but it is so unlikely it is effectively
@@ -574,11 +585,12 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 								extrinsic_events,
 								block.header.clone(),
 							);
-							info!(target: "state_chain_client", request_id = matching_request.id, submission_id = submission_id, "Request found in finalized block with hash {block_hash:?}, tx_hash {tx_hash:?}, and extrinsic index {extrinsic_index}.");
+							info!(target: "state_chain_client", request_id = matching_request.id, submission_id = submission.id, "Request found in finalized block with hash {block_hash:?}, tx_hash {tx_hash:?}, and extrinsic index {extrinsic_index}.");
 							if let Some(until_in_block_sender) =
 								matching_request.until_in_block_sender
 							{
 								let _result = until_in_block_sender.send(
+									#[allow(clippy::useless_asref)]
 									result.as_ref().map(Clone::clone).map_err(
 										|error| match error {
 											ExtrinsicError::Dispatch(dispatch_error) =>
@@ -600,15 +612,15 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			self.submissions_by_nonce.retain(|nonce, submissions| {
 				assert!(self.finalized_nonce <= *nonce, "{SUBSTRATE_BEHAVIOUR}");
 
-				submissions.retain(|submission_id, submission| {
+				submissions.retain(|submission| {
 					let alive = submission.lifetime.contains(&(block.header.number + 1));
 
 					if !alive {
-						info!(target: "state_chain_client", request_id = submission.request_id, submission_id = submission_id, "Submission has timed out.");
+						info!(target: "state_chain_client", request_id = submission.request_id, submission_id = submission.id, "Submission has timed out.");
 						if let Some(request) = requests.get_mut(&submission.request_id) {
-							request.pending_submissions.remove(submission_id).unwrap();
+							request.pending_submissions.remove(&submission.id).unwrap();
 						}
-						self.submission_status_futures.remove((submission.request_id, *submission_id));
+						self.submission_status_futures.remove((submission.request_id, submission.id));
 					}
 
 					alive

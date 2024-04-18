@@ -2,7 +2,7 @@
 
 The Chainflip Engine is layer between the State Chain (Chainflip's blockchain) and the external chains supported by Chainflip.
 
-## Responsibilites
+## Responsibilities
 
 Broadly the Chainflip Engine's responsibilities include:
 

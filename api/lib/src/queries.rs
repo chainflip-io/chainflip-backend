@@ -1,20 +1,20 @@
 use super::*;
-use cf_chains::{address::ToHumanreadableAddress, Chain};
+use cf_chains::{address::ToHumanreadableAddress, instances::ChainInstanceFor, Chain};
 use cf_primitives::{chains::assets::any, AssetAmount, FlipBalance};
 use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi,
 };
 use codec::Decode;
+use custom_rpc::CustomApiClient;
 use frame_support::sp_runtime::DigestItem;
 use pallet_cf_ingress_egress::DepositChannelDetails;
 use pallet_cf_validator::RotationPhase;
 use serde::Deserialize;
 use sp_consensus_aura::{Slot, AURA_ENGINE_ID};
-use state_chain_runtime::PalletInstanceAlias;
+use state_chain_runtime::runtime_apis::FailingWitnessValidators;
 use std::{collections::BTreeMap, ops::Deref, sync::Arc};
 use tracing::log;
 use utilities::task_scope;
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwapChannelInfo<C: Chain> {
 	deposit_address: <C::ChainAccount as ToHumanreadableAddress>::Humanreadable,
@@ -45,6 +45,8 @@ impl QueryApi {
 			&state_chain_settings.signing_key_file,
 			AccountRole::Unregistered,
 			false,
+			false,
+			false,
 			None,
 		)
 		.await?;
@@ -52,13 +54,13 @@ impl QueryApi {
 		Ok(Self { state_chain_client })
 	}
 
-	pub async fn get_open_swap_channels<C: Chain + PalletInstanceAlias>(
+	pub async fn get_open_swap_channels<C: Chain>(
 		&self,
 		block_hash: Option<state_chain_runtime::Hash>,
 	) -> Result<Vec<SwapChannelInfo<C>>, anyhow::Error>
 	where
 		state_chain_runtime::Runtime:
-			pallet_cf_ingress_egress::Config<C::Instance, TargetChain = C>,
+			pallet_cf_ingress_egress::Config<ChainInstanceFor<C>, TargetChain = C>,
 	{
 		let block_hash =
 			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_block().hash);
@@ -67,7 +69,7 @@ impl QueryApi {
 			self.state_chain_client
 				.storage_map::<pallet_cf_ingress_egress::DepositChannelLookup<
 					state_chain_runtime::Runtime,
-					C::Instance,
+					ChainInstanceFor<C>,
 				>, Vec<_>>(block_hash)
 				.map(|result| {
 					result.map(|channels| channels.into_iter().collect::<BTreeMap<_, _>>())
@@ -101,14 +103,14 @@ impl QueryApi {
 		let block_hash =
 			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_block().hash);
 
-		futures::future::join_all(Asset::all().iter().map(|asset| async {
+		futures::future::join_all(Asset::all().map(|asset| async move {
 			Ok((
-				*asset,
+				asset,
 				self.state_chain_client
 					.storage_double_map_entry::<pallet_cf_lp::FreeBalances<state_chain_runtime::Runtime>>(
 						block_hash,
 						&self.state_chain_client.account_id(),
-						asset,
+						&asset,
 					)
 					.await?
 					.unwrap_or_default(),
@@ -218,6 +220,21 @@ impl QueryApi {
 		let index = current_validators.iter().position(|account| account == &account_id).unwrap();
 
 		result.next_block_in = Some(compute_distance(index, current_relative_slot, validator_len));
+		Ok(result)
+	}
+
+	pub async fn check_witnesses(
+		&self,
+		block_hash: Option<state_chain_runtime::Hash>,
+		hash: state_chain_runtime::Hash,
+	) -> Result<Option<FailingWitnessValidators>, anyhow::Error> {
+		let result = self
+			.state_chain_client
+			.base_rpc_client
+			.raw_rpc_client
+			.cf_witness_count(hash, block_hash)
+			.await?;
+
 		Ok(result)
 	}
 }

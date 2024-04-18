@@ -6,18 +6,27 @@ mod mock;
 mod tests;
 
 pub mod weights;
-use weights::WeightInfo;
+pub use weights::WeightInfo;
+pub mod migrations;
 
 use cf_primitives::AccountRole;
 use cf_traits::AccountRoleRegistry;
 use frame_support::{
 	error::BadOrigin,
-	pallet_prelude::DispatchResult,
-	traits::{EnsureOrigin, IsType, OnKilledAccount, OnNewAccount},
+	pallet_prelude::{DispatchResult, StorageVersion},
+	traits::{EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OnNewAccount},
+	BoundedVec,
 };
+use sp_core::ConstU32;
+
 use frame_system::{ensure_signed, pallet_prelude::OriginFor, RawOrigin};
 pub use pallet::*;
-use sp_std::{marker::PhantomData, vec::Vec};
+use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, vec::Vec};
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+pub const MAX_LENGTH_FOR_VANITY_NAME: u32 = 64;
+
+type VanityName = BoundedVec<u8, ConstU32<MAX_LENGTH_FOR_VANITY_NAME>>;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -32,14 +41,9 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::without_storage_info]
+	#[pallet::storage_version(PALLET_VERSION)]
 	pub struct Pallet<T>(PhantomData<T>);
-
-	// TODO: Remove once swapping is enabled and stabilised.
-	// Acts to flag the swapping features. If there are no Broker accounts or
-	// LP accounts, then the swapping features are disabled.
-	#[pallet::storage]
-	#[pallet::getter(fn swapping_enabled)]
-	pub type SwappingEnabled<T: Config> = StorageValue<_, bool, ValueQuery>;
 
 	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	// !!!!!!!!!!!!!!!!!!!! IMPORTANT: Care must be taken when changing this !!!!!!!!!!!!!!!!!!!!
@@ -49,10 +53,28 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type AccountRoles<T: Config> = StorageMap<_, Identity, T::AccountId, AccountRole>;
 
+	/// Vanity names of the validators stored as a Map with the current validator IDs as key.
+	#[pallet::storage]
+	#[pallet::getter(fn vanity_names)]
+	pub type VanityNames<T: Config> =
+		StorageValue<_, BTreeMap<T::AccountId, VanityName>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		AccountRoleRegistered { account_id: T::AccountId, role: AccountRole },
+		AccountRoleRegistered {
+			account_id: T::AccountId,
+			role: AccountRole,
+		},
+		AccountRoleDeregistered {
+			account_id: T::AccountId,
+			role: AccountRole,
+		},
+		/// Vanity Name for a node has been set.
+		VanityNameSet {
+			account_id: T::AccountId,
+			name: VanityName,
+		},
 	}
 
 	#[pallet::error]
@@ -61,73 +83,77 @@ pub mod pallet {
 		UnknownAccount,
 		/// The account already has a registered role.
 		AccountRoleAlreadyRegistered,
-		/// Initially when swapping features are deployed to the chain, they will be disabled.
-		SwappingDisabled,
+		/// Invalid characters in the name.
+		InvalidCharactersInName,
 	}
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub initial_account_roles: Vec<(T::AccountId, AccountRole)>,
+		pub genesis_vanity_names: BTreeMap<T::AccountId, VanityName>,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { initial_account_roles: Default::default() }
+			Self {
+				initial_account_roles: Default::default(),
+				genesis_vanity_names: Default::default(),
+			}
 		}
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
-			let mut should_enable_swapping = false;
 			for (account, role) in &self.initial_account_roles {
-				AccountRoles::<T>::insert(account, role);
-				if *role == AccountRole::LiquidityProvider || *role == AccountRole::Broker {
-					should_enable_swapping = true;
-				}
+				Pallet::<T>::register_account_role(account, *role)
+					.expect("Genesis account role registration should not fail.");
 			}
-			if should_enable_swapping {
-				SwappingEnabled::<T>::put(true);
-			}
+			VanityNames::<T>::put(&self.genesis_vanity_names);
 		}
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		// TODO: Remove this function after the feature is deployed and stabilised.
-		// Once the swapping features are enabled, they can't be disabled.
-		// If they have been enabled, it's possible accounts have already registered as Brokers or
-		// LPs. Thus, disabling this flag is not an indicator of whether the public can swap.
-		// Governance can bypass this by calling `gov_register_account_role`.
+		/// Allow a node to set a "Vanity Name" for themselves. This is functionally
+		/// useless but can be used to make the network a bit more friendly for
+		/// observers. Names are required to be <= MAX_LENGTH_FOR_VANITY_NAME (64)
+		/// UTF-8 bytes.
+		///
+		/// The dispatch origin of this function must be signed.
+		///
+		/// ## Events
+		///
+		/// - [VanityNameSet](Event::VanityNameSet)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::error::BadOrigin)
+		/// - [InvalidCharactersInName](Error::InvalidCharactersInName)
 		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::enable_swapping())]
-		pub fn enable_swapping(origin: OriginFor<T>) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			SwappingEnabled::<T>::put(true);
-			Ok(())
-		}
-
-		// TODO: Remove this function after swapping is deployed and stabilised.
-		/// Bypass the Swapping Enabled check. This allows governance to enable swapping
-		/// features for some controlled accounts.
-		#[pallet::call_index(1)]
-		#[pallet::weight(T::WeightInfo::gov_register_account_role())]
-		pub fn gov_register_account_role(
+		#[pallet::weight(T::WeightInfo::set_vanity_name())]
+		pub fn set_vanity_name(
 			origin: OriginFor<T>,
-			account: T::AccountId,
-			role: AccountRole,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::register_account_role_unprotected(&account, role)?;
-			Ok(())
+			name: VanityName,
+		) -> DispatchResultWithPostInfo {
+			let account_id = ensure_signed(origin)?;
+			ensure!(sp_std::str::from_utf8(&name).is_ok(), Error::<T>::InvalidCharactersInName);
+			VanityNames::<T>::mutate(|vanity_names| {
+				vanity_names.insert(account_id.clone(), name.clone());
+			});
+			Self::deposit_event(Event::VanityNameSet { account_id, name });
+			Ok(().into())
 		}
 	}
 }
 
-impl<T: Config> Pallet<T> {
-	// WARN: This is not protected by the Swapping feature flag.
-	// In most cases the correct function to use is `register_account_role`.
-	fn register_account_role_unprotected(
+impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
+	/// Register the account role for some account id.
+	///
+	/// Fails if an account role has already been registered for this account id, or if the account
+	/// doesn't exist.
+	#[frame_support::transactional]
+	fn register_account_role(
 		account_id: &T::AccountId,
 		account_role: AccountRole,
 	) -> DispatchResult {
@@ -143,26 +169,34 @@ impl<T: Config> Pallet<T> {
 				Some(_) => Err(Error::<T>::AccountRoleAlreadyRegistered),
 				None => Err(Error::<T>::UnknownAccount),
 			}
-		})
-		.map_err(Into::into)
+		})?;
+		frame_system::Consumer::<T>::created(account_id)?;
+		Ok(())
 	}
-}
 
-impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
-	/// Register the account role for some account id.
+	/// Deregister the account role for some account id.
 	///
-	/// Fails if an account type has already been registered for this account id.
-	/// Or if Swapping is not yet enabled.
-	fn register_account_role(
+	/// This is required in order to be able to redeem all funds. Callers should ensure that any
+	/// state associated with the account is cleaned up before calling this function. For example:
+	/// LPs should withdraw all liquidity.
+	#[frame_support::transactional]
+	fn deregister_account_role(
 		account_id: &T::AccountId,
 		account_role: AccountRole,
 	) -> DispatchResult {
-		match account_role {
-			AccountRole::Broker | AccountRole::LiquidityProvider
-				if !SwappingEnabled::<T>::get() =>
-				Err(Error::<T>::SwappingDisabled.into()),
-			_ => Self::register_account_role_unprotected(account_id, account_role),
-		}
+		AccountRoles::<T>::try_mutate(account_id, |role| {
+			role.replace(AccountRole::Unregistered)
+				.filter(|r| *r == account_role)
+				.ok_or(Error::<T>::UnknownAccount)
+		})?;
+		<frame_system::Pallet<T>>::dec_consumers(account_id);
+
+		Self::deposit_event(Event::AccountRoleDeregistered {
+			account_id: account_id.clone(),
+			role: account_role,
+		});
+
+		Ok(())
 	}
 
 	fn has_account_role(id: &T::AccountId, role: AccountRole) -> bool {
@@ -180,20 +214,12 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 			AccountRole::Broker => ensure_broker::<T>(origin),
 		}
 	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn register_account(account_id: T::AccountId, role: AccountRole) {
-		AccountRoles::<T>::insert(account_id, role);
-	}
-	#[cfg(feature = "runtime-benchmarks")]
-	fn get_account_role(account_id: T::AccountId) -> AccountRole {
-		AccountRoles::<T>::get(account_id).unwrap_or_default()
-	}
 }
 
 impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
 	fn on_killed_account(who: &T::AccountId) {
 		AccountRoles::<T>::remove(who);
+		let _ = VanityNames::<T>::try_mutate(|vanity_names| vanity_names.remove(who).ok_or(()));
 	}
 }
 

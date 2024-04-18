@@ -5,15 +5,17 @@ use core::ops::Range;
 use crate::{mock::*, Error, *};
 use cf_test_utilities::{assert_event_sequence, last_event};
 use cf_traits::{
-	mocks::{
-		funding_info::MockFundingInfo, reputation_resetter::MockReputationResetter,
-		vault_rotator::MockVaultRotatorA,
-	},
+	mocks::{key_rotator::MockKeyRotatorA, reputation_resetter::MockReputationResetter},
 	AccountRoleRegistry, SafeMode, SetSafeMode,
 };
 use cf_utilities::success_threshold_from_share_count;
-use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
+use frame_support::{
+	assert_noop, assert_ok,
+	error::BadOrigin,
+	traits::{HandleLifetime, OriginTrait},
+};
 use frame_system::RawOrigin;
+use sp_runtime::testing::UintAuthorityId;
 
 const ALICE: u64 = 100;
 const BOB: u64 = 101;
@@ -23,9 +25,9 @@ fn assert_epoch_index(n: EpochIndex) {
 	assert_eq!(
 		ValidatorPallet::epoch_index(),
 		n,
-		"we should be in epoch {n:?}. VaultRotator says {:?} / {:?}",
+		"we should be in epoch {n:?}. KeyRotator says {:?} / {:?}",
 		CurrentRotationPhase::<Test>::get(),
-		<Test as crate::Config>::VaultRotator::status()
+		<Test as crate::Config>::KeyRotator::status()
 	);
 }
 
@@ -45,14 +47,18 @@ macro_rules! assert_default_rotation_outcome {
 		assert_rotation_phase_matches!(RotationPhase::Idle);
 		assert_epoch_index(GENESIS_EPOCH + 1);
 		assert_eq!(Bond::<Test>::get(), EXPECTED_BOND, "bond should be updated");
-		assert_eq!(ValidatorPallet::current_authorities(), BTreeSet::from(AUCTION_WINNERS));
+		// Use BTreeSet to ignore ordering.
+		assert_eq!(
+			ValidatorPallet::current_authorities().into_iter().collect::<BTreeSet<u64>>(),
+			WINNING_BIDS.into_iter().map(|bid| bid.bidder_id).collect::<BTreeSet<_>>()
+		);
 	};
 }
 
 #[track_caller]
 fn assert_rotation_aborted() {
 	assert_rotation_phase_matches!(RotationPhase::Idle);
-	assert_eq!(<Test as Config>::VaultRotator::status(), AsyncResult::Void);
+	assert_eq!(<Test as Config>::KeyRotator::status(), AsyncResult::Void);
 	assert_event_sequence!(
 		Test,
 		RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
@@ -62,15 +68,24 @@ fn assert_rotation_aborted() {
 	);
 }
 
-fn simple_rotation_state(
-	auction_winners: Vec<u64>,
-	bond: Option<u128>,
-) -> RuntimeRotationState<Test> {
-	RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
-		winners: auction_winners,
-		bond: bond.unwrap_or(100),
-		losers: AUCTION_LOSERS.to_vec(),
+fn add_bids(bids: Vec<Bid<ValidatorId, Amount>>) {
+	bids.into_iter().for_each(|bid| {
+		MockFlip::credit_funds(&bid.bidder_id, bid.amount);
+		// Some account might have already registered, so it's Ok if this fails.
+		let _ = <<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&bid.bidder_id);
+		assert_ok!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(bid.bidder_id)));
+
 	})
+}
+
+fn remove_bids(bidders: Vec<ValidatorId>) {
+	bidders.into_iter().for_each(|bidder| {
+		assert_ok!(ValidatorPallet::stop_bidding(RuntimeOrigin::signed(bidder)));
+	})
+}
+
+fn set_default_test_bids() {
+	add_bids([&WINNING_BIDS[..], &LOSING_BIDS[..], &[UNQUALIFIED_BID]].concat());
 }
 
 #[test]
@@ -98,14 +113,18 @@ fn changing_epoch_block_size() {
 fn should_retry_rotation_until_success_with_failing_auctions() {
 	new_test_ext()
 		.execute_with(|| {
-			assert_eq!(MockBidderProvider::get_bidders().len(), 0);
+			// Stop all current bidders
+			ValidatorPallet::get_active_bids().into_iter().for_each(|v| {
+				assert_ok!(ValidatorPallet::stop_bidding(RuntimeOrigin::signed(v.bidder_id)));
+			});
+			assert_eq!(ValidatorPallet::get_active_bids().len(), 0);
 		})
 		// Move forward past the epoch boundary, the auction will be failing
 		.then_advance_n_blocks_and_execute_with_checks(EPOCH_DURATION + 100, || {
 			assert_epoch_index(GENESIS_EPOCH);
 			assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
 
-			MockBidderProvider::set_default_test_bids();
+			set_default_test_bids();
 		})
 		// Now that we have bidders, we should succeed the auction, and complete the rotation
 		.then_advance_n_blocks_and_execute_with_checks(1, || {
@@ -113,21 +132,21 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 				CurrentRotationPhase::<Test>::get(),
 				RotationPhase::<Test>::KeygensInProgress(..)
 			));
-			MockVaultRotatorA::keygen_success();
+			MockKeyRotatorA::keygen_success();
 		})
 		.then_advance_n_blocks_and_execute_with_checks(2, || {
 			assert!(matches!(
 				CurrentRotationPhase::<Test>::get(),
 				RotationPhase::<Test>::KeyHandoversInProgress(..)
 			));
-			MockVaultRotatorA::key_handover_success();
+			MockKeyRotatorA::key_handover_success();
 		})
 		.then_advance_n_blocks_and_execute_with_checks(2, || {
 			assert!(matches!(
 				CurrentRotationPhase::<Test>::get(),
 				RotationPhase::<Test>::ActivatingKeys(..)
 			));
-			MockVaultRotatorA::keys_activated();
+			MockKeyRotatorA::keys_activated();
 		})
 		.then_advance_n_blocks_and_execute_with_checks(2, || {
 			assert_default_rotation_outcome!();
@@ -137,7 +156,7 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 #[test]
 fn should_be_unable_to_force_rotation_during_a_rotation() {
 	new_test_ext().then_execute_with_checks(|| {
-		MockBidderProvider::set_default_test_bids();
+		set_default_test_bids();
 		ValidatorPallet::start_authority_rotation();
 		assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
 		assert_noop!(
@@ -150,7 +169,7 @@ fn should_be_unable_to_force_rotation_during_a_rotation() {
 #[test]
 fn should_rotate_when_forced() {
 	new_test_ext().then_execute_with_checks(|| {
-		MockBidderProvider::set_default_test_bids();
+		set_default_test_bids();
 		assert_ok!(ValidatorPallet::force_rotation(RuntimeOrigin::root()));
 		assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
 		assert_noop!(
@@ -166,31 +185,31 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 	new_test_ext()
 		.then_execute_with_checks(|| {
 			assert_eq!(
-				CurrentAuthorities::<Test>::get(),
+				CurrentAuthorities::<Test>::get().into_iter().collect::<BTreeSet<u64>>(),
 				genesis_set,
 				"the current authorities should be the genesis authorities"
 			);
 			// Run to the epoch boundary.
-			MockBidderProvider::set_default_test_bids();
+			set_default_test_bids();
 		})
 		.then_advance_n_blocks_and_execute_with_checks(EPOCH_DURATION, || {
 			assert_eq!(
-				ValidatorPallet::current_authorities(),
+				ValidatorPallet::current_authorities().into_iter().collect::<BTreeSet<u64>>(),
 				genesis_set,
 				"we should still be validating with the genesis authorities"
 			);
 
 			assert_rotation_phase_matches!(RotationPhase::<Test>::KeygensInProgress(..));
-			MockVaultRotatorA::keygen_success();
+			MockKeyRotatorA::keygen_success();
 		})
 		.then_advance_n_blocks_and_execute_with_checks(2, || {
 			assert_rotation_phase_matches!(RotationPhase::<Test>::KeyHandoversInProgress(..));
-			MockVaultRotatorA::key_handover_success();
+			MockKeyRotatorA::key_handover_success();
 		})
 		.then_advance_n_blocks_and_execute_with_checks(2, || {
 			assert_rotation_phase_matches!(RotationPhase::<Test>::ActivatingKeys(..));
 
-			MockVaultRotatorA::keys_activated();
+			MockKeyRotatorA::keys_activated();
 		})
 		.then_advance_n_blocks_and_execute_with_checks(2, || {
 			assert_default_rotation_outcome!();
@@ -201,7 +220,7 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 fn genesis() {
 	new_test_ext().then_execute_with_checks(|| {
 		assert_eq!(
-			CurrentAuthorities::<Test>::get(),
+			CurrentAuthorities::<Test>::get().into_iter().collect::<BTreeSet<u64>>(),
 			BTreeSet::from(GENESIS_AUTHORITIES),
 			"We should have a set of validators at genesis"
 		);
@@ -278,8 +297,8 @@ fn register_peer_id() {
 	new_test_ext().then_execute_with_checks(|| {
 		use sp_core::{Encode, Pair};
 
-		<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE).unwrap();
-		<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&BOB).unwrap();
+		assert_ok!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE));
+		assert_ok!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&BOB));
 
 		let alice_peer_keypair = sp_core::ed25519::Pair::from_legacy_string("alice", None);
 		let alice_peer_public_key = alice_peer_keypair.public();
@@ -415,10 +434,10 @@ fn register_peer_id() {
 fn rerun_auction_if_not_enough_participants() {
 	new_test_ext()
 		.execute_with(|| {
-			// Unqualify one of the auction winners
+			// Un-qualify one of the auction winners
 			// Change the auction parameters to simulate a shortage in available candidates
-			MockBidderProvider::set_default_test_bids();
-			let num_bidders = <MockBidderProvider as BidderProvider>::get_bidders().len() as u32;
+			set_default_test_bids();
+			let num_bidders = ValidatorPallet::get_active_bids().len() as u32;
 
 			assert_ok!(ValidatorPallet::update_pallet_config(
 				RuntimeOrigin::root(),
@@ -438,7 +457,7 @@ fn rerun_auction_if_not_enough_participants() {
 			));
 			// Assert that we still in the idle phase
 			assert_rotation_phase_matches!(RotationPhase::<Test>::Idle);
-			let num_bidders = <MockBidderProvider as BidderProvider>::get_bidders().len() as u32;
+			let num_bidders = ValidatorPallet::get_active_bids().len() as u32;
 			assert_ok!(ValidatorPallet::update_pallet_config(
 				RuntimeOrigin::root(),
 				PalletConfigUpdate::AuctionParameters {
@@ -484,15 +503,15 @@ fn highest_bond() {
 	new_test_ext().then_execute_with_checks(|| {
 		// Epoch 1
 		EpochHistory::<Test>::activate_epoch(&ALICE, 1);
-		HistoricalAuthorities::<Test>::insert(1, BTreeSet::from([ALICE]));
+		HistoricalAuthorities::<Test>::insert(1, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(1, 10);
 		// Epoch 2
 		EpochHistory::<Test>::activate_epoch(&ALICE, 2);
-		HistoricalAuthorities::<Test>::insert(2, BTreeSet::from([ALICE]));
+		HistoricalAuthorities::<Test>::insert(2, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(2, 30);
 		// Epoch 3
 		EpochHistory::<Test>::activate_epoch(&ALICE, 3);
-		HistoricalAuthorities::<Test>::insert(3, BTreeSet::from([ALICE]));
+		HistoricalAuthorities::<Test>::insert(3, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(3, 20);
 		// Expect the bond of epoch 2
 		assert_eq!(EpochHistory::<Test>::active_bond(&ALICE), 30);
@@ -502,20 +521,6 @@ fn highest_bond() {
 		EpochHistory::<Test>::deactivate_epoch(&ALICE, 3);
 		// Expect the bond to be zero if there is no epoch the node is active in
 		assert_eq!(EpochHistory::<Test>::active_bond(&ALICE), 0);
-	});
-}
-
-#[test]
-fn test_setting_vanity_names_() {
-	new_test_ext().then_execute_with_checks(|| {
-		let validators: &[u64] = &[123, 456, 789, 101112];
-		assert_ok!(ValidatorPallet::set_vanity_name(RuntimeOrigin::signed(validators[0]), "Test Validator 1".as_bytes().to_vec()));
-		assert_ok!(ValidatorPallet::set_vanity_name(RuntimeOrigin::signed(validators[2]), "Test Validator 2".as_bytes().to_vec()));
-		let vanity_names = crate::VanityNames::<Test>::get();
-		assert_eq!(sp_std::str::from_utf8(vanity_names.get(&validators[0]).unwrap()).unwrap(), "Test Validator 1");
-		assert_eq!(sp_std::str::from_utf8(vanity_names.get(&validators[2]).unwrap()).unwrap(), "Test Validator 2");
-		assert_noop!(ValidatorPallet::set_vanity_name(RuntimeOrigin::signed(validators[0]), [0xfe, 0xff].to_vec()), crate::Error::<Test>::InvalidCharactersInName);
-		assert_noop!(ValidatorPallet::set_vanity_name(RuntimeOrigin::signed(validators[0]), "Validator Name too longggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg".as_bytes().to_vec()), crate::Error::<Test>::NameTooLong);
 	});
 }
 
@@ -565,7 +570,7 @@ fn no_validator_rotation_when_disabled_by_safe_mode() {
 		assert!(<MockRuntimeSafeMode as Get<PalletSafeMode>>::get() == PalletSafeMode::CODE_GREEN);
 
 		// Try to start a rotation.
-		MockBidderProvider::set_default_test_bids();
+		set_default_test_bids();
 		ValidatorPallet::start_authority_rotation();
 		assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
 	});
@@ -590,10 +595,7 @@ mod bond_expiry {
 		new_test_ext().execute_with(|| {
 			const BOND: u128 = 100;
 			let initial_epoch = ValidatorPallet::current_epoch();
-			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(
-				vec![1, 2],
-				Some(BOND),
-			));
+			ValidatorPallet::transition_to_next_epoch(vec![1, 2], BOND);
 			assert_eq!(ValidatorPallet::bond(), BOND);
 
 			// Ensure the new bond is set for each authority
@@ -602,10 +604,7 @@ mod bond_expiry {
 			});
 
 			const NEXT_BOND: u128 = BOND + 1;
-			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(
-				vec![2, 3],
-				Some(NEXT_BOND),
-			));
+			ValidatorPallet::transition_to_next_epoch(vec![2, 3], NEXT_BOND);
 			assert_eq!(ValidatorPallet::bond(), NEXT_BOND);
 
 			ValidatorPallet::current_authorities().iter().for_each(|account_id| {
@@ -629,20 +628,14 @@ mod bond_expiry {
 		new_test_ext().execute_with(|| {
 			let initial_epoch = ValidatorPallet::current_epoch();
 			const AUTHORITY_IN_BOTH_EPOCHS: u64 = 2;
-			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(
-				vec![1, AUTHORITY_IN_BOTH_EPOCHS],
-				Some(100),
-			));
+			ValidatorPallet::transition_to_next_epoch(vec![1, AUTHORITY_IN_BOTH_EPOCHS], 100);
 			assert_eq!(ValidatorPallet::bond(), 100);
 
 			ValidatorPallet::current_authorities().iter().for_each(|account_id| {
 				assert_eq!(MockBonder::get_bond(account_id), 100);
 			});
 
-			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(
-				vec![AUTHORITY_IN_BOTH_EPOCHS, 3],
-				Some(99),
-			));
+			ValidatorPallet::transition_to_next_epoch(vec![AUTHORITY_IN_BOTH_EPOCHS, 3], 99);
 			assert_eq!(ValidatorPallet::bond(), 99);
 
 			// Keeps the highest bond of all the epochs it's been active in
@@ -705,7 +698,7 @@ fn test_expect_validator_register_fails() {
 				percentage: Percent::from_percent(60),
 			},
 		));
-		MockFundingInfo::<Test>::credit_funds(&ID, Percent::from_percent(40) * GENESIS_BOND);
+		MockFlip::credit_funds(&ID, Percent::from_percent(40) * GENESIS_BOND);
 		// Reduce the set size target to the current authority count.
 		assert_ok!(Pallet::<Test>::update_pallet_config(
 			RawOrigin::Root.into(),
@@ -734,7 +727,7 @@ fn test_expect_validator_register_fails() {
 		));
 		// It should be possible to register now since the actual size is below the target.
 		assert_ok!(Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ID)));
-		MockFundingInfo::<Test>::credit_funds(&ID, Percent::from_percent(20) * GENESIS_BOND);
+		MockFlip::credit_funds(&ID, Percent::from_percent(20) * GENESIS_BOND);
 		// Trying to register again passes the funding check but fails for other reasons.
 		assert_noop!(
 			Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ID)),
@@ -773,7 +766,7 @@ fn failed_keygen_with_offenders(offenders: impl IntoIterator<Item = u64>) {
 		}),
 	));
 
-	MockVaultRotatorA::failed(offenders);
+	MockKeyRotatorA::failed(offenders);
 	Pallet::<Test>::on_initialize(1);
 }
 #[cfg(test)]
@@ -843,12 +836,12 @@ mod key_handover {
 				bond: Default::default(),
 			}),
 		));
-		MockVaultRotatorA::keygen_success();
+		MockKeyRotatorA::keygen_success();
 		System::reset_events();
 		Pallet::<Test>::on_initialize(1);
 
 		assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
-		MockVaultRotatorA::failed(offenders);
+		MockKeyRotatorA::failed(offenders);
 		System::reset_events();
 		Pallet::<Test>::on_initialize(2);
 	}
@@ -874,14 +867,14 @@ mod key_handover {
 			})
 			.then_execute_at_next_block(|_| {
 				// Successful keygen should transition to handover
-				MockVaultRotatorA::keygen_success();
+				MockKeyRotatorA::keygen_success();
 			})
 			.then_execute_at_next_block(|_| {
 				assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
 			})
 			.then_execute_at_next_block(|_| {
 				// Handover fails with a different non-candidate and will be retried
-				MockVaultRotatorA::failed([fails_handover]);
+				MockKeyRotatorA::failed([fails_handover]);
 			})
 			.then_execute_at_next_block(|_| {
 				// Ensure that banned nodes banned during either keygen or handover aren't selected
@@ -949,12 +942,12 @@ mod key_handover {
 #[test]
 fn safe_mode_can_aborts_authority_rotation_before_key_handover() {
 	new_test_ext().then_execute_with_checks(|| {
-		MockBidderProvider::set_default_test_bids();
+		set_default_test_bids();
 		ValidatorPallet::start_authority_rotation();
 
 		assert_rotation_phase_matches!(RotationPhase::<Test>::KeygensInProgress(..));
 
-		MockVaultRotatorA::keygen_success();
+		MockKeyRotatorA::keygen_success();
 
 		System::reset_events();
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
@@ -966,11 +959,11 @@ fn safe_mode_can_aborts_authority_rotation_before_key_handover() {
 #[test]
 fn safe_mode_does_not_aborts_authority_rotation_after_key_handover() {
 	new_test_ext().then_execute_with_checks(|| {
-		MockBidderProvider::set_default_test_bids();
+		set_default_test_bids();
 		ValidatorPallet::start_authority_rotation();
-		MockVaultRotatorA::keygen_success();
+		MockKeyRotatorA::keygen_success();
 		ValidatorPallet::on_initialize(1);
-		MockVaultRotatorA::key_handover_success();
+		MockKeyRotatorA::key_handover_success();
 
 		System::reset_events();
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
@@ -989,13 +982,13 @@ fn safe_mode_does_not_aborts_authority_rotation_after_key_handover() {
 #[test]
 fn safe_mode_does_not_aborts_authority_rotation_during_key_activation() {
 	new_test_ext().then_execute_with_checks(|| {
-		MockBidderProvider::set_default_test_bids();
+		set_default_test_bids();
 		ValidatorPallet::start_authority_rotation();
-		MockVaultRotatorA::keygen_success();
+		MockKeyRotatorA::keygen_success();
 		ValidatorPallet::on_initialize(1);
-		MockVaultRotatorA::key_handover_success();
+		MockKeyRotatorA::key_handover_success();
 		ValidatorPallet::on_initialize(1);
-		MockVaultRotatorA::keys_activated();
+		MockKeyRotatorA::keys_activated();
 
 		System::reset_events();
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
@@ -1014,10 +1007,10 @@ fn safe_mode_does_not_aborts_authority_rotation_during_key_activation() {
 fn authority_rotation_can_succeed_after_aborted_by_safe_mode() {
 	new_test_ext()
 		.then_execute_with_checks(|| {
-			MockBidderProvider::set_default_test_bids();
+			set_default_test_bids();
 			// Abort authority rotation using Safe Mode.
 			ValidatorPallet::start_authority_rotation();
-			MockVaultRotatorA::keygen_success();
+			MockKeyRotatorA::keygen_success();
 			<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
 		})
 		.then_execute_at_next_block(|_| {
@@ -1030,17 +1023,17 @@ fn authority_rotation_can_succeed_after_aborted_by_safe_mode() {
 		.then_execute_at_next_block(|_| {
 			assert_rotation_phase_matches!(RotationPhase::<Test>::KeygensInProgress(..));
 
-			MockVaultRotatorA::keygen_success();
+			MockKeyRotatorA::keygen_success();
 		})
 		.then_execute_at_next_block(|_| {
 			assert_rotation_phase_matches!(RotationPhase::<Test>::KeyHandoversInProgress(..));
 
-			MockVaultRotatorA::key_handover_success();
+			MockKeyRotatorA::key_handover_success();
 		})
 		.then_execute_at_next_block(|_| {
 			assert_rotation_phase_matches!(RotationPhase::<Test>::ActivatingKeys(..));
 
-			MockVaultRotatorA::keys_activated();
+			MockKeyRotatorA::keys_activated();
 		})
 		.then_advance_n_blocks_and_execute_with_checks(2, || {
 			assert_default_rotation_outcome!();
@@ -1059,7 +1052,7 @@ fn can_calculate_percentage_cfe_at_target_version() {
 			let _ = ValidatorPallet::register_as_validator(RuntimeOrigin::signed(*id));
 			assert_ok!(ValidatorPallet::cfe_version(RuntimeOrigin::signed(*id), initial_version,));
 		});
-		CurrentAuthorities::<Test>::set(BTreeSet::from(authorities));
+		CurrentAuthorities::<Test>::set(Vec::from(authorities));
 
 		assert_eq!(
 			ValidatorPallet::percent_authorities_compatible_with_version(initial_version),
@@ -1085,7 +1078,7 @@ fn can_calculate_percentage_cfe_at_target_version() {
 		);
 
 		// Change authorities
-		CurrentAuthorities::<Test>::set(BTreeSet::from(authorities));
+		CurrentAuthorities::<Test>::set(Vec::from(authorities));
 		assert_eq!(
 			ValidatorPallet::percent_authorities_compatible_with_version(initial_version),
 			Percent::from_percent(0)
@@ -1175,4 +1168,173 @@ fn qualification_by_cfe_version() {
 		));
 		assert!(!QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
 	});
+}
+
+#[test]
+fn validator_registration_and_deregistration() {
+	new_test_ext().execute_with(|| {
+		// Register as validator
+		assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(ALICE),));
+		assert_ok!(frame_system::Provider::<Test>::created(&ALICE)); // session keys requires a provider ref.
+		assert!(!pallet_session::NextKeys::<Test>::contains_key(ALICE));
+		assert_ok!(ValidatorPallet::set_keys(
+			RuntimeOrigin::signed(ALICE),
+			MockSessionKeys::from(UintAuthorityId(ALICE)),
+			Default::default(),
+		));
+
+		assert!(pallet_session::NextKeys::<Test>::contains_key(ALICE));
+
+		// Deregistration is blocked while the validator is a bidder.
+		add_bids(vec![Bid { bidder_id: ALICE, amount: 100 }]);
+		assert_noop!(
+			ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(ALICE),),
+			Error::<Test>::StillBidding
+		);
+
+		// Stop bidding, deregistration should be possible.
+		remove_bids(vec![ALICE]);
+		assert_ok!(ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(ALICE),));
+
+		// State should be cleaned up.
+		assert!(!pallet_session::NextKeys::<Test>::contains_key(ALICE));
+	});
+}
+
+#[test]
+fn test_start_and_stop_bidding() {
+	new_test_ext().execute_with(|| {
+		MockEpochInfo::add_authorities(ALICE);
+		const AMOUNT: u128 = 100;
+
+		MockFlip::credit_funds(&ALICE, AMOUNT);
+
+		// Not yet registered as validator.
+		assert_noop!(ValidatorPallet::stop_bidding(RuntimeOrigin::signed(ALICE)), BadOrigin);
+		assert_noop!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(ALICE)), BadOrigin);
+
+		assert!(!ValidatorPallet::is_bidding(&ALICE));
+
+		assert_ok!(<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE));
+
+		assert!(!ValidatorPallet::is_bidding(&ALICE));
+
+		assert_noop!(
+			ValidatorPallet::stop_bidding(RuntimeOrigin::signed(ALICE)),
+			<Error<Test>>::AlreadyNotBidding
+		);
+
+		assert!(!ValidatorPallet::is_bidding(&ALICE));
+
+		assert_ok!(ValidatorPallet::start_bidding(RuntimeOrigin::signed(ALICE)));
+
+		assert!(ValidatorPallet::is_bidding(&ALICE));
+
+		assert_noop!(
+			ValidatorPallet::start_bidding(RuntimeOrigin::signed(ALICE)),
+			<Error<Test>>::AlreadyBidding
+		);
+
+		CurrentRotationPhase::<Test>::set(RotationPhase::KeygensInProgress(Default::default()));
+
+		assert_noop!(
+			ValidatorPallet::stop_bidding(RuntimeOrigin::signed(ALICE)),
+			<Error<Test>>::AuctionPhase
+		);
+		assert!(ValidatorPallet::is_bidding(&ALICE));
+
+		// Can stop bidding if outside of auction phase
+		CurrentRotationPhase::<Test>::set(RotationPhase::Idle);
+
+		assert_ok!(ValidatorPallet::stop_bidding(RuntimeOrigin::signed(ALICE)));
+		assert!(!ValidatorPallet::is_bidding(&ALICE));
+
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::ValidatorPallet(crate::Event::StartedBidding { account_id: ALICE }),
+			RuntimeEvent::ValidatorPallet(crate::Event::StoppedBidding { account_id: ALICE })
+		);
+	});
+}
+
+#[test]
+fn can_determine_is_auction_phase() {
+	new_test_ext().execute_with(|| {
+		// is auction phase if not RotationPhases::Idle
+		[
+			RotationPhase::KeygensInProgress(Default::default()),
+			RotationPhase::KeyHandoversInProgress(Default::default()),
+			RotationPhase::ActivatingKeys(Default::default()),
+			RotationPhase::NewKeysActivated(Default::default()),
+			RotationPhase::SessionRotating(Default::default(), Default::default()),
+		]
+		.into_iter()
+		.for_each(|phase| {
+			CurrentRotationPhase::<Test>::set(phase);
+			assert!(ValidatorPallet::is_auction_phase());
+		});
+
+		CurrentRotationPhase::<Test>::set(RotationPhase::Idle);
+		assert!(!ValidatorPallet::is_auction_phase());
+
+		// In Idle phase, must be within certain % of epoch progress.
+		CurrentEpochStartedAt::<Test>::set(1_000);
+		BlocksPerEpoch::<Test>::set(100);
+		RedemptionPeriodAsPercentage::<Test>::set(Percent::from_percent(85));
+
+		// First block of auction phase = 1_000 + 100 * 85% = 1085
+		System::set_block_number(1084);
+		assert!(!ValidatorPallet::is_auction_phase());
+
+		System::set_block_number(1085);
+		assert!(ValidatorPallet::is_auction_phase());
+	});
+}
+
+#[test]
+fn redemption_check_works() {
+	new_test_ext().execute_with(|| {
+		let validator = WINNING_BIDS[0].bidder_id;
+
+		// Not in auction + not bidding = Can redeem
+		CurrentRotationPhase::<Test>::set(RotationPhase::Idle);
+		ActiveBidder::<Test>::set(Default::default());
+		assert_ok!(ValidatorPallet::ensure_can_redeem(&validator));
+
+		// In Auction + not bidding = Can redeem
+		CurrentRotationPhase::<Test>::set(RotationPhase::KeygensInProgress(Default::default()));
+		assert_ok!(ValidatorPallet::ensure_can_redeem(&validator));
+
+		// Not in Auction + bidding = Can redeem
+		CurrentRotationPhase::<Test>::set(RotationPhase::Idle);
+		ActiveBidder::<Test>::mutate(|bidders| bidders.insert(validator));
+		assert_ok!(ValidatorPallet::ensure_can_redeem(&validator));
+
+		// Auction Phase + bidding = Cannot redeem
+		CurrentRotationPhase::<Test>::set(RotationPhase::KeygensInProgress(Default::default()));
+		assert_noop!(ValidatorPallet::ensure_can_redeem(&validator), Error::<Test>::StillBidding);
+	});
+}
+
+#[test]
+fn validator_set_change_propagates_to_session_pallet() {
+	new_test_ext()
+		// Set some new authorities different from the old ones.
+		.then_execute_with_checks(|| {
+			assert!(
+				Pallet::<Test>::current_authorities() ==
+					pallet_session::Pallet::<Test>::validators()
+			);
+			CurrentRotationPhase::put(RotationPhase::<Test>::NewKeysActivated(
+				RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
+					winners: WINNING_BIDS.map(|bidder| bidder.bidder_id).to_vec(),
+					losers: vec![],
+					bond: EXPECTED_BOND,
+				}),
+			));
+		})
+		// Run until the new epoch.
+		.then_process_blocks_until(|_| CurrentRotationPhase::<Test>::get() == RotationPhase::Idle)
+		// Do the consistency checks.
+		.then_execute_with_checks(|| {});
 }

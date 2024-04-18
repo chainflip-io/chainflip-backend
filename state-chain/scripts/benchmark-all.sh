@@ -21,12 +21,13 @@ REPEAT=$repeat
 
 echo "Benchmarking $BINARY with $STEPS steps and $REPEAT repetitions"
 
-# Template file by which we genreate the weight files
+# Template file by which we generate the weight files
 TEMPLATE=state-chain/chainflip-weight-template.hbs
 echo "Executing benchmarks..."
 
 pallets=$(ls state-chain/pallets | grep -v .md)
 
+# Use dev-3 to run the benchmarks (required by Broadcast pallet)
 for pallet in $pallets ; do
   echo "Running benchmark for: $pallet"
   pallet_fmt="pallet_$(echo $pallet|tr "-" "_")"
@@ -34,10 +35,10 @@ for pallet in $pallets ; do
     --pallet "$pallet_fmt" \
     --extrinsic '*' \
     --output "state-chain/pallets/$pallet/src/weights.rs" \
-    --execution=wasm \
     --steps="$STEPS" \
     --repeat="$REPEAT" \
-    --template="$TEMPLATE"
+    --template="$TEMPLATE" \
+    --chain=dev-3
 
     if [ $? -eq 0 ]
     then

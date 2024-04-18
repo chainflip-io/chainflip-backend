@@ -1,64 +1,97 @@
 import Web3 from 'web3';
-import { Asset, assetDecimals } from '@chainflip-io/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 import { sendDot } from './send_dot';
 import { sendBtc } from './send_btc';
 import { sendErc20 } from './send_erc20';
-import { sendEth, signAndSendTxEth } from './send_eth';
-import { getEthContractAddress, defaultAssetAmounts, amountToFineAmount } from './utils';
+import { sendEvmNative, signAndSendTxEvm } from './send_evm';
+import {
+  getContractAddress,
+  defaultAssetAmounts,
+  amountToFineAmount,
+  chainFromAsset,
+  getEvmEndpoint,
+  assetDecimals,
+} from './utils';
 import { approveErc20 } from './approve_erc20';
-import { getCFTesterAbi } from './eth_abis';
+import { getCFTesterAbi } from './contract_interfaces';
+import { sendSol } from './send_sol';
+import { sendSolUsdc } from './send_solusdc';
 
 const cfTesterAbi = await getCFTesterAbi();
 
 export async function send(asset: Asset, address: string, amount?: string, log = true) {
   switch (asset) {
-    case 'BTC':
+    case 'Btc':
       await sendBtc(address, amount ?? defaultAssetAmounts(asset));
       break;
-    case 'ETH':
-      await sendEth(address, amount ?? defaultAssetAmounts(asset), log);
+    case 'Eth':
+      await sendEvmNative('Ethereum', address, amount ?? defaultAssetAmounts(asset), log);
       break;
-    case 'DOT':
+    case 'ArbEth':
+      await sendEvmNative('Arbitrum', address, amount ?? defaultAssetAmounts(asset), log);
+      break;
+    case 'Dot':
       await sendDot(address, amount ?? defaultAssetAmounts(asset));
       break;
-    case 'USDC': {
-      const contractAddress = getEthContractAddress(asset);
-      await sendErc20(address, contractAddress, amount ?? defaultAssetAmounts(asset), log);
+    case 'SOL':
+      await sendSol(address, amount ?? defaultAssetAmounts(asset));
+      break;
+    case 'Usdc':
+    case 'Usdt':
+    case 'Flip': {
+      const contractAddress = getContractAddress('Ethereum', asset);
+      await sendErc20(
+        'Ethereum',
+        address,
+        contractAddress,
+        amount ?? defaultAssetAmounts(asset),
+        log,
+      );
       break;
     }
-    case 'FLIP': {
-      const contractAddress = getEthContractAddress(asset);
-      await sendErc20(address, contractAddress, amount ?? defaultAssetAmounts(asset), log);
+    case 'ArbUsdc': {
+      const contractAddress = getContractAddress('Arbitrum', asset);
+      await sendErc20(
+        'Arbitrum',
+        address,
+        contractAddress,
+        amount ?? defaultAssetAmounts(asset),
+        log,
+      );
       break;
     }
+    case 'SolUsdc':
+      await sendSolUsdc(address, amount ?? defaultAssetAmounts(asset));
+      break;
     default:
       throw new Error(`Unsupported asset type: ${asset}`);
   }
 }
 
 export async function sendViaCfTester(asset: Asset, toAddress: string, amount?: string) {
-  const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
-  const web3 = new Web3(ethEndpoint);
+  const chain = chainFromAsset(asset);
 
-  const cfTesterAddress = getEthContractAddress('CFTESTER');
+  const web3 = new Web3(getEvmEndpoint(chain));
+
+  const cfTesterAddress = getContractAddress(chain, 'CFTESTER');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const cfTesterContract = new web3.eth.Contract(cfTesterAbi as any, cfTesterAddress);
 
   let txData;
   let value = '0';
   switch (asset) {
-    case 'ETH':
+    case 'Eth':
       txData = cfTesterContract.methods.transferEth(toAddress).encodeABI();
-      value = amountToFineAmount(amount ?? defaultAssetAmounts(asset), assetDecimals[asset]);
+      value = amountToFineAmount(amount ?? defaultAssetAmounts(asset), assetDecimals(asset));
       break;
-    case 'USDC':
-    case 'FLIP': {
+    case 'Usdc':
+    case 'Flip': {
       await approveErc20(asset, cfTesterAddress, amount ?? defaultAssetAmounts(asset));
       txData = cfTesterContract.methods
         .transferToken(
           toAddress,
-          getEthContractAddress(asset),
-          amountToFineAmount(amount ?? defaultAssetAmounts(asset), assetDecimals[asset]),
+          getContractAddress(chain, asset),
+          amountToFineAmount(amount ?? defaultAssetAmounts(asset), assetDecimals(asset)),
         )
         .encodeABI();
       break;
@@ -67,5 +100,5 @@ export async function sendViaCfTester(asset: Asset, toAddress: string, amount?: 
       throw new Error(`Unsupported asset type: ${asset}`);
   }
 
-  await signAndSendTxEth(cfTesterAddress, value, txData);
+  await signAndSendTxEvm(chain, cfTesterAddress, value, txData);
 }

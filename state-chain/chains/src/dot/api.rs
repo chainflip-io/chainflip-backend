@@ -66,7 +66,7 @@ where
 			E::replay_protection(false),
 			fetch_params,
 			transfer_params,
-			E::try_vault_account().ok_or(AllBatchError::Other)?,
+			E::try_vault_account().ok_or(AllBatchError::VaultAccountNotSet)?,
 		)))
 	}
 }
@@ -97,16 +97,16 @@ where
 	fn new_unsigned(
 		maybe_old_key: Option<PolkadotPublicKey>,
 		new_key: PolkadotPublicKey,
-	) -> Result<Self, SetAggKeyWithAggKeyError> {
+	) -> Result<Option<Self>, SetAggKeyWithAggKeyError> {
 		let vault = E::try_vault_account().ok_or(SetAggKeyWithAggKeyError::Failed)?;
 
-		Ok(Self::RotateVaultProxy(rotate_vault_proxy::extrinsic_builder(
+		Ok(Some(Self::RotateVaultProxy(rotate_vault_proxy::extrinsic_builder(
 			// we reset the proxy account nonce on a rotation tx
 			E::replay_protection(true),
 			maybe_old_key,
 			new_key,
 			vault,
-		)))
+		))))
 	}
 }
 

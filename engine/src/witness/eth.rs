@@ -1,14 +1,9 @@
-mod contract_common;
-pub mod erc20_deposits;
-mod eth_chain_tracking;
-mod eth_source;
-mod ethereum_deposits;
-mod key_manager;
+mod chain_tracking;
 mod state_chain_gateway;
-pub mod vault;
 
 use std::{collections::HashMap, sync::Arc};
 
+use cf_chains::Ethereum;
 use cf_primitives::{chains::assets::eth, EpochIndex};
 use futures_core::Future;
 use sp_core::H160;
@@ -16,19 +11,19 @@ use utilities::task_scope::Scope;
 
 use crate::{
 	db::PersistentKeyDB,
-	eth::{retry_rpc::EthRetryRpcClient, rpc::EthRpcSigningClient},
+	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
 	state_chain_observer::client::{
-		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
-		StateChainStreamApi,
+		chain_api::ChainApi,
+		extrinsic_api::signed::SignedExtrinsicApi,
+		storage_api::StorageApi,
+		stream_api::{StreamApi, FINALIZED},
+		STATE_CHAIN_CONNECTION,
 	},
-	witness::eth::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents},
+	witness::evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
 };
 
-use super::common::{
-	chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder,
-	STATE_CHAIN_CONNECTION,
-};
-pub use eth_source::EthSource;
+use super::{common::epoch_source::EpochSourceBuilder, evm::source::EvmSource};
+use crate::witness::common::chain_source::extension::ChainSourceExt;
 
 use anyhow::{Context, Result};
 
@@ -36,7 +31,7 @@ use chainflip_node::chain_spec::berghain::ETHEREUM_SAFETY_MARGIN;
 
 pub async fn start<StateChainClient, StateChainStream, ProcessCall, ProcessingFut>(
 	scope: &Scope<'_, anyhow::Error>,
-	eth_client: EthRetryRpcClient<EthRpcSigningClient>,
+	eth_client: EvmRetryRpcClient<EvmRpcSigningClient>,
 	process_call: ProcessCall,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
@@ -45,7 +40,7 @@ pub async fn start<StateChainClient, StateChainStream, ProcessCall, ProcessingFu
 ) -> Result<()>
 where
 	StateChainClient: StorageApi + ChainApi + SignedExtrinsicApi + 'static + Send + Sync,
-	StateChainStream: StateChainStreamApi + Clone,
+	StateChainStream: StreamApi<FINALIZED> + Clone,
 	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 		+ Send
 		+ Sync
@@ -95,12 +90,15 @@ where
 	let flip_contract_address =
 		*supported_erc20_tokens.get(&eth::Asset::Flip).context("FLIP not supported")?;
 
+	let usdt_contract_address =
+		*supported_erc20_tokens.get(&eth::Asset::Usdt).context("USDT not supported")?;
+
 	let supported_erc20_tokens: HashMap<H160, cf_primitives::Asset> = supported_erc20_tokens
 		.into_iter()
 		.map(|(asset, address)| (address, asset.into()))
 		.collect();
 
-	let eth_source = EthSource::new(eth_client.clone()).strictly_monotonic().shared(scope);
+	let eth_source = EvmSource::new(eth_client.clone()).strictly_monotonic().shared(scope);
 
 	eth_source
 		.clone()
@@ -109,7 +107,7 @@ where
 		.logging("chain tracking")
 		.spawn(scope);
 
-	let vaults = epoch_source.vaults().await;
+	let vaults = epoch_source.vaults::<Ethereum>().await;
 
 	// ===== Full witnessing stream =====
 
@@ -176,6 +174,19 @@ where
 		.await?
 		.continuous("FlipDeposits".to_string(), db.clone())
 		.logging("FlipDeposits")
+		.spawn(scope);
+
+	eth_safe_vault_source_deposit_addresses
+		.clone()
+		.erc20_deposits::<_, _, _, UsdtEvents>(
+			process_call.clone(),
+			eth_client.clone(),
+			cf_primitives::chains::assets::eth::Asset::Usdt,
+			usdt_contract_address,
+		)
+		.await?
+		.continuous("USDTDeposits".to_string(), db.clone())
+		.logging("USDTDeposits")
 		.spawn(scope);
 
 	eth_safe_vault_source_deposit_addresses

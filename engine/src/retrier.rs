@@ -277,31 +277,25 @@ impl<Client: Send + Sync + Clone + 'static> ClientSelector<Client> {
 		&self,
 		primary_or_secondary: PrimaryOrSecondary,
 	) -> (Client, PrimaryOrSecondary) {
-		let primary_signal = self.primary_signal.clone();
-		let secondary_signal = self.secondary_signal.clone();
-
-		// If we have two clients, then we should bias the requested one, but if it's not ready,
-		// request from the other one.
-		match secondary_signal {
-			Some(secondary_signal) => match primary_or_secondary {
-				PrimaryOrSecondary::Secondary => {
-					tokio::select! {
-						biased;
-						client_and_type = secondary_signal.wait() => client_and_type,
-						client_and_type = primary_signal.wait() => client_and_type,
+		futures::future::select_all(
+			utilities::conditional::conditional(
+				&self.secondary_signal,
+				|secondary_signal| {
+					// If we have two clients, then we should bias the requested one, but if it's
+					// not ready, request from the other one.
+					match primary_or_secondary {
+						PrimaryOrSecondary::Secondary => [secondary_signal, &self.primary_signal],
+						PrimaryOrSecondary::Primary => [&self.primary_signal, secondary_signal],
 					}
+					.into_iter()
 				},
-				PrimaryOrSecondary::Primary => {
-					tokio::select! {
-						biased;
-						client_and_type = primary_signal.wait() => client_and_type,
-						client_and_type = secondary_signal.wait() => client_and_type,
-					}
-				},
-			},
-			// If we only have a primary, we have to wait for it to be ready.
-			None => primary_signal.wait().await,
-		}
+				// If we only have a primary, we have to wait for it to be ready.
+				|()| [&self.primary_signal].into_iter(),
+			)
+			.map(|signal| Box::pin(signal.clone().wait())),
+		)
+		.await
+		.0
 	}
 }
 
@@ -384,6 +378,7 @@ where
 		scope.spawn(async move {
 			utilities::loop_select! {
 				if let Some((response_sender, request_log, closure, retry_limit)) = request_receiver.recv() => {
+					RPC_RETRIER_REQUESTS.inc(&[name, request_log.rpc_method.as_str()]);
 					let request_id = request_holder.next_request_id();
 					let (client, primary_or_secondary) = client_selector.select_client(PrimaryOrSecondary::Primary).await;
 
@@ -395,7 +390,6 @@ where
 					RPC_RETRIER_TOTAL_REQUESTS.inc(&[name, request_log.rpc_method.as_str()]);
 					match result {
 						Ok(value) => {
-							RPC_RETRIER_REQUESTS.inc(&[name, request_log.rpc_method.as_str()]);
 							if let Some((response_sender, _)) = request_holder.remove(&request_id) {
 								let _result = response_sender.send(value);
 							}

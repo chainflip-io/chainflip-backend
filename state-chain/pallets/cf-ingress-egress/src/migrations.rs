@@ -1,9 +1,9 @@
-pub mod ingress_expiry;
-mod witness_safety_margins;
+use crate::Pallet;
+use cf_runtime_upgrade_utilities::{PlaceholderMigration, VersionedMigration};
 
-use cf_runtime_upgrade_utilities::VersionedMigration;
+pub mod add_boost_pools;
 
 pub type PalletMigration<T, I> = (
-	VersionedMigration<crate::Pallet<T, I>, ingress_expiry::Migration<T, I>, 0, 1>,
-	VersionedMigration<crate::Pallet<T, I>, witness_safety_margins::Migration<T, I>, 1, 2>,
+	VersionedMigration<Pallet<T, I>, add_boost_pools::Migration<T, I>, 6, 7>,
+	PlaceholderMigration<Pallet<T, I>, 7>,
 );

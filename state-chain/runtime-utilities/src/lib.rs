@@ -64,16 +64,13 @@ where
 #[macro_export]
 macro_rules! log_or_panic {
     ($($arg:tt)*) => {
-        #[cfg(not(debug_assertions))]
-        {
-			use scale_info::prelude::format;
-            log::error!("log_or_panic: {}", format_args!($($arg)*));
-        }
-        #[cfg(debug_assertions)]
-        {
+		if cfg!(debug_assertions) {
 			use scale_info::prelude::format;
             panic!("log_or_panic: {}", format_args!($($arg)*));
-        };
+		} else {
+			use scale_info::prelude::format;
+            log::error!("log_or_panic: {}", format_args!($($arg)*));
+		}
     };
 }
 

@@ -1,10 +1,6 @@
 on:
   workflow_call:
     inputs:
-      tag:
-        type: string
-        required: false
-        default: ${{ github.ref_name }}
       network:
         type: string
         required: false
@@ -15,7 +11,7 @@ env:
 
 jobs:
   check-version:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         manifest:
@@ -26,7 +22,7 @@ jobs:
           - api/bin/chainflip-lp-api/Cargo.toml
           - state-chain/runtime/Cargo.toml
     steps:
-      - name: Checkout 🏁
+      - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Install Rust 🦀
@@ -41,44 +37,53 @@ jobs:
         run: |
           echo "version=$(cargo read-manifest --manifest-path ${{ matrix.manifest }} | jq -r .version)" >> $GITHUB_OUTPUT
 
+      - name: Check systemd files and debian package config 👀
+        shell: bash
+        run: ./ci/scripts/check_engine_systemd_config.sh ${{ steps.cargo.outputs.version }}
+
       - name: Check tag version matches Cargo.toml 🕵️‍♂️
         shell: bash
+        if: inputs.network != 'sisyphos'
         run: |
-          if [[ "${{ inputs.tag }}" != "${{ steps.cargo.outputs.version }}" ]]; then
-            echo "Tag version (${{ inputs.tag }}) does not match version (${{ steps.cargo.outputs.version }}) in ${{ matrix.manifest }}"
+          if [[ "${{ github.ref_name }}" != "${{ steps.cargo.outputs.version }}" ]]; then
+            echo "Tag version (${{ github.ref_name }}) does not match version (${{ steps.cargo.outputs.version }}) in ${{ matrix.manifest }}"
             exit 1
           fi
 
-      - name: Check systemd files and debian package config 👀
-        shell: bash
-        run: ./ci/scripts/check_engine_systemd_config.sh ${{ inputs.tag }}
-
-  check-engine-systemd:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout 🏁
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-
-      - name: Check systemd files and debian package config 👀
-        shell: bash
-        run: ./ci/scripts/check_engine_systemd_config.sh ${{ inputs.tag }}
-
   check-changelog:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    if: inputs.network != 'sisyphos'
     steps:
-      - name: Checkout 🏁
+      - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Check changelog 📝
         shell: bash
-        run: ./ci/scripts/check_changelog.sh ${{ inputs.tag }}
+        run: ./ci/scripts/check_changelog.sh ${{ github.ref_name }}
 
   check-runtime-spec-version:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
-      - name: Checkout 🏁
+      - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
-      - name: Check changelog 📝
+      - name: Check runtime spec version against Berghain 🕵️‍♂️
         shell: bash
-        run: ./ci/scripts/check_runtime_spec_version.sh ${{ inputs.network }}
+        run: ./ci/scripts/check_runtime_spec_version.sh berghain
+
+  notify-discord-on-failure:
+    runs-on: ubuntu-22.04
+    needs: [check-version, check-changelog, check-runtime-spec-version]
+    if: failure()
+    steps:
+      - name: Notify on failed bouncer 📢
+        env:
+          DISCORD_USERNAME: "WaBouncer"
+          DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_RELEASE }}
+        uses: Ilshidur/action-discord@0c4b27844ba47cb1c7bee539c8eead5284ce9fa9
+        with:
+          args: |
+            ❗️❗️❗️❗️ Hey **${{ github.actor }}**, seems like our CI just took a detour through the land of broken builds. ❗️❗️❗️❗️
+            There was an issue with release checks on `${{ github.ref_name }}`
+            🔗 Link to job: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>
+            #️⃣ Tagging: <@704658689302462605>

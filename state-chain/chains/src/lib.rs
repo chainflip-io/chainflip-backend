@@ -1,21 +1,25 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(step_trait)]
+#![feature(extract_if)]
+
 use core::{fmt::Display, iter::Step};
 
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 pub use address::ForeignChainAddress;
-use address::{AddressDerivationApi, AddressDerivationError, ToHumanreadableAddress};
+use address::{
+	AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress, ToHumanreadableAddress,
+};
 use cf_primitives::{AssetAmount, BroadcastId, ChannelId, EthAmount, TransactionHash};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
-	pallet_prelude::{MaybeSerializeDeserialize, Member},
+	pallet_prelude::{MaybeSerializeDeserialize, Member, RuntimeDebug},
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, CheckedSub},
 		BoundedVec, DispatchError,
 	},
-	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, RuntimeDebug,
-	StorageHasher,
+	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, StorageHasher,
 };
+use instances::{ChainCryptoInstanceAlias, ChainInstanceAlias};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::{ConstU32, U256};
@@ -34,6 +38,7 @@ pub use frame_support::traits::Get;
 pub mod benchmarking_value;
 
 pub mod any;
+pub mod arb;
 pub mod btc;
 pub mod dot;
 pub mod eth;
@@ -44,12 +49,14 @@ pub mod sol;
 pub mod address;
 pub mod deposit_channel;
 pub use deposit_channel::*;
+use strum::IntoEnumIterator;
+pub mod instances;
 
 pub mod mocks;
 
 /// A trait representing all the types and constants that need to be implemented for supported
 /// blockchains.
-pub trait Chain: Member + Parameter {
+pub trait Chain: Member + Parameter + ChainInstanceAlias {
 	const NAME: &'static str;
 
 	const GAS_ASSET: Self::ChainAsset;
@@ -77,6 +84,7 @@ pub trait Chain: Member + Parameter {
 	type ChainAmount: Member
 		+ Parameter
 		+ Copy
+		+ MaybeSerializeDeserialize
 		+ Default
 		+ AtLeast32BitUnsigned
 		+ Into<AssetAmount>
@@ -99,10 +107,12 @@ pub trait Chain: Member + Parameter {
 		+ Parameter
 		+ MaxEncodedLen
 		+ Copy
+		+ MaybeSerializeDeserialize
 		+ BenchmarkValue
 		+ FullCodec
 		+ Into<cf_primitives::Asset>
 		+ Into<cf_primitives::ForeignChain>
+		+ IntoEnumIterator
 		+ Unpin;
 
 	type ChainAccount: Member
@@ -114,7 +124,7 @@ pub trait Chain: Member + Parameter {
 		+ Ord
 		+ PartialOrd
 		+ TryFrom<ForeignChainAddress>
-		+ Into<ForeignChainAddress>
+		+ IntoForeignChainAddress<Self>
 		+ Unpin
 		+ ToHumanreadableAddress;
 
@@ -139,13 +149,17 @@ pub trait Chain: Member + Parameter {
 		+ TransactionMetadata<Self>
 		+ BenchmarkValue
 		+ Default;
+
+	/// The type representing the transaction hash for this particular chain
+	type TransactionRef: Member + Parameter + BenchmarkValue;
+
 	/// Passed in to construct the replay protection.
 	type ReplayProtectionParams: Member + Parameter;
 	type ReplayProtection: Member + Parameter;
 }
 
 /// Common crypto-related types and operations for some external chain.
-pub trait ChainCrypto {
+pub trait ChainCrypto: ChainCryptoInstanceAlias {
 	type UtxoChain: Get<bool>;
 
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
@@ -164,6 +178,8 @@ pub trait ChainCrypto {
 
 	/// Uniquely identifies a transaction on the outgoing direction.
 	type TransactionOutId: Member + Parameter + Unpin + BenchmarkValue;
+
+	type KeyHandoverIsRequired: Get<bool>;
 
 	type GovKey: Member + Parameter + Copy + BenchmarkValue;
 
@@ -298,7 +314,6 @@ pub trait ChainEnvironment<
 
 pub enum SetAggKeyWithAggKeyError {
 	Failed,
-	NotRequired,
 }
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
@@ -306,7 +321,7 @@ pub trait SetAggKeyWithAggKey<C: ChainCrypto>: ApiCall<C> {
 	fn new_unsigned(
 		maybe_old_key: Option<<C as ChainCrypto>::AggKey>,
 		new_key: <C as ChainCrypto>::AggKey,
-	) -> Result<Self, SetAggKeyWithAggKeyError>;
+	) -> Result<Option<Self>, SetAggKeyWithAggKeyError>;
 }
 
 #[allow(clippy::result_unit_err)]
@@ -339,10 +354,31 @@ pub trait RegisterRedemption: ApiCall<<Ethereum as Chain>::ChainCrypto> {
 	fn amount(&self) -> u128;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq, TypeInfo)]
 pub enum AllBatchError {
+	/// Empty transaction - the call is not required.
 	NotRequired,
-	Other,
+
+	/// The token address lookup failed. The token is not supported on the target chain.
+	UnsupportedToken,
+
+	/// The vault account is not set.
+	VaultAccountNotSet,
+
+	/// The Aggregate key lookup failed
+	AggKeyNotSet,
+
+	/// Unable to select Utxos.
+	UtxoSelectionFailed,
+
+	/// Some other DispatchError occurred.
+	DispatchError(DispatchError),
+}
+
+impl From<DispatchError> for AllBatchError {
+	fn from(e: DispatchError) -> Self {
+		AllBatchError::DispatchError(e)
+	}
 }
 
 #[derive(Debug)]
@@ -487,5 +523,23 @@ impl<C: Chain> FeeEstimationApi<C> for () {
 
 	fn estimate_egress_fee(&self, _asset: C::ChainAsset) -> C::ChainAmount {
 		Default::default()
+	}
+}
+
+/// Defines an interface for a retry policy.
+pub trait RetryPolicy {
+	type BlockNumber;
+	type AttemptCount;
+	/// Returns the delay for the given attempt count. If None, no delay is applied.
+	fn next_attempt_delay(retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber>;
+}
+
+pub struct DefaultRetryPolicy;
+impl RetryPolicy for DefaultRetryPolicy {
+	type BlockNumber = u32;
+	type AttemptCount = u32;
+
+	fn next_attempt_delay(_retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber> {
+		Some(10u32)
 	}
 }

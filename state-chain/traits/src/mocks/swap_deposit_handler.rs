@@ -1,4 +1,5 @@
 use cf_chains::Chain;
+use cf_primitives::SwapId;
 
 use crate::{EgressApi, SwapDepositHandler};
 
@@ -7,7 +8,7 @@ pub struct MockSwapDepositHandler<T>(sp_std::marker::PhantomData<T>);
 
 impl<C: Chain, E: EgressApi<C>> SwapDepositHandler for MockSwapDepositHandler<(C, E)>
 where
-	C::ChainAsset: TryFrom<cf_primitives::Asset>,
+	cf_primitives::Asset: TryInto<C::ChainAsset>,
 {
 	type AccountId = u64;
 
@@ -21,12 +22,13 @@ where
 		_broker_id: Self::AccountId,
 		_broker_commission_bps: cf_primitives::BasisPoints,
 		_channel_id: cf_primitives::ChannelId,
-	) {
-		E::schedule_egress(
+	) -> SwapId {
+		let _ = E::schedule_egress(
 			to.try_into().unwrap_or_else(|_| panic!("Unable to convert")),
 			amount.try_into().unwrap_or_else(|_| panic!("Unable to convert")),
 			destination_address.try_into().unwrap_or_else(|_| panic!("Unable to convert")),
 			None,
 		);
+		1
 	}
 }

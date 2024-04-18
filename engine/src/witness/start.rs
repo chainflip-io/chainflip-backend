@@ -6,9 +6,11 @@ use crate::{
 	btc::retry_rpc::BtcRetryRpcClient,
 	db::PersistentKeyDB,
 	dot::retry_rpc::DotRetryRpcClient,
-	eth::{retry_rpc::EthRetryRpcClient, rpc::EthRpcSigningClient},
+	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
 	state_chain_observer::client::{
-		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
+		extrinsic_api::signed::SignedExtrinsicApi,
+		storage_api::StorageApi,
+		stream_api::{StreamApi, FINALIZED, UNFINALIZED},
 	},
 };
 
@@ -25,12 +27,13 @@ use anyhow::Result;
 // point it means that on start up this will block, and the state chain observer will not start.
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
-	eth_client: EthRetryRpcClient<EthRpcSigningClient>,
+	eth_client: EvmRetryRpcClient<EvmRpcSigningClient>,
+	arb_client: EvmRetryRpcClient<EvmRpcSigningClient>,
 	btc_client: BtcRetryRpcClient,
 	dot_client: DotRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,
-	state_chain_stream: impl StateChainStreamApi + Clone,
-	unfinalised_state_chain_stream: impl StateChainStreamApi<false> + Clone,
+	state_chain_stream: impl StreamApi<FINALIZED> + Clone,
+	unfinalised_state_chain_stream: impl StreamApi<UNFINALIZED> + Clone,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
 where
@@ -65,7 +68,10 @@ where
 				let _ = state_chain_client
 					.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 						call: Box::new(
-							pallet_cf_witnesser::Call::prewitness { call: Box::new(call) }.into(),
+							pallet_cf_witnesser::Call::prewitness_and_execute {
+								call: Box::new(call),
+							}
+							.into(),
 						),
 						epoch_index,
 					})
@@ -88,7 +94,7 @@ where
 		scope,
 		btc_client,
 		witness_call.clone(),
-		prewitness_call.clone(),
+		prewitness_call,
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
 		unfinalised_state_chain_stream.clone(),
@@ -99,14 +105,24 @@ where
 	let start_dot = super::dot::start(
 		scope,
 		dot_client,
-		witness_call,
-		state_chain_client,
-		state_chain_stream,
-		epoch_source,
-		db,
+		witness_call.clone(),
+		state_chain_client.clone(),
+		state_chain_stream.clone(),
+		epoch_source.clone(),
+		db.clone(),
 	);
 
-	futures::future::try_join3(start_eth, start_btc, start_dot).await?;
+	let start_arb = super::arb::start(
+		scope,
+		arb_client,
+		witness_call,
+		state_chain_client.clone(),
+		state_chain_stream.clone(),
+		epoch_source.clone(),
+		db.clone(),
+	);
+
+	futures::future::try_join4(start_eth, start_btc, start_dot, start_arb).await?;
 
 	Ok(())
 }

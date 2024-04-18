@@ -70,7 +70,7 @@ impl ChainSigning for BtcSigning {
 
 	/// The window is smaller for bitcoin because its block time is a lot longer and it supports
 	/// multiple signing payloads
-	const CEREMONY_ID_WINDOW: u64 = 1500;
+	const CEREMONY_ID_WINDOW: u64 = 50;
 }
 
 impl CryptoScheme for BtcCryptoScheme {

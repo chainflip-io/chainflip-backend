@@ -7,18 +7,18 @@ use cf_chains::{
 	eth::Ethereum,
 	evm::EvmCrypto,
 	mocks::{MockApiCall, MockEthereum, MockEthereumChainCrypto, MockTransactionBuilder},
-	Chain, ChainCrypto,
+	Chain, ChainCrypto, RetryPolicy,
 };
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
-		block_height_provider::BlockHeightProvider, signer_nomination::MockNominator,
-		threshold_signer::MockThresholdSigner,
+		block_height_provider::BlockHeightProvider, cfe_interface_mock::MockCfeInterface,
+		signer_nomination::MockNominator, threshold_signer::MockThresholdSigner,
 	},
 	AccountRoleRegistry, OnBroadcastReady,
 };
 use codec::{Decode, Encode};
-use frame_support::{parameter_types, traits::UnfilteredDispatchable};
+use frame_support::{derive_impl, parameter_types, traits::UnfilteredDispatchable};
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_core::{ConstU64, H256};
@@ -42,6 +42,7 @@ thread_local! {
 	pub static VALIDKEY: std::cell::RefCell<bool> = RefCell::new(true);
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -111,6 +112,21 @@ impl OnBroadcastReady<MockEthereum> for MockBroadcastReadyProvider {
 	type ApiCall = MockApiCall<MockEthereumChainCrypto>;
 }
 
+pub struct MockRetryPolicy;
+
+parameter_types! {
+	pub static BroadcastDelay: Option<BlockNumberFor<Test>> = None;
+}
+
+impl RetryPolicy for MockRetryPolicy {
+	type BlockNumber = u64;
+	type AttemptCount = u32;
+
+	fn next_attempt_delay(_retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber> {
+		BroadcastDelay::get()
+	}
+}
+
 impl_mock_runtime_safe_mode! { broadcast: PalletSafeMode<Instance1> }
 
 impl pallet_cf_broadcast::Config<Instance1> for Test {
@@ -132,6 +148,8 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type BroadcastReadyProvider = MockBroadcastReadyProvider;
 	type SafeModeBlockMargin = ConstU64<10>;
 	type ChainTracking = BlockHeightProvider<MockEthereum>;
+	type RetryPolicy = MockRetryPolicy;
+	type CfeBroadcastRequest = MockCfeInterface;
 }
 
 impl_mock_chainflip!(Test);
@@ -139,7 +157,7 @@ cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig::default(),
 	|| {
-		MockEpochInfo::next_epoch((0..4).collect());
+		MockEpochInfo::next_epoch((0..151).collect());
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		for id in &MockEpochInfo::current_authorities() {
 			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id).unwrap();

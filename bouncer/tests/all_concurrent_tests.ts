@@ -1,12 +1,13 @@
 #!/usr/bin/env -S pnpm tsx
 import { testAllSwaps } from '../shared/swapping';
-import { testEthereumDeposits } from '../shared/ethereum_deposits';
+import { testEvmDeposits } from '../shared/evm_deposits';
 import { runWithTimeout, observeBadEvents } from '../shared/utils';
 import { testFundRedeem } from '../shared/fund_redeem';
 import { testMultipleMembersGovernance } from '../shared/multiple_members_governance';
 import { testLpApi } from '../shared/lp_api_test';
 import { swapLessThanED } from '../shared/swap_less_than_existential_deposit_dot';
 import { testPolkadotRuntimeUpdate } from '../shared/polkadot_runtime_update';
+import { testBrokerFeeCollection } from '../shared/broker_fee_collection';
 
 async function runAllConcurrentTests() {
   // Specify the number of nodes via providing an argument to this script.
@@ -23,10 +24,11 @@ async function runAllConcurrentTests() {
   const tests = [
     swapLessThanED(),
     testAllSwaps(),
-    testEthereumDeposits(),
+    testEvmDeposits(),
     testFundRedeem('redeem'),
     testMultipleMembersGovernance(),
     testLpApi(),
+    testBrokerFeeCollection(),
   ];
 
   // Test that only work if there is more than one node
@@ -43,12 +45,13 @@ async function runAllConcurrentTests() {
   await Promise.all([broadcastAborted, feeDeficitRefused]);
 }
 
-runWithTimeout(runAllConcurrentTests(), 1800000)
+runWithTimeout(runAllConcurrentTests(), 1000000)
   .then(() => {
     // There are some dangling resources that prevent the process from exiting
     process.exit(0);
   })
   .catch((error) => {
+    console.error!('All concurrent tests timed out. Exiting.');
     console.error(error);
     process.exit(-1);
   });

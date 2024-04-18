@@ -8,12 +8,12 @@ use crate::mock_runtime::{
 use super::*;
 use cf_primitives::AccountRole;
 use cf_traits::{AccountInfo, EpochInfo, QualifyNode};
-use state_chain_runtime::{BitcoinVault, EthereumVault, PolkadotVault};
+use state_chain_runtime::{BitcoinThresholdSigner, EvmThresholdSigner, PolkadotThresholdSigner};
 pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 
 const BLOCKS_PER_EPOCH: u32 = 1000;
 
-pub fn default() -> ExtBuilder {
+pub fn with_test_defaults() -> ExtBuilder {
 	ExtBuilder::default()
 		.accounts(vec![
 			(AccountId::from(ALICE), AccountRole::Validator, GENESIS_BALANCE),
@@ -28,14 +28,14 @@ pub fn default() -> ExtBuilder {
 
 #[test]
 fn state_of_genesis_is_as_expected() {
-	default().build().execute_with(|| {
+	with_test_defaults().build().execute_with(|| {
 		// Confirmation that we have our assumed state at block 1
 		assert_eq!(Flip::total_issuance(), TOTAL_ISSUANCE, "we have issued the total issuance");
 
 		let accounts = [AccountId::from(CHARLIE), AccountId::from(BOB), AccountId::from(ALICE)];
 
 		for account in accounts.iter() {
-			assert_eq!(<Flip as AccountInfo<_>>::balance(account), GENESIS_BALANCE,);
+			assert_eq!(<Flip as AccountInfo>::balance(account), GENESIS_BALANCE,);
 		}
 
 		assert_eq!(Validator::bond(), GENESIS_BALANCE);
@@ -44,6 +44,19 @@ fn state_of_genesis_is_as_expected() {
 			accounts.iter().collect::<BTreeSet<_>>(),
 			"the validators are those expected at genesis"
 		);
+
+		for account in &accounts {
+			assert_eq!(
+				frame_system::Pallet::<Runtime>::providers(account),
+				1,
+				"Expected provider count to be incremented on genesis."
+			);
+			assert_eq!(
+				frame_system::Pallet::<Runtime>::consumers(account),
+				2,
+				"Expected consumer count to be incremented twice on genesis: account roles and session pallets."
+			);
+		}
 
 		assert_eq!(
 			Validator::blocks_per_epoch(),
@@ -66,9 +79,9 @@ fn state_of_genesis_is_as_expected() {
 
 		assert_eq!(Emissions::last_supply_update_block(), 0, "no emissions");
 
-		assert_eq!(EthereumVault::ceremony_id_counter(), 0, "no key generation requests");
-		assert_eq!(PolkadotVault::ceremony_id_counter(), 0, "no key generation requests");
-		assert_eq!(BitcoinVault::ceremony_id_counter(), 0, "no key generation requests");
+		assert_eq!(EvmThresholdSigner::ceremony_id_counter(), 0, "no key generation requests");
+		assert_eq!(PolkadotThresholdSigner::ceremony_id_counter(), 0, "no key generation requests");
+		assert_eq!(BitcoinThresholdSigner::ceremony_id_counter(), 0, "no key generation requests");
 
 		assert_eq!(
 			pallet_cf_environment::EthereumSignatureNonce::<Runtime>::get(),

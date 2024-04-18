@@ -1,0 +1,30 @@
+---
+source: state-chain/custom-rpc/src/type_decoder.rs
+expression: value
+---
+{
+  "name": "Inner",
+  "values": [
+    {
+      "name": "Asset",
+      "values": {
+        "any": {
+          "name": "Flip",
+          "values": []
+        },
+        "eth": {
+          "name": "Eth",
+          "values": []
+        },
+        "btc": {
+          "name": "Btc",
+          "values": []
+        },
+        "dot": {
+          "name": "Dot",
+          "values": []
+        }
+      }
+    }
+  ]
+}

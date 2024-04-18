@@ -1,15 +1,6 @@
-mod btc_chain_tracking;
-mod btc_deposits;
-pub mod btc_source;
-
-use std::sync::Arc;
-
-use bitcoin::BlockHash;
-use cf_chains::btc::{self, deposit_address::DepositAddress, BlockNumber, CHANGE_ADDRESS_SALT};
-use cf_primitives::{EpochIndex, NetworkEnvironment};
-use futures_core::Future;
-use secp256k1::hashes::Hash;
-use utilities::task_scope::Scope;
+mod chain_tracking;
+mod deposits;
+pub mod source;
 
 use crate::{
 	btc::{
@@ -18,10 +9,19 @@ use crate::{
 	},
 	db::PersistentKeyDB,
 	state_chain_observer::client::{
-		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
+		extrinsic_api::signed::SignedExtrinsicApi,
+		storage_api::StorageApi,
+		stream_api::{StreamApi, FINALIZED, UNFINALIZED},
 	},
 };
-use btc_source::BtcSource;
+use bitcoin::BlockHash;
+use cf_chains::btc::{self, deposit_address::DepositAddress, BlockNumber, CHANGE_ADDRESS_SALT};
+use cf_primitives::{EpochIndex, NetworkEnvironment};
+use futures_core::Future;
+use secp256k1::hashes::Hash;
+use source::BtcSource;
+use std::sync::Arc;
+use utilities::task_scope::Scope;
 
 use super::common::{
 	chain_source::{extension::ChainSourceExt, Header},
@@ -51,13 +51,11 @@ pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoric
 			state_chain_runtime::RuntimeCall::BitcoinBroadcaster(
 				pallet_cf_broadcast::Call::transaction_succeeded {
 					tx_out_id: tx_hash,
-					signer_id: DepositAddress::new(
-						epoch.info.0.public_key.current,
-						CHANGE_ADDRESS_SALT,
-					)
-					.script_pubkey(),
+					signer_id: DepositAddress::new(epoch.info.0.current, CHANGE_ADDRESS_SALT)
+						.script_pubkey(),
 					tx_fee: tx.fee.unwrap_or_default().to_sat(),
 					tx_metadata: (),
+					transaction_ref: tx_hash,
 				},
 			),
 			epoch.index,
@@ -80,13 +78,13 @@ pub async fn start<
 	prewitness_call: PrewitnessCall,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
-	unfinalised_state_chain_stream: impl StateChainStreamApi<false>,
+	unfinalised_state_chain_stream: impl StreamApi<UNFINALIZED>,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
 where
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
-	StateChainStream: StateChainStreamApi + Clone + 'static + Send + Sync,
+	StateChainStream: StreamApi<FINALIZED> + Clone,
 	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 		+ Send
 		+ Sync
@@ -109,7 +107,7 @@ where
 		.logging("chain tracking")
 		.spawn(scope);
 
-	let vaults = epoch_source.vaults().await;
+	let vaults = epoch_source.vaults::<cf_chains::Bitcoin>().await;
 
 	let block_source = btc_source
 		.then({
@@ -188,7 +186,7 @@ fn success_witnesses<'a>(
 
 	for tx in txs {
 		let mut monitored = monitored_tx_hashes.clone();
-		let tx_hash = tx.txid.as_raw_hash().to_byte_array();
+		let tx_hash = tx.txid.to_byte_array().into();
 
 		if monitored.any(|&monitored_hash| monitored_hash == tx_hash) {
 			successful_witnesses.push((tx_hash, tx));
@@ -203,7 +201,7 @@ mod tests {
 	use bitcoin::Amount;
 
 	use super::*;
-	use crate::witness::btc::btc_deposits::tests::{fake_transaction, fake_verbose_vouts};
+	use crate::witness::btc::deposits::tests::{fake_transaction, fake_verbose_vouts};
 
 	#[test]
 	fn witnesses_tx_hash_successfully() {
@@ -227,8 +225,7 @@ mod tests {
 			),
 		];
 
-		let tx_hashes =
-			txs.iter().map(|tx| tx.txid.to_raw_hash().to_byte_array()).collect::<Vec<_>>();
+		let tx_hashes = txs.iter().map(|tx| tx.txid.to_byte_array().into()).collect::<Vec<_>>();
 
 		// we're not monitoring for index 2, and they're out of order.
 		let monitored_hashes = [tx_hashes[3], tx_hashes[0], tx_hashes[1]];

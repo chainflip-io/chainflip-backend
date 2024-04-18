@@ -4,7 +4,7 @@ The intention of this document is to ensure the team makes decisions, work can m
 
 # Location
 
-We choose to document our practices here inside this repository, so they are easily assessible and we can use Github's source control tools to manage the maintainence of this document.
+We choose to document our practices here inside this repository, so they are easily accessible and we can use Github's source control tools to manage the maintenance of this document.
 
 # Requirements
 
@@ -13,15 +13,15 @@ Our practices must be:
 - As unambiguous as possible. It should be clear how and when the practice applies. If necessary they should include clarifying examples. Ideally these examples would be from our codebase, and include links to PRs and issues.
 - Well-reasoned. Otherwise we will likely alienate some developers. As such each practice should be justified using logic, principles, ideals, and other practices.
 
-# Maintainence
+# Maintenance
 
-Create an issue on this repository regarding the modification to / problem with the practices, provide a justification for the change, and add the <span style="color:rgb(0,255,0)">practices</span> label. We intentionally chose not to burden ourselves with a formal process to agree on modifications to the practices, but it is expected the whole team be given the opportinity to comment, a majority of the team should agree to a change, and those who disagreed are satisfied with the resolution. Once the modification is agreed on by the team, create a pull request to modify this document. That pull request should contain changes that ensure the codebase matches the new practices if applicable.
+Create an issue on this repository regarding the modification to / problem with the practices, provide a justification for the change, and add the <span style="color:rgb(0,255,0)">practices</span> label. We intentionally chose not to burden ourselves with a formal process to agree on modifications to the practices, but it is expected the whole team be given the opportunity to comment, a majority of the team should agree to a change, and those who disagreed are satisfied with the resolution. Once the modification is agreed on by the team, create a pull request to modify this document. That pull request should contain changes that ensure the codebase matches the new practices if applicable.
 
 # Application
 
 It is expected we "disagree and commit" with the contents of this document. If you feel a particular practice should be changed, you should still follow the practice until the team agrees to a change.
 
-These practices should be used to help resolve disagreements. If that is not possible, the disagreement should be escalated so it can be resolved. If possible the resolution should result in modifcations to this document.
+These practices should be used to help resolve disagreements. If that is not possible, the disagreement should be escalated so it can be resolved. If possible the resolution should result in modifications to this document.
 
 # Template
 
@@ -35,15 +35,15 @@ Code reviewing is an important part of the software development lifecycle. It is
 
 Why are small PRs important? [Google has a good explanation](https://google.github.io/eng-practices/review/developer/small-cls.html) and we agree.
 
-A rough guideline for the maximum of what constitutes "small" is around 400 lines of code. [Research](https://static1.smartbear.co/support/media/resources/cc/book/code-review-cisco-case-study.pdf) shows that once developers had reviewed more than 200 lines of code their ability to identify defects diminished. So ideally PRs kept under 200 lines are best. It's also important to make sure the PR makes sense on its own if merged. Develoeprs should think about how a large change can be broken up into smaller, self-contanied changes where relevant, to ensure PRs stay small.
+A rough guideline for the maximum of what constitutes "small" is around 400 lines of code. [Research](https://static1.smartbear.co/support/media/resources/cc/book/code-review-cisco-case-study.pdf) shows that once developers had reviewed more than 200 lines of code their ability to identify defects diminished. So ideally PRs kept under 200 lines are best. It's also important to make sure the PR makes sense on its own if merged. Developers should think about how a large change can be broken up into smaller, self-contained changes where relevant, to ensure PRs stay small.
 
 ### Organised and meaningful commits
 
-Each commit should be well named. While writing the occasional "ARGHHH" commit meessage may give us the stress relief we need, we should instead seek other stress reduction strategies, and have well named commits like "fix: authority rewards are now rewarded at each block" so as not to annoy and stress your fellow developers (which might result in "ARGGGH"s with more "G"s). This is important for two reasons: debugging, to find where bugs were introduced and providing reviewers a nice description of what to expect in a commit, also allowing them to navigate your PR more easily.
+Each commit should be well named. While writing the occasional "ARGGGH" commit message may give us the stress relief we need, we should instead seek other stress reduction strategies, and have well named commits like "fix: authority rewards are now rewarded at each block" so as not to annoy and stress your fellow developers (which might result in "ARGGGH"s with more "G"s). This is important for two reasons: debugging, to find where bugs were introduced and providing reviewers a nice description of what to expect in a commit, also allowing them to navigate your PR more easily.
 
 ### Self review
 
-Before requesting a review, developers are encouraged to conduct a thorough self-review of their own work. The approach to self-reviewing should be the same approach taken to reviewing the work of others. Investigate assumptions are being made, look for bugs, try and break it, think about how it could be structured to read better. Often you'll be able to find ways to improve your own code before the reviewer does.
+Before requesting a review, developers are encouraged to conduct a thorough self-review of their own work. The approach to self-reviewing should be the same approach taken to reviewing the work of others. Investigate assumptions being made, look for bugs, try and break it, think about how it could be structured to read better. Often you'll be able to find ways to improve your own code before the reviewer does.
 
 ## Correctness
 
@@ -88,7 +88,7 @@ We use a variation on conventional commits to keep our commits clear for reviewe
 `chore`: Code has been moved, dead code removed, file renamed, merging imports, function name typos, changing module structure, bumping dependency versions etc. There shouldn't be any code changes in a `chore` commit.
 `doc`: Comments, READMEs and any other form of documentation e.g. diagrams have been changed.
 
-The order of prececedece is as listed. So if a commit includes a feature and test changes you'd use `feature`.
+The order of precedence is as listed. So if a commit includes a feature and test changes you'd use `feature`.
 
 ## Code
 

@@ -3,15 +3,16 @@
 use super::*;
 use crate as pallet_cf_validator;
 use crate::PalletSafeMode;
+use cf_primitives::FlipBalance;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
+		cfe_interface_mock::MockCfeInterface, key_rotator::MockKeyRotatorA,
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
-		vault_rotator::MockVaultRotatorA,
 	},
-	AccountRoleRegistry, Bid,
+	AccountRoleRegistry,
 };
-use frame_support::{construct_runtime, parameter_types};
+use frame_support::{construct_runtime, derive_impl, parameter_types};
 use sp_core::H256;
 use sp_runtime::{
 	impl_opaque_keys,
@@ -29,6 +30,8 @@ pub const MIN_AUTHORITY_SIZE: u32 = 1;
 pub const MAX_AUTHORITY_SIZE: u32 = WINNING_BIDS.len() as u32;
 pub const MAX_AUTHORITY_SET_EXPANSION: u32 = WINNING_BIDS.len() as u32;
 
+pub type MockFlip = MockFundingInfo<Test>;
+
 construct_runtime!(
 	pub struct Test {
 		System: frame_system,
@@ -40,6 +43,7 @@ construct_runtime!(
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -91,13 +95,20 @@ impl pallet_session::Config for Test {
 	type NextSessionRotation = ();
 	type WeightInfo = ();
 }
-pub const AUCTION_WINNERS: [ValidatorId; 4] = [0, 1, 2, 3];
-pub const WINNING_BIDS: [Amount; 4] = [120, 120, 110, 105];
-pub const AUCTION_LOSERS: [ValidatorId; 3] = [5, 6, 7];
-pub const UNQUALIFIED_NODE: ValidatorId = 8;
-pub const UNQUALIFIED_NODE_BID: Amount = 200;
-pub const LOSING_BIDS: [Amount; 3] = [99, 90, 74];
-pub const EXPECTED_BOND: Amount = WINNING_BIDS[WINNING_BIDS.len() - 1];
+pub const WINNING_BIDS: [Bid<ValidatorId, FlipBalance>; 4] = [
+	Bid { bidder_id: 0, amount: 120 },
+	Bid { bidder_id: 1, amount: 120 },
+	Bid { bidder_id: 2, amount: 110 },
+	Bid { bidder_id: 3, amount: 105 },
+];
+pub const LOSING_BIDS: [Bid<ValidatorId, FlipBalance>; 3] = [
+	Bid { bidder_id: 5, amount: 99 },
+	Bid { bidder_id: 6, amount: 90 },
+	Bid { bidder_id: 7, amount: 74 },
+];
+pub const UNQUALIFIED_BID: Bid<ValidatorId, FlipBalance> = Bid { bidder_id: 8, amount: 200 };
+
+pub const EXPECTED_BOND: Amount = WINNING_BIDS[WINNING_BIDS.len() - 1].amount;
 
 pub struct TestEpochTransitionHandler;
 
@@ -105,7 +116,6 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {}
 
 thread_local! {
 	pub static MISSED_SLOTS: RefCell<(u64, u64)> = RefCell::new(Default::default());
-	pub static BIDDERS: RefCell<Vec<Bid<ValidatorId, Amount>>> = RefCell::new(Default::default());
 }
 
 pub struct MockMissedAuthorshipSlots;
@@ -153,49 +163,20 @@ impl Bonding for MockBonder {
 pub type MockOffenceReporter =
 	cf_traits::mocks::offence_reporting::MockOffenceReporter<ValidatorId, PalletOffence>;
 
-pub struct MockBidderProvider;
-
-impl MockBidderProvider {
-	pub fn set_bids(bids: Vec<Bid<ValidatorId, Amount>>) {
-		BIDDERS.with(|cell| *cell.borrow_mut() = bids);
-	}
-
-	pub fn set_default_test_bids() {
-		BIDDERS.with(|cell| {
-			*cell.borrow_mut() = AUCTION_WINNERS
-				.into_iter()
-				.zip(WINNING_BIDS)
-				.chain(AUCTION_LOSERS.into_iter().zip(LOSING_BIDS))
-				.chain(sp_std::iter::once((UNQUALIFIED_NODE, UNQUALIFIED_NODE_BID)))
-				.map(|(bidder_id, amount)| Bid { bidder_id, amount })
-				.collect()
-		})
-	}
-}
-
-impl BidderProvider for MockBidderProvider {
-	type ValidatorId = ValidatorId;
-	type Amount = Amount;
-
-	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
-		BIDDERS.with(|cell| cell.borrow().clone())
-	}
-}
-
 impl_mock_runtime_safe_mode!(validator: PalletSafeMode);
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = PalletOffence;
 	type EpochTransitionHandler = TestEpochTransitionHandler;
-	type VaultRotator = MockVaultRotatorA;
+	type KeyRotator = MockKeyRotatorA;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
-	type BidderProvider = MockBidderProvider;
 	type OffenceReporter = MockOffenceReporter;
 	type Bonder = MockBonder;
 	type ReputationResetter = MockReputationResetter<Self>;
 	type KeygenQualification = QualifyAll<ValidatorId>;
 	type SafeMode = MockRuntimeSafeMode;
 	type ValidatorWeightInfo = ();
+	type CfePeerRegistration = MockCfeInterface;
 }
 
 /// Session pallet requires a set of validators at genesis.
@@ -204,24 +185,32 @@ pub const REDEMPTION_PERCENTAGE_AT_GENESIS: Percent = Percent::from_percent(50);
 pub const GENESIS_BOND: Amount = 100;
 pub const EPOCH_DURATION: u64 = 10;
 
+fn all_validators() -> Vec<ValidatorId> {
+	[
+		&GENESIS_AUTHORITIES[..],
+		&[&WINNING_BIDS[..], &LOSING_BIDS[..]]
+			.concat()
+			.into_iter()
+			.map(|bid| bid.bidder_id)
+			.collect::<Vec<_>>()[..],
+	]
+	.concat()
+	.to_vec()
+}
+
 cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
 		system: SystemConfig::default(),
 		session: SessionConfig {
-			keys: [&GENESIS_AUTHORITIES[..], &AUCTION_WINNERS[..], &AUCTION_LOSERS[..]]
-				.concat()
-				.iter()
-				.map(|&i| (i, i, UintAuthorityId(i).into()))
+			keys: all_validators()
+				.into_iter()
+				.map(|i| (i, i, UintAuthorityId(i).into()))
 				.collect(),
 		},
 		validator_pallet: ValidatorPalletConfig {
 			genesis_authorities: BTreeSet::from(GENESIS_AUTHORITIES),
 			genesis_backups: Default::default(),
-			genesis_vanity_names: BTreeMap::from_iter([(
-				GENESIS_AUTHORITIES[0],
-				"Alice ✅".as_bytes().to_vec(),
-			)]),
 			blocks_per_epoch: EPOCH_DURATION,
 			bond: GENESIS_BOND,
 			redemption_period_as_percentage: REDEMPTION_PERCENTAGE_AT_GENESIS,
@@ -237,16 +226,9 @@ cf_test_utilities::impl_test_helpers! {
 		},
 	},
 	||{
-		assert_eq!(
-			VanityNames::<Test>::get().get(&GENESIS_AUTHORITIES[0]).unwrap(),
-			&"Alice ✅".as_bytes().to_vec()
-		);
-		for account_id in
-			[&GENESIS_AUTHORITIES[..], &AUCTION_WINNERS[..], &AUCTION_LOSERS[..]]
-				.into_iter()
-				.flatten()
+		for account_id in all_validators()
 		{
-			<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(account_id).unwrap();
+			<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&account_id).unwrap();
 		}
 	},
 }
@@ -255,9 +237,7 @@ cf_test_utilities::impl_test_helpers! {
 macro_rules! assert_invariants {
 	() => {
 		assert_eq!(
-			<ValidatorPallet as EpochInfo>::current_authorities()
-				.into_iter()
-				.collect::<Vec<_>>(),
+			<ValidatorPallet as EpochInfo>::current_authorities(),
 			Session::validators(),
 			"Authorities out of sync at block {:?}. RotationPhase: {:?}",
 			System::block_number(),
@@ -288,7 +268,7 @@ impl<Ctx: Clone> TestHelper for TestRunner<Ctx> {
 	/// Run checks before and after the execution to ensure the integrity of states.
 	fn then_execute_with_checks<R>(self, execute: impl FnOnce() -> R) -> TestRunner<R> {
 		self.then_execute_with(|_| {
-			QualifyAll::<u64>::except([UNQUALIFIED_NODE]);
+			QualifyAll::<u64>::except([UNQUALIFIED_BID.bidder_id]);
 			log::debug!("Pre-test invariant check.");
 			assert_invariants!();
 			log::debug!("Pre-test invariant check passed.");
@@ -308,10 +288,11 @@ impl<Ctx: Clone> TestHelper for TestRunner<Ctx> {
 	) -> TestRunner<R> {
 		self.then_execute_with(|_| System::current_block_number() + blocks)
 			.then_process_blocks_until(|execution_block| {
+				assert_invariants!();
 				System::current_block_number() == execution_block - 1
 			})
 			.then_execute_at_next_block(|_| {
-				QualifyAll::<u64>::except([UNQUALIFIED_NODE]);
+				QualifyAll::<u64>::except([UNQUALIFIED_BID.bidder_id]);
 				log::debug!("Pre-test invariant check.");
 				assert_invariants!();
 				let r = execute();

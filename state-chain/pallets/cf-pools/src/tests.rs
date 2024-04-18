@@ -1,15 +1,18 @@
 use crate::{
-	self as pallet_cf_pools, mock::*, utilities, AskBidMap, AssetAmounts, AssetPair, AssetsMap,
-	CollectedNetworkFee, Error, Event, FlipBuyInterval, FlipToBurn, LimitOrder, PoolInfo,
-	PoolOrders, Pools, RangeOrder, RangeOrderSize, ScheduledLimitOrderUpdates, STABLE_ASSET,
+	self as pallet_cf_pools, mock::*, utilities, AskBidMap, AssetAmounts, AssetPair,
+	CollectedNetworkFee, Error, Event, FlipBuyInterval, LimitOrder, PoolInfo, PoolOrders,
+	PoolPairsMap, Pools, RangeOrder, RangeOrderSize, ScheduledLimitOrderUpdates, STABLE_ASSET,
 };
-use cf_amm::common::{price_at_tick, tick_at_price, Order, Tick, PRICE_FRACTIONAL_BITS};
+use cf_amm::common::{price_at_tick, tick_at_price, Side, Tick, PRICE_FRACTIONAL_BITS};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount, SwapOutput};
 use cf_test_utilities::{assert_events_match, assert_has_event, last_event};
-use cf_traits::AssetConverter;
+use cf_traits::{
+	mocks::swap_queue_api::{MockSwap, MockSwapQueueApi},
+	AssetConverter, SwapType, SwappingApi,
+};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use frame_system::pallet_prelude::BlockNumberFor;
-use sp_core::U256;
+use sp_core::{bounded_vec, U256};
 use sp_runtime::Permill;
 
 #[test]
@@ -80,7 +83,6 @@ fn test_buy_back_flip_no_funds_available() {
 		FlipBuyInterval::<Test>::set(5);
 		CollectedNetworkFee::<Test>::set(30);
 		LiquidityPools::on_initialize(8);
-		assert_eq!(FlipToBurn::<Test>::get(), 0);
 	});
 }
 
@@ -149,7 +151,7 @@ fn test_sweeping() {
 			RuntimeOrigin::signed(ALICE),
 			ETH,
 			STABLE_ASSET,
-			Order::Buy,
+			Side::Buy,
 			0,
 			Some(TICK),
 			POSITION_0_SIZE,
@@ -171,7 +173,7 @@ fn test_sweeping() {
 			RuntimeOrigin::signed(ALICE),
 			ETH,
 			STABLE_ASSET,
-			Order::Sell,
+			Side::Sell,
 			1,
 			Some(TICK),
 			POSITION_1_SIZE,
@@ -199,7 +201,7 @@ fn test_buy_back_flip() {
 			Default::default(),
 			price_at_tick(0).unwrap(),
 		));
-		for side in [Order::Buy, Order::Sell] {
+		for side in [Side::Buy, Side::Sell] {
 			assert_ok!(LiquidityPools::set_limit_order(
 				RuntimeOrigin::signed(ALICE),
 				FLIP,
@@ -227,21 +229,27 @@ fn test_buy_back_flip() {
 		// The default buy interval is zero, and this means we don't buy back.
 		assert_eq!(FlipBuyInterval::<Test>::get(), 0);
 		LiquidityPools::on_initialize(1);
-		assert_eq!(FlipToBurn::<Test>::get(), 0);
 
 		// A non-zero buy interval
 		FlipBuyInterval::<Test>::set(INTERVAL);
 
 		// Nothing is bought if we're not at the interval.
 		LiquidityPools::on_initialize(INTERVAL * 3 - 1);
-		assert_eq!(0, FlipToBurn::<Test>::get());
 		assert_eq!(EXPECTED_COLLECTED_FEES, CollectedNetworkFee::<Test>::get());
 
 		// If we're at an interval, we should buy flip.
 		LiquidityPools::on_initialize(INTERVAL * 3);
 		assert_eq!(0, CollectedNetworkFee::<Test>::get());
-		assert!(
-			FlipToBurn::<Test>::get().abs_diff(EXPECTED_COLLECTED_FEES / FLIP_PRICE_IN_USDC) <= 1
+		assert_eq!(
+			MockSwapQueueApi::get_swap_queue()
+				.first()
+				.expect("Should have scheduled a swap usdc -> flip"),
+			&MockSwap {
+				from: STABLE_ASSET,
+				to: FLIP,
+				amount: EXPECTED_COLLECTED_FEES,
+				swap_type: SwapType::NetworkFee,
+			}
 		);
 	});
 }
@@ -289,6 +297,10 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			Ok(PoolInfo {
 				limit_order_fee_hundredth_pips: old_fee,
 				range_order_fee_hundredth_pips: old_fee,
+				range_order_total_fees_earned: Default::default(),
+				limit_order_total_fees_earned: Default::default(),
+				range_total_swap_inputs: Default::default(),
+				limit_total_swap_inputs: Default::default(),
 			})
 		);
 
@@ -297,7 +309,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			STABLE_ASSET,
-			Order::Sell,
+			Side::Sell,
 			0,
 			Some(0),
 			5_000,
@@ -306,7 +318,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			STABLE_ASSET,
-			Order::Buy,
+			Side::Buy,
 			1,
 			Some(0),
 			1_000,
@@ -315,7 +327,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			RuntimeOrigin::signed(BOB),
 			Asset::Eth,
 			STABLE_ASSET,
-			Order::Sell,
+			Side::Sell,
 			0,
 			Some(0),
 			10_000,
@@ -324,13 +336,13 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			RuntimeOrigin::signed(BOB),
 			Asset::Eth,
 			STABLE_ASSET,
-			Order::Buy,
+			Side::Buy,
 			1,
 			Some(0),
 			10_000,
 		));
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(ALICE)),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap {
 					asks: vec![LimitOrder {
@@ -354,7 +366,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			})
 		);
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &BOB,),
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(BOB)),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap {
 					asks: vec![LimitOrder {
@@ -409,8 +421,19 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			Ok(PoolInfo {
 				limit_order_fee_hundredth_pips: new_fee,
 				range_order_fee_hundredth_pips: new_fee,
+				range_order_total_fees_earned: Default::default(),
+				limit_order_total_fees_earned: PoolPairsMap {
+					base: U256::from(4000),
+					quote: U256::from(3992)
+				},
+				range_total_swap_inputs: Default::default(),
+				limit_total_swap_inputs: PoolPairsMap {
+					base: U256::from(6000),
+					quote: U256::from(5988)
+				},
 			})
 		);
+
 		System::assert_has_event(RuntimeEvent::LiquidityPools(Event::<Test>::PoolFeeSet {
 			base_asset: Asset::Eth,
 			quote_asset: STABLE_ASSET,
@@ -421,7 +444,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 		// Alice's remaining liquidity = 5_000 - 2_000
 		// Bob's remaining liquidity = 10_000 - 4_000
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(ALICE)),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap {
 					asks: vec![LimitOrder {
@@ -445,7 +468,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			})
 		);
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &BOB,),
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(BOB)),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap {
 					asks: vec![LimitOrder {
@@ -510,7 +533,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			STABLE_ASSET,
-			Order::Sell,
+			Side::Sell,
 			0,
 			Some(0),
 			100,
@@ -519,7 +542,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 			RuntimeOrigin::signed(BOB),
 			Asset::Eth,
 			STABLE_ASSET,
-			Order::Sell,
+			Side::Sell,
 			0,
 			Some(tick),
 			100_000,
@@ -528,13 +551,13 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 			RuntimeOrigin::signed(BOB),
 			Asset::Eth,
 			STABLE_ASSET,
-			Order::Buy,
+			Side::Buy,
 			1,
 			Some(tick),
 			10_000,
 		));
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(ALICE)),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap {
 					asks: vec![LimitOrder {
@@ -585,7 +608,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 			lp: ALICE,
 			base_asset: Asset::Eth,
 			quote_asset: STABLE_ASSET,
-			side: Order::Sell,
+			side: Side::Sell,
 			id: 0,
 			tick: 0,
 			sell_amount_change: None,
@@ -597,7 +620,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 			lp: BOB,
 			base_asset: Asset::Eth,
 			quote_asset: STABLE_ASSET,
-			side: Order::Sell,
+			side: Side::Sell,
 			id: 0,
 			tick: 100,
 			sell_amount_change: None,
@@ -609,7 +632,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 			lp: BOB,
 			base_asset: Asset::Eth,
 			quote_asset: STABLE_ASSET,
-			side: Order::Buy,
+			side: Side::Buy,
 			id: 1,
 			tick: 100,
 			sell_amount_change: None,
@@ -639,6 +662,10 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 			Ok(PoolInfo {
 				limit_order_fee_hundredth_pips: old_fee,
 				range_order_fee_hundredth_pips: old_fee,
+				range_order_total_fees_earned: Default::default(),
+				limit_order_total_fees_earned: Default::default(),
+				range_total_swap_inputs: Default::default(),
+				limit_total_swap_inputs: Default::default(),
 			})
 		);
 
@@ -683,7 +710,7 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 		assert_eq!(BobCollectedUsdc::get(), 0u128);
 
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(ALICE)),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap { asks: vec![], bids: vec![] },
 				range_orders: vec![RangeOrder {
@@ -691,12 +718,12 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 					id: 0.into(),
 					range: range.clone(),
 					liquidity: 1_000_000,
-					fees_earned: AssetsMap { base: 999.into(), quote: 997.into() }
+					fees_earned: PoolPairsMap { base: 999.into(), quote: 997.into() }
 				}]
 			})
 		);
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &BOB,),
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(BOB)),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap { asks: vec![], bids: vec![] },
 				range_orders: vec![RangeOrder {
@@ -704,7 +731,7 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 					id: 0.into(),
 					range: range.clone(),
 					liquidity: 1_000_000,
-					fees_earned: AssetsMap { base: 999.into(), quote: 997.into() }
+					fees_earned: PoolPairsMap { base: 999.into(), quote: 997.into() }
 				}]
 			})
 		);
@@ -757,7 +784,7 @@ fn can_execute_scheduled_limit_order() {
 			Box::new(pallet_cf_pools::Call::<Test>::set_limit_order {
 				base_asset: Asset::Flip,
 				quote_asset: STABLE_ASSET,
-				side: Order::Buy,
+				side: Side::Buy,
 				id: order_id,
 				option_tick: Some(100),
 				sell_amount: 55,
@@ -816,7 +843,7 @@ fn cant_schedule_in_the_past() {
 				Box::new(pallet_cf_pools::Call::<Test>::set_limit_order {
 					base_asset: Asset::Flip,
 					quote_asset: STABLE_ASSET,
-					side: Order::Buy,
+					side: Side::Buy,
 					id: 0,
 					option_tick: Some(0),
 					sell_amount: 55,
@@ -881,7 +908,7 @@ fn can_get_all_pool_orders() {
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			STABLE_ASSET,
-			Order::Sell,
+			Side::Sell,
 			4,
 			Some(100),
 			500_000,
@@ -890,7 +917,7 @@ fn can_get_all_pool_orders() {
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			STABLE_ASSET,
-			Order::Sell,
+			Side::Sell,
 			5,
 			Some(1000),
 			600_000,
@@ -899,7 +926,7 @@ fn can_get_all_pool_orders() {
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			STABLE_ASSET,
-			Order::Sell,
+			Side::Sell,
 			6,
 			Some(100),
 			700_000,
@@ -908,14 +935,14 @@ fn can_get_all_pool_orders() {
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			STABLE_ASSET,
-			Order::Buy,
+			Side::Buy,
 			7,
 			Some(1000),
 			800_000,
 		));
 
 		assert_eq!(
-			LiquidityPools::all_pool_orders(Asset::Eth, STABLE_ASSET),
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, None),
 			Ok(PoolOrders::<Test> {
 				limit_orders: AskBidMap {
 					asks: vec![
@@ -1013,7 +1040,7 @@ fn asset_conversion() {
 		const AVAILABLE: AssetAmount = 1_000_000;
 		const DESIRED: AssetAmount = 10_000;
 		// No available funds -> no conversion.
-		assert!(LiquidityPools::convert_asset_to_approximate_output(
+		assert!(LiquidityPools::calculate_asset_conversion(
 			Asset::Flip,
 			0u128,
 			Asset::Eth,
@@ -1023,42 +1050,175 @@ fn asset_conversion() {
 
 		// Desired output is zero -> trivially ok.
 		assert_eq!(
-			LiquidityPools::convert_asset_to_approximate_output(
-				Asset::Flip,
-				AVAILABLE,
-				Asset::Eth,
-				0u128,
-			),
-			Some((AVAILABLE, 0))
+			LiquidityPools::calculate_asset_conversion(Asset::Flip, AVAILABLE, Asset::Eth, 0u128,),
+			Some(0u128)
 		);
 
-		// Desired output is available -> assets converted.
-		assert!(matches!(
-			LiquidityPools::convert_asset_to_approximate_output(
-				Asset::Flip,
-				AVAILABLE,
+		// Desired output is available -> required amount.
+		let required =
+			LiquidityPools::calculate_asset_conversion(Asset::Flip, AVAILABLE, Asset::Eth, DESIRED)
+				.unwrap();
+		assert!(required > 0 && required <= AVAILABLE);
+
+		// Same asset and desired output is available.
+		assert_eq!(
+			LiquidityPools::calculate_asset_conversion(Asset::Eth, AVAILABLE, Asset::Eth, DESIRED),
+			Some(DESIRED)
+		);
+
+		// Same asset and desired output is not fully available.
+		assert_eq!(
+			LiquidityPools::calculate_asset_conversion(
 				Asset::Eth,
 				DESIRED,
+				Asset::Eth,
+				DESIRED * 2
 			),
-			Some((remaining, converted)) if converted > 0 && remaining + converted <= AVAILABLE
-		),);
-		cf_test_utilities::assert_event_sequence!(
-			Test,
-			RuntimeEvent::LiquidityPools(Event::NewPoolCreated { .. }),
-			RuntimeEvent::LiquidityPools(Event::RangeOrderUpdated { .. }),
-			RuntimeEvent::LiquidityPools(Event::NewPoolCreated { .. }),
-			RuntimeEvent::LiquidityPools(Event::RangeOrderUpdated { .. }),
-			RuntimeEvent::LiquidityPools(Event::AssetSwapped {
-				from: Asset::Flip,
-				to: STABLE_ASSET,
-				..
-			}),
-			RuntimeEvent::LiquidityPools(Event::NetworkFeeTaken { .. }),
-			RuntimeEvent::LiquidityPools(Event::AssetSwapped {
-				from: STABLE_ASSET,
-				to: Asset::Eth,
-				..
-			}),
+			Some(DESIRED)
 		);
+	});
+}
+
+#[test]
+fn fees_are_getting_recorded() {
+	new_test_ext().execute_with(|| {
+		let range_1 = -100..100;
+
+		// Create a new pool.
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			Asset::Eth,
+			STABLE_ASSET,
+			Default::default(),
+			price_at_tick(0).unwrap(),
+		));
+
+		assert_ok!(LiquidityPools::set_range_order(
+			RuntimeOrigin::signed(ALICE),
+			Asset::Eth,
+			STABLE_ASSET,
+			0,
+			Some(range_1.clone()),
+			RangeOrderSize::Liquidity { liquidity: 100_000 },
+		));
+
+		MockBalance::assert_fees_recorded(&ALICE);
+
+		assert_ok!(LiquidityPools::set_limit_order(
+			RuntimeOrigin::signed(BOB),
+			Asset::Eth,
+			STABLE_ASSET,
+			Side::Sell,
+			6,
+			Some(100),
+			700_000,
+		));
+
+		MockBalance::assert_fees_recorded(&BOB);
+	});
+}
+
+#[test]
+fn test_maximum_slippage_limits() {
+	use cf_utilities::{assert_err, assert_ok};
+
+	new_test_ext().execute_with(|| {
+		const BASE_ASSET: Asset = Asset::Eth;
+		const OTHER_ASSET: Asset = Asset::Btc;
+
+		let asset_pair = AssetPair::new(BASE_ASSET, STABLE_ASSET).unwrap();
+
+		// Ensure limits are configured per pool: this limit should be ignored during testing.
+		assert_ok!(LiquidityPools::set_maximum_price_impact(
+			RuntimeOrigin::root(),
+			bounded_vec![(OTHER_ASSET, Some(1))],
+		));
+		System::assert_last_event(RuntimeEvent::LiquidityPools(
+			crate::Event::<Test>::PriceImpactLimitSet {
+				asset_pair: AssetPair::new(OTHER_ASSET, STABLE_ASSET).unwrap(),
+				limit: Some(1),
+			},
+		));
+
+		let test_swaps = |size_limit_when_slippage_limit_is_hit| {
+			for (size, expected_output) in [
+				(0, 0),
+				(1, 0),
+				(100, 99),
+				(200, 199),
+				(250, 249),
+				(300, 299),
+				(400, 398),
+				(500, 497),
+				(1500, 1477),
+				(2500, 2439),
+				(3500, 3381),
+				(4500, 4306),
+				(5500, 5213),
+				(6500, 6103),
+				(7500, 6976),
+				(8500, 7834),
+				(9500, 8675),
+				(10500, 9502),
+				(11500, 10313),
+				(12500, 11111),
+				(13500, 11894),
+				(14500, 12663),
+				(15500, 13419),
+			] {
+				pallet_cf_pools::Pools::<Test>::remove(asset_pair);
+				assert_ok!(LiquidityPools::new_pool(
+					RuntimeOrigin::root(),
+					BASE_ASSET,
+					STABLE_ASSET,
+					Default::default(),
+					price_at_tick(0).unwrap(),
+				));
+				assert_ok!(LiquidityPools::set_range_order(
+					RuntimeOrigin::signed(ALICE),
+					BASE_ASSET,
+					STABLE_ASSET,
+					0,
+					Some(-10000..10000),
+					RangeOrderSize::Liquidity { liquidity: 100_000 },
+				));
+				let result = LiquidityPools::swap_single_leg(STABLE_ASSET, Asset::Eth, size);
+				if size < size_limit_when_slippage_limit_is_hit {
+					assert_eq!(expected_output, assert_ok!(result));
+				} else {
+					assert_err!(result);
+				}
+			}
+		};
+
+		test_swaps(u128::MAX);
+
+		assert_ok!(LiquidityPools::set_maximum_price_impact(
+			RuntimeOrigin::root(),
+			bounded_vec![(BASE_ASSET, Some(954))]
+		));
+
+		test_swaps(10500);
+
+		assert_ok!(LiquidityPools::set_maximum_price_impact(
+			RuntimeOrigin::root(),
+			bounded_vec![(BASE_ASSET, None)]
+		));
+
+		test_swaps(u128::MAX);
+
+		assert_ok!(LiquidityPools::set_maximum_price_impact(
+			RuntimeOrigin::root(),
+			bounded_vec![(BASE_ASSET, Some(10))]
+		));
+
+		test_swaps(300);
+
+		assert_ok!(LiquidityPools::set_maximum_price_impact(
+			RuntimeOrigin::root(),
+			bounded_vec![(BASE_ASSET, Some(300))]
+		));
+
+		test_swaps(3500);
 	});
 }

@@ -136,13 +136,15 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
-			if T::SafeMode::get().reporting_enabled &&
-				current_block % T::HeartbeatBlockInterval::get() == Zero::zero()
-			{
-				// Reputation depends on heartbeats
-				Self::penalise_offline_authorities(Self::current_network_state().offline);
+			if current_block % T::HeartbeatBlockInterval::get() == Zero::zero() {
 				T::Heartbeat::on_heartbeat_interval();
-				return T::WeightInfo::submit_network_state()
+				if T::SafeMode::get().reporting_enabled {
+					// Reputation depends on heartbeats
+					let offline_authorities = Self::current_network_state().offline;
+					let num_offline_authorities = offline_authorities.len() as u32;
+					Self::penalise_offline_authorities(offline_authorities);
+					return T::WeightInfo::submit_network_state(num_offline_authorities)
+				}
 			}
 			T::WeightInfo::on_initialize_no_action()
 		}
@@ -304,7 +306,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::heartbeat())]
+		#[pallet::weight((T::WeightInfo::heartbeat(), DispatchClass::Operational))]
 		pub fn heartbeat(origin: OriginFor<T>) -> DispatchResult {
 			let validator_id: T::ValidatorId =
 				T::AccountRoleRegistry::ensure_validator(origin)?.into();
@@ -388,7 +390,10 @@ impl<T: Config> OffenceReporter for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Offence = T::Offence;
 
-	fn report_many(offence: impl Into<Self::Offence>, validators: &[Self::ValidatorId]) {
+	fn report_many(
+		offence: impl Into<Self::Offence>,
+		validators: impl IntoIterator<Item = T::ValidatorId> + Clone,
+	) {
 		if !T::SafeMode::get().reporting_enabled {
 			return
 		}
@@ -396,16 +401,16 @@ impl<T: Config> OffenceReporter for Pallet<T> {
 		let penalty = Self::resolve_penalty_for(offence);
 
 		if penalty.reputation > 0 {
-			for validator_id in validators {
-				Reputations::<T>::mutate(validator_id, |rep| {
+			validators.clone().into_iter().for_each(|validator_id| {
+				Reputations::<T>::mutate(&validator_id, |rep| {
 					rep.deduct_reputation(penalty.reputation);
 				});
 				Self::deposit_event(Event::OffencePenalty {
-					offender: validator_id.clone(),
+					offender: validator_id,
 					offence,
 					penalty: penalty.reputation,
 				});
-			}
+			});
 		}
 
 		if penalty.suspension > Zero::zero() {
@@ -445,7 +450,7 @@ impl<T: Config> Pallet<T> {
 	pub fn penalise_offline_authorities(offline_authorities: Vec<T::ValidatorId>) {
 		<Self as OffenceReporter>::report_many(
 			PalletOffence::MissedHeartbeat,
-			offline_authorities.as_slice(),
+			offline_authorities.clone(),
 		);
 		for validator_id in offline_authorities {
 			let reputation_points = Reputations::<T>::mutate(&validator_id, |rep| {
@@ -459,15 +464,15 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	pub fn suspend_all<'a>(
-		validators: impl IntoIterator<Item = &'a T::ValidatorId>,
+	pub fn suspend_all(
+		validators: impl IntoIterator<Item = T::ValidatorId>,
 		offence: &T::Offence,
 		suspension: BlockNumberFor<T>,
 	) {
 		let current_block = frame_system::Pallet::<T>::current_block_number();
 		let mut suspensions = Suspensions::<T>::get(offence);
 		let suspend_until = current_block.saturating_add(suspension);
-		suspensions.extend(iter::repeat(suspend_until).zip(validators.into_iter().cloned()));
+		suspensions.extend(iter::repeat(suspend_until).zip(validators));
 		suspensions.make_contiguous().sort_unstable_by_key(|(block, _)| *block);
 		while matches!(suspensions.front(), Some((block, _)) if *block < current_block) {
 			suspensions.pop_front();

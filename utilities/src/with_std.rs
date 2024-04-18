@@ -13,16 +13,12 @@ pub mod spmc;
 pub mod task_scope;
 pub mod unending_stream;
 pub use unending_stream::UnendingStream;
+pub mod cached_stream;
 pub mod logging;
 pub mod redact_endpoint_secret;
 pub mod rpc;
 pub mod serde_helpers;
-
-mod cached_stream;
-pub use cached_stream::{CachedStream, InnerCachedStream, MakeCachedStream};
-
-mod try_cached_stream;
-pub use try_cached_stream::{MakeTryCachedStream, TryCachedStream};
+pub mod try_cached_stream;
 
 pub fn clean_hex_address<A: TryFrom<Vec<u8>>>(address_str: &str) -> Result<A, anyhow::Error> {
 	let address_hex_str = match address_str.strip_prefix("0x") {
@@ -76,8 +72,9 @@ macro_rules! assert_panics {
 #[macro_export]
 macro_rules! assert_future_panics {
 	($future:expr) => {
-		use futures::future::FutureExt;
-		match ::std::panic::AssertUnwindSafe($future).catch_unwind().await {
+		match ::futures::future::FutureExt::catch_unwind(::std::panic::AssertUnwindSafe($future))
+			.await
+		{
 			Ok(_result) => panic!("future didn't panic '{}'", stringify!($future),),
 			Err(panic) => panic,
 		}

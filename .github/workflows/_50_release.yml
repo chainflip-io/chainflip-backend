@@ -10,54 +10,50 @@ env:
 
 jobs:
   compress-binaries:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        ubuntu_version: [20.04, 22.04]
+    runs-on: ubuntu-22.04
     steps:
-      - name: Checkout
+      - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Set release directory
         run: |
-          echo "RELEASE_DIR=chainflip_${{ github.ref_name }}_ubuntu_${{ matrix.ubuntu_version }}_amd64" >> $GITHUB_ENV
+          echo "RELEASE_DIR=chainflip_${{ github.ref_name }}_ubuntu_22.04_amd64" >> $GITHUB_ENV
 
-      - name: Download binaries
-        uses: actions/download-artifact@7a1cd3216ca9260cd8022db641d960b1db4d1be4
+      - name: Download binaries 📥
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
         with:
-          name: chainflip-backend-bin-ubuntu-${{ matrix.ubuntu_version }}
+          name: chainflip-backend-bin
           path: ${{ env.RELEASE_DIR }}
 
-      - name: Compress release
+      - name: Compress release 🗜️
         run: tar -czf ${{ env.RELEASE_DIR }}.tar.gz ${{ env.RELEASE_DIR }}
 
-      - name: Upload binaries
-        uses: actions/upload-artifact@c7d193f32edcb7bfad88892161225aeda64e9392
+      - name: Upload binaries 📤
+        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
         with:
           name: chainflip-backend-bin
           path: ${{ env.RELEASE_DIR }}.tar.gz
 
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs:
       - compress-binaries
     steps:
-      - name: Checkout
+      - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
-      - name: Download binaries
-        uses: actions/download-artifact@7a1cd3216ca9260cd8022db641d960b1db4d1be4
+      - name: Download binaries 📥
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
         with:
           name: chainflip-backend-bin
 
-      - name: Substitute ENV
+      - name: Substitute ENV 🌍
         env:
           CF_NETWORK: ${{ inputs.network }}
           CF_VERSION: ${{ github.ref_name }}
         run: envsubst < RELEASE_TEMPLATE.md > RELEASE.md
 
-      - name: Release
+      - name: Release 🚀
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844
         with:
           name: Chainflip ${{ inputs.network }}:${{ github.ref_name }}
