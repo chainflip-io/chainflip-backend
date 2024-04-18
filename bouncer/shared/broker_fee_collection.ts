@@ -95,7 +95,14 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   });
   brokerMutex.runExclusive(async () => {
     await chainflip.tx.swapping
-      .requestSwapDepositAddress(asset, swapAsset, encodedEthAddr, {Single: commissionBps}, null, 0)
+      .requestSwapDepositAddress(
+        asset,
+        swapAsset,
+        encodedEthAddr,
+        { Single: commissionBps },
+        null,
+        0,
+      )
       .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip));
   });
 
