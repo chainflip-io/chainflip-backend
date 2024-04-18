@@ -29,6 +29,9 @@ impl<T: Clone> Sender<T> {
 				Err(error) => match error {
 					async_broadcast::TrySendError::Full(msg) => {
 						warn!("Waiting for space in channel which is currently full with a capacity of {} items at {}", self.sender.capacity(), caller_location);
+
+						// Note: All the receivers are guaranteed to to receive the message.
+						// Thus, if one does not receive the message, this will block until it does.
 						match self.sender.broadcast(msg).await {
 							Ok(None) => true,
 							Ok(Some(_)) => unreachable!("async_broadcast feature unused"),
