@@ -68,11 +68,17 @@ fn liquidity_providers_can_move_assets_internally() {
 		assert_eq!(FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth), Some(1_000));
 		assert_eq!(FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT_2), Asset::Eth), None);
 		assert_ok!(LiquidityProvider::withdraw_asset_v2(
-			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			RuntimeOrigin::signed((LP_ACCOUNT).into()),
 			100,
 			Asset::Eth,
 			AccountOrAddress::Internal(LP_ACCOUNT_2.into()),
 		));
+		System::assert_last_event(RuntimeEvent::LiquidityProvider(crate::Event::AssetMoved {
+			from: AccountId::from(LP_ACCOUNT),
+			to: AccountId::from(LP_ACCOUNT_2),
+			asset: Asset::Eth,
+			amount: 100,
+		}));
 		// Expect the balances to be moved between the LP accounts.
 		assert_eq!(FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth), Some(900));
 		assert_eq!(FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT_2), Asset::Eth), Some(100));

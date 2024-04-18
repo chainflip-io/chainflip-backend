@@ -150,6 +150,12 @@ pub mod pallet {
 			asset: Asset,
 			amount_credited: AssetAmount,
 		},
+		AssetMoved {
+			from: T::AccountId,
+			to: T::AccountId,
+			asset: Asset,
+			amount: AssetAmount,
+		},
 	}
 
 	#[pallet::pallet]
@@ -349,10 +355,11 @@ impl<T: Config> Pallet<T> {
 					// Credit the asset to the destination account.
 					Self::try_credit_account(&destination_account, asset, amount)?;
 
-					Self::deposit_event(Event::<T>::AccountCredited {
-						account_id: destination_account,
+					Self::deposit_event(Event::AssetMoved {
+						from: account_id,
+						to: destination_account,
 						asset,
-						amount_credited: amount,
+						amount,
 					});
 				},
 				AccountOrAddress::External(destination_address) => {
