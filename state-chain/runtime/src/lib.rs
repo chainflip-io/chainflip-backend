@@ -1278,7 +1278,7 @@ impl_runtime_apis! {
 
 			let (asset_pair, order) = AssetPair::from_swap(from, to).ok_or(DispatchErrorWithMessage::Other(DispatchError::Other("Invalid asset pair")))?;
 
-			let result = pallet_cf_pools::Pools::<Runtime>::try_mutate(asset_pair, |maybe_pool| {
+			pallet_cf_pools::Pools::<Runtime>::try_mutate(asset_pair, |maybe_pool| {
 				let pool = maybe_pool.as_mut().ok_or(DispatchErrorWithMessage::Other(DispatchError::Other("Pool not found")))?;
 
 				for (id, (tick, amount)) in limit_orders.into_iter().enumerate() {
