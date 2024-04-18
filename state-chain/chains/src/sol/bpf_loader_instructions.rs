@@ -39,7 +39,7 @@ pub enum UpgradeableLoaderInstruction {
 	/// The ProgramData address is derived from the Program account's address as
 	/// follows:
 	///
-	/// ```
+	///
 	/// # use solana_program::pubkey::Pubkey;
 	/// # use solana_program::bpf_loader_upgradeable;
 	/// # let program_address = &[];
@@ -47,7 +47,7 @@ pub enum UpgradeableLoaderInstruction {
 	///      &[program_address],
 	///      &bpf_loader_upgradeable::id()
 	///  );
-	/// ```
+	///
 	///
 	/// The `DeployWithMaxDataLen` instruction does not require the ProgramData
 	/// account be a signer and therefore MUST be included within the same
