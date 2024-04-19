@@ -217,9 +217,9 @@ pub struct RpcAuctionState {
 }
 
 #[derive(Serialize, Deserialize)]
-struct SwapFee {
-	amount: U256,
-	asset: Asset,
+pub struct SwapFee {
+	pub amount: U256,
+	pub asset: Asset,
 }
 
 impl SwapFee {
