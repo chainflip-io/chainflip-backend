@@ -105,20 +105,6 @@ pub trait SwappingApi {
 	) -> Result<AssetAmount, DispatchError>;
 }
 
-impl<T: frame_system::Config> SwappingApi for T {
-	fn take_network_fee(input_amount: AssetAmount) -> (AssetAmount, AssetAmount) {
-		(input_amount, 0)
-	}
-
-	fn swap_single_leg(
-		_from: Asset,
-		_to: Asset,
-		input_amount: AssetAmount,
-	) -> Result<AssetAmount, DispatchError> {
-		Ok(input_amount)
-	}
-}
-
 pub trait SwapQueueApi {
 	type BlockNumber;
 
