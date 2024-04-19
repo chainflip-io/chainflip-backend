@@ -36,7 +36,7 @@ jobs:
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: release-berghain.yml
-          name: chainflip-backend-bin
+          name: chainflip-backend-bin-ubuntu-22.04
           github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
           path: latest-release
 
