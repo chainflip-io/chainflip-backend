@@ -34,7 +34,7 @@ use self::{
 	btc::retry_rpc::BtcRetryRpcClient,
 	db::{KeyStore, PersistentKeyDB},
 	dot::retry_rpc::DotRetryRpcClient,
-	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
+	eth::{retry_rpc::EthRetryRpcClient, rpc::EthRpcSigningClient},
 	settings::{CommandLineOptions, Settings, DEFAULT_SETTINGS_DIR},
 };
 use anyhow::Context;
@@ -227,33 +227,11 @@ async fn run_main(
 						.await
 						.expect(STATE_CHAIN_CONNECTION),
 				);
-				EvmRetryRpcClient::<EvmRpcSigningClient>::new(
+				EthRetryRpcClient::<EthRpcSigningClient>::new(
 					scope,
 					settings.eth.private_key_file,
 					settings.eth.nodes,
 					expected_eth_chain_id,
-					"eth_rpc",
-					"eth_subscribe",
-					"Ethereum",
-				)?
-			};
-			let arb_client = {
-				let expected_arb_chain_id = web3::types::U256::from(
-					state_chain_client
-						.storage_value::<pallet_cf_environment::ArbitrumChainId<state_chain_runtime::Runtime>>(
-							state_chain_client.latest_finalized_block().hash,
-						)
-						.await
-						.expect(STATE_CHAIN_CONNECTION),
-				);
-				EvmRetryRpcClient::<EvmRpcSigningClient>::new(
-					scope,
-					settings.arb.private_key_file,
-					settings.arb.nodes,
-					expected_arb_chain_id,
-					"arb_rpc",
-					"arb_subscribe",
-					"Arbitrum",
 				)?
 			};
 
@@ -283,7 +261,6 @@ async fn run_main(
 			witness::start::start(
 				scope,
 				eth_client.clone(),
-				arb_client.clone(),
 				btc_client.clone(),
 				dot_client.clone(),
 				state_chain_client.clone(),
@@ -297,7 +274,6 @@ async fn run_main(
 				state_chain_client.clone(),
 				state_chain_stream,
 				eth_client,
-				arb_client,
 				dot_client,
 				btc_client,
 				eth_multisig_client,
