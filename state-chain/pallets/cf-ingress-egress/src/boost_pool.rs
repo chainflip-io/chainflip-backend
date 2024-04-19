@@ -139,6 +139,37 @@ where
 		self.available_amount.into_chain_amount()
 	}
 
+	pub fn get_amounts(&self) -> BTreeMap<AccountId, C::ChainAmount> {
+		self.amounts
+			.iter()
+			.map(|(account_id, scaled_amount)| {
+				(account_id.clone(), scaled_amount.into_chain_amount())
+			})
+			.collect()
+	}
+
+	pub fn get_pending_boosts(
+		&self,
+	) -> BTreeMap<PrewitnessedDepositId, BTreeMap<AccountId, C::ChainAmount>> {
+		self.pending_boosts
+			.iter()
+			.map(|(deposit_id, owed_amounts_map)| {
+				(
+					*deposit_id,
+					owed_amounts_map
+						.iter()
+						.map(|(account_id, scaled_amount)| {
+							(account_id.clone(), scaled_amount.into_chain_amount())
+						})
+						.collect(),
+				)
+			})
+			.collect()
+	}
+
+	pub fn get_pending_withdrawals(&self) -> &BTreeMap<AccountId, BTreeSet<PrewitnessedDepositId>> {
+		&self.pending_withdrawals
+	}
 	pub(crate) fn provide_funds_for_boosting(
 		&mut self,
 		prewitnessed_deposit_id: PrewitnessedDepositId,
@@ -340,7 +371,7 @@ where
 	}
 
 	#[cfg(test)]
-	pub fn get_pending_boosts(&self) -> Vec<PrewitnessedDepositId> {
+	pub fn get_pending_boost_ids(&self) -> Vec<PrewitnessedDepositId> {
 		self.pending_boosts.keys().copied().collect()
 	}
 	#[cfg(test)]

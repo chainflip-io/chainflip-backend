@@ -53,7 +53,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 		// Create boost pools:
 		use strum::IntoEnumIterator;
 		for asset in TargetChainAsset::<T, I>::iter() {
-			for pool_tier in BoostPoolTier::iter() {
+			for pool_tier in SORTED_BOOST_TIERS {
 				BoostPools::<T, I>::set(
 					asset,
 					pool_tier,

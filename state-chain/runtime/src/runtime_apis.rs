@@ -8,7 +8,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, FlipBalance,
-	ForeignChain, NetworkEnvironment, SemVer, SwapOutput,
+	ForeignChain, NetworkEnvironment, PrewitnessedDepositId, SemVer, SwapOutput,
 };
 use codec::{Decode, Encode};
 use core::ops::Range;
@@ -25,7 +25,10 @@ use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
 use sp_runtime::DispatchError;
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+use sp_std::{
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	vec::Vec,
+};
 
 type VanityName = Vec<u8>;
 
@@ -64,6 +67,14 @@ pub struct BoostPoolDepth {
 	pub asset: Asset,
 	pub tier: u16,
 	pub available_amount: AssetAmount,
+}
+
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
+pub struct BoostPoolDetails {
+	pub available_amount: AssetAmount,
+	pub amounts: BTreeMap<AccountId32, AssetAmount>,
+	pub pending_boosts: BTreeMap<PrewitnessedDepositId, BTreeMap<AccountId32, AssetAmount>>,
+	pub pending_withdrawals: BTreeMap<AccountId32, BTreeSet<PrewitnessedDepositId>>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
@@ -229,5 +240,6 @@ decl_runtime_apis!(
 		fn cf_channel_opening_fee(chain: ForeignChain) -> FlipBalance;
 		fn cf_get_events(filter: EventFilter) -> Vec<EventRecord<RuntimeEvent, Hash>>;
 		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth>;
+		fn cf_boost_pool_details(asset: Asset) -> BTreeMap<u16, BoostPoolDetails>;
 	}
 );
