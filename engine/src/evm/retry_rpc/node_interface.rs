@@ -1,9 +1,6 @@
 use ethers::prelude::*;
 
-use crate::evm::rpc::{
-	node_interface::NodeInterfaceRpcApi,
-	EvmRpcApi,
-};
+use crate::evm::rpc::{node_interface::NodeInterfaceRpcApi, EvmRpcApi};
 
 use super::EvmRetryRpcClient;
 
@@ -33,7 +30,13 @@ impl<Rpc: EvmRpcApi + NodeInterfaceRpcApi> NodeInterfaceRetryRpcApi for EvmRetry
 					let tx_data = tx_data.clone();
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
-						client.gas_estimate_components(destination_address, contract_creation, tx_data).await
+						client
+							.gas_estimate_components(
+								destination_address,
+								contract_creation,
+								tx_data,
+							)
+							.await
 					})
 				}),
 				RequestLog::new(
