@@ -8,14 +8,14 @@
 // For example: ./commands/send_usdt.ts 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6 1.2
 // will send 1.2 Usdt to account 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6
 
-import { runWithTimeout, getEvmContractAddress } from '../shared/utils';
+import { runWithTimeout, getContractAddress } from '../shared/utils';
 import { sendErc20 } from '../shared/send_erc20';
 
 async function main(): Promise<void> {
   const ethereumAddress = process.argv[2];
   const usdtAmount = process.argv[3].trim();
 
-  const contractAddress = getEvmContractAddress('Ethereum', 'Usdt');
+  const contractAddress = getContractAddress('Ethereum', 'Usdt');
   await sendErc20('Ethereum', ethereumAddress, contractAddress, usdtAmount);
 
   process.exit(0);

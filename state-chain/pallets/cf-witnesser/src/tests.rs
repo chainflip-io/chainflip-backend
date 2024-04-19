@@ -71,7 +71,7 @@ fn no_double_call_on_epoch_boundary() {
 		// Only one vote, nothing should happen yet.
 		assert_ok!(Witnesser::witness_at_epoch(RuntimeOrigin::signed(ALISSA), call.clone(), 1));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
-		MockEpochInfo::next_epoch(BTreeSet::from([ALISSA, BOBSON, CHARLEMAGNE]));
+		MockEpochInfo::next_epoch(Vec::from([ALISSA, BOBSON, CHARLEMAGNE]));
 		assert_eq!(MockEpochInfo::epoch_index(), 2);
 
 		// Vote for the same call, this time in the next epoch.
@@ -160,9 +160,12 @@ fn can_continue_to_witness_for_old_epochs() {
 		MockEpochInfo::next_epoch(current_authorities.clone());
 
 		// remove CHARLEMAGNE and add DEIRDRE
-		current_authorities.pop_last();
-		current_authorities.insert(DEIRDRE);
-		assert_eq!(current_authorities, BTreeSet::from([ALISSA, BOBSON, DEIRDRE]));
+		current_authorities.pop();
+		current_authorities.push(DEIRDRE);
+		assert_eq!(
+			current_authorities.clone().into_iter().collect::<BTreeSet<u64>>(),
+			BTreeSet::from([ALISSA, BOBSON, DEIRDRE])
+		);
 		MockEpochInfo::next_epoch(current_authorities);
 
 		let current_epoch = MockEpochInfo::epoch_index();
@@ -487,7 +490,7 @@ fn setup_witness_authorities(
 				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&v);
 			v
 		})
-		.collect::<BTreeSet<_>>();
+		.collect::<Vec<_>>();
 	MockEpochInfo::next_epoch(authorities.clone());
 	let mut call: Box<RuntimeCall> =
 		Box::new(RuntimeCall::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
@@ -643,7 +646,7 @@ fn can_punish_failed_witnesser_in_previous_epochs() {
 			// Rotate to the next epoch with new authorities
 			let _ = setup_witness_authorities(100u64..200u64);
 			// Set the current set of authority as the past authorities in the Mock.
-			MockEpochInfo::set_past_authorities(BTreeSet::from_iter(0u64..100u64));
+			MockEpochInfo::set_past_authorities(Vec::from_iter(0u64..100u64));
 
 			// Some of remaining authorities can witness to pass the
 			for v in (success_threshold / 2)..success_threshold {

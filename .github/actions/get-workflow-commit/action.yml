@@ -27,7 +27,7 @@ runs:
             owner,
             repo,
             workflow_id,
-            status: 'completed',
+            status: 'success',
             event: 'push',
           });
           const run = runs.data.workflow_runs[0];

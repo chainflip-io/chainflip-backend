@@ -59,6 +59,13 @@ pub struct ValidatorInfo {
 	pub restricted_balances: BTreeMap<EthereumAddress, u128>,
 }
 
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
+pub struct BoostPoolDepth {
+	pub asset: Asset,
+	pub tier: u16,
+	pub available_amount: AssetAmount,
+}
+
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct RuntimeApiPenalty {
 	pub reputation_points: i32,
@@ -221,5 +228,6 @@ decl_runtime_apis!(
 		fn cf_witness_safety_margin(chain: ForeignChain) -> Option<u64>;
 		fn cf_channel_opening_fee(chain: ForeignChain) -> FlipBalance;
 		fn cf_get_events(filter: EventFilter) -> Vec<EventRecord<RuntimeEvent, Hash>>;
+		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth>;
 	}
 );

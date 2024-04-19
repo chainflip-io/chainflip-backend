@@ -1,4 +1,4 @@
-use crate::{Chainflip, FundingInfo};
+use crate::{AccountInfo, Chainflip, FundingInfo};
 use frame_support::Never;
 use sp_runtime::{
 	traits::{CheckedSub, Zero},
@@ -15,6 +15,7 @@ impl<T> MockPallet for MockFundingInfo<T> {
 }
 
 const BALANCES: &[u8] = b"BALANCES";
+const BONDS: &[u8] = b"BONDS";
 
 impl<T: Chainflip> MockFundingInfo<T> {
 	pub fn credit_funds(account_id: &T::AccountId, amount: T::Amount) {
@@ -78,5 +79,24 @@ impl<T: Chainflip> FundingInfo for MockFundingInfo<T> {
 				balances.values().cloned().sum()
 			})
 			.unwrap_or_default()
+	}
+}
+
+impl<T: Chainflip> AccountInfo for MockFundingInfo<T> {
+	type AccountId = T::AccountId;
+	type Amount = T::Amount;
+	/// Returns the account's total Flip balance.
+	fn balance(account_id: &Self::AccountId) -> Self::Amount {
+		Self::total_balance_of(account_id)
+	}
+
+	/// Returns the bond on the account.
+	fn bond(account_id: &Self::AccountId) -> Self::Amount {
+		<Self as MockPalletStorage>::get_storage(BONDS, account_id).unwrap_or_default()
+	}
+
+	/// Returns the account's liquid funds, net of the bond.
+	fn liquid_funds(account_id: &Self::AccountId) -> Self::Amount {
+		Self::balance(account_id).saturating_sub(Self::bond(account_id))
 	}
 }

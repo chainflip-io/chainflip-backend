@@ -4,10 +4,14 @@ import * as toml from 'toml';
 import path from 'path';
 import { SemVerLevel, bumpReleaseVersion } from './bump_release_version';
 import { simpleRuntimeUpgrade } from './simple_runtime_upgrade';
-import { compareSemVer, sleep } from './utils';
+import { compareSemVer, getChainflipApi, sleep } from './utils';
 import { bumpSpecVersionAgainstNetwork } from './utils/spec_version';
 import { compileBinaries } from './utils/compile_binaries';
 import { submitRuntimeUpgradeWithRestrictions } from './submit_runtime_upgrade';
+import { execWithLog } from './utils/exec_with_log';
+import { setupArbVault } from './setup_arb_vault';
+import { submitGovernanceExtrinsic } from './cf_governance';
+import { setupSwaps } from './setup_swaps';
 
 async function readPackageTomlVersion(projectRoot: string): Promise<string> {
   const data = await fs.readFile(path.join(projectRoot, '/state-chain/runtime/Cargo.toml'), 'utf8');
@@ -48,24 +52,23 @@ async function incompatibleUpgradeNoBuild(
   binaryPath: string,
   runtimePath: string,
   numberOfNodes: 1 | 3,
+  newVersion: string,
 ) {
-  let selectedNodes;
-  if (numberOfNodes === 1) {
-    selectedNodes = ['bashful'];
-  } else if (numberOfNodes === 3) {
-    selectedNodes = ['bashful', 'doc', 'dopey'];
-  } else {
-    throw new Error('Invalid number of nodes');
-  }
+  const chainflip = await getChainflipApi();
+
+  const SELECTED_NODES = numberOfNodes === 1 ? 'bashful' : 'bashful doc dopey';
 
   console.log('Starting all the engines');
 
   const nodeCount = numberOfNodes + '-node';
-  execSync(
-    `INIT_RUN=false LOG_SUFFIX="-upgrade" NODE_COUNT=${nodeCount} SELECTED_NODES="${selectedNodes.join(
-      ' ',
-    )}" LOCALNET_INIT_DIR=${localnetInitPath} BINARY_ROOT_PATH=${binaryPath} ${localnetInitPath}/scripts/start-all-engines.sh`,
-  );
+  execWithLog(`${localnetInitPath}/scripts/start-all-engines.sh`, 'start-all-engines-pre-upgrade', {
+    INIT_RUN: 'false',
+    LOG_SUFFIX: '-upgrade',
+    NODE_COUNT: nodeCount,
+    SELECTED_NODES,
+    LOCALNET_INIT_DIR: localnetInitPath,
+    BINARY_ROOT_PATH: binaryPath,
+  });
 
   await sleep(7000);
 
@@ -77,8 +80,20 @@ async function incompatibleUpgradeNoBuild(
     'Check that the old engine has now shut down, and that the new engine is now running.',
   );
 
-  // Wait for the old broker and lp-api to shut down, and ensure the runtime upgrade is finalised.
-  await sleep(20000);
+  // Ensure the runtime upgrade is finalised.
+  await sleep(10000);
+
+  // We're going to take down the node, so we don't want them to be suspended.
+  await submitGovernanceExtrinsic(
+    chainflip.tx.reputation.setPenalty('MissedAuthorshipSlot', {
+      reputation: 100,
+      suspension: 0,
+    }),
+  );
+
+  console.log('Submitted extrinsic to set suspension for MissedAuthorship slot to 0');
+  // Ensure extrinsic gets in.
+  await sleep(12000);
 
   console.log('Killing the old node.');
   execSync(`kill $(ps aux | grep chainflip-node | grep -v grep | awk '{print $2}')`);
@@ -86,47 +101,84 @@ async function incompatibleUpgradeNoBuild(
   console.log('Killed old node');
 
   // let them shutdown
-  await sleep(2000);
+  await sleep(4000);
 
-  console.log('Stopped old broker and lp-api. Starting the new ones.');
+  console.log('Old broker and LP-API have crashed since we killed the node.');
 
   console.log('Starting the new node');
 
   const KEYS_DIR = `${localnetInitPath}/keys`;
 
-  const selectedNodesSep = `"${selectedNodes.join(' ')}"`;
-
-  try {
-    const buffer = execSync(
-      `INIT_RPC_PORT=9944 KEYS_DIR=${KEYS_DIR} NODE_COUNT=${nodeCount} SELECTED_NODES=${selectedNodesSep} LOCALNET_INIT_DIR=${localnetInitPath} BINARY_ROOT_PATH=${binaryPath} ${localnetInitPath}/scripts/start-all-nodes.sh`,
-    );
-    console.log('start node success: ' + buffer.toString());
-  } catch (e) {
-    console.error('start node error: ');
-    console.log(e);
-  }
+  execWithLog(`${localnetInitPath}/scripts/start-all-nodes.sh`, 'start-all-nodes', {
+    INIT_RPC_PORT: `9944`,
+    KEYS_DIR,
+    NODE_COUNT: nodeCount,
+    SELECTED_NODES,
+    LOCALNET_INIT_DIR: localnetInitPath,
+    BINARY_ROOT_PATH: binaryPath,
+  });
 
   await sleep(20000);
+
+  // Set missed authorship suspension back to 100/150 after nodes back up.
+  await submitGovernanceExtrinsic(
+    chainflip.tx.reputation.setPenalty('MissedAuthorshipSlot', {
+      reputation: 100,
+      suspension: 150,
+    }),
+  );
 
   const output = execSync("ps aux | grep chainflip-node | grep -v grep | awk '{print $2}'");
   console.log('New node PID: ' + output.toString());
 
   // Restart the engines
-  execSync(
-    `INIT_RUN=false LOG_SUFFIX="-upgrade" NODE_COUNT=${nodeCount} SELECTED_NODES=${selectedNodesSep} LOCALNET_INIT_DIR=${localnetInitPath} BINARY_ROOT_PATH=${binaryPath} ${localnetInitPath}/scripts/start-all-engines.sh`,
+  execWithLog(
+    `${localnetInitPath}/scripts/start-all-engines.sh`,
+    'start-all-engines-post-upgrade',
+    {
+      INIT_RUN: 'false',
+      LOG_SUFFIX: '-upgrade',
+      NODE_COUNT: nodeCount,
+      SELECTED_NODES,
+      LOCALNET_INIT_DIR: localnetInitPath,
+      BINARY_ROOT_PATH: binaryPath,
+    },
   );
+
+  await sleep(4000);
+
+  if (newVersion.includes('1.4')) {
+    await setupArbVault();
+  }
 
   console.log('Starting new broker and lp-api.');
 
-  execSync(`KEYS_DIR=${KEYS_DIR} ${localnetInitPath}/scripts/start-broker-api.sh ${binaryPath}`);
-  execSync(`KEYS_DIR=${KEYS_DIR} ${localnetInitPath}/scripts/start-lp-api.sh ${binaryPath}`);
+  execWithLog(`${localnetInitPath}/scripts/start-broker-api.sh ${binaryPath}`, 'start-broker-api', {
+    KEYS_DIR,
+  });
 
-  await sleep(20000);
+  execWithLog(`${localnetInitPath}/scripts/start-lp-api.sh ${binaryPath}`, 'start-lp-api', {
+    KEYS_DIR,
+  });
 
-  const brokerPID = execSync('lsof -t -i:10997');
-  console.log('New broker PID: ' + brokerPID.toString());
-  const lpApiPID = execSync('lsof -t -i:10589');
-  console.log('New LP API PID: ' + lpApiPID.toString());
+  await sleep(10000);
+
+  for (const [process, port] of [
+    ['broker-api', 10997],
+    ['lp-api', 10589],
+  ]) {
+    try {
+      const pid = execSync(`lsof -t -i:${port}`);
+      console.log(`New ${process} PID: ${pid.toString()}`);
+    } catch (e) {
+      console.error(`Error starting ${process}: ${e}`);
+      throw e;
+    }
+  }
+
+  if (newVersion.includes('1.4')) {
+    await setupSwaps();
+  }
 
   console.log('Started new broker and lp-api.');
 }
@@ -136,6 +188,7 @@ async function incompatibleUpgrade(
   localnetInitPath: string,
   nextVersionWorkspacePath: string,
   numberOfNodes: 1 | 3,
+  newVersion: string,
 ) {
   await bumpSpecVersionAgainstNetwork(
     `${nextVersionWorkspacePath}/state-chain/runtime/src/lib.rs`,
@@ -149,6 +202,7 @@ async function incompatibleUpgrade(
     `${nextVersionWorkspacePath}/target/release`,
     `${nextVersionWorkspacePath}/target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm`,
     numberOfNodes,
+    newVersion,
   );
 }
 
@@ -206,6 +260,7 @@ export async function upgradeNetworkGit(
       `${currentVersionWorkspacePath}/localnet/init`,
       nextVersionWorkspacePath,
       numberOfNodes,
+      toTomlVersion,
     );
   }
 
@@ -259,7 +314,13 @@ export async function upgradeNetworkPrebuilt(
 
   if (!isCompatible) {
     console.log('The versions are incompatible.');
-    await incompatibleUpgradeNoBuild(localnetInitPath, binariesPath, runtimePath, numberOfNodes);
+    await incompatibleUpgradeNoBuild(
+      localnetInitPath,
+      binariesPath,
+      runtimePath,
+      numberOfNodes,
+      nodeVersion,
+    );
   } else {
     console.log('The versions are compatible.');
     await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, true);

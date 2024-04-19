@@ -111,6 +111,10 @@ pub enum ValidatorSubcommands {
 	RegisterAccount,
 	/// De-register this validator account.
 	DeregisterAccount,
+	/// Start bidding to participate in all future auctions.
+	StartBidding,
+	/// Stop bidding, thereby stopping participation in auctions.
+	StopBidding,
 }
 
 #[derive(Parser, Clone, Debug)]
@@ -167,9 +171,13 @@ pub enum CliCommand {
 	},
 	#[clap(about = "Rotate your session keys")]
 	Rotate {},
-	#[clap(about = "Stop bidding, thereby stop participating in auctions")]
+	#[clap(
+		about = "Stop bidding, thereby stop participating in auctions. [DEPRECATED - use 'validator stop-bidding' instead]"
+	)]
 	StopBidding {},
-	#[clap(about = "The account starts bidding for all future auctions, until it stops bidding")]
+	#[clap(
+		about = "The account starts bidding for all future auctions, until it stops bidding. [DEPRECATED - use 'validator start-bidding' instead]"
+	)]
 	StartBidding {},
 	#[clap(about = "Set a UTF-8 vanity name for your node (max length 64)")]
 	VanityName {

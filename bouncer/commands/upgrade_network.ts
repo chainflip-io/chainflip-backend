@@ -120,7 +120,10 @@ async function main(): Promise<void> {
   process.exit(0);
 }
 
-runWithTimeout(main(), 15 * 60 * 1000).catch((error) => {
-  console.error(error);
-  process.exit(-1);
+// Quite a long timeout, as the sequence of try-runtime runs takes some time.
+runWithTimeout(main(), 30 * 60 * 1000).catch((error) => {
+  console.error('upgrade_network exiting due to error: ', error);
+  if (process.exitCode === 0) {
+    process.exitCode = -1;
+  }
 });

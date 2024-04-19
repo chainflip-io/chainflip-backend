@@ -3,6 +3,7 @@ use crate::System;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 use sp_std::marker::PhantomData;
 
+pub mod active_bidders;
 pub mod arbitrum_integration;
 pub mod housekeeping;
 pub mod reap_old_accounts;
@@ -27,7 +28,7 @@ where
 			U::on_runtime_upgrade()
 		} else {
 			log::info!(
-				"Skipping storage migration for version {:?} - consider removing this from the runtime.",
+				"⏭️ Skipping storage migration for version {:?} - consider removing this from the runtime.",
 				SPEC_VERSION
 			);
 			Weight::zero()

@@ -2,8 +2,7 @@
 # related to our Rust projects. Our CI needs a properly configured
 # environment so we can guarantee consistancy between projects.
 
-ARG UBUNTU_VERSION=20.04
-FROM ubuntu:${UBUNTU_VERSION}
+FROM ubuntu:22.04
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
