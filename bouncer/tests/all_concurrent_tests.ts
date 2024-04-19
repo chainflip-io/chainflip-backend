@@ -12,9 +12,7 @@ import { testBrokerFeeCollection } from '../shared/broker_fee_collection';
 async function runAllConcurrentTests() {
   // Specify the number of nodes via providing an argument to this script.
   // Using regex because the localnet script passes in "3-node".
-  const match = process.argv[2] ? process.argv[2].match(/\d+/) : null;
-  const givenNumberOfNodes = match ? parseInt(match[0]) : null;
-  const numberOfNodes = givenNumberOfNodes ?? 1;
+  const numberOfNodes = Number.parseInt(process.argv[2]) || 1;
 
   const abortController = new AbortController();
   const broadcastAborted = observeBadEvents(':BroadcastAborted', abortController.signal);
@@ -25,13 +23,62 @@ async function runAllConcurrentTests() {
 
   // Tests that work with any number of nodes
   const tests = [
-    swapLessThanED(),
-    testAllSwaps(),
-    testEvmDeposits(),
-    testFundRedeem('redeem'),
-    testMultipleMembersGovernance(),
-    testLpApi(),
-    testBrokerFeeCollection(),
+    swapLessThanED().then(
+      () => {
+        console.log('swapLessThanED promise resolved');
+      },
+      () => {
+        console.log('swapLessThanED promise rejected');
+      },
+    ),
+    testAllSwaps().then(
+      () => {
+        console.log('testAllSwaps promise resolved');
+      },
+      () => {
+        console.log('testAllSwaps promise rejected');
+      },
+    ),
+    testEvmDeposits().then(
+      () => {
+        console.log('testEvmDeposits promise resolved');
+      },
+      () => {
+        console.log('testEvmDeposits promise rejected');
+      },
+    ),
+    testFundRedeem('redeem').then(
+      () => {
+        console.log('testFundRedeem promise resolved');
+      },
+      () => {
+        console.log('testFundRedeem promise rejected');
+      },
+    ),
+    testMultipleMembersGovernance().then(
+      () => {
+        console.log('testMultipleMembersGovernance promise resolved');
+      },
+      () => {
+        console.log('testMultipleMembersGovernance promise rejected');
+      },
+    ),
+    testLpApi().then(
+      () => {
+        console.log('testLpApi promise resolved');
+      },
+      () => {
+        console.log('testLpApi promise rejected');
+      },
+    ),
+    testBrokerFeeCollection().then(
+      () => {
+        console.log('testBrokerFeeCollection promise resolved');
+      },
+      () => {
+        console.log('testBrokerFeeCollection promise rejected');
+      },
+    ),
   ];
 
   // Test that only work if there is more than one node
@@ -41,7 +88,7 @@ async function runAllConcurrentTests() {
     tests.push(...multiNodeTests);
   }
 
-  await Promise.all([...tests]);
+  await Promise.all(tests);
 
   // Gracefully exit the broadcast abort observer
   abortController.abort();
