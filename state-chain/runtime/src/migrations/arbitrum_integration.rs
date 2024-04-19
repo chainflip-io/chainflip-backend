@@ -158,7 +158,7 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 		pallet_cf_environment::ArbitrumSupportedAssets::<Runtime>::insert(ArbUsdc, usdc_address);
 		pallet_cf_chain_tracking::CurrentChainState::<Runtime, ArbitrumInstance>::put(ChainState {
 			block_height: start_block_number,
-			tracked_data: ArbitrumTrackedData { base_fee: 0, gas_limit_multiplier: 0.into() },
+			tracked_data: ArbitrumTrackedData { base_fee: 0, gas_limit_multiplier: 1.into() },
 		});
 		pallet_cf_ingress_egress::DepositChannelLifetime::<Runtime, ArbitrumInstance>::put(
 			deposit_channel_lifetime,
