@@ -261,37 +261,22 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		amount: AssetAmount,
 		asset: Asset,
 		destination: AccountId,
-		wait_for: WaitFor,
-	) -> Result<ApiWaitForResult<AccountId>> {
+	) -> Result<H256> {
 		if amount == 0 {
-			bail!("Withdrawal amount must be greater than 0");
+			bail!("Amount must be greater than 0");
 		}
+		let (tx_hash, ..) = self
+			.submit_signed_extrinsic(RuntimeCall::from(pallet_cf_lp::Call::move_asset {
+				amount,
+				asset,
+				destination,
+			}))
+			.await
+			.until_in_block()
+			.await
+			.context("Registration for Liquidity Refund Address failed.")?;
 
-		let wait_for_result = self
-			.submit_signed_extrinsic_wait_for(
-				pallet_cf_lp::Call::move_asset { amount, asset, destination },
-				wait_for,
-			)
-			.await?;
-
-		Ok(match wait_for_result {
-			WaitForResult::TransactionHash(tx_hash) => return Ok(ApiWaitForResult::TxHash(tx_hash)),
-			WaitForResult::Details(details) => {
-				let (tx_hash, events, ..) = details;
-				let destination = events
-					.into_iter()
-					.find_map(|event| match event {
-						state_chain_runtime::RuntimeEvent::LiquidityProvider(
-							pallet_cf_lp::Event::AssetMoved { from, .. },
-						) => Some(from),
-						_ => None,
-					})
-					.ok_or_else(|| {
-						anyhow::anyhow!("No WithdrawalEgressScheduled event was found")
-					})?;
-				ApiWaitForResult::TxDetails { tx_hash, response: destination }
-			},
-		})
+		Ok(tx_hash)
 	}
 
 	async fn update_range_order(

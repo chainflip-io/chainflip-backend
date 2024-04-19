@@ -30,7 +30,7 @@ use jsonrpsee::{
 };
 use pallet_cf_pools::{AssetPair, IncreaseOrDecrease, OrderId, RangeOrderSize};
 use rpc_types::{OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
-use sp_core::U256;
+use sp_core::{H256, U256};
 use std::{
 	collections::{HashMap, HashSet},
 	ops::Range,
@@ -128,8 +128,7 @@ pub trait Rpc {
 		amount: NumberOrHex,
 		asset: Asset,
 		destination_account: AccountId32,
-		wait_for: Option<WaitFor>,
-	) -> RpcResult<ApiWaitForResult<AccountId32>>;
+	) -> RpcResult<Hash>;
 
 	#[method(name = "update_range_order")]
 	async fn update_range_order(
@@ -302,20 +301,11 @@ impl RpcServer for RpcServerImpl {
 		amount: NumberOrHex,
 		asset: Asset,
 		destination_account: AccountId32,
-		wait_for: Option<WaitFor>,
-	) -> RpcResult<ApiWaitForResult<AccountId32>> {
-		// let destination_address =
-		// 	chainflip_api::clean_foreign_chain_address(asset.into(), destination_address)?;
-
+	) -> RpcResult<H256> {
 		Ok(self
 			.api
 			.lp_api()
-			.move_asset(
-				try_parse_number_or_hex(amount)?,
-				asset,
-				destination_account,
-				wait_for.unwrap_or_default(),
-			)
+			.move_asset(try_parse_number_or_hex(amount)?, asset, destination_account)
 			.await?)
 	}
 
