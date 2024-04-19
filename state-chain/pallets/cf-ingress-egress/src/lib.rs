@@ -445,7 +445,7 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
-	pub(super) type BoostPools<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub type BoostPools<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Twox64Concat,
 		TargetChainAsset<T, I>,

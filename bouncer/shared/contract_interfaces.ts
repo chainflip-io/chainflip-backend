@@ -8,9 +8,7 @@ async function loadContract(abiPath: string): Promise<JSON> {
 function loadContractCached(abiPath: string) {
   let cached: JSON | undefined;
   return async () => {
-    if (!cached) {
-      cached = await loadContract(abiPath);
-    }
+    cached ??= await loadContract(abiPath);
     return cached;
   };
 }

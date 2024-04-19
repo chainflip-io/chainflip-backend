@@ -4,7 +4,7 @@ import { newAddress, getChainflipApi, observeEvent } from '../shared/utils';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 
 async function rotatesThroughBtcSwap() {
-  const chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipApi();
 
   const tag = `Btc -> Dot (through rotation)`;
   const address = await newAddress('Dot', 'foo');
