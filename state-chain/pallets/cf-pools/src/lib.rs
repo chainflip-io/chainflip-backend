@@ -1007,16 +1007,16 @@ pub mod pallet {
 }
 
 impl<T: Config> SwappingApi for Pallet<T> {
-	fn take_network_fee(input: AssetAmount) -> AssetAmount {
+	fn take_network_fee(input: AssetAmount) -> (AssetAmount, AssetAmount) {
 		if input.is_zero() {
-			return input
+			return (input, 0)
 		}
 		let (remaining, fee) = utilities::calculate_network_fee(T::NetworkFee::get(), input);
 		CollectedNetworkFee::<T>::mutate(|total| {
 			total.saturating_accrue(fee);
 		});
 		Self::deposit_event(Event::<T>::NetworkFeeTaken { fee_amount: fee });
-		remaining
+		(remaining, fee)
 	}
 
 	#[transactional]
@@ -1530,18 +1530,20 @@ impl<T: Config> Pallet<T> {
 	) -> Result<SwapOutput, DispatchError> {
 		Ok(match (from, to) {
 			(_, STABLE_ASSET) => {
-				let output = Self::take_network_fee(Self::swap_single_leg(from, to, input_amount)?);
-				SwapOutput { intermediary: None, output }
+				let output = Self::swap_single_leg(from, to, input_amount)?;
+				let (output, network_fee) = Self::take_network_fee(output);
+				SwapOutput { intermediary: None, output, network_fee }
 			},
 			(STABLE_ASSET, _) => {
-				let output = Self::swap_single_leg(from, to, Self::take_network_fee(input_amount))?;
-				SwapOutput { intermediary: None, output }
+				let (input_amount, network_fee) = Self::take_network_fee(input_amount);
+				let output = Self::swap_single_leg(from, to, input_amount)?;
+				SwapOutput { intermediary: None, output, network_fee }
 			},
 			_ => {
 				let intermediary = Self::swap_single_leg(from, STABLE_ASSET, input_amount)?;
-				let output =
-					Self::swap_single_leg(STABLE_ASSET, to, Self::take_network_fee(intermediary))?;
-				SwapOutput { intermediary: Some(intermediary), output }
+				let (intermediary, network_fee) = Self::take_network_fee(intermediary);
+				let output = Self::swap_single_leg(STABLE_ASSET, to, intermediary)?;
+				SwapOutput { intermediary: Some(intermediary), output, network_fee }
 			},
 		})
 	}
