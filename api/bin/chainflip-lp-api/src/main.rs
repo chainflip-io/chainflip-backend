@@ -15,8 +15,8 @@ use chainflip_api::{
 		AccountRole, Asset, ForeignChain, Hash, RedemptionAmount,
 	},
 	settings::StateChain,
-	BlockInfo, BlockUpdate, ChainApi, EthereumAddress, OperatorApi, SignedExtrinsicApi,
-	StateChainApi, StorageApi, WaitFor,
+	AccountId32, BlockInfo, BlockUpdate, ChainApi, EthereumAddress, OperatorApi,
+	SignedExtrinsicApi, StateChainApi, StorageApi, WaitFor,
 };
 use clap::Parser;
 use custom_rpc::CustomApiClient;
@@ -121,6 +121,15 @@ pub trait Rpc {
 		destination_address: &str,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<EgressId>>;
+
+	#[method(name = "move_asset")]
+	async fn move_asset(
+		&self,
+		amount: NumberOrHex,
+		asset: Asset,
+		destination_account: AccountId32,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<AccountId32>>;
 
 	#[method(name = "update_range_order")]
 	async fn update_range_order(
@@ -282,6 +291,29 @@ impl RpcServer for RpcServerImpl {
 				try_parse_number_or_hex(amount)?,
 				asset,
 				destination_address,
+				wait_for.unwrap_or_default(),
+			)
+			.await?)
+	}
+
+	/// Returns an egress id
+	async fn move_asset(
+		&self,
+		amount: NumberOrHex,
+		asset: Asset,
+		destination_account: AccountId32,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<AccountId32>> {
+		// let destination_address =
+		// 	chainflip_api::clean_foreign_chain_address(asset.into(), destination_address)?;
+
+		Ok(self
+			.api
+			.lp_api()
+			.move_asset(
+				try_parse_number_or_hex(amount)?,
+				asset,
+				destination_account,
 				wait_for.unwrap_or_default(),
 			)
 			.await?)

@@ -6,7 +6,7 @@ pub use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::address::EncodedAddress;
-use cf_primitives::{Asset, AssetAmount, BasisPoints, BlockNumber, EgressId};
+use cf_primitives::{AccountId, Asset, AssetAmount, BasisPoints, BlockNumber, EgressId};
 use chainflip_engine::state_chain_observer::client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock, WaitFor, WaitForResult},
 	StateChainClient,
@@ -252,6 +252,44 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 					})?;
 
 				ApiWaitForResult::TxDetails { tx_hash, response: egress_id }
+			},
+		})
+	}
+
+	async fn move_asset(
+		&self,
+		amount: AssetAmount,
+		asset: Asset,
+		destination: AccountId,
+		wait_for: WaitFor,
+	) -> Result<ApiWaitForResult<AccountId>> {
+		if amount == 0 {
+			bail!("Withdrawal amount must be greater than 0");
+		}
+
+		let wait_for_result = self
+			.submit_signed_extrinsic_wait_for(
+				pallet_cf_lp::Call::move_asset { amount, asset, destination },
+				wait_for,
+			)
+			.await?;
+
+		Ok(match wait_for_result {
+			WaitForResult::TransactionHash(tx_hash) => return Ok(ApiWaitForResult::TxHash(tx_hash)),
+			WaitForResult::Details(details) => {
+				let (tx_hash, events, ..) = details;
+				let destination = events
+					.into_iter()
+					.find_map(|event| match event {
+						state_chain_runtime::RuntimeEvent::LiquidityProvider(
+							pallet_cf_lp::Event::AssetMoved { from, .. },
+						) => Some(from),
+						_ => None,
+					})
+					.ok_or_else(|| {
+						anyhow::anyhow!("No WithdrawalEgressScheduled event was found")
+					})?;
+				ApiWaitForResult::TxDetails { tx_hash, response: destination }
 			},
 		})
 	}
