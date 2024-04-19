@@ -158,7 +158,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(7);
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
 #[scale_info(skip_type_params(I))]
 pub struct PalletSafeMode<I: 'static> {
-	pub boost_swaps_enabled: bool,
+	pub boost_deposits_enabled: bool,
 	pub add_boost_funds_enabled: bool,
 	pub stop_boosting_enabled: bool,
 	#[doc(hidden)]
@@ -168,13 +168,13 @@ pub struct PalletSafeMode<I: 'static> {
 
 impl<I: 'static> SafeMode for PalletSafeMode<I> {
 	const CODE_RED: Self = PalletSafeMode {
-		boost_swaps_enabled: false,
+		boost_deposits_enabled: false,
 		add_boost_funds_enabled: false,
 		stop_boosting_enabled: false,
 		_phantom: PhantomData,
 	};
 	const CODE_GREEN: Self = PalletSafeMode {
-		boost_swaps_enabled: true,
+		boost_deposits_enabled: true,
 		add_boost_funds_enabled: true,
 		stop_boosting_enabled: true,
 		_phantom: PhantomData,
@@ -1420,7 +1420,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			);
 
 			// Only boost on non-zero fee and if the channel isn't already boosted:
-			if T::SafeMode::get().boost_swaps_enabled &&
+			if T::SafeMode::get().boost_deposits_enabled &&
 				boost_fee > 0 && !matches!(boost_status, BoostStatus::Boosted { .. })
 			{
 				match Self::try_boosting(asset, amount, boost_fee, prewitnessed_deposit_id) {

@@ -822,7 +822,7 @@ fn turn_safe_mode_off() {
 }
 
 #[test]
-fn boosting_swaps_is_disabled_by_safe_mode() {
+fn boosting_deposits_is_disabled_by_safe_mode() {
 	new_test_ext().execute_with(|| {
 		const DEPOSIT_AMOUNT: AssetAmount = 250_000_000;
 
