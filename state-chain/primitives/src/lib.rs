@@ -198,12 +198,8 @@ pub struct SwapOutput {
 	pub intermediary: Option<AssetAmount>,
 	// Final output of the swap
 	pub output: AssetAmount,
-}
-
-impl From<AssetAmount> for SwapOutput {
-	fn from(value: AssetAmount) -> Self {
-		Self { intermediary: None, output: value }
-	}
+	// the USDC network fee
+	pub network_fee: AssetAmount,
 }
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo)]

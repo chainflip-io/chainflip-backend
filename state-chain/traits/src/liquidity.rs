@@ -96,8 +96,8 @@ impl<T: frame_system::Config> PoolApi for T {
 
 pub trait SwappingApi {
 	/// Takes the swap amount in STABLE_ASSET, collect network fee from it
-	/// and return the remaining value
-	fn take_network_fee(input_amount: AssetAmount) -> AssetAmount;
+	/// and return the (remaining value, network fee taken)
+	fn take_network_fee(input_amount: AssetAmount) -> (AssetAmount, AssetAmount);
 
 	/// Process a single leg of a swap, into or from Stable asset. No network fee is taken.
 	fn swap_single_leg(
@@ -108,8 +108,8 @@ pub trait SwappingApi {
 }
 
 impl<T: frame_system::Config> SwappingApi for T {
-	fn take_network_fee(input_amount: AssetAmount) -> AssetAmount {
-		input_amount
+	fn take_network_fee(input_amount: AssetAmount) -> (AssetAmount, AssetAmount) {
+		(input_amount, 0)
 	}
 
 	fn swap_single_leg(

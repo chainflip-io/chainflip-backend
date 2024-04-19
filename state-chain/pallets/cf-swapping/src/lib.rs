@@ -768,7 +768,7 @@ pub mod pallet {
 					"All swaps should have Stable amount set here"
 				);
 				let stable_amount = swap.stable_amount.get_or_insert_with(Default::default);
-				*stable_amount = T::SwappingApi::take_network_fee(*stable_amount);
+				*stable_amount = T::SwappingApi::take_network_fee(*stable_amount).0;
 			}
 
 			Ok(())

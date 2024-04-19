@@ -1113,7 +1113,7 @@ fn process_all_into_stable_swaps_first() {
 		assert_swaps_queue_is_empty();
 
 		// Network fee should only be taken once.
-		let total_amount_after_network_fee = MockSwappingApi::take_network_fee(amount * 4);
+		let (total_amount_after_network_fee, _) = MockSwappingApi::take_network_fee(amount * 4);
 		let output_amount = total_amount_after_network_fee / 4;
 		// Verify swap "from" -> STABLE_ASSET, then "to" -> Output Asset
 		assert_eq!(

@@ -214,11 +214,24 @@ pub struct RpcAuctionState {
 }
 
 #[derive(Serialize, Deserialize)]
+struct SwapFee {
+	amount: U256,
+	asset: Asset,
+}
+
+impl SwapFee {
+	fn new<T: Into<U256>>(amount: T, asset: Asset) -> Self {
+		Self { amount: amount.into(), asset }
+	}
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct RpcSwapOutput {
 	// Intermediary amount, if there's any
 	pub intermediary: Option<NumberOrHex>,
 	// Final output of the swap
 	pub output: NumberOrHex,
+	pub included_fees: Vec<SwapFee>,
 }
 
 impl From<SwapOutput> for RpcSwapOutput {
@@ -226,6 +239,7 @@ impl From<SwapOutput> for RpcSwapOutput {
 		Self {
 			intermediary: swap_output.intermediary.map(Into::into),
 			output: swap_output.output.into(),
+			included_fees: vec![SwapFee::new(swap_output.network_fee, Asset::Usdc)],
 		}
 	}
 }

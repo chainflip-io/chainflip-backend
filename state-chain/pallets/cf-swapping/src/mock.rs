@@ -90,8 +90,9 @@ impl MockSwappingApi {
 }
 
 impl SwappingApi for MockSwappingApi {
-	fn take_network_fee(input_amount: AssetAmount) -> AssetAmount {
-		input_amount - NetworkFee::get() * input_amount
+	fn take_network_fee(input_amount: AssetAmount) -> (AssetAmount, AssetAmount) {
+		let network_fee = NetworkFee::get() * input_amount;
+		(input_amount - network_fee, network_fee)
 	}
 
 	fn swap_single_leg(
