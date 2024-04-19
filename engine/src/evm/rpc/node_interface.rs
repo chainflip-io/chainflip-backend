@@ -9,14 +9,8 @@ use super::{EvmRpcClient, EvmRpcSigningClient};
 
 abigen!(NodeInterface, "$CF_ARB_CONTRACT_ABI_ROOT/INodeInterface.json");
 
-// This is a kind of precompile on Arbitrum
+// This is a kind of precompile on Arbitrum (althoug not deployed on chain)
 const NODE_INTERFACE_ADDRESS: &str = "0x00000000000000000000000000000000000000C8";
-// TODO: This should be the address of the contract that we are going to call. However, passing the
-// vault contract address here is quite annoying and I think it works regardless of the address, so
-// I don't think it's necessary. const DESTINATION_ADDRESS: &str =
-// "0x0000000000000000000000000000000000000123"; TODO: This should be at least the length of the CCM
-// execute call and we should also check how it increases with lenght. const TX_DATA: &str =
-// "1234567890abcdef";
 
 #[async_trait::async_trait]
 pub trait NodeInterfaceRpcApi {
