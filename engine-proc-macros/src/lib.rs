@@ -11,7 +11,8 @@ use engine_upgrade_utils::{ENGINE_ENTRYPOINT_PREFIX, ENGINE_LIB_PREFIX, NEW_VERS
 pub fn link_engine_library_version(args: TokenStream, item: TokenStream) -> TokenStream {
 	let mut item_foreign_mod = parse_macro_input!(item as ItemForeignMod);
 
-	let syn::ForeignItem::Fn(ref mut input_fn) = item_foreign_mod.items.iter_mut().next().unwrap()
+	assert_eq!(item_foreign_mod.items.len(), 1, "Only expect one function signature for the entrypoint");
+	let syn::ForeignItem::Fn(ref mut input_fn) = item_foreign_mod.items[0]
 	else {
 		panic!("Expected a function signature")
 	};
@@ -24,12 +25,12 @@ pub fn link_engine_library_version(args: TokenStream, item: TokenStream) -> Toke
 
 	let underscored_version = version.replace('.', "_");
 
-	let entrypoint_sig = input_fn.sig.clone();
-	let new_fn_name = syn::Ident::new(
+	let input_fn_sig = input_fn.sig.clone();
+	let versioned_fn_name = syn::Ident::new(
 		&format!("{ENGINE_ENTRYPOINT_PREFIX}{underscored_version}"),
 		input_fn.sig.ident.span(),
 	);
-	input_fn.sig.ident = new_fn_name.clone();
+	input_fn.sig.ident = versioned_fn_name.clone();
 
 	let versioned_lib_name = format!("{ENGINE_LIB_PREFIX}{underscored_version}");
 
@@ -37,9 +38,9 @@ pub fn link_engine_library_version(args: TokenStream, item: TokenStream) -> Toke
 		#[link(name = #versioned_lib_name)]
 		#item_foreign_mod
 
-		pub #entrypoint_sig {
+		pub #input_fn_sig {
 			unsafe {
-				#new_fn_name(c_args, start_from)
+				#versioned_fn_name(c_args, start_from)
 			}
 		}
 	})
@@ -51,17 +52,17 @@ pub fn cfe_entrypoint(_attrs: TokenStream, item: TokenStream) -> TokenStream {
 	let input_fn = parse_macro_input!(item as ItemFn);
 
 	// Get the version from your Cargo.toml file
-	let version = env!("CARGO_PKG_VERSION").replace('.', "_");
+	let underscored_version = env!("CARGO_PKG_VERSION").replace('.', "_");
 
 	// Construct the new function name
-	let new_fn_name =
-		syn::Ident::new(&format!("{ENGINE_ENTRYPOINT_PREFIX}{version}"), input_fn.sig.ident.span());
+	let versioned_fn_name =
+		syn::Ident::new(&format!("{ENGINE_ENTRYPOINT_PREFIX}{underscored_version}"), input_fn.sig.ident.span());
 
 	let block = input_fn.block;
 
 	let output = quote! {
 		#[no_mangle]
-		extern "C" fn #new_fn_name(
+		extern "C" fn #versioned_fn_name(
 			c_args: CStrArray,
 			start_from: u32,
 		) -> ExitStatus {
