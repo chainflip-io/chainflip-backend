@@ -11,9 +11,12 @@ use engine_upgrade_utils::{ENGINE_ENTRYPOINT_PREFIX, ENGINE_LIB_PREFIX, NEW_VERS
 pub fn link_engine_library_version(args: TokenStream, item: TokenStream) -> TokenStream {
 	let mut item_foreign_mod = parse_macro_input!(item as ItemForeignMod);
 
-	assert_eq!(item_foreign_mod.items.len(), 1, "Only expect one function signature for the entrypoint");
-	let syn::ForeignItem::Fn(ref mut input_fn) = item_foreign_mod.items[0]
-	else {
+	assert_eq!(
+		item_foreign_mod.items.len(),
+		1,
+		"Only expect one function signature for the entrypoint"
+	);
+	let syn::ForeignItem::Fn(ref mut input_fn) = item_foreign_mod.items[0] else {
 		panic!("Expected a function signature")
 	};
 
@@ -55,8 +58,10 @@ pub fn cfe_entrypoint(_attrs: TokenStream, item: TokenStream) -> TokenStream {
 	let underscored_version = env!("CARGO_PKG_VERSION").replace('.', "_");
 
 	// Construct the new function name
-	let versioned_fn_name =
-		syn::Ident::new(&format!("{ENGINE_ENTRYPOINT_PREFIX}{underscored_version}"), input_fn.sig.ident.span());
+	let versioned_fn_name = syn::Ident::new(
+		&format!("{ENGINE_ENTRYPOINT_PREFIX}{underscored_version}"),
+		input_fn.sig.ident.span(),
+	);
 
 	let block = input_fn.block;
 
