@@ -109,6 +109,12 @@ impl From<DispatchError> for DispatchErrorWithMessage {
 		}
 	}
 }
+impl From<&'static str> for DispatchErrorWithMessage {
+	fn from(message: &'static str) -> Self {
+		DispatchErrorWithMessage::Other(DispatchError::Other(message))
+	}
+}
+
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
 pub struct FailingWitnessValidators {
 	pub failing_count: u32,
