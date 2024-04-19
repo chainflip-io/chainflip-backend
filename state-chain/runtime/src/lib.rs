@@ -1264,9 +1264,9 @@ impl_runtime_apis! {
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
-			limit_orders: Option<Vec<(i32, U256)>>,
+			additional_limit_orders: Option<Vec<(i32, U256)>>,
 		) -> Result<SwapOutput, DispatchErrorWithMessage> {
-			if let Some(limit_orders) = limit_orders {
+			if let Some(limit_orders) = additional_limit_orders {
 				let (asset_pair, order) = AssetPair::from_swap(from, to).ok_or(DispatchErrorWithMessage::Other(DispatchError::Other("Invalid asset pair")))?;
 
 				pallet_cf_pools::Pools::<Runtime>::try_mutate(asset_pair, |maybe_pool| {
