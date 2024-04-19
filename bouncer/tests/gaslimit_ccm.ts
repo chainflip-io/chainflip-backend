@@ -7,12 +7,15 @@ import { runWithTimeout, observeBadEvents } from '../shared/utils';
 async function testGasLimitCcmTest() {
   console.log('=== Testing GasLimit CCM swaps ===');
 
-  let stopObserving = false;
-  const feeDeficitRefused = observeBadEvents(':TransactionFeeDeficitRefused', () => stopObserving);
+  const abortController = new AbortController();
+  const feeDeficitRefused = observeBadEvents(
+    ':TransactionFeeDeficitRefused',
+    abortController.signal,
+  );
 
   await testGasLimitCcmSwaps();
 
-  stopObserving = true;
+  abortController.abort();
   await feeDeficitRefused;
 
   console.log('=== GasLimit CCM test completed ===');

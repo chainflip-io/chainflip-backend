@@ -55,7 +55,7 @@ async function test() {
 
   const consolidationEventPromise = observeEvent(
     'bitcoinIngressEgress:UtxoConsolidation',
-    chainflip,
+    'chainflip',
   );
 
   // We should have exactly consolidationThreshold utxos,
@@ -73,7 +73,7 @@ async function test() {
 
   const broadcastSuccessPromise = observeEvent(
     'bitcoinBroadcaster:BroadcastSuccess',
-    chainflip,
+    'chainflip',
     (event) => {
       if (consolidationBroadcastId === event.data.broadcastId) return true;
       return false;
@@ -81,7 +81,7 @@ async function test() {
   );
   const feeDeficitPromise = observeEvent(
     'bitcoinBroadcaster:TransactionFeeDeficitRecorded',
-    chainflip,
+    'chainflip',
   );
 
   console.log(`Waiting for broadcast ${consolidationBroadcastId} to succeed`);

@@ -72,7 +72,7 @@ export async function pushPolkadotRuntimeUpdate(wasmPath: string): Promise<void>
   }
 
   // Submit the proposal
-  const observeDemocracyStarted = observeEvent('democracy:Started', polkadot);
+  const observeDemocracyStarted = observeEvent('democracy:Started', 'polkadot');
   const amount = amountToFineAmount(PROPOSAL_AMOUNT, assetDecimals('Dot'));
   console.log(`Submitting proposal with amount: ${PROPOSAL_AMOUNT}`);
   const democracyStartedEvent = await submitAndGetEvent(
@@ -87,10 +87,10 @@ export async function pushPolkadotRuntimeUpdate(wasmPath: string): Promise<void>
   await observeDemocracyStarted;
 
   // Vote for the proposal
-  const observeDemocracyPassed = observeEvent('democracy:Passed', polkadot);
-  const observeDemocracyNotPassed = observeEvent('democracy:NotPassed', polkadot);
-  const observeSchedulerDispatched = observeEvent('scheduler:Dispatched', polkadot);
-  const observeCodeUpdated = observeEvent('system:CodeUpdated', polkadot);
+  const observeDemocracyPassed = observeEvent('democracy:Passed', 'polkadot');
+  const observeDemocracyNotPassed = observeEvent('democracy:NotPassed', 'polkadot');
+  const observeSchedulerDispatched = observeEvent('scheduler:Dispatched', 'polkadot');
+  const observeCodeUpdated = observeEvent('system:CodeUpdated', 'polkadot');
   const vote = { Standard: { vote: true, balance: amount } };
   await submitAndGetEvent(
     polkadot.tx.democracy.vote(proposalIndex, vote),
@@ -233,8 +233,8 @@ export async function testPolkadotRuntimeUpdate(): Promise<void> {
   const [wasmPath, expectedSpecVersion] = await bumpAndBuildPolkadotRuntime();
 
   // Monitor for the broadcast aborted event to help catch failed swaps
-  let stopObserving = false;
-  const broadcastAborted = observeBadEvents(':BroadcastAborted', () => stopObserving);
+  const abortController = new AbortController();
+  const broadcastAborted = observeBadEvents(':BroadcastAborted', abortController.signal);
 
   // Start some swaps
   const swapping = doPolkadotSwaps();
@@ -257,7 +257,7 @@ export async function testPolkadotRuntimeUpdate(): Promise<void> {
   // Wait for all of the swaps to complete
   console.log('Waiting for swaps to complete...');
   await swapping;
-  stopObserving = true;
+  abortController.abort();
   await broadcastAborted;
 
   process.exit(0);

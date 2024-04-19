@@ -55,7 +55,7 @@ export async function provideLiquidity(
 
   let eventHandle = observeEvent(
     'liquidityProvider:LiquidityDepositAddressReady',
-    chainflip,
+    'chainflip',
     (event) => event.data.asset === ccy,
   );
 
@@ -72,7 +72,7 @@ export async function provideLiquidity(
   console.log('Sending ' + amount + ' ' + ccy + ' to ' + ingressAddress);
   eventHandle = observeEvent(
     'liquidityProvider:AccountCredited',
-    chainflip,
+    'chainflip',
     (event) =>
       event.data.asset === ccy &&
       isWithinOnePercent(

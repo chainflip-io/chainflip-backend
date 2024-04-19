@@ -63,7 +63,7 @@ export async function redeemFlip(
   console.log('Requesting redemption');
   const redemptionRequestHandle = observeEvent(
     'funding:RedemptionRequested',
-    chainflip,
+    'chainflip',
     (event) => event.data.accountId === flipWallet.address,
   );
   const flipperinoRedeemAmount = intoFineAmount(flipAmount);
@@ -94,7 +94,7 @@ export async function redeemFlip(
 
   const redemptionExecutedHandle = observeEvent(
     'funding:RedemptionSettled',
-    chainflip,
+    'chainflip',
     (event) => event.data[0] === flipWallet.address,
   );
 

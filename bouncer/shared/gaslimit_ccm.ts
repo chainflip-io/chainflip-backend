@@ -4,7 +4,6 @@ import { newCcmMetadata, prepareSwap } from './swapping';
 import {
   chainFromAsset,
   chainGasAsset,
-  getChainflipApi,
   getEvmEndpoint,
   observeBadEvents,
   observeCcmReceived,
@@ -50,10 +49,8 @@ function gasTestCcmMetadata(sourceAsset: Asset, gasToConsume: number, gasBudgetF
 }
 
 async function getEvmChainFees(chain: Chain) {
-  await using chainflipApi = await getChainflipApi();
-
   const trackedData = (
-    await observeEvent(`${chain.toLowerCase()}ChainTracking:ChainStateUpdated`, chainflipApi)
+    await observeEvent(`${chain.toLowerCase()}ChainTracking:ChainStateUpdated`, 'chainflip')
   ).data.newChainState.trackedData;
 
   const baseFee = Number(trackedData.baseFee.replace(/,/g, ''));
@@ -74,7 +71,6 @@ async function testGasLimitSwap(
   gasToConsume?: number,
   gasBudgetFraction?: number,
 ) {
-  await using chainflipApi = await getChainflipApi();
   const destChain = chainFromAsset(destAsset).toString();
 
   // Increase the gas consumption to make sure all the messages are unique
@@ -117,47 +113,47 @@ async function testGasLimitSwap(
 
   // SwapExecuted is emitted at the same time as swapScheduled so we can't wait for swapId to be known.
   const swapIdToEgressAmount: { [key: string]: string } = {};
-  let swapScheduledObserved = false;
+  let abortController = new AbortController();
   const swapExecutedHandle = observeEvent(
     'swapping:SwapExecuted',
-    chainflipApi,
+    'chainflip',
     (event) => {
       swapIdToEgressAmount[event.data.swapId] = event.data.egressAmount;
       return false;
     },
-    () => swapScheduledObserved,
+    abortController.signal,
   );
   const swapIdToEgressId: { [key: string]: string } = {};
   const swapEgressHandle = observeEvent(
     'swapping:SwapEgressScheduled',
-    chainflipApi,
+    'chainflip',
     (event) => {
       swapIdToEgressId[event.data.swapId] = event.data.egressId;
       return false;
     },
-    () => swapScheduledObserved,
+    abortController.signal,
   );
   const egressIdToBroadcastId: { [key: string]: string } = {};
   const ccmBroadcastHandle = observeEvent(
     `${destChain.toLowerCase()}IngressEgress:CcmBroadcastRequested`,
-    chainflipApi,
+    'chainflip',
     (event) => {
       egressIdToBroadcastId[event.data.egressId] = event.data.broadcastId;
       return false;
     },
-    () => swapScheduledObserved,
+    abortController.signal,
   );
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const broadcastIdToTxPayload: { [key: string]: any } = {};
   const broadcastRequesthandle = observeEvent(
     `${destChain.toLowerCase()}Broadcaster:TransactionBroadcastRequest`,
-    chainflipApi,
+    'chainflip',
     (event) => {
       broadcastIdToTxPayload[event.data.broadcastId] = event.data.transactionPayload;
       return false;
     },
-    () => swapScheduledObserved,
+    abortController.signal,
   );
 
   await send(sourceAsset, depositAddress);
@@ -179,7 +175,7 @@ async function testGasLimitSwap(
 
   console.log(`${tag} Swap events found`);
 
-  swapScheduledObserved = true;
+  abortController.abort();
   await Promise.all([
     swapExecutedHandle,
     swapEgressHandle,
@@ -228,7 +224,7 @@ async function testGasLimitSwap(
     );
     await observeEvent(
       `${destChain.toLowerCase()}Broadcaster:BroadcastAborted`,
-      chainflipApi,
+      'chainflip',
       (event) => event.data.broadcastId === egressIdToBroadcastId[swapIdToEgressId[swapId]],
     );
     stopObservingCcmReceived = true;
@@ -241,10 +237,10 @@ async function testGasLimitSwap(
     console.log(`${tag} Gas budget ${gasLimitBudget}. Expecting successful broadcast.`);
 
     // Check that broadcast is not aborted
-    let stopObserving = false;
+    abortController = new AbortController();
     const observeBroadcastFailure = observeBadEvents(
       `${destChain.toLowerCase()}Broadcaster:BroadcastAborted`,
-      () => stopObserving,
+      abortController.signal,
       (event) => {
         const aborted = event.data.broadcastId === egressIdToBroadcastId[swapIdToEgressId[swapId]];
         if (aborted) {
@@ -272,7 +268,7 @@ async function testGasLimitSwap(
     }
 
     // Stop listening for broadcast failure
-    stopObserving = true;
+    abortController.abort();
     await observeBroadcastFailure;
 
     const web3 = new Web3(getEvmEndpoint(chainFromAsset(destAsset)));
@@ -284,7 +280,7 @@ async function testGasLimitSwap(
 
     const feeDeficitHandle = observeEvent(
       `${destChain.toLowerCase()}Broadcaster:TransactionFeeDeficitRecorded`,
-      chainflipApi,
+      'chainflip',
       (event) => Number(event.data.amount.replace(/,/g, '')) === totalFee,
     );
 

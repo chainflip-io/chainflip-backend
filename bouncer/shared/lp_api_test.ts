@@ -1,7 +1,6 @@
 import { Chain, InternalAssets as Assets } from '@chainflip/cli';
 import assert from 'assert';
 import {
-  getChainflipApi,
   observeEvent,
   isValidHexHash,
   isValidEthAddress,
@@ -33,7 +32,6 @@ const testAssetAmount = parseInt(
   amountToFineAmount(testAmount.toString(), assetDecimals(testAsset)),
 );
 const amountToProvide = testAmount * 50; // Provide plenty of the asset for the tests
-const chainflip = await getChainflipApi();
 const testAddress = '0x1594300cbd587694affd70c933b9ee9155b186d9';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -70,7 +68,7 @@ async function provideLiquidityAndTestAssetBalances() {
 async function testRegisterLiquidityRefundAddress() {
   const observeRefundAddressRegisteredEvent = observeEvent(
     'liquidityProvider:LiquidityRefundAddressRegistered',
-    chainflip,
+    'chainflip',
     (event) => event.data.address.Eth === testAddress,
   );
 
@@ -89,7 +87,7 @@ async function testRegisterLiquidityRefundAddress() {
 async function testLiquidityDeposit() {
   const observeLiquidityDepositAddressReadyEvent = observeEvent(
     'liquidityProvider:LiquidityDepositAddressReady',
-    chainflip,
+    'chainflip',
     (event) => event.data.depositAddress.Eth,
   );
 
@@ -111,7 +109,7 @@ async function testLiquidityDeposit() {
   // Send funds to the deposit address and watch for deposit event
   const observeAccountCreditedEvent = observeEvent(
     'liquidityProvider:AccountCredited',
-    chainflip,
+    'chainflip',
     (event) =>
       event.data.asset === testAsset &&
       isWithinOnePercent(

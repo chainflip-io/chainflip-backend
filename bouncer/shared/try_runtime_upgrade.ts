@@ -1,10 +1,10 @@
 // This requires the try-runtime cli to be installed globally
 // https://github.com/paritytech/try-runtime-cli
 
-import { ApiPromise } from '@polkadot/api';
 import path from 'path';
 import { compileBinaries } from './utils/compile_binaries';
 import { createTmpDirIfNotExists, execWithRustLog } from './utils/exec_with_log';
+import { getChainflipApi } from './utils';
 
 function createSnapshotFile(networkUrl: string, blockHash: string) {
   const blockParam = blockHash === 'latest' ? '' : `--at ${blockHash}`;
@@ -58,11 +58,12 @@ function tryRuntimeCommand(runtimePath: string, blockHash: 'latest' | string, ne
 // - last-n, must also specify a number of blocks. This goes backwards from the latest block, running the migration on each block down the chain.
 export async function tryRuntimeUpgrade(
   block: number | 'latest' | 'all' | 'last-n',
-  api: ApiPromise,
   networkUrl: string,
   runtimePath: string,
   lastN = 50,
 ) {
+  await using api = await getChainflipApi();
+
   if (block === 'all') {
     const latestBlock = await api.rpc.chain.getBlockHash();
 
@@ -101,7 +102,6 @@ export async function tryRuntimeUpgrade(
 
 export async function tryRuntimeUpgradeWithCompileRuntime(
   block: number | 'latest' | 'all' | 'last-n',
-  api: ApiPromise,
   projectRoot: string,
   networkUrl: string,
   lastN = 50,
@@ -109,7 +109,6 @@ export async function tryRuntimeUpgradeWithCompileRuntime(
   await compileBinaries('runtime', projectRoot);
   await tryRuntimeUpgrade(
     block,
-    api,
     networkUrl,
     `${projectRoot}/target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm`,
     lastN,

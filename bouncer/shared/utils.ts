@@ -23,6 +23,18 @@ import { getCFTesterAbi } from './contract_interfaces';
 import { SwapParams } from './perform_swap';
 import { newSolAddress } from './new_sol_address';
 
+// @ts-expect-error polyfilling
+Symbol.asyncDispose ??= Symbol('asyncDispose');
+// @ts-expect-error polyfilling
+Symbol.dispose ??= Symbol('dispose');
+
+declare global {
+  interface SymbolConstructor {
+    readonly asyncDispose: unique symbol;
+    readonly dispose: unique symbol;
+  }
+}
+
 const cfTesterAbi = await getCFTesterAbi();
 
 export const lpMutex = new Mutex();
@@ -272,11 +284,6 @@ export const sha256 = (data: string): Buffer => crypto.createHash('sha256').upda
 
 export { sleep };
 
-// @ts-expect-error polyfilling
-Symbol.asyncDispose ??= Symbol('asyncDispose');
-// @ts-expect-error polyfilling
-Symbol.dispose ??= Symbol('dispose');
-
 type DisposableApiPromise = ApiPromise & { [Symbol.asyncDispose](): Promise<void> };
 
 // It is important to cache WS connections because nodes seem to have a
@@ -351,58 +358,108 @@ export function getBtcClient(): Client {
   });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type EventQuery = (data: any) => boolean;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type Event = { name: any; data: any; block: number; event_index: number };
-export async function observeEvent(
-  eventName: string,
-  api: ApiPromise,
-  eventQuery?: EventQuery,
-  stopObserveEvent?: () => boolean,
+export const deferredPromise = <T>() => {
+  let resolve: (value: T) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let reject: (reason?: any) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  return { promise, resolve: resolve!, reject: reject! };
+};
+
+const createDisposable = (fn: () => void) => ({ [Symbol.dispose]: fn });
+
+export type Event = {
+  name: { section: string; method: string };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: any;
+  block: number;
+  event_index: number;
+};
+
+async function* pollEvents(
+  chain: 'chainflip' | 'polkadot',
+  signal?: AbortSignal,
   finalized = false,
-): Promise<Event> {
-  let result: Event | undefined;
-  let eventFound = false;
-
-  const query = eventQuery ?? (() => true);
-  const stopObserve = stopObserveEvent ?? (() => false);
-
-  const [expectedSection, expectedMethod] = eventName.split(':');
+) {
+  await using api = await (chain === 'chainflip' ? getChainflipApi() : getPolkadotApi());
 
   const subscribeMethod = finalized
     ? api.rpc.chain.subscribeFinalizedHeads
     : api.rpc.chain.subscribeNewHeads;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const unsubscribe: any = await subscribeMethod(async (header) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const events: any[] = await api.query.system.events.at(header.hash);
-    events.forEach((record, index) => {
-      const { event } = record;
-      if (
-        !eventFound &&
-        event.section.includes(expectedSection) &&
-        event.method.includes(expectedMethod)
-      ) {
-        const expectedEvent = {
-          name: { section: event.section, method: event.method },
-          data: event.toHuman().data,
-          block: header.number.toNumber(),
-          event_index: index,
-        };
-        if (query(expectedEvent)) {
-          result = expectedEvent;
-          eventFound = true;
-          unsubscribe();
-        }
-      }
-    });
+  let { promise, resolve } = deferredPromise<Event[] | null>();
+
+  const unsubscribe = await subscribeMethod(async (header) => {
+    const blockEvents = await (await api.at(header.hash)).query.system.events();
+
+    resolve(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      [...(blockEvents as unknown as any[])].map(
+        (codec, index) =>
+          ({
+            name: { section: codec.event.section, method: codec.event.method },
+            data: codec.event.toHuman().data,
+            block: header.number.toNumber(),
+            event_index: index,
+          }) as Event,
+      ),
+    );
   });
-  while (!eventFound && !stopObserve()) {
-    await sleep(1000);
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  using _ = createDisposable(unsubscribe);
+
+  signal?.addEventListener('abort', () => {
+    resolve(null);
+  });
+
+  while (true) {
+    const next = await promise;
+    if (next === null) return;
+    yield* next;
+    ({ promise, resolve } = deferredPromise<Event[] | null>());
   }
-  return result as Event;
+}
+
+type EventQuery = (event: Event) => boolean;
+export async function observeEvent(
+  eventName: string,
+  chain: 'chainflip' | 'polkadot',
+  eventQuery?: EventQuery,
+  signal?: undefined,
+  finalized?: boolean,
+): Promise<Event>;
+export async function observeEvent(
+  eventName: string,
+  chain: 'chainflip' | 'polkadot',
+  eventQuery: EventQuery | undefined,
+  signal: AbortSignal,
+  finalized?: boolean,
+): Promise<Event | null>;
+export async function observeEvent(
+  eventName: string,
+  chain: 'chainflip' | 'polkadot',
+  eventQuery: EventQuery = () => true,
+  signal?: AbortSignal,
+  finalized = false,
+): Promise<Event | null> {
+  const [expectedSection, expectedMethod] = eventName.split(':');
+
+  for await (const event of pollEvents(chain, signal, finalized)) {
+    if (
+      event.name.section.includes(expectedSection) &&
+      event.name.method.includes(expectedMethod) &&
+      eventQuery(event)
+    ) {
+      return event;
+    }
+  }
+
+  return null;
 }
 
 export type EgressId = [Chain, number];
@@ -410,16 +467,10 @@ type BroadcastId = [Chain, number];
 // Observe multiple events related to the same swap that could be emitted in the same block
 export async function observeSwapEvents(
   { sourceAsset, destAsset, depositAddress, channelId }: SwapParams,
-  api: ApiPromise,
   tag?: string,
   swapType?: SwapType,
   finalized = false,
 ): Promise<BroadcastId | undefined> {
-  let eventFound = false;
-  const subscribeMethod = finalized
-    ? api.rpc.chain.subscribeFinalizedHeads
-    : api.rpc.chain.subscribeNewHeads;
-
   const swapScheduledEvent = 'SwapScheduled';
   const swapExecutedEvent = 'SwapExecuted';
   const swapEgressScheduled = 'SwapEgressScheduled';
@@ -430,71 +481,61 @@ export async function observeSwapEvents(
   let egressId: EgressId;
   let broadcastId;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const unsubscribe: any = await subscribeMethod(async (header) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const events: any[] = await api.query.system.events.at(header.hash);
-    events.forEach((record) => {
-      const { event } = record;
-      if (!eventFound && event.method.includes(expectedMethod)) {
-        const expectedEvent = {
-          data: event.toHuman().data,
-        };
-
-        switch (expectedMethod) {
-          case swapScheduledEvent:
-            if ('DepositChannel' in expectedEvent.data.origin) {
-              if (
-                Number(expectedEvent.data.origin.DepositChannel.channelId) === channelId &&
-                sourceAsset === (expectedEvent.data.sourceAsset as Asset) &&
-                destAsset === (expectedEvent.data.destinationAsset as Asset) &&
-                swapType
-                  ? expectedEvent.data.swapType[swapType] !== undefined
-                  : true &&
-                    depositAddress ===
-                      (Object.values(
-                        expectedEvent.data.origin.DepositChannel.depositAddress,
-                      )[0] as string)
-              ) {
-                expectedMethod = swapExecutedEvent;
-                swapId = expectedEvent.data.swapId;
-                console.log(`${tag} swap scheduled with swapId: ${swapId}`);
-              }
-            }
-            break;
-          case swapExecutedEvent:
-            if (expectedEvent.data.swapId === swapId) {
-              expectedMethod = swapEgressScheduled;
-              console.log(`${tag} swap executed, with id: ${swapId}`);
-            }
-            break;
-          case swapEgressScheduled:
-            if (expectedEvent.data.swapId === swapId) {
-              expectedMethod = batchBroadcastRequested;
-              egressId = expectedEvent.data.egressId as EgressId;
-              console.log(`${tag} swap egress scheduled with id: (${egressId[0]}, ${egressId[1]})`);
-            }
-            break;
-          case batchBroadcastRequested:
-            expectedEvent.data.egressIds.forEach((eventEgressId: EgressId) => {
-              if (egressId[0] === eventEgressId[0] && egressId[1] === eventEgressId[1]) {
-                broadcastId = [egressId[0], Number(expectedEvent.data.broadcastId)] as BroadcastId;
-                console.log(`${tag} broadcast requested, with id: (${broadcastId})`);
-                eventFound = true;
-                unsubscribe();
-              }
-            });
-            break;
-          default:
-            break;
+  for await (const event of pollEvents('chainflip', undefined, finalized)) {
+    // eslint-disable-next-line no-continue
+    if (!event.name.method.includes(expectedMethod)) continue;
+    switch (expectedMethod) {
+      case swapScheduledEvent:
+        if ('DepositChannel' in event.data.origin) {
+          if (
+            Number(event.data.origin.DepositChannel.channelId) === channelId &&
+            sourceAsset === (event.data.sourceAsset as Asset) &&
+            destAsset === (event.data.destinationAsset as Asset) &&
+            swapType
+              ? event.data.swapType[swapType] !== undefined
+              : true &&
+                depositAddress ===
+                  (Object.values(event.data.origin.DepositChannel.depositAddress)[0] as string)
+          ) {
+            expectedMethod = swapExecutedEvent;
+            swapId = event.data.swapId;
+            console.log(`${tag} swap scheduled with swapId: ${swapId}`);
+          }
         }
+        break;
+      case swapExecutedEvent:
+        if (event.data.swapId === swapId) {
+          expectedMethod = swapEgressScheduled;
+          console.log(`${tag} swap executed, with id: ${swapId}`);
+        }
+        break;
+      case swapEgressScheduled:
+        if (event.data.swapId === swapId) {
+          expectedMethod = batchBroadcastRequested;
+          egressId = event.data.egressId as EgressId;
+          console.log(`${tag} swap egress scheduled with id: (${egressId[0]}, ${egressId[1]})`);
+        }
+        break;
+      case batchBroadcastRequested: {
+        const egressFound = event.data.egressIds.some(
+          // eslint-disable-next-line no-loop-func
+          (eventEgressId: EgressId) =>
+            egressId[0] === eventEgressId[0] && egressId[1] === eventEgressId[1],
+        );
+
+        if (egressFound) {
+          broadcastId = [egressId[0], Number(event.data.broadcastId)] as BroadcastId;
+          console.log(`${tag} broadcast requested, with id: (${broadcastId})`);
+          return broadcastId;
+        }
+        break;
       }
-    });
-  });
-  while (!eventFound) {
-    await sleep(1000);
+      default:
+        break;
+    }
   }
-  return broadcastId;
+
+  return undefined;
 }
 
 // TODO: To import from the SDK once it's exported
@@ -510,9 +551,7 @@ export async function observeSwapScheduled(
   channelId: number,
   swapType?: SwapType,
 ) {
-  await using chainflipApi = await getChainflipApi();
-
-  return observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
+  return observeEvent('swapping:SwapScheduled', 'chainflip', (event) => {
     if ('DepositChannel' in event.data.origin) {
       const channelMatches = Number(event.data.origin.DepositChannel.channelId) === channelId;
       const sourceAssetMatches = sourceAsset === (event.data.sourceAsset as Asset);
@@ -528,11 +567,10 @@ export async function observeSwapScheduled(
 // Make sure the stopObserveEvent returns true before the end of the test
 export async function observeBadEvents(
   eventName: string,
-  stopObserveEvent: () => boolean,
+  signal: AbortSignal,
   eventQuery?: EventQuery,
 ) {
-  await using chainflipApi = await getChainflipApi();
-  const event = await observeEvent(eventName, chainflipApi, eventQuery, stopObserveEvent);
+  const event = await observeEvent(eventName, 'chainflip', eventQuery, signal);
   if (event) {
     throw new Error(
       `Unexpected event emitted ${event.name.section}:${event.name.method} in block ${event.block}`,
@@ -541,26 +579,25 @@ export async function observeBadEvents(
 }
 
 export async function observeBroadcastSuccess(broadcastId: BroadcastId) {
-  await using chainflipApi = await getChainflipApi();
   const broadcaster = broadcastId[0].toLowerCase() + 'Broadcaster';
   const broadcastIdNumber = broadcastId[1];
 
-  let stopObserving = false;
+  const abortController = new AbortController();
   const observeBroadcastFailure = observeBadEvents(
     broadcaster + ':BroadcastAborted',
-    () => stopObserving,
+    abortController.signal,
     (event) => {
       if (broadcastIdNumber === Number(event.data.broadcastId)) return true;
       return false;
     },
   );
 
-  await observeEvent(broadcaster + ':BroadcastSuccess', chainflipApi, (event) => {
+  await observeEvent(broadcaster + ':BroadcastSuccess', 'chainflip', (event) => {
     if (broadcastIdNumber === Number(event.data.broadcastId)) return true;
     return false;
   });
 
-  stopObserving = true;
+  abortController.abort();
   await observeBroadcastFailure;
 }
 

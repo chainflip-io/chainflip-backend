@@ -30,7 +30,7 @@ async function main(): Promise<void> {
   const ethIngressKey = (
     await observeEvent(
       'liquidityProvider:LiquidityDepositAddressReady',
-      chainflip,
+      'chainflip',
       (event) => event.data.depositAddress.Eth,
     )
   ).data.depositAddress.Eth as string;
@@ -48,7 +48,7 @@ async function main(): Promise<void> {
       if (stdout !== '') process.stdout.write(stdout);
     },
   );
-  await observeEvent('liquidityProvider:AccountCredited', chainflip);
+  await observeEvent('liquidityProvider:AccountCredited', 'chainflip');
   exec(
     'pnpm tsx  ./commands/send_eth.ts ' + ethIngressKey + ' 10',
     { timeout: 10000 },

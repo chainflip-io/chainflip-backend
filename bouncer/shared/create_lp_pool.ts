@@ -20,7 +20,7 @@ export async function createLpPool(ccy: Asset, initialPrice: number) {
     );
     const poolCreatedEvent = observeEvent(
       'liquidityPools:NewPoolCreated',
-      chainflip,
+      'chainflip',
       (event) => event.data.baseAsset === ccy,
     );
     const extrinsic = chainflip.tx.liquidityPools.newPool(ccy, 'usdc', 20, price);

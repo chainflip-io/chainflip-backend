@@ -5,7 +5,7 @@ async function setSafeMode(mode: string, options?: TranslatedOptions) {
   await using chainflip = await getChainflipApi();
 
   const extrinsic = chainflip.tx.environment.updateSafeMode({ [mode]: options });
-  const eventHandle = observeEvent('environment:RuntimeSafeModeUpdated', chainflip);
+  const eventHandle = observeEvent('environment:RuntimeSafeModeUpdated', 'chainflip');
   await submitGovernanceExtrinsic(extrinsic);
   await eventHandle;
 }

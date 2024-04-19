@@ -14,7 +14,7 @@ async function main(): Promise<void> {
   const ethIngressKey = (
     await observeEvent(
       'liquidityProvider:LiquidityDepositAddressReady',
-      chainflip,
+      'chainflip',
       (event) => event.data.depositAddress.Eth,
     )
   ).data.depositAddress.Eth as string;
@@ -32,7 +32,7 @@ async function main(): Promise<void> {
       if (stdout !== '') process.stdout.write(stdout);
     },
   );
-  await observeEvent('liquidityProvider:AccountCredited', chainflip);
+  await observeEvent('liquidityProvider:AccountCredited', 'chainflip');
   console.log('Successfully witnessed transfer!');
   process.exit(0);
 }

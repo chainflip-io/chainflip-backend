@@ -11,7 +11,7 @@ export async function setupArbVault(): Promise<void> {
   const arbClient = new Web3(getEvmEndpoint('Arbitrum'));
 
   // Step 1
-  await initializeArbitrumChain(chainflip);
+  await initializeArbitrumChain();
 
   // Step 2
   console.log('Forcing rotation');
@@ -20,7 +20,7 @@ export async function setupArbVault(): Promise<void> {
   // Step 3
   const arbActivationRequest = observeEvent(
     'arbitrumVault:AwaitingGovernanceActivation',
-    chainflip,
+    'chainflip',
   );
 
   const arbKey = (await arbActivationRequest).data.newPublicKey;
@@ -34,7 +34,7 @@ export async function setupArbVault(): Promise<void> {
   );
 
   console.log('Waiting for new epoch...');
-  await observeEvent('validator:NewEpoch', chainflip);
+  await observeEvent('validator:NewEpoch', 'chainflip');
 
   console.log('=== New Epoch ===');
   console.log('=== Vault Setup completed ===');

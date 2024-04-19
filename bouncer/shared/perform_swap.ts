@@ -4,7 +4,6 @@ import { newSwap } from './new_swap';
 import { send, sendViaCfTester } from './send';
 import { getBalance } from './get_balance';
 import {
-  getChainflipApi,
   observeBalanceIncrease,
   observeEvent,
   observeCcmReceived,
@@ -42,11 +41,9 @@ export async function requestNewSwap(
   brokerCommissionBps?: number,
   log = true,
 ): Promise<SwapParams> {
-  await using chainflipApi = await getChainflipApi();
-
   const addressPromise = observeEvent(
     'swapping:SwapDepositAddressReady',
-    chainflipApi,
+    'chainflip',
 
     (event) => {
       // Find deposit address for the right swap by looking at destination address:
@@ -186,15 +183,13 @@ export async function performAndTrackSwap(
   amount?: string,
   tag?: string,
 ) {
-  await using chainflipApi = await getChainflipApi();
-
   const swapParams = await requestNewSwap(sourceAsset, destAsset, destAddress, tag);
 
   await send(sourceAsset, swapParams.depositAddress, amount);
   console.log(`${tag} fund sent, waiting for the deposit to be witnessed..`);
 
   // SwapScheduled, SwapExecuted, SwapEgressScheduled, BatchBroadcastRequested
-  const broadcastId = await observeSwapEvents(swapParams, chainflipApi, tag);
+  const broadcastId = await observeSwapEvents(swapParams, tag);
 
   if (broadcastId) await observeBroadcastSuccess(broadcastId);
   else throw new Error('Failed to retrieve broadcastId!');

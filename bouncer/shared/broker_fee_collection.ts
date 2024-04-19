@@ -66,7 +66,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   console.log(`${asset} destinationAddress:`, destinationAddress);
   const observeSwapScheduledEvent = observeEvent(
     ':SwapScheduled',
-    chainflip,
+    'chainflip',
     (event) =>
       event.data.destinationAddress[destinationChain]?.toLowerCase() ===
       observeDestinationAddress.toLowerCase(),
@@ -77,7 +77,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
 
   // we need to manually create the swap channel and observe the relative event
   // because we want to use a separate broker to not interfere with other tests
-  const addressPromise = observeEvent('swapping:SwapDepositAddressReady', chainflip, (event) => {
+  const addressPromise = observeEvent('swapping:SwapDepositAddressReady', 'chainflip', (event) => {
     // Find deposit address for the right swap by looking at destination address:
     const destAddressEvent = event.data.destinationAddress[shortChainFromAsset(swapAsset)];
     if (!destAddressEvent) return false;
@@ -173,7 +173,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   );
   const observeWithdrawalRequested = observeEvent(
     'swapping:WithdrawalRequested',
-    chainflip,
+    'chainflip',
     (event) =>
       event.data.destinationAddress[chain]?.toLowerCase() ===
       observeWithdrawalAddress.toLowerCase(),
@@ -187,7 +187,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   console.log(`Withdrawal requested, egressId: ${withdrawalRequestedEvent.data.egressId}`);
   const BatchBroadcastRequestedEvent = await observeEvent(
     ':BatchBroadcastRequested',
-    chainflip,
+    'chainflip',
     (event) =>
       event.data.egressIds.some(
         (egressId: EgressId) =>

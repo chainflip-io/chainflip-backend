@@ -8,7 +8,6 @@ import {
 } from '@chainflip/cli';
 import { HDNodeWallet, Wallet, getDefaultProvider } from 'ethers';
 import {
-  getChainflipApi,
   observeBalanceIncrease,
   observeEvent,
   getContractAddress,
@@ -83,8 +82,6 @@ export async function performSwapViaContract(
   swapTag?: string,
   messageMetadata?: CcmDepositMetadata,
 ): Promise<ContractSwapParams> {
-  await using api = await getChainflipApi();
-
   const tag = swapTag ?? '';
 
   const srcChain = chainFromAsset(sourceAsset);
@@ -131,7 +128,7 @@ export async function performSwapViaContract(
       wallet,
       messageMetadata,
     );
-    await observeEvent('swapping:SwapScheduled', api, (event) => {
+    await observeEvent('swapping:SwapScheduled', 'chainflip', (event) => {
       if ('Vault' in event.data.origin) {
         const sourceAssetMatches = sourceAsset === (event.data.sourceAsset as Asset);
         const destAssetMatches = destAsset === (event.data.destinationAsset as Asset);

@@ -1,6 +1,6 @@
 import { BN } from '@polkadot/util';
 import { aliceKeyringPair } from '../shared/polkadot_keyring';
-import { Event, getPolkadotApi, polkadotSigningMutex, sleep } from '../shared/utils';
+import { Event, deferredPromise, getPolkadotApi, polkadotSigningMutex } from '../shared/utils';
 
 // TODO: Move getPolkadotApi and other stuff from utils to here
 
@@ -15,42 +15,40 @@ export async function handleDispatchError(result: any) {
         error: new Uint8Array(Buffer.from(dispatchError.module.error.slice(2), 'hex')),
       };
       const { docs, name, section } = polkadot.registry.findMetaError(errorIndex);
-      throw new Error('dispatchError:' + section + '.' + name + ': ' + docs);
-    } else {
-      throw new Error('dispatchError: ' + JSON.stringify(dispatchError));
+      return new Error('dispatchError:' + section + '.' + name + ': ' + docs);
     }
+
+    return new Error('dispatchError: ' + JSON.stringify(dispatchError));
   }
+
+  return null;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function submitAndGetEvent(call: any, eventMatch: any): Promise<Event> {
   const alice = await aliceKeyringPair();
-  let done = false;
-  let event: Event = { name: '', data: [], block: 0, event_index: 0 };
+
+  const { promise, resolve, reject } = deferredPromise<Event>();
+
   await polkadotSigningMutex.runExclusive(async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await call.signAndSend(alice, { nonce: -1 }, async (result: any) => {
-      if (result.dispatchError) {
-        done = true;
-      }
-      await handleDispatchError(result);
-      if (result.isInBlock) {
+      const error = await handleDispatchError(result);
+
+      if (error) {
+        reject(error);
+      } else if (result.isInBlock) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         result.events.forEach((eventRecord: any) => {
           if (eventMatch.is(eventRecord.event)) {
-            event = eventRecord.event;
-            done = true;
+            resolve(eventRecord.event);
           }
         });
-        if (!done) {
-          done = true;
-          throw new Error('Event was not found in block: ' + JSON.stringify(eventMatch));
-        }
+
+        reject(new Error('Event was not found in block: ' + JSON.stringify(eventMatch)));
       }
     });
   });
-  while (!done) {
-    await sleep(1000);
-  }
-  return event;
+
+  return promise;
 }

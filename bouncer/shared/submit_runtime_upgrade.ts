@@ -24,7 +24,7 @@ export async function submitRuntimeUpgradeWithRestrictions(
 
   if (tryRuntime) {
     console.log('Running try-runtime before submitting the runtime upgrade.');
-    await tryRuntimeUpgrade('last-n', chainflip, networkUrl, wasmPath);
+    await tryRuntimeUpgrade('last-n', networkUrl, wasmPath);
   }
 
   let versionPercentRestriction;
@@ -42,8 +42,8 @@ export async function submitRuntimeUpgradeWithRestrictions(
   console.log('Submitted runtime upgrade. Waiting for the runtime upgrade to complete.');
 
   const event = await Promise.race([
-    observeEvent('system:CodeUpdated', chainflip),
-    observeEvent('governance:FailedExecution', chainflip),
+    observeEvent('system:CodeUpdated', 'chainflip'),
+    observeEvent('governance:FailedExecution', 'chainflip'),
   ]);
 
   if (event.name.method === 'FailedExecution') {

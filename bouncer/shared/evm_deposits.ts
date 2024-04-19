@@ -7,7 +7,6 @@ import {
   observeBadEvents,
   sleep,
   observeEvent,
-  getChainflipApi,
   getContractAddress,
   decodeDotAddressForContract,
   defaultAssetAmounts,
@@ -39,8 +38,6 @@ async function testDepositEvm(sourceAsset: Asset, destAsset: Asset) {
 }
 
 async function testSuccessiveNativeDeposits(sourceAsset: Asset, destAsset: Asset) {
-  let stopObserving = false;
-
   const swapParams = await testSwap(
     sourceAsset,
     destAsset,
@@ -49,10 +46,11 @@ async function testSuccessiveNativeDeposits(sourceAsset: Asset, destAsset: Asset
     ' DuplicatedDepositTest',
   );
 
+  const abortController = new AbortController();
   // Check the Deposit contract is deployed. It is assumed that the funds are fetched immediately.
   const observingSwapScheduled = observeBadEvents(
     'swapping:SwapScheduled',
-    () => stopObserving,
+    abortController.signal,
     (event) => {
       if ('DepositChannel' in event.data.origin) {
         const channelMatches =
@@ -70,7 +68,7 @@ async function testSuccessiveNativeDeposits(sourceAsset: Asset, destAsset: Asset
   // Trying to witness the fetch BroadcastSuccess is just unnecessarily complicated here.
   await sleep(100000);
 
-  stopObserving = true;
+  abortController.abort();
   await observingSwapScheduled;
 }
 
@@ -106,13 +104,11 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
   );
 
   let eventCounter = 0;
-  let stopObserve = false;
-
-  await using chainflip = await getChainflipApi();
+  const abortController = new AbortController();
 
   const observingEvent = observeEvent(
     'swapping:SwapScheduled',
-    chainflip,
+    'chainflip',
     (event) => {
       if (
         'Vault' in event.data.origin &&
@@ -124,7 +120,7 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
       }
       return false;
     },
-    () => stopObserve,
+    abortController.signal,
   );
 
   while (eventCounter === 0) {
@@ -135,7 +131,7 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
   // Wait some more time after the first event to ensure another one is not emited
   await sleep(30000);
 
-  stopObserve = true;
+  abortController.abort();
   await observingEvent;
 }
 

@@ -1,5 +1,4 @@
 import Web3 from 'web3';
-import { ApiPromise } from '@polkadot/api';
 import {
   Connection,
   NonceAccount,
@@ -14,15 +13,17 @@ import {
   encodeSolAddress,
   getSolConnection,
   observeEvent,
+  getChainflipApi,
 } from '../shared/utils';
 import { signAndSendTxSol } from '../shared/send_sol';
 import { getSolanaVaultIdl, getKeyManagerAbi } from '../shared/contract_interfaces';
 import { signAndSendTxEvm } from '../shared/send_evm';
 import { submitGovernanceExtrinsic } from './cf_governance';
 
-export async function initializeArbitrumChain(chainflip: ApiPromise) {
+export async function initializeArbitrumChain() {
+  await using chainflip = await getChainflipApi();
   console.log('Initializing Arbitrum');
-  const arbInitializationRequest = observeEvent('arbitrumVault:ChainInitialized', chainflip);
+  const arbInitializationRequest = observeEvent('arbitrumVault:ChainInitialized', 'chainflip');
   await submitGovernanceExtrinsic(chainflip.tx.arbitrumVault.initializeChain());
   await arbInitializationRequest;
 }

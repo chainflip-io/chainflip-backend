@@ -38,7 +38,7 @@ async function main(): Promise<void> {
   console.log('=== Performing initial Vault setup ===');
 
   // Step 1
-  await initializeArbitrumChain(chainflip);
+  await initializeArbitrumChain();
 
   // Step 2
   console.log('Forcing rotation');
@@ -49,13 +49,16 @@ async function main(): Promise<void> {
 
   const dotActivationRequest = observeEvent(
     'polkadotVault:AwaitingGovernanceActivation',
-    chainflip,
+    'chainflip',
   );
-  const btcActivationRequest = observeEvent('bitcoinVault:AwaitingGovernanceActivation', chainflip);
+  const btcActivationRequest = observeEvent(
+    'bitcoinVault:AwaitingGovernanceActivation',
+    'chainflip',
+  );
 
   const arbActivationRequest = observeEvent(
     'arbitrumVault:AwaitingGovernanceActivation',
-    chainflip,
+    'chainflip',
   );
   // const solActivationRequest = observeEvent('solanaVault:AwaitingGovernanceActivation', chainflip);
   const dotKey = (await dotActivationRequest).data.newPublicKey;
@@ -90,7 +93,7 @@ async function main(): Promise<void> {
   };
   const { vaultAddress, vaultExtrinsicIndex } = await createPolkadotVault();
 
-  const proxyAdded = observeEvent('proxy:ProxyAdded', polkadot);
+  const proxyAdded = observeEvent('proxy:ProxyAdded', 'polkadot');
 
   // Step 5
   console.log('Rotating Proxy and Funding Accounts.');
@@ -175,7 +178,7 @@ async function main(): Promise<void> {
 
   // Confirmation
   console.log('Waiting for new epoch...');
-  await observeEvent('validator:NewEpoch', chainflip);
+  await observeEvent('validator:NewEpoch', 'chainflip');
 
   console.log('=== New Epoch ===');
   console.log('=== Vault Setup completed ===');

@@ -29,7 +29,7 @@ export async function rangeOrder(ccy: Asset, amount: number) {
   console.log('Setting up ' + ccy + ' range order');
   const orderCreatedEvent = observeEvent(
     'liquidityPools:RangeOrderUpdated',
-    chainflip,
+    'chainflip',
     (event) =>
       event.data.lp === lp.address && event.data.baseAsset === ccy && event.data.id === String(0),
   );

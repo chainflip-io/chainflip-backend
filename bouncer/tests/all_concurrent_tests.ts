@@ -16,9 +16,12 @@ async function runAllConcurrentTests() {
   const givenNumberOfNodes = match ? parseInt(match[0]) : null;
   const numberOfNodes = givenNumberOfNodes ?? 1;
 
-  let stopObserving = false;
-  const broadcastAborted = observeBadEvents(':BroadcastAborted', () => stopObserving);
-  const feeDeficitRefused = observeBadEvents(':TransactionFeeDeficitRefused', () => stopObserving);
+  const abortController = new AbortController();
+  const broadcastAborted = observeBadEvents(':BroadcastAborted', abortController.signal);
+  const feeDeficitRefused = observeBadEvents(
+    ':TransactionFeeDeficitRefused',
+    abortController.signal,
+  );
 
   // Tests that work with any number of nodes
   const tests = [
@@ -41,7 +44,7 @@ async function runAllConcurrentTests() {
   await Promise.all([...tests]);
 
   // Gracefully exit the broadcast abort observer
-  stopObserving = true;
+  abortController.abort();
   await Promise.all([broadcastAborted, feeDeficitRefused]);
 }
 

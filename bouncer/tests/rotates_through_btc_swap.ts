@@ -15,7 +15,7 @@ async function rotatesThroughBtcSwap() {
 
   await submitGovernanceExtrinsic(chainflip.tx.validator.forceRotation());
   console.log(`Vault rotation initiated. Awaiting new epoch.`);
-  await observeEvent('validator:NewEpoch', chainflip);
+  await observeEvent('validator:NewEpoch', 'chainflip');
   console.log('Vault rotated!');
 
   await doPerformSwap(swapParams, tag);

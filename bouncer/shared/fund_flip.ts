@@ -11,11 +11,10 @@ import {
   getWhaleKey,
   assetDecimals,
 } from './utils';
-import { observeEvent, getChainflipApi, amountToFineAmount } from '../shared/utils';
+import { observeEvent, amountToFineAmount } from '../shared/utils';
 import { approveErc20 } from './approve_erc20';
 
 export async function fundFlip(scAddress: string, flipAmount: string) {
-  await using chainflip = await getChainflipApi();
   await cryptoWaitReady();
 
   await approveErc20('Flip', getContractAddress('Ethereum', 'GATEWAY'), flipAmount);
@@ -70,7 +69,7 @@ export async function fundFlip(scAddress: string, flipAmount: string) {
   );
   await observeEvent(
     'funding:Funded',
-    chainflip,
+    'chainflip',
     (event) => hexPubkeyToFlipAddress(pubkey) === event.data.accountId,
   );
 }
