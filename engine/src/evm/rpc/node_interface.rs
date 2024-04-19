@@ -8,7 +8,7 @@ use super::{EvmRpcClient, EvmRpcSigningClient};
 
 abigen!(NodeInterface, "$CF_ARB_CONTRACT_ABI_ROOT/INodeInterface.json");
 
-// This is a kind of precompile on Arbitrum (althoug not deployed on chain)
+// This is a kind of precompile on Arbitrum (although not deployed on chain)
 const NODE_INTERFACE_ADDRESS: &str = "0x00000000000000000000000000000000000000C8";
 
 #[async_trait::async_trait]
