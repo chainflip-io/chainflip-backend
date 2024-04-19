@@ -83,11 +83,10 @@ impl ArbitrumTrackedData {
 }
 
 pub mod fees {
-	// TODO: Revisit these values so they match a multiplier of one with the REFERENCE_GAS_LIMIT
-	pub const BASE_COST_PER_BATCH: u128 = 5_200_000;
-	pub const GAS_COST_PER_FETCH: u128 = 1_700_000;
-	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 1_500_000;
-	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 1_800_000;
+	pub const BASE_COST_PER_BATCH: u128 = 60_000;
+	pub const GAS_COST_PER_FETCH: u128 = 30_000;
+	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
+	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
 }
 
 impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {
