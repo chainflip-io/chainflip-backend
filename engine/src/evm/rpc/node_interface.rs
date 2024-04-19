@@ -1,5 +1,4 @@
 use ethers::prelude::*;
-// use ethers::types::U64;
 use sp_core::H160;
 use std::str::FromStr;
 
