@@ -36,7 +36,24 @@ jobs:
           name: chainflip-backend-bin-ubuntu-${{ matrix.ubuntu_version }}
           path: ./target/release
 
-      - name: Get date 📅
+      - name: Download latest release binaries
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: release-berghain.yml
+          name: chainflip-backend-bin
+          github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
+          path: latest-release
+
+      # TODO: Once dylib is building on release 1.3, we can make this step real
+      - name: TMP, move dylib into the target/release. The dylib doesn't exist on release 1.3 yet.
+        run: |
+          mv old-engine-dylib/*.so target/release/
+          ls -la latest-release
+        #  This is what we would do
+        # run: |
+        #   mv latest-release/*.so target/release/
+
+      - name: Get date
         id: get-date
         run: |
           echo "date=$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
@@ -44,7 +61,7 @@ jobs:
       - name: Build global packages 🌍
         run: |
           cargo deb -v --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ inputs.network }}
-          cargo deb -v --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ inputs.network }}
+          cargo deb -v --no-build --no-strip -p engine-runner --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ inputs.network }}
           cargo deb -v --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.get-date.outputs.date }}"
           cargo deb -v --no-build --no-strip -p chainflip-broker-api --deb-revision "${{ steps.get-date.outputs.date }}"
           cargo deb -v --no-build --no-strip -p chainflip-lp-api --deb-revision "${{ steps.get-date.outputs.date }}"
