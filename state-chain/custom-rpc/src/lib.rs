@@ -217,14 +217,29 @@ pub struct RpcAuctionState {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum SwapFeeKind {
+	Network,
+}
+
+impl SwapFeeKind {
+	fn into_fee<T: Into<U256>>(self, amount: T, asset: Asset) -> SwapFee {
+		SwapFee::new(amount, asset, self)
+	}
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct SwapFee {
 	pub amount: U256,
+	#[serde(flatten)]
 	pub asset: Asset,
+	#[serde(rename = "type")]
+	pub kind: SwapFeeKind,
 }
 
 impl SwapFee {
-	fn new<T: Into<U256>>(amount: T, asset: Asset) -> Self {
-		Self { amount: amount.into(), asset }
+	fn new<T: Into<U256>>(amount: T, asset: Asset, kind: SwapFeeKind) -> Self {
+		Self { amount: amount.into(), asset, kind }
 	}
 }
 
@@ -242,7 +257,7 @@ impl From<SwapOutput> for RpcSwapOutput {
 		Self {
 			intermediary: swap_output.intermediary.map(Into::into),
 			output: swap_output.output.into(),
-			included_fees: vec![SwapFee::new(swap_output.network_fee, Asset::Usdc)],
+			included_fees: vec![SwapFeeKind::Network.into_fee(swap_output.network_fee, Asset::Usdc)],
 		}
 	}
 }
@@ -546,7 +561,7 @@ pub trait CustomApi {
 		from_asset: Asset,
 		to_asset: Asset,
 		amount: NumberOrHex,
-		limit_orders: Option<Vec<(i32, U256)>>,
+		additional_limit_orders: Option<Vec<(i32, U256)>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutput>;
 	#[method(name = "required_asset_ratio_for_range_order")]
@@ -1071,7 +1086,7 @@ where
 		from_asset: Asset,
 		to_asset: Asset,
 		amount: NumberOrHex,
-		limit_orders: Option<Vec<(i32, U256)>>,
+		additional_limit_orders: Option<Vec<(i32, U256)>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutput> {
 		self.client
@@ -1090,7 +1105,7 @@ where
 						}
 					})
 					.map_err(|str| anyhow::anyhow!(str))?,
-				limit_orders,
+				additional_limit_orders,
 			)
 			.map_err(to_rpc_error)
 			.and_then(|result| result.map_err(map_dispatch_error))
@@ -1973,5 +1988,16 @@ mod test {
 			vec![BoostPoolFeesRpc::new(Asset::Btc, 10, boost_details_1())];
 
 		insta::assert_json_snapshot!(val);
+	}
+
+	#[test]
+	fn test_swap_output_serialization() {
+		let swap_output = RpcSwapOutput {
+			output: NumberOrHex::Hex(1_000_000_000_000_000_000u128.into()),
+			intermediary: Some(NumberOrHex::Hex(1_000_000u128.into())),
+			included_fees: vec![SwapFeeKind::Network.into_fee(1_000u128, Asset::Usdc)],
+		};
+
+		insta::assert_snapshot!(serde_json::to_value(swap_output).unwrap());
 	}
 }
