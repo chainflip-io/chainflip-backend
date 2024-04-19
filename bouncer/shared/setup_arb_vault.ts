@@ -6,7 +6,7 @@ import { initializeArbitrumChain, initializeArbitrumContracts } from './initiali
 // This cuts out the pieces of arb activation from `bouncer/commands/setup_vaults.ts`
 // So we can use it for the upgrade test.
 export async function setupArbVault(): Promise<void> {
-  const chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipApi();
 
   const arbClient = new Web3(getEvmEndpoint('Arbitrum'));
 

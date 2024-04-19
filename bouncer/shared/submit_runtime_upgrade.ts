@@ -18,7 +18,7 @@ export async function submitRuntimeUpgradeWithRestrictions(
 ) {
   const runtimeWasm = await readRuntimeWasmFromFile(wasmPath);
 
-  const chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipApi();
 
   const networkUrl = process.env.CF_NODE_ENDPOINT ?? 'ws://localhost:9944';
 
