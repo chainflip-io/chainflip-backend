@@ -14,7 +14,7 @@ mod old {
 mod new {
 	#[engine_proc_macros::link_engine_library_version("1.4.0")]
 	extern "C" {
-		pub fn cfe_entrypoint(
+		fn cfe_entrypoint(
 			c_args: engine_upgrade_utils::CStrArray,
 			start_from: u32,
 		) -> engine_upgrade_utils::ExitStatus;
@@ -37,7 +37,7 @@ fn main() -> anyhow::Result<()> {
 
 	// Attempt to run the new version first
 	let exit_status_new_first =
-		unsafe { new::cfe_entrypoint(c_str_array.clone(), engine_upgrade_utils::NO_START_FROM) };
+		new::cfe_entrypoint(c_str_array.clone(), engine_upgrade_utils::NO_START_FROM);
 	println!("The new version has exited with exit status: {:?}", exit_status_new_first);
 
 	match exit_status_new_first.status_code {
@@ -48,12 +48,10 @@ fn main() -> anyhow::Result<()> {
 			// The new version is not compatible yet, so run the old version
 			println!("The latest version {NEW_VERSION} is not yet compatible. Running the old version {OLD_VERSION}...");
 			let compatible_args = engine_upgrade_utils::args_compatible_with_old(env_args);
-			let exit_status_old = unsafe {
-				old::cfe_entrypoint(
-					CStrArray::from_rust_strings(&compatible_args)?,
-					engine_upgrade_utils::NO_START_FROM,
-				)
-			};
+			let exit_status_old = old::cfe_entrypoint(
+				CStrArray::from_rust_strings(&compatible_args)?,
+				engine_upgrade_utils::NO_START_FROM,
+			);
 
 			println!("Old version has exited with exit status: {:?}", exit_status_old);
 
@@ -61,8 +59,7 @@ fn main() -> anyhow::Result<()> {
 			if exit_status_old.status_code == engine_upgrade_utils::NO_LONGER_COMPATIBLE {
 				println!("Switching to the new version {NEW_VERSION} after the old version {OLD_VERSION} is no longer compatible.");
 				// Attempt to run the new version again
-				let exit_status_new =
-					unsafe { new::cfe_entrypoint(c_str_array, exit_status_old.at_block) };
+				let exit_status_new = new::cfe_entrypoint(c_str_array, exit_status_old.at_block);
 				println!("New version has exited with exit status: {:?}", exit_status_new);
 			} else {
 				println!(
