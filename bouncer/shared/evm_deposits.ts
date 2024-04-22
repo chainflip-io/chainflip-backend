@@ -108,11 +108,9 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
   let eventCounter = 0;
   let stopObserve = false;
 
-  await using chainflip = await getChainflipApi();
-
   const observingEvent = observeEvent(
     'swapping:SwapScheduled',
-    chainflip,
+    await getChainflipApi(),
     (event) => {
       if (
         'Vault' in event.data.origin &&

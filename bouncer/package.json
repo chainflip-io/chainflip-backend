@@ -33,15 +33,15 @@
   "devDependencies": {
     "@types/minimist": "^1.2.2",
     "@types/node": "18",
-    "@typescript-eslint/eslint-plugin": "^7.7.0",
-    "@typescript-eslint/parser": "^7.7.0",
-    "eslint": "^8.57.0",
+    "@typescript-eslint/eslint-plugin": "^5.43.0",
+    "@typescript-eslint/parser": "^5.59.7",
+    "eslint": "^8.41.0",
     "eslint-config-airbnb-base": "^15.0.0",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-import": "^2.29.1",
-    "prettier": "^3.2.5",
-    "tsx": "^4.7.2",
-    "typescript": "^5.4.5"
+    "eslint-config-prettier": "^8.8.0",
+    "eslint-plugin-import": "^2.25.2",
+    "prettier": "^2.8.8",
+    "tsx": "^3.12.7",
+    "typescript": "^5.0.4"
   },
   "type": "module"
 }

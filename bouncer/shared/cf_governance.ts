@@ -3,6 +3,8 @@ import Keyring from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { getChainflipApi, handleSubstrateError, snowWhiteMutex } from './utils';
 
+const chainflip = await getChainflipApi();
+
 const snowWhiteUri =
   process.env.SNOWWHITE_URI ??
   'market outdoor rubber basic simple banana resist quarter lab random hurdle cruise';
@@ -17,7 +19,6 @@ export async function submitGovernanceExtrinsic(
   extrinsic: SubmittableExtrinsic<'promise'>,
   preAuthorise = 0,
 ) {
-  await using chainflip = await getChainflipApi();
   return snowWhiteMutex.runExclusive(async () =>
     chainflip.tx.governance
       .proposeGovernanceExtrinsic(extrinsic, preAuthorise)

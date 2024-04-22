@@ -22,7 +22,7 @@ async function main(): Promise<void> {
   const expectedEvents = args.succeed_on.split(',');
   const printEvent = expectedEvents.length === 1;
   const badEvents = args.fail_on ? args.fail_on.split(',') : [];
-  await using api = await getChainflipApi();
+  const api = await getChainflipApi();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await api.query.system.events((events: any[]) => {

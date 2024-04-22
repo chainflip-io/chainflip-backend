@@ -3,10 +3,10 @@ import { aliceKeyringPair } from '../shared/polkadot_keyring';
 import { Event, getPolkadotApi, polkadotSigningMutex, sleep } from '../shared/utils';
 
 // TODO: Move getPolkadotApi and other stuff from utils to here
+const polkadot = await getPolkadotApi();
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function handleDispatchError(result: any) {
-  await using polkadot = await getPolkadotApi();
+export function handleDispatchError(result: any) {
   if (result.dispatchError) {
     const dispatchError = JSON.parse(result.dispatchError);
     if (dispatchError.module) {
@@ -29,11 +29,11 @@ export async function submitAndGetEvent(call: any, eventMatch: any): Promise<Eve
   let event: Event = { name: '', data: [], block: 0, event_index: 0 };
   await polkadotSigningMutex.runExclusive(async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await call.signAndSend(alice, { nonce: -1 }, async (result: any) => {
+    await call.signAndSend(alice, { nonce: -1 }, (result: any) => {
       if (result.dispatchError) {
         done = true;
       }
-      await handleDispatchError(result);
+      handleDispatchError(result);
       if (result.isInBlock) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         result.events.forEach((eventRecord: any) => {
