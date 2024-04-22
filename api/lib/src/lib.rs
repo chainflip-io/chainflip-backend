@@ -348,15 +348,13 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		source_asset: Asset,
 		destination_asset: Asset,
 		destination_address: EncodedAddress,
-		broker_commission: BrokerFees<
-			<state_chain_runtime::Runtime as frame_system::Config>::AccountId,
-		>,
+		broker_commission: BrokerFees<AccountId32>,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 	) -> Result<SwapDepositAddress> {
 		let (_tx_hash, events, header, ..) = self
 			.submit_signed_extrinsic_with_dry_run(
-				pallet_cf_swapping::Call::request_swap_deposit_address {
+				pallet_cf_swapping::Call::request_swap_deposit_address_v2 {
 					source_asset,
 					destination_asset,
 					destination_address,

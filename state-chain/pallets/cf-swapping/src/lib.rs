@@ -7,7 +7,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, Beneficiary, BrokerFees, ChannelId, ForeignChain, SwapId,
-	SwapLeg, TransactionHash, STABLE_ASSET,
+	SwapLeg, TransactionHash, MAX_BENEFICIARIES, STABLE_ASSET,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -20,6 +20,7 @@ use frame_support::{
 		traits::{Get, Saturating},
 		DispatchError, Permill,
 	},
+	testing_prelude::bounded_vec,
 	transactional,
 };
 use frame_system::pallet_prelude::*;
@@ -314,7 +315,7 @@ pub mod pallet {
 			source_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 			boost_fee: BasisPoints,
 			channel_opening_fee: T::Amount,
-			beneficiaries: Vec<Beneficiary<T::AccountId>>,
+			beneficiaries: BoundedVec<Beneficiary<T::AccountId>, ConstU32<MAX_BENEFICIARIES>>,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
@@ -427,7 +428,7 @@ pub mod pallet {
 		/// Brokers should withdraw their earned fees before deregistering.
 		EarnedFeesNotWithdrawn,
 		/// The provided list of broker contains an account which is not registered as Broker
-		SubBrokerAccountIsNotABroker,
+		BeneficiaryAccountIsNotABroker,
 	}
 
 	#[pallet::hooks]
@@ -476,6 +477,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [SwapDepositAddressReady](Event::SwapDepositAddressReady)
+		#[deprecated(note = "Use `request_swap_deposit_address_v2` instead.")]
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::request_swap_deposit_address())]
 		pub fn request_swap_deposit_address(
@@ -483,77 +485,19 @@ pub mod pallet {
 			source_asset: Asset,
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
-			broker_commission: BrokerFees<T::AccountId>,
+			broker_commission: BasisPoints,
 			channel_metadata: Option<CcmChannelMetadata>,
 			boost_fee: BasisPoints,
 		) -> DispatchResult {
-			ensure!(T::SafeMode::get().deposits_enabled, Error::<T>::DepositsDisabled);
-			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
-			let mut broker_fees: Vec<Beneficiary<T::AccountId>> = vec![];
-			let total_bps: BasisPoints;
-			match broker_commission {
-				BrokerFees::Single(broker_bps) => {
-					ensure!(broker_bps <= 1000, Error::<T>::BrokerCommissionBpsTooHigh);
-					total_bps = broker_bps;
-					if broker_bps > 0 {
-						broker_fees.push(Beneficiary { account: broker.clone(), bps: broker_bps });
-					}
-				},
-				BrokerFees::Multiple(ref fees_bps) => {
-					for element in fees_bps.clone() {
-						// we need to check that all provided Account are registered as broker
-						ensure!(
-							T::AccountRoleRegistry::has_account_role(
-								&element.account,
-								AccountRole::Broker
-							),
-							Error::<T>::SubBrokerAccountIsNotABroker
-						);
-					}
-					total_bps = fees_bps.iter().fold(0, |acc, element| acc + element.bps);
-					ensure!(total_bps <= 1000, Error::<T>::BrokerCommissionBpsTooHigh);
-					broker_fees = (*fees_bps)
-						.clone()
-						.into_iter()
-						.filter(|elem| elem.bps > 0)
-						.collect::<Vec<_>>();
-				},
-			}
-
-			let destination_address_internal =
-				Self::validate_destination_address(&destination_address, destination_asset)?;
-
-			if channel_metadata.is_some() {
-				let destination_chain: ForeignChain = destination_asset.into();
-				ensure!(destination_chain.ccm_support(), Error::<T>::CcmUnsupportedForTargetChain);
-			}
-
-			let (channel_id, deposit_address, expiry_height, channel_opening_fee) =
-				T::DepositHandler::request_swap_deposit_address(
-					source_asset,
-					destination_asset,
-					destination_address_internal,
-					broker_fees.clone(),
-					broker,
-					channel_metadata.clone(),
-					boost_fee,
-				)?;
-
-			Self::deposit_event(Event::<T>::SwapDepositAddressReady {
-				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
-				destination_address,
+			Self::request_swap_deposit_address_v2(
+				origin,
 				source_asset,
 				destination_asset,
-				channel_id,
-				broker_commission_rate: total_bps,
+				destination_address,
+				BrokerFees::Single(broker_commission),
 				channel_metadata,
-				source_chain_expiry_block: expiry_height,
 				boost_fee,
-				channel_opening_fee,
-				beneficiaries: broker_fees,
-			});
-
-			Ok(())
+			)
 		}
 
 		/// Brokers can withdraw their collected fees.
@@ -729,6 +673,92 @@ pub mod pallet {
 			let _ = EarnedBrokerFees::<T>::clear_prefix(&account_id, u32::MAX, None);
 
 			T::AccountRoleRegistry::deregister_as_broker(&account_id)?;
+
+			Ok(())
+		}
+
+		/// Request a swap deposit address.
+		///
+		/// ## Events
+		///
+		/// - [SwapDepositAddressReady](Event::SwapDepositAddressReady)
+		#[pallet::call_index(10)]
+		#[pallet::weight(T::WeightInfo::request_swap_deposit_address())]
+		pub fn request_swap_deposit_address_v2(
+			origin: OriginFor<T>,
+			source_asset: Asset,
+			destination_asset: Asset,
+			destination_address: EncodedAddress,
+			broker_commission: BrokerFees<T::AccountId>,
+			channel_metadata: Option<CcmChannelMetadata>,
+			boost_fee: BasisPoints,
+		) -> DispatchResult {
+			ensure!(T::SafeMode::get().deposits_enabled, Error::<T>::DepositsDisabled);
+			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
+			let (beneficiaries, total_bps): (
+				BoundedVec<Beneficiary<T::AccountId>, ConstU32<MAX_BENEFICIARIES>>,
+				BasisPoints,
+			) = match broker_commission {
+				BrokerFees::Single(broker_bps) =>
+					if broker_bps > 0 {
+						(
+							bounded_vec![Beneficiary { account: broker.clone(), bps: broker_bps }],
+							broker_bps,
+						)
+					} else {
+						(bounded_vec![], broker_bps)
+					},
+				BrokerFees::Multiple(ref fees_bps) => {
+					for Beneficiary { account, bps: _ } in fees_bps.clone() {
+						ensure!(
+							T::AccountRoleRegistry::has_account_role(&account, AccountRole::Broker),
+							Error::<T>::BeneficiaryAccountIsNotABroker
+						);
+					}
+					(
+						(*fees_bps)
+							.clone()
+							.into_iter()
+							.filter(|Beneficiary { account: _, bps }| *bps > 0)
+							.collect::<Vec<_>>().try_into().expect("The provided beneficiaries vec cannot have more than MAX_BENEFICIARIES elements"),
+						fees_bps.iter().fold(0, |acc, Beneficiary { account: _, bps }| acc + bps),
+					)
+				},
+			};
+			ensure!(total_bps <= 1000, Error::<T>::BrokerCommissionBpsTooHigh);
+
+			let destination_address_internal =
+				Self::validate_destination_address(&destination_address, destination_asset)?;
+
+			if channel_metadata.is_some() {
+				let destination_chain: ForeignChain = destination_asset.into();
+				ensure!(destination_chain.ccm_support(), Error::<T>::CcmUnsupportedForTargetChain);
+			}
+
+			let (channel_id, deposit_address, expiry_height, channel_opening_fee) =
+				T::DepositHandler::request_swap_deposit_address(
+					source_asset,
+					destination_asset,
+					destination_address_internal,
+					beneficiaries.clone(),
+					broker,
+					channel_metadata.clone(),
+					boost_fee,
+				)?;
+
+			Self::deposit_event(Event::<T>::SwapDepositAddressReady {
+				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
+				destination_address,
+				source_asset,
+				destination_asset,
+				channel_id,
+				broker_commission_rate: total_bps,
+				channel_metadata,
+				source_chain_expiry_block: expiry_height,
+				boost_fee,
+				channel_opening_fee,
+				beneficiaries,
+			});
 
 			Ok(())
 		}
@@ -1109,7 +1139,10 @@ pub mod pallet {
 			to: Asset,
 			amount: AssetAmount,
 			destination_address: ForeignChainAddress,
-			broker_commission: Vec<Beneficiary<Self::AccountId>>,
+			broker_commission: BoundedVec<
+				Beneficiary<Self::AccountId>,
+				ConstU32<MAX_BENEFICIARIES>,
+			>,
 			channel_id: ChannelId,
 		) -> SwapId {
 			// Permill maxes out at 100% so this is safe.
@@ -1137,10 +1170,10 @@ pub mod pallet {
 				SwapType::Swap(destination_address.clone()),
 			);
 
-			for elem in broker_commission {
-				EarnedBrokerFees::<T>::mutate(&elem.account, from, |earned_fees| {
+			for Beneficiary { account, bps } in broker_commission {
+				EarnedBrokerFees::<T>::mutate(&account, from, |earned_fees| {
 					earned_fees.saturating_accrue(
-						Permill::from_parts(elem.bps as u32 * BASIS_POINTS_PER_MILLION) * amount,
+						Permill::from_parts(bps as u32 * BASIS_POINTS_PER_MILLION) * amount,
 					)
 				});
 			}

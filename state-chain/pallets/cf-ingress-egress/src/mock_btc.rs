@@ -7,7 +7,7 @@ pub use cf_chains::{
 };
 pub use cf_primitives::{
 	chains::{assets, Bitcoin},
-	Asset, AssetAmount,
+	Asset, AssetAmount, MAX_BENEFICIARIES,
 };
 use cf_primitives::{Beneficiary, ChannelId, SwapId};
 use cf_test_utilities::impl_test_helpers;
@@ -26,7 +26,9 @@ use cf_traits::{
 	},
 	NetworkEnvironmentProvider, OnDeposit, SwapDepositHandler,
 };
-use frame_support::{derive_impl, traits::UnfilteredDispatchable};
+use frame_support::{
+	derive_impl, pallet_prelude::ConstU32, traits::UnfilteredDispatchable, BoundedVec,
+};
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
@@ -84,7 +86,7 @@ impl SwapDepositHandler for MockSwapDepositHandlerBtc {
 		_to: Asset,
 		_amount: AssetAmount,
 		_destination_address: ForeignChainAddress,
-		_broker_commission: Vec<Beneficiary<Self::AccountId>>,
+		_broker_commission: BoundedVec<Beneficiary<Self::AccountId>, ConstU32<MAX_BENEFICIARIES>>,
 		_channel_id: ChannelId,
 	) -> SwapId {
 		unimplemented!()

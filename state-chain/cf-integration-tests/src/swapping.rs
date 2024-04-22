@@ -220,7 +220,7 @@ fn basic_pool_setup_provision_and_swap() {
 		set_limit_order(&DORIS, Asset::Flip, Asset::Usdc, 0, Some(0), 500_000);
 		set_range_order(&DORIS, Asset::Flip, Asset::Usdc, 0, Some(-10..10), 1_000_000);
 
-		assert_ok!(Swapping::request_swap_deposit_address(
+		assert_ok!(Swapping::request_swap_deposit_address_v2(
 			RuntimeOrigin::signed(ZION.clone()),
 			Asset::Eth,
 			Asset::Flip,
@@ -324,7 +324,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 			cf_parameters: Default::default(),
 		};
 
-		assert_ok!(Swapping::request_swap_deposit_address(
+		assert_ok!(Swapping::request_swap_deposit_address_v2(
 			RuntimeOrigin::signed(ZION.clone()),
 			Asset::Flip,
 			Asset::Usdc,

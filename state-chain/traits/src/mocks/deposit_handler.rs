@@ -3,8 +3,9 @@ use crate::{Chainflip, DepositApi};
 use cf_chains::{
 	address::ForeignChainAddress, dot::PolkadotAccountId, CcmChannelMetadata, Chain, ForeignChain,
 };
-use cf_primitives::{chains::assets::any, BasisPoints, Beneficiary, ChannelId};
+use cf_primitives::{chains::assets::any, BasisPoints, Beneficiary, ChannelId, MAX_BENEFICIARIES};
 use codec::{Decode, Encode};
+use frame_support::{pallet_prelude::ConstU32, sp_runtime::BoundedVec};
 use scale_info::TypeInfo;
 use sp_std::marker::PhantomData;
 
@@ -25,7 +26,7 @@ pub struct SwapChannel<C: Chain, T: Chainflip> {
 	pub source_asset: <C as Chain>::ChainAsset,
 	pub destination_asset: any::Asset,
 	pub destination_address: ForeignChainAddress,
-	pub broker_commission: Vec<Beneficiary<T::AccountId>>,
+	pub broker_commission: BoundedVec<Beneficiary<T::AccountId>, ConstU32<MAX_BENEFICIARIES>>,
 	pub broker_id: <T as frame_system::Config>::AccountId,
 	pub channel_metadata: Option<CcmChannelMetadata>,
 	pub boost_fee: BasisPoints,
@@ -117,7 +118,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 		source_asset: <C as Chain>::ChainAsset,
 		destination_asset: cf_primitives::Asset,
 		destination_address: ForeignChainAddress,
-		broker_commission: Vec<Beneficiary<Self::AccountId>>,
+		broker_commission: BoundedVec<Beneficiary<Self::AccountId>, ConstU32<MAX_BENEFICIARIES>>,
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,

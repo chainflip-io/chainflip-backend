@@ -1,7 +1,7 @@
-use cf_chains::Chain;
-use cf_primitives::{Beneficiary, SwapId};
-
 use crate::{EgressApi, SwapDepositHandler};
+use cf_chains::Chain;
+use cf_primitives::{Beneficiary, SwapId, MAX_BENEFICIARIES};
+use frame_support::{pallet_prelude::ConstU32, BoundedVec};
 
 /// Simple mock that applies 1:1 swap ratio to all pairs.
 pub struct MockSwapDepositHandler<T>(sp_std::marker::PhantomData<T>);
@@ -19,7 +19,7 @@ where
 		to: cf_primitives::Asset,
 		amount: cf_primitives::AssetAmount,
 		destination_address: cf_chains::ForeignChainAddress,
-		_broker_commission: Vec<Beneficiary<Self::AccountId>>,
+		_broker_commission: BoundedVec<Beneficiary<Self::AccountId>, ConstU32<MAX_BENEFICIARIES>>,
 		_channel_id: cf_primitives::ChannelId,
 	) -> SwapId {
 		let _ = E::schedule_egress(

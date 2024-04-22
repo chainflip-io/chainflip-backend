@@ -6,10 +6,11 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::{
 	traits::{IdentifyAccount, Verify},
-	MultiSignature, Percent, RuntimeDebug,
+	BoundedVec, MultiSignature, Percent, RuntimeDebug,
 };
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_core::ConstU32;
 use sp_std::{
 	cmp::{Ord, PartialOrd},
 	vec::Vec,
@@ -322,14 +323,36 @@ fn is_more_recent_semver() {
 	ensure_left_is_more_recent(ver(1, 1, 0), ver(1, 0, 2));
 }
 
+pub const MAX_BENEFICIARIES: u32 = 4;
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum BrokerFees<Id> {
 	Single(BasisPoints),
-	Multiple(Vec<Beneficiary<Id>>),
+	Multiple(BoundedVec<Beneficiary<Id>, ConstU32<MAX_BENEFICIARIES>>),
 }
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
 pub struct Beneficiary<Id> {
 	pub account: Id,
 	pub bps: BasisPoints,
+}
+
+impl<Id> From<BasisPoints> for BrokerFees<Id> {
+	fn from(value: BasisPoints) -> Self {
+		BrokerFees::Single(value)
+	}
+}
+
+impl<Id: std::fmt::Debug> TryFrom<Vec<(Id, BasisPoints)>> for BrokerFees<Id> {
+	type Error = &'static str;
+	fn try_from(value: Vec<(Id, BasisPoints)>) -> Result<Self, Self::Error> {
+		Ok(BrokerFees::Multiple(
+			value
+				.into_iter()
+				.map(|(id, bps)| Beneficiary { account: id, bps })
+				.collect::<Vec<_>>()
+				.try_into()
+				.expect("Provided Vec should contain max MAX_BENEFICIARIES elements"),
+		))
+	}
 }

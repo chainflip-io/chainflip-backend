@@ -27,12 +27,15 @@ mod benchmarks {
 		// A non-zero balance is required to pay for the channel opening fee.
 		T::FeePayment::mint_to_account(&caller, (5 * FLIPPERINOS_PER_FLIP).into());
 
-		let origin = RawOrigin::Signed(caller);
-		let call = Call::<T>::request_swap_deposit_address {
+		let origin = RawOrigin::Signed(caller.clone());
+		let call = Call::<T>::request_swap_deposit_address_v2 {
 			source_asset: Asset::Eth,
 			destination_asset: Asset::Usdc,
 			destination_address: EncodedAddress::benchmark_value(),
-			broker_commission: cf_primitives::BrokerFees::Single(0),
+			broker_commission: cf_primitives::BrokerFees::Multiple(bounded_vec![
+				Beneficiary { account: caller.clone(), bps: 10 },
+				Beneficiary { account: caller, bps: 10 },
+			]),
 			boost_fee: 0,
 			channel_metadata: None,
 		};

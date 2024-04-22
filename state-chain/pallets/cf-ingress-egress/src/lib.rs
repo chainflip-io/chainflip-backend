@@ -31,7 +31,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	Asset, BasisPoints, Beneficiary, BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex,
-	ForeignChain, PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId,
+	ForeignChain, PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId, MAX_BENEFICIARIES,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -252,7 +252,7 @@ pub mod pallet {
 		Swap {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
-			broker_commission: Vec<Beneficiary<AccountId>>,
+			broker_commission: BoundedVec<Beneficiary<AccountId>, ConstU32<MAX_BENEFICIARIES>>,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
@@ -1944,7 +1944,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		source_asset: TargetChainAsset<T, I>,
 		destination_asset: Asset,
 		destination_address: ForeignChainAddress,
-		broker_commission: Vec<Beneficiary<Self::AccountId>>,
+		broker_commission: BoundedVec<Beneficiary<Self::AccountId>, ConstU32<MAX_BENEFICIARIES>>,
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
