@@ -1,6 +1,8 @@
 use core::str::FromStr;
 
 use borsh::{BorshDeserialize, BorshSerialize};
+#[cfg(test)]
+use ed25519_dalek;
 use generic_array::{typenum::U64, GenericArray};
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
@@ -684,21 +686,23 @@ impl TryFrom<Vec<u8>> for Pubkey {
 #[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize, Copy)]
 pub struct Signature(GenericArray<u8, U64>);
 
-// impl Signature {
-// 	pub(self) fn verify_verbose(
-// 		&self,
-// 		pubkey_bytes: &[u8],
-// 		message_bytes: &[u8],
-// 	) -> Result<(), ed25519_dalek::SignatureError> {
-// 		let publickey = ed25519_dalek::PublicKey::from_bytes(pubkey_bytes)?;
-// 		let signature = self.0.as_slice().try_into()?;
-// 		publickey.verify_strict(message_bytes, &signature)
-// 	}
+impl Signature {
+	#[cfg(test)]
+	pub(self) fn verify_verbose(
+		&self,
+		pubkey_bytes: &[u8],
+		message_bytes: &[u8],
+	) -> Result<(), ed25519_dalek::SignatureError> {
+		let publickey = ed25519_dalek::PublicKey::from_bytes(pubkey_bytes)?;
+		let signature = self.0.as_slice().try_into()?;
+		publickey.verify_strict(message_bytes, &signature)
+	}
 
-// 	pub fn verify(&self, pubkey_bytes: &[u8], message_bytes: &[u8]) -> bool {
-// 		self.verify_verbose(pubkey_bytes, message_bytes).is_ok()
-// 	}
-// }
+	#[cfg(test)]
+	pub fn verify(&self, pubkey_bytes: &[u8], message_bytes: &[u8]) -> bool {
+		self.verify_verbose(pubkey_bytes, message_bytes).is_ok()
+	}
+}
 
 impl From<[u8; SIGNATURE_BYTES]> for Signature {
 	fn from(signature: [u8; SIGNATURE_BYTES]) -> Self {
@@ -1476,20 +1480,6 @@ mod tests {
 			),
 			vec![114u8, 247u8, 72u8, 110u8, 145u8, 65u8, 236u8, 153u8]
 		);
-	}
-
-	#[test]
-	fn playground() {
-		println!(
-			"{:?}",
-			hex::encode(
-				ProgramInstruction::get_instruction(
-					&VaultProgram::FetchNative { seed: vec![1u8, 2u8, 3u8], bump: 255 },
-					vec![],
-				)
-				.data
-			)
-		)
 	}
 
 	// Test taken from https://docs.rs/solana-sdk/latest/src/solana_sdk/transaction/mod.rs.html#1354

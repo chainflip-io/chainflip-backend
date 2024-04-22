@@ -28,7 +28,6 @@ bech32 = { default-features = false, version = '0.9.1' }
 base58 = '0.2.0'
 
 # Solana
-#solana-sdk = { path = "../../../solana/sdk", optional = true }
 borsh = { version = "1.2.1", default_features = false, features = [
   "derive",
   "unstable__schema",
@@ -46,8 +45,8 @@ bincode = { version = "2.0.0-rc.3", default-features = false, features = [
   "alloc",
   "serde",
 ] }
-#curve25519-dalek = { git = "https://github.com/solana-labs/curve25519-dalek.git", rev = "b500cdc2a920cd5bff9e2dd974d7b97349d61464", optional = true }
-# solana-sdk = { version = "1.17.15", optional = true }
+curve25519-dalek = { git = "https://github.com/solana-labs/curve25519-dalek.git", rev = "b500cdc2a920cd5bff9e2dd974d7b97349d61464", optional = true }
+
 
 # Other
 anyhow = { version = '1.0', default-features = false, optional = true }
@@ -108,6 +107,7 @@ std = [
   'dep:ss58-registry',
   'dep:anyhow',
   'strum/std',
+  'curve25519-dalek/std',
 ]
 runtime-benchmarks = [
   'cf-primitives/runtime-benchmarks',
