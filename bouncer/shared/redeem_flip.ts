@@ -36,7 +36,7 @@ export async function redeemFlip(
   ethAddress: HexString,
   flipAmount: RedeemAmount,
 ): Promise<string> {
-  await using chainflip = await getChainflipApi();
+  const chainflip = await getChainflipApi();
   const keyring = new Keyring({ type: 'sr25519' });
   keyring.setSS58Format(2112);
   const flipWallet = keyring.createFromUri('//' + flipSeed);

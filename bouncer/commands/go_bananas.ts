@@ -204,7 +204,7 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
 }
 
 async function launchTornado() {
-  await using chainflip = await getChainflipApi();
+  const chainflip = await getChainflipApi();
   const epoch = (
     await chainflip.query.bitcoinThresholdSigner.currentKeyEpoch()
   ).toJSON()! as number;

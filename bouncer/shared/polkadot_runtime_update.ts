@@ -19,6 +19,7 @@ import { testSwap } from './swapping';
 
 const POLKADOT_REPO_URL = `https://github.com/chainflip-io/polkadot.git`;
 const PROPOSAL_AMOUNT = '100';
+const polkadot = await getPolkadotApi();
 const polkadotEndpoint = 'http://127.0.0.1:9947';
 
 // The spec version of the runtime wasm file that is in the repo at bouncer/test_data/polkadot_runtime_xxxx.wasm
@@ -34,7 +35,6 @@ let swapsStarted = 0;
 /// Pushes a polkadot runtime update using the democracy pallet.
 /// preimage -> proposal -> vote -> democracy pass -> scheduler dispatch runtime update.
 export async function pushPolkadotRuntimeUpdate(wasmPath: string): Promise<void> {
-  await using polkadot = await getPolkadotApi();
   console.log('-- Pushing polkadot runtime update --');
 
   // Read the runtime wasm from file
@@ -118,7 +118,7 @@ export async function pushPolkadotRuntimeUpdate(wasmPath: string): Promise<void>
   const schedulerDispatchedEvent = await observeSchedulerDispatched;
   if (schedulerDispatchedEvent.data.result.Err) {
     console.log('Runtime update failed');
-    await handleDispatchError({
+    handleDispatchError({
       dispatchError: JSON.stringify({ module: schedulerDispatchedEvent.data.result.Err.Module }),
     });
     process.exit(-1);

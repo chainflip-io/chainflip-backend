@@ -13,7 +13,7 @@ import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 async function main(): Promise<void> {
   const signaturesCount = process.argv[2];
 
-  await using api = await getChainflipApi();
+  const api = await getChainflipApi();
   const stressTest = api.tx.ethereumBroadcaster.stressTest(signaturesCount);
   const sudoCall = api.tx.governance.callAsSudo(stressTest);
 

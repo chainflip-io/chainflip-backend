@@ -15,7 +15,7 @@ import { observeEvent, getChainflipApi, amountToFineAmount } from '../shared/uti
 import { approveErc20 } from './approve_erc20';
 
 export async function fundFlip(scAddress: string, flipAmount: string) {
-  await using chainflip = await getChainflipApi();
+  const chainflip = await getChainflipApi();
   await cryptoWaitReady();
 
   await approveErc20('Flip', getContractAddress('Ethereum', 'GATEWAY'), flipAmount);
