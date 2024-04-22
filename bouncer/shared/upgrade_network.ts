@@ -58,12 +58,16 @@ async function incompatibleUpgradeNoBuild(
 
   const SELECTED_NODES = numberOfNodes === 1 ? 'bashful' : 'bashful doc dopey';
 
+  // We need to kill the engine process before starting the new engine (engine-runner)
+  // Since the new engine contains the old one.
+  execSync(`kill $(ps aux | grep chainflip-engine | grep -v grep | awk '{print $2}')`);
+
   console.log('Starting all the engines');
 
   const nodeCount = numberOfNodes + '-node';
   execWithLog(`${localnetInitPath}/scripts/start-all-engines.sh`, 'start-all-engines-pre-upgrade', {
     INIT_RUN: 'false',
-    LOG_SUFFIX: '-upgrade',
+    LOG_SUFFIX: '-pre-upgrade',
     NODE_COUNT: nodeCount,
     SELECTED_NODES,
     LOCALNET_INIT_DIR: localnetInitPath,
@@ -79,6 +83,10 @@ async function incompatibleUpgradeNoBuild(
   console.log(
     'Check that the old engine has now shut down, and that the new engine is now running.',
   );
+
+  // TODO: add some tests here. After this point. If the upgrade doesn't work.
+  // but below, we effectively restart the engine before running any tests it's possible that 
+  // we don't catch the error here.
 
   // Ensure the runtime upgrade is finalised.
   await sleep(10000);
@@ -137,7 +145,7 @@ async function incompatibleUpgradeNoBuild(
     'start-all-engines-post-upgrade',
     {
       INIT_RUN: 'false',
-      LOG_SUFFIX: '-upgrade',
+      LOG_SUFFIX: '-post-upgrade',
       NODE_COUNT: nodeCount,
       SELECTED_NODES,
       LOCALNET_INIT_DIR: localnetInitPath,
@@ -290,7 +298,7 @@ export async function upgradeNetworkPrebuilt(
     cleanOldVersion = oldVersion.match(versionRegex)[0];
   }
 
-  const cfeBinaryVersion = execSync(`${binariesPath}/chainflip-engine --version`).toString();
+  const cfeBinaryVersion = execSync(`${binariesPath}/engine-runner --version`).toString();
   const cfeVersion = cfeBinaryVersion.match(versionRegex)[0];
   console.log("CFE version we're upgrading to: " + cfeVersion);
 
