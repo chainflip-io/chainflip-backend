@@ -1,6 +1,6 @@
 use crate::*;
 use cf_chains::DepositChannel;
-use frame_support::{testing_prelude::bounded_vec, traits::OnRuntimeUpgrade};
+use frame_support::traits::OnRuntimeUpgrade;
 
 mod old {
 	use super::*;
@@ -70,10 +70,12 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 					action: ChannelAction::Swap {
 						destination_asset,
 						destination_address,
-						broker_commission: bounded_vec![Beneficiary {
+						broker_commission: vec![Beneficiary {
 							account: broker_id,
 							bps: broker_commission_bps,
-						}],
+						}]
+						.try_into()
+						.unwrap(),
 					},
 					boost_fee: old_channel.boost_fee,
 					boost_status: old_channel.boost_status,
@@ -198,10 +200,9 @@ mod migration_tests {
 					ChannelAction::Swap {
 						destination_asset: Asset::Eth,
 						destination_address: ForeignChainAddress::Eth(H160([5u8; 20])),
-						broker_commission: bounded_vec![Beneficiary {
-							account: broker_address,
-							bps: 15
-						}]
+						broker_commission: vec![Beneficiary { account: broker_address, bps: 15 }]
+							.try_into()
+							.unwrap()
 					}
 				);
 			}

@@ -32,10 +32,14 @@ mod benchmarks {
 			source_asset: Asset::Eth,
 			destination_asset: Asset::Usdc,
 			destination_address: EncodedAddress::benchmark_value(),
-			broker_commission: cf_primitives::BrokerFees::Multiple(bounded_vec![
-				Beneficiary { account: caller.clone(), bps: 10 },
-				Beneficiary { account: caller, bps: 10 },
-			]),
+			broker_commission: cf_primitives::BrokerFees::Multiple(
+				vec![
+					Beneficiary { account: caller.clone(), bps: 10 },
+					Beneficiary { account: caller, bps: 10 },
+				]
+				.try_into()
+				.unwrap(),
+			),
 			boost_fee: 0,
 			channel_metadata: None,
 		};

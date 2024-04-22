@@ -20,7 +20,6 @@ use frame_support::{
 		traits::{Get, Saturating},
 		DispatchError, Permill,
 	},
-	testing_prelude::bounded_vec,
 	transactional,
 };
 use frame_system::pallet_prelude::*;
@@ -702,11 +701,13 @@ pub mod pallet {
 				BrokerFees::Single(broker_bps) =>
 					if broker_bps > 0 {
 						(
-							bounded_vec![Beneficiary { account: broker.clone(), bps: broker_bps }],
+							vec![Beneficiary { account: broker.clone(), bps: broker_bps }]
+								.try_into()
+								.unwrap(),
 							broker_bps,
 						)
 					} else {
-						(bounded_vec![], broker_bps)
+						(vec![].try_into().unwrap(), broker_bps)
 					},
 				BrokerFees::Multiple(ref fees_bps) => {
 					for Beneficiary { account, bps: _ } in fees_bps.clone() {

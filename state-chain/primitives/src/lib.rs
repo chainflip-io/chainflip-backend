@@ -343,7 +343,7 @@ impl<Id> From<BasisPoints> for BrokerFees<Id> {
 	}
 }
 
-impl<Id: std::fmt::Debug> TryFrom<Vec<(Id, BasisPoints)>> for BrokerFees<Id> {
+impl<Id: core::fmt::Debug> TryFrom<Vec<(Id, BasisPoints)>> for BrokerFees<Id> {
 	type Error = &'static str;
 	fn try_from(value: Vec<(Id, BasisPoints)>) -> Result<Self, Self::Error> {
 		Ok(BrokerFees::Multiple(
