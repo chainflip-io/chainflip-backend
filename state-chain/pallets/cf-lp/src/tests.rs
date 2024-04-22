@@ -70,7 +70,7 @@ fn liquidity_providers_can_move_assets_internally() {
 
 		// Cannot move assets to a non-LP account.
 		assert_noop!(
-			LiquidityProvider::move_asset(
+			LiquidityProvider::transfer_asset(
 				RuntimeOrigin::signed((LP_ACCOUNT).into()),
 				100,
 				Asset::Eth,
@@ -79,18 +79,20 @@ fn liquidity_providers_can_move_assets_internally() {
 			Error::<Test>::DestinationAccountNotLiquidityProvider
 		);
 
-		assert_ok!(LiquidityProvider::move_asset(
+		assert_ok!(LiquidityProvider::transfer_asset(
 			RuntimeOrigin::signed((LP_ACCOUNT).into()),
 			100,
 			Asset::Eth,
 			AccountId::from(LP_ACCOUNT_2),
 		));
-		System::assert_last_event(RuntimeEvent::LiquidityProvider(crate::Event::AssetMoved {
-			from: AccountId::from(LP_ACCOUNT),
-			to: AccountId::from(LP_ACCOUNT_2),
-			asset: Asset::Eth,
-			amount: 100,
-		}));
+		System::assert_last_event(RuntimeEvent::LiquidityProvider(
+			crate::Event::AssetTransferred {
+				from: AccountId::from(LP_ACCOUNT),
+				to: AccountId::from(LP_ACCOUNT_2),
+				asset: Asset::Eth,
+				amount: 100,
+			},
+		));
 		// Expect the balances to be moved between the LP accounts.
 		assert_eq!(FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth), Some(900));
 		assert_eq!(FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT_2), Asset::Eth), Some(100));

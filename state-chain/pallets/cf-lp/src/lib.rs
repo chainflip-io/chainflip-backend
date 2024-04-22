@@ -152,7 +152,7 @@ pub mod pallet {
 			asset: Asset,
 			amount_credited: AssetAmount,
 		},
-		AssetMoved {
+		AssetTransferred {
 			from: T::AccountId,
 			to: T::AccountId,
 			asset: Asset,
@@ -226,8 +226,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// For when the user wants to withdraw their free balances out of the chain.
-		/// Requires a valid foreign chain address.
+		/// Withdraw some amount of an asset from the free balance to an external address.
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::withdraw_asset())]
 		pub fn withdraw_asset(
@@ -236,7 +235,7 @@ pub mod pallet {
 			asset: Asset,
 			destination_address: EncodedAddress,
 		) -> DispatchResult {
-			Self::move_or_withdrawal(
+			Self::transfer_or_withdraw(
 				origin,
 				amount,
 				asset,
@@ -315,33 +314,37 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// For when the user wants to move their free balances to another lp account. Requires a
-		/// valid internal account. If an account is provided, the assets are getting moved
-		/// internally.
+		/// Transfer some amount of an asset from the free balance to the free balance of another LP
+		/// account on the Chainflip network.
 		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::withdraw_asset())]
-		pub fn move_asset(
+		pub fn transfer_asset(
 			origin: OriginFor<T>,
 			amount: AssetAmount,
 			asset: Asset,
 			destination: T::AccountId,
 		) -> DispatchResult {
-			Self::move_or_withdrawal(origin, amount, asset, AccountOrAddress::Internal(destination))
+			Self::transfer_or_withdraw(
+				origin,
+				amount,
+				asset,
+				AccountOrAddress::Internal(destination),
+			)
 		}
 	}
 }
 
 impl<T: Config> Pallet<T> {
-	pub fn move_or_withdrawal(
+	pub fn transfer_or_withdraw(
 		origin: OriginFor<T>,
 		amount: AssetAmount,
 		asset: Asset,
 		destination: AccountOrAddress<T::AccountId>,
 	) -> DispatchResult {
 		ensure!(T::SafeMode::get().withdrawal_enabled, Error::<T>::WithdrawalsDisabled);
-		if amount > 0 {
-			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+		let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
+		if amount > 0 {
 			match destination {
 				AccountOrAddress::Internal(destination_account) => {
 					// Check if the destination account has the role liquidity provider.
@@ -361,7 +364,7 @@ impl<T: Config> Pallet<T> {
 					// Credit the asset to the destination account.
 					Self::try_credit_account(&destination_account, asset, amount)?;
 
-					Self::deposit_event(Event::AssetMoved {
+					Self::deposit_event(Event::AssetTransferred {
 						from: account_id,
 						to: destination_account,
 						asset,

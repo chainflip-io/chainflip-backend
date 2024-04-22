@@ -256,7 +256,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		})
 	}
 
-	async fn move_asset(
+	async fn transfer_asset(
 		&self,
 		amount: AssetAmount,
 		asset: Asset,
@@ -266,7 +266,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 			bail!("Amount must be greater than 0");
 		}
 		let (tx_hash, ..) = self
-			.submit_signed_extrinsic(RuntimeCall::from(pallet_cf_lp::Call::move_asset {
+			.submit_signed_extrinsic(RuntimeCall::from(pallet_cf_lp::Call::transfer_asset {
 				amount,
 				asset,
 				destination,

@@ -122,8 +122,8 @@ pub trait Rpc {
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<EgressId>>;
 
-	#[method(name = "move_asset")]
-	async fn move_asset(
+	#[method(name = "transfer_asset")]
+	async fn transfer_asset(
 		&self,
 		amount: NumberOrHex,
 		asset: Asset,
@@ -296,7 +296,7 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	/// Returns an egress id
-	async fn move_asset(
+	async fn transfer_asset(
 		&self,
 		amount: NumberOrHex,
 		asset: Asset,
@@ -305,7 +305,7 @@ impl RpcServer for RpcServerImpl {
 		Ok(self
 			.api
 			.lp_api()
-			.move_asset(try_parse_number_or_hex(amount)?, asset, destination_account)
+			.transfer_asset(try_parse_number_or_hex(amount)?, asset, destination_account)
 			.await?)
 	}
 
