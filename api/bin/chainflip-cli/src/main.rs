@@ -69,7 +69,7 @@ async fn run_cli() -> Result<()> {
 									params.destination_asset.into(),
 									&params.destination_address,
 								)?,
-								api::BrokerFees::Single(params.broker_commission),
+								params.broker_commission.into(),
 								None,
 								params.boost_fee,
 							)
