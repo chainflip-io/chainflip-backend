@@ -216,6 +216,8 @@ pub struct RpcAuctionState {
 #[derive(Serialize, Deserialize)]
 pub enum SwapFeeKind {
 	Network,
+	Ingress,
+	Egress,
 }
 
 impl SwapFeeKind {
@@ -250,10 +252,21 @@ pub struct RpcSwapOutput {
 
 impl From<SwapOutput> for RpcSwapOutput {
 	fn from(swap_output: SwapOutput) -> Self {
+		let mut included_fees =
+			vec![SwapFeeKind::Network.into_fee(swap_output.network_fee, Asset::Usdc)];
+
+		if let Some((asset, fee)) = swap_output.ingress_fee {
+			included_fees.push(SwapFeeKind::Ingress.into_fee(fee, asset));
+		}
+
+		if let Some((asset, fee)) = swap_output.egress_fee {
+			included_fees.push(SwapFeeKind::Egress.into_fee(fee, asset));
+		}
+
 		Self {
 			intermediary: swap_output.intermediary.map(Into::into),
 			output: swap_output.output.into(),
-			included_fees: vec![SwapFeeKind::Network.into_fee(swap_output.network_fee, Asset::Usdc)],
+			included_fees,
 		}
 	}
 }
@@ -1722,11 +1735,25 @@ mod test {
 
 	#[test]
 	fn test_swap_output_serialization() {
-		let swap_output = RpcSwapOutput {
-			output: NumberOrHex::Hex(1_000_000_000_000_000_000u128.into()),
-			intermediary: Some(NumberOrHex::Hex(1_000_000u128.into())),
-			included_fees: vec![SwapFeeKind::Network.into_fee(1_000u128, Asset::Usdc)],
-		};
+		let swap_output: RpcSwapOutput = SwapOutput {
+			output: 1_000_000_000_000_000_000u128,
+			intermediary: Some(1_000_000u128),
+			network_fee: 1_000u128,
+			ingress_fee: Some((Asset::Btc, 1_000u128)),
+			egress_fee: Some((Asset::Flip, 1_000u128)),
+		}
+		.into();
+
+		insta::assert_snapshot!(serde_json::to_value(swap_output).unwrap());
+
+		let swap_output: RpcSwapOutput = SwapOutput {
+			output: 1_000_000_000_000_000_000u128,
+			intermediary: Some(1_000_000u128),
+			network_fee: 1_000u128,
+			ingress_fee: Some((Asset::Btc, 1_000u128)),
+			egress_fee: None,
+		}
+		.into();
 
 		insta::assert_snapshot!(serde_json::to_value(swap_output).unwrap());
 	}

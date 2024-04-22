@@ -393,11 +393,11 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 		// Do some swaps to collect fees.
 		assert_eq!(
 			LiquidityPools::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 10_000).unwrap(),
-			SwapOutput { intermediary: None, output: 5_987u128, network_fee: 20 }
+			SwapOutput::new(None, 5_987u128, 20),
 		);
 		assert_eq!(
 			LiquidityPools::swap_with_network_fee(Asset::Eth, STABLE_ASSET, 10_000).unwrap(),
-			SwapOutput { intermediary: None, output: 5_987u128, network_fee: 12 }
+			SwapOutput::new(None, 5_987u128, 12),
 		);
 
 		// Updates the fees to the new value and collect any fees on current positions.
@@ -582,11 +582,11 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 		// Do some swaps to collect fees.
 		assert_eq!(
 			LiquidityPools::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 202_200).unwrap(),
-			SwapOutput { intermediary: None, output: 99_894u128, network_fee: 404 }
+			SwapOutput::new(None, 99_894u128, 404),
 		);
 		assert_eq!(
 			LiquidityPools::swap_with_network_fee(Asset::Eth, STABLE_ASSET, 18_000).unwrap(),
-			SwapOutput { intermediary: None, output: 9_071, network_fee: 18 }
+			SwapOutput::new(None, 9_071, 18),
 		);
 
 		// Updates the fees to the new value and collect any fees on current positions.
@@ -690,11 +690,11 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 		// Do some swaps to collect fees.
 		assert_eq!(
 			LiquidityPools::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 5_000).unwrap(),
-			SwapOutput { intermediary: None, output: 2_989u128, network_fee: 10 }
+			SwapOutput::new(None, 2_989u128, 10),
 		);
 		assert_eq!(
 			LiquidityPools::swap_with_network_fee(Asset::Eth, STABLE_ASSET, 5_000).unwrap(),
-			SwapOutput { intermediary: None, output: 2_998u128, network_fee: 6 }
+			SwapOutput::new(None, 2_998u128, 6),
 		);
 
 		// Updates the fees to the new value. No fee is collected for range orders.

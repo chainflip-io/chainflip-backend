@@ -1266,6 +1266,14 @@ impl_runtime_apis! {
 			amount: AssetAmount,
 			additional_limit_orders: Option<Vec<(Tick, U256)>>,
 		) -> Result<SwapOutput, DispatchErrorWithMessage> {
+			let ingress_fee = Self::cf_ingress_fee(from);
+
+			let swap_input_amount = if let Some(fee) = ingress_fee {
+				amount.checked_sub(fee).ok_or("Deposit is lower than ingress fee")?
+			} else {
+				amount
+			};
+
 			if let Some(limit_orders) = additional_limit_orders {
 				let (asset_pair, side) = AssetPair::from_swap(from, to).ok_or("Invalid asset pair")?;
 
@@ -1281,7 +1289,20 @@ impl_runtime_apis! {
 					Ok::<_, DispatchErrorWithMessage>(())
 				})?;
 			}
-			LiquidityPools::swap_with_network_fee(from, to, amount).map_err(Into::into)
+
+			let mut swap_output = LiquidityPools::swap_with_network_fee(from, to, swap_input_amount)
+				.map_err(Into::<DispatchErrorWithMessage>::into)?;
+
+			let egress_fee = Self::cf_egress_fee(to);
+
+			if let Some(fee) = egress_fee {
+				swap_output.output = swap_output.output.checked_sub(fee).ok_or("Swap output amount is lower than egress fee")?;
+			}
+
+			swap_output.ingress_fee = ingress_fee.map(|fee| (from, fee));
+			swap_output.egress_fee = egress_fee.map(|fee| (to, fee));
+
+			Ok(swap_output)
 		}
 
 		fn cf_pool_info(base_asset: Asset, quote_asset: Asset) -> Result<PoolInfo, DispatchErrorWithMessage> {

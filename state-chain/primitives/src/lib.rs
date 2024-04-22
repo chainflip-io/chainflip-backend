@@ -200,6 +200,18 @@ pub struct SwapOutput {
 	pub output: AssetAmount,
 	// the USDC network fee
 	pub network_fee: AssetAmount,
+	pub ingress_fee: Option<(Asset, AssetAmount)>,
+	pub egress_fee: Option<(Asset, AssetAmount)>,
+}
+
+impl SwapOutput {
+	pub fn new(
+		intermediary: Option<AssetAmount>,
+		output: AssetAmount,
+		network_fee: AssetAmount,
+	) -> Self {
+		Self { intermediary, output, network_fee, ingress_fee: None, egress_fee: None }
+	}
 }
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo)]

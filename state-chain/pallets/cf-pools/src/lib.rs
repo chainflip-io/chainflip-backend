@@ -1533,18 +1533,18 @@ impl<T: Config> Pallet<T> {
 			(_, STABLE_ASSET) => {
 				let output = Self::swap_single_leg(from, to, input_amount)?;
 				let (output, network_fee) = Self::take_network_fee(output);
-				SwapOutput { intermediary: None, output, network_fee }
+				SwapOutput::new(None, output, network_fee)
 			},
 			(STABLE_ASSET, _) => {
 				let (input_amount, network_fee) = Self::take_network_fee(input_amount);
 				let output = Self::swap_single_leg(from, to, input_amount)?;
-				SwapOutput { intermediary: None, output, network_fee }
+				SwapOutput::new(None, output, network_fee)
 			},
 			_ => {
 				let intermediary = Self::swap_single_leg(from, STABLE_ASSET, input_amount)?;
 				let (intermediary, network_fee) = Self::take_network_fee(intermediary);
 				let output = Self::swap_single_leg(STABLE_ASSET, to, intermediary)?;
-				SwapOutput { intermediary: Some(intermediary), output, network_fee }
+				SwapOutput::new(Some(intermediary), output, network_fee)
 			},
 		})
 	}
