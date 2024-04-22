@@ -229,7 +229,9 @@ where
 	DotFinalisedSource::new(dot_client.clone())
 		.strictly_monotonic()
 		.logging("finalised block produced")
-		.then(|header| async move { header.data.iter().filter_map(filter_map_events).collect() })
+		.then(|header| async move {
+			header.data.iter().filter_map(filter_map_events).collect::<Vec<_>>()
+		})
 		.chunk_by_vault(vaults, scope)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
