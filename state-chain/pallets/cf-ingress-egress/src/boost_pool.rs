@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests;
 
+use frame_support::DefaultNoBound;
 use sp_runtime::{
 	helpers_128bit::multiply_by_rational_with_rounding, Rounding, SaturatedConversion,
 };
@@ -10,17 +11,10 @@ use super::*;
 
 const SCALE_FACTOR: u128 = 1000;
 /// Represents 1/SCALE_FACTOR of Asset amount as a way to gain extra precision.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, DefaultNoBound)]
 struct ScaledAmount<C: Chain> {
 	val: u128,
 	_phantom: PhantomData<C>,
-}
-
-// Manually implementing Default because deriving didn't work due to generic parameter:
-impl<C: Chain> Default for ScaledAmount<C> {
-	fn default() -> Self {
-		Self { val: Default::default(), _phantom: Default::default() }
-	}
 }
 
 impl<C: Chain> PartialOrd for ScaledAmount<C> {
@@ -139,6 +133,10 @@ where
 		self.available_amount.into_chain_amount()
 	}
 
+	/// Attempt to use pool's available funds to boost up to `amount_to_boost`. Returns
+	/// (boosted_amount, boost_fee), where "boosted amount" is the amount provided by the pool plus
+	/// the boost fee. For example, in the (likely common) case of having sufficient funds in a
+	/// single pool the boosted amount will exactly equal the amount prewitnessed.
 	pub(crate) fn provide_funds_for_boosting(
 		&mut self,
 		prewitnessed_deposit_id: PrewitnessedDepositId,
