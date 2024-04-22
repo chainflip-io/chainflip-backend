@@ -83,7 +83,7 @@ export async function performSwapViaContract(
   swapTag?: string,
   messageMetadata?: CcmDepositMetadata,
 ): Promise<ContractSwapParams> {
-  await using api = await getChainflipApi();
+  const api = await getChainflipApi();
 
   const tag = swapTag ?? '';
 

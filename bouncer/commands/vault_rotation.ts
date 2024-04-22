@@ -9,7 +9,7 @@ import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { getChainflipApi, runWithTimeout } from '../shared/utils';
 
 async function main(): Promise<void> {
-  await using chainflip = await getChainflipApi();
+  const chainflip = await getChainflipApi();
 
   console.log('Forcing rotation');
   await submitGovernanceExtrinsic(chainflip.tx.validator.forceRotation());

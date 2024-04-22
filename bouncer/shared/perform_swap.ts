@@ -42,7 +42,7 @@ export async function requestNewSwap(
   brokerCommissionBps?: number,
   log = true,
 ): Promise<SwapParams> {
-  await using chainflipApi = await getChainflipApi();
+  const chainflipApi = await getChainflipApi();
 
   const addressPromise = observeEvent(
     'swapping:SwapDepositAddressReady',
@@ -186,7 +186,7 @@ export async function performAndTrackSwap(
   amount?: string,
   tag?: string,
 ) {
-  await using chainflipApi = await getChainflipApi();
+  const chainflipApi = await getChainflipApi();
 
   const swapParams = await requestNewSwap(sourceAsset, destAsset, destAddress, tag);
 

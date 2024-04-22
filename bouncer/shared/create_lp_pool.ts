@@ -3,7 +3,7 @@ import { observeEvent, getChainflipApi, assetDecimals } from '../shared/utils';
 import { submitGovernanceExtrinsic } from './cf_governance';
 
 export async function createLpPool(ccy: Asset, initialPrice: number) {
-  await using chainflip = await getChainflipApi();
+  const chainflip = await getChainflipApi();
 
   if (
     (

@@ -11,11 +11,12 @@
 import { runWithTimeout, sleep, getChainflipApi } from '../shared/utils';
 
 async function main(): Promise<void> {
-  await using api = await getChainflipApi();
+  const api = await getChainflipApi();
   const expectedBlock = process.argv[2];
   while ((await api.rpc.chain.getBlockHash(expectedBlock)).every((e) => e === 0)) {
     await sleep(1000);
   }
+  console.log('Observed block no. ' + expectedBlock);
   process.exit(0);
 }
 

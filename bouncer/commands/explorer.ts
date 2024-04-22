@@ -77,7 +77,7 @@ async function processBlock(blockNumber: number, api: ApiPromise) {
 async function main() {
   const start = process.argv[2];
   const end = process.argv[3];
-  await using api = await getChainflipApi();
+  const api = await getChainflipApi();
   if (start === 'live') {
     const unsubscribe = await api.rpc.chain.subscribeNewHeads(async (header) => {
       if (end && parseInt(end) < header.number.toNumber()) {

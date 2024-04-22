@@ -272,59 +272,30 @@ export const sha256 = (data: string): Buffer => crypto.createHash('sha256').upda
 
 export { sleep };
 
-// @ts-expect-error polyfilling
-Symbol.asyncDispose ??= Symbol('asyncDispose');
-// @ts-expect-error polyfilling
-Symbol.dispose ??= Symbol('dispose');
-
-type DisposableApiPromise = ApiPromise & { [Symbol.asyncDispose](): Promise<void> };
-
 // It is important to cache WS connections because nodes seem to have a
 // limit on how many can be opened at the same time (from the same IP presumably)
 function getCachedSubstrateApi(defaultEndpoint: string) {
-  let api: DisposableApiPromise | undefined;
-  let connections = 0;
+  let api: ApiPromise | undefined;
 
-  return async (providedEndpoint?: string): Promise<DisposableApiPromise> => {
-    if (!api) {
-      const endpoint = providedEndpoint ?? defaultEndpoint;
+  return async (providedEndpoint?: string): Promise<ApiPromise> => {
+    if (api) return api;
 
-      const apiPromise = await ApiPromise.create({
-        provider: new WsProvider(endpoint),
-        noInitWarn: true,
-        types: {
-          EncodedAddress: {
-            _enum: {
-              Eth: '[u8; 20]',
-              Arb: '[u8; 20]',
-              Dot: '[u8; 32]',
-              Btc: 'Vec<u8>',
-            },
+    const endpoint = providedEndpoint ?? defaultEndpoint;
+
+    api = await ApiPromise.create({
+      provider: new WsProvider(endpoint),
+      noInitWarn: true,
+      types: {
+        EncodedAddress: {
+          _enum: {
+            Eth: '[u8; 20]',
+            Arb: '[u8; 20]',
+            Dot: '[u8; 32]',
+            Btc: 'Vec<u8>',
           },
         },
-      });
-
-      api = new Proxy(apiPromise as unknown as DisposableApiPromise, {
-        get(target, prop, receiver) {
-          if (prop === Symbol.asyncDispose) {
-            return async () => {
-              connections -= 1;
-              if (connections === 0) {
-                await Reflect.get(target, 'disconnect', receiver).call(target);
-                api = undefined;
-              }
-            };
-          }
-          if (prop === 'disconnect') {
-            return async () => {};
-          }
-
-          return Reflect.get(target, prop, receiver);
-        },
-      });
-    }
-
-    connections += 1;
+      },
+    });
 
     return api;
   };
@@ -510,7 +481,7 @@ export async function observeSwapScheduled(
   channelId: number,
   swapType?: SwapType,
 ) {
-  await using chainflipApi = await getChainflipApi();
+  const chainflipApi = await getChainflipApi();
 
   return observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
     if ('DepositChannel' in event.data.origin) {
@@ -531,8 +502,12 @@ export async function observeBadEvents(
   stopObserveEvent: () => boolean,
   eventQuery?: EventQuery,
 ) {
-  await using chainflipApi = await getChainflipApi();
-  const event = await observeEvent(eventName, chainflipApi, eventQuery, stopObserveEvent);
+  const event = await observeEvent(
+    eventName,
+    await getChainflipApi(),
+    eventQuery,
+    stopObserveEvent,
+  );
   if (event) {
     throw new Error(
       `Unexpected event emitted ${event.name.section}:${event.name.method} in block ${event.block}`,
@@ -541,7 +516,7 @@ export async function observeBadEvents(
 }
 
 export async function observeBroadcastSuccess(broadcastId: BroadcastId) {
-  await using chainflipApi = await getChainflipApi();
+  const chainflipApi = await getChainflipApi();
   const broadcaster = broadcastId[0].toLowerCase() + 'Broadcaster';
   const broadcastIdNumber = broadcastId[1];
 
@@ -909,7 +884,7 @@ type SwapRate = {
   output: string;
 };
 export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
-  await using chainflipApi = await getChainflipApi();
+  const chainflipApi = await getChainflipApi();
 
   const fineFromAmount = amountToFineAmount(fromAmount, assetDecimals(from));
   const hexPrice = (await chainflipApi.rpc(

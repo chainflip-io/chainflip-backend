@@ -1,4 +1,5 @@
 #!/usr/bin/env -S pnpm tsx
+import { ApiPromise } from '@polkadot/api';
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { exec } from 'child_process';
@@ -11,12 +12,14 @@ import {
   getChainflipApi,
 } from '../shared/utils';
 
+let chainflip: ApiPromise;
+
 async function main(): Promise<void> {
   await cryptoWaitReady();
   const keyring = new Keyring({ type: 'sr25519' });
   const lpUri = process.env.LP_URI ?? '//LP_1';
   const lp = keyring.createFromUri(lpUri);
-  await using chainflip = await getChainflipApi();
+  chainflip = await getChainflipApi();
 
   // Register Liquidity Refund Address before requesting reposit address.
   const encodedEthAddr = chainflip.createType('EncodedAddress', {
