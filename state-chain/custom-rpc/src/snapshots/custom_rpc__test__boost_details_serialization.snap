@@ -1,0 +1,40 @@
+---
+source: state-chain/custom-rpc/src/lib.rs
+expression: val
+---
+{
+  "10": {
+    "available_amount": 10000,
+    "amounts": {
+      "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT": 10000
+    },
+    "pending_boosts": {
+      "0": {
+        "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT": 200,
+        "5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt": 2000
+      },
+      "1": {
+        "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT": 1000
+      }
+    },
+    "pending_withdrawals": {}
+  },
+  "30": {
+    "available_amount": 0,
+    "amounts": {},
+    "pending_boosts": {
+      "0": {
+        "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT": 1000,
+        "5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt": 2000
+      }
+    },
+    "pending_withdrawals": {
+      "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT": [
+        0
+      ],
+      "5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt": [
+        0
+      ]
+    }
+  }
+}

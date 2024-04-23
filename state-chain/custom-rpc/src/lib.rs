@@ -299,6 +299,9 @@ pub struct SwapResponse {
 	swaps: Vec<ScheduledSwap>,
 }
 
+type BoostPoolDepthResponse = Vec<BoostPoolDepth>;
+type BoostPoolDetailsResponse = BTreeMap<u16, BoostPoolDetails>;
+
 #[rpc(server, client, namespace = "cf")]
 /// The custom RPC endpoints for the state chain node.
 pub trait CustomApi {
@@ -561,10 +564,10 @@ pub trait CustomApi {
 	) -> RpcResult<Vec<sp_core::Bytes>>;
 
 	#[method(name = "boost_pools_depth")]
-	fn cf_boost_pools_depth(&self) -> RpcResult<Vec<BoostPoolDepth>>;
+	fn cf_boost_pools_depth(&self) -> RpcResult<BoostPoolDepthResponse>;
 
 	#[method(name = "boost_pool_details")]
-	fn cf_boost_pool_details(&self, asset: Asset) -> RpcResult<BTreeMap<u16, BoostPoolDetails>>;
+	fn cf_boost_pool_details(&self, asset: Asset) -> RpcResult<BoostPoolDetailsResponse>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1478,6 +1481,8 @@ where
 
 #[cfg(test)]
 mod test {
+	use std::collections::BTreeSet;
+
 	use super::*;
 	use cf_primitives::{
 		chains::assets::{any, arb, btc, dot, eth},
@@ -1697,5 +1702,58 @@ mod test {
 		};
 
 		insta::assert_snapshot!(serde_json::to_value(env).unwrap());
+	}
+
+	#[test]
+	fn test_boost_depth_serialization() {
+		let val: BoostPoolDepthResponse = vec![
+			BoostPoolDepth {
+				asset: Asset::Flip,
+				tier: 10,
+				available_amount: 1_000_000_000 * FLIPPERINOS_PER_FLIP,
+			},
+			BoostPoolDepth { asset: Asset::Flip, tier: 30, available_amount: 0 },
+		];
+		insta::assert_json_snapshot!(val);
+	}
+
+	#[test]
+	fn test_boost_details_serialization() {
+		use sp_runtime::AccountId32;
+
+		let id1 = AccountId32::new([1; 32]);
+		let id2 = AccountId32::new([2; 32]);
+
+		let val: BoostPoolDetailsResponse = BTreeMap::from([
+			(
+				10,
+				BoostPoolDetails {
+					available_amount: 10_000,
+					amounts: BTreeMap::from([(id1.clone(), 10_000)]),
+					pending_boosts: BTreeMap::from([
+						(0, BTreeMap::from([(id1.clone(), 200), (id2.clone(), 2_000)])),
+						(1, BTreeMap::from([(id1.clone(), 1_000)])),
+					]),
+					pending_withdrawals: Default::default(),
+				},
+			),
+			(
+				30,
+				BoostPoolDetails {
+					available_amount: 0,
+					amounts: BTreeMap::from([]),
+					pending_boosts: BTreeMap::from([(
+						0,
+						BTreeMap::from([(id1.clone(), 1_000), (id2.clone(), 2_000)]),
+					)]),
+					pending_withdrawals: BTreeMap::from([
+						(id1, BTreeSet::from([0])),
+						(id2, BTreeSet::from([0])),
+					]),
+				},
+			),
+		]);
+
+		insta::assert_json_snapshot!(val);
 	}
 }
