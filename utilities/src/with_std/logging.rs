@@ -1,6 +1,8 @@
-use crate::{task_scope, Port};
+use crate::{Port};
 use serde::Deserialize;
 use tracing_subscriber::fmt::format::FmtSpan;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing::subscriber::DefaultGuard;
 use warp::{Filter, Reply};
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
@@ -83,13 +85,13 @@ macro_rules! print_start_and_end {
 /// The full syntax used for specifying filter directives used in both the REST api and in the RUST_LOG environment variable is specified here: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
 pub async fn init_json_logger(
 	settings: LoggingSettings,
-) -> impl FnOnce(&task_scope::Scope<'_, anyhow::Error>) {
+) -> DefaultGuard {
 	use tracing::metadata::LevelFilter;
 	use tracing_subscriber::EnvFilter;
 
 	let format_span = if settings.span_lifecycle { FmtSpan::FULL } else { FmtSpan::NONE };
 
-	let reload_handle = {
+	let (reload_handle, _guard) = {
 		let builder = tracing_subscriber::fmt()
 			.json()
 			.with_current_span(false)
@@ -103,67 +105,67 @@ pub async fn init_json_logger(
 			.with_filter_reloading();
 
 		let reload_handle = builder.reload_handle();
-		builder.init();
-		reload_handle
+		let _guard = builder.finish().set_default();
+		(reload_handle, _guard)
 	};
 
-	move |scope| {
-		scope.spawn_weak(async move {
-			const PATH: &str = "tracing";
-			const MAX_CONTENT_LENGTH: u64 = 2 * 1024;
+	tokio::task::spawn(async move {
+		const PATH: &str = "tracing";
+		const MAX_CONTENT_LENGTH: u64 = 2 * 1024;
 
-			let change_filter = warp::post()
-				.and(warp::path(PATH))
-				.and(warp::path::end())
-				.and(warp::body::content_length_limit(MAX_CONTENT_LENGTH))
-				.and(warp::body::json())
-				.then({
-					let reload_handle = reload_handle.clone();
-					move |filter: String| {
-						futures::future::ready(
-							match EnvFilter::builder()
-								.with_default_directive(LevelFilter::INFO.into())
-								.parse(filter)
-							{
-								Ok(env_filter) => match reload_handle.reload(env_filter) {
-									Ok(_) => warp::reply().into_response(),
-									Err(error) => warp::reply::with_status(
-										warp::reply::json(&error.to_string()),
-										warp::http::StatusCode::INTERNAL_SERVER_ERROR,
-									)
-									.into_response(),
-								},
+		let change_filter = warp::post()
+			.and(warp::path(PATH))
+			.and(warp::path::end())
+			.and(warp::body::content_length_limit(MAX_CONTENT_LENGTH))
+			.and(warp::body::json())
+			.then({
+				let reload_handle = reload_handle.clone();
+				move |filter: String| {
+					futures::future::ready(
+						match EnvFilter::builder()
+							.with_default_directive(LevelFilter::INFO.into())
+							.parse(filter)
+						{
+							Ok(env_filter) => match reload_handle.reload(env_filter) {
+								Ok(_) => warp::reply().into_response(),
 								Err(error) => warp::reply::with_status(
 									warp::reply::json(&error.to_string()),
-									warp::http::StatusCode::BAD_REQUEST,
+									warp::http::StatusCode::INTERNAL_SERVER_ERROR,
 								)
 								.into_response(),
 							},
-						)
-					}
-				});
+							Err(error) => warp::reply::with_status(
+								warp::reply::json(&error.to_string()),
+								warp::http::StatusCode::BAD_REQUEST,
+							)
+							.into_response(),
+						},
+					)
+				}
+			});
 
-			let get_filter =
-				warp::get().and(warp::path(PATH)).and(warp::path::end()).then(move || {
-					futures::future::ready({
-						let (status, message) = match reload_handle
-							.with_current(|env_filter| env_filter.to_string())
-						{
-							Ok(reply) => (warp::http::StatusCode::OK, reply),
-							Err(error) =>
-								(warp::http::StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
-						};
+		let get_filter =
+			warp::get().and(warp::path(PATH)).and(warp::path::end()).then(move || {
+				futures::future::ready({
+					let (status, message) = match reload_handle
+						.with_current(|env_filter| env_filter.to_string())
+					{
+						Ok(reply) => (warp::http::StatusCode::OK, reply),
+						Err(error) =>
+							(warp::http::StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
+					};
 
-						warp::reply::with_status(warp::reply::json(&message), status)
-							.into_response()
-					})
-				});
+					warp::reply::with_status(warp::reply::json(&message), status)
+						.into_response()
+				})
+			});
 
-			warp::serve(change_filter.or(get_filter))
-				.run((std::net::Ipv4Addr::LOCALHOST, settings.command_server_port))
-				.await;
+		warp::serve(change_filter.or(get_filter))
+			.run((std::net::Ipv4Addr::LOCALHOST, settings.command_server_port))
+			.await;
 
-			Ok(())
-		});
-	}
+		Ok::<(), anyhow::Error>(())
+	});
+
+	_guard
 }

@@ -113,10 +113,13 @@ async fn run_main(
 	settings: Settings,
 	start_from: Option<state_chain_runtime::BlockNumber>,
 ) -> anyhow::Result<()> {
+
+	let _guard = utilities::logging::init_json_logger(
+		settings.logging.clone(),
+	).await;
+
 	task_scope(|scope| {
 		async move {
-			let mut start_logger_server_fn =
-				Some(utilities::logging::init_json_logger(settings.logging.clone()).await);
 
 			let has_completed_initialising = Arc::new(AtomicBool::new(false));
 
@@ -134,10 +137,7 @@ async fn run_main(
 
 			// In case we are upgrading, this gives the old CFE more time to release system
 			// resources.
-			tokio::time::sleep(Duration::from_secs(3)).await;
-
-			// Wait until SCC has started, to ensure old engine has stopped
-			start_logger_server_fn.take().expect("only called once")(scope);
+			tokio::time::sleep(Duration::from_secs(4)).await;
 
 			if let Some(health_check_settings) = &settings.health_check {
 				health::start(scope, health_check_settings, has_completed_initialising.clone())

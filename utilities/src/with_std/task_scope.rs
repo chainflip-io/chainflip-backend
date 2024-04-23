@@ -91,6 +91,7 @@ use std::{
 	task::{Context, Poll},
 };
 
+use tracing::instrument::WithSubscriber;
 use core::fmt::Debug;
 use futures::{
 	ready,
@@ -286,10 +287,12 @@ impl TaskProperties {
 	}
 }
 
+use tracing::instrument::WithDispatch;
+
 #[pin_project::pin_project]
 struct TaskWrapper<Task> {
 	#[pin]
-	future: Task,
+	future: WithDispatch<Task>,
 	properties: TaskProperties,
 }
 impl<Task: Future + Unpin + 'static> Future for TaskWrapper<Task> {
@@ -482,9 +485,9 @@ impl<Error: Debug + Send + 'static> Stream for ScopeResultStream<Error> {
 					let tasks = &mut self.tasks;
 					match tasks {
 						ScopedTasks::CurrentThread(tasks) =>
-							tasks.push(TaskWrapper { future, properties }),
+							tasks.push(TaskWrapper { future: future.with_current_subscriber(), properties }),
 						ScopedTasks::MultiThread(runtime, tasks) =>
-							tasks.push(TaskWrapper { future: runtime.spawn(future), properties }),
+							tasks.push(TaskWrapper { future: runtime.spawn(future.with_current_subscriber()).with_current_subscriber(), properties }),
 					}
 				} else {
 					// Sender/`Scope` has been dropped
@@ -557,7 +560,7 @@ impl<Error: Debug + Send + 'static> Drop for ScopeResultStream<Error> {
 			ScopedTasks::MultiThread(runtime, tasks) =>
 				if !tasks.is_empty() {
 					for task in tasks.iter() {
-						task.future.abort();
+						task.future.inner().abort();
 					}
 					tokio::task::block_in_place(|| {
 						runtime.block_on(tasks.for_each(|(properties, result)| {
