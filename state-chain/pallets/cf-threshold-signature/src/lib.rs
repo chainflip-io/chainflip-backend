@@ -1496,9 +1496,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	fn activate_new_key(new_agg_key: AggKeyFor<T, I>) {
+	fn activate_new_key() {
 		PendingKeyRotation::<T, I>::put(KeyRotationStatus::Complete);
-		Self::set_key_for_epoch(CurrentEpochIndex::<T>::get().saturating_add(1), new_agg_key);
 		Self::deposit_event(Event::KeyRotationCompleted);
 	}
 
