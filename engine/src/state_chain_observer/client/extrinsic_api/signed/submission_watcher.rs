@@ -183,24 +183,6 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		)
 	}
 
-	fn build_and_sign_extrinsic(
-		&self,
-		call: state_chain_runtime::RuntimeCall,
-		nonce: Nonce,
-	) -> state_chain_runtime::UncheckedExtrinsic {
-		self.signer
-			.new_signed_extrinsic(
-				call.clone(),
-				&self.runtime_version,
-				self.genesis_hash,
-				self.finalized_block_hash,
-				self.finalized_block_number,
-				self.extrinsic_lifetime,
-				nonce,
-			)
-			.0
-	}
-
 	async fn submit_extrinsic_at_nonce(
 		&mut self,
 		request: &mut Request,
@@ -280,7 +262,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 							// here
 
 							let new_runtime_version =
-								self.base_rpc_client.runtime_version().await?;
+								self.base_rpc_client.runtime_version(None).await?;
 							if new_runtime_version == self.runtime_version {
 								// break, as the error is now very unlikely to be solved by
 								// fetching again
@@ -311,19 +293,34 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		&mut self,
 		call: state_chain_runtime::RuntimeCall,
 	) -> Result<(), DryRunError> {
-		// Use the nonce from the latest unfinalized block.
 		let hash = self.base_rpc_client.latest_unfinalized_block_hash().await?;
-		let nonce = self
-			.base_rpc_client
-			.storage_map_entry::<frame_system::Account<state_chain_runtime::Runtime>>(
-				hash,
-				&self.signer.account_id,
-			)
-			.await?
-			.nonce;
-		let uxt = self.build_and_sign_extrinsic(call.clone(), nonce);
-		let result_bytes = self.base_rpc_client.dry_run(Encode::encode(&uxt).into(), None).await?;
-		let dry_run_result: ApplyExtrinsicResult = Decode::decode(&mut &*result_bytes)?;
+
+		// Use the nonce from the latest unfinalized block.
+		let (account_info, runtime_version) = tokio::try_join!(
+			self.base_rpc_client
+				.storage_map_entry::<frame_system::Account<state_chain_runtime::Runtime>>(
+					hash,
+					&self.signer.account_id,
+				),
+			self.base_rpc_client.runtime_version(Some(hash)),
+		)?;
+
+		let (signed_extrinsic, _) = self.signer.new_signed_extrinsic(
+			call.clone(),
+			&runtime_version,
+			self.genesis_hash,
+			self.finalized_block_hash,
+			self.finalized_block_number,
+			self.extrinsic_lifetime,
+			account_info.nonce,
+		);
+
+		let dry_run_result: ApplyExtrinsicResult = Decode::decode(
+			&mut &*self
+				.base_rpc_client
+				.dry_run(Encode::encode(&signed_extrinsic).into(), hash)
+				.await?,
+		)?;
 
 		debug!(target: "state_chain_client", "Dry run completed. \nCall:{:?} \nResult: {:?}", call, &dry_run_result);
 
