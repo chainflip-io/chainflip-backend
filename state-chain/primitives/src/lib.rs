@@ -327,6 +327,9 @@ pub const MAX_BENEFICIARIES: u32 = 4;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
 #[serde(untagged)]
+#[serde(
+	expecting = r#"Expected EITHER a Number representing the broker commission rate in basis points OR an Array of at most FOUR beneficiaries [(AccountId, BasisPoints)]."#
+)]
 pub enum BrokerFees<Id> {
 	Single(BasisPoints),
 	Multiple(BoundedVec<Beneficiary<Id>, ConstU32<MAX_BENEFICIARIES>>),
