@@ -593,9 +593,18 @@ impl P2PContext {
 
 		// Listen on all interfaces
 		let endpoint = format!("tcp://0.0.0.0:{port}");
-		info!("Started listening for incoming p2p connections on: {endpoint}");
+		// In the case of an upgrade, it's possible the system still needs time to release the port.
+		loop {
+			match socket.bind(&endpoint) {
+				Ok(_) => break,
+				Err(e) => {
+					error!("Failed to bind to endpoint: {endpoint}, error: {e}. Retrying in 2 seconds");
+					std::thread::sleep(Duration::from_secs(2));
+				},
+			}
+		}
 
-		socket.bind(&endpoint).expect("invalid endpoint");
+		info!("Started listening for incoming p2p connections on: {endpoint}");
 
 		let (incoming_message_sender, incoming_message_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
