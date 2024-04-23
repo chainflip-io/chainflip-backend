@@ -796,6 +796,11 @@ fn test_add_boost_funds() {
 
 #[track_caller]
 fn turn_safe_mode_on() {
+	assert!(
+		<MockRuntimeSafeMode as sp_core::Get<PalletSafeMode<()>>>::get() ==
+			PalletSafeMode::CODE_GREEN,
+		"Safe mode was already on"
+	);
 	<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
 	assert!(
 		<MockRuntimeSafeMode as sp_core::Get<PalletSafeMode<()>>>::get() ==
@@ -805,6 +810,11 @@ fn turn_safe_mode_on() {
 
 #[track_caller]
 fn turn_safe_mode_off() {
+	assert!(
+		<MockRuntimeSafeMode as sp_core::Get<PalletSafeMode<()>>>::get() ==
+			PalletSafeMode::CODE_RED,
+		"Safe mode was already off"
+	);
 	<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
 	assert!(
 		<MockRuntimeSafeMode as sp_core::Get<PalletSafeMode<()>>>::get() ==
