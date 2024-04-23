@@ -1,5 +1,6 @@
 use crate::*;
 use cf_chains::DepositChannel;
+use cf_primitives::Beneficiary;
 use frame_support::traits::OnRuntimeUpgrade;
 
 mod old {

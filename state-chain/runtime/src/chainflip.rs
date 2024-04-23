@@ -47,9 +47,7 @@ use cf_chains::{
 	ChainEnvironment, ChainState, DepositChannel, ForeignChain, ReplayProtectionProvider,
 	SetCommKeyWithAggKey, SetGovKeyWithAggKey, TransactionBuilder,
 };
-use cf_primitives::{
-	chains::assets, AccountRole, Asset, BasisPoints, Beneficiary, ChannelId, MAX_BENEFICIARIES,
-};
+use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, Beneficiaries, ChannelId};
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
@@ -60,13 +58,12 @@ use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
 use frame_support::{
 	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
-	pallet_prelude::{ConstU32, DispatchError},
+	pallet_prelude::DispatchError,
 	sp_runtime::{
 		traits::{BlockNumberProvider, One, UniqueSaturatedFrom, UniqueSaturatedInto},
 		FixedPointNumber, FixedU64,
 	},
 	traits::{Defensive, Get},
-	BoundedVec,
 };
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
@@ -550,7 +547,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				source_asset: Asset,
 				destination_asset: Asset,
 				destination_address: ForeignChainAddress,
-				broker_commission: BoundedVec<Beneficiary<Self::AccountId>, ConstU32<MAX_BENEFICIARIES>>,
+				broker_commission: Beneficiaries<Self::AccountId>,
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadata>,
 				boost_fee: BasisPoints

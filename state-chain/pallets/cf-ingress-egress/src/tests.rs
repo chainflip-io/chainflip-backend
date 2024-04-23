@@ -34,7 +34,6 @@ use cf_traits::{
 };
 use frame_support::{
 	assert_err, assert_ok,
-	testing_prelude::bounded_vec,
 	traits::{Hooks, OriginTrait},
 	weights::Weight,
 };
@@ -487,7 +486,7 @@ fn can_process_ccm_deposit() {
 			from_asset,
 			to_asset,
 			destination_address.clone(),
-			bounded_vec![],
+			Default::default(),
 			1,
 			Some(channel_metadata),
 			0,

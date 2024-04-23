@@ -6,8 +6,8 @@ use cf_chains::{
 	CcmChannelMetadata, CcmDepositMetadata, SwapOrigin,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, Beneficiary, BrokerFees, ChannelId, ForeignChain, SwapId,
-	SwapLeg, TransactionHash, MAX_BENEFICIARIES, STABLE_ASSET,
+	AccountRole, Asset, AssetAmount, Beneficiaries, Beneficiary, BrokerFees, ChannelId,
+	ForeignChain, SwapId, SwapLeg, TransactionHash, MAX_BENEFICIARIES, STABLE_ASSET,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -17,6 +17,7 @@ use cf_traits::{
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
+		bounded_vec,
 		traits::{Get, Saturating},
 		DispatchError, Permill,
 	},
@@ -198,7 +199,6 @@ impl_pallet_safe_mode! {
 
 #[frame_support::pallet]
 pub mod pallet {
-
 	use cf_chains::{address::EncodedAddress, AnyChain, Chain};
 	use cf_primitives::{Asset, AssetAmount, BasisPoints, EgressId, SwapId};
 	use cf_traits::{
@@ -314,7 +314,7 @@ pub mod pallet {
 			source_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 			boost_fee: BasisPoints,
 			channel_opening_fee: T::Amount,
-			beneficiaries: BoundedVec<Beneficiary<T::AccountId>, ConstU32<MAX_BENEFICIARIES>>,
+			beneficiaries: Beneficiaries<T::AccountId>,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
@@ -694,38 +694,27 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure!(T::SafeMode::get().deposits_enabled, Error::<T>::DepositsDisabled);
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
-			let (beneficiaries, total_bps): (
-				BoundedVec<Beneficiary<T::AccountId>, ConstU32<MAX_BENEFICIARIES>>,
-				BasisPoints,
-			) = match broker_commission {
-				BrokerFees::Single(broker_bps) =>
-					if broker_bps > 0 {
-						(
-							vec![Beneficiary { account: broker.clone(), bps: broker_bps }]
-								.try_into()
-								.unwrap(),
-							broker_bps,
-						)
+			let (beneficiaries, total_bps) = match broker_commission {
+				BrokerFees::Single(bps) =>
+					if bps > 0 {
+						(bounded_vec![Beneficiary { account: broker.clone(), bps }], bps)
 					} else {
-						(vec![].try_into().unwrap(), broker_bps)
+						(Default::default(), 0)
 					},
-				BrokerFees::Multiple(ref fees_bps) => {
-					for Beneficiary { account, bps: _ } in fees_bps.clone() {
+				BrokerFees::Multiple(mut beneficiaries) => {
+					for Beneficiary { account, .. } in &beneficiaries {
 						ensure!(
-							T::AccountRoleRegistry::has_account_role(&account, AccountRole::Broker),
+							T::AccountRoleRegistry::has_account_role(account, AccountRole::Broker),
 							Error::<T>::BeneficiaryAccountIsNotABroker
 						);
 					}
-					(
-						(*fees_bps)
-							.clone()
-							.into_iter()
-							.filter(|Beneficiary { account: _, bps }| *bps > 0)
-							.collect::<Vec<_>>().try_into().expect("The provided beneficiaries vec cannot have more than MAX_BENEFICIARIES elements"),
-						fees_bps.iter().fold(0, |acc, Beneficiary { account: _, bps }| acc + bps),
-					)
+
+					beneficiaries.retain(|Beneficiary { bps, .. }| *bps > 0);
+					let total = beneficiaries.iter().map(|Beneficiary { bps, .. }| bps).sum();
+					(beneficiaries, total)
 				},
 			};
+
 			ensure!(total_bps <= 1000, Error::<T>::BrokerCommissionBpsTooHigh);
 
 			let destination_address_internal =

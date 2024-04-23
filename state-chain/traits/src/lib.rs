@@ -19,20 +19,20 @@ use cf_chains::{
 	ChainCrypto, DepositChannel, Ethereum, SwapOrigin,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiary, BroadcastId,
+	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries, BroadcastId,
 	ChannelId, Ed25519PublicKey, EgressCounter, EgressId, EpochIndex, FlipBalance, ForeignChain,
-	Ipv6Addr, NetworkEnvironment, SemVer, SwapId, ThresholdSignatureRequestId, MAX_BENEFICIARIES,
+	Ipv6Addr, NetworkEnvironment, SemVer, SwapId, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	error::BadOrigin,
-	pallet_prelude::{ConstU32, DispatchResultWithPostInfo, Member},
+	pallet_prelude::{DispatchResultWithPostInfo, Member},
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
 		DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
 	},
 	traits::{EnsureOrigin, Get, Imbalance, IsType, UnfilteredDispatchable},
-	BoundedVec, CloneNoBound, EqNoBound, Hashable, Parameter, PartialEqNoBound,
+	CloneNoBound, EqNoBound, Hashable, Parameter, PartialEqNoBound,
 };
 use scale_info::TypeInfo;
 use sp_std::{collections::btree_set::BTreeSet, iter::Sum, marker::PhantomData, prelude::*};
@@ -693,7 +693,7 @@ pub trait DepositApi<C: Chain> {
 		source_asset: C::ChainAsset,
 		destination_asset: Asset,
 		destination_address: ForeignChainAddress,
-		broker_commission: BoundedVec<Beneficiary<Self::AccountId>, ConstU32<MAX_BENEFICIARIES>>,
+		broker_commission: Beneficiaries<Self::AccountId>,
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,

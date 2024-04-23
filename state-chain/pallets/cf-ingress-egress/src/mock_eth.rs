@@ -29,7 +29,7 @@ use cf_traits::{
 	},
 	DepositApi, NetworkEnvironmentProvider, OnDeposit,
 };
-use frame_support::{derive_impl, testing_prelude::bounded_vec, traits::UnfilteredDispatchable};
+use frame_support::{derive_impl, traits::UnfilteredDispatchable};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup, Zero};
@@ -249,7 +249,7 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 						source_asset,
 						destination_asset.into(),
 						destination_address.clone(),
-						bounded_vec![],
+						Default::default(),
 						BROKER,
 						None,
 						0,

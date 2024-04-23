@@ -24,25 +24,31 @@ mod benchmarks {
 			AccountRole::Broker,
 		)
 		.unwrap();
+
 		// A non-zero balance is required to pay for the channel opening fee.
 		T::FeePayment::mint_to_account(&caller, (5 * FLIPPERINOS_PER_FLIP).into());
+
+		let beneficiaries = (0..4)
+			.map(|i| {
+				let account = frame_benchmarking::account::<T::AccountId>("beneficiary", i, 0);
+				frame_benchmarking::whitelist_account!(account);
+				<<T as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<T>>::register_as_broker(&account).unwrap();
+				Beneficiary { account, bps: 10 }
+			})
+			.collect::<Vec<_>>()
+			.try_into()
+			.unwrap();
 
 		let origin = RawOrigin::Signed(caller.clone());
 		let call = Call::<T>::request_swap_deposit_address_v2 {
 			source_asset: Asset::Eth,
 			destination_asset: Asset::Usdc,
 			destination_address: EncodedAddress::benchmark_value(),
-			broker_commission: cf_primitives::BrokerFees::Multiple(
-				vec![
-					Beneficiary { account: caller.clone(), bps: 10 },
-					Beneficiary { account: caller, bps: 10 },
-				]
-				.try_into()
-				.unwrap(),
-			),
+			broker_commission: cf_primitives::BrokerFees::Multiple(beneficiaries),
 			boost_fee: 0,
 			channel_metadata: None,
 		};
+
 		#[block]
 		{
 			assert_ok!(call.dispatch_bypass_filter(origin.into()));

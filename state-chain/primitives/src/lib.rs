@@ -325,6 +325,8 @@ fn is_more_recent_semver() {
 
 pub const MAX_BENEFICIARIES: u32 = 4;
 
+pub type Beneficiaries<Id> = BoundedVec<Beneficiary<Id>, ConstU32<MAX_BENEFICIARIES>>;
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
 #[serde(untagged)]
 #[serde(
@@ -332,8 +334,9 @@ pub const MAX_BENEFICIARIES: u32 = 4;
 )]
 pub enum BrokerFees<Id> {
 	Single(BasisPoints),
-	Multiple(BoundedVec<Beneficiary<Id>, ConstU32<MAX_BENEFICIARIES>>),
+	Multiple(Beneficiaries<Id>),
 }
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
 pub struct Beneficiary<Id> {
 	pub account: Id,
@@ -343,19 +346,5 @@ pub struct Beneficiary<Id> {
 impl<Id> From<BasisPoints> for BrokerFees<Id> {
 	fn from(value: BasisPoints) -> Self {
 		BrokerFees::Single(value)
-	}
-}
-
-impl<Id: core::fmt::Debug> TryFrom<Vec<(Id, BasisPoints)>> for BrokerFees<Id> {
-	type Error = &'static str;
-	fn try_from(value: Vec<(Id, BasisPoints)>) -> Result<Self, Self::Error> {
-		Ok(BrokerFees::Multiple(
-			value
-				.into_iter()
-				.map(|(id, bps)| Beneficiary { account: id, bps })
-				.collect::<Vec<_>>()
-				.try_into()
-				.expect("Provided Vec should contain max MAX_BENEFICIARIES elements"),
-		))
 	}
 }
