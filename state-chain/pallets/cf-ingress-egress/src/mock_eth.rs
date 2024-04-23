@@ -1,5 +1,5 @@
 pub use crate::{self as pallet_cf_ingress_egress};
-use crate::{DepositBalances, DepositWitness, Instance1, PalletSafeMode};
+use crate::{DepositBalances, DepositWitness, PalletSafeMode};
 
 use cf_chains::eth::EthereumTrackedData;
 pub use cf_chains::{
@@ -40,7 +40,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 frame_support::construct_runtime!(
 	pub enum Test {
 		System: frame_system,
-		IngressEgress: pallet_cf_ingress_egress::<Instance1>,
+		IngressEgress: pallet_cf_ingress_egress,
 	}
 );
 
@@ -109,9 +109,9 @@ impl NetworkEnvironmentProvider for MockNetworkEnvironmentProvider {
 	}
 }
 
-impl_mock_runtime_safe_mode! { ingress_egress_ethereum: PalletSafeMode<Instance1> }
+impl_mock_runtime_safe_mode! { ingress_egress_ethereum: PalletSafeMode<()> }
 
-impl crate::Config<Instance1> for Test {
+impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Ethereum;
@@ -119,7 +119,7 @@ impl crate::Config<Instance1> for Test {
 	type AddressConverter = MockAddressConverter;
 	type LpBalance = MockBalance;
 	type SwapDepositHandler =
-		MockSwapDepositHandler<(Ethereum, pallet_cf_ingress_egress::Pallet<Self, Instance1>)>;
+		MockSwapDepositHandler<(Ethereum, pallet_cf_ingress_egress::Pallet<Self>)>;
 	type ChainApiCall = MockEthereumApiCall<MockEvmEnvironment>;
 	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;
@@ -152,9 +152,9 @@ impl_test_helpers! {
 	}
 }
 
-type TestChainAccount = <<Test as crate::Config<Instance1>>::TargetChain as Chain>::ChainAccount;
-type TestChainAmount = <<Test as crate::Config<Instance1>>::TargetChain as Chain>::ChainAmount;
-type TestChainAsset = <<Test as crate::Config<Instance1>>::TargetChain as Chain>::ChainAsset;
+type TestChainAccount = <<Test as crate::Config>::TargetChain as Chain>::ChainAccount;
+type TestChainAmount = <<Test as crate::Config>::TargetChain as Chain>::ChainAmount;
+type TestChainAsset = <<Test as crate::Config>::TargetChain as Chain>::ChainAsset;
 
 pub trait RequestAddressAndDeposit {
 	fn request_address_and_deposit(

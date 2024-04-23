@@ -468,37 +468,37 @@ mod benchmarks {
 	#[test]
 	fn benchmark_works() {
 		new_test_ext().execute_with(|| {
-			_ccm_broadcast_failed::<Test, Instance1>(true);
+			_ccm_broadcast_failed::<Test, ()>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_vault_transfer_failed::<Test, Instance1>(true);
+			_vault_transfer_failed::<Test, ()>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_finalise_ingress::<Test, Instance1>(100, true);
+			_finalise_ingress::<Test, ()>(100, true);
 		});
 		new_test_ext().execute_with(|| {
-			_process_single_deposit::<Test, Instance1>(true);
+			_process_single_deposit::<Test, ()>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_disable_asset_egress::<Test, Instance1>(true);
+			_disable_asset_egress::<Test, ()>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_clear_prewitnessed_deposits::<Test, Instance1>(100, true);
+			_clear_prewitnessed_deposits::<Test, ()>(100, true);
 		});
 		new_test_ext().execute_with(|| {
-			_add_boost_funds::<Test, Instance1>(true);
+			_add_boost_funds::<Test, ()>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_on_lost_deposit::<Test, Instance1>(100, true);
+			_on_lost_deposit::<Test, ()>(100, true);
 		});
 		new_test_ext().execute_with(|| {
-			_stop_boosting::<Test, Instance1>(true);
+			_stop_boosting::<Test, ()>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_deposit_boosted::<Test, Instance1>(true);
+			_deposit_boosted::<Test, ()>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_boost_finalised::<Test, Instance1>(true);
+			_boost_finalised::<Test, ()>(true);
 		});
 	}
 }

@@ -1,16 +1,13 @@
-pub use crate::{self as pallet_cf_ingress_egress, Instance3};
+pub use crate::{self as pallet_cf_ingress_egress};
 
 use crate::PalletSafeMode;
 use cf_chains::btc::{deposit_address::DepositAddress, BitcoinTrackedData};
 pub use cf_chains::{
-	address::{AddressDerivationApi, AddressDerivationError, ForeignChainAddress},
+	address::{AddressDerivationApi, AddressDerivationError},
 	Chain,
 };
-pub use cf_primitives::{
-	chains::{assets, Bitcoin},
-	Asset, AssetAmount,
-};
-use cf_primitives::{ChannelId, SwapId};
+pub use cf_primitives::chains::{assets, Bitcoin};
+use cf_primitives::ChannelId;
 use cf_test_utilities::impl_test_helpers;
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode,
@@ -26,7 +23,7 @@ use cf_traits::{
 		swap_deposit_handler::MockSwapDepositHandler,
 		swap_queue_api::MockSwapQueueApi,
 	},
-	NetworkEnvironmentProvider, OnDeposit, SwapDepositHandler,
+	NetworkEnvironmentProvider, OnDeposit,
 };
 use frame_support::{derive_impl, traits::UnfilteredDispatchable};
 use sp_core::H256;
@@ -38,7 +35,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 frame_support::construct_runtime!(
 	pub enum Test {
 		System: frame_system,
-		IngressEgress: pallet_cf_ingress_egress::<Instance3>,
+		IngressEgress: pallet_cf_ingress_egress,
 	}
 );
 
@@ -75,25 +72,6 @@ impl_mock_callback!(RuntimeOrigin);
 pub struct MockDepositHandler;
 impl OnDeposit<Bitcoin> for MockDepositHandler {}
 
-pub struct MockSwapDepositHandlerBtc;
-impl SwapDepositHandler for MockSwapDepositHandlerBtc {
-	type AccountId = AccountId;
-
-	fn schedule_swap_from_channel(
-		_deposit_address: ForeignChainAddress,
-		_deposit_block_height: u64,
-		_from: Asset,
-		_to: Asset,
-		_amount: AssetAmount,
-		_destination_address: ForeignChainAddress,
-		_broker_id: Self::AccountId,
-		_broker_commission_bps: cf_primitives::BasisPoints,
-		_channel_id: ChannelId,
-	) -> SwapId {
-		unimplemented!()
-	}
-}
-
 pub type MockEgressBroadcaster =
 	MockBroadcaster<(MockBitcoinApiCall<MockBtcEnvironment>, RuntimeCall)>;
 
@@ -126,9 +104,9 @@ impl NetworkEnvironmentProvider for MockNetworkEnvironmentProvider {
 	}
 }
 
-impl_mock_runtime_safe_mode! { ingress_egress_bitcoin: PalletSafeMode<Instance3> }
+impl_mock_runtime_safe_mode! { ingress_egress_bitcoin: PalletSafeMode<()> }
 
-impl pallet_cf_ingress_egress::Config<Instance3> for Test {
+impl pallet_cf_ingress_egress::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Bitcoin;
@@ -136,7 +114,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Test {
 	type AddressConverter = MockAddressConverter;
 	type LpBalance = MockBalance;
 	type SwapDepositHandler =
-		MockSwapDepositHandler<(Bitcoin, pallet_cf_ingress_egress::Pallet<Self, Instance3>)>;
+		MockSwapDepositHandler<(Bitcoin, pallet_cf_ingress_egress::Pallet<Self>)>;
 	type ChainApiCall = MockBitcoinApiCall<MockBtcEnvironment>;
 	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;
