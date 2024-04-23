@@ -41,6 +41,8 @@ members = [
   'engine',
   'engine/generate-genesis-keys',
   'utilities',
+  'utilities/scale-json',
+  'utilities/scale-json/scale-json-logger',
   'state-chain/custom-rpc',
   'state-chain/cf-session-benchmarking',
   'engine/multisig',
