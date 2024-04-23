@@ -313,6 +313,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type SafeMode = RuntimeSafeMode;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
@@ -333,6 +334,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type SafeMode = RuntimeSafeMode;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
@@ -353,6 +355,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type SafeMode = RuntimeSafeMode;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
@@ -373,6 +376,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type SafeMode = RuntimeSafeMode;
 }
 
 parameter_types! {
