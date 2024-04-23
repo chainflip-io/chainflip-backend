@@ -24,7 +24,6 @@ use self::evm::EvmCrypto;
 // Reference constants for the chain spec
 pub const CHAIN_ID_MAINNET: u64 = 42161;
 pub const CHAIN_ID_ARBITRUM_SEPOLIA: u64 = 421614;
-pub const CHAIN_ID_ARBITRUM_OLD: u64 = 412346;
 
 impl Chain for Arbitrum {
 	const NAME: &'static str = "Arbitrum";

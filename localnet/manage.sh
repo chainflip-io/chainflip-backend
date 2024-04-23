@@ -158,8 +158,8 @@ build-localnet() {
     echo "☀️ Solana not installed, skipping..."
   fi
 
-#  echo "🦑 Waiting for Arbitrum nodes to start"
-#  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
+  echo "🦑 Waiting for Arbitrum nodes to start"
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
   echo "🪄 Deploying L2 Contracts"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up arb-init -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
 
