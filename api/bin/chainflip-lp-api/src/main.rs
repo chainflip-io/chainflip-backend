@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use cf_primitives::{AccountId, BasisPoints, BlockNumber, EgressId};
 use cf_utilities::{
 	rpc::NumberOrHex,
@@ -125,7 +126,7 @@ pub trait Rpc {
 	#[method(name = "transfer_asset")]
 	async fn transfer_asset(
 		&self,
-		amount: NumberOrHex,
+		amount: U256,
 		asset: Asset,
 		destination_account: AccountId32,
 	) -> RpcResult<Hash>;
@@ -298,14 +299,18 @@ impl RpcServer for RpcServerImpl {
 	/// Returns an egress id
 	async fn transfer_asset(
 		&self,
-		amount: NumberOrHex,
+		amount: U256,
 		asset: Asset,
 		destination_account: AccountId32,
 	) -> RpcResult<H256> {
 		Ok(self
 			.api
 			.lp_api()
-			.transfer_asset(try_parse_number_or_hex(amount)?, asset, destination_account)
+			.transfer_asset(
+				amount.try_into().map_err(|_| anyhow!("Failed to convert amount to u128"))?,
+				asset,
+				destination_account,
+			)
 			.await?)
 	}
 

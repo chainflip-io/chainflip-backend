@@ -110,6 +110,8 @@ pub mod pallet {
 		FundsRemaining,
 		/// The destination account is not a liquidity provider.
 		DestinationAccountNotLiquidityProvider,
+		/// The account cannot transfer to itself.
+		CannotTransferToOriginAccount,
 	}
 
 	#[pallet::event]
@@ -347,6 +349,10 @@ impl<T: Config> Pallet<T> {
 		if amount > 0 {
 			match destination {
 				AccountOrAddress::Internal(destination_account) => {
+					ensure!(
+						account_id != destination_account,
+						Error::<T>::CannotTransferToOriginAccount
+					);
 					// Check if the destination account has the role liquidity provider.
 					ensure!(
 						T::AccountRoleRegistry::has_account_role(

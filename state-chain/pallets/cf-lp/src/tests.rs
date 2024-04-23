@@ -79,6 +79,17 @@ fn liquidity_providers_can_move_assets_internally() {
 			Error::<Test>::DestinationAccountNotLiquidityProvider
 		);
 
+		// Cannot transfer assets to the same account.
+		assert_noop!(
+			LiquidityProvider::transfer_asset(
+				RuntimeOrigin::signed((LP_ACCOUNT).into()),
+				100,
+				Asset::Eth,
+				AccountId::from(LP_ACCOUNT),
+			),
+			Error::<Test>::CannotTransferToOriginAccount
+		);
+
 		assert_ok!(LiquidityProvider::transfer_asset(
 			RuntimeOrigin::signed((LP_ACCOUNT).into()),
 			100,
