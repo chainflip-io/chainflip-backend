@@ -23,7 +23,7 @@ use frame_support::{
 
 use frame_system::pallet_prelude::OriginFor;
 use serde::{Deserialize, Serialize};
-use sp_arithmetic::traits::{UniqueSaturatedInto, Zero};
+use sp_arithmetic::traits::{AtLeast32BitUnsigned, UniqueSaturatedInto, Zero};
 use sp_std::{boxed::Box, collections::btree_set::BTreeSet, vec::Vec};
 
 pub use pallet::*;
@@ -1522,12 +1522,46 @@ impl<T: Config> Pallet<T> {
 		Ok(assets_change)
 	}
 
+	pub fn try_add_limit_orders(
+		account_id: &T::AccountId,
+		from: any::Asset,
+		to: any::Asset,
+		limit_orders: Vec<(Tick, U256)>,
+	) -> Result<(), DispatchError> {
+		let (asset_pair, side) = AssetPair::from_swap(from, to).ok_or("Invalid asset pair")?;
+
+		Self::try_mutate_pool(asset_pair, |_, pool| {
+			for (id, (tick, amount)) in limit_orders.into_iter().enumerate() {
+				let order_id = (account_id.clone(), id as u64);
+				pool.pool_state
+					.collect_and_mint_limit_order(&order_id, !side, tick, amount)
+					.map_err(|_| "Failed to set limit order")?;
+			}
+
+			Ok::<_, DispatchError>(())
+		})?;
+
+		Ok(())
+	}
+
 	#[transactional]
 	pub fn swap_with_network_fee(
 		from: any::Asset,
 		to: any::Asset,
 		input_amount: AssetAmount,
+		additional_limit_orders: Option<(T::AccountId, Vec<(Tick, U256)>, Vec<(Tick, U256)>)>,
 	) -> Result<SwapOutput, DispatchError> {
+		match ((from, to), additional_limit_orders) {
+			((_, STABLE_ASSET) | (STABLE_ASSET, _), Some((account_id, limit_orders, _))) => {
+				Self::try_add_limit_orders(&account_id, from, to, limit_orders)?;
+			},
+			(_, Some((account_id, first_leg, second_leg))) => {
+				Self::try_add_limit_orders(&account_id, from, STABLE_ASSET, first_leg)?;
+				Self::try_add_limit_orders(&account_id, STABLE_ASSET, to, second_leg)?;
+			},
+			_ => {},
+		}
+
 		Ok(match (from, to) {
 			(_, STABLE_ASSET) => {
 				let (output, network_fee) =
@@ -1997,6 +2031,7 @@ impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
 					output_asset,
 					input_asset,
 					desired_output_amount.into(),
+					None,
 				)
 				.ok(),
 			)
@@ -2026,7 +2061,13 @@ impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
 
 		let estimation_output = with_transaction_unchecked(|| {
 			TransactionOutcome::Rollback(
-				Self::swap_with_network_fee(input_asset, output_asset, estimation_input).ok(),
+				Self::swap_with_network_fee(
+					input_asset,
+					output_asset,
+					estimation_input,
+					None,
+				)
+				.ok(),
 			)
 		})?
 		.output;

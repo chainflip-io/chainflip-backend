@@ -1269,23 +1269,15 @@ impl_runtime_apis! {
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
-			additional_limit_orders: Option<Vec<(Tick, U256)>>,
+			first_leg_additional_limit_orders: Vec<(Tick, U256)>,
+			second_leg_additional_limit_orders: Vec<(Tick, U256)>,
 		) -> Result<SwapOutput, DispatchErrorWithMessage> {
-			if let Some(limit_orders) = additional_limit_orders {
-				let (asset_pair, side) = AssetPair::from_swap(from, to).ok_or("Invalid asset pair")?;
-
-				pallet_cf_pools::Pools::<Runtime>::try_mutate(asset_pair, |maybe_pool| {
-					let pool = maybe_pool.as_mut().ok_or("Pool not found")?;
-
-					for (id, (tick, amount)) in limit_orders.into_iter().enumerate() {
-						pool.pool_state.collect_and_mint_limit_order(&(Default::default(), id as u64), !side, tick, amount)
-							.map_err(|_| "Failed to set limit order")?;
-					}
-
-					Ok::<_, DispatchErrorWithMessage>(())
-				})?;
-			}
-			LiquidityPools::swap_with_network_fee(from, to, amount).map_err(Into::into)
+			LiquidityPools::swap_with_network_fee(
+				from,
+				to,
+				amount,
+				Some((AccountId32::new([0u8; 32]), first_leg_additional_limit_orders, second_leg_additional_limit_orders))
+			).map_err(Into::into)
 		}
 
 		fn cf_pool_info(base_asset: Asset, quote_asset: Asset) -> Result<PoolInfo, DispatchErrorWithMessage> {

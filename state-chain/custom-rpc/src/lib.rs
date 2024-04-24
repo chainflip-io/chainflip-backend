@@ -560,7 +560,8 @@ pub trait CustomApi {
 		from_asset: Asset,
 		to_asset: Asset,
 		amount: NumberOrHex,
-		additional_limit_orders: Option<Vec<(Tick, U256)>>,
+		first_leg_additional_limit_orders: Option<Vec<(Tick, U256)>>,
+		second_leg_additional_limit_orders: Option<Vec<(Tick, U256)>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutput>;
 	#[method(name = "required_asset_ratio_for_range_order")]
@@ -1085,7 +1086,8 @@ where
 		from_asset: Asset,
 		to_asset: Asset,
 		amount: NumberOrHex,
-		additional_limit_orders: Option<Vec<(Tick, U256)>>,
+		first_leg_additional_limit_orders: Option<Vec<(Tick, U256)>>,
+		second_leg_additional_limit_orders: Option<Vec<(Tick, U256)>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutput> {
 		self.client
@@ -1104,7 +1106,8 @@ where
 						}
 					})
 					.map_err(|str| anyhow::anyhow!(str))?,
-				additional_limit_orders,
+				first_leg_additional_limit_orders.unwrap_or_default(),
+				second_leg_additional_limit_orders.unwrap_or_default(),
 			)
 			.map_err(to_rpc_error)
 			.and_then(|result| result.map_err(map_dispatch_error))
