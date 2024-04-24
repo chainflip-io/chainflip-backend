@@ -8,7 +8,7 @@ mod old {
 
 	#[derive(CloneNoBound, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T, I))]
-	pub struct DepositChannelDetails<T: Config<I>, I: 'static> {
+	pub struct DepositChannelDetails<T: Config<I>, I: 'static = ()> {
 		pub deposit_channel: DepositChannel<T::TargetChain>,
 		/// The block number at which the deposit channel was opened, expressed as a block number
 		/// on the external Chain.
@@ -150,7 +150,7 @@ mod migration_tests {
 			let address1 = ScriptPubkey::Taproot([0u8; 32]);
 			let address2 = ScriptPubkey::Taproot([1u8; 32]);
 			let broker_address = 10u64;
-			let mock_deposit_channel_details = || -> old::DepositChannelDetails<Test, Instance3> {
+			let mock_deposit_channel_details = || -> old::DepositChannelDetails<Test> {
 				old::DepositChannelDetails::<Test, _> {
 					deposit_channel: DepositChannel {
 						channel_id: 123,
@@ -194,7 +194,7 @@ mod migration_tests {
 
 			// Verify data is correctly migrated into new storage.
 			for address in [address1, address2] {
-				let channel = DepositChannelLookup::<Test, Instance3>::get(address);
+				let channel = DepositChannelLookup::<Test>::get(address);
 				assert!(channel.is_some());
 				assert_eq!(
 					channel.unwrap().action,
