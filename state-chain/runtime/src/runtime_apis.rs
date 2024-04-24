@@ -71,8 +71,7 @@ pub struct BoostPoolDepth {
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
 pub struct BoostPoolDetails {
-	pub available_amount: AssetAmount,
-	pub amounts: BTreeMap<AccountId32, AssetAmount>,
+	pub available_amounts: BTreeMap<AccountId32, AssetAmount>,
 	pub pending_boosts: BTreeMap<PrewitnessedDepositId, BTreeMap<AccountId32, AssetAmount>>,
 	pub pending_withdrawals: BTreeMap<AccountId32, BTreeSet<PrewitnessedDepositId>>,
 }

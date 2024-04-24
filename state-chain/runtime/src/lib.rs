@@ -1653,8 +1653,7 @@ impl_runtime_apis! {
 					(
 						tier as u16,
 						BoostPoolDetails {
-							available_amount: pool.get_available_amount().into(),
-							amounts: pool.get_amounts().into_iter().map(|(id, amount)| (id, amount.into())).collect(),
+							available_amounts: pool.get_amounts().into_iter().map(|(id, amount)| (id, amount.into())).collect(),
 							pending_boosts: pool.get_pending_boosts().into_iter().map(|(deposit_id, owed_amounts)| {
 								(
 									deposit_id,
