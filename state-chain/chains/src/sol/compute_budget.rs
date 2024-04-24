@@ -1,6 +1,9 @@
-use super::{vec, FromStr, Instruction, Pubkey, COMPUTE_BUDGET_PROGRAM};
+use super::sol_tx_building_blocks::{Instruction, Pubkey, COMPUTE_BUDGET_PROGRAM};
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
+
+use crate::vec;
+use core::str::FromStr;
 
 /// Compute Budget Instructions
 #[derive(BorshDeserialize, BorshSerialize, Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]

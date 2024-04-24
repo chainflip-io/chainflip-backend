@@ -1,10 +1,11 @@
 //! Program instructions
-use super::{
-	vec, AccountMeta, FromStr, Instruction, Pubkey, ASSOCIATED_TOKEN_PROGRAM_ID, SYSTEM_PROGRAM_ID,
+use super::sol_tx_building_blocks::{
+	AccountMeta, Instruction, Pubkey, ASSOCIATED_TOKEN_PROGRAM_ID, SYSTEM_PROGRAM_ID,
 	TOKEN_PROGRAM_ID,
 };
-
+use crate::vec;
 use borsh::{BorshDeserialize, BorshSerialize};
+use core::str::FromStr;
 
 // https://docs.rs/spl-associated-token-account/2.3.0/src/spl_associated_token_account/instruction.rs.html#1-161
 

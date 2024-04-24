@@ -1,4 +1,4 @@
-use super::{Pubkey, Signature};
+use super::sol_tx_building_blocks::{Pubkey, Signature};
 use ed25519_dalek::Signer as DalekSigner;
 use rand0_7::{rngs::OsRng, CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};

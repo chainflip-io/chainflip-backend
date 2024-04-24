@@ -1,4 +1,6 @@
-use super::{vec, AccountMeta, FromStr, Instruction, Pubkey, BPF_LOADER_UPGRADEABLE_ID};
+use super::sol_tx_building_blocks::{AccountMeta, Instruction, Pubkey, BPF_LOADER_UPGRADEABLE_ID};
+use crate::vec;
+use core::str::FromStr;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
