@@ -160,8 +160,6 @@ pub mod pallet {
 
 	pub type AssetAmounts = PoolPairsMap<AssetAmount>;
 
-	pub type TickAndAmount = (Tick, U256);
-
 	/// Represents an amount of liquidity, either as an exact amount, or through maximum and minimum
 	/// amounts of both assets. Internally those max/min are converted into exact liquidity amounts,
 	/// that is if the appropriate asset ratio can be achieved while maintaining the max/min bounds.
@@ -1528,8 +1526,12 @@ impl<T: Config> Pallet<T> {
 		account_id: &T::AccountId,
 		from: any::Asset,
 		to: any::Asset,
-		limit_orders: Vec<(Tick, U256)>,
+		maybe_limit_orders: Option<Vec<(Tick, U256)>>,
 	) -> Result<(), DispatchError> {
+		let Some(limit_orders) = maybe_limit_orders else {
+			return Ok(());
+		};
+
 		let (asset_pair, side) = AssetPair::from_swap(from, to).ok_or("Invalid asset pair")?;
 
 		Self::try_mutate_pool(asset_pair, |_, pool| {
@@ -1546,12 +1548,17 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
+	#[allow(clippy::type_complexity)]
 	#[transactional]
 	pub fn swap_with_network_fee(
 		from: any::Asset,
 		to: any::Asset,
 		input_amount: AssetAmount,
-		additional_limit_orders: Option<(T::AccountId, Vec<TickAndAmount>, Vec<TickAndAmount>)>,
+		additional_limit_orders: Option<(
+			T::AccountId,
+			Option<Vec<(Tick, U256)>>,
+			Option<Vec<(Tick, U256)>>,
+		)>,
 	) -> Result<SwapOutput, DispatchError> {
 		match ((from, to), additional_limit_orders) {
 			((_, STABLE_ASSET) | (STABLE_ASSET, _), Some((account_id, limit_orders, _))) => {

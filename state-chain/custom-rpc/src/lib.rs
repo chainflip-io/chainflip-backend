@@ -1106,8 +1106,8 @@ where
 						}
 					})
 					.map_err(|str| anyhow::anyhow!(str))?,
-				first_leg_additional_limit_orders.unwrap_or_default(),
-				second_leg_additional_limit_orders.unwrap_or_default(),
+				first_leg_additional_limit_orders,
+				second_leg_additional_limit_orders,
 			)
 			.map_err(to_rpc_error)
 			.and_then(|result| result.map_err(map_dispatch_error))
