@@ -241,11 +241,15 @@ pub enum VaultProgram {
 		bump: u8,
 	},
 	RotateAggKey {
-		transfer_funds: bool,
+		skip_transfer_funds: bool,
 	},
-	TransferTokens {
+	FetchTokens {
 		seed: Vec<u8>,
 		bump: u8,
+		amount: u64,
+		decimals: u8,
+	},
+	TransferTokens {
 		amount: u64,
 		decimals: u8,
 	},
@@ -300,8 +304,9 @@ impl ProgramInstruction for VaultProgram {
 	fn call_name(&self) -> &str {
 		match self {
 			Self::FetchNative { seed: _, bump: _ } => "fetch_native",
-			Self::RotateAggKey { transfer_funds: _ } => "rotate_agg_key",
-			Self::TransferTokens { seed: _, bump: _, amount: _, decimals: _ } => "transfer_tokens",
+			Self::RotateAggKey { skip_transfer_funds: _ } => "rotate_agg_key",
+			Self::FetchTokens { seed: _, bump: _, amount: _, decimals: _ } => "fetch_tokens",
+			Self::TransferTokens { amount: _, decimals: _ } => "transfer_tokens",
 			Self::ExecuteCcmNativeCall {
 				source_chain: _,
 				source_address: _,
