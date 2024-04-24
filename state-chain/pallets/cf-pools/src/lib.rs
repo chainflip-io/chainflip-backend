@@ -160,6 +160,8 @@ pub mod pallet {
 
 	pub type AssetAmounts = PoolPairsMap<AssetAmount>;
 
+	pub type TickAndAmount = (Tick, U256);
+
 	/// Represents an amount of liquidity, either as an exact amount, or through maximum and minimum
 	/// amounts of both assets. Internally those max/min are converted into exact liquidity amounts,
 	/// that is if the appropriate asset ratio can be achieved while maintaining the max/min bounds.
@@ -1549,7 +1551,7 @@ impl<T: Config> Pallet<T> {
 		from: any::Asset,
 		to: any::Asset,
 		input_amount: AssetAmount,
-		additional_limit_orders: Option<(T::AccountId, Vec<(Tick, U256)>, Vec<(Tick, U256)>)>,
+		additional_limit_orders: Option<(T::AccountId, Vec<TickAndAmount>, Vec<TickAndAmount>)>,
 	) -> Result<SwapOutput, DispatchError> {
 		match ((from, to), additional_limit_orders) {
 			((_, STABLE_ASSET) | (STABLE_ASSET, _), Some((account_id, limit_orders, _))) => {
