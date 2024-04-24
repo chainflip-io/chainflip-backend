@@ -816,19 +816,19 @@ mod tests {
 	#[test]
 	fn create_nonced_transfer() {
 		let durable_nonce = Hash::from_str("F5HaggF8o2jESnoFi7sSdgy2qhz4amp3miev144Cfp49").unwrap();
-		let from_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
-		let from_pubkey = from_keypair.pubkey();
+		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
+		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let to_pubkey = Pubkey::from_str("4MqL4qy2W1yXzuF3PiuSMehMbJzMuZEcBwVvrgtuhx7V").unwrap();
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
 				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
-				&from_pubkey,
+				&agg_key_pubkey,
 			),
-			SystemProgramInstruction::transfer(&from_pubkey, &to_pubkey, 1000000000),
+			SystemProgramInstruction::transfer(&agg_key_pubkey, &to_pubkey, 1000000000),
 		];
-		let message = Message::new(&instructions, Some(&from_pubkey));
+		let message = Message::new(&instructions, Some(&agg_key_pubkey));
 		let mut tx = Transaction::new_unsigned(message);
-		tx.sign(&[&from_keypair], durable_nonce);
+		tx.sign(&[&agg_key_keypair], durable_nonce);
 
 		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
 		let expected_serialized_tx = hex_literal::hex!("01b0c5753a71484e74a73f01e8a373cd2170285afa09ecf83174de8701a469d150e195cc24ad915024614932248d1f036823d814545d6475df814dfaa7f85bd20301000205f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19231e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd4000000000000000000000000000000000000000000000000000000000000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000d11cb0294f1fde6725b37bc3f341f5083378cb8f543019218dba6f9d53e12a920203030104000404000000030200020c0200000000ca9a3b00000000").to_vec();
@@ -844,8 +844,8 @@ mod tests {
 	#[test]
 	fn create_transfer_cu_priority_fees() {
 		let durable_nonce = Hash::from_str("2GGxiEHwtWPGNKH5czvxRGvQTayRvCT1PFsA9yK2iMnq").unwrap();
-		let from_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
-		let from_pubkey = from_keypair.pubkey();
+		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
+		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let to_pubkey = Pubkey::from_str("4MqL4qy2W1yXzuF3PiuSMehMbJzMuZEcBwVvrgtuhx7V").unwrap();
 		let compute_unit_price = 100_0000;
 		let compute_unit_limit = 300_000;
@@ -853,15 +853,15 @@ mod tests {
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
 				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
-				&from_pubkey,
+				&agg_key_pubkey,
 			),
 			ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
 			ComputeBudgetInstruction::set_compute_unit_limit(compute_unit_limit),
-			SystemProgramInstruction::transfer(&from_pubkey, &to_pubkey, lamports),
+			SystemProgramInstruction::transfer(&agg_key_pubkey, &to_pubkey, lamports),
 		];
-		let message = Message::new(&instructions, Some(&from_pubkey));
+		let message = Message::new(&instructions, Some(&agg_key_pubkey));
 		let mut tx = Transaction::new_unsigned(message);
-		tx.sign(&[&from_keypair], durable_nonce);
+		tx.sign(&[&agg_key_keypair], durable_nonce);
 
 		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
 		let expected_serialized_tx = hex_literal::hex!("017036ecc82313548a7f1ef280b9d7c53f9747e23abcb4e76d86c8df6aa87e82d460ad7cea2e8d972a833d3e1802341448a99be200ad4648c454b9d5a5e2d5020d01000306f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19231e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd400000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000012c57218f6315b83818802f3522fe7e04c596ae4fe08841e7940bc2f958aaaea04030301050004040000000400090340420f000000000004000502e0930400030200020c0200000040420f0000000000").to_vec();
