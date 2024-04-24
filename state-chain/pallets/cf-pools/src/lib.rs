@@ -1530,20 +1530,32 @@ impl<T: Config> Pallet<T> {
 	) -> Result<SwapOutput, DispatchError> {
 		Ok(match (from, to) {
 			(_, STABLE_ASSET) => {
-				let output = Self::swap_single_leg(from, to, input_amount)?;
-				let (output, network_fee) = Self::take_network_fee(output);
+				let (output, network_fee) =
+					Self::take_network_fee(Self::swap_single_leg(from, to, input_amount)?);
+
 				SwapOutput { intermediary: None, output, network_fee }
 			},
 			(STABLE_ASSET, _) => {
 				let (input_amount, network_fee) = Self::take_network_fee(input_amount);
-				let output = Self::swap_single_leg(from, to, input_amount)?;
-				SwapOutput { intermediary: None, output, network_fee }
+
+				SwapOutput {
+					intermediary: None,
+					output: Self::swap_single_leg(from, to, input_amount)?,
+					network_fee,
+				}
 			},
 			_ => {
-				let intermediary = Self::swap_single_leg(from, STABLE_ASSET, input_amount)?;
-				let (intermediary, network_fee) = Self::take_network_fee(intermediary);
-				let output = Self::swap_single_leg(STABLE_ASSET, to, intermediary)?;
-				SwapOutput { intermediary: Some(intermediary), output, network_fee }
+				let (intermediary, network_fee) = Self::take_network_fee(Self::swap_single_leg(
+					from,
+					STABLE_ASSET,
+					input_amount,
+				)?);
+
+				SwapOutput {
+					intermediary: Some(intermediary),
+					output: Self::swap_single_leg(STABLE_ASSET, to, intermediary)?,
+					network_fee,
+				}
 			},
 		})
 	}

@@ -191,7 +191,7 @@ decl_runtime_apis!(
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
-			additional_limit_orders: Option<Vec<(i32, U256)>>,
+			additional_limit_orders: Option<Vec<(Tick, U256)>>,
 		) -> Result<SwapOutput, DispatchErrorWithMessage>;
 		fn cf_pool_info(
 			base_asset: Asset,

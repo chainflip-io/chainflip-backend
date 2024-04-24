@@ -1278,8 +1278,7 @@ impl_runtime_apis! {
 					let pool = maybe_pool.as_mut().ok_or("Pool not found")?;
 
 					for (id, (tick, amount)) in limit_orders.into_iter().enumerate() {
-						let account_id = AccountId32::new([0; 32]);
-						pool.pool_state.collect_and_mint_limit_order(&(account_id, id as u64), side, tick, amount)
+						pool.pool_state.collect_and_mint_limit_order(&(Default::default(), id as u64), !side, tick, amount)
 							.map_err(|_| "Failed to set limit order")?;
 					}
 
