@@ -17,6 +17,7 @@ import { jsonRpc } from './json_rpc';
 import { provideLiquidity } from './provide_liquidity';
 import { sendEvmNative } from './send_evm';
 import { getBalance } from './get_balance';
+import Keyring from '@polkadot/keyring';
 
 type RpcAsset = {
   asset: string;
@@ -140,6 +141,36 @@ async function testWithdrawAsset() {
 
   await observeBalanceIncrease(testAsset, testAddress, oldBalance);
   console.log('=== testWithdrawAsset complete ===');
+}
+
+async function testTransferAsset() {
+  console.log('=== Starting testTransferAsset ===');
+  const amountToTransfer = (testAssetAmount / 10).toString(16);
+
+  const keyring = new Keyring({ type: 'sr25519' });
+
+  const lpAccount1 = keyring.createFromUri('//LP_1');
+  const lpAccount2 = keyring.createFromUri('//LP_2');
+
+  const oldBalanceLp1 = JSON.stringify(await chainflip.query.liquidityProvider.freeBalances(lpAccount1.address, testAsset));
+  const oldBalanceLp2 = JSON.stringify(await chainflip.query.liquidityProvider.freeBalances(lpAccount2.address, testAsset));
+
+  const result = await lpApiRpc(`lp_transfer_asset`, [
+    amountToTransfer,
+    testRpcAsset,
+    lpAccount2.address,
+  ]);
+
+  // Expect result to be a block hash
+  assert.match(result, /0x[0-9a-fA-F]{64}/, `Unexpected transfer asset result`);
+
+  const newBalanceLp1 = JSON.stringify(await chainflip.query.liquidityProvider.freeBalances(lpAccount1.address, testAsset));
+  const newBalanceLp2 = JSON.stringify(await chainflip.query.liquidityProvider.freeBalances(lpAccount2.address, testAsset));
+
+  assert.ok(newBalanceLp2 > oldBalanceLp2, `Expected balance to increase after transfer`);
+  assert.ok(newBalanceLp1 < oldBalanceLp1, `Expected balance to decrease after transfer`);
+
+  console.log('=== testTransferAsset complete ===');
 }
 
 async function testRegisterWithExistingLpAccount() {
@@ -370,6 +401,7 @@ export async function testLpApi() {
     testRangeOrder(),
     testLimitOrder(),
     testGetOpenSwapChannels(),
+    testTransferAsset(),
   ]);
 
   console.log('=== LP API test complete ===');

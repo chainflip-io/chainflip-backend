@@ -274,8 +274,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 			.await
 			.until_in_block()
 			.await
-			.context("Registration for Liquidity Refund Address failed.")?;
-
+			.context("Unable to transfer asset.")?;
 		Ok(tx_hash)
 	}
 
