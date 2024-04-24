@@ -202,6 +202,7 @@ jobs:
       - name: Run bouncer after upgrade 🙅‍♂️
         id: post-upgrade-bouncer
         run: |
+          git fetch --all
           git checkout ${{ env.UPGRADE_TO_COMMIT }}
           git rev-parse HEAD
           cd bouncer
