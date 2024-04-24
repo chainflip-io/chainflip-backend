@@ -30,7 +30,7 @@ async fn should_update_version_on_bad_proof() {
 				)))
 			});
 
-			mock_rpc_api.expect_runtime_version().times(1).returning(move || {
+			mock_rpc_api.expect_runtime_version().times(1).returning(move |_| {
 				let new_runtime_version = sp_version::RuntimeVersion {
 					spec_name: "test".into(),
 					impl_name: "test".into(),

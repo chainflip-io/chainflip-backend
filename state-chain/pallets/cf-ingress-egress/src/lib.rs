@@ -38,7 +38,7 @@ use cf_traits::{
 	liquidity::{LpBalanceApi, LpDepositHandler},
 	AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter, Broadcaster, CcmHandler,
 	CcmSwapIds, Chainflip, DepositApi, EgressApi, EpochInfo, FeePayment, GetBlockHeight,
-	IngressEgressFeeApi, NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails,
+	IngressEgressFeeApi, NetworkEnvironmentProvider, OnDeposit, SafeMode, ScheduledEgressDetails,
 	SwapDepositHandler, SwapQueueApi, SwapType,
 };
 use frame_support::{
@@ -50,6 +50,7 @@ pub use pallet::*;
 use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	marker::PhantomData,
 	vec,
 	vec::Vec,
 };
@@ -153,6 +154,32 @@ impl<C: Chain> CrossChainMessage<C> {
 }
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(8);
+
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+#[scale_info(skip_type_params(I))]
+pub struct PalletSafeMode<I: 'static> {
+	pub boost_deposits_enabled: bool,
+	pub add_boost_funds_enabled: bool,
+	pub stop_boosting_enabled: bool,
+	#[doc(hidden)]
+	#[codec(skip)]
+	_phantom: PhantomData<I>,
+}
+
+impl<I: 'static> SafeMode for PalletSafeMode<I> {
+	const CODE_RED: Self = PalletSafeMode {
+		boost_deposits_enabled: false,
+		add_boost_funds_enabled: false,
+		stop_boosting_enabled: false,
+		_phantom: PhantomData,
+	};
+	const CODE_GREEN: Self = PalletSafeMode {
+		boost_deposits_enabled: true,
+		add_boost_funds_enabled: true,
+		stop_boosting_enabled: true,
+		_phantom: PhantomData,
+	};
+}
 
 /// Calls to the external chains that has failed to be broadcast/accepted by the target chain.
 /// User can use information stored here to query for relevant information to broadcast
@@ -430,6 +457,9 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		type SwapQueueApi: SwapQueueApi;
+
+		/// Safe Mode access.
+		type SafeMode: Get<PalletSafeMode<I>>;
 	}
 
 	/// Lookup table for addresses to corresponding deposit channels.
@@ -444,7 +474,7 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
-	pub(super) type BoostPools<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub type BoostPools<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Twox64Concat,
 		TargetChainAsset<T, I>,
@@ -672,6 +702,9 @@ pub mod pallet {
 			amount_attempted: TargetChainAmount<T, I>,
 			channel_id: ChannelId,
 		},
+		BoostPoolCreated {
+			boost_pool: BoostPoolId<T::TargetChain>,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -691,6 +724,10 @@ pub mod pallet {
 		BitcoinChannelIdTooLarge,
 		/// The amount is below the minimum egress amount.
 		BelowEgressDustLimit,
+		/// Adding boost funds is disabled due to safe mode.
+		AddBoostFundsDisabled,
+		/// Retrieving boost funds disabled due to safe mode.
+		StopBoostingDisabled,
 	}
 
 	#[pallet::hooks]
@@ -1035,6 +1072,10 @@ pub mod pallet {
 			pool_tier: BoostPoolTier,
 		) -> DispatchResult {
 			let booster_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+			ensure!(
+				T::SafeMode::get().add_boost_funds_enabled,
+				Error::<T, I>::AddBoostFundsDisabled
+			);
 
 			T::LpBalance::try_debit_account(&booster_id, asset.into(), amount.into())?;
 
@@ -1063,6 +1104,7 @@ pub mod pallet {
 			pool_tier: BoostPoolTier,
 		) -> DispatchResult {
 			let booster = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+			ensure!(T::SafeMode::get().stop_boosting_enabled, Error::<T, I>::StopBoostingDisabled);
 
 			let (unlocked_amount, pending_boosts) =
 				BoostPools::<T, I>::mutate(asset, pool_tier, |pool| {
@@ -1377,7 +1419,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			);
 
 			// Only boost on non-zero fee and if the channel isn't already boosted:
-			if boost_fee > 0 && !matches!(boost_status, BoostStatus::Boosted { .. }) {
+			if T::SafeMode::get().boost_deposits_enabled &&
+				boost_fee > 0 && !matches!(boost_status, BoostStatus::Boosted { .. })
+			{
 				match Self::try_boosting(asset, amount, boost_fee, prewitnessed_deposit_id) {
 					Ok(BoostOutput { used_pools, total_fee: boost_fee_amount }) => {
 						DepositChannelLookup::<T, I>::mutate(&deposit_address, |details| {

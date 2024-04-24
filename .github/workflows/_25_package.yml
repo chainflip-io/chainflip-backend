@@ -12,19 +12,15 @@ env:
 jobs:
   packages:
     runs-on: namespace-profile-rust-builder
-    strategy:
-      fail-fast: false
-      matrix:
-        ubuntu_version: [20.04, 22.04]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-${{ matrix.ubuntu_version }}-48"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-22.04-48"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
       env:
-        NSC_CACHE_PATH: ubuntu-${{ matrix.ubuntu_version }}
+        NSC_CACHE_PATH: "/cache"
       volumes:
-        - /cache:/cache-ubuntu-${{ matrix.ubuntu_version }}
+        - /cache:/cache
       options: --cap-add=SYS_ADMIN
     steps:
       - name: Checkout 🛒
@@ -33,7 +29,7 @@ jobs:
       - name: Download binaries from same run 📥
         uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
         with:
-          name: chainflip-backend-bin-ubuntu-${{ matrix.ubuntu_version }}
+          name: chainflip-backend-bin
           path: ./target/release
 
       - name: Get date 📅
@@ -52,6 +48,6 @@ jobs:
       - name: Upload packages 📤
         uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
         with:
-          name: chainflip-backend-packages-ubuntu-${{ matrix.ubuntu_version }}
+          name: chainflip-backend-packages
           path: |
             target/debian/*.deb

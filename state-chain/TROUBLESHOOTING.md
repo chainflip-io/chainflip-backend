@@ -22,12 +22,21 @@ You need to build the runtime with `try-runtime` enabled.
 cargo build --release --features=try-runtime
 ```
 
-Now you can run your tests against a public rpc node. For example for perseverance:
+Now you can run your tests against a public rpc node.
+To test against Perseverance (Our canary testnet):
 
 ```bash copy
 try-runtime \
     --runtime ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm \
     on-runtime-upgrade live --uri wss://perseverance.chainflip.xyz:443
+```
+
+To test try-runtime against Berghain (Our Mainnet):
+
+```bash copy
+try-runtime \
+    --runtime ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm \
+    on-runtime-upgrade live --uri wss://mainnet-rpc.chainflip.io:443
 ```
 
 If you have trouble connecting to the remote rpc node, you can run a local rpc node and connect to that instead. First connect a local node to the network with some rpc optimisations:
@@ -85,7 +94,7 @@ cargo cf-build-benchmarks
 To generate or update a single weight file for pallet run:
 
 ```bash
-source state-chain/scripts/benchmark.sh {palletname e.x: broadcast}
+source state-chain/scripts/benchmark.sh {pallet_name e.x: broadcast}
 ```
 
 ### Chainflip-Node is not compiling with benchmark features enabled
@@ -175,8 +184,7 @@ There are grey areas. For example, it's acceptable to panic on any condition tha
 
 ### Benchmark whitelist
 
-When writing benchmarks, storage keys can be •whitelisted• for reads and/or writes, meaning reading/writing to the
-whitelisted key is ignored. This is confusing since mostly this is used in the context of whitelisting *account*
+When writing benchmarks, storage keys can be •*whitelisted*• for reads and/or writes, meaning reading/writing to the whitelisted key is ignored. This is confusing since mostly this is used in the context of whitelisting *account*
 storage, which is easy to confuse with whitelisting the actual account.
 
 See [this PR](https://github.com/paritytech/substrate/pull/6815) for a decent explanation.
@@ -197,6 +205,9 @@ name = 'my-crate'
 my-dep = { version = "1", default-features = false }
 my-optional-dep = { version = "1", optional = true }
 
+[dev-dependencies]
+test-only-dep = { version = "1" }
+
 [features]
 std = ['my-dep/std', 'my-optional-dep']
 ```
@@ -204,6 +215,8 @@ std = ['my-dep/std', 'my-optional-dep']
 It means that, by default, `my-crate` will pull in `my-dep` without any default features activated, and will *not* pull in `my-optional-dep` at all.
 
 However if you compile `my-crate` with feature `std`, then it will pull `my-dep` *and* `my-optional-dep` with `std` feature activated.
+
+For dependencies only used for testing (e.g. for mock and unit tests, under the [dev-dependencies] section), it should not have the `default-features = false` and should not be included in the std feature.
 
 ## Substrate storage: Separation of front overlay and backend. Feat clear_prefix()
 

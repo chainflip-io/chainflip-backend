@@ -47,9 +47,10 @@ macro_rules! assert_default_rotation_outcome {
 		assert_rotation_phase_matches!(RotationPhase::Idle);
 		assert_epoch_index(GENESIS_EPOCH + 1);
 		assert_eq!(Bond::<Test>::get(), EXPECTED_BOND, "bond should be updated");
+		// Use BTreeSet to ignore ordering.
 		assert_eq!(
-			ValidatorPallet::current_authorities(),
-			BTreeSet::from_iter(WINNING_BIDS.into_iter().map(|bid| bid.bidder_id))
+			ValidatorPallet::current_authorities().into_iter().collect::<BTreeSet<u64>>(),
+			WINNING_BIDS.into_iter().map(|bid| bid.bidder_id).collect::<BTreeSet<_>>()
 		);
 	};
 }
@@ -65,17 +66,6 @@ fn assert_rotation_aborted() {
 		}),
 		RuntimeEvent::ValidatorPallet(Event::RotationAborted)
 	);
-}
-
-fn simple_rotation_state(
-	auction_winners: Vec<u64>,
-	bond: Option<u128>,
-) -> RuntimeRotationState<Test> {
-	RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
-		winners: auction_winners,
-		bond: bond.unwrap_or(100),
-		losers: LOSING_BIDS.into_iter().map(|bid| bid.bidder_id).collect(),
-	})
 }
 
 fn add_bids(bids: Vec<Bid<ValidatorId, Amount>>) {
@@ -195,7 +185,7 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 	new_test_ext()
 		.then_execute_with_checks(|| {
 			assert_eq!(
-				CurrentAuthorities::<Test>::get(),
+				CurrentAuthorities::<Test>::get().into_iter().collect::<BTreeSet<u64>>(),
 				genesis_set,
 				"the current authorities should be the genesis authorities"
 			);
@@ -204,7 +194,7 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 		})
 		.then_advance_n_blocks_and_execute_with_checks(EPOCH_DURATION, || {
 			assert_eq!(
-				ValidatorPallet::current_authorities(),
+				ValidatorPallet::current_authorities().into_iter().collect::<BTreeSet<u64>>(),
 				genesis_set,
 				"we should still be validating with the genesis authorities"
 			);
@@ -230,7 +220,7 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 fn genesis() {
 	new_test_ext().then_execute_with_checks(|| {
 		assert_eq!(
-			CurrentAuthorities::<Test>::get(),
+			CurrentAuthorities::<Test>::get().into_iter().collect::<BTreeSet<u64>>(),
 			BTreeSet::from(GENESIS_AUTHORITIES),
 			"We should have a set of validators at genesis"
 		);
@@ -513,15 +503,15 @@ fn highest_bond() {
 	new_test_ext().then_execute_with_checks(|| {
 		// Epoch 1
 		EpochHistory::<Test>::activate_epoch(&ALICE, 1);
-		HistoricalAuthorities::<Test>::insert(1, BTreeSet::from([ALICE]));
+		HistoricalAuthorities::<Test>::insert(1, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(1, 10);
 		// Epoch 2
 		EpochHistory::<Test>::activate_epoch(&ALICE, 2);
-		HistoricalAuthorities::<Test>::insert(2, BTreeSet::from([ALICE]));
+		HistoricalAuthorities::<Test>::insert(2, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(2, 30);
 		// Epoch 3
 		EpochHistory::<Test>::activate_epoch(&ALICE, 3);
-		HistoricalAuthorities::<Test>::insert(3, BTreeSet::from([ALICE]));
+		HistoricalAuthorities::<Test>::insert(3, Vec::from([ALICE]));
 		HistoricalBonds::<Test>::insert(3, 20);
 		// Expect the bond of epoch 2
 		assert_eq!(EpochHistory::<Test>::active_bond(&ALICE), 30);
@@ -605,10 +595,7 @@ mod bond_expiry {
 		new_test_ext().execute_with(|| {
 			const BOND: u128 = 100;
 			let initial_epoch = ValidatorPallet::current_epoch();
-			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(
-				vec![1, 2],
-				Some(BOND),
-			));
+			ValidatorPallet::transition_to_next_epoch(vec![1, 2], BOND);
 			assert_eq!(ValidatorPallet::bond(), BOND);
 
 			// Ensure the new bond is set for each authority
@@ -617,10 +604,7 @@ mod bond_expiry {
 			});
 
 			const NEXT_BOND: u128 = BOND + 1;
-			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(
-				vec![2, 3],
-				Some(NEXT_BOND),
-			));
+			ValidatorPallet::transition_to_next_epoch(vec![2, 3], NEXT_BOND);
 			assert_eq!(ValidatorPallet::bond(), NEXT_BOND);
 
 			ValidatorPallet::current_authorities().iter().for_each(|account_id| {
@@ -644,20 +628,14 @@ mod bond_expiry {
 		new_test_ext().execute_with(|| {
 			let initial_epoch = ValidatorPallet::current_epoch();
 			const AUTHORITY_IN_BOTH_EPOCHS: u64 = 2;
-			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(
-				vec![1, AUTHORITY_IN_BOTH_EPOCHS],
-				Some(100),
-			));
+			ValidatorPallet::transition_to_next_epoch(vec![1, AUTHORITY_IN_BOTH_EPOCHS], 100);
 			assert_eq!(ValidatorPallet::bond(), 100);
 
 			ValidatorPallet::current_authorities().iter().for_each(|account_id| {
 				assert_eq!(MockBonder::get_bond(account_id), 100);
 			});
 
-			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(
-				vec![AUTHORITY_IN_BOTH_EPOCHS, 3],
-				Some(99),
-			));
+			ValidatorPallet::transition_to_next_epoch(vec![AUTHORITY_IN_BOTH_EPOCHS, 3], 99);
 			assert_eq!(ValidatorPallet::bond(), 99);
 
 			// Keeps the highest bond of all the epochs it's been active in
@@ -1074,7 +1052,7 @@ fn can_calculate_percentage_cfe_at_target_version() {
 			let _ = ValidatorPallet::register_as_validator(RuntimeOrigin::signed(*id));
 			assert_ok!(ValidatorPallet::cfe_version(RuntimeOrigin::signed(*id), initial_version,));
 		});
-		CurrentAuthorities::<Test>::set(BTreeSet::from(authorities));
+		CurrentAuthorities::<Test>::set(Vec::from(authorities));
 
 		assert_eq!(
 			ValidatorPallet::percent_authorities_compatible_with_version(initial_version),
@@ -1100,7 +1078,7 @@ fn can_calculate_percentage_cfe_at_target_version() {
 		);
 
 		// Change authorities
-		CurrentAuthorities::<Test>::set(BTreeSet::from(authorities));
+		CurrentAuthorities::<Test>::set(Vec::from(authorities));
 		assert_eq!(
 			ValidatorPallet::percent_authorities_compatible_with_version(initial_version),
 			Percent::from_percent(0)
@@ -1288,7 +1266,7 @@ fn can_determine_is_auction_phase() {
 			RotationPhase::KeyHandoversInProgress(Default::default()),
 			RotationPhase::ActivatingKeys(Default::default()),
 			RotationPhase::NewKeysActivated(Default::default()),
-			RotationPhase::SessionRotating(Default::default()),
+			RotationPhase::SessionRotating(Default::default(), Default::default()),
 		]
 		.into_iter()
 		.for_each(|phase| {
@@ -1336,4 +1314,27 @@ fn redemption_check_works() {
 		CurrentRotationPhase::<Test>::set(RotationPhase::KeygensInProgress(Default::default()));
 		assert_noop!(ValidatorPallet::ensure_can_redeem(&validator), Error::<Test>::StillBidding);
 	});
+}
+
+#[test]
+fn validator_set_change_propagates_to_session_pallet() {
+	new_test_ext()
+		// Set some new authorities different from the old ones.
+		.then_execute_with_checks(|| {
+			assert!(
+				Pallet::<Test>::current_authorities() ==
+					pallet_session::Pallet::<Test>::validators()
+			);
+			CurrentRotationPhase::put(RotationPhase::<Test>::NewKeysActivated(
+				RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
+					winners: WINNING_BIDS.map(|bidder| bidder.bidder_id).to_vec(),
+					losers: vec![],
+					bond: EXPECTED_BOND,
+				}),
+			));
+		})
+		// Run until the new epoch.
+		.then_process_blocks_until(|_| CurrentRotationPhase::<Test>::get() == RotationPhase::Idle)
+		// Do the consistency checks.
+		.then_execute_with_checks(|| {});
 }

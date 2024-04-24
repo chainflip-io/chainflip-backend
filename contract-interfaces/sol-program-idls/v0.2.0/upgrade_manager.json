@@ -121,5 +121,12 @@
       "programFunctionName": "transfer_vault_upgrade_authority",
       "discriminator": "[114, 247, 72, 110, 145, 65, 236, 153]"
     }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Suspended",
+      "msg": "Upgrade Manager program is suspended"
+    }
   ]
 }

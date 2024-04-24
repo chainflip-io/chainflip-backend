@@ -41,20 +41,17 @@ export async function submitRuntimeUpgradeWithRestrictions(
 
   console.log('Submitted runtime upgrade. Waiting for the runtime upgrade to complete.');
 
-  // TODO: Check if there were any errors in the submission, like `UpgradeConditionsNotMet` and `NotEnoughAuthoritiesCfesAtTargetVersion`.
-  // and exit with error.
-
   const event = await Promise.race([
     observeEvent('system:CodeUpdated', chainflip),
     observeEvent('governance:FailedExecution', chainflip),
   ]);
 
-  if (event.name === 'governance:FailedExecution') {
-    throw Error(`Runtime upgrade failed with error: ${event.data}`);
+  if (event.name.method === 'FailedExecution') {
+    // TODO: use findMetaError to provide a more meaningful error message.
+    throw Error(`Runtime upgrade failed with error: ${JSON.stringify(event.data)}`);
   }
 
   console.log('Runtime upgrade completed.');
-  chainflip.disconnect();
 }
 
 export async function submitRuntimeUpgradeWasmPath(wasmPath: string) {

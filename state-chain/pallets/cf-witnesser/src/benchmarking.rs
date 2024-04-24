@@ -7,7 +7,7 @@ use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::v2::*;
 use frame_support::{assert_ok, traits::Hooks};
 use frame_system::RawOrigin;
-use sp_std::{boxed::Box, collections::btree_set::BTreeSet};
+use sp_std::boxed::Box;
 
 #[benchmarks]
 mod benchmarks {
@@ -21,7 +21,7 @@ mod benchmarks {
 		let call: <T as Config>::RuntimeCall = frame_system::Call::remark { remark: vec![] }.into();
 		let epoch = T::EpochInfo::epoch_index();
 
-		T::EpochInfo::add_authority_info_for_epoch(epoch, BTreeSet::from([validator_id]));
+		T::EpochInfo::add_authority_info_for_epoch(epoch, Vec::from([validator_id]));
 
 		#[extrinsic_call]
 		witness_at_epoch(RawOrigin::Signed(caller.clone()), Box::new(call.clone()), epoch);

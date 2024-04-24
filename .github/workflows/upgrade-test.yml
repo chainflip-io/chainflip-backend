@@ -134,7 +134,7 @@ jobs:
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: ${{ inputs.upgrade-to-workflow-name }}
-          name: chainflip-backend-bin-try-runtime-ubuntu-22.04
+          name: chainflip-backend-bin-try-runtime
           path: upgrade-to-bins
           commit: ${{ env.UPGRADE_TO_COMMIT }}
 
@@ -188,6 +188,7 @@ jobs:
         shell: bash
         id: upgrade-network
         run: |
+          git fetch --all
           git checkout ${{ github.sha }}
           git rev-parse HEAD
           cd bouncer

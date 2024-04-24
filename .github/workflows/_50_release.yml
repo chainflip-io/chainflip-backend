@@ -11,22 +11,18 @@ env:
 jobs:
   compress-binaries:
     runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        ubuntu_version: [20.04, 22.04]
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Set release directory
         run: |
-          echo "RELEASE_DIR=chainflip_${{ github.ref_name }}_ubuntu_${{ matrix.ubuntu_version }}_amd64" >> $GITHUB_ENV
+          echo "RELEASE_DIR=chainflip_${{ github.ref_name }}_ubuntu_22.04_amd64" >> $GITHUB_ENV
 
       - name: Download binaries 📥
         uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
         with:
-          name: chainflip-backend-bin-ubuntu-${{ matrix.ubuntu_version }}
+          name: chainflip-backend-bin
           path: ${{ env.RELEASE_DIR }}
 
       - name: Compress release 🗜️

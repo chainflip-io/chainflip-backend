@@ -1,9 +1,7 @@
 # This CI runs a lot of the jobs in parallel to speed up development time. We also run a simpler suite of bouncer tests.
 name: Release Chainflip Development on main
 on:
-  push:
-    branches:
-      - main
+  merge_group:
 
 jobs:
   pre-check:
@@ -34,30 +32,11 @@ jobs:
       upload-name: "chainflip-backend-bin-try-runtime"
       binary-subdir: release
 
-  docker:
-    needs: [build]
-    uses: ./.github/workflows/_24_docker.yml
-    secrets: inherit
-    with:
-      network: "test"
-      environment: "development"
-  package:
-    needs: [build]
-    uses: ./.github/workflows/_25_package.yml
-    with:
-      network: "test"
-    secrets: inherit
   post-check:
     needs: [build]
     uses: ./.github/workflows/_40_post_check.yml
     secrets: inherit
-  publish:
-    needs: [package]
-    uses: ./.github/workflows/_30_publish.yml
-    with:
-      version: ci/${{ github.sha }}/
-      environment: "development"
-    secrets: inherit
+
   upgrade-check:
     needs: [build-try-runtime]
     uses: ./.github/workflows/upgrade-test.yml
