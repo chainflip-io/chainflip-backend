@@ -1,5 +1,6 @@
 import { Chain, InternalAssets as Assets } from '@chainflip/cli';
 import assert from 'assert';
+import Keyring from '@polkadot/keyring';
 import {
   getChainflipApi,
   observeEvent,
@@ -17,7 +18,6 @@ import { jsonRpc } from './json_rpc';
 import { provideLiquidity } from './provide_liquidity';
 import { sendEvmNative } from './send_evm';
 import { getBalance } from './get_balance';
-import Keyring from '@polkadot/keyring';
 
 type RpcAsset = {
   asset: string;
