@@ -35,7 +35,7 @@ use state_chain_runtime::{
 	chainflip::{BlockUpdate, Offence},
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
-		BrokerInfo, CustomRuntimeApi, DispatchErrorWithMessage, EventFilter,
+		BoostPoolDepth, BrokerInfo, CustomRuntimeApi, DispatchErrorWithMessage, EventFilter,
 		FailingWitnessValidators, LiquidityProviderInfo, ValidatorInfo,
 	},
 	NetworkFee,
@@ -559,6 +559,9 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<sp_core::Bytes>>;
+
+	#[method(name = "boost_pools_depth")]
+	fn cf_boost_pools_depth(&self) -> RpcResult<Vec<BoostPoolDepth>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -964,6 +967,13 @@ where
 			.cf_pool_depth(self.unwrap_or_best(at), base_asset, quote_asset, tick_range)
 			.map_err(to_rpc_error)
 			.and_then(|result| result.map_err(map_dispatch_error))
+	}
+
+	fn cf_boost_pools_depth(&self) -> RpcResult<Vec<BoostPoolDepth>> {
+		self.client
+			.runtime_api()
+			.cf_boost_pools_depth(self.client.info().best_hash)
+			.map_err(to_rpc_error)
 	}
 
 	fn cf_pool_liquidity(
