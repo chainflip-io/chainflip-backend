@@ -152,8 +152,12 @@ async function testTransferAsset() {
   const lpAccount1 = keyring.createFromUri('//LP_1');
   const lpAccount2 = keyring.createFromUri('//LP_2');
 
-  const oldBalanceLp1 = JSON.stringify(await chainflip.query.liquidityProvider.freeBalances(lpAccount1.address, testAsset));
-  const oldBalanceLp2 = JSON.stringify(await chainflip.query.liquidityProvider.freeBalances(lpAccount2.address, testAsset));
+  const oldBalanceLp1 = JSON.stringify(
+    await chainflip.query.liquidityProvider.freeBalances(lpAccount1.address, testAsset),
+  );
+  const oldBalanceLp2 = JSON.stringify(
+    await chainflip.query.liquidityProvider.freeBalances(lpAccount2.address, testAsset),
+  );
 
   const result = await lpApiRpc(`lp_transfer_asset`, [
     amountToTransfer,
@@ -164,8 +168,12 @@ async function testTransferAsset() {
   // Expect result to be a block hash
   assert.match(result, /0x[0-9a-fA-F]{64}/, `Unexpected transfer asset result`);
 
-  const newBalanceLp1 = JSON.stringify(await chainflip.query.liquidityProvider.freeBalances(lpAccount1.address, testAsset));
-  const newBalanceLp2 = JSON.stringify(await chainflip.query.liquidityProvider.freeBalances(lpAccount2.address, testAsset));
+  const newBalanceLp1 = JSON.stringify(
+    await chainflip.query.liquidityProvider.freeBalances(lpAccount1.address, testAsset),
+  );
+  const newBalanceLp2 = JSON.stringify(
+    await chainflip.query.liquidityProvider.freeBalances(lpAccount2.address, testAsset),
+  );
 
   assert.ok(newBalanceLp2 > oldBalanceLp2, `Expected balance to increase after transfer`);
   assert.ok(newBalanceLp1 < oldBalanceLp1, `Expected balance to decrease after transfer`);
