@@ -330,6 +330,7 @@ mod boost_pool_details {
 	#[derive(Serialize, Deserialize)]
 	pub struct BoostPoolDetailsRpc {
 		fee_tier: u16,
+		#[serde(flatten)]
 		asset: Asset,
 		available_amounts: Vec<AccountAndAmount>,
 		deposits_pending_finalization: Vec<PendingBoost>,
@@ -1478,7 +1479,7 @@ where
 			get_boost_details_for_asset(asset)
 		} else {
 			let results_for_each_asset: RpcResult<Vec<_>> =
-				Asset::all().map(|asset| get_boost_details_for_asset(asset)).collect();
+				Asset::all().map(get_boost_details_for_asset).collect();
 
 			results_for_each_asset.map(|inner| inner.into_iter().flatten().collect())
 		}

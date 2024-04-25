@@ -64,6 +64,7 @@ pub struct ValidatorInfo {
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
 pub struct BoostPoolDepth {
+	#[serde(flatten)]
 	pub asset: Asset,
 	pub tier: u16,
 	#[serde(serialize_with = "serialize_as_hex")]
