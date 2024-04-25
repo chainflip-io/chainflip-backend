@@ -35,14 +35,14 @@ impl Chain for Solana {
 	type TrackedData = tracked_data::SolTrackedData;
 	type ChainAsset = assets::sol::Asset;
 	type ChainAccount = SolAddress;
-	type EpochStartData = ();
+	type EpochStartData = (); //todo
 	type DepositFetchId = ChannelId;
-	type DepositChannelState = ();
-	type DepositDetails = ();
+	type DepositChannelState = (); //todo
+	type DepositDetails = (); //todo
 	type Transaction = SolTransaction;
-	type TransactionMetadata = ();
-	type ReplayProtectionParams = ();
-	type ReplayProtection = ();
+	type TransactionMetadata = (); //todo
+	type ReplayProtectionParams = (); //todo
+	type ReplayProtection = (); //todo
 	type TransactionRef = SolHash;
 }
 
@@ -54,7 +54,7 @@ impl ChainCrypto for SolanaCrypto {
 	type KeyHandoverIsRequired = ConstBool<false>;
 
 	type AggKey = SolAddress;
-	type Payload = ();
+	type Payload = (); //todo
 	type ThresholdSignature = SolSignature;
 	type TransactionInId = SolHash;
 	type TransactionOutId = Self::ThresholdSignature;
