@@ -103,8 +103,9 @@ pub enum DispatchErrorWithMessage {
 impl From<DispatchError> for DispatchErrorWithMessage {
 	fn from(value: DispatchError) -> Self {
 		match value {
-			DispatchError::Module(sp_runtime::ModuleError { message: Some(message), .. }) =>
-				DispatchErrorWithMessage::Module(message.as_bytes().to_vec()),
+			DispatchError::Module(sp_runtime::ModuleError { message: Some(message), .. }) => {
+				DispatchErrorWithMessage::Module(message.as_bytes().to_vec())
+			},
 			value => DispatchErrorWithMessage::Other(value),
 		}
 	}
@@ -168,6 +169,7 @@ decl_runtime_apis!(
 			to: Asset,
 			amount: AssetAmount,
 			additional_limit_orders: Option<Vec<(i32, U256)>>,
+			broker_commission_bps: Option<BasisPoints>,
 		) -> Result<SwapOutput, DispatchErrorWithMessage>;
 		fn cf_pool_info(
 			base_asset: Asset,

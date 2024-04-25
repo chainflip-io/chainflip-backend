@@ -218,6 +218,7 @@ pub enum SwapFeeKind {
 	Network,
 	Ingress,
 	Egress,
+	Broker,
 }
 
 impl SwapFeeKind {
@@ -261,6 +262,10 @@ impl From<SwapOutput> for RpcSwapOutput {
 
 		if let Some((asset, fee)) = swap_output.egress_fee {
 			included_fees.push(SwapFeeKind::Egress.into_fee(fee, asset));
+		}
+
+		if let Some((asset, fee)) = swap_output.broker_commission {
+			included_fees.push(SwapFeeKind::Broker.into_fee(fee, asset));
 		}
 
 		Self {
@@ -637,11 +642,13 @@ fn map_dispatch_error(e: DispatchErrorWithMessage) -> jsonrpsee::core::Error {
 	jsonrpsee::core::Error::from(match e {
 		DispatchErrorWithMessage::Module(message) => match std::str::from_utf8(&message) {
 			Ok(message) => anyhow::anyhow!("DispatchError: {message}"),
-			Err(error) =>
-				anyhow::anyhow!("DispatchError: Unable to deserialize error message: '{error}'"),
+			Err(error) => {
+				anyhow::anyhow!("DispatchError: Unable to deserialize error message: '{error}'")
+			},
 		},
-		DispatchErrorWithMessage::Other(e) =>
-			anyhow::anyhow!("DispatchError: {}", <&'static str>::from(e)),
+		DispatchErrorWithMessage::Other(e) => {
+			anyhow::anyhow!("DispatchError: {}", <&'static str>::from(e))
+		},
 	})
 }
 
@@ -962,6 +969,7 @@ where
 		amount: NumberOrHex,
 		additional_limit_orders: Option<Vec<(i32, U256)>>,
 		at: Option<state_chain_runtime::Hash>,
+		broker_commission_bps: Option<BasisPoints>,
 	) -> RpcResult<RpcSwapOutput> {
 		self.client
 			.runtime_api()
@@ -980,6 +988,7 @@ where
 					})
 					.map_err(|str| anyhow::anyhow!(str))?,
 				additional_limit_orders,
+				broker_commission_bps,
 			)
 			.map_err(to_rpc_error)
 			.and_then(|result| result.map_err(map_dispatch_error))
@@ -1462,7 +1471,7 @@ where
 				let _ = sink.reject(jsonrpsee::core::Error::from(
 					sc_rpc_api::state::error::Error::Client(Box::new(e)),
 				));
-				return Ok(())
+				return Ok(());
 			},
 		};
 		let stream = futures::stream::iter(std::iter::once(Ok(BlockUpdate {

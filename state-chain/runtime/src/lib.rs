@@ -1265,11 +1265,20 @@ impl_runtime_apis! {
 			to: Asset,
 			amount: AssetAmount,
 			additional_limit_orders: Option<Vec<(Tick, U256)>>,
+			broker_commission_bps: Option<BasisPoints>,
 		) -> Result<SwapOutput, DispatchErrorWithMessage> {
 			let ingress_fee = Self::cf_ingress_fee(from);
 
 			let swap_input_amount = if let Some(fee) = ingress_fee {
 				amount.checked_sub(fee).ok_or("Deposit is lower than ingress fee")?
+			} else {
+				amount
+			};
+
+			let broker_commission = Self::cf_broker_commission(amount, broker_commission_bps);
+
+			let swap_input_amount = if let Some(fee) = broker_commission {
+				amount.checked_sub(fee).ok_or("Broker fee cannot be more than the amount")?
 			} else {
 				amount
 			};
@@ -1420,6 +1429,11 @@ impl_runtime_apis! {
 					)
 				},
 			}
+		}
+
+		fn cf_broker_commission(amount: AssetAmount, broker_commission_bps: BasisPoints) -> Option<AssetAmount> {
+			Permill::from_parts(broker_commission_bps as u32 * BASIS_POINTS_PER_MILLION) *
+				amount;
 		}
 
 		fn cf_witness_safety_margin(chain: ForeignChain) -> Option<u64> {
