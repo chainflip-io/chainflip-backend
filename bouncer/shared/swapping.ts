@@ -145,7 +145,7 @@ export async function testSwap(
     log,
   );
 }
-async function testSwapViaContract(
+export async function testSwapViaContract(
   sourceAsset: Asset,
   destAsset: Asset,
   addressType?: BtcAddressType,
