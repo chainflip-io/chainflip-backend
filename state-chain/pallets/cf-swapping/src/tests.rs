@@ -27,7 +27,7 @@ use frame_support::{
 use itertools::Itertools;
 use sp_arithmetic::Permill;
 use sp_core::H160;
-use sp_runtime::{traits::Scale, Percent};
+use sp_runtime::Percent;
 use sp_std::iter;
 
 const GAS_BUDGET: AssetAmount = 1_000u128;
