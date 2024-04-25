@@ -749,7 +749,7 @@ pub mod pallet {
 				let stable_amount = *stable_amount;
 
 				if swap.to == STABLE_ASSET {
-					swap.update_swap_result(SwapLeg::ToStable, stable_amount);
+					swap.final_output = Some(stable_amount);
 				}
 			}
 
