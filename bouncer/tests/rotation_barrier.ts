@@ -20,6 +20,7 @@ async function rotateAndSwap() {
   let stopObserving = false;
   const broadcastAborted = observeBadEvents(':BroadcastAborted', () => stopObserving);
 
+  // Using Arbitrum as the ingress chain to make the swap as fast as possible
   await testSwapViaContract('ArbEth', 'Eth');
 
   stopObserving = true;
