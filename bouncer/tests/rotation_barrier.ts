@@ -9,7 +9,6 @@ async function rotateAndSwap() {
   await submitGovernanceExtrinsic(chainflip.tx.validator.forceRotation());
 
   // Wait for the activation key to be created and the activation key to be sent for signing
-
   console.log(`Vault rotation initiated`);
   await observeEvent('evmThresholdSigner:KeygenSuccess', chainflip);
   console.log(`Waiting for the bitcoin key handover`);
@@ -24,10 +23,7 @@ async function rotateAndSwap() {
   await testSwapViaContract('ArbEth', 'Eth');
 
   stopObserving = true;
-
   await broadcastAborted;
-
-  console.log('Finished!');
 }
 
 try {
