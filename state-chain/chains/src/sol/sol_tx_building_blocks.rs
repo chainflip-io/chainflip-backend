@@ -814,7 +814,7 @@ mod tests {
 	}
 
 	#[test]
-	fn create_nonced_transfer() {
+	fn create_transfer_native() {
 		let durable_nonce = Hash::from_str("F5HaggF8o2jESnoFi7sSdgy2qhz4amp3miev144Cfp49").unwrap();
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
@@ -837,7 +837,7 @@ mod tests {
 		// println!("tx:{:?}", hex::encode(serialized_tx));
 
 		let transaction_length = serialized_tx.len();
-		println!("Nonced Transfer: {} bytes", transaction_length);
+		println!("Transfer Native length: {} bytes", transaction_length);
 		assert!(transaction_length <= MAX_TRANSACTION_LENGTH)
 	}
 
@@ -870,7 +870,7 @@ mod tests {
 		assert_eq!(serialized_tx, expected_serialized_tx);
 
 		let transaction_length = serialized_tx.len();
-		println!("Nonced transfer w/ budget:  {} bytes", transaction_length);
+		println!("Transfer Native length w/ budget:  {} bytes", transaction_length);
 		assert!(transaction_length <= MAX_TRANSACTION_LENGTH)
 	}
 
@@ -912,7 +912,7 @@ mod tests {
 		assert_eq!(serialized_tx, expected_serialized_tx);
 
 		let transaction_length = serialized_tx.len();
-		println!("Nonced fetch native:  {} bytes", transaction_length);
+		println!("Fetch native length:  {} bytes", transaction_length);
 		assert!(transaction_length <= MAX_TRANSACTION_LENGTH)
 	}
 
@@ -968,6 +968,8 @@ mod tests {
 		let expected_serialized_tx = hex_literal::hex!("01ae1c08f2bb80bd9eea640dea37d0bb5bbeb057715a49165542b8c8c6456225ea08266a69e3d2ca3bad21a3d573ba60990eb4a632bdcb31fdd06f494d1768370e0100070bf79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921eff116c91f924b871717959253d68219f0750a644b4fc95d9a3e5cda6cd250db966a2b36557938f49cc5d00f8f12d86f16f48e03b63c8422967dba621ab60bf000000000000000000000000000000000000000000000000000000000000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee874a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc8751ca3279285b0e42cb03e396d7a90fa147d917443e9c437fe48e4ccd954f0bf91277d430e44664449bc744abfff1c3da747f82bee786eb50e219be4c279ca0204030105000404000000090808000a020307060419494710642cb0c6460300000013020bfe00e1f5050000000006").to_vec();
 		// println!("tx:{:?}", hex::encode(serialized_tx.clone()));
 
+		let transaction_length = serialized_tx.len();
+		println!("Fetch tokens length:  {} bytes", transaction_length);
 		assert_eq!(serialized_tx, expected_serialized_tx);
 	}
 
@@ -1018,6 +1020,8 @@ mod tests {
 		let expected_serialized_tx = hex_literal::hex!("019cae816a9a1d6dcaf6a327e208999e8dd68ab2202d11199abd9ebe2f5e8c68ba1340169eb21bd47b2bb1ece8e7c617e347d223dad08deccdcfd17602d4b48c050100090df79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19263b35f30ba8a5f9e80b8258b6e39ef4062e5f55c60a8217df3ec39457331cc80b966a2b36557938f49cc5d00f8f12d86f16f48e03b63c8422967dba621ab60bf000000000000000000000000000000000000000000000000000000000000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90c4a8e3702f6e26d9d0c900c1461da4e3debef5743ce253bb9f0308a68c944220fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee874a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c81a0052237ad76cb6e88fe505dc3d96bba6d8889f098b1eaa342ec84458805218c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f8590884c492fcd363de27fa07c2ae01f440765ce921938329887831c64d5f6dc81603040301050004040000000c0600020708040601010a0809000b03020806041136b4eeaf4a557ebc020000000000000006").to_vec();
 		// println!("tx:{:?}", hex::encode(serialized_tx.clone()));
 
+		let transaction_length = serialized_tx.len();
+		println!("Transfer tokens length:  {} bytes", transaction_length);
 		assert_eq!(serialized_tx, expected_serialized_tx);
 	}
 
@@ -1084,7 +1088,7 @@ mod tests {
 			let transaction_bytes = serialized_tx.len();
 			println!(
 				"Full rotation - number of nonce accounts: {} - Bytes: {}",
-				i,
+				i + 1,
 				serialized_tx.len()
 			);
 			assert!(transaction_bytes < MAX_TRANSACTION_LENGTH, "Transaction too large")
@@ -1142,7 +1146,7 @@ mod tests {
 		assert_eq!(serialized_tx, expected_serialized_tx);
 
 		let transaction_length = serialized_tx.len();
-		println!("Nonced ccm native:  {} bytes", transaction_length);
+		println!("Ccm native length:  {} bytes", transaction_length);
 		assert!(transaction_length <= MAX_TRANSACTION_LENGTH)
 	}
 
@@ -1228,6 +1232,7 @@ mod tests {
 		assert_eq!(serialized_tx, expected_serialized_tx);
 
 		let transaction_length = serialized_tx.len();
+		println!("Ccm token length:  {} bytes", transaction_length);
 		assert!(transaction_length <= MAX_TRANSACTION_LENGTH)
 	}
 
@@ -1290,7 +1295,7 @@ mod tests {
 	}
 
 	#[test]
-	fn create_nonced_associated_token_account() {
+	fn create_idempotent_associated_token_account() {
 		let durable_nonce = Hash::from_str("3GY33ibbFkTSdXeXuPAh2NxGTwm1TfEFNKKG9XjxFa67").unwrap();
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
