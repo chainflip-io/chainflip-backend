@@ -332,7 +332,7 @@ mod boost_pool_details {
 		fee_tier: u16,
 		asset: Asset,
 		available_amounts: Vec<AccountAndAmount>,
-		pending_boosts: Vec<PendingBoost>,
+		deposits_pending_finalization: Vec<PendingBoost>,
 		pending_withdrawals: Vec<PendingWithdrawal>,
 	}
 
@@ -351,7 +351,7 @@ mod boost_pool_details {
 				asset,
 				fee_tier,
 				available_amounts: map_to_vec(details.available_amounts),
-				pending_boosts: details
+				deposits_pending_finalization: details
 					.pending_boosts
 					.into_iter()
 					.map(|(deposit_id, owed_amounts)| PendingBoost {
@@ -640,7 +640,7 @@ pub trait CustomApi {
 	fn cf_boost_pools_depth(&self) -> RpcResult<BoostPoolDepthResponse>;
 
 	#[method(name = "boost_pool_details")]
-	fn cf_boost_pool_details(&self, asset: Asset) -> RpcResult<BoostPoolDetailsResponse>;
+	fn cf_boost_pool_details(&self, asset: Option<Asset>) -> RpcResult<BoostPoolDetailsResponse>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1460,17 +1460,28 @@ where
 			.collect::<Vec<_>>())
 	}
 
-	fn cf_boost_pool_details(&self, asset: Asset) -> RpcResult<BoostPoolDetailsResponse> {
-		self.client
-			.runtime_api()
-			.cf_boost_pool_details(self.client.info().best_hash, asset)
-			.map(|details_vec| {
-				details_vec
-					.into_iter()
-					.map(|(tier, details)| BoostPoolDetailsRpc::new(asset, tier, details))
-					.collect()
-			})
-			.map_err(to_rpc_error)
+	fn cf_boost_pool_details(&self, asset: Option<Asset>) -> RpcResult<BoostPoolDetailsResponse> {
+		let get_boost_details_for_asset = |asset| {
+			self.client
+				.runtime_api()
+				.cf_boost_pool_details(self.client.info().best_hash, asset)
+				.map(|details_vec| {
+					details_vec
+						.into_iter()
+						.map(|(tier, details)| BoostPoolDetailsRpc::new(asset, tier, details))
+						.collect()
+				})
+				.map_err(to_rpc_error)
+		};
+
+		if let Some(asset) = asset {
+			get_boost_details_for_asset(asset)
+		} else {
+			let results_for_each_asset: RpcResult<Vec<_>> =
+				Asset::all().map(|asset| get_boost_details_for_asset(asset)).collect();
+
+			results_for_each_asset.map(|inner| inner.into_iter().flatten().collect())
+		}
 	}
 }
 
