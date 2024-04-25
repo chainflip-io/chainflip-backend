@@ -119,7 +119,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
         solKeyBuffer,
         solKeyBuffer,
         tokenVaultPda.toBuffer(),
-        Buffer.from([255])
+        Buffer.from([255]),
       ]),
       keys: [
         { pubkey: dataAccount, isSigner: false, isWritable: true },
