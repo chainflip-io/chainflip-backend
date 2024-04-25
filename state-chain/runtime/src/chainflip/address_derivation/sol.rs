@@ -6,8 +6,6 @@ use crate::Environment;
 
 use super::AddressDerivation;
 
-const VAULT_PDA_ASSET_SOL: &str = "VaultPdaAssetSol";
-
 impl AddressDerivationApi<Solana> for AddressDerivation {
 	fn generate_address(
 		source_asset: <Solana as cf_chains::Chain>::ChainAsset,
@@ -37,16 +35,8 @@ impl AddressDerivationApi<Solana> for AddressDerivation {
 		match source_asset {
 			Asset::Sol => {
 				let (pda, _bump) = DerivedAddressBuilder::from_address(vault_address)?
-					.chain_seed(VAULT_PDA_ASSET_SOL)?
-					.chain_seed(channel_id.to_ne_bytes())?
+					.chain_seed(channel_id.to_le_bytes())?
 					.finish()?;
-				log::warn!(
-					"SOL DERIVED ADDR [vault: {}; CHAN: {}]: {}",
-					vault_address,
-					channel_id,
-					pda
-				);
-
 				Ok((pda, ()))
 			},
 		}

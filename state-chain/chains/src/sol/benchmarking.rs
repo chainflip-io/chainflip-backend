@@ -18,7 +18,7 @@ impl BenchmarkValueExtended for SolAddress {
 
 impl BenchmarkValue for SolTrackedData {
 	fn benchmark_value() -> Self {
-		SolTrackedData { ingress_fee: Some(1u128), egress_fee: Some(2u128) }
+		SolTrackedData {}
 	}
 }
 

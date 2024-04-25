@@ -255,10 +255,7 @@ impl ExtBuilder {
 			solana_chain_tracking: SolanaChainTrackingConfig {
 				init_chain_state: ChainState::<Solana> {
 					block_height: 0,
-					tracked_data: SolTrackedData {
-						ingress_fee: Some(0u128),
-						egress_fee: Some(0u128),
-					},
+					tracked_data: SolTrackedData {},
 				},
 			},
 			bitcoin_threshold_signer: Default::default(),
