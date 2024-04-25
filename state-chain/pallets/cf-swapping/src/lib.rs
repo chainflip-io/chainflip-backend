@@ -17,7 +17,6 @@ use cf_traits::{
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
-		bounded_vec,
 		traits::{Get, Saturating},
 		DispatchError, Permill,
 	},
@@ -697,7 +696,9 @@ pub mod pallet {
 			let (beneficiaries, total_bps) = match broker_commission {
 				BrokerFees::Single(bps) =>
 					if bps > 0 {
-						(bounded_vec![Beneficiary { account: broker.clone(), bps }], bps)
+						let mut beneficiaries = Beneficiaries::new();
+						beneficiaries.try_push(Beneficiary { account: broker.clone(), bps }).expect("We are only inserting an element, impossible to exceed the maximum size");
+						(beneficiaries, bps)
 					} else {
 						(Default::default(), 0)
 					},
