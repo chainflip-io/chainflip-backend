@@ -12,8 +12,8 @@ mod weights;
 use crate::{
 	chainflip::{calculate_account_apy, Offence},
 	runtime_apis::{
-		AuctionState, BrokerInfo, DispatchErrorWithMessage, EventFilter, FailingWitnessValidators,
-		LiquidityProviderInfo, RuntimeApiPenalty, ValidatorInfo,
+		AuctionState, BoostPoolDepth, BrokerInfo, DispatchErrorWithMessage, EventFilter,
+		FailingWitnessValidators, LiquidityProviderInfo, RuntimeApiPenalty, ValidatorInfo,
 	},
 };
 use cf_amm::{
@@ -326,6 +326,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type SafeMode = RuntimeSafeMode;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
@@ -346,6 +347,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type SafeMode = RuntimeSafeMode;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
@@ -366,6 +368,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type SafeMode = RuntimeSafeMode;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
@@ -386,6 +389,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type SafeMode = RuntimeSafeMode;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
@@ -406,6 +410,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type SafeMode = RuntimeSafeMode;
 }
 
 parameter_types! {
@@ -1724,6 +1729,34 @@ impl_runtime_apis! {
 						None
 					}
 				).collect::<Vec<_>>()
+		}
+
+		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth> {
+
+			fn boost_pools_depth<I: 'static>() -> Vec<BoostPoolDepth>
+				where Runtime: pallet_cf_ingress_egress::Config<I> {
+
+				pallet_cf_ingress_egress::BoostPools::<Runtime, I>::iter().map(|(asset, tier, pool)|
+
+					BoostPoolDepth {
+						asset: asset.into(),
+						tier: tier as u16,
+						available_amount: pool.get_available_amount().into()
+					}
+
+				).collect()
+			}
+
+			ForeignChain::iter().flat_map(|chain| {
+				match chain {
+					ForeignChain::Ethereum => boost_pools_depth::<EthereumInstance>(),
+					ForeignChain::Polkadot => boost_pools_depth::<PolkadotInstance>(),
+					ForeignChain::Bitcoin => boost_pools_depth::<BitcoinInstance>(),
+					ForeignChain::Arbitrum => boost_pools_depth::<ArbitrumInstance>(),
+					ForeignChain::Solana => boost_pools_depth::<SolanaInstance>(),
+				}
+			}).collect()
+
 		}
 	}
 

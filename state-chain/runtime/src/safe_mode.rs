@@ -26,6 +26,11 @@ impl_runtime_safe_mode! {
 	broadcast_arbitrum: pallet_cf_broadcast::PalletSafeMode<Instance4>,
 	broadcast_solana: pallet_cf_broadcast::PalletSafeMode<Instance5>,
 	witnesser: pallet_cf_witnesser::PalletSafeMode<WitnesserCallPermission>,
+	ingress_egress_ethereum: pallet_cf_ingress_egress::PalletSafeMode<Instance1>,
+	ingress_egress_bitcoin: pallet_cf_ingress_egress::PalletSafeMode<Instance3>,
+	ingress_egress_polkadot: pallet_cf_ingress_egress::PalletSafeMode<Instance2>,
+	ingress_egress_arbitrum: pallet_cf_ingress_egress::PalletSafeMode<Instance4>,
+	ingress_egress_solana: pallet_cf_ingress_egress::PalletSafeMode<Instance5>,
 }
 
 /// Contains permissions for different Runtime calls.

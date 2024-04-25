@@ -21,13 +21,17 @@ impl<T: Clone> Sender<T> {
 	#[allow(clippy::manual_async_fn)]
 	#[track_caller]
 	pub fn send(&self, msg: T) -> impl futures::Future<Output = bool> + '_ {
+		let caller_location = core::panic::Location::caller();
 		async move {
 			match self.sender.try_broadcast(msg) {
 				Ok(None) => true,
 				Ok(Some(_)) => unreachable!("async_broadcast feature unused"),
 				Err(error) => match error {
 					async_broadcast::TrySendError::Full(msg) => {
-						warn!("Waiting for space in channel which is currently full with a capacity of {} items at {}", self.sender.capacity(), core::panic::Location::caller());
+						warn!("Waiting for space in channel which is currently full with a capacity of {} items at {}", self.sender.capacity(), caller_location);
+
+						// Note: All the receivers are guaranteed to to receive the message.
+						// Thus, if one does not receive the message, this will block until it does.
 						match self.sender.broadcast(msg).await {
 							Ok(None) => true,
 							Ok(Some(_)) => unreachable!("async_broadcast feature unused"),

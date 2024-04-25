@@ -45,6 +45,8 @@ jobs:
     steps:
       - name: Checkout chainflip-backend 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          fetch-depth: 0
 
       - name: Get upgrade-to-commit SHA 📜
         uses: ./.github/actions/get-workflow-commit
@@ -134,7 +136,7 @@ jobs:
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: ${{ inputs.upgrade-to-workflow-name }}
-          name: chainflip-backend-bin-try-runtime-ubuntu-22.04
+          name: chainflip-backend-bin-try-runtime
           path: upgrade-to-bins
           commit: ${{ env.UPGRADE_TO_COMMIT }}
 
@@ -161,7 +163,6 @@ jobs:
           BINARY_ROOT_PATH: ./latest-release-bins
           DEBUG_OUTPUT_DESTINATION: /tmp/chainflip/debug.*log
         run: |
-          git fetch --all
           git checkout ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}
           set -x
           mkdir -p /tmp/chainflip/bashful
@@ -175,7 +176,6 @@ jobs:
       - name: Run bouncer on latest release 🙅‍♂️
         id: pre-upgrade-bouncer
         run: |
-          git fetch --all
           git checkout ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}
           git rev-parse HEAD
           cd bouncer

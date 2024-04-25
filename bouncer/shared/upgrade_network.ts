@@ -4,11 +4,14 @@ import * as toml from 'toml';
 import path from 'path';
 import { SemVerLevel, bumpReleaseVersion } from './bump_release_version';
 import { simpleRuntimeUpgrade } from './simple_runtime_upgrade';
-import { compareSemVer, sleep } from './utils';
+import { compareSemVer, getChainflipApi, sleep } from './utils';
 import { bumpSpecVersionAgainstNetwork } from './utils/spec_version';
 import { compileBinaries } from './utils/compile_binaries';
 import { submitRuntimeUpgradeWithRestrictions } from './submit_runtime_upgrade';
 import { execWithLog } from './utils/exec_with_log';
+import { setupArbVault } from './setup_arb_vault';
+import { submitGovernanceExtrinsic } from './cf_governance';
+import { setupSwaps } from './setup_swaps';
 
 async function readPackageTomlVersion(projectRoot: string): Promise<string> {
   const data = await fs.readFile(path.join(projectRoot, '/state-chain/runtime/Cargo.toml'), 'utf8');
@@ -49,7 +52,10 @@ async function incompatibleUpgradeNoBuild(
   binaryPath: string,
   runtimePath: string,
   numberOfNodes: 1 | 3,
+  newVersion: string,
 ) {
+  const chainflip = await getChainflipApi();
+
   const SELECTED_NODES = numberOfNodes === 1 ? 'bashful' : 'bashful doc dopey';
 
   console.log('Starting all the engines');
@@ -75,7 +81,19 @@ async function incompatibleUpgradeNoBuild(
   );
 
   // Ensure the runtime upgrade is finalised.
-  await sleep(20000);
+  await sleep(10000);
+
+  // We're going to take down the node, so we don't want them to be suspended.
+  await submitGovernanceExtrinsic(
+    chainflip.tx.reputation.setPenalty('MissedAuthorshipSlot', {
+      reputation: 100,
+      suspension: 0,
+    }),
+  );
+
+  console.log('Submitted extrinsic to set suspension for MissedAuthorship slot to 0');
+  // Ensure extrinsic gets in.
+  await sleep(12000);
 
   console.log('Killing the old node.');
   execSync(`kill $(ps aux | grep chainflip-node | grep -v grep | awk '{print $2}')`);
@@ -83,7 +101,7 @@ async function incompatibleUpgradeNoBuild(
   console.log('Killed old node');
 
   // let them shutdown
-  await sleep(2000);
+  await sleep(4000);
 
   console.log('Old broker and LP-API have crashed since we killed the node.');
 
@@ -92,7 +110,7 @@ async function incompatibleUpgradeNoBuild(
   const KEYS_DIR = `${localnetInitPath}/keys`;
 
   execWithLog(`${localnetInitPath}/scripts/start-all-nodes.sh`, 'start-all-nodes', {
-    INIT_RPC_PORT: `${9944}`,
+    INIT_RPC_PORT: `9944`,
     KEYS_DIR,
     NODE_COUNT: nodeCount,
     SELECTED_NODES,
@@ -101,6 +119,14 @@ async function incompatibleUpgradeNoBuild(
   });
 
   await sleep(20000);
+
+  // Set missed authorship suspension back to 100/150 after nodes back up.
+  await submitGovernanceExtrinsic(
+    chainflip.tx.reputation.setPenalty('MissedAuthorshipSlot', {
+      reputation: 100,
+      suspension: 150,
+    }),
+  );
 
   const output = execSync("ps aux | grep chainflip-node | grep -v grep | awk '{print $2}'");
   console.log('New node PID: ' + output.toString());
@@ -119,6 +145,12 @@ async function incompatibleUpgradeNoBuild(
     },
   );
 
+  await sleep(4000);
+
+  if (newVersion.includes('1.4')) {
+    await setupArbVault();
+  }
+
   console.log('Starting new broker and lp-api.');
 
   execWithLog(`${localnetInitPath}/scripts/start-broker-api.sh ${binaryPath}`, 'start-broker-api', {
@@ -129,7 +161,7 @@ async function incompatibleUpgradeNoBuild(
     KEYS_DIR,
   });
 
-  await sleep(20000);
+  await sleep(10000);
 
   for (const [process, port] of [
     ['broker-api', 10997],
@@ -144,6 +176,10 @@ async function incompatibleUpgradeNoBuild(
     }
   }
 
+  if (newVersion.includes('1.4')) {
+    await setupSwaps();
+  }
+
   console.log('Started new broker and lp-api.');
 }
 
@@ -152,6 +188,7 @@ async function incompatibleUpgrade(
   localnetInitPath: string,
   nextVersionWorkspacePath: string,
   numberOfNodes: 1 | 3,
+  newVersion: string,
 ) {
   await bumpSpecVersionAgainstNetwork(
     `${nextVersionWorkspacePath}/state-chain/runtime/src/lib.rs`,
@@ -165,6 +202,7 @@ async function incompatibleUpgrade(
     `${nextVersionWorkspacePath}/target/release`,
     `${nextVersionWorkspacePath}/target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm`,
     numberOfNodes,
+    newVersion,
   );
 }
 
@@ -222,6 +260,7 @@ export async function upgradeNetworkGit(
       `${currentVersionWorkspacePath}/localnet/init`,
       nextVersionWorkspacePath,
       numberOfNodes,
+      toTomlVersion,
     );
   }
 
@@ -275,7 +314,13 @@ export async function upgradeNetworkPrebuilt(
 
   if (!isCompatible) {
     console.log('The versions are incompatible.');
-    await incompatibleUpgradeNoBuild(localnetInitPath, binariesPath, runtimePath, numberOfNodes);
+    await incompatibleUpgradeNoBuild(
+      localnetInitPath,
+      binariesPath,
+      runtimePath,
+      numberOfNodes,
+      nodeVersion,
+    );
   } else {
     console.log('The versions are compatible.');
     await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, true);

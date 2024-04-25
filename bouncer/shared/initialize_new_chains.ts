@@ -1,7 +1,7 @@
 import Web3 from 'web3';
+import { ApiPromise } from '@polkadot/api';
 import {
   Connection,
-  NonceAccount,
   PublicKey,
   SystemProgram,
   Transaction,
@@ -11,11 +11,19 @@ import {
   getContractAddress,
   getSolWhaleKeyPair,
   encodeSolAddress,
-  getSolConnection,
+  observeEvent,
 } from '../shared/utils';
 import { signAndSendTxSol } from '../shared/send_sol';
 import { getSolanaVaultIdl, getKeyManagerAbi } from '../shared/contract_interfaces';
 import { signAndSendTxEvm } from '../shared/send_evm';
+import { submitGovernanceExtrinsic } from './cf_governance';
+
+export async function initializeArbitrumChain(chainflip: ApiPromise) {
+  console.log('Initializing Arbitrum');
+  const arbInitializationRequest = observeEvent('arbitrumVault:ChainInitialized', chainflip);
+  await submitGovernanceExtrinsic(chainflip.tx.arbitrumVault.initializeChain());
+  await arbInitializationRequest;
+}
 
 export async function initializeArbitrumContracts(
   arbClient: Web3,
@@ -101,11 +109,17 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
 
   const solKeyBuffer = Buffer.from(solKey.slice(2), 'hex');
   const newAggKey = new PublicKey(encodeSolAddress(solKey));
+  const tokenVaultPda = new PublicKey(getContractAddress('Solana', 'TOKEN_VAULT_PDA'));
 
   // Initialize Vault program
   const tx = new Transaction().add(
     new TransactionInstruction({
-      data: Buffer.concat([Buffer.from(discriminator.buffer), solKeyBuffer, solKeyBuffer]),
+      data: Buffer.concat([
+        Buffer.from(discriminator.buffer),
+        solKeyBuffer,
+        solKeyBuffer,
+        tokenVaultPda.toBuffer(),
+      ]),
       keys: [
         { pubkey: dataAccount, isSigner: false, isWritable: true },
         { pubkey: whaleKeypair.publicKey, isSigner: true, isWritable: false },
@@ -115,35 +129,27 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
     }),
   );
 
-  // Deriving the nonceAccounts with index seeds to find all deployed nonce accounts
-  for (let i = 0; ; i++) {
+  // Set nonce authority to the new AggKey
+  const numberOfNonceAccounts = 7;
+  for (let i = 0; i < numberOfNonceAccounts; i++) {
     // Using the index stringified as the seed ('0', '1', '2' ...)
     const seed = i.toString();
+
+    // Deriving the nonceAccounts with index seeds to find the nonce accounts
     const nonceAccountPubKey = await PublicKey.createWithSeed(
       whaleKeypair.publicKey,
       seed,
       SystemProgram.programId,
     );
 
-    const accountInfo = await getSolConnection().getAccountInfo(nonceAccountPubKey);
-
-    // If accountInfo or accountInfo.data is not present, or nonceAccount is null, break the loop
-    if (
-      accountInfo &&
-      accountInfo.data &&
-      NonceAccount.fromAccountData(accountInfo.data) !== null
-    ) {
-      // Set nonce authority to the new AggKey
-      tx.add(
-        SystemProgram.nonceAuthorize({
-          noncePubkey: new PublicKey(nonceAccountPubKey),
-          authorizedPubkey: whaleKeypair.publicKey,
-          newAuthorizedPubkey: newAggKey,
-        }),
-      );
-    } else {
-      break;
-    }
+    // Set nonce authority to the new AggKey
+    tx.add(
+      SystemProgram.nonceAuthorize({
+        noncePubkey: new PublicKey(nonceAccountPubKey),
+        authorizedPubkey: whaleKeypair.publicKey,
+        newAuthorizedPubkey: newAggKey,
+      }),
+    );
   }
   // Set Vault's upgrade authority to Upgrade manager's PDA
   tx.add(

@@ -1,5 +1,7 @@
 use crate::{safe_mode, Runtime};
-use cf_chains::instances::SolanaInstance;
+use cf_chains::instances::{
+	ArbitrumInstance, BitcoinInstance, EthereumInstance, PolkadotInstance, SolanaInstance,
+};
 use cf_traits::SafeMode;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 #[cfg(feature = "try-runtime")]
@@ -7,10 +9,7 @@ use sp_runtime::DispatchError;
 
 pub mod old {
 	use super::*;
-	use cf_chains::instances::{
-		ArbitrumInstance, BitcoinCryptoInstance, BitcoinInstance, EthereumInstance, EvmInstance,
-		PolkadotCryptoInstance, PolkadotInstance,
-	};
+	use cf_chains::instances::{BitcoinCryptoInstance, EvmInstance, PolkadotCryptoInstance};
 	use frame_support::pallet_prelude::*;
 
 	#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
@@ -31,6 +30,10 @@ pub mod old {
 		pub broadcast_bitcoin: pallet_cf_broadcast::PalletSafeMode<BitcoinInstance>,
 		pub broadcast_polkadot: pallet_cf_broadcast::PalletSafeMode<PolkadotInstance>,
 		pub broadcast_arbitrum: pallet_cf_broadcast::PalletSafeMode<ArbitrumInstance>,
+		pub ingress_egress_ethereum: pallet_cf_ingress_egress::PalletSafeMode<EthereumInstance>,
+		pub ingress_egress_bitcoin: pallet_cf_ingress_egress::PalletSafeMode<BitcoinInstance>,
+		pub ingress_egress_polkadot: pallet_cf_ingress_egress::PalletSafeMode<PolkadotInstance>,
+		pub ingress_egress_arbitrum: pallet_cf_ingress_egress::PalletSafeMode<ArbitrumInstance>,
 		pub witnesser: pallet_cf_witnesser::PalletSafeMode<safe_mode::WitnesserCallPermission>,
 	}
 }
@@ -66,6 +69,12 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 							broadcast_solana: <pallet_cf_broadcast::PalletSafeMode<
 								SolanaInstance,
 							> as SafeMode>::CODE_GREEN,
+							// Set safe mode on for ingress-egress to disable boost features.
+							ingress_egress_ethereum: old.ingress_egress_ethereum,
+							ingress_egress_bitcoin: old.ingress_egress_bitcoin,
+							ingress_egress_polkadot: old.ingress_egress_polkadot,
+							ingress_egress_arbitrum: old.ingress_egress_arbitrum,
+							ingress_egress_solana: <pallet_cf_ingress_egress::PalletSafeMode<SolanaInstance> as SafeMode>::CODE_RED,
 							witnesser: old.witnesser,
 						}
 				})
