@@ -91,7 +91,6 @@ use std::{
 	task::{Context, Poll},
 };
 
-use tracing::instrument::WithSubscriber;
 use core::fmt::Debug;
 use futures::{
 	ready,
@@ -99,6 +98,7 @@ use futures::{
 	Future, FutureExt, Stream, StreamExt,
 };
 use tokio::sync::oneshot;
+use tracing::instrument::WithSubscriber;
 
 pub trait Unwrappable {
 	type Item;
@@ -484,10 +484,16 @@ impl<Error: Debug + Send + 'static> Stream for ScopeResultStream<Error> {
 					}
 					let tasks = &mut self.tasks;
 					match tasks {
-						ScopedTasks::CurrentThread(tasks) =>
-							tasks.push(TaskWrapper { future: future.with_current_subscriber(), properties }),
-						ScopedTasks::MultiThread(runtime, tasks) =>
-							tasks.push(TaskWrapper { future: runtime.spawn(future.with_current_subscriber()).with_current_subscriber(), properties }),
+						ScopedTasks::CurrentThread(tasks) => tasks.push(TaskWrapper {
+							future: future.with_current_subscriber(),
+							properties,
+						}),
+						ScopedTasks::MultiThread(runtime, tasks) => tasks.push(TaskWrapper {
+							future: runtime
+								.spawn(future.with_current_subscriber())
+								.with_current_subscriber(),
+							properties,
+						}),
 					}
 				} else {
 					// Sender/`Scope` has been dropped

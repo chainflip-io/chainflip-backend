@@ -1,8 +1,7 @@
-use crate::{Port};
+use crate::Port;
 use serde::Deserialize;
-use tracing_subscriber::fmt::format::FmtSpan;
-use tracing_subscriber::util::SubscriberInitExt;
 use tracing::subscriber::DefaultGuard;
+use tracing_subscriber::{fmt::format::FmtSpan, util::SubscriberInitExt};
 use warp::{Filter, Reply};
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
@@ -83,9 +82,7 @@ macro_rules! print_start_and_end {
 /// '"debug,warp=off,hyper=off,jsonrpc=off,web3=off,reqwest=off"' 127.0.0.1:36079/tracing
 ///
 /// The full syntax used for specifying filter directives used in both the REST api and in the RUST_LOG environment variable is specified here: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
-pub async fn init_json_logger(
-	settings: LoggingSettings,
-) -> DefaultGuard {
+pub async fn init_json_logger(settings: LoggingSettings) -> DefaultGuard {
 	use tracing::metadata::LevelFilter;
 	use tracing_subscriber::EnvFilter;
 
@@ -144,21 +141,18 @@ pub async fn init_json_logger(
 				}
 			});
 
-		let get_filter =
-			warp::get().and(warp::path(PATH)).and(warp::path::end()).then(move || {
-				futures::future::ready({
-					let (status, message) = match reload_handle
-						.with_current(|env_filter| env_filter.to_string())
-					{
+		let get_filter = warp::get().and(warp::path(PATH)).and(warp::path::end()).then(move || {
+			futures::future::ready({
+				let (status, message) =
+					match reload_handle.with_current(|env_filter| env_filter.to_string()) {
 						Ok(reply) => (warp::http::StatusCode::OK, reply),
 						Err(error) =>
 							(warp::http::StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
 					};
 
-					warp::reply::with_status(warp::reply::json(&message), status)
-						.into_response()
-				})
-			});
+				warp::reply::with_status(warp::reply::json(&message), status).into_response()
+			})
+		});
 
 		warp::serve(change_filter.or(get_filter))
 			.run((std::net::Ipv4Addr::LOCALHOST, settings.command_server_port))

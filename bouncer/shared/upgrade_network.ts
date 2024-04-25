@@ -85,7 +85,7 @@ async function incompatibleUpgradeNoBuild(
   );
 
   // TODO: add some tests here. After this point. If the upgrade doesn't work.
-  // but below, we effectively restart the engine before running any tests it's possible that 
+  // but below, we effectively restart the engine before running any tests it's possible that
   // we don't catch the error here.
 
   // Ensure the runtime upgrade is finalised.

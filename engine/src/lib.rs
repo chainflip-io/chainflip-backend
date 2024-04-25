@@ -113,14 +113,10 @@ async fn run_main(
 	settings: Settings,
 	start_from: Option<state_chain_runtime::BlockNumber>,
 ) -> anyhow::Result<()> {
-
-	let _guard = utilities::logging::init_json_logger(
-		settings.logging.clone(),
-	).await;
+	let _guard = utilities::logging::init_json_logger(settings.logging.clone()).await;
 
 	task_scope(|scope| {
 		async move {
-
 			let has_completed_initialising = Arc::new(AtomicBool::new(false));
 
 			let (state_chain_stream, unfinalised_state_chain_stream, state_chain_client) =
