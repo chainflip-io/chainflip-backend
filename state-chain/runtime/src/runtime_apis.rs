@@ -66,7 +66,16 @@ pub struct ValidatorInfo {
 pub struct BoostPoolDepth {
 	pub asset: Asset,
 	pub tier: u16,
+	#[serde(serialize_with = "serialize_as_hex")]
 	pub available_amount: AssetAmount,
+}
+
+fn serialize_as_hex<S>(amount: &AssetAmount, s: S) -> Result<S::Ok, S::Error>
+where
+	S: serde::Serializer,
+{
+	use cf_utilities::rpc::NumberOrHex;
+	NumberOrHex::from(*amount).serialize(s)
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
