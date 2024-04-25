@@ -8,6 +8,7 @@ echo "Running nightly tests 🧪"
 ./tests/all_concurrent_tests.ts $1
 ./tests/rotates_through_btc_swap.ts
 ./tests/btc_utxo_consolidation.ts
+./tests/rotation_barrier.ts
 
 if [[ $LOCALNET == false ]]; then
   echo "🤫 Skipping tests that require localnet"
