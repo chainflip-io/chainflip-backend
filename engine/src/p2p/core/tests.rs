@@ -24,7 +24,7 @@ use std::time::Duration;
 /// This has to be large enough to account for the possibility of
 /// the initial handshake failing and the node having to reconnect
 /// after `RECONNECT_INTERVAL`
-const MAX_CONNECTION_DELAY: Duration = Duration::from_millis(2000);
+const MAX_CONNECTION_DELAY: Duration = Duration::from_millis(1000);
 
 struct Node {
 	account_id: AccountId,
