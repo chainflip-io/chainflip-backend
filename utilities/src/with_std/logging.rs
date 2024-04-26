@@ -157,8 +157,6 @@ pub async fn init_json_logger(settings: LoggingSettings) -> DefaultGuard {
 		warp::serve(change_filter.or(get_filter))
 			.run((std::net::Ipv4Addr::LOCALHOST, settings.command_server_port))
 			.await;
-
-		Ok::<(), anyhow::Error>(())
 	});
 
 	_guard
