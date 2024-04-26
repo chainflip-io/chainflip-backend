@@ -1,0 +1,18 @@
+---
+source: state-chain/custom-rpc/src/lib.rs
+expression: val
+---
+[
+  {
+    "chain": "Ethereum",
+    "asset": "FLIP",
+    "tier": 10,
+    "available_amount": "0x33b2e3c9fd0803ce8000000"
+  },
+  {
+    "chain": "Ethereum",
+    "asset": "FLIP",
+    "tier": 30,
+    "available_amount": "0x0"
+  }
+]
