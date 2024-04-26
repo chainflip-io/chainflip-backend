@@ -323,7 +323,7 @@ fn is_more_recent_semver() {
 	ensure_left_is_more_recent(ver(1, 1, 0), ver(1, 0, 2));
 }
 
-pub const MAX_BENEFICIARIES: u32 = 4;
+pub const MAX_BENEFICIARIES: u32 = 6;
 
 pub type Beneficiaries<Id> = BoundedVec<Beneficiary<Id>, ConstU32<MAX_BENEFICIARIES>>;
 
