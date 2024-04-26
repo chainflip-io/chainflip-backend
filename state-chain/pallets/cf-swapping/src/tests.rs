@@ -27,6 +27,7 @@ use frame_support::{
 use itertools::Itertools;
 use sp_arithmetic::Permill;
 use sp_core::H160;
+use sp_runtime::Percent;
 use sp_std::iter;
 
 const GAS_BUDGET: AssetAmount = 1_000u128;
@@ -2243,4 +2244,43 @@ fn network_fee_swap_gets_burnt() {
 		assert_swaps_queue_is_empty();
 		assert_eq!(FlipToBurn::<Test>::get(), AMOUNT);
 	});
+}
+
+#[test]
+fn swap_output_amounts_correctly_account_for_fees() {
+	for (from, to) in
+		// non-stable to non-stable, non-stable to stable, stable to non-stable
+		[(Asset::Btc, Asset::Eth), (Asset::Btc, Asset::Usdc), (Asset::Usdc, Asset::Eth)]
+	{
+		new_test_ext().execute_with(|| {
+			const SWAPPED_AMOUNT: AssetAmount = 1000;
+
+			let network_fee = Percent::from_percent(1);
+			NetworkFee::set(network_fee);
+
+			let expected_output: AssetAmount =
+				(SWAPPED_AMOUNT as u32 - (network_fee * SWAPPED_AMOUNT as u32)).into();
+
+			{
+				Swapping::schedule_swap(
+					from,
+					to,
+					SWAPPED_AMOUNT,
+					SwapType::Swap(ForeignChainAddress::Eth(H160::zero())),
+				);
+
+				Swapping::on_finalize(System::block_number() + SWAP_DELAY_BLOCKS as u64);
+
+				assert_eq!(
+					MockEgressHandler::<AnyChain>::get_scheduled_egresses(),
+					vec![MockEgressParameter::Swap {
+						asset: to,
+						amount: expected_output,
+						fee: 0,
+						destination_address: ForeignChainAddress::Eth(H160::zero()),
+					},]
+				);
+			}
+		});
+	}
 }

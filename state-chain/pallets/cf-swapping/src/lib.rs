@@ -746,6 +746,10 @@ pub mod pallet {
 				);
 				let stable_amount = swap.stable_amount.get_or_insert_with(Default::default);
 				*stable_amount = T::SwappingApi::take_network_fee(*stable_amount);
+
+				if swap.to == STABLE_ASSET {
+					swap.final_output = Some(*stable_amount);
+				}
 			}
 
 			Ok(())
