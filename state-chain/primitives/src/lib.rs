@@ -211,7 +211,14 @@ impl SwapOutput {
 		output: AssetAmount,
 		network_fee: AssetAmount,
 	) -> Self {
-		Self { intermediary, output, network_fee, ingress_fee: None, egress_fee: None }
+		Self {
+			intermediary,
+			output,
+			network_fee,
+			ingress_fee: None,
+			egress_fee: None,
+			broker_commission: None,
+		}
 	}
 }
 
@@ -259,8 +266,8 @@ pub enum CfeCompatibility {
 
 impl SemVer {
 	pub fn compatibility_with_runtime(&self, version_runtime_requires: SemVer) -> CfeCompatibility {
-		if self.major == version_runtime_requires.major
-			&& self.minor == version_runtime_requires.minor
+		if self.major == version_runtime_requires.major &&
+			self.minor == version_runtime_requires.minor
 		{
 			CfeCompatibility::Compatible
 		} else if self < &version_runtime_requires {
