@@ -36,6 +36,10 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApi for EvmRet
 	) -> Vec<AddressState> {
 		self.rpc_retry_client
 			.request(
+				RequestLog::new(
+					"address_states".to_string(),
+					Some(format!("{block_hash:?}, {contract_address:?}")),
+				),
 				Box::pin(move |client| {
 					let addresses = addresses.clone();
 					#[allow(clippy::redundant_async_block)]
@@ -43,10 +47,6 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApi for EvmRet
 						client.address_states(block_hash, contract_address, addresses).await
 					})
 				}),
-				RequestLog::new(
-					"address_states".to_string(),
-					Some(format!("{block_hash:?}, {contract_address:?}")),
-				),
 			)
 			.await
 	}
@@ -59,6 +59,10 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApi for EvmRet
 	) -> Vec<U256> {
 		self.rpc_retry_client
 			.request(
+				RequestLog::new(
+					"balances".to_string(),
+					Some(format!("{block_hash:?}, {contract_address:?}")),
+				),
 				Box::pin(move |client| {
 					let addresses = addresses.clone();
 					#[allow(clippy::redundant_async_block)]
@@ -66,10 +70,6 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApi for EvmRet
 						client.balances(block_hash, contract_address, addresses).await
 					})
 				}),
-				RequestLog::new(
-					"balances".to_string(),
-					Some(format!("{block_hash:?}, {contract_address:?}")),
-				),
 			)
 			.await
 	}
