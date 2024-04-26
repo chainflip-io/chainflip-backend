@@ -2,6 +2,14 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.3.4] - 2024-04-26
+
+### Fixes
+
+- Add Broker account to Genesis for testing purposes ([#4754](https://github.com/chainflip-io/chainflip-backend/pull/4754))
+- Correctly handle Polkadot Metadata updates in CFE ([#4785](https://github.com/chainflip-io/chainflip-backend/pull/4785))
+- Take Network Fee on Swaps ending in USDC ([#4801](https://github.com/chainflip-io/chainflip-backend/pull/4801))
+
 ## [1.3.3] - 2024-04-10
 
 ### Fixes
