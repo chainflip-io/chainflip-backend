@@ -78,7 +78,7 @@ async function incompatibleUpgradeNoBuild(
 
   console.log('Engines started');
 
-  await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, true);
+  await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, false);
 
   console.log(
     'Check that the old engine has now shut down, and that the new engine is now running.',
@@ -298,27 +298,20 @@ export async function upgradeNetworkPrebuilt(
     cleanOldVersion = oldVersion.match(versionRegex)[0];
   }
 
-  const cfeBinaryVersion = execSync(`${binariesPath}/engine-runner --version`).toString();
-  const cfeVersion = cfeBinaryVersion.match(versionRegex)[0];
-  console.log("CFE version we're upgrading to: " + cfeVersion);
-
   const nodeBinaryVersion = execSync(`${binariesPath}/chainflip-node --version`).toString();
   const nodeVersion = nodeBinaryVersion.match(versionRegex)[0];
   console.log("Node version we're upgrading to: " + nodeVersion);
 
-  if (cfeVersion !== nodeVersion) {
-    throw new Error(
-      "The CFE version and the node version don't match. Ensure you selected the correct binaries.",
-    );
-  }
 
-  if (compareSemVer(cleanOldVersion, cfeVersion) === 'greater') {
+  // We use nodeVersion as a proxy for the cfe version since they are updated together.
+  // And getting the cfe version involves ensuring the dylib is available.
+  if (compareSemVer(cleanOldVersion, nodeVersion) === 'greater') {
     throw new Error(
       "The version we're upgrading to is older than the version we're upgrading from. Ensure you selected the correct binaries.",
     );
   }
 
-  const isCompatible = isCompatibleWith(cleanOldVersion, cfeVersion);
+  const isCompatible = isCompatibleWith(cleanOldVersion, nodeVersion);
 
   if (!isCompatible) {
     console.log('The versions are incompatible.');
