@@ -639,11 +639,11 @@ impl P2PContext {
 
 			let mut parts = match receive_multipart(&socket) {
 				Ok(parts) => parts,
-				Err(e) => {
-					trace!("Failed to receive message: {e}");
-					std::thread::sleep(Duration::from_secs(1));
+				Err(zmq::Error::EAGAIN) => {
+					std::thread::sleep(Duration::from_millis(100));
 					continue
 				},
+				Err(e) => panic!("Failed to receive multipart: {e}"),
 			};
 
 			P2P_MSG_RECEIVED.inc();
