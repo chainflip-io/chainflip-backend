@@ -1,5 +1,5 @@
 pub use crate::{self as pallet_cf_ingress_egress};
-use crate::{DepositBalances, DepositWitness};
+use crate::{DepositBalances, DepositWitness, PalletSafeMode};
 
 use cf_chains::eth::EthereumTrackedData;
 pub use cf_chains::{
@@ -14,7 +14,7 @@ pub use cf_primitives::{
 };
 use cf_test_utilities::{impl_test_helpers, TestExternalities};
 use cf_traits::{
-	impl_mock_callback, impl_mock_chainflip,
+	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		address_converter::MockAddressConverter,
 		api_call::{MockEthereumApiCall, MockEvmEnvironment},
@@ -109,6 +109,8 @@ impl NetworkEnvironmentProvider for MockNetworkEnvironmentProvider {
 	}
 }
 
+impl_mock_runtime_safe_mode! { ingress_egress_ethereum: PalletSafeMode<()> }
+
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
@@ -128,6 +130,7 @@ impl crate::Config for Test {
 	type AssetConverter = MockAssetConverter;
 	type FeePayment = MockFeePayment<Self>;
 	type SwapQueueApi = MockSwapQueueApi;
+	type SafeMode = MockRuntimeSafeMode;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
