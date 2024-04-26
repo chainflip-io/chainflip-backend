@@ -560,6 +560,14 @@ pub trait CustomApi {
 		from_asset: Asset,
 		to_asset: Asset,
 		amount: NumberOrHex,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcSwapOutput>;
+	#[method(name = "swap_rate_v2")]
+	fn cf_pool_swap_rate_v2(
+		&self,
+		from_asset: Asset,
+		to_asset: Asset,
+		amount: NumberOrHex,
 		first_leg_additional_limit_orders: Option<Vec<(Tick, U256)>>,
 		second_leg_additional_limit_orders: Option<Vec<(Tick, U256)>>,
 		at: Option<state_chain_runtime::Hash>,
@@ -1082,6 +1090,16 @@ where
 	}
 
 	fn cf_pool_swap_rate(
+		&self,
+		from_asset: Asset,
+		to_asset: Asset,
+		amount: NumberOrHex,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcSwapOutput> {
+		self.cf_pool_swap_rate_v2(from_asset, to_asset, amount, None, None, at)
+	}
+
+	fn cf_pool_swap_rate_v2(
 		&self,
 		from_asset: Asset,
 		to_asset: Asset,
