@@ -279,7 +279,7 @@ pub(super) async fn start(
 	incoming_message_sender: UnboundedSender<(AccountId, Vec<u8>)>,
 	outgoing_message_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
 	peer_update_receiver: UnboundedReceiver<PeerUpdate>,
-) {
+) -> anyhow::Result<()> {
 	debug!("Our derived x25519 pubkey: {}", pk_to_string(&p2p_key.encryption_key.public_key));
 
 	let zmq_context = zmq::Context::new();
@@ -311,7 +311,7 @@ pub(super) async fn start(
 		context.add_or_update_peer(peer_info);
 	}
 
-	let incoming_message_receiver_ed25519 = context.start_listening_thread(port);
+	let incoming_message_receiver_ed25519 = context.start_listening_thread(port)?;
 
 	context
 		.control_loop(
@@ -323,6 +323,8 @@ pub(super) async fn start(
 		)
 		.instrument(info_span!("p2p"))
 		.await;
+
+	Ok(())
 }
 
 fn disconnect_socket(_socket: ConnectedOutgoingSocket) {
@@ -599,7 +601,10 @@ impl P2PContext {
 	}
 
 	/// Start listening for incoming p2p messages on a separate thread
-	fn start_listening_thread(&mut self, port: Port) -> UnboundedReceiver<(XPublicKey, Vec<u8>)> {
+	fn start_listening_thread(
+		&mut self,
+		port: Port,
+	) -> anyhow::Result<UnboundedReceiver<(XPublicKey, Vec<u8>)>> {
 		let socket = self.zmq_context.socket(zmq::SocketType::ROUTER).unwrap();
 
 		socket.set_router_mandatory(true).unwrap();
@@ -611,15 +616,13 @@ impl P2PContext {
 		// Listen on all interfaces
 		let endpoint = format!("tcp://0.0.0.0:{port}");
 		// In the case of an upgrade, it's possible the system still needs time to release the port.
-		loop {
-			match socket.bind(&endpoint) {
-				Ok(_) => break,
-				Err(e) => {
-					error!(
-						"Failed to bind to endpoint: {endpoint}, error: {e}. Retrying in 2 seconds"
-					);
-					std::thread::sleep(Duration::from_secs(2));
-				},
+		let mut i = 0;
+		while let Err(e) = socket.bind(&endpoint) {
+			error!("Failed to bind to endpoint: {}, error: {}. Retrying in 2 seconds", endpoint, e);
+			std::thread::sleep(Duration::from_secs(2));
+			i += 1;
+			if i > 10 {
+				panic!("Failed to bind to endpoint: {}", endpoint);
 			}
 		}
 
@@ -673,7 +676,7 @@ impl P2PContext {
 			}
 		});
 
-		incoming_message_receiver
+		Ok(incoming_message_receiver)
 	}
 
 	fn check_activity(&mut self) {
