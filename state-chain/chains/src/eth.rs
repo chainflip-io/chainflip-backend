@@ -7,7 +7,7 @@ pub mod deposit_address;
 
 use crate::{
 	evm::{DeploymentStatus, EvmFetchId, EvmTransactionMetadata, Transaction},
-	*,
+	Chain, FeeEstimationApi, *,
 };
 use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Ethereum;
@@ -21,7 +21,6 @@ use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, Runtim
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{cmp::min, convert::TryInto, str};
-use crate::{Chain, FeeEstimationApi};
 
 // Reference constants for the chain spec
 pub const CHAIN_ID_MAINNET: u64 = 1;

@@ -6,7 +6,7 @@ use sp_std::vec;
 
 use sol_prim::SlotNumber;
 
-use crate::{address, assets, FeeRefundCalculator, TypeInfo,FeeEstimationApi};
+use crate::{address, assets, FeeEstimationApi, FeeRefundCalculator, TypeInfo};
 use codec::{Decode, Encode, MaxEncodedLen};
 use serde::{Deserialize, Serialize};
 

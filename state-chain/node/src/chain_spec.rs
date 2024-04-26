@@ -720,7 +720,7 @@ fn testnet_genesis(
 		solana_chain_tracking: state_chain_runtime::SolanaChainTrackingConfig {
 			init_chain_state: ChainState::<Solana> {
 				block_height: 0,
-				tracked_data: SolTrackedData { priority_fee: 100000u32.into()},
+				tracked_data: SolTrackedData { priority_fee: 100000u32.into() },
 			},
 		},
 		// Channel lifetimes are set to ~2 hours at average block times.
