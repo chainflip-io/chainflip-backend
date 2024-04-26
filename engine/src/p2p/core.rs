@@ -693,12 +693,11 @@ impl P2PContext {
 	}
 }
 
-// Flag to signal that we want to block until a message is available.
-const ZMQ_DO_WAIT: i32 = 0;
-
 /// Unlike recv_multipart available on zmq::Socket, this collects
 /// original message structs rather than payload bytes only
 fn receive_multipart(socket: &zmq::Socket) -> zmq::Result<Vec<zmq::Message>> {
+	const ZMQ_DO_WAIT: i32 = 0;
+
 	let mut parts = vec![];
 
 	let recv_part = |flag, parts: &mut Vec<zmq::Message>| -> Result<(), zmq::Error> {
