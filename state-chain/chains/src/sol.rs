@@ -88,12 +88,14 @@ impl ChainCrypto for SolanaCrypto {
 pub const LAMPORTS_PER_SIGNATURE: <Solana as Chain>::ChainAmount = 5000;
 
 // This is to be used both for ingress/egress estimation and for setting the compute units
-// limit when crafting transactions
+// limit when crafting transactions by the State Chain.
 mod compute_units_costs {
 	pub const BASE_COMPUTE_UNITS_PER_TX: u128 = 450;
 	pub const COMPUTE_UNITS_PER_FETCH_NATIVE: u128 = 7_500;
-	pub const COMPUTE_UNITS_PER_FETCH_TOKEN: u128 = 31_000;
 	pub const COMPUTE_UNITS_PER_TRANSFER_NATIVE: u128 = 300;
+	#[allow(dead_code)]
+	pub const COMPUTE_UNITS_PER_FETCH_TOKEN: u128 = 31_000;
+	#[allow(dead_code)]
 	pub const COMPUTE_UNITS_PER_TRANSFER_TOKEN: u128 = 41_200;
 }
 
