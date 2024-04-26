@@ -31,6 +31,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	Asset, BasisPoints, Beneficiaries, BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex,
+	BoostPoolTier,
 	ForeignChain, PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId,
 };
 use cf_runtime_utilities::log_or_panic;
@@ -54,7 +55,6 @@ use sp_std::{
 	vec,
 	vec::Vec,
 };
-use strum_macros::EnumIter;
 pub use weights::WeightInfo;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -72,28 +72,18 @@ pub struct PrewitnessedDeposit<C: Chain> {
 	pub deposit_details: C::DepositDetails,
 }
 
-// TODO: use u16 directly so we can dynamically add/remove pools?
-#[derive(
-	Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo, EnumIter,
-)]
-#[repr(u16)]
-pub enum BoostPoolTier {
-	FiveBps = 5,
-	TenBps = 10,
-	ThirtyBps = 30,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct BoostPoolId<C: Chain> {
 	asset: C::ChainAsset,
 	tier: BoostPoolTier,
 }
+
 pub struct BoostOutput<C: Chain> {
 	used_pools: BTreeMap<BoostPoolTier, C::ChainAmount>,
 	total_fee: C::ChainAmount,
 }
 
-const SORTED_BOOST_TIERS: [BoostPoolTier; 3] =
+pub const SORTED_BOOST_TIERS: [BoostPoolTier; 3] =
 	[BoostPoolTier::FiveBps, BoostPoolTier::TenBps, BoostPoolTier::ThirtyBps];
 
 /// Enum wrapper for fetch and egress requests.
@@ -229,7 +219,7 @@ pub mod pallet {
 	pub(crate) type ChannelRecycleQueue<T, I> =
 		Vec<(TargetChainBlockNumber<T, I>, TargetChainAccount<T, I>)>;
 
-	pub(crate) type TargetChainAsset<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAsset;
+	pub type TargetChainAsset<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAsset;
 	pub(crate) type TargetChainAccount<T, I> =
 		<<T as Config<I>>::TargetChain as Chain>::ChainAccount;
 	pub(crate) type TargetChainAmount<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAmount;
@@ -375,7 +365,7 @@ pub mod pallet {
 			use strum::IntoEnumIterator;
 
 			for asset in TargetChainAsset::<T, I>::iter() {
-				for pool_tier in BoostPoolTier::iter() {
+				for pool_tier in SORTED_BOOST_TIERS {
 					BoostPools::<T, I>::set(
 						asset,
 						pool_tier,

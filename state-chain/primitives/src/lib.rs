@@ -48,6 +48,15 @@ pub type SwapId = u64;
 
 pub type PrewitnessedDepositId = u64;
 
+// TODO: use u16 directly so we can dynamically add/remove pools?
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
+#[repr(u16)]
+pub enum BoostPoolTier {
+	FiveBps = 5,
+	TenBps = 10,
+	ThirtyBps = 30,
+}
+
 /// The type of the Id given to threshold signature requests. Note a single request may
 /// result in multiple ceremonies, but only one ceremony should succeed.
 pub type ThresholdSignatureRequestId = u32;
