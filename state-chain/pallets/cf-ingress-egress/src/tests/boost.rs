@@ -733,7 +733,7 @@ fn lost_funds_are_acknowledged_by_boost_pool() {
 		assert_eq!(
 			BoostPools::<Test, ()>::get(eth::Asset::Eth, BoostPoolTier::FiveBps)
 				.unwrap()
-				.get_pending_boosts(),
+				.get_pending_boost_ids(),
 			vec![deposit_id]
 		);
 
@@ -747,7 +747,7 @@ fn lost_funds_are_acknowledged_by_boost_pool() {
 
 			assert!(BoostPools::<Test, ()>::get(eth::Asset::Eth, BoostPoolTier::FiveBps)
 				.unwrap()
-				.get_pending_boosts()
+				.get_pending_boost_ids()
 				.is_empty());
 		}
 	});
