@@ -18,7 +18,7 @@ impl BenchmarkValueExtended for SolAddress {
 
 impl BenchmarkValue for SolTrackedData {
 	fn benchmark_value() -> Self {
-		SolTrackedData {}
+		SolTrackedData {priority_fee: 100_000}
 	}
 }
 
