@@ -62,15 +62,17 @@ pub struct ValidatorInfo {
 	pub restricted_balances: BTreeMap<EthereumAddress, u128>,
 }
 
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BoostPoolDepth {
-	#[serde(flatten)]
+	#[cfg_attr(feature = "std", serde(flatten))]
 	pub asset: Asset,
 	pub tier: u16,
-	#[serde(serialize_with = "serialize_as_hex")]
+	#[cfg_attr(feature = "std", serde(serialize_with = "serialize_as_hex"))]
 	pub available_amount: AssetAmount,
 }
 
+#[cfg(feature = "std")]
 fn serialize_as_hex<S>(amount: &AssetAmount, s: S) -> Result<S::Ok, S::Error>
 where
 	S: serde::Serializer,
