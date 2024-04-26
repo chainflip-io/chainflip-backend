@@ -287,12 +287,10 @@ impl TaskProperties {
 	}
 }
 
-use tracing::instrument::WithDispatch;
-
 #[pin_project::pin_project]
 struct TaskWrapper<Task> {
 	#[pin]
-	future: WithDispatch<Task>,
+	future: Task,
 	properties: TaskProperties,
 }
 impl<Task: Future + Unpin + 'static> Future for TaskWrapper<Task> {
@@ -364,7 +362,7 @@ impl<'env, Error: Debug + Send + 'static> Scope<'env, Error> {
 		let location = core::panic::Location::caller();
 		let _result = self.sender.try_send({
 			let future: Pin<Box<dyn 'env + Future<Output = Result<(), Error>> + Send>> =
-				Box::pin(f);
+				Box::pin(f.with_current_subscriber());
 			let future: TaskFuture<Error> = unsafe { std::mem::transmute(future) };
 			(TaskProperties { weak, location: *location }, future)
 		});
@@ -484,16 +482,10 @@ impl<Error: Debug + Send + 'static> Stream for ScopeResultStream<Error> {
 					}
 					let tasks = &mut self.tasks;
 					match tasks {
-						ScopedTasks::CurrentThread(tasks) => tasks.push(TaskWrapper {
-							future: future.with_current_subscriber(),
-							properties,
-						}),
-						ScopedTasks::MultiThread(runtime, tasks) => tasks.push(TaskWrapper {
-							future: runtime
-								.spawn(future.with_current_subscriber())
-								.with_current_subscriber(),
-							properties,
-						}),
+						ScopedTasks::CurrentThread(tasks) =>
+							tasks.push(TaskWrapper { future, properties }),
+						ScopedTasks::MultiThread(runtime, tasks) =>
+							tasks.push(TaskWrapper { future: runtime.spawn(future), properties }),
 					}
 				} else {
 					// Sender/`Scope` has been dropped
@@ -566,7 +558,7 @@ impl<Error: Debug + Send + 'static> Drop for ScopeResultStream<Error> {
 			ScopedTasks::MultiThread(runtime, tasks) =>
 				if !tasks.is_empty() {
 					for task in tasks.iter() {
-						task.future.inner().abort();
+						task.future.abort();
 					}
 					tokio::task::block_in_place(|| {
 						runtime.block_on(tasks.for_each(|(properties, result)| {
