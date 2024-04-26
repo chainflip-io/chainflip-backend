@@ -6,7 +6,7 @@ use sp_std::vec;
 
 use sol_prim::SlotNumber;
 
-use crate::{address, assets, FeeRefundCalculator, TypeInfo};
+use crate::{address, assets, FeeEstimationApi, FeeRefundCalculator, TypeInfo};
 use codec::{Decode, Encode, MaxEncodedLen};
 use serde::{Deserialize, Serialize};
 
@@ -15,14 +15,11 @@ use super::{Chain, ChainCrypto};
 pub mod api;
 pub mod benchmarking;
 pub mod consts;
-mod tracked_data;
 
 pub use sol_prim::{
 	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
 	Address as SolAddress, Digest as SolHash, Signature as SolSignature,
 };
-
-pub use tracked_data::SolTrackedData;
 
 impl Chain for Solana {
 	const NAME: &'static str = "Solana";
@@ -32,7 +29,7 @@ impl Chain for Solana {
 	type ChainBlockNumber = SlotNumber;
 	type ChainAmount = AssetAmount;
 	type TransactionFee = Self::ChainAmount;
-	type TrackedData = tracked_data::SolTrackedData;
+	type TrackedData = SolTrackedData;
 	type ChainAsset = assets::sol::Asset;
 	type ChainAccount = SolAddress;
 	type EpochStartData = (); //todo
@@ -85,6 +82,70 @@ impl ChainCrypto for SolanaCrypto {
 		_rotation_broadcast_id: cf_primitives::BroadcastId,
 	) -> vec::Vec<cf_primitives::BroadcastId> {
 		todo!()
+	}
+}
+
+pub const LAMPORTS_PER_SIGNATURE: <Solana as Chain>::ChainAmount = 5000;
+
+// This is to be used both for ingress/egress estimation and for setting the compute units
+// limit when crafting transactions by the State Chain.
+mod compute_units_costs {
+	pub const BASE_COMPUTE_UNITS_PER_TX: u128 = 450;
+	pub const COMPUTE_UNITS_PER_FETCH_NATIVE: u128 = 7_500;
+	pub const COMPUTE_UNITS_PER_TRANSFER_NATIVE: u128 = 300;
+	#[allow(dead_code)]
+	pub const COMPUTE_UNITS_PER_FETCH_TOKEN: u128 = 31_000;
+	#[allow(dead_code)]
+	pub const COMPUTE_UNITS_PER_TRANSFER_TOKEN: u128 = 41_200;
+}
+
+#[derive(
+	Default,
+	Clone,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Debug,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
+)]
+pub struct SolTrackedData {
+	pub priority_fee: <Solana as Chain>::ChainAmount,
+}
+
+impl FeeEstimationApi<Solana> for SolTrackedData {
+	fn estimate_egress_fee(
+		&self,
+		asset: <Solana as crate::Chain>::ChainAsset,
+	) -> <Solana as crate::Chain>::ChainAmount {
+		use compute_units_costs::*;
+
+		let compute_units_per_transfer = BASE_COMPUTE_UNITS_PER_TX +
+			match asset {
+				assets::sol::Asset::Sol => COMPUTE_UNITS_PER_TRANSFER_NATIVE,
+				// TODO: To add when USDC is supported
+				// assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_TRANSFER_TOKEN,
+			};
+
+		LAMPORTS_PER_SIGNATURE + (self.priority_fee).saturating_mul(compute_units_per_transfer)
+	}
+	fn estimate_ingress_fee(
+		&self,
+		asset: <Solana as crate::Chain>::ChainAsset,
+	) -> <Solana as crate::Chain>::ChainAmount {
+		use compute_units_costs::*;
+
+		let compute_units_per_transfer = BASE_COMPUTE_UNITS_PER_TX +
+			match asset {
+				assets::sol::Asset::Sol => COMPUTE_UNITS_PER_FETCH_NATIVE,
+				// TODO: To add when USDC is supported
+				// assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_FETCH_TOKEN,
+			};
+
+		LAMPORTS_PER_SIGNATURE + (self.priority_fee).saturating_mul(compute_units_per_transfer)
 	}
 }
 

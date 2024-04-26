@@ -7,7 +7,7 @@ pub mod deposit_address;
 
 use crate::{
 	evm::{DeploymentStatus, EvmFetchId, EvmTransactionMetadata, Transaction},
-	*,
+	Chain, FeeEstimationApi, *,
 };
 use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Ethereum;
