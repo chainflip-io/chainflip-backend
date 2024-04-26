@@ -30,9 +30,8 @@ use cf_chains::{
 	FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	Asset, BasisPoints, Beneficiaries, BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex,
-	BoostPoolTier,
-	ForeignChain, PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId,
+	Asset, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId, EgressCounter,
+	EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
