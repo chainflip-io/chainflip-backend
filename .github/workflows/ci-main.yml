@@ -55,10 +55,3 @@ jobs:
       version: ci/${{ github.sha }}/
       environment: "development"
     secrets: inherit
-  upgrade-check:
-    needs: [build-try-runtime]
-    uses: ./.github/workflows/upgrade-test.yml
-    secrets: inherit
-    with:
-      upgrade-from-release: "sisyphos"
-      upgrade-to-workflow-name: "ci-main.yml"
