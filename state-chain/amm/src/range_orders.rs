@@ -23,7 +23,7 @@
 mod tests;
 
 use serde::{Deserialize, Serialize};
-use sp_std::{collections::btree_map::BTreeMap, convert::Infallible, vec::Vec};
+use sp_std::{collections::btree_map::BTreeMap, convert::Infallible, prelude::ToOwned, vec::Vec};
 
 use crate::collect_map_in_range;
 use cf_utilities::MinMax;
