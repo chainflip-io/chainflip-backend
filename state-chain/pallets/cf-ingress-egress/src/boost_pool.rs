@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests;
 
+use frame_support::DefaultNoBound;
 use sp_runtime::{
 	helpers_128bit::multiply_by_rational_with_rounding, Rounding, SaturatedConversion,
 };
@@ -10,17 +11,10 @@ use super::*;
 
 const SCALE_FACTOR: u128 = 1000;
 /// Represents 1/SCALE_FACTOR of Asset amount as a way to gain extra precision.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, DefaultNoBound)]
 struct ScaledAmount<C: Chain> {
 	val: u128,
 	_phantom: PhantomData<C>,
-}
-
-// Manually implementing Default because deriving didn't work due to generic parameter:
-impl<C: Chain> Default for ScaledAmount<C> {
-	fn default() -> Self {
-		Self { val: Default::default(), _phantom: Default::default() }
-	}
 }
 
 impl<C: Chain> PartialOrd for ScaledAmount<C> {
@@ -139,6 +133,42 @@ where
 		self.available_amount.into_chain_amount()
 	}
 
+	pub fn get_amounts(&self) -> BTreeMap<AccountId, C::ChainAmount> {
+		self.amounts
+			.iter()
+			.map(|(account_id, scaled_amount)| {
+				(account_id.clone(), scaled_amount.into_chain_amount())
+			})
+			.collect()
+	}
+
+	pub fn get_pending_boosts(
+		&self,
+	) -> BTreeMap<PrewitnessedDepositId, BTreeMap<AccountId, C::ChainAmount>> {
+		self.pending_boosts
+			.iter()
+			.map(|(deposit_id, owed_amounts_map)| {
+				(
+					*deposit_id,
+					owed_amounts_map
+						.iter()
+						.map(|(account_id, scaled_amount)| {
+							(account_id.clone(), scaled_amount.into_chain_amount())
+						})
+						.collect(),
+				)
+			})
+			.collect()
+	}
+
+	pub fn get_pending_withdrawals(&self) -> &BTreeMap<AccountId, BTreeSet<PrewitnessedDepositId>> {
+		&self.pending_withdrawals
+	}
+
+	/// Attempt to use pool's available funds to boost up to `amount_to_boost`. Returns
+	/// (boosted_amount, boost_fee), where "boosted amount" is the amount provided by the pool plus
+	/// the boost fee. For example, in the (likely common) case of having sufficient funds in a
+	/// single pool the boosted amount will exactly equal the amount prewitnessed.
 	pub(crate) fn provide_funds_for_boosting(
 		&mut self,
 		prewitnessed_deposit_id: PrewitnessedDepositId,
@@ -340,7 +370,7 @@ where
 	}
 
 	#[cfg(test)]
-	pub fn get_pending_boosts(&self) -> Vec<PrewitnessedDepositId> {
+	pub fn get_pending_boost_ids(&self) -> Vec<PrewitnessedDepositId> {
 		self.pending_boosts.keys().copied().collect()
 	}
 	#[cfg(test)]

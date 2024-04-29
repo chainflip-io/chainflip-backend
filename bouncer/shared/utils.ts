@@ -78,6 +78,8 @@ export function getContractAddress(chain: Chain, contract: string): string {
       switch (contract) {
         case 'VAULT':
           return '8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf';
+        case 'TOKEN_VAULT_PDA':
+          return '9j17hjg8wR2uFxJAJDAFahwsgTCNx35sc5qXSxDmuuF6';
         case 'DATA_ACCOUNT':
           return '623nEsyGYWKYggY1yHxQFJiBarL9jdWdrMr7ASiCKP6a';
         case 'UPGRADE_MANAGER':

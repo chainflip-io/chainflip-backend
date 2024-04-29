@@ -168,10 +168,7 @@ async function main(): Promise<void> {
   // Only issue reg. durable nonces is that they will need to be changed every time a new Solana tag is
   // used since they are not deterministic. We could insert them in the governance extrinsic but that
   // is unnecessary for production.
-  // await submitGovernanceExtrinsic(
-  //   chainflip.tx.environment.witnessInitializeSolanaVault(
-  //   ),
-  // );
+  // await submitGovernanceExtrinsic(chainflip.tx.environment.witnessInitializeSolanaVault());
 
   // Confirmation
   console.log('Waiting for new epoch...');
