@@ -166,7 +166,7 @@ mod happy {
 
 		let (pda, bump) = Pda::from_address(vault_program_id)
 			.expect("derive")
-			.chain_seed(&[1])
+			.chain_seed([1])
 			.expect("chain-seed")
 			.finish()
 			.expect("finish");
@@ -174,18 +174,15 @@ mod happy {
 		assert_eq!(
 			pda,
 			"5N72J9YQKpky5yFnrWWpFcBQsWpFMK4rW6b2Ue3YmYcu".parse().expect("public key")
-		);		
-		assert_eq!(
-			bump,
-			255
-		);		
-		
+		);
+		assert_eq!(bump, 255);
+
 		let vault_program_id: Address =
 			"8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf".parse().expect("public key");
 
 		let (pda, bump) = Pda::from_address(vault_program_id)
 			.expect("derive")
-			.chain_seed(&[1,2])
+			.chain_seed([1, 2])
 			.expect("chain-seed")
 			.finish()
 			.expect("finish");
@@ -193,13 +190,9 @@ mod happy {
 		assert_eq!(
 			pda,
 			"6PkQHEp18NgEDS5ydkgivU4pzTV6sYmoEaHvbbv4un73".parse().expect("public key")
-		);		
-		assert_eq!(
-			bump,
-			255
-		);		
+		);
+		assert_eq!(bump, 255);
 	}
-
 
 	fn get_associated_token_account(
 		wallet_address: Address,
@@ -222,11 +215,11 @@ mod happy {
 
 		Pda::from_address(spl_associated_token_program_id)
 			.expect("derive")
-			.chain_seed(&wallet_address.0)
+			.chain_seed(wallet_address.0)
 			.expect("chain-seed")
-			.chain_seed(&token_program_id.0)
+			.chain_seed(token_program_id.0)
 			.expect("chain-seed")
-			.chain_seed(&mint_pubkey.0)
+			.chain_seed(mint_pubkey.0)
 			.expect("chain-seed")
 			.finish()
 			.expect("finish")
