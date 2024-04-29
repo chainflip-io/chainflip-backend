@@ -117,7 +117,7 @@ fn insert_swaps(swaps: &[Swap]) {
 				swap.to,
 				swap.amount,
 				destination_address.clone(),
-				bounded_vec![Beneficiary { account: broker_id as u64, bps: 2 }],
+				bounded_vec![Affiliate { account: broker_id as u64, bps: 2 }],
 				1,
 			);
 		}
@@ -202,7 +202,7 @@ fn expect_earned_fees_to_be_recorded() {
 			Asset::Usdc,
 			100,
 			ForeignChainAddress::Eth([2; 20].into()),
-			bounded_vec![Beneficiary { account: ALICE, bps: 200 }],
+			bounded_vec![Affiliate { account: ALICE, bps: 200 }],
 			1,
 		);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 2);
@@ -213,7 +213,7 @@ fn expect_earned_fees_to_be_recorded() {
 			Asset::Usdc,
 			100,
 			ForeignChainAddress::Eth([2; 20].into()),
-			bounded_vec![Beneficiary { account: ALICE, bps: 200 }],
+			bounded_vec![Affiliate { account: ALICE, bps: 200 }],
 			1,
 		);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 4);
@@ -225,8 +225,8 @@ fn expect_earned_fees_to_be_recorded() {
 			100,
 			ForeignChainAddress::Eth([2; 20].into()),
 			bounded_vec![
-				Beneficiary { account: ALICE, bps: 200 },
-				Beneficiary { account: BOB, bps: 200 }
+				Affiliate { account: ALICE, bps: 200 },
+				Affiliate { account: BOB, bps: 200 }
 			],
 			1,
 		);
@@ -247,7 +247,7 @@ fn cannot_swap_with_incorrect_destination_address_type() {
 			Asset::Dot,
 			10,
 			ForeignChainAddress::Eth([2; 20].into()),
-			bounded_vec![Beneficiary { account: ALICE, bps: 2 }],
+			bounded_vec![Affiliate { account: ALICE, bps: 2 }],
 			1,
 		);
 
@@ -1906,7 +1906,7 @@ fn swap_with_custom_broker_fee(
 		to,
 		amount,
 		ForeignChainAddress::Eth([2; 20].into()),
-		bounded_vec![Beneficiary { account: ALICE, bps: broker_fee }],
+		bounded_vec![Affiliate { account: ALICE, bps: broker_fee }],
 		1,
 	);
 }

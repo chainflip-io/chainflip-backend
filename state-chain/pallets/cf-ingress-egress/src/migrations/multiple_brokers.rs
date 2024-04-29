@@ -1,6 +1,6 @@
 use crate::*;
 use cf_chains::DepositChannel;
-use cf_primitives::Beneficiary;
+use cf_primitives::Affiliate;
 use frame_support::traits::OnRuntimeUpgrade;
 
 mod old {
@@ -71,7 +71,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 					action: ChannelAction::Swap {
 						destination_asset,
 						destination_address,
-						broker_commission: vec![Beneficiary {
+						broker_commission: vec![Affiliate {
 							account: broker_id,
 							bps: broker_commission_bps,
 						}]
@@ -201,7 +201,7 @@ mod migration_tests {
 					ChannelAction::Swap {
 						destination_asset: Asset::Eth,
 						destination_address: ForeignChainAddress::Eth(H160([5u8; 20])),
-						broker_commission: vec![Beneficiary { account: broker_address, bps: 15 }]
+						broker_commission: vec![Affiliate { account: broker_address, bps: 15 }]
 							.try_into()
 							.unwrap()
 					}

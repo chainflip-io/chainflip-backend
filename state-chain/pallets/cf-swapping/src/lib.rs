@@ -6,8 +6,8 @@ use cf_chains::{
 	CcmChannelMetadata, CcmDepositMetadata, SwapOrigin,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, Beneficiaries, Beneficiary, BrokerFees, ChannelId,
-	ForeignChain, SwapId, SwapLeg, TransactionHash, MAX_BENEFICIARIES, STABLE_ASSET,
+	AccountRole, Affiliate, Affiliates, Asset, AssetAmount, BrokerFees, ChannelId, ForeignChain,
+	SwapId, SwapLeg, TransactionHash, STABLE_ASSET,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -313,7 +313,7 @@ pub mod pallet {
 			source_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 			boost_fee: BasisPoints,
 			channel_opening_fee: T::Amount,
-			beneficiaries: Beneficiaries<T::AccountId>,
+			affiliates: Affiliates<T::AccountId>,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
@@ -426,7 +426,7 @@ pub mod pallet {
 		/// Brokers should withdraw their earned fees before deregistering.
 		EarnedFeesNotWithdrawn,
 		/// The provided list of broker contains an account which is not registered as Broker
-		BeneficiaryAccountIsNotABroker,
+		AffiliateAccountIsNotABroker,
 	}
 
 	#[pallet::hooks]
@@ -687,32 +687,33 @@ pub mod pallet {
 			source_asset: Asset,
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
-			broker_commission: BrokerFees<T::AccountId>,
+			broker_fees: BrokerFees<T::AccountId>,
 			channel_metadata: Option<CcmChannelMetadata>,
 			boost_fee: BasisPoints,
 		) -> DispatchResult {
 			ensure!(T::SafeMode::get().deposits_enabled, Error::<T>::DepositsDisabled);
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
-			let (beneficiaries, total_bps) = match broker_commission {
+			let (affiliates, total_bps) = match broker_fees {
 				BrokerFees::Single(bps) =>
 					if bps > 0 {
-						let mut beneficiaries = Beneficiaries::new();
-						beneficiaries.try_push(Beneficiary { account: broker.clone(), bps }).expect("We are only inserting an element, impossible to exceed the maximum size");
-						(beneficiaries, bps)
+						let mut affiliates = Affiliates::new();
+						affiliates.try_push(Affiliate { account: broker.clone(), bps })
+							.expect("We are only inserting one element, impossible to exceed the maximum size");
+						(affiliates, bps)
 					} else {
 						(Default::default(), 0)
 					},
-				BrokerFees::Multiple(mut beneficiaries) => {
-					for Beneficiary { account, .. } in &beneficiaries {
+				BrokerFees::Multiple(mut affiliates) => {
+					for Affiliate { account, .. } in &affiliates {
 						ensure!(
 							T::AccountRoleRegistry::has_account_role(account, AccountRole::Broker),
-							Error::<T>::BeneficiaryAccountIsNotABroker
+							Error::<T>::AffiliateAccountIsNotABroker
 						);
 					}
 
-					beneficiaries.retain(|Beneficiary { bps, .. }| *bps > 0);
-					let total = beneficiaries.iter().map(|Beneficiary { bps, .. }| bps).sum();
-					(beneficiaries, total)
+					affiliates.retain(|Affiliate { bps, .. }| *bps > 0);
+					let total = affiliates.iter().map(|Affiliate { bps, .. }| bps).sum();
+					(affiliates, total)
 				},
 			};
 
@@ -731,7 +732,7 @@ pub mod pallet {
 					source_asset,
 					destination_asset,
 					destination_address_internal,
-					beneficiaries.clone(),
+					affiliates.clone(),
 					broker,
 					channel_metadata.clone(),
 					boost_fee,
@@ -748,7 +749,7 @@ pub mod pallet {
 				source_chain_expiry_block: expiry_height,
 				boost_fee,
 				channel_opening_fee,
-				beneficiaries,
+				affiliates,
 			});
 
 			Ok(())
@@ -1130,10 +1131,7 @@ pub mod pallet {
 			to: Asset,
 			amount: AssetAmount,
 			destination_address: ForeignChainAddress,
-			broker_commission: BoundedVec<
-				Beneficiary<Self::AccountId>,
-				ConstU32<MAX_BENEFICIARIES>,
-			>,
+			broker_commission: Affiliates<Self::AccountId>,
 			channel_id: ChannelId,
 		) -> SwapId {
 			// Permill maxes out at 100% so this is safe.
@@ -1161,7 +1159,7 @@ pub mod pallet {
 				SwapType::Swap(destination_address.clone()),
 			);
 
-			for Beneficiary { account, bps } in broker_commission {
+			for Affiliate { account, bps } in broker_commission {
 				EarnedBrokerFees::<T>::mutate(&account, from, |earned_fees| {
 					earned_fees.saturating_accrue(
 						Permill::from_parts(bps as u32 * BASIS_POINTS_PER_MILLION) * amount,

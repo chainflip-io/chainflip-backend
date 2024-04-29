@@ -1,5 +1,5 @@
 use cf_chains::{address::ForeignChainAddress, assets::any::AssetMap};
-use cf_primitives::{Asset, AssetAmount, Beneficiaries, ChannelId, SwapId};
+use cf_primitives::{Affiliates, Asset, AssetAmount, ChannelId, SwapId};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -16,7 +16,7 @@ pub trait SwapDepositHandler {
 		to: Asset,
 		amount: AssetAmount,
 		destination_address: ForeignChainAddress,
-		broker_commission: Beneficiaries<Self::AccountId>,
+		broker_commission: Affiliates<Self::AccountId>,
 		channel_id: ChannelId,
 	) -> SwapId;
 }

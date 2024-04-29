@@ -348,7 +348,7 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		source_asset: Asset,
 		destination_asset: Asset,
 		destination_address: EncodedAddress,
-		broker_commission: BrokerFees<AccountId32>,
+		broker_fees: BrokerFees<AccountId32>,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 	) -> Result<SwapDepositAddress> {
@@ -358,7 +358,7 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 					source_asset,
 					destination_asset,
 					destination_address,
-					broker_commission,
+					broker_fees,
 					channel_metadata,
 					boost_fee: boost_fee.unwrap_or_default(),
 				},

@@ -3,7 +3,7 @@ use crate::{Chainflip, DepositApi};
 use cf_chains::{
 	address::ForeignChainAddress, dot::PolkadotAccountId, CcmChannelMetadata, Chain, ForeignChain,
 };
-use cf_primitives::{chains::assets::any, BasisPoints, Beneficiaries, ChannelId};
+use cf_primitives::{chains::assets::any, Affiliates, BasisPoints, ChannelId};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_std::marker::PhantomData;
@@ -25,7 +25,7 @@ pub struct SwapChannel<C: Chain, T: Chainflip> {
 	pub source_asset: <C as Chain>::ChainAsset,
 	pub destination_asset: any::Asset,
 	pub destination_address: ForeignChainAddress,
-	pub broker_commission: Beneficiaries<<T as frame_system::Config>::AccountId>,
+	pub broker_commission: Affiliates<<T as frame_system::Config>::AccountId>,
 	pub broker_id: <T as frame_system::Config>::AccountId,
 	pub channel_metadata: Option<CcmChannelMetadata>,
 	pub boost_fee: BasisPoints,
@@ -117,7 +117,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 		source_asset: <C as Chain>::ChainAsset,
 		destination_asset: cf_primitives::Asset,
 		destination_address: ForeignChainAddress,
-		broker_commission: Beneficiaries<Self::AccountId>,
+		broker_commission: Affiliates<Self::AccountId>,
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
