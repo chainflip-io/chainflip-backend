@@ -216,7 +216,6 @@ mod tests {
 						AccountRole::Validator,
 						false,
 						false,
-						false,
 						None,
 					)
 					.await.unwrap();

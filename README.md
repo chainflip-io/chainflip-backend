@@ -156,3 +156,11 @@ These commands can be used to control which logs the engine outputs at runtime.
 The `RUST_LOG` environment variable controls the initial filtering directives if specified at engine startup.
 
 The syntax for specifying filtering directives is given here: <https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html>
+
+## Testnet
+
+To start a multi node testnet you can use the [chainflip-testnet-tools](https://github.com/chainflip-io/chainflip-testnet-tools). A multi-node testnet can be useful to test more complex test scenarios under more realistic conditions.
+
+## Chainflip Engine Runner
+
+This is the root binary that kicks off the Chainflip Engine. It is responsible for loading the shared libraries and running each of the shared libraries. See the [Chainflip Engine Runner README](./engine-runner-bin/README.md) for more information.
