@@ -752,7 +752,7 @@ pub mod pallet {
 		}
 
 		fn swap_into_stable_taking_network_fee(
-			swaps: &mut Vec<Swap>,
+			swaps: &mut [Swap],
 		) -> Result<(), BatchExecutionError> {
 			Self::do_group_and_swap(swaps, SwapLeg::ToStable)?;
 
@@ -926,14 +926,14 @@ pub mod pallet {
 		// and do the swaps of a given direction. Processed and unprocessed swaps are
 		// returned.
 		fn do_group_and_swap(
-			swaps: &mut Vec<Swap>,
+			swaps: &mut [Swap],
 			direction: SwapLeg,
 		) -> Result<(), BatchExecutionError> {
 			let swap_groups = swaps
 				.iter_mut()
 				.filter_map(|swap| swap.swap_asset(direction).map(|asset| (asset, swap)))
-				.fold(BTreeMap::new(), |mut map, (asset, swap)| {
-					map.entry(asset).or_insert_with(Vec::new).push(swap);
+				.fold(BTreeMap::new(), |mut map: BTreeMap<_, Vec<_>>, (asset, swap)| {
+					map.entry(asset).or_default().push(swap);
 					map
 				});
 
