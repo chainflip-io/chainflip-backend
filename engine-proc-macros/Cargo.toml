@@ -1,0 +1,20 @@
+[package]
+authors = ["Chainflip team <https://github.com/chainflip-io>"]
+build = 'build.rs'
+edition = '2021'
+name = "engine-proc-macros"
+# The version here is the version that will be used for the generated code, and therefore will be the
+# suffix of the generated engine entrypoint. TODO: Fix this.
+version = "1.4.0"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "2.0.52"
+quote = "1.0.35"
+proc-macro2 = "1.0.79"
+engine-upgrade-utils = { path = "../engine-upgrade-utils" }
+
+[build-dependencies]
+engine-upgrade-utils = { path = "../engine-upgrade-utils" }

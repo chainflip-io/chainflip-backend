@@ -1400,6 +1400,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cf-engine-dylib"
+version = "1.4.0"
+dependencies = [
+ "chainflip-engine",
+ "engine-proc-macros",
+ "engine-upgrade-utils",
+]
+
+[[package]]
 name = "cf-integration-tests"
 version = "0.1.0"
 dependencies = [
@@ -1739,6 +1748,7 @@ dependencies = [
  "custom-rpc",
  "dyn-clone",
  "ed25519-dalek",
+ "engine-upgrade-utils",
  "ethbloom",
  "ethereum",
  "ethers",
@@ -1802,7 +1812,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
- "toml 0.7.8",
  "tracing",
  "url",
  "utilities",
@@ -3300,6 +3309,34 @@ name = "endian-type"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
+
+[[package]]
+name = "engine-proc-macros"
+version = "1.4.0"
+dependencies = [
+ "engine-upgrade-utils",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.55",
+]
+
+[[package]]
+name = "engine-runner"
+version = "1.4.0"
+dependencies = [
+ "anyhow",
+ "cf-engine-dylib",
+ "engine-proc-macros",
+ "engine-upgrade-utils",
+]
+
+[[package]]
+name = "engine-upgrade-utils"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "toml 0.8.10",
+]
 
 [[package]]
 name = "enr"
@@ -4946,7 +4983,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite 0.2.13",
- "socket2 0.4.10",
+ "socket2 0.5.5",
  "tokio",
  "tower-service",
  "tracing",
@@ -13173,18 +13210,6 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "0.7.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd79e69d3b627db300ff956027cc6c3798cef26d22526befdfcd12feeb6d2257"
-dependencies = [
- "serde",
- "serde_spanned",
- "toml_datetime",
- "toml_edit 0.19.15",
-]
-
-[[package]]
-name = "toml"
 version = "0.8.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a9aad4a3066010876e8dcf5a8a06e70a558751117a145c6ce2b82c2e2054290"
@@ -13202,19 +13227,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3550f4e9685620ac18a50ed434eb3aec30db8ba93b0287467bca5826ea25baf1"
 dependencies = [
  "serde",
-]
-
-[[package]]
-name = "toml_edit"
-version = "0.19.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b5bb770da30e5cbfde35a2d7b9b8a2c4b8ef89548a7a6aeab5c9a576e3e7421"
-dependencies = [
- "indexmap 2.2.2",
- "serde",
- "serde_spanned",
- "toml_datetime",
- "winnow",
 ]
 
 [[package]]

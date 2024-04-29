@@ -98,6 +98,7 @@ use futures::{
 	Future, FutureExt, Stream, StreamExt,
 };
 use tokio::sync::oneshot;
+use tracing::instrument::WithSubscriber;
 
 pub trait Unwrappable {
 	type Item;
@@ -361,7 +362,7 @@ impl<'env, Error: Debug + Send + 'static> Scope<'env, Error> {
 		let location = core::panic::Location::caller();
 		let _result = self.sender.try_send({
 			let future: Pin<Box<dyn 'env + Future<Output = Result<(), Error>> + Send>> =
-				Box::pin(f);
+				Box::pin(f.with_current_subscriber());
 			let future: TaskFuture<Error> = unsafe { std::mem::transmute(future) };
 			(TaskProperties { weak, location: *location }, future)
 		});
