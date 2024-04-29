@@ -1,7 +1,7 @@
 use super::sol_tx_building_blocks::{
 	AccountMeta, Instruction, Pubkey, SYSTEM_PROGRAM_ID, UPGRADE_MANAGER_PROGRAM, VAULT_PROGRAM,
 };
-use crate::vec::Vec;
+use crate::{vec, vec::Vec};
 use borsh::{BorshDeserialize, BorshSerialize};
 use core::str::FromStr;
 use scale_info::prelude::string::String;
