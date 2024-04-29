@@ -78,6 +78,14 @@ where
 	}
 }
 
+pub struct NoopRuntimeUpgrade;
+
+impl OnRuntimeUpgrade for NoopRuntimeUpgrade {
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		Default::default()
+	}
+}
+
 /// A helper enum to wrap the pre_upgrade bytes like an Option before passing them to post_upgrade.
 /// This enum is used rather than an Option to make the API clearer to the developer.
 #[derive(Encode, Decode)]

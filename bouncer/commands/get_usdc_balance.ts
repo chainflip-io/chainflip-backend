@@ -7,11 +7,11 @@
 // For example: ./commands/get_usdc_balance.ts 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6
 // might print: 100.2
 
-import { runWithTimeout, getEvmContractAddress } from '../shared/utils';
+import { runWithTimeout, getContractAddress } from '../shared/utils';
 import { getErc20Balance } from '../shared/get_erc20_balance';
 
 async function getUsdcBalanceCommand(ethereumAddress: string) {
-  const contractAddress = getEvmContractAddress('Ethereum', 'Usdc');
+  const contractAddress = getContractAddress('Ethereum', 'Usdc');
   const balance = await getErc20Balance('Ethereum', ethereumAddress, contractAddress);
   console.log(balance);
   process.exit(0);

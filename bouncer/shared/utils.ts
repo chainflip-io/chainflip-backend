@@ -12,14 +12,16 @@ import {
 } from '@chainflip/cli';
 import Web3 from 'web3';
 import { Connection, Keypair } from '@solana/web3.js';
-import { u8aToHex } from '@polkadot/util';
+import { base58Decode, base58Encode } from '@polkadot/util-crypto';
+import { hexToU8a, u8aToHex } from '@polkadot/util';
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
 import { newEvmAddress } from './new_evm_address';
 import { CcmDepositMetadata } from './new_swap';
-import { getCFTesterAbi } from './eth_abis';
+import { getCFTesterAbi } from './contract_interfaces';
 import { SwapParams } from './perform_swap';
+import { newSolAddress } from './new_sol_address';
 
 const cfTesterAbi = await getCFTesterAbi();
 
@@ -32,7 +34,7 @@ export const snowWhiteMutex = new Mutex();
 
 export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'];
 
-export function getEvmContractAddress(chain: Chain, contract: string): string {
+export function getContractAddress(chain: Chain, contract: string): string {
   switch (chain) {
     case 'Ethereum':
       switch (contract) {
@@ -75,11 +77,19 @@ export function getEvmContractAddress(chain: Chain, contract: string): string {
     case 'Solana':
       switch (contract) {
         case 'VAULT':
-          return '632bJHVLPj6XPLVgrabFwxogtAQQ5zb8hwm9zqZuCcHo';
+          return '8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf';
+        case 'TOKEN_VAULT_PDA':
+          return '9j17hjg8wR2uFxJAJDAFahwsgTCNx35sc5qXSxDmuuF6';
+        case 'DATA_ACCOUNT':
+          return '623nEsyGYWKYggY1yHxQFJiBarL9jdWdrMr7ASiCKP6a';
+        case 'UPGRADE_MANAGER':
+          return '274BzCz5RPHJZsxdcSGySahz4qAWqwSDcmz1YEKkGaZC';
+        case 'UPGRADE_MANAGER_SIGNER':
+          return '2SAhe89c1umM2JvCnmqCEnY8UCQtNPEKGe7UXA8KSQqH';
         case 'SolUsdc':
           return process.env.ARB_USDC_ADDRESS ?? '24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p';
         case 'CFTESTER':
-          return 'NJusJ7itnSsh4jSi43i9MMKB9sF4VbNvdSwUA45gPE6';
+          return '8pBPaVfTAcjLeNfC187Fkvi9b1XEFhRNJ95BQXXVksmH';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
@@ -172,6 +182,10 @@ export function assetContractId(asset: Asset): number {
       return assetConstants.ArbEth.contractId;
     case 'ArbUsdc':
       return assetConstants.ArbUsdc.contractId;
+    case 'Sol':
+      return 9;
+    case 'SolUsdc':
+      return 10;
     default:
       throw new Error(`Unsupported asset: ${asset}`);
   }
@@ -195,6 +209,10 @@ export function assetDecimals(asset: Asset): number {
       return assetConstants.ArbEth.decimals;
     case 'ArbUsdc':
       return assetConstants.ArbUsdc.decimals;
+    case 'Sol':
+      return 9;
+    case 'SolUsdc':
+      return 6;
     default:
       throw new Error(`Unsupported asset: ${asset}`);
   }
@@ -210,6 +228,8 @@ export function chainContractId(chain: Chain): number {
       return chainConstants.Polkadot.contractId;
     case 'Arbitrum':
       return chainConstants.Arbitrum.contractId;
+    case 'Solana':
+      return 5;
     default:
       throw new Error(`Unsupported chain: ${chain}`);
   }
@@ -271,6 +291,7 @@ function getCachedSubstrateApi(defaultEndpoint: string) {
         EncodedAddress: {
           _enum: {
             Eth: '[u8; 20]',
+            Arb: '[u8; 20]',
             Dot: '[u8; 32]',
             Btc: 'Vec<u8>',
           },
@@ -542,6 +563,10 @@ export async function newAddress(
     case Assets.Btc:
       rawAddress = await newBtcAddress(seed, type ?? 'P2PKH');
       break;
+    case 'Sol':
+    case 'SolUsdc':
+      rawAddress = newSolAddress(seed);
+      break;
     default:
       throw new Error(`Unsupported asset: ${asset}`);
   }
@@ -741,7 +766,7 @@ export async function observeCcmReceived(
       chainContractId(chainFromAsset(sourceAsset)).toString(),
       sourceAddress ?? null,
       messageMetadata.message,
-      getEvmContractAddress(chainFromAsset(destAsset), destAsset.toString()),
+      getContractAddress(chainFromAsset(destAsset), destAsset.toString()),
       '*',
       '*',
       '*',
@@ -779,6 +804,18 @@ export function hexPubkeyToFlipAddress(hexPubkey: string) {
   const keyring = new Keyring({ type: 'sr25519' });
   keyring.setSS58Format(2112);
   return keyring.encodeAddress(hexPubkey);
+}
+
+export function decodeSolAddress(address: string): string {
+  return u8aToHex(base58Decode(address));
+}
+
+export function encodeSolAddress(address: string): string {
+  return base58Encode(hexToU8a(address));
+}
+
+export function getEncodedSolAddress(address: string): string {
+  return /^0x[a-fA-F0-9]+$/.test(address) ? encodeSolAddress(address) : address;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

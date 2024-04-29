@@ -12,8 +12,8 @@ const BOOSTER_1: AccountId = 1;
 const BOOSTER_2: AccountId = 2;
 const BOOSTER_3: AccountId = 3;
 
-const BOOST_1: BoostId = 1;
-const BOOST_2: BoostId = 2;
+const BOOST_1: PrewitnessedDepositId = 1;
+const BOOST_2: PrewitnessedDepositId = 2;
 
 #[track_caller]
 pub fn check_pool(pool: &TestPool, amounts: impl IntoIterator<Item = (AccountId, Amount)>) {
@@ -34,7 +34,7 @@ pub fn check_pool(pool: &TestPool, amounts: impl IntoIterator<Item = (AccountId,
 #[track_caller]
 fn check_pending_boosts(
 	pool: &TestPool,
-	boosts: impl IntoIterator<Item = (BoostId, Vec<(AccountId, Amount)>)>,
+	boosts: impl IntoIterator<Item = (PrewitnessedDepositId, Vec<(AccountId, Amount)>)>,
 ) {
 	let expected_boosts: BTreeMap<_, _> = boosts.into_iter().collect();
 
@@ -44,8 +44,8 @@ fn check_pending_boosts(
 		"mismatch in pending boosts ids"
 	);
 
-	for (boost_id, boost_amounts) in &pool.pending_boosts {
-		let expected_amounts = &expected_boosts[boost_id];
+	for (prewitnessed_deposit_id, boost_amounts) in &pool.pending_boosts {
+		let expected_amounts = &expected_boosts[prewitnessed_deposit_id];
 
 		assert_eq!(
 			BTreeMap::from_iter(expected_amounts.iter().copied()),
@@ -59,11 +59,13 @@ fn check_pending_boosts(
 #[track_caller]
 fn check_pending_withdrawals(
 	pool: &TestPool,
-	withdrawals: impl IntoIterator<Item = (AccountId, Vec<BoostId>)>,
+	withdrawals: impl IntoIterator<Item = (AccountId, Vec<PrewitnessedDepositId>)>,
 ) {
 	let expected_withdrawals: BTreeMap<_, BTreeSet<_>> = withdrawals
 		.into_iter()
-		.map(|(account_id, boost_ids)| (account_id, boost_ids.into_iter().collect()))
+		.map(|(account_id, prewitnessed_deposit_ids)| {
+			(account_id, prewitnessed_deposit_ids.into_iter().collect())
+		})
 		.collect();
 
 	assert_eq!(pool.pending_withdrawals, expected_withdrawals, "mismatch in pending withdrawals");
@@ -105,14 +107,14 @@ fn withdrawing_funds() {
 	check_pool(&pool, [(BOOSTER_1, 1000), (BOOSTER_2, 900), (BOOSTER_3, 800)]);
 
 	// No pending to receive, should be able to withdraw in full
-	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok(1000));
+	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok((1000, Default::default())));
 	check_pool(&pool, [(BOOSTER_2, 900), (BOOSTER_3, 800)]);
 	check_pending_withdrawals(&pool, []);
 
-	assert_eq!(pool.stop_boosting(BOOSTER_2), Ok(900));
+	assert_eq!(pool.stop_boosting(BOOSTER_2), Ok((900, Default::default())));
 	check_pool(&pool, [(BOOSTER_3, 800)]);
 
-	assert_eq!(pool.stop_boosting(BOOSTER_3), Ok(800));
+	assert_eq!(pool.stop_boosting(BOOSTER_3), Ok((800, Default::default())));
 	check_pool(&pool, []);
 }
 
@@ -125,7 +127,7 @@ fn withdrawing_twice_is_no_op() {
 	pool.add_funds(BOOSTER_1, AMOUNT_1);
 	pool.add_funds(BOOSTER_2, AMOUNT_2);
 
-	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok(AMOUNT_1));
+	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok((AMOUNT_1, Default::default())));
 
 	check_pool(&pool, [(BOOSTER_2, AMOUNT_2)]);
 
@@ -170,7 +172,7 @@ fn adding_funds_during_pending_withdrawal_from_same_booster() {
 
 	check_pending_boosts(&pool, [(BOOST_1, vec![(BOOSTER_1, 500), (BOOSTER_2, 1500)])]);
 
-	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok(500));
+	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok((500, BTreeSet::from_iter([BOOST_1]))));
 
 	check_pool(&pool, [(BOOSTER_2, 1500)]);
 	check_pending_boosts(&pool, [(BOOST_1, vec![(BOOSTER_1, 500), (BOOSTER_2, 1500)])]);
@@ -197,7 +199,7 @@ fn withdrawing_funds_before_finalisation() {
 	check_pool(&pool, [(BOOSTER_1, 500), (BOOSTER_2, 500)]);
 
 	// Only some of the funds are available immediately, and some are in pending withdrawals:
-	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok(500));
+	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok((500, BTreeSet::from_iter([BOOST_1]))));
 	check_pool(&pool, [(BOOSTER_2, 500)]);
 
 	assert_eq!(pool.on_finalised_deposit(BOOST_1), vec![(BOOSTER_1, 500)]);
@@ -215,7 +217,7 @@ fn adding_funds_with_pending_withdrawals() {
 	check_pool(&pool, [(BOOSTER_1, 500), (BOOSTER_2, 500)]);
 
 	// Only some of the funds are available immediately, and some are in pending withdrawals:
-	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok(500));
+	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok((500, BTreeSet::from_iter([BOOST_1]))));
 	check_pool(&pool, [(BOOSTER_2, 500)]);
 
 	pool.add_funds(BOOSTER_3, 1000);
@@ -243,7 +245,7 @@ fn deposit_is_lost_while_withdrawing() {
 	pool.add_funds(BOOSTER_1, 1000);
 	pool.add_funds(BOOSTER_2, 1000);
 	assert_eq!(pool.provide_funds_for_boosting(BOOST_1, 1000), Ok((1000, 0)));
-	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok(500));
+	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok((500, BTreeSet::from_iter([BOOST_1]))));
 
 	check_pool(&pool, [(BOOSTER_2, 500)]);
 	check_pending_boosts(&pool, [(BOOST_1, vec![(BOOSTER_1, 500), (BOOSTER_2, 500)])]);
@@ -268,7 +270,7 @@ fn partially_losing_pending_withdrawals() {
 
 	check_pool(&pool, [(BOOSTER_1, 250), (BOOSTER_2, 250)]);
 
-	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok(250));
+	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok((250, BTreeSet::from_iter([BOOST_1, BOOST_2]))));
 
 	check_pending_withdrawals(&pool, [(BOOSTER_1, vec![BOOST_1, BOOST_2])]);
 
@@ -312,7 +314,7 @@ fn booster_joins_then_funds_lost() {
 	assert_eq!(pool.provide_funds_for_boosting(BOOST_1, 500), Ok((500, 0)));
 	assert_eq!(pool.provide_funds_for_boosting(BOOST_2, 1000), Ok((1000, 0)));
 
-	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok(250));
+	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok((250, BTreeSet::from_iter([BOOST_1, BOOST_2]))));
 	check_pool(&pool, [(BOOSTER_2, 250)]);
 
 	// New booster joins while we have a pending withdrawal:
@@ -340,7 +342,7 @@ fn booster_joins_between_boosts() {
 	check_pool(&pool, [(BOOSTER_1, 755), (BOOSTER_2, 755)]);
 	check_pending_boosts(&pool, [(BOOST_1, vec![(BOOSTER_1, 250), (BOOSTER_2, 250)])]);
 
-	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok(755));
+	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok((755, BTreeSet::from_iter([BOOST_1]))));
 	check_pool(&pool, [(BOOSTER_2, 755)]);
 
 	// New booster joins while we have a pending withdrawal:
@@ -404,12 +406,12 @@ fn small_rewards_accumulate() {
 	check_pool(&pool, [(BOOSTER_1, 1004), (BOOSTER_2, 50)]);
 
 	// 4 more boost like that and BOOSTER 2 should have withdrawable fees:
-	for boost_id in 1..=4 {
+	for prewitnessed_deposit_id in 1..=4 {
 		assert_eq!(
-			pool.provide_funds_for_boosting(boost_id, SMALL_DEPOSIT),
+			pool.provide_funds_for_boosting(prewitnessed_deposit_id, SMALL_DEPOSIT),
 			Ok((SMALL_DEPOSIT, 5))
 		);
-		assert_eq!(pool.on_finalised_deposit(boost_id), vec![]);
+		assert_eq!(pool.on_finalised_deposit(prewitnessed_deposit_id), vec![]);
 	}
 
 	// Note the increase in Booster 2's balance:
@@ -425,7 +427,7 @@ fn use_max_available_amount() {
 
 	check_pool(&pool, [(BOOSTER_1, 0)]);
 
-	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok(0));
+	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok((0, BTreeSet::from_iter([BOOST_1]))));
 
 	pool.add_funds(BOOSTER_1, 200);
 

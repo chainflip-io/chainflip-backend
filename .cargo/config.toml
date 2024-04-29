@@ -2,7 +2,7 @@
 CF_ETH_CONTRACT_ABI_ROOT = { value = "contract-interfaces/eth-contract-abis", relative = true }
 CF_ETH_CONTRACT_ABI_TAG = "v1.1.2"
 CF_SOL_PROGRAM_IDL_ROOT = { value = "contract-interfaces/sol-program-idls", relative = true }
-CF_SOL_PROGRAM_IDL_TAG = "v0.1.1"
+CF_SOL_PROGRAM_IDL_TAG = "v0.2.0"
 CF_TEST_CONFIG_ROOT = { value = "engine/config/testing", relative = true }
 
 # Note: If you just want to save typing command commands, you can install tab completions for most shells. Type
@@ -38,6 +38,7 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2020-0168: This advisory comes from `mach`, which is unmaintained but not a security issue. It's a dependency of `subxt`.
 # - RUSTSEC-2021-0139: This advisory comes from `ansi_term`, which is unmaintained but not a security issue. It's a dependency of `subxt`.
 # - RUSTSEC-2022-0061: This advisory is related to the deprecated `parity-wasm`, not a security issue. It's a dependency of `substrate`.
+# - RUSTSEC-2024-0336: This adivsory comes from rustls, which is a dependency of the `try-runtime-cli` crate.
 # - RUSTSEC-2024-0320: Unmaintained transitive `yaml-rust` dependency of `insta` crate. We only use insta for testing.
 cf-audit = '''
 audit -D unmaintained -D unsound
@@ -47,4 +48,5 @@ audit -D unmaintained -D unsound
     --ignore RUSTSEC-2022-0061
     --ignore RUSTSEC-2021-0145
     --ignore RUSTSEC-2024-0320
+    --ignore RUSTSEC-2024-0336
 '''

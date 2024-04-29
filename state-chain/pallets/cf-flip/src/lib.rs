@@ -474,7 +474,9 @@ impl<T: Config> cf_traits::Issuance for FlipIssuance<T> {
 	}
 }
 
-impl<T: Config> AccountInfo<T> for Pallet<T> {
+impl<T: Config> AccountInfo for Pallet<T> {
+	type AccountId = T::AccountId;
+	type Amount = T::Amount;
 	fn balance(account_id: &T::AccountId) -> T::Amount {
 		Account::<T>::get(account_id).total()
 	}

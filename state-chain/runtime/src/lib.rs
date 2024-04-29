@@ -12,8 +12,9 @@ mod weights;
 use crate::{
 	chainflip::{calculate_account_apy, Offence},
 	runtime_apis::{
-		AuctionState, BrokerInfo, DispatchErrorWithMessage, EventFilter, FailingWitnessValidators,
-		LiquidityProviderInfo, RuntimeApiPenalty, ValidatorInfo,
+		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, DispatchErrorWithMessage,
+		EventFilter, FailingWitnessValidators, LiquidityProviderInfo, RuntimeApiPenalty,
+		ValidatorInfo,
 	},
 };
 use cf_amm::{
@@ -38,7 +39,7 @@ use core::ops::Range;
 use frame_support::instances::*;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
+use pallet_cf_ingress_egress::{ChannelAction, DepositWitness, TargetChainAsset};
 use pallet_cf_pools::{
 	AskBidMap, AssetPair, PoolLiquidity, PoolOrderbook, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
@@ -105,8 +106,8 @@ pub use cf_primitives::{
 	SwapOutput,
 };
 pub use cf_traits::{
-	AccountInfo, BidderProvider, CcmHandler, Chainflip, EpochInfo, PoolApi, QualifyNode,
-	SessionKeysRegistered, SwappingApi,
+	AccountInfo, CcmHandler, Chainflip, EpochInfo, PoolApi, QualifyNode, SessionKeysRegistered,
+	SwappingApi,
 };
 // Required for genesis config.
 pub use pallet_cf_validator::SetSizeParameters;
@@ -193,7 +194,6 @@ impl pallet_cf_validator::Config for Runtime {
 	type KeyRotator =
 		cons_key_rotator!(EvmThresholdSigner, PolkadotThresholdSigner, BitcoinThresholdSigner);
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
-	type BidderProvider = pallet_cf_funding::Pallet<Self>;
 	type KeygenQualification = (
 		Reputation,
 		(
@@ -314,6 +314,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type SafeMode = RuntimeSafeMode;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
@@ -334,6 +335,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type SafeMode = RuntimeSafeMode;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
@@ -354,6 +356,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type SafeMode = RuntimeSafeMode;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
@@ -374,6 +377,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type SafeMode = RuntimeSafeMode;
 }
 
 parameter_types! {
@@ -590,6 +594,7 @@ impl pallet_cf_funding::Config for Runtime {
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EvmInstance>;
 	type RegisterRedemption = EthereumApi<EvmEnvironment>;
 	type TimeSource = Timestamp;
+	type RedemptionChecker = Validator;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = pallet_cf_funding::weights::PalletWeight<Runtime>;
 }
@@ -1015,7 +1020,7 @@ type PalletMigrations = (
 	pallet_cf_environment::migrations::PalletMigration<Runtime>,
 	pallet_cf_funding::migrations::PalletMigration<Runtime>,
 	pallet_cf_account_roles::migrations::PalletMigration<Runtime>,
-	// pallet_cf_validator::migrations::PalletMigration<Runtime>,
+	pallet_cf_validator::migrations::PalletMigration<Runtime>,
 	pallet_cf_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_tokenholder_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, EthereumInstance>,
@@ -1057,7 +1062,11 @@ type MigrationsForV1_4 = (
 	>,
 	migrations::housekeeping::Migration,
 	migrations::reap_old_accounts::Migration,
+	// NOTE: Do not change this validator pallet migration order:
+	// Migrate Validator pallet from version 0 -> 1
 	migrations::vanity_names::Migration,
+	// Migrate Validator pallet from version 1 -> 2
+	migrations::active_bidders::Migration,
 );
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -1165,7 +1174,7 @@ impl_runtime_apis! {
 			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(account_id);
 			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode<_>>::is_qualified(account_id);
 			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(account_id);
-			let is_bidding = pallet_cf_funding::ActiveBidder::<Runtime>::get(account_id);
+			let is_bidding = Validator::is_bidding(account_id);
 			let bound_redeem_address = pallet_cf_funding::BoundRedeemAddress::<Runtime>::get(account_id);
 			let apy_bp = calculate_account_apy(account_id);
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(account_id);
@@ -1221,7 +1230,7 @@ impl_runtime_apis! {
 			)
 			.and_then(|resolver| {
 				resolver.resolve_auction(
-					<Runtime as pallet_cf_validator::Config>::BidderProvider::get_qualified_bidders::<<Runtime as pallet_cf_validator::Config>::KeygenQualification>(),
+					Validator::get_qualified_bidders::<<Runtime as pallet_cf_validator::Config>::KeygenQualification>(),
 					Validator::auction_bid_cutoff_percentage(),
 				)
 			})
@@ -1610,6 +1619,67 @@ impl_runtime_apis! {
 						None
 					}
 				).collect::<Vec<_>>()
+		}
+
+		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth> {
+
+			fn boost_pools_depth<I: 'static>() -> Vec<BoostPoolDepth>
+				where Runtime: pallet_cf_ingress_egress::Config<I> {
+
+				pallet_cf_ingress_egress::BoostPools::<Runtime, I>::iter().map(|(asset, tier, pool)|
+
+					BoostPoolDepth {
+						asset: asset.into(),
+						tier: tier as u16,
+						available_amount: pool.get_available_amount().into()
+					}
+
+				).collect()
+			}
+
+			ForeignChain::iter().flat_map(|chain| {
+				match chain {
+					ForeignChain::Ethereum => boost_pools_depth::<EthereumInstance>(),
+					ForeignChain::Polkadot => boost_pools_depth::<PolkadotInstance>(),
+					ForeignChain::Bitcoin => boost_pools_depth::<BitcoinInstance>(),
+					ForeignChain::Arbitrum => boost_pools_depth::<ArbitrumInstance>(),
+				}
+			}).collect()
+
+		}
+
+		fn cf_boost_pool_details(asset: Asset) -> BTreeMap<u16, BoostPoolDetails> {
+
+			fn boost_pools_details<I: 'static>(asset: TargetChainAsset::<Runtime, I>) -> BTreeMap<u16, BoostPoolDetails>
+				where Runtime: pallet_cf_ingress_egress::Config<I> {
+
+				pallet_cf_ingress_egress::BoostPools::<Runtime, I>::iter_prefix(asset).map(|(tier, pool)| {
+					(
+						tier as u16,
+						BoostPoolDetails {
+							available_amounts: pool.get_amounts().into_iter().map(|(id, amount)| (id, amount.into())).collect(),
+							pending_boosts: pool.get_pending_boosts().into_iter().map(|(deposit_id, owed_amounts)| {
+								(
+									deposit_id,
+									owed_amounts.into_iter().map(|(id, amount)| (id, amount.into())).collect()
+								)
+							}).collect(),
+							pending_withdrawals: pool.get_pending_withdrawals().clone(),
+						}
+					)
+				}).collect()
+
+			}
+
+			let chain: ForeignChain = asset.into();
+
+			match chain {
+				ForeignChain::Ethereum => boost_pools_details::<EthereumInstance>(asset.try_into().unwrap()),
+				ForeignChain::Polkadot => boost_pools_details::<PolkadotInstance>(asset.try_into().unwrap()),
+				ForeignChain::Bitcoin => boost_pools_details::<BitcoinInstance>(asset.try_into().unwrap()),
+				ForeignChain::Arbitrum => boost_pools_details::<ArbitrumInstance>(asset.try_into().unwrap()),
+			}
+
 		}
 	}
 

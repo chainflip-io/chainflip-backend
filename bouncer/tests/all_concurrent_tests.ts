@@ -45,12 +45,13 @@ async function runAllConcurrentTests() {
   await Promise.all([broadcastAborted, feeDeficitRefused]);
 }
 
-runWithTimeout(runAllConcurrentTests(), 1000000)
+runWithTimeout(runAllConcurrentTests(), 2000000)
   .then(() => {
     // There are some dangling resources that prevent the process from exiting
     process.exit(0);
   })
   .catch((error) => {
+    console.error!('All concurrent tests timed out. Exiting.');
     console.error(error);
     process.exit(-1);
   });

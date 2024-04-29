@@ -16,10 +16,9 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::{eth::Address as EthereumAddress, RegisterRedemption};
-use cf_primitives::AccountRole;
 use cf_traits::{
-	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Bid, BidderProvider, Broadcaster,
-	Chainflip, EpochInfo, FeePayment, Funding,
+	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
+	Funding,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -43,7 +42,7 @@ use sp_std::{
 pub enum Pending {
 	Pending,
 }
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
 
 #[derive(Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct PendingRedemptionInfo<FlipBalance> {
@@ -52,13 +51,14 @@ pub struct PendingRedemptionInfo<FlipBalance> {
 	pub redeem_address: EthereumAddress,
 }
 
-impl_pallet_safe_mode!(PalletSafeMode; redeem_enabled, start_bidding_enabled, stop_bidding_enabled);
+impl_pallet_safe_mode!(PalletSafeMode; redeem_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use cf_chains::eth::Ethereum;
 	use cf_primitives::BroadcastId;
+	use cf_traits::RedemptionCheck;
 	use frame_support::{pallet_prelude::*, Parameter};
 	use frame_system::pallet_prelude::*;
 
@@ -98,7 +98,7 @@ pub mod pallet {
 
 		/// The Flip token implementation.
 		type Flip: Funding<AccountId = <Self as frame_system::Config>::AccountId, Balance = Self::Amount>
-			+ AccountInfo<Self>
+			+ AccountInfo<AccountId = Self::AccountId, Amount = Self::Amount>
 			+ FeePayment<Amount = Self::Amount, AccountId = <Self as frame_system::Config>::AccountId>;
 
 		type Broadcaster: Broadcaster<Ethereum, ApiCall = Self::RegisterRedemption>;
@@ -112,6 +112,9 @@ pub mod pallet {
 		/// Something that provides the current time.
 		type TimeSource: UnixTime;
 
+		/// Provide information on current bidders
+		type RedemptionChecker: RedemptionCheck<ValidatorId = Self::AccountId>;
+
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;
 
@@ -123,11 +126,6 @@ pub mod pallet {
 	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
-
-	/// Store the list of funded accounts and whether or not they are a active bidder.
-	#[pallet::storage]
-	pub type ActiveBidder<T: Config> =
-		StorageMap<_, Blake2_128Concat, AccountId<T>, bool, ValueQuery>;
 
 	/// PendingRedemptions stores a Pending enum for the account until the redemption is executed
 	/// or the redemption expires.
@@ -203,12 +201,6 @@ pub mod pallet {
 		/// redeemed_amount\]
 		RedemptionSettled(AccountId<T>, FlipBalance<T>),
 
-		/// An account has stopped bidding and will no longer take part in auctions.
-		StoppedBidding { account_id: AccountId<T> },
-
-		/// A previously non-bidding account has started bidding.
-		StartedBidding { account_id: AccountId<T> },
-
 		/// A redemption has expired without being executed.
 		RedemptionExpired { account_id: AccountId<T> },
 
@@ -249,15 +241,6 @@ pub mod pallet {
 		/// The redeemer tried to redeem despite having a redemption already pending.
 		PendingRedemption,
 
-		/// Can't stop bidding an account if it's already not bidding.
-		AlreadyNotBidding,
-
-		/// Can only start bidding if not already bidding.
-		AlreadyBidding,
-
-		/// We are in the auction phase
-		AuctionPhase,
-
 		/// When requesting a redemption, you must not have an amount below the minimum.
 		BelowMinimumFunding,
 
@@ -281,12 +264,6 @@ pub mod pallet {
 
 		/// Redeem is disabled due to Safe Mode.
 		RedeemDisabled,
-
-		/// Start Bidding is disabled due to Safe Mode.
-		StartBiddingDisabled,
-
-		/// Stop Bidding is disabled due to Safe Mode.
-		StopBiddingDisabled,
 
 		/// The executor for this account is bound to another address.
 		ExecutorBindingRestrictionViolated,
@@ -365,9 +342,7 @@ pub mod pallet {
 			ensure!(T::SafeMode::get().redeem_enabled, Error::<T>::RedeemDisabled);
 
 			// Not allowed to redeem if we are an active bidder in the auction phase
-			if T::EpochInfo::is_auction_phase() {
-				ensure!(!ActiveBidder::<T>::get(&account_id), Error::<T>::AuctionPhase);
-			}
+			T::RedemptionChecker::ensure_can_redeem(&account_id)?;
 
 			// The redemption must be executed before a new one can be requested.
 			ensure!(
@@ -585,56 +560,20 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Signals a node's intent to withdraw their funds after the next auction and desist
-		/// from future auctions. Should only be called by accounts that are not already not
-		/// bidding.
-		///
-		/// ## Events
-		///
-		/// - [ActiveBidder](Event::ActiveBidder)
-		///
-		/// ## Errors
-		///
-		/// - [AlreadyNotBidding](Error::AlreadyNotBidding)
+		/// This call is now deprecated.
+		/// The functionality has been moved to the Validator pallet
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::WeightInfo::stop_bidding())]
-		pub fn stop_bidding(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			ensure!(T::SafeMode::get().stop_bidding_enabled, Error::<T>::StopBiddingDisabled);
-
-			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
-
-			ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
-
-			ActiveBidder::<T>::try_mutate(&account_id, |is_active_bidder| {
-				if *is_active_bidder {
-					*is_active_bidder = false;
-					Ok(())
-				} else {
-					Err(Error::<T>::AlreadyNotBidding)
-				}
-			})?;
-			Self::deposit_event(Event::StoppedBidding { account_id });
-			Ok(().into())
+		#[pallet::weight(Weight::from_parts(0, 0))]
+		pub fn stop_bidding(_origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			Err(DispatchError::Other("Deprecated").into())
 		}
 
-		/// Signals a non-bidding node's intent to start bidding, and participate in the
-		/// next auction. Should only be called if the account is in a non-bidding state.
-		///
-		/// ## Events
-		///
-		/// - [StartedBidding](Event::StartedBidding)
-		///
-		/// ## Errors
-		///
-		/// - [AlreadyBidding](Error::AlreadyBidding)
+		/// This call is now deprecated.
+		/// The functionality has been moved to the Validator pallet
 		#[pallet::call_index(5)]
-		#[pallet::weight(T::WeightInfo::start_bidding())]
-		pub fn start_bidding(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			ensure!(T::SafeMode::get().start_bidding_enabled, Error::<T>::StartBiddingDisabled);
-			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
-			Self::activate_bidding(&account_id)?;
-			Self::deposit_event(Event::StartedBidding { account_id });
-			Ok(().into())
+		#[pallet::weight(Weight::from_parts(0, 0))]
+		pub fn start_bidding(_origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			Err(DispatchError::Other("Deprecated").into())
 		}
 
 		/// Updates the minimum funding required for an account, the extrinsic is gated with
@@ -771,7 +710,7 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub genesis_accounts: Vec<(AccountId<T>, AccountRole, T::Amount)>,
+		pub genesis_accounts: Vec<(AccountId<T>, T::Amount)>,
 		pub redemption_tax: T::Amount,
 		pub minimum_funding: T::Amount,
 		pub redemption_ttl: Duration,
@@ -798,12 +737,8 @@ pub mod pallet {
 			MinimumFunding::<T>::set(self.minimum_funding);
 			RedemptionTax::<T>::set(self.redemption_tax);
 			RedemptionTTLSeconds::<T>::set(self.redemption_ttl.as_secs());
-			for (account_id, role, amount) in self.genesis_accounts.iter() {
+			for (account_id, amount) in self.genesis_accounts.iter() {
 				Pallet::<T>::add_funds_to_account(account_id, *amount);
-				if matches!(role, AccountRole::Validator) {
-					Pallet::<T>::activate_bidding(account_id)
-						.expect("The account was just created so this can't fail.");
-				}
 			}
 		}
 	}
@@ -820,50 +755,12 @@ impl<T: Config> Pallet<T> {
 
 		T::Flip::credit_funds(account_id, amount)
 	}
-
-	/// Sets the `active` flag associated with the account to true, signalling that the account
-	/// wishes to participate in auctions, to become a network authority.
-	///
-	/// Returns an error if the account is already bidding.
-	fn activate_bidding(account_id: &AccountId<T>) -> Result<(), Error<T>> {
-		ActiveBidder::<T>::try_mutate(account_id, |is_active_bidder| {
-			if *is_active_bidder {
-				Err(Error::AlreadyBidding)
-			} else {
-				*is_active_bidder = true;
-				Ok(())
-			}
-		})
-	}
-}
-
-impl<T: Config> BidderProvider for Pallet<T> {
-	type ValidatorId = <T as frame_system::Config>::AccountId;
-	type Amount = T::Amount;
-
-	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
-		ActiveBidder::<T>::iter()
-			.filter_map(|(bidder_id, active)| {
-				if active {
-					let amount = T::Flip::balance(&bidder_id);
-					Some(Bid { bidder_id, amount })
-				} else {
-					None
-				}
-			})
-			.collect()
-	}
-
-	fn is_bidder(validator_id: &Self::ValidatorId) -> bool {
-		ActiveBidder::<T>::get(validator_id)
-	}
 }
 
 /// Ensure we clean up account specific items that definitely won't be required once the account
 /// leaves the network.
 impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
-		ActiveBidder::<T>::remove(account_id);
 		RestrictedBalances::<T>::remove(account_id);
 		BoundExecutorAddress::<T>::remove(account_id);
 		BoundRedeemAddress::<T>::remove(account_id);

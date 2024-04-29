@@ -56,7 +56,7 @@ pub fn init_bidders<T: RuntimeConfig>(n: u32, set_id: u32, flip_funded: u128) {
 		));
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&bidder);
 		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&bidder));
-		assert_ok!(pallet_cf_funding::Pallet::<T>::start_bidding(bidder_origin.clone(),));
+		assert_ok!(Pallet::<T>::start_bidding(bidder_origin.clone(),));
 
 		let public_key: p2p_crypto::Public = RuntimeAppPublic::generate_pair(None);
 		let signature = public_key.sign(&bidder.encode()).unwrap();
@@ -167,7 +167,7 @@ mod benchmarks {
 		HistoricalBonds::<T>::insert(OLD_EPOCH, amount);
 		HistoricalBonds::<T>::insert(EPOCH_TO_EXPIRE, amount);
 
-		let authorities: BTreeSet<_> = (0..a).map(|id| account("hello", id, id)).collect();
+		let authorities: Vec<_> = (0..a).map(|id| account("hello", id, id)).collect();
 
 		HistoricalAuthorities::<T>::insert(OLD_EPOCH, authorities.clone());
 		HistoricalAuthorities::<T>::insert(EPOCH_TO_EXPIRE, authorities.clone());
@@ -356,5 +356,32 @@ mod benchmarks {
 		.is_err());
 	}
 
+	#[benchmark]
+	fn stop_bidding() {
+		let caller: T::AccountId = whitelisted_caller();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		frame_system::Pallet::<T>::inc_providers(&caller);
+		assert_ok!(T::AccountRoleRegistry::register_as_validator(&caller));
+		ActiveBidder::<T>::set(BTreeSet::from([caller.clone()]));
+
+		#[extrinsic_call]
+		stop_bidding(RawOrigin::Signed(caller.clone()));
+
+		assert!(!Pallet::<T>::is_bidding(&caller));
+	}
+
+	#[benchmark]
+	fn start_bidding() {
+		let caller: T::AccountId = whitelisted_caller();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		frame_system::Pallet::<T>::inc_providers(&caller);
+		assert_ok!(T::AccountRoleRegistry::register_as_validator(&caller));
+		ActiveBidder::<T>::set(Default::default());
+
+		#[extrinsic_call]
+		start_bidding(RawOrigin::Signed(caller.clone()));
+
+		assert!(Pallet::<T>::is_bidding(&caller));
+	}
 	// NOTE: Test suite not included due to missing Funding and Reputation pallet in `mock::Test`.
 }

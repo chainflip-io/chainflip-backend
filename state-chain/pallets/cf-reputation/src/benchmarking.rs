@@ -83,7 +83,7 @@ mod benchmarks {
 
 		// Generate validators and set as validators
 		let validators =
-			(0..o).map(|v| account("validator", v, v)).collect::<BTreeSet<T::ValidatorId>>();
+			(0..o).map(|v| account("validator", v, v)).collect::<Vec<T::ValidatorId>>();
 		T::EpochInfo::set_authorities(validators);
 
 		let interval = T::HeartbeatBlockInterval::get();

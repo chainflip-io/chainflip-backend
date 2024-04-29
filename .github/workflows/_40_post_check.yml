@@ -60,7 +60,7 @@ jobs:
       - name: Download binaries 📥
         uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
         with:
-          name: chainflip-backend-bin-ubuntu-22.04
+          name: chainflip-backend-bin
 
       - name: Install node dependencies 📦
         working-directory: bouncer
@@ -187,7 +187,7 @@ jobs:
       - name: Download Binaries 📥
         uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
         with:
-          name: chainflip-backend-bin-ubuntu-22.04
+          name: chainflip-backend-bin
 
       - name: Make Binaries Executable 🛠️
         run: |

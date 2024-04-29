@@ -158,7 +158,7 @@ impl DotRpcApi for DotHttpRpcClient {
 		// RPC returning the value of the runtime at the end of the block, not the beginning.
 		let chain_runtime_version = self.runtime_version(Some(parent_hash)).await?;
 
-		let client_runtime_version = self.rpc_methods.state_get_runtime_version(None).await?;
+		let client_runtime_version = self.online_client.runtime_version();
 
 		// We set the metadata and runtime version we need to decode this block's events.
 		// The metadata from the OnlineClient is used within the EventsClient to decode the
@@ -167,6 +167,10 @@ impl DotRpcApi for DotHttpRpcClient {
 			chain_runtime_version.transaction_version !=
 				client_runtime_version.transaction_version
 		{
+			tracing::debug!(
+				"Setting runtime version of {chain_runtime_version:?} and metadata for block {:?}",
+				block_hash
+			);
 			let new_metadata = self.metadata(parent_hash).await?;
 
 			self.online_client.set_runtime_version(subxt::backend::RuntimeVersion {
@@ -227,6 +231,15 @@ mod tests {
 				.unwrap(),
 			H256::from_str("0xa0138c9d6686f9d80c3fa8a7e175951842ca400f43e479ba694d6d4da69969ea")
 				.unwrap(),
+			// runtime upgrade block
+			H256::from_str("0xb2c53eb7137113a73bdc02c7bd90a55a70b7b257d451453024d8b04122c30924")
+				.unwrap(),
+			// next block was failing here
+			H256::from_str("0x2c10ed1032a734cbcc93d7ba033a8ec9fa1b54e8ef1f121fe63a77bc1288e00b")
+				.unwrap(),
+			// block with 4 dot transfer :( that was missed
+			H256::from_str("0x0901b861c6db91f7f417a2fa20f3c82f005631f7d441a2a9e8fa5e2e55c6624c")
+				.unwrap(),
 		];
 
 		let dot_http_rpc =
@@ -235,6 +248,8 @@ mod tests {
 				.await;
 
 		for block_hash in block_hash_of_runtime_updates {
+			println!("TRYING BLOCK: {:?}", block_hash);
+
 			// Block hash of the block before the runtime update occurred
 			let block_hash_of_parent =
 				dot_http_rpc.block(block_hash).await.unwrap().unwrap().block.header.parent_hash;
