@@ -42,3 +42,4 @@ jobs:
     with:
       upgrade-from-release: "sisyphos"
       upgrade-to-workflow-name: "ci-main.yml"
+      upgrade-to-commit: ${{ github.sha }}
