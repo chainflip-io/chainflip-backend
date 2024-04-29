@@ -147,16 +147,24 @@ async function testTransferAsset() {
   console.log('=== Starting testTransferAsset ===');
   const amountToTransfer = (testAssetAmount / 10).toString(16);
 
+  const getLpBalance = async (account: string) => {
+    let balance = JSON.stringify(
+      await chainflip.query.liquidityProvider.freeBalances(account, testAsset),
+    );
+    // The balance is 'null' if the account has no balance. We interpret this as 0.
+    if (balance === 'null') {
+      balance = JSON.stringify((0).toString(16));
+    }
+    return balance;
+  };
+
   const keyring = new Keyring({ type: 'sr25519' });
+
+  const sourceLpAccount = keyring.createFromUri('//LP_1');
   const destinationLpAccount = keyring.createFromUri('//LP_2');
 
-  let oldBalance = JSON.stringify(
-    await chainflip.query.liquidityProvider.freeBalances(destinationLpAccount.address, testAsset),
-  );
-
-  if (oldBalance === 'null') {
-    oldBalance = JSON.stringify((0).toString(16));
-  }
+  const oldBalanceSource = await getLpBalance(sourceLpAccount.address);
+  const oldBalanceDestination = await getLpBalance(destinationLpAccount.address);
 
   const result = await lpApiRpc(`lp_transfer_asset`, [
     amountToTransfer,
@@ -167,11 +175,17 @@ async function testTransferAsset() {
   // Expect result to be a block hash
   assert.match(result, /0x[0-9a-fA-F]{64}/, `Unexpected transfer asset result`);
 
-  const newBalance = JSON.stringify(
-    await chainflip.query.liquidityProvider.freeBalances(destinationLpAccount.address, testAsset),
-  );
+  const newBalancesSource = await getLpBalance(sourceLpAccount.address);
+  const newBalanceDestination = await getLpBalance(destinationLpAccount.address);
 
-  assert(newBalance > oldBalance, `Failed to observe balance increase after transfer`);
+  assert(
+    newBalanceDestination > oldBalanceDestination,
+    `Failed to observe balance increase after transfer for destination account!`,
+  );
+  assert(
+    newBalancesSource < oldBalanceSource,
+    `Failed to observe balance decrease after transfer for source account!`,
+  );
 
   console.log('=== testTransferAsset complete ===');
 }
