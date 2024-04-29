@@ -929,7 +929,13 @@ pub mod pallet {
 			swaps: &mut Vec<Swap>,
 			direction: SwapLeg,
 		) -> Result<(), BatchExecutionError> {
-			let swap_groups = Self::split_and_group_swaps(swaps, direction);
+			let swap_groups = swaps
+				.iter_mut()
+				.filter_map(|swap| swap.swap_asset(direction).map(|asset| (asset, swap)))
+				.fold(BTreeMap::new(), |mut map, (asset, swap)| {
+					map.entry(asset).or_insert_with(Vec::new).push(swap);
+					map
+				});
 
 			for (asset, swaps) in swap_groups {
 				Self::execute_group_of_swaps(swaps, asset, direction).map_err(|amount| {
@@ -1019,23 +1025,6 @@ pub mod pallet {
 					*maybe_ccm_output = None;
 				}
 			});
-		}
-
-		/// Split all swaps of a given direction, and group them by asset into a BTreeMap and return
-		/// the rest
-		fn split_and_group_swaps(
-			swaps: &mut Vec<Swap>,
-			direction: SwapLeg,
-		) -> BTreeMap<Asset, Vec<&mut Swap>> {
-			let mut grouped_swaps = BTreeMap::new();
-
-			for swap in swaps {
-				if let Some(asset) = swap.swap_asset(direction) {
-					grouped_swaps.entry(asset).or_insert(vec![]).push(swap);
-				}
-			}
-
-			grouped_swaps
 		}
 
 		/// Schedule the egress of a completed Cross chain message.
