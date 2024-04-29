@@ -6,6 +6,8 @@ use cf_traits::SafeMode;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 #[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
+#[cfg(feature = "try-runtime")]
+use sp_std::{vec, vec::Vec};
 
 pub mod old {
 	use super::*;
