@@ -473,10 +473,10 @@ where
 	/// Sets retry limit of no limit, since we expect most requests not to fail.
 	pub async fn request<T: Send + 'static>(
 		&self,
-		specific_closure: TypedFutureGenerator<T, Client>,
 		request_log: RequestLog,
+		specific_closure: TypedFutureGenerator<T, Client>,
 	) -> T {
-		self.request_with_limit::<T, NoRetryLimit>(specific_closure, request_log, NoRetryLimit)
+		self.request_with_limit::<T, NoRetryLimit>(request_log, specific_closure, NoRetryLimit)
 			.await
 	}
 
@@ -484,8 +484,8 @@ where
 	/// Returns an error if the retry limit is reached.
 	pub async fn request_with_limit<T: Send + 'static, R: RetryLimitReturn>(
 		&self,
-		specific_closure: TypedFutureGenerator<T, Client>,
 		request_log: RequestLog,
+		specific_closure: TypedFutureGenerator<T, Client>,
 		retry_limit: R,
 	) -> R::ReturnType<T> {
 		let retry_limit = R::into_retry_limit(retry_limit);
@@ -635,8 +635,8 @@ mod tests {
 					REQUEST_1,
 					retrier_client
 						.request(
-							specific_fut_closure(REQUEST_1, INITIAL_TIMEOUT),
 							RequestLog::new("request 1".to_string(), None),
+							specific_fut_closure(REQUEST_1, INITIAL_TIMEOUT),
 						)
 						.await
 				);
@@ -646,8 +646,8 @@ mod tests {
 					REQUEST_2,
 					retrier_client
 						.request(
-							specific_fut_closure(REQUEST_2, INITIAL_TIMEOUT),
 							RequestLog::new("request 2".to_string(), None),
+							specific_fut_closure(REQUEST_2, INITIAL_TIMEOUT),
 						)
 						.await
 				);
@@ -674,8 +674,8 @@ mod tests {
 					REQUEST_1,
 					retrier_client
 						.request_with_limit(
-							specific_fut_closure(REQUEST_1, INITIAL_TIMEOUT),
 							RequestLog::new("request 1".to_string(), None),
+							specific_fut_closure(REQUEST_1, INITIAL_TIMEOUT),
 							5
 						)
 						.await
@@ -687,8 +687,8 @@ mod tests {
 					REQUEST_2,
 					retrier_client
 						.request_with_limit(
-							specific_fut_closure(REQUEST_2, INITIAL_TIMEOUT),
 							RequestLog::new("request 2".to_string(), None),
+							specific_fut_closure(REQUEST_2, INITIAL_TIMEOUT),
 							5
 						)
 						.await
@@ -740,8 +740,8 @@ mod tests {
 				timeout(
 					Duration::from_millis(100),
 					retrier_client.request(
-						specific_fut_closure(REQUEST_3, Duration::default()),
 						RequestLog::new("request 3".to_string(), None),
+						specific_fut_closure(REQUEST_3, Duration::default()),
 					),
 				)
 				.await
@@ -752,8 +752,8 @@ mod tests {
 					timeout(
 						Duration::from_millis(600),
 						retrier_client.request(
-							specific_fut_closure(REQUEST_3, Duration::default()),
 							RequestLog::new("request 3".to_string(), None),
+							specific_fut_closure(REQUEST_3, Duration::default()),
 						),
 					)
 					.await
@@ -794,8 +794,8 @@ mod tests {
 
 				retrier_client
 					.request_with_limit(
-						specific_fut_err::<(), _>(INITIAL_TIMEOUT),
 						RequestLog::new("request".to_string(), None),
+						specific_fut_err::<(), _>(INITIAL_TIMEOUT),
 						5,
 					)
 					.await
@@ -835,8 +835,8 @@ mod tests {
 					REQUEST_1,
 					retrier_client
 						.request(
-							specific_fut_closure(REQUEST_1, INITIAL_TIMEOUT),
 							RequestLog::new("request 1".to_string(), None),
+							specific_fut_closure(REQUEST_1, INITIAL_TIMEOUT),
 						)
 						.await
 				);
@@ -846,8 +846,8 @@ mod tests {
 					REQUEST_2,
 					retrier_client
 						.request(
-							specific_fut_closure(REQUEST_2, INITIAL_TIMEOUT),
 							RequestLog::new("request 2".to_string(), None),
+							specific_fut_closure(REQUEST_2, INITIAL_TIMEOUT),
 						)
 						.await
 				);
@@ -872,8 +872,8 @@ mod tests {
 
 				retrier_client
 					.request(
-						specific_fut_err::<(), _>(INITIAL_TIMEOUT),
 						RequestLog::new("request".to_string(), None),
+						specific_fut_err::<(), _>(INITIAL_TIMEOUT),
 					)
 					.await;
 
