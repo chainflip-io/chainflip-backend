@@ -1,0 +1,77 @@
+---
+source: state-chain/custom-rpc/src/lib.rs
+expression: val
+---
+[
+  {
+    "fee_tier": 10,
+    "chain": "Arbitrum",
+    "asset": "ETH",
+    "available_amounts": [
+      {
+        "account_id": "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT",
+        "amount": "0x2710"
+      }
+    ],
+    "deposits_pending_finalization": [
+      {
+        "deposit_id": 0,
+        "owed_amounts": [
+          {
+            "account_id": "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT",
+            "amount": "0xc8"
+          },
+          {
+            "account_id": "5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt",
+            "amount": "0x7d0"
+          }
+        ]
+      },
+      {
+        "deposit_id": 1,
+        "owed_amounts": [
+          {
+            "account_id": "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT",
+            "amount": "0x3e8"
+          }
+        ]
+      }
+    ],
+    "pending_withdrawals": []
+  },
+  {
+    "fee_tier": 30,
+    "chain": "Bitcoin",
+    "asset": "BTC",
+    "available_amounts": [],
+    "deposits_pending_finalization": [
+      {
+        "deposit_id": 0,
+        "owed_amounts": [
+          {
+            "account_id": "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT",
+            "amount": "0x3e8"
+          },
+          {
+            "account_id": "5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt",
+            "amount": "0x7d0"
+          }
+        ]
+      }
+    ],
+    "pending_withdrawals": [
+      {
+        "account_id": "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT",
+        "pending_deposits": [
+          0
+        ]
+      },
+      {
+        "account_id": "5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt",
+        "pending_deposits": [
+          0
+        ]
+      }
+    ]
+  }
+]

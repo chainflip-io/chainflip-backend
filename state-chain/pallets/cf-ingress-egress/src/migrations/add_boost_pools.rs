@@ -53,7 +53,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 		// Create boost pools:
 		use strum::IntoEnumIterator;
 		for asset in TargetChainAsset::<T, I>::iter() {
-			for pool_tier in BoostPoolTier::iter() {
+			for pool_tier in SORTED_BOOST_TIERS {
 				BoostPools::<T, I>::set(
 					asset,
 					pool_tier,
@@ -121,13 +121,13 @@ mod migration_tests {
 
 			// Verify data is correctly migrated into new storage.
 			for address in [address1, address2] {
-				let channel = DepositChannelLookup::<Test, Instance3>::get(address);
+				let channel = DepositChannelLookup::<Test, ()>::get(address);
 				assert!(channel.is_some());
 				assert_eq!(channel.unwrap().boost_status, BoostStatus::NotBoosted);
 			}
 		});
 
-		fn mock_deposit_channel_details() -> old::DepositChannelDetails<Test, Instance3> {
+		fn mock_deposit_channel_details() -> old::DepositChannelDetails<Test, ()> {
 			old::DepositChannelDetails::<Test, _> {
 				deposit_channel: DepositChannel {
 					channel_id: 123,
