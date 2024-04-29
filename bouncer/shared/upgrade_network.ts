@@ -302,7 +302,6 @@ export async function upgradeNetworkPrebuilt(
   const nodeVersion = nodeBinaryVersion.match(versionRegex)[0];
   console.log("Node version we're upgrading to: " + nodeVersion);
 
-
   // We use nodeVersion as a proxy for the cfe version since they are updated together.
   // And getting the cfe version involves ensuring the dylib is available.
   if (compareSemVer(cleanOldVersion, nodeVersion) === 'greater') {
