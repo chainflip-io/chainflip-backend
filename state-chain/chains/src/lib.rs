@@ -61,6 +61,8 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 
 	const GAS_ASSET: Self::ChainAsset;
 
+	const WITNESS_PERIOD: Self::ChainBlockNumber;
+
 	type ChainCrypto: ChainCrypto;
 
 	type ChainBlockNumber: FullCodec
