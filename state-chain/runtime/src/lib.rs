@@ -1790,7 +1790,7 @@ impl_runtime_apis! {
 				ForeignChain::Polkadot => boost_pools_details::<PolkadotInstance>(asset.try_into().unwrap()),
 				ForeignChain::Bitcoin => boost_pools_details::<BitcoinInstance>(asset.try_into().unwrap()),
 				ForeignChain::Arbitrum => boost_pools_details::<ArbitrumInstance>(asset.try_into().unwrap()),
-				ForeignChain::Arbitrum => boost_pools_details::<SolanaInstance>(asset.try_into().unwrap()),
+				ForeignChain::Solana => boost_pools_details::<SolanaInstance>(asset.try_into().unwrap()),
 			}
 
 		}
