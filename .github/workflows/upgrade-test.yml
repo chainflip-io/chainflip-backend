@@ -190,8 +190,9 @@ jobs:
         run: |
           git checkout ${{ github.sha }}
           git rev-parse HEAD
+          ls -a
+          mv ./upgrade-to-bins/*.so ./old-engine-dylib/
           cd bouncer
-          mv ./../upgrade-to-bins/*.so ./../old-engine-dylib/
           pnpm install
           ./commands/upgrade_network.ts prebuilt \
             --runtime ./../main-runtime/state_chain_runtime.compact.compressed.wasm \
