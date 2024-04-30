@@ -7,8 +7,8 @@ use cf_chains::{
 	assets::any::AssetMap, eth::Address as EthereumAddress, Chain, ForeignChainAddress,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, FlipBalance,
-	ForeignChain, NetworkEnvironment, SemVer, SwapOutput,
+	AccountRole, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, EpochIndex,
+	FlipBalance, ForeignChain, NetworkEnvironment, SemVer, SwapOutput,
 };
 use codec::{Decode, Encode};
 use core::ops::Range;

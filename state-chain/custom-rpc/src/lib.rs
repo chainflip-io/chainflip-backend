@@ -8,8 +8,8 @@ use cf_chains::{
 	Chain,
 };
 use cf_primitives::{
-	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, ForeignChain,
-	NetworkEnvironment, SemVer, SwapId, SwapOutput,
+	chains::assets::any, AccountRole, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
+	ForeignChain, NetworkEnvironment, SemVer, SwapId, SwapOutput,
 };
 use cf_utilities::rpc::NumberOrHex;
 use codec::Encode;
@@ -458,6 +458,7 @@ pub trait CustomApi {
 		to_asset: Asset,
 		amount: NumberOrHex,
 		additional_limit_orders: Option<Vec<(i32, U256)>>,
+		broker_commission_bps: Option<BasisPoints>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutput>;
 	#[method(name = "required_asset_ratio_for_range_order")]
@@ -968,8 +969,8 @@ where
 		to_asset: Asset,
 		amount: NumberOrHex,
 		additional_limit_orders: Option<Vec<(i32, U256)>>,
-		at: Option<state_chain_runtime::Hash>,
 		broker_commission_bps: Option<BasisPoints>,
+		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutput> {
 		self.client
 			.runtime_api()
@@ -1750,6 +1751,7 @@ mod test {
 			network_fee: 1_000u128,
 			ingress_fee: Some((Asset::Btc, 1_000u128)),
 			egress_fee: Some((Asset::Flip, 1_000u128)),
+			broker_commission: Some((Asset::Btc, 2_000u128)),
 		}
 		.into();
 
@@ -1761,6 +1763,7 @@ mod test {
 			network_fee: 1_000u128,
 			ingress_fee: Some((Asset::Btc, 1_000u128)),
 			egress_fee: None,
+			broker_commission: Some((Asset::Btc, 2_000u128)),
 		}
 		.into();
 
