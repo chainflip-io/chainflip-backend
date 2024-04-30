@@ -6,8 +6,8 @@ use cf_chains::{
 	CcmChannelMetadata, CcmDepositMetadata, SwapOrigin,
 };
 use cf_primitives::{
-	AccountRole, Affiliate, Affiliates, Asset, AssetAmount, BrokerFees, ChannelId, ForeignChain,
-	SwapId, SwapLeg, TransactionHash, STABLE_ASSET,
+	AccountRole, Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, ChannelId,
+	ForeignChain, SwapId, SwapLeg, TransactionHash, STABLE_ASSET,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -313,7 +313,7 @@ pub mod pallet {
 			source_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 			boost_fee: BasisPoints,
 			channel_opening_fee: T::Amount,
-			affiliates: Affiliates<T::AccountId>,
+			beneficiaries: Beneficiaries<T::AccountId>,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
@@ -492,9 +492,10 @@ pub mod pallet {
 				source_asset,
 				destination_asset,
 				destination_address,
-				BrokerFees::Single(broker_commission),
+				broker_commission,
 				channel_metadata,
 				boost_fee,
+				None,
 			)
 		}
 
@@ -687,34 +688,35 @@ pub mod pallet {
 			source_asset: Asset,
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
-			broker_fees: BrokerFees<T::AccountId>,
+			broker_fee: BasisPoints,
 			channel_metadata: Option<CcmChannelMetadata>,
 			boost_fee: BasisPoints,
+			affiliate_fees: Option<Affiliates<T::AccountId>>,
 		) -> DispatchResult {
 			ensure!(T::SafeMode::get().deposits_enabled, Error::<T>::DepositsDisabled);
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
-			let (affiliates, total_bps) = match broker_fees {
-				BrokerFees::Single(bps) =>
-					if bps > 0 {
-						let mut affiliates = Affiliates::new();
-						affiliates.try_push(Affiliate { account: broker.clone(), bps })
-							.expect("We are only inserting one element, impossible to exceed the maximum size");
-						(affiliates, bps)
-					} else {
-						(Default::default(), 0)
-					},
-				BrokerFees::Multiple(mut affiliates) => {
-					for Affiliate { account, .. } in &affiliates {
+			let (beneficiaries, total_bps) = {
+				let mut beneficiaries = Beneficiaries::new();
+				if let Some(mut affiliates) = affiliate_fees {
+					beneficiaries.try_push(Beneficiary {account: broker.clone(), bps: broker_fee}).expect("We are only inserting one element, impossible to exceed the maximum size");
+					affiliates.retain(|Beneficiary { bps, .. }| *bps > 0);
+					for Beneficiary { account, bps } in affiliates {
 						ensure!(
-							T::AccountRoleRegistry::has_account_role(account, AccountRole::Broker),
+							T::AccountRoleRegistry::has_account_role(&account, AccountRole::Broker),
 							Error::<T>::AffiliateAccountIsNotABroker
 						);
+						beneficiaries
+							.try_push(Beneficiary { account, bps })
+							.expect("Cannot exceed MAX_BENEFICIARY size which is MAX_AFFILIATE + 1 (main broker)");
 					}
-
-					affiliates.retain(|Affiliate { bps, .. }| *bps > 0);
-					let total = affiliates.iter().map(|Affiliate { bps, .. }| bps).sum();
-					(affiliates, total)
-				},
+					let total = beneficiaries.iter().map(|Beneficiary { bps, .. }| bps).sum();
+					(beneficiaries, total)
+				} else if broker_fee > 0 {
+					beneficiaries.try_push(Beneficiary {account: broker.clone(), bps: broker_fee}).expect("We are only inserting one element, impossible to exceed the maximum size");
+					(beneficiaries, broker_fee)
+				} else {
+					(Default::default(), 0)
+				}
 			};
 
 			ensure!(total_bps <= 1000, Error::<T>::BrokerCommissionBpsTooHigh);
@@ -732,7 +734,7 @@ pub mod pallet {
 					source_asset,
 					destination_asset,
 					destination_address_internal,
-					affiliates.clone(),
+					beneficiaries.clone(),
 					broker,
 					channel_metadata.clone(),
 					boost_fee,
@@ -749,7 +751,7 @@ pub mod pallet {
 				source_chain_expiry_block: expiry_height,
 				boost_fee,
 				channel_opening_fee,
-				affiliates,
+				beneficiaries,
 			});
 
 			Ok(())
@@ -1131,7 +1133,7 @@ pub mod pallet {
 			to: Asset,
 			amount: AssetAmount,
 			destination_address: ForeignChainAddress,
-			broker_commission: Affiliates<Self::AccountId>,
+			broker_commission: Beneficiaries<Self::AccountId>,
 			channel_id: ChannelId,
 		) -> SwapId {
 			// Permill maxes out at 100% so this is safe.
@@ -1159,7 +1161,7 @@ pub mod pallet {
 				SwapType::Swap(destination_address.clone()),
 			);
 
-			for Affiliate { account, bps } in broker_commission {
+			for Beneficiary { account, bps } in broker_commission {
 				EarnedBrokerFees::<T>::mutate(&account, from, |earned_fees| {
 					earned_fees.saturating_accrue(
 						Permill::from_parts(bps as u32 * BASIS_POINTS_PER_MILLION) * amount,

@@ -69,9 +69,10 @@ async fn run_cli() -> Result<()> {
 									params.destination_asset.into(),
 									&params.destination_address,
 								)?,
-								params.broker_commission.into(),
+								params.broker_commission,
 								None,
 								params.boost_fee,
+								None,
 							)
 							.await?;
 						println!("Deposit Address: {address}");

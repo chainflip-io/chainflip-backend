@@ -3,7 +3,7 @@
 use super::*;
 
 use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue};
-use cf_primitives::{AccountRole, FLIPPERINOS_PER_FLIP};
+use cf_primitives::{AccountRole, Beneficiary, FLIPPERINOS_PER_FLIP};
 use cf_traits::{AccountRoleRegistry, Chainflip, FeePayment};
 use frame_benchmarking::v2::*;
 use frame_support::{
@@ -33,7 +33,7 @@ mod benchmarks {
 				let account = frame_benchmarking::account::<T::AccountId>("beneficiary", i, 0);
 				frame_benchmarking::whitelist_account!(account);
 				<<T as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<T>>::register_as_broker(&account).unwrap();
-				Affiliate { account, bps: 10 }
+				Beneficiary { account, bps: 10 }
 			})
 			.collect::<Vec<_>>()
 			.try_into()
@@ -44,9 +44,10 @@ mod benchmarks {
 			source_asset: Asset::Eth,
 			destination_asset: Asset::Usdc,
 			destination_address: EncodedAddress::benchmark_value(),
-			broker_fees: cf_primitives::BrokerFees::Multiple(affiliates),
+			broker_fee: 10,
 			boost_fee: 0,
 			channel_metadata: None,
+			affiliate_fees: Some(affiliates),
 		};
 
 		#[block]

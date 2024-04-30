@@ -4,9 +4,11 @@ use cf_utilities::{
 };
 use chainflip_api::{
 	self, clean_foreign_chain_address,
-	primitives::{AccountRole, Asset, BasisPoints, BlockNumber, CcmChannelMetadata, ChannelId},
+	primitives::{
+		AccountRole, Affiliates, Asset, BasisPoints, BlockNumber, CcmChannelMetadata, ChannelId,
+	},
 	settings::StateChain,
-	AccountId32, BrokerApi, BrokerFees, OperatorApi, StateChainApi, WithdrawFeesDetail,
+	AccountId32, BrokerApi, OperatorApi, StateChainApi, WithdrawFeesDetail,
 };
 use clap::Parser;
 use futures::FutureExt;
@@ -55,9 +57,10 @@ pub trait Rpc {
 		source_asset: Asset,
 		destination_asset: Asset,
 		destination_address: String,
-		broker_commission: BrokerFees<AccountId32>,
+		broker_commission: BasisPoints,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
+		affiliate_fees: Option<Affiliates<AccountId32>>,
 	) -> RpcResult<BrokerSwapDepositAddress>;
 
 	#[method(name = "withdraw_fees", aliases = ["broker_withdrawFees"])]
@@ -100,9 +103,10 @@ impl RpcServer for RpcServerImpl {
 		source_asset: Asset,
 		destination_asset: Asset,
 		destination_address: String,
-		broker_commission: BrokerFees<AccountId32>,
+		broker_commission: BasisPoints,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
+		affiliate_fees: Option<Affiliates<AccountId32>>,
 	) -> RpcResult<BrokerSwapDepositAddress> {
 		Ok(self
 			.api
@@ -114,6 +118,7 @@ impl RpcServer for RpcServerImpl {
 				broker_commission,
 				channel_metadata,
 				boost_fee,
+				affiliate_fees,
 			)
 			.await
 			.map(BrokerSwapDepositAddress::from)?)

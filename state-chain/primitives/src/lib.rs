@@ -332,28 +332,15 @@ fn is_more_recent_semver() {
 	ensure_left_is_more_recent(ver(1, 1, 0), ver(1, 0, 2));
 }
 
-const MAX_AFFILIATES: u32 = 6;
+pub const MAX_AFFILIATES: u32 = 5;
+pub const MAX_BENEFICIARIES: u32 = 6;
 
-pub type Affiliates<Id> = BoundedVec<Affiliate<Id>, ConstU32<MAX_AFFILIATES>>;
+pub type Affiliates<Id> = BoundedVec<Beneficiary<Id>, ConstU32<MAX_AFFILIATES>>;
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
-#[serde(untagged)]
-#[serde(
-	expecting = r#"Expected EITHER a Number representing the broker commission rate in basis points OR an Array of at most SIX affiliates [(AccountId, BasisPoints)]."#
-)]
-pub enum BrokerFees<Id> {
-	Single(BasisPoints),
-	Multiple(Affiliates<Id>),
-}
+pub type Beneficiaries<Id> = BoundedVec<Beneficiary<Id>, ConstU32<{ MAX_AFFILIATES + 1 }>>;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
-pub struct Affiliate<Id> {
+pub struct Beneficiary<Id> {
 	pub account: Id,
 	pub bps: BasisPoints,
-}
-
-impl<Id> From<BasisPoints> for BrokerFees<Id> {
-	fn from(value: BasisPoints) -> Self {
-		BrokerFees::Single(value)
-	}
 }

@@ -11,7 +11,9 @@ use cf_chains::{
 	dot::PolkadotAccountId,
 	AnyChain, CcmChannelMetadata, CcmDepositMetadata, Ethereum,
 };
-use cf_primitives::{Asset, AssetAmount, BasisPoints, ForeignChain, NetworkEnvironment};
+use cf_primitives::{
+	Asset, AssetAmount, BasisPoints, Beneficiary, ForeignChain, NetworkEnvironment,
+};
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::{
@@ -117,7 +119,7 @@ fn insert_swaps(swaps: &[Swap]) {
 				swap.to,
 				swap.amount,
 				destination_address.clone(),
-				bounded_vec![Affiliate { account: broker_id as u64, bps: 2 }],
+				bounded_vec![Beneficiary { account: broker_id as u64, bps: 2 }],
 				1,
 			);
 		}
@@ -152,9 +154,10 @@ fn request_swap_success_with_valid_parameters() {
 			Asset::Eth,
 			Asset::Usdc,
 			EncodedAddress::Eth(Default::default()),
-			cf_primitives::BrokerFees::Single(0),
+			0,
 			None,
-			0
+			0,
+			None
 		));
 	});
 }
@@ -202,7 +205,7 @@ fn expect_earned_fees_to_be_recorded() {
 			Asset::Usdc,
 			100,
 			ForeignChainAddress::Eth([2; 20].into()),
-			bounded_vec![Affiliate { account: ALICE, bps: 200 }],
+			bounded_vec![Beneficiary { account: ALICE, bps: 200 }],
 			1,
 		);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 2);
@@ -213,7 +216,7 @@ fn expect_earned_fees_to_be_recorded() {
 			Asset::Usdc,
 			100,
 			ForeignChainAddress::Eth([2; 20].into()),
-			bounded_vec![Affiliate { account: ALICE, bps: 200 }],
+			bounded_vec![Beneficiary { account: ALICE, bps: 200 }],
 			1,
 		);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 4);
@@ -225,8 +228,8 @@ fn expect_earned_fees_to_be_recorded() {
 			100,
 			ForeignChainAddress::Eth([2; 20].into()),
 			bounded_vec![
-				Affiliate { account: ALICE, bps: 200 },
-				Affiliate { account: BOB, bps: 200 }
+				Beneficiary { account: ALICE, bps: 200 },
+				Beneficiary { account: BOB, bps: 200 }
 			],
 			1,
 		);
@@ -247,7 +250,7 @@ fn cannot_swap_with_incorrect_destination_address_type() {
 			Asset::Dot,
 			10,
 			ForeignChainAddress::Eth([2; 20].into()),
-			bounded_vec![Affiliate { account: ALICE, bps: 2 }],
+			bounded_vec![Beneficiary { account: ALICE, bps: 2 }],
 			1,
 		);
 
@@ -265,9 +268,10 @@ fn expect_swap_id_to_be_emitted() {
 				Asset::Eth,
 				Asset::Usdc,
 				EncodedAddress::Eth(Default::default()),
-				cf_primitives::BrokerFees::Single(0),
+				0,
 				None,
-				0
+				0,
+				None
 			));
 
 			const AMOUNT: AssetAmount = 500;
@@ -458,9 +462,10 @@ fn rejects_invalid_swap_deposit() {
 				Asset::Btc,
 				Asset::Eth,
 				EncodedAddress::Dot(Default::default()),
-				cf_primitives::BrokerFees::Single(0),
+				0,
 				Some(ccm.clone()),
-				0
+				0,
+				None
 			),
 			Error::<Test>::IncompatibleAssetAndAddress
 		);
@@ -471,9 +476,10 @@ fn rejects_invalid_swap_deposit() {
 				Asset::Eth,
 				Asset::Dot,
 				EncodedAddress::Dot(Default::default()),
-				cf_primitives::BrokerFees::Single(0),
+				0,
 				Some(ccm),
-				0
+				0,
+				None
 			),
 			Error::<Test>::CcmUnsupportedForTargetChain
 		);
@@ -535,9 +541,10 @@ fn can_process_ccms_via_swap_deposit_address() {
 			Asset::Dot,
 			Asset::Eth,
 			EncodedAddress::Eth(Default::default()),
-			cf_primitives::BrokerFees::Single(0),
+			0,
 			Some(request_ccm),
-			0
+			0,
+			None
 		));
 		assert_ok!(Swapping::on_ccm_deposit(
 			Asset::Dot,
@@ -1509,9 +1516,10 @@ fn swap_excess_are_confiscated_ccm_via_deposit() {
 			from,
 			to,
 			EncodedAddress::Eth(Default::default()),
-			cf_primitives::BrokerFees::Single(0),
+			0,
 			Some(request_ccm),
 			0,
+			None
 		));
 
 		assert_ok!(Swapping::on_ccm_deposit(
@@ -1906,7 +1914,7 @@ fn swap_with_custom_broker_fee(
 		to,
 		amount,
 		ForeignChainAddress::Eth([2; 20].into()),
-		bounded_vec![Affiliate { account: ALICE, bps: broker_fee }],
+		bounded_vec![Beneficiary { account: ALICE, bps: broker_fee }],
 		1,
 	);
 }
@@ -2005,9 +2013,10 @@ fn broker_bps_is_limited() {
 				Asset::Eth,
 				Asset::Usdc,
 				EncodedAddress::Eth(Default::default()),
-				cf_primitives::BrokerFees::Single(1001),
+				1001,
 				None,
 				0,
+				None
 			),
 			Error::<Test>::BrokerCommissionBpsTooHigh
 		);
@@ -2144,9 +2153,10 @@ fn deposit_address_ready_event_contain_correct_boost_fee_value() {
 			Asset::Eth,
 			Asset::Usdc,
 			EncodedAddress::Eth(Default::default()),
-			cf_primitives::BrokerFees::Single(0),
+			0,
 			None,
-			BOOST_FEE
+			BOOST_FEE,
+			None
 		));
 		assert_event_sequence!(
 			Test,
