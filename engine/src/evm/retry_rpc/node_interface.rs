@@ -26,6 +26,10 @@ impl<Rpc: EvmRpcApi + NodeInterfaceRpcApi> NodeInterfaceRetryRpcApi for EvmRetry
 	) -> (u64, u64, U256, U256) {
 		self.rpc_retry_client
 			.request(
+				RequestLog::new(
+					"gas_estimate_components".to_string(),
+					Some(format!("{destination_address:?}, {contract_creation:?}")),
+				),
 				Box::pin(move |client| {
 					let tx_data = tx_data.clone();
 					#[allow(clippy::redundant_async_block)]
@@ -39,10 +43,6 @@ impl<Rpc: EvmRpcApi + NodeInterfaceRpcApi> NodeInterfaceRetryRpcApi for EvmRetry
 							.await
 					})
 				}),
-				RequestLog::new(
-					"gas_estimate_components".to_string(),
-					Some(format!("{destination_address:?}, {contract_creation:?}")),
-				),
 			)
 			.await
 	}
