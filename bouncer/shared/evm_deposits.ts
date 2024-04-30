@@ -139,7 +139,6 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
   await observingEvent;
 }
 
-
 async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset) {
   const { destAddress, tag } = await prepareSwap(
     sourceAsset,
@@ -148,23 +147,18 @@ async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset) {
     undefined,
     ' EvmTestDoubleDeposit',
   );
-  const swapParams = await requestNewSwap(
-    sourceAsset,
-    destAsset,
-    destAddress,
-    tag,
-  );
+  const swapParams = await requestNewSwap(sourceAsset, destAsset, destAddress, tag);
 
   const swapScheduledHandle = observeSwapScheduled(sourceAsset, destAsset, swapParams.channelId);
 
-  await send(sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset))
+  await send(sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset));
 
   // Wait for SC to schedule a swap
   await swapScheduledHandle;
 
   // Do another deposit. Regardless of the fetch having been bradcasted or not, another swap
   // should be scheduled when we deposit again.
-  await send(sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset))
+  await send(sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset));
 
   await observeSwapScheduled(sourceAsset, destAsset, swapParams.channelId);
 }
