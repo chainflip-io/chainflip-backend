@@ -147,7 +147,8 @@ async function testTransferAsset() {
   console.log('=== Starting testTransferAsset ===');
   const amountToTransfer = testAssetAmount.toString(16);
 
-  const getLpBalance = async (account: string) => (await chainflip.query.liquidityProvider.freeBalances(account, testAsset))
+  const getLpBalance = async (account: string) =>
+    (await chainflip.query.liquidityProvider.freeBalances(account, testAsset))
       .unwrapOrDefault()
       .toBigInt();
 
