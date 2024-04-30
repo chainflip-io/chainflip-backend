@@ -169,8 +169,6 @@ pub mod pallet {
 
 			Self::activate_new_key_for_chain(block_number);
 
-			T::SafeMode::set_code_red();
-
 			Pallet::<T, I>::deposit_event(Event::VaultRotatedExternally(new_public_key));
 
 			Ok(().into())
