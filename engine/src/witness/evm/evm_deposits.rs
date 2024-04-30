@@ -3,7 +3,7 @@ use crate::{
 	witness::common::{RuntimeCallHasChain, RuntimeHasChain},
 };
 use anyhow::ensure;
-use cf_chains::instances::ChainInstanceFor;
+use cf_chains::{instances::ChainInstanceFor, Chain};
 use cf_primitives::EpochIndex;
 use ethers::types::Bloom;
 use futures_core::Future;
@@ -62,6 +62,8 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
 	{
 		self.then(move |epoch, header| {
+			<Inner::Chain as Chain>::assert_block_phase(header.index);
+
 			let eth_rpc = eth_rpc.clone();
 			let process_call = process_call.clone();
 			async move {
@@ -87,7 +89,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								addresses,
 							)
 							.await?,
-							events_at_block::<VaultEvents, _>(
+							events_at_block::<Inner::Chain, VaultEvents, _>(
 								Header {
 									index: header.index,
 									hash: header.hash,
@@ -233,6 +235,7 @@ mod tests {
 	};
 
 	use super::{super::contract_common::events_at_block, *};
+	use cf_chains::{Chain, Ethereum};
 	use ethers::prelude::U256;
 	use futures_util::FutureExt;
 	use utilities::task_scope;
@@ -323,6 +326,7 @@ mod tests {
 					"eth_rpc",
 					"eth_subscribe",
 					"Ethereum",
+					Ethereum::WITNESS_PERIOD,
 				)
 				.unwrap();
 
@@ -344,7 +348,7 @@ mod tests {
 				.await
 				.unwrap();
 
-				let fetched_native_events = events_at_block::<VaultEvents, _>(
+				let fetched_native_events = events_at_block::<cf_chains::Ethereum, VaultEvents, _>(
 					Header {
 						index: block_number,
 						parent_hash: Some(block.parent_hash),

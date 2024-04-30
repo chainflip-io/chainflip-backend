@@ -1,4 +1,4 @@
-use cf_chains::instances::ChainInstanceFor;
+use cf_chains::{instances::ChainInstanceFor, Chain};
 use pallet_cf_ingress_egress::DepositChannelDetails;
 use std::sync::Arc;
 use utilities::task_scope::Scope;
@@ -34,7 +34,11 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		MonitoredSCItems<
 			Inner,
 			Addresses<Inner>,
-			impl Fn(Inner::Index, &Addresses<Inner>) -> Addresses<Inner> + Send + Sync + Clone + 'static,
+			impl Fn(<Inner::Chain as Chain>::ChainBlockNumber, &Addresses<Inner>) -> Addresses<Inner>
+				+ Send
+				+ Sync
+				+ Clone
+				+ 'static,
 		>,
 	>
 	where
@@ -62,9 +66,14 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					}
 				},
 				|index, addresses: &Addresses<Inner>| {
+					<Inner::Chain as Chain>::assert_block_phase(index);
 					addresses
 						.iter()
-						.filter(|details| details.opened_at <= index && index <= details.expires_at)
+						.filter(|details| {
+							<Inner::Chain as Chain>::assert_block_phase(details.opened_at);
+							<Inner::Chain as Chain>::assert_block_phase(details.expires_at);
+							details.opened_at <= index && index <= details.expires_at
+						})
 						.cloned()
 						.collect()
 				},

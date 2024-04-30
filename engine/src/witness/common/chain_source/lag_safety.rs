@@ -3,6 +3,8 @@ use std::{collections::VecDeque, iter::Step};
 use futures::stream;
 use futures_util::StreamExt;
 
+use cf_chains::Chain;
+
 use crate::witness::common::{chain_source::ChainClient, ExternalChainSource};
 
 use super::{BoxChainStream, ChainSource, Header};
@@ -11,18 +13,21 @@ use super::{BoxChainStream, ChainSource, Header};
 /// This means it's possible it produces two of the same block, for example, if strictly monotonic
 /// is not applied before the lag_safety.
 #[derive(Clone)]
-pub struct LagSafety<InnerSource> {
+pub struct LagSafety<InnerSource: ExternalChainSource> {
 	inner_source: InnerSource,
-	margin: usize,
+	margin: <InnerSource::Chain as Chain>::ChainBlockNumber,
 }
-impl<InnerSource> LagSafety<InnerSource> {
-	pub fn new(inner_source: InnerSource, margin: usize) -> Self {
+impl<InnerSource: ExternalChainSource> LagSafety<InnerSource> {
+	pub fn new(
+		inner_source: InnerSource,
+		margin: <InnerSource::Chain as Chain>::ChainBlockNumber,
+	) -> Self {
 		Self { inner_source, margin }
 	}
 }
 
 #[async_trait::async_trait]
-impl<InnerSource: ChainSource> ChainSource for LagSafety<InnerSource>
+impl<InnerSource: ExternalChainSource> ChainSource for LagSafety<InnerSource>
 where
 	InnerSource::Client: Clone,
 {
@@ -36,7 +41,16 @@ where
 		&self,
 	) -> (BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>, Self::Client) {
 		let (chain_stream, chain_client) = self.inner_source.stream_and_client().await;
-		let margin = self.margin;
+
+		let margin = Into::<u64>::into({
+			let remainder = <InnerSource::Chain as Chain>::block_phase(self.margin);
+			self.margin +
+				if remainder == Default::default() {
+					Default::default()
+				} else {
+					<InnerSource::Chain as Chain>::WITNESS_PERIOD - remainder
+				}
+		}) as usize;
 
 		(
 			Box::pin(stream::unfold(
@@ -55,7 +69,8 @@ where
 					utilities::loop_select!(
 						if let Some(header) = chain_stream.next() => {
 							let header_index = header.index;
-							if unsafe_cache.back().map_or(false, |last_header| Some(&last_header.hash) != header.parent_hash.as_ref() || Step::forward_checked(last_header.index, 1) != Some(header_index)) {
+							<InnerSource::Chain as Chain>::assert_block_phase(header_index);
+							if unsafe_cache.back().map_or(false, |last_header| Some(&last_header.hash) != header.parent_hash.as_ref()) {
 								unsafe_cache.clear();
 							}
 							unsafe_cache.push_back(header);
@@ -159,6 +174,11 @@ mod tests {
 			(Box::pin(stream), self.client.clone())
 		}
 	}
+	impl<HeaderStream: Stream<Item = Header<u64, u64, ()>> + Send + Sync> ExternalChainSource
+		for MockChainSource<HeaderStream>
+	{
+		type Chain = cf_chains::Ethereum;
+	}
 
 	pub fn normal_header(index: u64) -> Header<u64, u64, ()> {
 		Header { index, hash: index, parent_hash: Some(index - 1), data: () }
@@ -208,19 +228,19 @@ mod tests {
 	#[tokio::test]
 	async fn margin_holds_up_blocks() {
 		const INDICES: Range<u64> = 5u64..10;
-		const MARGIN: usize = 2;
+		const MARGIN: u64 = 2;
 		let mock_chain_source = MockChainSource::new(stream::iter(INDICES).map(normal_header));
 		let lag_safety = LagSafety::new(mock_chain_source, MARGIN);
 
 		let (mut chain_stream, client) = lag_safety.stream_and_client().await;
 
-		for i in (INDICES.start - MARGIN as u64)..(INDICES.end - MARGIN as u64) {
+		for i in (INDICES.start - MARGIN)..(INDICES.end - MARGIN) {
 			assert_eq!(chain_stream.next().await.unwrap().index, i);
 		}
 		assert!(chain_stream.next().await.is_none());
 		assert_eq!(
 			client.queried_indices().await,
-			(INDICES.start - MARGIN as u64..INDICES.start).collect::<Vec<_>>()
+			(INDICES.start - MARGIN..INDICES.start).collect::<Vec<_>>()
 		);
 	}
 
@@ -231,7 +251,7 @@ mod tests {
 	// Normally this isn't going to occur because the strictly monotonic will be applied first.
 	#[tokio::test]
 	async fn duplicate_block_index_produces_duplicate_output_blocks() {
-		const MARGIN: usize = 1;
+		const MARGIN: u64 = 1;
 
 		// one block fork
 		let mock_chain_source =
@@ -248,7 +268,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn reorg_with_depth_equal_to_safety_margin_queries_for_correct_blocks() {
-		const MARGIN: usize = 3;
+		const MARGIN: u64 = 3;
 
 		let mock_chain_source = MockChainSource::new(stream::iter([
 			// these three are on a bad fork
@@ -267,7 +287,7 @@ mod tests {
 		let lag_safety = LagSafety::new(mock_chain_source, MARGIN);
 		let (mut chain_stream, client) = lag_safety.stream_and_client().await;
 
-		for i in (5 - MARGIN as u64)..=(13 - MARGIN as u64) {
+		for i in (5 - MARGIN)..=(13 - MARGIN) {
 			assert_eq!(chain_stream.next().await, Some(normal_header(i)));
 		}
 
@@ -279,7 +299,7 @@ mod tests {
 	// encounter some other strange, unaccounted for behaviour.
 	#[tokio::test]
 	async fn reorg_with_depth_less_than_safety_margin_passes_through_bad_block() {
-		const MARGIN: usize = 2;
+		const MARGIN: u64 = 2;
 
 		let bad_block = test_header(5, 55, 44);
 
@@ -299,13 +319,13 @@ mod tests {
 		let lag_safety = LagSafety::new(mock_chain_source, MARGIN);
 		let (mut chain_stream, client) = lag_safety.stream_and_client().await;
 
-		for i in (5 - MARGIN as u64)..5 {
+		for i in (5 - MARGIN)..5 {
 			assert_eq!(chain_stream.next().await, Some(normal_header(i)));
 		}
 		// Here's the bad block, we consider it safe now, because within the bad fork it's safe.
 		assert_eq!(chain_stream.next().await.unwrap(), bad_block);
 
-		for i in 6..(12 - MARGIN as u64) {
+		for i in 6..(12 - MARGIN) {
 			assert_eq!(chain_stream.next().await, Some(normal_header(i)));
 		}
 

@@ -430,16 +430,19 @@ impl<'a, 'env, StateChainClient: StorageApi + Send + Sync + 'static, Info, Histo
 					.expect(STATE_CHAIN_CONNECTION)
 				{
 					Some(vault_start_block_number) => {
+						TChain::assert_block_phase(vault_start_block_number);
 						Some((
-						state_chain_client
-						.storage_map_entry::<pallet_cf_threshold_signature::Keys<
-							state_chain_runtime::Runtime,
-							CryptoInstanceFor<TChain>,
-						>>(block_hash, &epoch)
-						.await
-						.expect(STATE_CHAIN_CONNECTION)
-						.expect("since the block start number for this epoch exists, the vault key for this epoch should also exist. Both the vault key and the vault start block number are set in the same function (activate_keys() in vault_rotator.rs)"),
-						vault_start_block_number, info))
+							state_chain_client
+								.storage_map_entry::<pallet_cf_threshold_signature::Keys<
+									state_chain_runtime::Runtime,
+									CryptoInstanceFor<TChain>,
+								>>(block_hash, &epoch)
+								.await
+								.expect(STATE_CHAIN_CONNECTION)
+								.expect("since the block start number for this epoch exists, the vault key for this epoch should also exist. Both the vault key and the vault start block number are set in the same function (activate_keys() in vault_rotator.rs)"),
+							vault_start_block_number,
+							info
+						))
 					}
 					None => None,
 				}

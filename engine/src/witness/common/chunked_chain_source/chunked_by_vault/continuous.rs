@@ -1,6 +1,7 @@
 use crate::witness::common::chunked_chain_source::chunked_by_vault::{
 	builder::ChunkedByVaultBuilder, ChunkedByVault,
 };
+use cf_chains::Chain;
 use cf_primitives::EpochIndex;
 use core::iter::Step;
 use futures_util::stream;
@@ -89,6 +90,9 @@ where
 						move |(mut chain_stream, chain_client, mut epoch, mut unprocessed_indices, mut inprogress_indices, mut processed_indices)| async move {
 							let is_epoch_complete = |processed_indices: &RleBitmap<Self::Index>, end: Self::Index| {
 								processed_indices.is_superset(&{
+									<Inner::Chain as Chain>::assert_block_phase(epoch.info.1);
+									<Inner::Chain as Chain>::assert_block_phase(end);
+
 									let mut bitmap = RleBitmap::new(true);
 									bitmap.set_range(..epoch.info.1, false);
 									bitmap.set_range(end.., false);
@@ -96,11 +100,16 @@ where
 								})
 							};
 
+							<Inner::Chain as Chain>::assert_block_phase(epoch.info.1);
+
 							loop_select!(
 								let header = chain_stream.next_or_pending() => {
+									<Inner::Chain as Chain>::assert_block_phase(header.index);
 									let next_unprocessed = processed_indices.iter(true).last().map_or(epoch.info.1, |highest_processed| std::cmp::max(Step::forward(highest_processed, 1), epoch.info.1));
+									<Inner::Chain as Chain>::assert_block_phase(next_unprocessed);
 									if next_unprocessed < header.index {
-										for unprocessed_index in next_unprocessed..header.index {
+										for unprocessed_index in (next_unprocessed..header.index).step_by(Into::<u64>::into(<Inner::Chain as Chain>::WITNESS_PERIOD) as usize) {
+											<Inner::Chain as Chain>::assert_block_phase(unprocessed_index);
 											if inprogress_indices.len() < MAXIMUM_CONCURRENT_INPROGRESS {
 												inprogress_indices.insert(unprocessed_index, {
 													let chain_client = chain_client.clone();
@@ -110,14 +119,15 @@ where
 													}.boxed()
 												});
 											} else {
-												unprocessed_indices.set(unprocessed_index, true);
+												unprocessed_indices.set_range(<Inner::Chain as Chain>::block_period(unprocessed_index), true);
 											}
 										}
 									}
 
-									unprocessed_indices.set(header.index, false);
+									let processed_index_range = <Inner::Chain as Chain>::block_period(header.index);
+									unprocessed_indices.set_range(processed_index_range.clone(), false);
 									inprogress_indices.remove(header.index);
-									processed_indices.set(header.index, true);
+									processed_indices.set_range(processed_index_range, true);
 									let _result = self.store.store(epoch.index, &processed_indices);
 
 									break Some((header, (chain_stream, chain_client, epoch, unprocessed_indices, inprogress_indices, processed_indices)))
@@ -127,12 +137,16 @@ where
 									break None
 								} else disable then if is_epoch_complete(&processed_indices, epoch.historic_signal.get().unwrap().1) => break None,
 								let (_, header) = inprogress_indices.next_or_pending() => {
-									processed_indices.set(header.index, true);
+									<Inner::Chain as Chain>::assert_block_phase(header.index);
+
+									let processed_index_range = <Inner::Chain as Chain>::block_period(header.index);
+
+									processed_indices.set_range(processed_index_range, true);
 									let _result = self.store.store(epoch.index, &processed_indices);
 
 									let next_unprocessed_indice = unprocessed_indices.iter(true).next();
 									if let Some(unprocessed_index) = next_unprocessed_indice {
-										unprocessed_indices.set(unprocessed_index, false);
+										unprocessed_indices.set_range(<Inner::Chain as Chain>::block_period(unprocessed_index), false);
 										inprogress_indices.insert(unprocessed_index, {
 											let chain_client = chain_client.clone();
 											#[allow(clippy::redundant_async_block)]

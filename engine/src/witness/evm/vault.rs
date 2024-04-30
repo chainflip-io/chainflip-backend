@@ -18,7 +18,7 @@ use anyhow::{anyhow, Result};
 use cf_chains::{
 	address::{EncodedAddress, IntoForeignChainAddress},
 	eth::Address as EthereumAddress,
-	CcmChannelMetadata, CcmDepositMetadata,
+	CcmChannelMetadata, CcmDepositMetadata, Chain,
 };
 use cf_primitives::{chains::assets::eth::Asset as EthereumAsset, Asset, ForeignChain};
 use ethers::prelude::*;
@@ -228,12 +228,18 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		ProcessingFut: Future<Output = ()> + Send + 'static,
 	{
 		self.then::<Result<Bloom>, _, _>(move |epoch, header| {
+			<Inner::Chain as Chain>::assert_block_phase(header.index);
+
 			let process_call = process_call.clone();
 			let eth_rpc = eth_rpc.clone();
 			let supported_assets = supported_assets.clone();
 			async move {
-				for event in
-					events_at_block::<VaultEvents, _>(header, contract_address, &eth_rpc).await?
+				for event in events_at_block::<Inner::Chain, VaultEvents, _>(
+					header,
+					contract_address,
+					&eth_rpc,
+				)
+				.await?
 				{
 					match call_from_event::<Inner::Chain>(
 						event,

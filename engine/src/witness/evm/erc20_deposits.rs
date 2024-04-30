@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use cf_chains::instances::ChainInstanceFor;
+use cf_chains::{instances::ChainInstanceFor, Chain};
 use cf_primitives::EpochIndex;
 use ethers::types::{Bloom, H160};
 use futures_core::Future;
@@ -91,6 +91,8 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
 	{
 		Ok(self.then(move |epoch, header| {
+			<Inner::Chain as Chain>::assert_block_phase(header.index);
+
 			let process_call = process_call.clone();
 			let eth_rpc = eth_rpc.clone();
 			async move {
@@ -102,7 +104,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					.map(|deposit_channel| deposit_channel.deposit_channel.address)
 					.collect::<HashSet<_>>();
 
-				let deposit_witnesses = events_at_block::<Events, _>(
+				let deposit_witnesses = events_at_block::<Inner::Chain, Events, _>(
 					Header {
 						index: header.index,
 						hash: header.hash,

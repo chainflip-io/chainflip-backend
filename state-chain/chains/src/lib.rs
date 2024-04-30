@@ -64,6 +64,17 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 		block_number % Self::WITNESS_PERIOD
 	}
 
+	fn assert_block_phase(block_number: Self::ChainBlockNumber) {
+		assert_eq!(Self::block_phase(block_number), Default::default());
+	}
+
+	fn block_period(
+		block_number: Self::ChainBlockNumber,
+	) -> core::ops::Range<Self::ChainBlockNumber> {
+		Self::assert_block_phase(block_number);
+		block_number..block_number + Self::WITNESS_PERIOD
+	}
+
 	type ChainCrypto: ChainCrypto;
 
 	type ChainBlockNumber: FullCodec
