@@ -145,18 +145,11 @@ async function testWithdrawAsset() {
 
 async function testTransferAsset() {
   console.log('=== Starting testTransferAsset ===');
-  const amountToTransfer = (testAssetAmount / 10).toString(16);
+  const amountToTransfer = testAssetAmount.toString(16);
 
-  const getLpBalance = async (account: string) => {
-    let balance = JSON.stringify(
-      await chainflip.query.liquidityProvider.freeBalances(account, testAsset),
-    );
-    // The balance is 'null' if the account has no balance. We interpret this as 0.
-    if (balance === 'null') {
-      balance = JSON.stringify((0).toString(16));
-    }
-    return balance;
-  };
+  const getLpBalance = async (account: string) => (await chainflip.query.liquidityProvider.freeBalances(account, testAsset))
+      .unwrapOrDefault()
+      .toBigInt();
 
   const keyring = new Keyring({ type: 'sr25519' });
 
@@ -185,6 +178,11 @@ async function testTransferAsset() {
   assert(
     newBalancesSource < oldBalanceSource,
     `Failed to observe balance decrease after transfer for source account!`,
+  );
+
+  assert(
+    oldBalanceSource + oldBalanceDestination === newBalancesSource + newBalanceDestination,
+    `Balance integrity check failed!`,
   );
 
   console.log('=== testTransferAsset complete ===');
@@ -418,8 +416,9 @@ export async function testLpApi() {
     testRangeOrder(),
     testLimitOrder(),
     testGetOpenSwapChannels(),
-    testTransferAsset(),
   ]);
+
+  await testTransferAsset();
 
   console.log('=== LP API test complete ===');
 }
