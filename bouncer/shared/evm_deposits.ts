@@ -1,6 +1,6 @@
 import Web3 from 'web3';
 import { InternalAsset as Asset } from '@chainflip/cli';
-import { doPerformSwap } from '../shared/perform_swap';
+import { doPerformSwap, requestNewSwap } from '../shared/perform_swap';
 import { prepareSwap, testSwap } from '../shared/swapping';
 import {
   observeFetch,
@@ -17,28 +17,30 @@ import {
   assetDecimals,
   chainContractId,
   assetContractId,
+  observeSwapScheduled,
 } from '../shared/utils';
 import { signAndSendTxEvm } from './send_evm';
 import { getCFTesterAbi } from './contract_interfaces';
+import { send } from './send';
 
 const cfTesterAbi = await getCFTesterAbi();
 
-async function testDepositEvm(sourceAsset: Asset, destAsset: Asset) {
+async function testSuccessiveDepositEvm(sourceAsset: Asset, destAsset: Asset) {
   const swapParams = await testSwap(
     sourceAsset,
     destAsset,
     undefined,
     undefined,
-    ' EvmDepositTest',
+    ' EvmDepositTestFirstDeposit',
   );
 
   // Check the Deposit contract is deployed. It is assumed that the funds are fetched immediately.
   await observeFetch(sourceAsset, swapParams.depositAddress);
 
-  await doPerformSwap(swapParams, `[${sourceAsset}->${destAsset} EvmDepositTest2]`);
+  await doPerformSwap(swapParams, `[${sourceAsset}->${destAsset} EvmDepositTestSecondDeposit]`);
 }
 
-async function testSuccessiveNativeDeposits(sourceAsset: Asset, destAsset: Asset) {
+async function testNoDuplicateWitnessing(sourceAsset: Asset, destAsset: Asset) {
   let stopObserving = false;
 
   const swapParams = await testSwap(
@@ -137,25 +139,55 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
   await observingEvent;
 }
 
+
+async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset) {
+  const { destAddress, tag } = await prepareSwap(
+    sourceAsset,
+    destAsset,
+    undefined,
+    undefined,
+    ' EvmTestDoubleDeposit',
+  );
+  const swapParams = await requestNewSwap(
+    sourceAsset,
+    destAsset,
+    destAddress,
+    tag,
+  );
+
+  const swapScheduledHandle = observeSwapScheduled(sourceAsset, destAsset, swapParams.channelId);
+
+  await send(sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset))
+
+  // Wait for SC to schedule a swap
+  await swapScheduledHandle;
+
+  // Do another deposit. Regardless of the fetch having been bradcasted or not, another swap
+  // should be scheduled when we deposit again.
+  await send(sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset))
+
+  await observeSwapScheduled(sourceAsset, destAsset, swapParams.channelId);
+}
+
 export async function testEvmDeposits() {
   console.log('=== Testing EVM Deposits ===');
 
   const depositTests = Promise.all([
-    testDepositEvm('Eth', 'Dot'),
-    testDepositEvm('Flip', 'Btc'),
-    testDepositEvm('ArbEth', 'Dot'),
-    testDepositEvm('ArbUsdc', 'Btc'),
+    testSuccessiveDepositEvm('Eth', 'Dot'),
+    testSuccessiveDepositEvm('Flip', 'Btc'),
+    testSuccessiveDepositEvm('ArbEth', 'Dot'),
+    testSuccessiveDepositEvm('ArbUsdc', 'Btc'),
   ]);
 
   const duplicatedDepositTest = Promise.all([
-    testSuccessiveNativeDeposits('Eth', 'Dot'),
-    testSuccessiveNativeDeposits('Eth', 'Btc'),
-    testSuccessiveNativeDeposits('Eth', 'Flip'),
-    testSuccessiveNativeDeposits('Eth', 'Usdc'),
-    testSuccessiveNativeDeposits('ArbEth', 'Dot'),
-    testSuccessiveNativeDeposits('ArbEth', 'Btc'),
-    testSuccessiveNativeDeposits('ArbEth', 'Flip'),
-    testSuccessiveNativeDeposits('ArbEth', 'Usdc'),
+    testNoDuplicateWitnessing('Eth', 'Dot'),
+    testNoDuplicateWitnessing('Eth', 'Btc'),
+    testNoDuplicateWitnessing('Eth', 'Flip'),
+    testNoDuplicateWitnessing('Eth', 'Usdc'),
+    testNoDuplicateWitnessing('ArbEth', 'Dot'),
+    testNoDuplicateWitnessing('ArbEth', 'Btc'),
+    testNoDuplicateWitnessing('ArbEth', 'Flip'),
+    testNoDuplicateWitnessing('ArbEth', 'Usdc'),
   ]);
 
   const multipleTxSwapsTest = Promise.all([
