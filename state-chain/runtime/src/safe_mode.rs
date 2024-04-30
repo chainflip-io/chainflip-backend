@@ -68,6 +68,12 @@ pub struct WitnesserCallPermission {
 	pub bitcoin_chain_tracking: bool,
 	pub bitcoin_ingress_egress: bool,
 	pub bitcoin_vault: bool,
+
+	// Arbitrum pallets
+	pub arbitrum_broadcast: bool,
+	pub arbitrum_chain_tracking: bool,
+	pub arbitrum_ingress_egress: bool,
+	pub arbitrum_vault: bool,
 }
 
 impl WitnesserCallPermission {
@@ -88,6 +94,10 @@ impl WitnesserCallPermission {
 			bitcoin_chain_tracking: true,
 			bitcoin_ingress_egress: true,
 			bitcoin_vault: true,
+			arbitrum_broadcast: true,
+			arbitrum_chain_tracking: true,
+			arbitrum_ingress_egress: true,
+			arbitrum_vault: true,
 		}
 	}
 }
@@ -113,6 +123,11 @@ impl CallDispatchFilter<RuntimeCall> for WitnesserCallPermission {
 			RuntimeCall::BitcoinChainTracking(..) => self.bitcoin_chain_tracking,
 			RuntimeCall::BitcoinIngressEgress(..) => self.bitcoin_ingress_egress,
 			RuntimeCall::BitcoinVault(..) => self.bitcoin_vault,
+
+			RuntimeCall::ArbitrumBroadcaster(..) => self.arbitrum_broadcast,
+			RuntimeCall::ArbitrumChainTracking(..) => self.arbitrum_chain_tracking,
+			RuntimeCall::ArbitrumIngressEgress(..) => self.arbitrum_ingress_egress,
+			RuntimeCall::ArbitrumVault(..) => self.arbitrum_vault,
 
 			_ => {
 				cf_runtime_utilities::log_or_panic!(
