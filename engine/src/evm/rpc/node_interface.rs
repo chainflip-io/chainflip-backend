@@ -8,7 +8,8 @@ use super::{EvmRpcClient, EvmRpcSigningClient};
 
 abigen!(NodeInterface, "$CF_ARB_CONTRACT_ABI_ROOT/INodeInterface.json");
 
-// This is a kind of precompile on Arbitrum (although not deployed on chain)
+// It's not actually deployed on-chain but it's accessible via RPC's. See:
+// https://docs.arbitrum.io/build-decentralized-apps/nodeinterface/reference
 const NODE_INTERFACE_ADDRESS: &str = "0x00000000000000000000000000000000000000C8";
 
 #[async_trait::async_trait]
