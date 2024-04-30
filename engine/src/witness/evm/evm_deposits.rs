@@ -182,9 +182,7 @@ where
 /// by the Deposit contract upon deployment or after it.
 /// Note that when we have a contract deployed already we substrate the balance at the previous
 /// block, since we will have already witnessed the deposits at the time the deposit was made.
-pub fn eth_ingresses_at_block<
-	Addresses: IntoIterator<Item = (H160, (AddressState, AddressState))>,
->(
+fn eth_ingresses_at_block<Addresses: IntoIterator<Item = (H160, (AddressState, AddressState))>>(
 	addresses: Addresses,
 	native_events: Vec<FetchedNativeFilter>,
 ) -> Result<Vec<(H160, U256)>, anyhow::Error> {
