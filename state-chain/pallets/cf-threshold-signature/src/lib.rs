@@ -139,10 +139,10 @@ pub enum KeyRotationStatus<T: Config<I>, I: 'static = ()> {
 	KeyHandoverComplete {
 		new_public_key: AggKeyFor<T, I>,
 	},
-	/// We are waiting for the key to be updated on the contract, and witnessed by the network.
-	AwaitingActivation {
+	/// We are waiting for the threshold signatures for the rotation txs for chains under this key
+	/// to complete
+	AwaitingActivationSignatures {
 		request_ids: Vec<RequestId>,
-		new_public_key: AggKeyFor<T, I>,
 	},
 	/// The key has been successfully updated on the external chain, and/or funds rotated to new
 	/// key.
@@ -1496,7 +1496,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	fn activate_new_key() {
+	fn mark_key_rotation_complete() {
 		PendingKeyRotation::<T, I>::put(KeyRotationStatus::Complete);
 		Self::deposit_event(Event::KeyRotationCompleted);
 	}

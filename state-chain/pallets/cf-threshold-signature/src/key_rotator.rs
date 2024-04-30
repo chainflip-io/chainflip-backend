@@ -149,10 +149,12 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 							"Unreachable because we are in the branch for the Failed variant."
 						),
 					},
-				KeyRotationStatusVariant::AwaitingActivation => {
+				KeyRotationStatusVariant::AwaitingActivationSignatures => {
 					PendingKeyRotation::<T, I>::mutate(|pending_key_rotation| {
 						match pending_key_rotation {
-							Some(KeyRotationStatus::AwaitingActivation { request_ids, .. }) => {
+							Some(KeyRotationStatus::AwaitingActivationSignatures {
+								request_ids,
+							}) => {
 								request_ids.retain(|request_id| {
 									if Signature::<T, I>::get(request_id) == AsyncResult::Void {
 										T::VaultActivator::activate_key();
@@ -163,7 +165,7 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 								});
 							},
 							_ => unreachable!(
-									"Unreachable because we are in the branch for the AwaitingActivation variant."
+									"Unreachable because we are in the branch for the AwaitingActivationSignatures variant."
 									),
 						}
 					});
@@ -171,7 +173,7 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 					let status = T::VaultActivator::status()
 						.replace_inner(KeyRotationStatusOuter::RotationComplete);
 					if status.is_ready() {
-						Self::activate_new_key();
+						Self::mark_key_rotation_complete();
 					}
 					status
 				},
@@ -254,12 +256,11 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 					.into_iter()
 					.any(|result| result == StartKeyActivationResult::FirstVault)
 			{
-				Self::activate_new_key();
+				Self::mark_key_rotation_complete();
 			} else {
-				PendingKeyRotation::<T, I>::put(KeyRotationStatus::<T, I>::AwaitingActivation {
-					request_ids,
-					new_public_key,
-				});
+				PendingKeyRotation::<T, I>::put(
+					KeyRotationStatus::<T, I>::AwaitingActivationSignatures { request_ids },
+				);
 			}
 		} else {
 			log::error!("Vault activation called during wrong state.");

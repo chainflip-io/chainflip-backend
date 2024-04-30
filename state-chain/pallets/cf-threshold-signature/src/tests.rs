@@ -502,7 +502,7 @@ fn test_retries_for_immutable_key() {
 				CurrentEpochIndex::<Test>::get().saturating_add(1),
 				MockAggKey(*b"NEXT"),
 			);
-			EvmThresholdSigner::activate_new_key();
+			EvmThresholdSigner::mark_key_rotation_complete();
 
 			// Retry should re-use the original key.
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
@@ -1756,10 +1756,7 @@ mod key_rotation {
 			EvmThresholdSigner::activate_keys();
 			assert_eq!(
 				PendingKeyRotation::<Test, _>::get().unwrap(),
-				KeyRotationStatus::AwaitingActivation {
-					request_ids: vec![4],
-					new_public_key: NEW_AGG_PUB_KEY_POST_HANDOVER
-				}
+				KeyRotationStatus::AwaitingActivationSignatures { request_ids: vec![4] }
 			);
 
 			// Vault activation started and it is now pending
