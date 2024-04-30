@@ -63,6 +63,7 @@ impl Chain for Arbitrum {
 #[codec(mel_bound())]
 pub struct ArbitrumTrackedData {
 	pub base_fee: <Arbitrum as Chain>::ChainAmount,
+	pub gas_limit_multiplier: FixedU64,
 }
 
 impl Default for ArbitrumTrackedData {
@@ -82,10 +83,10 @@ impl ArbitrumTrackedData {
 }
 
 pub mod fees {
-	pub const BASE_COST_PER_BATCH: u128 = 5_200_000;
-	pub const GAS_COST_PER_FETCH: u128 = 1_700_000;
-	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 1_500_000;
-	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 1_800_000;
+	pub const BASE_COST_PER_BATCH: u128 = 60_000;
+	pub const GAS_COST_PER_FETCH: u128 = 30_000;
+	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
+	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
 }
 
 impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {
@@ -103,7 +104,8 @@ impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {
 				assets::arb::Asset::ArbUsdc => GAS_COST_PER_FETCH,
 			};
 
-		self.base_fee.saturating_mul(gas_cost_per_fetch)
+		self.base_fee
+			.saturating_mul(self.gas_limit_multiplier.saturating_mul_int(gas_cost_per_fetch))
 	}
 
 	fn estimate_egress_fee(
@@ -118,7 +120,8 @@ impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {
 				assets::arb::Asset::ArbUsdc => GAS_COST_PER_TRANSFER_TOKEN,
 			};
 
-		self.base_fee.saturating_mul(gas_cost_per_transfer)
+		self.base_fee
+			.saturating_mul(self.gas_limit_multiplier.saturating_mul_int(gas_cost_per_transfer))
 	}
 }
 
