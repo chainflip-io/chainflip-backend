@@ -2,6 +2,7 @@ use crate::{safe_mode, Runtime};
 use cf_chains::{
 	arb::{self, ArbitrumTrackedData},
 	eth::Address,
+	instances::{BitcoinInstance, EthereumInstance, PolkadotInstance},
 	ChainState,
 };
 use cf_traits::SafeMode;
@@ -76,9 +77,12 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 							broadcast_ethereum: old.broadcast_ethereum,
 							broadcast_bitcoin: old.broadcast_bitcoin,
 							broadcast_polkadot: old.broadcast_polkadot,
-							broadcast_arbitrum: <pallet_cf_broadcast::PalletSafeMode<
-								ArbitrumInstance,
-							> as SafeMode>::CODE_GREEN,
+							broadcast_arbitrum: <pallet_cf_broadcast::PalletSafeMode<ArbitrumInstance> as SafeMode>::CODE_GREEN,
+							// Set safe mode on for ingress-egress to disable boost features.
+							ingress_egress_ethereum: <pallet_cf_ingress_egress::PalletSafeMode<EthereumInstance> as SafeMode>::CODE_RED,
+							ingress_egress_bitcoin: <pallet_cf_ingress_egress::PalletSafeMode<BitcoinInstance> as SafeMode>::CODE_RED,
+							ingress_egress_polkadot: <pallet_cf_ingress_egress::PalletSafeMode<PolkadotInstance> as SafeMode>::CODE_RED,
+							ingress_egress_arbitrum: <pallet_cf_ingress_egress::PalletSafeMode<ArbitrumInstance> as SafeMode>::CODE_RED,
 							witnesser: old.witnesser,
 						}
 				})
@@ -137,11 +141,11 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 				_ => {
 					// Assume testnet
 					(
-						hex_literal::hex!("8e1308925a26cb5cF400afb402d67B3523473379").into(),
-						hex_literal::hex!("Ce5303b8e8BFCa9d1857976F300fb29928522c6F").into(),
-						hex_literal::hex!("84401CD7AbBeBB22ACb7aF2beCfd9bE56C30bcf1").into(),
+						hex_literal::hex!("5FbDB2315678afecb367f032d93F642f64180aa3").into(),
+						hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512").into(),
+						hex_literal::hex!("9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0").into(),
 						412346,
-						hex_literal::hex!("1D55838a9EC169488D360783D65e6CD985007b72").into(),
+						hex_literal::hex!("Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9").into(),
 						0,
 						// state-chain/node/src/chain_spec/testnet.rs
 						2 * 60 * 60 * 4,

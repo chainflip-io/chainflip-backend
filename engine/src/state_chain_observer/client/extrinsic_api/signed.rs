@@ -200,7 +200,7 @@ impl SignedExtrinsicClient {
 							account_nonce,
 							state_chain_stream.cache().hash,
 							state_chain_stream.cache().number,
-							base_rpc_client.runtime_version().await?,
+							base_rpc_client.runtime_version(None).await?,
 							genesis_hash,
 							SIGNED_EXTRINSIC_LIFETIME,
 							base_rpc_client.clone(),

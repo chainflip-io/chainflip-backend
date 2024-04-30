@@ -4,7 +4,7 @@ LOCALNET_INIT_DIR=localnet/init
 WORKFLOW=build-localnet
 GENESIS_NODES=("bashful" "doc" "dopey")
 SELECTED_NODES=("bashful")
-REQUIRED_BINARIES="chainflip-engine chainflip-node"
+REQUIRED_BINARIES="engine-runner chainflip-node"
 INITIAL_CONTAINERS="init init-solana"
 CORE_CONTAINERS="bitcoin geth polkadot redis"
 ARB_CONTAINERS="sequencer staker-unsafe poster"
@@ -381,3 +381,4 @@ main() {
 }
 
 main "$@"
+

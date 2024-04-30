@@ -1,0 +1,367 @@
+{
+  "version": "0.1.0",
+  "name": "cf_tester",
+  "instructions": [
+    {
+      "name": "initialize",
+      "accounts": [
+        {
+          "name": "dataAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "initializer",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "newAggKey",
+          "type": "publicKey"
+        },
+        {
+          "name": "newGovKey",
+          "type": "publicKey"
+        },
+        {
+          "name": "newTokenVaultPda",
+          "type": "publicKey"
+        }
+      ]
+    },
+    {
+      "name": "cfReceiveToken",
+      "accounts": [
+        {
+          "name": "receiverTokenAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "mint",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "instructionSysvar",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "sourceChain",
+          "type": "u32"
+        },
+        {
+          "name": "sourceAddress",
+          "type": "bytes"
+        },
+        {
+          "name": "message",
+          "type": "bytes"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "cfReceiveNative",
+      "accounts": [
+        {
+          "name": "receiverNative",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "instructionSysvar",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "sourceChain",
+          "type": "u32"
+        },
+        {
+          "name": "sourceAddress",
+          "type": "bytes"
+        },
+        {
+          "name": "message",
+          "type": "bytes"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "contractSwapNative",
+      "accounts": [
+        {
+          "name": "vault",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "dataAccount",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "aggKey",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "pda",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "eventAuthority",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "seed",
+          "type": "bytes"
+        },
+        {
+          "name": "bump",
+          "type": "u8"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "dstChain",
+          "type": "u32"
+        },
+        {
+          "name": "dstAddress",
+          "type": "bytes"
+        },
+        {
+          "name": "dstToken",
+          "type": "u32"
+        },
+        {
+          "name": "message",
+          "type": {
+            "option": "bytes"
+          }
+        },
+        {
+          "name": "gasAmount",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "cfParameters",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "contractSwapToken",
+      "accounts": [
+        {
+          "name": "vault",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "dataAccount",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "tokenVaultAssociatedTokenAcount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "pda",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "pdaAssociatedTokenAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "mint",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "eventAuthority",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "seed",
+          "type": "bytes"
+        },
+        {
+          "name": "bump",
+          "type": "u8"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "dstChain",
+          "type": "u32"
+        },
+        {
+          "name": "dstAddress",
+          "type": "bytes"
+        },
+        {
+          "name": "dstToken",
+          "type": "u32"
+        },
+        {
+          "name": "message",
+          "type": {
+            "option": "bytes"
+          }
+        },
+        {
+          "name": "gasAmount",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "cfParameters",
+          "type": "bytes"
+        },
+        {
+          "name": "decimals",
+          "type": "u8"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "DataAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "aggKey",
+            "type": "publicKey"
+          },
+          {
+            "name": "govKey",
+            "type": "publicKey"
+          },
+          {
+            "name": "tokenVaultPda",
+            "type": "publicKey"
+          },
+          {
+            "name": "isVaultSuspended",
+            "type": "bool"
+          },
+          {
+            "name": "isUpgradeManagerSuspended",
+            "type": "bool"
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "name": "ReceivedCCM",
+      "fields": [
+        {
+          "name": "sourceChain",
+          "type": "u32",
+          "index": false
+        },
+        {
+          "name": "sourceAddress",
+          "type": "bytes",
+          "index": false
+        },
+        {
+          "name": "message",
+          "type": "bytes",
+          "index": false
+        },
+        {
+          "name": "amount",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "remainingPubkeys",
+          "type": {
+            "vec": "publicKey"
+          },
+          "index": false
+        },
+        {
+          "name": "remainingIsSigner",
+          "type": {
+            "vec": "bool"
+          },
+          "index": false
+        },
+        {
+          "name": "remainingIsWritable",
+          "type": {
+            "vec": "bool"
+          },
+          "index": false
+        }
+      ]
+    }
+  ]
+}

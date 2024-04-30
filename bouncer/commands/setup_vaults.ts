@@ -21,9 +21,10 @@ import {
 } from '../shared/utils';
 import { aliceKeyringPair } from '../shared/polkadot_keyring';
 import {
+  initializeArbitrumChain,
   initializeArbitrumContracts,
   initializeSolanaPrograms,
-} from '../shared/initialize_contracts';
+} from '../shared/initialize_new_chains';
 
 async function main(): Promise<void> {
   const btcClient = getBtcClient();
@@ -37,10 +38,7 @@ async function main(): Promise<void> {
   console.log('=== Performing initial Vault setup ===');
 
   // Step 1
-  console.log('Initializing Arbitrum');
-  const arbInitializationRequest = observeEvent('arbitrumVault:ChainInitialized', chainflip);
-  await submitGovernanceExtrinsic(chainflip.tx.arbitrumVault.initializeChain());
-  await arbInitializationRequest;
+  await initializeArbitrumChain(chainflip);
 
   // Step 2
   console.log('Forcing rotation');
@@ -170,10 +168,7 @@ async function main(): Promise<void> {
   // Only issue reg. durable nonces is that they will need to be changed every time a new Solana tag is
   // used since they are not deterministic. We could insert them in the governance extrinsic but that
   // is unnecessary for production.
-  // await submitGovernanceExtrinsic(
-  //   chainflip.tx.environment.witnessInitializeSolanaVault(
-  //   ),
-  // );
+  // await submitGovernanceExtrinsic(chainflip.tx.environment.witnessInitializeSolanaVault());
 
   // Confirmation
   console.log('Waiting for new epoch...');

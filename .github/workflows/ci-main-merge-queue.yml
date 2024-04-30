@@ -1,0 +1,44 @@
+# This CI runs a lot of the jobs in parallel to speed up development time. We also run a simpler suite of bouncer tests.
+name: Release Chainflip Development on main
+on:
+  merge_group:
+
+jobs:
+  pre-check:
+    uses: ./.github/workflows/_01_pre_check.yml
+    secrets: inherit
+  test:
+    needs: [pre-check]
+    uses: ./.github/workflows/_10_test.yml
+    secrets: inherit
+  coverage:
+    uses: ./.github/workflows/_11_coverage.yml
+    with:
+      test_features: runtime-benchmarks
+    secrets: inherit
+  build:
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      profile: "release"
+  # Used to test upgrades to this version from the latest release
+  build-try-runtime:
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      profile: "try-runtime"
+      upload-name: "chainflip-backend-bin-try-runtime"
+      binary-subdir: release
+
+  post-check:
+    needs: [build]
+    uses: ./.github/workflows/_40_post_check.yml
+    secrets: inherit
+
+  upgrade-check:
+    needs: [build-try-runtime]
+    uses: ./.github/workflows/upgrade-test.yml
+    secrets: inherit
+    with:
+      upgrade-from-release: "sisyphos"
+      upgrade-to-workflow-name: "ci-main.yml"

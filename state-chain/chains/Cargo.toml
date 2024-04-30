@@ -27,6 +27,27 @@ rlp = { default-features = false, version = '0.5' }
 bech32 = { default-features = false, version = '0.9.1' }
 base58 = '0.2.0'
 
+# Solana
+borsh = { version = "1.2.1", default_features = false, features = [
+  "derive",
+  "unstable__schema",
+  "hashbrown",
+] }
+serde_with = { version = "2.3.3", default-features = false, features = [
+  "macros",
+] }
+generic-array = { version = "0.14.7", default-features = false, features = [
+  "serde",
+  "more_lengths",
+] }
+bs58 = { version = "0.4.0", default-features = false, features = ["alloc"] }
+bincode = { version = "2.0.0-rc.3", default-features = false, features = [
+  "alloc",
+  "serde",
+] }
+curve25519-dalek = { git = "https://github.com/solana-labs/curve25519-dalek.git", rev = "b500cdc2a920cd5bff9e2dd974d7b97349d61464", optional = true }
+
+
 # Other
 anyhow = { version = '1.0', default-features = false, optional = true }
 hex = { default-features = false, version = '0.4', features = ['serde'] }
@@ -57,6 +78,9 @@ sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chain
 sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
 cf-test-utilities = { path = '../test-utilities' }
 rand = { version = '0.8.4' }
+rand0-7 = { package = "rand", version = "0.7" }
+ed25519-dalek = { version = "1.0.1" }
+thiserror = "1.0.50"
 
 [features]
 default = ['std']
@@ -83,6 +107,7 @@ std = [
   'dep:ss58-registry',
   'dep:anyhow',
   'strum/std',
+  'curve25519-dalek/std',
 ]
 runtime-benchmarks = [
   'cf-primitives/runtime-benchmarks',
