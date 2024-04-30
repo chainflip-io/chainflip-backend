@@ -48,7 +48,7 @@ async function testNoDuplicateWitnessing(sourceAsset: Asset, destAsset: Asset) {
     destAsset,
     undefined,
     undefined,
-    ' DuplicatedDepositTest',
+    ' NoDuplicateWitnessingTest',
   );
 
   // Check the Deposit contract is deployed. It is assumed that the funds are fetched immediately.
@@ -179,7 +179,7 @@ export async function testEvmDeposits() {
     testSuccessiveDepositEvm('ArbUsdc', 'Btc'),
   ]);
 
-  const duplicatedDepositTest = Promise.all([
+  const noDuplicatedWitnessingTest = Promise.all([
     testNoDuplicateWitnessing('Eth', 'Dot'),
     testNoDuplicateWitnessing('Eth', 'Btc'),
     testNoDuplicateWitnessing('Eth', 'Flip'),
@@ -197,7 +197,7 @@ export async function testEvmDeposits() {
     testTxMultipleContractSwaps('ArbEth', 'Flip'),
   ]);
 
-  await Promise.all([depositTests, duplicatedDepositTest, multipleTxSwapsTest]);
+  await Promise.all([depositTests, noDuplicatedWitnessingTest, multipleTxSwapsTest]);
 
   console.log('=== EVM Deposit Test completed ===');
 }
