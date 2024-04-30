@@ -13,10 +13,7 @@ use cf_primitives::{AssetAmount, BroadcastId, ChannelId, EthAmount, TransactionH
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member, RuntimeDebug},
-	sp_runtime::{
-		traits::{AtLeast32BitUnsigned, CheckedSub},
-		BoundedVec, DispatchError,
-	},
+	sp_runtime::{traits::AtLeast32BitUnsigned, BoundedVec, DispatchError},
 	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, StorageHasher,
 };
 use instances::{ChainCryptoInstanceAlias, ChainInstanceAlias};
@@ -63,6 +60,10 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 
 	const WITNESS_PERIOD: Self::ChainBlockNumber;
 
+	fn block_phase(block_number: Self::ChainBlockNumber) -> Self::ChainBlockNumber {
+		block_number % Self::WITNESS_PERIOD
+	}
+
 	type ChainCrypto: ChainCrypto;
 
 	type ChainBlockNumber: FullCodec
@@ -74,11 +75,9 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 		+ AtLeast32BitUnsigned
 		// this is used primarily for tests. We use u32 because it's the smallest block number we
 		// use (and so we can always .into() into a larger type)
-		+ From<u32>
 		+ Into<u64>
 		+ MaxEncodedLen
 		+ Display
-		+ CheckedSub
 		+ Unpin
 		+ Step
 		+ BenchmarkValue;

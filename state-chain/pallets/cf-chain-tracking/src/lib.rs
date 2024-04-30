@@ -81,6 +81,8 @@ pub mod pallet {
 	pub enum Error<T, I = ()> {
 		/// The submitted data is too old.
 		StaleDataSubmitted,
+		/// Block height must be a multiple of the witness period
+		InvalidBlockHeight,
 	}
 
 	#[pallet::genesis_config]
@@ -91,7 +93,11 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
-			CurrentChainState::<T, I>::put(self.init_chain_state.clone());
+			CurrentChainState::<T, I>::put(ChainState {
+				block_height: self.init_chain_state.block_height -
+					<T::TargetChain as Chain>::block_phase(self.init_chain_state.block_height),
+				tracked_data: self.init_chain_state.tracked_data.clone(),
+			});
 		}
 	}
 
@@ -125,7 +131,11 @@ pub mod pallet {
 			new_chain_state: ChainState<T::TargetChain>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-
+			ensure!(
+				<T::TargetChain as Chain>::block_phase(new_chain_state.block_height) ==
+					Default::default(),
+				Error::<T, I>::InvalidBlockHeight
+			);
 			CurrentChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|previous_chain_state| {
 				ensure!(
 					new_chain_state.block_height >

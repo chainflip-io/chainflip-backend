@@ -1757,7 +1757,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> (TargetChainBlockNumber<T, I>, TargetChainBlockNumber<T, I>, TargetChainBlockNumber<T, I>)
 	{
 		let current_height = T::ChainTracking::get_block_height();
-		let lifetime = DepositChannelLifetime::<T, I>::get();
+		debug_assert_eq!(
+			<T::TargetChain as Chain>::block_phase(current_height),
+			Default::default()
+		);
+
+		let lifetime = {
+			let lifetime = DepositChannelLifetime::<T, I>::get();
+			let phase = <T::TargetChain as Chain>::block_phase(lifetime);
+			if phase == Default::default() {
+				lifetime
+			} else {
+				lifetime + <T::TargetChain as Chain>::WITNESS_PERIOD - phase
+			}
+		};
+
 		let expiry_height = current_height + lifetime;
 		let recycle_height = expiry_height + lifetime;
 
