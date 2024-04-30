@@ -1542,10 +1542,8 @@ impl<T: Config> Pallet<T> {
 					.map_err(|_| "Failed to set limit order")?;
 			}
 
-			Ok::<_, DispatchError>(())
-		})?;
-
-		Ok(())
+			Ok(())
+		})
 	}
 
 	#[allow(clippy::type_complexity)]

@@ -248,13 +248,39 @@ pub struct RpcSwapOutput {
 	pub intermediary: Option<NumberOrHex>,
 	// Final output of the swap
 	pub output: NumberOrHex,
-	pub included_fees: Vec<SwapFee>,
 }
 
 impl From<SwapOutput> for RpcSwapOutput {
 	fn from(swap_output: SwapOutput) -> Self {
 		Self {
 			intermediary: swap_output.intermediary.map(Into::into),
+			output: swap_output.output.into(),
+		}
+	}
+}
+
+impl From<RpcSwapOutputV2> for RpcSwapOutput {
+	fn from(swap_output: RpcSwapOutputV2) -> Self {
+		Self {
+			intermediary: swap_output.intermediate.map(Into::into),
+			output: swap_output.output.into(),
+		}
+	}
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RpcSwapOutputV2 {
+	// Intermediate amount, if there's any
+	pub intermediate: Option<U256>,
+	// Final output of the swap
+	pub output: U256,
+	pub included_fees: Vec<SwapFee>,
+}
+
+impl From<SwapOutput> for RpcSwapOutputV2 {
+	fn from(swap_output: SwapOutput) -> Self {
+		Self {
+			intermediate: swap_output.intermediary.map(Into::into),
 			output: swap_output.output.into(),
 			included_fees: vec![SwapFeeKind::Network.into_fee(swap_output.network_fee, Asset::Usdc)],
 		}
@@ -567,11 +593,11 @@ pub trait CustomApi {
 		&self,
 		from_asset: Asset,
 		to_asset: Asset,
-		amount: NumberOrHex,
+		amount: U256,
 		first_leg_additional_limit_orders: Option<Vec<(Tick, U256)>>,
 		second_leg_additional_limit_orders: Option<Vec<(Tick, U256)>>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcSwapOutput>;
+	) -> RpcResult<RpcSwapOutputV2>;
 	#[method(name = "required_asset_ratio_for_range_order")]
 	fn cf_required_asset_ratio_for_range_order(
 		&self,
@@ -1096,18 +1122,19 @@ where
 		amount: NumberOrHex,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutput> {
-		self.cf_pool_swap_rate_v2(from_asset, to_asset, amount, None, None, at)
+		self.cf_pool_swap_rate_v2(from_asset, to_asset, amount.into(), None, None, at)
+			.map(Into::into)
 	}
 
 	fn cf_pool_swap_rate_v2(
 		&self,
 		from_asset: Asset,
 		to_asset: Asset,
-		amount: NumberOrHex,
+		amount: U256,
 		first_leg_additional_limit_orders: Option<Vec<(Tick, U256)>>,
 		second_leg_additional_limit_orders: Option<Vec<(Tick, U256)>>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcSwapOutput> {
+	) -> RpcResult<RpcSwapOutputV2> {
 		self.client
 			.runtime_api()
 			.cf_pool_simulate_swap(
@@ -1129,7 +1156,7 @@ where
 			)
 			.map_err(to_rpc_error)
 			.and_then(|result| result.map_err(map_dispatch_error))
-			.map(RpcSwapOutput::from)
+			.map(RpcSwapOutputV2::from)
 	}
 
 	fn cf_pool_info(
