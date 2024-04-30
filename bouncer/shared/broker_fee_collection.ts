@@ -111,7 +111,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
       depositAddress,
       channelId,
     },
-    undefined,
+    `${asset}->${swapAsset} BrokerFee`,
     undefined,
     undefined,
     rawDepositForSwapAmount,

@@ -31,6 +31,7 @@ async function testSuccessiveDepositEvm(sourceAsset: Asset, destAsset: Asset) {
     destAsset,
     undefined,
     undefined,
+    undefined,
     ' EvmDepositTestFirstDeposit',
   );
 
@@ -46,6 +47,7 @@ async function testNoDuplicateWitnessing(sourceAsset: Asset, destAsset: Asset) {
   const swapParams = await testSwap(
     sourceAsset,
     destAsset,
+    undefined,
     undefined,
     undefined,
     ' NoDuplicateWitnessingTest',
