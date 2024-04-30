@@ -118,7 +118,7 @@ impl RpcServer for RpcServerImpl {
 				broker_commission,
 				channel_metadata,
 				boost_fee,
-				affiliate_fees,
+				affiliate_fees.unwrap_or_default(),
 			)
 			.await
 			.map(BrokerSwapDepositAddress::from)?)

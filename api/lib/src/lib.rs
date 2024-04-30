@@ -348,23 +348,32 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		source_asset: Asset,
 		destination_asset: Asset,
 		destination_address: EncodedAddress,
-		broker_fee: BasisPoints,
+		broker_commission: BasisPoints,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
-		affiliate_fees: Option<Affiliates<AccountId32>>,
+		affiliate_fees: Affiliates<AccountId32>,
 	) -> Result<SwapDepositAddress> {
 		let (_tx_hash, events, header, ..) = self
-			.submit_signed_extrinsic_with_dry_run(
-				pallet_cf_swapping::Call::request_swap_deposit_address_v2 {
+			.submit_signed_extrinsic_with_dry_run(if affiliate_fees.is_empty() {
+				pallet_cf_swapping::Call::request_swap_deposit_address {
 					source_asset,
 					destination_asset,
 					destination_address,
-					broker_fee,
+					broker_commission,
+					channel_metadata,
+					boost_fee: boost_fee.unwrap_or_default(),
+				}
+			} else {
+				pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
+					source_asset,
+					destination_asset,
+					destination_address,
+					broker_commission,
 					channel_metadata,
 					boost_fee: boost_fee.unwrap_or_default(),
 					affiliate_fees,
-				},
-			)
+				}
+			})
 			.await?
 			.until_in_block()
 			.await?;

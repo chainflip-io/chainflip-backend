@@ -268,7 +268,7 @@ pub mod pallet {
 		Swap {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
-			broker_commission: Beneficiaries<AccountId>,
+			broker_fees: Beneficiaries<AccountId>,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
@@ -1484,25 +1484,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				DepositAction::LiquidityProvision { lp_account }
 			},
-			ChannelAction::Swap {
-				destination_address,
-				destination_asset,
-				broker_commission,
-				..
-			} => DepositAction::Swap {
-				swap_id: T::SwapDepositHandler::schedule_swap_from_channel(
-					<<T::TargetChain as Chain>::ChainAccount as IntoForeignChainAddress<
-						T::TargetChain,
-					>>::into_foreign_chain_address(deposit_address.clone()),
-					block_height.into(),
-					asset.into(),
-					destination_asset,
-					amount_after_fees.into(),
-					destination_address,
-					broker_commission,
-					channel_id,
-				),
-			},
+			ChannelAction::Swap { destination_address, destination_asset, broker_fees, .. } =>
+				DepositAction::Swap {
+					swap_id: T::SwapDepositHandler::schedule_swap_from_channel(
+						<<T::TargetChain as Chain>::ChainAccount as IntoForeignChainAddress<
+							T::TargetChain,
+						>>::into_foreign_chain_address(deposit_address.clone()),
+						block_height.into(),
+						asset.into(),
+						destination_asset,
+						amount_after_fees.into(),
+						destination_address,
+						broker_fees,
+						channel_id,
+					),
+				},
 			ChannelAction::CcmTransfer {
 				destination_asset,
 				destination_address,
@@ -1977,7 +1973,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		source_asset: TargetChainAsset<T, I>,
 		destination_asset: Asset,
 		destination_address: ForeignChainAddress,
-		broker_commission: Beneficiaries<Self::AccountId>,
+		broker_fees: Beneficiaries<Self::AccountId>,
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
@@ -1994,11 +1990,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 					destination_address,
 					channel_metadata: msg,
 				},
-				None => ChannelAction::Swap {
-					destination_asset,
-					destination_address,
-					broker_commission,
-				},
+				None => ChannelAction::Swap { destination_asset, destination_address, broker_fees },
 			},
 			boost_fee,
 		)?;

@@ -28,7 +28,33 @@ mod benchmarks {
 		// A non-zero balance is required to pay for the channel opening fee.
 		T::FeePayment::mint_to_account(&caller, (5 * FLIPPERINOS_PER_FLIP).into());
 
-		let affiliates = (0..4)
+		let origin = RawOrigin::Signed(caller.clone());
+		let call = Call::<T>::request_swap_deposit_address {
+			source_asset: Asset::Eth,
+			destination_asset: Asset::Usdc,
+			destination_address: EncodedAddress::benchmark_value(),
+			broker_commission: 10,
+			boost_fee: 0,
+			channel_metadata: None,
+		};
+
+		#[block]
+		{
+			assert_ok!(call.dispatch_bypass_filter(origin.into()));
+		}
+	}
+
+	#[benchmark]
+	fn request_swap_deposit_address_with_affiliates() {
+		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Broker,
+		)
+		.unwrap();
+
+		// A non-zero balance is required to pay for the channel opening fee.
+		T::FeePayment::mint_to_account(&caller, (5 * FLIPPERINOS_PER_FLIP).into());
+
+		let affiliate_fees = (0..4)
 			.map(|i| {
 				let account = frame_benchmarking::account::<T::AccountId>("beneficiary", i, 0);
 				frame_benchmarking::whitelist_account!(account);
@@ -40,14 +66,14 @@ mod benchmarks {
 			.unwrap();
 
 		let origin = RawOrigin::Signed(caller.clone());
-		let call = Call::<T>::request_swap_deposit_address_v2 {
+		let call = Call::<T>::request_swap_deposit_address_with_affiliates {
 			source_asset: Asset::Eth,
 			destination_asset: Asset::Usdc,
 			destination_address: EncodedAddress::benchmark_value(),
-			broker_fee: 10,
+			broker_commission: 10,
 			boost_fee: 0,
 			channel_metadata: None,
-			affiliate_fees: Some(affiliates),
+			affiliate_fees,
 		};
 
 		#[block]

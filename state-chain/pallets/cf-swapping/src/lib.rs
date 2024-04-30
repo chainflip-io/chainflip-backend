@@ -313,7 +313,7 @@ pub mod pallet {
 			source_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 			boost_fee: BasisPoints,
 			channel_opening_fee: T::Amount,
-			beneficiaries: Beneficiaries<T::AccountId>,
+			affiliate_fees: Affiliates<T::AccountId>,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
@@ -324,7 +324,9 @@ pub mod pallet {
 			destination_address: EncodedAddress,
 			origin: SwapOrigin,
 			swap_type: SwapType,
+			#[deprecated(note = "Use broker_fee instead")]
 			broker_commission: Option<AssetAmount>,
+			broker_fee: Option<AssetAmount>,
 			execute_at: BlockNumberFor<T>,
 		},
 		/// A swap has been executed.
@@ -475,7 +477,6 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [SwapDepositAddressReady](Event::SwapDepositAddressReady)
-		#[deprecated(note = "Use `request_swap_deposit_address_v2` instead.")]
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::request_swap_deposit_address())]
 		pub fn request_swap_deposit_address(
@@ -487,7 +488,7 @@ pub mod pallet {
 			channel_metadata: Option<CcmChannelMetadata>,
 			boost_fee: BasisPoints,
 		) -> DispatchResult {
-			Self::request_swap_deposit_address_v2(
+			Self::request_swap_deposit_address_with_affiliates(
 				origin,
 				source_asset,
 				destination_asset,
@@ -495,7 +496,7 @@ pub mod pallet {
 				broker_commission,
 				channel_metadata,
 				boost_fee,
-				None,
+				Default::default(),
 			)
 		}
 
@@ -580,6 +581,7 @@ pub mod pallet {
 				origin: swap_origin,
 				swap_type: SwapType::Swap(destination_address_internal),
 				broker_commission: None,
+				broker_fee: None,
 				execute_at,
 			});
 
@@ -682,41 +684,44 @@ pub mod pallet {
 		///
 		/// - [SwapDepositAddressReady](Event::SwapDepositAddressReady)
 		#[pallet::call_index(10)]
-		#[pallet::weight(T::WeightInfo::request_swap_deposit_address())]
-		pub fn request_swap_deposit_address_v2(
+		#[pallet::weight(T::WeightInfo::request_swap_deposit_address_with_affiliates())]
+		pub fn request_swap_deposit_address_with_affiliates(
 			origin: OriginFor<T>,
 			source_asset: Asset,
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
-			broker_fee: BasisPoints,
+			broker_commission: BasisPoints,
 			channel_metadata: Option<CcmChannelMetadata>,
 			boost_fee: BasisPoints,
-			affiliate_fees: Option<Affiliates<T::AccountId>>,
+			affiliate_fees: Affiliates<T::AccountId>,
 		) -> DispatchResult {
 			ensure!(T::SafeMode::get().deposits_enabled, Error::<T>::DepositsDisabled);
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
 			let (beneficiaries, total_bps) = {
 				let mut beneficiaries = Beneficiaries::new();
-				if let Some(mut affiliates) = affiliate_fees {
-					beneficiaries.try_push(Beneficiary {account: broker.clone(), bps: broker_fee}).expect("We are only inserting one element, impossible to exceed the maximum size");
-					affiliates.retain(|Beneficiary { bps, .. }| *bps > 0);
-					for Beneficiary { account, bps } in affiliates {
-						ensure!(
-							T::AccountRoleRegistry::has_account_role(&account, AccountRole::Broker),
-							Error::<T>::AffiliateAccountIsNotABroker
-						);
+				if broker_commission > 0 {
+					beneficiaries
+						.try_push(Beneficiary { account: broker.clone(), bps: broker_commission })
+						.expect("First element, impossible to exceed the maximum size");
+				}
+				for affiliate in &affiliate_fees {
+					ensure!(
+						T::AccountRoleRegistry::has_account_role(
+							&affiliate.account,
+							AccountRole::Broker
+						),
+						Error::<T>::AffiliateAccountIsNotABroker
+					);
+					if affiliate.bps > 0 {
 						beneficiaries
-							.try_push(Beneficiary { account, bps })
+							.try_push(affiliate.clone())
 							.expect("Cannot exceed MAX_BENEFICIARY size which is MAX_AFFILIATE + 1 (main broker)");
 					}
-					let total = beneficiaries.iter().map(|Beneficiary { bps, .. }| bps).sum();
-					(beneficiaries, total)
-				} else if broker_fee > 0 {
-					beneficiaries.try_push(Beneficiary {account: broker.clone(), bps: broker_fee}).expect("We are only inserting one element, impossible to exceed the maximum size");
-					(beneficiaries, broker_fee)
-				} else {
-					(Default::default(), 0)
 				}
+				let total_bps = beneficiaries
+					.iter()
+					.fold(0, |total, Beneficiary { bps, .. }| total.saturating_add(*bps));
+				(beneficiaries, total_bps)
 			};
 
 			ensure!(total_bps <= 1000, Error::<T>::BrokerCommissionBpsTooHigh);
@@ -746,12 +751,12 @@ pub mod pallet {
 				source_asset,
 				destination_asset,
 				channel_id,
-				broker_commission_rate: total_bps,
+				broker_commission_rate: broker_commission,
 				channel_metadata,
 				source_chain_expiry_block: expiry_height,
 				boost_fee,
 				channel_opening_fee,
-				beneficiaries,
+				affiliate_fees,
 			});
 
 			Ok(())
@@ -1178,6 +1183,7 @@ pub mod pallet {
 				origin: swap_origin,
 				swap_type: SwapType::Swap(destination_address),
 				broker_commission: Some(fee),
+				broker_fee: Some(fee),
 				execute_at,
 			});
 
@@ -1250,6 +1256,7 @@ pub mod pallet {
 						origin: origin.clone(),
 						swap_type: SwapType::CcmPrincipal(ccm_id),
 						broker_commission: None,
+						broker_fee: None,
 						execute_at,
 					});
 					Some(swap_id)
@@ -1271,6 +1278,7 @@ pub mod pallet {
 					origin,
 					swap_type: SwapType::CcmGas(ccm_id),
 					broker_commission: None,
+					broker_fee: None,
 					execute_at,
 				});
 				Some(swap_id)

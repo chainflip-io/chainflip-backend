@@ -72,7 +72,7 @@ async fn run_cli() -> Result<()> {
 								params.broker_commission,
 								None,
 								params.boost_fee,
-								None,
+								Default::default(),
 							)
 							.await?;
 						println!("Deposit Address: {address}");

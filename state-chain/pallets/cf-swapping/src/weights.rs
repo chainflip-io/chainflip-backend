@@ -33,6 +33,7 @@ use core::marker::PhantomData;
 /// Weight functions needed for pallet_cf_swapping.
 pub trait WeightInfo {
 	fn request_swap_deposit_address() -> Weight;
+	fn request_swap_deposit_address_with_affiliates() -> Weight;
 	fn withdraw() -> Weight;
 	fn register_as_broker() -> Weight;
 	fn deregister_as_broker() -> Weight;
@@ -66,6 +67,37 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// Storage: `EthereumIngressEgress::DepositChannelLookup` (r:0 w:1)
 	/// Proof: `EthereumIngressEgress::DepositChannelLookup` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	fn request_swap_deposit_address() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `1668`
+		//  Estimated: `5133`
+		// Minimum execution time: 437_000_000 picoseconds.
+		Weight::from_parts(452_000_000, 5133)
+			.saturating_add(T::DbWeight::get().reads(10_u64))
+			.saturating_add(T::DbWeight::get().writes(4_u64))
+	}
+	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
+	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: Some(33), added: 2508, mode: `MaxEncodedLen`)
+	/// Storage: `EthereumIngressEgress::ChannelOpeningFee` (r:1 w:0)
+	/// Proof: `EthereumIngressEgress::ChannelOpeningFee` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Flip::Account` (r:1 w:1)
+	/// Proof: `Flip::Account` (`max_values`: None, `max_size`: Some(80), added: 2555, mode: `MaxEncodedLen`)
+	/// Storage: `EthereumIngressEgress::DepositChannelPool` (r:1 w:0)
+	/// Proof: `EthereumIngressEgress::DepositChannelPool` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumIngressEgress::ChannelIdCounter` (r:1 w:1)
+	/// Proof: `EthereumIngressEgress::ChannelIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Environment::EthereumVaultAddress` (r:1 w:0)
+	/// Proof: `Environment::EthereumVaultAddress` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumChainTracking::CurrentChainState` (r:1 w:0)
+	/// Proof: `EthereumChainTracking::CurrentChainState` (`max_values`: Some(1), `max_size`: Some(40), added: 535, mode: `MaxEncodedLen`)
+	/// Storage: `EthereumIngressEgress::DepositChannelLifetime` (r:1 w:0)
+	/// Proof: `EthereumIngressEgress::DepositChannelLifetime` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumIngressEgress::DepositChannelRecycleBlocks` (r:1 w:1)
+	/// Proof: `EthereumIngressEgress::DepositChannelRecycleBlocks` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumIngressEgress::DepositChannelLookup` (r:0 w:1)
+	/// Proof: `EthereumIngressEgress::DepositChannelLookup` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn request_swap_deposit_address_with_affiliates() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `1668`
 		//  Estimated: `5133`
@@ -192,6 +224,37 @@ impl WeightInfo for () {
 	/// Storage: `EthereumIngressEgress::DepositChannelLookup` (r:0 w:1)
 	/// Proof: `EthereumIngressEgress::DepositChannelLookup` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	fn request_swap_deposit_address() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `1668`
+		//  Estimated: `5133`
+		// Minimum execution time: 437_000_000 picoseconds.
+		Weight::from_parts(452_000_000, 5133)
+			.saturating_add(RocksDbWeight::get().reads(10_u64))
+			.saturating_add(RocksDbWeight::get().writes(4_u64))
+	}
+	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
+	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: Some(33), added: 2508, mode: `MaxEncodedLen`)
+	/// Storage: `EthereumIngressEgress::ChannelOpeningFee` (r:1 w:0)
+	/// Proof: `EthereumIngressEgress::ChannelOpeningFee` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Flip::Account` (r:1 w:1)
+	/// Proof: `Flip::Account` (`max_values`: None, `max_size`: Some(80), added: 2555, mode: `MaxEncodedLen`)
+	/// Storage: `EthereumIngressEgress::DepositChannelPool` (r:1 w:0)
+	/// Proof: `EthereumIngressEgress::DepositChannelPool` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumIngressEgress::ChannelIdCounter` (r:1 w:1)
+	/// Proof: `EthereumIngressEgress::ChannelIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Environment::EthereumVaultAddress` (r:1 w:0)
+	/// Proof: `Environment::EthereumVaultAddress` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumChainTracking::CurrentChainState` (r:1 w:0)
+	/// Proof: `EthereumChainTracking::CurrentChainState` (`max_values`: Some(1), `max_size`: Some(40), added: 535, mode: `MaxEncodedLen`)
+	/// Storage: `EthereumIngressEgress::DepositChannelLifetime` (r:1 w:0)
+	/// Proof: `EthereumIngressEgress::DepositChannelLifetime` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumIngressEgress::DepositChannelRecycleBlocks` (r:1 w:1)
+	/// Proof: `EthereumIngressEgress::DepositChannelRecycleBlocks` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumIngressEgress::DepositChannelLookup` (r:0 w:1)
+	/// Proof: `EthereumIngressEgress::DepositChannelLookup` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn request_swap_deposit_address_with_affiliates() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `1668`
 		//  Estimated: `5133`
