@@ -1,14 +1,13 @@
 pub use cf_primitives::chains::Solana;
-use cf_primitives::{AssetAmount, ChannelId};
+use cf_primitives::ChannelId;
 
-use sp_core::ConstBool;
+use sp_core::{ConstBool, RuntimeDebug};
 use sp_std::vec;
 
 use sol_prim::SlotNumber;
 
 use crate::{address, assets, FeeRefundCalculator, TypeInfo};
-use codec::{Decode, Encode, MaxEncodedLen};
-use serde::{Deserialize, Serialize};
+use codec::{Decode, Encode};
 
 use super::{Chain, ChainCrypto};
 
@@ -27,7 +26,12 @@ pub mod token_instructions;
 
 pub use sol_prim::{
 	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
-	Address as SolAddress, Digest as SolHash, Signature as SolSignature,
+	Address as SolAddress, Amount as SolAmount, ComputeLimit as SolComputeLimit, Digest as SolHash,
+	Signature as SolSignature,
+};
+pub use sol_tx_building_blocks::{
+	AccountMeta as SolAccountMeta, Hash as RawSolHash, Instruction as SolInstruction,
+	Message as SolMessage, Pubkey as SolPubkey, Transaction as SolTransaction,
 };
 
 pub use tracked_data::SolTrackedData;
@@ -38,14 +42,14 @@ impl Chain for Solana {
 
 	type ChainCrypto = SolanaCrypto;
 	type ChainBlockNumber = SlotNumber;
-	type ChainAmount = AssetAmount;
+	type ChainAmount = SolAmount;
 	type TransactionFee = Self::ChainAmount;
 	type TrackedData = tracked_data::SolTrackedData;
 	type ChainAsset = assets::sol::Asset;
 	type ChainAccount = SolAddress;
 	type EpochStartData = (); //todo
 	type DepositFetchId = ChannelId;
-	type DepositChannelState = (); //todo
+	type DepositChannelState = SolanaDepositChannelState; //todo
 	type DepositDetails = (); //todo
 	type Transaction = SolTransaction;
 	type TransactionMetadata = (); //todo
@@ -62,7 +66,7 @@ impl ChainCrypto for SolanaCrypto {
 	type KeyHandoverIsRequired = ConstBool<false>;
 
 	type AggKey = SolAddress;
-	type Payload = (); //todo
+	type Payload = SolMessage; //todo
 	type ThresholdSignature = SolSignature;
 	type TransactionInId = SolHash;
 	type TransactionOutId = Self::ThresholdSignature;
@@ -95,21 +99,6 @@ impl ChainCrypto for SolanaCrypto {
 		todo!()
 	}
 }
-
-#[derive(
-	Debug,
-	Clone,
-	Copy,
-	PartialEq,
-	Eq,
-	TypeInfo,
-	Encode,
-	Decode,
-	MaxEncodedLen,
-	Serialize,
-	Deserialize,
-)]
-pub struct SolTransaction {}
 
 impl FeeRefundCalculator<Solana> for SolTransaction {
 	fn return_fee_refund(
@@ -148,3 +137,11 @@ impl address::ToHumanreadableAddress for SolAddress {
 		self.to_string()
 	}
 }
+
+#[derive(Clone, Encode, Decode, TypeInfo, Eq, PartialEq, RuntimeDebug)]
+pub struct SolanaDepositChannelState {
+	pub seed: Vec<u8>,
+	pub bump: u8,
+}
+
+impl crate::deposit_channel::ChannelLifecycleHooks for SolanaDepositChannelState {}

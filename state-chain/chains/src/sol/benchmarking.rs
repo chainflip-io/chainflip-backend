@@ -1,6 +1,8 @@
 #![cfg(feature = "runtime-benchmarks")]
 
-use super::{api::SolanaApi, SolAddress, SolHash, SolSignature, SolTrackedData, SolTransaction};
+use super::{
+	api::SolanaApi, SolAddress, SolHash, SolMessage, SolSignature, SolTrackedData, SolTransaction,
+};
 
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 
@@ -22,9 +24,16 @@ impl BenchmarkValue for SolTrackedData {
 	}
 }
 
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for SolMessage {
+	fn benchmark_value() -> Self {
+		Self::new(&[], None)
+	}
+}
+
 impl BenchmarkValue for SolTransaction {
 	fn benchmark_value() -> Self {
-		SolTransaction {}
+		SolTransaction { message: SolMessage::benchmark_value(), signatures: Default::default() }
 	}
 }
 

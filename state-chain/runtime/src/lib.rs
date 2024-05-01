@@ -1433,7 +1433,7 @@ impl_runtime_apis! {
 				ForeignChainAndAsset::Polkadot(asset) => MinimumDeposit::<Runtime, PolkadotInstance>::get(asset),
 				ForeignChainAndAsset::Bitcoin(asset) => MinimumDeposit::<Runtime, BitcoinInstance>::get(asset).into(),
 				ForeignChainAndAsset::Arbitrum(asset) => MinimumDeposit::<Runtime, ArbitrumInstance>::get(asset),
-				ForeignChainAndAsset::Solana(asset) => MinimumDeposit::<Runtime, SolanaInstance>::get(asset),
+				ForeignChainAndAsset::Solana(asset) => MinimumDeposit::<Runtime, SolanaInstance>::get(asset).into(),
 			}
 		}
 
@@ -1468,7 +1468,7 @@ impl_runtime_apis! {
 					)
 				},
 				ForeignChainAndAsset::Solana(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, SolanaInstance>::
-				estimate_ingress_fee(asset)),
+				estimate_ingress_fee(asset).into()),
 			}
 		}
 
@@ -1491,7 +1491,7 @@ impl_runtime_apis! {
 					)
 				},
 				ForeignChainAndAsset::Solana(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, SolanaInstance>::
-				estimate_egress_fee(asset)),
+				estimate_egress_fee(asset).into()),
 			}
 		}
 
