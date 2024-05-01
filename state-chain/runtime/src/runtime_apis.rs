@@ -15,6 +15,7 @@ use core::ops::Range;
 use frame_support::sp_runtime::AccountId32;
 use frame_system::EventRecord;
 use pallet_cf_governance::GovCallHash;
+pub use pallet_cf_ingress_egress::OwedAmount;
 use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
@@ -81,10 +82,11 @@ where
 	NumberOrHex::from(*amount).serialize(s)
 }
 
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct BoostPoolDetails {
 	pub available_amounts: BTreeMap<AccountId32, AssetAmount>,
-	pub pending_boosts: BTreeMap<PrewitnessedDepositId, BTreeMap<AccountId32, AssetAmount>>,
+	pub pending_boosts:
+		BTreeMap<PrewitnessedDepositId, BTreeMap<AccountId32, OwedAmount<AssetAmount>>>,
 	pub pending_withdrawals: BTreeMap<AccountId32, BTreeSet<PrewitnessedDepositId>>,
 }
 

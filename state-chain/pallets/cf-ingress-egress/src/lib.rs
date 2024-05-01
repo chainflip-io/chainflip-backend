@@ -18,6 +18,7 @@ pub mod weights;
 mod boost_pool;
 
 use boost_pool::BoostPool;
+pub use boost_pool::OwedAmount;
 
 use frame_support::{pallet_prelude::OptionQuery, transactional};
 
