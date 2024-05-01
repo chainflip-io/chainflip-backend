@@ -149,7 +149,7 @@ async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset) {
   );
   const swapParams = await requestNewSwap(sourceAsset, destAsset, destAddress, tag);
 
-  const swapScheduledHandle = observeSwapScheduled(sourceAsset, destAsset, swapParams.channelId);
+  let swapScheduledHandle = observeSwapScheduled(sourceAsset, destAsset, swapParams.channelId);
 
   await send(sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset));
 
@@ -158,9 +158,10 @@ async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset) {
 
   // Do another deposit. Regardless of the fetch having been bradcasted or not, another swap
   // should be scheduled when we deposit again.
-  await send(sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset));
+  swapScheduledHandle = observeSwapScheduled(sourceAsset, destAsset, swapParams.channelId);
 
-  await observeSwapScheduled(sourceAsset, destAsset, swapParams.channelId);
+  await send(sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset));
+  await swapScheduledHandle;
 }
 
 export async function testEvmDeposits() {
