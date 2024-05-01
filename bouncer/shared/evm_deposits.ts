@@ -145,7 +145,7 @@ async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset) {
     destAsset,
     undefined,
     undefined,
-    ' EvmTestDoubleDeposit',
+    ' EvmDoubleDepositTest',
   );
   const swapParams = await requestNewSwap(sourceAsset, destAsset, destAddress, tag);
 
@@ -191,7 +191,19 @@ export async function testEvmDeposits() {
     testTxMultipleContractSwaps('ArbEth', 'Flip'),
   ]);
 
-  await Promise.all([depositTests, noDuplicatedWitnessingTest, multipleTxSwapsTest]);
+  const doubleDepositTests = Promise.all([
+    testDoubleDeposit('Eth', 'Dot'),
+    testDoubleDeposit('Usdc', 'Flip'),
+    testDoubleDeposit('ArbEth', 'Dot'),
+    testDoubleDeposit('ArbUsdc', 'Btc'),
+  ]);
+
+  await Promise.all([
+    depositTests,
+    noDuplicatedWitnessingTest,
+    multipleTxSwapsTest,
+    doubleDepositTests,
+  ]);
 
   console.log('=== EVM Deposit Test completed ===');
 }
