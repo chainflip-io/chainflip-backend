@@ -4,11 +4,8 @@ use crate::{mock::*, PendingVaultActivation, VaultActivationStatus, VaultStartBl
 use cf_chains::mocks::{MockAggKey, MockEthereum};
 use cf_test_utilities::last_event;
 use cf_traits::{
-	mocks::block_height_provider::BlockHeightProvider, AsyncResult, EpochInfo, SafeMode,
-	VaultActivator,
+	mocks::block_height_provider::BlockHeightProvider, AsyncResult, EpochInfo, VaultActivator,
 };
-use frame_support::assert_ok;
-use sp_core::Get;
 
 pub const NEW_AGG_PUBKEY: MockAggKey = MockAggKey(*b"newk");
 
@@ -21,22 +18,6 @@ macro_rules! assert_last_event {
 			event
 		);
 	};
-}
-
-#[test]
-fn test_vault_key_rotated_externally_triggers_code_red() {
-	new_test_ext().execute_with(|| {
-		const TX_HASH: [u8; 4] = [0xab; 4];
-		assert_eq!(<MockRuntimeSafeMode as Get<MockRuntimeSafeMode>>::get(), SafeMode::CODE_GREEN);
-		assert_ok!(VaultsPallet::vault_key_rotated_externally(
-			RuntimeOrigin::root(),
-			NEW_AGG_PUBKEY,
-			1,
-			TX_HASH,
-		));
-		assert_eq!(<MockRuntimeSafeMode as Get<MockRuntimeSafeMode>>::get(), SafeMode::CODE_RED);
-		assert_last_event!(crate::Event::VaultRotatedExternally(..));
-	});
 }
 
 #[test]

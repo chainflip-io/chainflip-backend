@@ -29,18 +29,20 @@ pub mod primitives {
 	};
 }
 pub use cf_chains::eth::Address as EthereumAddress;
-pub use chainflip_engine::state_chain_observer::client::{
-	base_rpc_api::{BaseRpcApi, RawRpcApi},
-	chain_api::ChainApi,
-	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized, WaitFor, WaitForResult},
-	storage_api::StorageApi,
-	BlockInfo,
+pub use chainflip_engine::{
+	settings,
+	state_chain_observer::client::{
+		base_rpc_api::{BaseRpcApi, RawRpcApi},
+		chain_api::ChainApi,
+		extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized, WaitFor, WaitForResult},
+		storage_api::StorageApi,
+		BlockInfo,
+	},
 };
 
 pub mod lp;
 pub mod queries;
 
-pub use chainflip_engine::settings;
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
 use chainflip_engine::state_chain_observer::client::{
@@ -120,7 +122,6 @@ impl StateChainApi {
 			&state_chain_settings.ws_endpoint,
 			&state_chain_settings.signing_key_file,
 			AccountRole::Unregistered,
-			false,
 			false,
 			false,
 			None,

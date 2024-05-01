@@ -4,13 +4,13 @@ use super::sol_tx_building_blocks::{
 	TOKEN_PROGRAM_ID,
 };
 use crate::vec;
-use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
+use borsh::{BorshDeserialize, BorshSerialize};
 use core::str::FromStr;
 
 // https://docs.rs/spl-associated-token-account/2.3.0/src/spl_associated_token_account/instruction.rs.html#1-161
 
 /// Instructions supported by the AssociatedTokenAccount program
-#[derive(Clone, Debug, PartialEq, BorshDeserialize, BorshSerialize, BorshSchema)]
+#[derive(Clone, Debug, PartialEq, BorshDeserialize, BorshSerialize)]
 pub enum AssociatedTokenAccountInstruction {
 	/// Creates an associated token account for the given wallet address and
 	/// token mint Returns an error if the account exists.

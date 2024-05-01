@@ -831,6 +831,7 @@ export function handleSubstrateError(api: any) {
       } else {
         error = dispatchError.toString();
       }
+      console.log('Dispatch error:' + error);
       console.log('Extrinsic failed: ' + error);
       process.exit(1);
     }

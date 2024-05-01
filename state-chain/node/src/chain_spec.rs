@@ -714,7 +714,10 @@ fn testnet_genesis(
 		arbitrum_chain_tracking: state_chain_runtime::ArbitrumChainTrackingConfig {
 			init_chain_state: ChainState::<Arbitrum> {
 				block_height: 0,
-				tracked_data: ArbitrumTrackedData { base_fee: 100000000u32.into() },
+				tracked_data: ArbitrumTrackedData {
+					base_fee: 100000000u32.into(),
+					gas_limit_multiplier: 1.into(),
+				},
 			},
 		},
 		solana_chain_tracking: state_chain_runtime::SolanaChainTrackingConfig {

@@ -801,9 +801,7 @@ mod tests {
 			let instruction = Instruction::new_with_borsh(program_id, &bank_instruction, vec![]);
 
 			let mut tx = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
-			//let blockhash = client.get_latest_blockhash()?;
 			tx.sign(&[payer], Default::default());
-			// println!("tx:{:?}", tx);
 			Ok(())
 		}
 
@@ -834,11 +832,7 @@ mod tests {
 		let expected_serialized_tx = hex_literal::hex!("01b0c5753a71484e74a73f01e8a373cd2170285afa09ecf83174de8701a469d150e195cc24ad915024614932248d1f036823d814545d6475df814dfaa7f85bd20301000205f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19231e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd4000000000000000000000000000000000000000000000000000000000000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000d11cb0294f1fde6725b37bc3f341f5083378cb8f543019218dba6f9d53e12a920203030104000404000000030200020c0200000000ca9a3b00000000").to_vec();
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
-		// println!("tx:{:?}", hex::encode(serialized_tx));
-
-		let transaction_length = serialized_tx.len();
-		println!("Transfer Native length: {} bytes", transaction_length);
-		assert!(transaction_length <= MAX_TRANSACTION_LENGTH)
+		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
 	}
 
 	#[test]
@@ -865,13 +859,9 @@ mod tests {
 
 		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
 		let expected_serialized_tx = hex_literal::hex!("017036ecc82313548a7f1ef280b9d7c53f9747e23abcb4e76d86c8df6aa87e82d460ad7cea2e8d972a833d3e1802341448a99be200ad4648c454b9d5a5e2d5020d01000306f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19231e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd400000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000012c57218f6315b83818802f3522fe7e04c596ae4fe08841e7940bc2f958aaaea04030301050004040000000400090340420f000000000004000502e0930400030200020c0200000040420f0000000000").to_vec();
-		// println!("tx:{:?}", hex::encode(serialized_tx.clone()));
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
-
-		let transaction_length = serialized_tx.len();
-		println!("Transfer Native length w/ budget:  {} bytes", transaction_length);
-		assert!(transaction_length <= MAX_TRANSACTION_LENGTH)
+		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
 	}
 
 	#[test]
@@ -903,17 +893,12 @@ mod tests {
 		let message = Message::new(&instructions, Some(&agg_key_pubkey));
 		let mut tx = Transaction::new_unsigned(message);
 		tx.sign(&[&agg_key_keypair], durable_nonce);
-		// println!("{:?}", tx);
 
 		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
 		let expected_serialized_tx = hex_literal::hex!("018876d689319695f4e695d1bc6dc71b36cb7e81093d7122aa6153de24aeafe251d589f63321272cb2f195f81acf5617b16994bcdbdc070cfd459a2f76d0c4650701000407f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d192b9cd0bfce0d0c993da26980648022f34b2e9a33794312b94eb3f8cad440e3e6b000000000000000000000000000000000000000000000000000000000000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000004a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e489000203030104000404000000060405000203118e24658f6c59298c040000000b0c0d37f9").to_vec();
-		// println!("tx:{:?}", hex::encode(serialized_tx.clone()));
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
-
-		let transaction_length = serialized_tx.len();
-		println!("Fetch native length:  {} bytes", transaction_length);
-		assert!(transaction_length <= MAX_TRANSACTION_LENGTH)
+		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
 	}
 
 	#[test]
@@ -962,15 +947,12 @@ mod tests {
 		let message = Message::new(&instructions, Some(&agg_key_pubkey));
 		let mut tx = Transaction::new_unsigned(message);
 		tx.sign(&[&agg_key_keypair], durable_nonce);
-		// println!("{:?}", tx);
 
 		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
 		let expected_serialized_tx = hex_literal::hex!("01ae1c08f2bb80bd9eea640dea37d0bb5bbeb057715a49165542b8c8c6456225ea08266a69e3d2ca3bad21a3d573ba60990eb4a632bdcb31fdd06f494d1768370e0100070bf79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921eff116c91f924b871717959253d68219f0750a644b4fc95d9a3e5cda6cd250db966a2b36557938f49cc5d00f8f12d86f16f48e03b63c8422967dba621ab60bf000000000000000000000000000000000000000000000000000000000000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee874a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc8751ca3279285b0e42cb03e396d7a90fa147d917443e9c437fe48e4ccd954f0bf91277d430e44664449bc744abfff1c3da747f82bee786eb50e219be4c279ca0204030105000404000000090808000a020307060419494710642cb0c6460300000013020bfe00e1f5050000000006").to_vec();
-		// println!("tx:{:?}", hex::encode(serialized_tx.clone()));
 
-		let transaction_length = serialized_tx.len();
-		println!("Fetch tokens length:  {} bytes", transaction_length);
 		assert_eq!(serialized_tx, expected_serialized_tx);
+		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
 	}
 
 	#[test]
@@ -1014,15 +996,12 @@ mod tests {
 		let message = Message::new(&instructions, Some(&agg_key_pubkey));
 		let mut tx = Transaction::new_unsigned(message);
 		tx.sign(&[&agg_key_keypair], durable_nonce);
-		// println!("{:?}", tx);
 
 		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
 		let expected_serialized_tx = hex_literal::hex!("019cae816a9a1d6dcaf6a327e208999e8dd68ab2202d11199abd9ebe2f5e8c68ba1340169eb21bd47b2bb1ece8e7c617e347d223dad08deccdcfd17602d4b48c050100090df79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19263b35f30ba8a5f9e80b8258b6e39ef4062e5f55c60a8217df3ec39457331cc80b966a2b36557938f49cc5d00f8f12d86f16f48e03b63c8422967dba621ab60bf000000000000000000000000000000000000000000000000000000000000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90c4a8e3702f6e26d9d0c900c1461da4e3debef5743ce253bb9f0308a68c944220fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee874a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c81a0052237ad76cb6e88fe505dc3d96bba6d8889f098b1eaa342ec84458805218c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f8590884c492fcd363de27fa07c2ae01f440765ce921938329887831c64d5f6dc81603040301050004040000000c0600020708040601010a0809000b03020806041136b4eeaf4a557ebc020000000000000006").to_vec();
-		// println!("tx:{:?}", hex::encode(serialized_tx.clone()));
 
-		let transaction_length = serialized_tx.len();
-		println!("Transfer tokens length:  {} bytes", transaction_length);
 		assert_eq!(serialized_tx, expected_serialized_tx);
+		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
 	}
 
 	// Full rotation: Use nonce, rotate agg key, transfer nonce authority and transfer upgrade
@@ -1065,15 +1044,13 @@ mod tests {
 		let message = Message::new(&instructions, Some(&agg_key_pubkey));
 		let mut tx = Transaction::new_unsigned(message);
 		tx.sign(&[&agg_key_keypair], durable_nonce);
-		// println("{:?}", tx);
 
 		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
 		let expected_serialized_tx = hex_literal::hex!("01fed383fc6dce627eb80c846b416966ff97965a9803512978883e68c9fc46340e31bbaa57c280b231f7de1c0763fb254ebd6ae85ce927f06338d3edebaf4288070100050af79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1924a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b6744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be543990044a5cfec75730f8780ded36a7c8ae1dcc60d84e1a830765fc6108e7b40402e4951000000000000000000000000000000000000000000000000000000000000000002a8f6914e88a1b0e210153ef763ae2b00c2b93d16c124d2c0537a10048000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293caadf0d6118bacf2a2a5c3d141e72c8733db3de162cc364a7f779b7bb4670e59f06050301080004040000000700090340420f000000000007000502e0930400090402000305094e518fabdda5d68b00060304000304040000000502010024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be543990044").to_vec();
-		// println!("tx:{:?}", hex::encode(serialized_tx.clone()));
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
 
-		for (i, nonce_account) in NONCE_ACCOUNTS.iter().enumerate().skip(1) {
+		for (_, nonce_account) in NONCE_ACCOUNTS.iter().enumerate().skip(1) {
 			instructions.push(SystemProgramInstruction::nonce_authorize(
 				&Pubkey::from_str(nonce_account).unwrap(),
 				&agg_key_pubkey,
@@ -1085,13 +1062,7 @@ mod tests {
 			let serialized_tx =
 				bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
 
-			let transaction_bytes = serialized_tx.len();
-			println!(
-				"Full rotation - number of nonce accounts: {} - Bytes: {}",
-				i + 1,
-				serialized_tx.len()
-			);
-			assert!(transaction_bytes < MAX_TRANSACTION_LENGTH, "Transaction too large")
+			assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
 		}
 	}
 
@@ -1136,18 +1107,12 @@ mod tests {
 		let message = Message::new(&instructions, Some(&agg_key_pubkey));
 		let mut tx = Transaction::new_unsigned(message);
 		tx.sign(&[&agg_key_keypair], durable_nonce);
-		// println("{:?}", tx);
 
 		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
 		let expected_serialized_tx = hex_literal::hex!("01217162fc43cb4bb7aeaec8d386feda3de3eb82cf86373f9d06fc5eea953684b7fec12c88b916bc902db521942d170b5e190f5e1d8578e7eb27d5b8d2beb3a00301000609f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb0c4a8e3702f6e26d9d0c900c1461da4e3debef5743ce253bb9f0308a68c9442217eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19200000000000000000000000000000000000000000000000000000000000000000575731869899efe0bd5d9161ad9f1db7c582c48c0b4ea7cff6a637c55c7310706a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f0800000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000004a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cd49f21c8621074e921e03bfa822094631b67b33facb1ad598841a5b91d2390080303030206000404000000030200010c0200000000ca9a3b000000000806070001040305267d050be38042e0b201000000060000000b0698160301040000007c1d0f0700ca9a3b00000000").to_vec();
 
-		// println("tx:{:?}", hex::encode(serialized_tx.clone()));
-
 		assert_eq!(serialized_tx, expected_serialized_tx);
-
-		let transaction_length = serialized_tx.len();
-		println!("Ccm native length:  {} bytes", transaction_length);
-		assert!(transaction_length <= MAX_TRANSACTION_LENGTH)
+		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
 	}
 
 	#[test]
@@ -1222,18 +1187,12 @@ mod tests {
 		let message = Message::new(&instructions, Some(&agg_key_pubkey));
 		let mut tx = Transaction::new_unsigned(message);
 		tx.sign(&[&agg_key_keypair], durable_nonce);
-		// println!("{:?}", tx);
 
 		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
 		let expected_serialized_tx = hex_literal::hex!("01044b82cf77f58d01af97090e5b392317f2b3f3037b16f264a0114791d7cc6b4d234f1fc518ad5d28c1cd1cac0fc5b4969f7e77e07ba0577f9b44fade4f28ec090100090ef79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921a98962b4689f93f09c8bbcf32aec09ab57e8ea65a02cc814e335cbf3e853ab663b35f30ba8a5f9e80b8258b6e39ef4062e5f55c60a8217df3ec39457331cc80b966a2b36557938f49cc5d00f8f12d86f16f48e03b63c8422967dba621ab60bf000000000000000000000000000000000000000000000000000000000000000006a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f0800000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee874a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c7417da8b99d7748127a76b03d61fee69c80dfef73ad2d5503737beedc5a9ed4881a0052237ad76cb6e88fe505dc3d96bba6d8889f098b1eaa342ec844588052195b87bc2cbdf23ee31be8254d8d7fcd7c31aaa6930621a20d5841df15672a1d903050301070004040000000b080a000d04030908051136b4eeaf4a557ebc8096980000000000060b080a00030c08090602266cb8a27b9fdeaa2301000000060000000b0698160301040000007c1d0f078096980000000000").to_vec();
 
-		// println!("tx:{:?}", hex::encode(serialized_tx.clone()));
-
 		assert_eq!(serialized_tx, expected_serialized_tx);
-
-		let transaction_length = serialized_tx.len();
-		println!("Ccm token length:  {} bytes", transaction_length);
-		assert!(transaction_length <= MAX_TRANSACTION_LENGTH)
+		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
 	}
 
 	#[test]
@@ -1284,14 +1243,12 @@ mod tests {
 		let message = Message::new(&instructions, Some(&agg_key_pubkey));
 		let mut tx = Transaction::new_unsigned(message);
 		tx.sign(&[&agg_key_keypair], durable_nonce);
-		// println("{:?}", tx);
 
 		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
 		let expected_serialized_tx = hex_literal::hex!("01ab10abaa3ebb93f14f783053d9b9e23c95fc1c76b6b72ebb285c8f1d61acebc0b7ad323c9d370c00b8867f6b1f4aa92a974a879ecc9f3e63ae63fb9062bf0d0f0100080df79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19220b855ca2d3763c4f0f055c8ec3523199c684abe93655a9cde1bc843da5ef2da298f27f13ce155954657f0238e63932beb510964abd44e20e9603e6b6f2b424a72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c000000000000000000000000000000000000000000000000000000000000000002a8f6914e88a1b0e210153ef763ae2b00c2b93d16c124d2c0537a100480000006a7d51718c774c928566398691d5eb68b5eb8a39b4b6d5c73555b210000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006a7d517192c5c51218cc94c3d4af17f58daee089ba1fd44e3dbd98a000000001068c72f83398081684c491910b66f8d8cca0edc00cbcf11c89f86c5c39d80f7154e2cfe8c12c99db54b553ffeae05145bcafaab8b11ea3d1a8c45f98764bfd44a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b51e7e35a9b795b74ca6d292d9949701179cf2a5a20621893d50b6e4dadfcca0a02050301080004040000000a0a0c000304020009070b061348d34cbd54b03e65060000007369676e6572ff").to_vec();
 
-		// println("tx:{:?}", hex::encode(serialized_tx.clone()));
-
 		assert_eq!(serialized_tx, expected_serialized_tx);
+		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
 	}
 
 	#[test]
@@ -1322,14 +1279,12 @@ mod tests {
 		let message = Message::new(&instructions, Some(&agg_key_pubkey));
 		let mut tx = Transaction::new_unsigned(message);
 		tx.sign(&[&agg_key_keypair], durable_nonce);
-		// println("{:?}", tx);
 
 		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
 		let expected_serialized_tx = hex_literal::hex!("01eb287ff9329fbaf83592ec56709d52d3d7f7edcab7ab53fc8371acff871016c51dfadde692630545a91d6534095bb5697b5fb9ee17dc292552eabf9ab6e3390601000609f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d192ca03f3e6d6fd79aaf8ebd4ce053492a34f22d0edafbfa88a380848d9a4735150000000000000000000000000000000000000000000000000000000000000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90c4a8e3702f6e26d9d0c900c1461da4e3debef5743ce253bb9f0308a68c944220f1b83220b1108ea0e171b5391e6c0157370c8353516b74e962f855be6d787038c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f85921b22d7dfc8cdeba6027384563948d038a11eba06289de51a15c3d649d1f7e2c020303010400040400000008060002060703050101").to_vec();
 
-		// println("tx:{:?}", hex::encode(serialized_tx.clone()));
-
 		assert_eq!(serialized_tx, expected_serialized_tx);
+		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
 	}
 
 	// TODO: Pull and compare discriminators and function from the contracts-interfaces

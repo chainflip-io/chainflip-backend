@@ -49,7 +49,7 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 				Ok(None) => {
 					// This can happen if, for example, on a utxo chain there are no funds that
 					// need to be swept.
-					Self::activate_new_key_for_chain(T::ChainTracking::get_block_height());
+					Self::activate_key();
 					vec![StartKeyActivationResult::ActivationTxNotRequired]
 				},
 				Err(SetAggKeyWithAggKeyError::Failed) => {
