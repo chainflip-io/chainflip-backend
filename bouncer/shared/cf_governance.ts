@@ -17,10 +17,10 @@ export async function submitGovernanceExtrinsic(
   extrinsic: SubmittableExtrinsic<'promise'>,
   preAuthorise = 0,
 ) {
-  await using chainflip = await getChainflipApi();
-  return snowWhiteMutex.runExclusive(async () =>
-    chainflip.tx.governance
+  return snowWhiteMutex.runExclusive(async () => {
+    await using chainflip = await getChainflipApi();
+    await chainflip.tx.governance
       .proposeGovernanceExtrinsic(extrinsic, preAuthorise)
-      .signAndSend(snowWhite, { nonce: -1 }, handleSubstrateError(chainflip)),
-  );
+      .signAndSend(snowWhite, { nonce: -1 }, handleSubstrateError(chainflip));
+  });
 }
