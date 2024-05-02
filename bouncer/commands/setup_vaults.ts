@@ -32,8 +32,8 @@ async function main(): Promise<void> {
   const alice = await aliceKeyringPair();
   const solClient = getSolConnection();
 
-  const chainflip = await getChainflipApi();
-  const polkadot = await getPolkadotApi();
+  await using chainflip = await getChainflipApi();
+  await using polkadot = await getPolkadotApi();
 
   console.log('=== Performing initial Vault setup ===');
 

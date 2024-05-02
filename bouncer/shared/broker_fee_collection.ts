@@ -31,8 +31,6 @@ const swapAssetAmount = {
 };
 const commissionBps = 1000; // 10%
 
-const chainflip = await getChainflipApi();
-
 const keyring = new Keyring({ type: 'sr25519' });
 const broker = keyring.createFromUri('//BROKER_FEE_TEST');
 
@@ -40,6 +38,7 @@ export async function submitBrokerWithdrawal(
   asset: Asset,
   addressObject: { [chain: string]: string },
 ) {
+  await using chainflip = await getChainflipApi();
   // Only allow one withdrawal at a time to stop nonce issues
   return brokerMutex.runExclusive(async () =>
     chainflip.tx.swapping
@@ -51,6 +50,7 @@ export async function submitBrokerWithdrawal(
 /// Runs a swap, checks that the broker fees are collected,
 /// then withdraws the broker fees, making sure the balance is correct after the withdrawal.
 async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
+  await using chainflip = await getChainflipApi();
   // Check the broker fees before the swap
   const earnedBrokerFeesBefore = BigInt(
     (await chainflip.query.swapping.earnedBrokerFees(broker.address, asset)).toString(),
@@ -226,6 +226,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
 export async function testBrokerFeeCollection(): Promise<void> {
   console.log('\x1b[36m%s\x1b[0m', '=== Running broker fee collection test ===');
   await cryptoWaitReady();
+  await using chainflip = await getChainflipApi();
 
   // Check account role
   const role = JSON.stringify(
