@@ -2039,9 +2039,9 @@ mod test {
 
 	#[test]
 	fn test_swap_output_serialization() {
-		let swap_output = RpcSwapOutput {
-			output: NumberOrHex::Hex(1_000_000_000_000_000_000u128.into()),
-			intermediary: Some(NumberOrHex::Hex(1_000_000u128.into())),
+		let swap_output = RpcSwapOutputV2 {
+			output: 1_000_000_000_000_000_000u128.into(),
+			intermediate: Some(1_000_000u128.into()),
 			included_fees: vec![SwapFeeKind::Network.into_fee(1_000u128, Asset::Usdc)],
 		};
 

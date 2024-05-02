@@ -2,4 +2,4 @@
 source: state-chain/custom-rpc/src/lib.rs
 expression: "serde_json::to_value(swap_output).unwrap()"
 ---
-{"included_fees":[{"amount":"0x3e8","asset":"USDC","chain":"Ethereum","type":"Network"}],"intermediary":"0xf4240","output":"0xde0b6b3a7640000"}
+{"included_fees":[{"amount":"0x3e8","asset":"USDC","chain":"Ethereum","type":"Network"}],"intermediate":"0xf4240","output":"0xde0b6b3a7640000"}
