@@ -929,12 +929,12 @@ pub mod pallet {
 			swaps: &mut [Swap],
 			direction: SwapLeg,
 		) -> Result<(), BatchExecutionError> {
-			let swap_groups = swaps
-				.iter_mut()
-				.filter_map(|swap| swap.swap_asset(direction).map(|asset| (asset, swap)))
-				.fold(BTreeMap::new(), |mut map: BTreeMap<_, Vec<_>>, (asset, swap)| {
-					map.entry(asset).or_default().push(swap);
-					map
+			let swap_groups =
+				swaps.iter_mut().fold(BTreeMap::new(), |mut groups: BTreeMap<_, Vec<_>>, swap| {
+					if let Some(asset) = swap.swap_asset(direction) {
+						groups.entry(asset).or_default().push(swap);
+					}
+					groups
 				});
 
 			for (asset, swaps) in swap_groups {
