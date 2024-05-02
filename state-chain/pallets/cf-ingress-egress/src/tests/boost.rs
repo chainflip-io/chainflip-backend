@@ -993,6 +993,9 @@ fn test_create_boost_pools() {
 			pallet_cf_ingress_egress::Error::<Test, ()>::BoostPoolAlreadyExists
 		);
 
+		// Make sure it did not remove the existing boost pool
+		assert!(BoostPools::<Test, ()>::get(eth::Asset::Eth, TIER_5_BPS).is_some());
+
 		// Should not be able to create a pool with a tier of 0
 		assert_noop!(
 			Pallet::<Test, _>::create_boost_pools(

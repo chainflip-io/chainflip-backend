@@ -479,20 +479,18 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn create_boost_pools(n: Linear<1, 255>) {
+	fn create_boost_pools() {
 		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
 
-		let new_pools: Vec<_> = (1..=n)
-			.map(|i| BoostPoolId {
-				asset: BenchmarkValue::benchmark_value(),
-				tier: BoostPoolTier::from(i as u16),
-			})
-			.collect();
+		let new_pools =
+			vec![BoostPoolId { asset: BenchmarkValue::benchmark_value(), tier: TIER_5_BPS }];
+
+		assert_eq!(BoostPools::<T, I>::iter().count(), 0);
 		#[block]
 		{
 			assert_ok!(Pallet::<T, I>::create_boost_pools(origin, new_pools.clone()));
 		}
-		assert_eq!(BoostPools::<T, I>::iter().count(), n as usize);
+		assert_eq!(BoostPools::<T, I>::iter().count(), 1);
 	}
 
 	#[cfg(test)]
@@ -534,7 +532,7 @@ mod benchmarks {
 			_boost_finalised::<Test, ()>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_create_boost_pools::<Test, ()>(100, true);
+			_create_boost_pools::<Test, ()>(true);
 		});
 	}
 }

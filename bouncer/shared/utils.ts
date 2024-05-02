@@ -327,7 +327,7 @@ export const getPolkadotApi = getCachedSubstrateApi(
 
 export const polkadotSigningMutex = new Mutex();
 
-export async function chainIngressEgress(chain: Chain) {
+export async function ingressEgressPalletForChain(chain: Chain) {
   const chainflip = await getChainflipApi();
   switch (chain) {
     case 'Ethereum':

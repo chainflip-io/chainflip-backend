@@ -6,7 +6,7 @@
 
 import { InternalAsset as Asset, Chain } from '@chainflip/cli/.';
 import {
-  chainIngressEgress,
+  ingressEgressPalletForChain,
   getAssetsForChain,
   getChainflipApi,
   observeEvent,
@@ -25,7 +25,7 @@ const chains = ['Ethereum', 'Polkadot', 'Bitcoin', 'Arbitrum'];
 async function main(): Promise<void> {
   console.log('=== Creating Boost Pools ===');
   const chainflip = await getChainflipApi();
-  const boostPoolEvents = [];
+  const observeBoostPoolEvents = [];
 
   for (const c of chains) {
     const chain = c as Chain;
@@ -48,21 +48,21 @@ async function main(): Promise<void> {
         );
         const observeBoostPoolAlreadyExists = observeEvent(`governance:FailedExecution`, chainflip);
 
-        boostPoolEvents.push(
+        observeBoostPoolEvents.push(
           Promise.race([observeBoostPoolCreated, observeBoostPoolAlreadyExists]),
         );
       }
     }
 
-    const ingressEgress = await chainIngressEgress(chain);
-    await submitGovernanceExtrinsic(ingressEgress.createBoostPools(newPools));
+    const ingressEgressPallet = await ingressEgressPalletForChain(chain);
+    submitGovernanceExtrinsic(ingressEgressPallet.createBoostPools(newPools));
   }
 
-  const boostPoolEvent = await Promise.all(boostPoolEvents);
-  for (const event of boostPoolEvent) {
+  const boostPoolEvents = await Promise.all(observeBoostPoolEvents);
+  for (const event of boostPoolEvents) {
     if (event.name.method !== 'BoostPoolCreated') {
       // TODO: decode error here
-      throw new Error(`Failed to create boost pool: ${JSON.stringify(boostPoolEvent)}`);
+      throw new Error(`Failed to create boost pool: ${JSON.stringify(event)}`);
     }
     console.log(
       `Boost pools created for ${event.data.boostPool.asset} at ${event.data.boostPool.tier} bps`,

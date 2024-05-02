@@ -1107,7 +1107,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(9)]
-		#[pallet::weight(T::WeightInfo::create_boost_pools(new_pools.len() as u32))]
+		#[pallet::weight(T::WeightInfo::create_boost_pools() * new_pools.len() as u64)]
 		pub fn create_boost_pools(
 			origin: OriginFor<T>,
 			new_pools: Vec<BoostPoolId<T::TargetChain>>,
