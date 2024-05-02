@@ -133,6 +133,8 @@ impl FeeEstimationApi<Bitcoin> for BitcoinTrackedData {
 	) -> <Bitcoin as Chain>::ChainAmount {
 		self.btc_fee_info
 			.min_fee_required_per_tx()
+			.saturating_add(self.btc_fee_info.fee_per_vault_utxo())
+			.saturating_add(self.btc_fee_info.fee_per_output_utxo())
 			.saturating_add(self.btc_fee_info.fee_per_output_utxo())
 	}
 }
@@ -175,12 +177,9 @@ impl BitcoinFeeInfo {
 
 	pub fn fee_for_utxo(&self, utxo: &Utxo) -> BtcAmount {
 		if utxo.deposit_address.script_path.is_none() {
-			// Our vault utxos (salt = 0) use VAULT_UTXO_SIZE_IN_BYTES vbytes in a Btc transaction
-			self.sats_per_kilobyte.saturating_mul(VAULT_UTXO_SIZE_IN_BYTES) / BYTES_PER_BTC_KILOBYTE
+			self.fee_per_vault_utxo()
 		} else {
-			// Our input utxos are approximately INPUT_UTXO_SIZE_IN_BYTES vbytes each in the Btc
-			// transaction
-			self.sats_per_kilobyte.saturating_mul(INPUT_UTXO_SIZE_IN_BYTES) / BYTES_PER_BTC_KILOBYTE
+			self.fee_per_input_utxo()
 		}
 	}
 
@@ -188,6 +187,11 @@ impl BitcoinFeeInfo {
 		// Our input utxos are approximately INPUT_UTXO_SIZE_IN_BYTES vbytes each in the Btc
 		// transaction
 		self.sats_per_kilobyte.saturating_mul(INPUT_UTXO_SIZE_IN_BYTES) / BYTES_PER_BTC_KILOBYTE
+	}
+
+	pub fn fee_per_vault_utxo(&self) -> BtcAmount {
+		// Our vault utxos (salt = 0) use VAULT_UTXO_SIZE_IN_BYTES vbytes in a Btc transaction
+		self.sats_per_kilobyte.saturating_mul(VAULT_UTXO_SIZE_IN_BYTES) / BYTES_PER_BTC_KILOBYTE
 	}
 
 	pub fn fee_per_output_utxo(&self) -> BtcAmount {
