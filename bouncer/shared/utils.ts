@@ -261,8 +261,8 @@ export function stateChainAssetFromAsset(asset: Asset): string {
 export const runWithTimeout = async <T>(promise: Promise<T>, millis: number): Promise<T> =>
   Promise.race([
     promise,
-    sleep(millis, null, { ref: false }).then(() => {
-      throw new Error(`Timed out after ${millis} ms.`);
+    sleep(millis, new Error(`Timed out after ${millis} ms.`), { ref: false }).then((error) => {
+      throw error;
     }),
   ]);
 
@@ -511,7 +511,8 @@ export async function observeSwapScheduled(
 ) {
   await using chainflipApi = await getChainflipApi();
 
-  return observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
+  // need to await this to prevent the chainflip api from being disposed prematurely
+  const result = await observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
     if ('DepositChannel' in event.data.origin) {
       const channelMatches = Number(event.data.origin.DepositChannel.channelId) === channelId;
       const sourceAssetMatches = sourceAsset === (event.data.sourceAsset as Asset);
@@ -522,6 +523,8 @@ export async function observeSwapScheduled(
     // Otherwise it was a swap scheduled by interacting with the Eth smart contract
     return false;
   });
+
+  return result;
 }
 
 // Make sure the stopObserveEvent returns true before the end of the test
