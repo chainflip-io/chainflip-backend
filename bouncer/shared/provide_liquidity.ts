@@ -24,7 +24,7 @@ export async function provideLiquidity(
   waitForFinalization = false,
   lpKey?: string,
 ) {
-  const chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipApi();
   await cryptoWaitReady();
   const chain = shortChainFromAsset(ccy);
 

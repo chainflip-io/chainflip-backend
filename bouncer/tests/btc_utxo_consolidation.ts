@@ -5,9 +5,8 @@ import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { provideLiquidity } from '../shared/provide_liquidity';
 import { getChainflipApi, observeEvent, runWithTimeout } from '../shared/utils';
 
-const chainflip = await getChainflipApi();
-
 async function queryUtxos(): Promise<{ amount: number; count: number }> {
+  await using chainflip = await getChainflipApi();
   const utxos: [{ amount: number }] = (
     await chainflip.query.environment.bitcoinAvailableUtxos()
   ).toJSON();
@@ -20,6 +19,7 @@ async function queryUtxos(): Promise<{ amount: number; count: number }> {
 
 async function test() {
   console.log('=== Testing BTC UTXO Consolidation ===');
+  await using chainflip = await getChainflipApi();
   const initialUtxos = await queryUtxos();
 
   console.log(`Initial utxo count: ${initialUtxos.count}`);
