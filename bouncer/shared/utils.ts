@@ -258,17 +258,13 @@ export function stateChainAssetFromAsset(asset: Asset): string {
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
-export const runWithTimeout = async <T>(promise: Promise<T>, millis: number): Promise<T> => {
-  const controller = new AbortController();
-  const result = await Promise.race([
+export const runWithTimeout = async <T>(promise: Promise<T>, millis: number): Promise<T> =>
+  Promise.race([
     promise,
-    sleep(millis, { signal: AbortController }).then(() => {
+    sleep(millis, null, { ref: false }).then(() => {
       throw new Error(`Timed out after ${millis} ms.`);
     }),
   ]);
-  controller.abort();
-  return result;
-};
 
 export const sha256 = (data: string): Buffer => crypto.createHash('sha256').update(data).digest();
 
