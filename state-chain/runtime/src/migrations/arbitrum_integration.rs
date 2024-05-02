@@ -78,11 +78,10 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 							broadcast_bitcoin: old.broadcast_bitcoin,
 							broadcast_polkadot: old.broadcast_polkadot,
 							broadcast_arbitrum: <pallet_cf_broadcast::PalletSafeMode<ArbitrumInstance> as SafeMode>::CODE_GREEN,
-							// Set safe mode on for ingress-egress to disable boost features.
-							ingress_egress_ethereum: <pallet_cf_ingress_egress::PalletSafeMode<EthereumInstance> as SafeMode>::CODE_RED,
-							ingress_egress_bitcoin: <pallet_cf_ingress_egress::PalletSafeMode<BitcoinInstance> as SafeMode>::CODE_RED,
-							ingress_egress_polkadot: <pallet_cf_ingress_egress::PalletSafeMode<PolkadotInstance> as SafeMode>::CODE_RED,
-							ingress_egress_arbitrum: <pallet_cf_ingress_egress::PalletSafeMode<ArbitrumInstance> as SafeMode>::CODE_RED,
+							ingress_egress_ethereum: <pallet_cf_ingress_egress::PalletSafeMode<EthereumInstance> as SafeMode>::CODE_GREEN,
+							ingress_egress_bitcoin: <pallet_cf_ingress_egress::PalletSafeMode<BitcoinInstance> as SafeMode>::CODE_GREEN,
+							ingress_egress_polkadot: <pallet_cf_ingress_egress::PalletSafeMode<PolkadotInstance> as SafeMode>::CODE_GREEN,
+							ingress_egress_arbitrum: <pallet_cf_ingress_egress::PalletSafeMode<ArbitrumInstance> as SafeMode>::CODE_GREEN,
 							witnesser: old.witnesser,
 						}
 				})
