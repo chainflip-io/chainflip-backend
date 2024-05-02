@@ -206,7 +206,16 @@ async function randomPolkadotSwap(): Promise<void> {
     destAsset = Assets.Dot;
   }
 
-  await testSwap(sourceAsset, destAsset, undefined, undefined, undefined, undefined, false);
+  await testSwap(
+    sourceAsset,
+    destAsset,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    false,
+  );
   swapsComplete++;
   console.log(`Swap complete: (${swapsComplete}/${swapsStarted})`);
 }
