@@ -104,6 +104,8 @@ async function incompatibleUpgradeNoBuild(
   await sleep(12000);
 
   console.log('Killing the old node.');
+  const oldNode = execSync("ps aux | grep chainflip-node | grep -v grep | awk '{print $2}").toString();
+  console.log('About to kill old chainflip-node with PID: ' + oldNode);
   execSync(`kill $(ps aux | grep chainflip-node | grep -v grep | awk '{print $2}')`);
 
   console.log('Killed old node');
