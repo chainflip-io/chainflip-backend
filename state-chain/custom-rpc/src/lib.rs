@@ -1513,7 +1513,7 @@ where
 	}
 
 	fn cf_boost_pool_details(&self, asset: Option<Asset>) -> RpcResult<BoostPoolDetailsResponse> {
-		let get_boost_details_for_asset = |asset| {
+		execute_for_all_or_one_asset(asset, |asset| {
 			self.client
 				.runtime_api()
 				.cf_boost_pool_details(self.client.info().best_hash, asset)
@@ -1524,16 +1524,7 @@ where
 						.collect()
 				})
 				.map_err(to_rpc_error)
-		};
-
-		if let Some(asset) = asset {
-			get_boost_details_for_asset(asset)
-		} else {
-			let results_for_each_asset: RpcResult<Vec<_>> =
-				Asset::all().map(get_boost_details_for_asset).collect();
-
-			results_for_each_asset.map(|inner| inner.into_iter().flatten().collect())
-		}
+		})
 	}
 
 	fn cf_boost_pool_pending_fees(
@@ -1541,7 +1532,7 @@ where
 		asset: Option<Asset>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<BoostPoolFeesResponse> {
-		let get_boost_fees_for_asset = |asset| {
+		execute_for_all_or_one_asset(asset, |asset| {
 			self.client
 				.runtime_api()
 				.cf_boost_pool_details(self.unwrap_or_best(at), asset)
@@ -1552,16 +1543,7 @@ where
 						.collect()
 				})
 				.map_err(to_rpc_error)
-		};
-
-		if let Some(asset) = asset {
-			get_boost_fees_for_asset(asset)
-		} else {
-			let results_for_each_asset: RpcResult<Vec<_>> =
-				Asset::all().map(get_boost_fees_for_asset).collect();
-
-			results_for_each_asset.map(|inner| inner.into_iter().flatten().collect())
-		}
+		})
 	}
 }
 
@@ -1646,6 +1628,24 @@ where
 		);
 
 		Ok(())
+	}
+}
+
+/// Execute f (which returns a Vec of results) for `asset`. If `asset` is `None`
+/// the closure is executed for every supported asset and the results are concatenated.
+fn execute_for_all_or_one_asset<Response, F>(
+	asset: Option<Asset>,
+	mut f: F,
+) -> RpcResult<Vec<Response>>
+where
+	F: FnMut(Asset) -> RpcResult<Vec<Response>>,
+{
+	if let Some(asset) = asset {
+		f(asset)
+	} else {
+		let results_for_each_asset: RpcResult<Vec<_>> = Asset::all().map(f).collect();
+
+		results_for_each_asset.map(|inner| inner.into_iter().flatten().collect())
 	}
 }
 
