@@ -682,10 +682,17 @@ pub trait CustomApi {
 	) -> RpcResult<Vec<sp_core::Bytes>>;
 
 	#[method(name = "boost_pools_depth")]
-	fn cf_boost_pools_depth(&self) -> RpcResult<BoostPoolDepthResponse>;
+	fn cf_boost_pools_depth(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<BoostPoolDepthResponse>;
 
 	#[method(name = "boost_pool_details")]
-	fn cf_boost_pool_details(&self, asset: Option<Asset>) -> RpcResult<BoostPoolDetailsResponse>;
+	fn cf_boost_pool_details(
+		&self,
+		asset: Option<Asset>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<BoostPoolDetailsResponse>;
 
 	#[method(name = "boost_pool_pending_fees")]
 	fn cf_boost_pool_pending_fees(
@@ -1100,10 +1107,13 @@ where
 			.and_then(|result| result.map_err(map_dispatch_error))
 	}
 
-	fn cf_boost_pools_depth(&self) -> RpcResult<Vec<BoostPoolDepth>> {
+	fn cf_boost_pools_depth(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<BoostPoolDepth>> {
 		self.client
 			.runtime_api()
-			.cf_boost_pools_depth(self.client.info().best_hash)
+			.cf_boost_pools_depth(self.unwrap_or_best(at))
 			.map_err(to_rpc_error)
 	}
 
@@ -1512,11 +1522,15 @@ where
 			.collect::<Vec<_>>())
 	}
 
-	fn cf_boost_pool_details(&self, asset: Option<Asset>) -> RpcResult<BoostPoolDetailsResponse> {
+	fn cf_boost_pool_details(
+		&self,
+		asset: Option<Asset>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<BoostPoolDetailsResponse> {
 		execute_for_all_or_one_asset(asset, |asset| {
 			self.client
 				.runtime_api()
-				.cf_boost_pool_details(self.client.info().best_hash, asset)
+				.cf_boost_pool_details(self.unwrap_or_best(at), asset)
 				.map(|details_for_each_pool| {
 					details_for_each_pool
 						.into_iter()
