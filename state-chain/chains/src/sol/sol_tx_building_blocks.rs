@@ -998,7 +998,7 @@ mod tests {
 
 	#[test]
 	fn create_fetch_native() {
-		let recent_hash = Hash::from_str("E6E2bNxGcgFyqeVRT3FSjw7YFbbMAZVQC21ZLVwrztRm").unwrap();
+		let durable_nonce = Hash::from_str("E6E2bNxGcgFyqeVRT3FSjw7YFbbMAZVQC21ZLVwrztRm").unwrap();
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let deposit_channel =
@@ -1028,7 +1028,7 @@ mod tests {
 		];
 		let message = Message::new(&instructions, Some(&agg_key_pubkey));
 		let mut tx = Transaction::new_unsigned(message);
-		tx.sign(&[&agg_key_keypair], recent_hash);
+		tx.sign(&[&agg_key_keypair], durable_nonce);
 		// println!("{:?}", tx);
 
 		let serialized_tx =
@@ -1045,7 +1045,7 @@ mod tests {
 
 	#[test]
 	fn create_fetch_native_in_batch() {
-		let recent_hash = Hash::from_str("E6E2bNxGcgFyqeVRT3FSjw7YFbbMAZVQC21ZLVwrztRm").unwrap();
+		let durable_nonce = Hash::from_str("E6E2bNxGcgFyqeVRT3FSjw7YFbbMAZVQC21ZLVwrztRm").unwrap();
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let compute_unit_price = 1_000_000;
@@ -1095,7 +1095,7 @@ mod tests {
 		];
 		let message = Message::new(&instructions, Some(&agg_key_pubkey));
 		let mut tx = Transaction::new_unsigned(message);
-		tx.sign(&[&agg_key_keypair], recent_hash);
+		tx.sign(&[&agg_key_keypair], durable_nonce);
 		// println!("{:?}", tx);
 
 		let serialized_tx =

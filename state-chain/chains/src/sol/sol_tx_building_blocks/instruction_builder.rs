@@ -19,7 +19,7 @@ use crate::{
 		compute_budget::ComputeBudgetInstruction,
 		consts::SYSTEM_PROGRAM_ID,
 		program_instructions::{ProgramInstruction, SystemProgramInstruction, VaultProgram},
-		SolAccountMeta, SolInstruction, SolPubkey,
+		SolAccountMeta, SolAsset, SolComputeLimit, SolInstruction, SolPubkey,
 	},
 	DepositChannel,
 };
@@ -31,8 +31,6 @@ pub enum SolanaInstructionBuilderError {
 	CannotLookupAggKey,
 	// Cannot obtain an available Nonce Account
 	NoAvailableNonceAccount,
-	// Failed to lookup Compute Limit
-	CannotLookupComputeLimit,
 	// Failed to lookup Compute Price
 	CannotLookupComputePrice,
 	// Failed to lookup Vault Program Data Account
@@ -41,20 +39,31 @@ pub enum SolanaInstructionBuilderError {
 
 pub struct SolanaInstructionBuilder<Environment: 'static> {
 	instructions: Vec<SolInstruction>,
+	compute_limit: SolComputeLimit,
 	_phantom: PhantomData<Environment>,
 }
 
 impl<Environment> Default for SolanaInstructionBuilder<Environment> {
 	fn default() -> Self {
-		Self { instructions: Default::default(), _phantom: Default::default() }
+		Self {
+			instructions: Default::default(),
+			compute_limit: Default::default(),
+			_phantom: Default::default(),
+		}
 	}
 }
 
+/// TODO: Implement Compute Limit calculation. pro-1357
+const COMPUTE_LIMIT: SolComputeLimit = 300_000u32;
+
 impl<Environment: SolanaEnvironment> SolanaInstructionBuilder<Environment> {
 	pub fn finalize(mut self) -> Result<Vec<SolInstruction>, SolanaInstructionBuilderError> {
+		// TODO: implement compute limit calculation
+		self.compute_limit = COMPUTE_LIMIT;
+
 		let mut final_instructions = vec![
 			SystemProgramInstruction::advance_nonce_account(
-				&Environment::lookup_account(SolanaEnvAccountLookupKey::NextNonceAccount)
+				&Environment::lookup_account(SolanaEnvAccountLookupKey::AvailableNonceAccount)
 					.ok_or(SolanaInstructionBuilderError::NoAvailableNonceAccount)?
 					.into(),
 				&Environment::lookup_account(SolanaEnvAccountLookupKey::AggKey)
@@ -65,10 +74,7 @@ impl<Environment: SolanaEnvironment> SolanaInstructionBuilder<Environment> {
 				Environment::compute_price()
 					.ok_or(SolanaInstructionBuilderError::CannotLookupComputePrice)?,
 			),
-			ComputeBudgetInstruction::set_compute_unit_limit(
-				Environment::compute_limit()
-					.ok_or(SolanaInstructionBuilderError::CannotLookupComputeLimit)?,
-			),
+			ComputeBudgetInstruction::set_compute_unit_limit(self.compute_limit),
 		];
 
 		final_instructions.append(&mut self.instructions);
@@ -93,18 +99,20 @@ impl<Environment: SolanaEnvironment> SolanaInstructionBuilder<Environment> {
 
 		self.instructions
 			.extend(&mut deposit_channels.into_iter().map(|deposit_channel| {
-				ProgramInstruction::get_instruction(
-					&VaultProgram::FetchNative {
-						seed: deposit_channel.state.seed,
-						bump: deposit_channel.state.bump,
-					},
-					vec![
-						SolAccountMeta::new_readonly(vault_program_data_account, false),
-						SolAccountMeta::new(agg_key, true),
-						SolAccountMeta::new(deposit_channel.address.into(), false),
-						SolAccountMeta::new_readonly(system_program_id, false),
-					],
-				)
+				match deposit_channel.asset {
+					SolAsset::Sol => ProgramInstruction::get_instruction(
+						&VaultProgram::FetchNative {
+							seed: deposit_channel.state.seed,
+							bump: deposit_channel.state.bump,
+						},
+						vec![
+							SolAccountMeta::new_readonly(vault_program_data_account, false),
+							SolAccountMeta::new(agg_key, true),
+							SolAccountMeta::new(deposit_channel.address.into(), false),
+							SolAccountMeta::new_readonly(system_program_id, false),
+						],
+					),
+				}
 			}));
 		Ok(self)
 	}
@@ -117,8 +125,7 @@ mod test {
 		sol::{
 			extra_types_for_testing::{Keypair, Signer},
 			sol_tx_building_blocks::{generate_deposit_channel, VAULT_PROGRAM_DATA_ACCOUNT},
-			SolAddress, SolAmount, SolComputeLimit, SolHash, SolMessage, SolTransaction,
-			SolanaDepositChannelState,
+			SolAddress, SolAmount, SolHash, SolMessage, SolTransaction, SolanaDepositChannelState,
 		},
 		ChainEnvironment,
 	};
@@ -131,7 +138,7 @@ mod test {
 		198, 68, 58, 83, 75, 44, 221, 80, 114, 35, 57, 137, 180, 21, 215, 89, 101, 115, 231, 67,
 		243, 229, 179, 134, 251,
 	];
-	const SOL: crate::assets::sol::Asset = crate::assets::sol::Asset::Sol;
+	const SOL: SolAsset = SolAsset::Sol;
 
 	fn get_deposit_channel() -> DepositChannel<Solana> {
 		DepositChannel::<Solana> {
@@ -152,19 +159,13 @@ mod test {
 					.expect("Key pair generation must succeed")
 					.pubkey()
 					.into(),
-				SolanaEnvAccountLookupKey::NextNonceAccount =>
+				SolanaEnvAccountLookupKey::AvailableNonceAccount =>
 					SolAddress::from_str(NEXT_NONCE).unwrap(),
 				SolanaEnvAccountLookupKey::VaultProgramDataAccount =>
 					SolPubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT)
 						.expect("Vault program data account must be correct")
 						.into(),
 			})
-		}
-	}
-
-	impl ChainEnvironment<(), SolComputeLimit> for MockSolanaEnvironment {
-		fn lookup(_s: ()) -> Option<u32> {
-			Some(300_000u32)
 		}
 	}
 
@@ -190,14 +191,14 @@ mod test {
 		expected_serialized_tx: Vec<u8>,
 	) {
 		// Obtain required info from Chain Environment
-		let recent_block = MockSolanaEnvironment::recent_block_hash().unwrap();
+		let durable_nonce = MockSolanaEnvironment::durable_nonce().unwrap();
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 
 		// Construct the Transaction and sign it
 		let message = SolMessage::new(&instruction_set, Some(&agg_key_pubkey));
 		let mut tx = SolTransaction::new_unsigned(message);
-		tx.sign(&[&agg_key_keypair], recent_block.into());
+		tx.sign(&[&agg_key_keypair], durable_nonce.into());
 
 		// println!("{:?}", tx);
 		let serialized_tx =

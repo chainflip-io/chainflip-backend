@@ -9,7 +9,7 @@ use sp_core::RuntimeDebug;
 use sp_std::vec;
 
 use crate::{
-	sol::{SolAddress, SolAmount, SolComputeLimit, SolHash, SolanaCrypto},
+	sol::{SolAddress, SolAmount, SolHash, SolanaCrypto},
 	AllBatch, AllBatchError, ApiCall, Chain, ChainCrypto, ChainEnvironment, ConsolidateCall,
 	ConsolidationError, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress,
 	SetAggKeyWithAggKey, Solana, TransferAssetParams, TransferFallback,
@@ -20,19 +20,14 @@ mod batch_fetch;
 /// Super trait combining all Environment lookups required for the Solana chain.
 pub trait SolanaEnvironment:
 	ChainEnvironment<SolanaEnvAccountLookupKey, SolAddress>
-	+ ChainEnvironment<(), SolComputeLimit>
 	+ ChainEnvironment<(), SolAmount>
 	+ ChainEnvironment<(), SolHash>
 {
-	fn compute_limit() -> Option<SolComputeLimit> {
-		<Self as ChainEnvironment<(), SolComputeLimit>>::lookup(())
-	}
-
 	fn compute_price() -> Option<SolAmount> {
 		<Self as ChainEnvironment<(), SolAmount>>::lookup(())
 	}
 
-	fn recent_block_hash() -> Option<SolHash> {
+	fn durable_nonce() -> Option<SolHash> {
 		<Self as ChainEnvironment<(), SolHash>>::lookup(())
 	}
 
@@ -45,7 +40,7 @@ pub trait SolanaEnvironment:
 /// This is the Key type used in Solana Environment to look up Account type (Pubkey).
 pub enum SolanaEnvAccountLookupKey {
 	AggKey,
-	NextNonceAccount,
+	AvailableNonceAccount,
 	VaultProgramDataAccount,
 }
 
