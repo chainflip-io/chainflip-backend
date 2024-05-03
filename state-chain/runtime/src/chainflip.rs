@@ -43,7 +43,10 @@ use cf_chains::{
 		api::{EvmChainId, EvmEnvironmentProvider, EvmReplayProtection},
 		EvmCrypto, Transaction,
 	},
-	sol::api::SolanaApi,
+	sol::{
+		api::{SolanaApi, SolanaEnvAccountLookupKey, SolanaEnvironment},
+		SolAddress, SolAmount, SolHash,
+	},
 	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	ChainEnvironment, ChainState, DepositChannel, ForeignChain, ReplayProtectionProvider,
 	SetCommKeyWithAggKey, SetGovKeyWithAggKey, Solana, TransactionBuilder,
@@ -480,6 +483,33 @@ impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct SolEnvironment;
+
+/// TODO: Implement this in PRO-1362
+impl ChainEnvironment<SolanaEnvAccountLookupKey, SolAddress> for SolEnvironment {
+	fn lookup(_s: SolanaEnvAccountLookupKey) -> Option<SolAddress> {
+		unimplemented!()
+	}
+}
+
+impl ChainEnvironment<(), SolAmount> for SolEnvironment {
+	fn lookup(_s: ()) -> Option<u64> {
+		unimplemented!()
+	}
+}
+
+impl ChainEnvironment<(), SolHash> for SolEnvironment {
+	fn lookup(_s: ()) -> Option<SolHash> {
+		unimplemented!()
+	}
+}
+
+impl ChainEnvironment<(), Vec<SolAddress>> for SolEnvironment {
+	fn lookup(_s: ()) -> Option<Vec<SolAddress>> {
+		unimplemented!()
+	}
+}
+
+impl SolanaEnvironment for SolEnvironment {}
 
 pub struct TokenholderGovernanceBroadcaster;
 

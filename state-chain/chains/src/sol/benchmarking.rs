@@ -49,11 +49,9 @@ impl BenchmarkValue for SolHash {
 	}
 }
 
-impl<E> BenchmarkValue for SolanaApi<E> {
+impl<E: crate::sol::api::SolanaEnvironment> BenchmarkValue for SolanaApi<E> {
 	fn benchmark_value() -> Self {
-		SolanaApi::SetAggKeyWithAggKey {
-			maybe_old_key: Some([7u8; 32].into()),
-			new_key: [8u8; 32].into(),
-		}
+		SolanaApi::<E>::rotate_agg_key([8u8; 32].into())
+			.expect("Benchmark value for SolApi must work.")
 	}
 }

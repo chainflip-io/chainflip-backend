@@ -1,6 +1,6 @@
 pub use cf_primitives::chains::Solana;
-use cf_primitives::ChannelId;
 
+use cf_primitives::ChannelId;
 use sp_core::{ConstBool, RuntimeDebug};
 use sp_std::vec;
 
@@ -145,4 +145,4 @@ pub struct SolanaDepositChannelState {
 	pub bump: u8,
 }
 
-impl crate::deposit_channel::ChannelLifecycleHooks for SolanaDepositChannelState {}
+impl crate::ChannelLifecycleHooks for SolanaDepositChannelState {}

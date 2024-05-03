@@ -9,11 +9,10 @@ use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
 pub use crate::sol::{consts::SYSTEM_PROGRAM_ID, SolSignature};
 
-use crate::{
-	deposit_channel::DepositChannel,
-	sol::{SolAddress, SolHash},
-	Solana,
-};
+use crate::sol::{SolAddress, SolHash};
+
+#[cfg(test)]
+use crate::{DepositChannel, Solana};
 
 #[cfg(test)]
 use super::extra_types_for_testing::{SignerError, Signers, TransactionError};
@@ -840,6 +839,7 @@ impl FromStr for Hash {
 	}
 }
 
+#[cfg(test)]
 pub fn generate_address(
 	seed: impl AsRef<[u8]>,
 ) -> Result<(SolAddress, u8), crate::sol::AddressDerivationError> {
@@ -848,6 +848,7 @@ pub fn generate_address(
 		.finish()
 }
 
+#[cfg(test)]
 pub fn generate_deposit_channel(channel_id: u64) -> DepositChannel<Solana> {
 	let seed = channel_id.to_le_bytes();
 	let (pda, bump) = generate_address(seed).expect("Address generation must work.");
@@ -879,6 +880,7 @@ mod tests {
 			VAULT_PROGRAM_DATA_ACCOUNT, VAULT_PROGRAM_DATA_ADDRESS,
 		},
 		token_instructions::AssociatedTokenAccountInstruction,
+		SolAmount, SolComputeLimit,
 	};
 	use core::str::FromStr;
 
@@ -895,6 +897,10 @@ mod tests {
 		198, 68, 58, 83, 75, 44, 221, 80, 114, 35, 57, 137, 180, 21, 215, 89, 101, 115, 231, 67,
 		243, 229, 179, 134, 251,
 	];
+
+	const COMPUTE_UNIT_PRICE: SolAmount = 1_000_000u64;
+	const COMPUTE_UNIT_LIMIT: SolComputeLimit = 300_000u32;
+	const TEST_DURABLE_NONCE: &str = "E6E2bNxGcgFyqeVRT3FSjw7YFbbMAZVQC21ZLVwrztRm";
 
 	#[test]
 	fn can_generate_address() {
@@ -945,7 +951,7 @@ mod tests {
 
 	#[test]
 	fn create_transfer_native() {
-		let durable_nonce = Hash::from_str("F5HaggF8o2jESnoFi7sSdgy2qhz4amp3miev144Cfp49").unwrap();
+		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let to_pubkey = Pubkey::from_str("4MqL4qy2W1yXzuF3PiuSMehMbJzMuZEcBwVvrgtuhx7V").unwrap();
@@ -954,6 +960,8 @@ mod tests {
 				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
 				&agg_key_pubkey,
 			),
+			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
+			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
 			SystemProgramInstruction::transfer(&agg_key_pubkey, &to_pubkey, 1000000000),
 		];
 		let message = Message::new(&instructions, Some(&agg_key_pubkey));
@@ -961,7 +969,9 @@ mod tests {
 		tx.sign(&[&agg_key_keypair], durable_nonce);
 
 		let serialized_tx = tx.finalize_and_serialize().unwrap();
-		let expected_serialized_tx = hex_literal::hex!("01b0c5753a71484e74a73f01e8a373cd2170285afa09ecf83174de8701a469d150e195cc24ad915024614932248d1f036823d814545d6475df814dfaa7f85bd20301000205f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19231e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd4000000000000000000000000000000000000000000000000000000000000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000d11cb0294f1fde6725b37bc3f341f5083378cb8f543019218dba6f9d53e12a920203030104000404000000030200020c0200000000ca9a3b00000000").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("01345c86d1be2bcdf2c93c75b6054b6232e5b1e7f2fe7b3ca241d48c8a5f993af3e474bf581b2e9a1543af13104b3f3a53530d849731cc403418da313743a57e0401000306f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19231e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd400000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004030301050004040000000400090340420f000000000004000502e0930400030200020c0200000000ca9a3b00000000").to_vec();
+
+		// println!("{:?}", hex::encode(serialized_tx.clone()));
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
 		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
@@ -973,16 +983,15 @@ mod tests {
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let to_pubkey = Pubkey::from_str("4MqL4qy2W1yXzuF3PiuSMehMbJzMuZEcBwVvrgtuhx7V").unwrap();
-		let compute_unit_price = 100_0000;
-		let compute_unit_limit = 300_000;
+
 		let lamports = 1_000_000;
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
 				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
 				&agg_key_pubkey,
 			),
-			ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
-			ComputeBudgetInstruction::set_compute_unit_limit(compute_unit_limit),
+			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
+			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
 			SystemProgramInstruction::transfer(&agg_key_pubkey, &to_pubkey, lamports),
 		];
 		let message = Message::new(&instructions, Some(&agg_key_pubkey));
@@ -998,21 +1007,19 @@ mod tests {
 
 	#[test]
 	fn create_fetch_native() {
-		let durable_nonce = Hash::from_str("E6E2bNxGcgFyqeVRT3FSjw7YFbbMAZVQC21ZLVwrztRm").unwrap();
+		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let deposit_channel =
 			Pubkey::from_str("XFmi41e1L9t732KoZdmzMSVige3SjjzsLzk1rW4rhwP").unwrap();
-		let compute_unit_price = 1_000_000;
-		let compute_unit_limit = 300_000;
 
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
 				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
 				&agg_key_pubkey,
 			),
-			ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
-			ComputeBudgetInstruction::set_compute_unit_limit(compute_unit_limit),
+			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
+			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
 			ProgramInstruction::get_instruction(
 				&VaultProgram::FetchNative { seed: vec![11u8, 12u8, 13u8, 55u8], bump: 255 },
 				vec![
@@ -1045,11 +1052,9 @@ mod tests {
 
 	#[test]
 	fn create_fetch_native_in_batch() {
-		let durable_nonce = Hash::from_str("E6E2bNxGcgFyqeVRT3FSjw7YFbbMAZVQC21ZLVwrztRm").unwrap();
+		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
-		let compute_unit_price = 1_000_000;
-		let compute_unit_limit = 300_000;
 
 		// Deposit channel generated in `can_generate_address()`
 		let deposit_channel_0 = generate_deposit_channel(0u64);
@@ -1060,8 +1065,8 @@ mod tests {
 				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
 				&agg_key_pubkey,
 			),
-			ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
-			ComputeBudgetInstruction::set_compute_unit_limit(compute_unit_limit),
+			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
+			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
 			ProgramInstruction::get_instruction(
 				&VaultProgram::FetchNative {
 					seed: deposit_channel_0.state.seed.to_vec(),
@@ -1217,7 +1222,7 @@ mod tests {
 	// manager's upgrade authority
 	#[test]
 	fn create_full_rotation() {
-		let durable_nonce = Hash::from_str("CW1aUc4krwqNiMfZ9J4D7wWHd5GXCZFkBNJYJg3tRd1Y").unwrap();
+		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let new_agg_key_pubkey =
@@ -1228,8 +1233,8 @@ mod tests {
 				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
 				&agg_key_pubkey,
 			),
-			ComputeBudgetInstruction::set_compute_unit_price(100_0000),
-			ComputeBudgetInstruction::set_compute_unit_limit(300_000),
+			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
+			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
 			ProgramInstruction::get_instruction(
 				&VaultProgram::RotateAggKey { skip_transfer_funds: false },
 				vec![
@@ -1244,34 +1249,26 @@ mod tests {
 				&agg_key_pubkey,
 				Some(&new_agg_key_pubkey),
 			),
+		];
+		instructions.extend(NONCE_ACCOUNTS.iter().map(|nonce_account| {
 			SystemProgramInstruction::nonce_authorize(
-				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
+				&Pubkey::from_str(nonce_account).unwrap(),
 				&agg_key_pubkey,
 				&new_agg_key_pubkey,
-			),
-		];
+			)
+		}));
+
 		let message = Message::new(&instructions, Some(&agg_key_pubkey));
 		let mut tx = Transaction::new_unsigned(message);
 		tx.sign(&[&agg_key_keypair], durable_nonce);
 
 		let serialized_tx = tx.finalize_and_serialize().unwrap();
-		let expected_serialized_tx = hex_literal::hex!("01fed383fc6dce627eb80c846b416966ff97965a9803512978883e68c9fc46340e31bbaa57c280b231f7de1c0763fb254ebd6ae85ce927f06338d3edebaf4288070100050af79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1924a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b6744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be543990044a5cfec75730f8780ded36a7c8ae1dcc60d84e1a830765fc6108e7b40402e4951000000000000000000000000000000000000000000000000000000000000000002a8f6914e88a1b0e210153ef763ae2b00c2b93d16c124d2c0537a10048000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293caadf0d6118bacf2a2a5c3d141e72c8733db3de162cc364a7f779b7bb4670e59f06050301080004040000000700090340420f000000000007000502e0930400090402000305094e518fabdda5d68b00060304000304040000000502010024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be543990044").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("01bc10cb686da3b32ce8c910bfafeca7fccf81d729bcd5bcb06e01ea72ee9db7f16c1c0893f86bb04f931da2ac1f80cc9be4d5d6a64167126b676be1808de3cb0f01000513f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1924a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b6744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900448541f57201f277c5f3ffb631d0212e26e7f47749c26c4808718174a0ab2a09a18cd28baa84f2067bbdf24513c2d44e44bf408f2e6da6e60762e3faa4a62a0adba5cfec75730f8780ded36a7c8ae1dcc60d84e1a830765fc6108e7b40402e4951cd644e45426a41a7cb8369b8a0c1c89bb3f86cf278fdd9cc38b0f69784ad5667e392cd98d3284fd551604be95c14cc8e20123e2940ef9fb784e6b591c7442864e5e1869817a4fd88ddf7ab7a5f7252d7c345b39721769888608592912e8ca9acf0f13460b3fd04b7d53d7421fc874ec00eec769cf36480895e1a407bf1249475f2b2e24122be016983be9369965246cc45e1f621d40fba300c56c7ac50c3874df4f83bd213a59c9785110cf83c718f9486c3484f918593bce20c61dc6a96036afecc89e3b031824af6363174d19bbec12d3a13c4a173e5aeb349b63042bc138f000000000000000000000000000000000000000000000000000000000000000002a8f6914e88a1b0e210153ef763ae2b00c2b93d16c124d2c0537a10048000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e489000f0e0301110004040000001000090340420f000000000010000502e093040012040200030e094e518fabdda5d68b000f0306000304040000000e02010024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e020c0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e020a0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e020b0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e02080024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e02070024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e02040024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e020d0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e02090024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e02050024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be543990044").to_vec();
+
+		// println!("tx:{:?}", hex::encode(serialized_tx.clone()));
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
-
-		for (_, nonce_account) in NONCE_ACCOUNTS.iter().enumerate().skip(1) {
-			instructions.push(SystemProgramInstruction::nonce_authorize(
-				&Pubkey::from_str(nonce_account).unwrap(),
-				&agg_key_pubkey,
-				&new_agg_key_pubkey,
-			));
-			let message = Message::new(&instructions, Some(&agg_key_pubkey));
-			let mut tx = Transaction::new_unsigned(message);
-			tx.sign(&[&agg_key_keypair], durable_nonce);
-			let serialized_tx = tx.finalize_and_serialize().unwrap();
-
-			assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
-		}
+		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
 	}
 
 	#[test]
