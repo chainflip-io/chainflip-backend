@@ -33,7 +33,7 @@ export const btcClientMutex = new Mutex();
 export const brokerMutex = new Mutex();
 export const snowWhiteMutex = new Mutex();
 
-export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'];
+export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'] as Chain[];
 
 export type Asset = SDKAsset | 'Sol' | 'SolUsdc';
 export type Chain = SDKChain | 'Solana';

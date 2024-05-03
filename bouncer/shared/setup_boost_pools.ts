@@ -1,11 +1,6 @@
-import {
-  ingressEgressPalletForChain,
-  getAssetsForChain,
-  getChainflipApi,
-  observeEvent,
-  Asset,
-} from '../shared/utils';
+import { ingressEgressPalletForChain, getAssetsForChain, Asset } from '../shared/utils';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
+import { observeEvent } from './utils/substrate';
 
 type BoostPoolId = {
   asset: Asset;
@@ -18,7 +13,6 @@ const chains = ['Ethereum', 'Polkadot', 'Bitcoin', 'Arbitrum'] as const;
 
 export async function setupBoostPools(): Promise<void> {
   console.log('=== Creating Boost Pools ===');
-  await using chainflip = await getChainflipApi();
   const observeBoostPoolEvents = [];
 
   for (const c of chains) {
@@ -36,11 +30,12 @@ export async function setupBoostPools(): Promise<void> {
 
         const observeBoostPoolCreated = observeEvent(
           `${chain.toLowerCase()}IngressEgress:BoostPoolCreated`,
-          chainflip,
-          (event) =>
-            event.data.boostPool.asset === asset && event.data.boostPool.tier === tier.toString(),
+          {
+            test: (event) =>
+              event.data.boostPool.asset === asset && event.data.boostPool.tier === tier.toString(),
+          },
         );
-        const observeBoostPoolAlreadyExists = observeEvent(`governance:FailedExecution`, chainflip);
+        const observeBoostPoolAlreadyExists = observeEvent(`governance:FailedExecution`);
 
         observeBoostPoolEvents.push(
           Promise.race([observeBoostPoolCreated, observeBoostPoolAlreadyExists]),
