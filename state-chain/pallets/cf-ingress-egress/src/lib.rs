@@ -1350,6 +1350,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.map(|(tier, _)| tier)
 			.collect::<BTreeSet<_>>();
 
+		debug_assert!(
+			sorted_boost_tiers
+				.iter()
+				.zip(sorted_boost_tiers.iter().skip(1))
+				.all(|(a, b)| a < b),
+			"Boost tiers should be in ascending order"
+		);
+
 		for boost_tier in sorted_boost_tiers {
 			if boost_tier > max_boost_fee_bps {
 				break
