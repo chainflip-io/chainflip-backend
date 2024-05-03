@@ -292,7 +292,8 @@ where
 			amount.saturating_accrue(excess_contributed);
 
 			if let Some(amount) = boosters_to_receive.get_mut(lucky_id) {
-				amount.total.saturating_accrue(remaining_to_receive)
+				amount.total.saturating_accrue(remaining_to_receive);
+				amount.fee.saturating_accrue(remaining_to_receive);
 			}
 		}
 

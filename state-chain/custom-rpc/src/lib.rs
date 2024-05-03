@@ -339,21 +339,19 @@ mod boost_pool_rpc {
 		pending_withdrawals: Vec<PendingWithdrawal>,
 	}
 
-	fn map_to_vec(map: BTreeMap<AccountId32, AssetAmount>) -> Vec<AccountAndAmount> {
-		map.into_iter()
-			.map(|(account_id, amount)| AccountAndAmount {
-				account_id,
-				amount: NumberOrHex::from(amount),
-			})
-			.collect()
-	}
-
 	impl BoostPoolDetailsRpc {
 		pub fn new(asset: Asset, fee_tier: u16, details: BoostPoolDetails) -> Self {
 			BoostPoolDetailsRpc {
 				asset,
 				fee_tier,
-				available_amounts: map_to_vec(details.available_amounts),
+				available_amounts: details
+					.available_amounts
+					.into_iter()
+					.map(|(account_id, amount)| AccountAndAmount {
+						account_id,
+						amount: NumberOrHex::from(amount),
+					})
+					.collect(),
 				deposits_pending_finalization: details
 					.pending_boosts
 					.into_iter()
