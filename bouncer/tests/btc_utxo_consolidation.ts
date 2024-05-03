@@ -29,8 +29,8 @@ async function test() {
   }
 
   // Reset consolidation parameters to ensure consolidation doesn't trigger immediately:
-  await submitGovernanceExtrinsic(
-    chainflip.tx.environment.updateConsolidationParameters({
+  await submitGovernanceExtrinsic((api) =>
+    api.tx.environment.updateConsolidationParameters({
       consolidationSize: 100,
       consolidationThreshold: 200,
     }),
@@ -60,8 +60,8 @@ async function test() {
 
   // We should have exactly consolidationThreshold utxos,
   // so this should trigger consolidation:
-  await submitGovernanceExtrinsic(
-    chainflip.tx.environment.updateConsolidationParameters({
+  await submitGovernanceExtrinsic((api) =>
+    api.tx.environment.updateConsolidationParameters({
       consolidationSize,
       consolidationThreshold,
     }),
@@ -103,8 +103,8 @@ async function test() {
   );
 
   // Clean up after the test to minimise conflicts with any other tests
-  await submitGovernanceExtrinsic(
-    chainflip.tx.environment.updateConsolidationParameters({
+  await submitGovernanceExtrinsic((api) =>
+    api.tx.environment.updateConsolidationParameters({
       consolidationSize: 100,
       consolidationThreshold: 200,
     }),

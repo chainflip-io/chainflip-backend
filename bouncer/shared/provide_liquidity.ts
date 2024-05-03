@@ -2,7 +2,6 @@ import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { InternalAsset as Asset } from '@chainflip/cli';
 import {
-  observeEvent,
   newAddress,
   getChainflipApi,
   decodeDotAddressForContract,
@@ -17,6 +16,7 @@ import {
   assetDecimals,
 } from '../shared/utils';
 import { send } from '../shared/send';
+import { observeEvent } from './utils/substrate';
 
 export async function provideLiquidity(
   ccy: Asset,
@@ -53,11 +53,9 @@ export async function provideLiquidity(
     });
   }
 
-  let eventHandle = observeEvent(
-    'liquidityProvider:LiquidityDepositAddressReady',
-    chainflip,
-    (event) => event.data.asset === ccy,
-  );
+  let eventHandle = observeEvent('liquidityProvider:LiquidityDepositAddressReady', {
+    test: (event) => event.data.asset === ccy,
+  });
 
   console.log('Requesting ' + ccy + ' deposit address');
   await lpMutex.runExclusive(async () => {
@@ -70,18 +68,15 @@ export async function provideLiquidity(
 
   console.log('Received ' + ccy + ' address: ' + ingressAddress);
   console.log('Sending ' + amount + ' ' + ccy + ' to ' + ingressAddress);
-  eventHandle = observeEvent(
-    'liquidityProvider:AccountCredited',
-    chainflip,
-    (event) =>
+  eventHandle = observeEvent('liquidityProvider:AccountCredited', {
+    test: (event) =>
       event.data.asset === ccy &&
       isWithinOnePercent(
         BigInt(event.data.amountCredited.replace(/,/g, '')),
         BigInt(amountToFineAmount(String(amount), assetDecimals(ccy))),
       ),
-    undefined,
-    waitForFinalization,
-  );
+    finalized: waitForFinalization,
+  });
   await send(ccy, ingressAddress, String(amount));
 
   await eventHandle;

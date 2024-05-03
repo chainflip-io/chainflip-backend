@@ -1,5 +1,4 @@
-import { InternalAsset as Asset } from '@chainflip/cli';
-import { getContractAddress } from './utils';
+import { Asset, getContractAddress } from './utils';
 import { getBtcBalance } from './get_btc_balance';
 import { getDotBalance } from './get_dot_balance';
 import { getEvmNativeBalance } from './get_evm_native_balance';

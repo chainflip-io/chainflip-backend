@@ -4,8 +4,8 @@ import Client from 'bitcoin-core';
 import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
 import { Mutex } from 'async-mutex';
 import {
-  Chain,
-  InternalAsset as Asset,
+  Chain as SDKChain,
+  InternalAsset as SDKAsset,
   InternalAssets as Assets,
   assetConstants,
   chainConstants,
@@ -14,6 +14,7 @@ import Web3 from 'web3';
 import { Connection, Keypair } from '@solana/web3.js';
 import { base58Decode, base58Encode, cryptoWaitReady } from '@polkadot/util-crypto';
 import { hexToU8a, u8aToHex } from '@polkadot/util';
+import BigNumber from 'bignumber.js';
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
@@ -33,6 +34,12 @@ export const brokerMutex = new Mutex();
 export const snowWhiteMutex = new Mutex();
 
 export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'];
+
+export type Asset = SDKAsset | 'Sol' | 'SolUsdc';
+export type Chain = SDKChain | 'Solana';
+
+const isSDKAsset = (asset: Asset): asset is SDKAsset => asset in assetConstants;
+const isSDKChain = (chain: Chain): chain is SDKChain => chain in chainConstants;
 
 export function getContractAddress(chain: Chain, contract: string): string {
   switch (chain) {
@@ -120,26 +127,12 @@ export function shortChainFromAsset(asset: Asset): string {
   }
 }
 
-export function amountToFineAmount(amount: string, decimals: number): string {
-  let fineAmount = '';
-  if (amount.indexOf('.') === -1) {
-    fineAmount = amount + '0'.repeat(decimals);
-  } else {
-    const amountParts = amount.split('.');
-    fineAmount = amountParts[0] + amountParts[1].padEnd(decimals, '0').substr(0, decimals);
-  }
-  return fineAmount;
+export function amountToFineAmount(amount: string, decimals: number | string): string {
+  return new BigNumber(amount).shiftedBy(Number(decimals)).toFixed();
 }
 
-export function fineAmountToAmount(fineAmount: string, decimals: number): string {
-  let balance = '';
-  if (fineAmount.length > decimals) {
-    const decimalLocation = fineAmount.length - decimals;
-    balance = fineAmount.slice(0, decimalLocation) + '.' + fineAmount.slice(decimalLocation);
-  } else {
-    balance = '0.' + fineAmount.padStart(decimals, '0');
-  }
-  return balance;
+export function fineAmountToAmount(fineAmount: string, decimals: number | string): string {
+  return new BigNumber(fineAmount).shiftedBy(-Number(decimals)).toFixed();
 }
 
 export function defaultAssetAmounts(asset: Asset): string {
@@ -165,74 +158,23 @@ export function defaultAssetAmounts(asset: Asset): string {
 }
 
 export function assetContractId(asset: Asset): number {
-  switch (asset) {
-    case 'Btc':
-      return assetConstants.Btc.contractId;
-    case 'Eth':
-      return assetConstants.Eth.contractId;
-    case 'Usdc':
-      return assetConstants.Usdc.contractId;
-    case 'Usdt':
-      return assetConstants.Usdt.contractId;
-    case 'Flip':
-      return assetConstants.Flip.contractId;
-    case 'Dot':
-      return assetConstants.Dot.contractId;
-    case 'ArbEth':
-      return assetConstants.ArbEth.contractId;
-    case 'ArbUsdc':
-      return assetConstants.ArbUsdc.contractId;
-    case 'Sol':
-      return 9;
-    case 'SolUsdc':
-      return 10;
-    default:
-      throw new Error(`Unsupported asset: ${asset}`);
-  }
+  if (isSDKAsset(asset)) return assetConstants[asset].contractId;
+  if (asset === 'Sol') return 9;
+  if (asset === 'SolUsdc') return 10;
+  throw new Error(`Unsupported asset: ${asset}`);
 }
 
 export function assetDecimals(asset: Asset): number {
-  switch (asset) {
-    case 'Btc':
-      return assetConstants.Btc.decimals;
-    case 'Eth':
-      return assetConstants.Eth.decimals;
-    case 'Usdc':
-      return assetConstants.Usdc.decimals;
-    case 'Usdt':
-      return assetConstants.Usdt.decimals;
-    case 'Flip':
-      return assetConstants.Flip.decimals;
-    case 'Dot':
-      return assetConstants.Dot.decimals;
-    case 'ArbEth':
-      return assetConstants.ArbEth.decimals;
-    case 'ArbUsdc':
-      return assetConstants.ArbUsdc.decimals;
-    case 'Sol':
-      return 9;
-    case 'SolUsdc':
-      return 6;
-    default:
-      throw new Error(`Unsupported asset: ${asset}`);
-  }
+  if (isSDKAsset(asset)) return assetConstants[asset].decimals;
+  if (asset === 'Sol') return 9;
+  if (asset === 'SolUsdc') return 6;
+  throw new Error(`Unsupported asset: ${asset}`);
 }
 
 export function chainContractId(chain: Chain): number {
-  switch (chain) {
-    case 'Ethereum':
-      return chainConstants.Ethereum.contractId;
-    case 'Bitcoin':
-      return chainConstants.Bitcoin.contractId;
-    case 'Polkadot':
-      return chainConstants.Polkadot.contractId;
-    case 'Arbitrum':
-      return chainConstants.Arbitrum.contractId;
-    case 'Solana':
-      return 5;
-    default:
-      throw new Error(`Unsupported chain: ${chain}`);
-  }
+  if (isSDKChain(chain)) return chainConstants[chain].contractId;
+  if (chain === 'Solana') return 5;
+  throw new Error(`Unsupported chain: ${chain}`);
 }
 
 export function chainGasAsset(chain: Chain): Asset {
@@ -267,7 +209,7 @@ export function getAssetsForChain(chain: Chain): Asset[] {
 
 // State Chain uses non-unique string identifiers for assets.
 export function stateChainAssetFromAsset(asset: Asset): string {
-  if (assetConstants[asset]) {
+  if (isSDKAsset(asset)) {
     return assetConstants[asset].asset;
   }
   throw new Error(`Unsupported asset: ${asset}`);
@@ -282,6 +224,22 @@ export const runWithTimeout = async <T>(promise: Promise<T>, millis: number): Pr
   ]);
 
 export const sha256 = (data: string): Buffer => crypto.createHash('sha256').update(data).digest();
+
+export const deferredPromise = <T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (error: Error) => void;
+} => {
+  let resolve: (value: T) => void;
+  let reject: (error: Error) => void;
+
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  return { promise, resolve: resolve!, reject: reject! };
+};
 
 export { sleep };
 
@@ -324,13 +282,19 @@ function getCachedSubstrateApi(defaultEndpoint: string) {
             return async () => {
               connections -= 1;
               if (connections === 0) {
-                await Reflect.get(target, 'disconnect', receiver).call(target);
-                api = undefined;
+                setTimeout(() => {
+                  if (connections === 0) {
+                    api = undefined;
+                    Reflect.get(target, 'disconnect', receiver).call(target);
+                  }
+                }, 5_000).unref();
               }
             };
           }
           if (prop === 'disconnect') {
-            return async () => {};
+            return async () => {
+              // noop
+            };
           }
 
           return Reflect.get(target, prop, receiver);
@@ -353,17 +317,15 @@ export const getPolkadotApi = getCachedSubstrateApi(
 
 export const polkadotSigningMutex = new Mutex();
 
-export async function ingressEgressPalletForChain(chain: Chain) {
-  const chainflip = await getChainflipApi();
+const toLowerCase = <const T extends string>(string: T) => string.toLowerCase() as Lowercase<T>;
+
+export function ingressEgressPalletForChain(chain: Chain) {
   switch (chain) {
     case 'Ethereum':
-      return chainflip.tx.ethereumIngressEgress;
     case 'Bitcoin':
-      return chainflip.tx.bitcoinIngressEgress;
     case 'Polkadot':
-      return chainflip.tx.polkadotIngressEgress;
     case 'Arbitrum':
-      return chainflip.tx.arbitrumIngressEgress;
+      return `${toLowerCase(chain)}IngressEgress` as const;
     default:
       throw new Error(`Unsupported chain: ${chain}`);
   }
@@ -631,25 +593,9 @@ export async function newAddress(
 }
 
 export function chainFromAsset(asset: Asset): Chain {
-  switch (asset) {
-    case 'Dot':
-      return 'Polkadot';
-    case 'Eth':
-    case 'Flip':
-    case 'Usdc':
-    case 'Usdt':
-      return 'Ethereum';
-    case 'Btc':
-      return 'Bitcoin';
-    case 'ArbUsdc':
-    case 'ArbEth':
-      return 'Arbitrum';
-    case 'Sol':
-    case 'SolUsdc':
-      return 'Solana';
-    default:
-      throw new Error(`Unsupported asset: ${asset}`);
-  }
+  if (isSDKAsset(asset)) return assetConstants[asset].chain;
+  if (asset === 'Sol' || asset === 'SolUsdc') return 'Solana';
+  throw new Error(`Unsupported asset: ${asset}`);
 }
 
 export function getEvmEndpoint(chain: Chain): string {
@@ -706,12 +652,12 @@ export function getWhaleKey(chain: Chain): string {
 }
 
 export async function observeBalanceIncrease(
-  dstCcy: string,
+  dstCcy: Asset,
   address: string,
   oldBalance: string,
 ): Promise<number> {
   for (let i = 0; i < 1200; i++) {
-    const newBalance = Number(await getBalance(dstCcy as Asset, address));
+    const newBalance = Number(await getBalance(dstCcy, address));
     if (newBalance > Number(oldBalance)) {
       return newBalance;
     }
@@ -724,7 +670,7 @@ export async function observeBalanceIncrease(
 
 export async function observeFetch(asset: Asset, address: string): Promise<void> {
   for (let i = 0; i < 120; i++) {
-    const balance = Number(await getBalance(asset as Asset, address));
+    const balance = Number(await getBalance(asset, address));
     if (balance === 0) {
       const chain = chainFromAsset(asset);
       if (chain === 'Ethereum' || chain === 'Arbitrum') {

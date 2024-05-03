@@ -4,9 +4,8 @@ import { submitGovernanceExtrinsic } from './cf_governance';
 async function setSafeMode(mode: string, options?: TranslatedOptions) {
   await using chainflip = await getChainflipApi();
 
-  const extrinsic = chainflip.tx.environment.updateSafeMode({ [mode]: options });
   const eventHandle = observeEvent('environment:RuntimeSafeModeUpdated', chainflip);
-  await submitGovernanceExtrinsic(extrinsic);
+  await submitGovernanceExtrinsic((api) => api.tx.environment.updateSafeMode({ [mode]: options }));
   await eventHandle;
 }
 
