@@ -789,7 +789,7 @@ fn test_add_boost_funds() {
 }
 
 #[track_caller]
-fn toggle_boosting_with_safe_mode(enable: bool) {
+fn boosting_with_safe_mode(enable: bool) {
 	fn get_safe_mode() -> PalletSafeMode<()> {
 		<MockRuntimeSafeMode as sp_core::Get<PalletSafeMode<()>>>::get()
 	}
@@ -819,7 +819,7 @@ fn boosting_deposits_is_disabled_by_safe_mode() {
 			TIER_5_BPS
 		));
 
-		toggle_boosting_with_safe_mode(false);
+		boosting_with_safe_mode(false);
 
 		// Prewitness a deposit that would usually get boosted
 		let (_channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, 10);
@@ -833,7 +833,7 @@ fn boosting_deposits_is_disabled_by_safe_mode() {
 		witness_deposit(deposit_address, eth::Asset::Eth, DEPOSIT_AMOUNT);
 		assert_eq!(get_lp_eth_balance(&LP_ACCOUNT), INIT_LP_BALANCE + DEPOSIT_AMOUNT - INGRESS_FEE);
 
-		toggle_boosting_with_safe_mode(true);
+		boosting_with_safe_mode(true);
 
 		// Try another deposit
 		let deposit_id = prewitness_deposit(deposit_address, eth::Asset::Eth, DEPOSIT_AMOUNT);
@@ -850,7 +850,7 @@ fn add_boost_funds_is_disabled_by_safe_mode() {
 
 		setup();
 
-		toggle_boosting_with_safe_mode(false);
+		boosting_with_safe_mode(false);
 
 		// Should not be able to add funds to the boost pool
 		assert_noop!(
@@ -869,7 +869,7 @@ fn add_boost_funds_is_disabled_by_safe_mode() {
 			None
 		);
 
-		toggle_boosting_with_safe_mode(true);
+		boosting_with_safe_mode(true);
 
 		// Should be able to add funds to the boost pool now that the safe mode is turned off
 		assert_ok!(IngressEgress::add_boost_funds(
@@ -901,7 +901,7 @@ fn stop_boosting_is_disabled_by_safe_mode() {
 			TIER_5_BPS
 		));
 
-		toggle_boosting_with_safe_mode(false);
+		boosting_with_safe_mode(false);
 
 		// Should not be able to stop boosting
 		assert_noop!(
@@ -919,7 +919,7 @@ fn stop_boosting_is_disabled_by_safe_mode() {
 			Some(BOOST_FUNDS)
 		);
 
-		toggle_boosting_with_safe_mode(true);
+		boosting_with_safe_mode(true);
 
 		// Should be able to stop boosting now that the safe mode is turned off
 		assert_ok!(IngressEgress::stop_boosting(

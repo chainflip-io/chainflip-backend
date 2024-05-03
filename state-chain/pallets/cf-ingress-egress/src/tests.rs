@@ -1796,7 +1796,7 @@ fn ingress_fee_is_withheld_or_scheduled_for_swap() {
 }
 
 #[test]
-fn safe_mode_prevents_deposit() {
+fn safe_mode_prevents_deposit_channel_creation() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(IngressEgress::open_channel(
 			&ALICE,
@@ -1821,7 +1821,7 @@ fn safe_mode_prevents_deposit() {
 				ChannelAction::LiquidityProvision { lp_account: 0 },
 				0,
 			),
-			crate::Error::<Test, _>::DepositsDisabledForChain
+			crate::Error::<Test, _>::DepositChannelCreationDisabled
 		);
 	});
 }

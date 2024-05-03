@@ -712,7 +712,7 @@ pub mod pallet {
 		/// Cannot create a boost pool of 0 bps
 		InvalidBoostPoolTier,
 		/// Disabled due to safe mode for the chain
-		DepositsDisabledForChain,
+		DepositChannelCreationDisabled,
 	}
 
 	#[pallet::hooks]
@@ -1784,7 +1784,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		(ChannelId, TargetChainAccount<T, I>, TargetChainBlockNumber<T, I>, T::Amount),
 		DispatchError,
 	> {
-		ensure!(T::SafeMode::get().deposits_enabled, Error::<T, I>::DepositsDisabledForChain);
+		ensure!(T::SafeMode::get().deposits_enabled, Error::<T, I>::DepositChannelCreationDisabled);
 		let channel_opening_fee = ChannelOpeningFee::<T, I>::get();
 		T::FeePayment::try_burn_fee(requester, channel_opening_fee)?;
 		Self::deposit_event(Event::<T, I>::ChannelOpeningFeePaid { fee: channel_opening_fee });
