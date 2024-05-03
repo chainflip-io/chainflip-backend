@@ -31,6 +31,7 @@ const price = new Map<Asset, number>([
 ]);
 
 export async function setupSwaps(): Promise<void> {
+  console.log('=== Setting up for swaps ===');
   await cryptoWaitReady();
 
   await Promise.all([
@@ -85,5 +86,4 @@ export async function setupSwaps(): Promise<void> {
   ]);
 
   console.log('=== Swaps Setup completed ===');
-  process.exit(0);
 }

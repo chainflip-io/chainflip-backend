@@ -14,6 +14,7 @@ import {
   observeBroadcastSuccess,
 } from '../shared/utils';
 import { CcmDepositMetadata } from '../shared/new_swap';
+import { SwapContext, SwapStatus } from './swapping';
 
 function encodeDestinationAddress(address: string, destAsset: Asset): string {
   let destAddress = address;
@@ -42,7 +43,7 @@ export async function requestNewSwap(
   brokerCommissionBps?: number,
   log = true,
 ): Promise<SwapParams> {
-  const chainflipApi = await getChainflipApi();
+  await using chainflipApi = await getChainflipApi();
 
   const addressPromise = observeEvent(
     'swapping:SwapDepositAddressReady',
@@ -107,6 +108,7 @@ export async function doPerformSwap(
   senderType = SenderType.Address,
   amount?: string,
   log = true,
+  swapContext?: SwapContext,
 ) {
   const oldBalance = await getBalance(destAsset, destAddress);
 
@@ -124,6 +126,8 @@ export async function doPerformSwap(
 
   if (log) console.log(`${tag} Funded the address`);
 
+  swapContext?.updateStatus(tag, SwapStatus.Funded);
+
   await swapScheduledHandle;
 
   if (log) console.log(`${tag} Waiting for balance to update`);
@@ -135,7 +139,9 @@ export async function doPerformSwap(
     ]);
 
     if (log) console.log(`${tag} Swap success! New balance: ${newBalance}!`);
+    swapContext?.updateStatus(tag, SwapStatus.Success);
   } catch (err) {
+    swapContext?.updateStatus(tag, SwapStatus.Failure);
     throw new Error(`${tag} ${err}`);
   }
 }
@@ -150,6 +156,7 @@ export async function performSwap(
   amount?: string,
   brokerCommissionBps?: number,
   log = true,
+  swapContext?: SwapContext,
 ) {
   const tag = swapTag ?? '';
 
@@ -173,7 +180,8 @@ export async function performSwap(
     brokerCommissionBps,
     log,
   );
-  await doPerformSwap(swapParams, tag, messageMetadata, senderType, amount, log);
+
+  await doPerformSwap(swapParams, tag, messageMetadata, senderType, amount, log, swapContext);
 
   return swapParams;
 }
@@ -186,7 +194,7 @@ export async function performAndTrackSwap(
   amount?: string,
   tag?: string,
 ) {
-  const chainflipApi = await getChainflipApi();
+  await using chainflipApi = await getChainflipApi();
 
   const swapParams = await requestNewSwap(sourceAsset, destAsset, destAddress, tag);
 

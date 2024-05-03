@@ -4,7 +4,7 @@ import { exec } from 'child_process';
 import { runWithTimeout, observeEvent, getChainflipApi } from '../shared/utils';
 
 async function main(): Promise<void> {
-  const chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipApi();
   const keyring = new Keyring({ type: 'sr25519' });
   const lpUri = process.env.LP_URI ?? '//LP_1';
   const lp = keyring.createFromUri(lpUri);

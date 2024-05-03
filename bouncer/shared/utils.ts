@@ -12,7 +12,7 @@ import {
 } from '@chainflip/cli';
 import Web3 from 'web3';
 import { Connection, Keypair } from '@solana/web3.js';
-import { base58Decode, base58Encode } from '@polkadot/util-crypto';
+import { base58Decode, base58Encode, cryptoWaitReady } from '@polkadot/util-crypto';
 import { hexToU8a, u8aToHex } from '@polkadot/util';
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
@@ -250,6 +250,21 @@ export function chainGasAsset(chain: Chain): Asset {
   }
 }
 
+export function getAssetsForChain(chain: Chain): Asset[] {
+  switch (chain) {
+    case 'Ethereum':
+      return [Assets.Eth, Assets.Usdc, Assets.Usdt, Assets.Flip];
+    case 'Bitcoin':
+      return [Assets.Btc];
+    case 'Polkadot':
+      return [Assets.Dot];
+    case 'Arbitrum':
+      return [Assets.ArbEth, Assets.ArbUsdc];
+    default:
+      throw new Error(`Unsupported chain: ${chain}`);
+  }
+}
+
 // State Chain uses non-unique string identifiers for assets.
 export function stateChainAssetFromAsset(asset: Asset): string {
   if (assetConstants[asset]) {
@@ -258,46 +273,72 @@ export function stateChainAssetFromAsset(asset: Asset): string {
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
-export const runWithTimeout = async <T>(promise: Promise<T>, millis: number): Promise<T> => {
-  const controller = new AbortController();
-  const result = await Promise.race([
+export const runWithTimeout = async <T>(promise: Promise<T>, millis: number): Promise<T> =>
+  Promise.race([
     promise,
-    sleep(millis, { signal: AbortController }).then(() => {
-      throw new Error(`Timed out after ${millis} ms.`);
+    sleep(millis, new Error(`Timed out after ${millis} ms.`), { ref: false }).then((error) => {
+      throw error;
     }),
   ]);
-  controller.abort();
-  return result;
-};
 
 export const sha256 = (data: string): Buffer => crypto.createHash('sha256').update(data).digest();
 
 export { sleep };
 
+// @ts-expect-error polyfilling
+Symbol.asyncDispose ??= Symbol('asyncDispose');
+// @ts-expect-error polyfilling
+Symbol.dispose ??= Symbol('dispose');
+
+type DisposableApiPromise = ApiPromise & { [Symbol.asyncDispose](): Promise<void> };
+
 // It is important to cache WS connections because nodes seem to have a
 // limit on how many can be opened at the same time (from the same IP presumably)
 function getCachedSubstrateApi(defaultEndpoint: string) {
-  let api: ApiPromise | undefined;
+  let api: DisposableApiPromise | undefined;
+  let connections = 0;
 
-  return async (providedEndpoint?: string): Promise<ApiPromise> => {
-    if (api) return api;
+  return async (providedEndpoint?: string): Promise<DisposableApiPromise> => {
+    if (!api) {
+      await cryptoWaitReady();
+      const endpoint = providedEndpoint ?? defaultEndpoint;
 
-    const endpoint = providedEndpoint ?? defaultEndpoint;
-
-    api = await ApiPromise.create({
-      provider: new WsProvider(endpoint),
-      noInitWarn: true,
-      types: {
-        EncodedAddress: {
-          _enum: {
-            Eth: '[u8; 20]',
-            Arb: '[u8; 20]',
-            Dot: '[u8; 32]',
-            Btc: 'Vec<u8>',
+      const apiPromise = await ApiPromise.create({
+        provider: new WsProvider(endpoint),
+        noInitWarn: true,
+        types: {
+          EncodedAddress: {
+            _enum: {
+              Eth: '[u8; 20]',
+              Arb: '[u8; 20]',
+              Dot: '[u8; 32]',
+              Btc: 'Vec<u8>',
+            },
           },
         },
-      },
-    });
+      });
+
+      api = new Proxy(apiPromise as unknown as DisposableApiPromise, {
+        get(target, prop, receiver) {
+          if (prop === Symbol.asyncDispose) {
+            return async () => {
+              connections -= 1;
+              if (connections === 0) {
+                await Reflect.get(target, 'disconnect', receiver).call(target);
+                api = undefined;
+              }
+            };
+          }
+          if (prop === 'disconnect') {
+            return async () => {};
+          }
+
+          return Reflect.get(target, prop, receiver);
+        },
+      });
+    }
+
+    connections += 1;
 
     return api;
   };
@@ -311,6 +352,22 @@ export const getPolkadotApi = getCachedSubstrateApi(
 );
 
 export const polkadotSigningMutex = new Mutex();
+
+export async function ingressEgressPalletForChain(chain: Chain) {
+  const chainflip = await getChainflipApi();
+  switch (chain) {
+    case 'Ethereum':
+      return chainflip.tx.ethereumIngressEgress;
+    case 'Bitcoin':
+      return chainflip.tx.bitcoinIngressEgress;
+    case 'Polkadot':
+      return chainflip.tx.polkadotIngressEgress;
+    case 'Arbitrum':
+      return chainflip.tx.arbitrumIngressEgress;
+    default:
+      throw new Error(`Unsupported chain: ${chain}`);
+  }
+}
 
 export function getBtcClient(): Client {
   const endpoint = process.env.BTC_ENDPOINT || 'http://127.0.0.1:8332';
@@ -483,9 +540,10 @@ export async function observeSwapScheduled(
   channelId: number,
   swapType?: SwapType,
 ) {
-  const chainflipApi = await getChainflipApi();
+  await using chainflipApi = await getChainflipApi();
 
-  return observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
+  // need to await this to prevent the chainflip api from being disposed prematurely
+  const result = await observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
     if ('DepositChannel' in event.data.origin) {
       const channelMatches = Number(event.data.origin.DepositChannel.channelId) === channelId;
       const sourceAssetMatches = sourceAsset === (event.data.sourceAsset as Asset);
@@ -496,6 +554,8 @@ export async function observeSwapScheduled(
     // Otherwise it was a swap scheduled by interacting with the Eth smart contract
     return false;
   });
+
+  return result;
 }
 
 // Make sure the stopObserveEvent returns true before the end of the test
@@ -504,12 +564,8 @@ export async function observeBadEvents(
   stopObserveEvent: () => boolean,
   eventQuery?: EventQuery,
 ) {
-  const event = await observeEvent(
-    eventName,
-    await getChainflipApi(),
-    eventQuery,
-    stopObserveEvent,
-  );
+  await using chainflipApi = await getChainflipApi();
+  const event = await observeEvent(eventName, chainflipApi, eventQuery, stopObserveEvent);
   if (event) {
     throw new Error(
       `Unexpected event emitted ${event.name.section}:${event.name.method} in block ${event.block}`,
@@ -518,7 +574,7 @@ export async function observeBadEvents(
 }
 
 export async function observeBroadcastSuccess(broadcastId: BroadcastId) {
-  const chainflipApi = await getChainflipApi();
+  await using chainflipApi = await getChainflipApi();
   const broadcaster = broadcastId[0].toLowerCase() + 'Broadcaster';
   const broadcastIdNumber = broadcastId[1];
 
@@ -887,7 +943,7 @@ type SwapRate = {
   output: string;
 };
 export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
-  const chainflipApi = await getChainflipApi();
+  await using chainflipApi = await getChainflipApi();
 
   const fineFromAmount = amountToFineAmount(fromAmount, assetDecimals(from));
   const hexPrice = (await chainflipApi.rpc(
