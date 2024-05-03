@@ -70,6 +70,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Login to DockerHub 🔑
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
+        with:
+          username: ${{ secrets.CF_DOCKERHUB_USERNAME }}
+          password: ${{ secrets.CF_DOCKERHUB_TOKEN }}
       - name: Configure NodeJS 🛠️
         uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65
         with:
