@@ -94,8 +94,9 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			CurrentChainState::<T, I>::put(ChainState {
-				block_height: self.init_chain_state.block_height -
-					<T::TargetChain as Chain>::block_phase(self.init_chain_state.block_height),
+				block_height: <T::TargetChain as Chain>::block_witness_root(
+					self.init_chain_state.block_height,
+				),
 				tracked_data: self.init_chain_state.tracked_data.clone(),
 			});
 		}
@@ -132,8 +133,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			ensure!(
-				<T::TargetChain as Chain>::block_phase(new_chain_state.block_height) ==
-					Default::default(),
+				<T::TargetChain as Chain>::is_block_witness_root(new_chain_state.block_height),
 				Error::<T, I>::InvalidBlockHeight
 			);
 			CurrentChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|previous_chain_state| {

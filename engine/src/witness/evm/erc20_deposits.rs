@@ -91,7 +91,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
 	{
 		Ok(self.then(move |epoch, header| {
-			<Inner::Chain as Chain>::assert_block_phase(header.index);
+			assert!(<Inner::Chain as Chain>::is_block_witness_root(header.index));
 
 			let process_call = process_call.clone();
 			let eth_rpc = eth_rpc.clone();

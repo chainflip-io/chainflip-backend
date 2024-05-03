@@ -69,11 +69,11 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					}
 				},
 				|index, tx_out_ids: &TxOutIdsInitiatedAt<Inner>| {
-					<Inner::Chain as Chain>::assert_block_phase(index);
+					assert!(<Inner::Chain as Chain>::is_block_witness_root(index));
 					tx_out_ids
 						.iter()
 						.filter(|(_, initiated_at)| {
-							<Inner::Chain as Chain>::assert_block_phase(*initiated_at);
+							assert!(<Inner::Chain as Chain>::is_block_witness_root(*initiated_at));
 							initiated_at <= &index
 						})
 						.cloned()

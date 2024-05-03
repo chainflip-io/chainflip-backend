@@ -66,12 +66,16 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					}
 				},
 				|index, addresses: &Addresses<Inner>| {
-					<Inner::Chain as Chain>::assert_block_phase(index);
+					assert!(<Inner::Chain as Chain>::is_block_witness_root(index));
 					addresses
 						.iter()
 						.filter(|details| {
-							<Inner::Chain as Chain>::assert_block_phase(details.opened_at);
-							<Inner::Chain as Chain>::assert_block_phase(details.expires_at);
+							assert!(<Inner::Chain as Chain>::is_block_witness_root(
+								details.opened_at
+							));
+							assert!(<Inner::Chain as Chain>::is_block_witness_root(
+								details.expires_at
+							));
 							details.opened_at <= index && index <= details.expires_at
 						})
 						.cloned()

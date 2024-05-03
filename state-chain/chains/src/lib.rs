@@ -13,7 +13,10 @@ use cf_primitives::{AssetAmount, BroadcastId, ChannelId, EthAmount, TransactionH
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member, RuntimeDebug},
-	sp_runtime::{traits::AtLeast32BitUnsigned, BoundedVec, DispatchError},
+	sp_runtime::{
+		traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub},
+		BoundedVec, DispatchError,
+	},
 	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, StorageHasher,
 };
 use instances::{ChainCryptoInstanceAlias, ChainInstanceAlias};
@@ -51,6 +54,49 @@ pub mod instances;
 
 pub mod mocks;
 
+pub mod witness_period {
+	use core::ops::{Rem, Sub};
+
+	use frame_support::sp_runtime::traits::{One, Saturating};
+
+	fn block_witness_floor<
+		I: Copy + Saturating + Sub<I, Output = I> + Rem<I, Output = I> + Eq + One,
+	>(
+		witness_period: I,
+		block_number: I,
+	) -> I {
+		block_number - (block_number % witness_period)
+	}
+
+	pub fn is_block_witness_root<
+		I: Copy + Saturating + Sub<I, Output = I> + Rem<I, Output = I> + Eq + One,
+	>(
+		witness_period: I,
+		block_number: I,
+	) -> bool {
+		block_witness_root(witness_period, block_number) == block_number
+	}
+
+	pub fn block_witness_root<
+		I: Copy + Saturating + Sub<I, Output = I> + Rem<I, Output = I> + Eq + One,
+	>(
+		witness_period: I,
+		block_number: I,
+	) -> I {
+		block_witness_floor(witness_period, block_number)
+	}
+
+	pub fn block_witness_range<
+		I: Copy + Saturating + Sub<I, Output = I> + Rem<I, Output = I> + Eq + One,
+	>(
+		witness_period: I,
+		block_number: I,
+	) -> core::ops::RangeInclusive<I> {
+		let floored_block_number = block_witness_floor(witness_period, block_number);
+		floored_block_number..=floored_block_number.saturating_add(witness_period - One::one())
+	}
+}
+
 /// A trait representing all the types and constants that need to be implemented for supported
 /// blockchains.
 pub trait Chain: Member + Parameter + ChainInstanceAlias {
@@ -60,19 +106,52 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 
 	const WITNESS_PERIOD: Self::ChainBlockNumber;
 
-	fn block_phase(block_number: Self::ChainBlockNumber) -> Self::ChainBlockNumber {
-		block_number % Self::WITNESS_PERIOD
-	}
-
-	fn assert_block_phase(block_number: Self::ChainBlockNumber) {
-		assert_eq!(Self::block_phase(block_number), Default::default());
-	}
-
-	fn block_period(
+	/// Outputs the root block that witnesses the range of blocks after (not including)
+	/// `block_number`
+	fn checked_block_witness_next(
 		block_number: Self::ChainBlockNumber,
-	) -> core::ops::Range<Self::ChainBlockNumber> {
-		Self::assert_block_phase(block_number);
-		block_number..block_number + Self::WITNESS_PERIOD
+	) -> Option<Self::ChainBlockNumber> {
+		Self::block_witness_root(block_number).checked_add(&Self::WITNESS_PERIOD)
+	}
+
+	/// Outputs the period that witnesses blocks after `block_number`, if there is not such a
+	/// period, it outputs the period that witnesses `block_number`
+	fn saturating_block_witness_next(
+		block_number: Self::ChainBlockNumber,
+	) -> Self::ChainBlockNumber {
+		let floored_block_number = Self::block_witness_root(block_number);
+		floored_block_number
+			.checked_add(&Self::WITNESS_PERIOD)
+			.unwrap_or(floored_block_number)
+	}
+
+	/// Outputs the root block that witnesses the range of blocks before (not including)
+	/// `block_number`
+	fn checked_block_witness_previous(
+		block_number: Self::ChainBlockNumber,
+	) -> Option<Self::ChainBlockNumber> {
+		Self::block_witness_root(block_number).checked_sub(&Self::WITNESS_PERIOD)
+	}
+
+	/// Checks this block is a root block of a witness range. A `witness root` is a block number
+	/// used to identify the witness of a range of blocks, for example in Arbitrum `24` refers to
+	/// the witness of all the blocks `24..=47`.
+	fn is_block_witness_root(block_number: Self::ChainBlockNumber) -> bool {
+		witness_period::is_block_witness_root(Self::WITNESS_PERIOD, block_number)
+	}
+
+	/// Outputs the root block that's associated range includes the specified block. A `witness
+	/// root` is a block number used to identify the witness of a range of blocks, for example in
+	/// Arbitrum `24` refers to the witness of all the blocks `24..=47`.
+	fn block_witness_root(block_number: Self::ChainBlockNumber) -> Self::ChainBlockNumber {
+		witness_period::block_witness_root(Self::WITNESS_PERIOD, block_number)
+	}
+
+	/// Outputs the range of blocks this block will be witnessed in.
+	fn block_witness_range(
+		block_number: Self::ChainBlockNumber,
+	) -> core::ops::RangeInclusive<Self::ChainBlockNumber> {
+		witness_period::block_witness_range(Self::WITNESS_PERIOD, block_number)
 	}
 
 	type ChainCrypto: ChainCrypto;

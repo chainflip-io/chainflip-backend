@@ -430,7 +430,7 @@ impl<'a, 'env, StateChainClient: StorageApi + Send + Sync + 'static, Info, Histo
 					.expect(STATE_CHAIN_CONNECTION)
 				{
 					Some(vault_start_block_number) => {
-						TChain::assert_block_phase(vault_start_block_number);
+						assert!(TChain::is_block_witness_root(vault_start_block_number));
 						Some((
 							state_chain_client
 								.storage_map_entry::<pallet_cf_threshold_signature::Keys<

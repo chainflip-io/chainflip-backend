@@ -1,9 +1,10 @@
-use std::{collections::VecDeque, iter::Step};
+use std::collections::VecDeque;
 
 use futures::stream;
 use futures_util::StreamExt;
 
 use cf_chains::Chain;
+use num_traits::CheckedSub;
 
 use crate::witness::common::{chain_source::ChainClient, ExternalChainSource};
 
@@ -42,15 +43,7 @@ where
 	) -> (BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>, Self::Client) {
 		let (chain_stream, chain_client) = self.inner_source.stream_and_client().await;
 
-		let margin = Into::<u64>::into({
-			let remainder = <InnerSource::Chain as Chain>::block_phase(self.margin);
-			self.margin +
-				if remainder == Default::default() {
-					Default::default()
-				} else {
-					<InnerSource::Chain as Chain>::WITNESS_PERIOD - remainder
-				}
-		}) as usize;
+		let margin = self.margin;
 
 		(
 			Box::pin(stream::unfold(
@@ -66,25 +59,61 @@ where
 					>::new(),
 				),
 				move |(mut chain_stream, chain_client, mut unsafe_cache)| async move {
-					utilities::loop_select!(
-						if let Some(header) = chain_stream.next() => {
-							let header_index = header.index;
-							<InnerSource::Chain as Chain>::assert_block_phase(header_index);
-							if unsafe_cache.back().map_or(false, |last_header| Some(&last_header.hash) != header.parent_hash.as_ref()) {
-								unsafe_cache.clear();
-							}
-							unsafe_cache.push_back(header);
-							if let Some(next_output_index) = Step::backward_checked(header_index, margin) {
-								break Some(if unsafe_cache.len() > margin {
-									assert_eq!(unsafe_cache.len() - 1, margin);
-									unsafe_cache.pop_front().unwrap()
-								} else {
-									// We don't check sequence of hashes and assume due to order of requests it will be safe (even though this is not true)
-									chain_client.header_at_index(next_output_index).await
-								})
-							}
-						} else break None,
-					).map(move |item| (item, (chain_stream, chain_client, unsafe_cache)))
+					fn pop_safe_from_cache<CS: ExternalChainSource>(
+						unsafe_cache: &mut VecDeque<
+							Header<
+								<CS as ChainSource>::Index,
+								<CS as ChainSource>::Hash,
+								<CS as ChainSource>::Data,
+							>,
+						>,
+						margin: <CS as ChainSource>::Index,
+					) -> Option<
+						Header<
+							<CS as ChainSource>::Index,
+							<CS as ChainSource>::Hash,
+							<CS as ChainSource>::Data,
+						>,
+					> {
+						use num_traits::CheckedSub;
+
+						if (*<CS::Chain as Chain>::block_witness_range(unsafe_cache.back()?.index)
+							.end())
+						.checked_sub(
+							<CS::Chain as Chain>::block_witness_range(unsafe_cache.front()?.index)
+								.end(),
+						)? >= margin
+						{
+							Some(unsafe_cache.pop_front().unwrap())
+						} else {
+							None
+						}
+					}
+
+					if let Some(safe_header) = pop_safe_from_cache::<Self>(&mut unsafe_cache, margin) {
+						Some(safe_header)
+					} else {
+						utilities::loop_select!(
+							if let Some(header) = chain_stream.next() => {
+								let header_index = header.index;
+								assert!(<InnerSource::Chain as Chain>::is_block_witness_root(header_index));
+								if unsafe_cache.back().map_or(false, |last_header| Some(&last_header.hash) != header.parent_hash.as_ref()) {
+									unsafe_cache.clear();
+								}
+								unsafe_cache.push_back(header);
+								if let Some(safe_header) = pop_safe_from_cache::<Self>(&mut unsafe_cache, margin) {
+									break Some(safe_header)
+								} else if let Some(associated_safe_non_root_block) = <InnerSource::Chain as Chain>::block_witness_range(header_index).end().checked_sub(&margin) {
+									// We don't check the sequence of hashes and assume due to order of requests it will be safe (even though this is not true)
+									if *<InnerSource::Chain as Chain>::block_witness_range(associated_safe_non_root_block).end() == associated_safe_non_root_block {
+										break Some(chain_client.header_at_index(<InnerSource::Chain as Chain>::block_witness_root(associated_safe_non_root_block)).await);
+									} else if let Some(safe_root_block) = <InnerSource::Chain as Chain>::checked_block_witness_previous(associated_safe_non_root_block) {
+										break Some(chain_client.header_at_index(safe_root_block).await);
+									}
+								}
+							} else break None,
+						)
+					}.map(move |item| (item, (chain_stream, chain_client, unsafe_cache)))
 				},
 			)),
 			chain_client,
@@ -101,33 +130,32 @@ where
 
 #[cfg(test)]
 mod tests {
+	use sp_runtime::traits::One;
 	use std::{ops::Range, sync::Arc};
 
-	use crate::common::Mutex;
+	use crate::{common::Mutex, witness::common::chain_source::ChainClient};
 
 	use super::*;
 
 	use futures::Stream;
 
 	#[derive(Clone)]
-	pub struct MockChainClient {
+	pub struct MockChainClient<ExternalChain: Chain> {
 		// These are the indices that have been queried, not got from the inner stream.
-		queried_indices: Arc<Mutex<Vec<u64>>>,
+		queried_indices: Arc<Mutex<Vec<ExternalChain::ChainBlockNumber>>>,
 	}
 
-	impl MockChainClient {
-		pub async fn queried_indices(&self) -> Vec<u64> {
+	impl<ExternalChain: Chain> MockChainClient<ExternalChain> {
+		pub async fn queried_indices(&self) -> Vec<ExternalChain::ChainBlockNumber> {
 			let guard = self.queried_indices.lock().await;
 			guard.clone()
 		}
 	}
 
 	#[async_trait::async_trait]
-	impl ChainClient for MockChainClient {
-		type Index = u64;
-
-		type Hash = u64;
-
+	impl<ExternalChain: Chain> ChainClient for MockChainClient<ExternalChain> {
+		type Index = ExternalChain::ChainBlockNumber;
+		type Hash = ExternalChain::ChainBlockNumber;
 		type Data = ();
 
 		async fn header_at_index(
@@ -136,17 +164,37 @@ mod tests {
 		) -> Header<Self::Index, Self::Hash, Self::Data> {
 			let mut queried = self.queried_indices.lock().await;
 			queried.push(index);
-			Header { index, hash: index, parent_hash: Some(index - 1), data: () }
+			Header {
+				index,
+				hash: index + ExternalChain::WITNESS_PERIOD - One::one(),
+				parent_hash: Some(index - One::one()),
+				data: (),
+			}
 		}
 	}
 
-	pub struct MockChainSource<HeaderStream: Stream<Item = Header<u64, u64, ()>> + Send + Sync> {
+	pub struct MockChainSource<
+		ExternalChain: Chain,
+		HeaderStream: Stream<
+				Item = Header<ExternalChain::ChainBlockNumber, ExternalChain::ChainBlockNumber, ()>,
+			> + Send
+			+ Sync,
+	> {
 		stream: Arc<Mutex<Option<HeaderStream>>>,
-		client: MockChainClient,
+		client: MockChainClient<ExternalChain>,
 	}
 
-	impl<HeaderStream: Stream<Item = Header<u64, u64, ()>> + Send + Sync>
-		MockChainSource<HeaderStream>
+	impl<
+			ExternalChain: Chain,
+			HeaderStream: Stream<
+					Item = Header<
+						ExternalChain::ChainBlockNumber,
+						ExternalChain::ChainBlockNumber,
+						(),
+					>,
+				> + Send
+				+ Sync,
+		> MockChainSource<ExternalChain, HeaderStream>
 	{
 		fn new(stream: HeaderStream) -> Self {
 			Self {
@@ -157,14 +205,23 @@ mod tests {
 	}
 
 	#[async_trait::async_trait]
-	impl<HeaderStream: Stream<Item = Header<u64, u64, ()>> + Send + Sync> ChainSource
-		for MockChainSource<HeaderStream>
+	impl<
+			ExternalChain: Chain,
+			HeaderStream: Stream<
+					Item = Header<
+						ExternalChain::ChainBlockNumber,
+						ExternalChain::ChainBlockNumber,
+						(),
+					>,
+				> + Send
+				+ Sync,
+		> ChainSource for MockChainSource<ExternalChain, HeaderStream>
 	{
-		type Index = u64;
-		type Hash = u64;
+		type Index = ExternalChain::ChainBlockNumber;
+		type Hash = ExternalChain::ChainBlockNumber;
 		type Data = ();
 
-		type Client = MockChainClient;
+		type Client = MockChainClient<ExternalChain>;
 
 		async fn stream_and_client(
 			&self,
@@ -174,10 +231,19 @@ mod tests {
 			(Box::pin(stream), self.client.clone())
 		}
 	}
-	impl<HeaderStream: Stream<Item = Header<u64, u64, ()>> + Send + Sync> ExternalChainSource
-		for MockChainSource<HeaderStream>
+	impl<
+			ExternalChain: Chain,
+			HeaderStream: Stream<
+					Item = Header<
+						ExternalChain::ChainBlockNumber,
+						ExternalChain::ChainBlockNumber,
+						(),
+					>,
+				> + Send
+				+ Sync,
+		> ExternalChainSource for MockChainSource<ExternalChain, HeaderStream>
 	{
-		type Chain = cf_chains::Ethereum;
+		type Chain = ExternalChain;
 	}
 
 	pub fn normal_header(index: u64) -> Header<u64, u64, ()> {
@@ -186,7 +252,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn empty_inner_stream_returns_empty_no_lag() {
-		let mock_chain_source = MockChainSource::new(stream::empty());
+		let mock_chain_source = MockChainSource::<cf_chains::Ethereum, _>::new(stream::empty());
 
 		let lag_safety = LagSafety::new(mock_chain_source, 0);
 
@@ -198,7 +264,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn empty_inner_stream_returns_empty_with_lag() {
-		let mock_chain_source = MockChainSource::new(stream::empty());
+		let mock_chain_source = MockChainSource::<cf_chains::Ethereum, _>::new(stream::empty());
 
 		let lag_safety = LagSafety::new(mock_chain_source, 4);
 
@@ -211,7 +277,9 @@ mod tests {
 	#[tokio::test]
 	async fn no_margin_passes_through() {
 		const INDICES: Range<u64> = 5u64..10;
-		let mock_chain_source = MockChainSource::new(stream::iter(INDICES).map(normal_header));
+		let mock_chain_source = MockChainSource::<cf_chains::Ethereum, _>::new(
+			stream::iter(INDICES).map(normal_header),
+		);
 
 		let lag_safety = LagSafety::new(mock_chain_source, 0);
 
@@ -229,7 +297,9 @@ mod tests {
 	async fn margin_holds_up_blocks() {
 		const INDICES: Range<u64> = 5u64..10;
 		const MARGIN: u64 = 2;
-		let mock_chain_source = MockChainSource::new(stream::iter(INDICES).map(normal_header));
+		let mock_chain_source = MockChainSource::<cf_chains::Ethereum, _>::new(
+			stream::iter(INDICES).map(normal_header),
+		);
 		let lag_safety = LagSafety::new(mock_chain_source, MARGIN);
 
 		let (mut chain_stream, client) = lag_safety.stream_and_client().await;
@@ -254,8 +324,10 @@ mod tests {
 		const MARGIN: u64 = 1;
 
 		// one block fork
-		let mock_chain_source =
-			MockChainSource::new(stream::iter([test_header(5, 5, 4), test_header(5, 55, 4)]));
+		let mock_chain_source = MockChainSource::<cf_chains::Ethereum, _>::new(stream::iter([
+			test_header(5, 5, 4),
+			test_header(5, 55, 4),
+		]));
 
 		let lag_safety = LagSafety::new(mock_chain_source, MARGIN);
 
@@ -270,7 +342,7 @@ mod tests {
 	async fn reorg_with_depth_equal_to_safety_margin_queries_for_correct_blocks() {
 		const MARGIN: u64 = 3;
 
-		let mock_chain_source = MockChainSource::new(stream::iter([
+		let mock_chain_source = MockChainSource::<cf_chains::Ethereum, _>::new(stream::iter([
 			// these three are on a bad fork
 			test_header(5, 55, 44),
 			test_header(6, 66, 55),
@@ -303,7 +375,7 @@ mod tests {
 
 		let bad_block = test_header(5, 55, 44);
 
-		let mock_chain_source = MockChainSource::new(stream::iter([
+		let mock_chain_source = MockChainSource::<cf_chains::Ethereum, _>::new(stream::iter([
 			// these three are on a bad fork
 			bad_block,
 			test_header(6, 66, 55),
@@ -331,5 +403,55 @@ mod tests {
 
 		// NB: No 5, since we returned as safe on the bad fork.
 		assert_eq!(client.queried_indices().await, vec![3, 4, 6, 7]);
+	}
+
+	#[tokio::test]
+	async fn margin_functions_with_greater_than_one_witness_period() {
+		async fn test_margin(
+			margins: &[u64],
+			expected: &[Header<u64, u64, ()>],
+			expected_queries: &[u64],
+		) {
+			for margin in margins {
+				let mock_chain_source =
+					MockChainSource::<cf_chains::Arbitrum, _>::new(stream::iter(
+						(72u64..=120).step_by(cf_chains::Arbitrum::WITNESS_PERIOD as usize).map(
+							|index| {
+								test_header(
+									index,
+									index + cf_chains::Arbitrum::WITNESS_PERIOD - 1,
+									index - 1,
+								)
+							},
+						),
+					));
+
+				let lag_safety = LagSafety::new(mock_chain_source, *margin);
+				let (chain_stream, client) = lag_safety.stream_and_client().await;
+
+				assert_eq!(&chain_stream.collect::<Vec<_>>().await[..], expected);
+
+				assert_eq!(&client.queried_indices().await[..], expected_queries);
+			}
+		}
+
+		test_margin(
+			&[0],
+			&[test_header(72, 95, 71), test_header(96, 119, 95), test_header(120, 143, 119)],
+			&[],
+		)
+		.await;
+		test_margin(
+			&[1, 5, 23, 24],
+			&[test_header(48, 71, 47), test_header(72, 95, 71), test_header(96, 119, 95)],
+			&[48],
+		)
+		.await;
+		test_margin(
+			&[25, 36, 47, 48],
+			&[test_header(24, 47, 23), test_header(48, 71, 47), test_header(72, 95, 71)],
+			&[24, 48],
+		)
+		.await;
 	}
 }

@@ -57,7 +57,7 @@ where
 	EventParameters: std::fmt::Debug + ethers::contract::EthLogDecode + Send + Sync + 'static,
 	EvmRpcClient: EvmRetryRpcApi,
 {
-	Chain::assert_block_phase(header.index);
+	assert!(Chain::is_block_witness_root(header.index));
 	if Chain::WITNESS_PERIOD == 1 {
 		let mut contract_bloom = Bloom::default();
 		contract_bloom.accrue(BloomInput::Raw(&contract_address.0));
@@ -71,7 +71,7 @@ where
 		}
 	} else {
 		eth_rpc
-			.get_logs_range(Chain::block_period(header.index), contract_address)
+			.get_logs_range(Chain::block_witness_range(header.index), contract_address)
 			.await
 	}
 	.into_iter()
