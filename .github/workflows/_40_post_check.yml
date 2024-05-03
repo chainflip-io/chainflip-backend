@@ -80,7 +80,6 @@ jobs:
         env:
           BINARY_ROOT_PATH: .
           DEBUG_OUTPUT_DESTINATION: /tmp/chainflip/debug.log
-          NODE_COUNT: 1-node
         run: |
           set -x
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
