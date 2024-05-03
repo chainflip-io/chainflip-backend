@@ -314,7 +314,7 @@ mod boost_pool_rpc {
 	#[derive(Serialize, Deserialize)]
 	struct AccountAndAmount {
 		account_id: AccountId32,
-		amount: NumberOrHex,
+		amount: U256,
 	}
 
 	#[derive(Serialize, Deserialize)]
@@ -349,7 +349,7 @@ mod boost_pool_rpc {
 					.into_iter()
 					.map(|(account_id, amount)| AccountAndAmount {
 						account_id,
-						amount: NumberOrHex::from(amount),
+						amount: U256::from(amount),
 					})
 					.collect(),
 				deposits_pending_finalization: details
@@ -361,7 +361,7 @@ mod boost_pool_rpc {
 							.into_iter()
 							.map(|(account_id, amount)| AccountAndAmount {
 								account_id,
-								amount: NumberOrHex::from(amount.total),
+								amount: U256::from(amount.total),
 							})
 							.collect(),
 					})
@@ -406,7 +406,7 @@ mod boost_pool_rpc {
 							.into_iter()
 							.map(|(account_id, amount)| AccountAndAmount {
 								account_id,
-								amount: NumberOrHex::from(amount.fee),
+								amount: U256::from(amount.fee),
 							})
 							.collect(),
 					})

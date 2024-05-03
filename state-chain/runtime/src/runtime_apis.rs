@@ -78,8 +78,8 @@ fn serialize_as_hex<S>(amount: &AssetAmount, s: S) -> Result<S::Ok, S::Error>
 where
 	S: serde::Serializer,
 {
-	use cf_utilities::rpc::NumberOrHex;
-	NumberOrHex::from(*amount).serialize(s)
+	use sp_core::U256;
+	U256::from(*amount).serialize(s)
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
