@@ -1630,7 +1630,7 @@ impl_runtime_apis! {
 
 					BoostPoolDepth {
 						asset: asset.into(),
-						tier: tier as u16,
+						tier,
 						available_amount: pool.get_available_amount().into()
 					}
 
@@ -1655,7 +1655,7 @@ impl_runtime_apis! {
 
 				pallet_cf_ingress_egress::BoostPools::<Runtime, I>::iter_prefix(asset).map(|(tier, pool)| {
 					(
-						tier as u16,
+						tier,
 						BoostPoolDetails {
 							available_amounts: pool.get_amounts().into_iter().map(|(id, amount)| (id, amount.into())).collect(),
 							pending_boosts: pool.get_pending_boosts().into_iter().map(|(deposit_id, owed_amounts)| {

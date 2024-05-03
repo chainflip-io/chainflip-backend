@@ -250,6 +250,21 @@ export function chainGasAsset(chain: Chain): Asset {
   }
 }
 
+export function getAssetsForChain(chain: Chain): Asset[] {
+  switch (chain) {
+    case 'Ethereum':
+      return [Assets.Eth, Assets.Usdc, Assets.Usdt, Assets.Flip];
+    case 'Bitcoin':
+      return [Assets.Btc];
+    case 'Polkadot':
+      return [Assets.Dot];
+    case 'Arbitrum':
+      return [Assets.ArbEth, Assets.ArbUsdc];
+    default:
+      throw new Error(`Unsupported chain: ${chain}`);
+  }
+}
+
 // State Chain uses non-unique string identifiers for assets.
 export function stateChainAssetFromAsset(asset: Asset): string {
   if (assetConstants[asset]) {
@@ -337,6 +352,22 @@ export const getPolkadotApi = getCachedSubstrateApi(
 );
 
 export const polkadotSigningMutex = new Mutex();
+
+export async function ingressEgressPalletForChain(chain: Chain) {
+  const chainflip = await getChainflipApi();
+  switch (chain) {
+    case 'Ethereum':
+      return chainflip.tx.ethereumIngressEgress;
+    case 'Bitcoin':
+      return chainflip.tx.bitcoinIngressEgress;
+    case 'Polkadot':
+      return chainflip.tx.polkadotIngressEgress;
+    case 'Arbitrum':
+      return chainflip.tx.arbitrumIngressEgress;
+    default:
+      throw new Error(`Unsupported chain: ${chain}`);
+  }
+}
 
 export function getBtcClient(): Client {
   const endpoint = process.env.BTC_ENDPOINT || 'http://127.0.0.1:8332';
