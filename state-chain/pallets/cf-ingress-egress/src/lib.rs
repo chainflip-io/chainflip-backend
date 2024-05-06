@@ -1804,13 +1804,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		} else {
 			// In case of an none-gas asset, we need to use the simulation amount. If the simulation
 			// amount is not available, we use the available amount.
-			let simulation_amount = if let Some (simulation_amount) = get_simulation_amount(asset.into()) {
+			let simulation_amount = if let Some(simulation_amount) =
+				get_simulation_amount(asset.into())
+			{
 				simulation_amount
 			} else {
 				log::warn!("No simulation amount available for {asset:?}. Using available amount.");
 				available_amount.into()
 			};
-	
+
 			let transaction_fee = T::AssetConverter::calculate_asset_conversion(
 				asset,
 				simulation_amount,
