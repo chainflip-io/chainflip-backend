@@ -9,6 +9,7 @@ pub enum NoneChain {}
 impl Chain for NoneChain {
 	const NAME: &'static str = "NONE";
 	const GAS_ASSET: Self::ChainAsset = assets::any::Asset::Usdc;
+	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 	type ChainCrypto = NoneChainCrypto;
 	type ChainBlockNumber = u64;
 	type ChainAmount = u64;

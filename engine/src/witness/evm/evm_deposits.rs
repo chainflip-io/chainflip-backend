@@ -3,7 +3,7 @@ use crate::{
 	witness::common::{RuntimeCallHasChain, RuntimeHasChain},
 };
 use anyhow::ensure;
-use cf_chains::instances::ChainInstanceFor;
+use cf_chains::{instances::ChainInstanceFor, Chain};
 use cf_primitives::EpochIndex;
 use ethers::types::Bloom;
 use futures_core::Future;
@@ -62,6 +62,8 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
 	{
 		self.then(move |epoch, header| {
+			assert!(<Inner::Chain as Chain>::is_block_witness_root(header.index));
+
 			let eth_rpc = eth_rpc.clone();
 			let process_call = process_call.clone();
 			async move {
@@ -87,7 +89,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								addresses,
 							)
 							.await?,
-							events_at_block::<VaultEvents, _>(
+							events_at_block::<Inner::Chain, VaultEvents, _>(
 								Header {
 									index: header.index,
 									hash: header.hash,
@@ -182,9 +184,7 @@ where
 /// by the Deposit contract upon deployment or after it.
 /// Note that when we have a contract deployed already we substrate the balance at the previous
 /// block, since we will have already witnessed the deposits at the time the deposit was made.
-pub fn eth_ingresses_at_block<
-	Addresses: IntoIterator<Item = (H160, (AddressState, AddressState))>,
->(
+fn eth_ingresses_at_block<Addresses: IntoIterator<Item = (H160, (AddressState, AddressState))>>(
 	addresses: Addresses,
 	native_events: Vec<FetchedNativeFilter>,
 ) -> Result<Vec<(H160, U256)>, anyhow::Error> {
@@ -235,6 +235,7 @@ mod tests {
 	};
 
 	use super::{super::contract_common::events_at_block, *};
+	use cf_chains::{Chain, Ethereum};
 	use ethers::prelude::U256;
 	use futures_util::FutureExt;
 	use utilities::task_scope;
@@ -325,6 +326,7 @@ mod tests {
 					"eth_rpc",
 					"eth_subscribe",
 					"Ethereum",
+					Ethereum::WITNESS_PERIOD,
 				)
 				.unwrap();
 
@@ -346,7 +348,7 @@ mod tests {
 				.await
 				.unwrap();
 
-				let fetched_native_events = events_at_block::<VaultEvents, _>(
+				let fetched_native_events = events_at_block::<cf_chains::Ethereum, VaultEvents, _>(
 					Header {
 						index: block_number,
 						parent_hash: Some(block.parent_hash),

@@ -38,7 +38,7 @@ use self::{
 	settings::{CommandLineOptions, Settings, DEFAULT_SETTINGS_DIR},
 };
 use anyhow::Context;
-use cf_chains::dot::PolkadotHash;
+use cf_chains::{dot::PolkadotHash, Chain};
 use cf_primitives::AccountRole;
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
@@ -231,6 +231,7 @@ async fn run_main(
 					"eth_rpc",
 					"eth_subscribe",
 					"Ethereum",
+					cf_chains::Ethereum::WITNESS_PERIOD,
 				)?
 			};
 			let arb_client = {
@@ -250,6 +251,7 @@ async fn run_main(
 					"arb_rpc",
 					"arb_subscribe",
 					"Arbitrum",
+					cf_chains::Arbitrum::WITNESS_PERIOD,
 				)?
 			};
 

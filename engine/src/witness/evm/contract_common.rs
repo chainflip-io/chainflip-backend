@@ -47,30 +47,36 @@ impl<EventParameters: Debug + ethers::contract::EthLogDecode> Event<EventParamet
 	}
 }
 
-pub async fn events_at_block<EventParameters, EvmRpcClient>(
+pub async fn events_at_block<Chain, EventParameters, EvmRpcClient>(
 	header: Header<u64, H256, Bloom>,
 	contract_address: H160,
 	eth_rpc: &EvmRpcClient,
 ) -> Result<Vec<Event<EventParameters>>>
 where
+	Chain: cf_chains::Chain<ChainBlockNumber = u64>,
 	EventParameters: std::fmt::Debug + ethers::contract::EthLogDecode + Send + Sync + 'static,
 	EvmRpcClient: EvmRetryRpcApi,
 {
-	let mut contract_bloom = Bloom::default();
-	contract_bloom.accrue(BloomInput::Raw(&contract_address.0));
+	assert!(Chain::is_block_witness_root(header.index));
+	if Chain::WITNESS_PERIOD == 1 {
+		let mut contract_bloom = Bloom::default();
+		contract_bloom.accrue(BloomInput::Raw(&contract_address.0));
 
-	// if we have logs for this block, fetch them.
-	if header.data.contains_bloom(&contract_bloom) {
-		eth_rpc
-			.get_logs(header.hash, contract_address)
-			.await
-			.into_iter()
-			.map(|unparsed_log| -> anyhow::Result<Event<EventParameters>> {
-				Event::<EventParameters>::new_from_unparsed_logs(unparsed_log)
-			})
-			.collect::<anyhow::Result<Vec<_>>>()
+		// if we have logs for this block, fetch them.
+		if header.data.contains_bloom(&contract_bloom) {
+			eth_rpc.get_logs(header.hash, contract_address).await
+		} else {
+			// we know there won't be interesting logs, so don't fetch for events
+			vec![]
+		}
 	} else {
-		// we know there won't be interesting logs, so don't fetch for events
-		anyhow::Result::Ok(vec![])
+		eth_rpc
+			.get_logs_range(Chain::block_witness_range(header.index), contract_address)
+			.await
 	}
+	.into_iter()
+	.map(|unparsed_log| -> anyhow::Result<Event<EventParameters>> {
+		Event::<EventParameters>::new_from_unparsed_logs(unparsed_log)
+	})
+	.collect::<anyhow::Result<Vec<_>>>()
 }

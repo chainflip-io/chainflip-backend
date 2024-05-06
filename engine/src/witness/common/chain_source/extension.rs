@@ -44,9 +44,12 @@ pub trait ChainSourceExt: ChainSource {
 	/// Apply some safety margin to the chain source, such that the chain source will lag behind by
 	/// a set margin. This is specifically for chains that don't offer deterministic finality, such
 	/// as Ethereum or Bitcoin.
-	fn lag_safety(self, margin: usize) -> LagSafety<Self>
+	fn lag_safety(
+		self,
+		margin: <<Self as ExternalChainSource>::Chain as cf_chains::Chain>::ChainBlockNumber,
+	) -> LagSafety<Self>
 	where
-		Self: Sized,
+		Self: ExternalChainSource + Sized,
 	{
 		LagSafety::new(self, margin)
 	}
