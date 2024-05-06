@@ -30,6 +30,25 @@ mod old {
 		old::DepositChannelDetails<T, I>,
 		OptionQuery,
 	>;
+
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	pub struct PrewitnessedDeposit<C: Chain> {
+		pub asset: C::ChainAsset,
+		pub amount: C::ChainAmount,
+		pub deposit_address: C::ChainAccount,
+		pub block_height: C::ChainBlockNumber,
+		pub deposit_details: C::DepositDetails,
+	}
+
+	#[frame_support::storage_alias]
+	pub type PrewitnessedDeposits<T: Config<I>, I: 'static> = StorageDoubleMap<
+		Pallet<T, I>,
+		Twox64Concat,
+		ChannelId,
+		Twox64Concat,
+		PrewitnessedDepositId,
+		PrewitnessedDeposit<<T as Config<I>>::TargetChain>,
+	>;
 }
 
 pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
@@ -50,6 +69,8 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			},
 		);
 
+		let _ = old::PrewitnessedDeposits::<T, I>::clear(u32::MAX, None);
+
 		Weight::zero()
 	}
 
@@ -57,6 +78,13 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		let number_of_channels_in_lookup =
 			old::DepositChannelLookup::<T, I>::iter_keys().count() as u32;
+
+		// Ensure that test is set up correctly:
+		#[cfg(test)]
+		{
+			use crate::mock_btc::Test;
+			assert_ne!(old::PrewitnessedDeposits::<Test, _>::iter_keys().count(), 0);
+		}
 
 		Ok(number_of_channels_in_lookup.encode())
 	}
@@ -70,12 +98,22 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 				number_of_channels_in_lookup_pre_migration,
 			"DepositChannelLookup migration failed."
 		);
+
+		// Test that we delete all entries as part of the migration:
+		#[cfg(test)]
+		{
+			use crate::mock_btc::Test;
+			assert_eq!(old::PrewitnessedDeposits::<Test, _>::iter_keys().count(), 0);
+		}
+
 		Ok(())
 	}
 }
 
 #[cfg(test)]
 mod migration_tests {
+	use cf_chains::btc::UtxoId;
+	use sp_core::H256;
 
 	#[test]
 	fn test_migration() {
@@ -94,6 +132,18 @@ mod migration_tests {
 			// Insert mock data into old storage
 			old::DepositChannelLookup::insert(address1.clone(), mock_deposit_channel_details());
 			old::DepositChannelLookup::insert(address2.clone(), mock_deposit_channel_details());
+
+			old::PrewitnessedDeposits::<Test, _>::insert(
+				1,
+				2,
+				old::PrewitnessedDeposit {
+					asset: cf_chains::assets::btc::Asset::Btc,
+					amount: 0,
+					deposit_address: address1.clone(),
+					block_height: 0,
+					deposit_details: UtxoId { tx_id: H256::zero(), vout: 0 },
+				},
+			);
 
 			#[cfg(feature = "try-runtime")]
 			let state: Vec<u8> = super::Migration::<Test, _>::pre_upgrade().unwrap();
