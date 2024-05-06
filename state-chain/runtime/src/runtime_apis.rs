@@ -79,7 +79,6 @@ fn serialize_as_hex<S>(amount: &AssetAmount, s: S) -> Result<S::Ok, S::Error>
 where
 	S: serde::Serializer,
 {
-	use sp_core::U256;
 	U256::from(*amount).serialize(s)
 }
 
