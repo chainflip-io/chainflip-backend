@@ -1,9 +1,10 @@
 use anyhow::{anyhow, Context};
-use core::time::Duration;
+use core::{convert::TryFrom, time::Duration};
 use futures::{stream, Stream};
 #[doc(hidden)]
 pub use lazy_format::lazy_format as internal_lazy_format;
-use rpc::NumberOrHex;
+use sp_core::U256;
+use std::any::type_name;
 
 pub mod future_map;
 pub mod loop_select;
@@ -12,7 +13,9 @@ pub mod rle_bitmap;
 pub mod spmc;
 pub mod task_scope;
 pub mod unending_stream;
+use crate::rpc::NumberOrHex;
 pub use unending_stream::UnendingStream;
+
 pub mod cached_stream;
 pub mod logging;
 pub mod redact_endpoint_secret;
@@ -30,6 +33,17 @@ pub fn clean_hex_address<A: TryFrom<Vec<u8>>>(address_str: &str) -> Result<A, an
 		.context("Invalid hex")?
 		.try_into()
 		.map_err(|_| anyhow::anyhow!("Invalid address length"))
+}
+
+pub fn try_convert_u256_to<T: TryFrom<U256> + std::fmt::Display>(
+	amount: U256,
+) -> anyhow::Result<T> {
+	T::try_from(amount).map_err(|_| {
+		anyhow!(
+			"Error converting amount to {}. Please use a valid hex string as input.",
+			type_name::<T>()
+		)
+	})
 }
 
 pub fn try_parse_number_or_hex(amount: NumberOrHex) -> anyhow::Result<u128> {
