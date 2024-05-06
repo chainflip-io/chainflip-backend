@@ -170,6 +170,8 @@ async function testTransferAsset() {
   // Expect result to be a block hash
   assert.match(result, /0x[0-9a-fA-F]{64}/, `Unexpected transfer asset result`);
 
+  await sleep(6000);
+
   const newBalancesSource = await getLpBalance(sourceLpAccount.address);
   const newBalanceDestination = await getLpBalance(destinationLpAccount.address);
 
