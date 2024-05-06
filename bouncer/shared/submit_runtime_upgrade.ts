@@ -35,8 +35,8 @@ export async function submitRuntimeUpgradeWithRestrictions(
   }
 
   console.log('Submitting runtime upgrade.');
-  await submitGovernanceExtrinsic(
-    chainflip.tx.governance.chainflipRuntimeUpgrade(versionPercentRestriction, runtimeWasm),
+  await submitGovernanceExtrinsic((api) =>
+    api.tx.governance.chainflipRuntimeUpgrade(versionPercentRestriction, runtimeWasm),
   );
 
   console.log('Submitted runtime upgrade. Waiting for the runtime upgrade to complete.');

@@ -1,6 +1,7 @@
 import Web3 from 'web3';
-import { approveVault, Chain } from '@chainflip/cli';
+import { approveVault } from '@chainflip/cli';
 import {
+  Chain,
   amountToFineAmount,
   ethNonceMutex,
   arbNonceMutex,

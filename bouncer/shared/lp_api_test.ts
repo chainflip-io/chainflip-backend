@@ -1,4 +1,4 @@
-import { Chain, InternalAssets as Assets } from '@chainflip/cli';
+import { InternalAssets as Assets } from '@chainflip/cli';
 import assert from 'assert';
 import Keyring from '@polkadot/keyring';
 import {
@@ -13,6 +13,7 @@ import {
   isWithinOnePercent,
   assetDecimals,
   stateChainAssetFromAsset,
+  Chain,
 } from './utils';
 import { jsonRpc } from './json_rpc';
 import { provideLiquidity } from './provide_liquidity';
