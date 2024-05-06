@@ -490,8 +490,8 @@ pub trait CustomApi {
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcAccountInfoV2>;
-	#[method(name = "asset_balances")]
-	fn cf_asset_balances(
+	#[method(name = "asset_free_balances", aliases = ["cf_asset_balances"])]
+	fn cf_asset_free_balances(
 		&self,
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
@@ -948,14 +948,14 @@ where
 		})
 	}
 
-	fn cf_asset_balances(
+	fn cf_asset_free_balances(
 		&self,
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<any::AssetMap<U256>> {
 		self.client
 			.runtime_api()
-			.cf_asset_balances(self.unwrap_or_best(at), account_id)
+			.cf_asset_free_balances(self.unwrap_or_best(at), account_id)
 			.map_err(to_rpc_error)
 			.and_then(|result| {
 				result

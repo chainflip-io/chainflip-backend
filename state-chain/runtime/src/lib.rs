@@ -1163,7 +1163,7 @@ impl_runtime_apis! {
 				})
 				.collect()
 		}
-		fn cf_asset_balances(account_id: AccountId) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage> {
+		fn cf_asset_free_balances(account_id: AccountId) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage> {
 			LiquidityProvider::asset_balances(&account_id).map_err(Into::into)
 		}
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {

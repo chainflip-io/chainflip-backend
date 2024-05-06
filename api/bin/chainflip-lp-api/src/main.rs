@@ -320,7 +320,7 @@ impl RpcServer for RpcServerImpl {
 			.state_chain_client
 			.base_rpc_client
 			.raw_rpc_client
-			.cf_asset_balances(
+			.cf_asset_free_balances(
 				self.api.state_chain_client.account_id(),
 				Some(self.api.state_chain_client.latest_finalized_block().hash),
 			)
