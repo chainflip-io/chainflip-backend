@@ -533,13 +533,14 @@ macro_rules! assets {
 	}
 }
 
-pub fn get_simulation_amount(asset: Asset) -> u128 {
+/// Returns an amount for an none-gas asset we use for transaction fee estimation.
+pub fn get_simulation_amount(asset: Asset) -> Option<u128> {
 	match asset {
-		Asset::Flip => 5_000_000_000_000_000_000,
-		Asset::Usdc => 10_000_000,
-		Asset::Usdt => 10_000_000,
-		Asset::ArbUsdc => 10_000_000,
-		_ => panic!("Unsupported asset"),
+		Asset::Flip => Some(5_000_000_000_000_000_000),
+		Asset::Usdc => Some(10_000_000),
+		Asset::Usdt => Some(10_000_000),
+		Asset::ArbUsdc => Some(10_000_000),
+		_ => None,
 	}
 }
 

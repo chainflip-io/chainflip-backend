@@ -1802,8 +1802,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Self::accrue_withheld_fee(asset, sp_std::cmp::min(fee_estimate, available_amount));
 			available_amount.saturating_sub(fee_estimate)
 		} else {
-			// In case of an none-gas asset, we need to use the simulation amount.
-			let simulation_amount = get_simulation_amount(asset.into());
+			// In case of an none-gas asset, we need to use the simulation amount. If the simulation
+			// amount is not available, we use the available amount.
+			let simulation_amount = if let Some (simulation_amount) = get_simulation_amount(asset.into()) {
+				simulation_amount
+			} else {
+				log::warn!("No simulation amount available for {asset:?}. Using available amount.");
+				available_amount.into()
+			};
+	
 			let transaction_fee = T::AssetConverter::calculate_asset_conversion(
 				asset,
 				simulation_amount,
@@ -1819,7 +1826,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				T::SwapQueueApi::schedule_swap(
 					asset.into(),
 					<T::TargetChain as Chain>::GAS_ASSET.into(),
-					transaction_fee.into(),
+					transaction_fee,
 					SwapType::IngressEgressFee,
 				);
 			}
