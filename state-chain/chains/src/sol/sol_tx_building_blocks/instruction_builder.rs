@@ -156,11 +156,9 @@ mod test {
 	use super::*;
 	use crate::{
 		sol::{
+			consts::MAX_TRANSACTION_LENGTH,
 			extra_types_for_testing::{Keypair, Signer},
-			sol_tx_building_blocks::{
-				generate_deposit_channel, NONCE_ACCOUNTS, UPGRADE_MANAGER_PROGRAM_DATA_ACCOUNT,
-				VAULT_PROGRAM_DATA_ACCOUNT,
-			},
+			sol_tx_building_blocks::{generate_deposit_channel, sol_test_values::*},
 			SolAmount, SolHash, SolMessage, SolTransaction, SolanaDepositChannelState,
 		},
 		ChainEnvironment,
@@ -256,6 +254,8 @@ mod test {
 
 		//println!("tx:{:?}", hex::encode(serialized_tx.clone()));
 		assert_eq!(serialized_tx, expected_serialized_tx);
+		println!("{:?}", serialized_tx.len());
+		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
 	}
 
 	#[test]

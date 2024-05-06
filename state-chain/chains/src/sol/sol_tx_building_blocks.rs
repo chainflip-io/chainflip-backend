@@ -7,7 +7,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
-pub use crate::sol::{consts::SYSTEM_PROGRAM_ID, SolSignature};
+pub use crate::sol::{consts::*, SolSignature};
 
 use crate::sol::{SolAddress, SolHash};
 
@@ -27,52 +27,6 @@ use super::program_instructions::SystemProgramInstruction;
 pub const HASH_BYTES: usize = 32;
 /// Maximum string length of a base58 encoded pubkey
 const MAX_BASE58_LEN: usize = 44;
-
-// Solana native programs
-pub const TOKEN_PROGRAM_ID: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
-pub const ASSOCIATED_TOKEN_PROGRAM_ID: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
-pub const SYS_VAR_RECENT_BLOCKHASHES: &str = "SysvarRecentB1ockHashes11111111111111111111";
-pub const SYS_VAR_INSTRUCTIONS: &str = "Sysvar1nstructions1111111111111111111111111";
-pub const SYS_VAR_RENT: &str = "SysvarRent111111111111111111111111111111111";
-pub const SYS_VAR_CLOCK: &str = "SysvarC1ock11111111111111111111111111111111";
-pub const BPF_LOADER_UPGRADEABLE_ID: &str = "BPFLoaderUpgradeab1e11111111111111111111111";
-pub const COMPUTE_BUDGET_PROGRAM: &str = "ComputeBudget111111111111111111111111111111";
-pub const MAX_TRANSACTION_LENGTH: usize = 1_232;
-
-// Chainflip addresses - can be constants on a per-chain basis inserted on runtime upgrade.
-// Addresses and bumps can be derived from the seeds. However, for most of them there is no
-// need to rederive them every time so we could include them as constants. The token vault
-// ata's for each of the tokens can be derived on the fly but we might want to also store
-// them as constants for simplicity. Initial nonce account hashes should probably also be
-// inserted on chain genesis but won't be constant.
-pub const VAULT_PROGRAM: &str = "8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf";
-pub const VAULT_PROGRAM_DATA_ADDRESS: &str = "3oEKmL4nsw6RDZWhkYTdCUmjxDrzVkm1cWayPsvn3p57";
-pub const VAULT_PROGRAM_DATA_ACCOUNT: &str = "623nEsyGYWKYggY1yHxQFJiBarL9jdWdrMr7ASiCKP6a";
-// MIN_PUB_KEY per supported spl-token
-pub const MINT_PUB_KEY: &str = "24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p";
-pub const TOKEN_VAULT_PDA_ACCOUNT: &str = "9j17hjg8wR2uFxJAJDAFahwsgTCNx35sc5qXSxDmuuF6";
-// This can be derived from the TOKEN_VAULT_PDA_ACCOUNT and the mintPubKey but we can have it stored
-// There will be a different one per each supported spl-token
-pub const TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT: &str =
-	"DUjCLckPi4g7QAwBEwuFL1whpgY6L9fxwXnqbWvS2pcW";
-pub const UPGRADE_MANAGER_PROGRAM: &str = "274BzCz5RPHJZsxdcSGySahz4qAWqwSDcmz1YEKkGaZC";
-pub const UPGRADE_MANAGER_PROGRAM_DATA_ACCOUNT: &str =
-	"CAGADTb6bdpm4L4esntbLQovDyg6Wutiot2DNkMR8wZa";
-pub const UPGRADE_MANAGER_PDA_SIGNER_SEED: [u8; 6] = [115u8, 105u8, 103u8, 110u8, 101u8, 114u8];
-pub const UPGRADE_MANAGER_PDA_SIGNER_BUMP: u8 = 255;
-pub const UPGRADE_MANAGER_PDA_SIGNER: &str = "2SAhe89c1umM2JvCnmqCEnY8UCQtNPEKGe7UXA8KSQqH";
-pub const NONCE_ACCOUNTS: [&str; 10] = [
-	"2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw",
-	"HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo",
-	"HDYArziNzyuNMrK89igisLrXFe78ti8cvkcxfx4qdU2p",
-	"HLPsNyxBqfq2tLE31v6RiViLp2dTXtJRgHgsWgNDRPs2",
-	"GKMP63TqzbueWTrFYjRwMNkAyTHpQ54notRbAbMDmePM",
-	"EpmHm2aSPsB5ZZcDjqDhQ86h1BV32GFCbGSMuC58Y2tn",
-	"9yBZNMrLrtspj4M7bEf2X6tqbqHxD2vNETw8qSdvJHMa",
-	"J9dT7asYJFGS68NdgDCYjzU2Wi8uBoBusSHN1Z6JLWna",
-	"GUMpVpQFNYJvSbyTtUarZVL7UDUgErKzDTSVJhekUX55",
-	"AUiHYbzH7qLZSkb3u7nAqtvqC7e41sEzgWjBEvXrpfGv",
-];
 
 /// An atomically-commited sequence of instructions.
 ///
@@ -843,9 +797,11 @@ impl FromStr for Hash {
 pub fn generate_address(
 	seed: impl AsRef<[u8]>,
 ) -> Result<(SolAddress, u8), crate::sol::AddressDerivationError> {
-	crate::sol::DerivedAddressBuilder::from_address(SolAddress::from_str(VAULT_PROGRAM).unwrap())?
-		.chain_seed(seed)?
-		.finish()
+	crate::sol::DerivedAddressBuilder::from_address(
+		SolAddress::from_str(sol_test_values::VAULT_PROGRAM).unwrap(),
+	)?
+	.chain_seed(seed)?
+	.finish()
 }
 
 #[cfg(test)]
@@ -859,25 +815,51 @@ pub fn generate_deposit_channel(channel_id: u64) -> DepositChannel<Solana> {
 		state: crate::sol::SolanaDepositChannelState { seed: seed.to_vec(), bump },
 	}
 }
+pub mod sol_test_values {
+	// Values used for testing purposes
+	pub const VAULT_PROGRAM: &str = "8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf";
+	pub const VAULT_PROGRAM_DATA_ADDRESS: &str = "3oEKmL4nsw6RDZWhkYTdCUmjxDrzVkm1cWayPsvn3p57";
+	pub const VAULT_PROGRAM_DATA_ACCOUNT: &str = "623nEsyGYWKYggY1yHxQFJiBarL9jdWdrMr7ASiCKP6a";
+	// MIN_PUB_KEY per supported spl-token
+	pub const MINT_PUB_KEY: &str = "24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p";
+	pub const TOKEN_VAULT_PDA_ACCOUNT: &str = "9j17hjg8wR2uFxJAJDAFahwsgTCNx35sc5qXSxDmuuF6";
+	// This can be derived from the TOKEN_VAULT_PDA_ACCOUNT and the mintPubKey but we can have it
+	// stored There will be a different one per each supported spl-token
+	pub const TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT: &str =
+		"DUjCLckPi4g7QAwBEwuFL1whpgY6L9fxwXnqbWvS2pcW";
+	pub const UPGRADE_MANAGER_PROGRAM: &str = "274BzCz5RPHJZsxdcSGySahz4qAWqwSDcmz1YEKkGaZC";
+	pub const UPGRADE_MANAGER_PROGRAM_DATA_ACCOUNT: &str =
+		"CAGADTb6bdpm4L4esntbLQovDyg6Wutiot2DNkMR8wZa";
+	pub const UPGRADE_MANAGER_PDA_SIGNER_SEED: [u8; 6] = [115u8, 105u8, 103u8, 110u8, 101u8, 114u8];
+	pub const UPGRADE_MANAGER_PDA_SIGNER_BUMP: u8 = 255;
+	pub const UPGRADE_MANAGER_PDA_SIGNER: &str = "2SAhe89c1umM2JvCnmqCEnY8UCQtNPEKGe7UXA8KSQqH";
+	pub const NONCE_ACCOUNTS: [&str; 10] = [
+		"2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw",
+		"HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo",
+		"HDYArziNzyuNMrK89igisLrXFe78ti8cvkcxfx4qdU2p",
+		"HLPsNyxBqfq2tLE31v6RiViLp2dTXtJRgHgsWgNDRPs2",
+		"GKMP63TqzbueWTrFYjRwMNkAyTHpQ54notRbAbMDmePM",
+		"EpmHm2aSPsB5ZZcDjqDhQ86h1BV32GFCbGSMuC58Y2tn",
+		"9yBZNMrLrtspj4M7bEf2X6tqbqHxD2vNETw8qSdvJHMa",
+		"J9dT7asYJFGS68NdgDCYjzU2Wi8uBoBusSHN1Z6JLWna",
+		"GUMpVpQFNYJvSbyTtUarZVL7UDUgErKzDTSVJhekUX55",
+		"AUiHYbzH7qLZSkb3u7nAqtvqC7e41sEzgWjBEvXrpfGv",
+	];
+}
 
 #[cfg(test)]
 mod tests {
 	use crate::sol::{
 		bpf_loader_instructions::set_upgrade_authority,
 		compute_budget::ComputeBudgetInstruction,
+		consts::*,
 		extra_types_for_testing::{Keypair, Signer},
 		program_instructions::{
 			ProgramInstruction, SystemProgramInstruction, UpgradeManagerProgram, VaultProgram,
 		},
 		sol_tx_building_blocks::{
-			generate_address, generate_deposit_channel, AccountMeta, BorshDeserialize,
-			BorshSerialize, Hash, Instruction, Message, Pubkey, Transaction,
-			BPF_LOADER_UPGRADEABLE_ID, MAX_TRANSACTION_LENGTH, MINT_PUB_KEY, NONCE_ACCOUNTS,
-			SYSTEM_PROGRAM_ID, SYS_VAR_CLOCK, SYS_VAR_INSTRUCTIONS, SYS_VAR_RENT, TOKEN_PROGRAM_ID,
-			TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT, TOKEN_VAULT_PDA_ACCOUNT,
-			UPGRADE_MANAGER_PDA_SIGNER, UPGRADE_MANAGER_PDA_SIGNER_BUMP,
-			UPGRADE_MANAGER_PDA_SIGNER_SEED, UPGRADE_MANAGER_PROGRAM_DATA_ACCOUNT, VAULT_PROGRAM,
-			VAULT_PROGRAM_DATA_ACCOUNT, VAULT_PROGRAM_DATA_ADDRESS,
+			generate_address, generate_deposit_channel, sol_test_values::*, AccountMeta,
+			BorshDeserialize, BorshSerialize, Hash, Instruction, Message, Pubkey, Transaction,
 		},
 		token_instructions::AssociatedTokenAccountInstruction,
 		SolAmount, SolComputeLimit,
