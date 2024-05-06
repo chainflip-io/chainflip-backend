@@ -172,7 +172,7 @@ jobs:
           git checkout ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}
           git rev-parse HEAD
           cd bouncer
-          pnpm install
+          pnpm install --frozen-lockfile
           ./run.sh
 
       # we need to be sure that when this fails, we catch the error, any panics etc. that occur
@@ -185,7 +185,7 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           mv ./../upgrade-to-bins/*.so ./../old-engine-dylib/
-          pnpm install
+          pnpm install --frozen-lockfile
           ./commands/upgrade_network.ts prebuilt \
             --runtime ./../main-runtime/state_chain_runtime.compact.compressed.wasm \
             --bins ./../upgrade-to-bins \
@@ -198,7 +198,7 @@ jobs:
           git checkout ${{ env.UPGRADE_TO_COMMIT }}
           git rev-parse HEAD
           cd bouncer
-          pnpm install
+          pnpm install --frozen-lockfile
           ./commands/setup_swaps.ts
           ./tests/all_concurrent_tests.ts
 
