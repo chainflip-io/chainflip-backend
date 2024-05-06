@@ -102,12 +102,12 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 				cf_runtime_upgrade_utilities::genesis_hashes::BERGHAIN => {
 					log::warn!("Need to set up arbitrum integration for Berghain");
 					(
-						[0u8; 20].into(),
-						[0u8; 20].into(),
-						[0u8; 20].into(),
+						hex_literal::hex!("BFe612c77C2807Ac5a6A41F84436287578000275").into(),
+						hex_literal::hex!("79001a5e762f3bEFC8e5871b42F6734e00498920").into(),
+						hex_literal::hex!("c1B12993f760B654897F0257573202fba13D5481").into(),
 						arb::CHAIN_ID_MAINNET,
 						hex_literal::hex!("af88d065e77c8cC2239327C5EDb3A432268e5831").into(),
-						0,
+						208460974,
 						// state-chain/node/src/chain_spec/berghain.rs
 						24 * 3600 * 4,
 					)
@@ -120,7 +120,7 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 						hex_literal::hex!("4F358eC5BD58c994f74B317554D7472769a0Ccf8").into(),
 						arb::CHAIN_ID_ARBITRUM_SEPOLIA,
 						hex_literal::hex!("75faf114eafb1BDbe2F0316DF893fd58CE46AA4d").into(),
-						38766950,
+						38766992,
 						// state-chain/node/src/chain_spec/perseverance.rs
 						2 * 60 * 60 * 4,
 					)
@@ -133,7 +133,7 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 						hex_literal::hex!("2e78F26e9798EBDe7F2b19736De6Aae4d51d6d34").into(),
 						arb::CHAIN_ID_ARBITRUM_SEPOLIA,
 						hex_literal::hex!("75faf114eafb1BDbe2F0316DF893fd58CE46AA4d").into(),
-						38762559,
+						38762596,
 						// state-chain/node/src/chain_spec/sisyphos.rs
 						2 * 60 * 60 * 4,
 					)

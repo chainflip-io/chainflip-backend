@@ -27,10 +27,10 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	eth_key_manager_address: hex_literal::hex!("cd351d3626Dc244730796A3168D315168eBf08Be"),
 	eth_vault_address: hex_literal::hex!("F5e10380213880111522dd0efD3dbb45b9f62Bcc"),
 	eth_address_checker_address: hex_literal::hex!("79001a5e762f3bEFC8e5871b42F6734e00498920"),
-	arb_key_manager_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
-	arb_vault_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+	arb_key_manager_address: hex_literal::hex!("BFe612c77C2807Ac5a6A41F84436287578000275"),
+	arb_vault_address: hex_literal::hex!("79001a5e762f3bEFC8e5871b42F6734e00498920"),
 	arbusdc_token_address: hex_literal::hex!("af88d065e77c8cC2239327C5EDb3A432268e5831"),
-	arb_address_checker_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+	arb_address_checker_address: hex_literal::hex!("c1B12993f760B654897F0257573202fba13D5481"),
 	ethereum_chain_id: cf_chains::eth::CHAIN_ID_MAINNET,
 	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_MAINNET,
 	eth_init_agg_key: hex_literal::hex!(
