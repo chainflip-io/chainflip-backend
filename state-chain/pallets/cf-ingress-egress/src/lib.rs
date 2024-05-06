@@ -1761,10 +1761,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let lifetime = DepositChannelLifetime::<T, I>::get();
 
-		let expiry_height =
-			<T::TargetChain as Chain>::block_witness_root(current_height.saturating_add(lifetime));
-		let recycle_height =
-			<T::TargetChain as Chain>::block_witness_root(expiry_height.saturating_add(lifetime));
+		let expiry_height = <T::TargetChain as Chain>::saturating_block_witness_next(
+			current_height.saturating_add(lifetime),
+		);
+		let recycle_height = <T::TargetChain as Chain>::saturating_block_witness_next(
+			expiry_height.saturating_add(lifetime),
+		);
+		debug_assert_ne!(expiry_height, recycle_height);
 
 		(current_height, expiry_height, recycle_height)
 	}
