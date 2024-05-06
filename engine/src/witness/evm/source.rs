@@ -118,8 +118,6 @@ where
 										};
 										state.evm_header_sequence.clear();
 										return Some((composite_header, state))
-									} else {
-										state.evm_header_sequence.clear();
 									}
 								}
 							}
