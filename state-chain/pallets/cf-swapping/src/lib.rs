@@ -6,7 +6,8 @@ use cf_chains::{
 	CcmChannelMetadata, CcmDepositMetadata, SwapOrigin,
 };
 use cf_primitives::{
-	Asset, AssetAmount, ChannelId, ForeignChain, SwapId, SwapLeg, TransactionHash, STABLE_ASSET,
+	AccountRole, Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, ChannelId,
+	ForeignChain, SwapId, SwapLeg, TransactionHash, STABLE_ASSET,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -197,7 +198,6 @@ impl_pallet_safe_mode! {
 
 #[frame_support::pallet]
 pub mod pallet {
-
 	use cf_chains::{address::EncodedAddress, AnyChain, Chain};
 	use cf_primitives::{Asset, AssetAmount, BasisPoints, EgressId, SwapId};
 	use cf_traits::{
@@ -313,6 +313,7 @@ pub mod pallet {
 			source_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 			boost_fee: BasisPoints,
 			channel_opening_fee: T::Amount,
+			affiliate_fees: Affiliates<T::AccountId>,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
@@ -323,7 +324,9 @@ pub mod pallet {
 			destination_address: EncodedAddress,
 			origin: SwapOrigin,
 			swap_type: SwapType,
+			#[deprecated(note = "Use broker_fee instead")]
 			broker_commission: Option<AssetAmount>,
+			broker_fee: Option<AssetAmount>,
 			execute_at: BlockNumberFor<T>,
 		},
 		/// A swap has been executed.
@@ -424,6 +427,8 @@ pub mod pallet {
 		BrokerCommissionBpsTooHigh,
 		/// Brokers should withdraw their earned fees before deregistering.
 		EarnedFeesNotWithdrawn,
+		/// The provided list of broker contains an account which is not registered as Broker
+		AffiliateAccountIsNotABroker,
 	}
 
 	#[pallet::hooks]
@@ -479,47 +484,20 @@ pub mod pallet {
 			source_asset: Asset,
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
-			broker_commission_bps: BasisPoints,
+			broker_commission: BasisPoints,
 			channel_metadata: Option<CcmChannelMetadata>,
 			boost_fee: BasisPoints,
 		) -> DispatchResult {
-			ensure!(T::SafeMode::get().deposits_enabled, Error::<T>::DepositsDisabled);
-			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
-			ensure!(broker_commission_bps <= 1000, Error::<T>::BrokerCommissionBpsTooHigh);
-
-			let destination_address_internal =
-				Self::validate_destination_address(&destination_address, destination_asset)?;
-
-			if channel_metadata.is_some() {
-				let destination_chain: ForeignChain = destination_asset.into();
-				ensure!(destination_chain.ccm_support(), Error::<T>::CcmUnsupportedForTargetChain);
-			}
-
-			let (channel_id, deposit_address, expiry_height, channel_opening_fee) =
-				T::DepositHandler::request_swap_deposit_address(
-					source_asset,
-					destination_asset,
-					destination_address_internal,
-					broker_commission_bps,
-					broker,
-					channel_metadata.clone(),
-					boost_fee,
-				)?;
-
-			Self::deposit_event(Event::<T>::SwapDepositAddressReady {
-				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
-				destination_address,
+			Self::request_swap_deposit_address_with_affiliates(
+				origin,
 				source_asset,
 				destination_asset,
-				channel_id,
-				broker_commission_rate: broker_commission_bps,
+				destination_address,
+				broker_commission,
 				channel_metadata,
-				source_chain_expiry_block: expiry_height,
 				boost_fee,
-				channel_opening_fee,
-			});
-
-			Ok(())
+				Default::default(),
+			)
 		}
 
 		/// Brokers can withdraw their collected fees.
@@ -603,6 +581,7 @@ pub mod pallet {
 				origin: swap_origin,
 				swap_type: SwapType::Swap(destination_address_internal),
 				broker_commission: None,
+				broker_fee: None,
 				execute_at,
 			});
 
@@ -695,6 +674,90 @@ pub mod pallet {
 			let _ = EarnedBrokerFees::<T>::clear_prefix(&account_id, u32::MAX, None);
 
 			T::AccountRoleRegistry::deregister_as_broker(&account_id)?;
+
+			Ok(())
+		}
+
+		/// Request a swap deposit address.
+		///
+		/// ## Events
+		///
+		/// - [SwapDepositAddressReady](Event::SwapDepositAddressReady)
+		#[pallet::call_index(10)]
+		#[pallet::weight(T::WeightInfo::request_swap_deposit_address_with_affiliates())]
+		pub fn request_swap_deposit_address_with_affiliates(
+			origin: OriginFor<T>,
+			source_asset: Asset,
+			destination_asset: Asset,
+			destination_address: EncodedAddress,
+			broker_commission: BasisPoints,
+			channel_metadata: Option<CcmChannelMetadata>,
+			boost_fee: BasisPoints,
+			affiliate_fees: Affiliates<T::AccountId>,
+		) -> DispatchResult {
+			ensure!(T::SafeMode::get().deposits_enabled, Error::<T>::DepositsDisabled);
+			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
+			let (beneficiaries, total_bps) = {
+				let mut beneficiaries = Beneficiaries::new();
+				if broker_commission > 0 {
+					beneficiaries
+						.try_push(Beneficiary { account: broker.clone(), bps: broker_commission })
+						.expect("First element, impossible to exceed the maximum size");
+				}
+				for affiliate in &affiliate_fees {
+					ensure!(
+						T::AccountRoleRegistry::has_account_role(
+							&affiliate.account,
+							AccountRole::Broker
+						),
+						Error::<T>::AffiliateAccountIsNotABroker
+					);
+					if affiliate.bps > 0 {
+						beneficiaries
+							.try_push(affiliate.clone())
+							.expect("Cannot exceed MAX_BENEFICIARY size which is MAX_AFFILIATE + 1 (main broker)");
+					}
+				}
+				let total_bps = beneficiaries
+					.iter()
+					.fold(0, |total, Beneficiary { bps, .. }| total.saturating_add(*bps));
+				(beneficiaries, total_bps)
+			};
+
+			ensure!(total_bps <= 1000, Error::<T>::BrokerCommissionBpsTooHigh);
+
+			let destination_address_internal =
+				Self::validate_destination_address(&destination_address, destination_asset)?;
+
+			if channel_metadata.is_some() {
+				let destination_chain: ForeignChain = destination_asset.into();
+				ensure!(destination_chain.ccm_support(), Error::<T>::CcmUnsupportedForTargetChain);
+			}
+
+			let (channel_id, deposit_address, expiry_height, channel_opening_fee) =
+				T::DepositHandler::request_swap_deposit_address(
+					source_asset,
+					destination_asset,
+					destination_address_internal,
+					beneficiaries.clone(),
+					broker,
+					channel_metadata.clone(),
+					boost_fee,
+				)?;
+
+			Self::deposit_event(Event::<T>::SwapDepositAddressReady {
+				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
+				destination_address,
+				source_asset,
+				destination_asset,
+				channel_id,
+				broker_commission_rate: broker_commission,
+				channel_metadata,
+				source_chain_expiry_block: expiry_height,
+				boost_fee,
+				channel_opening_fee,
+				affiliate_fees,
+			});
 
 			Ok(())
 		}
@@ -1068,13 +1131,15 @@ pub mod pallet {
 			to: Asset,
 			amount: AssetAmount,
 			destination_address: ForeignChainAddress,
-			broker_id: Self::AccountId,
-			broker_commission_bps: BasisPoints,
+			broker_commission: Beneficiaries<Self::AccountId>,
 			channel_id: ChannelId,
 		) -> SwapId {
 			// Permill maxes out at 100% so this is safe.
-			let fee = Permill::from_parts(broker_commission_bps as u32 * BASIS_POINTS_PER_MILLION) *
-				amount;
+			let fee: u128 = Permill::from_parts(
+				broker_commission.iter().fold(0, |acc, entry| acc + entry.bps) as u32 *
+					BASIS_POINTS_PER_MILLION,
+			) * amount;
+
 			assert!(fee <= amount, "Broker fee cannot be more than the amount");
 
 			let net_amount = amount.saturating_sub(fee);
@@ -1093,9 +1158,15 @@ pub mod pallet {
 				net_amount,
 				SwapType::Swap(destination_address.clone()),
 			);
-			EarnedBrokerFees::<T>::mutate(&broker_id, from, |earned_fees| {
-				earned_fees.saturating_accrue(fee)
-			});
+
+			for Beneficiary { account, bps } in broker_commission {
+				EarnedBrokerFees::<T>::mutate(&account, from, |earned_fees| {
+					earned_fees.saturating_accrue(
+						Permill::from_parts(bps as u32 * BASIS_POINTS_PER_MILLION) * amount,
+					)
+				});
+			}
+
 			Self::deposit_event(Event::<T>::SwapScheduled {
 				swap_id,
 				source_asset: from,
@@ -1105,6 +1176,7 @@ pub mod pallet {
 				origin: swap_origin,
 				swap_type: SwapType::Swap(destination_address),
 				broker_commission: Some(fee),
+				broker_fee: Some(fee),
 				execute_at,
 			});
 
@@ -1177,6 +1249,7 @@ pub mod pallet {
 						origin: origin.clone(),
 						swap_type: SwapType::CcmPrincipal(ccm_id),
 						broker_commission: None,
+						broker_fee: None,
 						execute_at,
 					});
 					Some(swap_id)
@@ -1198,6 +1271,7 @@ pub mod pallet {
 					origin,
 					swap_type: SwapType::CcmGas(ccm_id),
 					broker_commission: None,
+					broker_fee: None,
 					execute_at,
 				});
 				Some(swap_id)

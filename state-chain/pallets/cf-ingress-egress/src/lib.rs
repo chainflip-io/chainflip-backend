@@ -31,8 +31,8 @@ use cf_chains::{
 	FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	Asset, BasisPoints, BoostPoolTier, BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex,
-	ForeignChain, PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId,
+	Asset, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId, EgressCounter,
+	EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -140,7 +140,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(7);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(8);
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
 #[scale_info(skip_type_params(I))]
@@ -266,8 +266,7 @@ pub mod pallet {
 		Swap {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
-			broker_id: AccountId,
-			broker_commission_bps: BasisPoints,
+			broker_fees: Beneficiaries<AccountId>,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
@@ -1509,27 +1508,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				DepositAction::LiquidityProvision { lp_account }
 			},
-			ChannelAction::Swap {
-				destination_address,
-				destination_asset,
-				broker_id,
-				broker_commission_bps,
-				..
-			} => DepositAction::Swap {
-				swap_id: T::SwapDepositHandler::schedule_swap_from_channel(
-					<<T::TargetChain as Chain>::ChainAccount as IntoForeignChainAddress<
-						T::TargetChain,
-					>>::into_foreign_chain_address(deposit_address.clone()),
-					block_height.into(),
-					asset.into(),
-					destination_asset,
-					amount_after_fees.into(),
-					destination_address,
-					broker_id,
-					broker_commission_bps,
-					channel_id,
-				),
-			},
+			ChannelAction::Swap { destination_address, destination_asset, broker_fees, .. } =>
+				DepositAction::Swap {
+					swap_id: T::SwapDepositHandler::schedule_swap_from_channel(
+						<<T::TargetChain as Chain>::ChainAccount as IntoForeignChainAddress<
+							T::TargetChain,
+						>>::into_foreign_chain_address(deposit_address.clone()),
+						block_height.into(),
+						asset.into(),
+						destination_asset,
+						amount_after_fees.into(),
+						destination_address,
+						broker_fees,
+						channel_id,
+					),
+				},
 			ChannelAction::CcmTransfer {
 				destination_asset,
 				destination_address,
@@ -2014,7 +2007,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		source_asset: TargetChainAsset<T, I>,
 		destination_asset: Asset,
 		destination_address: ForeignChainAddress,
-		broker_commission_bps: BasisPoints,
+		broker_fees: Beneficiaries<Self::AccountId>,
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
@@ -2031,12 +2024,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 					destination_address,
 					channel_metadata: msg,
 				},
-				None => ChannelAction::Swap {
-					destination_asset,
-					destination_address,
-					broker_commission_bps,
-					broker_id: broker_id.clone(),
-				},
+				None => ChannelAction::Swap { destination_asset, destination_address, broker_fees },
 			},
 			boost_fee,
 		)?;
