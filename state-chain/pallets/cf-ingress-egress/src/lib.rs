@@ -1767,7 +1767,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let recycle_height = <T::TargetChain as Chain>::saturating_block_witness_next(
 			expiry_height.saturating_add(lifetime),
 		);
-		debug_assert_ne!(expiry_height, recycle_height);
+
+		debug_assert!(current_height < expiry_height);
+		debug_assert!(expiry_height < recycle_height);
 
 		(current_height, expiry_height, recycle_height)
 	}
