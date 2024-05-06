@@ -179,8 +179,8 @@ pub trait Rpc {
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<LimitOrder>>>;
 
-	#[method(name = "asset_balances")]
-	async fn asset_balances(&self) -> RpcResult<AssetMap<U256>>;
+	#[method(name = "asset_free_balances", aliases = ["lp_asset_balances"])]
+	async fn asset_free_balances(&self) -> RpcResult<AssetMap<U256>>;
 
 	#[method(name = "get_open_swap_channels")]
 	async fn get_open_swap_channels(&self) -> RpcResult<OpenSwapChannels>;
@@ -315,7 +315,7 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	/// Returns a list of all assets and their free balance in json format
-	async fn asset_balances(&self) -> RpcResult<AssetMap<U256>> {
+	async fn asset_free_balances(&self) -> RpcResult<AssetMap<U256>> {
 		self.api
 			.state_chain_client
 			.base_rpc_client
