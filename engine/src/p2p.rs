@@ -176,7 +176,7 @@ where
 						outgoing_message_receiver,
 						peer_update_receiver,
 					)
-					.await;
+					.await?;
 
 					Ok(())
 				}

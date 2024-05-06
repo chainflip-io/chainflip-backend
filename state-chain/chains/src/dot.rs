@@ -325,6 +325,7 @@ pub struct PolkadotTransactionId {
 impl Chain for Polkadot {
 	const NAME: &'static str = "Polkadot";
 	const GAS_ASSET: Self::ChainAsset = assets::dot::Asset::Dot;
+	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 
 	type ChainCrypto = PolkadotCrypto;
 	type ChainBlockNumber = PolkadotBlockNumber;

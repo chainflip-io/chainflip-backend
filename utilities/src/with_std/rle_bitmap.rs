@@ -126,6 +126,10 @@ impl<T: Ord + Copy + Step + Bounded> RleBitmap<T> {
 			.take_while(move |t| if let Some(end) = option_end { *t < end } else { true })
 		})
 	}
+
+	pub fn is_empty(&self) -> bool {
+		self.iter(true).next().is_none()
+	}
 }
 
 #[cfg(test)]

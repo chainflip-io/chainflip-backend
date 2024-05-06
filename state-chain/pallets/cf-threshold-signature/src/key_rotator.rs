@@ -149,34 +149,31 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 							"Unreachable because we are in the branch for the Failed variant."
 						),
 					},
-				KeyRotationStatusVariant::AwaitingActivation => {
-					let new_public_key =
-						PendingKeyRotation::<T, I>::mutate(|pending_key_rotation| {
-							match pending_key_rotation {
-								Some(KeyRotationStatus::AwaitingActivation {
-									request_ids,
-									new_public_key,
-								}) => {
-									request_ids.retain(|request_id| {
-										if Signature::<T, I>::get(request_id) == AsyncResult::Void {
-											T::VaultActivator::activate_key();
-											false
-										} else {
-											true
-										}
-									});
-									*new_public_key
-								},
-								_ => unreachable!(
-									"Unreachable because we are in the branch for the AwaitingActivation variant."
+				KeyRotationStatusVariant::AwaitingActivationSignatures => {
+					PendingKeyRotation::<T, I>::mutate(|pending_key_rotation| {
+						match pending_key_rotation {
+							Some(KeyRotationStatus::AwaitingActivationSignatures {
+								request_ids,
+							}) => {
+								request_ids.retain(|request_id| {
+									if Signature::<T, I>::get(request_id) == AsyncResult::Void {
+										T::VaultActivator::activate_key();
+										false
+									} else {
+										true
+									}
+								});
+							},
+							_ => unreachable!(
+									"Unreachable because we are in the branch for the AwaitingActivationSignatures variant."
 									),
-							}
-						});
+						}
+					});
 
 					let status = T::VaultActivator::status()
 						.replace_inner(KeyRotationStatusOuter::RotationComplete);
 					if status.is_ready() {
-						Self::activate_new_key(new_public_key);
+						Self::mark_key_rotation_complete();
 					}
 					status
 				},
@@ -241,6 +238,16 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 				})
 				.collect::<Vec<_>>();
 
+			// After successful keygen, we update the key to the new key even though the new key is
+			// still not activated yet until the old key signs over the rotation tx. This is because
+			// any subsequent txs from this point onwards need to sign with the new key as it will
+			// be broadcast after the rotation tx goes through (ensured by broadcast barrier) and so
+			// it needs to be signed by the new key.
+			Self::set_key_for_epoch(
+				CurrentEpochIndex::<T>::get().saturating_add(1),
+				new_public_key,
+			);
+
 			// If there are no request_ids to wait for and there is no chain for this key that is
 			// activating its first vault, we dont have to wait for anything and we can activate the
 			// key mark jey rotation as complete.
@@ -249,12 +256,11 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 					.into_iter()
 					.any(|result| result == StartKeyActivationResult::FirstVault)
 			{
-				Self::activate_new_key(new_public_key);
+				Self::mark_key_rotation_complete();
 			} else {
-				PendingKeyRotation::<T, I>::put(KeyRotationStatus::<T, I>::AwaitingActivation {
-					request_ids,
-					new_public_key,
-				});
+				PendingKeyRotation::<T, I>::put(
+					KeyRotationStatus::<T, I>::AwaitingActivationSignatures { request_ids },
+				);
 			}
 		} else {
 			log::error!("Vault activation called during wrong state.");

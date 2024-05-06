@@ -4,16 +4,17 @@ import Client from 'bitcoin-core';
 import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
 import { Mutex } from 'async-mutex';
 import {
-  Chain,
-  InternalAsset as Asset,
+  Chain as SDKChain,
+  InternalAsset as SDKAsset,
   InternalAssets as Assets,
   assetConstants,
   chainConstants,
 } from '@chainflip/cli';
 import Web3 from 'web3';
 import { Connection, Keypair } from '@solana/web3.js';
-import { base58Decode, base58Encode } from '@polkadot/util-crypto';
+import { base58Decode, base58Encode, cryptoWaitReady } from '@polkadot/util-crypto';
 import { hexToU8a, u8aToHex } from '@polkadot/util';
+import BigNumber from 'bignumber.js';
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
@@ -32,7 +33,13 @@ export const btcClientMutex = new Mutex();
 export const brokerMutex = new Mutex();
 export const snowWhiteMutex = new Mutex();
 
-export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'];
+export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'] as Chain[];
+
+export type Asset = SDKAsset | 'Sol' | 'SolUsdc';
+export type Chain = SDKChain | 'Solana';
+
+const isSDKAsset = (asset: Asset): asset is SDKAsset => asset in assetConstants;
+const isSDKChain = (chain: Chain): chain is SDKChain => chain in chainConstants;
 
 export function getContractAddress(chain: Chain, contract: string): string {
   switch (chain) {
@@ -120,26 +127,12 @@ export function shortChainFromAsset(asset: Asset): string {
   }
 }
 
-export function amountToFineAmount(amount: string, decimals: number): string {
-  let fineAmount = '';
-  if (amount.indexOf('.') === -1) {
-    fineAmount = amount + '0'.repeat(decimals);
-  } else {
-    const amountParts = amount.split('.');
-    fineAmount = amountParts[0] + amountParts[1].padEnd(decimals, '0').substr(0, decimals);
-  }
-  return fineAmount;
+export function amountToFineAmount(amount: string, decimals: number | string): string {
+  return new BigNumber(amount).shiftedBy(Number(decimals)).toFixed();
 }
 
-export function fineAmountToAmount(fineAmount: string, decimals: number): string {
-  let balance = '';
-  if (fineAmount.length > decimals) {
-    const decimalLocation = fineAmount.length - decimals;
-    balance = fineAmount.slice(0, decimalLocation) + '.' + fineAmount.slice(decimalLocation);
-  } else {
-    balance = '0.' + fineAmount.padStart(decimals, '0');
-  }
-  return balance;
+export function fineAmountToAmount(fineAmount: string, decimals: number | string): string {
+  return new BigNumber(fineAmount).shiftedBy(-Number(decimals)).toFixed();
 }
 
 export function defaultAssetAmounts(asset: Asset): string {
@@ -165,74 +158,23 @@ export function defaultAssetAmounts(asset: Asset): string {
 }
 
 export function assetContractId(asset: Asset): number {
-  switch (asset) {
-    case 'Btc':
-      return assetConstants.Btc.contractId;
-    case 'Eth':
-      return assetConstants.Eth.contractId;
-    case 'Usdc':
-      return assetConstants.Usdc.contractId;
-    case 'Usdt':
-      return assetConstants.Usdt.contractId;
-    case 'Flip':
-      return assetConstants.Flip.contractId;
-    case 'Dot':
-      return assetConstants.Dot.contractId;
-    case 'ArbEth':
-      return assetConstants.ArbEth.contractId;
-    case 'ArbUsdc':
-      return assetConstants.ArbUsdc.contractId;
-    case 'Sol':
-      return 9;
-    case 'SolUsdc':
-      return 10;
-    default:
-      throw new Error(`Unsupported asset: ${asset}`);
-  }
+  if (isSDKAsset(asset)) return assetConstants[asset].contractId;
+  if (asset === 'Sol') return 9;
+  if (asset === 'SolUsdc') return 10;
+  throw new Error(`Unsupported asset: ${asset}`);
 }
 
 export function assetDecimals(asset: Asset): number {
-  switch (asset) {
-    case 'Btc':
-      return assetConstants.Btc.decimals;
-    case 'Eth':
-      return assetConstants.Eth.decimals;
-    case 'Usdc':
-      return assetConstants.Usdc.decimals;
-    case 'Usdt':
-      return assetConstants.Usdt.decimals;
-    case 'Flip':
-      return assetConstants.Flip.decimals;
-    case 'Dot':
-      return assetConstants.Dot.decimals;
-    case 'ArbEth':
-      return assetConstants.ArbEth.decimals;
-    case 'ArbUsdc':
-      return assetConstants.ArbUsdc.decimals;
-    case 'Sol':
-      return 9;
-    case 'SolUsdc':
-      return 6;
-    default:
-      throw new Error(`Unsupported asset: ${asset}`);
-  }
+  if (isSDKAsset(asset)) return assetConstants[asset].decimals;
+  if (asset === 'Sol') return 9;
+  if (asset === 'SolUsdc') return 6;
+  throw new Error(`Unsupported asset: ${asset}`);
 }
 
 export function chainContractId(chain: Chain): number {
-  switch (chain) {
-    case 'Ethereum':
-      return chainConstants.Ethereum.contractId;
-    case 'Bitcoin':
-      return chainConstants.Bitcoin.contractId;
-    case 'Polkadot':
-      return chainConstants.Polkadot.contractId;
-    case 'Arbitrum':
-      return chainConstants.Arbitrum.contractId;
-    case 'Solana':
-      return 5;
-    default:
-      throw new Error(`Unsupported chain: ${chain}`);
-  }
+  if (isSDKChain(chain)) return chainConstants[chain].contractId;
+  if (chain === 'Solana') return 5;
+  throw new Error(`Unsupported chain: ${chain}`);
 }
 
 export function chainGasAsset(chain: Chain): Asset {
@@ -250,54 +192,117 @@ export function chainGasAsset(chain: Chain): Asset {
   }
 }
 
+export function getAssetsForChain(chain: Chain): Asset[] {
+  switch (chain) {
+    case 'Ethereum':
+      return [Assets.Eth, Assets.Usdc, Assets.Usdt, Assets.Flip];
+    case 'Bitcoin':
+      return [Assets.Btc];
+    case 'Polkadot':
+      return [Assets.Dot];
+    case 'Arbitrum':
+      return [Assets.ArbEth, Assets.ArbUsdc];
+    default:
+      throw new Error(`Unsupported chain: ${chain}`);
+  }
+}
+
 // State Chain uses non-unique string identifiers for assets.
 export function stateChainAssetFromAsset(asset: Asset): string {
-  if (assetConstants[asset]) {
+  if (isSDKAsset(asset)) {
     return assetConstants[asset].asset;
   }
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
-export const runWithTimeout = async <T>(promise: Promise<T>, millis: number): Promise<T> => {
-  const controller = new AbortController();
-  const result = await Promise.race([
+export const runWithTimeout = async <T>(promise: Promise<T>, millis: number): Promise<T> =>
+  Promise.race([
     promise,
-    sleep(millis, { signal: AbortController }).then(() => {
-      throw new Error(`Timed out after ${millis} ms.`);
+    sleep(millis, new Error(`Timed out after ${millis} ms.`), { ref: false }).then((error) => {
+      throw error;
     }),
   ]);
-  controller.abort();
-  return result;
-};
 
 export const sha256 = (data: string): Buffer => crypto.createHash('sha256').update(data).digest();
 
+export const deferredPromise = <T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (error: Error) => void;
+} => {
+  let resolve: (value: T) => void;
+  let reject: (error: Error) => void;
+
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  return { promise, resolve: resolve!, reject: reject! };
+};
+
 export { sleep };
+
+// @ts-expect-error polyfilling
+Symbol.asyncDispose ??= Symbol('asyncDispose');
+// @ts-expect-error polyfilling
+Symbol.dispose ??= Symbol('dispose');
+
+type DisposableApiPromise = ApiPromise & { [Symbol.asyncDispose](): Promise<void> };
 
 // It is important to cache WS connections because nodes seem to have a
 // limit on how many can be opened at the same time (from the same IP presumably)
 function getCachedSubstrateApi(defaultEndpoint: string) {
-  let api: ApiPromise | undefined;
+  let api: DisposableApiPromise | undefined;
+  let connections = 0;
 
-  return async (providedEndpoint?: string): Promise<ApiPromise> => {
-    if (api) return api;
+  return async (providedEndpoint?: string): Promise<DisposableApiPromise> => {
+    if (!api) {
+      await cryptoWaitReady();
+      const endpoint = providedEndpoint ?? defaultEndpoint;
 
-    const endpoint = providedEndpoint ?? defaultEndpoint;
-
-    api = await ApiPromise.create({
-      provider: new WsProvider(endpoint),
-      noInitWarn: true,
-      types: {
-        EncodedAddress: {
-          _enum: {
-            Eth: '[u8; 20]',
-            Arb: '[u8; 20]',
-            Dot: '[u8; 32]',
-            Btc: 'Vec<u8>',
+      const apiPromise = await ApiPromise.create({
+        provider: new WsProvider(endpoint),
+        noInitWarn: true,
+        types: {
+          EncodedAddress: {
+            _enum: {
+              Eth: '[u8; 20]',
+              Arb: '[u8; 20]',
+              Dot: '[u8; 32]',
+              Btc: 'Vec<u8>',
+            },
           },
         },
-      },
-    });
+      });
+
+      api = new Proxy(apiPromise as unknown as DisposableApiPromise, {
+        get(target, prop, receiver) {
+          if (prop === Symbol.asyncDispose) {
+            return async () => {
+              connections -= 1;
+              if (connections === 0) {
+                setTimeout(() => {
+                  if (connections === 0) {
+                    api = undefined;
+                    Reflect.get(target, 'disconnect', receiver).call(target);
+                  }
+                }, 5_000).unref();
+              }
+            };
+          }
+          if (prop === 'disconnect') {
+            return async () => {
+              // noop
+            };
+          }
+
+          return Reflect.get(target, prop, receiver);
+        },
+      });
+    }
+
+    connections += 1;
 
     return api;
   };
@@ -311,6 +316,20 @@ export const getPolkadotApi = getCachedSubstrateApi(
 );
 
 export const polkadotSigningMutex = new Mutex();
+
+const toLowerCase = <const T extends string>(string: T) => string.toLowerCase() as Lowercase<T>;
+
+export function ingressEgressPalletForChain(chain: Chain) {
+  switch (chain) {
+    case 'Ethereum':
+    case 'Bitcoin':
+    case 'Polkadot':
+    case 'Arbitrum':
+      return `${toLowerCase(chain)}IngressEgress` as const;
+    default:
+      throw new Error(`Unsupported chain: ${chain}`);
+  }
+}
 
 export function getBtcClient(): Client {
   const endpoint = process.env.BTC_ENDPOINT || 'http://127.0.0.1:8332';
@@ -483,9 +502,10 @@ export async function observeSwapScheduled(
   channelId: number,
   swapType?: SwapType,
 ) {
-  const chainflipApi = await getChainflipApi();
+  await using chainflipApi = await getChainflipApi();
 
-  return observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
+  // need to await this to prevent the chainflip api from being disposed prematurely
+  const result = await observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
     if ('DepositChannel' in event.data.origin) {
       const channelMatches = Number(event.data.origin.DepositChannel.channelId) === channelId;
       const sourceAssetMatches = sourceAsset === (event.data.sourceAsset as Asset);
@@ -496,6 +516,8 @@ export async function observeSwapScheduled(
     // Otherwise it was a swap scheduled by interacting with the Eth smart contract
     return false;
   });
+
+  return result;
 }
 
 // Make sure the stopObserveEvent returns true before the end of the test
@@ -504,12 +526,8 @@ export async function observeBadEvents(
   stopObserveEvent: () => boolean,
   eventQuery?: EventQuery,
 ) {
-  const event = await observeEvent(
-    eventName,
-    await getChainflipApi(),
-    eventQuery,
-    stopObserveEvent,
-  );
+  await using chainflipApi = await getChainflipApi();
+  const event = await observeEvent(eventName, chainflipApi, eventQuery, stopObserveEvent);
   if (event) {
     throw new Error(
       `Unexpected event emitted ${event.name.section}:${event.name.method} in block ${event.block}`,
@@ -518,7 +536,7 @@ export async function observeBadEvents(
 }
 
 export async function observeBroadcastSuccess(broadcastId: BroadcastId) {
-  const chainflipApi = await getChainflipApi();
+  await using chainflipApi = await getChainflipApi();
   const broadcaster = broadcastId[0].toLowerCase() + 'Broadcaster';
   const broadcastIdNumber = broadcastId[1];
 
@@ -575,25 +593,9 @@ export async function newAddress(
 }
 
 export function chainFromAsset(asset: Asset): Chain {
-  switch (asset) {
-    case 'Dot':
-      return 'Polkadot';
-    case 'Eth':
-    case 'Flip':
-    case 'Usdc':
-    case 'Usdt':
-      return 'Ethereum';
-    case 'Btc':
-      return 'Bitcoin';
-    case 'ArbUsdc':
-    case 'ArbEth':
-      return 'Arbitrum';
-    case 'Sol':
-    case 'SolUsdc':
-      return 'Solana';
-    default:
-      throw new Error(`Unsupported asset: ${asset}`);
-  }
+  if (isSDKAsset(asset)) return assetConstants[asset].chain;
+  if (asset === 'Sol' || asset === 'SolUsdc') return 'Solana';
+  throw new Error(`Unsupported asset: ${asset}`);
 }
 
 export function getEvmEndpoint(chain: Chain): string {
@@ -650,12 +652,12 @@ export function getWhaleKey(chain: Chain): string {
 }
 
 export async function observeBalanceIncrease(
-  dstCcy: string,
+  dstCcy: Asset,
   address: string,
   oldBalance: string,
 ): Promise<number> {
   for (let i = 0; i < 1200; i++) {
-    const newBalance = Number(await getBalance(dstCcy as Asset, address));
+    const newBalance = Number(await getBalance(dstCcy, address));
     if (newBalance > Number(oldBalance)) {
       return newBalance;
     }
@@ -668,7 +670,7 @@ export async function observeBalanceIncrease(
 
 export async function observeFetch(asset: Asset, address: string): Promise<void> {
   for (let i = 0; i < 120; i++) {
-    const balance = Number(await getBalance(asset as Asset, address));
+    const balance = Number(await getBalance(asset, address));
     if (balance === 0) {
       const chain = chainFromAsset(asset);
       if (chain === 'Ethereum' || chain === 'Arbitrum') {
@@ -831,6 +833,7 @@ export function handleSubstrateError(api: any) {
       } else {
         error = dispatchError.toString();
       }
+      console.log('Dispatch error:' + error);
       console.log('Extrinsic failed: ' + error);
       process.exit(1);
     }
@@ -886,7 +889,7 @@ type SwapRate = {
   output: string;
 };
 export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
-  const chainflipApi = await getChainflipApi();
+  await using chainflipApi = await getChainflipApi();
 
   const fineFromAmount = amountToFineAmount(fromAmount, assetDecimals(from));
   const hexPrice = (await chainflipApi.rpc(

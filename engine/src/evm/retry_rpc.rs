@@ -1,4 +1,5 @@
 pub mod address_checker;
+pub mod node_interface;
 
 use ethers::{
 	prelude::*,
@@ -30,6 +31,7 @@ pub struct EvmRetryRpcClient<Rpc: EvmRpcApi> {
 	rpc_retry_client: RetrierClient<Rpc>,
 	sub_retry_client: RetrierClient<ReconnectSubscriptionClient>,
 	chain_name: &'static str,
+	witness_period: u64,
 }
 
 const ETHERS_RPC_TIMEOUT: Duration = Duration::from_millis(4 * 1000);
@@ -47,6 +49,7 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcClient<Rpc> {
 		evm_rpc_client_name: &'static str,
 		evm_subscription_client_name: &'static str,
 		chain_name: &'static str,
+		witness_period: u64,
 	) -> Self {
 		let sub_client = ReconnectSubscriptionClient::new(
 			nodes.primary.ws_endpoint,
@@ -76,6 +79,7 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcClient<Rpc> {
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
 			chain_name,
+			witness_period,
 		}
 	}
 }
@@ -88,6 +92,7 @@ impl EvmRetryRpcClient<EvmRpcClient> {
 		evm_rpc_client_name: &'static str,
 		evm_subscription_client_name: &'static str,
 		chain_name: &'static str,
+		witness_period: u64,
 	) -> Result<Self> {
 		let rpc_client = EvmRpcClient::new(
 			nodes.primary.http_endpoint.clone(),
@@ -112,6 +117,7 @@ impl EvmRetryRpcClient<EvmRpcClient> {
 			evm_rpc_client_name,
 			evm_subscription_client_name,
 			chain_name,
+			witness_period,
 		))
 	}
 }
@@ -125,6 +131,7 @@ impl EvmRetryRpcClient<EvmRpcSigningClient> {
 		evm_rpc_client_name: &'static str,
 		evm_subscription_client_name: &'static str,
 		chain_name: &'static str,
+		witness_period: u64,
 	) -> Result<Self> {
 		let rpc_client = EvmRpcSigningClient::new(
 			private_key_file.clone(),
@@ -155,12 +162,19 @@ impl EvmRetryRpcClient<EvmRpcSigningClient> {
 			evm_rpc_client_name,
 			evm_subscription_client_name,
 			chain_name,
+			witness_period,
 		))
 	}
 }
 
 #[async_trait::async_trait]
 pub trait EvmRetryRpcApi: Clone {
+	async fn get_logs_range(
+		&self,
+		range: std::ops::RangeInclusive<u64>,
+		contract_address: H160,
+	) -> Vec<Log>;
+
 	async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log>;
 
 	async fn chain_id(&self) -> U256;
@@ -191,9 +205,44 @@ pub trait EvmRetrySigningRpcApi: EvmRetryRpcApi {
 
 #[async_trait::async_trait]
 impl<Rpc: EvmRpcApi> EvmRetryRpcApi for EvmRetryRpcClient<Rpc> {
+	async fn get_logs_range(
+		&self,
+		range: std::ops::RangeInclusive<u64>,
+		contract_address: H160,
+	) -> Vec<Log> {
+		assert!(!range.is_empty());
+		self.rpc_retry_client
+			.request(
+				RequestLog::new(
+					"get_logs_range".to_string(),
+					Some(format!("{range:?}, {contract_address:?}")),
+				),
+				Box::pin(move |client| {
+					let range = range.clone();
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move {
+						client
+							.get_logs(
+								// The `from_block` and `to_block` are inclusive
+								Filter::new()
+									.address(contract_address)
+									.from_block(*range.start())
+									.to_block(*range.end()),
+							)
+							.await
+					})
+				}),
+			)
+			.await
+	}
+
 	async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log> {
 		self.rpc_retry_client
 			.request(
+				RequestLog::new(
+					"get_logs".to_string(),
+					Some(format!("{block_hash:?}, {contract_address:?}")),
+				),
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
@@ -204,10 +253,6 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApi for EvmRetryRpcClient<Rpc> {
 							.await
 					})
 				}),
-				RequestLog::new(
-					"get_logs".to_string(),
-					Some(format!("{block_hash:?}, {contract_address:?}")),
-				),
 			)
 			.await
 	}
@@ -215,11 +260,11 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApi for EvmRetryRpcClient<Rpc> {
 	async fn chain_id(&self) -> U256 {
 		self.rpc_retry_client
 			.request(
+				RequestLog::new("chain_id".to_string(), None),
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.chain_id().await })
 				}),
-				RequestLog::new("chain_id".to_string(), None),
 			)
 			.await
 	}
@@ -227,11 +272,11 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApi for EvmRetryRpcClient<Rpc> {
 	async fn transaction_receipt(&self, tx_hash: H256) -> TransactionReceipt {
 		self.rpc_retry_client
 			.request(
+				RequestLog::new("transaction_receipt".to_string(), Some(format!("{tx_hash:?}"))),
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.transaction_receipt(tx_hash).await })
 				}),
-				RequestLog::new("transaction_receipt".to_string(), Some(format!("{tx_hash:?}"))),
 			)
 			.await
 	}
@@ -239,11 +284,11 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApi for EvmRetryRpcClient<Rpc> {
 	async fn block(&self, block_number: U64) -> Block<H256> {
 		self.rpc_retry_client
 			.request(
+				RequestLog::new("block".to_string(), Some(format!("{block_number}"))),
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.block(block_number).await })
 				}),
-				RequestLog::new("block".to_string(), Some(format!("{block_number}"))),
 			)
 			.await
 	}
@@ -251,11 +296,11 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApi for EvmRetryRpcClient<Rpc> {
 	async fn block_with_txs(&self, block_number: U64) -> Block<Transaction> {
 		self.rpc_retry_client
 			.request(
+				RequestLog::new("block_with_txs".to_string(), Some(format!("{block_number}"))),
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.block_with_txs(block_number).await })
 				}),
-				RequestLog::new("block_with_txs".to_string(), Some(format!("{block_number}"))),
 			)
 			.await
 	}
@@ -266,12 +311,12 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApi for EvmRetryRpcClient<Rpc> {
 		newest_block: BlockNumber,
 		reward_percentiles: Vec<f64>,
 	) -> FeeHistory {
-		let log = RequestLog::new(
-			"fee_history".to_string(),
-			Some(format!("{block_count}, {newest_block}, {reward_percentiles:?}")),
-		);
 		self.rpc_retry_client
 			.request(
+				RequestLog::new(
+					"fee_history".to_string(),
+					Some(format!("{block_count}, {newest_block}, {reward_percentiles:?}")),
+				),
 				Box::pin(move |client| {
 					let reward_percentiles = reward_percentiles.clone();
 					#[allow(clippy::redundant_async_block)]
@@ -279,7 +324,6 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApi for EvmRetryRpcClient<Rpc> {
 						client.fee_history(block_count, newest_block, &reward_percentiles).await
 					})
 				}),
-				log,
 			)
 			.await
 	}
@@ -287,11 +331,11 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApi for EvmRetryRpcClient<Rpc> {
 	async fn get_transaction(&self, tx_hash: H256) -> Transaction {
 		self.rpc_retry_client
 			.request(
+				RequestLog::new("get_transaction".to_string(), Some(format!("{tx_hash:?}"))),
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.get_transaction(tx_hash).await })
 				}),
-				RequestLog::new("get_transaction".to_string(), Some(format!("{tx_hash:?}"))),
 			)
 			.await
 	}
@@ -304,10 +348,10 @@ impl<Rpc: EvmSigningRpcApi> EvmRetrySigningRpcApi for EvmRetryRpcClient<Rpc> {
 		&self,
 		tx: cf_chains::evm::Transaction,
 	) -> anyhow::Result<TxHash> {
-		let log = RequestLog::new("broadcast_transaction".to_string(), Some(format!("{tx:?}")));
 		let s = self.chain_name.to_owned();
 		self.rpc_retry_client
 			.request_with_limit(
+				RequestLog::new("broadcast_transaction".to_string(), Some(format!("{tx:?}"))),
 				Box::pin(move |client| {
 					let tx = tx.clone();
 					let s = s.clone();
@@ -353,7 +397,6 @@ impl<Rpc: EvmSigningRpcApi> EvmRetrySigningRpcApi for EvmRetryRpcClient<Rpc> {
 							.context(format!("Failed to send {} transaction", s))
 					})
 				}),
-				log,
 				MAX_BROADCAST_RETRIES,
 			)
 			.await
@@ -370,11 +413,11 @@ impl<Rpc: EvmRpcApi> EvmRetrySubscribeApi for EvmRetryRpcClient<Rpc> {
 	async fn subscribe_blocks(&self) -> ConscientiousEvmWebsocketBlockHeaderStream {
 		self.sub_retry_client
 			.request(
+				RequestLog::new("subscribe_blocks".to_string(), None),
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.subscribe_blocks().await })
 				}),
-				RequestLog::new("subscribe_blocks".to_string(), None),
 			)
 			.await
 	}
@@ -392,30 +435,61 @@ impl<Rpc: EvmRpcApi> ChainClient for EvmRetryRpcClient<Rpc> {
 		&self,
 		index: Self::Index,
 	) -> Header<Self::Index, Self::Hash, Self::Data> {
+		use cf_chains::witness_period;
+
+		let witness_period = self.witness_period;
+		assert!(witness_period::is_block_witness_root(witness_period, index));
 		self.rpc_retry_client
 			.request(
+				RequestLog::new("header_at_index".to_string(), Some(format!("{index}"))),
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
-						let block = client.block(index.into()).await?;
-						let (Some(block_number), Some(block_hash)) = (block.number, block.hash)
-						else {
-							return Err(anyhow::anyhow!(
-								"Block number or hash is none for block number: {}",
-								index
-							))
-						};
+						let witness_range =
+							witness_period::block_witness_range(witness_period, index);
 
-						assert_eq!(block_number.as_u64(), index);
+						async fn get_block_details<Rpc: EvmRpcApi>(
+							client: &Rpc,
+							index: u64,
+						) -> anyhow::Result<(H256, Option<H256>, Bloom)> {
+							let block = client.block(index.into()).await?;
+
+							if let (Some(block_number), Some(block_hash)) =
+								(block.number, block.hash)
+							{
+								assert_eq!(block_number.as_u64(), index);
+								Ok((
+									block_hash,
+									if index == 0 { None } else { Some(block.parent_hash) },
+									block.logs_bloom.unwrap_or(Bloom::repeat_byte(0xFFu8)),
+								))
+							} else {
+								Err(anyhow::anyhow!(
+									"Block number or hash is none for block number: {}",
+									index
+								))
+							}
+						}
+
+						let (block_hash, block_parent_hash, block_bloom) =
+							get_block_details(&client, *witness_range.end()).await?;
+
 						Ok(Header {
-							index,
+							index: witness_period::block_witness_root(witness_period, index),
 							hash: block_hash,
-							parent_hash: Some(block.parent_hash),
-							data: block.logs_bloom.unwrap_or(Bloom::repeat_byte(0xFFu8)).0.into(),
+							parent_hash: {
+								if witness_range.end() == witness_range.start() {
+									block_parent_hash
+								} else {
+									let (_, parent_block_hash, _) =
+										get_block_details(&client, *witness_range.start()).await?;
+									parent_block_hash
+								}
+							},
+							data: block_bloom,
 						})
 					})
 				}),
-				RequestLog::new("header_at_index".to_string(), Some(format!("{index}"))),
 			)
 			.await
 	}
@@ -444,6 +518,7 @@ pub mod mocks {
 
 		#[async_trait::async_trait]
 		impl EvmRetryRpcApi for EvmRetryRpcClient {
+			async fn get_logs_range(&self, range: std::ops::RangeInclusive<u64>, contract_address: H160) -> Vec<Log>;
 
 			async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log>;
 
@@ -470,6 +545,7 @@ pub mod mocks {
 #[cfg(test)]
 mod tests {
 	use crate::settings::Settings;
+	use cf_chains::Chain;
 	use futures::FutureExt;
 	use utilities::task_scope::task_scope;
 
@@ -490,6 +566,7 @@ mod tests {
 					"eth_rpc",
 					"eth_subscribe",
 					"Ethereum",
+					Ethereum::WITNESS_PERIOD,
 				)
 				.unwrap();
 

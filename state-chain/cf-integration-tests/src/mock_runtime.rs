@@ -247,7 +247,10 @@ impl ExtBuilder {
 			arbitrum_chain_tracking: ArbitrumChainTrackingConfig {
 				init_chain_state: ChainState::<Arbitrum> {
 					block_height: 0,
-					tracked_data: ArbitrumTrackedData { base_fee: 100000u32.into() },
+					tracked_data: ArbitrumTrackedData {
+						base_fee: 100000u32.into(),
+						gas_limit_multiplier: 1.into(),
+					},
 				},
 			},
 			bitcoin_threshold_signer: Default::default(),

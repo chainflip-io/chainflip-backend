@@ -1,5 +1,6 @@
-import { Chain, InternalAssets as Assets } from '@chainflip/cli';
+import { InternalAssets as Assets } from '@chainflip/cli';
 import assert from 'assert';
+import Keyring from '@polkadot/keyring';
 import {
   getChainflipApi,
   observeEvent,
@@ -12,6 +13,7 @@ import {
   isWithinOnePercent,
   assetDecimals,
   stateChainAssetFromAsset,
+  Chain,
 } from './utils';
 import { jsonRpc } from './json_rpc';
 import { provideLiquidity } from './provide_liquidity';
@@ -140,6 +142,52 @@ async function testWithdrawAsset() {
 
   await observeBalanceIncrease(testAsset, testAddress, oldBalance);
   console.log('=== testWithdrawAsset complete ===');
+}
+
+async function testTransferAsset() {
+  console.log('=== Starting testTransferAsset ===');
+  const amountToTransfer = testAssetAmount.toString(16);
+
+  const getLpBalance = async (account: string) =>
+    (await chainflip.query.liquidityProvider.freeBalances(account, testAsset))
+      .unwrapOrDefault()
+      .toBigInt();
+
+  const keyring = new Keyring({ type: 'sr25519' });
+
+  const sourceLpAccount = keyring.createFromUri('//LP_1');
+  const destinationLpAccount = keyring.createFromUri('//LP_2');
+
+  const oldBalanceSource = await getLpBalance(sourceLpAccount.address);
+  const oldBalanceDestination = await getLpBalance(destinationLpAccount.address);
+
+  const result = await lpApiRpc(`lp_transfer_asset`, [
+    amountToTransfer,
+    testRpcAsset,
+    destinationLpAccount.address,
+  ]);
+
+  // Expect result to be a block hash
+  assert.match(result, /0x[0-9a-fA-F]{64}/, `Unexpected transfer asset result`);
+
+  const newBalancesSource = await getLpBalance(sourceLpAccount.address);
+  const newBalanceDestination = await getLpBalance(destinationLpAccount.address);
+
+  assert(
+    newBalanceDestination > oldBalanceDestination,
+    `Failed to observe balance increase after transfer for destination account!`,
+  );
+  assert(
+    newBalancesSource < oldBalanceSource,
+    `Failed to observe balance decrease after transfer for source account!`,
+  );
+
+  assert(
+    oldBalanceSource + oldBalanceDestination === newBalancesSource + newBalanceDestination,
+    `Balance integrity check failed!`,
+  );
+
+  console.log('=== testTransferAsset complete ===');
 }
 
 async function testRegisterWithExistingLpAccount() {
@@ -371,6 +419,8 @@ export async function testLpApi() {
     testLimitOrder(),
     testGetOpenSwapChannels(),
   ]);
+
+  await testTransferAsset();
 
   console.log('=== LP API test complete ===');
 }

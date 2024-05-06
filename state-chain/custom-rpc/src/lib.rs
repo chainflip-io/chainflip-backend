@@ -1,4 +1,4 @@
-use boost_pool_details::BoostPoolDetailsRpc;
+use boost_pool_rpc::BoostPoolDetailsRpc;
 use cf_amm::{
 	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
@@ -46,6 +46,8 @@ use std::{
 	marker::PhantomData,
 	sync::Arc,
 };
+
+use crate::boost_pool_rpc::BoostPoolFeesRpc;
 
 mod type_decoder;
 
@@ -300,7 +302,7 @@ pub struct SwapResponse {
 	swaps: Vec<ScheduledSwap>,
 }
 
-mod boost_pool_details {
+mod boost_pool_rpc {
 
 	use std::collections::BTreeSet;
 
@@ -312,7 +314,7 @@ mod boost_pool_details {
 	#[derive(Serialize, Deserialize)]
 	struct AccountAndAmount {
 		account_id: AccountId32,
-		amount: NumberOrHex,
+		amount: U256,
 	}
 
 	#[derive(Serialize, Deserialize)]
@@ -337,27 +339,31 @@ mod boost_pool_details {
 		pending_withdrawals: Vec<PendingWithdrawal>,
 	}
 
-	fn map_to_vec(map: BTreeMap<AccountId32, AssetAmount>) -> Vec<AccountAndAmount> {
-		map.into_iter()
-			.map(|(account_id, amount)| AccountAndAmount {
-				account_id,
-				amount: NumberOrHex::from(amount),
-			})
-			.collect()
-	}
-
 	impl BoostPoolDetailsRpc {
 		pub fn new(asset: Asset, fee_tier: u16, details: BoostPoolDetails) -> Self {
 			BoostPoolDetailsRpc {
 				asset,
 				fee_tier,
-				available_amounts: map_to_vec(details.available_amounts),
+				available_amounts: details
+					.available_amounts
+					.into_iter()
+					.map(|(account_id, amount)| AccountAndAmount {
+						account_id,
+						amount: U256::from(amount),
+					})
+					.collect(),
 				deposits_pending_finalization: details
 					.pending_boosts
 					.into_iter()
 					.map(|(deposit_id, owed_amounts)| PendingBoost {
 						deposit_id,
-						owed_amounts: map_to_vec(owed_amounts),
+						owed_amounts: owed_amounts
+							.into_iter()
+							.map(|(account_id, amount)| AccountAndAmount {
+								account_id,
+								amount: U256::from(amount.total),
+							})
+							.collect(),
 					})
 					.collect(),
 				pending_withdrawals: details
@@ -371,10 +377,48 @@ mod boost_pool_details {
 			}
 		}
 	}
+
+	#[derive(Serialize, Deserialize)]
+	struct PendingFees {
+		deposit_id: PrewitnessedDepositId,
+		fees: Vec<AccountAndAmount>,
+	}
+
+	#[derive(Serialize, Deserialize)]
+	pub struct BoostPoolFeesRpc {
+		fee_tier: u16,
+		#[serde(flatten)]
+		asset: Asset,
+		pending_fees: Vec<PendingFees>,
+	}
+
+	impl BoostPoolFeesRpc {
+		pub fn new(asset: Asset, fee_tier: u16, details: BoostPoolDetails) -> Self {
+			BoostPoolFeesRpc {
+				fee_tier,
+				asset,
+				pending_fees: details
+					.pending_boosts
+					.into_iter()
+					.map(|(deposit_id, owed_amounts)| PendingFees {
+						deposit_id,
+						fees: owed_amounts
+							.into_iter()
+							.map(|(account_id, amount)| AccountAndAmount {
+								account_id,
+								amount: U256::from(amount.fee),
+							})
+							.collect(),
+					})
+					.collect(),
+			}
+		}
+	}
 }
 
 type BoostPoolDepthResponse = Vec<BoostPoolDepth>;
-type BoostPoolDetailsResponse = Vec<boost_pool_details::BoostPoolDetailsRpc>;
+type BoostPoolDetailsResponse = Vec<boost_pool_rpc::BoostPoolDetailsRpc>;
+type BoostPoolFeesResponse = Vec<boost_pool_rpc::BoostPoolFeesRpc>;
 
 #[rpc(server, client, namespace = "cf")]
 /// The custom RPC endpoints for the state chain node.
@@ -638,10 +682,24 @@ pub trait CustomApi {
 	) -> RpcResult<Vec<sp_core::Bytes>>;
 
 	#[method(name = "boost_pools_depth")]
-	fn cf_boost_pools_depth(&self) -> RpcResult<BoostPoolDepthResponse>;
+	fn cf_boost_pools_depth(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<BoostPoolDepthResponse>;
 
 	#[method(name = "boost_pool_details")]
-	fn cf_boost_pool_details(&self, asset: Option<Asset>) -> RpcResult<BoostPoolDetailsResponse>;
+	fn cf_boost_pool_details(
+		&self,
+		asset: Option<Asset>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<BoostPoolDetailsResponse>;
+
+	#[method(name = "boost_pool_pending_fees")]
+	fn cf_boost_pool_pending_fees(
+		&self,
+		asset: Option<Asset>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<BoostPoolFeesResponse>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1049,10 +1107,13 @@ where
 			.and_then(|result| result.map_err(map_dispatch_error))
 	}
 
-	fn cf_boost_pools_depth(&self) -> RpcResult<Vec<BoostPoolDepth>> {
+	fn cf_boost_pools_depth(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<BoostPoolDepth>> {
 		self.client
 			.runtime_api()
-			.cf_boost_pools_depth(self.client.info().best_hash)
+			.cf_boost_pools_depth(self.unwrap_or_best(at))
 			.map_err(to_rpc_error)
 	}
 
@@ -1461,28 +1522,42 @@ where
 			.collect::<Vec<_>>())
 	}
 
-	fn cf_boost_pool_details(&self, asset: Option<Asset>) -> RpcResult<BoostPoolDetailsResponse> {
-		let get_boost_details_for_asset = |asset| {
+	fn cf_boost_pool_details(
+		&self,
+		asset: Option<Asset>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<BoostPoolDetailsResponse> {
+		execute_for_all_or_one_asset(asset, |asset| {
 			self.client
 				.runtime_api()
-				.cf_boost_pool_details(self.client.info().best_hash, asset)
-				.map(|details_vec| {
-					details_vec
+				.cf_boost_pool_details(self.unwrap_or_best(at), asset)
+				.map(|details_for_each_pool| {
+					details_for_each_pool
 						.into_iter()
 						.map(|(tier, details)| BoostPoolDetailsRpc::new(asset, tier, details))
 						.collect()
 				})
 				.map_err(to_rpc_error)
-		};
+		})
+	}
 
-		if let Some(asset) = asset {
-			get_boost_details_for_asset(asset)
-		} else {
-			let results_for_each_asset: RpcResult<Vec<_>> =
-				Asset::all().map(get_boost_details_for_asset).collect();
-
-			results_for_each_asset.map(|inner| inner.into_iter().flatten().collect())
-		}
+	fn cf_boost_pool_pending_fees(
+		&self,
+		asset: Option<Asset>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<BoostPoolFeesResponse> {
+		execute_for_all_or_one_asset(asset, |asset| {
+			self.client
+				.runtime_api()
+				.cf_boost_pool_details(self.unwrap_or_best(at), asset)
+				.map(|details_for_each_pool| {
+					details_for_each_pool
+						.into_iter()
+						.map(|(fee_tier, details)| BoostPoolFeesRpc::new(asset, fee_tier, details))
+						.collect()
+				})
+				.map_err(to_rpc_error)
+		})
 	}
 }
 
@@ -1570,6 +1645,24 @@ where
 	}
 }
 
+/// Execute f (which returns a Vec of results) for `asset`. If `asset` is `None`
+/// the closure is executed for every supported asset and the results are concatenated.
+fn execute_for_all_or_one_asset<Response, F>(
+	asset: Option<Asset>,
+	mut f: F,
+) -> RpcResult<Vec<Response>>
+where
+	F: FnMut(Asset) -> RpcResult<Vec<Response>>,
+{
+	if let Some(asset) = asset {
+		f(asset)
+	} else {
+		let results_for_each_asset: RpcResult<Vec<_>> = Asset::all().map(f).collect();
+
+		results_for_each_asset.map(|inner| inner.into_iter().flatten().collect())
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use std::collections::BTreeSet;
@@ -1580,6 +1673,8 @@ mod test {
 		FLIPPERINOS_PER_FLIP,
 	};
 	use sp_core::H160;
+	use sp_runtime::AccountId32;
+	use state_chain_runtime::runtime_apis::OwedAmount;
 
 	/*
 		changing any of these serialization tests signifies a breaking change in the
@@ -1808,42 +1903,57 @@ mod test {
 		insta::assert_json_snapshot!(val);
 	}
 
+	const ID_1: AccountId32 = AccountId32::new([1; 32]);
+	const ID_2: AccountId32 = AccountId32::new([2; 32]);
+
+	fn boost_details_1() -> BoostPoolDetails {
+		BoostPoolDetails {
+			available_amounts: BTreeMap::from([(ID_1.clone(), 10_000)]),
+			pending_boosts: BTreeMap::from([
+				(
+					0,
+					BTreeMap::from([
+						(ID_1.clone(), OwedAmount { total: 200, fee: 10 }),
+						(ID_2.clone(), OwedAmount { total: 2_000, fee: 100 }),
+					]),
+				),
+				(1, BTreeMap::from([(ID_1.clone(), OwedAmount { total: 1_000, fee: 50 })])),
+			]),
+			pending_withdrawals: Default::default(),
+		}
+	}
+
+	fn boost_details_2() -> BoostPoolDetails {
+		BoostPoolDetails {
+			available_amounts: BTreeMap::from([]),
+			pending_boosts: BTreeMap::from([(
+				0,
+				BTreeMap::from([
+					(ID_1.clone(), OwedAmount { total: 1_000, fee: 50 }),
+					(ID_2.clone(), OwedAmount { total: 2_000, fee: 100 }),
+				]),
+			)]),
+			pending_withdrawals: BTreeMap::from([
+				(ID_1.clone(), BTreeSet::from([0])),
+				(ID_2.clone(), BTreeSet::from([0])),
+			]),
+		}
+	}
+
 	#[test]
 	fn test_boost_details_serialization() {
-		use sp_runtime::AccountId32;
-
-		let id1 = AccountId32::new([1; 32]);
-		let id2 = AccountId32::new([2; 32]);
-
 		let val: BoostPoolDetailsResponse = vec![
-			BoostPoolDetailsRpc::new(
-				Asset::ArbEth,
-				10,
-				BoostPoolDetails {
-					available_amounts: BTreeMap::from([(id1.clone(), 10_000)]),
-					pending_boosts: BTreeMap::from([
-						(0, BTreeMap::from([(id1.clone(), 200), (id2.clone(), 2_000)])),
-						(1, BTreeMap::from([(id1.clone(), 1_000)])),
-					]),
-					pending_withdrawals: Default::default(),
-				},
-			),
-			BoostPoolDetailsRpc::new(
-				Asset::Btc,
-				30,
-				BoostPoolDetails {
-					available_amounts: BTreeMap::from([]),
-					pending_boosts: BTreeMap::from([(
-						0,
-						BTreeMap::from([(id1.clone(), 1_000), (id2.clone(), 2_000)]),
-					)]),
-					pending_withdrawals: BTreeMap::from([
-						(id1, BTreeSet::from([0])),
-						(id2, BTreeSet::from([0])),
-					]),
-				},
-			),
+			BoostPoolDetailsRpc::new(Asset::ArbEth, 10, boost_details_1()),
+			BoostPoolDetailsRpc::new(Asset::Btc, 30, boost_details_2()),
 		];
+
+		insta::assert_json_snapshot!(val);
+	}
+
+	#[test]
+	fn test_boost_fees_serialization() {
+		let val: BoostPoolFeesResponse =
+			vec![BoostPoolFeesRpc::new(Asset::Btc, 10, boost_details_1())];
 
 		insta::assert_json_snapshot!(val);
 	}

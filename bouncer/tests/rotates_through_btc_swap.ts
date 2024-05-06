@@ -4,7 +4,7 @@ import { newAddress, getChainflipApi, observeEvent } from '../shared/utils';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 
 async function rotatesThroughBtcSwap() {
-  const chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipApi();
 
   const tag = `Btc -> Dot (through rotation)`;
   const address = await newAddress('Dot', 'foo');
@@ -13,7 +13,7 @@ async function rotatesThroughBtcSwap() {
 
   const swapParams = await requestNewSwap('Btc', 'Dot', address, tag);
 
-  await submitGovernanceExtrinsic(chainflip.tx.validator.forceRotation());
+  await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
   console.log(`Vault rotation initiated. Awaiting new epoch.`);
   await observeEvent('validator:NewEpoch', chainflip);
   console.log('Vault rotated!');

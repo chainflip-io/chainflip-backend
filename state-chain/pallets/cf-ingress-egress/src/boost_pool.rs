@@ -76,6 +76,14 @@ impl<C: Chain> ScaledAmount<C> {
 	}
 }
 
+type OwedAmountScaled<C> = OwedAmount<ScaledAmount<C>>;
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct OwedAmount<AmountT> {
+	pub total: AmountT,
+	pub fee: AmountT,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct BoostPool<AccountId, C: Chain> {
 	// Fee charged by the pool
@@ -85,7 +93,7 @@ pub struct BoostPool<AccountId, C: Chain> {
 	// Mapping from booster to the available amount they own in `available_amount`
 	amounts: BTreeMap<AccountId, ScaledAmount<C>>,
 	// Boosted deposits awaiting finalisation and how much of them is owed to which booster
-	pending_boosts: BTreeMap<PrewitnessedDepositId, BTreeMap<AccountId, ScaledAmount<C>>>,
+	pending_boosts: BTreeMap<PrewitnessedDepositId, BTreeMap<AccountId, OwedAmountScaled<C>>>,
 	// Stores boosters who have indicated that they want to stop boosting along with
 	// the pending deposits that they have to wait to be finalised
 	pending_withdrawals: BTreeMap<AccountId, BTreeSet<PrewitnessedDepositId>>,
@@ -144,7 +152,7 @@ where
 
 	pub fn get_pending_boosts(
 		&self,
-	) -> BTreeMap<PrewitnessedDepositId, BTreeMap<AccountId, C::ChainAmount>> {
+	) -> BTreeMap<PrewitnessedDepositId, BTreeMap<AccountId, OwedAmount<C::ChainAmount>>> {
 		self.pending_boosts
 			.iter()
 			.map(|(deposit_id, owed_amounts_map)| {
@@ -152,8 +160,14 @@ where
 					*deposit_id,
 					owed_amounts_map
 						.iter()
-						.map(|(account_id, scaled_amount)| {
-							(account_id.clone(), scaled_amount.into_chain_amount())
+						.map(|(account_id, owed_amount)| {
+							(
+								account_id.clone(),
+								OwedAmount {
+									total: owed_amount.total.into_chain_amount(),
+									fee: owed_amount.fee.into_chain_amount(),
+								},
+							)
 						})
 						.collect(),
 				)
@@ -237,7 +251,7 @@ where
 
 				// Same as above, but also includes fees (note, however, that we round down
 				// to ensure that we don't distribute more than we have)
-				let booster_to_receive = multiply_by_rational_with_rounding(
+				let booster_to_receive: ScaledAmount<C> = multiply_by_rational_with_rounding(
 					amount_to_receive.into(),
 					(*amount).into(),
 					current_total_available_amount.into(),
@@ -248,13 +262,18 @@ where
 				.unwrap_or_default()
 				.into();
 
+				let booster_fee = booster_to_receive.saturating_sub(booster_contribution);
+
 				// Amount should always be large enough at this point, but saturating to be safe:
 				amount.saturating_reduce(booster_contribution);
 
 				total_contributed.saturating_accrue(booster_contribution);
 				to_receive_recorded.saturating_accrue(booster_to_receive);
 
-				(booster_id.clone(), booster_to_receive)
+				(
+					booster_id.clone(),
+					OwedAmountScaled { total: booster_to_receive, fee: booster_fee },
+				)
 			})
 			.collect();
 
@@ -273,7 +292,8 @@ where
 			amount.saturating_accrue(excess_contributed);
 
 			if let Some(amount) = boosters_to_receive.get_mut(lucky_id) {
-				amount.saturating_accrue(remaining_to_receive)
+				amount.total.saturating_accrue(remaining_to_receive);
+				amount.fee.saturating_accrue(remaining_to_receive);
 			}
 		}
 
@@ -309,9 +329,9 @@ where
 					self.pending_withdrawals.remove(&booster_id);
 				}
 
-				unlocked_funds.push((booster_id, amount.into_chain_amount()));
+				unlocked_funds.push((booster_id, amount.total.into_chain_amount()));
 			} else {
-				self.add_funds_inner(booster_id, amount);
+				self.add_funds_inner(booster_id, amount.total);
 			}
 		}
 

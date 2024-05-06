@@ -10,7 +10,7 @@ import { aliceKeyringPair } from './polkadot_keyring';
 export async function sendDot(address: string, amount: string) {
   const planckAmount = amountToFineAmount(amount, assetDecimals('Dot'));
   const alice = await aliceKeyringPair();
-  const polkadot = await getPolkadotApi();
+  await using polkadot = await getPolkadotApi();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let resolve: any;
@@ -48,5 +48,5 @@ export async function sendDot(address: string, amount: string) {
       });
   });
 
-  return promise;
+  await promise;
 }

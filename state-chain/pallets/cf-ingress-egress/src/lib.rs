@@ -18,6 +18,7 @@ pub mod weights;
 mod boost_pool;
 
 use boost_pool::BoostPool;
+pub use boost_pool::OwedAmount;
 
 use frame_support::{pallet_prelude::OptionQuery, transactional};
 
@@ -81,9 +82,6 @@ pub struct BoostOutput<C: Chain> {
 	used_pools: BTreeMap<BoostPoolTier, C::ChainAmount>,
 	total_fee: C::ChainAmount,
 }
-
-pub const SORTED_BOOST_TIERS: [BoostPoolTier; 3] =
-	[BoostPoolTier::FiveBps, BoostPoolTier::TenBps, BoostPoolTier::ThirtyBps];
 
 /// Enum wrapper for fetch and egress requests.
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
@@ -360,18 +358,6 @@ pub mod pallet {
 		fn build(&self) {
 			DepositChannelLifetime::<T, I>::put(self.deposit_channel_lifetime);
 			WitnessSafetyMargin::<T, I>::set(self.witness_safety_margin);
-
-			use strum::IntoEnumIterator;
-
-			for asset in TargetChainAsset::<T, I>::iter() {
-				for pool_tier in SORTED_BOOST_TIERS {
-					BoostPools::<T, I>::set(
-						asset,
-						pool_tier,
-						Some(BoostPool::new(pool_tier as BasisPoints)),
-					);
-				}
-			}
 
 			for (asset, dust_limit) in self.dust_limits.clone() {
 				EgressDustLimit::<T, I>::set(asset, dust_limit.unique_saturated_into());
@@ -717,6 +703,10 @@ pub mod pallet {
 		AddBoostFundsDisabled,
 		/// Retrieving boost funds disabled due to safe mode.
 		StopBoostingDisabled,
+		/// Cannot create a boost pool if it already exists.
+		BoostPoolAlreadyExists,
+		/// Cannot create a boost pool of 0 bps
+		InvalidBoostPoolTier,
 	}
 
 	#[pallet::hooks]
@@ -1115,6 +1105,28 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		#[pallet::call_index(9)]
+		#[pallet::weight(T::WeightInfo::create_boost_pools() * new_pools.len() as u64)]
+		pub fn create_boost_pools(
+			origin: OriginFor<T>,
+			new_pools: Vec<BoostPoolId<T::TargetChain>>,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			new_pools.into_iter().try_for_each(|pool_id| {
+				ensure!(pool_id.tier != 0, Error::<T, I>::InvalidBoostPoolTier);
+				BoostPools::<T, I>::try_mutate_exists(pool_id.asset, pool_id.tier, |pool| {
+					ensure!(pool.is_none(), Error::<T, I>::BoostPoolAlreadyExists);
+					*pool = Some(BoostPool::new(pool_id.tier));
+
+					Self::deposit_event(Event::<T, I>::BoostPoolCreated { boost_pool: pool_id });
+
+					Ok::<(), Error<T, I>>(())
+				})
+			})?;
+			Ok(())
+		}
 	}
 }
 
@@ -1334,8 +1346,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let mut used_pools = BTreeMap::new();
 
-		for boost_tier in SORTED_BOOST_TIERS {
-			if boost_tier as u16 > max_boost_fee_bps {
+		let sorted_boost_tiers = BoostPools::<T, I>::iter_prefix(asset)
+			.map(|(tier, _)| tier)
+			.collect::<BTreeSet<_>>();
+
+		debug_assert!(
+			sorted_boost_tiers
+				.iter()
+				.zip(sorted_boost_tiers.iter().skip(1))
+				.all(|(a, b)| a < b),
+			"Boost tiers should be in ascending order"
+		);
+
+		for boost_tier in sorted_boost_tiers {
+			if boost_tier > max_boost_fee_bps {
 				break
 			}
 
@@ -1726,9 +1750,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> (TargetChainBlockNumber<T, I>, TargetChainBlockNumber<T, I>, TargetChainBlockNumber<T, I>)
 	{
 		let current_height = T::ChainTracking::get_block_height();
+		debug_assert!(<T::TargetChain as Chain>::is_block_witness_root(current_height));
+
 		let lifetime = DepositChannelLifetime::<T, I>::get();
-		let expiry_height = current_height + lifetime;
-		let recycle_height = expiry_height + lifetime;
+
+		let expiry_height = <T::TargetChain as Chain>::saturating_block_witness_next(
+			current_height.saturating_add(lifetime),
+		);
+		let recycle_height = <T::TargetChain as Chain>::saturating_block_witness_next(
+			expiry_height.saturating_add(lifetime),
+		);
+
+		debug_assert!(current_height < expiry_height);
+		debug_assert!(expiry_height < recycle_height);
 
 		(current_height, expiry_height, recycle_height)
 	}
