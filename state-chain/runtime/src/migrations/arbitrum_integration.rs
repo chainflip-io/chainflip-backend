@@ -32,11 +32,20 @@ mod old {
 		PolkadotCryptoInstance, PolkadotInstance,
 	};
 	use frame_support::pallet_prelude::*;
+
+	#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+	pub struct SwappingSafeMode {
+		pub swaps_enabled: bool,
+		pub withdrawals_enabled: bool,
+		pub deposits_enabled: bool,
+		pub broker_registration_enabled: bool,
+	}
+
 	#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 	pub struct RuntimeSafeMode {
 		pub emissions: pallet_cf_emissions::PalletSafeMode,
 		pub funding: pallet_cf_funding::PalletSafeMode,
-		pub swapping: pallet_cf_swapping::PalletSafeMode,
+		pub swapping: SwappingSafeMode,
 		pub liquidity_provider: pallet_cf_lp::PalletSafeMode,
 		pub validator: pallet_cf_validator::PalletSafeMode,
 		pub pools: pallet_cf_pools::PalletSafeMode,
@@ -66,7 +75,11 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 					safe_mode::RuntimeSafeMode {
 							emissions: old.emissions,
 							funding: old.funding,
-							swapping: old.swapping,
+							swapping: pallet_cf_swapping::PalletSafeMode {
+								swaps_enabled: old.swapping.swaps_enabled,
+								withdrawals_enabled: old.swapping.withdrawals_enabled,
+								broker_registration_enabled: old.swapping.broker_registration_enabled
+							},
 							liquidity_provider: old.liquidity_provider,
 							validator: old.validator,
 							pools: old.pools,

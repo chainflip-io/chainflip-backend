@@ -192,7 +192,7 @@ pub enum PalletConfigUpdate {
 }
 
 impl_pallet_safe_mode! {
-	PalletSafeMode; swaps_enabled, withdrawals_enabled, deposits_enabled, broker_registration_enabled,
+	PalletSafeMode; swaps_enabled, withdrawals_enabled, broker_registration_enabled,
 }
 
 #[frame_support::pallet]
@@ -416,8 +416,6 @@ pub mod pallet {
 
 		/// Withdrawals are disabled due to Safe Mode.
 		WithdrawalsDisabled,
-		/// Swap deposits are disabled due to Safe Mode.
-		DepositsDisabled,
 		/// Broker registration is disabled due to Safe Mode.
 		BrokerRegistrationDisabled,
 		/// Broker commission bps is limited to 1000 points.
@@ -483,7 +481,6 @@ pub mod pallet {
 			channel_metadata: Option<CcmChannelMetadata>,
 			boost_fee: BasisPoints,
 		) -> DispatchResult {
-			ensure!(T::SafeMode::get().deposits_enabled, Error::<T>::DepositsDisabled);
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
 			ensure!(broker_commission_bps <= 1000, Error::<T>::BrokerCommissionBpsTooHigh);
 
