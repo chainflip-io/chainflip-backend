@@ -49,7 +49,6 @@ mod benchmarks {
 	#[benchmark]
 	fn process_single_deposit() {
 		const CHANNEL_ID: u64 = 1;
-		const PREWITNESSED_DEPOSIT_ID: u64 = 1;
 
 		let deposit_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount =
 			BenchmarkValue::benchmark_value();
@@ -76,17 +75,6 @@ mod benchmarks {
 				boost_status: BoostStatus::NotBoosted,
 			},
 		);
-		PrewitnessedDeposits::<T, I>::insert(
-			CHANNEL_ID,
-			PREWITNESSED_DEPOSIT_ID,
-			PrewitnessedDeposit {
-				asset: source_asset,
-				amount: deposit_amount,
-				deposit_address: deposit_address.clone(),
-				deposit_details: BenchmarkValue::benchmark_value(),
-				block_height: BenchmarkValue::benchmark_value(),
-			},
-		);
 
 		#[block]
 		{
@@ -98,8 +86,6 @@ mod benchmarks {
 				BenchmarkValue::benchmark_value()
 			));
 		}
-
-		assert!(PrewitnessedDeposits::<T, I>::get(CHANNEL_ID, PREWITNESSED_DEPOSIT_ID).is_none());
 	}
 	#[benchmark]
 	fn finalise_ingress(a: Linear<1, 100>) {
@@ -455,30 +441,6 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn clear_prewitnessed_deposits(n: Linear<1, 255>) {
-		for i in 0..n {
-			PrewitnessedDeposits::<T, I>::insert(
-				0,
-				i as u64,
-				PrewitnessedDeposit {
-					asset: BenchmarkValue::benchmark_value(),
-					amount: BenchmarkValue::benchmark_value(),
-					deposit_address: BenchmarkValue::benchmark_value(),
-					deposit_details: BenchmarkValue::benchmark_value(),
-					block_height: BenchmarkValue::benchmark_value(),
-				},
-			);
-		}
-
-		#[block]
-		{
-			assert_eq!(Pallet::<T, I>::clear_prewitnessed_deposits(0), n as u32);
-		}
-
-		assert_eq!(PrewitnessedDeposits::<T, I>::iter().count(), 0);
-	}
-
-	#[benchmark]
 	fn create_boost_pools() {
 		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
 
@@ -512,9 +474,6 @@ mod benchmarks {
 		});
 		new_test_ext().execute_with(|| {
 			_disable_asset_egress::<Test, ()>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_clear_prewitnessed_deposits::<Test, ()>(100, true);
 		});
 		new_test_ext().execute_with(|| {
 			_add_boost_funds::<Test, ()>(true);
