@@ -287,6 +287,12 @@ impl From<SwapOutput> for RpcSwapOutputV2 {
 	}
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct SwapRateV2Options {
+	pub first_leg_additional_limit_orders: Option<Vec<(Tick, U256)>>,
+	pub second_leg_additional_limit_orders: Option<Vec<(Tick, U256)>>,
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy)]
 pub struct RpcPoolInfo {
 	#[serde(flatten)]
@@ -594,8 +600,7 @@ pub trait CustomApi {
 		from_asset: Asset,
 		to_asset: Asset,
 		amount: U256,
-		first_leg_additional_limit_orders: Option<Vec<(Tick, U256)>>,
-		second_leg_additional_limit_orders: Option<Vec<(Tick, U256)>>,
+		options: Option<SwapRateV2Options>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2>;
 	#[method(name = "required_asset_ratio_for_range_order")]
@@ -1122,7 +1127,7 @@ where
 		amount: NumberOrHex,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutput> {
-		self.cf_pool_swap_rate_v2(from_asset, to_asset, amount.into(), None, None, at)
+		self.cf_pool_swap_rate_v2(from_asset, to_asset, amount.into(), None, at)
 			.map(Into::into)
 	}
 
@@ -1131,10 +1136,15 @@ where
 		from_asset: Asset,
 		to_asset: Asset,
 		amount: U256,
-		first_leg_additional_limit_orders: Option<Vec<(Tick, U256)>>,
-		second_leg_additional_limit_orders: Option<Vec<(Tick, U256)>>,
+		options: Option<SwapRateV2Options>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2> {
+		let (first_leg, second_leg) = options
+			.map(|opts| {
+				(opts.first_leg_additional_limit_orders, opts.second_leg_additional_limit_orders)
+			})
+			.unwrap_or((None, None));
+
 		self.client
 			.runtime_api()
 			.cf_pool_simulate_swap(
@@ -1151,8 +1161,8 @@ where
 						}
 					})
 					.map_err(|str| anyhow::anyhow!(str))?,
-				first_leg_additional_limit_orders,
-				second_leg_additional_limit_orders,
+				first_leg,
+				second_leg,
 			)
 			.map_err(to_rpc_error)
 			.and_then(|result| result.map_err(map_dispatch_error))
