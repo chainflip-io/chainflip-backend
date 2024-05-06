@@ -91,6 +91,8 @@ where
 					}
 
 					if let Some(safe_header) = pop_safe_from_cache::<Self>(&mut unsafe_cache, margin) {
+						// Technically this check is unneeded as the witness_period is constant, but if it weren't then a new unsafe block could
+						// cause multiple new blocks to become safe, in which case this would be needed.
 						Some(safe_header)
 					} else {
 						utilities::loop_select!(

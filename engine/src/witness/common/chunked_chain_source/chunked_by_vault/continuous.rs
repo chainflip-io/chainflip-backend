@@ -105,6 +105,10 @@ where
 								let header = chain_stream.next_or_pending() => {
 									assert!(<Inner::Chain as Chain>::is_block_witness_root(header.index));
 
+									// Note if the processed indices loaded from the database are not aligned to the `witness_period`, we will skip blocks.
+									// For example: If the `witness_period` is 5, and the database states 0..3 are witnessed. Then blocks 3..5 will not be
+									// witnessed as we cannot partially witness a `witness_period`, but we will witness 5..10 etc.
+
 									for unprocessed_root in itertools::unfold(
 										if processed_indices.is_empty() {
 											Some(epoch.info.1)
