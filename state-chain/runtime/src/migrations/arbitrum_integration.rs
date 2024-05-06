@@ -102,12 +102,12 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 				cf_runtime_upgrade_utilities::genesis_hashes::BERGHAIN => {
 					log::warn!("Need to set up arbitrum integration for Berghain");
 					(
-						[0u8; 20].into(),
-						[0u8; 20].into(),
-						[0u8; 20].into(),
+						hex_literal::hex!("BFe612c77C2807Ac5a6A41F84436287578000275").into(),
+						hex_literal::hex!("79001a5e762f3bEFC8e5871b42F6734e00498920").into(),
+						hex_literal::hex!("c1B12993f760B654897F0257573202fba13D5481").into(),
 						arb::CHAIN_ID_MAINNET,
-						[0u8; 20].into(),
-						0,
+						hex_literal::hex!("af88d065e77c8cC2239327C5EDb3A432268e5831").into(),
+						208460974,
 						// state-chain/node/src/chain_spec/berghain.rs
 						24 * 3600 * 4,
 					)
@@ -115,12 +115,12 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 				cf_runtime_upgrade_utilities::genesis_hashes::PERSEVERANCE => {
 					log::warn!("Need to set up arbitrum integration for Perseverance");
 					(
-						[1u8; 20].into(),
-						[1u8; 20].into(),
-						[1u8; 20].into(),
+						hex_literal::hex!("18195b0E3c33EeF3cA6423b1828E0FE0C03F32Fd").into(),
+						hex_literal::hex!("2bb150e6d4366A1BDBC4275D1F35892CD63F27e3").into(),
+						hex_literal::hex!("4F358eC5BD58c994f74B317554D7472769a0Ccf8").into(),
 						arb::CHAIN_ID_ARBITRUM_SEPOLIA,
-						[1u8; 20].into(),
-						0,
+						hex_literal::hex!("75faf114eafb1BDbe2F0316DF893fd58CE46AA4d").into(),
+						38766992,
 						// state-chain/node/src/chain_spec/perseverance.rs
 						2 * 60 * 60 * 4,
 					)
@@ -128,12 +128,12 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 				cf_runtime_upgrade_utilities::genesis_hashes::SISYPHOS => {
 					log::warn!("Need to set up arbitrum integration for Sisyphos");
 					(
-						[2u8; 20].into(),
-						[2u8; 20].into(),
-						[2u8; 20].into(),
+						hex_literal::hex!("7EA74208E2954a7294097C731434caD29c5094D8").into(),
+						hex_literal::hex!("8155BdD48CD011e1118b51A1C82be020A3E5c2f2").into(),
+						hex_literal::hex!("2e78F26e9798EBDe7F2b19736De6Aae4d51d6d34").into(),
 						arb::CHAIN_ID_ARBITRUM_SEPOLIA,
-						[2u8; 20].into(),
-						0,
+						hex_literal::hex!("75faf114eafb1BDbe2F0316DF893fd58CE46AA4d").into(),
+						38762596,
 						// state-chain/node/src/chain_spec/sisyphos.rs
 						2 * 60 * 60 * 4,
 					)
