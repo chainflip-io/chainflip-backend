@@ -92,6 +92,7 @@ impl IntoForeignChainAddress<MockEthereum> for u64 {
 impl Chain for MockEthereum {
 	const NAME: &'static str = "MockEthereum";
 	const GAS_ASSET: Self::ChainAsset = assets::eth::Asset::Eth;
+	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 
 	type ChainCrypto = MockEthereumChainCrypto;
 

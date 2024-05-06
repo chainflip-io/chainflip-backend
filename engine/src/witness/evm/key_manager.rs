@@ -77,12 +77,17 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
 	{
 		self.then::<Result<Bloom>, _, _>(move |epoch, header| {
+			assert!(<Inner::Chain as Chain>::is_block_witness_root(header.index));
+
 			let process_call = process_call.clone();
 			let eth_rpc = eth_rpc.clone();
 			async move {
-				for event in
-					events_at_block::<KeyManagerEvents, _>(header, contract_address, &eth_rpc)
-						.await?
+				for event in events_at_block::<Inner::Chain, KeyManagerEvents, _>(
+					header,
+					contract_address,
+					&eth_rpc,
+				)
+				.await?
 				{
 					info!("Handling event: {event}");
 					let call: state_chain_runtime::RuntimeCall = match event.event_parameters {
@@ -173,7 +178,7 @@ mod tests {
 
 	use std::{path::PathBuf, str::FromStr};
 
-	use cf_chains::Ethereum;
+	use cf_chains::{Chain, Ethereum};
 	use cf_primitives::AccountRole;
 	use futures_util::FutureExt;
 	use sp_core::{H160, U256};
@@ -206,6 +211,7 @@ mod tests {
 					"eth_rpc",
 					"eth_subscribe",
 					"Ethereum",
+					Ethereum::WITNESS_PERIOD,
 				)
 				.unwrap();
 

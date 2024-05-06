@@ -159,7 +159,7 @@ where
 
 	// Full witnessing stream.
 	block_source
-		.lag_safety(btc_safety_margin as usize)
+		.lag_safety(btc_safety_margin)
 		.logging("safe block produced")
 		.chunk_by_vault(vaults, scope)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())

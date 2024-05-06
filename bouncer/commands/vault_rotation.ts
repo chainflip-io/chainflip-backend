@@ -6,13 +6,11 @@
 // For example: ./commands/vault_rotation.ts
 
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
-import { getChainflipApi, runWithTimeout } from '../shared/utils';
+import { runWithTimeout } from '../shared/utils';
 
 async function main(): Promise<void> {
-  await using chainflip = await getChainflipApi();
-
   console.log('Forcing rotation');
-  await submitGovernanceExtrinsic(chainflip.tx.validator.forceRotation());
+  await submitGovernanceExtrinsic((chainflip) => chainflip.tx.validator.forceRotation());
 
   process.exit(0);
 }

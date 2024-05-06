@@ -1,11 +1,6 @@
-import { InternalAsset as Asset, Chain } from '@chainflip/cli/.';
-import {
-  ingressEgressPalletForChain,
-  getAssetsForChain,
-  getChainflipApi,
-  observeEvent,
-} from '../shared/utils';
+import { ingressEgressPalletForChain, getAssetsForChain, Asset } from '../shared/utils';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
+import { observeEvent } from './utils/substrate';
 
 type BoostPoolId = {
   asset: Asset;
@@ -14,17 +9,16 @@ type BoostPoolId = {
 
 // These are the tiers of boost pools that will be created for each asset
 const boostPoolTiers = [5, 10, 30];
-const chains = ['Ethereum', 'Polkadot', 'Bitcoin', 'Arbitrum'];
+const chains = ['Ethereum', 'Polkadot', 'Bitcoin', 'Arbitrum'] as const;
 
 export async function setupBoostPools(): Promise<void> {
   console.log('=== Creating Boost Pools ===');
-  const chainflip = await getChainflipApi();
   const observeBoostPoolEvents = [];
 
   for (const c of chains) {
-    const chain = c as Chain;
+    const chain = c;
     console.log(`Creating boost pools for all ${chain} assets`);
-    const assets = await getAssetsForChain(chain);
+    const assets = getAssetsForChain(chain);
     const newPools: BoostPoolId[] = [];
 
     for (const asset of assets) {
@@ -36,11 +30,12 @@ export async function setupBoostPools(): Promise<void> {
 
         const observeBoostPoolCreated = observeEvent(
           `${chain.toLowerCase()}IngressEgress:BoostPoolCreated`,
-          chainflip,
-          (event) =>
-            event.data.boostPool.asset === asset && event.data.boostPool.tier === tier.toString(),
+          {
+            test: (event) =>
+              event.data.boostPool.asset === asset && event.data.boostPool.tier === tier.toString(),
+          },
         );
-        const observeBoostPoolAlreadyExists = observeEvent(`governance:FailedExecution`, chainflip);
+        const observeBoostPoolAlreadyExists = observeEvent(`governance:FailedExecution`);
 
         observeBoostPoolEvents.push(
           Promise.race([observeBoostPoolCreated, observeBoostPoolAlreadyExists]),
@@ -48,8 +43,9 @@ export async function setupBoostPools(): Promise<void> {
       }
     }
 
-    const ingressEgressPallet = await ingressEgressPalletForChain(chain);
-    submitGovernanceExtrinsic(ingressEgressPallet.createBoostPools(newPools));
+    submitGovernanceExtrinsic((api) =>
+      api.tx[ingressEgressPalletForChain(chain)].createBoostPools(newPools),
+    );
   }
 
   const boostPoolEvents = await Promise.all(observeBoostPoolEvents);

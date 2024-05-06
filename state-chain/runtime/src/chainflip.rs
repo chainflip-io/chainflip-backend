@@ -47,7 +47,7 @@ use cf_chains::{
 	ChainEnvironment, ChainState, DepositChannel, ForeignChain, ReplayProtectionProvider,
 	SetCommKeyWithAggKey, SetGovKeyWithAggKey, TransactionBuilder,
 };
-use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId};
+use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, Beneficiaries, ChannelId};
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
@@ -547,7 +547,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				source_asset: Asset,
 				destination_asset: Asset,
 				destination_address: ForeignChainAddress,
-				broker_commission_bps: BasisPoints,
+				broker_commission: Beneficiaries<Self::AccountId>,
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadata>,
 				boost_fee: BasisPoints
@@ -558,7 +558,7 @@ macro_rules! impl_deposit_api_for_anychain {
 							source_asset,
 							destination_asset,
 							destination_address,
-							broker_commission_bps,
+							broker_commission,
 							broker_id,
 							channel_metadata,
 							boost_fee

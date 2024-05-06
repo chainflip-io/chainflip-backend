@@ -109,6 +109,7 @@ impl crate::Config for Test {
 }
 
 pub const LP_ACCOUNT: [u8; 32] = [1u8; 32];
+pub const LP_ACCOUNT_2: [u8; 32] = [3u8; 32];
 pub const NON_LP_ACCOUNT: [u8; 32] = [2u8; 32];
 
 cf_test_utilities::impl_test_helpers! {
@@ -117,6 +118,9 @@ cf_test_utilities::impl_test_helpers! {
 	|| {
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
 			&LP_ACCOUNT.into(),
+		));
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+			&LP_ACCOUNT_2.into(),
 		));
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
 			&NON_LP_ACCOUNT.into(),

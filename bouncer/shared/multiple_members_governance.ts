@@ -12,9 +12,7 @@ async function getGovernanceMembers(): Promise<string[]> {
 }
 
 async function setGovernanceMembers(members: string[]) {
-  await using chainflip = await getChainflipApi();
-
-  await submitGovernanceExtrinsic(chainflip.tx.governance.newMembershipSet(members));
+  await submitGovernanceExtrinsic((chainflip) => chainflip.tx.governance.newMembershipSet(members));
 }
 
 await cryptoWaitReady();
@@ -40,11 +38,13 @@ async function addAliceToGovernance() {
 }
 
 async function submitWithMultipleGovernanceMembers() {
-  await using chainflip = await getChainflipApi();
-
   // Killing 2 birds with 1 stone: testing governance execution with multiple
   // members *and* restoring governance to its original state
-  await submitGovernanceExtrinsic(chainflip.tx.governance.newMembershipSet([snowWhite.address]));
+  await submitGovernanceExtrinsic((chainflip) =>
+    chainflip.tx.governance.newMembershipSet([snowWhite.address]),
+  );
+
+  await using chainflip = await getChainflipApi();
 
   const proposalId = Number((await observeEvent('governance:Proposed', chainflip)).data);
 
