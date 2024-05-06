@@ -27,6 +27,9 @@ impl<InnerSource: ExternalChainSource> LagSafety<InnerSource> {
 	}
 }
 
+type ChainHeader<CS> =
+	Header<<CS as ChainSource>::Index, <CS as ChainSource>::Hash, <CS as ChainSource>::Data>;
+
 #[async_trait::async_trait]
 impl<InnerSource: ExternalChainSource> ChainSource for LagSafety<InnerSource>
 where
@@ -47,34 +50,12 @@ where
 
 		(
 			Box::pin(stream::unfold(
-				(
-					chain_stream,
-					chain_client.clone(),
-					VecDeque::<
-						Header<
-							<Self as ChainSource>::Index,
-							<Self as ChainSource>::Hash,
-							<Self as ChainSource>::Data,
-						>,
-					>::new(),
-				),
+				(chain_stream, chain_client.clone(), VecDeque::<ChainHeader<Self>>::new()),
 				move |(mut chain_stream, chain_client, mut unsafe_cache)| async move {
 					fn pop_safe_from_cache<CS: ExternalChainSource>(
-						unsafe_cache: &mut VecDeque<
-							Header<
-								<CS as ChainSource>::Index,
-								<CS as ChainSource>::Hash,
-								<CS as ChainSource>::Data,
-							>,
-						>,
+						unsafe_cache: &mut VecDeque<ChainHeader<CS>>,
 						margin: <CS as ChainSource>::Index,
-					) -> Option<
-						Header<
-							<CS as ChainSource>::Index,
-							<CS as ChainSource>::Hash,
-							<CS as ChainSource>::Data,
-						>,
-					> {
+					) -> Option<ChainHeader<CS>> {
 						use num_traits::CheckedSub;
 
 						if (*<CS::Chain as Chain>::block_witness_range(unsafe_cache.back()?.index)
