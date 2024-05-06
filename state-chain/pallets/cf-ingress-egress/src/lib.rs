@@ -19,6 +19,7 @@ mod boost_pool;
 
 use boost_pool::BoostPool;
 pub use boost_pool::OwedAmount;
+use cf_primitives::chains::assets::get_simulation_amount;
 
 use frame_support::{pallet_prelude::OptionQuery, transactional};
 
@@ -1801,15 +1802,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Self::accrue_withheld_fee(asset, sp_std::cmp::min(fee_estimate, available_amount));
 			available_amount.saturating_sub(fee_estimate)
 		} else {
+			// In case of an none-gas asset, we need to use the simulation amount.
+			let simulation_amount = get_simulation_amount(asset.into());
 			let transaction_fee = T::AssetConverter::calculate_asset_conversion(
 				asset,
-				available_amount,
+				simulation_amount,
 				<T::TargetChain as Chain>::GAS_ASSET,
-				fee_estimate,
+				fee_estimate.into(),
 			)
 			.unwrap_or_else(|| {
 				log::warn!("Unable to convert input to gas for input of {available_amount:?} ${asset:?}. Ignoring ingress egress fees.");
-				<T::TargetChain as Chain>::ChainAmount::zero()
+				<T::TargetChain as Chain>::ChainAmount::zero().into()
 			});
 
 			if !transaction_fee.is_zero() {
@@ -1820,7 +1823,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					SwapType::IngressEgressFee,
 				);
 			}
-			available_amount.saturating_sub(transaction_fee)
+			available_amount.saturating_sub(transaction_fee.unique_saturated_into())
 		};
 
 		AmountAndFeesWithheld::<T, I> {

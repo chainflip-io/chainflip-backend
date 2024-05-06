@@ -14,6 +14,8 @@
 //! assert_eq!(any::Asset::Flip, any::Asset::from(eth::Asset::Flip));
 //! ```
 
+use crate::Asset;
+
 macro_rules! assets {
 	(@ legacy_encoding) => {};
 	(
@@ -528,6 +530,16 @@ macro_rules! assets {
 				}
 			}
 		)*
+	}
+}
+
+pub fn get_simulation_amount(asset: Asset) -> u128 {
+	match asset {
+		Asset::Flip => 5_000_000_000_000_000_000,
+		Asset::Usdc => 10_000_000,
+		Asset::Usdt => 10_000_000,
+		Asset::ArbUsdc => 10_000_000,
+		_ => panic!("Unsupported asset"),
 	}
 }
 
