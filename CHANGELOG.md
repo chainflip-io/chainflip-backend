@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.3.5] - 2024-05-07
+
+### Fixes
+
+- Fix a bug with deleting `/sbin` in Docker images ([#4828](https://github.com/chainflip-io/chainflip-backend/pull/4828))
+
 ## [1.3.4] - 2024-04-26
 
 ### Fixes
