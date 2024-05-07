@@ -3,7 +3,7 @@ use cf_chains::DepositChannel;
 use cf_primitives::Beneficiary;
 use frame_support::traits::OnRuntimeUpgrade;
 
-mod old {
+pub mod old {
 	use super::*;
 
 	#[derive(CloneNoBound, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
