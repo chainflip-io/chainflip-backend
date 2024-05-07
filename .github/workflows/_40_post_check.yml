@@ -134,6 +134,7 @@ jobs:
         continue-on-error: true
         run: |
           cat /tmp/solana/solana.*log
+          cat /tmp/solana/test-ledger/*.log
 
       - name: Upload Localnet Logs 💾
         if: always()
