@@ -1,8 +1,8 @@
 //! This file contains a Instruction builder for the Solana chain.
 //!
-//! The builder provides a interface for users to create Raw solana
+//! The builder provides a interface for the API to create Raw solana
 //! Instructions and Instruction sets with some level of abstraction
-//! so the user do not need to deal with low level code in `sol_tx_building_blocks.rs`.
+//! so they don't need to deal with low level code in `sol_tx_core.rs`.
 
 use core::str::FromStr;
 use sp_std::marker::PhantomData;
@@ -12,10 +12,12 @@ use cf_primitives::chains::Solana;
 use crate::{
 	sol::{
 		api::{SolanaEnvAccountLookupKey, SolanaEnvironment, SolanaTransactionBuildingError},
-		bpf_loader_instructions::set_upgrade_authority,
-		compute_budget::ComputeBudgetInstruction,
 		consts::SYSTEM_PROGRAM_ID,
-		program_instructions::{ProgramInstruction, SystemProgramInstruction, VaultProgram},
+		sol_tx_core::{
+			bpf_loader_instructions::set_upgrade_authority,
+			compute_budget::ComputeBudgetInstruction,
+			program_instructions::{ProgramInstruction, SystemProgramInstruction, VaultProgram},
+		},
 		SolAccountMeta, SolAddress, SolAsset, SolComputeLimit, SolInstruction, SolPubkey,
 	},
 	DepositChannel, TransferAssetParams,
@@ -41,6 +43,10 @@ impl<Environment> Default for SolanaInstructionBuilder<Environment> {
 const COMPUTE_LIMIT: SolComputeLimit = 300_000u32;
 
 impl<Environment: SolanaEnvironment> SolanaInstructionBuilder<Environment> {
+	/// Finalize a Instruction Set. This should be called after a instruction set is complete.
+	/// This will add some extra instruction required for the integrity of the Solana Transaction.
+	///
+	/// If Ok, returns the finished Instruction Set to construct the SolTransaction.
 	pub fn finalize(mut self) -> Result<Vec<SolInstruction>, SolanaTransactionBuildingError> {
 		// TODO: implement compute limit calculation
 		self.compute_limit = COMPUTE_LIMIT;
@@ -60,6 +66,8 @@ impl<Environment: SolanaEnvironment> SolanaInstructionBuilder<Environment> {
 		Ok(final_instructions)
 	}
 
+	/// Add instructions to fetch from each `deposit_channel` being passed in.
+	/// Used to batch fetch from multiple deposit channels in a single transaction.
 	pub fn fetch_from(
 		mut self,
 		deposit_channels: Vec<DepositChannel<Solana>>,
@@ -91,6 +99,8 @@ impl<Environment: SolanaEnvironment> SolanaInstructionBuilder<Environment> {
 		Ok(self)
 	}
 
+	/// Add instruction to `transfer` from our Vault account to a target account.
+	/// Each call will add a single Transfer, since Transfer should not be batched.
 	pub fn transfer(
 		mut self,
 		to: TransferAssetParams<Solana>,
@@ -108,6 +118,7 @@ impl<Environment: SolanaEnvironment> SolanaInstructionBuilder<Environment> {
 		Ok(self)
 	}
 
+	/// Add instructions to rotate the current Vault agg key to the next key.
 	pub fn rotate_agg_key(
 		mut self,
 		new_agg_key: SolAddress,
@@ -157,8 +168,11 @@ mod test {
 	use crate::{
 		sol::{
 			consts::MAX_TRANSACTION_LENGTH,
-			extra_types_for_testing::{Keypair, Signer},
-			sol_tx_building_blocks::{generate_deposit_channel, sol_test_values::*},
+			sol_tx_core::{
+				extra_types_for_testing::{Keypair, Signer},
+				generate_deposit_channel,
+				sol_test_values::*,
+			},
 			SolAmount, SolHash, SolMessage, SolTransaction, SolanaDepositChannelState,
 		},
 		ChainEnvironment,
@@ -167,7 +181,9 @@ mod test {
 	const NEXT_NONCE: &str = NONCE_ACCOUNTS[0];
 	const SOL: SolAsset = SolAsset::Sol;
 
-	/// Test deposit channel derived from `sol_tx_building_blocks::can_generate_address()`
+	/// Test deposit channel derived from `sol_tx_core::can_generate_address()`
+	/// This is used to check consistency in Fetch logic. This is not a "Valid" deposit channel
+	/// since the `seed` is NOT derived from the `channel_id`.
 	fn get_deposit_channel() -> DepositChannel<Solana> {
 		DepositChannel::<Solana> {
 			channel_id: 1u64,
@@ -267,7 +283,7 @@ mod test {
 
 	#[test]
 	fn can_create_batch_fetch_instruction_set() {
-		// Deposit channel generated in `can_generate_address()`
+		// Use valid Deposit channel derived from `channel_id`
 		let deposit_channel_0 = generate_deposit_channel(0u64);
 		let deposit_channel_1 = generate_deposit_channel(1u64);
 

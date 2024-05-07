@@ -14,15 +14,10 @@ use super::{Chain, ChainCrypto};
 pub mod api;
 pub mod benchmarking;
 pub mod consts;
+pub mod instruction_builder;
 mod tracked_data;
 
-pub mod bpf_loader_instructions;
-pub mod compute_budget;
-#[cfg(test)]
-pub mod extra_types_for_testing;
-pub mod program_instructions;
-pub mod sol_tx_building_blocks;
-pub mod token_instructions;
+pub mod sol_tx_core;
 
 pub use crate::assets::sol::Asset as SolAsset;
 pub use sol_prim::{
@@ -30,7 +25,7 @@ pub use sol_prim::{
 	Address as SolAddress, Amount as SolAmount, ComputeLimit as SolComputeLimit, Digest as SolHash,
 	Signature as SolSignature,
 };
-pub use sol_tx_building_blocks::{
+pub use sol_tx_core::{
 	AccountMeta as SolAccountMeta, Hash as RawSolHash, Instruction as SolInstruction,
 	Message as SolMessage, Pubkey as SolPubkey, Transaction as SolTransaction,
 };

@@ -1,4 +1,4 @@
-use crate::sol::{sol_tx_building_blocks::SolSignature, SolPubkey};
+use crate::sol::{SolPubkey, SolSignature};
 use ed25519_dalek::Signer as DalekSigner;
 use rand0_7::{rngs::OsRng, CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};

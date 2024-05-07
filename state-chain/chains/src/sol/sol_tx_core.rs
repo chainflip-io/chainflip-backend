@@ -7,28 +7,32 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
-pub use crate::sol::{consts::*, SolSignature};
-
-use crate::sol::{SolAddress, SolHash};
+use crate::sol::{consts::*, SolAddress, SolHash, SolSignature};
 
 #[cfg(test)]
 use crate::{DepositChannel, Solana};
 
 #[cfg(test)]
-use super::extra_types_for_testing::{SignerError, Signers, TransactionError};
+use crate::sol::sol_tx_core::extra_types_for_testing::{SignerError, Signers, TransactionError};
 #[cfg(test)]
 use thiserror::Error;
 
-pub mod instruction_builder;
+pub mod bpf_loader_instructions;
+pub mod compute_budget;
+#[cfg(test)]
+pub mod extra_types_for_testing;
+pub mod program_instructions;
 pub mod short_vec;
+pub mod token_instructions;
 
-use super::program_instructions::SystemProgramInstruction;
+use program_instructions::SystemProgramInstruction;
 
 pub const HASH_BYTES: usize = 32;
+
 /// Maximum string length of a base58 encoded pubkey
 const MAX_BASE58_LEN: usize = 44;
 
-/// An atomically-commited sequence of instructions.
+/// An atomically-committed sequence of instructions.
 ///
 /// While [`Instruction`]s are the basic unit of computation in Solana,
 /// they are submitted by clients in [`Transaction`]s containing one or
@@ -804,6 +808,7 @@ pub fn generate_address(
 	.finish()
 }
 
+/// Derive deposit channels from the `channel_id` and our `VAULT_PROGRAM` account.
 #[cfg(test)]
 pub fn generate_deposit_channel(channel_id: u64) -> DepositChannel<Solana> {
 	let seed = channel_id.to_le_bytes();
@@ -865,18 +870,20 @@ pub mod sol_test_values {
 #[cfg(test)]
 mod tests {
 	use crate::sol::{
-		bpf_loader_instructions::set_upgrade_authority,
-		compute_budget::ComputeBudgetInstruction,
 		consts::*,
-		extra_types_for_testing::{Keypair, Signer},
-		program_instructions::{
-			ProgramInstruction, SystemProgramInstruction, UpgradeManagerProgram, VaultProgram,
+		sol_tx_core::{
+			bpf_loader_instructions::set_upgrade_authority,
+			compute_budget::ComputeBudgetInstruction,
+			extra_types_for_testing::{Keypair, Signer},
+			generate_address, generate_deposit_channel,
+			program_instructions::{
+				ProgramInstruction, SystemProgramInstruction, UpgradeManagerProgram, VaultProgram,
+			},
+			sol_test_values::*,
+			token_instructions::AssociatedTokenAccountInstruction,
+			AccountMeta, BorshDeserialize, BorshSerialize, Hash, Instruction, Message, Pubkey,
+			Transaction,
 		},
-		sol_tx_building_blocks::{
-			generate_address, generate_deposit_channel, sol_test_values::*, AccountMeta,
-			BorshDeserialize, BorshSerialize, Hash, Instruction, Message, Pubkey, Transaction,
-		},
-		token_instructions::AssociatedTokenAccountInstruction,
 	};
 	use core::str::FromStr;
 

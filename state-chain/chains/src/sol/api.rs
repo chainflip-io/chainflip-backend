@@ -10,8 +10,8 @@ use sp_std::vec;
 
 use crate::{
 	sol::{
-		sol_tx_building_blocks::instruction_builder::SolanaInstructionBuilder, SolAddress,
-		SolAmount, SolHash, SolMessage, SolTransaction, SolanaCrypto,
+		instruction_builder::SolanaInstructionBuilder, SolAddress, SolAmount, SolHash, SolMessage,
+		SolTransaction, SolanaCrypto,
 	},
 	AllBatch, AllBatchError, ApiCall, Chain, ChainCrypto, ChainEnvironment, ConsolidateCall,
 	ConsolidationError, DepositChannel, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress,

@@ -1,4 +1,4 @@
-use super::sol_tx_building_blocks::{sol_test_values::*, AccountMeta, Instruction, Pubkey};
+use super::{sol_test_values::*, AccountMeta, Instruction, Pubkey};
 
 use crate::{sol::consts::SYSTEM_PROGRAM_ID, vec::Vec};
 use borsh::{BorshDeserialize, BorshSerialize};

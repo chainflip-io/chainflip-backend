@@ -1,4 +1,4 @@
-use super::sol_tx_building_blocks::{Instruction, Pubkey, COMPUTE_BUDGET_PROGRAM};
+use super::{Instruction, Pubkey, COMPUTE_BUDGET_PROGRAM};
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
