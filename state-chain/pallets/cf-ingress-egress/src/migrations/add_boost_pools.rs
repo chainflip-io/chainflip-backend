@@ -1,7 +1,6 @@
-use crate::*;
+use crate::{migrations::multiple_brokers, *};
 use cf_chains::DepositChannel;
 use frame_support::traits::OnRuntimeUpgrade;
-use crate::migrations::multiple_brokers;
 
 mod old {
 	use super::*;
@@ -131,7 +130,9 @@ mod migration_tests {
 				},
 				opened_at: Default::default(),
 				expires_at: Default::default(),
-				action: multiple_brokers::old::ChannelAction::LiquidityProvision { lp_account: Default::default() },
+				action: multiple_brokers::old::ChannelAction::LiquidityProvision {
+					lp_account: Default::default(),
+				},
 				boost_fee: 0,
 			}
 		}
