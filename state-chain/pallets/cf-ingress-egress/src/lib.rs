@@ -768,10 +768,12 @@ pub mod pallet {
 							BoostPools::<T, I>::mutate(deposit_channel.asset, pool_tier, |pool| {
 								if let Some(pool) = pool {
 									let affected_boosters_count =
-										pool.on_lost_deposit(prewitnessed_deposit_id);
-									used_weight.saturating_accrue(T::WeightInfo::on_lost_deposit(
-										affected_boosters_count as u32,
-									));
+										pool.process_deposit_as_lost(prewitnessed_deposit_id);
+									used_weight.saturating_accrue(
+										T::WeightInfo::process_deposit_as_lost(
+											affected_boosters_count as u32,
+										),
+									);
 								} else {
 									log_or_panic!(
 										"Pool must exist: ({pool_tier:?}, {:?})",
@@ -1661,7 +1663,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				BoostPools::<T, I>::mutate(asset, boost_tier, |maybe_pool| {
 					if let Some(pool) = maybe_pool {
 						for (booster_id, finalised_withdrawn_amount) in
-							pool.on_finalised_deposit(prewitnessed_deposit_id)
+							pool.process_deposit_as_finalised(prewitnessed_deposit_id)
 						{
 							if let Err(err) = T::LpBalance::try_credit_account(
 								&booster_id,

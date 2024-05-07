@@ -259,7 +259,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn on_lost_deposit(n: Linear<1, 100>) {
+	fn process_deposit_as_lost(n: Linear<1, 100>) {
 		create_boost_pool::<T, I>();
 
 		use strum::IntoEnumIterator;
@@ -294,7 +294,7 @@ mod benchmarks {
 		{
 			BoostPools::<T, I>::mutate(asset, TIER_5_BPS, |pool| {
 				// This depends on the number of boosters who contributed to it:
-				pool.as_mut().unwrap().on_lost_deposit(prewitnessed_deposit_id);
+				pool.as_mut().unwrap().process_deposit_as_lost(prewitnessed_deposit_id);
 			});
 		}
 	}
@@ -520,7 +520,7 @@ mod benchmarks {
 			_add_boost_funds::<Test, ()>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_on_lost_deposit::<Test, ()>(100, true);
+			_process_deposit_as_lost::<Test, ()>(100, true);
 		});
 		new_test_ext().execute_with(|| {
 			_stop_boosting::<Test, ()>(true);

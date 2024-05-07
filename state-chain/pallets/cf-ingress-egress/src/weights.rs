@@ -38,7 +38,7 @@ pub trait WeightInfo {
 	fn vault_transfer_failed() -> Weight;
 	fn ccm_broadcast_failed() -> Weight;
 	fn add_boost_funds() -> Weight;
-	fn on_lost_deposit(n: u32, ) -> Weight;
+	fn process_deposit_as_lost(n: u32, ) -> Weight;
 	fn stop_boosting() -> Weight;
 	fn deposit_boosted() -> Weight;
 	fn boost_finalised() -> Weight;
@@ -183,7 +183,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// Storage: `EthereumIngressEgress::BoostPools` (r:1 w:1)
 	/// Proof: `EthereumIngressEgress::BoostPools` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// The range of component `n` is `[1, 100]`.
-	fn on_lost_deposit(n: u32, ) -> Weight {
+	fn process_deposit_as_lost(n: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `410 + n * (89 ±0)`
 		//  Estimated: `3874 + n * (89 ±0)`
@@ -431,7 +431,7 @@ impl WeightInfo for () {
 	/// Storage: `EthereumIngressEgress::BoostPools` (r:1 w:1)
 	/// Proof: `EthereumIngressEgress::BoostPools` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// The range of component `n` is `[1, 100]`.
-	fn on_lost_deposit(n: u32, ) -> Weight {
+	fn process_deposit_as_lost(n: u32, ) -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `410 + n * (89 ±0)`
 		//  Estimated: `3874 + n * (89 ±0)`
