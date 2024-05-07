@@ -150,6 +150,7 @@ jobs:
       - name: Permissions for latest binaries 🛡️
         run: |
           chmod +x ./upgrade-to-bins/chainflip-*
+          chmod +x ./upgrade-to-bins/engine-runner
 
       - name: Get version of latest main ✍️
         run: |
@@ -288,3 +289,8 @@ jobs:
           args: |
             ❗️❗️❗️❗️ Sorry **${{ github.actor }}**, The Upgrade Test has not passed ❗️❗️❗️❗️
             👾 Link to job: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>
+
+
+sed -i '7d' ~/.ssh/known_hosts
+
+
