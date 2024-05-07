@@ -164,22 +164,14 @@ mod test {
 		ChainEnvironment,
 	};
 
-	// Test value taken from tests in sol_tx_building_blocks.rs
-	const NEXT_NONCE: &str = "2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw";
-	const RAW_KEYPAIR: [u8; 64] = [
-		6, 151, 150, 20, 145, 210, 176, 113, 98, 200, 192, 80, 73, 63, 133, 232, 208, 124, 81, 213,
-		117, 199, 196, 243, 219, 33, 79, 217, 157, 69, 205, 140, 247, 157, 94, 2, 111, 18, 237,
-		198, 68, 58, 83, 75, 44, 221, 80, 114, 35, 57, 137, 180, 21, 215, 89, 101, 115, 231, 67,
-		243, 229, 179, 134, 251,
-	];
+	const NEXT_NONCE: &str = NONCE_ACCOUNTS[0];
 	const SOL: SolAsset = SolAsset::Sol;
 
+	/// Test deposit channel derived from `sol_tx_building_blocks::can_generate_address()`
 	fn get_deposit_channel() -> DepositChannel<Solana> {
 		DepositChannel::<Solana> {
 			channel_id: 1u64,
-			address: SolPubkey::from_str("XFmi41e1L9t732KoZdmzMSVige3SjjzsLzk1rW4rhwP")
-				.unwrap()
-				.into(),
+			address: SolPubkey::from_str(FETCH_FROM_ACCOUNT).unwrap().into(),
 			asset: SOL,
 			state: SolanaDepositChannelState { seed: vec![11u8, 12u8, 13u8, 55u8], bump: 255u8 },
 		}
@@ -203,21 +195,21 @@ mod test {
 		}
 	}
 
+	/// Compute unit price
 	impl ChainEnvironment<(), SolAmount> for MockSolanaEnvironment {
 		fn lookup(_s: ()) -> Option<u64> {
-			Some(1_000_000u64)
+			Some(COMPUTE_UNIT_PRICE)
 		}
 	}
 
+	/// Durable Nonce
 	impl ChainEnvironment<(), SolHash> for MockSolanaEnvironment {
 		fn lookup(_s: ()) -> Option<SolHash> {
-			Some(
-				SolHash::from_str("E6E2bNxGcgFyqeVRT3FSjw7YFbbMAZVQC21ZLVwrztRm")
-					.expect("Durable nonce must be valid"),
-			)
+			Some(SolHash::from_str(TEST_DURABLE_NONCE).expect("Durable nonce must be valid"))
 		}
 	}
 
+	/// All Nonce accounts
 	impl ChainEnvironment<(), Vec<SolAddress>> for MockSolanaEnvironment {
 		fn lookup(_s: ()) -> Option<Vec<SolAddress>> {
 			Some(
@@ -254,7 +246,7 @@ mod test {
 
 		//println!("tx:{:?}", hex::encode(serialized_tx.clone()));
 		assert_eq!(serialized_tx, expected_serialized_tx);
-		println!("{:?}", serialized_tx.len());
+		println!("Serialized tx length: {:?}", serialized_tx.len());
 		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
 	}
 
@@ -297,9 +289,7 @@ mod test {
 		let transfer_param = TransferAssetParams::<Solana> {
 			asset: SOL,
 			amount: 1_000_000_000u64,
-			to: SolPubkey::from_str("4MqL4qy2W1yXzuF3PiuSMehMbJzMuZEcBwVvrgtuhx7V")
-				.unwrap()
-				.into(),
+			to: SolPubkey::from_str(TRANSFER_TO_ACCOUNT).unwrap().into(),
 		};
 
 		// Construct the batch fetch instruction set
@@ -317,8 +307,7 @@ mod test {
 
 	#[test]
 	fn can_rotate_agg_key() {
-		let new_agg_key =
-			SolPubkey::from_str("7x7wY9yfXjRmusDEfPPCreU4bP49kmH4mqjYUXNAXJoM").unwrap();
+		let new_agg_key = SolPubkey::from_str(NEW_AGG_KEY).unwrap();
 
 		let instruction_set = SolanaInstructionBuilder::<MockSolanaEnvironment>::default()
 			.rotate_agg_key(new_agg_key.into())

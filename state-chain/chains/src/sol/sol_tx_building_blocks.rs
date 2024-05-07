@@ -815,8 +815,11 @@ pub fn generate_deposit_channel(channel_id: u64) -> DepositChannel<Solana> {
 		state: crate::sol::SolanaDepositChannelState { seed: seed.to_vec(), bump },
 	}
 }
+
+/// Values used for testing purposes
 pub mod sol_test_values {
-	// Values used for testing purposes
+	use crate::sol::{SolAmount, SolComputeLimit};
+
 	pub const VAULT_PROGRAM: &str = "8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf";
 	pub const VAULT_PROGRAM_DATA_ADDRESS: &str = "3oEKmL4nsw6RDZWhkYTdCUmjxDrzVkm1cWayPsvn3p57";
 	pub const VAULT_PROGRAM_DATA_ACCOUNT: &str = "623nEsyGYWKYggY1yHxQFJiBarL9jdWdrMr7ASiCKP6a";
@@ -845,6 +848,18 @@ pub mod sol_test_values {
 		"GUMpVpQFNYJvSbyTtUarZVL7UDUgErKzDTSVJhekUX55",
 		"AUiHYbzH7qLZSkb3u7nAqtvqC7e41sEzgWjBEvXrpfGv",
 	];
+	pub const RAW_KEYPAIR: [u8; 64] = [
+		6, 151, 150, 20, 145, 210, 176, 113, 98, 200, 192, 80, 73, 63, 133, 232, 208, 124, 81, 213,
+		117, 199, 196, 243, 219, 33, 79, 217, 157, 69, 205, 140, 247, 157, 94, 2, 111, 18, 237,
+		198, 68, 58, 83, 75, 44, 221, 80, 114, 35, 57, 137, 180, 21, 215, 89, 101, 115, 231, 67,
+		243, 229, 179, 134, 251,
+	];
+	pub const COMPUTE_UNIT_PRICE: SolAmount = 1_000_000u64;
+	pub const COMPUTE_UNIT_LIMIT: SolComputeLimit = 300_000u32;
+	pub const TEST_DURABLE_NONCE: &str = "E6E2bNxGcgFyqeVRT3FSjw7YFbbMAZVQC21ZLVwrztRm";
+	pub const FETCH_FROM_ACCOUNT: &str = "XFmi41e1L9t732KoZdmzMSVige3SjjzsLzk1rW4rhwP";
+	pub const TRANSFER_TO_ACCOUNT: &str = "4MqL4qy2W1yXzuF3PiuSMehMbJzMuZEcBwVvrgtuhx7V";
+	pub const NEW_AGG_KEY: &str = "7x7wY9yfXjRmusDEfPPCreU4bP49kmH4mqjYUXNAXJoM";
 }
 
 #[cfg(test)]
@@ -862,7 +877,6 @@ mod tests {
 			BorshDeserialize, BorshSerialize, Hash, Instruction, Message, Pubkey, Transaction,
 		},
 		token_instructions::AssociatedTokenAccountInstruction,
-		SolAmount, SolComputeLimit,
 	};
 	use core::str::FromStr;
 
@@ -872,17 +886,6 @@ mod tests {
 		Deposit { lamports: u64 },
 		Withdraw { lamports: u64 },
 	}
-
-	const RAW_KEYPAIR: [u8; 64] = [
-		6, 151, 150, 20, 145, 210, 176, 113, 98, 200, 192, 80, 73, 63, 133, 232, 208, 124, 81, 213,
-		117, 199, 196, 243, 219, 33, 79, 217, 157, 69, 205, 140, 247, 157, 94, 2, 111, 18, 237,
-		198, 68, 58, 83, 75, 44, 221, 80, 114, 35, 57, 137, 180, 21, 215, 89, 101, 115, 231, 67,
-		243, 229, 179, 134, 251,
-	];
-
-	const COMPUTE_UNIT_PRICE: SolAmount = 1_000_000u64;
-	const COMPUTE_UNIT_LIMIT: SolComputeLimit = 300_000u32;
-	const TEST_DURABLE_NONCE: &str = "E6E2bNxGcgFyqeVRT3FSjw7YFbbMAZVQC21ZLVwrztRm";
 
 	#[test]
 	fn can_generate_address() {
@@ -936,7 +939,7 @@ mod tests {
 		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
-		let to_pubkey = Pubkey::from_str("4MqL4qy2W1yXzuF3PiuSMehMbJzMuZEcBwVvrgtuhx7V").unwrap();
+		let to_pubkey = Pubkey::from_str(TRANSFER_TO_ACCOUNT).unwrap();
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
 				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
@@ -964,7 +967,7 @@ mod tests {
 		let durable_nonce = Hash::from_str("2GGxiEHwtWPGNKH5czvxRGvQTayRvCT1PFsA9yK2iMnq").unwrap();
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
-		let to_pubkey = Pubkey::from_str("4MqL4qy2W1yXzuF3PiuSMehMbJzMuZEcBwVvrgtuhx7V").unwrap();
+		let to_pubkey = Pubkey::from_str(TRANSFER_TO_ACCOUNT).unwrap();
 
 		let lamports = 1_000_000;
 		let instructions = [
@@ -992,8 +995,7 @@ mod tests {
 		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
-		let deposit_channel =
-			Pubkey::from_str("XFmi41e1L9t732KoZdmzMSVige3SjjzsLzk1rW4rhwP").unwrap();
+		let deposit_channel = Pubkey::from_str(FETCH_FROM_ACCOUNT).unwrap();
 
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
@@ -1207,8 +1209,7 @@ mod tests {
 		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
-		let new_agg_key_pubkey =
-			Pubkey::from_str("7x7wY9yfXjRmusDEfPPCreU4bP49kmH4mqjYUXNAXJoM").unwrap();
+		let new_agg_key_pubkey = Pubkey::from_str(NEW_AGG_KEY).unwrap();
 
 		let mut instructions = vec![
 			SystemProgramInstruction::advance_nonce_account(
