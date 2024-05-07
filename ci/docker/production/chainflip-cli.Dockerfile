@@ -17,8 +17,7 @@ WORKDIR /etc/chainflip
 
 RUN chmod +x /usr/local/bin/chainflip-cli \
     && useradd -m -u 1000 -U -s /bin/sh -d /flip flip \
-    && chown -R 1000:1000 /etc/chainflip \
-    && rm -rf /sbin /usr/sbin /usr/local/sbin
+    && chown -R 1000:1000 /etc/chainflip
 
 USER flip
 

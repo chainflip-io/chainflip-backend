@@ -12,6 +12,14 @@ use serde::{Deserialize, Serialize};
 
 use super::{Chain, ChainCrypto};
 
+pub mod bpf_loader_instructions;
+pub mod compute_budget;
+#[cfg(test)]
+pub mod extra_types_for_testing;
+pub mod program_instructions;
+pub mod sol_tx_building_blocks;
+pub mod token_instructions;
+
 pub mod api;
 pub mod benchmarking;
 pub mod consts;
@@ -24,6 +32,7 @@ pub use sol_prim::{
 impl Chain for Solana {
 	const NAME: &'static str = "Solana";
 	const GAS_ASSET: Self::ChainAsset = assets::sol::Asset::Sol;
+	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 
 	type ChainCrypto = SolanaCrypto;
 	type ChainBlockNumber = SlotNumber;

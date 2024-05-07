@@ -1,27 +1,23 @@
 import Web3 from 'web3';
-import { getChainflipApi, getEvmEndpoint, observeEvent } from '../shared/utils';
+import { getEvmEndpoint } from '../shared/utils';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { initializeArbitrumChain, initializeArbitrumContracts } from './initialize_new_chains';
+import { observeEvent } from './utils/substrate';
 
 // This cuts out the pieces of arb activation from `bouncer/commands/setup_vaults.ts`
 // So we can use it for the upgrade test.
 export async function setupArbVault(): Promise<void> {
-  const chainflip = await getChainflipApi();
-
   const arbClient = new Web3(getEvmEndpoint('Arbitrum'));
 
   // Step 1
-  await initializeArbitrumChain(chainflip);
+  await initializeArbitrumChain();
 
   // Step 2
   console.log('Forcing rotation');
-  await submitGovernanceExtrinsic(chainflip.tx.validator.forceRotation());
+  await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
 
   // Step 3
-  const arbActivationRequest = observeEvent(
-    'arbitrumVault:AwaitingGovernanceActivation',
-    chainflip,
-  );
+  const arbActivationRequest = observeEvent('arbitrumVault:AwaitingGovernanceActivation');
 
   const arbKey = (await arbActivationRequest).data.newPublicKey;
 
@@ -29,12 +25,12 @@ export async function setupArbVault(): Promise<void> {
   console.log('Inserting Arbitrum key in the contracts');
   await initializeArbitrumContracts(arbClient, arbKey);
 
-  await submitGovernanceExtrinsic(
-    chainflip.tx.environment.witnessInitializeArbitrumVault(await arbClient.eth.getBlockNumber()),
+  await submitGovernanceExtrinsic(async (api) =>
+    api.tx.environment.witnessInitializeArbitrumVault(await arbClient.eth.getBlockNumber()),
   );
 
   console.log('Waiting for new epoch...');
-  await observeEvent('validator:NewEpoch', chainflip);
+  await observeEvent('validator:NewEpoch');
 
   console.log('=== New Epoch ===');
   console.log('=== Vault Setup completed ===');

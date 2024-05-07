@@ -12,6 +12,10 @@ use std::{
 	time::Duration,
 };
 
+use core::sync::atomic::AtomicBool;
+
+use core::sync::atomic::Ordering;
+
 use auth::Authenticator;
 use serde::{Deserialize, Serialize};
 use state_chain_runtime::AccountId;
@@ -253,6 +257,18 @@ struct P2PContext {
 	/// NOTE: zmq context is intentionally declared at the bottom of the struct
 	/// to ensure its destructor is called after that of any zmq sockets
 	zmq_context: zmq::Context,
+
+	/// This is used to stop the listening thread.
+	stop_thread: Arc<AtomicBool>,
+}
+
+impl Drop for P2PContext {
+	fn drop(&mut self) {
+		// We want to stop the native threads that were spawned, as these won't be unwound by the
+		// task scope. We need the port to be released when this dylib exits so it can be used by
+		// the other dylib.
+		self.stop_thread.store(true, Ordering::Relaxed);
+	}
 }
 
 pub(super) async fn start(
@@ -263,7 +279,7 @@ pub(super) async fn start(
 	incoming_message_sender: UnboundedSender<(AccountId, Vec<u8>)>,
 	outgoing_message_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
 	peer_update_receiver: UnboundedReceiver<PeerUpdate>,
-) {
+) -> anyhow::Result<()> {
 	debug!("Our derived x25519 pubkey: {}", pk_to_string(&p2p_key.encryption_key.public_key));
 
 	let zmq_context = zmq::Context::new();
@@ -287,6 +303,7 @@ pub(super) async fn start(
 		reconnect_context: ReconnectContext::new(reconnect_sender),
 		incoming_message_sender,
 		our_account_id,
+		stop_thread: Arc::new(AtomicBool::new(false)),
 	};
 
 	debug!("Registering peer info for {} peers", current_peers.len());
@@ -294,7 +311,7 @@ pub(super) async fn start(
 		context.add_or_update_peer(peer_info);
 	}
 
-	let incoming_message_receiver_ed25519 = context.start_listening_thread(port);
+	let incoming_message_receiver_ed25519 = context.start_listening_thread(port)?;
 
 	context
 		.control_loop(
@@ -306,6 +323,8 @@ pub(super) async fn start(
 		)
 		.instrument(info_span!("p2p"))
 		.await;
+
+	Ok(())
 }
 
 fn disconnect_socket(_socket: ConnectedOutgoingSocket) {
@@ -582,7 +601,10 @@ impl P2PContext {
 	}
 
 	/// Start listening for incoming p2p messages on a separate thread
-	fn start_listening_thread(&mut self, port: Port) -> UnboundedReceiver<(XPublicKey, Vec<u8>)> {
+	fn start_listening_thread(
+		&mut self,
+		port: Port,
+	) -> anyhow::Result<UnboundedReceiver<(XPublicKey, Vec<u8>)>> {
 		let socket = self.zmq_context.socket(zmq::SocketType::ROUTER).unwrap();
 
 		socket.set_router_mandatory(true).unwrap();
@@ -593,17 +615,40 @@ impl P2PContext {
 
 		// Listen on all interfaces
 		let endpoint = format!("tcp://0.0.0.0:{port}");
-		info!("Started listening for incoming p2p connections on: {endpoint}");
+		// In the case of an upgrade, it's possible the system still needs time to release the port.
+		let mut i = 0;
+		while let Err(e) = socket.bind(&endpoint) {
+			error!("Failed to bind to endpoint: {}, error: {}. Retrying in 2 seconds", endpoint, e);
+			std::thread::sleep(Duration::from_secs(2));
+			i += 1;
+			if i > 10 {
+				panic!("Failed to bind to endpoint: {}", endpoint);
+			}
+		}
 
-		socket.bind(&endpoint).expect("invalid endpoint");
+		info!("Started listening for incoming p2p connections on: {endpoint}");
 
 		let (incoming_message_sender, incoming_message_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
 
+		let stop_thread = self.stop_thread.clone();
+
 		// This OS thread is for incoming messages
 		// TODO: combine this with the authentication thread?
 		std::thread::spawn(move || loop {
-			let mut parts = receive_multipart(&socket).unwrap();
+			if stop_thread.load(Ordering::Relaxed) {
+				break
+			}
+
+			let mut parts = match receive_multipart(&socket) {
+				Ok(parts) => parts,
+				Err(zmq::Error::EAGAIN) => {
+					std::thread::sleep(Duration::from_millis(100));
+					continue
+				},
+				Err(e) => panic!("Failed to receive multipart: {e}"),
+			};
+
 			P2P_MSG_RECEIVED.inc();
 			// We require that all messages exchanged between
 			// peers only consist of one part. ZMQ dealer
@@ -631,7 +676,7 @@ impl P2PContext {
 			}
 		});
 
-		incoming_message_receiver
+		Ok(incoming_message_receiver)
 	}
 
 	fn check_activity(&mut self) {
@@ -651,21 +696,21 @@ impl P2PContext {
 /// Unlike recv_multipart available on zmq::Socket, this collects
 /// original message structs rather than payload bytes only
 fn receive_multipart(socket: &zmq::Socket) -> zmq::Result<Vec<zmq::Message>> {
-	// This indicates that we always want to block while
-	// waiting for new messages
-	let flags = 0;
+	const ZMQ_DO_WAIT: i32 = 0;
 
 	let mut parts = vec![];
 
-	loop {
+	let recv_part = |flag, parts: &mut Vec<zmq::Message>| -> Result<(), zmq::Error> {
 		let mut part = zmq::Message::new();
-		socket.recv(&mut part, flags)?;
+		socket.recv(&mut part, flag)?;
 		parts.push(part);
+		Ok(())
+	};
 
-		let more_parts = socket.get_rcvmore()?;
-		if !more_parts {
-			break
-		}
+	recv_part(zmq::DONTWAIT, &mut parts)?;
+	while socket.get_rcvmore()? {
+		recv_part(ZMQ_DO_WAIT, &mut parts)?;
 	}
+
 	Ok(parts)
 }

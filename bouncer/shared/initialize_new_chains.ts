@@ -1,5 +1,4 @@
 import Web3 from 'web3';
-import { ApiPromise } from '@polkadot/api';
 import {
   Connection,
   PublicKey,
@@ -7,21 +6,17 @@ import {
   Transaction,
   TransactionInstruction,
 } from '@solana/web3.js';
-import {
-  getContractAddress,
-  getSolWhaleKeyPair,
-  encodeSolAddress,
-  observeEvent,
-} from '../shared/utils';
+import { getContractAddress, getSolWhaleKeyPair, encodeSolAddress } from '../shared/utils';
 import { signAndSendTxSol } from '../shared/send_sol';
 import { getSolanaVaultIdl, getKeyManagerAbi } from '../shared/contract_interfaces';
 import { signAndSendTxEvm } from '../shared/send_evm';
 import { submitGovernanceExtrinsic } from './cf_governance';
+import { observeEvent } from './utils/substrate';
 
-export async function initializeArbitrumChain(chainflip: ApiPromise) {
+export async function initializeArbitrumChain() {
   console.log('Initializing Arbitrum');
-  const arbInitializationRequest = observeEvent('arbitrumVault:ChainInitialized', chainflip);
-  await submitGovernanceExtrinsic(chainflip.tx.arbitrumVault.initializeChain());
+  const arbInitializationRequest = observeEvent('arbitrumVault:ChainInitialized');
+  await submitGovernanceExtrinsic((chainflip) => chainflip.tx.arbitrumVault.initializeChain());
   await arbInitializationRequest;
 }
 

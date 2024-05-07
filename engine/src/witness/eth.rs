@@ -123,7 +123,7 @@ where
 	tracing::info!("Safety margin for Ethereum is set to {eth_safety_margin} blocks.",);
 
 	let eth_safe_vault_source = eth_source
-		.lag_safety(eth_safety_margin as usize)
+		.lag_safety(eth_safety_margin)
 		.logging("safe block produced")
 		.chunk_by_vault(vaults, scope);
 

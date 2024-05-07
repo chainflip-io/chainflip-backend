@@ -53,7 +53,7 @@ async function main(): Promise<void> {
     }).argv;
 
   const endpoint = process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944';
-  const chainflipApi = await getChainflipApi();
+  await using chainflipApi = await getChainflipApi();
 
   if (args.compile) {
     console.log('Try runtime after compiling.');

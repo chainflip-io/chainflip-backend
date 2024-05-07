@@ -1,9 +1,12 @@
 #!/usr/bin/env -S pnpm tsx
-import { testAllSwaps } from '../shared/swapping';
+import { SwapContext, testAllSwaps } from '../shared/swapping';
 import { runWithTimeout } from '../shared/utils';
 
+const swapContext = new SwapContext();
+
 async function main(): Promise<void> {
-  await testAllSwaps();
+  await testAllSwaps(swapContext);
+  swapContext.print_report();
   process.exit(0);
 }
 
@@ -14,5 +17,6 @@ runWithTimeout(main(), 1800000)
   })
   .catch((error) => {
     console.error(error);
+    swapContext.print_report();
     process.exit(-1);
   });

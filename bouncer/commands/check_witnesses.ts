@@ -14,16 +14,18 @@
 // will wait for the next chainStateUpdate extrinsic for ethereum and after some blocks (2) it will check how many validator witnessed it
 
 import { blake2AsHex } from '@polkadot/util-crypto';
+import { SubmittableExtrinsic } from '@polkadot/api/types';
+import { SubmittableResult } from '@polkadot/api';
 import { runWithTimeout, sleep, getChainflipApi } from '../shared/utils';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const witnessHash = new Set<any>();
-function hashCall(extrinsic: SubmittableExtrinsic<'promise', ISubmittableResult>) {
+function hashCall(extrinsic: SubmittableExtrinsic<'promise', SubmittableResult>) {
   const blakeHash = blake2AsHex(extrinsic.method.toU8a(), 256);
   witnessHash.add(blakeHash);
 }
 async function main(): Promise<void> {
-  const api = await getChainflipApi();
+  await using api = await getChainflipApi();
   // we need the epoch number to query the correct storage item
   const chain: string = process.argv[2];
   if (!chain || !(chain === 'ETH' || chain === 'BTC' || chain === 'DOT')) {

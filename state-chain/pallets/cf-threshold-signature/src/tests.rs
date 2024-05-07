@@ -2,7 +2,7 @@ use core::marker::PhantomData;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-	mock::*, AttemptCount, AuthorityCount, CeremonyContext, CeremonyId, Error,
+	mock::*, AttemptCount, AuthorityCount, CeremonyContext, CeremonyId, CurrentEpochIndex, Error,
 	Event as PalletEvent, KeyHandoverResolutionPendingSince, KeyRotationStatus,
 	KeygenFailureVoters, KeygenOutcomeFor, KeygenResolutionPendingSince, KeygenResponseTimeout,
 	KeygenSuccessVoters, PalletOffence, PendingKeyRotation, RequestContext, RequestId,
@@ -498,7 +498,11 @@ fn test_retries_for_immutable_key() {
 			} = EvmThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 
 			// Pretend the key has been updated to the next one.
-			EvmThresholdSigner::activate_new_key(MockAggKey(*b"NEXT"));
+			EvmThresholdSigner::set_key_for_epoch(
+				CurrentEpochIndex::<Test>::get().saturating_add(1),
+				MockAggKey(*b"NEXT"),
+			);
+			EvmThresholdSigner::mark_key_rotation_complete();
 
 			// Retry should re-use the original key.
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
@@ -1752,10 +1756,7 @@ mod key_rotation {
 			EvmThresholdSigner::activate_keys();
 			assert_eq!(
 				PendingKeyRotation::<Test, _>::get().unwrap(),
-				KeyRotationStatus::AwaitingActivation {
-					request_ids: vec![4],
-					new_public_key: NEW_AGG_PUB_KEY_POST_HANDOVER
-				}
+				KeyRotationStatus::AwaitingActivationSignatures { request_ids: vec![4] }
 			);
 
 			// Vault activation started and it is now pending
