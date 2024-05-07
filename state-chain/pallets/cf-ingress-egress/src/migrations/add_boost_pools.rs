@@ -79,13 +79,6 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 		let number_of_channels_in_lookup =
 			old::DepositChannelLookup::<T, I>::iter_keys().count() as u32;
 
-		// Ensure that test is set up correctly:
-		#[cfg(test)]
-		{
-			use crate::mock_btc::Test;
-			assert_ne!(old::PrewitnessedDeposits::<Test, _>::iter_keys().count(), 0);
-		}
-
 		Ok(number_of_channels_in_lookup.encode())
 	}
 
@@ -98,13 +91,6 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 				number_of_channels_in_lookup_pre_migration,
 			"DepositChannelLookup migration failed."
 		);
-
-		// Test that we delete all entries as part of the migration:
-		#[cfg(test)]
-		{
-			use crate::mock_btc::Test;
-			assert_eq!(old::PrewitnessedDeposits::<Test, _>::iter_keys().count(), 0);
-		}
 
 		Ok(())
 	}
@@ -153,6 +139,9 @@ mod migration_tests {
 
 			#[cfg(feature = "try-runtime")]
 			super::Migration::<Test, _>::post_upgrade(state).unwrap();
+
+			// Test that we delete all entries as part of the migration:
+			assert_eq!(old::PrewitnessedDeposits::<Test, _>::iter_keys().count(), 0);
 
 			// Verify data is correctly migrated into new storage.
 			for address in [address1, address2] {
