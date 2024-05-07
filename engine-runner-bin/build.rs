@@ -1,3 +1,5 @@
+use std::env;
+
 use engine_upgrade_utils::{
 	build_helpers::toml_with_package_version, ENGINE_LIB_PREFIX, NEW_VERSION, OLD_VERSION,
 };
@@ -30,6 +32,14 @@ fn main() {
 
 	println!("cargo:rustc-link-lib=dylib={}{}", ENGINE_LIB_PREFIX, old_version_suffix);
 	println!("cargo:rustc-link-lib=dylib={}{}", ENGINE_LIB_PREFIX, new_version_suffix);
+
+	if env::var("TARGET").unwrap().contains("apple") {
+		println!("cargo:rustc-link-arg=-Wl,-rpath,@executable_path/../../../old-engine-dylib");
+	} else {
+		// TODO: Use $ORIGIN for linux. I tried, but it doesn't seem to work like `@executable_path`
+		// does for mac.
+		println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib/chainflip-engine");
+	}
 
 	// ===  Sanity check that the the assets have an item with the matching version. ===
 

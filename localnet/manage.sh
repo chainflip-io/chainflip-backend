@@ -209,10 +209,13 @@ build-localnet() {
   SELECTED_NODES=${SELECTED_NODES[@]} \
   ./$LOCALNET_INIT_DIR/scripts/start-all-engines.sh
 
+  echo "Starting engines health check ..."
+
   HEALTH_PORT=5555
   for NODE in "${SELECTED_NODES[@]}"; do
     while true; do
         output=$(check_endpoint_health "http://localhost:$HEALTH_PORT/health")
+        echo "Checking $NODE's chainflip-engine health ..."
         if [[ $output == "RUNNING" ]]; then
             echo "💚 $NODE's chainflip-engine is running!"
             break
