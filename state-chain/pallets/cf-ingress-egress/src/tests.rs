@@ -1,13 +1,13 @@
 mod boost;
 
 use crate::{
-	mock_eth::*, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
-	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLookup, DepositChannelPool,
-	DepositIgnoredReason, DepositWitness, DisabledEgressAssets, EgressDustLimit,
-	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
-	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter,
-	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount,
-	WithheldTransactionFees,
+	get_simulation_amount, mock_eth::*, BoostStatus, Call as PalletCall, ChannelAction,
+	ChannelIdCounter, ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLookup,
+	DepositChannelPool, DepositIgnoredReason, DepositWitness, DisabledEgressAssets,
+	EgressDustLimit, Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls,
+	FetchOrTransfer, MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode,
+	PrewitnessedDepositIdCounter, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
+	TargetChainAccount, WithheldTransactionFees,
 };
 use cf_chains::{
 	address::{AddressConverter, IntoForeignChainAddress},
@@ -1696,5 +1696,24 @@ fn safe_mode_prevents_deposit_channel_creation() {
 			),
 			crate::Error::<Test, _>::DepositChannelCreationDisabled
 		);
+	});
+}
+
+// Test that the simulation amount is set for all none-gas assets.
+// If this test is failing, it means that the simulation amount is not set for a new asset.
+// Go to the get_simulation_amount function and update it to return a valid amount for the new
+// asset.
+#[test]
+fn ensure_simulation_amount_for_none_gas_asset() {
+	new_test_ext().execute_with(|| {
+		for asset in Asset::all() {
+			if !asset.is_gas_asset() {
+				assert!(
+					get_simulation_amount(asset).is_some(),
+					"None-gas asset needs to have simulation amount!. Check asset: {:?}",
+					asset
+				);
+			}
+		}
 	});
 }

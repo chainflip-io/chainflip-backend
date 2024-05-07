@@ -14,8 +14,6 @@
 //! assert_eq!(any::Asset::Flip, any::Asset::from(eth::Asset::Flip));
 //! ```
 
-use crate::Asset;
-
 macro_rules! assets {
 	(@ legacy_encoding) => {};
 	(
@@ -110,6 +108,13 @@ macro_rules! assets {
 				pub fn all() -> impl Iterator<Item = Self> + Clone + 'static {
 					use strum::IntoEnumIterator;
 					Self::iter()
+				}
+				pub fn is_gas_asset(&self) -> bool {
+					match self {
+						$(
+							$(Self::$asset_variant => $asset_gas,)+
+						)+
+					}
 				}
 			}
 			impl From<Asset> for $crate::ForeignChain {
@@ -530,17 +535,6 @@ macro_rules! assets {
 				}
 			}
 		)*
-	}
-}
-
-/// Returns an amount for an none-gas asset we use for transaction fee estimation.
-pub fn get_simulation_amount(asset: Asset) -> Option<u128> {
-	match asset {
-		Asset::Flip => Some(5_000_000_000_000_000_000),
-		Asset::Usdc => Some(10_000_000),
-		Asset::Usdt => Some(10_000_000),
-		Asset::ArbUsdc => Some(10_000_000),
-		_ => None,
 	}
 }
 

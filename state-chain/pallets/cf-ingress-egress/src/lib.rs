@@ -19,7 +19,6 @@ mod boost_pool;
 
 use boost_pool::BoostPool;
 pub use boost_pool::OwedAmount;
-use cf_primitives::chains::assets::get_simulation_amount;
 
 use frame_support::{pallet_prelude::OptionQuery, transactional};
 
@@ -2005,5 +2004,16 @@ impl<T: Config<I>, I: 'static> IngressEgressFeeApi<T::TargetChain> for Pallet<T,
 				tracker.register_transfer(fee);
 			});
 		}
+	}
+}
+
+/// Returns an amount for an none-gas asset we use for transaction fee estimation.
+pub fn get_simulation_amount(asset: Asset) -> Option<u128> {
+	match asset {
+		Asset::Flip => Some(5_000_000_000_000_000_000),
+		Asset::Usdc => Some(10_000_000),
+		Asset::Usdt => Some(10_000_000),
+		Asset::ArbUsdc => Some(10_000_000),
+		_ => None,
 	}
 }
