@@ -131,7 +131,7 @@ mod migration_tests {
 				},
 				opened_at: Default::default(),
 				expires_at: Default::default(),
-				action: ChannelAction::LiquidityProvision { lp_account: Default::default() },
+				action: multiple_brokers::old::ChannelAction::LiquidityProvision { lp_account: Default::default() },
 				boost_fee: 0,
 			}
 		}
