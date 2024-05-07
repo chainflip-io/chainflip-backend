@@ -37,7 +37,10 @@ jobs:
           name: chainflip-backend-packages-ubuntu-${{ matrix.ubuntu_version }}
           path: packages
 
-      - name: Get commit SHA, distribution codename ⌨️
+      - name: ls packages
+        run: ls packages
+
+      - name: Get commit SHA, distribution codename
         id: vars
         run: |
           echo "codename=$(lsb_release -c -s)" >> $GITHUB_OUTPUT

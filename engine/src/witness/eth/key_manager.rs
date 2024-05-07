@@ -213,7 +213,6 @@ mod tests {
 						AccountRole::Unregistered,
 						false,
 						false,
-						false,
 						None,
 					)
 					.await

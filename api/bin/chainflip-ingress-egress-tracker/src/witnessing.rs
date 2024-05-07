@@ -116,7 +116,6 @@ pub(super) async fn start(
 		state_chain_observer::client::StateChainClient::connect_without_account(
 			scope,
 			&settings.state_chain_ws_endpoint,
-			false,
 		)
 		.await?
 	};

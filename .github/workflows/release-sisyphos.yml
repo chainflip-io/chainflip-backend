@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - 'release/[0-9]+.[0-9]+'
+      - 'release-dylib-1.3'
 
 concurrency:
   group: ${{ github.ref }}-release-sisyphos

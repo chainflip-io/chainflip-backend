@@ -46,7 +46,6 @@ impl QueryApi {
 			AccountRole::Unregistered,
 			false,
 			false,
-			false,
 			None,
 		)
 		.await?;

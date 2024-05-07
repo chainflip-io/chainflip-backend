@@ -1,0 +1,70 @@
+[package]
+name = "engine-runner"
+description = "The central runner for the chainflip engine, it requires two shared library versions to run."
+# NB: When updating this version, you must update the debian assets appropriately too.
+version = "1.4.0"
+authors = ["Chainflip team <https://github.com/chainflip-io>"]
+build = 'build.rs'
+edition = '2021'
+license = '<TODO>'
+publish = false
+repository = 'https://github.com/chainflip-io/chainflip-backend'
+
+[package.metadata.deb]
+assets = [
+    # target/release is a special path in cargo-deb, it auto resolves to the correct path.
+    # thus old-engine-dylib requires a relative path to the old engine dylib directory, but the new dylib
+    #  and the runner can just use target/release.
+    [
+        "target/release/engine-runner",
+        "usr/bin/chainflip-engine",
+        "755",
+    ],
+    # Note: These are namespaced by `chainflip-engine`. Since this is a custom path (unlike /usr/lib), we need
+    # to specify this. We do this in the `chainflip-engine.service` files, so the user does not need to set it
+    # manually.
+    [
+        "target/release/libchainflip_engine_v1_4_0.so",
+        "usr/lib/chainflip-engine/libchainflip_engine_v1_4_0.so",
+        "755",
+    ],
+    # The old version gets put into target/release by the package github actions workflow.
+    # It downloads the correct version from the releases page.
+    [
+        "target/release/libchainflip_engine_v1_3_3.so",
+        "usr/lib/chainflip-engine/libchainflip_engine_v1_3_3.so",
+        "755",
+    ],
+]
+
+
+depends = "$auto, systemd"
+extended-description = """\
+Chainflip Validator Engine Package"""
+maintainer = "Chainflip Labs GmbH <dev@chainflip.io>"
+maintainer-scripts = "package/"
+name = "chainflip-engine"
+priority = "required"
+section = "rust"
+systemd-units = [{ unit-name = "chainflip-engine", enable = false }]
+[package.metadata.deb.variants.test]
+maintainer-scripts = "package/test"
+
+[package.metadata.deb.variants.sisyphos]
+maintainer-scripts = "package/sisyphos"
+
+[package.metadata.deb.variants.perseverance]
+maintainer-scripts = "package/perseverance"
+
+[package.metadata.deb.variants.berghain]
+maintainer-scripts = "package/berghain"
+
+[dependencies]
+# Ensures correct compilation order. We want to compile the engine dylib first, then the runner.
+cf-engine-dylib = { path = "../engine-dylib" }
+engine-upgrade-utils = { path = "../engine-upgrade-utils" }
+engine-proc-macros = { path = "../engine-proc-macros" }
+anyhow = "1.0"
+
+[build-dependencies]
+engine-upgrade-utils = { path = "../engine-upgrade-utils" }
