@@ -19,7 +19,6 @@ use futures::FutureExt;
 use serde::Serialize;
 use std::{io::Write, path::PathBuf, sync::Arc};
 use utilities::{clean_hex_address, round_f64, task_scope::task_scope};
-
 mod settings;
 
 #[tokio::main]
@@ -73,6 +72,7 @@ async fn run_cli() -> Result<()> {
 								params.broker_commission,
 								None,
 								params.boost_fee,
+								Default::default(),
 							)
 							.await?;
 						println!("Deposit Address: {address}");

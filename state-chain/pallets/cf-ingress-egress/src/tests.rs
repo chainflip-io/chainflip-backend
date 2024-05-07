@@ -485,7 +485,7 @@ fn can_process_ccm_deposit() {
 			from_asset,
 			to_asset,
 			destination_address.clone(),
-			0,
+			Default::default(),
 			1,
 			Some(channel_metadata),
 			0,

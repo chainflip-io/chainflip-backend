@@ -150,6 +150,7 @@ jobs:
       - name: Permissions for latest binaries 🛡️
         run: |
           chmod +x ./upgrade-to-bins/chainflip-*
+          chmod +x ./upgrade-to-bins/engine-runner
 
       - name: Get version of latest main ✍️
         run: |
@@ -213,10 +214,15 @@ jobs:
         run: |
           cat /tmp/chainflip/*/chainflip-engine.*log
 
-      - name: Print new chainflip-engine logs 🚗
+      - name: Print new pre-upgrade chainflip-engine logs 🚗
         if: always()
         run: |
-          cat /tmp/chainflip/*/chainflip-engine-upgrade.*log
+          cat /tmp/chainflip/*/chainflip-engine-pre-upgrade.*log
+
+      - name: Print new post-upgrade chainflip-engine logs 🚗
+        if: always()
+        run: |
+          cat /tmp/chainflip/*/chainflip-engine-post-upgrade.*log
 
       - name: Print chainflip-node logs 📡
         if: always()

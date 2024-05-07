@@ -22,7 +22,7 @@ You need to build the runtime with `try-runtime` enabled.
 cargo build --release --features=try-runtime
 ```
 
-Now you can run your tests against a public rpc node. 
+Now you can run your tests against a public rpc node.
 To test against Perseverance (Our canary testnet):
 
 ```bash copy
