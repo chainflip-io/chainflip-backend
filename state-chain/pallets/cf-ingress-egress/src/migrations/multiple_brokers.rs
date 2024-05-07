@@ -22,7 +22,7 @@ mod old {
 		/// The boost fee
 		pub boost_fee: BasisPoints,
 		/// Boost status, indicating whether there is pending boost on the channel
-		pub boost_status: BoostStatus,
+		pub boost_status: BoostStatus<TargetChainAmount<T, I>>,
 	}
 
 	#[frame_support::storage_alias]
