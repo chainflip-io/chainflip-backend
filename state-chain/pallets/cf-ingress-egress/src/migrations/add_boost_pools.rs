@@ -50,21 +50,6 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			},
 		);
 
-		// Create boost pools:
-		use strum::IntoEnumIterator;
-		for asset in TargetChainAsset::<T, I>::iter() {
-			for pool_tier in BoostPoolTier::iter() {
-				BoostPools::<T, I>::set(
-					asset,
-					pool_tier,
-					Some(BoostPool::new(pool_tier as BasisPoints)),
-				);
-				Pallet::<T, I>::deposit_event(Event::BoostPoolCreated {
-					boost_pool: BoostPoolId { asset, tier: pool_tier },
-				});
-			}
-		}
-
 		Weight::zero()
 	}
 

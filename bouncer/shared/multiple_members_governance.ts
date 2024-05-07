@@ -5,16 +5,14 @@ import { getChainflipApi, observeEvent } from '../shared/utils';
 import { snowWhite, submitGovernanceExtrinsic } from '../shared/cf_governance';
 
 async function getGovernanceMembers(): Promise<string[]> {
-  const chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipApi();
 
   const res = (await chainflip.query.governance.members()).toJSON();
   return res as string[];
 }
 
 async function setGovernanceMembers(members: string[]) {
-  const chainflip = await getChainflipApi();
-
-  await submitGovernanceExtrinsic(chainflip.tx.governance.newMembershipSet(members));
+  await submitGovernanceExtrinsic((chainflip) => chainflip.tx.governance.newMembershipSet(members));
 }
 
 await cryptoWaitReady();
@@ -31,7 +29,7 @@ async function addAliceToGovernance() {
 
   await setGovernanceMembers(newMembers);
 
-  const chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipApi();
   await observeEvent('governance:Executed', chainflip);
 
   assert((await getGovernanceMembers()).length === 2, 'Governance should now have 2 members');
@@ -40,11 +38,13 @@ async function addAliceToGovernance() {
 }
 
 async function submitWithMultipleGovernanceMembers() {
-  const chainflip = await getChainflipApi();
-
   // Killing 2 birds with 1 stone: testing governance execution with multiple
   // members *and* restoring governance to its original state
-  await submitGovernanceExtrinsic(chainflip.tx.governance.newMembershipSet([snowWhite.address]));
+  await submitGovernanceExtrinsic((chainflip) =>
+    chainflip.tx.governance.newMembershipSet([snowWhite.address]),
+  );
+
+  await using chainflip = await getChainflipApi();
 
   const proposalId = Number((await observeEvent('governance:Proposed', chainflip)).data);
 

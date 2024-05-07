@@ -12,8 +12,9 @@ mod weights;
 use crate::{
 	chainflip::{calculate_account_apy, Offence},
 	runtime_apis::{
-		AuctionState, BoostPoolDepth, BrokerInfo, DispatchErrorWithMessage, EventFilter,
-		FailingWitnessValidators, LiquidityProviderInfo, RuntimeApiPenalty, ValidatorInfo,
+		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, DispatchErrorWithMessage,
+		EventFilter, FailingWitnessValidators, LiquidityProviderInfo, RuntimeApiPenalty,
+		ValidatorInfo,
 	},
 };
 use cf_amm::{
@@ -38,7 +39,7 @@ use core::ops::Range;
 use frame_support::instances::*;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
+use pallet_cf_ingress_egress::{ChannelAction, DepositWitness, OwedAmount, TargetChainAsset};
 use pallet_cf_pools::{
 	AskBidMap, AssetPair, PoolLiquidity, PoolOrderbook, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
@@ -1629,7 +1630,7 @@ impl_runtime_apis! {
 
 					BoostPoolDepth {
 						asset: asset.into(),
-						tier: tier as u16,
+						tier,
 						available_amount: pool.get_available_amount().into()
 					}
 
@@ -1644,6 +1645,40 @@ impl_runtime_apis! {
 					ForeignChain::Arbitrum => boost_pools_depth::<ArbitrumInstance>(),
 				}
 			}).collect()
+
+		}
+
+		fn cf_boost_pool_details(asset: Asset) -> BTreeMap<u16, BoostPoolDetails> {
+
+			fn boost_pools_details<I: 'static>(asset: TargetChainAsset::<Runtime, I>) -> BTreeMap<u16, BoostPoolDetails>
+				where Runtime: pallet_cf_ingress_egress::Config<I> {
+
+				pallet_cf_ingress_egress::BoostPools::<Runtime, I>::iter_prefix(asset).map(|(tier, pool)| {
+					(
+						tier,
+						BoostPoolDetails {
+							available_amounts: pool.get_amounts().into_iter().map(|(id, amount)| (id, amount.into())).collect(),
+							pending_boosts: pool.get_pending_boosts().into_iter().map(|(deposit_id, owed_amounts)| {
+								(
+									deposit_id,
+									owed_amounts.into_iter().map(|(id, amount)| (id, OwedAmount {total: amount.total.into(), fee: amount.fee.into()})).collect()
+								)
+							}).collect(),
+							pending_withdrawals: pool.get_pending_withdrawals().clone(),
+						}
+					)
+				}).collect()
+
+			}
+
+			let chain: ForeignChain = asset.into();
+
+			match chain {
+				ForeignChain::Ethereum => boost_pools_details::<EthereumInstance>(asset.try_into().unwrap()),
+				ForeignChain::Polkadot => boost_pools_details::<PolkadotInstance>(asset.try_into().unwrap()),
+				ForeignChain::Bitcoin => boost_pools_details::<BitcoinInstance>(asset.try_into().unwrap()),
+				ForeignChain::Arbitrum => boost_pools_details::<ArbitrumInstance>(asset.try_into().unwrap()),
+			}
 
 		}
 	}

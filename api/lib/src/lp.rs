@@ -6,7 +6,7 @@ pub use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::address::EncodedAddress;
-use cf_primitives::{Asset, AssetAmount, BasisPoints, BlockNumber, EgressId};
+use cf_primitives::{AccountId, Asset, AssetAmount, BasisPoints, BlockNumber, EgressId};
 use chainflip_engine::state_chain_observer::client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock, WaitFor, WaitForResult},
 	StateChainClient,
@@ -254,6 +254,28 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 				ApiWaitForResult::TxDetails { tx_hash, response: egress_id }
 			},
 		})
+	}
+
+	async fn transfer_asset(
+		&self,
+		amount: AssetAmount,
+		asset: Asset,
+		destination: AccountId,
+	) -> Result<H256> {
+		if amount == 0 {
+			bail!("Amount must be greater than 0");
+		}
+		let (tx_hash, ..) = self
+			.submit_signed_extrinsic(RuntimeCall::from(pallet_cf_lp::Call::transfer_asset {
+				amount,
+				asset,
+				destination,
+			}))
+			.await
+			.until_in_block()
+			.await
+			.context("Unable to transfer asset.")?;
+		Ok(tx_hash)
 	}
 
 	async fn update_range_order(

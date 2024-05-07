@@ -11,7 +11,7 @@ use crate::assert_ok;
 
 pub mod logging;
 
-const CHANNEL_TIMEOUT: Duration = Duration::from_millis(10);
+const CHANNEL_TIMEOUT: Duration = Duration::from_millis(1000);
 
 /// Checks if a given future either is ready, or will become ready on the next poll/without yielding
 pub fn assert_future_can_complete<I>(f: impl Future<Output = I>) -> I {

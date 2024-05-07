@@ -117,6 +117,10 @@ impl WeightInfo for MockWeightInfo {
 		Weight::from_parts(100, 0)
 	}
 
+	fn request_swap_deposit_address_with_affiliates() -> Weight {
+		Weight::from_parts(100, 0)
+	}
+
 	fn withdraw() -> Weight {
 		Weight::from_parts(100, 0)
 	}

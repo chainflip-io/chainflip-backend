@@ -9,11 +9,7 @@ use cf_traits::{
 	AsyncResult, Broadcaster, CfeMultisigRequest, Chainflip, CurrentEpochIndex, GetBlockHeight,
 	SafeMode, SetSafeMode, VaultKeyWitnessedHandler,
 };
-use frame_support::{
-	pallet_prelude::*,
-	sp_runtime::traits::{One, Saturating},
-	traits::StorageVersion,
-};
+use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::prelude::*;
@@ -169,8 +165,6 @@ pub mod pallet {
 
 			Self::activate_new_key_for_chain(block_number);
 
-			T::SafeMode::set_code_red();
-
 			Pallet::<T, I>::deposit_event(Event::VaultRotatedExternally(new_public_key));
 
 			Ok(().into())
@@ -219,7 +213,7 @@ pub mod pallet {
 			if let Some(deployment_block) = self.deployment_block {
 				VaultStartBlockNumbers::<T, I>::insert(
 					cf_primitives::GENESIS_EPOCH,
-					deployment_block,
+					<T::Chain as Chain>::block_witness_root(deployment_block),
 				);
 			} else {
 				log::info!("No genesis vault key configured for {}.", Pallet::<T, I>::name());
@@ -234,7 +228,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		PendingVaultActivation::<T, I>::put(VaultActivationStatus::<T, I>::Complete);
 		VaultStartBlockNumbers::<T, I>::insert(
 			CurrentEpochIndex::<T>::get().saturating_add(1),
-			block_number.saturating_add(One::one()),
+			<T::Chain as Chain>::saturating_block_witness_next(block_number),
 		);
 		Self::deposit_event(Event::VaultActivationCompleted);
 	}

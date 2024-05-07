@@ -18,6 +18,7 @@ pub mod weights;
 mod boost_pool;
 
 use boost_pool::BoostPool;
+pub use boost_pool::OwedAmount;
 
 use frame_support::{pallet_prelude::OptionQuery, transactional};
 
@@ -30,8 +31,8 @@ use cf_chains::{
 	FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	Asset, BasisPoints, BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex, ForeignChain,
-	PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId,
+	Asset, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId, EgressCounter,
+	EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -54,7 +55,6 @@ use sp_std::{
 	vec,
 	vec::Vec,
 };
-use strum_macros::EnumIter;
 pub use weights::WeightInfo;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -72,29 +72,16 @@ pub struct PrewitnessedDeposit<C: Chain> {
 	pub deposit_details: C::DepositDetails,
 }
 
-// TODO: use u16 directly so we can dynamically add/remove pools?
-#[derive(
-	Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo, EnumIter,
-)]
-#[repr(u16)]
-pub enum BoostPoolTier {
-	FiveBps = 5,
-	TenBps = 10,
-	ThirtyBps = 30,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct BoostPoolId<C: Chain> {
 	asset: C::ChainAsset,
 	tier: BoostPoolTier,
 }
+
 pub struct BoostOutput<C: Chain> {
 	used_pools: BTreeMap<BoostPoolTier, C::ChainAmount>,
 	total_fee: C::ChainAmount,
 }
-
-const SORTED_BOOST_TIERS: [BoostPoolTier; 3] =
-	[BoostPoolTier::FiveBps, BoostPoolTier::TenBps, BoostPoolTier::ThirtyBps];
 
 /// Enum wrapper for fetch and egress requests.
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
@@ -153,7 +140,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(7);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(8);
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
 #[scale_info(skip_type_params(I))]
@@ -161,6 +148,7 @@ pub struct PalletSafeMode<I: 'static> {
 	pub boost_deposits_enabled: bool,
 	pub add_boost_funds_enabled: bool,
 	pub stop_boosting_enabled: bool,
+	pub deposits_enabled: bool,
 	#[doc(hidden)]
 	#[codec(skip)]
 	_phantom: PhantomData<I>,
@@ -171,12 +159,14 @@ impl<I: 'static> SafeMode for PalletSafeMode<I> {
 		boost_deposits_enabled: false,
 		add_boost_funds_enabled: false,
 		stop_boosting_enabled: false,
+		deposits_enabled: false,
 		_phantom: PhantomData,
 	};
 	const CODE_GREEN: Self = PalletSafeMode {
 		boost_deposits_enabled: true,
 		add_boost_funds_enabled: true,
 		stop_boosting_enabled: true,
+		deposits_enabled: true,
 		_phantom: PhantomData,
 	};
 }
@@ -229,7 +219,7 @@ pub mod pallet {
 	pub(crate) type ChannelRecycleQueue<T, I> =
 		Vec<(TargetChainBlockNumber<T, I>, TargetChainAccount<T, I>)>;
 
-	pub(crate) type TargetChainAsset<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAsset;
+	pub type TargetChainAsset<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAsset;
 	pub(crate) type TargetChainAccount<T, I> =
 		<<T as Config<I>>::TargetChain as Chain>::ChainAccount;
 	pub(crate) type TargetChainAmount<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAmount;
@@ -279,8 +269,7 @@ pub mod pallet {
 		Swap {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
-			broker_id: AccountId,
-			broker_commission_bps: BasisPoints,
+			broker_fees: Beneficiaries<AccountId>,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
@@ -372,18 +361,6 @@ pub mod pallet {
 		fn build(&self) {
 			DepositChannelLifetime::<T, I>::put(self.deposit_channel_lifetime);
 			WitnessSafetyMargin::<T, I>::set(self.witness_safety_margin);
-
-			use strum::IntoEnumIterator;
-
-			for asset in TargetChainAsset::<T, I>::iter() {
-				for pool_tier in BoostPoolTier::iter() {
-					BoostPools::<T, I>::set(
-						asset,
-						pool_tier,
-						Some(BoostPool::new(pool_tier as BasisPoints)),
-					);
-				}
-			}
 
 			for (asset, dust_limit) in self.dust_limits.clone() {
 				EgressDustLimit::<T, I>::set(asset, dust_limit.unique_saturated_into());
@@ -729,6 +706,12 @@ pub mod pallet {
 		AddBoostFundsDisabled,
 		/// Retrieving boost funds disabled due to safe mode.
 		StopBoostingDisabled,
+		/// Cannot create a boost pool if it already exists.
+		BoostPoolAlreadyExists,
+		/// Cannot create a boost pool of 0 bps
+		InvalidBoostPoolTier,
+		/// Disabled due to safe mode for the chain
+		DepositChannelCreationDisabled,
 	}
 
 	#[pallet::hooks]
@@ -1127,6 +1110,28 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		#[pallet::call_index(9)]
+		#[pallet::weight(T::WeightInfo::create_boost_pools() * new_pools.len() as u64)]
+		pub fn create_boost_pools(
+			origin: OriginFor<T>,
+			new_pools: Vec<BoostPoolId<T::TargetChain>>,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			new_pools.into_iter().try_for_each(|pool_id| {
+				ensure!(pool_id.tier != 0, Error::<T, I>::InvalidBoostPoolTier);
+				BoostPools::<T, I>::try_mutate_exists(pool_id.asset, pool_id.tier, |pool| {
+					ensure!(pool.is_none(), Error::<T, I>::BoostPoolAlreadyExists);
+					*pool = Some(BoostPool::new(pool_id.tier));
+
+					Self::deposit_event(Event::<T, I>::BoostPoolCreated { boost_pool: pool_id });
+
+					Ok::<(), Error<T, I>>(())
+				})
+			})?;
+			Ok(())
+		}
 	}
 }
 
@@ -1346,8 +1351,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let mut used_pools = BTreeMap::new();
 
-		for boost_tier in SORTED_BOOST_TIERS {
-			if boost_tier as u16 > max_boost_fee_bps {
+		let sorted_boost_tiers = BoostPools::<T, I>::iter_prefix(asset)
+			.map(|(tier, _)| tier)
+			.collect::<BTreeSet<_>>();
+
+		debug_assert!(
+			sorted_boost_tiers
+				.iter()
+				.zip(sorted_boost_tiers.iter().skip(1))
+				.all(|(a, b)| a < b),
+			"Boost tiers should be in ascending order"
+		);
+
+		for boost_tier in sorted_boost_tiers {
+			if boost_tier > max_boost_fee_bps {
 				break
 			}
 
@@ -1496,27 +1513,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				DepositAction::LiquidityProvision { lp_account }
 			},
-			ChannelAction::Swap {
-				destination_address,
-				destination_asset,
-				broker_id,
-				broker_commission_bps,
-				..
-			} => DepositAction::Swap {
-				swap_id: T::SwapDepositHandler::schedule_swap_from_channel(
-					<<T::TargetChain as Chain>::ChainAccount as IntoForeignChainAddress<
-						T::TargetChain,
-					>>::into_foreign_chain_address(deposit_address.clone()),
-					block_height.into(),
-					asset.into(),
-					destination_asset,
-					amount_after_fees.into(),
-					destination_address,
-					broker_id,
-					broker_commission_bps,
-					channel_id,
-				),
-			},
+			ChannelAction::Swap { destination_address, destination_asset, broker_fees, .. } =>
+				DepositAction::Swap {
+					swap_id: T::SwapDepositHandler::schedule_swap_from_channel(
+						<<T::TargetChain as Chain>::ChainAccount as IntoForeignChainAddress<
+							T::TargetChain,
+						>>::into_foreign_chain_address(deposit_address.clone()),
+						block_height.into(),
+						asset.into(),
+						destination_asset,
+						amount_after_fees.into(),
+						destination_address,
+						broker_fees,
+						channel_id,
+					),
+				},
 			ChannelAction::CcmTransfer {
 				destination_asset,
 				destination_address,
@@ -1744,9 +1755,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> (TargetChainBlockNumber<T, I>, TargetChainBlockNumber<T, I>, TargetChainBlockNumber<T, I>)
 	{
 		let current_height = T::ChainTracking::get_block_height();
+		debug_assert!(<T::TargetChain as Chain>::is_block_witness_root(current_height));
+
 		let lifetime = DepositChannelLifetime::<T, I>::get();
-		let expiry_height = current_height + lifetime;
-		let recycle_height = expiry_height + lifetime;
+
+		let expiry_height = <T::TargetChain as Chain>::saturating_block_witness_next(
+			current_height.saturating_add(lifetime),
+		);
+		let recycle_height = <T::TargetChain as Chain>::saturating_block_witness_next(
+			expiry_height.saturating_add(lifetime),
+		);
+
+		debug_assert!(current_height < expiry_height);
+		debug_assert!(expiry_height < recycle_height);
 
 		(current_height, expiry_height, recycle_height)
 	}
@@ -1766,6 +1787,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		(ChannelId, TargetChainAccount<T, I>, TargetChainBlockNumber<T, I>, T::Amount),
 		DispatchError,
 	> {
+		ensure!(T::SafeMode::get().deposits_enabled, Error::<T, I>::DepositChannelCreationDisabled);
 		let channel_opening_fee = ChannelOpeningFee::<T, I>::get();
 		T::FeePayment::try_burn_fee(requester, channel_opening_fee)?;
 		Self::deposit_event(Event::<T, I>::ChannelOpeningFeePaid { fee: channel_opening_fee });
@@ -1991,7 +2013,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		source_asset: TargetChainAsset<T, I>,
 		destination_asset: Asset,
 		destination_address: ForeignChainAddress,
-		broker_commission_bps: BasisPoints,
+		broker_fees: Beneficiaries<Self::AccountId>,
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
@@ -2008,12 +2030,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 					destination_address,
 					channel_metadata: msg,
 				},
-				None => ChannelAction::Swap {
-					destination_asset,
-					destination_address,
-					broker_commission_bps,
-					broker_id: broker_id.clone(),
-				},
+				None => ChannelAction::Swap { destination_asset, destination_address, broker_fees },
 			},
 			boost_fee,
 		)?;

@@ -7,17 +7,16 @@
 // For example: ./commands/stress_test.ts 3
 // will initiate a stress test generating 3 signatures
 
-import { getChainflipApi, runWithTimeout } from '../shared/utils';
+import { runWithTimeout } from '../shared/utils';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 
 async function main(): Promise<void> {
   const signaturesCount = process.argv[2];
 
-  const api = await getChainflipApi();
-  const stressTest = api.tx.ethereumBroadcaster.stressTest(signaturesCount);
-  const sudoCall = api.tx.governance.callAsSudo(stressTest);
-
-  await submitGovernanceExtrinsic(sudoCall);
+  await submitGovernanceExtrinsic((api) => {
+    const stressTest = api.tx.ethereumBroadcaster.stressTest(signaturesCount);
+    return api.tx.governance.callAsSudo(stressTest);
+  });
 
   console.log('Requesting ' + signaturesCount + ' ETH signatures');
 

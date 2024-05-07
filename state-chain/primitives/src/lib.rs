@@ -6,15 +6,15 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::{
 	traits::{IdentifyAccount, Verify},
-	MultiSignature, Percent, RuntimeDebug,
+	BoundedVec, MultiSignature, Percent, RuntimeDebug,
 };
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_core::ConstU32;
 use sp_std::{
 	cmp::{Ord, PartialOrd},
 	vec::Vec,
 };
-
 pub mod chains;
 
 pub use chains::{assets::any::Asset, ForeignChain};
@@ -47,6 +47,8 @@ pub type BroadcastId = u32;
 pub type SwapId = u64;
 
 pub type PrewitnessedDepositId = u64;
+
+pub type BoostPoolTier = u16;
 
 /// The type of the Id given to threshold signature requests. Note a single request may
 /// result in multiple ceremonies, but only one ceremony should succeed.
@@ -321,4 +323,17 @@ fn is_more_recent_semver() {
 	ensure_left_is_more_recent(ver(0, 2, 0), ver(0, 1, 0));
 	ensure_left_is_more_recent(ver(1, 0, 0), ver(0, 2, 2));
 	ensure_left_is_more_recent(ver(1, 1, 0), ver(1, 0, 2));
+}
+
+pub const MAX_AFFILIATES: u32 = 5;
+pub const MAX_BENEFICIARIES: u32 = 6;
+
+pub type Affiliates<Id> = BoundedVec<Beneficiary<Id>, ConstU32<MAX_AFFILIATES>>;
+
+pub type Beneficiaries<Id> = BoundedVec<Beneficiary<Id>, ConstU32<{ MAX_AFFILIATES + 1 }>>;
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+pub struct Beneficiary<Id> {
+	pub account: Id,
+	pub bps: BasisPoints,
 }

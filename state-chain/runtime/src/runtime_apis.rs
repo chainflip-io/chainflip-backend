@@ -8,13 +8,14 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, FlipBalance,
-	ForeignChain, NetworkEnvironment, SemVer, SwapOutput,
+	ForeignChain, NetworkEnvironment, PrewitnessedDepositId, SemVer, SwapOutput,
 };
 use codec::{Decode, Encode};
 use core::ops::Range;
 use frame_support::sp_runtime::AccountId32;
 use frame_system::EventRecord;
 use pallet_cf_governance::GovCallHash;
+pub use pallet_cf_ingress_egress::OwedAmount;
 use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
@@ -25,7 +26,10 @@ use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
 use sp_runtime::DispatchError;
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+use sp_std::{
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	vec::Vec,
+};
 
 type VanityName = Vec<u8>;
 
@@ -59,11 +63,31 @@ pub struct ValidatorInfo {
 	pub restricted_balances: BTreeMap<EthereumAddress, u128>,
 }
 
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BoostPoolDepth {
+	#[cfg_attr(feature = "std", serde(flatten))]
 	pub asset: Asset,
 	pub tier: u16,
+	#[cfg_attr(feature = "std", serde(serialize_with = "serialize_as_hex"))]
 	pub available_amount: AssetAmount,
+}
+
+#[cfg(feature = "std")]
+fn serialize_as_hex<S>(amount: &AssetAmount, s: S) -> Result<S::Ok, S::Error>
+where
+	S: serde::Serializer,
+{
+	use sp_core::U256;
+	U256::from(*amount).serialize(s)
+}
+
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+pub struct BoostPoolDetails {
+	pub available_amounts: BTreeMap<AccountId32, AssetAmount>,
+	pub pending_boosts:
+		BTreeMap<PrewitnessedDepositId, BTreeMap<AccountId32, OwedAmount<AssetAmount>>>,
+	pub pending_withdrawals: BTreeMap<AccountId32, BTreeSet<PrewitnessedDepositId>>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
@@ -229,5 +253,6 @@ decl_runtime_apis!(
 		fn cf_channel_opening_fee(chain: ForeignChain) -> FlipBalance;
 		fn cf_get_events(filter: EventFilter) -> Vec<EventRecord<RuntimeEvent, Hash>>;
 		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth>;
+		fn cf_boost_pool_details(asset: Asset) -> BTreeMap<u16, BoostPoolDetails>;
 	}
 );
