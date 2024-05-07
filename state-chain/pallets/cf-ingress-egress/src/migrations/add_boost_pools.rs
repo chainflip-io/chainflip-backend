@@ -1,6 +1,7 @@
 use crate::*;
 use cf_chains::DepositChannel;
 use frame_support::traits::OnRuntimeUpgrade;
+use crate::migrations::multiple_brokers;
 
 mod old {
 	use super::*;
@@ -17,7 +18,7 @@ mod old {
 		pub expires_at: TargetChainBlockNumber<T, I>,
 
 		/// The action to be taken when the DepositChannel is deposited to.
-		pub action: ChannelAction<T::AccountId>,
+		pub action: multiple_brokers::old::ChannelAction<T::AccountId>,
 		/// The boost fee
 		pub boost_fee: BasisPoints,
 	}
@@ -37,9 +38,9 @@ pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> Weight {
 		// Add (default) boost status to existing deposit channels:
-		DepositChannelLookup::<T, I>::translate(
+		multiple_brokers::old::DepositChannelLookup::<T, I>::translate(
 			|_address, old_channel: old::DepositChannelDetails<T, I>| {
-				Some(DepositChannelDetails::<T, I> {
+				Some(multiple_brokers::old::DepositChannelDetails::<T, I> {
 					deposit_channel: old_channel.deposit_channel,
 					opened_at: old_channel.opened_at,
 					expires_at: old_channel.expires_at,
