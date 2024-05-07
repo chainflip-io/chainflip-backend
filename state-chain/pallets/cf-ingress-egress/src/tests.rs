@@ -5,9 +5,9 @@ use crate::{
 	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLookup, DepositChannelPool,
 	DepositIgnoredReason, DepositWitness, DisabledEgressAssets, EgressDustLimit,
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
-	MinimumDeposit, Pallet, PalletConfigUpdate, PrewitnessedDeposit, PrewitnessedDepositIdCounter,
-	PrewitnessedDeposits, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount,
-	WithheldTransactionFees,
+	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, PrewitnessedDeposit,
+	PrewitnessedDepositIdCounter, PrewitnessedDeposits, ScheduledEgressCcm,
+	ScheduledEgressFetchOrTransfer, TargetChainAccount, WithheldTransactionFees,
 };
 use cf_chains::{
 	address::{AddressConverter, IntoForeignChainAddress},
@@ -29,8 +29,8 @@ use cf_traits::{
 		funding_info::MockFundingInfo,
 		swap_queue_api::{MockSwap, MockSwapQueueApi},
 	},
-	DepositApi, EgressApi, EpochInfo, FundingInfo, GetBlockHeight, ScheduledEgressDetails,
-	SwapType,
+	DepositApi, EgressApi, EpochInfo, FundingInfo, GetBlockHeight, SafeMode,
+	ScheduledEgressDetails, SwapType,
 };
 use frame_support::{
 	assert_err, assert_ok,
@@ -1793,4 +1793,35 @@ fn ingress_fee_is_withheld_or_scheduled_for_swap() {
 	}
 
 	test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(ingress_function)
+}
+
+#[test]
+fn safe_mode_prevents_deposit_channel_creation() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(IngressEgress::open_channel(
+			&ALICE,
+			eth::Asset::Eth,
+			ChannelAction::LiquidityProvision { lp_account: 0 },
+			0,
+		));
+
+		use cf_traits::SetSafeMode;
+
+		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+			ingress_egress_ethereum: PalletSafeMode {
+				deposits_enabled: false,
+				..PalletSafeMode::CODE_GREEN
+			},
+		});
+
+		assert_err!(
+			IngressEgress::open_channel(
+				&ALICE,
+				eth::Asset::Eth,
+				ChannelAction::LiquidityProvision { lp_account: 0 },
+				0,
+			),
+			crate::Error::<Test, _>::DepositChannelCreationDisabled
+		);
+	});
 }
