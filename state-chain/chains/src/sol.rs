@@ -32,7 +32,7 @@ pub use sol_prim::{
 impl Chain for Solana {
 	const NAME: &'static str = "Solana";
 	const GAS_ASSET: Self::ChainAsset = assets::sol::Asset::Sol;
-	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
+	const WITNESS_PERIOD: Self::ChainBlockNumber = 15;
 
 	type ChainCrypto = SolanaCrypto;
 	type ChainBlockNumber = SlotNumber;

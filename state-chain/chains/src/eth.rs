@@ -33,7 +33,6 @@ pub const CHAIN_ID_KOVAN: u64 = 42;
 impl Chain for Ethereum {
 	const NAME: &'static str = "Ethereum";
 	const GAS_ASSET: Self::ChainAsset = assets::eth::Asset::Eth;
-	/// TODO: Solana produces 2-3 blocks per second. We need a large number here
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 
 	type ChainCrypto = evm::EvmCrypto;
