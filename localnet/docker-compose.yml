@@ -14,7 +14,7 @@ services:
     platform: linux/amd64
     volumes:
       - "/tmp/solana/test-ledger:/test-ledger"
-    command: /bin/sh -c "cp -R /solana/ledger/* /test-ledger"
+    command: /bin/sh -c "cp -R /solana/ledger/* /test-ledger && chmod -R 777 /test-ledger"
 
   arb-init:
     image: ghcr.io/chainflip-io/chainflip-eth-contracts/arbitrum-gizmo-shop:v1.1.2-usdt-${NODE_COUNT}
