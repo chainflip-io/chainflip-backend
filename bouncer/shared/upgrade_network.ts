@@ -4,7 +4,7 @@ import * as toml from 'toml';
 import path from 'path';
 import { SemVerLevel, bumpReleaseVersion } from './bump_release_version';
 import { simpleRuntimeUpgrade } from './simple_runtime_upgrade';
-import { compareSemVer, getChainflipApi, sleep } from './utils';
+import { compareSemVer, sleep } from './utils';
 import { bumpSpecVersionAgainstNetwork } from './utils/spec_version';
 import { compileBinaries } from './utils/compile_binaries';
 import { submitRuntimeUpgradeWithRestrictions } from './submit_runtime_upgrade';
@@ -54,8 +54,6 @@ async function incompatibleUpgradeNoBuild(
   numberOfNodes: 1 | 3,
   newVersion: string,
 ) {
-  const chainflip = await getChainflipApi();
-
   const SELECTED_NODES = numberOfNodes === 1 ? 'bashful' : 'bashful doc dopey';
 
   // We need to kill the engine process before starting the new engine (engine-runner)
@@ -78,7 +76,7 @@ async function incompatibleUpgradeNoBuild(
 
   console.log('Engines started');
 
-  await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, false);
+  await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, true);
 
   console.log(
     'Check that the old engine has now shut down, and that the new engine is now running.',
@@ -92,8 +90,8 @@ async function incompatibleUpgradeNoBuild(
   await sleep(10000);
 
   // We're going to take down the node, so we don't want them to be suspended.
-  await submitGovernanceExtrinsic(
-    chainflip.tx.reputation.setPenalty('MissedAuthorshipSlot', {
+  await submitGovernanceExtrinsic((api) =>
+    api.tx.reputation.setPenalty('MissedAuthorshipSlot', {
       reputation: 100,
       suspension: 0,
     }),
@@ -129,8 +127,8 @@ async function incompatibleUpgradeNoBuild(
   await sleep(20000);
 
   // Set missed authorship suspension back to 100/150 after nodes back up.
-  await submitGovernanceExtrinsic(
-    chainflip.tx.reputation.setPenalty('MissedAuthorshipSlot', {
+  await submitGovernanceExtrinsic((api) =>
+    api.tx.reputation.setPenalty('MissedAuthorshipSlot', {
       reputation: 100,
       suspension: 150,
     }),

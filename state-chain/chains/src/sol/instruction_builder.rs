@@ -5,7 +5,7 @@
 //! so they don't need to deal with low level code in `sol_tx_core.rs`.
 
 use core::str::FromStr;
-use sp_std::marker::PhantomData;
+use sp_std::{marker::PhantomData, vec, vec::Vec};
 
 use cf_primitives::chains::Solana;
 

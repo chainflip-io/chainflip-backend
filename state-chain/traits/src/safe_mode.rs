@@ -104,7 +104,7 @@ macro_rules! impl_runtime_safe_mode {
 }
 
 /// Implements a basic SafeMode struct for a pallet.
-/// Creats a struct made up of a list of bools.
+/// Creates a struct made up of a list of bools.
 /// For pallets that requires more complex logic, SafeMode can be implemented
 /// manually with custom logic.
 ///

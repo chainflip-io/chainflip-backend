@@ -1,11 +1,12 @@
 use super::{sol_test_values::*, AccountMeta, Instruction, Pubkey};
 
-use crate::{sol::consts::SYSTEM_PROGRAM_ID, vec::Vec};
+use crate::sol::consts::SYSTEM_PROGRAM_ID;
 use borsh::{BorshDeserialize, BorshSerialize};
 use core::str::FromStr;
 use scale_info::prelude::string::String;
 use serde::{Deserialize, Serialize};
 use sp_io::hashing::sha2_256;
+use sp_std::{vec, vec::Vec};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum SystemProgramInstruction {

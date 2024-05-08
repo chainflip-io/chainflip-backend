@@ -1701,7 +1701,6 @@ dependencies = [
  "custom-rpc",
  "ed25519-dalek 2.1.1",
  "frame-support",
- "frame-system",
  "futures",
  "hex",
  "hmac-sha512",

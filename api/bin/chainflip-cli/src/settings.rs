@@ -1,4 +1,7 @@
-use chainflip_api::primitives::{state_chain_runtime, AccountRole, Asset, ForeignChain};
+use chainflip_api::{
+	primitives::{state_chain_runtime, AccountRole, Asset, ForeignChain},
+	BasisPoints,
+};
 pub use chainflip_engine::settings::StateChain;
 use chainflip_engine::{
 	constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT},
@@ -66,7 +69,7 @@ pub struct SwapRequestParams {
 	/// Egress asset address to receive funds after the swap
 	pub destination_address: String,
 	/// Commission to the broker in basis points
-	pub broker_commission: u16,
+	pub broker_commission: BasisPoints,
 	/// Commission to the booster in basis points
 	pub boost_fee: Option<u16>,
 }

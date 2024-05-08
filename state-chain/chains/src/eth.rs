@@ -7,7 +7,7 @@ pub mod deposit_address;
 
 use crate::{
 	evm::{DeploymentStatus, EvmFetchId, EvmTransactionMetadata, Transaction},
-	*,
+	Chain, FeeEstimationApi, *,
 };
 use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Ethereum;
@@ -33,6 +33,7 @@ pub const CHAIN_ID_KOVAN: u64 = 42;
 impl Chain for Ethereum {
 	const NAME: &'static str = "Ethereum";
 	const GAS_ASSET: Self::ChainAsset = assets::eth::Asset::Eth;
+	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 
 	type ChainCrypto = evm::EvmCrypto;
 	type ChainBlockNumber = u64;

@@ -4,9 +4,9 @@ import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { testSwapViaContract } from '../shared/swapping';
 
 async function rotateAndSwap() {
-  const chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipApi();
 
-  await submitGovernanceExtrinsic(chainflip.tx.validator.forceRotation());
+  await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
 
   // Wait for the activation key to be created and the activation key to be sent for signing
   console.log(`Vault rotation initiated`);

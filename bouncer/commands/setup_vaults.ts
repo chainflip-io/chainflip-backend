@@ -10,14 +10,12 @@ import { AddressOrPair } from '@polkadot/api/types';
 import Web3 from 'web3';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import {
-  getChainflipApi,
   getPolkadotApi,
   getBtcClient,
-  observeEvent,
-  sleep,
   handleSubstrateError,
   getEvmEndpoint,
   getSolConnection,
+  deferredPromise,
 } from '../shared/utils';
 import { aliceKeyringPair } from '../shared/polkadot_keyring';
 import {
@@ -25,6 +23,7 @@ import {
   initializeArbitrumContracts,
   initializeSolanaPrograms,
 } from '../shared/initialize_new_chains';
+import { observeEvent } from '../shared/utils/substrate';
 
 async function main(): Promise<void> {
   const btcClient = getBtcClient();
@@ -32,31 +31,23 @@ async function main(): Promise<void> {
   const alice = await aliceKeyringPair();
   const solClient = getSolConnection();
 
-  const chainflip = await getChainflipApi();
-  const polkadot = await getPolkadotApi();
+  await using polkadot = await getPolkadotApi();
 
   console.log('=== Performing initial Vault setup ===');
 
   // Step 1
-  await initializeArbitrumChain(chainflip);
+  await initializeArbitrumChain();
 
   // Step 2
   console.log('Forcing rotation');
-  await submitGovernanceExtrinsic(chainflip.tx.validator.forceRotation());
+  await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
 
   // Step 3
   console.log('Waiting for new keys');
 
-  const dotActivationRequest = observeEvent(
-    'polkadotVault:AwaitingGovernanceActivation',
-    chainflip,
-  );
-  const btcActivationRequest = observeEvent('bitcoinVault:AwaitingGovernanceActivation', chainflip);
-
-  const arbActivationRequest = observeEvent(
-    'arbitrumVault:AwaitingGovernanceActivation',
-    chainflip,
-  );
+  const dotActivationRequest = observeEvent('polkadotVault:AwaitingGovernanceActivation');
+  const btcActivationRequest = observeEvent('bitcoinVault:AwaitingGovernanceActivation');
+  const arbActivationRequest = observeEvent('arbitrumVault:AwaitingGovernanceActivation');
   // const solActivationRequest = observeEvent('solanaVault:AwaitingGovernanceActivation', chainflip);
   const dotKey = (await dotActivationRequest).data.newPublicKey;
   const btcKey = (await btcActivationRequest).data.newPublicKey;
@@ -66,8 +57,11 @@ async function main(): Promise<void> {
   // Step 4
   console.log('Requesting Polkadot Vault creation');
   const createPolkadotVault = async () => {
-    let vaultAddress: AddressOrPair | undefined;
-    let vaultExtrinsicIndex: number | undefined;
+    const { promise, resolve } = deferredPromise<{
+      vaultAddress: AddressOrPair;
+      vaultExtrinsicIndex: number;
+    }>();
+
     const unsubscribe = await polkadot.tx.proxy
       .createPure(polkadot.createType('ProxyType', 'Any'), 0, 0)
       .signAndSend(alice, { nonce: -1 }, (result) => {
@@ -78,24 +72,24 @@ async function main(): Promise<void> {
           console.log('Polkadot Vault created');
           // TODO: figure out type inference so we don't have to coerce using `any`
           const pureCreated = result.findRecord('proxy', 'PureCreated')!;
-          vaultAddress = pureCreated.event.data[0] as AddressOrPair;
-          vaultExtrinsicIndex = result.txIndex!;
+          resolve({
+            vaultAddress: pureCreated.event.data[0] as AddressOrPair,
+            vaultExtrinsicIndex: result.txIndex!,
+          });
           unsubscribe();
         }
       });
-    while (vaultAddress === undefined) {
-      await sleep(3000);
-    }
-    return { vaultAddress, vaultExtrinsicIndex };
+
+    return promise;
   };
   const { vaultAddress, vaultExtrinsicIndex } = await createPolkadotVault();
 
-  const proxyAdded = observeEvent('proxy:ProxyAdded', polkadot);
+  const proxyAdded = observeEvent('proxy:ProxyAdded', { chain: 'polkadot' });
 
   // Step 5
   console.log('Rotating Proxy and Funding Accounts.');
   const rotateAndFund = async () => {
-    let done = false;
+    const { promise, resolve } = deferredPromise<void>();
     const rotation = polkadot.tx.proxy.proxy(
       polkadot.createType('MultiAddress', vaultAddress),
       null,
@@ -126,12 +120,11 @@ async function main(): Promise<void> {
         }
         if (result.isInBlock) {
           unsubscribe();
-          done = true;
+          resolve();
         }
       });
-    while (!done) {
-      await sleep(3000);
-    }
+
+    await promise;
   };
   await rotateAndFund();
   const vaultBlockNumber = (await proxyAdded).block;
@@ -146,20 +139,20 @@ async function main(): Promise<void> {
 
   // Step 7
   console.log('Registering Vaults with state chain');
-  await submitGovernanceExtrinsic(
+  await submitGovernanceExtrinsic((chainflip) =>
     chainflip.tx.environment.witnessPolkadotVaultCreation(vaultAddress, {
       blockNumber: vaultBlockNumber,
       extrinsicIndex: vaultExtrinsicIndex,
     }),
   );
-  await submitGovernanceExtrinsic(
+  await submitGovernanceExtrinsic(async (chainflip) =>
     chainflip.tx.environment.witnessCurrentBitcoinBlockNumberForKey(
       await btcClient.getBlockCount(),
       btcKey,
     ),
   );
 
-  await submitGovernanceExtrinsic(
+  await submitGovernanceExtrinsic(async (chainflip) =>
     chainflip.tx.environment.witnessInitializeArbitrumVault(await arbClient.eth.getBlockNumber()),
   );
 
@@ -172,7 +165,7 @@ async function main(): Promise<void> {
 
   // Confirmation
   console.log('Waiting for new epoch...');
-  await observeEvent('validator:NewEpoch', chainflip);
+  await observeEvent('validator:NewEpoch');
 
   console.log('=== New Epoch ===');
   console.log('=== Vault Setup completed ===');

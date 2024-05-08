@@ -1,9 +1,9 @@
-import { InternalAsset as Asset } from '@chainflip/cli';
-import { observeEvent, getChainflipApi, assetDecimals } from '../shared/utils';
+import { getChainflipApi, assetDecimals, Asset } from '../shared/utils';
 import { submitGovernanceExtrinsic } from './cf_governance';
+import { observeEvent } from './utils/substrate';
 
 export async function createLpPool(ccy: Asset, initialPrice: number) {
-  const chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipApi();
 
   if (
     (
@@ -18,13 +18,10 @@ export async function createLpPool(ccy: Asset, initialPrice: number) {
     console.log(
       'Setting up ' + ccy + ' pool with an initial price of ' + initialPrice + ' USDC per ' + ccy,
     );
-    const poolCreatedEvent = observeEvent(
-      'liquidityPools:NewPoolCreated',
-      chainflip,
-      (event) => event.data.baseAsset === ccy,
-    );
-    const extrinsic = chainflip.tx.liquidityPools.newPool(ccy, 'usdc', 20, price);
-    await submitGovernanceExtrinsic(extrinsic);
+    const poolCreatedEvent = observeEvent('liquidityPools:NewPoolCreated', {
+      test: (event) => event.data.baseAsset === ccy,
+    });
+    await submitGovernanceExtrinsic((api) => api.tx.liquidityPools.newPool(ccy, 'usdc', 20, price));
     await poolCreatedEvent;
   }
 }

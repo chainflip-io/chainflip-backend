@@ -1,0 +1,35 @@
+---
+source: state-chain/custom-rpc/src/lib.rs
+expression: val
+---
+[
+  {
+    "fee_tier": 10,
+    "chain": "Bitcoin",
+    "asset": "BTC",
+    "pending_fees": [
+      {
+        "deposit_id": 0,
+        "fees": [
+          {
+            "account_id": "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT",
+            "amount": "0xa"
+          },
+          {
+            "account_id": "5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt",
+            "amount": "0x64"
+          }
+        ]
+      },
+      {
+        "deposit_id": 1,
+        "fees": [
+          {
+            "account_id": "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT",
+            "amount": "0x32"
+          }
+        ]
+      }
+    ]
+  }
+]

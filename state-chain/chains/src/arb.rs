@@ -28,6 +28,7 @@ pub const CHAIN_ID_ARBITRUM_SEPOLIA: u64 = 421614;
 impl Chain for Arbitrum {
 	const NAME: &'static str = "Arbitrum";
 	const GAS_ASSET: Self::ChainAsset = assets::arb::Asset::ArbEth;
+	const WITNESS_PERIOD: Self::ChainBlockNumber = 24;
 
 	type ChainCrypto = EvmCrypto;
 	type ChainBlockNumber = u64;

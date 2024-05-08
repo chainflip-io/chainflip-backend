@@ -4,9 +4,9 @@ use codec::{Decode, Encode};
 use frame_support::{
 	sp_runtime::DispatchError, CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound,
 };
-use scale_info::TypeInfo;
+use scale_info::{prelude::format, TypeInfo};
 use sp_core::RuntimeDebug;
-use sp_std::vec;
+use sp_std::{boxed::Box, vec, vec::Vec};
 
 use crate::{
 	sol::{

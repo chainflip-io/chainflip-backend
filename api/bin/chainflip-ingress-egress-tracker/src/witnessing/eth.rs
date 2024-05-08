@@ -1,5 +1,5 @@
 use anyhow::Context;
-use cf_chains::Ethereum;
+use cf_chains::{Chain, Ethereum};
 use cf_primitives::chains::assets::eth::Asset;
 use std::sync::Arc;
 use utilities::task_scope;
@@ -53,6 +53,7 @@ where
 			"eth_rpc",
 			"eth_subscribe",
 			"Ethereum",
+			Ethereum::WITNESS_PERIOD,
 		)?
 	};
 

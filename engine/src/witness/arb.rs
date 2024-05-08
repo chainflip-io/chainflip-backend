@@ -115,7 +115,7 @@ where
 	tracing::info!("Safety margin for Arbitrum is set to {arb_safety_margin} blocks.",);
 
 	let arb_safe_vault_source = arb_source
-		.lag_safety(arb_safety_margin as usize)
+		.lag_safety(arb_safety_margin)
 		.logging("safe block produced")
 		.chunk_by_vault(vaults, scope);
 
@@ -179,6 +179,7 @@ mod tests {
 
 	use std::path::PathBuf;
 
+	use cf_chains::{Arbitrum, Chain};
 	use cf_primitives::AccountRole;
 
 	use crate::{
@@ -250,6 +251,7 @@ mod tests {
 						"arb_rpc",
 						"arb_subscribe",
 						"Arbitrum",
+						Arbitrum::WITNESS_PERIOD,
 					).unwrap()
 				};
 
