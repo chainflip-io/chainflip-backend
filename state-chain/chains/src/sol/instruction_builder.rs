@@ -1,8 +1,10 @@
 //! This file contains a Instruction builder for the Solana chain.
 //!
-//! The builder provides a interface for the API to create Raw solana
-//! Instructions and Instruction sets with some level of abstraction
-//! so they don't need to deal with low level code in `sol_tx_core.rs`.
+//! The builder provides a interface for the API to create raw Solana
+//! Instructions and Instruction sets with some level of abstraction.
+//! This avoids the need to deal with low level Solana core types.
+//!
+//! Refer to the test section on how this builder can be used.
 
 use core::str::FromStr;
 use sp_std::{marker::PhantomData, vec, vec::Vec};
@@ -308,7 +310,6 @@ mod test {
 			to: SolPubkey::from_str(TRANSFER_TO_ACCOUNT).unwrap().into(),
 		};
 
-		// Construct the batch fetch instruction set
 		let instruction_set = SolanaInstructionBuilder::<MockSolanaEnvironment>::default()
 			.transfer(transfer_param)
 			.expect("Transfer instruction set can be built")

@@ -43,7 +43,7 @@ impl Chain for Solana {
 	type ChainAccount = SolAddress;
 	type EpochStartData = (); //todo
 	type DepositFetchId = ChannelId;
-	type DepositChannelState = SolanaDepositChannelState; //todo
+	type DepositChannelState = SolanaDepositChannelState;
 	type DepositDetails = (); //todo
 	type Transaction = SolTransaction;
 	type TransactionMetadata = (); //todo

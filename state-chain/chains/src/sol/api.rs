@@ -204,7 +204,7 @@ impl<Env: SolanaEnvironment> SetAggKeyWithAggKey<SolanaCrypto> for SolanaApi<Env
 		new_key: <SolanaCrypto as ChainCrypto>::AggKey,
 	) -> Result<Option<Self>, crate::SetAggKeyWithAggKeyError> {
 		Self::rotate_agg_key(new_key).map(Some).map_err(|e| {
-			log::error!("Failed to construct Rotate Agg key! {:?}", e);
+			log::error!("Failed to construct Solana Rotate Agg key transaction! Error: {:?}", e);
 			crate::SetAggKeyWithAggKeyError::Failed
 		})
 	}

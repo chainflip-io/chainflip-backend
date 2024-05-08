@@ -177,6 +177,9 @@ impl Transaction {
 		self.message().serialize()
 	}
 
+	/// Due to different Serialization between SolSignature and Solana native Signature type, the
+	/// SolSignatures needs to be converted into the RawSignature type before the transaction is
+	/// serialized as whole.
 	pub fn finalize_and_serialize(self) -> Result<Vec<u8>, bincode::error::EncodeError> {
 		bincode::serde::encode_to_vec(RawTransaction::from(self), bincode::config::legacy())
 	}
