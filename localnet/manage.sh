@@ -130,8 +130,10 @@ build-localnet() {
   echo "🦺 Updating init state files permissions ..."
   if [[ $CI == true ]]; then
     sudo chmod -R 777 /tmp/chainflip
-    sudo chmod -R 777 /tmp/solana
     sudo chown -R $USER:$USER /tmp/solana
+    sudo chmod g+s /tmp/solana
+    sudo chmod -R 777 /tmp/solana
+    umask 002
   else
     chmod -R 777 /tmp/chainflip
     chmod -R 777 /tmp/solana
