@@ -306,7 +306,7 @@ where
 		Ok(())
 	}
 
-	pub(crate) fn on_finalised_deposit(
+	pub(crate) fn process_deposit_as_finalised(
 		&mut self,
 		prewitnessed_deposit_id: PrewitnessedDepositId,
 	) -> Vec<(AccountId, C::ChainAmount)> {
@@ -339,7 +339,10 @@ where
 	}
 
 	// Returns the number of boosters affected
-	pub fn on_lost_deposit(&mut self, prewitnessed_deposit_id: PrewitnessedDepositId) -> usize {
+	pub fn process_deposit_as_lost(
+		&mut self,
+		prewitnessed_deposit_id: PrewitnessedDepositId,
+	) -> usize {
 		let Some(booster_contributions) = self.pending_boosts.remove(&prewitnessed_deposit_id)
 		else {
 			log_or_panic!(

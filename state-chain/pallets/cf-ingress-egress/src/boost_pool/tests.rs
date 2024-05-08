@@ -157,7 +157,7 @@ fn boosting_with_fees() {
 		[(BOOST_1, vec![(BOOSTER_1, 333 + 3, 3), (BOOSTER_2, 667 + 6, 6)])],
 	);
 
-	assert_eq!(pool.on_finalised_deposit(BOOST_1), vec![]);
+	assert_eq!(pool.process_deposit_as_finalised(BOOST_1), vec![]);
 
 	check_pool(&pool, [(BOOSTER_1, 1003), (BOOSTER_2, 2006)]);
 }
@@ -191,7 +191,7 @@ fn adding_funds_during_pending_withdrawal_from_same_booster() {
 
 	// Booster 1 is no longer withdrawing, so pending funds go into available pool
 	// on finalisation:
-	assert_eq!(pool.on_finalised_deposit(BOOST_1), vec![]);
+	assert_eq!(pool.process_deposit_as_finalised(BOOST_1), vec![]);
 	check_pool(&pool, [(BOOSTER_1, 1500), (BOOSTER_2, AMOUNT_2)]);
 }
 
@@ -208,7 +208,7 @@ fn withdrawing_funds_before_finalisation() {
 	assert_eq!(pool.stop_boosting(BOOSTER_1), Ok((500, BTreeSet::from_iter([BOOST_1]))));
 	check_pool(&pool, [(BOOSTER_2, 500)]);
 
-	assert_eq!(pool.on_finalised_deposit(BOOST_1), vec![(BOOSTER_1, 500)]);
+	assert_eq!(pool.process_deposit_as_finalised(BOOST_1), vec![(BOOSTER_1, 500)]);
 	check_pool(&pool, [(BOOSTER_2, 1000)]);
 }
 
@@ -229,7 +229,7 @@ fn adding_funds_with_pending_withdrawals() {
 	pool.add_funds(BOOSTER_3, 1000);
 	check_pool(&pool, [(BOOSTER_2, 500), (BOOSTER_3, 1000)]);
 
-	assert_eq!(pool.on_finalised_deposit(BOOST_1), vec![(BOOSTER_1, 500)]);
+	assert_eq!(pool.process_deposit_as_finalised(BOOST_1), vec![(BOOSTER_1, 500)]);
 	check_pool(&pool, [(BOOSTER_2, 1000), (BOOSTER_3, 1000)]);
 }
 
@@ -241,7 +241,7 @@ fn deposit_is_lost_no_withdrawal() {
 	check_pool(&pool, [(BOOSTER_1, 1000), (BOOSTER_2, 1000)]);
 
 	assert_eq!(pool.provide_funds_for_boosting(BOOST_1, 1000), Ok((1000, 0)));
-	pool.on_lost_deposit(BOOST_1);
+	pool.process_deposit_as_lost(BOOST_1);
 	check_pool(&pool, [(BOOSTER_1, 500), (BOOSTER_2, 500)]);
 }
 
@@ -257,7 +257,7 @@ fn deposit_is_lost_while_withdrawing() {
 	check_pending_boosts(&pool, [(BOOST_1, vec![(BOOSTER_1, 500, 0), (BOOSTER_2, 500, 0)])]);
 	check_pending_withdrawals(&pool, [(BOOSTER_1, vec![BOOST_1])]);
 
-	pool.on_lost_deposit(BOOST_1);
+	pool.process_deposit_as_lost(BOOST_1);
 
 	check_pool(&pool, [(BOOSTER_2, 500)]);
 	// BOOSTER_1 is not considered "withdrawing" because they no longer await
@@ -292,7 +292,7 @@ fn partially_losing_pending_withdrawals() {
 	// Deposit of 500 is finalised, BOOSTER 1 gets 250 here, the other 250 goes into
 	// Booster 2's available boost amount:
 	{
-		assert_eq!(pool.on_finalised_deposit(BOOST_1), vec![(BOOSTER_1, 250)]);
+		assert_eq!(pool.process_deposit_as_finalised(BOOST_1), vec![(BOOSTER_1, 250)]);
 
 		check_pool(&pool, [(BOOSTER_2, 500)]);
 		check_pending_withdrawals(&pool, [(BOOSTER_1, vec![BOOST_2])]);
@@ -301,7 +301,7 @@ fn partially_losing_pending_withdrawals() {
 
 	// The other deposit is lost:
 	{
-		pool.on_lost_deposit(BOOST_2);
+		pool.process_deposit_as_lost(BOOST_2);
 		check_pool(&pool, [(BOOSTER_2, 500)]);
 
 		// BOOSTER_1 is no longer withdrawing:
@@ -329,12 +329,12 @@ fn booster_joins_then_funds_lost() {
 
 	// Deposit of 500 is finalised. Importantly this doesn't affect Booster 3 as they
 	// didn't participate in the boost:
-	assert_eq!(pool.on_finalised_deposit(BOOST_1), vec![(BOOSTER_1, 250)]);
+	assert_eq!(pool.process_deposit_as_finalised(BOOST_1), vec![(BOOSTER_1, 250)]);
 	check_pool(&pool, [(BOOSTER_2, 500), (BOOSTER_3, 1000)]);
 
 	// The other deposit is lost, which removes the pending withdrawal and
 	// inactive amount from the pool. Booster 3 is not affected:
-	pool.on_lost_deposit(BOOST_2);
+	pool.process_deposit_as_lost(BOOST_2);
 	check_pool(&pool, [(BOOSTER_2, 500), (BOOSTER_3, 1000)]);
 }
 
@@ -370,7 +370,7 @@ fn booster_joins_between_boosts() {
 	// Deposit of 500 is finalised, 250 goes to Booster 1's free balance, and the
 	// remaining 250 goes to Booster 2; Booster 3 joined after this boost, so they
 	// get nothing; there is only one pending boost now (Boost 2):
-	assert_eq!(pool.on_finalised_deposit(BOOST_1), vec![(BOOSTER_1, 250)]);
+	assert_eq!(pool.process_deposit_as_finalised(BOOST_1), vec![(BOOSTER_1, 250)]);
 	check_pool(&pool, [(BOOSTER_2, 736), (BOOSTER_3, 1288)]);
 	check_pending_boosts(&pool, [(BOOST_2, vec![(BOOSTER_2, 274, 5), (BOOSTER_3, 725, 14)])]);
 
@@ -378,7 +378,7 @@ fn booster_joins_between_boosts() {
 		// Scenario A: the second deposit is lost; available amounts remain the same,
 		// but there is no more pending boosts:
 		let mut pool = pool.clone();
-		pool.on_lost_deposit(BOOST_2);
+		pool.process_deposit_as_lost(BOOST_2);
 		check_pool(&pool, [(BOOSTER_2, 736), (BOOSTER_3, 1288)]);
 		check_pending_boosts(&pool, []);
 	}
@@ -387,7 +387,7 @@ fn booster_joins_between_boosts() {
 		// Scenario B: the second deposit is received and distributed back between
 		// the contributed boosters:
 		let mut pool = pool.clone();
-		assert_eq!(pool.on_finalised_deposit(BOOST_2), vec![]);
+		assert_eq!(pool.process_deposit_as_finalised(BOOST_2), vec![]);
 		check_pool(&pool, [(BOOSTER_2, 1010), (BOOSTER_3, 2014)]);
 		check_pending_boosts(&pool, []);
 	}
@@ -405,7 +405,7 @@ fn small_rewards_accumulate() {
 	const SMALL_DEPOSIT: AssetAmount = 500;
 
 	assert_eq!(pool.provide_funds_for_boosting(BOOST_1, SMALL_DEPOSIT), Ok((SMALL_DEPOSIT, 5)));
-	assert_eq!(pool.on_finalised_deposit(BOOST_1), vec![]);
+	assert_eq!(pool.process_deposit_as_finalised(BOOST_1), vec![]);
 
 	// BOOSTER 2 earns ~0.25 (it is rounded down when converted to AssetAmount,
 	// but the fractional part isn't lost)
@@ -417,7 +417,7 @@ fn small_rewards_accumulate() {
 			pool.provide_funds_for_boosting(prewitnessed_deposit_id, SMALL_DEPOSIT),
 			Ok((SMALL_DEPOSIT, 5))
 		);
-		assert_eq!(pool.on_finalised_deposit(prewitnessed_deposit_id), vec![]);
+		assert_eq!(pool.process_deposit_as_finalised(prewitnessed_deposit_id), vec![]);
 	}
 
 	// Note the increase in Booster 2's balance:
@@ -437,7 +437,7 @@ fn use_max_available_amount() {
 
 	pool.add_funds(BOOSTER_1, 200);
 
-	assert_eq!(pool.on_finalised_deposit(BOOST_1), vec![]);
+	assert_eq!(pool.process_deposit_as_finalised(BOOST_1), vec![]);
 
 	check_pool(&pool, [(BOOSTER_1, 1210)]);
 }
