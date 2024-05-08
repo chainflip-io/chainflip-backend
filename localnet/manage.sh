@@ -129,9 +129,6 @@ build-localnet() {
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
   echo "🦺 Updating init state files permissions ..."
 
-  echo "🕵🏻‍♂️ Prining all /tmp/solana dir files before permissions update ..."
-  ls -laR /tmp/solana
-
   if [[ $CI == true ]]; then
     echo "🔐 Setting permissions for CI ..."
     sudo chmod -R 777 /tmp/chainflip
@@ -143,9 +140,6 @@ build-localnet() {
     chmod -R 777 /tmp/chainflip
     chmod -R 777 /tmp/solana
   fi
-
-  echo "🕵🏻‍♂️ Prining all /tmp/solana dir files after permissions update ..."
-  ls -laR /tmp/solana
 
   echo "🏗 Building network"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $CORE_CONTAINERS -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
