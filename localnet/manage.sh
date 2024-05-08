@@ -15,6 +15,7 @@ DEBUG_OUTPUT_DESTINATION=${DEBUG_OUTPUT_DESTINATION:-'/tmp/chainflip/debug.log'}
 source ./localnet/helper.sh
 
 mkdir -p /tmp/chainflip/
+mkdir -p /tmp/solana/
 touch /tmp/chainflip/debug.log
 
 set -eo pipefail
@@ -131,13 +132,12 @@ build-localnet() {
 
   if [[ $CI == true ]]; then
     echo "🔐 Setting permissions for CI ..."
-    sudo chmod -R 777 /tmp/chainflip
-    sudo chown -R $USER:$USER /tmp/solana
-    sudo chown -R $USER:$USER /tmp/test-ledger
     sudo chmod g+s /tmp/solana
-    sudo chmod g+s /tmp/solana/test-ledger
+    sudo chmod -R 777 /tmp/chainflip
     sudo chmod -R 777 /tmp/solana
-    sudo chmod -R 777 /tmp/solana/test-ledger
+    sudo chown -R $USER:$USER /tmp/solana
+    sudo find /tmp/solana -type d -exec chown $USER:$USER {} +
+    sudo find /tmp/solana -type f -exec chown $USER:$USER {} +
   else
     chmod -R 777 /tmp/chainflip
     chmod -R 777 /tmp/solana
