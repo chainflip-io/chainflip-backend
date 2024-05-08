@@ -40,6 +40,8 @@ fn main() {
 	} else {
 		// TODO: Use $ORIGIN for linux. I tried, but it doesn't seem to work like `@executable_path`
 		// does for mac.
+		// This path is where we store the libraries in the docker image, and as part of the apt
+		// installation.
 		println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib/chainflip-engine");
 	}
 
