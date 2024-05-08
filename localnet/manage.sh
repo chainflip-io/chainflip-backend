@@ -133,7 +133,9 @@ build-localnet() {
     echo "🔐 Setting permissions for CI ..."
     sudo chmod -R 777 /tmp/chainflip
     sudo chown -R $USER:$USER /tmp/solana
+    sudo chown -R $USER:$USER /tmp/test-ledger
     sudo chmod g+s /tmp/solana
+    sudo chmod g+s /tmp/solana/test-ledger
     sudo chmod -R 777 /tmp/solana
     sudo chmod -R 777 /tmp/solana/test-ledger
   else
