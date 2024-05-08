@@ -32,11 +32,20 @@ mod old {
 		PolkadotCryptoInstance, PolkadotInstance,
 	};
 	use frame_support::pallet_prelude::*;
+
+	#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+	pub struct SwappingSafeMode {
+		pub swaps_enabled: bool,
+		pub withdrawals_enabled: bool,
+		pub deposits_enabled: bool,
+		pub broker_registration_enabled: bool,
+	}
+
 	#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 	pub struct RuntimeSafeMode {
 		pub emissions: pallet_cf_emissions::PalletSafeMode,
 		pub funding: pallet_cf_funding::PalletSafeMode,
-		pub swapping: pallet_cf_swapping::PalletSafeMode,
+		pub swapping: SwappingSafeMode,
 		pub liquidity_provider: pallet_cf_lp::PalletSafeMode,
 		pub validator: pallet_cf_validator::PalletSafeMode,
 		pub pools: pallet_cf_pools::PalletSafeMode,
@@ -66,7 +75,11 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 					safe_mode::RuntimeSafeMode {
 							emissions: old.emissions,
 							funding: old.funding,
-							swapping: old.swapping,
+							swapping: pallet_cf_swapping::PalletSafeMode {
+								swaps_enabled: old.swapping.swaps_enabled,
+								withdrawals_enabled: old.swapping.withdrawals_enabled,
+								broker_registration_enabled: old.swapping.broker_registration_enabled
+							},
 							liquidity_provider: old.liquidity_provider,
 							validator: old.validator,
 							pools: old.pools,
@@ -78,11 +91,10 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 							broadcast_bitcoin: old.broadcast_bitcoin,
 							broadcast_polkadot: old.broadcast_polkadot,
 							broadcast_arbitrum: <pallet_cf_broadcast::PalletSafeMode<ArbitrumInstance> as SafeMode>::CODE_GREEN,
-							// Set safe mode on for ingress-egress to disable boost features.
-							ingress_egress_ethereum: <pallet_cf_ingress_egress::PalletSafeMode<EthereumInstance> as SafeMode>::CODE_RED,
-							ingress_egress_bitcoin: <pallet_cf_ingress_egress::PalletSafeMode<BitcoinInstance> as SafeMode>::CODE_RED,
-							ingress_egress_polkadot: <pallet_cf_ingress_egress::PalletSafeMode<PolkadotInstance> as SafeMode>::CODE_RED,
-							ingress_egress_arbitrum: <pallet_cf_ingress_egress::PalletSafeMode<ArbitrumInstance> as SafeMode>::CODE_RED,
+							ingress_egress_ethereum: <pallet_cf_ingress_egress::PalletSafeMode<EthereumInstance> as SafeMode>::CODE_GREEN,
+							ingress_egress_bitcoin: <pallet_cf_ingress_egress::PalletSafeMode<BitcoinInstance> as SafeMode>::CODE_GREEN,
+							ingress_egress_polkadot: <pallet_cf_ingress_egress::PalletSafeMode<PolkadotInstance> as SafeMode>::CODE_GREEN,
+							ingress_egress_arbitrum: <pallet_cf_ingress_egress::PalletSafeMode<ArbitrumInstance> as SafeMode>::CODE_GREEN,
 							witnesser: old.witnesser,
 						}
 				})

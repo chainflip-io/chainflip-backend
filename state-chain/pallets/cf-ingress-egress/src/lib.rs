@@ -145,6 +145,7 @@ pub struct PalletSafeMode<I: 'static> {
 	pub boost_deposits_enabled: bool,
 	pub add_boost_funds_enabled: bool,
 	pub stop_boosting_enabled: bool,
+	pub deposits_enabled: bool,
 	#[doc(hidden)]
 	#[codec(skip)]
 	_phantom: PhantomData<I>,
@@ -155,12 +156,14 @@ impl<I: 'static> SafeMode for PalletSafeMode<I> {
 		boost_deposits_enabled: false,
 		add_boost_funds_enabled: false,
 		stop_boosting_enabled: false,
+		deposits_enabled: false,
 		_phantom: PhantomData,
 	};
 	const CODE_GREEN: Self = PalletSafeMode {
 		boost_deposits_enabled: true,
 		add_boost_funds_enabled: true,
 		stop_boosting_enabled: true,
+		deposits_enabled: true,
 		_phantom: PhantomData,
 	};
 }
@@ -693,6 +696,8 @@ pub mod pallet {
 		BoostPoolAlreadyExists,
 		/// Cannot create a boost pool of 0 bps
 		InvalidBoostPoolTier,
+		/// Disabled due to safe mode for the chain
+		DepositChannelCreationDisabled,
 	}
 
 	#[pallet::hooks]
@@ -1714,6 +1719,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		(ChannelId, TargetChainAccount<T, I>, TargetChainBlockNumber<T, I>, T::Amount),
 		DispatchError,
 	> {
+		ensure!(T::SafeMode::get().deposits_enabled, Error::<T, I>::DepositChannelCreationDisabled);
 		let channel_opening_fee = ChannelOpeningFee::<T, I>::get();
 		T::FeePayment::try_burn_fee(requester, channel_opening_fee)?;
 		Self::deposit_event(Event::<T, I>::ChannelOpeningFeePaid { fee: channel_opening_fee });
