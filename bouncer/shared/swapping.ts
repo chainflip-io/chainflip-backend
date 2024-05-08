@@ -1,6 +1,7 @@
 import { randomAsHex, randomAsNumber } from '@polkadot/util-crypto';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import Web3 from 'web3';
+import assert from 'assert';
 import { performSwap, SwapParams } from '../shared/perform_swap';
 import {
   newAddress,
@@ -20,6 +21,13 @@ enum SolidityType {
   String = 'string',
   Bytes = 'bytes',
   Address = 'address',
+}
+
+export enum SwapStatus {
+  Initiated,
+  Funded,
+  Success,
+  Failure,
 }
 
 let swapCount = 1;
@@ -121,6 +129,7 @@ export async function testSwap(
   destAsset: Asset,
   addressType?: BtcAddressType,
   messageMetadata?: CcmDepositMetadata,
+  swapContext?: SwapContext,
   tagSuffix?: string,
   amount?: string,
   log = true,
@@ -133,6 +142,9 @@ export async function testSwap(
     tagSuffix,
     log,
   );
+
+  swapContext?.updateStatus(tag, SwapStatus.Initiated);
+
   return performSwap(
     sourceAsset,
     destAsset,
@@ -143,13 +155,15 @@ export async function testSwap(
     amount,
     undefined,
     log,
+    swapContext,
   );
 }
-async function testSwapViaContract(
+export async function testSwapViaContract(
   sourceAsset: Asset,
   destAsset: Asset,
   addressType?: BtcAddressType,
   messageMetadata?: CcmDepositMetadata,
+  swapContext?: SwapContext,
   tagSuffix?: string,
 ) {
   const { destAddress, tag } = await prepareSwap(
@@ -159,10 +173,62 @@ async function testSwapViaContract(
     messageMetadata,
     (tagSuffix ?? '') + ' Contract',
   );
+
+  swapContext?.updateStatus(tag, SwapStatus.Initiated);
   return performSwapViaContract(sourceAsset, destAsset, destAddress, tag, messageMetadata);
 }
 
-export async function testAllSwaps() {
+export class SwapContext {
+  allSwaps: Map<string, SwapStatus>;
+
+  constructor() {
+    this.allSwaps = new Map();
+  }
+
+  updateStatus(tag: string, status: SwapStatus) {
+    const currentStatus = this.allSwaps.get(tag);
+
+    // Sanity checks:
+    switch (status) {
+      case SwapStatus.Initiated: {
+        assert(currentStatus === undefined, `Unexpected status transition for ${tag}`);
+        break;
+      }
+      case SwapStatus.Funded: {
+        assert(currentStatus === SwapStatus.Initiated, `Unexpected status transition for ${tag}`);
+        break;
+      }
+      case SwapStatus.Success: {
+        assert(currentStatus === SwapStatus.Funded, `Unexpected status transition for ${tag}`);
+        break;
+      }
+      default:
+        // nothing to do
+        break;
+    }
+
+    this.allSwaps.set(tag, status);
+  }
+
+  print_report() {
+    const unsuccessfulSwapsEntries: string[] = [];
+    this.allSwaps.forEach((status, tag) => {
+      if (status !== SwapStatus.Success) {
+        unsuccessfulSwapsEntries.push(`${tag}: ${SwapStatus[status]}`);
+      }
+    });
+
+    if (unsuccessfulSwapsEntries.length === 0) {
+      console.log('All swaps are successful!');
+    } else {
+      let report = `Unsuccessful swaps:\n`;
+      report += unsuccessfulSwapsEntries.join('\n');
+      console.error(report);
+    }
+  }
+}
+
+export async function testAllSwaps(swapContext: SwapContext) {
   const allSwaps: Promise<SwapParams | ContractSwapParams>[] = [];
 
   function appendSwap(
@@ -173,10 +239,12 @@ export async function testAllSwaps() {
   ) {
     if (destAsset === 'Btc') {
       Object.values(btcAddressTypes).forEach((btcAddrType) => {
-        allSwaps.push(functionCall(sourceAsset, destAsset, btcAddrType, messageMetadata));
+        allSwaps.push(
+          functionCall(sourceAsset, destAsset, btcAddrType, messageMetadata, swapContext),
+        );
       });
     } else {
-      allSwaps.push(functionCall(sourceAsset, destAsset, undefined, messageMetadata));
+      allSwaps.push(functionCall(sourceAsset, destAsset, undefined, messageMetadata, swapContext));
     }
   }
 

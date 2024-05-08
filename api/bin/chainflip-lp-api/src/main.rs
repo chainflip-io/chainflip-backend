@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use cf_primitives::{AccountId, BasisPoints, BlockNumber, EgressId};
 use cf_utilities::{
 	rpc::NumberOrHex,
@@ -15,8 +16,8 @@ use chainflip_api::{
 		AccountRole, Asset, ForeignChain, Hash, RedemptionAmount,
 	},
 	settings::StateChain,
-	BlockInfo, BlockUpdate, ChainApi, EthereumAddress, OperatorApi, SignedExtrinsicApi,
-	StateChainApi, StorageApi, WaitFor,
+	AccountId32, BlockInfo, BlockUpdate, ChainApi, EthereumAddress, OperatorApi,
+	SignedExtrinsicApi, StateChainApi, StorageApi, WaitFor,
 };
 use clap::Parser;
 use custom_rpc::CustomApiClient;
@@ -30,7 +31,7 @@ use jsonrpsee::{
 };
 use pallet_cf_pools::{AssetPair, IncreaseOrDecrease, OrderId, RangeOrderSize};
 use rpc_types::{OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
-use sp_core::U256;
+use sp_core::{H256, U256};
 use std::{
 	collections::{HashMap, HashSet},
 	ops::Range,
@@ -121,6 +122,14 @@ pub trait Rpc {
 		destination_address: &str,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<EgressId>>;
+
+	#[method(name = "transfer_asset")]
+	async fn transfer_asset(
+		&self,
+		amount: U256,
+		asset: Asset,
+		destination_account: AccountId32,
+	) -> RpcResult<Hash>;
 
 	#[method(name = "update_range_order")]
 	async fn update_range_order(
@@ -283,6 +292,24 @@ impl RpcServer for RpcServerImpl {
 				asset,
 				destination_address,
 				wait_for.unwrap_or_default(),
+			)
+			.await?)
+	}
+
+	/// Returns an egress id
+	async fn transfer_asset(
+		&self,
+		amount: U256,
+		asset: Asset,
+		destination_account: AccountId32,
+	) -> RpcResult<H256> {
+		Ok(self
+			.api
+			.lp_api()
+			.transfer_asset(
+				amount.try_into().map_err(|_| anyhow!("Failed to convert amount to u128"))?,
+				asset,
+				destination_account,
 			)
 			.await?)
 	}

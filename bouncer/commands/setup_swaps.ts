@@ -8,7 +8,12 @@
 import { setupSwaps } from '../shared/setup_swaps';
 import { runWithTimeout } from '../shared/utils';
 
-runWithTimeout(setupSwaps(), 240000).catch((error) => {
+async function main(): Promise<void> {
+  await setupSwaps();
+  process.exit(0);
+}
+
+runWithTimeout(main(), 240000).catch((error) => {
   console.error(error);
   process.exit(-1);
 });

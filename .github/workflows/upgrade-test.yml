@@ -70,19 +70,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Login to DockerHub 🔑
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
+        with:
+          username: ${{ secrets.CF_DOCKERHUB_USERNAME }}
+          password: ${{ secrets.CF_DOCKERHUB_TOKEN }}
+
       - name: Configure NodeJS 🛠️
         uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65
         with:
-          node-version: 18
+          node-version: 20
           cache: "pnpm"
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@chainflip-io"
           cache-dependency-path: "bouncer/pnpm-lock.yaml"
-
-      - name: Set NPM registry 🔧
-        run: |
-          pnpm set @chainflip-io:registry=https://npm.pkg.github.com/
-          pnpm set //npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}
 
       - name: Install system packages 💿
         run: |
@@ -128,7 +127,7 @@ jobs:
       - name: Get version of the latest release ✍️
         run: |
           set -x
-          RELEASE_VERSION=$(./latest-release-bins/chainflip-engine --version)
+          RELEASE_VERSION=$(./latest-release-bins/chainflip-node --version)
           echo $RELEASE_VERSION
           echo "RELEASE_VERSION=${RELEASE_VERSION}" >> $GITHUB_ENV
 
@@ -151,6 +150,7 @@ jobs:
       - name: Permissions for latest binaries 🛡️
         run: |
           chmod +x ./upgrade-to-bins/chainflip-*
+          chmod +x ./upgrade-to-bins/engine-runner
 
       - name: Get version of latest main ✍️
         run: |
@@ -179,7 +179,7 @@ jobs:
           git checkout ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}
           git rev-parse HEAD
           cd bouncer
-          pnpm install
+          pnpm install --frozen-lockfile
           ./run.sh
 
       # we need to be sure that when this fails, we catch the error, any panics etc. that occur
@@ -191,7 +191,8 @@ jobs:
           git checkout ${{ github.sha }}
           git rev-parse HEAD
           cd bouncer
-          pnpm install
+          mv ./../upgrade-to-bins/*.so ./../old-engine-dylib/
+          pnpm install --frozen-lockfile
           ./commands/upgrade_network.ts prebuilt \
             --runtime ./../main-runtime/state_chain_runtime.compact.compressed.wasm \
             --bins ./../upgrade-to-bins \
@@ -204,7 +205,7 @@ jobs:
           git checkout ${{ env.UPGRADE_TO_COMMIT }}
           git rev-parse HEAD
           cd bouncer
-          pnpm install
+          pnpm install --frozen-lockfile
           ./commands/setup_swaps.ts
           ./tests/all_concurrent_tests.ts
 
@@ -213,10 +214,15 @@ jobs:
         run: |
           cat /tmp/chainflip/*/chainflip-engine.*log
 
-      - name: Print new chainflip-engine logs 🚗
+      - name: Print new pre-upgrade chainflip-engine logs 🚗
         if: always()
         run: |
-          cat /tmp/chainflip/*/chainflip-engine-upgrade.*log
+          cat /tmp/chainflip/*/chainflip-engine-pre-upgrade.*log
+
+      - name: Print new post-upgrade chainflip-engine logs 🚗
+        if: always()
+        run: |
+          cat /tmp/chainflip/*/chainflip-engine-post-upgrade.*log
 
       - name: Print chainflip-node logs 📡
         if: always()

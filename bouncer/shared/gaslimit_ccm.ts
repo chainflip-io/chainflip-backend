@@ -50,7 +50,7 @@ function gasTestCcmMetadata(sourceAsset: Asset, gasToConsume: number, gasBudgetF
 }
 
 async function getEvmChainFees(chain: Chain) {
-  const chainflipApi = await getChainflipApi();
+  await using chainflipApi = await getChainflipApi();
 
   const trackedData = (
     await observeEvent(`${chain.toLowerCase()}ChainTracking:ChainStateUpdated`, chainflipApi)
@@ -74,7 +74,7 @@ async function testGasLimitSwap(
   gasToConsume?: number,
   gasBudgetFraction?: number,
 ) {
-  const chainflipApi = await getChainflipApi();
+  await using chainflipApi = await getChainflipApi();
   const destChain = chainFromAsset(destAsset).toString();
 
   // Increase the gas consumption to make sure all the messages are unique
@@ -228,7 +228,7 @@ async function testGasLimitSwap(
     );
     await observeEvent(
       `${destChain.toLowerCase()}Broadcaster:BroadcastAborted`,
-      await getChainflipApi(),
+      chainflipApi,
       (event) => event.data.broadcastId === egressIdToBroadcastId[swapIdToEgressId[swapId]],
     );
     stopObservingCcmReceived = true;
@@ -284,7 +284,7 @@ async function testGasLimitSwap(
 
     const feeDeficitHandle = observeEvent(
       `${destChain.toLowerCase()}Broadcaster:TransactionFeeDeficitRecorded`,
-      await getChainflipApi(),
+      chainflipApi,
       (event) => Number(event.data.amount.replace(/,/g, '')) === totalFee,
     );
 

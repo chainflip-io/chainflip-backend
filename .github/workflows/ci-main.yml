@@ -19,21 +19,18 @@ jobs:
       test_features: runtime-benchmarks
     secrets: inherit
   build:
-    needs: [test]
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
       profile: "release"
   # Used to test upgrades to this version from the latest release
   build-try-runtime:
-    needs: [test]
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
       profile: "try-runtime"
       upload-name: "chainflip-backend-bin-try-runtime"
       binary-subdir: release
-
   docker:
     needs: [build]
     uses: ./.github/workflows/_24_docker.yml
@@ -47,10 +44,6 @@ jobs:
     with:
       network: "test"
     secrets: inherit
-  post-check:
-    needs: [build]
-    uses: ./.github/workflows/_40_post_check.yml
-    secrets: inherit
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml
@@ -58,10 +51,3 @@ jobs:
       version: ci/${{ github.sha }}/
       environment: "development"
     secrets: inherit
-  upgrade-check:
-    needs: [build-try-runtime]
-    uses: ./.github/workflows/upgrade-test.yml
-    secrets: inherit
-    with:
-      upgrade-from-release: "sisyphos"
-      upgrade-to-workflow-name: "ci-main.yml"

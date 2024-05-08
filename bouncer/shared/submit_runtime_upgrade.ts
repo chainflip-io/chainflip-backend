@@ -18,7 +18,7 @@ export async function submitRuntimeUpgradeWithRestrictions(
 ) {
   const runtimeWasm = await readRuntimeWasmFromFile(wasmPath);
 
-  const chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipApi();
 
   const networkUrl = process.env.CF_NODE_ENDPOINT ?? 'ws://localhost:9944';
 
@@ -35,8 +35,8 @@ export async function submitRuntimeUpgradeWithRestrictions(
   }
 
   console.log('Submitting runtime upgrade.');
-  await submitGovernanceExtrinsic(
-    chainflip.tx.governance.chainflipRuntimeUpgrade(versionPercentRestriction, runtimeWasm),
+  await submitGovernanceExtrinsic((api) =>
+    api.tx.governance.chainflipRuntimeUpgrade(versionPercentRestriction, runtimeWasm),
   );
 
   console.log('Submitted runtime upgrade. Waiting for the runtime upgrade to complete.');

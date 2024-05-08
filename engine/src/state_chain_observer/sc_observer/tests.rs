@@ -716,7 +716,6 @@ async fn run_the_sc_observer() {
 					AccountRole::Unregistered,
 					false,
 					false,
-					false,
 					None,
 				)
 				.await

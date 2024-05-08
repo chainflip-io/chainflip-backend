@@ -1,5 +1,5 @@
 #!/usr/bin/env -S pnpm tsx
-import { testAllSwaps } from '../shared/swapping';
+import { SwapContext, testAllSwaps } from '../shared/swapping';
 import { testEvmDeposits } from '../shared/evm_deposits';
 import { runWithTimeout, observeBadEvents } from '../shared/utils';
 import { testFundRedeem } from '../shared/fund_redeem';
@@ -8,6 +8,8 @@ import { testLpApi } from '../shared/lp_api_test';
 import { swapLessThanED } from '../shared/swap_less_than_existential_deposit_dot';
 import { testPolkadotRuntimeUpdate } from '../shared/polkadot_runtime_update';
 import { testBrokerFeeCollection } from '../shared/broker_fee_collection';
+
+const swapContext = new SwapContext();
 
 async function runAllConcurrentTests() {
   // Specify the number of nodes via providing an argument to this script.
@@ -23,7 +25,7 @@ async function runAllConcurrentTests() {
   // Tests that work with any number of nodes
   const tests = [
     swapLessThanED(),
-    testAllSwaps(),
+    testAllSwaps(swapContext),
     testEvmDeposits(),
     testFundRedeem('redeem'),
     testMultipleMembersGovernance(),
@@ -52,6 +54,7 @@ runWithTimeout(runAllConcurrentTests(), 2000000)
   })
   .catch((error) => {
     console.error!('All concurrent tests timed out. Exiting.');
+    swapContext.print_report();
     console.error(error);
     process.exit(-1);
   });

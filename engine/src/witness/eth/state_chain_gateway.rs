@@ -1,4 +1,4 @@
-use cf_chains::Ethereum;
+use cf_chains::{Chain, Ethereum};
 use ethers::{prelude::abigen, types::Bloom};
 use sp_core::{H160, H256};
 use tracing::{info, trace};
@@ -42,10 +42,12 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		ProcessingFut: Future<Output = ()> + Send + 'static,
 	{
 		self.then::<Result<Bloom>, _, _>(move |epoch, header| {
+			assert!(<Inner::Chain as Chain>::is_block_witness_root(header.index));
+
 			let process_call = process_call.clone();
 			let eth_rpc = eth_rpc.clone();
 			async move {
-				for event in events_at_block::<StateChainGatewayEvents, _>(
+				for event in events_at_block::<Inner::Chain, StateChainGatewayEvents, _>(
 					header,
 					contract_address,
 					&eth_rpc,

@@ -11,7 +11,9 @@ use cf_chains::{
 	dot::PolkadotAccountId,
 	AnyChain, CcmChannelMetadata, CcmDepositMetadata, Ethereum,
 };
-use cf_primitives::{Asset, AssetAmount, BasisPoints, ForeignChain, NetworkEnvironment};
+use cf_primitives::{
+	Asset, AssetAmount, BasisPoints, Beneficiary, ForeignChain, NetworkEnvironment,
+};
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::{
@@ -23,6 +25,7 @@ use cf_traits::{
 };
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
+	testing_prelude::bounded_vec,
 	traits::{Hooks, OriginTrait},
 };
 use itertools::Itertools;
@@ -117,8 +120,7 @@ fn insert_swaps(swaps: &[Swap]) {
 				swap.to,
 				swap.amount,
 				destination_address.clone(),
-				broker_id as u64,
-				2,
+				bounded_vec![Beneficiary { account: broker_id as u64, bps: 2 }],
 				1,
 			);
 		}
@@ -148,14 +150,15 @@ fn assert_swaps_queue_is_empty() {
 #[test]
 fn request_swap_success_with_valid_parameters() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Swapping::request_swap_deposit_address(
+		assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			Asset::Usdc,
 			EncodedAddress::Eth(Default::default()),
 			0,
 			None,
-			0
+			0,
+			Default::default(),
 		));
 	});
 }
@@ -194,6 +197,8 @@ fn process_all_swaps() {
 fn expect_earned_fees_to_be_recorded() {
 	new_test_ext().execute_with(|| {
 		const ALICE: u64 = 2_u64;
+		const BOB: u64 = 3_u64;
+
 		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
 			ForeignChainAddress::Eth([2; 20].into()),
 			Default::default(),
@@ -201,8 +206,7 @@ fn expect_earned_fees_to_be_recorded() {
 			Asset::Usdc,
 			100,
 			ForeignChainAddress::Eth([2; 20].into()),
-			ALICE,
-			200,
+			bounded_vec![Beneficiary { account: ALICE, bps: 200 }],
 			1,
 		);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 2);
@@ -213,11 +217,25 @@ fn expect_earned_fees_to_be_recorded() {
 			Asset::Usdc,
 			100,
 			ForeignChainAddress::Eth([2; 20].into()),
-			ALICE,
-			200,
+			bounded_vec![Beneficiary { account: ALICE, bps: 200 }],
 			1,
 		);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 4);
+		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
+			ForeignChainAddress::Eth([2; 20].into()),
+			Default::default(),
+			Asset::Eth,
+			Asset::Usdc,
+			100,
+			ForeignChainAddress::Eth([2; 20].into()),
+			bounded_vec![
+				Beneficiary { account: ALICE, bps: 200 },
+				Beneficiary { account: BOB, bps: 200 }
+			],
+			1,
+		);
+		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Eth), 2);
+		assert_eq!(EarnedBrokerFees::<Test>::get(BOB, cf_primitives::Asset::Eth), 2);
 	});
 }
 
@@ -233,8 +251,7 @@ fn cannot_swap_with_incorrect_destination_address_type() {
 			Asset::Dot,
 			10,
 			ForeignChainAddress::Eth([2; 20].into()),
-			ALICE,
-			2,
+			bounded_vec![Beneficiary { account: ALICE, bps: 2 }],
 			1,
 		);
 
@@ -247,14 +264,15 @@ fn expect_swap_id_to_be_emitted() {
 	new_test_ext()
 		.execute_with(|| {
 			// 1. Request a deposit address -> SwapDepositAddressReady
-			assert_ok!(Swapping::request_swap_deposit_address(
+			assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
 				RuntimeOrigin::signed(ALICE),
 				Asset::Eth,
 				Asset::Usdc,
 				EncodedAddress::Eth(Default::default()),
 				0,
 				None,
-				0
+				0,
+				Default::default(),
 			));
 
 			const AMOUNT: AssetAmount = 500;
@@ -266,8 +284,7 @@ fn expect_swap_id_to_be_emitted() {
 				Asset::Usdc,
 				AMOUNT,
 				ForeignChainAddress::Eth(Default::default()),
-				ALICE,
-				0,
+				bounded_vec![],
 				1,
 			);
 			// 3. Process swaps -> SwapExecuted, SwapEgressScheduled
@@ -294,7 +311,6 @@ fn expect_swap_id_to_be_emitted() {
 						deposit_block_height: 0
 					},
 					swap_type: SwapType::Swap(ForeignChainAddress::Eth(..)),
-					broker_commission: _,
 					..
 				})
 			);
@@ -370,6 +386,7 @@ fn can_swap_using_witness_origin() {
 			origin: SwapOrigin::Vault { tx_hash: Default::default() },
 			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
 			broker_commission: None,
+			broker_fee: None,
 			execute_at: 3,
 		}));
 	});
@@ -441,27 +458,29 @@ fn rejects_invalid_swap_deposit() {
 		let ccm = generate_ccm_channel();
 
 		assert_noop!(
-			Swapping::request_swap_deposit_address(
+			Swapping::request_swap_deposit_address_with_affiliates(
 				RuntimeOrigin::signed(ALICE),
 				Asset::Btc,
 				Asset::Eth,
 				EncodedAddress::Dot(Default::default()),
 				0,
 				Some(ccm.clone()),
-				0
+				0,
+				Default::default(),
 			),
 			Error::<Test>::IncompatibleAssetAndAddress
 		);
 
 		assert_noop!(
-			Swapping::request_swap_deposit_address(
+			Swapping::request_swap_deposit_address_with_affiliates(
 				RuntimeOrigin::signed(ALICE),
 				Asset::Eth,
 				Asset::Dot,
 				EncodedAddress::Dot(Default::default()),
 				0,
 				Some(ccm),
-				0
+				0,
+				Default::default(),
 			),
 			Error::<Test>::CcmUnsupportedForTargetChain
 		);
@@ -518,14 +537,15 @@ fn can_process_ccms_via_swap_deposit_address() {
 		let ccm = generate_ccm_deposit();
 
 		// Can process CCM via Swap deposit
-		assert_ok!(Swapping::request_swap_deposit_address(
+		assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Dot,
 			Asset::Eth,
 			EncodedAddress::Eth(Default::default()),
 			0,
 			Some(request_ccm),
-			0
+			0,
+			Default::default(),
 		));
 		assert_ok!(Swapping::on_ccm_deposit(
 			Asset::Dot,
@@ -924,6 +944,7 @@ fn swap_by_witnesser_happy_path() {
 			origin: SwapOrigin::Vault { tx_hash: Default::default() },
 			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
 			broker_commission: None,
+			broker_fee: None,
 			execute_at,
 		}));
 
@@ -946,8 +967,7 @@ fn swap_by_deposit_happy_path() {
 			to,
 			amount,
 			ForeignChainAddress::Eth(Default::default()),
-			Default::default(),
-			Default::default(),
+			bounded_vec![],
 			1,
 		);
 
@@ -977,6 +997,7 @@ fn swap_by_deposit_happy_path() {
 			},
 			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
 			broker_commission: Some(0),
+			broker_fee: Some(0),
 			execute_at,
 		}));
 
@@ -1403,8 +1424,7 @@ fn can_handle_swaps_with_zero_outputs() {
 				Asset::Eth,
 				100,
 				eth_address.clone(),
-				Default::default(),
-				0,
+				bounded_vec![],
 				0,
 			);
 			Swapping::schedule_swap_from_channel(
@@ -1414,8 +1434,7 @@ fn can_handle_swaps_with_zero_outputs() {
 				Asset::Eth,
 				1,
 				eth_address,
-				Default::default(),
-				0,
+				bounded_vec![],
 				0,
 			);
 
@@ -1495,7 +1514,7 @@ fn swap_excess_are_confiscated_ccm_via_deposit() {
 		set_maximum_swap_amount(from, Some(max_swap));
 
 		// Register CCM via Swap deposit
-		assert_ok!(Swapping::request_swap_deposit_address(
+		assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
 			RuntimeOrigin::signed(ALICE),
 			from,
 			to,
@@ -1503,6 +1522,7 @@ fn swap_excess_are_confiscated_ccm_via_deposit() {
 			0,
 			Some(request_ccm),
 			0,
+			Default::default(),
 		));
 
 		assert_ok!(Swapping::on_ccm_deposit(
@@ -1693,8 +1713,7 @@ fn swap_excess_are_confiscated_for_swap_via_deposit() {
 			to,
 			amount,
 			ForeignChainAddress::Eth(Default::default()),
-			ALICE,
-			0,
+			bounded_vec![],
 			0,
 		);
 
@@ -1898,8 +1917,7 @@ fn swap_with_custom_broker_fee(
 		to,
 		amount,
 		ForeignChainAddress::Eth([2; 20].into()),
-		ALICE,
-		broker_fee,
+		bounded_vec![Beneficiary { account: ALICE, bps: broker_fee }],
 		1,
 	);
 }
@@ -1953,6 +1971,7 @@ fn assert_swap_scheduled_event_emitted(
 		},
 		swap_type: SwapType::Swap(ForeignChainAddress::Eth([2; 20].into())),
 		broker_commission: Some(broker_commission),
+		broker_fee: Some(broker_commission),
 		execute_at,
 	}));
 }
@@ -1993,7 +2012,7 @@ fn swap_broker_fee_subtracted_from_swap_amount() {
 fn broker_bps_is_limited() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			Swapping::request_swap_deposit_address(
+			Swapping::request_swap_deposit_address_with_affiliates(
 				RuntimeOrigin::signed(ALICE),
 				Asset::Eth,
 				Asset::Usdc,
@@ -2001,6 +2020,7 @@ fn broker_bps_is_limited() {
 				1001,
 				None,
 				0,
+				Default::default(),
 			),
 			Error::<Test>::BrokerCommissionBpsTooHigh
 		);
@@ -2132,14 +2152,15 @@ fn swaps_get_retried_on_next_block_after_failure() {
 fn deposit_address_ready_event_contain_correct_boost_fee_value() {
 	new_test_ext().execute_with(|| {
 		const BOOST_FEE: u16 = 100;
-		assert_ok!(Swapping::request_swap_deposit_address(
+		assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			Asset::Usdc,
 			EncodedAddress::Eth(Default::default()),
 			0,
 			None,
-			BOOST_FEE
+			BOOST_FEE,
+			Default::default(),
 		));
 		assert_event_sequence!(
 			Test,

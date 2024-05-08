@@ -4,7 +4,7 @@ import * as toml from 'toml';
 import path from 'path';
 import { SemVerLevel, bumpReleaseVersion } from './bump_release_version';
 import { simpleRuntimeUpgrade } from './simple_runtime_upgrade';
-import { compareSemVer, getChainflipApi, sleep } from './utils';
+import { compareSemVer, sleep } from './utils';
 import { bumpSpecVersionAgainstNetwork } from './utils/spec_version';
 import { compileBinaries } from './utils/compile_binaries';
 import { submitRuntimeUpgradeWithRestrictions } from './submit_runtime_upgrade';
@@ -54,16 +54,18 @@ async function incompatibleUpgradeNoBuild(
   numberOfNodes: 1 | 3,
   newVersion: string,
 ) {
-  const chainflip = await getChainflipApi();
-
   const SELECTED_NODES = numberOfNodes === 1 ? 'bashful' : 'bashful doc dopey';
+
+  // We need to kill the engine process before starting the new engine (engine-runner)
+  // Since the new engine contains the old one.
+  execSync(`kill $(ps aux | grep chainflip-engine | grep -v grep | awk '{print $2}')`);
 
   console.log('Starting all the engines');
 
   const nodeCount = numberOfNodes + '-node';
   execWithLog(`${localnetInitPath}/scripts/start-all-engines.sh`, 'start-all-engines-pre-upgrade', {
     INIT_RUN: 'false',
-    LOG_SUFFIX: '-upgrade',
+    LOG_SUFFIX: '-pre-upgrade',
     NODE_COUNT: nodeCount,
     SELECTED_NODES,
     LOCALNET_INIT_DIR: localnetInitPath,
@@ -80,12 +82,16 @@ async function incompatibleUpgradeNoBuild(
     'Check that the old engine has now shut down, and that the new engine is now running.',
   );
 
+  // TODO: add some tests here. After this point. If the upgrade doesn't work.
+  // but below, we effectively restart the engine before running any tests it's possible that
+  // we don't catch the error here.
+
   // Ensure the runtime upgrade is finalised.
   await sleep(10000);
 
   // We're going to take down the node, so we don't want them to be suspended.
-  await submitGovernanceExtrinsic(
-    chainflip.tx.reputation.setPenalty('MissedAuthorshipSlot', {
+  await submitGovernanceExtrinsic((api) =>
+    api.tx.reputation.setPenalty('MissedAuthorshipSlot', {
       reputation: 100,
       suspension: 0,
     }),
@@ -121,8 +127,8 @@ async function incompatibleUpgradeNoBuild(
   await sleep(20000);
 
   // Set missed authorship suspension back to 100/150 after nodes back up.
-  await submitGovernanceExtrinsic(
-    chainflip.tx.reputation.setPenalty('MissedAuthorshipSlot', {
+  await submitGovernanceExtrinsic((api) =>
+    api.tx.reputation.setPenalty('MissedAuthorshipSlot', {
       reputation: 100,
       suspension: 150,
     }),
@@ -137,7 +143,7 @@ async function incompatibleUpgradeNoBuild(
     'start-all-engines-post-upgrade',
     {
       INIT_RUN: 'false',
-      LOG_SUFFIX: '-upgrade',
+      LOG_SUFFIX: '-post-upgrade',
       NODE_COUNT: nodeCount,
       SELECTED_NODES,
       LOCALNET_INIT_DIR: localnetInitPath,
@@ -290,27 +296,19 @@ export async function upgradeNetworkPrebuilt(
     cleanOldVersion = oldVersion.match(versionRegex)[0];
   }
 
-  const cfeBinaryVersion = execSync(`${binariesPath}/chainflip-engine --version`).toString();
-  const cfeVersion = cfeBinaryVersion.match(versionRegex)[0];
-  console.log("CFE version we're upgrading to: " + cfeVersion);
-
   const nodeBinaryVersion = execSync(`${binariesPath}/chainflip-node --version`).toString();
   const nodeVersion = nodeBinaryVersion.match(versionRegex)[0];
   console.log("Node version we're upgrading to: " + nodeVersion);
 
-  if (cfeVersion !== nodeVersion) {
-    throw new Error(
-      "The CFE version and the node version don't match. Ensure you selected the correct binaries.",
-    );
-  }
-
-  if (compareSemVer(cleanOldVersion, cfeVersion) === 'greater') {
+  // We use nodeVersion as a proxy for the cfe version since they are updated together.
+  // And getting the cfe version involves ensuring the dylib is available.
+  if (compareSemVer(cleanOldVersion, nodeVersion) === 'greater') {
     throw new Error(
       "The version we're upgrading to is older than the version we're upgrading from. Ensure you selected the correct binaries.",
     );
   }
 
-  const isCompatible = isCompatibleWith(cleanOldVersion, cfeVersion);
+  const isCompatible = isCompatibleWith(cleanOldVersion, nodeVersion);
 
   if (!isCompatible) {
     console.log('The versions are incompatible.');

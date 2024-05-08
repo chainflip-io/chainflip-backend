@@ -5,9 +5,8 @@ import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { provideLiquidity } from '../shared/provide_liquidity';
 import { getChainflipApi, observeEvent, runWithTimeout } from '../shared/utils';
 
-const chainflip = await getChainflipApi();
-
 async function queryUtxos(): Promise<{ amount: number; count: number }> {
+  await using chainflip = await getChainflipApi();
   const utxos: [{ amount: number }] = (
     await chainflip.query.environment.bitcoinAvailableUtxos()
   ).toJSON();
@@ -20,6 +19,7 @@ async function queryUtxos(): Promise<{ amount: number; count: number }> {
 
 async function test() {
   console.log('=== Testing BTC UTXO Consolidation ===');
+  await using chainflip = await getChainflipApi();
   const initialUtxos = await queryUtxos();
 
   console.log(`Initial utxo count: ${initialUtxos.count}`);
@@ -29,8 +29,8 @@ async function test() {
   }
 
   // Reset consolidation parameters to ensure consolidation doesn't trigger immediately:
-  await submitGovernanceExtrinsic(
-    chainflip.tx.environment.updateConsolidationParameters({
+  await submitGovernanceExtrinsic((api) =>
+    api.tx.environment.updateConsolidationParameters({
       consolidationSize: 100,
       consolidationThreshold: 200,
     }),
@@ -60,8 +60,8 @@ async function test() {
 
   // We should have exactly consolidationThreshold utxos,
   // so this should trigger consolidation:
-  await submitGovernanceExtrinsic(
-    chainflip.tx.environment.updateConsolidationParameters({
+  await submitGovernanceExtrinsic((api) =>
+    api.tx.environment.updateConsolidationParameters({
       consolidationSize,
       consolidationThreshold,
     }),
@@ -103,8 +103,8 @@ async function test() {
   );
 
   // Clean up after the test to minimise conflicts with any other tests
-  await submitGovernanceExtrinsic(
-    chainflip.tx.environment.updateConsolidationParameters({
+  await submitGovernanceExtrinsic((api) =>
+    api.tx.environment.updateConsolidationParameters({
       consolidationSize: 100,
       consolidationThreshold: 200,
     }),

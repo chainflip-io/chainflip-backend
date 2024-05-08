@@ -40,7 +40,7 @@ use core::ops::Range;
 use frame_support::instances::*;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_ingress_egress::{ChannelAction, DepositWitness, TargetChainAsset};
+use pallet_cf_ingress_egress::{ChannelAction, DepositWitness, OwedAmount, TargetChainAsset};
 use pallet_cf_pools::{
 	AskBidMap, AssetPair, PoolLiquidity, PoolOrderbook, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
@@ -1741,7 +1741,7 @@ impl_runtime_apis! {
 
 					BoostPoolDepth {
 						asset: asset.into(),
-						tier: tier as u16,
+						tier,
 						available_amount: pool.get_available_amount().into()
 					}
 
@@ -1767,13 +1767,13 @@ impl_runtime_apis! {
 
 				pallet_cf_ingress_egress::BoostPools::<Runtime, I>::iter_prefix(asset).map(|(tier, pool)| {
 					(
-						tier as u16,
+						tier,
 						BoostPoolDetails {
 							available_amounts: pool.get_amounts().into_iter().map(|(id, amount)| (id, amount.into())).collect(),
 							pending_boosts: pool.get_pending_boosts().into_iter().map(|(deposit_id, owed_amounts)| {
 								(
 									deposit_id,
-									owed_amounts.into_iter().map(|(id, amount)| (id, amount.into())).collect()
+									owed_amounts.into_iter().map(|(id, amount)| (id, OwedAmount {total: amount.total.into(), fee: amount.fee.into()})).collect()
 								)
 							}).collect(),
 							pending_withdrawals: pool.get_pending_withdrawals().clone(),
