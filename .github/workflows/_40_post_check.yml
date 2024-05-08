@@ -153,6 +153,11 @@ jobs:
         continue-on-error: true
         run: ls -alR /tmp/chainflip
 
+      - name: List /tmp/solana 📂
+        if: always()
+        continue-on-error: true
+        run: ls -alR /tmp/solana
+
       - name: Show logs from docker containers 🐳🕵️‍♂️
         if: always()
         continue-on-error: true
