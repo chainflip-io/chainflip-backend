@@ -137,7 +137,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(8);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(9);
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
 #[scale_info(skip_type_params(I))]
