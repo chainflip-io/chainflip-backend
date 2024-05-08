@@ -27,7 +27,7 @@ else
   additional_docker_compose_down_args="--volumes --remove-orphans"
 fi
 echo "🔧 Setting up Localnet Manager"
-echo "🕵🏻‍♂️ For full debug log, check /tmp/chainflip/debug.log"
+echo "🕵🏻‍♂️ For full debug log, check $DEBUG_OUTPUT_DESTINATION"
 setup() {
   echo "🤗 Welcome to Localnet manager"
   sleep 2
