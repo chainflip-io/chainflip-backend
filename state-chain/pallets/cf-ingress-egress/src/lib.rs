@@ -1801,37 +1801,26 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Self::accrue_withheld_fee(asset, sp_std::cmp::min(fee_estimate, available_amount));
 			available_amount.saturating_sub(fee_estimate)
 		} else {
-			// In case of an none-gas asset, we need to use the simulation amount. If the simulation
-			// amount is not available, we use the available amount.
-			let simulation_amount = if let Some(simulation_amount) =
-				get_simulation_amount(asset.into())
-			{
-				simulation_amount
-			} else {
-				log::warn!("No simulation amount available for {asset:?}. Using available amount.");
-				available_amount.into()
-			};
-
 			let transaction_fee = T::AssetConverter::calculate_asset_conversion(
 				asset,
-				simulation_amount,
+				available_amount,
 				<T::TargetChain as Chain>::GAS_ASSET,
-				fee_estimate.into(),
+				fee_estimate,
 			)
 			.unwrap_or_else(|| {
 				log::warn!("Unable to convert input to gas for input of {available_amount:?} ${asset:?}. Ignoring ingress egress fees.");
-				<T::TargetChain as Chain>::ChainAmount::zero().into()
+				<T::TargetChain as Chain>::ChainAmount::zero()
 			});
 
 			if !transaction_fee.is_zero() {
 				T::SwapQueueApi::schedule_swap(
 					asset.into(),
 					<T::TargetChain as Chain>::GAS_ASSET.into(),
-					transaction_fee,
+					transaction_fee.into(),
 					SwapType::IngressEgressFee,
 				);
 			}
-			available_amount.saturating_sub(transaction_fee.unique_saturated_into())
+			available_amount.saturating_sub(transaction_fee)
 		};
 
 		AmountAndFeesWithheld::<T, I> {
@@ -2004,16 +1993,5 @@ impl<T: Config<I>, I: 'static> IngressEgressFeeApi<T::TargetChain> for Pallet<T,
 				tracker.register_transfer(fee);
 			});
 		}
-	}
-}
-
-/// Returns an amount for an none-gas asset we use for transaction fee estimation.
-pub fn get_simulation_amount(asset: Asset) -> Option<u128> {
-	match asset {
-		Asset::Flip => Some(5_000_000_000_000_000_000),
-		Asset::Usdc => Some(10_000_000),
-		Asset::Usdt => Some(10_000_000),
-		Asset::ArbUsdc => Some(10_000_000),
-		_ => None,
 	}
 }

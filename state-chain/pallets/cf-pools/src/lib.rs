@@ -2017,14 +2017,15 @@ impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
 			return Some(available_input_amount.min(desired_output_amount))
 		}
 
+		let estimation_amount = utilities::fee_estimation_cap(input_asset)
+			.defensive_proof(
+				"Fee estimation cap not available. Please report this to Chainflip Labs.",
+			)?
+			.min(available_input_amount.into());
+
 		let available_output_amount = with_transaction_unchecked(|| {
 			TransactionOutcome::Rollback(
-				Self::swap_with_network_fee(
-					input_asset,
-					output_asset,
-					available_input_amount.into(),
-				)
-				.ok(),
+				Self::swap_with_network_fee(input_asset, output_asset, estimation_amount).ok(),
 			)
 		})?
 		.output;
@@ -2034,7 +2035,7 @@ impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
 		} else {
 			let input_amount_to_convert = multiply_by_rational_with_rounding(
 				desired_output_amount.into(),
-				available_input_amount.into(),
+				estimation_amount,
 				available_output_amount,
 				sp_arithmetic::Rounding::Down,
 			)
@@ -2056,5 +2057,40 @@ pub mod utilities {
 	) -> (AssetAmount, AssetAmount) {
 		let fee = fee_percentage * input;
 		(input - fee, fee)
+	}
+
+	/// The maximum amount of a non-gas asset to be used for transaction fee estimation.
+	///
+	/// We need this cap so that we don't exhaust pool liquidity during estimation.
+	///
+	/// The value should be large enough to allow a good estimation of the fee, but small enough
+	/// to not exhaust the pool liquidity.
+	///
+	/// ```
+	/// use pallet_cf_pools::utilities::fee_estimation_cap;
+	/// use cf_primitives::Asset;
+	///
+	/// for asset in Asset::all() {
+	///     if !asset.is_gas_asset() {
+	///         assert!(
+	///             fee_estimation_cap(asset).is_some(),
+	///             "No fee estimation cap defined for {:?}. Add one to the fee_estimation_cap function definition.",
+	///             asset,
+	///         );
+	///     }
+	/// }
+	/// ```
+	pub fn fee_estimation_cap(asset: Asset) -> Option<u128> {
+		use cf_primitives::FLIPPERINOS_PER_FLIP;
+		/// 20 Dollars.
+		const USD_ESTIMATION_CAP: u128 = 20_000_000;
+
+		match asset {
+			Asset::Flip => Some(10 * FLIPPERINOS_PER_FLIP),
+			Asset::Usdc => Some(USD_ESTIMATION_CAP),
+			Asset::Usdt => Some(USD_ESTIMATION_CAP),
+			Asset::ArbUsdc => Some(USD_ESTIMATION_CAP),
+			_ => None,
+		}
 	}
 }

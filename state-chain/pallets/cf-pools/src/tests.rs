@@ -1018,6 +1018,7 @@ fn can_get_all_pool_orders() {
 #[test]
 fn asset_conversion() {
 	new_test_ext().execute_with(|| {
+		const AVAILABLE_LIQUIDITY: AssetAmount = 100_000_000_000_000_000;
 		// Create pools
 		for asset in [Asset::Eth, Asset::Flip] {
 			assert_ok!(LiquidityPools::new_pool(
@@ -1033,7 +1034,7 @@ fn asset_conversion() {
 				STABLE_ASSET,
 				0,
 				Some(-100..100),
-				RangeOrderSize::Liquidity { liquidity: 100_000_000_000_000_000 },
+				RangeOrderSize::Liquidity { liquidity: AVAILABLE_LIQUIDITY },
 			));
 		}
 
@@ -1073,6 +1074,18 @@ fn asset_conversion() {
 				DESIRED,
 				Asset::Eth,
 				DESIRED * 2
+			),
+			Some(DESIRED)
+		);
+
+		// Input amount is capped: it's possible to estimate even if the available input exceeds
+		// available liquidity.
+		assert_eq!(
+			LiquidityPools::calculate_asset_conversion(
+				Asset::Eth,
+				AVAILABLE_LIQUIDITY * 2,
+				Asset::Eth,
+				DESIRED
 			),
 			Some(DESIRED)
 		);
