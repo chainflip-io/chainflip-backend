@@ -808,6 +808,58 @@ pub fn generate_address(
 	.finish()
 }
 
+#[allow(dead_code)]
+pub fn get_associated_token_account(wallet_address: Pubkey, mint_pubkey: Pubkey) -> (Pubkey, u8) {
+	// PublicKey.findProgramAddressSync(
+	// 	[
+	// 		walletAddress.toBuffer(),
+	// 		TOKEN_PROGRAM_ID.toBuffer(),
+	// 		tokenMintAddress.toBuffer(),
+	// 	],
+	// 	SPL_ASSOCIATED_TOKEN_ACCOUNT_PROGRAM_ID
+	// )[0];
+
+	let spl_associated_token_program_id =
+		SolAddress::from_str(ASSOCIATED_TOKEN_PROGRAM_ID).unwrap();
+
+	let token_program_id = SolAddress::from_str(TOKEN_PROGRAM_ID).unwrap();
+
+	let (address, bump) =
+		crate::sol::DerivedAddressBuilder::from_address(spl_associated_token_program_id)
+			.expect("derive")
+			.chain_seed(SolAddress::from(wallet_address))
+			.expect("chain-seed")
+			.chain_seed(token_program_id)
+			.expect("chain-seed")
+			.chain_seed(SolAddress::from(mint_pubkey))
+			.expect("chain-seed")
+			.finish()
+			.expect("finish");
+	(Pubkey::from(address), bump)
+}
+
+#[test]
+fn derive_associated_token_account_on_curve() {
+	let wallet_address = Pubkey::from_str("HfasueN6RNPjSM6rKGH5dga6kS2oUF8siGH3m4MXPURp").unwrap();
+
+	let mint_pubkey = Pubkey::from_str(sol_test_values::MINT_PUB_KEY).unwrap();
+
+	let (pda, _) = get_associated_token_account(wallet_address, mint_pubkey);
+
+	assert_eq!(pda, "BeRexE9vZSdQMNg65PAnhy3rRPUxF6oWsxyNegYxySZD".parse().expect("public key"));
+}
+
+#[test]
+fn derive_associated_token_account_off_curve() {
+	let pda_address = Pubkey::from_str("9j17hjg8wR2uFxJAJDAFahwsgTCNx35sc5qXSxDmuuF6").unwrap();
+
+	let mint_pubkey = Pubkey::from_str(sol_test_values::MINT_PUB_KEY).unwrap();
+
+	let (pda, _) = get_associated_token_account(pda_address, mint_pubkey);
+
+	assert_eq!(pda, "DUjCLckPi4g7QAwBEwuFL1whpgY6L9fxwXnqbWvS2pcW".parse().expect("public key"));
+}
+
 /// Derive deposit channels from the `channel_id` and our `VAULT_PROGRAM` account.
 #[cfg(test)]
 pub fn generate_deposit_channel(channel_id: u64) -> DepositChannel<Solana> {

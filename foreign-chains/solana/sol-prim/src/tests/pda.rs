@@ -56,7 +56,6 @@ mod failures {
 
 mod happy {
 	use super::*;
-
 	fn run_single(public_key: &str, seeds: &[&str], expected_pda: &str) {
 		let public_key: Address = public_key.parse().expect("public-key");
 		let expected_pda: Address = expected_pda.parse().expect("expected-pda");
@@ -192,68 +191,5 @@ mod happy {
 			"6PkQHEp18NgEDS5ydkgivU4pzTV6sYmoEaHvbbv4un73".parse().expect("public key")
 		);
 		assert_eq!(bump, 255);
-	}
-
-	fn get_associated_token_account(
-		wallet_address: Address,
-		mint_pubkey: Address,
-	) -> (Address, u8) {
-		// PublicKey.findProgramAddressSync(
-		// 	[
-		// 		walletAddress.toBuffer(),
-		// 		TOKEN_PROGRAM_ID.toBuffer(),
-		// 		tokenMintAddress.toBuffer(),
-		// 	],
-		// 	SPL_ASSOCIATED_TOKEN_ACCOUNT_PROGRAM_ID
-		// )[0];
-
-		let spl_associated_token_program_id: Address =
-			"ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL".parse().expect("public key");
-
-		let token_program_id: Address =
-			"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA".parse().expect("public key");
-
-		Pda::from_address(spl_associated_token_program_id)
-			.expect("derive")
-			.chain_seed(wallet_address.0)
-			.expect("chain-seed")
-			.chain_seed(token_program_id.0)
-			.expect("chain-seed")
-			.chain_seed(mint_pubkey.0)
-			.expect("chain-seed")
-			.finish()
-			.expect("finish")
-	}
-
-	#[test]
-	fn derive_associated_token_account_on_curve() {
-		let wallet_address: Address =
-			"HfasueN6RNPjSM6rKGH5dga6kS2oUF8siGH3m4MXPURp".parse().expect("public key");
-
-		let mint_pubkey: Address =
-			"24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p".parse().expect("public key");
-
-		let (pda, _) = get_associated_token_account(wallet_address, mint_pubkey);
-
-		assert_eq!(
-			pda,
-			"BeRexE9vZSdQMNg65PAnhy3rRPUxF6oWsxyNegYxySZD".parse().expect("public key")
-		);
-	}
-
-	#[test]
-	fn derive_associated_token_account_off_curve() {
-		let pda_address: Address =
-			"9j17hjg8wR2uFxJAJDAFahwsgTCNx35sc5qXSxDmuuF6".parse().expect("public key");
-
-		let mint_pubkey: Address =
-			"24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p".parse().expect("public key");
-
-		let (pda, _) = get_associated_token_account(pda_address, mint_pubkey);
-
-		assert_eq!(
-			pda,
-			"DUjCLckPi4g7QAwBEwuFL1whpgY6L9fxwXnqbWvS2pcW".parse().expect("public key")
-		);
 	}
 }
