@@ -1,3 +1,4 @@
+#[cfg(feature = "runtime-benchmarks")]
 use cf_primitives::chains::assets::sol;
 #[cfg(feature = "runtime-benchmarks")]
 use cf_primitives::{

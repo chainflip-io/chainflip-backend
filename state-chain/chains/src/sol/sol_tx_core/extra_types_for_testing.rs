@@ -1,4 +1,4 @@
-use super::sol_tx_building_blocks::{Pubkey, Signature};
+use crate::sol::{SolPubkey, SolSignature};
 use ed25519_dalek::Signer as DalekSigner;
 use rand0_7::{rngs::OsRng, CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -75,21 +75,22 @@ impl Keypair {
 		})
 	}
 }
+
 impl Signer for Keypair {
 	#[inline]
-	fn pubkey(&self) -> Pubkey {
-		Pubkey::from(self.0.public.to_bytes())
+	fn pubkey(&self) -> SolPubkey {
+		SolPubkey::from(self.0.public.to_bytes())
 	}
 
-	fn try_pubkey(&self) -> Result<Pubkey, SignerError> {
+	fn try_pubkey(&self) -> Result<SolPubkey, SignerError> {
 		Ok(self.pubkey())
 	}
 
-	fn sign_message(&self, message: &[u8]) -> Signature {
-		Signature::from(self.0.sign(message).to_bytes())
+	fn sign_message(&self, message: &[u8]) -> SolSignature {
+		SolSignature::from(self.0.sign(message).to_bytes())
 	}
 
-	fn try_sign_message(&self, message: &[u8]) -> Result<Signature, SignerError> {
+	fn try_sign_message(&self, message: &[u8]) -> Result<SolSignature, SignerError> {
 		Ok(self.sign_message(message))
 	}
 
@@ -103,29 +104,29 @@ impl Signer for Keypair {
 /// `Transaction` signing interfaces
 pub trait Signer {
 	/// Infallibly gets the implementor's public key. Returns the all-zeros
-	/// `Pubkey` if the implementor has none.
-	fn pubkey(&self) -> Pubkey {
+	/// `SolPubkey` if the implementor has none.
+	fn pubkey(&self) -> SolPubkey {
 		self.try_pubkey().unwrap_or_default()
 	}
 	/// Fallibly gets the implementor's public key
-	fn try_pubkey(&self) -> Result<Pubkey, SignerError>;
+	fn try_pubkey(&self) -> Result<SolPubkey, SignerError>;
 	/// Infallibly produces an Ed25519 signature over the provided `message`
 	/// bytes. Returns the all-zeros `Signature` if signing is not possible.
-	fn sign_message(&self, message: &[u8]) -> Signature {
+	fn sign_message(&self, message: &[u8]) -> SolSignature {
 		self.try_sign_message(message).unwrap_or_default()
 	}
 	/// Fallibly produces an Ed25519 signature over the provided `message` bytes.
-	fn try_sign_message(&self, message: &[u8]) -> Result<Signature, SignerError>;
+	fn try_sign_message(&self, message: &[u8]) -> Result<SolSignature, SignerError>;
 	/// Whether the implementation requires user interaction to sign
 	fn is_interactive(&self) -> bool;
 }
 
 /// Convenience trait for working with mixed collections of `Signer`s
 pub trait Signers {
-	fn pubkeys(&self) -> Vec<Pubkey>;
-	fn try_pubkeys(&self) -> Result<Vec<Pubkey>, SignerError>;
-	fn sign_message(&self, message: &[u8]) -> Vec<Signature>;
-	fn try_sign_message(&self, message: &[u8]) -> Result<Vec<Signature>, SignerError>;
+	fn pubkeys(&self) -> Vec<SolPubkey>;
+	fn try_pubkeys(&self) -> Result<Vec<SolPubkey>, SignerError>;
+	fn sign_message(&self, message: &[u8]) -> Vec<SolSignature>;
+	fn try_sign_message(&self, message: &[u8]) -> Result<Vec<SolSignature>, SignerError>;
 	fn is_interactive(&self) -> bool;
 }
 
@@ -175,8 +176,9 @@ pub enum TransactionError {
 	#[error("Account in use")]
 	AccountInUse,
 
-	/// A `Pubkey` appears twice in the transaction's `account_keys`.  Instructions can reference
-	/// `Pubkey`s more than once but the message must contain a list with no duplicate keys
+	/// A `SolPubkey` appears twice in the transaction's `account_keys`.  Instructions can
+	/// reference `SolPubkey`s more than once but the message must contain a list with no duplicate
+	/// keys
 	#[error("Account loaded twice")]
 	AccountLoadedTwice,
 
@@ -188,7 +190,7 @@ pub enum TransactionError {
 	#[error("Attempt to load a program that does not exist")]
 	ProgramAccountNotFound,
 
-	/// The from `Pubkey` does not have sufficient balance to pay the fee to schedule the
+	/// The from `SolPubkey` does not have sufficient balance to pay the fee to schedule the
 	/// transaction
 	#[error("Insufficient funds for fee")]
 	InsufficientFundsForFee,
@@ -574,11 +576,11 @@ pub enum InstructionError {
 
 macro_rules! default_keypairs_impl {
 	() => {
-		fn pubkeys(&self) -> Vec<Pubkey> {
+		fn pubkeys(&self) -> Vec<SolPubkey> {
 			self.iter().map(|keypair| keypair.pubkey()).collect()
 		}
 
-		fn try_pubkeys(&self) -> Result<Vec<Pubkey>, SignerError> {
+		fn try_pubkeys(&self) -> Result<Vec<SolPubkey>, SignerError> {
 			let mut pubkeys = Vec::new();
 			for keypair in self.iter() {
 				pubkeys.push(keypair.try_pubkey()?);
@@ -586,11 +588,11 @@ macro_rules! default_keypairs_impl {
 			Ok(pubkeys)
 		}
 
-		fn sign_message(&self, message: &[u8]) -> Vec<Signature> {
+		fn sign_message(&self, message: &[u8]) -> Vec<SolSignature> {
 			self.iter().map(|keypair| keypair.sign_message(message)).collect()
 		}
 
-		fn try_sign_message(&self, message: &[u8]) -> Result<Vec<Signature>, SignerError> {
+		fn try_sign_message(&self, message: &[u8]) -> Result<Vec<SolSignature>, SignerError> {
 			let mut signatures = Vec::new();
 			for keypair in self.iter() {
 				signatures.push(keypair.try_sign_message(message)?);
