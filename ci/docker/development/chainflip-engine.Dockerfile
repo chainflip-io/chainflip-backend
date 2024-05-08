@@ -20,8 +20,6 @@ COPY engine-runner /usr/local/bin/chainflip-engine
 COPY old-engine-dylib/libchainflip_engine_v*.so /usr/local/lib/
 COPY libchainflip_engine_v*.so /usr/local/lib/
 
-ENV LD_LIBRARY_PATH=/usr/local/lib
-
 WORKDIR /etc/chainflip
 
 RUN chmod +x /usr/local/bin/chainflip-engine
