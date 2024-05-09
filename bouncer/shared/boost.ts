@@ -1,4 +1,7 @@
 import Keyring from '@polkadot/keyring';
+import { KeyringPair } from '@polkadot/keyring/types';
+import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
+import assert from 'assert';
 import {
   getChainflipApi,
   observeEvent,
@@ -8,18 +11,14 @@ import {
   amountToFineAmount,
   assetDecimals,
   Event,
-  sleep,
   ingressEgressPalletForChain,
   submitChainflipExtrinsic,
   calculateFeeWithBps,
   amountToFineAmountBigInt,
   newAddress,
 } from './utils';
-import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
-import assert from 'assert';
 import { send } from './send';
 import { provideLiquidity } from './provide_liquidity';
-import { KeyringPair } from '@polkadot/keyring/types';
 import { requestNewSwap } from './perform_swap';
 import { createBoostPools } from './setup_boost_pools';
 
@@ -27,6 +26,7 @@ const keyring = new Keyring({ type: 'sr25519' });
 keyring.setSS58Format(2112);
 
 async function lpSubmitExtrinsic(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   extrinsic: any,
   keyringPair: KeyringPair,
   errorOnFail: boolean = true,
@@ -69,7 +69,7 @@ export async function stopBoosting(
   );
   if (!extrinsicResult.dispatchError) {
     console.log('waiting for stop boosting event');
-    return await observeStoppedBoosting;
+    return observeStoppedBoosting;
   }
   console.log('Already stopped boosting');
   return undefined;
@@ -109,7 +109,7 @@ export async function addBoostFunds(
     lp,
   );
 
-  return await observeBoostFundsAdded;
+  return observeBoostFundsAdded;
 }
 
 /// Adds boost funds to the boost pool and does a swap with boosting enabled, then stops boosting and checks the fees collected are correct.
@@ -149,12 +149,12 @@ async function testBoostingForAsset(asset: Asset, boostFee: number, lpUri: strin
   const observeDepositFinalised = observeEvent(
     chainFromAsset(asset).toLowerCase() + 'IngressEgress:DepositFinalised',
     chainflip,
-    (event) => event.data.channelId == swapRequest.channelId.toString(),
+    (event) => event.data.channelId === swapRequest.channelId.toString(),
   );
   const observeSwapBoosted = observeEvent(
     chainFromAsset(asset).toLowerCase() + 'IngressEgress:DepositBoosted',
     chainflip,
-    (event) => event.data.channelId == swapRequest.channelId.toString(),
+    (event) => event.data.channelId === swapRequest.channelId.toString(),
   );
 
   await send(asset, swapRequest.depositAddress, amount.toString());
@@ -164,7 +164,7 @@ async function testBoostingForAsset(asset: Asset, boostFee: number, lpUri: strin
   const depositEvent = await Promise.race([observeSwapBoosted, observeDepositFinalised]);
   if (depositEvent.name.method === 'DepositFinalised') {
     throw new Error('Deposit was finalised without seeing the DepositBoosted event');
-  } else if (depositEvent.name.method != 'DepositBoosted') {
+  } else if (depositEvent.name.method !== 'DepositBoosted') {
     throw new Error(`Unexpected event ${depositEvent.name.method}`);
   }
 

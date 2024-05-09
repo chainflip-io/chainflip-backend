@@ -2,6 +2,7 @@ import * as crypto from 'crypto';
 import { setTimeout as sleep } from 'timers/promises';
 import Client from 'bitcoin-core';
 import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
+import { KeyringPair } from '@polkadot/keyring/types';
 import { Mutex } from 'async-mutex';
 import {
   Chain as SDKChain,
@@ -23,7 +24,6 @@ import { CcmDepositMetadata } from './new_swap';
 import { getCFTesterAbi } from './contract_interfaces';
 import { SwapParams } from './perform_swap';
 import { newSolAddress } from './new_sol_address';
-import { KeyringPair } from '@polkadot/keyring/types';
 
 const cfTesterAbi = await getCFTesterAbi();
 
@@ -132,11 +132,6 @@ export function amountToFineAmount(amount: string, decimals: number | string): s
   return new BigNumber(amount).shiftedBy(Number(decimals)).toFixed();
 }
 
-export function amountToFineAmountBigInt(amount: number | string, asset: Asset): bigint {
-  const stringAmount = typeof amount === 'number' ? amount.toString() : amount;
-  return BigInt(amountToFineAmount(stringAmount, assetDecimals(asset)));
-}
-
 export function fineAmountToAmount(fineAmount: string, decimals: number | string): string {
   return new BigNumber(fineAmount).shiftedBy(-Number(decimals)).toFixed();
 }
@@ -211,6 +206,11 @@ export function getAssetsForChain(chain: Chain): Asset[] {
     default:
       throw new Error(`Unsupported chain: ${chain}`);
   }
+}
+
+export function amountToFineAmountBigInt(amount: number | string, asset: Asset): bigint {
+  const stringAmount = typeof amount === 'number' ? amount.toString() : amount;
+  return BigInt(amountToFineAmount(stringAmount, assetDecimals(asset)));
 }
 
 // State Chain uses non-unique string identifiers for assets.
@@ -921,14 +921,17 @@ export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
 /// Returning the extrinsic result or throwing the dispatchError.
 export async function submitChainflipExtrinsic(
   account: KeyringPair,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   extrinsic: any,
-  errorOnFail: boolean = true,
+  errorOnFail = true,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> {
   await using chainflipApi = await getChainflipApi();
 
-  let extrinsicResult = undefined;
+  let extrinsicResult;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await extrinsic.signAndSend(account, { nonce: -1 }, (arg: any) => {
-    if (arg.blockNumber != undefined || arg.dispatchError != undefined) {
+    if (arg.blockNumber !== undefined || arg.dispatchError !== undefined) {
       extrinsicResult = arg;
     }
   });

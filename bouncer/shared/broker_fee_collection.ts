@@ -6,7 +6,6 @@ import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import {
   EgressId,
-  amountToFineAmount,
   brokerMutex,
   decodeDotAddressForContract,
   handleSubstrateError,
@@ -14,7 +13,6 @@ import {
   observeBalanceIncrease,
   observeEvent,
   shortChainFromAsset,
-  assetDecimals,
   hexStringToBytesArray,
   getChainflipApi,
   calculateFeeWithBps,

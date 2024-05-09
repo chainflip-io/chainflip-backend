@@ -1,11 +1,10 @@
-import { Asset } from '../shared/utils';
+import { InternalAssets as Assets } from '@chainflip/cli';
 import {
   ingressEgressPalletForChain,
   getAssetsForChain,
-  getChainflipApi,
   chainFromAsset,
+  Asset,
 } from '../shared/utils';
-import { InternalAssets as Assets } from '@chainflip/cli';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { observeEvent } from './utils/substrate';
 import { addBoostFunds } from './boost';
@@ -27,6 +26,7 @@ export async function createBoostPools(newPools: BoostPoolId[]): Promise<void> {
     throw new Error('No boost pools to create');
   }
   const chain = chainFromAsset(newPools[0].asset);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const observeBoostPoolEvents: Promise<any>[] = [];
 
   for (const pool of newPools) {
@@ -90,12 +90,14 @@ export async function setupBoostPools(): Promise<void> {
     }
     boostPoolCreationPromises.push(createBoostPools(newPools));
   }
+  await Promise.all(boostPoolCreationPromises);
 
   // Add some boost funds for Btc to each boost tier
   console.log('Funding Boost Pools');
-  const fundBoostPoolsPromises: Promise<void>[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fundBoostPoolsPromises: Promise<any>[] = [];
   for (const tier of boostPoolTiers) {
-    addBoostFunds(Assets.Btc, tier, fundBtcBoostPoolsAmount);
+    fundBoostPoolsPromises.push(addBoostFunds(Assets.Btc, tier, fundBtcBoostPoolsAmount));
   }
   await Promise.all(fundBoostPoolsPromises);
 
