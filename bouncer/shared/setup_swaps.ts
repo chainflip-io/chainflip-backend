@@ -59,20 +59,6 @@ export async function setupSwaps(): Promise<void> {
     // provideLiquidity('SolUsdc', deposits.get('SolUsdc')!),
   ]);
 
-  // also fund the boost account
-  await Promise.all([
-    provideLiquidity('Usdc', deposits.get('Usdc')!, false, '//LP_BOOST'),
-    provideLiquidity('Eth', deposits.get('Eth')!, false, '//LP_BOOST'),
-    provideLiquidity('Dot', deposits.get('Dot')!, false, '//LP_BOOST'),
-    provideLiquidity('Btc', deposits.get('Btc')!, false, '//LP_BOOST'),
-    provideLiquidity('Flip', deposits.get('Flip')!, false, '//LP_BOOST'),
-    provideLiquidity('Usdt', deposits.get('Usdt')!, false, '//LP_BOOST'),
-    provideLiquidity('ArbEth', deposits.get('ArbEth')!, false, '//LP_BOOST'),
-    provideLiquidity('ArbUsdc', deposits.get('ArbUsdc')!, false, '//LP_BOOST'),
-    // provideLiquidity('Sol', deposits.get('Sol')!, false, '//LP_BOOST'),
-    // provideLiquidity('SolUsdc', deposits.get('SolUsdc')!, false, '//LP_BOOST'),
-  ]);
-
   await Promise.all([
     rangeOrder('Eth', deposits.get('Eth')! * 0.9999),
     rangeOrder('Dot', deposits.get('Dot')! * 0.9999),

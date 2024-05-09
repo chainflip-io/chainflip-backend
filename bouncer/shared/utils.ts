@@ -23,6 +23,7 @@ import { CcmDepositMetadata } from './new_swap';
 import { getCFTesterAbi } from './contract_interfaces';
 import { SwapParams } from './perform_swap';
 import { newSolAddress } from './new_sol_address';
+import { KeyringPair } from '@polkadot/keyring/types';
 
 const cfTesterAbi = await getCFTesterAbi();
 
@@ -129,6 +130,11 @@ export function shortChainFromAsset(asset: Asset): string {
 
 export function amountToFineAmount(amount: string, decimals: number | string): string {
   return new BigNumber(amount).shiftedBy(Number(decimals)).toFixed();
+}
+
+export function amountToFineAmountBigInt(amount: number | string, asset: Asset): bigint {
+  const stringAmount = typeof amount === 'number' ? amount.toString() : amount;
+  return BigInt(amountToFineAmount(stringAmount, assetDecimals(asset)));
 }
 
 export function fineAmountToAmount(fineAmount: string, decimals: number | string): string {
@@ -909,4 +915,44 @@ export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
   const outputPrice = fineAmountToAmount(finePriceOutput.toString(), assetDecimals(to));
 
   return outputPrice;
+}
+
+/// Submits an extrinsic and waits for it to be included in a block.
+/// Returning the extrinsic result or throwing the dispatchError.
+export async function submitChainflipExtrinsic(
+  account: KeyringPair,
+  extrinsic: any,
+  errorOnFail: boolean = true,
+): Promise<any> {
+  await using chainflipApi = await getChainflipApi();
+
+  let extrinsicResult = undefined;
+  await extrinsic.signAndSend(account, { nonce: -1 }, (arg: any) => {
+    if (arg.blockNumber != undefined || arg.dispatchError != undefined) {
+      extrinsicResult = arg;
+    }
+  });
+  while (!extrinsicResult) {
+    await sleep(100);
+  }
+  if (extrinsicResult.dispatchError && errorOnFail) {
+    let error;
+    if (extrinsicResult.dispatchError.isModule) {
+      const { docs, name, section } = chainflipApi.registry.findMetaError(
+        extrinsicResult.dispatchError.asModule,
+      );
+      error = section + '.' + name + ': ' + docs;
+    } else {
+      error = extrinsicResult.dispatchError.toString();
+    }
+    throw new Error(`Failed to submit extrinsic: ${error}`);
+  }
+  return extrinsicResult;
+}
+
+/// Calculate the fee using the given bps. Used for broker & boost fee calculation.
+export function calculateFeeWithBps(fineAmount: bigint, bps: number): bigint {
+  // Using some strange math here because the SC rounds down on 0.5 instead of up.
+  const divisor = BigInt(10000 / bps);
+  return fineAmount / divisor + (fineAmount % divisor > divisor / 2n ? 1n : 0n);
 }

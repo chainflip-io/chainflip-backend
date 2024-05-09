@@ -42,6 +42,7 @@ export async function requestNewSwap(
   messageMetadata?: CcmDepositMetadata,
   brokerCommissionBps?: number,
   log = true,
+  boostFeeBps = 0,
 ): Promise<SwapParams> {
   await using chainflipApi = await getChainflipApi();
 
@@ -74,7 +75,14 @@ export async function requestNewSwap(
       return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
     },
   );
-  await newSwap(sourceAsset, destAsset, destAddress, messageMetadata, brokerCommissionBps);
+  await newSwap(
+    sourceAsset,
+    destAsset,
+    destAddress,
+    messageMetadata,
+    brokerCommissionBps,
+    boostFeeBps,
+  );
 
   const res = (await addressPromise).data;
 

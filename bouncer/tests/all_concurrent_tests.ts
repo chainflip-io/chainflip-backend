@@ -8,6 +8,7 @@ import { testLpApi } from '../shared/lp_api_test';
 import { swapLessThanED } from '../shared/swap_less_than_existential_deposit_dot';
 import { testPolkadotRuntimeUpdate } from '../shared/polkadot_runtime_update';
 import { testBrokerFeeCollection } from '../shared/broker_fee_collection';
+import { testBoostingSwap } from '../shared/boost';
 
 const swapContext = new SwapContext();
 
@@ -31,6 +32,7 @@ async function runAllConcurrentTests() {
     testMultipleMembersGovernance(),
     testLpApi(),
     testBrokerFeeCollection(),
+    testBoostingSwap(),
   ];
 
   // Test that only work if there is more than one node
