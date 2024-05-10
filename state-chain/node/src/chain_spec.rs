@@ -3,7 +3,7 @@ use cf_chains::{
 	assets::btc,
 	btc::BITCOIN_DUST_LIMIT,
 	dot::{PolkadotAccountId, PolkadotHash},
-	sol::{SolAddress, SolTrackedData},
+	sol::{SolAddress, SolHash, SolTrackedData},
 	Arbitrum, ChainState, Solana,
 };
 use cf_primitives::{
@@ -101,6 +101,17 @@ pub struct StateChainEnvironment {
 	dot_vault_account_id: Option<PolkadotAccountId>,
 	dot_runtime_version: RuntimeVersion,
 	sol_vault_address: SolAddress,
+	sol_vault_data_account_address: SolAddress,
+	sol_token_vault_address: SolAddress,
+	sol_token_vault_usdc_address: SolAddress,
+	sol_upgrade_manager_address: SolAddress,
+	sol_upgrade_manager_signer_seed: [u8; 6],
+	sol_upgrade_manager_program_data_address: SolAddress,
+	sol_vault_program_data_address: SolAddress,
+	// nonce_accounts:Vec<(SolAddress,SolHash,bool)>,
+	solusdc_token_address: SolAddress,
+	sol_vault_emit_event_address: SolAddress,
+	sol_genesis_hash: SolHash,
 }
 
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
@@ -138,6 +149,32 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(FromStr::from_str, GENESIS_FUNDING, genesis_funding_amount);
 	from_env_var!(FromStr::from_str, MIN_FUNDING, min_funding);
 	from_env_var!(FromStr::from_str, SOL_VAULT_ADDRESS, sol_vault_address);
+	from_env_var!(
+		FromStr::from_str,
+		SOL_VAULT_DATA_ACCOUNT_ADDRESS,
+		sol_vault_data_account_address
+	);
+	from_env_var!(FromStr::from_str, SOL_TOKEN_VAULT_ADDRESS, sol_token_vault_address);
+	from_env_var!(FromStr::from_str, SOL_TOKEN_VAULT_USDC_ADDRESS, sol_token_vault_usdc_address);
+	from_env_var!(FromStr::from_str, SOL_UPGRADE_MANAGER_ADDRESS, sol_upgrade_manager_address);
+	from_env_var!(
+		FromStr::from_str,
+		SOL_UPGRADE_MANAGER_SIGNER_SEED,
+		sol_upgrade_manager_signer_seed
+	);
+	from_env_var!(
+		FromStr::from_str,
+		SOL_UPGRADE_MANAGER_PROGRAM_DATA_ADDRESS,
+		sol_upgrade_manager_program_data_address
+	);
+	from_env_var!(
+		FromStr::from_str,
+		SOL_VAULT_PROGRAM_DATA_ADDRESS,
+		sol_vault_program_data_address
+	);
+	from_env_var!(FromStr::from_str, SOLUSDC_TOKEN_ADDRESS, solusdc_token_address);
+	from_env_var!(FromStr::from_str, SOL_VAULT_EMIT_EVENT_ADDRESS, sol_vault_emit_event_address);
+	from_env_var!(FromStr::from_str, SOL_GENESIS_HASH, sol_genesis_hash);
 
 	let dot_genesis_hash = match env::var("DOT_GENESIS_HASH") {
 		Ok(s) => hex_decode::<32>(&s).unwrap().into(),
@@ -182,6 +219,16 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 			transaction_version: dot_transaction_version,
 		},
 		sol_vault_address,
+		sol_vault_data_account_address,
+		sol_token_vault_address,
+		sol_token_vault_usdc_address,
+		sol_upgrade_manager_address,
+		sol_upgrade_manager_signer_seed,
+		sol_upgrade_manager_program_data_address,
+		sol_vault_program_data_address,
+		solusdc_token_address,
+		sol_vault_emit_event_address,
+		sol_genesis_hash,
 	}
 }
 
@@ -243,6 +290,16 @@ pub fn inner_cf_development_config(
 		dot_vault_account_id,
 		dot_runtime_version,
 		sol_vault_address,
+		sol_vault_data_account_address,
+		sol_token_vault_address,
+		sol_token_vault_usdc_address,
+		sol_upgrade_manager_address,
+		sol_upgrade_manager_signer_seed,
+		sol_upgrade_manager_program_data_address,
+		sol_vault_program_data_address,
+		solusdc_token_address,
+		sol_vault_emit_event_address,
+		sol_genesis_hash,
 	} = get_environment_or_defaults(testnet::ENV);
 	Ok(ChainSpec::builder(wasm_binary, None)
 		.with_name("CF Develop")
@@ -274,6 +331,16 @@ pub fn inner_cf_development_config(
 				polkadot_genesis_hash: dot_genesis_hash,
 				polkadot_vault_account_id: dot_vault_account_id,
 				sol_vault_address,
+				sol_vault_data_account_address,
+				sol_token_vault_address,
+				sol_token_vault_usdc_address,
+				sol_upgrade_manager_address,
+				sol_upgrade_manager_signer_seed,
+				sol_upgrade_manager_program_data_address,
+				sol_vault_program_data_address,
+				solusdc_token_address,
+				sol_vault_emit_event_address,
+				sol_genesis_hash,
 				network_environment: NetworkEnvironment::Development,
 				..Default::default()
 			},
@@ -348,6 +415,16 @@ macro_rules! network_spec {
 					dot_vault_account_id,
 					dot_runtime_version,
 					sol_vault_address,
+					sol_vault_data_account_address,
+					sol_token_vault_address,
+					sol_token_vault_usdc_address,
+					sol_upgrade_manager_address,
+					sol_upgrade_manager_signer_seed,
+					sol_upgrade_manager_program_data_address,
+					sol_vault_program_data_address,
+					solusdc_token_address,
+					sol_vault_emit_event_address,
+					sol_genesis_hash,
 				} = env_override.unwrap_or(ENV);
 				let protocol_id = format!(
 					"{}-{}",
@@ -409,6 +486,16 @@ macro_rules! network_spec {
 							polkadot_genesis_hash: dot_genesis_hash,
 							polkadot_vault_account_id: dot_vault_account_id.clone(),
 							sol_vault_address,
+							sol_vault_data_account_address,
+							sol_token_vault_address,
+							sol_token_vault_usdc_address,
+							sol_upgrade_manager_address,
+							sol_upgrade_manager_signer_seed,
+							sol_upgrade_manager_program_data_address,
+							sol_vault_program_data_address,
+							solusdc_token_address,
+							sol_vault_emit_event_address,
+							sol_genesis_hash,
 							network_environment: NETWORK_ENVIRONMENT,
 							..Default::default()
 						},

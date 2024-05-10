@@ -1,6 +1,6 @@
 pub use super::common::*;
 use super::{get_account_id_from_seed, StateChainEnvironment};
-use cf_chains::{dot::RuntimeVersion, sol::SolAddress};
+use cf_chains::{dot::RuntimeVersion, sol::{SolAddress, SolHash}};
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use sc_service::ChainType;
 use sp_core::{sr25519, H256};
@@ -44,7 +44,44 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	)),
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 10000, transaction_version: 25 },
-	sol_vault_address: SolAddress([0; 32]), // TODO: fill in the valid Solana address,
+	// encodes to "8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf"
+	sol_vault_address: SolAddress(hex_literal::hex![
+		"4a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b"
+	]),
+	// encodes to "623nEsyGYWKYggY1yHxQFJiBarL9jdWdrMr7ASiCKP6a"
+	sol_vault_data_account_address: SolAddress(hex_literal::hex![
+		"4a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b"
+	]),
+	// encodes to "9j17hjg8wR2uFxJAJDAFahwsgTCNx35sc5qXSxDmuuF6"
+	sol_token_vault_address: SolAddress(hex_literal::hex![
+		"81a0052237ad76cb6e88fe505dc3d96bba6d8889f098b1eaa342ec8445880521"
+	]),
+	// encodes to "DUjCLckPi4g7QAwBEwuFL1whpgY6L9fxwXnqbWvS2pcW"
+	sol_token_vault_usdc_address: SolAddress(hex_literal::hex![
+		"b966a2b36557938f49cc5d00f8f12d86f16f48e03b63c8422967dba621ab60bf"
+	]),
+	// encodes to "274BzCz5RPHJZsxdcSGySahz4qAWqwSDcmz1YEKkGaZC"
+	sol_upgrade_manager_address: SolAddress(hex_literal::hex![
+		"1068c72f83398081684c491910b66f8d8cca0edc00cbcf11c89f86c5c39d80f7"
+	]),
+	sol_upgrade_manager_signer_seed: [115, 105, 103, 110, 101, 114],
+	// encodes to "CAGADTb6bdpm4L4esntbLQovDyg6Wutiot2DNkMR8wZa"
+	sol_upgrade_manager_program_data_address: SolAddress(hex_literal::hex![
+		"a5cfec75730f8780ded36a7c8ae1dcc60d84e1a830765fc6108e7b40402e4951"
+	]),
+	// encodes to "3oEKmL4nsw6RDZWhkYTdCUmjxDrzVkm1cWayPsvn3p57"
+	sol_vault_program_data_address: SolAddress(hex_literal::hex![
+		"298f27f13ce155954657f0238e63932beb510964abd44e20e9603e6b6f2b424a"
+	]),
+	// encodes to "24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p"
+	solusdc_token_address: SolAddress(hex_literal::hex![
+		"0fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee87"
+	]),
+	// encodes to "CioaL3E9GAEkExjSuhTRLRKAiDQkqDQTYAR345CEDGaL"
+	sol_vault_emit_event_address: SolAddress(hex_literal::hex![
+		"ae26080da692562cc5907d3f401b6c686f6d64f927065f9c1b32a1dc49d384b9"
+	]),
+	sol_genesis_hash: SolHash([0; 32]) // TODO: How do we handle this?
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 3 * HOURS;
