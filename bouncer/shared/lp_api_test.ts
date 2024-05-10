@@ -1,6 +1,6 @@
 import { InternalAssets as Assets } from '@chainflip/cli';
 import assert from 'assert';
-import Keyring from '@polkadot/keyring';
+import Keyring from '../polkadot/keyring';
 import {
   getChainflipApi,
   observeEvent,

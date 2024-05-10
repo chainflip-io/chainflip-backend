@@ -1,7 +1,6 @@
 #!/usr/bin/env -S pnpm tsx
-import { Keyring } from '@polkadot/keyring';
-import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { exec } from 'child_process';
+import { Keyring } from '../polkadot/keyring';
 import {
   runWithTimeout,
   sleep,
@@ -12,7 +11,6 @@ import {
 } from '../shared/utils';
 
 async function main(): Promise<void> {
-  await cryptoWaitReady();
   const keyring = new Keyring({ type: 'sr25519' });
   const lpUri = process.env.LP_URI ?? '//LP_1';
   const lp = keyring.createFromUri(lpUri);
