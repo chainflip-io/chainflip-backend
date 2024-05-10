@@ -1254,3 +1254,78 @@ fn test_maximum_slippage_limits() {
 		test_swaps(3500);
 	});
 }
+
+#[test]
+fn can_accept_additional_limit_orders() {
+	new_test_ext().execute_with(|| {
+		let from = Asset::Flip;
+		let to = Asset::Usdt;
+		let default_price = price_at_tick(0).unwrap();
+
+		// While the pool does not exist, no info can be obtained.
+		assert!(Pools::<Test>::get(AssetPair::new(from, STABLE_ASSET).unwrap()).is_none());
+
+		for asset in [from, to] {
+			// Create a new pool.
+			assert_ok!(LiquidityPools::new_pool(
+				RuntimeOrigin::root(),
+				asset,
+				STABLE_ASSET,
+				0u32,
+				default_price,
+			));
+			System::assert_last_event(RuntimeEvent::LiquidityPools(
+				Event::<Test>::NewPoolCreated {
+					base_asset: asset,
+					quote_asset: STABLE_ASSET,
+					fee_hundredth_pips: 0u32,
+					initial_price: default_price,
+				},
+			));
+		}
+
+		const ONE_ETH: u128 = 10u128.pow(18);
+
+		assert!(LiquidityPools::swap_with_network_fee(
+			from,
+			STABLE_ASSET,
+			ONE_ETH,
+			Some((0, vec![], vec![]))
+		)
+		.is_err());
+		let swap_output = LiquidityPools::swap_with_network_fee(
+			from,
+			STABLE_ASSET,
+			ONE_ETH,
+			Some((0, vec![(-196236, ONE_ETH.into())], vec![])),
+		)
+		.unwrap();
+
+		assert_eq!(
+			swap_output,
+			SwapOutput { intermediary: None, output: 3000097981, network_fee: 6012220 }
+		);
+
+		const ONE_USDC: u128 = 10u128.pow(6);
+
+		assert!(LiquidityPools::swap_with_network_fee(
+			from,
+			to,
+			ONE_ETH,
+			Some((0, vec![(-196236, ONE_ETH.into())], vec![])),
+		)
+		.is_err());
+		let swap_output = LiquidityPools::swap_with_network_fee(
+			from,
+			to,
+			ONE_ETH,
+			Some((0, vec![(-196236, ONE_ETH.into())], vec![(0, (3500 * ONE_USDC).into())])),
+		)
+		.unwrap();
+
+		assert_eq!(
+			swap_output,
+			SwapOutput { intermediary: Some(3000097981), output: 3000097980, network_fee: 6012220 }
+		)
+	});
+}
