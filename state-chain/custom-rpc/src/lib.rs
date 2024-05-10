@@ -1141,9 +1141,12 @@ where
 	) -> RpcResult<RpcSwapOutputV2> {
 		let (first_leg, second_leg) = options
 			.map(|opts| {
-				(opts.first_leg_additional_limit_orders, opts.second_leg_additional_limit_orders)
+				(
+					opts.first_leg_additional_limit_orders.unwrap_or_default(),
+					opts.second_leg_additional_limit_orders.unwrap_or_default(),
+				)
 			})
-			.unwrap_or((None, None));
+			.unwrap_or((vec![], vec![]));
 
 		self.client
 			.runtime_api()

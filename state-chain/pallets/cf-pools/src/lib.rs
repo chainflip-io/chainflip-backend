@@ -10,7 +10,8 @@ use cf_amm::{
 use cf_chains::Chain;
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
 use cf_traits::{
-	impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwapQueueApi, SwapType, SwappingApi,
+	impl_pallet_safe_mode, Chainflip, LpBalanceApi, NetworkFeeTaken, PoolApi, SwapQueueApi,
+	SwapType, SwappingApi,
 };
 use frame_support::{
 	dispatch::GetDispatchInfo,
@@ -1007,16 +1008,16 @@ pub mod pallet {
 }
 
 impl<T: Config> SwappingApi for Pallet<T> {
-	fn take_network_fee(input: AssetAmount) -> (AssetAmount, AssetAmount) {
+	fn take_network_fee(input: AssetAmount) -> NetworkFeeTaken {
 		if input.is_zero() {
-			return (input, 0)
+			return NetworkFeeTaken { remaining_amount: 0, network_fee: 0 };
 		}
 		let (remaining, fee) = utilities::calculate_network_fee(T::NetworkFee::get(), input);
 		CollectedNetworkFee::<T>::mutate(|total| {
 			total.saturating_accrue(fee);
 		});
 		Self::deposit_event(Event::<T>::NetworkFeeTaken { fee_amount: fee });
-		(remaining, fee)
+		NetworkFeeTaken { remaining_amount: remaining, network_fee: fee }
 	}
 
 	#[transactional]
@@ -1526,11 +1527,11 @@ impl<T: Config> Pallet<T> {
 		account_id: &T::AccountId,
 		from: any::Asset,
 		to: any::Asset,
-		maybe_limit_orders: Option<Vec<(Tick, U256)>>,
+		limit_orders: Vec<(Tick, U256)>,
 	) -> Result<(), DispatchError> {
-		let Some(limit_orders) = maybe_limit_orders else {
+		if limit_orders.is_empty() {
 			return Ok(());
-		};
+		}
 
 		let (asset_pair, side) = AssetPair::from_swap(from, to).ok_or("Invalid asset pair")?;
 
@@ -1552,11 +1553,7 @@ impl<T: Config> Pallet<T> {
 		from: any::Asset,
 		to: any::Asset,
 		input_amount: AssetAmount,
-		additional_limit_orders: Option<(
-			T::AccountId,
-			Option<Vec<(Tick, U256)>>,
-			Option<Vec<(Tick, U256)>>,
-		)>,
+		additional_limit_orders: Option<(T::AccountId, Vec<(Tick, U256)>, Vec<(Tick, U256)>)>,
 	) -> Result<SwapOutput, DispatchError> {
 		match ((from, to), additional_limit_orders) {
 			((_, STABLE_ASSET) | (STABLE_ASSET, _), Some((account_id, limit_orders, _))) => {
@@ -1571,13 +1568,14 @@ impl<T: Config> Pallet<T> {
 
 		Ok(match (from, to) {
 			(_, STABLE_ASSET) => {
-				let (output, network_fee) =
+				let NetworkFeeTaken { remaining_amount: output, network_fee } =
 					Self::take_network_fee(Self::swap_single_leg(from, to, input_amount)?);
 
 				SwapOutput { intermediary: None, output, network_fee }
 			},
 			(STABLE_ASSET, _) => {
-				let (input_amount, network_fee) = Self::take_network_fee(input_amount);
+				let NetworkFeeTaken { remaining_amount: input_amount, network_fee } =
+					Self::take_network_fee(input_amount);
 
 				SwapOutput {
 					intermediary: None,
@@ -1586,11 +1584,12 @@ impl<T: Config> Pallet<T> {
 				}
 			},
 			_ => {
-				let (intermediary, network_fee) = Self::take_network_fee(Self::swap_single_leg(
-					from,
-					STABLE_ASSET,
-					input_amount,
-				)?);
+				let NetworkFeeTaken { remaining_amount: intermediary, network_fee } =
+					Self::take_network_fee(Self::swap_single_leg(
+						from,
+						STABLE_ASSET,
+						input_amount,
+					)?);
 
 				SwapOutput {
 					intermediary: Some(intermediary),

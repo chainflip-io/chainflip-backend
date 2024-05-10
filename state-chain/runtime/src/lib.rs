@@ -1269,8 +1269,8 @@ impl_runtime_apis! {
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
-			first_leg_additional_limit_orders: Option<Vec<(Tick, U256)>>,
-			second_leg_additional_limit_orders: Option<Vec<(Tick, U256)>>,
+			first_leg_additional_limit_orders: Vec<(Tick, U256)>,
+			second_leg_additional_limit_orders: Vec<(Tick, U256)>,
 		) -> Result<SwapOutput, DispatchErrorWithMessage> {
 			LiquidityPools::swap_with_network_fee(
 				from,

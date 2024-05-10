@@ -11,7 +11,7 @@ use cf_traits::{
 		address_converter::MockAddressConverter, deposit_handler::MockDepositHandler,
 		egress_handler::MockEgressHandler, ingress_egress_fee_handler::MockIngressEgressFeeHandler,
 	},
-	AccountRoleRegistry, SwappingApi,
+	AccountRoleRegistry, NetworkFeeTaken, SwappingApi,
 };
 use frame_support::{derive_impl, pallet_prelude::DispatchError, parameter_types, weights::Weight};
 use frame_system as system;
@@ -90,9 +90,9 @@ impl MockSwappingApi {
 }
 
 impl SwappingApi for MockSwappingApi {
-	fn take_network_fee(input_amount: AssetAmount) -> (AssetAmount, AssetAmount) {
+	fn take_network_fee(input_amount: AssetAmount) -> NetworkFeeTaken {
 		let network_fee = NetworkFee::get() * input_amount;
-		(input_amount - network_fee, network_fee)
+		NetworkFeeTaken { remaining_amount: input_amount - network_fee, network_fee }
 	}
 
 	fn swap_single_leg(
