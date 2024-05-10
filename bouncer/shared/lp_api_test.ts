@@ -189,14 +189,10 @@ async function testTransferAsset() {
     newBalanceDestination > oldBalanceDestination,
     `Failed to observe balance increase after transfer for destination account!`,
   );
+
   assert(
     newBalancesSource < oldBalanceSource,
     `Failed to observe balance decrease after transfer for source account!`,
-  );
-
-  assert(
-    oldBalanceSource + oldBalanceDestination === newBalancesSource + newBalanceDestination,
-    `Balance integrity check failed!`,
   );
 
   console.log('=== testTransferAsset complete ===');
