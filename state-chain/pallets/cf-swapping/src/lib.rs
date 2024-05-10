@@ -7,7 +7,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountRole, Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, ChannelId,
-	ForeignChain, SwapId, SwapLeg, TransactionHash, STABLE_ASSET,
+	ForeignChain, SwapId, SwapLeg, TransactionHash, BASIS_POINTS_PER_MILLION, STABLE_ASSET,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -39,8 +39,6 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
-
-const BASIS_POINTS_PER_MILLION: u32 = 100;
 
 pub const SWAP_DELAY_BLOCKS: u32 = 2;
 

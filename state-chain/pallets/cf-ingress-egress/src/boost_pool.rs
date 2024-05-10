@@ -98,7 +98,7 @@ fn fee_from_boosted_amount<C: Chain>(
 	amount_to_boost: ScaledAmount<C>,
 	fee_bps: u16,
 ) -> ScaledAmount<C> {
-	const BASIS_POINTS_PER_MILLION: u32 = 100;
+	use cf_primitives::BASIS_POINTS_PER_MILLION;
 	let fee_permill = Permill::from_parts(fee_bps as u32 * BASIS_POINTS_PER_MILLION);
 
 	ScaledAmount::from_raw(fee_permill * amount_to_boost.val)
