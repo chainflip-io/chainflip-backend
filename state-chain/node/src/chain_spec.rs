@@ -158,7 +158,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(FromStr::from_str, SOL_TOKEN_VAULT_USDC_ADDRESS, sol_token_vault_usdc_address);
 	from_env_var!(FromStr::from_str, SOL_UPGRADE_MANAGER_ADDRESS, sol_upgrade_manager_address);
 	from_env_var!(
-		FromStr::from_str,
+		clean_hex_address,
 		SOL_UPGRADE_MANAGER_SIGNER_SEED,
 		sol_upgrade_manager_signer_seed
 	);

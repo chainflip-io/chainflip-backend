@@ -12,7 +12,7 @@ use cf_chains::{
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
-	sol::{SolAddress, SolHash, SolAsset},
+	sol::{SolAddress, SolAsset, SolHash},
 	Chain,
 };
 use cf_primitives::{
@@ -225,7 +225,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn sol_upgrade_manager_signer_seed)]
-	pub type SolanaUpgradeManagerSignerSeed<T> = StorageValue<_, [u8;6], ValueQuery>;
+	pub type SolanaUpgradeManagerSignerSeed<T> = StorageValue<_, [u8; 6], ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn sol_upgrade_manager_program_data_address)]
@@ -442,37 +442,37 @@ pub mod pallet {
 			Ok(dispatch_result)
 		}
 
-	// 	/// Manually witnesses the current Solana block number to complete the pending vault
-	// 	/// rotation.
-	// 	///
-	// 	/// ## Events
-	// 	///
-	// 	/// - [SolanaBlockNumberSetForVault](Event::SolanaInitialized)
-	// 	///
-	// 	/// ## Errors
-	// 	///
-	// 	/// - [BadOrigin](frame_support::error::BadOrigin)
-	// 	#[allow(clippy::too_many_arguments)]
-	// 	#[pallet::call_index(6)]
-	// 	// This weight is not strictly correct but since it's a governance call, weight is
-	// 	// irrelevant.
-	// 	#[pallet::weight(Weight::zero())]
-	// 	pub fn witness_initialize_solana_vault(
-	// 		origin: OriginFor<T>,
-	// 		block_number: u64,
-	// 	) -> DispatchResultWithPostInfo {
-	// 		T::EnsureGovernance::ensure_origin(origin)?;
+		// 	/// Manually witnesses the current Solana block number to complete the pending vault
+		// 	/// rotation.
+		// 	///
+		// 	/// ## Events
+		// 	///
+		// 	/// - [SolanaBlockNumberSetForVault](Event::SolanaInitialized)
+		// 	///
+		// 	/// ## Errors
+		// 	///
+		// 	/// - [BadOrigin](frame_support::error::BadOrigin)
+		// 	#[allow(clippy::too_many_arguments)]
+		// 	#[pallet::call_index(6)]
+		// 	// This weight is not strictly correct but since it's a governance call, weight is
+		// 	// irrelevant.
+		// 	#[pallet::weight(Weight::zero())]
+		// 	pub fn witness_initialize_solana_vault(
+		// 		origin: OriginFor<T>,
+		// 		block_number: u64,
+		// 	) -> DispatchResultWithPostInfo {
+		// 		T::EnsureGovernance::ensure_origin(origin)?;
 
-	// 		use cf_traits::VaultKeyWitnessedHandler;
+		// 		use cf_traits::VaultKeyWitnessedHandler;
 
-	// 		// Witness the agg_key rotation manually in the vaults pallet for solana
-	// 		let dispatch_result =
-	// 			T::SolanaVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
+		// 		// Witness the agg_key rotation manually in the vaults pallet for solana
+		// 		let dispatch_result =
+		// 			T::SolanaVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
 
-	// 		Self::deposit_event(Event::<T>::SolanaInitialized);
+		// 		Self::deposit_event(Event::<T>::SolanaInitialized);
 
-	// 		Ok(dispatch_result)
-	// 	}
+		// 		Ok(dispatch_result)
+		// 	}
 	}
 
 	#[pallet::genesis_config]
@@ -498,7 +498,7 @@ pub mod pallet {
 		pub sol_token_vault_address: SolAddress,
 		pub sol_token_vault_usdc_address: SolAddress,
 		pub sol_upgrade_manager_address: SolAddress,
-		pub sol_upgrade_manager_signer_seed: [u8;6],
+		pub sol_upgrade_manager_signer_seed: [u8; 6],
 		pub sol_upgrade_manager_program_data_address: SolAddress,
 		pub sol_vault_program_data_address: SolAddress,
 		pub sol_nonce_accounts: Vec<(SolAddress, SolHash, bool)>,

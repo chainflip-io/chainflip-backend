@@ -6,7 +6,10 @@ pub use super::{
 		POLKADOT_EXPIRY_BLOCKS, SOLANA_EXPIRY_BLOCKS,
 	},
 };
-use cf_chains::{dot::RuntimeVersion, sol::{SolAddress,SolHash}};
+use cf_chains::{
+	dot::RuntimeVersion,
+	sol::{SolAddress, SolHash},
+};
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use sc_service::ChainType;
 use sp_core::H256;
@@ -60,7 +63,9 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	]),
 	sol_vault_emit_event_address: SolAddress([0; 32]), // TODO: fill in the valid Solana address,
 	// encodes to "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"
-	sol_genesis_hash: SolHash(hex_literal::hex!["ce59db5080fc2c6d3bcf7ca90712d3c2e5e6c28f27f0dfbb9953bdb0894c03ab"]),
+	sol_genesis_hash: SolHash(hex_literal::hex![
+		"ce59db5080fc2c6d3bcf7ca90712d3c2e5e6c28f27f0dfbb9953bdb0894c03ab"
+	]),
 };
 
 pub const BASHFUL_ACCOUNT_ID: &str = "cFLbasoV5juCGacy9LvvwSgkupFiFmwt8RmAuA3xcaY5YmkBe";

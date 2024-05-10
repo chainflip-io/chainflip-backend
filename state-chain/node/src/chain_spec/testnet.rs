@@ -1,6 +1,9 @@
 pub use super::common::*;
 use super::{get_account_id_from_seed, StateChainEnvironment};
-use cf_chains::{dot::RuntimeVersion, sol::{SolAddress, SolHash}};
+use cf_chains::{
+	dot::RuntimeVersion,
+	sol::{SolAddress, SolHash},
+};
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use sc_service::ChainType;
 use sp_core::{sr25519, H256};
@@ -81,7 +84,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	sol_vault_emit_event_address: SolAddress(hex_literal::hex![
 		"ae26080da692562cc5907d3f401b6c686f6d64f927065f9c1b32a1dc49d384b9"
 	]),
-	sol_genesis_hash: SolHash([0; 32]) // TODO: How do we handle this?
+	sol_genesis_hash: SolHash([0; 32]), // TODO: How do we handle this?
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 3 * HOURS;

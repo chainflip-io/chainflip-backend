@@ -63,7 +63,9 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	]),
 	sol_vault_emit_event_address: SolAddress([0; 32]), // TODO: fill in the valid Solana address,
 	// encodes to "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d"
-	sol_genesis_hash: SolHash(hex_literal::hex!["45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0"]),
+	sol_genesis_hash: SolHash(hex_literal::hex![
+		"45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0"
+	]),
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 24 * HOURS;
