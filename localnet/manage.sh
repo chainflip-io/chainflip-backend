@@ -21,6 +21,7 @@ touch /tmp/chainflip/debug.log
 set -eo pipefail
 
 if [[ $CI == true ]]; then
+  set -x
   additional_docker_compose_up_args="--quiet-pull"
   additional_docker_compose_down_args="--volumes --remove-orphans --rmi all"
 else
@@ -159,7 +160,12 @@ build-localnet() {
 
   if which solana-test-validator >>$DEBUG_OUTPUT_DESTINATION 2>&1; then
     echo "☀️ Waiting for Solana node to start"
+    if [[ $CI == true ]]; then
+      echo "🚀 Starting Solana in CI mode ..."
+      sudo ./localnet/init/scripts/start-solana.sh
+    else
     ./localnet/init/scripts/start-solana.sh
+    fi
     check_endpoint_health -s http://localhost:8899 >> $DEBUG_OUTPUT_DESTINATION 2>&1
   else
     echo "☀️ Solana not installed, skipping..."
