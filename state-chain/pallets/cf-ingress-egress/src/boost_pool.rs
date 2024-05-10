@@ -43,6 +43,12 @@ impl<C: Chain> ScaledAmount<C> {
 		amount.saturating_mul(SCALE_FACTOR).into()
 	}
 
+	// Convenience method to create ScaledAmount from u128
+	// without scaling
+	fn from_raw(val: u128) -> Self {
+		ScaledAmount { val, _phantom: PhantomData }
+	}
+
 	fn into_chain_amount(self) -> C::ChainAmount {
 		self.val
 			.checked_div(SCALE_FACTOR)
@@ -84,6 +90,47 @@ pub struct OwedAmount<AmountT> {
 	pub fee: AmountT,
 }
 
+/// Boosted amount is the amount provided by the pool plus boost fee,
+/// (and the sum of all boosted amounts from each participating pool
+/// must be equal the deposit amount being boosted). The fee is payed
+/// per boosted amount, and so here we multiply by fee_bps directly.
+fn fee_from_boosted_amount<C: Chain>(
+	amount_to_boost: ScaledAmount<C>,
+	fee_bps: u16,
+) -> ScaledAmount<C> {
+	const BASIS_POINTS_PER_MILLION: u32 = 100;
+	let fee_permill = Permill::from_parts(fee_bps as u32 * BASIS_POINTS_PER_MILLION);
+
+	ScaledAmount::from_raw(fee_permill * amount_to_boost.val)
+}
+
+/// Unlike `fee_from_boosted_amount`, the boosted amount is not known here
+/// so we have to calculate it first from the provided amount in order to
+/// calculate the boost fee amount.
+fn fee_from_provided_amount<C: Chain>(
+	provided_amount: ScaledAmount<C>,
+	fee_bps: u16,
+) -> Result<ScaledAmount<C>, &'static str> {
+	// Compute `boosted = provided / (1 - fee)`
+	let boosted_amount = {
+		const BASIS_POINTS_MAX: u16 = 10_000;
+
+		let inverse_fee = BASIS_POINTS_MAX.saturating_sub(fee_bps);
+
+		multiply_by_rational_with_rounding(
+			provided_amount.val,
+			BASIS_POINTS_MAX as u128,
+			inverse_fee as u128,
+			Rounding::Down,
+		)
+		.ok_or("invalid fee")?
+	};
+
+	let fee_amount = boosted_amount.checked_sub(provided_amount.val).ok_or("invalid fee")?;
+
+	Ok(ScaledAmount::from_raw(fee_amount))
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct BoostPool<AccountId, C: Chain> {
 	// Fee charged by the pool
@@ -112,15 +159,6 @@ where
 			amounts: Default::default(),
 			pending_boosts: Default::default(),
 			pending_withdrawals: Default::default(),
-		}
-	}
-
-	fn compute_fee(&self, amount_to_boost: ScaledAmount<C>) -> ScaledAmount<C> {
-		const BASIS_POINTS_PER_MILLION: u32 = 100;
-		ScaledAmount {
-			val: Permill::from_parts(self.fee_bps as u32 * BASIS_POINTS_PER_MILLION) *
-				amount_to_boost.val,
-			_phantom: PhantomData,
 		}
 	}
 
@@ -189,7 +227,7 @@ where
 		amount_to_boost: C::ChainAmount,
 	) -> Result<(C::ChainAmount, C::ChainAmount), &'static str> {
 		let amount_to_boost = ScaledAmount::<C>::from_chain_amount(amount_to_boost);
-		let full_amount_fee = self.compute_fee(amount_to_boost);
+		let full_amount_fee = fee_from_boosted_amount(amount_to_boost, self.fee_bps);
 
 		let required_amount = amount_to_boost.saturating_sub(full_amount_fee);
 
@@ -197,7 +235,7 @@ where
 			(required_amount, full_amount_fee)
 		} else {
 			let provided_amount = self.available_amount;
-			let fee = self.compute_fee(provided_amount);
+			let fee = fee_from_provided_amount(provided_amount, self.fee_bps)?;
 
 			(provided_amount, fee)
 		};
