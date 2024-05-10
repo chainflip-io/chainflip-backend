@@ -1,4 +1,4 @@
-use super::{sol_test_values::*, AccountMeta, Instruction, Pubkey};
+use super::{AccountMeta, Instruction, Pubkey};
 
 use crate::sol::consts::SYSTEM_PROGRAM_ID;
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -274,14 +274,8 @@ pub enum UpgradeManagerProgram {
 }
 
 pub trait ProgramInstruction: BorshSerialize {
-	fn get_program_id(&self) -> &str;
-
-	fn get_instruction(&self, accounts: Vec<AccountMeta>) -> Instruction {
-		let mut instruction = Instruction::new_with_borsh(
-			Pubkey::from_str(self.get_program_id()).unwrap(),
-			&self,
-			accounts,
-		);
+	fn get_instruction(&self, program_id: Pubkey, accounts: Vec<AccountMeta>) -> Instruction {
+		let mut instruction = Instruction::new_with_borsh(program_id, &self, accounts);
 		instruction.data.remove(0);
 		let mut data = self.function_discriminator();
 		data.append(&mut instruction.data);
@@ -297,10 +291,6 @@ pub trait ProgramInstruction: BorshSerialize {
 }
 
 impl ProgramInstruction for VaultProgram {
-	fn get_program_id(&self) -> &str {
-		VAULT_PROGRAM
-	}
-
 	fn call_name(&self) -> &str {
 		match self {
 			Self::FetchNative { seed: _, bump: _ } => "fetch_native",
@@ -324,10 +314,6 @@ impl ProgramInstruction for VaultProgram {
 }
 
 impl ProgramInstruction for UpgradeManagerProgram {
-	fn get_program_id(&self) -> &str {
-		UPGRADE_MANAGER_PROGRAM
-	}
-
 	fn call_name(&self) -> &str {
 		match self {
 			Self::UpgradeVaultProgram { seed: _, bump: _ } => "upgrade_vault_program",

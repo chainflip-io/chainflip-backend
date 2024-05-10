@@ -10,8 +10,8 @@ use sp_std::{boxed::Box, vec, vec::Vec};
 
 use crate::{
 	sol::{
-		instruction_builder::SolanaInstructionBuilder, SolAddress, SolAmount, SolHash, SolMessage,
-		SolTransaction, SolanaCrypto,
+		instruction_builder::SolanaInstructionBuilder, sol_tx_core::address_derivation, SolAddress,
+		SolAmount, SolHash, SolMessage, SolTransaction, SolanaCrypto,
 	},
 	AllBatch, AllBatchError, ApiCall, Chain, ChainCrypto, ChainEnvironment, ConsolidateCall,
 	ConsolidationError, DepositChannel, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress,
@@ -45,10 +45,14 @@ pub trait SolanaEnvironment:
 					SolanaTransactionBuildingError::CannotLookupAggKey,
 				SolanaEnvAccountLookupKey::AvailableNonceAccount =>
 					SolanaTransactionBuildingError::NoAvailableNonceAccount,
+				SolanaEnvAccountLookupKey::VaultProgram =>
+					SolanaTransactionBuildingError::CannotLookupVaultProgram,
 				SolanaEnvAccountLookupKey::VaultProgramDataAccount =>
 					SolanaTransactionBuildingError::CannotLookupVaultProgramDataAccount,
 				SolanaEnvAccountLookupKey::UpgradeManagerProgramDataAccount =>
 					SolanaTransactionBuildingError::CannotLookupUpgradeManagerProgramDataAccount,
+				SolanaEnvAccountLookupKey::TokenMintPubkey =>
+					SolanaTransactionBuildingError::CannotLookupTokenMintPubkey,
 			},
 		)
 	}
@@ -64,20 +68,25 @@ pub trait SolanaEnvironment:
 pub enum SolanaEnvAccountLookupKey {
 	AggKey,
 	AvailableNonceAccount,
+	VaultProgram,
 	VaultProgramDataAccount,
 	UpgradeManagerProgramDataAccount,
+	TokenMintPubkey,
 }
 
 /// Errors that can arise when building Solana Transactions.
 #[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub enum SolanaTransactionBuildingError {
 	CannotLookupAggKey,
+	CannotLookupVaultProgram,
 	CannotLookupVaultProgramDataAccount,
 	CannotLookupComputePrice,
 	CannotLookupDurableNonce,
 	CannotLookupUpgradeManagerProgramDataAccount,
+	CannotLookupTokenMintPubkey,
 	NoNonceAccountsSet,
 	NoAvailableNonceAccount,
+	FailedToDeriveAddress(crate::sol::AddressDerivationError),
 }
 
 impl From<SolanaTransactionBuildingError> for DispatchError {
@@ -85,6 +94,12 @@ impl From<SolanaTransactionBuildingError> for DispatchError {
 		DispatchError::Other(Box::leak(
 			format!("Failed to build Solana Transaction. {:?}", value).into_boxed_str(),
 		))
+	}
+}
+
+impl From<SolanaTransactionBuildingError> for AllBatchError {
+	fn from(value: SolanaTransactionBuildingError) -> AllBatchError {
+		AllBatchError::DispatchError(value.into())
 	}
 }
 
@@ -222,14 +237,32 @@ impl<Env: 'static> ExecutexSwapAndCall<Solana> for SolanaApi<Env> {
 	}
 }
 
-impl<Env: 'static> AllBatch<Solana> for SolanaApi<Env> {
+impl<Env: SolanaEnvironment> AllBatch<Solana> for SolanaApi<Env> {
 	fn new_unsigned(
-		_fetch_params: vec::Vec<FetchAssetParams<Solana>>,
-		_transfer_params: vec::Vec<TransferAssetParams<Solana>>,
+		fetch_params: vec::Vec<FetchAssetParams<Solana>>,
+		transfer_params: vec::Vec<TransferAssetParams<Solana>>,
 	) -> Result<Self, AllBatchError> {
-		// Create a BatchFetch for all deposit_channels
-		// Figure out how to derive deposit_channels from ChannelId (or pass DepositChannel in)
-		// Create a Transfer for each Transfer
+		let vault_program = Env::lookup_account(SolanaEnvAccountLookupKey::VaultProgram)
+			.map_err(|e| AllBatchError::DispatchError(e.into()))?;
+		let deposit_channels = fetch_params
+			.into_iter()
+			.map(|fetch_param| {
+				address_derivation::derive_deposit_channel::<Env>(
+					fetch_param.deposit_fetch_id,
+					fetch_param.asset,
+					vault_program,
+				)
+				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)
+			})
+			.collect::<Result<Vec<_>, SolanaTransactionBuildingError>>()?;
+
+		let _fetch_tx = Self::batch_fetch(deposit_channels)?;
+
+		let _transfer_txs = transfer_params
+			.into_iter()
+			.map(|transfer_param| Self::transfer(transfer_param))
+			.collect::<Result<Vec<_>, SolanaTransactionBuildingError>>()?;
+
 		todo!("PRO-1348 This should be implemented after allowing Multiple transactions to be returned by this trait.")
 	}
 }

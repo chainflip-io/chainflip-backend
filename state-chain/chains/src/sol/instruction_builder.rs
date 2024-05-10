@@ -78,6 +78,7 @@ impl<Environment: SolanaEnvironment> SolanaInstructionBuilder<Environment> {
 		let agg_key = Environment::lookup_account(SolanaEnvAccountLookupKey::AggKey)?.into();
 		let system_program_id = SolPubkey::from_str(SYSTEM_PROGRAM_ID)
 			.expect("Solana's System Program ID must be correct.");
+		let vault_program = Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgram)?;
 
 		self.instructions
 			.extend(&mut deposit_channels.into_iter().map(|deposit_channel| {
@@ -87,6 +88,7 @@ impl<Environment: SolanaEnvironment> SolanaInstructionBuilder<Environment> {
 							seed: deposit_channel.state.seed,
 							bump: deposit_channel.state.bump,
 						},
+						vault_program.into(),
 						vec![
 							SolAccountMeta::new_readonly(vault_program_data_account, false),
 							SolAccountMeta::new(agg_key, true),
@@ -132,11 +134,14 @@ impl<Environment: SolanaEnvironment> SolanaInstructionBuilder<Environment> {
 		let upgrade_manager_program_data_account = Environment::lookup_account(
 			SolanaEnvAccountLookupKey::UpgradeManagerProgramDataAccount,
 		)?;
+		let vault_program = Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgram)?;
 		let nonce_accounts = Environment::all_nonce_accounts()?;
 
+		// Build instructions to set the new Aggkey
 		self.instructions.append(&mut vec![
 			ProgramInstruction::get_instruction(
 				&VaultProgram::RotateAggKey { skip_transfer_funds: false },
+				vault_program.into(),
 				vec![
 					SolAccountMeta::new(vault_program_data_account.into(), false),
 					SolAccountMeta::new(agg_key.into(), true),
@@ -150,6 +155,8 @@ impl<Environment: SolanaEnvironment> SolanaInstructionBuilder<Environment> {
 				Some(&new_agg_key.into()),
 			),
 		]);
+
+		// Build instructions to update authorization for all Nonce accounts.
 		self.instructions.extend(nonce_accounts.into_iter().map(|nonce_account| {
 			SystemProgramInstruction::nonce_authorize(
 				&nonce_account.into(),
@@ -165,23 +172,17 @@ impl<Environment: SolanaEnvironment> SolanaInstructionBuilder<Environment> {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{
-		sol::{
-			consts::MAX_TRANSACTION_LENGTH,
-			sol_tx_core::{
-				extra_types_for_testing::{Keypair, Signer},
-				generate_deposit_channel,
-				sol_test_values::*,
-			},
-			SolAmount, SolHash, SolMessage, SolTransaction, SolanaDepositChannelState,
+	use crate::sol::{
+		consts::MAX_TRANSACTION_LENGTH,
+		sol_tx_core::{
+			address_derivation::derive_deposit_channel,
+			extra_types_for_testing::{Keypair, Signer},
+			sol_test_values::*,
 		},
-		ChainEnvironment,
+		SolMessage, SolTransaction, SolanaDepositChannelState,
 	};
 
-	const NEXT_NONCE: &str = NONCE_ACCOUNTS[0];
-	const SOL: SolAsset = SolAsset::Sol;
-
-	/// Test deposit channel derived from `sol_tx_core::can_generate_address()`
+	/// Test deposit channel derived from `sol_tx_core::can_derive_address()`
 	/// This is used to check consistency in Fetch logic. This is not a "Valid" deposit channel
 	/// since the `seed` is NOT derived from the `channel_id`.
 	fn get_deposit_channel() -> DepositChannel<Solana> {
@@ -192,54 +193,6 @@ mod test {
 			state: SolanaDepositChannelState { seed: vec![11u8, 12u8, 13u8, 55u8], bump: 255u8 },
 		}
 	}
-
-	pub struct MockSolanaEnvironment;
-	impl ChainEnvironment<SolanaEnvAccountLookupKey, SolAddress> for MockSolanaEnvironment {
-		fn lookup(s: SolanaEnvAccountLookupKey) -> Option<SolAddress> {
-			Some(match s {
-				SolanaEnvAccountLookupKey::AggKey => Keypair::from_bytes(&RAW_KEYPAIR)
-					.expect("Key pair generation must succeed")
-					.pubkey()
-					.into(),
-				SolanaEnvAccountLookupKey::AvailableNonceAccount =>
-					SolAddress::from_str(NEXT_NONCE).unwrap(),
-				SolanaEnvAccountLookupKey::VaultProgramDataAccount =>
-					SolAddress::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
-				SolanaEnvAccountLookupKey::UpgradeManagerProgramDataAccount =>
-					SolAddress::from_str(UPGRADE_MANAGER_PROGRAM_DATA_ACCOUNT).unwrap(),
-			})
-		}
-	}
-
-	/// Compute unit price
-	impl ChainEnvironment<(), SolAmount> for MockSolanaEnvironment {
-		fn lookup(_s: ()) -> Option<u64> {
-			Some(COMPUTE_UNIT_PRICE)
-		}
-	}
-
-	/// Durable Nonce
-	impl ChainEnvironment<(), SolHash> for MockSolanaEnvironment {
-		fn lookup(_s: ()) -> Option<SolHash> {
-			Some(SolHash::from_str(TEST_DURABLE_NONCE).expect("Durable nonce must be valid"))
-		}
-	}
-
-	/// All Nonce accounts
-	impl ChainEnvironment<(), Vec<SolAddress>> for MockSolanaEnvironment {
-		fn lookup(_s: ()) -> Option<Vec<SolAddress>> {
-			Some(
-				NONCE_ACCOUNTS
-					.into_iter()
-					.map(|key| {
-						SolPubkey::from_str(key).expect("Nonce accounts must be valid").into()
-					})
-					.collect::<Vec<_>>(),
-			)
-		}
-	}
-
-	impl SolanaEnvironment for MockSolanaEnvironment {}
 
 	#[track_caller]
 	fn test_constructed_instruction_set(
@@ -283,9 +236,14 @@ mod test {
 
 	#[test]
 	fn can_create_batch_fetch_instruction_set() {
+		let vault_program =
+			MockSolanaEnvironment::lookup_account(SolanaEnvAccountLookupKey::VaultProgram).unwrap();
+
 		// Use valid Deposit channel derived from `channel_id`
-		let deposit_channel_0 = generate_deposit_channel(0u64);
-		let deposit_channel_1 = generate_deposit_channel(1u64);
+		let deposit_channel_0 =
+			derive_deposit_channel::<MockSolanaEnvironment>(0u64, SOL, vault_program).unwrap();
+		let deposit_channel_1 =
+			derive_deposit_channel::<MockSolanaEnvironment>(1u64, SOL, vault_program).unwrap();
 
 		// Construct the batch fetch instruction set
 		let instruction_set = SolanaInstructionBuilder::<MockSolanaEnvironment>::default()

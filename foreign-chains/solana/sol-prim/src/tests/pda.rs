@@ -157,39 +157,4 @@ mod happy {
 			],
 		);
 	}
-
-	#[test]
-	fn get_deposit_channel_with_bump() {
-		let vault_program_id: Address =
-			"8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf".parse().expect("public key");
-
-		let (pda, bump) = Pda::from_address(vault_program_id)
-			.expect("derive")
-			.chain_seed([1])
-			.expect("chain-seed")
-			.finish()
-			.expect("finish");
-
-		assert_eq!(
-			pda,
-			"5N72J9YQKpky5yFnrWWpFcBQsWpFMK4rW6b2Ue3YmYcu".parse().expect("public key")
-		);
-		assert_eq!(bump, 255);
-
-		let vault_program_id: Address =
-			"8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf".parse().expect("public key");
-
-		let (pda, bump) = Pda::from_address(vault_program_id)
-			.expect("derive")
-			.chain_seed([1, 2])
-			.expect("chain-seed")
-			.finish()
-			.expect("finish");
-
-		assert_eq!(
-			pda,
-			"6PkQHEp18NgEDS5ydkgivU4pzTV6sYmoEaHvbbv4un73".parse().expect("public key")
-		);
-		assert_eq!(bump, 255);
-	}
 }

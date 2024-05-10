@@ -9,21 +9,19 @@ use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
 use crate::sol::{consts::*, SolAddress, SolHash, SolSignature};
 
-#[cfg(test)]
-use crate::{DepositChannel, Solana};
-
-#[cfg(test)]
-use crate::sol::sol_tx_core::extra_types_for_testing::{SignerError, Signers, TransactionError};
-#[cfg(test)]
-use thiserror::Error;
-
+pub mod address_derivation;
 pub mod bpf_loader_instructions;
 pub mod compute_budget;
-#[cfg(test)]
-pub mod extra_types_for_testing;
 pub mod program_instructions;
 pub mod short_vec;
 pub mod token_instructions;
+
+#[cfg(test)]
+use thiserror::Error;
+#[cfg(test)]
+pub mod extra_types_for_testing;
+#[cfg(test)]
+use extra_types_for_testing::{SignerError, Signers, TransactionError};
 
 use program_instructions::SystemProgramInstruction;
 
@@ -797,85 +795,18 @@ impl FromStr for Hash {
 	}
 }
 
+/// Values ans types used for testing purposes
 #[cfg(test)]
-pub fn generate_address(
-	seed: impl AsRef<[u8]>,
-) -> Result<(SolAddress, u8), crate::sol::AddressDerivationError> {
-	crate::sol::DerivedAddressBuilder::from_address(
-		SolAddress::from_str(sol_test_values::VAULT_PROGRAM).unwrap(),
-	)?
-	.chain_seed(seed)?
-	.finish()
-}
-
-#[allow(dead_code)]
-pub fn get_associated_token_account(wallet_address: Pubkey, mint_pubkey: Pubkey) -> (Pubkey, u8) {
-	// PublicKey.findProgramAddressSync(
-	// 	[
-	// 		walletAddress.toBuffer(),
-	// 		TOKEN_PROGRAM_ID.toBuffer(),
-	// 		tokenMintAddress.toBuffer(),
-	// 	],
-	// 	SPL_ASSOCIATED_TOKEN_ACCOUNT_PROGRAM_ID
-	// )[0];
-
-	let spl_associated_token_program_id =
-		SolAddress::from_str(ASSOCIATED_TOKEN_PROGRAM_ID).unwrap();
-
-	let token_program_id = SolAddress::from_str(TOKEN_PROGRAM_ID).unwrap();
-
-	let (address, bump) =
-		crate::sol::DerivedAddressBuilder::from_address(spl_associated_token_program_id)
-			.expect("derive")
-			.chain_seed(SolAddress::from(wallet_address))
-			.expect("chain-seed")
-			.chain_seed(token_program_id)
-			.expect("chain-seed")
-			.chain_seed(SolAddress::from(mint_pubkey))
-			.expect("chain-seed")
-			.finish()
-			.expect("finish");
-	(Pubkey::from(address), bump)
-}
-
-#[test]
-fn derive_associated_token_account_on_curve() {
-	let wallet_address = Pubkey::from_str("HfasueN6RNPjSM6rKGH5dga6kS2oUF8siGH3m4MXPURp").unwrap();
-
-	let mint_pubkey = Pubkey::from_str(sol_test_values::MINT_PUB_KEY).unwrap();
-
-	let (pda, _) = get_associated_token_account(wallet_address, mint_pubkey);
-
-	assert_eq!(pda, "BeRexE9vZSdQMNg65PAnhy3rRPUxF6oWsxyNegYxySZD".parse().expect("public key"));
-}
-
-#[test]
-fn derive_associated_token_account_off_curve() {
-	let pda_address = Pubkey::from_str("9j17hjg8wR2uFxJAJDAFahwsgTCNx35sc5qXSxDmuuF6").unwrap();
-
-	let mint_pubkey = Pubkey::from_str(sol_test_values::MINT_PUB_KEY).unwrap();
-
-	let (pda, _) = get_associated_token_account(pda_address, mint_pubkey);
-
-	assert_eq!(pda, "DUjCLckPi4g7QAwBEwuFL1whpgY6L9fxwXnqbWvS2pcW".parse().expect("public key"));
-}
-
-/// Derive deposit channels from the `channel_id` and our `VAULT_PROGRAM` account.
-#[cfg(test)]
-pub fn generate_deposit_channel(channel_id: u64) -> DepositChannel<Solana> {
-	let seed = channel_id.to_le_bytes();
-	let (pda, bump) = generate_address(seed).expect("Address generation must work.");
-	DepositChannel::<Solana> {
-		channel_id,
-		address: pda,
-		asset: crate::assets::sol::Asset::Sol,
-		state: crate::sol::SolanaDepositChannelState { seed: seed.to_vec(), bump },
-	}
-}
-
-/// Values used for testing purposes
 pub mod sol_test_values {
-	use crate::sol::{SolAmount, SolComputeLimit};
+	use super::extra_types_for_testing::{Keypair, Signer};
+	use crate::{
+		sol::{
+			api::{SolanaEnvAccountLookupKey, SolanaEnvironment},
+			SolAddress, SolAmount, SolAsset, SolComputeLimit, SolHash, SolPubkey,
+		},
+		ChainEnvironment,
+	};
+	use core::str::FromStr;
 
 	pub const VAULT_PROGRAM: &str = "8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf";
 	pub const VAULT_PROGRAM_DATA_ADDRESS: &str = "3oEKmL4nsw6RDZWhkYTdCUmjxDrzVkm1cWayPsvn3p57";
@@ -917,6 +848,61 @@ pub mod sol_test_values {
 	pub const FETCH_FROM_ACCOUNT: &str = "XFmi41e1L9t732KoZdmzMSVige3SjjzsLzk1rW4rhwP";
 	pub const TRANSFER_TO_ACCOUNT: &str = "4MqL4qy2W1yXzuF3PiuSMehMbJzMuZEcBwVvrgtuhx7V";
 	pub const NEW_AGG_KEY: &str = "7x7wY9yfXjRmusDEfPPCreU4bP49kmH4mqjYUXNAXJoM";
+
+	pub const NEXT_NONCE: &str = NONCE_ACCOUNTS[0];
+	pub const SOL: SolAsset = SolAsset::Sol;
+
+	pub struct MockSolanaEnvironment;
+	impl ChainEnvironment<SolanaEnvAccountLookupKey, SolAddress> for MockSolanaEnvironment {
+		fn lookup(s: SolanaEnvAccountLookupKey) -> Option<SolAddress> {
+			Some(match s {
+				SolanaEnvAccountLookupKey::AggKey => Keypair::from_bytes(&RAW_KEYPAIR)
+					.expect("Key pair generation must succeed")
+					.pubkey()
+					.into(),
+				SolanaEnvAccountLookupKey::AvailableNonceAccount =>
+					SolAddress::from_str(NEXT_NONCE).unwrap(),
+				SolanaEnvAccountLookupKey::VaultProgram =>
+					SolAddress::from_str(VAULT_PROGRAM).unwrap(),
+				SolanaEnvAccountLookupKey::VaultProgramDataAccount =>
+					SolAddress::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+				SolanaEnvAccountLookupKey::UpgradeManagerProgramDataAccount =>
+					SolAddress::from_str(UPGRADE_MANAGER_PROGRAM_DATA_ACCOUNT).unwrap(),
+				SolanaEnvAccountLookupKey::TokenMintPubkey =>
+					SolAddress::from_str(MINT_PUB_KEY).unwrap(),
+			})
+		}
+	}
+
+	/// Compute unit price
+	impl ChainEnvironment<(), SolAmount> for MockSolanaEnvironment {
+		fn lookup(_s: ()) -> Option<u64> {
+			Some(COMPUTE_UNIT_PRICE)
+		}
+	}
+
+	/// Durable Nonce
+	impl ChainEnvironment<(), SolHash> for MockSolanaEnvironment {
+		fn lookup(_s: ()) -> Option<SolHash> {
+			Some(SolHash::from_str(TEST_DURABLE_NONCE).expect("Durable nonce must be valid"))
+		}
+	}
+
+	/// All Nonce accounts
+	impl ChainEnvironment<(), Vec<SolAddress>> for MockSolanaEnvironment {
+		fn lookup(_s: ()) -> Option<Vec<SolAddress>> {
+			Some(
+				NONCE_ACCOUNTS
+					.into_iter()
+					.map(|key| {
+						SolPubkey::from_str(key).expect("Nonce accounts must be valid").into()
+					})
+					.collect::<Vec<_>>(),
+			)
+		}
+	}
+
+	impl SolanaEnvironment for MockSolanaEnvironment {}
 }
 
 #[cfg(test)]
@@ -924,10 +910,10 @@ mod tests {
 	use crate::sol::{
 		consts::*,
 		sol_tx_core::{
+			address_derivation::derive_deposit_channel,
 			bpf_loader_instructions::set_upgrade_authority,
 			compute_budget::ComputeBudgetInstruction,
 			extra_types_for_testing::{Keypair, Signer},
-			generate_address, generate_deposit_channel,
 			program_instructions::{
 				ProgramInstruction, SystemProgramInstruction, UpgradeManagerProgram, VaultProgram,
 			},
@@ -936,6 +922,7 @@ mod tests {
 			AccountMeta, BorshDeserialize, BorshSerialize, Hash, Instruction, Message, Pubkey,
 			Transaction,
 		},
+		SolAddress,
 	};
 	use core::str::FromStr;
 
@@ -944,35 +931,6 @@ mod tests {
 		Initialize,
 		Deposit { lamports: u64 },
 		Withdraw { lamports: u64 },
-	}
-
-	#[test]
-	fn can_generate_address() {
-		let channel_0_seed = 0u64.to_le_bytes();
-		let channel_1_seed = 1u64.to_le_bytes();
-
-		assert_eq!(
-			generate_address(channel_0_seed).unwrap(),
-			(
-				Pubkey::from_str("JDtAzKWKzQJCiHCfK4PU7qYuE4wChxuqfDqQhRbv6kwX").unwrap().into(),
-				254u8
-			)
-		);
-		assert_eq!(
-			generate_address(channel_1_seed).unwrap(),
-			(
-				Pubkey::from_str("32qRitYeor2v7Rb3M2iL8PHkoyqhcoCCqYuWCNKqstN7").unwrap().into(),
-				255u8
-			)
-		);
-
-		assert_eq!(
-			generate_address([11u8, 12u8, 13u8, 55u8]).unwrap(),
-			(
-				Pubkey::from_str("XFmi41e1L9t732KoZdmzMSVige3SjjzsLzk1rW4rhwP").unwrap().into(),
-				255u8
-			)
-		);
 	}
 
 	#[test]
@@ -1065,6 +1023,7 @@ mod tests {
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
 			ProgramInstruction::get_instruction(
 				&VaultProgram::FetchNative { seed: vec![11u8, 12u8, 13u8, 55u8], bump: 255 },
+				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
 				vec![
 					AccountMeta::new_readonly(
 						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
@@ -1098,10 +1057,13 @@ mod tests {
 		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
+		let vault_program = SolAddress::from_str(VAULT_PROGRAM).unwrap();
 
-		// Deposit channel generated in `can_generate_address()`
-		let deposit_channel_0 = generate_deposit_channel(0u64);
-		let deposit_channel_1 = generate_deposit_channel(1u64);
+		// Deposit channel generated in `can_derive_address()`
+		let deposit_channel_0 =
+			derive_deposit_channel::<MockSolanaEnvironment>(0u64, SOL, vault_program).unwrap();
+		let deposit_channel_1 =
+			derive_deposit_channel::<MockSolanaEnvironment>(1u64, SOL, vault_program).unwrap();
 
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
@@ -1115,6 +1077,7 @@ mod tests {
 					seed: deposit_channel_0.state.seed.to_vec(),
 					bump: deposit_channel_0.state.bump,
 				},
+				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
 				vec![
 					AccountMeta::new_readonly(
 						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
@@ -1130,6 +1093,7 @@ mod tests {
 					seed: deposit_channel_1.state.seed,
 					bump: deposit_channel_1.state.bump,
 				},
+				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
 				vec![
 					AccountMeta::new_readonly(
 						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
@@ -1183,6 +1147,7 @@ mod tests {
 					amount: 100000000,
 					decimals: 6,
 				},
+				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
 				vec![
 					AccountMeta::new_readonly(
 						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
@@ -1235,6 +1200,7 @@ mod tests {
 			),
 			ProgramInstruction::get_instruction(
 				&VaultProgram::TransferTokens { amount: 2, decimals: 6 },
+				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
 				vec![
 					AccountMeta::new_readonly(
 						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
@@ -1279,6 +1245,7 @@ mod tests {
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
 			ProgramInstruction::get_instruction(
 				&VaultProgram::RotateAggKey { skip_transfer_funds: false },
+				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
 				vec![
 					AccountMeta::new(Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(), false),
 					AccountMeta::new(agg_key_pubkey, true),
@@ -1335,6 +1302,7 @@ mod tests {
 					message: vec![124u8, 29u8, 15u8, 7u8],
 					amount,
 				},
+				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
 				vec![
 					AccountMeta::new_readonly(
 						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
@@ -1386,6 +1354,7 @@ mod tests {
 			),
 			ProgramInstruction::get_instruction(
 				&VaultProgram::TransferTokens { amount, decimals: 6 },
+				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
 				vec![
 					AccountMeta::new_readonly(
 						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
@@ -1413,6 +1382,7 @@ mod tests {
 					message: vec![124u8, 29u8, 15u8, 7u8],
 					amount,
 				},
+				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
 				vec![
 					AccountMeta::new_readonly(
 						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
@@ -1464,6 +1434,7 @@ mod tests {
 					seed: UPGRADE_MANAGER_PDA_SIGNER_SEED.to_vec(),
 					bump: UPGRADE_MANAGER_PDA_SIGNER_BUMP,
 				},
+				Pubkey::from_str(UPGRADE_MANAGER_PROGRAM).unwrap(),
 				vec![
 					AccountMeta::new_readonly(
 						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
