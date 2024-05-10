@@ -10,9 +10,9 @@ import { setupSwaps } from '../shared/setup_swaps';
 import { runWithTimeout } from '../shared/utils';
 
 async function main(): Promise<void> {
-  console.log("=== Setup concurrent ===");
+  console.log('=== Setup concurrent ===');
   await Promise.all([setupSwaps(), setupBoostPools()]);
-  console.log("=== Setup concurrent complete ===");
+  console.log('=== Setup concurrent complete ===');
   process.exit(0);
 }
 
