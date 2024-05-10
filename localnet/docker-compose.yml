@@ -9,12 +9,12 @@ services:
     command: /bin/sh -c "cp -R /initial-state/* /localnet-initial-state"
 
   init-solana:
-    image: ghcr.io/chainflip-io/solana-localnet-ledger:latest
+    image: ghcr.io/chainflip-io/solana-localnet-ledger:50
     container_name: init-solana
     platform: linux/amd64
     volumes:
       - "/tmp/solana/test-ledger:/test-ledger"
-    command: /bin/sh -c "cp -R /solana/ledger/* /test-ledger && chwon -R runner:runner /test-ledger"
+    command: /bin/sh -c "cp -R /solana/ledger/* /test-ledger"
 
   arb-init:
     image: ghcr.io/chainflip-io/chainflip-eth-contracts/arbitrum-gizmo-shop:v1.1.2-usdt-${NODE_COUNT}
