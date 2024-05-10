@@ -5,7 +5,7 @@ WORKFLOW=build-localnet
 GENESIS_NODES=("bashful" "doc" "dopey")
 SELECTED_NODES=("bashful")
 REQUIRED_BINARIES="engine-runner chainflip-node"
-INITIAL_CONTAINERS="init init-solana"
+INITIAL_CONTAINERS="init"
 CORE_CONTAINERS="bitcoin geth polkadot redis"
 ARB_CONTAINERS="sequencer staker-unsafe poster"
 export NODE_COUNT="1-node"
@@ -129,6 +129,7 @@ build-localnet() {
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" pull >>$DEBUG_OUTPUT_DESTINATION 2>&1
   echo "🔮 Initializing Network"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
+  unzip localnet/init/solana-ledger.zip -d /tmp/solana/ >>$DEBUG_OUTPUT_DESTINATION 2>&1
   echo "🦺 Updating init state files permissions ..."
 
   if [[ $CI == true ]]; then
@@ -137,8 +138,9 @@ build-localnet() {
     sudo chmod -R 777 /tmp/chainflip
     sudo chmod -R 777 /tmp/solana
     sudo chown -R $USER:$USER /tmp/solana
-    sudo find /tmp/solana -type d -exec chown $USER:$USER {} +
-    sudo find /tmp/solana -type f -exec chown $USER:$USER {} +
+    sudo chown -R $USER:$USER /tmp/solana/*
+    sudo find /tmp/solana/test-ledger -type d -exec chown $USER:$USER {} +
+    sudo find /tmp/solana/test-ledger -type f -exec chown $USER:$USER {} +
   else
     chmod -R 777 /tmp/chainflip
     chmod -R 777 /tmp/solana
