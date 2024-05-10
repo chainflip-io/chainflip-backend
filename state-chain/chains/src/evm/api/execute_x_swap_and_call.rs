@@ -24,7 +24,6 @@ pub struct ExecutexSwapAndCall {
 }
 
 impl ExecutexSwapAndCall {
-	#[allow(clippy::too_many_arguments)]
 	pub(crate) fn new(
 		transfer_param: EncodableTransferAssetParams,
 		source_chain: ForeignChain,

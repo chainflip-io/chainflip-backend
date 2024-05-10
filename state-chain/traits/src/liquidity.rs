@@ -8,7 +8,6 @@ use scale_info::TypeInfo;
 pub trait SwapDepositHandler {
 	type AccountId;
 
-	#[allow(clippy::too_many_arguments)]
 	fn schedule_swap_from_channel(
 		deposit_address: ForeignChainAddress,
 		deposit_block_height: u64,
