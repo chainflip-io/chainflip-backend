@@ -5,7 +5,7 @@ WORKFLOW=build-localnet
 GENESIS_NODES=("bashful" "doc" "dopey")
 SELECTED_NODES=("bashful")
 REQUIRED_BINARIES="engine-runner chainflip-node"
-INITIAL_CONTAINERS="init"
+INITIAL_CONTAINERS="init init-solana"
 CORE_CONTAINERS="bitcoin geth polkadot redis"
 ARB_CONTAINERS="sequencer staker-unsafe poster"
 export NODE_COUNT="1-node"
@@ -137,7 +137,6 @@ build-localnet() {
     sudo chmod -R 777 /tmp/chainflip
     sudo chmod -R 777 /tmp/solana
     sudo chown -R $USER:$USER /tmp/solana
-    sudo chown -R $USER:$USER /tmp/solana/*
   else
     chmod -R 777 /tmp/chainflip
     chmod -R 777 /tmp/solana
