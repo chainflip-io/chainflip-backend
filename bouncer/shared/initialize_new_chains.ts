@@ -22,7 +22,7 @@ export async function initializeArbitrumChain() {
 
 export async function initializeSolanaChain() {
   console.log('Initializing Solana');
-  const solInitializationRequest = observeEvent('SolanaVault:ChainInitialized');
+  const solInitializationRequest = observeEvent('solanaVault:ChainInitialized');
   await submitGovernanceExtrinsic((chainflip) => chainflip.tx.solanaVault.initializeChain());
   await solInitializationRequest;
 }
