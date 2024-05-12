@@ -97,8 +97,6 @@ jobs:
         if: ${{ ! inputs.full_bouncer }}
         working-directory: bouncer
         run: |
-          solana program show 8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf
-          solana balance HfasueN6RNPjSM6rKGH5dga6kS2oUF8siGH3m4MXPURp
           ./run.sh
 
       - name: Print chainflip-engine logs 🚗
