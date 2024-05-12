@@ -76,8 +76,6 @@ jobs:
         run: |
           set -x
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          mkdir -p /tmp/solana
-          chown -R runner:runner /tmp/solana
           mkdir -p /tmp/chainflip/bashful
           mkdir -p /tmp/chainflip/doc
           mkdir -p /tmp/chainflip/dopey
