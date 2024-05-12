@@ -20,6 +20,13 @@ export async function initializeArbitrumChain() {
   await arbInitializationRequest;
 }
 
+export async function initializeSolanaChain() {
+  console.log('Initializing Solana');
+  const solInitializationRequest = observeEvent('SolanaVault:ChainInitialized');
+  await submitGovernanceExtrinsic((chainflip) => chainflip.tx.solanaVault.initializeChain());
+  await solInitializationRequest;
+}
+
 export async function initializeArbitrumContracts(
   arbClient: Web3,
   arbKey: { pubKeyX: string; pubKeyYParity: string },
@@ -83,8 +90,6 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
     console.log('Solana not running, skipping key initialization');
     return;
   }
-
-  console.log('Initializing Solana programs');
 
   const solanaVaultProgramId = new PublicKey(getContractAddress('Solana', 'VAULT'));
   const solanaUpgradeManagerProgramId = new PublicKey(
