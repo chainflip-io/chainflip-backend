@@ -100,7 +100,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
   const discriminatorString = vaultIdl.instructions.find(
     (instruction: { name: string }) => instruction.name === 'initialize',
   ).discriminator;
-  const discriminator = new Uint8Array(JSON.parse(discriminatorString));
+  const discriminator = new Uint8Array(discriminatorString.map(Number));
 
   const solKeyBuffer = Buffer.from(solKey.slice(2), 'hex');
   const newAggKey = new PublicKey(encodeSolAddress(solKey));
