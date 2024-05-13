@@ -58,8 +58,8 @@ pub trait LpBalanceApi {
 	/// Record the fees collected by the account.
 	fn record_fees(who: &Self::AccountId, amount: AssetAmount, asset: Asset);
 
-	/// Returns the asset balances of the given account.
-	fn asset_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError>;
+	/// Returns the asset free balances of the given account.
+	fn free_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError>;
 }
 
 pub trait PoolApi {

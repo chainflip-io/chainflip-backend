@@ -365,7 +365,7 @@ fn account_registration_and_deregistration() {
 		assert!(
 			LiquidityRefundAddress::<Test>::get(&LP_ACCOUNT_ID, ForeignChain::Ethereum).is_none()
 		);
-		assert!(<LiquidityProvider as LpBalanceApi>::asset_balances(&LP_ACCOUNT_ID)
+		assert!(<LiquidityProvider as LpBalanceApi>::free_balances(&LP_ACCOUNT_ID)
 			.unwrap()
 			.iter()
 			.all(|(_, amount)| *amount == 0));
