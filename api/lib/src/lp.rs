@@ -330,7 +330,6 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		))
 	}
 
-	#[allow(clippy::too_many_arguments)]
 	async fn update_limit_order(
 		&self,
 		base_asset: Asset,
@@ -357,7 +356,6 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		.await
 	}
 
-	#[allow(clippy::too_many_arguments)]
 	async fn set_limit_order(
 		&self,
 		base_asset: Asset,
