@@ -58,7 +58,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	                                                                * Solana address, */
 	sol_vault_program_data_address: SolAddress([0; 32]), // TODO: fill in the valid Solana address,
 	// encodes to "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
-	solusdc_token_address: SolAddress(hex_literal::hex![
+	solusdc_address: SolAddress(hex_literal::hex![
 		"3b442cb3912157f13a933d0134282d032b5ffecd01a2dbf1b7790608df002ea7"
 	]),
 	sol_vault_emit_event_address: SolAddress([0; 32]), // TODO: fill in the valid Solana address,

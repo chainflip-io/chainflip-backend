@@ -77,14 +77,14 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		"298f27f13ce155954657f0238e63932beb510964abd44e20e9603e6b6f2b424a"
 	]),
 	// encodes to "24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p"
-	solusdc_token_address: SolAddress(hex_literal::hex![
+	solusdc_address: SolAddress(hex_literal::hex![
 		"0fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee87"
 	]),
 	// encodes to "CioaL3E9GAEkExjSuhTRLRKAiDQkqDQTYAR345CEDGaL"
 	sol_vault_emit_event_address: SolAddress(hex_literal::hex![
 		"ae26080da692562cc5907d3f401b6c686f6d64f927065f9c1b32a1dc49d384b9"
 	]),
-	sol_genesis_hash: SolHash([0; 32]), // TODO: How do we handle this?
+	sol_genesis_hash: SolHash([0; 32]), /* put correct values here */
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 3 * HOURS;

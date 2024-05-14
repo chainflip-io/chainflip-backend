@@ -1,6 +1,10 @@
 use crate::{safe_mode, Runtime};
-use cf_chains::instances::{
-	ArbitrumInstance, BitcoinInstance, EthereumInstance, PolkadotInstance, SolanaInstance,
+use cf_chains::{
+	instances::{
+		ArbitrumInstance, BitcoinInstance, EthereumInstance, PolkadotInstance, SolanaInstance,
+	},
+	sol::SolTrackedData,
+	ChainState,
 };
 use cf_traits::SafeMode;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
@@ -44,7 +48,7 @@ pub struct SolanaIntegration;
 
 impl OnRuntimeUpgrade for SolanaIntegration {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		use cf_chains::sol::SolAddress;
+		use cf_chains::sol::{SolAddress, SolHash};
 		use frame_support::assert_ok;
 
 		assert_ok!(pallet_cf_environment::RuntimeSafeMode::<Runtime>::translate(
@@ -93,9 +97,9 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 			upgrade_manager_program_data_address,
 			vault_program_data_address,
 			nonce_accounts,
-			usdc_token_address,
+			usdc_address,
 			vault_emit_event_address,
-			sol_genesis_hash,
+			genesis_hash,
 			start_block_number,
 			deposit_channel_lifetime,
 		): (
@@ -117,19 +121,35 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 			// TODO: Continue here to finish the migration
 			cf_runtime_upgrade_utilities::genesis_hashes::BERGHAIN => {
 				(
-					hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
-					hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
-					hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
-					hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
-					hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
 					[115, 105, 103, 110, 101, 114],
-					hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
-					hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
-					vec![],                                                        /* put correct values here */
-					hex_literal::hex!(
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
+					vec![], /* put correct values here */
+					SolAddress(hex_literal::hex!(
 						"c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61"
-					),
-					hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+					)),
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
 					SolHash(hex_literal::hex![
 						"45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0"
 					]),
@@ -141,19 +161,35 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 
 			cf_runtime_upgrade_utilities::genesis_hashes::PERSEVERANCE => {
 				(
-					hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
-					hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
-					hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
-					hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
-					hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
 					[115, 105, 103, 110, 101, 114],
-					hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
-					hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
-					vec![],                                                        /* put correct values here */
-					hex_literal::hex!(
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
+					vec![], /* put correct values here */
+					SolAddress(hex_literal::hex!(
 						"3b442cb3912157f13a933d0134282d032b5ffecd01a2dbf1b7790608df002ea7"
-					),
-					hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+					)),
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
 					SolHash(hex_literal::hex![
 						"ce59db5080fc2c6d3bcf7ca90712d3c2e5e6c28f27f0dfbb9953bdb0894c03ab"
 					]),
@@ -164,19 +200,35 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 			},
 			cf_runtime_upgrade_utilities::genesis_hashes::SISYPHOS => {
 				(
-					hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
-					hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
-					hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
-					hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
-					hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
 					[115, 105, 103, 110, 101, 114],
-					hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
-					hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
-					vec![],                                                        /* put correct values here */
-					hex_literal::hex!(
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
+					vec![], /* put correct values here */
+					SolAddress(hex_literal::hex!(
 						"3b442cb3912157f13a933d0134282d032b5ffecd01a2dbf1b7790608df002ea7"
-					),
-					hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+					)),
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
 					SolHash(hex_literal::hex![
 						"ce59db5080fc2c6d3bcf7ca90712d3c2e5e6c28f27f0dfbb9953bdb0894c03ab"
 					]),
@@ -188,39 +240,37 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 			_ => {
 				// Assume testnet
 				(
-					hex_literal::hex!(
+					SolAddress(hex_literal::hex!(
 						"72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c"
-					),
-					hex_literal::hex!(
+					)),
+					SolAddress(hex_literal::hex!(
 						"4a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b"
-					),
-					hex_literal::hex!(
+					)),
+					SolAddress(hex_literal::hex!(
 						"81a0052237ad76cb6e88fe505dc3d96bba6d8889f098b1eaa342ec8445880521"
-					),
-					hex_literal::hex!(
+					)),
+					SolAddress(hex_literal::hex!(
 						"b966a2b36557938f49cc5d00f8f12d86f16f48e03b63c8422967dba621ab60bf"
-					),
-					hex_literal::hex!(
+					)),
+					SolAddress(hex_literal::hex!(
 						"1068c72f83398081684c491910b66f8d8cca0edc00cbcf11c89f86c5c39d80f7"
-					),
+					)),
 					[115, 105, 103, 110, 101, 114],
-					hex_literal::hex!(
+					SolAddress(hex_literal::hex!(
 						"a5cfec75730f8780ded36a7c8ae1dcc60d84e1a830765fc6108e7b40402e4951"
-					),
-					hex_literal::hex!(
+					)),
+					SolAddress(hex_literal::hex!(
 						"298f27f13ce155954657f0238e63932beb510964abd44e20e9603e6b6f2b424a"
-					),
+					)),
 					vec![], /* put correct values here */
-					hex_literal::hex!(
+					SolAddress(hex_literal::hex!(
 						"0fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee87"
-					),
-					hex_literal::hex!(
+					)),
+					SolAddress(hex_literal::hex!(
 						"ae26080da692562cc5907d3f401b6c686f6d64f927065f9c1b32a1dc49d384b9"
-					),
-					SolHash(hex_literal::hex![
-						"ce59db5080fc2c6d3bcf7ca90712d3c2e5e6c28f27f0dfbb9953bdb0894c03ab"
-					]),
-					0, /* put correct values here */
+					)),
+					SolHash([0; 32]), /* put correct values here */
+					0,                /* put correct values here */
 					// // state-chain/node/src/chain_spec/testnet.rs
 					2 * 60 * 60 * 10 / 4,
 				)
@@ -228,6 +278,40 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 		};
 
 		pallet_cf_environment::SolanaVaultAddress::<Runtime>::put(vault_address);
+		pallet_cf_environment::SolanaVaultDataAccountAddress::<Runtime>::put(
+			vault_data_account_address,
+		);
+		pallet_cf_environment::SolanaTokenVaultAddress::<Runtime>::put(token_vault_address);
+		pallet_cf_environment::SolanaTokenVaultUsdcAddress::<Runtime>::put(
+			token_vault_usdc_address,
+		);
+		pallet_cf_environment::SolanaUpgradeManagerAddress::<Runtime>::put(upgrade_manager_address);
+		pallet_cf_environment::SolanaUpgradeManagerSignerSeed::<Runtime>::put(
+			upgrade_manager_signer_seed,
+		);
+		pallet_cf_environment::SolanaUpgradeManagerProgramDataAddress::<Runtime>::put(
+			upgrade_manager_program_data_address,
+		);
+		pallet_cf_environment::SolanaVaultProgramDataAddress::<Runtime>::put(
+			vault_program_data_address,
+		);
+		pallet_cf_environment::SolanaNonceAccounts::<Runtime>::put(nonce_accounts);
+		pallet_cf_environment::SolanaGenesisHash::<Runtime>::put(genesis_hash);
+		// TODO: Add for token support
+		// pallet_cf_environment::SolanaSupportedAssets::<Runtime>::insert(SolUsdc, usdc_address);
+		pallet_cf_chain_tracking::CurrentChainState::<Runtime, SolanaInstance>::put(ChainState {
+			block_height: start_block_number,
+			tracked_data: SolTrackedData { priority_fee: 0u32.into() },
+		});
+		pallet_cf_environment::SolanaVaultEmitEventAddress::<Runtime>::put(
+			vault_emit_event_address,
+		);
+
+		pallet_cf_ingress_egress::DepositChannelLifetime::<Runtime, SolanaInstance>::put(
+			deposit_channel_lifetime,
+		);
+		// We shoudln't be using this at all
+		pallet_cf_ingress_egress::WitnessSafetyMargin::<Runtime, SolanaInstance>::put(1);
 
 		Weight::zero()
 	}

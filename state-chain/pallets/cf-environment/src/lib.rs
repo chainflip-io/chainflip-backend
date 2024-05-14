@@ -222,6 +222,10 @@ pub mod pallet {
 	pub type SolanaTokenVaultAddress<T> = StorageValue<_, SolAddress, ValueQuery>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn sol_token_vault_usdc_address)]
+	pub type SolanaTokenVaultUsdcAddress<T> = StorageValue<_, SolAddress, ValueQuery>;
+
+	#[pallet::storage]
 	#[pallet::getter(fn sol_upgrade_manager_address)]
 	pub type SolanaUpgradeManagerAddress<T> = StorageValue<_, SolAddress, ValueQuery>;
 
@@ -504,7 +508,7 @@ pub mod pallet {
 		pub sol_upgrade_manager_program_data_address: SolAddress,
 		pub sol_vault_program_data_address: SolAddress,
 		pub sol_nonce_accounts: Vec<(SolAddress, SolHash, bool)>,
-		pub solusdc_token_address: SolAddress,
+		pub solusdc_address: SolAddress,
 		pub sol_vault_emit_event_address: SolAddress,
 		pub sol_genesis_hash: SolHash,
 		pub network_environment: NetworkEnvironment,
@@ -541,6 +545,7 @@ pub mod pallet {
 			SolanaVaultAddress::<T>::set(self.sol_vault_address);
 			SolanaVaultDataAccountAddress::<T>::set(self.sol_vault_data_account_address);
 			SolanaTokenVaultAddress::<T>::set(self.sol_token_vault_address);
+			SolanaTokenVaultUsdcAddress::<T>::set(self.sol_token_vault_usdc_address);
 			SolanaUpgradeManagerAddress::<T>::set(self.sol_upgrade_manager_address);
 			SolanaUpgradeManagerSignerSeed::<T>::set(self.sol_upgrade_manager_signer_seed);
 			SolanaUpgradeManagerProgramDataAddress::<T>::set(
@@ -548,7 +553,7 @@ pub mod pallet {
 			);
 			SolanaVaultProgramDataAddress::<T>::set(self.sol_vault_program_data_address);
 			// SolanaNonceAccounts::<T>::set(self.sol_nonce_accounts);
-			// SolanaSupportedAssets::<T>::insert(SolAsset::Usdc, self.solusdc_token_address);
+			// SolanaSupportedAssets::<T>::insert(SolAsset::Usdc, self.solusdc_address);
 			SolanaVaultEmitEventAddress::<T>::set(self.sol_vault_emit_event_address);
 			SolanaGenesisHash::<T>::set(self.sol_genesis_hash);
 

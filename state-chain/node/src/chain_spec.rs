@@ -109,7 +109,7 @@ pub struct StateChainEnvironment {
 	sol_upgrade_manager_program_data_address: SolAddress,
 	sol_vault_program_data_address: SolAddress,
 	// nonce_accounts:Vec<(SolAddress,SolHash,bool)>,
-	solusdc_token_address: SolAddress,
+	solusdc_address: SolAddress,
 	sol_vault_emit_event_address: SolAddress,
 	sol_genesis_hash: SolHash,
 }
@@ -172,7 +172,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		SOL_VAULT_PROGRAM_DATA_ADDRESS,
 		sol_vault_program_data_address
 	);
-	from_env_var!(FromStr::from_str, SOLUSDC_TOKEN_ADDRESS, solusdc_token_address);
+	from_env_var!(FromStr::from_str, SOLUSDC_TOKEN_ADDRESS, solusdc_address);
 	from_env_var!(FromStr::from_str, SOL_VAULT_EMIT_EVENT_ADDRESS, sol_vault_emit_event_address);
 	from_env_var!(FromStr::from_str, SOL_GENESIS_HASH, sol_genesis_hash);
 
@@ -226,7 +226,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		sol_upgrade_manager_signer_seed,
 		sol_upgrade_manager_program_data_address,
 		sol_vault_program_data_address,
-		solusdc_token_address,
+		solusdc_address,
 		sol_vault_emit_event_address,
 		sol_genesis_hash,
 	}
@@ -297,7 +297,7 @@ pub fn inner_cf_development_config(
 		sol_upgrade_manager_signer_seed,
 		sol_upgrade_manager_program_data_address,
 		sol_vault_program_data_address,
-		solusdc_token_address,
+		solusdc_address,
 		sol_vault_emit_event_address,
 		sol_genesis_hash,
 	} = get_environment_or_defaults(testnet::ENV);
@@ -338,7 +338,7 @@ pub fn inner_cf_development_config(
 				sol_upgrade_manager_signer_seed,
 				sol_upgrade_manager_program_data_address,
 				sol_vault_program_data_address,
-				solusdc_token_address,
+				solusdc_address,
 				sol_vault_emit_event_address,
 				sol_genesis_hash,
 				network_environment: NetworkEnvironment::Development,
@@ -422,7 +422,7 @@ macro_rules! network_spec {
 					sol_upgrade_manager_signer_seed,
 					sol_upgrade_manager_program_data_address,
 					sol_vault_program_data_address,
-					solusdc_token_address,
+					solusdc_address,
 					sol_vault_emit_event_address,
 					sol_genesis_hash,
 				} = env_override.unwrap_or(ENV);
@@ -493,7 +493,7 @@ macro_rules! network_spec {
 							sol_upgrade_manager_signer_seed,
 							sol_upgrade_manager_program_data_address,
 							sol_vault_program_data_address,
-							solusdc_token_address,
+							solusdc_address,
 							sol_vault_emit_event_address,
 							sol_genesis_hash,
 							network_environment: NETWORK_ENVIRONMENT,
