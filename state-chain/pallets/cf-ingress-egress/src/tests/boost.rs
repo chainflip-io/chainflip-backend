@@ -186,7 +186,8 @@ fn basic_passive_boosting() {
 		let (channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, 30);
 		let prewitnessed_deposit_id = prewitness_deposit(deposit_address, ASSET, DEPOSIT_AMOUNT);
 		// All of BOOSTER_AMOUNT_1 should be used:
-		const POOL_1_FEE: AssetAmount = BOOSTER_AMOUNT_1 * TIER_5_BPS as u128 / 10_000;
+		const POOL_1_FEE: AssetAmount =
+			BOOSTER_AMOUNT_1 * TIER_5_BPS as u128 / (10_000 - TIER_5_BPS as u128);
 		// Only part of BOOSTER_AMOUNT_2 should be used:
 		const POOL_2_CONTRIBUTION: AssetAmount = DEPOSIT_AMOUNT - (BOOSTER_AMOUNT_1 + POOL_1_FEE);
 		const POOL_2_FEE: AssetAmount = POOL_2_CONTRIBUTION * TIER_10_BPS as u128 / 10_000;
