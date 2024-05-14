@@ -75,6 +75,8 @@ jobs:
 
       - name: Start Solana
         run: |
+          sudo chown -R $USER:$USER /tmp/solana
+          sudo chmod -R 777 /tmp/solana
           ./localnet/init/scripts/start-solana.sh
 
       # - name: Start a localnet 🚀
