@@ -68,6 +68,7 @@ std = [
   'scale-info/std',
   'sp-arithmetic/std',
   'sp-std/std',
+  'sp-core/std',
   'serde/std',
 ]
 runtime-benchmarks = [
