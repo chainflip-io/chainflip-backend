@@ -243,14 +243,14 @@ impl SwapFee {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct RpcSwapOutput {
+pub struct RpcSwapOutputV1 {
 	// Intermediary amount, if there's any
 	pub intermediary: Option<NumberOrHex>,
 	// Final output of the swap
 	pub output: NumberOrHex,
 }
 
-impl From<SwapOutput> for RpcSwapOutput {
+impl From<SwapOutput> for RpcSwapOutputV1 {
 	fn from(swap_output: SwapOutput) -> Self {
 		Self {
 			intermediary: swap_output.intermediary.map(Into::into),
@@ -259,7 +259,7 @@ impl From<SwapOutput> for RpcSwapOutput {
 	}
 }
 
-impl From<RpcSwapOutputV2> for RpcSwapOutput {
+impl From<RpcSwapOutputV2> for RpcSwapOutputV1 {
 	fn from(swap_output: RpcSwapOutputV2) -> Self {
 		Self {
 			intermediary: swap_output.intermediate.map(Into::into),
@@ -593,7 +593,7 @@ pub trait CustomApi {
 		to_asset: Asset,
 		amount: NumberOrHex,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcSwapOutput>;
+	) -> RpcResult<RpcSwapOutputV1>;
 	#[method(name = "swap_rate_v2")]
 	fn cf_pool_swap_rate_v2(
 		&self,
@@ -1126,7 +1126,7 @@ where
 		to_asset: Asset,
 		amount: NumberOrHex,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcSwapOutput> {
+	) -> RpcResult<RpcSwapOutputV1> {
 		self.cf_pool_swap_rate_v2(from_asset, to_asset, amount.into(), None, at)
 			.map(Into::into)
 	}
