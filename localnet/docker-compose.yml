@@ -13,6 +13,7 @@ services:
     image: ghcr.io/chainflip-io/solana-localnet-ledger:50
     pull_policy: always
     container_name: init-solana
+    user: runner
     platform: linux/amd64
     volumes:
       - "/tmp/solana/test-ledger:/test-ledger"
