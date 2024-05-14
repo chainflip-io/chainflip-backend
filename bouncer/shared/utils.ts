@@ -12,9 +12,9 @@ import {
 } from '@chainflip/cli';
 import Web3 from 'web3';
 import { Connection, Keypair } from '@solana/web3.js';
-import { base58Decode, base58Encode, cryptoWaitReady } from '@polkadot/util-crypto';
 import { hexToU8a, u8aToHex } from '@polkadot/util';
 import BigNumber from 'bignumber.js';
+import { base58Decode, base58Encode } from '../polkadot/util-crypto';
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
@@ -258,7 +258,6 @@ function getCachedSubstrateApi(defaultEndpoint: string) {
 
   return async (providedEndpoint?: string): Promise<DisposableApiPromise> => {
     if (!api) {
-      await cryptoWaitReady();
       const endpoint = providedEndpoint ?? defaultEndpoint;
 
       const apiPromise = await ApiPromise.create({

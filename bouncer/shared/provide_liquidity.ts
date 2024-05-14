@@ -1,6 +1,5 @@
-import { Keyring } from '@polkadot/keyring';
-import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { InternalAsset as Asset } from '@chainflip/cli';
+import { Keyring } from '../polkadot/keyring';
 import {
   newAddress,
   getChainflipApi,
@@ -25,7 +24,6 @@ export async function provideLiquidity(
   lpKey?: string,
 ) {
   await using chainflip = await getChainflipApi();
-  await cryptoWaitReady();
   const chain = shortChainFromAsset(ccy);
 
   const keyring = new Keyring({ type: 'sr25519' });
