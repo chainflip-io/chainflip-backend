@@ -249,7 +249,7 @@ pub mod pallet {
 	pub type SolanaVaultEmitEventAddress<T> = StorageValue<_, SolAddress, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn solana_genesis_hash)]
+	#[pallet::getter(fn sol_genesis_hash)]
 	pub type SolanaGenesisHash<T> = StorageValue<_, SolHash, ValueQuery>;
 
 	// OTHER ENVIRONMENT ITEMS
