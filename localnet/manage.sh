@@ -126,7 +126,7 @@ build-localnet() {
   echo "🪢 Pulling Docker Images"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" pull >>$DEBUG_OUTPUT_DESTINATION 2>&1
   echo "🔮 Initializing Network"
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
   # mv ./localnet/init/solana /tmp
   echo "🦺 Updating init state files permissions ..."
 
