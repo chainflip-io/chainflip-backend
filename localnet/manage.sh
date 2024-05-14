@@ -16,7 +16,7 @@ DEBUG_OUTPUT_DESTINATION=${DEBUG_OUTPUT_DESTINATION:-'/tmp/chainflip/debug.log'}
 source ./localnet/helper.sh
 
 mkdir -p /tmp/chainflip/
-# mkdir -p /tmp/solana/
+mkdir -p /tmp/solana/
 touch /tmp/chainflip/debug.log
 
 set -eo pipefail
@@ -124,8 +124,6 @@ build-localnet() {
     fi
   done
 
-  mkdir -p /tmp/chainflip/
-  touch /tmp/chainflip/debug.log
   echo "🪢 Pulling Docker Images"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" pull >>$DEBUG_OUTPUT_DESTINATION 2>&1
   echo "🔮 Initializing Network"
@@ -135,7 +133,6 @@ build-localnet() {
 
   if [[ $CI == true ]]; then
     echo "🔐 Setting permissions for CI ..."
-    sudo chmod g+s /tmp/solana
     sudo chmod -R 777 /tmp/chainflip
     sudo chmod -R 777 /tmp/solana
     sudo chown -R $USER:$USER /tmp/solana
@@ -170,7 +167,6 @@ build-localnet() {
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
   echo "🪄 Deploying L2 Contracts"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up arb-init -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
-
 
   INIT_RPC_PORT=9944
 

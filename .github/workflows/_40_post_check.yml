@@ -61,37 +61,48 @@ jobs:
         with:
           name: chainflip-backend-bin
 
-      - name: Install node dependencies 📦
-        working-directory: bouncer
-        run: pnpm install
+      # - name: Install node dependencies 📦
+      #   working-directory: bouncer
+      #   run: pnpm install
 
       - name: Install solana ☀️
         run: |
           sh -c "$(curl -sSfL https://release.solana.com/$SOLANA_VERSION/install)"
 
-      - name: Start a localnet 🚀
-        env:
-          BINARY_ROOT_PATH: .
-          DEBUG_OUTPUT_DESTINATION: /tmp/chainflip/debug.log
+      - name: Initialize Solana 🌱
         run: |
-          set -x
-          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          mkdir -p /tmp/chainflip/bashful
-          mkdir -p /tmp/chainflip/doc
-          mkdir -p /tmp/chainflip/dopey
-          touch /tmp/chainflip/debug.log
-          ls ${{ env.BINARY_ROOT_PATH }}
-          sudo cp ${{ env.BINARY_ROOT_PATH }}/libchainflip_engine_v*.so /usr/lib/
-          chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
-          chmod +x ${{ env.BINARY_ROOT_PATH }}/engine-runner
-          touch ./localnet/.setup_complete
-          ./localnet/manage.sh
+          docker compose -f localnet/docker-compose.yml -p chainflip-localnet up init-solana -d
 
-      - name: Run HeuteLeiderNicht.voll.exe 🙅‍♂️
-        if: inputs.full_bouncer
-        working-directory: bouncer
+      - name: Start Solana
         run: |
-          ./full_bouncer.sh
+          ./localnet/init/scripts/start-solana.sh
+
+      # - name: Start a localnet 🚀
+      #   env:
+      #     BINARY_ROOT_PATH: .
+      #     DEBUG_OUTPUT_DESTINATION: /tmp/chainflip/debug.log
+      #   run: |
+      #     set -x
+      #     export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+      #     mkdir -p /tmp/chainflip/bashful
+      #     mkdir -p /tmp/chainflip/doc
+      #     mkdir -p /tmp/chainflip/dopey
+      #     touch /tmp/chainflip/debug.log
+      #     ls ${{ env.BINARY_ROOT_PATH }}
+      #     sudo cp ${{ env.BINARY_ROOT_PATH }}/libchainflip_engine_v*.so /usr/lib/
+      #     chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
+      #     chmod +x ${{ env.BINARY_ROOT_PATH }}/engine-runner
+      #     touch ./localnet/.setup_complete
+      #     ./localnet/manage.sh
+
+      - name: Sleep
+        run: sleep 3600
+
+      # - name: Run HeuteLeiderNicht.voll.exe 🙅‍♂️
+      #   if: inputs.full_bouncer
+      #   working-directory: bouncer
+      #   run: |
+      #     ./full_bouncer.sh
 
       - name: Run HeuteLeiderNicht.einfach.exe 🦺
         if: ${{ ! inputs.full_bouncer }}
