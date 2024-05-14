@@ -70,6 +70,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 				number_of_channels_in_lookup_pre_migration,
 			"DepositChannelLookup migration failed."
 		);
+
 		Ok(())
 	}
 }
