@@ -221,12 +221,6 @@ pub enum SwapFeeKind {
 	Network,
 }
 
-impl SwapFeeKind {
-	fn into_fee<T: Into<U256>>(self, amount: T, asset: Asset) -> SwapFee {
-		SwapFee::new(amount, asset, self)
-	}
-}
-
 #[derive(Serialize, Deserialize)]
 pub struct SwapFee {
 	pub amount: U256,
@@ -234,12 +228,6 @@ pub struct SwapFee {
 	pub asset: Asset,
 	#[serde(rename = "type")]
 	pub kind: SwapFeeKind,
-}
-
-impl SwapFee {
-	fn new<T: Into<U256>>(amount: T, asset: Asset, kind: SwapFeeKind) -> Self {
-		Self { amount: amount.into(), asset, kind }
-	}
 }
 
 #[derive(Serialize, Deserialize)]
@@ -282,7 +270,11 @@ impl From<SwapOutput> for RpcSwapOutputV2 {
 		Self {
 			intermediate: swap_output.intermediary.map(Into::into),
 			output: swap_output.output.into(),
-			included_fees: vec![SwapFeeKind::Network.into_fee(swap_output.network_fee, Asset::Usdc)],
+			included_fees: vec![SwapFee {
+				kind: SwapFeeKind::Network,
+				asset: Asset::Usdc,
+				amount: swap_output.network_fee.into(),
+			}],
 		}
 	}
 }
@@ -2052,12 +2044,11 @@ mod test {
 
 	#[test]
 	fn test_swap_output_serialization() {
-		let swap_output = RpcSwapOutputV2 {
-			output: 1_000_000_000_000_000_000u128.into(),
-			intermediate: Some(1_000_000u128.into()),
-			included_fees: vec![SwapFeeKind::Network.into_fee(1_000u128, Asset::Usdc)],
-		};
-
-		insta::assert_snapshot!(serde_json::to_value(swap_output).unwrap());
+		insta::assert_snapshot!(serde_json::to_value(RpcSwapOutputV2::from(SwapOutput {
+			output: 1_000_000_000_000_000_000u128,
+			intermediary: Some(1_000_000u128),
+			network_fee: 1_000u128
+		}))
+		.unwrap());
 	}
 }
