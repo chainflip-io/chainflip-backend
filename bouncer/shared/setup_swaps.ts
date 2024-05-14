@@ -1,4 +1,3 @@
-import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { createLpPool } from '../shared/create_lp_pool';
 import { provideLiquidity } from '../shared/provide_liquidity';
 import { rangeOrder } from '../shared/range_order';
@@ -32,7 +31,6 @@ const price = new Map<Asset, number>([
 
 export async function setupSwaps(): Promise<void> {
   console.log('=== Setting up for swaps ===');
-  await cryptoWaitReady();
 
   await Promise.all([
     createLpPool('Eth', price.get('Eth')!),

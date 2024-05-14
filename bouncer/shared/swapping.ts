@@ -1,7 +1,7 @@
-import { randomAsHex, randomAsNumber } from '@polkadot/util-crypto';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import Web3 from 'web3';
 import assert from 'assert';
+import { randomAsHex, randomAsNumber } from '../polkadot/util-crypto';
 import { performSwap, SwapParams } from '../shared/perform_swap';
 import {
   newAddress,

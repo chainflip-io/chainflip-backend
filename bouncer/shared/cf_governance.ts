@@ -1,14 +1,11 @@
-import { SubmittableExtrinsic } from '@polkadot/api/types';
-import Keyring from '@polkadot/keyring';
-import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { ApiPromise } from '@polkadot/api';
+import type { SubmittableExtrinsic } from '@polkadot/api/types';
+import type { ApiPromise } from '@polkadot/api';
+import Keyring from '../polkadot/keyring';
 import { getChainflipApi, handleSubstrateError, snowWhiteMutex } from './utils';
 
 const snowWhiteUri =
   process.env.SNOWWHITE_URI ??
   'market outdoor rubber basic simple banana resist quarter lab random hurdle cruise';
-
-await cryptoWaitReady();
 
 const keyring = new Keyring({ type: 'sr25519' });
 
