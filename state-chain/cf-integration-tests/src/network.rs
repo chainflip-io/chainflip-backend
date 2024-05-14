@@ -22,7 +22,7 @@ use sp_std::collections::btree_set::BTreeSet;
 use state_chain_runtime::{
 	AccountRoles, AllPalletsWithSystem, ArbitrumInstance, BitcoinInstance, Funding,
 	LiquidityProvider, PalletExecutionOrder, PolkadotInstance, Runtime, RuntimeCall, RuntimeEvent,
-	RuntimeOrigin, Validator, Weight,
+	RuntimeOrigin, SolanaInstance, Validator, Weight,
 };
 use std::{
 	cell::RefCell,
@@ -282,6 +282,16 @@ impl Engine {
 						queue_dispatch_extrinsic(
 							RuntimeCall::Environment(
 								pallet_cf_environment::Call::witness_initialize_arbitrum_vault {
+									block_number: 1,
+								},
+							),
+							pallet_cf_governance::RawOrigin::GovernanceApproval.into()
+						);
+					}
+					RuntimeEvent::SolanaVault(pallet_cf_vaults::Event::<_, SolanaInstance>::AwaitingGovernanceActivation { .. }) => {
+						queue_dispatch_extrinsic(
+							RuntimeCall::Environment(
+								pallet_cf_environment::Call::witness_initialize_solana_vault {
 									block_number: 1,
 								},
 							),

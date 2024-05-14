@@ -49,7 +49,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	dot_runtime_version: RuntimeVersion { spec_version: 10000, transaction_version: 25 },
 	// encodes to "8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf"
 	sol_vault_address: SolAddress(hex_literal::hex![
-		"4a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b"
+		"72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c"
 	]),
 	// encodes to "623nEsyGYWKYggY1yHxQFJiBarL9jdWdrMr7ASiCKP6a"
 	sol_vault_data_account_address: SolAddress(hex_literal::hex![
