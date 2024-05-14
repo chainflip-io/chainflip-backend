@@ -15,6 +15,17 @@ const BOOSTER_3: AccountId = 3;
 const BOOST_1: PrewitnessedDepositId = 1;
 const BOOST_2: PrewitnessedDepositId = 2;
 
+#[test]
+fn check_fee_math() {
+	type Amount = ScaledAmount<Ethereum>;
+
+	let boosted_amount = Amount::from_raw(1_000_000);
+	assert_eq!(super::fee_from_boosted_amount(boosted_amount, 10), Amount::from_raw(1_000));
+
+	let provided_amount = Amount::from_raw(1_000_000);
+	assert_eq!(super::fee_from_provided_amount(provided_amount, 10), Ok(Amount::from_raw(1_001)));
+}
+
 #[track_caller]
 pub fn check_pool(pool: &TestPool, amounts: impl IntoIterator<Item = (AccountId, Amount)>) {
 	assert_eq!(
@@ -427,9 +438,12 @@ fn small_rewards_accumulate() {
 #[test]
 fn use_max_available_amount() {
 	let mut pool = TestPool::new(100);
-	pool.add_funds(BOOSTER_1, 1000);
+	pool.add_funds(BOOSTER_1, 1_000_000);
 
-	assert_eq!(pool.provide_funds_for_boosting(BOOST_1, 1010), Ok((1010, 10)));
+	// Note that we request more liquidity than is available. This is fine, and
+	// expected because the test is from the perspective of a single pool, and
+	// finding more funds is another component's responsibility.
+	assert_eq!(pool.provide_funds_for_boosting(BOOST_1, 2_000_000), Ok((1_010_101, 10_101)));
 
 	check_pool(&pool, [(BOOSTER_1, 0)]);
 
@@ -439,7 +453,7 @@ fn use_max_available_amount() {
 
 	assert_eq!(pool.on_finalised_deposit(BOOST_1), vec![]);
 
-	check_pool(&pool, [(BOOSTER_1, 1210)]);
+	check_pool(&pool, [(BOOSTER_1, 1_010_301)]);
 }
 
 #[test]

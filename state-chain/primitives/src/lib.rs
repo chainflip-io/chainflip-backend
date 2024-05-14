@@ -122,6 +122,8 @@ pub const MILLISECONDS_PER_BLOCK: u64 = 6000;
 
 pub const SECONDS_PER_BLOCK: u64 = MILLISECONDS_PER_BLOCK / 1000;
 
+pub const BASIS_POINTS_PER_MILLION: u32 = 100;
+
 pub const STABLE_ASSET: Asset = Asset::Usdc;
 
 /// Determines the default (genesis) maximum allowed reduction of authority set size in
