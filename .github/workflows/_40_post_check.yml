@@ -56,28 +56,18 @@ jobs:
         run: |
           npm install -g wscat
 
-      # - name: Download binaries 📥
-      #   uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
-      #   with:
-      #     name: chainflip-backend-bin
+      - name: Download binaries 📥
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+        with:
+          name: chainflip-backend-bin
 
-      # - name: Install node dependencies 📦
-      #   working-directory: bouncer
-      #   run: pnpm install
+      - name: Install node dependencies 📦
+        working-directory: bouncer
+        run: pnpm install
 
       - name: Install solana ☀️
         run: |
           sh -c "$(curl -sSfL https://release.solana.com/$SOLANA_VERSION/install)"
-
-      # - name: Initialize Solana 🌱
-      #   run: |
-      #     docker compose -f localnet/docker-compose.yml -p chainflip-localnet up init-solana -d
-
-      # - name: Start Solana
-      #   run: |
-      #     sudo chown -R $USER:$USER /tmp/solana
-      #     sudo chmod -R 777 /tmp/solana
-      #     ./localnet/init/scripts/start-solana.sh
 
       - name: Start a localnet 🚀
         env:
@@ -91,20 +81,17 @@ jobs:
           mkdir -p /tmp/chainflip/dopey
           touch /tmp/chainflip/debug.log
           ls ${{ env.BINARY_ROOT_PATH }}
-          # sudo cp ${{ env.BINARY_ROOT_PATH }}/libchainflip_engine_v*.so /usr/lib/
-          # chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
-          # chmod +x ${{ env.BINARY_ROOT_PATH }}/engine-runner
+          sudo cp ${{ env.BINARY_ROOT_PATH }}/libchainflip_engine_v*.so /usr/lib/
+          chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
+          chmod +x ${{ env.BINARY_ROOT_PATH }}/engine-runner
           touch ./localnet/.setup_complete
           ./localnet/manage.sh
 
-      # - name: Sleep
-      #   run: sleep 3600
-
-      # - name: Run HeuteLeiderNicht.voll.exe 🙅‍♂️
-      #   if: inputs.full_bouncer
-      #   working-directory: bouncer
-      #   run: |
-      #     ./full_bouncer.sh
+      - name: Run HeuteLeiderNicht.voll.exe 🙅‍♂️
+        if: inputs.full_bouncer
+        working-directory: bouncer
+        run: |
+          ./full_bouncer.sh
 
       - name: Run HeuteLeiderNicht.einfach.exe 🦺
         if: ${{ ! inputs.full_bouncer }}
@@ -195,31 +182,31 @@ jobs:
             👾 Link to job: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>
             #️⃣ Tagging: <@&939151218708709416>
 
-  # chainspec-compatibility:
-  #   runs-on: ubuntu-22.04
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       network: [sisyphos, perseverance, berghain]
-  #   steps:
-  #     - name: Checkout chainflip-backend 🛒
-  #       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+  chainspec-compatibility:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        network: [sisyphos, perseverance, berghain]
+    steps:
+      - name: Checkout chainflip-backend 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
-  #     - name: Download Binaries 📥
-  #       uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
-  #       with:
-  #         name: chainflip-backend-bin
+      - name: Download Binaries 📥
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+        with:
+          name: chainflip-backend-bin
 
-  #     - name: Make Binaries Executable 🛠️
-  #       run: |
-  #         chmod +x chainflip-*
+      - name: Make Binaries Executable 🛠️
+        run: |
+          chmod +x chainflip-*
 
-  #     - name: Run Test 🧪
-  #       shell: bash
-  #       run: ./ci/scripts/check_node_syncing.sh --network ${{ matrix.network }} --binary-root-path .
+      - name: Run Test 🧪
+        shell: bash
+        run: ./ci/scripts/check_node_syncing.sh --network ${{ matrix.network }} --binary-root-path .
 
-  #     - name: Print logs 📜
-  #       if: always()
-  #       continue-on-error: true
-  #       run: |
-  #         cat /tmp/chainflip-node.log
+      - name: Print logs 📜
+        if: always()
+        continue-on-error: true
+        run: |
+          cat /tmp/chainflip-node.log
