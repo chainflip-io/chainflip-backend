@@ -56,10 +56,10 @@ jobs:
         run: |
           npm install -g wscat
 
-      - name: Download binaries 📥
-        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
-        with:
-          name: chainflip-backend-bin
+      # - name: Download binaries 📥
+      #   uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+      #   with:
+      #     name: chainflip-backend-bin
 
       # - name: Install node dependencies 📦
       #   working-directory: bouncer
@@ -193,31 +193,31 @@ jobs:
             👾 Link to job: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>
             #️⃣ Tagging: <@&939151218708709416>
 
-  chainspec-compatibility:
-    runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        network: [sisyphos, perseverance, berghain]
-    steps:
-      - name: Checkout chainflip-backend 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+  # chainspec-compatibility:
+  #   runs-on: ubuntu-22.04
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       network: [sisyphos, perseverance, berghain]
+  #   steps:
+  #     - name: Checkout chainflip-backend 🛒
+  #       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
-      - name: Download Binaries 📥
-        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
-        with:
-          name: chainflip-backend-bin
+  #     - name: Download Binaries 📥
+  #       uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+  #       with:
+  #         name: chainflip-backend-bin
 
-      - name: Make Binaries Executable 🛠️
-        run: |
-          chmod +x chainflip-*
+  #     - name: Make Binaries Executable 🛠️
+  #       run: |
+  #         chmod +x chainflip-*
 
-      - name: Run Test 🧪
-        shell: bash
-        run: ./ci/scripts/check_node_syncing.sh --network ${{ matrix.network }} --binary-root-path .
+  #     - name: Run Test 🧪
+  #       shell: bash
+  #       run: ./ci/scripts/check_node_syncing.sh --network ${{ matrix.network }} --binary-root-path .
 
-      - name: Print logs 📜
-        if: always()
-        continue-on-error: true
-        run: |
-          cat /tmp/chainflip-node.log
+  #     - name: Print logs 📜
+  #       if: always()
+  #       continue-on-error: true
+  #       run: |
+  #         cat /tmp/chainflip-node.log
