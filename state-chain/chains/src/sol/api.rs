@@ -1,4 +1,4 @@
-use core::marker::PhantomData;
+use core::{marker::PhantomData, str::FromStr};
 
 use codec::{Decode, Encode};
 use frame_support::{
@@ -10,29 +10,36 @@ use sp_std::{boxed::Box, vec, vec::Vec};
 
 use crate::{
 	sol::{
-		instruction_builder::SolanaInstructionBuilder, SolAddress, SolAmount, SolHash, SolMessage,
-		SolTransaction, SolanaCrypto,
+		consts::SYSTEM_PROGRAM_ID, instruction_builder::SolanaInstructionBuilder, SolAddress,
+		SolAmount, SolHash, SolMessage, SolTransaction, SolanaCrypto,
 	},
 	AllBatch, AllBatchError, ApiCall, Chain, ChainCrypto, ChainEnvironment, ConsolidateCall,
 	ConsolidationError, DepositChannel, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress,
 	SetAggKeyWithAggKey, Solana, TransferAssetParams, TransferFallback,
 };
 
+#[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
+pub struct ComputePrice;
+#[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
+pub struct DurableNonce;
+#[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
+pub struct AllNonceAccounts;
+
 /// Super trait combining all Environment lookups required for the Solana chain.
 /// Also contains some calls for easy data retrieval.
 pub trait SolanaEnvironment:
 	ChainEnvironment<SolanaEnvAccountLookupKey, SolAddress>
-	+ ChainEnvironment<(), SolAmount>
-	+ ChainEnvironment<(), SolHash>
-	+ ChainEnvironment<(), Vec<SolAddress>>
+	+ ChainEnvironment<ComputePrice, SolAmount>
+	+ ChainEnvironment<DurableNonce, SolHash>
+	+ ChainEnvironment<AllNonceAccounts, Vec<SolAddress>>
 {
 	fn compute_price() -> Result<SolAmount, SolanaTransactionBuildingError> {
-		<Self as ChainEnvironment<(), SolAmount>>::lookup(())
+		<Self as ChainEnvironment<ComputePrice, SolAmount>>::lookup(ComputePrice)
 			.ok_or(SolanaTransactionBuildingError::CannotLookupComputePrice)
 	}
 
 	fn durable_nonce() -> Result<SolHash, SolanaTransactionBuildingError> {
-		<Self as ChainEnvironment<(), SolHash>>::lookup(())
+		<Self as ChainEnvironment<DurableNonce, SolHash>>::lookup(DurableNonce)
 			.ok_or(SolanaTransactionBuildingError::CannotLookupDurableNonce)
 	}
 
@@ -54,7 +61,7 @@ pub trait SolanaEnvironment:
 	}
 
 	fn all_nonce_accounts() -> Result<Vec<SolAddress>, SolanaTransactionBuildingError> {
-		<Self as ChainEnvironment<(), Vec<SolAddress>>>::lookup(())
+		<Self as ChainEnvironment<AllNonceAccounts, Vec<SolAddress>>>::lookup(AllNonceAccounts)
 			.ok_or(SolanaTransactionBuildingError::NoNonceAccountsSet)
 	}
 }
@@ -113,11 +120,23 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 	) -> Result<Self, SolanaTransactionBuildingError> {
 		// Lookup the current Aggkey
 		let agg_key = Environment::lookup_account(SolanaEnvAccountLookupKey::AggKey)?;
+		let vault_program_data_account =
+			Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgramDataAccount)?;
+		let system_program_id = SolAddress::from_str(SYSTEM_PROGRAM_ID)
+			.expect("Preset System Program ID account must be valid.");
+		let next_nonce =
+			Environment::lookup_account(SolanaEnvAccountLookupKey::AvailableNonceAccount)?;
+		let compute_price = Environment::compute_price()?;
 
 		// Build the instruction_set
-		let instruction_set = SolanaInstructionBuilder::<Environment>::default()
-			.fetch_from(deposit_channels)?
-			.finalize()?;
+		let instruction_set = SolanaInstructionBuilder::fetch_from(
+			deposit_channels,
+			vault_program_data_account,
+			system_program_id,
+			agg_key,
+			next_nonce,
+			compute_price,
+		);
 		let transaction =
 			SolTransaction::new_unsigned(SolMessage::new(&instruction_set, Some(&agg_key.into())));
 
@@ -133,11 +152,13 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 	) -> Result<Self, SolanaTransactionBuildingError> {
 		// Lookup the current Aggkey
 		let agg_key = Environment::lookup_account(SolanaEnvAccountLookupKey::AggKey)?;
+		let next_nonce =
+			Environment::lookup_account(SolanaEnvAccountLookupKey::AvailableNonceAccount)?;
+		let compute_price = Environment::compute_price()?;
 
 		// Build the instruction_set
-		let instruction_set = SolanaInstructionBuilder::<Environment>::default()
-			.transfer(transfer_param)?
-			.finalize()?;
+		let instruction_set =
+			SolanaInstructionBuilder::transfer(transfer_param, agg_key, next_nonce, compute_price);
 
 		let transaction =
 			SolTransaction::new_unsigned(SolMessage::new(&instruction_set, Some(&agg_key.into())));
@@ -152,11 +173,29 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 	pub fn rotate_agg_key(new_agg_key: SolAddress) -> Result<Self, SolanaTransactionBuildingError> {
 		// Lookup the current Aggkey
 		let agg_key = Environment::lookup_account(SolanaEnvAccountLookupKey::AggKey)?;
+		let nonce_accounts = Environment::all_nonce_accounts()?;
+		let vault_program_data_account =
+			Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgramDataAccount)?;
+		let system_program_id = SolAddress::from_str(SYSTEM_PROGRAM_ID)
+			.expect("Preset System Program ID account must be valid.");
+		let upgrade_manager_program_data_account = Environment::lookup_account(
+			SolanaEnvAccountLookupKey::UpgradeManagerProgramDataAccount,
+		)?;
+		let next_nonce =
+			Environment::lookup_account(SolanaEnvAccountLookupKey::AvailableNonceAccount)?;
+		let compute_price = Environment::compute_price()?;
 
 		// Build the instruction_set
-		let instruction_set = SolanaInstructionBuilder::<Environment>::default()
-			.rotate_agg_key(new_agg_key)?
-			.finalize()?;
+		let instruction_set = SolanaInstructionBuilder::rotate_agg_key(
+			new_agg_key,
+			nonce_accounts,
+			vault_program_data_account,
+			system_program_id,
+			upgrade_manager_program_data_account,
+			agg_key,
+			next_nonce,
+			compute_price,
+		);
 
 		let transaction =
 			SolTransaction::new_unsigned(SolMessage::new(&instruction_set, Some(&agg_key.into())));
@@ -188,7 +227,7 @@ impl<Env: 'static> ApiCall<SolanaCrypto> for SolanaApi<Env> {
 	}
 
 	fn transaction_out_id(&self) -> <SolanaCrypto as ChainCrypto>::TransactionOutId {
-		todo!("Double check on the transaction out ID")
+		self.transaction.signatures.first().cloned().unwrap_or_default()
 	}
 }
 
@@ -218,7 +257,7 @@ impl<Env: 'static> ExecutexSwapAndCall<Solana> for SolanaApi<Env> {
 		_gas_budget: <Solana as Chain>::ChainAmount,
 		_message: vec::Vec<u8>,
 	) -> Result<Self, DispatchError> {
-		todo!()
+		Err(DispatchError::Other("Unimplemented"))
 	}
 }
 
@@ -230,7 +269,7 @@ impl<Env: 'static> AllBatch<Solana> for SolanaApi<Env> {
 		// Create a BatchFetch for all deposit_channels
 		// Figure out how to derive deposit_channels from ChannelId (or pass DepositChannel in)
 		// Create a Transfer for each Transfer
-		todo!("PRO-1348 This should be implemented after allowing Multiple transactions to be returned by this trait.")
+		Err(AllBatchError::DispatchError(DispatchError::Other("PRO-1348 This should be implemented after allowing Multiple transactions to be returned by this trait.")))
 	}
 }
 
