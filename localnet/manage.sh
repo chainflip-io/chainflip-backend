@@ -245,7 +245,7 @@ destroy() {
   for pid in $(ps -ef | grep chainflip | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
   for pid in $(ps -ef | grep solana | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
   rm -rf /tmp/chainflip
-  rm -rf /tmp/solana/
+  # rm -rf /tmp/solana/
 
   unset DOT_GENESIS_HASH
 
