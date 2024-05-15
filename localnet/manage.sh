@@ -169,6 +169,9 @@ build-localnet() {
     sudo chmod -R 777 /tmp/chainflip
     sudo chown -R $USER:$USER /tmp/solana
     sudo chmod -R 777 /tmp/solana
+    echo "🐛 Fix solana symlink issue ..."
+    rm /tmp/solana/test-ledger/snapshot/100/accounts_hardlinks/account_path_0
+    ln -s /tmp/solana/test-ledger/accounts/snapshot/100 /tmp/solana/test-ledger/snapshot/100/accounts_hardlinks/account_path_0
   else
     chmod -R 777 /tmp/chainflip
     chmod -R 777 /tmp/solana
