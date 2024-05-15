@@ -44,7 +44,7 @@ export async function setupBoostPools(): Promise<void> {
       }
     }
     console.log(`Creating boost pools for chain ${chain} via governance: ${newPools}`);
-    submitGovernanceExtrinsic((api) =>
+    await submitGovernanceExtrinsic((api) =>
       api.tx[ingressEgressPalletForChain(chain)].createBoostPools(newPools),
     );
   }
