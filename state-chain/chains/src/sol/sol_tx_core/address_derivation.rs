@@ -12,7 +12,7 @@ use crate::{
 use core::str::FromStr;
 
 /// Derive an address from our Vault program key. Produces an Address and a bump.
-pub fn derive_address(
+fn derive_address(
 	seed: impl AsRef<[u8]>,
 	vault_program: SolAddress,
 ) -> Result<(SolAddress, u8), AddressDerivationError> {
