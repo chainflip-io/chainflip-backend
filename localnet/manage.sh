@@ -136,9 +136,9 @@ build-localnet() {
 #  |____/ \___|_.__/ \__,_|\__, |\__, |_|_| |_|\__, |
 #                          |___/ |___/         |___/
 
-  cp -R ./localnet/init/solana /tmp
-  # tar -xzf /tmp/solana/solana-ledger.tar.gz -C /tmp/solana/
-  # rm -rf /tmp/solana/solana-ledger.tar.gz
+  # cp -R ./localnet/init/solana /tmp
+  tar -xzf /tmp/solana/solana-ledger.tar.gz -C /tmp/solana/
+  rm -rf /tmp/solana/solana-ledger.tar.gz
 
   echo "🦺 Updating init state files permissions ..."
 
