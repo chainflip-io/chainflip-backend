@@ -19,8 +19,18 @@ async function runAllConcurrentTests() {
   const numberOfNodes = givenNumberOfNodes ?? 1;
 
   let stopObserving = false;
-  const broadcastAborted = observeBadEvents(':BroadcastAborted', () => stopObserving);
-  const feeDeficitRefused = observeBadEvents(':TransactionFeeDeficitRefused', () => stopObserving);
+  const broadcastAborted = observeBadEvents(
+    ':BroadcastAborted',
+    () => stopObserving,
+    undefined,
+    'Concurrent broadcast aborted',
+  );
+  const feeDeficitRefused = observeBadEvents(
+    ':TransactionFeeDeficitRefused',
+    () => stopObserving,
+    undefined,
+    'Concurrent fee deficit refused',
+  );
 
   // Tests that work with any number of nodes
   const tests = [

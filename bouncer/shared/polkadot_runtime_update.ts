@@ -243,7 +243,12 @@ export async function testPolkadotRuntimeUpdate(): Promise<void> {
 
   // Monitor for the broadcast aborted event to help catch failed swaps
   let stopObserving = false;
-  const broadcastAborted = observeBadEvents(':BroadcastAborted', () => stopObserving);
+  const broadcastAborted = observeBadEvents(
+    ':BroadcastAborted',
+    () => stopObserving,
+    undefined,
+    'Polkadot runtime upgrade',
+  );
 
   // Start some swaps
   const swapping = doPolkadotSwaps();

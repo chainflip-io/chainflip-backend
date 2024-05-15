@@ -258,6 +258,7 @@ async function testGasLimitSwap(
         }
         return aborted;
       },
+      testTag,
     );
 
     // Expecting success

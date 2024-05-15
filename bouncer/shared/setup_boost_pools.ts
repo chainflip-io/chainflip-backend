@@ -23,6 +23,7 @@ export async function setupBoostPools(): Promise<void> {
 
     for (const asset of assets) {
       for (const tier of boostPoolTiers) {
+        console.log(`Creating boost pool for chain ${chain}, asset ${asset}, tier ${tier}`);
         if (tier <= 0) {
           throw new Error(`Invalid tier value: ${tier}`);
         }
@@ -42,7 +43,7 @@ export async function setupBoostPools(): Promise<void> {
         );
       }
     }
-
+    console.log(`Creating boost pools for chain ${chain} via governance: ${newPools}`);
     submitGovernanceExtrinsic((api) =>
       api.tx[ingressEgressPalletForChain(chain)].createBoostPools(newPools),
     );
