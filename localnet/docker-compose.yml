@@ -9,14 +9,14 @@ services:
       - "/tmp/chainflip/data:/localnet-initial-state"
     command: /bin/sh -c "cp -R /initial-state/* /localnet-initial-state"
 
-  # init-solana:
-  #   image: ghcr.io/chainflip-io/solana-localnet-ledger:50
-  #   pull_policy: always
-  #   container_name: init-solana
-  #   platform: linux/amd64
-  #   volumes:
-  #     - "/tmp/solana/test-ledger:/test-ledger"
-  #   command: /bin/sh -c "cp -R /solana/ledger/* /test-ledger"
+  solana-init:
+    image: ghcr.io/chainflip-io/solana-localnet-ledger:53fb4bc2efb359ac377d1d48b25a4d2f0b845b19
+    pull_policy: always
+    container_name: init-solana
+    platform: linux/amd64
+    volumes:
+      - "/tmp/solana:/test-ledger"
+    command: /bin/sh -c "cp -R /solana/solana-ledger.tar.gz /test-ledger"
 
   arb-init:
     image: ghcr.io/chainflip-io/chainflip-eth-contracts/arbitrum-gizmo-shop:v1.1.2-usdt-${NODE_COUNT}

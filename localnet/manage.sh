@@ -5,7 +5,7 @@ WORKFLOW=build-localnet
 GENESIS_NODES=("bashful" "doc" "dopey")
 SELECTED_NODES=("bashful")
 REQUIRED_BINARIES="engine-runner chainflip-node"
-INITIAL_CONTAINERS="eth-init"
+INIT_CONTAINERS="eth-init solana-init"
 CORE_CONTAINERS="bitcoin geth polkadot redis"
 ARB_CONTAINERS="sequencer staker-unsafe poster"
 export NODE_COUNT="1-node"
@@ -126,8 +126,19 @@ build-localnet() {
   echo "🪢 Pulling Docker Images"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" pull >>$DEBUG_OUTPUT_DESTINATION 2>&1
   echo "🔮 Initializing Network"
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
-  cp -R ./localnet/init/solana /tmp
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INIT_CONTAINERS $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
+
+#   ____       _                       _
+#  |  _ \  ___| |__  _   _  __ _  __ _(_)_ __   __ _
+#  | | | |/ _ \ '_ \| | | |/ _` |/ _` | | '_ \ / _` |
+#  | |_| |  __/ |_) | |_| | (_| | (_| | | | | | (_| |
+#  |____/ \___|_.__/ \__,_|\__, |\__, |_|_| |_|\__, |
+#                          |___/ |___/         |___/
+
+  # cp -R ./localnet/init/solana /tmp
+  tar -xzf /tmp/solana/solana-ledger.tar.gz -C /tmp/solana/
+  rm -rf /tmp/solana/solana-ledger.tar.gz
+
   echo "🦺 Updating init state files permissions ..."
 
   echo "🏗 Building network"
