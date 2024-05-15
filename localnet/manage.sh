@@ -5,7 +5,8 @@ WORKFLOW=build-localnet
 GENESIS_NODES=("bashful" "doc" "dopey")
 SELECTED_NODES=("bashful")
 REQUIRED_BINARIES="engine-runner chainflip-node"
-INIT_CONTAINERS="eth-init solana-init"
+# INIT_CONTAINERS="eth-init solana-init"
+INIT_CONTAINERS="eth-init"
 CORE_CONTAINERS="bitcoin geth polkadot redis"
 ARB_CONTAINERS="sequencer staker-unsafe poster"
 export NODE_COUNT="1-node"
@@ -135,9 +136,9 @@ build-localnet() {
 #  |____/ \___|_.__/ \__,_|\__, |\__, |_|_| |_|\__, |
 #                          |___/ |___/         |___/
 
-  # cp -R ./localnet/init/solana /tmp
-  tar -xzf /tmp/solana/solana-ledger.tar.gz -C /tmp/solana/
-  rm -rf /tmp/solana/solana-ledger.tar.gz
+  cp -R ./localnet/init/solana /tmp
+  # tar -xzf /tmp/solana/solana-ledger.tar.gz -C /tmp/solana/
+  # rm -rf /tmp/solana/solana-ledger.tar.gz
 
   echo "🦺 Updating init state files permissions ..."
 

@@ -15,7 +15,7 @@ services:
     container_name: init-solana
     platform: linux/amd64
     volumes:
-      - "/tmp/solana:/test-ledger"
+      - "/Users/assemhasna/GitHub/chainflip-io/chainflip-backend/localnet/init/solana:/test-ledger"
     command: /bin/sh -c "cp -R /solana/solana-ledger.tar.gz /test-ledger"
 
   arb-init:
