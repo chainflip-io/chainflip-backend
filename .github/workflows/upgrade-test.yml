@@ -206,7 +206,6 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
-          ./commands/setup_swaps.ts
           ./tests/all_concurrent_tests.ts
 
       - name: Print chainflip-engine logs 🚗

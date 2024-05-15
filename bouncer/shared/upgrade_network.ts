@@ -102,7 +102,16 @@ async function incompatibleUpgradeNoBuild(
   await sleep(12000);
 
   console.log('Killing the old node.');
-  execSync(`kill $(ps aux | grep chainflip-node | grep -v grep | awk '{print $2}')`);
+
+  try {
+    const execOutput = execSync(
+      `kill $(ps -o pid -o comm | grep chainflip-node | awk '{print $1}')`,
+    );
+    console.log('Kill node exec output:', execOutput.toString());
+  } catch (e) {
+    console.log('Error killing node: ' + e);
+    throw e;
+  }
 
   console.log('Killed old node');
 
@@ -134,7 +143,7 @@ async function incompatibleUpgradeNoBuild(
     }),
   );
 
-  const output = execSync("ps aux | grep chainflip-node | grep -v grep | awk '{print $2}'");
+  const output = execSync("ps -o pid -o comm | grep chainflip-node | awk '{print $1}'");
   console.log('New node PID: ' + output.toString());
 
   // Restart the engines
