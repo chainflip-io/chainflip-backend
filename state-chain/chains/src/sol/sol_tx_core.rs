@@ -820,7 +820,7 @@ pub fn generate_deposit_channel(channel_id: u64) -> DepositChannel<Solana> {
 		channel_id,
 		address: pda,
 		asset: crate::assets::sol::Asset::Sol,
-		state: crate::sol::SolanaDepositChannelState { seed: seed.to_vec(), bump },
+		state: bump,
 	}
 }
 
@@ -865,7 +865,7 @@ pub mod sol_test_values {
 	pub const COMPUTE_UNIT_PRICE: SolAmount = 1_000_000u64;
 	pub const COMPUTE_UNIT_LIMIT: SolComputeLimit = 300_000u32;
 	pub const TEST_DURABLE_NONCE: &str = "E6E2bNxGcgFyqeVRT3FSjw7YFbbMAZVQC21ZLVwrztRm";
-	pub const FETCH_FROM_ACCOUNT: &str = "XFmi41e1L9t732KoZdmzMSVige3SjjzsLzk1rW4rhwP";
+	pub const FETCH_FROM_ACCOUNT: &str = "4Spd3kst7XsA9pdp5ArfdXxEK4xfW88eRKbyQBmMvwQj";
 	pub const TRANSFER_TO_ACCOUNT: &str = "4MqL4qy2W1yXzuF3PiuSMehMbJzMuZEcBwVvrgtuhx7V";
 	pub const NEW_AGG_KEY: &str = "7x7wY9yfXjRmusDEfPPCreU4bP49kmH4mqjYUXNAXJoM";
 }
@@ -918,9 +918,9 @@ mod tests {
 		);
 
 		assert_eq!(
-			generate_address([11u8, 12u8, 13u8, 55u8]).unwrap(),
+			generate_address(923601931u64.to_le_bytes()).unwrap(),
 			(
-				Pubkey::from_str("XFmi41e1L9t732KoZdmzMSVige3SjjzsLzk1rW4rhwP").unwrap().into(),
+				Pubkey::from_str("4Spd3kst7XsA9pdp5ArfdXxEK4xfW88eRKbyQBmMvwQj").unwrap().into(),
 				255u8
 			)
 		);
@@ -1015,7 +1015,10 @@ mod tests {
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
 			ProgramInstruction::get_instruction(
-				&VaultProgram::FetchNative { seed: vec![11u8, 12u8, 13u8, 55u8], bump: 255 },
+				&VaultProgram::FetchNative {
+					seed: vec![11u8, 12u8, 13u8, 55u8, 0u8, 0u8, 0u8, 0u8],
+					bump: 255,
+				},
 				vec![
 					AccountMeta::new_readonly(
 						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
@@ -1036,7 +1039,7 @@ mod tests {
 			tx.finalize_and_serialize().expect("Transaction serialization should succeed");
 
 		// With compute unit price and limit
-		let expected_serialized_tx = hex_literal::hex!("011691ba07e3fc47bd0d4172288ed4ff8df2a7b6b66ce4237ff8330bab7692ded233fbe3efbe9c17e8a7592968c02136bc45cfc93015003d06fbe3fbd69d7cad0501000508f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb07c0202da00e4ac49553356529d5d45fc631c1d5eaee3d483667cad61d63692a17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19200000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000004a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004030302050004040000000400090340420f000000000004000502e0930400070406000103118e24658f6c59298c040000000b0c0d37ff").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("0106c23d5531cfd1d8d543eb8f88dc346a540224a50930bb1c4509c0a5ad9da77a5fb097530c0d9fa9e35f65ce9445c02bdabef979967ee0d60ed0cc8cc0c7370001000508f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19233306d43f017cdb7b1a324afdc62c79317d5b93e2e63b870143344134db9c60000000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000004a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004030301050004040000000400090340420f000000000004000502e0930400070406000203158e24658f6c59298c080000000b0c0d3700000000ff").to_vec();
 
 		// println!("tx:{:?}", hex::encode(serialized_tx.clone()));
 
@@ -1063,8 +1066,8 @@ mod tests {
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
 			ProgramInstruction::get_instruction(
 				&VaultProgram::FetchNative {
-					seed: deposit_channel_0.state.seed.to_vec(),
-					bump: deposit_channel_0.state.bump,
+					seed: deposit_channel_0.channel_id.to_le_bytes().to_vec(),
+					bump: deposit_channel_0.state,
 				},
 				vec![
 					AccountMeta::new_readonly(
@@ -1078,8 +1081,8 @@ mod tests {
 			),
 			ProgramInstruction::get_instruction(
 				&VaultProgram::FetchNative {
-					seed: deposit_channel_1.state.seed,
-					bump: deposit_channel_1.state.bump,
+					seed: deposit_channel_1.channel_id.to_le_bytes().to_vec(),
+					bump: deposit_channel_1.state,
 				},
 				vec![
 					AccountMeta::new_readonly(
@@ -1103,7 +1106,7 @@ mod tests {
 		// With compute unit price and limit
 		let expected_serialized_tx = hex_literal::hex!("010824d160477d5184765ad3ad95be7a17f20684fed88857acfde4c7f71e751177b741f6d25465e5530db686b2138e14fe9a6afca798c8349080f71f6621fb730701000509f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921e2fb5dc3bc76acc1a86ef6457885c32189c53b1db8a695267fed8f8d6921ec4ffe38210450436716ebc835b8499c10c957d9fb8c4c8ef5a3c0473cf67b588be00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000004a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890005040301060004040000000500090340420f000000000005000502e0930400080407000304158e24658f6c59298c080000000000000000000000fe080407000204158e24658f6c59298c080000000100000000000000ff").to_vec();
 
-		// println!("tx:{:?}", hex::encode(serialized_tx.clone()));
+		println!("tx:{:?}", hex::encode(serialized_tx.clone()));
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
 		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)

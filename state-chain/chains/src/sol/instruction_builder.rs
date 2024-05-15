@@ -67,8 +67,8 @@ impl SolanaInstructionBuilder {
 			.map(|deposit_channel| match deposit_channel.asset {
 				SolAsset::Sol => ProgramInstruction::get_instruction(
 					&VaultProgram::FetchNative {
-						seed: deposit_channel.state.seed,
-						bump: deposit_channel.state.bump,
+						seed: deposit_channel.channel_id.to_le_bytes().to_vec(),
+						bump: deposit_channel.state,
 					},
 					vec![
 						SolAccountMeta::new_readonly(vault_program_data_account.into(), false),
@@ -147,7 +147,7 @@ mod test {
 			generate_deposit_channel,
 			sol_test_values::*,
 		},
-		SolAmount, SolHash, SolMessage, SolTransaction, SolanaDepositChannelState,
+		SolAmount, SolHash, SolMessage, SolTransaction,
 	};
 	use core::str::FromStr;
 
@@ -159,10 +159,10 @@ mod test {
 	/// since the `seed` is NOT derived from the `channel_id`.
 	fn get_deposit_channel() -> DepositChannel<Solana> {
 		DepositChannel::<Solana> {
-			channel_id: 1u64,
+			channel_id: 923_601_931u64,
 			address: SolPubkey::from_str(FETCH_FROM_ACCOUNT).unwrap().into(),
 			asset: SOL,
-			state: SolanaDepositChannelState { seed: vec![11u8, 12u8, 13u8, 55u8], bump: 255u8 },
+			state: 255u8,
 		}
 	}
 
@@ -242,7 +242,7 @@ mod test {
 		);
 
 		// Serialized tx built in `create_fetch_native` test
-		let expected_serialized_tx = hex_literal::hex!("011691ba07e3fc47bd0d4172288ed4ff8df2a7b6b66ce4237ff8330bab7692ded233fbe3efbe9c17e8a7592968c02136bc45cfc93015003d06fbe3fbd69d7cad0501000508f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb07c0202da00e4ac49553356529d5d45fc631c1d5eaee3d483667cad61d63692a17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19200000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000004a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004030302050004040000000400090340420f000000000004000502e0930400070406000103118e24658f6c59298c040000000b0c0d37ff").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("0106c23d5531cfd1d8d543eb8f88dc346a540224a50930bb1c4509c0a5ad9da77a5fb097530c0d9fa9e35f65ce9445c02bdabef979967ee0d60ed0cc8cc0c7370001000508f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19233306d43f017cdb7b1a324afdc62c79317d5b93e2e63b870143344134db9c60000000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000004a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004030301050004040000000400090340420f000000000004000502e0930400070406000203158e24658f6c59298c080000000b0c0d3700000000ff").to_vec();
 
 		test_constructed_instruction_set(instruction_set, expected_serialized_tx);
 	}

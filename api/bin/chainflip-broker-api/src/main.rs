@@ -149,7 +149,7 @@ pub struct BrokerOptions {
 	#[clap(
 		long = "max_connections",
 		default_value = "100",
-		help = "The maximum number of conncurrent websocket connections to accept."
+		help = "The maximum number of concurrent websocket connections to accept."
 	)]
 	pub max_connections: u32,
 	#[clap(

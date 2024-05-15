@@ -1,10 +1,10 @@
 pub use cf_primitives::chains::Solana;
 
 use cf_primitives::ChannelId;
-use sp_core::{ConstBool, RuntimeDebug};
-use sp_std::{vec, vec::Vec};
+use sp_core::ConstBool;
+use sp_std::vec::Vec;
 
-use sol_prim::SlotNumber;
+use sol_prim::{AccountBump, SlotNumber};
 
 use crate::{address, assets, FeeEstimationApi, FeeRefundCalculator, TypeInfo};
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -43,7 +43,7 @@ impl Chain for Solana {
 	type ChainAccount = SolAddress;
 	type EpochStartData = (); //todo
 	type DepositFetchId = ChannelId;
-	type DepositChannelState = SolanaDepositChannelState;
+	type DepositChannelState = AccountBump;
 	type DepositDetails = (); //todo
 	type Transaction = SolTransaction;
 	type TransactionMetadata = (); //todo
@@ -89,7 +89,7 @@ impl ChainCrypto for SolanaCrypto {
 
 	fn maybe_broadcast_barriers_on_rotation(
 		_rotation_broadcast_id: cf_primitives::BroadcastId,
-	) -> vec::Vec<cf_primitives::BroadcastId> {
+	) -> Vec<cf_primitives::BroadcastId> {
 		todo!()
 	}
 }
@@ -197,10 +197,4 @@ impl address::ToHumanreadableAddress for SolAddress {
 	}
 }
 
-#[derive(Clone, Encode, Decode, TypeInfo, Eq, PartialEq, RuntimeDebug)]
-pub struct SolanaDepositChannelState {
-	pub seed: Vec<u8>,
-	pub bump: u8,
-}
-
-impl crate::ChannelLifecycleHooks for SolanaDepositChannelState {}
+impl crate::ChannelLifecycleHooks for AccountBump {}
