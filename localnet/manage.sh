@@ -1,23 +1,31 @@
 #!/bin/bash
 
+#  ██████╗██╗  ██╗ █████╗ ██╗███╗   ██╗███████╗██╗     ██╗██████╗     ██████╗  ██████╗ ██╗   ██╗███╗   ██╗ ██████╗███████╗██████╗
+# ██╔════╝██║  ██║██╔══██╗██║████╗  ██║██╔════╝██║     ██║██╔══██╗    ██╔══██╗██╔═══██╗██║   ██║████╗  ██║██╔════╝██╔════╝██╔══██╗
+# ██║     ███████║███████║██║██╔██╗ ██║█████╗  ██║     ██║██████╔╝    ██████╔╝██║   ██║██║   ██║██╔██╗ ██║██║     █████╗  ██████╔╝
+# ██║     ██╔══██║██╔══██║██║██║╚██╗██║██╔══╝  ██║     ██║██╔═══╝     ██╔══██╗██║   ██║██║   ██║██║╚██╗██║██║     ██╔══╝  ██╔══██╗
+# ╚██████╗██║  ██║██║  ██║██║██║ ╚████║██║     ███████╗██║██║         ██████╔╝╚██████╔╝╚██████╔╝██║ ╚████║╚██████╗███████╗██║  ██║
+#  ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝╚═╝     ╚══════╝╚═╝╚═╝         ╚═════╝  ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝╚══════╝╚═╝  ╚═╝
+
 LOCALNET_INIT_DIR=localnet/init
 WORKFLOW=build-localnet
 GENESIS_NODES=("bashful" "doc" "dopey")
 SELECTED_NODES=("bashful")
 REQUIRED_BINARIES="engine-runner chainflip-node"
 INIT_CONTAINERS="eth-init solana-init"
-# INIT_CONTAINERS="eth-init"
 CORE_CONTAINERS="bitcoin geth polkadot redis"
 ARB_CONTAINERS="sequencer staker-unsafe poster"
+SOLANA_BASE_PATH="/tmp/solana"
+CHAINFLIP_BASE_PATH="/tmp/chainflip"
 export NODE_COUNT="1-node"
 
-DEBUG_OUTPUT_DESTINATION=${DEBUG_OUTPUT_DESTINATION:-'/tmp/chainflip/debug.log'}
+DEBUG_OUTPUT_DESTINATION=${DEBUG_OUTPUT_DESTINATION:-"$CHAINFLIP_BASE_PATH/debug.log"}
 
 source ./localnet/helper.sh
 
-mkdir -p /tmp/chainflip/
-mkdir -p /tmp/solana/
-touch /tmp/chainflip/debug.log
+mkdir -p $CHAINFLIP_BASE_PATH
+mkdir -p $SOLANA_BASE_PATH
+touch $CHAINFLIP_BASE_PATHdebug.log
 
 set -eo pipefail
 
@@ -129,16 +137,8 @@ build-localnet() {
   echo "🔮 Initializing Network"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INIT_CONTAINERS $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
 
-#   ____       _                       _
-#  |  _ \  ___| |__  _   _  __ _  __ _(_)_ __   __ _
-#  | | | |/ _ \ '_ \| | | |/ _` |/ _` | | '_ \ / _` |
-#  | |_| |  __/ |_) | |_| | (_| | (_| | | | | | (_| |
-#  |____/ \___|_.__/ \__,_|\__, |\__, |_|_| |_|\__, |
-#                          |___/ |___/         |___/
-
-  # cp -R ./localnet/init/solana /tmp
-  tar -xzf /tmp/solana/solana-ledger.tar.gz -C /tmp/solana/
-  rm -rf /tmp/solana/solana-ledger.tar.gz
+  tar -xzf $SOLANA_BASE_PATH/solana-ledger.tar.gz -C $SOLANA_BASE_PATH
+  rm -rf $SOLANA_BASE_PATH/solana-ledger.tar.gz
 
   echo "🦺 Updating init state files permissions ..."
 
@@ -156,18 +156,9 @@ build-localnet() {
   REPLY=$(check_endpoint_health -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://localhost:9947') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]
   DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
 
-  if [[ $CI == true ]]; then
-    echo "🔐 Setting permissions for CI ..."
-    sudo chmod -R 777 /tmp/chainflip
-    sudo chown -R $USER:$USER /tmp/solana
-    sudo chmod -R 777 /tmp/solana
-    echo "🐛 Fix solana symlink issue ..."
-    rm /tmp/solana/test-ledger/snapshot/100/accounts_hardlinks/account_path_0
-    ln -s /tmp/solana/test-ledger/accounts/snapshot/100 /tmp/solana/test-ledger/snapshot/100/accounts_hardlinks/account_path_0
-  else
-    chmod -R 777 /tmp/chainflip
-    chmod -R 777 /tmp/solana
-  fi
+  echo "🐛 Fix solana symlink issue ..."
+  rm $SOLANA_BASE_PATH/test-ledger/snapshot/100/accounts_hardlinks/account_path_0
+  ln -s $SOLANA_BASE_PATH/test-ledger/accounts/snapshot/100 $SOLANA_BASE_PATH/test-ledger/snapshot/100/accounts_hardlinks/account_path_0
 
   if which solana-test-validator >>$DEBUG_OUTPUT_DESTINATION 2>&1; then
     echo "☀️ Waiting for Solana node to start"
@@ -248,8 +239,8 @@ destroy() {
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down $additional_docker_compose_down_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
   for pid in $(ps -ef | grep chainflip | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
   for pid in $(ps -ef | grep solana | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
-  rm -rf /tmp/chainflip
-  rm -rf /tmp/solana/
+  rm -rf ="/tmp/chainflip"
+  rm -rf $SOLANA_BASE_PATH
 
   unset DOT_GENESIS_HASH
 
@@ -304,7 +295,7 @@ logs() {
   select SERVICE in node engine broker lp polkadot geth bitcoin solana poster sequencer staker debug redis all ingress-egress-tracker; do
     if [[ $SERVICE == "all" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow
-      tail -f /tmp/chainflip/*/chainflip-*.log
+      tail -f $CHAINFLIP_BASE_PATH*/chainflip-*.log
     fi
     if [[ $SERVICE == "polkadot" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow polkadot
@@ -329,23 +320,23 @@ logs() {
     fi
     if [[ $SERVICE == "node" ]] || [[ $SERVICE == "engine" ]]; then
       select NODE in bashful doc dopey; do
-        tail -f /tmp/chainflip/$NODE/chainflip-$SERVICE.*log
+        tail -f $CHAINFLIP_BASE_PATH$NODE/chainflip-$SERVICE.*log
       done
     fi
     if [[ $SERVICE == "broker" ]]; then
-      tail -f /tmp/chainflip/chainflip-broker-api.*log
+      tail -f $CHAINFLIP_BASE_PATHchainflip-broker-api.*log
     fi
     if [[ $SERVICE == "lp" ]]; then
-      tail -f /tmp/chainflip/chainflip-lp-api.*log
+      tail -f $CHAINFLIP_BASE_PATHchainflip-lp-api.*log
     fi
     if [[ $SERVICE == "ingress-egress-tracker" ]]; then
-      tail -f /tmp/chainflip/chainflip-ingress-egress-tracker.*log
+      tail -f $CHAINFLIP_BASE_PATHchainflip-ingress-egress-tracker.*log
     fi
     if [[ $SERVICE == "solana" ]]; then
-      tail -f /tmp/solana/solana.*log
+      tail -f $SOLANA_BASE_PATHsolana.*log
     fi
     if [[ $SERVICE == "debug" ]]; then
-      cat /tmp/chainflip/debug.log
+      cat $CHAINFLIP_BASE_PATHdebug.log
     fi
     break
   done

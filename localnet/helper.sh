@@ -1,6 +1,6 @@
 function check_endpoint_health() {
-  retries=10   # Number of retries
-  delay=6     # Delay between retries in seconds
+  retries=30   # Number of retries
+  delay=10     # Delay between retries in seconds
 
   while [ $retries -gt 0 ]; do
     if curl -s "$@"; then
