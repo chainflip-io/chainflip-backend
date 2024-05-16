@@ -10,7 +10,7 @@ services:
     command: /bin/sh -c "cp -R /initial-state/* /localnet-initial-state"
 
   solana-init:
-    image: ghcr.io/chainflip-io/solana-localnet-ledger:61688ec4256c236a638427eadffa778ee4d82350
+    image: ghcr.io/chainflip-io/solana-localnet-ledger:v0.3.2
     pull_policy: always
     container_name: init-solana
     platform: linux/amd64
