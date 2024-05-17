@@ -123,6 +123,7 @@ jobs:
       - name: Permissions for latest binaries 🛡️
         run: |
           chmod +x ./latest-release-bins/chainflip-*
+          chmod +x ./latest-release-bins/engine-runner
 
       - name: Get version of the latest release ✍️
         run: |
