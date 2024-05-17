@@ -2,7 +2,13 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
-## [1.3.5] - 2024-05-07
+## [1.3.6] - 2024-05-17
+
+### Fixes
+
+- Fix a bug with missing `ca-certificates` that was preventing the Broker and LP APIs from connecting to an RPC node over HTTPS/WSS ([#4864](https://github.com/chainflip-io/chainflip-backend/pull/4864))
+
+## [1.3.6] - 2024-05-07
 
 ### Fixes
 
