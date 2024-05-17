@@ -5,7 +5,7 @@
 // 1 - Asset
 // 2 - Tier
 // 3 - Amount
-// 4 (optional) - Account URI (Default: "//LP_1")
+// 4 (optional) - Account URI (Default: "//LP_BOOST")
 //
 // Provides liquidity, then adds the funds to the specified boost pool and waits until it is confirmed via an event.
 // For example: ./commands/add_boost_funds.ts Btc 5 0.1 "//LP_2"
@@ -24,7 +24,7 @@ async function main(): Promise<void> {
   process.exit(0);
 }
 
-runWithTimeout(main(), 60000).catch((error) => {
+runWithTimeout(main(), 80000).catch((error) => {
   console.error(error);
   process.exit(-1);
 });

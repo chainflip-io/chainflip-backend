@@ -14,6 +14,7 @@ import {
   decodeSolAddress,
   chainContractId,
   assetDecimals,
+  Event,
 } from '../shared/utils';
 import { send } from '../shared/send';
 import { observeEvent } from './utils/substrate';
@@ -23,7 +24,7 @@ export async function provideLiquidity(
   amount: number,
   waitForFinalization = false,
   lpKey?: string,
-) {
+): Promise<Event> {
   await using chainflip = await getChainflipApi();
   await cryptoWaitReady();
   const chain = shortChainFromAsset(ccy);
@@ -79,5 +80,5 @@ export async function provideLiquidity(
   });
   await send(ccy, ingressAddress, String(amount));
 
-  await eventHandle;
+  return eventHandle;
 }

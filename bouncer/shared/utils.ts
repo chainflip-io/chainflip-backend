@@ -14,7 +14,7 @@ import {
 import Web3 from 'web3';
 import { Connection, Keypair } from '@solana/web3.js';
 import { base58Decode, base58Encode, cryptoWaitReady } from '@polkadot/util-crypto';
-import { hexToU8a, u8aToHex } from '@polkadot/util';
+import { hexToU8a, u8aToHex, BN } from '@polkadot/util';
 import BigNumber from 'bignumber.js';
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
@@ -188,21 +188,6 @@ export function chainGasAsset(chain: Chain): Asset {
       return Assets.Dot;
     case 'Arbitrum':
       return Assets.ArbEth;
-    default:
-      throw new Error(`Unsupported chain: ${chain}`);
-  }
-}
-
-export function getAssetsForChain(chain: Chain): Asset[] {
-  switch (chain) {
-    case 'Ethereum':
-      return [Assets.Eth, Assets.Usdc, Assets.Usdt, Assets.Flip];
-    case 'Bitcoin':
-      return [Assets.Btc];
-    case 'Polkadot':
-      return [Assets.Dot];
-    case 'Arbitrum':
-      return [Assets.ArbEth, Assets.ArbUsdc];
     default:
       throw new Error(`Unsupported chain: ${chain}`);
   }
@@ -844,6 +829,16 @@ export function handleSubstrateError(api: any) {
       process.exit(1);
     }
   };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function decodeModuleError(module: any, api: any): string {
+  const errorIndex = {
+    index: new BN(module.index),
+    error: new Uint8Array(Buffer.from(module.error.slice(2), 'hex')),
+  };
+  const { docs, name, section } = api.registry.findMetaError(errorIndex);
+  return `${section}.${name}: ${docs}`;
 }
 
 export function isValidHexHash(hash: string): boolean {

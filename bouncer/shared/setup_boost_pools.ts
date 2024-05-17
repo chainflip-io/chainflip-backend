@@ -1,13 +1,16 @@
-import { InternalAssets as Assets } from '@chainflip/cli';
+import { InternalAssets as Assets, chainConstants, getInternalAsset } from '@chainflip/cli';
 import {
   ingressEgressPalletForChain,
-  getAssetsForChain,
   chainFromAsset,
   Asset,
+  decodeModuleError,
+  getChainflipApi,
+  Event,
 } from '../shared/utils';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { observeEvent } from './utils/substrate';
 import { addBoostFunds } from './boost';
+import { provideLiquidity } from './provide_liquidity';
 
 export type BoostPoolId = {
   asset: Asset;
@@ -16,7 +19,6 @@ export type BoostPoolId = {
 
 // These are the tiers of boost pools that will be created for each asset
 const boostPoolTiers = [5, 10, 30];
-const chains = ['Ethereum', 'Polkadot', 'Bitcoin', 'Arbitrum'] as const;
 const fundBtcBoostPoolsAmount = 2; // Put 2 BTC in each Btc boost pool after creation
 
 /// Submits a single governance extrinsic that creates the boost pools for the given assets and tiers.
@@ -35,7 +37,7 @@ export async function createBoostPools(newPools: BoostPoolId[]): Promise<void> {
     }
 
     if (pool.tier <= 0) {
-      throw new Error(`Invalid tier value: ${pool.tier}`);
+      throw new Error(`Tier value: ${pool.tier} must be larger than 0`);
     }
 
     const observeBoostPoolCreated = observeEvent(
@@ -43,13 +45,13 @@ export async function createBoostPools(newPools: BoostPoolId[]): Promise<void> {
       {
         test: (event) =>
           event.data.boostPool.asset === pool.asset &&
-          event.data.boostPool.tier === pool.tier.toString(),
+          Number(event.data.boostPool.tier) === pool.tier,
       },
     );
-    const observeBoostPoolAlreadyExists = observeEvent(`governance:FailedExecution`);
+    const observeGovernanceFailedExecution = observeEvent(`governance:FailedExecution`);
 
     observeBoostPoolEvents.push(
-      Promise.race([observeBoostPoolCreated, observeBoostPoolAlreadyExists]),
+      Promise.race([observeBoostPoolCreated, observeGovernanceFailedExecution]),
     );
   }
 
@@ -60,8 +62,8 @@ export async function createBoostPools(newPools: BoostPoolId[]): Promise<void> {
   const boostPoolEvents = await Promise.all(observeBoostPoolEvents);
   for (const event of boostPoolEvents) {
     if (event.name.method !== 'BoostPoolCreated') {
-      // TODO: decode error here
-      throw new Error(`Failed to create boost pool: ${JSON.stringify(event)}`);
+      const error = decodeModuleError(event.data[0].Module, await getChainflipApi());
+      throw new Error(`Failed to create boost pool: ${error}`);
     }
     console.log(
       `Boost pools created for ${event.data.boostPool.asset} at ${event.data.boostPool.tier} bps`,
@@ -74,30 +76,38 @@ export async function setupBoostPools(): Promise<void> {
   console.log('=== Creating Boost Pools ===');
   const boostPoolCreationPromises: Promise<void>[] = [];
 
-  for (const c of chains) {
-    const chain = c;
-    console.log(`Creating boost pools for all ${chain} assets`);
-    const assets = getAssetsForChain(chain);
-    const newPools: BoostPoolId[] = [];
+  for (const chain in chainConstants) {
+    if (Object.prototype.hasOwnProperty.call(chainConstants, chain)) {
+      console.log(`Creating boost pools for all ${chain} assets`);
+      const newPools: BoostPoolId[] = [];
 
-    for (const asset of assets) {
-      for (const tier of boostPoolTiers) {
-        if (tier <= 0) {
-          throw new Error(`Invalid tier value: ${tier}`);
+      for (const asset of chainConstants[chain as keyof typeof chainConstants].assets) {
+        for (const tier of boostPoolTiers) {
+          if (tier <= 0) {
+            throw new Error(`Invalid tier value: ${tier}`);
+          }
+          newPools.push({ asset: getInternalAsset({ asset, chain }), tier });
         }
-        newPools.push({ asset, tier });
       }
+      boostPoolCreationPromises.push(createBoostPools(newPools));
     }
-    boostPoolCreationPromises.push(createBoostPools(newPools));
   }
   await Promise.all(boostPoolCreationPromises);
 
   // Add some boost funds for Btc to each boost tier
   console.log('Funding Boost Pools');
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const fundBoostPoolsPromises: Promise<any>[] = [];
+  const btcIngressFee = 0.0001; // Some small amount to cover the ingress fee
+  await provideLiquidity(
+    Assets.Btc,
+    fundBtcBoostPoolsAmount * boostPoolTiers.length + btcIngressFee,
+    false,
+    '//LP_BOOST',
+  );
+  const fundBoostPoolsPromises: Promise<Event>[] = [];
   for (const tier of boostPoolTiers) {
-    fundBoostPoolsPromises.push(addBoostFunds(Assets.Btc, tier, fundBtcBoostPoolsAmount));
+    fundBoostPoolsPromises.push(
+      addBoostFunds(Assets.Btc, tier, fundBtcBoostPoolsAmount, '//LP_BOOST', false),
+    );
   }
   await Promise.all(fundBoostPoolsPromises);
 

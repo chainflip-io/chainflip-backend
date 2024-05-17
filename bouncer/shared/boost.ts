@@ -21,6 +21,7 @@ import { send } from './send';
 import { provideLiquidity } from './provide_liquidity';
 import { requestNewSwap } from './perform_swap';
 import { createBoostPools } from './setup_boost_pools';
+import { jsonRpc } from './json_rpc';
 
 const keyring = new Keyring({ type: 'sr25519' });
 keyring.setSS58Format(2112);
@@ -48,7 +49,7 @@ export async function stopBoosting(
   await using chainflip = await getChainflipApi();
   const lp = keyring.createFromUri(lpUri);
 
-  assert(boostTier > 0, 'Boost fee must be greater than 0');
+  assert(boostTier > 0, 'Boost tier must be greater than 0');
 
   const observeStoppedBoosting = observeEvent(
     chainFromAsset(asset).toLowerCase() + 'IngressEgress:StoppedBoosting',
@@ -81,13 +82,19 @@ export async function addBoostFunds(
   boostTier: number,
   amount: number,
   lpUri = '//LP_BOOST',
+  depositLiquidity = true,
 ): Promise<Event> {
   await using chainflip = await getChainflipApi();
   const lp = keyring.createFromUri(lpUri);
+  console.log(`address: ${lp.address}`);
 
-  assert(boostTier > 0, 'Boost fee must be greater than 0');
+  assert(boostTier > 0, 'Boost tier must be greater than 0');
 
-  await provideLiquidity(asset, amount, true, lpUri);
+  if (depositLiquidity) {
+    // Provide a little more than the amount because some will be lost due to ingress fee
+    // TODO: use 'cf_ingress_egress_environment' to get the ingress fee instead of hardcoding 1%
+    await provideLiquidity(asset, amount * 1.01, false, lpUri);
+  }
 
   const observeBoostFundsAdded = observeEvent(
     chainFromAsset(asset).toLowerCase() + 'IngressEgress:BoostFundsAdded',
@@ -125,15 +132,20 @@ async function testBoostingForAsset(asset: Asset, boostFee: number, lpUri: strin
     'Stopped boosting but, the test cannot start with pending boosts.',
   );
 
-  // Add boost funds
-  console.log(`Providing liquidity for boosting`);
-  await addBoostFunds(asset, boostFee, amount, lpUri);
+  const boostPoolDetails = (await jsonRpc('cf_boost_pool_details', [Assets.Btc.toUpperCase()]))[0];
+  assert.strictEqual(boostPoolDetails.fee_tier, boostFee, 'Unexpected lowest fee tier');
+  assert.strictEqual(
+    boostPoolDetails.available_amounts.length,
+    0,
+    'Boost pool must be empty for test',
+  );
 
-  // TODO: Check that we are the only booster in the pool
+  // Add boost funds
+  await addBoostFunds(asset, boostFee, amount, lpUri);
 
   // Do a swap
   const swapAsset = asset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
-  const destAddress = await newAddress(swapAsset, 'LP_1');
+  const destAddress = await newAddress(swapAsset, 'LP_BOOST');
   console.log(`Swap destination address: ${destAddress}`);
   const swapRequest = await requestNewSwap(
     asset,
@@ -202,6 +214,7 @@ export async function testBoostingSwap() {
   const boostPool = (
     await chainflip.query.bitcoinIngressEgress.boostPools(Assets.Btc, boostPoolTier)
   ).toJSON();
+
   // Create the boost pool if it doesn't exist
   if (!boostPool?.feeBps) {
     await createBoostPools([{ asset: Assets.Btc, tier: boostPoolTier }]);
