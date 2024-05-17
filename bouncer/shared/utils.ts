@@ -525,17 +525,19 @@ export async function observeBadEvents(
   eventName: string,
   stopObserveEvent: () => boolean,
   eventQuery?: EventQuery,
+  testTag?: string,
 ) {
   await using chainflipApi = await getChainflipApi();
   const event = await observeEvent(eventName, chainflipApi, eventQuery, stopObserveEvent);
   if (event) {
+    const testMessage = testTag ? `Test: ${testTag}: ` : '';
     throw new Error(
-      `Unexpected event emitted ${event.name.section}:${event.name.method} in block ${event.block}`,
+      `${testMessage}Unexpected event emitted ${event.name.section}: ${event.name.method} in block ${event.block} `,
     );
   }
 }
 
-export async function observeBroadcastSuccess(broadcastId: BroadcastId) {
+export async function observeBroadcastSuccess(broadcastId: BroadcastId, testTag?: string) {
   await using chainflipApi = await getChainflipApi();
   const broadcaster = broadcastId[0].toLowerCase() + 'Broadcaster';
   const broadcastIdNumber = broadcastId[1];
@@ -548,6 +550,7 @@ export async function observeBroadcastSuccess(broadcastId: BroadcastId) {
       if (broadcastIdNumber === Number(event.data.broadcastId)) return true;
       return false;
     },
+    testTag ? `observe BroadcastSuccess test tag: ${testTag}` : 'observe BroadcastSuccess',
   );
 
   await observeEvent(broadcaster + ':BroadcastSuccess', chainflipApi, (event) => {

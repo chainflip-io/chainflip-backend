@@ -46,6 +46,8 @@ export async function setupSwaps(): Promise<void> {
     // createLpPool('SolUsdc', price.get('SolUsdc')!),
   ]);
 
+  console.log('LP Pools created');
+
   await Promise.all([
     provideLiquidity('Usdc', deposits.get('Usdc')!),
     provideLiquidity('Eth', deposits.get('Eth')!),
@@ -58,6 +60,8 @@ export async function setupSwaps(): Promise<void> {
     // provideLiquidity('Sol', deposits.get('Sol')!),
     // provideLiquidity('SolUsdc', deposits.get('SolUsdc')!),
   ]);
+
+  console.log('Liquidity provided');
 
   // also fund the boost account
   await Promise.all([
@@ -73,6 +77,8 @@ export async function setupSwaps(): Promise<void> {
     // provideLiquidity('SolUsdc', deposits.get('SolUsdc')!, false, '//LP_BOOST'),
   ]);
 
+  console.log('Boost account funded ');
+
   await Promise.all([
     rangeOrder('Eth', deposits.get('Eth')! * 0.9999),
     rangeOrder('Dot', deposits.get('Dot')! * 0.9999),
@@ -84,6 +90,8 @@ export async function setupSwaps(): Promise<void> {
     // rangeOrder('Sol', deposits.get('Sol')! * 0.9999),
     // rangeOrder('SolUsdc', deposits.get('SolUsdc')! * 0.9999),
   ]);
+
+  console.log('Range orders placed');
 
   console.log('=== Swaps Setup completed ===');
 }

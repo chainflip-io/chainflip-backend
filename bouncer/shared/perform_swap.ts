@@ -204,7 +204,7 @@ export async function performAndTrackSwap(
   // SwapScheduled, SwapExecuted, SwapEgressScheduled, BatchBroadcastRequested
   const broadcastId = await observeSwapEvents(swapParams, chainflipApi, tag);
 
-  if (broadcastId) await observeBroadcastSuccess(broadcastId);
+  if (broadcastId) await observeBroadcastSuccess(broadcastId, tag);
   else throw new Error('Failed to retrieve broadcastId!');
   console.log(`${tag} broadcast executed succesfully, swap is complete!`);
 }
