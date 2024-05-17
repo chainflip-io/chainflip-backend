@@ -3,7 +3,7 @@ use digest::Digest;
 use scale_info::TypeInfo;
 use sha2::Sha256;
 
-use crate::{address::Address, consts};
+use crate::{address::Address, consts, AccountBump};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -62,8 +62,8 @@ impl Pda {
 		Ok(self)
 	}
 
-	pub fn finish(self) -> Result<(Address, u8), PdaError> {
-		for bump in (0..=u8::MAX).rev() {
+	pub fn finish(self) -> Result<(Address, AccountBump), PdaError> {
+		for bump in (0..=AccountBump::MAX).rev() {
 			let digest = self
 				.hasher
 				.clone()

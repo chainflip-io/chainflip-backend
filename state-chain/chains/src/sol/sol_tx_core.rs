@@ -175,6 +175,9 @@ impl Transaction {
 		self.message().serialize()
 	}
 
+	/// Due to different Serialization between SolSignature and Solana native Signature type, the
+	/// SolSignatures needs to be converted into the RawSignature type before the transaction is
+	/// serialized as whole.
 	pub fn finalize_and_serialize(self) -> Result<Vec<u8>, bincode::error::EncodeError> {
 		bincode::serde::encode_to_vec(RawTransaction::from(self), bincode::config::legacy())
 	}
@@ -795,18 +798,10 @@ impl FromStr for Hash {
 	}
 }
 
-/// Values ans types used for testing purposes
+/// Values used for testing purposes
 #[cfg(test)]
 pub mod sol_test_values {
-	use super::extra_types_for_testing::{Keypair, Signer};
-	use crate::{
-		sol::{
-			api::{SolanaEnvAccountLookupKey, SolanaEnvironment},
-			SolAddress, SolAmount, SolAsset, SolComputeLimit, SolHash, SolPubkey,
-		},
-		ChainEnvironment,
-	};
-	use core::str::FromStr;
+	use crate::sol::{SolAmount, SolAsset, SolComputeLimit};
 
 	pub const VAULT_PROGRAM: &str = "8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf";
 	pub const VAULT_PROGRAM_DATA_ADDRESS: &str = "3oEKmL4nsw6RDZWhkYTdCUmjxDrzVkm1cWayPsvn3p57";
@@ -845,64 +840,13 @@ pub mod sol_test_values {
 	pub const COMPUTE_UNIT_PRICE: SolAmount = 1_000_000u64;
 	pub const COMPUTE_UNIT_LIMIT: SolComputeLimit = 300_000u32;
 	pub const TEST_DURABLE_NONCE: &str = "E6E2bNxGcgFyqeVRT3FSjw7YFbbMAZVQC21ZLVwrztRm";
-	pub const FETCH_FROM_ACCOUNT: &str = "XFmi41e1L9t732KoZdmzMSVige3SjjzsLzk1rW4rhwP";
+	pub const FETCH_FROM_ACCOUNT: &str = "4Spd3kst7XsA9pdp5ArfdXxEK4xfW88eRKbyQBmMvwQj";
 	pub const TRANSFER_TO_ACCOUNT: &str = "4MqL4qy2W1yXzuF3PiuSMehMbJzMuZEcBwVvrgtuhx7V";
 	pub const NEW_AGG_KEY: &str = "7x7wY9yfXjRmusDEfPPCreU4bP49kmH4mqjYUXNAXJoM";
 
 	pub const NEXT_NONCE: &str = NONCE_ACCOUNTS[0];
 	pub const SOL: SolAsset = SolAsset::Sol;
-
-	pub struct MockSolanaEnvironment;
-	impl ChainEnvironment<SolanaEnvAccountLookupKey, SolAddress> for MockSolanaEnvironment {
-		fn lookup(s: SolanaEnvAccountLookupKey) -> Option<SolAddress> {
-			Some(match s {
-				SolanaEnvAccountLookupKey::AggKey => Keypair::from_bytes(&RAW_KEYPAIR)
-					.expect("Key pair generation must succeed")
-					.pubkey()
-					.into(),
-				SolanaEnvAccountLookupKey::AvailableNonceAccount =>
-					SolAddress::from_str(NEXT_NONCE).unwrap(),
-				SolanaEnvAccountLookupKey::VaultProgram =>
-					SolAddress::from_str(VAULT_PROGRAM).unwrap(),
-				SolanaEnvAccountLookupKey::VaultProgramDataAccount =>
-					SolAddress::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
-				SolanaEnvAccountLookupKey::UpgradeManagerProgramDataAccount =>
-					SolAddress::from_str(UPGRADE_MANAGER_PROGRAM_DATA_ACCOUNT).unwrap(),
-				SolanaEnvAccountLookupKey::TokenMintPubkey =>
-					SolAddress::from_str(MINT_PUB_KEY).unwrap(),
-			})
-		}
-	}
-
-	/// Compute unit price
-	impl ChainEnvironment<(), SolAmount> for MockSolanaEnvironment {
-		fn lookup(_s: ()) -> Option<u64> {
-			Some(COMPUTE_UNIT_PRICE)
-		}
-	}
-
-	/// Durable Nonce
-	impl ChainEnvironment<(), SolHash> for MockSolanaEnvironment {
-		fn lookup(_s: ()) -> Option<SolHash> {
-			Some(SolHash::from_str(TEST_DURABLE_NONCE).expect("Durable nonce must be valid"))
-		}
-	}
-
-	/// All Nonce accounts
-	impl ChainEnvironment<(), Vec<SolAddress>> for MockSolanaEnvironment {
-		fn lookup(_s: ()) -> Option<Vec<SolAddress>> {
-			Some(
-				NONCE_ACCOUNTS
-					.into_iter()
-					.map(|key| {
-						SolPubkey::from_str(key).expect("Nonce accounts must be valid").into()
-					})
-					.collect::<Vec<_>>(),
-			)
-		}
-	}
-
-	impl SolanaEnvironment for MockSolanaEnvironment {}
+	pub const TRANSFER_AMOUNT: SolAmount = 1_000_000_000u64;
 }
 
 #[cfg(test)]
@@ -964,7 +908,7 @@ mod tests {
 			),
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
-			SystemProgramInstruction::transfer(&agg_key_pubkey, &to_pubkey, 1000000000),
+			SystemProgramInstruction::transfer(&agg_key_pubkey, &to_pubkey, TRANSFER_AMOUNT),
 		];
 		let message = Message::new(&instructions, Some(&agg_key_pubkey));
 		let mut tx = Transaction::new_unsigned(message);
@@ -1022,7 +966,10 @@ mod tests {
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
 			ProgramInstruction::get_instruction(
-				&VaultProgram::FetchNative { seed: vec![11u8, 12u8, 13u8, 55u8], bump: 255 },
+				&VaultProgram::FetchNative {
+					seed: vec![11u8, 12u8, 13u8, 55u8, 0u8, 0u8, 0u8, 0u8],
+					bump: 255,
+				},
 				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
 				vec![
 					AccountMeta::new_readonly(
@@ -1044,7 +991,7 @@ mod tests {
 			tx.finalize_and_serialize().expect("Transaction serialization should succeed");
 
 		// With compute unit price and limit
-		let expected_serialized_tx = hex_literal::hex!("011691ba07e3fc47bd0d4172288ed4ff8df2a7b6b66ce4237ff8330bab7692ded233fbe3efbe9c17e8a7592968c02136bc45cfc93015003d06fbe3fbd69d7cad0501000508f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb07c0202da00e4ac49553356529d5d45fc631c1d5eaee3d483667cad61d63692a17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19200000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000004a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004030302050004040000000400090340420f000000000004000502e0930400070406000103118e24658f6c59298c040000000b0c0d37ff").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("0106c23d5531cfd1d8d543eb8f88dc346a540224a50930bb1c4509c0a5ad9da77a5fb097530c0d9fa9e35f65ce9445c02bdabef979967ee0d60ed0cc8cc0c7370001000508f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19233306d43f017cdb7b1a324afdc62c79317d5b93e2e63b870143344134db9c60000000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000004a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004030301050004040000000400090340420f000000000004000502e0930400070406000203158e24658f6c59298c080000000b0c0d3700000000ff").to_vec();
 
 		// println!("tx:{:?}", hex::encode(serialized_tx.clone()));
 
@@ -1057,13 +1004,11 @@ mod tests {
 		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
-		let vault_program = SolAddress::from_str(VAULT_PROGRAM).unwrap();
+		let vault_program_id = SolAddress::from_str(VAULT_PROGRAM).unwrap();
 
 		// Deposit channel generated in `can_derive_address()`
-		let deposit_channel_0 =
-			derive_deposit_channel::<MockSolanaEnvironment>(0u64, SOL, vault_program).unwrap();
-		let deposit_channel_1 =
-			derive_deposit_channel::<MockSolanaEnvironment>(1u64, SOL, vault_program).unwrap();
+		let deposit_channel_0 = derive_deposit_channel(0u64, SOL, vault_program_id).unwrap();
+		let deposit_channel_1 = derive_deposit_channel(1u64, SOL, vault_program_id).unwrap();
 
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
@@ -1074,8 +1019,8 @@ mod tests {
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
 			ProgramInstruction::get_instruction(
 				&VaultProgram::FetchNative {
-					seed: deposit_channel_0.state.seed.to_vec(),
-					bump: deposit_channel_0.state.bump,
+					seed: deposit_channel_0.channel_id.to_le_bytes().to_vec(),
+					bump: deposit_channel_0.state,
 				},
 				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
 				vec![
@@ -1090,8 +1035,8 @@ mod tests {
 			),
 			ProgramInstruction::get_instruction(
 				&VaultProgram::FetchNative {
-					seed: deposit_channel_1.state.seed,
-					bump: deposit_channel_1.state.bump,
+					seed: deposit_channel_1.channel_id.to_le_bytes().to_vec(),
+					bump: deposit_channel_1.state,
 				},
 				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
 				vec![
@@ -1287,7 +1232,7 @@ mod tests {
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let to_pubkey = Pubkey::from_str("pyq7ySiH5RvKteu2vdXKC7SNyNDp9vNDkGXdHxSpPtu").unwrap();
 		let cf_receiver = Pubkey::from_str("NJusJ7itnSsh4jSi43i9MMKB9sF4VbNvdSwUA45gPE6").unwrap();
-		let amount: u64 = 1000000000;
+		let amount: u64 = TRANSFER_AMOUNT;
 
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(

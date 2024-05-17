@@ -33,7 +33,7 @@ impl BenchmarkValue for SolMessage {
 
 impl BenchmarkValue for SolTransaction {
 	fn benchmark_value() -> Self {
-		SolTransaction { message: SolMessage::benchmark_value(), signatures: Default::default() }
+		SolTransaction::new_unsigned(SolMessage::benchmark_value())
 	}
 }
 

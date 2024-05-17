@@ -9,6 +9,7 @@ pub mod consts;
 pub type Amount = u64;
 pub type SlotNumber = u64;
 pub type ComputeLimit = u32;
+pub type AccountBump = u8;
 
 define_binary!(address, Address, crate::consts::SOLANA_ADDRESS_LEN, "A");
 define_binary!(digest, Digest, crate::consts::SOLANA_DIGEST_LEN, "D");

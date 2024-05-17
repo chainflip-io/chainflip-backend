@@ -4,7 +4,7 @@ use cf_chains::{
 };
 
 use super::AddressDerivation;
-use crate::{chainflip::SolEnvironment, Environment};
+use crate::Environment;
 
 impl AddressDerivationApi<Solana> for AddressDerivation {
 	fn generate_address(
@@ -29,7 +29,7 @@ impl AddressDerivationApi<Solana> for AddressDerivation {
 		cf_chains::address::AddressDerivationError,
 	> {
 		let vault_address = Environment::sol_vault_address();
-		derive_deposit_channel::<SolEnvironment>(channel_id, source_asset, vault_address)
+		derive_deposit_channel(channel_id, source_asset, vault_address)
 			.map(|deposit_channel| (deposit_channel.address, deposit_channel.state))
 			.map_err(cf_chains::address::AddressDerivationError::SolanaDerivationError)
 	}

@@ -1,43 +1,16 @@
 //! Contains code for Deriving addresses and deposit channels for the Solana Environment.
 use cf_primitives::{chains::assets::sol::Asset as SolAsset, ChannelId};
+use sol_prim::AccountBump;
 
 use crate::{
 	deposit_channel::DepositChannel,
-	sol::{
-		api::SolanaEnvironment, consts::*, AddressDerivationError, DerivedAddressBuilder,
-		SolAddress,
-	},
+	sol::{consts::*, AddressDerivationError, DerivedAddressBuilder, SolAddress},
 	Solana,
 };
 use core::str::FromStr;
 
-/// Derive an address from our Vault program key. Produces an Address and a bump.
-fn derive_address(
-	seed: impl AsRef<[u8]>,
-	vault_program: SolAddress,
-) -> Result<(SolAddress, u8), AddressDerivationError> {
-	DerivedAddressBuilder::from_address(vault_program)?.chain_seed(seed)?.finish()
-}
-
-/// Derive a Associated Token Account (ATA) of a main target account.
-pub fn derive_associated_token_account(
-	target: SolAddress,
-	mint_pubkey: SolAddress,
-) -> Result<(SolAddress, u8), AddressDerivationError> {
-	let associated_token_program_id = SolAddress::from_str(ASSOCIATED_TOKEN_PROGRAM_ID)
-		.expect("Associated token program ID must be valid");
-	let token_program_id =
-		SolAddress::from_str(TOKEN_PROGRAM_ID).expect("Token program ID must be valid");
-
-	DerivedAddressBuilder::from_address(associated_token_program_id)?
-		.chain_seed(target)?
-		.chain_seed(token_program_id)?
-		.chain_seed(mint_pubkey)?
-		.finish()
-}
-
-/// Derive deposit channels for a channel ID
-pub fn derive_deposit_channel<Env: SolanaEnvironment>(
+/// Derive address/deposit channels for a channel ID
+pub fn derive_deposit_channel(
 	channel_id: ChannelId,
 	_asset: SolAsset,
 	vault_program: SolAddress,
@@ -56,14 +29,40 @@ pub fn derive_deposit_channel<Env: SolanaEnvironment>(
 			channel_id,
 			address,
 			asset: SolAsset::Sol,
-			state: crate::sol::SolanaDepositChannelState { seed: seed.to_vec(), bump },
+			state: bump,
 		})
+}
+
+/// Derive an address from our Vault program key. Produces an Address and a bump.
+fn derive_address(
+	seed: impl AsRef<[u8]>,
+	vault_program: SolAddress,
+) -> Result<(SolAddress, AccountBump), AddressDerivationError> {
+	DerivedAddressBuilder::from_address(vault_program)?.chain_seed(seed)?.finish()
+}
+
+#[allow(dead_code)]
+/// Derive a Associated Token Account (ATA) of a main target account.
+fn derive_associated_token_account(
+	target: SolAddress,
+	mint_pubkey: SolAddress,
+) -> Result<(SolAddress, AccountBump), AddressDerivationError> {
+	let associated_token_program_id = SolAddress::from_str(ASSOCIATED_TOKEN_PROGRAM_ID)
+		.expect("Associated token program ID must be valid");
+	let token_program_id =
+		SolAddress::from_str(TOKEN_PROGRAM_ID).expect("Token program ID must be valid");
+
+	DerivedAddressBuilder::from_address(associated_token_program_id)?
+		.chain_seed(target)?
+		.chain_seed(token_program_id)?
+		.chain_seed(mint_pubkey)?
+		.finish()
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::sol::{sol_tx_core::sol_test_values, SolanaDepositChannelState};
+	use crate::sol::sol_tx_core::sol_test_values;
 
 	#[test]
 	fn derive_associated_token_account_on_curve() {
@@ -124,38 +123,26 @@ mod tests {
 	#[test]
 	fn can_derive_deposit_channel_for_sol() {
 		let vault_program = SolAddress::from_str(sol_test_values::VAULT_PROGRAM).unwrap();
-		let channel_0_seed = 0u64.to_le_bytes();
-		let channel_1_seed = 1u64.to_le_bytes();
 
 		assert_eq!(
-			derive_deposit_channel::<sol_test_values::MockSolanaEnvironment>(
-				0u64,
-				SolAsset::Sol,
-				vault_program
-			)
-			.unwrap(),
+			derive_deposit_channel(0u64, SolAsset::Sol, vault_program).unwrap(),
 			DepositChannel {
 				channel_id: 0u64,
 				address: SolAddress::from_str("JDtAzKWKzQJCiHCfK4PU7qYuE4wChxuqfDqQhRbv6kwX")
 					.unwrap(),
 				asset: SolAsset::Sol,
-				state: SolanaDepositChannelState { seed: channel_0_seed.to_vec(), bump: 254u8 },
+				state: 254u8,
 			},
 		);
 
 		assert_eq!(
-			derive_deposit_channel::<sol_test_values::MockSolanaEnvironment>(
-				1u64,
-				SolAsset::Sol,
-				vault_program
-			)
-			.unwrap(),
+			derive_deposit_channel(1u64, SolAsset::Sol, vault_program).unwrap(),
 			DepositChannel {
 				channel_id: 1u64,
 				address: SolAddress::from_str("32qRitYeor2v7Rb3M2iL8PHkoyqhcoCCqYuWCNKqstN7")
 					.unwrap(),
 				asset: SolAsset::Sol,
-				state: SolanaDepositChannelState { seed: channel_1_seed.to_vec(), bump: 255u8 },
+				state: 255u8,
 			},
 		);
 	}
