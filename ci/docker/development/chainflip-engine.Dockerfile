@@ -26,4 +26,6 @@ WORKDIR /etc/chainflip
 
 RUN chmod +x /usr/local/bin/chainflip-engine
 
+RUN apt-get update && apt-get install -y ca-certificates
+
 CMD ["/usr/local/bin/chainflip-engine"]

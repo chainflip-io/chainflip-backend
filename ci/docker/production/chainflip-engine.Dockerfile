@@ -28,6 +28,8 @@ RUN chmod +x /usr/local/bin/chainflip-engine \
     && useradd -m -u 1000 -U -s /bin/sh -d /flip flip \
     && chown -R 1000:1000 /etc/chainflip
 
+RUN apt-get update && apt-get install -y ca-certificates
+
 USER flip
 
 CMD ["/usr/local/bin/chainflip-engine"]

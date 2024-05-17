@@ -17,4 +17,6 @@ WORKDIR /etc/chainflip
 
 RUN chmod +x /usr/local/bin/chainflip-broker-api
 
+RUN apt-get update && apt-get install -y ca-certificates
+
 CMD ["/usr/local/bin/chainflip-broker-api"]

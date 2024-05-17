@@ -17,4 +17,6 @@ WORKDIR /etc/chainflip
 
 RUN chmod +x /usr/local/bin/generate-genesis-keys
 
+RUN apt-get update && apt-get install -y ca-certificates
+
 CMD ["/usr/local/bin/generate-genesis-keys"]
