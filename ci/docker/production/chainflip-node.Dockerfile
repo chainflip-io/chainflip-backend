@@ -22,7 +22,10 @@ RUN chmod +x /usr/local/bin/chainflip-node \
     && useradd -m -u 1000 -U -s /bin/sh -d /flip flip \
     && chown -R 1000:1000 /etc/chainflip
 
-RUN apt-get update && apt-get install -y ca-certificates
+RUN apt-get update \
+    && apt-get install -y ca-certificates --no-install-recommends \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 USER flip
 
