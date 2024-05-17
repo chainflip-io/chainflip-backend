@@ -40,5 +40,5 @@ jobs:
     uses: ./.github/workflows/upgrade-test.yml
     secrets: inherit
     with:
-      upgrade-from-release: "perseverance"
+      upgrade-from-release: "sisyphos"
       upgrade-to-workflow-name: "ci-main.yml"

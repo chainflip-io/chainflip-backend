@@ -6,7 +6,7 @@ on:
       upgrade-from-release:
         description: 'The release we want to upgrade *from*: "sisyphos", "perseverance" or "berghain"'
         required: true
-        default: "perseverance"
+        default: "sisyphos"
       upgrade-to-workflow-name:
         description: "Name of the workflow to pull the upgrade-to artefacts from"
         required: true
@@ -20,7 +20,7 @@ on:
       upgrade-from-release:
         type: string
         description: 'The release we want to upgrade *from*: "perseverance" or "berghain"'
-        default: "perseverance"
+        default: "sisyphos"
       upgrade-to-workflow-name:
         type: string
         description: "Name of the workflow to pull the upgrade-to artefacts from"
@@ -29,7 +29,6 @@ on:
         type: string
         description: "Commit to run the upgrade test against. Leave blank to use the latest successful workflow run."
         required: false
-
 env:
   FORCE_COLOR: 1
 
@@ -116,7 +115,7 @@ jobs:
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: release-${{ inputs.upgrade-from-release }}.yml
-          name: chainflip-backend-bin-ubuntu-22.04
+          name: chainflip-backend-bin
           github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
           path: latest-release-bins
 
