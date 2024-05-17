@@ -1,20 +1,22 @@
 version: "3.9"
 services:
-  init:
+  eth-init:
     image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.1.2-usdt-${NODE_COUNT}
+    pull_policy: always
     container_name: init
     platform: linux/amd64
     volumes:
       - "/tmp/chainflip/data:/localnet-initial-state"
     command: /bin/sh -c "cp -R /initial-state/* /localnet-initial-state"
 
-  init-solana:
-    image: ghcr.io/chainflip-io/solana-localnet-ledger:v0.2.0
+  solana-init:
+    image: ghcr.io/chainflip-io/solana-localnet-ledger:v0.3.2
+    pull_policy: always
     container_name: init-solana
     platform: linux/amd64
     volumes:
-      - "/tmp/solana/test-ledger:/test-ledger"
-    command: /bin/sh -c "cp -R /solana/ledger/* /test-ledger"
+      - "/tmp/solana:/test-ledger"
+    command: /bin/sh -c "cp -R /solana/solana-ledger.tar.gz /test-ledger"
 
   arb-init:
     image: ghcr.io/chainflip-io/chainflip-eth-contracts/arbitrum-gizmo-shop:v1.1.2-usdt-${NODE_COUNT}
