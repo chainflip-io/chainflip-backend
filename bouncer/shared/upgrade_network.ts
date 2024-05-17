@@ -58,7 +58,8 @@ async function incompatibleUpgradeNoBuild(
 
   // We need to kill the engine process before starting the new engine (engine-runner)
   // Since the new engine contains the old one.
-  execSync(`kill $(ps aux | grep chainflip-engine | grep -v grep | awk '{print $2}')`);
+  console.log('Killing the old engines');
+  execSync(`kill $(ps aux | grep engine-runner | grep -v grep | awk '{print $2}')`);
 
   console.log('Starting all the engines');
 
