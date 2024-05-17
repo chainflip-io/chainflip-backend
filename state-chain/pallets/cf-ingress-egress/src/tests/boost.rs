@@ -36,7 +36,7 @@ const INIT_FETCHED_DEPOSITS: AssetAmount = 2 * INIT_BOOSTER_ETH_BALANCE;
 const INGRESS_FEE: AssetAmount = 1_000_000;
 
 fn get_lp_balance(lp: &AccountId, asset: eth::Asset) -> AssetAmount {
-	let balances = <Test as crate::Config>::LpBalance::asset_balances(lp).unwrap();
+	let balances = <Test as crate::Config>::LpBalance::free_balances(lp).unwrap();
 
 	balances[asset.into()]
 }
@@ -186,7 +186,8 @@ fn basic_passive_boosting() {
 		let (channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, 30);
 		let prewitnessed_deposit_id = prewitness_deposit(deposit_address, ASSET, DEPOSIT_AMOUNT);
 		// All of BOOSTER_AMOUNT_1 should be used:
-		const POOL_1_FEE: AssetAmount = BOOSTER_AMOUNT_1 * TIER_5_BPS as u128 / 10_000;
+		const POOL_1_FEE: AssetAmount =
+			BOOSTER_AMOUNT_1 * TIER_5_BPS as u128 / (10_000 - TIER_5_BPS as u128);
 		// Only part of BOOSTER_AMOUNT_2 should be used:
 		const POOL_2_CONTRIBUTION: AssetAmount = DEPOSIT_AMOUNT - (BOOSTER_AMOUNT_1 + POOL_1_FEE);
 		const POOL_2_FEE: AssetAmount = POOL_2_CONTRIBUTION * TIER_10_BPS as u128 / 10_000;
@@ -244,11 +245,6 @@ fn basic_passive_boosting() {
 				action: DepositAction::BoostersCredited { prewitnessed_deposit_id },
 				channel_id,
 			}));
-
-			assert_eq!(
-				PrewitnessedDeposits::<Test, ()>::get(channel_id, prewitnessed_deposit_id),
-				None
-			);
 
 			assert_eq!(get_available_amount(ASSET, TIER_5_BPS), BOOSTER_AMOUNT_1 + POOL_1_FEE);
 
@@ -419,13 +415,16 @@ fn stop_boosting() {
 #[track_caller]
 fn assert_boosted(
 	deposit_address: H160,
-	prewitnessed_deposit_id: PrewitnessedDepositId,
-	pools: impl IntoIterator<Item = BoostPoolTier>,
+	expected_prewitnessed_deposit_id: PrewitnessedDepositId,
+	expected_pools: impl IntoIterator<Item = BoostPoolTier>,
 ) {
-	assert_eq!(
-		DepositChannelLookup::<Test, ()>::get(deposit_address).unwrap().boost_status,
-		BoostStatus::Boosted { prewitnessed_deposit_id, pools: Vec::from_iter(pools.into_iter()) }
-	);
+	match DepositChannelLookup::<Test, ()>::get(deposit_address).unwrap().boost_status {
+		BoostStatus::Boosted { prewitnessed_deposit_id, pools, .. } => {
+			assert_eq!(prewitnessed_deposit_id, expected_prewitnessed_deposit_id);
+			assert_eq!(pools, Vec::from_iter(expected_pools.into_iter()));
+		},
+		_ => panic!("The channel is not boosted"),
+	}
 }
 
 #[track_caller]
@@ -455,7 +454,7 @@ fn witnessed_amount_does_not_match_boosted() {
 		assert_eq!(get_available_amount(eth::Asset::Eth, TIER_5_BPS), BOOSTER_AMOUNT_1);
 
 		// ==== LP sends funds to liquidity deposit address, which gets pre-witnessed ====
-		let (channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, 30);
+		let (_channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, 30);
 		let deposit_id =
 			prewitness_deposit(deposit_address, eth::Asset::Eth, PREWITNESSED_DEPOSIT_AMOUNT);
 
@@ -491,7 +490,6 @@ fn witnessed_amount_does_not_match_boosted() {
 		// Check that receiving unexpected amount didn't affect our ability to finalise the boost
 		// when the correct amount is received after all:
 		witness_deposit(deposit_address, eth::Asset::Eth, PREWITNESSED_DEPOSIT_AMOUNT);
-		assert_eq!(PrewitnessedDeposits::<Test, ()>::get(channel_id, deposit_id), None);
 		assert_eq!(get_available_amount(eth::Asset::Eth, TIER_5_BPS), BOOSTER_AMOUNT_1 + BOOST_FEE);
 
 		// The channel should no longer be boosted:
@@ -524,7 +522,7 @@ fn double_prewitness_due_to_reorg() {
 		));
 
 		// ==== LP sends funds to liquidity deposit address, which gets pre-witnessed ====
-		let (channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, BOOST_FEE_BPS);
+		let (_channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, BOOST_FEE_BPS);
 		let deposit_id1 = prewitness_deposit(deposit_address, eth::Asset::Eth, DEPOSIT_AMOUNT);
 
 		const LP_BALANCE_AFTER_BOOST: AssetAmount =
@@ -546,7 +544,7 @@ fn double_prewitness_due_to_reorg() {
 
 		// Due to reorg, the same deposit is pre-witnessed again, but it has no effect since
 		// we don't boost it due to an existing boost:
-		let deposit_id2 = prewitness_deposit(deposit_address, eth::Asset::Eth, DEPOSIT_AMOUNT);
+		let _deposit_id2 = prewitness_deposit(deposit_address, eth::Asset::Eth, DEPOSIT_AMOUNT);
 		{
 			// No channel action took place, LP balance is unchanged:
 			assert_eq!(get_lp_eth_balance(&LP_ACCOUNT), LP_BALANCE_AFTER_BOOST);
@@ -569,18 +567,6 @@ fn double_prewitness_due_to_reorg() {
 				get_available_amount(eth::Asset::Eth, TIER_10_BPS),
 				BOOSTER_AMOUNT_1 + BOOST_FEE
 			);
-
-			// One prewitness deposit is "consumed", but one is still pending:
-			assert_eq!(PrewitnessedDeposits::<Test, ()>::get(channel_id, deposit_id1), None);
-			assert!(PrewitnessedDeposits::<Test, ()>::get(channel_id, deposit_id2).is_some());
-		}
-
-		// When the channel expires, the redundant prewitnessed deposit is finally removed:
-		{
-			let recycle_block = IngressEgress::expiry_and_recycle_block_height().2;
-			BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
-			IngressEgress::on_idle(recycle_block, Weight::MAX);
-			assert_eq!(PrewitnessedDeposits::<Test, ()>::get(channel_id, deposit_id2), None);
 		}
 	});
 }
@@ -713,14 +699,11 @@ fn lost_funds_are_acknowledged_by_boost_pool() {
 			TIER_5_BPS
 		));
 
-		let (channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, TIER_5_BPS);
+		let (_channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, TIER_5_BPS);
 
 		let deposit_id = prewitness_deposit(deposit_address, eth::Asset::Eth, DEPOSIT_AMOUNT);
 
-		assert_eq!(
-			DepositChannelLookup::<Test, ()>::get(deposit_address).unwrap().boost_status,
-			BoostStatus::Boosted { prewitnessed_deposit_id: deposit_id, pools: vec![TIER_5_BPS] }
-		);
+		assert_boosted(deposit_address, deposit_id, [TIER_5_BPS]);
 
 		assert_eq!(get_lp_eth_balance(&LP_ACCOUNT), DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE);
 
@@ -737,7 +720,6 @@ fn lost_funds_are_acknowledged_by_boost_pool() {
 			let recycle_block = IngressEgress::expiry_and_recycle_block_height().2;
 			BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
 			IngressEgress::on_idle(recycle_block, Weight::MAX);
-			assert_eq!(PrewitnessedDeposits::<Test, ()>::get(channel_id, deposit_id), None);
 
 			assert!(BoostPools::<Test, ()>::get(eth::Asset::Eth, TIER_5_BPS)
 				.unwrap()

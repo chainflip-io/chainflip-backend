@@ -1,6 +1,6 @@
 import assert from 'assert';
 import { randomBytes } from 'crypto';
-import { HexString } from '@polkadot/util/types';
+import type { HexString } from '@polkadot/util/types';
 import {
   fineAmountToAmount,
   newAddress,

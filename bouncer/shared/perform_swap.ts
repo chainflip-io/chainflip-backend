@@ -1,5 +1,5 @@
-import { encodeAddress } from '@polkadot/util-crypto';
 import { InternalAsset as Asset } from '@chainflip/cli';
+import { encodeAddress } from '../polkadot/util-crypto';
 import { newSwap } from './new_swap';
 import { send, sendViaCfTester } from './send';
 import { getBalance } from './get_balance';
@@ -212,7 +212,7 @@ export async function performAndTrackSwap(
   // SwapScheduled, SwapExecuted, SwapEgressScheduled, BatchBroadcastRequested
   const broadcastId = await observeSwapEvents(swapParams, chainflipApi, tag);
 
-  if (broadcastId) await observeBroadcastSuccess(broadcastId);
+  if (broadcastId) await observeBroadcastSuccess(broadcastId, tag);
   else throw new Error('Failed to retrieve broadcastId!');
   console.log(`${tag} broadcast executed succesfully, swap is complete!`);
 }

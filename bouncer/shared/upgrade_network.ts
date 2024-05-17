@@ -58,7 +58,8 @@ async function incompatibleUpgradeNoBuild(
 
   // We need to kill the engine process before starting the new engine (engine-runner)
   // Since the new engine contains the old one.
-  execSync(`kill $(ps aux | grep chainflip-engine | grep -v grep | awk '{print $2}')`);
+  console.log('Killing the old engines');
+  execSync(`kill $(ps aux | grep engine-runner | grep -v grep | awk '{print $2}')`);
 
   console.log('Starting all the engines');
 
@@ -102,7 +103,16 @@ async function incompatibleUpgradeNoBuild(
   await sleep(12000);
 
   console.log('Killing the old node.');
-  execSync(`kill $(ps aux | grep chainflip-node | grep -v grep | awk '{print $2}')`);
+
+  try {
+    const execOutput = execSync(
+      `kill $(ps -o pid -o comm | grep chainflip-node | awk '{print $1}')`,
+    );
+    console.log('Kill node exec output:', execOutput.toString());
+  } catch (e) {
+    console.log('Error killing node: ' + e);
+    throw e;
+  }
 
   console.log('Killed old node');
 
@@ -134,7 +144,7 @@ async function incompatibleUpgradeNoBuild(
     }),
   );
 
-  const output = execSync("ps aux | grep chainflip-node | grep -v grep | awk '{print $2}'");
+  const output = execSync("ps -o pid -o comm | grep chainflip-node | awk '{print $1}'");
   console.log('New node PID: ' + output.toString());
 
   // Restart the engines
@@ -289,12 +299,14 @@ export async function upgradeNetworkPrebuilt(
 ) {
   const versionRegex = /\d+\.\d+\.\d+/;
 
-  console.log("Version we're upgrading from: " + oldVersion);
+  console.log("Raw version we're upgrading from: " + oldVersion);
 
   let cleanOldVersion = oldVersion;
   if (!versionRegex.test(cleanOldVersion)) {
     cleanOldVersion = oldVersion.match(versionRegex)[0];
   }
+
+  console.log("Raw version we're upgrading from: " + cleanOldVersion);
 
   const nodeBinaryVersion = execSync(`${binariesPath}/chainflip-node --version`).toString();
   const nodeVersion = nodeBinaryVersion.match(versionRegex)[0];
@@ -308,9 +320,14 @@ export async function upgradeNetworkPrebuilt(
     );
   }
 
-  const isCompatible = isCompatibleWith(cleanOldVersion, nodeVersion);
-
-  if (!isCompatible) {
+  if (cleanOldVersion === nodeVersion) {
+    throw Error(
+      'The versions are the same. No need to upgrade. Please provide a different version.',
+    );
+  } else if (isCompatibleWith(cleanOldVersion, nodeVersion)) {
+    console.log('The versions are compatible.');
+    await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, true);
+  } else {
     console.log('The versions are incompatible.');
     await incompatibleUpgradeNoBuild(
       localnetInitPath,
@@ -319,9 +336,6 @@ export async function upgradeNetworkPrebuilt(
       numberOfNodes,
       nodeVersion,
     );
-  } else {
-    console.log('The versions are compatible.');
-    await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, true);
   }
 
   console.log('Upgrade complete.');

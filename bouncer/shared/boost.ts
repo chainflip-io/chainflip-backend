@@ -1,4 +1,6 @@
+// eslint-disable-next-line no-restricted-imports
 import Keyring from '@polkadot/keyring';
+// eslint-disable-next-line no-restricted-imports
 import { KeyringPair } from '@polkadot/keyring/types';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import assert from 'assert';

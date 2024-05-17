@@ -175,6 +175,7 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 	type ChainAmount: Member
 		+ Parameter
 		+ Copy
+		+ Unpin
 		+ MaybeSerializeDeserialize
 		+ Default
 		+ AtLeast32BitUnsigned

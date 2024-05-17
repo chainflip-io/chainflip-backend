@@ -131,7 +131,7 @@ impl LpBalanceApi for MockBalance {
 		});
 	}
 
-	fn asset_balances(
+	fn free_balances(
 		_who: &Self::AccountId,
 	) -> Result<AssetMap<AssetAmount>, sp_runtime::DispatchError> {
 		unreachable!()

@@ -1278,7 +1278,6 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	#[allow(clippy::too_many_arguments)]
 	fn inner_update_limit_order(
 		pool: &mut Pool<T>,
 		lp: &T::AccountId,
@@ -1368,7 +1367,6 @@ impl<T: Config> Pallet<T> {
 		Ok(*sold_amount_change.abs())
 	}
 
-	#[allow(clippy::too_many_arguments)]
 	fn inner_update_range_order(
 		pool: &mut Pool<T>,
 		lp: &T::AccountId,
@@ -1899,7 +1897,6 @@ impl<T: Config> Pallet<T> {
 	/// - Payout collected `fee` and `bought_amount`
 	/// - Update cache storage for Pool
 	/// - Deposit the correct event.
-	#[allow(clippy::too_many_arguments)]
 	fn process_limit_order_update(
 		pool: &mut Pool<T>,
 		asset_pair: &AssetPair,

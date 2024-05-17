@@ -54,8 +54,8 @@ export async function createBoostPools(newPools: BoostPoolId[]): Promise<void> {
       Promise.race([observeBoostPoolCreated, observeGovernanceFailedExecution]),
     );
   }
-
-  submitGovernanceExtrinsic((api) =>
+  console.log(`Creating boost pools for chain ${chain} via governance: ${newPools}`);
+  await submitGovernanceExtrinsic((api) =>
     api.tx[ingressEgressPalletForChain(chain)].createBoostPools(newPools),
   );
 

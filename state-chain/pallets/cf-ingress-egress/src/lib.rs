@@ -58,18 +58,15 @@ use sp_std::{
 pub use weights::WeightInfo;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum BoostStatus {
-	Boosted { prewitnessed_deposit_id: PrewitnessedDepositId, pools: Vec<BoostPoolTier> },
+pub enum BoostStatus<ChainAmount> {
+	// If a (pre-witnessed) deposit on a channel has been boosted, we record
+	// its id, amount, and the pools that participated in boosting it.
+	Boosted {
+		prewitnessed_deposit_id: PrewitnessedDepositId,
+		pools: Vec<BoostPoolTier>,
+		amount: ChainAmount,
+	},
 	NotBoosted,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct PrewitnessedDeposit<C: Chain> {
-	pub asset: C::ChainAsset,
-	pub amount: C::ChainAmount,
-	pub deposit_address: C::ChainAccount,
-	pub block_height: C::ChainBlockNumber,
-	pub deposit_details: C::DepositDetails,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -140,7 +137,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(8);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(9);
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
 #[scale_info(skip_type_params(I))]
@@ -250,7 +247,7 @@ pub mod pallet {
 		/// The boost fee
 		pub boost_fee: BasisPoints,
 		/// Boost status, indicating whether there is pending boost on the channel
-		pub boost_status: BoostStatus,
+		pub boost_status: BoostStatus<TargetChainAmount<T, I>>,
 	}
 
 	pub enum IngressOrEgress {
@@ -551,17 +548,6 @@ pub mod pallet {
 	pub type PrewitnessedDepositIdCounter<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, PrewitnessedDepositId, ValueQuery>;
 
-	/// Stores all deposits that have been prewitnessed but not yet finalised.
-	#[pallet::storage]
-	pub type PrewitnessedDeposits<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
-		_,
-		Twox64Concat,
-		ChannelId,
-		Twox64Concat,
-		PrewitnessedDepositId,
-		PrewitnessedDeposit<T::TargetChain>,
-	>;
-
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -722,12 +708,9 @@ pub mod pallet {
 		fn on_idle(_n: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut used_weight = Weight::zero();
 
-			// Approximate weight calculation: r/w DepositChannelLookup + r PrewitnessedDeposits +
-			// w DepositChannelPool + 1 clear_prewitnessed_deposits
+			// Approximate weight calculation: r/w DepositChannelLookup + w DepositChannelPool
 			let recycle_weight_per_address =
-				frame_support::weights::constants::RocksDbWeight::get()
-					.reads_writes(2, 2)
-					.saturating_add(T::WeightInfo::clear_prewitnessed_deposits(1));
+				frame_support::weights::constants::RocksDbWeight::get().reads_writes(1, 2);
 
 			let maximum_addresses_to_recycle = remaining_weight
 				.ref_time()
@@ -767,10 +750,10 @@ pub mod pallet {
 								.reads_writes(0, 1),
 						);
 					}
-					let removed_deposits =
-						Self::clear_prewitnessed_deposits(deposit_channel.channel_id);
 
-					if let BoostStatus::Boosted { prewitnessed_deposit_id, pools } = boost_status {
+					if let BoostStatus::Boosted { prewitnessed_deposit_id, pools, .. } =
+						boost_status
+					{
 						for pool_tier in pools {
 							BoostPools::<T, I>::mutate(deposit_channel.asset, pool_tier, |pool| {
 								if let Some(pool) = pool {
@@ -790,10 +773,6 @@ pub mod pallet {
 							});
 						}
 					}
-
-					used_weight = used_weight.saturating_add(
-						T::WeightInfo::clear_prewitnessed_deposits(removed_deposits),
-					);
 				}
 			}
 			used_weight
@@ -1151,14 +1130,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.collect()
 	}
 
-	// Clears all prewitnessed deposits for a given channel, returning the number of items removed.
-	fn clear_prewitnessed_deposits(channel_id: ChannelId) -> u32 {
-		let item_count = PrewitnessedDeposits::<T, I>::iter_prefix(channel_id).count() as u32;
-		// TODO: find out why clear_prefix returns 0 and ignores the given limit.
-		let _removed = PrewitnessedDeposits::<T, I>::clear_prefix(channel_id, item_count, None);
-		item_count
-	}
-
 	/// Take all scheduled egress requests and send them out in an `AllBatch` call.
 	///
 	/// Note: Egress transactions with Blacklisted assets are not sent, and kept in storage.
@@ -1424,18 +1395,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			let channel_id = deposit_channel.channel_id;
 
-			PrewitnessedDeposits::<T, I>::insert(
-				channel_id,
-				prewitnessed_deposit_id,
-				PrewitnessedDeposit {
-					asset,
-					amount,
-					deposit_address: deposit_address.clone(),
-					block_height,
-					deposit_details: deposit_details.clone(),
-				},
-			);
-
 			// Only boost on non-zero fee and if the channel isn't already boosted:
 			if T::SafeMode::get().boost_deposits_enabled &&
 				boost_fee > 0 && !matches!(boost_status, BoostStatus::Boosted { .. })
@@ -1447,6 +1406,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								details.boost_status = BoostStatus::Boosted {
 									prewitnessed_deposit_id,
 									pools: used_pools.keys().cloned().collect(),
+									amount,
 								};
 							}
 						});
@@ -1625,37 +1585,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			&deposit_channel_details.deposit_channel,
 		);
 
-		let maybe_boost_to_process =
-			if let BoostStatus::Boosted { prewitnessed_deposit_id, pools } =
-				deposit_channel_details.boost_status
-			{
-				// We are expecting a boost, but check if the amount is matching
-				match PrewitnessedDeposits::<T, I>::get(channel_id, prewitnessed_deposit_id) {
-					Some(boosted_deposit) if boosted_deposit.amount == deposit_amount => {
-						// Deposit matches boosted deposit, process as boosted
-						Some((prewitnessed_deposit_id, pools))
-					},
-					Some(_) => {
-						// Boosted deposit is found but the amounts didn't match, the deposit
-						// should be processed as not boosted.
-						None
-					},
-					None => {
-						log_or_panic!("Could not find deposit by prewitness deposit id: {prewitnessed_deposit_id}");
-						// This is unexpected since we always add a prewitnessed deposit at the
-						// same time as boosting it! Because we won't be able to confirm if the
-						// amount is correct, we fallback to processing the deposit as not boosted.
-						None
-					},
-				}
-			} else {
-				// The channel is not even boosted, so we process the deposit as not boosted
-				None
-			};
+		// We received a deposit on a channel. If channel has been boosted earlier
+		// (i.e. awaiting finalisation), *and* the boosted amount matches the amount
+		// in this deposit, finalise the boost by crediting boost pools with the deposit.
+		// Process as non-boosted deposit otherwise:
+		let maybe_boost_to_process = match deposit_channel_details.boost_status {
+			BoostStatus::Boosted { prewitnessed_deposit_id, pools, amount }
+				if amount == deposit_amount =>
+				Some((prewitnessed_deposit_id, pools)),
+			_ => None,
+		};
 
 		if let Some((prewitnessed_deposit_id, used_pools)) = maybe_boost_to_process {
-			PrewitnessedDeposits::<T, I>::remove(channel_id, prewitnessed_deposit_id);
-
 			// Note that ingress fee is not payed here, as it has already been payed at the time
 			// of boosting
 			DepositBalances::<T, I>::mutate(asset, |deposits| {
@@ -1700,15 +1641,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				channel_id,
 			});
 		} else {
-			// If the deposit isn't boosted, we don't care which prewitness deposit we remove
-			// (in case there are multiple on the channel), as long is the amounts match:
-			if let Some((prewitnessed_deposit_id, _)) =
-				PrewitnessedDeposits::<T, I>::iter_prefix(channel_id)
-					.find(|(_id, deposit)| deposit.amount == deposit_amount)
-			{
-				PrewitnessedDeposits::<T, I>::remove(channel_id, prewitnessed_deposit_id);
-			}
-
 			let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
 				Self::withhold_ingress_or_egress_fee(
 					IngressOrEgress::Ingress,

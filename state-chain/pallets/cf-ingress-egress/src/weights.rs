@@ -42,7 +42,6 @@ pub trait WeightInfo {
 	fn stop_boosting() -> Weight;
 	fn deposit_boosted() -> Weight;
 	fn boost_finalised() -> Weight;
-	fn clear_prewitnessed_deposits(n: u32, ) -> Weight;
 	fn create_boost_pools() -> Weight;
 }
 
@@ -265,22 +264,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(334_000_000, 89189)
 			.saturating_add(T::DbWeight::get().reads(37_u64))
 			.saturating_add(T::DbWeight::get().writes(35_u64))
-	}
-	/// Storage: `EthereumIngressEgress::PrewitnessedDeposits` (r:255 w:254)
-	/// Proof: `EthereumIngressEgress::PrewitnessedDeposits` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// The range of component `n` is `[1, 255]`.
-	fn clear_prewitnessed_deposits(n: u32, ) -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `171 + n * (67 ±0)`
-		//  Estimated: `3637 + n * (2543 ±0)`
-		// Minimum execution time: 14_000_000 picoseconds.
-		Weight::from_parts(3_637_486, 3637)
-			// Standard Error: 19_280
-			.saturating_add(Weight::from_parts(4_369_902, 0).saturating_mul(n.into()))
-			.saturating_add(T::DbWeight::get().reads(1_u64))
-			.saturating_add(T::DbWeight::get().reads((1_u64).saturating_mul(n.into())))
-			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(n.into())))
-			.saturating_add(Weight::from_parts(0, 2543).saturating_mul(n.into()))
 	}
 	/// Storage: `EthereumIngressEgress::BoostPools` (r:1 w:1)
 	/// Proof: `EthereumIngressEgress::BoostPools` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -513,22 +496,6 @@ impl WeightInfo for () {
 		Weight::from_parts(334_000_000, 89189)
 			.saturating_add(RocksDbWeight::get().reads(37_u64))
 			.saturating_add(RocksDbWeight::get().writes(35_u64))
-	}
-	/// Storage: `EthereumIngressEgress::PrewitnessedDeposits` (r:255 w:254)
-	/// Proof: `EthereumIngressEgress::PrewitnessedDeposits` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// The range of component `n` is `[1, 255]`.
-	fn clear_prewitnessed_deposits(n: u32, ) -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `171 + n * (67 ±0)`
-		//  Estimated: `3637 + n * (2543 ±0)`
-		// Minimum execution time: 14_000_000 picoseconds.
-		Weight::from_parts(3_637_486, 3637)
-			// Standard Error: 19_280
-			.saturating_add(Weight::from_parts(4_369_902, 0).saturating_mul(n.into()))
-			.saturating_add(RocksDbWeight::get().reads(1_u64))
-			.saturating_add(RocksDbWeight::get().reads((1_u64).saturating_mul(n.into())))
-			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(n.into())))
-			.saturating_add(Weight::from_parts(0, 2543).saturating_mul(n.into()))
 	}
 	/// Storage: `EthereumIngressEgress::BoostPools` (r:1 w:1)
 	/// Proof: `EthereumIngressEgress::BoostPools` (`max_values`: None, `max_size`: None, mode: `Measured`)

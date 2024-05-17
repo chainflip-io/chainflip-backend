@@ -1,4 +1,4 @@
-#!/usr/bin/env -S pnpm tsx
+#!/usr/bin/env -S NODE_OPTIONS=--max-old-space-size=4096 pnpm tsx
 import { SwapContext, testAllSwaps } from '../shared/swapping';
 import { testEvmDeposits } from '../shared/evm_deposits';
 import { runWithTimeout, observeBadEvents } from '../shared/utils';
@@ -20,8 +20,18 @@ async function runAllConcurrentTests() {
   const numberOfNodes = givenNumberOfNodes ?? 1;
 
   let stopObserving = false;
-  const broadcastAborted = observeBadEvents(':BroadcastAborted', () => stopObserving);
-  const feeDeficitRefused = observeBadEvents(':TransactionFeeDeficitRefused', () => stopObserving);
+  const broadcastAborted = observeBadEvents(
+    ':BroadcastAborted',
+    () => stopObserving,
+    undefined,
+    'Concurrent broadcast aborted',
+  );
+  const feeDeficitRefused = observeBadEvents(
+    ':TransactionFeeDeficitRefused',
+    () => stopObserving,
+    undefined,
+    'Concurrent fee deficit refused',
+  );
 
   // Tests that work with any number of nodes
   const tests = [

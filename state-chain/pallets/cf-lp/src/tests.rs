@@ -63,16 +63,23 @@ fn liquidity_providers_can_withdraw_asset() {
 #[test]
 fn liquidity_providers_can_move_assets_internally() {
 	new_test_ext().execute_with(|| {
-		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, 1_000);
-		// Check if the LP accounts have the correct initial balances.
-		assert_eq!(FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth), Some(1_000));
-		assert_eq!(FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT_2), Asset::Eth), None);
+		const BALANCE_LP_1: AssetAmount = 1_000;
+		const TRANSFER_AMOUNT: AssetAmount = 100;
+		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, BALANCE_LP_1);
+
+		let old_balance_origin = FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth)
+			.expect("balance exists");
+		let old_balance_dest =
+			FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT_2), Asset::Eth).unwrap_or(0);
+
+		assert_eq!(old_balance_origin, BALANCE_LP_1);
+		assert_eq!(old_balance_dest, 0);
 
 		// Cannot move assets to a non-LP account.
 		assert_noop!(
 			LiquidityProvider::transfer_asset(
 				RuntimeOrigin::signed((LP_ACCOUNT).into()),
-				100,
+				TRANSFER_AMOUNT,
 				Asset::Eth,
 				AccountId::from(NON_LP_ACCOUNT),
 			),
@@ -83,7 +90,7 @@ fn liquidity_providers_can_move_assets_internally() {
 		assert_noop!(
 			LiquidityProvider::transfer_asset(
 				RuntimeOrigin::signed((LP_ACCOUNT).into()),
-				100,
+				TRANSFER_AMOUNT,
 				Asset::Eth,
 				AccountId::from(LP_ACCOUNT),
 			),
@@ -92,7 +99,7 @@ fn liquidity_providers_can_move_assets_internally() {
 
 		assert_ok!(LiquidityProvider::transfer_asset(
 			RuntimeOrigin::signed((LP_ACCOUNT).into()),
-			100,
+			TRANSFER_AMOUNT,
 			Asset::Eth,
 			AccountId::from(LP_ACCOUNT_2),
 		));
@@ -101,12 +108,22 @@ fn liquidity_providers_can_move_assets_internally() {
 				from: AccountId::from(LP_ACCOUNT),
 				to: AccountId::from(LP_ACCOUNT_2),
 				asset: Asset::Eth,
-				amount: 100,
+				amount: TRANSFER_AMOUNT,
 			},
 		));
 		// Expect the balances to be moved between the LP accounts.
 		assert_eq!(FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth), Some(900));
 		assert_eq!(FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT_2), Asset::Eth), Some(100));
+
+		let new_balance_origin = FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth)
+			.expect("balance exists");
+		let new_balance_dest = FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT_2), Asset::Eth)
+			.expect("balance exists");
+
+		assert!(
+			old_balance_origin + old_balance_dest == new_balance_origin + new_balance_dest,
+			"Balance integrity check failed!"
+		);
 	});
 }
 
@@ -348,7 +365,7 @@ fn account_registration_and_deregistration() {
 		assert!(
 			LiquidityRefundAddress::<Test>::get(&LP_ACCOUNT_ID, ForeignChain::Ethereum).is_none()
 		);
-		assert!(<LiquidityProvider as LpBalanceApi>::asset_balances(&LP_ACCOUNT_ID)
+		assert!(<LiquidityProvider as LpBalanceApi>::free_balances(&LP_ACCOUNT_ID)
 			.unwrap()
 			.iter()
 			.all(|(_, amount)| *amount == 0));
