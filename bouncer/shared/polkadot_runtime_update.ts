@@ -171,7 +171,7 @@ export async function bumpAndBuildPolkadotRuntime(): Promise<[string, number]> {
   console.log('Updating polkadot source');
   execSync(`git pull`, { cwd: workspacePath });
 
-  await specVersion(`${workspacePath}/runtime/polkadot/src/lib.rs`, 'write', nextSpecVersion);
+  specVersion(`${workspacePath}/runtime/polkadot/src/lib.rs`, 'write', nextSpecVersion);
 
   // Compile polkadot runtime
   console.log('Compiling polkadot...');
