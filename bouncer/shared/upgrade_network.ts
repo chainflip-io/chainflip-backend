@@ -321,7 +321,9 @@ export async function upgradeNetworkPrebuilt(
   }
 
   if (cleanOldVersion === nodeVersion) {
-    throw Error('The versions are the same. No need to upgrade. Please provide a different version.');
+    throw Error(
+      'The versions are the same. No need to upgrade. Please provide a different version.',
+    );
   } else if (isCompatibleWith(cleanOldVersion, nodeVersion)) {
     console.log('The versions are compatible.');
     await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, true);
