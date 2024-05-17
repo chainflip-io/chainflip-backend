@@ -4,9 +4,8 @@
 //! Instructions and Instruction sets with some level of abstraction.
 //! This avoids the need to deal with low level Solana core types.
 
-use sp_std::{vec, vec::Vec};
-
 use cf_primitives::chains::Solana;
+use sp_std::{vec, vec::Vec};
 
 use crate::{
 	sol::{
@@ -15,10 +14,10 @@ use crate::{
 			compute_budget::ComputeBudgetInstruction,
 			program_instructions::{ProgramInstruction, SystemProgramInstruction, VaultProgram},
 		},
-		SolAccountMeta, SolAddress, SolAmount, SolAsset, SolComputeLimit, SolInstruction,
-		SolPubkey,
+		SolAccountMeta, SolAddress, SolAmount, SolAsset, SolCcmExtraAccounts, SolComputeLimit,
+		SolInstruction, SolPubkey,
 	},
-	DepositChannel, TransferAssetParams,
+	DepositChannel, ForeignChainAddress, TransferAssetParams,
 };
 
 pub struct SolanaInstructionBuilder;
@@ -139,6 +138,55 @@ impl SolanaInstructionBuilder {
 
 		Self::finalize(instructions, nonce_account.into(), agg_key.into(), compute_price)
 	}
+
+	pub fn ccm_transfer(
+		transfer_param: TransferAssetParams<Solana>,
+		source_chain: cf_primitives::ForeignChain,
+		source_address: Option<ForeignChainAddress>,
+		message: Vec<u8>,
+		extra_accounts: SolCcmExtraAccounts,
+		vault_program: SolAddress,
+		vault_program_data_account: SolAddress,
+		system_program_id: SolAddress,
+		sys_var_instructions: SolAddress,
+		agg_key: SolAddress,
+		nonce_account: SolAddress,
+		compute_price: SolAmount,
+	) -> Vec<SolInstruction> {
+		let instructions = vec![
+			SystemProgramInstruction::transfer(
+				&agg_key.into(),
+				&transfer_param.to.into(),
+				transfer_param.amount,
+			),
+			ProgramInstruction::get_instruction(
+				&VaultProgram::ExecuteCcmNativeCall {
+					source_chain: source_chain as u32,
+					source_address: codec::Encode::encode(&source_address),
+					message,
+					amount: transfer_param.amount,
+				},
+				vault_program.into(),
+				vec![
+					vec![
+						SolAccountMeta::new_readonly(vault_program_data_account.into(), false),
+						SolAccountMeta::new_readonly(agg_key.into(), true),
+						SolAccountMeta::new(transfer_param.to.into(), false),
+						// cf receiver account. `extra_accounts` is guaranteed to be non-empty
+						SolAccountMeta::from(extra_accounts.cf_receiver.clone()),
+						SolAccountMeta::new_readonly(system_program_id.into(), false),
+						SolAccountMeta::new_readonly(sys_var_instructions.into(), false),
+					],
+					extra_accounts.remaining_account_metas(),
+				]
+				.into_iter()
+				.flatten()
+				.collect::<Vec<_>>(),
+			),
+		];
+
+		Self::finalize(instructions, nonce_account.into(), agg_key.into(), compute_price)
+	}
 }
 
 #[cfg(test)]
@@ -191,6 +239,10 @@ mod test {
 
 	fn system_program_id() -> SolAddress {
 		SolAddress::from_str(crate::sol::consts::SYSTEM_PROGRAM_ID).unwrap()
+	}
+
+	fn sys_var_instructions() -> SolAddress {
+		SolAddress::from_str(crate::sol::consts::SYS_VAR_INSTRUCTIONS).unwrap()
 	}
 
 	fn compute_price() -> SolAmount {
@@ -315,6 +367,36 @@ mod test {
 
 		// Serialized tx built in `create_full_rotation` test
 		let expected_serialized_tx = hex_literal::hex!("01bc10cb686da3b32ce8c910bfafeca7fccf81d729bcd5bcb06e01ea72ee9db7f16c1c0893f86bb04f931da2ac1f80cc9be4d5d6a64167126b676be1808de3cb0f01000513f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1924a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b6744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900448541f57201f277c5f3ffb631d0212e26e7f47749c26c4808718174a0ab2a09a18cd28baa84f2067bbdf24513c2d44e44bf408f2e6da6e60762e3faa4a62a0adba5cfec75730f8780ded36a7c8ae1dcc60d84e1a830765fc6108e7b40402e4951cd644e45426a41a7cb8369b8a0c1c89bb3f86cf278fdd9cc38b0f69784ad5667e392cd98d3284fd551604be95c14cc8e20123e2940ef9fb784e6b591c7442864e5e1869817a4fd88ddf7ab7a5f7252d7c345b39721769888608592912e8ca9acf0f13460b3fd04b7d53d7421fc874ec00eec769cf36480895e1a407bf1249475f2b2e24122be016983be9369965246cc45e1f621d40fba300c56c7ac50c3874df4f83bd213a59c9785110cf83c718f9486c3484f918593bce20c61dc6a96036afecc89e3b031824af6363174d19bbec12d3a13c4a173e5aeb349b63042bc138f000000000000000000000000000000000000000000000000000000000000000002a8f6914e88a1b0e210153ef763ae2b00c2b93d16c124d2c0537a10048000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e489000f0e0301110004040000001000090340420f000000000010000502e093040012040200030e094e518fabdda5d68b000f0306000304040000000e02010024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e020c0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e020a0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e020b0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e02080024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e02070024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e02040024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e020d0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e02090024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e02050024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be543990044").to_vec();
+
+		test_constructed_instruction_set(instruction_set, expected_serialized_tx);
+	}
+
+	#[test]
+	fn can_create_ccm_instruction_set() {
+		let ccm_param = ccm_parameter();
+		let transfer_param = TransferAssetParams::<Solana> {
+			asset: SOL,
+			amount: TRANSFER_AMOUNT,
+			to: SolPubkey::from_str(TRANSFER_TO_ACCOUNT).unwrap().into(),
+		};
+
+		let instruction_set = SolanaInstructionBuilder::ccm_transfer(
+			transfer_param,
+			ccm_param.source_chain,
+			ccm_param.source_address,
+			ccm_param.channel_metadata.message.to_vec(),
+			ccm_extra_accounts(),
+			vault_program(),
+			vault_program_data_account(),
+			system_program_id(),
+			sys_var_instructions(),
+			agg_key(),
+			next_nonce(),
+			compute_price(),
+		);
+
+		// Serialized tx built in `create_ccm_native_transfer` test
+		let expected_serialized_tx = hex_literal::hex!("019e8ac555f753d59579063aa9339e3c434b31aa4d26f4999e2bcad27812a70812a5c0aac063d036359f91c81d9fd67a0d309b471e9f1ff40de1fc9a7a39bbc2090100070bf79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb0575731869899efe0bd5d9161ad9f1db7c582c48c0b4ea7cff6a637c55c7310717eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19231e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd400000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f0800000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000004a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293ca73bdf31e341218a693b8772c43ecfcecd4cf35fada09a87ea0f860d028168e5c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890005040302070004040000000500090340420f000000000005000502e0930400040200030c0200000000ca9a3b0000000009070800030104060a367d050be38042e0b201000000160000000100ffffffffffffffffffffffffffffffffffffffff040000007c1d0f0700ca9a3b00000000").to_vec();
 
 		test_constructed_instruction_set(instruction_set, expected_serialized_tx);
 	}

@@ -133,6 +133,7 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: <Ethereum as Chain>::ChainAmount,
 		message: Vec<u8>,
+		_cf_parameter: Vec<u8>,
 	) -> Result<Self, DispatchError> {
 		if MockEvmEnvironment::lookup(transfer_param.asset).is_none() {
 			Err(DispatchError::CannotLookup)
@@ -255,6 +256,7 @@ impl ExecutexSwapAndCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: <Bitcoin as Chain>::ChainAmount,
 		message: Vec<u8>,
+		_cf_parameter: Vec<u8>,
 	) -> Result<Self, DispatchError> {
 		if MockBtcEnvironment::lookup(transfer_param.asset).is_none() {
 			Err(DispatchError::CannotLookup)

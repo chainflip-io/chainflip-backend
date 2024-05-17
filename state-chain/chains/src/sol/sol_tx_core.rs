@@ -772,6 +772,61 @@ impl From<Hash> for SolHash {
 	}
 }
 
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, Clone)]
+pub struct CcmExtraAddress {
+	pub_key: Pubkey,
+	writable: bool,
+}
+
+impl From<CcmExtraAddress> for AccountMeta {
+	fn from(from: CcmExtraAddress) -> Self {
+		match from.writable {
+			true => AccountMeta::new(from.pub_key, false),
+			false => AccountMeta::new_readonly(from.pub_key, false),
+		}
+	}
+}
+
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, Clone)]
+pub struct CcmExtraAccounts {
+	pub cf_receiver: CcmExtraAddress,
+	pub remaining_accounts: Vec<CcmExtraAddress>,
+}
+
+impl CcmExtraAccounts {
+	pub fn remaining_account_metas(self) -> Vec<AccountMeta> {
+		self.remaining_accounts.into_iter().map(|acc| acc.into()).collect::<Vec<_>>()
+	}
+}
+
+#[test]
+fn ccm_extra_accounts_encoding() {
+	let extra_accounts = CcmExtraAccounts {
+		cf_receiver: CcmExtraAddress { pub_key: Pubkey([0x11; 32]), writable: false },
+		remaining_accounts: vec![
+			CcmExtraAddress { pub_key: Pubkey([0x22; 32]), writable: true },
+			CcmExtraAddress { pub_key: Pubkey([0x33; 32]), writable: true },
+		],
+	};
+
+	let encoded = Encode::encode(&extra_accounts);
+	// println!("{:?}", hex::encode(encoded));
+
+	// Scale encoding format:
+	// cf_receiver(32 bytes, bool),
+	// size_of_vec(compact encoding), remaining_accounts_0(32 bytes, bool), remaining_accounts_1,
+	// etc..
+	assert_eq!(
+		encoded,
+		hex_literal::hex!(
+			"1111111111111111111111111111111111111111111111111111111111111111 00
+			08 
+			2222222222222222222222222222222222222222222222222222222222222222 01
+			3333333333333333333333333333333333333333333333333333333333333333 01"
+		)
+	);
+}
+
 #[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum ParseHashError {
@@ -801,7 +856,14 @@ impl FromStr for Hash {
 /// Values used for testing purposes
 #[cfg(test)]
 pub mod sol_test_values {
-	use crate::sol::{SolAmount, SolAsset, SolComputeLimit};
+	use crate::{
+		sol::{
+			SolAmount, SolAsset, SolCcmExtraAccounts, SolCcmExtraAddress, SolComputeLimit,
+			SolPubkey,
+		},
+		CcmChannelMetadata, CcmDepositMetadata, ForeignChain, ForeignChainAddress,
+	};
+	use core::str::FromStr;
 
 	pub const VAULT_PROGRAM: &str = "8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf";
 	pub const VAULT_PROGRAM_DATA_ADDRESS: &str = "3oEKmL4nsw6RDZWhkYTdCUmjxDrzVkm1cWayPsvn3p57";
@@ -837,6 +899,7 @@ pub mod sol_test_values {
 		198, 68, 58, 83, 75, 44, 221, 80, 114, 35, 57, 137, 180, 21, 215, 89, 101, 115, 231, 67,
 		243, 229, 179, 134, 251,
 	];
+	pub const TRANSFER_AMOUNT: SolAmount = 1_000_000_000u64;
 	pub const COMPUTE_UNIT_PRICE: SolAmount = 1_000_000u64;
 	pub const COMPUTE_UNIT_LIMIT: SolComputeLimit = 300_000u32;
 	pub const TEST_DURABLE_NONCE: &str = "E6E2bNxGcgFyqeVRT3FSjw7YFbbMAZVQC21ZLVwrztRm";
@@ -846,7 +909,35 @@ pub mod sol_test_values {
 
 	pub const NEXT_NONCE: &str = NONCE_ACCOUNTS[0];
 	pub const SOL: SolAsset = SolAsset::Sol;
-	pub const TRANSFER_AMOUNT: SolAmount = 1_000_000_000u64;
+
+	pub fn ccm_extra_accounts() -> SolCcmExtraAccounts {
+		SolCcmExtraAccounts {
+			cf_receiver: SolCcmExtraAddress {
+				pub_key: SolPubkey::from_str("NJusJ7itnSsh4jSi43i9MMKB9sF4VbNvdSwUA45gPE6")
+					.unwrap(),
+				writable: true,
+			},
+			remaining_accounts: vec![SolCcmExtraAddress {
+				pub_key: SolPubkey::from_str("CFp37nEY6E9byYHiuxQZg6vMCnzwNrgiF9nFGT6Zwcnx")
+					.unwrap(),
+				writable: false,
+			}],
+		}
+	}
+
+	pub fn ccm_parameter() -> CcmDepositMetadata {
+		CcmDepositMetadata {
+			source_chain: ForeignChain::Ethereum,
+			source_address: Some(ForeignChainAddress::Eth([0xff; 20].into())),
+			channel_metadata: CcmChannelMetadata {
+				message: vec![124u8, 29u8, 15u8, 7u8].try_into().unwrap(), // CCM message
+				gas_budget: 0u128,                                         // unused
+				cf_parameters: codec::Encode::encode(&ccm_extra_accounts())
+					.try_into()
+					.expect("Test data cannot be too long"), // Extra addresses
+			},
+		}
+	}
 }
 
 #[cfg(test)]
@@ -1227,41 +1318,53 @@ mod tests {
 
 	#[test]
 	fn create_ccm_native_transfer() {
-		let durable_nonce = Hash::from_str("FJzAoeurcnAKG7eNFhzixySntXkDzoEh2bcRNfKm1gsy").unwrap();
+		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
-		let to_pubkey = Pubkey::from_str("pyq7ySiH5RvKteu2vdXKC7SNyNDp9vNDkGXdHxSpPtu").unwrap();
-		let cf_receiver = Pubkey::from_str("NJusJ7itnSsh4jSi43i9MMKB9sF4VbNvdSwUA45gPE6").unwrap();
-		let amount: u64 = TRANSFER_AMOUNT;
+		let to_pubkey = Pubkey::from_str(TRANSFER_TO_ACCOUNT).unwrap();
+		let extra_accounts = ccm_extra_accounts();
+		let ccm_parameter = ccm_parameter();
 
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
 				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
 				&agg_key_pubkey,
 			),
-			SystemProgramInstruction::transfer(&agg_key_pubkey, &to_pubkey, amount),
+			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
+			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
+			SystemProgramInstruction::transfer(&agg_key_pubkey, &to_pubkey, TRANSFER_AMOUNT),
 			ProgramInstruction::get_instruction(
 				&VaultProgram::ExecuteCcmNativeCall {
-					source_chain: 1,
-					source_address: vec![11u8, 6u8, 152u8, 22u8, 3u8, 1u8],
-					message: vec![124u8, 29u8, 15u8, 7u8],
-					amount,
+					source_chain: ccm_parameter.source_chain as u32,
+					source_address: codec::Encode::encode(&ccm_parameter.source_address),
+					message: ccm_parameter.channel_metadata.message.to_vec(),
+					amount: TRANSFER_AMOUNT,
 				},
 				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
 				vec![
-					AccountMeta::new_readonly(
-						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
-						false,
-					),
-					AccountMeta::new_readonly(agg_key_pubkey, true),
-					AccountMeta::new(to_pubkey, false),
-					AccountMeta::new_readonly(cf_receiver, false),
-					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
-					AccountMeta::new_readonly(
-						Pubkey::from_str(SYS_VAR_INSTRUCTIONS).unwrap(),
-						false,
-					),
-				],
+					vec![
+						AccountMeta::new_readonly(
+							Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+							false,
+						),
+						AccountMeta::new_readonly(agg_key_pubkey, true),
+						AccountMeta::new(to_pubkey, false),
+						AccountMeta::from(extra_accounts.cf_receiver.clone()), /* cf receiver
+						                                                        * account */
+						AccountMeta::new_readonly(
+							Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
+							false,
+						),
+						AccountMeta::new_readonly(
+							Pubkey::from_str(SYS_VAR_INSTRUCTIONS).unwrap(),
+							false,
+						),
+					],
+					extra_accounts.remaining_account_metas(),
+				]
+				.into_iter()
+				.flatten()
+				.collect::<Vec<_>>(),
 			),
 		];
 		let message = Message::new(&instructions, Some(&agg_key_pubkey));
@@ -1269,7 +1372,8 @@ mod tests {
 		tx.sign(&[&agg_key_keypair], durable_nonce);
 
 		let serialized_tx = tx.finalize_and_serialize().unwrap();
-		let expected_serialized_tx = hex_literal::hex!("01217162fc43cb4bb7aeaec8d386feda3de3eb82cf86373f9d06fc5eea953684b7fec12c88b916bc902db521942d170b5e190f5e1d8578e7eb27d5b8d2beb3a00301000609f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb0c4a8e3702f6e26d9d0c900c1461da4e3debef5743ce253bb9f0308a68c9442217eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19200000000000000000000000000000000000000000000000000000000000000000575731869899efe0bd5d9161ad9f1db7c582c48c0b4ea7cff6a637c55c7310706a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f0800000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000004a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cd49f21c8621074e921e03bfa822094631b67b33facb1ad598841a5b91d2390080303030206000404000000030200010c0200000000ca9a3b000000000806070001040305267d050be38042e0b201000000060000000b0698160301040000007c1d0f0700ca9a3b00000000").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("019e8ac555f753d59579063aa9339e3c434b31aa4d26f4999e2bcad27812a70812a5c0aac063d036359f91c81d9fd67a0d309b471e9f1ff40de1fc9a7a39bbc2090100070bf79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb0575731869899efe0bd5d9161ad9f1db7c582c48c0b4ea7cff6a637c55c7310717eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19231e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd400000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f0800000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000004a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293ca73bdf31e341218a693b8772c43ecfcecd4cf35fada09a87ea0f860d028168e5c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890005040302070004040000000500090340420f000000000005000502e0930400040200030c0200000000ca9a3b0000000009070800030104060a367d050be38042e0b201000000160000000100ffffffffffffffffffffffffffffffffffffffff040000007c1d0f0700ca9a3b00000000").to_vec();
+		// println!("{:?}", hex::encode(serialized_tx.clone()));
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
 		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)

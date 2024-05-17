@@ -11,13 +11,15 @@ use sp_std::{boxed::Box, vec, vec::Vec};
 use crate::{
 	sol::{
 		consts::SYSTEM_PROGRAM_ID, instruction_builder::SolanaInstructionBuilder,
-		sol_tx_core::address_derivation, SolAddress, SolAmount, SolHash, SolMessage,
-		SolTransaction, SolanaCrypto,
+		sol_tx_core::address_derivation, SolAddress, SolAmount, SolCcmExtraAccounts, SolHash,
+		SolMessage, SolTransaction, SolanaCrypto,
 	},
 	AllBatch, AllBatchError, ApiCall, Chain, ChainCrypto, ChainEnvironment, ConsolidateCall,
 	ConsolidationError, DepositChannel, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress,
 	SetAggKeyWithAggKey, Solana, TransferAssetParams, TransferFallback,
 };
+
+use cf_primitives::ForeignChain;
 
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct ComputePrice;
@@ -95,6 +97,13 @@ pub enum SolanaTransactionBuildingError {
 	NoNonceAccountsSet,
 	NoAvailableNonceAccount,
 	FailedToDeriveAddress(crate::sol::AddressDerivationError),
+	CannotDecodeCcmCfParam,
+}
+
+impl sp_std::fmt::Display for SolanaTransactionBuildingError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{:?}", self)
+	}
 }
 
 impl From<SolanaTransactionBuildingError> for DispatchError {
@@ -117,6 +126,7 @@ pub enum SolanaTransactionType {
 	BatchFetch,
 	Transfer,
 	RotateAggKey,
+	CcmTransfer,
 }
 
 /// The Solana Api call. Contains a call_type and the actual Transaction itself.
@@ -226,6 +236,54 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			_phantom: Default::default(),
 		})
 	}
+
+	pub fn ccm_transfer(
+		transfer_param: TransferAssetParams<Solana>,
+		source_chain: ForeignChain,
+		source_address: Option<ForeignChainAddress>,
+		message: Vec<u8>,
+		cf_parameter: Vec<u8>,
+	) -> Result<Self, SolanaTransactionBuildingError> {
+		let extra_accounts = SolCcmExtraAccounts::decode(&mut &cf_parameter[..])
+			.map_err(|_| SolanaTransactionBuildingError::CannotDecodeCcmCfParam)?;
+
+		let vault_program = Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgram)?;
+		let vault_program_data_account =
+			Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgramDataAccount)?;
+		let system_program_id = SolAddress::from_str(crate::sol::consts::SYSTEM_PROGRAM_ID)
+			.expect("Solana System program ID must be valid.");
+		let sys_var_instructions = SolAddress::from_str(crate::sol::consts::SYS_VAR_INSTRUCTIONS)
+			.expect("Solana System Var Instruction must be valid.");
+		let agg_key = Environment::lookup_account(SolanaEnvAccountLookupKey::AggKey)?;
+		let nonce_account =
+			Environment::lookup_account(SolanaEnvAccountLookupKey::AvailableNonceAccount)?;
+		let compute_price = Environment::compute_price()?;
+
+		// Build the instruction_set
+		let instruction_set = SolanaInstructionBuilder::ccm_transfer(
+			transfer_param,
+			source_chain,
+			source_address,
+			message,
+			extra_accounts,
+			vault_program,
+			vault_program_data_account,
+			system_program_id,
+			sys_var_instructions,
+			agg_key,
+			nonce_account,
+			compute_price,
+		);
+
+		let transaction =
+			SolTransaction::new_unsigned(SolMessage::new(&instruction_set, Some(&agg_key.into())));
+
+		Ok(Self {
+			call_type: SolanaTransactionType::CcmTransfer,
+			transaction,
+			_phantom: Default::default(),
+		})
+	}
 }
 
 impl<Env: 'static> ApiCall<SolanaCrypto> for SolanaApi<Env> {
@@ -257,7 +315,7 @@ impl<Env: 'static> ConsolidateCall<Solana> for SolanaApi<Env> {
 	}
 }
 
-impl<Env: SolanaEnvironment> SetAggKeyWithAggKey<SolanaCrypto> for SolanaApi<Env> {
+impl<Env: 'static + SolanaEnvironment> SetAggKeyWithAggKey<SolanaCrypto> for SolanaApi<Env> {
 	fn new_unsigned(
 		_maybe_old_key: Option<<SolanaCrypto as ChainCrypto>::AggKey>,
 		new_key: <SolanaCrypto as ChainCrypto>::AggKey,
@@ -269,19 +327,24 @@ impl<Env: SolanaEnvironment> SetAggKeyWithAggKey<SolanaCrypto> for SolanaApi<Env
 	}
 }
 
-impl<Env: 'static> ExecutexSwapAndCall<Solana> for SolanaApi<Env> {
+impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi<Env> {
 	fn new_unsigned(
-		_transfer_param: TransferAssetParams<Solana>,
-		_source_chain: cf_primitives::ForeignChain,
-		_source_address: Option<ForeignChainAddress>,
+		transfer_param: TransferAssetParams<Solana>,
+		source_chain: cf_primitives::ForeignChain,
+		source_address: Option<ForeignChainAddress>,
 		_gas_budget: <Solana as Chain>::ChainAmount,
-		_message: vec::Vec<u8>,
+		message: vec::Vec<u8>,
+		cf_parameter: Vec<u8>,
 	) -> Result<Self, DispatchError> {
-		Err(DispatchError::Other("Unimplemented"))
+		Self::ccm_transfer(transfer_param, source_chain, source_address, message, cf_parameter)
+			.map_err(|e| {
+				log::error!("Failed to construct Solana CCM transfer transaction! Error: {:?}", e);
+				e.into()
+			})
 	}
 }
 
-impl<Env: SolanaEnvironment> AllBatch<Solana> for SolanaApi<Env> {
+impl<Env: 'static + SolanaEnvironment> AllBatch<Solana> for SolanaApi<Env> {
 	fn new_unsigned(
 		fetch_params: vec::Vec<FetchAssetParams<Solana>>,
 		transfer_params: vec::Vec<TransferAssetParams<Solana>>,

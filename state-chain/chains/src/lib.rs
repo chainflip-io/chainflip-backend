@@ -496,6 +496,7 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: C::ChainAmount,
 		message: Vec<u8>,
+		cf_parameter: Vec<u8>,
 	) -> Result<Self, DispatchError>;
 }
 
