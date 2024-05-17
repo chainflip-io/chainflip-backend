@@ -1,4 +1,4 @@
-#!/usr/bin/env NODE_OPTIONS=--max-old-space-size=4096 -S pnpm tsx
+#!/usr/bin/env -S NODE_OPTIONS=--max-old-space-size=4096 pnpm tsx
 import { SwapContext, testAllSwaps } from '../shared/swapping';
 import { testEvmDeposits } from '../shared/evm_deposits';
 import { runWithTimeout, observeBadEvents } from '../shared/utils';
