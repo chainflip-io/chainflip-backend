@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy the runner binary, renaming to chainflip-engine and the dylib files.
 COPY --chown=1000:1000 engine-runner /usr/local/bin/chainflip-engine
 COPY --chown=1000:1000 old-engine-dylib/libchainflip_engine_v*.so /usr/local/lib/
+# This path is set in the rpath of the runner binary build.rs file.
 COPY --chown=1000:1000 libchainflip_engine_v*.so /usr/local/lib/
 
 WORKDIR /etc/chainflip

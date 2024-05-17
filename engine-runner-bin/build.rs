@@ -43,6 +43,8 @@ fn main() {
 		// This path is where we store the libraries in the docker image, and as part of the apt
 		// installation.
 		println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib/chainflip-engine");
+		// For docker
+		println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/local/lib/chainflip-engine");
 	}
 
 	// ===  Sanity check that the the assets have an item with the matching version. ===
