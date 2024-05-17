@@ -302,11 +302,11 @@ export async function upgradeNetworkPrebuilt(
   console.log("Raw version we're upgrading from: " + oldVersion);
 
   let cleanOldVersion = oldVersion;
-  if (!versionRegex.test(cleanOldVersion)) {
+  if (versionRegex.test(cleanOldVersion)) {
     cleanOldVersion = oldVersion.match(versionRegex)[0];
   }
 
-  console.log("Raw version we're upgrading from: " + cleanOldVersion);
+  console.log("Version we're upgrading from: " + cleanOldVersion);
 
   const nodeBinaryVersion = execSync(`${binariesPath}/chainflip-node --version`).toString();
   const nodeVersion = nodeBinaryVersion.match(versionRegex)[0];
