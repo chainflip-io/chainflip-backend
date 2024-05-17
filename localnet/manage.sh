@@ -1,11 +1,14 @@
 #!/bin/bash
 
-#  ██████╗██╗  ██╗ █████╗ ██╗███╗   ██╗███████╗██╗     ██╗██████╗     ██████╗  ██████╗ ██╗   ██╗███╗   ██╗ ██████╗███████╗██████╗
-# ██╔════╝██║  ██║██╔══██╗██║████╗  ██║██╔════╝██║     ██║██╔══██╗    ██╔══██╗██╔═══██╗██║   ██║████╗  ██║██╔════╝██╔════╝██╔══██╗
-# ██║     ███████║███████║██║██╔██╗ ██║█████╗  ██║     ██║██████╔╝    ██████╔╝██║   ██║██║   ██║██╔██╗ ██║██║     █████╗  ██████╔╝
-# ██║     ██╔══██║██╔══██║██║██║╚██╗██║██╔══╝  ██║     ██║██╔═══╝     ██╔══██╗██║   ██║██║   ██║██║╚██╗██║██║     ██╔══╝  ██╔══██╗
-# ╚██████╗██║  ██║██║  ██║██║██║ ╚████║██║     ███████╗██║██║         ██████╔╝╚██████╔╝╚██████╔╝██║ ╚████║╚██████╗███████╗██║  ██║
-#  ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝╚═╝     ╚══════╝╚═╝╚═╝         ╚═════╝  ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝╚══════╝╚═╝  ╚═╝
+
+#  ██████╗██╗  ██╗ █████╗ ██╗███╗   ██╗███████╗██╗     ██╗██████╗     ██╗      ██████╗  ██████╗ █████╗ ██╗     ███╗   ██╗███████╗████████╗
+# ██╔════╝██║  ██║██╔══██╗██║████╗  ██║██╔════╝██║     ██║██╔══██╗    ██║     ██╔═══██╗██╔════╝██╔══██╗██║     ████╗  ██║██╔════╝╚══██╔══╝
+# ██║     ███████║███████║██║██╔██╗ ██║█████╗  ██║     ██║██████╔╝    ██║     ██║   ██║██║     ███████║██║     ██╔██╗ ██║█████╗     ██║
+# ██║     ██╔══██║██╔══██║██║██║╚██╗██║██╔══╝  ██║     ██║██╔═══╝     ██║     ██║   ██║██║     ██╔══██║██║     ██║╚██╗██║██╔══╝     ██║
+# ╚██████╗██║  ██║██║  ██║██║██║ ╚████║██║     ███████╗██║██║         ███████╗╚██████╔╝╚██████╗██║  ██║███████╗██║ ╚████║███████╗   ██║
+#  ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝╚═╝     ╚══════╝╚═╝╚═╝         ╚══════╝ ╚═════╝  ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═══╝╚══════╝   ╚═╝
+
+
 
 LOCALNET_INIT_DIR=localnet/init
 WORKFLOW=build-localnet
@@ -25,7 +28,7 @@ source ./localnet/helper.sh
 
 mkdir -p $CHAINFLIP_BASE_PATH
 mkdir -p $SOLANA_BASE_PATH
-touch $CHAINFLIP_BASE_PATHdebug.log
+touch $CHAINFLIP_BASE_PATH/debug.log
 
 set -eo pipefail
 
@@ -295,7 +298,7 @@ logs() {
   select SERVICE in node engine broker lp polkadot geth bitcoin solana poster sequencer staker debug redis all ingress-egress-tracker; do
     if [[ $SERVICE == "all" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow
-      tail -f $CHAINFLIP_BASE_PATH*/chainflip-*.log
+      tail -f $CHAINFLIP_BASE_PATH/*/chainflip-*.log
     fi
     if [[ $SERVICE == "polkadot" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow polkadot
@@ -320,23 +323,23 @@ logs() {
     fi
     if [[ $SERVICE == "node" ]] || [[ $SERVICE == "engine" ]]; then
       select NODE in bashful doc dopey; do
-        tail -f $CHAINFLIP_BASE_PATH$NODE/chainflip-$SERVICE.*log
+        tail -f $CHAINFLIP_BASE_PATH/$NODE/chainflip-$SERVICE.*log
       done
     fi
     if [[ $SERVICE == "broker" ]]; then
-      tail -f $CHAINFLIP_BASE_PATHchainflip-broker-api.*log
+      tail -f $CHAINFLIP_BASE_PATH/chainflip-broker-api.*log
     fi
     if [[ $SERVICE == "lp" ]]; then
-      tail -f $CHAINFLIP_BASE_PATHchainflip-lp-api.*log
+      tail -f $CHAINFLIP_BASE_PATH/chainflip-lp-api.*log
     fi
     if [[ $SERVICE == "ingress-egress-tracker" ]]; then
-      tail -f $CHAINFLIP_BASE_PATHchainflip-ingress-egress-tracker.*log
+      tail -f $CHAINFLIP_BASE_PATH/chainflip-ingress-egress-tracker.*log
     fi
     if [[ $SERVICE == "solana" ]]; then
-      tail -f $SOLANA_BASE_PATHsolana.*log
+      tail -f $SOLANA_BASE_PATH/solana.*log
     fi
     if [[ $SERVICE == "debug" ]]; then
-      cat $CHAINFLIP_BASE_PATHdebug.log
+      cat $CHAINFLIP_BASE_PATH/debug.log
     fi
     break
   done
