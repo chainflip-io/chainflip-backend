@@ -7,6 +7,7 @@ use cf_amm::{
 	range_orders::{self, Liquidity},
 	PoolState,
 };
+use cf_chains::Chain;
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
 use cf_traits::{
 	impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwapQueueApi, SwapType, SwappingApi,
@@ -22,7 +23,7 @@ use frame_support::{
 
 use frame_system::pallet_prelude::OriginFor;
 use serde::{Deserialize, Serialize};
-use sp_arithmetic::traits::{AtLeast32BitUnsigned, UniqueSaturatedInto, Zero};
+use sp_arithmetic::traits::{UniqueSaturatedInto, Zero};
 use sp_std::{boxed::Box, collections::btree_set::BTreeSet, vec::Vec};
 
 pub use pallet::*;
@@ -1962,13 +1963,11 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
-	fn estimate_swap_input_for_desired_output<
-		Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy,
-	>(
-		input_asset: impl Into<Asset>,
-		output_asset: impl Into<Asset>,
-		desired_output_amount: Amount,
-	) -> Option<Amount> {
+	fn estimate_swap_input_for_desired_output<C: Chain>(
+		input_asset: C::ChainAsset,
+		output_asset: C::ChainAsset,
+		desired_output_amount: C::ChainAmount,
+	) -> Option<C::ChainAmount> {
 		let input_asset = input_asset.into();
 		let output_asset = output_asset.into();
 
@@ -1991,57 +1990,45 @@ impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
 		.map(|swap_output| swap_output.output.unique_saturated_into())
 	}
 
-	/// Calculate the amount of input asset needed to get the desired amount of output asset,
-	/// subject to an available input amount and network fee. The actual
-	/// output amount is not guaranteed to be close to the desired amount.
-	///
-	/// Returns the input amount needed to get the desired output.
-	fn calculate_asset_conversion<Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy>(
-		input_asset: impl Into<Asset>,
-		available_input_amount: Amount,
-		output_asset: impl Into<Asset>,
-		desired_output_amount: Amount,
-	) -> Option<Amount> {
+	fn calculate_input_for_gas_output<C: Chain>(
+		input_asset: C::ChainAsset,
+		required_gas: C::ChainAmount,
+	) -> Option<C::ChainAmount> {
 		use frame_support::sp_runtime::helpers_128bit::multiply_by_rational_with_rounding;
 
-		if desired_output_amount.is_zero() {
-			return Some(Amount::zero())
-		}
-		if available_input_amount.is_zero() {
-			return None
+		if required_gas.is_zero() {
+			return Some(Zero::zero())
 		}
 
+		let output_asset = C::GAS_ASSET.into();
 		let input_asset = input_asset.into();
-		let output_asset = output_asset.into();
 		if input_asset == output_asset {
-			return Some(available_input_amount.min(desired_output_amount))
+			return Some(required_gas)
 		}
 
-		let estimation_amount = utilities::fee_estimation_cap(input_asset)
-			.defensive_proof(
-				"Fee estimation cap not available. Please report this to Chainflip Labs.",
-			)?
-			.min(available_input_amount.into());
+		let estimation_input = utilities::fee_estimation_cap(input_asset).defensive_proof(
+			"Fee estimation cap not available. Please report this to Chainflip Labs.",
+		)?;
 
-		let available_output_amount = with_transaction_unchecked(|| {
+		let estimation_output = with_transaction_unchecked(|| {
 			TransactionOutcome::Rollback(
-				Self::swap_with_network_fee(input_asset, output_asset, estimation_amount).ok(),
+				Self::swap_with_network_fee(input_asset, output_asset, estimation_input).ok(),
 			)
 		})?
 		.output;
 
-		if available_output_amount == 0 {
+		if estimation_output == 0 {
 			None
 		} else {
 			let input_amount_to_convert = multiply_by_rational_with_rounding(
-				desired_output_amount.into(),
-				estimation_amount,
-				available_output_amount,
+				required_gas.into(),
+				estimation_input,
+				estimation_output,
 				sp_arithmetic::Rounding::Down,
 			)
 			.defensive_proof(
 				"Unexpected overflow occurred during asset conversion. Please report this to Chainflip Labs."
-			)?.min(available_input_amount.into());
+			)?;
 
 			Some(input_amount_to_convert.unique_saturated_into())
 		}
@@ -2059,9 +2046,9 @@ pub mod utilities {
 		(input - fee, fee)
 	}
 
-	/// The maximum amount of a non-gas asset to be used for transaction fee estimation.
+	/// The amount of a non-gas asset to be used for transaction fee estimation.
 	///
-	/// We need this cap so that we don't exhaust pool liquidity during estimation.
+	/// This should be of a similar order of magnitude to expected fees to get an accurate result.
 	///
 	/// The value should be large enough to allow a good estimation of the fee, but small enough
 	/// to not exhaust the pool liquidity.

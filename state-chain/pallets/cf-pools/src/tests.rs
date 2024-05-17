@@ -4,6 +4,7 @@ use crate::{
 	PoolPairsMap, Pools, RangeOrder, RangeOrderSize, ScheduledLimitOrderUpdates, STABLE_ASSET,
 };
 use cf_amm::common::{price_at_tick, tick_at_price, Side, Tick, PRICE_FRACTIONAL_BITS};
+use cf_chains::Ethereum;
 use cf_primitives::{chains::assets::any::Asset, AssetAmount, SwapOutput};
 use cf_test_utilities::{assert_events_match, assert_has_event, last_event};
 use cf_traits::{
@@ -1017,77 +1018,96 @@ fn can_get_all_pool_orders() {
 
 #[test]
 fn asset_conversion() {
+	use cf_chains::assets::eth::Asset as EthereumAsset;
 	new_test_ext().execute_with(|| {
-		const AVAILABLE_LIQUIDITY: AssetAmount = 100_000_000_000_000_000;
+		const fn decimals<const I: u32>() -> u128 {
+			10u128.pow(I)
+		}
+
+		const USDC_DECIMALS: u128 = decimals::<6>();
+		const PRICE_DECIMALS: u128 = decimals::<{ 18 - 6 }>();
+
+		/// 1 MILLION DOLLARS
+		const AVAILABLE_QUOTE_LIQUIDITY: u128 = 1_000_000 * USDC_DECIMALS;
+		/// 2000 USD per ETH
+		const ETH_PRICE: u128 = 2000;
+		/// 5 USD per FLIP
+		const FLIP_PRICE: u128 = 5;
+
+		let eth_tick: Tick = -223338;
+		let flip_tick: Tick = -283256;
+
+		// No available funds -> no conversion.
+		assert!(LiquidityPools::calculate_input_for_gas_output::<Ethereum>(FLIP, DESIRED_ETH,)
+			.is_none());
+
 		// Create pools
-		for asset in [Asset::Eth, Asset::Flip] {
+		for (base_asset, price, tick) in
+			[(Asset::Eth, ETH_PRICE, eth_tick), (Asset::Flip, FLIP_PRICE, flip_tick)]
+		{
+			let available_base_liquidity = AVAILABLE_QUOTE_LIQUIDITY * price * PRICE_DECIMALS;
+
+			println!("Creating pool for {:?} at tick {}", base_asset, tick);
+
 			assert_ok!(LiquidityPools::new_pool(
 				RuntimeOrigin::root(),
-				asset,
+				base_asset,
 				STABLE_ASSET,
 				Default::default(),
-				price_at_tick(0).unwrap(),
+				price_at_tick(tick).unwrap(),
 			));
-			assert_ok!(LiquidityPools::set_range_order(
+			assert_ok!(LiquidityPools::set_limit_order(
 				RuntimeOrigin::signed(ALICE),
-				asset,
+				base_asset,
 				STABLE_ASSET,
+				Side::Sell,
 				0,
-				Some(-100..100),
-				RangeOrderSize::Liquidity { liquidity: AVAILABLE_LIQUIDITY },
+				Some(tick),
+				available_base_liquidity,
+			));
+			assert_ok!(LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(ALICE),
+				base_asset,
+				STABLE_ASSET,
+				Side::Buy,
+				1,
+				Some(tick),
+				AVAILABLE_QUOTE_LIQUIDITY,
 			));
 		}
 
-		const AVAILABLE: AssetAmount = 1_000_000;
-		const DESIRED: AssetAmount = 10_000;
-		// No available funds -> no conversion.
-		assert!(LiquidityPools::calculate_asset_conversion(
-			Asset::Flip,
-			0u128,
-			Asset::Eth,
-			DESIRED,
-		)
-		.is_none());
+		const FLIP: EthereumAsset = EthereumAsset::Flip;
 
 		// Desired output is zero -> trivially ok.
 		assert_eq!(
-			LiquidityPools::calculate_asset_conversion(Asset::Flip, AVAILABLE, Asset::Eth, 0u128,),
+			LiquidityPools::calculate_input_for_gas_output::<Ethereum>(FLIP, 0u128,),
 			Some(0u128)
 		);
 
-		// Desired output is available -> required amount.
+		// Desired output -> required amount at current price.
+		/// 100_000 gas when the gas cost is 10 gwei.
+		const GWEI: AssetAmount = decimals::<9>();
+		const DESIRED_ETH: AssetAmount = 100_000 * 10 * GWEI;
 		let required =
-			LiquidityPools::calculate_asset_conversion(Asset::Flip, AVAILABLE, Asset::Eth, DESIRED)
-				.unwrap();
-		assert!(required > 0 && required <= AVAILABLE);
+			LiquidityPools::calculate_input_for_gas_output::<Ethereum>(FLIP, DESIRED_ETH).unwrap();
 
-		// Same asset and desired output is available.
-		assert_eq!(
-			LiquidityPools::calculate_asset_conversion(Asset::Eth, AVAILABLE, Asset::Eth, DESIRED),
-			Some(DESIRED)
+		// Tick math means that the prices are not exact, so we allow for 1% inaccuracy in the
+		// estimate.
+		const EXPECTED_REQUIRED_INPUT: AssetAmount = DESIRED_ETH * (ETH_PRICE / FLIP_PRICE);
+		assert!(
+			required.abs_diff(EXPECTED_REQUIRED_INPUT) < EXPECTED_REQUIRED_INPUT / 100,
+			"actual: {}, expected: {}",
+			required,
+			EXPECTED_REQUIRED_INPUT
 		);
 
-		// Same asset and desired output is not fully available.
+		// Input is gas asset -> trivially ok.
 		assert_eq!(
-			LiquidityPools::calculate_asset_conversion(
-				Asset::Eth,
-				DESIRED,
-				Asset::Eth,
-				DESIRED * 2
+			LiquidityPools::calculate_input_for_gas_output::<Ethereum>(
+				cf_chains::assets::eth::GAS_ASSET,
+				DESIRED_ETH
 			),
-			Some(DESIRED)
-		);
-
-		// Input amount is capped: it's possible to estimate even if the available input exceeds
-		// available liquidity.
-		assert_eq!(
-			LiquidityPools::calculate_asset_conversion(
-				Asset::Eth,
-				AVAILABLE_LIQUIDITY * 2,
-				Asset::Eth,
-				DESIRED
-			),
-			Some(DESIRED)
+			Some(DESIRED_ETH)
 		);
 	});
 }
