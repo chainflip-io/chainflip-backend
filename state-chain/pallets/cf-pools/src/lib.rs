@@ -7,6 +7,7 @@ use cf_amm::{
 	range_orders::{self, Liquidity},
 	PoolState,
 };
+use cf_chains::SwapOrigin;
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
 use cf_traits::{
 	impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwapQueueApi, SwapType, SwappingApi,
@@ -332,6 +333,9 @@ pub mod pallet {
 							any::Asset::Flip,
 							*collected_fee,
 							SwapType::NetworkFee,
+							SwapOrigin::Internal,
+							None, /* destination address */
+							None, /* broker fee */
 						);
 						collected_fee.set_zero();
 						Ok::<_, DispatchError>(())

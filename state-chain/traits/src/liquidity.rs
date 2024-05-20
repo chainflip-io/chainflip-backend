@@ -1,4 +1,8 @@
-use cf_chains::{address::ForeignChainAddress, assets::any::AssetMap};
+use cf_chains::{
+	address::{EncodedAddress, ForeignChainAddress},
+	assets::any::AssetMap,
+	SwapOrigin,
+};
 use cf_primitives::{Asset, AssetAmount, Beneficiaries, ChannelId, SwapId};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
@@ -129,7 +133,10 @@ pub trait SwapQueueApi {
 		to: Asset,
 		amount: AssetAmount,
 		swap_type: SwapType,
-	) -> (u64, Self::BlockNumber);
+		swap_origin: SwapOrigin,
+		destination_address: Option<EncodedAddress>,
+		broker_fee: Option<AssetAmount>,
+	) -> SwapId;
 }
 
 impl<T: frame_system::Config> SwapQueueApi for T {
@@ -140,8 +147,11 @@ impl<T: frame_system::Config> SwapQueueApi for T {
 		_to: Asset,
 		_amount: AssetAmount,
 		_swap_type: SwapType,
-	) -> (u64, Self::BlockNumber) {
-		(0, Self::BlockNumber::default())
+		_swap_origin: SwapOrigin,
+		_destination_address: Option<EncodedAddress>,
+		_broker_fee: Option<AssetAmount>,
+	) -> SwapId {
+		0
 	}
 }
 

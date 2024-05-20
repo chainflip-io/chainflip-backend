@@ -2,7 +2,7 @@
 
 use cf_amm::common::Side;
 use cf_chains::{
-	address::{AddressConverter, ForeignChainAddress},
+	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
 	CcmChannelMetadata, CcmDepositMetadata, SwapOrigin,
 };
 use cf_primitives::{
@@ -319,7 +319,7 @@ pub mod pallet {
 			source_asset: Asset,
 			deposit_amount: AssetAmount,
 			destination_asset: Asset,
-			destination_address: EncodedAddress,
+			destination_address: Option<EncodedAddress>,
 			origin: SwapOrigin,
 			swap_type: SwapType,
 			#[deprecated(note = "Use broker_fee instead")]
@@ -559,27 +559,16 @@ pub mod pallet {
 
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, to)?;
-			let swap_origin = SwapOrigin::Vault { tx_hash };
 
-			let (swap_id, execute_at) = Self::schedule_swap(
+			Self::schedule_swap(
 				from,
 				to,
 				deposit_amount,
 				SwapType::Swap(destination_address_internal.clone()),
+				SwapOrigin::Vault { tx_hash },
+				Some(destination_address),
+				None,
 			);
-
-			Self::deposit_event(Event::<T>::SwapScheduled {
-				swap_id,
-				source_asset: from,
-				deposit_amount,
-				destination_asset: to,
-				destination_address,
-				origin: swap_origin,
-				swap_type: SwapType::Swap(destination_address_internal),
-				broker_commission: None,
-				broker_fee: None,
-				execute_at,
-			});
 
 			Ok(())
 		}
@@ -1141,17 +1130,19 @@ pub mod pallet {
 
 			let encoded_destination_address =
 				T::AddressConverter::to_encoded_address(destination_address.clone());
-			let swap_origin = SwapOrigin::DepositChannel {
-				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
-				channel_id,
-				deposit_block_height,
-			};
 
-			let (swap_id, execute_at) = Self::schedule_swap(
+			let swap_id = Self::schedule_swap(
 				from,
 				to,
 				net_amount,
 				SwapType::Swap(destination_address.clone()),
+				SwapOrigin::DepositChannel {
+					deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
+					channel_id,
+					deposit_block_height,
+				},
+				Some(encoded_destination_address),
+				Some(fee),
 			);
 
 			for Beneficiary { account, bps } in broker_commission {
@@ -1161,19 +1152,6 @@ pub mod pallet {
 					)
 				});
 			}
-
-			Self::deposit_event(Event::<T>::SwapScheduled {
-				swap_id,
-				source_asset: from,
-				deposit_amount: amount,
-				destination_asset: to,
-				destination_address: encoded_destination_address,
-				origin: swap_origin,
-				swap_type: SwapType::Swap(destination_address),
-				broker_commission: Some(fee),
-				broker_fee: Some(fee),
-				execute_at,
-			});
 
 			swap_id
 		}
@@ -1229,46 +1207,28 @@ pub mod pallet {
 					swap_output.principal = Some(principal_swap_amount);
 					None
 				} else {
-					let (swap_id, execute_at) = Self::schedule_swap(
+					let swap_id = Self::schedule_swap(
 						source_asset,
 						destination_asset,
 						principal_swap_amount,
 						SwapType::CcmPrincipal(ccm_id),
+						origin.clone(),
+						Some(encoded_destination_address.clone()),
+						None,
 					);
-					Self::deposit_event(Event::<T>::SwapScheduled {
-						swap_id,
-						source_asset,
-						deposit_amount: principal_swap_amount,
-						destination_asset,
-						destination_address: encoded_destination_address.clone(),
-						origin: origin.clone(),
-						swap_type: SwapType::CcmPrincipal(ccm_id),
-						broker_commission: None,
-						broker_fee: None,
-						execute_at,
-					});
 					Some(swap_id)
 				};
 
 			let gas_swap_id = if let Some(other_gas_asset) = other_gas_asset {
-				let (swap_id, execute_at) = Self::schedule_swap(
+				let swap_id = Self::schedule_swap(
 					source_asset,
 					other_gas_asset,
 					gas_budget,
 					SwapType::CcmGas(ccm_id),
-				);
-				Self::deposit_event(Event::<T>::SwapScheduled {
-					swap_id,
-					source_asset,
-					deposit_amount: gas_budget,
-					destination_asset: other_gas_asset,
-					destination_address: encoded_destination_address.clone(),
 					origin,
-					swap_type: SwapType::CcmGas(ccm_id),
-					broker_commission: None,
-					broker_fee: None,
-					execute_at,
-				});
+					Some(encoded_destination_address.clone()),
+					None,
+				);
 				Some(swap_id)
 			} else {
 				swap_output.gas = Some(gas_budget);
@@ -1314,7 +1274,10 @@ impl<T: Config> SwapQueueApi for Pallet<T> {
 		to: Asset,
 		amount: AssetAmount,
 		swap_type: SwapType,
-	) -> (u64, Self::BlockNumber) {
+		swap_origin: SwapOrigin,
+		destination_address: Option<EncodedAddress>,
+		broker_fee: Option<AssetAmount>,
+	) -> SwapId {
 		let swap_id = SwapIdCounter::<T>::mutate(|id| {
 			id.saturating_accrue(1);
 			*id
@@ -1345,9 +1308,25 @@ impl<T: Config> SwapQueueApi for Pallet<T> {
 
 		let execute_at = frame_system::Pallet::<T>::block_number() + SWAP_DELAY_BLOCKS.into();
 
-		SwapQueue::<T>::append(execute_at, Swap::new(swap_id, from, to, swap_amount, swap_type));
+		SwapQueue::<T>::append(
+			execute_at,
+			Swap::new(swap_id, from, to, swap_amount, swap_type.clone()),
+		);
 
-		(swap_id, execute_at)
+		Self::deposit_event(Event::<T>::SwapScheduled {
+			swap_id,
+			source_asset: from,
+			deposit_amount: amount,
+			destination_asset: to,
+			destination_address,
+			origin: swap_origin,
+			swap_type,
+			broker_commission: broker_fee,
+			broker_fee,
+			execute_at,
+		});
+
+		swap_id
 	}
 }
 
