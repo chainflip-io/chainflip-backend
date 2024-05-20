@@ -231,7 +231,7 @@ where
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: <Ethereum as Chain>::ChainAmount,
 		message: Vec<u8>,
-		_cf_parameter: Vec<u8>,
+		_cf_parameters: Vec<u8>,
 	) -> Result<Self, DispatchError> {
 		let transfer_param = EncodableTransferAssetParams {
 			asset: E::token_address(transfer_param.asset).ok_or(DispatchError::CannotLookup)?,
