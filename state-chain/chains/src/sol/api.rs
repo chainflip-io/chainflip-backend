@@ -10,12 +10,11 @@ use sp_std::{boxed::Box, vec, vec::Vec};
 
 use crate::{
 	sol::{
-		consts::SYSTEM_PROGRAM_ID, instruction_builder::SolanaInstructionBuilder,
-		sol_tx_core::address_derivation, SolAddress, SolAmount, SolHash, SolMessage,
-		SolTransaction, SolanaCrypto,
+		consts::SYSTEM_PROGRAM_ID, instruction_builder::SolanaInstructionBuilder, SolAddress,
+		SolAmount, SolHash, SolMessage, SolTransaction, SolanaCrypto,
 	},
 	AllBatch, AllBatchError, ApiCall, Chain, ChainCrypto, ChainEnvironment, ConsolidateCall,
-	ConsolidationError, DepositChannel, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress,
+	ConsolidationError, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress,
 	SetAggKeyWithAggKey, Solana, TransferAssetParams, TransferFallback,
 };
 
@@ -132,7 +131,7 @@ pub struct SolanaApi<Environment: 'static> {
 
 impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 	pub fn batch_fetch(
-		deposit_channels: Vec<DepositChannel<Solana>>,
+		fetch_params: Vec<FetchAssetParams<Solana>>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
 		// Lookup the current Aggkey
 		let agg_key = Environment::lookup_account(SolanaEnvAccountLookupKey::AggKey)?;
@@ -147,7 +146,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 
 		// Build the instruction_set
 		let instruction_set = SolanaInstructionBuilder::fetch_from(
-			deposit_channels,
+			fetch_params,
 			vault_program,
 			vault_program_data_account,
 			system_program_id,
@@ -275,7 +274,7 @@ impl<Env: 'static> ExecutexSwapAndCall<Solana> for SolanaApi<Env> {
 		_source_chain: cf_primitives::ForeignChain,
 		_source_address: Option<ForeignChainAddress>,
 		_gas_budget: <Solana as Chain>::ChainAmount,
-		_message: vec::Vec<u8>,
+		_message: Vec<u8>,
 	) -> Result<Self, DispatchError> {
 		Err(DispatchError::Other("Unimplemented"))
 	}
@@ -283,24 +282,10 @@ impl<Env: 'static> ExecutexSwapAndCall<Solana> for SolanaApi<Env> {
 
 impl<Env: SolanaEnvironment> AllBatch<Solana> for SolanaApi<Env> {
 	fn new_unsigned(
-		fetch_params: vec::Vec<FetchAssetParams<Solana>>,
-		transfer_params: vec::Vec<TransferAssetParams<Solana>>,
+		fetch_params: Vec<FetchAssetParams<Solana>>,
+		transfer_params: Vec<TransferAssetParams<Solana>>,
 	) -> Result<Self, AllBatchError> {
-		let vault_program = Env::lookup_account(SolanaEnvAccountLookupKey::VaultProgram)
-			.map_err(|e| AllBatchError::DispatchError(e.into()))?;
-		let deposit_channels = fetch_params
-			.into_iter()
-			.map(|fetch_param| {
-				address_derivation::derive_deposit_channel(
-					fetch_param.deposit_fetch_id,
-					fetch_param.asset,
-					vault_program,
-				)
-				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)
-			})
-			.collect::<Result<Vec<_>, SolanaTransactionBuildingError>>()?;
-
-		let _fetch_tx = Self::batch_fetch(deposit_channels)?;
+		let _fetch_tx = Self::batch_fetch(fetch_params)?;
 
 		let _transfer_txs = transfer_params
 			.into_iter()

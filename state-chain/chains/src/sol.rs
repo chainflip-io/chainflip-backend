@@ -6,7 +6,7 @@ use sp_std::vec::Vec;
 
 use sol_prim::{AccountBump, SlotNumber};
 
-use crate::{address, assets, FeeEstimationApi, FeeRefundCalculator, TypeInfo};
+use crate::{address, assets, DepositChannel, FeeEstimationApi, FeeRefundCalculator, TypeInfo};
 use codec::{Decode, Encode, MaxEncodedLen};
 use serde::{Deserialize, Serialize};
 
@@ -42,7 +42,7 @@ impl Chain for Solana {
 	type ChainAsset = assets::sol::Asset;
 	type ChainAccount = SolAddress;
 	type EpochStartData = (); //todo
-	type DepositFetchId = ChannelId;
+	type DepositFetchId = SolanaDepositFetchId;
 	type DepositChannelState = AccountBump;
 	type DepositDetails = (); //todo
 	type Transaction = SolTransaction;
@@ -198,3 +198,20 @@ impl address::ToHumanreadableAddress for SolAddress {
 }
 
 impl crate::ChannelLifecycleHooks for AccountBump {}
+
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
+pub struct SolanaDepositFetchId {
+	pub channel_id: ChannelId,
+	pub address: SolAddress,
+	pub bump: AccountBump,
+}
+
+impl From<&DepositChannel<Solana>> for SolanaDepositFetchId {
+	fn from(from: &DepositChannel<Solana>) -> Self {
+		SolanaDepositFetchId {
+			channel_id: from.channel_id,
+			address: from.address,
+			bump: from.state,
+		}
+	}
+}
