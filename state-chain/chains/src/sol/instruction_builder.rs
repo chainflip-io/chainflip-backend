@@ -14,7 +14,7 @@ use crate::{
 			compute_budget::ComputeBudgetInstruction,
 			program_instructions::{ProgramInstruction, SystemProgramInstruction, VaultProgram},
 		},
-		SolAccountMeta, SolAddress, SolAmount, SolAsset, SolCcmExtraAccounts, SolComputeLimit,
+		SolAccountMeta, SolAddress, SolAmount, SolAsset, SolCcmAccounts, SolComputeLimit,
 		SolInstruction, SolPubkey,
 	},
 	DepositChannel, ForeignChainAddress, TransferAssetParams,
@@ -144,7 +144,7 @@ impl SolanaInstructionBuilder {
 		source_chain: cf_primitives::ForeignChain,
 		source_address: Option<ForeignChainAddress>,
 		message: Vec<u8>,
-		extra_accounts: SolCcmExtraAccounts,
+		ccm_accounts: SolCcmAccounts,
 		vault_program: SolAddress,
 		vault_program_data_account: SolAddress,
 		system_program_id: SolAddress,
@@ -172,12 +172,11 @@ impl SolanaInstructionBuilder {
 						SolAccountMeta::new_readonly(vault_program_data_account.into(), false),
 						SolAccountMeta::new_readonly(agg_key.into(), true),
 						SolAccountMeta::new(transfer_param.to.into(), false),
-						// cf receiver account. `extra_accounts` is guaranteed to be non-empty
-						SolAccountMeta::from(extra_accounts.cf_receiver.clone()),
+						SolAccountMeta::from(ccm_accounts.cf_receiver.clone()),
 						SolAccountMeta::new_readonly(system_program_id.into(), false),
 						SolAccountMeta::new_readonly(sys_var_instructions.into(), false),
 					],
-					extra_accounts.remaining_account_metas(),
+					ccm_accounts.remaining_account_metas(),
 				]
 				.into_iter()
 				.flatten()
@@ -385,7 +384,7 @@ mod test {
 			ccm_param.source_chain,
 			ccm_param.source_address,
 			ccm_param.channel_metadata.message.to_vec(),
-			ccm_extra_accounts(),
+			ccm_accounts(),
 			vault_program(),
 			vault_program_data_account(),
 			system_program_id(),

@@ -11,7 +11,7 @@ use sp_std::{boxed::Box, vec, vec::Vec};
 use crate::{
 	sol::{
 		consts::SYSTEM_PROGRAM_ID, instruction_builder::SolanaInstructionBuilder,
-		sol_tx_core::address_derivation, SolAddress, SolAmount, SolCcmExtraAccounts, SolHash,
+		sol_tx_core::address_derivation, SolAddress, SolAmount, SolCcmAccounts, SolHash,
 		SolMessage, SolTransaction, SolanaCrypto,
 	},
 	AllBatch, AllBatchError, ApiCall, Chain, ChainCrypto, ChainEnvironment, ConsolidateCall,
@@ -242,9 +242,9 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
 		message: Vec<u8>,
-		cf_parameter: Vec<u8>,
+		cf_parameters: Vec<u8>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
-		let extra_accounts = SolCcmExtraAccounts::decode(&mut &cf_parameter[..])
+		let ccm_accounts = SolCcmAccounts::decode(&mut &cf_parameters[..])
 			.map_err(|_| SolanaTransactionBuildingError::CannotDecodeCcmCfParam)?;
 
 		let vault_program = Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgram)?;
@@ -265,7 +265,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			source_chain,
 			source_address,
 			message,
-			extra_accounts,
+			ccm_accounts,
 			vault_program,
 			vault_program_data_account,
 			system_program_id,
@@ -334,9 +334,9 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 		source_address: Option<ForeignChainAddress>,
 		_gas_budget: <Solana as Chain>::ChainAmount,
 		message: vec::Vec<u8>,
-		cf_parameter: Vec<u8>,
+		cf_parameters: Vec<u8>,
 	) -> Result<Self, DispatchError> {
-		Self::ccm_transfer(transfer_param, source_chain, source_address, message, cf_parameter)
+		Self::ccm_transfer(transfer_param, source_chain, source_address, message, cf_parameters)
 			.map_err(|e| {
 				log::error!("Failed to construct Solana CCM transfer transaction! Error: {:?}", e);
 				e.into()

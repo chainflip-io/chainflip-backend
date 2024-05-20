@@ -773,27 +773,27 @@ impl From<Hash> for SolHash {
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, Clone)]
-pub struct CcmExtraAddress {
-	pub_key: Pubkey,
-	writable: bool,
+pub struct CcmAddress {
+	pubkey: Pubkey,
+	is_writable: bool,
 }
 
-impl From<CcmExtraAddress> for AccountMeta {
-	fn from(from: CcmExtraAddress) -> Self {
-		match from.writable {
-			true => AccountMeta::new(from.pub_key, false),
-			false => AccountMeta::new_readonly(from.pub_key, false),
+impl From<CcmAddress> for AccountMeta {
+	fn from(from: CcmAddress) -> Self {
+		match from.is_writable {
+			true => AccountMeta::new(from.pubkey, false),
+			false => AccountMeta::new_readonly(from.pubkey, false),
 		}
 	}
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, Clone)]
-pub struct CcmExtraAccounts {
-	pub cf_receiver: CcmExtraAddress,
-	pub remaining_accounts: Vec<CcmExtraAddress>,
+pub struct CcmAccounts {
+	pub cf_receiver: CcmAddress,
+	pub remaining_accounts: Vec<CcmAddress>,
 }
 
-impl CcmExtraAccounts {
+impl CcmAccounts {
 	pub fn remaining_account_metas(self) -> Vec<AccountMeta> {
 		self.remaining_accounts.into_iter().map(|acc| acc.into()).collect::<Vec<_>>()
 	}
@@ -801,11 +801,11 @@ impl CcmExtraAccounts {
 
 #[test]
 fn ccm_extra_accounts_encoding() {
-	let extra_accounts = CcmExtraAccounts {
-		cf_receiver: CcmExtraAddress { pub_key: Pubkey([0x11; 32]), writable: false },
+	let extra_accounts = CcmAccounts {
+		cf_receiver: CcmAddress { pubkey: Pubkey([0x11; 32]), is_writable: false },
 		remaining_accounts: vec![
-			CcmExtraAddress { pub_key: Pubkey([0x22; 32]), writable: true },
-			CcmExtraAddress { pub_key: Pubkey([0x33; 32]), writable: true },
+			CcmAddress { pubkey: Pubkey([0x22; 32]), is_writable: true },
+			CcmAddress { pubkey: Pubkey([0x33; 32]), is_writable: true },
 		],
 	};
 
@@ -857,10 +857,7 @@ impl FromStr for Hash {
 #[cfg(test)]
 pub mod sol_test_values {
 	use crate::{
-		sol::{
-			SolAmount, SolAsset, SolCcmExtraAccounts, SolCcmExtraAddress, SolComputeLimit,
-			SolPubkey,
-		},
+		sol::{SolAmount, SolAsset, SolCcmAccounts, SolCcmAddress, SolComputeLimit, SolPubkey},
 		CcmChannelMetadata, CcmDepositMetadata, ForeignChain, ForeignChainAddress,
 	};
 	use core::str::FromStr;
@@ -910,17 +907,16 @@ pub mod sol_test_values {
 	pub const NEXT_NONCE: &str = NONCE_ACCOUNTS[0];
 	pub const SOL: SolAsset = SolAsset::Sol;
 
-	pub fn ccm_extra_accounts() -> SolCcmExtraAccounts {
-		SolCcmExtraAccounts {
-			cf_receiver: SolCcmExtraAddress {
-				pub_key: SolPubkey::from_str("NJusJ7itnSsh4jSi43i9MMKB9sF4VbNvdSwUA45gPE6")
-					.unwrap(),
-				writable: true,
+	pub fn ccm_accounts() -> SolCcmAccounts {
+		SolCcmAccounts {
+			cf_receiver: SolCcmAddress {
+				pubkey: SolPubkey::from_str("NJusJ7itnSsh4jSi43i9MMKB9sF4VbNvdSwUA45gPE6").unwrap(),
+				is_writable: true,
 			},
-			remaining_accounts: vec![SolCcmExtraAddress {
-				pub_key: SolPubkey::from_str("CFp37nEY6E9byYHiuxQZg6vMCnzwNrgiF9nFGT6Zwcnx")
+			remaining_accounts: vec![SolCcmAddress {
+				pubkey: SolPubkey::from_str("CFp37nEY6E9byYHiuxQZg6vMCnzwNrgiF9nFGT6Zwcnx")
 					.unwrap(),
-				writable: false,
+				is_writable: false,
 			}],
 		}
 	}
@@ -932,7 +928,7 @@ pub mod sol_test_values {
 			channel_metadata: CcmChannelMetadata {
 				message: vec![124u8, 29u8, 15u8, 7u8].try_into().unwrap(), // CCM message
 				gas_budget: 0u128,                                         // unused
-				cf_parameters: codec::Encode::encode(&ccm_extra_accounts())
+				cf_parameters: codec::Encode::encode(&ccm_accounts())
 					.try_into()
 					.expect("Test data cannot be too long"), // Extra addresses
 			},
@@ -1322,7 +1318,11 @@ mod tests {
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let to_pubkey = Pubkey::from_str(TRANSFER_TO_ACCOUNT).unwrap();
-		let extra_accounts = ccm_extra_accounts();
+		let extra_accounts = ccm_accounts();
+
+		// Test ccm only contains 2 accounts - 1 cf_receiver and 1 ccm_account.
+		let cf_receiver: AccountMeta = extra_accounts.cf_receiver.clone().into();
+		let ccm_account = extra_accounts.remaining_account_metas()[0].clone();
 		let ccm_parameter = ccm_parameter();
 
 		let instructions = [
@@ -1342,29 +1342,21 @@ mod tests {
 				},
 				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
 				vec![
-					vec![
-						AccountMeta::new_readonly(
-							Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
-							false,
-						),
-						AccountMeta::new_readonly(agg_key_pubkey, true),
-						AccountMeta::new(to_pubkey, false),
-						AccountMeta::from(extra_accounts.cf_receiver.clone()), /* cf receiver
-						                                                        * account */
-						AccountMeta::new_readonly(
-							Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
-							false,
-						),
-						AccountMeta::new_readonly(
-							Pubkey::from_str(SYS_VAR_INSTRUCTIONS).unwrap(),
-							false,
-						),
-					],
-					extra_accounts.remaining_account_metas(),
-				]
-				.into_iter()
-				.flatten()
-				.collect::<Vec<_>>(),
+					AccountMeta::new_readonly(
+						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+						false,
+					),
+					AccountMeta::new_readonly(agg_key_pubkey, true),
+					AccountMeta::new(to_pubkey, false),
+					cf_receiver, /* cf receiver
+					              * account */
+					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
+					AccountMeta::new_readonly(
+						Pubkey::from_str(SYS_VAR_INSTRUCTIONS).unwrap(),
+						false,
+					),
+					ccm_account,
+				],
 			),
 		];
 		let message = Message::new(&instructions, Some(&agg_key_pubkey));

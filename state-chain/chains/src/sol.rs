@@ -25,9 +25,9 @@ pub use sol_prim::{
 	Signature as SolSignature,
 };
 pub use sol_tx_core::{
-	AccountMeta as SolAccountMeta, CcmExtraAccounts as SolCcmExtraAccounts,
-	CcmExtraAddress as SolCcmExtraAddress, Hash as RawSolHash, Instruction as SolInstruction,
-	Message as SolMessage, Pubkey as SolPubkey, Transaction as SolTransaction,
+	AccountMeta as SolAccountMeta, CcmAccounts as SolCcmAccounts, CcmAddress as SolCcmAddress,
+	Hash as RawSolHash, Instruction as SolInstruction, Message as SolMessage, Pubkey as SolPubkey,
+	Transaction as SolTransaction,
 };
 
 impl Chain for Solana {
