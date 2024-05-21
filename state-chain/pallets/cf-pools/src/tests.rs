@@ -3,7 +3,7 @@ use crate::{
 	CollectedNetworkFee, Error, Event, FlipBuyInterval, LimitOrder, PoolInfo, PoolOrders,
 	PoolPairsMap, Pools, RangeOrder, RangeOrderSize, ScheduledLimitOrderUpdates, STABLE_ASSET,
 };
-use cf_amm::common::{price_at_tick, tick_at_price, Side, Tick, PRICE_FRACTIONAL_BITS};
+use cf_amm::common::{price_at_tick, tick_at_price, Price, Side, Tick, PRICE_FRACTIONAL_BITS};
 use cf_chains::Ethereum;
 use cf_primitives::{chains::assets::any::Asset, AssetAmount, SwapOutput};
 use cf_test_utilities::{assert_events_match, assert_has_event, last_event};
@@ -1034,18 +1034,17 @@ fn asset_conversion() {
 		/// 5 USD per FLIP
 		const FLIP_PRICE: u128 = 5;
 
-		let eth_tick: Tick = -223338;
-		let flip_tick: Tick = -283256;
-
 		// No available funds -> no conversion.
 		assert!(LiquidityPools::calculate_input_for_gas_output::<Ethereum>(FLIP, DESIRED_ETH,)
 			.is_none());
 
 		// Create pools
-		for (base_asset, price, tick) in
-			[(Asset::Eth, ETH_PRICE, eth_tick), (Asset::Flip, FLIP_PRICE, flip_tick)]
-		{
+		for (base_asset, price) in [(Asset::Eth, ETH_PRICE), (Asset::Flip, FLIP_PRICE)] {
 			let available_base_liquidity = AVAILABLE_QUOTE_LIQUIDITY * price * PRICE_DECIMALS;
+			let tick = cf_amm::common::tick_at_price(
+				(Price::from(price) << PRICE_FRACTIONAL_BITS) / Price::from(PRICE_DECIMALS),
+			)
+			.unwrap();
 
 			println!("Creating pool for {:?} at tick {}", base_asset, tick);
 
