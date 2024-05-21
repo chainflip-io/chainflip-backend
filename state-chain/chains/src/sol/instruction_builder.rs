@@ -17,7 +17,7 @@ use crate::{
 		SolAccountMeta, SolAddress, SolAmount, SolAsset, SolCcmAccounts, SolComputeLimit,
 		SolInstruction, SolPubkey,
 	},
-	DepositChannel, ForeignChainAddress, TransferAssetParams,
+	FetchAssetParams, ForeignChainAddress, TransferAssetParams,
 };
 
 pub struct SolanaInstructionBuilder;
@@ -54,7 +54,7 @@ impl SolanaInstructionBuilder {
 	/// Create an instruction set to fetch from each `deposit_channel` being passed in.
 	/// Used to batch fetch from multiple deposit channels in a single transaction.
 	pub fn fetch_from(
-		deposit_channels: Vec<DepositChannel<Solana>>,
+		fetch_params: Vec<FetchAssetParams<Solana>>,
 		vault_program: SolAddress,
 		vault_program_data_account: SolAddress,
 		system_program_id: SolAddress,
@@ -62,19 +62,19 @@ impl SolanaInstructionBuilder {
 		nonce_account: SolAddress,
 		compute_price: SolAmount,
 	) -> Vec<SolInstruction> {
-		let instructions = deposit_channels
+		let instructions = fetch_params
 			.into_iter()
-			.map(|deposit_channel| match deposit_channel.asset {
+			.map(|fetch_param| match fetch_param.asset {
 				SolAsset::Sol => ProgramInstruction::get_instruction(
 					&VaultProgram::FetchNative {
-						seed: deposit_channel.channel_id.to_le_bytes().to_vec(),
-						bump: deposit_channel.state,
+						seed: fetch_param.deposit_fetch_id.channel_id.to_le_bytes().to_vec(),
+						bump: fetch_param.deposit_fetch_id.bump,
 					},
 					vault_program.into(),
 					vec![
 						SolAccountMeta::new_readonly(vault_program_data_account.into(), false),
 						SolAccountMeta::new(agg_key.into(), true),
-						SolAccountMeta::new(deposit_channel.address.into(), false),
+						SolAccountMeta::new(fetch_param.deposit_fetch_id.address.into(), false),
 						SolAccountMeta::new_readonly(system_program_id.into(), false),
 					],
 				),
@@ -190,6 +190,8 @@ impl SolanaInstructionBuilder {
 
 #[cfg(test)]
 mod test {
+	use cf_primitives::ChannelId;
+
 	use super::*;
 	use crate::sol::{
 		consts::MAX_TRANSACTION_LENGTH,
@@ -201,15 +203,17 @@ mod test {
 		SolHash, SolMessage, SolTransaction,
 	};
 	use core::str::FromStr;
-	/// Test deposit channel derived from `sol_tx_core::can_derive_address()`
-	/// This is used to check consistency in Fetch logic. This is not a "Valid" deposit channel
-	/// since the `seed` is NOT derived from the `channel_id`.
-	fn get_deposit_channel() -> crate::DepositChannel<Solana> {
-		crate::DepositChannel::<Solana> {
-			channel_id: 923_601_931u64,
-			address: SolPubkey::from_str(FETCH_FROM_ACCOUNT).unwrap().into(),
+
+	fn get_fetch_params(channel_id: Option<ChannelId>) -> crate::FetchAssetParams<Solana> {
+		crate::FetchAssetParams {
+			deposit_fetch_id: (&derive_deposit_channel(
+				channel_id.unwrap_or(923_601_931u64),
+				SOL,
+				vault_program(),
+			)
+			.unwrap())
+				.into(),
 			asset: SOL,
-			state: 255u8,
 		}
 	}
 
@@ -288,7 +292,7 @@ mod test {
 	fn can_create_fetch_instruction_set() {
 		// Construct the batch fetch instruction set
 		let instruction_set = SolanaInstructionBuilder::fetch_from(
-			vec![get_deposit_channel()],
+			vec![get_fetch_params(None)],
 			vault_program(),
 			vault_program_data_account(),
 			system_program_id(),
@@ -307,12 +311,12 @@ mod test {
 	fn can_create_batch_fetch_instruction_set() {
 		let vault_program = vault_program();
 		// Use valid Deposit channel derived from `channel_id`
-		let deposit_channel_0 = derive_deposit_channel(0u64, SOL, vault_program).unwrap();
-		let deposit_channel_1 = derive_deposit_channel(1u64, SOL, vault_program).unwrap();
+		let fetch_param_0 = get_fetch_params(Some(0));
+		let fetch_param_1 = get_fetch_params(Some(1));
 
 		// Construct the batch fetch instruction set
 		let instruction_set = SolanaInstructionBuilder::fetch_from(
-			vec![deposit_channel_0, deposit_channel_1],
+			vec![fetch_param_0, fetch_param_1],
 			vault_program,
 			vault_program_data_account(),
 			system_program_id(),

@@ -5,6 +5,8 @@ use cf_primitives::{
 	chains::assets::{btc, dot, eth},
 	Asset,
 };
+#[cfg(feature = "runtime-benchmarks")]
+use core::str::FromStr;
 
 #[cfg(feature = "runtime-benchmarks")]
 use ethereum_types::{H160, U256};
@@ -125,6 +127,31 @@ impl BenchmarkValue for EvmFetchId {
 impl BenchmarkValueExtended for EvmFetchId {
 	fn benchmark_value_by_id(id: u8) -> Self {
 		Self::DeployAndFetch(id as u64)
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for crate::sol::SolanaDepositFetchId {
+	fn benchmark_value() -> Self {
+		crate::sol::SolanaDepositFetchId {
+			channel_id: 923_601_931u64,
+			address: crate::sol::SolAddress::from_str(
+				"4Spd3kst7XsA9pdp5ArfdXxEK4xfW88eRKbyQBmMvwQj",
+			)
+			.unwrap(),
+			bump: 255u8,
+		}
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValueExtended for crate::sol::SolanaDepositFetchId {
+	fn benchmark_value_by_id(id: u8) -> Self {
+		crate::sol::SolanaDepositFetchId {
+			channel_id: id as u64,
+			address: crate::sol::SolAddress([id; 32]),
+			bump: 255u8,
+		}
 	}
 }
 
