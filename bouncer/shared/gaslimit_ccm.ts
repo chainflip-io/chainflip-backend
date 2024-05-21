@@ -370,7 +370,7 @@ export async function testGasLimitCcmSwaps() {
     testGasLimitSwap('Eth', 'Usdc', ' sufBudget', undefined, 7500),
     testGasLimitSwap('Flip', 'Eth', ' sufBudget', undefined, 5000),
     testGasLimitSwap('Eth', 'Usdt', ' sufBudget', undefined, 7500),
-    testGasLimitSwap('Btc', 'Eth', ' sufBudget', undefined, 750),
+    testGasLimitSwap('Btc', 'Eth', ' sufBudget', undefined, 250),
     testGasLimitSwap('Dot', 'ArbUsdc', ' sufBudget', undefined, 100),
     testGasLimitSwap('Eth', 'ArbUsdc', ' sufBudget', undefined, 2000),
     testGasLimitSwap('Flip', 'ArbEth', ' sufBudget', undefined, 1000),
