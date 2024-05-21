@@ -2,4 +2,4 @@
 source: state-chain/custom-rpc/src/lib.rs
 expression: "serde_json::to_value(swap_output).unwrap()"
 ---
-{"egress_fee":{"amount":"0xf4240","asset":{"asset":"ETH","chain":"Ethereum"}},"ingress_fee":{"amount":"0x1f4","asset":{"asset":"FLIP","chain":"Ethereum"}},"intermediary":"0xf4240","network_fee":{"amount":"0x3e8","asset":{"asset":"USDC","chain":"Ethereum"}},"output":"0xde0b6b3a7640000"}
+{"egress_fee":{"amount":"0xf4240","asset":"ETH","chain":"Ethereum"},"ingress_fee":{"amount":"0x1f4","asset":"FLIP","chain":"Ethereum"},"intermediary":"0xf4240","network_fee":{"amount":"0x3e8","asset":"USDC","chain":"Ethereum"},"output":"0xde0b6b3a7640000"}

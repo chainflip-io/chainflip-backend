@@ -249,6 +249,7 @@ impl From<RpcSwapOutputV2> for RpcSwapOutputV1 {
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcFee {
+	#[serde(flatten)]
 	pub asset: Asset,
 	pub amount: Amount,
 }
