@@ -21,8 +21,7 @@ use cf_traits::{
 		egress_handler::{MockEgressHandler, MockEgressParameter},
 		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
 	},
-	AccountRoleRegistry, CcmHandler, Chainflip, NetworkFeeTaken, SetSafeMode, SwapDepositHandler,
-	SwappingApi,
+	AccountRoleRegistry, CcmHandler, Chainflip, SetSafeMode, SwapDepositHandler, SwappingApi,
 };
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
