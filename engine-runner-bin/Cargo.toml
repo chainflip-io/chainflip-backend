@@ -25,6 +25,8 @@ assets = [
     # manually.
     [
         "target/release/libchainflip_engine_v1_4_1.so",
+        # This is the path where the engine dylib is searched for on linux.
+        # As set in the build.rs file.
         "usr/lib/chainflip-engine/libchainflip_engine_v1_4_1.so",
         "755",
     ],
@@ -32,6 +34,8 @@ assets = [
     # It downloads the correct version from the releases page.
     [
         "target/release/libchainflip_engine_v1_3_5.so",
+        # This is the path where the engine dylib is searched for on linux.
+        # As set in the build.rs file.
         "usr/lib/chainflip-engine/libchainflip_engine_v1_3_5.so",
         "755",
     ],
