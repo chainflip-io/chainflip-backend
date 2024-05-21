@@ -1796,21 +1796,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			IngressOrEgress::Egress => T::ChainTracking::estimate_egress_fee(asset),
 		};
 
-		let transaction_fee = if asset == <T::TargetChain as Chain>::GAS_ASSET {
+		let fees_withheld = if asset == <T::TargetChain as Chain>::GAS_ASSET {
 			// No need to schedule a swap for gas, it's already in the gas asset.
 			Self::accrue_withheld_fee(asset, sp_std::cmp::min(fee_estimate, available_amount));
 			fee_estimate
 		} else {
-			let transaction_fee = T::AssetConverter::calculate_input_for_gas_output::<T::TargetChain>(
+			let transaction_fee = sp_std::cmp::min(T::AssetConverter::calculate_input_for_gas_output::<T::TargetChain>(
 				asset,
 				fee_estimate,
 			)
 			.unwrap_or_else(|| {
 				log::warn!("Unable to convert input to gas for input of {available_amount:?} ${asset:?}. Ignoring ingress egress fees.");
 				<T::TargetChain as Chain>::ChainAmount::zero()
-			});
+			}), available_amount);
 
-			if !transaction_fee.is_zero() && transaction_fee < available_amount {
+			if !transaction_fee.is_zero() {
 				T::SwapQueueApi::schedule_swap(
 					asset.into(),
 					<T::TargetChain as Chain>::GAS_ASSET.into(),
@@ -1823,8 +1823,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		};
 
 		AmountAndFeesWithheld::<T, I> {
-			amount_after_fees: available_amount.saturating_sub(transaction_fee),
-			fees_withheld: transaction_fee,
+			amount_after_fees: available_amount.saturating_sub(fees_withheld),
+			fees_withheld,
 		}
 	}
 }
