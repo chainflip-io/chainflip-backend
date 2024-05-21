@@ -217,20 +217,6 @@ pub struct RpcAuctionState {
 }
 
 #[derive(Serialize, Deserialize)]
-pub enum SwapFeeKind {
-	Network,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct SwapFee {
-	pub amount: U256,
-	#[serde(flatten)]
-	pub asset: Asset,
-	#[serde(rename = "type")]
-	pub kind: SwapFeeKind,
-}
-
-#[derive(Serialize, Deserialize)]
 pub struct RpcSwapOutputV1 {
 	// Intermediary amount, if there's any
 	pub intermediary: Option<NumberOrHex>,
@@ -2059,9 +2045,9 @@ mod test {
 		insta::assert_snapshot!(serde_json::to_value(RpcSwapOutputV2 {
 			output: 1_000_000_000_000_000_000u128.into(),
 			intermediary: Some(1_000_000u128.into()),
-			network_fee: RpcFee {asset: Asset::Usdc, amount: 1_000u128.into()},
-			ingress_fee: RpcFee {asset: Asset::Flip, amount: 500u128.into()},
-			egress_fee: RpcFee {asset: Asset::Eth, amount: 1_000_000u128.into()},
+			network_fee: RpcFee { asset: Asset::Usdc, amount: 1_000u128.into() },
+			ingress_fee: RpcFee { asset: Asset::Flip, amount: 500u128.into() },
+			egress_fee: RpcFee { asset: Asset::Eth, amount: 1_000_000u128.into() },
 		})
 		.unwrap());
 	}
