@@ -8,7 +8,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, FlipBalance,
-	ForeignChain, NetworkEnvironment, PrewitnessedDepositId, SemVer, SwapOutput,
+	ForeignChain, NetworkEnvironment, PrewitnessedDepositId, SemVer,
 };
 use codec::{Decode, Encode};
 use core::ops::Range;
@@ -129,6 +129,16 @@ pub struct BrokerInfo {
 	pub earned_fees: Vec<(Asset, AssetAmount)>,
 }
 
+/// Struct that represents the estimated output of a Swap.
+#[derive(Encode, Decode, TypeInfo)]
+pub struct SimulatedSwapInformation {
+	pub intermediary: Option<AssetAmount>,
+	pub output: AssetAmount,
+	pub network_fee: AssetAmount,
+	pub ingress_fee: AssetAmount,
+	pub egress_fee: AssetAmount,
+}
+
 #[derive(Debug, Decode, Encode, TypeInfo)]
 pub enum DispatchErrorWithMessage {
 	Module(Vec<u8>),
@@ -197,7 +207,7 @@ decl_runtime_apis!(
 			to: Asset,
 			amount: AssetAmount,
 			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
-		) -> Result<SwapOutput, DispatchErrorWithMessage>;
+		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;
 		fn cf_pool_info(
 			base_asset: Asset,
 			quote_asset: Asset,

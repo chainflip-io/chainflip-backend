@@ -10,7 +10,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, ForeignChain,
-	NetworkEnvironment, SemVer, SwapId, SwapOutput,
+	NetworkEnvironment, SemVer, SwapId,
 };
 use cf_utilities::rpc::NumberOrHex;
 use codec::Encode;
@@ -241,33 +241,27 @@ pub struct RpcSwapOutputV1 {
 impl From<RpcSwapOutputV2> for RpcSwapOutputV1 {
 	fn from(swap_output: RpcSwapOutputV2) -> Self {
 		Self {
-			intermediary: swap_output.intermediate.map(Into::into),
+			intermediary: swap_output.intermediary.map(Into::into),
 			output: swap_output.output.into(),
 		}
 	}
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct RpcSwapOutputV2 {
-	// Intermediate amount, if there's any
-	pub intermediate: Option<U256>,
-	// Final output of the swap
-	pub output: U256,
-	pub included_fees: Vec<SwapFee>,
+pub struct RpcFee {
+	pub asset: Asset,
+	pub amount: Amount,
 }
 
-impl From<SwapOutput> for RpcSwapOutputV2 {
-	fn from(swap_output: SwapOutput) -> Self {
-		Self {
-			intermediate: swap_output.intermediary.map(Into::into),
-			output: swap_output.output.into(),
-			included_fees: vec![SwapFee {
-				kind: SwapFeeKind::Network,
-				asset: Asset::Usdc,
-				amount: swap_output.network_fee.into(),
-			}],
-		}
-	}
+#[derive(Serialize, Deserialize)]
+pub struct RpcSwapOutputV2 {
+	// Intermediary amount, if there's any
+	pub intermediary: Option<U256>,
+	// Final output of the swap
+	pub output: U256,
+	pub network_fee: RpcFee,
+	pub ingress_fee: RpcFee,
+	pub egress_fee: RpcFee,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -1163,7 +1157,22 @@ where
 			)
 			.map_err(to_rpc_error)
 			.and_then(|result| result.map_err(map_dispatch_error))
-			.map(RpcSwapOutputV2::from)
+			.map(|simulated_swap_info| RpcSwapOutputV2 {
+				intermediary: simulated_swap_info.intermediary.map(Into::into),
+				output: simulated_swap_info.output.into(),
+				network_fee: RpcFee {
+					asset: cf_primitives::STABLE_ASSET,
+					amount: simulated_swap_info.network_fee.into(),
+				},
+				ingress_fee: RpcFee {
+					asset: from_asset,
+					amount: simulated_swap_info.ingress_fee.into(),
+				},
+				egress_fee: RpcFee {
+					asset: to_asset,
+					amount: simulated_swap_info.egress_fee.into(),
+				},
+			})
 	}
 
 	fn cf_pool_info(
@@ -2046,11 +2055,13 @@ mod test {
 
 	#[test]
 	fn test_swap_output_serialization() {
-		insta::assert_snapshot!(serde_json::to_value(RpcSwapOutputV2::from(SwapOutput {
-			output: 1_000_000_000_000_000_000u128,
-			intermediary: Some(1_000_000u128),
-			network_fee: 1_000u128
-		}))
+		insta::assert_snapshot!(serde_json::to_value(RpcSwapOutputV2 {
+			output: 1_000_000_000_000_000_000u128.into(),
+			intermediary: Some(1_000_000u128.into()),
+			network_fee: RpcFee {asset: Asset::Usdc, amount: 1_000u128.into()},
+			ingress_fee: RpcFee {asset: Asset::Flip, amount: 500u128.into()},
+			egress_fee: RpcFee {asset: Asset::Eth, amount: 1_000_000u128.into()},
+		})
 		.unwrap());
 	}
 }
