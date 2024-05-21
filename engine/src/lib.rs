@@ -21,6 +21,7 @@ pub mod witness;
 pub mod btc;
 pub mod dot;
 pub mod evm;
+pub mod sol;
 
 use crate::state_chain_observer::client::CreateStateChainClientError;
 use ::multisig::{bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
