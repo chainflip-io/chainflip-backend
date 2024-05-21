@@ -64,25 +64,18 @@ export async function stopBoosting(
   return undefined;
 }
 
-/// Provides liquidity, then adds the funds to the boost pool of the given tier and returns the BoostFundsAdded event.
+/// Adds existing funds to the boost pool of the given tier and returns the BoostFundsAdded event.
 export async function addBoostFunds(
   asset: Asset,
   boostTier: number,
   amount: number,
   lpUri = '//LP_BOOST',
-  depositLiquidity = true,
 ): Promise<Event> {
   await using chainflip = await getChainflipApi();
   const lp = keyring.createFromUri(lpUri);
   const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, lpMutex);
 
   assert(boostTier > 0, 'Boost tier must be greater than 0');
-
-  if (depositLiquidity) {
-    // Provide a little more than the amount because some will be lost due to ingress fee
-    // TODO: use 'cf_ingress_egress_environment' to get the ingress fee instead of hardcoding 1%
-    await provideLiquidity(asset, amount * 1.01, false, lpUri);
-  }
 
   const observeBoostFundsAdded = observeEvent(
     chainFromAsset(asset).toLowerCase() + 'IngressEgress:BoostFundsAdded',
@@ -128,6 +121,7 @@ async function testBoostingForAsset(asset: Asset, boostFee: number, lpUri: strin
   );
 
   // Add boost funds
+  await provideLiquidity(asset, amount * 1.01, false, lpUri);
   await addBoostFunds(asset, boostFee, amount, lpUri);
 
   // Do a swap

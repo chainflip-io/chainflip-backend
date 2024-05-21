@@ -106,7 +106,7 @@ export async function setupBoostPools(): Promise<void> {
   const fundBoostPoolsPromises: Promise<Event>[] = [];
   for (const tier of boostPoolTiers) {
     fundBoostPoolsPromises.push(
-      addBoostFunds(Assets.Btc, tier, fundBtcBoostPoolsAmount, '//LP_BOOST', false),
+      addBoostFunds(Assets.Btc, tier, fundBtcBoostPoolsAmount, '//LP_BOOST'),
     );
   }
   await Promise.all(fundBoostPoolsPromises);
