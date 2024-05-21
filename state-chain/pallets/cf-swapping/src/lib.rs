@@ -1316,7 +1316,7 @@ impl<T: Config> SwapQueueApi for Pallet<T> {
 		Self::deposit_event(Event::<T>::SwapScheduled {
 			swap_id,
 			source_asset: from,
-			deposit_amount: amount,
+			deposit_amount: amount.saturating_add(broker_fee.unwrap_or_default()),
 			destination_asset: to,
 			destination_address,
 			origin: swap_origin,
