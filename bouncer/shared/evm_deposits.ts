@@ -119,7 +119,7 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
     chainflip,
     (event) => {
       if (
-        event.data.origin != 'Internal' &&
+        event.data.origin !== 'Internal' &&
         'Vault' in event.data.origin &&
         event.data.origin.Vault.txHash === receipt.transactionHash
       ) {

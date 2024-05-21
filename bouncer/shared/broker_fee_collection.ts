@@ -63,13 +63,14 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
     asset === Assets.Dot ? decodeDotAddressForContract(destinationAddress) : destinationAddress;
   const destinationChain = shortChainFromAsset(swapAsset); // "Eth" -> "Eth"
   console.log(`${asset} destinationAddress:`, destinationAddress);
-  const observeSwapScheduledEvent = observeEvent(':SwapScheduled', chainflip, (event) => {
-    return (
-      event.data.origin != 'Internal' &&
+  const observeSwapScheduledEvent = observeEvent(
+    ':SwapScheduled',
+    chainflip,
+    (event) =>
+      event.data.origin !== 'Internal' &&
       event.data.destinationAddress[destinationChain]?.toLowerCase() ===
-        observeDestinationAddress.toLowerCase()
-    );
-  });
+        observeDestinationAddress.toLowerCase(),
+  );
   console.log(`Running swap ${asset} -> ${swapAsset}`);
 
   const rawDepositForSwapAmount = swapAssetAmount[asset].toString();
