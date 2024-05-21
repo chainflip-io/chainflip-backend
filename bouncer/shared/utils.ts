@@ -951,6 +951,26 @@ export async function submitChainflipExtrinsic(
   return extrinsicResult;
 }
 
+export class ChainflipExtrinsicSubmitter {
+  private keyringPair: KeyringPair;
+
+  private mutex: Mutex;
+
+  constructor(keyringPair: KeyringPair, mutex: Mutex = new Mutex()) {
+    this.keyringPair = keyringPair;
+    this.mutex = mutex;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async Submit(extrinsic: any, errorOnFail: boolean = true) {
+    let extrinsicResult;
+    await this.mutex.runExclusive(async () => {
+      extrinsicResult = await submitChainflipExtrinsic(this.keyringPair, extrinsic, errorOnFail);
+    });
+    return extrinsicResult;
+  }
+}
+
 /// Calculate the fee using the given bps. Used for broker & boost fee calculation.
 export function calculateFeeWithBps(fineAmount: bigint, bps: number): bigint {
   // Using some strange math here because the SC rounds down on 0.5 instead of up.

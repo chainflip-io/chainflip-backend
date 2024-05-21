@@ -1,7 +1,6 @@
 // eslint-disable-next-line no-restricted-imports
 import Keyring from '@polkadot/keyring';
 // eslint-disable-next-line no-restricted-imports
-import { KeyringPair } from '@polkadot/keyring/types';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import assert from 'assert';
 import {
@@ -14,7 +13,7 @@ import {
   assetDecimals,
   Event,
   ingressEgressPalletForChain,
-  submitChainflipExtrinsic,
+  ChainflipExtrinsicSubmitter,
   calculateFeeWithBps,
   amountToFineAmountBigInt,
   newAddress,
@@ -28,19 +27,6 @@ import { jsonRpc } from './json_rpc';
 const keyring = new Keyring({ type: 'sr25519' });
 keyring.setSS58Format(2112);
 
-async function lpSubmitExtrinsic(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  extrinsic: any,
-  keyringPair: KeyringPair,
-  errorOnFail: boolean = true,
-) {
-  let extrinsicResult;
-  await lpMutex.runExclusive(async () => {
-    extrinsicResult = await submitChainflipExtrinsic(keyringPair, extrinsic, errorOnFail);
-  });
-  return extrinsicResult;
-}
-
 /// Stops boosting for the given boost pool tier and returns the StoppedBoosting event.
 export async function stopBoosting(
   asset: Asset,
@@ -50,6 +36,7 @@ export async function stopBoosting(
 ): Promise<Event | undefined> {
   await using chainflip = await getChainflipApi();
   const lp = keyring.createFromUri(lpUri);
+  const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, lpMutex);
 
   assert(boostTier > 0, 'Boost tier must be greater than 0');
 
@@ -62,12 +49,11 @@ export async function stopBoosting(
       event.data.boostPool.tier === boostTier.toString(),
   );
 
-  const extrinsicResult = await lpSubmitExtrinsic(
+  const extrinsicResult = await extrinsicSubmitter.Submit(
     chainflip.tx[ingressEgressPalletForChain(chainFromAsset(asset))].stopBoosting(
       shortChainFromAsset(asset).toUpperCase(),
       boostTier,
     ),
-    lp,
     errorOnFail,
   );
   if (!extrinsicResult.dispatchError) {
@@ -88,7 +74,7 @@ export async function addBoostFunds(
 ): Promise<Event> {
   await using chainflip = await getChainflipApi();
   const lp = keyring.createFromUri(lpUri);
-  console.log(`address: ${lp.address}`);
+  const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, lpMutex);
 
   assert(boostTier > 0, 'Boost tier must be greater than 0');
 
@@ -109,13 +95,12 @@ export async function addBoostFunds(
 
   // Add funds to the boost pool
   console.log(`Adding boost funds of ${amount} ${asset} at ${boostTier}bps`);
-  await lpSubmitExtrinsic(
+  await extrinsicSubmitter.Submit(
     chainflip.tx[ingressEgressPalletForChain(chainFromAsset(asset))].addBoostFunds(
       shortChainFromAsset(asset).toUpperCase(),
       amountToFineAmount(amount.toString(), assetDecimals(asset)),
       boostTier,
     ),
-    lp,
   );
 
   return observeBoostFundsAdded;
