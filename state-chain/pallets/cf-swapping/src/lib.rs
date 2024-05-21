@@ -317,7 +317,9 @@ pub mod pallet {
 		SwapScheduled {
 			swap_id: SwapId,
 			source_asset: Asset,
+			#[deprecated(note = "Use swap_input instead")]
 			deposit_amount: AssetAmount,
+			swap_input: AssetAmount,
 			destination_asset: Asset,
 			destination_address: Option<EncodedAddress>,
 			origin: SwapOrigin,
@@ -1316,7 +1318,8 @@ impl<T: Config> SwapQueueApi for Pallet<T> {
 		Self::deposit_event(Event::<T>::SwapScheduled {
 			swap_id,
 			source_asset: from,
-			deposit_amount: amount.saturating_add(broker_fee.unwrap_or_default()),
+			deposit_amount: swap_amount,
+			swap_input: swap_amount,
 			destination_asset: to,
 			destination_address,
 			origin: swap_origin,

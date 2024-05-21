@@ -259,6 +259,7 @@ fn cannot_swap_with_incorrect_destination_address_type() {
 	});
 }
 
+#[allow(deprecated)]
 #[test]
 fn expect_swap_id_to_be_emitted() {
 	new_test_ext()
@@ -303,6 +304,7 @@ fn expect_swap_id_to_be_emitted() {
 					swap_id: 1,
 					source_asset: Asset::Eth,
 					deposit_amount: AMOUNT,
+					swap_input: AMOUNT,
 					destination_asset: Asset::Usdc,
 					destination_address: Some(EncodedAddress::Eth(..)),
 					origin: SwapOrigin::DepositChannel {
@@ -380,6 +382,7 @@ fn can_swap_using_witness_origin() {
 		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapScheduled {
 			swap_id: 1,
 			source_asset: from,
+			swap_input: amount,
 			deposit_amount: amount,
 			destination_asset: to,
 			destination_address: Some(EncodedAddress::Eth(Default::default())),
@@ -938,6 +941,7 @@ fn swap_by_witnesser_happy_path() {
 		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapScheduled {
 			swap_id: 1,
 			source_asset: from,
+			swap_input: amount,
 			deposit_amount: amount,
 			destination_asset: to,
 			destination_address: Some(EncodedAddress::Eth(Default::default())),
@@ -986,6 +990,7 @@ fn swap_by_deposit_happy_path() {
 		);
 		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapScheduled {
 			swap_id: 1,
+			swap_input: amount,
 			deposit_amount: amount,
 			source_asset: from,
 			destination_asset: to,
@@ -1242,6 +1247,7 @@ fn cannot_withdraw_in_safe_mode() {
 	});
 }
 
+#[allow(deprecated)]
 #[test]
 fn ccm_swaps_emits_events() {
 	new_test_ext().execute_with(|| {
@@ -1266,6 +1272,7 @@ fn ccm_swaps_emits_events() {
 				swap_id: 1,
 				source_asset: Asset::Flip,
 				deposit_amount: 9_000,
+				swap_input: 9_000,
 				destination_asset: Asset::Usdc,
 				destination_address: Some(EncodedAddress::Eth(..)),
 				origin: ORIGIN,
@@ -1277,6 +1284,7 @@ fn ccm_swaps_emits_events() {
 				swap_id: 2,
 				source_asset: Asset::Flip,
 				deposit_amount: 1_000,
+				swap_input: 1_000,
 				destination_asset: Asset::Eth,
 				destination_address: Some(EncodedAddress::Eth(..)),
 				origin: ORIGIN,
@@ -1308,6 +1316,7 @@ fn ccm_swaps_emits_events() {
 				swap_id: 3,
 				source_asset: Asset::Eth,
 				deposit_amount: 9_000,
+				swap_input: 9_000,
 				destination_asset: Asset::Usdc,
 				destination_address: Some(EncodedAddress::Eth(..)),
 				origin: ORIGIN,
@@ -1339,6 +1348,7 @@ fn ccm_swaps_emits_events() {
 				swap_id: 4,
 				source_asset: Asset::Flip,
 				deposit_amount: 1_000,
+				swap_input: 1_000,
 				destination_asset: Asset::Eth,
 				destination_address: Some(EncodedAddress::Eth(..)),
 				origin: ORIGIN,
@@ -1959,6 +1969,7 @@ fn assert_swap_scheduled_event_emitted(
 		swap_id,
 		source_asset,
 		deposit_amount,
+		swap_input: deposit_amount,
 		destination_asset,
 		destination_address: Some(EncodedAddress::Eth([2; 20])),
 		origin: SwapOrigin::DepositChannel {
@@ -1994,7 +2005,7 @@ fn swap_broker_fee_subtracted_from_swap_amount() {
 				assert_swap_scheduled_event_emitted(
 					swap_id,
 					asset,
-					*amount,
+					amount.checked_sub(broker_commission).unwrap(),
 					Asset::Flip,
 					broker_commission,
 					execute_at,
