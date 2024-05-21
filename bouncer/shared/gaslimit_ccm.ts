@@ -366,17 +366,17 @@ export async function testGasLimitCcmSwaps() {
 
   // reducing gas budget input amount used for gas to achieve a gasLimitBudget ~= 4-500k (Eth) and ~8M (Arb).
   const gasLimitSwapsSufBudget = [
-    testGasLimitSwap('Dot', 'Flip', ' sufBudget', undefined, 750),
-    testGasLimitSwap('Eth', 'Usdc', ' sufBudget', undefined, 7500),
-    testGasLimitSwap('Flip', 'Eth', ' sufBudget', undefined, 5000),
-    testGasLimitSwap('Eth', 'Usdt', ' sufBudget', undefined, 7500),
+    testGasLimitSwap('Dot', 'Flip', ' sufBudget', undefined, 250),
+    testGasLimitSwap('Eth', 'Usdc', ' sufBudget', undefined, 2500),
+    testGasLimitSwap('Flip', 'Eth', ' sufBudget', undefined, 2500),
+    testGasLimitSwap('Eth', 'Usdt', ' sufBudget', undefined, 2500),
     testGasLimitSwap('Btc', 'Eth', ' sufBudget', undefined, 250),
-    testGasLimitSwap('Dot', 'ArbUsdc', ' sufBudget', undefined, 100),
-    testGasLimitSwap('Eth', 'ArbUsdc', ' sufBudget', undefined, 2000),
-    testGasLimitSwap('Flip', 'ArbEth', ' sufBudget', undefined, 1000),
-    testGasLimitSwap('Btc', 'ArbUsdc', ' sufBudget', undefined, 100),
-    testGasLimitSwap('ArbEth', 'Eth', ' sufBudget', undefined, 750),
-    testGasLimitSwap('ArbUsdc', 'Flip', ' sufBudget', undefined, 100),
+    testGasLimitSwap('Dot', 'ArbUsdc', ' sufBudget', undefined, 50),
+    testGasLimitSwap('Eth', 'ArbUsdc', ' sufBudget', undefined, 1000),
+    testGasLimitSwap('Flip', 'ArbEth', ' sufBudget', undefined, 500),
+    testGasLimitSwap('Btc', 'ArbUsdc', ' sufBudget', undefined, 50),
+    testGasLimitSwap('ArbEth', 'Eth', ' sufBudget', undefined, 250),
+    testGasLimitSwap('ArbUsdc', 'Flip', ' sufBudget', undefined, 50),
   ];
 
   // None of this should be broadcasted as the gasLimitBudget is not enough
