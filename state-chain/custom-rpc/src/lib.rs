@@ -238,15 +238,6 @@ pub struct RpcSwapOutputV1 {
 	pub output: NumberOrHex,
 }
 
-impl From<SwapOutput> for RpcSwapOutputV1 {
-	fn from(swap_output: SwapOutput) -> Self {
-		Self {
-			intermediary: swap_output.intermediary.map(Into::into),
-			output: swap_output.output.into(),
-		}
-	}
-}
-
 impl From<RpcSwapOutputV2> for RpcSwapOutputV1 {
 	fn from(swap_output: RpcSwapOutputV2) -> Self {
 		Self {
