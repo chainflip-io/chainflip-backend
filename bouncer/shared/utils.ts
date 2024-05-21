@@ -434,7 +434,10 @@ export async function observeSwapEvents(
 
         switch (expectedMethod) {
           case swapScheduledEvent:
-            if ('DepositChannel' in expectedEvent.data.origin) {
+            if (
+              expectedEvent.data.origin !== 'Internal' &&
+              'DepositChannel' in expectedEvent.data.origin
+            ) {
               if (
                 Number(expectedEvent.data.origin.DepositChannel.channelId) === channelId &&
                 sourceAsset === (expectedEvent.data.sourceAsset as Asset) &&
