@@ -44,7 +44,7 @@ fn main() {
 		// installation.
 		println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib/chainflip-engine");
 		// For docker
-		println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/local/lib/chainflip-engine");
+		println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/local/lib");
 	}
 
 	// ===  Sanity check that the the assets have an item with the matching version. ===
