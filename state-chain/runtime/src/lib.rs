@@ -14,7 +14,7 @@ use crate::{
 	runtime_apis::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, DispatchErrorWithMessage,
 		EventFilter, FailingWitnessValidators, LiquidityProviderInfo, RuntimeApiPenalty,
-		ValidatorInfo,
+		SimulateSwapAdditionalOrder, ValidatorInfo,
 	},
 };
 use cf_amm::{
@@ -36,12 +36,12 @@ use cf_runtime_upgrade_utilities::VersionedMigration;
 use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi};
 use codec::Encode;
 use core::ops::Range;
-use frame_support::{instances::*, sp_runtime::AccountId32};
+use frame_support::instances::*;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{ChannelAction, DepositWitness, OwedAmount, TargetChainAsset};
 use pallet_cf_pools::{
-	AskBidMap, AssetPair, PoolLiquidity, PoolOrderbook, PoolPriceV1, PoolPriceV2,
+	AskBidMap, AssetPair, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
 };
 use pallet_cf_reputation::ExclusionList;
@@ -78,7 +78,7 @@ use pallet_session::historical as session_historical;
 pub use pallet_timestamp::Call as TimestampCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata, U256};
+use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::{
 	traits::{
 		AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor,
@@ -1269,14 +1269,36 @@ impl_runtime_apis! {
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
-			first_leg_additional_limit_orders: Vec<(Tick, U256)>,
-			second_leg_additional_limit_orders: Vec<(Tick, U256)>,
+			additional_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 		) -> Result<SwapOutput, DispatchErrorWithMessage> {
+			if let Some(additional_orders) = additional_orders {
+				for (index, additional_order) in additional_orders.into_iter().enumerate() {
+					match additional_order {
+						SimulateSwapAdditionalOrder::LimitOrder {
+							base_asset,
+							quote_asset,
+							side,
+							tick,
+							sell_amount,
+						} => {
+							LiquidityPools::try_add_limit_order(
+								&AccountId::new([0; 32]),
+								base_asset,
+								quote_asset,
+								side,
+								index as OrderId,
+								tick,
+								sell_amount.into(),
+							)?;
+						}
+					}
+				}
+			}
+
 			LiquidityPools::swap_with_network_fee(
 				from,
 				to,
-				amount,
-				Some((AccountId32::new([0u8; 32]), first_leg_additional_limit_orders, second_leg_additional_limit_orders))
+				amount
 			).map_err(Into::into)
 		}
 

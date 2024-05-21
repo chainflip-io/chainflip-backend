@@ -163,7 +163,7 @@ fn test_sweeping() {
 		assert_eq!(AliceDebitedEth::get(), 0);
 		assert_eq!(AliceDebitedUsdc::get(), POSITION_0_SIZE);
 
-		LiquidityPools::swap_with_network_fee(ETH, STABLE_ASSET, SWAP_AMOUNT, None).unwrap();
+		LiquidityPools::swap_with_network_fee(ETH, STABLE_ASSET, SWAP_AMOUNT).unwrap();
 
 		assert_eq!(AliceCollectedEth::get(), 0);
 		assert_eq!(AliceCollectedUsdc::get(), 0);
@@ -220,8 +220,8 @@ fn test_buy_back_flip() {
 		// Do two swaps of equivalent value.
 		const USDC_SWAP_VALUE: u128 = 100_000;
 		const FLIP_SWAP_VALUE: u128 = USDC_SWAP_VALUE / FLIP_PRICE_IN_USDC;
-		LiquidityPools::swap_with_network_fee(FLIP, STABLE_ASSET, FLIP_SWAP_VALUE, None).unwrap();
-		LiquidityPools::swap_with_network_fee(STABLE_ASSET, FLIP, USDC_SWAP_VALUE, None).unwrap();
+		LiquidityPools::swap_with_network_fee(FLIP, STABLE_ASSET, FLIP_SWAP_VALUE).unwrap();
+		LiquidityPools::swap_with_network_fee(STABLE_ASSET, FLIP, USDC_SWAP_VALUE).unwrap();
 
 		// 2 swaps of 100_000 USDC, 0.2% fee
 		const EXPECTED_COLLECTED_FEES: AssetAmount = 400;
@@ -393,11 +393,11 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 
 		// Do some swaps to collect fees.
 		assert_eq!(
-			LiquidityPools::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 10_000, None).unwrap(),
+			LiquidityPools::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 10_000).unwrap(),
 			SwapOutput { intermediary: None, output: 5_987u128, network_fee: 20 }
 		);
 		assert_eq!(
-			LiquidityPools::swap_with_network_fee(Asset::Eth, STABLE_ASSET, 10_000, None).unwrap(),
+			LiquidityPools::swap_with_network_fee(Asset::Eth, STABLE_ASSET, 10_000).unwrap(),
 			SwapOutput { intermediary: None, output: 5_987u128, network_fee: 12 }
 		);
 
@@ -582,11 +582,11 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 
 		// Do some swaps to collect fees.
 		assert_eq!(
-			LiquidityPools::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 202_200, None).unwrap(),
+			LiquidityPools::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 202_200).unwrap(),
 			SwapOutput { intermediary: None, output: 99_894u128, network_fee: 404 }
 		);
 		assert_eq!(
-			LiquidityPools::swap_with_network_fee(Asset::Eth, STABLE_ASSET, 18_000, None).unwrap(),
+			LiquidityPools::swap_with_network_fee(Asset::Eth, STABLE_ASSET, 18_000).unwrap(),
 			SwapOutput { intermediary: None, output: 9_071, network_fee: 18 }
 		);
 
@@ -690,11 +690,11 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 
 		// Do some swaps to collect fees.
 		assert_eq!(
-			LiquidityPools::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 5_000, None).unwrap(),
+			LiquidityPools::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 5_000).unwrap(),
 			SwapOutput { intermediary: None, output: 2_989u128, network_fee: 10 }
 		);
 		assert_eq!(
-			LiquidityPools::swap_with_network_fee(Asset::Eth, STABLE_ASSET, 5_000, None).unwrap(),
+			LiquidityPools::swap_with_network_fee(Asset::Eth, STABLE_ASSET, 5_000).unwrap(),
 			SwapOutput { intermediary: None, output: 2_998u128, network_fee: 6 }
 		);
 
@@ -1262,10 +1262,10 @@ fn can_accept_additional_limit_orders() {
 		let to = Asset::Usdt;
 		let default_price = price_at_tick(0).unwrap();
 
-		// While the pool does not exist, no info can be obtained.
-		assert!(Pools::<Test>::get(AssetPair::new(from, STABLE_ASSET).unwrap()).is_none());
-
 		for asset in [from, to] {
+			// While the pool does not exist, no info can be obtained.
+			assert!(Pools::<Test>::get(AssetPair::new(asset, STABLE_ASSET).unwrap()).is_none());
+
 			// Create a new pool.
 			assert_ok!(LiquidityPools::new_pool(
 				RuntimeOrigin::root(),
@@ -1284,22 +1284,22 @@ fn can_accept_additional_limit_orders() {
 			));
 		}
 
-		const ONE_ETH: u128 = 10u128.pow(18);
+		const ONE_FLIP: u128 = 10u128.pow(18);
 
-		assert!(LiquidityPools::swap_with_network_fee(
+		assert!(LiquidityPools::swap_with_network_fee(from, STABLE_ASSET, ONE_FLIP,).is_err());
+
+		assert!(LiquidityPools::try_add_limit_order(
+			&0,
 			from,
 			STABLE_ASSET,
-			ONE_ETH,
-			Some((0, vec![], vec![]))
+			Side::Buy,
+			0,
+			-196236,
+			ONE_FLIP.into()
 		)
-		.is_err());
-		let swap_output = LiquidityPools::swap_with_network_fee(
-			from,
-			STABLE_ASSET,
-			ONE_ETH,
-			Some((0, vec![(-196236, ONE_ETH.into())], vec![])),
-		)
-		.unwrap();
+		.is_ok());
+		let swap_output =
+			LiquidityPools::swap_with_network_fee(from, STABLE_ASSET, ONE_FLIP).unwrap();
 
 		assert_eq!(
 			swap_output,
@@ -1308,20 +1308,39 @@ fn can_accept_additional_limit_orders() {
 
 		const ONE_USDC: u128 = 10u128.pow(6);
 
-		assert!(LiquidityPools::swap_with_network_fee(
+		assert!(LiquidityPools::try_add_limit_order(
+			&0,
 			from,
-			to,
-			ONE_ETH,
-			Some((0, vec![(-196236, ONE_ETH.into())], vec![])),
+			Asset::Usdc,
+			Side::Buy,
+			0,
+			-196236,
+			ONE_FLIP.into()
 		)
-		.is_err());
-		let swap_output = LiquidityPools::swap_with_network_fee(
+		.is_ok());
+		assert!(LiquidityPools::swap_with_network_fee(from, to, ONE_FLIP,).is_err());
+
+		assert!(LiquidityPools::try_add_limit_order(
+			&0,
 			from,
-			to,
-			ONE_ETH,
-			Some((0, vec![(-196236, ONE_ETH.into())], vec![(0, (3500 * ONE_USDC).into())])),
+			Asset::Usdc,
+			Side::Buy,
+			0,
+			-196236,
+			ONE_FLIP.into()
 		)
-		.unwrap();
+		.is_ok());
+		assert!(LiquidityPools::try_add_limit_order(
+			&0,
+			to,
+			Asset::Usdc,
+			Side::Sell,
+			0,
+			0,
+			(3500 * ONE_USDC).into()
+		)
+		.is_ok());
+		let swap_output = LiquidityPools::swap_with_network_fee(from, to, ONE_FLIP).unwrap();
 
 		assert_eq!(
 			swap_output,

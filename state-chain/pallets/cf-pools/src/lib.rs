@@ -1280,6 +1280,41 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
+	fn collect_and_mint_limit_order_with_dispatch_error(
+		pool: &mut Pool<T>,
+		lp: &T::AccountId,
+		side: Side,
+		id: OrderId,
+		tick: cf_amm::common::Tick,
+		sold_amount: cf_amm::common::Amount,
+		allow_noop: bool,
+	) -> Result<(Collected, PositionInfo), DispatchError> {
+		let (collected, position_info) = match pool.pool_state.collect_and_mint_limit_order(
+			&(lp.clone(), id),
+			side,
+			tick,
+			sold_amount,
+		) {
+			Ok(ok) => Ok(ok),
+			Err(error) => Err(match error {
+				limit_orders::PositionError::NonExistent =>
+					if allow_noop {
+						return Ok(Default::default())
+					} else {
+						Error::<T>::OrderDoesNotExist
+					},
+				limit_orders::PositionError::InvalidTick => Error::<T>::InvalidTick,
+				limit_orders::PositionError::Other(limit_orders::MintError::MaximumLiquidity) =>
+					Error::<T>::MaximumGrossLiquidity,
+				limit_orders::PositionError::Other(
+					limit_orders::MintError::MaximumPoolInstances,
+				) => Error::<T>::MaximumPoolInstances,
+			}),
+		}?;
+
+		Ok((collected, position_info))
+	}
+
 	fn inner_update_limit_order(
 		pool: &mut Pool<T>,
 		lp: &T::AccountId,
@@ -1290,68 +1325,56 @@ impl<T: Config> Pallet<T> {
 		sold_amount_change: IncreaseOrDecrease<cf_amm::common::Amount>,
 		allow_noop: bool,
 	) -> Result<AssetAmount, DispatchError> {
-		let (sold_amount_change, position_info, collected) =
-			match sold_amount_change {
-				IncreaseOrDecrease::Increase(sold_amount) => {
-					let (collected, position_info) = match pool
-						.pool_state
-						.collect_and_mint_limit_order(&(lp.clone(), id), side, tick, sold_amount)
-					{
-						Ok(ok) => Ok(ok),
-						Err(error) => Err(match error {
-							limit_orders::PositionError::NonExistent =>
-								if allow_noop {
-									return Ok(Default::default())
-								} else {
-									Error::<T>::OrderDoesNotExist
-								},
-							limit_orders::PositionError::InvalidTick => Error::<T>::InvalidTick,
-							limit_orders::PositionError::Other(
-								limit_orders::MintError::MaximumLiquidity,
-							) => Error::<T>::MaximumGrossLiquidity,
-							limit_orders::PositionError::Other(
-								limit_orders::MintError::MaximumPoolInstances,
-							) => Error::<T>::MaximumPoolInstances,
-						}),
-					}?;
-
-					let debited_amount: AssetAmount = sold_amount.try_into()?;
-					T::LpBalance::try_debit_account(
+		let (sold_amount_change, position_info, collected) = match sold_amount_change {
+			IncreaseOrDecrease::Increase(sold_amount) => {
+				let (collected, position_info) =
+					Self::collect_and_mint_limit_order_with_dispatch_error(
+						pool,
 						lp,
-						asset_pair.assets()[side.to_sold_pair()],
-						debited_amount,
+						side,
+						id,
+						tick,
+						sold_amount,
+						allow_noop,
 					)?;
 
-					(IncreaseOrDecrease::Increase(debited_amount), position_info, collected)
-				},
-				IncreaseOrDecrease::Decrease(sold_amount) => {
-					let (sold_amount, collected, position_info) = match pool
-						.pool_state
-						.collect_and_burn_limit_order(&(lp.clone(), id), side, tick, sold_amount)
-					{
-						Ok(ok) => Ok(ok),
-						Err(error) => Err(match error {
-							limit_orders::PositionError::NonExistent =>
-								if allow_noop {
-									return Ok(Default::default())
-								} else {
-									Error::<T>::OrderDoesNotExist
-								},
-							limit_orders::PositionError::InvalidTick => Error::InvalidTick,
-							limit_orders::PositionError::Other(error) => match error {},
-						}),
-					}?;
+				let debited_amount: AssetAmount = sold_amount.try_into()?;
+				T::LpBalance::try_debit_account(
+					lp,
+					asset_pair.assets()[side.to_sold_pair()],
+					debited_amount,
+				)?;
 
-					let withdrawn_amount: AssetAmount = sold_amount.try_into()?;
-					T::LpBalance::try_credit_account(
-						lp,
-						asset_pair.assets()[side.to_sold_pair()],
-						withdrawn_amount,
-					)?;
+				(IncreaseOrDecrease::Increase(debited_amount), position_info, collected)
+			},
+			IncreaseOrDecrease::Decrease(sold_amount) => {
+				let (sold_amount, collected, position_info) = match pool
+					.pool_state
+					.collect_and_burn_limit_order(&(lp.clone(), id), side, tick, sold_amount)
+				{
+					Ok(ok) => Ok(ok),
+					Err(error) => Err(match error {
+						limit_orders::PositionError::NonExistent =>
+							if allow_noop {
+								return Ok(Default::default())
+							} else {
+								Error::<T>::OrderDoesNotExist
+							},
+						limit_orders::PositionError::InvalidTick => Error::InvalidTick,
+						limit_orders::PositionError::Other(error) => match error {},
+					}),
+				}?;
 
-					(IncreaseOrDecrease::Decrease(withdrawn_amount), position_info, collected)
-				},
-			};
+				let withdrawn_amount: AssetAmount = sold_amount.try_into()?;
+				T::LpBalance::try_credit_account(
+					lp,
+					asset_pair.assets()[side.to_sold_pair()],
+					withdrawn_amount,
+				)?;
+
+				(IncreaseOrDecrease::Decrease(withdrawn_amount), position_info, collected)
+			},
+		};
 
 		// Process the update
 		Self::process_limit_order_update(
@@ -1523,25 +1546,25 @@ impl<T: Config> Pallet<T> {
 		Ok(assets_change)
 	}
 
-	pub fn try_add_limit_orders(
+	pub fn try_add_limit_order(
 		account_id: &T::AccountId,
-		from: any::Asset,
-		to: any::Asset,
-		limit_orders: Vec<(Tick, U256)>,
+		base_asset: any::Asset,
+		quote_asset: any::Asset,
+		side: Side,
+		id: OrderId,
+		tick: Tick,
+		sell_amount: U256,
 	) -> Result<(), DispatchError> {
-		if limit_orders.is_empty() {
-			return Ok(());
-		}
-
-		let (asset_pair, side) = AssetPair::from_swap(from, to).ok_or("Invalid asset pair")?;
-
-		Self::try_mutate_pool(asset_pair, |_, pool| {
-			for (id, (tick, amount)) in limit_orders.into_iter().enumerate() {
-				let order_id = (account_id.clone(), id as u64);
-				pool.pool_state
-					.collect_and_mint_limit_order(&order_id, !side, tick, amount)
-					.map_err(|_| "Failed to set limit order")?;
-			}
+		Self::try_mutate_pool(AssetPair::try_new::<T>(base_asset, quote_asset)?, |_, pool| {
+			let _ = Self::collect_and_mint_limit_order_with_dispatch_error(
+				pool,
+				account_id,
+				side,
+				id,
+				tick,
+				sell_amount,
+				false,
+			)?;
 
 			Ok(())
 		})
@@ -1553,19 +1576,7 @@ impl<T: Config> Pallet<T> {
 		from: any::Asset,
 		to: any::Asset,
 		input_amount: AssetAmount,
-		additional_limit_orders: Option<(T::AccountId, Vec<(Tick, U256)>, Vec<(Tick, U256)>)>,
 	) -> Result<SwapOutput, DispatchError> {
-		match ((from, to), additional_limit_orders) {
-			((_, STABLE_ASSET) | (STABLE_ASSET, _), Some((account_id, limit_orders, _))) => {
-				Self::try_add_limit_orders(&account_id, from, to, limit_orders)?;
-			},
-			(_, Some((account_id, first_leg, second_leg))) => {
-				Self::try_add_limit_orders(&account_id, from, STABLE_ASSET, first_leg)?;
-				Self::try_add_limit_orders(&account_id, STABLE_ASSET, to, second_leg)?;
-			},
-			_ => {},
-		}
-
 		Ok(match (from, to) {
 			(_, STABLE_ASSET) => {
 				let NetworkFeeTaken { remaining_amount: output, network_fee } =
@@ -2037,7 +2048,6 @@ impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
 					output_asset,
 					input_asset,
 					desired_output_amount.into(),
-					None,
 				)
 				.ok(),
 			)
@@ -2071,7 +2081,6 @@ impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
 					input_asset,
 					output_asset,
 					estimation_input,
-					None,
 				)
 				.ok(),
 			)

@@ -74,6 +74,17 @@ pub struct BoostPoolDepth {
 	pub available_amount: AssetAmount,
 }
 
+#[derive(Encode, Decode, TypeInfo)]
+pub enum SimulateSwapAdditionalOrder {
+	LimitOrder {
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
+		tick: Tick,
+		sell_amount: AssetAmount,
+	},
+}
+
 #[cfg(feature = "std")]
 fn serialize_as_hex<S>(amount: &AssetAmount, s: S) -> Result<S::Ok, S::Error>
 where
@@ -185,8 +196,7 @@ decl_runtime_apis!(
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
-			first_leg_additional_limit_orders: Vec<(Tick, U256)>,
-			second_leg_additional_limit_orders: Vec<(Tick, U256)>,
+			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 		) -> Result<SwapOutput, DispatchErrorWithMessage>;
 		fn cf_pool_info(
 			base_asset: Asset,

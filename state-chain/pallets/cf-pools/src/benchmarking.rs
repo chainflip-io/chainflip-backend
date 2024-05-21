@@ -199,7 +199,7 @@ mod benchmarks {
 			Some(0),
 			10_000,
 		));
-		assert_ok!(Pallet::<T>::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 1_000, None));
+		assert_ok!(Pallet::<T>::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 1_000));
 		let fee = 1_000;
 		let call = Call::<T>::set_pool_fees {
 			base_asset: Asset::Eth,

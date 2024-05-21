@@ -280,9 +280,8 @@ impl From<SwapOutput> for RpcSwapOutputV2 {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct SwapRateV2Options {
-	pub first_leg_additional_limit_orders: Option<Vec<(Tick, U256)>>,
-	pub second_leg_additional_limit_orders: Option<Vec<(Tick, U256)>>,
+pub enum SwapRateV2AdditionalOrder {
+	LimitOrder { base_asset: Asset, quote_asset: Asset, side: Side, tick: Tick, sell_amount: U256 },
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy)]
@@ -592,7 +591,7 @@ pub trait CustomApi {
 		from_asset: Asset,
 		to_asset: Asset,
 		amount: U256,
-		options: Option<SwapRateV2Options>,
+		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2>;
 	#[method(name = "required_asset_ratio_for_range_order")]
@@ -1128,18 +1127,9 @@ where
 		from_asset: Asset,
 		to_asset: Asset,
 		amount: U256,
-		options: Option<SwapRateV2Options>,
+		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2> {
-		let (first_leg, second_leg) = options
-			.map(|opts| {
-				(
-					opts.first_leg_additional_limit_orders.unwrap_or_default(),
-					opts.second_leg_additional_limit_orders.unwrap_or_default(),
-				)
-			})
-			.unwrap_or((vec![], vec![]));
-
 		self.client
 			.runtime_api()
 			.cf_pool_simulate_swap(
@@ -1156,8 +1146,29 @@ where
 						}
 					})
 					.map_err(|str| anyhow::anyhow!(str))?,
-				first_leg,
-				second_leg,
+				additional_orders.map(|additional_orders| {
+					additional_orders
+						.into_iter()
+						.map(|additional_order| {
+							match additional_order {
+							SwapRateV2AdditionalOrder::LimitOrder {
+								base_asset,
+								quote_asset,
+								side,
+								tick,
+								sell_amount,
+							} =>
+								state_chain_runtime::runtime_apis::SimulateSwapAdditionalOrder::LimitOrder {
+									base_asset,
+									quote_asset,
+									side,
+									tick,
+									sell_amount: sell_amount.try_into().unwrap_or(AssetAmount::MAX),
+								}
+						}
+						})
+						.collect()
+				}),
 			)
 			.map_err(to_rpc_error)
 			.and_then(|result| result.map_err(map_dispatch_error))
