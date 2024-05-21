@@ -1,5 +1,4 @@
 use crate::{Config, CurrentAuthorities, HistoricalAuthorities, ValidatorIdOf};
-use codec::{Decode, Encode};
 use core::marker::PhantomData;
 #[cfg(feature = "try-runtime")]
 use frame_support::sp_runtime::DispatchError;
