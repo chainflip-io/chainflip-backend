@@ -37,7 +37,7 @@ use pallet_cf_broadcast::{
 	AwaitingBroadcast, BroadcastIdCounter, RequestFailureCallbacks, RequestSuccessCallbacks,
 	ThresholdSignatureData,
 };
-use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall};
+use pallet_cf_ingress_egress::{DepositWitness, EgressDustLimit, FailedForeignChainCall};
 use pallet_cf_lp::HistoricalEarnedFees;
 use pallet_cf_pools::{OrderId, RangeOrderSize};
 use pallet_cf_swapping::{CcmIdCounter, SWAP_DELAY_BLOCKS};
@@ -94,6 +94,7 @@ fn credit_account(account_id: &AccountId, asset: Asset, amount: AssetAmount) {
 	System::reset_events();
 }
 
+#[track_caller]
 fn set_range_order(
 	account_id: &AccountId,
 	base_asset: Asset,
@@ -182,15 +183,52 @@ fn set_limit_order(
 	System::reset_events();
 }
 
-fn setup_pool_and_accounts(assets: Vec<Asset>) {
+pub enum OrderType {
+	LimitOrder,
+	RangeOrder,
+}
+
+#[track_caller]
+fn setup_pool_and_accounts(assets: Vec<Asset>, order_type: OrderType) {
 	new_account(&DORIS, AccountRole::LiquidityProvider);
 	new_account(&ZION, AccountRole::Broker);
 
-	for asset in assets {
+	const DECIMALS: u128 = 10u128.pow(18);
+
+	for (order_id, asset) in (0..).zip(assets) {
 		new_pool(asset, 0u32, price_at_tick(0).unwrap());
-		credit_account(&DORIS, asset, 1_000_000);
-		credit_account(&DORIS, Asset::Usdc, 1_000_000);
-		set_range_order(&DORIS, asset, Asset::Usdc, 0, Some(-1_000..1_000), 1_000_000);
+		credit_account(&DORIS, asset, 10_000_000 * DECIMALS);
+		credit_account(&DORIS, Asset::Usdc, 10_000_000 * DECIMALS);
+		match order_type {
+			OrderType::LimitOrder => {
+				set_limit_order(
+					&DORIS,
+					asset,
+					Asset::Usdc,
+					order_id,
+					Some(0),
+					1_000_000 * DECIMALS,
+				);
+				set_limit_order(
+					&DORIS,
+					Asset::Usdc,
+					asset,
+					u64::MAX - order_id,
+					Some(0),
+					1_000_000 * DECIMALS,
+				);
+			},
+			OrderType::RangeOrder => {
+				set_range_order(
+					&DORIS,
+					asset,
+					Asset::Usdc,
+					order_id,
+					Some(-10..10),
+					10_000_000 * DECIMALS,
+				);
+			},
+		}
 	}
 }
 
@@ -207,18 +245,19 @@ fn basic_pool_setup_provision_and_swap() {
 		new_pool(Asset::Flip, 0, price_at_tick(0).unwrap());
 		register_refund_addresses(&DORIS);
 
-		credit_account(&DORIS, Asset::Eth, 1_000_000);
-		credit_account(&DORIS, Asset::Flip, 1_000_000);
-		credit_account(&DORIS, Asset::Usdc, 1_000_000);
+		// Use the same decimals amount for all assets.
+		const DECIMALS: u128 = 10u128.pow(18);
+		credit_account(&DORIS, Asset::Eth, 10_000_000 * DECIMALS);
+		credit_account(&DORIS, Asset::Flip, 10_000_000 * DECIMALS);
+		credit_account(&DORIS, Asset::Usdc, 10_000_000 * DECIMALS);
 		assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Eth));
 		assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Flip));
 		assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Usdc));
 
-		set_limit_order(&DORIS, Asset::Eth, Asset::Usdc, 0, Some(0), 500_000);
-		set_range_order(&DORIS, Asset::Eth, Asset::Usdc, 0, Some(-10..10), 1_000_000);
-
-		set_limit_order(&DORIS, Asset::Flip, Asset::Usdc, 0, Some(0), 500_000);
-		set_range_order(&DORIS, Asset::Flip, Asset::Usdc, 0, Some(-10..10), 1_000_000);
+		set_limit_order(&DORIS, Asset::Eth, Asset::Usdc, 0, Some(0), 1_000_000 * DECIMALS);
+		set_limit_order(&DORIS, Asset::Usdc, Asset::Eth, 0, Some(0), 1_000_000 * DECIMALS);
+		set_limit_order(&DORIS, Asset::Flip, Asset::Usdc, 0, Some(0), 1_000_000 * DECIMALS);
+		set_limit_order(&DORIS, Asset::Usdc, Asset::Flip, 0, Some(0), 1_000_000 * DECIMALS);
 
 		assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
 			RuntimeOrigin::signed(ZION.clone()),
@@ -237,11 +276,12 @@ fn basic_pool_setup_provision_and_swap() {
 		).unwrap();
 
 		System::reset_events();
+		const DEPOSIT_AMOUNT: u128 = 5_000 * DECIMALS;
 		witness_call(RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::process_deposits {
 			deposit_witnesses: vec![DepositWitness {
 				deposit_address,
 				asset: cf_primitives::chains::assets::eth::Asset::Eth,
-				amount: 50,
+				amount: DEPOSIT_AMOUNT,
 				deposit_details: (),
 			}],
 			block_height: 0,
@@ -249,7 +289,7 @@ fn basic_pool_setup_provision_and_swap() {
 
 		let swap_id = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapScheduled {
 			swap_id,
-			deposit_amount: 50,
+			deposit_amount: DEPOSIT_AMOUNT,
 			origin: SwapOrigin::DepositChannel {
 				deposit_address: events_deposit_address,
 				..
@@ -315,10 +355,13 @@ fn basic_pool_setup_provision_and_swap() {
 fn can_process_ccm_via_swap_deposit_address() {
 	super::genesis::with_test_defaults().build().execute_with(|| {
 		// Setup pool and liquidity
-		setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip]);
+		setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip], OrderType::LimitOrder);
 
-		let gas_budget = 100;
-		let deposit_amount = 1_000;
+		const DECIMALS: u128 = 10u128.pow(18);
+
+		let gas_budget = 50 * DECIMALS;
+		let deposit_amount = 50_000 * DECIMALS;
+
 		let message = CcmChannelMetadata {
 			message: vec![0u8, 1u8, 2u8, 3u8, 4u8].try_into().unwrap(),
 			gas_budget,
@@ -348,28 +391,37 @@ fn can_process_ccm_via_swap_deposit_address() {
 				deposit_witnesses: vec![DepositWitness {
 					deposit_address,
 					asset: cf_primitives::chains::assets::eth::Asset::Flip,
-					amount: 1_000,
+					amount: deposit_amount,
 					deposit_details: (),
 				}],
 				block_height: 0,
-			}
+			},
 		));
-		let (principal_swap_id, gas_swap_id) = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::CcmDepositReceived {
+		let (principal_swap_id, gas_swap_id) = assert_events_match!(
+		Runtime,
+		RuntimeEvent::Swapping(pallet_cf_swapping::Event::CcmDepositReceived {
 			ccm_id,
 			principal_swap_id: Some(principal_swap_id),
 			gas_swap_id: Some(gas_swap_id),
 			deposit_amount: amount,
 			..
 		}) if ccm_id == CcmIdCounter::<Runtime>::get() &&
-			amount == deposit_amount => (principal_swap_id, gas_swap_id));
+			amount == deposit_amount => (principal_swap_id, gas_swap_id)
+		);
 
 		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
 		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(2);
-		state_chain_runtime::AllPalletsWithoutSystem::on_idle(3, Weight::from_parts(1_000_000_000_000, 0));
+		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
+			3,
+			Weight::from_parts(1_000_000_000_000, 0),
+		);
 
 		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
 		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(3);
-		state_chain_runtime::AllPalletsWithoutSystem::on_idle(4, Weight::from_parts(1_000_000_000_000, 0));
+		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
+			4,
+			Weight::from_parts(1_000_000_000_000, 0),
+		);
 
 		let (.., egress_id) = assert_events_match!(
 			Runtime,
@@ -423,10 +475,10 @@ fn can_process_ccm_via_swap_deposit_address() {
 #[test]
 fn can_process_ccm_via_direct_deposit() {
 	super::genesis::with_test_defaults().build().execute_with(|| {
-		setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip]);
+		setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip], OrderType::LimitOrder);
 
-		let gas_budget = 100;
-		let deposit_amount = 1_000;
+		let gas_budget = 100_000_000;
+		let deposit_amount = 100_000_000_000;
 		let deposit_metadata = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
 			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
@@ -515,7 +567,7 @@ fn can_process_ccm_via_direct_deposit() {
 #[test]
 fn failed_swaps_are_rolled_back() {
 	super::genesis::with_test_defaults().build().execute_with(|| {
-		setup_pool_and_accounts(vec![Asset::Eth, Asset::Btc]);
+		setup_pool_and_accounts(vec![Asset::Eth, Asset::Btc], OrderType::RangeOrder);
 
 		// Get current pool's liquidity
 		let eth_price = LiquidityPools::current_price(Asset::Eth, STABLE_ASSET)
@@ -601,7 +653,7 @@ fn failed_swaps_are_rolled_back() {
 		);
 
 		// All swaps can continue once the problematic pool is fixed
-		setup_pool_and_accounts(vec![Asset::Flip]);
+		setup_pool_and_accounts(vec![Asset::Flip], OrderType::RangeOrder);
 		System::reset_events();
 
 		Swapping::on_finalize(swaps_scheduled_at + 2);
@@ -775,7 +827,7 @@ fn can_resign_failed_ccm() {
 					<Runtime as Chainflip>::EpochInfo::current_epoch()
 				));
 			}
-			setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip]);
+			setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip], OrderType::LimitOrder);
 
 			// Deposit CCM and process the swap
 			let deposit_metadata = CcmDepositMetadata {
