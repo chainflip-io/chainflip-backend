@@ -505,11 +505,13 @@ export async function observeSwapScheduled(
 
   // need to await this to prevent the chainflip api from being disposed prematurely
   const result = await observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
-    if ('DepositChannel' in event.data.origin) {
-      const channelMatches = Number(event.data.origin.DepositChannel.channelId) === channelId;
-      const sourceAssetMatches = sourceAsset === (event.data.sourceAsset as Asset);
-      const destAssetMatches = destAsset === (event.data.destinationAsset as Asset);
-      const swapTypeMatches = swapType ? event.data.swapType[swapType] !== undefined : true;
+    const data = event.data;
+
+    if (data.origin !== 'Internal' && 'DepositChannel' in data.origin) {
+      const channelMatches = Number(data.origin.DepositChannel.channelId) === channelId;
+      const sourceAssetMatches = sourceAsset === (data.sourceAsset as Asset);
+      const destAssetMatches = destAsset === (data.destinationAsset as Asset);
+      const swapTypeMatches = swapType ? data.swapType[swapType] !== undefined : true;
       return channelMatches && sourceAssetMatches && destAssetMatches && swapTypeMatches;
     }
     // Otherwise it was a swap scheduled by interacting with the Eth smart contract

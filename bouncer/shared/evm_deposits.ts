@@ -58,7 +58,7 @@ async function testNoDuplicateWitnessing(sourceAsset: Asset, destAsset: Asset) {
     'swapping:SwapScheduled',
     () => stopObserving,
     (event) => {
-      if ('DepositChannel' in event.data.origin) {
+      if (event.data.origin !== 'Internal' && 'DepositChannel' in event.data.origin) {
         const channelMatches =
           Number(event.data.origin.DepositChannel.channelId) === swapParams.channelId;
         const assetMatches = sourceAsset === (event.data.sourceAsset as Asset);
@@ -119,6 +119,7 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
     chainflip,
     (event) => {
       if (
+        event.data.origin != 'Internal' &&
         'Vault' in event.data.origin &&
         event.data.origin.Vault.txHash === receipt.transactionHash
       ) {

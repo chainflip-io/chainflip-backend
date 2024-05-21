@@ -132,7 +132,7 @@ export async function performSwapViaContract(
       messageMetadata,
     );
     await observeEvent('swapping:SwapScheduled', api, (event) => {
-      if ('Vault' in event.data.origin) {
+      if (event.data.origin !== 'Internal' && 'Vault' in event.data.origin) {
         const sourceAssetMatches = sourceAsset === (event.data.sourceAsset as Asset);
         const destAssetMatches = destAsset === (event.data.destinationAsset as Asset);
         const txHashMatches = event.data.origin.Vault.txHash === receipt.hash;
