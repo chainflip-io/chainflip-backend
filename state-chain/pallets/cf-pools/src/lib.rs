@@ -2006,7 +2006,7 @@ impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
 			return Some(required_gas)
 		}
 
-		let estimation_input = utilities::fee_estimation_cap(input_asset).defensive_proof(
+		let estimation_input = utilities::fee_estimation_basis(input_asset).defensive_proof(
 			"Fee estimation cap not available. Please report this to Chainflip Labs.",
 		)?;
 
@@ -2054,20 +2054,20 @@ pub mod utilities {
 	/// to not exhaust the pool liquidity.
 	///
 	/// ```
-	/// use pallet_cf_pools::utilities::fee_estimation_cap;
+	/// use pallet_cf_pools::utilities::fee_estimation_basis;
 	/// use cf_primitives::Asset;
 	///
 	/// for asset in Asset::all() {
 	///     if !asset.is_gas_asset() {
 	///         assert!(
-	///             fee_estimation_cap(asset).is_some(),
-	///             "No fee estimation cap defined for {:?}. Add one to the fee_estimation_cap function definition.",
+	///             fee_estimation_basis(asset).is_some(),
+	///             "No fee estimation cap defined for {:?}. Add one to the fee_estimation_basis function definition.",
 	///             asset,
 	///         );
 	///     }
 	/// }
 	/// ```
-	pub fn fee_estimation_cap(asset: Asset) -> Option<u128> {
+	pub fn fee_estimation_basis(asset: Asset) -> Option<u128> {
 		use cf_primitives::FLIPPERINOS_PER_FLIP;
 		/// 20 Dollars.
 		const USD_ESTIMATION_CAP: u128 = 20_000_000;
