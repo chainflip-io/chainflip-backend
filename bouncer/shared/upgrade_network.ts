@@ -47,6 +47,67 @@ function createGitWorkspaceAt(nextVersionWorkspacePath: string, toGitRef: string
   }
 }
 
+function killOldNodes() {
+  console.log('Killing the old node.');
+
+  try {
+    const execOutput = execSync(
+      `kill $(ps -o pid -o comm | grep chainflip-node | awk '{print $1}')`,
+    );
+    console.log('Kill node exec output:', execOutput.toString());
+  } catch (e) {
+    console.log('Error killing node: ' + e);
+    throw e;
+  }
+
+  console.log('Killed old node');
+}
+
+async function compatibleUpgrade(
+  localnetInitPath: string,
+  binaryPath: string,
+  runtimePath: string,
+  numberOfNodes: 1 | 3,
+  newVersion: string,
+) {
+  await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, true);
+
+  killOldNodes();
+
+  const KEYS_DIR = `${localnetInitPath}/keys`;
+
+  const nodeCount = numberOfNodes + '-node';
+
+  const SELECTED_NODES = numberOfNodes === 1 ? 'bashful' : 'bashful doc dopey';
+
+  execWithLog(`${localnetInitPath}/scripts/start-all-nodes.sh`, 'start-all-nodes', {
+    INIT_RPC_PORT: `9944`,
+    KEYS_DIR,
+    NODE_COUNT: nodeCount,
+    SELECTED_NODES,
+    LOCALNET_INIT_DIR: localnetInitPath,
+    BINARY_ROOT_PATH: binaryPath,
+  });
+
+  // wait for nodes to be ready
+  await sleep(10000);
+
+  // engines crashed when node shutdown, so restart them.
+  execWithLog(
+    `${localnetInitPath}/scripts/start-all-engines.sh`,
+    'start-all-engines-post-upgrade',
+    {
+      INIT_RUN: 'false',
+      LOG_SUFFIX: '-post-upgrade',
+      NODE_COUNT: nodeCount,
+      SELECTED_NODES,
+      LOCALNET_INIT_DIR: localnetInitPath,
+      BINARY_ROOT_PATH: binaryPath,
+    },
+  );
+
+}
+
 async function incompatibleUpgradeNoBuild(
   localnetInitPath: string,
   binaryPath: string,
@@ -102,19 +163,7 @@ async function incompatibleUpgradeNoBuild(
   // Ensure extrinsic gets in.
   await sleep(12000);
 
-  console.log('Killing the old node.');
-
-  try {
-    const execOutput = execSync(
-      `kill $(ps -o pid -o comm | grep chainflip-node | awk '{print $1}')`,
-    );
-    console.log('Kill node exec output:', execOutput.toString());
-  } catch (e) {
-    console.log('Error killing node: ' + e);
-    throw e;
-  }
-
-  console.log('Killed old node');
+  killOldNodes();
 
   // let them shutdown
   await sleep(4000);
@@ -266,14 +315,22 @@ export async function upgradeNetworkGit(
   const isCompatible = isCompatibleWith(fromTomlVersion, newToTomlVersion);
   console.log('Is compatible: ' + isCompatible);
 
+  const localnetInitPath = `${currentVersionWorkspacePath}/localnet/init`;
   if (isCompatible) {
     console.log('The versions are compatible.');
-    await simpleRuntimeUpgrade(nextVersionWorkspacePath, true);
+    await compatibleUpgrade(
+      localnetInitPath,
+      `${nextVersionWorkspacePath}/target/release`,
+      `${nextVersionWorkspacePath}/target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm`,
+      numberOfNodes,
+      toTomlVersion,
+    );
+
     console.log('Upgrade complete.');
   } else if (!isCompatible) {
     console.log('The versions are incompatible.');
     await incompatibleUpgrade(
-      `${currentVersionWorkspacePath}/localnet/init`,
+      localnetInitPath,
       nextVersionWorkspacePath,
       numberOfNodes,
       toTomlVersion,
@@ -326,7 +383,13 @@ export async function upgradeNetworkPrebuilt(
     );
   } else if (isCompatibleWith(cleanOldVersion, nodeVersion)) {
     console.log('The versions are compatible.');
-    await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, true);
+    await compatibleUpgrade(
+      localnetInitPath,
+      binariesPath,
+      runtimePath,
+      numberOfNodes,
+      nodeVersion,
+    );
   } else {
     console.log('The versions are incompatible.');
     await incompatibleUpgradeNoBuild(
