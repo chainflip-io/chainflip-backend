@@ -109,6 +109,13 @@ macro_rules! assets {
 					use strum::IntoEnumIterator;
 					Self::iter()
 				}
+				pub fn is_gas_asset(&self) -> bool {
+					match self {
+						$(
+							$(Self::$asset_variant => $asset_gas,)+
+						)+
+					}
+				}
 			}
 			impl From<Asset> for $crate::ForeignChain {
 				fn from(asset: Asset) -> Self {
