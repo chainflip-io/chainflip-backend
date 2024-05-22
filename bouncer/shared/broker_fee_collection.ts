@@ -67,8 +67,9 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
     ':SwapScheduled',
     chainflip,
     (event) =>
+      event.data.origin !== 'Internal' &&
       event.data.destinationAddress[destinationChain]?.toLowerCase() ===
-      observeDestinationAddress.toLowerCase(),
+        observeDestinationAddress.toLowerCase(),
   );
   console.log(`Running swap ${asset} -> ${swapAsset}`);
 

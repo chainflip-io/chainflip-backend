@@ -1,6 +1,7 @@
 use super::{MockPallet, MockPalletStorage};
 use crate::{SwapQueueApi, SwapType};
-use cf_primitives::{Asset, AssetAmount};
+use cf_chains::{address::EncodedAddress, SwapOrigin};
+use cf_primitives::{Asset, AssetAmount, SwapId};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 
@@ -34,10 +35,13 @@ impl SwapQueueApi for MockSwapQueueApi {
 		to: Asset,
 		amount: AssetAmount,
 		swap_type: SwapType,
-	) -> (u64, Self::BlockNumber) {
+		_swap_origin: SwapOrigin,
+		_destination_address: Option<EncodedAddress>,
+		_broker_fee: Option<AssetAmount>,
+	) -> SwapId {
 		Self::mutate_value(SWAP_QUEUE, |queue: &mut Option<Vec<MockSwap>>| {
 			queue.get_or_insert(vec![]).push(MockSwap { from, to, amount, swap_type });
 		});
-		(Self::get_value::<Vec<MockSwap>>(SWAP_QUEUE).unwrap().len() as u64, 0)
+		Self::get_value::<Vec<MockSwap>>(SWAP_QUEUE).unwrap().len() as u64
 	}
 }

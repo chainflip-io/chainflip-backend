@@ -1818,6 +1818,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					<T::TargetChain as Chain>::GAS_ASSET.into(),
 					transaction_fee.into(),
 					SwapType::IngressEgressFee,
+					SwapOrigin::Internal,
+					None, /* destination address */
+					None, /* broker fee */
 				);
 			}
 			available_amount.saturating_sub(transaction_fee)
