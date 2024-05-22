@@ -48,6 +48,7 @@ jobs:
           fetch-depth: 0
 
       - name: Get upgrade-to-commit SHA 📜
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call'
         uses: ./.github/actions/get-workflow-commit
         id: get-upgrade-to-commit
         with:
@@ -57,7 +58,11 @@ jobs:
       - name: Set upgrade-to-commit 📲
         run: |
           if [ -z "${{ inputs.upgrade-to-commit }}" ]; then
+          if [[ "${{ github.event_name }}" == "workflow_call" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "UPGRADE_TO_COMMIT=${{ steps.get-upgrade-to-commit.outputs.commit-sha }}" >> $GITHUB_ENV
+          else
+            echo "UPGRADE_TO_COMMIT=${{ github.sha }}" >> $GITHUB_ENV
+          fi
           else
             echo "UPGRADE_TO_COMMIT=${{ inputs.upgrade-to-commit }}" >> $GITHUB_ENV
           fi
@@ -131,7 +136,15 @@ jobs:
           echo $RELEASE_VERSION
           echo "RELEASE_VERSION=${RELEASE_VERSION}" >> $GITHUB_ENV
 
-      - name: Download latest main binaries 📥
+      - name: Download upgrade-to binaries for push or pull request📥
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
+        uses: actions/download-artifact@v3
+        with:
+          name: chainflip-backend-bin-try-runtime
+          path: upgrade-to-bins
+
+      - name: Download upgrade-to binaries for workflow call 📥
+        if: github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch'
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: ${{ inputs.upgrade-to-workflow-name }}
@@ -139,7 +152,15 @@ jobs:
           path: upgrade-to-bins
           commit: ${{ env.UPGRADE_TO_COMMIT }}
 
-      - name: Download latest main runtime 📥
+      - name: Download upgrade-to runtime for push or pull request 📥
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
+        uses: actions/download-artifact@v3
+        with:
+          name: chainflip-node-runtime-try-runtime
+          path: main-runtime
+
+      - name: Download upgrade-to runtime for workflow call 📥
+        if: github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch'
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: ${{ inputs.upgrade-to-workflow-name }}
