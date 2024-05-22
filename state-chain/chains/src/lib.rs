@@ -220,8 +220,6 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 		+ Unpin
 		+ ToHumanreadableAddress;
 
-	type EpochStartData: Member + Parameter + MaxEncodedLen;
-
 	type DepositFetchId: Member
 		+ Parameter
 		+ Copy

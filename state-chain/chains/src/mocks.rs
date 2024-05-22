@@ -103,7 +103,6 @@ impl Chain for MockEthereum {
 	type TransactionFee = TransactionFee;
 	type ChainAccount = u64;
 	type ChainAsset = assets::eth::Asset;
-	type EpochStartData = ();
 	type DepositChannelState = MockLifecycleHooks;
 	type DepositDetails = [u8; 4];
 	type Transaction = MockTransaction;

@@ -42,7 +42,6 @@ impl Chain for Ethereum {
 	type TrackedData = EthereumTrackedData;
 	type ChainAccount = evm::Address;
 	type ChainAsset = assets::eth::Asset;
-	type EpochStartData = ();
 	type DepositFetchId = EvmFetchId;
 	type DepositChannelState = DeploymentStatus;
 	type DepositDetails = ();
