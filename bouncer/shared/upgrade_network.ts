@@ -68,7 +68,6 @@ async function compatibleUpgrade(
   binaryPath: string,
   runtimePath: string,
   numberOfNodes: 1 | 3,
-  newVersion: string,
 ) {
   await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, true);
 
@@ -105,7 +104,6 @@ async function compatibleUpgrade(
       BINARY_ROOT_PATH: binaryPath,
     },
   );
-
 }
 
 async function incompatibleUpgradeNoBuild(
@@ -318,13 +316,9 @@ export async function upgradeNetworkGit(
   const localnetInitPath = `${currentVersionWorkspacePath}/localnet/init`;
   if (isCompatible) {
     console.log('The versions are compatible.');
-    await compatibleUpgrade(
-      localnetInitPath,
-      `${nextVersionWorkspacePath}/target/release`,
-      `${nextVersionWorkspacePath}/target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm`,
-      numberOfNodes,
-      toTomlVersion,
-    );
+    await simpleRuntimeUpgrade(nextVersionWorkspacePath, true);
+
+    // TODO: Add restart nodes support, as in the prebuilt case.
 
     console.log('Upgrade complete.');
   } else if (!isCompatible) {
