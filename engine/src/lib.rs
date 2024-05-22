@@ -282,10 +282,12 @@ async fn run_main(
 			};
 
 			let sol_client = {
+				// TODO: Hardcoded for now. Using the current bouncer's genesis hash. We could also
+				// use None here for now but it's good to know if we're connecting to the right
+				// network.
 				let expected_sol_genesis_hash = Some(
-					SolHash::from_str("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG").unwrap(),
+					SolHash::from_str("HVCgXwa8EdNwJot62RRz533iLaFaedXu56aazzCaL3Es").unwrap(),
 				);
-				// TODO: Hardcoded for now
 				// SolHash::from(
 				// 	state_chain_client
 				// 		.storage_value::<pallet_cf_environment::SolGenesisHash<state_chain_runtime::Runtime>>(
