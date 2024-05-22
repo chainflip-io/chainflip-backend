@@ -2,13 +2,12 @@ use futures_core::Future;
 // use subxt::ext::sp_runtime::print;
 use thiserror::Error;
 
-use reqwest::{Client, header::{CONTENT_TYPE}};
+use reqwest::{header::CONTENT_TYPE, Client};
 use serde::{Deserialize, Serialize};
 
 use serde;
-use serde_json::json;
 use serde_bytes;
-use serde_json::from_value;
+use serde_json::{from_value, json};
 
 use tracing::error;
 use utilities::make_periodic_tick;
@@ -18,12 +17,10 @@ use crate::{constants::RPC_RETRY_CONNECTION_INTERVAL, settings::HttpBasicAuthEnd
 use anyhow::{anyhow, Context, Result};
 use tracing::warn;
 
-use cf_chains::sol::SolHash;
-use cf_chains::sol::sol_tx_core::Pubkey;
+use cf_chains::sol::{sol_tx_core::Pubkey, SolHash};
 
+use super::{commitment_config::CommitmentConfig, rpc_client_api::*};
 use std::str::FromStr;
-use super::rpc_client_api::*;
-use super::commitment_config::CommitmentConfig;
 
 // From jsonrpc crate
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -103,13 +100,8 @@ impl SolRpcClient {
 	}
 
 	// async fn call_rpc<T: for<'a> serde::de::Deserialize<'a>>(
-	async fn call_rpc (
-		&self,
-		method: &str,
-		params: ReqParams,
-	) -> Result<serde_json::Value, Error> {
-		call_rpc_raw(&self.client, &self.endpoint, method, params)
-			.await
+	async fn call_rpc(&self, method: &str, params: ReqParams) -> Result<serde_json::Value, Error> {
+		call_rpc_raw(&self.client, &self.endpoint, method, params).await
 	}
 }
 
@@ -133,11 +125,11 @@ async fn call_rpc_raw(
 			"params": []
 		})],
 		ReqParams::Single(params) => vec![json!({
-            "jsonrpc": "2.0",
-            "id": 0,
-            "method": method,
-            "params": params
-        })],
+			"jsonrpc": "2.0",
+			"id": 0,
+			"method": method,
+			"params": params
+		})],
 	};
 
 	println!("request_body: {:?}", request_body);
@@ -152,12 +144,9 @@ async fn call_rpc_raw(
 		.map_err(Error::Transport)?;
 
 	println!("response: {:?}", response);
-	
-	let mut json = response
-		.json::<serde_json::Value>()
-		.await
-		.map_err(Error::Transport)?;
-	
+
+	let mut json = response.json::<serde_json::Value>().await.map_err(Error::Transport)?;
+
 	println!("json: {:?}", json);
 
 	// TODO: This is a bit hacky and assumes it will be an array of length 1.
@@ -188,40 +177,40 @@ async fn get_genesis_hash(
 	client: &Client,
 	endpoint: &HttpBasicAuthEndpoint,
 ) -> anyhow::Result<SolHash> {
-    // Call `call_rpc_raw` and get the JSON value
-    let json_value = call_rpc_raw(client, endpoint, "getGenesisHash", ReqParams::Empty)
-        .await
-        .map_err(anyhow::Error::msg)?;
+	// Call `call_rpc_raw` and get the JSON value
+	let json_value = call_rpc_raw(client, endpoint, "getGenesisHash", ReqParams::Empty)
+		.await
+		.map_err(anyhow::Error::msg)?;
 
-    // Extract the `result` field from the JSON value
-    let genesis_hash_str = json_value
-        .as_str()
-        .ok_or(anyhow!("Missing or empty `result` field in getGenesisHash response"))?;
+	// Extract the `result` field from the JSON value
+	let genesis_hash_str = json_value
+		.as_str()
+		.ok_or(anyhow!("Missing or empty `result` field in getGenesisHash response"))?;
 
-    // Parse the genesis hash string into a `SolHash`
-    let genesis_hash = SolHash::from_str(genesis_hash_str)
-        .map_err(|_| anyhow!("Invalid genesis hash"))?;
+	// Parse the genesis hash string into a `SolHash`
+	let genesis_hash =
+		SolHash::from_str(genesis_hash_str).map_err(|_| anyhow!("Invalid genesis hash"))?;
 
-    Ok(genesis_hash)
+	Ok(genesis_hash)
 }
 
 /// An Account with data that is stored on chain
 #[repr(C)]
 // #[frozen_abi(digest = "HawRVHh7t4d3H3bitWHFt25WhhoDmbJMCfWdESQQoYEy")]
-#[derive(Deserialize, PartialEq, Eq, Clone, Default /* ,  AbiExample */ )]
+#[derive(Deserialize, PartialEq, Eq, Clone, Default /* ,  AbiExample */)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
-    /// lamports in the account
-    pub lamports: u64,
-    /// data held in this account
-    #[serde(with = "serde_bytes")]
-    pub data: Vec<u8>,
-    /// the program that owns this account. If executable, the program that loads this account.
-    pub owner: Pubkey,
-    /// this account's data contains a loaded program (and is now read-only)
-    pub executable: bool,
-    /// the epoch at which this account will next owe rent
-    pub rent_epoch: u64,
+	/// lamports in the account
+	pub lamports: u64,
+	/// data held in this account
+	#[serde(with = "serde_bytes")]
+	pub data: Vec<u8>,
+	/// the program that owns this account. If executable, the program that loads this account.
+	pub owner: Pubkey,
+	/// this account's data contains a loaded program (and is now read-only)
+	pub executable: bool,
+	/// the epoch at which this account will next owe rent
+	pub rent_epoch: u64,
 }
 
 #[async_trait::async_trait]
@@ -229,7 +218,8 @@ pub trait SolRpcApi {
 	async fn get_recent_prioritization_fees(&self) -> anyhow::Result<Vec<RpcPrioritizationFee>>;
 	async fn get_multiple_accounts_with_config(
 		&self,
-		pubkeys: &[Pubkey],
+		// Using Strings for now as we can't convert Pubkey to String at the moment
+		pubkeys: &[String],
 		config: RpcAccountInfoConfig,
 	) -> Result<Response<Vec<Option<UiAccount>>>>;
 }
@@ -237,34 +227,33 @@ pub trait SolRpcApi {
 #[async_trait::async_trait]
 impl SolRpcApi for SolRpcClient {
 	async fn get_recent_prioritization_fees(&self) -> anyhow::Result<Vec<RpcPrioritizationFee>> {
-		let response = self
-			.call_rpc("getRecentPrioritizationFees", ReqParams::Empty)
-			.await?;
+		let response = self.call_rpc("getRecentPrioritizationFees", ReqParams::Empty).await?;
 		let fees: Vec<RpcPrioritizationFee> = from_value(response)
-        	.map_err(|err| anyhow!("Failed to parse prioritization fees: {}", err))?;
-    	Ok(fees)
+			.map_err(|err| anyhow!("Failed to parse prioritization fees: {}", err))?;
+		Ok(fees)
 	}
 
 	async fn get_multiple_accounts_with_config(
-			&self,
-			pubkeys: &[Pubkey],
-			config: RpcAccountInfoConfig,
-		) -> Result<Response<Vec<Option<UiAccount>>>> {
-			// TODO: We might want to request a data slice => No data at all for Sol, we only need lamports, and only balance data for tokens.
-			let response = self
-				.call_rpc("getMultipleAccounts", ReqParams::Single(json!([["vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg"], json!(config)])))
-				.await?;
-			println!("response: {:?}", response);
+		&self,
+		pubkeys: &[String],
+		config: RpcAccountInfoConfig,
+	) -> Result<Response<Vec<Option<UiAccount>>>> {
+		// TODO: We might want to request a data slice => No data at all for Sol, we only need
+		// lamports, and only balance data for tokens.
 
-			let Response {
-				context,
-				value: accounts,
-			} = serde_json::from_value::<Response<Vec<Option<UiAccount>>>>(response.clone())?;
-			Ok(Response {
-				context,
-				value: accounts,
-			})
-		}	
+		// Convert pubkeys to a vector of strings
+		let pubkeys: Vec<_> = pubkeys.iter().map(|pubkey| pubkey).collect();
+
+		let response = self
+			.call_rpc("getMultipleAccounts", ReqParams::Single(json!([pubkeys, json!(config)])))
+			.await?;
+		println!("response: {:?}", response);
+
+		// TODO: Could we put this in call_rpc with a passed generic type?
+		let Response { context, value: accounts } =
+			serde_json::from_value::<Response<Vec<Option<UiAccount>>>>(response.clone())?;
+		Ok(Response { context, value: accounts })
+	}
 }
 
 #[cfg(test)]
@@ -286,7 +275,9 @@ mod tests {
 		.unwrap()
 		.await;
 
-		get_genesis_hash(&sol_rpc_client.client, &sol_rpc_client.endpoint).await.unwrap();
+		get_genesis_hash(&sol_rpc_client.client, &sol_rpc_client.endpoint)
+			.await
+			.unwrap();
 	}
 
 	#[tokio::test]
@@ -304,26 +295,40 @@ mod tests {
 		.unwrap()
 		.await;
 
-
 		let priority_fees = sol_rpc_client.get_recent_prioritization_fees().await.unwrap();
 		println!("priority_fees: {:?}", priority_fees);
 
-		let result = sol_rpc_client.get_multiple_accounts_with_config(
-			&[Pubkey::from_str("vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg").unwrap()],
-			RpcAccountInfoConfig {
-				encoding: Some(UiAccountEncoding::JsonParsed),
-				data_slice: None,
-				commitment: Some(CommitmentConfig::finalized()),
-				min_context_slot: None,
-			},
-		).await.unwrap();
+		let result = sol_rpc_client
+			.get_multiple_accounts_with_config(
+				&["vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg".to_string()],
+				RpcAccountInfoConfig {
+					encoding: Some(UiAccountEncoding::JsonParsed),
+					data_slice: None,
+					commitment: Some(CommitmentConfig::finalized()),
+					min_context_slot: None,
+				},
+			)
+			.await
+			.unwrap();
 
-		// Print the first account's balance
 		println!("rpc context: {:?}", result.context);
-		println!("account_info: {:?}", result.value[0]);
 		println!("account_info: {:?}", result.value);
-		// println!("account_info: {:?}", accounts_info[0].as_ref().map(|a| a.lamports));
 
-
+		let result = sol_rpc_client
+			.get_multiple_accounts_with_config(
+				&[
+					"vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg".to_string(),
+					"4fYNw3dojWmQ4dXtSGE9epjRGy9pFSx62YypT7avPYvA".to_string(),
+				],
+				RpcAccountInfoConfig {
+					encoding: Some(UiAccountEncoding::JsonParsed),
+					data_slice: None,
+					commitment: Some(CommitmentConfig::finalized()),
+					min_context_slot: None,
+				},
+			)
+			.await
+			.unwrap();
+		println!("account_info: {:?}", result.value);
 	}
 }
