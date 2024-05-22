@@ -38,6 +38,18 @@ pub enum UiAccountData {
     Binary(String, UiAccountEncoding),
 }
 
+/// A duplicate representation of an Account for pretty JSON serialization
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UiAccount {
+    pub lamports: u64,
+    pub data: UiAccountData,
+    pub owner: String,
+    pub executable: bool,
+    pub rent_epoch: u64,
+    pub space: Option<u64>,
+}
+
 
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -56,4 +68,19 @@ pub struct RpcAccountInfoConfig {
     pub min_context_slot: Option<u64>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcResponseContext {
+    pub slot: u64,
+    // simplified as a string for now
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_version: Option<String>,
+}
+
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Response<T> {
+    pub context: RpcResponseContext,
+    pub value: T,
+}
 
