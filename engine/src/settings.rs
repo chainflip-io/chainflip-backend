@@ -169,6 +169,18 @@ impl Btc {
 }
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+pub struct Sol {
+	#[serde(flatten)]
+	pub nodes: NodeContainer<HttpBasicAuthEndpoint>,
+}
+
+impl Sol {
+	pub fn validate_settings(&self) -> Result<(), ConfigError> {
+		self.nodes.validate()
+	}
+}
+
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct HealthCheck {
 	pub hostname: String,
 	pub port: Port,
@@ -189,6 +201,7 @@ pub struct Settings {
 	pub dot: Dot,
 	pub btc: Btc,
 	pub arb: Evm,
+	pub sol: Sol,
 
 	pub health_check: Option<HealthCheck>,
 	pub prometheus: Option<Prometheus>,

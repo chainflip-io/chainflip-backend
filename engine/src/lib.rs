@@ -37,9 +37,10 @@ use self::{
 	dot::retry_rpc::DotRetryRpcClient,
 	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
 	settings::{CommandLineOptions, Settings, DEFAULT_SETTINGS_DIR},
+	sol::retry_rpc::SolRetryRpcClient,
 };
 use anyhow::Context;
-use cf_chains::{dot::PolkadotHash, Chain};
+use cf_chains::{dot::PolkadotHash, sol::SolHash, Chain};
 use cf_primitives::AccountRole;
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
@@ -52,6 +53,7 @@ use std::{
 };
 use utilities::{cached_stream::CachedStream, metrics, task_scope::task_scope};
 
+use std::str::FromStr;
 use utilities::logging::ErrorType;
 
 pub fn settings_and_run_main(
@@ -279,12 +281,35 @@ async fn run_main(
 				DotRetryRpcClient::new(scope, settings.dot.nodes, expected_dot_genesis_hash)?
 			};
 
+			let sol_client = {
+				let expected_sol_genesis_hash = Some(
+					SolHash::from_str("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG").unwrap(),
+				);
+				// TODO: Hardcoded for now
+				// SolHash::from(
+				// 	state_chain_client
+				// 		.storage_value::<pallet_cf_environment::SolGenesisHash<state_chain_runtime::Runtime>>(
+				// 			state_chain_client.latest_finalized_block().hash,
+				// 		)
+				// 		.await
+				// 		.expect(STATE_CHAIN_CONNECTION),
+				// );
+				SolRetryRpcClient::new(
+					scope,
+					settings.sol.nodes,
+					expected_sol_genesis_hash,
+					cf_chains::Solana::WITNESS_PERIOD,
+				)
+				.await?
+			};
+
 			witness::start::start(
 				scope,
 				eth_client.clone(),
 				arb_client.clone(),
 				btc_client.clone(),
 				dot_client.clone(),
+				sol_client.clone(),
 				state_chain_client.clone(),
 				state_chain_stream.clone(),
 				unfinalised_state_chain_stream.clone(),
