@@ -194,27 +194,14 @@ async fn get_genesis_hash(
 	Ok(genesis_hash)
 }
 
-/// An Account with data that is stored on chain
-#[repr(C)]
-// #[frozen_abi(digest = "HawRVHh7t4d3H3bitWHFt25WhhoDmbJMCfWdESQQoYEy")]
-#[derive(Deserialize, PartialEq, Eq, Clone, Default /* ,  AbiExample */)]
-#[serde(rename_all = "camelCase")]
-pub struct Account {
-	/// lamports in the account
-	pub lamports: u64,
-	/// data held in this account
-	#[serde(with = "serde_bytes")]
-	pub data: Vec<u8>,
-	/// the program that owns this account. If executable, the program that loads this account.
-	pub owner: Pubkey,
-	/// this account's data contains a loaded program (and is now read-only)
-	pub executable: bool,
-	/// the epoch at which this account will next owe rent
-	pub rent_epoch: u64,
-}
-
 #[async_trait::async_trait]
 pub trait SolRpcApi {
+	// TODO: Change naming to get_block and make config an option
+	async fn get_block_with_config(
+		&self,
+		slot: u64,
+		config: RpcBlockConfig,
+	) -> anyhow::Result<UiConfirmedBlock>;
 	async fn get_recent_prioritization_fees(&self) -> anyhow::Result<Vec<RpcPrioritizationFee>>;
 	async fn get_multiple_accounts_with_config(
 		&self,
@@ -226,6 +213,20 @@ pub trait SolRpcApi {
 
 #[async_trait::async_trait]
 impl SolRpcApi for SolRpcClient {
+	async fn get_block_with_config(
+		&self,
+		slot: u64,
+		config: RpcBlockConfig,
+	) -> anyhow::Result<UiConfirmedBlock> {
+		// TODO: Should we harcode to not get transactions nor rewards?
+		let response = self
+			.call_rpc("getBlock", ReqParams::Single(json!([slot, json!(config)])))
+			.await?;
+		let block: UiConfirmedBlock =
+			from_value(response).map_err(|err| anyhow!("Failed to parse block {}", err))?;
+		Ok(block)
+	}
+
 	async fn get_recent_prioritization_fees(&self) -> anyhow::Result<Vec<RpcPrioritizationFee>> {
 		let response = self.call_rpc("getRecentPrioritizationFees", ReqParams::Empty).await?;
 		let fees: Vec<RpcPrioritizationFee> = from_value(response)
@@ -330,5 +331,20 @@ mod tests {
 			.await
 			.unwrap();
 		println!("account_info: {:?}", result.value);
+
+		let block = sol_rpc_client
+			.get_block_with_config(
+				300620702,
+				RpcBlockConfig {
+					encoding: Some(UiTransactionEncoding::JsonParsed),
+					transaction_details: Some(TransactionDetails::None),
+					rewards: Some(false),
+					commitment: Some(CommitmentConfig::finalized()),
+					max_supported_transaction_version: None,
+				},
+			)
+			.await
+			.unwrap();
+		println!("block: {:?}", block);
 	}
 }
