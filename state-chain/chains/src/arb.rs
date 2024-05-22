@@ -37,7 +37,6 @@ impl Chain for Arbitrum {
 	type TrackedData = ArbitrumTrackedData;
 	type ChainAccount = eth::Address;
 	type ChainAsset = assets::arb::Asset;
-	type EpochStartData = ();
 	type DepositFetchId = EvmFetchId;
 	type DepositChannelState = DeploymentStatus;
 	type DepositDetails = ();
