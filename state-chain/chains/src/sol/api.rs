@@ -10,8 +10,9 @@ use sp_std::{boxed::Box, vec, vec::Vec};
 
 use crate::{
 	sol::{
-		consts::SYSTEM_PROGRAM_ID, instruction_builder::SolanaInstructionBuilder, SolAddress,
-		SolAmount, SolCcmAccounts, SolHash, SolMessage, SolTransaction, SolanaCrypto,
+		consts::{SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID},
+		instruction_builder::{AssetWithDerivedAddress, SolanaInstructionBuilder},
+		SolAddress, SolAmount, SolCcmAccounts, SolHash, SolMessage, SolTransaction, SolanaCrypto,
 	},
 	AllBatch, AllBatchError, ApiCall, Chain, ChainCrypto, ChainEnvironment, ConsolidateCall,
 	ConsolidationError, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress,
@@ -62,13 +63,15 @@ pub trait SolanaEnvironment:
 					SolanaTransactionBuildingError::CannotLookupUpgradeManagerProgramDataAccount,
 				SolanaEnvAccountLookupKey::TokenMintPubkey =>
 					SolanaTransactionBuildingError::CannotLookupTokenMintPubkey,
+				SolanaEnvAccountLookupKey::TokenVaultAssociatedTokenAccount =>
+					SolanaTransactionBuildingError::CannotLookupTokenVaultAssociatedTokenAccount,
 			},
 		)
 	}
 
 	fn all_nonce_accounts() -> Result<Vec<SolAddress>, SolanaTransactionBuildingError> {
 		<Self as ChainEnvironment<AllNonceAccounts, Vec<SolAddress>>>::lookup(AllNonceAccounts)
-			.ok_or(SolanaTransactionBuildingError::NoNonceAccountsSet)
+			.ok_or(SolanaTransactionBuildingError::NonceAccountsAreNotSet)
 	}
 }
 
@@ -81,6 +84,7 @@ pub enum SolanaEnvAccountLookupKey {
 	VaultProgramDataAccount,
 	UpgradeManagerProgramDataAccount,
 	TokenMintPubkey,
+	TokenVaultAssociatedTokenAccount,
 }
 
 /// Errors that can arise when building Solana Transactions.
@@ -93,7 +97,8 @@ pub enum SolanaTransactionBuildingError {
 	CannotLookupDurableNonce,
 	CannotLookupUpgradeManagerProgramDataAccount,
 	CannotLookupTokenMintPubkey,
-	NoNonceAccountsSet,
+	CannotLookupTokenVaultAssociatedTokenAccount,
+	NonceAccountsAreNotSet,
 	NoAvailableNonceAccount,
 	FailedToDeriveAddress(crate::sol::AddressDerivationError),
 	CannotDecodeCcmCfParam,
@@ -149,14 +154,29 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let vault_program_data_account =
 			Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgramDataAccount)?;
 		let system_program_id = SolAddress::from_str(SYSTEM_PROGRAM_ID)
-			.expect("Preset System Program ID account must be valid.");
+			.expect("Preset Solana System Program ID account must be valid.");
 		let next_nonce =
 			Environment::lookup_account(SolanaEnvAccountLookupKey::AvailableNonceAccount)?;
 		let compute_price = Environment::compute_price()?;
+		let token_mint_pubkey =
+			Environment::lookup_account(SolanaEnvAccountLookupKey::TokenMintPubkey)?;
+		let token_program_id = SolAddress::from_str(TOKEN_PROGRAM_ID)
+			.expect("Preset Solana Token program ID must be valid.");
+		let token_vault_ata = Environment::lookup_account(
+			SolanaEnvAccountLookupKey::TokenVaultAssociatedTokenAccount,
+		)?;
+
+		let decomposed_fetch_params = fetch_params
+			.into_iter()
+			.map(|param| AssetWithDerivedAddress::decompose_fetch_params(param, token_mint_pubkey))
+			.collect::<Result<Vec<_>, _>>()?;
 
 		// Build the instruction_set
 		let instruction_set = SolanaInstructionBuilder::fetch_from(
-			fetch_params,
+			decomposed_fetch_params,
+			token_mint_pubkey,
+			token_vault_ata,
+			token_program_id,
 			vault_program,
 			vault_program_data_account,
 			system_program_id,

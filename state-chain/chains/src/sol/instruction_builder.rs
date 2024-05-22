@@ -5,20 +5,47 @@
 //! This avoids the need to deal with low level Solana core types.
 
 use cf_primitives::chains::Solana;
+use sol_prim::AccountBump;
 use sp_std::{vec, vec::Vec};
 
 use crate::{
 	sol::{
+		api::SolanaTransactionBuildingError,
+		consts::SOL_USDC_DECIMAL,
 		sol_tx_core::{
 			bpf_loader_instructions::set_upgrade_authority,
 			compute_budget::ComputeBudgetInstruction,
 			program_instructions::{ProgramInstruction, SystemProgramInstruction, VaultProgram},
 		},
 		SolAccountMeta, SolAddress, SolAmount, SolAsset, SolCcmAccounts, SolComputeLimit,
-		SolInstruction, SolPubkey,
+		SolInstruction, SolPubkey, SolanaDepositFetchId,
 	},
 	FetchAssetParams, ForeignChainAddress, TransferAssetParams,
 };
+
+/// Internal enum type that contains SolAsset with derived ATA
+pub enum AssetWithDerivedAddress {
+	Sol,
+	Usdc((SolAddress, AccountBump)),
+}
+
+impl AssetWithDerivedAddress {
+	pub fn decompose_fetch_params(
+		fetch_params: FetchAssetParams<Solana>,
+		token_mint_pubkey: SolAddress,
+	) -> Result<(SolanaDepositFetchId, AssetWithDerivedAddress), SolanaTransactionBuildingError> {
+		match fetch_params.asset {
+			SolAsset::Sol => Ok((fetch_params.deposit_fetch_id, AssetWithDerivedAddress::Sol)),
+			SolAsset::SolUsdc =>
+				crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
+					fetch_params.deposit_fetch_id.address,
+					token_mint_pubkey,
+				)
+				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)
+				.map(|ata| (fetch_params.deposit_fetch_id, AssetWithDerivedAddress::Usdc(ata))),
+		}
+	}
+}
 
 pub struct SolanaInstructionBuilder;
 
@@ -54,7 +81,10 @@ impl SolanaInstructionBuilder {
 	/// Create an instruction set to fetch from each `deposit_channel` being passed in.
 	/// Used to batch fetch from multiple deposit channels in a single transaction.
 	pub fn fetch_from(
-		fetch_params: Vec<FetchAssetParams<Solana>>,
+		decomposed_fetch_params: Vec<(SolanaDepositFetchId, AssetWithDerivedAddress)>,
+		token_mint_pubkey: SolAddress,
+		token_vault_ata: SolAddress,
+		token_program_id: SolAddress,
 		vault_program: SolAddress,
 		vault_program_data_account: SolAddress,
 		system_program_id: SolAddress,
@@ -62,19 +92,37 @@ impl SolanaInstructionBuilder {
 		nonce_account: SolAddress,
 		compute_price: SolAmount,
 	) -> Vec<SolInstruction> {
-		let instructions = fetch_params
+		let instructions = decomposed_fetch_params
 			.into_iter()
-			.map(|fetch_param| match fetch_param.asset {
-				SolAsset::Sol => ProgramInstruction::get_instruction(
+			.map(|(fetch_id, asset)| match asset {
+				AssetWithDerivedAddress::Sol => ProgramInstruction::get_instruction(
 					&VaultProgram::FetchNative {
-						seed: fetch_param.deposit_fetch_id.channel_id.to_le_bytes().to_vec(),
-						bump: fetch_param.deposit_fetch_id.bump,
+						seed: fetch_id.channel_id.to_le_bytes().to_vec(),
+						bump: fetch_id.bump,
 					},
 					vault_program.into(),
 					vec![
 						SolAccountMeta::new_readonly(vault_program_data_account.into(), false),
 						SolAccountMeta::new(agg_key.into(), true),
-						SolAccountMeta::new(fetch_param.deposit_fetch_id.address.into(), false),
+						SolAccountMeta::new(fetch_id.address.into(), false),
+						SolAccountMeta::new_readonly(system_program_id.into(), false),
+					],
+				),
+				AssetWithDerivedAddress::Usdc(ata) => ProgramInstruction::get_instruction(
+					&VaultProgram::FetchTokens {
+						seed: fetch_id.channel_id.to_le_bytes().to_vec(),
+						bump: fetch_id.bump,
+						decimals: SOL_USDC_DECIMAL,
+					},
+					vault_program.into(),
+					vec![
+						SolAccountMeta::new_readonly(vault_program_data_account.into(), false),
+						SolAccountMeta::new_readonly(agg_key.into(), true),
+						SolAccountMeta::new_readonly(fetch_id.address.into(), false),
+						SolAccountMeta::new(ata.0.into(), false),
+						SolAccountMeta::new(token_vault_ata.into(), false),
+						SolAccountMeta::new_readonly(token_mint_pubkey.into(), false),
+						SolAccountMeta::new_readonly(token_program_id.into(), false),
 						SolAccountMeta::new_readonly(system_program_id.into(), false),
 					],
 				),
@@ -94,6 +142,7 @@ impl SolanaInstructionBuilder {
 		let instructions = match to.asset {
 			SolAsset::Sol =>
 				vec![SystemProgramInstruction::transfer(&agg_key.into(), &to.to.into(), to.amount)],
+			SolAsset::SolUsdc => unimplemented!(),
 		};
 
 		Self::finalize(instructions, nonce_account.into(), agg_key.into(), compute_price)
@@ -194,27 +243,31 @@ mod test {
 
 	use super::*;
 	use crate::sol::{
-		consts::MAX_TRANSACTION_LENGTH,
+		consts::{MAX_TRANSACTION_LENGTH, TOKEN_PROGRAM_ID},
 		sol_tx_core::{
-			address_derivation::derive_deposit_channel,
+			address_derivation::derive_deposit_address,
 			extra_types_for_testing::{Keypair, Signer},
 			sol_test_values::*,
 		},
-		SolHash, SolMessage, SolTransaction,
+		SolHash, SolMessage, SolTransaction, SolanaDepositFetchId,
 	};
 	use core::str::FromStr;
 
-	fn get_fetch_params(channel_id: Option<ChannelId>) -> crate::FetchAssetParams<Solana> {
-		crate::FetchAssetParams {
-			deposit_fetch_id: (&derive_deposit_channel(
-				channel_id.unwrap_or(923_601_931u64),
-				SOL,
-				vault_program(),
-			)
-			.unwrap())
-				.into(),
-			asset: SOL,
-		}
+	fn get_decomposed_fetch_params(
+		channel_id: Option<ChannelId>,
+		asset: SolAsset,
+	) -> (SolanaDepositFetchId, AssetWithDerivedAddress) {
+		let channel_id = channel_id.unwrap_or(923_601_931u64);
+		let (address, bump) = derive_deposit_address(channel_id, vault_program()).unwrap();
+
+		AssetWithDerivedAddress::decompose_fetch_params(
+			crate::FetchAssetParams {
+				deposit_fetch_id: SolanaDepositFetchId { channel_id, address, bump },
+				asset,
+			},
+			token_mint_pubkey(),
+		)
+		.unwrap()
 	}
 
 	fn agg_key() -> SolAddress {
@@ -256,6 +309,18 @@ mod test {
 		SolHash::from_str(TEST_DURABLE_NONCE).unwrap()
 	}
 
+	fn token_vault_ata() -> SolAddress {
+		SolAddress::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap()
+	}
+
+	fn token_program_id() -> SolAddress {
+		SolAddress::from_str(TOKEN_PROGRAM_ID).unwrap()
+	}
+
+	fn token_mint_pubkey() -> SolAddress {
+		SolAddress::from_str(MINT_PUB_KEY).unwrap()
+	}
+
 	fn nonce_accounts() -> Vec<SolAddress> {
 		NONCE_ACCOUNTS
 			.into_iter()
@@ -289,10 +354,13 @@ mod test {
 	}
 
 	#[test]
-	fn can_create_fetch_instruction_set() {
+	fn can_create_fetch_native_instruction_set() {
 		// Construct the batch fetch instruction set
 		let instruction_set = SolanaInstructionBuilder::fetch_from(
-			vec![get_fetch_params(None)],
+			vec![get_decomposed_fetch_params(None, SOL)],
+			token_mint_pubkey(),
+			token_vault_ata(),
+			token_program_id(),
 			vault_program(),
 			vault_program_data_account(),
 			system_program_id(),
@@ -308,15 +376,19 @@ mod test {
 	}
 
 	#[test]
-	fn can_create_batch_fetch_instruction_set() {
+	fn can_create_batch_fetch_native_instruction_set() {
 		let vault_program = vault_program();
+
 		// Use valid Deposit channel derived from `channel_id`
-		let fetch_param_0 = get_fetch_params(Some(0));
-		let fetch_param_1 = get_fetch_params(Some(1));
+		let fetch_param_0 = get_decomposed_fetch_params(Some(0), SOL);
+		let fetch_param_1 = get_decomposed_fetch_params(Some(1), SOL);
 
 		// Construct the batch fetch instruction set
 		let instruction_set = SolanaInstructionBuilder::fetch_from(
 			vec![fetch_param_0, fetch_param_1],
+			token_mint_pubkey(),
+			token_vault_ata(),
+			token_program_id(),
 			vault_program,
 			vault_program_data_account(),
 			system_program_id(),
@@ -332,7 +404,54 @@ mod test {
 	}
 
 	#[test]
-	fn can_create_transfer_instruction_set() {
+	fn can_create_fetch_token_instruction_set() {
+		// Construct the fetch instruction set
+		let instruction_set = SolanaInstructionBuilder::fetch_from(
+			vec![get_decomposed_fetch_params(Some(0u64), USDC)],
+			token_mint_pubkey(),
+			token_vault_ata(),
+			token_program_id(),
+			vault_program(),
+			vault_program_data_account(),
+			system_program_id(),
+			agg_key(),
+			next_nonce(),
+			compute_price(),
+		);
+
+		// Serialized tx built in `create_fetch_tokens` test
+		let expected_serialized_tx = hex_literal::hex!("01c2deaa4b670a3b7e1a661f106e3c63b0247aa3d30e44779c7024528636d643b2a2a167c2823643a38cf2bcb4ce77797cadb3bed6b1934d9380140555afa0520f0100080cf79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925f2c4cda9625242d4cc2e114789f8a6b1fcc7b36decda03a639919cdce0be871b966a2b36557938f49cc5d00f8f12d86f16f48e03b63c8422967dba621ab60bf00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee874a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cffe38210450436716ebc835b8499c10c957d9fb8c4c8ef5a3c0473cf67b588bec27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004040301060004040000000500090340420f000000000005000502e09304000a0809000b020308070416494710642cb0c646080000000000000000000000fe06").to_vec();
+
+		test_constructed_instruction_set(instruction_set, expected_serialized_tx);
+	}
+
+	#[test]
+	fn can_create_fetch_mixed_asset_multiple_instruction_set() {
+		let instruction_set = SolanaInstructionBuilder::fetch_from(
+			vec![
+				get_decomposed_fetch_params(Some(0u64), USDC),
+				get_decomposed_fetch_params(Some(1u64), USDC),
+				get_decomposed_fetch_params(Some(2u64), SOL),
+			],
+			token_mint_pubkey(),
+			token_vault_ata(),
+			token_program_id(),
+			vault_program(),
+			vault_program_data_account(),
+			system_program_id(),
+			agg_key(),
+			next_nonce(),
+			compute_price(),
+		);
+
+		// Serialized tx built in `create_batch_fetch` test
+		let expected_serialized_tx = hex_literal::hex!("015980d922d0a6ed11c1d64c9a6ceba7a5d4e2eb1127bcdae1f4fb9343b3679b3ed09ba6cf10bb5c0cab6886afa7aee09f1b4ed3d1025ba60697428e81c246a40e0100090ff79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19255268e2506656a8aafc4689443bad81d0ca129f134075303ca77eefefc1b3b395f2c4cda9625242d4cc2e114789f8a6b1fcc7b36decda03a639919cdce0be871839f5b31e9ce2282c92310f62fa5e69302a0ae2e28ba1b99b0e7d57c10ab84c6b966a2b36557938f49cc5d00f8f12d86f16f48e03b63c8422967dba621ab60bf00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee871e2fb5dc3bc76acc1a86ef6457885c32189c53b1db8a695267fed8f8d6921ec44a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cffe38210450436716ebc835b8499c10c957d9fb8c4c8ef5a3c0473cf67b588bec27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890006060301080004040000000700090340420f000000000007000502e09304000d080c000e03050a090616494710642cb0c646080000000000000000000000fe060d080c000b04050a090616494710642cb0c646080000000100000000000000ff060d040c000206158e24658f6c59298c080000000200000000000000ff").to_vec();
+
+		test_constructed_instruction_set(instruction_set, expected_serialized_tx);
+	}
+
+	#[test]
+	fn can_create_transfer_native_instruction_set() {
 		let transfer_param = TransferAssetParams::<Solana> {
 			asset: SOL,
 			amount: TRANSFER_AMOUNT,
