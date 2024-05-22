@@ -113,6 +113,7 @@ substrate-frame-rpc-system = { git = "https://github.com/chainflip-io/polkadot-s
 frame-metadata = { version = "16.0.0", default-features = false, features = [
   "current",
 ] }
+serde_bytes = "0.11.14"
 
 [dependencies.rocksdb]
 version = "0.21.0"
