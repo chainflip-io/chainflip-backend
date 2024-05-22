@@ -16,6 +16,7 @@ use crate::{
 			bpf_loader_instructions::set_upgrade_authority,
 			compute_budget::ComputeBudgetInstruction,
 			program_instructions::{ProgramInstruction, SystemProgramInstruction, VaultProgram},
+			token_instructions::AssociatedTokenAccountInstruction,
 		},
 		SolAccountMeta, SolAddress, SolAmount, SolAsset, SolCcmAccounts, SolComputeLimit,
 		SolInstruction, SolPubkey, SolanaDepositFetchId,
@@ -132,18 +133,62 @@ impl SolanaInstructionBuilder {
 		Self::finalize(instructions, nonce_account.into(), agg_key.into(), compute_price)
 	}
 
-	/// Create an instruction set to `transfer` from our Vault account to a target account.
-	pub fn transfer(
-		to: TransferAssetParams<Solana>,
+	/// Create an instruction set to `transfer` native Asset::Sol from our Vault account to a target
+	/// account.
+	pub fn transfer_native(
+		amount: SolAmount,
+		to: SolAddress,
 		agg_key: SolAddress,
 		nonce_account: SolAddress,
 		compute_price: SolAmount,
 	) -> Vec<SolInstruction> {
-		let instructions = match to.asset {
-			SolAsset::Sol =>
-				vec![SystemProgramInstruction::transfer(&agg_key.into(), &to.to.into(), to.amount)],
-			SolAsset::SolUsdc => unimplemented!(),
-		};
+		let instructions =
+			vec![SystemProgramInstruction::transfer(&agg_key.into(), &to.into(), amount)];
+
+		Self::finalize(instructions, nonce_account.into(), agg_key.into(), compute_price)
+	}
+
+	/// Create an instruction to `transfer` USDC token.
+	pub fn transfer_usdc_token(
+		ata: SolAddress,
+		amount: SolAmount,
+		address: SolAddress,
+		vault_program: SolAddress,
+		vault_program_data_account: SolAddress,
+		token_vault_pda_account: SolAddress,
+		token_vault_ata: SolAddress,
+		token_mint_pubkey: SolAddress,
+		token_program_id: SolAddress,
+		system_program_id: SolAddress,
+		agg_key: SolAddress,
+		nonce_account: SolAddress,
+		compute_price: SolAmount,
+	) -> Vec<SolInstruction> {
+		let instructions = vec![
+			AssociatedTokenAccountInstruction::create_associated_token_account_idempotent_instruction(
+				&agg_key.into(),
+				&address.into(),
+				&token_mint_pubkey.into(),
+				&ata.into(),
+			),
+			ProgramInstruction::get_instruction(
+				&VaultProgram::TransferTokens { amount, decimals: SOL_USDC_DECIMAL },
+				vault_program.into(),
+				vec![
+					SolAccountMeta::new_readonly(
+						vault_program_data_account.into(),
+						false,
+					),
+					SolAccountMeta::new_readonly(agg_key.into(), true),
+					SolAccountMeta::new_readonly(token_vault_pda_account.into(), false),
+					SolAccountMeta::new(token_vault_ata.into(), false),
+					SolAccountMeta::new(ata.into(), false),
+					SolAccountMeta::new_readonly(token_mint_pubkey.into(), false),
+					SolAccountMeta::new_readonly(token_program_id.into(), false),
+					SolAccountMeta::new_readonly(system_program_id.into(), false),
+				],
+			),
+		];
 
 		Self::finalize(instructions, nonce_account.into(), agg_key.into(), compute_price)
 	}
@@ -287,6 +332,10 @@ mod test {
 
 	fn vault_program_data_account() -> SolAddress {
 		SolAddress::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap()
+	}
+
+	fn token_vault_pda_account() -> SolAddress {
+		SolAddress::from_str(TOKEN_VAULT_PDA_ACCOUNT).unwrap()
 	}
 
 	fn upgrade_manager_program_data_account() -> SolAddress {
@@ -452,14 +501,9 @@ mod test {
 
 	#[test]
 	fn can_create_transfer_native_instruction_set() {
-		let transfer_param = TransferAssetParams::<Solana> {
-			asset: SOL,
-			amount: TRANSFER_AMOUNT,
-			to: SolPubkey::from_str(TRANSFER_TO_ACCOUNT).unwrap().into(),
-		};
-
-		let instruction_set = SolanaInstructionBuilder::transfer(
-			transfer_param,
+		let instruction_set = SolanaInstructionBuilder::transfer_native(
+			TRANSFER_AMOUNT,
+			SolAddress::from_str(TRANSFER_TO_ACCOUNT).unwrap(),
 			agg_key(),
 			next_nonce(),
 			compute_price(),
@@ -469,6 +513,36 @@ mod test {
 		let expected_serialized_tx = hex_literal::hex!("01345c86d1be2bcdf2c93c75b6054b6232e5b1e7f2fe7b3ca241d48c8a5f993af3e474bf581b2e9a1543af13104b3f3a53530d849731cc403418da313743a57e0401000306f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19231e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd400000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004030301050004040000000400090340420f000000000004000502e0930400030200020c0200000000ca9a3b00000000").to_vec();
 
 		test_constructed_instruction_set(instruction_set, expected_serialized_tx);
+	}
+
+	#[test]
+	fn can_create_transfer_usdc_token_instruction_set() {
+		if let (SolanaDepositFetchId { address, .. }, AssetWithDerivedAddress::Usdc(ata)) =
+			get_decomposed_fetch_params(Some(0u64), SolAsset::SolUsdc)
+		{
+			let instruction_set = SolanaInstructionBuilder::transfer_usdc_token(
+				ata.0,
+				TRANSFER_AMOUNT,
+				address,
+				vault_program(),
+				vault_program_data_account(),
+				token_vault_pda_account(),
+				token_vault_ata(),
+				token_mint_pubkey(),
+				token_program_id(),
+				system_program_id(),
+				agg_key(),
+				next_nonce(),
+				compute_price(),
+			);
+
+			// Serialized tx built in `create_transfer_native` test
+			let expected_serialized_tx = hex_literal::hex!("01660e2622564fdbba66421a5661944bf68316b5f2f0dec440510cbd39f75ae6e108f569a6dfad8896bd6f4cb3bacacb4016760d99dd39bdc14ec2784f5107680d01000a0ef79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925f2c4cda9625242d4cc2e114789f8a6b1fcc7b36decda03a639919cdce0be871b966a2b36557938f49cc5d00f8f12d86f16f48e03b63c8422967dba621ab60bf00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee874a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c81a0052237ad76cb6e88fe505dc3d96bba6d8889f098b1eaa342ec84458805218c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859ffe38210450436716ebc835b8499c10c957d9fb8c4c8ef5a3c0473cf67b588bec27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890005040301060004040000000500090340420f000000000005000502e09304000c0600020d08040701010a0809000b03020807041136b4eeaf4a557ebc00ca9a3b0000000006").to_vec();
+
+			test_constructed_instruction_set(instruction_set, expected_serialized_tx);
+		} else {
+			unreachable!("Derived asset must be the `Usdc(ata)` variation.");
+		}
 	}
 
 	#[test]
