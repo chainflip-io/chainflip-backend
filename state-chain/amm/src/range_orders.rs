@@ -23,8 +23,10 @@
 mod tests;
 
 use serde::{Deserialize, Serialize};
-use sp_std::{collections::btree_map::BTreeMap, convert::Infallible, vec::Vec};
+use sp_std::{collections::btree_map::BTreeMap, convert::Infallible, prelude::ToOwned, vec::Vec};
 
+use crate::collect_map_in_range;
+use cf_utilities::MinMax;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_core::{U256, U512};
@@ -62,9 +64,9 @@ pub struct Position {
 }
 
 impl Position {
-	fn collect_fees<LiquidityProvider: Ord>(
+	fn collect_fees<LiquidityProvider: Ord, OrderId: Ord + Clone>(
 		&mut self,
-		pool_state: &PoolState<LiquidityProvider>,
+		pool_state: &PoolState<LiquidityProvider, OrderId>,
 		lower_tick: Tick,
 		lower_delta: &TickDelta,
 		upper_tick: Tick,
@@ -112,9 +114,9 @@ impl Position {
 		collected_fees
 	}
 
-	fn set_liquidity<LiquidityProvider: Ord>(
+	fn set_liquidity<LiquidityProvider: Ord, OrderId: Ord + Clone>(
 		&mut self,
-		pool_state: &PoolState<LiquidityProvider>,
+		pool_state: &PoolState<LiquidityProvider, OrderId>,
 		new_liquidity: Liquidity,
 		lower_tick: Tick,
 		lower_delta: &TickDelta,
@@ -154,7 +156,7 @@ pub struct TickDelta {
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, Serialize, Deserialize)]
-pub struct PoolState<LiquidityProvider: Ord> {
+pub struct PoolState<LiquidityProvider: Ord, OrderId: Ord + Clone> {
 	/// The percentage fee taken from swap inputs and earned by LPs. It is in units of 0.0001%.
 	/// I.e. 5000 means 0.5%.
 	pub(super) fee_hundredth_pips: u32,
@@ -174,13 +176,31 @@ pub struct PoolState<LiquidityProvider: Ord> {
 	/// All the ticks that have at least one range order that starts or ends at it, i.e. those
 	/// ticks where liquidity_gross is non-zero.
 	liquidity_map: BTreeMap<Tick, TickDelta>,
-	positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
+	pub positions: BTreeMap<(LiquidityProvider, OrderId, Tick, Tick), Position>,
 	/// Total fees earned over all time
 	pub(super) total_fees_earned: PoolPairsMap<Amount>,
 	/// Total of all swap inputs over all time (not including fees)
 	pub(super) total_swap_inputs: PoolPairsMap<Amount>,
 	/// Total of all swap outputs over all time
 	total_swap_outputs: PoolPairsMap<Amount>,
+}
+
+pub mod old {
+	use super::*;
+
+	#[derive(Clone, Debug, TypeInfo, Encode, Decode, Serialize, Deserialize)]
+	pub struct PoolState<LiquidityProvider: Ord> {
+		pub fee_hundredth_pips: u32,
+		pub current_sqrt_price: SqrtPriceQ64F96,
+		pub current_tick: Tick,
+		pub current_liquidity: Liquidity,
+		pub global_fee_growth: PoolPairsMap<FeeGrowthQ128F128>,
+		pub liquidity_map: BTreeMap<Tick, TickDelta>,
+		pub positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
+		pub total_fees_earned: PoolPairsMap<Amount>,
+		pub total_swap_inputs: PoolPairsMap<Amount>,
+		pub total_swap_outputs: PoolPairsMap<Amount>,
+	}
 }
 
 pub(super) trait SwapDirection: crate::common::SwapDirection {
@@ -436,7 +456,9 @@ impl<'a> From<&'a Position> for PositionInfo {
 	}
 }
 
-impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
+impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord + MinMax>
+	PoolState<LiquidityProvider, OrderId>
+{
 	/// Creates a new pool with the specified fee and initial price. The pool is created with no
 	/// liquidity, it must be added using the `PoolState::collect_and_mint` function.
 	///
@@ -484,14 +506,46 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		})
 	}
 
+	// TODO: Can be deleted after migration.
+	pub fn migrate(
+		old: old::PoolState<(LiquidityProvider, OrderId)>,
+		new_positions: BTreeMap<(LiquidityProvider, OrderId, Tick, Tick), Position>,
+	) -> Self {
+		Self {
+			fee_hundredth_pips: old.fee_hundredth_pips,
+			current_sqrt_price: old.current_sqrt_price,
+			current_tick: old.current_tick,
+			current_liquidity: old.current_liquidity,
+			global_fee_growth: old.global_fee_growth,
+			liquidity_map: old.liquidity_map,
+			positions: new_positions,
+			total_fees_earned: old.total_fees_earned,
+			total_swap_inputs: old.total_swap_inputs,
+			total_swap_outputs: old.total_swap_outputs,
+		}
+	}
+
+	// TODO: Delete after migration.
+	pub fn is_state_migrated(&self, old: &old::PoolState<(LiquidityProvider, OrderId)>) -> bool {
+		self.fee_hundredth_pips == old.fee_hundredth_pips &&
+			self.current_sqrt_price == old.current_sqrt_price &&
+			self.current_tick == old.current_tick &&
+			self.current_liquidity == old.current_liquidity &&
+			self.global_fee_growth == old.global_fee_growth &&
+			self.liquidity_map.encode() == old.liquidity_map.encode() &&
+			self.total_fees_earned == old.total_fees_earned &&
+			self.total_swap_inputs == old.total_swap_inputs &&
+			self.total_swap_outputs == old.total_swap_outputs
+	}
+
 	pub(super) fn collect_all(
 		&mut self,
 	) -> impl '_ + Iterator<Item = ((LiquidityProvider, Tick, Tick), (Collected, PositionInfo))> {
 		self.positions.keys().cloned().collect::<sp_std::vec::Vec<_>>().into_iter().map(
-			|(lp, lower_tick, upper_tick)| {
+			|(lp, order_id, lower_tick, upper_tick)| {
 				(
 					(lp.clone(), lower_tick, upper_tick),
-					self.collect(&lp, lower_tick, upper_tick).unwrap(),
+					self.collect(&lp, order_id, lower_tick, upper_tick).unwrap(),
 				)
 			},
 		)
@@ -541,13 +595,15 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub(super) fn collect_and_mint<T, E, TryDebit: FnOnce(PoolPairsMap<Amount>) -> Result<T, E>>(
 		&mut self,
 		lp: &LiquidityProvider,
+		order_id: OrderId,
 		lower_tick: Tick,
 		upper_tick: Tick,
 		size: Size,
 		try_debit: TryDebit,
 	) -> Result<(T, Liquidity, Collected, PositionInfo), PositionError<MintError<E>>> {
 		Self::validate_position_range(lower_tick, upper_tick)?;
-		let option_position = self.positions.get(&(lp.clone(), lower_tick, upper_tick));
+		let option_position =
+			self.positions.get(&(lp.clone(), order_id.clone(), lower_tick, upper_tick));
 
 		let [option_initial_lower_delta, option_initial_upper_delta] =
 			[lower_tick, upper_tick].map(|tick| self.liquidity_map.get(&tick));
@@ -628,7 +684,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				.map_err(|err| PositionError::Other(MintError::CallbackFailed(err)))?;
 
 			self.current_liquidity += current_liquidity_delta;
-			self.positions.insert((lp.clone(), lower_tick, upper_tick), position);
+			self.positions.insert((lp.clone(), order_id, lower_tick, upper_tick), position);
 			self.liquidity_map.insert(lower_tick, lower_delta);
 			self.liquidity_map.insert(upper_tick, upper_delta);
 
@@ -651,14 +707,17 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub(super) fn collect_and_burn(
 		&mut self,
 		lp: &LiquidityProvider,
+		order_id: OrderId,
 		lower_tick: Tick,
 		upper_tick: Tick,
 		size: Size,
 	) -> Result<(PoolPairsMap<Amount>, Liquidity, Collected, PositionInfo), PositionError<BurnError>>
 	{
 		Self::validate_position_range(lower_tick, upper_tick)?;
-		if let Some(mut position) =
-			self.positions.get(&(lp.clone(), lower_tick, upper_tick)).cloned()
+		if let Some(mut position) = self
+			.positions
+			.get(&(lp.clone(), order_id.clone(), lower_tick, upper_tick))
+			.cloned()
 		{
 			assert!(position.liquidity != 0);
 
@@ -712,9 +771,12 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				// DIFF: This behaviour is different than Uniswap's to ensure if a position
 				// exists its ticks also exist in the liquidity_map, by removing zero liquidity
 				// positions
-				self.positions.remove(&(lp.clone(), lower_tick, upper_tick));
+				self.positions.remove(&(lp.clone(), order_id.clone(), lower_tick, upper_tick));
 			} else {
-				*self.positions.get_mut(&(lp.clone(), lower_tick, upper_tick)).unwrap() = position;
+				*self
+					.positions
+					.get_mut(&(lp.clone(), order_id.clone(), lower_tick, upper_tick))
+					.unwrap() = position;
 			};
 
 			// DIFF: This behaviour is different than Uniswap's. We don't accumulated tokens
@@ -735,12 +797,15 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub(super) fn collect(
 		&mut self,
 		lp: &LiquidityProvider,
+		order_id: OrderId,
 		lower_tick: Tick,
 		upper_tick: Tick,
 	) -> Result<(Collected, PositionInfo), PositionError<CollectError>> {
 		Self::validate_position_range(lower_tick, upper_tick)?;
-		if let Some(mut position) =
-			self.positions.get(&(lp.clone(), lower_tick, upper_tick)).cloned()
+		if let Some(mut position) = self
+			.positions
+			.get(&(lp.clone(), order_id.clone(), lower_tick, upper_tick))
+			.cloned()
 		{
 			assert!(position.liquidity != 0);
 			let lower_delta = self.liquidity_map.get(&lower_tick).unwrap();
@@ -750,7 +815,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				position.collect_fees(self, lower_tick, lower_delta, upper_tick, upper_delta);
 			let position_info = PositionInfo::from(&position);
 
-			self.positions.insert((lp.clone(), lower_tick, upper_tick), position);
+			self.positions.insert((lp.clone(), order_id, lower_tick, upper_tick), position);
 
 			Ok((collected_fees, position_info))
 		} else {
@@ -1073,13 +1138,15 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// Returns an iterator over all positions
 	///
 	/// This function never panics.
-	pub(super) fn positions(
+	pub fn positions(
 		&self,
-	) -> impl '_ + Iterator<Item = (LiquidityProvider, Tick, Tick, Collected, PositionInfo)> {
-		self.positions.iter().map(|((lp, lower_tick, upper_tick), position)| {
+	) -> impl '_ + Iterator<Item = (LiquidityProvider, OrderId, Tick, Tick, Collected, PositionInfo)>
+	{
+		self.positions.iter().map(|((lp, order_id, lower_tick, upper_tick), position)| {
 			let mut position = position.clone();
 			(
 				lp.clone(),
+				order_id.clone(),
 				*lower_tick,
 				*upper_tick,
 				position.collect_fees(
@@ -1094,6 +1161,43 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		})
 	}
 
+	/// Returns an iterator over all positions by a given liquidity provider
+	///
+	/// This function never panics.
+	pub fn positions_by_lp(
+		&self,
+		lp: &LiquidityProvider,
+	) -> impl '_ + Iterator<Item = (LiquidityProvider, OrderId, Tick, Tick, Collected, PositionInfo)>
+	{
+		let from = (lp.clone(), <OrderId as MinMax>::min(), MIN_TICK, MIN_TICK);
+		let to = (lp.clone(), <OrderId as MinMax>::max(), MAX_TICK, MAX_TICK);
+		let positions_by_lp = collect_map_in_range::<
+			(LiquidityProvider, OrderId, Tick, Tick),
+			Position,
+		>(&from, &to, &self.positions);
+		positions_by_lp
+			.into_iter()
+			.map(|((lp, order_id, lower_tick, upper_tick), position)| {
+				let mut position = position.clone();
+				(
+					lp.clone(),
+					order_id.clone(),
+					lower_tick.to_owned(),
+					upper_tick.to_owned(),
+					position.collect_fees(
+						self,
+						*lower_tick,
+						self.liquidity_map.get(lower_tick).unwrap(),
+						*upper_tick,
+						self.liquidity_map.get(upper_tick).unwrap(),
+					),
+					PositionInfo::from(&position),
+				)
+			})
+			.collect::<Vec<_>>()
+			.into_iter()
+	}
+
 	/// Returns the current value of a position i.e. the assets you would receive by burning the
 	/// position, and the fees earned by the position since the last time it was updated/collected.
 	///
@@ -1101,13 +1205,14 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub(super) fn position(
 		&self,
 		lp: &LiquidityProvider,
+		order_id: OrderId,
 		lower_tick: Tick,
 		upper_tick: Tick,
 	) -> Result<(Collected, PositionInfo), PositionError<Infallible>> {
 		Self::validate_position_range(lower_tick, upper_tick)?;
 		let mut position = self
 			.positions
-			.get(&(lp.clone(), lower_tick, upper_tick))
+			.get(&(lp.clone(), order_id, lower_tick, upper_tick))
 			.ok_or(PositionError::NonExistent)?
 			.clone();
 		Ok((

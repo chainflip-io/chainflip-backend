@@ -8,10 +8,13 @@ use crate::{
 	range_orders::Liquidity,
 };
 
+use crate::collect_map_in_range;
+
 use super::*;
 
 type LiquidityProvider = cf_primitives::AccountId;
-type PoolState = super::PoolState<LiquidityProvider>;
+type OrderId = u64;
+type PoolState = super::PoolState<LiquidityProvider, OrderId>;
 
 #[test]
 fn test_basic_swaps() {
@@ -38,6 +41,7 @@ fn test_basic_swaps() {
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_mint_limit_order(
 					&LiquidityProvider::from([0; 32]),
+					0,
 					!order,
 					0,
 					amount
@@ -64,6 +68,7 @@ fn test_basic_swaps() {
 			let (minted_amounts, minted_liquidity, collected_fees, position_info) =
 				assert_ok!(pool_state.collect_and_mint_range_order(
 					&LiquidityProvider::from([0; 32]),
+					1,
 					-100..100,
 					range_orders::Size::Liquidity { liquidity },
 					Result::<_, Infallible>::Ok
@@ -103,6 +108,7 @@ fn test_basic_swaps() {
 			let (range_order_minted_amounts, minted_liquidity, collected_fees, position_info) =
 				assert_ok!(pool_state.collect_and_mint_range_order(
 					&LiquidityProvider::from([0; 32]),
+					1,
 					-100..100,
 					range_orders::Size::Liquidity { liquidity: range_order_liquidity },
 					Result::<_, Infallible>::Ok
@@ -122,6 +128,7 @@ fn test_basic_swaps() {
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_mint_limit_order(
 					&LiquidityProvider::from([0; 32]),
+					0,
 					!order,
 					0,
 					limit_order_liquidity
@@ -159,6 +166,7 @@ fn test_basic_swaps() {
 				let (range_order_minted_amounts, minted_liquidity, collected_fees, position_info) =
 					assert_ok!(pool_state.collect_and_mint_range_order(
 						&LiquidityProvider::from([0; 32]),
+						1,
 						lower_tick..upper_tick,
 						range_orders::Size::Liquidity { liquidity },
 						Result::<_, Infallible>::Ok
@@ -182,6 +190,7 @@ fn test_basic_swaps() {
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_mint_limit_order(
 					&LiquidityProvider::from([0; 32]),
+					0,
 					!order,
 					0,
 					limit_order_liquidity
@@ -215,4 +224,51 @@ fn test_sqrt_price_to_price() {
 		Price::from(1) << PRICE_FRACTIONAL_BITS
 	);
 	assert!(sqrt_price_to_price(MIN_SQRT_PRICE) < sqrt_price_to_price(MAX_SQRT_PRICE));
+}
+
+#[test]
+fn test_collect_in_range() {
+	let data_map: BTreeMap<(u64, u32), (u64, u32)> = vec![
+		((2, 2), (2, 2)),
+		((3, 3), (3, 3)),
+		((4, 4), (4, 4)),
+		((5, 5), (5, 5)),
+		((6, 6), (6, 6)),
+		((7, 7), (7, 7)),
+		((8, 8), (8, 8)),
+		((9, 9), (9, 9)),
+	]
+	.into_iter()
+	.collect();
+
+	// Collects an inclusive range of elements for the map by defined bounds.
+	assert_eq!(
+		collect_map_in_range::<(u64, u32), (u64, u32)>(&(4, 4), &(7, 7), &data_map)
+			.collect::<Vec<_>>(),
+		vec![(&(4, 4), &(4, 4)), (&(5, 5), &(5, 5)), (&(6, 6), &(6, 6)), (&(7, 7), &(7, 7)),]
+	);
+
+	// Collects till the end if the upper bound is higher then the last element.
+	assert_eq!(
+		collect_map_in_range::<(u64, u32), (u64, u32)>(&(5, 5), &(12, 12), &data_map,)
+			.collect::<Vec<_>>(),
+		vec![
+			(&(5, 5), &(5, 5)),
+			(&(6, 6), &(6, 6)),
+			(&(7, 7), &(7, 7)),
+			(&(8, 8), &(8, 8)),
+			(&(9, 9), &(9, 9)),
+		]
+		.into_iter()
+		.collect::<Vec<_>>()
+	);
+
+	// // Collects from the first element if the lower bound is lower then the first element.
+	assert_eq!(
+		collect_map_in_range::<(u64, u32), (u64, u32)>(&(1, 1), &(5, 5), &data_map,)
+			.collect::<Vec<_>>(),
+		vec![(&(2, 2), &(2, 2)), (&(3, 3), &(3, 3)), (&(4, 4), &(4, 4)), (&(5, 5), &(5, 5)),]
+			.into_iter()
+			.collect::<Vec<_>>()
+	);
 }

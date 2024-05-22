@@ -1060,6 +1060,7 @@ type MigrationsForV1_4 = (
 		9,
 		10,
 	>,
+	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 	migrations::housekeeping::Migration,
 	migrations::reap_old_accounts::Migration,
 	// NOTE: Do not change this validator pallet migration order:

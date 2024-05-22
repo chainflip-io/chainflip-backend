@@ -5,6 +5,7 @@ mod tests;
 
 use core::convert::Infallible;
 
+use cf_utilities::MinMax;
 use codec::{Decode, Encode};
 use common::{
 	is_sqrt_price_valid, price_to_sqrt_price, sqrt_price_to_price, tick_at_sqrt_price, Amount,
@@ -14,7 +15,7 @@ use common::{
 use limit_orders::{Collected, PositionInfo};
 use range_orders::Liquidity;
 use scale_info::TypeInfo;
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_map::BTreeMap, ops::Bound::Included, vec::Vec};
 
 use crate::common::{mul_div_floor, nth_root_of_integer_as_fixed_point};
 
@@ -22,10 +23,19 @@ pub mod common;
 pub mod limit_orders;
 pub mod range_orders;
 
+pub mod old {
+	use super::*;
+	#[derive(Clone, Debug, TypeInfo, Encode, Decode, serde::Serialize, serde::Deserialize)]
+	pub struct PoolState<LiquidityProvider: Ord> {
+		pub limit_orders: limit_orders::old::PoolState<LiquidityProvider>,
+		pub range_orders: range_orders::old::PoolState<LiquidityProvider>,
+	}
+}
+
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, serde::Serialize, serde::Deserialize)]
-pub struct PoolState<LiquidityProvider: Ord> {
-	limit_orders: limit_orders::PoolState<LiquidityProvider>,
-	range_orders: range_orders::PoolState<LiquidityProvider>,
+pub struct PoolState<LiquidityProvider: Ord, OrderId: Ord + Clone + MinMax> {
+	pub limit_orders: limit_orders::PoolState<LiquidityProvider, OrderId>,
+	pub range_orders: range_orders::PoolState<LiquidityProvider, OrderId>,
 }
 
 pub enum NewError {
@@ -33,7 +43,9 @@ pub enum NewError {
 	RangeOrders(range_orders::NewError),
 }
 
-impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
+impl<LiquidityProvider: Clone + Ord, OrderId: Clone + Ord + MinMax>
+	PoolState<LiquidityProvider, OrderId>
+{
 	pub fn new(
 		fee_hundredth_pips: u32,
 		initial_range_order_price: Price,
@@ -246,6 +258,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn collect_and_mint_limit_order(
 		&mut self,
 		lp: &LiquidityProvider,
+		order_id: OrderId,
 		order: Side,
 		tick: Tick,
 		sold_amount: Amount,
@@ -254,15 +267,19 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		limit_orders::PositionError<limit_orders::MintError>,
 	> {
 		match order.to_sold_pair() {
-			Pairs::Base => self.limit_orders.collect_and_mint::<QuoteToBase>(lp, tick, sold_amount),
+			Pairs::Base =>
+				self.limit_orders
+					.collect_and_mint::<QuoteToBase>(lp, order_id, tick, sold_amount),
 			Pairs::Quote =>
-				self.limit_orders.collect_and_mint::<BaseToQuote>(lp, tick, sold_amount),
+				self.limit_orders
+					.collect_and_mint::<BaseToQuote>(lp, order_id, tick, sold_amount),
 		}
 	}
 
 	pub fn collect_and_burn_limit_order(
 		&mut self,
 		lp: &LiquidityProvider,
+		order_id: OrderId,
 		order: Side,
 		tick: Tick,
 		sold_amount: Amount,
@@ -271,9 +288,12 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		limit_orders::PositionError<limit_orders::BurnError>,
 	> {
 		match order.to_sold_pair() {
-			Pairs::Base => self.limit_orders.collect_and_burn::<QuoteToBase>(lp, tick, sold_amount),
+			Pairs::Base =>
+				self.limit_orders
+					.collect_and_burn::<QuoteToBase>(lp, order_id, tick, sold_amount),
 			Pairs::Quote =>
-				self.limit_orders.collect_and_burn::<BaseToQuote>(lp, tick, sold_amount),
+				self.limit_orders
+					.collect_and_burn::<BaseToQuote>(lp, order_id, tick, sold_amount),
 		}
 	}
 
@@ -284,6 +304,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	>(
 		&mut self,
 		lp: &LiquidityProvider,
+		order_id: OrderId,
 		tick_range: core::ops::Range<Tick>,
 		size: range_orders::Size,
 		try_debit: TryDebit,
@@ -291,13 +312,20 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		(T, range_orders::Liquidity, range_orders::Collected, range_orders::PositionInfo),
 		range_orders::PositionError<range_orders::MintError<E>>,
 	> {
-		self.range_orders
-			.collect_and_mint(lp, tick_range.start, tick_range.end, size, try_debit)
+		self.range_orders.collect_and_mint(
+			lp,
+			order_id,
+			tick_range.start,
+			tick_range.end,
+			size,
+			try_debit,
+		)
 	}
 
 	pub fn collect_and_burn_range_order(
 		&mut self,
 		lp: &LiquidityProvider,
+		order_id: OrderId,
 		tick_range: core::ops::Range<Tick>,
 		size: range_orders::Size,
 	) -> Result<
@@ -309,7 +337,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		),
 		range_orders::PositionError<range_orders::BurnError>,
 	> {
-		self.range_orders.collect_and_burn(lp, tick_range.start, tick_range.end, size)
+		self.range_orders
+			.collect_and_burn(lp, order_id, tick_range.start, tick_range.end, size)
 	}
 
 	pub fn range_order_liquidity_value(
@@ -332,12 +361,13 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn range_order(
 		&self,
 		lp: &LiquidityProvider,
+		order_id: OrderId,
 		tick_range: core::ops::Range<Tick>,
 	) -> Result<
 		(range_orders::Collected, range_orders::PositionInfo),
 		range_orders::PositionError<Infallible>,
 	> {
-		self.range_orders.position(lp, tick_range.start, tick_range.end)
+		self.range_orders.position(lp, order_id, tick_range.start, tick_range.end)
 	}
 
 	pub fn range_orders(
@@ -346,14 +376,15 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	       + Iterator<
 		Item = (
 			LiquidityProvider,
+			OrderId,
 			core::ops::Range<Tick>,
 			range_orders::Collected,
 			range_orders::PositionInfo,
 		),
 	> {
 		self.range_orders.positions().map(
-			|(lp, lower_tick, upper_tick, collected, position_info)| {
-				(lp, lower_tick..upper_tick, collected, position_info)
+			|(lp, order_id, lower_tick, upper_tick, collected, position_info)| {
+				(lp, order_id, lower_tick..upper_tick, collected, position_info)
 			},
 		)
 	}
@@ -361,6 +392,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn limit_order(
 		&self,
 		lp: &LiquidityProvider,
+		order_id: OrderId,
 		order: Side,
 		tick: Tick,
 	) -> Result<
@@ -368,8 +400,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		limit_orders::PositionError<Infallible>,
 	> {
 		match order {
-			Side::Sell => self.limit_orders.position::<QuoteToBase>(lp, tick),
-			Side::Buy => self.limit_orders.position::<BaseToQuote>(lp, tick),
+			Side::Sell => self.limit_orders.position::<QuoteToBase>(lp, order_id, tick),
+			Side::Buy => self.limit_orders.position::<BaseToQuote>(lp, order_id, tick),
 		}
 	}
 
@@ -381,6 +413,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			+ Iterator<
 				Item = (
 					LiquidityProvider,
+					OrderId,
 					Tick,
 					limit_orders::Collected,
 					limit_orders::PositionInfo,
@@ -464,8 +497,10 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn set_fees(
 		&mut self,
 		fee_hundredth_pips: u32,
-	) -> Result<PoolPairsMap<Vec<(LiquidityProvider, Tick, Collected, PositionInfo)>>, SetFeesError>
-	{
+	) -> Result<
+		PoolPairsMap<Vec<(LiquidityProvider, OrderId, Tick, Collected, PositionInfo)>>,
+		SetFeesError,
+	> {
 		self.range_orders.set_fees(fee_hundredth_pips)?;
 		self.limit_orders.set_fees(fee_hundredth_pips)
 	}
@@ -485,18 +520,39 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			})
 			.collect()
 	}
-
+	#[allow(clippy::type_complexity)]
 	pub fn collect_all_limit_orders(
 		&mut self,
 	) -> PoolPairsMap<
-		Vec<(LiquidityProvider, Tick, limit_orders::Collected, limit_orders::PositionInfo)>,
+		Vec<(
+			LiquidityProvider,
+			OrderId,
+			Tick,
+			limit_orders::Collected,
+			limit_orders::PositionInfo,
+		)>,
 	> {
 		self.limit_orders.collect_all()
 	}
 
 	// Returns if the pool fee is valid.
 	pub fn validate_fees(fee_hundredth_pips: u32) -> bool {
-		limit_orders::PoolState::<LiquidityProvider>::validate_fees(fee_hundredth_pips) &&
-			range_orders::PoolState::<LiquidityProvider>::validate_fees(fee_hundredth_pips)
+		limit_orders::PoolState::<LiquidityProvider, OrderId>::validate_fees(fee_hundredth_pips) &&
+			range_orders::PoolState::<LiquidityProvider, OrderId>::validate_fees(
+				fee_hundredth_pips,
+			)
 	}
+}
+
+/// Collects the elements of a given BTreeMap between two defined Bound. The bounds are
+/// inclusive.
+pub(crate) fn collect_map_in_range<'a, K: Ord + Clone, V: Clone>(
+	start: &'a K,
+	end: &'a K,
+	positions: &'a BTreeMap<K, V>,
+) -> impl 'a + Iterator<Item = (&'a K, &'a V)> {
+	positions
+		.range((Included(start), Included(end)))
+		.collect::<Vec<_>>()
+		.into_iter()
 }
