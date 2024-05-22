@@ -946,7 +946,7 @@ export async function submitChainflipExtrinsic(
     } else {
       error = extrinsicResult.dispatchError.toString();
     }
-    throw new Error(`Failed to submit extrinsic: ${error}`);
+    throw new Error(`Extrinsic failed: ${error}`);
   }
   return extrinsicResult;
 }
@@ -962,7 +962,7 @@ export class ChainflipExtrinsicSubmitter {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async Submit(extrinsic: any, errorOnFail: boolean = true) {
+  async submit(extrinsic: any, errorOnFail: boolean = true) {
     let extrinsicResult;
     await this.mutex.runExclusive(async () => {
       extrinsicResult = await submitChainflipExtrinsic(this.keyringPair, extrinsic, errorOnFail);

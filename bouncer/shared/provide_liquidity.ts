@@ -28,6 +28,7 @@ export async function provideLiquidity(
   const chain = shortChainFromAsset(ccy);
 
   const keyring = new Keyring({ type: 'sr25519' });
+  keyring.setSS58Format(2112);
   const lpUri = lpKey ?? (process.env.LP_URI || '//LP_1');
   const lp = keyring.createFromUri(lpUri);
 
@@ -53,7 +54,7 @@ export async function provideLiquidity(
   }
 
   let eventHandle = observeEvent('liquidityProvider:LiquidityDepositAddressReady', {
-    test: (event) => event.data.asset === ccy,
+    test: (event) => event.data.asset === ccy && event.data.accountId === lp.address,
   });
 
   console.log('Requesting ' + ccy + ' deposit address');

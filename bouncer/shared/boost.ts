@@ -1,6 +1,5 @@
 // eslint-disable-next-line no-restricted-imports
 import Keyring from '@polkadot/keyring';
-// eslint-disable-next-line no-restricted-imports
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import assert from 'assert';
 import {
@@ -49,7 +48,7 @@ export async function stopBoosting(
       event.data.boostPool.tier === boostTier.toString(),
   );
 
-  const extrinsicResult = await extrinsicSubmitter.Submit(
+  const extrinsicResult = await extrinsicSubmitter.submit(
     chainflip.tx[ingressEgressPalletForChain(chainFromAsset(asset))].stopBoosting(
       shortChainFromAsset(asset).toUpperCase(),
       boostTier,
@@ -88,7 +87,7 @@ export async function addBoostFunds(
 
   // Add funds to the boost pool
   console.log(`Adding boost funds of ${amount} ${asset} at ${boostTier}bps`);
-  await extrinsicSubmitter.Submit(
+  await extrinsicSubmitter.submit(
     chainflip.tx[ingressEgressPalletForChain(chainFromAsset(asset))].addBoostFunds(
       shortChainFromAsset(asset).toUpperCase(),
       amountToFineAmount(amount.toString(), assetDecimals(asset)),
