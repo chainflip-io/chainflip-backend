@@ -37,7 +37,7 @@ use pallet_cf_broadcast::{
 	AwaitingBroadcast, BroadcastIdCounter, RequestFailureCallbacks, RequestSuccessCallbacks,
 	ThresholdSignatureData,
 };
-use pallet_cf_ingress_egress::{DepositWitness, EgressDustLimit, FailedForeignChainCall};
+use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall};
 use pallet_cf_lp::HistoricalEarnedFees;
 use pallet_cf_pools::{OrderId, RangeOrderSize};
 use pallet_cf_swapping::{CcmIdCounter, SWAP_DELAY_BLOCKS};
