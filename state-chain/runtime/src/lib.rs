@@ -1347,18 +1347,16 @@ impl_runtime_apis! {
 		fn cf_ingress_fee(generic_asset: Asset) -> Option<AssetAmount> {
 			match generic_asset.into() {
 				ForeignChainAndAsset::Ethereum(asset) => {
-					pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(
-						generic_asset,
-						Asset::Eth,
+					pallet_cf_pools::Pallet::<Runtime>::calculate_input_for_gas_output::<Ethereum>(
+						asset,
 						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::estimate_ingress_fee(asset)
 					)
 				},
 				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::estimate_ingress_fee(asset)),
 				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::estimate_ingress_fee(asset).into()),
 				ForeignChainAndAsset::Arbitrum(asset) => {
-					pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(
-						generic_asset,
-						Asset::ArbEth,
+					pallet_cf_pools::Pallet::<Runtime>::calculate_input_for_gas_output::<Arbitrum>(
+						asset,
 						pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::estimate_ingress_fee(asset)
 					)
 				},
@@ -1368,18 +1366,16 @@ impl_runtime_apis! {
 		fn cf_egress_fee(generic_asset: Asset) -> Option<AssetAmount> {
 			match generic_asset.into() {
 				ForeignChainAndAsset::Ethereum(asset) => {
-					pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(
-						generic_asset,
-						Asset::Eth,
+					pallet_cf_pools::Pallet::<Runtime>::calculate_input_for_gas_output::<Ethereum>(
+						asset,
 						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::estimate_egress_fee(asset)
 					)
 				},
 				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::estimate_egress_fee(asset)),
 				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::estimate_egress_fee(asset).into()),
 				ForeignChainAndAsset::Arbitrum(asset) => {
-					pallet_cf_pools::Pallet::<Runtime>::estimate_swap_input_for_desired_output(
-						generic_asset,
-						Asset::ArbEth,
+					pallet_cf_pools::Pallet::<Runtime>::calculate_input_for_gas_output::<Arbitrum>(
+						asset,
 						pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::estimate_egress_fee(asset)
 					)
 				},
