@@ -1843,6 +1843,7 @@ dependencies = [
  "scale-info",
  "secp256k1 0.27.0",
  "serde",
+ "serde_bytes",
  "serde_json",
  "serde_path_to_error",
  "sha2 0.10.8",
