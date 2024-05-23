@@ -1556,7 +1556,7 @@ impl<T: Config> Pallet<T> {
 		sell_amount: Amount,
 	) -> Result<(), DispatchError> {
 		Self::try_mutate_pool(AssetPair::try_new::<T>(base_asset, quote_asset)?, |_, pool| {
-			let _ = Self::collect_and_mint_limit_order_with_dispatch_error(
+			Self::collect_and_mint_limit_order_with_dispatch_error(
 				pool,
 				account_id,
 				side,
