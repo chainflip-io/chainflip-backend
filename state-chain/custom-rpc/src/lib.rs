@@ -29,7 +29,7 @@ use serde::{Deserialize, Serialize};
 use sp_api::ApiError;
 use sp_core::U256;
 use sp_runtime::{
-	traits::{Block as BlockT, Header as HeaderT},
+	traits::{Block as BlockT, Header as HeaderT, UniqueSaturatedInto},
 	Permill,
 };
 use state_chain_runtime::{
@@ -1123,21 +1123,20 @@ where
 						.into_iter()
 						.map(|additional_order| {
 							match additional_order {
-							SwapRateV2AdditionalOrder::LimitOrder {
-								base_asset,
-								quote_asset,
-								side,
-								tick,
-								sell_amount,
-							} =>
-								state_chain_runtime::runtime_apis::SimulateSwapAdditionalOrder::LimitOrder {
+								SwapRateV2AdditionalOrder::LimitOrder {
 									base_asset,
 									quote_asset,
 									side,
 									tick,
-									sell_amount: sell_amount.try_into().unwrap_or(AssetAmount::MAX),
+									sell_amount,
+								} => state_chain_runtime::runtime_apis::SimulateSwapAdditionalOrder::LimitOrder {
+									base_asset,
+									quote_asset,
+									side,
+									tick,
+									sell_amount: sell_amount.unique_saturated_into(),
 								}
-						}
+							}
 						})
 						.collect()
 				}),
