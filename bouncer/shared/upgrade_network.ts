@@ -114,7 +114,7 @@ async function compatibleUpgrade(
   });
 
   // wait for nodes to be ready
-  await sleep(10000);
+  await sleep(20000);
 
   // engines crashed when node shutdown, so restart them.
   execWithLog(
@@ -162,7 +162,7 @@ async function incompatibleUpgradeNoBuild(
 
   console.log('Engines started');
 
-  await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, true);
+  await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, false);
 
   console.log(
     'Check that the old engine has now shut down, and that the new engine is now running.',
