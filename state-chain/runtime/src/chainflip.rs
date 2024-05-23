@@ -45,7 +45,7 @@ use cf_chains::{
 	},
 	sol::{
 		api::{
-			AllNonceAccounts, ComputePrice, DurableNonce, SolanaApi, SolanaEnvAccountLookupKey,
+			AllNonceAccounts, ComputePrice, NonceAccount, SolanaApi, SolanaEnvAccountLookupKey,
 			SolanaEnvironment,
 		},
 		SolAddress, SolAmount, SolHash,
@@ -502,15 +502,15 @@ impl ChainEnvironment<ComputePrice, SolAmount> for SolEnvironment {
 	}
 }
 
-impl ChainEnvironment<DurableNonce, SolHash> for SolEnvironment {
-	fn lookup(_s: DurableNonce) -> Option<SolHash> {
+impl ChainEnvironment<NonceAccount, (SolAddress, SolHash)> for SolEnvironment {
+	fn lookup(_s: NonceAccount) -> Option<(SolAddress, SolHash)> {
 		// TODO
 		None
 	}
 }
 
-impl ChainEnvironment<AllNonceAccounts, Vec<SolAddress>> for SolEnvironment {
-	fn lookup(_s: AllNonceAccounts) -> Option<Vec<SolAddress>> {
+impl ChainEnvironment<AllNonceAccounts, Vec<(SolAddress, SolHash)>> for SolEnvironment {
+	fn lookup(_s: AllNonceAccounts) -> Option<Vec<(SolAddress, SolHash)>> {
 		// TODO
 		None
 	}
