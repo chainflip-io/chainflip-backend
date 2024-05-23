@@ -25,6 +25,11 @@ basic_auth_password = "password"
 ws_endpoint = "ws://localhost:8548"
 http_endpoint = "http://localhost:8547"
 
+[sol.rpc]
+http_endpoint = "http://localhost:8899"
+basic_auth_user = "username"
+basic_auth_password = "password"
+
 [health_check]
 hostname = "127.0.0.1"
 port = 5555

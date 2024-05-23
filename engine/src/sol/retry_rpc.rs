@@ -59,6 +59,7 @@ impl SolRetryRpcClient {
 #[async_trait::async_trait]
 pub trait SolRetryRpcApi: Clone {
 	async fn get_block_with_config(&self, slot: u64, config: RpcBlockConfig) -> UiConfirmedBlock;
+	async fn get_slot(&self, commitment: CommitmentConfig) -> u64; // Slot
 	async fn get_recent_prioritization_fees(&self) -> Vec<RpcPrioritizationFee>;
 	async fn get_multiple_accounts_with_config(
 		&self,
@@ -77,6 +78,18 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.get_block_with_config(slot, config).await })
+				}),
+			)
+			.await
+	}
+
+	async fn get_slot(&self, commitment: CommitmentConfig) -> u64 {
+		self.rpc_retry_client
+			.request(
+				RequestLog::new("getSlot".to_string(), Some(format!("{commitment:?}"))),
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.get_slot(commitment).await })
 				}),
 			)
 			.await
@@ -217,6 +230,8 @@ mod tests {
 					scope,
 					NodeContainer {
 						primary: HttpBasicAuthEndpoint {
+							// TODO: We should get this from settings, just hardcoding it for
+							// testing
 							http_endpoint: "https://api.testnet.solana.com".into(),
 							basic_auth_user: "flip".to_string(),
 							basic_auth_password: "flip".to_string(),
@@ -228,6 +243,9 @@ mod tests {
 				)
 				.await
 				.unwrap();
+
+				let slot = retry_client.get_slot(CommitmentConfig::finalized()).await;
+				println!("slot: {:?}", slot);
 
 				let priority_fees = retry_client.get_recent_prioritization_fees().await;
 				println!("priority_fees: {:?}", priority_fees[0]);

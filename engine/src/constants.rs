@@ -45,6 +45,14 @@ pub const DOT_HTTP_ENDPOINT: &str = "DOT__RPC__HTTP_ENDPOINT";
 pub const DOT_BACKUP_WS_ENDPOINT: &str = "DOT__BACKUP_RPC__WS_ENDPOINT";
 pub const DOT_BACKUP_HTTP_ENDPOINT: &str = "DOT__BACKUP_RPC__HTTP_ENDPOINT";
 
+pub const SOL_HTTP_ENDPOINT: &str = "SOL__RPC__HTTP_ENDPOINT";
+pub const SOL_RPC_USER: &str = "SOL__RPC__BASIC_AUTH_USER";
+pub const SOL_RPC_PASSWORD: &str = "SOL__RPC__BASIC_AUTH_PASSWORD";
+
+pub const SOL_BACKUP_HTTP_ENDPOINT: &str = "SOL__BACKUP_RPC__HTTP_ENDPOINT";
+pub const SOL_BACKUP_RPC_USER: &str = "SOL__BACKUP_RPC__BASIC_AUTH_USER";
+pub const SOL_BACKUP_RPC_PASSWORD: &str = "SOL__BACKUP_RPC__BASIC_AUTH_PASSWORD";
+
 /// IP Address and port on which we listen for incoming p2p connections
 pub const NODE_P2P_IP_ADDRESS: &str = "NODE_P2P__IP_ADDRESS";
 pub const NODE_P2P_PORT: &str = "NODE_P2P__PORT";

@@ -202,6 +202,7 @@ pub trait SolRpcApi {
 		slot: u64,
 		config: RpcBlockConfig,
 	) -> anyhow::Result<UiConfirmedBlock>;
+	async fn get_slot(&self, commitment: CommitmentConfig) -> anyhow::Result<u64>; // Slot
 	async fn get_recent_prioritization_fees(&self) -> anyhow::Result<Vec<RpcPrioritizationFee>>;
 	async fn get_multiple_accounts_with_config(
 		&self,
@@ -225,6 +226,14 @@ impl SolRpcApi for SolRpcClient {
 		let block: UiConfirmedBlock =
 			from_value(response).map_err(|err| anyhow!("Failed to parse block {}", err))?;
 		Ok(block)
+	}
+
+	async fn get_slot(&self, commitment: CommitmentConfig) -> anyhow::Result<u64> {
+		let response =
+			self.call_rpc("getSlot", ReqParams::Single(json!([json!(commitment)]))).await?;
+		let slot: u64 =
+			from_value(response).map_err(|err| anyhow!("Failed to parse block {}", err))?;
+		Ok(slot)
 	}
 
 	async fn get_recent_prioritization_fees(&self) -> anyhow::Result<Vec<RpcPrioritizationFee>> {
@@ -295,6 +304,9 @@ mod tests {
 		)
 		.unwrap()
 		.await;
+
+		let slot = sol_rpc_client.get_slot(CommitmentConfig::finalized()).await.unwrap();
+		println!("slot: {:?}", slot);
 
 		let priority_fees = sol_rpc_client.get_recent_prioritization_fees().await.unwrap();
 		println!("priority_fees: {:?}", priority_fees);
