@@ -2,7 +2,7 @@
 name = "engine-runner"
 description = "The central runner for the chainflip engine, it requires two shared library versions to run."
 # NB: When updating this version, you must update the debian assets appropriately too.
-version = "1.4.0"
+version = "1.4.1"
 authors = ["Chainflip team <https://github.com/chainflip-io>"]
 build = 'build.rs'
 edition = '2021'
@@ -24,14 +24,18 @@ assets = [
     # to specify this. We do this in the `chainflip-engine.service` files, so the user does not need to set it
     # manually.
     [
-        "target/release/libchainflip_engine_v1_4_0.so",
-        "usr/lib/chainflip-engine/libchainflip_engine_v1_4_0.so",
+        "target/release/libchainflip_engine_v1_4_1.so",
+        # This is the path where the engine dylib is searched for on linux.
+        # As set in the build.rs file.
+        "usr/lib/chainflip-engine/libchainflip_engine_v1_4_1.so",
         "755",
     ],
     # The old version gets put into target/release by the package github actions workflow.
     # It downloads the correct version from the releases page.
     [
         "target/release/libchainflip_engine_v1_3_5.so",
+        # This is the path where the engine dylib is searched for on linux.
+        # As set in the build.rs file.
         "usr/lib/chainflip-engine/libchainflip_engine_v1_3_5.so",
         "755",
     ],

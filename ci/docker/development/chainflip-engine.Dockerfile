@@ -18,12 +18,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy the runner bniary and the dylib files.
 COPY engine-runner /usr/local/bin/chainflip-engine
 COPY old-engine-dylib/libchainflip_engine_v*.so /usr/local/lib/
+# This path is set in the rpath of the runner binary build.rs file.
 COPY libchainflip_engine_v*.so /usr/local/lib/
-
-ENV LD_LIBRARY_PATH=/usr/local/lib
 
 WORKDIR /etc/chainflip
 
 RUN chmod +x /usr/local/bin/chainflip-engine
+
+RUN apt-get update \
+    && apt-get install -y ca-certificates --no-install-recommends \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 CMD ["/usr/local/bin/chainflip-engine"]

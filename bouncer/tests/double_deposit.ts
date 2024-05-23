@@ -1,7 +1,6 @@
 #!/usr/bin/env -S pnpm tsx
-import { Keyring } from '@polkadot/keyring';
-import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { exec } from 'child_process';
+import { Keyring } from '../polkadot/keyring';
 import {
   runWithTimeout,
   sleep,
@@ -9,10 +8,10 @@ import {
   newAddress,
   observeEvent,
   getChainflipApi,
+  lpMutex,
 } from '../shared/utils';
 
 async function main(): Promise<void> {
-  await cryptoWaitReady();
   const keyring = new Keyring({ type: 'sr25519' });
   const lpUri = process.env.LP_URI ?? '//LP_1';
   const lp = keyring.createFromUri(lpUri);
@@ -22,11 +21,17 @@ async function main(): Promise<void> {
   const encodedEthAddr = chainflip.createType('EncodedAddress', {
     Eth: hexStringToBytesArray(await newAddress('Eth', 'LP_1')),
   });
-  await chainflip.tx.liquidityProvider
-    .registerLiquidityRefundAddress(encodedEthAddr)
-    .signAndSend(lp);
+  await lpMutex.runExclusive(async () => {
+    await chainflip.tx.liquidityProvider
+      .registerLiquidityRefundAddress(encodedEthAddr)
+      .signAndSend(lp);
+  });
 
-  await chainflip.tx.liquidityProvider.requestLiquidityDepositAddress('Eth', null).signAndSend(lp);
+  await lpMutex.runExclusive(async () => {
+    await chainflip.tx.liquidityProvider
+      .requestLiquidityDepositAddress('Eth', null)
+      .signAndSend(lp);
+  });
   const ethIngressKey = (
     await observeEvent(
       'liquidityProvider:LiquidityDepositAddressReady',

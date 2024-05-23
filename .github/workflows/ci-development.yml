@@ -56,6 +56,11 @@ jobs:
     secrets: inherit
     with:
       full_bouncer: false
+  upgrade-check:
+    runs-on: ubuntu-22.04
+    if: false
+    steps:
+      - run: echo "Upgrade check is disabled. This is a placeholder to hack around the fact we just want to run this in the merge queue. But for it to still be required"
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml

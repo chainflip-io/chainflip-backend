@@ -175,6 +175,7 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 	type ChainAmount: Member
 		+ Parameter
 		+ Copy
+		+ Unpin
 		+ MaybeSerializeDeserialize
 		+ Default
 		+ AtLeast32BitUnsigned
@@ -218,8 +219,6 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 		+ IntoForeignChainAddress<Self>
 		+ Unpin
 		+ ToHumanreadableAddress;
-
-	type EpochStartData: Member + Parameter + MaxEncodedLen;
 
 	type DepositFetchId: Member
 		+ Parameter

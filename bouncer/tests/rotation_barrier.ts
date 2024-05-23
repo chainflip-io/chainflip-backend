@@ -17,7 +17,12 @@ async function rotateAndSwap() {
   await observeEvent('evmThresholdSigner:ThresholdSignatureRequest', chainflip);
 
   let stopObserving = false;
-  const broadcastAborted = observeBadEvents(':BroadcastAborted', () => stopObserving);
+  const broadcastAborted = observeBadEvents(
+    ':BroadcastAborted',
+    () => stopObserving,
+    undefined,
+    'Rotate and swap',
+  );
 
   // Using Arbitrum as the ingress chain to make the swap as fast as possible
   await testSwapViaContract('ArbEth', 'Eth');

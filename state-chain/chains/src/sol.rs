@@ -41,7 +41,6 @@ impl Chain for Solana {
 	type TrackedData = SolTrackedData;
 	type ChainAsset = assets::sol::Asset;
 	type ChainAccount = SolAddress;
-	type EpochStartData = (); //todo
 	type DepositFetchId = ChannelId;
 	type DepositChannelState = (); //todo
 	type DepositDetails = (); //todo

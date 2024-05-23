@@ -6,7 +6,7 @@ on:
       upgrade-from-release:
         description: 'The release we want to upgrade *from*: "sisyphos", "perseverance" or "berghain"'
         required: true
-        default: "perseverance"
+        default: "sisyphos"
       upgrade-to-workflow-name:
         description: "Name of the workflow to pull the upgrade-to artefacts from"
         required: true
@@ -20,7 +20,7 @@ on:
       upgrade-from-release:
         type: string
         description: 'The release we want to upgrade *from*: "perseverance" or "berghain"'
-        default: "perseverance"
+        default: "sisyphos"
       upgrade-to-workflow-name:
         type: string
         description: "Name of the workflow to pull the upgrade-to artefacts from"
@@ -29,7 +29,6 @@ on:
         type: string
         description: "Commit to run the upgrade test against. Leave blank to use the latest successful workflow run."
         required: false
-
 env:
   FORCE_COLOR: 1
 
@@ -49,6 +48,7 @@ jobs:
           fetch-depth: 0
 
       - name: Get upgrade-to-commit SHA 📜
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call'
         uses: ./.github/actions/get-workflow-commit
         id: get-upgrade-to-commit
         with:
@@ -58,7 +58,11 @@ jobs:
       - name: Set upgrade-to-commit 📲
         run: |
           if [ -z "${{ inputs.upgrade-to-commit }}" ]; then
+          if [[ "${{ github.event_name }}" == "workflow_call" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "UPGRADE_TO_COMMIT=${{ steps.get-upgrade-to-commit.outputs.commit-sha }}" >> $GITHUB_ENV
+          else
+            echo "UPGRADE_TO_COMMIT=${{ github.sha }}" >> $GITHUB_ENV
+          fi
           else
             echo "UPGRADE_TO_COMMIT=${{ inputs.upgrade-to-commit }}" >> $GITHUB_ENV
           fi
@@ -116,13 +120,14 @@ jobs:
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: release-${{ inputs.upgrade-from-release }}.yml
-          name: chainflip-backend-bin-ubuntu-22.04
+          name: chainflip-backend-bin
           github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
           path: latest-release-bins
 
       - name: Permissions for latest binaries 🛡️
         run: |
           chmod +x ./latest-release-bins/chainflip-*
+          chmod +x ./latest-release-bins/engine-runner
 
       - name: Get version of the latest release ✍️
         run: |
@@ -131,7 +136,15 @@ jobs:
           echo $RELEASE_VERSION
           echo "RELEASE_VERSION=${RELEASE_VERSION}" >> $GITHUB_ENV
 
-      - name: Download latest main binaries 📥
+      - name: Download upgrade-to binaries for push or pull request📥
+        if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        uses: actions/download-artifact@v3
+        with:
+          name: chainflip-backend-bin-try-runtime
+          path: upgrade-to-bins
+
+      - name: Download upgrade-to binaries for workflow call 📥
+        if: github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch'
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: ${{ inputs.upgrade-to-workflow-name }}
@@ -139,7 +152,15 @@ jobs:
           path: upgrade-to-bins
           commit: ${{ env.UPGRADE_TO_COMMIT }}
 
-      - name: Download latest main runtime 📥
+      - name: Download upgrade-to runtime for push or pull request 📥
+        if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        uses: actions/download-artifact@v3
+        with:
+          name: chainflip-node-runtime-try-runtime
+          path: main-runtime
+
+      - name: Download upgrade-to runtime for workflow call 📥
+        if: github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch'
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: ${{ inputs.upgrade-to-workflow-name }}
@@ -206,7 +227,6 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
-          ./commands/setup_swaps.ts
           ./tests/all_concurrent_tests.ts
 
       - name: Print chainflip-engine logs 🚗
