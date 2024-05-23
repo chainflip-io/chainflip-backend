@@ -8,6 +8,7 @@ import {
   newAddress,
   observeEvent,
   getChainflipApi,
+  lpMutex,
 } from '../shared/utils';
 
 async function main(): Promise<void> {
@@ -20,11 +21,17 @@ async function main(): Promise<void> {
   const encodedEthAddr = chainflip.createType('EncodedAddress', {
     Eth: hexStringToBytesArray(await newAddress('Eth', 'LP_1')),
   });
-  await chainflip.tx.liquidityProvider
-    .registerLiquidityRefundAddress(encodedEthAddr)
-    .signAndSend(lp);
+  await lpMutex.runExclusive(async () => {
+    await chainflip.tx.liquidityProvider
+      .registerLiquidityRefundAddress(encodedEthAddr)
+      .signAndSend(lp);
+  });
 
-  await chainflip.tx.liquidityProvider.requestLiquidityDepositAddress('Eth', null).signAndSend(lp);
+  await lpMutex.runExclusive(async () => {
+    await chainflip.tx.liquidityProvider
+      .requestLiquidityDepositAddress('Eth', null)
+      .signAndSend(lp);
+  });
   const ethIngressKey = (
     await observeEvent(
       'liquidityProvider:LiquidityDepositAddressReady',

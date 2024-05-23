@@ -1,7 +1,7 @@
 import { compactAddLength } from '@polkadot/util';
 import { promises as fs } from 'fs';
 import { submitGovernanceExtrinsic } from './cf_governance';
-import { getChainflipApi, observeEvent } from '../shared/utils';
+import { decodeModuleError, getChainflipApi, observeEvent } from '../shared/utils';
 import { tryRuntimeUpgrade } from './try_runtime_upgrade';
 
 async function readRuntimeWasmFromFile(filePath: string): Promise<Uint8Array> {
@@ -47,8 +47,8 @@ export async function submitRuntimeUpgradeWithRestrictions(
   ]);
 
   if (event.name.method === 'FailedExecution') {
-    // TODO: use findMetaError to provide a more meaningful error message.
-    throw Error(`Runtime upgrade failed with error: ${JSON.stringify(event.data)}`);
+    const error = decodeModuleError(event.data[0].Module, chainflip);
+    throw Error(`Runtime upgrade failed: ${error}`);
   }
 
   console.log('Runtime upgrade completed.');

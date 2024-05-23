@@ -15,6 +15,7 @@ export async function newSwap(
   destAddress: string,
   messageMetadata?: CcmDepositMetadata,
   brokerCommissionBps = defaultCommissionBps,
+  boostFeeBps = 0,
 ): Promise<void> {
   const destinationAddress =
     destAsset === 'Dot' ? decodeDotAddressForContract(destAddress) : destAddress;
@@ -36,6 +37,7 @@ export async function newSwap(
             message: messageMetadata.message as `0x${string}`,
             gasBudget: messageMetadata.gasBudget.toString(),
           },
+          boostFeeBps,
         },
         {
           url: brokerUrl,
