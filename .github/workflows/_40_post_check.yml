@@ -180,7 +180,6 @@ jobs:
             ❗️❗️❗️❗️ Sorry **${{ github.actor }}**, the Bouncer has rejected you ❗️❗️❗️❗️
             The Bouncer has rejected the build on branch `${{ github.ref_name }}`
             👾 Link to job: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>
-            #️⃣ Tagging: <@&939151218708709416>
 
   chainspec-compatibility:
     runs-on: ubuntu-22.04
