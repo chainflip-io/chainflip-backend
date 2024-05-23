@@ -236,13 +236,15 @@ jobs:
 
       - name: Print new pre-upgrade chainflip-engine logs 🚗
         if: always()
+        # In the case of a compatible upgrade, we don't expect any logs here
+        continue-on-error: true
         run: |
-          cat /tmp/chainflip/*/chainflip-engine-pre-upgrade.*log
+          cat /tmp/chainflip/*/start-all-engines-pre-upgrade.*log
 
       - name: Print new post-upgrade chainflip-engine logs 🚗
         if: always()
         run: |
-          cat /tmp/chainflip/*/chainflip-engine-post-upgrade.*log
+          cat /tmp/chainflip/*/start-all-engines-post-upgrade.*log
 
       - name: Print chainflip-node logs 📡
         if: always()
