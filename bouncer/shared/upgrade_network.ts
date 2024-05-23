@@ -162,7 +162,7 @@ async function incompatibleUpgradeNoBuild(
 
   console.log('Engines started');
 
-  await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, false);
+  await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, true);
 
   console.log(
     'Check that the old engine has now shut down, and that the new engine is now running.',
@@ -316,11 +316,7 @@ export async function upgradeNetworkGit(
     console.log('Upgrade complete.');
   } else if (!isCompatible) {
     console.log('The versions are incompatible.');
-    await incompatibleUpgrade(
-      localnetInitPath,
-      nextVersionWorkspacePath,
-      numberOfNodes,
-    );
+    await incompatibleUpgrade(localnetInitPath, nextVersionWorkspacePath, numberOfNodes);
   }
 
   console.log('Cleaning up...');
@@ -369,20 +365,10 @@ export async function upgradeNetworkPrebuilt(
     );
   } else if (isCompatibleWith(cleanOldVersion, nodeVersion)) {
     console.log('The versions are compatible.');
-    await compatibleUpgrade(
-      localnetInitPath,
-      binariesPath,
-      runtimePath,
-      numberOfNodes,
-    );
+    await compatibleUpgrade(localnetInitPath, binariesPath, runtimePath, numberOfNodes);
   } else {
     console.log('The versions are incompatible.');
-    await incompatibleUpgradeNoBuild(
-      localnetInitPath,
-      binariesPath,
-      runtimePath,
-      numberOfNodes,
-    );
+    await incompatibleUpgradeNoBuild(localnetInitPath, binariesPath, runtimePath, numberOfNodes);
   }
 
   console.log('Upgrade complete.');
