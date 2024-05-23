@@ -2077,12 +2077,7 @@ impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
 
 		let estimation_output = with_transaction_unchecked(|| {
 			TransactionOutcome::Rollback(
-				Self::swap_with_network_fee(
-					input_asset,
-					output_asset,
-					estimation_input,
-				)
-				.ok(),
+				Self::swap_with_network_fee(input_asset, output_asset, estimation_input).ok(),
 			)
 		})?
 		.output;
