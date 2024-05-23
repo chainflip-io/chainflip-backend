@@ -1437,6 +1437,14 @@ impl_runtime_apis! {
 
 						(amount_after_fees, fees_withheld)
 					},
+					ForeignChainAndAsset::Solana(asset) => {
+						let AmountAndFeesWithheld {
+							amount_after_fees,
+							fees_withheld,
+						} = pallet_cf_ingress_egress::Pallet::<Runtime, SolanaInstance>::withhold_ingress_or_egress_fee(ingress_or_egress, asset, amount.unique_saturated_into());
+
+						(amount_after_fees, fees_withheld)
+					},
 				}
 			}
 
