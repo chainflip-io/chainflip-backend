@@ -4,14 +4,18 @@ use sp_core::H256;
 use utilities::make_periodic_tick;
 
 use crate::{
-	sol::retry_rpc::SolRetryRpcApi,
+	sol::{
+		commitment_config::CommitmentConfig,
+		retry_rpc::SolRetryRpcApi,
+		rpc_client_api::{RpcBlockConfig, TransactionDetails, UiTransactionEncoding},
+	},
 	witness::common::{
 		chain_source::{BoxChainStream, ChainClient, ChainSource, Header},
 		ExternalChain, ExternalChainSource,
 	},
 };
-use cf_chains::sol::SolHash;
-use std::{collections::VecDeque, time::Duration};
+use cf_chains::{sol::SolHash, Chain, Solana};
+use std::{collections::VecDeque, str::FromStr, time::Duration};
 
 #[derive(Clone)]
 pub struct SolSource<Client> {
@@ -42,22 +46,43 @@ where
 		(
 			Box::pin(stream::unfold(
 				(self.client.clone(), None, make_periodic_tick(POLL_INTERVAL, true)),
-				// TODO: Write this code for Solana. Something should be related to the witness
-				// period?
-				|(client, last_block_hash_yielded, mut tick)| async move {
+				|(client, last_witnesses_range_end, mut tick)| async move {
 					loop {
 						tick.tick().await;
 
-						let best_block_header = client.best_block_header().await;
-						if last_block_hash_yielded != Some(best_block_header.hash) {
+						let slot = client.get_slot(CommitmentConfig::finalized()).await;
+
+						let block = client
+							.get_block_with_config(
+								slot,
+								RpcBlockConfig {
+									encoding: Some(UiTransactionEncoding::JsonParsed),
+									transaction_details: Some(TransactionDetails::None),
+									rewards: Some(false),
+									commitment: Some(CommitmentConfig::finalized()),
+									max_supported_transaction_version: None,
+								},
+							)
+							.await;
+
+						let blockhash =
+							SolHash::from_str(&block.blockhash).expect("Invalid block hash");
+						let parent_blockhash = SolHash::from_str(&block.previous_blockhash)
+							.expect("Invalid block hash");
+
+						let witness_range = Solana::block_witness_range(slot);
+
+						// Get the header if the slot is greater than the last witness range end
+						if Some(slot) > last_witnesses_range_end {
+							let witness_range_end = *witness_range.end();
 							return Some((
 								Header {
-									index: best_block_header.height,
-									hash: best_block_header.hash,
-									parent_hash: best_block_header.previous_block_hash,
+									index: Solana::block_witness_root(slot),
+									hash: blockhash,
+									parent_hash: Some(parent_blockhash),
 									data: (),
 								},
-								(client, Some(best_block_header.hash), tick),
+								(client, Some(witness_range_end), tick),
 							))
 						}
 					}

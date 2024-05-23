@@ -280,6 +280,23 @@ pub struct ArbOptions {
 }
 
 #[derive(Parser, Debug, Clone, Default)]
+pub struct SolOptions {
+	#[clap(long = "sol.rpc.http_endpoint")]
+	pub sol_http_endpoint: Option<String>,
+	#[clap(long = "sol.rpc.basic_auth_user")]
+	pub sol_basic_auth_user: Option<String>,
+	#[clap(long = "sol.rpc.basic_auth_password")]
+	pub sol_basic_auth_password: Option<String>,
+
+	#[clap(long = "sol.backup_rpc.http_endpoint")]
+	pub sol_backup_http_endpoint: Option<String>,
+	#[clap(long = "sol.backup_rpc.basic_auth_user")]
+	pub sol_backup_basic_auth_user: Option<String>,
+	#[clap(long = "sol.backup_rpc.basic_auth_password")]
+	pub sol_backup_basic_auth_password: Option<String>,
+}
+
+#[derive(Parser, Debug, Clone, Default)]
 pub struct P2POptions {
 	#[clap(long = "p2p.node_key_file", parse(from_os_str))]
 	node_key_file: Option<PathBuf>,
@@ -315,6 +332,9 @@ pub struct CommandLineOptions {
 
 	#[clap(flatten)]
 	pub arb_opts: ArbOptions,
+
+	#[clap(flatten)]
+	pub sol_opts: SolOptions,
 
 	// Health Check Settings
 	#[clap(long = "health_check.hostname")]
@@ -353,6 +373,7 @@ impl Default for CommandLineOptions {
 			dot_opts: DotOptions::default(),
 			btc_opts: BtcOptions::default(),
 			arb_opts: ArbOptions::default(),
+			sol_opts: SolOptions::default(),
 			health_check_hostname: None,
 			health_check_port: None,
 			prometheus_hostname: None,
@@ -537,6 +558,8 @@ impl CfSettings for Settings {
 
 		self.arb.validate_settings()?;
 
+		self.sol.validate_settings()?;
+
 		self.state_chain.validate_settings()?;
 
 		is_valid_db_path(&self.signing.db_file).map_err(|e| ConfigError::Message(e.to_string()))?;
@@ -633,6 +656,8 @@ impl Source for CommandLineOptions {
 		self.btc_opts.insert_all(&mut map);
 
 		self.arb_opts.insert_all(&mut map);
+
+		self.sol_opts.insert_all(&mut map);
 
 		insert_command_line_option(&mut map, "health_check.hostname", &self.health_check_hostname);
 		insert_command_line_option(&mut map, "health_check.port", &self.health_check_port);
@@ -784,6 +809,34 @@ impl ArbOptions {
 	}
 }
 
+impl SolOptions {
+	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
+		insert_command_line_option(map, "sol.rpc.http_endpoint", &self.sol_http_endpoint);
+		insert_command_line_option(map, "sol.rpc.basic_auth_user", &self.sol_basic_auth_user);
+		insert_command_line_option(
+			map,
+			"sol.rpc.basic_auth_password",
+			&self.sol_basic_auth_password,
+		);
+
+		insert_command_line_option(
+			map,
+			"sol.backup_rpc.http_endpoint",
+			&self.sol_backup_http_endpoint,
+		);
+		insert_command_line_option(
+			map,
+			"sol.backup_rpc.basic_auth_user",
+			&self.sol_backup_basic_auth_user,
+		);
+		insert_command_line_option(
+			map,
+			"sol.backup_rpc.basic_auth_password",
+			&self.sol_backup_basic_auth_password,
+		);
+	}
+}
+
 impl Settings {
 	/// New settings loaded from "$base_config_path/config/Settings.toml",
 	/// environment and `CommandLineOptions`
@@ -851,7 +904,9 @@ pub mod tests {
 		BTC_BACKUP_HTTP_ENDPOINT, BTC_BACKUP_RPC_PASSWORD, BTC_BACKUP_RPC_USER, BTC_HTTP_ENDPOINT,
 		BTC_RPC_PASSWORD, BTC_RPC_USER, DOT_BACKUP_HTTP_ENDPOINT, DOT_BACKUP_WS_ENDPOINT,
 		DOT_HTTP_ENDPOINT, DOT_WS_ENDPOINT, ETH_BACKUP_HTTP_ENDPOINT, ETH_BACKUP_WS_ENDPOINT,
-		ETH_HTTP_ENDPOINT, ETH_WS_ENDPOINT, NODE_P2P_IP_ADDRESS,
+		ETH_HTTP_ENDPOINT, ETH_WS_ENDPOINT, NODE_P2P_IP_ADDRESS, SOL_BACKUP_HTTP_ENDPOINT,
+		SOL_BACKUP_RPC_PASSWORD, SOL_BACKUP_RPC_USER, SOL_HTTP_ENDPOINT, SOL_RPC_PASSWORD,
+		SOL_RPC_USER,
 	};
 
 	use super::*;
@@ -895,6 +950,14 @@ pub mod tests {
 		BTC_BACKUP_RPC_USER => "second.user",
 		BTC_BACKUP_RPC_PASSWORD => "second.password",
 
+		SOL_HTTP_ENDPOINT => "http://localhost:8899",
+		SOL_RPC_USER => "user",
+		SOL_RPC_PASSWORD => "password",
+
+		SOL_BACKUP_HTTP_ENDPOINT => "http://second.localhost:8899",
+		SOL_BACKUP_RPC_USER => "second.user",
+		SOL_BACKUP_RPC_PASSWORD => "second.password",
+
 		DOT_WS_ENDPOINT => "wss://my_fake_polkadot_rpc:443/<secret_key>",
 		DOT_HTTP_ENDPOINT => "https://my_fake_polkadot_rpc:443/<secret_key>",
 		DOT_BACKUP_WS_ENDPOINT =>
@@ -926,6 +989,7 @@ pub mod tests {
 
 		let settings = Settings::new(CommandLineOptions::default())
 			.expect("Check that the test environment is set correctly");
+
 		assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
 		assert_eq!(settings.eth.nodes.primary.http_endpoint.as_ref(), "http://localhost:8545");
 		assert_eq!(settings.arb.nodes.primary.http_endpoint.as_ref(), "http://localhost:8547");
@@ -1037,6 +1101,15 @@ pub mod tests {
 				arb_backup_ws_endpoint: Some("ws://second_endpoint:4321".to_owned()),
 				arb_backup_http_endpoint: Some("http://second_endpoint:4321".to_owned()),
 				arb_private_key_file: Some(PathBuf::from_str("keys/eth_private_key_2").unwrap()),
+			},
+			sol_opts: SolOptions {
+				sol_http_endpoint: Some("http://sol-endpoint:4321".to_owned()),
+				sol_basic_auth_user: Some("my_username".to_owned()),
+				sol_basic_auth_password: Some("my_password".to_owned()),
+
+				sol_backup_http_endpoint: Some("http://second.sol-endpoint:4321".to_owned()),
+				sol_backup_basic_auth_user: Some("second.my_username".to_owned()),
+				sol_backup_basic_auth_password: Some("second.my_password".to_owned()),
 			},
 			health_check_hostname: Some("health_check_hostname".to_owned()),
 			health_check_port: Some(1337),

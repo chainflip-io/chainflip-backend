@@ -326,6 +326,7 @@ async fn run_main(
 				arb_client,
 				dot_client,
 				btc_client,
+				// sol_client,
 				eth_multisig_client,
 				dot_multisig_client,
 				btc_multisig_client,
