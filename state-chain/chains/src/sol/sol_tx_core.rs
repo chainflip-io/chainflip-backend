@@ -23,8 +23,6 @@ pub mod extra_types_for_testing;
 #[cfg(test)]
 use extra_types_for_testing::{SignerError, Signers, TransactionError};
 
-use program_instructions::SystemProgramInstruction;
-
 pub const HASH_BYTES: usize = 32;
 
 /// Maximum string length of a base58 encoded pubkey
@@ -81,6 +79,7 @@ impl Transaction {
 		}
 	}
 
+	#[cfg(test)]
 	pub fn new_with_payer(instructions: &[Instruction], payer: Option<&Pubkey>) -> Self {
 		let message = Message::new(instructions, payer);
 		Self::new_unsigned(message)
@@ -425,10 +424,6 @@ pub struct Message {
 }
 
 impl Message {
-	pub fn new(instructions: &[Instruction], payer: Option<&Pubkey>) -> Self {
-		Self::new_with_blockhash(instructions, payer, &Hash::default())
-	}
-
 	pub fn new_with_blockhash(
 		instructions: &[Instruction],
 		payer: Option<&Pubkey>,
@@ -449,13 +444,19 @@ impl Message {
 		)
 	}
 
+	#[cfg(test)]
+	pub fn new(instructions: &[Instruction], payer: Option<&Pubkey>) -> Self {
+		Self::new_with_blockhash(instructions, payer, &Hash::default())
+	}
+
+	#[cfg(test)]
 	pub fn new_with_nonce(
 		mut instructions: Vec<Instruction>,
 		payer: Option<&Pubkey>,
 		nonce_account_pubkey: &Pubkey,
 		nonce_authority_pubkey: &Pubkey,
 	) -> Self {
-		let nonce_ix = SystemProgramInstruction::advance_nonce_account(
+		let nonce_ix = program_instructions::SystemProgramInstruction::advance_nonce_account(
 			nonce_account_pubkey,
 			nonce_authority_pubkey,
 		);
@@ -463,7 +464,7 @@ impl Message {
 		Self::new(&instructions, payer)
 	}
 
-	pub fn new_with_compiled_instructions(
+	fn new_with_compiled_instructions(
 		num_required_signatures: u8,
 		num_readonly_signed_accounts: u8,
 		num_readonly_unsigned_accounts: u8,
@@ -997,7 +998,8 @@ mod tests {
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
 			SystemProgramInstruction::transfer(&agg_key_pubkey, &to_pubkey, TRANSFER_AMOUNT),
 		];
-		let message = Message::new(&instructions, Some(&agg_key_pubkey));
+		let message =
+			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 		let mut tx = Transaction::new_unsigned(message);
 		tx.sign(&[&agg_key_keypair], durable_nonce);
 
@@ -1027,7 +1029,8 @@ mod tests {
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
 			SystemProgramInstruction::transfer(&agg_key_pubkey, &to_pubkey, lamports),
 		];
-		let message = Message::new(&instructions, Some(&agg_key_pubkey));
+		let message =
+			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 		let mut tx = Transaction::new_unsigned(message);
 		tx.sign(&[&agg_key_keypair], durable_nonce);
 
@@ -1069,7 +1072,8 @@ mod tests {
 				],
 			),
 		];
-		let message = Message::new(&instructions, Some(&agg_key_pubkey));
+		let message =
+			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 		let mut tx = Transaction::new_unsigned(message);
 		tx.sign(&[&agg_key_keypair], durable_nonce);
 		// println!("{:?}", tx);
@@ -1137,7 +1141,8 @@ mod tests {
 				],
 			),
 		];
-		let message = Message::new(&instructions, Some(&agg_key_pubkey));
+		let message =
+			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 		let mut tx = Transaction::new_unsigned(message);
 		tx.sign(&[&agg_key_keypair], durable_nonce);
 		// println!("{:?}", tx);
@@ -1198,7 +1203,8 @@ mod tests {
 				],
 			),
 		];
-		let message = Message::new(&instructions, Some(&agg_key_pubkey));
+		let message =
+			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 		let mut tx = Transaction::new_unsigned(message);
 		tx.sign(&[&agg_key_keypair], durable_nonce);
 
@@ -1248,7 +1254,8 @@ mod tests {
 				],
 			),
 		];
-		let message = Message::new(&instructions, Some(&agg_key_pubkey));
+		let message =
+			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 		let mut tx = Transaction::new_unsigned(message);
 		tx.sign(&[&agg_key_keypair], durable_nonce);
 
@@ -1299,7 +1306,8 @@ mod tests {
 			)
 		}));
 
-		let message = Message::new(&instructions, Some(&agg_key_pubkey));
+		let message =
+			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 		let mut tx = Transaction::new_unsigned(message);
 		tx.sign(&[&agg_key_keypair], durable_nonce);
 
@@ -1359,7 +1367,8 @@ mod tests {
 				],
 			),
 		];
-		let message = Message::new(&instructions, Some(&agg_key_pubkey));
+		let message =
+			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 		let mut tx = Transaction::new_unsigned(message);
 		tx.sign(&[&agg_key_keypair], durable_nonce);
 
@@ -1442,7 +1451,8 @@ mod tests {
 				],
 			),
 		];
-		let message = Message::new(&instructions, Some(&agg_key_pubkey));
+		let message =
+			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 		let mut tx = Transaction::new_unsigned(message);
 		tx.sign(&[&agg_key_keypair], durable_nonce);
 
@@ -1499,7 +1509,8 @@ mod tests {
 				],
 			),
 		];
-		let message = Message::new(&instructions, Some(&agg_key_pubkey));
+		let message =
+			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 		let mut tx = Transaction::new_unsigned(message);
 		tx.sign(&[&agg_key_keypair], durable_nonce);
 
@@ -1535,7 +1546,8 @@ mod tests {
 				&to_ata
 			),
 		];
-		let message = Message::new(&instructions, Some(&agg_key_pubkey));
+		let message =
+			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 		let mut tx = Transaction::new_unsigned(message);
 		tx.sign(&[&agg_key_keypair], durable_nonce);
 
