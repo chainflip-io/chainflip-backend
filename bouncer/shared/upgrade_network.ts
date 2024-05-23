@@ -63,6 +63,33 @@ function killOldNodes() {
   console.log('Killed old node');
 }
 
+async function startBrokerAndLpApi(localnetInitPath: string, binaryPath: string, keysDir: string) {
+  console.log('Starting new broker and lp-api.');
+
+  execWithLog(`${localnetInitPath}/scripts/start-broker-api.sh ${binaryPath}`, 'start-broker-api', {
+    keysDir,
+  });
+
+  execWithLog(`${localnetInitPath}/scripts/start-lp-api.sh ${binaryPath}`, 'start-lp-api', {
+    keysDir,
+  });
+
+  await sleep(10000);
+
+  for (const [process, port] of [
+    ['broker-api', 10997],
+    ['lp-api', 10589],
+  ]) {
+    try {
+      const pid = execSync(`lsof -t -i:${port}`);
+      console.log(`New ${process} PID: ${pid.toString()}`);
+    } catch (e) {
+      console.error(`Error starting ${process}: ${e}`);
+      throw e;
+    }
+  }
+}
+
 async function compatibleUpgrade(
   localnetInitPath: string,
   binaryPath: string,
@@ -104,6 +131,8 @@ async function compatibleUpgrade(
       BINARY_ROOT_PATH: binaryPath,
     },
   );
+
+  startBrokerAndLpApi(localnetInitPath, binaryPath, KEYS_DIR);
 }
 
 async function incompatibleUpgradeNoBuild(
@@ -214,30 +243,7 @@ async function incompatibleUpgradeNoBuild(
     await setupArbVault();
   }
 
-  console.log('Starting new broker and lp-api.');
-
-  execWithLog(`${localnetInitPath}/scripts/start-broker-api.sh ${binaryPath}`, 'start-broker-api', {
-    KEYS_DIR,
-  });
-
-  execWithLog(`${localnetInitPath}/scripts/start-lp-api.sh ${binaryPath}`, 'start-lp-api', {
-    KEYS_DIR,
-  });
-
-  await sleep(10000);
-
-  for (const [process, port] of [
-    ['broker-api', 10997],
-    ['lp-api', 10589],
-  ]) {
-    try {
-      const pid = execSync(`lsof -t -i:${port}`);
-      console.log(`New ${process} PID: ${pid.toString()}`);
-    } catch (e) {
-      console.error(`Error starting ${process}: ${e}`);
-      throw e;
-    }
-  }
+  startBrokerAndLpApi(localnetInitPath, binaryPath, KEYS_DIR);
 
   if (newVersion.includes('1.4')) {
     await setupSwaps();
