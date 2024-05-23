@@ -394,11 +394,11 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 		// Do some swaps to collect fees.
 		assert_eq!(
 			LiquidityPools::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 10_000).unwrap(),
-			SwapOutput { intermediary: None, output: 5_987u128 }
+			SwapOutput { intermediary: None, output: 5_987u128, network_fee: 20 }
 		);
 		assert_eq!(
 			LiquidityPools::swap_with_network_fee(Asset::Eth, STABLE_ASSET, 10_000).unwrap(),
-			SwapOutput { intermediary: None, output: 5_987u128 }
+			SwapOutput { intermediary: None, output: 5_987u128, network_fee: 12 }
 		);
 
 		// Updates the fees to the new value and collect any fees on current positions.
@@ -583,11 +583,11 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 		// Do some swaps to collect fees.
 		assert_eq!(
 			LiquidityPools::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 202_200).unwrap(),
-			SwapOutput { intermediary: None, output: 99_894u128 }
+			SwapOutput { intermediary: None, output: 99_894u128, network_fee: 404 }
 		);
 		assert_eq!(
 			LiquidityPools::swap_with_network_fee(Asset::Eth, STABLE_ASSET, 18_000).unwrap(),
-			SwapOutput { intermediary: None, output: 9_071 }
+			SwapOutput { intermediary: None, output: 9_071, network_fee: 18 }
 		);
 
 		// Updates the fees to the new value and collect any fees on current positions.
@@ -691,11 +691,11 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 		// Do some swaps to collect fees.
 		assert_eq!(
 			LiquidityPools::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 5_000).unwrap(),
-			SwapOutput { intermediary: None, output: 2_989u128 }
+			SwapOutput { intermediary: None, output: 2_989u128, network_fee: 10 }
 		);
 		assert_eq!(
 			LiquidityPools::swap_with_network_fee(Asset::Eth, STABLE_ASSET, 5_000).unwrap(),
-			SwapOutput { intermediary: None, output: 2_998u128 }
+			SwapOutput { intermediary: None, output: 2_998u128, network_fee: 6 }
 		);
 
 		// Updates the fees to the new value. No fee is collected for range orders.
@@ -1252,5 +1252,99 @@ fn test_maximum_slippage_limits() {
 		));
 
 		test_swaps(3500);
+	});
+}
+
+#[test]
+fn can_accept_additional_limit_orders() {
+	new_test_ext().execute_with(|| {
+		let from = Asset::Flip;
+		let to = Asset::Usdt;
+		let default_price = price_at_tick(0).unwrap();
+
+		for asset in [from, to] {
+			// While the pool does not exist, no info can be obtained.
+			assert!(Pools::<Test>::get(AssetPair::new(asset, STABLE_ASSET).unwrap()).is_none());
+
+			// Create a new pool.
+			assert_ok!(LiquidityPools::new_pool(
+				RuntimeOrigin::root(),
+				asset,
+				STABLE_ASSET,
+				0u32,
+				default_price,
+			));
+			System::assert_last_event(RuntimeEvent::LiquidityPools(
+				Event::<Test>::NewPoolCreated {
+					base_asset: asset,
+					quote_asset: STABLE_ASSET,
+					fee_hundredth_pips: 0u32,
+					initial_price: default_price,
+				},
+			));
+		}
+
+		const ONE_FLIP: u128 = 10u128.pow(18);
+
+		assert!(LiquidityPools::swap_with_network_fee(from, STABLE_ASSET, ONE_FLIP,).is_err());
+
+		assert!(LiquidityPools::try_add_limit_order(
+			&0,
+			from,
+			STABLE_ASSET,
+			Side::Buy,
+			0,
+			-196236,
+			ONE_FLIP.into()
+		)
+		.is_ok());
+		let swap_output =
+			LiquidityPools::swap_with_network_fee(from, STABLE_ASSET, ONE_FLIP).unwrap();
+
+		assert_eq!(
+			swap_output,
+			SwapOutput { intermediary: None, output: 3000097981, network_fee: 6012220 }
+		);
+
+		const ONE_USDC: u128 = 10u128.pow(6);
+
+		assert!(LiquidityPools::try_add_limit_order(
+			&0,
+			from,
+			Asset::Usdc,
+			Side::Buy,
+			0,
+			-196236,
+			ONE_FLIP.into()
+		)
+		.is_ok());
+		assert!(LiquidityPools::swap_with_network_fee(from, to, ONE_FLIP,).is_err());
+
+		assert!(LiquidityPools::try_add_limit_order(
+			&0,
+			from,
+			Asset::Usdc,
+			Side::Buy,
+			0,
+			-196236,
+			ONE_FLIP.into()
+		)
+		.is_ok());
+		assert!(LiquidityPools::try_add_limit_order(
+			&0,
+			to,
+			Asset::Usdc,
+			Side::Sell,
+			0,
+			0,
+			(3500 * ONE_USDC).into()
+		)
+		.is_ok());
+		let swap_output = LiquidityPools::swap_with_network_fee(from, to, ONE_FLIP).unwrap();
+
+		assert_eq!(
+			swap_output,
+			SwapOutput { intermediary: Some(3000097981), output: 3000097980, network_fee: 6012220 }
+		)
 	});
 }
