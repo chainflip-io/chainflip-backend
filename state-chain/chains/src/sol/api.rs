@@ -354,20 +354,62 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let compute_price = Environment::compute_price()?;
 
 		// Build the instruction_set
-		let instruction_set = SolanaInstructionBuilder::ccm_transfer(
-			transfer_param,
-			source_chain,
-			source_address,
-			message,
-			ccm_accounts,
-			vault_program,
-			vault_program_data_account,
-			system_program_id,
-			sys_var_instructions,
-			agg_key,
-			nonce_account,
-			compute_price,
-		);
+		let instruction_set = match transfer_param.asset {
+			SolAsset::Sol => Ok(SolanaInstructionBuilder::ccm_transfer_native(
+				transfer_param.amount,
+				transfer_param.to,
+				source_chain,
+				source_address,
+				message,
+				ccm_accounts,
+				vault_program,
+				vault_program_data_account,
+				system_program_id,
+				sys_var_instructions,
+				agg_key,
+				nonce_account,
+				compute_price,
+			)),
+			SolAsset::SolUsdc => {
+				let token_vault_pda_account =
+					Environment::lookup_account(SolanaEnvAccountLookupKey::TokenVaultPdaAccount)?;
+				let token_mint_pubkey =
+					Environment::lookup_account(SolanaEnvAccountLookupKey::TokenMintPubkey)?;
+				let token_program_id = SolAddress::from_str(TOKEN_PROGRAM_ID)
+					.expect("Preset Solana Token program ID must be valid.");
+				let token_vault_ata = Environment::lookup_account(
+					SolanaEnvAccountLookupKey::TokenVaultAssociatedTokenAccount,
+				)?;
+
+				let ata =
+					crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
+						transfer_param.to,
+						token_mint_pubkey,
+					)
+					.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
+
+				Ok(SolanaInstructionBuilder::ccm_transfer_usdc_token(
+					ata.0,
+					transfer_param.amount,
+					transfer_param.to,
+					source_chain,
+					source_address,
+					message,
+					ccm_accounts,
+					vault_program,
+					vault_program_data_account,
+					system_program_id,
+					sys_var_instructions,
+					token_vault_pda_account,
+					token_vault_ata,
+					token_mint_pubkey,
+					token_program_id,
+					agg_key,
+					nonce_account,
+					compute_price,
+				))
+			},
+		}?;
 
 		let transaction = SolTransaction::new_unsigned(SolMessage::new_with_blockhash(
 			&instruction_set,

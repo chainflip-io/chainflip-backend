@@ -21,7 +21,7 @@ use crate::{
 		SolAccountMeta, SolAddress, SolAmount, SolAsset, SolCcmAccounts, SolComputeLimit,
 		SolInstruction, SolPubkey, SolanaDepositFetchId,
 	},
-	FetchAssetParams, ForeignChainAddress, TransferAssetParams,
+	FetchAssetParams, ForeignChainAddress,
 };
 
 /// Internal enum type that contains SolAsset with derived ATA
@@ -233,8 +233,10 @@ impl SolanaInstructionBuilder {
 		Self::finalize(instructions, nonce_account.into(), agg_key.into(), compute_price)
 	}
 
-	pub fn ccm_transfer(
-		transfer_param: TransferAssetParams<Solana>,
+	/// Creates an instruction set for CCM messages that transfer native Sol token
+	pub fn ccm_transfer_native(
+		amount: SolAmount,
+		to: SolAddress,
 		source_chain: cf_primitives::ForeignChain,
 		source_address: Option<ForeignChainAddress>,
 		message: Vec<u8>,
@@ -248,24 +250,20 @@ impl SolanaInstructionBuilder {
 		compute_price: SolAmount,
 	) -> Vec<SolInstruction> {
 		let instructions = vec![
-			SystemProgramInstruction::transfer(
-				&agg_key.into(),
-				&transfer_param.to.into(),
-				transfer_param.amount,
-			),
+			SystemProgramInstruction::transfer(&agg_key.into(), &to.into(), amount),
 			ProgramInstruction::get_instruction(
 				&VaultProgram::ExecuteCcmNativeCall {
 					source_chain: source_chain as u32,
 					source_address: codec::Encode::encode(&source_address),
 					message,
-					amount: transfer_param.amount,
+					amount,
 				},
 				vault_program.into(),
 				vec![
 					vec![
 						SolAccountMeta::new_readonly(vault_program_data_account.into(), false),
 						SolAccountMeta::new_readonly(agg_key.into(), true),
-						SolAccountMeta::new(transfer_param.to.into(), false),
+						SolAccountMeta::new(to.into(), false),
 						SolAccountMeta::from(ccm_accounts.cf_receiver.clone()),
 						SolAccountMeta::new_readonly(system_program_id.into(), false),
 						SolAccountMeta::new_readonly(sys_var_instructions.into(), false),
@@ -280,6 +278,78 @@ impl SolanaInstructionBuilder {
 
 		Self::finalize(instructions, nonce_account.into(), agg_key.into(), compute_price)
 	}
+
+	pub fn ccm_transfer_usdc_token(
+		ata: SolAddress,
+		amount: SolAmount,
+		to: SolAddress,
+		source_chain: cf_primitives::ForeignChain,
+		source_address: Option<ForeignChainAddress>,
+		message: Vec<u8>,
+		ccm_accounts: SolCcmAccounts,
+		vault_program: SolAddress,
+		vault_program_data_account: SolAddress,
+		system_program_id: SolAddress,
+		sys_var_instructions: SolAddress,
+		token_vault_pda_account: SolAddress,
+		token_vault_ata: SolAddress,
+		token_mint_pubkey: SolAddress,
+		token_program_id: SolAddress,
+		agg_key: SolAddress,
+		nonce_account: SolAddress,
+		compute_price: SolAmount,
+	) -> Vec<SolInstruction> {
+		let instructions = vec![
+			AssociatedTokenAccountInstruction::create_associated_token_account_idempotent_instruction(
+				&agg_key.into(),
+				&to.into(),
+				&token_mint_pubkey.into(),
+				&ata.into(),
+			),
+			ProgramInstruction::get_instruction(
+				&VaultProgram::TransferTokens { amount, decimals: SOL_USDC_DECIMAL },
+				vault_program.into(),
+				vec![
+					SolAccountMeta::new_readonly(
+						vault_program_data_account.into(),
+						false,
+					),
+					SolAccountMeta::new_readonly(agg_key.into(), true),
+					SolAccountMeta::new_readonly(token_vault_pda_account.into(), false),
+					SolAccountMeta::new(token_vault_ata.into(), false),
+					SolAccountMeta::new(ata.into(), false),
+					SolAccountMeta::new_readonly(token_mint_pubkey.into(), false),
+					SolAccountMeta::new_readonly(token_program_id.into(), false),
+					SolAccountMeta::new_readonly(system_program_id.into(), false),
+				],
+			),
+			ProgramInstruction::get_instruction(
+				&VaultProgram::ExecuteCcmTokenCall {
+					source_chain: source_chain as u32,
+					source_address: codec::Encode::encode(&source_address),
+					message,
+					amount,
+				},
+				vault_program.into(),
+				vec![
+					vec![
+						SolAccountMeta::new_readonly(vault_program_data_account.into(), false),
+						SolAccountMeta::new_readonly(agg_key.into(), true),
+						SolAccountMeta::new(ata.into(), false),
+						ccm_accounts.cf_receiver.clone().into(),
+						SolAccountMeta::new_readonly(token_program_id.into(), false),
+						SolAccountMeta::new_readonly(token_mint_pubkey.into(), false),
+						SolAccountMeta::new_readonly(sys_var_instructions.into(), false),
+					],
+					ccm_accounts.remaining_account_metas(),
+				]
+				.into_iter()
+				.flatten()
+				.collect::<Vec<_>>(),
+			)];
+
+		Self::finalize(instructions, nonce_account.into(), agg_key.into(), compute_price)
+	}
 }
 
 #[cfg(test)]
@@ -287,14 +357,17 @@ mod test {
 	use cf_primitives::ChannelId;
 
 	use super::*;
-	use crate::sol::{
-		consts::{MAX_TRANSACTION_LENGTH, TOKEN_PROGRAM_ID},
-		sol_tx_core::{
-			address_derivation::derive_deposit_address,
-			extra_types_for_testing::{Keypair, Signer},
-			sol_test_values::*,
+	use crate::{
+		sol::{
+			consts::{MAX_TRANSACTION_LENGTH, TOKEN_PROGRAM_ID},
+			sol_tx_core::{
+				address_derivation::derive_deposit_address,
+				extra_types_for_testing::{Keypair, Signer},
+				sol_test_values::*,
+			},
+			SolHash, SolMessage, SolTransaction, SolanaDepositFetchId,
 		},
-		SolHash, SolMessage, SolTransaction, SolanaDepositFetchId,
+		TransferAssetParams,
 	};
 	use core::str::FromStr;
 
@@ -394,12 +467,18 @@ mod test {
 		tx.sign(&[&agg_key_keypair], durable_nonce);
 
 		// println!("{:?}", tx);
-		let serialized_tx =
-			tx.finalize_and_serialize().expect("Transaction serialization must succeed");
+		let serialized_tx = tx
+			.clone()
+			.finalize_and_serialize()
+			.expect("Transaction serialization must succeed");
 
-		//println!("tx:{:?}", hex::encode(serialized_tx.clone()));
-		assert_eq!(serialized_tx, expected_serialized_tx);
-		println!("Serialized tx length: {:?}", serialized_tx.len());
+		if serialized_tx != expected_serialized_tx {
+			panic!(
+				"Transaction mismatch. \nTx: {:?} \nSerialized: {:?}",
+				tx,
+				hex::encode(serialized_tx.clone())
+			);
+		}
 		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
 	}
 
@@ -571,7 +650,7 @@ mod test {
 	}
 
 	#[test]
-	fn can_create_ccm_instruction_set() {
+	fn can_create_ccm_native_instruction_set() {
 		let ccm_param = ccm_parameter();
 		let transfer_param = TransferAssetParams::<Solana> {
 			asset: SOL,
@@ -579,8 +658,9 @@ mod test {
 			to: SolPubkey::from_str(TRANSFER_TO_ACCOUNT).unwrap().into(),
 		};
 
-		let instruction_set = SolanaInstructionBuilder::ccm_transfer(
-			transfer_param,
+		let instruction_set = SolanaInstructionBuilder::ccm_transfer_native(
+			transfer_param.amount,
+			transfer_param.to,
 			ccm_param.source_chain,
 			ccm_param.source_address,
 			ccm_param.channel_metadata.message.to_vec(),
@@ -596,6 +676,43 @@ mod test {
 
 		// Serialized tx built in `create_ccm_native_transfer` test
 		let expected_serialized_tx = hex_literal::hex!("019e8ac555f753d59579063aa9339e3c434b31aa4d26f4999e2bcad27812a70812a5c0aac063d036359f91c81d9fd67a0d309b471e9f1ff40de1fc9a7a39bbc2090100070bf79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb0575731869899efe0bd5d9161ad9f1db7c582c48c0b4ea7cff6a637c55c7310717eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19231e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd400000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f0800000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000004a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293ca73bdf31e341218a693b8772c43ecfcecd4cf35fada09a87ea0f860d028168e5c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890005040302070004040000000500090340420f000000000005000502e0930400040200030c0200000000ca9a3b0000000009070800030104060a367d050be38042e0b201000000160000000100ffffffffffffffffffffffffffffffffffffffff040000007c1d0f0700ca9a3b00000000").to_vec();
+
+		test_constructed_instruction_set(instruction_set, expected_serialized_tx);
+	}
+
+	#[test]
+	fn can_create_ccm_usdc_token_instruction_set() {
+		let ccm_param = ccm_parameter();
+		let to = SolAddress::from_str(TRANSFER_TO_ACCOUNT).unwrap();
+		let to_ata = crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
+			to,
+			token_mint_pubkey(),
+		)
+		.unwrap();
+
+		let instruction_set = SolanaInstructionBuilder::ccm_transfer_usdc_token(
+			to_ata.0,
+			TRANSFER_AMOUNT,
+			to,
+			ccm_param.source_chain,
+			ccm_param.source_address,
+			ccm_param.channel_metadata.message.to_vec(),
+			ccm_accounts(),
+			vault_program(),
+			vault_program_data_account(),
+			system_program_id(),
+			sys_var_instructions(),
+			token_vault_pda_account(),
+			token_vault_ata(),
+			token_mint_pubkey(),
+			token_program_id(),
+			agg_key(),
+			nonce_account(),
+			compute_price(),
+		);
+
+		// Serialized tx built in `create_ccm_native_transfer` test
+		let expected_serialized_tx = hex_literal::hex!("01105b6646cf4b5b42cd489b2123d18d253e8cb488f889078ada016a2daae5a7bcbef8f4cd5f603142f62fbb42965a49306535239617c13ba1fbca72cc571d7c0f01000c11f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb0575731869899efe0bd5d9161ad9f1db7c582c48c0b4ea7cff6a637c55c7310717eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925ec7baaea7200eb2a66ccd361ee73bc87a7e5222ecedcbc946e97afb59ec4616b966a2b36557938f49cc5d00f8f12d86f16f48e03b63c8422967dba621ab60bf00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f0800000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8731e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd44a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c81a0052237ad76cb6e88fe505dc3d96bba6d8889f098b1eaa342ec84458805218c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859a73bdf31e341218a693b8772c43ecfcecd4cf35fada09a87ea0f860d028168e5c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890006050302080004040000000600090340420f000000000006000502e09304000f0600030b0a050901010d080c000e04030a09051136b4eeaf4a557ebc00ca9a3b00000000060d080c000301090a0710366cb8a27b9fdeaa2301000000160000000100ffffffffffffffffffffffffffffffffffffffff040000007c1d0f0700ca9a3b00000000").to_vec();
 
 		test_constructed_instruction_set(instruction_set, expected_serialized_tx);
 	}

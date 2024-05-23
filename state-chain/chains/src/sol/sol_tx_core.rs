@@ -1502,28 +1502,32 @@ mod tests {
 
 	#[test]
 	fn create_ccm_token_transfer() {
-		let durable_nonce = Hash::from_str("B5SuVcUSTScrPyYsexYXECDTNysCSsy6tjJjGssDSVJg").unwrap();
+		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
+		let amount = TRANSFER_AMOUNT;
+		let token_mint_pubkey = SolAddress::from_str(MINT_PUB_KEY).unwrap();
+		let extra_accounts = ccm_accounts();
+		let ccm_parameter = ccm_parameter();
 
-		let cf_receiver = Pubkey::from_str("8pBPaVfTAcjLeNfC187Fkvi9b1XEFhRNJ95BQXXVksmH").unwrap();
-		let amount: u64 = 10000000;
+		let to_pubkey = SolAddress::from_str(TRANSFER_TO_ACCOUNT).unwrap();
+		let to_pubkey_ata = derive_associated_token_account(to_pubkey, token_mint_pubkey).unwrap();
 
-		// Associated token account from "pyq7ySiH5RvKteu2vdXKC7SNyNDp9vNDkGXdHxSpPtu"
-		let to_token_account =
-			Pubkey::from_str("7iBzy7rBaX4tEtRwXaanXdMhAeDPf1S5fBcCnKeK39kK").unwrap();
-
-		let remaining_account =
-			Pubkey::from_str("2npYpAQcNWcZo85eB43DnSMyeeVCiks7g65YaWVKp8TX").unwrap();
-
-		// This would lack the idempotent account creating but that's fine for the test
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
 				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
 				&agg_key_pubkey,
 			),
+			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
+			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
+			AssociatedTokenAccountInstruction::create_associated_token_account_idempotent_instruction(
+				&agg_key_pubkey,
+				&to_pubkey.into(),
+				&token_mint_pubkey.into(),
+				&to_pubkey_ata.0.into(),
+			),
 			ProgramInstruction::get_instruction(
-				&VaultProgram::TransferTokens { amount, decimals: 6 },
+				&VaultProgram::TransferTokens { amount, decimals: SOL_USDC_DECIMAL },
 				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
 				vec![
 					AccountMeta::new_readonly(
@@ -1539,7 +1543,7 @@ mod tests {
 						Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(),
 						false,
 					),
-					AccountMeta::new(to_token_account, false),
+					AccountMeta::new(to_pubkey_ata.0.into(), false),
 					AccountMeta::new_readonly(Pubkey::from_str(MINT_PUB_KEY).unwrap(), false),
 					AccountMeta::new_readonly(Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(), false),
 					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
@@ -1547,9 +1551,9 @@ mod tests {
 			),
 			ProgramInstruction::get_instruction(
 				&VaultProgram::ExecuteCcmTokenCall {
-					source_chain: 1,
-					source_address: vec![11u8, 6u8, 152u8, 22u8, 3u8, 1u8],
-					message: vec![124u8, 29u8, 15u8, 7u8],
+					source_chain: ccm_parameter.source_chain as u32,
+					source_address: codec::Encode::encode(&ccm_parameter.source_address),
+					message: ccm_parameter.channel_metadata.message.into(),
 					amount,
 				},
 				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
@@ -1559,15 +1563,15 @@ mod tests {
 						false,
 					),
 					AccountMeta::new_readonly(agg_key_pubkey, true),
-					AccountMeta::new(to_token_account, false),
-					AccountMeta::new_readonly(cf_receiver, false),
+					AccountMeta::new(to_pubkey_ata.0.into(), false),
+					extra_accounts.cf_receiver.into(),
 					AccountMeta::new_readonly(Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(), false),
 					AccountMeta::new_readonly(Pubkey::from_str(MINT_PUB_KEY).unwrap(), false),
 					AccountMeta::new_readonly(
 						Pubkey::from_str(SYS_VAR_INSTRUCTIONS).unwrap(),
 						false,
 					),
-					AccountMeta::new(remaining_account, false),
+					extra_accounts.remaining_accounts[0].clone().into(),
 				],
 			),
 		];
@@ -1575,9 +1579,12 @@ mod tests {
 			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
 		let mut tx = Transaction::new_unsigned(message);
 		tx.sign(&[&agg_key_keypair], durable_nonce);
+		// println!("{:?}", tx);
 
 		let serialized_tx = tx.finalize_and_serialize().unwrap();
-		let expected_serialized_tx = hex_literal::hex!("01044b82cf77f58d01af97090e5b392317f2b3f3037b16f264a0114791d7cc6b4d234f1fc518ad5d28c1cd1cac0fc5b4969f7e77e07ba0577f9b44fade4f28ec090100090ef79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921a98962b4689f93f09c8bbcf32aec09ab57e8ea65a02cc814e335cbf3e853ab663b35f30ba8a5f9e80b8258b6e39ef4062e5f55c60a8217df3ec39457331cc80b966a2b36557938f49cc5d00f8f12d86f16f48e03b63c8422967dba621ab60bf000000000000000000000000000000000000000000000000000000000000000006a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f0800000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee874a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c7417da8b99d7748127a76b03d61fee69c80dfef73ad2d5503737beedc5a9ed4881a0052237ad76cb6e88fe505dc3d96bba6d8889f098b1eaa342ec844588052195b87bc2cbdf23ee31be8254d8d7fcd7c31aaa6930621a20d5841df15672a1d903050301070004040000000b080a000d04030908051136b4eeaf4a557ebc8096980000000000060b080a00030c08090602266cb8a27b9fdeaa2301000000060000000b0698160301040000007c1d0f078096980000000000").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("01105b6646cf4b5b42cd489b2123d18d253e8cb488f889078ada016a2daae5a7bcbef8f4cd5f603142f62fbb42965a49306535239617c13ba1fbca72cc571d7c0f01000c11f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb0575731869899efe0bd5d9161ad9f1db7c582c48c0b4ea7cff6a637c55c7310717eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925ec7baaea7200eb2a66ccd361ee73bc87a7e5222ecedcbc946e97afb59ec4616b966a2b36557938f49cc5d00f8f12d86f16f48e03b63c8422967dba621ab60bf00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f0800000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8731e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd44a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c81a0052237ad76cb6e88fe505dc3d96bba6d8889f098b1eaa342ec84458805218c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859a73bdf31e341218a693b8772c43ecfcecd4cf35fada09a87ea0f860d028168e5c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890006050302080004040000000600090340420f000000000006000502e09304000f0600030b0a050901010d080c000e04030a09051136b4eeaf4a557ebc00ca9a3b00000000060d080c000301090a0710366cb8a27b9fdeaa2301000000160000000100ffffffffffffffffffffffffffffffffffffffff040000007c1d0f0700ca9a3b00000000").to_vec();
+
+		// println!("{:?}", hex::encode(serialized_tx.clone()));
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
 		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
