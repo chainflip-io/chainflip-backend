@@ -1,10 +1,12 @@
 use crate::{Config, CurrentAuthorities, HistoricalAuthorities, ValidatorIdOf};
-use codec::{Decode, Encode};
 use core::marker::PhantomData;
-#[cfg(feature = "try-runtime")]
-use frame_support::sp_runtime::DispatchError;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 use sp_std::vec::Vec;
+
+#[cfg(feature = "try-runtime")]
+use codec::{Decode, Encode};
+#[cfg(feature = "try-runtime")]
+use frame_support::sp_runtime::DispatchError;
 
 pub struct Migration<T: Config>(PhantomData<T>);
 

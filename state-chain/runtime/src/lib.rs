@@ -14,7 +14,7 @@ use crate::{
 	runtime_apis::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, DispatchErrorWithMessage,
 		EventFilter, FailingWitnessValidators, LiquidityProviderInfo, RuntimeApiPenalty,
-		ValidatorInfo,
+		SimulateSwapAdditionalOrder, SimulatedSwapInformation, ValidatorInfo,
 	},
 };
 use cf_amm::{
@@ -39,9 +39,11 @@ use core::ops::Range;
 use frame_support::instances::*;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_ingress_egress::{ChannelAction, DepositWitness, OwedAmount, TargetChainAsset};
+use pallet_cf_ingress_egress::{
+	ChannelAction, DepositWitness, IngressOrEgress, OwedAmount, TargetChainAsset,
+};
 use pallet_cf_pools::{
-	AskBidMap, AssetPair, PoolLiquidity, PoolOrderbook, PoolPriceV1, PoolPriceV2,
+	AskBidMap, AssetPair, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
 };
 use pallet_cf_reputation::ExclusionList;
@@ -1265,8 +1267,92 @@ impl_runtime_apis! {
 		///
 		/// Note: This function must only be called through RPC, because RPC has its own storage buffer
 		/// layer and would not affect on-chain storage.
-		fn cf_pool_simulate_swap(from: Asset, to:Asset, amount: AssetAmount) -> Result<SwapOutput, DispatchErrorWithMessage> {
-			LiquidityPools::swap_with_network_fee(from, to, amount).map_err(Into::into)
+		fn cf_pool_simulate_swap(
+			from: Asset,
+			to: Asset,
+			amount: AssetAmount,
+			additional_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
+		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage> {
+			if let Some(additional_orders) = additional_orders {
+				for (index, additional_order) in additional_orders.into_iter().enumerate() {
+					match additional_order {
+						SimulateSwapAdditionalOrder::LimitOrder {
+							base_asset,
+							quote_asset,
+							side,
+							tick,
+							sell_amount,
+						} => {
+							LiquidityPools::try_add_limit_order(
+								&AccountId::new([0; 32]),
+								base_asset,
+								quote_asset,
+								side,
+								index as OrderId,
+								tick,
+								sell_amount.into(),
+							)?;
+						}
+					}
+				}
+			}
+
+			fn remove_fees(ingress_or_egress: IngressOrEgress, asset: Asset, amount: AssetAmount) -> (AssetAmount, AssetAmount) {
+				use pallet_cf_ingress_egress::AmountAndFeesWithheld;
+
+				match asset.into() {
+					ForeignChainAndAsset::Ethereum(asset) => {
+						let AmountAndFeesWithheld {
+							amount_after_fees,
+							fees_withheld,
+						} = pallet_cf_ingress_egress::Pallet::<Runtime, EthereumInstance>::withhold_ingress_or_egress_fee(ingress_or_egress, asset, amount.unique_saturated_into());
+
+						(amount_after_fees, fees_withheld)
+					},
+					ForeignChainAndAsset::Polkadot(asset) => {
+						let AmountAndFeesWithheld {
+							amount_after_fees,
+							fees_withheld,
+						} = pallet_cf_ingress_egress::Pallet::<Runtime, PolkadotInstance>::withhold_ingress_or_egress_fee(ingress_or_egress, asset, amount.unique_saturated_into());
+
+						(amount_after_fees, fees_withheld)
+					},
+					ForeignChainAndAsset::Bitcoin(asset) => {
+						let AmountAndFeesWithheld {
+							amount_after_fees,
+							fees_withheld,
+						} = pallet_cf_ingress_egress::Pallet::<Runtime, BitcoinInstance>::withhold_ingress_or_egress_fee(ingress_or_egress, asset, amount.unique_saturated_into());
+
+						(amount_after_fees.into(), fees_withheld.into())
+					},
+					ForeignChainAndAsset::Arbitrum(asset) => {
+						let AmountAndFeesWithheld {
+							amount_after_fees,
+							fees_withheld,
+						} = pallet_cf_ingress_egress::Pallet::<Runtime, ArbitrumInstance>::withhold_ingress_or_egress_fee(ingress_or_egress, asset, amount.unique_saturated_into());
+
+						(amount_after_fees, fees_withheld)
+					},
+				}
+			}
+
+			let (amount_to_swap, ingress_fee) = remove_fees(IngressOrEgress::Ingress, from, amount);
+
+			let swap_output = LiquidityPools::swap_with_network_fee(
+				from,
+				to,
+				amount_to_swap,
+			)?;
+
+			let (output, egress_fee) = remove_fees(IngressOrEgress::Egress, to, swap_output.output);
+
+			Ok(SimulatedSwapInformation {
+				intermediary: swap_output.intermediary,
+				output,
+				network_fee: swap_output.network_fee,
+				ingress_fee,
+				egress_fee,
+			})
 		}
 
 		fn cf_pool_info(base_asset: Asset, quote_asset: Asset) -> Result<PoolInfo, DispatchErrorWithMessage> {
