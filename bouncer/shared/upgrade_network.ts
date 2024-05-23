@@ -9,9 +9,7 @@ import { bumpSpecVersionAgainstNetwork } from './utils/spec_version';
 import { compileBinaries } from './utils/compile_binaries';
 import { submitRuntimeUpgradeWithRestrictions } from './submit_runtime_upgrade';
 import { execWithLog } from './utils/exec_with_log';
-import { setupArbVault } from './setup_arb_vault';
 import { submitGovernanceExtrinsic } from './cf_governance';
-import { setupSwaps } from './setup_swaps';
 
 async function readPackageTomlVersion(projectRoot: string): Promise<string> {
   const data = await fs.readFile(path.join(projectRoot, '/state-chain/runtime/Cargo.toml'), 'utf8');
@@ -132,7 +130,7 @@ async function compatibleUpgrade(
     },
   );
 
-  startBrokerAndLpApi(localnetInitPath, binaryPath, KEYS_DIR);
+  await startBrokerAndLpApi(localnetInitPath, binaryPath, KEYS_DIR);
 }
 
 async function incompatibleUpgradeNoBuild(
@@ -140,7 +138,6 @@ async function incompatibleUpgradeNoBuild(
   binaryPath: string,
   runtimePath: string,
   numberOfNodes: 1 | 3,
-  newVersion: string,
 ) {
   const SELECTED_NODES = numberOfNodes === 1 ? 'bashful' : 'bashful doc dopey';
 
@@ -239,15 +236,7 @@ async function incompatibleUpgradeNoBuild(
 
   await sleep(4000);
 
-  if (newVersion.includes('1.4')) {
-    await setupArbVault();
-  }
-
-  startBrokerAndLpApi(localnetInitPath, binaryPath, KEYS_DIR);
-
-  if (newVersion.includes('1.4')) {
-    await setupSwaps();
-  }
+  await startBrokerAndLpApi(localnetInitPath, binaryPath, KEYS_DIR);
 
   console.log('Started new broker and lp-api.');
 }
@@ -257,7 +246,6 @@ async function incompatibleUpgrade(
   localnetInitPath: string,
   nextVersionWorkspacePath: string,
   numberOfNodes: 1 | 3,
-  newVersion: string,
 ) {
   await bumpSpecVersionAgainstNetwork(
     `${nextVersionWorkspacePath}/state-chain/runtime/src/lib.rs`,
@@ -271,7 +259,6 @@ async function incompatibleUpgrade(
     `${nextVersionWorkspacePath}/target/release`,
     `${nextVersionWorkspacePath}/target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm`,
     numberOfNodes,
-    newVersion,
   );
 }
 
@@ -333,7 +320,6 @@ export async function upgradeNetworkGit(
       localnetInitPath,
       nextVersionWorkspacePath,
       numberOfNodes,
-      toTomlVersion,
     );
   }
 
@@ -388,7 +374,6 @@ export async function upgradeNetworkPrebuilt(
       binariesPath,
       runtimePath,
       numberOfNodes,
-      nodeVersion,
     );
   } else {
     console.log('The versions are incompatible.');
@@ -397,7 +382,6 @@ export async function upgradeNetworkPrebuilt(
       binariesPath,
       runtimePath,
       numberOfNodes,
-      nodeVersion,
     );
   }
 
