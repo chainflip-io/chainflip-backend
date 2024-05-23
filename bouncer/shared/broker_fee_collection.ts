@@ -6,7 +6,6 @@ import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import {
   EgressId,
-  amountToFineAmount,
   brokerMutex,
   decodeDotAddressForContract,
   handleSubstrateError,
@@ -14,9 +13,10 @@ import {
   observeBalanceIncrease,
   observeEvent,
   shortChainFromAsset,
-  assetDecimals,
   hexStringToBytesArray,
   getChainflipApi,
+  calculateFeeWithBps,
+  amountToFineAmountBigInt,
 } from '../shared/utils';
 import { getBalance } from '../shared/get_balance';
 import { doPerformSwap } from '../shared/perform_swap';
@@ -62,7 +62,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   const destinationAddress = await newAddress(swapAsset, seed ?? randomBytes(32).toString('hex'));
   const observeDestinationAddress =
     asset === Assets.Dot ? decodeDotAddressForContract(destinationAddress) : destinationAddress;
-  const destinationChain = shortChainFromAsset(swapAsset); // "Eth" -> "Eth"
+  const destinationChain = shortChainFromAsset(swapAsset);
   console.log(`${asset} destinationAddress:`, destinationAddress);
   const observeSwapScheduledEvent = observeEvent(
     ':SwapScheduled',
@@ -126,9 +126,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   const depositAmountAfterIngressFee = BigInt(
     swapScheduledEvent.data.depositAmount.replaceAll(',', ''),
   );
-  const rawDepositForSwapAmountBigInt = BigInt(
-    amountToFineAmount(rawDepositForSwapAmount, assetDecimals(asset)),
-  );
+  const rawDepositForSwapAmountBigInt = amountToFineAmountBigInt(rawDepositForSwapAmount, asset);
   console.log('depositAmount:', depositAmountAfterIngressFee);
   assert(
     depositAmountAfterIngressFee >= 0 &&
@@ -150,11 +148,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
     `Mismatch between brokerCommission from the swap event and the detected increase. Did some other ${asset} swap happen at the same time as this test?`,
   );
 
-  // Calculating the fee. Using some strange math here because the SC rounds down on 0.5 instead of up.
-  const divisor = BigInt(10000 / commissionBps);
-  const expectedIncrease =
-    depositAmountAfterIngressFee / divisor +
-    (depositAmountAfterIngressFee % divisor > divisor / 2n ? 1n : 0n);
+  const expectedIncrease = calculateFeeWithBps(depositAmountAfterIngressFee, commissionBps);
   assert.strictEqual(
     increase,
     expectedIncrease,
@@ -204,12 +198,8 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   // Check that the balance after withdrawal is correct after deducting withdrawal fee
   const balanceAfterWithdrawal = await getBalance(asset, withdrawalAddress);
   console.log(`${asset} Balance after withdrawal:`, balanceAfterWithdrawal);
-  const balanceAfterWithdrawalBigInt = BigInt(
-    amountToFineAmount(balanceAfterWithdrawal, assetDecimals(asset)),
-  );
-  const balanceBeforeWithdrawalBigInt = BigInt(
-    amountToFineAmount(balanceBeforeWithdrawal, assetDecimals(asset)),
-  );
+  const balanceAfterWithdrawalBigInt = amountToFineAmountBigInt(balanceAfterWithdrawal, asset);
+  const balanceBeforeWithdrawalBigInt = amountToFineAmountBigInt(balanceBeforeWithdrawal, asset);
   // Log the chain state for Ethereum assets to help debugging.
   if (['Flip', 'Eth', 'Usdc'].includes(asset.toString())) {
     const chainState = JSON.stringify(

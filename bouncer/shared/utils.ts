@@ -2,6 +2,8 @@ import * as crypto from 'crypto';
 import { setTimeout as sleep } from 'timers/promises';
 import Client from 'bitcoin-core';
 import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
+// eslint-disable-next-line no-restricted-imports
+import { KeyringPair } from '@polkadot/keyring/types';
 import { Mutex } from 'async-mutex';
 import {
   Chain as SDKChain,
@@ -192,19 +194,9 @@ export function chainGasAsset(chain: Chain): Asset {
   }
 }
 
-export function getAssetsForChain(chain: Chain): Asset[] {
-  switch (chain) {
-    case 'Ethereum':
-      return [Assets.Eth, Assets.Usdc, Assets.Usdt, Assets.Flip];
-    case 'Bitcoin':
-      return [Assets.Btc];
-    case 'Polkadot':
-      return [Assets.Dot];
-    case 'Arbitrum':
-      return [Assets.ArbEth, Assets.ArbUsdc];
-    default:
-      throw new Error(`Unsupported chain: ${chain}`);
-  }
+export function amountToFineAmountBigInt(amount: number | string, asset: Asset): bigint {
+  const stringAmount = typeof amount === 'number' ? amount.toString() : amount;
+  return BigInt(amountToFineAmount(stringAmount, assetDecimals(asset)));
 }
 
 // State Chain uses non-unique string identifiers for assets.
@@ -843,6 +835,16 @@ export function handleSubstrateError(api: any) {
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function decodeModuleError(module: any, api: any): string {
+  const errorIndex = {
+    index: new BN(module.index),
+    error: new Uint8Array(Buffer.from(module.error.slice(2), 'hex')),
+  };
+  const { docs, name, section } = api.registry.findMetaError(errorIndex);
+  return `${section}.${name}: ${docs}`;
+}
+
 export function isValidHexHash(hash: string): boolean {
   const hexHashRegex = /^0x[0-9a-fA-F]{64}$/;
   return hexHashRegex.test(hash);
@@ -912,4 +914,67 @@ export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
   const outputPrice = fineAmountToAmount(finePriceOutput.toString(), assetDecimals(to));
 
   return outputPrice;
+}
+
+/// Submits an extrinsic and waits for it to be included in a block.
+/// Returning the extrinsic result or throwing the dispatchError.
+export async function submitChainflipExtrinsic(
+  account: KeyringPair,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  extrinsic: any,
+  errorOnFail = true,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<any> {
+  await using chainflipApi = await getChainflipApi();
+
+  let extrinsicResult;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await extrinsic.signAndSend(account, { nonce: -1 }, (arg: any) => {
+    if (arg.blockNumber !== undefined || arg.dispatchError !== undefined) {
+      extrinsicResult = arg;
+    }
+  });
+  while (!extrinsicResult) {
+    await sleep(100);
+  }
+  if (extrinsicResult.dispatchError && errorOnFail) {
+    let error;
+    if (extrinsicResult.dispatchError.isModule) {
+      const { docs, name, section } = chainflipApi.registry.findMetaError(
+        extrinsicResult.dispatchError.asModule,
+      );
+      error = section + '.' + name + ': ' + docs;
+    } else {
+      error = extrinsicResult.dispatchError.toString();
+    }
+    throw new Error(`Extrinsic failed: ${error}`);
+  }
+  return extrinsicResult;
+}
+
+export class ChainflipExtrinsicSubmitter {
+  private keyringPair: KeyringPair;
+
+  private mutex: Mutex;
+
+  constructor(keyringPair: KeyringPair, mutex: Mutex = new Mutex()) {
+    this.keyringPair = keyringPair;
+    this.mutex = mutex;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async submit(extrinsic: any, errorOnFail: boolean = true) {
+    let extrinsicResult;
+    await this.mutex.runExclusive(async () => {
+      extrinsicResult = await submitChainflipExtrinsic(this.keyringPair, extrinsic, errorOnFail);
+    });
+    return extrinsicResult;
+  }
+}
+
+/// Calculate the fee using the given bps. Used for broker & boost fee calculation.
+export function calculateFeeWithBps(fineAmount: bigint, bps: number): bigint {
+  // Using some strange math here because the SC rounds down on 0.5 instead of up.
+  const divisor = BigInt(10000 / bps);
+  return fineAmount / divisor + (fineAmount % divisor > divisor / 2n ? 1n : 0n);
 }
