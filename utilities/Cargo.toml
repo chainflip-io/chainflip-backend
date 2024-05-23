@@ -45,6 +45,12 @@ jsonrpsee = { version = "0.16.2", features = [
 ], optional = true }
 regex = { version = "1", optional = true }
 url = { version = "2.4", optional = true }
+scale-info = { version = "2.10", optional = true }
+thiserror = { version = "1.0.26", optional = true }
+log = "0.4"
+
+# local dependencies
+scale-json = { path = "./scale-json", optional = true }
 
 [dev-dependencies]
 serde_json = "1.0"
@@ -67,6 +73,9 @@ std = [
   'dep:pin-project',
   'dep:serde',
   'serde?/std',
+  'dep:scale-info',
+  'dep:scale-json',
+  'dep:thiserror',
   'dep:tracing',
   'dep:tracing-subscriber',
   'dep:warp',
