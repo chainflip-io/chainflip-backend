@@ -25,7 +25,7 @@ use cf_primitives::ForeignChain;
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct ComputePrice;
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
-pub struct DurableNonce;
+pub struct NonceAccount;
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct AllNonceAccounts;
 
@@ -34,17 +34,17 @@ pub struct AllNonceAccounts;
 pub trait SolanaEnvironment:
 	ChainEnvironment<SolanaEnvAccountLookupKey, SolAddress>
 	+ ChainEnvironment<ComputePrice, SolAmount>
-	+ ChainEnvironment<DurableNonce, SolHash>
-	+ ChainEnvironment<AllNonceAccounts, Vec<SolAddress>>
+	+ ChainEnvironment<NonceAccount, (SolAddress, SolHash)>
+	+ ChainEnvironment<AllNonceAccounts, Vec<(SolAddress, SolHash)>>
 {
 	fn compute_price() -> Result<SolAmount, SolanaTransactionBuildingError> {
 		<Self as ChainEnvironment<ComputePrice, SolAmount>>::lookup(ComputePrice)
 			.ok_or(SolanaTransactionBuildingError::CannotLookupComputePrice)
 	}
 
-	fn durable_nonce() -> Result<SolHash, SolanaTransactionBuildingError> {
-		<Self as ChainEnvironment<DurableNonce, SolHash>>::lookup(DurableNonce)
-			.ok_or(SolanaTransactionBuildingError::CannotLookupDurableNonce)
+	fn nonce_account() -> Result<(SolAddress, SolHash), SolanaTransactionBuildingError> {
+		<Self as ChainEnvironment<NonceAccount, (SolAddress, SolHash)>>::lookup(NonceAccount)
+			.ok_or(SolanaTransactionBuildingError::NoAvailableNonceAccount)
 	}
 
 	fn lookup_account(
@@ -54,8 +54,6 @@ pub trait SolanaEnvironment:
 			match key {
 				SolanaEnvAccountLookupKey::AggKey =>
 					SolanaTransactionBuildingError::CannotLookupAggKey,
-				SolanaEnvAccountLookupKey::AvailableNonceAccount =>
-					SolanaTransactionBuildingError::NoAvailableNonceAccount,
 				SolanaEnvAccountLookupKey::VaultProgram =>
 					SolanaTransactionBuildingError::CannotLookupVaultProgram,
 				SolanaEnvAccountLookupKey::VaultProgramDataAccount =>
@@ -73,8 +71,11 @@ pub trait SolanaEnvironment:
 	}
 
 	fn all_nonce_accounts() -> Result<Vec<SolAddress>, SolanaTransactionBuildingError> {
-		<Self as ChainEnvironment<AllNonceAccounts, Vec<SolAddress>>>::lookup(AllNonceAccounts)
-			.ok_or(SolanaTransactionBuildingError::NonceAccountsAreNotSet)
+		<Self as ChainEnvironment<AllNonceAccounts, Vec<(SolAddress, SolHash)>>>::lookup(
+			AllNonceAccounts,
+		)
+		.map(|nonces| nonces.into_iter().map(|(addr, _hash)| addr).collect::<Vec<_>>())
+		.ok_or(SolanaTransactionBuildingError::NoNonceAccountsSet)
 	}
 }
 
@@ -82,7 +83,6 @@ pub trait SolanaEnvironment:
 #[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub enum SolanaEnvAccountLookupKey {
 	AggKey,
-	AvailableNonceAccount,
 	VaultProgram,
 	VaultProgramDataAccount,
 	UpgradeManagerProgramDataAccount,
@@ -98,12 +98,11 @@ pub enum SolanaTransactionBuildingError {
 	CannotLookupVaultProgram,
 	CannotLookupVaultProgramDataAccount,
 	CannotLookupComputePrice,
-	CannotLookupDurableNonce,
 	CannotLookupUpgradeManagerProgramDataAccount,
 	CannotLookupTokenMintPubkey,
 	CannotLookupTokenVaultAssociatedTokenAccount,
 	CannotLookupTokenVaultPdaAccount,
-	NonceAccountsAreNotSet,
+	NoNonceAccountsSet,
 	NoAvailableNonceAccount,
 	FailedToDeriveAddress(crate::sol::AddressDerivationError),
 	CannotDecodeCcmCfParam,
@@ -160,8 +159,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgramDataAccount)?;
 		let system_program_id = SolAddress::from_str(SYSTEM_PROGRAM_ID)
 			.expect("Preset Solana System Program ID account must be valid.");
-		let next_nonce =
-			Environment::lookup_account(SolanaEnvAccountLookupKey::AvailableNonceAccount)?;
+		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
 		let token_mint_pubkey =
 			Environment::lookup_account(SolanaEnvAccountLookupKey::TokenMintPubkey)?;
@@ -186,11 +184,14 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			vault_program_data_account,
 			system_program_id,
 			agg_key,
-			next_nonce,
+			nonce_account,
 			compute_price,
 		);
-		let transaction =
-			SolTransaction::new_unsigned(SolMessage::new(&instruction_set, Some(&agg_key.into())));
+		let transaction = SolTransaction::new_unsigned(SolMessage::new_with_blockhash(
+			&instruction_set,
+			Some(&agg_key.into()),
+			&durable_nonce.into(),
+		));
 
 		Ok(Self {
 			call_type: SolanaTransactionType::BatchFetch,
@@ -204,8 +205,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 	) -> Result<Vec<Self>, SolanaTransactionBuildingError> {
 		// Lookup the current Aggkey
 		let agg_key = Environment::lookup_account(SolanaEnvAccountLookupKey::AggKey)?;
-		let next_nonce =
-			Environment::lookup_account(SolanaEnvAccountLookupKey::AvailableNonceAccount)?;
+		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
 
 		// split the transfer params into Native and Token assets
@@ -222,7 +222,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 						transfer_param.amount,
 						transfer_param.to,
 						agg_key,
-						next_nonce,
+						nonce_account,
 						compute_price,
 					)
 				})
@@ -270,7 +270,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 							token_program_id,
 							system_program_id,
 							agg_key,
-							next_nonce,
+							nonce_account,
 							compute_price,
 						))
 					})
@@ -281,9 +281,10 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		.flatten()
 		.map(|instruction_set| Self {
 			call_type: SolanaTransactionType::Transfer,
-			transaction: SolTransaction::new_unsigned(SolMessage::new(
+			transaction: SolTransaction::new_unsigned(SolMessage::new_with_blockhash(
 				&instruction_set,
 				Some(&agg_key.into()),
+				&durable_nonce.into(),
 			)),
 			_phantom: Default::default(),
 		})
@@ -302,8 +303,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let upgrade_manager_program_data_account = Environment::lookup_account(
 			SolanaEnvAccountLookupKey::UpgradeManagerProgramDataAccount,
 		)?;
-		let next_nonce =
-			Environment::lookup_account(SolanaEnvAccountLookupKey::AvailableNonceAccount)?;
+		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
 
 		// Build the instruction_set
@@ -315,12 +315,15 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			system_program_id,
 			upgrade_manager_program_data_account,
 			agg_key,
-			next_nonce,
+			nonce_account,
 			compute_price,
 		);
 
-		let transaction =
-			SolTransaction::new_unsigned(SolMessage::new(&instruction_set, Some(&agg_key.into())));
+		let transaction = SolTransaction::new_unsigned(SolMessage::new_with_blockhash(
+			&instruction_set,
+			Some(&agg_key.into()),
+			&durable_nonce.into(),
+		));
 
 		Ok(Self {
 			call_type: SolanaTransactionType::RotateAggKey,
@@ -347,8 +350,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let sys_var_instructions = SolAddress::from_str(crate::sol::consts::SYS_VAR_INSTRUCTIONS)
 			.expect("Solana System Var Instruction must be valid.");
 		let agg_key = Environment::lookup_account(SolanaEnvAccountLookupKey::AggKey)?;
-		let nonce_account =
-			Environment::lookup_account(SolanaEnvAccountLookupKey::AvailableNonceAccount)?;
+		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
 
 		// Build the instruction_set
@@ -367,8 +369,11 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			compute_price,
 		);
 
-		let transaction =
-			SolTransaction::new_unsigned(SolMessage::new(&instruction_set, Some(&agg_key.into())));
+		let transaction = SolTransaction::new_unsigned(SolMessage::new_with_blockhash(
+			&instruction_set,
+			Some(&agg_key.into()),
+			&durable_nonce.into(),
+		));
 
 		Ok(Self {
 			call_type: SolanaTransactionType::CcmTransfer,
