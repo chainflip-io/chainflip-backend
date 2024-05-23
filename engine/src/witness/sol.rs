@@ -1,12 +1,10 @@
 mod chain_tracking;
 mod source;
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
-use cf_chains::Solana;
 use cf_primitives::EpochIndex;
 use futures_core::Future;
-use sp_core::H160;
 use utilities::task_scope::Scope;
 
 use crate::{
@@ -17,7 +15,6 @@ use crate::{
 		extrinsic_api::signed::SignedExtrinsicApi,
 		storage_api::StorageApi,
 		stream_api::{StreamApi, FINALIZED},
-		STATE_CHAIN_CONNECTION,
 	},
 };
 
@@ -26,18 +23,16 @@ use super::{
 	sol::source::SolSource,
 };
 
-use anyhow::{Context, Result};
-
-use chainflip_node::chain_spec::berghain::SOLANA_SAFETY_MARGIN;
+use anyhow::Result;
 
 pub async fn start<StateChainClient, StateChainStream, ProcessCall, ProcessingFut>(
 	scope: &Scope<'_, anyhow::Error>,
 	sol_client: SolRetryRpcClient,
-	process_call: ProcessCall,
+	_process_call: ProcessCall,
 	state_chain_client: Arc<StateChainClient>,
-	state_chain_stream: StateChainStream,
+	_state_chain_stream: StateChainStream,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
-	db: Arc<PersistentKeyDB>,
+	_db: Arc<PersistentKeyDB>,
 ) -> Result<()>
 where
 	StateChainClient: StorageApi + ChainApi + SignedExtrinsicApi + 'static + Send + Sync,

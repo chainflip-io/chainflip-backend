@@ -3,7 +3,6 @@ use crate::{sol::retry_rpc::SolRetryRpcApi, witness::common::chain_source::Heade
 use cf_chains::sol::SolTrackedData;
 
 use super::super::common::chunked_chain_source::chunked_by_time::chain_tracking::GetTrackedData;
-use frame_support::sp_runtime::FixedU64;
 use utilities::context;
 
 use cf_chains::sol::SolHash;
@@ -23,9 +22,7 @@ impl<T: SolRetryRpcApi + Send + Sync + Clone> GetTrackedData<cf_chains::Solana, 
 		Ok(SolTrackedData {
 			priority_fee: (context!(priority_fees
 				.get(priority_fees.len().saturating_sub(1) / 2)
-				.cloned())?)
-			.try_into()
-			.expect("Priority fee should fit u128"),
+				.cloned())?),
 		})
 	}
 }
