@@ -121,7 +121,6 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 		): (Address, Address, Address, u64, Address, u64, u64) =
 			match cf_runtime_upgrade_utilities::genesis_hashes::genesis_hash::<Runtime>() {
 				cf_runtime_upgrade_utilities::genesis_hashes::BERGHAIN => {
-					log::warn!("Need to set up arbitrum integration for Berghain");
 					(
 						hex_literal::hex!("BFe612c77C2807Ac5a6A41F84436287578000275").into(),
 						hex_literal::hex!("79001a5e762f3bEFC8e5871b42F6734e00498920").into(),
@@ -134,7 +133,6 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 					)
 				},
 				cf_runtime_upgrade_utilities::genesis_hashes::PERSEVERANCE => {
-					log::warn!("Need to set up arbitrum integration for Perseverance");
 					(
 						hex_literal::hex!("18195b0E3c33EeF3cA6423b1828E0FE0C03F32Fd").into(),
 						hex_literal::hex!("2bb150e6d4366A1BDBC4275D1F35892CD63F27e3").into(),
@@ -147,7 +145,6 @@ impl OnRuntimeUpgrade for ArbitrumIntegration {
 					)
 				},
 				cf_runtime_upgrade_utilities::genesis_hashes::SISYPHOS => {
-					log::warn!("Need to set up arbitrum integration for Sisyphos");
 					(
 						hex_literal::hex!("7EA74208E2954a7294097C731434caD29c5094D8").into(),
 						hex_literal::hex!("8155BdD48CD011e1118b51A1C82be020A3E5c2f2").into(),

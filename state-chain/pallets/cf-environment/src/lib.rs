@@ -12,7 +12,7 @@ use cf_chains::{
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
-	sol::SolAddress,
+	sol::{SolAddress, SolAsset, SolHash, Solana},
 	Chain,
 };
 use cf_primitives::{
@@ -80,6 +80,8 @@ pub mod pallet {
 		type BitcoinVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Bitcoin>;
 		/// On new key witnessed handler for Arbitrum
 		type ArbitrumVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Arbitrum>;
+		/// On new key witnessed handler for Solana
+		type SolanaVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Solana>;
 
 		/// For getting the current active AggKey. Used for rotating Utxos from previous vault.
 		type BitcoinKeyProvider: KeyProvider<<Bitcoin as Chain>::ChainCrypto>;
@@ -202,8 +204,53 @@ pub mod pallet {
 
 	// SOLANA CHAIN RELATED ENVIRONMENT ITEMS
 	#[pallet::storage]
+	#[pallet::getter(fn supported_sol_assets)]
+	/// Map of supported assets for SOL
+	pub type SolanaSupportedAssets<T: Config> =
+		StorageMap<_, Blake2_128Concat, SolAsset, SolAddress>;
+
+	#[pallet::storage]
 	#[pallet::getter(fn sol_vault_address)]
 	pub type SolanaVaultAddress<T> = StorageValue<_, SolAddress, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn sol_vault_data_account_address)]
+	pub type SolanaVaultDataAccountAddress<T> = StorageValue<_, SolAddress, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn sol_token_vault_address)]
+	pub type SolanaTokenVaultAddress<T> = StorageValue<_, SolAddress, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn sol_token_vault_usdc_address)]
+	pub type SolanaTokenVaultUsdcAddress<T> = StorageValue<_, SolAddress, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn sol_upgrade_manager_address)]
+	pub type SolanaUpgradeManagerAddress<T> = StorageValue<_, SolAddress, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn sol_upgrade_manager_signer_seed)]
+	pub type SolanaUpgradeManagerSignerSeed<T> = StorageValue<_, [u8; 6], ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn sol_upgrade_manager_program_data_address)]
+	pub type SolanaUpgradeManagerProgramDataAddress<T> = StorageValue<_, SolAddress, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn sol_vault_program_data_address)]
+	pub type SolanaVaultProgramDataAddress<T> = StorageValue<_, SolAddress, ValueQuery>;
+
+	#[pallet::storage]
+	pub type SolanaNonceAccounts<T> = StorageValue<_, Vec<(SolAddress, SolHash, bool)>, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn sol_vault_emit_event_address)]
+	pub type SolanaVaultEmitEventAddress<T> = StorageValue<_, SolAddress, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn sol_genesis_hash)]
+	pub type SolanaGenesisHash<T> = StorageValue<_, SolHash, ValueQuery>;
 
 	// OTHER ENVIRONMENT ITEMS
 	#[pallet::storage]
@@ -233,6 +280,10 @@ pub mod pallet {
 		AddedNewArbAsset(ArbAsset, EvmAddress),
 		/// The address of an supported ARB asset was updated
 		UpdatedArbAsset(ArbAsset, EvmAddress),
+		/// A new supported SOL asset was added
+		AddedNewSolAsset(SolAsset, SolAddress),
+		/// The address of an supported SOL asset was updated
+		UpdatedSolAsset(SolAsset, SolAddress),
 		/// Polkadot Vault Account is successfully set
 		PolkadotVaultAccountSet { polkadot_vault_account_id: PolkadotAccountId },
 		/// The starting block number for the new Bitcoin vault was set
@@ -243,6 +294,8 @@ pub mod pallet {
 		UtxoConsolidationParametersUpdated { params: utxo_selection::ConsolidationParameters },
 		/// Arbitrum Initialized: contract addresses have been set, first key activated
 		ArbitrumInitialized,
+		/// Solana Initialized: contract addresses have been set, first key activated
+		SolanaInitialized,
 		/// Some unspendable Utxos are discarded from storage.
 		StaleUtxosDiscarded { utxos: Vec<Utxo> },
 	}
@@ -363,12 +416,12 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Manually witnesses the current Bitcoin block number to complete the pending vault
+		/// Manually witnesses the current Arbitrum block number to complete the pending vault
 		/// rotation.
 		///
 		/// ## Events
 		///
-		/// - [BitcoinBlockNumberSetForVault](Event::BitcoinBlockNumberSetForVault)
+		/// - [ArbitrumBlockNumberSetForVault](Event::ArbitrumInitialized)
 		///
 		/// ## Errors
 		///
@@ -386,11 +439,43 @@ pub mod pallet {
 
 			use cf_traits::VaultKeyWitnessedHandler;
 
-			// Witness the agg_key rotation manually in the vaults pallet for bitcoin
+			// Witness the agg_key rotation manually in the vaults pallet for arbitrum
 			let dispatch_result =
 				T::ArbitrumVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
 
 			Self::deposit_event(Event::<T>::ArbitrumInitialized);
+
+			Ok(dispatch_result)
+		}
+
+		/// Manually witnesses the current Solana block number to complete the pending vault
+		/// rotation.
+		///
+		/// ## Events
+		///
+		/// - [SolanaBlockNumberSetForVault](Event::SolanaInitialized)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[allow(clippy::too_many_arguments)]
+		#[pallet::call_index(6)]
+		// This weight is not strictly correct but since it's a governance call, weight is
+		// irrelevant.
+		#[pallet::weight(Weight::zero())]
+		pub fn witness_initialize_solana_vault(
+			origin: OriginFor<T>,
+			block_number: u64,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			use cf_traits::VaultKeyWitnessedHandler;
+
+			// Witness the agg_key rotation manually in the vaults pallet for solana
+			let dispatch_result =
+				T::SolanaVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
+
+			Self::deposit_event(Event::<T>::SolanaInitialized);
 
 			Ok(dispatch_result)
 		}
@@ -414,8 +499,19 @@ pub mod pallet {
 		pub arb_vault_address: EvmAddress,
 		pub arb_address_checker_address: EvmAddress,
 		pub arbitrum_chain_id: u64,
-		pub network_environment: NetworkEnvironment,
 		pub sol_vault_address: SolAddress,
+		pub sol_vault_data_account_address: SolAddress,
+		pub sol_token_vault_address: SolAddress,
+		pub sol_token_vault_usdc_address: SolAddress,
+		pub sol_upgrade_manager_address: SolAddress,
+		pub sol_upgrade_manager_signer_seed: [u8; 6],
+		pub sol_upgrade_manager_program_data_address: SolAddress,
+		pub sol_vault_program_data_address: SolAddress,
+		pub sol_nonce_accounts: Vec<(SolAddress, SolHash, bool)>,
+		pub solusdc_address: SolAddress,
+		pub sol_vault_emit_event_address: SolAddress,
+		pub sol_genesis_hash: SolHash,
+		pub network_environment: NetworkEnvironment,
 		pub _config: PhantomData<T>,
 	}
 
@@ -447,6 +543,19 @@ pub mod pallet {
 			ArbitrumAddressCheckerAddress::<T>::set(self.arb_address_checker_address);
 
 			SolanaVaultAddress::<T>::set(self.sol_vault_address);
+			SolanaVaultDataAccountAddress::<T>::set(self.sol_vault_data_account_address);
+			SolanaTokenVaultAddress::<T>::set(self.sol_token_vault_address);
+			SolanaTokenVaultUsdcAddress::<T>::set(self.sol_token_vault_usdc_address);
+			SolanaUpgradeManagerAddress::<T>::set(self.sol_upgrade_manager_address);
+			SolanaUpgradeManagerSignerSeed::<T>::set(self.sol_upgrade_manager_signer_seed);
+			SolanaUpgradeManagerProgramDataAddress::<T>::set(
+				self.sol_upgrade_manager_program_data_address,
+			);
+			SolanaVaultProgramDataAddress::<T>::set(self.sol_vault_program_data_address);
+			// SolanaNonceAccounts::<T>::set(self.sol_nonce_accounts);
+			// SolanaSupportedAssets::<T>::insert(SolAsset::Usdc, self.solusdc_address);
+			SolanaVaultEmitEventAddress::<T>::set(self.sol_vault_emit_event_address);
+			SolanaGenesisHash::<T>::set(self.sol_genesis_hash);
 
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
 
