@@ -65,11 +65,11 @@ async function startBrokerAndLpApi(localnetInitPath: string, binaryPath: string,
   console.log('Starting new broker and lp-api.');
 
   execWithLog(`${localnetInitPath}/scripts/start-broker-api.sh ${binaryPath}`, 'start-broker-api', {
-    keysDir,
+    KEYS_DIR: keysDir,
   });
 
   execWithLog(`${localnetInitPath}/scripts/start-lp-api.sh ${binaryPath}`, 'start-lp-api', {
-    keysDir,
+    KEYS_DIR: keysDir,
   });
 
   await sleep(10000);
