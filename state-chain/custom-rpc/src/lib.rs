@@ -10,7 +10,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, ForeignChain,
-	NetworkEnvironment, SemVer, SwapId, SwapOutput,
+	NetworkEnvironment, SemVer, SwapId,
 };
 use cf_utilities::rpc::NumberOrHex;
 use codec::Encode;
@@ -29,7 +29,7 @@ use serde::{Deserialize, Serialize};
 use sp_api::ApiError;
 use sp_core::U256;
 use sp_runtime::{
-	traits::{Block as BlockT, Header as HeaderT},
+	traits::{Block as BlockT, Header as HeaderT, UniqueSaturatedInto},
 	Permill,
 };
 use state_chain_runtime::{
@@ -217,20 +217,43 @@ pub struct RpcAuctionState {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct RpcSwapOutput {
+pub struct RpcSwapOutputV1 {
 	// Intermediary amount, if there's any
 	pub intermediary: Option<NumberOrHex>,
 	// Final output of the swap
 	pub output: NumberOrHex,
 }
 
-impl From<SwapOutput> for RpcSwapOutput {
-	fn from(swap_output: SwapOutput) -> Self {
+impl From<RpcSwapOutputV2> for RpcSwapOutputV1 {
+	fn from(swap_output: RpcSwapOutputV2) -> Self {
 		Self {
 			intermediary: swap_output.intermediary.map(Into::into),
 			output: swap_output.output.into(),
 		}
 	}
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RpcFee {
+	#[serde(flatten)]
+	pub asset: Asset,
+	pub amount: Amount,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RpcSwapOutputV2 {
+	// Intermediary amount, if there's any
+	pub intermediary: Option<U256>,
+	// Final output of the swap
+	pub output: U256,
+	pub network_fee: RpcFee,
+	pub ingress_fee: RpcFee,
+	pub egress_fee: RpcFee,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub enum SwapRateV2AdditionalOrder {
+	LimitOrder { base_asset: Asset, quote_asset: Asset, side: Side, tick: Tick, sell_amount: U256 },
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy)]
@@ -533,7 +556,16 @@ pub trait CustomApi {
 		to_asset: Asset,
 		amount: NumberOrHex,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcSwapOutput>;
+	) -> RpcResult<RpcSwapOutputV1>;
+	#[method(name = "swap_rate_v2")]
+	fn cf_pool_swap_rate_v2(
+		&self,
+		from_asset: Asset,
+		to_asset: Asset,
+		amount: U256,
+		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcSwapOutputV2>;
 	#[method(name = "required_asset_ratio_for_range_order")]
 	fn cf_required_asset_ratio_for_range_order(
 		&self,
@@ -1057,7 +1089,19 @@ where
 		to_asset: Asset,
 		amount: NumberOrHex,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcSwapOutput> {
+	) -> RpcResult<RpcSwapOutputV1> {
+		self.cf_pool_swap_rate_v2(from_asset, to_asset, amount.into(), None, at)
+			.map(Into::into)
+	}
+
+	fn cf_pool_swap_rate_v2(
+		&self,
+		from_asset: Asset,
+		to_asset: Asset,
+		amount: U256,
+		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcSwapOutputV2> {
 		self.client
 			.runtime_api()
 			.cf_pool_simulate_swap(
@@ -1074,10 +1118,47 @@ where
 						}
 					})
 					.map_err(|str| anyhow::anyhow!(str))?,
+				additional_orders.map(|additional_orders| {
+					additional_orders
+						.into_iter()
+						.map(|additional_order| {
+							match additional_order {
+								SwapRateV2AdditionalOrder::LimitOrder {
+									base_asset,
+									quote_asset,
+									side,
+									tick,
+									sell_amount,
+								} => state_chain_runtime::runtime_apis::SimulateSwapAdditionalOrder::LimitOrder {
+									base_asset,
+									quote_asset,
+									side,
+									tick,
+									sell_amount: sell_amount.unique_saturated_into(),
+								}
+							}
+						})
+						.collect()
+				}),
 			)
 			.map_err(to_rpc_error)
 			.and_then(|result| result.map_err(map_dispatch_error))
-			.map(RpcSwapOutput::from)
+			.map(|simulated_swap_info| RpcSwapOutputV2 {
+				intermediary: simulated_swap_info.intermediary.map(Into::into),
+				output: simulated_swap_info.output.into(),
+				network_fee: RpcFee {
+					asset: cf_primitives::STABLE_ASSET,
+					amount: simulated_swap_info.network_fee.into(),
+				},
+				ingress_fee: RpcFee {
+					asset: from_asset,
+					amount: simulated_swap_info.ingress_fee.into(),
+				},
+				egress_fee: RpcFee {
+					asset: to_asset,
+					amount: simulated_swap_info.egress_fee.into(),
+				},
+			})
 	}
 
 	fn cf_pool_info(
@@ -1956,5 +2037,17 @@ mod test {
 			vec![BoostPoolFeesRpc::new(Asset::Btc, 10, boost_details_1())];
 
 		insta::assert_json_snapshot!(val);
+	}
+
+	#[test]
+	fn test_swap_output_serialization() {
+		insta::assert_snapshot!(serde_json::to_value(RpcSwapOutputV2 {
+			output: 1_000_000_000_000_000_000u128.into(),
+			intermediary: Some(1_000_000u128.into()),
+			network_fee: RpcFee { asset: Asset::Usdc, amount: 1_000u128.into() },
+			ingress_fee: RpcFee { asset: Asset::Flip, amount: 500u128.into() },
+			egress_fee: RpcFee { asset: Asset::Eth, amount: 1_000_000u128.into() },
+		})
+		.unwrap());
 	}
 }

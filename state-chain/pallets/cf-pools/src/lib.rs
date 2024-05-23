@@ -10,7 +10,8 @@ use cf_amm::{
 use cf_chains::Chain;
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
 use cf_traits::{
-	impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwapQueueApi, SwapType, SwappingApi,
+	impl_pallet_safe_mode, Chainflip, LpBalanceApi, NetworkFeeTaken, PoolApi, SwapQueueApi,
+	SwapType, SwappingApi,
 };
 use frame_support::{
 	dispatch::GetDispatchInfo,
@@ -617,7 +618,7 @@ pub mod pallet {
 								IncreaseOrDecrease::Decrease(range_orders::Size::Liquidity {
 									liquidity: Liquidity::MAX,
 								}),
-								/* allow_noop */ false,
+								NoOpStatus::Error,
 							)?;
 							Self::inner_update_range_order(
 								pool,
@@ -629,7 +630,7 @@ pub mod pallet {
 									minimum: Default::default(),
 									maximum: withdrawn_asset_amounts.map(Into::into),
 								}),
-								/* allow_noop */ true,
+								NoOpStatus::Allow,
 							)?;
 						}
 
@@ -651,7 +652,7 @@ pub mod pallet {
 								minimum: minimum.map(Into::into),
 							},
 					}),
-					/* allow_noop */ false,
+					NoOpStatus::Error,
 				)?;
 
 				Ok(())
@@ -697,7 +698,7 @@ pub mod pallet {
 							IncreaseOrDecrease::Decrease(range_orders::Size::Liquidity {
 								liquidity: Liquidity::MAX,
 							}),
-							/* allow noop */ false,
+							NoOpStatus::Error,
 						)?;
 
 						Ok(option_new_tick_range.unwrap_or(previous_tick_range))
@@ -718,7 +719,7 @@ pub mod pallet {
 								minimum: minimum.map(Into::into),
 							},
 					}),
-					/* allow noop */ true,
+					NoOpStatus::Allow,
 				)?;
 
 				Ok(())
@@ -769,7 +770,7 @@ pub mod pallet {
 								id,
 								previous_tick,
 								IncreaseOrDecrease::Decrease(cf_amm::common::Amount::MAX),
-								/* allow_noop */ false,
+								NoOpStatus::Error,
 							)?;
 							Self::inner_update_limit_order(
 								pool,
@@ -779,7 +780,7 @@ pub mod pallet {
 								id,
 								new_tick,
 								IncreaseOrDecrease::Increase(withdrawn_asset_amount.into()),
-								/* allow_noop */ true,
+								NoOpStatus::Allow,
 							)?;
 						}
 
@@ -794,7 +795,7 @@ pub mod pallet {
 					id,
 					tick,
 					amount_change.map(|amount| amount.into()),
-					/* allow_noop */ false,
+					NoOpStatus::Error,
 				)?;
 
 				Ok(())
@@ -844,7 +845,7 @@ pub mod pallet {
 							id,
 							previous_tick,
 							IncreaseOrDecrease::Decrease(cf_amm::common::Amount::MAX),
-							/* allow noop */ false,
+							NoOpStatus::Error,
 						)?;
 
 						Ok(option_new_tick.unwrap_or(previous_tick))
@@ -858,7 +859,7 @@ pub mod pallet {
 					id,
 					tick,
 					IncreaseOrDecrease::Increase(sell_amount.into()),
-					/* allow noop */ true,
+					NoOpStatus::Allow,
 				)?;
 
 				Ok(())
@@ -1007,16 +1008,16 @@ pub mod pallet {
 }
 
 impl<T: Config> SwappingApi for Pallet<T> {
-	fn take_network_fee(input: AssetAmount) -> AssetAmount {
+	fn take_network_fee(input: AssetAmount) -> NetworkFeeTaken {
 		if input.is_zero() {
-			return input
+			return NetworkFeeTaken { remaining_amount: 0, network_fee: 0 };
 		}
 		let (remaining, fee) = utilities::calculate_network_fee(T::NetworkFee::get(), input);
 		CollectedNetworkFee::<T>::mutate(|total| {
 			total.saturating_accrue(fee);
 		});
 		Self::deposit_event(Event::<T>::NetworkFeeTaken { fee_amount: fee });
-		remaining
+		NetworkFeeTaken { remaining_amount: remaining, network_fee: fee }
 	}
 
 	#[transactional]
@@ -1225,6 +1226,12 @@ pub struct PoolPriceV2 {
 	pub range_order: SqrtPriceQ64F96,
 }
 
+#[derive(PartialEq, Eq)]
+enum NoOpStatus {
+	Allow,
+	Error,
+}
+
 impl<T: Config> Pallet<T> {
 	fn inner_sweep(lp: &T::AccountId) -> DispatchResult {
 		// Collect to avoid undefined behaviour (See StorsgeMap::iter_keys documentation)
@@ -1242,7 +1249,7 @@ impl<T: Config> Pallet<T> {
 						IncreaseOrDecrease::Decrease(range_orders::Size::Liquidity {
 							liquidity: 0,
 						}),
-						false,
+						NoOpStatus::Error,
 					)?;
 				}
 			}
@@ -1268,7 +1275,7 @@ impl<T: Config> Pallet<T> {
 						id,
 						tick,
 						IncreaseOrDecrease::Decrease(Default::default()),
-						false,
+						NoOpStatus::Error,
 					)?;
 				}
 			}
@@ -1279,6 +1286,41 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
+	fn collect_and_mint_limit_order_with_dispatch_error(
+		pool: &mut Pool<T>,
+		lp: &T::AccountId,
+		side: Side,
+		id: OrderId,
+		tick: cf_amm::common::Tick,
+		sold_amount: cf_amm::common::Amount,
+		noop_status: NoOpStatus,
+	) -> Result<(Collected, PositionInfo), DispatchError> {
+		let (collected, position_info) = match pool.pool_state.collect_and_mint_limit_order(
+			&(lp.clone(), id),
+			side,
+			tick,
+			sold_amount,
+		) {
+			Ok(ok) => Ok(ok),
+			Err(error) => Err(match error {
+				limit_orders::PositionError::NonExistent =>
+					if noop_status == NoOpStatus::Allow {
+						return Ok(Default::default())
+					} else {
+						Error::<T>::OrderDoesNotExist
+					},
+				limit_orders::PositionError::InvalidTick => Error::<T>::InvalidTick,
+				limit_orders::PositionError::Other(limit_orders::MintError::MaximumLiquidity) =>
+					Error::<T>::MaximumGrossLiquidity,
+				limit_orders::PositionError::Other(
+					limit_orders::MintError::MaximumPoolInstances,
+				) => Error::<T>::MaximumPoolInstances,
+			}),
+		}?;
+
+		Ok((collected, position_info))
+	}
+
 	fn inner_update_limit_order(
 		pool: &mut Pool<T>,
 		lp: &T::AccountId,
@@ -1287,70 +1329,58 @@ impl<T: Config> Pallet<T> {
 		id: OrderId,
 		tick: cf_amm::common::Tick,
 		sold_amount_change: IncreaseOrDecrease<cf_amm::common::Amount>,
-		allow_noop: bool,
+		noop_status: NoOpStatus,
 	) -> Result<AssetAmount, DispatchError> {
-		let (sold_amount_change, position_info, collected) =
-			match sold_amount_change {
-				IncreaseOrDecrease::Increase(sold_amount) => {
-					let (collected, position_info) = match pool
-						.pool_state
-						.collect_and_mint_limit_order(&(lp.clone(), id), side, tick, sold_amount)
-					{
-						Ok(ok) => Ok(ok),
-						Err(error) => Err(match error {
-							limit_orders::PositionError::NonExistent =>
-								if allow_noop {
-									return Ok(Default::default())
-								} else {
-									Error::<T>::OrderDoesNotExist
-								},
-							limit_orders::PositionError::InvalidTick => Error::<T>::InvalidTick,
-							limit_orders::PositionError::Other(
-								limit_orders::MintError::MaximumLiquidity,
-							) => Error::<T>::MaximumGrossLiquidity,
-							limit_orders::PositionError::Other(
-								limit_orders::MintError::MaximumPoolInstances,
-							) => Error::<T>::MaximumPoolInstances,
-						}),
-					}?;
-
-					let debited_amount: AssetAmount = sold_amount.try_into()?;
-					T::LpBalance::try_debit_account(
+		let (sold_amount_change, position_info, collected) = match sold_amount_change {
+			IncreaseOrDecrease::Increase(sold_amount) => {
+				let (collected, position_info) =
+					Self::collect_and_mint_limit_order_with_dispatch_error(
+						pool,
 						lp,
-						asset_pair.assets()[side.to_sold_pair()],
-						debited_amount,
+						side,
+						id,
+						tick,
+						sold_amount,
+						noop_status,
 					)?;
 
-					(IncreaseOrDecrease::Increase(debited_amount), position_info, collected)
-				},
-				IncreaseOrDecrease::Decrease(sold_amount) => {
-					let (sold_amount, collected, position_info) = match pool
-						.pool_state
-						.collect_and_burn_limit_order(&(lp.clone(), id), side, tick, sold_amount)
-					{
-						Ok(ok) => Ok(ok),
-						Err(error) => Err(match error {
-							limit_orders::PositionError::NonExistent =>
-								if allow_noop {
-									return Ok(Default::default())
-								} else {
-									Error::<T>::OrderDoesNotExist
-								},
-							limit_orders::PositionError::InvalidTick => Error::InvalidTick,
-							limit_orders::PositionError::Other(error) => match error {},
-						}),
-					}?;
+				let debited_amount: AssetAmount = sold_amount.try_into()?;
+				T::LpBalance::try_debit_account(
+					lp,
+					asset_pair.assets()[side.to_sold_pair()],
+					debited_amount,
+				)?;
 
-					let withdrawn_amount: AssetAmount = sold_amount.try_into()?;
-					T::LpBalance::try_credit_account(
-						lp,
-						asset_pair.assets()[side.to_sold_pair()],
-						withdrawn_amount,
-					)?;
+				(IncreaseOrDecrease::Increase(debited_amount), position_info, collected)
+			},
+			IncreaseOrDecrease::Decrease(sold_amount) => {
+				let (sold_amount, collected, position_info) = match pool
+					.pool_state
+					.collect_and_burn_limit_order(&(lp.clone(), id), side, tick, sold_amount)
+				{
+					Ok(ok) => Ok(ok),
+					Err(error) => Err(match error {
+						limit_orders::PositionError::NonExistent =>
+							if noop_status == NoOpStatus::Allow {
+								return Ok(Default::default())
+							} else {
+								Error::<T>::OrderDoesNotExist
+							},
+						limit_orders::PositionError::InvalidTick => Error::InvalidTick,
+						limit_orders::PositionError::Other(error) => match error {},
+					}),
+				}?;
 
-					(IncreaseOrDecrease::Decrease(withdrawn_amount), position_info, collected)
-				},
-			};
+				let withdrawn_amount: AssetAmount = sold_amount.try_into()?;
+				T::LpBalance::try_credit_account(
+					lp,
+					asset_pair.assets()[side.to_sold_pair()],
+					withdrawn_amount,
+				)?;
+
+				(IncreaseOrDecrease::Decrease(withdrawn_amount), position_info, collected)
+			},
+		};
 
 		// Process the update
 		Self::process_limit_order_update(
@@ -1375,7 +1405,7 @@ impl<T: Config> Pallet<T> {
 		id: OrderId,
 		tick_range: Range<cf_amm::common::Tick>,
 		size_change: IncreaseOrDecrease<range_orders::Size>,
-		allow_noop: bool,
+		noop_status: NoOpStatus,
 	) -> Result<AssetAmounts, DispatchError> {
 		let (liquidity_change, position_info, assets_change, collected) = match size_change {
 			IncreaseOrDecrease::Increase(size) => {
@@ -1406,7 +1436,7 @@ impl<T: Config> Pallet<T> {
 							range_orders::PositionError::InvalidTickRange =>
 								Error::<T>::InvalidTickRange.into(),
 							range_orders::PositionError::NonExistent =>
-								if allow_noop {
+								if noop_status == NoOpStatus::Allow {
 									return Ok(Default::default())
 								} else {
 									Error::<T>::OrderDoesNotExist.into()
@@ -1440,7 +1470,7 @@ impl<T: Config> Pallet<T> {
 						range_orders::PositionError::InvalidTickRange =>
 							Error::<T>::InvalidTickRange,
 						range_orders::PositionError::NonExistent =>
-							if allow_noop {
+							if noop_status == NoOpStatus::Allow {
 								return Ok(Default::default())
 							} else {
 								Error::<T>::OrderDoesNotExist
@@ -1522,6 +1552,31 @@ impl<T: Config> Pallet<T> {
 		Ok(assets_change)
 	}
 
+	pub fn try_add_limit_order(
+		account_id: &T::AccountId,
+		base_asset: any::Asset,
+		quote_asset: any::Asset,
+		side: Side,
+		id: OrderId,
+		tick: Tick,
+		sell_amount: Amount,
+	) -> Result<(), DispatchError> {
+		Self::try_mutate_pool(AssetPair::try_new::<T>(base_asset, quote_asset)?, |_, pool| {
+			Self::collect_and_mint_limit_order_with_dispatch_error(
+				pool,
+				account_id,
+				side,
+				id,
+				tick,
+				sell_amount,
+				NoOpStatus::Error,
+			)?;
+
+			Ok(())
+		})
+	}
+
+	#[allow(clippy::type_complexity)]
 	#[transactional]
 	pub fn swap_with_network_fee(
 		from: any::Asset,
@@ -1530,18 +1585,34 @@ impl<T: Config> Pallet<T> {
 	) -> Result<SwapOutput, DispatchError> {
 		Ok(match (from, to) {
 			(_, STABLE_ASSET) => {
-				let output = Self::take_network_fee(Self::swap_single_leg(from, to, input_amount)?);
-				SwapOutput { intermediary: None, output }
+				let NetworkFeeTaken { remaining_amount: output, network_fee } =
+					Self::take_network_fee(Self::swap_single_leg(from, to, input_amount)?);
+
+				SwapOutput { intermediary: None, output, network_fee }
 			},
 			(STABLE_ASSET, _) => {
-				let output = Self::swap_single_leg(from, to, Self::take_network_fee(input_amount))?;
-				SwapOutput { intermediary: None, output }
+				let NetworkFeeTaken { remaining_amount: input_amount, network_fee } =
+					Self::take_network_fee(input_amount);
+
+				SwapOutput {
+					intermediary: None,
+					output: Self::swap_single_leg(from, to, input_amount)?,
+					network_fee,
+				}
 			},
 			_ => {
-				let intermediary = Self::swap_single_leg(from, STABLE_ASSET, input_amount)?;
-				let output =
-					Self::swap_single_leg(STABLE_ASSET, to, Self::take_network_fee(intermediary))?;
-				SwapOutput { intermediary: Some(intermediary), output }
+				let NetworkFeeTaken { remaining_amount: intermediary, network_fee } =
+					Self::take_network_fee(Self::swap_single_leg(
+						from,
+						STABLE_ASSET,
+						input_amount,
+					)?);
+
+				SwapOutput {
+					intermediary: Some(intermediary),
+					output: Self::swap_single_leg(STABLE_ASSET, to, intermediary)?,
+					network_fee,
+				}
 			},
 		})
 	}
