@@ -35,12 +35,12 @@ const testAssetAmount = parseInt(
   amountToFineAmount(testAmount.toString(), assetDecimals(testAsset)),
 );
 const amountToProvide = testAmount * 50; // Provide plenty of the asset for the tests
-const chainflip = await getChainflipApi();
+await using chainflip = await getChainflipApi();
 const testAddress = '0x1594300cbd587694affd70c933b9ee9155b186d9';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function lpApiRpc(method: string, params: any[]): Promise<any> {
-  // The port for the lp api is defined in `start_lp_api.sh`
+  // The port for the lp api is defined in `chainflip-lp-api.service`
   return jsonRpc(method, params, 'http://127.0.0.1:10589');
 }
 

@@ -712,6 +712,8 @@ pub mod pallet {
 		InvalidBoostPoolTier,
 		/// Disabled due to safe mode for the chain
 		DepositChannelCreationDisabled,
+		/// The specified boost pool does not exist.
+		BoostPoolDoesNotExist,
 	}
 
 	#[pallet::hooks]
@@ -1064,8 +1066,7 @@ pub mod pallet {
 			T::LpBalance::try_debit_account(&booster_id, asset.into(), amount.into())?;
 
 			BoostPools::<T, I>::mutate(asset, pool_tier, |pool| {
-				let pool =
-					pool.as_mut().ok_or_else(|| DispatchError::from("Boost pool must exist"))?;
+				let pool = pool.as_mut().ok_or(Error::<T, I>::BoostPoolDoesNotExist)?;
 				pool.add_funds(booster_id.clone(), amount);
 
 				Ok::<(), DispatchError>(())
@@ -1092,10 +1093,7 @@ pub mod pallet {
 
 			let (unlocked_amount, pending_boosts) =
 				BoostPools::<T, I>::mutate(asset, pool_tier, |pool| {
-					let pool = pool
-						.as_mut()
-						.ok_or_else(|| DispatchError::from("Boost pool must exist"))?;
-
+					let pool = pool.as_mut().ok_or(Error::<T, I>::BoostPoolDoesNotExist)?;
 					pool.stop_boosting(booster.clone())
 				})?;
 
