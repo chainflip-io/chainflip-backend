@@ -151,7 +151,7 @@ mod test {
 	};
 	use core::str::FromStr;
 
-	const NEXT_NONCE: &str = NONCE_ACCOUNTS[0];
+	const NONCE_ACCOUNT: &str = NONCE_ACCOUNTS[0];
 	const SOL: SolAsset = SolAsset::Sol;
 
 	/// Test deposit channel derived from `sol_tx_core::can_generate_address()`
@@ -173,8 +173,12 @@ mod test {
 			.into()
 	}
 
-	fn next_nonce() -> SolAddress {
-		SolAddress::from_str(NEXT_NONCE).unwrap()
+	fn nonce_account() -> SolAddress {
+		SolAddress::from_str(NONCE_ACCOUNT).unwrap()
+	}
+
+	fn durable_nonce() -> SolHash {
+		SolHash::from_str(TEST_DURABLE_NONCE).unwrap()
 	}
 
 	fn vault_program_data_account() -> SolAddress {
@@ -193,10 +197,6 @@ mod test {
 		COMPUTE_UNIT_PRICE
 	}
 
-	fn durable_nonce() -> SolHash {
-		SolHash::from_str(TEST_DURABLE_NONCE).unwrap()
-	}
-
 	fn nonce_accounts() -> Vec<SolAddress> {
 		NONCE_ACCOUNTS
 			.into_iter()
@@ -210,14 +210,15 @@ mod test {
 		expected_serialized_tx: Vec<u8>,
 	) {
 		// Obtain required info from Chain Environment
-		let durable_nonce = durable_nonce();
+		let durable_nonce = durable_nonce().into();
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 
 		// Construct the Transaction and sign it
-		let message = SolMessage::new(&instruction_set, Some(&agg_key_pubkey));
+		let message =
+			SolMessage::new_with_blockhash(&instruction_set, Some(&agg_key_pubkey), &durable_nonce);
 		let mut tx = SolTransaction::new_unsigned(message);
-		tx.sign(&[&agg_key_keypair], durable_nonce.into());
+		tx.sign(&[&agg_key_keypair], durable_nonce);
 
 		// println!("{:?}", tx);
 		let serialized_tx =
@@ -237,7 +238,7 @@ mod test {
 			vault_program_data_account(),
 			system_program_id(),
 			agg_key(),
-			next_nonce(),
+			nonce_account(),
 			compute_price(),
 		);
 
@@ -259,7 +260,7 @@ mod test {
 			vault_program_data_account(),
 			system_program_id(),
 			agg_key(),
-			next_nonce(),
+			nonce_account(),
 			compute_price(),
 		);
 
@@ -280,7 +281,7 @@ mod test {
 		let instruction_set = SolanaInstructionBuilder::transfer(
 			transfer_param,
 			agg_key(),
-			next_nonce(),
+			nonce_account(),
 			compute_price(),
 		);
 
@@ -301,7 +302,7 @@ mod test {
 			system_program_id(),
 			upgrade_manager_program_data_account(),
 			agg_key(),
-			next_nonce(),
+			nonce_account(),
 			compute_price(),
 		);
 
