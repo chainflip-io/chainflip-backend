@@ -99,7 +99,6 @@ impl SolRpcClient {
 		})
 	}
 
-	// async fn call_rpc<T: for<'a> serde::de::Deserialize<'a>>(
 	async fn call_rpc(&self, method: &str, params: ReqParams) -> Result<serde_json::Value, Error> {
 		call_rpc_raw(&self.client, &self.endpoint, method, params).await
 	}
@@ -259,7 +258,8 @@ impl SolRpcApi for SolRpcClient {
 			.await?;
 		println!("response: {:?}", response);
 
-		// TODO: Could we put this in call_rpc with a passed generic type?
+		// TODO: Could we put this in call_rpc with a passed generic type? Not all have context but
+		// many of them them do.
 		let Response { context, value: accounts } =
 			serde_json::from_value::<Response<Vec<Option<UiAccount>>>>(response.clone())?;
 		Ok(Response { context, value: accounts })
