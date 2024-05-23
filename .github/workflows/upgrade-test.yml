@@ -1,6 +1,9 @@
 name: Test upgrade from latest release to main
 
 on:
+  push:
+    branches:
+      - feat/sol-initialize-pallets
   workflow_dispatch:
     inputs:
       upgrade-from-release:
