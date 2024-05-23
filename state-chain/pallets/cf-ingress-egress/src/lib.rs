@@ -1788,7 +1788,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Returns the remaining amount after the fee has been withheld, and the fee itself, both
 	/// measured in units of the input asset. A swap may be scheduled to convert the fee into the
 	/// gas asset.
-	fn withhold_ingress_or_egress_fee(
+	pub fn withhold_ingress_or_egress_fee(
 		ingress_or_egress: IngressOrEgress,
 		asset: TargetChainAsset<T, I>,
 		available_amount: TargetChainAmount<T, I>,
