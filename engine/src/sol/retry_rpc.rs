@@ -26,6 +26,7 @@ pub struct SolRetryRpcClient {
 const SOLANA_RPC_TIMEOUT: Duration = Duration::from_millis(1000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
+#[allow(dead_code)]
 const MAX_BROADCAST_RETRIES: Attempt = 10;
 
 impl SolRetryRpcClient {
@@ -162,7 +163,7 @@ impl ChainClient for SolRetryRpcClient {
 						) -> anyhow::Result<(SolHash, Option<SolHash>)> {
 							let block = client
 								.get_block_with_config(
-									index.into(),
+									index,
 									RpcBlockConfig {
 										encoding: Some(UiTransactionEncoding::JsonParsed),
 										transaction_details: Some(TransactionDetails::None),
@@ -213,7 +214,7 @@ impl ChainClient for SolRetryRpcClient {
 
 #[cfg(test)]
 mod tests {
-	use crate::settings::Settings;
+	// use crate::settings::Settings;
 	use cf_chains::Chain;
 	use futures::FutureExt;
 	use utilities::task_scope::task_scope;
@@ -224,7 +225,7 @@ mod tests {
 	async fn test_sol_retry_rpc() {
 		task_scope(|scope| {
 			async move {
-				let settings = Settings::new_test().unwrap();
+				// let settings = Settings::new_test().unwrap();
 
 				let retry_client = SolRetryRpcClient::new(
 					scope,

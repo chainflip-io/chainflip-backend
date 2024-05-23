@@ -1,6 +1,4 @@
-use futures::stream::StreamExt;
 use futures_util::stream;
-use sp_core::H256;
 use utilities::make_periodic_tick;
 
 use crate::{
@@ -11,11 +9,11 @@ use crate::{
 	},
 	witness::common::{
 		chain_source::{BoxChainStream, ChainClient, ChainSource, Header},
-		ExternalChain, ExternalChainSource,
+		ExternalChainSource,
 	},
 };
 use cf_chains::{sol::SolHash, Chain, Solana};
-use std::{collections::VecDeque, str::FromStr, time::Duration};
+use std::{str::FromStr, time::Duration};
 
 #[derive(Clone)]
 pub struct SolSource<Client> {

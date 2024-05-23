@@ -6,7 +6,6 @@ use reqwest::{header::CONTENT_TYPE, Client};
 use serde::{Deserialize, Serialize};
 
 use serde;
-use serde_bytes;
 use serde_json::{from_value, json};
 
 use tracing::error;
@@ -14,10 +13,10 @@ use utilities::make_periodic_tick;
 
 use crate::{constants::RPC_RETRY_CONNECTION_INTERVAL, settings::HttpBasicAuthEndpoint};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use tracing::warn;
 
-use cf_chains::sol::{sol_tx_core::Pubkey, SolHash};
+use cf_chains::sol::SolHash;
 
 use super::{commitment_config::CommitmentConfig, rpc_client_api::*};
 use std::str::FromStr;
@@ -144,13 +143,13 @@ async fn call_rpc_raw(
 
 	println!("response: {:?}", response);
 
-	let mut json = response.json::<serde_json::Value>().await.map_err(Error::Transport)?;
+	let json = response.json::<serde_json::Value>().await.map_err(Error::Transport)?;
 
 	println!("json: {:?}", json);
 
 	// TODO: This is a bit hacky and assumes it will be an array of length 1.
 	if let Some(array) = json.as_array() {
-		if let Some(first_element) = array.get(0) {
+		if let Some(first_element) = array.first() {
 			println!("result: {:?}", first_element["result"].clone());
 			Ok(first_element["result"].clone())
 		} else {
@@ -250,8 +249,8 @@ impl SolRpcApi for SolRpcClient {
 		// TODO: We might want to request a data slice => No data at all for Sol, we only need
 		// lamports, and only balance data for tokens.
 
-		// Convert pubkeys to a vector of strings
-		let pubkeys: Vec<_> = pubkeys.iter().map(|pubkey| pubkey).collect();
+		// TODO: We will need to convert pubkeys to a vector of strings
+		// let pubkeys: Vec<_> = pubkeys.iter().map(|pubkey| pubkey).collect();
 
 		let response = self
 			.call_rpc("getMultipleAccounts", ReqParams::Single(json!([pubkeys, json!(config)])))
