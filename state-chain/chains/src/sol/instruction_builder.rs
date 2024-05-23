@@ -15,7 +15,7 @@ use crate::{
 		sol_tx_core::{
 			bpf_loader_instructions::set_upgrade_authority,
 			compute_budget::ComputeBudgetInstruction,
-			program_instructions::{ProgramInstruction, SystemProgramInstruction, VaultProgram},
+			program_instructions::{SystemProgramInstruction, VaultProgram},
 			token_instructions::AssociatedTokenAccountInstruction,
 		},
 		SolAccountMeta, SolAddress, SolAmount, SolAsset, SolCcmAccounts, SolComputeLimit,
@@ -96,16 +96,12 @@ impl SolanaInstructionBuilder {
 		let instructions = decomposed_fetch_params
 			.into_iter()
 			.map(|(fetch_id, asset)| match asset {
-				AssetWithDerivedAddress::Sol => ProgramInstruction::get_instruction(
-					&VaultProgram::FetchNative {
-						seed: fetch_id.channel_id.to_le_bytes().to_vec(),
-						bump: fetch_id.bump,
-					},
-					vault_program.into(),
-					vec![
-						SolAccountMeta::new_readonly(vault_program_data_account.into(), false),
-						SolAccountMeta::new(agg_key.into(), true),
-						SolAccountMeta::new(fetch_id.address.into(), false),
+				AssetWithDerivedAddress::Sol => VaultProgram::with_id(vault_program).fetch_native(
+					fetch_id.channel_id.to_le_bytes().to_vec(),
+					fetch_id.bump,
+					vault_program_data_account,
+					agg_key,
+					fetch_id.address.into(), false),
 						SolAccountMeta::new_readonly(system_program_id.into(), false),
 					],
 				),
@@ -119,13 +115,12 @@ impl SolanaInstructionBuilder {
 					vec![
 						SolAccountMeta::new_readonly(vault_program_data_account.into(), false),
 						SolAccountMeta::new_readonly(agg_key.into(), true),
-						SolAccountMeta::new_readonly(fetch_id.address.into(), false),
+						SolAccountMeta::new_readonly(fetch_id.address,
 						SolAccountMeta::new(ata.0.into(), false),
 						SolAccountMeta::new(token_vault_ata.into(), false),
 						SolAccountMeta::new_readonly(token_mint_pubkey.into(), false),
 						SolAccountMeta::new_readonly(token_program_id.into(), false),
-						SolAccountMeta::new_readonly(system_program_id.into(), false),
-					],
+					system_program_id,
 				),
 			})
 			.collect::<Vec<_>>();
@@ -206,15 +201,12 @@ impl SolanaInstructionBuilder {
 		compute_price: SolAmount,
 	) -> Vec<SolInstruction> {
 		let mut instructions = vec![
-			ProgramInstruction::get_instruction(
-				&VaultProgram::RotateAggKey { skip_transfer_funds: false },
-				vault_program.into(),
-				vec![
-					SolAccountMeta::new(vault_program_data_account.into(), false),
-					SolAccountMeta::new(agg_key.into(), true),
-					SolAccountMeta::new(new_agg_key.into(), false),
-					SolAccountMeta::new_readonly(system_program_id.into(), false),
-				],
+			VaultProgram::with_id(vault_program).rotate_agg_key(
+				false,
+				vault_program_data_account,
+				agg_key,
+				new_agg_key,
+				system_program_id,
 			),
 			set_upgrade_authority(
 				upgrade_manager_program_data_account.into(),

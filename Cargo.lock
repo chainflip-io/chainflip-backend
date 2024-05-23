@@ -1435,6 +1435,7 @@ dependencies = [
  "serde_bytes",
  "serde_with",
  "sha2 0.10.8",
+ "sha2-const",
  "sol-prim",
  "sp-core 21.0.0",
  "sp-io 23.0.0",
@@ -11055,6 +11056,12 @@ dependencies = [
  "cpufeatures",
  "digest 0.10.7",
 ]
+
+[[package]]
+name = "sha2-const"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5edcd790916d95ff81bdc1505b09c74d30d47a755929cc8c71c59cbbfa99f91b"
 
 [[package]]
 name = "sha3"

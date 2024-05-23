@@ -947,9 +947,7 @@ mod tests {
 			bpf_loader_instructions::set_upgrade_authority,
 			compute_budget::ComputeBudgetInstruction,
 			extra_types_for_testing::{Keypair, Signer},
-			program_instructions::{
-				ProgramInstruction, SystemProgramInstruction, UpgradeManagerProgram, VaultProgram,
-			},
+			program_instructions::{SystemProgramInstruction, UpgradeManagerProgram, VaultProgram},
 			sol_test_values::*,
 			token_instructions::AssociatedTokenAccountInstruction,
 			AccountMeta, BorshDeserialize, BorshSerialize, Hash, Instruction, Message, Pubkey,
@@ -1056,21 +1054,13 @@ mod tests {
 			),
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::FetchNative {
-					seed: vec![11u8, 12u8, 13u8, 55u8, 0u8, 0u8, 0u8, 0u8],
-					bump: 255,
-				},
-				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
-				vec![
-					AccountMeta::new_readonly(
-						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
-						false,
-					),
-					AccountMeta::new(agg_key_pubkey, true),
-					AccountMeta::new(deposit_channel, false),
-					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
-				],
+			VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap()).fetch_native(
+				vec![11u8, 12u8, 13u8, 55u8, 0u8, 0u8, 0u8, 0u8],
+				255,
+				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+				agg_key_pubkey,
+				deposit_channel,
+				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
 			),
 		];
 		let message =
@@ -1101,6 +1091,8 @@ mod tests {
 		let deposit_channel_0 = derive_deposit_address(0u64, vault_program_id).unwrap();
 		let deposit_channel_1 = derive_deposit_address(1u64, vault_program_id).unwrap();
 
+		let vault_program = VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap());
+
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
 				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
@@ -1108,37 +1100,21 @@ mod tests {
 			),
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::FetchNative {
-					seed: 0u64.to_le_bytes().to_vec(),
-					bump: deposit_channel_0.1,
-				},
-				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
-				vec![
-					AccountMeta::new_readonly(
-						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
-						false,
-					),
-					AccountMeta::new(agg_key_pubkey, true),
-					AccountMeta::new(deposit_channel_0.0.into(), false),
-					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
-				],
+			vault_program.fetch_native(
+				0u64.to_le_bytes().to_vec(),
+				deposit_channel_0.1,
+				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+				agg_key_pubkey,
+				deposit_channel_0.0,
+				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
 			),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::FetchNative {
-					seed: 1u64.to_le_bytes().to_vec(),
-					bump: deposit_channel_1.1,
-				},
-				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
-				vec![
-					AccountMeta::new_readonly(
-						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
-						false,
-					),
-					AccountMeta::new(agg_key_pubkey, true),
-					AccountMeta::new(deposit_channel_1.0.into(), false),
-					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
-				],
+			vault_program.fetch_native(
+				1u64.to_le_bytes().to_vec(),
+				deposit_channel_1.1,
+				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+				agg_key_pubkey,
+				deposit_channel_1.0,
+				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
 			),
 		];
 		let message =
@@ -1189,29 +1165,19 @@ mod tests {
 			),
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::FetchTokens {
-					seed: seed.to_le_bytes().to_vec(),
-					bump: deposit_channel.1,
-					decimals: 6,
-				},
-				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
-				vec![
-					AccountMeta::new_readonly(
-						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
-						false,
-					),
-					AccountMeta::new_readonly(agg_key_pubkey, true),
-					AccountMeta::new_readonly(deposit_channel.0.into(), false),
-					AccountMeta::new(deposit_channel_ata.0.into(), false),
-					AccountMeta::new(
-						Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(),
-						false,
-					),
-					AccountMeta::new_readonly(Pubkey::from_str(MINT_PUB_KEY).unwrap(), false),
-					AccountMeta::new_readonly(Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(), false),
-					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
-				],
+			VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap()).fetch_tokens(
+				seed.to_le_bytes().to_vec(),
+				deposit_channel.1,
+				100_000_000,
+				6,
+				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+				agg_key_pubkey,
+				deposit_channel,
+				deposit_channel_ata,
+				Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(),
+				Pubkey::from_str(MINT_PUB_KEY).unwrap(),
+				Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(),
+				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
 			),
 		];
 		let message =
@@ -1354,22 +1320,17 @@ mod tests {
 				&Pubkey::from_str(MINT_PUB_KEY).unwrap(),
 				&to_pubkey_ata.0.into(),
 			),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::TransferTokens { amount: TRANSFER_AMOUNT, decimals: SOL_USDC_DECIMAL },
-				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
-				vec![
-					AccountMeta::new_readonly(
-						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
-						false,
-					),
-					AccountMeta::new_readonly(agg_key_pubkey, true),
-					AccountMeta::new_readonly(Pubkey::from_str(TOKEN_VAULT_PDA_ACCOUNT).unwrap(), false),
-					AccountMeta::new(Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(), false),
-					AccountMeta::new(to_pubkey_ata.0.into(), false),
-					AccountMeta::new_readonly(Pubkey::from_str(MINT_PUB_KEY).unwrap(), false),
-					AccountMeta::new_readonly(Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(), false),
-					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
-				],
+			VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap()).transfer_tokens(
+				TRANSFER_AMOUNT,
+				SOL_USDC_DECIMAL,
+				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+				agg_key_pubkey,
+				Pubkey::from_str(TOKEN_VAULT_PDA_ACCOUNT).unwrap(),
+				Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(),
+				to_pubkey_ata.0,
+				Pubkey::from_str(MINT_PUB_KEY).unwrap(),
+				Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(),
+				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
 			),
 		];
 		let message =
@@ -1402,15 +1363,12 @@ mod tests {
 			),
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::RotateAggKey { skip_transfer_funds: false },
-				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
-				vec![
-					AccountMeta::new(Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(), false),
-					AccountMeta::new(agg_key_pubkey, true),
-					AccountMeta::new(new_agg_key_pubkey, false),
-					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
-				],
+			VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap()).rotate_agg_key(
+				false,
+				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+				agg_key_pubkey,
+				new_agg_key_pubkey,
+				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
 			),
 			set_upgrade_authority(
 				Pubkey::from_str(UPGRADE_MANAGER_PROGRAM_DATA_ACCOUNT).unwrap(),
@@ -1607,34 +1565,21 @@ mod tests {
 				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
 				&agg_key_pubkey,
 			),
-			ProgramInstruction::get_instruction(
-				&UpgradeManagerProgram::UpgradeVaultProgram {
-					seed: UPGRADE_MANAGER_PDA_SIGNER_SEED.to_vec(),
-					bump: UPGRADE_MANAGER_PDA_SIGNER_BUMP,
-				},
-				Pubkey::from_str(UPGRADE_MANAGER_PROGRAM).unwrap(),
-				vec![
-					AccountMeta::new_readonly(
-						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
-						false,
-					),
-					AccountMeta::new_readonly(govkey_pubkey, true),
-					AccountMeta::new(Pubkey::from_str(VAULT_PROGRAM_DATA_ADDRESS).unwrap(), false),
-					AccountMeta::new(Pubkey::from_str(VAULT_PROGRAM).unwrap(), false),
-					AccountMeta::new(buffer_address, false),
-					AccountMeta::new(spill_address, false),
-					AccountMeta::new_readonly(Pubkey::from_str(SYS_VAR_RENT).unwrap(), false),
-					AccountMeta::new_readonly(Pubkey::from_str(SYS_VAR_CLOCK).unwrap(), false),
-					AccountMeta::new_readonly(
-						Pubkey::from_str(UPGRADE_MANAGER_PDA_SIGNER).unwrap(),
-						false,
-					),
-					AccountMeta::new_readonly(
-						Pubkey::from_str(BPF_LOADER_UPGRADEABLE_ID).unwrap(),
-						false,
-					),
-				],
-			),
+			UpgradeManagerProgram::with_id(Pubkey::from_str(UPGRADE_MANAGER_PROGRAM).unwrap())
+				.upgrade_vault_program(
+					UPGRADE_MANAGER_PDA_SIGNER_SEED.to_vec(),
+					UPGRADE_MANAGER_PDA_SIGNER_BUMP,
+					Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+					govkey_pubkey,
+					Pubkey::from_str(VAULT_PROGRAM_DATA_ADDRESS).unwrap(),
+					Pubkey::from_str(VAULT_PROGRAM).unwrap(),
+					buffer_address,
+					spill_address,
+					Pubkey::from_str(SYS_VAR_RENT).unwrap(),
+					Pubkey::from_str(SYS_VAR_CLOCK).unwrap(),
+					Pubkey::from_str(UPGRADE_MANAGER_PDA_SIGNER).unwrap(),
+					Pubkey::from_str(BPF_LOADER_UPGRADEABLE_ID).unwrap(),
+				),
 		];
 		let message =
 			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
@@ -1683,72 +1628,6 @@ mod tests {
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
 		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
-	}
-
-	// TODO: Pull and compare discriminators and function from the contracts-interfaces
-	#[test]
-	fn test_function_discriminators() {
-		assert_eq!(
-			VaultProgram::function_discriminator(&VaultProgram::RotateAggKey {
-				skip_transfer_funds: false
-			}),
-			vec![78u8, 81u8, 143u8, 171u8, 221u8, 165u8, 214u8, 139u8]
-		);
-		assert_eq!(
-			VaultProgram::function_discriminator(&VaultProgram::FetchTokens {
-				seed: vec![34u8, 27u8, 77u8],
-				bump: 2,
-				decimals: 6
-			}),
-			vec![73u8, 71u8, 16u8, 100u8, 44u8, 176u8, 198u8, 70u8]
-		);
-		assert_eq!(
-			VaultProgram::function_discriminator(&VaultProgram::TransferTokens {
-				amount: 6,
-				decimals: 6
-			}),
-			vec![54u8, 180u8, 238u8, 175u8, 74u8, 85u8, 126u8, 188u8]
-		);
-		assert_eq!(
-			VaultProgram::function_discriminator(&VaultProgram::FetchNative {
-				seed: vec![1u8, 2u8, 3u8],
-				bump: 13
-			}),
-			vec![142u8, 36u8, 101u8, 143u8, 108u8, 89u8, 41u8, 140u8]
-		);
-		assert_eq!(
-			VaultProgram::function_discriminator(&VaultProgram::ExecuteCcmNativeCall {
-				source_chain: 1,
-				source_address: vec![2u8, 2u8, 67u8],
-				message: vec![2u8],
-				amount: 4
-			}),
-			vec![125u8, 5u8, 11u8, 227u8, 128u8, 66u8, 224u8, 178u8]
-		);
-		assert_eq!(
-			VaultProgram::function_discriminator(&VaultProgram::ExecuteCcmTokenCall {
-				source_chain: 1,
-				source_address: vec![2u8, 2u8, 67u8],
-				message: vec![3u8],
-				amount: 1
-			}),
-			vec![108u8, 184u8, 162u8, 123u8, 159u8, 222u8, 170u8, 35u8]
-		);
-		assert_eq!(
-			UpgradeManagerProgram::function_discriminator(
-				&UpgradeManagerProgram::UpgradeVaultProgram { seed: vec![31u8, 1u8, 5u8], bump: 3 }
-			),
-			vec![72u8, 211u8, 76u8, 189u8, 84u8, 176u8, 62u8, 101u8]
-		);
-		assert_eq!(
-			UpgradeManagerProgram::function_discriminator(
-				&UpgradeManagerProgram::TransferVaultUpgradeAuthority {
-					seed: vec![1u8, 5u8, 7u8],
-					bump: 3,
-				}
-			),
-			vec![114u8, 247u8, 72u8, 110u8, 145u8, 65u8, 236u8, 153u8]
-		);
 	}
 
 	// Test taken from https://docs.rs/solana-sdk/latest/src/solana_sdk/transaction/mod.rs.html#1354

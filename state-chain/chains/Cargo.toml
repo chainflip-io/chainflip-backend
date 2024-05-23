@@ -56,6 +56,7 @@ bincode = { version = "2.0.0-rc.3", default-features = false, features = [
   "serde",
 ] }
 curve25519-dalek = { git = "https://github.com/solana-labs/curve25519-dalek.git", rev = "b500cdc2a920cd5bff9e2dd974d7b97349d61464", optional = true }
+sha2-const = { version = "0.1.2", default-features = false }
 
 
 # Other
