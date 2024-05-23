@@ -1553,7 +1553,7 @@ impl<T: Config> Pallet<T> {
 		side: Side,
 		id: OrderId,
 		tick: Tick,
-		sell_amount: U256,
+		sell_amount: Amount,
 	) -> Result<(), DispatchError> {
 		Self::try_mutate_pool(AssetPair::try_new::<T>(base_asset, quote_asset)?, |_, pool| {
 			let _ = Self::collect_and_mint_limit_order_with_dispatch_error(
