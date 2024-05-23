@@ -618,7 +618,7 @@ pub mod pallet {
 								IncreaseOrDecrease::Decrease(range_orders::Size::Liquidity {
 									liquidity: Liquidity::MAX,
 								}),
-								/* allow_noop */ false,
+								NoOpStatus::Error,
 							)?;
 							Self::inner_update_range_order(
 								pool,
@@ -630,7 +630,7 @@ pub mod pallet {
 									minimum: Default::default(),
 									maximum: withdrawn_asset_amounts.map(Into::into),
 								}),
-								/* allow_noop */ true,
+								NoOpStatus::Allow,
 							)?;
 						}
 
@@ -652,7 +652,7 @@ pub mod pallet {
 								minimum: minimum.map(Into::into),
 							},
 					}),
-					/* allow_noop */ false,
+					NoOpStatus::Error,
 				)?;
 
 				Ok(())
@@ -698,7 +698,7 @@ pub mod pallet {
 							IncreaseOrDecrease::Decrease(range_orders::Size::Liquidity {
 								liquidity: Liquidity::MAX,
 							}),
-							/* allow noop */ false,
+							NoOpStatus::Error,
 						)?;
 
 						Ok(option_new_tick_range.unwrap_or(previous_tick_range))
@@ -719,7 +719,7 @@ pub mod pallet {
 								minimum: minimum.map(Into::into),
 							},
 					}),
-					/* allow noop */ true,
+					NoOpStatus::Allow,
 				)?;
 
 				Ok(())
@@ -770,7 +770,7 @@ pub mod pallet {
 								id,
 								previous_tick,
 								IncreaseOrDecrease::Decrease(cf_amm::common::Amount::MAX),
-								/* allow_noop */ false,
+								NoOpStatus::Error,
 							)?;
 							Self::inner_update_limit_order(
 								pool,
@@ -780,7 +780,7 @@ pub mod pallet {
 								id,
 								new_tick,
 								IncreaseOrDecrease::Increase(withdrawn_asset_amount.into()),
-								/* allow_noop */ true,
+								NoOpStatus::Allow,
 							)?;
 						}
 
@@ -795,7 +795,7 @@ pub mod pallet {
 					id,
 					tick,
 					amount_change.map(|amount| amount.into()),
-					/* allow_noop */ false,
+					NoOpStatus::Error,
 				)?;
 
 				Ok(())
@@ -845,7 +845,7 @@ pub mod pallet {
 							id,
 							previous_tick,
 							IncreaseOrDecrease::Decrease(cf_amm::common::Amount::MAX),
-							/* allow noop */ false,
+							NoOpStatus::Error,
 						)?;
 
 						Ok(option_new_tick.unwrap_or(previous_tick))
@@ -859,7 +859,7 @@ pub mod pallet {
 					id,
 					tick,
 					IncreaseOrDecrease::Increase(sell_amount.into()),
-					/* allow noop */ true,
+					NoOpStatus::Allow,
 				)?;
 
 				Ok(())
@@ -1226,6 +1226,12 @@ pub struct PoolPriceV2 {
 	pub range_order: SqrtPriceQ64F96,
 }
 
+#[derive(PartialEq, Eq)]
+enum NoOpStatus {
+	Allow,
+	Error,
+}
+
 impl<T: Config> Pallet<T> {
 	fn inner_sweep(lp: &T::AccountId) -> DispatchResult {
 		// Collect to avoid undefined behaviour (See StorsgeMap::iter_keys documentation)
@@ -1243,7 +1249,7 @@ impl<T: Config> Pallet<T> {
 						IncreaseOrDecrease::Decrease(range_orders::Size::Liquidity {
 							liquidity: 0,
 						}),
-						false,
+						NoOpStatus::Error,
 					)?;
 				}
 			}
@@ -1269,7 +1275,7 @@ impl<T: Config> Pallet<T> {
 						id,
 						tick,
 						IncreaseOrDecrease::Decrease(Default::default()),
-						false,
+						NoOpStatus::Error,
 					)?;
 				}
 			}
@@ -1287,7 +1293,7 @@ impl<T: Config> Pallet<T> {
 		id: OrderId,
 		tick: cf_amm::common::Tick,
 		sold_amount: cf_amm::common::Amount,
-		allow_noop: bool,
+		noop_status: NoOpStatus,
 	) -> Result<(Collected, PositionInfo), DispatchError> {
 		let (collected, position_info) = match pool.pool_state.collect_and_mint_limit_order(
 			&(lp.clone(), id),
@@ -1298,7 +1304,7 @@ impl<T: Config> Pallet<T> {
 			Ok(ok) => Ok(ok),
 			Err(error) => Err(match error {
 				limit_orders::PositionError::NonExistent =>
-					if allow_noop {
+					if noop_status == NoOpStatus::Allow {
 						return Ok(Default::default())
 					} else {
 						Error::<T>::OrderDoesNotExist
@@ -1323,7 +1329,7 @@ impl<T: Config> Pallet<T> {
 		id: OrderId,
 		tick: cf_amm::common::Tick,
 		sold_amount_change: IncreaseOrDecrease<cf_amm::common::Amount>,
-		allow_noop: bool,
+		noop_status: NoOpStatus,
 	) -> Result<AssetAmount, DispatchError> {
 		let (sold_amount_change, position_info, collected) = match sold_amount_change {
 			IncreaseOrDecrease::Increase(sold_amount) => {
@@ -1335,7 +1341,7 @@ impl<T: Config> Pallet<T> {
 						id,
 						tick,
 						sold_amount,
-						allow_noop,
+						noop_status,
 					)?;
 
 				let debited_amount: AssetAmount = sold_amount.try_into()?;
@@ -1355,7 +1361,7 @@ impl<T: Config> Pallet<T> {
 					Ok(ok) => Ok(ok),
 					Err(error) => Err(match error {
 						limit_orders::PositionError::NonExistent =>
-							if allow_noop {
+							if noop_status == NoOpStatus::Allow {
 								return Ok(Default::default())
 							} else {
 								Error::<T>::OrderDoesNotExist
@@ -1399,7 +1405,7 @@ impl<T: Config> Pallet<T> {
 		id: OrderId,
 		tick_range: Range<cf_amm::common::Tick>,
 		size_change: IncreaseOrDecrease<range_orders::Size>,
-		allow_noop: bool,
+		noop_status: NoOpStatus,
 	) -> Result<AssetAmounts, DispatchError> {
 		let (liquidity_change, position_info, assets_change, collected) = match size_change {
 			IncreaseOrDecrease::Increase(size) => {
@@ -1430,7 +1436,7 @@ impl<T: Config> Pallet<T> {
 							range_orders::PositionError::InvalidTickRange =>
 								Error::<T>::InvalidTickRange.into(),
 							range_orders::PositionError::NonExistent =>
-								if allow_noop {
+								if noop_status == NoOpStatus::Allow {
 									return Ok(Default::default())
 								} else {
 									Error::<T>::OrderDoesNotExist.into()
@@ -1464,7 +1470,7 @@ impl<T: Config> Pallet<T> {
 						range_orders::PositionError::InvalidTickRange =>
 							Error::<T>::InvalidTickRange,
 						range_orders::PositionError::NonExistent =>
-							if allow_noop {
+							if noop_status == NoOpStatus::Allow {
 								return Ok(Default::default())
 							} else {
 								Error::<T>::OrderDoesNotExist
@@ -1563,7 +1569,7 @@ impl<T: Config> Pallet<T> {
 				id,
 				tick,
 				sell_amount,
-				false,
+				NoOpStatus::Error,
 			)?;
 
 			Ok(())
