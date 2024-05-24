@@ -94,6 +94,8 @@ async function compatibleUpgrade(
   runtimePath: string,
   numberOfNodes: 1 | 3,
 ) {
+
+  throw new Error('Deliberate error, hopefully is removed from merge queue');
   await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, true);
 
   killOldNodes();
