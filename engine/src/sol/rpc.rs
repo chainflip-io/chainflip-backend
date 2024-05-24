@@ -1,17 +1,13 @@
 use futures_core::Future;
-// use subxt::ext::sp_runtime::print;
-use thiserror::Error;
 
 use reqwest::{header::CONTENT_TYPE, Client};
-use serde::{Deserialize, Serialize};
 
-use serde;
 use serde_json::{from_value, json};
 
 use tracing::error;
 use utilities::make_periodic_tick;
 
-use crate::constants::RPC_RETRY_CONNECTION_INTERVAL;
+use crate::{btc::rpc::Error, constants::RPC_RETRY_CONNECTION_INTERVAL};
 use utilities::redact_endpoint_secret::SecretUrl;
 
 use anyhow::{anyhow, Result};
@@ -21,34 +17,6 @@ use cf_chains::sol::SolHash;
 
 use super::{commitment_config::CommitmentConfig, rpc_client_api::*};
 use std::str::FromStr;
-
-// From jsonrpc crate
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct RpcError {
-	/// The integer identifier of the error
-	pub code: i32,
-	/// A string describing the error
-	pub message: String,
-	/// Additional data specific to the error
-	pub data: Option<Box<serde_json::value::RawValue>>,
-}
-
-#[derive(Error, Debug)]
-pub enum Error {
-	Transport(reqwest::Error),
-	Json(serde_json::Error),
-	Rpc(RpcError),
-}
-
-impl std::fmt::Display for Error {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		match *self {
-			Error::Transport(ref e) => write!(f, "Transport error: {}", e),
-			Error::Json(ref e) => write!(f, "JSON decode error: {}", e),
-			Error::Rpc(ref e) => write!(f, "RPC error response: {:?}", e),
-		}
-	}
-}
 
 #[derive(Clone)]
 pub struct SolRpcClient {
@@ -98,37 +66,27 @@ impl SolRpcClient {
 		})
 	}
 
-	async fn call_rpc(&self, method: &str, params: ReqParams) -> Result<serde_json::Value, Error> {
+	async fn call_rpc(
+		&self,
+		method: &str,
+		params: Option<serde_json::Value>,
+	) -> Result<serde_json::Value, Error> {
 		call_rpc_raw(&self.client, &self.endpoint, method, params).await
 	}
-}
-
-#[derive(Clone, Debug)]
-enum ReqParams {
-	Empty,
-	Single(serde_json::Value),
 }
 
 async fn call_rpc_raw(
 	client: &Client,
 	endpoint: &SecretUrl,
 	method: &str,
-	params: ReqParams,
+	params: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, Error> {
-	let request_body = match params.clone() {
-		ReqParams::Empty => vec![json!({
-			"jsonrpc": "2.0",
-			"id": 0,
-			"method": method,
-			"params": []
-		})],
-		ReqParams::Single(params) => vec![json!({
-			"jsonrpc": "2.0",
-			"id": 0,
-			"method": method,
-			"params": params
-		})],
-	};
+	let request_body = json!({
+		"jsonrpc": "2.0",
+		"id": 0,
+		"method": method,
+		"params": params.unwrap_or_else(|| json!([]))
+	});
 
 	println!("request_body: {:?}", request_body);
 
@@ -142,42 +100,18 @@ async fn call_rpc_raw(
 
 	println!("response: {:?}", response);
 
-	let json = response.json::<serde_json::Value>().await.map_err(Error::Transport)?;
+	let mut json = response.json::<serde_json::Value>().await.map_err(Error::Transport)?;
 
-	println!("json: {:?}", json);
-
-	// TODO: Now we always get an array of length one because the request_body is made as a vector.
-	// Do either single rpc calls or add batch support as in BTC. We might want batch support for
-	// calls like get multiple accounts. We'd just then need to make sure that the 100 accounts
-	// limit is per each of the individual rpc call and doesn't apply to the batch call itself. The
-	// current code doesn't make sense because we use a vector of length one. Either make it always
-	// a simple request or copy the batch request from BTC.
-	if let Some(array) = json.as_array() {
-		if let Some(first_element) = array.first() {
-			println!("result: {:?}", first_element["result"].clone());
-			Ok(first_element["result"].clone())
-		} else {
-			println!("Array is empty");
-			Err(Error::Rpc(RpcError {
-				code: -32603,
-				message: "Internal error".to_string(),
-				data: None,
-			}))
-		}
-	} else {
-		println!("Not an array");
-		Err(Error::Rpc(RpcError {
-			code: -32603,
-			message: "Internal error".to_string(),
-			data: None,
-		}))
+	if json["error"].is_object() {
+		return Err(Error::Rpc(serde_json::from_value(json["error"].clone()).map_err(Error::Json)?));
 	}
+	Ok(json["result"].take())
 }
 
 /// Get the Solana Network genesis hash by calling the `getGenesisHash` RPC.
 async fn get_genesis_hash(client: &Client, endpoint: &SecretUrl) -> anyhow::Result<SolHash> {
 	// Call `call_rpc_raw` and get the JSON value
-	let json_value = call_rpc_raw(client, endpoint, "getGenesisHash", ReqParams::Empty)
+	let json_value = call_rpc_raw(client, endpoint, "getGenesisHash", None)
 		.await
 		.map_err(anyhow::Error::msg)?;
 
@@ -219,24 +153,21 @@ impl SolRpcApi for SolRpcClient {
 		config: RpcBlockConfig,
 	) -> anyhow::Result<UiConfirmedBlock> {
 		// TODO: Should we harcode to not get transactions nor rewards?
-		let response = self
-			.call_rpc("getBlock", ReqParams::Single(json!([slot, json!(config)])))
-			.await?;
+		let response = self.call_rpc("getBlock", Some(json!([slot, json!(config)]))).await?;
 		let block: UiConfirmedBlock =
 			from_value(response).map_err(|err| anyhow!("Failed to parse block {}", err))?;
 		Ok(block)
 	}
 
 	async fn get_slot(&self, commitment: CommitmentConfig) -> anyhow::Result<u64> {
-		let response =
-			self.call_rpc("getSlot", ReqParams::Single(json!([json!(commitment)]))).await?;
+		let response = self.call_rpc("getSlot", Some(json!([json!(commitment)]))).await?;
 		let slot: u64 =
 			from_value(response).map_err(|err| anyhow!("Failed to parse block {}", err))?;
 		Ok(slot)
 	}
 
 	async fn get_recent_prioritization_fees(&self) -> anyhow::Result<Vec<RpcPrioritizationFee>> {
-		let response = self.call_rpc("getRecentPrioritizationFees", ReqParams::Empty).await?;
+		let response = self.call_rpc("getRecentPrioritizationFees", None).await?;
 		let fees: Vec<RpcPrioritizationFee> = from_value(response)
 			.map_err(|err| anyhow!("Failed to parse prioritization fees: {}", err))?;
 		Ok(fees)
@@ -254,7 +185,7 @@ impl SolRpcApi for SolRpcClient {
 		// let pubkeys: Vec<_> = pubkeys.iter().map(|pubkey| pubkey).collect();
 
 		let response = self
-			.call_rpc("getMultipleAccounts", ReqParams::Single(json!([pubkeys, json!(config)])))
+			.call_rpc("getMultipleAccounts", Some(json!([pubkeys, json!(config)])))
 			.await?;
 		println!("response: {:?}", response);
 
