@@ -1,8 +1,8 @@
-use utilities::task_scope::Scope;
+use utilities::{redact_endpoint_secret::SecretUrl, task_scope::Scope};
 
 use crate::{
 	retrier::{Attempt, RequestLog, RetrierClient},
-	settings::{HttpBasicAuthEndpoint, NodeContainer},
+	settings::NodeContainer,
 	witness::common::chain_source::{ChainClient, Header},
 };
 use cf_chains::{sol::SolHash, Solana};
@@ -32,7 +32,7 @@ const MAX_BROADCAST_RETRIES: Attempt = 10;
 impl SolRetryRpcClient {
 	pub async fn new(
 		scope: &Scope<'_, anyhow::Error>,
-		nodes: NodeContainer<HttpBasicAuthEndpoint>,
+		nodes: NodeContainer<SecretUrl>,
 		expected_genesis_hash: Option<SolHash>,
 		witness_period: u64,
 	) -> Result<Self> {
@@ -230,13 +230,7 @@ mod tests {
 				let retry_client = SolRetryRpcClient::new(
 					scope,
 					NodeContainer {
-						primary: HttpBasicAuthEndpoint {
-							// TODO: We should get this from settings, just hardcoding it for
-							// testing
-							http_endpoint: "https://api.testnet.solana.com".into(),
-							basic_auth_user: "flip".to_string(),
-							basic_auth_password: "flip".to_string(),
-						},
+						primary: SecretUrl::from("https://api.testnet.solana.com".to_string()),
 						backup: None,
 					},
 					None,
