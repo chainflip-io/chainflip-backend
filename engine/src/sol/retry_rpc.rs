@@ -1,12 +1,11 @@
-use utilities::task_scope::Scope;
-use crate::settings::WsHttpEndpoints;
 use crate::{
 	retrier::{Attempt, RequestLog, RetrierClient},
-	settings::NodeContainer,
+	settings::{NodeContainer, WsHttpEndpoints},
 	witness::common::chain_source::{ChainClient, Header},
 };
 use cf_chains::{sol::SolHash, Solana};
 use core::time::Duration;
+use utilities::task_scope::Scope;
 
 use anyhow::Result;
 use std::str::FromStr;
@@ -41,7 +40,9 @@ impl SolRetryRpcClient {
 
 		let backup_rpc_client = nodes
 			.backup
-			.map(|backup_endpoint| SolRpcClient::new(backup_endpoint.http_endpoint, expected_genesis_hash))
+			.map(|backup_endpoint| {
+				SolRpcClient::new(backup_endpoint.http_endpoint, expected_genesis_hash)
+			})
 			.transpose()?;
 
 		Ok(Self {
