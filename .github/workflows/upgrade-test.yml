@@ -281,21 +281,25 @@ jobs:
 
       - name: Print new post-upgrade chainflip-engine logs 🚗
         if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/*/start-all-engines-post-upgrade.*log
 
       - name: Print chainflip-node logs 📡
         if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/*/chainflip-node.*log
 
       - name: Print chainflip-broker-api logs 💼
         if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/chainflip-broker-api.*log
 
       - name: Print chainflip-lp-api logs 🤑
         if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/chainflip-lp-api.*log
 
