@@ -47,15 +47,17 @@ basic_auth_password = "flip"
 ws_endpoint = "ws://localhost:8548"
 http_endpoint = "http://localhost:8547"
 
-[sol.rpc]
-http_endpoint = "http://localhost:8899"
-basic_auth_user = "flip"
-basic_auth_password = "flip"
-
 # optional
 #[arb.backup_rpc]
 #ws_endpoint = "ws://localhost:8548"
 #http_endpoint = "http://localhost:8547"
+
+[sol.rpc]
+http_endpoint = "http://localhost:8899"
+
+# optional
+#[sol.backup_rpc]
+# http_endpoint = "http://localhost:8899"
 
 # optional
 [health_check]

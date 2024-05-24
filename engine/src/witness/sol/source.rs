@@ -51,7 +51,7 @@ where
 						let slot = client.get_slot(CommitmentConfig::finalized()).await;
 
 						let block = client
-							.get_block_with_config(
+							.get_block(
 								slot,
 								RpcBlockConfig {
 									encoding: Some(UiTransactionEncoding::JsonParsed),
