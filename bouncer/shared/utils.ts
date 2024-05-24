@@ -367,6 +367,8 @@ export enum SwapType {
   Swap = 'Swap',
   CcmPrincipal = 'CcmPrincipal',
   CcmGas = 'CcmGas',
+  NetworkFee = 'NetworkFee',
+  IngressEgressFee = 'IngressEgressFee',
 }
 
 export async function observeSwapScheduled(
@@ -682,7 +684,6 @@ export function handleSubstrateError(api: any) {
         error = dispatchError.toString();
       }
       console.log('Dispatch error:' + error);
-      console.log('Extrinsic failed: ' + error);
       process.exit(1);
     }
   };
