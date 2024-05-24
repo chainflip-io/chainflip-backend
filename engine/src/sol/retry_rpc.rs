@@ -1,5 +1,5 @@
-use utilities::{redact_endpoint_secret::SecretUrl, task_scope::Scope};
-
+use utilities::task_scope::Scope;
+use crate::settings::WsHttpEndpoints;
 use crate::{
 	retrier::{Attempt, RequestLog, RetrierClient},
 	settings::NodeContainer,
@@ -32,15 +32,16 @@ const MAX_BROADCAST_RETRIES: Attempt = 10;
 impl SolRetryRpcClient {
 	pub async fn new(
 		scope: &Scope<'_, anyhow::Error>,
-		nodes: NodeContainer<SecretUrl>,
+		nodes: NodeContainer<WsHttpEndpoints>,
 		expected_genesis_hash: Option<SolHash>,
 		witness_period: u64,
 	) -> Result<Self> {
-		let rpc_client = SolRpcClient::new(nodes.primary, expected_genesis_hash)?;
+		// Passing only the http_endpoint. Not using the ws for now
+		let rpc_client = SolRpcClient::new(nodes.primary.http_endpoint, expected_genesis_hash)?;
 
 		let backup_rpc_client = nodes
 			.backup
-			.map(|backup_endpoint| SolRpcClient::new(backup_endpoint, expected_genesis_hash))
+			.map(|backup_endpoint| SolRpcClient::new(backup_endpoint.http_endpoint, expected_genesis_hash))
 			.transpose()?;
 
 		Ok(Self {
@@ -230,7 +231,10 @@ mod tests {
 				let retry_client = SolRetryRpcClient::new(
 					scope,
 					NodeContainer {
-						primary: SecretUrl::from("https://api.testnet.solana.com".to_string()),
+						primary: WsHttpEndpoints {
+							ws_endpoint: "wss://api.testnet.solana.com".into(),
+							http_endpoint: "https://api.testnet.solana.com".into(),
+						},
 						backup: None,
 					},
 					None,
