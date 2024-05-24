@@ -14,6 +14,13 @@ on:
       upgrade-to-commit:
         description: "Commit to run the upgrade test against. Leave blank to use the latest workflow run."
         required: false
+      # Allows us to create a workflow call that doesn't run the job
+      # so that branch protection rules can skip when running on push, but not in merge queue.
+      run-job:
+        type: boolean
+        description: "Run the upgrade test job"
+        required: false
+        default: true
 
   workflow_call:
     inputs:
@@ -29,6 +36,13 @@ on:
         type: string
         description: "Commit to run the upgrade test against. Leave blank to use the latest successful workflow run."
         required: false
+      # Allows us to create a workflow call that doesn't run the job
+      # so that branch protection rules can skip when running on push, but not in merge queue.
+      run-job:
+        type: boolean
+        description: "Run the upgrade test job"
+        required: false
+        default: true
 env:
   FORCE_COLOR: 1
 
@@ -38,6 +52,7 @@ permissions:
 
 jobs:
   upgrade_test:
+    if: ${{ github.event.inputs.run-job }}
     runs-on: digitalocean
     # conservatively 1.5 hours. 2 bouncer runs need to occur.
     timeout-minutes: 90
