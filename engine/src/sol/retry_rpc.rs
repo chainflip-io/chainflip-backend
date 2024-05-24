@@ -59,7 +59,7 @@ impl SolRetryRpcClient {
 
 #[async_trait::async_trait]
 pub trait SolRetryRpcApi: Clone {
-	async fn get_block_with_config(&self, slot: u64, config: RpcBlockConfig) -> UiConfirmedBlock;
+	async fn get_block(&self, slot: u64, config: RpcBlockConfig) -> UiConfirmedBlock;
 	async fn get_slot(&self, commitment: CommitmentConfig) -> u64; // Slot
 	async fn get_recent_prioritization_fees(&self) -> Vec<RpcPrioritizationFee>;
 	async fn get_multiple_accounts_with_config(
@@ -72,13 +72,13 @@ pub trait SolRetryRpcApi: Clone {
 
 #[async_trait::async_trait]
 impl SolRetryRpcApi for SolRetryRpcClient {
-	async fn get_block_with_config(&self, slot: u64, config: RpcBlockConfig) -> UiConfirmedBlock {
+	async fn get_block(&self, slot: u64, config: RpcBlockConfig) -> UiConfirmedBlock {
 		self.rpc_retry_client
 			.request(
 				RequestLog::new("getBlock".to_string(), Some(format!("{slot:?}, {config:?}"))),
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.get_block_with_config(slot, config).await })
+					Box::pin(async move { client.get_block(slot, config).await })
 				}),
 			)
 			.await
@@ -162,7 +162,7 @@ impl ChainClient for SolRetryRpcClient {
 							index: u64,
 						) -> anyhow::Result<(SolHash, Option<SolHash>)> {
 							let block = client
-								.get_block_with_config(
+								.get_block(
 									index,
 									RpcBlockConfig {
 										encoding: Some(UiTransactionEncoding::JsonParsed),

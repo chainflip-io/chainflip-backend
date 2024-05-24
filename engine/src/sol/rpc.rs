@@ -129,8 +129,7 @@ async fn get_genesis_hash(client: &Client, endpoint: &SecretUrl) -> anyhow::Resu
 
 #[async_trait::async_trait]
 pub trait SolRpcApi {
-	// TODO: Change naming to get_block and make config an option
-	async fn get_block_with_config(
+	async fn get_block(
 		&self,
 		slot: u64,
 		config: RpcBlockConfig,
@@ -147,7 +146,7 @@ pub trait SolRpcApi {
 
 #[async_trait::async_trait]
 impl SolRpcApi for SolRpcClient {
-	async fn get_block_with_config(
+	async fn get_block(
 		&self,
 		slot: u64,
 		config: RpcBlockConfig,
@@ -266,7 +265,7 @@ mod tests {
 		println!("account_info: {:?}", result.value);
 
 		let block = sol_rpc_client
-			.get_block_with_config(
+			.get_block(
 				300620702,
 				RpcBlockConfig {
 					encoding: Some(UiTransactionEncoding::JsonParsed),
