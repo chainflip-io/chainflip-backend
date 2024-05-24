@@ -164,7 +164,7 @@ jobs:
           echo "RELEASE_VERSION=${RELEASE_VERSION}" >> $GITHUB_ENV
 
       - name: Download upgrade-to binaries for push or pull request📥
-        if: github.event.inputs.run-job && github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        if: github.event.inputs.run-job && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group')
         uses: actions/download-artifact@v3
         with:
           name: chainflip-backend-bin-try-runtime
