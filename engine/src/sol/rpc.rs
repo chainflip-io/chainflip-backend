@@ -11,7 +11,8 @@ use serde_json::{from_value, json};
 use tracing::error;
 use utilities::make_periodic_tick;
 
-use crate::{constants::RPC_RETRY_CONNECTION_INTERVAL, settings::HttpBasicAuthEndpoint};
+use crate::constants::RPC_RETRY_CONNECTION_INTERVAL;
+use utilities::redact_endpoint_secret::SecretUrl;
 
 use anyhow::{anyhow, Result};
 use tracing::warn;
@@ -53,13 +54,12 @@ impl std::fmt::Display for Error {
 pub struct SolRpcClient {
 	// Internally the Client is Arc'd
 	client: Client,
-	endpoint: HttpBasicAuthEndpoint,
+	endpoint: SecretUrl,
 }
 
 impl SolRpcClient {
 	pub fn new(
-		// TODO: Should we use SecretUrl instead?
-		endpoint: HttpBasicAuthEndpoint,
+		endpoint: SecretUrl,
 		expected_genesis_hash: Option<SolHash>,
 	) -> anyhow::Result<impl Future<Output = Self>> {
 		let client = Client::builder().build()?;
@@ -82,7 +82,7 @@ impl SolRpcClient {
 						},
 						Some(_) => {
 							error!(
-                                        "Connected to Solana node at {0} but the genesis hash {genesis_hash} does not match the expected genesis hash. Please check your CFE configuration file.", endpoint.http_endpoint
+                                        "Connected to Solana node at {0} but the genesis hash {genesis_hash} does not match the expected genesis hash. Please check your CFE configuration file.", endpoint
                                     )
 						},
 					},
@@ -90,7 +90,7 @@ impl SolRpcClient {
 						"Cannot connect to Solana node at {1} with error: {e}. \
                                 Please check your CFE configuration file. Retrying in {:?}...",
 						poll_interval.period(),
-						endpoint.http_endpoint
+						endpoint
 					),
 				}
 			}
@@ -111,7 +111,7 @@ enum ReqParams {
 
 async fn call_rpc_raw(
 	client: &Client,
-	endpoint: &HttpBasicAuthEndpoint,
+	endpoint: &SecretUrl,
 	method: &str,
 	params: ReqParams,
 ) -> Result<serde_json::Value, Error> {
@@ -133,8 +133,7 @@ async fn call_rpc_raw(
 	println!("request_body: {:?}", request_body);
 
 	let response = client
-		.post(endpoint.http_endpoint.as_ref())
-		.basic_auth(&endpoint.basic_auth_user, Some(&endpoint.basic_auth_password))
+		.post(endpoint.as_ref())
 		.header(CONTENT_TYPE, "application/json")
 		.json(&request_body)
 		.send()
@@ -147,7 +146,12 @@ async fn call_rpc_raw(
 
 	println!("json: {:?}", json);
 
-	// TODO: This is a bit hacky and assumes it will be an array of length 1.
+	// TODO: Now we always get an array of length one because the request_body is made as a vector.
+	// Do either single rpc calls or add batch support as in BTC. We might want batch support for
+	// calls like get multiple accounts. We'd just then need to make sure that the 100 accounts
+	// limit is per each of the individual rpc call and doesn't apply to the batch call itself. The
+	// current code doesn't make sense because we use a vector of length one. Either make it always
+	// a simple request or copy the batch request from BTC.
 	if let Some(array) = json.as_array() {
 		if let Some(first_element) = array.first() {
 			println!("result: {:?}", first_element["result"].clone());
@@ -171,10 +175,7 @@ async fn call_rpc_raw(
 }
 
 /// Get the Solana Network genesis hash by calling the `getGenesisHash` RPC.
-async fn get_genesis_hash(
-	client: &Client,
-	endpoint: &HttpBasicAuthEndpoint,
-) -> anyhow::Result<SolHash> {
+async fn get_genesis_hash(client: &Client, endpoint: &SecretUrl) -> anyhow::Result<SolHash> {
 	// Call `call_rpc_raw` and get the JSON value
 	let json_value = call_rpc_raw(client, endpoint, "getGenesisHash", ReqParams::Empty)
 		.await
@@ -273,16 +274,10 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_sol_asyc() {
-		let sol_rpc_client = SolRpcClient::new(
-			HttpBasicAuthEndpoint {
-				http_endpoint: "https://api.testnet.solana.com".into(),
-				basic_auth_user: "flip".to_string(),
-				basic_auth_password: "flip".to_string(),
-			},
-			None,
-		)
-		.unwrap()
-		.await;
+		let sol_rpc_client =
+			SolRpcClient::new(SecretUrl::from("https://api.testnet.solana.com".to_string()), None)
+				.unwrap()
+				.await;
 
 		get_genesis_hash(&sol_rpc_client.client, &sol_rpc_client.endpoint)
 			.await
@@ -294,11 +289,7 @@ mod tests {
 		// init_test_logger();
 
 		let sol_rpc_client = SolRpcClient::new(
-			HttpBasicAuthEndpoint {
-				http_endpoint: "https://api.devnet.solana.com".into(),
-				basic_auth_user: "flip".to_string(),
-				basic_auth_password: "flip".to_string(),
-			},
+			SecretUrl::from("https://api.devnet.solana.com".to_string()),
 			Some(SolHash::from_str("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG").unwrap()),
 		)
 		.unwrap()

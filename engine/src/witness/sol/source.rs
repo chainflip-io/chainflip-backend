@@ -44,7 +44,7 @@ where
 		(
 			Box::pin(stream::unfold(
 				(self.client.clone(), None, make_periodic_tick(POLL_INTERVAL, true)),
-				|(client, last_witnesses_range_end, mut tick)| async move {
+				|(client, last_witnessed_range_end, mut tick)| async move {
 					loop {
 						tick.tick().await;
 
@@ -70,8 +70,9 @@ where
 
 						let witness_range = Solana::block_witness_range(slot);
 
-						// Get the header if the slot is greater than the last witness range end
-						if Some(slot) > last_witnesses_range_end {
+						// Return the header if the slot is greater than the last witnessed range's
+						// end
+						if Some(slot) >= last_witnessed_range_end {
 							let witness_range_end = *witness_range.end();
 							return Some((
 								Header {
