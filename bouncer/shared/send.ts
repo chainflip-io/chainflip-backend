@@ -1,5 +1,4 @@
 import Web3 from 'web3';
-import { InternalAsset as Asset } from '@chainflip/cli';
 import { sendDot } from './send_dot';
 import { sendBtc } from './send_btc';
 import { sendErc20 } from './send_erc20';
@@ -11,6 +10,7 @@ import {
   chainFromAsset,
   getEvmEndpoint,
   assetDecimals,
+  Asset,
 } from './utils';
 import { approveErc20 } from './approve_erc20';
 import { getCFTesterAbi } from './contract_interfaces';

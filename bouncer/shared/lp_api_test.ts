@@ -14,7 +14,7 @@ import {
   Chain,
 } from './utils';
 import { jsonRpc } from './json_rpc';
-import { provideLiquidity } from './provide_liquidity';
+import { depositLiquidity } from './deposit_liquidity';
 import { sendEvmNative } from './send_evm';
 import { getBalance } from './get_balance';
 import { getChainflipApi, observeEvent } from './utils/substrate';
@@ -34,7 +34,6 @@ const testAssetAmount = parseInt(
   amountToFineAmount(testAmount.toString(), assetDecimals(testAsset)),
 );
 const amountToProvide = testAmount * 50; // Provide plenty of the asset for the tests
-await using chainflip = await getChainflipApi();
 const testAddress = '0x1594300cbd587694affd70c933b9ee9155b186d9';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -48,7 +47,7 @@ async function provideLiquidityAndTestAssetBalances() {
     amountToFineAmount(amountToProvide.toString(), assetDecimals('Eth')),
   );
   // We have to wait finalization here because the LP API server is using a finalized block stream (This may change in PRO-777 PR#3986)
-  await provideLiquidity(testAsset, amountToProvide, true);
+  await depositLiquidity(testAsset, amountToProvide, true);
 
   // Wait for the LP API to get the balance update, just incase it was slower than us to see the event.
   let retryCount = 0;
