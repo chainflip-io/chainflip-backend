@@ -156,14 +156,6 @@ impl ValidateSettings for HttpBasicAuthEndpoint {
 	}
 }
 
-impl ValidateSettings for SecretUrl {
-	/// Ensure the endpoint is a valid HTTP endpoint.
-	fn validate(&self) -> Result<(), ConfigError> {
-		validate_http_endpoint(self.clone()).map_err(|e| ConfigError::Message(e.to_string()))?;
-		Ok(())
-	}
-}
-
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Btc {
 	#[serde(flatten)]
@@ -179,15 +171,30 @@ impl Btc {
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Sol {
 	#[serde(flatten)]
-	pub nodes: NodeContainer<SecretUrl>,
+	pub nodes: NodeContainer<WsHttpEndpoints>,
 }
 
 impl Sol {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
-		self.nodes.validate()
+		self.nodes.validate()?;
+
+		// Check that all endpoints have a port number
+		let validate_sol_endpoints = |endpoints: &WsHttpEndpoints| -> Result<(), ConfigError> {
+			validate_port_exists(&endpoints.ws_endpoint)
+				.and_then(|_| validate_port_exists(&endpoints.http_endpoint))
+				.map_err(|e| {
+					ConfigError::Message(format!(
+						"Solana node endpoints must include a port number: {e}"
+					))
+				})
+		};
+		validate_sol_endpoints(&self.nodes.primary)?;
+		if let Some(backup) = &self.nodes.backup {
+			validate_sol_endpoints(backup)?;
+		}
+		Ok(())
 	}
 }
-
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct HealthCheck {
 	pub hostname: String,
@@ -289,9 +296,13 @@ pub struct ArbOptions {
 
 #[derive(Parser, Debug, Clone, Default)]
 pub struct SolOptions {
+	#[clap(long = "sol.rpc.ws_endpoint")]
+	pub sol_ws_endpoint: Option<String>,
 	#[clap(long = "sol.rpc.http_endpoint")]
 	pub sol_http_endpoint: Option<String>,
 
+	#[clap(long = "sol.backup_rpc.ws_endpoint")]
+	pub sol_backup_ws_endpoint: Option<String>,
 	#[clap(long = "sol.backup_rpc.http_endpoint")]
 	pub sol_backup_http_endpoint: Option<String>,
 }
@@ -811,8 +822,10 @@ impl ArbOptions {
 
 impl SolOptions {
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
+		insert_command_line_option(map, "sol.rpc.ws_endpoint", &self.sol_ws_endpoint);
 		insert_command_line_option(map, "sol.rpc.http_endpoint", &self.sol_http_endpoint);
 
+		insert_command_line_option(map, "sol.backup_rpc.ws_endpoint", &self.sol_backup_ws_endpoint);
 		insert_command_line_option(
 			map,
 			"sol.backup_rpc.http_endpoint",
@@ -820,6 +833,7 @@ impl SolOptions {
 		);
 	}
 }
+
 
 impl Settings {
 	/// New settings loaded from "$base_config_path/config/Settings.toml",
@@ -889,7 +903,7 @@ pub mod tests {
 		BTC_RPC_PASSWORD, BTC_RPC_USER, DOT_BACKUP_HTTP_ENDPOINT, DOT_BACKUP_WS_ENDPOINT,
 		DOT_HTTP_ENDPOINT, DOT_WS_ENDPOINT, ETH_BACKUP_HTTP_ENDPOINT, ETH_BACKUP_WS_ENDPOINT,
 		ETH_HTTP_ENDPOINT, ETH_WS_ENDPOINT, NODE_P2P_IP_ADDRESS, SOL_BACKUP_HTTP_ENDPOINT,
-		SOL_HTTP_ENDPOINT,
+		SOL_HTTP_ENDPOINT, SOL_WS_ENDPOINT, SOL_BACKUP_WS_ENDPOINT
 	};
 
 	use super::*;
@@ -934,8 +948,10 @@ pub mod tests {
 		BTC_BACKUP_RPC_PASSWORD => "second.password",
 
 		SOL_HTTP_ENDPOINT => "http://localhost:8899",
+		SOL_WS_ENDPOINT => "ws://localhost:8899",
 
 		SOL_BACKUP_HTTP_ENDPOINT => "http://second.localhost:8899",
+		SOL_BACKUP_WS_ENDPOINT => "ws://second.localhost:8899",
 
 		DOT_WS_ENDPOINT => "wss://my_fake_polkadot_rpc:443/<secret_key>",
 		DOT_HTTP_ENDPOINT => "https://my_fake_polkadot_rpc:443/<secret_key>",
@@ -972,6 +988,7 @@ pub mod tests {
 		assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
 		assert_eq!(settings.eth.nodes.primary.http_endpoint.as_ref(), "http://localhost:8545");
 		assert_eq!(settings.arb.nodes.primary.http_endpoint.as_ref(), "http://localhost:8547");
+		assert_eq!(settings.sol.nodes.primary.http_endpoint.as_ref(), "http://localhost:8899");
 		assert_eq!(
 			settings.dot.nodes.primary.ws_endpoint.as_ref(),
 			"wss://my_fake_polkadot_rpc:443/<secret_key>"
@@ -987,6 +1004,10 @@ pub mod tests {
 		assert_eq!(
 			settings.arb.nodes.backup.unwrap().http_endpoint.as_ref(),
 			"http://second.localhost:8547"
+		);
+		assert_eq!(
+			settings.sol.nodes.backup.unwrap().http_endpoint.as_ref(),
+			"http://second.localhost:8899"
 		);
 	}
 
@@ -1083,7 +1104,9 @@ pub mod tests {
 			},
 			sol_opts: SolOptions {
 				sol_http_endpoint: Some("http://sol-endpoint:4321".to_owned()),
+				sol_ws_endpoint: Some("ws://sol-endpoint:4321".to_owned()),
 				sol_backup_http_endpoint: Some("http://second.sol-endpoint:4321".to_owned()),
+				sol_backup_ws_endpoint: Some("ws://second.sol-endpoint:4321".to_owned()),
 			},
 			health_check_hostname: Some("health_check_hostname".to_owned()),
 			health_check_port: Some(1337),
