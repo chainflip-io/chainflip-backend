@@ -13,7 +13,7 @@ use utilities::redact_endpoint_secret::SecretUrl;
 use anyhow::{anyhow, Result};
 use tracing::warn;
 
-use cf_chains::sol::SolHash;
+use cf_chains::sol::{sol_tx_core::Pubkey, SolHash};
 
 use super::{commitment_config::CommitmentConfig, rpc_client_api::*};
 use std::str::FromStr;
@@ -127,6 +127,10 @@ async fn get_genesis_hash(client: &Client, endpoint: &SecretUrl) -> anyhow::Resu
 	Ok(genesis_hash)
 }
 
+fn encode_pubkey(pubkey: &Pubkey) -> String {
+	bs58::encode(pubkey).into_string()
+}
+
 #[async_trait::async_trait]
 pub trait SolRpcApi {
 	async fn get_block(
@@ -138,8 +142,7 @@ pub trait SolRpcApi {
 	async fn get_recent_prioritization_fees(&self) -> anyhow::Result<Vec<RpcPrioritizationFee>>;
 	async fn get_multiple_accounts_with_config(
 		&self,
-		// Using Strings for now as we can't convert Pubkey to String at the moment
-		pubkeys: &[String],
+		pubkeys: &[Pubkey],
 		config: RpcAccountInfoConfig,
 	) -> Result<Response<Vec<Option<UiAccount>>>>;
 }
@@ -151,7 +154,9 @@ impl SolRpcApi for SolRpcClient {
 		slot: u64,
 		config: RpcBlockConfig,
 	) -> anyhow::Result<UiConfirmedBlock> {
-		// TODO: Should we harcode to not get transactions nor rewards?
+		// TODO We haven't declared the type for transactions and rewards to simplify the code
+		// so we should probably be hardcoding RpcBlockConfig's transaction details and rewards
+		// to None.
 		let response = self.call_rpc("getBlock", Some(json!([slot, json!(config)]))).await?;
 		let block: UiConfirmedBlock =
 			from_value(response).map_err(|err| anyhow!("Failed to parse block {}", err))?;
@@ -174,22 +179,18 @@ impl SolRpcApi for SolRpcClient {
 
 	async fn get_multiple_accounts_with_config(
 		&self,
-		pubkeys: &[String],
+		pubkeys: &[Pubkey],
 		config: RpcAccountInfoConfig,
 	) -> Result<Response<Vec<Option<UiAccount>>>> {
-		// TODO: We might want to request a data slice => No data at all for Sol, we only need
-		// lamports, and only balance data for tokens.
+		// TODO: We will want to request a data slice => No data at all for Sol, we only need
+		// lamports, and only balance data for tokens. We should do it on a layer above this.
 
-		// TODO: We will need to convert pubkeys to a vector of strings
-		// let pubkeys: Vec<_> = pubkeys.iter().map(|pubkey| pubkey).collect();
+		let encoded_pubkeys: Vec<_> = pubkeys.iter().map(encode_pubkey).collect();
 
 		let response = self
-			.call_rpc("getMultipleAccounts", Some(json!([pubkeys, json!(config)])))
+			.call_rpc("getMultipleAccounts", Some(json!([encoded_pubkeys, json!(config)])))
 			.await?;
-		println!("response: {:?}", response);
 
-		// TODO: Could we put this in call_rpc with a passed generic type? Not all have context but
-		// many of them them do.
 		let Response { context, value: accounts } =
 			serde_json::from_value::<Response<Vec<Option<UiAccount>>>>(response.clone())?;
 		Ok(Response { context, value: accounts })
@@ -201,6 +202,13 @@ mod tests {
 	// use utilities::testing::logging::init_test_logger;
 
 	use super::*;
+
+	#[test]
+	fn test_encoding() {
+		let pubkey = Pubkey::from_str("vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg").unwrap();
+		let encoded = encode_pubkey(&pubkey);
+		assert_eq!(encoded, "vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg");
+	}
 
 	#[tokio::test]
 	async fn test_sol_asyc() {
@@ -233,7 +241,7 @@ mod tests {
 
 		let result = sol_rpc_client
 			.get_multiple_accounts_with_config(
-				&["vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg".to_string()],
+				&[Pubkey::from_str("vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg").unwrap()],
 				RpcAccountInfoConfig {
 					encoding: Some(UiAccountEncoding::JsonParsed),
 					data_slice: None,
@@ -250,8 +258,8 @@ mod tests {
 		let result = sol_rpc_client
 			.get_multiple_accounts_with_config(
 				&[
-					"vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg".to_string(),
-					"4fYNw3dojWmQ4dXtSGE9epjRGy9pFSx62YypT7avPYvA".to_string(),
+					Pubkey::from_str("vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg").unwrap(),
+					Pubkey::from_str("4fYNw3dojWmQ4dXtSGE9epjRGy9pFSx62YypT7avPYvA").unwrap(),
 				],
 				RpcAccountInfoConfig {
 					encoding: Some(UiAccountEncoding::JsonParsed),

@@ -114,6 +114,7 @@ frame-metadata = { version = "16.0.0", default-features = false, features = [
   "current",
 ] }
 serde_bytes = "0.11.14"
+bs58 = "0.5.1"
 
 [dependencies.rocksdb]
 version = "0.21.0"

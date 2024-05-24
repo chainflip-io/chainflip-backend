@@ -3,7 +3,10 @@ use crate::{
 	settings::{NodeContainer, WsHttpEndpoints},
 	witness::common::chain_source::{ChainClient, Header},
 };
-use cf_chains::{sol::SolHash, Solana};
+use cf_chains::{
+	sol::{sol_tx_core::Pubkey, SolHash},
+	Solana,
+};
 use core::time::Duration;
 use utilities::task_scope::Scope;
 
@@ -66,8 +69,7 @@ pub trait SolRetryRpcApi: Clone {
 	async fn get_recent_prioritization_fees(&self) -> Vec<RpcPrioritizationFee>;
 	async fn get_multiple_accounts_with_config(
 		&self,
-		// Using Strings for now as we can't convert Pubkey to String at the moment
-		pubkeys: &[String],
+		pubkeys: &[Pubkey],
 		config: RpcAccountInfoConfig,
 	) -> Response<Vec<Option<UiAccount>>>;
 }
@@ -112,7 +114,7 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 
 	async fn get_multiple_accounts_with_config(
 		&self,
-		pubkeys: &[String],
+		pubkeys: &[Pubkey],
 		config: RpcAccountInfoConfig,
 	) -> Response<Vec<Option<UiAccount>>> {
 		let pubkeys = pubkeys.to_owned();
