@@ -69,6 +69,8 @@ async function provideLiquidityAndTestAssetBalances() {
 }
 
 async function testRegisterLiquidityRefundAddress() {
+  await using chainflip = await getChainflipApi();
+  console.log('=== Starting testRegisterLiquidityRefundAddress ===');
   const observeRefundAddressRegisteredEvent = observeEvent(
     'liquidityProvider:LiquidityRefundAddressRegistered',
     {
@@ -86,9 +88,12 @@ async function testRegisterLiquidityRefundAddress() {
   await observeRefundAddressRegisteredEvent.event;
 
   // TODO: Check that the correct address is now set on the SC
+  console.log('=== testRegisterLiquidityRefundAddress complete ===');
 }
 
 async function testLiquidityDeposit() {
+  await using chainflip = await getChainflipApi();
+  console.log('=== Starting testLiquidityDeposit ===');
   const observeLiquidityDepositAddressReadyEvent = observeEvent(
     'liquidityProvider:LiquidityDepositAddressReady',
     {
@@ -122,6 +127,7 @@ async function testLiquidityDeposit() {
   }).event;
   await sendEvmNative(chainFromAsset(testAsset), liquidityDepositAddress, String(testAmount));
   await observeAccountCreditedEvent;
+  console.log('=== testLiquidityDeposit complete ===');
 }
 
 async function testWithdrawAsset() {
@@ -144,6 +150,7 @@ async function testWithdrawAsset() {
 }
 
 async function testTransferAsset() {
+  await using chainflip = await getChainflipApi();
   console.log('=== Starting testTransferAsset ===');
   const amountToTransfer = testAssetAmount.toString(16);
 
@@ -198,7 +205,7 @@ async function testTransferAsset() {
 }
 
 async function testRegisterWithExistingLpAccount() {
-  console.log('=== Starting testWithdrawAsset ===');
+  console.log('=== Starting testRegisterWithExistingLpAccount ===');
   try {
     await lpApiRpc(`lp_register_account`, []);
     throw new Error(`Unexpected lp_register_account result`);
@@ -214,7 +221,6 @@ async function testRegisterWithExistingLpAccount() {
 }
 
 /// Test lp_set_range_order and lp_update_range_order by minting, updating, and burning a range order.
-
 async function testRangeOrder() {
   console.log('=== Starting testRangeOrder ===');
   const range = { start: 1, end: 2 };
