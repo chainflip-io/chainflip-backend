@@ -10,7 +10,7 @@
 // For example: ./commands/new_swap.ts Dot Btc n1ocq2FF95qopwbEsjUTy3ZrawwXDJ6UsX
 
 import { parseAssetString, runWithTimeout } from '../shared/utils';
-import { newSwap } from '../shared/new_swap';
+import { requestNewSwap } from '../shared/perform_swap';
 
 async function newSwapCommand() {
   const sourceAsset = parseAssetString(process.argv[2]);
@@ -20,7 +20,16 @@ async function newSwapCommand() {
 
   console.log(`Requesting swap ${sourceAsset} -> ${destAsset}`);
 
-  await newSwap(sourceAsset, destAsset, destAddress, undefined, undefined, maxBoostFeeBps);
+  await requestNewSwap(
+    sourceAsset,
+    destAsset,
+    destAddress,
+    undefined,
+    undefined,
+    undefined,
+    true,
+    maxBoostFeeBps,
+  );
 
   process.exit(0);
 }
