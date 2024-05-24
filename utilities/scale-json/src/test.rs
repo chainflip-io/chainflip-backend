@@ -87,6 +87,15 @@ fn make_type_resolver<T: TypeInfo + 'static>() -> (u32, PortableRegistry) {
 	(type_id, PortableRegistry::from(registry))
 }
 
+macro_rules! insta_assert_json_pretty {
+	($($arg:tt)*) => {
+		insta::_assert_snapshot_base!(
+			transform=|v| serde_json::to_string_pretty(v).unwrap(),
+			$($arg)*
+		)
+	};
+}
+
 macro_rules! make_tests {
 	( [ $t:ty ], $( $name:ident: $v:expr ),+ $(,)? ) => {
 		$(
@@ -101,7 +110,10 @@ macro_rules! make_tests {
 					&registry,
 				)
 				.unwrap();
-				insta::assert_json_snapshot!(decoded_json);
+
+				// NOTE: Cannot use insta::assert_json_snapshot! here because the implementation relies on serde-json
+				// serialization and insta uses its own internal serializer.
+				insta_assert_json_pretty!(decoded_json.as_ref());
 			}
 		)+
 	};
