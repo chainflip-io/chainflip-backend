@@ -19,7 +19,9 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 	}
 
 	fn activate_key() {
-		Self::activate_new_key_for_chain(T::ChainTracking::get_block_height());
+		if ChainInitialized::<T, I>::get() {
+			Self::activate_new_key_for_chain(T::ChainTracking::get_block_height());
+		}
 	}
 
 	fn start_key_activation(
