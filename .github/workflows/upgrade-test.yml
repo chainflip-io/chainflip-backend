@@ -164,14 +164,14 @@ jobs:
           echo "RELEASE_VERSION=${RELEASE_VERSION}" >> $GITHUB_ENV
 
       - name: Download upgrade-to binaries for push or pull request📥
-        if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        if: github.event.inputs.run-job && github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group'
         uses: actions/download-artifact@v3
         with:
           name: chainflip-backend-bin-try-runtime
           path: upgrade-to-bins
 
       - name: Download upgrade-to binaries for workflow call 📥
-        if: github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch'
+        if: github.event.inputs.run-job && github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch'
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: ${{ inputs.upgrade-to-workflow-name }}
@@ -180,14 +180,14 @@ jobs:
           commit: ${{ env.UPGRADE_TO_COMMIT }}
 
       - name: Download upgrade-to runtime for push or pull request 📥
-        if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        if: github.event.inputs.run-job && github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group'
         uses: actions/download-artifact@v3
         with:
           name: chainflip-node-runtime-try-runtime
           path: main-runtime
 
       - name: Download upgrade-to runtime for workflow call 📥
-        if: github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch'
+        if: github.event.inputs.run-job && github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch'
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: ${{ inputs.upgrade-to-workflow-name }}
