@@ -9,18 +9,11 @@
 // It also accepts non-encoded bs58 address representations:
 // ./commands/get_sol_balance.ts 0x2f3fcadf740018f6037513959bab60d0dbef26888d264d54fc4d3d36c8cf5c91
 
-import { runWithTimeout } from '../shared/utils';
+import { executeWithTimeout } from '../shared/utils';
 import { getSolBalance } from '../shared/get_sol_balance';
 
 export async function getSolBalanceCommand(address: string) {
-  const balance = await getSolBalance(address);
-  console.log(balance);
-  process.exit(0);
+  console.log(await getSolBalance(address));
 }
 
-const solAddress = process.argv[2] ?? '0';
-
-runWithTimeout(getSolBalanceCommand(solAddress), 5000).catch((error) => {
-  console.error(error);
-  process.exit(-1);
-});
+await executeWithTimeout(getSolBalanceCommand(process.argv[2] ?? '0'), 5);

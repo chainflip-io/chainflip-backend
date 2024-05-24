@@ -3,7 +3,7 @@ import assert from 'assert';
 
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { depositLiquidity } from '../shared/deposit_liquidity';
-import { runWithTimeout } from '../shared/utils';
+import { executeWithTimeout } from '../shared/utils';
 import { observeEvent, getChainflipApi } from '../shared/utils/substrate';
 
 async function queryUtxos(): Promise<{ amount: number; count: number }> {
@@ -101,11 +101,6 @@ async function test() {
   );
 
   console.log('=== BTC UTXO Consolidation test completed ===');
-
-  process.exit(0);
 }
 
-runWithTimeout(test(), 200000).catch((error) => {
-  console.error(error);
-  process.exit(-1);
-});
+await executeWithTimeout(test(), 200);

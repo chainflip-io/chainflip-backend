@@ -132,7 +132,7 @@ async function main(): Promise<void> {
   });
 }
 
-runWithTimeout(main(), 3600000).catch(() => {
+await runWithTimeout(main(), 3600000).catch(() => {
   console.log('Failed to check amount of witnesses for ' + process.argv[2]);
   process.exit(-1);
 });

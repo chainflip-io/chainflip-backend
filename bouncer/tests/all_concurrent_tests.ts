@@ -39,7 +39,7 @@ async function runAllConcurrentTests() {
     testBoostingSwap(),
   ];
 
-  // Test that only work if there is more than one node
+  // Tests that only work if there is more than one node
   if (numberOfNodes > 1) {
     console.log(`Also running multi-node tests (${numberOfNodes} nodes)`);
     const multiNodeTests = [testPolkadotRuntimeUpdate()];

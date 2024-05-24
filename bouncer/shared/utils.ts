@@ -216,6 +216,26 @@ export const runWithTimeout = async <T>(promise: Promise<T>, millis: number): Pr
     }),
   ]);
 
+/// Runs the given promise with a timeout and handles exiting the process. Used for running commands & tests.
+export async function executeWithTimeout<T>(promise: Promise<T>, seconds: number): Promise<void> {
+  const start = Date.now();
+  await runWithTimeout(promise, seconds * 1000).catch((error) => {
+    console.error(error);
+    process.exit(-1);
+  });
+  const executionTime = (Date.now() - start) / 1000;
+
+  if (executionTime > seconds * 0.9) {
+    console.log(
+      `\x1b[33m%s\x1b[0m`,
+      `Warning: Execution time was close to the timeout: ${executionTime}/${seconds}s`,
+    );
+  } else {
+    console.log(`Execution time: ${executionTime}/${seconds}s`);
+  }
+  process.exit(0);
+}
+
 export const sha256 = (data: string): Buffer => crypto.createHash('sha256').update(data).digest();
 
 export const deferredPromise = <T>(): {

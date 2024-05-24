@@ -9,7 +9,7 @@
 // Argument 4 (optional) is the max boost fee bps (default: 0 (no boosting))
 // For example: ./commands/new_swap.ts Dot Btc n1ocq2FF95qopwbEsjUTy3ZrawwXDJ6UsX
 
-import { parseAssetString, runWithTimeout } from '../shared/utils';
+import { parseAssetString, executeWithTimeout } from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
 
 async function newSwapCommand() {
@@ -30,11 +30,6 @@ async function newSwapCommand() {
     true,
     maxBoostFeeBps,
   );
-
-  process.exit(0);
 }
 
-runWithTimeout(newSwapCommand(), 60000).catch((error) => {
-  console.error(error);
-  process.exit(-1);
-});
+await executeWithTimeout(newSwapCommand(), 60);
