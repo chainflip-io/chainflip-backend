@@ -40,8 +40,7 @@ pub enum UiAccountData {
 
 /// An Account with data that is stored on chain
 #[repr(C)]
-// #[frozen_abi(digest = "HawRVHh7t4d3H3bitWHFt25WhhoDmbJMCfWdESQQoYEy")]
-#[derive(Deserialize, PartialEq, Eq, Clone, Default /* ,  AbiExample */)]
+#[derive(Deserialize, PartialEq, Eq, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
 	/// lamports in the account

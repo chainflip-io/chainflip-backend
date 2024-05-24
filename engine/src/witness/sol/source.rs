@@ -70,9 +70,8 @@ where
 
 						let witness_range = Solana::block_witness_range(slot);
 
-						// Return the header if the slot is greater than the last witnessed range's
-						// end
-						if Some(slot) >= last_witnessed_range_end {
+						// Return a maximum of one header per range
+						if Some(slot) > last_witnessed_range_end {
 							let witness_range_end = *witness_range.end();
 							return Some((
 								Header {
