@@ -698,6 +698,12 @@ impl TryFrom<Vec<u8>> for Pubkey {
 	}
 }
 
+impl AsRef<[u8]> for Pubkey {
+	fn as_ref(&self) -> &[u8] {
+		&self.0[..]
+	}
+}
+
 #[cfg(test)]
 use ed25519_dalek;
 use generic_array::{typenum::U64, GenericArray};
