@@ -354,6 +354,9 @@ export async function observeSwapEvents(
     });
   });
   while (!eventFound) {
+    if (!api.isConnected) {
+      throw new Error('API is not connected');
+    }
     await sleep(1000);
   }
   return broadcastId;
