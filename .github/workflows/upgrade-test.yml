@@ -268,6 +268,7 @@ jobs:
 
       - name: Print chainflip-engine logs 🚗
         if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/*/chainflip-engine.*log
 
