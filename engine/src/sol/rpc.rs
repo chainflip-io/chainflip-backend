@@ -140,6 +140,7 @@ pub trait SolRpcApi {
 	) -> anyhow::Result<UiConfirmedBlock>;
 	async fn get_slot(&self, commitment: CommitmentConfig) -> anyhow::Result<u64>; // Slot
 	async fn get_recent_prioritization_fees(&self) -> anyhow::Result<Vec<RpcPrioritizationFee>>;
+	// TODO: Rename to get_multiple_accounts
 	async fn get_multiple_accounts_with_config(
 		&self,
 		pubkeys: &[Pubkey],
@@ -255,7 +256,7 @@ mod tests {
 		println!("rpc context: {:?}", result.context);
 		println!("account_info: {:?}", result.value);
 
-		let result = sol_rpc_client
+		let result: Response<Vec<Option<UiAccount>>> = sol_rpc_client
 			.get_multiple_accounts_with_config(
 				&[
 					Pubkey::from_str("vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg").unwrap(),
