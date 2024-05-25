@@ -1,20 +1,14 @@
 use cf_chains::{
 	arb::ArbitrumTrackedData,
 	assets::btc,
-	btc::BITCOIN_DUST_LIMIT,
-	dot::{PolkadotAccountId, PolkadotHash},
-	sol::{SolAddress, SolTrackedData},
-	Arbitrum, ChainState, Solana,
+	btc::{BitcoinFeeInfo, BitcoinTrackedData, BITCOIN_DUST_LIMIT},
+	dot::{PolkadotAccountId, PolkadotHash, PolkadotTrackedData, RuntimeVersion},
+	eth::EthereumTrackedData,
+	sol::{SolAddress, SolHash, SolTrackedData},
+	Arbitrum, Bitcoin, ChainState, Ethereum, Polkadot, Solana,
 };
 use cf_primitives::{
 	AccountRole, AuthorityCount, NetworkEnvironment, DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
-};
-
-use cf_chains::{
-	btc::{BitcoinFeeInfo, BitcoinTrackedData},
-	dot::{PolkadotTrackedData, RuntimeVersion},
-	eth::EthereumTrackedData,
-	Bitcoin, Ethereum, Polkadot,
 };
 use common::FLIPPERINOS_PER_FLIP;
 pub use sc_service::{ChainType, Properties};
@@ -101,6 +95,7 @@ pub struct StateChainEnvironment {
 	dot_vault_account_id: Option<PolkadotAccountId>,
 	dot_runtime_version: RuntimeVersion,
 	sol_vault_address: SolAddress,
+	sol_genesis_hash: Option<SolHash>,
 }
 
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
@@ -157,6 +152,11 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		Err(_) => defaults.dot_runtime_version.transaction_version,
 	};
 
+	let sol_genesis_hash = match env::var("SOL_GENESIS_HASH") {
+		Ok(s) => Some(SolHash::from_str(&s).unwrap()),
+		Err(_) => defaults.sol_genesis_hash,
+	};
+
 	StateChainEnvironment {
 		flip_token_address,
 		eth_usdc_address,
@@ -182,6 +182,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 			transaction_version: dot_transaction_version,
 		},
 		sol_vault_address,
+		sol_genesis_hash,
 	}
 }
 
@@ -243,6 +244,7 @@ pub fn inner_cf_development_config(
 		dot_vault_account_id,
 		dot_runtime_version,
 		sol_vault_address,
+		sol_genesis_hash,
 	} = get_environment_or_defaults(testnet::ENV);
 	Ok(ChainSpec::builder(wasm_binary, None)
 		.with_name("CF Develop")
@@ -274,6 +276,7 @@ pub fn inner_cf_development_config(
 				polkadot_genesis_hash: dot_genesis_hash,
 				polkadot_vault_account_id: dot_vault_account_id,
 				sol_vault_address,
+				sol_genesis_hash,
 				network_environment: NetworkEnvironment::Development,
 				..Default::default()
 			},
@@ -348,6 +351,7 @@ macro_rules! network_spec {
 					dot_vault_account_id,
 					dot_runtime_version,
 					sol_vault_address,
+					sol_genesis_hash,
 				} = env_override.unwrap_or(ENV);
 				let protocol_id = format!(
 					"{}-{}",
@@ -409,6 +413,7 @@ macro_rules! network_spec {
 							polkadot_genesis_hash: dot_genesis_hash,
 							polkadot_vault_account_id: dot_vault_account_id.clone(),
 							sol_vault_address,
+							sol_genesis_hash,
 							network_environment: NETWORK_ENVIRONMENT,
 							..Default::default()
 						},

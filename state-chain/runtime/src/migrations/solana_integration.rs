@@ -1,6 +1,9 @@
 use crate::{safe_mode, Runtime};
-use cf_chains::instances::{
-	ArbitrumInstance, BitcoinInstance, EthereumInstance, PolkadotInstance, SolanaInstance,
+use cf_chains::{
+	instances::{
+		ArbitrumInstance, BitcoinInstance, EthereumInstance, PolkadotInstance, SolanaInstance,
+	},
+	sol::SolHash,
 };
 use cf_traits::SafeMode;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
@@ -83,19 +86,55 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 			},
 		));
 
-		let vault_address: SolAddress =
+		let (vault_address, genesis_hash): (SolAddress, Option<SolHash>) =
 			match cf_runtime_upgrade_utilities::genesis_hashes::genesis_hash::<Runtime>() {
-				cf_runtime_upgrade_utilities::genesis_hashes::BERGHAIN => [0u8; 32].into(),
+				cf_runtime_upgrade_utilities::genesis_hashes::BERGHAIN => {
+					log::warn!("Need to set up Solana integration for Berghain");
+					(
+						SolAddress(hex_literal::hex!(
+							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+						)), /* put correct values here */
+						Some(SolHash(hex_literal::hex![
+							"45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0"
+						])),
+					)
+				},
 
-				cf_runtime_upgrade_utilities::genesis_hashes::PERSEVERANCE => [0u8; 32].into(),
-				cf_runtime_upgrade_utilities::genesis_hashes::SISYPHOS => [0u8; 32].into(),
+				cf_runtime_upgrade_utilities::genesis_hashes::PERSEVERANCE => {
+					log::warn!("Need to set up Solana integration for Perseverance");
+					(
+						SolAddress(hex_literal::hex!(
+							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+						)), /* put correct values here */
+						Some(SolHash(hex_literal::hex![
+							"ce59db5080fc2c6d3bcf7ca90712d3c2e5e6c28f27f0dfbb9953bdb0894c03ab"
+						])),
+					)
+				},
+				cf_runtime_upgrade_utilities::genesis_hashes::SISYPHOS => {
+					log::warn!("Need to set up Solana integration for Sisyphos");
+					(
+						SolAddress(hex_literal::hex!(
+							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+						)), /* put correct values here */
+						Some(SolHash(hex_literal::hex![
+							"ce59db5080fc2c6d3bcf7ca90712d3c2e5e6c28f27f0dfbb9953bdb0894c03ab"
+						])),
+					)
+				},
 				_ => {
 					// Assume testnet
-					todo!()
+					(
+						SolAddress(hex_literal::hex!(
+							"72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c"
+						)),
+						None,
+					)
 				},
 			};
 
 		pallet_cf_environment::SolanaVaultAddress::<Runtime>::put(vault_address);
+		pallet_cf_environment::SolanaGenesisHash::<Runtime>::put(genesis_hash);
 
 		Weight::zero()
 	}

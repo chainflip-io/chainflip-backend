@@ -40,7 +40,7 @@ use self::{
 	sol::retry_rpc::SolRetryRpcClient,
 };
 use anyhow::Context;
-use cf_chains::{dot::PolkadotHash, sol::SolHash, Chain};
+use cf_chains::{dot::PolkadotHash, Chain};
 use cf_primitives::AccountRole;
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
@@ -53,7 +53,6 @@ use std::{
 };
 use utilities::{cached_stream::CachedStream, metrics, task_scope::task_scope};
 
-use std::str::FromStr;
 use utilities::logging::ErrorType;
 
 pub fn settings_and_run_main(
@@ -282,20 +281,13 @@ async fn run_main(
 			};
 
 			let sol_client = {
-				// TODO: Hardcoded for now. Using the current bouncer's genesis hash. We could also
-				// use None here for now but it's good to know if we're connecting to the right
-				// network.
-				let expected_sol_genesis_hash = Some(
-					SolHash::from_str("Ek8oKQ2dpzWN4hgHm9vqSPk32dCSKuEDrWrSs8Se5Nez").unwrap(),
-				);
-				// SolHash::from(
-				// 	state_chain_client
-				// 		.storage_value::<pallet_cf_environment::SolGenesisHash<state_chain_runtime::Runtime>>(
-				// 			state_chain_client.latest_finalized_block().hash,
-				// 		)
-				// 		.await
-				// 		.expect(STATE_CHAIN_CONNECTION),
-				// );
+				let expected_sol_genesis_hash = state_chain_client
+					.storage_value::<pallet_cf_environment::SolanaGenesisHash<state_chain_runtime::Runtime>>(
+						state_chain_client.latest_finalized_block().hash,
+					)
+					.await
+					.expect(STATE_CHAIN_CONNECTION);
+
 				SolRetryRpcClient::new(
 					scope,
 					settings.sol.nodes,

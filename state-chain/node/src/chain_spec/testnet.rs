@@ -45,6 +45,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 10000, transaction_version: 25 },
 	sol_vault_address: SolAddress([0; 32]), // TODO: fill in the valid Solana address,
+	sol_genesis_hash: None,
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 3 * HOURS;
