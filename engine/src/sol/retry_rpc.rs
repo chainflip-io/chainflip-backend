@@ -252,7 +252,18 @@ mod tests {
 				let priority_fees = retry_client.get_recent_prioritization_fees().await;
 				println!("priority_fees: {:?}", priority_fees[0]);
 
-				// TODO: To add remaining calls
+				let account_infos = retry_client
+					.get_multiple_accounts_with_config(
+						&[Pubkey::from_str("vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg").unwrap()],
+						RpcAccountInfoConfig {
+							encoding: Some(UiAccountEncoding::JsonParsed),
+							data_slice: None,
+							commitment: Some(CommitmentConfig::finalized()),
+							min_context_slot: None,
+						},
+					)
+					.await;
+				println!("account_info: {:?}", account_infos.value);
 
 				Ok(())
 			}
