@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::commitment_config::CommitmentConfig;
-use cf_chains::sol::sol_tx_core::Pubkey;
+use cf_chains::sol::SolAddress as Pubkey;
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

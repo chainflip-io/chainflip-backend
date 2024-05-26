@@ -13,7 +13,7 @@ use utilities::redact_endpoint_secret::SecretUrl;
 use anyhow::{anyhow, Result};
 use tracing::warn;
 
-use cf_chains::sol::{sol_tx_core::Pubkey, SolHash};
+use cf_chains::sol::{SolAddress, SolHash};
 
 use super::{commitment_config::CommitmentConfig, rpc_client_api::*};
 use std::str::FromStr;
@@ -127,7 +127,7 @@ async fn get_genesis_hash(client: &Client, endpoint: &SecretUrl) -> anyhow::Resu
 	Ok(genesis_hash)
 }
 
-fn encode_pubkey(pubkey: &Pubkey) -> String {
+fn encode_pubkey(pubkey: &SolAddress) -> String {
 	bs58::encode(pubkey).into_string()
 }
 
@@ -143,7 +143,7 @@ pub trait SolRpcApi {
 	// TODO: Rename to get_multiple_accounts
 	async fn get_multiple_accounts_with_config(
 		&self,
-		pubkeys: &[Pubkey],
+		pubkeys: &[SolAddress],
 		config: RpcAccountInfoConfig,
 	) -> Result<Response<Vec<Option<UiAccount>>>>;
 }
@@ -180,7 +180,7 @@ impl SolRpcApi for SolRpcClient {
 
 	async fn get_multiple_accounts_with_config(
 		&self,
-		pubkeys: &[Pubkey],
+		pubkeys: &[SolAddress],
 		config: RpcAccountInfoConfig,
 	) -> Result<Response<Vec<Option<UiAccount>>>> {
 		// TODO: We will want to request a data slice => No data at all for Sol, we only need
@@ -206,7 +206,7 @@ mod tests {
 
 	#[test]
 	fn test_encoding() {
-		let pubkey = Pubkey::from_str("vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg").unwrap();
+		let pubkey = SolAddress::from_str("vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg").unwrap();
 		let encoded = encode_pubkey(&pubkey);
 		assert_eq!(encoded, "vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg");
 	}
@@ -242,7 +242,7 @@ mod tests {
 
 		let result = sol_rpc_client
 			.get_multiple_accounts_with_config(
-				&[Pubkey::from_str("vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg").unwrap()],
+				&[SolAddress::from_str("vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg").unwrap()],
 				RpcAccountInfoConfig {
 					encoding: Some(UiAccountEncoding::JsonParsed),
 					data_slice: None,
@@ -259,8 +259,8 @@ mod tests {
 		let result: Response<Vec<Option<UiAccount>>> = sol_rpc_client
 			.get_multiple_accounts_with_config(
 				&[
-					Pubkey::from_str("vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg").unwrap(),
-					Pubkey::from_str("4fYNw3dojWmQ4dXtSGE9epjRGy9pFSx62YypT7avPYvA").unwrap(),
+					SolAddress::from_str("vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg").unwrap(),
+					SolAddress::from_str("4fYNw3dojWmQ4dXtSGE9epjRGy9pFSx62YypT7avPYvA").unwrap(),
 				],
 				RpcAccountInfoConfig {
 					encoding: Some(UiAccountEncoding::JsonParsed),

@@ -4,7 +4,7 @@ use crate::{
 	witness::common::chain_source::{ChainClient, Header},
 };
 use cf_chains::{
-	sol::{sol_tx_core::Pubkey, SolHash},
+	sol::{SolAddress, SolHash},
 	Solana,
 };
 use core::time::Duration;
@@ -69,7 +69,7 @@ pub trait SolRetryRpcApi: Clone {
 	async fn get_recent_prioritization_fees(&self) -> Vec<RpcPrioritizationFee>;
 	async fn get_multiple_accounts_with_config(
 		&self,
-		pubkeys: &[Pubkey],
+		pubkeys: &[SolAddress],
 		config: RpcAccountInfoConfig,
 	) -> Response<Vec<Option<UiAccount>>>;
 }
@@ -114,7 +114,7 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 
 	async fn get_multiple_accounts_with_config(
 		&self,
-		pubkeys: &[Pubkey],
+		pubkeys: &[SolAddress],
 		config: RpcAccountInfoConfig,
 	) -> Response<Vec<Option<UiAccount>>> {
 		let pubkeys = pubkeys.to_owned();
@@ -254,7 +254,8 @@ mod tests {
 
 				let account_infos = retry_client
 					.get_multiple_accounts_with_config(
-						&[Pubkey::from_str("vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg").unwrap()],
+						&[SolAddress::from_str("vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg")
+							.unwrap()],
 						RpcAccountInfoConfig {
 							encoding: Some(UiAccountEncoding::JsonParsed),
 							data_slice: None,
