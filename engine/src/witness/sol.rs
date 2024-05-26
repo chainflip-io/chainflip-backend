@@ -94,6 +94,7 @@ where
 			process_call.clone(),
 			sol_client.clone(),
 			cf_primitives::chains::assets::sol::Asset::Sol,
+			vault_address,
 		)
 		.await
 		.continuous("SolanaDeposits".to_string(), db.clone())

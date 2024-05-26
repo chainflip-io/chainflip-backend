@@ -2,32 +2,36 @@ use crate::witness::common::{RuntimeCallHasChain, RuntimeHasChain};
 use anyhow::{ensure, Error};
 use cf_chains::{
 	instances::ChainInstanceFor,
-	sol::{SolAddress, SolHash, SolPubkey},
+	sol::{SolAddress, SolHash},
 	Chain,
 };
 use cf_primitives::EpochIndex;
 use futures_core::Future;
-use sp_core::{H160, H256};
 
 use crate::witness::common::chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses;
-
-use std::{any, collections::BTreeMap};
-
-use itertools::Itertools;
-
-use crate::witness::common::chain_source::Header;
 
 use super::super::common::chunked_chain_source::chunked_by_vault::{
 	builder::ChunkedByVaultBuilder, ChunkedByVault,
 };
-use crate::sol::{
-	commitment_config::CommitmentConfig,
-	retry_rpc::SolRetryRpcApi,
-	rpc_client_api::{
-		ParsedAccount, Response, RpcAccountInfoConfig, UiAccount, UiAccountData, UiAccountEncoding,
+use crate::{
+	sol::{
+		commitment_config::CommitmentConfig,
+		retry_rpc::SolRetryRpcApi,
+		rpc_client_api::{
+			ParsedAccount, Response, RpcAccountInfoConfig, UiAccount, UiAccountData,
+			UiAccountEncoding,
+		},
 	},
+	// witness::common::chain_source::Header,
 };
 use serde_json::Value;
+use std::str::FromStr;
+
+// TODO: Get this from some
+const FETCH_ACCOUNT_BYTE_LENGTH: usize = 24;
+const MAX_MULTIPLE_ACCOUNTS_QUERY: usize = 100;
+const SYSTEM_PROGRAM_ID: &str = "11111111111111111111111111111111";
+pub const TOKEN_PROGRAM_ID: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	/// TODO: Add description
@@ -36,6 +40,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		process_call: ProcessCall,
 		sol_rpc: SolRetryRpcClient,
 		asset: <Inner::Chain as cf_chains::Chain>::ChainAsset,
+		vault_address: SolAddress,
 	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
 	where
 		Inner::Chain:
@@ -52,7 +57,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		state_chain_runtime::RuntimeCall:
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
 	{
-		self.then(move |_epoch, header| {
+		self.then(move |epoch, header| {
 			assert!(<Inner::Chain as Chain>::is_block_witness_root(header.index));
 
 			let sol_rpc = sol_rpc.clone();
@@ -62,66 +67,60 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 				// Genesis block cannot contain any transactions
 				if !deposit_channels.is_empty() {
+					// TODO: Handle how to split/chain deposit channels and fetch accounts
+					// For now we assume they are properly ordered alternated
 					let addresses = deposit_channels
 						.into_iter()
-						.filter(|deposit_channel| deposit_channel.deposit_channel.asset == asset)
+						// TODO For the sol_account_infos we won't need to split for assets
+						// but we might have to do it to fit into the architecture of the CFE.
+						// E.g. We need to submit the asset on the cf_ingress_egress so effectively
+						// the submissions need to be separate
+						// .filter(|deposit_channel| deposit_channel.deposit_channel.asset == asset)
 						.map(|deposit_channel| deposit_channel.deposit_channel.address)
 						.collect::<Vec<_>>();
 
-					// Do a match statement for USDC
+					let chunked_addresses: Vec<Vec<_>> = addresses
+						.chunks(MAX_MULTIPLE_ACCOUNTS_QUERY)
+						.map(|chunk| chunk.to_vec())
+						.collect();
 
-					// let ingresses = sol_ingresses_at_block(
-					// 		&sol_rpc,
-					// 		addresses,
-					// 	)
-					// 	.await?;
+					// TODO: Check with Alastair what we need to submit. At least we need to check
+					// the deposit account and the fetch account and put them into one submission.
+					for chunk_address in chunked_addresses {
+						let account_infos: (Vec<(SolAddress, u128)>, u64) =
+							sol_account_infos(&sol_rpc, chunk_address, vault_address).await?;
+						let slot = account_infos.1;
+						let ingresses = account_infos.0;
 
-					// 	events_at_block::<Inner::Chain, VaultEvents, _>(
-					// 		Header {
-					// 			index: header.index,
-					// 			hash: header.hash,
-					// 			parent_hash: header.parent_hash,
-					// 			data: bloom,
-					// 		},
-					// 		vault_address,
-					// 		&sol_rpc,
-					// 	)
-					// 	.await?
-					// 	.into_iter()
-					// 	.filter_map(|event| match event.event_parameters {
-					// 		VaultEvents::FetchedNativeFilter(event) => Some(event),
-					// 		_ => None,
-					// 	})
-					// 	.collect(),
-					// )?;
-
-					// if !ingresses.is_empty() {
-					// 	process_call(
-					// 		pallet_cf_ingress_egress::Call::<
-					// 			_,
-					// 			ChainInstanceFor<Inner::Chain>,
-					// 		>::process_deposits {
-					// 			deposit_witnesses: ingresses
-					// 				.into_iter()
-					// 				.map(|(to_addr, value)| {
-					// 					pallet_cf_ingress_egress::DepositWitness {
-					// 						deposit_address: to_addr,
-					// 						asset: asset,
-					// 						amount:
-					// 							value
-					// 							.try_into()
-					// 							.expect("Ingress witness transfer value should fit u128"),
-					// 						deposit_details: (),
-					// 					}
-					// 				})
-					// 				.collect(),
-					// 			block_height: header.index,
-					// 		}
-					// 		.into(),
-					// 		epoch.index,
-					// 	)
-					// 	.await;
-					// }
+						// Should never be empty - do we really need to check?
+						if !ingresses.is_empty() {
+							process_call(
+									pallet_cf_ingress_egress::Call::<
+										_,
+										ChainInstanceFor<Inner::Chain>,
+									>::process_deposits {
+										deposit_witnesses: ingresses
+											.into_iter()
+											.map(|(to_addr, value)| {
+												pallet_cf_ingress_egress::DepositWitness {
+													deposit_address: to_addr,
+													asset,
+													amount:
+														value
+														.try_into()
+														.expect("Ingress witness transfer value should fit u128"),
+													deposit_details: (),
+												}
+											})
+											.collect(),
+										block_height: slot,
+									}
+									.into(),
+									epoch.index,
+								)
+								.await;
+						}
+					}
 				}
 				Ok::<_, anyhow::Error>(())
 			}
@@ -129,11 +128,11 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	}
 }
 
-
 async fn sol_account_infos<SolRetryRpcClient>(
 	sol_rpc: &SolRetryRpcClient,
-	addresses: Vec<SolPubkey>,
-) -> Result<(Vec<(SolPubkey, u128)>, u64), anyhow::Error>
+	addresses: Vec<SolAddress>,
+	vault_address: SolAddress,
+) -> Result<(Vec<(SolAddress, u128)>, u64), anyhow::Error>
 where
 	SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
 {
@@ -156,6 +155,9 @@ where
 
 	ensure!(addresses.len() == accounts_info.value.len());
 
+	let system_program_pubkey = SolAddress::from_str(SYSTEM_PROGRAM_ID).unwrap();
+	let associated_token_account_pubkey = SolAddress::from_str(TOKEN_PROGRAM_ID).unwrap();
+
 	// For now we infer the address type from the owner. However, we might want to enforce
 	// the ordering (e.g. deposit channel, fetch account, deposit channel, fetch account,
 	// etc.) and/or whether the deposit channels are SOL/Tokens.
@@ -167,86 +169,90 @@ where
 			match account_info {
 				Some(account_info) => {
 					println!("Parsing account_info {:?}", account_info);
-					let amount = match account_info.owner.as_str() {
+
+					let owner_pub_key = SolAddress::from_str(account_info.owner.as_str()).unwrap();
+					println!("owner_pub_key {:?}", owner_pub_key);
+					let amount = if owner_pub_key == system_program_pubkey {
 						// Native deposit channel
 						// TODO: Add a check for base64 encoding with empty data
-						"11111111111111111111111111111111" => {
-							println!("Native deposit channel found");
-							Ok(account_info.lamports as u128)
-						},
-						// Fetch account. We either get the Vault address or we default to it.
-						"THIS_SHOULD_BE_THE_VAULT_ADDRESS" => {
-							println!("Vault fetch account found");
-							// Fetch data and ensure it's encoding is base64
-							match account_info.data {
-								// Fetch Data Account
-								UiAccountData::Binary(base64_string, encoding) => {
-									println!("encoding {:?}", encoding);
-									println!("base64_string {:?}", base64_string);
+						println!("Native deposit channel found");
+						Ok(account_info.lamports as u128)
+					// Fetch account. We either get the Vault address or we default to it
+					// if we trust it's correctness
+					} else if owner_pub_key == vault_address {
+						println!("Vault fetch account found");
+						// Fetch data and ensure it's encoding is base64
+						match account_info.data {
+							// Fetch Data Account
+							UiAccountData::Binary(base64_string, encoding) => {
+								println!("encoding {:?}", encoding);
+								println!("base64_string {:?}", base64_string);
 
-									ensure!(encoding == UiAccountEncoding::Base64);
+								ensure!(encoding == UiAccountEncoding::Base64);
 
-									// Decode the base64 string to bytes
-									let mut bytes = base64::decode(&base64_string)
-										.expect("Failed to decode base64 string");
+								// Decode the base64 string to bytes
+								let mut bytes = base64::decode(&base64_string)
+									.expect("Failed to decode base64 string");
 
-									println!("bytes {:?}", bytes);
+								println!("bytes {:?}", bytes);
 
-									// Check that there are 24 bytes (16 from u128 + 8 from
-									// discriminator)
-									ensure!(bytes.len() == 24);
+								// Print the bytes that will be removed
+								println!("bytes to be removed {:?}", &bytes[..8]);
 
-									// Remove the discriminator
-									// TODO: Check that we are removing the correct ones
-									bytes.drain(..8);
+								// Check that there are 24 bytes (16 from u128 + 8 from
+								// discriminator)
+								ensure!(bytes.len() == FETCH_ACCOUNT_BYTE_LENGTH);
 
-									let array: [u8; 16] = bytes
-										.try_into()
-										.expect("Byte slice length doesn't match u128");
+								// Remove the discriminator
+								// TODO: Check that we are removing the correct ones. We could even
+								// have a check that the discriminator is the correct one.
+								bytes.drain(..8);
 
-									// TODO: Check that this conversion works with the real contract
-									let fetch_cumulative = u128::from_le_bytes(array);
+								let array: [u8; 16] =
+									bytes.try_into().expect("Byte slice length doesn't match u128");
 
-									Ok(fetch_cumulative)
-								},
-								_ => Err(anyhow::anyhow!("Unexpected fetch account encoding")),
-							}
-						},
+								// TODO: Check that this conversion works with the real contract
+								let fetch_cumulative = u128::from_le_bytes(array);
+
+								Ok(fetch_cumulative)
+							},
+							_ => Err(anyhow::anyhow!("Unexpected fetch account encoding")),
+						}
+					} else if owner_pub_key == associated_token_account_pubkey {
 						// Token deposit channel
-						"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" => {
-							println!("Associated token account");
+						println!("Associated token account");
 
-							// Fetch data and ensure it's encoding is JsonParsed
-							match account_info.data {
-								UiAccountData::Json(ParsedAccount {
-									parsed: Value::Object(json_parsed_account_data),
-									..
-								}) => {
-									let info = json_parsed_account_data
-										.get("info")
-										.and_then(|v| v.as_object())
-										.ok_or(anyhow::anyhow!("Missing 'info' field"))?;
+						// Fetch data and ensure it's encoding is JsonParsed
+						match account_info.data {
+							UiAccountData::Json(ParsedAccount {
+								parsed: Value::Object(json_parsed_account_data),
+								..
+							}) => {
+								let info = json_parsed_account_data
+									.get("info")
+									.and_then(|v| v.as_object())
+									.ok_or(anyhow::anyhow!("Missing 'info' field"))?;
 
-									let token_amount = info
-										.get("tokenAmount")
-										.ok_or(anyhow::anyhow!("Missing 'tokenAmount' field"))?;
+								let token_amount = info
+									.get("tokenAmount")
+									.ok_or(anyhow::anyhow!("Missing 'tokenAmount' field"))?;
 
-									// TODO: Do we want to check decimals and/or mintpubkey and/or
-									// owner?
+								// TODO: Do we want to check decimals and/or mintpubkey and/or
+								// owner?
 
-									let amount_str = token_amount
-										.get("amount")
-										.and_then(|v| v.as_str())
-										.ok_or(anyhow::anyhow!("Missing 'amount' field"))?;
+								let amount_str = token_amount
+									.get("amount")
+									.and_then(|v| v.as_str())
+									.ok_or(anyhow::anyhow!("Missing 'amount' field"))?;
 
-									amount_str.parse().map_err(|_| {
-										anyhow::anyhow!("Failed to parse string to u128")
-									})
-								},
-								_ => Err(anyhow::anyhow!("Unexpected token account encoding")),
-							}
-						},
-						_ => Err(anyhow::anyhow!("Unexpected account - unexpected owner")),
+								amount_str
+									.parse()
+									.map_err(|_| anyhow::anyhow!("Failed to parse string to u128"))
+							},
+							_ => Err(anyhow::anyhow!("Unexpected token account encoding")),
+						}
+					} else {
+						Err(anyhow::anyhow!("Unexpected account - unexpected owner"))
 					}?;
 					Ok((addresses[index], amount))
 				},
@@ -265,15 +271,18 @@ where
 #[cfg(test)]
 mod tests {
 	use crate::{
-		settings::{NodeContainer, Settings, WsHttpEndpoints},
+		settings::{NodeContainer, WsHttpEndpoints},
+		// use settings:: Settings
 		sol::{
-			retry_rpc::{SolRetryRpcApi, SolRetryRpcClient},
-			rpc::SolRpcClient,
+			retry_rpc::SolRetryRpcClient,
+			// retry_rpc::SolRetryRpcApi
+			// rpc::SolRpcClient,
 		},
-		witness::{common::chain_source::Header, sol::sol_deposits::sol_account_infos},
+		witness::sol::sol_deposits::sol_account_infos,
+		// witness::common::chain_source::Header
 	};
 
-	use cf_chains::{sol::SolPubkey, Chain, Solana};
+	use cf_chains::{sol::SolAddress, Chain, Solana};
 	use futures_util::FutureExt;
 	use std::str::FromStr;
 	use utilities::task_scope;
@@ -309,20 +318,33 @@ mod tests {
 				.await
 				.unwrap();
 
+				let owner_account =
+					SolAddress::from_str("gSbePebfvPy7tRqimPoVecS2UsBvYv46ynrzWocc92s").unwrap();
+
 				let mut addresses = vec![
 					// Normal account owned by system program - should be understood as a deposit
 					// channel
-					SolPubkey::from_str("BrX9Z85BbmXYMjvvuAWU8imwsAqutVQiDg9uNfTGkzrJ").unwrap(),
+					SolAddress::from_str("BrX9Z85BbmXYMjvvuAWU8imwsAqutVQiDg9uNfTGkzrJ").unwrap(),
 					// Token account - should be understood as a fetch account
-					SolPubkey::from_str("5WQayu3ARKuStAP3P6PvqxBfYo3crcKc2H821dLFhukz").unwrap(),
+					SolAddress::from_str("5WQayu3ARKuStAP3P6PvqxBfYo3crcKc2H821dLFhukz").unwrap(),
 					// Empty account - should return zero amount (non initialized fetch/deposit
 					// channel)
-					SolPubkey::from_str("ADtaKHTsYSmsty3MgLVfTQoMpM7hvFNTd2AxwN3hWRtt").unwrap(),
+					SolAddress::from_str("ADtaKHTsYSmsty3MgLVfTQoMpM7hvFNTd2AxwN3hWRtt").unwrap(),
 				];
 
-				let account_infos: (Vec<(SolPubkey, u128)>, u64) =
-					sol_account_infos(&retry_client, addresses).await.unwrap();
+				let account_infos: (Vec<(SolAddress, u128)>, u64) =
+					sol_account_infos(&retry_client, addresses.clone(), owner_account)
+						.await
+						.unwrap();
 				println!("Result {:?}", account_infos);
+
+				// Try an account with data that is not of the same length
+				addresses.push(
+					SolAddress::from_str("ELF78ZhSr8u4SCixA7YSpjdZHZoSNrAhcyysbavpC2kA").unwrap(),
+				);
+				let account_infos =
+					sol_account_infos(&retry_client, addresses, owner_account).await;
+				assert!(account_infos.is_err());
 
 				Ok(())
 			}
