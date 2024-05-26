@@ -1,5 +1,5 @@
 use crate::witness::common::{RuntimeCallHasChain, RuntimeHasChain};
-use anyhow::ensure;
+use anyhow::{ensure, Error};
 use cf_chains::{
 	instances::ChainInstanceFor,
 	sol::{SolAddress, SolHash, SolPubkey},
@@ -11,7 +11,7 @@ use sp_core::{H160, H256};
 
 use crate::witness::common::chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses;
 
-use std::collections::BTreeMap;
+use std::{any, collections::BTreeMap};
 
 use itertools::Itertools;
 
@@ -52,7 +52,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		state_chain_runtime::RuntimeCall:
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
 	{
-		self.then(move |epoch, header| {
+		self.then(move |_epoch, header| {
 			assert!(<Inner::Chain as Chain>::is_block_witness_root(header.index));
 
 			let sol_rpc = sol_rpc.clone();
@@ -129,37 +129,11 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	}
 }
 
-// // TODO: Add description
-// async fn sol_ingresses_at_block<SolRetryRpcClient>(
-// 	sol_rpc: &SolRetryRpcClient,
-// 	addresses: Vec<SolAddress>,
-// // ) -> Result<Vec<(SolAddress, u128, u128)>, anyhow::Error>
-// -> Vec<Option<UiAccount>>
-// )
-// where
-// 	SolRetryRpcClient: Send + Sync + Clone,
-// {
-// 	// TODO: For now we just assume that the array will contain both the deposit addresses
-// 	// and the fetch accounts properly ordered.
-// 	let balances = sol_rpc
-// 		.get_multiple_accounts_with_config(addresses.clone(), RpcAccountInfoConfig {
-// 			encoding: Some(UiAccountEncoding::JsonParsed),
-// 			data_slice: None,
-// 			commitment: Some(CommitmentConfig::finalized()),
-// 			min_context_slot: None,
-// 		},)
-// 		.await.expect("Failed to get multiple accounts");
-
-// 	ensure!(
-// 		addresses.len() == balances.len()
-// 	);
-// 	balances
-// }
 
 async fn sol_account_infos<SolRetryRpcClient>(
 	sol_rpc: &SolRetryRpcClient,
 	addresses: Vec<SolPubkey>,
-) -> Result<(impl Iterator<Item = (SolPubkey, u128)>, u64), anyhow::Error>
+) -> Result<(Vec<(SolPubkey, u128)>, u64), anyhow::Error>
 where
 	SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
 {
@@ -182,74 +156,110 @@ where
 
 	ensure!(addresses.len() == accounts_info.value.len());
 
-	// Assumption that it's intertwined sol deposit channels and fetch accounts. Maybe we will do it
-	// differently passing two separate arrays. But we need to call accounts and fetch acocunts in
-	// the same RPC call.
-	let accounts_info =
-		accounts_info.value.into_iter().enumerate().map(move |(index, account_info)| {
+	// For now we infer the address type from the owner. However, we might want to enforce
+	// the ordering (e.g. deposit channel, fetch account, deposit channel, fetch account,
+	// etc.) and/or whether the deposit channels are SOL/Tokens.
+	let accounts_info = accounts_info
+		.value
+		.into_iter()
+		.enumerate()
+		.map(move |(index, account_info)| {
 			match account_info {
 				Some(account_info) => {
-					println!("account_info {:?}", account_info);
-					if index % 2 == 0 {
-						println!("Parsing regular Sol deposit channel");
-						// TODO: If there is account info data, we expected it to be JsonParsed. We
-						// can then parse the owner and chec it's the System program. Probably not
-						// really necessary though.
-						(addresses[index].clone(), account_info.lamports as u128)
-					} else {
-						println!("Parsing Fetch account");
+					println!("Parsing account_info {:?}", account_info);
+					let amount = match account_info.owner.as_str() {
+						// Native deposit channel
+						// TODO: Add a check for base64 encoding with empty data
+						"11111111111111111111111111111111" => {
+							println!("Native deposit channel found");
+							Ok(account_info.lamports as u128)
+						},
+						// Fetch account. We either get the Vault address or we default to it.
+						"THIS_SHOULD_BE_THE_VAULT_ADDRESS" => {
+							println!("Vault fetch account found");
+							// Fetch data and ensure it's encoding is base64
+							match account_info.data {
+								// Fetch Data Account
+								UiAccountData::Binary(base64_string, encoding) => {
+									println!("encoding {:?}", encoding);
+									println!("base64_string {:?}", base64_string);
 
-						// Fetch account - manually parse the data to get the cumulative fetch
-						// amount
-						let base64_string = match account_info.data {
-							UiAccountData::Binary(base64_string, UiAccountEncoding::Base64) =>
-								Some(base64_string.clone()),
-							_ => None,
-						};
-						println!("base64_string {:?}", base64_string);
-						let fetch_cumulative = base64_string
-							.map(|base64_string| {
-								// Decode the base64 string to bytes
-								let mut bytes = base64::decode(&base64_string)
-									.expect("Failed to decode base64 string");
+									ensure!(encoding == UiAccountEncoding::Base64);
 
-								println!("bytes {:?}", bytes);
+									// Decode the base64 string to bytes
+									let mut bytes = base64::decode(&base64_string)
+										.expect("Failed to decode base64 string");
 
-								// Check that there are 24 bytes (16 from u128 + 8 from
-								// discriminator)
-								ensure!(bytes.len() == 24);
+									println!("bytes {:?}", bytes);
 
-								// Remove the first 8 bytes
-								bytes.drain(..8);
+									// Check that there are 24 bytes (16 from u128 + 8 from
+									// discriminator)
+									ensure!(bytes.len() == 24);
 
-								let array: [u8; 16] =
-									bytes.try_into().expect("Byte slice length doesn't match u128");
-								Ok(u128::from_le_bytes(array))
-							})
-							.expect("Got the wrong data type for fetch account data");
+									// Remove the discriminator
+									// TODO: Check that we are removing the correct ones
+									bytes.drain(..8);
 
-						(
-							addresses[index].clone(),
-							fetch_cumulative.expect("Failed to decode base64 string to u128"),
-						)
-					}
+									let array: [u8; 16] = bytes
+										.try_into()
+										.expect("Byte slice length doesn't match u128");
+
+									// TODO: Check that this conversion works with the real contract
+									let fetch_cumulative = u128::from_le_bytes(array);
+
+									Ok(fetch_cumulative)
+								},
+								_ => Err(anyhow::anyhow!("Unexpected fetch account encoding")),
+							}
+						},
+						// Token deposit channel
+						"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" => {
+							println!("Associated token account");
+
+							// Fetch data and ensure it's encoding is JsonParsed
+							match account_info.data {
+								UiAccountData::Json(ParsedAccount {
+									parsed: Value::Object(json_parsed_account_data),
+									..
+								}) => {
+									let info = json_parsed_account_data
+										.get("info")
+										.and_then(|v| v.as_object())
+										.ok_or(anyhow::anyhow!("Missing 'info' field"))?;
+
+									let token_amount = info
+										.get("tokenAmount")
+										.ok_or(anyhow::anyhow!("Missing 'tokenAmount' field"))?;
+
+									// TODO: Do we want to check decimals and/or mintpubkey and/or
+									// owner?
+
+									let amount_str = token_amount
+										.get("amount")
+										.and_then(|v| v.as_str())
+										.ok_or(anyhow::anyhow!("Missing 'amount' field"))?;
+
+									amount_str.parse().map_err(|_| {
+										anyhow::anyhow!("Failed to parse string to u128")
+									})
+								},
+								_ => Err(anyhow::anyhow!("Unexpected token account encoding")),
+							}
+						},
+						_ => Err(anyhow::anyhow!("Unexpected account - unexpected owner")),
+					}?;
+					Ok((addresses[index], amount))
 				},
 				// When no account in the address
-				None => (addresses[index].clone(), 0),
+				None => {
+					println!("Empty account found");
+					Ok((addresses[index], 0_u128))
+				},
 			}
-		});
+		})
+		.collect::<Result<Vec<(_, _)>, Error>>()?;
 
 	Ok((accounts_info, slot))
-}
-
-async fn get_sol_deposit_channel_balance(account_info: UiAccount) -> u64 {
-	// For now we don't really do any checks on the data
-	account_info.lamports
-}
-
-async fn get_sol_fetched_balance(account_info: UiAccount) -> u64 {
-	// For now we don't really do any checks on the data
-	account_info.lamports
 }
 
 #[cfg(test)]
@@ -299,15 +309,20 @@ mod tests {
 				.await
 				.unwrap();
 
-				let addresses = vec![
-					SolPubkey::from_str("BrX9Z85BbmXYMjvvuAWU8imwsAqutVQiDg9uNfTGkzrJ").unwrap(), /* normal account */
-					// TODO: This one will fail because it's not a fetch account
-					SolPubkey::from_str("5WQayu3ARKuStAP3P6PvqxBfYo3crcKc2H821dLFhukz").unwrap(), /* token account */
+				let mut addresses = vec![
+					// Normal account owned by system program - should be understood as a deposit
+					// channel
+					SolPubkey::from_str("BrX9Z85BbmXYMjvvuAWU8imwsAqutVQiDg9uNfTGkzrJ").unwrap(),
+					// Token account - should be understood as a fetch account
+					SolPubkey::from_str("5WQayu3ARKuStAP3P6PvqxBfYo3crcKc2H821dLFhukz").unwrap(),
+					// Empty account - should return zero amount (non initialized fetch/deposit
+					// channel)
+					SolPubkey::from_str("ADtaKHTsYSmsty3MgLVfTQoMpM7hvFNTd2AxwN3hWRtt").unwrap(),
 				];
 
-				let account_infos = sol_account_infos(&retry_client, addresses).await.unwrap();
-				println!("account_infos {:?}", account_infos.0.collect::<Vec<_>>());
-				println!("slot {:?}", account_infos.1);
+				let account_infos: (Vec<(SolPubkey, u128)>, u64) =
+					sol_account_infos(&retry_client, addresses).await.unwrap();
+				println!("Result {:?}", account_infos);
 
 				Ok(())
 			}
