@@ -12,7 +12,7 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi, IngressEgressFeeApi,
-	SwapQueueApi, SwapType,
+	NetworkFeeTaken, SwapQueueApi, SwapType,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -398,6 +398,10 @@ pub mod pallet {
 			asset: Asset,
 			amount: AssetAmount,
 			reason: DispatchError,
+		},
+		NetworkFeeTaken {
+			swap_id: SwapId,
+			fee_amount: AssetAmount,
 		},
 	}
 	#[pallet::error]
@@ -826,7 +830,16 @@ pub mod pallet {
 					"All swaps should have Stable amount set here"
 				);
 				let stable_amount = swap.stable_amount.get_or_insert_with(Default::default);
-				*stable_amount = T::SwappingApi::take_network_fee(*stable_amount).remaining_amount;
+
+				let NetworkFeeTaken { remaining_amount, network_fee } =
+					T::SwappingApi::take_network_fee(*stable_amount);
+
+				*stable_amount = remaining_amount;
+
+				Self::deposit_event(Event::<T>::NetworkFeeTaken {
+					fee_amount: network_fee,
+					swap_id: swap.swap_id,
+				});
 
 				if swap.to == STABLE_ASSET {
 					swap.final_output = Some(*stable_amount);
