@@ -143,11 +143,11 @@ pub struct UiConfirmedBlock {
 	pub blockhash: String,
 	pub parent_slot: u64,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub transactions: Option<Vec<serde_json::Value>>, // we should never get this
+	pub transactions: Option<Vec<Value>>, // we should never get this
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub signatures: Option<Vec<String>>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub rewards: Option<serde_json::Value>, // we should never get this
+	pub rewards: Option<Value>, // we should never get this
 	pub block_time: Option<u64>, // unix_timestamp
 	pub block_height: Option<u64>,
 }
@@ -155,10 +155,10 @@ pub struct UiConfirmedBlock {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionStatus {
-	pub slot: u64,                                            // slot
-	pub confirmations: Option<usize>,                         // None = rooted
-	pub status: Result<serde_json::Value, serde_json::Value>, // Not defined for simplification
-	pub err: Option<serde_json::Value>,                       // Not defined for simplification
+	pub slot: u64,                    // slot
+	pub confirmations: Option<usize>, // None = rooted
+	pub status: Result<Value, Value>, // Not defined for simplification
+	pub err: Option<Value>,           // Not defined for simplification
 	pub confirmation_status: Option<TransactionConfirmationStatus>,
 }
 
@@ -191,8 +191,8 @@ pub struct EncodedConfirmedTransactionWithStatusMeta {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum TransactionVersion {
-	Legacy(serde_json::Value),
-	Number(serde_json::Value),
+	Legacy(Value),
+	Number(Value),
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -209,7 +209,7 @@ pub enum EncodedTransaction {
 	                       * compatibility */
 	Binary(String, TransactionBinaryEncoding),
 	Json(UiTransaction),
-	Accounts(Vec<serde_json::Value>),
+	Accounts(Vec<Value>),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -227,16 +227,16 @@ pub struct UiInnerInstructions {
 	/// Transaction instruction index
 	pub index: u8,
 	/// List of inner instructions
-	pub instructions: Vec<serde_json::Value>,
+	pub instructions: Vec<Value>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiTokenAmount {
-	pub ui_amount: Option<serde_json::Value>,
+	pub ui_amount: Option<Value>,
 	pub decimals: u8,
-	pub amount: serde_json::Value,
-	pub ui_amount_string: serde_json::Value,
+	pub amount: Value,
+	pub ui_amount_string: Value,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -262,7 +262,7 @@ pub struct UiTransactionTokenBalance {
 #[serde(rename_all = "camelCase")]
 pub struct UiTransactionStatusMeta {
 	pub err: Option<Value>,
-	pub status: Result<serde_json::Value, serde_json::Value>, /* This field is deprecated.  See https://github.com/solana-labs/solana/issues/9302 */
+	pub status: Result<Value, Value>, /* This field is deprecated.  See https://github.com/solana-labs/solana/issues/9302 */
 	pub fee: u64,
 	pub pre_balances: Vec<u64>,
 	pub post_balances: Vec<u64>,
@@ -290,7 +290,7 @@ pub struct UiTransactionStatusMeta {
 		default = "OptionSerializer::none",
 		skip_serializing_if = "OptionSerializer::should_skip"
 	)]
-	pub rewards: OptionSerializer<Vec<serde_json::Value>>,
+	pub rewards: OptionSerializer<Vec<Value>>,
 	#[serde(
 		default = "OptionSerializer::skip",
 		skip_serializing_if = "OptionSerializer::should_skip"
@@ -348,11 +348,11 @@ pub enum UiMessage {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiParsedMessage {
-	pub account_keys: Vec<serde_json::Value>,
+	pub account_keys: Vec<Value>,
 	pub recent_blockhash: String,
-	pub instructions: Vec<serde_json::Value>,
+	pub instructions: Vec<Value>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub address_table_lookups: Option<Vec<serde_json::Value>>,
+	pub address_table_lookups: Option<Vec<Value>>,
 }
 
 /// A duplicate representation of a Message, in raw format, for pretty JSON serialization
@@ -362,9 +362,9 @@ pub struct UiRawMessage {
 	pub header: MessageHeader,
 	pub account_keys: Vec<String>,
 	pub recent_blockhash: String,
-	pub instructions: Vec<serde_json::Value>,
+	pub instructions: Vec<Value>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub address_table_lookups: Option<Vec<serde_json::Value>>,
+	pub address_table_lookups: Option<Vec<Value>>,
 }
 
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, Copy)]
