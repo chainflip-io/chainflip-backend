@@ -1,3 +1,5 @@
+#![feature(iterator_try_collect)]
+
 use crate::boost_pool_rpc::BoostPoolFeesRpc;
 use boost_pool_rpc::BoostPoolDetailsRpc;
 use cf_amm::{
@@ -59,8 +61,11 @@ use std::{
 	sync::Arc,
 };
 
+mod dynamic_events;
 pub mod monitoring;
 pub mod order_fills;
+
+pub use dynamic_events::{DynamicApiClient, DynamicApiServer};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RpcEpochState {
@@ -918,7 +923,14 @@ pub trait CustomApi {
 pub struct CustomRpc<C, B> {
 	pub client: Arc<C>,
 	pub executor: Arc<dyn sp_core::traits::SpawnNamed>,
+	pub type_metadata: dynamic_events::EventDecoderCache,
 	pub _phantom: PhantomData<B>,
+}
+
+impl<C, B> CustomRpc<C, B> {
+	pub fn new(client: Arc<C>, executor: Arc<dyn sp_core::traits::SpawnNamed>) -> Self {
+		Self { client, executor, type_metadata: Default::default(), _phantom: PhantomData }
+	}
 }
 
 impl<C, B> CustomRpc<C, B>
@@ -928,6 +940,16 @@ where
 {
 	fn unwrap_or_best(&self, from_rpc: Option<<B as BlockT>::Hash>) -> B::Hash {
 		from_rpc.unwrap_or_else(|| self.client.info().best_hash)
+	}
+}
+
+impl<C, B> CustomRpc<C, B>
+where
+	B: BlockT<Hash = state_chain_runtime::Hash>,
+	C: Send + Sync + 'static + CallApiAt<B>,
+{
+	fn storage_query_api(&self) -> StorageQueryApi<C, B> {
+		StorageQueryApi::new(&self.client)
 	}
 }
 
