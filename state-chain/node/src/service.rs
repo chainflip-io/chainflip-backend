@@ -10,9 +10,9 @@ use sc_service::{error::Error as ServiceError, Configuration, TaskManager, WarpS
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
-use std::{marker::PhantomData, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
-use custom_rpc::{monitoring::MonitoringApiServer, CustomApiServer, CustomRpc};
+use custom_rpc::{monitoring::MonitoringApiServer, CustomApiServer, CustomRpc, DynamicApiServer};
 use state_chain_runtime::{self, opaque::Block, RuntimeApi};
 
 pub(crate) type FullClient = sc_service::TFullClient<
@@ -258,19 +258,20 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 					.into_rpc(),
 				)?;
 
-				// Implement custom RPC extensions
-				module.merge(CustomApiServer::into_rpc(CustomRpc {
-					client: client.clone(),
-					_phantom: PhantomData,
-					executor: executor.clone(),
-				}))?;
+				module.merge(CustomApiServer::into_rpc(CustomRpc::new(
+					client.clone(),
+					executor.clone(),
+				)))?;
 
-				// Implement custom RPC extensions
-				module.merge(MonitoringApiServer::into_rpc(CustomRpc {
-					client: client.clone(),
-					_phantom: PhantomData,
-					executor: executor.clone(),
-				}))?;
+				module.merge(DynamicApiServer::into_rpc(CustomRpc::new(
+					client.clone(),
+					executor.clone(),
+				)))?;
+
+				module.merge(MonitoringApiServer::into_rpc(CustomRpc::new(
+					client.clone(),
+					executor.clone(),
+				)))?;
 
 				Ok(module)
 			};
