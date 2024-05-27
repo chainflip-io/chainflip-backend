@@ -1,8 +1,9 @@
 mod chain_tracking;
+mod durable_nonces;
 mod sol_deposits;
 mod source;
 
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use cf_primitives::EpochIndex;
 use futures_core::Future;
