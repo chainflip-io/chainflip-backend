@@ -28,7 +28,7 @@ export async function rangeOrder(ccy: Asset, amount: number) {
   const orderCreatedEvent = observeEvent('liquidityPools:RangeOrderUpdated', {
     test: (event) =>
       event.data.lp === lp.address && event.data.baseAsset === ccy && event.data.id === String(0),
-  });
+  }).event;
   await lpMutex.runExclusive(async () => {
     await chainflip.tx.liquidityPools
       .setRangeOrder(ccy.toLowerCase(), 'usdc', 0, [-887272, 887272], {

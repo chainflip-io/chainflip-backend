@@ -13,7 +13,6 @@ import {
   decodeSolAddress,
   chainContractId,
   assetDecimals,
-  Event,
 } from '../shared/utils';
 import { send } from '../shared/send';
 import { observeEvent } from './utils/substrate';
@@ -23,7 +22,7 @@ export async function provideLiquidity(
   amount: number,
   waitForFinalization = false,
   lpKey?: string,
-): Promise<Event> {
+) {
   await using chainflip = await getChainflipApi();
   const chain = shortChainFromAsset(ccy);
 
@@ -55,7 +54,7 @@ export async function provideLiquidity(
 
   let eventHandle = observeEvent('liquidityProvider:LiquidityDepositAddressReady', {
     test: (event) => event.data.asset === ccy && event.data.accountId === lp.address,
-  });
+  }).event;
 
   console.log('Requesting ' + ccy + ' deposit address');
   await lpMutex.runExclusive(async () => {
@@ -76,7 +75,7 @@ export async function provideLiquidity(
         BigInt(amountToFineAmount(String(amount), assetDecimals(ccy))),
       ),
     finalized: waitForFinalization,
-  });
+  }).event;
   await send(ccy, ingressAddress, String(amount));
 
   return eventHandle;

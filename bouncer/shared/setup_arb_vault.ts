@@ -17,7 +17,7 @@ export async function setupArbVault(): Promise<void> {
   await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
 
   // Step 3
-  const arbActivationRequest = observeEvent('arbitrumVault:AwaitingGovernanceActivation');
+  const arbActivationRequest = observeEvent('arbitrumVault:AwaitingGovernanceActivation').event;
 
   const arbKey = (await arbActivationRequest).data.newPublicKey;
 
