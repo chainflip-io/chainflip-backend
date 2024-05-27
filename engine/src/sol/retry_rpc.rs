@@ -4,7 +4,7 @@ use crate::{
 	witness::common::chain_source::{ChainClient, Header},
 };
 use cf_chains::{
-	sol::{SolAddress, SolHash},
+	sol::{SolAddress, SolHash, SolSignature},
 	Solana,
 };
 use core::time::Duration;
@@ -72,6 +72,17 @@ pub trait SolRetryRpcApi: Clone {
 		pubkeys: &[SolAddress],
 		config: RpcAccountInfoConfig,
 	) -> Response<Vec<Option<UiAccount>>>;
+	async fn get_signature_statuses(
+		&self,
+		signatures: &[SolSignature],
+		search_transaction_history: bool,
+	) -> Response<Vec<Option<TransactionStatus>>>;
+
+	async fn get_transaction(
+		&self,
+		signature: &SolSignature,
+		config: RpcTransactionConfig,
+	) -> EncodedConfirmedTransactionWithStatusMeta;
 }
 
 #[async_trait::async_trait]
@@ -132,6 +143,47 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 					Box::pin(async move {
 						client.get_multiple_accounts_with_config(&pubkeys, config).await
 					})
+				}),
+			)
+			.await
+	}
+	async fn get_signature_statuses(
+		&self,
+		signatures: &[SolSignature],
+		search_transaction_history: bool,
+	) -> Response<Vec<Option<TransactionStatus>>> {
+		let signatures = signatures.to_owned();
+		self.rpc_retry_client
+			.request(
+				RequestLog::new(
+					"getSignatureStatuses".to_string(),
+					Some(format!("{:?}, {:?}", signatures, search_transaction_history)),
+				),
+				Box::pin(move |client| {
+					let signatures = signatures.clone();
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move {
+						client.get_signature_statuses(&signatures, search_transaction_history).await
+					})
+				}),
+			)
+			.await
+	}
+	async fn get_transaction(
+		&self,
+		signature: &SolSignature,
+		config: RpcTransactionConfig,
+	) -> EncodedConfirmedTransactionWithStatusMeta {
+		let signature = *signature;
+		self.rpc_retry_client
+			.request(
+				RequestLog::new(
+					"getTransaction".to_string(),
+					Some(format!("{:?}, {:?}", signature, config)),
+				),
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.get_transaction(&signature, config).await })
 				}),
 			)
 			.await
@@ -265,6 +317,47 @@ mod tests {
 					)
 					.await;
 				println!("account_info: {:?}", account_infos.value);
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap()
+	}
+
+	#[tokio::test]
+	async fn test_sol_get_transaction() {
+		task_scope(|scope| {
+			async move {
+				// let settings = Settings::new_test().unwrap();
+
+				let retry_client = SolRetryRpcClient::new(
+					scope,
+					NodeContainer {
+						primary: WsHttpEndpoints {
+							ws_endpoint: "wss://api.devnet.solana.com".into(),
+							http_endpoint: "https://api.devnet.solana.com".into(),
+						},
+						backup: None,
+					},
+					None,
+					Solana::WITNESS_PERIOD,
+				)
+				.await
+				.unwrap();
+
+				let transaction = retry_client
+				.get_transaction(
+					&SolSignature::from_str("4hWBYH3K7ia2q8Vfk9xCd1ovhRDQKaYKVUCsS9HKEEK2XTF2t2BP8q4AhbVihsqk7QyWiq4csXybBLVoJmMFo2Sf").unwrap(),
+					RpcTransactionConfig {
+						encoding: Some(UiTransactionEncoding::JsonParsed),
+						commitment: Some(CommitmentConfig::confirmed()),
+						max_supported_transaction_version: Some(0),
+					},
+				)
+				.await;
+				println!("transaction: {:?}", transaction);
 
 				Ok(())
 			}

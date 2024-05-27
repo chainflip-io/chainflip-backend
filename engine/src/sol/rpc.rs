@@ -13,7 +13,7 @@ use utilities::redact_endpoint_secret::SecretUrl;
 use anyhow::{anyhow, Result};
 use tracing::warn;
 
-use cf_chains::sol::{SolAddress, SolHash};
+use cf_chains::sol::{SolAddress, SolHash, SolSignature};
 
 use super::{commitment_config::CommitmentConfig, rpc_client_api::*};
 use std::str::FromStr;
@@ -98,13 +98,12 @@ async fn call_rpc_raw(
 		.await
 		.map_err(Error::Transport)?;
 
-	println!("response: {:?}", response);
-
 	let mut json = response.json::<serde_json::Value>().await.map_err(Error::Transport)?;
 
 	if json["error"].is_object() {
 		return Err(Error::Rpc(serde_json::from_value(json["error"].clone()).map_err(Error::Json)?));
 	}
+	println!("json result: {:?}", json["result"]);
 	Ok(json["result"].take())
 }
 
@@ -146,6 +145,16 @@ pub trait SolRpcApi {
 		pubkeys: &[SolAddress],
 		config: RpcAccountInfoConfig,
 	) -> Result<Response<Vec<Option<UiAccount>>>>;
+	async fn get_signature_statuses(
+		&self,
+		signatures: &[SolSignature],
+		search_transaction_history: bool,
+	) -> Result<Response<Vec<Option<TransactionStatus>>>>;
+	async fn get_transaction(
+		&self,
+		signature: &SolSignature,
+		config: RpcTransactionConfig,
+	) -> Result<EncodedConfirmedTransactionWithStatusMeta>;
 }
 
 #[async_trait::async_trait]
@@ -195,6 +204,43 @@ impl SolRpcApi for SolRpcClient {
 		let Response { context, value: accounts } =
 			serde_json::from_value::<Response<Vec<Option<UiAccount>>>>(response.clone())?;
 		Ok(Response { context, value: accounts })
+	}
+
+	async fn get_signature_statuses(
+		&self,
+		signatures: &[SolSignature],
+		search_transaction_history: bool,
+	) -> Result<Response<Vec<Option<TransactionStatus>>>> {
+		let response = self
+			.call_rpc(
+				"getSignatureStatuses",
+				Some(json!([
+					signatures,
+					json!({
+						"searchTransactionHistory": search_transaction_history
+					})
+				])),
+			)
+			.await?;
+		let Response { context, value: tx_statuses } =
+			serde_json::from_value::<Response<Vec<Option<TransactionStatus>>>>(response.clone())?;
+		Ok(Response { context, value: tx_statuses })
+	}
+
+	async fn get_transaction(
+		&self,
+		signature: &SolSignature,
+		config: RpcTransactionConfig,
+	) -> anyhow::Result<EncodedConfirmedTransactionWithStatusMeta> {
+		let response =
+			self.call_rpc("getTransaction", Some(json!([signature, json!(config)]))).await?;
+
+		println!("DEBUG RESPONSE: {:?}", response);
+
+		let transaction_data = from_value(response)
+			.map_err(|err| anyhow!("Failed to parse transaction data {}", err))?;
+
+		Ok(transaction_data)
 	}
 }
 
@@ -287,5 +333,28 @@ mod tests {
 			.await
 			.unwrap();
 		println!("block: {:?}", block);
+	}
+
+	#[tokio::test]
+	async fn test_sol_get_transaction() {
+		let sol_rpc_client = SolRpcClient::new(
+			SecretUrl::from("https://api.devnet.solana.com".to_string()),
+			Some(SolHash::from_str("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG").unwrap()),
+		)
+		.unwrap()
+		.await;
+
+		let transaction = sol_rpc_client
+		.get_transaction(
+			&SolSignature::from_str("2Nb7bSQWoUYrEN6PYGN7Jhgs29HjSXEeM2mFKzkqwTiARM8EwXPQ6DMvQbvqLqxogXtvYtpxE44AsDeSS3e3fsDY").unwrap(),
+			RpcTransactionConfig {
+				encoding: None,
+				commitment: Some(CommitmentConfig::finalized()),
+				max_supported_transaction_version: None,
+			},
+		)
+		.await
+		.unwrap();
+		println!("transaction: {:?}", transaction);
 	}
 }
