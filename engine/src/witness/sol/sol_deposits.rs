@@ -140,7 +140,7 @@ where
 	SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
 {
 	let accounts_info: Response<Vec<Option<UiAccount>>> = sol_rpc
-		.get_multiple_accounts_with_config(
+		.get_multiple_accounts(
 			addresses.clone().as_slice(),
 			RpcAccountInfoConfig {
 				// Using JsonParsed will return the token accounts and the sol deposit channels
