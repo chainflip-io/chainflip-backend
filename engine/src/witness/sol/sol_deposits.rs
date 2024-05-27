@@ -2,8 +2,8 @@ use crate::witness::common::{RuntimeCallHasChain, RuntimeHasChain};
 use anyhow::{ensure, Error};
 use cf_chains::{
 	instances::ChainInstanceFor,
-	sol::{SolAddress, SolHash},
-	Chain,
+	sol::{SolAddress, SolHash, SolSignature},
+	Chain, Solana,
 };
 use cf_primitives::EpochIndex;
 use futures_core::Future;
@@ -76,6 +76,9 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 						// E.g. We need to submit the asset on the cf_ingress_egress so effectively
 						// the submissions need to be separate
 						// .filter(|deposit_channel| deposit_channel.deposit_channel.asset == asset)
+						// TODO: Here we can maybe get the fetch account (if part of the
+						// DepositChannel) struct in the DepositChannelState field. Maybe also keep
+						// the asset on a per deposit channel so we can use the same RPC call.
 						.map(|deposit_channel| deposit_channel.deposit_channel.address)
 						.collect::<Vec<_>>();
 
@@ -87,12 +90,12 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					// TODO: Check with Alastair what we need to submit. At least we need to check
 					// the deposit account and the fetch account and put them into one submission.
 					for chunk_address in chunked_addresses {
-						let account_infos: (Vec<(SolAddress, u128)>, u64) =
+						let account_infos =
 							sol_account_infos(&sol_rpc, chunk_address, vault_address).await?;
 						let slot = account_infos.1;
-						let ingresses = account_infos.0;
+						let ingresses = sol_ingresses(account_infos.0)?;
 
-						// Should never be empty - do we really need to check?
+						// Is this to not submit non-changes?
 						if !ingresses.is_empty() {
 							process_call(
 									pallet_cf_ingress_egress::Call::<
@@ -268,6 +271,27 @@ where
 	Ok((accounts_info, slot))
 }
 
+// TODO: For now we just presupose that the accounts are two consecutive items
+fn sol_ingresses(
+	account_infos: Vec<(SolAddress, u128)>,
+) -> Result<Vec<(SolAddress, u128)>, anyhow::Error> {
+	if account_infos.len() % 2 != 0 {
+		return Err(anyhow::anyhow!("The number of items in the vector must be even"));
+	}
+
+	let result = account_infos
+		.chunks(2)
+		.map(|account_pair| {
+			let (deposit_channel_address, value1) = account_pair[0];
+			let (_, value2) = account_pair[1];
+			// It should never reach saturation => (2^128 - 1) // 10 ^ 9
+			(deposit_channel_address, value1.saturating_add(value2))
+		})
+		.collect::<Vec<(_, _)>>();
+
+	Ok(result)
+}
+
 #[cfg(test)]
 mod tests {
 	use crate::{
@@ -286,6 +310,39 @@ mod tests {
 	use futures_util::FutureExt;
 	use std::str::FromStr;
 	use utilities::task_scope;
+
+	#[test]
+	fn test_sol_ingresses() {
+		let account_infos = vec![
+			(SolAddress::from_str("BrX9Z85BbmXYMjvvuAWU8imwsAqutVQiDg9uNfTGkzrJ").unwrap(), 1),
+			(SolAddress::from_str("5WQayu3ARKuStAP3P6PvqxBfYo3crcKc2H821dLFhukz").unwrap(), 2),
+			(SolAddress::from_str("ADtaKHTsYSmsty3MgLVfTQoMpM7hvFNTd2AxwN3hWRtt").unwrap(), 3),
+			(SolAddress::from_str("ELF78ZhSr8u4SCixA7YSpjdZHZoSNrAhcyysbavpC2kA").unwrap(), 4),
+		];
+
+		let ingresses = super::sol_ingresses(account_infos.clone()).unwrap();
+
+		assert_eq!(ingresses.len(), 2);
+		assert_eq!(ingresses[0].0, account_infos[0].0);
+		assert_eq!(ingresses[0].1, 3);
+		assert_eq!(ingresses[1].0, account_infos[2].0);
+		assert_eq!(ingresses[1].1, 7);
+	}
+
+	#[test]
+	fn test_sol_ingresses_error_if_odd_length() {
+		let account_infos = vec![
+			(SolAddress::from_str("BrX9Z85BbmXYMjvvuAWU8imwsAqutVQiDg9uNfTGkzrJ").unwrap(), 1),
+			(SolAddress::from_str("5WQayu3ARKuStAP3P6PvqxBfYo3crcKc2H821dLFhukz").unwrap(), 2),
+			(SolAddress::from_str("ADtaKHTsYSmsty3MgLVfTQoMpM7hvFNTd2AxwN3hWRtt").unwrap(), 3),
+		];
+
+		let ingresses = super::sol_ingresses(account_infos);
+
+		assert!(ingresses.is_err());
+	}
+
+	// TODO: Add test for Fetch Account from a live network (deploy it there)
 
 	#[tokio::test]
 	async fn test_get_deposit_channels_info() {
