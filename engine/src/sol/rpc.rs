@@ -139,8 +139,7 @@ pub trait SolRpcApi {
 	) -> anyhow::Result<UiConfirmedBlock>;
 	async fn get_slot(&self, commitment: CommitmentConfig) -> anyhow::Result<u64>; // Slot
 	async fn get_recent_prioritization_fees(&self) -> anyhow::Result<Vec<RpcPrioritizationFee>>;
-	// TODO: Rename to get_multiple_accounts
-	async fn get_multiple_accounts_with_config(
+	async fn get_multiple_accounts(
 		&self,
 		pubkeys: &[SolAddress],
 		config: RpcAccountInfoConfig,
@@ -187,7 +186,7 @@ impl SolRpcApi for SolRpcClient {
 		Ok(fees)
 	}
 
-	async fn get_multiple_accounts_with_config(
+	async fn get_multiple_accounts(
 		&self,
 		pubkeys: &[SolAddress],
 		config: RpcAccountInfoConfig,
@@ -287,7 +286,7 @@ mod tests {
 		println!("priority_fees: {:?}", priority_fees);
 
 		let result = sol_rpc_client
-			.get_multiple_accounts_with_config(
+			.get_multiple_accounts(
 				&[SolAddress::from_str("vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg").unwrap()],
 				RpcAccountInfoConfig {
 					encoding: Some(UiAccountEncoding::JsonParsed),
@@ -303,7 +302,7 @@ mod tests {
 		println!("account_info: {:?}", result.value);
 
 		let result: Response<Vec<Option<UiAccount>>> = sol_rpc_client
-			.get_multiple_accounts_with_config(
+			.get_multiple_accounts(
 				&[
 					SolAddress::from_str("vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg").unwrap(),
 					SolAddress::from_str("4fYNw3dojWmQ4dXtSGE9epjRGy9pFSx62YypT7avPYvA").unwrap(),
@@ -344,17 +343,32 @@ mod tests {
 		.unwrap()
 		.await;
 
+		let signature = SolSignature::from_str("2Nb7bSQWoUYrEN6PYGN7Jhgs29HjSXEeM2mFKzkqwTiARM8EwXPQ6DMvQbvqLqxogXtvYtpxE44AsDeSS3e3fsDY").unwrap();
+
 		let transaction = sol_rpc_client
-		.get_transaction(
-			&SolSignature::from_str("2Nb7bSQWoUYrEN6PYGN7Jhgs29HjSXEeM2mFKzkqwTiARM8EwXPQ6DMvQbvqLqxogXtvYtpxE44AsDeSS3e3fsDY").unwrap(),
-			RpcTransactionConfig {
-				encoding: None,
-				commitment: Some(CommitmentConfig::finalized()),
-				max_supported_transaction_version: None,
-			},
-		)
-		.await
-		.unwrap();
+			.get_transaction(
+				&signature,
+				RpcTransactionConfig {
+					encoding: None,
+					commitment: Some(CommitmentConfig::finalized()),
+					max_supported_transaction_version: None,
+				},
+			)
+			.await
+			.unwrap();
 		println!("transaction: {:?}", transaction);
+
+		let signature_status =
+			sol_rpc_client.get_signature_statuses(&[signature], true).await.unwrap();
+
+		let confirmation_status = signature_status
+			.value
+			.first()
+			.and_then(Option::as_ref)
+			.and_then(|ts| ts.confirmation_status.as_ref())
+			.expect("Expected confirmation_status to be Some");
+
+		println!("Signature status: {:?}", signature_status);
+		assert_eq!(confirmation_status, &TransactionConfirmationStatus::Finalized);
 	}
 }

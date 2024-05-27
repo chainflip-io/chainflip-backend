@@ -67,7 +67,7 @@ pub trait SolRetryRpcApi: Clone {
 	async fn get_block(&self, slot: u64, config: RpcBlockConfig) -> UiConfirmedBlock;
 	async fn get_slot(&self, commitment: CommitmentConfig) -> u64; // Slot
 	async fn get_recent_prioritization_fees(&self) -> Vec<RpcPrioritizationFee>;
-	async fn get_multiple_accounts_with_config(
+	async fn get_multiple_accounts(
 		&self,
 		pubkeys: &[SolAddress],
 		config: RpcAccountInfoConfig,
@@ -123,7 +123,7 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 			.await
 	}
 
-	async fn get_multiple_accounts_with_config(
+	async fn get_multiple_accounts(
 		&self,
 		pubkeys: &[SolAddress],
 		config: RpcAccountInfoConfig,
@@ -140,9 +140,7 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 					let pubkeys = pubkeys.clone();
 					let config = config.clone();
 					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move {
-						client.get_multiple_accounts_with_config(&pubkeys, config).await
-					})
+					Box::pin(async move { client.get_multiple_accounts(&pubkeys, config).await })
 				}),
 			)
 			.await
@@ -305,7 +303,7 @@ mod tests {
 				println!("priority_fees: {:?}", priority_fees[0]);
 
 				let account_infos = retry_client
-					.get_multiple_accounts_with_config(
+					.get_multiple_accounts(
 						&[SolAddress::from_str("vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg")
 							.unwrap()],
 						RpcAccountInfoConfig {
@@ -347,9 +345,11 @@ mod tests {
 				.await
 				.unwrap();
 
+				let signature = SolSignature::from_str("4hWBYH3K7ia2q8Vfk9xCd1ovhRDQKaYKVUCsS9HKEEK2XTF2t2BP8q4AhbVihsqk7QyWiq4csXybBLVoJmMFo2Sf").unwrap();
+
 				let transaction = retry_client
 				.get_transaction(
-					&SolSignature::from_str("4hWBYH3K7ia2q8Vfk9xCd1ovhRDQKaYKVUCsS9HKEEK2XTF2t2BP8q4AhbVihsqk7QyWiq4csXybBLVoJmMFo2Sf").unwrap(),
+					&signature,
 					RpcTransactionConfig {
 						encoding: Some(UiTransactionEncoding::JsonParsed),
 						commitment: Some(CommitmentConfig::confirmed()),
@@ -358,6 +358,17 @@ mod tests {
 				)
 				.await;
 				println!("transaction: {:?}", transaction);
+
+				let signature_status = retry_client
+				.get_signature_statuses(
+					&[signature],
+					true
+				).await;
+
+				let confirmation_status = signature_status.value.first().and_then(Option::as_ref).and_then(|ts| ts.confirmation_status.as_ref()).expect("Expected confirmation_status to be Some");
+
+				println!("Signature status: {:?}", signature_status);
+				assert_eq!(confirmation_status, &TransactionConfirmationStatus::Finalized);
 
 				Ok(())
 			}
