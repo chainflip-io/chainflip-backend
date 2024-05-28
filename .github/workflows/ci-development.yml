@@ -14,8 +14,8 @@ jobs:
     uses: ./.github/workflows/_01_pre_check.yml
     secrets: inherit
   force-version-bump:
-      uses: ./.github/workflows/_05_force_version_bump.yml
-      secrets: inherit
+    uses: ./.github/workflows/_05_force_version_bump.yml
+    secrets: inherit
   test:
     uses: ./.github/workflows/_10_test.yml
     secrets: inherit
@@ -55,7 +55,7 @@ jobs:
     uses: ./.github/workflows/_40_post_check.yml
     secrets: inherit
     with:
-      full_bouncer: false
+      full_bouncer: true
   upgrade-check:
     uses: ./.github/workflows/upgrade-test.yml
     secrets: inherit
