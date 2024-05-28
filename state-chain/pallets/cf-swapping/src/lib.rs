@@ -51,7 +51,6 @@ pub struct Swap {
 	swap_type: SwapType,
 	stable_amount: Option<AssetAmount>,
 	final_output: Option<AssetAmount>,
-	fee_taken: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -81,7 +80,6 @@ impl Swap {
 			swap_type,
 			stable_amount: if from == STABLE_ASSET { Some(input_amount) } else { None },
 			final_output: if from == to { Some(input_amount) } else { None },
-			fee_taken: false,
 		}
 	}
 

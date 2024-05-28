@@ -1576,7 +1576,6 @@ fn swap_excess_are_confiscated_ccm_via_deposit() {
 					swap_type: SwapType::CcmPrincipal(1),
 					stable_amount: Some(max_swap),
 					final_output: None,
-					fee_taken: false,
 				},
 				Swap {
 					swap_id: 2u64,
@@ -1586,7 +1585,6 @@ fn swap_excess_are_confiscated_ccm_via_deposit() {
 					swap_type: SwapType::CcmGas(1),
 					stable_amount: Some(max_swap),
 					final_output: None,
-					fee_taken: false,
 				}
 			]
 		);
@@ -1646,7 +1644,6 @@ fn swap_excess_are_confiscated_ccm_via_extrinsic() {
 					swap_type: SwapType::CcmPrincipal(1),
 					stable_amount: Some(max_swap),
 					final_output: None,
-					fee_taken: false,
 				},
 				Swap {
 					swap_id: 2u64,
@@ -1656,7 +1653,6 @@ fn swap_excess_are_confiscated_ccm_via_extrinsic() {
 					swap_type: SwapType::CcmGas(1),
 					stable_amount: Some(max_swap),
 					final_output: None,
-					fee_taken: false,
 				}
 			]
 		);
@@ -1702,7 +1698,6 @@ fn swap_excess_are_confiscated_for_swap_via_extrinsic() {
 				swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
 				stable_amount: Some(max_swap),
 				final_output: None,
-				fee_taken: false,
 			}]
 		);
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 900);
@@ -1749,7 +1744,6 @@ fn swap_excess_are_confiscated_for_swap_via_deposit() {
 				swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
 				stable_amount: Some(max_swap),
 				final_output: None,
-				fee_taken: false,
 			}]
 		);
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 900);
@@ -1806,7 +1800,6 @@ fn max_swap_amount_can_be_removed() {
 					swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
 					stable_amount: Some(max_swap),
 					final_output: None,
-					fee_taken: false,
 				},
 				// New swap takes the full amount.
 				Swap {
@@ -1817,7 +1810,6 @@ fn max_swap_amount_can_be_removed() {
 					swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
 					stable_amount: Some(amount),
 					final_output: None,
-					fee_taken: false,
 				}
 			]
 		);
@@ -1900,7 +1892,6 @@ fn can_swap_below_max_amount() {
 				swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
 				stable_amount: Some(amount),
 				final_output: None,
-				fee_taken: false,
 			},]
 		);
 	});
@@ -1942,7 +1933,6 @@ fn can_swap_ccm_below_max_amount() {
 					swap_type: SwapType::CcmPrincipal(1),
 					stable_amount: Some(principal_amount),
 					final_output: None,
-					fee_taken: false,
 				},
 				Swap {
 					swap_id: 2u64,
@@ -1952,7 +1942,6 @@ fn can_swap_ccm_below_max_amount() {
 					swap_type: SwapType::CcmGas(1),
 					stable_amount: Some(gas_budget),
 					final_output: None,
-					fee_taken: false,
 				}
 			]
 		);
