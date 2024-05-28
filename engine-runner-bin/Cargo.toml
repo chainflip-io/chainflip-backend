@@ -24,8 +24,8 @@ assets = [
     # to specify this. We do this in the `chainflip-engine.service` files, so the user does not need to set it
     # manually.
     [
-        "target/release/libchainflip_engine_v1_4_0.so",
-        "usr/lib/chainflip-engine/libchainflip_engine_v1_4_0.so",
+        "target/release/libchainflip_engine_v1_4_1.so",
+        "usr/lib/chainflip-engine/libchainflip_engine_v1_4_1.so",
         "755",
     ],
     # The old version gets put into target/release by the package github actions workflow.
