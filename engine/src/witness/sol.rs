@@ -98,10 +98,12 @@ where
 						},
 					)
 					.await;
+
 				let fee = match transaction.transaction.meta {
 					Some(meta) => meta.fee,
 					None => return Err(anyhow!("Empty meta")),
 				};
+
 				Ok((signature, slot, fee))
 			}
 		})
@@ -172,7 +174,7 @@ where
 			sol_client.clone(),
 			cf_primitives::chains::assets::sol::Asset::Sol,
 			vault_address,
-			usdc_pubkey,
+			None,
 		)
 		.await
 		.continuous("SolanaDeposits".to_string(), db.clone())
@@ -184,13 +186,13 @@ where
 	// 	.solana_deposits(
 	// 		process_call.clone(),
 	// 		sol_client.clone(),
-	// 		cf_primitives::chains::assets::sol::Asset::Sol,
+	// 		cf_primitives::chains::assets::sol::Asset::SolUsdc,
 	// 		vault_address,
-	// 		Some(usdc_pubkey),
+	// 		usdc_pubkey,
 	// 	)
 	// 	.await
-	// 	.continuous("SolanaDeposits".to_string(), db.clone())
-	// 	.logging("SolanaDeposits")
+	// 	.continuous("SolanaUsdcDeposits".to_string(), db.clone())
+	// 	.logging("SolanaUsdcDeposits")
 	// 	.spawn(scope);
 
 	// sol_safe_vault_source_deposit_addresses
@@ -206,4 +208,73 @@ where
 	// 	.spawn(scope);
 
 	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::{
+		settings::{NodeContainer, WsHttpEndpoints},
+		// use settings:: Settings
+		sol::retry_rpc::SolRetryRpcClient,
+		witness::common::chunked_chain_source::chunked_by_vault::monitored_items,
+	};
+
+	use cf_chains::{sol::SolAddress, Chain, Solana};
+	use futures_util::FutureExt;
+	use std::str::FromStr;
+	use utilities::task_scope;
+
+	use super::*;
+
+	#[tokio::test]
+	async fn test_success_witnesses() {
+		task_scope::task_scope(|scope| {
+			async {
+				// let settings = Settings::new_test().unwrap();
+				// let client = SolRetryRpcClient::<SolRpcClient>::new(
+				// 	scope,
+				// 	settings.sol.nodes,
+				// 	U256::from(1337u64),
+				// 	"sol_rpc",
+				// 	"sol_subscribe",
+				// 	"Ethereum",
+				// 	Ethereum::WITNESS_PERIOD,
+				// )
+				// .unwrap();
+
+				let retry_client = SolRetryRpcClient::new(
+					scope,
+					NodeContainer {
+						primary: WsHttpEndpoints {
+							ws_endpoint: "wss://api.devnet.solana.com".into(),
+							http_endpoint: "https://api.devnet.solana.com".into(),
+						},
+						backup: None,
+					},
+					None,
+					Solana::WITNESS_PERIOD,
+				)
+				.await
+				.unwrap();
+
+				let monitored_tx_signatures = [
+					SolSignature::from_str(
+						"4udChXyRXrqBxUTr9F3nbTcPyvteLJtFQ3wM35J53NdP4GWwUp2wBwdTJEYs2aiNz7DyCqitok6ci7qqHPkRByb2").unwrap()
+				];
+
+				let result =
+					success_witnesses(&retry_client, &monitored_tx_signatures, &[]).await.unwrap();
+				println!("{:?}", result);
+				assert_eq!(result.len(), 1);
+				assert_eq!(result[0].0, monitored_tx_signatures[0]);
+				assert!(result[0].1 > 0);
+				assert_eq!(result[0].2, 5000);
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
+	}
 }

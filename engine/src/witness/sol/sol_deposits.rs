@@ -32,7 +32,6 @@ pub use sol_prim::{
 };
 use std::str::FromStr;
 
-// TODO: Get this from a constant fine
 const FETCH_ACCOUNT_BYTE_LENGTH: usize = 24;
 const MAX_MULTIPLE_ACCOUNTS_QUERY: usize = 100;
 const FETCH_ACCOUNT_DISCRIMINATOR: [u8; 8] = [188, 68, 197, 38, 48, 192, 81, 100];
@@ -45,8 +44,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		sol_rpc: SolRetryRpcClient,
 		asset: <Inner::Chain as cf_chains::Chain>::ChainAsset,
 		vault_address: SolAddress,
-		// TODO: Make this into an option if we reuse the call
-		token_pubkey: SolAddress,
+		token_pubkey: Option<SolAddress>,
 	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
 	where
 		Inner::Chain:
@@ -83,8 +81,8 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							(
 								deposit_channel.deposit_channel.address,
 								derive_fetch_account(
+									vault_address,
 									deposit_channel.deposit_channel.address,
-									token_pubkey,
 								)
 								.expect("Failed to derive fetch account"),
 							)
@@ -104,7 +102,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							&sol_rpc,
 							deposit_channels_info,
 							vault_address,
-							true,
+							token_pubkey.is_none(),
 							token_pubkey,
 						)
 						.await?;
@@ -149,13 +147,18 @@ async fn ingress_amounts<SolRetryRpcClient>(
 	deposit_channels_info: Vec<(SolAddress, SolAddress)>,
 	vault_address: SolAddress,
 	is_native_asset: bool,
-	token_pubkey: SolAddress,
+	token_pubkey: Option<SolAddress>,
 ) -> Result<(Vec<(SolAddress, u128)>, u64), anyhow::Error>
 where
 	SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
 {
 	let system_program_pubkey = SolAddress::from_str(SYSTEM_PROGRAM_ID).unwrap();
 	let associated_token_account_pubkey = SolAddress::from_str(TOKEN_PROGRAM_ID).unwrap();
+
+	// Ensure that if !is_native_asset then ther eis a value in token_pubkey
+	if !is_native_asset {
+		ensure!(token_pubkey.is_some());
+	}
 
 	// Flattening it to have both deposit channels and fetch accounts
 	let addresses_to_witness = deposit_channels_info
@@ -165,7 +168,8 @@ where
 				if is_native_asset {
 					*address
 				} else {
-					derive_associated_token_account(*address, token_pubkey)
+					// Checked above that it's Some()
+					derive_associated_token_account(*address, token_pubkey.unwrap())
 						.expect("Failed to derive associated token account")
 						.0
 				},
@@ -431,40 +435,41 @@ mod tests {
 				let fetch_account_0 =
 					derive_fetch_account(vault_program, native_deposit_channel).unwrap();
 
-				let token_deposit_channel =
-					SolAddress::from_str("5WQayu3ARKuStAP3P6PvqxBfYo3crcKc2H821dLFhukz").unwrap();
-				let fetch_account_1 =
-					derive_fetch_account(vault_program, token_deposit_channel).unwrap();
-
 				let empty_account =
 					SolAddress::from_str("ADtaKHTsYSmsty3MgLVfTQoMpM7hvFNTd2AxwN3hWRtt").unwrap();
 				let fetch_account_2 = derive_fetch_account(vault_program, empty_account).unwrap();
 
 				let mut addresses = vec![
 					(native_deposit_channel, fetch_account_0),
-					(token_deposit_channel, fetch_account_1),
 					(empty_account, fetch_account_2),
 				];
+
+				let account_infos: (Vec<(SolAddress, u128)>, u64) =
+					ingress_amounts(&retry_client, addresses.clone(), owner_account, true, None)
+						.await
+						.unwrap();
+				println!("Result Native {:?}", account_infos);
+				assert_eq!(account_infos.0[0], (native_deposit_channel, 5000000000));
+				assert_eq!(account_infos.0[1], (empty_account, 0));
+
+				let token_deposit_channel =
+					SolAddress::from_str("5WQayu3ARKuStAP3P6PvqxBfYo3crcKc2H821dLFhukz").unwrap();
+				let fetch_account_1 =
+					derive_fetch_account(vault_program, token_deposit_channel).unwrap();
 				let token_mint_pubkey =
 					SolAddress::from_str("MAZEnmTmMsrjcoD6vymnSoZjzGF7i7Lvr2EXjffCiUo").unwrap();
 
-				let account_infos: (Vec<(SolAddress, u128)>, u64) = ingress_amounts(
-					&retry_client,
-					addresses.clone(),
-					owner_account,
-					true,
-					token_mint_pubkey,
-				)
-				.await
-				.unwrap();
-				println!("Result Native {:?}", account_infos);
-				assert_eq!(account_infos.0[0], (native_deposit_channel, 5000000000));
-				assert_eq!(account_infos.0[1], (token_deposit_channel, 10000));
-				assert_eq!(account_infos.0[2], (empty_account, 0));
-
+				addresses.push((token_deposit_channel, fetch_account_1));
 				// Try an account with data that is not of the same length
 				let fetch_account_3: SolAddress =
 					SolAddress::from_str("ELF78ZhSr8u4SCixA7YSpjdZHZoSNrAhcyysbavpC2kA").unwrap();
+				let account_infos: (Vec<(SolAddress, u128)>, u64) =
+					ingress_amounts(&retry_client, addresses.clone(), owner_account, true, None)
+						.await
+						.unwrap();
+				assert_eq!(account_infos.0[0], (native_deposit_channel, 5000000000));
+				assert_eq!(account_infos.0[1], (empty_account, 0));
+				assert_eq!(account_infos.0[2], (token_deposit_channel, 10000));
 
 				let mut new_addresses = addresses.clone();
 				new_addresses.push((empty_account, fetch_account_3));
@@ -474,7 +479,7 @@ mod tests {
 					new_addresses,
 					owner_account,
 					true,
-					token_mint_pubkey,
+					Some(token_mint_pubkey),
 				)
 				.await;
 				assert!(account_infos.is_err());
@@ -488,7 +493,7 @@ mod tests {
 					addresses,
 					SolAddress::from_str("EVo1QjbAPKs4UbS78uNk2LpNG7hAWJum52ybQMtxgVL2").unwrap(),
 					true,
-					token_mint_pubkey,
+					Some(token_mint_pubkey),
 				)
 				.await
 				.unwrap();
