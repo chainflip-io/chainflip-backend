@@ -395,7 +395,11 @@ export async function testGasLimitCcmSwaps() {
     testGasLimitSwap('ArbUsdc', 'Flip', ' insufBudget', undefined, 10 ** 5),
   ];
 
-  await Promise.all([...gasLimitSwapsSufBudget, ...gasLimitSwapsDefault, ...gasLimitSwapsInsufBudget]);
+  await Promise.all([
+    ...gasLimitSwapsSufBudget,
+    ...gasLimitSwapsDefault,
+    ...gasLimitSwapsInsufBudget,
+  ]);
 
   spam = false;
   await spammingEth;
