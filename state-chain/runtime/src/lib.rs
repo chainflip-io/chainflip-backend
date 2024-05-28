@@ -1019,6 +1019,12 @@ type AllMigrations = (
 /// comment out or remove pallet migrations. Prefer to delete the migration at the pallet level and
 /// replace with a dummy migration.
 type PalletMigrations = (
+	VersionedMigration<
+		pallet_cf_environment::Pallet<Runtime>,
+		migrations::arbitrum_integration::ArbitrumIntegration,
+		9,
+		10,
+	>,
 	pallet_cf_environment::migrations::PalletMigration<Runtime>,
 	pallet_cf_funding::migrations::PalletMigration<Runtime>,
 	pallet_cf_account_roles::migrations::PalletMigration<Runtime>,
@@ -1053,15 +1059,9 @@ type PalletMigrations = (
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 );
 
-// TODO: After this  release, remember to un-comment the
+// TODO: After this release, remember to un-comment the
 // Arbitrum-specific pallet migrations.
 type MigrationsForV1_4 = (
-	VersionedMigration<
-		pallet_cf_environment::Pallet<Runtime>,
-		migrations::arbitrum_integration::ArbitrumIntegration,
-		9,
-		10,
-	>,
 	migrations::housekeeping::Migration,
 	migrations::reap_old_accounts::Migration,
 	// NOTE: Do not change this validator pallet migration order:
