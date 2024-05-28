@@ -529,7 +529,7 @@ impl<T: Config> Pallet<T> {
 						}
 
 						let selected_utxo = select_utxos_for_consolidation(
-							current_key,
+							previous,
 							available_utxos,
 							&bitcoin_fee_info,
 							Self::consolidation_parameters(),
