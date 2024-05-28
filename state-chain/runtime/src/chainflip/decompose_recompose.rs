@@ -112,12 +112,12 @@ fn select_median_btc_info(data: Vec<BitcoinFeeInfo>) -> Option<BitcoinFeeInfo> {
 }
 
 fn arb_select_median_base_and_multiplier(data: &mut [Vec<u8>]) -> Option<ArbitrumTrackedData> {
-	let decode_all_result: Result<Vec<_>, _> = data
+	let decode_all_results: Result<Vec<_>, _> = data
 		.iter_mut()
 		.map(|entry| ArbitrumTrackedData::decode(&mut entry.as_slice()))
 		.collect();
 
-	match decode_all_result {
+	match decode_all_results {
 		Ok(entries) => {
 			let (base_values, multiplier_values): (Vec<_>, Vec<_>) =
 				entries.into_iter().map(|t| (t.base_fee, t.gas_limit_multiplier)).unzip();
@@ -182,6 +182,7 @@ mod tests {
 	use frame_support::{assert_ok, traits::Get, Hashable};
 	use pallet_cf_chain_tracking::CurrentChainState;
 	use pallet_cf_witnesser::CallHash;
+	use sp_runtime::FixedU64;
 	use sp_std::iter;
 
 	const BLOCK_HEIGHT: u64 = 1_000;
@@ -360,5 +361,28 @@ mod tests {
 	#[test]
 	fn select_median_btc_info_empty() {
 		assert_eq!(select_median_btc_info(vec![]), None);
+	}
+
+	#[test]
+	fn arb_select_median_base_and_multiplier_empty_votes() {
+		assert!(arb_select_median_base_and_multiplier(&mut []).is_none());
+	}
+
+	#[test]
+	fn arb_select_median_base_and_multiplier_test() {
+		let mut votes = [(1, 1), (9999, 1000), (7, 1002), (7, 4000), (3, 0)]
+			.into_iter()
+			.map(|(base_fee, multiplier)| ArbitrumTrackedData {
+				base_fee,
+				gas_limit_multiplier: FixedU64::from(multiplier),
+			})
+			.map(|data| data.encode())
+			.collect::<Vec<_>>();
+
+		let actual = arb_select_median_base_and_multiplier(&mut votes).unwrap();
+		let expected =
+			ArbitrumTrackedData { base_fee: 7, gas_limit_multiplier: FixedU64::from(1000) };
+
+		assert_eq!(actual, expected);
 	}
 }
