@@ -1855,6 +1855,7 @@ dependencies = [
  "serde_json",
  "serde_path_to_error",
  "sha2 0.10.8",
+ "sol-prim",
  "sp-core 21.0.0",
  "sp-rpc",
  "sp-runtime 24.0.0",

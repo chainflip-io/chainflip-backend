@@ -1,8 +1,6 @@
 use std::str::FromStr;
 
 use crate::{
-	db::PersistentKeyDB,
-	retrier::{Attempt, RequestLog, RetrierClient},
 	settings::{NodeContainer, WsHttpEndpoints},
 	sol::{
 		commitment_config::CommitmentConfig,

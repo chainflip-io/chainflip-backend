@@ -92,6 +92,12 @@ pallet-cf-witnesser = { path = "../state-chain/pallets/cf-witnesser" }
 pallet-cf-cfe-interface = { path = "../state-chain/pallets/cf-cfe-interface" }
 state-chain-runtime = { path = "../state-chain/runtime" }
 utilities = { path = "../utilities" }
+sol-prim = { path = "../foreign-chains/solana/sol-prim", features = [
+  "pda",
+  "str",
+  "serde",
+  "scale",
+] }
 
 # substrate deps
 cf-amm = { path = "../state-chain/amm" }

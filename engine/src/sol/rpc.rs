@@ -163,9 +163,6 @@ impl SolRpcApi for SolRpcClient {
 		slot: u64,
 		config: RpcBlockConfig,
 	) -> anyhow::Result<UiConfirmedBlock> {
-		// TODO We haven't declared the type for transactions and rewards to simplify the code
-		// so we should probably be hardcoding RpcBlockConfig's transaction details and rewards
-		// to None.
 		let response = self.call_rpc("getBlock", Some(json!([slot, json!(config)]))).await?;
 		let block: UiConfirmedBlock =
 			from_value(response).map_err(|err| anyhow!("Failed to parse block {}", err))?;
@@ -191,9 +188,6 @@ impl SolRpcApi for SolRpcClient {
 		pubkeys: &[SolAddress],
 		config: RpcAccountInfoConfig,
 	) -> Result<Response<Vec<Option<UiAccount>>>> {
-		// TODO: We will want to request a data slice => No data at all for Sol, we only need
-		// lamports, and only balance data for tokens. We should do it on a layer above this.
-
 		let encoded_pubkeys: Vec<_> = pubkeys.iter().map(encode_pubkey).collect();
 
 		let response = self
