@@ -51,6 +51,7 @@ impl WitnessDataExtraction for RuntimeCall {
 					&mut new_chain_state.tracked_data,
 					// Explicitly set a default value as `::default()` panics.
 					ArbitrumTrackedData {
+						// Use the floor value of 0.01 gwei for Arbitrum One
 						base_fee: 10000000,
 						gas_limit_multiplier: FixedU64::from(1),
 					},
