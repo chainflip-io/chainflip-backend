@@ -175,7 +175,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 141,
+	spec_version: 142,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 12,
