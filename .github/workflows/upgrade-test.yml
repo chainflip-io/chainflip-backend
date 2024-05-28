@@ -14,6 +14,13 @@ on:
       upgrade-to-commit:
         description: "Commit to run the upgrade test against. Leave blank to use the latest workflow run."
         required: false
+      # Allows us to create a workflow call that doesn't run the job
+      # so that branch protection rules can skip when running on push, but not in merge queue.
+      run-job:
+        type: boolean
+        description: "Run the upgrade test job"
+        required: false
+        default: true
 
   workflow_call:
     inputs:
@@ -29,6 +36,13 @@ on:
         type: string
         description: "Commit to run the upgrade test against. Leave blank to use the latest successful workflow run."
         required: false
+      # Allows us to create a workflow call that doesn't run the job
+      # so that branch protection rules can skip when running on push, but not in merge queue.
+      run-job:
+        type: boolean
+        description: "Run the upgrade test job"
+        required: false
+        default: true
 env:
   FORCE_COLOR: 1
 
@@ -43,6 +57,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: Checkout chainflip-backend 🛒
+        if: inputs.run-job
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
         with:
           fetch-depth: 0
@@ -56,6 +71,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set upgrade-to-commit 📲
+        if: inputs.run-job
         run: |
           if [ -z "${{ inputs.upgrade-to-commit }}" ]; then
           if [[ "${{ github.event_name }}" == "workflow_call" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
@@ -68,6 +84,7 @@ jobs:
           fi
 
       - name: Login to Github Container Registry 🔑
+        if: inputs.run-job
         uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
         with:
           registry: ghcr.io
@@ -75,12 +92,14 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to DockerHub 🔑
+        if: inputs.run-job
         uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
         with:
           username: ${{ secrets.CF_DOCKERHUB_USERNAME }}
           password: ${{ secrets.CF_DOCKERHUB_TOKEN }}
 
       - name: Configure NodeJS 🛠️
+        if: inputs.run-job
         uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65
         with:
           node-version: 20
@@ -88,15 +107,18 @@ jobs:
           cache-dependency-path: "bouncer/pnpm-lock.yaml"
 
       - name: Install system packages 💿
+        if: inputs.run-job
         run: |
           sudo apt update
           sudo apt install -y bc xxd
 
       - name: Install wscat 🐈
+        if: inputs.run-job
         run: |
           npm install -g wscat
 
       - name: Download try-runtime binary 📥
+        if: inputs.run-job
         uses: jaxxstorm/action-install-gh-release@v1.10.0
         with:
           repo: paritytech/try-runtime-cli
@@ -106,6 +128,7 @@ jobs:
           chmod: 0755
 
       - name: Get upgrade-from-commit 📜
+        if: inputs.run-job
         uses: ./.github/actions/get-workflow-commit
         id: get-upgrade-from-commit
         with:
@@ -113,10 +136,12 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: echo upgrade from commit 🔊
+        if: inputs.run-job
         run: |
           echo "The upgrade-from-commit is: ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}"
 
       - name: Download latest release binaries 📥
+        if: inputs.run-job
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: release-${{ inputs.upgrade-from-release }}.yml
@@ -125,26 +150,28 @@ jobs:
           path: latest-release-bins
 
       - name: Permissions for latest binaries 🛡️
+        if: inputs.run-job
         run: |
           chmod +x ./latest-release-bins/chainflip-*
           chmod +x ./latest-release-bins/engine-runner
 
       - name: Get version of the latest release ✍️
+        if: inputs.run-job
         run: |
           set -x
           RELEASE_VERSION=$(./latest-release-bins/chainflip-node --version)
           echo $RELEASE_VERSION
           echo "RELEASE_VERSION=${RELEASE_VERSION}" >> $GITHUB_ENV
 
-      - name: Download upgrade-to binaries for push or pull request📥
-        if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group'
+      - name: Download upgrade-to binaries for push or pull request 📥
+        if: inputs.run-job && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group')
         uses: actions/download-artifact@v3
         with:
           name: chainflip-backend-bin-try-runtime
           path: upgrade-to-bins
 
       - name: Download upgrade-to binaries for workflow call 📥
-        if: github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch'
+        if: inputs.run-job && (github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch')
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: ${{ inputs.upgrade-to-workflow-name }}
@@ -153,14 +180,14 @@ jobs:
           commit: ${{ env.UPGRADE_TO_COMMIT }}
 
       - name: Download upgrade-to runtime for push or pull request 📥
-        if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        if: inputs.run-job && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group')
         uses: actions/download-artifact@v3
         with:
           name: chainflip-node-runtime-try-runtime
           path: main-runtime
 
       - name: Download upgrade-to runtime for workflow call 📥
-        if: github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch'
+        if: inputs.run-job && (github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch')
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: ${{ inputs.upgrade-to-workflow-name }}
@@ -169,17 +196,20 @@ jobs:
           commit: ${{ env.UPGRADE_TO_COMMIT }}
 
       - name: Permissions for latest binaries 🛡️
+        if: inputs.run-job
         run: |
           chmod +x ./upgrade-to-bins/chainflip-*
           chmod +x ./upgrade-to-bins/engine-runner
 
       - name: Get version of latest main ✍️
+        if: inputs.run-job
         run: |
           set -x
           MAIN_VERSION=$(./upgrade-to-bins/chainflip-node --version)
           echo $MAIN_VERSION
 
       - name: Start a localnet from current release 🚀
+        if: inputs.run-job
         env:
           BINARY_ROOT_PATH: ./latest-release-bins
           DEBUG_OUTPUT_DESTINATION: /tmp/chainflip/debug.*log
@@ -195,6 +225,7 @@ jobs:
           ./localnet/manage.sh
 
       - name: Run bouncer on latest release 🙅‍♂️
+        if: inputs.run-job
         id: pre-upgrade-bouncer
         run: |
           git checkout ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}
@@ -206,6 +237,7 @@ jobs:
       # we need to be sure that when this fails, we catch the error, any panics etc. that occur
       # TODO: Run swaps simultaneously to the upgrade - we could do that inside the `upgrade_network` command itself.
       - name: Upgrade network 🚀
+        if: inputs.run-job
         shell: bash
         id: upgrade-network
         run: |
@@ -221,6 +253,7 @@ jobs:
             --oldVersion "${{ env.RELEASE_VERSION }}"
 
       - name: Run bouncer after upgrade 🙅‍♂️
+        if: inputs.run-job
         id: post-upgrade-bouncer
         run: |
           git checkout ${{ env.UPGRADE_TO_COMMIT }}
@@ -231,6 +264,7 @@ jobs:
 
       - name: Print chainflip-engine logs 🚗
         if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/*/chainflip-engine.*log
 
@@ -243,26 +277,31 @@ jobs:
 
       - name: Print new post-upgrade chainflip-engine logs 🚗
         if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/*/start-all-engines-post-upgrade.*log
 
       - name: Print chainflip-node logs 📡
         if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/*/chainflip-node.*log
 
       - name: Print chainflip-broker-api logs 💼
         if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/chainflip-broker-api.*log
 
       - name: Print chainflip-lp-api logs 🤑
         if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/chainflip-lp-api.*log
 
       - name: Print localnet init debug logs 🕵️‍♂️
         if: always()
+        continue-on-error: true
         run: |
           cat /tmp/chainflip/debug.log
 
