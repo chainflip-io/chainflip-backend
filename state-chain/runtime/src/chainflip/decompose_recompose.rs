@@ -4,6 +4,7 @@ use crate::{
 use cf_chains::{arb::ArbitrumTrackedData, btc::BitcoinFeeInfo};
 use codec::{Decode, Encode};
 use pallet_cf_witnesser::WitnessDataExtraction;
+use sp_runtime::FixedU64;
 use sp_std::{mem, prelude::*};
 
 impl WitnessDataExtraction for RuntimeCall {
@@ -46,7 +47,11 @@ impl WitnessDataExtraction for RuntimeCall {
 			>::update_chain_state {
 				ref mut new_chain_state,
 			}) => {
-				let tracked_data = mem::take(&mut new_chain_state.tracked_data);
+				let tracked_data = mem::replace(
+					&mut new_chain_state.tracked_data,
+					// Explicitly set a default value as `::default()` panics.
+					ArbitrumTrackedData { base_fee: 0, gas_limit_multiplier: FixedU64::from(1) },
+				);
 				Some(tracked_data.encode())
 			},
 			_ => None,
@@ -182,7 +187,6 @@ mod tests {
 	use frame_support::{assert_ok, traits::Get, Hashable};
 	use pallet_cf_chain_tracking::CurrentChainState;
 	use pallet_cf_witnesser::CallHash;
-	use sp_runtime::FixedU64;
 	use sp_std::iter;
 
 	const BLOCK_HEIGHT: u64 = 1_000;
