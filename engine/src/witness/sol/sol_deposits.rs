@@ -26,12 +26,16 @@ use crate::{
 };
 use serde_json::Value;
 use std::str::FromStr;
+pub use sol_prim::{
+	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
+};
 
-// TODO: Get this from some
+// TODO: Get this from a constant fine
 const FETCH_ACCOUNT_BYTE_LENGTH: usize = 24;
 const MAX_MULTIPLE_ACCOUNTS_QUERY: usize = 100;
 const SYSTEM_PROGRAM_ID: &str = "11111111111111111111111111111111";
 pub const TOKEN_PROGRAM_ID: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+pub const ASSOCIATED_TOKEN_PROGRAM_ID: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	/// TODO: Add description
@@ -81,6 +85,20 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 						// the asset on a per deposit channel so we can use the same RPC call.
 						.map(|deposit_channel| deposit_channel.deposit_channel.address)
 						.collect::<Vec<_>>();
+
+					for address in &addresses {
+						// TODO: The same derivation will be needed to fetch accounts. To share logic with the SC to make sure they match.
+						let fetch_account = derive_fetch_account(vault_address, *address).expect("Failed to derive fetch account");
+						println!("fetch_account {:?}", fetch_account);
+					}
+
+
+					// Derive ATA from the deposit channel
+					// TODO: There will be a derive_associated_token_account in PR#4851. To share logic with the SC to make sure they match.
+					// 
+					// let associated_token_program_id = SolAddress::from_str(ASSOCIATED_TOKEN_PROGRAM_ID).expect("Associated token program ID must be valid");
+					// let token_program_id =
+					// 	SolAddress::from_str(TOKEN_PROGRAM_ID).expect("Token program ID must be valid");
 
 					let chunked_addresses: Vec<Vec<_>> = addresses
 						.chunks(MAX_MULTIPLE_ACCOUNTS_QUERY)
@@ -292,6 +310,17 @@ fn sol_ingresses(
 	Ok(result)
 }
 
+fn derive_fetch_account(
+	vault_program: SolAddress,
+	deposit_channel: SolAddress,
+) -> Result<SolAddress, AddressDerivationError> {
+	let (fetch_account, _) = DerivedAddressBuilder::from_address(vault_program)?
+		.chain_seed(deposit_channel)?
+		.finish()?;
+
+	Ok(fetch_account)
+}
+
 #[cfg(test)]
 mod tests {
 	use crate::{
@@ -311,6 +340,8 @@ mod tests {
 	use std::str::FromStr;
 	use utilities::task_scope;
 
+	use super::*;
+
 	#[test]
 	fn test_sol_ingresses() {
 		let account_infos = vec![
@@ -320,7 +351,7 @@ mod tests {
 			(SolAddress::from_str("ELF78ZhSr8u4SCixA7YSpjdZHZoSNrAhcyysbavpC2kA").unwrap(), 4),
 		];
 
-		let ingresses = super::sol_ingresses(account_infos.clone()).unwrap();
+		let ingresses = sol_ingresses(account_infos.clone()).unwrap();
 
 		assert_eq!(ingresses.len(), 2);
 		assert_eq!(ingresses[0].0, account_infos[0].0);
@@ -337,12 +368,25 @@ mod tests {
 			(SolAddress::from_str("ADtaKHTsYSmsty3MgLVfTQoMpM7hvFNTd2AxwN3hWRtt").unwrap(), 3),
 		];
 
-		let ingresses = super::sol_ingresses(account_infos);
+		let ingresses = sol_ingresses(account_infos);
 
 		assert!(ingresses.is_err());
 	}
 
-	// TODO: Add test for Fetch Account from a live network (deploy it there)
+
+	#[test]
+	fn test_sol_derive_fetch_account() {
+		let fetch_account = derive_fetch_account(
+			SolAddress::from_str("8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf").unwrap(),
+			SolAddress::from_str("HAMxiXdEJxiBHabZAUm8PSLvWQM2GHi5PArVZvUCeDab").unwrap()).unwrap();
+		assert_eq!(
+			fetch_account,
+			SolAddress::from_str("HGgUaHpsmZpB3pcYt8PE89imca6BQBRqYtbVQQqsso3o").unwrap()
+		);
+	}
+
+
+	// TODO: Add test for decoding a fetch Account from a live network (deploy it before)
 
 	#[tokio::test]
 	async fn test_get_deposit_channels_info() {
