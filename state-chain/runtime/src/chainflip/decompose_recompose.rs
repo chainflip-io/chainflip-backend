@@ -50,7 +50,10 @@ impl WitnessDataExtraction for RuntimeCall {
 				let tracked_data = mem::replace(
 					&mut new_chain_state.tracked_data,
 					// Explicitly set a default value as `::default()` panics.
-					ArbitrumTrackedData { base_fee: 0, gas_limit_multiplier: FixedU64::from(1) },
+					ArbitrumTrackedData {
+						base_fee: 10000000,
+						gas_limit_multiplier: FixedU64::from(1),
+					},
 				);
 				Some(tracked_data.encode())
 			},
