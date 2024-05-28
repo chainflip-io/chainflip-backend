@@ -253,6 +253,7 @@ pub trait ProgramInstruction: BorshSerialize {
 // TODO: Derive this from ABI JSON instead. (or at least generate tests to ensure it matches)
 macro_rules! solana_program {
 	(
+		idl_path: $idl_path:expr,
 		$program:ident {
 			$(
 				$call_name:ident => $call:ident {
@@ -320,11 +321,123 @@ macro_rules! solana_program {
 			impl ProgramInstruction for $call {
 				const CALL_NAME: &'static str = stringify!($call_name);
 			}
+
+			#[cfg(test)]
+			mod $call_name {
+				use super::*;
+				use $crate::sol::sol_tx_core::program_instructions::idl::*;
+				use heck::{ToSnakeCase, ToUpperCamelCase};
+				use std::collections::BTreeSet;
+
+				const IDL_RAW: &str = include_str!($idl_path);
+
+				thread_local! {
+					static IDL: Idl = serde_json::from_str(IDL_RAW).unwrap();
+				}
+
+				fn test(f: impl FnOnce(&Idl)) {
+					IDL.with(|idl| {
+						f(idl);
+					});
+				}
+
+				#[test]
+				fn program_name() {
+					test(|idl| {
+						assert_eq!(
+							format!("{}_program", idl.metadata.name).to_upper_camel_case(),
+							stringify!($program)
+						);
+					});
+				}
+
+				#[test]
+				fn discriminator() {
+					test(|idl| {
+						assert_eq!(
+							<$call as ProgramInstruction>::function_discriminator(),
+							idl.instruction(stringify!($call_name)).discriminator
+						);
+					});
+				}
+
+				#[test]
+				fn $call_name() {
+					test(|idl| {
+							let instruction = idl.instruction(stringify!($call_name));
+							assert!(
+								instruction
+									.args
+									.iter()
+									.map(|arg| arg.name.as_str().to_snake_case())
+									.collect::<BTreeSet<_>>().is_superset(&BTreeSet::from([
+										$(
+											stringify!($call_arg).to_owned(),
+										)*
+									])),
+							);
+							assert_eq!(
+								instruction
+									.accounts
+									.iter()
+									.map(|account| account.name.as_str().to_snake_case())
+									.collect::<BTreeSet<_>>(),
+								BTreeSet::from([
+									$(
+										stringify!($account).to_owned(),
+									)*
+								])
+							);
+					});
+				}
+
+				$(
+					#[test]
+					fn $call_arg() {
+						test(|idl| {
+							let idl_arg = idl.instruction(stringify!($call_name)).args
+								.iter()
+								.find(|arg| arg.name.to_snake_case() == stringify!($call_arg))
+								.expect("arg not found in idl");
+
+							assert_eq!(idl_arg.ty.to_string(), stringify!($arg_type));
+						});
+					}
+				)*
+
+				$(
+					#[test]
+					fn $account() {
+						test(|idl| {
+							let idl_account = idl.instruction(stringify!($call_name)).accounts
+								.iter()
+								.find(|account| account.name.to_snake_case() == stringify!($account))
+								.expect("account not found in idl");
+
+							assert_eq!(
+								idl_account.signer,
+								$is_signer,
+								"is_signer doesn't match for {}", stringify!($account)
+							);
+							assert_eq!(
+								idl_account.writable,
+								$is_writable,
+								"is_writable doesn't match for {}", stringify!($account)
+							);
+						});
+					}
+				)*
+			}
 		)+
 	};
 }
 
 solana_program!(
+	idl_path: concat!(
+		env!("CF_SOL_PROGRAM_IDL_ROOT"), "/",
+		env!("CF_SOL_PROGRAM_IDL_TAG"), "/" ,
+		"upgrade_manager.json"
+	),
 	UpgradeManagerProgram {
 		upgrade_vault_program => UpgradeVaultProgram {
 			args: [
@@ -332,15 +445,15 @@ solana_program!(
 				bump: u8
 			],
 			account_metas: [
-				vault_program_data_account: { signer: false, writable: false },
-				govkey: { signer: true, writable: false },
-				vault_program_data_address: { signer: false, writable: true },
-				vault_program_address: { signer: false, writable: true },
+				vault_data_account: { signer: false, writable: false },
+				gov_key: { signer: true, writable: false },
+				program_data_address: { signer: false, writable: true },
+				program_address: { signer: false, writable: true },
 				buffer_address: { signer: false, writable: true },
 				spill_address: { signer: false, writable: true },
-				sys_var_rent: { signer: false, writable: false },
-				sys_var_clock: { signer: false, writable: false },
-				upgrade_manager_pda_signer: { signer: false, writable: false },
+				sysvar_rent: { signer: false, writable: false },
+				sysvar_clock: { signer: false, writable: false },
+				signer_pda: { signer: false, writable: false },
 				bpf_loader_upgradeable: { signer: false, writable: false },
 			]
 		},
@@ -350,10 +463,10 @@ solana_program!(
 				bump: u8
 			],
 			account_metas: [
-				vault_program_data_account: { signer: false, writable: false },
+				vault_data_account: { signer: false, writable: false },
 				agg_key: { signer: true, writable: false },
-				vault_program_data_address: { signer: false, writable: true },
-				vault_program_address: { signer: false, writable: false },
+				program_data_address: { signer: false, writable: true },
+				program_address: { signer: false, writable: false },
 				new_authority: { signer: false, writable: false },
 				signer_pda: { signer: false, writable: false },
 				bpf_loader_upgradeable: { signer: false, writable: false },
@@ -363,6 +476,11 @@ solana_program!(
 );
 
 solana_program!(
+	idl_path: concat!(
+		env!("CF_SOL_PROGRAM_IDL_ROOT"), "/",
+		env!("CF_SOL_PROGRAM_IDL_TAG"), "/" ,
+		"vault.json"
+	),
 	VaultProgram {
 		fetch_native => FetchNative {
 			args: [
@@ -370,10 +488,10 @@ solana_program!(
 				bump: u8,
 			],
 			account_metas: [
-				vault_program_data_account: { signer: false, writable: false },
+				data_account: { signer: false, writable: false },
 				agg_key: { signer: true, writable: true },
-				deposit_address: { signer: false, writable: true },
-				system_program_id: { signer: false, writable: false },
+				deposit_channel_pda: { signer: false, writable: true },
+				system_program: { signer: false, writable: false },
 			]
 		},
 		rotate_agg_key => RotateAggKey {
@@ -381,10 +499,10 @@ solana_program!(
 				skip_transfer_funds: bool,
 			],
 			account_metas: [
-				vault_program_data_account: { signer: false, writable: true },
+				data_account: { signer: false, writable: true },
 				agg_key: { signer: true, writable: true },
 				new_agg_key: { signer: false, writable: true },
-				system_program_id: { signer: false, writable: false },
+				system_program: { signer: false, writable: false },
 			]
 		},
 		fetch_tokens => FetchTokens {
@@ -395,14 +513,13 @@ solana_program!(
 				decimals: u8,
 			],
 			account_metas: [
-				vault_program_data_account: { signer: false, writable: false },
+				data_account: { signer: false, writable: false },
 				agg_key: { signer: true, writable: false },
-				deposit_address: { signer: false, writable: false },
-				deposit_address_ata: { signer: false, writable: true },
-				token_vault_ata: { signer: false, writable: true },
-				mint_pubkey: { signer: false, writable: false },
-				token_program_id: { signer: false, writable: false },
-				system_program_id: { signer: false, writable: false },
+				deposit_channel_pda: { signer: false, writable: false },
+				deposit_channel_associated_token_account: { signer: false, writable: true },
+				token_vault_associated_token_account: { signer: false, writable: true },
+				mint: { signer: false, writable: false },
+				token_program: { signer: false, writable: false },
 			]
 		},
 		transfer_tokens => TransferTokens {
@@ -411,30 +528,13 @@ solana_program!(
 				decimals: u8,
 			],
 			account_metas: [
-				vault_program_data_account: { signer: false, writable: false },
+				data_account: { signer: false, writable: false },
 				agg_key: { signer: true, writable: false },
 				token_vault_pda: { signer: false, writable: false },
-				token_vault_ata: { signer: false, writable: true },
-				token_destination: { signer: false, writable: true },
-				mint_pubkey: { signer: false, writable: false },
-				token_program_id: { signer: false, writable: false },
-				system_program_id: { signer: false, writable: false },
-			]
-		},
-		execute_ccm_native_call => ExecuteCcmNativeCall {
-			args: [
-				source_chain: u32,
-				source_address: Vec<u8>,
-				message: Vec<u8>,
-				amount: u64,
-			],
-			account_metas: [
-				vault_program_data_account: { signer: false, writable: false },
-				agg_key: { signer: true, writable: false },
-				destination: { signer: false, writable: true },
-				cf_receiver: { signer: false, writable: false },
-				system_program_id: { signer: false, writable: false },
-				sys_var_instructions: { signer: false, writable: false },
+				token_vault_associated_token_account: { signer: false, writable: true },
+				to_token_account: { signer: false, writable: true },
+				mint: { signer: false, writable: false },
+				token_program: { signer: false, writable: false },
 			]
 		},
 		execute_ccm_token_call => ExecuteCcmTokenCall {
@@ -445,52 +545,122 @@ solana_program!(
 				amount: u64,
 			],
 			account_metas: [
-				vault_program_data_account: { signer: false, writable: false },
+				data_account: { signer: false, writable: false },
 				agg_key: { signer: true, writable: false },
-				destination: { signer: false, writable: true },
+				receiver_token_account: { signer: false, writable: true },
 				cf_receiver: { signer: false, writable: false },
-				token_program_id: { signer: false, writable: false },
-				mint_pubkey: { signer: false, writable: false },
-				sys_var_instructions: { signer: false, writable: false },
-				remaining_account: { signer: false, writable: true },
+				token_program: { signer: false, writable: false },
+				mint: { signer: false, writable: false },
+				instruction_sysvar: { signer: false, writable: false },
+			]
+		},
+		execute_ccm_native_call => ExecuteCcmNativeCall {
+			args: [
+				source_chain: u32,
+				source_address: Vec<u8>,
+				message: Vec<u8>,
+				amount: u64,
+			],
+			account_metas: [
+				data_account: { signer: false, writable: false },
+				agg_key: { signer: true, writable: false },
+				receiver_native: { signer: false, writable: true },
+				cf_receiver: { signer: false, writable: false },
+				system_program: { signer: false, writable: false },
+				instruction_sysvar: { signer: false, writable: false },
 			]
 		},
 	}
 );
 
-// TODO: Pull and compare discriminators and function from the contracts-interfaces
-#[test]
-fn test_function_discriminators() {
-	assert_eq!(
-		<RotateAggKey as ProgramInstruction>::function_discriminator(),
-		[78u8, 81u8, 143u8, 171u8, 221u8, 165u8, 214u8, 139u8]
-	);
-	assert_eq!(
-		<FetchTokens as ProgramInstruction>::function_discriminator(),
-		[73u8, 71u8, 16u8, 100u8, 44u8, 176u8, 198u8, 70u8]
-	);
-	assert_eq!(
-		<TransferTokens as ProgramInstruction>::function_discriminator(),
-		[54u8, 180u8, 238u8, 175u8, 74u8, 85u8, 126u8, 188u8]
-	);
-	assert_eq!(
-		<FetchNative as ProgramInstruction>::function_discriminator(),
-		[142u8, 36u8, 101u8, 143u8, 108u8, 89u8, 41u8, 140u8]
-	);
-	assert_eq!(
-		<ExecuteCcmNativeCall as ProgramInstruction>::function_discriminator(),
-		[125u8, 5u8, 11u8, 227u8, 128u8, 66u8, 224u8, 178u8]
-	);
-	assert_eq!(
-		<ExecuteCcmTokenCall as ProgramInstruction>::function_discriminator(),
-		[108u8, 184u8, 162u8, 123u8, 159u8, 222u8, 170u8, 35u8]
-	);
-	assert_eq!(
-		<UpgradeVaultProgram as ProgramInstruction>::function_discriminator(),
-		[72u8, 211u8, 76u8, 189u8, 84u8, 176u8, 62u8, 101u8]
-	);
-	assert_eq!(
-		<TransferVaultUpgradeAuthority as ProgramInstruction>::function_discriminator(),
-		[114u8, 247u8, 72u8, 110u8, 145u8, 65u8, 236u8, 153u8]
-	);
+#[cfg(test)]
+mod idl {
+	use serde::{Deserialize, Serialize};
+
+	#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+	#[serde(rename_all = "camelCase")]
+	pub struct IdlInstruction {
+		pub name: String,
+		pub args: Vec<IdlArg>,
+		pub accounts: Vec<IdlAccountMeta>,
+		pub discriminator: [u8; 8],
+	}
+
+	#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+	pub struct IdlArg {
+		pub name: String,
+		#[serde(rename = "type")]
+		pub ty: IdlType,
+	}
+
+	#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+	#[serde(rename_all = "camelCase")]
+	pub enum IdlType {
+		Bytes,
+		U8,
+		U64,
+		U32,
+		Bool,
+		Pubkey,
+		Defined { name: String },
+		Option(Box<IdlType>),
+	}
+
+	impl std::fmt::Display for IdlType {
+		fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+			match self {
+				IdlType::Bytes => write!(f, "Vec<u8>"),
+				IdlType::U8 => write!(f, "u8"),
+				IdlType::U64 => write!(f, "u64"),
+				IdlType::U32 => write!(f, "u32"),
+				IdlType::Bool => write!(f, "bool"),
+				IdlType::Pubkey => write!(f, "Pubkey"),
+				IdlType::Defined { name } => write!(f, "{}", name),
+				IdlType::Option(ty) => write!(f, "Option<{}>", ty),
+			}
+		}
+	}
+
+	#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+	pub struct IdlError {
+		pub code: u32,
+		pub name: String,
+		pub msg: String,
+	}
+
+	#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+	#[serde(rename_all = "camelCase")]
+	pub struct IdlAccountMeta {
+		pub name: String,
+		#[serde(default)]
+		pub signer: bool,
+		#[serde(default)]
+		pub writable: bool,
+	}
+
+	#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+	#[serde(rename_all = "camelCase")]
+	pub struct IdlMetadata {
+		pub name: String,
+		pub version: String,
+		pub spec: String,
+		pub description: String,
+	}
+
+	#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+	pub struct Idl {
+		pub address: String,
+		pub metadata: IdlMetadata,
+		pub instructions: Vec<IdlInstruction>,
+		pub errors: Vec<IdlError>,
+	}
+
+	impl Idl {
+		pub fn instruction(&self, name: &str) -> &IdlInstruction {
+			self.instructions
+				.iter()
+				.find(|instr| instr.name == name)
+				.expect("instruction not found")
+		}
+	}
 }

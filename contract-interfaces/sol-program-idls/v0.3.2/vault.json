@@ -1,0 +1,1058 @@
+{
+  "address": "8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf",
+  "metadata": {
+    "name": "vault",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "execute_ccm_native_call",
+      "discriminator": [
+        125,
+        5,
+        11,
+        227,
+        128,
+        66,
+        224,
+        178
+      ],
+      "accounts": [
+        {
+          "name": "data_account"
+        },
+        {
+          "name": "agg_key",
+          "signer": true
+        },
+        {
+          "name": "receiver_native",
+          "writable": true
+        },
+        {
+          "name": "cf_receiver",
+          "docs": [
+            "the aggregate key signature."
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "instruction_sysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "source_chain",
+          "type": "u32"
+        },
+        {
+          "name": "source_address",
+          "type": "bytes"
+        },
+        {
+          "name": "message",
+          "type": "bytes"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "execute_ccm_token_call",
+      "discriminator": [
+        108,
+        184,
+        162,
+        123,
+        159,
+        222,
+        170,
+        35
+      ],
+      "accounts": [
+        {
+          "name": "data_account"
+        },
+        {
+          "name": "agg_key",
+          "signer": true
+        },
+        {
+          "name": "receiver_token_account",
+          "writable": true
+        },
+        {
+          "name": "cf_receiver",
+          "docs": [
+            "the aggregate key signature."
+          ]
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "instruction_sysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "source_chain",
+          "type": "u32"
+        },
+        {
+          "name": "source_address",
+          "type": "bytes"
+        },
+        {
+          "name": "message",
+          "type": "bytes"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "fetch_native",
+      "discriminator": [
+        142,
+        36,
+        101,
+        143,
+        108,
+        89,
+        41,
+        140
+      ],
+      "accounts": [
+        {
+          "name": "data_account"
+        },
+        {
+          "name": "agg_key",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "deposit_channel_pda",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "seed"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "seed",
+          "type": "bytes"
+        },
+        {
+          "name": "bump",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "fetch_tokens",
+      "discriminator": [
+        73,
+        71,
+        16,
+        100,
+        44,
+        176,
+        198,
+        70
+      ],
+      "accounts": [
+        {
+          "name": "data_account"
+        },
+        {
+          "name": "agg_key",
+          "signer": true
+        },
+        {
+          "name": "deposit_channel_pda",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "seed"
+              }
+            ]
+          }
+        },
+        {
+          "name": "deposit_channel_associated_token_account",
+          "writable": true
+        },
+        {
+          "name": "token_vault_associated_token_account",
+          "writable": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "seed",
+          "type": "bytes"
+        },
+        {
+          "name": "bump",
+          "type": "u8"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "decimals",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "data_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  97,
+                  116,
+                  97,
+                  95,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "initializer",
+          "writable": true,
+          "signer": true,
+          "address": "HfasueN6RNPjSM6rKGH5dga6kS2oUF8siGH3m4MXPURp"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "new_agg_key",
+          "type": "pubkey"
+        },
+        {
+          "name": "new_gov_key",
+          "type": "pubkey"
+        },
+        {
+          "name": "new_token_vault_pda",
+          "type": "pubkey"
+        },
+        {
+          "name": "token_vault_pda_bump",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "rotate_agg_key",
+      "discriminator": [
+        78,
+        81,
+        143,
+        171,
+        221,
+        165,
+        214,
+        139
+      ],
+      "accounts": [
+        {
+          "name": "data_account",
+          "writable": true
+        },
+        {
+          "name": "agg_key",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "new_agg_key",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "skip_transfer_funds",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "set_gov_key_with_agg_key",
+      "discriminator": [
+        66,
+        64,
+        58,
+        40,
+        15,
+        75,
+        215,
+        162
+      ],
+      "accounts": [
+        {
+          "name": "data_account",
+          "writable": true
+        },
+        {
+          "name": "agg_key",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_gov_key",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_gov_key_with_gov_key",
+      "discriminator": [
+        251,
+        142,
+        231,
+        255,
+        111,
+        143,
+        165,
+        106
+      ],
+      "accounts": [
+        {
+          "name": "data_account",
+          "writable": true
+        },
+        {
+          "name": "gov_key",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_gov_key",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_suspended_states",
+      "discriminator": [
+        1,
+        63,
+        23,
+        199,
+        230,
+        194,
+        194,
+        97
+      ],
+      "accounts": [
+        {
+          "name": "data_account",
+          "writable": true
+        },
+        {
+          "name": "gov_key",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "vault_suspended_state",
+          "type": "bool"
+        },
+        {
+          "name": "upgrade_manager_suspended_state",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "transfer_tokens",
+      "discriminator": [
+        54,
+        180,
+        238,
+        175,
+        74,
+        85,
+        126,
+        188
+      ],
+      "accounts": [
+        {
+          "name": "data_account"
+        },
+        {
+          "name": "agg_key",
+          "signer": true
+        },
+        {
+          "name": "token_vault_pda"
+        },
+        {
+          "name": "token_vault_associated_token_account",
+          "writable": true
+        },
+        {
+          "name": "to_token_account",
+          "writable": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "decimals",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "x_swap_native",
+      "discriminator": [
+        163,
+        38,
+        92,
+        226,
+        243,
+        105,
+        141,
+        196
+      ],
+      "accounts": [
+        {
+          "name": "data_account"
+        },
+        {
+          "name": "agg_key",
+          "writable": true
+        },
+        {
+          "name": "from",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "dst_chain",
+          "type": "u32"
+        },
+        {
+          "name": "dst_address",
+          "type": "bytes"
+        },
+        {
+          "name": "dst_token",
+          "type": "u32"
+        },
+        {
+          "name": "ccm_parameters",
+          "type": {
+            "option": {
+              "defined": {
+                "name": "CcmParams"
+              }
+            }
+          }
+        },
+        {
+          "name": "cf_parameters",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "x_swap_token",
+      "discriminator": [
+        69,
+        50,
+        252,
+        99,
+        229,
+        83,
+        119,
+        235
+      ],
+      "accounts": [
+        {
+          "name": "data_account"
+        },
+        {
+          "name": "token_vault_associated_token_account",
+          "writable": true
+        },
+        {
+          "name": "from",
+          "signer": true
+        },
+        {
+          "name": "from_token_account",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "dst_chain",
+          "type": "u32"
+        },
+        {
+          "name": "dst_address",
+          "type": "bytes"
+        },
+        {
+          "name": "dst_token",
+          "type": "u32"
+        },
+        {
+          "name": "ccm_parameters",
+          "type": {
+            "option": {
+              "defined": {
+                "name": "CcmParams"
+              }
+            }
+          }
+        },
+        {
+          "name": "cf_parameters",
+          "type": "bytes"
+        },
+        {
+          "name": "decimals",
+          "type": "u8"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "DataAccount",
+      "discriminator": [
+        85,
+        240,
+        182,
+        158,
+        76,
+        7,
+        18,
+        233
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "AggKeyRotated",
+      "discriminator": [
+        133,
+        39,
+        145,
+        216,
+        63,
+        154,
+        134,
+        245
+      ]
+    },
+    {
+      "name": "GovKeyRotated",
+      "discriminator": [
+        71,
+        44,
+        22,
+        197,
+        63,
+        250,
+        150,
+        83
+      ]
+    },
+    {
+      "name": "GovKeySetByAggKey",
+      "discriminator": [
+        135,
+        202,
+        24,
+        202,
+        91,
+        182,
+        141,
+        24
+      ]
+    },
+    {
+      "name": "GovKeySetByGovKey",
+      "discriminator": [
+        198,
+        58,
+        153,
+        108,
+        67,
+        162,
+        174,
+        167
+      ]
+    },
+    {
+      "name": "Suspended",
+      "discriminator": [
+        220,
+        179,
+        163,
+        2,
+        249,
+        252,
+        157,
+        102
+      ]
+    },
+    {
+      "name": "SwapNative",
+      "discriminator": [
+        155,
+        153,
+        130,
+        43,
+        124,
+        36,
+        21,
+        166
+      ]
+    },
+    {
+      "name": "SwapToken",
+      "discriminator": [
+        251,
+        44,
+        110,
+        28,
+        74,
+        176,
+        213,
+        137
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidTokenVaultAccount",
+      "msg": "Token Vault pda account does not match the expected program id"
+    },
+    {
+      "code": 6001,
+      "name": "Suspended",
+      "msg": "Vault program is suspended"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidRemainingAccount",
+      "msg": "An invalid account is provided as a remaining account"
+    },
+    {
+      "code": 6003,
+      "name": "InvalidRemainingAccountSigner",
+      "msg": "A remaining account can't be a signer"
+    },
+    {
+      "code": 6004,
+      "name": "UnchangedSuspendedStates",
+      "msg": "Suspended states are unchanged"
+    },
+    {
+      "code": 6005,
+      "name": "InvalidSwapParameters",
+      "msg": "Invalid swap parameters"
+    },
+    {
+      "code": 6006,
+      "name": "InvalidTokenVaultBump",
+      "msg": "Invalid token vault bump"
+    }
+  ],
+  "types": [
+    {
+      "name": "AggKeyRotated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_agg_key",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_agg_key",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CcmParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "message",
+            "type": "bytes"
+          },
+          {
+            "name": "gas_amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DataAccount",
+      "docs": [
+        "* ****************************************************************************\n * *************************** IMPORTANT NOTE *********************************\n * ****************************************************************************\n * If the vault is upgraded and the DataAccount struct is modified we need to\n * check the compatibility and ensure there is a proper migration process, given\n * that the Vault bytecode is the only thing being upgraded, not the data account.\n *\n * The easiest approach on upgrade is keeping the DataAccount unchanged and use\n * a new account struct for any new data that is required.\n *\n *        DO NOT MODIFY THIS WITHOUT UNDERSTANDING THE CONSEQUENCES!\n * ****************************************************************************\n * ****************************************************************************"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "agg_key",
+            "type": "pubkey"
+          },
+          {
+            "name": "gov_key",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_vault_pda",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_vault_bump",
+            "type": "u8"
+          },
+          {
+            "name": "is_vault_suspended",
+            "type": "bool"
+          },
+          {
+            "name": "is_upgrade_manager_suspended",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GovKeyRotated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_gov_key",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_gov_key",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GovKeySetByAggKey",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_gov_key",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_gov_key",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GovKeySetByGovKey",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_gov_key",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_gov_key",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Suspended",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "suspended_vault",
+            "type": "bool"
+          },
+          {
+            "name": "suspended_upgrade_manager",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SwapNative",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "dst_chain",
+            "type": "u32"
+          },
+          {
+            "name": "dst_address",
+            "type": "bytes"
+          },
+          {
+            "name": "dst_token",
+            "type": "u32"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "sender",
+            "type": "pubkey"
+          },
+          {
+            "name": "ccm_parameters",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "CcmParams"
+                }
+              }
+            }
+          },
+          {
+            "name": "cf_parameters",
+            "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SwapToken",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "dst_chain",
+            "type": "u32"
+          },
+          {
+            "name": "dst_address",
+            "type": "bytes"
+          },
+          {
+            "name": "dst_token",
+            "type": "u32"
+          },
+          {
+            "name": "src_token",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "sender",
+            "type": "pubkey"
+          },
+          {
+            "name": "ccm_parameters",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "CcmParams"
+                }
+              }
+            }
+          },
+          {
+            "name": "cf_parameters",
+            "type": "bytes"
+          }
+        ]
+      }
+    }
+  ]
+}

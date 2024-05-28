@@ -1177,7 +1177,6 @@ mod tests {
 				Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(),
 				Pubkey::from_str(MINT_PUB_KEY).unwrap(),
 				Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(),
-				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
 			),
 		];
 		let message =
@@ -1330,7 +1329,6 @@ mod tests {
 				to_pubkey_ata.0,
 				Pubkey::from_str(MINT_PUB_KEY).unwrap(),
 				Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(),
-				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
 			),
 		];
 		let message =

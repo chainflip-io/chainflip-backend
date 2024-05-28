@@ -93,6 +93,8 @@ rand = { version = '0.8.4' }
 rand0-7 = { package = "rand", version = "0.7" }
 ed25519-dalek = { version = "1.0.1" }
 thiserror = "1.0.50"
+serde_json = "1.0"
+heck = "0.5.0"
 
 [features]
 default = ['std']
