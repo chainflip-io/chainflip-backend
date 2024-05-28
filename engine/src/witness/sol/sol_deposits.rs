@@ -35,6 +35,7 @@ use std::str::FromStr;
 // TODO: Get this from a constant fine
 const FETCH_ACCOUNT_BYTE_LENGTH: usize = 24;
 const MAX_MULTIPLE_ACCOUNTS_QUERY: usize = 100;
+const FETCH_ACCOUNT_DISCRIMINATOR: [u8; 8] = [188, 68, 197, 38, 48, 192, 81, 100];
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	/// TODO: Add description
@@ -72,8 +73,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 				// Genesis block cannot contain any transactions
 				if !deposit_channels.is_empty() {
-					// TODO: Handle how to split/chain deposit channels and fetch accounts
-					// For now we assume they are properly ordered alternated
 					let deposit_channels_info = deposit_channels
 						.into_iter()
 						// TODO Consider not splitting this to reuse the same get_multiple_account
@@ -120,7 +119,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 											pallet_cf_ingress_egress::DepositWitness {
 												deposit_address: to_addr,
 												asset,
-												// TODO: Check with Alastair if we should just submit the total number
+												// TODO: Check with if we should just submit the total number (fetch + balance)
 												amount: value
 													.try_into()
 													.expect("Ingress witness transfer value should fit u128"),
@@ -175,6 +174,8 @@ where
 		})
 		.collect::<Vec<_>>();
 
+	ensure!(addresses_to_witness.len() <= MAX_MULTIPLE_ACCOUNTS_QUERY);
+
 	let accounts_info: Response<Vec<Option<UiAccount>>> = sol_rpc
 		.get_multiple_accounts(
 			addresses_to_witness.as_slice(),
@@ -221,9 +222,6 @@ where
 						match account_info.data {
 							// Fetch Data Account
 							UiAccountData::Binary(base64_string, encoding) => {
-								println!("encoding {:?}", encoding);
-								println!("base64_string {:?}", base64_string);
-
 								ensure!(encoding == UiAccountEncoding::Base64);
 
 								// Decode the base64 string to bytes
@@ -242,7 +240,12 @@ where
 								// Remove the discriminator
 								// TODO: Check that we are removing the correct ones. We could even
 								// have a check that the discriminator is the correct one.
-								bytes.drain(..8);
+								let discriminator: Vec<u8> = bytes.drain(..8).collect();
+
+								ensure!(
+									discriminator == FETCH_ACCOUNT_DISCRIMINATOR,
+									"Discriminator does not match expected value"
+								);
 
 								let array: [u8; 16] =
 									bytes.try_into().expect("Byte slice length doesn't match u128");
@@ -273,8 +276,7 @@ where
 									.get("tokenAmount")
 									.ok_or(anyhow::anyhow!("Missing 'tokenAmount' field"))?;
 
-								// TODO: Do we want to check decimals and/or mintpubkey and/or
-								// owner?
+								// TODO: Do we to check the mintpubkey and/or owner?
 
 								let amount_str = token_amount
 									.get("amount")
@@ -324,7 +326,7 @@ fn sol_ingresses(
 		})
 		.collect::<Vec<(_, _)>>();
 
-	assert_eq!(result.len(), account_infos.len() / 2);
+	ensure!(result.len() == account_infos.len() / 2);
 
 	Ok(result)
 }
@@ -334,12 +336,7 @@ mod tests {
 	use crate::{
 		settings::{NodeContainer, WsHttpEndpoints},
 		// use settings:: Settings
-		sol::{
-			retry_rpc::SolRetryRpcClient,
-			// retry_rpc::SolRetryRpcApi
-			// rpc::SolRpcClient,
-		},
-		// witness::common::chain_source::Header
+		sol::retry_rpc::SolRetryRpcClient,
 	};
 
 	use cf_chains::{sol::SolAddress, Chain, Solana};
@@ -392,8 +389,6 @@ mod tests {
 			SolAddress::from_str("HGgUaHpsmZpB3pcYt8PE89imca6BQBRqYtbVQQqsso3o").unwrap()
 		);
 	}
-
-	// TODO: Add test for decoding an actual fetch Account from a live network (deploy it before)
 
 	#[tokio::test]
 	async fn test_get_deposit_channels_info() {
@@ -468,20 +463,36 @@ mod tests {
 				assert_eq!(account_infos.0[2], (empty_account, 0));
 
 				// Try an account with data that is not of the same length
-				let data_account =
+				let fetch_account_3: SolAddress =
 					SolAddress::from_str("ELF78ZhSr8u4SCixA7YSpjdZHZoSNrAhcyysbavpC2kA").unwrap();
-				let fetch_account_3 = derive_fetch_account(vault_program, data_account).unwrap();
 
-				addresses.push((data_account, fetch_account_3));
+				let mut new_addresses = addresses.clone();
+				new_addresses.push((empty_account, fetch_account_3));
+
 				let account_infos = ingress_amounts(
 					&retry_client,
-					addresses,
+					new_addresses,
 					owner_account,
 					true,
 					token_mint_pubkey,
 				)
 				.await;
 				assert!(account_infos.is_err());
+
+				let correct_data_account =
+					SolAddress::from_str("HsRFLNzidLJx4RuqxdT924btgCTTuFFmNqp7Ph9y9HdN").unwrap();
+				addresses.push((empty_account, correct_data_account));
+
+				let account_infos = ingress_amounts(
+					&retry_client,
+					addresses,
+					SolAddress::from_str("EVo1QjbAPKs4UbS78uNk2LpNG7hAWJum52ybQMtxgVL2").unwrap(),
+					true,
+					token_mint_pubkey,
+				)
+				.await
+				.unwrap();
+				assert_eq!(account_infos.0[3], (empty_account, 74510874563096));
 
 				Ok(())
 			}
