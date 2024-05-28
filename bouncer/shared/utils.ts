@@ -429,15 +429,15 @@ export async function observeSwapEvents(
             if ('DepositChannel' in expectedEvent.data.origin) {
               if (
                 Number(expectedEvent.data.origin.DepositChannel.channelId) === channelId &&
-                sourceAsset === (expectedEvent.data.sourceAsset as Asset) &&
-                destAsset === (expectedEvent.data.destinationAsset as Asset) &&
-                swapType
+                  sourceAsset === (expectedEvent.data.sourceAsset as Asset) &&
+                  destAsset === (expectedEvent.data.destinationAsset as Asset) &&
+                  swapType
                   ? expectedEvent.data.swapType[swapType] !== undefined
                   : true &&
-                    depositAddress ===
-                      (Object.values(
-                        expectedEvent.data.origin.DepositChannel.depositAddress,
-                      )[0] as string)
+                  depositAddress ===
+                  (Object.values(
+                    expectedEvent.data.origin.DepositChannel.depositAddress,
+                  )[0] as string)
               ) {
                 expectedMethod = swapExecutedEvent;
                 swapId = expectedEvent.data.swapId;
@@ -978,29 +978,18 @@ export function calculateFeeWithBps(fineAmount: bigint, bps: number): bigint {
   return fineAmount / divisor + (fineAmount % divisor > divisor / 2n ? 1n : 0n);
 }
 
-export function tryUntilSuccess(
+// Throws error if unsuccessful.
+export async function tryUntilSuccess(
   closure: () => Promise<boolean>,
   pollTime: number,
   maxAttempts: number,
-): Promise<boolean> {
-  return new Promise((resolve, reject) => {
-    let attempts = 0;
-
-    const intervalId = setInterval(async () => {
-      attempts++;
-
-      try {
-        if (await closure()) {
-          clearInterval(intervalId);
-          resolve(true);
-        } else if (attempts >= maxAttempts) {
-          clearInterval(intervalId);
-          reject(new Error('Maximum attempts reached'));
-        }
-      } catch (error) {
-        clearInterval(intervalId);
-        reject(error);
-      }
-    }, pollTime);
-  });
+  logTag?: string,
+) {
+  for (let i = 0; i < maxAttempts; i++) {
+    if (await closure()) {
+      return;
+    }
+    await sleep(pollTime);
+  }
+  throw new Error('tryUntilSuccess failed: ' + logTag);
 }
