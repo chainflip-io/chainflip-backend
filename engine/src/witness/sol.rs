@@ -138,6 +138,10 @@ where
 		.await
 		.context("Failed to get Vault contract address from SC")?;
 
+	// TODO: Get this from the environment
+	let usdc_pubkey =
+		SolAddress::from_str("").expect("Failed to get USDC contract address from SC");
+
 	let sol_source = SolSource::new(sol_client.clone()).strictly_monotonic().shared(scope);
 
 	sol_source
@@ -161,19 +165,6 @@ where
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await;
 
-	// sol_safe_vault_source_deposit_addresses
-	// 	.clone()
-	// 	.erc20_deposits::<_, _, _, UsdtEvents>(
-	// 		process_call.clone(),
-	// 		sol_client.clone(),
-	// 		cf_primitives::chains::assets::sol::Asset::Usdc,
-	// 		usdt_contract_address,
-	// 	)
-	// 	.await?
-	// 	.continuous("USDTDeposits".to_string(), db.clone())
-	// 	.logging("USDTDeposits")
-	// 	.spawn(scope);
-
 	sol_safe_vault_source_deposit_addresses
 		.clone()
 		.solana_deposits(
@@ -181,11 +172,26 @@ where
 			sol_client.clone(),
 			cf_primitives::chains::assets::sol::Asset::Sol,
 			vault_address,
+			usdc_pubkey,
 		)
 		.await
 		.continuous("SolanaDeposits".to_string(), db.clone())
 		.logging("SolanaDeposits")
 		.spawn(scope);
+
+	// sol_safe_vault_source_deposit_addresses
+	// 	.clone()
+	// 	.solana_deposits(
+	// 		process_call.clone(),
+	// 		sol_client.clone(),
+	// 		cf_primitives::chains::assets::sol::Asset::Sol,
+	// 		vault_address,
+	// 		Some(usdc_pubkey),
+	// 	)
+	// 	.await
+	// 	.continuous("SolanaDeposits".to_string(), db.clone())
+	// 	.logging("SolanaDeposits")
+	// 	.spawn(scope);
 
 	// sol_safe_vault_source_deposit_addresses
 	// 	.clone()
