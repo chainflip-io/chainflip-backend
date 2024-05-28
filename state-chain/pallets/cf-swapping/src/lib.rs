@@ -866,12 +866,24 @@ pub mod pallet {
 
 			for swap in swaps {
 				if let Some(swap_output) = swap.final_output {
+					// To be consistent with `swap_output` and `intermediate_amount` (which do
+					// not include the network fee), we report input amount without the network fee
+					// for swaps from STABLE_ASSET:
+					let swap_input = if swap.from == STABLE_ASSET {
+						swap.stable_amount.unwrap_or_else(|| {
+							log_or_panic!("stable amount must be set for swaps from STABLE_ASSET");
+							swap.amount
+						})
+					} else {
+						swap.amount
+					};
+
 					Self::deposit_event(Event::<T>::SwapExecuted {
 						swap_id: swap.swap_id,
 						source_asset: swap.from,
 						destination_asset: swap.to,
-						deposit_amount: swap.amount,
-						swap_input: swap.amount,
+						deposit_amount: swap_input,
+						swap_input,
 						egress_amount: swap_output,
 						swap_output,
 						intermediate_amount: swap.intermediate_amount(),
