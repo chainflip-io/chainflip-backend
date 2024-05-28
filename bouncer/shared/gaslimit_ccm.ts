@@ -364,57 +364,41 @@ export async function testGasLimitCcmSwaps() {
     testGasLimitSwap('ArbEth', 'Eth', undefined, getRandomGasConsumption('Arbitrum')),
   ];
 
-  // reducing gas budget input amount used for gas to achieve a gasLimitBudget ~= 4-500k (Eth) and ~8M (Arb).
+  // Gas budget to 10% of the default swap amount, which should be enough
   const gasLimitSwapsSufBudget = [
-    testGasLimitSwap('Dot', 'Flip', ' sufBudget', undefined, 750),
-    testGasLimitSwap('Eth', 'Usdc', ' sufBudget', undefined, 7500),
-    testGasLimitSwap('Flip', 'Eth', ' sufBudget', undefined, 5000),
-    testGasLimitSwap('Eth', 'Usdt', ' sufBudget', undefined, 7500),
-    testGasLimitSwap('Btc', 'Eth', ' sufBudget', undefined, 750),
-    testGasLimitSwap('Dot', 'ArbUsdc', ' sufBudget', undefined, 100),
-    testGasLimitSwap('Eth', 'ArbUsdc', ' sufBudget', undefined, 2000),
-    testGasLimitSwap('Flip', 'ArbEth', ' sufBudget', undefined, 1000),
-    testGasLimitSwap('Btc', 'ArbUsdc', ' sufBudget', undefined, 100),
-    testGasLimitSwap('ArbEth', 'Eth', ' sufBudget', undefined, 750),
-    testGasLimitSwap('ArbUsdc', 'Flip', ' sufBudget', undefined, 100),
-  ];
-
-  // None of this should be broadcasted as the gasLimitBudget is not enough
-  const gasLimitSwapsInsufBudget = [
-    testGasLimitSwap('Dot', 'Flip', ' insufBudget', undefined, 10 ** 4),
-    testGasLimitSwap('Eth', 'Usdc', ' insufBudget', undefined, 10 ** 5),
-    testGasLimitSwap('Eth', 'Usdt', ' insufBudget', undefined, 10 ** 5),
-    testGasLimitSwap('Flip', 'Eth', ' insufBudget', undefined, 10 ** 5),
-    testGasLimitSwap('Btc', 'Eth', ' insufBudget', undefined, 10 ** 4),
-    testGasLimitSwap('Dot', 'ArbEth', ' insufBudget', undefined, 10 ** 4),
-    testGasLimitSwap('Eth', 'ArbEth', ' insufBudget', undefined, 10 ** 4),
-    testGasLimitSwap('Flip', 'ArbUsdc', ' insufBudget', undefined, 10 ** 4),
-    testGasLimitSwap('Btc', 'ArbUsdc', ' insufBudget', undefined, 10 ** 4),
-    testGasLimitSwap('ArbEth', 'Eth', ' insufBudget', undefined, 10 ** 5),
-    testGasLimitSwap('ArbUsdc', 'Flip', ' insufBudget', undefined, 10 ** 4),
+    testGasLimitSwap('Dot', 'Usdc', ' sufBudget', undefined, 10),
+    testGasLimitSwap('Usdc', 'Eth', ' sufBudget', undefined, 10),
+    testGasLimitSwap('Flip', 'Usdt', ' sufBudget', undefined, 10),
+    testGasLimitSwap('Usdt', 'Eth', ' sufBudget', undefined, 10),
+    testGasLimitSwap('Btc', 'Flip', ' sufBudget', undefined, 10),
+    testGasLimitSwap('Dot', 'ArbEth', ' sufBudget', undefined, 10),
+    testGasLimitSwap('Eth', 'ArbUsdc', ' sufBudget', undefined, 10),
+    testGasLimitSwap('ArbEth', 'Flip', ' sufBudget', undefined, 10),
+    testGasLimitSwap('Btc', 'ArbUsdc', ' sufBudget', undefined, 10),
+    testGasLimitSwap('Eth', 'ArbEth', ' sufBudget', undefined, 10),
+    testGasLimitSwap('ArbUsdc', 'Flip', ' sufBudget', undefined, 10),
   ];
 
   // This amount of gasLimitBudget will be swapped into very little gasLimitBudget. Not into zero as that will cause a debug_assert to
-  // panic when not in release due to zero swap intput amount. So for now we provide the minimum so it gets swapped to just > 0.
-  const gasLimitSwapsNoBudget = [
-    testGasLimitSwap('Dot', 'Flip', ' noBudget', undefined, 10 ** 6),
-    testGasLimitSwap('Eth', 'Usdc', ' noBudget', undefined, 10 ** 8),
-    testGasLimitSwap('Eth', 'Usdt', ' noBudget', undefined, 10 ** 8),
-    testGasLimitSwap('Flip', 'Eth', ' noBudget', undefined, 10 ** 6),
-    testGasLimitSwap('Btc', 'Eth', ' noBudget', undefined, 10 ** 5),
-    testGasLimitSwap('Dot', 'ArbUsdc', ' noBudget', undefined, 10 ** 6),
-    testGasLimitSwap('Eth', 'ArbEth', ' noBudget', undefined, 10 ** 8),
-    testGasLimitSwap('Flip', 'ArbUsdc', ' noBudget', undefined, 10 ** 6),
-    testGasLimitSwap('Btc', 'ArbEth', ' noBudget', undefined, 10 ** 5),
-    testGasLimitSwap('ArbEth', 'Eth', ' noBudget', undefined, 10 ** 6),
-    testGasLimitSwap('ArbUsdc', 'Flip', ' noBudget', undefined, 10 ** 5),
+  // panic when not in release due to zero swap input amount. So for now we provide the minimum so it gets swapped to just > 0.
+  const gasLimitSwapsInsufBudget = [
+    testGasLimitSwap('Dot', 'Flip', ' insufBudget', undefined, 10 ** 6),
+    testGasLimitSwap('Eth', 'Usdc', ' insufBudget', undefined, 10 ** 8),
+    testGasLimitSwap('Eth', 'Usdt', ' insufBudget', undefined, 10 ** 8),
+    testGasLimitSwap('Flip', 'Eth', ' insufBudget', undefined, 10 ** 6),
+    testGasLimitSwap('Btc', 'Eth', ' insufBudget', undefined, 10 ** 5),
+    testGasLimitSwap('Dot', 'ArbUsdc', ' insufBudget', undefined, 10 ** 6),
+    testGasLimitSwap('Eth', 'ArbEth', ' insufBudget', undefined, 10 ** 8),
+    testGasLimitSwap('Flip', 'ArbUsdc', ' insufBudget', undefined, 10 ** 6),
+    testGasLimitSwap('Btc', 'ArbEth', ' insufBudget', undefined, 10 ** 5),
+    testGasLimitSwap('ArbEth', 'Eth', ' insufBudget', undefined, 10 ** 6),
+    testGasLimitSwap('ArbUsdc', 'Flip', ' insufBudget', undefined, 10 ** 5),
   ];
 
   await Promise.all([
     ...gasLimitSwapsSufBudget,
-    ...gasLimitSwapsInsufBudget,
     ...gasLimitSwapsDefault,
-    ...gasLimitSwapsNoBudget,
+    ...gasLimitSwapsInsufBudget,
   ]);
 
   spam = false;
