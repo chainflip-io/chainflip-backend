@@ -30,9 +30,7 @@ async function addAliceToGovernance() {
   await using chainflip = await getChainflipApi();
   await observeEvent('governance:Executed', chainflip);
 
-  await tryUntilSuccess(async () => {
-    return (await getGovernanceMembers()).length === 2
-  }, 3000, 10);
+  await tryUntilSuccess(async () => (await getGovernanceMembers()).length === 2, 3000, 10);
 
   console.log('Added Alice to governance!');
 }
