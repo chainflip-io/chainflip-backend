@@ -19,6 +19,8 @@ impl<T: SolRetryRpcApi + Send + Sync + Clone> GetTrackedData<cf_chains::Solana, 
 			priorization_fees.iter().map(|f| f.prioritization_fee).collect();
 		priority_fees.sort();
 
+		// TODO: These fees won't be consistent accross CFEs so we either take the same approach
+		// as in Bitcoin or we try to do something more clever
 		Ok(SolTrackedData {
 			priority_fee: (context!(priority_fees
 				.get(priority_fees.len().saturating_sub(1) / 2)

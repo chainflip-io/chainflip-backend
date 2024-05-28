@@ -2,11 +2,12 @@ use crate::witness::common::{RuntimeCallHasChain, RuntimeHasChain};
 use anyhow::{ensure, Error};
 use cf_chains::{
 	instances::ChainInstanceFor,
-	sol::{SolAddress, SolHash, SolSignature},
+	sol::{SolAddress, SolAsset, SolHash, SolSignature},
 	Chain, Solana,
 };
 use cf_primitives::EpochIndex;
 use futures_core::Future;
+use sol_prim::pda::derive_associated_token_account;
 
 use crate::witness::common::chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses;
 
@@ -25,17 +26,15 @@ use crate::{
 	// witness::common::chain_source::Header,
 };
 use serde_json::Value;
-use std::str::FromStr;
 pub use sol_prim::{
-	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
+	consts::{SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID},
+	pda::derive_fetch_account,
 };
+use std::str::FromStr;
 
 // TODO: Get this from a constant fine
 const FETCH_ACCOUNT_BYTE_LENGTH: usize = 24;
 const MAX_MULTIPLE_ACCOUNTS_QUERY: usize = 100;
-const SYSTEM_PROGRAM_ID: &str = "11111111111111111111111111111111";
-pub const TOKEN_PROGRAM_ID: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
-pub const ASSOCIATED_TOKEN_PROGRAM_ID: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	/// TODO: Add description
@@ -45,6 +44,8 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		sol_rpc: SolRetryRpcClient,
 		asset: <Inner::Chain as cf_chains::Chain>::ChainAsset,
 		vault_address: SolAddress,
+		// TODO: Make this into an option if we reuse the call
+		token_pubkey: SolAddress,
 	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
 	where
 		Inner::Chain:
@@ -73,73 +74,66 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				if !deposit_channels.is_empty() {
 					// TODO: Handle how to split/chain deposit channels and fetch accounts
 					// For now we assume they are properly ordered alternated
-					let addresses = deposit_channels
+					let deposit_channels_info = deposit_channels
 						.into_iter()
-						// TODO For the sol_account_infos we won't need to split for assets
-						// but we might have to do it to fit into the architecture of the CFE.
-						// E.g. We need to submit the asset on the cf_ingress_egress so effectively
-						// the submissions need to be separate
-						// .filter(|deposit_channel| deposit_channel.deposit_channel.asset == asset)
-						// TODO: Here we can maybe get the fetch account (if part of the
-						// DepositChannel) struct in the DepositChannelState field. Maybe also keep
-						// the asset on a per deposit channel so we can use the same RPC call.
-						.map(|deposit_channel| deposit_channel.deposit_channel.address)
+						// TODO Consider not splitting this to reuse the same get_multiple_account
+						// rpc call. Doing it now because when we submit the vector as an extrinsic
+						// it gets submitted on a per asset basis
+						.filter(|deposit_channel| deposit_channel.deposit_channel.asset == asset)
+						.map(|deposit_channel| {
+							(
+								deposit_channel.deposit_channel.address,
+								derive_fetch_account(
+									deposit_channel.deposit_channel.address,
+									token_pubkey,
+								)
+								.expect("Failed to derive fetch account"),
+							)
+						})
 						.collect::<Vec<_>>();
 
-					for address in &addresses {
-						// TODO: The same derivation will be needed to fetch accounts. To share logic with the SC to make sure they match.
-						let fetch_account = derive_fetch_account(vault_address, *address).expect("Failed to derive fetch account");
-						println!("fetch_account {:?}", fetch_account);
-					}
+					let chunked_deposit_channels_info: Vec<Vec<(SolAddress, SolAddress)>> =
+						deposit_channels_info
+							.chunks(MAX_MULTIPLE_ACCOUNTS_QUERY / 2)
+							.map(|chunk| chunk.to_vec())
+							.collect();
 
-
-					// Derive ATA from the deposit channel
-					// TODO: There will be a derive_associated_token_account in PR#4851. To share logic with the SC to make sure they match.
-					// 
-					// let associated_token_program_id = SolAddress::from_str(ASSOCIATED_TOKEN_PROGRAM_ID).expect("Associated token program ID must be valid");
-					// let token_program_id =
-					// 	SolAddress::from_str(TOKEN_PROGRAM_ID).expect("Token program ID must be valid");
-
-					let chunked_addresses: Vec<Vec<_>> = addresses
-						.chunks(MAX_MULTIPLE_ACCOUNTS_QUERY)
-						.map(|chunk| chunk.to_vec())
-						.collect();
-
-					// TODO: Check with Alastair what we need to submit. At least we need to check
-					// the deposit account and the fetch account and put them into one submission.
-					for chunk_address in chunked_addresses {
-						let account_infos =
-							sol_account_infos(&sol_rpc, chunk_address, vault_address).await?;
-						let slot = account_infos.1;
-						let ingresses = sol_ingresses(account_infos.0)?;
+					// TODO: Check if we should submit every deposit channel separately.
+					for deposit_channels_info in chunked_deposit_channels_info {
+						// TODO: Update with correct is_native_asset
+						let ingresses = ingress_amounts(
+							&sol_rpc,
+							deposit_channels_info,
+							vault_address,
+							true,
+							token_pubkey,
+						)
+						.await?;
 
 						// Is this to not submit non-changes?
-						if !ingresses.is_empty() {
+						if !ingresses.0.is_empty() {
 							process_call(
-									pallet_cf_ingress_egress::Call::<
-										_,
-										ChainInstanceFor<Inner::Chain>,
-									>::process_deposits {
-										deposit_witnesses: ingresses
-											.into_iter()
-											.map(|(to_addr, value)| {
-												pallet_cf_ingress_egress::DepositWitness {
-													deposit_address: to_addr,
-													asset,
-													amount:
-														value
-														.try_into()
-														.expect("Ingress witness transfer value should fit u128"),
-													deposit_details: (),
-												}
-											})
-											.collect(),
-										block_height: slot,
-									}
-									.into(),
-									epoch.index,
-								)
-								.await;
+								pallet_cf_ingress_egress::Call::<_, ChainInstanceFor<Inner::Chain>>::process_deposits {
+									deposit_witnesses: ingresses.0
+										.into_iter()
+										.map(|(to_addr, value)| {
+											pallet_cf_ingress_egress::DepositWitness {
+												deposit_address: to_addr,
+												asset,
+												// TODO: Check with Alastair if we should just submit the total number
+												amount: value
+													.try_into()
+													.expect("Ingress witness transfer value should fit u128"),
+												deposit_details: (),
+											}
+										})
+										.collect(),
+									block_height: ingresses.1,
+								}
+								.into(),
+								epoch.index,
+							)
+							.await;
 						}
 					}
 				}
@@ -149,17 +143,41 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	}
 }
 
-async fn sol_account_infos<SolRetryRpcClient>(
+// We might end up splitting this into two functions, one for
+// native deposit channels and one for tokens to make it simpler
+async fn ingress_amounts<SolRetryRpcClient>(
 	sol_rpc: &SolRetryRpcClient,
-	addresses: Vec<SolAddress>,
+	deposit_channels_info: Vec<(SolAddress, SolAddress)>,
 	vault_address: SolAddress,
+	is_native_asset: bool,
+	token_pubkey: SolAddress,
 ) -> Result<(Vec<(SolAddress, u128)>, u64), anyhow::Error>
 where
 	SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
 {
+	let system_program_pubkey = SolAddress::from_str(SYSTEM_PROGRAM_ID).unwrap();
+	let associated_token_account_pubkey = SolAddress::from_str(TOKEN_PROGRAM_ID).unwrap();
+
+	// Flattening it to have both deposit channels and fetch accounts
+	let addresses_to_witness = deposit_channels_info
+		.iter()
+		.flat_map(|(address, b)| {
+			vec![
+				if is_native_asset {
+					*address
+				} else {
+					derive_associated_token_account(*address, token_pubkey)
+						.expect("Failed to derive associated token account")
+						.0
+				},
+				*b,
+			]
+		})
+		.collect::<Vec<_>>();
+
 	let accounts_info: Response<Vec<Option<UiAccount>>> = sol_rpc
 		.get_multiple_accounts(
-			addresses.clone().as_slice(),
+			addresses_to_witness.as_slice(),
 			RpcAccountInfoConfig {
 				// Using JsonParsed will return the token accounts and the sol deposit channels
 				// in a nicely parsed format. For our fetch token accounts it will return it encoded
@@ -174,14 +192,11 @@ where
 
 	let slot = accounts_info.context.slot;
 
-	ensure!(addresses.len() == accounts_info.value.len());
-
-	let system_program_pubkey = SolAddress::from_str(SYSTEM_PROGRAM_ID).unwrap();
-	let associated_token_account_pubkey = SolAddress::from_str(TOKEN_PROGRAM_ID).unwrap();
+	ensure!(deposit_channels_info.len() * 2 == accounts_info.value.len());
 
 	// For now we infer the address type from the owner. However, we might want to enforce
-	// the ordering (e.g. deposit channel, fetch account, deposit channel, fetch account,
-	// etc.) and/or whether the deposit channels are SOL/Tokens.
+	// from the ordering (they should be alternate) and/or whether the deposit channels are
+	// SOL/Tokens.
 	let accounts_info = accounts_info
 		.value
 		.into_iter()
@@ -195,7 +210,7 @@ where
 					println!("owner_pub_key {:?}", owner_pub_key);
 					let amount = if owner_pub_key == system_program_pubkey {
 						// Native deposit channel
-						// TODO: Add a check for base64 encoding with empty data
+						// TODO: Add a check for base64 encoding with empty data?
 						println!("Native deposit channel found");
 						Ok(account_info.lamports as u128)
 					// Fetch account. We either get the Vault address or we default to it
@@ -275,21 +290,23 @@ where
 					} else {
 						Err(anyhow::anyhow!("Unexpected account - unexpected owner"))
 					}?;
-					Ok((addresses[index], amount))
+					Ok((addresses_to_witness[index], amount))
 				},
 				// When no account in the address
 				None => {
 					println!("Empty account found");
-					Ok((addresses[index], 0_u128))
+					Ok((addresses_to_witness[index], 0_u128))
 				},
 			}
 		})
 		.collect::<Result<Vec<(_, _)>, Error>>()?;
 
-	Ok((accounts_info, slot))
+	// Now we will have Vec<(SolAddress, fetch/balance), slot> . We need to process that to return a
+	// valid list
+	Ok((sol_ingresses(accounts_info).expect("Failed to calculate ingresses"), slot))
 }
 
-// TODO: For now we just presupose that the accounts are two consecutive items
+// Accounts and fetch accounts are supposed to be in consecutive order
 fn sol_ingresses(
 	account_infos: Vec<(SolAddress, u128)>,
 ) -> Result<Vec<(SolAddress, u128)>, anyhow::Error> {
@@ -307,18 +324,9 @@ fn sol_ingresses(
 		})
 		.collect::<Vec<(_, _)>>();
 
+	assert_eq!(result.len(), account_infos.len() / 2);
+
 	Ok(result)
-}
-
-fn derive_fetch_account(
-	vault_program: SolAddress,
-	deposit_channel: SolAddress,
-) -> Result<SolAddress, AddressDerivationError> {
-	let (fetch_account, _) = DerivedAddressBuilder::from_address(vault_program)?
-		.chain_seed(deposit_channel)?
-		.finish()?;
-
-	Ok(fetch_account)
 }
 
 #[cfg(test)]
@@ -331,7 +339,6 @@ mod tests {
 			// retry_rpc::SolRetryRpcApi
 			// rpc::SolRpcClient,
 		},
-		witness::sol::sol_deposits::sol_account_infos,
 		// witness::common::chain_source::Header
 	};
 
@@ -373,20 +380,20 @@ mod tests {
 		assert!(ingresses.is_err());
 	}
 
-
 	#[test]
 	fn test_sol_derive_fetch_account() {
 		let fetch_account = derive_fetch_account(
 			SolAddress::from_str("8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf").unwrap(),
-			SolAddress::from_str("HAMxiXdEJxiBHabZAUm8PSLvWQM2GHi5PArVZvUCeDab").unwrap()).unwrap();
+			SolAddress::from_str("HAMxiXdEJxiBHabZAUm8PSLvWQM2GHi5PArVZvUCeDab").unwrap(),
+		)
+		.unwrap();
 		assert_eq!(
 			fetch_account,
 			SolAddress::from_str("HGgUaHpsmZpB3pcYt8PE89imca6BQBRqYtbVQQqsso3o").unwrap()
 		);
 	}
 
-
-	// TODO: Add test for decoding a fetch Account from a live network (deploy it before)
+	// TODO: Add test for decoding an actual fetch Account from a live network (deploy it before)
 
 	#[tokio::test]
 	async fn test_get_deposit_channels_info() {
@@ -421,30 +428,59 @@ mod tests {
 
 				let owner_account =
 					SolAddress::from_str("gSbePebfvPy7tRqimPoVecS2UsBvYv46ynrzWocc92s").unwrap();
+				let vault_program =
+					SolAddress::from_str("8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf").unwrap();
+
+				let native_deposit_channel =
+					SolAddress::from_str("ssvtUfHGexqLHjuNf6ngQScL2nFp79ergVQTmGAoHCA").unwrap();
+				let fetch_account_0 =
+					derive_fetch_account(vault_program, native_deposit_channel).unwrap();
+
+				let token_deposit_channel =
+					SolAddress::from_str("5WQayu3ARKuStAP3P6PvqxBfYo3crcKc2H821dLFhukz").unwrap();
+				let fetch_account_1 =
+					derive_fetch_account(vault_program, token_deposit_channel).unwrap();
+
+				let empty_account =
+					SolAddress::from_str("ADtaKHTsYSmsty3MgLVfTQoMpM7hvFNTd2AxwN3hWRtt").unwrap();
+				let fetch_account_2 = derive_fetch_account(vault_program, empty_account).unwrap();
 
 				let mut addresses = vec![
-					// Normal account owned by system program - should be understood as a deposit
-					// channel
-					SolAddress::from_str("BrX9Z85BbmXYMjvvuAWU8imwsAqutVQiDg9uNfTGkzrJ").unwrap(),
-					// Token account - should be understood as a fetch account
-					SolAddress::from_str("5WQayu3ARKuStAP3P6PvqxBfYo3crcKc2H821dLFhukz").unwrap(),
-					// Empty account - should return zero amount (non initialized fetch/deposit
-					// channel)
-					SolAddress::from_str("ADtaKHTsYSmsty3MgLVfTQoMpM7hvFNTd2AxwN3hWRtt").unwrap(),
+					(native_deposit_channel, fetch_account_0),
+					(token_deposit_channel, fetch_account_1),
+					(empty_account, fetch_account_2),
 				];
+				let token_mint_pubkey =
+					SolAddress::from_str("MAZEnmTmMsrjcoD6vymnSoZjzGF7i7Lvr2EXjffCiUo").unwrap();
 
-				let account_infos: (Vec<(SolAddress, u128)>, u64) =
-					sol_account_infos(&retry_client, addresses.clone(), owner_account)
-						.await
-						.unwrap();
-				println!("Result {:?}", account_infos);
+				let account_infos: (Vec<(SolAddress, u128)>, u64) = ingress_amounts(
+					&retry_client,
+					addresses.clone(),
+					owner_account,
+					true,
+					token_mint_pubkey,
+				)
+				.await
+				.unwrap();
+				println!("Result Native {:?}", account_infos);
+				assert_eq!(account_infos.0[0], (native_deposit_channel, 5000000000));
+				assert_eq!(account_infos.0[1], (token_deposit_channel, 10000));
+				assert_eq!(account_infos.0[2], (empty_account, 0));
 
 				// Try an account with data that is not of the same length
-				addresses.push(
-					SolAddress::from_str("ELF78ZhSr8u4SCixA7YSpjdZHZoSNrAhcyysbavpC2kA").unwrap(),
-				);
-				let account_infos =
-					sol_account_infos(&retry_client, addresses, owner_account).await;
+				let data_account =
+					SolAddress::from_str("ELF78ZhSr8u4SCixA7YSpjdZHZoSNrAhcyysbavpC2kA").unwrap();
+				let fetch_account_3 = derive_fetch_account(vault_program, data_account).unwrap();
+
+				addresses.push((data_account, fetch_account_3));
+				let account_infos = ingress_amounts(
+					&retry_client,
+					addresses,
+					owner_account,
+					true,
+					token_mint_pubkey,
+				)
+				.await;
 				assert!(account_infos.is_err());
 
 				Ok(())

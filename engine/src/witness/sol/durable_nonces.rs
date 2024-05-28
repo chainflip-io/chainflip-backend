@@ -6,11 +6,10 @@ use crate::{
 		commitment_config::CommitmentConfig,
 		retry_rpc::{SolRetryRpcApi, SolRetryRpcClient},
 		rpc_client_api::{
-			ParsedAccount, RpcAccountInfoConfig, RpcTransactionConfig,
-			TransactionConfirmationStatus, UiAccount, UiAccountData, UiAccountEncoding,
+			ParsedAccount, RpcAccountInfoConfig, UiAccount, UiAccountData, UiAccountEncoding,
 		},
 	},
-	witness::common::chain_source::{ChainClient, Header},
+	// witness::common::chain_source::{ChainClient, Header},
 };
 use cf_chains::sol::{SolAddress, SolHash};
 
