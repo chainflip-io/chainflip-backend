@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::commitment_config::CommitmentConfig;
+use super::commitment_config::{CommitmentConfig, CommitmentLevel};
 use crate::sol::option_serializer::OptionSerializer;
 use cf_chains::sol::SolAddress as Pubkey;
 
@@ -383,4 +383,15 @@ pub struct MessageHeader {
 	/// The last `num_readonly_unsigned_accounts` of the unsigned keys are
 	/// read-only accounts.
 	pub num_readonly_unsigned_accounts: u8,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcSendTransactionConfig {
+	#[serde(default)]
+	pub skip_preflight: bool,
+	pub preflight_commitment: Option<CommitmentLevel>,
+	pub encoding: Option<UiTransactionEncoding>,
+	pub max_retries: Option<usize>,
+	pub min_context_slot: Option<u64>, // slot
 }

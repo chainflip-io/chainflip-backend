@@ -1,5 +1,5 @@
 mod chain_tracking;
-mod durable_nonces;
+mod nonce_witnessing;
 mod sol_deposits;
 mod source;
 
@@ -35,25 +35,11 @@ use cf_chains::sol::{SolAddress, SolHash, SolSignature};
 use anyhow::{anyhow, Context, Result};
 use futures::{future::join_all, stream};
 
-// pub async fn process_egress<ProcessCall, ProcessingFut>(
-// 	epoch: Vault<cf_chains::Solana, SolAddress, ()>,
-// 	header: Header<u64, SolHash, Vec<SolSignature>>,
-// 	process_call: ProcessCall,
-// ) where
-// 	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
-// 		+ Send
-// 		+ Sync
-// 		+ Clone
-// 		+ 'static,
-// 	ProcessingFut: Future<Output = ()> + Send + 'static,
-// {
-// 	let test = header.data;
-// }
-
+// TODO: Implement a process_egress function that uses success_witness and submits
+// the transactions to the the State Chain (pallet_cf_broadcast::Call::transaction_succeeded)
 async fn success_witnesses(
 	sol_client: &SolRetryRpcClient,
 	monitored_tx_signatures: &[SolSignature],
-	_nonce_accounts: &[SolAddress], // can be pulled from the environment
 ) -> Result<Vec<(SolSignature, u64, u64)>, anyhow::Error>
 where
 	SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
@@ -141,8 +127,13 @@ where
 		.context("Failed to get Vault contract address from SC")?;
 
 	// TODO: Get this from the environment
-	let usdc_pubkey =
-		SolAddress::from_str("").expect("Failed to get USDC contract address from SC");
+	let _usdc_pubkey = SolAddress::from_str("24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p")
+		.expect("Failed to get USDC contract address from SC");
+
+	let nonces_accounts: Vec<(SolAddress, SolHash)> = vec![(
+		SolAddress::from_str("HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo").expect("Temp"),
+		SolHash::from_str("3DfasJ5WivELD1yNXSgxT8hFaphBpuYFUqdTjoBqYyrk").expect("Temp"),
+	)];
 
 	let sol_source = SolSource::new(sol_client.clone()).strictly_monotonic().shared(scope);
 
@@ -159,7 +150,7 @@ where
 
 	let sol_safe_vault_source = sol_source
 		// .lag_safety(sol_safety_margin) // NO SAFETY MARGIN
-		.logging("safe block produced")
+		// .logging("safe block produced")
 		.chunk_by_vault(vaults, scope);
 
 	let sol_safe_vault_source_deposit_addresses = sol_safe_vault_source
@@ -195,7 +186,15 @@ where
 	// 	.logging("SolanaUsdcDeposits")
 	// 	.spawn(scope);
 
-	// sol_safe_vault_source_deposit_addresses
+	sol_safe_vault_source_deposit_addresses
+		.clone()
+		.witness_nonces(process_call.clone(), sol_client.clone(), nonces_accounts)
+		.await
+		.continuous("SolanaNonceWitnessing".to_string(), db.clone())
+		.logging("SolanaNonceWitnessing")
+		.spawn(scope);
+
+	// sol_safe_vault_source
 	// 	.clone()
 	// 	.egress_items(scope, state_chain_stream, state_chain_client.clone())
 	// 	.await
@@ -263,7 +262,7 @@ mod tests {
 				];
 
 				let result =
-					success_witnesses(&retry_client, &monitored_tx_signatures, &[]).await.unwrap();
+					success_witnesses(&retry_client, &monitored_tx_signatures).await.unwrap();
 				println!("{:?}", result);
 				assert_eq!(result.len(), 1);
 				assert_eq!(result[0].0, monitored_tx_signatures[0]);

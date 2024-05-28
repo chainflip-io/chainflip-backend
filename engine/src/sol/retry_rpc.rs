@@ -83,6 +83,12 @@ pub trait SolRetryRpcApi: Clone {
 		signature: &SolSignature,
 		config: RpcTransactionConfig,
 	) -> EncodedConfirmedTransactionWithStatusMeta;
+
+	async fn send_transaction(
+		&self,
+		transaction: String,
+		config: RpcSendTransactionConfig,
+	) -> SolSignature;
 }
 
 #[async_trait::async_trait]
@@ -182,6 +188,25 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.get_transaction(&signature, config).await })
+				}),
+			)
+			.await
+	}
+	async fn send_transaction(
+		&self,
+		transaction: String,
+		config: RpcSendTransactionConfig,
+	) -> SolSignature {
+		self.rpc_retry_client
+			.request(
+				RequestLog::new(
+					"sendTransaction".to_string(),
+					Some(format!("{:?}, {:?}", transaction, config)),
+				),
+				Box::pin(move |client| {
+					let transaction = transaction.clone();
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.send_transaction(transaction, config).await })
 				}),
 			)
 			.await

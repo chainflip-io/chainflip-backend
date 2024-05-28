@@ -2,7 +2,7 @@ use crate::witness::common::{RuntimeCallHasChain, RuntimeHasChain};
 use anyhow::{ensure, Error};
 use cf_chains::{
 	instances::ChainInstanceFor,
-	sol::{SolAddress, SolAsset, SolHash, SolSignature},
+	sol::{SolAddress, SolHash, SolSignature},
 	Chain, Solana,
 };
 use cf_primitives::EpochIndex;
@@ -229,7 +229,7 @@ where
 								ensure!(encoding == UiAccountEncoding::Base64);
 
 								// Decode the base64 string to bytes
-								let mut bytes = base64::decode(&base64_string)
+								let mut bytes = base64::decode(base64_string)
 									.expect("Failed to decode base64 string");
 
 								println!("bytes {:?}", bytes);

@@ -154,6 +154,11 @@ pub trait SolRpcApi {
 		signature: &SolSignature,
 		config: RpcTransactionConfig,
 	) -> Result<EncodedConfirmedTransactionWithStatusMeta>;
+	async fn send_transaction(
+		&self,
+		transaction: String,
+		config: RpcSendTransactionConfig,
+	) -> Result<SolSignature>;
 }
 
 #[async_trait::async_trait]
@@ -228,12 +233,25 @@ impl SolRpcApi for SolRpcClient {
 		let response =
 			self.call_rpc("getTransaction", Some(json!([signature, json!(config)]))).await?;
 
-		println!("DEBUG RESPONSE: {:?}", response);
-
 		let transaction_data = from_value(response)
 			.map_err(|err| anyhow!("Failed to parse transaction data {}", err))?;
 
 		Ok(transaction_data)
+	}
+
+	// We expect a fully-signed transaction as encoded string. We might have to encode it here
+	// otherwise but the serialization is expected to be done by the caller.
+	async fn send_transaction(
+		&self,
+		transaction: String,
+		config: RpcSendTransactionConfig,
+	) -> Result<SolSignature> {
+		let response = self
+			.call_rpc("sendTransaction", Some(json!([transaction, json!(config)])))
+			.await?;
+		let signature: SolSignature = from_value(response)
+			.map_err(|err| anyhow!("Failed to parse the resulting signature: {}", err))?;
+		Ok(signature)
 	}
 }
 
@@ -329,7 +347,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_sol_get_transaction() {
+	async fn test_sol_transaction() {
 		let sol_rpc_client = SolRpcClient::new(
 			SecretUrl::from("https://api.devnet.solana.com".to_string()),
 			Some(SolHash::from_str("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG").unwrap()),
@@ -365,4 +383,6 @@ mod tests {
 		println!("Signature status: {:?}", signature_status);
 		assert_eq!(confirmation_status, &TransactionConfirmationStatus::Finalized);
 	}
+
+	// TODO: Add test for send transaction
 }
