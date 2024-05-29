@@ -61,7 +61,7 @@ jobs:
     uses: ./.github/workflows/upgrade-test.yml
     secrets: inherit
     with:
-      run-job: false
+      run-job: true
       upgrade-from-release: "sisyphos"
       upgrade-to-workflow-name: "ci-main.yml"
   publish:
