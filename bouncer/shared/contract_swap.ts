@@ -153,12 +153,12 @@ export async function performSwapViaContract(
 
     const ccmEventEmitted = messageMetadata
       ? observeCcmReceived(
-        sourceAsset,
-        destAsset,
-        destAddress,
-        messageMetadata,
-        wallet.address.toLowerCase(),
-      )
+          sourceAsset,
+          destAsset,
+          destAddress,
+          messageMetadata,
+          wallet.address.toLowerCase(),
+        )
       : Promise.resolve();
 
     const [newBalance] = await Promise.all([

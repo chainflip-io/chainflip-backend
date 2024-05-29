@@ -45,7 +45,7 @@ function newAbiEncodedMessage(types?: SolidityType[]): string {
     for (let i = 0; i < numElements; i++) {
       typesArray.push(
         Object.values(SolidityType)[
-        Math.floor(Math.random() * (Object.keys(SolidityType).length / 2))
+          Math.floor(Math.random() * (Object.keys(SolidityType).length / 2))
         ],
       );
     }
@@ -89,7 +89,7 @@ export function newCcmMetadata(
 
   const gasBudget = Math.floor(
     Number(amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals(sourceAsset))) /
-    gasDiv,
+      gasDiv,
   );
 
   return {
@@ -179,7 +179,14 @@ export async function testSwapViaContract(
   );
 
   swapContext?.updateStatus(tag, SwapStatus.Initiated);
-  return performSwapViaContract(sourceAsset, destAsset, destAddress, tag, messageMetadata, swapContext);
+  return performSwapViaContract(
+    sourceAsset,
+    destAsset,
+    destAddress,
+    tag,
+    messageMetadata,
+    swapContext,
+  );
 }
 
 export class SwapContext {
@@ -221,7 +228,10 @@ export class SwapContext {
         break;
       }
       case SwapStatus.Success: {
-        assert(currentStatus === SwapStatus.SwapScheduled, `Unexpected status transition for ${tag}`);
+        assert(
+          currentStatus === SwapStatus.SwapScheduled,
+          `Unexpected status transition for ${tag}`,
+        );
         break;
       }
       default:
