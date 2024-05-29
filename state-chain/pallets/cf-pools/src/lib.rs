@@ -455,9 +455,6 @@ pub mod pallet {
 			collected_fees: AssetAmount,
 			bought_amount: AssetAmount,
 		},
-		NetworkFeeTaken {
-			fee_amount: AssetAmount,
-		},
 		AssetSwapped {
 			from: Asset,
 			to: Asset,
@@ -1016,7 +1013,6 @@ impl<T: Config> SwappingApi for Pallet<T> {
 		CollectedNetworkFee::<T>::mutate(|total| {
 			total.saturating_accrue(fee);
 		});
-		Self::deposit_event(Event::<T>::NetworkFeeTaken { fee_amount: fee });
 		NetworkFeeTaken { remaining_amount: remaining, network_fee: fee }
 	}
 
