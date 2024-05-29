@@ -20,6 +20,13 @@ export async function initializeArbitrumChain() {
   await arbInitializationRequest;
 }
 
+export async function initializeSolanaChain() {
+  console.log('Initializing Solana');
+  const solInitializationRequest = observeEvent('solanaVault:ChainInitialized');
+  await submitGovernanceExtrinsic((chainflip) => chainflip.tx.solanaVault.initializeChain());
+  await solInitializationRequest;
+}
+
 export async function initializeArbitrumContracts(
   arbClient: Web3,
   arbKey: { pubKeyX: string; pubKeyYParity: string },

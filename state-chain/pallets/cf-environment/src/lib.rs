@@ -12,7 +12,7 @@ use cf_chains::{
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
-	sol::{SolAddress, SolHash},
+	sol::{SolAddress, SolHash, Solana},
 	Chain,
 };
 use cf_primitives::{
@@ -80,6 +80,8 @@ pub mod pallet {
 		type BitcoinVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Bitcoin>;
 		/// On new key witnessed handler for Arbitrum
 		type ArbitrumVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Arbitrum>;
+		/// On new key witnessed handler for Solana
+		type SolanaVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Solana>;
 
 		/// For getting the current active AggKey. Used for rotating Utxos from previous vault.
 		type BitcoinKeyProvider: KeyProvider<<Bitcoin as Chain>::ChainCrypto>;
@@ -247,6 +249,8 @@ pub mod pallet {
 		UtxoConsolidationParametersUpdated { params: utxo_selection::ConsolidationParameters },
 		/// Arbitrum Initialized: contract addresses have been set, first key activated
 		ArbitrumInitialized,
+		/// Solana Initialized: contract addresses have been set, first key activated
+		SolanaInitialized,
 		/// Some unspendable Utxos are discarded from storage.
 		StaleUtxosDiscarded { utxos: Vec<Utxo> },
 	}
@@ -395,6 +399,27 @@ pub mod pallet {
 				T::ArbitrumVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
 
 			Self::deposit_event(Event::<T>::ArbitrumInitialized);
+
+			Ok(dispatch_result)
+		}
+		#[allow(clippy::too_many_arguments)]
+		#[pallet::call_index(6)]
+		// This weight is not strictly correct but since it's a governance call, weight is
+		// irrelevant.
+		#[pallet::weight(Weight::zero())]
+		pub fn witness_initialize_solana_vault(
+			origin: OriginFor<T>,
+			block_number: u64,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			use cf_traits::VaultKeyWitnessedHandler;
+
+			// Witness the agg_key rotation manually in the vaults pallet for bitcoin
+			let dispatch_result =
+				T::SolanaVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
+
+			Self::deposit_event(Event::<T>::SolanaInitialized);
 
 			Ok(dispatch_result)
 		}

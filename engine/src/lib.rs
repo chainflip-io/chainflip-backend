@@ -24,7 +24,9 @@ pub mod evm;
 pub mod sol;
 
 use crate::state_chain_observer::client::CreateStateChainClientError;
-use ::multisig::{bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
+use ::multisig::{
+	bitcoin::BtcSigning, ed25519::Ed25519Signing, eth::EthSigning, polkadot::PolkadotSigning,
+};
 use cf_primitives::CfeCompatibility;
 use state_chain_observer::client::{
 	chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
@@ -161,6 +163,8 @@ async fn run_main(
 				dot_incoming_receiver,
 				btc_outgoing_sender,
 				btc_incoming_receiver,
+				sol_outgoing_sender,
+				sol_incoming_receiver,
 				p2p_ready_receiver,
 				p2p_fut,
 			) = p2p::start(
@@ -214,6 +218,17 @@ async fn run_main(
 				);
 
 			scope.spawn(btc_multisig_client_backend_future);
+
+			let (sol_multisig_client, sol_multisig_client_backend_future) =
+				multisig::start_client::<Ed25519Signing>(
+					state_chain_client.account_id(),
+					KeyStore::new(db.clone()),
+					sol_incoming_receiver,
+					sol_outgoing_sender,
+					ceremony_id_counters.solana,
+				);
+
+			scope.spawn(sol_multisig_client_backend_future);
 
 			// Create all the clients
 			let eth_client = {
@@ -318,9 +333,11 @@ async fn run_main(
 				arb_client,
 				dot_client,
 				btc_client,
+				sol_client,
 				eth_multisig_client,
 				dot_multisig_client,
 				btc_multisig_client,
+				sol_multisig_client,
 			));
 
 			p2p_ready_receiver.await.unwrap();

@@ -3,7 +3,10 @@ mod crypto_compat;
 mod tests;
 
 use anyhow::{anyhow, Context};
-use cf_chains::btc::{self, PreviousOrCurrent};
+use cf_chains::{
+	btc::{self, PreviousOrCurrent},
+	sol::SolAddress,
+};
 use cf_primitives::{BlockNumber, CeremonyId, EpochIndex};
 use crypto_compat::CryptoCompat;
 use futures::{FutureExt, StreamExt};
@@ -13,10 +16,11 @@ type CfeEvent = pallet_cf_cfe_interface::CfeEvent<Runtime>;
 
 use sp_runtime::AccountId32;
 use state_chain_runtime::{
-	AccountId, BitcoinInstance, EvmInstance, PolkadotInstance, Runtime, RuntimeCall,
+	AccountId, BitcoinInstance, EvmInstance, PolkadotInstance, Runtime, RuntimeCall, SolanaInstance,
 };
 use std::{
 	collections::BTreeSet,
+	str::FromStr,
 	sync::{
 		atomic::{AtomicBool, Ordering},
 		Arc,
@@ -29,6 +33,7 @@ use crate::{
 	btc::retry_rpc::BtcRetryRpcApi,
 	dot::retry_rpc::DotRetryRpcApi,
 	evm::retry_rpc::EvmRetrySigningRpcApi,
+	sol::retry_rpc::SolRetryRpcApi,
 	state_chain_observer::client::{
 		extrinsic_api::{
 			signed::{SignedExtrinsicApi, UntilFinalized},
@@ -39,8 +44,8 @@ use crate::{
 	},
 };
 use multisig::{
-	bitcoin::BtcCryptoScheme, client::MultisigClientApi, eth::EvmCryptoScheme,
-	polkadot::PolkadotCryptoScheme, ChainSigning, CryptoScheme, KeyId,
+	bitcoin::BtcCryptoScheme, client::MultisigClientApi, ed25519::Ed25519CryptoScheme,
+	eth::EvmCryptoScheme, polkadot::PolkadotCryptoScheme, ChainSigning, CryptoScheme, KeyId,
 	SignatureToThresholdSignature,
 };
 use utilities::task_scope::{task_scope, Scope};
@@ -221,9 +226,11 @@ pub async fn start<
 	EvmRpc,
 	DotRpc,
 	BtcRpc,
+	SolRpc,
 	EthMultisigClient,
 	PolkadotMultisigClient,
 	BitcoinMultisigClient,
+	SolMultisigClient,
 >(
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
@@ -231,18 +238,22 @@ pub async fn start<
 	arb_rpc: EvmRpc,
 	dot_rpc: DotRpc,
 	btc_rpc: BtcRpc,
+	sol_rpc: SolRpc,
 	eth_multisig_client: EthMultisigClient,
 	dot_multisig_client: PolkadotMultisigClient,
 	btc_multisig_client: BitcoinMultisigClient,
+	sol_multisig_client: SolMultisigClient,
 ) -> Result<(), anyhow::Error>
 where
 	BlockStream: StreamApi<FINALIZED>,
 	EvmRpc: EvmRetrySigningRpcApi + Send + Sync + 'static,
 	DotRpc: DotRetryRpcApi + Send + Sync + 'static,
 	BtcRpc: BtcRetryRpcApi + Send + Sync + 'static,
+	SolRpc: SolRetryRpcApi + Send + Sync + 'static,
 	EthMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,
 	PolkadotMultisigClient: MultisigClientApi<PolkadotCryptoScheme> + Send + Sync + 'static,
 	BitcoinMultisigClient: MultisigClientApi<BtcCryptoScheme> + Send + Sync + 'static,
+	SolMultisigClient: MultisigClientApi<Ed25519CryptoScheme> + Send + Sync + 'static,
 	StateChainClient:
 		StorageApi + ChainApi + UnsignedExtrinsicApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
@@ -515,13 +526,30 @@ where
                                         // p2p registration is handled in the p2p module.
                                         // Matching here to log the event due to the match_event macro.
                                     }
-                                    CfeEvent::SolThresholdSignatureRequest(unsupported) => {
-                                        tracing::warn!("sol-threshold-signature-request: {:?}", unsupported);
-                                        todo!()
+                                    CfeEvent::SolThresholdSignatureRequest(req) => {
+                                        handle_signing_request::<_, _, _, SolanaInstance>(
+                                            scope,
+                                            &sol_multisig_client,
+                                            state_chain_client.clone(),
+                                            req.ceremony_id,
+                                            req.signatories,
+                                            vec![(
+                                                KeyId::new(req.epoch_index, req.key),
+                                                multisig::ed25519::SigningPayload::new(req.payload.serialize())
+                                                    .expect("Payload should be correct size")
+                                            )],
+                                        ).await;
+
                                     }
-                                    CfeEvent::SolKeygenRequest(unsupported) => {
-                                        tracing::warn!("sol-keygen-request: {:?}", unsupported);
-                                        todo!()
+                                    CfeEvent::SolKeygenRequest(req) => {
+                                        handle_keygen_request::<_, _, _, SolanaInstance>(
+                                            scope,
+                                            &sol_multisig_client,
+                                            state_chain_client.clone(),
+                                            req.ceremony_id,
+                                            req.epoch_index,
+                                            req.participants,
+                                        ).await;
                                     }
                                     CfeEvent::SolTxBroadcastRequest(unsupported) => {
                                         tracing::warn!("sol-tx-broadcast-request: {:?}", unsupported);
@@ -565,6 +593,7 @@ pub struct CeremonyIdCounters {
 	pub ethereum: CeremonyId,
 	pub polkadot: CeremonyId,
 	pub bitcoin: CeremonyId,
+	pub solana: CeremonyId,
 }
 
 /// Get the ceremony id counters for each chain at the **start** of the given block without
@@ -635,6 +664,21 @@ where
 				>>(block_hash)
 				.await
 				.context("Failed to get Bitcoin CeremonyIdCounter from SC")?
+		},
+		solana: if let Some(ceremony_id) = events.iter().find_map(|event| match event {
+			CfeEvent::SolThresholdSignatureRequest(req) => Some(req.ceremony_id),
+			CfeEvent::SolKeygenRequest(req) => Some(req.ceremony_id),
+			_ => None,
+		}) {
+			ceremony_id.saturating_sub(1)
+		} else {
+			state_chain_client
+				.storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
+					state_chain_runtime::Runtime,
+					state_chain_runtime::SolanaInstance,
+				>>(block_hash)
+				.await
+				.context("Failed to get Solana CeremonyIdCounter from SC")?
 		},
 	})
 }

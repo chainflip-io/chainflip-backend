@@ -160,6 +160,15 @@ impl VaultKeyWitnessedHandler<Arbitrum> for MockArbitrumVaultKeyWitnessedHandler
 	}
 }
 
+pub struct MockSolanaVaultKeyWitnessedHandler;
+impl VaultKeyWitnessedHandler<Solana> for MockSolanaVaultKeyWitnessedHandler {
+	fn on_first_key_activated(
+		_block_number: <Solana as Chain>::ChainBlockNumber,
+	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
+		unimplemented!()
+	}
+}
+
 parameter_types! {
 	pub CurrentReleaseVersion: SemVer = SemVer {
 		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
@@ -185,6 +194,7 @@ impl pallet_cf_environment::Config for Test {
 	type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
 	type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;
 	type ArbitrumVaultKeyWitnessedHandler = MockArbitrumVaultKeyWitnessedHandler;
+	type SolanaVaultKeyWitnessedHandler = MockSolanaVaultKeyWitnessedHandler;
 	type BitcoinFeeInfo = MockBitcoinFeeInfo;
 	type BitcoinKeyProvider = MockBitcoinKeyProvider;
 	type RuntimeSafeMode = MockRuntimeSafeMode;

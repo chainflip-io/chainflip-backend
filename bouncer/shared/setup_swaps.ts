@@ -42,7 +42,7 @@ export async function setupSwaps(): Promise<void> {
     createLpPool('Usdt', price.get('Usdt')!),
     createLpPool('ArbEth', price.get('ArbEth')!),
     createLpPool('ArbUsdc', price.get('ArbUsdc')!),
-    // createLpPool('Sol', price.get('Sol')!),
+    createLpPool('Sol', price.get('Sol')!),
     // createLpPool('SolUsdc', price.get('SolUsdc')!),
   ]);
 
@@ -55,7 +55,7 @@ export async function setupSwaps(): Promise<void> {
     provideLiquidity('Usdt', deposits.get('Usdt')!),
     provideLiquidity('ArbEth', deposits.get('ArbEth')!),
     provideLiquidity('ArbUsdc', deposits.get('ArbUsdc')!),
-    // provideLiquidity('Sol', deposits.get('Sol')!),
+    provideLiquidity('Sol', deposits.get('Sol')!),
     // provideLiquidity('SolUsdc', deposits.get('SolUsdc')!),
   ]);
 
@@ -81,7 +81,7 @@ export async function setupSwaps(): Promise<void> {
     rangeOrder('Usdt', deposits.get('Usdt')! * 0.9999),
     rangeOrder('ArbEth', deposits.get('ArbEth')! * 0.9999),
     rangeOrder('ArbUsdc', deposits.get('ArbUsdc')! * 0.9999),
-    // rangeOrder('Sol', deposits.get('Sol')! * 0.9999),
+    rangeOrder('Sol', deposits.get('Sol')! * 0.9999),
     // rangeOrder('SolUsdc', deposits.get('SolUsdc')! * 0.9999),
   ]);
 

@@ -72,19 +72,13 @@ impl ChainCrypto for SolanaCrypto {
 		_payload: &Self::Payload,
 		_signature: &Self::ThresholdSignature,
 	) -> bool {
-		todo!()
+		// TODO: Implement this
+		true
 	}
 
 	fn agg_key_to_payload(_agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
-		todo!()
-	}
-
-	fn handover_key_matches(_current_key: &Self::AggKey, _new_key: &Self::AggKey) -> bool {
-		todo!()
-	}
-
-	fn key_handover_is_required() -> bool {
-		todo!()
+		// TODO: Implement this
+		SolMessage::new(&[], None)
 	}
 
 	fn maybe_broadcast_barriers_on_rotation(

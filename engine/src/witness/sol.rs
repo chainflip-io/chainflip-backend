@@ -129,7 +129,6 @@ where
 	// TODO: Get this from the environment
 	let _usdc_pubkey = SolAddress::from_str("24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p")
 		.expect("Failed to get USDC contract address from SC");
-
 	let nonces_accounts: Vec<(SolAddress, SolHash)> = vec![(
 		SolAddress::from_str("HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo").expect("Temp"),
 		SolHash::from_str("3DfasJ5WivELD1yNXSgxT8hFaphBpuYFUqdTjoBqYyrk").expect("Temp"),
@@ -186,6 +185,7 @@ where
 	// 	.logging("SolanaUsdcDeposits")
 	// 	.spawn(scope);
 
+	// TODO: We should probably witness through chunk_by_time and not chunk_by_vault
 	sol_safe_vault_source_deposit_addresses
 		.clone()
 		.witness_nonces(process_call.clone(), sol_client.clone(), nonces_accounts)
