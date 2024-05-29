@@ -3,8 +3,8 @@ import path from 'path';
 import assert from 'assert';
 import { execSync } from 'child_process';
 
-import { blake2AsU8a } from '@polkadot/util-crypto';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
+import { blake2AsU8a } from '../polkadot/util-crypto';
 import {
   getPolkadotApi,
   observeEvent,

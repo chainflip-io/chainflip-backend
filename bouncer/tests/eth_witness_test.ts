@@ -1,6 +1,6 @@
 #!/usr/bin/env -S pnpm tsx
-import { Keyring } from '@polkadot/keyring';
 import { exec } from 'child_process';
+import { Keyring } from '../polkadot/keyring';
 import { runWithTimeout, observeEvent, getChainflipApi } from '../shared/utils';
 
 async function main(): Promise<void> {

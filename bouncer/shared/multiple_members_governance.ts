@@ -1,6 +1,5 @@
-import Keyring from '@polkadot/keyring';
-import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { assert } from '@polkadot/util';
+import assert from 'assert';
+import Keyring from '../polkadot/keyring';
 import { getChainflipApi, observeEvent } from '../shared/utils';
 import { snowWhite, submitGovernanceExtrinsic } from '../shared/cf_governance';
 
@@ -15,7 +14,6 @@ async function setGovernanceMembers(members: string[]) {
   await submitGovernanceExtrinsic((chainflip) => chainflip.tx.governance.newMembershipSet(members));
 }
 
-await cryptoWaitReady();
 const keyring = new Keyring({ type: 'sr25519' });
 keyring.setSS58Format(2112);
 

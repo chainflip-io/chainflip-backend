@@ -1,5 +1,4 @@
-import { HexString } from '@polkadot/util/types';
-import { cryptoWaitReady } from '@polkadot/util-crypto';
+import type { HexString } from '@polkadot/util/types';
 import { fundStateChainAccount } from '@chainflip/cli';
 import { Wallet, ethers } from 'ethers';
 import { getNextEvmNonce } from './send_evm';
@@ -16,7 +15,6 @@ import { approveErc20 } from './approve_erc20';
 
 export async function fundFlip(scAddress: string, flipAmount: string) {
   await using chainflip = await getChainflipApi();
-  await cryptoWaitReady();
 
   await approveErc20('Flip', getContractAddress('Ethereum', 'GATEWAY'), flipAmount);
 

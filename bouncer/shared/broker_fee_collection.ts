@@ -1,9 +1,8 @@
 #!/usr/bin/env -S pnpm tsx
 import assert from 'assert';
 import { randomBytes } from 'crypto';
-import Keyring from '@polkadot/keyring';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
-import { cryptoWaitReady } from '@polkadot/util-crypto';
+import Keyring from '../polkadot/keyring';
 import {
   EgressId,
   brokerMutex,
@@ -215,7 +214,6 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
 
 export async function testBrokerFeeCollection(): Promise<void> {
   console.log('\x1b[36m%s\x1b[0m', '=== Running broker fee collection test ===');
-  await cryptoWaitReady();
   await using chainflip = await getChainflipApi();
 
   // Check account role
