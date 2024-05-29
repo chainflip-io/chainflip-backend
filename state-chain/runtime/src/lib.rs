@@ -13,9 +13,12 @@ mod weights;
 use crate::{
 	chainflip::{calculate_account_apy, Offence},
 	runtime_apis::{
-		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, DispatchErrorWithMessage,
-		EventFilter, FailingWitnessValidators, LiquidityProviderInfo, RuntimeApiPenalty,
-		SimulateSwapAdditionalOrder, SimulatedSwapInformation, ValidatorInfo,
+		runtime_decl_for_custom_runtime_api::CustomRuntimeApiV1, AuctionState, AuthoritiesInfo,
+		BoostPoolDepth, BoostPoolDetails, BrokerInfo, BtcUtxos, DispatchErrorWithMessage,
+		EpochState, EventFilter, ExternalChainsBlockHeight, FailingWitnessValidators, FeeImbalance,
+		FlipSupply, LastRuntimeUpgradeInfo, LiquidityProviderInfo, MonitoringData,
+		OpenDepositChannels, PendingBroadcasts, PendingTssCeremonies, RedemptionsInfo,
+		RuntimeApiPenalty, ValidatorInfo, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
 	},
 };
 use cf_amm::{
@@ -26,14 +29,14 @@ use cf_chains::{
 	arb::api::ArbitrumApi,
 	assets::any::{AssetMap, ForeignChainAndAsset},
 	btc::{BitcoinCrypto, BitcoinRetryPolicy},
-	dot::{self, PolkadotCrypto},
+	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
 	sol::SolanaCrypto,
 	Arbitrum, Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot, Solana,
 	TransactionBuilder,
 };
-use cf_primitives::{BroadcastId, NetworkEnvironment};
+use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment};
 use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi};
 use codec::Encode;
 use core::ops::Range;
@@ -51,7 +54,7 @@ use pallet_cf_reputation::ExclusionList;
 use pallet_cf_swapping::{CcmSwapAmounts, SwapLegInfo};
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
-use scale_info::prelude::string::String;
+use scale_info::prelude::{format, string::String};
 use sp_std::collections::btree_map::BTreeMap;
 
 pub use cf_chains::instances::{
@@ -1763,12 +1766,12 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_witness_count(hash: pallet_cf_witnesser::CallHash) -> Option<FailingWitnessValidators> {
+		fn cf_witness_count(hash: pallet_cf_witnesser::CallHash, epoch_index: Option<EpochIndex>) -> Option<FailingWitnessValidators> {
 			let mut result: FailingWitnessValidators = FailingWitnessValidators {
 				failing_count: 0,
 				validators: vec![],
 			};
-			let voting_validators = Witnesser::count_votes(<Runtime as Chainflip>::EpochInfo::current_epoch(), hash);
+			let voting_validators = Witnesser::count_votes(epoch_index.unwrap_or(<Runtime as Chainflip>::EpochInfo::current_epoch()), hash);
 			let vanity_names: BTreeMap<AccountId, BoundedVec<u8, _>> = pallet_cf_account_roles::VanityNames::<Runtime>::get();
 			voting_validators?.iter().for_each(|(val, voted)| {
 				let vanity = vanity_names.get(val).cloned().unwrap_or_default();
@@ -1867,6 +1870,165 @@ impl_runtime_apis! {
 				ForeignChain::Solana => boost_pools_details::<SolanaInstance>(asset.try_into().unwrap()),
 			}
 
+		}
+	}
+	impl runtime_apis::MonitoringRuntimeApi<Block> for Runtime {
+
+		fn cf_authorities() -> AuthoritiesInfo {
+			let mut authorities = pallet_cf_validator::CurrentAuthorities::<Runtime>::get();
+			let mut backups = pallet_cf_validator::Backups::<Runtime>::get();
+			let mut result = AuthoritiesInfo {
+				authorities: authorities.len() as u32,
+				online_authorities: 0,
+				backups: backups.len() as u32,
+				online_backups: 0,
+			};
+			authorities.retain(Reputation::is_qualified);
+			backups.retain(|elem, _| Reputation::is_qualified(elem));
+			result.online_authorities = authorities.len() as u32;
+			result.online_backups = backups.len() as u32;
+			result
+		}
+
+		fn cf_external_chains_block_height() -> ExternalChainsBlockHeight {
+			// safe to unwrap these value as stated on the storage item doc
+			let btc = pallet_cf_chain_tracking::CurrentChainState::<Runtime, BitcoinInstance>::get().unwrap();
+			let eth = pallet_cf_chain_tracking::CurrentChainState::<Runtime, EthereumInstance>::get().unwrap();
+			let dot = pallet_cf_chain_tracking::CurrentChainState::<Runtime, PolkadotInstance>::get().unwrap();
+
+			ExternalChainsBlockHeight {
+				bitcoin: btc.block_height,
+				ethereum: eth.block_height,
+				polkadot: dot.block_height.into(),
+			}
+		}
+
+		fn cf_btc_utxos() -> BtcUtxos {
+			let utxos = pallet_cf_environment::BitcoinAvailableUtxos::<Runtime>::get();
+			BtcUtxos {
+				total_balance: utxos.iter().fold(0, |acc, elem| acc + elem.amount),
+				count: utxos.len() as u32,
+			}
+		}
+
+		fn cf_dot_aggkey() -> PolkadotAccountId {
+			let epoch = PolkadotThresholdSigner::current_key_epoch().unwrap_or_default();
+			PolkadotThresholdSigner::keys(epoch).unwrap_or_default()
+		}
+
+		fn cf_suspended_validators() -> Vec<(Offence, u32)> {
+			pallet_cf_reputation::Suspensions::<Runtime>::iter().map(|(key, elem)| (key, elem.len() as u32)).collect()
+		}
+		fn cf_epoch_state() -> EpochState {
+			let auction_params = Validator::auction_parameters();
+			let min_active_bid = SetSizeMaximisingAuctionResolver::try_new(
+				<Runtime as Chainflip>::EpochInfo::current_authority_count(),
+				auction_params,
+			)
+			.and_then(|resolver| {
+				resolver.resolve_auction(
+					Validator::get_qualified_bidders::<<Runtime as pallet_cf_validator::Config>::KeygenQualification>(),
+					Validator::auction_bid_cutoff_percentage(),
+				)
+			})
+			.ok()
+			.map(|auction_outcome| auction_outcome.bond);
+			EpochState {
+				blocks_per_epoch: Validator::blocks_per_epoch(),
+				current_epoch_started_at: Validator::current_epoch_started_at(),
+				current_epoch_index: Validator::current_epoch(),
+				min_active_bid,
+				rotation_phase: format!("{}", Validator::current_rotation_phase())
+			}
+		}
+		fn cf_redemptions() -> RedemptionsInfo {
+			let redemptions: Vec<_> = pallet_cf_funding::PendingRedemptions::<Runtime>::iter().collect();
+			RedemptionsInfo {
+				total_balance: redemptions.iter().fold(0, |acc, elem| acc + elem.1.total),
+				count: redemptions.len() as u32,
+			}
+		}
+		fn cf_pending_broadcasts() -> PendingBroadcasts {
+			PendingBroadcasts {
+				ethereum: pallet_cf_broadcast::PendingBroadcasts::<Runtime, EthereumInstance>::decode_non_dedup_len().unwrap_or(0) as u32,
+				bitcoin: pallet_cf_broadcast::PendingBroadcasts::<Runtime, BitcoinInstance>::decode_non_dedup_len().unwrap_or(0) as u32,
+				polkadot: pallet_cf_broadcast::PendingBroadcasts::<Runtime, PolkadotInstance>::decode_non_dedup_len().unwrap_or(0) as u32,
+				arbitrum: pallet_cf_broadcast::PendingBroadcasts::<Runtime, ArbitrumInstance>::decode_non_dedup_len().unwrap_or(0) as u32,
+			}
+		}
+		fn cf_pending_tss_ceremonies() -> PendingTssCeremonies {
+			PendingTssCeremonies {
+				evm: pallet_cf_threshold_signature::PendingCeremonies::<Runtime, EvmInstance>::iter().collect::<Vec<_>>().len() as u32,
+				bitcoin: pallet_cf_threshold_signature::PendingCeremonies::<Runtime, BitcoinInstance>::iter().collect::<Vec<_>>().len() as u32,
+				polkadot: pallet_cf_threshold_signature::PendingCeremonies::<Runtime, PolkadotInstance>::iter().collect::<Vec<_>>().len() as u32,
+			}
+		}
+		fn cf_pending_swaps() -> u32 {
+			let swaps: Vec<_> = pallet_cf_swapping::SwapQueue::<Runtime>::iter().collect();
+			swaps.iter().fold(0u32, |acc, elem| acc + elem.1.len() as u32)
+		}
+		fn cf_open_deposit_channels() -> OpenDepositChannels {
+			let eth_channels: u32 = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, EthereumInstance>::iter().filter(|(_key, elem)| elem.expires_at > pallet_cf_chain_tracking::CurrentChainState::<Runtime, EthereumInstance>::get().unwrap().block_height).collect::<Vec<_>>().len() as u32;
+			let btc_channels: u32 = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, BitcoinInstance>::iter().filter(|(_key, elem)| elem.expires_at > pallet_cf_chain_tracking::CurrentChainState::<Runtime, BitcoinInstance>::get().unwrap().block_height).collect::<Vec<_>>().len() as u32;
+			let dot_channels: u32 = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, PolkadotInstance>::iter().filter(|(_key, elem)| elem.expires_at > pallet_cf_chain_tracking::CurrentChainState::<Runtime, PolkadotInstance>::get().unwrap().block_height).collect::<Vec<_>>().len() as u32;
+			let arb_channels: u32 = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, ArbitrumInstance>::iter().filter(|(_key, elem)| elem.expires_at > pallet_cf_chain_tracking::CurrentChainState::<Runtime, ArbitrumInstance>::get().unwrap().block_height).collect::<Vec<_>>().len() as u32;
+
+			OpenDepositChannels{
+				ethereum: eth_channels,
+				bitcoin: btc_channels,
+				polkadot: dot_channels,
+				arbitrum: arb_channels,
+			}
+		}
+		fn cf_fee_imbalance() -> FeeImbalance {
+			let eth = pallet_cf_ingress_egress::WithheldTransactionFees::<Runtime, EthereumInstance>::iter().fold(0, |acc, elem| acc+ elem.1) -
+				pallet_cf_broadcast::TransactionFeeDeficit::<Runtime, EthereumInstance>::iter().fold(0, |acc, elem| acc + elem.1);
+			let dot = pallet_cf_ingress_egress::WithheldTransactionFees::<Runtime, PolkadotInstance>::iter().fold(0, |acc, elem| acc+ elem.1) -
+				pallet_cf_broadcast::TransactionFeeDeficit::<Runtime, PolkadotInstance>::iter().fold(0, |acc, elem| acc + elem.1);
+			let btc = pallet_cf_ingress_egress::WithheldTransactionFees::<Runtime, BitcoinInstance>::iter().fold(0, |acc, elem| acc+ elem.1) -
+				pallet_cf_broadcast::TransactionFeeDeficit::<Runtime, BitcoinInstance>::iter().fold(0, |acc, elem| acc + elem.1);
+			let arb = pallet_cf_ingress_egress::WithheldTransactionFees::<Runtime, ArbitrumInstance>::iter().fold(0, |acc, elem| acc+ elem.1) -
+				pallet_cf_broadcast::TransactionFeeDeficit::<Runtime, ArbitrumInstance>::iter().fold(0, |acc, elem| acc + elem.1);
+
+			FeeImbalance {
+				ethereum: eth,
+				bitcoin: btc.into(),
+				polkadot: dot,
+				arbitrum: arb,
+			}
+		}
+		fn cf_build_version() -> LastRuntimeUpgradeInfo {
+			let info = frame_system::LastRuntimeUpgrade::<Runtime>::get().expect("this has to be set");
+			LastRuntimeUpgradeInfo {
+				spec_version: info.spec_version.into(),
+				spec_name: info.spec_name,
+			}
+		}
+		fn cf_monitoring_data() -> MonitoringData {
+			MonitoringData{
+				external_chains_height: Self::cf_external_chains_block_height(),
+				btc_utxos: Self::cf_btc_utxos(),
+				epoch: Self::cf_epoch_state(),
+				pending_redemptions: Self::cf_redemptions(),
+				pending_broadcasts: Self::cf_pending_broadcasts(),
+				pending_tss: Self::cf_pending_tss_ceremonies(),
+				open_deposit_channels: Self::cf_open_deposit_channels(),
+				fee_imbalance: Self::cf_fee_imbalance(),
+				authorities: Self::cf_authorities(),
+				build_version: Self::cf_build_version(),
+				suspended_validators: Self::cf_suspended_validators(),
+				pending_swaps: Self::cf_pending_swaps(),
+				dot_aggkey: Self::cf_dot_aggkey(),
+				flip_supply: {
+					let flip = Self::cf_flip_supply();
+					FlipSupply { total_supply: flip.0, offchain_supply: flip.1}
+				},
+			}
+		}
+		fn cf_accounts_info(accounts: BoundedVec<AccountId, ConstU32<10>>) -> Vec<ValidatorInfo> {
+			accounts.iter().map(|account_id| {
+				Self::cf_validator_info(account_id)
+			}).collect()
 		}
 	}
 

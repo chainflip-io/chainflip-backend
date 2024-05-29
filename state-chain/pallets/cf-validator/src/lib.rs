@@ -9,6 +9,7 @@ mod tests;
 mod helpers;
 
 pub mod weights;
+use scale_info::prelude::{fmt, fmt::Display};
 pub use weights::WeightInfo;
 pub mod migrations;
 
@@ -84,7 +85,18 @@ pub enum RotationPhase<T: Config> {
 	NewKeysActivated(RuntimeRotationState<T>),
 	SessionRotating(Vec<ValidatorIdOf<T>>, <T as Chainflip>::Amount),
 }
-
+impl<T: pallet::Config> Display for RotationPhase<T> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			RotationPhase::Idle => write!(f, "Idle"),
+			RotationPhase::KeygensInProgress(_) => write!(f, "KeygensInProgress"),
+			RotationPhase::KeyHandoversInProgress(_) => write!(f, "KeyHandoversInProgress"),
+			RotationPhase::ActivatingKeys(_) => write!(f, "ActivatingKeys"),
+			RotationPhase::NewKeysActivated(_) => write!(f, "NewKeysActivated"),
+			RotationPhase::SessionRotating(_, _) => write!(f, "SessionRotating"),
+		}
+	}
+}
 type ValidatorIdOf<T> = <T as Chainflip>::ValidatorId;
 
 type BackupMap<T> = BTreeMap<ValidatorIdOf<T>, <T as Chainflip>::Amount>;
