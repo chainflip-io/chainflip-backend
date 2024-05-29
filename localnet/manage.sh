@@ -137,7 +137,7 @@ build-localnet() {
   done
 
   mkdir -p /tmp/chainflip/
-  touch /tmp/chainflip/debug.log
+  touch $DEBUG_OUTPUT_DESTINATION
 
   echo "🪢 Pulling Docker Images"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" pull --quiet >>$DEBUG_OUTPUT_DESTINATION 2>&1
