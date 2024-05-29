@@ -18,7 +18,7 @@ use crate::{
 		EpochState, EventFilter, ExternalChainsBlockHeight, FailingWitnessValidators, FeeImbalance,
 		FlipSupply, LastRuntimeUpgradeInfo, LiquidityProviderInfo, MonitoringData,
 		OpenDepositChannels, PendingBroadcasts, PendingTssCeremonies, RedemptionsInfo,
-		RuntimeApiPenalty, ValidatorInfo, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
+		RuntimeApiPenalty, SimulateSwapAdditionalOrder, SimulatedSwapInformation, ValidatorInfo,
 	},
 };
 use cf_amm::{
