@@ -1,8 +1,13 @@
+use anyhow::Result;
+
 use super::{
 	curve25519::edwards::Point, CanonicalEncoding, ChainSigning, ChainTag, CryptoScheme, CryptoTag,
-	ECPoint,
+	ECPoint, SignatureToThresholdSignature,
 };
-use cf_chains::Chain;
+use cf_chains::{
+	sol::{SolAddress, SolSignature},
+	Chain, ChainCrypto, Solana,
+};
 use ed25519_consensus::VerificationKeyBytes;
 use serde::{Deserialize, Serialize};
 
@@ -24,9 +29,27 @@ impl Signature {
 	}
 }
 
+impl SignatureToThresholdSignature<<Solana as Chain>::ChainCrypto> for Vec<Signature> {
+	fn to_threshold_signature(
+		&self,
+	) -> <<Solana as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature {
+		// TODO: Implement this
+		// self.iter()
+		//     .map(|s| SolSignature::from(s.to_bytes()))
+		//     .collect()
+		SolSignature::default()
+	}
+}
+
 impl CanonicalEncoding for VerificationKeyBytes {
 	fn encode_key(&self) -> Vec<u8> {
 		self.to_bytes().to_vec()
+	}
+}
+
+impl CanonicalEncoding for SolAddress {
+	fn encode_key(&self) -> Vec<u8> {
+		self.0.to_vec()
 	}
 }
 
@@ -44,13 +67,23 @@ impl AsRef<[u8]> for SigningPayload {
 		self.0.as_ref()
 	}
 }
+
+impl SigningPayload {
+	pub fn new(payload: Vec<u8>) -> Result<Self> {
+		if payload.is_empty() || payload.len() > 1326 {
+			anyhow::bail!("Invalid payload size");
+		}
+		Ok(SigningPayload(payload))
+	}
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Ed25519CryptoScheme;
 
 impl ChainSigning for Ed25519Signing {
 	type CryptoScheme = Ed25519CryptoScheme;
 	// This scheme isn't implemented on the state chain.
-	type ChainCrypto = <cf_chains::none::NoneChain as Chain>::ChainCrypto;
+	type ChainCrypto = <Solana as Chain>::ChainCrypto;
 
 	const NAME: &'static str = "Ed25519";
 

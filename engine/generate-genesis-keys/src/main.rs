@@ -3,8 +3,8 @@ use cf_primitives::GENESIS_EPOCH;
 use chainflip_engine::db::PersistentKeyDB;
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use multisig::{
-	bitcoin::BtcSigning, client::keygen::generate_key_data, eth::EthSigning,
-	polkadot::PolkadotSigning, CanonicalEncoding, ChainSigning, KeyId, Rng,
+	bitcoin::BtcSigning, client::keygen::generate_key_data, ed25519::Ed25519Signing,
+	eth::EthSigning, polkadot::PolkadotSigning, CanonicalEncoding, ChainSigning, KeyId, Rng,
 };
 use rand::SeedableRng;
 use state_chain_runtime::AccountId;
@@ -27,6 +27,7 @@ struct AggKeys {
 	eth_agg_key: String,
 	dot_agg_key: String,
 	btc_agg_key: String,
+	sol_agg_key: String,
 }
 
 fn load_node_ids_from_csv<R>(mut reader: csv::Reader<R>) -> HashMap<AccountId, String>
@@ -78,6 +79,7 @@ fn main() {
 			eth_agg_key: generate_and_save_keys::<EthSigning>(&node_id_to_name_map),
 			dot_agg_key: generate_and_save_keys::<PolkadotSigning>(&node_id_to_name_map),
 			btc_agg_key: generate_and_save_keys::<BtcSigning>(&node_id_to_name_map),
+			sol_agg_key: generate_and_save_keys::<Ed25519Signing>(&node_id_to_name_map),
 		})
 		.expect("Should prettify json")
 	);
@@ -128,6 +130,7 @@ fn should_generate_and_save_all_keys() {
 	generate_and_save_keys::<EthSigning>(&node_id_to_name_map);
 	generate_and_save_keys::<PolkadotSigning>(&node_id_to_name_map);
 	generate_and_save_keys::<BtcSigning>(&node_id_to_name_map);
+	generate_and_save_keys::<Ed25519Signing>(&node_id_to_name_map);
 
 	// Open the db and check the keys
 	let db =
@@ -137,4 +140,5 @@ fn should_generate_and_save_all_keys() {
 	assert_eq!(db.load_keys::<EthSigning>().len(), 1);
 	assert_eq!(db.load_keys::<PolkadotSigning>().len(), 1);
 	assert_eq!(db.load_keys::<BtcSigning>().len(), 1);
+	assert_eq!(db.load_keys::<Ed25519Signing>().len(), 1);
 }

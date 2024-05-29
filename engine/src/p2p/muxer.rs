@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use cf_chains::{btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto};
+use cf_chains::{btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, sol::SolanaCrypto};
 use futures::Future;
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -19,6 +19,8 @@ pub struct P2PMuxer {
 	dot_outgoing_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
 	btc_incoming_sender: UnboundedSender<(AccountId, VersionedCeremonyMessage)>,
 	btc_outgoing_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
+	sol_incoming_sender: UnboundedSender<(AccountId, VersionedCeremonyMessage)>,
+	sol_outgoing_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
 }
 
 /// Top-level protocol message, encapsulates all others
@@ -93,6 +95,8 @@ impl P2PMuxer {
 		MultisigMessageReceiver<PolkadotCrypto>,
 		MultisigMessageSender<BitcoinCrypto>,
 		MultisigMessageReceiver<BitcoinCrypto>,
+		MultisigMessageSender<SolanaCrypto>,
+		MultisigMessageReceiver<SolanaCrypto>,
 		impl Future<Output = ()>,
 	) {
 		let (eth_outgoing_sender, eth_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -104,6 +108,9 @@ impl P2PMuxer {
 		let (btc_outgoing_sender, btc_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
 		let (btc_incoming_sender, btc_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
 
+		let (sol_outgoing_sender, sol_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
+		let (sol_incoming_sender, sol_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+
 		let muxer = P2PMuxer {
 			all_incoming_receiver,
 			all_outgoing_sender,
@@ -113,6 +120,8 @@ impl P2PMuxer {
 			dot_incoming_sender,
 			btc_outgoing_receiver,
 			btc_incoming_sender,
+			sol_outgoing_receiver,
+			sol_incoming_sender,
 		};
 
 		let muxer_fut = muxer.run().instrument(info_span!("P2PMuxer"));
@@ -124,6 +133,8 @@ impl P2PMuxer {
 			MultisigMessageReceiver::<PolkadotCrypto>::new(dot_incoming_receiver),
 			MultisigMessageSender::<BitcoinCrypto>::new(btc_outgoing_sender),
 			MultisigMessageReceiver::<BitcoinCrypto>::new(btc_incoming_receiver),
+			MultisigMessageSender::<SolanaCrypto>::new(sol_outgoing_sender),
+			MultisigMessageReceiver::<SolanaCrypto>::new(sol_incoming_receiver),
 			muxer_fut,
 		)
 	}
@@ -153,8 +164,9 @@ impl P2PMuxer {
 									.expect("bitcoin receiver dropped");
 							},
 							ChainTag::Ed25519 => {
-								P2P_BAD_MSG.inc(&["Ed25519_not_supported"]);
-								warn!("Ed25519 not yet supported")
+								self.sol_incoming_sender
+									.send((account_id, message))
+									.expect("solana receiver dropped");
 							},
 						}
 					},
@@ -204,6 +216,9 @@ impl P2PMuxer {
 				}
 				Some(data) = self.btc_outgoing_receiver.recv() => {
 					self.process_outgoing(ChainTag::Bitcoin, data).await;
+				}
+				Some(data) = self.sol_outgoing_receiver.recv() => {
+					self.process_outgoing(ChainTag::Ed25519, data).await;
 				}
 			}
 		}
