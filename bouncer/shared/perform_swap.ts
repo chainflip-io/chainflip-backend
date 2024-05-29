@@ -138,6 +138,8 @@ export async function doPerformSwap(
 
   await swapScheduledHandle;
 
+  swapContext?.updateStatus(tag, SwapStatus.SwapScheduled);
+
   if (log) console.log(`${tag} Waiting for balance to update`);
 
   try {

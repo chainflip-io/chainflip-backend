@@ -24,6 +24,7 @@ import {
 import { getBalance } from './get_balance';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { send } from './send';
+import { SwapContext, SwapStatus } from './swapping';
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'ArbUsdc'];
 
@@ -80,8 +81,9 @@ export async function performSwapViaContract(
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
-  swapTag?: string,
+  swapTag = '',
   messageMetadata?: CcmDepositMetadata,
+  swapContext?: SwapContext,
 ): Promise<ContractSwapParams> {
   await using api = await getChainflipApi();
 
@@ -114,6 +116,7 @@ export async function performSwapViaContract(
         wallet,
       );
     }
+    swapContext?.updateStatus(swapTag, SwapStatus.ContractApproved);
 
     const oldBalance = await getBalance(destAsset, destAddress);
     console.log(`${tag} Old balance: ${oldBalance}`);
@@ -131,6 +134,8 @@ export async function performSwapViaContract(
       wallet,
       messageMetadata,
     );
+    swapContext?.updateStatus(swapTag, SwapStatus.ContractExecuted);
+
     await observeEvent('swapping:SwapScheduled', api, (event) => {
       if ('Vault' in event.data.origin) {
         const sourceAssetMatches = sourceAsset === (event.data.sourceAsset as Asset);
@@ -141,16 +146,19 @@ export async function performSwapViaContract(
       // Otherwise it was a swap scheduled by requesting a deposit address
       return false;
     });
+
+    swapContext?.updateStatus(swapTag, SwapStatus.SwapScheduled);
+
     console.log(`${tag} Successfully observed event: swapping: SwapScheduled`);
 
     const ccmEventEmitted = messageMetadata
       ? observeCcmReceived(
-          sourceAsset,
-          destAsset,
-          destAddress,
-          messageMetadata,
-          wallet.address.toLowerCase(),
-        )
+        sourceAsset,
+        destAsset,
+        destAddress,
+        messageMetadata,
+        wallet.address.toLowerCase(),
+      )
       : Promise.resolve();
 
     const [newBalance] = await Promise.all([
@@ -158,6 +166,7 @@ export async function performSwapViaContract(
       ccmEventEmitted,
     ]);
     console.log(`${tag} Swap success! New balance: ${newBalance}!`);
+    swapContext?.updateStatus(swapTag, SwapStatus.Success);
     return {
       sourceAsset,
       destAsset,
@@ -166,6 +175,7 @@ export async function performSwapViaContract(
     };
   } catch (err) {
     console.error('err:', err);
+    swapContext?.updateStatus(swapTag, SwapStatus.Failure);
     if (err instanceof Error) {
       console.log(err.stack);
     }
