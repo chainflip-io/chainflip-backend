@@ -136,6 +136,9 @@ build-localnet() {
     fi
   done
 
+  mkdir -p /tmp/chainflip/
+  touch /tmp/chainflip/debug.log
+
   echo "🪢 Pulling Docker Images"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" pull --quiet >>$DEBUG_OUTPUT_DESTINATION 2>&1
   echo "🔮 Initializing Network"
