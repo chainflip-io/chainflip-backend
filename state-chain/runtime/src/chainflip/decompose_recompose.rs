@@ -1,5 +1,7 @@
-use crate::{BitcoinInstance, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall};
-use cf_chains::btc::BitcoinFeeInfo;
+use crate::{
+	BitcoinInstance, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall, SolanaInstance,
+};
+use cf_chains::{btc::BitcoinFeeInfo, sol::SolTrackedData};
 use codec::{Decode, Encode};
 use pallet_cf_witnesser::WitnessDataExtraction;
 use sp_std::{mem, prelude::*};
@@ -37,6 +39,19 @@ impl WitnessDataExtraction for RuntimeCall {
 
 			// Since there is no priority fee in Arbitrum, we do not extract anything from the chain
 			// tracking witness data.
+
+			// Solana's priority fee is reported as a median of the latest blocks' priority fees
+			// values reported from via the node's RPC. That can't match exactly between different
+			// engines.
+			RuntimeCall::SolanaChainTracking(pallet_cf_chain_tracking::Call::<
+				Runtime,
+				SolanaInstance,
+			>::update_chain_state {
+				ref mut new_chain_state,
+			}) => {
+				let tracked_data = mem::take(&mut new_chain_state.tracked_data);
+				Some(tracked_data.encode())
+			},
 			_ => None,
 		}
 	}
@@ -71,6 +86,15 @@ impl WitnessDataExtraction for RuntimeCall {
 					new_chain_state.tracked_data.median_tip = median;
 				};
 			},
+			RuntimeCall::SolanaChainTracking(pallet_cf_chain_tracking::Call::<
+				Runtime,
+				SolanaInstance,
+			>::update_chain_state {
+				new_chain_state,
+			}) =>
+				if let Some(tracked_data) = sol_select_median_priority_fee(data) {
+					new_chain_state.tracked_data = tracked_data;
+				},
 			_ => {
 				log::warn!("No witness data injection for call {:?}", self);
 			},
@@ -88,6 +112,28 @@ fn select_median<T: Ord + Copy>(mut data: Vec<T>) -> Option<T> {
 fn select_median_btc_info(data: Vec<BitcoinFeeInfo>) -> Option<BitcoinFeeInfo> {
 	select_median(data.iter().map(BitcoinFeeInfo::sats_per_kilobyte).collect())
 		.map(BitcoinFeeInfo::new)
+}
+
+fn sol_select_median_priority_fee(data: &mut [Vec<u8>]) -> Option<SolTrackedData> {
+	let decode_all_results: Result<Vec<_>, _> = data
+		.iter_mut()
+		.map(|entry| SolTrackedData::decode(&mut entry.as_slice()))
+		.collect();
+
+	match decode_all_results {
+		Ok(entries) => {
+			let priority_fees: Vec<_> = entries.into_iter().map(|t| (t.priority_fee)).collect();
+			Some(SolTrackedData { priority_fee: select_median(priority_fees)? })
+		},
+		Err(decode_err) => {
+			log::warn!(
+				"Error decoding {}: {}",
+				core::any::type_name::<SolTrackedData>(),
+				decode_err
+			);
+			None
+		},
+	}
 }
 
 fn decode_and_select<T, F>(data: &mut [Vec<u8>], mut select: F) -> Option<T>
@@ -323,5 +369,24 @@ mod tests {
 	#[test]
 	fn select_median_btc_info_empty() {
 		assert_eq!(select_median_btc_info(vec![]), None);
+	}
+
+	#[test]
+	fn sol_select_median_priority_fee_empty_votes_test() {
+		assert!(sol_select_median_priority_fee(&mut []).is_none());
+	}
+
+	#[test]
+	fn sol_select_median_priority_test() {
+		let mut votes = [(5), (1000), (1006), (9000), (0)]
+			.into_iter()
+			.map(|priority_fee| SolTrackedData { priority_fee })
+			.map(|data| data.encode())
+			.collect::<Vec<_>>();
+
+		let actual = sol_select_median_priority_fee(&mut votes).unwrap();
+		let expected = SolTrackedData { priority_fee: 1000 };
+
+		assert_eq!(actual, expected);
 	}
 }

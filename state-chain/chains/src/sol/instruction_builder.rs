@@ -41,11 +41,15 @@ impl SolanaInstructionBuilder {
 		// TODO: implement compute limit calculation
 		let compute_limit = COMPUTE_LIMIT;
 
-		let mut final_instructions = vec![
-			SystemProgramInstruction::advance_nonce_account(&nonce_account, &agg_key),
-			ComputeBudgetInstruction::set_compute_unit_price(compute_price),
-			ComputeBudgetInstruction::set_compute_unit_limit(compute_limit),
-		];
+		let mut final_instructions =
+			vec![SystemProgramInstruction::advance_nonce_account(&nonce_account, &agg_key)];
+
+		if compute_price > 0 {
+			final_instructions
+				.push(ComputeBudgetInstruction::set_compute_unit_price(compute_price));
+		}
+
+		final_instructions.push(ComputeBudgetInstruction::set_compute_unit_limit(compute_limit));
 
 		final_instructions.append(&mut instructions);
 
