@@ -319,6 +319,10 @@ fn expect_swap_id_to_be_emitted() {
 		.then_execute_with(|_| {
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken {
+					swap_id: 1,
+					fee_amount: 0,
+				}),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 					swap_id: 1,
@@ -1151,6 +1155,10 @@ fn process_all_into_stable_swaps_first() {
 
 		assert_event_sequence!(
 			Test,
+			RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken { swap_id: 1, .. }),
+			RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken { swap_id: 2, .. }),
+			RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken { swap_id: 3, .. }),
+			RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken { swap_id: 4, .. }),
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_id: 1,
@@ -1357,6 +1365,7 @@ fn ccm_swaps_emits_events() {
 	});
 }
 
+#[allow(deprecated)]
 #[test]
 fn can_handle_ccm_with_zero_swap_outputs() {
 	new_test_ext()
@@ -1382,6 +1391,8 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 			// Swap outputs are zero
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken { swap_id: 1, .. }),
+				RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken { swap_id: 2, .. }),
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					swap_id: 1,
 					source_asset: Asset::Usdc,
@@ -1448,6 +1459,8 @@ fn can_handle_swaps_with_zero_outputs() {
 			// Swap outputs are zero
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken { swap_id: 1, .. }),
+				RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken { swap_id: 2, .. }),
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					swap_id: 1,
 					destination_asset: Asset::Eth,
@@ -2064,6 +2077,8 @@ fn swaps_are_executed_according_to_execute_at_field() {
 			assert_eq!(System::block_number(), 3);
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken { swap_id: 1, .. }),
+				RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken { swap_id: 2, .. }),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_id: 1, .. }),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2, .. }),
@@ -2078,6 +2093,8 @@ fn swaps_are_executed_according_to_execute_at_field() {
 			assert_eq!(System::block_number(), 4);
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken { swap_id: 3, .. }),
+				RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken { swap_id: 4, .. }),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 3, .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_id: 3, .. }),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 4, .. }),
@@ -2137,10 +2154,16 @@ fn swaps_get_retried_on_next_block_after_failure() {
 			assert_eq!(System::block_number(), 4);
 			assert_event_sequence!(
 				Test,
+				// Re-trying failed swaps from previous block:
+				RuntimeEvent::Swapping(Event::NetworkFeeTaken { swap_id: 1, .. }),
+				RuntimeEvent::Swapping(Event::NetworkFeeTaken { swap_id: 2, .. }),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_id: 1, .. }),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2, .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_id: 2, .. }),
+				// Executing swaps scheduled for the current block:
+				RuntimeEvent::Swapping(Event::NetworkFeeTaken { swap_id: 3, .. }),
+				RuntimeEvent::Swapping(Event::NetworkFeeTaken { swap_id: 4, .. }),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 3, .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_id: 3, .. }),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 4, .. }),
