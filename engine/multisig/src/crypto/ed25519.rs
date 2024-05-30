@@ -33,11 +33,10 @@ impl SignatureToThresholdSignature<<Solana as Chain>::ChainCrypto> for Vec<Signa
 	fn to_threshold_signature(
 		&self,
 	) -> <<Solana as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature {
-		// TODO: Implement this
-		// self.iter()
-		//     .map(|s| SolSignature::from(s.to_bytes()))
-		//     .collect()
-		SolSignature::default()
+		self.iter()
+			.map(|s| SolSignature(s.clone().to_bytes()))
+			.next()
+			.expect("Exactly one signature for Solana")
 	}
 }
 

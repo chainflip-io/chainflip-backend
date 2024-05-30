@@ -60,7 +60,7 @@ impl ChainCrypto for SolanaCrypto {
 	type KeyHandoverIsRequired = ConstBool<false>;
 
 	type AggKey = SolAddress;
-	type Payload = SolMessage; //todo
+	type Payload = SolMessage;
 	type ThresholdSignature = SolSignature;
 	type TransactionInId = SolHash;
 	type TransactionOutId = Self::ThresholdSignature;
@@ -76,9 +76,8 @@ impl ChainCrypto for SolanaCrypto {
 		true
 	}
 
-	fn agg_key_to_payload(_agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
-		// TODO: Implement this
-		SolMessage::new(&[], None)
+	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
+		SolMessage::new(&[], Some(&SolPubkey::from(agg_key)))
 	}
 
 	fn maybe_broadcast_barriers_on_rotation(
