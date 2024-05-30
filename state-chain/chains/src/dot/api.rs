@@ -1,6 +1,8 @@
 pub mod batch_fetch_and_transfer;
 pub mod rotate_vault_proxy;
 
+use std::env;
+
 use super::{
 	PolkadotAccountId, PolkadotCrypto, PolkadotExtrinsicBuilder, PolkadotPublicKey, RuntimeVersion,
 };
@@ -146,7 +148,9 @@ macro_rules! map_over_api_variants {
 	};
 }
 
-impl<E: PolkadotEnvironment> ApiCall<PolkadotCrypto> for PolkadotApi<E> {
+impl<E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>> ApiCall<PolkadotCrypto>
+	for PolkadotApi<E>
+{
 	fn threshold_signature_payload(&self) -> <PolkadotCrypto as ChainCrypto>::Payload {
 		let RuntimeVersion { spec_version, transaction_version, .. } = E::runtime_version();
 		map_over_api_variants!(
@@ -185,6 +189,11 @@ impl<E: PolkadotEnvironment> ApiCall<PolkadotCrypto> for PolkadotApi<E> {
 	fn transaction_out_id(&self) -> <PolkadotCrypto as ChainCrypto>::TransactionOutId {
 		map_over_api_variants!(self, call, call.signature().unwrap())
 	}
+
+	fn refresh_replay_protection(&mut self) {
+		let environment = E::replay_protection(false);
+		map_over_api_variants!(self, call, call.refresh_replay_protection(environment))
+	}
 }
 
 pub trait CreatePolkadotVault: ApiCall<PolkadotCrypto> {
@@ -215,7 +224,9 @@ impl WithEnvironment for PolkadotExtrinsicBuilder {
 	}
 }
 
-impl<E: PolkadotEnvironment + 'static> ApiCall<PolkadotCrypto> for OpaqueApiCall<E> {
+impl<E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot> + 'static> ApiCall<PolkadotCrypto>
+	for OpaqueApiCall<E>
+{
 	fn threshold_signature_payload(&self) -> <PolkadotCrypto as ChainCrypto>::Payload {
 		let RuntimeVersion { spec_version, transaction_version, .. } = E::runtime_version();
 
@@ -240,5 +251,10 @@ impl<E: PolkadotEnvironment + 'static> ApiCall<PolkadotCrypto> for OpaqueApiCall
 
 	fn transaction_out_id(&self) -> <PolkadotCrypto as ChainCrypto>::TransactionOutId {
 		self.builder.signature().unwrap()
+	}
+
+	fn refresh_replay_protection(&mut self) {
+		let environment = E::replay_protection(false);
+		self.builder.refresh_replay_protection(environment)
 	}
 }

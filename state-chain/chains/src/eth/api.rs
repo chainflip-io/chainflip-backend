@@ -1,3 +1,5 @@
+use std::env;
+
 use super::Ethereum;
 use crate::{
 	evm::{
@@ -110,6 +112,10 @@ impl<C: EvmCall + Parameter + 'static> ApiCall<EvmCrypto> for EvmTransactionBuil
 			s: sig_data.sig.into(),
 			k_times_g_address: sig_data.k_times_g_address.into(),
 		}
+	}
+
+	fn refresh_replay_protection(&mut self) {
+		// self.replay_protection = environment;
 	}
 }
 
@@ -358,6 +364,10 @@ impl<E> ApiCall<EvmCrypto> for EthereumApi<E> {
 
 	fn transaction_out_id(&self) -> <EvmCrypto as ChainCrypto>::TransactionOutId {
 		map_over_api_variants!(self, call, call.transaction_out_id())
+	}
+
+	fn refresh_replay_protection(&mut self) {
+		map_over_api_variants!(self, call, call.refresh_replay_protection())
 	}
 }
 

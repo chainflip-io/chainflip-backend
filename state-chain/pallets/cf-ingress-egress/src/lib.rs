@@ -827,7 +827,7 @@ pub mod pallet {
 						});
 					},
 					// Previous epoch, signature is invalid. Re-sign but don't broadcast.
-					1 => match T::Broadcaster::re_sign_broadcast(call.broadcast_id, false) {
+					1 => match T::Broadcaster::re_sign_broadcast(call.broadcast_id, false, false) {
 						Ok(threshold_signature_id) => {
 							Self::deposit_event(Event::<T, I>::FailedForeignChainCallResigned {
 								broadcast_id: call.broadcast_id,

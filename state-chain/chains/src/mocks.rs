@@ -365,6 +365,8 @@ impl<C: ChainCrypto + 'static> ApiCall<C> for MockApiCall<C> {
 	fn transaction_out_id(&self) -> <C as ChainCrypto>::TransactionOutId {
 		self.tx_out_id.clone()
 	}
+
+	fn refresh_replay_protection(&mut self) {}
 }
 
 thread_local! {

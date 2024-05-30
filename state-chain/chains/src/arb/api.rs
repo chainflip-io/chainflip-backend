@@ -179,6 +179,10 @@ impl<E> ApiCall<EvmCrypto> for ArbitrumApi<E> {
 	fn transaction_out_id(&self) -> <EvmCrypto as ChainCrypto>::TransactionOutId {
 		map_over_api_variants!(self, call, call.transaction_out_id())
 	}
+
+	fn refresh_replay_protection(&mut self) {
+		map_over_api_variants!(self, call, call.refresh_replay_protection())
+	}
 }
 
 impl<E> ArbitrumApi<E> {

@@ -7,6 +7,7 @@ pub mod benchmarking;
 #[cfg(feature = "std")]
 pub mod serializable_address;
 
+use api::PolkadotEnvironment;
 use cf_utilities::SliceToArray;
 #[cfg(feature = "std")]
 pub use serializable_address::*;
@@ -483,6 +484,15 @@ impl PolkadotExtrinsicBuilder {
 
 	pub fn is_signed(&self) -> bool {
 		self.signature.is_some()
+	}
+
+	pub fn refresh_replay_protection(&mut self, env: PolkadotReplayProtection) {
+		// let new_replay_pro = PolkadotReplayProtection {
+		// 	genesis_hash: self.replay_protection.genesis_hash,
+		// 	signer: self.replay_protection.signer,
+		// 	nonce: Environment::next_polkadot_proxy_account_nonce(true),
+		// };
+		self.replay_protection = env;
 	}
 }
 
