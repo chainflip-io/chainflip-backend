@@ -136,7 +136,7 @@ build-localnet() {
     fi
   done
 
-  mkdir -p /tmp/chainflip/
+  mkdir -p $CHAINFLIP_BASE_PATH
   touch $DEBUG_OUTPUT_DESTINATION
 
   echo "🪢 Pulling Docker Images"
