@@ -55,7 +55,6 @@ async function main(): Promise<void> {
   const btcKey = (await btcActivationRequest).data.newPublicKey;
   const arbKey = (await arbActivationRequest).data.newPublicKey;
   const solKey = (await solActivationRequest).data.newPublicKey;
-  console.log('solKey:', solKey);
 
   // Step 4
   console.log('Requesting Polkadot Vault creation');
