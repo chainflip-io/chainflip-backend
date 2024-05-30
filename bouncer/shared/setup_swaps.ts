@@ -69,7 +69,7 @@ export async function setupSwaps(): Promise<void> {
     provideLiquidity('Usdt', deposits.get('Usdt')!, false, '//LP_BOOST'),
     provideLiquidity('ArbEth', deposits.get('ArbEth')!, false, '//LP_BOOST'),
     provideLiquidity('ArbUsdc', deposits.get('ArbUsdc')!, false, '//LP_BOOST'),
-    // provideLiquidity('Sol', deposits.get('Sol')!, false, '//LP_BOOST'),
+    provideLiquidity('Sol', deposits.get('Sol')!, false, '//LP_BOOST'),
     // provideLiquidity('SolUsdc', deposits.get('SolUsdc')!, false, '//LP_BOOST'),
   ]);
 

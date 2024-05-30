@@ -32,6 +32,9 @@ pub use sol_prim::{
 };
 use std::str::FromStr;
 
+use crate::common::Mutex;
+use std::{collections::HashMap, sync::Arc};
+
 const FETCH_ACCOUNT_BYTE_LENGTH: usize = 24;
 const MAX_MULTIPLE_ACCOUNTS_QUERY: usize = 100;
 const FETCH_ACCOUNT_DISCRIMINATOR: [u8; 8] = [188, 68, 197, 38, 48, 192, 81, 100];
@@ -45,6 +48,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		asset: <Inner::Chain as cf_chains::Chain>::ChainAsset,
 		vault_address: SolAddress,
 		token_pubkey: Option<SolAddress>,
+		cached_balances: Arc<Mutex<HashMap<SolAddress, u128>>>,
 	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
 	where
 		Inner::Chain:
@@ -61,20 +65,26 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		state_chain_runtime::RuntimeCall:
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
 	{
-		println!("DEBUG Processing Solana Deposits");
+		println!("DEBUGDEPOSITS Processing Solana Deposits");
 
 		self.then(move |epoch, header| {
 			assert!(<Inner::Chain as Chain>::is_block_witness_root(header.index));
 
 			let sol_rpc = sol_rpc.clone();
 			let process_call = process_call.clone();
+			let cached_balances = Arc::clone(&cached_balances);
 
-			println!("DEBUG Processing Solana Deposits Inner");
+			println!("DEBUGDEPOSITS Processing Solana Deposits Inner");
 
 			async move {
 				let (_, deposit_channels) = header.data;
 
-				println!("DEBUG Processing Solana Deposits Inner 2");
+				// TODO: Use DB instead?
+				// Using this as a global variable to store the previous balances. The new pallet it
+				// might be alright if we submit values again after a restart, it's just not
+				// let cached_balances = Arc::new(Mutex::new(HashMap::new()));
+
+				println!("DEBUGDEPOSITS Processing Solana Deposits Inner 2");
 
 				// TODO: Check that if asset != sol (native) then token_pubkey is Some??
 
@@ -98,7 +108,10 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 						})
 						.collect::<Vec<_>>();
 
-					println!("Processing Solana Deposits {:?}", deposit_channels_info);
+					println!(
+						"DEBUGDEPOSITS Processing Solana Deposits {:?}",
+						deposit_channels_info
+					);
 
 					let chunked_deposit_channels_info: Vec<Vec<(SolAddress, SolAddress)>> =
 						deposit_channels_info
@@ -106,7 +119,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							.map(|chunk| chunk.to_vec())
 							.collect();
 
-					// TODO: Check if we should submit every deposit channel separately.
+					// TODO: Should submit every deposit channel separately with the new pallet?
 					for deposit_channels_info in chunked_deposit_channels_info {
 						let ingresses = ingress_amounts(
 							&sol_rpc,
@@ -116,19 +129,48 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 						)
 						.await?;
 
-						// Is this to not submit non-changes?
 						if !ingresses.0.is_empty() {
+							let block_height = ingresses.1;
+
+							let mut cached_balances = cached_balances.lock().await;
+
+							// Filter out the deposit channels that have the same balance
+							let ingresses: Vec<(SolAddress, u128)> = ingresses
+								.0
+								.into_iter()
+								.filter_map(|(deposit_channel_address, value)| {
+									let deposit_channel_cached_balance =
+										cached_balances.get(&deposit_channel_address).unwrap_or(&0);
+
+									println!(
+										"DEBUGDEPOSITS deposit_channel_address {:?}, cached_balance {:?}, value {:?}, ",
+										deposit_channel_address,
+										*deposit_channel_cached_balance,
+										value
+									);
+
+									if value > *deposit_channel_cached_balance {
+										// TODO: We should submit the value as is with the new
+										// pallet Some((deposit_channel_address, value))
+										Some((
+											deposit_channel_address,
+											value - deposit_channel_cached_balance,
+										))
+									} else {
+										None
+									}
+								})
+								.collect::<Vec<_>>();
+
+							println!("DEBUGDEPOSITS Submitting ingresses {:?}", ingresses);
 							process_call(
 								pallet_cf_ingress_egress::Call::<_, ChainInstanceFor<Inner::Chain>>::process_deposits {
-									deposit_witnesses: ingresses.0
+									deposit_witnesses: ingresses.clone()
 										.into_iter()
 										.map(|(deposit_channel_address, value)| {
-											// TODO: Submit the value only if it's different from the previously submitted
-											// We should probably store that in db, pass it and check it before submitting.
 											pallet_cf_ingress_egress::DepositWitness {
 												deposit_address: deposit_channel_address,
 												asset,
-												// TODO: Check with if we should just submit the total number (fetch + balance)
 												amount: value
 													.try_into()
 													.expect("Ingress witness transfer value should fit u128"),
@@ -136,12 +178,21 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 											}
 										})
 										.collect(),
-									block_height: ingresses.1,
+									block_height,
 								}
 								.into(),
 								epoch.index,
 							)
 							.await;
+
+							// Update hashmap
+							ingresses.into_iter().for_each(|(deposit_channel_address, value)| {
+								println!(
+									"DEBUGDEPOSITS Updating cached_balances for {:?} to value {:?}",
+									deposit_channel_address, value
+								);
+								cached_balances.insert(deposit_channel_address, value);
+							});
 						}
 					}
 				}
