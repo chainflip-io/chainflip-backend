@@ -20,7 +20,7 @@ export async function createLpPool(ccy: Asset, initialPrice: number) {
     );
     const poolCreatedEvent = observeEvent('liquidityPools:NewPoolCreated', {
       test: (event) => event.data.baseAsset === ccy,
-    });
+    }).event;
     await submitGovernanceExtrinsic((api) => api.tx.liquidityPools.newPool(ccy, 'usdc', 20, price));
     await poolCreatedEvent;
   }

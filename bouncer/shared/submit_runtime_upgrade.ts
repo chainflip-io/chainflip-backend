@@ -1,8 +1,9 @@
 import { compactAddLength } from '@polkadot/util';
 import { promises as fs } from 'fs';
 import { submitGovernanceExtrinsic } from './cf_governance';
-import { decodeModuleError, getChainflipApi, observeEvent } from '../shared/utils';
+import { decodeModuleError, getChainflipApi } from '../shared/utils';
 import { tryRuntimeUpgrade } from './try_runtime_upgrade';
+import { observeEvent } from './utils/substrate';
 
 async function readRuntimeWasmFromFile(filePath: string): Promise<Uint8Array> {
   return compactAddLength(new Uint8Array(await fs.readFile(filePath)));
@@ -42,8 +43,8 @@ export async function submitRuntimeUpgradeWithRestrictions(
   console.log('Submitted runtime upgrade. Waiting for the runtime upgrade to complete.');
 
   const event = await Promise.race([
-    observeEvent('system:CodeUpdated', chainflip),
-    observeEvent('governance:FailedExecution', chainflip),
+    observeEvent('system:CodeUpdated').event,
+    observeEvent('governance:FailedExecution').event,
   ]);
 
   if (event.name.method === 'FailedExecution') {

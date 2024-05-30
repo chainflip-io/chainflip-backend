@@ -8,6 +8,7 @@ pub mod runtime_apis;
 pub mod safe_mode;
 #[cfg(feature = "std")]
 pub mod test_runner;
+use cf_runtime_upgrade_utilities::VersionedMigration;
 mod weights;
 use crate::{
 	chainflip::{calculate_account_apy, Offence},
@@ -33,7 +34,6 @@ use cf_chains::{
 	TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, NetworkEnvironment};
-use cf_runtime_upgrade_utilities::VersionedMigration;
 use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi};
 use codec::Encode;
 use core::ops::Range;
@@ -1103,7 +1103,7 @@ type AllMigrations = (
 	// UPGRADE
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
-	MigrationsForV1_4,
+	MigrationsForV1_5,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1126,9 +1126,6 @@ type PalletMigrations = (
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, ArbitrumInstance>,
 	// pallet_cf_vaults::migrations::PalletMigration<Runtime, SolanaInstance>,
-	// This is not a pallet migration but needs to be applied after the vaults and before the
-	// treshold signers migrations. TODO: Remove this after the 1.4 release.
-	migrations::arbitrum_integration::RenameEthereumToEvmThresholdSigner,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, EvmInstance>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, BitcoinInstance>,
@@ -1159,21 +1156,8 @@ type PalletMigrations = (
 
 // TODO: After this  release, remember to un-comment the
 // Arbitrum-specific pallet migrations.
-type MigrationsForV1_4 = (
-	VersionedMigration<
-		pallet_cf_environment::Pallet<Runtime>,
-		migrations::arbitrum_integration::ArbitrumIntegration,
-		9,
-		10,
-	>,
-	migrations::housekeeping::Migration,
-	migrations::reap_old_accounts::Migration,
-	// NOTE: Do not change this validator pallet migration order:
-	// Migrate Validator pallet from version 0 -> 1
-	migrations::vanity_names::Migration,
-	// Migrate Validator pallet from version 1 -> 2
-	migrations::active_bidders::Migration,
-);
+type MigrationsForV1_5 =
+	(migrations::housekeeping::Migration, migrations::reap_old_accounts::Migration);
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
