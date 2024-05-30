@@ -14,7 +14,7 @@ impl<C: ChainCrypto> MockPallet for MockKeyProvider<C> {
 const EPOCH_KEY: &[u8] = b"EPOCH_KEY";
 
 impl<C: ChainCrypto> MockKeyProvider<C> {
-	pub fn add_key(key: C::AggKey) {
+	pub fn set_key(key: C::AggKey) {
 		Self::put_value(EPOCH_KEY, EpochKey { key, epoch_index: Default::default() });
 	}
 }
