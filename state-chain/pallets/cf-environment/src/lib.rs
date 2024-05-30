@@ -12,6 +12,7 @@ use cf_chains::{
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
+	sol::SolAddress,
 	Chain,
 };
 use cf_primitives::{
@@ -35,7 +36,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 pub mod migrations;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(10);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(11);
 
 const INITIAL_CONSOLIDATION_PARAMETERS: utxo_selection::ConsolidationParameters =
 	utxo_selection::ConsolidationParameters {
@@ -198,6 +199,11 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub type ArbitrumSignatureNonce<T> = StorageValue<_, SignatureNonce, ValueQuery>;
+
+	// SOLANA CHAIN RELATED ENVIRONMENT ITEMS
+	#[pallet::storage]
+	#[pallet::getter(fn sol_vault_address)]
+	pub type SolanaVaultAddress<T> = StorageValue<_, SolAddress, ValueQuery>;
 
 	// OTHER ENVIRONMENT ITEMS
 	#[pallet::storage]
@@ -408,6 +414,7 @@ pub mod pallet {
 		pub arb_address_checker_address: EvmAddress,
 		pub arbitrum_chain_id: u64,
 		pub network_environment: NetworkEnvironment,
+		pub sol_vault_address: SolAddress,
 		pub _config: PhantomData<T>,
 	}
 
@@ -437,6 +444,8 @@ pub mod pallet {
 			ArbitrumChainId::<T>::set(self.arbitrum_chain_id);
 			ArbitrumSupportedAssets::<T>::insert(ArbAsset::ArbUsdc, self.arb_usdc_address);
 			ArbitrumAddressCheckerAddress::<T>::set(self.arb_address_checker_address);
+
+			SolanaVaultAddress::<T>::set(self.sol_vault_address);
 
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
 

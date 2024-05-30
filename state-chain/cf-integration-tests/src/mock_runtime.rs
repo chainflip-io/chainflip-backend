@@ -10,7 +10,7 @@ use state_chain_runtime::{
 	chainflip::Offence, constants::common::*, opaque::SessionKeys, test_runner::*, AccountId,
 	AccountRolesConfig, ArbitrumChainTrackingConfig, ArbitrumVaultConfig, EmissionsConfig,
 	EthereumVaultConfig, EvmThresholdSignerConfig, FlipConfig, FundingConfig, GovernanceConfig,
-	ReputationConfig, SessionConfig, ValidatorConfig,
+	ReputationConfig, SessionConfig, SolanaChainTrackingConfig, SolanaVaultConfig, ValidatorConfig,
 };
 
 use cf_chains::{
@@ -18,7 +18,8 @@ use cf_chains::{
 	btc::{BitcoinFeeInfo, BitcoinTrackedData},
 	dot::{PolkadotTrackedData, RuntimeVersion},
 	eth::EthereumTrackedData,
-	Arbitrum, Bitcoin, ChainState, Ethereum, Polkadot,
+	sol::SolTrackedData,
+	Arbitrum, Bitcoin, ChainState, Ethereum, Polkadot, Solana,
 };
 use state_chain_runtime::{
 	BitcoinChainTrackingConfig, EthereumChainTrackingConfig, PolkadotChainTrackingConfig,
@@ -203,6 +204,7 @@ impl ExtBuilder {
 				deployment_block: None,
 				chain_initialized: false,
 			},
+			solana_vault: SolanaVaultConfig { deployment_block: None, chain_initialized: false },
 			emissions: EmissionsConfig {
 				current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
 				backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_PERBILL,
@@ -253,6 +255,12 @@ impl ExtBuilder {
 					},
 				},
 			},
+			solana_chain_tracking: SolanaChainTrackingConfig {
+				init_chain_state: ChainState::<Solana> {
+					block_height: 0,
+					tracked_data: SolTrackedData { priority_fee: 100000u32.into() },
+				},
+			},
 			bitcoin_threshold_signer: Default::default(),
 			evm_threshold_signer: EvmThresholdSignerConfig {
 				key: Some(ethereum_vault_key),
@@ -262,6 +270,7 @@ impl ExtBuilder {
 				_instance: std::marker::PhantomData,
 			},
 			polkadot_threshold_signer: Default::default(),
+			solana_threshold_signer: Default::default(),
 			bitcoin_vault: Default::default(),
 			polkadot_vault: Default::default(),
 			environment: Default::default(),
@@ -272,6 +281,7 @@ impl ExtBuilder {
 			polkadot_ingress_egress: Default::default(),
 			ethereum_ingress_egress: Default::default(),
 			arbitrum_ingress_egress: Default::default(),
+			solana_ingress_egress: Default::default(),
 		})
 	}
 }

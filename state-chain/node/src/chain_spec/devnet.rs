@@ -9,6 +9,7 @@ pub const BITCOIN_EXPIRY_BLOCKS: u32 = 10 * 60 / 5;
 pub const ETHEREUM_EXPIRY_BLOCKS: u32 = 10 * 60 / 14;
 pub const ARBITRUM_EXPIRY_BLOCKS: u32 = 10 * 60 * 4;
 pub const POLKADOT_EXPIRY_BLOCKS: u32 = 10 * 60 / 6;
+pub const SOLANA_EXPIRY_BLOCKS: u32 = 10 * 60 * 10 / 4;
 
 pub const MIN_AUTHORITIES: AuthorityCount = 1;
 pub const AUCTION_PARAMETERS: SetSizeParameters = SetSizeParameters {
@@ -20,3 +21,4 @@ pub const AUCTION_PARAMETERS: SetSizeParameters = SetSizeParameters {
 pub const BITCOIN_SAFETY_MARGIN: u64 = 2;
 pub const ETHEREUM_SAFETY_MARGIN: u64 = 2;
 pub const ARBITRUM_SAFETY_MARGIN: u64 = 1;
+pub const SOLANA_SAFETY_MARGIN: u64 = 1; //TODO: put correct value

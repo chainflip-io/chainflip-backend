@@ -2,6 +2,7 @@
 resolver = "2"
 
 members = [
+  'foreign-chains/solana/sol-prim',
   'api/lib',
   'api/bin/chainflip-cli',
   'api/bin/chainflip-broker-api',

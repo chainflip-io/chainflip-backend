@@ -688,6 +688,8 @@ pub mod pallet {
 		BitcoinChannelIdTooLarge,
 		/// The amount is below the minimum egress amount.
 		BelowEgressDustLimit,
+		/// Solana address derivation error.
+		SolanaAddressDerivationError,
 		/// Adding boost funds is disabled due to safe mode.
 		AddBoostFundsDisabled,
 		/// Retrieving boost funds disabled due to safe mode.
@@ -720,11 +722,15 @@ pub mod pallet {
 
 			let addresses_to_recycle =
 				DepositChannelRecycleBlocks::<T, I>::mutate(|recycle_queue| {
-					Self::take_recyclable_addresses(
-						recycle_queue,
-						maximum_addresses_to_recycle,
-						T::ChainTracking::get_block_height(),
-					)
+					if recycle_queue.is_empty() {
+						vec![]
+					} else {
+						Self::take_recyclable_addresses(
+							recycle_queue,
+							maximum_addresses_to_recycle,
+							T::ChainTracking::get_block_height(),
+						)
+					}
 				});
 
 			// Add weight for the DepositChannelRecycleBlocks read/write plus the
@@ -1744,6 +1750,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							Error::<T, I>::MissingBitcoinVault,
 						AddressDerivationError::BitcoinChannelIdTooLarge =>
 							Error::<T, I>::BitcoinChannelIdTooLarge,
+						AddressDerivationError::SolanaDerivationError { .. } =>
+							Error::<T, I>::SolanaAddressDerivationError,
 					})?,
 				next_channel_id,
 			)

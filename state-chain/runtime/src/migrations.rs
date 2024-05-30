@@ -5,6 +5,7 @@ use sp_std::marker::PhantomData;
 
 pub mod housekeeping;
 pub mod reap_old_accounts;
+pub mod solana_integration;
 
 #[cfg(feature = "try-runtime")]
 use sp_std::{vec, vec::Vec};

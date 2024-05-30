@@ -1,3 +1,4 @@
+use cf_primitives::chains::assets::sol;
 #[cfg(feature = "runtime-benchmarks")]
 use cf_primitives::{
 	chains::assets::{btc, dot, eth},
@@ -81,6 +82,13 @@ impl BenchmarkValue for dot::Asset {
 impl BenchmarkValue for btc::Asset {
 	fn benchmark_value() -> Self {
 		btc::Asset::Btc
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for sol::Asset {
+	fn benchmark_value() -> Self {
+		sol::Asset::Sol
 	}
 }
 

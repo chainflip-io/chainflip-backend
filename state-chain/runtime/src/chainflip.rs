@@ -15,7 +15,7 @@ use crate::{
 	BitcoinThresholdSigner, BlockNumber, Emissions, Environment, EthereumBroadcaster,
 	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, Hash, PolkadotBroadcaster,
 	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
-	System, Validator, YEAR,
+	SolanaIngressEgress, System, Validator, YEAR,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -43,9 +43,10 @@ use cf_chains::{
 		api::{EvmChainId, EvmEnvironmentProvider, EvmReplayProtection},
 		EvmCrypto, Transaction,
 	},
+	sol::api::SolanaApi,
 	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	ChainEnvironment, ChainState, DepositChannel, ForeignChain, ReplayProtectionProvider,
-	SetCommKeyWithAggKey, SetGovKeyWithAggKey, TransactionBuilder,
+	SetCommKeyWithAggKey, SetGovKeyWithAggKey, Solana, TransactionBuilder,
 };
 use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, Beneficiaries, ChannelId};
 use cf_traits::{
@@ -304,6 +305,27 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 	}
 }
 
+pub struct SolanaTransactionBuilder;
+impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransactionBuilder {
+	fn build_transaction(
+		_signed_call: &SolanaApi<SolEnvironment>,
+	) -> <Solana as Chain>::Transaction {
+		todo!()
+	}
+	fn refresh_unsigned_data(_tx: &mut <Solana as Chain>::Transaction) {
+		todo!()
+	}
+	fn calculate_gas_limit(_call: &SolanaApi<SolEnvironment>) -> Option<U256> {
+		todo!()
+	}
+	fn requires_signature_refresh(
+		_call: &SolanaApi<SolEnvironment>,
+		_payload: &<<Solana as Chain>::ChainCrypto as ChainCrypto>::Payload,
+	) -> bool {
+		todo!()
+	}
+}
+
 pub struct BlockAuthorRewardDistribution;
 
 impl RewardsDistribution for BlockAuthorRewardDistribution {
@@ -456,6 +478,9 @@ impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
 	}
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct SolEnvironment;
+
 pub struct TokenholderGovernanceBroadcaster;
 
 impl TokenholderGovernanceBroadcaster {
@@ -496,6 +521,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 				Self::broadcast_gov_key::<Polkadot, PolkadotBroadcaster>(maybe_old_key, new_key),
 			ForeignChain::Bitcoin => Err(()),
 			ForeignChain::Arbitrum => Err(()),
+			ForeignChain::Solana => todo!(),
 		}
 	}
 
@@ -507,6 +533,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 				Self::is_govkey_compatible::<<Polkadot as Chain>::ChainCrypto>(key),
 			ForeignChain::Bitcoin => false,
 			ForeignChain::Arbitrum => false,
+			ForeignChain::Solana => todo!(),
 		}
 	}
 }
@@ -607,7 +634,8 @@ impl_deposit_api_for_anychain!(
 	(Ethereum, EthereumIngressEgress),
 	(Polkadot, PolkadotIngressEgress),
 	(Bitcoin, BitcoinIngressEgress),
-	(Arbitrum, ArbitrumIngressEgress)
+	(Arbitrum, ArbitrumIngressEgress),
+	(Solana, SolanaIngressEgress)
 );
 
 impl_egress_api_for_anychain!(
@@ -615,7 +643,8 @@ impl_egress_api_for_anychain!(
 	(Ethereum, EthereumIngressEgress),
 	(Polkadot, PolkadotIngressEgress),
 	(Bitcoin, BitcoinIngressEgress),
-	(Arbitrum, ArbitrumIngressEgress)
+	(Arbitrum, ArbitrumIngressEgress),
+	(Solana, SolanaIngressEgress)
 );
 
 pub struct DepositHandler;
@@ -631,6 +660,7 @@ impl OnDeposit<Bitcoin> for DepositHandler {
 	}
 }
 impl OnDeposit<Arbitrum> for DepositHandler {}
+impl OnDeposit<Solana> for DepositHandler {}
 
 pub struct ChainAddressConverter;
 
@@ -674,8 +704,12 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 		}
 	}
 }
+
 impl OnBroadcastReady<Arbitrum> for BroadcastReadyProvider {
 	type ApiCall = ArbitrumApi<EvmEnvironment>;
+}
+impl OnBroadcastReady<Solana> for BroadcastReadyProvider {
+	type ApiCall = SolanaApi<SolEnvironment>;
 }
 
 pub struct BitcoinFeeGetter;
@@ -767,5 +801,6 @@ impl_ingress_egress_fee_api_for_anychain!(
 	(Ethereum, EthereumIngressEgress),
 	(Polkadot, PolkadotIngressEgress),
 	(Bitcoin, BitcoinIngressEgress),
-	(Arbitrum, ArbitrumIngressEgress)
+	(Arbitrum, ArbitrumIngressEgress),
+	(Solana, SolanaIngressEgress)
 );

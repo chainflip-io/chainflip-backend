@@ -50,6 +50,8 @@ impl ExecutexSwapAndCall {
 				(ForeignChain::Bitcoin as u32, script.bytes()),
 			Some(ForeignChainAddress::Arb(source_address)) =>
 				(ForeignChain::Arbitrum as u32, source_address.0.to_vec()),
+			Some(ForeignChainAddress::Sol(source_address)) =>
+				(ForeignChain::Solana as u32, source_address.0.to_vec()),
 		}
 	}
 }

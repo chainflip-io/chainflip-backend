@@ -19,15 +19,18 @@ impl_runtime_safe_mode! {
 	threshold_signature_evm: pallet_cf_threshold_signature::PalletSafeMode<Instance16>,
 	threshold_signature_bitcoin: pallet_cf_threshold_signature::PalletSafeMode<Instance3>,
 	threshold_signature_polkadot: pallet_cf_threshold_signature::PalletSafeMode<Instance2>,
+	threshold_signature_solana: pallet_cf_threshold_signature::PalletSafeMode<Instance5>,
 	broadcast_ethereum: pallet_cf_broadcast::PalletSafeMode<Instance1>,
 	broadcast_bitcoin: pallet_cf_broadcast::PalletSafeMode<Instance3>,
 	broadcast_polkadot: pallet_cf_broadcast::PalletSafeMode<Instance2>,
 	broadcast_arbitrum: pallet_cf_broadcast::PalletSafeMode<Instance4>,
+	broadcast_solana: pallet_cf_broadcast::PalletSafeMode<Instance5>,
 	witnesser: pallet_cf_witnesser::PalletSafeMode<WitnesserCallPermission>,
 	ingress_egress_ethereum: pallet_cf_ingress_egress::PalletSafeMode<Instance1>,
 	ingress_egress_bitcoin: pallet_cf_ingress_egress::PalletSafeMode<Instance3>,
 	ingress_egress_polkadot: pallet_cf_ingress_egress::PalletSafeMode<Instance2>,
 	ingress_egress_arbitrum: pallet_cf_ingress_egress::PalletSafeMode<Instance4>,
+	ingress_egress_solana: pallet_cf_ingress_egress::PalletSafeMode<Instance5>,
 }
 
 /// Contains permissions for different Runtime calls.
@@ -74,6 +77,12 @@ pub struct WitnesserCallPermission {
 	pub arbitrum_chain_tracking: bool,
 	pub arbitrum_ingress_egress: bool,
 	pub arbitrum_vault: bool,
+
+	// Solana pallets
+	pub solana_broadcast: bool,
+	pub solana_chain_tracking: bool,
+	pub solana_ingress_egress: bool,
+	pub solana_vault: bool,
 }
 
 impl WitnesserCallPermission {
@@ -98,6 +107,10 @@ impl WitnesserCallPermission {
 			arbitrum_chain_tracking: true,
 			arbitrum_ingress_egress: true,
 			arbitrum_vault: true,
+			solana_broadcast: true,
+			solana_chain_tracking: true,
+			solana_ingress_egress: true,
+			solana_vault: true,
 		}
 	}
 }
@@ -128,6 +141,11 @@ impl CallDispatchFilter<RuntimeCall> for WitnesserCallPermission {
 			RuntimeCall::ArbitrumChainTracking(..) => self.arbitrum_chain_tracking,
 			RuntimeCall::ArbitrumIngressEgress(..) => self.arbitrum_ingress_egress,
 			RuntimeCall::ArbitrumVault(..) => self.arbitrum_vault,
+
+			RuntimeCall::SolanaBroadcaster(..) => self.solana_broadcast,
+			RuntimeCall::SolanaChainTracking(..) => self.solana_chain_tracking,
+			RuntimeCall::SolanaIngressEgress(..) => self.solana_ingress_egress,
+			RuntimeCall::SolanaVault(..) => self.solana_vault,
 
 			_ => {
 				cf_runtime_utilities::log_or_panic!(

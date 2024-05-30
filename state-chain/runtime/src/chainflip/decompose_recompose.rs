@@ -179,7 +179,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{RuntimeOrigin, Validator, Witnesser};
+	use crate::{RuntimeOrigin, SolanaInstance, Validator, Witnesser};
 	use cf_chains::{
 		btc::{BitcoinFeeInfo, BitcoinTrackedData},
 		dot::PolkadotTrackedData,
@@ -237,6 +237,16 @@ mod tests {
 					},
 				}),
 			ForeignChain::Arbitrum => unimplemented!(),
+			ForeignChain::Solana =>
+				RuntimeCall::SolanaChainTracking(pallet_cf_chain_tracking::Call::<
+					Runtime,
+					SolanaInstance,
+				>::update_chain_state {
+					new_chain_state: ChainState {
+						block_height: BLOCK_HEIGHT,
+						tracked_data: Default::default(),
+					},
+				}),
 		}
 	}
 

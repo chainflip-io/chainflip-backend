@@ -13,8 +13,18 @@ cf-primitives = { path = '../primitives', default-features = false }
 cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
 
 # Cryptography
+digest = { version = "0.10" }
 libsecp256k1 = { default-features = false, version = '0.7', features = [
   'static-context',
+] }
+sha2 = { version = "0.10", default-features = false }
+
+# Solana
+sol-prim = { path = "../../foreign-chains/solana/sol-prim", features = [
+  "pda",
+  "str",
+  "serde",
+  "scale",
 ] }
 
 # Ethereum
@@ -56,6 +66,7 @@ serde = { version = '1.0.195', default-features = false, features = [
   'alloc',
   'derive',
 ] }
+serde_bytes = { version = "0.11.14", default-features = false }
 log = { version = '0.4.16', default-features = false }
 itertools = { version = '0.11.0', default-features = false }
 arrayref = '0.3.6'
