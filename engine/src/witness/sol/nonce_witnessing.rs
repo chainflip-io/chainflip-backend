@@ -50,21 +50,21 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		state_chain_runtime::RuntimeCall:
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
 	{
-		println!("DEBUG Witnessing Nonce Accounts");
+		println!("DEBUGNONCES Witnessing Nonce Accounts");
 
 		self.then(move |_epoch, header| {
 			assert!(<Inner::Chain as Chain>::is_block_witness_root(header.index));
 			let sol_rpc = sol_rpc.clone();
 			let _process_call = process_call.clone();
 			let nonce_accounts = nonce_accounts.clone();
-			println!("DEBUG Witnessing Nonce Accounts Inner");
+			println!("DEBUGNONCES Witnessing Nonce Accounts Inner");
 			async move {
 				let nonce_addresses: Vec<SolAddress> = nonce_accounts
 					.clone()
 					.into_iter()
 					.map(|(nonce_address, _)| nonce_address)
 					.collect();
-				println!("DEBUG Witnessing Nonce Accounts: {:?}", nonce_addresses);
+				println!("DEBUGNONCES Witnessing Nonce Accounts: {:?}", nonce_addresses);
 				let current_nonce_accounts = get_durable_nonces(&sol_rpc, nonce_addresses).await?;
 
 				// Create a vector of the nonce accounts that have changed
@@ -73,13 +73,17 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					.zip(current_nonce_accounts.into_iter())
 					.filter_map(
 						|((nonce_address, current_durable_nonce), (_, new_durable_nonce))| {
-							println!("Nonce address: {:?}", nonce_address);
-							println!("current_durable_nonce: {:?}", current_durable_nonce);
-							println!("new_durable_nonce: {:?}", new_durable_nonce);
+							println!("DEBUGNONCES Nonce address: {:?}", nonce_address);
+							println!(
+								"DEBUGNONCES current_durable_nonce: {:?}",
+								current_durable_nonce
+							);
+							println!("DEBUGNONCES new_durable_nonce: {:?}", new_durable_nonce);
 							// Assumption that the nonce accounts will match
 							if current_durable_nonce != new_durable_nonce {
 								Some((nonce_address, current_durable_nonce, new_durable_nonce))
 							} else {
+								println!("DEBUGNONCES Nonce haven't changed!");
 								None
 							}
 						},
@@ -89,7 +93,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				// check if nonce_differences is empty
 				if !nonce_differences.is_empty() {
 					// TODO: Submit an extrinsic with the new nonce hash
-					println!("Nonce differences: {:?}", nonce_differences);
+					println!("DEBUGNONCES Nonce differences: {:?}", nonce_differences);
 				}
 
 				Ok::<_, anyhow::Error>(())

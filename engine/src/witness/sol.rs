@@ -3,7 +3,7 @@ mod nonce_witnessing;
 mod sol_deposits;
 mod source;
 
-use std::{str::FromStr, sync::Arc};
+use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use cf_primitives::EpochIndex;
 use futures_core::Future;
@@ -32,6 +32,7 @@ use crate::{
 };
 use cf_chains::sol::{SolAddress, SolHash, SolSignature};
 
+use crate::common::Mutex;
 use anyhow::{anyhow, Context, Result};
 use futures::{future::join_all, stream};
 
@@ -131,7 +132,7 @@ where
 		.expect("Failed to get USDC contract address from SC");
 	let nonces_accounts: Vec<(SolAddress, SolHash)> = vec![(
 		SolAddress::from_str("HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo").expect("Temp"),
-		SolHash::from_str("3DfasJ5WivELD1yNXSgxT8hFaphBpuYFUqdTjoBqYyrk").expect("Temp"),
+		SolHash::from_str("4UjUkFWp1Zkdge8zkuptMqHG9Xwr5eWbyperujHAHiNC").expect("Temp"),
 	)];
 
 	let sol_source = SolSource::new(sol_client.clone()).strictly_monotonic().shared(scope);
@@ -157,6 +158,11 @@ where
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await;
 
+	// TODO: Use DB instead?
+	// Using this as a global variable to store the previous balances. The new pallet it
+	// might be alright if we submit values again after a restart, it's just not
+	let cached_balances = Arc::new(Mutex::new(HashMap::new()));
+
 	sol_safe_vault_source_deposit_addresses
 		.clone()
 		.solana_deposits(
@@ -165,6 +171,7 @@ where
 			cf_primitives::chains::assets::sol::Asset::Sol,
 			vault_address,
 			None,
+			cached_balances,
 		)
 		.await
 		.continuous("SolanaDeposits".to_string(), db.clone())
@@ -185,7 +192,7 @@ where
 	// 	.logging("SolanaUsdcDeposits")
 	// 	.spawn(scope);
 
-	// TODO: We should probably witness through chunk_by_time and not chunk_by_vault
+	// TODO: Should we witness nonces through chunk_by_time and not chunk_by_vault?
 	sol_safe_vault_source_deposit_addresses
 		.clone()
 		.witness_nonces(process_call.clone(), sol_client.clone(), nonces_accounts)
