@@ -15,4 +15,5 @@ async function getUsdcBalanceCommand(ethereumAddress: string) {
   console.log(await getErc20Balance('Ethereum', ethereumAddress, contractAddress));
 }
 
-await executeWithTimeout(getUsdcBalanceCommand(process.argv[2] ?? '0'), 5);
+const ethereumAddress = process.argv[2] ?? '0';
+await executeWithTimeout(getUsdcBalanceCommand(ethereumAddress), 5);
