@@ -722,11 +722,15 @@ pub mod pallet {
 
 			let addresses_to_recycle =
 				DepositChannelRecycleBlocks::<T, I>::mutate(|recycle_queue| {
-					Self::take_recyclable_addresses(
-						recycle_queue,
-						maximum_addresses_to_recycle,
-						T::ChainTracking::get_block_height(),
-					)
+					if recycle_queue.is_empty() {
+						vec![]
+					} else {
+						Self::take_recyclable_addresses(
+							recycle_queue,
+							maximum_addresses_to_recycle,
+							T::ChainTracking::get_block_height(),
+						)
+					}
 				});
 
 			// Add weight for the DepositChannelRecycleBlocks read/write plus the
