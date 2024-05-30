@@ -19,9 +19,9 @@ export async function submitGovernanceExtrinsic(
 ) {
   await using chainflip = await getChainflipApi();
   const extrinsic = await cb(chainflip);
-  await snowWhiteMutex.runExclusive(async () =>
-    chainflip.tx.governance
+  await snowWhiteMutex.runExclusive(async () => {
+    await chainflip.tx.governance
       .proposeGovernanceExtrinsic(extrinsic, preAuthorise)
-      .signAndSend(snowWhite, { nonce: -1 }, handleSubstrateError(chainflip)),
-  );
+      .signAndSend(snowWhite, { nonce: -1 }, handleSubstrateError(chainflip));
+  });
 }

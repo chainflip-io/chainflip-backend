@@ -47,8 +47,8 @@ export async function createBoostPools(newPools: BoostPoolId[]): Promise<void> {
           event.data.boostPool.asset === pool.asset &&
           Number(event.data.boostPool.tier) === pool.tier,
       },
-    );
-    const observeGovernanceFailedExecution = observeEvent(`governance:FailedExecution`);
+    ).event;
+    const observeGovernanceFailedExecution = observeEvent(`governance:FailedExecution`).event;
 
     observeBoostPoolEvents.push(
       Promise.race([observeBoostPoolCreated, observeGovernanceFailedExecution]),

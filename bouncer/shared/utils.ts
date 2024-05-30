@@ -338,6 +338,7 @@ export function getBtcClient(): Client {
 type EventQuery = (data: any) => boolean;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Event = { name: any; data: any; block: number; event_index: number };
+/** @deprecated there is a new one in the substrate utils */
 export async function observeEvent(
   eventName: string,
   api: ApiPromise,

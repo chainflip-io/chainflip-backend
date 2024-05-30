@@ -15,7 +15,7 @@ import { observeEvent } from './utils/substrate';
 
 export async function initializeArbitrumChain() {
   console.log('Initializing Arbitrum');
-  const arbInitializationRequest = observeEvent('arbitrumVault:ChainInitialized');
+  const arbInitializationRequest = observeEvent('arbitrumVault:ChainInitialized').event;
   await submitGovernanceExtrinsic((chainflip) => chainflip.tx.arbitrumVault.initializeChain());
   await arbInitializationRequest;
 }
