@@ -2144,6 +2144,7 @@ pub mod utilities {
 			Asset::Usdc => Some(USD_ESTIMATION_CAP),
 			Asset::Usdt => Some(USD_ESTIMATION_CAP),
 			Asset::ArbUsdc => Some(USD_ESTIMATION_CAP),
+			Asset::SolUsdc => Some(USD_ESTIMATION_CAP),
 			_ => None,
 		}
 	}
