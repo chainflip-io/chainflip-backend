@@ -189,8 +189,8 @@ impl SystemProgramInstruction {
 			//
 			// NOTE: According to the solana sdk, this system variable is deprecated and should not
 			// be used. However, within the sdk itself they are still using this variable in the
-			// advance_nonce_account function so we use it here aswell. This should be revisited to
-			// make sure it is ok to use it, or if there is another way to advance the nonce
+			// advance_nonce_account function so we use it here as well. This should be revisited
+			// to make sure it is ok to use it, or if there is another way to advance the nonce
 			// account.
 			AccountMeta::new_readonly(
 				Pubkey::from_str("SysvarRecentB1ockHashes11111111111111111111").unwrap(),
@@ -246,7 +246,6 @@ pub enum VaultProgram {
 	FetchTokens {
 		seed: Vec<u8>,
 		bump: u8,
-		amount: u64,
 		decimals: u8,
 	},
 	TransferTokens {
@@ -295,7 +294,7 @@ impl ProgramInstruction for VaultProgram {
 		match self {
 			Self::FetchNative { seed: _, bump: _ } => "fetch_native",
 			Self::RotateAggKey { skip_transfer_funds: _ } => "rotate_agg_key",
-			Self::FetchTokens { seed: _, bump: _, amount: _, decimals: _ } => "fetch_tokens",
+			Self::FetchTokens { seed: _, bump: _, decimals: _ } => "fetch_tokens",
 			Self::TransferTokens { amount: _, decimals: _ } => "transfer_tokens",
 			Self::ExecuteCcmNativeCall {
 				source_chain: _,

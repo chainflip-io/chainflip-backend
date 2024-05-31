@@ -1,49 +1,23 @@
-//! Contains code for Deriving addresses and deposit channels for the Solana Environment.
-use cf_primitives::{chains::assets::sol::Asset as SolAsset, ChannelId};
+//! Provides a interface to deriving addresses for the purposes of DepositChannels
+//! as well as deriving ATA for token operations (such as fetch or transfer).
+
+use cf_primitives::ChannelId;
 use sol_prim::AccountBump;
 
-use crate::{
-	deposit_channel::DepositChannel,
-	sol::{consts::*, AddressDerivationError, DerivedAddressBuilder, SolAddress},
-	Solana,
-};
+use crate::sol::{consts::*, AddressDerivationError, DerivedAddressBuilder, SolAddress};
 use core::str::FromStr;
 
-/// Derive address/deposit channels for a channel ID
-pub fn derive_deposit_channel(
+/// Derive address for a given channel ID
+pub fn derive_deposit_address(
 	channel_id: ChannelId,
-	_asset: SolAsset,
-	vault_program: SolAddress,
-) -> Result<DepositChannel<Solana>, AddressDerivationError> {
-	let seed = channel_id.to_le_bytes();
-	derive_address(seed, vault_program)
-		// .and_then(|(address, bump)| match asset {
-		// 	SolAsset::Sol => Ok((address, bump)),
-		// 	SolAsset::Usd => {
-		// 	    let mint_pubkey =
-		// 	Env::lookup_account(crate::sol::api::SolanaEnvAccountLookupKey::TokenMintPubkey)?;
-		// 	    derive_associated_token_account(address, mint_pubkey)
-		// 	},
-		// })
-		.map(|(address, bump)| DepositChannel::<Solana> {
-			channel_id,
-			address,
-			asset: SolAsset::Sol,
-			state: bump,
-		})
-}
-
-/// Derive an address from our Vault program key. Produces an Address and a bump.
-fn derive_address(
-	seed: impl AsRef<[u8]>,
 	vault_program: SolAddress,
 ) -> Result<(SolAddress, AccountBump), AddressDerivationError> {
-	DerivedAddressBuilder::from_address(vault_program)?.chain_seed(seed)?.finish()
+	let seed = channel_id.to_le_bytes();
+	derive_address(seed, vault_program)
 }
 
-#[allow(dead_code)]
 /// Derive a Associated Token Account (ATA) of a main target account.
-fn derive_associated_token_account(
+pub fn derive_associated_token_account(
 	target: SolAddress,
 	mint_pubkey: SolAddress,
 ) -> Result<(SolAddress, AccountBump), AddressDerivationError> {
@@ -57,6 +31,14 @@ fn derive_associated_token_account(
 		.chain_seed(token_program_id)?
 		.chain_seed(mint_pubkey)?
 		.finish()
+}
+
+/// Derive an address from our Vault program key. Produces an Address and a bump.
+fn derive_address(
+	seed: impl AsRef<[u8]>,
+	vault_program: SolAddress,
+) -> Result<(SolAddress, AccountBump), AddressDerivationError> {
+	DerivedAddressBuilder::from_address(vault_program)?.chain_seed(seed)?.finish()
 }
 
 #[cfg(test)]
@@ -121,29 +103,32 @@ mod tests {
 	}
 
 	#[test]
-	fn can_derive_deposit_channel_for_sol() {
+	fn can_derive_deposit_address_native() {
 		let vault_program = SolAddress::from_str(sol_test_values::VAULT_PROGRAM).unwrap();
-
 		assert_eq!(
-			derive_deposit_channel(0u64, SolAsset::Sol, vault_program).unwrap(),
-			DepositChannel {
-				channel_id: 0u64,
-				address: SolAddress::from_str("JDtAzKWKzQJCiHCfK4PU7qYuE4wChxuqfDqQhRbv6kwX")
-					.unwrap(),
-				asset: SolAsset::Sol,
-				state: 254u8,
-			},
+			derive_deposit_address(0u64, vault_program).unwrap(),
+			(SolAddress::from_str("JDtAzKWKzQJCiHCfK4PU7qYuE4wChxuqfDqQhRbv6kwX").unwrap(), 254u8),
 		);
 
 		assert_eq!(
-			derive_deposit_channel(1u64, SolAsset::Sol, vault_program).unwrap(),
-			DepositChannel {
-				channel_id: 1u64,
-				address: SolAddress::from_str("32qRitYeor2v7Rb3M2iL8PHkoyqhcoCCqYuWCNKqstN7")
-					.unwrap(),
-				asset: SolAsset::Sol,
-				state: 255u8,
-			},
+			derive_deposit_address(1u64, vault_program).unwrap(),
+			(SolAddress::from_str("32qRitYeor2v7Rb3M2iL8PHkoyqhcoCCqYuWCNKqstN7").unwrap(), 255u8),
+		);
+	}
+	#[test]
+	fn can_derive_deposit_address_token() {
+		let vault_program = SolAddress::from_str(sol_test_values::VAULT_PROGRAM).unwrap();
+		let token_mint_pubkey = SolAddress::from_str(sol_test_values::MINT_PUB_KEY).unwrap();
+		let derived_account_0 = derive_deposit_address(0u64, vault_program).unwrap();
+		assert_eq!(
+			derive_associated_token_account(derived_account_0.0, token_mint_pubkey).unwrap(),
+			(SolAddress::from_str("7QWupKVHBPUnJpuvdt7uJxXaNWKYpEUAHPG9Rb28aEXS").unwrap(), 254u8)
+		);
+
+		let derived_account_1 = derive_deposit_address(1u64, vault_program).unwrap();
+		assert_eq!(
+			derive_associated_token_account(derived_account_1.0, token_mint_pubkey).unwrap(),
+			(SolAddress::from_str("9roLwm8U86pj24Hwwzx71AF8axYnSc6U542Bdx5w7FUZ").unwrap(), 255u8)
 		);
 	}
 }

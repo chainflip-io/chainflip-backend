@@ -1706,6 +1706,7 @@ mod test {
 					(Asset::ArbEth, 0),
 					(Asset::ArbUsdc, 0),
 					(Asset::Sol, 0),
+					(Asset::SolUsdc, 0),
 				]
 			}
 		))
@@ -1742,6 +1743,7 @@ mod test {
 					(Asset::ArbEth, 1),
 					(Asset::ArbUsdc, 2),
 					(Asset::Sol, 3),
+					(Asset::SolUsdc, 4),
 				],
 				earned_fees: any::AssetMap {
 					eth: eth::AssetMap {
@@ -1753,7 +1755,7 @@ mod test {
 					btc: btc::AssetMap { btc: 0u32.into() },
 					dot: dot::AssetMap { dot: 0u32.into() },
 					arb: arb::AssetMap { eth: 1u32.into(), usdc: 2u32.into() },
-					sol: sol::AssetMap { sol: 2u32.into() },
+					sol: sol::AssetMap { sol: 2u32.into(), usdc: 4u32.into() },
 				},
 			},
 			cf_primitives::NetworkEnvironment::Mainnet,
@@ -1801,7 +1803,7 @@ mod test {
 					btc: btc::AssetMap { btc: Some(0u32.into()) },
 					dot: dot::AssetMap { dot: None },
 					arb: arb::AssetMap { eth: None, usdc: Some(0u32.into()) },
-					sol: sol::AssetMap { sol: None },
+					sol: sol::AssetMap { sol: None, usdc: None },
 				},
 				network_fee_hundredth_pips: Permill::from_percent(100),
 			},
@@ -1816,7 +1818,7 @@ mod test {
 					btc: btc::AssetMap { btc: 0u32.into() },
 					dot: dot::AssetMap { dot: 0u32.into() },
 					arb: arb::AssetMap { eth: 0u32.into(), usdc: u64::MAX.into() },
-					sol: sol::AssetMap { sol: 0u32.into() },
+					sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into() },
 				},
 				ingress_fees: any::AssetMap {
 					eth: eth::AssetMap {
@@ -1828,7 +1830,7 @@ mod test {
 					btc: btc::AssetMap { btc: Some(0u32.into()) },
 					dot: dot::AssetMap { dot: Some((u64::MAX / 2 - 1).into()) },
 					arb: arb::AssetMap { eth: Some(0u32.into()), usdc: None },
-					sol: sol::AssetMap { sol: Some(0u32.into()) },
+					sol: sol::AssetMap { sol: Some(0u32.into()), usdc: None },
 				},
 				egress_fees: any::AssetMap {
 					eth: eth::AssetMap {
@@ -1840,7 +1842,7 @@ mod test {
 					btc: btc::AssetMap { btc: Some(0u32.into()) },
 					dot: dot::AssetMap { dot: Some((u64::MAX / 2 - 1).into()) },
 					arb: arb::AssetMap { eth: Some(0u32.into()), usdc: None },
-					sol: sol::AssetMap { sol: Some(1u32.into()) },
+					sol: sol::AssetMap { sol: Some(1u32.into()), usdc: None },
 				},
 				witness_safety_margins: HashMap::from([
 					(ForeignChain::Bitcoin, Some(3u64)),
@@ -1859,7 +1861,7 @@ mod test {
 					btc: btc::AssetMap { btc: 0u32.into() },
 					dot: dot::AssetMap { dot: 0u32.into() },
 					arb: arb::AssetMap { eth: 0u32.into(), usdc: u64::MAX.into() },
-					sol: sol::AssetMap { sol: 0u32.into() },
+					sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into() },
 				},
 				channel_opening_fees: HashMap::from([
 					(ForeignChain::Bitcoin, 0u32.into()),
@@ -1894,7 +1896,7 @@ mod test {
 						btc: btc::AssetMap { btc: Some(pool_info) },
 						dot: dot::AssetMap { dot: Some(pool_info) },
 						arb: arb::AssetMap { eth: Some(pool_info), usdc: Some(pool_info) },
-						sol: sol::AssetMap { sol: Some(pool_info) },
+						sol: sol::AssetMap { sol: Some(pool_info), usdc: None },
 					},
 				}
 			},

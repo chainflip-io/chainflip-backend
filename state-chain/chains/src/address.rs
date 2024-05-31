@@ -24,6 +24,7 @@ pub enum AddressDerivationError {
 	MissingPolkadotVault,
 	MissingBitcoinVault,
 	BitcoinChannelIdTooLarge,
+	MissingSolanaVaultProgram,
 	SolanaDerivationError(sol::AddressDerivationError),
 }
 

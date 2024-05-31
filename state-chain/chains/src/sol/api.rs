@@ -10,8 +10,10 @@ use sp_std::{boxed::Box, vec, vec::Vec};
 
 use crate::{
 	sol::{
-		consts::SYSTEM_PROGRAM_ID, instruction_builder::SolanaInstructionBuilder, SolAddress,
-		SolAmount, SolCcmAccounts, SolHash, SolMessage, SolTransaction, SolanaCrypto,
+		consts::{SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID},
+		instruction_builder::{AssetWithDerivedAddress, SolanaInstructionBuilder},
+		SolAddress, SolAmount, SolAsset, SolCcmAccounts, SolHash, SolMessage, SolTransaction,
+		SolanaCrypto,
 	},
 	AllBatch, AllBatchError, ApiCall, Chain, ChainCrypto, ChainEnvironment, ConsolidateCall,
 	ConsolidationError, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress,
@@ -60,6 +62,10 @@ pub trait SolanaEnvironment:
 					SolanaTransactionBuildingError::CannotLookupUpgradeManagerProgramDataAccount,
 				SolanaEnvAccountLookupKey::TokenMintPubkey =>
 					SolanaTransactionBuildingError::CannotLookupTokenMintPubkey,
+				SolanaEnvAccountLookupKey::TokenVaultAssociatedTokenAccount =>
+					SolanaTransactionBuildingError::CannotLookupTokenVaultAssociatedTokenAccount,
+				SolanaEnvAccountLookupKey::TokenVaultPdaAccount =>
+					SolanaTransactionBuildingError::CannotLookupTokenVaultPdaAccount,
 			},
 		)
 	}
@@ -81,6 +87,8 @@ pub enum SolanaEnvAccountLookupKey {
 	VaultProgramDataAccount,
 	UpgradeManagerProgramDataAccount,
 	TokenMintPubkey,
+	TokenVaultAssociatedTokenAccount,
+	TokenVaultPdaAccount,
 }
 
 /// Errors that can arise when building Solana Transactions.
@@ -92,6 +100,8 @@ pub enum SolanaTransactionBuildingError {
 	CannotLookupComputePrice,
 	CannotLookupUpgradeManagerProgramDataAccount,
 	CannotLookupTokenMintPubkey,
+	CannotLookupTokenVaultAssociatedTokenAccount,
+	CannotLookupTokenVaultPdaAccount,
 	NoNonceAccountsSet,
 	NoAvailableNonceAccount,
 	FailedToDeriveAddress(crate::sol::AddressDerivationError),
@@ -148,13 +158,28 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let vault_program_data_account =
 			Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgramDataAccount)?;
 		let system_program_id = SolAddress::from_str(SYSTEM_PROGRAM_ID)
-			.expect("Preset System Program ID account must be valid.");
+			.expect("Preset Solana System Program ID account must be valid.");
 		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
+		let token_mint_pubkey =
+			Environment::lookup_account(SolanaEnvAccountLookupKey::TokenMintPubkey)?;
+		let token_program_id = SolAddress::from_str(TOKEN_PROGRAM_ID)
+			.expect("Preset Solana Token program ID must be valid.");
+		let token_vault_ata = Environment::lookup_account(
+			SolanaEnvAccountLookupKey::TokenVaultAssociatedTokenAccount,
+		)?;
+
+		let decomposed_fetch_params = fetch_params
+			.into_iter()
+			.map(|param| AssetWithDerivedAddress::decompose_fetch_params(param, token_mint_pubkey))
+			.collect::<Result<Vec<_>, _>>()?;
 
 		// Build the instruction_set
 		let instruction_set = SolanaInstructionBuilder::fetch_from(
-			fetch_params,
+			decomposed_fetch_params,
+			token_mint_pubkey,
+			token_vault_ata,
+			token_program_id,
 			vault_program,
 			vault_program_data_account,
 			system_program_id,
@@ -176,32 +201,94 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 	}
 
 	pub fn transfer(
-		transfer_param: TransferAssetParams<Solana>,
-	) -> Result<Self, SolanaTransactionBuildingError> {
+		transfer_param: Vec<TransferAssetParams<Solana>>,
+	) -> Result<Vec<Self>, SolanaTransactionBuildingError> {
 		// Lookup the current Aggkey
 		let agg_key = Environment::lookup_account(SolanaEnvAccountLookupKey::AggKey)?;
 		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
 
-		// Build the instruction_set
-		let instruction_set = SolanaInstructionBuilder::transfer(
-			transfer_param,
-			agg_key,
-			nonce_account,
-			compute_price,
-		);
+		// split the transfer params into Native and Token assets
+		let (native, token) = transfer_param
+			.into_iter()
+			.partition::<Vec<TransferAssetParams<Solana>>, _>(|param| param.asset == SolAsset::Sol);
 
-		let transaction = SolTransaction::new_unsigned(SolMessage::new_with_blockhash(
-			&instruction_set,
-			Some(&agg_key.into()),
-			&durable_nonce.into(),
-		));
+		Ok(vec![
+			// Create native transfer instruction sets
+			native
+				.into_iter()
+				.map(|transfer_param| {
+					SolanaInstructionBuilder::transfer_native(
+						transfer_param.amount,
+						transfer_param.to,
+						agg_key,
+						nonce_account,
+						compute_price,
+					)
+				})
+				.collect::<Vec<_>>(),
+			if token.is_empty() {
+				vec![]
+			} else {
+				// Only do environment lookup if needed
+				let vault_program =
+					Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgram)?;
+				let vault_program_data_account = Environment::lookup_account(
+					SolanaEnvAccountLookupKey::VaultProgramDataAccount,
+				)?;
+				let token_vault_pda_account =
+					Environment::lookup_account(SolanaEnvAccountLookupKey::TokenVaultPdaAccount)?;
+				let token_mint_pubkey =
+					Environment::lookup_account(SolanaEnvAccountLookupKey::TokenMintPubkey)?;
+				let token_program_id = SolAddress::from_str(TOKEN_PROGRAM_ID)
+					.expect("Preset Solana Token program ID must be valid.");
+				let token_vault_ata = Environment::lookup_account(
+					SolanaEnvAccountLookupKey::TokenVaultAssociatedTokenAccount,
+				)?;
+				let system_program_id = SolAddress::from_str(SYSTEM_PROGRAM_ID)
+					.expect("Preset Solana System Program ID account must be valid.");
 
-		Ok(Self {
+				// Build the Transfer instruction set for Token transfers.
+				token
+					.into_iter()
+					.map(|transfer_param| {
+						let ata =
+						crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
+							transfer_param.to,
+							token_mint_pubkey,
+						)
+						.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
+						Ok(SolanaInstructionBuilder::transfer_usdc_token(
+							ata.0,
+							transfer_param.amount,
+							transfer_param.to,
+							vault_program,
+							vault_program_data_account,
+							token_vault_pda_account,
+							token_vault_ata,
+							token_mint_pubkey,
+							token_program_id,
+							system_program_id,
+							agg_key,
+							nonce_account,
+							compute_price,
+						))
+					})
+					.collect::<Result<Vec<_>, _>>()?
+			},
+		]
+		.into_iter()
+		.flatten()
+		.map(|instruction_set| Self {
 			call_type: SolanaTransactionType::Transfer,
-			transaction,
+			transaction: SolTransaction::new_unsigned(SolMessage::new_with_blockhash(
+				&instruction_set,
+				Some(&agg_key.into()),
+				&durable_nonce.into(),
+			)),
 			_phantom: Default::default(),
 		})
+		.collect::<Vec<_>>())
 	}
 
 	pub fn rotate_agg_key(new_agg_key: SolAddress) -> Result<Self, SolanaTransactionBuildingError> {
@@ -267,20 +354,62 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let compute_price = Environment::compute_price()?;
 
 		// Build the instruction_set
-		let instruction_set = SolanaInstructionBuilder::ccm_transfer(
-			transfer_param,
-			source_chain,
-			source_address,
-			message,
-			ccm_accounts,
-			vault_program,
-			vault_program_data_account,
-			system_program_id,
-			sys_var_instructions,
-			agg_key,
-			nonce_account,
-			compute_price,
-		);
+		let instruction_set = match transfer_param.asset {
+			SolAsset::Sol => Ok(SolanaInstructionBuilder::ccm_transfer_native(
+				transfer_param.amount,
+				transfer_param.to,
+				source_chain,
+				source_address,
+				message,
+				ccm_accounts,
+				vault_program,
+				vault_program_data_account,
+				system_program_id,
+				sys_var_instructions,
+				agg_key,
+				nonce_account,
+				compute_price,
+			)),
+			SolAsset::SolUsdc => {
+				let token_vault_pda_account =
+					Environment::lookup_account(SolanaEnvAccountLookupKey::TokenVaultPdaAccount)?;
+				let token_mint_pubkey =
+					Environment::lookup_account(SolanaEnvAccountLookupKey::TokenMintPubkey)?;
+				let token_program_id = SolAddress::from_str(TOKEN_PROGRAM_ID)
+					.expect("Preset Solana Token program ID must be valid.");
+				let token_vault_ata = Environment::lookup_account(
+					SolanaEnvAccountLookupKey::TokenVaultAssociatedTokenAccount,
+				)?;
+
+				let ata =
+					crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
+						transfer_param.to,
+						token_mint_pubkey,
+					)
+					.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
+
+				Ok(SolanaInstructionBuilder::ccm_transfer_usdc_token(
+					ata.0,
+					transfer_param.amount,
+					transfer_param.to,
+					source_chain,
+					source_address,
+					message,
+					ccm_accounts,
+					vault_program,
+					vault_program_data_account,
+					system_program_id,
+					sys_var_instructions,
+					token_vault_pda_account,
+					token_vault_ata,
+					token_mint_pubkey,
+					token_program_id,
+					agg_key,
+					nonce_account,
+					compute_price,
+				))
+			},
+		}?;
 
 		let transaction = SolTransaction::new_unsigned(SolMessage::new_with_blockhash(
 			&instruction_set,
@@ -360,11 +489,7 @@ impl<Env: 'static + SolanaEnvironment> AllBatch<Solana> for SolanaApi<Env> {
 		transfer_params: Vec<TransferAssetParams<Solana>>,
 	) -> Result<Self, AllBatchError> {
 		let _fetch_tx = Self::batch_fetch(fetch_params)?;
-
-		let _transfer_txs = transfer_params
-			.into_iter()
-			.map(|transfer_param| Self::transfer(transfer_param))
-			.collect::<Result<Vec<_>, SolanaTransactionBuildingError>>()?;
+		let _transfer_txs = Self::transfer(transfer_params)?;
 
 		Err(AllBatchError::DispatchError(DispatchError::Other("PRO-1348 This should be implemented after allowing Multiple transactions to be returned by this trait.")))
 	}
