@@ -344,15 +344,16 @@ mod test {
 			},
 			"topics": "0x"
 		});
+		let raw_error: serde_json::Value = serde_json::json!({
+			"error": "0x00000000",
+			"index": 31
+		});
 		let failed_1 = serde_json::json!({
 			"event": {
 				"System": {
 					"ExtrinsicFailed": {
 						"dispatch_error": {
-							"Module": {
-								"error": "0x00000000",
-								"index": 31
-							}
+							"Module": raw_error
 						},
 						"dispatch_info": {
 							"class": "Normal",
@@ -370,14 +371,17 @@ mod test {
 			},
 			"topics": "0x"
 		});
+		const ERROR: &str = "The user does not have enough funds.";
+		const ERROR_PALLET: &str = "LiquidityProvider";
+		const ERROR_NAME: &str = "InsufficientBalance";
 		let failed_2 = serde_json::json!({
 			"event": {
 				"System": {
 					"ExtrinsicFailed": {
 						"dispatch_error":{
-							"error": "The user does not have enough funds.",
-							"name": "InsufficientBalance",
-							"pallet": "LiquidityProvider"
+							"error": ERROR,
+							"name": ERROR_NAME,
+							"pallet": ERROR_PALLET
 						},
 						"dispatch_info": {
 							"class": "Normal",
@@ -412,7 +416,16 @@ mod test {
 		};
 
 		assert!(outcome(success).is_ok());
-		assert!(matches!(outcome(failed_1).unwrap_err(), DispatchError::DispatchError(_)));
-		assert!(matches!(outcome(failed_2).unwrap_err(), DispatchError::KnownModuleError { .. }));
+		assert!(
+			matches!(outcome(failed_1).unwrap_err(), DispatchError::DispatchError(e) if e == raw_error)
+		);
+		assert!(matches!(
+			outcome(failed_2).unwrap_err(),
+			DispatchError::KnownModuleError {
+				pallet,
+				name,
+				error
+			} if pallet == ERROR_PALLET && name == ERROR_NAME && error == ERROR
+		));
 	}
 }
