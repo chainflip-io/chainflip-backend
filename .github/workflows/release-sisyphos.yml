@@ -48,14 +48,6 @@ jobs:
     with:
       network: "sisyphos"
       environment: "development"
-  docker-persa:
-    needs: [build]
-    uses: ./.github/workflows/_24_docker.yml
-    with:
-      network: "perseverance"
-      environment: "production"
-      publish_public_images: true
-    secrets: inherit
   package:
     needs: [build]
     uses: ./.github/workflows/_25_package.yml
