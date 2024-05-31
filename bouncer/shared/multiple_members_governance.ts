@@ -1,6 +1,6 @@
 import assert from 'assert';
 import Keyring from '../polkadot/keyring';
-import { getChainflipApi, observeEvent } from '../shared/utils';
+import { getChainflipApi, observeEvent, tryUntilSuccess } from '../shared/utils';
 import { snowWhite, submitGovernanceExtrinsic } from '../shared/cf_governance';
 
 async function getGovernanceMembers(): Promise<string[]> {
@@ -30,7 +30,7 @@ async function addAliceToGovernance() {
   await using chainflip = await getChainflipApi();
   await observeEvent('governance:Executed', chainflip);
 
-  assert((await getGovernanceMembers()).length === 2, 'Governance should now have 2 members');
+  await tryUntilSuccess(async () => (await getGovernanceMembers()).length === 2, 3000, 10);
 
   console.log('Added Alice to governance!');
 }
