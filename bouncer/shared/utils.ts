@@ -977,3 +977,19 @@ export function calculateFeeWithBps(fineAmount: bigint, bps: number): bigint {
   const divisor = BigInt(10000 / bps);
   return fineAmount / divisor + (fineAmount % divisor > divisor / 2n ? 1n : 0n);
 }
+
+// Throws error if unsuccessful.
+export async function tryUntilSuccess(
+  closure: () => Promise<boolean>,
+  pollTime: number,
+  maxAttempts: number,
+  logTag?: string,
+) {
+  for (let i = 0; i < maxAttempts; i++) {
+    if (await closure()) {
+      return;
+    }
+    await sleep(pollTime);
+  }
+  throw new Error('tryUntilSuccess failed: ' + logTag);
+}
