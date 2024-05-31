@@ -4,16 +4,16 @@ import { rangeOrder } from '../shared/range_order';
 import { Asset } from './utils';
 
 const deposits = new Map<Asset, number>([
-  ['Dot', 10000],
-  ['Eth', 100],
-  ['ArbEth', 100],
-  ['Btc', 10],
-  ['Usdc', 1000000],
-  ['ArbUsdc', 100000],
-  ['Usdt', 100000],
-  ['Flip', 10000],
-  ['Sol', 100],
-  ['SolUsdc', 100000],
+  ['Dot', 100000],
+  ['Eth', 1000],
+  ['ArbEth', 1000],
+  ['Btc', 100],
+  ['Usdc', 10000000],
+  ['ArbUsdc', 1000000],
+  ['Usdt', 1000000],
+  ['Flip', 100000],
+  ['Sol', 1000],
+  ['SolUsdc', 1000000],
 ]);
 
 const price = new Map<Asset, number>([
