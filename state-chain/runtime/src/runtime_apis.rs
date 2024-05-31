@@ -8,7 +8,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, FlipBalance,
-	ForeignChain, NetworkEnvironment, PrewitnessedDepositId, SemVer, SwapOutput,
+	ForeignChain, NetworkEnvironment, PrewitnessedDepositId, SemVer,
 };
 use codec::{Decode, Encode};
 use core::ops::Range;
@@ -25,6 +25,7 @@ use pallet_cf_witnesser::CallHash;
 use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
+use sp_core::U256;
 use sp_runtime::DispatchError;
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
@@ -73,12 +74,22 @@ pub struct BoostPoolDepth {
 	pub available_amount: AssetAmount,
 }
 
+#[derive(Encode, Decode, TypeInfo)]
+pub enum SimulateSwapAdditionalOrder {
+	LimitOrder {
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
+		tick: Tick,
+		sell_amount: AssetAmount,
+	},
+}
+
 #[cfg(feature = "std")]
 fn serialize_as_hex<S>(amount: &AssetAmount, s: S) -> Result<S::Ok, S::Error>
 where
 	S: serde::Serializer,
 {
-	use sp_core::U256;
 	U256::from(*amount).serialize(s)
 }
 
@@ -118,6 +129,16 @@ pub struct BrokerInfo {
 	pub earned_fees: Vec<(Asset, AssetAmount)>,
 }
 
+/// Struct that represents the estimated output of a Swap.
+#[derive(Encode, Decode, TypeInfo)]
+pub struct SimulatedSwapInformation {
+	pub intermediary: Option<AssetAmount>,
+	pub output: AssetAmount,
+	pub network_fee: AssetAmount,
+	pub ingress_fee: AssetAmount,
+	pub egress_fee: AssetAmount,
+}
+
 #[derive(Debug, Decode, Encode, TypeInfo)]
 pub enum DispatchErrorWithMessage {
 	Module(Vec<u8>),
@@ -132,6 +153,7 @@ impl From<DispatchError> for DispatchErrorWithMessage {
 		}
 	}
 }
+
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
 pub struct FailingWitnessValidators {
 	pub failing_count: u32,
@@ -184,7 +206,8 @@ decl_runtime_apis!(
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
-		) -> Result<SwapOutput, DispatchErrorWithMessage>;
+			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
+		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;
 		fn cf_pool_info(
 			base_asset: Asset,
 			quote_asset: Asset,
@@ -235,7 +258,7 @@ decl_runtime_apis!(
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> LiquidityProviderInfo;
 		fn cf_broker_info(account_id: AccountId32) -> BrokerInfo;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
-		fn cf_asset_balances(
+		fn cf_free_balances(
 			account_id: AccountId32,
 		) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage>;
 		fn cf_redemption_tax() -> AssetAmount;

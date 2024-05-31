@@ -122,6 +122,8 @@ pub const MILLISECONDS_PER_BLOCK: u64 = 6000;
 
 pub const SECONDS_PER_BLOCK: u64 = MILLISECONDS_PER_BLOCK / 1000;
 
+pub const BASIS_POINTS_PER_MILLION: u32 = 100;
+
 pub const STABLE_ASSET: Asset = Asset::Usdc;
 
 /// Determines the default (genesis) maximum allowed reduction of authority set size in
@@ -192,20 +194,14 @@ pub enum AccountRole {
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;
 
 /// Struct that represents the estimated output of a Swap.
-#[derive(
-	PartialEq, Default, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo, Serialize, Deserialize,
-)]
+#[derive(PartialEq, Default, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo)]
 pub struct SwapOutput {
 	// Intermediary amount, if there's any
 	pub intermediary: Option<AssetAmount>,
 	// Final output of the swap
 	pub output: AssetAmount,
-}
-
-impl From<AssetAmount> for SwapOutput {
-	fn from(value: AssetAmount) -> Self {
-		Self { intermediary: None, output: value }
-	}
+	// the USDC network fee
+	pub network_fee: AssetAmount,
 }
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo)]

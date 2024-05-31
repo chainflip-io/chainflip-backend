@@ -32,7 +32,7 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 	}
 }
 
-pub type PalletMigration<T> = PlaceholderMigration<Pallet<T>, 9>;
+pub type PalletMigration<T> = PlaceholderMigration<Pallet<T>, 10>;
 
 #[cfg(test)]
 mod tests {

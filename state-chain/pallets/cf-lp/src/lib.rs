@@ -303,7 +303,7 @@ pub mod pallet {
 				Error::<T>::OpenOrdersRemaining
 			);
 			ensure!(
-				Self::asset_balances(&account_id)?.iter().all(|(_, amount)| *amount == 0),
+				Self::free_balances(&account_id)?.iter().all(|(_, amount)| *amount == 0),
 				Error::<T>::FundsRemaining
 			);
 
@@ -513,7 +513,7 @@ impl<T: Config> LpBalanceApi for Pallet<T> {
 		});
 	}
 
-	fn asset_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError> {
+	fn free_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError> {
 		T::PoolApi::sweep(who)?;
 		Ok(AssetMap::from_fn(|asset| FreeBalances::<T>::get(who, asset).unwrap_or_default()))
 	}

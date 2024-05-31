@@ -156,13 +156,11 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 								request_ids,
 							}) => {
 								request_ids.retain(|request_id| {
-									if Signature::<T, I>::get(request_id) == AsyncResult::Void {
-										T::VaultActivator::activate_key();
-										false
-									} else {
-										true
-									}
+									Signature::<T, I>::get(request_id) != AsyncResult::Void
 								});
+								if request_ids.is_empty() {
+									T::VaultActivator::activate_key();
+								}
 							},
 							_ => unreachable!(
 									"Unreachable because we are in the branch for the AwaitingActivationSignatures variant."
