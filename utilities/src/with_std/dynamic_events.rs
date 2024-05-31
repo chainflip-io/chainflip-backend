@@ -229,6 +229,8 @@ impl EventDecoder {
 				)
 				.and_then(|decoded| {
 					let mut json: JsonValue = decoded.into();
+					// This translates the raw error into a human-readable error message using
+					// the stored error metadata (see Self::resolve_dispatch_error).
 					if let Some(dispatch_error) =
 						json.pointer_mut("/event/System/ExtrinsicFailed/dispatch_error")
 					{
