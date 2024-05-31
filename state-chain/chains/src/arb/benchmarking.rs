@@ -1,7 +1,10 @@
 #![cfg(feature = "runtime-benchmarks")]
 
-use crate::evm::api::EvmReplayProtection;
-use cf_primitives::chains::assets::arb;
+use crate::{
+	evm::api::{EvmEnvironmentProvider, EvmReplayProtection},
+	ReplayProtectionProvider,
+};
+use cf_primitives::chains::{assets::arb, Arbitrum};
 
 use crate::{
 	benchmarking_value::BenchmarkValue,
@@ -25,7 +28,9 @@ impl BenchmarkValue for arb::Asset {
 	}
 }
 
-impl<E> BenchmarkValue for ArbitrumApi<E> {
+impl<E: ReplayProtectionProvider<Arbitrum> + EvmEnvironmentProvider<Arbitrum>> BenchmarkValue
+	for ArbitrumApi<E>
+{
 	fn benchmark_value() -> Self {
 		EvmTransactionBuilder::new_unsigned(
 			EvmReplayProtection::default(),

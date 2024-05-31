@@ -36,7 +36,7 @@ mod test_transfer_fallback {
 	use crate::{
 		eth::api::abi::load_abi,
 		evm::{
-			api::{ApiCall, EvmReplayProtection, EvmTransactionBuilder},
+			api::{EvmReplayProtection, EvmTransactionBuilder},
 			SchnorrVerificationComponents,
 		},
 	};

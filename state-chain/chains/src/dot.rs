@@ -7,7 +7,6 @@ pub mod benchmarking;
 #[cfg(feature = "std")]
 pub mod serializable_address;
 
-use api::PolkadotEnvironment;
 use cf_utilities::SliceToArray;
 #[cfg(feature = "std")]
 pub use serializable_address::*;

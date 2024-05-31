@@ -1,8 +1,6 @@
 pub mod batch_fetch_and_transfer;
 pub mod rotate_vault_proxy;
 
-use std::env;
-
 use super::{
 	PolkadotAccountId, PolkadotCrypto, PolkadotExtrinsicBuilder, PolkadotPublicKey, RuntimeVersion,
 };

@@ -1,25 +1,19 @@
-use std::env;
-
 use super::Ethereum;
 use crate::{
 	evm::{
 		api::{
 			all_batch, evm_all_batch_builder, execute_x_swap_and_call, set_agg_key_with_agg_key,
 			set_comm_key_with_agg_key, set_gov_key_with_agg_key, transfer_fallback, EvmCall,
-			EvmEnvironmentProvider, EvmReplayProtection, EvmTransactionBuilder, SigData,
+			EvmEnvironmentProvider, EvmReplayProtection, EvmTransactionBuilder,
 		},
-		EvmCrypto, SchnorrVerificationComponents,
+		EvmCrypto,
 	},
 	*,
 };
 use ethabi::{Address, Uint};
 use evm::api::common::*;
 use frame_support::{
-	sp_runtime::{
-		traits::{Hash, Keccak256},
-		DispatchError,
-	},
-	CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound,
+	sp_runtime::DispatchError, CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound,
 };
 use sp_std::marker::PhantomData;
 
@@ -163,7 +157,9 @@ where
 
 impl<E> RegisterRedemption for EthereumApi<E>
 where
-	E: StateChainGatewayAddressProvider + ReplayProtectionProvider<Ethereum>,
+	E: StateChainGatewayAddressProvider
+		+ EvmEnvironmentProvider<Ethereum>
+		+ ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(
 		node_id: &[u8; 32],
@@ -183,7 +179,9 @@ where
 
 impl<E> UpdateFlipSupply<EvmCrypto> for EthereumApi<E>
 where
-	E: StateChainGatewayAddressProvider + ReplayProtectionProvider<Ethereum>,
+	E: StateChainGatewayAddressProvider
+		+ EvmEnvironmentProvider<Ethereum>
+		+ ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(new_total_supply: u128, block_number: u64) -> Self {
 		Self::UpdateFlipSupply(EvmTransactionBuilder::new_unsigned(
@@ -345,7 +343,9 @@ impl<E> EthereumApi<E> {
 	}
 }
 
-impl<E> ApiCall<EvmCrypto> for EthereumApi<E> {
+impl<E: ReplayProtectionProvider<Ethereum> + EvmEnvironmentProvider<Ethereum>> ApiCall<EvmCrypto>
+	for EthereumApi<E>
+{
 	fn threshold_signature_payload(&self) -> <EvmCrypto as ChainCrypto>::Payload {
 		map_over_api_variants!(self, call, call.threshold_signature_payload())
 	}
@@ -367,7 +367,8 @@ impl<E> ApiCall<EvmCrypto> for EthereumApi<E> {
 	}
 
 	fn refresh_replay_protection(&mut self) {
-		map_over_api_variants!(self, call, call.refresh_replay_protection())
+		let new_replay_protection = E::replay_protection(E::key_manager_address());
+		map_over_api_variants!(self, call, call.refresh_replay_protection(new_replay_protection))
 	}
 }
 

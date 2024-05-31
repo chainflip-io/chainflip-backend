@@ -205,8 +205,8 @@ impl<C: EvmCall> EvmTransactionBuilder<C> {
 		}
 	}
 
-	pub fn refresh_replay_protection(&mut self) {
-		// self.replay_protection = environment;
+	pub fn refresh_replay_protection(&mut self, environment: EvmReplayProtection) {
+		self.replay_protection = environment;
 	}
 }
 
