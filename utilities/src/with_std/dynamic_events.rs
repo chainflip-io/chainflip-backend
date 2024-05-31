@@ -1,4 +1,5 @@
 use core::ops::Deref;
+use itertools::Itertools;
 use scale_info::{
 	scale::{Compact, Decode},
 	PortableRegistry,
@@ -154,12 +155,8 @@ impl EventDecoder {
 					(
 						pallet_error_type.index,
 						(pallet_error_type.name, {
-							let type_id = pallet_error_type
-								.fields
-								.first()
-								.expect("error variant has exactly one field")
-								.ty
-								.id;
+							let type_id =
+								pallet_error_type.fields.iter().exactly_one().unwrap().ty.id;
 							match types.resolve(type_id).unwrap().type_def.clone() {
 								scale_info::TypeDef::Variant(pallet_errors) => pallet_errors
 									.variants
