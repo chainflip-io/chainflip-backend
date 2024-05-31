@@ -704,6 +704,8 @@ pub mod pallet {
 		BelowEgressDustLimit,
 		/// Solana address derivation error.
 		SolanaAddressDerivationError,
+		/// Solana's Vault program cannot be loaded via the SolanaEnvironment.
+		MissingSolanaVaultProgram,
 		/// Adding boost funds is disabled due to safe mode.
 		AddBoostFundsDisabled,
 		/// Retrieving boost funds disabled due to safe mode.
@@ -1291,6 +1293,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ccm.source_address,
 				ccm.gas_budget,
 				ccm.message.to_vec(),
+				ccm.cf_parameters.to_vec(),
 			) {
 				Ok(api_call) => {
 					let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
@@ -1816,6 +1819,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							Error::<T, I>::BitcoinChannelIdTooLarge,
 						AddressDerivationError::SolanaDerivationError { .. } =>
 							Error::<T, I>::SolanaAddressDerivationError,
+						AddressDerivationError::MissingSolanaVaultProgram =>
+							Error::<T, I>::MissingSolanaVaultProgram,
 					})?,
 				next_channel_id,
 			)
