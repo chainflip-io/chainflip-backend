@@ -146,7 +146,7 @@ impl EventDecoder {
 	/// Create a new event decoder.
 	///
 	/// The arguments to this constructor can be extracted from substrate metadata.
-	pub fn new(mut types: PortableRegistry, errors_type_id: u32) -> Option<Self> {
+	pub fn new(mut types: PortableRegistry, errors_type_id: u32) -> Self {
 		let errors = match types.resolve(errors_type_id).unwrap().type_def.clone() {
 			scale_info::TypeDef::Variant(runtime_error_type) => runtime_error_type
 				.variants
@@ -201,7 +201,7 @@ impl EventDecoder {
 
 		log::debug!("EventDecoder error lookup: {:?}", errors);
 
-		Some(Self { events_type_id, types, errors })
+		Self { events_type_id, types, errors }
 	}
 
 	/// Decode a raw buffer of bytes into a list of [DyanmicEventRecord]s.
