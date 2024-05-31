@@ -32,16 +32,6 @@ macro_rules! print_start_and_end {
 				env!("CARGO_PKG_VERSION"),
 				$crate::internal_lazy_format!(if let Some(repository_link) = $crate::repository_link() => ("CI Build: \"{}\"", repository_link) else => ("Non-CI Build"))
 			);
-			println!(
-				"
-				 ██████╗██╗  ██╗ █████╗ ██╗███╗   ██╗███████╗██╗     ██╗██████╗
-				██╔════╝██║  ██║██╔══██╗██║████╗  ██║██╔════╝██║     ██║██╔══██╗
-				██║     ███████║███████║██║██╔██╗ ██║█████╗  ██║     ██║██████╔╝
-				██║     ██╔══██║██╔══██║██║██║╚██╗██║██╔══╝  ██║     ██║██╔═══╝
-				╚██████╗██║  ██║██║  ██║██║██║ ╚████║██║     ███████╗██║██║
-				 ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝╚═╝     ╚══════╝╚═╝╚═╝
-				"
-			);
 
 			match $e {
 				Ok(result) => match result {
