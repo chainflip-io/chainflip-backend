@@ -39,6 +39,9 @@ enum OtherEvent {
 	Bitcoin(InstanceLike<Bitcoin>),
 	BytesArray([u8; 32]),
 	ByteVec(Vec<u8>),
+	Recursive {
+		inner: Box<Self>,
+	},
 }
 
 trait Chain {
@@ -148,6 +151,24 @@ mod insta_tests {
 		byte_array: RuntimeEvent::Other(OtherEvent::BytesArray([0xcf; 32])),
 		byte_vec: RuntimeEvent::Other(OtherEvent::ByteVec(vec![0xcf; 42])),
 		byte_vec_empty: RuntimeEvent::Other(OtherEvent::ByteVec(vec![])),
+		recursive: RuntimeEvent::Other(OtherEvent::Recursive {
+			inner: Box::new(OtherEvent::Recursive {
+				inner: Box::new(OtherEvent::Recursive {
+					inner: Box::new(OtherEvent::Struct {
+						num_u8: 1,
+						num_u16: 2,
+						num_u32: 3,
+						num_u64: 4,
+						num_u128: 5,
+						num_i8: -1,
+						num_i16: -2,
+						num_i32: -3,
+						num_i64: -4,
+						num_i128: -5,
+					}),
+				}),
+			}),
+		}),
 	}
 }
 
