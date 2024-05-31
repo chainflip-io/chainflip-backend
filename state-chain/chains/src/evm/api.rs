@@ -1,4 +1,8 @@
-use crate::{eth::Address as EvmAddress, evm::SchnorrVerificationComponents, *};
+use crate::{
+	eth::Address as EvmAddress,
+	evm::{EvmCrypto, SchnorrVerificationComponents},
+	*,
+};
 use common::*;
 use ethabi::{Address, ParamType, Token, Uint};
 use frame_support::sp_runtime::traits::{Hash, Keccak256};
@@ -167,6 +171,42 @@ impl<C: EvmCall> EvmTransactionBuilder<C> {
 
 	pub fn gas_budget(&self) -> Option<<Ethereum as Chain>::ChainAmount> {
 		self.call.gas_budget()
+	}
+
+	pub fn threshold_signature_payload(&self) -> <EvmCrypto as ChainCrypto>::Payload {
+		Keccak256::hash(&ethabi::encode(&[
+			self.call.msg_hash().tokenize(),
+			self.replay_protection.tokenize(),
+		]))
+	}
+
+	pub fn signed(
+		mut self,
+		threshold_signature: &<EvmCrypto as ChainCrypto>::ThresholdSignature,
+	) -> Self {
+		self.sig_data = Some(SigData::new(self.replay_protection.nonce, threshold_signature));
+		self
+	}
+
+	pub fn chain_encoded(&self) -> Vec<u8> {
+		self.call
+			.abi_encoded(&self.sig_data.expect("Unsigned chain encoding is invalid."))
+	}
+
+	pub fn is_signed(&self) -> bool {
+		self.sig_data.is_some()
+	}
+
+	pub fn transaction_out_id(&self) -> <EvmCrypto as ChainCrypto>::TransactionOutId {
+		let sig_data = self.sig_data.expect("Unsigned transaction_out_id is invalid.");
+		SchnorrVerificationComponents {
+			s: sig_data.sig.into(),
+			k_times_g_address: sig_data.k_times_g_address.into(),
+		}
+	}
+
+	pub fn refresh_replay_protection(&mut self) {
+		// self.replay_protection = environment;
 	}
 }
 
