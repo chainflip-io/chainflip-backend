@@ -6,7 +6,7 @@ use sp_std::vec::Vec;
 
 use sol_prim::{AccountBump, SlotNumber};
 
-use crate::{address, assets, FeeEstimationApi, FeeRefundCalculator, TypeInfo};
+use crate::{address, assets, DepositChannel, FeeEstimationApi, FeeRefundCalculator, TypeInfo};
 use codec::{Decode, Encode, MaxEncodedLen};
 use serde::{Deserialize, Serialize};
 
@@ -25,8 +25,9 @@ pub use sol_prim::{
 	Signature as SolSignature,
 };
 pub use sol_tx_core::{
-	AccountMeta as SolAccountMeta, Hash as RawSolHash, Instruction as SolInstruction,
-	Message as SolMessage, Pubkey as SolPubkey, Transaction as SolTransaction,
+	AccountMeta as SolAccountMeta, CcmAccounts as SolCcmAccounts, CcmAddress as SolCcmAddress,
+	Hash as RawSolHash, Instruction as SolInstruction, Message as SolMessage, Pubkey as SolPubkey,
+	Transaction as SolTransaction,
 };
 
 impl Chain for Solana {
@@ -42,7 +43,7 @@ impl Chain for Solana {
 	type ChainAsset = assets::sol::Asset;
 	type ChainAccount = SolAddress;
 	type EpochStartData = (); //todo
-	type DepositFetchId = ChannelId;
+	type DepositFetchId = SolanaDepositFetchId;
 	type DepositChannelState = AccountBump;
 	type DepositDetails = (); //todo
 	type Transaction = SolTransaction;
@@ -136,8 +137,7 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 		let compute_units_per_transfer = BASE_COMPUTE_UNITS_PER_TX +
 			match asset {
 				assets::sol::Asset::Sol => COMPUTE_UNITS_PER_TRANSFER_NATIVE,
-				// TODO: To add when USDC is supported
-				// assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_TRANSFER_TOKEN,
+				assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_TRANSFER_TOKEN,
 			};
 
 		LAMPORTS_PER_SIGNATURE + (self.priority_fee).saturating_mul(compute_units_per_transfer)
@@ -151,8 +151,7 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 		let compute_units_per_fetch = BASE_COMPUTE_UNITS_PER_TX +
 			match asset {
 				assets::sol::Asset::Sol => COMPUTE_UNITS_PER_FETCH_NATIVE,
-				// TODO: To add when USDC is supported
-				// assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_FETCH_TOKEN,
+				assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_FETCH_TOKEN,
 			};
 
 		LAMPORTS_PER_SIGNATURE + (self.priority_fee).saturating_mul(compute_units_per_fetch)
@@ -198,3 +197,20 @@ impl address::ToHumanreadableAddress for SolAddress {
 }
 
 impl crate::ChannelLifecycleHooks for AccountBump {}
+
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
+pub struct SolanaDepositFetchId {
+	pub channel_id: ChannelId,
+	pub address: SolAddress,
+	pub bump: AccountBump,
+}
+
+impl From<&DepositChannel<Solana>> for SolanaDepositFetchId {
+	fn from(from: &DepositChannel<Solana>) -> Self {
+		SolanaDepositFetchId {
+			channel_id: from.channel_id,
+			address: from.address,
+			bump: from.state,
+		}
+	}
+}

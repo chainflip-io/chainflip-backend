@@ -584,6 +584,7 @@ fn can_egress_ccm() {
 			ccm.source_address,
 			GAS_BUDGET,
 			ccm.channel_metadata.message.to_vec(),
+			vec![],
 		).unwrap()]);
 
 		// Storage should be cleared
