@@ -123,8 +123,7 @@ async fn decode_events_at_hash(
 	let event_decoder = EventDecoder::new(
 		client.metadata().types().clone(),
 		client.metadata().outer_enums().error_enum_ty(),
-	)
-	.ok_or_else(|| anyhow::anyhow!("Unable to construct event decoder."))?;
+	);
 
 	for event in event_decoder
 		.decode_events(events_data)?
