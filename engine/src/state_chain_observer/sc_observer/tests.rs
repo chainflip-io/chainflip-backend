@@ -4,6 +4,7 @@ use crate::{
 	btc::retry_rpc::mocks::MockBtcRetryRpcClient,
 	dot::retry_rpc::mocks::MockDotHttpRpcClient,
 	evm::retry_rpc::mocks::MockEvmRetryRpcClient,
+	sol::retry_rpc::mocks::MockSolRetryRpcClient,
 	state_chain_observer::{
 		client::{
 			extrinsic_api,
@@ -55,6 +56,8 @@ async fn start_sc_observer<
 		MockEvmRetryRpcClient::new(),
 		MockDotHttpRpcClient::new(),
 		MockBtcRetryRpcClient::new(),
+		MockSolRetryRpcClient::new(),
+		MockMultisigClientApi::new(),
 		MockMultisigClientApi::new(),
 		MockMultisigClientApi::new(),
 		MockMultisigClientApi::new(),
@@ -728,6 +731,8 @@ async fn run_the_sc_observer() {
 				MockEvmRetryRpcClient::new(),
 				MockDotHttpRpcClient::new(),
 				MockBtcRetryRpcClient::new(),
+				MockSolRetryRpcClient::new(),
+				MockMultisigClientApi::new(),
 				MockMultisigClientApi::new(),
 				MockMultisigClientApi::new(),
 				MockMultisigClientApi::new(),

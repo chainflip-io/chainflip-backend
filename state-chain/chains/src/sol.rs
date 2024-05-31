@@ -49,7 +49,7 @@ impl Chain for Solana {
 	type TransactionMetadata = (); //todo
 	type ReplayProtectionParams = (); //todo
 	type ReplayProtection = (); //todo
-	type TransactionRef = SolHash;
+	type TransactionRef = SolSignature;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

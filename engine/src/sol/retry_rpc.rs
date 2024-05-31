@@ -292,6 +292,50 @@ impl ChainClient for SolRetryRpcClient {
 }
 
 #[cfg(test)]
+pub mod mocks {
+
+	use super::*;
+	use mockall::mock;
+
+	mock! {
+		pub SolRetryRpcClient {}
+
+		impl Clone for SolRetryRpcClient {
+			fn clone(&self) -> Self;
+		}
+
+		#[async_trait::async_trait]
+		impl SolRetryRpcApi for SolRetryRpcClient {
+			async fn get_block(&self, slot: u64, config: RpcBlockConfig) -> UiConfirmedBlock;
+			async fn get_slot(&self, commitment: CommitmentConfig) -> u64; // Slot
+			async fn get_recent_prioritization_fees(&self) -> Vec<RpcPrioritizationFee>;
+			async fn get_multiple_accounts(
+				&self,
+				pubkeys: &[SolAddress],
+				config: RpcAccountInfoConfig,
+			) -> Response<Vec<Option<UiAccount>>>;
+			async fn get_signature_statuses(
+				&self,
+				signatures: &[SolSignature],
+				search_transaction_history: bool,
+			) -> Response<Vec<Option<TransactionStatus>>>;
+
+			async fn get_transaction(
+				&self,
+				signature: &SolSignature,
+				config: RpcTransactionConfig,
+			) -> EncodedConfirmedTransactionWithStatusMeta;
+
+			async fn send_transaction(
+				&self,
+				transaction: String,
+				config: RpcSendTransactionConfig,
+			) -> SolSignature;
+		}
+	}
+}
+
+#[cfg(test)]
 mod tests {
 	// use crate::settings::Settings;
 	use cf_chains::Chain;
