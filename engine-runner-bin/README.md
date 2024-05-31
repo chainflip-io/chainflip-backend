@@ -33,3 +33,10 @@ All the versions that are required to be bumped are checked in the `build.rs` fi
 ### Developer Notes
 
 - The `cfe_entrypoint`, which is the C FFI entrypoint of the dylib that the runner can call, has its version defined by the version specified in the `engine-proc-macros` crate, and NOT the version of the dylib crate itself. This is perhaps a little counterintuitive, but it's just how Rust environment variables and proc-macros work at the moment. This is why the proc-macros crate checks it's version against the `NEW_VERSION` and `OLD_VERSION` consts in it's [build.rs](./../engine-proc-macros/build.rs) file.
+- So `DYLD_LIBRARY_PATH` does not need setting, when building the dylib locally for mac, you will have to run `install_name_tool` to remove the localpath and use `@rpath` so it can be used dynamically. After building the dylib you can run:
+
+ ```shell
+ install_name_tool -id @rpath/libchainflip_engine_v1_4_0.dylib ./target/release/libchainflip_engine_v1_4_0.dylib
+ ```
+
+The `LC_RPATH` is already set in the runner in the `build.rs` file.
