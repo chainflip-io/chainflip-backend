@@ -485,13 +485,8 @@ impl PolkadotExtrinsicBuilder {
 		self.signature.is_some()
 	}
 
-	pub fn refresh_replay_protection(&mut self, env: PolkadotReplayProtection) {
-		// let new_replay_pro = PolkadotReplayProtection {
-		// 	genesis_hash: self.replay_protection.genesis_hash,
-		// 	signer: self.replay_protection.signer,
-		// 	nonce: Environment::next_polkadot_proxy_account_nonce(true),
-		// };
-		self.replay_protection = env;
+	pub fn refresh_replay_protection(&mut self, environment: PolkadotReplayProtection) {
+		self.replay_protection = environment;
 	}
 }
 

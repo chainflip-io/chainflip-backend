@@ -183,8 +183,11 @@ impl<E: ReplayProtectionProvider<Arbitrum> + EvmEnvironmentProvider<Arbitrum>> A
 	}
 
 	fn refresh_replay_protection(&mut self) {
-		let new_replay_protection = E::replay_protection(E::key_manager_address());
-		map_over_api_variants!(self, call, call.refresh_replay_protection(new_replay_protection))
+		map_over_api_variants!(
+			self,
+			call,
+			call.refresh_replay_protection(E::replay_protection(E::key_manager_address()))
+		)
 	}
 }
 

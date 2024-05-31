@@ -75,44 +75,6 @@ pub enum EthereumApi<Environment: 'static> {
 	_Phantom(PhantomData<Environment>, Never),
 }
 
-// impl<C: EvmCall + Parameter + 'static> ApiCall<EvmCrypto> for EvmTransactionBuilder<C> {
-// 	fn threshold_signature_payload(&self) -> <EvmCrypto as ChainCrypto>::Payload {
-// 		Keccak256::hash(&ethabi::encode(&[
-// 			self.call.msg_hash().tokenize(),
-// 			self.replay_protection.tokenize(),
-// 		]))
-// 	}
-
-// 	fn signed(
-// 		mut self,
-// 		threshold_signature: &<EvmCrypto as ChainCrypto>::ThresholdSignature,
-// 	) -> Self {
-// 		self.sig_data = Some(SigData::new(self.replay_protection.nonce, threshold_signature));
-// 		self
-// 	}
-
-// 	fn chain_encoded(&self) -> Vec<u8> {
-// 		self.call
-// 			.abi_encoded(&self.sig_data.expect("Unsigned chain encoding is invalid."))
-// 	}
-
-// 	fn is_signed(&self) -> bool {
-// 		self.sig_data.is_some()
-// 	}
-
-// 	fn transaction_out_id(&self) -> <EvmCrypto as ChainCrypto>::TransactionOutId {
-// 		let sig_data = self.sig_data.expect("Unsigned transaction_out_id is invalid.");
-// 		SchnorrVerificationComponents {
-// 			s: sig_data.sig.into(),
-// 			k_times_g_address: sig_data.k_times_g_address.into(),
-// 		}
-// 	}
-
-// 	fn refresh_replay_protection(&mut self) {
-// 		// self.replay_protection = environment;
-// 	}
-// }
-
 impl<E> SetAggKeyWithAggKey<EvmCrypto> for EthereumApi<E>
 where
 	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,

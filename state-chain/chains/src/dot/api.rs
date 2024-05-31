@@ -189,8 +189,11 @@ impl<E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>> ApiCall<Polkad
 	}
 
 	fn refresh_replay_protection(&mut self) {
-		let environment = E::replay_protection(false);
-		map_over_api_variants!(self, call, call.refresh_replay_protection(environment))
+		map_over_api_variants!(
+			self,
+			call,
+			call.refresh_replay_protection(E::replay_protection(false))
+		)
 	}
 }
 
@@ -252,7 +255,6 @@ impl<E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot> + 'static> ApiC
 	}
 
 	fn refresh_replay_protection(&mut self) {
-		let environment = E::replay_protection(false);
-		self.builder.refresh_replay_protection(environment)
+		self.builder.refresh_replay_protection(E::replay_protection(false))
 	}
 }
