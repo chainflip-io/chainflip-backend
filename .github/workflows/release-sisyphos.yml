@@ -12,6 +12,11 @@ jobs:
   pre-check:
     uses: ./.github/workflows/_01_pre_check.yml
     secrets: inherit
+  force-version-bump:
+    uses: ./.github/workflows/_05_force_version_bump.yml
+    secrets: inherit
+    with:
+      network-to-check-against: "perseverance"
   release-checks:
     uses: ./.github/workflows/_03_release_checks.yml
     with:
