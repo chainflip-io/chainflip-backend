@@ -88,8 +88,7 @@ switch (network) {
 }
 
 const releaseSpecVersion = Number(
-  (await jsonRpc('state_getRuntimeVersion', [], endpoint))
-    .specVersion,
+  (await jsonRpc('state_getRuntimeVersion', [], endpoint)).specVersion,
 );
 console.log(`Release spec version: ${releaseSpecVersion}`);
 
