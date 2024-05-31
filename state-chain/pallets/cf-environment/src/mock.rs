@@ -4,7 +4,7 @@ use crate::{self as pallet_cf_environment, Decode, Encode, TypeInfo};
 use cf_chains::{
 	btc::{BitcoinCrypto, BitcoinFeeInfo},
 	dot::{api::CreatePolkadotVault, PolkadotCrypto},
-	eth, ApiCall, Arbitrum, Bitcoin, Chain, ChainCrypto, Polkadot,
+	eth, ApiCall, Arbitrum, Bitcoin, Chain, ChainCrypto, Polkadot, Solana
 };
 use cf_primitives::{BroadcastId, SemVer, ThresholdSignatureRequestId};
 use cf_traits::{

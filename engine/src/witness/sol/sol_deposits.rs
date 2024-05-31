@@ -41,7 +41,7 @@ const FETCH_ACCOUNT_DISCRIMINATOR: [u8; 8] = [188, 68, 197, 38, 48, 192, 81, 100
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	/// TODO: Add description
-	pub async fn solana_deposits<ProcessCall, ProcessingFut, SolRetryRpcClient>(
+	pub async fn sol_deposits<ProcessCall, ProcessingFut, SolRetryRpcClient>(
 		self,
 		process_call: ProcessCall,
 		sol_rpc: SolRetryRpcClient,

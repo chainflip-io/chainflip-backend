@@ -21,7 +21,9 @@ use crate::{
 	sol::{
 		commitment_config::CommitmentConfig,
 		retry_rpc::{SolRetryRpcApi, SolRetryRpcClient},
-		rpc_client_api::{RpcTransactionConfig, TransactionConfirmationStatus},
+		rpc_client_api::{
+			RpcTransactionConfig, TransactionConfirmationStatus, UiTransactionEncoding,
+		},
 	},
 	state_chain_observer::client::{
 		chain_api::ChainApi,
@@ -30,25 +32,61 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED},
 	},
 };
-use cf_chains::sol::{SolAddress, SolHash, SolSignature};
+use cf_chains::sol::{SolAddress, SolHash, SolSignature, LAMPORTS_PER_SIGNATURE};
 
 use crate::common::Mutex;
 use anyhow::{anyhow, Context, Result};
 use futures::{future::join_all, stream};
+use state_chain_runtime::SolanaInstance;
 
-// TODO: Implement a process_egress function that uses success_witness and submits
-// the transactions to the the State Chain (pallet_cf_broadcast::Call::transaction_succeeded)
+pub async fn process_egress<ProcessCall, ProcessingFut>(
+	epoch: Vault<cf_chains::Solana, (), ()>,
+	header: Header<u64, SolHash, ((), Vec<(SolSignature, u64)>)>,
+	process_call: ProcessCall,
+	sol_client: SolRetryRpcClient,
+) where
+	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
+		+ Send
+		+ Sync
+		+ Clone
+		+ 'static,
+	ProcessingFut: Future<Output = ()> + Send + 'static,
+{
+	let (_, monitored_egresses) = header.data;
+
+	let monitored_tx_signatures = monitored_egresses.into_iter().map(|(x, _)| x).collect();
+
+	let success_witnesses_result = success_witnesses(&sol_client, monitored_tx_signatures).await;
+
+	for (tx_signature, slot, tx_fee) in success_witnesses_result {
+		process_call(
+			pallet_cf_broadcast::Call::<_, SolanaInstance>::transaction_succeeded {
+				tx_out_id: tx_signature,
+				signer_id: epoch.info.0,
+				tx_fee,
+				tx_metadata: (),
+				transaction_ref: tx_signature,
+			}
+			.into(),
+			epoch.index,
+		)
+		.await;
+	}
+}
+
 async fn success_witnesses(
 	sol_client: &SolRetryRpcClient,
-	monitored_tx_signatures: &[SolSignature],
-) -> Result<Vec<(SolSignature, u64, u64)>, anyhow::Error>
+	monitored_tx_signatures: Vec<SolSignature>,
+) -> Vec<(SolSignature, u64, u64)>
 where
 	SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
 {
 	let mut finalized_transactions = Vec::new();
 
-	let signature_statuses =
-		sol_client.get_signature_statuses(monitored_tx_signatures, true).await.value;
+	let signature_statuses = sol_client
+		.get_signature_statuses(monitored_tx_signatures.as_slice(), true)
+		.await
+		.value;
 
 	for (signature, status_option) in
 		monitored_tx_signatures.iter().zip(signature_statuses.into_iter())
@@ -61,42 +99,46 @@ where
 		}
 	}
 
-	// We can either try to get the correct nonce account from the succesful transactions, it's
+	// Regarding the option of nonces witnesssing on broadcast:
+	// We could either try to get the correct nonce account from the succesful transactions, it's
 	// probably always in the same key position, since we need to call get_transaction anyway to get
 	// the fees. Otherwise we just use get_multiple_accounts for all the nonce accounts and compare
 	// them with the the previous hashes, which we can also pull from the environment.
 	// Matching keys from successful transactions against nonces is dangerous because ccm calls
 	// might have some sneaky keys passed by the user.
-	let futures: Vec<_> = finalized_transactions
-		.into_iter()
-		.map(|(signature, slot)| {
-			async move {
-				let transaction = sol_client
-					.get_transaction(
-						&signature,
-						RpcTransactionConfig {
-							encoding: None, // default Json
-							// Using confirmed to prevent race conditions. We assume that if we saw
-							// it finalized in get_signature_statuses it will eventually be
-							// finalized
-							commitment: Some(CommitmentConfig::confirmed()),
-							// Getting also type 0 even if we don't use them atm
-							max_supported_transaction_version: Some(0),
-						},
-					)
-					.await;
 
-				let fee = match transaction.transaction.meta {
-					Some(meta) => meta.fee,
-					None => return Err(anyhow!("Empty meta")),
-				};
+	let mut finalized_txs_info = Vec::new();
 
-				Ok((signature, slot, fee))
-			}
-		})
-		.collect();
+	println!("Finalized transactions: {:?}", finalized_transactions);
 
-	let finalized_txs_info: Result<Vec<_>, _> = join_all(futures).await.into_iter().collect();
+	// We could run this queries concurrently to make it faster but we'll have few txs anyway
+	for (signature, slot) in finalized_transactions {
+		let transaction = sol_client
+			.get_transaction(
+				&signature,
+				RpcTransactionConfig {
+					encoding: Some(UiTransactionEncoding::Json),
+					// Using finalized there could be a race condition where this doesn't get
+					// us the tx. But "Processed" is timing out so we better retry with finalized.
+					commitment: Some(CommitmentConfig::finalized()),
+					// Getting also type 0 even if we don't use them atm
+					max_supported_transaction_version: Some(0),
+				},
+			)
+			.await;
+		println!("Transaction: {:?}", transaction);
+
+		let fee = match transaction.transaction.meta {
+			Some(meta) => meta.fee,
+			// This shouldn't happen. Want to avoid Erroring. We either default to 5000 or return
+			// OK(()) so we don't submit transaction_succeeded and retry again later. Defaulting to
+			// avoid potentially getting stuck not witness something because no meta is returned.
+			// TODO: Check if this approach makes sense.
+			None => LAMPORTS_PER_SIGNATURE,
+		};
+
+		finalized_txs_info.push((signature, slot, fee));
+	}
 
 	finalized_txs_info
 }
@@ -160,12 +202,14 @@ where
 
 	// TODO: Use DB instead?
 	// Using this as a global variable to store the previous balances. The new pallet it
-	// might be alright if we submit values again after a restart, it's just not
+	// might be alright if we submit values again after a restart, it's just not efficient.
+	// Currently with this workaround to make it work for the current pallet, a restart of the
+	// engine would cause the engine to trigger swaps on all deposit channels with balances.
 	let cached_balances = Arc::new(Mutex::new(HashMap::new()));
 
 	sol_safe_vault_source_deposit_addresses
 		.clone()
-		.solana_deposits(
+		.sol_deposits(
 			process_call.clone(),
 			sol_client.clone(),
 			cf_primitives::chains::assets::sol::Asset::Sol,
@@ -180,7 +224,7 @@ where
 
 	// sol_safe_vault_source_deposit_addresses
 	// 	.clone()
-	// 	.solana_deposits(
+	// 	.sol_deposits(
 	// 		process_call.clone(),
 	// 		sol_client.clone(),
 	// 		cf_primitives::chains::assets::sol::Asset::SolUsdc,
@@ -201,17 +245,20 @@ where
 		.logging("SolanaNonceWitnessing")
 		.spawn(scope);
 
-	// sol_safe_vault_source
-	// 	.clone()
-	// 	.egress_items(scope, state_chain_stream, state_chain_client.clone())
-	// 	.await
-	// 	.then({
-	// 		let process_call = process_call.clone();
-	// 		move |epoch, header| process_egress(epoch, header, process_call.clone())
-	// 	})
-	// 	.continuous("SolanaEgress".to_string(), db)
-	// 	.logging("Egress")
-	// 	.spawn(scope);
+	sol_safe_vault_source
+		.clone()
+		.egress_items(scope, state_chain_stream, state_chain_client.clone())
+		.await
+		.then({
+			let process_call = process_call.clone();
+			let sol_client = sol_client.clone();
+			move |epoch, header| {
+				process_egress(epoch, header, process_call.clone(), sol_client.clone())
+			}
+		})
+		.continuous("SolanaEgress".to_string(), db)
+		.logging("Egress")
+		.spawn(scope);
 
 	Ok(())
 }
@@ -263,13 +310,13 @@ mod tests {
 				.await
 				.unwrap();
 
-				let monitored_tx_signatures = [
+				let monitored_tx_signatures = vec![
 					SolSignature::from_str(
 						"4udChXyRXrqBxUTr9F3nbTcPyvteLJtFQ3wM35J53NdP4GWwUp2wBwdTJEYs2aiNz7DyCqitok6ci7qqHPkRByb2").unwrap()
 				];
 
 				let result =
-					success_witnesses(&retry_client, &monitored_tx_signatures).await.unwrap();
+					success_witnesses(&retry_client, monitored_tx_signatures.clone()).await;
 				println!("{:?}", result);
 				assert_eq!(result.len(), 1);
 				assert_eq!(result[0].0, monitored_tx_signatures[0]);
