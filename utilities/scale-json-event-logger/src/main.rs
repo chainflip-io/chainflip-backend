@@ -5,6 +5,7 @@ use cf_utilities::{dynamic_events::EventDecoder, scale_json::ext::JsonValue};
 use env_logger::Env;
 use std::str::FromStr;
 use subxt::{
+	backend::BackendExt,
 	ext::{futures::TryStreamExt, sp_core::H256},
 	SubstrateConfig,
 };
@@ -25,6 +26,9 @@ path [optional]: JSON pointer paths to filter the decoded events.
 	A path looks like: /event/LiquidityPools
 	If any path matches the decoded event, the full event is printed.
 	If none are provided, all decoded events are printed.
+
+	DISCLAIMER: This is not production-grade code. In particular, there is a known race condition
+	where the metadata might no stay in sync with event encodings across a runtime upgrade.
 "#;
 
 /// This valid across all Substrate chains using FRAME, ie. any chain that stores its events in
@@ -92,9 +96,16 @@ async fn main() -> anyhow::Result<()> {
 			decode_events_at_hash(&client, hash, &filter).await?;
 		},
 		HashOption::Hash(hash) => {
+			let metadata_at_hash = client.backend().metadata_at_version(15, hash).await?;
+			client.set_metadata(metadata_at_hash);
 			decode_events_at_hash(&client, hash, &filter).await?;
 		},
 		HashOption::Follow => {
+			// This updates the client metadata in a separate thread. Note that there is no
+			// synchronization between the metadata updates and the event decoding, so decoding
+			// might fail during/after a runtime upgrade.
+			let update_notifier = client.updater();
+			tokio::spawn(async move { update_notifier.perform_runtime_updates().await });
 			client
 				.blocks()
 				.subscribe_finalized()
@@ -120,6 +131,8 @@ async fn decode_events_at_hash(
 		.await?
 		.expect("No events in block");
 
+	// NOTE: It's possible that the metadata used here is incompatible with the events data,
+	// since the metadata updates in another thread.
 	let event_decoder = EventDecoder::new(
 		client.metadata().types().clone(),
 		client.metadata().outer_enums().error_enum_ty(),
