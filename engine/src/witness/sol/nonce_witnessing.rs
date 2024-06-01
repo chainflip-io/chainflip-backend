@@ -11,20 +11,16 @@ use crate::witness::common::chunked_chain_source::chunked_by_vault::deposit_addr
 use super::super::common::chunked_chain_source::chunked_by_vault::{
 	builder::ChunkedByVaultBuilder, ChunkedByVault,
 };
-use crate::{
-	sol::{
-		commitment_config::CommitmentConfig,
-		retry_rpc::{SolRetryRpcApi, SolRetryRpcClient},
-		rpc_client_api::{
-			ParsedAccount, RpcAccountInfoConfig, UiAccount, UiAccountData, UiAccountEncoding,
-		},
+use crate::sol::{
+	commitment_config::CommitmentConfig,
+	retry_rpc::{SolRetryRpcApi, SolRetryRpcClient},
+	rpc_client_api::{
+		ParsedAccount, RpcAccountInfoConfig, UiAccount, UiAccountData, UiAccountEncoding,
 	},
-	// witness::common::chain_source::Header,
 };
 use anyhow::{anyhow, Result};
 use serde_json::Value;
 use std::str::FromStr;
-use tracing::{info, trace};
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	/// Witnessing the state of the nonce accounts periodically. It could also be done

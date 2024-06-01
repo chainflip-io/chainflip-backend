@@ -489,9 +489,12 @@ pub struct SolEnvironment;
 
 /// TODO: Implement this in PRO-1362
 impl ChainEnvironment<SolanaEnvAccountLookupKey, SolAddress> for SolEnvironment {
-	fn lookup(_s: SolanaEnvAccountLookupKey) -> Option<SolAddress> {
-		// TODO
-		None
+	fn lookup(key: SolanaEnvAccountLookupKey) -> Option<SolAddress> {
+		match key {
+			SolanaEnvAccountLookupKey::VaultProgram => Some(Environment::sol_vault_address()),
+			// TODO
+			_ => None,
+		}
 	}
 }
 
