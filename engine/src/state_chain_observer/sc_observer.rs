@@ -3,10 +3,7 @@ mod crypto_compat;
 mod tests;
 
 use anyhow::{anyhow, Context};
-use cf_chains::{
-	btc::{self, PreviousOrCurrent},
-	sol::SolAddress,
-};
+use cf_chains::btc::{self, PreviousOrCurrent};
 use cf_primitives::{BlockNumber, CeremonyId, EpochIndex};
 use crypto_compat::CryptoCompat;
 use futures::{FutureExt, StreamExt};
