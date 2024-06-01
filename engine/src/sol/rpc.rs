@@ -103,7 +103,8 @@ async fn call_rpc_raw(
 	if json["error"].is_object() {
 		return Err(Error::Rpc(serde_json::from_value(json["error"].clone()).map_err(Error::Json)?));
 	}
-	println!("json result: {:?}", json["result"]);
+	println!("Request&Result\nrequest_body: {:?}\njson result: {:?}", request_body, json["result"]);
+
 	Ok(json["result"].take())
 }
 
