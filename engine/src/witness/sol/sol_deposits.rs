@@ -39,7 +39,7 @@ const FETCH_ACCOUNT_BYTE_LENGTH: usize = 24;
 const MAX_MULTIPLE_ACCOUNTS_QUERY: usize = 100;
 const FETCH_ACCOUNT_DISCRIMINATOR: [u8; 8] = [188, 68, 197, 38, 48, 192, 81, 100];
 
-// TODO: This code supports not having to filter the asset in the deposit channels so we could
+// TODO: This code underneath supports not having to filter the asset in the deposit channels
 // call this together for native and tokens. The advantatge is that we can then use the same
 // getMultipleAccounts for any asset. However, there is two issues:
 // 1. If it's not native then we are using `token_pubkey`. If at some point we are to support more
@@ -54,6 +54,7 @@ const FETCH_ACCOUNT_DISCRIMINATOR: [u8; 8] = [188, 68, 197, 38, 48, 192, 81, 100
 //
 // For now we have the underlying logic that supports both but we filter it first just because the
 // way we are submitting the extrinsic.
+// TODO: Depending on the pallet approach we can reassess this.
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	/// We track Solana (Sol and SPL-token) deposits by periodically querying the
 	/// state of the deposit channel accounts. To ensure that no deposits are missed
@@ -92,8 +93,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		state_chain_runtime::RuntimeCall:
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
 	{
-		println!("DEBUGDEPOSITS Processing Solana Deposits");
-
 		self.then(move |epoch, header| {
 			assert!(<Inner::Chain as Chain>::is_block_witness_root(header.index));
 
@@ -101,12 +100,8 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			let process_call = process_call.clone();
 			let cached_balances = Arc::clone(&cached_balances);
 
-			println!("DEBUGDEPOSITS Processing Solana Deposits Inner");
-
 			async move {
 				let (_, deposit_channels) = header.data;
-
-				println!("DEBUGDEPOSITS Processing Solana Deposits Inner 2");
 
 				// Genesis block cannot contain any transactions
 				if !deposit_channels.is_empty() {
@@ -242,20 +237,25 @@ async fn ingress_amounts<SolRetryRpcClient>(
 where
 	SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
 {
+	if deposit_channels.is_empty() {
+		return Ok((vec![], 0));
+	}
+	ensure!(deposit_channels.len() <= MAX_MULTIPLE_ACCOUNTS_QUERY / 2);
+
 	let addresses_to_witness = deposit_channels
 		.clone()
 		.into_iter()
 		.flat_map(|deposit_channel| {
+			let address_to_witness = deposit_channel.address_to_witness();
 			vec![
-				*deposit_channel.address_to_witness(),
-				derive_fetch_account(vault_address, *deposit_channel.deposit_channel_address())
+				*address_to_witness,
+				derive_fetch_account(vault_address, *address_to_witness)
 					.expect("Failed to derive fetch account"),
 			]
 		})
 		.collect::<Vec<_>>();
 
 	ensure!(addresses_to_witness.len() <= MAX_MULTIPLE_ACCOUNTS_QUERY);
-	ensure!(addresses_to_witness.len() > 0);
 
 	let accounts_info_response: Response<Vec<Option<UiAccount>>> = sol_rpc
 		.get_multiple_accounts(
@@ -461,7 +461,6 @@ impl DepositChannelType {
 mod tests {
 	use crate::{
 		settings::{NodeContainer, WsHttpEndpoints},
-		// use settings:: Settings
 		sol::retry_rpc::SolRetryRpcClient,
 	};
 
@@ -472,48 +471,10 @@ mod tests {
 
 	use super::*;
 
-	// 	#[test]
-	// 	fn test_sol_ingresses_error_if_odd_length() {
-	// 		let account_infos = vec![
-	// 			(SolAddress::from_str("BrX9Z85BbmXYMjvvuAWU8imwsAqutVQiDg9uNfTGkzrJ").unwrap(), 1),
-	// 			(SolAddress::from_str("5WQayu3ARKuStAP3P6PvqxBfYo3crcKc2H821dLFhukz").unwrap(), 2),
-	// 			(SolAddress::from_str("ADtaKHTsYSmsty3MgLVfTQoMpM7hvFNTd2AxwN3hWRtt").unwrap(), 3),
-	// 		];
-
-	// 		let ingresses = sol_ingresses(account_infos);
-
-	// 		assert!(ingresses.is_err());
-	// 	}
-
-	// 	#[test]
-	// 	fn test_sol_derive_fetch_account() {
-	// 		let fetch_account = derive_fetch_account(
-	// 			SolAddress::from_str("8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf").unwrap(),
-	// 			SolAddress::from_str("HAMxiXdEJxiBHabZAUm8PSLvWQM2GHi5PArVZvUCeDab").unwrap(),
-	// 		)
-	// 		.unwrap();
-	// 		assert_eq!(
-	// 			fetch_account,
-	// 			SolAddress::from_str("HGgUaHpsmZpB3pcYt8PE89imca6BQBRqYtbVQQqsso3o").unwrap()
-	// 		);
-	// 	}
-
 	#[tokio::test]
 	async fn test_get_deposit_channels_info() {
 		task_scope::task_scope(|scope| {
 			async {
-				// let settings = Settings::new_test().unwrap();
-				// let client = SolRetryRpcClient::<SolRpcClient>::new(
-				// 	scope,
-				// 	settings.sol.nodes,
-				// 	U256::from(1337u64),
-				// 	"sol_rpc",
-				// 	"sol_subscribe",
-				// 	"Ethereum",
-				// 	Ethereum::WITNESS_PERIOD,
-				// )
-				// .unwrap();
-
 				let retry_client = SolRetryRpcClient::new(
 					scope,
 					NodeContainer {
@@ -588,45 +549,75 @@ mod tests {
 				assert_eq!(ingresses.0[0].1, 0);
 				assert_eq!(ingresses.0[1].1, 0);
 
-				// TODO: Deploy a new fetch account so we can test or refactor so we can test Fetch
-				// accounts by itself
+				let vault_program_account =
+					SolAddress::from_str("EMxiTBPTkGVkkbCMncu7j17gHyySojii4KhHwM36Hgz2").unwrap();
 
-				// 				let mut new_addresses = addresses.clone();
-				// 				new_addresses.push((empty_account, fetch_account_3));
-				// 				let account_infos = ingress_amounts(
-				// 					&retry_client,
-				// 					new_addresses,
-				// 					vault_program_account_account,
-				// 					Some(token_mint_pubkey),
-				// 				)
-				// 				.await;
-				// 				assert!(account_infos.is_err());
+				// Reacl fetch account deployed: 9MyUhDE1ZXr2Vs2TyMXccwnAYnUvrXvtvWxvuaDG6TbY
+				let account_infos = vec![
+					DepositChannelType::NativeDepositChannel(
+						// Address used to derive the fetch account deployed
+						SolAddress::from_str("12pWMFau4wPS1cnucRiDMhrKbBg876k5QduXkwVnXESa")
+							.unwrap(),
+					),
+					DepositChannelType::TokenDepositChannel(
+						// Arbitrary address, won't be used
+						SolAddress::from_str("BrX9Z85BbmXYMjvvuAWU8imwsAqutVQiDg9uNfTGkzrJ")
+							.unwrap(),
+						// Address used to derive the fetch account deployed
+						SolAddress::from_str("12pWMFau4wPS1cnucRiDMhrKbBg876k5QduXkwVnXESa")
+							.unwrap(),
+						SolAddress::from_str("MAZEnmTmMsrjcoD6vymnSoZjzGF7i7Lvr2EXjffCiUo")
+							.unwrap(),
+					),
+				];
 
-				// 				// Try real fetch data account
-				// 				let real_fetch_data_account =
-				// 					SolAddress::from_str("HsRFLNzidLJx4RuqxdT924btgCTTuFFmNqp7Ph9y9HdN").unwrap();
-				// 				addresses.push((empty_account, real_fetch_data_account));
+				let ingresses =
+					ingress_amounts(&retry_client, account_infos.clone(), vault_program_account)
+						.await
+						.unwrap();
 
-				// 				let account_infos = ingress_amounts(
-				// 					&retry_client,
-				// 					addresses.clone(),
-				// 					SolAddress::from_str("EVo1QjbAPKs4UbS78uNk2LpNG7hAWJum52ybQMtxgVL2").unwrap(),
-				// 					Some(token_mint_pubkey),
-				// 				)
-				// 				.await
-				// 				.unwrap();
-				// 				assert_eq!(account_infos.0[2], (empty_account, 74510874563096));
+				assert_eq!(ingresses.0[0].1, 123456789);
+				assert_eq!(ingresses.0[1].1, 123456789);
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
+	}
 
-				// 				// Wrong vault address (owner) when checking ownership of a fetch account
-				// 				assert!(ingress_amounts(
-				// 					&retry_client,
-				// 					addresses.clone(),
-				// 					SolAddress::from_str("So11111111111111111111111111111111111111112").unwrap(),
-				// 					Some(token_mint_pubkey),
-				// 				)
-				// 				.await
-				// 				.is_err());
+	#[tokio::test]
+	#[should_panic]
+	async fn test_fail_erroneus_fetch_account() {
+		task_scope::task_scope(|scope| {
+			async {
+				let retry_client = SolRetryRpcClient::new(
+					scope,
+					NodeContainer {
+						primary: WsHttpEndpoints {
+							ws_endpoint: "wss://api.devnet.solana.com".into(),
+							http_endpoint: "https://api.devnet.solana.com".into(),
+						},
+						backup: None,
+					},
+					None,
+					Solana::WITNESS_PERIOD,
+				)
+				.await
+				.unwrap();
 
+				let vault_program_account =
+					SolAddress::from_str("EMxiTBPTkGVkkbCMncu7j17gHyySojii4KhHwM36Hgz2").unwrap();
+
+				// Fetch account with incorrect data: "8VwrasdevLHvX4ytxa6yRqLkfdyh3GhEDXUChkS3bZRP"
+				let account_infos = vec![DepositChannelType::NativeDepositChannel(
+					// Address used to derive the fetch account deployed
+					SolAddress::from_str("45BRYhjqH4kf8ZrwQWg2NNtFB5gmZdE5khKCoS5EtFV4").unwrap(),
+				)];
+
+				let _ =
+					ingress_amounts(&retry_client, account_infos.clone(), vault_program_account)
+						.await;
 				Ok(())
 			}
 			.boxed()
