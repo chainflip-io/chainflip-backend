@@ -164,9 +164,8 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							let new_ingresses: Vec<(SolAddress, u128)> = ingresses
 								.into_iter()
 								.filter_map(|(deposit_channel_address, amount)| {
-									let deposit_channel_cached_balance = cached_balances
-										.get(&deposit_channel_address)
-										.expect("Vector should never be empty");
+									let deposit_channel_cached_balance =
+										cached_balances.get(&deposit_channel_address).unwrap_or(&0);
 
 									println!(
 										"DEBUGDEPOSITS deposit_channel_address {:?}, cached_balance {:?}, amount {:?}, ",
