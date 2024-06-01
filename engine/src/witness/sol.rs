@@ -174,7 +174,7 @@ where
 		.context("Failed to get Vault contract address from SC")?;
 
 	// TODO: Get this from the environment
-	let _usdc_pubkey = SolAddress::from_str("24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p")
+	let usdc_pubkey = SolAddress::from_str("24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p")
 		.expect("Failed to get USDC contract address from SC");
 	let nonces_accounts: Vec<(SolAddress, SolHash)> = vec![(
 		SolAddress::from_str("HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo").expect("Temp"),
@@ -218,8 +218,8 @@ where
 			sol_client.clone(),
 			cf_primitives::chains::assets::sol::Asset::Sol,
 			vault_address,
-			None,
 			cached_balances.clone(),
+			None,
 		)
 		.await
 		.continuous("SolanaDeposits".to_string(), db.clone())
@@ -233,8 +233,8 @@ where
 			sol_client.clone(),
 			cf_primitives::chains::assets::sol::Asset::SolUsdc,
 			vault_address,
-			None,
 			cached_balances,
+			Some(usdc_pubkey),
 		)
 		.await
 		.continuous("SolanaUsdcDeposits".to_string(), db.clone())
