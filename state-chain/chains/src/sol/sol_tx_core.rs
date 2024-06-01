@@ -444,7 +444,6 @@ impl Message {
 		)
 	}
 
-	#[cfg(test)]
 	pub fn new(instructions: &[Instruction], payer: Option<&Pubkey>) -> Self {
 		Self::new_with_blockhash(instructions, payer, &Hash::default())
 	}

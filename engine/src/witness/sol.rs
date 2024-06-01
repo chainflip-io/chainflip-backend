@@ -39,6 +39,10 @@ use anyhow::{anyhow, Context, Result};
 use futures::{future::join_all, stream};
 use state_chain_runtime::SolanaInstance;
 
+// TODO: We will keep resubmitting the same tx signatures again and again until we reach consensus
+// and the tx is no longer being pulled from the SC. We could keep a cache of the tx signatures we
+// have already submitted or the block number of the latest signature seen. The last one be
+// problematic if someone frontruns us submitting the tx.
 pub async fn process_egress<ProcessCall, ProcessingFut>(
 	epoch: Vault<cf_chains::Solana, (), ()>,
 	header: Header<u64, SolHash, ((), Vec<(SolSignature, u64)>)>,
@@ -59,6 +63,7 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 	let success_witnesses_result = success_witnesses(&sol_client, monitored_tx_signatures).await;
 
 	for (tx_signature, slot, tx_fee) in success_witnesses_result {
+		// Not submitting the slot?
 		process_call(
 			pallet_cf_broadcast::Call::<_, SolanaInstance>::transaction_succeeded {
 				tx_out_id: tx_signature,
@@ -215,26 +220,27 @@ where
 			cf_primitives::chains::assets::sol::Asset::Sol,
 			vault_address,
 			None,
-			cached_balances,
+			cached_balances.clone(),
 		)
 		.await
 		.continuous("SolanaDeposits".to_string(), db.clone())
 		.logging("SolanaDeposits")
 		.spawn(scope);
 
-	// sol_safe_vault_source_deposit_addresses
-	// 	.clone()
-	// 	.sol_deposits(
-	// 		process_call.clone(),
-	// 		sol_client.clone(),
-	// 		cf_primitives::chains::assets::sol::Asset::SolUsdc,
-	// 		vault_address,
-	// 		usdc_pubkey,
-	// 	)
-	// 	.await
-	// 	.continuous("SolanaUsdcDeposits".to_string(), db.clone())
-	// 	.logging("SolanaUsdcDeposits")
-	// 	.spawn(scope);
+	sol_safe_vault_source_deposit_addresses
+		.clone()
+		.sol_deposits(
+			process_call.clone(),
+			sol_client.clone(),
+			cf_primitives::chains::assets::sol::Asset::SolUsdc,
+			vault_address,
+			None,
+			cached_balances,
+		)
+		.await
+		.continuous("SolanaUsdcDeposits".to_string(), db.clone())
+		.logging("SolanaUsdcDeposits")
+		.spawn(scope);
 
 	// TODO: Should we witness nonces through chunk_by_time and not chunk_by_vault?
 	sol_safe_vault_source_deposit_addresses

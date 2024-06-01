@@ -1,9 +1,8 @@
 use crate::{
-	ArbitrumInstance, 
-	BitcoinInstance, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall,
-, SolanaInstance,
+	ArbitrumInstance, BitcoinInstance, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall,
+	SolanaInstance,
 };
-use cf_chains::{arb::ArbitrumTrackedData, {btc::BitcoinFeeInfo}, sol::SolTrackedData};
+use cf_chains::{arb::ArbitrumTrackedData, btc::BitcoinFeeInfo, sol::SolTrackedData};
 use codec::{Decode, Encode};
 use pallet_cf_witnesser::WitnessDataExtraction;
 use sp_runtime::FixedU64;
