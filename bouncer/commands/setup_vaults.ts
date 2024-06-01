@@ -47,10 +47,10 @@ async function main(): Promise<void> {
   // Step 3
   console.log('Waiting for new keys');
 
-  const dotActivationRequest = observeEvent('polkadotVault:AwaitingGovernanceActivation');
-  const btcActivationRequest = observeEvent('bitcoinVault:AwaitingGovernanceActivation');
-  const arbActivationRequest = observeEvent('arbitrumVault:AwaitingGovernanceActivation');
-  const solActivationRequest = observeEvent('solanaVault:AwaitingGovernanceActivation');
+  const dotActivationRequest = observeEvent('polkadotVault:AwaitingGovernanceActivation').event;
+  const btcActivationRequest = observeEvent('bitcoinVault:AwaitingGovernanceActivation').event;
+  const arbActivationRequest = observeEvent('arbitrumVault:AwaitingGovernanceActivation').event;
+  const solActivationRequest = observeEvent('solanaVault:AwaitingGovernanceActivation').event;
   const dotKey = (await dotActivationRequest).data.newPublicKey;
   const btcKey = (await btcActivationRequest).data.newPublicKey;
   const arbKey = (await arbActivationRequest).data.newPublicKey;
@@ -86,7 +86,7 @@ async function main(): Promise<void> {
   };
   const { vaultAddress, vaultExtrinsicIndex } = await createPolkadotVault();
 
-  const proxyAdded = observeEvent('proxy:ProxyAdded', { chain: 'polkadot' });
+  const proxyAdded = observeEvent('proxy:ProxyAdded', { chain: 'polkadot' }).event;
 
   // Step 5
   console.log('Rotating Proxy and Funding Accounts.');

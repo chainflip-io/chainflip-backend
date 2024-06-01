@@ -56,6 +56,14 @@ jobs:
     secrets: inherit
     with:
       full_bouncer: false
+
+  upgrade-check:
+    uses: ./.github/workflows/upgrade-test.yml
+    secrets: inherit
+    with:
+      run-job: false
+      upgrade-from-release: "sisyphos"
+      upgrade-to-workflow-name: "ci-main.yml"
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml

@@ -1,10 +1,12 @@
+use codec::{Decode, Encode};
 use core::str::FromStr;
 use digest::Digest;
+use scale_info::TypeInfo;
 use sha2::Sha256;
 
 use crate::{address::Address, consts, AccountBump};
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "std-error", derive(thiserror::Error))]
 pub enum PdaError {

@@ -13,9 +13,9 @@
 // For example: ./commands/check_witnesses.ts ETH
 // will wait for the next chainStateUpdate extrinsic for ethereum and after some blocks (2) it will check how many validator witnessed it
 
-import { blake2AsHex } from '@polkadot/util-crypto';
-import { SubmittableExtrinsic } from '@polkadot/api/types';
-import { SubmittableResult } from '@polkadot/api';
+import type { SubmittableExtrinsic } from '@polkadot/api/types';
+import type { SubmittableResult } from '@polkadot/api';
+import { blake2AsHex } from '../polkadot/util-crypto';
 import { runWithTimeout, sleep, getChainflipApi } from '../shared/utils';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

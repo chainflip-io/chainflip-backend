@@ -460,7 +460,6 @@ network_spec!(berghain);
 
 /// Configure initial storage state for FRAME modules.
 /// 150 authority limit
-#[allow(clippy::too_many_arguments)]
 fn testnet_genesis(
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>, // initial validators
 	extra_accounts: Vec<(AccountId, AccountRole, u128, Option<Vec<u8>>)>,

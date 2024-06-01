@@ -344,6 +344,8 @@ async fn run_main(
 
 			has_completed_initialising.store(true, std::sync::atomic::Ordering::Relaxed);
 
+			tracing::info!("Engine finished initialising");
+
 			Ok(())
 		}
 		.boxed()

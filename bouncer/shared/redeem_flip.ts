@@ -1,8 +1,8 @@
 import assert from 'assert';
 import { InternalAssets as Assets, executeRedemption, getRedemptionDelay } from '@chainflip/cli';
-import { HexString } from '@polkadot/util/types';
+import type { HexString } from '@polkadot/util/types';
 import { Wallet, ethers } from 'ethers';
-import Keyring from '@polkadot/keyring';
+import Keyring from '../polkadot/keyring';
 import { getNextEvmNonce } from './send_evm';
 import { getGatewayAbi } from './contract_interfaces';
 import {

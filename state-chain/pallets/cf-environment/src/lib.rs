@@ -381,7 +381,6 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[allow(clippy::too_many_arguments)]
 		#[pallet::call_index(5)]
 		// This weight is not strictly correct but since it's a governance call, weight is
 		// irrelevant.
@@ -550,23 +549,27 @@ impl<T: Config> Pallet<T> {
 			UtxoSelectionType::SelectForConsolidation =>
 				BitcoinAvailableUtxos::<T>::mutate(|available_utxos| {
 					if let Some(cf_traits::EpochKey {
-						key: AggKey { previous: Some(prev_key), current: current_key },
+						key: AggKey { previous, current: current_key },
 						..
 					}) = T::BitcoinKeyProvider::active_epoch_key()
 					{
-						let stale = available_utxos
-							.extract_if(|utxo| {
-								utxo.deposit_address.pubkey_x != current_key &&
-									utxo.deposit_address.pubkey_x != prev_key
-							})
-							.collect::<Vec<_>>();
+						if let Some(prev_key) = previous {
+							let stale = available_utxos
+								.extract_if(|utxo| {
+									utxo.deposit_address.pubkey_x != current_key &&
+										utxo.deposit_address.pubkey_x != prev_key
+								})
+								.collect::<Vec<_>>();
 
-						if !stale.is_empty() {
-							Self::deposit_event(Event::<T>::StaleUtxosDiscarded { utxos: stale });
+							if !stale.is_empty() {
+								Self::deposit_event(Event::<T>::StaleUtxosDiscarded {
+									utxos: stale,
+								});
+							}
 						}
 
 						let selected_utxo = select_utxos_for_consolidation(
-							current_key,
+							previous,
 							available_utxos,
 							&bitcoin_fee_info,
 							Self::consolidation_parameters(),

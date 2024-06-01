@@ -163,7 +163,7 @@ where
 							.map_err(|_| anyhow!("Failed to deposit CCM. Message too long."))?,
 						gas_budget: try_into_primitive(gas_amount)?,
 						cf_parameters: cf_parameters.0.to_vec().try_into().map_err(|_| {
-							anyhow!("Failed to deposit CCM. cf_parameter too long.")
+							anyhow!("Failed to deposit CCM. cf_parameters too long.")
 						})?,
 					},
 				},

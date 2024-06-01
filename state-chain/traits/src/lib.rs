@@ -934,20 +934,19 @@ impl<RuntimeCall> CallDispatchFilter<RuntimeCall> for () {
 }
 
 pub trait AssetConverter {
-	fn estimate_swap_input_for_desired_output<
-		Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy,
-	>(
-		input_asset: impl Into<Asset>,
-		output_asset: impl Into<Asset>,
-		desired_output_amount: Amount,
-	) -> Option<Amount>;
+	fn estimate_swap_input_for_desired_output<C: Chain>(
+		input_asset: C::ChainAsset,
+		output_asset: C::ChainAsset,
+		desired_output_amount: C::ChainAmount,
+	) -> Option<C::ChainAmount>;
 
-	fn calculate_asset_conversion<Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy>(
-		input_asset: impl Into<Asset>,
-		available_input_amount: Amount,
-		output_asset: impl Into<Asset>,
-		desired_output_amount: Amount,
-	) -> Option<Amount>;
+	/// Calculate the amount of an asset that is required to pay for a given amount of gas.
+	///
+	/// Use this for transaction fees only.
+	fn calculate_input_for_gas_output<C: Chain>(
+		input_asset: C::ChainAsset,
+		required_gas: C::ChainAmount,
+	) -> Option<C::ChainAmount>;
 }
 
 pub trait IngressEgressFeeApi<C: Chain> {

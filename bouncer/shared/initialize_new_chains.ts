@@ -15,7 +15,7 @@ import { observeEvent } from './utils/substrate';
 
 export async function initializeArbitrumChain() {
   console.log('Initializing Arbitrum');
-  const arbInitializationRequest = observeEvent('arbitrumVault:ChainInitialized');
+  const arbInitializationRequest = observeEvent('arbitrumVault:ChainInitialized').event;
   await submitGovernanceExtrinsic((chainflip) => chainflip.tx.arbitrumVault.initializeChain());
   await arbInitializationRequest;
 }
@@ -107,7 +107,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
   const discriminatorString = vaultIdl.instructions.find(
     (instruction: { name: string }) => instruction.name === 'initialize',
   ).discriminator;
-  const discriminator = new Uint8Array(JSON.parse(discriminatorString));
+  const discriminator = new Uint8Array(discriminatorString.map(Number));
 
   const solKeyBuffer = Buffer.from(solKey.slice(2), 'hex');
   const newAggKey = new PublicKey(encodeSolAddress(solKey));
@@ -121,6 +121,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
         solKeyBuffer,
         solKeyBuffer,
         tokenVaultPda.toBuffer(),
+        Buffer.from([255]),
       ]),
       keys: [
         { pubkey: dataAccount, isSigner: false, isWritable: true },

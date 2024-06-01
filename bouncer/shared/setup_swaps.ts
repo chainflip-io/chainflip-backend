@@ -1,4 +1,3 @@
-import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { createLpPool } from '../shared/create_lp_pool';
 import { provideLiquidity } from '../shared/provide_liquidity';
 import { rangeOrder } from '../shared/range_order';
@@ -32,7 +31,6 @@ const price = new Map<Asset, number>([
 
 export async function setupSwaps(): Promise<void> {
   console.log('=== Setting up for swaps ===');
-  await cryptoWaitReady();
 
   await Promise.all([
     createLpPool('Eth', price.get('Eth')!),
@@ -45,6 +43,8 @@ export async function setupSwaps(): Promise<void> {
     createLpPool('Sol', price.get('Sol')!),
     // createLpPool('SolUsdc', price.get('SolUsdc')!),
   ]);
+
+  console.log('LP Pools created');
 
   await Promise.all([
     provideLiquidity('Usdc', deposits.get('Usdc')!),
@@ -59,19 +59,7 @@ export async function setupSwaps(): Promise<void> {
     // provideLiquidity('SolUsdc', deposits.get('SolUsdc')!),
   ]);
 
-  // also fund the boost account
-  await Promise.all([
-    provideLiquidity('Usdc', deposits.get('Usdc')!, false, '//LP_BOOST'),
-    provideLiquidity('Eth', deposits.get('Eth')!, false, '//LP_BOOST'),
-    provideLiquidity('Dot', deposits.get('Dot')!, false, '//LP_BOOST'),
-    provideLiquidity('Btc', deposits.get('Btc')!, false, '//LP_BOOST'),
-    provideLiquidity('Flip', deposits.get('Flip')!, false, '//LP_BOOST'),
-    provideLiquidity('Usdt', deposits.get('Usdt')!, false, '//LP_BOOST'),
-    provideLiquidity('ArbEth', deposits.get('ArbEth')!, false, '//LP_BOOST'),
-    provideLiquidity('ArbUsdc', deposits.get('ArbUsdc')!, false, '//LP_BOOST'),
-    provideLiquidity('Sol', deposits.get('Sol')!, false, '//LP_BOOST'),
-    // provideLiquidity('SolUsdc', deposits.get('SolUsdc')!, false, '//LP_BOOST'),
-  ]);
+  console.log('Liquidity provided');
 
   await Promise.all([
     rangeOrder('Eth', deposits.get('Eth')! * 0.9999),
@@ -84,6 +72,8 @@ export async function setupSwaps(): Promise<void> {
     rangeOrder('Sol', deposits.get('Sol')! * 0.9999),
     // rangeOrder('SolUsdc', deposits.get('SolUsdc')! * 0.9999),
   ]);
+
+  console.log('Range orders placed');
 
   console.log('=== Swaps Setup completed ===');
 }

@@ -1,14 +1,11 @@
-import { SubmittableExtrinsic } from '@polkadot/api/types';
-import Keyring from '@polkadot/keyring';
-import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { ApiPromise } from '@polkadot/api';
+import type { SubmittableExtrinsic } from '@polkadot/api/types';
+import type { ApiPromise } from '@polkadot/api';
+import Keyring from '../polkadot/keyring';
 import { getChainflipApi, handleSubstrateError, snowWhiteMutex } from './utils';
 
 const snowWhiteUri =
   process.env.SNOWWHITE_URI ??
   'market outdoor rubber basic simple banana resist quarter lab random hurdle cruise';
-
-await cryptoWaitReady();
 
 const keyring = new Keyring({ type: 'sr25519' });
 
@@ -22,9 +19,9 @@ export async function submitGovernanceExtrinsic(
 ) {
   await using chainflip = await getChainflipApi();
   const extrinsic = await cb(chainflip);
-  await snowWhiteMutex.runExclusive(async () =>
-    chainflip.tx.governance
+  await snowWhiteMutex.runExclusive(async () => {
+    await chainflip.tx.governance
       .proposeGovernanceExtrinsic(extrinsic, preAuthorise)
-      .signAndSend(snowWhite, { nonce: -1 }, handleSubstrateError(chainflip)),
-  );
+      .signAndSend(snowWhite, { nonce: -1 }, handleSubstrateError(chainflip));
+  });
 }
