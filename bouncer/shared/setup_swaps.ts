@@ -41,7 +41,7 @@ export async function setupSwaps(): Promise<void> {
     createLpPool('ArbEth', price.get('ArbEth')!),
     createLpPool('ArbUsdc', price.get('ArbUsdc')!),
     createLpPool('Sol', price.get('Sol')!),
-    // createLpPool('SolUsdc', price.get('SolUsdc')!),
+    createLpPool('SolUsdc', price.get('SolUsdc')!),
   ]);
 
   console.log('LP Pools created');
@@ -56,7 +56,7 @@ export async function setupSwaps(): Promise<void> {
     provideLiquidity('ArbEth', deposits.get('ArbEth')!),
     provideLiquidity('ArbUsdc', deposits.get('ArbUsdc')!),
     provideLiquidity('Sol', deposits.get('Sol')!),
-    // provideLiquidity('SolUsdc', deposits.get('SolUsdc')!),
+    provideLiquidity('SolUsdc', deposits.get('SolUsdc')!),
   ]);
 
   console.log('Liquidity provided');
@@ -70,7 +70,7 @@ export async function setupSwaps(): Promise<void> {
     rangeOrder('ArbEth', deposits.get('ArbEth')! * 0.9999),
     rangeOrder('ArbUsdc', deposits.get('ArbUsdc')! * 0.9999),
     rangeOrder('Sol', deposits.get('Sol')! * 0.9999),
-    // rangeOrder('SolUsdc', deposits.get('SolUsdc')! * 0.9999),
+    rangeOrder('SolUsdc', deposits.get('SolUsdc')! * 0.9999),
   ]);
 
   console.log('Range orders placed');
