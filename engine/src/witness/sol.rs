@@ -3,7 +3,11 @@ mod nonce_witnessing;
 mod sol_deposits;
 mod source;
 
-use std::{collections::HashMap, str::FromStr, sync::Arc};
+use std::{
+	collections::{HashMap, HashSet},
+	str::FromStr,
+	sync::Arc,
+};
 
 use cf_primitives::EpochIndex;
 use futures_core::Future;
@@ -38,15 +42,12 @@ use crate::common::Mutex;
 use anyhow::{Context, Result};
 use state_chain_runtime::SolanaInstance;
 
-// TODO: We will keep resubmitting the same tx signatures again and again until we reach consensus
-// and the tx is no longer being pulled from the SC. We could keep a cache of the tx signatures we
-// have already submitted or the block number of the latest signature seen. The last one be
-// problematic if someone frontruns us submitting the tx.
 pub async fn process_egress<ProcessCall, ProcessingFut>(
 	epoch: Vault<cf_chains::Solana, (), ()>,
 	header: Header<u64, SolHash, ((), Vec<(SolSignature, u64)>)>,
 	process_call: ProcessCall,
 	sol_client: SolRetryRpcClient,
+	cached_witnessed_egresses: Arc<Mutex<HashSet<SolSignature>>>,
 ) where
 	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 		+ Send
@@ -61,20 +62,27 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 
 	let success_witnesses_result = success_witnesses(&sol_client, monitored_tx_signatures).await;
 
+	let mut cached_witnessed_egresses = cached_witnessed_egresses.lock().await;
+
 	for (tx_signature, _slot, tx_fee) in success_witnesses_result {
-		// TODO: Should we submit the slot instead of the epoch.index?
-		process_call(
-			pallet_cf_broadcast::Call::<_, SolanaInstance>::transaction_succeeded {
-				tx_out_id: tx_signature,
-				signer_id: epoch.info.0,
-				tx_fee,
-				tx_metadata: (),
-				transaction_ref: tx_signature,
-			}
-			.into(),
-			epoch.index,
-		)
-		.await;
+		// Cache submitted signatures to not keep submitting the signatures until there is
+		// consensus on the State Chain, as the engine will keep polling the same transactions.
+		if !cached_witnessed_egresses.contains(&tx_signature) {
+			// TODO: Should we submit the slot instead of the epoch.index?
+			process_call(
+				pallet_cf_broadcast::Call::<_, SolanaInstance>::transaction_succeeded {
+					tx_out_id: tx_signature,
+					signer_id: epoch.info.0,
+					tx_fee,
+					tx_metadata: (),
+					transaction_ref: tx_signature,
+				}
+				.into(),
+				epoch.index,
+			)
+			.await;
+			cached_witnessed_egresses.insert(tx_signature);
+		}
 	}
 }
 
@@ -205,11 +213,10 @@ where
 		.await;
 
 	// TODO: Probably use DB instead.
-	// Using this as a global variable to store the previous balances. The new pallet it
-	// might be alright if we submit values again after a restart, it's just not efficient.
-	// Currently with this workaround to make it work for the current pallet, a restart of the
-	// engine would cause the engine to trigger swaps on all deposit channels with balances.
+	// If in the new pallet the cumulative historical amount is tracked we could maybe get away with
+	// using cache but upon restart the engine would submit an extrinsic for each deposit address.
 	let cached_balances = Arc::new(Mutex::new(HashMap::new()));
+	let cached_witnessed_egresses = Arc::new(Mutex::new(HashSet::new()));
 
 	sol_safe_vault_source_deposit_addresses
 		.clone()
@@ -257,8 +264,15 @@ where
 		.then({
 			let process_call = process_call.clone();
 			let sol_client = sol_client.clone();
+			let cached_witnessed_egresses = cached_witnessed_egresses.clone();
 			move |epoch, header| {
-				process_egress(epoch, header, process_call.clone(), sol_client.clone())
+				process_egress(
+					epoch,
+					header,
+					process_call.clone(),
+					sol_client.clone(),
+					cached_witnessed_egresses.clone(),
+				)
 			}
 		})
 		.continuous("SolanaEgress".to_string(), db)
@@ -272,7 +286,6 @@ where
 mod tests {
 	use crate::{
 		settings::{NodeContainer, WsHttpEndpoints},
-		// use settings:: Settings
 		sol::retry_rpc::SolRetryRpcClient,
 	};
 
@@ -287,18 +300,6 @@ mod tests {
 	async fn test_success_witnesses() {
 		task_scope::task_scope(|scope| {
 			async {
-				// let settings = Settings::new_test().unwrap();
-				// let client = SolRetryRpcClient::<SolRpcClient>::new(
-				// 	scope,
-				// 	settings.sol.nodes,
-				// 	U256::from(1337u64),
-				// 	"sol_rpc",
-				// 	"sol_subscribe",
-				// 	"Ethereum",
-				// 	Ethereum::WITNESS_PERIOD,
-				// )
-				// .unwrap();
-
 				let retry_client = SolRetryRpcClient::new(
 					scope,
 					NodeContainer {
