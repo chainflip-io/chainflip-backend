@@ -40,7 +40,15 @@ const MAX_MULTIPLE_ACCOUNTS_QUERY: usize = 100;
 const FETCH_ACCOUNT_DISCRIMINATOR: [u8; 8] = [188, 68, 197, 38, 48, 192, 81, 100];
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
-	/// TODO: Add description
+	/// We track Solana (Sol and SPL-token) deposits by periodically querying the
+	/// state of the deposit channel accounts. To ensure that no deposits are missed
+	/// upon fetch, we use a helper program for each deposit channel (FetchHistoricalAccount)
+	/// that keeps track of the cumulative amount fetched from the corresponding deposit
+	/// channel.
+	/// Using the deposit channel's balance and the cumulative amount fetched from it we
+	/// can reliably track the amount deposited to a deposit channel.
+	/// As a reminder, for token deposit channels the account to witness is the derived
+	/// associated account from the actual deposit channel provided by the State Chain.
 	pub async fn sol_deposits<ProcessCall, ProcessingFut, SolRetryRpcClient>(
 		self,
 		process_call: ProcessCall,
@@ -78,11 +86,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 			async move {
 				let (_, deposit_channels) = header.data;
-
-				// TODO: Use DB instead?
-				// Using this as a global variable to store the previous balances. The new pallet it
-				// might be alright if we submit values again after a restart, it's just not
-				// let cached_balances = Arc::new(Mutex::new(HashMap::new()));
 
 				println!("DEBUGDEPOSITS Processing Solana Deposits Inner 2");
 
