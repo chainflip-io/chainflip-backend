@@ -20,7 +20,6 @@ use state_chain_runtime::{
 };
 use std::{
 	collections::BTreeSet,
-	str::FromStr,
 	sync::{
 		atomic::{AtomicBool, Ordering},
 		Arc,

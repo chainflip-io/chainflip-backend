@@ -352,17 +352,14 @@ where
 
 								ensure!(mint == token_pubkey_str);
 
-								let amount = info
-									.get("tokenAmount")
+								info.get("tokenAmount")
 									.and_then(|token_amount| token_amount.get("amount"))
 									.and_then(|v| v.as_str())
 									.ok_or(anyhow::anyhow!(
 										"Missing 'tokenAmount' or 'amount' field"
 									))?
 									.parse()
-									.map_err(|_| anyhow::anyhow!("Failed to parse string to u128"));
-
-								amount
+									.map_err(|_| anyhow::anyhow!("Failed to parse string to u128"))
 							},
 							_ => Err(anyhow::anyhow!("Unexpected token account encoding")),
 						}

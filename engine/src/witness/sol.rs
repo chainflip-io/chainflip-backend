@@ -35,8 +35,7 @@ use crate::{
 use cf_chains::sol::{SolAddress, SolHash, SolSignature, LAMPORTS_PER_SIGNATURE};
 
 use crate::common::Mutex;
-use anyhow::{anyhow, Context, Result};
-use futures::{future::join_all, stream};
+use anyhow::{Context, Result};
 use state_chain_runtime::SolanaInstance;
 
 // TODO: We will keep resubmitting the same tx signatures again and again until we reach consensus
@@ -62,8 +61,8 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 
 	let success_witnesses_result = success_witnesses(&sol_client, monitored_tx_signatures).await;
 
-	for (tx_signature, slot, tx_fee) in success_witnesses_result {
-		// Not submitting the slot?
+	for (tx_signature, _slot, tx_fee) in success_witnesses_result {
+		// TODO: Should we submit the slot instead of the epoch.index?
 		process_call(
 			pallet_cf_broadcast::Call::<_, SolanaInstance>::transaction_succeeded {
 				tx_out_id: tx_signature,
@@ -205,7 +204,7 @@ where
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await;
 
-	// TODO: Use DB instead?
+	// TODO: Probably use DB instead.
 	// Using this as a global variable to store the previous balances. The new pallet it
 	// might be alright if we submit values again after a restart, it's just not efficient.
 	// Currently with this workaround to make it work for the current pallet, a restart of the
@@ -275,10 +274,9 @@ mod tests {
 		settings::{NodeContainer, WsHttpEndpoints},
 		// use settings:: Settings
 		sol::retry_rpc::SolRetryRpcClient,
-		witness::common::chunked_chain_source::chunked_by_vault::monitored_items,
 	};
 
-	use cf_chains::{sol::SolAddress, Chain, Solana};
+	use cf_chains::{Chain, Solana};
 	use futures_util::FutureExt;
 	use std::str::FromStr;
 	use utilities::task_scope;
