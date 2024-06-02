@@ -234,6 +234,9 @@ cf_test_utilities::impl_test_helpers! {
 			eth_usdt_address: [0x2; 20].into(),
 			polkadot_genesis_hash: H256([0u8; 32]),
 			polkadot_vault_account_id: None,
+			sol_vault_address: [0u8; 32].into(),
+			sol_genesis_hash: None,
+			sol_usdc_address: [0u8; 32].into(),
 			network_environment: Default::default(),
 			..Default::default()
 		},

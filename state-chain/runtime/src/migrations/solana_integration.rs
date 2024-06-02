@@ -47,7 +47,7 @@ pub struct SolanaIntegration;
 
 impl OnRuntimeUpgrade for SolanaIntegration {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		use cf_chains::sol::SolAddress;
+		use cf_chains::{assets::sol::Asset::SolUsdc, sol::SolAddress};
 		use frame_support::assert_ok;
 
 		assert_ok!(pallet_cf_environment::RuntimeSafeMode::<Runtime>::translate(
@@ -86,7 +86,7 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 			},
 		));
 
-		let (vault_address, genesis_hash): (SolAddress, Option<SolHash>) =
+		let (vault_address, genesis_hash, usdc_address): (SolAddress, Option<SolHash>, SolAddress) =
 			match cf_runtime_upgrade_utilities::genesis_hashes::genesis_hash::<Runtime>() {
 				cf_runtime_upgrade_utilities::genesis_hashes::BERGHAIN => {
 					log::warn!("Need to set up Solana integration for Berghain");
@@ -97,6 +97,9 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 						Some(SolHash(hex_literal::hex![
 							"45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0"
 						])),
+						SolAddress(hex_literal::hex!(
+							"c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61"
+						)),
 					)
 				},
 
@@ -109,6 +112,9 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 						Some(SolHash(hex_literal::hex![
 							"ce59db5080fc2c6d3bcf7ca90712d3c2e5e6c28f27f0dfbb9953bdb0894c03ab"
 						])),
+						SolAddress(hex_literal::hex!(
+							"3b442cb3912157f13a933d0134282d032b5ffecd01a2dbf1b7790608df002ea7"
+						)),
 					)
 				},
 				cf_runtime_upgrade_utilities::genesis_hashes::SISYPHOS => {
@@ -120,6 +126,9 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 						Some(SolHash(hex_literal::hex![
 							"ce59db5080fc2c6d3bcf7ca90712d3c2e5e6c28f27f0dfbb9953bdb0894c03ab"
 						])),
+						SolAddress(hex_literal::hex!(
+							"3b442cb3912157f13a933d0134282d032b5ffecd01a2dbf1b7790608df002ea7"
+						)),
 					)
 				},
 				_ => {
@@ -129,12 +138,16 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 							"72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c"
 						)),
 						None,
+						SolAddress(hex_literal::hex!(
+							"0fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee87"
+						)),
 					)
 				},
 			};
 
 		pallet_cf_environment::SolanaVaultAddress::<Runtime>::put(vault_address);
 		pallet_cf_environment::SolanaGenesisHash::<Runtime>::put(genesis_hash);
+		pallet_cf_environment::SolanaSupportedAssets::<Runtime>::insert(SolUsdc, usdc_address);
 
 		Weight::zero()
 	}

@@ -53,6 +53,10 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	sol_genesis_hash: Some(SolHash(hex_literal::hex![
 		"ce59db5080fc2c6d3bcf7ca90712d3c2e5e6c28f27f0dfbb9953bdb0894c03ab"
 	])),
+	// encodes to "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+	sol_usdc_address: SolAddress(hex_literal::hex![
+		"3b442cb3912157f13a933d0134282d032b5ffecd01a2dbf1b7790608df002ea7"
+	]),
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 24 * HOURS;

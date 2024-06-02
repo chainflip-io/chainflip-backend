@@ -68,7 +68,7 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 		// Cache submitted signatures to not keep submitting the signatures until there is
 		// consensus on the State Chain, as the engine will keep polling the same transactions.
 		if !cached_witnessed_egresses.contains(&tx_signature) {
-			// TODO: Should we submit the slot instead of the epoch.index?
+			// TODO: Not submitting the slot?
 			process_call(
 				pallet_cf_broadcast::Call::<_, SolanaInstance>::transaction_succeeded {
 					tx_out_id: tx_signature,
@@ -181,12 +181,22 @@ where
 		.await
 		.context("Failed to get Vault contract address from SC")?;
 
-	// TODO: Get this from the environment
-	let usdc_pubkey = SolAddress::from_str("24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p")
-		.expect("Failed to get USDC contract address from SC");
+	let supported_sol_token_assets: HashMap<cf_primitives::chains::assets::sol::Asset, SolAddress> =
+		state_chain_client
+			.storage_map::<pallet_cf_environment::SolanaSupportedAssets<state_chain_runtime::Runtime>, _>(
+				state_chain_client.latest_finalized_block().hash,
+			)
+			.await
+			.context("Failed to fetch Solana supported assets")?;
+
+	let usdc_address = *supported_sol_token_assets
+		.get(&cf_primitives::chains::assets::sol::Asset::SolUsdc)
+		.context("SolanaSupportedAssets does not include USDC")?;
+
+	// TODO: Get this from the environment once implemented
 	let nonces_accounts: Vec<(SolAddress, SolHash)> = vec![(
-		SolAddress::from_str("HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo").expect("Temp"),
-		SolHash::from_str("4UjUkFWp1Zkdge8zkuptMqHG9Xwr5eWbyperujHAHiNC").expect("Temp"),
+		SolAddress::from_str("HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo").unwrap(),
+		SolHash::from_str("4UjUkFWp1Zkdge8zkuptMqHG9Xwr5eWbyperujHAHiNC").unwrap(),
 	)];
 
 	let sol_source = SolSource::new(sol_client.clone()).strictly_monotonic().shared(scope);
@@ -241,7 +251,7 @@ where
 			cf_primitives::chains::assets::sol::Asset::SolUsdc,
 			vault_address,
 			cached_balances,
-			Some(usdc_pubkey),
+			Some(usdc_address),
 		)
 		.await
 		.continuous("SolanaUsdcDeposits".to_string(), db.clone())
