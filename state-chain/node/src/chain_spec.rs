@@ -96,6 +96,7 @@ pub struct StateChainEnvironment {
 	dot_runtime_version: RuntimeVersion,
 	sol_vault_address: SolAddress,
 	sol_genesis_hash: Option<SolHash>,
+	sol_usdc_address: SolAddress,
 }
 
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
@@ -133,6 +134,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(FromStr::from_str, GENESIS_FUNDING, genesis_funding_amount);
 	from_env_var!(FromStr::from_str, MIN_FUNDING, min_funding);
 	from_env_var!(FromStr::from_str, SOL_VAULT_ADDRESS, sol_vault_address);
+	from_env_var!(FromStr::from_str, SOL_USDC_ADDRESS, sol_usdc_address);
 
 	let dot_genesis_hash = match env::var("DOT_GENESIS_HASH") {
 		Ok(s) => hex_decode::<32>(&s).unwrap().into(),
@@ -183,6 +185,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		},
 		sol_vault_address,
 		sol_genesis_hash,
+		sol_usdc_address,
 	}
 }
 
@@ -245,6 +248,7 @@ pub fn inner_cf_development_config(
 		dot_runtime_version,
 		sol_vault_address,
 		sol_genesis_hash,
+		sol_usdc_address,
 	} = get_environment_or_defaults(testnet::ENV);
 	Ok(ChainSpec::builder(wasm_binary, None)
 		.with_name("CF Develop")
@@ -277,6 +281,7 @@ pub fn inner_cf_development_config(
 				polkadot_vault_account_id: dot_vault_account_id,
 				sol_vault_address,
 				sol_genesis_hash,
+				sol_usdc_address,
 				network_environment: NetworkEnvironment::Development,
 				..Default::default()
 			},
@@ -352,6 +357,7 @@ macro_rules! network_spec {
 					dot_runtime_version,
 					sol_vault_address,
 					sol_genesis_hash,
+					sol_usdc_address,
 				} = env_override.unwrap_or(ENV);
 				let protocol_id = format!(
 					"{}-{}",
@@ -414,6 +420,7 @@ macro_rules! network_spec {
 							polkadot_vault_account_id: dot_vault_account_id.clone(),
 							sol_vault_address,
 							sol_genesis_hash,
+							sol_usdc_address: sol_usdc_address.into(),
 							network_environment: NETWORK_ENVIRONMENT,
 							..Default::default()
 						},

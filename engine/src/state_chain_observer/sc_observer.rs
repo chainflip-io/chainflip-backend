@@ -234,7 +234,7 @@ pub async fn start<
 	arb_rpc: EvmRpc,
 	dot_rpc: DotRpc,
 	btc_rpc: BtcRpc,
-	sol_rpc: SolRpc,
+	_sol_rpc: SolRpc,
 	eth_multisig_client: EthMultisigClient,
 	dot_multisig_client: PolkadotMultisigClient,
 	btc_multisig_client: BitcoinMultisigClient,

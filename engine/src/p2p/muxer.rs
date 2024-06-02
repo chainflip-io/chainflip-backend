@@ -85,6 +85,7 @@ fn add_tag_and_current_version(data: &[u8], tag: ChainTag) -> Vec<u8> {
 }
 
 impl P2PMuxer {
+	#[allow(clippy::type_complexity)]
 	pub fn start(
 		all_incoming_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
 		all_outgoing_sender: UnboundedSender<OutgoingMultisigStageMessages>,

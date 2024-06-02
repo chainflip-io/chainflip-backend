@@ -12,7 +12,7 @@ use cf_chains::{
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
-	sol::{SolAddress, SolHash, Solana},
+	sol::{SolAddress, SolAsset, SolHash, Solana},
 	Chain,
 };
 use cf_primitives::{
@@ -210,6 +210,12 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn sol_genesis_hash)]
 	pub type SolanaGenesisHash<T> = StorageValue<_, Option<SolHash>, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn supported_sol_assets)]
+	/// Map of supported assets for Sol
+	pub type SolanaSupportedAssets<T: Config> =
+		StorageMap<_, Blake2_128Concat, SolAsset, SolAddress>;
 
 	// OTHER ENVIRONMENT ITEMS
 	#[pallet::storage]
@@ -445,6 +451,7 @@ pub mod pallet {
 		pub network_environment: NetworkEnvironment,
 		pub sol_vault_address: SolAddress,
 		pub sol_genesis_hash: Option<SolHash>,
+		pub sol_usdc_address: SolAddress,
 		pub _config: PhantomData<T>,
 	}
 
@@ -476,7 +483,9 @@ pub mod pallet {
 			ArbitrumAddressCheckerAddress::<T>::set(self.arb_address_checker_address);
 
 			SolanaVaultAddress::<T>::set(self.sol_vault_address);
+
 			SolanaGenesisHash::<T>::set(self.sol_genesis_hash);
+			SolanaSupportedAssets::<T>::insert(SolAsset::SolUsdc, self.sol_usdc_address);
 
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
 

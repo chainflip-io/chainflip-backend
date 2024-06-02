@@ -184,14 +184,22 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								})
 								.collect::<Vec<_>>();
 
-							println!("DEBUGDEPOSITS Submitting new_ingresses {:?}", new_ingresses);
+							if !new_ingresses.is_empty() {
+								println!(
+									"DEBUGDEPOSITS Submitting new_ingresses {:?}, asset {:?}",
+									new_ingresses, asset
+								);
 
-							process_call(
-								pallet_cf_ingress_egress::Call::<_, ChainInstanceFor<Inner::Chain>>::process_deposits {
-									deposit_witnesses: new_ingresses.clone()
-										.into_iter()
-										.map(|(deposit_channel_address, value)| {
-											pallet_cf_ingress_egress::DepositWitness {
+								process_call(
+									pallet_cf_ingress_egress::Call::<
+										_,
+										ChainInstanceFor<Inner::Chain>,
+									>::process_deposits {
+										deposit_witnesses: new_ingresses
+											.clone()
+											.into_iter()
+											.map(|(deposit_channel_address, value)| {
+												pallet_cf_ingress_egress::DepositWitness {
 												deposit_address: deposit_channel_address,
 												asset,
 												amount: value
@@ -199,25 +207,26 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 													.expect("Ingress witness transfer value should fit u128"),
 												deposit_details: (),
 											}
-										})
-										.collect(),
-									block_height: slot,
-								}
-								.into(),
-								epoch.index,
-							)
-							.await;
+											})
+											.collect(),
+										block_height: slot,
+									}
+									.into(),
+									epoch.index,
+								)
+								.await;
 
-							// Update hashmap
-							new_ingresses.into_iter().for_each(
-								|(deposit_channel_address, value)| {
-									println!(
+								// Update hashmap
+								new_ingresses.into_iter().for_each(
+									|(deposit_channel_address, value)| {
+										println!(
 									"DEBUGDEPOSITS Updating cached_balances for {:?} to value {:?}",
 									deposit_channel_address, value
 								);
-									cached_balances.insert(deposit_channel_address, value);
-								},
-							);
+										cached_balances.insert(deposit_channel_address, value);
+									},
+								);
+							}
 						}
 					}
 				}
@@ -391,7 +400,9 @@ fn parse_account_amount_from_data(
 					match account_info.data {
 						// Fetch Data Account
 						UiAccountData::Binary(base64_string, encoding) => {
-							ensure!(encoding == UiAccountEncoding::Base64);
+							if encoding != UiAccountEncoding::Base64 {
+								return Err(anyhow::anyhow!("Data account encoding is not base64"));
+							}
 
 							// Decode the base64 string to bytes
 							let mut bytes = base64::decode(base64_string)

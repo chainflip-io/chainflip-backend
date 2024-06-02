@@ -46,14 +46,11 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		state_chain_runtime::RuntimeCall:
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
 	{
-		println!("DEBUGNONCES Witnessing Nonce Accounts");
-
 		self.then(move |_epoch, header| {
 			assert!(<Inner::Chain as Chain>::is_block_witness_root(header.index));
 			let sol_rpc = sol_rpc.clone();
 			let _process_call = process_call.clone();
 			let nonce_accounts = nonce_accounts.clone();
-			println!("DEBUGNONCES Witnessing Nonce Accounts Inner");
 			async move {
 				let nonce_addresses: Vec<SolAddress> = nonce_accounts
 					.clone()
@@ -156,11 +153,7 @@ where
 
 #[cfg(test)]
 mod tests {
-	use crate::{
-		settings::{NodeContainer, WsHttpEndpoints},
-		// use settings:: Settings
-		sol::retry_rpc::SolRetryRpcClient,
-	};
+	use crate::settings::{NodeContainer, WsHttpEndpoints};
 	use cf_chains::{Chain, Solana};
 	use futures::FutureExt;
 	use utilities::task_scope::task_scope;
