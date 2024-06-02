@@ -13,7 +13,7 @@ use super::super::common::chunked_chain_source::chunked_by_vault::{
 };
 use crate::sol::{
 	commitment_config::CommitmentConfig,
-	retry_rpc::{SolRetryRpcApi, SolRetryRpcClient},
+	retry_rpc::SolRetryRpcApi,
 	rpc_client_api::{
 		ParsedAccount, RpcAccountInfoConfig, UiAccount, UiAccountData, UiAccountEncoding,
 	},
@@ -153,7 +153,10 @@ where
 
 #[cfg(test)]
 mod tests {
-	use crate::settings::{NodeContainer, WsHttpEndpoints};
+	use crate::{
+		settings::{NodeContainer, WsHttpEndpoints},
+		sol::retry_rpc::SolRetryRpcClient,
+	};
 	use cf_chains::{Chain, Solana};
 	use futures::FutureExt;
 	use utilities::task_scope::task_scope;

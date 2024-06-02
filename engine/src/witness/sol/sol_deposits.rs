@@ -291,18 +291,21 @@ where
 	{
 		let accumulated_amount = match chunked_accounts_info {
 			[deposit_channel_account_info, fetch_account_info] => {
-				let deposit_channel_balance = parse_account_amount_from_data(
-					deposit_channel_account_info.clone(),
-					AccountType::DepositChannelType(deposit_channel.clone()),
-					vault_address,
-				)
-				.expect("Failed to get deposit channel balance");
-				let fetch_account_balance = parse_account_amount_from_data(
-					fetch_account_info.clone(),
-					AccountType::FetchAccount,
-					vault_address,
-				)
-				.expect("Failed to get fetch account balance");
+				let deposit_channel_balance = deposit_channel_account_info
+					.as_ref()
+					.map_or(Ok(0_u128), |deposit_channel_info| {
+						parse_account_amount_from_data(
+							deposit_channel_info.clone(),
+							deposit_channel.clone(),
+						)
+					})
+					.expect("Failed to get deposit channel balance");
+				let fetch_account_balance = fetch_account_info
+					.as_ref()
+					.map_or(Ok(0_u128), |fetch_info| {
+						parse_fetch_account_amount(fetch_info.clone(), vault_address)
+					})
+					.expect("Failed to get fetch account balance");
 
 				// We add up the values and push them if they are greater than 0
 				Ok(deposit_channel_balance.saturating_add(fetch_account_balance))
@@ -317,129 +320,111 @@ where
 }
 
 fn parse_account_amount_from_data(
-	account_info: Option<UiAccount>,
-	account_params: AccountType,
-	vault_address: SolAddress,
+	deposit_channel_info: UiAccount,
+	deposit_channel: DepositChannelType,
 ) -> Result<u128, anyhow::Error> {
-	let system_program_pubkey = SolAddress::from_str(SYSTEM_PROGRAM_ID).unwrap();
-	let associated_token_account_pubkey = SolAddress::from_str(TOKEN_PROGRAM_ID).unwrap();
-	match account_info {
-		Some(account_info) => {
-			println!("Parsing account_info {:?}", account_info);
+	println!("Parsing deposit_channel_info {:?}", deposit_channel_info);
 
-			let owner_pub_key = SolAddress::from_str(account_info.owner.as_str()).unwrap();
-			println!("owner_pub_key {:?}", owner_pub_key);
+	let owner_pub_key = SolAddress::from_str(deposit_channel_info.owner.as_str()).unwrap();
+	println!("owner_pub_key {:?}", owner_pub_key);
 
-			match account_params {
-				AccountType::DepositChannelType(deposit_channel_type) => match deposit_channel_type
-				{
-					DepositChannelType::NativeDepositChannel(_sol_address) => {
-						// Native deposit channel
-						println!("Native deposit channel found");
-						ensure!(
-							owner_pub_key == system_program_pubkey,
-							"Unexpected owner for native deposit channel",
-						);
-						Ok(account_info.lamports as u128)
-					},
-					DepositChannelType::TokenDepositChannel(
-						deposit_channel_address,
-						_,
-						token_mint_pubkey,
-					) => {
-						// Token deposit channel
-						println!("Token deposit channel found");
-						ensure!(
-							owner_pub_key == associated_token_account_pubkey,
-							"Unexpected owner for token deposit channel"
-						);
-
-						// Fetch data and ensure it's encoding is JsonParsed
-						match account_info.data {
-							UiAccountData::Json(ParsedAccount {
-								parsed: Value::Object(json_parsed_account_data),
-								..
-							}) => {
-								let info = json_parsed_account_data
-									.get("info")
-									.and_then(|v| v.as_object())
-									.ok_or(anyhow::anyhow!("Missing 'info' field"))?;
-
-								// Checking mint pubkey and owner. Might not be necessary
-								let owner = info
-									.get("owner")
-									.and_then(|v| v.as_str())
-									.ok_or(anyhow::anyhow!("Missing 'owner' field"))?;
-
-								ensure!(owner == deposit_channel_address.to_string());
-
-								let mint = info
-									.get("mint")
-									.and_then(|v| v.as_str())
-									.ok_or(anyhow::anyhow!("Missing 'mint' field"))?;
-
-								ensure!(mint == token_mint_pubkey.to_string());
-
-								info.get("tokenAmount")
-									.and_then(|token_amount| token_amount.get("amount"))
-									.and_then(|v| v.as_str())
-									.ok_or(anyhow::anyhow!(
-										"Missing 'tokenAmount' or 'amount' field"
-									))?
-									.parse()
-									.map_err(|_| anyhow::anyhow!("Failed to parse string to u128"))
-							},
-							_ => Err(anyhow::anyhow!("Data account encoding is not JsonParsed")),
-						}
-					},
-				},
-				AccountType::FetchAccount => {
-					// Fetch account
-					println!("Fetch account found");
-					ensure!(owner_pub_key == vault_address, "Unexpected owner for fetch account");
-					match account_info.data {
-						// Fetch Data Account
-						UiAccountData::Binary(base64_string, encoding) => {
-							if encoding != UiAccountEncoding::Base64 {
-								return Err(anyhow::anyhow!("Data account encoding is not base64"));
-							}
-
-							// Decode the base64 string to bytes
-							let mut bytes = base64::decode(base64_string)
-								.expect("Failed to decode base64 string");
-
-							// Check that there are 24 bytes (16 (u128) + 8 (discriminator))
-							ensure!(bytes.len() == FETCH_ACCOUNT_BYTE_LENGTH);
-
-							// Remove the discriminator
-							let discriminator: Vec<u8> = bytes.drain(..8).collect();
-
-							ensure!(
-								discriminator == FETCH_ACCOUNT_DISCRIMINATOR,
-								"Discriminator does not match expected value"
-							);
-
-							let array: [u8; 16] =
-								bytes.try_into().expect("Byte slice length doesn't match u128");
-
-							Ok(u128::from_le_bytes(array))
-						},
-						_ => Err(anyhow::anyhow!("Data account encoding is not base64")),
-					}
-				},
-			}
+	match deposit_channel {
+		DepositChannelType::NativeDepositChannel(_) => {
+			// Native deposit channel
+			println!("Native deposit channel found");
+			let system_program_pubkey = SolAddress::from_str(SYSTEM_PROGRAM_ID).unwrap();
+			ensure!(
+				owner_pub_key == system_program_pubkey,
+				"Unexpected owner for native deposit channel",
+			);
+			Ok(deposit_channel_info.lamports as u128)
 		},
-		None => {
-			println!("Empty account found");
-			Ok(0_u128)
+		DepositChannelType::TokenDepositChannel(deposit_channel_address, _, token_mint_pubkey) => {
+			// Token deposit channel
+			println!("Token deposit channel found");
+
+			let associated_token_account_pubkey = SolAddress::from_str(TOKEN_PROGRAM_ID).unwrap();
+			ensure!(
+				owner_pub_key == associated_token_account_pubkey,
+				"Unexpected owner for token deposit channel"
+			);
+
+			// Fetch data and ensure it's encoding is JsonParsed
+			match deposit_channel_info.data {
+				UiAccountData::Json(ParsedAccount {
+					parsed: Value::Object(json_parsed_account_data),
+					..
+				}) => {
+					let info = json_parsed_account_data
+						.get("info")
+						.and_then(|v| v.as_object())
+						.ok_or(anyhow::anyhow!("Missing 'info' field"))?;
+
+					// Checking mint pubkey and owner. Might not be necessary
+					let owner = info
+						.get("owner")
+						.and_then(|v| v.as_str())
+						.ok_or(anyhow::anyhow!("Missing 'owner' field"))?;
+
+					ensure!(owner == deposit_channel_address.to_string());
+
+					let mint = info
+						.get("mint")
+						.and_then(|v| v.as_str())
+						.ok_or(anyhow::anyhow!("Missing 'mint' field"))?;
+
+					ensure!(mint == token_mint_pubkey.to_string());
+
+					info.get("tokenAmount")
+						.and_then(|token_amount| token_amount.get("amount"))
+						.and_then(|v| v.as_str())
+						.ok_or(anyhow::anyhow!("Missing 'tokenAmount' or 'amount' field"))?
+						.parse()
+						.map_err(|_| anyhow::anyhow!("Failed to parse string to u128"))
+				},
+				_ => Err(anyhow::anyhow!("Data account encoding is not JsonParsed")),
+			}
 		},
 	}
 }
 
-#[derive(Debug, Clone)]
-enum AccountType {
-	DepositChannelType(DepositChannelType),
-	FetchAccount,
+fn parse_fetch_account_amount(
+	fetch_account_info: UiAccount,
+	vault_address: SolAddress,
+) -> Result<u128, anyhow::Error> {
+	println!("Parsing fetch_account_info {:?}", fetch_account_info);
+
+	let owner_pub_key = SolAddress::from_str(fetch_account_info.owner.as_str()).unwrap();
+	println!("owner_pub_key {:?}", owner_pub_key);
+
+	ensure!(owner_pub_key == vault_address, "Unexpected owner for fetch account");
+	match fetch_account_info.data {
+		// Fetch Data Account
+		UiAccountData::Binary(base64_string, encoding) => {
+			if encoding != UiAccountEncoding::Base64 {
+				return Err(anyhow::anyhow!("Data account encoding is not base64"));
+			}
+
+			// Decode the base64 string to bytes
+			let mut bytes = base64::decode(base64_string).expect("Failed to decode base64 string");
+
+			// Check that there are 24 bytes (16 (u128) + 8 (discriminator))
+			ensure!(bytes.len() == FETCH_ACCOUNT_BYTE_LENGTH);
+
+			// Remove the discriminator
+			let discriminator: Vec<u8> = bytes.drain(..8).collect();
+
+			ensure!(
+				discriminator == FETCH_ACCOUNT_DISCRIMINATOR,
+				"Discriminator does not match expected value"
+			);
+
+			let array: [u8; 16] = bytes.try_into().expect("Byte slice length doesn't match u128");
+
+			Ok(u128::from_le_bytes(array))
+		},
+		_ => Err(anyhow::anyhow!("Data account encoding is not base64")),
+	}
 }
 
 #[derive(Debug, Clone)]
