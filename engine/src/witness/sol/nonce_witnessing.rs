@@ -24,7 +24,9 @@ use std::str::FromStr;
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	/// Witnessing the state of the nonce accounts periodically. It could also be done
-	/// only when a broadcast is witnessed but this is more reliable.
+	/// only when a broadcast is witnessedd, which is the only time a nonce account
+	/// might change. Doing it periocally is more reliable to ensure we don't miss a
+	/// change in the value but will require an extra rpc call.
 	pub async fn witness_nonces<ProcessCall, ProcessingFut, SolRetryRpcClient>(
 		self,
 		process_call: ProcessCall,

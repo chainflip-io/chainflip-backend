@@ -234,7 +234,7 @@ pub async fn start<
 	arb_rpc: EvmRpc,
 	dot_rpc: DotRpc,
 	btc_rpc: BtcRpc,
-	_sol_rpc: SolRpc,
+	sol_rpc: SolRpc,
 	eth_multisig_client: EthMultisigClient,
 	dot_multisig_client: PolkadotMultisigClient,
 	btc_multisig_client: BitcoinMultisigClient,
@@ -547,9 +547,28 @@ where
                                             req.participants,
                                         ).await;
                                     }
-                                    CfeEvent::SolTxBroadcastRequest(unsupported) => {
-                                        tracing::warn!("sol-tx-broadcast-request: {:?}", unsupported);
-                                        todo!()
+                                    CfeEvent::SolTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> { broadcast_id, nominee, payload }) => {
+                                        if nominee == account_id {
+                                            let sol_rpc = sol_rpc.clone();
+                                            let state_chain_client = state_chain_client.clone();
+                                            scope.spawn(async move {
+                                                match sol_rpc.broadcast_transaction(payload.finalize_and_serialize().expect("Failed to serialize payloadd")).await {
+                                                    Ok(tx_signature) => info!("Solana TransactionBroadcastRequest {broadcast_id:?} success: tx_signature: {tx_signature:?}"),
+                                                    Err(error) => {
+                                                        error!("Error on Solana TransactionBroadcastRequest {broadcast_id:?}: {error:?}");
+                                                        state_chain_client.finalize_signed_extrinsic(
+                                                            RuntimeCall::SolanaBroadcaster(
+                                                                pallet_cf_broadcast::Call::transaction_failed {
+                                                                    broadcast_id,
+                                                                },
+                                                            ),
+                                                        )
+                                                        .await;
+                                                    }
+                                                }
+                                                Ok(())
+                                            });
+                                        }
                                     }
                                 }}
                             }

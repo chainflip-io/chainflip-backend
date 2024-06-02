@@ -4,10 +4,7 @@ use super::{
 	curve25519::edwards::Point, CanonicalEncoding, ChainSigning, ChainTag, CryptoScheme, CryptoTag,
 	ECPoint, SignatureToThresholdSignature,
 };
-use cf_chains::{
-	sol::{SolAddress, SolSignature},
-	Chain, ChainCrypto, Solana,
-};
+use cf_chains::{sol::SolSignature, Chain, ChainCrypto, Solana};
 use ed25519_consensus::VerificationKeyBytes;
 use serde::{Deserialize, Serialize};
 
@@ -46,12 +43,6 @@ impl CanonicalEncoding for VerificationKeyBytes {
 	}
 }
 
-impl CanonicalEncoding for SolAddress {
-	fn encode_key(&self) -> Vec<u8> {
-		self.0.to_vec()
-	}
-}
-
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
 pub struct SigningPayload(Vec<u8>);
 
@@ -69,7 +60,7 @@ impl AsRef<[u8]> for SigningPayload {
 
 impl SigningPayload {
 	pub fn new(payload: Vec<u8>) -> Result<Self> {
-		if payload.is_empty() || payload.len() > 1326 {
+		if payload.is_empty() {
 			anyhow::bail!("Invalid payload size");
 		}
 		Ok(SigningPayload(payload))

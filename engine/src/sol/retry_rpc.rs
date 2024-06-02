@@ -84,11 +84,8 @@ pub trait SolRetryRpcApi: Clone {
 		config: RpcTransactionConfig,
 	) -> EncodedConfirmedTransactionWithStatusMeta;
 
-	async fn send_transaction(
-		&self,
-		transaction: String,
-		config: RpcSendTransactionConfig,
-	) -> SolSignature;
+	async fn broadcast_transaction(&self, raw_transaction: Vec<u8>)
+		-> anyhow::Result<SolSignature>;
 }
 
 #[async_trait::async_trait]
@@ -192,22 +189,31 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 			)
 			.await
 	}
-	async fn send_transaction(
-		&self,
-		transaction: String,
-		config: RpcSendTransactionConfig,
-	) -> SolSignature {
+	async fn broadcast_transaction(&self, transaction: Vec<u8>) -> anyhow::Result<SolSignature> {
+		let encoded_transaction = base64::encode(&transaction);
+		let config = RpcSendTransactionConfig {
+			skip_preflight: true,
+			preflight_commitment: None,
+			encoding: Some(UiTransactionEncoding::Base64),
+			max_retries: None,
+			min_context_slot: None,
+		};
+
 		self.rpc_retry_client
-			.request(
+			.request_with_limit(
 				RequestLog::new(
 					"sendTransaction".to_string(),
 					Some(format!("{:?}, {:?}", transaction, config)),
 				),
 				Box::pin(move |client| {
-					let transaction = transaction.clone();
+					let encoded_transaction = encoded_transaction.clone();
+					// let config = config;
 					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.send_transaction(transaction, config).await })
+					Box::pin(
+						async move { client.send_transaction(encoded_transaction, config).await },
+					)
 				}),
+				MAX_BROADCAST_RETRIES,
 			)
 			.await
 	}
@@ -326,11 +332,8 @@ pub mod mocks {
 				config: RpcTransactionConfig,
 			) -> EncodedConfirmedTransactionWithStatusMeta;
 
-			async fn send_transaction(
-				&self,
-				transaction: String,
-				config: RpcSendTransactionConfig,
-			) -> SolSignature;
+			async fn broadcast_transaction(&self, transaction: Vec<u8>)
+				-> anyhow::Result<SolSignature>;
 		}
 	}
 }
