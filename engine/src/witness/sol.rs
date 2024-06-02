@@ -111,14 +111,6 @@ where
 		}
 	}
 
-	// Regarding the option of nonces witnesssing on broadcast:
-	// We could either try to get the correct nonce account from the succesful transactions, it's
-	// probably always in the same key position, since we need to call get_transaction anyway to get
-	// the fees. Otherwise we just use get_multiple_accounts for all the nonce accounts and compare
-	// them with the the previous hashes, which we can also pull from the environment.
-	// Matching keys from successful transactions against nonces is dangerous because ccm calls
-	// might have some sneaky keys passed by the user.
-
 	let mut finalized_txs_info = Vec::new();
 
 	println!("Finalized transactions: {:?}", finalized_transactions);
@@ -226,6 +218,8 @@ where
 	// If in the new pallet the cumulative historical amount is tracked we could maybe get away with
 	// using cache but upon restart the engine would submit an extrinsic for each deposit address.
 	let cached_balances = Arc::new(Mutex::new(HashMap::new()));
+	// For witnessed egresses we can get away with a simple cache since egressed transactions have a
+	// shorter lifespan than deposits and there won't be many of them simultaneously.
 	let cached_witnessed_egresses = Arc::new(Mutex::new(HashSet::new()));
 
 	sol_safe_vault_source_deposit_addresses
