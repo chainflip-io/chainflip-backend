@@ -8,8 +8,10 @@ on:
         default: false
       timeout-minutes:
         type: number
-        required: false
         default: 120
+      ngrok:
+        type: boolean
+        default: false
 
 env:
   FORCE_COLOR: 1
@@ -24,7 +26,8 @@ jobs:
     runs-on: digitalocean
     timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
-      - name: Setup ngrok
+      - name: Setup ngrok ✨
+        if: inputs.ngrok
         run: |
           curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
           echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
@@ -106,7 +109,8 @@ jobs:
         run: |
           ./run.sh
 
-      - name: Expose endpoints for Polkadot and Chainflip
+      - name: Expose endpoints for Polkadot and Chainflip 🤿
+        if: inputs.ngrok
         env:
           NGROK_AUTHTOKEN: ${{ secrets.CF_NGROK_AUTHTOKEN }}
         continue-on-error: true
@@ -115,7 +119,8 @@ jobs:
           ngrok http http://localhost:9945 --log-format=logfmt --log=/tmp/ngrok-polkadot.log &
           sleep 10
 
-      - name: Get ngrok URLs
+      - name: Get ngrok URLs 🔗
+        if: inputs.ngrok
         continue-on-error: true
         id: ngrok-urls
         run: python3 ./ci/scripts/get_ngrok_urls.py
