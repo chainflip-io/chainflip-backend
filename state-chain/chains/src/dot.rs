@@ -485,8 +485,8 @@ impl PolkadotExtrinsicBuilder {
 		self.signature.is_some()
 	}
 
-	pub fn refresh_replay_protection(&mut self, environment: PolkadotReplayProtection) {
-		self.replay_protection = environment;
+	pub fn refresh_replay_protection(&mut self, replay_protection: PolkadotReplayProtection) {
+		self.replay_protection = replay_protection;
 	}
 }
 
@@ -1123,6 +1123,16 @@ mod test_polkadot_extrinsics {
 			"encoded extrinsic: {:?}",
 			extrinsic_builder.get_signed_unchecked_extrinsic().unwrap().encode()
 		);
+
+		let new_replay_protection = PolkadotReplayProtection {
+			nonce: 13,
+			signer: account_id_1,
+			genesis_hash: Default::default(),
+		};
+
+		extrinsic_builder.refresh_replay_protection(new_replay_protection.clone());
+
+		assert_eq!(new_replay_protection, extrinsic_builder.replay_protection);
 	}
 
 	#[test]

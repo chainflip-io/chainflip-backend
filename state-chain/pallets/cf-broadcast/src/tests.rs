@@ -1314,11 +1314,11 @@ fn threshold_sign_and_refresh_replay_protection() {
 		MockTransactionBuilder::<MockEthereum, RuntimeCall>::set_refreshed_replay_protection();
 		let broadcast_id: u8 = 1;
 
-		let (tx_out_id1, api_call1) = api_call(broadcast_id);
+		let (tx_out_id, api_call) = api_call(broadcast_id);
 		ThresholdSignatureData::<Test, Instance1>::insert(
 			broadcast_id as u32,
 			(
-				api_call1.clone(),
+				api_call.clone(),
 				MockThresholdSignature {
 					signing_key: MockAggKey([0u8; 4]),
 					signed_payload: [0u8; 4],
@@ -1327,7 +1327,7 @@ fn threshold_sign_and_refresh_replay_protection() {
 		);
 
 		TransactionOutIdToBroadcastId::<Test, Instance1>::insert(
-			tx_out_id1,
+			tx_out_id,
 			(broadcast_id as u32, 0),
 		);
 
