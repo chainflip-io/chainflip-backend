@@ -236,8 +236,7 @@ impl SolRpcApi for SolRpcClient {
 		Ok(transaction_data)
 	}
 
-	// We expect a fully-signed transaction encoded as a string. We might have to encode it here
-	// otherwise but the serialization is expected to be done by the caller.
+	// Expecting a fully-signed transaction encoded as a string.
 	async fn send_transaction(
 		&self,
 		transaction: String,

@@ -14,16 +14,12 @@ use crate::witness::common::chunked_chain_source::chunked_by_vault::deposit_addr
 use super::super::common::chunked_chain_source::chunked_by_vault::{
 	builder::ChunkedByVaultBuilder, ChunkedByVault,
 };
-use crate::{
-	sol::{
-		commitment_config::CommitmentConfig,
-		retry_rpc::SolRetryRpcApi,
-		rpc_client_api::{
-			ParsedAccount, Response, RpcAccountInfoConfig, UiAccount, UiAccountData,
-			UiAccountEncoding,
-		},
+use crate::sol::{
+	commitment_config::CommitmentConfig,
+	retry_rpc::SolRetryRpcApi,
+	rpc_client_api::{
+		ParsedAccount, Response, RpcAccountInfoConfig, UiAccount, UiAccountData, UiAccountEncoding,
 	},
-	// witness::common::chain_source::Header,
 };
 use serde_json::Value;
 pub use sol_prim::{
@@ -136,9 +132,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							)
 							.await?;
 
-							let ingresses: Vec<(DepositChannelType, u128)> =
-								ingresses.into_iter().filter(|&(_, amount)| amount != 0).collect();
-
 							if !ingresses.is_empty() {
 								let mut cached_balances = cached_balances.lock().await;
 
@@ -158,9 +151,10 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 									);
 
 										if amount > *deposit_channel_cached_balance {
-											// With the current pallet we submit the difference in
-											// amount. This is a temporal workaround TODO: Should
-											// submit the amount as is with the new pallet?
+											// TODO: This is a workaround for the current pallet.
+											// With the new pallet we could submit "amount" as is
+											// but we'd still need to keep track of the cached
+											// balance to avoid continous submissions.
 											// Some((deposit_channel, amount))
 											Some((
 												deposit_channel,
@@ -303,7 +297,10 @@ where
 			_ => Err(anyhow::anyhow!("Unexpected number of accounts returned")),
 		}?;
 
-		ingresses.push((deposit_channel.clone(), accumulated_amount));
+		// Filter for amount already here for efficiency
+		if accumulated_amount > 0 {
+			ingresses.push((deposit_channel.clone(), accumulated_amount));
+		}
 	}
 
 	ensure!(deposit_channels.len() <= ingresses.len());
@@ -356,7 +353,6 @@ fn parse_account_amount_from_data(
 						.and_then(|v| v.as_object())
 						.ok_or(anyhow::anyhow!("Missing 'info' field"))?;
 
-					// Checking mint pubkey and owner. Might not be necessary
 					let owner = info
 						.get("owner")
 						.and_then(|v| v.as_str())
@@ -405,7 +401,6 @@ fn parse_fetch_account_amount(
 
 			ensure!(bytes.len() == FETCH_ACCOUNT_BYTE_LENGTH);
 
-			// Remove the discriminator
 			let discriminator: Vec<u8> = bytes.drain(..8).collect();
 
 			ensure!(
@@ -552,8 +547,7 @@ mod tests {
 						.await
 						.unwrap();
 
-				assert_eq!(ingresses.0[0].1, 0);
-				assert_eq!(ingresses.0[1].1, 0);
+				assert!(ingresses.0.is_empty());
 
 				let vault_program_account =
 					SolAddress::from_str("EMxiTBPTkGVkkbCMncu7j17gHyySojii4KhHwM36Hgz2").unwrap();
