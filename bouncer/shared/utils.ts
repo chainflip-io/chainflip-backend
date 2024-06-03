@@ -886,6 +886,15 @@ export function parseAssetString(input: string): Asset {
   if (foundAsset) {
     return foundAsset as Asset;
   }
+
+  // TODO: This is temporary to allow for solana swaps
+  if (input.toLowerCase() === 'sol') {
+  return 'sol' as Asset;
+  }
+  if (input.toLowerCase() === 'solusdc') {
+    return 'solusdc' as Asset;
+  }
+
   throw new Error(`Unsupported asset: ${input}`);
 }
 
