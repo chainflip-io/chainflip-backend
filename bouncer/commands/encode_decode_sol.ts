@@ -4,8 +4,9 @@
 // This command takes one argument.
 // This command encodes or decodes accordingly given an encoded Solana address or a regular hex string.
 //
-// For example: ./commands/encode_decode_sol.ts (0xb5ac50e149024d3303dd5a947b48bec62153d951a3b2358e190af5d0eff483db or DEBC3T7JCWr6ur6vUEaBan3ix4ibH5fDhuKuYqPK1Xht)
-// might print: 1.2
+// For example: ./commands/encode_decode_sol.ts 0xb5ac50e149024d3303dd5a947b48bec62153d951a3b2358e190af5d0eff483db
+//              ./commands/encode_decode_sol.ts DEBC3T7JCWr6ur6vUEaBan3ix4ibH5fDhuKuYqPK1Xht
+// might print: DEBC3T7JCWr6ur6vUEaBan3ix4ibH5fDhuKuYqPK1Xht
 
 import { runWithTimeout, decodeSolAddress, encodeSolAddress } from '../shared/utils';
 
