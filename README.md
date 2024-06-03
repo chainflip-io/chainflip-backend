@@ -90,26 +90,7 @@ commit.
 
 ### Prerequisites
 
-You will need to download [Docker](https://docs.docker.com/get-docker/), docker-compose and
-the [1Password CLI 2](https://developer.1password.com/docs/cli/get-started/).
-
-#### Login to 1Password
-
-The simplest way to login is to go via the [1Password app](https://developer.1password.com/docs/cli/get-started#step-1-connect-1password-cli-with-the-1password-app). Make sure you have v8 of 1Password installed.
-
-Verify you can connect to 1Password with:
-
-```shell
-op vault ls
-```
-
-#### Login to Docker
-
-The script will ask you to log in to our Docker container registry. You will need to create a [Classic PAT](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token#creating-a-personal-access-token-classic) for this.
-
-You only need to enable the `packages:read` permission.
-
-When creating a new PAT, you need to delete the `.setup_complete` file under `localnet`, which will cause the manage.sh to ask you again for the PAT you created.
+You will need to download [Docker](https://docs.docker.com/get-docker/), docker-compose
 
 ### Creating a Localnet
 

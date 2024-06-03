@@ -2,7 +2,7 @@ version: "3.9"
 services:
   eth-init:
     image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.1.2-usdt-${NODE_COUNT}
-    pull_policy: always
+    pull_policy: if_not_present
     container_name: init
     platform: linux/amd64
     volumes:
@@ -11,7 +11,7 @@ services:
 
   solana-init:
     image: ghcr.io/chainflip-io/solana-localnet-ledger:v0.3.2
-    pull_policy: always
+    pull_policy: if_not_present
     container_name: init-solana
     platform: linux/amd64
     volumes:
@@ -22,7 +22,7 @@ services:
     image: ghcr.io/chainflip-io/chainflip-eth-contracts/arbitrum-gizmo-shop:v1.1.2-usdt-${NODE_COUNT}
     restart: always
     container_name: arb-init
-    pull_policy: always
+    pull_policy: if_not_present
     platform: linux/amd64
     environment:
       ARB_ENDPOINT: "http://sequencer:8547"
@@ -100,7 +100,7 @@ services:
     container_name: polkadot
     platform: linux/amd64
     image: ghcr.io/chainflip-io/chainflip-backend/polkadot:357aa6af70b3d57fe0a9df1fe1815f704e59db07
-    pull_policy: always
+    pull_policy: if_not_present
     stop_grace_period: 5s
     stop_signal: SIGINT
     environment:
@@ -138,7 +138,7 @@ services:
   bitcoin:
     image: ghcr.io/chainflip-io/chainflip-backend/bitcoin:357aa6af70b3d57fe0a9df1fe1815f704e59db07
     platform: linux/amd64
-    pull_policy: always
+    pull_policy: if_not_present
     container_name: bitcoin
     restart: unless-stopped
     ports:
