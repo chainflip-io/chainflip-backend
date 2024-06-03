@@ -287,8 +287,7 @@ macro_rules! solana_program {
 				pub fn $call_name(
 					&self,
 					$( $call_arg: $arg_type ),+,
-					// AccountMetas
-					$( $account: impl Into<Pubkey> ),*
+					$( $account: impl Into<AccountMeta> ),*
 				) -> Instruction {
 					$call {
 						$(
@@ -298,10 +297,11 @@ macro_rules! solana_program {
 						self.program_id,
 						vec![
 							$(
-								AccountMeta {
-									pubkey: $account.into(),
-									is_signer: $is_signer,
-									is_writable: $is_writable,
+								{
+									let mut account = $account.into();
+									account.is_signer |= $is_signer;
+									account.is_writable |= $is_writable;
+									account
 								},
 							)*
 						]
@@ -327,7 +327,6 @@ macro_rules! solana_program {
 				use super::*;
 				use $crate::sol::sol_tx_core::program_instructions::idl::*;
 				use heck::{ToSnakeCase, ToUpperCamelCase};
-				use std::collections::BTreeSet;
 
 				const IDL_RAW: &str = include_str!($idl_path);
 
@@ -365,28 +364,33 @@ macro_rules! solana_program {
 				fn $call_name() {
 					test(|idl| {
 							let instruction = idl.instruction(stringify!($call_name));
-							assert!(
+							assert_eq!(
 								instruction
 									.args
 									.iter()
 									.map(|arg| arg.name.as_str().to_snake_case())
-									.collect::<BTreeSet<_>>().is_superset(&BTreeSet::from([
+									.collect::<Vec<_>>(),
+									vec![
 										$(
 											stringify!($call_arg).to_owned(),
 										)*
-									])),
+									],
+								"Arguments don't match for instruction {}",
+								stringify!($call_name),
 							);
 							assert_eq!(
 								instruction
 									.accounts
 									.iter()
 									.map(|account| account.name.as_str().to_snake_case())
-									.collect::<BTreeSet<_>>(),
-								BTreeSet::from([
+									.collect::<Vec<_>>(),
+								vec![
 									$(
 										stringify!($account).to_owned(),
 									)*
-								])
+								],
+								"Accounts don't match for instruction {}",
+								stringify!($call_name),
 							);
 					});
 				}
@@ -491,6 +495,7 @@ solana_program!(
 				data_account: { signer: false, writable: false },
 				agg_key: { signer: true, writable: true },
 				deposit_channel_pda: { signer: false, writable: true },
+				deposit_channel_historical_fetch: { signer: false, writable: true },
 				system_program: { signer: false, writable: false },
 			]
 		},
@@ -509,17 +514,18 @@ solana_program!(
 			args: [
 				seed: Vec<u8>,
 				bump: u8,
-				amount: u64,
 				decimals: u8,
 			],
 			account_metas: [
 				data_account: { signer: false, writable: false },
-				agg_key: { signer: true, writable: false },
+				agg_key: { signer: true, writable: true },
 				deposit_channel_pda: { signer: false, writable: false },
 				deposit_channel_associated_token_account: { signer: false, writable: true },
 				token_vault_associated_token_account: { signer: false, writable: true },
 				mint: { signer: false, writable: false },
 				token_program: { signer: false, writable: false },
+				deposit_channel_historical_fetch: { signer: false, writable: true },
+				system_program: { signer: false, writable: false },
 			]
 		},
 		transfer_tokens => TransferTokens {

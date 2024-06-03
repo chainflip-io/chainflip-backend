@@ -4,7 +4,10 @@
 //! Instructions and Instruction sets with some level of abstraction.
 //! This avoids the need to deal with low level Solana core types.
 
-use cf_primitives::chains::Solana;
+use core::str::FromStr;
+
+use crate::sol::Solana;
+use codec::Encode;
 use sol_prim::AccountBump;
 use sp_std::{vec, vec::Vec};
 
@@ -93,6 +96,7 @@ impl SolanaInstructionBuilder {
 		nonce_account: SolAddress,
 		compute_price: SolAmount,
 	) -> Vec<SolInstruction> {
+		let deposit_channel_historical_fetch = SolPubkey::from_str("TODO").unwrap();
 		let instructions = decomposed_fetch_params
 			.into_iter()
 			.map(|(fetch_id, asset)| match asset {
@@ -101,27 +105,25 @@ impl SolanaInstructionBuilder {
 					fetch_id.bump,
 					vault_program_data_account,
 					agg_key,
-					fetch_id.address.into(), false),
-						SolAccountMeta::new_readonly(system_program_id.into(), false),
-					],
-				),
-				AssetWithDerivedAddress::Usdc(ata) => ProgramInstruction::get_instruction(
-					&VaultProgram::FetchTokens {
-						seed: fetch_id.channel_id.to_le_bytes().to_vec(),
-						bump: fetch_id.bump,
-						decimals: SOL_USDC_DECIMAL,
-					},
-					vault_program.into(),
-					vec![
-						SolAccountMeta::new_readonly(vault_program_data_account.into(), false),
-						SolAccountMeta::new_readonly(agg_key.into(), true),
-						SolAccountMeta::new_readonly(fetch_id.address,
-						SolAccountMeta::new(ata.0.into(), false),
-						SolAccountMeta::new(token_vault_ata.into(), false),
-						SolAccountMeta::new_readonly(token_mint_pubkey.into(), false),
-						SolAccountMeta::new_readonly(token_program_id.into(), false),
+					deposit_channel_historical_fetch,
+					fetch_id.address,
 					system_program_id,
 				),
+				AssetWithDerivedAddress::Usdc((ata, bump)) => VaultProgram::with_id(vault_program)
+					.fetch_tokens(
+						fetch_id.channel_id.to_le_bytes().to_vec(),
+						fetch_id.bump,
+						SOL_USDC_DECIMAL,
+						vault_program_data_account,
+						agg_key,
+						fetch_id.address,
+						ata,
+						token_vault_ata,
+						token_mint_pubkey,
+						token_program_id,
+						deposit_channel_historical_fetch,
+						system_program_id,
+					),
 			})
 			.collect::<Vec<_>>();
 
@@ -154,7 +156,7 @@ impl SolanaInstructionBuilder {
 		token_vault_ata: SolAddress,
 		token_mint_pubkey: SolAddress,
 		token_program_id: SolAddress,
-		system_program_id: SolAddress,
+		_system_program_id: SolAddress,
 		agg_key: SolAddress,
 		nonce_account: SolAddress,
 		compute_price: SolAmount,
@@ -166,22 +168,17 @@ impl SolanaInstructionBuilder {
 				&token_mint_pubkey.into(),
 				&ata.into(),
 			),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::TransferTokens { amount, decimals: SOL_USDC_DECIMAL },
-				vault_program.into(),
-				vec![
-					SolAccountMeta::new_readonly(
-						vault_program_data_account.into(),
-						false,
-					),
-					SolAccountMeta::new_readonly(agg_key.into(), true),
-					SolAccountMeta::new_readonly(token_vault_pda_account.into(), false),
-					SolAccountMeta::new(token_vault_ata.into(), false),
-					SolAccountMeta::new(ata.into(), false),
-					SolAccountMeta::new_readonly(token_mint_pubkey.into(), false),
-					SolAccountMeta::new_readonly(token_program_id.into(), false),
-					SolAccountMeta::new_readonly(system_program_id.into(), false),
-				],
+			VaultProgram::with_id(vault_program).transfer_tokens(
+				amount,
+				SOL_USDC_DECIMAL,
+				vault_program_data_account,
+				agg_key,
+				token_vault_pda_account,
+				token_vault_ata,
+				ata,
+				token_mint_pubkey,
+				token_program_id,
+				// system_program_id,
 			),
 		];
 
@@ -243,28 +240,18 @@ impl SolanaInstructionBuilder {
 	) -> Vec<SolInstruction> {
 		let instructions = vec![
 			SystemProgramInstruction::transfer(&agg_key.into(), &to.into(), amount),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::ExecuteCcmNativeCall {
-					source_chain: source_chain as u32,
-					source_address: codec::Encode::encode(&source_address),
-					message,
-					amount,
-				},
-				vault_program.into(),
-				vec![
-					vec![
-						SolAccountMeta::new_readonly(vault_program_data_account.into(), false),
-						SolAccountMeta::new_readonly(agg_key.into(), true),
-						SolAccountMeta::new(to.into(), false),
-						SolAccountMeta::from(ccm_accounts.cf_receiver.clone()),
-						SolAccountMeta::new_readonly(system_program_id.into(), false),
-						SolAccountMeta::new_readonly(sys_var_instructions.into(), false),
-					],
-					ccm_accounts.remaining_account_metas(),
-				]
-				.into_iter()
-				.flatten()
-				.collect::<Vec<_>>(),
+			VaultProgram::with_id(vault_program).execute_ccm_native_call(
+				source_chain as u32,
+				source_address.encode(), // TODO: check if this is correct (scale encoding?)
+				message,
+				amount,
+				vault_program_data_account,
+				agg_key,
+				to,
+				ccm_accounts.cf_receiver,
+				system_program_id,
+				sys_var_instructions,
+				// ccm_accounts.remaining_account_metas(),
 			),
 		];
 
@@ -281,7 +268,7 @@ impl SolanaInstructionBuilder {
 		ccm_accounts: SolCcmAccounts,
 		vault_program: SolAddress,
 		vault_program_data_account: SolAddress,
-		system_program_id: SolAddress,
+		_system_program_id: SolAddress,
 		sys_var_instructions: SolAddress,
 		token_vault_pda_account: SolAddress,
 		token_vault_ata: SolAddress,
@@ -292,53 +279,38 @@ impl SolanaInstructionBuilder {
 		compute_price: SolAmount,
 	) -> Vec<SolInstruction> {
 		let instructions = vec![
-			AssociatedTokenAccountInstruction::create_associated_token_account_idempotent_instruction(
-				&agg_key.into(),
-				&to.into(),
-				&token_mint_pubkey.into(),
-				&ata.into(),
-			),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::TransferTokens { amount, decimals: SOL_USDC_DECIMAL },
-				vault_program.into(),
-				vec![
-					SolAccountMeta::new_readonly(
-						vault_program_data_account.into(),
-						false,
-					),
-					SolAccountMeta::new_readonly(agg_key.into(), true),
-					SolAccountMeta::new_readonly(token_vault_pda_account.into(), false),
-					SolAccountMeta::new(token_vault_ata.into(), false),
-					SolAccountMeta::new(ata.into(), false),
-					SolAccountMeta::new_readonly(token_mint_pubkey.into(), false),
-					SolAccountMeta::new_readonly(token_program_id.into(), false),
-					SolAccountMeta::new_readonly(system_program_id.into(), false),
-				],
-			),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::ExecuteCcmTokenCall {
-					source_chain: source_chain as u32,
-					source_address: codec::Encode::encode(&source_address),
-					message,
-					amount,
-				},
-				vault_program.into(),
-				vec![
-					vec![
-						SolAccountMeta::new_readonly(vault_program_data_account.into(), false),
-						SolAccountMeta::new_readonly(agg_key.into(), true),
-						SolAccountMeta::new(ata.into(), false),
-						ccm_accounts.cf_receiver.clone().into(),
-						SolAccountMeta::new_readonly(token_program_id.into(), false),
-						SolAccountMeta::new_readonly(token_mint_pubkey.into(), false),
-						SolAccountMeta::new_readonly(sys_var_instructions.into(), false),
-					],
-					ccm_accounts.remaining_account_metas(),
-				]
-				.into_iter()
-				.flatten()
-				.collect::<Vec<_>>(),
-			)];
+		AssociatedTokenAccountInstruction::create_associated_token_account_idempotent_instruction(
+			&agg_key.into(),
+			&to.into(),
+			&token_mint_pubkey.into(),
+			&ata.into(),
+		),
+		VaultProgram::with_id(vault_program).transfer_tokens(
+			amount,
+			SOL_USDC_DECIMAL,
+			vault_program_data_account,
+			agg_key,
+			token_vault_pda_account,
+			token_vault_ata,
+			ata,
+			token_mint_pubkey,
+			token_program_id,
+			// system_program_id,
+		),
+		VaultProgram::with_id(vault_program).execute_ccm_token_call(
+			source_chain as u32,
+			source_address.encode(), // TODO: check if this is correct (scale encoding?)
+			message,
+			amount,
+			vault_program_data_account,
+			agg_key,
+			ata,
+			ccm_accounts.cf_receiver,
+			token_program_id,
+			token_mint_pubkey,
+			sys_var_instructions,
+			// ccm_accounts.remaining_account_metas(),
+		)];
 
 		Self::finalize(instructions, nonce_account.into(), agg_key.into(), compute_price)
 	}

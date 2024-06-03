@@ -332,6 +332,12 @@ impl AccountMeta {
 	}
 }
 
+impl<P: Into<Pubkey>> From<P> for AccountMeta {
+	fn from(pubkey: P) -> Self {
+		AccountMeta { pubkey: pubkey.into(), is_signer: false, is_writable: false }
+	}
+}
+
 /// Describes the organization of a `Message`'s account keys.
 ///
 /// Every [`Instruction`] specifies which accounts it may reference, or
@@ -955,6 +961,7 @@ mod tests {
 		},
 		SolAddress,
 	};
+	use codec::Encode;
 	use core::str::FromStr;
 
 	#[derive(BorshSerialize, BorshDeserialize)]
@@ -1046,6 +1053,7 @@ mod tests {
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let deposit_channel = Pubkey::from_str(FETCH_FROM_ACCOUNT).unwrap();
+		let deposit_channel_pda = Pubkey::from_str("TODO").unwrap();
 
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
@@ -1060,6 +1068,7 @@ mod tests {
 				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
 				agg_key_pubkey,
 				deposit_channel,
+				deposit_channel_pda,
 				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
 			),
 		];
@@ -1087,6 +1096,7 @@ mod tests {
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let vault_program_id = SolAddress::from_str(VAULT_PROGRAM).unwrap();
+		let deposit_channel_historical_fetch = Pubkey::from_str("TODO").unwrap();
 
 		let deposit_channel_0 = derive_deposit_address(0u64, vault_program_id).unwrap();
 		let deposit_channel_1 = derive_deposit_address(1u64, vault_program_id).unwrap();
@@ -1105,6 +1115,7 @@ mod tests {
 				deposit_channel_0.1,
 				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
 				agg_key_pubkey,
+				deposit_channel_historical_fetch,
 				deposit_channel_0.0,
 				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
 			),
@@ -1113,6 +1124,7 @@ mod tests {
 				deposit_channel_1.1,
 				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
 				agg_key_pubkey,
+				deposit_channel_historical_fetch,
 				deposit_channel_1.0,
 				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
 			),
@@ -1147,6 +1159,7 @@ mod tests {
 		let deposit_channel = derive_deposit_address(seed, vault_program_id).unwrap();
 		let deposit_channel_ata =
 			derive_associated_token_account(deposit_channel.0, token_mint_pubkey).unwrap();
+		let deposit_channel_historical_fetch = Pubkey::from_str("TODO").unwrap();
 
 		// Deposit channel derived from the Vault address from the seed and the bump
 		assert_eq!(
@@ -1168,14 +1181,15 @@ mod tests {
 			VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap()).fetch_tokens(
 				seed.to_le_bytes().to_vec(),
 				deposit_channel.1,
-				100_000_000,
 				6,
 				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
 				agg_key_pubkey,
-				deposit_channel,
-				deposit_channel_ata,
+				deposit_channel.0,
+				deposit_channel_ata.0,
 				Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(),
 				Pubkey::from_str(MINT_PUB_KEY).unwrap(),
+				Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(),
+				deposit_channel_historical_fetch,
 				Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(),
 			),
 		];
@@ -1211,6 +1225,8 @@ mod tests {
 
 		let deposit_channel_2 = derive_deposit_address(2u64, vault_program_id).unwrap();
 
+		let deposit_channel_historical_fetch = Pubkey::from_str("TODO").unwrap();
+
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
 				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
@@ -1218,69 +1234,42 @@ mod tests {
 			),
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::FetchTokens {
-					seed: 0u64.to_le_bytes().to_vec(),
-					bump: deposit_channel_0.1,
-					decimals: 6,
-				},
-				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
-				vec![
-					AccountMeta::new_readonly(
-						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
-						false,
-					),
-					AccountMeta::new_readonly(agg_key_pubkey, true),
-					AccountMeta::new_readonly(deposit_channel_0.0.into(), false),
-					AccountMeta::new(deposit_channel_ata_0.0.into(), false),
-					AccountMeta::new(
-						Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(),
-						false,
-					),
-					AccountMeta::new_readonly(Pubkey::from_str(MINT_PUB_KEY).unwrap(), false),
-					AccountMeta::new_readonly(Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(), false),
-					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
-				],
+			VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap()).fetch_tokens(
+				0u64.to_le_bytes().to_vec(),
+				deposit_channel_0.1,
+				6,
+				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+				agg_key_pubkey,
+				deposit_channel_0.0,
+				deposit_channel_ata_0.0,
+				Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(),
+				Pubkey::from_str(MINT_PUB_KEY).unwrap(),
+				Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(),
+				deposit_channel_historical_fetch,
+				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
 			),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::FetchTokens {
-					seed: 1u64.to_le_bytes().to_vec(),
-					bump: deposit_channel_1.1,
-					decimals: 6,
-				},
-				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
-				vec![
-					AccountMeta::new_readonly(
-						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
-						false,
-					),
-					AccountMeta::new_readonly(agg_key_pubkey, true),
-					AccountMeta::new_readonly(deposit_channel_1.0.into(), false),
-					AccountMeta::new(deposit_channel_ata_1.0.into(), false),
-					AccountMeta::new(
-						Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(),
-						false,
-					),
-					AccountMeta::new_readonly(Pubkey::from_str(MINT_PUB_KEY).unwrap(), false),
-					AccountMeta::new_readonly(Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(), false),
-					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
-				],
+			VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap()).fetch_tokens(
+				1u64.to_le_bytes().to_vec(),
+				deposit_channel_1.1,
+				6,
+				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+				agg_key_pubkey,
+				deposit_channel_1.0,
+				deposit_channel_ata_1.0,
+				Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(),
+				Pubkey::from_str(MINT_PUB_KEY).unwrap(),
+				Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(),
+				deposit_channel_historical_fetch,
+				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
 			),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::FetchNative {
-					seed: 2u64.to_le_bytes().to_vec(),
-					bump: deposit_channel_2.1,
-				},
-				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
-				vec![
-					AccountMeta::new_readonly(
-						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
-						false,
-					),
-					AccountMeta::new(agg_key_pubkey, true),
-					AccountMeta::new(deposit_channel_2.0.into(), false),
-					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
-				],
+			VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap()).fetch_native(
+				2u64.to_le_bytes().to_vec(),
+				deposit_channel_2.1,
+				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+				agg_key_pubkey,
+				deposit_channel_historical_fetch,
+				deposit_channel_2.0,
+				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
 			),
 		];
 		let message = Message::new(&instructions, Some(&agg_key_pubkey));
@@ -1404,9 +1393,6 @@ mod tests {
 		let to_pubkey = Pubkey::from_str(TRANSFER_TO_ACCOUNT).unwrap();
 		let extra_accounts = ccm_accounts();
 
-		// Test ccm only contains 2 accounts - 1 cf_receiver and 1 ccm_account.
-		let cf_receiver: AccountMeta = extra_accounts.cf_receiver.clone().into();
-		let ccm_account = extra_accounts.remaining_account_metas()[0].clone();
 		let ccm_parameter = ccm_parameter();
 
 		let instructions = [
@@ -1417,31 +1403,20 @@ mod tests {
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
 			SystemProgramInstruction::transfer(&agg_key_pubkey, &to_pubkey, TRANSFER_AMOUNT),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::ExecuteCcmNativeCall {
-					source_chain: ccm_parameter.source_chain as u32,
-					source_address: codec::Encode::encode(&ccm_parameter.source_address),
-					message: ccm_parameter.channel_metadata.message.to_vec(),
-					amount: TRANSFER_AMOUNT,
-				},
-				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
-				vec![
-					AccountMeta::new_readonly(
-						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
-						false,
-					),
-					AccountMeta::new_readonly(agg_key_pubkey, true),
-					AccountMeta::new(to_pubkey, false),
-					cf_receiver, /* cf receiver
-					              * account */
-					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
-					AccountMeta::new_readonly(
-						Pubkey::from_str(SYS_VAR_INSTRUCTIONS).unwrap(),
-						false,
-					),
-					ccm_account,
-				],
-			),
+			VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap())
+				.execute_ccm_native_call(
+					ccm_parameter.source_chain as u32,
+					ccm_parameter.source_address.encode(), // TODO: check this (scale encoded?)
+					ccm_parameter.channel_metadata.message.to_vec(),
+					TRANSFER_AMOUNT,
+					Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+					agg_key_pubkey,
+					to_pubkey,
+					extra_accounts.cf_receiver,
+					Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
+					Pubkey::from_str(SYS_VAR_INSTRUCTIONS).unwrap(),
+					// remaining_account_metas ?
+				),
 		];
 		let message =
 			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
@@ -1482,53 +1457,31 @@ mod tests {
 				&token_mint_pubkey.into(),
 				&to_pubkey_ata.0.into(),
 			),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::TransferTokens { amount, decimals: SOL_USDC_DECIMAL },
-				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
-				vec![
-					AccountMeta::new_readonly(
-						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
-						false,
-					),
-					AccountMeta::new_readonly(agg_key_pubkey, true),
-					AccountMeta::new_readonly(
-						Pubkey::from_str(TOKEN_VAULT_PDA_ACCOUNT).unwrap(),
-						false,
-					),
-					AccountMeta::new(
-						Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(),
-						false,
-					),
-					AccountMeta::new(to_pubkey_ata.0.into(), false),
-					AccountMeta::new_readonly(Pubkey::from_str(MINT_PUB_KEY).unwrap(), false),
-					AccountMeta::new_readonly(Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(), false),
-					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
-				],
+			VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap()).transfer_tokens(
+				amount,
+				SOL_USDC_DECIMAL,
+				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+				agg_key_pubkey,
+				Pubkey::from_str(TOKEN_VAULT_PDA_ACCOUNT).unwrap(),
+				Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(),
+				to_pubkey_ata.0,
+				Pubkey::from_str(MINT_PUB_KEY).unwrap(),
+				Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(),
+				// Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap() ?
 			),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::ExecuteCcmTokenCall {
-					source_chain: ccm_parameter.source_chain as u32,
-					source_address: codec::Encode::encode(&ccm_parameter.source_address),
-					message: ccm_parameter.channel_metadata.message.into(),
-					amount,
-				},
-				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
-				vec![
-					AccountMeta::new_readonly(
-						Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
-						false,
-					),
-					AccountMeta::new_readonly(agg_key_pubkey, true),
-					AccountMeta::new(to_pubkey_ata.0.into(), false),
-					extra_accounts.cf_receiver.into(),
-					AccountMeta::new_readonly(Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(), false),
-					AccountMeta::new_readonly(Pubkey::from_str(MINT_PUB_KEY).unwrap(), false),
-					AccountMeta::new_readonly(
-						Pubkey::from_str(SYS_VAR_INSTRUCTIONS).unwrap(),
-						false,
-					),
-					extra_accounts.remaining_accounts[0].clone().into(),
-				],
+			VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap()).execute_ccm_token_call(
+				ccm_parameter.source_chain as u32,
+				ccm_parameter.source_address.encode(), // TODO: check this (scale encoded?)
+				ccm_parameter.channel_metadata.message.to_vec(),
+				amount,
+				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+				agg_key_pubkey,
+				to_pubkey_ata.0,
+				extra_accounts.cf_receiver,
+				Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(),
+				Pubkey::from_str(MINT_PUB_KEY).unwrap(),
+				Pubkey::from_str(SYS_VAR_INSTRUCTIONS).unwrap(),
+				// extra_accounts.remaining_accounts[0],
 			),
 		];
 		let message =
