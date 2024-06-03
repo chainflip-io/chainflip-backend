@@ -366,11 +366,14 @@ impl<C: ChainCrypto + 'static> ApiCall<C> for MockApiCall<C> {
 		self.tx_out_id.clone()
 	}
 
-	fn refresh_replay_protection(&mut self) {}
+	fn refresh_replay_protection(&mut self) {
+		REFRESHED_REPLAY_PROTECTION.with(|is_valid| *is_valid.borrow_mut() = true)
+	}
 }
 
 thread_local! {
 	pub static REQUIRES_REFRESH: std::cell::RefCell<bool> = const { RefCell::new(false) };
+	pub static REFRESHED_REPLAY_PROTECTION: std::cell::RefCell<bool> = const { RefCell::new(false) };
 }
 
 pub struct MockTransactionBuilder<C, Call>(PhantomData<(C, Call)>);
@@ -378,6 +381,12 @@ pub struct MockTransactionBuilder<C, Call>(PhantomData<(C, Call)>);
 impl<C, Call> MockTransactionBuilder<C, Call> {
 	pub fn set_requires_refresh() {
 		REQUIRES_REFRESH.with(|is_valid| *is_valid.borrow_mut() = true)
+	}
+	pub fn set_refreshed_replay_protection() {
+		REFRESHED_REPLAY_PROTECTION.with(|is_valid| *is_valid.borrow_mut() = false)
+	}
+	pub fn get_set_refreshed_replay_protection_state() -> bool {
+		REFRESHED_REPLAY_PROTECTION.with(|is_valid| *is_valid.borrow())
 	}
 }
 

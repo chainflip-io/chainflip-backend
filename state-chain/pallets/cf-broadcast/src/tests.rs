@@ -1307,3 +1307,37 @@ fn broadcast_re_signing() {
 			assert!(!AbortedBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
 		});
 }
+
+#[test]
+fn threshold_sign_and_refresh_replay_protection() {
+	new_test_ext().execute_with(|| {
+		MockTransactionBuilder::<MockEthereum, RuntimeCall>::set_refreshed_replay_protection();
+		let broadcast_id: u8 = 1;
+
+		let (tx_out_id1, api_call1) = api_call(broadcast_id);
+		ThresholdSignatureData::<Test, Instance1>::insert(
+			broadcast_id as u32,
+			(
+				api_call1.clone(),
+				MockThresholdSignature {
+					signing_key: MockAggKey([0u8; 4]),
+					signed_payload: [0u8; 4],
+				},
+			),
+		);
+
+		TransactionOutIdToBroadcastId::<Test, Instance1>::insert(
+			tx_out_id1,
+			(broadcast_id as u32, 0),
+		);
+
+		assert_ok!(Broadcaster::resign_aborted_broadcast(
+			RuntimeOrigin::root(),
+			broadcast_id as u32,
+			false,
+			true,
+		));
+
+		assert!(MockTransactionBuilder::<MockEthereum, RuntimeCall>::get_set_refreshed_replay_protection_state(), "Refreshed replay protection has not been refreshed!");
+	});
+}
