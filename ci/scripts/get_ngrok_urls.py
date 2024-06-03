@@ -27,4 +27,4 @@ with open(github_output_path, 'a', encoding="utf-8") as f:
     f.write(
         f'ngrok_chainflip_node="{polkadot_js_chainflip_node}\n')
     f.write(
-        f'ngrok_chainflip_node="{polkadot_js_polkadot_node}"\n')
+        f'ngrok_polkadot_node="{polkadot_js_polkadot_node}"\n')
