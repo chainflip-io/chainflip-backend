@@ -97,18 +97,6 @@ jobs:
           touch ./localnet/.setup_complete
           ./localnet/manage.sh
 
-      - name: Run HeuteLeiderNicht.voll.exe 🙅‍♂️
-        if: inputs.full_bouncer
-        working-directory: bouncer
-        run: |
-          ./full_bouncer.sh
-
-      - name: Run HeuteLeiderNicht.einfach.exe 🦺
-        if: ${{ ! inputs.full_bouncer }}
-        working-directory: bouncer
-        run: |
-          ./run.sh
-
       - name: Expose endpoints for Polkadot and Chainflip 🤿
         if: inputs.ngrok
         env:
@@ -124,6 +112,18 @@ jobs:
         continue-on-error: true
         id: ngrok-urls
         run: python3 ./ci/scripts/get_ngrok_urls.py
+
+      - name: Run HeuteLeiderNicht.voll.exe 🙅‍♂️
+        if: inputs.full_bouncer
+        working-directory: bouncer
+        run: |
+          ./full_bouncer.sh
+
+      - name: Run HeuteLeiderNicht.einfach.exe 🦺
+        if: ${{ ! inputs.full_bouncer }}
+        working-directory: bouncer
+        run: |
+          ./run.sh
 
       - name: Print chainflip-engine logs 🚗
         if: always()
