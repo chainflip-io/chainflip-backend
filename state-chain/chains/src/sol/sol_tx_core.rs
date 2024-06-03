@@ -7,7 +7,8 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
-use crate::sol::{consts::*, SolAddress, SolHash, SolSignature};
+use crate::sol::{SolAddress, SolHash, SolSignature};
+use sol_prim::consts::BPF_LOADER_UPGRADEABLE_ID;
 
 pub mod address_derivation;
 pub mod bpf_loader_instructions;
@@ -945,8 +946,9 @@ pub mod sol_test_values {
 
 #[cfg(test)]
 mod tests {
+	use super::*;
+
 	use crate::sol::{
-		consts::*,
 		sol_tx_core::{
 			address_derivation::{derive_associated_token_account, derive_deposit_address},
 			bpf_loader_instructions::set_upgrade_authority,
@@ -963,6 +965,10 @@ mod tests {
 		SolAddress,
 	};
 	use core::str::FromStr;
+	use sol_prim::consts::{
+		MAX_TRANSACTION_LENGTH, SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, SYS_VAR_CLOCK,
+		SYS_VAR_INSTRUCTIONS, SYS_VAR_RENT, TOKEN_PROGRAM_ID,
+	};
 
 	#[derive(BorshSerialize, BorshDeserialize)]
 	enum BankInstruction {

@@ -1,8 +1,5 @@
 //! Program instructions
-use super::{
-	AccountMeta, Instruction, Pubkey, ASSOCIATED_TOKEN_PROGRAM_ID, SYSTEM_PROGRAM_ID,
-	TOKEN_PROGRAM_ID,
-};
+use super::{AccountMeta, Instruction, Pubkey};
 use crate::vec;
 use borsh::{BorshDeserialize, BorshSerialize};
 use core::str::FromStr;
@@ -56,32 +53,31 @@ pub enum AssociatedTokenAccountInstruction {
 
 impl AssociatedTokenAccountInstruction {
 	/// Creates CreateIdempotent instruction
+	/// Note that the associated account address is passed as a parameter instead of being
+	/// derived in this function, which is the SDK implementation.
 	pub fn create_associated_token_account_idempotent_instruction(
 		funding_address: &Pubkey,
 		wallet_address: &Pubkey,
 		token_mint_address: &Pubkey,
 		associated_account_address: &Pubkey,
 	) -> Instruction {
-		// TODO: For now the associated account address passed as a parameter instead of
-		// being derived in this function. TBD if this is the right approach.
-
-		// let associated_account_address = get_associated_token_address_with_program_id(
-		//     wallet_address,
-		//     token_mint_address,
-		//     token_program_id,
-		// );
-
 		let account_metas = vec![
 			AccountMeta::new(*funding_address, true),
 			AccountMeta::new(*associated_account_address, false),
 			AccountMeta::new_readonly(*wallet_address, false),
 			AccountMeta::new_readonly(*token_mint_address, false),
-			AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
-			AccountMeta::new_readonly(Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(), false),
+			AccountMeta::new_readonly(
+				Pubkey::from_str(sol_prim::consts::SYSTEM_PROGRAM_ID).unwrap(),
+				false,
+			),
+			AccountMeta::new_readonly(
+				Pubkey::from_str(sol_prim::consts::TOKEN_PROGRAM_ID).unwrap(),
+				false,
+			),
 		];
 		Instruction::new_with_borsh(
 			// program id of the system program
-			Pubkey::from_str(ASSOCIATED_TOKEN_PROGRAM_ID).unwrap(),
+			Pubkey::from_str(sol_prim::consts::ASSOCIATED_TOKEN_PROGRAM_ID).unwrap(),
 			&Self::CreateIdempotent,
 			account_metas,
 		)

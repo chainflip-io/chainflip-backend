@@ -1,6 +1,6 @@
 use crate::witness::common::{RuntimeCallHasChain, RuntimeHasChain};
 use cf_chains::{
-	sol::{consts::NONCE_ACCOUNT_LENGTH, SolAddress, SolHash},
+	sol::{SolAddress, SolHash},
 	Chain,
 };
 use cf_primitives::EpochIndex;
@@ -129,7 +129,7 @@ where
 				return Err(anyhow!("Expected nonce account, got program {}", program));
 			}
 
-			if space != NONCE_ACCOUNT_LENGTH {
+			if space != sol_prim::consts::NONCE_ACCOUNT_LENGTH {
 				return Err(anyhow!("Expected nonce account, got space {:?}", space));
 			}
 

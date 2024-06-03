@@ -4,8 +4,9 @@
 use cf_primitives::ChannelId;
 use sol_prim::AccountBump;
 
-use crate::sol::{consts::*, AddressDerivationError, DerivedAddressBuilder, SolAddress};
+use crate::sol::{AddressDerivationError, DerivedAddressBuilder, SolAddress};
 use core::str::FromStr;
+use sol_prim::consts::{ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID};
 
 /// Derive address for a given channel ID
 pub fn derive_deposit_address(

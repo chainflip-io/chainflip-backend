@@ -5,13 +5,12 @@
 //! This avoids the need to deal with low level Solana core types.
 
 use cf_primitives::chains::Solana;
-use sol_prim::AccountBump;
+use sol_prim::{consts::SOL_USDC_DECIMAL, AccountBump};
 use sp_std::{vec, vec::Vec};
 
 use crate::{
 	sol::{
 		api::SolanaTransactionBuildingError,
-		consts::SOL_USDC_DECIMAL,
 		sol_tx_core::{
 			bpf_loader_instructions::set_upgrade_authority,
 			compute_budget::ComputeBudgetInstruction,
@@ -359,11 +358,11 @@ impl SolanaInstructionBuilder {
 #[cfg(test)]
 mod test {
 	use cf_primitives::ChannelId;
+	use sol_prim::consts::{SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS};
 
 	use super::*;
 	use crate::{
 		sol::{
-			consts::{MAX_TRANSACTION_LENGTH, TOKEN_PROGRAM_ID},
 			sol_tx_core::{
 				address_derivation::derive_deposit_address,
 				extra_types_for_testing::{Keypair, Signer},
@@ -374,6 +373,7 @@ mod test {
 		TransferAssetParams,
 	};
 	use core::str::FromStr;
+	use sol_prim::consts::{MAX_TRANSACTION_LENGTH, TOKEN_PROGRAM_ID};
 
 	fn get_decomposed_fetch_params(
 		channel_id: Option<ChannelId>,
@@ -424,11 +424,11 @@ mod test {
 	}
 
 	fn system_program_id() -> SolAddress {
-		SolAddress::from_str(crate::sol::consts::SYSTEM_PROGRAM_ID).unwrap()
+		SolAddress::from_str(SYSTEM_PROGRAM_ID).unwrap()
 	}
 
 	fn sys_var_instructions() -> SolAddress {
-		SolAddress::from_str(crate::sol::consts::SYS_VAR_INSTRUCTIONS).unwrap()
+		SolAddress::from_str(SYS_VAR_INSTRUCTIONS).unwrap()
 	}
 
 	fn compute_price() -> SolAmount {

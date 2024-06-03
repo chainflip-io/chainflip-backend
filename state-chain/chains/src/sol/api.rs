@@ -10,7 +10,6 @@ use sp_std::{boxed::Box, vec, vec::Vec};
 
 use crate::{
 	sol::{
-		consts::{SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID},
 		instruction_builder::{AssetWithDerivedAddress, SolanaInstructionBuilder},
 		SolAddress, SolAmount, SolAsset, SolCcmAccounts, SolHash, SolMessage, SolTransaction,
 		SolanaCrypto,
@@ -21,6 +20,7 @@ use crate::{
 };
 
 use cf_primitives::ForeignChain;
+use sol_prim::consts::{SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID};
 
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct ComputePrice;
@@ -345,9 +345,9 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let vault_program = Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgram)?;
 		let vault_program_data_account =
 			Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgramDataAccount)?;
-		let system_program_id = SolAddress::from_str(crate::sol::consts::SYSTEM_PROGRAM_ID)
+		let system_program_id = SolAddress::from_str(SYSTEM_PROGRAM_ID)
 			.expect("Solana System program ID must be valid.");
-		let sys_var_instructions = SolAddress::from_str(crate::sol::consts::SYS_VAR_INSTRUCTIONS)
+		let sys_var_instructions = SolAddress::from_str(SYS_VAR_INSTRUCTIONS)
 			.expect("Solana System Var Instruction must be valid.");
 		let agg_key = Environment::lookup_account(SolanaEnvAccountLookupKey::AggKey)?;
 		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
