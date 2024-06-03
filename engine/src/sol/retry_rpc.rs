@@ -340,7 +340,6 @@ pub mod mocks {
 
 #[cfg(test)]
 mod tests {
-	// use crate::settings::Settings;
 	use cf_chains::Chain;
 	use futures::FutureExt;
 	use utilities::task_scope::task_scope;
@@ -351,8 +350,6 @@ mod tests {
 	async fn test_sol_retry_rpc() {
 		task_scope(|scope| {
 			async move {
-				// let settings = Settings::new_test().unwrap();
-
 				let retry_client = SolRetryRpcClient::new(
 					scope,
 					NodeContainer {
@@ -397,7 +394,6 @@ mod tests {
 	}
 
 	#[tokio::test]
-	#[ignore = "requires connection to live network"]
 	async fn test_sol_get_transaction() {
 		task_scope(|scope| {
 			async move {
