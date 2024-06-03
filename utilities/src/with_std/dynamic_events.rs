@@ -345,16 +345,16 @@ mod test {
 			"topics": "0x"
 		});
 		let raw_error: serde_json::Value = serde_json::json!({
-			"error": "0x00000000",
-			"index": 31
+			"Module": {
+				"error": "0x00000000",
+				"index": 31
+			}
 		});
 		let failed_1 = serde_json::json!({
 			"event": {
 				"System": {
 					"ExtrinsicFailed": {
-						"dispatch_error": {
-							"Module": raw_error
-						},
+						"dispatch_error": raw_error,
 						"dispatch_info": {
 							"class": "Normal",
 							"pays_fee": "Yes",
@@ -407,17 +407,21 @@ mod test {
 			assert_eq!(record.extrinsic_event(index).as_deref(), Some(event).as_deref());
 		}
 
-		let outcome = |json| {
+		#[track_caller]
+		fn outcome(json: JsonValue) -> Result<(), DispatchError> {
 			DynamicEventRecord::new(json)
 				.expect("Valid json event record")
 				.event()
 				.extrinsic_outcome()
 				.expect("outcome should not be None")
-		};
+		}
 
 		assert!(outcome(success).is_ok());
 		assert!(
-			matches!(outcome(failed_1).unwrap_err(), DispatchError::DispatchError(e) if e == raw_error)
+			matches!(outcome(failed_1.clone()).unwrap_err(), DispatchError::DispatchError(e) if e == raw_error),
+			"Expected dispatch error to be DispatchError::DispatchError({:?}), got {:?}",
+			raw_error,
+			outcome(failed_1),
 		);
 		assert!(matches!(
 			outcome(failed_2).unwrap_err(),
