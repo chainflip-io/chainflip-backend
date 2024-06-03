@@ -1,3 +1,10 @@
+//! A dynamic decoder for substrate events.
+//!
+//! This module provides a decoder for substrate events that can be used to decode events from
+//! raw scale-encoded bytes, provided some compatible metadata.
+//!
+//! In addition to the [EventDecoder] itself, some wrapper types are provided to make working with
+//! the decoded events easier. See for example [DynamicEventRecord] and [DynamicEvent].
 use core::ops::Deref;
 use itertools::Itertools;
 use scale_info::{
