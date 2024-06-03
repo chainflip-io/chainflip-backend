@@ -108,19 +108,15 @@ async fn call_rpc_raw(
 	Ok(json["result"].take())
 }
 
-/// Get the Solana Network genesis hash by calling the `getGenesisHash` RPC.
 async fn get_genesis_hash(client: &Client, endpoint: &SecretUrl) -> anyhow::Result<SolHash> {
-	// Call `call_rpc_raw` and get the JSON value
 	let json_value = call_rpc_raw(client, endpoint, "getGenesisHash", None)
 		.await
 		.map_err(anyhow::Error::msg)?;
 
-	// Extract the `result` field from the JSON value
 	let genesis_hash_str = json_value
 		.as_str()
 		.ok_or(anyhow!("Missing or empty `result` field in getGenesisHash response"))?;
 
-	// Parse the genesis hash string into a `SolHash`
 	let genesis_hash =
 		SolHash::from_str(genesis_hash_str).map_err(|_| anyhow!("Invalid genesis hash"))?;
 
@@ -240,7 +236,7 @@ impl SolRpcApi for SolRpcClient {
 		Ok(transaction_data)
 	}
 
-	// We expect a fully-signed transaction as encoded string. We might have to encode it here
+	// We expect a fully-signed transaction encoded as a string. We might have to encode it here
 	// otherwise but the serialization is expected to be done by the caller.
 	async fn send_transaction(
 		&self,
@@ -258,8 +254,6 @@ impl SolRpcApi for SolRpcClient {
 
 #[cfg(test)]
 mod tests {
-	// use utilities::testing::logging::init_test_logger;
-
 	use super::*;
 
 	#[test]
@@ -384,6 +378,4 @@ mod tests {
 		println!("Signature status: {:?}", signature_status);
 		assert_eq!(confirmation_status, &TransactionConfirmationStatus::Finalized);
 	}
-
-	// TODO: Add test for send transaction
 }
