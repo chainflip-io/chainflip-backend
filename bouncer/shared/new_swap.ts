@@ -18,7 +18,7 @@ export interface CcmDepositMetadata {
   cfParameters: string;
 }
 
-
+// TODO: This is a workaround to make a Solana swap without SDK support
 // await broker.requestSwapDepositAddress(
 //   {
 //     srcAsset: stateChainAssetFromAsset(sourceAsset) as SCAsset,
