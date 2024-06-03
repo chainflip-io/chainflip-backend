@@ -227,29 +227,13 @@ where
 		.sol_deposits(
 			process_call.clone(),
 			sol_client.clone(),
-			cf_primitives::chains::assets::sol::Asset::Sol,
 			vault_address,
 			cached_balances.clone(),
-			None,
+			usdc_address,
 		)
 		.await
 		.continuous("SolanaDeposits".to_string(), db.clone())
 		.logging("SolanaDeposits")
-		.spawn(scope);
-
-	sol_safe_vault_source_deposit_addresses
-		.clone()
-		.sol_deposits(
-			process_call.clone(),
-			sol_client.clone(),
-			cf_primitives::chains::assets::sol::Asset::SolUsdc,
-			vault_address,
-			cached_balances,
-			Some(usdc_address),
-		)
-		.await
-		.continuous("SolanaUsdcDeposits".to_string(), db.clone())
-		.logging("SolanaUsdcDeposits")
 		.spawn(scope);
 
 	// Witnessing the state of the nonce accounts periodically. It could also be done

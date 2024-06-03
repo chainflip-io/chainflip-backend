@@ -5,7 +5,7 @@ use cf_chains::{
 	sol::{SolAddress, SolAsset, SolHash},
 	Chain,
 };
-use cf_primitives::EpochIndex;
+use cf_primitives::{chains::assets::sol::Asset, EpochIndex};
 use futures_core::Future;
 use sol_prim::pda::derive_associated_token_account;
 
@@ -40,22 +40,6 @@ const FETCH_ACCOUNT_BYTE_LENGTH: usize = 24;
 const MAX_MULTIPLE_ACCOUNTS_QUERY: usize = 100;
 const FETCH_ACCOUNT_DISCRIMINATOR: [u8; 8] = [188, 68, 197, 38, 48, 192, 81, 100];
 
-// TODO: This code underneath supports not having to filter the asset in the deposit channels
-// call this together for native and tokens. The advantatge is that we can then use the same
-// getMultipleAccounts for any asset. However, there is two issues:
-// 1. If it's not native then we are using `token_pubkey`. If at some point we are to support more
-//    tokens we should have a way to know which mint_pub_key to use for each token. This is a minor
-//    problem
-// 2. The main issue is that with the current pallet we have to submit a vector for all deposit
-//    channels of the same asset. Therefore we need to split them up before submitting the
-//    extrinsic. If the new pallet also works like that then we could also split the logic here (or
-//    make token_pubkey an Option) since we will call them separately per asset anyway. However, if
-//    the new pallet takes in separate extrinsics for each deposit channel then having the same
-//    logic here is better.
-//
-// For now we have the underlying logic that supports both but we filter it first just because the
-// way we are submitting the extrinsic.
-// TODO: Depending on the pallet approach we can reassess this.
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	/// We track Solana (Sol and SPL-token) deposits by periodically querying the
 	/// state of the deposit channel accounts. To ensure that no deposits are missed
@@ -66,14 +50,15 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	/// can reliably track the amount deposited to a deposit channel.
 	/// As a reminder, for token deposit channels the account to witness is the derived
 	/// associated account from the actual deposit channel provided by the State Chain.
+	/// Native asset and tokens are processed together reusing the getMultipleAccounts
+	/// for any combination of deposit channels and assets.
 	pub async fn sol_deposits<ProcessCall, ProcessingFut, SolRetryRpcClient>(
 		self,
 		process_call: ProcessCall,
 		sol_rpc: SolRetryRpcClient,
-		asset: <Inner::Chain as cf_chains::Chain>::ChainAsset,
 		vault_address: SolAddress,
 		cached_balances: Arc<Mutex<HashMap<SolAddress, u128>>>,
-		token_pubkey: Option<SolAddress>,
+		token_pubkey: SolAddress,
 	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
 	where
 		Inner::Chain: cf_chains::Chain<
@@ -108,29 +93,26 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				if !deposit_channels.is_empty() {
 					let deposit_channels_info = deposit_channels
 						.into_iter()
-						// We filter them for now to facilitate the submission of the extrinsic.
-						.filter(|deposit_channel| deposit_channel.deposit_channel.asset == asset)
 						.map(|deposit_channel| {
 							match deposit_channel.deposit_channel.asset {
 								// Native deposit channel
-								cf_primitives::chains::assets::sol::Asset::Sol =>
-									DepositChannelType::NativeDepositChannel(
+								Asset::Sol => DepositChannelType::NativeDepositChannel(
+									deposit_channel.deposit_channel.address,
+								),
+								// Token deposit channel. If we ever want to add another
+								// token we should add a match arm here and adequately
+								// pass a corresponding token_pubkey to this function.
+								Asset::SolUsdc => DepositChannelType::TokenDepositChannel(
+									deposit_channel.deposit_channel.address,
+									derive_associated_token_account(
 										deposit_channel.deposit_channel.address,
-									),
-								_ => {
-									let token_pubkey =
-										token_pubkey.expect("Token pubkey not provided");
-									DepositChannelType::TokenDepositChannel(
-										deposit_channel.deposit_channel.address,
-										derive_associated_token_account(
-											deposit_channel.deposit_channel.address,
-											token_pubkey,
-										)
-										.expect("Failed to derive associated token account")
-										.0,
 										token_pubkey,
 									)
-								},
+									.expect("Failed to derive associated token account")
+									.0,
+									token_pubkey,
+									deposit_channel.deposit_channel.asset,
+								),
 							}
 						})
 						.collect::<Vec<_>>();
@@ -146,29 +128,31 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							.map(|chunk| chunk.to_vec())
 							.collect::<Vec<Vec<_>>>();
 
-						// TODO: Should submit every deposit channel separately with the new pallet?
-						for deposit_channels_info in chunked_deposit_channels_info {
-							let (ingresses, slot) =
-								ingress_amounts(&sol_rpc, deposit_channels_info, vault_address)
-									.await?;
+						for chunk_deposit_channels_info in chunked_deposit_channels_info {
+							let (ingresses, slot) = ingress_amounts(
+								&sol_rpc,
+								chunk_deposit_channels_info,
+								vault_address,
+							)
+							.await?;
 
-							let ingresses: Vec<(SolAddress, u128)> =
+							let ingresses: Vec<(DepositChannelType, u128)> =
 								ingresses.into_iter().filter(|&(_, amount)| amount != 0).collect();
 
 							if !ingresses.is_empty() {
 								let mut cached_balances = cached_balances.lock().await;
 
 								// Filter out the deposit channels that have the same balance
-								let new_ingresses: Vec<(SolAddress, u128)> = ingresses
+								let new_ingresses: Vec<(DepositChannelType, u128)> = ingresses
 									.into_iter()
-									.filter_map(|(deposit_channel_address, amount)| {
+									.filter_map(|(deposit_channel, amount)| {
 										let deposit_channel_cached_balance = cached_balances
-											.get(&deposit_channel_address)
+											.get(deposit_channel.address_to_witness())
 											.unwrap_or(&0);
 
 										println!(
-										"DEBUGDEPOSITS deposit_channel_address {:?}, cached_balance {:?}, amount {:?}, ",
-										deposit_channel_address,
+										"DEBUGDEPOSITS deposit_channel {:?}, cached_balance {:?}, amount {:?}, ",
+										deposit_channel,
 										*deposit_channel_cached_balance,
 										amount
 									);
@@ -177,9 +161,9 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 											// With the current pallet we submit the difference in
 											// amount. This is a temporal workaround TODO: Should
 											// submit the amount as is with the new pallet?
-											// Some((deposit_channel_address, amount))
+											// Some((deposit_channel, amount))
 											Some((
-												deposit_channel_address,
+												deposit_channel,
 												amount - deposit_channel_cached_balance,
 											))
 										} else {
@@ -190,8 +174,8 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 								if !new_ingresses.is_empty() {
 									println!(
-										"DEBUGDEPOSITS Submitting new_ingresses {:?}, asset {:?}",
-										new_ingresses, asset
+										"DEBUGDEPOSITS Submitting new_ingresses {:?}",
+										new_ingresses
 									);
 
 									process_call(
@@ -202,13 +186,13 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 											deposit_witnesses: new_ingresses
 												.clone()
 												.into_iter()
-												.map(|(deposit_channel_address, value)| {
+												.map(|(deposit_channel, amount)| {
 													pallet_cf_ingress_egress::DepositWitness {
-												deposit_address: deposit_channel_address,
-												asset,
-												amount: value
+												deposit_address: *deposit_channel.address(),
+												asset: deposit_channel.asset(),
+												amount: amount
 													.try_into()
-													.expect("Ingress witness transfer value should fit u128"),
+													.expect("Ingress witness transfer value should fit u64"),
 												deposit_details: (),
 											}
 												})
@@ -222,12 +206,15 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 									// Update hashmap
 									new_ingresses.into_iter().for_each(
-										|(deposit_channel_address, value)| {
+										|(deposit_channel, value)| {
 											println!(
 									"DEBUGDEPOSITS Updating cached_balances for {:?} to value {:?}",
-									deposit_channel_address, value
+									deposit_channel, value
 								);
-											cached_balances.insert(deposit_channel_address, value);
+											cached_balances.insert(
+												*deposit_channel.address_to_witness(),
+												value,
+											);
 										},
 									);
 								}
@@ -247,13 +234,10 @@ async fn ingress_amounts<SolRetryRpcClient>(
 	sol_rpc: &SolRetryRpcClient,
 	deposit_channels: Vec<DepositChannelType>,
 	vault_address: SolAddress,
-) -> Result<(Vec<(SolAddress, u128)>, u64), anyhow::Error>
+) -> Result<(Vec<(DepositChannelType, u128)>, u64), anyhow::Error>
 where
 	SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
 {
-	if deposit_channels.is_empty() {
-		return Ok((vec![], 0));
-	}
 	ensure!(deposit_channels.len() <= MAX_MULTIPLE_ACCOUNTS_QUERY / 2);
 
 	let addresses_to_witness = deposit_channels
@@ -319,8 +303,11 @@ where
 			_ => Err(anyhow::anyhow!("Unexpected number of accounts returned")),
 		}?;
 
-		ingresses.push((*deposit_channel.deposit_channel_address(), accumulated_amount));
+		ingresses.push((deposit_channel.clone(), accumulated_amount));
 	}
+
+	ensure!(deposit_channels.len() <= ingresses.len());
+
 	Ok((ingresses, slot))
 }
 
@@ -331,7 +318,6 @@ fn parse_account_amount_from_data(
 	println!("Parsing deposit_channel_info {:?}", deposit_channel_info);
 
 	let owner_pub_key = SolAddress::from_str(deposit_channel_info.owner.as_str()).unwrap();
-	println!("owner_pub_key {:?}", owner_pub_key);
 
 	match deposit_channel {
 		DepositChannelType::NativeDepositChannel(_) => {
@@ -344,7 +330,12 @@ fn parse_account_amount_from_data(
 			);
 			Ok(deposit_channel_info.lamports as u128)
 		},
-		DepositChannelType::TokenDepositChannel(deposit_channel_address, _, token_mint_pubkey) => {
+		DepositChannelType::TokenDepositChannel(
+			deposit_channel_address,
+			_,
+			token_mint_pubkey,
+			_,
+		) => {
 			// Token deposit channel
 			println!("Token deposit channel found");
 
@@ -434,15 +425,15 @@ fn parse_fetch_account_amount(
 enum DepositChannelType {
 	// Deposit channel address
 	NativeDepositChannel(SolAddress),
-	// Deposit channel address, Deposit Channel ATA, mintPubkey
-	TokenDepositChannel(SolAddress, SolAddress, SolAddress),
+	// Deposit channel address, Deposit Channel ATA, mintPubkey, asset
+	TokenDepositChannel(SolAddress, SolAddress, SolAddress, Asset),
 }
 impl DepositChannelType {
-	fn deposit_channel_address(&self) -> &SolAddress {
+	fn address(&self) -> &SolAddress {
 		match self {
 			DepositChannelType::NativeDepositChannel(deposit_channel_address) =>
 				deposit_channel_address,
-			DepositChannelType::TokenDepositChannel(deposit_channel_address, _, _) =>
+			DepositChannelType::TokenDepositChannel(deposit_channel_address, _, _, _) =>
 				deposit_channel_address,
 		}
 	}
@@ -450,8 +441,14 @@ impl DepositChannelType {
 		match self {
 			DepositChannelType::NativeDepositChannel(native_deposit_channel) =>
 				native_deposit_channel,
-			DepositChannelType::TokenDepositChannel(_, deposit_channel_ata, _) =>
+			DepositChannelType::TokenDepositChannel(_, deposit_channel_ata, _, _) =>
 				deposit_channel_ata,
+		}
+	}
+	fn asset(&self) -> Asset {
+		match self {
+			DepositChannelType::NativeDepositChannel(_) => Asset::Sol,
+			DepositChannelType::TokenDepositChannel(_, _, _, asset) => *asset,
 		}
 	}
 }
@@ -504,6 +501,7 @@ mod tests {
 							.unwrap(),
 						SolAddress::from_str("MAZEnmTmMsrjcoD6vymnSoZjzGF7i7Lvr2EXjffCiUo")
 							.unwrap(),
+						Asset::SolUsdc,
 					),
 				];
 
@@ -515,8 +513,16 @@ mod tests {
 				assert_eq!(ingresses.0.len(), 2);
 
 				// Check deposit addresses
-				assert_eq!(ingresses.0[0].0, *account_infos[0].deposit_channel_address());
-				assert_eq!(ingresses.0[1].0, *account_infos[1].deposit_channel_address());
+				assert_eq!(ingresses.0[0].0.address(), account_infos[0].address());
+				assert_eq!(
+					ingresses.0[0].0.address_to_witness(),
+					account_infos[0].address_to_witness()
+				);
+				assert_eq!(ingresses.0[1].0.address(), account_infos[1].address());
+				assert_eq!(
+					ingresses.0[1].0.address_to_witness(),
+					account_infos[1].address_to_witness()
+				);
 
 				// Amounts
 				assert!(ingresses.0[0].1 > 1990030941101);
@@ -538,6 +544,7 @@ mod tests {
 							.unwrap(),
 						SolAddress::from_str("MAZEnmTmMsrjcoD6vymnSoZjzGF7i7Lvr2EXjffCiUo")
 							.unwrap(),
+						Asset::SolUsdc,
 					),
 				];
 				let ingresses =
@@ -567,6 +574,7 @@ mod tests {
 							.unwrap(),
 						SolAddress::from_str("MAZEnmTmMsrjcoD6vymnSoZjzGF7i7Lvr2EXjffCiUo")
 							.unwrap(),
+						Asset::SolUsdc,
 					),
 				];
 
