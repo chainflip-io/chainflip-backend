@@ -397,11 +397,10 @@ mod tests {
 	}
 
 	#[tokio::test]
+	#[ignore = "requires connection to live network"]
 	async fn test_sol_get_transaction() {
 		task_scope(|scope| {
 			async move {
-				// let settings = Settings::new_test().unwrap();
-
 				let retry_client = SolRetryRpcClient::new(
 					scope,
 					NodeContainer {
@@ -441,6 +440,46 @@ mod tests {
 
 				println!("Signature status: {:?}", signature_status);
 				assert_eq!(confirmation_status, &TransactionConfirmationStatus::Finalized);
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap()
+	}
+
+	#[tokio::test]
+	#[ignore = "requires local node"]
+	async fn test_sol_send_transaction() {
+		task_scope(|scope| {
+			async move {
+				let retry_client = SolRetryRpcClient::new(
+					scope,
+					NodeContainer {
+						primary: WsHttpEndpoints {
+							ws_endpoint: "ws://localhost:8899".into(),
+							http_endpoint: "http://localhost:8899".into(),
+						},
+						backup: None,
+					},
+					None,
+					Solana::WITNESS_PERIOD,
+				)
+				.await
+				.unwrap();
+
+				let slot = retry_client.get_slot(CommitmentConfig::finalized()).await;
+				println!("slot: {:?}", slot);
+
+				// Transaction crafted after initializing localnet to get the blockchash/durable nonce.
+				let signed_and_serialized_tx: Vec<u8> = hex::decode("018e2992131cfc9cb7efea3fcd2de3f026b9aa8ebc769bd241f969f1855c6b7fc1056e285e036128fbbf6ec334af4a5dfab0e4c59d7fd8de9a6cedd983ada0160b01000205a33ba00d6cffc2096e0cab5268ed0b692d36cc85bbf686bf1bd756c6221cf39017eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d192603ca4135c27d0ea590412b95b436c0c288805dc88e49584cd3eb85da41e0f60000000000000000000000000000000000000000000000000000000000000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000009fc96b14ae0b5ee9383cdacca044b8641f9509be9e1b71aa0e63825ed3a5ba210203030104000404000000030200020c0200000000ca9a3b00000000").expect("Decoding failed");
+
+				// Checking that encoding and sending the transaction works.
+				let tx_signature = retry_client
+				.broadcast_transaction(signed_and_serialized_tx).await.unwrap();
+
+				println!("tx_signature: {:?}", tx_signature);
 
 				Ok(())
 			}

@@ -204,10 +204,9 @@ where
 
 	// ===== Full witnessing stream =====
 
-	let sol_safe_vault_source = sol_source
-		// .lag_safety(sol_safety_margin) // NO SAFETY MARGIN
-		// .logging("safe block produced")
-		.chunk_by_vault(vaults, scope);
+	// Not using safety margin in Solana
+	let sol_safe_vault_source =
+		sol_source.logging("safe block produced").chunk_by_vault(vaults, scope);
 
 	let sol_safe_vault_source_deposit_addresses = sol_safe_vault_source
 		.clone()
@@ -218,8 +217,9 @@ where
 	// If in the new pallet the cumulative historical amount is tracked we could maybe get away with
 	// using cache but upon restart the engine would submit an extrinsic for each deposit address.
 	let cached_balances = Arc::new(Mutex::new(HashMap::new()));
-	// For witnessed egresses we can get away with a simple cache since egressed transactions have a
-	// shorter lifespan than deposits and there won't be many of them simultaneously.
+	// Similar when it comes to witness egresses. However, we could get away with a simple cache
+	// since egressed transactions have a shorter lifespan than deposits and there won't be many of
+	// simultaneously.
 	let cached_witnessed_egresses = Arc::new(Mutex::new(HashSet::new()));
 
 	sol_safe_vault_source_deposit_addresses
@@ -252,6 +252,10 @@ where
 		.logging("SolanaUsdcDeposits")
 		.spawn(scope);
 
+	// Witnessing the state of the nonce accounts periodically. It could also be done
+	// only when a broadcast is witnessedd, which is the only time a nonce account
+	// might change. Doing it periocally is more reliable to ensure we don't miss a
+	// change in the value but will require an extra rpc call.
 	// TODO: Should we witness nonces through chunk_by_time and not chunk_by_vault?
 	sol_safe_vault_source_deposit_addresses
 		.clone()

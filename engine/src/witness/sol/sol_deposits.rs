@@ -35,6 +35,7 @@ use std::str::FromStr;
 use crate::common::Mutex;
 use std::{collections::HashMap, sync::Arc};
 
+// 16 (u128) + 8 (discriminator)
 const FETCH_ACCOUNT_BYTE_LENGTH: usize = 24;
 const MAX_MULTIPLE_ACCOUNTS_QUERY: usize = 100;
 const FETCH_ACCOUNT_DISCRIMINATOR: [u8; 8] = [188, 68, 197, 38, 48, 192, 81, 100];
@@ -139,67 +140,70 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 						deposit_channels_info
 					);
 
-					let chunked_deposit_channels_info = deposit_channels_info
-						.chunks(MAX_MULTIPLE_ACCOUNTS_QUERY / 2)
-						.map(|chunk| chunk.to_vec())
-						.collect::<Vec<Vec<_>>>();
+					if !deposit_channels_info.is_empty() {
+						let chunked_deposit_channels_info = deposit_channels_info
+							.chunks(MAX_MULTIPLE_ACCOUNTS_QUERY / 2)
+							.map(|chunk| chunk.to_vec())
+							.collect::<Vec<Vec<_>>>();
 
-					// TODO: Should submit every deposit channel separately with the new pallet?
-					for deposit_channels_info in chunked_deposit_channels_info {
-						let (ingresses, slot) =
-							ingress_amounts(&sol_rpc, deposit_channels_info, vault_address).await?;
+						// TODO: Should submit every deposit channel separately with the new pallet?
+						for deposit_channels_info in chunked_deposit_channels_info {
+							let (ingresses, slot) =
+								ingress_amounts(&sol_rpc, deposit_channels_info, vault_address)
+									.await?;
 
-						let ingresses: Vec<(SolAddress, u128)> =
-							ingresses.into_iter().filter(|&(_, amount)| amount != 0).collect();
+							let ingresses: Vec<(SolAddress, u128)> =
+								ingresses.into_iter().filter(|&(_, amount)| amount != 0).collect();
 
-						if !ingresses.is_empty() {
-							let mut cached_balances = cached_balances.lock().await;
+							if !ingresses.is_empty() {
+								let mut cached_balances = cached_balances.lock().await;
 
-							// Filter out the deposit channels that have the same balance
-							let new_ingresses: Vec<(SolAddress, u128)> = ingresses
-								.into_iter()
-								.filter_map(|(deposit_channel_address, amount)| {
-									let deposit_channel_cached_balance =
-										cached_balances.get(&deposit_channel_address).unwrap_or(&0);
+								// Filter out the deposit channels that have the same balance
+								let new_ingresses: Vec<(SolAddress, u128)> = ingresses
+									.into_iter()
+									.filter_map(|(deposit_channel_address, amount)| {
+										let deposit_channel_cached_balance = cached_balances
+											.get(&deposit_channel_address)
+											.unwrap_or(&0);
 
-									println!(
+										println!(
 										"DEBUGDEPOSITS deposit_channel_address {:?}, cached_balance {:?}, amount {:?}, ",
 										deposit_channel_address,
 										*deposit_channel_cached_balance,
 										amount
 									);
 
-									if amount > *deposit_channel_cached_balance {
-										// With the current pallet we submit the difference in
-										// amount. This is a temporal workaround TODO: Should submit
-										// the amount as is with the new pallet?
-										// Some((deposit_channel_address, amount))
-										Some((
-											deposit_channel_address,
-											amount - deposit_channel_cached_balance,
-										))
-									} else {
-										None
-									}
-								})
-								.collect::<Vec<_>>();
+										if amount > *deposit_channel_cached_balance {
+											// With the current pallet we submit the difference in
+											// amount. This is a temporal workaround TODO: Should
+											// submit the amount as is with the new pallet?
+											// Some((deposit_channel_address, amount))
+											Some((
+												deposit_channel_address,
+												amount - deposit_channel_cached_balance,
+											))
+										} else {
+											None
+										}
+									})
+									.collect::<Vec<_>>();
 
-							if !new_ingresses.is_empty() {
-								println!(
-									"DEBUGDEPOSITS Submitting new_ingresses {:?}, asset {:?}",
-									new_ingresses, asset
-								);
+								if !new_ingresses.is_empty() {
+									println!(
+										"DEBUGDEPOSITS Submitting new_ingresses {:?}, asset {:?}",
+										new_ingresses, asset
+									);
 
-								process_call(
-									pallet_cf_ingress_egress::Call::<
-										_,
-										ChainInstanceFor<Inner::Chain>,
-									>::process_deposits {
-										deposit_witnesses: new_ingresses
-											.clone()
-											.into_iter()
-											.map(|(deposit_channel_address, value)| {
-												pallet_cf_ingress_egress::DepositWitness {
+									process_call(
+										pallet_cf_ingress_egress::Call::<
+											_,
+											ChainInstanceFor<Inner::Chain>,
+										>::process_deposits {
+											deposit_witnesses: new_ingresses
+												.clone()
+												.into_iter()
+												.map(|(deposit_channel_address, value)| {
+													pallet_cf_ingress_egress::DepositWitness {
 												deposit_address: deposit_channel_address,
 												asset,
 												amount: value
@@ -207,25 +211,26 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 													.expect("Ingress witness transfer value should fit u128"),
 												deposit_details: (),
 											}
-											})
-											.collect(),
-										block_height: slot,
-									}
-									.into(),
-									epoch.index,
-								)
-								.await;
+												})
+												.collect(),
+											block_height: slot,
+										}
+										.into(),
+										epoch.index,
+									)
+									.await;
 
-								// Update hashmap
-								new_ingresses.into_iter().for_each(
-									|(deposit_channel_address, value)| {
-										println!(
+									// Update hashmap
+									new_ingresses.into_iter().for_each(
+										|(deposit_channel_address, value)| {
+											println!(
 									"DEBUGDEPOSITS Updating cached_balances for {:?} to value {:?}",
 									deposit_channel_address, value
 								);
-										cached_balances.insert(deposit_channel_address, value);
-									},
-								);
+											cached_balances.insert(deposit_channel_address, value);
+										},
+									);
+								}
 							}
 						}
 					}
@@ -405,10 +410,8 @@ fn parse_fetch_account_amount(
 				return Err(anyhow::anyhow!("Data account encoding is not base64"));
 			}
 
-			// Decode the base64 string to bytes
 			let mut bytes = base64::decode(base64_string).expect("Failed to decode base64 string");
 
-			// Check that there are 24 bytes (16 (u128) + 8 (discriminator))
 			ensure!(bytes.len() == FETCH_ACCOUNT_BYTE_LENGTH);
 
 			// Remove the discriminator

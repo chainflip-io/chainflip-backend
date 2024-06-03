@@ -1,6 +1,6 @@
 use crate::witness::common::{RuntimeCallHasChain, RuntimeHasChain};
 use cf_chains::{
-	sol::{SolAddress, SolHash},
+	sol::{consts::NONCE_ACCOUNT_LENGTH, SolAddress, SolHash},
 	Chain,
 };
 use cf_primitives::EpochIndex;
@@ -23,10 +23,6 @@ use serde_json::Value;
 use std::str::FromStr;
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
-	/// Witnessing the state of the nonce accounts periodically. It could also be done
-	/// only when a broadcast is witnessedd, which is the only time a nonce account
-	/// might change. Doing it periocally is more reliable to ensure we don't miss a
-	/// change in the value but will require an extra rpc call.
 	pub async fn witness_nonces<ProcessCall, ProcessingFut, SolRetryRpcClient>(
 		self,
 		process_call: ProcessCall,
@@ -74,7 +70,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								current_durable_nonce
 							);
 							println!("DEBUGNONCES new_durable_nonce: {:?}", new_durable_nonce);
-							// Assumption that the nonce accounts will match
+
 							if current_durable_nonce != new_durable_nonce {
 								Some((nonce_address, current_durable_nonce, new_durable_nonce))
 							} else {
@@ -132,8 +128,8 @@ where
 			if program != "nonce" {
 				return Err(anyhow!("Expected nonce account, got program {}", program));
 			}
-			// check that the space is 80
-			if space != 80 {
+
+			if space != NONCE_ACCOUNT_LENGTH {
 				return Err(anyhow!("Expected nonce account, got space {:?}", space));
 			}
 
@@ -169,8 +165,6 @@ mod tests {
 	async fn test_get_nonces() {
 		task_scope(|scope| {
 			async move {
-				// let settings = Settings::new_test().unwrap();
-
 				let retry_client = SolRetryRpcClient::new(
 					scope,
 					NodeContainer {
@@ -186,7 +180,6 @@ mod tests {
 				.await
 				.unwrap();
 
-				// Nonce account
 				let nonce_accounts = get_durable_nonces(
 					&retry_client,
 					vec![SolAddress::from_str("6TcAavZQgsTCGJkrxrtu8X26H7DuzMH4Y9FfXXgoyUGe")
