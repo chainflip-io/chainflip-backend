@@ -1,10 +1,10 @@
 use super::{AccountMeta, Instruction, Pubkey};
 
-use crate::sol::consts::SYSTEM_PROGRAM_ID;
 use borsh::{BorshDeserialize, BorshSerialize};
 use core::str::FromStr;
 use scale_info::prelude::string::String;
 use serde::{Deserialize, Serialize};
+use sol_prim::consts::SYSTEM_PROGRAM_ID;
 use sp_io::hashing::sha2_256;
 use sp_std::{vec, vec::Vec};
 
