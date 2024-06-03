@@ -4,16 +4,6 @@ All notable changes included in each Chainflip release will be documented in thi
 
 ## [1.4.2] - 2024-06-03
 
-### CI
-
-- Add Namespace caching for Rust dependencies 💰🦀 ([#4688](https://github.com/chainflip-io/chainflip-backend/issues/4688))
-- Check chainspecs by running a node instance in CI 🕵️‍♂️ ([#4709](https://github.com/chainflip-io/chainflip-backend/issues/4709))
-- Add commit signing for automated PRs ✍️ ([#4717](https://github.com/chainflip-io/chainflip-backend/issues/4717))
-
-### Documentation
-
-- Fix a typo and minor grammar issue in PRACTICES.md ([#4695](https://github.com/chainflip-io/chainflip-backend/issues/4695))
-
 ### Features
 
 - Add arbitrum support (([PRO-1154](https://linear.app/chainflip/issue/PRO-1154))) ([#4486](https://github.com/chainflip-io/chainflip-backend/issues/4486))
@@ -111,27 +101,9 @@ All notable changes included in each Chainflip release will be documented in thi
 - Auto-disconnect client ([#4820](https://github.com/chainflip-io/chainflip-backend/issues/4820))
 - Refactor setup ([#4825](https://github.com/chainflip-io/chainflip-backend/issues/4825))
 
-### Logging
+### Documentation
 
-- Lp-api panic in submission watcher  ([#4664](https://github.com/chainflip-io/chainflip-backend/issues/4664))
-
-### Pick
-
-- Fix: wait for new balance on transfer asset ([#4836](https://github.com/chainflip-io/chainflip-backend/issues/4836)) ([#4846](https://github.com/chainflip-io/chainflip-backend/issues/4846))
-- Consistent boost fee ([#4860](https://github.com/chainflip-io/chainflip-backend/issues/4860))
-- Chore: move lp balance integrity check to unit test ([#4852](https://github.com/chainflip-io/chainflip-backend/issues/4852)) ([#4884](https://github.com/chainflip-io/chainflip-backend/issues/4884))
-- Bouncer for boost ([#4892](https://github.com/chainflip-io/chainflip-backend/issues/4892))
-- Bouncer: Add retrial mechanism for EVM broadcasts ([#4875](https://github.com/chainflip-io/chainflip-backend/issues/4875)) ([#4893](https://github.com/chainflip-io/chainflip-backend/issues/4893))
-- Fix: vault activation and initialization #4902 ([#4906](https://github.com/chainflip-io/chainflip-backend/issues/4906))
-- Fix: use median for base_fee and gas_fee_multiplier for arbitrum #4914 ([#4915](https://github.com/chainflip-io/chainflip-backend/issues/4915))
-- Refactor(bouncer): ensure crypto ready ([#4858](https://github.com/chainflip-io/chainflip-backend/issues/4858)) ([#4918](https://github.com/chainflip-io/chainflip-backend/issues/4918))
-- Feat (bouncer): add swapContext to contract swaps ([#4917](https://github.com/chainflip-io/chainflip-backend/issues/4917)) ([#4920](https://github.com/chainflip-io/chainflip-backend/issues/4920))
-- Fix: more robust governance bouncer test ([#4912](https://github.com/chainflip-io/chainflip-backend/issues/4912)) ([#4922](https://github.com/chainflip-io/chainflip-backend/issues/4922))
-- Chore: increase bouncer liquidity ([#4924](https://github.com/chainflip-io/chainflip-backend/issues/4924)) ([#4926](https://github.com/chainflip-io/chainflip-backend/issues/4926))
-
-### Ref
-
-- Manage bitcoin and polkadot images in backend repo 📸 ([#4677](https://github.com/chainflip-io/chainflip-backend/issues/4677))
+- Fix a typo and minor grammar issue in PRACTICES.md ([#4695](https://github.com/chainflip-io/chainflip-backend/issues/4695))
 
 ## [1.3.2] - 2024-03-27
 
