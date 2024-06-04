@@ -29,6 +29,10 @@ use cf_amm::{
 	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
 };
+pub use cf_chains::instances::{
+	ArbitrumInstance, BitcoinInstance, EthereumInstance, EvmInstance, PolkadotInstance,
+	SolanaInstance,
+};
 use cf_chains::{
 	arb::api::ArbitrumApi,
 	assets::any::{AssetMap, ForeignChainAndAsset},
@@ -42,7 +46,7 @@ use cf_chains::{
 };
 use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment};
 use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi};
-use codec::Encode;
+use codec::{alloc::string::ToString, Encode};
 use core::ops::Range;
 use frame_support::instances::*;
 pub use frame_system::Call as SystemCall;
@@ -58,13 +62,8 @@ use pallet_cf_reputation::ExclusionList;
 use pallet_cf_swapping::{CcmSwapAmounts, SwapLegInfo};
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
-use scale_info::prelude::{format, string::String};
+use scale_info::prelude::string::String;
 use sp_std::collections::btree_map::BTreeMap;
-
-pub use cf_chains::instances::{
-	ArbitrumInstance, BitcoinInstance, EthereumInstance, EvmInstance, PolkadotInstance,
-	SolanaInstance,
-};
 
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
