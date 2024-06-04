@@ -118,7 +118,6 @@ interface AbortableOptions<T> extends BaseOptions<T> {
 type EventName = `${string}:${string}`;
 
 type Observer<T> = {
-  abort: undefined;
   event: Promise<Event<T>>;
 };
 
@@ -142,7 +141,7 @@ export function observeEvent<T = any>(
     finalized = false,
     abortable = false,
   }: Options<T> | AbortableOptions<T> = {},
-): Observer<T> | AbortableObserver<T> {
+) {
   const [expectedSection, expectedMethod] = eventName.split(':');
 
   const controller = abortable ? new AbortController() : undefined;
@@ -160,17 +159,16 @@ export function observeEvent<T = any>(
         event.name.method.includes(expectedMethod) &&
         test(event)
       ) {
-        return event;
+        return event as Event<T>;
       }
     }
 
     return null;
   };
 
-  return {
-    abort: controller && (() => controller.abort()),
-    event: findEvent(),
-  } as Observer<T> | AbortableObserver<T>;
+  if (!controller) return { event: findEvent() } as Observer<T>;
+
+  return { stop: () => controller.abort(), event: findEvent() } as AbortableObserver<T>;
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 

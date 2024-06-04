@@ -1,4 +1,4 @@
-name: Nightly CI
+name: Nightly CI 😴
 on:
   schedule:
     - cron: "0 0 * * *"

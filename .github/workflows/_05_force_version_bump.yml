@@ -1,6 +1,10 @@
 
 on:
     workflow_call:
+      inputs:
+        network-to-check-against:
+          required: true
+          type: string
 
 jobs:
   force-version-bump:
@@ -23,7 +27,7 @@ jobs:
         uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
         with:
           workflow: release-perseverance.yml
-          name: chainflip-backend-bin-ubuntu-22.04
+          name: chainflip-backend-bin
           github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
           path: latest-release-bins
 
@@ -48,4 +52,4 @@ jobs:
         run: |
             set -x
             echo ${{ env.RELEASE_VERSION }}
-            ./commands/read_workspace_tomls.ts ${{ github.workspace }} "${{ env.RELEASE_VERSION }}"
+            ./commands/check_bin_and_runtime_versions.ts ${{ github.workspace }} "${{ env.RELEASE_VERSION }}" ${{ inputs.network-to-check-against }}

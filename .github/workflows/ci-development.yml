@@ -16,6 +16,8 @@ jobs:
   force-version-bump:
       uses: ./.github/workflows/_05_force_version_bump.yml
       secrets: inherit
+      with:
+        network-to-check-against: "sisyphos"
   test:
     uses: ./.github/workflows/_10_test.yml
     secrets: inherit
@@ -56,6 +58,7 @@ jobs:
     secrets: inherit
     with:
       full_bouncer: false
+      ngrok: true
 
   upgrade-check:
     uses: ./.github/workflows/upgrade-test.yml
