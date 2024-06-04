@@ -1,11 +1,11 @@
 use anyhow::Result;
 
 use super::{
-	curve25519::edwards::Point, CanonicalEncoding, ChainSigning, ChainTag, CryptoScheme, CryptoTag,
+	curve25519::edwards::Point, ChainSigning, ChainTag, CryptoScheme, CryptoTag,
 	ECPoint, SignatureToThresholdSignature,
 };
 use cf_chains::{sol::SolSignature, Chain, ChainCrypto, Solana};
-use ed25519_consensus::VerificationKeyBytes;
+use ed25519_dalek::{Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -37,11 +37,6 @@ impl SignatureToThresholdSignature<<Solana as Chain>::ChainCrypto> for Vec<Signa
 	}
 }
 
-impl CanonicalEncoding for VerificationKeyBytes {
-	fn encode_key(&self) -> Vec<u8> {
-		self.to_bytes().to_vec()
-	}
-}
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
 pub struct SigningPayload(Vec<u8>);
@@ -88,7 +83,7 @@ impl CryptoScheme for Ed25519CryptoScheme {
 
 	type Signature = Signature;
 
-	type PublicKey = VerificationKeyBytes;
+	type PublicKey = VerifyingKey;
 
 	type SigningPayload = SigningPayload;
 
@@ -148,17 +143,14 @@ impl CryptoScheme for Ed25519CryptoScheme {
 		public_key: &Self::PublicKey,
 		payload: &Self::SigningPayload,
 	) -> anyhow::Result<()> {
-		use ed25519_consensus::VerificationKey;
+		let signature = ed25519_dalek::Signature::from_bytes(&signature.to_bytes());
 
-		let signature = ed25519_consensus::Signature::from(signature.to_bytes());
-
-		Ok(VerificationKey::try_from(*public_key)
-			.and_then(|vk| vk.verify(&signature, &payload.0))?)
+		Ok(public_key.verify(&payload.0, &signature)?)
 	}
 
 	fn pubkey_from_point(pubkey_point: &Self::Point) -> Self::PublicKey {
 		let bytes: [u8; 32] = pubkey_point.as_bytes().into();
-		VerificationKeyBytes::from(bytes)
+		VerifyingKey::from_bytes(&bytes).expect("Invalid public key")
 	}
 
 	#[cfg(feature = "test")]

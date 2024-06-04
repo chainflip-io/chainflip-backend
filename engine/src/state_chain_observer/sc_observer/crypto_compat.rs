@@ -47,6 +47,6 @@ impl CryptoCompat<Ed25519Signing, SolanaCrypto> for SolanaInstance {
 	fn pubkey_to_aggkey(
 		pubkey: <<Ed25519Signing as ChainSigning>::CryptoScheme as CryptoScheme>::PublicKey,
 	) -> <SolanaCrypto as ChainCrypto>::AggKey {
-		SolAddress(pubkey.into())
+		SolAddress(pubkey.to_bytes())
 	}
 }

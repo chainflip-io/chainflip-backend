@@ -1,5 +1,6 @@
 use cf_primitives::EpochIndex;
 use serde::{Deserialize, Serialize};
+use ed25519_dalek::VerifyingKey;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct KeyId {
@@ -39,6 +40,12 @@ impl CanonicalEncoding for secp256k1::XOnlyPublicKey {
 impl CanonicalEncoding for cf_chains::sol::SolAddress {
 	fn encode_key(&self) -> Vec<u8> {
 		self.0.to_vec()
+	}
+}
+
+impl CanonicalEncoding for VerifyingKey {
+	fn encode_key(&self) -> Vec<u8> {
+		self.to_bytes().to_vec()
 	}
 }
 
