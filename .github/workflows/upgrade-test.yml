@@ -142,7 +142,7 @@ jobs:
 
       - name: Download latest release binaries 📥
         if: inputs.run-job
-        uses: dawidd6/action-download-artifact@v2
+        uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
         with:
           workflow: release-${{ inputs.upgrade-from-release }}.yml
           name: chainflip-backend-bin
@@ -172,7 +172,7 @@ jobs:
 
       - name: Download upgrade-to binaries for workflow call 📥
         if: inputs.run-job && (github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch')
-        uses: dawidd6/action-download-artifact@v2
+        uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
         with:
           workflow: ${{ inputs.upgrade-to-workflow-name }}
           name: chainflip-backend-bin-try-runtime
@@ -188,7 +188,7 @@ jobs:
 
       - name: Download upgrade-to runtime for workflow call 📥
         if: inputs.run-job && (github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch')
-        uses: dawidd6/action-download-artifact@v2
+        uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
         with:
           workflow: ${{ inputs.upgrade-to-workflow-name }}
           name: chainflip-node-runtime-try-runtime
