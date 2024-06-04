@@ -12,7 +12,7 @@ use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 use std::{marker::PhantomData, sync::Arc, time::Duration};
 
-use custom_rpc::{CustomApiServer, CustomRpc, MonitoringApiServer};
+use custom_rpc::{monitoring::MonitoringApiServer, CustomApiServer, CustomRpc};
 use state_chain_runtime::{self, opaque::Block, RuntimeApi};
 
 pub(crate) type FullClient = sc_service::TFullClient<

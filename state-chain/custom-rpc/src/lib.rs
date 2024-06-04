@@ -29,7 +29,7 @@ use pallet_cf_swapping::SwapLegInfo;
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_api::ApiError;
-use sp_core::{bounded_vec::BoundedVec, ConstU32, U256};
+use sp_core::U256;
 use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT, UniqueSaturatedInto},
 	Permill,
@@ -37,12 +37,14 @@ use sp_runtime::{
 use state_chain_runtime::{
 	chainflip::{BlockUpdate, Offence},
 	constants::common::TX_FEE_MULTIPLIER,
+	monitoring_apis::{
+		AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight, FeeImbalance, FlipSupply,
+		LastRuntimeUpgradeInfo, MonitoringData, OpenDepositChannels, PendingBroadcasts,
+		PendingTssCeremonies, RedemptionsInfo,
+	},
 	runtime_apis::{
-		AuthoritiesInfo, BoostPoolDepth, BoostPoolDetails, BrokerInfo, BtcUtxos, CustomRuntimeApi,
-		DispatchErrorWithMessage, EpochState, EventFilter, ExternalChainsBlockHeight,
-		FailingWitnessValidators, FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo,
-		LiquidityProviderInfo, MonitoringData, MonitoringRuntimeApi, OpenDepositChannels,
-		PendingBroadcasts, PendingTssCeremonies, RedemptionsInfo, ValidatorInfo,
+		BoostPoolDepth, BoostPoolDetails, BrokerInfo, CustomRuntimeApi, DispatchErrorWithMessage,
+		EventFilter, FailingWitnessValidators, LiquidityProviderInfo, ValidatorInfo,
 	},
 	NetworkFee,
 };
@@ -51,7 +53,7 @@ use std::{
 	marker::PhantomData,
 	sync::Arc,
 };
-
+pub mod monitoring;
 mod type_decoder;
 
 #[derive(Serialize, Deserialize)]
@@ -1851,212 +1853,6 @@ where
 	}
 }
 
-#[rpc(server, client, namespace = "cf_monitoring")]
-pub trait MonitoringApi {
-	#[method(name = "authorities")]
-	fn cf_authorities(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<AuthoritiesInfo>;
-	#[method(name = "external_chains_block_height")]
-	fn cf_external_chains_block_height(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<ExternalChainsBlockHeight>;
-	#[method(name = "btc_utxos")]
-	fn cf_btc_utxos(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<BtcUtxos>;
-	#[method(name = "dot_aggkey")]
-	fn cf_dot_aggkey(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<PolkadotAccountId>;
-	#[method(name = "suspended_validators")]
-	fn cf_suspended_validators(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<(Offence, u32)>>;
-	#[method(name = "epoch_state")]
-	fn cf_epoch_state(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<EpochState>;
-	#[method(name = "redemptions")]
-	fn cf_redemptions(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RedemptionsInfo>;
-	#[method(name = "pending_broadcasts")]
-	fn cf_pending_broadcasts(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<PendingBroadcasts>;
-	#[method(name = "pending_tss_ceremonies")]
-	fn cf_pending_tss_ceremonies(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<PendingTssCeremonies>;
-	#[method(name = "pending_swaps")]
-	fn cf_pending_swaps(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u32>;
-	#[method(name = "open_deposit_channels")]
-	fn cf_open_deposit_channels(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<OpenDepositChannels>;
-	#[method(name = "fee_imbalance")]
-	fn cf_fee_imbalance(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<FeeImbalance>;
-	#[method(name = "build_version")]
-	fn cf_build_version(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<LastRuntimeUpgradeInfo>;
-	#[method(name = "data")]
-	fn cf_monitoring_data(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcMonitoringData>;
-	#[method(name = "accounts_info")]
-	fn cf_accounts_info(
-		&self,
-		accounts: BoundedVec<state_chain_runtime::AccountId, ConstU32<10>>,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<RpcAccountInfoV2>>;
-}
-
-impl<C, B> MonitoringApiServer for CustomRpc<C, B>
-where
-	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
-	C: sp_api::ProvideRuntimeApi<B>
-		+ Send
-		+ Sync
-		+ 'static
-		+ HeaderBackend<B>
-		+ BlockchainEvents<B>,
-	C::Api: MonitoringRuntimeApi<B>,
-{
-	fn cf_authorities(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<AuthoritiesInfo> {
-		self.client
-			.runtime_api()
-			.cf_authorities(self.unwrap_or_best(at))
-			.map_err(to_rpc_error)
-	}
-	fn cf_external_chains_block_height(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<ExternalChainsBlockHeight> {
-		self.client
-			.runtime_api()
-			.cf_external_chains_block_height(self.unwrap_or_best(at))
-			.map_err(to_rpc_error)
-	}
-	fn cf_btc_utxos(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<BtcUtxos> {
-		self.client
-			.runtime_api()
-			.cf_btc_utxos(self.unwrap_or_best(at))
-			.map_err(to_rpc_error)
-	}
-	fn cf_dot_aggkey(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<PolkadotAccountId> {
-		self.client
-			.runtime_api()
-			.cf_dot_aggkey(self.unwrap_or_best(at))
-			.map_err(to_rpc_error)
-	}
-	fn cf_suspended_validators(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<(Offence, u32)>> {
-		self.client
-			.runtime_api()
-			.cf_suspended_validators(self.unwrap_or_best(at))
-			.map_err(to_rpc_error)
-	}
-	fn cf_epoch_state(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<EpochState> {
-		self.client
-			.runtime_api()
-			.cf_epoch_state(self.unwrap_or_best(at))
-			.map_err(to_rpc_error)
-	}
-	fn cf_redemptions(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RedemptionsInfo> {
-		self.client
-			.runtime_api()
-			.cf_redemptions(self.unwrap_or_best(at))
-			.map_err(to_rpc_error)
-	}
-	fn cf_pending_broadcasts(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<PendingBroadcasts> {
-		self.client
-			.runtime_api()
-			.cf_pending_broadcasts(self.unwrap_or_best(at))
-			.map_err(to_rpc_error)
-	}
-	fn cf_pending_tss_ceremonies(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<PendingTssCeremonies> {
-		self.client
-			.runtime_api()
-			.cf_pending_tss_ceremonies(self.unwrap_or_best(at))
-			.map_err(to_rpc_error)
-	}
-	fn cf_pending_swaps(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u32> {
-		self.client
-			.runtime_api()
-			.cf_pending_swaps(self.unwrap_or_best(at))
-			.map_err(to_rpc_error)
-	}
-	fn cf_open_deposit_channels(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<OpenDepositChannels> {
-		self.client
-			.runtime_api()
-			.cf_open_deposit_channels(self.unwrap_or_best(at))
-			.map_err(to_rpc_error)
-	}
-	fn cf_fee_imbalance(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<FeeImbalance> {
-		self.client
-			.runtime_api()
-			.cf_fee_imbalance(self.unwrap_or_best(at))
-			.map_err(to_rpc_error)
-	}
-	fn cf_build_version(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<LastRuntimeUpgradeInfo> {
-		self.client
-			.runtime_api()
-			.cf_build_version(self.unwrap_or_best(at))
-			.map_err(to_rpc_error)
-	}
-	fn cf_monitoring_data(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcMonitoringData> {
-		self.client
-			.runtime_api()
-			.cf_monitoring_data(self.unwrap_or_best(at))
-			.map(Into::into)
-			.map_err(to_rpc_error)
-	}
-	fn cf_accounts_info(
-		&self,
-		accounts: BoundedVec<state_chain_runtime::AccountId, ConstU32<10>>,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<RpcAccountInfoV2>> {
-		let accounts_info = self
-			.client
-			.runtime_api()
-			.cf_accounts_info(self.unwrap_or_best(at), accounts)
-			.map_err(to_rpc_error)?;
-		Ok(accounts_info
-			.into_iter()
-			.map(|account_info| RpcAccountInfoV2 {
-				balance: account_info.balance.into(),
-				bond: account_info.bond.into(),
-				last_heartbeat: account_info.last_heartbeat,
-				reputation_points: account_info.reputation_points,
-				keyholder_epochs: account_info.keyholder_epochs,
-				is_current_authority: account_info.is_current_authority,
-				is_current_backup: account_info.is_current_backup,
-				is_qualified: account_info.is_qualified,
-				is_online: account_info.is_online,
-				is_bidding: account_info.is_bidding,
-				bound_redeem_address: account_info.bound_redeem_address,
-				apy_bp: account_info.apy_bp,
-				restricted_balances: account_info.restricted_balances,
-			})
-			.collect())
-	}
-}
 #[cfg(test)]
 mod test {
 	use std::collections::BTreeSet;

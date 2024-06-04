@@ -4,6 +4,7 @@
 pub mod chainflip;
 pub mod constants;
 pub mod migrations;
+pub mod monitoring_apis;
 pub mod runtime_apis;
 pub mod safe_mode;
 #[cfg(feature = "std")]
@@ -12,13 +13,16 @@ use cf_runtime_upgrade_utilities::VersionedMigration;
 mod weights;
 use crate::{
 	chainflip::{calculate_account_apy, Offence},
+	monitoring_apis::{
+		AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight, FeeImbalance, FlipSupply,
+		LastRuntimeUpgradeInfo, MonitoringData, OpenDepositChannels, PendingBroadcasts,
+		PendingTssCeremonies, RedemptionsInfo,
+	},
 	runtime_apis::{
-		runtime_decl_for_custom_runtime_api::CustomRuntimeApiV1, AuctionState, AuthoritiesInfo,
-		BoostPoolDepth, BoostPoolDetails, BrokerInfo, BtcUtxos, DispatchErrorWithMessage,
-		EpochState, EventFilter, ExternalChainsBlockHeight, FailingWitnessValidators, FeeImbalance,
-		FlipSupply, LastRuntimeUpgradeInfo, LiquidityProviderInfo, MonitoringData,
-		OpenDepositChannels, PendingBroadcasts, PendingTssCeremonies, RedemptionsInfo,
-		RuntimeApiPenalty, SimulateSwapAdditionalOrder, SimulatedSwapInformation, ValidatorInfo,
+		runtime_decl_for_custom_runtime_api::CustomRuntimeApiV1, AuctionState, BoostPoolDepth,
+		BoostPoolDetails, BrokerInfo, DispatchErrorWithMessage, EventFilter,
+		FailingWitnessValidators, LiquidityProviderInfo, RuntimeApiPenalty,
+		SimulateSwapAdditionalOrder, SimulatedSwapInformation, ValidatorInfo,
 	},
 };
 use cf_amm::{
@@ -1872,7 +1876,8 @@ impl_runtime_apis! {
 
 		}
 	}
-	impl runtime_apis::MonitoringRuntimeApi<Block> for Runtime {
+
+	impl monitoring_apis::MonitoringRuntimeApi<Block> for Runtime {
 
 		fn cf_authorities() -> AuthoritiesInfo {
 			let mut authorities = pallet_cf_validator::CurrentAuthorities::<Runtime>::get();
@@ -1938,7 +1943,7 @@ impl_runtime_apis! {
 				current_epoch_started_at: Validator::current_epoch_started_at(),
 				current_epoch_index: Validator::current_epoch(),
 				min_active_bid,
-				rotation_phase: format!("{}", Validator::current_rotation_phase())
+				rotation_phase: Validator::current_rotation_phase().to_str().to_string(),
 			}
 		}
 		fn cf_redemptions() -> RedemptionsInfo {

@@ -9,7 +9,6 @@ mod tests;
 mod helpers;
 
 pub mod weights;
-use scale_info::prelude::{fmt, fmt::Display};
 pub use weights::WeightInfo;
 pub mod migrations;
 
@@ -85,15 +84,16 @@ pub enum RotationPhase<T: Config> {
 	NewKeysActivated(RuntimeRotationState<T>),
 	SessionRotating(Vec<ValidatorIdOf<T>>, <T as Chainflip>::Amount),
 }
-impl<T: pallet::Config> Display for RotationPhase<T> {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+
+impl<T: pallet::Config> RotationPhase<T> {
+	pub fn to_str(&self) -> &'static str {
 		match self {
-			RotationPhase::Idle => write!(f, "Idle"),
-			RotationPhase::KeygensInProgress(_) => write!(f, "KeygensInProgress"),
-			RotationPhase::KeyHandoversInProgress(_) => write!(f, "KeyHandoversInProgress"),
-			RotationPhase::ActivatingKeys(_) => write!(f, "ActivatingKeys"),
-			RotationPhase::NewKeysActivated(_) => write!(f, "NewKeysActivated"),
-			RotationPhase::SessionRotating(_, _) => write!(f, "SessionRotating"),
+			RotationPhase::Idle => "Idle",
+			RotationPhase::KeygensInProgress(_) => "KeygensInProgress",
+			RotationPhase::KeyHandoversInProgress(_) => "KeyHandoversInProgress",
+			RotationPhase::ActivatingKeys(_) => "ActivatingKeys",
+			RotationPhase::NewKeysActivated(_) => "NewKeysActivated",
+			RotationPhase::SessionRotating(_, _) => "SessionRotating",
 		}
 	}
 }
