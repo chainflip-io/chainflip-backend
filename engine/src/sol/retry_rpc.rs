@@ -221,7 +221,7 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 #[async_trait::async_trait]
 impl ChainClient for SolRetryRpcClient {
 	type Index = <Solana as cf_chains::Chain>::ChainBlockNumber;
-	type Hash = ();
+	type Hash = SolHash;
 	type Data = ();
 
 	async fn header_at_index(
@@ -240,7 +240,7 @@ impl ChainClient for SolRetryRpcClient {
 					Box::pin(async move {
 						Ok(Header {
 							index: witness_period::block_witness_root(witness_period, index),
-							hash: (),
+							hash: SolHash::default(),
 							parent_hash: None,
 							data: (),
 						})
@@ -296,6 +296,7 @@ pub mod mocks {
 mod tests {
 	use cf_chains::Chain;
 	use futures::FutureExt;
+	use std::str::FromStr;
 	use utilities::task_scope::task_scope;
 
 	use super::*;

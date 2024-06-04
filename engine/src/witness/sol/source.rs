@@ -8,7 +8,7 @@ use crate::{
 		ExternalChainSource,
 	},
 };
-use cf_chains::{Chain, Solana};
+use cf_chains::{sol::SolHash, Chain, Solana};
 use std::time::Duration;
 
 #[derive(Clone)]
@@ -27,7 +27,7 @@ const POLL_INTERVAL: Duration = Duration::from_secs(5);
 #[async_trait::async_trait]
 impl<C> ChainSource for SolSource<C>
 where
-	C: SolRetryRpcApi + ChainClient<Index = u64, Hash = (), Data = ()> + Clone,
+	C: SolRetryRpcApi + ChainClient<Index = u64, Hash = SolHash, Data = ()> + Clone,
 {
 	type Index = <C as ChainClient>::Index;
 	type Hash = <C as ChainClient>::Hash;
@@ -54,7 +54,7 @@ where
 							return Some((
 								Header {
 									index: Solana::block_witness_root(slot),
-									hash: (),
+									hash: SolHash::default(),
 									parent_hash: None,
 									data: (),
 								},
@@ -71,7 +71,7 @@ where
 
 impl<C> ExternalChainSource for SolSource<C>
 where
-	C: SolRetryRpcApi + ChainClient<Index = u64, Hash = (), Data = ()> + Clone,
+	C: SolRetryRpcApi + ChainClient<Index = u64, Hash = SolHash, Data = ()> + Clone,
 {
 	type Chain = cf_chains::sol::Solana;
 }
