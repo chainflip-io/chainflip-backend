@@ -6,7 +6,7 @@ use cf_chains::{
 	ChainCrypto,
 };
 use multisig::{
-	bitcoin::BtcSigning, ed25519::Ed25519Signing, eth::EthSigning, polkadot::PolkadotSigning,
+	bitcoin::BtcSigning, ed25519::SolSigning, eth::EthSigning, polkadot::PolkadotSigning,
 	ChainSigning, CryptoScheme,
 };
 use state_chain_runtime::{BitcoinInstance, EvmInstance, PolkadotInstance, SolanaInstance};
@@ -43,9 +43,9 @@ impl CryptoCompat<PolkadotSigning, PolkadotCrypto> for PolkadotInstance {
 	}
 }
 
-impl CryptoCompat<Ed25519Signing, SolanaCrypto> for SolanaInstance {
+impl CryptoCompat<SolSigning, SolanaCrypto> for SolanaInstance {
 	fn pubkey_to_aggkey(
-		pubkey: <<Ed25519Signing as ChainSigning>::CryptoScheme as CryptoScheme>::PublicKey,
+		pubkey: <<SolSigning as ChainSigning>::CryptoScheme as CryptoScheme>::PublicKey,
 	) -> <SolanaCrypto as ChainCrypto>::AggKey {
 		SolAddress(pubkey.to_bytes())
 	}

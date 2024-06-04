@@ -9,7 +9,7 @@ use ed25519_dalek::{Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Ed25519Signing {}
+pub struct SolSigning {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Signature {
@@ -63,22 +63,22 @@ impl SigningPayload {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Ed25519CryptoScheme;
+pub struct SolCryptoScheme;
 
-impl ChainSigning for Ed25519Signing {
-	type CryptoScheme = Ed25519CryptoScheme;
+impl ChainSigning for SolSigning {
+	type CryptoScheme = SolCryptoScheme;
 	// This scheme isn't implemented on the state chain.
 	type ChainCrypto = <Solana as Chain>::ChainCrypto;
 
-	const NAME: &'static str = "Ed25519";
+	const NAME: &'static str = "Solana";
 
 	// TODO: Technically the same "scheme" can be used by
 	// multiple chains, so we might want to decouple
 	// "scheme" from "chain".
-	const CHAIN_TAG: ChainTag = ChainTag::Ed25519;
+	const CHAIN_TAG: ChainTag = ChainTag::Solana;
 }
 
-impl CryptoScheme for Ed25519CryptoScheme {
+impl CryptoScheme for SolCryptoScheme {
 	type Point = super::curve25519::edwards::Point;
 
 	type Signature = Signature;
@@ -87,9 +87,9 @@ impl CryptoScheme for Ed25519CryptoScheme {
 
 	type SigningPayload = SigningPayload;
 
-	const CRYPTO_TAG: CryptoTag = CryptoTag::Ed25519;
+	const CRYPTO_TAG: CryptoTag = CryptoTag::Solana;
 
-	const NAME: &'static str = "Ed25519 Crypto";
+	const NAME: &'static str = "Solana Crypto";
 
 	fn build_signature(
 		z: <Self::Point as super::ECPoint>::Scalar,

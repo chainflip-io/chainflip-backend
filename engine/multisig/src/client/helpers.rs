@@ -74,7 +74,7 @@ macro_rules! test_all_crypto_schemes {
 	($test_function:ident ($($lt:tt),*)) => {
 		({
 			use $crate::{
-				bitcoin::BtcCryptoScheme, ed25519::Ed25519CryptoScheme, eth::EvmCryptoScheme,
+				bitcoin::BtcCryptoScheme, ed25519::SolCryptoScheme, eth::EvmCryptoScheme,
 				polkadot::PolkadotCryptoScheme,
 			};
 
@@ -88,7 +88,7 @@ macro_rules! test_all_crypto_schemes {
 			test::<EvmCryptoScheme>();
 			test::<PolkadotCryptoScheme>();
 			test::<BtcCryptoScheme>();
-			test::<Ed25519CryptoScheme>();
+			test::<SolCryptoScheme>();
 		})
 	};
 }
@@ -101,7 +101,7 @@ macro_rules! test_all_crypto_chains {
 	($test_function:ident ($($lt:tt),*)) => {
 		({
 			use $crate::{
-				bitcoin::BtcSigning, ed25519::Ed25519Signing, eth::EthSigning,
+				bitcoin::BtcSigning, ed25519::SolSigning, eth::EthSigning,
 				polkadot::PolkadotSigning,
 			};
 
@@ -115,7 +115,7 @@ macro_rules! test_all_crypto_chains {
 			test::<EthSigning>();
 			test::<PolkadotSigning>();
 			test::<BtcSigning>();
-			test::<Ed25519Signing>();
+			test::<SolSigning>();
 		})
 	};
 }
@@ -153,14 +153,14 @@ macro_rules! test_all_crypto_chains_async {
 	($test_function:ident ($($lt:tt),*)) => {
 		({
 			use crate::{
-				bitcoin::BtcSigning, ed25519::Ed25519Signing, eth::EthSigning,
+				bitcoin::BtcSigning, ed25519::SolSigning, eth::EthSigning,
 				polkadot::PolkadotSigning,
 			};
 			// Run the test on all CryptoSchemes
 			$test_function::<EthSigning>($($lt)*).await;
 			$test_function::<PolkadotSigning>($($lt)*).await;
 			$test_function::<BtcSigning>($($lt)*).await;
-			$test_function::<Ed25519Signing>($($lt)*).await;
+			$test_function::<SolSigning>($($lt)*).await;
 		})
 	};
 }

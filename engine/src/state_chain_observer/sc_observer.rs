@@ -40,7 +40,7 @@ use crate::{
 	},
 };
 use multisig::{
-	bitcoin::BtcCryptoScheme, client::MultisigClientApi, ed25519::Ed25519CryptoScheme,
+	bitcoin::BtcCryptoScheme, client::MultisigClientApi, ed25519::SolCryptoScheme,
 	eth::EvmCryptoScheme, polkadot::PolkadotCryptoScheme, ChainSigning, CryptoScheme, KeyId,
 	SignatureToThresholdSignature,
 };
@@ -249,7 +249,7 @@ where
 	EthMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,
 	PolkadotMultisigClient: MultisigClientApi<PolkadotCryptoScheme> + Send + Sync + 'static,
 	BitcoinMultisigClient: MultisigClientApi<BtcCryptoScheme> + Send + Sync + 'static,
-	SolMultisigClient: MultisigClientApi<Ed25519CryptoScheme> + Send + Sync + 'static,
+	SolMultisigClient: MultisigClientApi<SolCryptoScheme> + Send + Sync + 'static,
 	StateChainClient:
 		StorageApi + ChainApi + UnsignedExtrinsicApi + SignedExtrinsicApi + 'static + Send + Sync,
 {

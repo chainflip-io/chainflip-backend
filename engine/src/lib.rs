@@ -25,7 +25,7 @@ pub mod sol;
 
 use crate::state_chain_observer::client::CreateStateChainClientError;
 use ::multisig::{
-	bitcoin::BtcSigning, ed25519::Ed25519Signing, eth::EthSigning, polkadot::PolkadotSigning,
+	bitcoin::BtcSigning, ed25519::SolSigning, eth::EthSigning, polkadot::PolkadotSigning,
 };
 use cf_primitives::CfeCompatibility;
 use state_chain_observer::client::{
@@ -220,7 +220,7 @@ async fn run_main(
 			scope.spawn(btc_multisig_client_backend_future);
 
 			let (sol_multisig_client, sol_multisig_client_backend_future) =
-				multisig::start_client::<Ed25519Signing>(
+				multisig::start_client::<SolSigning>(
 					state_chain_client.account_id(),
 					KeyStore::new(db.clone()),
 					sol_incoming_receiver,
