@@ -1,6 +1,10 @@
 
 on:
     workflow_call:
+      inputs:
+        network-to-check-against:
+          required: true
+          type: string
 
 jobs:
   force-version-bump:
@@ -48,4 +52,4 @@ jobs:
         run: |
             set -x
             echo ${{ env.RELEASE_VERSION }}
-            ./commands/read_workspace_tomls.ts ${{ github.workspace }} "${{ env.RELEASE_VERSION }}"
+            ./commands/check_bin_and_runtime_versions.ts ${{ github.workspace }} "${{ env.RELEASE_VERSION }}" ${{ inputs.network-to-check-against }}

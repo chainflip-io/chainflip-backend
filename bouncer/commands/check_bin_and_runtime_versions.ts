@@ -8,6 +8,7 @@ import { specVersion } from '../shared/utils/spec_version';
 
 const projectRoot = process.argv[2];
 const engineReleaseVersion = process.argv[3];
+const network = process.argv[4];
 
 export function tomlVersion(cargoFilePath: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -70,9 +71,24 @@ if (
   );
 }
 
+let endpoint;
+switch (network) {
+  case 'mainnet':
+  case 'berghain':
+    endpoint = 'mainnet-archive.chainflip.io:443';
+    break;
+  case 'perseverance':
+    endpoint = 'https://perseverance.chainflip.xyz:443';
+    break;
+  case 'sisyphos':
+    endpoint = 'https://archive.sisyphos.chainflip.io:443';
+    break;
+  default:
+    throw Error('Invalid network');
+}
+
 const releaseSpecVersion = Number(
-  (await jsonRpc('state_getRuntimeVersion', [], 'https://perseverance.chainflip.xyz:443'))
-    .specVersion,
+  (await jsonRpc('state_getRuntimeVersion', [], endpoint)).specVersion,
 );
 console.log(`Release spec version: ${releaseSpecVersion}`);
 
