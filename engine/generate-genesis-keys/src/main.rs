@@ -3,8 +3,8 @@ use cf_primitives::GENESIS_EPOCH;
 use chainflip_engine::db::PersistentKeyDB;
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use multisig::{
-	bitcoin::BtcSigning, client::keygen::generate_key_data, ed25519::SolSigning,
-	eth::EthSigning, polkadot::PolkadotSigning, CanonicalEncoding, ChainSigning, KeyId, Rng,
+	bitcoin::BtcSigning, client::keygen::generate_key_data, ed25519::SolSigning, eth::EthSigning,
+	polkadot::PolkadotSigning, CanonicalEncoding, ChainSigning, KeyId, Rng,
 };
 use rand::SeedableRng;
 use state_chain_runtime::AccountId;
