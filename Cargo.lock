@@ -1487,6 +1487,7 @@ dependencies = [
  "pallet-cf-ingress-egress",
  "pallet-cf-lp",
  "pallet-cf-pools",
+ "pallet-cf-refunding",
  "pallet-cf-reputation",
  "pallet-cf-swapping",
  "pallet-cf-threshold-signature",
@@ -1714,6 +1715,7 @@ dependencies = [
  "pallet-cf-ingress-egress",
  "pallet-cf-lp",
  "pallet-cf-pools",
+ "pallet-cf-refunding",
  "pallet-cf-swapping",
  "pallet-cf-threshold-signature",
  "pallet-cf-validator",
@@ -7681,6 +7683,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-refunding"
+version = "0.1.0"
+dependencies = [
+ "cf-chains",
+ "cf-primitives",
+ "cf-runtime-upgrade-utilities",
+ "cf-test-utilities",
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-cf-account-roles",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-core 21.0.0",
+ "sp-io 23.0.0",
+ "sp-runtime 24.0.0",
+ "sp-std 8.0.0",
+]
+
+[[package]]
 name = "pallet-cf-reputation"
 version = "0.1.0"
 dependencies = [
@@ -12606,6 +12630,7 @@ dependencies = [
  "pallet-cf-ingress-egress",
  "pallet-cf-lp",
  "pallet-cf-pools",
+ "pallet-cf-refunding",
  "pallet-cf-reputation",
  "pallet-cf-swapping",
  "pallet-cf-threshold-signature",
