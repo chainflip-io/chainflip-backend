@@ -1,10 +1,10 @@
-use super::{sol_test_values::*, AccountMeta, Instruction, Pubkey};
+use super::{AccountMeta, Instruction, Pubkey};
 
-use crate::sol::consts::SYSTEM_PROGRAM_ID;
 use borsh::{BorshDeserialize, BorshSerialize};
 use core::str::FromStr;
 use scale_info::prelude::string::String;
 use serde::{Deserialize, Serialize};
+use sol_prim::consts::SYSTEM_PROGRAM_ID;
 use sp_io::hashing::sha2_256;
 use sp_std::{vec, vec::Vec};
 
@@ -189,8 +189,8 @@ impl SystemProgramInstruction {
 			//
 			// NOTE: According to the solana sdk, this system variable is deprecated and should not
 			// be used. However, within the sdk itself they are still using this variable in the
-			// advance_nonce_account function so we use it here aswell. This should be revisited to
-			// make sure it is ok to use it, or if there is another way to advance the nonce
+			// advance_nonce_account function so we use it here as well. This should be revisited
+			// to make sure it is ok to use it, or if there is another way to advance the nonce
 			// account.
 			AccountMeta::new_readonly(
 				Pubkey::from_str("SysvarRecentB1ockHashes11111111111111111111").unwrap(),
@@ -246,7 +246,6 @@ pub enum VaultProgram {
 	FetchTokens {
 		seed: Vec<u8>,
 		bump: u8,
-		amount: u64,
 		decimals: u8,
 	},
 	TransferTokens {
@@ -274,14 +273,8 @@ pub enum UpgradeManagerProgram {
 }
 
 pub trait ProgramInstruction: BorshSerialize {
-	fn get_program_id(&self) -> &str;
-
-	fn get_instruction(&self, accounts: Vec<AccountMeta>) -> Instruction {
-		let mut instruction = Instruction::new_with_borsh(
-			Pubkey::from_str(self.get_program_id()).unwrap(),
-			&self,
-			accounts,
-		);
+	fn get_instruction(&self, program_id: Pubkey, accounts: Vec<AccountMeta>) -> Instruction {
+		let mut instruction = Instruction::new_with_borsh(program_id, &self, accounts);
 		instruction.data.remove(0);
 		let mut data = self.function_discriminator();
 		data.append(&mut instruction.data);
@@ -297,15 +290,11 @@ pub trait ProgramInstruction: BorshSerialize {
 }
 
 impl ProgramInstruction for VaultProgram {
-	fn get_program_id(&self) -> &str {
-		VAULT_PROGRAM
-	}
-
 	fn call_name(&self) -> &str {
 		match self {
 			Self::FetchNative { seed: _, bump: _ } => "fetch_native",
 			Self::RotateAggKey { skip_transfer_funds: _ } => "rotate_agg_key",
-			Self::FetchTokens { seed: _, bump: _, amount: _, decimals: _ } => "fetch_tokens",
+			Self::FetchTokens { seed: _, bump: _, decimals: _ } => "fetch_tokens",
 			Self::TransferTokens { amount: _, decimals: _ } => "transfer_tokens",
 			Self::ExecuteCcmNativeCall {
 				source_chain: _,
@@ -324,10 +313,6 @@ impl ProgramInstruction for VaultProgram {
 }
 
 impl ProgramInstruction for UpgradeManagerProgram {
-	fn get_program_id(&self) -> &str {
-		UPGRADE_MANAGER_PROGRAM
-	}
-
 	fn call_name(&self) -> &str {
 		match self {
 			Self::UpgradeVaultProgram { seed: _, bump: _ } => "upgrade_vault_program",

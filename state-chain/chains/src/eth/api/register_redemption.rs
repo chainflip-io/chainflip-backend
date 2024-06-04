@@ -52,7 +52,6 @@ impl Tokenizable for RedemptionExecutor {
 }
 
 impl RegisterRedemption {
-	#[allow(clippy::too_many_arguments)]
 	pub fn new<Amount: Into<Uint> + Clone>(
 		node_id: &[u8; 32],
 		amount: Amount,

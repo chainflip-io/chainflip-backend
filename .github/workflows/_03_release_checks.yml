@@ -83,4 +83,3 @@ jobs:
             ❗️❗️❗️❗️ Hey **${{ github.actor }}**, seems like our CI just took a detour through the land of broken builds. ❗️❗️❗️❗️
             There was an issue with release checks on `${{ github.ref_name }}`
             🔗 Link to job: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>
-            #️⃣ Tagging: <@704658689302462605>

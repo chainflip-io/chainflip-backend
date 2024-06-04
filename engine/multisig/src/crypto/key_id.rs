@@ -36,6 +36,12 @@ impl CanonicalEncoding for secp256k1::XOnlyPublicKey {
 	}
 }
 
+impl CanonicalEncoding for cf_chains::sol::SolAddress {
+	fn encode_key(&self) -> Vec<u8> {
+		self.0.to_vec()
+	}
+}
+
 impl<const S: usize> CanonicalEncoding for [u8; S] {
 	fn encode_key(&self) -> Vec<u8> {
 		self.to_vec()

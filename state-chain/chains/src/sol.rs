@@ -6,7 +6,7 @@ use sp_std::vec::Vec;
 
 use sol_prim::{AccountBump, SlotNumber};
 
-use crate::{address, assets, FeeEstimationApi, FeeRefundCalculator, TypeInfo};
+use crate::{address, assets, DepositChannel, FeeEstimationApi, FeeRefundCalculator, TypeInfo};
 use codec::{Decode, Encode, MaxEncodedLen};
 use serde::{Deserialize, Serialize};
 
@@ -14,19 +14,20 @@ use super::{Chain, ChainCrypto};
 
 pub mod api;
 pub mod benchmarking;
-pub mod consts;
 pub mod instruction_builder;
 pub mod sol_tx_core;
 
 pub use crate::assets::sol::Asset as SolAsset;
+use ed25519_dalek::{PublicKey, Signature, Verifier};
 pub use sol_prim::{
 	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
 	Address as SolAddress, Amount as SolAmount, ComputeLimit as SolComputeLimit, Digest as SolHash,
 	Signature as SolSignature,
 };
 pub use sol_tx_core::{
-	AccountMeta as SolAccountMeta, Hash as RawSolHash, Instruction as SolInstruction,
-	Message as SolMessage, Pubkey as SolPubkey, Transaction as SolTransaction,
+	AccountMeta as SolAccountMeta, CcmAccounts as SolCcmAccounts, CcmAddress as SolCcmAddress,
+	Hash as RawSolHash, Instruction as SolInstruction, Message as SolMessage, Pubkey as SolPubkey,
+	Transaction as SolTransaction,
 };
 
 impl Chain for Solana {
@@ -41,15 +42,14 @@ impl Chain for Solana {
 	type TrackedData = SolTrackedData;
 	type ChainAsset = assets::sol::Asset;
 	type ChainAccount = SolAddress;
-	type EpochStartData = (); //todo
-	type DepositFetchId = ChannelId;
+	type DepositFetchId = SolanaDepositFetchId;
 	type DepositChannelState = AccountBump;
 	type DepositDetails = (); //todo
 	type Transaction = SolTransaction;
 	type TransactionMetadata = (); //todo
 	type ReplayProtectionParams = (); //todo
 	type ReplayProtection = (); //todo
-	type TransactionRef = SolHash;
+	type TransactionRef = SolSignature;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -60,7 +60,7 @@ impl ChainCrypto for SolanaCrypto {
 	type KeyHandoverIsRequired = ConstBool<false>;
 
 	type AggKey = SolAddress;
-	type Payload = SolMessage; //todo
+	type Payload = SolMessage;
 	type ThresholdSignature = SolSignature;
 	type TransactionInId = SolHash;
 	type TransactionOutId = Self::ThresholdSignature;
@@ -68,23 +68,25 @@ impl ChainCrypto for SolanaCrypto {
 	type GovKey = SolAddress;
 
 	fn verify_threshold_signature(
-		_agg_key: &Self::AggKey,
-		_payload: &Self::Payload,
-		_signature: &Self::ThresholdSignature,
+		agg_key: &Self::AggKey,
+		payload: &Self::Payload,
+		signature: &Self::ThresholdSignature,
 	) -> bool {
-		todo!()
+		let public_key = match PublicKey::from_bytes(&agg_key.0) {
+			Ok(pk) => pk,
+			Err(_) => return false,
+		};
+
+		let signature = match Signature::from_bytes(&signature.0) {
+			Ok(sig) => sig,
+			Err(_) => return false,
+		};
+
+		public_key.verify(payload.serialize().as_slice(), &signature).is_ok()
 	}
 
-	fn agg_key_to_payload(_agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
-		todo!()
-	}
-
-	fn handover_key_matches(_current_key: &Self::AggKey, _new_key: &Self::AggKey) -> bool {
-		todo!()
-	}
-
-	fn key_handover_is_required() -> bool {
-		todo!()
+	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
+		SolMessage::new(&[], Some(&SolPubkey::from(agg_key)))
 	}
 
 	fn maybe_broadcast_barriers_on_rotation(
@@ -136,8 +138,7 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 		let compute_units_per_transfer = BASE_COMPUTE_UNITS_PER_TX +
 			match asset {
 				assets::sol::Asset::Sol => COMPUTE_UNITS_PER_TRANSFER_NATIVE,
-				// TODO: To add when USDC is supported
-				// assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_TRANSFER_TOKEN,
+				assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_TRANSFER_TOKEN,
 			};
 
 		LAMPORTS_PER_SIGNATURE + (self.priority_fee).saturating_mul(compute_units_per_transfer)
@@ -151,8 +152,7 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 		let compute_units_per_fetch = BASE_COMPUTE_UNITS_PER_TX +
 			match asset {
 				assets::sol::Asset::Sol => COMPUTE_UNITS_PER_FETCH_NATIVE,
-				// TODO: To add when USDC is supported
-				// assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_FETCH_TOKEN,
+				assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_FETCH_TOKEN,
 			};
 
 		LAMPORTS_PER_SIGNATURE + (self.priority_fee).saturating_mul(compute_units_per_fetch)
@@ -198,3 +198,20 @@ impl address::ToHumanreadableAddress for SolAddress {
 }
 
 impl crate::ChannelLifecycleHooks for AccountBump {}
+
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
+pub struct SolanaDepositFetchId {
+	pub channel_id: ChannelId,
+	pub address: SolAddress,
+	pub bump: AccountBump,
+}
+
+impl From<&DepositChannel<Solana>> for SolanaDepositFetchId {
+	fn from(from: &DepositChannel<Solana>) -> Self {
+		SolanaDepositFetchId {
+			channel_id: from.channel_id,
+			address: from.address,
+			bump: from.state,
+		}
+	}
+}

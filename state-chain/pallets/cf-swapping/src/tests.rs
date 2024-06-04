@@ -118,7 +118,7 @@ fn insert_swaps(swaps: &[Swap]) {
 				Default::default(),
 				swap.from,
 				swap.to,
-				swap.amount,
+				swap.input_amount,
 				destination_address.clone(),
 				bounded_vec![Beneficiary { account: broker_id as u64, bps: 2 }],
 				1,
@@ -175,7 +175,7 @@ fn process_all_swaps() {
 			.cloned()
 			.map(|swap| MockEgressParameter::<AnyChain>::Swap {
 				asset: swap.to,
-				amount: swap.amount,
+				amount: swap.input_amount,
 				destination_address: if let SwapType::Swap(destination_address) = swap.swap_type {
 					destination_address
 				} else {
@@ -319,6 +319,10 @@ fn expect_swap_id_to_be_emitted() {
 		.then_execute_with(|_| {
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken {
+					swap_id: 1,
+					fee_amount: 0,
+				}),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 					swap_id: 1,
@@ -1135,7 +1139,8 @@ fn process_all_into_stable_swaps_first() {
 		assert_swaps_queue_is_empty();
 
 		// Network fee should only be taken once.
-		let total_amount_after_network_fee = MockSwappingApi::take_network_fee(amount * 4);
+		let total_amount_after_network_fee =
+			MockSwappingApi::take_network_fee(amount * 4).remaining_amount;
 		let output_amount = total_amount_after_network_fee / 4;
 		// Verify swap "from" -> STABLE_ASSET, then "to" -> Output Asset
 		assert_eq!(
@@ -1150,6 +1155,10 @@ fn process_all_into_stable_swaps_first() {
 
 		assert_event_sequence!(
 			Test,
+			RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken { swap_id: 1, .. }),
+			RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken { swap_id: 2, .. }),
+			RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken { swap_id: 3, .. }),
+			RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken { swap_id: 4, .. }),
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_id: 1,
@@ -1270,7 +1279,6 @@ fn ccm_swaps_emits_events() {
 				destination_address: EncodedAddress::Eth(..),
 				origin: ORIGIN,
 				swap_type: SwapType::CcmPrincipal(1),
-				broker_commission: _,
 				..
 			}),
 			RuntimeEvent::Swapping(Event::SwapScheduled {
@@ -1356,6 +1364,7 @@ fn ccm_swaps_emits_events() {
 	});
 }
 
+#[allow(deprecated)]
 #[test]
 fn can_handle_ccm_with_zero_swap_outputs() {
 	new_test_ext()
@@ -1381,6 +1390,8 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 			// Swap outputs are zero
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken { swap_id: 1, .. }),
+				RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken { swap_id: 2, .. }),
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					swap_id: 1,
 					source_asset: Asset::Usdc,
@@ -1447,6 +1458,8 @@ fn can_handle_swaps_with_zero_outputs() {
 			// Swap outputs are zero
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken { swap_id: 1, .. }),
+				RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken { swap_id: 2, .. }),
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					swap_id: 1,
 					destination_asset: Asset::Eth,
@@ -1559,21 +1572,19 @@ fn swap_excess_are_confiscated_ccm_via_deposit() {
 					swap_id: 1u64,
 					from,
 					to,
-					amount: max_swap,
+					input_amount: max_swap,
 					swap_type: SwapType::CcmPrincipal(1),
 					stable_amount: Some(max_swap),
 					final_output: None,
-					fee_taken: false,
 				},
 				Swap {
 					swap_id: 2u64,
 					from,
 					to: Asset::Eth,
-					amount: max_swap,
+					input_amount: max_swap,
 					swap_type: SwapType::CcmGas(1),
 					stable_amount: Some(max_swap),
 					final_output: None,
-					fee_taken: false,
 				}
 			]
 		);
@@ -1629,21 +1640,19 @@ fn swap_excess_are_confiscated_ccm_via_extrinsic() {
 					swap_id: 1u64,
 					from,
 					to,
-					amount: max_swap,
+					input_amount: max_swap,
 					swap_type: SwapType::CcmPrincipal(1),
 					stable_amount: Some(max_swap),
 					final_output: None,
-					fee_taken: false,
 				},
 				Swap {
 					swap_id: 2u64,
 					from,
 					to: Asset::Eth,
-					amount: max_swap,
+					input_amount: max_swap,
 					swap_type: SwapType::CcmGas(1),
 					stable_amount: Some(max_swap),
 					final_output: None,
-					fee_taken: false,
 				}
 			]
 		);
@@ -1685,11 +1694,10 @@ fn swap_excess_are_confiscated_for_swap_via_extrinsic() {
 				swap_id: 1u64,
 				from,
 				to,
-				amount: max_swap,
+				input_amount: max_swap,
 				swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
 				stable_amount: Some(max_swap),
 				final_output: None,
-				fee_taken: false,
 			}]
 		);
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 900);
@@ -1732,11 +1740,10 @@ fn swap_excess_are_confiscated_for_swap_via_deposit() {
 				swap_id: 1u64,
 				from,
 				to,
-				amount: max_swap,
+				input_amount: max_swap,
 				swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
 				stable_amount: Some(max_swap),
 				final_output: None,
-				fee_taken: false,
 			}]
 		);
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 900);
@@ -1789,28 +1796,69 @@ fn max_swap_amount_can_be_removed() {
 					swap_id: 1u64,
 					from,
 					to,
-					amount: max_swap,
+					input_amount: max_swap,
 					swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
 					stable_amount: Some(max_swap),
 					final_output: None,
-					fee_taken: false,
 				},
 				// New swap takes the full amount.
 				Swap {
 					swap_id: 2u64,
 					from,
 					to,
-					amount,
+					input_amount: amount,
 					swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
 					stable_amount: Some(amount),
 					final_output: None,
-					fee_taken: false,
 				}
 			]
 		);
 		// No no funds are confiscated.
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0);
 	});
+}
+
+#[test]
+fn swap_input_excludes_network_fee() {
+	const AMOUNT: AssetAmount = 1_000;
+	const FROM_ASSET: Asset = Asset::Usdc;
+	const TO_ASSET: Asset = Asset::Flip;
+	let destination_address: ForeignChainAddress = ForeignChainAddress::Eth(Default::default());
+	const NETWORK_FEE: Percent = Percent::from_percent(1);
+
+	NetworkFee::set(NETWORK_FEE);
+
+	new_test_ext()
+		.execute_with(|| {
+			Swapping::schedule_swap_from_channel(
+				ForeignChainAddress::Eth(Default::default()),
+				0,
+				FROM_ASSET,
+				TO_ASSET,
+				AMOUNT,
+				destination_address.clone(),
+				bounded_vec![],
+				0,
+			);
+		})
+		.then_process_blocks_until(|_| System::block_number() == 3)
+		.then_execute_with(|_| {
+			let expected_swap_input = AMOUNT - NETWORK_FEE * AMOUNT;
+
+			System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
+				swap_id: 1,
+				source_asset: FROM_ASSET,
+				destination_asset: TO_ASSET,
+				deposit_amount: expected_swap_input,
+				egress_amount: expected_swap_input,
+				swap_input: expected_swap_input,
+				swap_output: expected_swap_input,
+				intermediate_amount: None,
+				swap_type: SwapType::Swap(destination_address),
+			}));
+		});
+
+	NetworkFee::set(Default::default());
 }
 
 #[test]
@@ -1840,11 +1888,10 @@ fn can_swap_below_max_amount() {
 				swap_id: 1u64,
 				from,
 				to,
-				amount,
+				input_amount: amount,
 				swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
 				stable_amount: Some(amount),
 				final_output: None,
-				fee_taken: false,
 			},]
 		);
 	});
@@ -1882,21 +1929,19 @@ fn can_swap_ccm_below_max_amount() {
 					swap_id: 1u64,
 					from,
 					to,
-					amount: principal_amount,
+					input_amount: principal_amount,
 					swap_type: SwapType::CcmPrincipal(1),
 					stable_amount: Some(principal_amount),
 					final_output: None,
-					fee_taken: false,
 				},
 				Swap {
 					swap_id: 2u64,
 					from,
 					to: Asset::Eth,
-					amount: gas_budget,
+					input_amount: gas_budget,
 					swap_type: SwapType::CcmGas(1),
 					stable_amount: Some(gas_budget),
 					final_output: None,
-					fee_taken: false,
 				}
 			]
 		);
@@ -2063,6 +2108,8 @@ fn swaps_are_executed_according_to_execute_at_field() {
 			assert_eq!(System::block_number(), 3);
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken { swap_id: 1, .. }),
+				RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken { swap_id: 2, .. }),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_id: 1, .. }),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2, .. }),
@@ -2077,6 +2124,8 @@ fn swaps_are_executed_according_to_execute_at_field() {
 			assert_eq!(System::block_number(), 4);
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken { swap_id: 3, .. }),
+				RuntimeEvent::Swapping(Event::<Test>::NetworkFeeTaken { swap_id: 4, .. }),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 3, .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_id: 3, .. }),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 4, .. }),
@@ -2136,10 +2185,16 @@ fn swaps_get_retried_on_next_block_after_failure() {
 			assert_eq!(System::block_number(), 4);
 			assert_event_sequence!(
 				Test,
+				// Re-trying failed swaps from previous block:
+				RuntimeEvent::Swapping(Event::NetworkFeeTaken { swap_id: 1, .. }),
+				RuntimeEvent::Swapping(Event::NetworkFeeTaken { swap_id: 2, .. }),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_id: 1, .. }),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2, .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_id: 2, .. }),
+				// Executing swaps scheduled for the current block:
+				RuntimeEvent::Swapping(Event::NetworkFeeTaken { swap_id: 3, .. }),
+				RuntimeEvent::Swapping(Event::NetworkFeeTaken { swap_id: 4, .. }),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 3, .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_id: 3, .. }),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 4, .. }),

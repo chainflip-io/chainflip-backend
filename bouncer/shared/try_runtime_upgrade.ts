@@ -1,7 +1,7 @@
 // This requires the try-runtime cli to be installed globally
 // https://github.com/paritytech/try-runtime-cli
 
-import { ApiPromise } from '@polkadot/api';
+import type { ApiPromise } from '@polkadot/api';
 import path from 'path';
 import { compileBinaries } from './utils/compile_binaries';
 import { createTmpDirIfNotExists, execWithRustLog } from './utils/exec_with_log';

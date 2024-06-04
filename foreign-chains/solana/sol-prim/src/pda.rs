@@ -1,9 +1,12 @@
+use codec::{Decode, Encode};
+use core::str::FromStr;
 use digest::Digest;
+use scale_info::TypeInfo;
 use sha2::Sha256;
 
 use crate::{address::Address, consts, AccountBump};
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "std-error", derive(thiserror::Error))]
 pub enum PdaError {
@@ -85,4 +88,76 @@ fn bytes_are_curve_point<T: AsRef<[u8; consts::SOLANA_ADDRESS_LEN]>>(bytes: T) -
 	curve25519_dalek::edwards::CompressedEdwardsY::from_slice(bytes.as_ref())
 		.decompress()
 		.is_some()
+}
+
+pub fn derive_fetch_account(
+	vault_program: Address,
+	deposit_channel: Address,
+) -> Result<Address, PdaError> {
+	let (fetch_account, _) =
+		Pda::from_address(vault_program)?.chain_seed(deposit_channel)?.finish()?;
+
+	Ok(fetch_account)
+}
+
+#[allow(dead_code)]
+/// Derive a Associated Token Account (ATA) of a main account.
+pub fn derive_associated_token_account(
+	address: Address,
+	mint_pubkey: Address,
+) -> Result<(Address, AccountBump), PdaError> {
+	let associated_token_program_id = Address::from_str(consts::ASSOCIATED_TOKEN_PROGRAM_ID)
+		.expect("Associated token program ID must be valid");
+	let token_program_id =
+		Address::from_str(consts::TOKEN_PROGRAM_ID).expect("Token program ID must be valid");
+
+	Pda::from_address(associated_token_program_id)?
+		.chain_seed(address)?
+		.chain_seed(token_program_id)?
+		.chain_seed(mint_pubkey)?
+		.finish()
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_sol_derive_fetch_account() {
+		let fetch_account = derive_fetch_account(
+			Address::from_str("8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf").unwrap(),
+			Address::from_str("HAMxiXdEJxiBHabZAUm8PSLvWQM2GHi5PArVZvUCeDab").unwrap(),
+		)
+		.unwrap();
+		assert_eq!(
+			fetch_account,
+			Address::from_str("HGgUaHpsmZpB3pcYt8PE89imca6BQBRqYtbVQQqsso3o").unwrap()
+		);
+	}
+
+	#[test]
+	fn derive_associated_token_account_on_curve() {
+		let wallet_address =
+			Address::from_str("HfasueN6RNPjSM6rKGH5dga6kS2oUF8siGH3m4MXPURp").unwrap();
+		let mint_pubkey =
+			Address::from_str("24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p").unwrap();
+
+		assert_eq!(
+			derive_associated_token_account(wallet_address, mint_pubkey).unwrap(),
+			(Address::from_str("BeRexE9vZSdQMNg65PAnhy3rRPUxF6oWsxyNegYxySZD").unwrap(), 253u8)
+		);
+	}
+
+	#[test]
+	fn derive_associated_token_account_off_curve() {
+		let pda_address =
+			Address::from_str("9j17hjg8wR2uFxJAJDAFahwsgTCNx35sc5qXSxDmuuF6").unwrap();
+		let mint_pubkey =
+			Address::from_str("24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p").unwrap();
+
+		assert_eq!(
+			derive_associated_token_account(pda_address, mint_pubkey).unwrap(),
+			(Address::from_str("DUjCLckPi4g7QAwBEwuFL1whpgY6L9fxwXnqbWvS2pcW").unwrap(), 251u8)
+		);
+	}
 }

@@ -1,6 +1,9 @@
 pub use super::common::*;
 use super::StateChainEnvironment;
-use cf_chains::{dot::RuntimeVersion, sol::SolAddress};
+use cf_chains::{
+	dot::RuntimeVersion,
+	sol::{SolAddress, SolHash},
+};
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use sc_service::ChainType;
 use sp_core::H256;
@@ -46,6 +49,14 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 9431, transaction_version: 24 },
 	sol_vault_address: SolAddress([0; 32]), // TODO: fill in the valid Solana address,
+	// encodes to "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d"
+	sol_genesis_hash: Some(SolHash(hex_literal::hex![
+		"45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0"
+	])),
+	// encodes to "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+	sol_usdc_address: SolAddress(hex_literal::hex![
+		"c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61"
+	]),
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 24 * HOURS;

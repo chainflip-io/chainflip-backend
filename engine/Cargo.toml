@@ -3,7 +3,7 @@ authors = ["Chainflip team <https://github.com/chainflip-io>"]
 build = 'build.rs'
 edition = '2021'
 name = "chainflip-engine"
-version = "1.4.0"
+version = "1.5.0"
 
 [lib]
 crate-type = ["lib"]
@@ -92,6 +92,12 @@ pallet-cf-witnesser = { path = "../state-chain/pallets/cf-witnesser" }
 pallet-cf-cfe-interface = { path = "../state-chain/pallets/cf-cfe-interface" }
 state-chain-runtime = { path = "../state-chain/runtime" }
 utilities = { path = "../utilities" }
+sol-prim = { path = "../foreign-chains/solana/sol-prim", features = [
+  "pda",
+  "str",
+  "serde",
+  "scale",
+] }
 
 # substrate deps
 cf-amm = { path = "../state-chain/amm" }
@@ -115,6 +121,7 @@ frame-metadata = { version = "16.0.0", default-features = false, features = [
 ] }
 serde_bytes = "0.11.14"
 bs58 = "0.5.1"
+base64 = "0.22.1"
 
 [dependencies.rocksdb]
 version = "0.21.0"

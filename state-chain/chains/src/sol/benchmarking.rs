@@ -27,7 +27,7 @@ impl BenchmarkValue for SolTrackedData {
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for SolMessage {
 	fn benchmark_value() -> Self {
-		Self::new(&[], None)
+		Self::new_with_blockhash(&[], None, &SolHash::default().into())
 	}
 }
 

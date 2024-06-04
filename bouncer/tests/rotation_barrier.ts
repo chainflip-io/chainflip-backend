@@ -1,29 +1,25 @@
 #!/usr/bin/env -S pnpm tsx
-import { getChainflipApi, observeBadEvents, observeEvent } from '../shared/utils';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { testSwapViaContract } from '../shared/swapping';
+import { observeEvent, observeBadEvents } from '../shared/utils/substrate';
 
 async function rotateAndSwap() {
-  await using chainflip = await getChainflipApi();
-
   await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
 
   // Wait for the activation key to be created and the activation key to be sent for signing
   console.log(`Vault rotation initiated`);
-  await observeEvent('evmThresholdSigner:KeygenSuccess', chainflip);
+  await observeEvent('evmThresholdSigner:KeygenSuccess').event;
   console.log(`Waiting for the bitcoin key handover`);
-  await observeEvent('bitcoinThresholdSigner:KeyHandoverSuccessReported', chainflip);
+  await observeEvent('bitcoinThresholdSigner:KeyHandoverSuccessReported').event;
   console.log(`Waiting for eth key activation transaction to be sent for signing`);
-  await observeEvent('evmThresholdSigner:ThresholdSignatureRequest', chainflip);
+  await observeEvent('evmThresholdSigner:ThresholdSignatureRequest').event;
 
-  let stopObserving = false;
-  const broadcastAborted = observeBadEvents(':BroadcastAborted', () => stopObserving);
+  const broadcastAborted = observeBadEvents(':BroadcastAborted', { label: 'Rotate and swap' });
 
   // Using Arbitrum as the ingress chain to make the swap as fast as possible
   await testSwapViaContract('ArbEth', 'Eth');
 
-  stopObserving = true;
-  await broadcastAborted;
+  await broadcastAborted.stop();
 }
 
 try {

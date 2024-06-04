@@ -8,7 +8,6 @@ use scale_info::TypeInfo;
 pub trait SwapDepositHandler {
 	type AccountId;
 
-	#[allow(clippy::too_many_arguments)]
 	fn schedule_swap_from_channel(
 		deposit_address: ForeignChainAddress,
 		deposit_block_height: u64,
@@ -58,8 +57,8 @@ pub trait LpBalanceApi {
 	/// Record the fees collected by the account.
 	fn record_fees(who: &Self::AccountId, amount: AssetAmount, asset: Asset);
 
-	/// Returns the asset balances of the given account.
-	fn asset_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError>;
+	/// Returns the asset free balances of the given account.
+	fn free_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError>;
 }
 
 pub trait PoolApi {
@@ -93,10 +92,14 @@ impl<T: frame_system::Config> PoolApi for T {
 	}
 }
 
+pub struct NetworkFeeTaken {
+	pub remaining_amount: AssetAmount,
+	pub network_fee: AssetAmount,
+}
 pub trait SwappingApi {
 	/// Takes the swap amount in STABLE_ASSET, collect network fee from it
-	/// and return the remaining value
-	fn take_network_fee(input_amount: AssetAmount) -> AssetAmount;
+	/// and return the (remaining value, network fee taken)
+	fn take_network_fee(input_amount: AssetAmount) -> NetworkFeeTaken;
 
 	/// Process a single leg of a swap, into or from Stable asset. No network fee is taken.
 	fn swap_single_leg(
@@ -104,20 +107,6 @@ pub trait SwappingApi {
 		to: Asset,
 		input_amount: AssetAmount,
 	) -> Result<AssetAmount, DispatchError>;
-}
-
-impl<T: frame_system::Config> SwappingApi for T {
-	fn take_network_fee(input_amount: AssetAmount) -> AssetAmount {
-		input_amount
-	}
-
-	fn swap_single_leg(
-		_from: Asset,
-		_to: Asset,
-		input_amount: AssetAmount,
-	) -> Result<AssetAmount, DispatchError> {
-		Ok(input_amount)
-	}
 }
 
 pub trait SwapQueueApi {

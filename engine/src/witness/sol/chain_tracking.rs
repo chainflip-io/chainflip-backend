@@ -17,6 +17,7 @@ impl<T: SolRetryRpcApi + Send + Sync + Clone> GetTrackedData<cf_chains::Solana, 
 			priorization_fees.iter().map(|f| f.prioritization_fee).collect();
 		priority_fees.sort();
 
+		// These fees won't be consistent accross CFEs so we are handling that in the runtime.
 		Ok(SolTrackedData {
 			priority_fee: (context!(priority_fees
 				.get(priority_fees.len().saturating_sub(1) / 2)

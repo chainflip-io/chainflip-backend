@@ -58,6 +58,8 @@ mod benchmarks {
 			.map(|i| {
 				let account = frame_benchmarking::account::<T::AccountId>("beneficiary", i, 0);
 				frame_benchmarking::whitelist_account!(account);
+				frame_system::Pallet::<T>::inc_providers(&account);
+				<T as frame_system::Config>::OnNewAccount::on_new_account(&account);
 				<<T as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<T>>::register_as_broker(&account).unwrap();
 				Beneficiary { account, bps: 10 }
 			})

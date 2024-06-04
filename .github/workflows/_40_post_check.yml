@@ -13,7 +13,7 @@ on:
 
 env:
   FORCE_COLOR: 1
-  SOLANA_VERSION: v1.18.3
+  SOLANA_VERSION: v1.18.8
 
 permissions:
   packages: read
@@ -80,8 +80,8 @@ jobs:
           mkdir -p /tmp/chainflip/doc
           mkdir -p /tmp/chainflip/dopey
           touch /tmp/chainflip/debug.log
-          ls ${{ env.BINARY_ROOT_PATH }}
           sudo cp ${{ env.BINARY_ROOT_PATH }}/libchainflip_engine_v*.so /usr/lib/
+          sudo cp ./old-engine-dylib/libchainflip_engine_v*.so /usr/lib/
           chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
           chmod +x ${{ env.BINARY_ROOT_PATH }}/engine-runner
           touch ./localnet/.setup_complete
@@ -133,7 +133,8 @@ jobs:
         if: always()
         continue-on-error: true
         run: |
-          cat /tmp/solana/solana.*log
+          cat /tmp/solana/*.log
+          cat /tmp/solana/test-ledger/validator.log
 
       - name: Upload Localnet Logs 💾
         if: always()
@@ -151,6 +152,11 @@ jobs:
         if: always()
         continue-on-error: true
         run: ls -alR /tmp/chainflip
+
+      - name: List /tmp/solana 📂
+        if: always()
+        continue-on-error: true
+        run: ls -alR /tmp/solana
 
       - name: Show logs from docker containers 🐳🕵️‍♂️
         if: always()
@@ -174,7 +180,6 @@ jobs:
             ❗️❗️❗️❗️ Sorry **${{ github.actor }}**, the Bouncer has rejected you ❗️❗️❗️❗️
             The Bouncer has rejected the build on branch `${{ github.ref_name }}`
             👾 Link to job: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>
-            #️⃣ Tagging: <@&939151218708709416>
 
   chainspec-compatibility:
     runs-on: ubuntu-22.04

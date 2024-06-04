@@ -24,6 +24,7 @@ pub enum AddressDerivationError {
 	MissingPolkadotVault,
 	MissingBitcoinVault,
 	BitcoinChannelIdTooLarge,
+	MissingSolanaVaultProgram,
 	SolanaDerivationError(sol::AddressDerivationError),
 }
 
@@ -87,7 +88,7 @@ pub enum EncodedAddress {
 	Dot([u8; 32]),
 	Btc(Vec<u8>),
 	Arb([u8; 20]),
-	Sol([u8; crate::sol::consts::SOLANA_ADDRESS_SIZE]),
+	Sol([u8; sol_prim::consts::SOLANA_ADDRESS_LEN]),
 }
 
 pub trait AddressConverter: Sized {

@@ -1,4 +1,4 @@
-#!/usr/bin/env -S pnpm tsx
+#!/usr/bin/env -S NODE_OPTIONS=--max-old-space-size=6144 pnpm tsx
 import { SwapContext, testAllSwaps } from '../shared/swapping';
 import { testEvmDeposits } from '../shared/evm_deposits';
 import { runWithTimeout, observeBadEvents } from '../shared/utils';
@@ -8,6 +8,7 @@ import { testLpApi } from '../shared/lp_api_test';
 import { swapLessThanED } from '../shared/swap_less_than_existential_deposit_dot';
 import { testPolkadotRuntimeUpdate } from '../shared/polkadot_runtime_update';
 import { testBrokerFeeCollection } from '../shared/broker_fee_collection';
+import { testBoostingSwap } from '../shared/boost';
 
 const swapContext = new SwapContext();
 
@@ -19,8 +20,18 @@ async function runAllConcurrentTests() {
   const numberOfNodes = givenNumberOfNodes ?? 1;
 
   let stopObserving = false;
-  const broadcastAborted = observeBadEvents(':BroadcastAborted', () => stopObserving);
-  const feeDeficitRefused = observeBadEvents(':TransactionFeeDeficitRefused', () => stopObserving);
+  const broadcastAborted = observeBadEvents(
+    ':BroadcastAborted',
+    () => stopObserving,
+    undefined,
+    'Concurrent broadcast aborted',
+  );
+  const feeDeficitRefused = observeBadEvents(
+    ':TransactionFeeDeficitRefused',
+    () => stopObserving,
+    undefined,
+    'Concurrent fee deficit refused',
+  );
 
   // Tests that work with any number of nodes
   const tests = [
@@ -31,6 +42,7 @@ async function runAllConcurrentTests() {
     testMultipleMembersGovernance(),
     testLpApi(),
     testBrokerFeeCollection(),
+    testBoostingSwap(),
   ];
 
   // Test that only work if there is more than one node

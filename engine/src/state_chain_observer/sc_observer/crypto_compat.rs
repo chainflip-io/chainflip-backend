@@ -2,12 +2,14 @@ use cf_chains::{
 	btc::BitcoinCrypto,
 	dot::{PolkadotCrypto, PolkadotPublicKey},
 	evm::EvmCrypto,
+	sol::{SolAddress, SolanaCrypto},
 	ChainCrypto,
 };
 use multisig::{
-	bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning, ChainSigning, CryptoScheme,
+	bitcoin::BtcSigning, ed25519::Ed25519Signing, eth::EthSigning, polkadot::PolkadotSigning,
+	ChainSigning, CryptoScheme,
 };
-use state_chain_runtime::{BitcoinInstance, EvmInstance, PolkadotInstance};
+use state_chain_runtime::{BitcoinInstance, EvmInstance, PolkadotInstance, SolanaInstance};
 
 /// Compatibility layer for converting between public keys generated using the [CryptoScheme] types
 /// and the on-chain representation as defined by [ChainCrypto].
@@ -38,5 +40,13 @@ impl CryptoCompat<PolkadotSigning, PolkadotCrypto> for PolkadotInstance {
 		pubkey: <<PolkadotSigning as ChainSigning>::CryptoScheme as CryptoScheme>::PublicKey,
 	) -> <PolkadotCrypto as ChainCrypto>::AggKey {
 		PolkadotPublicKey::from_aliased(pubkey.to_bytes())
+	}
+}
+
+impl CryptoCompat<Ed25519Signing, SolanaCrypto> for SolanaInstance {
+	fn pubkey_to_aggkey(
+		pubkey: <<Ed25519Signing as ChainSigning>::CryptoScheme as CryptoScheme>::PublicKey,
+	) -> <SolanaCrypto as ChainCrypto>::AggKey {
+		SolAddress(pubkey.into())
 	}
 }

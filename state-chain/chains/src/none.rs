@@ -17,7 +17,6 @@ impl Chain for NoneChain {
 	type TrackedData = ();
 	type ChainAsset = assets::any::Asset;
 	type ChainAccount = ForeignChainAddress;
-	type EpochStartData = ();
 	type DepositFetchId = ChannelId;
 	type DepositChannelState = ();
 	type DepositDetails = ();

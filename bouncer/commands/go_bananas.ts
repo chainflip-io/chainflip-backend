@@ -3,8 +3,8 @@ import axios from 'axios';
 import { InternalAsset as Asset, Chain, getInternalAsset } from '@chainflip/cli';
 import bitcoin from 'bitcoinjs-lib';
 import { Tapleaf } from 'bitcoinjs-lib/src/types';
-import { blake2AsHex } from '@polkadot/util-crypto';
 import * as ecc from 'tiny-secp256k1';
+import { blake2AsHex } from '../polkadot/util-crypto';
 import {
   asciiStringToBytesArray,
   getChainflipApi,
