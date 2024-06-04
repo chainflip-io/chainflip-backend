@@ -1,6 +1,6 @@
 use cf_primitives::EpochIndex;
-use serde::{Deserialize, Serialize};
 use ed25519_dalek::VerifyingKey;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct KeyId {

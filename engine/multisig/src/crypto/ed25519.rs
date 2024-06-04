@@ -1,8 +1,8 @@
 use anyhow::Result;
 
 use super::{
-	curve25519::edwards::Point, ChainSigning, ChainTag, CryptoScheme, CryptoTag,
-	ECPoint, SignatureToThresholdSignature,
+	curve25519::edwards::Point, ChainSigning, ChainTag, CryptoScheme, CryptoTag, ECPoint,
+	SignatureToThresholdSignature,
 };
 use cf_chains::{sol::SolSignature, Chain, ChainCrypto, Solana};
 use ed25519_dalek::{Verifier, VerifyingKey};
@@ -36,7 +36,6 @@ impl SignatureToThresholdSignature<<Solana as Chain>::ChainCrypto> for Vec<Signa
 			.expect("Exactly one signature for Solana")
 	}
 }
-
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
 pub struct SigningPayload(Vec<u8>);
