@@ -185,8 +185,7 @@ fn test_signature_verification() {
 	};
 
 	let verifying_key =
-		ed25519_dalek::VerifyingKey::from_bytes(&public_key.as_bytes().try_into().unwrap())
-			.unwrap();
+		ed25519_dalek::VerifyingKey::from_bytes(&public_key.as_bytes().into()).unwrap();
 
 	// Verify the signature using the "reference" implementation (which in this case is
 	// ed25519_dalek used by Solana):
