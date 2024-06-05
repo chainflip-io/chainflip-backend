@@ -157,3 +157,38 @@ impl CryptoScheme for SolCryptoScheme {
 		SigningPayload([0u8; 32].to_vec())
 	}
 }
+
+#[test]
+fn test_signature_verification() {
+	use crate::crypto::{curve25519::edwards::Point, ECScalar};
+	use rand::{thread_rng, Rng};
+
+	type Scalar = <Point as ECPoint>::Scalar;
+
+	let message = b"payload";
+
+	let secret_key = Scalar::from_bytes_mod_order(&thread_rng().gen());
+	let public_key = Point::from_scalar(&secret_key);
+
+	let payload = SigningPayload(message.to_vec());
+
+	// Build a signature using the same primitives/operations as used in multisig ceremonies:
+	let signature = {
+		let nonce = Scalar::from_bytes_mod_order(&thread_rng().gen::<[u8; 32]>());
+		let nonce_commitment = Point::from_scalar(&nonce);
+		let challenge = SolCryptoScheme::build_challenge(public_key, nonce_commitment, &payload);
+
+		let response =
+			SolCryptoScheme::build_response(nonce, nonce_commitment, &secret_key, challenge);
+
+		SolCryptoScheme::build_signature(response, nonce_commitment)
+	};
+
+	let verifying_key =
+		ed25519_dalek::VerifyingKey::from_bytes(&public_key.as_bytes().try_into().unwrap())
+			.unwrap();
+
+	// Verify the signature using the "reference" implementation (which in this case is
+	// ed25519_dalek used by Solana):
+	SolCryptoScheme::verify_signature(&signature, &verifying_key, &payload).unwrap();
+}
