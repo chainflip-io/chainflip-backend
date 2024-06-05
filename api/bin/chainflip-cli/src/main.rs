@@ -6,7 +6,7 @@ use crate::settings::{
 use anyhow::{Context, Result};
 use api::{
 	lp::LpApi,
-	primitives::{RedemptionAmount, FLIP_DECIMALS},
+	primitives::{EpochIndex, RedemptionAmount, FLIP_DECIMALS},
 	queries::QueryApi,
 	AccountId32, BrokerApi, GovernanceApi, KeyPair, OperatorApi, StateChainApi, SwapDepositAddress,
 	ValidatorApi,
@@ -190,8 +190,8 @@ async fn run_cli() -> Result<()> {
 					api.governance_api().force_rotation().await?;
 				},
 				GenerateKeys { .. } => unreachable!("GenerateKeys is handled above"),
-				CountWitnesses { hash } => {
-					count_witnesses(api.query_api(), hash).await?;
+				CountWitnesses { hash, epoch_index } => {
+					count_witnesses(api.query_api(), hash, epoch_index).await?;
 				},
 			};
 			Ok(())
@@ -337,8 +337,12 @@ async fn pre_update_check(api: QueryApi) -> Result<()> {
 	Ok(())
 }
 
-async fn count_witnesses(api: QueryApi, hash: state_chain_runtime::Hash) -> Result<()> {
-	let result = api.check_witnesses(None, hash).await?;
+async fn count_witnesses(
+	api: QueryApi,
+	hash: state_chain_runtime::Hash,
+	epoch_index: Option<EpochIndex>,
+) -> Result<()> {
+	let result = api.check_witnesses(None, hash, epoch_index).await?;
 	match result {
 		Some(value) => {
 			println!("Number of authorities who failed to witness it: {}", value.failing_count);
