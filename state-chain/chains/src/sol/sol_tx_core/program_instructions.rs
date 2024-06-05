@@ -440,49 +440,6 @@ solana_program!(
 	idl_path: concat!(
 		env!("CF_SOL_PROGRAM_IDL_ROOT"), "/",
 		env!("CF_SOL_PROGRAM_IDL_TAG"), "/" ,
-		"upgrade_manager.json"
-	),
-	UpgradeManagerProgram {
-		upgrade_vault_program => UpgradeVaultProgram {
-			args: [
-				seed: Vec<u8>,
-				bump: u8
-			],
-			account_metas: [
-				vault_data_account: { signer: false, writable: false },
-				gov_key: { signer: true, writable: false },
-				program_data_address: { signer: false, writable: true },
-				program_address: { signer: false, writable: true },
-				buffer_address: { signer: false, writable: true },
-				spill_address: { signer: false, writable: true },
-				sysvar_rent: { signer: false, writable: false },
-				sysvar_clock: { signer: false, writable: false },
-				signer_pda: { signer: false, writable: false },
-				bpf_loader_upgradeable: { signer: false, writable: false },
-			]
-		},
-		transfer_vault_upgrade_authority => TransferVaultUpgradeAuthority {
-			args: [
-				seed: Vec<u8>,
-				bump: u8
-			],
-			account_metas: [
-				vault_data_account: { signer: false, writable: false },
-				agg_key: { signer: true, writable: false },
-				program_data_address: { signer: false, writable: true },
-				program_address: { signer: false, writable: false },
-				new_authority: { signer: false, writable: false },
-				signer_pda: { signer: false, writable: false },
-				bpf_loader_upgradeable: { signer: false, writable: false },
-			]
-		},
-	}
-);
-
-solana_program!(
-	idl_path: concat!(
-		env!("CF_SOL_PROGRAM_IDL_ROOT"), "/",
-		env!("CF_SOL_PROGRAM_IDL_TAG"), "/" ,
 		"vault.json"
 	),
 	VaultProgram {
@@ -576,6 +533,66 @@ solana_program!(
 				instruction_sysvar: { signer: false, writable: false },
 			]
 		},
+		// TODO: Update so we can pass an empty args arran and pubkey
+		// set_gov_key_with_agg_key => SetGovKeyWithAggKey {
+		// 	args: [
+		// 		new_gov_key: Pubkey,
+		// 	],
+		// 	account_metas: [
+		// 		data_account: { signer: false, writable: true },
+		// 		agg_key: { signer: true, writable: false },
+		// 	]
+		// },
+
+		// set_gov_key_with_gov_key => SetGovKeyWithGovKey {
+		// 	args: [
+		// 		new_gov_key: Pubkey,
+		// 	],
+		// 	account_metas: [
+		// 		data_account: { signer: false, writable: true },
+		// 		gov_key: { signer: true, writable: false },
+		// 	]
+		// },
+
+		set_suspended_state => SetSuspendedState {
+			args: [
+				suspend: bool,
+			],
+			account_metas: [
+				data_account: { signer: false, writable: true },
+				gov_key: { signer: true, writable: false },
+			]
+		},
+
+		// transfer_vault_upgrade_authority => TransferVaultUpgradeAuthority {
+		// 	args: [
+		// 	],
+		// 	account_metas: [
+		// 		data_account: { signer: false, writable: false },
+		// 		agg_key: { signer: true, writable: false },
+		// 		program_data_address: { signer: false, writable: true },
+		// 		program_address: { signer: false, writable: false },
+		// 		new_authority: { signer: false, writable: false },
+		// 		signer_pda: { signer: false, writable: false },
+		// 		bpf_loader_upgradeable: { signer: false, writable: false },
+		// 	]
+		// },
+
+		// upgrade_vault_program => UpgradeVaultProgram {
+		// 	args: [],
+		// 	account_metas: [
+		// 		data_account: { signer: false, writable: false },
+		// 		gov_key: { signer: true, writable: false },
+		// 		program_data_address: { signer: false, writable: true },
+		// 		program_address: { signer: false, writable: true },
+		// 		buffer_address: { signer: false, writable: true },
+		// 		spill_address: { signer: false, writable: true },
+		// 		sysvar_rent: { signer: false, writable: false },
+		// 		sysvar_clock: { signer: false, writable: false },
+		// 		signer_pda: { signer: false, writable: false },
+		// 		bpf_loader_upgradeable: { signer: false, writable: false },
+		// 	]
+		// },
 	}
 );
 

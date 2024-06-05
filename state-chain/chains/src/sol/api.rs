@@ -58,8 +58,6 @@ pub trait SolanaEnvironment:
 					SolanaTransactionBuildingError::CannotLookupVaultProgram,
 				SolanaEnvAccountLookupKey::VaultProgramDataAccount =>
 					SolanaTransactionBuildingError::CannotLookupVaultProgramDataAccount,
-				SolanaEnvAccountLookupKey::UpgradeManagerProgramDataAccount =>
-					SolanaTransactionBuildingError::CannotLookupUpgradeManagerProgramDataAccount,
 				SolanaEnvAccountLookupKey::TokenMintPubkey =>
 					SolanaTransactionBuildingError::CannotLookupTokenMintPubkey,
 				SolanaEnvAccountLookupKey::TokenVaultAssociatedTokenAccount =>
@@ -85,7 +83,6 @@ pub enum SolanaEnvAccountLookupKey {
 	AggKey,
 	VaultProgram,
 	VaultProgramDataAccount,
-	UpgradeManagerProgramDataAccount,
 	TokenMintPubkey,
 	TokenVaultAssociatedTokenAccount,
 	TokenVaultPdaAccount,
@@ -98,7 +95,6 @@ pub enum SolanaTransactionBuildingError {
 	CannotLookupVaultProgram,
 	CannotLookupVaultProgramDataAccount,
 	CannotLookupComputePrice,
-	CannotLookupUpgradeManagerProgramDataAccount,
 	CannotLookupTokenMintPubkey,
 	CannotLookupTokenVaultAssociatedTokenAccount,
 	CannotLookupTokenVaultPdaAccount,
@@ -302,9 +298,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgramDataAccount)?;
 		let system_program_id = SolAddress::from_str(SYSTEM_PROGRAM_ID)
 			.expect("Preset System Program ID account must be valid.");
-		let upgrade_manager_program_data_account = Environment::lookup_account(
-			SolanaEnvAccountLookupKey::UpgradeManagerProgramDataAccount,
-		)?;
 		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
 
@@ -315,7 +308,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			vault_program,
 			vault_program_data_account,
 			system_program_id,
-			upgrade_manager_program_data_account,
 			agg_key,
 			nonce_account,
 			compute_price,

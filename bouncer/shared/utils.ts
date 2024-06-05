@@ -86,13 +86,9 @@ export function getContractAddress(chain: Chain, contract: string): string {
         case 'VAULT':
           return '8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf';
         case 'TOKEN_VAULT_PDA':
-          return '9j17hjg8wR2uFxJAJDAFahwsgTCNx35sc5qXSxDmuuF6';
+          return 'CWxWcNZR1d5MpkvmL3HgvgohztoKyCDumuZvdPyJHK3d';
         case 'DATA_ACCOUNT':
-          return '623nEsyGYWKYggY1yHxQFJiBarL9jdWdrMr7ASiCKP6a';
-        case 'UPGRADE_MANAGER':
-          return '274BzCz5RPHJZsxdcSGySahz4qAWqwSDcmz1YEKkGaZC';
-        case 'UPGRADE_MANAGER_SIGNER':
-          return '2SAhe89c1umM2JvCnmqCEnY8UCQtNPEKGe7UXA8KSQqH';
+          return 'wxudAoEJWfe6ZFHYsDPYGGs2K3m62N3yApNxZLGyMYc';
         case 'SolUsdc':
           return process.env.ARB_USDC_ADDRESS ?? '24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p';
         case 'CFTESTER':

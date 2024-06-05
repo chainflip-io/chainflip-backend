@@ -350,6 +350,14 @@
         {
           "name": "token_vault_pda_bump",
           "type": "u8"
+        },
+        {
+          "name": "upgrade_signer_pda",
+          "type": "pubkey"
+        },
+        {
+          "name": "upgrade_signer_pda_bump",
+          "type": "u8"
         }
       ]
     }
@@ -423,11 +431,15 @@
             "type": "u8"
           },
           {
-            "name": "is_vault_suspended",
-            "type": "bool"
+            "name": "upgrade_signer_pda",
+            "type": "pubkey"
           },
           {
-            "name": "is_upgrade_manager_suspended",
+            "name": "upgrade_signer_pda_bump",
+            "type": "u8"
+          },
+          {
+            "name": "suspended",
             "type": "bool"
           }
         ]

@@ -105,6 +105,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
   const solKeyBuffer = Buffer.from(solKey.slice(2), 'hex');
   const newAggKey = new PublicKey(encodeSolAddress(solKey));
   const tokenVaultPda = new PublicKey(getContractAddress('Solana', 'TOKEN_VAULT_PDA'));
+  const upgradeSignerPda = new PublicKey("3eechPbKXiAVCubUkM9asJ5DbjNn7jHyi5KFLd5ocJbz");
 
   // Initialize Vault program
   const tx = new Transaction().add(
@@ -114,6 +115,9 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
         solKeyBuffer,
         solKeyBuffer,
         tokenVaultPda.toBuffer(),
+        Buffer.from([253]), //tokenVaultPda bump
+        upgradeSignerPda.toBuffer(),
+        Buffer.from([255]) // upgradeSignerPda bump
       ]),
       keys: [
         { pubkey: dataAccount, isSigner: false, isWritable: true },
