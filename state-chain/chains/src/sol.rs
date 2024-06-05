@@ -71,14 +71,17 @@ impl ChainCrypto for SolanaCrypto {
 		payload: &Self::Payload,
 		signature: &Self::ThresholdSignature,
 	) -> bool {
-		use ed25519_dalek::Verifier;
+		use ed25519_dalek::{PublicKey, Signature, Verifier};
 
-		let public_key = match ed25519_dalek::VerifyingKey::from_bytes(&agg_key.0) {
+		let public_key = match PublicKey::from_bytes(&agg_key.0) {
 			Ok(pk) => pk,
 			Err(_) => return false,
 		};
 
-		let signature = ed25519_dalek::Signature::from_bytes(&signature.0);
+		let signature = match Signature::from_bytes(&signature.0) {
+			Ok(sig) => sig,
+			Err(_) => return false,
+		};
 
 		public_key.verify(payload.serialize().as_slice(), &signature).is_ok()
 	}
