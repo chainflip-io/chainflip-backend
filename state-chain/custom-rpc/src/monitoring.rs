@@ -35,19 +35,19 @@ pub trait MonitoringApi {
 	#[method(name = "redemptions")]
 	fn cf_redemptions(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RedemptionsInfo>;
 	#[method(name = "pending_broadcasts")]
-	fn cf_pending_broadcasts(
+	fn cf_pending_broadcasts_count(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<PendingBroadcasts>;
 	#[method(name = "pending_tss_ceremonies")]
-	fn cf_pending_tss_ceremonies(
+	fn cf_pending_tss_ceremonies_count(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<PendingTssCeremonies>;
 	#[method(name = "pending_swaps")]
-	fn cf_pending_swaps(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u32>;
+	fn cf_pending_swaps_count(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u32>;
 	#[method(name = "open_deposit_channels")]
-	fn cf_open_deposit_channels(
+	fn cf_open_deposit_channels_count(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<OpenDepositChannels>;
@@ -104,10 +104,10 @@ where
 		cf_suspended_validators -> Vec<(Offence, u32)>,
 		cf_epoch_state -> EpochState,
 		cf_redemptions -> RedemptionsInfo,
-		cf_pending_broadcasts -> PendingBroadcasts,
-		cf_pending_tss_ceremonies -> PendingTssCeremonies,
-		cf_pending_swaps -> u32,
-		cf_open_deposit_channels -> OpenDepositChannels,
+		cf_pending_broadcasts_count -> PendingBroadcasts,
+		cf_pending_tss_ceremonies_count -> PendingTssCeremonies,
+		cf_pending_swaps_count -> u32,
+		cf_open_deposit_channels_count -> OpenDepositChannels,
 		cf_fee_imbalance -> FeeImbalance,
 		cf_build_version -> LastRuntimeUpgradeInfo
 	}

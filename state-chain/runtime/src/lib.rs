@@ -1952,7 +1952,7 @@ impl_runtime_apis! {
 				count: redemptions.len() as u32,
 			}
 		}
-		fn cf_pending_broadcasts() -> PendingBroadcasts {
+		fn cf_pending_broadcasts_count() -> PendingBroadcasts {
 			PendingBroadcasts {
 				ethereum: pallet_cf_broadcast::PendingBroadcasts::<Runtime, EthereumInstance>::decode_non_dedup_len().unwrap_or(0) as u32,
 				bitcoin: pallet_cf_broadcast::PendingBroadcasts::<Runtime, BitcoinInstance>::decode_non_dedup_len().unwrap_or(0) as u32,
@@ -1960,18 +1960,18 @@ impl_runtime_apis! {
 				arbitrum: pallet_cf_broadcast::PendingBroadcasts::<Runtime, ArbitrumInstance>::decode_non_dedup_len().unwrap_or(0) as u32,
 			}
 		}
-		fn cf_pending_tss_ceremonies() -> PendingTssCeremonies {
+		fn cf_pending_tss_ceremonies_count() -> PendingTssCeremonies {
 			PendingTssCeremonies {
 				evm: pallet_cf_threshold_signature::PendingCeremonies::<Runtime, EvmInstance>::iter().collect::<Vec<_>>().len() as u32,
 				bitcoin: pallet_cf_threshold_signature::PendingCeremonies::<Runtime, BitcoinInstance>::iter().collect::<Vec<_>>().len() as u32,
 				polkadot: pallet_cf_threshold_signature::PendingCeremonies::<Runtime, PolkadotInstance>::iter().collect::<Vec<_>>().len() as u32,
 			}
 		}
-		fn cf_pending_swaps() -> u32 {
+		fn cf_pending_swaps_count() -> u32 {
 			let swaps: Vec<_> = pallet_cf_swapping::SwapQueue::<Runtime>::iter().collect();
 			swaps.iter().fold(0u32, |acc, elem| acc + elem.1.len() as u32)
 		}
-		fn cf_open_deposit_channels() -> OpenDepositChannels {
+		fn cf_open_deposit_channels_count() -> OpenDepositChannels {
 			let eth_channels: u32 = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, EthereumInstance>::iter().filter(|(_key, elem)| elem.expires_at > pallet_cf_chain_tracking::CurrentChainState::<Runtime, EthereumInstance>::get().unwrap().block_height).collect::<Vec<_>>().len() as u32;
 			let btc_channels: u32 = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, BitcoinInstance>::iter().filter(|(_key, elem)| elem.expires_at > pallet_cf_chain_tracking::CurrentChainState::<Runtime, BitcoinInstance>::get().unwrap().block_height).collect::<Vec<_>>().len() as u32;
 			let dot_channels: u32 = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, PolkadotInstance>::iter().filter(|(_key, elem)| elem.expires_at > pallet_cf_chain_tracking::CurrentChainState::<Runtime, PolkadotInstance>::get().unwrap().block_height).collect::<Vec<_>>().len() as u32;
@@ -1989,14 +1989,11 @@ impl_runtime_apis! {
 				pallet_cf_broadcast::TransactionFeeDeficit::<Runtime, EthereumInstance>::iter().fold(0, |acc, elem| acc + elem.1);
 			let dot = pallet_cf_ingress_egress::WithheldTransactionFees::<Runtime, PolkadotInstance>::iter().fold(0, |acc, elem| acc+ elem.1) -
 				pallet_cf_broadcast::TransactionFeeDeficit::<Runtime, PolkadotInstance>::iter().fold(0, |acc, elem| acc + elem.1);
-			let btc = pallet_cf_ingress_egress::WithheldTransactionFees::<Runtime, BitcoinInstance>::iter().fold(0, |acc, elem| acc+ elem.1) -
-				pallet_cf_broadcast::TransactionFeeDeficit::<Runtime, BitcoinInstance>::iter().fold(0, |acc, elem| acc + elem.1);
 			let arb = pallet_cf_ingress_egress::WithheldTransactionFees::<Runtime, ArbitrumInstance>::iter().fold(0, |acc, elem| acc+ elem.1) -
 				pallet_cf_broadcast::TransactionFeeDeficit::<Runtime, ArbitrumInstance>::iter().fold(0, |acc, elem| acc + elem.1);
 
 			FeeImbalance {
 				ethereum: eth,
-				bitcoin: btc.into(),
 				polkadot: dot,
 				arbitrum: arb,
 			}
@@ -2014,14 +2011,14 @@ impl_runtime_apis! {
 				btc_utxos: Self::cf_btc_utxos(),
 				epoch: Self::cf_epoch_state(),
 				pending_redemptions: Self::cf_redemptions(),
-				pending_broadcasts: Self::cf_pending_broadcasts(),
-				pending_tss: Self::cf_pending_tss_ceremonies(),
-				open_deposit_channels: Self::cf_open_deposit_channels(),
+				pending_broadcasts: Self::cf_pending_broadcasts_count(),
+				pending_tss: Self::cf_pending_tss_ceremonies_count(),
+				open_deposit_channels: Self::cf_open_deposit_channels_count(),
 				fee_imbalance: Self::cf_fee_imbalance(),
 				authorities: Self::cf_authorities(),
 				build_version: Self::cf_build_version(),
 				suspended_validators: Self::cf_suspended_validators(),
-				pending_swaps: Self::cf_pending_swaps(),
+				pending_swaps: Self::cf_pending_swaps_count(),
 				dot_aggkey: Self::cf_dot_aggkey(),
 				flip_supply: {
 					let flip = Self::cf_flip_supply();

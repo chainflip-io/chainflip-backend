@@ -58,7 +58,6 @@ pub struct OpenDepositChannels {
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
 pub struct FeeImbalance {
 	pub ethereum: u128,
-	pub bitcoin: u128,
 	pub polkadot: u128,
 	pub arbitrum: u128,
 }
@@ -109,10 +108,10 @@ decl_runtime_apis!(
 		fn cf_suspended_validators() -> Vec<(Offence, u32)>;
 		fn cf_epoch_state() -> EpochState;
 		fn cf_redemptions() -> RedemptionsInfo;
-		fn cf_pending_broadcasts() -> PendingBroadcasts;
-		fn cf_pending_tss_ceremonies() -> PendingTssCeremonies;
-		fn cf_pending_swaps() -> u32;
-		fn cf_open_deposit_channels() -> OpenDepositChannels;
+		fn cf_pending_broadcasts_count() -> PendingBroadcasts;
+		fn cf_pending_tss_ceremonies_count() -> PendingTssCeremonies;
+		fn cf_pending_swaps_count() -> u32;
+		fn cf_open_deposit_channels_count() -> OpenDepositChannels;
 		fn cf_fee_imbalance() -> FeeImbalance;
 		fn cf_build_version() -> LastRuntimeUpgradeInfo;
 		fn cf_monitoring_data() -> MonitoringData;

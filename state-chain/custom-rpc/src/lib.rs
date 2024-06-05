@@ -88,7 +88,6 @@ impl From<RedemptionsInfo> for RpcRedemptionsInfo {
 #[derive(Serialize, Deserialize)]
 pub struct RpcFeeImbalance {
 	pub ethereum: NumberOrHex,
-	pub bitcoin: NumberOrHex,
 	pub polkadot: NumberOrHex,
 	pub arbitrum: NumberOrHex,
 }
@@ -96,7 +95,6 @@ impl From<FeeImbalance> for RpcFeeImbalance {
 	fn from(fee_imbalance: FeeImbalance) -> Self {
 		Self {
 			ethereum: fee_imbalance.ethereum.into(),
-			bitcoin: fee_imbalance.bitcoin.into(),
 			polkadot: fee_imbalance.polkadot.into(),
 			arbitrum: fee_imbalance.arbitrum.into(),
 		}
