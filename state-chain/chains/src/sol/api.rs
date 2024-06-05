@@ -109,7 +109,7 @@ pub enum SolanaTransactionBuildingError {
 }
 
 impl sp_std::fmt::Display for SolanaTransactionBuildingError {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		write!(f, "{:?}", self)
 	}
 }
@@ -171,7 +171,13 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 
 		let decomposed_fetch_params = fetch_params
 			.into_iter()
-			.map(|param| AssetWithDerivedAddress::decompose_fetch_params(param, token_mint_pubkey))
+			.map(|param| {
+				AssetWithDerivedAddress::decompose_fetch_params(
+					param,
+					token_mint_pubkey,
+					vault_program,
+				)
+			})
 			.collect::<Result<Vec<_>, _>>()?;
 
 		// Build the instruction_set
@@ -245,9 +251,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				let token_vault_ata = Environment::lookup_account(
 					SolanaEnvAccountLookupKey::TokenVaultAssociatedTokenAccount,
 				)?;
-				let system_program_id = SolAddress::from_str(SYSTEM_PROGRAM_ID)
-					.expect("Preset Solana System Program ID account must be valid.");
-
 				// Build the Transfer instruction set for Token transfers.
 				token
 					.into_iter()
@@ -268,7 +271,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 							token_vault_ata,
 							token_mint_pubkey,
 							token_program_id,
-							system_program_id,
 							agg_key,
 							nonce_account,
 							compute_price,
@@ -398,7 +400,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					ccm_accounts,
 					vault_program,
 					vault_program_data_account,
-					system_program_id,
 					sys_var_instructions,
 					token_vault_pda_account,
 					token_vault_ata,

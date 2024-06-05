@@ -949,7 +949,9 @@ mod tests {
 	use crate::sol::{
 		consts::*,
 		sol_tx_core::{
-			address_derivation::{derive_associated_token_account, derive_deposit_address},
+			address_derivation::{
+				derive_associated_token_account, derive_deposit_address, derive_fetch_account,
+			},
 			bpf_loader_instructions::set_upgrade_authority,
 			compute_budget::ComputeBudgetInstruction,
 			extra_types_for_testing::{Keypair, Signer},
@@ -1052,8 +1054,12 @@ mod tests {
 		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
-		let deposit_channel = Pubkey::from_str(FETCH_FROM_ACCOUNT).unwrap();
-		let deposit_channel_pda = Pubkey::from_str("TODO").unwrap();
+		let vault_program_id = SolAddress::from_str(VAULT_PROGRAM).unwrap();
+		let deposit_channel: Pubkey = Pubkey::from_str(FETCH_FROM_ACCOUNT).unwrap();
+		let deposit_channel_historical_fetch =
+			derive_fetch_account(SolAddress::from(deposit_channel), vault_program_id)
+				.unwrap()
+				.0;
 
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
@@ -1068,7 +1074,7 @@ mod tests {
 				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
 				agg_key_pubkey,
 				deposit_channel,
-				deposit_channel_pda,
+				deposit_channel_historical_fetch,
 				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
 			),
 		];
@@ -1096,10 +1102,14 @@ mod tests {
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let vault_program_id = SolAddress::from_str(VAULT_PROGRAM).unwrap();
-		let deposit_channel_historical_fetch = Pubkey::from_str("TODO").unwrap();
 
 		let deposit_channel_0 = derive_deposit_address(0u64, vault_program_id).unwrap();
 		let deposit_channel_1 = derive_deposit_address(1u64, vault_program_id).unwrap();
+
+		let deposit_channel_historical_fetch_0 =
+			derive_fetch_account(deposit_channel_0.0, vault_program_id).unwrap().0;
+		let deposit_channel_historical_fetch_1 =
+			derive_fetch_account(deposit_channel_1.0, vault_program_id).unwrap().0;
 
 		let vault_program = VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap());
 
@@ -1115,7 +1125,7 @@ mod tests {
 				deposit_channel_0.1,
 				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
 				agg_key_pubkey,
-				deposit_channel_historical_fetch,
+				deposit_channel_historical_fetch_0,
 				deposit_channel_0.0,
 				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
 			),
@@ -1124,7 +1134,7 @@ mod tests {
 				deposit_channel_1.1,
 				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
 				agg_key_pubkey,
-				deposit_channel_historical_fetch,
+				deposit_channel_historical_fetch_1,
 				deposit_channel_1.0,
 				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
 			),
@@ -1159,7 +1169,8 @@ mod tests {
 		let deposit_channel = derive_deposit_address(seed, vault_program_id).unwrap();
 		let deposit_channel_ata =
 			derive_associated_token_account(deposit_channel.0, token_mint_pubkey).unwrap();
-		let deposit_channel_historical_fetch = Pubkey::from_str("TODO").unwrap();
+		let deposit_channel_historical_fetch =
+			derive_fetch_account(deposit_channel_ata.0, vault_program_id).unwrap();
 
 		// Deposit channel derived from the Vault address from the seed and the bump
 		assert_eq!(
@@ -1169,6 +1180,12 @@ mod tests {
 		assert_eq!(
 			deposit_channel_ata,
 			(SolAddress::from_str("7QWupKVHBPUnJpuvdt7uJxXaNWKYpEUAHPG9Rb28aEXS").unwrap(), 254u8),
+		);
+		// Historical fetch account derived from the Vault address using the deposit_channel_ata as
+		// the seed
+		assert_eq!(
+			deposit_channel_historical_fetch,
+			(SolAddress::from_str("FuNSXye89kBJQXp3rqkcz7oCUd5C5rVUDo7o5CRQ6T2o").unwrap(), 252u8),
 		);
 
 		let instructions = [
@@ -1189,7 +1206,7 @@ mod tests {
 				Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(),
 				Pubkey::from_str(MINT_PUB_KEY).unwrap(),
 				Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(),
-				deposit_channel_historical_fetch,
+				deposit_channel_historical_fetch.0,
 				Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(),
 			),
 		];
@@ -1218,14 +1235,19 @@ mod tests {
 		let deposit_channel_0 = derive_deposit_address(0u64, vault_program_id).unwrap();
 		let deposit_channel_ata_0 =
 			derive_associated_token_account(deposit_channel_0.0, token_mint_pubkey).unwrap();
+		let deposit_channel_historical_fetch_0 =
+			derive_fetch_account(deposit_channel_ata_0.0, vault_program_id).unwrap();
 
 		let deposit_channel_1 = derive_deposit_address(1u64, vault_program_id).unwrap();
 		let deposit_channel_ata_1 =
 			derive_associated_token_account(deposit_channel_1.0, token_mint_pubkey).unwrap();
+		let deposit_channel_historical_fetch_1: (SolAddress, u8) =
+			derive_fetch_account(deposit_channel_ata_1.0, vault_program_id).unwrap();
 
 		let deposit_channel_2 = derive_deposit_address(2u64, vault_program_id).unwrap();
 
-		let deposit_channel_historical_fetch = Pubkey::from_str("TODO").unwrap();
+		let deposit_channel_historical_fetch_2 =
+			derive_fetch_account(deposit_channel_2.0, vault_program_id).unwrap();
 
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
@@ -1245,7 +1267,7 @@ mod tests {
 				Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(),
 				Pubkey::from_str(MINT_PUB_KEY).unwrap(),
 				Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(),
-				deposit_channel_historical_fetch,
+				deposit_channel_historical_fetch_0.0,
 				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
 			),
 			VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap()).fetch_tokens(
@@ -1259,7 +1281,7 @@ mod tests {
 				Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(),
 				Pubkey::from_str(MINT_PUB_KEY).unwrap(),
 				Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(),
-				deposit_channel_historical_fetch,
+				deposit_channel_historical_fetch_1.0,
 				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
 			),
 			VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap()).fetch_native(
@@ -1267,7 +1289,7 @@ mod tests {
 				deposit_channel_2.1,
 				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
 				agg_key_pubkey,
-				deposit_channel_historical_fetch,
+				deposit_channel_historical_fetch_2.0,
 				deposit_channel_2.0,
 				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
 			),

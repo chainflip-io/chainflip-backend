@@ -4,9 +4,10 @@
 //! Instructions and Instruction sets with some level of abstraction.
 //! This avoids the need to deal with low level Solana core types.
 
-use core::str::FromStr;
-
-use crate::sol::Solana;
+use crate::sol::{
+	sol_tx_core::address_derivation::{derive_associated_token_account, derive_fetch_account},
+	Solana,
+};
 use codec::Encode;
 use sol_prim::AccountBump;
 use sp_std::{vec, vec::Vec};
@@ -21,8 +22,8 @@ use crate::{
 			program_instructions::{SystemProgramInstruction, VaultProgram},
 			token_instructions::AssociatedTokenAccountInstruction,
 		},
-		SolAccountMeta, SolAddress, SolAmount, SolAsset, SolCcmAccounts, SolComputeLimit,
-		SolInstruction, SolPubkey, SolanaDepositFetchId,
+		SolAddress, SolAmount, SolAsset, SolCcmAccounts, SolComputeLimit, SolInstruction,
+		SolPubkey, SolanaDepositFetchId,
 	},
 	FetchAssetParams, ForeignChainAddress,
 };
@@ -37,16 +38,36 @@ impl AssetWithDerivedAddress {
 	pub fn decompose_fetch_params(
 		fetch_params: FetchAssetParams<Solana>,
 		token_mint_pubkey: SolAddress,
-	) -> Result<(SolanaDepositFetchId, AssetWithDerivedAddress), SolanaTransactionBuildingError> {
+		vault_program: SolAddress,
+	) -> Result<
+		(SolanaDepositFetchId, AssetWithDerivedAddress, SolAddress),
+		SolanaTransactionBuildingError,
+	> {
 		match fetch_params.asset {
-			SolAsset::Sol => Ok((fetch_params.deposit_fetch_id, AssetWithDerivedAddress::Sol)),
-			SolAsset::SolUsdc =>
-				crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
+			SolAsset::Sol => {
+				let historical_fetch_account =
+					derive_fetch_account(fetch_params.deposit_fetch_id.address, vault_program)
+						.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
+				Ok((
+					fetch_params.deposit_fetch_id,
+					AssetWithDerivedAddress::Sol,
+					historical_fetch_account.0,
+				))
+			},
+			SolAsset::SolUsdc => {
+				let ata = derive_associated_token_account(
 					fetch_params.deposit_fetch_id.address,
 					token_mint_pubkey,
 				)
-				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)
-				.map(|ata| (fetch_params.deposit_fetch_id, AssetWithDerivedAddress::Usdc(ata))),
+				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
+				let historical_fetch_account = derive_fetch_account(ata.0, vault_program)
+					.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
+				Ok((
+					fetch_params.deposit_fetch_id,
+					AssetWithDerivedAddress::Usdc(ata),
+					historical_fetch_account.0,
+				))
+			},
 		}
 	}
 }
@@ -85,7 +106,7 @@ impl SolanaInstructionBuilder {
 	/// Create an instruction set to fetch from each `deposit_channel` being passed in.
 	/// Used to batch fetch from multiple deposit channels in a single transaction.
 	pub fn fetch_from(
-		decomposed_fetch_params: Vec<(SolanaDepositFetchId, AssetWithDerivedAddress)>,
+		decomposed_fetch_params: Vec<(SolanaDepositFetchId, AssetWithDerivedAddress, SolAddress)>,
 		token_mint_pubkey: SolAddress,
 		token_vault_ata: SolAddress,
 		token_program_id: SolAddress,
@@ -96,20 +117,19 @@ impl SolanaInstructionBuilder {
 		nonce_account: SolAddress,
 		compute_price: SolAmount,
 	) -> Vec<SolInstruction> {
-		let deposit_channel_historical_fetch = SolPubkey::from_str("TODO").unwrap();
 		let instructions = decomposed_fetch_params
 			.into_iter()
-			.map(|(fetch_id, asset)| match asset {
+			.map(|(fetch_id, asset, deposit_historical_fetch_account)| match asset {
 				AssetWithDerivedAddress::Sol => VaultProgram::with_id(vault_program).fetch_native(
 					fetch_id.channel_id.to_le_bytes().to_vec(),
 					fetch_id.bump,
 					vault_program_data_account,
 					agg_key,
-					deposit_channel_historical_fetch,
 					fetch_id.address,
+					deposit_historical_fetch_account,
 					system_program_id,
 				),
-				AssetWithDerivedAddress::Usdc((ata, bump)) => VaultProgram::with_id(vault_program)
+				AssetWithDerivedAddress::Usdc((ata, _bump)) => VaultProgram::with_id(vault_program)
 					.fetch_tokens(
 						fetch_id.channel_id.to_le_bytes().to_vec(),
 						fetch_id.bump,
@@ -121,7 +141,7 @@ impl SolanaInstructionBuilder {
 						token_vault_ata,
 						token_mint_pubkey,
 						token_program_id,
-						deposit_channel_historical_fetch,
+						deposit_historical_fetch_account,
 						system_program_id,
 					),
 			})
@@ -156,7 +176,6 @@ impl SolanaInstructionBuilder {
 		token_vault_ata: SolAddress,
 		token_mint_pubkey: SolAddress,
 		token_program_id: SolAddress,
-		_system_program_id: SolAddress,
 		agg_key: SolAddress,
 		nonce_account: SolAddress,
 		compute_price: SolAmount,
@@ -178,7 +197,6 @@ impl SolanaInstructionBuilder {
 				ata,
 				token_mint_pubkey,
 				token_program_id,
-				// system_program_id,
 			),
 		];
 
@@ -251,6 +269,7 @@ impl SolanaInstructionBuilder {
 				ccm_accounts.cf_receiver,
 				system_program_id,
 				sys_var_instructions,
+				// TODO: We should be passing this!
 				// ccm_accounts.remaining_account_metas(),
 			),
 		];
@@ -268,7 +287,6 @@ impl SolanaInstructionBuilder {
 		ccm_accounts: SolCcmAccounts,
 		vault_program: SolAddress,
 		vault_program_data_account: SolAddress,
-		_system_program_id: SolAddress,
 		sys_var_instructions: SolAddress,
 		token_vault_pda_account: SolAddress,
 		token_vault_ata: SolAddress,
@@ -295,7 +313,6 @@ impl SolanaInstructionBuilder {
 			ata,
 			token_mint_pubkey,
 			token_program_id,
-			// system_program_id,
 		),
 		VaultProgram::with_id(vault_program).execute_ccm_token_call(
 			source_chain as u32,
@@ -309,6 +326,7 @@ impl SolanaInstructionBuilder {
 			token_program_id,
 			token_mint_pubkey,
 			sys_var_instructions,
+			// TODO: We should be passing this!
 			// ccm_accounts.remaining_account_metas(),
 		)];
 
@@ -338,7 +356,7 @@ mod test {
 	fn get_decomposed_fetch_params(
 		channel_id: Option<ChannelId>,
 		asset: SolAsset,
-	) -> (SolanaDepositFetchId, AssetWithDerivedAddress) {
+	) -> (SolanaDepositFetchId, AssetWithDerivedAddress, SolAddress) {
 		let channel_id = channel_id.unwrap_or(923_601_931u64);
 		let (address, bump) = derive_deposit_address(channel_id, vault_program()).unwrap();
 
@@ -348,6 +366,7 @@ mod test {
 				asset,
 			},
 			token_mint_pubkey(),
+			SolAddress::from_str(VAULT_PROGRAM).unwrap(),
 		)
 		.unwrap()
 	}
@@ -581,7 +600,6 @@ mod test {
 			token_vault_ata(),
 			token_mint_pubkey(),
 			token_program_id(),
-			system_program_id(),
 			agg_key(),
 			nonce_account(),
 			compute_price(),
@@ -666,7 +684,6 @@ mod test {
 			ccm_accounts(),
 			vault_program(),
 			vault_program_data_account(),
-			system_program_id(),
 			sys_var_instructions(),
 			token_vault_pda_account(),
 			token_vault_ata(),
