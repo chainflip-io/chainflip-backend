@@ -1,5 +1,4 @@
 use cf_primitives::EpochIndex;
-use ed25519_dalek::VerifyingKey;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
@@ -43,7 +42,7 @@ impl CanonicalEncoding for cf_chains::sol::SolAddress {
 	}
 }
 
-impl CanonicalEncoding for VerifyingKey {
+impl CanonicalEncoding for ed25519_dalek::VerifyingKey {
 	fn encode_key(&self) -> Vec<u8> {
 		self.to_bytes().to_vec()
 	}

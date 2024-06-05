@@ -67,12 +67,20 @@ impl ChainCrypto for SolanaCrypto {
 	type GovKey = SolAddress;
 
 	fn verify_threshold_signature(
-		_agg_key: &Self::AggKey,
-		_payload: &Self::Payload,
-		_signature: &Self::ThresholdSignature,
+		agg_key: &Self::AggKey,
+		payload: &Self::Payload,
+		signature: &Self::ThresholdSignature,
 	) -> bool {
-		// TODO: Implement this
-		true
+		use ed25519_dalek::Verifier;
+
+		let public_key = match ed25519_dalek::VerifyingKey::from_bytes(&agg_key.0) {
+			Ok(pk) => pk,
+			Err(_) => return false,
+		};
+
+		let signature = ed25519_dalek::Signature::from_bytes(&signature.0);
+
+		public_key.verify(payload.serialize().as_slice(), &signature).is_ok()
 	}
 
 	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
