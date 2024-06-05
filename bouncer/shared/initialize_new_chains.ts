@@ -87,12 +87,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
   console.log('Initializing Solana programs');
 
   const solanaVaultProgramId = new PublicKey(getContractAddress('Solana', 'VAULT'));
-  const solanaUpgradeManagerProgramId = new PublicKey(
-    getContractAddress('Solana', 'UPGRADE_MANAGER'),
-  );
-  const solanaUpgradeManagerSignerProgramId = new PublicKey(
-    getContractAddress('Solana', 'UPGRADE_MANAGER_SIGNER'),
-  );
+
   const dataAccount = new PublicKey(getContractAddress('Solana', 'DATA_ACCOUNT'));
   const whaleKeypair = getSolWhaleKeyPair();
   const vaultIdl = await getSolanaVaultIdl();
@@ -105,7 +100,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
   const solKeyBuffer = Buffer.from(solKey.slice(2), 'hex');
   const newAggKey = new PublicKey(encodeSolAddress(solKey));
   const tokenVaultPda = new PublicKey(getContractAddress('Solana', 'TOKEN_VAULT_PDA'));
-  const upgradeSignerPda = new PublicKey("3eechPbKXiAVCubUkM9asJ5DbjNn7jHyi5KFLd5ocJbz");
+  const upgradeSignerPda = new PublicKey('3eechPbKXiAVCubUkM9asJ5DbjNn7jHyi5KFLd5ocJbz');
 
   // Initialize Vault program
   const tx = new Transaction().add(
@@ -115,9 +110,9 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
         solKeyBuffer,
         solKeyBuffer,
         tokenVaultPda.toBuffer(),
-        Buffer.from([253]), //tokenVaultPda bump
+        Buffer.from([253]), // tokenVaultPda bump
         upgradeSignerPda.toBuffer(),
-        Buffer.from([255]) // upgradeSignerPda bump
+        Buffer.from([255]), // upgradeSignerPda bump
       ]),
       keys: [
         { pubkey: dataAccount, isSigner: false, isWritable: true },
@@ -150,20 +145,12 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
       }),
     );
   }
-  // Set Vault's upgrade authority to Upgrade manager's PDA
+  // Set Vault's upgrade authority to upgradeSignerPDa
   tx.add(
     createUpgradeAuthorityInstruction(
       solanaVaultProgramId,
       whaleKeypair.publicKey,
-      solanaUpgradeManagerSignerProgramId,
-    ),
-  );
-  // Set Upgrade Manager's upgrade authority to AggKey
-  tx.add(
-    createUpgradeAuthorityInstruction(
-      solanaUpgradeManagerProgramId,
-      whaleKeypair.publicKey,
-      newAggKey,
+      upgradeSignerPda,
     ),
   );
   await signAndSendTxSol(tx);
