@@ -232,11 +232,6 @@ pub enum PolkadotProxyType {
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct EncodedPolkadotPayload(pub Vec<u8>);
 
-#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
-pub struct EpochStartData {
-	pub vault_account: PolkadotAccountId,
-}
-
 #[derive(
 	Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq, Serialize, Deserialize,
 )]
@@ -334,7 +329,6 @@ impl Chain for Polkadot {
 	type ChainAccount = PolkadotAccountId;
 	type TransactionFee = Self::ChainAmount;
 	type ChainAsset = assets::dot::Asset;
-	type EpochStartData = EpochStartData;
 	type DepositFetchId = PolkadotChannelId;
 	type DepositChannelState = PolkadotChannelState;
 	type DepositDetails = ();

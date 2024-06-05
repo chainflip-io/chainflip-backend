@@ -3,8 +3,8 @@ import path from 'path';
 import assert from 'assert';
 import { execSync } from 'child_process';
 
-import { blake2AsU8a } from '@polkadot/util-crypto';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
+import { blake2AsU8a } from '../polkadot/util-crypto';
 import {
   getPolkadotApi,
   observeEvent,
@@ -171,7 +171,7 @@ export async function bumpAndBuildPolkadotRuntime(): Promise<[string, number]> {
   console.log('Updating polkadot source');
   execSync(`git pull`, { cwd: workspacePath });
 
-  await specVersion(`${workspacePath}/runtime/polkadot/src/lib.rs`, 'write', nextSpecVersion);
+  specVersion(`${workspacePath}/runtime/polkadot/src/lib.rs`, 'write', nextSpecVersion);
 
   // Compile polkadot runtime
   console.log('Compiling polkadot...');
@@ -243,7 +243,12 @@ export async function testPolkadotRuntimeUpdate(): Promise<void> {
 
   // Monitor for the broadcast aborted event to help catch failed swaps
   let stopObserving = false;
-  const broadcastAborted = observeBadEvents(':BroadcastAborted', () => stopObserving);
+  const broadcastAborted = observeBadEvents(
+    ':BroadcastAborted',
+    () => stopObserving,
+    undefined,
+    'Polkadot runtime upgrade',
+  );
 
   // Start some swaps
   const swapping = doPolkadotSwaps();

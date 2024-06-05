@@ -72,6 +72,15 @@ impl TryFrom<NumberOrHex> for u64 {
 	}
 }
 
+impl From<NumberOrHex> for U256 {
+	fn from(value: NumberOrHex) -> Self {
+		match value {
+			NumberOrHex::Number(n) => n.into(),
+			NumberOrHex::Hex(n) => n,
+		}
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;

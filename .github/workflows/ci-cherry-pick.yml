@@ -41,7 +41,7 @@ jobs:
           git cherry-pick -x $COMMIT_SHA
 
       - name: Create Pull Request 🐂
-        uses: peter-evans/create-pull-request@v3
+        uses: peter-evans/create-pull-request@v4
         with:
           token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
           commit-message: "pick: ${{ env.COMMIT_SHA }} to ${{ env.RELEASE_BRANCH }}"

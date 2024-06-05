@@ -7,12 +7,12 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountRole, Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, ChannelId,
-	ForeignChain, SwapId, SwapLeg, TransactionHash, STABLE_ASSET,
+	ForeignChain, SwapId, SwapLeg, TransactionHash, BASIS_POINTS_PER_MILLION, STABLE_ASSET,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi, IngressEgressFeeApi,
-	SwapQueueApi, SwapType,
+	NetworkFeeTaken, SwapQueueApi, SwapType,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -40,20 +40,17 @@ pub use weights::WeightInfo;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
-const BASIS_POINTS_PER_MILLION: u32 = 100;
-
 pub const SWAP_DELAY_BLOCKS: u32 = 2;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct Swap {
-	pub swap_id: SwapId,
+	swap_id: SwapId,
 	pub from: Asset,
 	pub to: Asset,
-	pub amount: AssetAmount,
-	pub swap_type: SwapType,
-	pub stable_amount: Option<AssetAmount>,
-	pub final_output: Option<AssetAmount>,
-	pub fee_taken: bool,
+	input_amount: AssetAmount,
+	swap_type: SwapType,
+	stable_amount: Option<AssetAmount>,
+	final_output: Option<AssetAmount>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -72,18 +69,17 @@ impl Swap {
 		swap_id: SwapId,
 		from: Asset,
 		to: Asset,
-		amount: AssetAmount,
+		input_amount: AssetAmount,
 		swap_type: SwapType,
 	) -> Self {
 		Self {
 			swap_id,
 			from,
 			to,
-			amount,
+			input_amount,
 			swap_type,
-			stable_amount: if from == STABLE_ASSET { Some(amount) } else { None },
-			final_output: if from == to { Some(amount) } else { None },
-			fee_taken: false,
+			stable_amount: if from == STABLE_ASSET { Some(input_amount) } else { None },
+			final_output: if from == to { Some(input_amount) } else { None },
 		}
 	}
 
@@ -98,7 +94,7 @@ impl Swap {
 
 	fn swap_amount(&self, direction: SwapLeg) -> Option<AssetAmount> {
 		match direction {
-			SwapLeg::ToStable => Some(self.amount),
+			SwapLeg::ToStable => Some(self.input_amount),
 			SwapLeg::FromStable => self.stable_amount,
 		}
 	}
@@ -400,6 +396,10 @@ pub mod pallet {
 			asset: Asset,
 			amount: AssetAmount,
 			reason: DispatchError,
+		},
+		NetworkFeeTaken {
+			swap_id: SwapId,
+			fee_amount: AssetAmount,
 		},
 	}
 	#[pallet::error]
@@ -779,7 +779,7 @@ pub mod pallet {
 							// All swaps from `base_asset` have to go through the stable asset:
 							quote_asset: STABLE_ASSET,
 							side: Side::Sell,
-							amount: swap.amount,
+							amount: swap.input_amount,
 							source_asset: None,
 							source_amount: None,
 						})
@@ -787,7 +787,7 @@ pub mod pallet {
 						// In case the swap is "simulated", the amount is just an estimate,
 						// so we additionally include `source_asset` and `source_amount`:
 						let (source_asset, source_amount) = if swap.from != STABLE_ASSET {
-							(Some(swap.from), Some(swap.amount))
+							(Some(swap.from), Some(swap.input_amount))
 						} else {
 							(None, None)
 						};
@@ -828,7 +828,16 @@ pub mod pallet {
 					"All swaps should have Stable amount set here"
 				);
 				let stable_amount = swap.stable_amount.get_or_insert_with(Default::default);
-				*stable_amount = T::SwappingApi::take_network_fee(*stable_amount);
+
+				let NetworkFeeTaken { remaining_amount, network_fee } =
+					T::SwappingApi::take_network_fee(*stable_amount);
+
+				*stable_amount = remaining_amount;
+
+				Self::deposit_event(Event::<T>::NetworkFeeTaken {
+					fee_amount: network_fee,
+					swap_id: swap.swap_id,
+				});
 
 				if swap.to == STABLE_ASSET {
 					swap.final_output = Some(*stable_amount);
@@ -855,12 +864,24 @@ pub mod pallet {
 
 			for swap in swaps {
 				if let Some(swap_output) = swap.final_output {
+					// To be consistent with `swap_output` and `intermediate_amount` (which do
+					// not include the network fee), we report input amount without the network fee
+					// for swaps from STABLE_ASSET:
+					let swap_input = if swap.from == STABLE_ASSET {
+						swap.stable_amount.unwrap_or_else(|| {
+							log_or_panic!("stable amount must be set for swaps from STABLE_ASSET");
+							swap.input_amount
+						})
+					} else {
+						swap.input_amount
+					};
+
 					Self::deposit_event(Event::<T>::SwapExecuted {
 						swap_id: swap.swap_id,
 						source_asset: swap.from,
 						destination_asset: swap.to,
-						deposit_amount: swap.amount,
-						swap_input: swap.amount,
+						deposit_amount: swap_input,
+						swap_input,
 						egress_amount: swap_output,
 						swap_output,
 						intermediate_amount: swap.intermediate_amount(),

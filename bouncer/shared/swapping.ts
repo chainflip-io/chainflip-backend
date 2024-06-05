@@ -1,7 +1,7 @@
-import { randomAsHex, randomAsNumber } from '@polkadot/util-crypto';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import Web3 from 'web3';
 import assert from 'assert';
+import { randomAsHex, randomAsNumber } from '../polkadot/util-crypto';
 import { performSwap, SwapParams } from '../shared/perform_swap';
 import {
   newAddress,
@@ -26,6 +26,10 @@ enum SolidityType {
 export enum SwapStatus {
   Initiated,
   Funded,
+  // Contract swap specific statuses
+  ContractApproved,
+  ContractExecuted,
+  SwapScheduled,
   Success,
   Failure,
 }
@@ -175,7 +179,14 @@ export async function testSwapViaContract(
   );
 
   swapContext?.updateStatus(tag, SwapStatus.Initiated);
-  return performSwapViaContract(sourceAsset, destAsset, destAddress, tag, messageMetadata);
+  return performSwapViaContract(
+    sourceAsset,
+    destAsset,
+    destAddress,
+    tag,
+    messageMetadata,
+    swapContext,
+  );
 }
 
 export class SwapContext {
@@ -198,8 +209,29 @@ export class SwapContext {
         assert(currentStatus === SwapStatus.Initiated, `Unexpected status transition for ${tag}`);
         break;
       }
+      case SwapStatus.ContractApproved: {
+        assert(currentStatus === SwapStatus.Initiated, `Unexpected status transition for ${tag}`);
+        break;
+      }
+      case SwapStatus.ContractExecuted: {
+        assert(
+          currentStatus === SwapStatus.ContractApproved,
+          `Unexpected status transition for ${tag}`,
+        );
+        break;
+      }
+      case SwapStatus.SwapScheduled: {
+        assert(
+          currentStatus === SwapStatus.ContractExecuted || currentStatus === SwapStatus.Funded,
+          `Unexpected status transition for ${tag}`,
+        );
+        break;
+      }
       case SwapStatus.Success: {
-        assert(currentStatus === SwapStatus.Funded, `Unexpected status transition for ${tag}`);
+        assert(
+          currentStatus === SwapStatus.SwapScheduled,
+          `Unexpected status transition for ${tag}`,
+        );
         break;
       }
       default:

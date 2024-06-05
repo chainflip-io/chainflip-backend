@@ -218,11 +218,6 @@ impl BitcoinFeeInfo {
 	}
 }
 
-#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
-pub struct EpochStartData {
-	pub change_pubkey: AggKey,
-}
-
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
 	const GAS_ASSET: Self::ChainAsset = assets::btc::Asset::Btc;
@@ -235,7 +230,6 @@ impl Chain for Bitcoin {
 	type TrackedData = BitcoinTrackedData;
 	type ChainAsset = assets::btc::Asset;
 	type ChainAccount = ScriptPubkey;
-	type EpochStartData = EpochStartData;
 	type DepositFetchId = BitcoinFetchId;
 	type DepositChannelState = DepositAddress;
 	type DepositDetails = UtxoId;

@@ -44,7 +44,22 @@
     "no-restricted-syntax": "off",
     "prefer-destructuring": "off",
     "prefer-template": "off",
-    "radix": "off"
+    "radix": "off",
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["@polkadot/util-crypto"],
+            "message": "Please import this from './polkadot/util-crypto. It has already been initialized"
+          },
+          {
+            "group": ["@polkadot/keyring"],
+            "message": "Please import this from './polkadot/keyring. It has already been initialized"
+          }
+        ]
+      }
+    ]
   },
   "globals": {
     "jest": true

@@ -30,6 +30,8 @@ RUST_LOG=runtime=debug $BINARY_ROOT_PATH/chainflip-node --chain=$CHAIN \
   --port=$PORT \
   --rpc-port=$RPC_PORT \
   --rpc-max-connections=500 \
+  --rpc-max-request-size 1000 \
+  --rpc-max-response-size 1000 \
   --blocks-pruning=archive \
   --state-pruning=archive \
   --bootnodes=/ip4/127.0.0.1/tcp/30333/p2p/12D3KooWFD3YMDyQocSQBAx6VCcUruYihi6xYufduzf321FnvvoY \

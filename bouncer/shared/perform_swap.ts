@@ -1,5 +1,5 @@
-import { encodeAddress } from '@polkadot/util-crypto';
 import { InternalAsset as Asset } from '@chainflip/cli';
+import { encodeAddress } from '../polkadot/util-crypto';
 import { newSwap } from './new_swap';
 import { send, sendViaCfTester } from './send';
 import { getBalance } from './get_balance';
@@ -42,6 +42,7 @@ export async function requestNewSwap(
   messageMetadata?: CcmDepositMetadata,
   brokerCommissionBps?: number,
   log = true,
+  boostFeeBps = 0,
 ): Promise<SwapParams> {
   await using chainflipApi = await getChainflipApi();
 
@@ -74,7 +75,14 @@ export async function requestNewSwap(
       return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
     },
   );
-  await newSwap(sourceAsset, destAsset, destAddress, messageMetadata, brokerCommissionBps);
+  await newSwap(
+    sourceAsset,
+    destAsset,
+    destAddress,
+    messageMetadata,
+    brokerCommissionBps,
+    boostFeeBps,
+  );
 
   const res = (await addressPromise).data;
 
@@ -129,6 +137,8 @@ export async function doPerformSwap(
   swapContext?.updateStatus(tag, SwapStatus.Funded);
 
   await swapScheduledHandle;
+
+  swapContext?.updateStatus(tag, SwapStatus.SwapScheduled);
 
   if (log) console.log(`${tag} Waiting for balance to update`);
 
@@ -204,7 +214,7 @@ export async function performAndTrackSwap(
   // SwapScheduled, SwapExecuted, SwapEgressScheduled, BatchBroadcastRequested
   const broadcastId = await observeSwapEvents(swapParams, chainflipApi, tag);
 
-  if (broadcastId) await observeBroadcastSuccess(broadcastId);
+  if (broadcastId) await observeBroadcastSuccess(broadcastId, tag);
   else throw new Error('Failed to retrieve broadcastId!');
   console.log(`${tag} broadcast executed succesfully, swap is complete!`);
 }

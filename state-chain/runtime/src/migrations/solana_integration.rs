@@ -91,7 +91,7 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 				cf_runtime_upgrade_utilities::genesis_hashes::SISYPHOS => [0u8; 32].into(),
 				_ => {
 					// Assume testnet
-					todo!()
+					[0u8; 32].into()
 				},
 			};
 

@@ -161,19 +161,18 @@ fn can_discard_stale_utxos() {
 	let epoch_3 = [0xBB; 32];
 	let epoch_4 = [0xDD; 32];
 	new_test_ext().execute_with(|| {
-		// Do not discard utxo if `previous` key is not set.
-		MockBitcoinKeyProvider::add_key(AggKey { current: epoch_2, previous: None });
 		ConsolidationParameters::<Test>::set(utxo_selection::ConsolidationParameters {
 			consolidation_threshold: 5,
 			consolidation_size: 2,
 		});
 
+		// Does not discard UTXOs if previous key not set:
+		MockBitcoinKeyProvider::set_key(AggKey { current: epoch_2, previous: None });
+
 		BitcoinAvailableUtxos::<Test>::set(vec![
 			utxo_with_key(epoch_1),
 			utxo_with_key(epoch_1),
-			utxo_with_key(epoch_1),
-			utxo_with_key(epoch_3),
-			utxo_with_key(epoch_3),
+			utxo_with_key(epoch_2),
 			utxo_with_key(epoch_3),
 		]);
 
@@ -182,25 +181,32 @@ fn can_discard_stale_utxos() {
 			None
 		);
 
-		// No consolidation. Epoch 1 utxos are discarded
-		MockBitcoinKeyProvider::add_key(AggKey { current: epoch_3, previous: Some(epoch_2) });
+		// Have not reached threshold, but will still move previous epoch UTXO into the new vault
+		// as part of "consolidation". Epoch 1 utxos are discarded.
+		MockBitcoinKeyProvider::set_key(AggKey { current: epoch_3, previous: Some(epoch_2) });
 		assert_eq!(
-			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
-			None
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation,)
+				.unwrap()
+				.0,
+			vec![utxo_with_key(epoch_2)]
 		);
 
 		System::assert_has_event(RuntimeEvent::Environment(crate::Event::StaleUtxosDiscarded {
-			utxos: vec![utxo_with_key(epoch_1), utxo_with_key(epoch_1), utxo_with_key(epoch_1)],
+			utxos: vec![utxo_with_key(epoch_1), utxo_with_key(epoch_1)],
 		}));
 
-		// Can consolidate and discard at the same time
+		// Can "consolidate" and discard at the same time
 		BitcoinAvailableUtxos::<Test>::append(utxo_with_key(epoch_1));
 
-		MockBitcoinKeyProvider::add_key(AggKey { current: epoch_4, previous: Some(epoch_3) });
-		assert!(Environment::select_and_take_bitcoin_utxos(
-			UtxoSelectionType::SelectForConsolidation
-		)
-		.is_some());
+		MockBitcoinKeyProvider::set_key(AggKey { current: epoch_4, previous: Some(epoch_3) });
+
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation,)
+				.unwrap()
+				.0,
+			vec![utxo_with_key(epoch_3)]
+		);
+
 		System::assert_has_event(RuntimeEvent::Environment(crate::Event::StaleUtxosDiscarded {
 			utxos: vec![utxo_with_key(epoch_1)],
 		}));
@@ -213,7 +219,7 @@ fn can_consolidate_current_and_prev_utxos() {
 	let epoch_2 = [0xBB; 32];
 	const CONSOLIDATION_SIZE: u32 = 4;
 	new_test_ext().execute_with(|| {
-		MockBitcoinKeyProvider::add_key(AggKey { current: epoch_2, previous: Some(epoch_1) });
+		MockBitcoinKeyProvider::set_key(AggKey { current: epoch_2, previous: Some(epoch_1) });
 		ConsolidationParameters::<Test>::set(utxo_selection::ConsolidationParameters {
 			consolidation_threshold: 5,
 			consolidation_size: CONSOLIDATION_SIZE,
@@ -254,7 +260,7 @@ fn can_consolidate_old_utxo_only() {
 
 	new_test_ext().execute_with(|| {
 		// Set current key to epoch 2, and transfer limit to 2 utxo at a time.
-		MockBitcoinKeyProvider::add_key(AggKey { current: epoch_2, previous: Some(epoch_1) });
+		MockBitcoinKeyProvider::set_key(AggKey { current: epoch_2, previous: Some(epoch_1) });
 		ConsolidationParameters::<Test>::set(utxo_selection::ConsolidationParameters {
 			consolidation_threshold: 10,
 			consolidation_size: CONSOLIDATION_SIZE,
@@ -317,36 +323,6 @@ fn do_nothing_with_no_key_set() {
 			None,
 		);
 		assert_eq!(crate::BitcoinAvailableUtxos::<Test>::decode_len(), Some(6));
-
-		// Set key for current vault.
-		MockBitcoinKeyProvider::add_key(AggKey { current: epoch_2, previous: None });
-
-		assert_eq!(
-			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
-			None,
-		);
-
-		assert_eq!(crate::BitcoinAvailableUtxos::<Test>::decode_len(), Some(6));
-
-		// Only consolidate and discard stale utxos when previous key is available.
-		MockBitcoinKeyProvider::add_key(AggKey { current: epoch_3, previous: Some(epoch_2) });
-
-		// Utxos from epoch 1 are discarded, those from epoch 2 are consolidated.
-		assert_eq!(
-			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation)
-				.unwrap()
-				.0,
-			vec![utxo_with_key(epoch_2), utxo_with_key(epoch_2),],
-		);
-
-		System::assert_has_event(RuntimeEvent::Environment(crate::Event::StaleUtxosDiscarded {
-			utxos: vec![utxo_with_key(epoch_1), utxo_with_key(epoch_1)],
-		}));
-
-		assert_eq!(
-			BitcoinAvailableUtxos::<Test>::get(),
-			vec![utxo_with_key(epoch_3), utxo_with_key(epoch_3),]
-		);
 	});
 }
 

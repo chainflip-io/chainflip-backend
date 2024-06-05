@@ -68,3 +68,19 @@ fn vault_start_block_number_is_set_correctly() {
 		assert_last_event!(crate::Event::VaultActivationCompleted);
 	});
 }
+
+#[test]
+fn vault_start_block_number_not_set_when_chain_not_initialized() {
+	new_test_ext_no_key().execute_with(|| {
+		use crate::ChainInitialized;
+		BlockHeightProvider::<MockEthereum>::set_block_height(1000);
+		ChainInitialized::<Test, _>::put(false);
+		VaultsPallet::start_key_activation(NEW_AGG_PUBKEY, Some(Default::default()));
+		VaultsPallet::activate_key();
+		assert!(VaultStartBlockNumbers::<Test, _>::iter_keys().next().is_none());
+		assert!(matches!(
+			PendingVaultActivation::<Test, _>::get().unwrap(),
+			VaultActivationStatus::Complete
+		));
+	});
+}

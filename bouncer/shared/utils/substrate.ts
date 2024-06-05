@@ -1,5 +1,4 @@
 import 'disposablestack/auto';
-import assert from 'assert';
 import { deferredPromise, getChainflipApi, getPolkadotApi } from '../utils';
 
 const apiMap = {
@@ -118,36 +117,23 @@ interface AbortableOptions<T> extends BaseOptions<T> {
 
 type EventName = `${string}:${string}`;
 
-class Observer<T> extends Promise<T> {
-  static from<T>(cb: () => Promise<T>, controller?: AbortController): Observer<T> {
-    const obs = Observer.resolve(cb()) as Observer<T>;
-    obs.controller = controller;
-    return obs;
-  }
+type Observer<T> = {
+  abort: undefined;
+  event: Promise<Event<T>>;
+};
 
-  controller?: AbortController;
-
-  abort(): Observer<T | null> {
-    assert(this.controller, 'Observer is not abortable');
-    this.controller.abort();
-    return this;
-  }
-
-  then<TResult1 = T, TResult2 = never>(
-    onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null | undefined,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null | undefined,
-  ): Observer<TResult1 | TResult2> {
-    return Observer.from(() => super.then(onfulfilled, onrejected), this.controller);
-  }
-}
+type AbortableObserver<T> = {
+  stop: () => void;
+  event: Promise<Event<T> | null>;
+};
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export function observeEvent<T = any>(eventName: EventName): Observer<Event<T>>;
-export function observeEvent<T = any>(eventName: EventName, opts: Options<T>): Observer<Event<T>>;
+export function observeEvent<T = any>(eventName: EventName): Observer<T>;
+export function observeEvent<T = any>(eventName: EventName, opts: Options<T>): Observer<T>;
 export function observeEvent<T = any>(
   eventName: EventName,
   opts: AbortableOptions<T>,
-): Observer<Event<T> | null>;
+): AbortableObserver<T>;
 export function observeEvent<T = any>(
   eventName: EventName,
   {
@@ -156,7 +142,7 @@ export function observeEvent<T = any>(
     finalized = false,
     abortable = false,
   }: Options<T> | AbortableOptions<T> = {},
-): Observer<Event<T> | null> {
+): Observer<T> | AbortableObserver<T> {
   const [expectedSection, expectedMethod] = eventName.split(':');
 
   const controller = abortable ? new AbortController() : undefined;
@@ -181,16 +167,30 @@ export function observeEvent<T = any>(
     return null;
   };
 
-  return Observer.from(findEvent, controller);
+  return {
+    abort: controller && (() => controller.abort()),
+    event: findEvent(),
+  } as Observer<T> | AbortableObserver<T>;
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-export function observeBadEvents<T>(eventName: EventName, test?: EventTest<T>): Observer<void> {
-  return observeEvent(eventName, { test, abortable: true }).then((event) => {
-    if (event) {
-      throw new Error(
-        `Unexpected event emitted ${event.name.section}:${event.name.method} in block ${event.block}`,
-      );
-    }
-  }) as Observer<void>;
+export function observeBadEvents<T>(
+  eventName: EventName,
+  { test, label }: { test?: EventTest<T>; label?: string },
+): { stop: () => Promise<void> } {
+  const observer = observeEvent(eventName, { test, abortable: true });
+
+  return {
+    stop: async () => {
+      observer.stop();
+
+      await observer.event.then((event) => {
+        if (event) {
+          throw new Error(
+            `Unexpected event emitted ${event.name.section}:${event.name.method} in block ${event.block} [${label}]`,
+          );
+        }
+      });
+    },
+  };
 }

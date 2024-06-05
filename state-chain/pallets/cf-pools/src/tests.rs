@@ -3,7 +3,8 @@ use crate::{
 	CollectedNetworkFee, Error, Event, FlipBuyInterval, LimitOrder, PoolInfo, PoolOrders,
 	PoolPairsMap, Pools, RangeOrder, RangeOrderSize, ScheduledLimitOrderUpdates, STABLE_ASSET,
 };
-use cf_amm::common::{price_at_tick, tick_at_price, Side, Tick, PRICE_FRACTIONAL_BITS};
+use cf_amm::common::{price_at_tick, tick_at_price, Price, Side, Tick, PRICE_FRACTIONAL_BITS};
+use cf_chains::Ethereum;
 use cf_primitives::{chains::assets::any::Asset, AssetAmount, SwapOutput};
 use cf_test_utilities::{assert_events_match, assert_has_event, last_event};
 use cf_traits::{
@@ -393,11 +394,11 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 		// Do some swaps to collect fees.
 		assert_eq!(
 			LiquidityPools::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 10_000).unwrap(),
-			SwapOutput { intermediary: None, output: 5_987u128 }
+			SwapOutput { intermediary: None, output: 5_987u128, network_fee: 20 }
 		);
 		assert_eq!(
 			LiquidityPools::swap_with_network_fee(Asset::Eth, STABLE_ASSET, 10_000).unwrap(),
-			SwapOutput { intermediary: None, output: 5_987u128 }
+			SwapOutput { intermediary: None, output: 5_987u128, network_fee: 12 }
 		);
 
 		// Updates the fees to the new value and collect any fees on current positions.
@@ -582,11 +583,11 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 		// Do some swaps to collect fees.
 		assert_eq!(
 			LiquidityPools::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 202_200).unwrap(),
-			SwapOutput { intermediary: None, output: 99_894u128 }
+			SwapOutput { intermediary: None, output: 99_894u128, network_fee: 404 }
 		);
 		assert_eq!(
 			LiquidityPools::swap_with_network_fee(Asset::Eth, STABLE_ASSET, 18_000).unwrap(),
-			SwapOutput { intermediary: None, output: 9_071 }
+			SwapOutput { intermediary: None, output: 9_071, network_fee: 18 }
 		);
 
 		// Updates the fees to the new value and collect any fees on current positions.
@@ -690,11 +691,11 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 		// Do some swaps to collect fees.
 		assert_eq!(
 			LiquidityPools::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 5_000).unwrap(),
-			SwapOutput { intermediary: None, output: 2_989u128 }
+			SwapOutput { intermediary: None, output: 2_989u128, network_fee: 10 }
 		);
 		assert_eq!(
 			LiquidityPools::swap_with_network_fee(Asset::Eth, STABLE_ASSET, 5_000).unwrap(),
-			SwapOutput { intermediary: None, output: 2_998u128 }
+			SwapOutput { intermediary: None, output: 2_998u128, network_fee: 6 }
 		);
 
 		// Updates the fees to the new value. No fee is collected for range orders.
@@ -1017,64 +1018,95 @@ fn can_get_all_pool_orders() {
 
 #[test]
 fn asset_conversion() {
+	use cf_chains::assets::eth::Asset as EthereumAsset;
 	new_test_ext().execute_with(|| {
+		const fn decimals<const I: u32>() -> u128 {
+			10u128.pow(I)
+		}
+
+		const USDC_DECIMALS: u128 = decimals::<6>();
+		const PRICE_DECIMALS: u128 = decimals::<{ 18 - 6 }>();
+
+		/// 1 MILLION DOLLARS
+		const AVAILABLE_QUOTE_LIQUIDITY: u128 = 1_000_000 * USDC_DECIMALS;
+		/// 2000 USD per ETH
+		const ETH_PRICE: u128 = 2000;
+		/// 5 USD per FLIP
+		const FLIP_PRICE: u128 = 5;
+
+		// No available funds -> no conversion.
+		assert!(LiquidityPools::calculate_input_for_gas_output::<Ethereum>(FLIP, DESIRED_ETH,)
+			.is_none());
+
 		// Create pools
-		for asset in [Asset::Eth, Asset::Flip] {
+		for (base_asset, price) in [(Asset::Eth, ETH_PRICE), (Asset::Flip, FLIP_PRICE)] {
+			let available_base_liquidity = AVAILABLE_QUOTE_LIQUIDITY * price * PRICE_DECIMALS;
+			let tick = cf_amm::common::tick_at_price(
+				(Price::from(price) << PRICE_FRACTIONAL_BITS) / Price::from(PRICE_DECIMALS),
+			)
+			.unwrap();
+
+			println!("Creating pool for {:?} at tick {}", base_asset, tick);
+
 			assert_ok!(LiquidityPools::new_pool(
 				RuntimeOrigin::root(),
-				asset,
+				base_asset,
 				STABLE_ASSET,
 				Default::default(),
-				price_at_tick(0).unwrap(),
+				price_at_tick(tick).unwrap(),
 			));
-			assert_ok!(LiquidityPools::set_range_order(
+			assert_ok!(LiquidityPools::set_limit_order(
 				RuntimeOrigin::signed(ALICE),
-				asset,
+				base_asset,
 				STABLE_ASSET,
+				Side::Sell,
 				0,
-				Some(-100..100),
-				RangeOrderSize::Liquidity { liquidity: 100_000_000_000_000_000 },
+				Some(tick),
+				available_base_liquidity,
+			));
+			assert_ok!(LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(ALICE),
+				base_asset,
+				STABLE_ASSET,
+				Side::Buy,
+				1,
+				Some(tick),
+				AVAILABLE_QUOTE_LIQUIDITY,
 			));
 		}
 
-		const AVAILABLE: AssetAmount = 1_000_000;
-		const DESIRED: AssetAmount = 10_000;
-		// No available funds -> no conversion.
-		assert!(LiquidityPools::calculate_asset_conversion(
-			Asset::Flip,
-			0u128,
-			Asset::Eth,
-			DESIRED,
-		)
-		.is_none());
+		const FLIP: EthereumAsset = EthereumAsset::Flip;
 
 		// Desired output is zero -> trivially ok.
 		assert_eq!(
-			LiquidityPools::calculate_asset_conversion(Asset::Flip, AVAILABLE, Asset::Eth, 0u128,),
+			LiquidityPools::calculate_input_for_gas_output::<Ethereum>(FLIP, 0u128,),
 			Some(0u128)
 		);
 
-		// Desired output is available -> required amount.
+		// Desired output -> required amount at current price.
+		/// 100_000 gas when the gas cost is 10 gwei.
+		const GWEI: AssetAmount = decimals::<9>();
+		const DESIRED_ETH: AssetAmount = 100_000 * 10 * GWEI;
 		let required =
-			LiquidityPools::calculate_asset_conversion(Asset::Flip, AVAILABLE, Asset::Eth, DESIRED)
-				.unwrap();
-		assert!(required > 0 && required <= AVAILABLE);
+			LiquidityPools::calculate_input_for_gas_output::<Ethereum>(FLIP, DESIRED_ETH).unwrap();
 
-		// Same asset and desired output is available.
-		assert_eq!(
-			LiquidityPools::calculate_asset_conversion(Asset::Eth, AVAILABLE, Asset::Eth, DESIRED),
-			Some(DESIRED)
+		// Tick math means that the prices are not exact, so we allow for 1% inaccuracy in the
+		// estimate.
+		const EXPECTED_REQUIRED_INPUT: AssetAmount = DESIRED_ETH * (ETH_PRICE / FLIP_PRICE);
+		assert!(
+			required.abs_diff(EXPECTED_REQUIRED_INPUT) < EXPECTED_REQUIRED_INPUT / 100,
+			"actual: {}, expected: {}",
+			required,
+			EXPECTED_REQUIRED_INPUT
 		);
 
-		// Same asset and desired output is not fully available.
+		// Input is gas asset -> trivially ok.
 		assert_eq!(
-			LiquidityPools::calculate_asset_conversion(
-				Asset::Eth,
-				DESIRED,
-				Asset::Eth,
-				DESIRED * 2
+			LiquidityPools::calculate_input_for_gas_output::<Ethereum>(
+				cf_chains::assets::eth::GAS_ASSET,
+				DESIRED_ETH
 			),
-			Some(DESIRED)
+			Some(DESIRED_ETH)
 		);
 	});
 }
@@ -1220,5 +1252,99 @@ fn test_maximum_slippage_limits() {
 		));
 
 		test_swaps(3500);
+	});
+}
+
+#[test]
+fn can_accept_additional_limit_orders() {
+	new_test_ext().execute_with(|| {
+		let from = Asset::Flip;
+		let to = Asset::Usdt;
+		let default_price = price_at_tick(0).unwrap();
+
+		for asset in [from, to] {
+			// While the pool does not exist, no info can be obtained.
+			assert!(Pools::<Test>::get(AssetPair::new(asset, STABLE_ASSET).unwrap()).is_none());
+
+			// Create a new pool.
+			assert_ok!(LiquidityPools::new_pool(
+				RuntimeOrigin::root(),
+				asset,
+				STABLE_ASSET,
+				0u32,
+				default_price,
+			));
+			System::assert_last_event(RuntimeEvent::LiquidityPools(
+				Event::<Test>::NewPoolCreated {
+					base_asset: asset,
+					quote_asset: STABLE_ASSET,
+					fee_hundredth_pips: 0u32,
+					initial_price: default_price,
+				},
+			));
+		}
+
+		const ONE_FLIP: u128 = 10u128.pow(18);
+
+		assert!(LiquidityPools::swap_with_network_fee(from, STABLE_ASSET, ONE_FLIP,).is_err());
+
+		assert!(LiquidityPools::try_add_limit_order(
+			&0,
+			from,
+			STABLE_ASSET,
+			Side::Buy,
+			0,
+			-196236,
+			ONE_FLIP.into()
+		)
+		.is_ok());
+		let swap_output =
+			LiquidityPools::swap_with_network_fee(from, STABLE_ASSET, ONE_FLIP).unwrap();
+
+		assert_eq!(
+			swap_output,
+			SwapOutput { intermediary: None, output: 3000097981, network_fee: 6012220 }
+		);
+
+		const ONE_USDC: u128 = 10u128.pow(6);
+
+		assert!(LiquidityPools::try_add_limit_order(
+			&0,
+			from,
+			Asset::Usdc,
+			Side::Buy,
+			0,
+			-196236,
+			ONE_FLIP.into()
+		)
+		.is_ok());
+		assert!(LiquidityPools::swap_with_network_fee(from, to, ONE_FLIP,).is_err());
+
+		assert!(LiquidityPools::try_add_limit_order(
+			&0,
+			from,
+			Asset::Usdc,
+			Side::Buy,
+			0,
+			-196236,
+			ONE_FLIP.into()
+		)
+		.is_ok());
+		assert!(LiquidityPools::try_add_limit_order(
+			&0,
+			to,
+			Asset::Usdc,
+			Side::Sell,
+			0,
+			0,
+			(3500 * ONE_USDC).into()
+		)
+		.is_ok());
+		let swap_output = LiquidityPools::swap_with_network_fee(from, to, ONE_FLIP).unwrap();
+
+		assert_eq!(
+			swap_output,
+			SwapOutput { intermediary: Some(3000097981), output: 3000097980, network_fee: 6012220 }
+		)
 	});
 }

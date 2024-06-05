@@ -1,7 +1,10 @@
-use crate::{BitcoinInstance, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall};
-use cf_chains::btc::BitcoinFeeInfo;
+use crate::{
+	ArbitrumInstance, BitcoinInstance, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall,
+};
+use cf_chains::{arb::ArbitrumTrackedData, btc::BitcoinFeeInfo};
 use codec::{Decode, Encode};
 use pallet_cf_witnesser::WitnessDataExtraction;
+use sp_runtime::FixedU64;
 use sp_std::{mem, prelude::*};
 
 impl WitnessDataExtraction for RuntimeCall {
@@ -34,9 +37,27 @@ impl WitnessDataExtraction for RuntimeCall {
 				let fee_info = mem::take(&mut new_chain_state.tracked_data.median_tip);
 				Some(fee_info.encode())
 			},
-
-			// Since there is no priority fee in Arbitrum, we do not extract anything from the chain
-			// tracking witness data.
+			// In Arbitrum the amount of gas for calls keep changing accross time. In order to get
+			// that value (gas multiplier) we need to use a call to the NodeInterface which
+			// simulates a transaction to get that value. However, that estimation can't be done at
+			// a particular block but rather when the node receives the RPC call.
+			RuntimeCall::ArbitrumChainTracking(pallet_cf_chain_tracking::Call::<
+				Runtime,
+				ArbitrumInstance,
+			>::update_chain_state {
+				ref mut new_chain_state,
+			}) => {
+				let tracked_data = mem::replace(
+					&mut new_chain_state.tracked_data,
+					// Explicitly set a default value as `::default()` panics.
+					ArbitrumTrackedData {
+						// Use the floor value of 0.01 gwei for Arbitrum One
+						base_fee: 10000000,
+						gas_limit_multiplier: FixedU64::from(1),
+					},
+				);
+				Some(tracked_data.encode())
+			},
 			_ => None,
 		}
 	}
@@ -71,6 +92,15 @@ impl WitnessDataExtraction for RuntimeCall {
 					new_chain_state.tracked_data.median_tip = median;
 				};
 			},
+			RuntimeCall::ArbitrumChainTracking(pallet_cf_chain_tracking::Call::<
+				Runtime,
+				ArbitrumInstance,
+			>::update_chain_state {
+				new_chain_state,
+			}) =>
+				if let Some(tracked_data) = arb_select_median_base_and_multiplier(data) {
+					new_chain_state.tracked_data = tracked_data;
+				},
 			_ => {
 				log::warn!("No witness data injection for call {:?}", self);
 			},
@@ -88,6 +118,32 @@ fn select_median<T: Ord + Copy>(mut data: Vec<T>) -> Option<T> {
 fn select_median_btc_info(data: Vec<BitcoinFeeInfo>) -> Option<BitcoinFeeInfo> {
 	select_median(data.iter().map(BitcoinFeeInfo::sats_per_kilobyte).collect())
 		.map(BitcoinFeeInfo::new)
+}
+
+fn arb_select_median_base_and_multiplier(data: &mut [Vec<u8>]) -> Option<ArbitrumTrackedData> {
+	let decode_all_results: Result<Vec<_>, _> = data
+		.iter_mut()
+		.map(|entry| ArbitrumTrackedData::decode(&mut entry.as_slice()))
+		.collect();
+
+	match decode_all_results {
+		Ok(entries) => {
+			let (base_values, multiplier_values): (Vec<_>, Vec<_>) =
+				entries.into_iter().map(|t| (t.base_fee, t.gas_limit_multiplier)).unzip();
+			Some(ArbitrumTrackedData {
+				base_fee: select_median(base_values)?,
+				gas_limit_multiplier: select_median(multiplier_values)?,
+			})
+		},
+		Err(decode_err) => {
+			log::warn!(
+				"Error decoding {}: {}",
+				core::any::type_name::<ArbitrumTrackedData>(),
+				decode_err
+			);
+			None
+		},
+	}
 }
 
 fn decode_and_select<T, F>(data: &mut [Vec<u8>], mut select: F) -> Option<T>
@@ -323,5 +379,28 @@ mod tests {
 	#[test]
 	fn select_median_btc_info_empty() {
 		assert_eq!(select_median_btc_info(vec![]), None);
+	}
+
+	#[test]
+	fn arb_select_median_base_and_multiplier_empty_votes() {
+		assert!(arb_select_median_base_and_multiplier(&mut []).is_none());
+	}
+
+	#[test]
+	fn arb_select_median_base_and_multiplier_test() {
+		let mut votes = [(1, 1), (9999, 1000), (7, 1002), (7, 4000), (3, 0)]
+			.into_iter()
+			.map(|(base_fee, multiplier)| ArbitrumTrackedData {
+				base_fee,
+				gas_limit_multiplier: FixedU64::from(multiplier),
+			})
+			.map(|data| data.encode())
+			.collect::<Vec<_>>();
+
+		let actual = arb_select_median_base_and_multiplier(&mut votes).unwrap();
+		let expected =
+			ArbitrumTrackedData { base_fee: 7, gas_limit_multiplier: FixedU64::from(1000) };
+
+		assert_eq!(actual, expected);
 	}
 }
