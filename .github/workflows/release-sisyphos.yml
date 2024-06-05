@@ -66,6 +66,7 @@ jobs:
     with:
       full_bouncer: true
   upgrade-check:
+    needs: [build-try-runtime-benchmarks]
     uses: ./.github/workflows/upgrade-test.yml
     secrets: inherit
     with:
