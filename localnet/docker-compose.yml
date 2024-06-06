@@ -9,7 +9,7 @@ services:
       - "/tmp/chainflip/data:/localnet-initial-state"
     command: /bin/sh -c "cp -R /initial-state/* /localnet-initial-state"
 
-  init-solana:
+  solana-init:
     image: ghcr.io/chainflip-io/solana-localnet-ledger:v0.5.0
     pull_policy: always
     container_name: init-solana
