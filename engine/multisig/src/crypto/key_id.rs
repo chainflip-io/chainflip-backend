@@ -42,6 +42,12 @@ impl CanonicalEncoding for cf_chains::sol::SolAddress {
 	}
 }
 
+impl CanonicalEncoding for ed25519_dalek::VerifyingKey {
+	fn encode_key(&self) -> Vec<u8> {
+		self.to_bytes().to_vec()
+	}
+}
+
 impl<const S: usize> CanonicalEncoding for [u8; S] {
 	fn encode_key(&self) -> Vec<u8> {
 		self.to_vec()

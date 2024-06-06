@@ -164,7 +164,7 @@ impl P2PMuxer {
 									.send((account_id, message))
 									.expect("bitcoin receiver dropped");
 							},
-							ChainTag::Ed25519 => {
+							ChainTag::Solana => {
 								self.sol_incoming_sender
 									.send((account_id, message))
 									.expect("solana receiver dropped");
@@ -219,7 +219,7 @@ impl P2PMuxer {
 					self.process_outgoing(ChainTag::Bitcoin, data).await;
 				}
 				Some(data) = self.sol_outgoing_receiver.recv() => {
-					self.process_outgoing(ChainTag::Ed25519, data).await;
+					self.process_outgoing(ChainTag::Solana, data).await;
 				}
 			}
 		}

@@ -40,9 +40,7 @@ pub enum ChainTag {
 	Ethereum = 0x0000,
 	Polkadot = 0x0001,
 	Bitcoin = 0x0002,
-
-	// Ed25519 placeholder
-	Ed25519 = 0xffff,
+	Solana = 0x0003,
 }
 
 #[repr(u16)]
@@ -51,9 +49,7 @@ pub enum CryptoTag {
 	Evm = 0x0000,
 	Polkadot = 0x0001,
 	Bitcoin = 0x0002,
-
-	// Ed25519 placeholder
-	Ed25519 = 0xffff,
+	Solana = 0x0003,
 }
 
 impl Display for ChainTag {
@@ -62,7 +58,7 @@ impl Display for ChainTag {
 			ChainTag::Ethereum => write!(f, "Ethereum"),
 			ChainTag::Polkadot => write!(f, "Polkadot"),
 			ChainTag::Bitcoin => write!(f, "Bitcoin"),
-			ChainTag::Ed25519 => write!(f, "Ed25519"),
+			ChainTag::Solana => write!(f, "Solana"),
 		}
 	}
 }

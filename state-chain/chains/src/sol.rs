@@ -18,7 +18,6 @@ pub mod instruction_builder;
 pub mod sol_tx_core;
 
 pub use crate::assets::sol::Asset as SolAsset;
-use ed25519_dalek::{PublicKey, Signature, Verifier};
 pub use sol_prim::{
 	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
 	Address as SolAddress, Amount as SolAmount, ComputeLimit as SolComputeLimit, Digest as SolHash,
@@ -72,6 +71,8 @@ impl ChainCrypto for SolanaCrypto {
 		payload: &Self::Payload,
 		signature: &Self::ThresholdSignature,
 	) -> bool {
+		use ed25519_dalek::{PublicKey, Signature, Verifier};
+
 		let public_key = match PublicKey::from_bytes(&agg_key.0) {
 			Ok(pk) => pk,
 			Err(_) => return false,
