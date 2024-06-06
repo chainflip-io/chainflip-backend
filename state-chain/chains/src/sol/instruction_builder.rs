@@ -16,10 +16,7 @@ use sp_std::{vec, vec::Vec};
 use crate::{
 	sol::{
 		api::SolanaTransactionBuildingError,
-		consts::{
-			SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID,
-			SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID,
-		},
+		consts::{SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID},
 		sol_tx_core::{
 			compute_budget::ComputeBudgetInstruction,
 			program_instructions::{SystemProgramInstruction, VaultProgram},
@@ -395,8 +392,6 @@ mod test {
 		SolAddress::from_str(TOKEN_VAULT_PDA_ACCOUNT).unwrap()
 	}
 
-
-
 	fn compute_price() -> SolAmount {
 		COMPUTE_UNIT_PRICE
 	}
@@ -404,8 +399,6 @@ mod test {
 	fn token_vault_ata() -> SolAddress {
 		SolAddress::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap()
 	}
-
-
 
 	fn token_mint_pubkey() -> SolAddress {
 		SolAddress::from_str(MINT_PUB_KEY).unwrap()
