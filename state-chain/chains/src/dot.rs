@@ -486,6 +486,7 @@ impl PolkadotExtrinsicBuilder {
 	}
 
 	pub fn refresh_replay_protection(&mut self, replay_protection: PolkadotReplayProtection) {
+		self.signature = None;
 		self.replay_protection = replay_protection;
 	}
 }
