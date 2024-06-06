@@ -22,6 +22,8 @@ cf-primitives = { path = '../../primitives', default-features = false }
 cf-traits = { path = '../../traits', default-features = false }
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
 
+log = { version = '0.4.16', default-features = false }
+
 serde = { version = '1.0.195', default_features = false, features = [
     'alloc',
     'derive',
@@ -59,6 +61,7 @@ std = [
     'frame-support/std',
     'frame-system/std',
     'scale-info/std',
+    'log/std',
     'serde/std',
     'sp-std/std',
 ]

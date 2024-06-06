@@ -952,3 +952,8 @@ pub trait AssetConverter {
 pub trait IngressEgressFeeApi<C: Chain> {
 	fn accrue_withheld_fee(asset: C::ChainAsset, amount: C::ChainAmount);
 }
+
+pub trait Refunding<C: Chain> {
+	fn record_gas_fees(asset: C::ChainAsset, amount: C::ChainAmount);
+	fn collect_fees(asset: C::ChainAsset, amount: C::ChainAmount);
+}

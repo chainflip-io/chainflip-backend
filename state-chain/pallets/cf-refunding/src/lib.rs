@@ -1,53 +1,34 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
-use cf_primitives::{AccountRole, Asset, AssetAmount, BasisPoints, ForeignChain};
-use cf_traits::{
-	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi,
-	EgressApi, LpDepositHandler, PoolApi, ScheduledEgressDetails,
-};
+use cf_chains::AnyChain;
+use cf_primitives::{Asset, AssetAmount};
+use cf_traits::{impl_pallet_safe_mode, Chainflip, EgressApi};
+use sp_std::collections::btree_map::BTreeMap;
 
 use sp_std::vec;
 
-use cf_chains::assets::any::AssetMap;
-use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult};
-use frame_system::pallet_prelude::*;
+use frame_support::pallet_prelude::*;
 pub use pallet::*;
 
 mod benchmarking;
 
-// #[cfg(test)]
-// mod mock;
-// #[cfg(test)]
-// mod tests;
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
 
 // pub mod migrations;
 // pub mod weights;
 // pub use weights::WeightInfo;
 
-use cf_chains::address::EncodedAddress;
-
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
 
 impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
-	use cf_chains::Chain;
-	use cf_primitives::{ChannelId, EgressId};
-
 	use super::*;
-
-	/// AccountOrAddress is a enum that can represent an internal account or an external address.
-	/// This is used to represent the destination address for an egress during a withdrawal or an
-	/// internal account to move funds internally.
-	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
-	pub enum AccountOrAddress<AccountId> {
-		Internal(AccountId),
-		External(EncodedAddress),
-	}
-
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
@@ -71,7 +52,8 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		AnEvent { account_id: T::AccountId, asset: Asset, amount_debited: AssetAmount },
+		RefundScheduled { account_id: T::AccountId, asset: Asset, amount: AssetAmount },
+		RefundIntegrityCheckFailed { asset: Asset },
 	}
 
 	#[pallet::pallet]
@@ -79,14 +61,62 @@ pub mod pallet {
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
-	#[pallet::call]
-	impl<T: Config> Pallet<T> {
-		#[pallet::call_index(1)]
-		#[pallet::weight(10_000)]
-		pub fn do_something(origin: OriginFor<T>) -> DispatchResult {
-			Ok(().into())
+	/// Storage for recorded fees per validator and asset.
+	#[pallet::storage]
+	pub type RecordedFees<T: Config> =
+		StorageMap<_, Twox64Concat, Asset, BTreeMap<T::AccountId, AssetAmount>, ValueQuery>;
+
+	/// Storage for validator's withheld transaction fees.
+	#[pallet::storage]
+	pub type WithheldTransactionFees<T: Config> =
+		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
+}
+
+impl<T: Config> Pallet<T> {
+	pub fn record_gas_fee(account_id: T::AccountId, asset: Asset, gas_fee: AssetAmount) {
+		RecordedFees::<T>::mutate(&asset, |recorded_fees| {
+			recorded_fees
+				.entry(account_id)
+				.and_modify(|fee| *fee += gas_fee)
+				.or_insert(gas_fee);
+		});
+	}
+	pub fn withheld_transaction_fee(asset: Asset, amount: AssetAmount) {
+		WithheldTransactionFees::<T>::mutate(&asset, |fees| *fees += amount);
+	}
+	pub fn on_distribute_withheld_fees() {
+		let assets = WithheldTransactionFees::<T>::iter_keys().collect::<Vec<_>>();
+
+		for asset in assets {
+			// Integrity check before we start refunding
+			if WithheldTransactionFees::<T>::get(asset) !=
+				RecordedFees::<T>::get(asset).iter().map(|(_, fee)| fee).sum()
+			{
+				log::warn!(
+                    "Integrity check for refunding failed for asset {:?}. Refunding will be skipped.", asset);
+				Self::deposit_event(Event::RefundIntegrityCheckFailed { asset });
+				continue;
+			}
+			let mut available_funds = WithheldTransactionFees::<T>::take(asset);
+			let recorded_fees = RecordedFees::<T>::take(asset);
+			for (validator, fee) in recorded_fees {
+				if let Some(remaining_funds) = available_funds.checked_sub(fee) {
+					available_funds = remaining_funds;
+					Self::deposit_event(Event::RefundScheduled {
+						account_id: validator,
+						asset,
+						amount: fee,
+					});
+				} else {
+					// TODO: This actually can never happen, still better to remember the data in a
+					// seperate storage item?
+					log::warn!(
+                        "Insufficient funds to refund validator {:?} for asset {:?}. Refunding not possible!",
+                        validator,
+                        asset,
+                    );
+				}
+			}
 		}
 	}
 }
-
-impl<T: Config> Pallet<T> {}

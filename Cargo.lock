@@ -7694,6 +7694,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "log",
  "pallet-cf-account-roles",
  "parity-scale-codec",
  "scale-info",
