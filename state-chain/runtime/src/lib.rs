@@ -1263,6 +1263,57 @@ impl_runtime_apis! {
 		fn cf_free_balances(account_id: AccountId) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage> {
 			LiquidityProvider::free_balances(&account_id).map_err(Into::into)
 		}
+		fn cf_lp_total_balances(account_id: AccountId) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage> {
+			let mut balances = LiquidityProvider::free_balances(&account_id).map_err(Into::<DispatchErrorWithMessage>::into)?;
+			let base_assets: Vec<Asset> = Asset::all().collect();
+			for base_asset in base_assets {
+				let orders = Self::cf_pool_orders(base_asset, Asset::Usdc, Some(account_id.clone())).unwrap();
+				let boosted_funds = Self::cf_boost_pool_details(base_asset);
+				// pub struct BoostPoolDetails {
+				// 	pub available_amounts: BTreeMap<AccountId32, u128>,
+				// 	pub pending_boosts: BTreeMap<u64, BTreeMap<AccountId32, OwedAmount<u128>>>,
+				// 	pub pending_withdrawals: BTreeMap<AccountId32, BTreeSet<u64>>,
+				// }
+				let boost_amount = boosted_funds.iter().fold(0, |acc, (_fee, elem)| acc + elem.available_amounts.get(&account_id).unwrap_or(&0u128) + elem.pending_boosts.iter().fold(0, |acc, (_boost_id, elem)| acc + elem.get(&account_id).unwrap_or(&OwedAmount{total: 0u128, fee: 0u128}).total));
+				for ask in orders.limit_orders.asks {
+					match base_asset {
+						Asset::Usdc => {
+							//is this necessary? is it possible to open orders from usdc to usdc???
+							balances.eth.usdc += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
+						},
+						Asset::Usdt => {
+							balances.eth.usdt += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
+						},
+						Asset::Eth => {
+							balances.eth.eth += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
+						},
+						Asset::Flip => {
+							balances.eth.flip += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
+						},
+						Asset::Btc => {
+							balances.btc.btc += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
+						},
+						Asset::Dot => {
+							balances.dot.dot += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
+						},
+						Asset::ArbEth => {
+							balances.arb.eth += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
+						},
+						Asset::ArbUsdc => {
+							balances.arb.usdc += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
+						},
+						Asset::Sol => {
+							balances.sol.sol += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
+						}
+					}
+				}
+				for bid in orders.limit_orders.bids {
+					balances.eth.usdc += <sp_core::U256 as TryInto<u128>>::try_into(bid.sell_amount).unwrap() + boost_amount;
+				}
+			}
+
+			Ok(balances)
+		}
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()
 		}

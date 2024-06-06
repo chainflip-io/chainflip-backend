@@ -620,6 +620,12 @@ pub trait CustomApi {
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<any::AssetMap<U256>>;
+	#[method(name = "lp_total_balances", aliases = ["lp_total_balances"])]
+	fn cf_lp_total_balances(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<any::AssetMap<U256>>;
 	#[method(name = "penalties")]
 	fn cf_penalties(
 		&self,
@@ -1083,6 +1089,22 @@ where
 		self.client
 			.runtime_api()
 			.cf_free_balances(self.unwrap_or_best(at), account_id)
+			.map_err(to_rpc_error)
+			.and_then(|result| {
+				result
+					.map(|free_balances| free_balances.map(Into::into))
+					.map_err(map_dispatch_error)
+			})
+	}
+
+	fn cf_lp_total_balances(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<any::AssetMap<U256>> {
+		self.client
+			.runtime_api()
+			.cf_lp_total_balances(self.unwrap_or_best(at), account_id)
 			.map_err(to_rpc_error)
 			.and_then(|result| {
 				result
