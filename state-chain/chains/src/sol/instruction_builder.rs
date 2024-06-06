@@ -9,13 +9,17 @@ use crate::sol::{
 	Solana,
 };
 use codec::Encode;
+use core::str::FromStr;
 use sol_prim::AccountBump;
 use sp_std::{vec, vec::Vec};
 
 use crate::{
 	sol::{
 		api::SolanaTransactionBuildingError,
-		consts::SOL_USDC_DECIMAL,
+		consts::{
+			SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID,
+			SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID,
+		},
 		sol_tx_core::{
 			compute_budget::ComputeBudgetInstruction,
 			program_instructions::{SystemProgramInstruction, VaultProgram},
@@ -71,6 +75,17 @@ impl AssetWithDerivedAddress {
 	}
 }
 
+fn system_program_id() -> SolAddress {
+	SolAddress::from_str(SYSTEM_PROGRAM_ID).unwrap()
+}
+
+fn sys_var_instructions() -> SolAddress {
+	SolAddress::from_str(SYS_VAR_INSTRUCTIONS).unwrap()
+}
+
+fn token_program_id() -> SolAddress {
+	SolAddress::from_str(TOKEN_PROGRAM_ID).unwrap()
+}
 pub struct SolanaInstructionBuilder;
 
 /// TODO: Implement Compute Limit calculation. pro-1357
@@ -108,10 +123,8 @@ impl SolanaInstructionBuilder {
 		decomposed_fetch_params: Vec<(SolanaDepositFetchId, AssetWithDerivedAddress, SolAddress)>,
 		token_mint_pubkey: SolAddress,
 		token_vault_ata: SolAddress,
-		token_program_id: SolAddress,
 		vault_program: SolAddress,
 		vault_program_data_account: SolAddress,
-		system_program_id: SolAddress,
 		agg_key: SolAddress,
 		nonce_account: SolAddress,
 		compute_price: SolAmount,
@@ -126,7 +139,7 @@ impl SolanaInstructionBuilder {
 					agg_key,
 					fetch_id.address,
 					deposit_historical_fetch_account,
-					system_program_id,
+					system_program_id(),
 				),
 				AssetWithDerivedAddress::Usdc((ata, _bump)) => VaultProgram::with_id(vault_program)
 					.fetch_tokens(
@@ -139,9 +152,9 @@ impl SolanaInstructionBuilder {
 						ata,
 						token_vault_ata,
 						token_mint_pubkey,
-						token_program_id,
+						token_program_id(),
 						deposit_historical_fetch_account,
-						system_program_id,
+						system_program_id(),
 					),
 			})
 			.collect::<Vec<_>>();
@@ -174,7 +187,6 @@ impl SolanaInstructionBuilder {
 		token_vault_pda_account: SolAddress,
 		token_vault_ata: SolAddress,
 		token_mint_pubkey: SolAddress,
-		token_program_id: SolAddress,
 		agg_key: SolAddress,
 		nonce_account: SolAddress,
 		compute_price: SolAmount,
@@ -195,7 +207,7 @@ impl SolanaInstructionBuilder {
 				token_vault_ata,
 				ata,
 				token_mint_pubkey,
-				token_program_id,
+				token_program_id(),
 			),
 		];
 
@@ -208,7 +220,6 @@ impl SolanaInstructionBuilder {
 		all_nonce_accounts: Vec<SolAddress>,
 		vault_program: SolAddress,
 		vault_program_data_account: SolAddress,
-		system_program_id: SolAddress,
 		agg_key: SolAddress,
 		nonce_account: SolAddress,
 		compute_price: SolAmount,
@@ -218,7 +229,7 @@ impl SolanaInstructionBuilder {
 			vault_program_data_account,
 			agg_key,
 			new_agg_key,
-			system_program_id,
+			system_program_id(),
 		)];
 		instructions.extend(all_nonce_accounts.into_iter().map(|nonce_account| {
 			SystemProgramInstruction::nonce_authorize(
@@ -241,8 +252,6 @@ impl SolanaInstructionBuilder {
 		ccm_accounts: SolCcmAccounts,
 		vault_program: SolAddress,
 		vault_program_data_account: SolAddress,
-		system_program_id: SolAddress,
-		sys_var_instructions: SolAddress,
 		agg_key: SolAddress,
 		nonce_account: SolAddress,
 		compute_price: SolAmount,
@@ -258,8 +267,8 @@ impl SolanaInstructionBuilder {
 				agg_key,
 				to,
 				ccm_accounts.cf_receiver,
-				system_program_id,
-				sys_var_instructions,
+				system_program_id(),
+				sys_var_instructions(),
 				// TODO: We should be passing this!
 				// ccm_accounts.remaining_account_metas(),
 			),
@@ -278,11 +287,9 @@ impl SolanaInstructionBuilder {
 		ccm_accounts: SolCcmAccounts,
 		vault_program: SolAddress,
 		vault_program_data_account: SolAddress,
-		sys_var_instructions: SolAddress,
 		token_vault_pda_account: SolAddress,
 		token_vault_ata: SolAddress,
 		token_mint_pubkey: SolAddress,
-		token_program_id: SolAddress,
 		agg_key: SolAddress,
 		nonce_account: SolAddress,
 		compute_price: SolAmount,
@@ -303,7 +310,7 @@ impl SolanaInstructionBuilder {
 			token_vault_ata,
 			ata,
 			token_mint_pubkey,
-			token_program_id,
+			token_program_id(),
 		),
 		VaultProgram::with_id(vault_program).execute_ccm_token_call(
 			source_chain as u32,
@@ -314,9 +321,9 @@ impl SolanaInstructionBuilder {
 			agg_key,
 			ata,
 			ccm_accounts.cf_receiver,
-			token_program_id,
+			token_program_id(),
 			token_mint_pubkey,
-			sys_var_instructions,
+			sys_var_instructions(),
 			// TODO: We should be passing this!
 			// ccm_accounts.remaining_account_metas(),
 		)];
@@ -332,7 +339,7 @@ mod test {
 	use super::*;
 	use crate::{
 		sol::{
-			consts::{MAX_TRANSACTION_LENGTH, TOKEN_PROGRAM_ID},
+			consts::MAX_TRANSACTION_LENGTH,
 			sol_tx_core::{
 				address_derivation::derive_deposit_address,
 				extra_types_for_testing::{Keypair, Signer},
@@ -342,7 +349,6 @@ mod test {
 		},
 		TransferAssetParams,
 	};
-	use core::str::FromStr;
 
 	fn get_decomposed_fetch_params(
 		channel_id: Option<ChannelId>,
@@ -389,13 +395,7 @@ mod test {
 		SolAddress::from_str(TOKEN_VAULT_PDA_ACCOUNT).unwrap()
 	}
 
-	fn system_program_id() -> SolAddress {
-		SolAddress::from_str(crate::sol::consts::SYSTEM_PROGRAM_ID).unwrap()
-	}
 
-	fn sys_var_instructions() -> SolAddress {
-		SolAddress::from_str(crate::sol::consts::SYS_VAR_INSTRUCTIONS).unwrap()
-	}
 
 	fn compute_price() -> SolAmount {
 		COMPUTE_UNIT_PRICE
@@ -405,9 +405,7 @@ mod test {
 		SolAddress::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap()
 	}
 
-	fn token_program_id() -> SolAddress {
-		SolAddress::from_str(TOKEN_PROGRAM_ID).unwrap()
-	}
+
 
 	fn token_mint_pubkey() -> SolAddress {
 		SolAddress::from_str(MINT_PUB_KEY).unwrap()
@@ -461,10 +459,8 @@ mod test {
 			vec![get_decomposed_fetch_params(None, SOL)],
 			token_mint_pubkey(),
 			token_vault_ata(),
-			token_program_id(),
 			vault_program(),
 			vault_program_data_account(),
-			system_program_id(),
 			agg_key(),
 			nonce_account(),
 			compute_price(),
@@ -489,10 +485,8 @@ mod test {
 			vec![fetch_param_0, fetch_param_1],
 			token_mint_pubkey(),
 			token_vault_ata(),
-			token_program_id(),
 			vault_program,
 			vault_program_data_account(),
-			system_program_id(),
 			agg_key(),
 			nonce_account(),
 			compute_price(),
@@ -511,10 +505,8 @@ mod test {
 			vec![get_decomposed_fetch_params(Some(0u64), USDC)],
 			token_mint_pubkey(),
 			token_vault_ata(),
-			token_program_id(),
 			vault_program(),
 			vault_program_data_account(),
-			system_program_id(),
 			agg_key(),
 			nonce_account(),
 			compute_price(),
@@ -536,10 +528,8 @@ mod test {
 			],
 			token_mint_pubkey(),
 			token_vault_ata(),
-			token_program_id(),
 			vault_program(),
 			vault_program_data_account(),
-			system_program_id(),
 			agg_key(),
 			nonce_account(),
 			compute_price(),
@@ -586,7 +576,6 @@ mod test {
 			token_vault_pda_account(),
 			token_vault_ata(),
 			token_mint_pubkey(),
-			token_program_id(),
 			agg_key(),
 			nonce_account(),
 			compute_price(),
@@ -607,7 +596,6 @@ mod test {
 			nonce_accounts(),
 			vault_program(),
 			vault_program_data_account(),
-			system_program_id(),
 			agg_key(),
 			nonce_account(),
 			compute_price(),
@@ -637,8 +625,6 @@ mod test {
 			ccm_accounts(),
 			vault_program(),
 			vault_program_data_account(),
-			system_program_id(),
-			sys_var_instructions(),
 			agg_key(),
 			nonce_account(),
 			compute_price(),
@@ -670,11 +656,9 @@ mod test {
 			ccm_accounts(),
 			vault_program(),
 			vault_program_data_account(),
-			sys_var_instructions(),
 			token_vault_pda_account(),
 			token_vault_ata(),
 			token_mint_pubkey(),
-			token_program_id(),
 			agg_key(),
 			nonce_account(),
 			compute_price(),
