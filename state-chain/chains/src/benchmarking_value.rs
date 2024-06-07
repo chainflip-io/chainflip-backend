@@ -7,6 +7,7 @@ use cf_primitives::{
 
 #[cfg(feature = "runtime-benchmarks")]
 use ethereum_types::{H160, U256};
+use sp_core::H256;
 
 #[cfg(feature = "runtime-benchmarks")]
 use crate::address::EncodedAddress;
@@ -14,6 +15,7 @@ use crate::address::EncodedAddress;
 use crate::address::ForeignChainAddress;
 #[cfg(feature = "runtime-benchmarks")]
 use crate::dot::PolkadotTransactionId;
+use crate::evm;
 #[cfg(feature = "runtime-benchmarks")]
 use crate::evm::{EvmFetchId, EvmTransactionMetadata};
 
@@ -150,6 +152,13 @@ impl BenchmarkValue for EvmTransactionMetadata {
 impl BenchmarkValue for PolkadotTransactionId {
 	fn benchmark_value() -> Self {
 		Self { block_number: 0u32, extrinsic_index: 0u32 }
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for evm::DepositDetails {
+	fn benchmark_value() -> Self {
+		Self { tx_hashes: Some(vec![H256::default()]) }
 	}
 }
 
