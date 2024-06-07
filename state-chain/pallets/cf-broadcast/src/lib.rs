@@ -696,26 +696,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			RequestFailureCallbacks::<T, I>::insert(broadcast_id, callback);
 		}
 
-		(broadcast_id, Self::threshold_sign(api_call, broadcast_id, true, false))
+		(broadcast_id, Self::threshold_sign(api_call, broadcast_id, true))
 	}
 
 	/// Signs a API call, use `Call::on_signature_ready` as the callback, and returns the signature
 	/// request ID.
 	fn threshold_sign(
-		mut api_call: <T as Config<I>>::ApiCall,
+		api_call: <T as Config<I>>::ApiCall,
 		broadcast_id: BroadcastId,
 		should_broadcast: bool,
-		refresh_replay_protection: bool,
 	) -> ThresholdSignatureRequestId {
 		// We must set this here because after the threshold signature is requested, it's
 		// possible that an authority submits the transaction themselves, not going through the
 		// standard path. This protects against that, to ensure we always set the earliest possible
 		// block number we could have broadcast at, so that we can ensure we witness it.
 		let initiated_at = T::ChainTracking::get_block_height();
-
-		if refresh_replay_protection {
-			api_call.refresh_replay_protection();
-		}
 
 		let threshold_signature_payload = api_call.threshold_signature_payload();
 		T::ThresholdSigner::request_signature_with_callback(
@@ -751,7 +746,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					&broadcast_data.threshold_signature_payload,
 				) {
 					Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid { broadcast_id });
-					Self::threshold_sign(api_call, broadcast_id, true, false);
+					Self::threshold_sign(api_call, broadcast_id, true);
 					log::info!(
 						"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
 						broadcast_id
@@ -937,7 +932,7 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 
 	fn threshold_sign(api_call: Self::ApiCall) -> (BroadcastId, ThresholdSignatureRequestId) {
 		let broadcast_id = Self::next_broadcast_id();
-		(broadcast_id, Self::threshold_sign(api_call, broadcast_id, false, false))
+		(broadcast_id, Self::threshold_sign(api_call, broadcast_id, false))
 	}
 
 	fn re_sign_broadcast(
@@ -948,8 +943,12 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 		AbortedBroadcasts::<T, I>::mutate(|aborted| {
 			aborted.remove(&broadcast_id);
 		});
-		let api_call = Self::clean_up_broadcast_storage(broadcast_id)
+		let mut api_call = Self::clean_up_broadcast_storage(broadcast_id)
 			.ok_or(Error::<T, I>::ApiCallUnavailable)?;
+
+		if refresh_replay_protection {
+			api_call.refresh_replay_protection();
+		}
 
 		PendingBroadcasts::<T, I>::try_mutate(|pending| {
 			if pending.contains(&broadcast_id) {
@@ -961,12 +960,7 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 				Ok(())
 			}
 		})?;
-		Ok(Self::threshold_sign(
-			api_call,
-			broadcast_id,
-			request_broadcast,
-			refresh_replay_protection,
-		))
+		Ok(Self::threshold_sign(api_call, broadcast_id, request_broadcast))
 	}
 
 	fn expire_broadcast(broadcast_id: BroadcastId) {

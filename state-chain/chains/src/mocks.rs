@@ -385,7 +385,7 @@ impl<C, Call> MockTransactionBuilder<C, Call> {
 	pub fn set_refreshed_replay_protection() {
 		REFRESHED_REPLAY_PROTECTION.with(|is_valid| *is_valid.borrow_mut() = false)
 	}
-	pub fn get_set_refreshed_replay_protection_state() -> bool {
+	pub fn get_refreshed_replay_protection_state() -> bool {
 		REFRESHED_REPLAY_PROTECTION.with(|is_valid| *is_valid.borrow())
 	}
 }

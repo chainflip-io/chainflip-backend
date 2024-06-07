@@ -1338,6 +1338,6 @@ fn threshold_sign_and_refresh_replay_protection() {
 			true,
 		));
 
-		assert!(MockTransactionBuilder::<MockEthereum, RuntimeCall>::get_set_refreshed_replay_protection_state(), "Refreshed replay protection has not been refreshed!");
+		assert!(MockTransactionBuilder::<MockEthereum, RuntimeCall>::get_refreshed_replay_protection_state(), "Refreshed replay protection has not been refreshed!");
 	});
 }

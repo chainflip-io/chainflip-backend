@@ -206,6 +206,7 @@ impl<C: EvmCall> EvmTransactionBuilder<C> {
 	}
 
 	pub fn refresh_replay_protection(&mut self, replay_protection: EvmReplayProtection) {
+		self.sig_data = None;
 		self.replay_protection = replay_protection;
 	}
 }
@@ -279,4 +280,46 @@ pub trait EvmEnvironmentProvider<C: Chain> {
 	fn vault_address() -> EvmAddress;
 	fn chain_id() -> EvmChainId;
 	fn next_nonce() -> u64;
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use evm::AggKey;
+
+	#[test]
+	fn test_evm_transaction_builder() {
+		let replay_protection = EvmReplayProtection {
+			nonce: 1,
+			chain_id: 1,
+			key_manager_address: Address::from_low_u64_be(1),
+			contract_address: Address::from_low_u64_be(2),
+		};
+
+		let call = set_agg_key_with_agg_key::SetAggKeyWithAggKey { new_key: AggKey::default() };
+		let builder = EvmTransactionBuilder::new_unsigned(replay_protection, call);
+
+		assert_eq!(builder.chain_id(), 1);
+		assert_eq!(builder.replay_protection(), replay_protection);
+		assert_eq!(builder.gas_budget(), None);
+		assert!(!builder.is_signed());
+
+		let threshold_signature =
+			SchnorrVerificationComponents { s: [0u8; 32], k_times_g_address: [0u8; 20] };
+
+		let mut builder = builder.signed(&threshold_signature);
+		assert!(builder.is_signed());
+
+		let new_replay_protection = EvmReplayProtection {
+			nonce: 2,
+			chain_id: 2,
+			key_manager_address: Address::from_low_u64_be(3),
+			contract_address: Address::from_low_u64_be(4),
+		};
+
+		builder.refresh_replay_protection(new_replay_protection);
+
+		assert_eq!(builder.replay_protection(), new_replay_protection);
+		assert!(!builder.is_signed());
+	}
 }
