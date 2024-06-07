@@ -1278,8 +1278,9 @@ impl_runtime_apis! {
 				for ask in orders.limit_orders.asks {
 					match base_asset {
 						Asset::Usdc => {
-							//is this necessary? is it possible to open orders from usdc to usdc???
-							//maybe querying cf_pool_orders for USDC -> USDC throw an error! keep this into account
+							// is this necessary? is it possible to open orders from usdc to usdc???
+							// maybe querying cf_pool_orders for USDC -> USDC throw an error! keep this into account
+							// If it throws an error just handle it and only check the boosted funds for usdc not the orders!
 							balances.eth.usdc += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
 						},
 						Asset::Usdt => {
