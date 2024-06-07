@@ -1132,7 +1132,7 @@ mod test_polkadot_extrinsics {
 		};
 
 		extrinsic_builder.refresh_replay_protection(new_replay_protection.clone());
-
+		assert!(!extrinsic_builder.is_signed());
 		assert_eq!(new_replay_protection, extrinsic_builder.replay_protection);
 	}
 

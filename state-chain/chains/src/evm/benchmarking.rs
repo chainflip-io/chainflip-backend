@@ -1,7 +1,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::{
-	api::{EvmEnvironmentProvider, EvmReplayProtection},
+	api::{EvmChainId, EvmEnvironmentProvider, EvmReplayProtection},
 	TransactionFee,
 };
 use crate::{
@@ -41,23 +41,23 @@ where
 
 impl EvmEnvironmentProvider<Ethereum> for EvmBenchmarkEnv {
 	fn token_address(_asset: assets::eth::Asset) -> Option<Address> {
-		unimplemented!()
+		Some(Address::benchmark_value())
 	}
 
 	fn vault_address() -> Address {
-		unimplemented!()
+		Address::benchmark_value()
 	}
 
 	fn key_manager_address() -> Address {
-		unimplemented!()
+		Address::benchmark_value()
 	}
 
 	fn chain_id() -> api::EvmChainId {
-		unimplemented!()
+		EvmChainId::benchmark_value()
 	}
 
 	fn next_nonce() -> u64 {
-		unimplemented!()
+		u64::benchmark_value()
 	}
 }
 
