@@ -1124,16 +1124,6 @@ mod test_polkadot_extrinsics {
 			"encoded extrinsic: {:?}",
 			extrinsic_builder.get_signed_unchecked_extrinsic().unwrap().encode()
 		);
-
-		let new_replay_protection = PolkadotReplayProtection {
-			nonce: 13,
-			signer: account_id_1,
-			genesis_hash: Default::default(),
-		};
-
-		extrinsic_builder.refresh_replay_protection(new_replay_protection.clone());
-		assert!(!extrinsic_builder.is_signed());
-		assert_eq!(new_replay_protection, extrinsic_builder.replay_protection);
 	}
 
 	#[test]
@@ -1155,5 +1145,41 @@ mod test_polkadot_extrinsics {
 		// be updated if we update the fee calculation.
 		assert_eq!(ingress_fee, 197_300_000u128);
 		assert_eq!(egress_fee, 197_450_000u128);
+	}
+
+	#[test]
+	fn refresh_replay_protection() {
+		let keypair = PolkadotPair::from_seed(&RAW_SEED_1);
+		let account_id: PolkadotAccountId = keypair.public_key();
+		let test_runtime_call: PolkadotRuntimeCall =
+			PolkadotRuntimeCall::Balances(BalancesCall::transfer_allow_death {
+				dest: PolkadotAccountIdLookup::from(account_id),
+				value: 35_000_000_000u128, //0.035 WND
+			});
+
+		let mut extrinsic_builder = PolkadotExtrinsicBuilder::new(
+			PolkadotReplayProtection {
+				nonce: 12,
+				signer: account_id,
+				genesis_hash: Default::default(),
+			},
+			test_runtime_call,
+		);
+
+		extrinsic_builder.insert_signature(keypair.sign(&extrinsic_builder.get_signature_payload(
+			TEST_RUNTIME_VERSION.spec_version,
+			TEST_RUNTIME_VERSION.transaction_version,
+		)));
+
+		let new_replay_protection = PolkadotReplayProtection {
+			nonce: 13,
+			signer: account_id,
+			genesis_hash: Default::default(),
+		};
+
+		extrinsic_builder.refresh_replay_protection(new_replay_protection.clone());
+
+		assert_eq!(new_replay_protection, extrinsic_builder.replay_protection);
+		assert!(!extrinsic_builder.is_signed());
 	}
 }
