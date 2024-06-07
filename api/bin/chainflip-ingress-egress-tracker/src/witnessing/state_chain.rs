@@ -556,7 +556,7 @@ mod tests {
 						deposit_address: polkadot_account_id,
 						amount: 100u128,
 						asset: cf_chains::assets::dot::Asset::Dot,
-						deposit_details: (),
+						deposit_details: 1,
 					}],
 					block_height: 1,
 				},

@@ -7,6 +7,8 @@ use cf_primitives::{
 
 #[cfg(feature = "runtime-benchmarks")]
 use ethereum_types::{H160, U256};
+
+#[cfg(feature = "runtime-benchmarks")]
 use sp_core::H256;
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -15,6 +17,7 @@ use crate::address::EncodedAddress;
 use crate::address::ForeignChainAddress;
 #[cfg(feature = "runtime-benchmarks")]
 use crate::dot::PolkadotTransactionId;
+#[cfg(feature = "runtime-benchmarks")]
 use crate::evm;
 #[cfg(feature = "runtime-benchmarks")]
 use crate::evm::{EvmFetchId, EvmTransactionMetadata};
