@@ -7,7 +7,7 @@ use cf_amm::{
 	range_orders::{self, Liquidity},
 	PoolState,
 };
-use cf_chains::Chain;
+use cf_chains::{Chain, assets::any::AssetMap};
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
 use cf_traits::{
 	impl_pallet_safe_mode, Chainflip, LpBalanceApi, NetworkFeeTaken, PoolApi, SwapQueueApi,
@@ -1091,6 +1091,21 @@ impl<T: Config> PoolApi for Pallet<T> {
 		Ok(pool_orders.limit_orders.asks.len() as u32 +
 			pool_orders.limit_orders.bids.len() as u32 +
 			pool_orders.range_orders.len() as u32)
+	}
+
+	fn order_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError> {
+		let mut result = AssetMap::from_fn(|_| 0);
+
+		for base_asset in Asset::all().filter(|asset| *asset != Asset::Usdc) {
+			let pool_orders = Self::pool_orders(base_asset, Asset::Usdc, Some(who.clone()))?;
+			for ask in pool_orders.limit_orders.asks {
+				result[base_asset] += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap();
+			}
+			for bid in pool_orders.limit_orders.bids {
+				result[Asset::Usdc] += <sp_core::U256 as TryInto<u128>>::try_into(bid.sell_amount).unwrap();
+			}
+		}
+		Ok(result)
 	}
 }
 
