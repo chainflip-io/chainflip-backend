@@ -78,6 +78,8 @@ pub trait PoolApi {
 		base_asset: Asset,
 		quote_asset: Asset,
 	) -> Result<u32, DispatchError>;
+
+	fn order_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError>;
 }
 
 impl<T: frame_system::Config> PoolApi for T {
@@ -93,6 +95,9 @@ impl<T: frame_system::Config> PoolApi for T {
 		_quote_asset: Asset,
 	) -> Result<u32, DispatchError> {
 		Ok(0)
+	}
+	fn order_balances(_who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError> {
+		Ok(AssetMap::from_fn(|_| 0))
 	}
 }
 
