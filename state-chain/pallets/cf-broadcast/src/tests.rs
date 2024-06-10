@@ -1270,3 +1270,40 @@ fn broadcast_is_retried_without_initial_nominee() {
 			assert_broadcast_storage_cleaned_up(broadcast_id);
 		});
 }
+
+#[test]
+fn broadcast_re_signing() {
+	new_test_ext()
+		.execute_with(|| {
+			let (broadcast_id, _) = start_mock_broadcast();
+			// BroadcastDelay::set(Some(1u32.into()));
+			// assert_ok!(Broadcaster::transaction_failed(RuntimeOrigin::signed(0u64),
+			// broadcast_id));
+
+			// Abort the broadcast
+			let nominee = ready_to_abort_broadcast(broadcast_id);
+			assert_ok!(Broadcaster::transaction_failed(
+				RuntimeOrigin::signed(nominee),
+				broadcast_id
+			));
+			System::assert_last_event(RuntimeEvent::Broadcaster(
+				crate::Event::<Test, Instance1>::BroadcastAborted { broadcast_id },
+			));
+			broadcast_id
+		})
+		.then_execute_at_next_block(|broadcast_id| {
+			// Check that the broadcast is aborted
+			assert!(!PendingBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
+			assert!(AbortedBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
+
+			// Request a re-sign
+			assert_ok!(crate::Pallet::<Test, Instance1>::re_sign_aborted_broadcast(
+				RuntimeOrigin::root(),
+				broadcast_id,
+				true,
+			));
+			// Check that the broadcast is re-scheduled
+			assert!(PendingBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
+			assert!(!AbortedBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
+		});
+}
