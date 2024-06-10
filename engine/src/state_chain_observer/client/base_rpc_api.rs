@@ -13,7 +13,7 @@ use sp_version::RuntimeVersion;
 use state_chain_runtime::SignedBlock;
 
 use codec::Encode;
-use custom_rpc::CustomApiClient;
+use custom_rpc::{CustomApiClient, DynamicApiClient};
 use sc_rpc_api::{
 	author::AuthorApiClient,
 	chain::ChainApiClient,
@@ -25,6 +25,7 @@ use futures::future::BoxFuture;
 use serde_json::value::RawValue;
 use std::sync::Arc;
 use subxt::backend::rpc::RawRpcSubscription;
+use utilities::dynamic_events::DynamicEventRecord;
 
 #[cfg(test)]
 use mockall::automock;
@@ -35,6 +36,7 @@ pub trait RawRpcApi:
 	ClientT
 	+ SubscriptionClientT
 	+ CustomApiClient
+	+ DynamicApiClient
 	+ SystemApiClient<state_chain_runtime::Hash, state_chain_runtime::BlockNumber>
 	+ StateApiClient<state_chain_runtime::Hash>
 	+ AuthorApiClient<
@@ -161,6 +163,11 @@ pub trait BaseRpcApi {
 		params: Option<Box<RawValue>>,
 		unsub: &str,
 	) -> RpcResult<Subscription<Box<RawValue>>>;
+
+	async fn dynamic_events(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<DynamicEventRecord>>;
 }
 
 pub struct BaseRpcClient<RawRpcClient> {
@@ -295,6 +302,13 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		unsub: &str,
 	) -> RpcResult<Subscription<Box<RawValue>>> {
 		self.raw_rpc_client.subscribe(sub, Params(params), unsub).await
+	}
+
+	async fn dynamic_events(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<DynamicEventRecord>> {
+		self.raw_rpc_client.cf_dynamic_events(at).await
 	}
 }
 
