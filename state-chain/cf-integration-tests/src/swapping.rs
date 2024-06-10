@@ -268,6 +268,7 @@ fn basic_pool_setup_provision_and_swap() {
 			None,
 			0u16,
 			Default::default(),
+			None,
 		));
 
 		let deposit_address = <AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
@@ -377,6 +378,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 			Some(message),
 			0u16,
 			Default::default(),
+			None,
 		));
 
 		// Deposit funds for the ccm.

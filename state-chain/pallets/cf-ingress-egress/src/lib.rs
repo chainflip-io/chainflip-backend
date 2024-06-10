@@ -27,8 +27,8 @@ use cf_chains::{
 		AddressConverter, AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress,
 	},
 	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
-	Chain, ChannelLifecycleHooks, ConsolidateCall, DepositChannel, ExecutexSwapAndCall,
-	FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
+	Chain, ChannelLifecycleHooks, ChannelRefundParameters, ConsolidateCall, DepositChannel,
+	ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	Asset, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId, EgressCounter,
@@ -267,6 +267,7 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
+			refund_params: Option<ChannelRefundParameters>,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
@@ -275,6 +276,7 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			channel_metadata: CcmChannelMetadata,
+			refund_params: Option<ChannelRefundParameters>,
 		},
 	}
 
@@ -1479,26 +1481,31 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				DepositAction::LiquidityProvision { lp_account }
 			},
-			ChannelAction::Swap { destination_address, destination_asset, broker_fees, .. } =>
-				DepositAction::Swap {
-					swap_id: T::SwapDepositHandler::schedule_swap_from_channel(
-						<<T::TargetChain as Chain>::ChainAccount as IntoForeignChainAddress<
-							T::TargetChain,
-						>>::into_foreign_chain_address(deposit_address.clone()),
-						block_height.into(),
-						asset.into(),
-						destination_asset,
-						amount_after_fees.into(),
-						destination_address,
-						broker_fees,
-						channel_id,
-					),
-				},
+			ChannelAction::Swap {
+				destination_address,
+				destination_asset,
+				broker_fees,
+				refund_params,
+			} => DepositAction::Swap {
+				swap_id: T::SwapDepositHandler::schedule_swap_from_channel(
+					<<T::TargetChain as Chain>::ChainAccount as IntoForeignChainAddress<
+						T::TargetChain,
+					>>::into_foreign_chain_address(deposit_address.clone()),
+					block_height.into(),
+					asset.into(),
+					destination_asset,
+					amount_after_fees.into(),
+					destination_address,
+					broker_fees,
+					refund_params,
+					channel_id,
+				),
+			},
 			ChannelAction::CcmTransfer {
 				destination_asset,
 				destination_address,
 				channel_metadata,
-				..
+				refund_params,
 			} => {
 				if let Ok(CcmSwapIds { principal_swap_id, gas_swap_id }) =
 					T::CcmHandler::on_ccm_deposit(
@@ -1520,6 +1527,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							channel_id,
 							deposit_block_height: block_height.into(),
 						},
+						refund_params,
 					) {
 					DepositAction::CcmTransfer { principal_swap_id, gas_swap_id }
 				} else {
@@ -1821,6 +1829,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					asset.into(),
 					<T::TargetChain as Chain>::GAS_ASSET.into(),
 					transaction_fee.into(),
+					None, /* refund params */
 					SwapType::IngressEgressFee,
 				);
 			}
@@ -1956,6 +1965,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
+		refund_params: Option<ChannelRefundParameters>,
 	) -> Result<
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
@@ -1968,8 +1978,14 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 					destination_asset,
 					destination_address,
 					channel_metadata: msg,
+					refund_params,
 				},
-				None => ChannelAction::Swap { destination_asset, destination_address, broker_fees },
+				None => ChannelAction::Swap {
+					destination_asset,
+					destination_address,
+					broker_fees,
+					refund_params,
+				},
 			},
 			boost_fee,
 		)?;

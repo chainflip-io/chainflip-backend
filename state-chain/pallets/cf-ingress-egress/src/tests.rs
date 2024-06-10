@@ -490,6 +490,7 @@ fn can_process_ccm_deposit() {
 			1,
 			Some(channel_metadata),
 			0,
+			None,
 		)
 		.unwrap();
 

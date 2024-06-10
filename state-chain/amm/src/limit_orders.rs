@@ -215,7 +215,7 @@ impl SwapDirection for BaseToQuote {
 	}
 
 	fn output_amount_floor(input: Amount, price: Price) -> Amount {
-		mul_div_floor(input, price, U256::one() << PRICE_FRACTIONAL_BITS)
+		crate::common::output_amount_floor(input, price)
 	}
 
 	fn best_priced_fixed_pool(

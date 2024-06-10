@@ -3,7 +3,8 @@
 use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, ForeignChainAddress},
-	CcmChannelMetadata, CcmDepositMetadata, SwapOrigin,
+	CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParameters, SwapOrigin,
+	SwapRefundParameters,
 };
 use cf_primitives::{
 	AccountRole, Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, ChannelId,
@@ -41,6 +42,83 @@ pub use weights::WeightInfo;
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 pub const SWAP_DELAY_BLOCKS: u32 = 2;
+pub const SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
+
+struct SwapCtx {
+	swap: Swap,
+	stable_amount: Option<AssetAmount>,
+	final_output: Option<AssetAmount>,
+}
+
+impl SwapCtx {
+	fn new(swap: Swap) -> Self {
+		Self {
+			stable_amount: if swap.from == STABLE_ASSET { Some(swap.input_amount) } else { None },
+			final_output: if swap.from == swap.to { Some(swap.input_amount) } else { None },
+			swap,
+		}
+	}
+
+	fn swap_id(&self) -> SwapId {
+		self.swap.swap_id
+	}
+
+	fn input_asset(&self) -> Asset {
+		self.swap.from
+	}
+
+	fn output_asset(&self) -> Asset {
+		self.swap.to
+	}
+
+	fn input_amount(&self) -> AssetAmount {
+		self.swap.input_amount
+	}
+
+	fn refund_params(&self) -> Option<&SwapRefundParameters> {
+		self.swap.refund_params.as_ref()
+	}
+
+	fn swap_type(&self) -> &SwapType {
+		&self.swap.swap_type
+	}
+
+	fn update_swap_result(&mut self, direction: SwapLeg, output: AssetAmount) {
+		match direction {
+			SwapLeg::ToStable => {
+				self.stable_amount = Some(output);
+				if self.output_asset() == STABLE_ASSET {
+					self.final_output = Some(output);
+				}
+			},
+			SwapLeg::FromStable => self.final_output = Some(output),
+		}
+	}
+
+	fn swap_amount(&self, direction: SwapLeg) -> Option<AssetAmount> {
+		match direction {
+			SwapLeg::ToStable => Some(self.input_amount()),
+			SwapLeg::FromStable => self.stable_amount,
+		}
+	}
+
+	fn swap_asset(&self, direction: SwapLeg) -> Option<Asset> {
+		match (direction, self.input_asset(), self.output_asset()) {
+			(SwapLeg::ToStable, STABLE_ASSET, _) => None,
+			(SwapLeg::ToStable, from, _) => Some(from),
+			(SwapLeg::FromStable, _, STABLE_ASSET) => None,
+			(SwapLeg::FromStable, _, to) => Some(to),
+		}
+	}
+
+	fn intermediate_amount(&self) -> Option<AssetAmount> {
+		if self.input_asset() == STABLE_ASSET || self.output_asset() == STABLE_ASSET {
+			None
+		} else {
+			self.stable_amount
+		}
+	}
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct Swap {
@@ -48,9 +126,8 @@ pub struct Swap {
 	pub from: Asset,
 	pub to: Asset,
 	input_amount: AssetAmount,
+	refund_params: Option<SwapRefundParameters>,
 	swap_type: SwapType,
-	stable_amount: Option<AssetAmount>,
-	final_output: Option<AssetAmount>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -70,53 +147,10 @@ impl Swap {
 		from: Asset,
 		to: Asset,
 		input_amount: AssetAmount,
+		refund_params: Option<SwapRefundParameters>,
 		swap_type: SwapType,
 	) -> Self {
-		Self {
-			swap_id,
-			from,
-			to,
-			input_amount,
-			swap_type,
-			stable_amount: if from == STABLE_ASSET { Some(input_amount) } else { None },
-			final_output: if from == to { Some(input_amount) } else { None },
-		}
-	}
-
-	fn swap_asset(&self, direction: SwapLeg) -> Option<Asset> {
-		match (direction, self.from, self.to) {
-			(SwapLeg::ToStable, STABLE_ASSET, _) => None,
-			(SwapLeg::ToStable, from, _) => Some(from),
-			(SwapLeg::FromStable, _, STABLE_ASSET) => None,
-			(SwapLeg::FromStable, _, to) => Some(to),
-		}
-	}
-
-	fn swap_amount(&self, direction: SwapLeg) -> Option<AssetAmount> {
-		match direction {
-			SwapLeg::ToStable => Some(self.input_amount),
-			SwapLeg::FromStable => self.stable_amount,
-		}
-	}
-
-	fn update_swap_result(&mut self, direction: SwapLeg, output: AssetAmount) {
-		match direction {
-			SwapLeg::ToStable => {
-				self.stable_amount = Some(output);
-				if self.to == STABLE_ASSET {
-					self.final_output = Some(output);
-				}
-			},
-			SwapLeg::FromStable => self.final_output = Some(output),
-		}
-	}
-
-	fn intermediate_amount(&self) -> Option<AssetAmount> {
-		if self.from == STABLE_ASSET || self.to == STABLE_ASSET {
-			None
-		} else {
-			self.stable_amount
-		}
+		Self { swap_id, from, to, input_amount, swap_type, refund_params }
 	}
 }
 
@@ -135,6 +169,7 @@ pub(crate) struct CcmSwapOutput {
 
 enum BatchExecutionError {
 	SwapLegFailed { asset: Asset, direction: SwapLeg, amount: AssetAmount },
+	PriceLimitHit { successful_swaps: Vec<Swap>, failed_swaps: Vec<Swap> },
 	DispatchError { error: DispatchError },
 }
 
@@ -311,7 +346,7 @@ pub mod pallet {
 			channel_opening_fee: T::Amount,
 			affiliate_fees: Affiliates<T::AccountId>,
 		},
-		/// A swap deposit has been received.
+		/// A swap is scheduled for the first time
 		SwapScheduled {
 			swap_id: SwapId,
 			source_asset: Asset,
@@ -323,6 +358,11 @@ pub mod pallet {
 			#[deprecated(note = "Use broker_fee instead")]
 			broker_commission: Option<AssetAmount>,
 			broker_fee: Option<AssetAmount>,
+			execute_at: BlockNumberFor<T>,
+		},
+		/// A swap is re-scheduled for a future block after failure
+		SwapRescheduled {
+			swap_id: SwapId,
 			execute_at: BlockNumberFor<T>,
 		},
 		/// A swap has been executed.
@@ -346,6 +386,12 @@ pub mod pallet {
 			asset: Asset,
 			amount: AssetAmount,
 			fee: AssetAmount,
+		},
+		RefundEgressScheduled {
+			swap_id: SwapId,
+			egress_id: EgressId,
+			amount: AssetAmount,
+			egress_fee: AssetAmount,
 		},
 		/// A broker fee withdrawal has been requested.
 		WithdrawalRequested {
@@ -397,6 +443,12 @@ pub mod pallet {
 			amount: AssetAmount,
 			reason: DispatchError,
 		},
+		RefundEgressIgnored {
+			swap_id: SwapId,
+			asset: Asset,
+			amount: AssetAmount,
+			reason: DispatchError,
+		},
 		NetworkFeeTaken {
 			swap_id: SwapId,
 			fee_amount: AssetAmount,
@@ -437,34 +489,20 @@ pub mod pallet {
 				return
 			}
 
+			// TODO: delete `FirstUnprocessedBlock` (but after this is merged to make migration
+			// easier?)
 			let mut block_to_process = FirstUnprocessedBlock::<T>::get();
 
 			// NOTE: we iterate manually because BlockNumberFor<T> does not implement Step:
 			while block_to_process <= current_block {
-				match Self::process_swaps_for_block(block_to_process) {
-					Err(BatchExecutionError::SwapLegFailed { asset, direction, amount }) => {
-						Self::deposit_event(Event::<T>::BatchSwapFailed {
-							asset,
-							direction,
-							amount,
-						});
-
-						break
-					},
-					Err(BatchExecutionError::DispatchError { error }) => {
-						log::error!(
-							"Failed to execute swap batch at block {:?}: {:?}",
-							block_to_process,
-							error
-						);
-						break
-					},
+				match Self::process_swaps_for_block(current_block, block_to_process) {
 					Ok(()) => {
 						block_to_process += 1u32.into();
+						FirstUnprocessedBlock::<T>::set(block_to_process);
 					},
+					Err(()) => break,
 				}
 			}
-			FirstUnprocessedBlock::<T>::set(block_to_process);
 		}
 	}
 
@@ -485,6 +523,7 @@ pub mod pallet {
 			broker_commission: BasisPoints,
 			channel_metadata: Option<CcmChannelMetadata>,
 			boost_fee: BasisPoints,
+			refund_parameters: Option<ChannelRefundParameters>,
 		) -> DispatchResult {
 			Self::request_swap_deposit_address_with_affiliates(
 				origin,
@@ -495,6 +534,7 @@ pub mod pallet {
 				channel_metadata,
 				boost_fee,
 				Default::default(),
+				refund_parameters,
 			)
 		}
 
@@ -567,6 +607,7 @@ pub mod pallet {
 				from,
 				to,
 				deposit_amount,
+				None,
 				SwapType::Swap(destination_address_internal.clone()),
 			);
 
@@ -610,6 +651,8 @@ pub mod pallet {
 				destination_address_internal,
 				deposit_metadata,
 				SwapOrigin::Vault { tx_hash },
+				// NOTE: FoK not yet supported for swaps from the contract
+				None,
 			);
 
 			Ok(())
@@ -692,6 +735,7 @@ pub mod pallet {
 			channel_metadata: Option<CcmChannelMetadata>,
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<T::AccountId>,
+			refund_parameters: Option<ChannelRefundParameters>,
 		) -> DispatchResult {
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
 			let (beneficiaries, total_bps) = {
@@ -740,6 +784,7 @@ pub mod pallet {
 					broker,
 					channel_metadata.clone(),
 					boost_fee,
+					refund_parameters,
 				)?;
 
 			Self::deposit_event(Event::<T>::SwapDepositAddressReady {
@@ -763,37 +808,39 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		#[allow(clippy::result_unit_err)]
 		pub fn get_scheduled_swap_legs(
-			mut swaps: Vec<Swap>,
+			swaps: Vec<Swap>,
 			base_asset: Asset,
 		) -> Result<Vec<SwapLegInfo>, ()> {
+			let mut swaps: Vec<_> = swaps.into_iter().map(SwapCtx::new).collect();
+
 			Self::swap_into_stable_taking_network_fee(&mut swaps)
 				.map_err(|_| log::error!("Failed to simulate swaps"))?;
 
 			Ok(swaps
 				.into_iter()
 				.filter_map(|swap| {
-					if swap.from == base_asset {
+					if swap.input_asset() == base_asset {
 						Some(SwapLegInfo {
-							swap_id: swap.swap_id,
+							swap_id: swap.swap_id(),
 							base_asset,
 							// All swaps from `base_asset` have to go through the stable asset:
 							quote_asset: STABLE_ASSET,
 							side: Side::Sell,
-							amount: swap.input_amount,
+							amount: swap.input_amount(),
 							source_asset: None,
 							source_amount: None,
 						})
-					} else if swap.to == base_asset {
+					} else if swap.output_asset() == base_asset {
 						// In case the swap is "simulated", the amount is just an estimate,
 						// so we additionally include `source_asset` and `source_amount`:
-						let (source_asset, source_amount) = if swap.from != STABLE_ASSET {
-							(Some(swap.from), Some(swap.input_amount))
+						let (source_asset, source_amount) = if swap.input_asset() != STABLE_ASSET {
+							(Some(swap.input_asset()), Some(swap.input_amount()))
 						} else {
 							(None, None)
 						};
 
 						Some(SwapLegInfo {
-							swap_id: swap.swap_id,
+							swap_id: swap.swap_id(),
 							base_asset,
 							// All swaps to `base_asset` have to go through the stable asset:
 							quote_asset: STABLE_ASSET,
@@ -812,13 +859,13 @@ pub mod pallet {
 		}
 
 		fn swap_into_stable_taking_network_fee(
-			swaps: &mut [Swap],
+			swaps: &mut [SwapCtx],
 		) -> Result<(), BatchExecutionError> {
 			Self::do_group_and_swap(swaps, SwapLeg::ToStable)?;
 
 			// Take NetworkFee for all swaps
 			for swap in swaps.iter_mut() {
-				if swap.swap_type == SwapType::NetworkFee {
+				if swap.swap_type() == &SwapType::NetworkFee {
 					// Don't take network fee for network fee swaps
 					continue;
 				}
@@ -834,27 +881,25 @@ pub mod pallet {
 
 				*stable_amount = remaining_amount;
 
+				// Copy so we don't hold a mutable reference:
+				let stable_amount = *stable_amount;
+
 				Self::deposit_event(Event::<T>::NetworkFeeTaken {
 					fee_amount: network_fee,
-					swap_id: swap.swap_id,
+					swap_id: swap.swap_id(),
 				});
 
-				if swap.to == STABLE_ASSET {
-					swap.final_output = Some(*stable_amount);
+				if swap.output_asset() == STABLE_ASSET {
+					swap.final_output = Some(stable_amount);
 				}
 			}
 
 			Ok(())
 		}
 
-		// Transactional ensures that any failed swap will rollback all storage changes.
 		#[transactional]
-		fn process_swaps_for_block(block: BlockNumberFor<T>) -> Result<(), BatchExecutionError> {
-			let mut swaps = SwapQueue::<T>::take(block);
-
-			if swaps.is_empty() {
-				return Ok(())
-			}
+		fn execute_batch(swaps: Vec<Swap>) -> Result<Vec<SwapCtx>, BatchExecutionError> {
+			let mut swaps: Vec<_> = swaps.into_iter().map(SwapCtx::new).collect();
 
 			// Swap into Stable asset first, then take network fees:
 			Self::swap_into_stable_taking_network_fee(&mut swaps)?;
@@ -862,36 +907,57 @@ pub mod pallet {
 			// Swap from Stable asset, and complete the swap logic.
 			Self::do_group_and_swap(&mut swaps, SwapLeg::FromStable)?;
 
+			// Swaps executed without triggering price impact protection, but we still need to
+			// check that none of the swaps violated their minimum output requirements:
+			let (non_violating, violating): (Vec<_>, Vec<_>) =
+				swaps.into_iter().partition(|swap| {
+					let final_output = swap.final_output.unwrap();
+					swap.refund_params()
+						.as_ref()
+						.map_or(true, |params| final_output >= params.min_output)
+				});
+
+			if violating.is_empty() {
+				Ok(non_violating)
+			} else {
+				Err(BatchExecutionError::PriceLimitHit {
+					successful_swaps: non_violating.into_iter().map(|ctx| ctx.swap).collect(),
+					failed_swaps: violating.into_iter().map(|ctx| ctx.swap).collect(),
+				})
+			}
+		}
+
+		fn process_swap_outcomes(swaps: &[SwapCtx]) {
 			for swap in swaps {
 				if let Some(swap_output) = swap.final_output {
 					// To be consistent with `swap_output` and `intermediate_amount` (which do
 					// not include the network fee), we report input amount without the network fee
 					// for swaps from STABLE_ASSET:
-					let swap_input = if swap.from == STABLE_ASSET {
+					let swap_input = if swap.input_asset() == STABLE_ASSET {
 						swap.stable_amount.unwrap_or_else(|| {
 							log_or_panic!("stable amount must be set for swaps from STABLE_ASSET");
-							swap.input_amount
+							swap.input_amount()
 						})
 					} else {
-						swap.input_amount
+						swap.input_amount()
 					};
 
 					Self::deposit_event(Event::<T>::SwapExecuted {
-						swap_id: swap.swap_id,
-						source_asset: swap.from,
-						destination_asset: swap.to,
+						swap_id: swap.swap_id(),
+						source_asset: swap.input_asset(),
+						destination_asset: swap.output_asset(),
 						deposit_amount: swap_input,
 						swap_input,
 						egress_amount: swap_output,
 						swap_output,
 						intermediate_amount: swap.intermediate_amount(),
-						swap_type: swap.swap_type.clone(),
+						swap_type: swap.swap_type().clone(),
 					});
 					// Handle swap completion logic.
-					match &swap.swap_type {
+					match &swap.swap_type() {
 						SwapType::Swap(destination_address) =>
 							match T::EgressHandler::schedule_egress(
-								swap.to,
+								swap.output_asset(),
 								swap_output,
 								destination_address.clone(),
 								None,
@@ -902,17 +968,17 @@ pub mod pallet {
 									fee_withheld,
 								}) => {
 									Self::deposit_event(Event::<T>::SwapEgressScheduled {
-										swap_id: swap.swap_id,
+										swap_id: swap.swap_id(),
 										egress_id,
-										asset: swap.to,
+										asset: swap.output_asset(),
 										amount: egress_amount,
 										fee: fee_withheld,
 									});
 								},
 								Err(err) => {
 									Self::deposit_event(Event::<T>::SwapEgressIgnored {
-										swap_id: swap.swap_id,
-										asset: swap.to,
+										swap_id: swap.swap_id(),
+										asset: swap.output_asset(),
 										amount: swap_output,
 										reason: err.into(),
 									});
@@ -929,26 +995,28 @@ pub mod pallet {
 							Self::handle_ccm_swap_result(*ccm_id, swap_output, CcmSwapLeg::Gas);
 						},
 						SwapType::NetworkFee =>
-							if swap.to == Asset::Flip {
+							if swap.output_asset() == Asset::Flip {
 								FlipToBurn::<T>::mutate(|total| {
 									total.saturating_accrue(swap_output);
 								});
 							} else {
 								log_or_panic!(
 									"NetworkFee burning should not be in asset: {:?}",
-									swap.to
+									swap.output_asset()
 								);
 							},
 						SwapType::IngressEgressFee => {
-							if swap.to == ForeignChain::from(swap.to).gas_asset() {
+							if swap.output_asset() ==
+								ForeignChain::from(swap.output_asset()).gas_asset()
+							{
 								T::IngressEgressFeeHandler::accrue_withheld_fee(
-									swap.to,
+									swap.output_asset(),
 									swap_output,
 								);
 							} else {
 								log_or_panic!(
 									"IngressEgressFee swap should not be to non-gas asset: {:?}",
-									swap.to
+									swap.output_asset()
 								);
 							}
 						},
@@ -957,8 +1025,115 @@ pub mod pallet {
 					debug_assert!(false, "Swap is not completed yet!");
 				}
 			}
+		}
 
-			Ok(())
+		// Returns swaps that have not expired yet and should be scheduled for retry.
+		fn refund_any_expired_swaps(
+			swaps: Vec<Swap>,
+			current_block: BlockNumberFor<T>,
+		) -> Vec<Swap> {
+			let (swaps_to_retry, swaps_to_refund): (Vec<Swap>, Vec<Swap>) =
+				swaps.into_iter().partition(|swap| {
+					swap.refund_params
+						.as_ref()
+						.map_or(true, |params| current_block < params.refund_block.into())
+				});
+
+			for swap in swaps_to_refund {
+				let destination_address = swap.refund_params.unwrap().refund_address;
+				match T::EgressHandler::schedule_egress(
+					swap.from,
+					swap.input_amount,
+					destination_address,
+					None,
+				) {
+					Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) => {
+						Self::deposit_event(Event::<T>::RefundEgressScheduled {
+							swap_id: swap.swap_id,
+							egress_id,
+							amount: egress_amount,
+							egress_fee: fee_withheld,
+						});
+					},
+					Err(err) => {
+						Self::deposit_event(Event::<T>::RefundEgressIgnored {
+							swap_id: swap.swap_id,
+							asset: swap.from,
+							amount: swap.input_amount,
+							reason: err.into(),
+						});
+					},
+				}
+			}
+
+			swaps_to_retry
+		}
+
+		fn process_swaps_for_block(
+			current_block: BlockNumberFor<T>,
+			block_to_process: BlockNumberFor<T>,
+		) -> Result<(), ()> {
+			let mut swaps_to_execute = SwapQueue::<T>::take(block_to_process);
+
+			loop {
+				if swaps_to_execute.is_empty() {
+					return Ok(())
+				}
+
+				match Self::execute_batch(swaps_to_execute.clone()) {
+					Ok(successful_swaps) => {
+						Self::process_swap_outcomes(&successful_swaps);
+						// Nothing to do here, all swaps are processed for block
+						return Ok(())
+					},
+					Err(err) => {
+						let (successful_swaps, failed_swaps) = {
+							match err {
+								BatchExecutionError::PriceLimitHit {
+									successful_swaps,
+									failed_swaps,
+								} => (successful_swaps, failed_swaps),
+								BatchExecutionError::SwapLegFailed { asset, direction, amount } => {
+									Self::deposit_event(Event::<T>::BatchSwapFailed {
+										asset,
+										direction,
+										amount,
+									});
+									(vec![], swaps_to_execute)
+								},
+								BatchExecutionError::DispatchError { error } => {
+									log::error!(
+										"Failed to execute swap batch at block {:?}: {:?}",
+										block_to_process,
+										error
+									);
+									(vec![], swaps_to_execute)
+								},
+							}
+						};
+
+						let swaps_to_retry =
+							Self::refund_any_expired_swaps(failed_swaps, current_block);
+
+						let retry_block = current_block + SWAP_RETRY_DELAY_BLOCKS.into();
+
+						for swap in &swaps_to_retry {
+							Self::deposit_event(Event::<T>::SwapRescheduled {
+								swap_id: swap.swap_id,
+								execute_at: retry_block,
+							});
+						}
+
+						SwapQueue::<T>::insert(retry_block, swaps_to_retry);
+
+						if !successful_swaps.is_empty() {
+							swaps_to_execute = successful_swaps;
+						} else {
+							return Err(())
+						}
+					},
+				}
+			}
 		}
 
 		pub fn principal_and_gas_amounts(
@@ -1007,7 +1182,7 @@ pub mod pallet {
 		// and do the swaps of a given direction. Processed and unprocessed swaps are
 		// returned.
 		fn do_group_and_swap(
-			swaps: &mut [Swap],
+			swaps: &mut [SwapCtx],
 			direction: SwapLeg,
 		) -> Result<(), BatchExecutionError> {
 			let swap_groups =
@@ -1029,7 +1204,7 @@ pub mod pallet {
 		/// Bundle the given swaps and do a single swap of a given direction. Updates the given
 		/// swaps in-place. If batch swap failed, return the input amount.
 		fn execute_group_of_swaps(
-			swaps: Vec<&mut Swap>,
+			swaps: Vec<&mut SwapCtx>,
 			asset: Asset,
 			direction: SwapLeg,
 		) -> Result<(), AssetAmount> {
@@ -1074,13 +1249,13 @@ pub mod pallet {
 
 				swap.update_swap_result(direction, swap_output);
 
-				if swap_output == 0 && matches!(swap.swap_type, SwapType::Swap(_)) {
+				if swap_output == 0 && matches!(swap.swap_type(), SwapType::Swap(_)) {
 					// This is unlikely but theoretically possible if, for example, the initial swap
 					// input is so small compared to the total bundle size that it rounds down to
 					// zero when we do the division.
 					log::warn!(
 						"Swap {:?} in bundle {{ input: {bundle_input}, output: {bundle_output} }} resulted in swap output of zero.",
-						swap
+						swap.swap
 					);
 				}
 			}
@@ -1150,6 +1325,7 @@ pub mod pallet {
 			amount: AssetAmount,
 			destination_address: ForeignChainAddress,
 			broker_commission: Beneficiaries<Self::AccountId>,
+			refund_params: Option<ChannelRefundParameters>,
 			channel_id: ChannelId,
 		) -> SwapId {
 			// Permill maxes out at 100% so this is safe.
@@ -1170,10 +1346,24 @@ pub mod pallet {
 				deposit_block_height,
 			};
 
+			// Now that we know input amount, we can calculate the minimum output amount:
+			let refund_params = refund_params.map(|params| SwapRefundParameters {
+				refund_block: params.refund_block,
+				refund_address: params.refund_address,
+				min_output: u128::try_from(cf_amm::common::output_amount_ceil(
+					net_amount.into(),
+					params.price_limit,
+				))
+				.unwrap_or(u128::MAX),
+			});
+
+			dbg!(&refund_params);
+
 			let (swap_id, execute_at) = Self::schedule_swap(
 				from,
 				to,
 				net_amount,
+				refund_params,
 				SwapType::Swap(destination_address.clone()),
 			);
 
@@ -1210,6 +1400,8 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			deposit_metadata: CcmDepositMetadata,
 			origin: SwapOrigin,
+			// TODO: CCM should use refund params
+			_refund_params: Option<ChannelRefundParameters>,
 		) -> Result<CcmSwapIds, ()> {
 			let encoded_destination_address =
 				T::AddressConverter::to_encoded_address(destination_address.clone());
@@ -1256,6 +1448,7 @@ pub mod pallet {
 						source_asset,
 						destination_asset,
 						principal_swap_amount,
+						None,
 						SwapType::CcmPrincipal(ccm_id),
 					);
 					Self::deposit_event(Event::<T>::SwapScheduled {
@@ -1278,6 +1471,7 @@ pub mod pallet {
 					source_asset,
 					other_gas_asset,
 					gas_budget,
+					None,
 					SwapType::CcmGas(ccm_id),
 				);
 				Self::deposit_event(Event::<T>::SwapScheduled {
@@ -1336,6 +1530,7 @@ impl<T: Config> SwapQueueApi for Pallet<T> {
 		from: Asset,
 		to: Asset,
 		amount: AssetAmount,
+		refund_params: Option<SwapRefundParameters>,
 		swap_type: SwapType,
 	) -> (u64, Self::BlockNumber) {
 		let swap_id = SwapIdCounter::<T>::mutate(|id| {
@@ -1368,7 +1563,10 @@ impl<T: Config> SwapQueueApi for Pallet<T> {
 
 		let execute_at = frame_system::Pallet::<T>::block_number() + SWAP_DELAY_BLOCKS.into();
 
-		SwapQueue::<T>::append(execute_at, Swap::new(swap_id, from, to, swap_amount, swap_type));
+		SwapQueue::<T>::append(
+			execute_at,
+			Swap::new(swap_id, from, to, swap_amount, refund_params, swap_type),
+		);
 
 		(swap_id, execute_at)
 	}
