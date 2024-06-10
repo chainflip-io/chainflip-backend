@@ -79,7 +79,7 @@ pub trait PoolApi {
 		quote_asset: Asset,
 	) -> Result<u32, DispatchError>;
 
-	fn order_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError>;
+	fn open_order_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError>;
 }
 
 impl<T: frame_system::Config> PoolApi for T {
@@ -96,7 +96,7 @@ impl<T: frame_system::Config> PoolApi for T {
 	) -> Result<u32, DispatchError> {
 		Ok(0)
 	}
-	fn order_balances(_who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError> {
+	fn open_order_balances(_who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError> {
 		Ok(AssetMap::from_fn(|_| 0))
 	}
 }
@@ -158,13 +158,13 @@ pub enum SwapType {
 pub trait BoostApi {
 	type AccountId;
 
-	fn boosted_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError>;
+	fn boost_pool_balances(who: &Self::AccountId) -> Vec<(Asset, AssetAmount)>;
 }
 
 impl<T: frame_system::Config> BoostApi for T {
 	type AccountId = T::AccountId;
 
-	fn boosted_balances(_who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError> {
-		Ok(AssetMap::from_fn(|_| 0))
+	fn boost_pool_balances(_who: &Self::AccountId) -> Vec<(Asset, AssetAmount)> {
+		vec![]
 	}
 }
