@@ -836,7 +836,7 @@ pub mod pallet {
 							FailedForeignChainCalls::<T, I>::append(current_epoch, call);
 						},
 						Err(e) => {
-							// This can happen if a broadcast is still pending despite
+							// This can happen if a broadcast is still pending
 							// since the previous epoch.
 							// TODO: make sure this can't happen.
 							log::warn!(

@@ -1751,7 +1751,7 @@ impl_runtime_apis! {
 
 		fn cf_failed_call_ethereum(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {
 			if EthereumIngressEgress::get_failed_call(broadcast_id).is_some() {
-				EthereumBroadcaster::threshold_signature_data(broadcast_id).map(|(api_call, _)|{
+				EthereumBroadcaster::threshold_signature_data(broadcast_id).map(|api_call|{
 					chainflip::EthTransactionBuilder::build_transaction(&api_call)
 				})
 			} else {
@@ -1761,7 +1761,7 @@ impl_runtime_apis! {
 
 		fn cf_failed_call_arbitrum(broadcast_id: BroadcastId) -> Option<<cf_chains::Arbitrum as cf_chains::Chain>::Transaction> {
 			if ArbitrumIngressEgress::get_failed_call(broadcast_id).is_some() {
-				ArbitrumBroadcaster::threshold_signature_data(broadcast_id).map(|(api_call, _)|{
+				ArbitrumBroadcaster::threshold_signature_data(broadcast_id).map(|api_call|{
 					chainflip::ArbTransactionBuilder::build_transaction(&api_call)
 				})
 			} else {
