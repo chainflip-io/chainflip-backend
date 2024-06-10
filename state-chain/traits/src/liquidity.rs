@@ -154,3 +154,17 @@ pub enum SwapType {
 	NetworkFee,
 	IngressEgressFee,
 }
+
+pub trait BoostApi {
+	type AccountId;
+
+	fn boosted_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError>;
+}
+
+impl<T: frame_system::Config> BoostApi for T {
+	type AccountId = T::AccountId;
+
+	fn boosted_balances(_who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError> {
+		Ok(AssetMap::from_fn(|_| 0))
+	}
+}
