@@ -125,6 +125,18 @@ jobs:
         run: |
           ./run.sh
 
+      - name: Write chain output to file 📝
+        # TODO: Add only failure here. - just testing for now
+        continue-on-error: true
+        working-directory: bouncer
+        run: |
+          BLOCK_HEIGHT=$(curl -s -H "Content-Type: application/json" \
+          -d '{"jsonrpc":"2.0","method":"chain_getHeader","params":[],"id":1}' \
+          http://localhost:9944 \
+          | jq -r '.result.number' \
+          | xargs printf "%d\n")
+          ./commands/explorer.ts 0 $BLOCK_HEIGHT
+
       - name: Print chainflip-engine logs 🚗
         if: always()
         continue-on-error: true
