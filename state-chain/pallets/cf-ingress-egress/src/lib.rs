@@ -20,8 +20,6 @@ mod boost_pool;
 use boost_pool::BoostPool;
 pub use boost_pool::OwedAmount;
 
-use frame_support::{pallet_prelude::OptionQuery, transactional};
-
 use cf_chains::{
 	address::{
 		AddressConverter, AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress,
@@ -34,18 +32,22 @@ use cf_primitives::{
 	Asset, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId, EgressCounter,
 	EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId,
 	SECONDS_PER_BLOCK,
+	chains::assets::any::AssetMap, Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier,
+	BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex, ForeignChain,
+	PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	liquidity::{LpBalanceApi, LpDepositHandler},
-	AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter, Broadcaster, CcmHandler,
-	CcmSwapIds, Chainflip, DepositApi, EgressApi, EpochInfo, FeePayment, GetBlockHeight,
-	IngressEgressFeeApi, NetworkEnvironmentProvider, OnDeposit, SafeMode, ScheduledEgressDetails,
-	SwapDepositHandler, SwapQueueApi, SwapType,
+	AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter, BoostApi, Broadcaster,
+	CcmHandler, CcmSwapIds, Chainflip, DepositApi, EgressApi, EpochInfo, FeePayment,
+	GetBlockHeight, IngressEgressFeeApi, NetworkEnvironmentProvider, OnDeposit, SafeMode,
+	ScheduledEgressDetails, SwapDepositHandler, SwapQueueApi, SwapType,
 };
 use frame_support::{
-	pallet_prelude::*,
+	pallet_prelude::{OptionQuery, *},
 	sp_runtime::{traits::Zero, DispatchError, Permill, Saturating},
+	transactional,
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -56,6 +58,7 @@ use sp_std::{
 	vec,
 	vec::Vec,
 };
+use strum::IntoEnumIterator;
 pub use weights::WeightInfo;
 
 /// Max allowed value for the number of blocks to keep retrying a swap before it is refunded
@@ -2049,5 +2052,34 @@ impl<T: Config<I>, I: 'static> IngressEgressFeeApi<T::TargetChain> for Pallet<T,
 				tracker.register_transfer(fee);
 			});
 		}
+	}
+}
+
+impl<T: Config<I>, I: 'static> BoostApi for Pallet<T, I> {
+	type AccountId = T::AccountId;
+	fn boosted_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError> {
+		Ok(AssetMap::from_fn(|asset| {
+			let mut total: AssetAmount = 0;
+			for chain_asset in TargetChainAsset::<T, I>::iter() {
+				if <<<T as pallet::Config<I>>::TargetChain as cf_chains::Chain>::ChainAsset as Into<Asset>>::into(chain_asset) == asset {
+						total += BoostPools::<T, I>::iter_prefix(chain_asset).fold(0, |acc, (_tier, pool)|
+							{
+								let active: AssetAmount = pool.get_amounts().into_iter().filter(|(id, _amount)| id == who).map(|(_id, amount)| amount.into()).sum();
+
+								let pending: AssetAmount = pool.get_pending_boosts().into_values().
+									map(|owed: BTreeMap<Self::AccountId, OwedAmount<<T::TargetChain as Chain>::ChainAmount>>| match owed.get(who) {
+										Some(owed_amount) => {
+											owed_amount.total.into()
+										},
+										None => AssetAmount::from(0u32)
+									}).sum();
+
+								acc + active + pending
+							});
+					}
+			}
+
+			total
+		}))
 	}
 }

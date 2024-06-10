@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use core::ops::Range;
+use std::ops::IndexMut;
 
 use cf_amm::{
 	common::{self, Amount, PoolPairsMap, Price, Side, SqrtPriceQ64F96, Tick},
@@ -7,7 +8,7 @@ use cf_amm::{
 	range_orders::{self, Liquidity},
 	PoolState,
 };
-use cf_chains::{Chain, assets::any::AssetMap};
+use cf_chains::{assets::any::AssetMap, Chain};
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
 use cf_traits::{
 	impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwapQueueApi, SwappingApi,
@@ -1002,10 +1003,12 @@ impl<T: Config> PoolApi for Pallet<T> {
 		for base_asset in Asset::all().filter(|asset| *asset != Asset::Usdc) {
 			let pool_orders = Self::pool_orders(base_asset, Asset::Usdc, Some(who.clone()))?;
 			for ask in pool_orders.limit_orders.asks {
-				result[base_asset] += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap();
+				*result.index_mut(base_asset) +=
+					<sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap();
 			}
 			for bid in pool_orders.limit_orders.bids {
-				result[Asset::Usdc] += <sp_core::U256 as TryInto<u128>>::try_into(bid.sell_amount).unwrap();
+				*result.index_mut(Asset::Usdc) +=
+					<sp_core::U256 as TryInto<u128>>::try_into(bid.sell_amount).unwrap();
 			}
 		}
 		Ok(result)
