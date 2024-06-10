@@ -2062,21 +2062,20 @@ impl<T: Config<I>, I: 'static> BoostApi for Pallet<T, I> {
 			let mut total: AssetAmount = 0;
 			for chain_asset in TargetChainAsset::<T, I>::iter() {
 				if <<<T as pallet::Config<I>>::TargetChain as cf_chains::Chain>::ChainAsset as Into<Asset>>::into(chain_asset) == asset {
-						total += BoostPools::<T, I>::iter_prefix(chain_asset).fold(0, |acc, (_tier, pool)|
-							{
-								let active: AssetAmount = pool.get_amounts().into_iter().filter(|(id, _amount)| id == who).map(|(_id, amount)| amount.into()).sum();
+					total += BoostPools::<T, I>::iter_prefix(chain_asset).fold(0, |acc, (_tier, pool)| {
+						let active: AssetAmount = pool.get_amounts().into_iter().filter(|(id, _amount)| id == who).map(|(_id, amount)| amount.into()).sum();
 
-								let pending: AssetAmount = pool.get_pending_boosts().into_values().
-									map(|owed: BTreeMap<Self::AccountId, OwedAmount<<T::TargetChain as Chain>::ChainAmount>>| match owed.get(who) {
-										Some(owed_amount) => {
-											owed_amount.total.into()
-										},
-										None => AssetAmount::from(0u32)
-									}).sum();
+						let pending: AssetAmount = pool.get_pending_boosts().into_values().
+							map(|owed: BTreeMap<Self::AccountId, OwedAmount<<T::TargetChain as Chain>::ChainAmount>>| match owed.get(who) {
+								Some(owed_amount) => {
+									owed_amount.total.into()
+								},
+								None => AssetAmount::from(0u32)
+							}).sum();
 
-								acc + active + pending
-							});
-					}
+						acc + active + pending
+					});
+				}
 			}
 
 			total
