@@ -389,6 +389,13 @@ macro_rules! assets {
 					})
 				}
 			}
+
+			impl scale_info::prelude::ops::Add<AssetMap<crate::AssetAmount>> for AssetMap<crate::AssetAmount> {
+				type Output = AssetMap<crate::AssetAmount>;
+				fn add(self, other: AssetMap<crate::AssetAmount>) -> AssetMap<crate::AssetAmount>{
+					AssetMap::from_fn(|asset| self[asset] + other[asset])
+				}
+			}
 		}
 
 		$(
