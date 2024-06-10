@@ -997,7 +997,7 @@ impl<T: Config> PoolApi for Pallet<T> {
 			pool_orders.range_orders.len() as u32)
 	}
 
-	fn order_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError> {
+	fn open_order_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError> {
 		let mut result = AssetMap::from_fn(|_| 0);
 
 		for base_asset in Asset::all().filter(|asset| *asset != Asset::Usdc) {

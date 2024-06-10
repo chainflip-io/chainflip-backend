@@ -64,6 +64,7 @@ use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use scale_info::prelude::string::String;
 use sp_std::collections::btree_map::BTreeMap;
+use std::ops::IndexMut;
 
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
@@ -1265,13 +1266,20 @@ impl_runtime_apis! {
 		}
 		fn cf_lp_total_balances(account_id: AccountId) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage> {
 			let free_balances = LiquidityProvider::free_balances(&account_id).map_err(Into::<DispatchErrorWithMessage>::into)?;
-			let order_balances = LiquidityPools::order_balances(&account_id).map_err(Into::<DispatchErrorWithMessage>::into)?;
-			let boost_balances = EthereumIngressEgress::boosted_balances(&account_id).map_err(Into::<DispatchErrorWithMessage>::into)? +
-				PolkadotIngressEgress::boosted_balances(&account_id).map_err(Into::<DispatchErrorWithMessage>::into)? +
-				BitcoinIngressEgress::boosted_balances(&account_id).map_err(Into::<DispatchErrorWithMessage>::into)? +
-				ArbitrumIngressEgress::boosted_balances(&account_id).map_err(Into::<DispatchErrorWithMessage>::into)? +
-				SolanaIngressEgress::boosted_balances(&account_id).map_err(Into::<DispatchErrorWithMessage>::into)?;
-			Ok(free_balances + order_balances + boost_balances)
+			let open_order_balances = LiquidityPools::open_order_balances(&account_id).map_err(Into::<DispatchErrorWithMessage>::into)?;
+			let boost_pools_balances = {
+				let mut result = EthereumIngressEgress::boost_pool_balances(&account_id); //.append(
+				result.append( &mut PolkadotIngressEgress::boost_pool_balances(&account_id));
+				result.append( &mut BitcoinIngressEgress::boost_pool_balances(&account_id));
+				result.append( &mut ArbitrumIngressEgress::boost_pool_balances(&account_id));
+				result.append( &mut SolanaIngressEgress::boost_pool_balances(&account_id));
+				let mut map = AssetMap::from_fn(|_| 0);
+				for (asset, amount) in result {
+					*map.index_mut(asset) = amount;
+				}
+				map
+			};
+			Ok(free_balances + open_order_balances + boost_pools_balances)
 		}
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()
