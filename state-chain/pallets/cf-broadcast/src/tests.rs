@@ -10,9 +10,9 @@ use crate::{
 use cf_chains::{
 	evm::SchnorrVerificationComponents,
 	mocks::{
-		ChainChoice, MockAggKey, MockApiCall, MockBroadcastBarriers, MockEthereum,
-		MockEthereumChainCrypto, MockEthereumTransactionMetadata, MockThresholdSignature,
-		MockTransactionBuilder, ETH_TX_FEE, MOCK_TRANSACTION_OUT_ID, MOCK_TX_METADATA,
+		ChainChoice, MockApiCall, MockBroadcastBarriers, MockEthereum, MockEthereumChainCrypto,
+		MockEthereumTransactionMetadata, MockTransactionBuilder, ETH_TX_FEE,
+		MOCK_TRANSACTION_OUT_ID, MOCK_TX_METADATA,
 	},
 	ChainCrypto, FeeRefundCalculator,
 };
@@ -563,16 +563,7 @@ fn callback_is_called_upon_broadcast_failure() {
 			broadcast_id,
 			new_mock_broadcast_attempt(broadcast_id, 0u64),
 		);
-		ThresholdSignatureData::<Test, Instance1>::insert(
-			broadcast_id,
-			(
-				api_call,
-				MockThresholdSignature {
-					signing_key: MockAggKey([0u8; 4]),
-					signed_payload: [0u8; 4],
-				},
-			),
-		);
+		ThresholdSignatureData::<Test, Instance1>::insert(broadcast_id, api_call);
 
 		// Broadcast fails when no broadcaster can be nominated.
 		let nominee = ready_to_abort_broadcast(broadcast_id);
