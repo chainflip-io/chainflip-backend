@@ -639,7 +639,7 @@ pub mod pallet {
 		/// Requires governance origin.
 		#[pallet::call_index(5)]
 		#[pallet::weight(Weight::zero())]
-		pub fn resign_aborted_broadcast(
+		pub fn re_sign_aborted_broadcast(
 			origin: OriginFor<T>,
 			broadcast_id: BroadcastId,
 			request_broadcast: bool,
