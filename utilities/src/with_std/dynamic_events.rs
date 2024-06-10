@@ -181,7 +181,7 @@ impl EventDecoder {
 					)
 				})
 				.collect::<NamedVariantLookup<_>>(),
-			_ => panic!("Outer error type is not an Enum"),
+			_ => panic!("Expected the RuntimeError type, which should be an Enum."),
 		};
 
 		let events_type_id = types
