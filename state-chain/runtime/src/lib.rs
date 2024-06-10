@@ -13,7 +13,7 @@ use crate::{
 	chainflip::{calculate_account_apy, Offence},
 	runtime_apis::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, DispatchErrorWithMessage,
-		EventFilter, FailingWitnessValidators, LiquidityProviderInfo, RuntimeApiPenalty,
+		FailingWitnessValidators, LiquidityProviderInfo, RuntimeApiPenalty,
 		SimulateSwapAdditionalOrder, SimulatedSwapInformation, ValidatorInfo,
 	},
 };
@@ -1686,21 +1686,6 @@ impl_runtime_apis! {
 				ForeignChain::Bitcoin => pallet_cf_ingress_egress::Pallet::<Runtime, BitcoinInstance>::channel_opening_fee(),
 				ForeignChain::Arbitrum => pallet_cf_ingress_egress::Pallet::<Runtime, ArbitrumInstance>::channel_opening_fee(),
 			}
-		}
-
-		fn cf_get_events(filter: EventFilter) -> Vec<frame_system::EventRecord<RuntimeEvent, Hash>> {
-			frame_system::Events::<Runtime>::get()
-				.into_iter()
-				.filter_map(|event_record|
-					if match &filter {
-						EventFilter::AllEvents => true,
-						EventFilter::SystemOnly => matches!(event_record.event, RuntimeEvent::System(..)),
-					} {
-						Some(*event_record)
-					} else {
-						None
-					}
-				).collect::<Vec<_>>()
 		}
 
 		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth> {

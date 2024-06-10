@@ -1,3 +1,5 @@
+#![feature(iterator_try_collect)]
+
 use boost_pool_rpc::BoostPoolDetailsRpc;
 use cf_amm::{
 	common::{Amount, PoolPairsMap, Side, Tick},
@@ -13,7 +15,6 @@ use cf_primitives::{
 	NetworkEnvironment, SemVer, SwapId,
 };
 use cf_utilities::rpc::NumberOrHex;
-use codec::Encode;
 use core::ops::Range;
 use jsonrpsee::{
 	core::{error::SubscriptionClosed, RpcResult},
@@ -37,7 +38,7 @@ use state_chain_runtime::{
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
 		BoostPoolDepth, BoostPoolDetails, BrokerInfo, CustomRuntimeApi, DispatchErrorWithMessage,
-		EventFilter, FailingWitnessValidators, LiquidityProviderInfo, ValidatorInfo,
+		FailingWitnessValidators, LiquidityProviderInfo, ValidatorInfo,
 	},
 	NetworkFee,
 };
@@ -49,7 +50,8 @@ use std::{
 
 use crate::boost_pool_rpc::BoostPoolFeesRpc;
 
-mod type_decoder;
+mod dynamic_events;
+pub use dynamic_events::{DynamicApiClient, DynamicApiServer};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScheduledSwap {
@@ -701,18 +703,6 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<FailingWitnessValidators>>;
 
-	#[method(name = "get_events")]
-	fn cf_get_events(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<scale_value::Value>>;
-
-	#[method(name = "get_system_events_encoded")]
-	fn cf_get_system_events_encoded(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<sp_core::Bytes>>;
-
 	#[method(name = "boost_pools_depth")]
 	fn cf_boost_pools_depth(
 		&self,
@@ -735,23 +725,33 @@ pub trait CustomApi {
 }
 
 /// An RPC extension for the state chain node.
-pub struct CustomRpc<C, B> {
+pub struct CustomRpc<C, B, S> {
 	pub client: Arc<C>,
-	pub _phantom: PhantomData<B>,
+	pub state_backend: Arc<S>,
 	pub executor: Arc<dyn sp_core::traits::SpawnNamed>,
+	pub type_metadata: dynamic_events::EventDecoderCache,
+	pub _phantom: PhantomData<B>,
 }
 
-impl<C, B> CustomRpc<C, B>
+impl<C, B, S> CustomRpc<C, B, S>
 where
 	B: BlockT<Hash = state_chain_runtime::Hash>,
-	C: sp_api::ProvideRuntimeApi<B>
-		+ Send
-		+ Sync
-		+ 'static
-		+ HeaderBackend<B>
-		+ BlockchainEvents<B>,
-	C::Api: CustomRuntimeApi<B>,
+	C: sp_api::ProvideRuntimeApi<B> + Send + Sync + 'static + HeaderBackend<B>,
 {
+	pub fn new(
+		client: Arc<C>,
+		backend: Arc<S>,
+		executor: Arc<dyn sp_core::traits::SpawnNamed>,
+	) -> Self {
+		Self {
+			client,
+			state_backend: backend,
+			executor,
+			type_metadata: Default::default(),
+			_phantom: Default::default(),
+		}
+	}
+
 	fn unwrap_or_best(&self, from_rpc: Option<<B as BlockT>::Hash>) -> B::Hash {
 		from_rpc.unwrap_or_else(|| self.client.info().best_hash)
 	}
@@ -773,7 +773,7 @@ fn map_dispatch_error(e: DispatchErrorWithMessage) -> jsonrpsee::core::Error {
 	})
 }
 
-impl<C, B> CustomApiServer for CustomRpc<C, B>
+impl<C, B, S> CustomApiServer for CustomRpc<C, B, S>
 where
 	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
 	C: sp_api::ProvideRuntimeApi<B>
@@ -783,6 +783,7 @@ where
 		+ HeaderBackend<B>
 		+ BlockchainEvents<B>,
 	C::Api: CustomRuntimeApi<B>,
+	S: Send + Sync + 'static,
 {
 	fn cf_is_auction_phase(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<bool> {
 		self.client
@@ -1570,39 +1571,6 @@ where
 			.map_err(to_rpc_error)
 	}
 
-	fn cf_get_events(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<scale_value::Value>> {
-		let event_decoder = type_decoder::TypeDecoder::new::<
-			frame_system::EventRecord<state_chain_runtime::RuntimeEvent, state_chain_runtime::Hash>,
-		>();
-		let events = self
-			.client
-			.runtime_api()
-			.cf_get_events(self.unwrap_or_best(at), EventFilter::AllEvents)
-			.map_err(to_rpc_error)?;
-
-		Ok(events
-			.into_iter()
-			.map(|event_record| event_decoder.decode_data(event_record.encode()))
-			.collect::<Vec<_>>())
-	}
-
-	fn cf_get_system_events_encoded(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<sp_core::Bytes>> {
-		Ok(self
-			.client
-			.runtime_api()
-			.cf_get_events(self.unwrap_or_best(at), EventFilter::SystemOnly)
-			.map_err(to_rpc_error)?
-			.into_iter()
-			.map(|event| event.encode().into())
-			.collect::<Vec<_>>())
-	}
-
 	fn cf_boost_pool_details(
 		&self,
 		asset: Option<Asset>,
@@ -1642,7 +1610,7 @@ where
 	}
 }
 
-impl<C, B> CustomRpc<C, B>
+impl<C, B, S> CustomRpc<C, B, S>
 where
 	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
 	C: sp_api::ProvideRuntimeApi<B>
