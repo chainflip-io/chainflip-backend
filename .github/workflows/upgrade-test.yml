@@ -327,7 +327,7 @@ jobs:
             /tmp/chainflip/logs/*.log
 
       - name: Write chain explorer to file 📝
-        if: always()
+        if: failure()
         continue-on-error: true
         working-directory: bouncer
         run: |

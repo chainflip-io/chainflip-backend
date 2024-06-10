@@ -126,7 +126,7 @@ jobs:
           ./run.sh
 
       - name: Write chain explorer to file 📝
-        if: always()
+        if: failure()
         continue-on-error: true
         working-directory: bouncer
         run: |
