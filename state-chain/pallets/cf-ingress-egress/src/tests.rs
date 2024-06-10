@@ -906,6 +906,7 @@ fn deposits_below_minimum_are_rejected() {
 				deposit_address,
 				asset: flip,
 				amount: default_deposit_amount,
+				block_height: Default::default(),
 				deposit_details: Default::default(),
 				ingress_fee: 0,
 				action: DepositAction::LiquidityProvision { lp_account: LP_ACCOUNT },
