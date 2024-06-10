@@ -125,8 +125,8 @@ jobs:
         run: |
           ./run.sh
 
-      - name: Write chain output to file 📝
-        # TODO: Add only failure here. - just testing for now
+      - name: Write chain explorer to file 📝
+        if: failure()
         continue-on-error: true
         working-directory: bouncer
         run: |
