@@ -5,7 +5,10 @@ use crate::{
 };
 use common::*;
 use ethabi::{Address, ParamType, Token, Uint};
-use frame_support::sp_runtime::traits::{Hash, Keccak256};
+use frame_support::{
+	sp_runtime::traits::{Hash, Keccak256},
+	traits::Defensive,
+};
 
 use super::{tokenizable::Tokenizable, EvmFetchId};
 
@@ -180,6 +183,14 @@ impl<C: EvmCall> EvmTransactionBuilder<C> {
 		]))
 	}
 
+	fn expect_sig_data_defensive(&self, reason: &'static str) -> SigData {
+		self.sig_data.defensive_proof(reason).unwrap_or(SigData {
+			sig: Default::default(),
+			nonce: Default::default(),
+			k_times_g_address: Default::default(),
+		})
+	}
+
 	pub fn signed(
 		mut self,
 		threshold_signature: &<EvmCrypto as ChainCrypto>::ThresholdSignature,
@@ -189,8 +200,9 @@ impl<C: EvmCall> EvmTransactionBuilder<C> {
 	}
 
 	pub fn chain_encoded(&self) -> Vec<u8> {
-		self.call
-			.abi_encoded(&self.sig_data.expect("Unsigned chain encoding is invalid."))
+		self.call.abi_encoded(
+			&self.expect_sig_data_defensive("`chain_encoded` is only called on signed api calls."),
+		)
 	}
 
 	pub fn is_signed(&self) -> bool {
@@ -198,7 +210,9 @@ impl<C: EvmCall> EvmTransactionBuilder<C> {
 	}
 
 	pub fn transaction_out_id(&self) -> <EvmCrypto as ChainCrypto>::TransactionOutId {
-		let sig_data = self.sig_data.expect("Unsigned transaction_out_id is invalid.");
+		let sig_data = self.expect_sig_data_defensive(
+			"`transaction_out_id` is only requested for signed transactions.",
+		);
 		SchnorrVerificationComponents {
 			s: sig_data.sig.into(),
 			k_times_g_address: sig_data.k_times_g_address.into(),
