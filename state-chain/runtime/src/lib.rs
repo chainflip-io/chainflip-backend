@@ -1267,7 +1267,7 @@ impl_runtime_apis! {
 			let free_balances = LiquidityProvider::free_balances(&account_id).map_err(Into::<DispatchErrorWithMessage>::into)?;
 			let open_order_balances = LiquidityPools::open_order_balances(&account_id).map_err(Into::<DispatchErrorWithMessage>::into)?;
 			let boost_pools_balances = {
-				let mut result = EthereumIngressEgress::boost_pool_balances(&account_id); //.append(
+				let mut result = EthereumIngressEgress::boost_pool_balances(&account_id);
 				result.append( &mut PolkadotIngressEgress::boost_pool_balances(&account_id));
 				result.append( &mut BitcoinIngressEgress::boost_pool_balances(&account_id));
 				result.append( &mut ArbitrumIngressEgress::boost_pool_balances(&account_id));
