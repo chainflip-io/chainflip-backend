@@ -158,6 +158,23 @@ fn setup() {
 }
 
 #[test]
+fn cannot_add_zero_boost_funds() {
+	new_test_ext().execute_with(|| {
+		setup();
+
+		assert_noop!(
+			IngressEgress::add_boost_funds(
+				RuntimeOrigin::signed(BOOSTER_1),
+				eth::Asset::Eth,
+				0,
+				TIER_5_BPS
+			),
+			pallet_cf_ingress_egress::Error::<Test, ()>::AddBoostAmountMustBeNonZero
+		);
+	});
+}
+
+#[test]
 fn basic_passive_boosting() {
 	new_test_ext().execute_with(|| {
 		const ASSET: eth::Asset = eth::Asset::Eth;
