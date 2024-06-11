@@ -18,6 +18,7 @@ use anyhow::{anyhow, Result};
 use cf_chains::{
 	address::{EncodedAddress, IntoForeignChainAddress},
 	eth::Address as EthereumAddress,
+	evm::DepositDetails,
 	CcmChannelMetadata, CcmDepositMetadata, Chain,
 };
 use cf_primitives::{chains::assets::eth::Asset as EthereumAsset, Asset, ForeignChain};
@@ -215,7 +216,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	where
 		Inner::Chain: cf_chains::Chain<
 			ChainAmount = u128,
-			DepositDetails = (),
+			DepositDetails = DepositDetails,
 			ChainAccount = EthereumAddress,
 		>,
 		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = Bloom>,
