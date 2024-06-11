@@ -1028,48 +1028,6 @@ pub mod pallet {
 			}
 		}
 
-		// Returns swaps that have not expired yet and should be scheduled for retry.
-		fn refund_any_expired_swaps(
-			swaps: Vec<Swap>,
-			current_block: BlockNumberFor<T>,
-		) -> Vec<Swap> {
-			let (swaps_to_retry, swaps_to_refund): (Vec<Swap>, Vec<Swap>) =
-				swaps.into_iter().partition(|swap| {
-					swap.refund_params
-						.as_ref()
-						.map_or(true, |params| current_block < params.refund_block.into())
-				});
-
-			for swap in swaps_to_refund {
-				let destination_address = swap.refund_params.unwrap().refund_address;
-				match T::EgressHandler::schedule_egress(
-					swap.from,
-					swap.input_amount,
-					destination_address,
-					None,
-				) {
-					Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) => {
-						Self::deposit_event(Event::<T>::RefundEgressScheduled {
-							swap_id: swap.swap_id,
-							egress_id,
-							amount: egress_amount,
-							egress_fee: fee_withheld,
-						});
-					},
-					Err(err) => {
-						Self::deposit_event(Event::<T>::RefundEgressIgnored {
-							swap_id: swap.swap_id,
-							asset: swap.from,
-							amount: swap.input_amount,
-							reason: err.into(),
-						});
-					},
-				}
-			}
-
-			swaps_to_retry
-		}
-
 		fn process_swaps_for_block(
 			current_block: BlockNumberFor<T>,
 			block_to_process: BlockNumberFor<T>,
@@ -1116,19 +1074,60 @@ pub mod pallet {
 							}
 						};
 
-						let swaps_to_retry =
-							Self::refund_any_expired_swaps(failed_swaps, current_block);
-
 						let retry_block = current_block + SWAP_RETRY_DELAY_BLOCKS.into();
 
-						for swap in &swaps_to_retry {
-							Self::deposit_event(Event::<T>::SwapRescheduled {
-								swap_id: swap.swap_id,
-								execute_at: retry_block,
-							});
-						}
+						for swap in failed_swaps {
+							dbg!(&swap.refund_params, retry_block);
 
-						SwapQueue::<T>::mutate(retry_block, |swaps| swaps.extend(swaps_to_retry));
+							match swap.refund_params {
+								Some(params)
+									if BlockNumberFor::<T>::from(params.refund_block) <
+										retry_block =>
+								{
+									// Reached refund block, schedule refund:
+									match T::EgressHandler::schedule_egress(
+										swap.from,
+										swap.input_amount,
+										params.refund_address,
+										None,
+									) {
+										Ok(ScheduledEgressDetails {
+											egress_id,
+											egress_amount,
+											fee_withheld,
+										}) => {
+											Self::deposit_event(
+												Event::<T>::RefundEgressScheduled {
+													swap_id: swap.swap_id,
+													egress_id,
+													amount: egress_amount,
+													egress_fee: fee_withheld,
+												},
+											);
+										},
+										Err(err) => {
+											Self::deposit_event(Event::<T>::RefundEgressIgnored {
+												swap_id: swap.swap_id,
+												asset: swap.from,
+												amount: swap.input_amount,
+												reason: err.into(),
+											});
+										},
+									}
+								},
+								_ => {
+									// Either refund parameters not set, or refund block not
+									// reached:
+
+									Self::deposit_event(Event::<T>::SwapRescheduled {
+										swap_id: swap.swap_id,
+										execute_at: retry_block,
+									});
+
+									SwapQueue::<T>::append(retry_block, swap);
+								},
+							}
+						}
 
 						if !satisfactory_swaps.is_empty() {
 							swaps_to_execute = satisfactory_swaps;
@@ -1366,8 +1365,6 @@ pub mod pallet {
 				))
 				.unwrap_or(u128::MAX),
 			});
-
-			dbg!(&refund_params);
 
 			let (swap_id, execute_at) = Self::schedule_swap(
 				from,

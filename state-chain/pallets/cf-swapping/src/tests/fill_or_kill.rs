@@ -29,8 +29,8 @@ fn price_limit_is_respected_in_fok_swap() {
 
 			insert_swaps(&vec![
 				new_swap(1, None),
-				new_swap(2, Some(params(5, HIGH_MIN_OUTPUT))),
-				new_swap(3, Some(params(5, INPUT_AMOUNT))),
+				new_swap(2, Some(params(SWAP_RETRIED_AT_BLOCK as u32, HIGH_MIN_OUTPUT))),
+				new_swap(3, Some(params(SWAP_RETRIED_AT_BLOCK as u32, INPUT_AMOUNT))),
 			]);
 
 			assert_event_sequence!(
@@ -118,7 +118,7 @@ fn fok_swap_gets_refunded_due_to_price_limit() {
 		})
 		.then_execute_at_block(SWAPS_SCHEDULED_FOR_BLOCK, |_| {})
 		.then_execute_with(|_| {
-			// Swap should fail here and resheduled for a later block
+			// Swap should fail here and rescheduled for a later block
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
@@ -139,7 +139,7 @@ fn fok_swap_gets_refunded_due_to_price_limit() {
 }
 
 #[test]
-fn fok_swap_gets_refunded_due_to_slippage_protection() {
+fn fok_swap_gets_refunded_due_to_price_impact_protection() {
 	const SWAPS_ADDED_BLOCK: u64 = 1;
 	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = 3;
 	const SWAP_RETRIED_AT_BLOCK: u64 = SWAPS_SCHEDULED_FOR_BLOCK + SWAP_RETRY_DELAY_BLOCKS as u64;
@@ -180,7 +180,7 @@ fn fok_swap_gets_refunded_due_to_slippage_protection() {
 			MockSwappingApi::set_swaps_should_fail(true);
 		})
 		.then_execute_with(|_| {
-			// Swap should fail here (due to slippage protection) and be refunded due
+			// Swap should fail here (due to price impact protection) and be refunded due
 			// to reaching expiry block
 			assert_event_sequence!(
 				Test,

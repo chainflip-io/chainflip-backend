@@ -132,7 +132,10 @@ fn insert_swaps(swaps: &[Swap]) {
 				destination_address.clone(),
 				bounded_vec![Beneficiary { account: broker_id as u64, bps: 2 }],
 				swap.refund_params.clone().map(|params| ChannelRefundParameters {
-					retry_duration: MAX_RETRY_DURATION_BLOCKS,
+					retry_duration: params
+						.refund_block
+						.checked_sub(System::block_number().try_into().unwrap())
+						.expect("invalid refund block"),
 					refund_address: ForeignChainAddress::Eth([10; 20].into()),
 					price_limit: sqrt_price_to_price(bounded_sqrt_price(
 						params.min_output.into(),
