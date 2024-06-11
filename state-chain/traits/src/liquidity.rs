@@ -157,13 +157,13 @@ pub enum SwapType {
 pub trait BoostApi {
 	type AccountId;
 
-	fn boost_pool_balances(who: &Self::AccountId) -> Vec<(Asset, AssetAmount)>;
+	fn boost_pool_account_balances(who: &Self::AccountId) -> Vec<(Asset, AssetAmount)>;
 }
 
 impl<T: frame_system::Config> BoostApi for T {
 	type AccountId = T::AccountId;
 
-	fn boost_pool_balances(_who: &Self::AccountId) -> Vec<(Asset, AssetAmount)> {
+	fn boost_pool_account_balances(_who: &Self::AccountId) -> Vec<(Asset, AssetAmount)> {
 		vec![]
 	}
 }
