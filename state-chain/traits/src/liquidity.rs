@@ -6,7 +6,10 @@ use cf_primitives::{Asset, AssetAmount, Beneficiaries, ChannelId, SwapId};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 use frame_system::pallet_prelude::BlockNumberFor;
-use scale_info::{TypeInfo, prelude::vec::Vec, prelude::vec};
+use scale_info::{
+	prelude::{vec, vec::Vec},
+	TypeInfo,
+};
 
 pub trait SwapDepositHandler {
 	type AccountId;
@@ -79,7 +82,7 @@ pub trait PoolApi {
 		quote_asset: Asset,
 	) -> Result<u32, DispatchError>;
 
-	fn open_order_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError>;
+	fn open_order_balances(who: &Self::AccountId) -> AssetMap<AssetAmount>;
 }
 
 impl<T: frame_system::Config> PoolApi for T {
@@ -96,8 +99,8 @@ impl<T: frame_system::Config> PoolApi for T {
 	) -> Result<u32, DispatchError> {
 		Ok(0)
 	}
-	fn open_order_balances(_who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError> {
-		Ok(AssetMap::from_fn(|_| 0))
+	fn open_order_balances(_who: &Self::AccountId) -> AssetMap<AssetAmount> {
+		AssetMap::from_fn(|_| 0)
 	}
 }
 

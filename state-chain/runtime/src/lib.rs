@@ -47,7 +47,7 @@ use cf_chains::{
 use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment, STABLE_ASSET};
 use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi};
 use codec::{alloc::string::ToString, Encode};
-use core::ops::Range;
+use core::ops::{IndexMut, Range};
 use frame_support::instances::*;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
@@ -64,7 +64,6 @@ use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use scale_info::prelude::string::String;
 use sp_std::collections::btree_map::BTreeMap;
-use core::ops::IndexMut;
 
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
@@ -1265,7 +1264,7 @@ impl_runtime_apis! {
 		}
 		fn cf_lp_total_balances(account_id: AccountId) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage> {
 			let free_balances = LiquidityProvider::free_balances(&account_id).map_err(Into::<DispatchErrorWithMessage>::into)?;
-			let open_order_balances = LiquidityPools::open_order_balances(&account_id).map_err(Into::<DispatchErrorWithMessage>::into)?;
+			let open_order_balances = LiquidityPools::open_order_balances(&account_id);
 			let boost_pools_balances = {
 				let mut result = EthereumIngressEgress::boost_pool_balances(&account_id);
 				result.append( &mut PolkadotIngressEgress::boost_pool_balances(&account_id));
