@@ -9,6 +9,7 @@ use cf_chains::{
 use cf_primitives::{
 	AccountRole, Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, ChannelId,
 	ForeignChain, SwapId, SwapLeg, TransactionHash, BASIS_POINTS_PER_MILLION, STABLE_ASSET,
+	SWAP_RETRY_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -42,7 +43,6 @@ pub use weights::WeightInfo;
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 pub const SWAP_DELAY_BLOCKS: u32 = 2;
-pub const SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
 
 struct SwapCtx {
 	swap: Swap,
@@ -607,6 +607,7 @@ pub mod pallet {
 				from,
 				to,
 				deposit_amount,
+				// NOTE: FoK not yet supported for swaps from the contract
 				None,
 				SwapType::Swap(destination_address_internal.clone()),
 			);
@@ -1087,7 +1088,10 @@ pub mod pallet {
 						return Ok(())
 					},
 					Err(err) => {
-						let (successful_swaps, failed_swaps) = {
+						// Depending on the error, split the swaps into "satisfactory"
+						// (have a chance of succeeding if retried immediately), and "failed"
+						// (unlikely to succeed now and should be retried later or refunded).
+						let (satisfactory_swaps, failed_swaps) = {
 							match err {
 								BatchExecutionError::PriceLimitHit {
 									successful_swaps,
@@ -1124,10 +1128,10 @@ pub mod pallet {
 							});
 						}
 
-						SwapQueue::<T>::insert(retry_block, swaps_to_retry);
+						SwapQueue::<T>::mutate(retry_block, |swaps| swaps.extend(swaps_to_retry));
 
-						if !successful_swaps.is_empty() {
-							swaps_to_execute = successful_swaps;
+						if !satisfactory_swaps.is_empty() {
+							swaps_to_execute = satisfactory_swaps;
 						} else {
 							return Err(())
 						}
@@ -1348,7 +1352,13 @@ pub mod pallet {
 
 			// Now that we know input amount, we can calculate the minimum output amount:
 			let refund_params = refund_params.map(|params| SwapRefundParameters {
-				refund_block: params.refund_block,
+				refund_block: {
+					use sp_arithmetic::traits::UniqueSaturatedInto;
+					// In practice block number always fits in u32:
+					let current_block: u32 =
+						frame_system::Pallet::<T>::block_number().unique_saturated_into();
+					current_block.saturating_add(params.retry_duration)
+				},
 				refund_address: params.refund_address,
 				min_output: u128::try_from(cf_amm::common::output_amount_ceil(
 					net_amount.into(),

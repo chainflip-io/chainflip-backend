@@ -647,7 +647,7 @@ pub struct SwapRefundParameters {
 	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Serialize, Deserialize,
 )]
 pub struct ChannelRefundParameters {
-	pub refund_block: cf_primitives::BlockNumber,
+	pub retry_duration: cf_primitives::BlockNumber,
 	pub refund_address: ForeignChainAddress,
 	pub price_limit: Price,
 }

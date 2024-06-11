@@ -33,6 +33,7 @@ use cf_chains::{
 use cf_primitives::{
 	Asset, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId, EgressCounter,
 	EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId,
+	MAX_RETRY_DURATION_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -1970,6 +1971,13 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
+		if let Some(refund_params) = &refund_params {
+			ensure!(
+				refund_params.retry_duration <= MAX_RETRY_DURATION_BLOCKS,
+				DispatchError::Other("Retry duration too long")
+			);
+		}
+
 		let (channel_id, deposit_address, expiry_height, channel_opening_fee) = Self::open_channel(
 			&broker_id,
 			source_asset,

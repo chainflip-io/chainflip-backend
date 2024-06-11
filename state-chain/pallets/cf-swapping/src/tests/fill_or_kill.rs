@@ -7,9 +7,9 @@ fn new_swap(id: SwapId, refund_params: Option<SwapRefundParameters>) -> Swap {
 	Swap::new(id, Asset::Eth, Asset::Usdc, INPUT_AMOUNT, refund_params, swap_type)
 }
 
-fn params(refund_if_reaches: u32, min_output: AssetAmount) -> SwapRefundParameters {
+fn params(refund_block: u32, min_output: AssetAmount) -> SwapRefundParameters {
 	SwapRefundParameters {
-		refund_block: refund_if_reaches,
+		refund_block,
 		refund_address: ForeignChainAddress::Eth([10; 20].into()),
 		min_output,
 	}

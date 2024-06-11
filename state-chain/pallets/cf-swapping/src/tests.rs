@@ -15,6 +15,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiary, ForeignChain, NetworkEnvironment,
+	MAX_RETRY_DURATION_BLOCKS,
 };
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
@@ -130,9 +131,8 @@ fn insert_swaps(swaps: &[Swap]) {
 				swap.input_amount,
 				destination_address.clone(),
 				bounded_vec![Beneficiary { account: broker_id as u64, bps: 2 }],
-				// TODO: check if this works!
 				swap.refund_params.clone().map(|params| ChannelRefundParameters {
-					refund_block: params.refund_block,
+					retry_duration: MAX_RETRY_DURATION_BLOCKS,
 					refund_address: ForeignChainAddress::Eth([10; 20].into()),
 					price_limit: sqrt_price_to_price(bounded_sqrt_price(
 						params.min_output.into(),
