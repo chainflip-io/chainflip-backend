@@ -1,7 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use core::ops::Range;
-use core::ops::{Index, IndexMut};
-
 use cf_amm::{
 	common::{self, Amount, PoolPairsMap, Price, Side, SqrtPriceQ64F96, Tick},
 	limit_orders::{self, Collected, PositionInfo},
@@ -14,6 +11,7 @@ use cf_traits::{
 	impl_pallet_safe_mode, Chainflip, LpBalanceApi, NetworkFeeTaken, PoolApi, SwapQueueApi,
 	SwapType, SwappingApi,
 };
+use core::ops::{Index, IndexMut, Range};
 use frame_support::{
 	dispatch::GetDispatchInfo,
 	pallet_prelude::*,
@@ -1094,11 +1092,14 @@ impl<T: Config> PoolApi for Pallet<T> {
 			pool_orders.range_orders.len() as u32)
 	}
 
-	fn open_order_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError> {
+	fn open_order_balances(who: &Self::AccountId) -> AssetMap<AssetAmount> {
 		let mut result = AssetMap::from_fn(|_| 0);
 
 		for base_asset in Asset::all().filter(|asset| *asset != Asset::Usdc) {
-			let pool_orders = Self::pool_orders(base_asset, Asset::Usdc, Some(who.clone()))?;
+			let pool_orders = match Self::pool_orders(base_asset, Asset::Usdc, Some(who.clone())) {
+				Ok(orders) => orders,
+				Err(_) => continue,
+			};
 			for ask in pool_orders.limit_orders.asks {
 				*result.index_mut(base_asset) = result
 					.index(base_asset)
@@ -1110,7 +1111,7 @@ impl<T: Config> PoolApi for Pallet<T> {
 					.saturating_add(bid.sell_amount.saturated_into::<u128>());
 			}
 		}
-		Ok(result)
+		result
 	}
 }
 
