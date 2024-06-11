@@ -264,10 +264,10 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// Stores all needed information to be able to re-request the signature
+	/// Stores the signed external API Call for a broadcast.
 	#[pallet::storage]
 	#[pallet::getter(fn threshold_signature_data)]
-	pub type ThresholdSignatureData<T: Config<I>, I: 'static = ()> =
+	pub type PendingApiCalls<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BroadcastId, ApiCallFor<T, I>, OptionQuery>;
 
 	/// Stores metadata related to a transaction.
@@ -421,7 +421,7 @@ pub mod pallet {
 		/// A callback to be used when a threshold signature request completes. Retrieves the
 		/// requested signature, uses the configured [TransactionBuilder] to build the transaction.
 		/// Initiates the broadcast sequence if `should_broadcast` is set to true, otherwise insert
-		/// the signature result into the `ThresholdSignatureData` storage.
+		/// the signature result into the `PendingApiCalls` storage.
 		///
 		/// ## Events
 		///
@@ -457,7 +457,7 @@ pub mod pallet {
 
 			let signed_api_call = api_call.signed(&signature);
 
-			ThresholdSignatureData::<T, I>::insert(broadcast_id, signed_api_call.clone());
+			PendingApiCalls::<T, I>::insert(broadcast_id, signed_api_call.clone());
 
 			// If a signed call already exists, update the storage and do not broadcast.
 			if should_broadcast {
@@ -655,7 +655,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn clean_up_broadcast_storage(broadcast_id: BroadcastId) -> Option<ApiCallFor<T, I>> {
 		AwaitingBroadcast::<T, I>::remove(broadcast_id);
 		TransactionMetadata::<T, I>::remove(broadcast_id);
-		ThresholdSignatureData::<T, I>::take(broadcast_id).map(|api_call| {
+		PendingApiCalls::<T, I>::take(broadcast_id).map(|api_call| {
 			TransactionOutIdToBroadcastId::<T, I>::remove(api_call.transaction_out_id());
 			api_call
 		})
@@ -739,7 +739,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if let Some(broadcast_data) = AwaitingBroadcast::<T, I>::get(broadcast_id) {
 			// If the broadcast is not pending, we should not retry.
-			if let Some(api_call) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
+			if let Some(api_call) = PendingApiCalls::<T, I>::get(broadcast_id) {
 				if T::TransactionBuilder::requires_signature_refresh(
 					&api_call,
 					&broadcast_data.threshold_signature_payload,

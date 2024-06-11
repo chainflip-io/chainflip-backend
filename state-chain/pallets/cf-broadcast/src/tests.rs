@@ -3,8 +3,8 @@
 use crate::{
 	mock::*, AbortedBroadcasts, AwaitingBroadcast, BroadcastData, BroadcastId, Config,
 	DelayedBroadcastRetryQueue, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1,
-	PalletOffence, PendingBroadcasts, RequestFailureCallbacks, RequestSuccessCallbacks,
-	ThresholdSignatureData, Timeouts, TransactionFeeDeficit, TransactionMetadata,
+	PalletOffence, PendingApiCalls, PendingBroadcasts, RequestFailureCallbacks,
+	RequestSuccessCallbacks, Timeouts, TransactionFeeDeficit, TransactionMetadata,
 	TransactionOutIdToBroadcastId,
 };
 use cf_chains::{
@@ -122,7 +122,7 @@ fn assert_broadcast_storage_cleaned_up(broadcast_id: BroadcastId) {
 	);
 	assert!(FailedBroadcasters::<Test, Instance1>::get(broadcast_id).is_empty());
 	assert_eq!(Broadcaster::attempt_count(broadcast_id), 0);
-	assert!(ThresholdSignatureData::<Test, Instance1>::get(broadcast_id).is_none());
+	assert!(PendingApiCalls::<Test, Instance1>::get(broadcast_id).is_none());
 	assert!(TransactionMetadata::<Test, Instance1>::get(broadcast_id).is_none());
 	assert!(!PendingBroadcasts::<Test, Instance1>::get().contains(&broadcast_id))
 }
@@ -563,7 +563,7 @@ fn callback_is_called_upon_broadcast_failure() {
 			broadcast_id,
 			new_mock_broadcast_attempt(broadcast_id, 0u64),
 		);
-		ThresholdSignatureData::<Test, Instance1>::insert(broadcast_id, api_call);
+		PendingApiCalls::<Test, Instance1>::insert(broadcast_id, api_call);
 
 		// Broadcast fails when no broadcaster can be nominated.
 		let nominee = ready_to_abort_broadcast(broadcast_id);
