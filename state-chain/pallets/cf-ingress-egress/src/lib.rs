@@ -2054,7 +2054,10 @@ impl<T: Config<I>, I: 'static> BoostApi for Pallet<T, I> {
 						let pending: AssetAmount = pool
 							.get_pending_boosts()
 							.into_values()
-							.map(|owed| owed.get(who).map_or(0u32.into(), |owed_amount| owed_amount.total.into()))
+							.map(|owed| {
+								owed.get(who)
+									.map_or(0u32.into(), |owed_amount| owed_amount.total.into())
+							})
 							.sum();
 
 						acc + active + pending
