@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use core::ops::Range;
-use std::ops::IndexMut;
+use std::ops::{Index, IndexMut};
 
 use cf_amm::{
 	common::{self, Amount, PoolPairsMap, Price, Side, SqrtPriceQ64F96, Tick},
@@ -23,6 +23,7 @@ use frame_support::{
 
 use frame_system::pallet_prelude::OriginFor;
 use serde::{Deserialize, Serialize};
+use sp_arithmetic::traits::{SaturatedConversion, UniqueSaturatedInto, Zero};
 use sp_std::{boxed::Box, collections::btree_set::BTreeSet, vec::Vec};
 
 pub use pallet::*;
@@ -1003,12 +1004,14 @@ impl<T: Config> PoolApi for Pallet<T> {
 		for base_asset in Asset::all().filter(|asset| *asset != Asset::Usdc) {
 			let pool_orders = Self::pool_orders(base_asset, Asset::Usdc, Some(who.clone()))?;
 			for ask in pool_orders.limit_orders.asks {
-				*result.index_mut(base_asset) +=
-					<sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap();
+				*result.index_mut(base_asset) = result
+					.index(base_asset)
+					.saturating_add(ask.sell_amount.saturated_into::<u128>());
 			}
 			for bid in pool_orders.limit_orders.bids {
-				*result.index_mut(Asset::Usdc) +=
-					<sp_core::U256 as TryInto<u128>>::try_into(bid.sell_amount).unwrap();
+				*result.index_mut(Asset::Usdc) = result
+					.index(Asset::Usdc)
+					.saturating_add(bid.sell_amount.saturated_into::<u128>());
 			}
 		}
 		Ok(result)
