@@ -2,4 +2,4 @@
 import { send } from '../shared/send';
 import { parseAssetString } from '../shared/utils';
 
-send(parseAssetString(process.argv[2]), process.argv[3]);
+await send(parseAssetString(process.argv[2]), process.argv[3]);

@@ -276,6 +276,7 @@ function getCachedSubstrateApi(defaultEndpoint: string) {
                 setTimeout(() => {
                   if (connections === 0) {
                     api = undefined;
+                    /* eslint-disable-next-line @typescript-eslint/no-floating-promises */
                     Reflect.get(target, 'disconnect', receiver).call(target);
                   }
                 }, 5_000).unref();

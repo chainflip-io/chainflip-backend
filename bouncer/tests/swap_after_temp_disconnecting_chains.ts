@@ -9,15 +9,15 @@ try {
   const networkName = 'chainflip-localnet_default';
   const allExternalNodes = ['bitcoin', 'geth', 'polkadot'];
 
-  allExternalNodes.forEach((container) => {
-    disconnectContainerFromNetwork(container, networkName);
-  });
+  await Promise.all(
+    allExternalNodes.map((container) => disconnectContainerFromNetwork(container, networkName)),
+  );
 
   await sleep(10000);
 
-  allExternalNodes.forEach((container) => {
-    connectContainerToNetwork(container, networkName);
-  });
+  await Promise.all(
+    allExternalNodes.map((container) => connectContainerToNetwork(container, networkName)),
+  );
 
   await Promise.all([testSwap('Dot', 'Btc'), testSwap('Btc', 'Flip'), testSwap('Eth', 'Usdc')]);
 

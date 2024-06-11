@@ -149,6 +149,7 @@ export function observeEvent<T = any>(
   const it = subscribeHeads({ chain, finalized });
 
   controller?.signal.addEventListener('abort', () => {
+    /* eslint-disable-next-line @typescript-eslint/no-floating-promises */
     it.return();
   });
 

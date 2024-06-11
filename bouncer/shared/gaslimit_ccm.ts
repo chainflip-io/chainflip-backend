@@ -210,7 +210,7 @@ async function testGasLimitSwap(
   if (minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER[destChain] >= gasLimitBudget) {
     let stopObservingCcmReceived = false;
 
-    observeCcmReceived(
+    await observeCcmReceived(
       sourceAsset,
       destAsset,
       destAddress,

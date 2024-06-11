@@ -250,6 +250,7 @@ async function playSwapper() {
     const dest = assets
       .filter((x) => x !== src)
       .at(Math.floor(Math.random() * (assets.length - 1)))!;
+    /* eslint-disable @typescript-eslint/no-floating-promises */
     testSwap(src, dest, undefined, undefined, undefined, undefined, swapAmount.get(src));
     await sleep(5000);
   }

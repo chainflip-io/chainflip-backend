@@ -224,6 +224,7 @@ async function doPolkadotSwaps(): Promise<void> {
   const startSwapInterval = 2000;
   console.log(`Running polkadot swaps, new random swap every ${startSwapInterval}ms`);
   while (!runtimeUpdatePushed) {
+    /* eslint-disable @typescript-eslint/no-floating-promises */
     randomPolkadotSwap();
     swapsStarted++;
     await sleep(startSwapInterval);
