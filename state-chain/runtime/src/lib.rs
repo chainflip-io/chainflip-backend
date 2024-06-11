@@ -64,7 +64,7 @@ use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use scale_info::prelude::string::String;
 use sp_std::collections::btree_map::BTreeMap;
-use std::ops::IndexMut;
+use core::ops::IndexMut;
 
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,

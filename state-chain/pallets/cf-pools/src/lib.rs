@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use core::ops::Range;
-use std::ops::{Index, IndexMut};
+use core::ops::{Index, IndexMut};
 
 use cf_amm::{
 	common::{self, Amount, PoolPairsMap, Price, Side, SqrtPriceQ64F96, Tick},
