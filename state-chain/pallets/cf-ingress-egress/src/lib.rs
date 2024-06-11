@@ -690,6 +690,8 @@ pub mod pallet {
 		BelowEgressDustLimit,
 		/// Solana address derivation error.
 		SolanaAddressDerivationError,
+		/// You cannot add 0 to a boost pool.
+		AddBoostAmountMustBeNonZero,
 		/// Adding boost funds is disabled due to safe mode.
 		AddBoostFundsDisabled,
 		/// Retrieving boost funds disabled due to safe mode.
@@ -1049,6 +1051,7 @@ pub mod pallet {
 				T::SafeMode::get().add_boost_funds_enabled,
 				Error::<T, I>::AddBoostFundsDisabled
 			);
+			ensure!(amount > Zero::zero(), Error::<T, I>::AddBoostAmountMustBeNonZero);
 
 			T::LpBalance::try_debit_account(&booster_id, asset.into(), amount.into())?;
 
