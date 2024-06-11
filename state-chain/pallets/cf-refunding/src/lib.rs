@@ -1,12 +1,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::AnyChain;
+use cf_chains::{AnyChain, Ethereum, ForeignChainAddress};
 use cf_primitives::{Asset, AssetAmount};
 use cf_traits::{impl_pallet_safe_mode, Chainflip, EgressApi};
 use sp_std::collections::btree_map::BTreeMap;
 
 use sp_std::vec;
+
+use cf_traits::Refunding;
 
 use frame_support::pallet_prelude::*;
 pub use pallet::*;
@@ -24,7 +26,7 @@ mod tests;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
 
-impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled);
+impl_pallet_safe_mode!(PalletSafeMode; ensure_something);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -36,11 +38,10 @@ pub mod pallet {
 		/// an runtime upgrade
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// API for handling asset egress.
-		type EgressHandler: EgressApi<AnyChain>;
+		// /// API for handling asset egress.
+		// type EgressHandler: EgressApi<AnyChain>;
 
-		/// Safe Mode access.
-		type SafeMode: Get<PalletSafeMode>;
+		// type SafeMode: Get<PalletSafeMode>;
 	}
 
 	#[pallet::error]
@@ -52,7 +53,7 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		RefundScheduled { account_id: T::AccountId, asset: Asset, amount: AssetAmount },
+		RefundScheduled { account_id: ForeignChainAddress, asset: Asset, amount: AssetAmount },
 		RefundIntegrityCheckFailed { asset: Asset },
 	}
 
@@ -64,7 +65,7 @@ pub mod pallet {
 	/// Storage for recorded fees per validator and asset.
 	#[pallet::storage]
 	pub type RecordedFees<T: Config> =
-		StorageMap<_, Twox64Concat, Asset, BTreeMap<T::AccountId, AssetAmount>, ValueQuery>;
+		StorageMap<_, Twox64Concat, Asset, BTreeMap<ForeignChainAddress, AssetAmount>, ValueQuery>;
 
 	/// Storage for validator's withheld transaction fees.
 	#[pallet::storage]
@@ -73,7 +74,7 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	pub fn record_gas_fee(account_id: T::AccountId, asset: Asset, gas_fee: AssetAmount) {
+	pub fn record_gas_fee(account_id: ForeignChainAddress, asset: Asset, gas_fee: AssetAmount) {
 		RecordedFees::<T>::mutate(&asset, |recorded_fees| {
 			recorded_fees
 				.entry(account_id)

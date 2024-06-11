@@ -54,6 +54,10 @@ use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use scale_info::prelude::string::String;
 use sp_std::collections::btree_map::BTreeMap;
 
+use crate::chainflip::refunding::{
+	ArbRefunding, BtcRefunding, DotRefunding, EthRefunding, SolRefunding,
+};
+
 pub use cf_chains::instances::{
 	ArbitrumInstance, BitcoinInstance, EthereumInstance, EvmInstance, PolkadotInstance,
 	SolanaInstance,
@@ -329,6 +333,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type Refunding = EthRefunding<Ethereum>;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -350,6 +355,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type Refunding = DotRefunding<Polkadot>;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -371,6 +377,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type Refunding = BtcRefunding<Bitcoin>;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -392,6 +399,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type Refunding = ArbRefunding<Arbitrum>;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -413,6 +421,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type Refunding = SolRefunding<Solana>;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -794,6 +803,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = EthereumChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
+	type Refunding = EthRefunding<Ethereum>;
 	type CfeBroadcastRequest = CfeInterface;
 }
 
@@ -818,6 +828,7 @@ impl pallet_cf_broadcast::Config<Instance2> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = PolkadotChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
+	type Refunding = DotRefunding<Polkadot>;
 	type CfeBroadcastRequest = CfeInterface;
 }
 
@@ -842,6 +853,7 @@ impl pallet_cf_broadcast::Config<Instance3> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = BitcoinChainTracking;
 	type RetryPolicy = BitcoinRetryPolicy;
+	type Refunding = BtcRefunding<Bitcoin>;
 	type CfeBroadcastRequest = CfeInterface;
 }
 
@@ -866,7 +878,13 @@ impl pallet_cf_broadcast::Config<Instance4> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = ArbitrumChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
+	type Refunding = ArbRefunding<Arbitrum>;
 	type CfeBroadcastRequest = CfeInterface;
+}
+
+impl pallet_cf_refunding::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	// type SafeMode = pallet_cf_refunding::PalletSafeMode;
 }
 
 impl pallet_cf_broadcast::Config<Instance5> for Runtime {
@@ -890,6 +908,7 @@ impl pallet_cf_broadcast::Config<Instance5> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = SolanaChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
+	type Refunding = SolRefunding<Solana>;
 	type CfeBroadcastRequest = CfeInterface;
 }
 
@@ -983,6 +1002,8 @@ construct_runtime!(
 		SolanaThresholdSigner: pallet_cf_threshold_signature::<Instance5>,
 		SolanaBroadcaster: pallet_cf_broadcast::<Instance5>,
 		SolanaIngressEgress: pallet_cf_ingress_egress::<Instance5>,
+
+		Refunding: pallet_cf_refunding,
 	}
 );
 
@@ -1091,6 +1112,7 @@ pub type PalletExecutionOrder = (
 	SolanaIngressEgress,
 	// Liquidity Pools
 	LiquidityPools,
+	// Refunding,
 );
 
 /// Contains:

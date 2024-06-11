@@ -25,6 +25,8 @@ use sp_runtime::{
 	Permill,
 };
 
+use cf_chains::{evm::Address, ForeignChainAddress};
+
 use sp_std::str::FromStr;
 
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -78,14 +80,15 @@ parameter_types! {
 impl_mock_runtime_safe_mode!(refunding: PalletSafeMode);
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type EgressHandler = MockEgressHandler<AnyChain>;
-	type SafeMode = MockRuntimeSafeMode;
 }
 
-pub const ACCOUNT: [u8; 32] = [1u8; 32];
-pub const ACCOUNT_2: [u8; 32] = [3u8; 32];
-pub const ACCOUNT_3: [u8; 32] = [2u8; 32];
-pub const ACCOUNT_4: [u8; 32] = [4u8; 32];
+fn to_eth_address(seed: Address) -> ForeignChainAddress {
+	ForeignChainAddress::Eth(seed)
+}
+
+pub fn generate_eth_chain_address(vec: [u8; 20]) -> ForeignChainAddress {
+	ForeignChainAddress::Eth(sp_core::H160(vec))
+}
 
 cf_test_utilities::impl_test_helpers! {
 	Test,

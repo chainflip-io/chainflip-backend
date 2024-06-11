@@ -954,6 +954,6 @@ pub trait IngressEgressFeeApi<C: Chain> {
 }
 
 pub trait Refunding<C: Chain> {
-	fn record_gas_fees(asset: C::ChainAsset, amount: C::ChainAmount);
-	fn collect_fees(asset: C::ChainAsset, amount: C::ChainAmount);
+	fn record_gas_fees(account_id: C::ChainAccount, asset: C::ChainAsset, amount: C::ChainAmount);
+	fn with_held_transaction_fees(asset: C::ChainAsset, amount: C::ChainAmount);
 }

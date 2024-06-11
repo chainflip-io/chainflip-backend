@@ -19,7 +19,7 @@ use cf_chains::{
 };
 use cf_traits::{
 	offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster, CfeBroadcastRequest,
-	Chainflip, EpochInfo, GetBlockHeight, SafeMode, ThresholdSigner,
+	Chainflip, EpochInfo, GetBlockHeight, Refunding, SafeMode, ThresholdSigner,
 };
 use cfe_events::TxBroadcastRequest;
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -64,7 +64,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 pub mod pallet {
 	use super::*;
 	use cf_chains::benchmarking_value::BenchmarkValue;
-	use cf_traits::{AccountRoleRegistry, BroadcastNomination, OnBroadcastReady};
+	use cf_traits::{AccountRoleRegistry, BroadcastNomination, OnBroadcastReady, Refunding};
 	use frame_support::{pallet_prelude::*, traits::EnsureOrigin};
 	use frame_system::pallet_prelude::*;
 
@@ -192,6 +192,9 @@ pub mod pallet {
 		>;
 
 		type CfeBroadcastRequest: CfeBroadcastRequest<Self, Self::TargetChain>;
+
+		/// The chain specific refunding adapter.
+		type Refunding: Refunding<Self::TargetChain>;
 
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
@@ -534,9 +537,15 @@ pub mod pallet {
 						let to_refund =
 							broadcast_data.transaction_payload.return_fee_refund(tx_fee);
 
-						TransactionFeeDeficit::<T, I>::mutate(signer_id.clone(), |fee_deficit| {
-							*fee_deficit = fee_deficit.saturating_add(to_refund);
-						});
+						// TransactionFeeDeficit::<T, I>::mutate(signer_id.clone(), |fee_deficit| {
+						// 	*fee_deficit = fee_deficit.saturating_add(to_refund);
+						// });
+
+						T::Refunding::record_gas_fees(
+							signer_id.clone().into(),
+							<T::TargetChain as Chain>::GAS_ASSET,
+							to_refund,
+						);
 
 						Self::deposit_event(Event::<T, I>::TransactionFeeDeficitRecorded {
 							beneficiary: signer_id,
