@@ -1,15 +1,30 @@
 use frame_support::traits::OnRuntimeUpgrade;
 
-use crate::{ApiCallFor, ThresholdSignatureData, ThresholdSignatureFor};
+use crate::PendingApiCalls;
 
 pub struct Migration<T, I>(sp_std::marker::PhantomData<(T, I)>);
 
+mod old {
+	use cf_primitives::BroadcastId;
+	use frame_support::Twox64Concat;
+
+	use crate::{ApiCallFor, Config, Pallet, ThresholdSignatureFor};
+
+	#[frame_support::storage_alias]
+	pub type ThresholdSignatureData<T: Config<I>, I: 'static> = StorageMap<
+		Pallet<T, I>,
+		Twox64Concat,
+		BroadcastId,
+		(ApiCallFor<T, I>, ThresholdSignatureFor<T, I>),
+	>;
+}
+
 impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		ThresholdSignatureData::<T, I>::translate_values::<
-			(ApiCallFor<T, I>, ThresholdSignatureFor<T, I>),
-			_,
-		>(|(api_call, _sig)| Some(api_call));
+		for (id, (api_call, _sig)) in old::ThresholdSignatureData::<T, I>::drain() {
+			PendingApiCalls::<T, I>::insert(id, api_call);
+		}
+
 		Default::default()
 	}
 }
@@ -23,7 +38,7 @@ mod test {
 	};
 	use frame_support::instances::Instance1;
 
-	use crate::{mock::new_test_ext, ThresholdSignatureData};
+	use crate::mock::new_test_ext;
 
 	#[test]
 	fn migration_test() {
@@ -38,14 +53,15 @@ mod test {
 
 		new_test_ext().execute_with(|| {
 			frame_support::storage::unhashed::put(
-				ThresholdSignatureData::<crate::mock::Test, Instance1>::hashed_key_for(ID).as_ref(),
+				old::ThresholdSignatureData::<crate::mock::Test, Instance1>::hashed_key_for(ID)
+					.as_ref(),
 				&(API_CALL, SIG),
 			);
 
 			Migration::<crate::mock::Test, Instance1>::on_runtime_upgrade();
 
 			assert_eq!(
-				ThresholdSignatureData::<crate::mock::Test, Instance1>::get(ID)
+				PendingApiCalls::<crate::mock::Test, Instance1>::get(ID)
 					.expect("Migration should succeed"),
 				API_CALL
 			);
