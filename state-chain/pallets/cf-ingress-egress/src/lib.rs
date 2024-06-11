@@ -2038,41 +2038,29 @@ impl<T: Config<I>, I: 'static> IngressEgressFeeApi<T::TargetChain> for Pallet<T,
 
 impl<T: Config<I>, I: 'static> BoostApi for Pallet<T, I> {
 	type AccountId = T::AccountId;
-	fn boost_pool_balances(who: &Self::AccountId) -> Vec<(Asset, AssetAmount)> {
-		let mut result: Vec<(Asset, AssetAmount)> = vec![];
-		for chain_asset in TargetChainAsset::<T, I>::iter() {
-			let total =
-				BoostPools::<T, I>::iter_prefix(chain_asset).fold(0, |acc, (_tier, pool)| {
-					let active: AssetAmount = pool
-						.get_amounts()
-						.into_iter()
-						.filter(|(id, _amount)| id == who)
-						.map(|(_id, amount)| amount.into())
-						.sum();
+	fn boost_pool_account_balances(who: &Self::AccountId) -> Vec<(Asset, AssetAmount)> {
+		TargetChainAsset::<T, I>::iter()
+			.map(|chain_asset| {
+				(
+					chain_asset.into(),
+					BoostPools::<T, I>::iter_prefix(chain_asset).fold(0, |acc, (_tier, pool)| {
+						let active: AssetAmount = pool
+							.get_amounts()
+							.into_iter()
+							.filter(|(id, _amount)| id == who)
+							.map(|(_id, amount)| amount.into())
+							.sum();
 
-					let pending: AssetAmount = pool
-						.get_pending_boosts()
-						.into_values()
-						.map(
-							|owed: BTreeMap<
-								Self::AccountId,
-								OwedAmount<<T::TargetChain as Chain>::ChainAmount>,
-							>| match owed.get(who) {
-								Some(owed_amount) => owed_amount.total.into(),
-								None => AssetAmount::from(0u32),
-							},
-						)
-						.sum();
+						let pending: AssetAmount = pool
+							.get_pending_boosts()
+							.into_values()
+							.map(|owed| owed.get(who).map_or(0u32.into(), |owed_amount| owed_amount.total.into()))
+							.sum();
 
-					acc + active + pending
-				});
-			result.push((
-				<<<T as pallet::Config<I>>::TargetChain as cf_chains::Chain>::ChainAsset as Into<
-					Asset,
-				>>::into(chain_asset),
-				total,
-			));
-		}
-		result
+						acc + active + pending
+					}),
+				)
+			})
+			.collect()
 	}
 }
