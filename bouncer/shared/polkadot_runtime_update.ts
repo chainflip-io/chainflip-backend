@@ -5,17 +5,11 @@ import { execSync } from 'child_process';
 
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import { blake2AsU8a } from '../polkadot/util-crypto';
-import {
-  getPolkadotApi,
-  amountToFineAmount,
-  sleep,
-  observeBadEvents,
-  assetDecimals,
-} from '../shared/utils';
+import { getPolkadotApi, amountToFineAmount, sleep, assetDecimals } from '../shared/utils';
 import { specVersion, getNetworkRuntimeVersion } from './utils/spec_version';
 import { handleDispatchError, submitAndGetEvent } from '../shared/polkadot_utils';
 import { testSwap } from './swapping';
-import { observeEvent } from './utils/substrate';
+import { observeEvent, observeBadEvent } from './utils/substrate';
 
 const POLKADOT_REPO_URL = `https://github.com/chainflip-io/polkadot.git`;
 const PROPOSAL_AMOUNT = '100';
@@ -253,13 +247,9 @@ export async function testPolkadotRuntimeUpdate(): Promise<void> {
   const [wasmPath, expectedSpecVersion] = await bumpAndBuildPolkadotRuntime();
 
   // Monitor for the broadcast aborted event to help catch failed swaps
-  let stopObserving = false;
-  const broadcastAborted = observeBadEvents(
-    ':BroadcastAborted',
-    () => stopObserving,
-    undefined,
-    'Polkadot runtime upgrade',
-  );
+  const broadcastAborted = observeBadEvent(':BroadcastAborted', {
+    label: 'Polkadot runtime upgrade',
+  });
 
   // Start some swaps
   const swapping = doPolkadotSwaps();
@@ -282,8 +272,7 @@ export async function testPolkadotRuntimeUpdate(): Promise<void> {
   // Wait for all of the swaps to complete
   console.log('Waiting for swaps to complete...');
   await swapping;
-  stopObserving = true;
-  await broadcastAborted;
+  await broadcastAborted.stop();
 
   process.exit(0);
 }
