@@ -35,7 +35,7 @@ set -eo pipefail
 if [[ $CI == true ]]; then
   set -x
   additional_docker_compose_up_args="--quiet-pull"
-  additional_docker_compose_down_args="--volumes --remove-orphans --rmi all"
+  additional_docker_compose_down_args="--volumes --remove-orphans"
 else
   additional_docker_compose_up_args=""
   additional_docker_compose_down_args="--volumes --remove-orphans"
