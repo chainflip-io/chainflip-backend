@@ -1,5 +1,4 @@
 #!/usr/bin/env -S pnpm tsx
-import { exec } from 'child_process';
 import { Keyring } from '../polkadot/keyring';
 import {
   runWithTimeout,
@@ -34,12 +33,9 @@ async function main(): Promise<void> {
       .signAndSend(lp);
   });
   const ethIngressKey = (
-    await observeEvent(
-      'liquidityProvider:LiquidityDepositAddressReady',
-      {
-        test: (event) => event.data.depositAddress.Eth,
-      }
-    ).event
+    await observeEvent('liquidityProvider:LiquidityDepositAddressReady', {
+      test: (event) => event.data.depositAddress.Eth,
+    }).event
   ).data.depositAddress.Eth as string;
   console.log('Eth ingress address: ' + ethIngressKey);
   await sleep(8000); // sleep for 8 seconds to give the engine a chance to start witnessing
