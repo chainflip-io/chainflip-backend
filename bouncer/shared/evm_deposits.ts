@@ -4,7 +4,6 @@ import { doPerformSwap, requestNewSwap } from '../shared/perform_swap';
 import { prepareSwap, testSwap } from '../shared/swapping';
 import {
   observeFetch,
-  observeBadEvents,
   sleep,
   getContractAddress,
   decodeDotAddressForContract,
@@ -21,7 +20,7 @@ import { signAndSendTxEvm } from './send_evm';
 import { getCFTesterAbi } from './contract_interfaces';
 import { send } from './send';
 
-import { observeEvent } from './utils/substrate';
+import { observeEvent, observeBadEvent } from './utils/substrate';
 
 const cfTesterAbi = await getCFTesterAbi();
 
@@ -42,8 +41,6 @@ async function testSuccessiveDepositEvm(sourceAsset: Asset, destAsset: Asset) {
 }
 
 async function testNoDuplicateWitnessing(sourceAsset: Asset, destAsset: Asset) {
-  let stopObserving = false;
-
   const swapParams = await testSwap(
     sourceAsset,
     destAsset,
@@ -54,10 +51,8 @@ async function testNoDuplicateWitnessing(sourceAsset: Asset, destAsset: Asset) {
   );
 
   // Check the Deposit contract is deployed. It is assumed that the funds are fetched immediately.
-  const observingSwapScheduled = observeBadEvents(
-    'swapping:SwapScheduled',
-    () => stopObserving,
-    (event) => {
+  const observingSwapScheduled = observeBadEvent('swapping:SwapScheduled', {
+    test: (event) => {
       if ('DepositChannel' in event.data.origin) {
         const channelMatches =
           Number(event.data.origin.DepositChannel.channelId) === swapParams.channelId;
@@ -66,7 +61,7 @@ async function testNoDuplicateWitnessing(sourceAsset: Asset, destAsset: Asset) {
       }
       return false;
     },
-  );
+  });
 
   await observeFetch(sourceAsset, swapParams.depositAddress);
 
@@ -74,8 +69,7 @@ async function testNoDuplicateWitnessing(sourceAsset: Asset, destAsset: Asset) {
   // Trying to witness the fetch BroadcastSuccess is just unnecessarily complicated here.
   await sleep(100000);
 
-  stopObserving = true;
-  await observingSwapScheduled;
+  await observingSwapScheduled.stop();
 }
 
 // Not supporting Btc to avoid adding more unnecessary complexity with address encoding.

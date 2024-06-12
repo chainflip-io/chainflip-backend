@@ -171,9 +171,8 @@ export function observeEvent<T = any>(
 
   return { stop: () => controller.abort(), event: findEvent() } as AbortableObserver<T>;
 }
-/* eslint-enable @typescript-eslint/no-explicit-any */
-
-export function observeBadEvents<T>(
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export function observeBadEvent<T = any>(
   eventName: EventName,
   { test, label }: { test?: EventTest<T>; label?: string },
 ): { stop: () => Promise<void> } {
