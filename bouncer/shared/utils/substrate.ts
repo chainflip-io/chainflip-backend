@@ -9,7 +9,7 @@ const apiMap = {
 type SubstrateChain = keyof typeof apiMap;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Event<T = any> = {
+export type Event<T = any> = {
   name: { section: string; method: string };
   data: T;
   block: number;
