@@ -20,16 +20,12 @@ async function runAllConcurrentTests() {
   const givenNumberOfNodes = match ? parseInt(match[0]) : null;
   const numberOfNodes = givenNumberOfNodes ?? 1;
 
-  const broadcastAborted = observeBadEvent(
-    ':BroadcastAborted',
-    { label: 'Concurrent broadcast aborted' }
-  );
-  const feeDeficitRefused = observeBadEvent(
-    ':TransactionFeeDeficitRefused',
-    {
-      label: 'Concurrent fee deficit refused',
-    }
-  );
+  const broadcastAborted = observeBadEvent(':BroadcastAborted', {
+    label: 'Concurrent broadcast aborted',
+  });
+  const feeDeficitRefused = observeBadEvent(':TransactionFeeDeficitRefused', {
+    label: 'Concurrent fee deficit refused',
+  });
 
   // Tests that work with any number of nodes and can be run concurrently
   const tests = [

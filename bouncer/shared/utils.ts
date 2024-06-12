@@ -25,6 +25,7 @@ import { CcmDepositMetadata } from './new_swap';
 import { getCFTesterAbi } from './contract_interfaces';
 import { SwapParams } from './perform_swap';
 import { newSolAddress } from './new_sol_address';
+import { observeBadEvent } from './utils/substrate';
 
 const cfTesterAbi = await getCFTesterAbi();
 
@@ -514,46 +515,22 @@ export async function observeSwapScheduled(
   return result;
 }
 
-// Make sure the stopObserveEvent returns true before the end of the test
-export async function observeBadEvents(
-  eventName: string,
-  stopObserveEvent: () => boolean,
-  eventQuery?: EventQuery,
-  testTag?: string,
-) {
-  await using chainflipApi = await getChainflipApi();
-  const event = await observeEvent(eventName, chainflipApi, eventQuery, stopObserveEvent);
-  if (event) {
-    const testMessage = testTag ? `Test: ${testTag}: ` : '';
-    throw new Error(
-      `${testMessage}Unexpected event emitted ${event.name.section}: ${event.name.method} in block ${event.block} `,
-    );
-  }
-}
-
 export async function observeBroadcastSuccess(broadcastId: BroadcastId, testTag?: string) {
   await using chainflipApi = await getChainflipApi();
   const broadcaster = broadcastId[0].toLowerCase() + 'Broadcaster';
   const broadcastIdNumber = broadcastId[1];
 
-  let stopObserving = false;
-  const observeBroadcastFailure = observeBadEvents(
-    broadcaster + ':BroadcastAborted',
-    () => stopObserving,
-    (event) => {
-      if (broadcastIdNumber === Number(event.data.broadcastId)) return true;
-      return false;
-    },
-    testTag ? `observe BroadcastSuccess test tag: ${testTag}` : 'observe BroadcastSuccess',
-  );
+  const observeBroadcastFailure = observeBadEvent(`${broadcaster}:BroadcastAborted`, {
+    test: (event) => broadcastIdNumber === Number(event.data.broadcastId),
+    label: testTag ? `observe BroadcastSuccess test tag: ${testTag}` : 'observe BroadcastSuccess',
+  });
 
   await observeEvent(broadcaster + ':BroadcastSuccess', chainflipApi, (event) => {
     if (broadcastIdNumber === Number(event.data.broadcastId)) return true;
     return false;
   });
 
-  stopObserving = true;
-  await observeBroadcastFailure;
+  await observeBroadcastFailure.stop();
 }
 
 export async function newAddress(
