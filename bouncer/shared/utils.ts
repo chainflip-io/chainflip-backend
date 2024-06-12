@@ -25,7 +25,7 @@ import { CcmDepositMetadata } from './new_swap';
 import { getCFTesterAbi } from './contract_interfaces';
 import { SwapParams } from './perform_swap';
 import { newSolAddress } from './new_sol_address';
-import { observeBadEvent } from './utils/substrate';
+import { observeBadEvent, observeEvent } from './utils/substrate';
 
 const cfTesterAbi = await getCFTesterAbi();
 
@@ -338,59 +338,7 @@ export function getBtcClient(): Client {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type EventQuery = (data: any) => boolean;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Event = { name: any; data: any; block: number; event_index: number };
-/** @deprecated there is a new one in the substrate utils */
-export async function observeEvent(
-  eventName: string,
-  api: ApiPromise,
-  eventQuery?: EventQuery,
-  stopObserveEvent?: () => boolean,
-  finalized = false,
-): Promise<Event> {
-  let result: Event | undefined;
-  let eventFound = false;
-
-  const query = eventQuery ?? (() => true);
-  const stopObserve = stopObserveEvent ?? (() => false);
-
-  const [expectedSection, expectedMethod] = eventName.split(':');
-
-  const subscribeMethod = finalized
-    ? api.rpc.chain.subscribeFinalizedHeads
-    : api.rpc.chain.subscribeNewHeads;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const unsubscribe: any = await subscribeMethod(async (header) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const events: any[] = await api.query.system.events.at(header.hash);
-    events.forEach((record, index) => {
-      const { event } = record;
-      if (
-        !eventFound &&
-        event.section.includes(expectedSection) &&
-        event.method.includes(expectedMethod)
-      ) {
-        const expectedEvent = {
-          name: { section: event.section, method: event.method },
-          data: event.toHuman().data,
-          block: header.number.toNumber(),
-          event_index: index,
-        };
-        if (query(expectedEvent)) {
-          result = expectedEvent;
-          eventFound = true;
-          unsubscribe();
-        }
-      }
-    });
-  });
-  while (!eventFound && !stopObserve()) {
-    await sleep(1000);
-  }
-  return result as Event;
-}
 
 export type EgressId = [Chain, number];
 type BroadcastId = [Chain, number];
@@ -497,26 +445,23 @@ export async function observeSwapScheduled(
   channelId: number,
   swapType?: SwapType,
 ) {
-  await using chainflipApi = await getChainflipApi();
-
   // need to await this to prevent the chainflip api from being disposed prematurely
-  const result = await observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
-    if ('DepositChannel' in event.data.origin) {
-      const channelMatches = Number(event.data.origin.DepositChannel.channelId) === channelId;
-      const sourceAssetMatches = sourceAsset === (event.data.sourceAsset as Asset);
-      const destAssetMatches = destAsset === (event.data.destinationAsset as Asset);
-      const swapTypeMatches = swapType ? event.data.swapType[swapType] !== undefined : true;
-      return channelMatches && sourceAssetMatches && destAssetMatches && swapTypeMatches;
-    }
-    // Otherwise it was a swap scheduled by interacting with the Eth smart contract
-    return false;
-  });
-
-  return result;
+  await observeEvent('swapping:SwapScheduled', {
+    test: (event) => {
+      if ('DepositChannel' in event.data.origin) {
+        const channelMatches = Number(event.data.origin.DepositChannel.channelId) === channelId;
+        const sourceAssetMatches = sourceAsset === (event.data.sourceAsset as Asset);
+        const destAssetMatches = destAsset === (event.data.destinationAsset as Asset);
+        const swapTypeMatches = swapType ? event.data.swapType[swapType] !== undefined : true;
+        return channelMatches && sourceAssetMatches && destAssetMatches && swapTypeMatches;
+      }
+      // Otherwise it was a swap scheduled by interacting with the Eth smart contract
+      return false;
+    },
+  }).event;
 }
 
 export async function observeBroadcastSuccess(broadcastId: BroadcastId, testTag?: string) {
-  await using chainflipApi = await getChainflipApi();
   const broadcaster = broadcastId[0].toLowerCase() + 'Broadcaster';
   const broadcastIdNumber = broadcastId[1];
 
@@ -525,10 +470,9 @@ export async function observeBroadcastSuccess(broadcastId: BroadcastId, testTag?
     label: testTag ? `observe BroadcastSuccess test tag: ${testTag}` : 'observe BroadcastSuccess',
   });
 
-  await observeEvent(broadcaster + ':BroadcastSuccess', chainflipApi, (event) => {
-    if (broadcastIdNumber === Number(event.data.broadcastId)) return true;
-    return false;
-  });
+  await observeEvent(`${broadcaster}:BroadcastSuccess`, {
+    test: (event) => broadcastIdNumber === Number(event.data.broadcastId),
+  }).event;
 
   await observeBroadcastFailure.stop();
 }
