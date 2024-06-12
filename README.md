@@ -30,7 +30,25 @@ cargo cf-test-ci
 > **_NOTE:_**  cf-test-ci is an alias for cargo test with additional flags. These aliases are defined in [.cargo/config.toml](.cargo/config.toml).
 
 ## Contributing
+### Setup
+Make sure you have the following packages and tools installed. The following is for debian-like systems (e.g. Ubuntu). You may need to adjust for your system.
 
+```bash
+# Update package lists
+sudo apt update
+
+# Install essential build tools and libraries
+sudo apt install -y build-essential pkg-config libssl-dev protobuf-compiler clang cmake jq
+
+# Install Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Install Node.js and pnpm
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt install -y nodejs
+npm install -g pnpm
+
+```
 ### Code style
 
 The best way to ensure that your code is easy to merge, is to copy the project's pre-commit hook into your local `.git/`
@@ -90,7 +108,11 @@ commit.
 
 ### Prerequisites
 
-You will need to download [Docker](https://docs.docker.com/get-docker/), docker-compose
+#### Hardware
+We recommend at least 16GB of RAM and 4 CPU cores to handle all the containers and binaries running locally.
+
+#### Software and Tools
+You will need to download [Docker](https://docs.docker.com/get-docker/).
 
 ### Creating a Localnet
 
