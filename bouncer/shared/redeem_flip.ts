@@ -7,7 +7,6 @@ import { getNextEvmNonce } from './send_evm';
 import { getGatewayAbi } from './contract_interfaces';
 import {
   sleep,
-  observeEvent,
   handleSubstrateError,
   getContractAddress,
   getChainflipApi,
@@ -18,6 +17,7 @@ import {
   getWhaleKey,
   assetDecimals,
 } from './utils';
+import { observeEvent } from './utils/substrate';
 
 export type RedeemAmount = 'Max' | { Exact: string };
 
@@ -61,11 +61,9 @@ export async function redeemFlip(
   );
 
   console.log('Requesting redemption');
-  const redemptionRequestHandle = observeEvent(
-    'funding:RedemptionRequested',
-    chainflip,
-    (event) => event.data.accountId === flipWallet.address,
-  );
+  const redemptionRequestHandle = observeEvent('funding:RedemptionRequested', {
+    test: (event) => event.data.accountId === flipWallet.address,
+  }).event;
   const flipperinoRedeemAmount = intoFineAmount(flipAmount);
   await chainflip.tx.funding
     .redeem(flipperinoRedeemAmount, ethAddress, null)
@@ -92,11 +90,9 @@ export async function redeemFlip(
 
   const nonce = await getNextEvmNonce('Ethereum');
 
-  const redemptionExecutedHandle = observeEvent(
-    'funding:RedemptionSettled',
-    chainflip,
-    (event) => event.data[0] === flipWallet.address,
-  );
+  const redemptionExecutedHandle = observeEvent('funding:RedemptionSettled', {
+    test: (event) => event.data[0] === flipWallet.address,
+  }).event;
 
   await executeRedemption(accountIdHex, networkOptions, { nonce });
   const redemptionExecutedAmount = (await redemptionExecutedHandle).data[1];
