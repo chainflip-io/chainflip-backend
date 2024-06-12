@@ -337,11 +337,11 @@ jobs:
           | jq -r '.result.number' \
           | xargs printf "%d\n")
           ./commands/explorer.ts 0 $BLOCK_HEIGHT > /tmp/chainflip/explorer.txt
-    
+
       - name: Upload chain explorer 📤
         if: failure()
         continue-on-error: true
-        usdocker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --volumes --remove-orphans
+        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
         with:
           name: chain-explorer
           path: /tmp/chainflip/explorer.txt
