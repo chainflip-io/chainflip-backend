@@ -1,4 +1,3 @@
-version: "3.9"
 services:
   eth-init:
     image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.1.2-usdt-${NODE_COUNT}
