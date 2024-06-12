@@ -5,7 +5,6 @@ import {
   chainFromAsset,
   chainGasAsset,
   getEvmEndpoint,
-  observeBadEvents,
   observeCcmReceived,
   observeSwapScheduled,
   sleep,
@@ -14,7 +13,7 @@ import {
 import { requestNewSwap } from './perform_swap';
 import { send } from './send';
 import { spamEvm } from './send_evm';
-import { observeEvent } from './utils/substrate';
+import { observeEvent, observeBadEvent } from './utils/substrate';
 
 // This test uses the CFTester contract as the receiver for a CCM call. The contract will consume approximately
 // the gasLimitBudget amount specified in the CCM message with an error margin. On top of that, the gasLimitBudget overhead of the
@@ -237,24 +236,25 @@ async function testGasLimitSwap(
     console.log(`${tag} Gas budget ${gasLimitBudget}. Expecting successful broadcast.`);
 
     // Check that broadcast is not aborted
-    let stopObserving = false;
-    const observeBroadcastFailure = observeBadEvents(
+    const observeBroadcastFailure = observeBadEvent(
       `${destChain.toLowerCase()}Broadcaster:BroadcastAborted`,
-      () => stopObserving,
-      (event) => {
-        const aborted = event.data.broadcastId === egressIdToBroadcastId[swapIdToEgressId[swapId]];
-        if (aborted) {
-          console.log(
-            `${tag} FAILURE! Broadcast Aborted unexpected! broadcastId: ${
-              event.data.broadcastId
-            }. Gas budget: ${gasLimitBudget} while limit is ${
-              minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER[destChain]
-            }!`,
-          );
-        }
-        return aborted;
+      {
+        test: (event) => {
+          const aborted =
+            event.data.broadcastId === egressIdToBroadcastId[swapIdToEgressId[swapId]];
+          if (aborted) {
+            console.log(
+              `${tag} FAILURE! Broadcast Aborted unexpected! broadcastId: ${
+                event.data.broadcastId
+              }. Gas budget: ${gasLimitBudget} while limit is ${
+                minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER[destChain]
+              }!`,
+            );
+          }
+          return aborted;
+        },
+        label: testTag,
       },
-      testTag,
     );
 
     // Expecting success
@@ -269,8 +269,7 @@ async function testGasLimitSwap(
     }
 
     // Stop listening for broadcast failure
-    stopObserving = true;
-    await observeBroadcastFailure;
+    await observeBroadcastFailure.stop();
 
     const web3 = new Web3(getEvmEndpoint(chainFromAsset(destAsset)));
     const receipt = await web3.eth.getTransactionReceipt(ccmReceived?.txHash as string);
