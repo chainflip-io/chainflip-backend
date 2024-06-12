@@ -6,8 +6,6 @@ import {
   observeFetch,
   observeBadEvents,
   sleep,
-  observeEvent,
-  getChainflipApi,
   getContractAddress,
   decodeDotAddressForContract,
   defaultAssetAmounts,
@@ -22,6 +20,8 @@ import {
 import { signAndSendTxEvm } from './send_evm';
 import { getCFTesterAbi } from './contract_interfaces';
 import { send } from './send';
+
+import { observeEvent } from './utils/substrate';
 
 const cfTesterAbi = await getCFTesterAbi();
 
@@ -110,14 +110,8 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
   );
 
   let eventCounter = 0;
-  let stopObserve = false;
-
-  await using chainflip = await getChainflipApi();
-
-  const observingEvent = observeEvent(
-    'swapping:SwapScheduled',
-    chainflip,
-    (event) => {
+  const observingEvent = observeEvent('swapping:SwapScheduled', {
+    test: (event) => {
       if (
         'Vault' in event.data.origin &&
         event.data.origin.Vault.txHash === receipt.transactionHash
@@ -128,8 +122,8 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
       }
       return false;
     },
-    () => stopObserve,
-  );
+    abortable: true,
+  });
 
   while (eventCounter === 0) {
     await sleep(2000);
@@ -139,8 +133,8 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
   // Wait some more time after the first event to ensure another one is not emited
   await sleep(30000);
 
-  stopObserve = true;
-  await observingEvent;
+  observingEvent.stop();
+  await observingEvent.event;
 }
 
 async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset) {
