@@ -6,10 +6,10 @@ import {
   sleep,
   hexStringToBytesArray,
   newAddress,
-  observeEvent,
   getChainflipApi,
   lpMutex,
 } from '../shared/utils';
+import { observeEvent } from '../shared/utils/substrate';
 
 async function main(): Promise<void> {
   const keyring = new Keyring({ type: 'sr25519' });
@@ -35,9 +35,10 @@ async function main(): Promise<void> {
   const ethIngressKey = (
     await observeEvent(
       'liquidityProvider:LiquidityDepositAddressReady',
-      chainflip,
-      (event) => event.data.depositAddress.Eth,
-    )
+      {
+        test: (event) => event.data.depositAddress.Eth,
+      }
+    ).event
   ).data.depositAddress.Eth as string;
   console.log('Eth ingress address: ' + ethIngressKey);
   await sleep(8000); // sleep for 8 seconds to give the engine a chance to start witnessing
@@ -53,7 +54,7 @@ async function main(): Promise<void> {
       if (stdout !== '') process.stdout.write(stdout);
     },
   );
-  await observeEvent('liquidityProvider:AccountCredited', chainflip);
+  await observeEvent('liquidityProvider:AccountCredited').event;
   exec(
     'pnpm tsx  ./commands/send_eth.ts ' + ethIngressKey + ' 10',
     { timeout: 10000 },
