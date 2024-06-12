@@ -15,7 +15,6 @@ use cf_chains::{
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiary, ForeignChain, NetworkEnvironment,
-	MAX_RETRY_DURATION_BLOCKS,
 };
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
