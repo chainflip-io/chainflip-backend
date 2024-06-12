@@ -1064,7 +1064,9 @@ pub mod pallet {
 									(vec![], swaps_to_execute)
 								},
 								BatchExecutionError::DispatchError { error } => {
-									log::error!(
+									// This should only happen when the transaction nested too deep,
+									// which should not happen in practice (max nesting is 255):
+									log_or_panic!(
 										"Failed to execute swap batch at block {:?}: {:?}",
 										block_to_process,
 										error
