@@ -9,7 +9,6 @@
 import { createLpPool } from '../shared/create_lp_pool';
 import { parseAssetString, executeWithTimeout } from '../shared/utils';
 
-await executeWithTimeout(
-  createLpPool(parseAssetString(process.argv[2]), parseFloat(process.argv[3])),
-  20,
-);
+const initialPrice = parseFloat(process.argv[3]);
+const asset = parseAssetString(process.argv[2]);
+await executeWithTimeout(createLpPool(asset, initialPrice), 20);

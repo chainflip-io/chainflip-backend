@@ -16,4 +16,5 @@ async function getUsdtBalanceCommand(ethereumAddress: string) {
   process.exit(0);
 }
 
-await executeWithTimeout(getUsdtBalanceCommand(process.argv[2] ?? '0'), 5);
+const ethereumAddress = process.argv[2] ?? '0';
+await executeWithTimeout(getUsdtBalanceCommand(ethereumAddress), 5);

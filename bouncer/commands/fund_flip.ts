@@ -12,4 +12,6 @@
 import { executeWithTimeout } from '../shared/utils';
 import { fundFlip } from '../shared/fund_flip';
 
-await executeWithTimeout(fundFlip(process.argv[2], process.argv[3].trim()), 120);
+const address = process.argv[2];
+const flipAmount = process.argv[3].trim();
+await executeWithTimeout(fundFlip(address, flipAmount), 120);

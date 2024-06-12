@@ -15,4 +15,5 @@ async function getFlipBalanceCommand(ethereumAddress: string) {
   console.log(await getErc20Balance('Ethereum', ethereumAddress, contractAddress));
 }
 
-await executeWithTimeout(getFlipBalanceCommand(process.argv[2] ?? '0'), 5);
+const ethereumAddress = process.argv[2] ?? '0';
+await executeWithTimeout(getFlipBalanceCommand(ethereumAddress), 5);

@@ -16,4 +16,5 @@ export async function getSolBalanceCommand(address: string) {
   console.log(await getSolBalance(address));
 }
 
-await executeWithTimeout(getSolBalanceCommand(process.argv[2] ?? '0'), 5);
+const solAddress = process.argv[2] ?? '0';
+await executeWithTimeout(getSolBalanceCommand(solAddress), 5);

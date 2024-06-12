@@ -14,4 +14,5 @@ async function getDotBalanceCommand(address: string) {
   console.log(await getDotBalance(address));
 }
 
-await executeWithTimeout(getDotBalanceCommand(process.argv[2] ?? '0'), 5);
+const address = process.argv[2] ?? '0';
+await executeWithTimeout(getDotBalanceCommand(address), 5);

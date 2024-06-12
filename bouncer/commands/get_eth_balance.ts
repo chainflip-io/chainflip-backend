@@ -14,4 +14,5 @@ export async function getEthBalanceCommand(address: string) {
   console.log(await getEvmNativeBalance('Ethereum', address));
 }
 
-await executeWithTimeout(getEthBalanceCommand(process.argv[2] ?? '0'), 5);
+const ethereumAddress = process.argv[2] ?? '0';
+await executeWithTimeout(getEthBalanceCommand(ethereumAddress), 5);

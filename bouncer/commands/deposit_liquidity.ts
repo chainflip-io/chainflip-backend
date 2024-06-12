@@ -11,12 +11,7 @@
 import { parseAssetString, executeWithTimeout } from '../shared/utils';
 import { depositLiquidity } from '../shared/deposit_liquidity';
 
-await executeWithTimeout(
-  depositLiquidity(
-    parseAssetString(process.argv[2]),
-    parseFloat(process.argv[3]),
-    false,
-    process.argv[4],
-  ),
-  120,
-);
+const asset = parseAssetString(process.argv[2]);
+const amount = parseFloat(process.argv[3]);
+const lpKey = process.argv[4];
+await executeWithTimeout(depositLiquidity(asset, amount, false, lpKey), 120);

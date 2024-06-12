@@ -17,4 +17,5 @@ export async function getSolUsdcBalanceCommand(address: string) {
   process.exit(0);
 }
 
-await executeWithTimeout(getSolUsdcBalanceCommand(process.argv[2] ?? '0'), 5);
+const solAddress = process.argv[2] ?? '0';
+await executeWithTimeout(getSolUsdcBalanceCommand(solAddress), 5);

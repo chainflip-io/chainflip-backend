@@ -15,4 +15,5 @@ async function getUsdcBalanceCommand(arbitrumAddress: string) {
   console.log(await getErc20Balance('Arbitrum', arbitrumAddress, contractAddress));
 }
 
-await executeWithTimeout(getUsdcBalanceCommand(process.argv[2] ?? '0'), 5);
+const arbitrumAddress = process.argv[2] ?? '0';
+await executeWithTimeout(getUsdcBalanceCommand(arbitrumAddress), 5);

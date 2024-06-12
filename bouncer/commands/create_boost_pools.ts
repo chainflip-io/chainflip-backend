@@ -9,6 +9,7 @@
 // For example: ./commands/create_boost_pools.ts '[{"asset": "Eth","tier": 5}, {"asset": "Eth","tier": 10}, {"asset": "Eth","tier": 30}]'
 
 import { executeWithTimeout } from '../shared/utils';
-import { createBoostPools } from '../shared/setup_boost_pools';
+import { BoostPoolId, createBoostPools } from '../shared/setup_boost_pools';
 
-await executeWithTimeout(createBoostPools(JSON.parse(process.argv[2])), 30);
+const newPools: BoostPoolId[] = JSON.parse(process.argv[2]);
+await executeWithTimeout(createBoostPools(newPools), 30);

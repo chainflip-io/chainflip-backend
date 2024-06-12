@@ -14,4 +14,5 @@ export async function getArbBalanceCommand(address: string) {
   console.log(await getEvmNativeBalance('Arbitrum', address));
 }
 
-await executeWithTimeout(getArbBalanceCommand(process.argv[2] ?? '0'), 5);
+const arbitrumAddress = process.argv[2] ?? '0';
+await executeWithTimeout(getArbBalanceCommand(arbitrumAddress), 5);
