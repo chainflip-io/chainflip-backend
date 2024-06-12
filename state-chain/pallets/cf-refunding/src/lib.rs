@@ -38,6 +38,9 @@ pub mod pallet {
 		/// an runtime upgrade
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
+		/// Handles egress for all chains.
+		type EgressHandler: EgressApi<AnyChain>;
+
 		// /// API for handling asset egress.
 		// type EgressHandler: EgressApi<AnyChain>;
 
@@ -103,6 +106,7 @@ impl<T: Config> Pallet<T> {
 			for (validator, fee) in recorded_fees {
 				if let Some(remaining_funds) = available_funds.checked_sub(fee) {
 					available_funds = remaining_funds;
+					let _ = T::EgressHandler::schedule_egress(asset, fee, validator.clone(), None);
 					Self::deposit_event(Event::RefundScheduled {
 						account_id: validator,
 						asset,

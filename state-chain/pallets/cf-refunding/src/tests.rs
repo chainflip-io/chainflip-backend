@@ -2,16 +2,15 @@ use cf_chains::{evm::Address, ForeignChainAddress};
 use cf_primitives::{Asset, AssetAmount};
 use sp_runtime::AccountId32;
 
+use cf_chains::AnyChain;
+use cf_traits::mocks::egress_handler::{MockEgressHandler, MockEgressParameter};
+
 use crate::{mock::*, RecordedFees, WithheldTransactionFees};
 
 fn payed_gas(asset: Asset, amount: AssetAmount, account: ForeignChainAddress) {
 	Refunding::record_gas_fee(account, asset, amount);
 	Refunding::withheld_transaction_fee(asset, amount);
 }
-
-// fn to_eth_address(seed: Address) -> ForeignChainAddress {
-// 	ForeignChainAddress::Eth(seed)
-// }
 
 #[test]
 fn refund_validators() {
@@ -34,7 +33,15 @@ fn refund_validators() {
 
 		Refunding::on_distribute_withheld_fees();
 
+		let mut egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
+
 		let recorded_fees = RecordedFees::<Test>::get(Asset::Eth);
+
+		assert_eq!(egresses.len(), 3);
+
+		for egress in egresses {
+			assert_eq!(egress.amount(), 100);
+		}
 
 		assert_eq!(recorded_fees.get(&address_1), None);
 		assert_eq!(recorded_fees.get(&address_2), None);

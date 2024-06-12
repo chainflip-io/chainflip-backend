@@ -80,6 +80,7 @@ parameter_types! {
 impl_mock_runtime_safe_mode!(refunding: PalletSafeMode);
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
+	type EgressHandler = MockEgressHandler<AnyChain>;
 }
 
 fn to_eth_address(seed: Address) -> ForeignChainAddress {
