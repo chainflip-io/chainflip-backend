@@ -229,7 +229,8 @@ async function testGasLimitSwap(
     }).event;
     stopObservingCcmReceived = true;
     console.log(
-      `${tag} Broadcast Aborted found! broadcastId: ${egressIdToBroadcastId[swapIdToEgressId[swapId]]
+      `${tag} Broadcast Aborted found! broadcastId: ${
+        egressIdToBroadcastId[swapIdToEgressId[swapId]]
       }`,
     );
   } else if (minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER[destChain] < gasLimitBudget) {
@@ -244,8 +245,10 @@ async function testGasLimitSwap(
         const aborted = event.data.broadcastId === egressIdToBroadcastId[swapIdToEgressId[swapId]];
         if (aborted) {
           console.log(
-            `${tag} FAILURE! Broadcast Aborted unexpected! broadcastId: ${event.data.broadcastId
-            }. Gas budget: ${gasLimitBudget} while limit is ${minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER[destChain]
+            `${tag} FAILURE! Broadcast Aborted unexpected! broadcastId: ${
+              event.data.broadcastId
+            }. Gas budget: ${gasLimitBudget} while limit is ${
+              minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER[destChain]
             }!`,
           );
         }
