@@ -341,7 +341,7 @@ jobs:
       - name: Upload chain explorer 📤
         if: failure()
         continue-on-error: true
-        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
+        usdocker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --volumes --remove-orphans
         with:
           name: chain-explorer
           path: /tmp/chainflip/explorer.txt
