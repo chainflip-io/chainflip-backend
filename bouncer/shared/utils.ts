@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 import { setTimeout as sleep } from 'timers/promises';
 import Client from 'bitcoin-core';
-import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
+import { ApiPromise, Keyring } from '@polkadot/api';
 // eslint-disable-next-line no-restricted-imports
 import { KeyringPair } from '@polkadot/keyring/types';
 import { Mutex } from 'async-mutex';
@@ -25,7 +25,7 @@ import { CcmDepositMetadata } from './new_swap';
 import { getCFTesterAbi } from './contract_interfaces';
 import { SwapParams } from './perform_swap';
 import { newSolAddress } from './new_sol_address';
-import { observeBadEvent, observeEvent } from './utils/substrate';
+import { getChainflipApi, observeBadEvent, observeEvent } from './utils/substrate';
 
 const cfTesterAbi = await getCFTesterAbi();
 
@@ -235,79 +235,6 @@ export const deferredPromise = <T>(): {
 };
 
 export { sleep };
-
-// @ts-expect-error polyfilling
-Symbol.asyncDispose ??= Symbol('asyncDispose');
-// @ts-expect-error polyfilling
-Symbol.dispose ??= Symbol('dispose');
-
-type DisposableApiPromise = ApiPromise & { [Symbol.asyncDispose](): Promise<void> };
-
-// It is important to cache WS connections because nodes seem to have a
-// limit on how many can be opened at the same time (from the same IP presumably)
-function getCachedSubstrateApi(defaultEndpoint: string) {
-  let api: DisposableApiPromise | undefined;
-  let connections = 0;
-
-  return async (providedEndpoint?: string): Promise<DisposableApiPromise> => {
-    if (!api) {
-      const endpoint = providedEndpoint ?? defaultEndpoint;
-
-      const apiPromise = await ApiPromise.create({
-        provider: new WsProvider(endpoint),
-        noInitWarn: true,
-        types: {
-          EncodedAddress: {
-            _enum: {
-              Eth: '[u8; 20]',
-              Arb: '[u8; 20]',
-              Dot: '[u8; 32]',
-              Btc: 'Vec<u8>',
-            },
-          },
-        },
-      });
-
-      api = new Proxy(apiPromise as unknown as DisposableApiPromise, {
-        get(target, prop, receiver) {
-          if (prop === Symbol.asyncDispose) {
-            return async () => {
-              connections -= 1;
-              if (connections === 0) {
-                setTimeout(() => {
-                  if (connections === 0) {
-                    api = undefined;
-                    Reflect.get(target, 'disconnect', receiver)
-                      .call(target)
-                      .catch(() => null);
-                  }
-                }, 5_000).unref();
-              }
-            };
-          }
-          if (prop === 'disconnect') {
-            return async () => {
-              // noop
-            };
-          }
-
-          return Reflect.get(target, prop, receiver);
-        },
-      });
-    }
-
-    connections += 1;
-
-    return api;
-  };
-}
-
-export const getChainflipApi = getCachedSubstrateApi(
-  process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944',
-);
-export const getPolkadotApi = getCachedSubstrateApi(
-  process.env.POLKADOT_ENDPOINT ?? 'ws://127.0.0.1:9947',
-);
 
 export const polkadotSigningMutex = new Mutex();
 

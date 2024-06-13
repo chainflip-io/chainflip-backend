@@ -7,13 +7,13 @@ import * as ecc from 'tiny-secp256k1';
 import { blake2AsHex } from '../polkadot/util-crypto';
 import {
   asciiStringToBytesArray,
-  getChainflipApi,
   hexStringToBytesArray,
   sleep,
   fineAmountToAmount,
   assetDecimals,
   chainFromAsset,
   stateChainAssetFromAsset,
+  getChainflipApi,
 } from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
 import { testSwap } from '../shared/swapping';

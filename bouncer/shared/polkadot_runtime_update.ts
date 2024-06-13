@@ -5,11 +5,11 @@ import { execSync } from 'child_process';
 
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import { blake2AsU8a } from '../polkadot/util-crypto';
-import { getPolkadotApi, amountToFineAmount, sleep, assetDecimals } from '../shared/utils';
+import { amountToFineAmount, sleep, assetDecimals } from '../shared/utils';
 import { specVersion, getNetworkRuntimeVersion } from './utils/spec_version';
 import { handleDispatchError, submitAndGetEvent } from '../shared/polkadot_utils';
 import { testSwap } from './swapping';
-import { observeEvent, observeBadEvent } from './utils/substrate';
+import { observeEvent, observeBadEvent, getPolkadotApi } from './utils/substrate';
 
 const POLKADOT_REPO_URL = `https://github.com/chainflip-io/polkadot.git`;
 const PROPOSAL_AMOUNT = '100';

@@ -1,8 +1,8 @@
 import assert from 'assert';
 import Keyring from '../polkadot/keyring';
-import { getChainflipApi, tryUntilSuccess } from '../shared/utils';
+import { tryUntilSuccess } from '../shared/utils';
 import { snowWhite, submitGovernanceExtrinsic } from '../shared/cf_governance';
-import { observeEvent } from './utils/substrate';
+import { getChainflipApi, observeEvent } from './utils/substrate';
 
 async function getGovernanceMembers(): Promise<string[]> {
   await using chainflip = await getChainflipApi();

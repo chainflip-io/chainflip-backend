@@ -4,7 +4,6 @@ import { newSwap } from './new_swap';
 import { send, sendViaCfTester } from './send';
 import { getBalance } from './get_balance';
 import {
-  getChainflipApi,
   observeBalanceIncrease,
   observeCcmReceived,
   shortChainFromAsset,
@@ -14,7 +13,7 @@ import {
 } from '../shared/utils';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapContext, SwapStatus } from './swapping';
-import { observeEvent } from './utils/substrate';
+import { getChainflipApi, observeEvent } from './utils/substrate';
 
 function encodeDestinationAddress(address: string, destAsset: Asset): string {
   let destAddress = address;
