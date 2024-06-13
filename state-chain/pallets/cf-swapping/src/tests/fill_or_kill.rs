@@ -204,7 +204,7 @@ fn fok_swap_gets_refunded_due_to_price_impact_protection() {
 
 			// FoK swap 1 should fail and will eventually be refunded
 			insert_swaps(&[new_swap(1, Some(params(SWAP_REFUND_AT_BLOCK, INPUT_AMOUNT)))]);
-			// Non swap 2 will fail together with swap 1, but should be retried indefinitely
+			// Non-FoK swap 2 will fail together with swap 1, but should be retried indefinitely
 			insert_swaps(&[new_swap(2, None)]);
 
 			assert_event_sequence!(

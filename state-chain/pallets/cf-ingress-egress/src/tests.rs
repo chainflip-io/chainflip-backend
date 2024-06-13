@@ -7,13 +7,14 @@ use crate::{
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
 	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter,
 	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount,
-	WithheldTransactionFees,
+	WithheldTransactionFees, MAX_RETRY_DURATION_BLOCKS,
 };
 use cf_chains::{
 	address::{AddressConverter, IntoForeignChainAddress},
 	evm::EvmFetchId,
 	mocks::MockEthereum,
-	CcmChannelMetadata, DepositChannel, ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
+	CcmChannelMetadata, ChannelRefundParameters, DepositChannel, ExecutexSwapAndCall, SwapOrigin,
+	TransferAssetParams,
 };
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
 use cf_test_utilities::assert_has_event;
@@ -38,6 +39,7 @@ use frame_support::{
 	weights::Weight,
 };
 use sp_core::H160;
+use sp_runtime::DispatchError;
 
 const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
 const BOB_ETH_ADDRESS: EthereumAddress = H160([101u8; 20]);
@@ -459,6 +461,29 @@ fn reused_address_channel_id_matches() {
 		// The reused details should be the same as before.
 		assert_eq!(new_channel.channel_id, reused_channel_id);
 		assert_eq!(new_channel.address, reused_address);
+	});
+}
+
+#[test]
+fn test_refund_parameter_validation() {
+	new_test_ext().execute_with(|| {
+		assert_err!(
+			IngressEgress::request_swap_deposit_address(
+				eth::Asset::Flip,
+				Asset::Eth,
+				ForeignChainAddress::Eth(Default::default()),
+				Default::default(),
+				1,
+				None,
+				0,
+				Some(ChannelRefundParameters {
+					retry_duration: MAX_RETRY_DURATION_BLOCKS + 1,
+					refund_address: ForeignChainAddress::Eth(Default::default()),
+					price_limit: Default::default(),
+				}),
+			),
+			DispatchError::Other("Retry duration too long")
+		);
 	});
 }
 

@@ -33,7 +33,7 @@ use cf_chains::{
 use cf_primitives::{
 	Asset, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId, EgressCounter,
 	EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId,
-	MAX_RETRY_DURATION_BLOCKS,
+	SECONDS_PER_BLOCK, SWAP_RETRY_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -57,6 +57,10 @@ use sp_std::{
 	vec::Vec,
 };
 pub use weights::WeightInfo;
+
+/// Max allowed value for the number of blocks to keep retrying a swap before it is refunded
+pub const MAX_RETRY_DURATION_BLOCKS: u32 =
+	3600 / (SECONDS_PER_BLOCK as u32 * SWAP_RETRY_DELAY_BLOCKS);
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum BoostStatus<ChainAmount> {

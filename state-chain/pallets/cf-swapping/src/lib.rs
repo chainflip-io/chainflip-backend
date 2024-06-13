@@ -390,6 +390,7 @@ pub mod pallet {
 		RefundEgressScheduled {
 			swap_id: SwapId,
 			egress_id: EgressId,
+			asset: Asset,
 			amount: AssetAmount,
 			egress_fee: AssetAmount,
 		},
@@ -523,7 +524,6 @@ pub mod pallet {
 			broker_commission: BasisPoints,
 			channel_metadata: Option<CcmChannelMetadata>,
 			boost_fee: BasisPoints,
-			refund_parameters: Option<ChannelRefundParameters>,
 		) -> DispatchResult {
 			Self::request_swap_deposit_address_with_affiliates(
 				origin,
@@ -534,7 +534,8 @@ pub mod pallet {
 				channel_metadata,
 				boost_fee,
 				Default::default(),
-				refund_parameters,
+				// This extrinsic is for backwards compatibility and does not support FoK
+				None,
 			)
 		}
 
@@ -1102,6 +1103,7 @@ pub mod pallet {
 												Event::<T>::RefundEgressScheduled {
 													swap_id: swap.swap_id,
 													egress_id,
+													asset: swap.from,
 													amount: egress_amount,
 													egress_fee: fee_withheld,
 												},
