@@ -6,10 +6,8 @@ use cf_primitives::{Asset, AssetAmount, Beneficiaries, ChannelId, SwapId};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 use frame_system::pallet_prelude::BlockNumberFor;
-use scale_info::{
-	prelude::{vec, vec::Vec},
-	TypeInfo,
-};
+use scale_info::TypeInfo;
+use sp_std::vec::Vec;
 
 pub trait SwapDepositHandler {
 	type AccountId;
@@ -162,12 +160,4 @@ pub trait BoostApi {
 	type AccountId;
 
 	fn boost_pool_account_balances(who: &Self::AccountId) -> Vec<(Asset, AssetAmount)>;
-}
-
-impl<T: frame_system::Config> BoostApi for T {
-	type AccountId = T::AccountId;
-
-	fn boost_pool_account_balances(_who: &Self::AccountId) -> Vec<(Asset, AssetAmount)> {
-		vec![]
-	}
 }
