@@ -44,13 +44,13 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 pub const SWAP_DELAY_BLOCKS: u32 = 2;
 
-struct SwapCtx {
+struct SwapState {
 	swap: Swap,
 	stable_amount: Option<AssetAmount>,
 	final_output: Option<AssetAmount>,
 }
 
-impl SwapCtx {
+impl SwapState {
 	fn new(swap: Swap) -> Self {
 		Self {
 			stable_amount: if swap.from == STABLE_ASSET { Some(swap.input_amount) } else { None },
@@ -813,7 +813,7 @@ pub mod pallet {
 			swaps: Vec<Swap>,
 			base_asset: Asset,
 		) -> Result<Vec<SwapLegInfo>, ()> {
-			let mut swaps: Vec<_> = swaps.into_iter().map(SwapCtx::new).collect();
+			let mut swaps: Vec<_> = swaps.into_iter().map(SwapState::new).collect();
 
 			Self::swap_into_stable_taking_network_fee(&mut swaps)
 				.map_err(|_| log::error!("Failed to simulate swaps"))?;
@@ -861,7 +861,7 @@ pub mod pallet {
 		}
 
 		fn swap_into_stable_taking_network_fee(
-			swaps: &mut [SwapCtx],
+			swaps: &mut [SwapState],
 		) -> Result<(), BatchExecutionError> {
 			Self::do_group_and_swap(swaps, SwapLeg::ToStable)?;
 
@@ -900,8 +900,8 @@ pub mod pallet {
 		}
 
 		#[transactional]
-		fn execute_batch(swaps: Vec<Swap>) -> Result<Vec<SwapCtx>, BatchExecutionError> {
-			let mut swaps: Vec<_> = swaps.into_iter().map(SwapCtx::new).collect();
+		fn execute_batch(swaps: Vec<Swap>) -> Result<Vec<SwapState>, BatchExecutionError> {
+			let mut swaps: Vec<_> = swaps.into_iter().map(SwapState::new).collect();
 
 			// Swap into Stable asset first, then take network fees:
 			Self::swap_into_stable_taking_network_fee(&mut swaps)?;
@@ -929,7 +929,7 @@ pub mod pallet {
 			}
 		}
 
-		fn process_swap_outcomes(swaps: &[SwapCtx]) {
+		fn process_swap_outcomes(swaps: &[SwapState]) {
 			for swap in swaps {
 				if let Some(swap_output) = swap.final_output {
 					// To be consistent with `swap_output` and `intermediate_amount` (which do
@@ -1189,7 +1189,7 @@ pub mod pallet {
 		// and do the swaps of a given direction. Processed and unprocessed swaps are
 		// returned.
 		fn do_group_and_swap(
-			swaps: &mut [SwapCtx],
+			swaps: &mut [SwapState],
 			direction: SwapLeg,
 		) -> Result<(), BatchExecutionError> {
 			let swap_groups =
@@ -1211,7 +1211,7 @@ pub mod pallet {
 		/// Bundle the given swaps and do a single swap of a given direction. Updates the given
 		/// swaps in-place. If batch swap failed, return the input amount.
 		fn execute_group_of_swaps(
-			swaps: Vec<&mut SwapCtx>,
+			swaps: Vec<&mut SwapState>,
 			asset: Asset,
 			direction: SwapLeg,
 		) -> Result<(), AssetAmount> {
