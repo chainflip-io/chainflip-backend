@@ -2051,6 +2051,14 @@ impl_runtime_apis! {
 				Self::cf_validator_info(account_id)
 			}).collect()
 		}
+		fn cf_btc_discrepancy() -> i128 {
+			let total_lp_balances = pallet_cf_account_roles::AccountRoles::<Runtime>::iter().filter(|(_id, account_role)| *account_role == AccountRole::LiquidityProvider).map(|(id, _role)| id).fold( AssetMap::from_fn(|_| 0), |acc, account| {
+				acc + Self::cf_lp_total_balances(account.clone()).expect("All accounts are LPs, impossible to fail")
+			});
+			let btc_lp_balance = total_lp_balances.btc.btc as i128;
+			let utxos_balance = pallet_cf_environment::BitcoinAvailableUtxos::<Runtime>::get().iter().fold(0, |acc, utxo| acc + utxo.amount) as i128;
+			utxos_balance - btc_lp_balance
+		}
 	}
 
 	// END custom runtime APIs

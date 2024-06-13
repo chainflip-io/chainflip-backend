@@ -69,6 +69,11 @@ pub trait MonitoringApi {
 		accounts: BoundedVec<state_chain_runtime::AccountId, ConstU32<10>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcAccountInfoV2>>;
+	#[method(name = "balance_discrepancy")]
+	fn cf_btc_discrepancy(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<i128>;
 }
 
 macro_rules! pass_through {
@@ -109,7 +114,8 @@ where
 		cf_pending_swaps_count -> u32,
 		cf_open_deposit_channels_count -> OpenDepositChannels,
 		cf_fee_imbalance -> FeeImbalance,
-		cf_build_version -> LastRuntimeUpgradeInfo
+		cf_build_version -> LastRuntimeUpgradeInfo,
+		cf_btc_discrepancy -> i128
 	}
 	fn cf_monitoring_data(
 		&self,

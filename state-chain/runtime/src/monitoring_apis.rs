@@ -118,5 +118,6 @@ decl_runtime_apis!(
 		fn cf_accounts_info(
 			accounts: BoundedVec<AccountId32, sp_core::ConstU32<10>>,
 		) -> Vec<ValidatorInfo>;
+		fn cf_btc_discrepancy() -> i128;
 	}
 );
