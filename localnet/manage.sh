@@ -216,6 +216,12 @@ destroy() {
   rm -rf "/tmp/chainflip"
   rm -rf $SOLANA_BASE_PATH
 
+  if [ "$OS_TYPE" == "Linux" ]; then
+    echo "🧹  Detected OS: $OS_TYPE. removing chainflip .so files..."
+    sudo rm -rf /usr/lib/libchainflip_engine_v*.so
+  else
+    echo "🧹  Detected OS: $OS_TYPE. Skipping chainflip .so file deletion."
+  fi
   unset DOT_GENESIS_HASH
 
   echo "✅ Done"
