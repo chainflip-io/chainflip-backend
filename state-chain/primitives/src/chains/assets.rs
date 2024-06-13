@@ -390,10 +390,34 @@ macro_rules! assets {
 				}
 			}
 
-			impl scale_info::prelude::ops::Add<AssetMap<crate::AssetAmount>> for AssetMap<crate::AssetAmount> {
-				type Output = AssetMap<crate::AssetAmount>;
-				fn add(self, other: AssetMap<crate::AssetAmount>) -> AssetMap<crate::AssetAmount>{
-					AssetMap::from_fn(|asset| self.index(asset).saturating_add(*other.index(asset)) )
+			impl<N: sp_arithmetic::traits::Saturating> sp_arithmetic::traits::Saturating for AssetMap<N> {
+				fn saturating_add(self, rhs: AssetMap<N>) -> AssetMap<N> {
+					AssetMap {
+						$(
+							$chain_member_and_module: self.$chain_member_and_module.saturating_add(rhs.$chain_member_and_module),
+						)+
+					}
+				}
+				fn saturating_sub(self, rhs: AssetMap<N>) -> AssetMap<N> {
+					AssetMap {
+						$(
+							$chain_member_and_module: self.$chain_member_and_module.saturating_sub(rhs.$chain_member_and_module),
+						)+
+					}
+				}
+				fn saturating_mul(self, rhs: AssetMap<N>) -> AssetMap<N> {
+					AssetMap {
+						$(
+							$chain_member_and_module: self.$chain_member_and_module.saturating_mul(rhs.$chain_member_and_module),
+						)+
+					}
+				}
+				fn saturating_pow(self, exp: usize) -> AssetMap<N> {
+					AssetMap {
+						$(
+							$chain_member_and_module: self.$chain_member_and_module.saturating_pow(exp),
+						)+
+					}
 				}
 			}
 		}
@@ -538,6 +562,37 @@ macro_rules! assets {
 							map[asset] = value;
 							map
 						})
+					}
+				}
+
+				impl<N: sp_arithmetic::traits::Saturating> sp_arithmetic::traits::Saturating for AssetMap<N> {
+					fn saturating_add(self, rhs: AssetMap<N>) -> AssetMap<N> {
+						AssetMap {
+							$(
+								$asset_member: self.$asset_member.saturating_add(rhs.$asset_member),
+							)+
+						}
+					}
+					fn saturating_sub(self, rhs: AssetMap<N>) -> AssetMap<N> {
+						AssetMap {
+							$(
+								$asset_member: self.$asset_member.saturating_sub(rhs.$asset_member),
+							)+
+						}
+					}
+					fn saturating_mul(self, rhs: AssetMap<N>) -> AssetMap<N> {
+						AssetMap {
+							$(
+								$asset_member: self.$asset_member.saturating_mul(rhs.$asset_member),
+							)+
+						}
+					}
+					fn saturating_pow(self, exp: usize) -> AssetMap<N> {
+						AssetMap {
+							$(
+								$asset_member: self.$asset_member.saturating_pow(exp),
+							)+
+						}
 					}
 				}
 			}
