@@ -44,7 +44,7 @@ else
 fi
 echo "👋 Welcome to Chainflip localnet manager"
 echo "🔧 Setting up..."
-echo "🕵🏻‍♂️ For full debug log, check $DEBUG_OUTPUT_DESTINATION"
+echo "🕵🏻‍♂️  For full debug log, check $DEBUG_OUTPUT_DESTINATION"
 
 get-workflow() {
   echo "❓ Would you like to build, recreate or destroy your Localnet? (Type 1, 2, 3, 4, 5 or 6)"
@@ -98,11 +98,11 @@ build-localnet() {
   touch $DEBUG_OUTPUT_DESTINATION
 
   if [ "$OS_TYPE" == "Linux" ]; then
-    echo "🕵🏻‍♂️ Detected OS: $OS_TYPE. Copying .so files..."
+    echo "🕵🏻‍♂️  Detected OS: $OS_TYPE. Copying .so files..."
     sudo cp $BINARY_ROOT_PATH/libchainflip_engine_v*.so /usr/lib/
     sudo cp ./old-engine-dylib/libchainflip_engine_v*.so /usr/lib/
   else
-    echo "🕵🏻‍♂️ Detected OS: $OS_TYPE. Skipping .so file copy."
+    echo "🕵🏻‍♂️  Detected OS: $OS_TYPE. Skipping .so file copy."
   fi
 
   echo "🪢 Pulling Docker Images"
