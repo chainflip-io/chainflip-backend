@@ -1,7 +1,8 @@
 #!/usr/bin/env -S pnpm tsx
 import { requestNewSwap, performSwap, doPerformSwap } from '../shared/perform_swap';
-import { newAddress, getChainflipApi, observeEvent } from '../shared/utils';
+import { newAddress, getChainflipApi } from '../shared/utils';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
+import { observeEvent } from '../shared/utils/substrate';
 
 async function rotatesThroughBtcSwap() {
   await using chainflip = await getChainflipApi();
@@ -15,7 +16,7 @@ async function rotatesThroughBtcSwap() {
 
   await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
   console.log(`Vault rotation initiated. Awaiting new epoch.`);
-  await observeEvent('validator:NewEpoch', chainflip);
+  await observeEvent('validator:NewEpoch').event;
   console.log('Vault rotated!');
 
   await doPerformSwap(swapParams, tag);
