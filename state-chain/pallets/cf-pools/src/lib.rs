@@ -1110,6 +1110,19 @@ impl<T: Config> PoolApi for Pallet<T> {
 					.index(Asset::Usdc)
 					.saturating_add(bid.sell_amount.saturated_into::<u128>());
 			}
+			for range_order in pool_orders.range_orders {
+				let pair = Self::pool_range_order_liquidity_value(
+					base_asset,
+					Asset::Usdc,
+					range_order.range,
+					range_order.liquidity,
+				)
+				.expect("Cannot fail we are sure the pool exists and the orders too");
+				*result.index_mut(base_asset) =
+					result.index(base_asset).saturating_add(pair.base.saturated_into::<u128>());
+				*result.index_mut(Asset::Usdc) =
+					result.index(Asset::Usdc).saturating_add(pair.quote.saturated_into::<u128>());
+			}
 		}
 		result
 	}
