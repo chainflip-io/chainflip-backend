@@ -32,6 +32,8 @@ touch $CHAINFLIP_BASE_PATH/debug.log
 
 set -eo pipefail
 
+OS_TYPE=$(uname)
+
 if [[ $CI == true ]]; then
   set -x
   additional_docker_compose_up_args="--quiet-pull"
@@ -95,6 +97,14 @@ build-localnet() {
   mkdir -p $CHAINFLIP_BASE_PATH
   touch $DEBUG_OUTPUT_DESTINATION
 
+  if [ "$OS_TYPE" == "Linux" ]; then
+    echo "Detected OS: $OS_TYPE. Copying .so files..."
+    sudo cp $BINARY_ROOT_PATH/libchainflip_engine_v*.so /usr/lib/
+    sudo cp ./old-engine-dylib/libchainflip_engine_v*.so /usr/lib/
+  else
+    echo "Detected OS: $OS_TYPE. Skipping .so file copy."
+  fi
+
   echo "🪢 Pulling Docker Images"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" pull --quiet >>$DEBUG_OUTPUT_DESTINATION 2>&1
   echo "🔮 Initializing Network"
@@ -102,8 +112,6 @@ build-localnet() {
 
   tar -xzf $SOLANA_BASE_PATH/solana-ledger.tar.gz -C $SOLANA_BASE_PATH
   rm -rf $SOLANA_BASE_PATH/solana-ledger.tar.gz
-
-  echo "🦺 Updating init state files permissions ..."
 
   echo "🏗 Building network"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $CORE_CONTAINERS -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
