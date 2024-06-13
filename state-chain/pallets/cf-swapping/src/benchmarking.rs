@@ -36,7 +36,6 @@ mod benchmarks {
 			broker_commission: 10,
 			boost_fee: 0,
 			channel_metadata: None,
-			refund_parameters: None,
 		};
 
 		#[block]

@@ -364,7 +364,6 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 					broker_commission,
 					channel_metadata,
 					boost_fee: boost_fee.unwrap_or_default(),
-					refund_parameters,
 				}
 			} else {
 				pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
