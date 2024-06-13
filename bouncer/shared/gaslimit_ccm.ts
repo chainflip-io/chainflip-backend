@@ -155,9 +155,7 @@ async function testGasLimitSwap(
 
   await send(sourceAsset, depositAddress);
 
-  const {
-    data: { swapId },
-  } = await swapScheduledHandle;
+  const swapId = (await swapScheduledHandle).data.swapId;
 
   while (
     !(
@@ -178,11 +176,13 @@ async function testGasLimitSwap(
   broadcastRequesthandle.stop();
 
   await Promise.all([
-    swapExecutedHandle,
-    swapEgressHandle,
-    ccmBroadcastHandle,
-    broadcastRequesthandle,
+    swapExecutedHandle.event,
+    swapEgressHandle.event,
+    ccmBroadcastHandle.event,
+    broadcastRequesthandle.event,
   ]);
+
+  console.log(`${tag} Awaited all the handles`);
 
   let egressBudgetAmount;
 
@@ -195,6 +195,8 @@ async function testGasLimitSwap(
     egressBudgetAmount = Number(swapIdToEgressAmount[gasSwapId].replace(/,/g, ''));
   }
 
+  console.log(`${tag} Egress budget amount: ${egressBudgetAmount}`);
+
   const txPayload = broadcastIdToTxPayload[egressIdToBroadcastId[swapIdToEgressId[swapId]]];
   const maxFeePerGas = Number(txPayload.maxFeePerGas.replace(/,/g, ''));
   const gasLimitBudget = Number(txPayload.gasLimit.replace(/,/g, ''));
@@ -206,8 +208,14 @@ async function testGasLimitSwap(
   // This is a very rough approximation for the gas limit required. A buffer is added to account for that.
   if (minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER[destChain] >= gasLimitBudget) {
     let stopObservingCcmReceived = false;
+    console.log(
+      `${tag} Gas budget of ${gasLimitBudget} is too low. Expecting BroadcastAborted event. Time to wait for CCM event`,
+    );
 
-    await observeCcmReceived(
+    // We run this because we want to ensure that we *don't* get a CCM event.
+    // So awaiting here means we would never progress.
+    /* eslint-disable @typescript-eslint/no-floating-promises */
+    observeCcmReceived(
       sourceAsset,
       destAsset,
       destAddress,
@@ -257,6 +265,8 @@ async function testGasLimitSwap(
       },
     );
 
+    console.log(`${tag} Waiting for CCM event...`);
+
     // Expecting success
     const ccmReceived = await observeCcmReceived(
       sourceAsset,
@@ -268,8 +278,12 @@ async function testGasLimitSwap(
       throw new Error(`${tag} CCM event emitted. Gas consumed is less than expected!`);
     }
 
+    console.log(`${tag} CCM event emitted!`);
+
     // Stop listening for broadcast failure
     await observeBroadcastFailure.stop();
+
+    console.log(`${tag} Broadcast failure stopped!`);
 
     const web3 = new Web3(getEvmEndpoint(chainFromAsset(destAsset)));
     const receipt = await web3.eth.getTransactionReceipt(ccmReceived?.txHash as string);

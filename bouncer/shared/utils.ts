@@ -373,7 +373,7 @@ export async function observeSwapScheduled(
   swapType?: SwapType,
 ) {
   // need to await this to prevent the chainflip api from being disposed prematurely
-  await observeEvent('swapping:SwapScheduled', {
+  return observeEvent('swapping:SwapScheduled', {
     test: (event) => {
       if ('DepositChannel' in event.data.origin) {
         const channelMatches = Number(event.data.origin.DepositChannel.channelId) === channelId;
