@@ -209,7 +209,7 @@ build-localnet() {
 }
 
 destroy() {
-  echo -n "💣 Destroying network..."
+  echo "💣 Destroying network..."
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down $additional_docker_compose_down_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
   for pid in $(ps -ef | grep chainflip | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
   for pid in $(ps -ef | grep solana | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
@@ -218,7 +218,7 @@ destroy() {
 
   unset DOT_GENESIS_HASH
 
-  echo -n "✅ Done"
+  echo "✅ Done"
 }
 
 yeet() {
