@@ -92,6 +92,10 @@ impl ApiCall<PolkadotCrypto> for MockCreatePolkadotVault {
 	) -> <<Polkadot as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId {
 		unimplemented!()
 	}
+
+	fn refresh_replay_protection(&mut self) {
+		unimplemented!()
+	}
 }
 
 pub struct MockPolkadotVaultKeyWitnessedHandler;

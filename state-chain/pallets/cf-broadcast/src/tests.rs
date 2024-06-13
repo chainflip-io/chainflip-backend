@@ -1297,13 +1297,42 @@ fn broadcast_re_signing() {
 			assert!(AbortedBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
 
 			// Request a re-sign
-			assert_ok!(crate::Pallet::<Test, Instance1>::re_sign_aborted_broadcast(
+			assert_ok!(crate::Pallet::<Test, Instance1>::re_sign_aborted_broadcasts(
 				RuntimeOrigin::root(),
-				broadcast_id,
+				vec![broadcast_id],
 				true,
+				false,
 			));
 			// Check that the broadcast is re-scheduled
 			assert!(PendingBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
 			assert!(!AbortedBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
 		});
+}
+
+#[test]
+fn threshold_sign_and_refresh_replay_protection() {
+	new_test_ext().execute_with(|| {
+		MockTransactionBuilder::<MockEthereum, RuntimeCall>::set_refreshed_replay_protection();
+		let broadcast_id: u8 = 1;
+
+		let (tx_out_id, api_call) = api_call(broadcast_id);
+		PendingApiCalls::<Test, Instance1>::insert(
+			broadcast_id as u32,
+			api_call.clone(),
+		);
+
+		TransactionOutIdToBroadcastId::<Test, Instance1>::insert(
+			tx_out_id,
+			(broadcast_id as u32, 0),
+		);
+
+		assert_ok!(Broadcaster::re_sign_aborted_broadcasts(
+			RuntimeOrigin::root(),
+			vec![broadcast_id as u32],
+			false,
+			true,
+		));
+
+		assert!(MockTransactionBuilder::<MockEthereum, RuntimeCall>::get_refreshed_replay_protection_state(), "Refreshed replay protection has not been refreshed!");
+	});
 }

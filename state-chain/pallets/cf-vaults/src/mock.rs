@@ -119,6 +119,10 @@ impl ApiCall<MockEthereumChainCrypto> for MockSetAggKeyWithAggKey {
 	) -> <<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId {
 		todo!()
 	}
+
+	fn refresh_replay_protection(&mut self) {
+		unimplemented!()
+	}
 }
 
 parameter_types! {

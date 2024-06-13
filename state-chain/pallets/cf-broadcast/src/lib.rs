@@ -634,18 +634,25 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Re-sign and optionally re-send a broadcast request.
+		/// Re-sign and optionally re-send some broadcast requests.
 		///
 		/// Requires governance origin.
 		#[pallet::call_index(5)]
 		#[pallet::weight(Weight::zero())]
-		pub fn re_sign_aborted_broadcast(
+		pub fn re_sign_aborted_broadcasts(
 			origin: OriginFor<T>,
-			broadcast_id: BroadcastId,
+			broadcast_ids: Vec<BroadcastId>,
 			request_broadcast: bool,
+			refresh_replay_protection: bool,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::re_sign_broadcast(broadcast_id, request_broadcast)?;
+			for broadcast_id in broadcast_ids {
+				Self::re_sign_broadcast(
+					broadcast_id,
+					request_broadcast,
+					refresh_replay_protection,
+				)?;
+			}
 			Ok(())
 		}
 	}
@@ -937,11 +944,12 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 	fn re_sign_broadcast(
 		broadcast_id: BroadcastId,
 		request_broadcast: bool,
+		refresh_replay_protection: bool,
 	) -> Result<ThresholdSignatureRequestId, DispatchError> {
 		AbortedBroadcasts::<T, I>::mutate(|aborted| {
 			aborted.remove(&broadcast_id);
 		});
-		let api_call = Self::clean_up_broadcast_storage(broadcast_id)
+		let mut api_call = Self::clean_up_broadcast_storage(broadcast_id)
 			.ok_or(Error::<T, I>::ApiCallUnavailable)?;
 
 		PendingBroadcasts::<T, I>::try_mutate(|pending| {
@@ -954,6 +962,10 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 				Ok(())
 			}
 		})?;
+
+		if refresh_replay_protection {
+			api_call.refresh_replay_protection();
+		}
 		Ok(Self::threshold_sign(api_call, broadcast_id, request_broadcast))
 	}
 
