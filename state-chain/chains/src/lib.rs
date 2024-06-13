@@ -649,5 +649,5 @@ pub struct SwapRefundParameters {
 pub struct ChannelRefundParameters {
 	pub retry_duration: cf_primitives::BlockNumber,
 	pub refund_address: ForeignChainAddress,
-	pub price_limit: Price,
+	pub min_price: Price,
 }

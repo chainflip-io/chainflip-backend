@@ -479,7 +479,7 @@ fn test_refund_parameter_validation() {
 				Some(ChannelRefundParameters {
 					retry_duration: MAX_RETRY_DURATION_BLOCKS + 1,
 					refund_address: ForeignChainAddress::Eth(Default::default()),
-					price_limit: Default::default(),
+					min_price: Default::default(),
 				}),
 			),
 			DispatchError::Other("Retry duration too long")

@@ -136,7 +136,7 @@ fn insert_swaps(swaps: &[Swap]) {
 						.checked_sub(System::block_number().try_into().unwrap())
 						.expect("invalid refund block"),
 					refund_address: ForeignChainAddress::Eth([10; 20].into()),
-					price_limit: sqrt_price_to_price(bounded_sqrt_price(
+					min_price: sqrt_price_to_price(bounded_sqrt_price(
 						params.min_output.into(),
 						swap.input_amount.into(),
 					)),

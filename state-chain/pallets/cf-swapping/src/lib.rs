@@ -1365,7 +1365,7 @@ pub mod pallet {
 				refund_address: params.refund_address,
 				min_output: u128::try_from(cf_amm::common::output_amount_ceil(
 					net_amount.into(),
-					params.price_limit,
+					params.min_price,
 				))
 				.unwrap_or(u128::MAX),
 			});
