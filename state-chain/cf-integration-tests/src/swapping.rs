@@ -24,7 +24,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, FLIPPERINOS_PER_FLIP,
-	GENESIS_EPOCH, STABLE_ASSET,
+	GENESIS_EPOCH, STABLE_ASSET, SWAP_RETRY_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match};
 use cf_traits::{Chainflip, EpochInfo, LpBalanceApi};
@@ -642,7 +642,7 @@ fn failed_swaps_are_rolled_back() {
 
 		// Subsequent swaps will also fail. No swaps should be processed and the Pool liquidity
 		// shouldn't be drained.
-		Swapping::on_finalize(swaps_scheduled_at + 1);
+		Swapping::on_finalize(swaps_scheduled_at + SWAP_RETRY_DELAY_BLOCKS);
 		assert_eq!(
 			Some(eth_price),
 			LiquidityPools::current_price(Asset::Eth, STABLE_ASSET)
@@ -658,7 +658,7 @@ fn failed_swaps_are_rolled_back() {
 		setup_pool_and_accounts(vec![Asset::Flip], OrderType::RangeOrder);
 		System::reset_events();
 
-		Swapping::on_finalize(swaps_scheduled_at + 2);
+		Swapping::on_finalize(swaps_scheduled_at + 2 * SWAP_RETRY_DELAY_BLOCKS);
 
 		assert_ne!(
 			Some(eth_price),
