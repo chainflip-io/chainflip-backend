@@ -40,43 +40,9 @@ else
   additional_docker_compose_up_args=""
   additional_docker_compose_down_args="--volumes --remove-orphans"
 fi
-echo "🔧 Setting up Localnet Manager"
+echo "👋 Welcome to Chainflip localnet manager"
+echo "🔧 Setting up..."
 echo "🕵🏻‍♂️ For full debug log, check $DEBUG_OUTPUT_DESTINATION"
-setup() {
-  echo "🤗 Welcome to Localnet manager"
-  sleep 2
-  echo "👽 We need to do some quick set up to get you ready!"
-  sleep 3
-
-  if ! which op >>$DEBUG_OUTPUT_DESTINATION 2>&1; then
-    echo "❌  OnePassword CLI not installed."
-    echo "https://developer.1password.com/docs/cli/get-started/#install"
-    exit 1
-  fi
-
-  if ! which docker >>$DEBUG_OUTPUT_DESTINATION 2>&1; then
-    echo "❌  docker CLI not installed."
-    echo "https://docs.docker.com/get-docker/"
-    exit 1
-  fi
-
-  echo "🐳 Logging in to our Docker Registry. You'll need to create a Classic PAT with packages:read permissions"
-  echo "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token"
-
-  set +e
-  # Attempt Docker login
-  docker login ghcr.io
-  # Check the exit status of the previous command
-  if [ $? -ne 0 ]; then
-      echo "Docker login to ghcr.io failed. Please check your credentials (github PAT) and try again."
-      exit 1
-  fi
-  # Restore the previous errexit setting
-  set -eo pipefail
-
-
-  touch localnet/.setup_complete
-}
 
 get-workflow() {
   echo "❓ Would you like to build, recreate or destroy your Localnet? (Type 1, 2, 3, 4, 5 or 6)"
@@ -85,16 +51,6 @@ get-workflow() {
     break
   done
   if [[ $WORKFLOW =~ build-localnet|recreate ]]; then
-    set +e
-    # Attempt Docker login
-    docker login ghcr.io
-    # Check the exit status of the previous command
-    if [ $? -ne 0 ]; then
-        echo "Docker login to ghcr.io failed. Please check your credentials (github PAT) and try again."
-        exit 1
-    fi
-    # Restore the previous errexit setting
-    set -eo pipefail
     echo "❓ Would you like to run a 1 or 3 node network? (Type 1 or 3)"
     read -r NODE_COUNT
     if [[ $NODE_COUNT == "1" ]]; then
@@ -364,9 +320,6 @@ main() {
     if ! which wscat >>$DEBUG_OUTPUT_DESTINATION; then
         echo "wscat is not installed. Installing now..."
         npm install -g wscat
-    fi
-    if [[ ! -f ./localnet/.setup_complete ]]; then
-        setup
     fi
     if [ -z $CI ]; then
       get-workflow

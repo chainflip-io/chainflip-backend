@@ -1,7 +1,8 @@
 import assert from 'assert';
 import Keyring from '../polkadot/keyring';
-import { getChainflipApi, observeEvent, tryUntilSuccess } from '../shared/utils';
+import { getChainflipApi, tryUntilSuccess } from '../shared/utils';
 import { snowWhite, submitGovernanceExtrinsic } from '../shared/cf_governance';
+import { observeEvent } from './utils/substrate';
 
 async function getGovernanceMembers(): Promise<string[]> {
   await using chainflip = await getChainflipApi();
@@ -27,8 +28,7 @@ async function addAliceToGovernance() {
 
   await setGovernanceMembers(newMembers);
 
-  await using chainflip = await getChainflipApi();
-  await observeEvent('governance:Executed', chainflip);
+  await observeEvent('governance:Executed').event;
 
   await tryUntilSuccess(async () => (await getGovernanceMembers()).length === 2, 3000, 10);
 
@@ -44,12 +44,12 @@ async function submitWithMultipleGovernanceMembers() {
 
   await using chainflip = await getChainflipApi();
 
-  const proposalId = Number((await observeEvent('governance:Proposed', chainflip)).data);
+  const proposalId = Number((await observeEvent('governance:Proposed').event).data);
 
   // Note that with two members, we need to approve with the other account:
   await chainflip.tx.governance.approve(proposalId).signAndSend(alice, { nonce: -1 });
 
-  const executedProposalId = Number((await observeEvent('governance:Executed', chainflip)).data);
+  const executedProposalId = Number((await observeEvent('governance:Executed').event).data);
   assert(proposalId === executedProposalId, 'Proposal Ids should match');
 
   assert(

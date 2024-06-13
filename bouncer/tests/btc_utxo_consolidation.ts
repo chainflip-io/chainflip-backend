@@ -3,7 +3,8 @@ import assert from 'assert';
 
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { provideLiquidity } from '../shared/provide_liquidity';
-import { getChainflipApi, observeEvent, runWithTimeout } from '../shared/utils';
+import { getChainflipApi, runWithTimeout } from '../shared/utils';
+import { observeEvent } from '../shared/utils/substrate';
 
 async function queryUtxos(): Promise<{ amount: number; count: number }> {
   await using chainflip = await getChainflipApi();
@@ -19,7 +20,6 @@ async function queryUtxos(): Promise<{ amount: number; count: number }> {
 
 async function test() {
   console.log('=== Testing BTC UTXO Consolidation ===');
-  await using chainflip = await getChainflipApi();
   const initialUtxos = await queryUtxos();
 
   console.log(`Initial utxo count: ${initialUtxos.count}`);
@@ -53,10 +53,7 @@ async function test() {
     `Setting consolidation threshold to: ${consolidationThreshold} and size to: ${consolidationSize}`,
   );
 
-  const consolidationEventPromise = observeEvent(
-    'bitcoinIngressEgress:UtxoConsolidation',
-    chainflip,
-  );
+  const consolidationEventPromise = observeEvent('bitcoinIngressEgress:UtxoConsolidation').event;
 
   // We should have exactly consolidationThreshold utxos,
   // so this should trigger consolidation:
@@ -71,18 +68,11 @@ async function test() {
   const consolidationBroadcastId = (await consolidationEventPromise).data.broadcastId;
   console.log(`Consolidation event is observed! Broadcast id: ${consolidationBroadcastId}`);
 
-  const broadcastSuccessPromise = observeEvent(
-    'bitcoinBroadcaster:BroadcastSuccess',
-    chainflip,
-    (event) => {
-      if (consolidationBroadcastId === event.data.broadcastId) return true;
-      return false;
-    },
-  );
-  const feeDeficitPromise = observeEvent(
-    'bitcoinBroadcaster:TransactionFeeDeficitRecorded',
-    chainflip,
-  );
+  const broadcastSuccessPromise = observeEvent('bitcoinBroadcaster:BroadcastSuccess', {
+    test: (event) => consolidationBroadcastId === event.data.broadcastId,
+  }).event;
+
+  const feeDeficitPromise = observeEvent('bitcoinBroadcaster:TransactionFeeDeficitRecorded').event;
 
   console.log(`Waiting for broadcast ${consolidationBroadcastId} to succeed`);
   await broadcastSuccessPromise;

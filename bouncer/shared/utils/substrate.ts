@@ -9,7 +9,7 @@ const apiMap = {
 type SubstrateChain = keyof typeof apiMap;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Event<T = any> = {
+export type Event<T = any> = {
   name: { section: string; method: string };
   data: T;
   block: number;
@@ -149,6 +149,7 @@ export function observeEvent<T = any>(
   const it = subscribeHeads({ chain, finalized });
 
   controller?.signal.addEventListener('abort', () => {
+    /* eslint-disable-next-line @typescript-eslint/no-floating-promises */
     it.return();
   });
 
