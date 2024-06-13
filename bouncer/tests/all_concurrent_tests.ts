@@ -3,7 +3,6 @@ import { SwapContext, testAllSwaps } from '../shared/swapping';
 import { testEvmDeposits } from '../shared/evm_deposits';
 import { runWithTimeout } from '../shared/utils';
 import { testFundRedeem } from '../shared/fund_redeem';
-import { testMultipleMembersGovernance } from '../shared/multiple_members_governance';
 import { testLpApi } from '../shared/lp_api_test';
 import { swapLessThanED } from '../shared/swap_less_than_existential_deposit_dot';
 import { testPolkadotRuntimeUpdate } from '../shared/polkadot_runtime_update';
@@ -33,7 +32,6 @@ async function runAllConcurrentTests() {
     testAllSwaps(swapContext),
     testEvmDeposits(),
     testFundRedeem('redeem'),
-    testMultipleMembersGovernance(),
     testLpApi(),
     testBrokerFeeCollection(),
     testBoostingSwap(),
