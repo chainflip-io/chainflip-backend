@@ -35,7 +35,6 @@ mod test_set_comm_key_with_agg_key {
 	use crate::{
 		eth::api::abi::load_abi,
 		evm::{api::EvmTransactionBuilder, tests::asymmetrise, SchnorrVerificationComponents},
-		ApiCall,
 	};
 
 	use crate::evm::api::EvmReplayProtection;

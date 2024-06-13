@@ -89,7 +89,7 @@ mod test_execute_x_swap_and_execute {
 		dot::PolkadotAccountId,
 		eth::api::abi::load_abi,
 		evm::{
-			api::{ApiCall, EvmReplayProtection, EvmTransactionBuilder},
+			api::{EvmReplayProtection, EvmTransactionBuilder},
 			SchnorrVerificationComponents,
 		},
 	};

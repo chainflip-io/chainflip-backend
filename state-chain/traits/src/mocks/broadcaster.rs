@@ -60,6 +60,10 @@ impl<C: ChainCrypto + 'static> ApiCall<C> for MockApiCall<C> {
 	fn transaction_out_id(&self) -> <C as cf_chains::ChainCrypto>::TransactionOutId {
 		unimplemented!()
 	}
+
+	fn refresh_replay_protection(&mut self) {
+		unimplemented!()
+	}
 }
 
 impl<
@@ -119,6 +123,7 @@ impl<
 	fn re_sign_broadcast(
 		broadcast_id: BroadcastId,
 		_request_broadcast: bool,
+		_refresh_replay_protection: bool,
 	) -> Result<ThresholdSignatureRequestId, sp_runtime::DispatchError> {
 		Self::put_value(b"RESIGNED_CALLBACKS", broadcast_id);
 		Ok(Self::next_threshold_id())

@@ -146,6 +146,10 @@ impl ApiCall<MockEthereumChainCrypto> for MockUpdateFlipSupply {
 	fn transaction_out_id(&self) -> <MockEthereumChainCrypto as ChainCrypto>::TransactionOutId {
 		unimplemented!()
 	}
+
+	fn refresh_replay_protection(&mut self) {
+		unimplemented!()
+	}
 }
 
 pub struct MockStateChainGatewayProvider;

@@ -39,7 +39,7 @@ mod test_set_agg_key_with_agg_key {
 	use crate::{
 		eth::api::abi::load_abi,
 		evm::{
-			api::{ApiCall, EvmReplayProtection, EvmTransactionBuilder},
+			api::{EvmReplayProtection, EvmTransactionBuilder},
 			SchnorrVerificationComponents,
 		},
 	};

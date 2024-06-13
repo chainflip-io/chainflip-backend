@@ -58,7 +58,7 @@ mod test_all_batch {
 			api::{EvmReplayProtection, EvmTransactionBuilder},
 			EvmFetchId, SchnorrVerificationComponents,
 		},
-		AllBatch, ApiCall, FetchAssetParams,
+		AllBatch, FetchAssetParams,
 	};
 	use cf_primitives::chains::assets;
 

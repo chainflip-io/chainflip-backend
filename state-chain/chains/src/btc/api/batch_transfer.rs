@@ -55,4 +55,8 @@ impl ApiCall<BitcoinCrypto> for BatchTransfer {
 	fn transaction_out_id(&self) -> <BitcoinCrypto as ChainCrypto>::TransactionOutId {
 		self.bitcoin_transaction.txid()
 	}
+
+	fn refresh_replay_protection(&mut self) {
+		// No replay protection for Bitcoin.
+	}
 }

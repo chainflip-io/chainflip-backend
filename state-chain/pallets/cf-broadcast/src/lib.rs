@@ -643,9 +643,10 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			broadcast_id: BroadcastId,
 			request_broadcast: bool,
+			refresh_replay_protection: bool,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::re_sign_broadcast(broadcast_id, request_broadcast)?;
+			Self::re_sign_broadcast(broadcast_id, request_broadcast, refresh_replay_protection)?;
 			Ok(())
 		}
 	}
@@ -937,12 +938,17 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 	fn re_sign_broadcast(
 		broadcast_id: BroadcastId,
 		request_broadcast: bool,
+		refresh_replay_protection: bool,
 	) -> Result<ThresholdSignatureRequestId, DispatchError> {
 		AbortedBroadcasts::<T, I>::mutate(|aborted| {
 			aborted.remove(&broadcast_id);
 		});
-		let api_call = Self::clean_up_broadcast_storage(broadcast_id)
+		let mut api_call = Self::clean_up_broadcast_storage(broadcast_id)
 			.ok_or(Error::<T, I>::ApiCallUnavailable)?;
+
+		if refresh_replay_protection {
+			api_call.refresh_replay_protection();
+		}
 
 		PendingBroadcasts::<T, I>::try_mutate(|pending| {
 			if pending.contains(&broadcast_id) {

@@ -529,6 +529,7 @@ pub trait Broadcaster<C: Chain> {
 	fn re_sign_broadcast(
 		broadcast_id: BroadcastId,
 		request_broadcast: bool,
+		refresh_replay_protection: bool,
 	) -> Result<ThresholdSignatureRequestId, DispatchError>;
 
 	/// Request a call to be threshold signed, but do not broadcast.
