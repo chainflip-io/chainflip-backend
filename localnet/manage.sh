@@ -99,6 +99,7 @@ build-localnet() {
 
   if [ "$OS_TYPE" == "Linux" ]; then
     echo "🕵🏻‍♂️  Detected OS: $OS_TYPE. Copying .so files..."
+    echo "ℹ️ Note: The .so files in 'old-engine-dylib' are built for Ubuntu 22.04."
     sudo cp $BINARY_ROOT_PATH/libchainflip_engine_v*.so /usr/lib/
     sudo cp ./old-engine-dylib/libchainflip_engine_v*.so /usr/lib/
   else
