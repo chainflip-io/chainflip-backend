@@ -22,6 +22,18 @@
         "ignoreRestSiblings": true
       }
     ],
+    "no-unused-expressions": "off",
+    "@typescript-eslint/no-unused-expressions": "error",
+    "no-misused-promises": "off",
+    "@typescript-eslint/no-misused-promises": [
+      "error",
+      {
+        "checksVoidReturn": false,
+        "checksConditionals": true
+      }
+    ],
+    "no-floating-promises": "off",
+    "@typescript-eslint/no-floating-promises": "error",
     "no-use-before-define": "off",
     "@typescript-eslint/no-use-before-define": "error",
     "no-shadow": "off",

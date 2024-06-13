@@ -10,7 +10,6 @@ import {
   handleSubstrateError,
   newAddress,
   observeBalanceIncrease,
-  observeEvent,
   shortChainFromAsset,
   hexStringToBytesArray,
   getChainflipApi,
@@ -19,6 +18,7 @@ import {
 } from '../shared/utils';
 import { getBalance } from '../shared/get_balance';
 import { doPerformSwap } from '../shared/perform_swap';
+import { observeEvent } from './utils/substrate';
 
 const swapAssetAmount = {
   [Assets.Eth]: 1,
@@ -63,42 +63,42 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
     asset === Assets.Dot ? decodeDotAddressForContract(destinationAddress) : destinationAddress;
   const destinationChain = shortChainFromAsset(swapAsset);
   console.log(`${asset} destinationAddress:`, destinationAddress);
-  const observeSwapScheduledEvent = observeEvent(
-    ':SwapScheduled',
-    chainflip,
-    (event) =>
+  const observeSwapScheduledEvent = observeEvent(':SwapScheduled', {
+    test: (event) =>
       event.data.destinationAddress[destinationChain]?.toLowerCase() ===
       observeDestinationAddress.toLowerCase(),
-  );
+  });
   console.log(`Running swap ${asset} -> ${swapAsset}`);
 
   const rawDepositForSwapAmount = swapAssetAmount[asset].toString();
 
   // we need to manually create the swap channel and observe the relative event
   // because we want to use a separate broker to not interfere with other tests
-  const addressPromise = observeEvent('swapping:SwapDepositAddressReady', chainflip, (event) => {
-    // Find deposit address for the right swap by looking at destination address:
-    const destAddressEvent = event.data.destinationAddress[shortChainFromAsset(swapAsset)];
-    if (!destAddressEvent) return false;
+  const addressPromise = observeEvent('swapping:SwapDepositAddressReady', {
+    test: (event) => {
+      // Find deposit address for the right swap by looking at destination address:
+      const destAddressEvent = event.data.destinationAddress[shortChainFromAsset(swapAsset)];
+      if (!destAddressEvent) return false;
 
-    const destAssetMatches = event.data.destinationAsset === swapAsset;
-    const sourceAssetMatches = event.data.sourceAsset === asset;
-    const destAddressMatches =
-      destAddressEvent.toLowerCase() === observeDestinationAddress.toLowerCase();
+      const destAssetMatches = event.data.destinationAsset === swapAsset;
+      const sourceAssetMatches = event.data.sourceAsset === asset;
+      const destAddressMatches =
+        destAddressEvent.toLowerCase() === observeDestinationAddress.toLowerCase();
 
-    return destAddressMatches && destAssetMatches && sourceAssetMatches;
+      return destAddressMatches && destAssetMatches && sourceAssetMatches;
+    },
   });
 
   const encodedEthAddr = chainflip.createType('EncodedAddress', {
     Eth: hexStringToBytesArray(destinationAddress),
   });
-  brokerMutex.runExclusive(async () => {
+  await brokerMutex.runExclusive(async () => {
     await chainflip.tx.swapping
       .requestSwapDepositAddress(asset, swapAsset, encodedEthAddr, commissionBps, null, 0)
       .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip));
   });
 
-  const res = (await addressPromise).data;
+  const res = (await addressPromise.event).data;
 
   const depositAddress = res.depositAddress[shortChainFromAsset(asset)];
   const channelId = Number(res.channelId);
@@ -117,7 +117,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   );
 
   // Get values from the swap event
-  const swapScheduledEvent = await observeSwapScheduledEvent;
+  const swapScheduledEvent = await observeSwapScheduledEvent.event;
   const brokerCommission = BigInt(swapScheduledEvent.data.brokerCommission.replaceAll(',', ''));
   console.log('brokerCommission:', brokerCommission);
 
@@ -164,30 +164,26 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   console.log(
     `Withdrawing broker fees to ${observeWithdrawalAddress}, balance before: ${balanceBeforeWithdrawal}`,
   );
-  const observeWithdrawalRequested = observeEvent(
-    'swapping:WithdrawalRequested',
-    chainflip,
-    (event) =>
+  const observeWithdrawalRequested = observeEvent('swapping:WithdrawalRequested', {
+    test: (event) =>
       event.data.destinationAddress[chain]?.toLowerCase() ===
       observeWithdrawalAddress.toLowerCase(),
-  );
+  });
 
   await submitBrokerWithdrawal(asset, {
     [chain]: observeWithdrawalAddress,
   });
   console.log(`Submitted withdrawal for ${asset}`);
-  const withdrawalRequestedEvent = await observeWithdrawalRequested;
+  const withdrawalRequestedEvent = await observeWithdrawalRequested.event;
   console.log(`Withdrawal requested, egressId: ${withdrawalRequestedEvent.data.egressId}`);
-  const BatchBroadcastRequestedEvent = await observeEvent(
-    ':BatchBroadcastRequested',
-    chainflip,
-    (event) =>
+  const BatchBroadcastRequestedEvent = await observeEvent(':BatchBroadcastRequested', {
+    test: (event) =>
       event.data.egressIds.some(
         (egressId: EgressId) =>
           egressId[0] === withdrawalRequestedEvent.data.egressId[0] &&
           egressId[1] === withdrawalRequestedEvent.data.egressId[1],
       ),
-  );
+  }).event;
   console.log(
     `Batch broadcast requested, broadcastId: ${BatchBroadcastRequestedEvent.data.broadcastId}`,
   );
