@@ -49,7 +49,7 @@ echo "🕵🏻‍♂️ For full debug log, check $DEBUG_OUTPUT_DESTINATION"
 get-workflow() {
   echo "❓ Would you like to build, recreate or destroy your Localnet? (Type 1, 2, 3, 4, 5 or 6)"
   select WORKFLOW in build-localnet recreate destroy logs yeet bouncer; do
-    echo "You have chosen $WORKFLOW"
+    echo "🐝 You have chosen $WORKFLOW workflow"
     break
   done
   if [[ $WORKFLOW =~ build-localnet|recreate ]]; then
@@ -60,10 +60,10 @@ get-workflow() {
     elif [[ $NODE_COUNT == "3" ]]; then
       SELECTED_NODES=("${GENESIS_NODES[@]}")
     else
-      echo "Invalid NODE_COUNT value: $NODE_COUNT"
+      echo "❌ Invalid NODE_COUNT value: $NODE_COUNT"
       exit 1
     fi
-    echo "You have chosen $NODE_COUNT node(s) network"
+    echo "🎩 You have chosen $NODE_COUNT node(s) network"
     export NODE_COUNT="$NODE_COUNT-node"
 
     if [[ -z "${BINARY_ROOT_PATH}" ]]; then
@@ -73,7 +73,7 @@ get-workflow() {
       export BINARY_ROOT_PATH=${BINARY_ROOT_PATH:-"./target/debug"}
     fi
 
-    echo "Do you want to start ingress-egress-tracker? (Type y or leave empty)"
+    echo "❓ Do you want to start ingress-egress-tracker? (Type y or leave empty)"
     read -p "(default: NO) " START_TRACKER
     echo
     export START_TRACKER=${START_TRACKER}
@@ -98,11 +98,11 @@ build-localnet() {
   touch $DEBUG_OUTPUT_DESTINATION
 
   if [ "$OS_TYPE" == "Linux" ]; then
-    echo "Detected OS: $OS_TYPE. Copying .so files..."
+    echo "🕵🏻‍♂️ Detected OS: $OS_TYPE. Copying .so files..."
     sudo cp $BINARY_ROOT_PATH/libchainflip_engine_v*.so /usr/lib/
     sudo cp ./old-engine-dylib/libchainflip_engine_v*.so /usr/lib/
   else
-    echo "Detected OS: $OS_TYPE. Skipping .so file copy."
+    echo "🕵🏻‍♂️ Detected OS: $OS_TYPE. Skipping .so file copy."
   fi
 
   echo "🪢 Pulling Docker Images"
@@ -182,7 +182,7 @@ build-localnet() {
   for NODE in "${SELECTED_NODES[@]}"; do
     while true; do
         output=$(check_endpoint_health "http://localhost:$HEALTH_PORT/health")
-        echo "Checking $NODE's chainflip-engine health ..."
+        echo "🩺 Checking $NODE's chainflip-engine health ..."
         if [[ $output == "RUNNING" ]]; then
             echo "💚 $NODE's chainflip-engine is running!"
             break
@@ -218,7 +218,7 @@ destroy() {
 
   unset DOT_GENESIS_HASH
 
-  echo "done"
+  echo -n "✅ Done"
 }
 
 yeet() {
@@ -319,6 +319,8 @@ logs() {
 bouncer() {
   (
     cd ./bouncer
+    echo "🔧 Setting up Bouncer"
+    echo "💾 Installing packages ..."
     pnpm install >>$DEBUG_OUTPUT_DESTINATION 2>&1
     ./run.sh $NODE_COUNT
   )
@@ -326,7 +328,7 @@ bouncer() {
 
 main() {
     if ! which wscat >>$DEBUG_OUTPUT_DESTINATION; then
-        echo "wscat is not installed. Installing now..."
+        echo "💿 wscat is not installed. Installing now..."
         npm install -g wscat
     fi
     if [ -z $CI ]; then
