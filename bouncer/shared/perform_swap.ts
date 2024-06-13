@@ -6,7 +6,6 @@ import { getBalance } from './get_balance';
 import {
   getChainflipApi,
   observeBalanceIncrease,
-  observeEvent,
   observeCcmReceived,
   shortChainFromAsset,
   observeSwapScheduled,
@@ -15,6 +14,7 @@ import {
 } from '../shared/utils';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapContext, SwapStatus } from './swapping';
+import { observeEvent } from './utils/substrate';
 
 function encodeDestinationAddress(address: string, destAsset: Asset): string {
   let destAddress = address;
@@ -48,33 +48,33 @@ export async function requestNewSwap(
 
   const addressPromise = observeEvent(
     'swapping:SwapDepositAddressReady',
-    chainflipApi,
+    {
+      test: (event) => {
+        // Find deposit address for the right swap by looking at destination address:
+        const destAddressEvent = encodeDestinationAddress(
+          event.data.destinationAddress[shortChainFromAsset(destAsset)],
+          destAsset,
+        );
+        if (!destAddressEvent) return false;
 
-    (event) => {
-      // Find deposit address for the right swap by looking at destination address:
-      const destAddressEvent = encodeDestinationAddress(
-        event.data.destinationAddress[shortChainFromAsset(destAsset)],
-        destAsset,
-      );
-      if (!destAddressEvent) return false;
+        const destAssetMatches = event.data.destinationAsset === destAsset;
+        const sourceAssetMatches = event.data.sourceAsset === sourceAsset;
+        const destAddressMatches =
+          destAddressEvent.toLowerCase() ===
+          encodeDestinationAddress(destAddress, destAsset).toLowerCase();
 
-      const destAssetMatches = event.data.destinationAsset === destAsset;
-      const sourceAssetMatches = event.data.sourceAsset === sourceAsset;
-      const destAddressMatches =
-        destAddressEvent.toLowerCase() ===
-        encodeDestinationAddress(destAddress, destAsset).toLowerCase();
-
-      // CF Parameters is always set to '' by the SDK for now
-      const ccmMetadataMatches = messageMetadata
-        ? event.data.channelMetadata !== null &&
+        // CF Parameters is always set to '' by the SDK for now
+        const ccmMetadataMatches = messageMetadata
+          ? event.data.channelMetadata !== null &&
           event.data.channelMetadata.message === messageMetadata.message &&
           Number(event.data.channelMetadata.gasBudget.replace(/,/g, '')) ===
-            messageMetadata.gasBudget
-        : event.data.channelMetadata === null;
+          messageMetadata.gasBudget
+          : event.data.channelMetadata === null;
 
-      return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
-    },
-  );
+        return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
+      },
+    }
+  ).event;
   await newSwap(
     sourceAsset,
     destAsset,
@@ -172,12 +172,11 @@ export async function performSwap(
 
   if (log)
     console.log(
-      `${tag} The args are: ${sourceAsset} ${destAsset} ${destAddress} ${
-        messageMetadata
-          ? messageMetadata.message.substring(0, 6) +
-            '...' +
-            messageMetadata.message.substring(messageMetadata.message.length - 4)
-          : ''
+      `${tag} The args are: ${sourceAsset} ${destAsset} ${destAddress} ${messageMetadata
+        ? messageMetadata.message.substring(0, 6) +
+        '...' +
+        messageMetadata.message.substring(messageMetadata.message.length - 4)
+        : ''
       }`,
     );
 
