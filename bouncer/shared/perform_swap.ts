@@ -44,37 +44,32 @@ export async function requestNewSwap(
   log = true,
   boostFeeBps = 0,
 ): Promise<SwapParams> {
-  await using chainflipApi = await getChainflipApi();
+  const addressPromise = observeEvent('swapping:SwapDepositAddressReady', {
+    test: (event) => {
+      // Find deposit address for the right swap by looking at destination address:
+      const destAddressEvent = encodeDestinationAddress(
+        event.data.destinationAddress[shortChainFromAsset(destAsset)],
+        destAsset,
+      );
+      if (!destAddressEvent) return false;
 
-  const addressPromise = observeEvent(
-    'swapping:SwapDepositAddressReady',
-    {
-      test: (event) => {
-        // Find deposit address for the right swap by looking at destination address:
-        const destAddressEvent = encodeDestinationAddress(
-          event.data.destinationAddress[shortChainFromAsset(destAsset)],
-          destAsset,
-        );
-        if (!destAddressEvent) return false;
+      const destAssetMatches = event.data.destinationAsset === destAsset;
+      const sourceAssetMatches = event.data.sourceAsset === sourceAsset;
+      const destAddressMatches =
+        destAddressEvent.toLowerCase() ===
+        encodeDestinationAddress(destAddress, destAsset).toLowerCase();
 
-        const destAssetMatches = event.data.destinationAsset === destAsset;
-        const sourceAssetMatches = event.data.sourceAsset === sourceAsset;
-        const destAddressMatches =
-          destAddressEvent.toLowerCase() ===
-          encodeDestinationAddress(destAddress, destAsset).toLowerCase();
-
-        // CF Parameters is always set to '' by the SDK for now
-        const ccmMetadataMatches = messageMetadata
-          ? event.data.channelMetadata !== null &&
+      // CF Parameters is always set to '' by the SDK for now
+      const ccmMetadataMatches = messageMetadata
+        ? event.data.channelMetadata !== null &&
           event.data.channelMetadata.message === messageMetadata.message &&
           Number(event.data.channelMetadata.gasBudget.replace(/,/g, '')) ===
-          messageMetadata.gasBudget
-          : event.data.channelMetadata === null;
+            messageMetadata.gasBudget
+        : event.data.channelMetadata === null;
 
-        return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
-      },
-    }
-  ).event;
+      return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
+    },
+  }).event;
   await newSwap(
     sourceAsset,
     destAsset,
@@ -172,11 +167,12 @@ export async function performSwap(
 
   if (log)
     console.log(
-      `${tag} The args are: ${sourceAsset} ${destAsset} ${destAddress} ${messageMetadata
-        ? messageMetadata.message.substring(0, 6) +
-        '...' +
-        messageMetadata.message.substring(messageMetadata.message.length - 4)
-        : ''
+      `${tag} The args are: ${sourceAsset} ${destAsset} ${destAddress} ${
+        messageMetadata
+          ? messageMetadata.message.substring(0, 6) +
+            '...' +
+            messageMetadata.message.substring(messageMetadata.message.length - 4)
+          : ''
       }`,
     );
 

@@ -1,12 +1,10 @@
 #!/usr/bin/env -S pnpm tsx
 import { requestNewSwap, performSwap, doPerformSwap } from '../shared/perform_swap';
-import { newAddress, getChainflipApi } from '../shared/utils';
+import { newAddress } from '../shared/utils';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { observeEvent } from '../shared/utils/substrate';
 
 async function rotatesThroughBtcSwap() {
-  await using chainflip = await getChainflipApi();
-
   const tag = `Btc -> Dot (through rotation)`;
   const address = await newAddress('Dot', 'foo');
 

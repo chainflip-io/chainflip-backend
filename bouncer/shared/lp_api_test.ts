@@ -73,8 +73,8 @@ async function testRegisterLiquidityRefundAddress() {
   const observeRefundAddressRegisteredEvent = observeEvent(
     'liquidityProvider:LiquidityRefundAddressRegistered',
     {
-      test: (event) => event.data.address.Eth === testAddress
-    }
+      test: (event) => event.data.address.Eth === testAddress,
+    },
   );
 
   const registerRefundAddress = await lpApiRpc(`lp_register_liquidity_refund_address`, [
@@ -93,8 +93,8 @@ async function testLiquidityDeposit() {
   const observeLiquidityDepositAddressReadyEvent = observeEvent(
     'liquidityProvider:LiquidityDepositAddressReady',
     {
-      test: (event) => event.data.depositAddress.Eth
-    }
+      test: (event) => event.data.depositAddress.Eth,
+    },
   ).event;
 
   const liquidityDepositAddress = (
@@ -113,18 +113,14 @@ async function testLiquidityDeposit() {
   );
 
   // Send funds to the deposit address and watch for deposit event
-  const observeAccountCreditedEvent = observeEvent(
-    'liquidityProvider:AccountCredited',
-    {
-      test:
-        (event) =>
-          event.data.asset === testAsset &&
-          isWithinOnePercent(
-            BigInt(event.data.amountCredited.replace(/,/g, '')),
-            BigInt(testAssetAmount),
-          )
-    }
-  ).event;
+  const observeAccountCreditedEvent = observeEvent('liquidityProvider:AccountCredited', {
+    test: (event) =>
+      event.data.asset === testAsset &&
+      isWithinOnePercent(
+        BigInt(event.data.amountCredited.replace(/,/g, '')),
+        BigInt(testAssetAmount),
+      ),
+  }).event;
   await sendEvmNative(chainFromAsset(testAsset), liquidityDepositAddress, String(testAmount));
   await observeAccountCreditedEvent;
 }
