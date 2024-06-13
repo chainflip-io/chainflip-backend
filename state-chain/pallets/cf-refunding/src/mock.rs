@@ -1,23 +1,15 @@
 use crate as pallet_cf_refunding;
 use crate::PalletSafeMode;
 use cf_chains::{
-	address::{AddressDerivationApi, AddressDerivationError},
-	AnyChain, Chain, Ethereum,
+	address::AddressDerivationError, dot::PolkadotAccountId, AnyChain, Chain, Ethereum,
 };
-use cf_primitives::{chains::assets, AccountId, ChannelId};
-#[cfg(feature = "runtime-benchmarks")]
-use cf_traits::mocks::fee_payment::MockFeePayment;
+use cf_primitives::{AccountId, ChannelId};
+
 use cf_traits::{
-	impl_mock_chainflip, impl_mock_runtime_safe_mode,
-	mocks::{
-		address_converter::MockAddressConverter, deposit_handler::MockDepositHandler,
-		egress_handler::MockEgressHandler,
-	},
+	impl_mock_chainflip, impl_mock_runtime_safe_mode, mocks::egress_handler::MockEgressHandler,
 	AccountRoleRegistry,
 };
-use frame_support::{
-	assert_ok, derive_impl, parameter_types, sp_runtime::app_crypto::sp_core::H160,
-};
+use frame_support::{derive_impl, parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -25,9 +17,7 @@ use sp_runtime::{
 	Permill,
 };
 
-use cf_chains::{evm::Address, ForeignChainAddress};
-
-use sp_std::str::FromStr;
+use cf_chains::ForeignChainAddress;
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -77,18 +67,17 @@ parameter_types! {
 	pub const NetworkFee: Permill = Permill::from_percent(0);
 }
 
+pub const ETH_ADDR_1: ForeignChainAddress = ForeignChainAddress::Eth(H160([0; 20]));
+pub const ETH_ADDR_2: ForeignChainAddress = ForeignChainAddress::Eth(H160([1; 20]));
+pub const ETH_ADDR_3: ForeignChainAddress = ForeignChainAddress::Eth(H160([2; 20]));
+
+pub const DOT_ADDR_1: ForeignChainAddress =
+	ForeignChainAddress::Dot(PolkadotAccountId::from_aliased([1; 32]));
+
 impl_mock_runtime_safe_mode!(refunding: PalletSafeMode);
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type EgressHandler = MockEgressHandler<AnyChain>;
-}
-
-fn to_eth_address(seed: Address) -> ForeignChainAddress {
-	ForeignChainAddress::Eth(seed)
-}
-
-pub fn generate_eth_chain_address(vec: [u8; 20]) -> ForeignChainAddress {
-	ForeignChainAddress::Eth(sp_core::H160(vec))
 }
 
 cf_test_utilities::impl_test_helpers! {

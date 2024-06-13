@@ -1,11 +1,10 @@
-use crate::{Refunding, Runtime};
+use crate::Refunding;
 
-use cf_primitives::AccountId;
 use cf_traits::Refunding as RefundingTrait;
 
 use cf_chains::{
 	address::IntoForeignChainAddress, btc::ScriptPubkey, dot::PolkadotAccountId, Arbitrum, Bitcoin,
-	Ethereum, ForeignChainAddress, Polkadot, Solana,
+	Ethereum, Polkadot, Solana,
 };
 
 use crate::eth::Address as EvmAddress;

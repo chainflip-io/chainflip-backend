@@ -20,7 +20,6 @@ pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 
 impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> Weight {
-		let gas_asset = <T::TargetChain as Chain>::GAS_ASSET;
 		for (asset, fee) in old::WithheldTransactionFees::<T, I>::drain() {
 			T::Refunding::with_held_transaction_fees(asset, fee);
 		}

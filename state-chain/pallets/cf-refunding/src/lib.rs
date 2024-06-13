@@ -1,14 +1,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{AnyChain, Ethereum, ForeignChainAddress};
-use cf_primitives::{Asset, AssetAmount};
+use cf_chains::{AnyChain, ForeignChainAddress};
+use cf_primitives::{Asset, AssetAmount, EpochIndex};
 use cf_traits::{impl_pallet_safe_mode, Chainflip, EgressApi};
 use sp_std::collections::btree_map::BTreeMap;
 
 use sp_std::vec;
-
-use cf_traits::Refunding;
 
 use frame_support::pallet_prelude::*;
 pub use pallet::*;
@@ -56,8 +54,16 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		RefundScheduled { account_id: ForeignChainAddress, asset: Asset, amount: AssetAmount },
-		RefundIntegrityCheckFailed { asset: Asset },
+		RefundScheduled {
+			account_id: ForeignChainAddress,
+			asset: Asset,
+			amount: AssetAmount,
+			epoch: EpochIndex,
+		},
+		RefundIntegrityCheckFailed {
+			epoch: EpochIndex,
+			asset: Asset,
+		},
 	}
 
 	#[pallet::pallet]
@@ -88,17 +94,17 @@ impl<T: Config> Pallet<T> {
 	pub fn withheld_transaction_fee(asset: Asset, amount: AssetAmount) {
 		WithheldTransactionFees::<T>::mutate(&asset, |fees| *fees += amount);
 	}
-	pub fn on_distribute_withheld_fees() {
+	pub fn on_distribute_withheld_fees(epoch: EpochIndex) {
 		let assets = WithheldTransactionFees::<T>::iter_keys().collect::<Vec<_>>();
 
 		for asset in assets {
 			// Integrity check before we start refunding
-			if WithheldTransactionFees::<T>::get(asset) !=
+			if WithheldTransactionFees::<T>::get(asset) <
 				RecordedFees::<T>::get(asset).iter().map(|(_, fee)| fee).sum()
 			{
 				log::warn!(
                     "Integrity check for refunding failed for asset {:?}. Refunding will be skipped.", asset);
-				Self::deposit_event(Event::RefundIntegrityCheckFailed { asset });
+				Self::deposit_event(Event::RefundIntegrityCheckFailed { asset, epoch });
 				continue;
 			}
 			let mut available_funds = WithheldTransactionFees::<T>::take(asset);
@@ -111,6 +117,7 @@ impl<T: Config> Pallet<T> {
 						account_id: validator,
 						asset,
 						amount: fee,
+						epoch,
 					});
 				} else {
 					// TODO: This actually can never happen, still better to remember the data in a
