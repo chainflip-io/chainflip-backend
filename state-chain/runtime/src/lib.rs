@@ -92,7 +92,7 @@ use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::{
 	traits::{
 		AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor,
-		One, OpaqueKeys, UniqueSaturatedInto, Verify,
+		One, OpaqueKeys, Saturating, UniqueSaturatedInto, Verify,
 	},
 	BoundedVec,
 };
@@ -1277,7 +1277,7 @@ impl_runtime_apis! {
 				}
 				map
 			};
-			Ok(free_balances + open_order_balances + boost_pools_balances)
+			Ok(free_balances.saturating_add(open_order_balances).saturating_add(boost_pools_balances))
 		}
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()
