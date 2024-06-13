@@ -1,12 +1,12 @@
 pub use crate::{self as pallet_cf_ingress_egress};
 use crate::{DepositBalances, DepositWitness, PalletSafeMode};
 
-use cf_chains::eth::EthereumTrackedData;
 pub use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError, ForeignChainAddress},
 	eth::Address as EthereumAddress,
 	CcmDepositMetadata, Chain,
 };
+use cf_chains::{eth::EthereumTrackedData, AnyChain};
 use cf_primitives::ChannelId;
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
@@ -24,6 +24,7 @@ use cf_traits::{
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
 		lp_balance::MockBalance,
+		refunding::MockRefunding,
 		swap_deposit_handler::MockSwapDepositHandler,
 		swap_queue_api::MockSwapQueueApi,
 	},
@@ -130,6 +131,7 @@ impl crate::Config for Test {
 	type AssetConverter = MockAssetConverter;
 	type FeePayment = MockFeePayment<Self>;
 	type SwapQueueApi = MockSwapQueueApi;
+	type Refunding = MockRefunding<AnyChain>;
 	type SafeMode = MockRuntimeSafeMode;
 }
 

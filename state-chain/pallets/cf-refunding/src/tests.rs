@@ -1,8 +1,7 @@
-use cf_chains::{dot::PolkadotAccountId, evm::Address, ForeignChainAddress};
+use cf_chains::{evm::Address, ForeignChainAddress};
 use cf_primitives::{Asset, AssetAmount};
 use cf_test_utilities::assert_event_sequence;
 use sp_core::H160;
-use sp_runtime::AccountId32;
 
 use cf_chains::AnyChain;
 use cf_traits::mocks::egress_handler::{MockEgressHandler, MockEgressParameter};

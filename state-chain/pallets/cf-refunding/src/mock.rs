@@ -1,9 +1,7 @@
 use crate as pallet_cf_refunding;
 use crate::PalletSafeMode;
-use cf_chains::{
-	address::AddressDerivationError, dot::PolkadotAccountId, AnyChain, Chain, Ethereum,
-};
-use cf_primitives::{AccountId, ChannelId};
+use cf_chains::{dot::PolkadotAccountId, AnyChain, Chain, Ethereum};
+use cf_primitives::AccountId;
 
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode, mocks::egress_handler::MockEgressHandler,

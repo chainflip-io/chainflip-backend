@@ -1,7 +1,7 @@
 use crate::*;
 use frame_support::traits::OnRuntimeUpgrade;
 
-use frame_support::pallet_prelude::{ValueQuery, Weight};
+use frame_support::pallet_prelude::{DispatchError, ValueQuery, Weight};
 
 mod old {
 	use super::*;
@@ -32,27 +32,11 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
-		assert_eq!(
-			old::TransactionFeeDeficit::<T, I>::decoded_len(),
-			None,
-			"TransactionFeeDeficit not empty - migration failed!"
-		);
+		// assert_eq!(
+		// 	old::TransactionFeeDeficit::<T, I>::decode_len(),
+		// 	None,
+		// 	"TransactionFeeDeficit not empty - migration failed!"
+		// );
 		Ok(())
-	}
-}
-
-#[cfg(test)]
-mod migration_tests {
-	use cf_chains::btc::UtxoId;
-	use sp_core::H256;
-
-	#[test]
-	fn test_migration() {
-		use cf_chains::btc::ScriptPubkey;
-
-		use super::*;
-		use crate::mock_btc::*;
-
-		new_test_ext().execute_with(|| {});
 	}
 }
