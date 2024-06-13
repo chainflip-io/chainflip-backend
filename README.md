@@ -48,7 +48,10 @@ curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt install -y nodejs
 npm install -g pnpm
 
+# Install Solana
+sh -c "$(curl -sSfL https://release.solana.com/v1.18.8/install)"
 ```
+
 ### Code style
 
 The best way to ensure that your code is easy to merge, is to copy the project's pre-commit hook into your local `.git/`
