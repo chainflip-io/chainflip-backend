@@ -213,7 +213,7 @@ jobs:
         if: always()
         continue-on-error: true
         run: |
-          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --rmi all --volumes --remove-orphans
+          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --volumes --remove-orphans
 
       - name: Notify on failed bouncer 📢
         if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main' || failure() && contains(github.ref_name, 'release/') || cancelled() && contains(github.ref_name, 'release/')
