@@ -69,11 +69,8 @@ pub trait MonitoringApi {
 		accounts: BoundedVec<state_chain_runtime::AccountId, ConstU32<10>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcAccountInfoV2>>;
-	#[method(name = "balance_discrepancy")]
-	fn cf_btc_discrepancy(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<i128>;
+	#[method(name = "btc_discrepancy")]
+	fn cf_btc_discrepancy(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<i128>;
 }
 
 macro_rules! pass_through {
