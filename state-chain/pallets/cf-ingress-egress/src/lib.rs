@@ -33,7 +33,7 @@ use cf_chains::{
 use cf_primitives::{
 	Asset, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId, EgressCounter,
 	EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId,
-	SECONDS_PER_BLOCK, SWAP_RETRY_DELAY_BLOCKS,
+	SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -59,8 +59,7 @@ use sp_std::{
 pub use weights::WeightInfo;
 
 /// Max allowed value for the number of blocks to keep retrying a swap before it is refunded
-pub const MAX_RETRY_DURATION_BLOCKS: u32 =
-	3600 / (SECONDS_PER_BLOCK as u32 * SWAP_RETRY_DELAY_BLOCKS);
+pub const MAX_SWAP_RETRY_DURATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum BoostStatus<ChainAmount> {
@@ -1977,7 +1976,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	> {
 		if let Some(refund_params) = &refund_params {
 			ensure!(
-				refund_params.retry_duration <= MAX_RETRY_DURATION_BLOCKS,
+				refund_params.retry_duration <= MAX_SWAP_RETRY_DURATION_BLOCKS,
 				DispatchError::Other("Retry duration too long")
 			);
 		}

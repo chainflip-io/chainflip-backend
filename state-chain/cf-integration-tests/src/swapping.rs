@@ -24,7 +24,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, FLIPPERINOS_PER_FLIP,
-	GENESIS_EPOCH, STABLE_ASSET, SWAP_RETRY_DELAY_BLOCKS,
+	GENESIS_EPOCH, STABLE_ASSET,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match};
 use cf_traits::{Chainflip, EpochInfo, LpBalanceApi};
@@ -40,7 +40,7 @@ use pallet_cf_broadcast::{
 use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall};
 use pallet_cf_lp::HistoricalEarnedFees;
 use pallet_cf_pools::{OrderId, RangeOrderSize};
-use pallet_cf_swapping::{CcmIdCounter, SWAP_DELAY_BLOCKS};
+use pallet_cf_swapping::{CcmIdCounter, SWAP_DELAY_BLOCKS, SWAP_RETRY_DELAY_BLOCKS};
 use sp_core::U256;
 use state_chain_runtime::{
 	chainflip::{

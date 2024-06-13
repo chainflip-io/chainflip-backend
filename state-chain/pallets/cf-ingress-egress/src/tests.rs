@@ -7,7 +7,7 @@ use crate::{
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
 	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter,
 	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount,
-	WithheldTransactionFees, MAX_RETRY_DURATION_BLOCKS,
+	WithheldTransactionFees, MAX_SWAP_RETRY_DURATION_BLOCKS,
 };
 use cf_chains::{
 	address::{AddressConverter, IntoForeignChainAddress},
@@ -477,7 +477,7 @@ fn test_refund_parameter_validation() {
 				None,
 				0,
 				Some(ChannelRefundParameters {
-					retry_duration: MAX_RETRY_DURATION_BLOCKS + 1,
+					retry_duration: MAX_SWAP_RETRY_DURATION_BLOCKS + 1,
 					refund_address: ForeignChainAddress::Eth(Default::default()),
 					min_price: Default::default(),
 				}),

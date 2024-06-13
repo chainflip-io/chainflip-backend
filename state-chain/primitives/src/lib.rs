@@ -131,9 +131,6 @@ pub const MILLISECONDS_PER_BLOCK: u64 = 6000;
 
 pub const SECONDS_PER_BLOCK: u64 = MILLISECONDS_PER_BLOCK / 1000;
 
-/// Number of blocks to wait before trying a previously failed swap again
-pub const SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
-
 pub const BASIS_POINTS_PER_MILLION: u32 = 100;
 
 pub const STABLE_ASSET: Asset = Asset::Usdc;

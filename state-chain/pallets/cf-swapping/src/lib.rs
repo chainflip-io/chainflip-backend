@@ -9,7 +9,6 @@ use cf_chains::{
 use cf_primitives::{
 	AccountRole, Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, ChannelId,
 	ForeignChain, SwapId, SwapLeg, TransactionHash, BASIS_POINTS_PER_MILLION, STABLE_ASSET,
-	SWAP_RETRY_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -43,6 +42,9 @@ pub use weights::WeightInfo;
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 pub const SWAP_DELAY_BLOCKS: u32 = 2;
+
+/// Number of blocks to wait before trying a previously failed swap again
+pub const SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
 
 struct SwapState {
 	swap: Swap,
