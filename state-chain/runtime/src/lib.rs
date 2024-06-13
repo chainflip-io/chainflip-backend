@@ -1745,7 +1745,8 @@ impl_runtime_apis! {
 				let execute_at = core::cmp::max(block, current_block.saturating_add(1));
 
 				let swaps: Vec<_> = swaps_for_block.iter().filter(|swap| swap.from == base_asset || swap.to == base_asset).cloned().collect();
-				Swapping::get_scheduled_swap_legs(swaps, base_asset).unwrap().into_iter().map(move |swap| (swap, execute_at))
+				// TODO: Use the FoK logic when this fails instead of unwrap_or_default.
+				Swapping::get_scheduled_swap_legs(swaps, base_asset).unwrap_or_default().into_iter().map(move |swap| (swap, execute_at))
 			}).collect()
 		}
 
