@@ -4,7 +4,13 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	assets::any::AssetMap, eth::Address as EthereumAddress, Chain, ForeignChainAddress,
+	assets::any::AssetMap,
+	eth::Address as EthereumAddress,
+	instances::{
+		ArbitrumInstance, BitcoinInstance, EthereumInstance, EvmInstance, PolkadotInstance,
+		SolanaInstance,
+	},
+	Chain, ForeignChainAddress,
 };
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, FlipBalance,
@@ -166,6 +172,32 @@ pub enum EventFilter {
 	SystemOnly,
 }
 
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
+pub struct SafeModeStatuses {
+	pub swapping: pallet_cf_swapping::PalletSafeMode,
+	pub emissions: pallet_cf_emissions::PalletSafeMode,
+	pub funding: pallet_cf_funding::PalletSafeMode,
+	pub lp: pallet_cf_lp::PalletSafeMode,
+	pub pools: pallet_cf_pools::PalletSafeMode,
+	pub reputation: pallet_cf_reputation::PalletSafeMode,
+	pub validator: pallet_cf_validator::PalletSafeMode,
+	pub ingress_egress_ethereum: pallet_cf_ingress_egress::PalletSafeMode<EthereumInstance>,
+	pub ingress_egress_polkadot: pallet_cf_ingress_egress::PalletSafeMode<PolkadotInstance>,
+	pub ingress_egress_bitcoin: pallet_cf_ingress_egress::PalletSafeMode<BitcoinInstance>,
+	pub ingress_egress_arbitrum: pallet_cf_ingress_egress::PalletSafeMode<ArbitrumInstance>,
+	pub ingress_egress_solana: pallet_cf_ingress_egress::PalletSafeMode<SolanaInstance>,
+	pub broadcast_ethereum: pallet_cf_broadcast::PalletSafeMode<EthereumInstance>,
+	pub broadcast_polkadot: pallet_cf_broadcast::PalletSafeMode<PolkadotInstance>,
+	pub broadcast_bitcoin: pallet_cf_broadcast::PalletSafeMode<BitcoinInstance>,
+	pub broadcast_arbitrum: pallet_cf_broadcast::PalletSafeMode<ArbitrumInstance>,
+	pub broadcast_solana: pallet_cf_broadcast::PalletSafeMode<SolanaInstance>,
+	pub threshold_signature_evm: pallet_cf_threshold_signature::PalletSafeMode<EvmInstance>,
+	pub threshold_signature_bitcoin: pallet_cf_threshold_signature::PalletSafeMode<BitcoinInstance>,
+	pub threshold_signature_polkadot:
+		pallet_cf_threshold_signature::PalletSafeMode<PolkadotInstance>,
+	pub threshold_signature_solana: pallet_cf_threshold_signature::PalletSafeMode<SolanaInstance>,
+}
+
 decl_runtime_apis!(
 	/// Definition for all runtime API interfaces.
 	pub trait CustomRuntimeApi {
@@ -279,5 +311,6 @@ decl_runtime_apis!(
 		fn cf_get_events(filter: EventFilter) -> Vec<EventRecord<RuntimeEvent, Hash>>;
 		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth>;
 		fn cf_boost_pool_details(asset: Asset) -> BTreeMap<u16, BoostPoolDetails>;
+		fn cf_safe_mode_statuses() -> SafeModeStatuses;
 	}
 );

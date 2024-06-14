@@ -41,7 +41,10 @@ frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag =
 sp-arithmetic = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
 sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
 sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
-serde = { default_features = false, version = '1.0.126' }
+serde = { default_features = false, version = '1.0.126', features = [
+  'alloc',
+  'derive',
+] }
 
 [dev-dependencies]
 cf-test-utilities = { path = '../../test-utilities' }

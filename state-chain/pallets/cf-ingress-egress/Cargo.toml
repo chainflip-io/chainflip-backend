@@ -28,6 +28,10 @@ strum_macros = { default-features = false, version = '0.24' }
 nanorand = { version = '0.7.0', default-features = false, features = [
   'wyrand',
 ] }
+serde = { default_features = false, version = '1.0.126', features = [
+  'alloc',
+  'derive',
+] }
 
 # ==== Parity deps ====
 codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = false, features = [
@@ -67,6 +71,7 @@ std = [
   'sp-std/std',
   'log/std',
   'nanorand/std',
+  'serde/std',
 ]
 runtime-benchmarks = [
   'cf-chains/runtime-benchmarks',

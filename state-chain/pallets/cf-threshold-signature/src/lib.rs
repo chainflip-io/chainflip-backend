@@ -55,12 +55,25 @@ use weights::WeightInfo;
 /// The type used for counting signing attempts.
 type AttemptCount = AuthorityCount;
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(
+	serde::Serialize,
+	serde::Deserialize,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Copy,
+	Clone,
+	PartialEq,
+	Eq,
+	RuntimeDebug,
+)]
 #[scale_info(skip_type_params(I))]
 pub struct PalletSafeMode<I: 'static> {
 	pub slashing_enabled: bool,
 	#[doc(hidden)]
 	#[codec(skip)]
+	#[serde(skip_serializing)]
 	_phantom: PhantomData<I>,
 }
 

@@ -315,6 +315,7 @@ impl pallet_cf_vaults::Config<Instance5> for Runtime {
 	type CfeMultisigRequest = CfeInterface;
 }
 
+use crate::runtime_apis::SafeModeStatuses;
 use chainflip::address_derivation::AddressDerivation;
 
 impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
@@ -1873,6 +1874,32 @@ impl_runtime_apis! {
 				ForeignChain::Solana => boost_pools_details::<SolanaInstance>(asset.try_into().unwrap()),
 			}
 
+		}
+
+		fn cf_safe_mode_statuses() -> SafeModeStatuses {
+			SafeModeStatuses {
+				swapping: <Runtime as pallet_cf_swapping::Config>::SafeMode::get(),
+				emissions: <Runtime as pallet_cf_emissions::Config>::SafeMode::get(),
+				funding: <Runtime as pallet_cf_funding::Config>::SafeMode::get(),
+				lp: <Runtime as pallet_cf_lp::Config>::SafeMode::get(),
+				pools: <Runtime as pallet_cf_pools::Config>::SafeMode::get(),
+				reputation: <Runtime as pallet_cf_reputation::Config>::SafeMode::get(),
+				validator: <Runtime as pallet_cf_validator::Config>::SafeMode::get(),
+				ingress_egress_ethereum: <Runtime as pallet_cf_ingress_egress::Config<EthereumInstance>>::SafeMode::get(),
+				ingress_egress_polkadot: <Runtime as pallet_cf_ingress_egress::Config<PolkadotInstance>>::SafeMode::get(),
+				ingress_egress_bitcoin: <Runtime as pallet_cf_ingress_egress::Config<BitcoinInstance>>::SafeMode::get(),
+				ingress_egress_arbitrum: <Runtime as pallet_cf_ingress_egress::Config<ArbitrumInstance>>::SafeMode::get(),
+				ingress_egress_solana: <Runtime as pallet_cf_ingress_egress::Config<SolanaInstance>>::SafeMode::get(),
+				broadcast_ethereum: <Runtime as pallet_cf_broadcast::Config<EthereumInstance>>::SafeMode::get(),
+				broadcast_polkadot: <Runtime as pallet_cf_broadcast::Config<PolkadotInstance>>::SafeMode::get(),
+				broadcast_bitcoin: <Runtime as pallet_cf_broadcast::Config<BitcoinInstance>>::SafeMode::get(),
+				broadcast_arbitrum: <Runtime as pallet_cf_broadcast::Config<ArbitrumInstance>>::SafeMode::get(),
+				broadcast_solana: <Runtime as pallet_cf_broadcast::Config<SolanaInstance>>::SafeMode::get(),
+				threshold_signature_evm: <Runtime as pallet_cf_threshold_signature::Config<EvmInstance>>::SafeMode::get(),
+				threshold_signature_bitcoin: <Runtime as pallet_cf_threshold_signature::Config<BitcoinInstance>>::SafeMode::get(),
+				threshold_signature_polkadot: <Runtime as pallet_cf_threshold_signature::Config<PolkadotInstance>>::SafeMode::get(),
+				threshold_signature_solana: <Runtime as pallet_cf_threshold_signature::Config<SolanaInstance>>::SafeMode::get(),
+			}
 		}
 	}
 

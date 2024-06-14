@@ -44,7 +44,8 @@ use state_chain_runtime::{
 	},
 	runtime_apis::{
 		BoostPoolDepth, BoostPoolDetails, BrokerInfo, CustomRuntimeApi, DispatchErrorWithMessage,
-		EventFilter, FailingWitnessValidators, LiquidityProviderInfo, ValidatorInfo,
+		EventFilter, FailingWitnessValidators, LiquidityProviderInfo, SafeModeStatuses,
+		ValidatorInfo,
 	},
 	NetworkFee,
 };
@@ -835,6 +836,12 @@ pub trait CustomApi {
 		asset: Option<Asset>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<BoostPoolFeesResponse>;
+
+	#[method(name = "safe_mode_statuses")]
+	fn cf_safe_mode_statuses(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<SafeModeStatuses>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1746,6 +1753,16 @@ where
 				})
 				.map_err(to_rpc_error)
 		})
+	}
+
+	fn cf_safe_mode_statuses(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<SafeModeStatuses> {
+		self.client
+			.runtime_api()
+			.cf_safe_mode_statuses(self.unwrap_or_best(at))
+			.map_err(to_rpc_error)
 	}
 }
 
