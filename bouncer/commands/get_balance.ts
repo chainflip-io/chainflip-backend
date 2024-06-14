@@ -11,4 +11,4 @@ async function getBalance(ccy: string, address: string) {
 
 const ccy = process.argv[2];
 const address = process.argv[3];
-getBalance(ccy, address);
+await getBalance(ccy, address);

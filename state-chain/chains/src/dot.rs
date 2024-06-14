@@ -331,7 +331,7 @@ impl Chain for Polkadot {
 	type ChainAsset = assets::dot::Asset;
 	type DepositFetchId = PolkadotChannelId;
 	type DepositChannelState = PolkadotChannelState;
-	type DepositDetails = ();
+	type DepositDetails = PolkadotExtrinsicIndex;
 	type Transaction = PolkadotTransactionData;
 	type TransactionMetadata = ();
 	type ReplayProtectionParams = ResetProxyAccountNonce;

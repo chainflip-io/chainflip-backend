@@ -21,6 +21,14 @@ use serde::{Deserialize, Serialize};
 use sp_core::ConstBool;
 use sp_std::{convert::TryFrom, str, vec};
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
+pub struct DepositDetails {
+	// In the case of EVM Native Deposits (ETH or arbETH), because we need to detect ingresses by
+	// checking balances rather than using events, there can be more than one hash associated with
+	// a deposit amount.
+	pub tx_hashes: Option<Vec<H256>>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EvmCrypto;
 

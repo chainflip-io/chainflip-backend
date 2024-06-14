@@ -14,4 +14,4 @@ async function sendBitcoin() {
   }
 }
 
-sendBitcoin();
+await sendBitcoin();

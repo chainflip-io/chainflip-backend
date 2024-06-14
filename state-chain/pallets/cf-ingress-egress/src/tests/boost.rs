@@ -63,7 +63,12 @@ fn request_deposit_address_eth(account_id: u64, max_boost_fee: BasisPoints) -> (
 #[track_caller]
 fn prewitness_deposit(deposit_address: H160, asset: eth::Asset, amount: AssetAmount) -> u64 {
 	assert_ok!(Pallet::<Test, _>::add_prewitnessed_deposits(
-		vec![DepositWitness::<Ethereum> { deposit_address, asset, amount, deposit_details: () }],
+		vec![DepositWitness::<Ethereum> {
+			deposit_address,
+			asset,
+			amount,
+			deposit_details: Default::default()
+		}],
 		0
 	),);
 
@@ -73,7 +78,12 @@ fn prewitness_deposit(deposit_address: H160, asset: eth::Asset, amount: AssetAmo
 #[track_caller]
 fn witness_deposit(deposit_address: H160, asset: eth::Asset, amount: AssetAmount) {
 	assert_ok!(Pallet::<Test, _>::process_deposit_witnesses(
-		vec![DepositWitness::<Ethereum> { deposit_address, asset, amount, deposit_details: () }],
+		vec![DepositWitness::<Ethereum> {
+			deposit_address,
+			asset,
+			amount,
+			deposit_details: Default::default()
+		}],
 		Default::default()
 	));
 }
@@ -148,6 +158,23 @@ fn setup() {
 }
 
 #[test]
+fn cannot_add_zero_boost_funds() {
+	new_test_ext().execute_with(|| {
+		setup();
+
+		assert_noop!(
+			IngressEgress::add_boost_funds(
+				RuntimeOrigin::signed(BOOSTER_1),
+				eth::Asset::Eth,
+				0,
+				TIER_5_BPS
+			),
+			pallet_cf_ingress_egress::Error::<Test, ()>::AddBoostAmountMustBeNonZero
+		);
+	});
+}
+
+#[test]
 fn basic_passive_boosting() {
 	new_test_ext().execute_with(|| {
 		const ASSET: eth::Asset = eth::Asset::Eth;
@@ -204,9 +231,10 @@ fn basic_passive_boosting() {
 					(TIER_5_BPS, POOL_1_CONTRIBUTION),
 					(TIER_10_BPS, POOL_2_CONTRIBUTION),
 				]),
+				block_height: Default::default(),
 				channel_id,
 				prewitnessed_deposit_id,
-				deposit_details: (),
+				deposit_details: Default::default(),
 				ingress_fee: INGRESS_FEE,
 				boost_fee: POOL_1_FEE + POOL_2_FEE,
 				action: DepositAction::LiquidityProvision { lp_account: LP_ACCOUNT },
@@ -240,7 +268,8 @@ fn basic_passive_boosting() {
 				deposit_address,
 				asset: ASSET,
 				amount: DEPOSIT_AMOUNT,
-				deposit_details: (),
+				block_height: Default::default(),
+				deposit_details: Default::default(),
 				ingress_fee: 0,
 				action: DepositAction::BoostersCredited { prewitnessed_deposit_id },
 				channel_id,

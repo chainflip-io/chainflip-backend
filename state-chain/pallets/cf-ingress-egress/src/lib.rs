@@ -561,6 +561,7 @@ pub mod pallet {
 			deposit_address: TargetChainAccount<T, I>,
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
+			block_height: TargetChainBlockNumber<T, I>,
 			deposit_details: <T::TargetChain as Chain>::DepositDetails,
 			// Ingress fee in the deposit asset. i.e. *NOT* the gas asset, if the deposit asset is
 			// a non-gas asset.
@@ -644,6 +645,7 @@ pub mod pallet {
 			deposit_details: <T::TargetChain as Chain>::DepositDetails,
 			prewitnessed_deposit_id: PrewitnessedDepositId,
 			channel_id: ChannelId,
+			block_height: TargetChainBlockNumber<T, I>,
 			// Ingress fee in the deposit asset. i.e. *NOT* the gas asset, if the deposit asset is
 			// a non-gas asset. The ingress fee is taken *after* the boost fee.
 			ingress_fee: TargetChainAmount<T, I>,
@@ -696,6 +698,8 @@ pub mod pallet {
 		BelowEgressDustLimit,
 		/// Solana address derivation error.
 		SolanaAddressDerivationError,
+		/// You cannot add 0 to a boost pool.
+		AddBoostAmountMustBeNonZero,
 		/// Adding boost funds is disabled due to safe mode.
 		AddBoostFundsDisabled,
 		/// Retrieving boost funds disabled due to safe mode.
@@ -1055,6 +1059,7 @@ pub mod pallet {
 				T::SafeMode::get().add_boost_funds_enabled,
 				Error::<T, I>::AddBoostFundsDisabled
 			);
+			ensure!(amount > Zero::zero(), Error::<T, I>::AddBoostAmountMustBeNonZero);
 
 			T::LpBalance::try_debit_account(&booster_id, asset.into(), amount.into())?;
 
@@ -1446,6 +1451,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							deposit_address: deposit_address.clone(),
 							asset,
 							amounts: used_pools,
+							block_height,
 							prewitnessed_deposit_id,
 							channel_id,
 							deposit_details: deposit_details.clone(),
@@ -1653,6 +1659,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				deposit_address,
 				asset,
 				amount: deposit_amount,
+				block_height,
 				deposit_details,
 				ingress_fee: 0u32.into(),
 				action: DepositAction::BoostersCredited { prewitnessed_deposit_id },
@@ -1690,6 +1697,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					deposit_address,
 					asset,
 					amount: deposit_amount,
+					block_height,
 					deposit_details,
 					ingress_fee: fees_withheld,
 					action: deposit_action,

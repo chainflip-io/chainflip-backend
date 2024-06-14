@@ -283,7 +283,7 @@ fn basic_pool_setup_provision_and_swap() {
 				deposit_address,
 				asset: cf_primitives::chains::assets::eth::Asset::Eth,
 				amount: DEPOSIT_AMOUNT,
-				deposit_details: (),
+				deposit_details: Default::default(),
 			}],
 			block_height: 0,
 		}));
@@ -394,7 +394,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 					deposit_address,
 					asset: cf_primitives::chains::assets::eth::Asset::Flip,
 					amount: deposit_amount,
-					deposit_details: (),
+					deposit_details: Default::default(),
 				}],
 				block_height: 0,
 			},

@@ -11,7 +11,7 @@ use crate::{
 };
 use cf_chains::{
 	address::{AddressConverter, IntoForeignChainAddress},
-	evm::EvmFetchId,
+	evm::{DepositDetails, EvmFetchId},
 	mocks::MockEthereum,
 	CcmChannelMetadata, ChannelRefundParameters, DepositChannel, ExecutexSwapAndCall, SwapOrigin,
 	TransferAssetParams,
@@ -228,7 +228,7 @@ fn request_address_and_deposit(
 		address,
 		asset,
 		DEFAULT_DEPOSIT_AMOUNT,
-		(),
+		Default::default(),
 		Default::default()
 	));
 	(id, address)
@@ -531,7 +531,7 @@ fn can_process_ccm_deposit() {
 			deposit_address,
 			from_asset,
 			amount,
-			(),
+			Default::default(),
 			Default::default()
 		));
 		assert_eq!(
@@ -711,7 +711,7 @@ fn multi_use_deposit_address_different_blocks() {
 				deposit_address,
 				ETH,
 				1,
-				(),
+				Default::default(),
 				Default::default()
 			));
 			let recycle_block = IngressEgress::expiry_and_recycle_block_height().2;
@@ -932,6 +932,7 @@ fn deposits_below_minimum_are_rejected() {
 				deposit_address,
 				asset: flip,
 				amount: default_deposit_amount,
+				block_height: Default::default(),
 				deposit_details: Default::default(),
 				ingress_fee: 0,
 				action: DepositAction::LiquidityProvision { lp_account: LP_ACCOUNT },
@@ -961,7 +962,7 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 			deposit_address,
 			asset: ASSET,
 			amount: DEPOSIT_AMOUNT,
-			deposit_details: (),
+			deposit_details: Default::default(),
 		};
 		assert_ok!(IngressEgress::process_deposit_witnesses(
 			vec![deposit_detail.clone()],
@@ -974,7 +975,7 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 				RuntimeEvent::IngressEgress(crate::Event::<Test, ()>::DepositIgnored {
 					asset: ASSET,
 					amount: DEPOSIT_AMOUNT,
-					deposit_details: (),
+					deposit_details: DepositDetails { tx_hashes: None },
 					reason: DepositIgnoredReason::NotEnoughToPayFees,
 					..
 				},)
@@ -997,7 +998,7 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 				RuntimeEvent::IngressEgress(crate::Event::<Test, ()>::DepositFinalised {
 					asset: ASSET,
 					amount: DEPOSIT_AMOUNT,
-					deposit_details: (),
+					deposit_details: DepositDetails { tx_hashes: None },
 					ingress_fee: LOW_FEE,
 					action: DepositAction::LiquidityProvision { lp_account: ALICE },
 					..
@@ -1020,8 +1021,14 @@ fn handle_pending_deployment() {
 		IngressEgress::on_finalize(1);
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 0);
 		// Process deposit again the same address.
-		Pallet::<Test, _>::process_single_deposit(deposit_address, ETH, 1, (), Default::default())
-			.unwrap();
+		Pallet::<Test, _>::process_single_deposit(
+			deposit_address,
+			ETH,
+			1,
+			Default::default(),
+			Default::default(),
+		)
+		.unwrap();
 		// None-pending requests can still be sent
 		request_address_and_deposit(1u64, eth::Asset::Eth);
 		request_address_and_deposit(2u64, eth::Asset::Eth);
@@ -1047,7 +1054,7 @@ fn handle_pending_deployment_same_block() {
 			deposit_address,
 			eth::Asset::Eth,
 			1,
-			(),
+			Default::default(),
 			Default::default(),
 		)
 		.unwrap();
