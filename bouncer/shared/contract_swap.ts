@@ -8,9 +8,7 @@ import {
 } from '@chainflip/cli';
 import { HDNodeWallet, Wallet, getDefaultProvider } from 'ethers';
 import {
-  getChainflipApi,
   observeBalanceIncrease,
-  observeEvent,
   getContractAddress,
   observeCcmReceived,
   amountToFineAmount,
@@ -85,8 +83,6 @@ export async function performSwapViaContract(
   messageMetadata?: CcmDepositMetadata,
   swapContext?: SwapContext,
 ): Promise<ContractSwapParams> {
-  await using api = await getChainflipApi();
-
   const tag = swapTag ?? '';
 
   const srcChain = chainFromAsset(sourceAsset);
@@ -135,19 +131,6 @@ export async function performSwapViaContract(
       messageMetadata,
     );
     swapContext?.updateStatus(swapTag, SwapStatus.ContractExecuted);
-
-    await observeEvent('swapping:SwapScheduled', api, (event) => {
-      if ('Vault' in event.data.origin) {
-        const sourceAssetMatches = sourceAsset === (event.data.sourceAsset as Asset);
-        const destAssetMatches = destAsset === (event.data.destinationAsset as Asset);
-        const txHashMatches = event.data.origin.Vault.txHash === receipt.hash;
-        return sourceAssetMatches && destAssetMatches && txHashMatches;
-      }
-      // Otherwise it was a swap scheduled by requesting a deposit address
-      return false;
-    });
-
-    swapContext?.updateStatus(swapTag, SwapStatus.SwapScheduled);
 
     console.log(`${tag} Successfully observed event: swapping: SwapScheduled`);
 
