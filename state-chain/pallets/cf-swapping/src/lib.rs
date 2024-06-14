@@ -1082,8 +1082,6 @@ pub mod pallet {
 						let retry_block = current_block + SWAP_RETRY_DELAY_BLOCKS.into();
 
 						for swap in failed_swaps {
-							dbg!(&swap.refund_params, retry_block);
-
 							match swap.refund_params {
 								Some(params)
 									if BlockNumberFor::<T>::from(params.refund_block) <
