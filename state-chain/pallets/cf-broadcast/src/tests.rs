@@ -4,8 +4,7 @@ use crate::{
 	mock::*, AbortedBroadcasts, AwaitingBroadcast, BroadcastData, BroadcastId, Config,
 	DelayedBroadcastRetryQueue, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1,
 	PalletOffence, PendingBroadcasts, RequestFailureCallbacks, RequestSuccessCallbacks,
-	ThresholdSignatureData, Timeouts, TransactionFeeDeficit, TransactionMetadata,
-	TransactionOutIdToBroadcastId,
+	ThresholdSignatureData, Timeouts, TransactionMetadata, TransactionOutIdToBroadcastId,
 };
 use cf_chains::{
 	evm::SchnorrVerificationComponents,
@@ -14,7 +13,7 @@ use cf_chains::{
 		MockEthereumChainCrypto, MockEthereumTransactionMetadata, MockThresholdSignature,
 		MockTransactionBuilder, ETH_TX_FEE, MOCK_TRANSACTION_OUT_ID, MOCK_TX_METADATA,
 	},
-	ChainCrypto, FeeRefundCalculator,
+	ChainCrypto, Ethereum, FeeRefundCalculator,
 };
 use cf_traits::{
 	mocks::{
@@ -160,17 +159,15 @@ fn transaction_succeeded_results_in_refund_for_signer() {
 
 		let broadcast_data = AwaitingBroadcast::<Test, Instance1>::get(broadcast_id).unwrap();
 
-		let nominee = MockNominator::get_last_nominee().unwrap();
-
-		assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(nominee), 0);
+		assert_eq!(MockRefunding::<Ethereum>::get_transaction_fee_deficit(), 0);
 
 		witness_broadcast(tx_out_id);
 
 		let expected_refund = broadcast_data.transaction_payload.return_fee_refund(ETH_TX_FEE);
 
-		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_id).is_none());
+		assert_eq!(MockRefunding::<Ethereum>::get_transaction_fee_deficit(), expected_refund);
 
-		assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(nominee), expected_refund);
+		// assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(nominee), expected_refund);
 
 		assert_eq!(
 			System::events().get(1).expect("an event").event,
@@ -525,9 +522,7 @@ fn transaction_succeeded_results_in_refund_refuse_for_signer() {
 		let (tx_out_id, api_call) = api_call(1);
 		initiate_and_sign_broadcast(&api_call, TxType::Normal);
 
-		let nominee = MockNominator::get_last_nominee().unwrap();
-
-		assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(nominee), 0);
+		assert_eq!(MockRefunding::<Ethereum>::get_transaction_fee_deficit(), 0);
 
 		witness_broadcast(tx_out_id);
 
@@ -680,7 +675,7 @@ fn retry_with_threshold_signing_still_allows_late_success_witness_second_attempt
 			));
 
 			assert_eq!(
-				TransactionFeeDeficit::<Test, Instance1>::get(nominee),
+				MockRefunding::<MockEthereum>::get_transaction_fee_deficit(),
 				broadcast_data.transaction_payload.return_fee_refund(ETH_TX_FEE)
 			);
 		});

@@ -17,7 +17,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> Weight {
 		for (signer_id, to_refund) in old::TransactionFeeDeficit::<T, I>::drain() {
 			T::Refunding::record_gas_fees(
-				signer_id.clone().into(),
+				signer_id.clone(),
 				<T::TargetChain as Chain>::GAS_ASSET,
 				to_refund,
 			);

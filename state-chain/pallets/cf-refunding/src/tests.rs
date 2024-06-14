@@ -1,10 +1,9 @@
-use cf_chains::{evm::Address, ForeignChainAddress};
+use cf_chains::ForeignChainAddress;
 use cf_primitives::{Asset, AssetAmount};
 use cf_test_utilities::assert_event_sequence;
-use sp_core::H160;
 
 use cf_chains::AnyChain;
-use cf_traits::mocks::egress_handler::{MockEgressHandler, MockEgressParameter};
+use cf_traits::mocks::egress_handler::MockEgressHandler;
 
 use crate::{mock::*, Event, RecordedFees, WithheldTransactionFees};
 

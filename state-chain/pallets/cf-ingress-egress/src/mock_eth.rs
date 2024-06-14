@@ -1,17 +1,17 @@
 pub use crate::{self as pallet_cf_ingress_egress};
 use crate::{DepositBalances, DepositWitness, PalletSafeMode};
 
+use cf_chains::eth::EthereumTrackedData;
 pub use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError, ForeignChainAddress},
 	eth::Address as EthereumAddress,
 	CcmDepositMetadata, Chain,
 };
-use cf_chains::{eth::EthereumTrackedData, AnyChain};
-use cf_primitives::ChannelId;
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
 	Asset,
 };
+use cf_primitives::{AssetAmount, ChannelId};
 use cf_test_utilities::{impl_test_helpers, TestExternalities};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode,
@@ -24,7 +24,6 @@ use cf_traits::{
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
 		lp_balance::MockBalance,
-		refunding::MockRefunding,
 		swap_deposit_handler::MockSwapDepositHandler,
 		swap_queue_api::MockSwapQueueApi,
 	},
@@ -110,6 +109,30 @@ impl NetworkEnvironmentProvider for MockNetworkEnvironmentProvider {
 	}
 }
 
+thread_local! {
+	pub static WITHHELD_TRANSACTION_FEES: std::cell::RefCell<AssetAmount> = std::cell::RefCell::new(0);
+}
+
+pub struct MockRefunding<T> {
+	phantom: std::marker::PhantomData<T>,
+}
+
+impl<T> MockRefunding<T> {
+	pub fn get_withheld_transaction_fees() -> AssetAmount {
+		WITHHELD_TRANSACTION_FEES.with(|cell| *cell.borrow())
+	}
+}
+
+impl<T: Chain> cf_traits::Refunding<T> for MockRefunding<Ethereum> {
+	fn record_gas_fees(_: T::ChainAccount, _: T::ChainAsset, _: T::ChainAmount) {}
+
+	fn with_held_transaction_fees(_: T::ChainAsset, amount: T::ChainAmount) {
+		WITHHELD_TRANSACTION_FEES.with(|cell| {
+			*cell.borrow_mut() += amount.into();
+		});
+	}
+}
+
 impl_mock_runtime_safe_mode! { ingress_egress_ethereum: PalletSafeMode<()> }
 
 impl crate::Config for Test {
@@ -131,7 +154,7 @@ impl crate::Config for Test {
 	type AssetConverter = MockAssetConverter;
 	type FeePayment = MockFeePayment<Self>;
 	type SwapQueueApi = MockSwapQueueApi;
-	type Refunding = MockRefunding<AnyChain>;
+	type Refunding = MockRefunding<Ethereum>;
 	type SafeMode = MockRuntimeSafeMode;
 }
 

@@ -280,10 +280,9 @@ pub mod pallet {
 	pub type TransactionMetadata<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BroadcastId, TransactionMetadataFor<T, I>>;
 
-	/// Tracks how much a signer id is owed for paying transaction fees.
-	#[pallet::storage]
-	pub type TransactionFeeDeficit<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, SignerIdFor<T, I>, ChainAmountFor<T, I>, ValueQuery>;
+	// #[pallet::storage]
+	// pub type TransactionFeeDeficit<T: Config<I>, I: 'static = ()> =
+	// 	StorageMap<_, Twox64Concat, SignerIdFor<T, I>, ChainAmountFor<T, I>, ValueQuery>;
 
 	/// Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
 	#[pallet::storage]
@@ -537,12 +536,8 @@ pub mod pallet {
 						let to_refund =
 							broadcast_data.transaction_payload.return_fee_refund(tx_fee);
 
-						// TransactionFeeDeficit::<T, I>::mutate(signer_id.clone(), |fee_deficit| {
-						// 	*fee_deficit = fee_deficit.saturating_add(to_refund);
-						// });
-
 						T::Refunding::record_gas_fees(
-							signer_id.clone().into(),
+							signer_id.clone(),
 							<T::TargetChain as Chain>::GAS_ASSET,
 							to_refund,
 						);

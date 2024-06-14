@@ -84,7 +84,7 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	pub fn record_gas_fee(account_id: ForeignChainAddress, asset: Asset, gas_fee: AssetAmount) {
-		RecordedFees::<T>::mutate(&asset, |recorded_fees| {
+		RecordedFees::<T>::mutate(asset, |recorded_fees| {
 			recorded_fees
 				.entry(account_id)
 				.and_modify(|fee| *fee += gas_fee)
@@ -92,7 +92,7 @@ impl<T: Config> Pallet<T> {
 		});
 	}
 	pub fn withheld_transaction_fee(asset: Asset, amount: AssetAmount) {
-		WithheldTransactionFees::<T>::mutate(&asset, |fees| *fees += amount);
+		WithheldTransactionFees::<T>::mutate(asset, |fees| *fees += amount);
 	}
 	pub fn on_distribute_withheld_fees(epoch: EpochIndex) {
 		let assets = WithheldTransactionFees::<T>::iter_keys().collect::<Vec<_>>();
@@ -100,7 +100,7 @@ impl<T: Config> Pallet<T> {
 		for asset in assets {
 			// Integrity check before we start refunding
 			if WithheldTransactionFees::<T>::get(asset) <
-				RecordedFees::<T>::get(asset).iter().map(|(_, fee)| fee).sum()
+				RecordedFees::<T>::get(asset).values().sum()
 			{
 				log::warn!(
                     "Integrity check for refunding failed for asset {:?}. Refunding will be skipped.", asset);

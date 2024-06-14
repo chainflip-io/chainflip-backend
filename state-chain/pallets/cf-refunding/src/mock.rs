@@ -1,11 +1,10 @@
 use crate as pallet_cf_refunding;
 use crate::PalletSafeMode;
-use cf_chains::{dot::PolkadotAccountId, AnyChain, Chain, Ethereum};
+use cf_chains::{dot::PolkadotAccountId, AnyChain};
 use cf_primitives::AccountId;
 
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode, mocks::egress_handler::MockEgressHandler,
-	AccountRoleRegistry,
 };
 use frame_support::{derive_impl, parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
