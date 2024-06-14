@@ -321,118 +321,139 @@ macro_rules! solana_program {
 			impl ProgramInstruction for $call {
 				const CALL_NAME: &'static str = stringify!($call_name);
 			}
+		)+
 
-			#[cfg(test)]
-			mod $call_name {
-				use super::*;
-				use $crate::sol::sol_tx_core::program_instructions::idl::*;
-				use heck::{ToSnakeCase, ToUpperCamelCase};
+		#[cfg(test)]
+		mod test {
+			use super::*;
+			use std::collections::BTreeSet;
+			use $crate::sol::sol_tx_core::program_instructions::idl::Idl;
 
-				const IDL_RAW: &str = include_str!($idl_path);
+			const IDL_RAW: &str = include_str!($idl_path);
 
-				thread_local! {
-					static IDL: Idl = serde_json::from_str(IDL_RAW).unwrap();
-				}
+			thread_local! {
+				static IDL: Idl = serde_json::from_str(IDL_RAW).unwrap();
+			}
 
-				fn test(f: impl FnOnce(&Idl)) {
-					IDL.with(|idl| {
-						f(idl);
-					});
-				}
+			fn test(f: impl FnOnce(&Idl)) {
+				IDL.with(|idl| {
+					f(idl);
+				});
+			}
 
-				#[test]
-				fn program_name() {
-					test(|idl| {
-						assert_eq!(
-							format!("{}_program", idl.metadata.name).to_upper_camel_case(),
-							stringify!($program)
-						);
-					});
-				}
+			#[test]
+			fn instructions_exist_in_idl() {
+				test(|idl| {
+					let defined_in_idl = idl.instructions.iter().map(|instr| instr.name.clone()).collect::<BTreeSet<_>>();
+					let defined_in_code = [
+						$(
+							stringify!($call_name).to_owned(),
+						)*
+					].into_iter().collect::<BTreeSet<_>>();
+					assert!(defined_in_code.is_subset(&defined_in_idl), "Some instructions are not defined in the IDL");
+				});
+			}
 
-				#[test]
-				fn discriminator() {
-					test(|idl| {
-						assert_eq!(
-							<$call as ProgramInstruction>::function_discriminator(),
-							idl.instruction(stringify!($call_name)).discriminator
-						);
-					});
-				}
+			$(
+				#[cfg(test)]
+				mod $call_name {
+					use super::*;
+					use heck::{ToSnakeCase, ToUpperCamelCase};
 
-				#[test]
-				fn $call_name() {
-					test(|idl| {
-							let instruction = idl.instruction(stringify!($call_name));
+					#[test]
+					fn program_name() {
+						test(|idl| {
 							assert_eq!(
-								instruction
-									.args
-									.iter()
-									.map(|arg| arg.name.as_str().to_snake_case())
-									.collect::<Vec<_>>(),
+								format!("{}_program", idl.metadata.name).to_upper_camel_case(),
+								stringify!($program)
+							);
+						});
+					}
+
+					#[test]
+					fn discriminator() {
+						test(|idl| {
+							assert_eq!(
+								<$call as ProgramInstruction>::function_discriminator(),
+								idl.instruction(stringify!($call_name)).discriminator
+							);
+						});
+					}
+
+					#[test]
+					fn $call_name() {
+						test(|idl| {
+								let instruction = idl.instruction(stringify!($call_name));
+								assert_eq!(
+									instruction
+										.args
+										.iter()
+										.map(|arg| arg.name.as_str().to_snake_case())
+										.collect::<Vec<_>>(),
+										vec![
+											$(
+												stringify!($call_arg).to_owned(),
+											)*
+										],
+									"Arguments don't match for instruction {}",
+									stringify!($call_name),
+								);
+								assert_eq!(
+									instruction
+										.accounts
+										.iter()
+										.map(|account| account.name.as_str().to_snake_case())
+										.collect::<Vec<_>>(),
 									vec![
 										$(
-											stringify!($call_arg).to_owned(),
+											stringify!($account).to_owned(),
 										)*
 									],
-								"Arguments don't match for instruction {}",
-								stringify!($call_name),
-							);
-							assert_eq!(
-								instruction
-									.accounts
+									"Accounts don't match for instruction {}",
+									stringify!($call_name),
+								);
+						});
+					}
+
+					$(
+						#[test]
+						fn $call_arg() {
+							test(|idl| {
+								let idl_arg = idl.instruction(stringify!($call_name)).args
 									.iter()
-									.map(|account| account.name.as_str().to_snake_case())
-									.collect::<Vec<_>>(),
-								vec![
-									$(
-										stringify!($account).to_owned(),
-									)*
-								],
-								"Accounts don't match for instruction {}",
-								stringify!($call_name),
-							);
-					});
+									.find(|arg| arg.name.to_snake_case() == stringify!($call_arg))
+									.expect("arg not found in idl");
+
+								assert_eq!(idl_arg.ty.to_string(), stringify!($arg_type));
+							});
+						}
+					)*
+
+					$(
+						#[test]
+						fn $account() {
+							test(|idl| {
+								let idl_account = idl.instruction(stringify!($call_name)).accounts
+									.iter()
+									.find(|account| account.name.to_snake_case() == stringify!($account))
+									.expect("account not found in idl");
+
+								assert_eq!(
+									idl_account.signer,
+									$is_signer,
+									"is_signer doesn't match for {}", stringify!($account)
+								);
+								assert_eq!(
+									idl_account.writable,
+									$is_writable,
+									"is_writable doesn't match for {}", stringify!($account)
+								);
+							});
+						}
+					)*
 				}
-
-				$(
-					#[test]
-					fn $call_arg() {
-						test(|idl| {
-							let idl_arg = idl.instruction(stringify!($call_name)).args
-								.iter()
-								.find(|arg| arg.name.to_snake_case() == stringify!($call_arg))
-								.expect("arg not found in idl");
-
-							assert_eq!(idl_arg.ty.to_string(), stringify!($arg_type));
-						});
-					}
-				)*
-
-				$(
-					#[test]
-					fn $account() {
-						test(|idl| {
-							let idl_account = idl.instruction(stringify!($call_name)).accounts
-								.iter()
-								.find(|account| account.name.to_snake_case() == stringify!($account))
-								.expect("account not found in idl");
-
-							assert_eq!(
-								idl_account.signer,
-								$is_signer,
-								"is_signer doesn't match for {}", stringify!($account)
-							);
-							assert_eq!(
-								idl_account.writable,
-								$is_writable,
-								"is_writable doesn't match for {}", stringify!($account)
-							);
-						});
-					}
-				)*
-			}
-		)+
+			)+
+		}
 	};
 }
 
