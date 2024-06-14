@@ -297,13 +297,13 @@ macro_rules! solana_program {
 			$(
 				pub fn $call_name(
 					&self,
-					$( $call_arg: $arg_type ),+,
-					$( $account: impl Into<AccountMeta> ),*
+					$( $call_arg: $arg_type, )*
+					$( $account: impl Into<AccountMeta>, )*
 				) -> Instruction {
 					$call {
 						$(
 							$call_arg,
-						)+
+						)*
 					}.get_instruction(
 						self.program_id,
 						vec![
@@ -326,7 +326,7 @@ macro_rules! solana_program {
 			pub struct $call {
 				$(
 					$call_arg: $arg_type,
-				)+
+				)*
 			}
 
 			impl ProgramInstruction for $call {
@@ -400,12 +400,12 @@ macro_rules! solana_program {
 										.args
 										.iter()
 										.map(|arg| arg.name.as_str().to_snake_case())
-										.collect::<Vec<_>>(),
-										vec![
+										.collect::<Vec<String>>(),
+										[
 											$(
 												stringify!($call_arg).to_owned(),
 											)*
-										],
+										].into_iter().collect::<Vec<String>>(),
 									"Arguments don't match for instruction {}",
 									stringify!($call_name),
 								);
@@ -414,12 +414,12 @@ macro_rules! solana_program {
 										.accounts
 										.iter()
 										.map(|account| account.name.as_str().to_snake_case())
-										.collect::<Vec<_>>(),
-									vec![
+										.collect::<Vec<String>>(),
+									[
 										$(
 											stringify!($account).to_owned(),
 										)*
-									],
+									].into_iter().collect::<Vec<String>>(),
 									"Accounts don't match for instruction {}",
 									stringify!($call_name),
 								);
@@ -565,26 +565,26 @@ solana_program!(
 				instruction_sysvar: { signer: false, writable: false },
 			]
 		},
-		// TODO: Update so we can pass an empty args arran and pubkey
-		// set_gov_key_with_agg_key => SetGovKeyWithAggKey {
-		// 	args: [
-		// 		new_gov_key: Pubkey,
-		// 	],
-		// 	account_metas: [
-		// 		data_account: { signer: false, writable: true },
-		// 		agg_key: { signer: true, writable: false },
-		// 	]
-		// },
 
-		// set_gov_key_with_gov_key => SetGovKeyWithGovKey {
-		// 	args: [
-		// 		new_gov_key: Pubkey,
-		// 	],
-		// 	account_metas: [
-		// 		data_account: { signer: false, writable: true },
-		// 		gov_key: { signer: true, writable: false },
-		// 	]
-		// },
+		set_gov_key_with_agg_key => SetGovKeyWithAggKey {
+			args: [
+				new_gov_key: Pubkey,
+			],
+			account_metas: [
+				data_account: { signer: false, writable: true },
+				agg_key: { signer: true, writable: false },
+			]
+		},
+
+		set_gov_key_with_gov_key => SetGovKeyWithGovKey {
+			args: [
+				new_gov_key: Pubkey,
+			],
+			account_metas: [
+				data_account: { signer: false, writable: true },
+				gov_key: { signer: true, writable: false },
+			]
+		},
 
 		set_suspended_state => SetSuspendedState {
 			args: [
@@ -596,35 +596,34 @@ solana_program!(
 			]
 		},
 
-		// transfer_vault_upgrade_authority => TransferVaultUpgradeAuthority {
-		// 	args: [
-		// 	],
-		// 	account_metas: [
-		// 		data_account: { signer: false, writable: false },
-		// 		agg_key: { signer: true, writable: false },
-		// 		program_data_address: { signer: false, writable: true },
-		// 		program_address: { signer: false, writable: false },
-		// 		new_authority: { signer: false, writable: false },
-		// 		signer_pda: { signer: false, writable: false },
-		// 		bpf_loader_upgradeable: { signer: false, writable: false },
-		// 	]
-		// },
+		transfer_vault_upgrade_authority => TransferVaultUpgradeAuthority {
+			args: [],
+			account_metas: [
+				data_account: { signer: false, writable: false },
+				agg_key: { signer: true, writable: false },
+				program_data_address: { signer: false, writable: true },
+				program_address: { signer: false, writable: false },
+				new_authority: { signer: false, writable: false },
+				signer_pda: { signer: false, writable: false },
+				bpf_loader_upgradeable: { signer: false, writable: false },
+			]
+		},
 
-		// upgrade_vault_program => UpgradeVaultProgram {
-		// 	args: [],
-		// 	account_metas: [
-		// 		data_account: { signer: false, writable: false },
-		// 		gov_key: { signer: true, writable: false },
-		// 		program_data_address: { signer: false, writable: true },
-		// 		program_address: { signer: false, writable: true },
-		// 		buffer_address: { signer: false, writable: true },
-		// 		spill_address: { signer: false, writable: true },
-		// 		sysvar_rent: { signer: false, writable: false },
-		// 		sysvar_clock: { signer: false, writable: false },
-		// 		signer_pda: { signer: false, writable: false },
-		// 		bpf_loader_upgradeable: { signer: false, writable: false },
-		// 	]
-		// },
+		upgrade_vault_program => UpgradeVaultProgram {
+			args: [],
+			account_metas: [
+				data_account: { signer: false, writable: false },
+				gov_key: { signer: true, writable: false },
+				program_data_address: { signer: false, writable: true },
+				program_address: { signer: false, writable: true },
+				buffer_address: { signer: false, writable: true },
+				spill_address: { signer: false, writable: true },
+				sysvar_rent: { signer: false, writable: false },
+				sysvar_clock: { signer: false, writable: false },
+				signer_pda: { signer: false, writable: false },
+				bpf_loader_upgradeable: { signer: false, writable: false },
+			]
+		},
 	}
 );
 
