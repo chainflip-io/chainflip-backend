@@ -142,7 +142,7 @@ jobs:
 
       - name: Download latest release binaries 📥
         if: inputs.run-job
-        uses: dawidd6/action-download-artifact@v2
+        uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
         with:
           workflow: release-${{ inputs.upgrade-from-release }}.yml
           name: chainflip-backend-bin
@@ -172,7 +172,7 @@ jobs:
 
       - name: Download upgrade-to binaries for workflow call 📥
         if: inputs.run-job && (github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch')
-        uses: dawidd6/action-download-artifact@v2
+        uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
         with:
           workflow: ${{ inputs.upgrade-to-workflow-name }}
           name: chainflip-backend-bin-try-runtime
@@ -188,7 +188,7 @@ jobs:
 
       - name: Download upgrade-to runtime for workflow call 📥
         if: inputs.run-job && (github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch')
-        uses: dawidd6/action-download-artifact@v2
+        uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
         with:
           workflow: ${{ inputs.upgrade-to-workflow-name }}
           name: chainflip-node-runtime-try-runtime
@@ -326,6 +326,26 @@ jobs:
           path: |
             /tmp/chainflip/logs/*.log
 
+      - name: Write chain explorer to file 📝
+        if: failure()
+        continue-on-error: true
+        working-directory: bouncer
+        run: |
+          BLOCK_HEIGHT=$(curl -s -H "Content-Type: application/json" \
+          -d '{"jsonrpc":"2.0","method":"chain_getHeader","params":[],"id":1}' \
+          http://localhost:9944 \
+          | jq -r '.result.number' \
+          | xargs printf "%d\n")
+          ./commands/explorer.ts 0 $BLOCK_HEIGHT > /tmp/chainflip/explorer.txt
+
+      - name: Upload chain explorer 📤
+        if: failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
+        with:
+          name: chain-explorer
+          path: /tmp/chainflip/explorer.txt
+
       - name: Upload Snapshots 💾
         if: failure()
         continue-on-error: true
@@ -341,7 +361,7 @@ jobs:
         run: |
           ls -alR /tmp/chainflip
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs
-          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --rmi all --volumes --remove-orphans
+          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --volumes --remove-orphans
 
       - name: Notify on failed upgrade test 🚨
         if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main'

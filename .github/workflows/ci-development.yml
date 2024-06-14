@@ -39,6 +39,13 @@ jobs:
       profile: "try-runtime"
       upload-name: "chainflip-backend-bin-try-runtime"
       binary-subdir: release
+  build-benchmarks:
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      profile: "benchmarks"
+      upload-name: "chainflip-backend-bin-benchmarks"
+      binary-subdir: release
   docker:
     needs: [build]
     uses: ./.github/workflows/_24_docker.yml
@@ -59,7 +66,9 @@ jobs:
     with:
       full_bouncer: false
       ngrok: true
-
+  test-benchmarks:
+    needs: [build-benchmarks]
+    uses: ./.github/workflows/_41_test_benchmarks.yml
   upgrade-check:
     uses: ./.github/workflows/upgrade-test.yml
     secrets: inherit

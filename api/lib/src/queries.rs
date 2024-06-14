@@ -1,6 +1,6 @@
 use super::*;
 use cf_chains::{address::ToHumanreadableAddress, instances::ChainInstanceFor, Chain};
-use cf_primitives::{chains::assets::any, AssetAmount, FlipBalance};
+use cf_primitives::{chains::assets::any, AssetAmount, EpochIndex, FlipBalance};
 use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi,
 };
@@ -226,12 +226,13 @@ impl QueryApi {
 		&self,
 		block_hash: Option<state_chain_runtime::Hash>,
 		hash: state_chain_runtime::Hash,
+		epoch_index: Option<EpochIndex>,
 	) -> Result<Option<FailingWitnessValidators>, anyhow::Error> {
 		let result = self
 			.state_chain_client
 			.base_rpc_client
 			.raw_rpc_client
-			.cf_witness_count(hash, block_hash)
+			.cf_witness_count(hash, epoch_index, block_hash)
 			.await?;
 
 		Ok(result)

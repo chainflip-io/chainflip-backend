@@ -61,4 +61,4 @@ if (!bitcoinAddress || !btcAmount) {
   process.exit(-1);
 }
 
-createRawTransaction(bitcoinAddress, btcAmount);
+await createRawTransaction(bitcoinAddress, btcAmount);

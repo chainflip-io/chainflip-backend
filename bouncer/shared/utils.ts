@@ -276,7 +276,9 @@ function getCachedSubstrateApi(defaultEndpoint: string) {
                 setTimeout(() => {
                   if (connections === 0) {
                     api = undefined;
-                    Reflect.get(target, 'disconnect', receiver).call(target);
+                    Reflect.get(target, 'disconnect', receiver)
+                      .call(target)
+                      .catch(() => null);
                   }
                 }, 5_000).unref();
               }

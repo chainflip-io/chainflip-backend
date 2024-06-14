@@ -100,7 +100,7 @@ fn deposit_witnesses(
 ) -> Vec<DepositWitness<Polkadot>> {
 	let mut deposit_witnesses = vec![];
 	for (phase, wrapped_event) in events {
-		if let Phase::ApplyExtrinsic(_extrinsic_index) = phase {
+		if let Phase::ApplyExtrinsic(extrinsic_index) = phase {
 			if let EventWrapper::Transfer { to, amount, from: _ } = wrapped_event {
 				let deposit_address = PolkadotAccountId::from_aliased(to.0);
 				if monitored_addresses.contains(&deposit_address) {
@@ -108,7 +108,7 @@ fn deposit_witnesses(
 						deposit_address,
 						asset: Asset::Dot,
 						amount: *amount,
-						deposit_details: (),
+						deposit_details: *extrinsic_index,
 					});
 				}
 			}
@@ -207,9 +207,28 @@ mod test {
 			&block_event_details,
 		);
 
-		assert_eq!(deposit_witnesses.len(), 3);
-		assert_eq!(deposit_witnesses[0].amount, TRANSFER_1_AMOUNT);
-		assert_eq!(deposit_witnesses[1].amount, TRANSFER_2_AMOUNT);
-		assert_eq!(deposit_witnesses[2].amount, TRANSFER_TO_SELF_AMOUNT);
+		assert_eq!(
+			deposit_witnesses,
+			vec![
+				DepositWitness {
+					deposit_address: transfer_1_deposit_address,
+					asset: Asset::Dot,
+					amount: TRANSFER_1_AMOUNT,
+					deposit_details: TRANSFER_1_INDEX
+				},
+				DepositWitness {
+					deposit_address: transfer_2_deposit_address,
+					asset: Asset::Dot,
+					amount: TRANSFER_2_AMOUNT,
+					deposit_details: TRANSFER_2_INDEX
+				},
+				DepositWitness {
+					deposit_address: transfer_2_deposit_address,
+					asset: Asset::Dot,
+					amount: TRANSFER_TO_SELF_AMOUNT,
+					deposit_details: TRANSFER_TO_SELF_INDEX
+				}
+			]
+		);
 	}
 }

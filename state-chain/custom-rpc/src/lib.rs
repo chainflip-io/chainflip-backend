@@ -1,3 +1,4 @@
+use crate::boost_pool_rpc::BoostPoolFeesRpc;
 use boost_pool_rpc::BoostPoolDetailsRpc;
 use cf_amm::{
 	common::{Amount, PoolPairsMap, Side, Tick},
@@ -5,12 +6,13 @@ use cf_amm::{
 };
 use cf_chains::{
 	address::{ForeignChainAddressHumanreadable, ToHumanreadableAddress},
+	dot::PolkadotAccountId,
 	eth::Address as EthereumAddress,
 	Chain,
 };
 use cf_primitives::{
-	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, ForeignChain,
-	NetworkEnvironment, SemVer, SwapId,
+	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex,
+	ForeignChain, NetworkEnvironment, SemVer, SwapId,
 };
 use cf_utilities::rpc::NumberOrHex;
 use codec::Encode;
@@ -35,6 +37,11 @@ use sp_runtime::{
 use state_chain_runtime::{
 	chainflip::{BlockUpdate, Offence},
 	constants::common::TX_FEE_MULTIPLIER,
+	monitoring_apis::{
+		AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight, FeeImbalance, FlipSupply,
+		LastRuntimeUpgradeInfo, MonitoringData, OpenDepositChannels, PendingBroadcasts,
+		PendingTssCeremonies, RedemptionsInfo,
+	},
 	runtime_apis::{
 		BoostPoolDepth, BoostPoolDetails, BrokerInfo, CustomRuntimeApi, DispatchErrorWithMessage,
 		EventFilter, FailingWitnessValidators, LiquidityProviderInfo, ValidatorInfo,
@@ -46,10 +53,105 @@ use std::{
 	marker::PhantomData,
 	sync::Arc,
 };
-
-use crate::boost_pool_rpc::BoostPoolFeesRpc;
-
+pub mod monitoring;
 mod type_decoder;
+
+#[derive(Serialize, Deserialize)]
+pub struct RpcEpochState {
+	pub blocks_per_epoch: u32,
+	pub current_epoch_started_at: u32,
+	pub current_epoch_index: u32,
+	pub min_active_bid: Option<NumberOrHex>,
+	pub rotation_phase: String,
+}
+impl From<EpochState> for RpcEpochState {
+	fn from(rotation_state: EpochState) -> Self {
+		Self {
+			blocks_per_epoch: rotation_state.blocks_per_epoch,
+			current_epoch_started_at: rotation_state.current_epoch_started_at,
+			current_epoch_index: rotation_state.current_epoch_index,
+			rotation_phase: rotation_state.rotation_phase,
+			min_active_bid: rotation_state.min_active_bid.map(Into::into),
+		}
+	}
+}
+#[derive(Serialize, Deserialize)]
+pub struct RpcRedemptionsInfo {
+	pub total_balance: NumberOrHex,
+	pub count: u32,
+}
+impl From<RedemptionsInfo> for RpcRedemptionsInfo {
+	fn from(redemption_info: RedemptionsInfo) -> Self {
+		Self { total_balance: redemption_info.total_balance.into(), count: redemption_info.count }
+	}
+}
+#[derive(Serialize, Deserialize)]
+pub struct RpcFeeImbalance {
+	pub ethereum: NumberOrHex,
+	pub polkadot: NumberOrHex,
+	pub arbitrum: NumberOrHex,
+}
+impl From<FeeImbalance> for RpcFeeImbalance {
+	fn from(fee_imbalance: FeeImbalance) -> Self {
+		Self {
+			ethereum: fee_imbalance.ethereum.into(),
+			polkadot: fee_imbalance.polkadot.into(),
+			arbitrum: fee_imbalance.arbitrum.into(),
+		}
+	}
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RpcFlipSupply {
+	pub total_supply: NumberOrHex,
+	pub offchain_supply: NumberOrHex,
+}
+impl From<FlipSupply> for RpcFlipSupply {
+	fn from(flip_supply: FlipSupply) -> Self {
+		Self {
+			total_supply: flip_supply.total_supply.into(),
+			offchain_supply: flip_supply.offchain_supply.into(),
+		}
+	}
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RpcMonitoringData {
+	pub external_chains_height: ExternalChainsBlockHeight,
+	pub btc_utxos: BtcUtxos,
+	pub epoch: RpcEpochState,
+	pub pending_redemptions: RpcRedemptionsInfo,
+	pub pending_broadcasts: PendingBroadcasts,
+	pub pending_tss: PendingTssCeremonies,
+	pub open_deposit_channels: OpenDepositChannels,
+	pub fee_imbalance: RpcFeeImbalance,
+	pub authorities: AuthoritiesInfo,
+	pub build_version: LastRuntimeUpgradeInfo,
+	pub suspended_validators: Vec<(Offence, u32)>,
+	pub pending_swaps: u32,
+	pub dot_aggkey: PolkadotAccountId,
+	pub flip_supply: RpcFlipSupply,
+}
+impl From<MonitoringData> for RpcMonitoringData {
+	fn from(monitoring_data: MonitoringData) -> Self {
+		Self {
+			epoch: monitoring_data.epoch.into(),
+			pending_redemptions: monitoring_data.pending_redemptions.into(),
+			fee_imbalance: monitoring_data.fee_imbalance.into(),
+			external_chains_height: monitoring_data.external_chains_height,
+			btc_utxos: monitoring_data.btc_utxos,
+			pending_broadcasts: monitoring_data.pending_broadcasts,
+			pending_tss: monitoring_data.pending_tss,
+			open_deposit_channels: monitoring_data.open_deposit_channels,
+			authorities: monitoring_data.authorities,
+			build_version: monitoring_data.build_version,
+			suspended_validators: monitoring_data.suspended_validators,
+			pending_swaps: monitoring_data.pending_swaps,
+			dot_aggkey: monitoring_data.dot_aggkey,
+			flip_supply: monitoring_data.flip_supply.into(),
+		}
+	}
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScheduledSwap {
@@ -698,6 +800,7 @@ pub trait CustomApi {
 	fn cf_witness_count(
 		&self,
 		hash: state_chain_runtime::Hash,
+		epoch_index: Option<EpochIndex>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<FailingWitnessValidators>>;
 
@@ -750,7 +853,6 @@ where
 		+ 'static
 		+ HeaderBackend<B>
 		+ BlockchainEvents<B>,
-	C::Api: CustomRuntimeApi<B>,
 {
 	fn unwrap_or_best(&self, from_rpc: Option<<B as BlockT>::Hash>) -> B::Hash {
 		from_rpc.unwrap_or_else(|| self.client.info().best_hash)
@@ -1562,11 +1664,16 @@ where
 	fn cf_witness_count(
 		&self,
 		hash: state_chain_runtime::Hash,
+		epoch_index: Option<EpochIndex>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<FailingWitnessValidators>> {
 		self.client
 			.runtime_api()
-			.cf_witness_count(self.unwrap_or_best(at), pallet_cf_witnesser::CallHash(hash.into()))
+			.cf_witness_count(
+				self.unwrap_or_best(at),
+				pallet_cf_witnesser::CallHash(hash.into()),
+				epoch_index,
+			)
 			.map_err(to_rpc_error)
 	}
 

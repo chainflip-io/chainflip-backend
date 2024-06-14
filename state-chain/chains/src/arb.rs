@@ -39,7 +39,7 @@ impl Chain for Arbitrum {
 	type ChainAsset = assets::arb::Asset;
 	type DepositFetchId = EvmFetchId;
 	type DepositChannelState = DeploymentStatus;
-	type DepositDetails = ();
+	type DepositDetails = evm::DepositDetails;
 	type Transaction = evm::Transaction;
 	type TransactionMetadata = evm::EvmTransactionMetadata;
 	type ReplayProtectionParams = Self::ChainAccount;

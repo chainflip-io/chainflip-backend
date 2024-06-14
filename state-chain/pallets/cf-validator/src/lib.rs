@@ -85,6 +85,18 @@ pub enum RotationPhase<T: Config> {
 	SessionRotating(Vec<ValidatorIdOf<T>>, <T as Chainflip>::Amount),
 }
 
+impl<T: pallet::Config> RotationPhase<T> {
+	pub fn to_str(&self) -> &'static str {
+		match self {
+			RotationPhase::Idle => "Idle",
+			RotationPhase::KeygensInProgress(_) => "KeygensInProgress",
+			RotationPhase::KeyHandoversInProgress(_) => "KeyHandoversInProgress",
+			RotationPhase::ActivatingKeys(_) => "ActivatingKeys",
+			RotationPhase::NewKeysActivated(_) => "NewKeysActivated",
+			RotationPhase::SessionRotating(_, _) => "SessionRotating",
+		}
+	}
+}
 type ValidatorIdOf<T> = <T as Chainflip>::ValidatorId;
 
 type BackupMap<T> = BTreeMap<ValidatorIdOf<T>, <T as Chainflip>::Amount>;
