@@ -19,7 +19,7 @@ use crate::{
 		consts::{SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID},
 		sol_tx_core::{
 			compute_budget::ComputeBudgetInstruction,
-			program_instructions::{SystemProgramInstruction, VaultProgram},
+			program_instructions::{InstructionExt, SystemProgramInstruction, VaultProgram},
 			token_instructions::AssociatedTokenAccountInstruction,
 		},
 		SolAddress, SolAmount, SolAsset, SolCcmAccounts, SolComputeLimit, SolInstruction,
@@ -255,20 +255,20 @@ impl SolanaInstructionBuilder {
 	) -> Vec<SolInstruction> {
 		let instructions = vec![
 			SystemProgramInstruction::transfer(&agg_key.into(), &to.into(), amount),
-			VaultProgram::with_id(vault_program).execute_ccm_native_call(
-				source_chain as u32,
-				source_address.encode(), // TODO: check if this is correct (scale encoding?)
-				message,
-				amount,
-				vault_program_data_account,
-				agg_key,
-				to,
-				ccm_accounts.cf_receiver,
-				system_program_id(),
-				sys_var_instructions(),
-				// TODO: We should be passing this!
-				// ccm_accounts.remaining_account_metas(),
-			),
+			VaultProgram::with_id(vault_program)
+				.execute_ccm_native_call(
+					source_chain as u32,
+					source_address.encode(), // TODO: check if this is correct (scale encoding?)
+					message,
+					amount,
+					vault_program_data_account,
+					agg_key,
+					to,
+					ccm_accounts.cf_receiver.clone(),
+					system_program_id(),
+					sys_var_instructions(),
+				)
+				.with_remaining_accounts(ccm_accounts.remaining_account_metas()),
 		];
 
 		Self::finalize(instructions, nonce_account.into(), agg_key.into(), compute_price)
@@ -317,13 +317,11 @@ impl SolanaInstructionBuilder {
 			vault_program_data_account,
 			agg_key,
 			ata,
-			ccm_accounts.cf_receiver,
+			ccm_accounts.cf_receiver.clone(),
 			token_program_id(),
 			token_mint_pubkey,
 			sys_var_instructions(),
-			// TODO: We should be passing this!
-			// ccm_accounts.remaining_account_metas(),
-		)];
+		).with_remaining_accounts(ccm_accounts.remaining_account_metas())];
 
 		Self::finalize(instructions, nonce_account.into(), agg_key.into(), compute_price)
 	}

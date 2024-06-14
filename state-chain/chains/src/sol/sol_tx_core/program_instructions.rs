@@ -250,6 +250,17 @@ pub trait ProgramInstruction: BorshSerialize {
 	}
 }
 
+pub trait InstructionExt {
+	fn with_remaining_accounts(self, accounts: Vec<AccountMeta>) -> Self;
+}
+
+impl InstructionExt for Instruction {
+	fn with_remaining_accounts(mut self, accounts: Vec<AccountMeta>) -> Self {
+		self.accounts.extend(accounts);
+		self
+	}
+}
+
 // TODO: Derive this from ABI JSON instead. (or at least generate tests to ensure it matches)
 macro_rules! solana_program {
 	(
