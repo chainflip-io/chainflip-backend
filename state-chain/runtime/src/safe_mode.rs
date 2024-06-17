@@ -16,6 +16,7 @@ impl_runtime_safe_mode! {
 	validator: pallet_cf_validator::PalletSafeMode,
 	pools: pallet_cf_pools::PalletSafeMode,
 	reputation: pallet_cf_reputation::PalletSafeMode,
+	refunding: pallet_cf_refunding::PalletSafeMode,
 	threshold_signature_evm: pallet_cf_threshold_signature::PalletSafeMode<Instance16>,
 	threshold_signature_bitcoin: pallet_cf_threshold_signature::PalletSafeMode<Instance3>,
 	threshold_signature_polkadot: pallet_cf_threshold_signature::PalletSafeMode<Instance2>,

@@ -892,7 +892,7 @@ impl pallet_cf_broadcast::Config<Instance4> for Runtime {
 impl pallet_cf_refunding::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
-	// type SafeMode = pallet_cf_refunding::PalletSafeMode;
+	type SafeMode = RuntimeSafeMode;
 }
 
 impl pallet_cf_broadcast::Config<Instance5> for Runtime {

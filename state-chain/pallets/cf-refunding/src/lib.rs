@@ -18,13 +18,9 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-// pub mod migrations;
-// pub mod weights;
-// pub use weights::WeightInfo;
-
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
 
-impl_pallet_safe_mode!(PalletSafeMode; ensure_something);
+impl_pallet_safe_mode!(PalletSafeMode; do_refund);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -33,16 +29,14 @@ pub mod pallet {
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
 		/// Because we want to emit events when there is a config change during
-		/// an runtime upgrade
+		/// an runtime upgrade.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Handles egress for all chains.
 		type EgressHandler: EgressApi<AnyChain>;
 
-		// /// API for handling asset egress.
-		// type EgressHandler: EgressApi<AnyChain>;
-
-		// type SafeMode: Get<PalletSafeMode>;
+		///
+		type SafeMode: Get<PalletSafeMode>;
 	}
 
 	#[pallet::error]
@@ -95,6 +89,10 @@ impl<T: Config> Pallet<T> {
 		WithheldTransactionFees::<T>::mutate(asset, |fees| *fees += amount);
 	}
 	pub fn on_distribute_withheld_fees(epoch: EpochIndex) {
+		if !T::SafeMode::get().do_refund {
+			log::info!("Refunding is disabled. Skipping refunding.");
+			return;
+		}
 		let assets = WithheldTransactionFees::<T>::iter_keys().collect::<Vec<_>>();
 
 		for asset in assets {

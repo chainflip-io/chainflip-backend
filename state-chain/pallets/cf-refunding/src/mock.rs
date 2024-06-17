@@ -72,9 +72,11 @@ pub const DOT_ADDR_1: ForeignChainAddress =
 	ForeignChainAddress::Dot(PolkadotAccountId::from_aliased([1; 32]));
 
 impl_mock_runtime_safe_mode!(refunding: PalletSafeMode);
+
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type EgressHandler = MockEgressHandler<AnyChain>;
+	type SafeMode = MockRuntimeSafeMode;
 }
 
 cf_test_utilities::impl_test_helpers! {
