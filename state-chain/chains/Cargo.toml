@@ -35,7 +35,6 @@ rlp = { default-features = false, version = '0.5' }
 
 # Bitcoin
 bech32 = { default-features = false, version = '0.9.1' }
-base58 = '0.2.0'
 
 # Solana
 borsh = { version = "1.2.1", default_features = false, features = [
