@@ -65,7 +65,7 @@ pub fn settings_and_run_main(
 	{
 		Ok(settings) => settings,
 		Err(e) => {
-			eprintln!("Error reading settings: {}", e);
+			eprintln!("{:#}", e);
 			return ExitStatus { status_code: ERROR_READING_SETTINGS, at_block: NO_START_FROM };
 		},
 	};
