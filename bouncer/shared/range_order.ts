@@ -1,13 +1,7 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
 import { Keyring } from '../polkadot/keyring';
-import {
-  getChainflipApi,
-  handleSubstrateError,
-  amountToFineAmount,
-  lpMutex,
-  assetDecimals,
-} from '../shared/utils';
-import { observeEvent } from './utils/substrate';
+import { handleSubstrateError, amountToFineAmount, lpMutex, assetDecimals } from '../shared/utils';
+import { getChainflipApi, observeEvent } from './utils/substrate';
 
 export async function rangeOrder(ccy: Asset, amount: number) {
   const fineAmount = amountToFineAmount(String(amount), assetDecimals(ccy));

@@ -1,11 +1,6 @@
-import {
-  polkadotSigningMutex,
-  sleep,
-  amountToFineAmount,
-  getPolkadotApi,
-  assetDecimals,
-} from './utils';
+import { polkadotSigningMutex, sleep, amountToFineAmount, assetDecimals } from './utils';
 import { aliceKeyringPair } from './polkadot_keyring';
+import { getPolkadotApi } from './utils/substrate';
 
 export async function sendDot(address: string, amount: string) {
   const planckAmount = amountToFineAmount(amount, assetDecimals('Dot'));

@@ -1,4 +1,5 @@
-import { getPolkadotApi, fineAmountToAmount, assetDecimals } from './utils';
+import { fineAmountToAmount, assetDecimals } from './utils';
+import { getPolkadotApi } from './utils/substrate';
 
 export async function getDotBalance(address: string): Promise<string> {
   await using polkadot = await getPolkadotApi(process.env.POLKADOT_ENDPOINT);

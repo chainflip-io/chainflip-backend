@@ -12,13 +12,12 @@ import {
   observeBalanceIncrease,
   shortChainFromAsset,
   hexStringToBytesArray,
-  getChainflipApi,
   calculateFeeWithBps,
   amountToFineAmountBigInt,
 } from '../shared/utils';
 import { getBalance } from '../shared/get_balance';
 import { doPerformSwap } from '../shared/perform_swap';
-import { observeEvent } from './utils/substrate';
+import { getChainflipApi, observeEvent } from './utils/substrate';
 
 const swapAssetAmount = {
   [Assets.Eth]: 1,

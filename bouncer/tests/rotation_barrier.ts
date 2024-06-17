@@ -1,7 +1,7 @@
 #!/usr/bin/env -S pnpm tsx
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { testSwapViaContract } from '../shared/swapping';
-import { observeEvent, observeBadEvents } from '../shared/utils/substrate';
+import { observeEvent, observeBadEvent } from '../shared/utils/substrate';
 
 async function rotateAndSwap() {
   await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
@@ -14,7 +14,7 @@ async function rotateAndSwap() {
   console.log(`Waiting for eth key activation transaction to be sent for signing`);
   await observeEvent('evmThresholdSigner:ThresholdSignatureRequest').event;
 
-  const broadcastAborted = observeBadEvents(':BroadcastAborted', { label: 'Rotate and swap' });
+  const broadcastAborted = observeBadEvent(':BroadcastAborted', { label: 'Rotate and swap' });
 
   // Using Arbitrum as the ingress chain to make the swap as fast as possible
   await testSwapViaContract('ArbEth', 'Eth');

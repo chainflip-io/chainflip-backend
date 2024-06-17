@@ -10,7 +10,6 @@ import { AddressOrPair } from '@polkadot/api/types';
 import Web3 from 'web3';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import {
-  getPolkadotApi,
   getBtcClient,
   handleSubstrateError,
   getEvmEndpoint,
@@ -23,7 +22,7 @@ import {
   initializeArbitrumContracts,
   initializeSolanaPrograms,
 } from '../shared/initialize_new_chains';
-import { observeEvent } from '../shared/utils/substrate';
+import { getPolkadotApi, observeEvent } from '../shared/utils/substrate';
 
 async function main(): Promise<void> {
   const btcClient = getBtcClient();

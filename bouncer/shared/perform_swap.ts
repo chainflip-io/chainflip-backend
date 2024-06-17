@@ -4,9 +4,7 @@ import { newSwap } from './new_swap';
 import { send, sendViaCfTester } from './send';
 import { getBalance } from './get_balance';
 import {
-  getChainflipApi,
   observeBalanceIncrease,
-  observeEvent,
   observeCcmReceived,
   shortChainFromAsset,
   observeSwapScheduled,
@@ -15,6 +13,7 @@ import {
 } from '../shared/utils';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapContext, SwapStatus } from './swapping';
+import { getChainflipApi, observeEvent } from './utils/substrate';
 
 function encodeDestinationAddress(address: string, destAsset: Asset): string {
   let destAddress = address;
@@ -44,13 +43,8 @@ export async function requestNewSwap(
   log = true,
   boostFeeBps = 0,
 ): Promise<SwapParams> {
-  await using chainflipApi = await getChainflipApi();
-
-  const addressPromise = observeEvent(
-    'swapping:SwapDepositAddressReady',
-    chainflipApi,
-
-    (event) => {
+  const addressPromise = observeEvent('swapping:SwapDepositAddressReady', {
+    test: (event) => {
       // Find deposit address for the right swap by looking at destination address:
       const destAddressEvent = encodeDestinationAddress(
         event.data.destinationAddress[shortChainFromAsset(destAsset)],
@@ -74,7 +68,7 @@ export async function requestNewSwap(
 
       return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
     },
-  );
+  }).event;
   await newSwap(
     sourceAsset,
     destAsset,

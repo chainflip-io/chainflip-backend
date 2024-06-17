@@ -16,7 +16,7 @@
 import type { SubmittableExtrinsic } from '@polkadot/api/types';
 import type { SubmittableResult } from '@polkadot/api';
 import { blake2AsHex } from '../polkadot/util-crypto';
-import { runWithTimeout, sleep, getChainflipApi } from '../shared/utils';
+import { getChainflipApi, runWithTimeout, sleep } from '../shared/utils';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const witnessHash = new Set<any>();

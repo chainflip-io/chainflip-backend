@@ -23,7 +23,8 @@ import {
   tryRuntimeUpgrade,
   tryRuntimeUpgradeWithCompileRuntime,
 } from '../shared/try_runtime_upgrade';
-import { getChainflipApi, runWithTimeout } from '../shared/utils';
+import { runWithTimeout } from '../shared/utils';
+import { getChainflipApi } from '../shared/utils/substrate';
 
 async function main(): Promise<void> {
   const args = await yargs(hideBin(process.argv))

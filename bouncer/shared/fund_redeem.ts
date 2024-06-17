@@ -5,13 +5,13 @@ import {
   fineAmountToAmount,
   newAddress,
   observeBalanceIncrease,
-  getChainflipApi,
   assetDecimals,
 } from '../shared/utils';
 import { getBalance } from '../shared/get_balance';
 import { fundFlip } from '../shared/fund_flip';
 import { redeemFlip, RedeemAmount } from '../shared/redeem_flip';
 import { newStatechainAddress } from '../shared/new_statechain_address';
+import { getChainflipApi } from './utils/substrate';
 
 // Submitting the `redeem` extrinsic will cost a small amount of gas. Any more than this and we should be suspicious.
 const gasErrorMargin = 0.1;
