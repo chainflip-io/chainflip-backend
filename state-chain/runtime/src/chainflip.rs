@@ -46,9 +46,9 @@ use cf_chains::{
 	sol::{
 		api::{
 			AllNonceAccounts, ComputePrice, NonceAccount, SolanaApi, SolanaEnvAccountLookupKey,
-			SolanaEnvironment,
+			SolanaEnvironment, TokenEnvironment,
 		},
-		SolAddress, SolAmount, SolHash,
+		SolAddress, SolAmount, SolAsset, SolHash,
 	},
 	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	ChainEnvironment, ChainState, DepositChannel, ForeignChain, ReplayProtectionProvider,
@@ -511,6 +511,13 @@ impl ChainEnvironment<NonceAccount, (SolAddress, SolHash)> for SolEnvironment {
 
 impl ChainEnvironment<AllNonceAccounts, Vec<(SolAddress, SolHash)>> for SolEnvironment {
 	fn lookup(_s: AllNonceAccounts) -> Option<Vec<(SolAddress, SolHash)>> {
+		// TODO
+		None
+	}
+}
+
+impl ChainEnvironment<SolAsset, TokenEnvironment> for SolEnvironment {
+	fn lookup(_s: SolAsset) -> Option<TokenEnvironment> {
 		// TODO
 		None
 	}

@@ -4,6 +4,8 @@
 //! Instructions and Instruction sets with some level of abstraction.
 //! This avoids the need to deal with low level Solana core types.
 
+use std::collections::HashMap;
+
 use cf_primitives::chains::Solana;
 use sol_prim::AccountBump;
 use sp_std::{vec, vec::Vec};
@@ -24,6 +26,12 @@ use crate::{
 	FetchAssetParams, ForeignChainAddress,
 };
 
+use super::{
+	api::{SolanaEnvironment, TokenEnvironment},
+	consts::TOKEN_PROGRAM_ID,
+};
+use sp_std::str::FromStr;
+
 /// Internal enum type that contains SolAsset with derived ATA
 pub enum AssetWithDerivedAddress {
 	Sol,
@@ -31,19 +39,22 @@ pub enum AssetWithDerivedAddress {
 }
 
 impl AssetWithDerivedAddress {
-	pub fn decompose_fetch_params(
+	pub fn decompose_fetch_params<Environment: SolanaEnvironment>(
 		fetch_params: FetchAssetParams<Solana>,
-		token_mint_pubkey: SolAddress,
+		token_environments: &mut HashMap<SolAsset, TokenEnvironment>,
 	) -> Result<(SolanaDepositFetchId, AssetWithDerivedAddress), SolanaTransactionBuildingError> {
 		match fetch_params.asset {
 			SolAsset::Sol => Ok((fetch_params.deposit_fetch_id, AssetWithDerivedAddress::Sol)),
-			SolAsset::SolUsdc =>
+			SolAsset::SolUsdc => {
+				let sol_usdc_environment =
+					Environment::get_token_environment(token_environments, SolAsset::SolUsdc)?;
 				crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
 					fetch_params.deposit_fetch_id.address,
-					token_mint_pubkey,
+					sol_usdc_environment.token_mint_pubkey,
 				)
 				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)
-				.map(|ata| (fetch_params.deposit_fetch_id, AssetWithDerivedAddress::Usdc(ata))),
+				.map(|ata| (fetch_params.deposit_fetch_id, AssetWithDerivedAddress::Usdc(ata)))
+			},
 		}
 	}
 }
@@ -83,9 +94,7 @@ impl SolanaInstructionBuilder {
 	/// Used to batch fetch from multiple deposit channels in a single transaction.
 	pub fn fetch_from(
 		decomposed_fetch_params: Vec<(SolanaDepositFetchId, AssetWithDerivedAddress)>,
-		token_mint_pubkey: SolAddress,
-		token_vault_ata: SolAddress,
-		token_program_id: SolAddress,
+		token_environments: HashMap<SolAsset, TokenEnvironment>,
 		vault_program: SolAddress,
 		vault_program_data_account: SolAddress,
 		system_program_id: SolAddress,
@@ -121,9 +130,28 @@ impl SolanaInstructionBuilder {
 						SolAccountMeta::new_readonly(agg_key.into(), true),
 						SolAccountMeta::new_readonly(fetch_id.address.into(), false),
 						SolAccountMeta::new(ata.0.into(), false),
-						SolAccountMeta::new(token_vault_ata.into(), false),
-						SolAccountMeta::new_readonly(token_mint_pubkey.into(), false),
-						SolAccountMeta::new_readonly(token_program_id.into(), false),
+						SolAccountMeta::new(
+							token_environments
+								.get(&SolAsset::SolUsdc)
+								.expect("the function caller makes sure this exists")
+								.token_vault_ata
+								.into(),
+							false,
+						),
+						SolAccountMeta::new_readonly(
+							token_environments
+								.get(&SolAsset::SolUsdc)
+								.expect("the function caller makes sure this exists")
+								.token_mint_pubkey
+								.into(),
+							false,
+						),
+						SolAccountMeta::new_readonly(
+							SolAddress::from_str(TOKEN_PROGRAM_ID)
+								.expect("Preset Solana Token program ID must be valid.")
+								.into(),
+							false,
+						),
 						SolAccountMeta::new_readonly(system_program_id.into(), false),
 					],
 				),
@@ -148,8 +176,8 @@ impl SolanaInstructionBuilder {
 		Self::finalize(instructions, nonce_account.into(), agg_key.into(), compute_price)
 	}
 
-	/// Create an instruction to `transfer` USDC token.
-	pub fn transfer_usdc_token(
+	/// Create an instruction to `transfer` token.
+	pub fn transfer_token(
 		ata: SolAddress,
 		amount: SolAmount,
 		address: SolAddress,
@@ -163,6 +191,7 @@ impl SolanaInstructionBuilder {
 		agg_key: SolAddress,
 		nonce_account: SolAddress,
 		compute_price: SolAmount,
+		token_decimals: u8,
 	) -> Vec<SolInstruction> {
 		let instructions = vec![
 			AssociatedTokenAccountInstruction::create_associated_token_account_idempotent_instruction(
@@ -172,7 +201,7 @@ impl SolanaInstructionBuilder {
 				&ata.into(),
 			),
 			ProgramInstruction::get_instruction(
-				&VaultProgram::TransferTokens { amount, decimals: SOL_USDC_DECIMAL },
+				&VaultProgram::TransferTokens { amount, decimals: token_decimals },
 				vault_program.into(),
 				vec![
 					SolAccountMeta::new_readonly(
@@ -279,7 +308,7 @@ impl SolanaInstructionBuilder {
 		Self::finalize(instructions, nonce_account.into(), agg_key.into(), compute_price)
 	}
 
-	pub fn ccm_transfer_usdc_token(
+	pub fn ccm_transfer_token(
 		ata: SolAddress,
 		amount: SolAmount,
 		to: SolAddress,
@@ -298,6 +327,7 @@ impl SolanaInstructionBuilder {
 		agg_key: SolAddress,
 		nonce_account: SolAddress,
 		compute_price: SolAmount,
+		token_decimals: u8,
 	) -> Vec<SolInstruction> {
 		let instructions = vec![
 			AssociatedTokenAccountInstruction::create_associated_token_account_idempotent_instruction(
@@ -307,7 +337,7 @@ impl SolanaInstructionBuilder {
 				&ata.into(),
 			),
 			ProgramInstruction::get_instruction(
-				&VaultProgram::TransferTokens { amount, decimals: SOL_USDC_DECIMAL },
+				&VaultProgram::TransferTokens { amount, decimals: token_decimals },
 				vault_program.into(),
 				vec![
 					SolAccountMeta::new_readonly(
@@ -359,6 +389,7 @@ mod test {
 	use super::*;
 	use crate::{
 		sol::{
+			api::{AllNonceAccounts, ComputePrice, NonceAccount, SolanaEnvAccountLookupKey},
 			consts::{MAX_TRANSACTION_LENGTH, TOKEN_PROGRAM_ID},
 			sol_tx_core::{
 				address_derivation::derive_deposit_address,
@@ -367,9 +398,46 @@ mod test {
 			},
 			SolHash, SolMessage, SolTransaction, SolanaDepositFetchId,
 		},
-		TransferAssetParams,
+		ChainEnvironment, TransferAssetParams,
 	};
 	use core::str::FromStr;
+
+	pub struct MockSolEnv;
+	impl SolanaEnvironment for MockSolEnv {}
+	impl ChainEnvironment<SolanaEnvAccountLookupKey, SolAddress> for MockSolEnv {
+		fn lookup(_s: SolanaEnvAccountLookupKey) -> Option<SolAddress> {
+			// TODO
+			None
+		}
+	}
+
+	impl ChainEnvironment<ComputePrice, SolAmount> for MockSolEnv {
+		fn lookup(_s: ComputePrice) -> Option<u64> {
+			// TODO
+			None
+		}
+	}
+
+	impl ChainEnvironment<NonceAccount, (SolAddress, SolHash)> for MockSolEnv {
+		fn lookup(_s: NonceAccount) -> Option<(SolAddress, SolHash)> {
+			// TODO
+			None
+		}
+	}
+
+	impl ChainEnvironment<AllNonceAccounts, Vec<(SolAddress, SolHash)>> for MockSolEnv {
+		fn lookup(_s: AllNonceAccounts) -> Option<Vec<(SolAddress, SolHash)>> {
+			// TODO
+			None
+		}
+	}
+
+	impl ChainEnvironment<SolAsset, TokenEnvironment> for MockSolEnv {
+		fn lookup(_s: SolAsset) -> Option<TokenEnvironment> {
+			// TODO
+			None
+		}
+	}
 
 	fn get_decomposed_fetch_params(
 		channel_id: Option<ChannelId>,
@@ -378,12 +446,12 @@ mod test {
 		let channel_id = channel_id.unwrap_or(923_601_931u64);
 		let (address, bump) = derive_deposit_address(channel_id, vault_program()).unwrap();
 
-		AssetWithDerivedAddress::decompose_fetch_params(
+		AssetWithDerivedAddress::decompose_fetch_params::<MockSolEnv>(
 			crate::FetchAssetParams {
 				deposit_fetch_id: SolanaDepositFetchId { channel_id, address, bump },
 				asset,
 			},
-			token_mint_pubkey(),
+			&mut token_environments(),
 		)
 		.unwrap()
 	}
@@ -443,6 +511,20 @@ mod test {
 		SolAddress::from_str(MINT_PUB_KEY).unwrap()
 	}
 
+	fn token_environments() -> HashMap<SolAsset, TokenEnvironment> {
+		let mut token_environments = HashMap::new();
+		token_environments.insert(
+			SolAsset::SolUsdc,
+			TokenEnvironment {
+				token_mint_pubkey: SolAddress::from_str(MINT_PUB_KEY).unwrap(),
+				token_vault_ata: SolAddress::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT)
+					.unwrap(),
+				token_vault_pda_account: SolAddress::from_str(TOKEN_VAULT_PDA_ACCOUNT).unwrap(),
+			},
+		);
+		token_environments
+	}
+
 	fn nonce_accounts() -> Vec<SolAddress> {
 		NONCE_ACCOUNTS
 			.into_iter()
@@ -489,9 +571,7 @@ mod test {
 		// Construct the batch fetch instruction set
 		let instruction_set = SolanaInstructionBuilder::fetch_from(
 			vec![get_decomposed_fetch_params(None, SOL)],
-			token_mint_pubkey(),
-			token_vault_ata(),
-			token_program_id(),
+			token_environments(),
 			vault_program(),
 			vault_program_data_account(),
 			system_program_id(),
@@ -517,9 +597,7 @@ mod test {
 		// Construct the batch fetch instruction set
 		let instruction_set = SolanaInstructionBuilder::fetch_from(
 			vec![fetch_param_0, fetch_param_1],
-			token_mint_pubkey(),
-			token_vault_ata(),
-			token_program_id(),
+			token_environments(),
 			vault_program,
 			vault_program_data_account(),
 			system_program_id(),
@@ -539,9 +617,7 @@ mod test {
 		// Construct the fetch instruction set
 		let instruction_set = SolanaInstructionBuilder::fetch_from(
 			vec![get_decomposed_fetch_params(Some(0u64), USDC)],
-			token_mint_pubkey(),
-			token_vault_ata(),
-			token_program_id(),
+			token_environments(),
 			vault_program(),
 			vault_program_data_account(),
 			system_program_id(),
@@ -564,9 +640,7 @@ mod test {
 				get_decomposed_fetch_params(Some(1u64), USDC),
 				get_decomposed_fetch_params(Some(2u64), SOL),
 			],
-			token_mint_pubkey(),
-			token_vault_ata(),
-			token_program_id(),
+			token_environments(),
 			vault_program(),
 			vault_program_data_account(),
 			system_program_id(),
@@ -607,7 +681,7 @@ mod test {
 			)
 			.unwrap();
 
-		let instruction_set = SolanaInstructionBuilder::transfer_usdc_token(
+		let instruction_set = SolanaInstructionBuilder::transfer_token(
 			to_pubkey_ata.0,
 			TRANSFER_AMOUNT,
 			to_pubkey,
@@ -621,6 +695,7 @@ mod test {
 			agg_key(),
 			nonce_account(),
 			compute_price(),
+			SOL_USDC_DECIMAL,
 		);
 
 		// Serialized tx built in `create_transfer_native` test
@@ -692,7 +767,7 @@ mod test {
 		)
 		.unwrap();
 
-		let instruction_set = SolanaInstructionBuilder::ccm_transfer_usdc_token(
+		let instruction_set = SolanaInstructionBuilder::ccm_transfer_token(
 			to_ata.0,
 			TRANSFER_AMOUNT,
 			to,
@@ -711,6 +786,7 @@ mod test {
 			agg_key(),
 			nonce_account(),
 			compute_price(),
+			SOL_USDC_DECIMAL,
 		);
 
 		// Serialized tx built in `create_ccm_native_transfer` test
