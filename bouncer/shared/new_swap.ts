@@ -1,14 +1,8 @@
-import { InternalAsset as Asset, Asset as SCAsset } from '@chainflip/cli';
-import {
-  decodeDotAddressForContract,
-  chainFromAsset,
-  stateChainAssetFromAsset,
-  getChainflipApi,
-} from './utils';
+import { InternalAsset as Asset } from '@chainflip/cli';
 
-import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { Keyring } from '@polkadot/api';
 import { Mutex } from 'async-mutex';
+import { getChainflipApi } from './utils';
 
 const defaultCommissionBps = 100; // 1%
 
@@ -17,23 +11,6 @@ export interface CcmDepositMetadata {
   gasBudget: number;
   cfParameters: string;
 }
-
-// TODO: This is a workaround to make a Solana swap without SDK support
-// await broker.requestSwapDepositAddress(
-//   {
-//     srcAsset: stateChainAssetFromAsset(sourceAsset) as SCAsset,
-//     destAsset: stateChainAssetFromAsset(destAsset) as SCAsset,
-//     srcChain: chainFromAsset(sourceAsset),
-//     destAddress: destinationAddress,
-//     destChain: chainFromAsset(destAsset),
-//     ccmMetadata: messageMetadata && {
-//       message: messageMetadata.message as `0x${string}`,
-//       gasBudget: messageMetadata.gasBudget.toString(),
-//     },
-//   },
-//   {
-//     url: brokerUrl,
-//     commissionBps: brokerCommissionBps,
 
 const mutex = new Mutex();
 

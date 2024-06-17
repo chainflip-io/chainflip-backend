@@ -1,4 +1,4 @@
-import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 import Web3 from 'web3';
 import assert from 'assert';
 import { randomAsHex, randomAsNumber } from '../polkadot/util-crypto';
