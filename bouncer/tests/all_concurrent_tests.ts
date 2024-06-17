@@ -44,7 +44,7 @@ async function runAllConcurrentTests() {
     tests.push(...multiNodeTests);
   }
 
-  await Promise.all([...tests]);
+  await Promise.all(tests);
 
   await Promise.all([broadcastAborted.stop(), feeDeficitRefused.stop()]);
 }
@@ -55,7 +55,6 @@ runWithTimeout(runAllConcurrentTests(), 2000000)
     process.exit(0);
   })
   .catch((error) => {
-    console.error('All concurrent tests timed out. Exiting.');
     swapContext.print_report();
     console.error(error);
     process.exit(-1);
