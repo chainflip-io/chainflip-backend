@@ -2,8 +2,8 @@ use crate::witness::common::{RuntimeCallHasChain, RuntimeHasChain};
 use anyhow::{ensure, Error};
 use cf_chains::{
 	instances::ChainInstanceFor,
-	sol::{SolAddress, SolHash, SolSignature},
-	Chain, Solana,
+	sol::{SolAddress, SolHash},
+	Chain,
 };
 use cf_primitives::EpochIndex;
 use futures_core::Future;
@@ -97,11 +97,11 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 					// TODO: Check if we should submit every deposit channel separately.
 					for deposit_channels_info in chunked_deposit_channels_info {
-						// TODO: Update with correct is_native_asset
 						let ingresses = ingress_amounts(
 							&sol_rpc,
 							deposit_channels_info,
 							vault_address,
+							// TODO: Do it in a nicer way?
 							token_pubkey.is_none(),
 							token_pubkey,
 						)
@@ -114,6 +114,8 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 									deposit_witnesses: ingresses.0
 										.into_iter()
 										.map(|(to_addr, value)| {
+											// TODO: Submit the value only if it's different from the previously submitted
+											// We should probably store that in db
 											pallet_cf_ingress_egress::DepositWitness {
 												deposit_address: to_addr,
 												asset,
