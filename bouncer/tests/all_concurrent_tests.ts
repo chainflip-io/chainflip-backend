@@ -1,7 +1,7 @@
 #!/usr/bin/env -S NODE_OPTIONS=--max-old-space-size=6144 pnpm tsx
 import { SwapContext, testAllSwaps } from '../shared/swapping';
 import { testEvmDeposits } from '../shared/evm_deposits';
-import { runWithTimeout, observeBadEvents } from '../shared/utils';
+import { runWithTimeout } from '../shared/utils';
 import { testFundRedeem } from '../shared/fund_redeem';
 import { testMultipleMembersGovernance } from '../shared/multiple_members_governance';
 import { testLpApi } from '../shared/lp_api_test';
@@ -9,6 +9,7 @@ import { swapLessThanED } from '../shared/swap_less_than_existential_deposit_dot
 import { testPolkadotRuntimeUpdate } from '../shared/polkadot_runtime_update';
 import { testBrokerFeeCollection } from '../shared/broker_fee_collection';
 import { testBoostingSwap } from '../shared/boost';
+import { observeBadEvent } from '../shared/utils/substrate';
 
 const swapContext = new SwapContext();
 
@@ -19,21 +20,14 @@ async function runAllConcurrentTests() {
   const givenNumberOfNodes = match ? parseInt(match[0]) : null;
   const numberOfNodes = givenNumberOfNodes ?? 1;
 
-  let stopObserving = false;
-  const broadcastAborted = observeBadEvents(
-    ':BroadcastAborted',
-    () => stopObserving,
-    undefined,
-    'Concurrent broadcast aborted',
-  );
-  const feeDeficitRefused = observeBadEvents(
-    ':TransactionFeeDeficitRefused',
-    () => stopObserving,
-    undefined,
-    'Concurrent fee deficit refused',
-  );
+  const broadcastAborted = observeBadEvent(':BroadcastAborted', {
+    label: 'Concurrent broadcast aborted',
+  });
+  const feeDeficitRefused = observeBadEvent(':TransactionFeeDeficitRefused', {
+    label: 'Concurrent fee deficit refused',
+  });
 
-  // Tests that work with any number of nodes
+  // Tests that work with any number of nodes and can be run concurrently
   const tests = [
     swapLessThanED(),
     testAllSwaps(swapContext),
@@ -54,9 +48,7 @@ async function runAllConcurrentTests() {
 
   await Promise.all([...tests]);
 
-  // Gracefully exit the broadcast abort observer
-  stopObserving = true;
-  await Promise.all([broadcastAborted, feeDeficitRefused]);
+  await Promise.all([broadcastAborted.stop(), feeDeficitRefused.stop()]);
 }
 
 runWithTimeout(runAllConcurrentTests(), 2000000)

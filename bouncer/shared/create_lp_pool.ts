@@ -1,6 +1,6 @@
-import { getChainflipApi, assetDecimals, Asset } from '../shared/utils';
+import { assetDecimals, Asset } from '../shared/utils';
 import { submitGovernanceExtrinsic } from './cf_governance';
-import { observeEvent } from './utils/substrate';
+import { getChainflipApi, observeEvent } from './utils/substrate';
 
 export async function createLpPool(ccy: Asset, initialPrice: number) {
   await using chainflip = await getChainflipApi();

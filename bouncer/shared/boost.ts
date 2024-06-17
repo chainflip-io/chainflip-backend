@@ -3,7 +3,6 @@ import Keyring from '@polkadot/keyring';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import assert from 'assert';
 import {
-  getChainflipApi,
   lpMutex,
   chainFromAsset,
   shortChainFromAsset,
@@ -20,7 +19,7 @@ import { provideLiquidity } from './provide_liquidity';
 import { requestNewSwap } from './perform_swap';
 import { createBoostPools } from './setup_boost_pools';
 import { jsonRpc } from './json_rpc';
-import { observeEvent, Event } from './utils/substrate';
+import { observeEvent, Event, getChainflipApi } from './utils/substrate';
 
 const keyring = new Keyring({ type: 'sr25519' });
 keyring.setSS58Format(2112);

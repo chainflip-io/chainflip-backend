@@ -10,12 +10,11 @@ import {
   getWhaleKey,
   assetDecimals,
 } from './utils';
-import { observeEvent, getChainflipApi, amountToFineAmount } from '../shared/utils';
+import { amountToFineAmount } from '../shared/utils';
 import { approveErc20 } from './approve_erc20';
+import { observeEvent } from './utils/substrate';
 
 export async function fundFlip(scAddress: string, flipAmount: string) {
-  await using chainflip = await getChainflipApi();
-
   await approveErc20('Flip', getContractAddress('Ethereum', 'GATEWAY'), flipAmount);
 
   const flipperinoAmount = amountToFineAmount(flipAmount, assetDecimals('Flip'));
@@ -66,9 +65,7 @@ export async function fundFlip(scAddress: string, flipAmount: string) {
       ' blockHash: ' +
       receipt2.blockHash,
   );
-  await observeEvent(
-    'funding:Funded',
-    chainflip,
-    (event) => hexPubkeyToFlipAddress(pubkey) === event.data.accountId,
-  );
+  await observeEvent('funding:Funded', {
+    test: (event) => hexPubkeyToFlipAddress(pubkey) === event.data.accountId,
+  }).event;
 }

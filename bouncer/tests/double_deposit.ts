@@ -1,14 +1,7 @@
 #!/usr/bin/env -S pnpm tsx
 import { Keyring } from '../polkadot/keyring';
-import {
-  runWithTimeout,
-  sleep,
-  hexStringToBytesArray,
-  newAddress,
-  getChainflipApi,
-  lpMutex,
-} from '../shared/utils';
-import { observeEvent } from '../shared/utils/substrate';
+import { runWithTimeout, sleep, hexStringToBytesArray, newAddress, lpMutex } from '../shared/utils';
+import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import { sendEvmNative } from '../shared/send_evm';
 
 async function main(): Promise<void> {

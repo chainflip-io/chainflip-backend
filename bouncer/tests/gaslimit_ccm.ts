@@ -1,19 +1,18 @@
 #!/usr/bin/env -S pnpm tsx
 import { testGasLimitCcmSwaps } from '../shared/gaslimit_ccm';
-import { runWithTimeout, observeBadEvents } from '../shared/utils';
+import { runWithTimeout } from '../shared/utils';
+import { observeBadEvent } from '../shared/utils/substrate';
 
 // Running this test separately from all the concurrent tests because there will
 // be BroadcastAborted events emited.
 async function testGasLimitCcmTest() {
   console.log('=== Testing GasLimit CCM swaps ===');
 
-  let stopObserving = false;
-  const feeDeficitRefused = observeBadEvents(':TransactionFeeDeficitRefused', () => stopObserving);
+  const feeDeficitRefused = observeBadEvent(':TransactionFeeDeficitRefused', {});
 
   await testGasLimitCcmSwaps();
 
-  stopObserving = true;
-  await feeDeficitRefused;
+  await feeDeficitRefused.stop();
 
   console.log('=== GasLimit CCM test completed ===');
 }

@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 import { setTimeout as sleep } from 'timers/promises';
 import Client from 'bitcoin-core';
-import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
+import { ApiPromise, Keyring } from '@polkadot/api';
 // eslint-disable-next-line no-restricted-imports
 import { KeyringPair } from '@polkadot/keyring/types';
 import { Mutex } from 'async-mutex';
@@ -25,6 +25,7 @@ import { CcmDepositMetadata } from './new_swap';
 import { getCFTesterAbi } from './contract_interfaces';
 import { SwapParams } from './perform_swap';
 import { newSolAddress } from './new_sol_address';
+import { getChainflipApi, observeBadEvent, observeEvent } from './utils/substrate';
 
 const cfTesterAbi = await getCFTesterAbi();
 
@@ -235,79 +236,6 @@ export const deferredPromise = <T>(): {
 
 export { sleep };
 
-// @ts-expect-error polyfilling
-Symbol.asyncDispose ??= Symbol('asyncDispose');
-// @ts-expect-error polyfilling
-Symbol.dispose ??= Symbol('dispose');
-
-type DisposableApiPromise = ApiPromise & { [Symbol.asyncDispose](): Promise<void> };
-
-// It is important to cache WS connections because nodes seem to have a
-// limit on how many can be opened at the same time (from the same IP presumably)
-function getCachedSubstrateApi(defaultEndpoint: string) {
-  let api: DisposableApiPromise | undefined;
-  let connections = 0;
-
-  return async (providedEndpoint?: string): Promise<DisposableApiPromise> => {
-    if (!api) {
-      const endpoint = providedEndpoint ?? defaultEndpoint;
-
-      const apiPromise = await ApiPromise.create({
-        provider: new WsProvider(endpoint),
-        noInitWarn: true,
-        types: {
-          EncodedAddress: {
-            _enum: {
-              Eth: '[u8; 20]',
-              Arb: '[u8; 20]',
-              Dot: '[u8; 32]',
-              Btc: 'Vec<u8>',
-            },
-          },
-        },
-      });
-
-      api = new Proxy(apiPromise as unknown as DisposableApiPromise, {
-        get(target, prop, receiver) {
-          if (prop === Symbol.asyncDispose) {
-            return async () => {
-              connections -= 1;
-              if (connections === 0) {
-                setTimeout(() => {
-                  if (connections === 0) {
-                    api = undefined;
-                    Reflect.get(target, 'disconnect', receiver)
-                      .call(target)
-                      .catch(() => null);
-                  }
-                }, 5_000).unref();
-              }
-            };
-          }
-          if (prop === 'disconnect') {
-            return async () => {
-              // noop
-            };
-          }
-
-          return Reflect.get(target, prop, receiver);
-        },
-      });
-    }
-
-    connections += 1;
-
-    return api;
-  };
-}
-
-export const getChainflipApi = getCachedSubstrateApi(
-  process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944',
-);
-export const getPolkadotApi = getCachedSubstrateApi(
-  process.env.POLKADOT_ENDPOINT ?? 'ws://127.0.0.1:9947',
-);
-
 export const polkadotSigningMutex = new Mutex();
 
 const toLowerCase = <const T extends string>(string: T) => string.toLowerCase() as Lowercase<T>;
@@ -337,59 +265,7 @@ export function getBtcClient(): Client {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type EventQuery = (data: any) => boolean;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Event = { name: any; data: any; block: number; event_index: number };
-/** @deprecated there is a new one in the substrate utils */
-export async function observeEvent(
-  eventName: string,
-  api: ApiPromise,
-  eventQuery?: EventQuery,
-  stopObserveEvent?: () => boolean,
-  finalized = false,
-): Promise<Event> {
-  let result: Event | undefined;
-  let eventFound = false;
-
-  const query = eventQuery ?? (() => true);
-  const stopObserve = stopObserveEvent ?? (() => false);
-
-  const [expectedSection, expectedMethod] = eventName.split(':');
-
-  const subscribeMethod = finalized
-    ? api.rpc.chain.subscribeFinalizedHeads
-    : api.rpc.chain.subscribeNewHeads;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const unsubscribe: any = await subscribeMethod(async (header) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const events: any[] = await api.query.system.events.at(header.hash);
-    events.forEach((record, index) => {
-      const { event } = record;
-      if (
-        !eventFound &&
-        event.section.includes(expectedSection) &&
-        event.method.includes(expectedMethod)
-      ) {
-        const expectedEvent = {
-          name: { section: event.section, method: event.method },
-          data: event.toHuman().data,
-          block: header.number.toNumber(),
-          event_index: index,
-        };
-        if (query(expectedEvent)) {
-          result = expectedEvent;
-          eventFound = true;
-          unsubscribe();
-        }
-      }
-    });
-  });
-  while (!eventFound && !stopObserve()) {
-    await sleep(1000);
-  }
-  return result as Event;
-}
 
 export type EgressId = [Chain, number];
 type BroadcastId = [Chain, number];
@@ -496,64 +372,36 @@ export async function observeSwapScheduled(
   channelId: number,
   swapType?: SwapType,
 ) {
-  await using chainflipApi = await getChainflipApi();
-
   // need to await this to prevent the chainflip api from being disposed prematurely
-  const result = await observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
-    if ('DepositChannel' in event.data.origin) {
-      const channelMatches = Number(event.data.origin.DepositChannel.channelId) === channelId;
-      const sourceAssetMatches = sourceAsset === (event.data.sourceAsset as Asset);
-      const destAssetMatches = destAsset === (event.data.destinationAsset as Asset);
-      const swapTypeMatches = swapType ? event.data.swapType[swapType] !== undefined : true;
-      return channelMatches && sourceAssetMatches && destAssetMatches && swapTypeMatches;
-    }
-    // Otherwise it was a swap scheduled by interacting with the Eth smart contract
-    return false;
-  });
-
-  return result;
-}
-
-// Make sure the stopObserveEvent returns true before the end of the test
-export async function observeBadEvents(
-  eventName: string,
-  stopObserveEvent: () => boolean,
-  eventQuery?: EventQuery,
-  testTag?: string,
-) {
-  await using chainflipApi = await getChainflipApi();
-  const event = await observeEvent(eventName, chainflipApi, eventQuery, stopObserveEvent);
-  if (event) {
-    const testMessage = testTag ? `Test: ${testTag}: ` : '';
-    throw new Error(
-      `${testMessage}Unexpected event emitted ${event.name.section}: ${event.name.method} in block ${event.block} `,
-    );
-  }
+  return observeEvent('swapping:SwapScheduled', {
+    test: (event) => {
+      if ('DepositChannel' in event.data.origin) {
+        const channelMatches = Number(event.data.origin.DepositChannel.channelId) === channelId;
+        const sourceAssetMatches = sourceAsset === (event.data.sourceAsset as Asset);
+        const destAssetMatches = destAsset === (event.data.destinationAsset as Asset);
+        const swapTypeMatches = swapType ? event.data.swapType[swapType] !== undefined : true;
+        return channelMatches && sourceAssetMatches && destAssetMatches && swapTypeMatches;
+      }
+      // Otherwise it was a swap scheduled by interacting with the Eth smart contract
+      return false;
+    },
+  }).event;
 }
 
 export async function observeBroadcastSuccess(broadcastId: BroadcastId, testTag?: string) {
-  await using chainflipApi = await getChainflipApi();
   const broadcaster = broadcastId[0].toLowerCase() + 'Broadcaster';
   const broadcastIdNumber = broadcastId[1];
 
-  let stopObserving = false;
-  const observeBroadcastFailure = observeBadEvents(
-    broadcaster + ':BroadcastAborted',
-    () => stopObserving,
-    (event) => {
-      if (broadcastIdNumber === Number(event.data.broadcastId)) return true;
-      return false;
-    },
-    testTag ? `observe BroadcastSuccess test tag: ${testTag}` : 'observe BroadcastSuccess',
-  );
-
-  await observeEvent(broadcaster + ':BroadcastSuccess', chainflipApi, (event) => {
-    if (broadcastIdNumber === Number(event.data.broadcastId)) return true;
-    return false;
+  const observeBroadcastFailure = observeBadEvent(`${broadcaster}:BroadcastAborted`, {
+    test: (event) => broadcastIdNumber === Number(event.data.broadcastId),
+    label: testTag ? `observe BroadcastSuccess test tag: ${testTag}` : 'observe BroadcastSuccess',
   });
 
-  stopObserving = true;
-  await observeBroadcastFailure;
+  await observeEvent(`${broadcaster}:BroadcastSuccess`, {
+    test: (event) => broadcastIdNumber === Number(event.data.broadcastId),
+  }).event;
+
+  await observeBroadcastFailure.stop();
 }
 
 export async function newAddress(

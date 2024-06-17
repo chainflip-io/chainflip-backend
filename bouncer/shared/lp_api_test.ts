@@ -2,8 +2,6 @@ import { InternalAssets as Assets } from '@chainflip/cli';
 import assert from 'assert';
 import Keyring from '../polkadot/keyring';
 import {
-  getChainflipApi,
-  observeEvent,
   isValidHexHash,
   isValidEthAddress,
   amountToFineAmount,
@@ -19,6 +17,7 @@ import { jsonRpc } from './json_rpc';
 import { provideLiquidity } from './provide_liquidity';
 import { sendEvmNative } from './send_evm';
 import { getBalance } from './get_balance';
+import { getChainflipApi, observeEvent } from './utils/substrate';
 
 type RpcAsset = {
   asset: string;
@@ -72,8 +71,9 @@ async function provideLiquidityAndTestAssetBalances() {
 async function testRegisterLiquidityRefundAddress() {
   const observeRefundAddressRegisteredEvent = observeEvent(
     'liquidityProvider:LiquidityRefundAddressRegistered',
-    chainflip,
-    (event) => event.data.address.Eth === testAddress,
+    {
+      test: (event) => event.data.address.Eth === testAddress,
+    },
   );
 
   const registerRefundAddress = await lpApiRpc(`lp_register_liquidity_refund_address`, [
@@ -83,7 +83,7 @@ async function testRegisterLiquidityRefundAddress() {
   if (!isValidHexHash(await registerRefundAddress)) {
     throw new Error(`Unexpected lp_register_liquidity_refund_address result`);
   }
-  await observeRefundAddressRegisteredEvent;
+  await observeRefundAddressRegisteredEvent.event;
 
   // TODO: Check that the correct address is now set on the SC
 }
@@ -91,9 +91,10 @@ async function testRegisterLiquidityRefundAddress() {
 async function testLiquidityDeposit() {
   const observeLiquidityDepositAddressReadyEvent = observeEvent(
     'liquidityProvider:LiquidityDepositAddressReady',
-    chainflip,
-    (event) => event.data.depositAddress.Eth,
-  );
+    {
+      test: (event) => event.data.depositAddress.Eth,
+    },
+  ).event;
 
   const liquidityDepositAddress = (
     await lpApiRpc(`lp_liquidity_deposit`, [testRpcAsset, 'InBlock'])
@@ -111,16 +112,14 @@ async function testLiquidityDeposit() {
   );
 
   // Send funds to the deposit address and watch for deposit event
-  const observeAccountCreditedEvent = observeEvent(
-    'liquidityProvider:AccountCredited',
-    chainflip,
-    (event) =>
+  const observeAccountCreditedEvent = observeEvent('liquidityProvider:AccountCredited', {
+    test: (event) =>
       event.data.asset === testAsset &&
       isWithinOnePercent(
         BigInt(event.data.amountCredited.replace(/,/g, '')),
         BigInt(testAssetAmount),
       ),
-  );
+  }).event;
   await sendEvmNative(chainFromAsset(testAsset), liquidityDepositAddress, String(testAmount));
   await observeAccountCreditedEvent;
 }

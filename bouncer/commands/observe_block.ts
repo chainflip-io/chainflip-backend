@@ -8,7 +8,8 @@
 // For example: ./commands/observe_block.ts 3
 // will wait until block number 3 has appeared on the state chain
 
-import { runWithTimeout, sleep, getChainflipApi } from '../shared/utils';
+import { runWithTimeout, sleep } from '../shared/utils';
+import { getChainflipApi } from '../shared/utils/substrate';
 
 async function main(): Promise<void> {
   await using api = await getChainflipApi();

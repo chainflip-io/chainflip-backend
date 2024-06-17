@@ -2,7 +2,6 @@ import { InternalAsset as Asset } from '@chainflip/cli';
 import { Keyring } from '../polkadot/keyring';
 import {
   newAddress,
-  getChainflipApi,
   decodeDotAddressForContract,
   handleSubstrateError,
   lpMutex,
@@ -15,7 +14,7 @@ import {
   assetDecimals,
 } from '../shared/utils';
 import { send } from '../shared/send';
-import { observeEvent } from './utils/substrate';
+import { getChainflipApi, observeEvent } from './utils/substrate';
 
 export async function provideLiquidity(
   ccy: Asset,

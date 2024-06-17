@@ -9,7 +9,6 @@ import {
   sleep,
   handleSubstrateError,
   getContractAddress,
-  getChainflipApi,
   amountToFineAmount,
   observeEVMEvent,
   chainFromAsset,
@@ -17,7 +16,7 @@ import {
   getWhaleKey,
   assetDecimals,
 } from './utils';
-import { observeEvent } from './utils/substrate';
+import { getChainflipApi, observeEvent } from './utils/substrate';
 
 export type RedeemAmount = 'Max' | { Exact: string };
 
