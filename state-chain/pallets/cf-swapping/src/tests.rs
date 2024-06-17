@@ -1257,13 +1257,15 @@ fn cannot_swap_in_safe_mode() {
 
 		// No swap is done
 		Swapping::on_finalize(swaps_scheduled_at);
-		assert_eq!(SwapQueue::<Test>::decode_len(swaps_scheduled_at), Some(4));
+
+		let retry_at_block = swaps_scheduled_at + SWAP_RETRY_DELAY_BLOCKS as u64;
+		assert_eq!(SwapQueue::<Test>::decode_len(retry_at_block), Some(4));
 
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
 
 		// Swaps are processed
-		Swapping::on_finalize(swaps_scheduled_at + 1);
-		assert_eq!(SwapQueue::<Test>::decode_len(swaps_scheduled_at), None);
+		Swapping::on_finalize(retry_at_block);
+		assert_eq!(SwapQueue::<Test>::decode_len(retry_at_block), None);
 	});
 }
 

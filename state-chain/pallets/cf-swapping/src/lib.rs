@@ -483,11 +483,22 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Execute all swaps in the SwapQueue
 		fn on_finalize(current_block: BlockNumberFor<T>) {
+			let mut swaps_to_execute = SwapQueue::<T>::take(current_block);
+
 			if !T::SafeMode::get().swaps_enabled {
+				// Since we won't be executing swaps at this block, we need to reschedule them:
+				let retry_block = current_block + SWAP_RETRY_DELAY_BLOCKS.into();
+				for swap in swaps_to_execute {
+					Self::deposit_event(Event::<T>::SwapRescheduled {
+						swap_id: swap.swap_id,
+						execute_at: retry_block,
+					});
+
+					SwapQueue::<T>::append(retry_block, swap);
+				}
+
 				return
 			}
-
-			let mut swaps_to_execute = SwapQueue::<T>::take(current_block);
 
 			loop {
 				if swaps_to_execute.is_empty() {
