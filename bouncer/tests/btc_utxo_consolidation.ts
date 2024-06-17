@@ -3,8 +3,8 @@ import assert from 'assert';
 
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { provideLiquidity } from '../shared/provide_liquidity';
-import { getChainflipApi, runWithTimeout } from '../shared/utils';
-import { observeEvent } from '../shared/utils/substrate';
+import { runWithTimeout } from '../shared/utils';
+import { observeEvent, getChainflipApi } from '../shared/utils/substrate';
 
 async function queryUtxos(): Promise<{ amount: number; count: number }> {
   await using chainflip = await getChainflipApi();
