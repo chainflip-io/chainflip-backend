@@ -33,11 +33,11 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
-		// assert_eq!(
-		// 	old::WithheldTransactionFees::<T, I>::decoded_len(),
-		// 	None,
-		// 	"WithheldTransactionFees not empty - migration failed!"
-		// );
+		assert_eq!(
+			old::WithheldTransactionFees::<T, I>::iter().collect::<Vec<_>>().len(),
+			0,
+			"WithheldTransactionFees not empty - migration failed!"
+		);
 		Ok(())
 	}
 }

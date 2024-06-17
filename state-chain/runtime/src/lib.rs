@@ -2010,16 +2010,9 @@ impl_runtime_apis! {
 		}
 		fn cf_fee_imbalance() -> FeeImbalance {
 
-			let eth = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::get(Asset::Eth) - pallet_cf_refunding::RecordedFees::<Runtime>::get(Asset::Eth).iter().map(|(_, amount)| amount).sum::<AssetAmount>();
-			let dot = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::get(Asset::Dot) - pallet_cf_refunding::RecordedFees::<Runtime>::get(Asset::Dot).iter().map(|(_, amount)| amount).sum::<AssetAmount>();
-			let arb = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::get(Asset::ArbEth) - pallet_cf_refunding::RecordedFees::<Runtime>::get(Asset::ArbEth).iter().map(|(_, amount)| amount).sum::<AssetAmount>();
-
-			// let eth = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::iter().fold(0, |acc, elem| acc+ elem.1) -
-			// 	pallet_cf_refunding::RecordedFees::<Runtime>::iter().fold(0, |acc, elem| acc + elem.1);
-			// let dot = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::iter().fold(0, |acc, elem| acc+ elem.1) -
-			// 	pallet_cf_broadcast::RecordedFees::<Runtime>::iter().fold(0, |acc, elem| acc + elem.1);
-			// let arb = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::iter().fold(0, |acc, elem| acc+ elem.1) -
-			// 	pallet_cf_broadcast::RecordedFees::<Runtime>::iter().fold(0, |acc, elem| acc + elem.1);
+			let eth = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::get(Asset::Eth) - pallet_cf_refunding::RecordedFees::<Runtime>::get(Asset::Eth).values().sum::<AssetAmount>();
+			let dot = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::get(Asset::Dot) - pallet_cf_refunding::RecordedFees::<Runtime>::get(Asset::Dot).values().sum::<AssetAmount>();
+			let arb = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::get(Asset::ArbEth) - pallet_cf_refunding::RecordedFees::<Runtime>::get(Asset::ArbEth).values().sum::<AssetAmount>();
 
 			FeeImbalance {
 				ethereum: eth,

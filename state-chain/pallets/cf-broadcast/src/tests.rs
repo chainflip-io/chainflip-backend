@@ -167,8 +167,6 @@ fn transaction_succeeded_results_in_refund_for_signer() {
 
 		assert_eq!(MockRefunding::<Ethereum>::get_transaction_fee_deficit(), expected_refund);
 
-		// assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(nominee), expected_refund);
-
 		assert_eq!(
 			System::events().get(1).expect("an event").event,
 			RuntimeEvent::Broadcaster(crate::Event::TransactionFeeDeficitRecorded {

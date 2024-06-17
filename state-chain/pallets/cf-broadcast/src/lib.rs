@@ -280,10 +280,6 @@ pub mod pallet {
 	pub type TransactionMetadata<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BroadcastId, TransactionMetadataFor<T, I>>;
 
-	// #[pallet::storage]
-	// pub type TransactionFeeDeficit<T: Config<I>, I: 'static = ()> =
-	// 	StorageMap<_, Twox64Concat, SignerIdFor<T, I>, ChainAmountFor<T, I>, ValueQuery>;
-
 	/// Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
 	#[pallet::storage]
 	#[pallet::getter(fn broadcast_barriers)]

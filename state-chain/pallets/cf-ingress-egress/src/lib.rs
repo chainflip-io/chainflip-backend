@@ -536,10 +536,6 @@ pub mod pallet {
 	pub type WitnessSafetyMargin<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, TargetChainBlockNumber<T, I>, OptionQuery>;
 
-	// #[pallet::storage]
-	// pub type WithheldTransactionFees<T: Config<I>, I: 'static = ()> =
-	// 	StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, TargetChainAmount<T, I>, ValueQuery>;
-
 	/// The fixed fee charged for opening a channel, in Flipperinos.
 	#[pallet::storage]
 	#[pallet::getter(fn channel_opening_fee)]
