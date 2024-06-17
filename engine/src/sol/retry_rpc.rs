@@ -11,6 +11,7 @@ use core::time::Duration;
 use utilities::task_scope::Scope;
 
 use anyhow::Result;
+use base64::Engine;
 use std::str::FromStr;
 
 use super::{
@@ -190,7 +191,7 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 			.await
 	}
 	async fn broadcast_transaction(&self, transaction: Vec<u8>) -> anyhow::Result<SolSignature> {
-		let encoded_transaction = base64::encode(&transaction);
+		let encoded_transaction = base64::engine::general_purpose::STANDARD.encode(&transaction);
 		let config = RpcSendTransactionConfig {
 			skip_preflight: true,
 			preflight_commitment: None,

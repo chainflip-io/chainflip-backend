@@ -1,5 +1,6 @@
 use crate::witness::common::{RuntimeCallHasChain, RuntimeHasChain};
 use anyhow::ensure;
+use base64::Engine;
 use cf_chains::{
 	instances::ChainInstanceFor,
 	sol::{SolAddress, SolAsset, SolHash},
@@ -397,7 +398,9 @@ fn parse_fetch_account_amount(
 				return Err(anyhow::anyhow!("Data account encoding is not base64"));
 			}
 
-			let mut bytes = base64::decode(base64_string).expect("Failed to decode base64 string");
+			let mut bytes = base64::engine::general_purpose::STANDARD
+				.decode(base64_string)
+				.expect("Failed to decode base64 string");
 
 			ensure!(bytes.len() == FETCH_ACCOUNT_BYTE_LENGTH);
 
