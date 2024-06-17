@@ -309,8 +309,8 @@ export async function testAllSwaps(swapContext: SwapContext) {
   // });
   // await Promise.all(allSwaps);
 
-  appendSwap("Sol", "Eth", testSwap)
-  appendSwap("SolUsdc", "Btc", testSwap)
+  appendSwap('Sol', 'Eth', testSwap);
+  appendSwap('SolUsdc', 'Btc', testSwap);
 
   await Promise.all(allSwaps);
 

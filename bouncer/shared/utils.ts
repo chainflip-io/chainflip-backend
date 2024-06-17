@@ -889,7 +889,7 @@ export function parseAssetString(input: string): Asset {
 
   // TODO: This is temporary to allow for solana swaps
   if (input.toLowerCase() === 'sol') {
-  return 'sol' as Asset;
+    return 'sol' as Asset;
   }
   if (input.toLowerCase() === 'solusdc') {
     return 'solusdc' as Asset;
