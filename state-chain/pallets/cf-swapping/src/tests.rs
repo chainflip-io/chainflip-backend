@@ -2088,7 +2088,6 @@ fn swaps_are_executed_according_to_execute_at_field() {
 		.execute_with(|| {
 			// Block 1, swaps should be scheduled at block 3
 			assert_eq!(System::block_number(), 1);
-			assert_eq!(FirstUnprocessedBlock::<Test>::get(), 0);
 			insert_swaps(&swaps);
 
 			assert_event_sequence!(
@@ -2109,7 +2108,6 @@ fn swaps_are_executed_according_to_execute_at_field() {
 		})
 		.then_execute_at_next_block(|_| {
 			// First group of swaps will be processed at the end of this block
-			assert_eq!(FirstUnprocessedBlock::<Test>::get(), 3);
 		})
 		.then_execute_with(|_| {
 			assert_eq!(System::block_number(), 3);
@@ -2125,7 +2123,6 @@ fn swaps_are_executed_according_to_execute_at_field() {
 		})
 		.then_execute_at_next_block(|_| {
 			// Second group of swaps will be processed at the end of this block
-			assert_eq!(FirstUnprocessedBlock::<Test>::get(), 4);
 		})
 		.then_execute_with(|_| {
 			assert_eq!(System::block_number(), 4);
@@ -2153,7 +2150,6 @@ fn swaps_get_retried_after_failure() {
 		.execute_with(|| {
 			// Block 1, swaps should be scheduled at block 3
 			assert_eq!(System::block_number(), 1);
-			assert_eq!(FirstUnprocessedBlock::<Test>::get(), 0);
 			insert_swaps(&swaps);
 
 			assert_event_sequence!(
@@ -2184,7 +2180,6 @@ fn swaps_get_retried_after_failure() {
 			// First group of swaps will be processed at the end of this block,
 			// but we force them to fail:
 			MockSwappingApi::set_swaps_should_fail(true);
-			assert_eq!(FirstUnprocessedBlock::<Test>::get(), 3);
 		})
 		.then_execute_with(|_| {
 			assert_eq!(System::block_number(), 3);
@@ -2220,9 +2215,7 @@ fn swaps_get_retried_after_failure() {
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_id: 4, .. }),
 			);
 		})
-		.then_execute_at_block(RETRY_AT_BLOCK, |_| {
-			assert_eq!(FirstUnprocessedBlock::<Test>::get(), 5);
-		})
+		.then_execute_at_block(RETRY_AT_BLOCK, |_| {})
 		.then_execute_with(|_| {
 			// Re-trying failed swaps originally scheduled for block 3 (which should
 			// now be successful):

@@ -290,11 +290,6 @@ pub mod pallet {
 	pub type SwapQueue<T: Config> =
 		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<Swap>, ValueQuery>;
 
-	/// The first block for which swaps haven't yet been processed
-	#[pallet::storage]
-	pub(crate) type FirstUnprocessedBlock<T: Config> =
-		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
-
 	/// SwapId Counter
 	#[pallet::storage]
 	pub type SwapIdCounter<T: Config> = StorageValue<_, SwapId, ValueQuery>;
@@ -492,18 +487,110 @@ pub mod pallet {
 				return
 			}
 
-			// TODO: delete `FirstUnprocessedBlock` (but after this is merged to make migration
-			// easier?)
-			let mut block_to_process = FirstUnprocessedBlock::<T>::get();
+			let mut swaps_to_execute = SwapQueue::<T>::take(current_block);
 
-			// NOTE: we iterate manually because BlockNumberFor<T> does not implement Step:
-			while block_to_process <= current_block {
-				match Self::process_swaps_for_block(current_block, block_to_process) {
-					Ok(()) => {
-						block_to_process += 1u32.into();
-						FirstUnprocessedBlock::<T>::set(block_to_process);
+			loop {
+				if swaps_to_execute.is_empty() {
+					return
+				}
+
+				match Self::execute_batch(swaps_to_execute.clone()) {
+					Ok(successful_swaps) => {
+						Self::process_swap_outcomes(&successful_swaps);
+						// Nothing to do here, all swaps are processed for block
+						return
 					},
-					Err(()) => break,
+					Err(err) => {
+						// Depending on the error, split the swaps into "satisfactory"
+						// (have a chance of succeeding if retried immediately), and "failed"
+						// (unlikely to succeed now and should be retried later or refunded).
+						let (satisfactory_swaps, failed_swaps) = {
+							match err {
+								BatchExecutionError::PriceLimitHit {
+									successful_swaps,
+									failed_swaps,
+								} => (successful_swaps, failed_swaps),
+								BatchExecutionError::SwapLegFailed { asset, direction, amount } => {
+									Self::deposit_event(Event::<T>::BatchSwapFailed {
+										asset,
+										direction,
+										amount,
+									});
+									(vec![], swaps_to_execute)
+								},
+								BatchExecutionError::DispatchError { error } => {
+									// This should only happen when the transaction nested too deep,
+									// which should not happen in practice (max nesting is 255):
+									log_or_panic!(
+										"Failed to execute swap batch at block {:?}: {:?}",
+										current_block,
+										error
+									);
+									(vec![], swaps_to_execute)
+								},
+							}
+						};
+
+						let retry_block = current_block + SWAP_RETRY_DELAY_BLOCKS.into();
+
+						for swap in failed_swaps {
+							match swap.refund_params {
+								Some(params)
+									if BlockNumberFor::<T>::from(params.refund_block) <
+										retry_block =>
+								{
+									// Reached refund block, schedule refund:
+									match T::EgressHandler::schedule_egress(
+										swap.from,
+										swap.input_amount,
+										params.refund_address,
+										None,
+									) {
+										Ok(ScheduledEgressDetails {
+											egress_id,
+											egress_amount,
+											fee_withheld,
+										}) => {
+											Self::deposit_event(
+												Event::<T>::RefundEgressScheduled {
+													swap_id: swap.swap_id,
+													egress_id,
+													asset: swap.from,
+													amount: egress_amount,
+													egress_fee: fee_withheld,
+												},
+											);
+										},
+										Err(err) => {
+											Self::deposit_event(Event::<T>::RefundEgressIgnored {
+												swap_id: swap.swap_id,
+												asset: swap.from,
+												amount: swap.input_amount,
+												reason: err.into(),
+											});
+										},
+									}
+								},
+								_ => {
+									// Either refund parameters not set, or refund block not
+									// reached:
+
+									Self::deposit_event(Event::<T>::SwapRescheduled {
+										swap_id: swap.swap_id,
+										execute_at: retry_block,
+									});
+
+									SwapQueue::<T>::append(retry_block, swap);
+								},
+							}
+						}
+
+						if !satisfactory_swaps.is_empty() {
+							swaps_to_execute = satisfactory_swaps;
+						} else {
+							return
+						}
+					},
 				}
 			}
 		}
@@ -1027,118 +1114,6 @@ pub mod pallet {
 					};
 				} else {
 					debug_assert!(false, "Swap is not completed yet!");
-				}
-			}
-		}
-
-		fn process_swaps_for_block(
-			current_block: BlockNumberFor<T>,
-			block_to_process: BlockNumberFor<T>,
-		) -> Result<(), ()> {
-			let mut swaps_to_execute = SwapQueue::<T>::take(block_to_process);
-
-			loop {
-				if swaps_to_execute.is_empty() {
-					return Ok(())
-				}
-
-				match Self::execute_batch(swaps_to_execute.clone()) {
-					Ok(successful_swaps) => {
-						Self::process_swap_outcomes(&successful_swaps);
-						// Nothing to do here, all swaps are processed for block
-						return Ok(())
-					},
-					Err(err) => {
-						// Depending on the error, split the swaps into "satisfactory"
-						// (have a chance of succeeding if retried immediately), and "failed"
-						// (unlikely to succeed now and should be retried later or refunded).
-						let (satisfactory_swaps, failed_swaps) = {
-							match err {
-								BatchExecutionError::PriceLimitHit {
-									successful_swaps,
-									failed_swaps,
-								} => (successful_swaps, failed_swaps),
-								BatchExecutionError::SwapLegFailed { asset, direction, amount } => {
-									Self::deposit_event(Event::<T>::BatchSwapFailed {
-										asset,
-										direction,
-										amount,
-									});
-									(vec![], swaps_to_execute)
-								},
-								BatchExecutionError::DispatchError { error } => {
-									// This should only happen when the transaction nested too deep,
-									// which should not happen in practice (max nesting is 255):
-									log_or_panic!(
-										"Failed to execute swap batch at block {:?}: {:?}",
-										block_to_process,
-										error
-									);
-									(vec![], swaps_to_execute)
-								},
-							}
-						};
-
-						let retry_block = current_block + SWAP_RETRY_DELAY_BLOCKS.into();
-
-						for swap in failed_swaps {
-							match swap.refund_params {
-								Some(params)
-									if BlockNumberFor::<T>::from(params.refund_block) <
-										retry_block =>
-								{
-									// Reached refund block, schedule refund:
-									match T::EgressHandler::schedule_egress(
-										swap.from,
-										swap.input_amount,
-										params.refund_address,
-										None,
-									) {
-										Ok(ScheduledEgressDetails {
-											egress_id,
-											egress_amount,
-											fee_withheld,
-										}) => {
-											Self::deposit_event(
-												Event::<T>::RefundEgressScheduled {
-													swap_id: swap.swap_id,
-													egress_id,
-													asset: swap.from,
-													amount: egress_amount,
-													egress_fee: fee_withheld,
-												},
-											);
-										},
-										Err(err) => {
-											Self::deposit_event(Event::<T>::RefundEgressIgnored {
-												swap_id: swap.swap_id,
-												asset: swap.from,
-												amount: swap.input_amount,
-												reason: err.into(),
-											});
-										},
-									}
-								},
-								_ => {
-									// Either refund parameters not set, or refund block not
-									// reached:
-
-									Self::deposit_event(Event::<T>::SwapRescheduled {
-										swap_id: swap.swap_id,
-										execute_at: retry_block,
-									});
-
-									SwapQueue::<T>::append(retry_block, swap);
-								},
-							}
-						}
-
-						if !satisfactory_swaps.is_empty() {
-							swaps_to_execute = satisfactory_swaps;
-						} else {
-							return Err(())
-						}
-					},
 				}
 			}
 		}
