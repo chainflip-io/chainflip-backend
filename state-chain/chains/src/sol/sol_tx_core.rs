@@ -958,6 +958,7 @@ mod tests {
 		SolAddress,
 	};
 	use core::str::FromStr;
+	use sol_prim::DerivedAta;
 
 	#[derive(BorshSerialize, BorshDeserialize)]
 	enum BankInstruction {
@@ -1111,7 +1112,7 @@ mod tests {
 			ProgramInstruction::get_instruction(
 				&VaultProgram::FetchNative {
 					seed: 0u64.to_le_bytes().to_vec(),
-					bump: deposit_channel_0.1,
+					bump: deposit_channel_0.bump,
 				},
 				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
 				vec![
@@ -1120,14 +1121,14 @@ mod tests {
 						false,
 					),
 					AccountMeta::new(agg_key_pubkey, true),
-					AccountMeta::new(deposit_channel_0.0.into(), false),
+					AccountMeta::new(deposit_channel_0.address.into(), false),
 					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
 				],
 			),
 			ProgramInstruction::get_instruction(
 				&VaultProgram::FetchNative {
 					seed: 1u64.to_le_bytes().to_vec(),
-					bump: deposit_channel_1.1,
+					bump: deposit_channel_1.bump,
 				},
 				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
 				vec![
@@ -1136,7 +1137,7 @@ mod tests {
 						false,
 					),
 					AccountMeta::new(agg_key_pubkey, true),
-					AccountMeta::new(deposit_channel_1.0.into(), false),
+					AccountMeta::new(deposit_channel_1.address.into(), false),
 					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
 				],
 			),
@@ -1170,16 +1171,24 @@ mod tests {
 		let seed = 0u64;
 		let deposit_channel = derive_deposit_address(seed, vault_program_id).unwrap();
 		let deposit_channel_ata =
-			derive_associated_token_account(deposit_channel.0, token_mint_pubkey).unwrap();
+			derive_associated_token_account(deposit_channel.address, token_mint_pubkey).unwrap();
 
 		// Deposit channel derived from the Vault address from the seed and the bump
 		assert_eq!(
 			deposit_channel,
-			(SolAddress::from_str("JDtAzKWKzQJCiHCfK4PU7qYuE4wChxuqfDqQhRbv6kwX").unwrap(), 254u8),
+			DerivedAta {
+				address: SolAddress::from_str("JDtAzKWKzQJCiHCfK4PU7qYuE4wChxuqfDqQhRbv6kwX")
+					.unwrap(),
+				bump: 254u8
+			},
 		);
 		assert_eq!(
 			deposit_channel_ata,
-			(SolAddress::from_str("7QWupKVHBPUnJpuvdt7uJxXaNWKYpEUAHPG9Rb28aEXS").unwrap(), 254u8),
+			DerivedAta {
+				address: SolAddress::from_str("7QWupKVHBPUnJpuvdt7uJxXaNWKYpEUAHPG9Rb28aEXS")
+					.unwrap(),
+				bump: 254u8
+			},
 		);
 
 		let instructions = [
@@ -1192,7 +1201,7 @@ mod tests {
 			ProgramInstruction::get_instruction(
 				&VaultProgram::FetchTokens {
 					seed: seed.to_le_bytes().to_vec(),
-					bump: deposit_channel.1,
+					bump: deposit_channel.bump,
 					decimals: 6,
 				},
 				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
@@ -1202,8 +1211,8 @@ mod tests {
 						false,
 					),
 					AccountMeta::new_readonly(agg_key_pubkey, true),
-					AccountMeta::new_readonly(deposit_channel.0.into(), false),
-					AccountMeta::new(deposit_channel_ata.0.into(), false),
+					AccountMeta::new_readonly(deposit_channel.address.into(), false),
+					AccountMeta::new(deposit_channel_ata.address.into(), false),
 					AccountMeta::new(
 						Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(),
 						false,
@@ -1238,11 +1247,11 @@ mod tests {
 
 		let deposit_channel_0 = derive_deposit_address(0u64, vault_program_id).unwrap();
 		let deposit_channel_ata_0 =
-			derive_associated_token_account(deposit_channel_0.0, token_mint_pubkey).unwrap();
+			derive_associated_token_account(deposit_channel_0.address, token_mint_pubkey).unwrap();
 
 		let deposit_channel_1 = derive_deposit_address(1u64, vault_program_id).unwrap();
 		let deposit_channel_ata_1 =
-			derive_associated_token_account(deposit_channel_1.0, token_mint_pubkey).unwrap();
+			derive_associated_token_account(deposit_channel_1.address, token_mint_pubkey).unwrap();
 
 		let deposit_channel_2 = derive_deposit_address(2u64, vault_program_id).unwrap();
 
@@ -1256,7 +1265,7 @@ mod tests {
 			ProgramInstruction::get_instruction(
 				&VaultProgram::FetchTokens {
 					seed: 0u64.to_le_bytes().to_vec(),
-					bump: deposit_channel_0.1,
+					bump: deposit_channel_0.bump,
 					decimals: 6,
 				},
 				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
@@ -1266,8 +1275,8 @@ mod tests {
 						false,
 					),
 					AccountMeta::new_readonly(agg_key_pubkey, true),
-					AccountMeta::new_readonly(deposit_channel_0.0.into(), false),
-					AccountMeta::new(deposit_channel_ata_0.0.into(), false),
+					AccountMeta::new_readonly(deposit_channel_0.address.into(), false),
+					AccountMeta::new(deposit_channel_ata_0.address.into(), false),
 					AccountMeta::new(
 						Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(),
 						false,
@@ -1280,7 +1289,7 @@ mod tests {
 			ProgramInstruction::get_instruction(
 				&VaultProgram::FetchTokens {
 					seed: 1u64.to_le_bytes().to_vec(),
-					bump: deposit_channel_1.1,
+					bump: deposit_channel_1.bump,
 					decimals: 6,
 				},
 				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
@@ -1290,8 +1299,8 @@ mod tests {
 						false,
 					),
 					AccountMeta::new_readonly(agg_key_pubkey, true),
-					AccountMeta::new_readonly(deposit_channel_1.0.into(), false),
-					AccountMeta::new(deposit_channel_ata_1.0.into(), false),
+					AccountMeta::new_readonly(deposit_channel_1.address.into(), false),
+					AccountMeta::new(deposit_channel_ata_1.address.into(), false),
 					AccountMeta::new(
 						Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(),
 						false,
@@ -1304,7 +1313,7 @@ mod tests {
 			ProgramInstruction::get_instruction(
 				&VaultProgram::FetchNative {
 					seed: 2u64.to_le_bytes().to_vec(),
-					bump: deposit_channel_2.1,
+					bump: deposit_channel_2.bump,
 				},
 				Pubkey::from_str(VAULT_PROGRAM).unwrap(),
 				vec![
@@ -1313,7 +1322,7 @@ mod tests {
 						false,
 					),
 					AccountMeta::new(agg_key_pubkey, true),
-					AccountMeta::new(deposit_channel_2.0.into(), false),
+					AccountMeta::new(deposit_channel_2.address.into(), false),
 					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
 				],
 			),
@@ -1352,7 +1361,7 @@ mod tests {
 				&agg_key_pubkey,
 				&to_pubkey.into(),
 				&Pubkey::from_str(MINT_PUB_KEY).unwrap(),
-				&to_pubkey_ata.0.into(),
+				&to_pubkey_ata.address.into(),
 			),
 			ProgramInstruction::get_instruction(
 				&VaultProgram::TransferTokens { amount: TRANSFER_AMOUNT, decimals: SOL_USDC_DECIMAL },
@@ -1365,7 +1374,7 @@ mod tests {
 					AccountMeta::new_readonly(agg_key_pubkey, true),
 					AccountMeta::new_readonly(Pubkey::from_str(TOKEN_VAULT_PDA_ACCOUNT).unwrap(), false),
 					AccountMeta::new(Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(), false),
-					AccountMeta::new(to_pubkey_ata.0.into(), false),
+					AccountMeta::new(to_pubkey_ata.address.into(), false),
 					AccountMeta::new_readonly(Pubkey::from_str(MINT_PUB_KEY).unwrap(), false),
 					AccountMeta::new_readonly(Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(), false),
 					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
@@ -1524,7 +1533,7 @@ mod tests {
 				&agg_key_pubkey,
 				&to_pubkey.into(),
 				&token_mint_pubkey.into(),
-				&to_pubkey_ata.0.into(),
+				&to_pubkey_ata.address.into(),
 			),
 			ProgramInstruction::get_instruction(
 				&VaultProgram::TransferTokens { amount, decimals: SOL_USDC_DECIMAL },
@@ -1543,7 +1552,7 @@ mod tests {
 						Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(),
 						false,
 					),
-					AccountMeta::new(to_pubkey_ata.0.into(), false),
+					AccountMeta::new(to_pubkey_ata.address.into(), false),
 					AccountMeta::new_readonly(Pubkey::from_str(MINT_PUB_KEY).unwrap(), false),
 					AccountMeta::new_readonly(Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(), false),
 					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
@@ -1563,7 +1572,7 @@ mod tests {
 						false,
 					),
 					AccountMeta::new_readonly(agg_key_pubkey, true),
-					AccountMeta::new(to_pubkey_ata.0.into(), false),
+					AccountMeta::new(to_pubkey_ata.address.into(), false),
 					extra_accounts.cf_receiver.into(),
 					AccountMeta::new_readonly(Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(), false),
 					AccountMeta::new_readonly(Pubkey::from_str(MINT_PUB_KEY).unwrap(), false),

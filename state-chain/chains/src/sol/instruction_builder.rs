@@ -5,7 +5,7 @@
 //! This avoids the need to deal with low level Solana core types.
 
 use cf_primitives::chains::Solana;
-use sol_prim::AccountBump;
+use sol_prim::DerivedAta;
 use sp_std::{vec, vec::Vec};
 
 use crate::{
@@ -27,7 +27,7 @@ use crate::{
 /// Internal enum type that contains SolAsset with derived ATA
 pub enum AssetWithDerivedAddress {
 	Sol,
-	Usdc((SolAddress, AccountBump)),
+	Usdc(DerivedAta),
 }
 
 impl AssetWithDerivedAddress {
@@ -120,7 +120,7 @@ impl SolanaInstructionBuilder {
 						SolAccountMeta::new_readonly(vault_program_data_account.into(), false),
 						SolAccountMeta::new_readonly(agg_key.into(), true),
 						SolAccountMeta::new_readonly(fetch_id.address.into(), false),
-						SolAccountMeta::new(ata.0.into(), false),
+						SolAccountMeta::new(ata.address.into(), false),
 						SolAccountMeta::new(token_vault_ata.into(), false),
 						SolAccountMeta::new_readonly(token_mint_pubkey.into(), false),
 						SolAccountMeta::new_readonly(token_program_id.into(), false),
@@ -376,7 +376,8 @@ mod test {
 		asset: SolAsset,
 	) -> (SolanaDepositFetchId, AssetWithDerivedAddress) {
 		let channel_id = channel_id.unwrap_or(923_601_931u64);
-		let (address, bump) = derive_deposit_address(channel_id, vault_program()).unwrap();
+		let DerivedAta { address, bump } =
+			derive_deposit_address(channel_id, vault_program()).unwrap();
 
 		AssetWithDerivedAddress::decompose_fetch_params(
 			crate::FetchAssetParams {
@@ -608,7 +609,7 @@ mod test {
 			.unwrap();
 
 		let instruction_set = SolanaInstructionBuilder::transfer_usdc_token(
-			to_pubkey_ata.0,
+			to_pubkey_ata.address,
 			TRANSFER_AMOUNT,
 			to_pubkey,
 			vault_program(),
@@ -693,7 +694,7 @@ mod test {
 		.unwrap();
 
 		let instruction_set = SolanaInstructionBuilder::ccm_transfer_usdc_token(
-			to_ata.0,
+			to_ata.address,
 			TRANSFER_AMOUNT,
 			to,
 			ccm_param.source_chain,

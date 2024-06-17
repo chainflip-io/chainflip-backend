@@ -6,7 +6,7 @@ use crate::{
 };
 
 mod failures {
-	use crate::consts;
+	use crate::{consts, DerivedAta};
 
 	use super::*;
 
@@ -46,20 +46,23 @@ mod failures {
 	fn initial_address_should_be_a_valid_point() {
 		let public_key: Address =
 			"J4mK4RXAuizk5aMZw8Vz8W3y7mrCy6dcgniZ4qwZimZE".parse().expect("public key");
-		let (pda, _bump) = Pda::from_address(public_key).expect("derive").finish().expect("finish");
+		let DerivedAta { address, .. } =
+			Pda::from_address(public_key).expect("derive").finish().expect("finish");
 		assert!(matches!(
-			Pda::from_address(pda).expect_err("PDA can't be a valid point on a curve"),
+			Pda::from_address(address).expect_err("PDA can't be a valid point on a curve"),
 			PdaError::NotAValidPoint,
 		))
 	}
 }
 
 mod happy {
+	use crate::DerivedAta;
+
 	use super::*;
 	fn run_single(public_key: &str, seeds: &[&str], expected_pda: &str) {
 		let public_key: Address = public_key.parse().expect("public-key");
 		let expected_pda: Address = expected_pda.parse().expect("expected-pda");
-		let (actual_pda, _) = seeds
+		let DerivedAta { address: actual_pda, .. } = seeds
 			.iter()
 			.try_fold(Pda::from_address(public_key).expect("derive"), Pda::chain_seed)
 			.expect("chain-seed")
