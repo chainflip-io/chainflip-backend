@@ -487,11 +487,11 @@ impl<Env: 'static + SolanaEnvironment> AllBatch<Solana> for SolanaApi<Env> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Solana>>,
 		transfer_params: Vec<TransferAssetParams<Solana>>,
-	) -> Result<Self, AllBatchError> {
-		let _fetch_tx = Self::batch_fetch(fetch_params)?;
-		let _transfer_txs = Self::transfer(transfer_params)?;
+	) -> Result<Vec<Self>, AllBatchError> {
+		let mut txs = Self::transfer(transfer_params)?;
+		txs.push(Self::batch_fetch(fetch_params)?);
 
-		Err(AllBatchError::DispatchError(DispatchError::Other("PRO-1348 This should be implemented after allowing Multiple transactions to be returned by this trait.")))
+		Ok(txs)
 	}
 }
 

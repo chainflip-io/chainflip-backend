@@ -61,13 +61,13 @@ where
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Polkadot>>,
 		transfer_params: Vec<TransferAssetParams<Polkadot>>,
-	) -> Result<Self, AllBatchError> {
-		Ok(Self::BatchFetchAndTransfer(batch_fetch_and_transfer::extrinsic_builder(
+	) -> Result<Vec<Self>, AllBatchError> {
+		Ok(vec![Self::BatchFetchAndTransfer(batch_fetch_and_transfer::extrinsic_builder(
 			E::replay_protection(false),
 			fetch_params,
 			transfer_params,
 			E::try_vault_account().ok_or(AllBatchError::VaultAccountNotSet)?,
-		)))
+		))])
 	}
 }
 

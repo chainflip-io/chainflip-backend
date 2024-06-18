@@ -46,13 +46,13 @@ where
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Arbitrum>>,
 		transfer_params: Vec<TransferAssetParams<Arbitrum>>,
-	) -> Result<Self, AllBatchError> {
-		Ok(Self::AllBatch(evm_all_batch_builder(
+	) -> Result<Vec<Self>, AllBatchError> {
+		Ok(vec![Self::AllBatch(evm_all_batch_builder(
 			fetch_params,
 			transfer_params,
 			E::token_address,
 			E::replay_protection(E::vault_address()),
-		)?))
+		)?)])
 	}
 }
 

@@ -485,7 +485,7 @@ pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<C>>,
 		transfer_params: Vec<TransferAssetParams<C>>,
-	) -> Result<Self, AllBatchError>;
+	) -> Result<Vec<Self>, AllBatchError>;
 }
 
 pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {

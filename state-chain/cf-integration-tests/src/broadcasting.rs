@@ -40,6 +40,9 @@ fn bitcoin_broadcast_delay_works() {
 					to: ScriptPubkey::P2PKH([0u8; 20]),
 				}],
 			)
+			.unwrap()
+			.first()
+			.cloned()
 			.unwrap();
 
 			let (broadcast_id, _) =

@@ -83,14 +83,14 @@ impl AllBatch<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
 		transfer_params: Vec<TransferAssetParams<Ethereum>>,
-	) -> Result<Self, AllBatchError> {
+	) -> Result<Vec<Self>, AllBatchError> {
 		if ALL_BATCH_SUCCESS.with(|cell| *cell.borrow()) {
-			Ok(Self::AllBatch(MockEthAllBatch {
+			Ok(vec![Self::AllBatch(MockEthAllBatch {
 				nonce: Default::default(),
 				fetch_params,
 				transfer_params,
 				_phantom: PhantomData,
-			}))
+			})])
 		} else {
 			Err(AllBatchError::UnsupportedToken)
 		}
@@ -290,13 +290,13 @@ impl AllBatch<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Bitcoin>>,
 		transfer_params: Vec<TransferAssetParams<Bitcoin>>,
-	) -> Result<Self, AllBatchError> {
+	) -> Result<Vec<Self>, AllBatchError> {
 		if ALL_BATCH_SUCCESS.with(|cell| *cell.borrow()) {
-			Ok(Self::AllBatch(MockBtcAllBatch {
+			Ok(vec![Self::AllBatch(MockBtcAllBatch {
 				fetch_params,
 				transfer_params,
 				_phantom: PhantomData,
-			}))
+			})])
 		} else {
 			Err(AllBatchError::UnsupportedToken)
 		}

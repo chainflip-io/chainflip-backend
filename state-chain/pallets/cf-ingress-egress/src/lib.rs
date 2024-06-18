@@ -579,7 +579,7 @@ pub mod pallet {
 			asset: TargetChainAsset<T, I>,
 		},
 		BatchBroadcastRequested {
-			broadcast_id: BroadcastId,
+			broadcast_ids: Vec<BroadcastId>,
 			egress_ids: Vec<EgressId>,
 		},
 		MinimumDepositSet {
@@ -1230,14 +1230,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			fetch_params,
 			transfer_params,
 		) {
-			Ok(egress_transaction) => {
-				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
-					egress_transaction,
-					Some(Call::finalise_ingress { addresses }.into()),
-					|_| None,
-				);
+			Ok(egress_transactions) => {
 				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
-					broadcast_id,
+					broadcast_ids: egress_transactions
+						.into_iter()
+						.map(|egress_transaction| {
+							T::Broadcaster::threshold_sign_and_broadcast_with_callback(
+								egress_transaction,
+								Some(
+									Call::finalise_ingress { addresses: addresses.clone() }.into(),
+								),
+								|_| None,
+							)
+						})
+						.collect::<Vec<_>>(),
 					egress_ids,
 				});
 				Ok(())

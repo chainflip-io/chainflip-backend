@@ -291,7 +291,7 @@ fn on_finalize_can_send_batch_all() {
 
 		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
 			crate::Event::BatchBroadcastRequested {
-				broadcast_id: 1,
+				broadcast_ids: vec![1],
 				egress_ids: vec![
 					(ForeignChain::Ethereum, 1),
 					(ForeignChain::Ethereum, 2),
@@ -357,12 +357,13 @@ fn addresses_are_getting_reused() {
 		// Simulate broadcast success.
 		.then_process_events(|_ctx, event| match event {
 			RuntimeEvent::IngressEgress(PalletEvent::BatchBroadcastRequested {
-				broadcast_id,
+				broadcast_ids,
 				..
-			}) => Some(broadcast_id),
+			}) => Some(broadcast_ids),
 			_ => None,
 		})
 		.then_execute_at_next_block(|(channels, broadcast_ids)| {
+			let broadcast_ids = broadcast_ids.into_iter().flatten().collect::<Vec<_>>();
 			assert!(broadcast_ids.len() == 1);
 			// This would normally be triggered on broadcast success, should finalise the ingress.
 			for id in broadcast_ids {
