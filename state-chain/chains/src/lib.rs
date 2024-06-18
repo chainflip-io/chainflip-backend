@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(step_trait)]
 #![feature(extract_if)]
+#![feature(split_array)]
 
 use core::{fmt::Display, iter::Step};
 

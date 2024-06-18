@@ -716,7 +716,7 @@ impl RawSignature {
 		pubkey_bytes: &[u8],
 		message_bytes: &[u8],
 	) -> Result<(), ed25519_dalek::SignatureError> {
-		let public_key = ed25519_dalek::PublicKey::from_bytes(pubkey_bytes)?;
+		let public_key = ed25519_dalek::VerifyingKey::try_from(pubkey_bytes)?;
 		let signature = self.0.as_slice().try_into()?;
 		public_key.verify_strict(message_bytes, &signature)
 	}
