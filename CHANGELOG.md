@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.4.3] - 2024-06-18
+
+### Fixes
+
+- Print cause of settings error ([#4972](https://github.com/chainflip-io/chainflip-backend/issues/4972))
+
 ## [1.4.2] - 2024-06-03
 
 ### Features
