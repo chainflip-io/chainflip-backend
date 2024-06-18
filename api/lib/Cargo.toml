@@ -1,6 +1,6 @@
 [package]
 name = "chainflip-api"
-version = "1.4.2"
+version = "1.4.3"
 edition = "2021"
 
 [lints]
