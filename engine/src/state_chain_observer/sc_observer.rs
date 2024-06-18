@@ -337,8 +337,6 @@ where
 
                                     }
                                     CfeEvent::BtcThresholdSignatureRequest(ThresholdSignatureRequest::<Runtime, _> { ceremony_id, epoch_index, key, signatories, payload : payloads }) => {
-
-
                                         if payloads.len() > multisig::MAX_BTC_SIGNING_PAYLOADS {
                                             error!(ceremony_id = ceremony_id, "Too many payloads, ignoring Bitcoin signing request ({}/{})", payloads.len(), multisig::MAX_BTC_SIGNING_PAYLOADS);
                                             btc_multisig_client.update_latest_ceremony_id(ceremony_id);
@@ -418,24 +416,28 @@ where
                                             let btc_rpc = btc_rpc.clone();
                                             let state_chain_client = state_chain_client.clone();
                                             scope.spawn(async move {
-
-                                                // We check for AwaitingBroadcasts for Bitcoin specifically because if the previous broadcast was not broadcast,
+                                                // We check for PendingBroadcasts for Bitcoin specifically because if the previous broadcast was not broadcast,
                                                 // it can cause ours to fail, as we could be using a change UTXO that's only created in the previous broadcast.
-                                                for (awaiting_broadcast_id, awaiting_broadcast_data) in state_chain_client
-                                                    .storage_map::<pallet_cf_broadcast::AwaitingBroadcast<Runtime, BitcoinInstance>, Vec<_>>(current_block.hash)
+                                                for awaiting_broadcast_id in state_chain_client
+                                                    .storage_value::<pallet_cf_broadcast::PendingBroadcasts<Runtime, BitcoinInstance>>(current_block.hash)
                                                     .await?
                                                     .into_iter()
-                                                    .filter(|(b_id, _)| *b_id < broadcast_id)
+                                                    .filter(|b_id| *b_id < broadcast_id)
                                                     // Sort by id to ensure we process them in order, as they may depend on each other.
-                                                    .sorted_by_key(|(b_id, _)| *b_id) {
-                                                    match btc_rpc.send_raw_transaction(awaiting_broadcast_data.transaction_payload.encoded_transaction).await {
-                                                        Ok(tx_hash) => info!("Bitcoin AwaitingBroadcast {awaiting_broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
-                                                        Err(error) => {
-                                                            // Just log any errors, don't throw, as this one is not technically our responsibility to broadcast.
-                                                            error!("Error on Bitcoin AwaitingBroadcast {awaiting_broadcast_id:?}: {error:?}");
-                                                        }
+                                                    .sorted() {
+                                                        if let Some(awaiting_broadcast_data) = state_chain_client
+                                                            .storage_map_entry::<pallet_cf_broadcast::AwaitingBroadcast<Runtime, BitcoinInstance>>(current_block.hash, &awaiting_broadcast_id)
+                                                            .await? {
+                                                                match btc_rpc.send_raw_transaction(awaiting_broadcast_data.transaction_payload.encoded_transaction).await {
+                                                                    Ok(tx_hash) => info!("Bitcoin PendingBroadcast {awaiting_broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
+                                                                    Err(error) => {
+                                                                        // Just log any errors, don't throw, as this one is not technically our responsibility to broadcast.
+                                                                        // and we want to get to attempting broadcasting our one.
+                                                                        error!("Error on Bitcoin PendingBroadcast {awaiting_broadcast_id:?}: {error:?}");
+                                                                    }
+                                                                }
+                                                            }
                                                     }
-                                                }
 
                                                 match btc_rpc.send_raw_transaction(payload.encoded_transaction).await {
                                                     Ok(tx_hash) => info!("Bitcoin TransactionBroadcastRequest {broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
