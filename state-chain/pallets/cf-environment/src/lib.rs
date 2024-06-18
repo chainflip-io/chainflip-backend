@@ -407,7 +407,6 @@ pub mod pallet {
 
 			Ok(dispatch_result)
 		}
-		#[allow(clippy::too_many_arguments)]
 		#[pallet::call_index(6)]
 		// This weight is not strictly correct but since it's a governance call, weight is
 		// irrelevant.
