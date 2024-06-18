@@ -23,15 +23,6 @@ impl MockAssetConverter {
 }
 
 impl AssetConverter for MockAssetConverter {
-	fn estimate_swap_input_for_desired_output<C: Chain>(
-		input_asset: C::ChainAsset,
-		output_asset: C::ChainAsset,
-		desired_output_amount: C::ChainAmount,
-	) -> Option<C::ChainAmount> {
-		Self::get_price(output_asset.into(), input_asset.into())
-			.map(|price| (price * desired_output_amount.into()).unique_saturated_into())
-	}
-
 	fn calculate_input_for_gas_output<C: Chain>(
 		input_asset: C::ChainAsset,
 		desired_output_amount: C::ChainAmount,
