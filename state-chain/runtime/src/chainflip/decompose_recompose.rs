@@ -59,10 +59,6 @@ impl WitnessDataExtraction for RuntimeCall {
 				);
 				Some(tracked_data.encode())
 			},
-
-			// Since there is no priority fee in Arbitrum, we do not extract anything from the chain
-			// tracking witness data.
-
 			// Solana's priority fee is reported as a median of the latest blocks' priority fees
 			// values reported from via the node's RPC. That can't match exactly between different
 			// engines.
