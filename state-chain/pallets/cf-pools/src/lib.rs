@@ -2030,33 +2030,6 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
-	fn estimate_swap_input_for_desired_output<C: Chain>(
-		input_asset: C::ChainAsset,
-		output_asset: C::ChainAsset,
-		desired_output_amount: C::ChainAmount,
-	) -> Option<C::ChainAmount> {
-		let input_asset = input_asset.into();
-		let output_asset = output_asset.into();
-
-		if input_asset == output_asset {
-			return Some(desired_output_amount)
-		}
-		// Because we don't know input amount, we swap in the
-		// opposite direction, which should give us a good enough
-		// approximation of the required input amount:
-		with_transaction_unchecked(|| {
-			TransactionOutcome::Rollback(
-				Self::swap_with_network_fee(
-					output_asset,
-					input_asset,
-					desired_output_amount.into(),
-				)
-				.ok(),
-			)
-		})
-		.map(|swap_output| swap_output.output.unique_saturated_into())
-	}
-
 	fn calculate_input_for_gas_output<C: Chain>(
 		input_asset: C::ChainAsset,
 		required_gas: C::ChainAmount,

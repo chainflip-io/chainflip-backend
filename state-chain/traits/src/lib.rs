@@ -934,12 +934,6 @@ impl<RuntimeCall> CallDispatchFilter<RuntimeCall> for () {
 }
 
 pub trait AssetConverter {
-	fn estimate_swap_input_for_desired_output<C: Chain>(
-		input_asset: C::ChainAsset,
-		output_asset: C::ChainAsset,
-		desired_output_amount: C::ChainAmount,
-	) -> Option<C::ChainAmount>;
-
 	/// Calculate the amount of an asset that is required to pay for a given amount of gas.
 	///
 	/// Use this for transaction fees only.
