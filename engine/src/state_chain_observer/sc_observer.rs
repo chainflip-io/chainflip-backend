@@ -24,7 +24,7 @@ use std::{
 	},
 	time::Duration,
 };
-use tracing::{debug, error, info, info_span, Instrument};
+use tracing::{debug, error, info, info_span, warn, Instrument};
 
 use crate::{
 	btc::retry_rpc::BtcRetryRpcApi,
@@ -433,7 +433,7 @@ where
                                                                     Err(error) => {
                                                                         // Just log any errors, don't throw, as this one is not technically our responsibility to broadcast.
                                                                         // and we want to get to attempting broadcasting our one.
-                                                                        error!("Error on Bitcoin PendingBroadcast {awaiting_broadcast_id:?}: {error:?}");
+                                                                        warn!("Error on Bitcoin PendingBroadcast {awaiting_broadcast_id:?}: {error:?}");
                                                                     }
                                                                 }
                                                             }
