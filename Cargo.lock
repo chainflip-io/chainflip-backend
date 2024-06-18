@@ -1866,7 +1866,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-ingress-egress-tracker"
-version = "1.4.1"
+version = "1.4.3"
 dependencies = [
  "anyhow",
  "async-trait",
