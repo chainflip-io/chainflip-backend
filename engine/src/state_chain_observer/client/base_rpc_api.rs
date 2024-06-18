@@ -9,6 +9,7 @@ use sp_core::{
 	storage::{StorageData, StorageKey},
 	Bytes,
 };
+use sp_runtime::DispatchError;
 use sp_version::RuntimeVersion;
 use state_chain_runtime::SignedBlock;
 
@@ -25,7 +26,7 @@ use futures::future::BoxFuture;
 use serde_json::value::RawValue;
 use std::sync::Arc;
 use subxt::backend::rpc::RawRpcSubscription;
-use utilities::dynamic_events::DynamicEventRecord;
+use utilities::dynamic_events::{DynamicEventRecord, ResolvedDispatchError};
 
 #[cfg(test)]
 use mockall::automock;
@@ -168,6 +169,12 @@ pub trait BaseRpcApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<DynamicEventRecord>>;
+
+	async fn decode_dispatch_error(
+		&self,
+		dispatch_error: DispatchError,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<ResolvedDispatchError<DispatchError>>;
 }
 
 pub struct BaseRpcClient<RawRpcClient> {
@@ -309,6 +316,14 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<DynamicEventRecord>> {
 		self.raw_rpc_client.cf_dynamic_events(at).await
+	}
+
+	async fn decode_dispatch_error(
+		&self,
+		dispatch_error: DispatchError,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<ResolvedDispatchError<DispatchError>> {
+		self.raw_rpc_client.cf_dynamic_decode_error(dispatch_error, at).await
 	}
 }
 
