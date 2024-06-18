@@ -6,7 +6,7 @@ use std::{
 use anyhow::{anyhow, Result};
 use cf_primitives::CfeCompatibility;
 use codec::{Decode, Encode};
-use frame_support::{dispatch::DispatchInfo, pallet_prelude::InvalidTransaction};
+use frame_support::pallet_prelude::InvalidTransaction;
 use itertools::Itertools;
 use sc_transaction_pool_api::TransactionStatus;
 use sp_core::H256;
@@ -19,6 +19,9 @@ use thiserror::Error;
 use tokio::sync::oneshot;
 use tracing::{debug, error, info, warn};
 use utilities::{
+	dynamic_events::{
+		DynamicDispatchError, DynamicEvent, DynamicEventRecord, ResolvedDispatchError,
+	},
 	future_map::FutureMap,
 	task_scope::{self, Scope},
 	UnendingStream,
@@ -26,7 +29,6 @@ use utilities::{
 
 use crate::state_chain_observer::client::{
 	base_rpc_api,
-	error_decoder::{DispatchError, ErrorDecoder},
 	extrinsic_api::common::invalid_err_obj,
 	storage_api::{CheckBlockCompatibility, StorageApi},
 	SUBSTRATE_BEHAVIOUR,
@@ -44,7 +46,7 @@ pub enum ExtrinsicError<OtherError> {
 	#[error(transparent)]
 	Other(OtherError),
 	#[error(transparent)]
-	Dispatch(DispatchError),
+	Dispatch(DynamicDispatchError),
 }
 
 #[derive(Error, Debug)]
@@ -56,11 +58,10 @@ pub enum DryRunError {
 	#[error("The transaction is invalid: {0}")]
 	InvalidTransaction(#[from] TransactionValidityError),
 	#[error("The transaction failed: {0}")]
-	Dispatch(#[from] DispatchError),
+	Dispatch(#[from] ResolvedDispatchError<sp_runtime::DispatchError>),
 }
 
-pub type ExtrinsicDetails =
-	(H256, Vec<state_chain_runtime::RuntimeEvent>, state_chain_runtime::Header, DispatchInfo);
+pub type ExtrinsicDetails = (H256, Vec<serde_json::Value>, state_chain_runtime::Header);
 
 pub type ExtrinsicResult<OtherError> = Result<ExtrinsicDetails, ExtrinsicError<OtherError>>;
 
@@ -130,14 +131,9 @@ pub struct SubmissionWatcher<
 	#[allow(clippy::type_complexity)]
 	block_cache: VecDeque<(
 		state_chain_runtime::Hash,
-		Option<(
-			state_chain_runtime::Header,
-			Vec<UncheckedExtrinsic>,
-			Vec<Box<frame_system::EventRecord<state_chain_runtime::RuntimeEvent, H256>>>,
-		)>,
+		Option<(state_chain_runtime::Header, Vec<UncheckedExtrinsic>, Vec<DynamicEventRecord>)>,
 	)>,
 	base_rpc_client: Arc<BaseRpcClient>,
-	error_decoder: ErrorDecoder,
 }
 
 pub enum SubmissionLogicError {
@@ -173,7 +169,6 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				extrinsic_lifetime,
 				block_cache: Default::default(),
 				base_rpc_client,
-				error_decoder: Default::default(),
 			},
 			// Return an empty requests map. This is done so that initial state of the requests
 			// matches the submission watchers state. The requests must be stored outside of
@@ -324,7 +319,15 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 		debug!(target: "state_chain_client", "Dry run completed. \nCall:{:?} \nResult: {:?}", call, &dry_run_result);
 
-		Ok(dry_run_result?.map_err(|e| self.error_decoder.decode_dispatch_error(e))?)
+		if let Err(e) = dry_run_result? {
+			Err(self
+				.base_rpc_client
+				.decode_dispatch_error(e, Some(hash))
+				.await
+				.map(DryRunError::Dispatch)?)
+		} else {
+			Ok(())
+		}
 	}
 
 	pub async fn new_request(
@@ -363,29 +366,14 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		Ok(())
 	}
 
-	fn decide_extrinsic_success<OtherError>(
+	fn decide_extrinsic_success(
 		&self,
-		tx_hash: H256,
-		extrinsic_events: Vec<state_chain_runtime::RuntimeEvent>,
-		header: state_chain_runtime::Header,
-	) -> ExtrinsicResult<OtherError> {
-		// We expect to find a Success or Failed event, grab the dispatch info and send
-		// it with the events
+		extrinsic_events: &[DynamicEvent],
+	) -> Result<(), DynamicDispatchError> {
 		extrinsic_events
 			.iter()
-			.find_map(|event| match event {
-				state_chain_runtime::RuntimeEvent::System(
-					frame_system::Event::ExtrinsicSuccess { dispatch_info },
-				) => Some(Ok(*dispatch_info)),
-				state_chain_runtime::RuntimeEvent::System(
-					frame_system::Event::ExtrinsicFailed { dispatch_error, dispatch_info: _ },
-				) => Some(Err(ExtrinsicError::Dispatch(
-					self.error_decoder.decode_dispatch_error(*dispatch_error),
-				))),
-				_ => None,
-			})
+			.find_map(|event| event.extrinsic_outcome())
 			.expect(SUBSTRATE_BEHAVIOUR)
-			.map(|dispatch_info| (tx_hash, extrinsic_events, header, dispatch_info))
 	}
 
 	pub async fn watch_for_submission_in_block(&mut self) -> (RequestID, SubmissionID, H256, H256) {
@@ -427,11 +415,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 					Some((
 						block.block.header,
 						block.block.extrinsics,
-						self.base_rpc_client
-							.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(
-								block_hash,
-							)
-							.await?,
+						self.base_rpc_client.dynamic_events(Some(block_hash)).await?,
 					))
 				} else {
 					None
@@ -452,23 +436,25 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				}) {
 				let extrinsic_events = events
 					.iter()
-					.filter_map(|event_record| match event_record.as_ref() {
-						frame_system::EventRecord {
-							phase: frame_system::Phase::ApplyExtrinsic(index),
-							event,
-							..
-						} if *index as usize == extrinsic_index => Some(event.clone()),
-						_ => None,
-					})
+					.filter_map(|event_record| event_record.extrinsic_event(extrinsic_index as u64))
 					.collect::<Vec<_>>();
 
 				if let Some(request) = requests.get_mut(&request_id) {
 					let until_in_block_sender = request.until_in_block_sender.take().unwrap();
-					let _result = until_in_block_sender.send(self.decide_extrinsic_success(
-						tx_hash,
-						extrinsic_events,
-						header.clone(),
-					));
+					let _result = until_in_block_sender.send(
+						self.decide_extrinsic_success(&extrinsic_events[..])
+							.map(|_| {
+								(
+									tx_hash,
+									extrinsic_events
+										.into_iter()
+										.map(|event| event.to_json().take())
+										.collect(),
+									header.clone(),
+								)
+							})
+							.map_err(ExtrinsicError::Dispatch),
+					);
 				}
 			} else {
 				// PRO-1250
@@ -486,10 +472,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 	) -> Result<(), anyhow::Error> {
 		let block = self.base_rpc_client.block(block_hash).await?.expect(SUBSTRATE_BEHAVIOUR).block;
 		// TODO: Move this out into BlockProducer
-		let events = self
-			.base_rpc_client
-			.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(block_hash)
-			.await?;
+		let events = self.base_rpc_client.dynamic_events(Some(block_hash)).await?;
 
 		assert_eq!(block.header.number, self.finalized_block_number + 1, "{SUBSTRATE_BEHAVIOUR}");
 
@@ -513,14 +496,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 			for (extrinsic_index, extrinsic_events) in events
 				.into_iter()
-				.filter_map(|event_record| match *event_record {
-					frame_system::EventRecord {
-						phase: frame_system::Phase::ApplyExtrinsic(extrinsic_index),
-						event,
-						..
-					} => Some((extrinsic_index, event)),
-					_ => None,
-				})
+				.filter_map(|event_record| event_record.indexed_extrinsic_event())
 				.sorted_by_key(|(extrinsic_index, _)| *extrinsic_index)
 				.group_by(|(extrinsic_index, _)| *extrinsic_index)
 				.into_iter()
@@ -566,29 +542,27 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 									(optional_extrinsic_events.take().unwrap(), request)
 								}) {
 							let extrinsic_events = extrinsic_events.collect::<Vec<_>>();
-							let result = self.decide_extrinsic_success(
-								tx_hash,
-								extrinsic_events,
-								block.header.clone(),
-							);
+							let result =
+								self.decide_extrinsic_success(&extrinsic_events[..]).map(|_| {
+									(
+										tx_hash,
+										extrinsic_events
+											.into_iter()
+											.map(|event| event.to_json().take())
+											.collect(),
+										block.header.clone(),
+									)
+								});
 							info!(target: "state_chain_client", request_id = matching_request.id, submission_id = submission.id, "Request found in finalized block with hash {block_hash:?}, tx_hash {tx_hash:?}, and extrinsic index {extrinsic_index}.");
 							if let Some(until_in_block_sender) =
 								matching_request.until_in_block_sender
 							{
-								let _result = until_in_block_sender.send(
-									#[allow(clippy::useless_asref)]
-									result.as_ref().map(Clone::clone).map_err(
-										|error| match error {
-											ExtrinsicError::Dispatch(dispatch_error) =>
-												ExtrinsicError::Dispatch(dispatch_error.clone()),
-											ExtrinsicError::Other(
-												FinalizationError::NotFinalized,
-											) => ExtrinsicError::Other(InBlockError::NotInBlock),
-										},
-									),
-								);
+								let _result = until_in_block_sender
+									.send(result.clone().map_err(ExtrinsicError::Dispatch));
 							}
-							let _result = matching_request.until_finalized_sender.send(result);
+							let _result = matching_request
+								.until_finalized_sender
+								.send(result.map_err(ExtrinsicError::Dispatch));
 						}
 					}
 				}
@@ -596,24 +570,24 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 			// Remove any submissions that have expired
 			self.submissions_by_nonce.retain(|nonce, submissions| {
-				assert!(self.finalized_nonce <= *nonce, "{SUBSTRATE_BEHAVIOUR}");
+			assert!(self.finalized_nonce <= *nonce, "{SUBSTRATE_BEHAVIOUR}");
 
-				submissions.retain(|submission| {
-					let alive = submission.lifetime.contains(&(block.header.number + 1));
+			submissions.retain(|submission| {
+				let alive = submission.lifetime.contains(&(block.header.number + 1));
 
-					if !alive {
-						info!(target: "state_chain_client", request_id = submission.request_id, submission_id = submission.id, "Submission has timed out.");
-						if let Some(request) = requests.get_mut(&submission.request_id) {
-							request.pending_submissions.remove(&submission.id).unwrap();
-						}
-						self.submission_status_futures.remove((submission.request_id, submission.id));
+				if !alive {
+					info!(target: "state_chain_client", request_id = submission.request_id, submission_id = submission.id, "Submission has timed out.");
+					if let Some(request) = requests.get_mut(&submission.request_id) {
+						request.pending_submissions.remove(&submission.id).unwrap();
 					}
+					self.submission_status_futures.remove((submission.request_id, submission.id));
+				}
 
-					alive
-				});
-
-				!submissions.is_empty()
+				alive
 			});
+
+			!submissions.is_empty()
+		});
 
 			// Remove any requests that have all their submission have expired and whose
 			// resubmission window has past.
