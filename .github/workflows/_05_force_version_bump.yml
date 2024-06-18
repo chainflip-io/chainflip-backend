@@ -26,7 +26,7 @@ jobs:
       - name: Download latest release binaries
         uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
         with:
-          workflow: release-perseverance.yml
+          workflow: release-${{ inputs.network-to-check-against }}.yml
           name: chainflip-backend-bin
           github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
           path: latest-release-bins
