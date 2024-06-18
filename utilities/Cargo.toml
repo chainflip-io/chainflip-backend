@@ -37,6 +37,7 @@ serde = { version = "1.0", optional = true, default_features = false, features =
   "alloc",
   "derive",
 ] }
+serde_json = { version = "1.0", optional = true }
 sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", optional = true }
 sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", optional = true }
 tempfile = { version = "3.7.0", optional = true }
@@ -55,7 +56,6 @@ scale-json = { path = "./scale-json", optional = true }
 
 
 [dev-dependencies]
-serde_json = "1.0"
 tempfile = "3.7.0"
 reqwest = { version = "0.11.4", features = ["rustls-tls"] }
 
@@ -74,6 +74,7 @@ std = [
   'itertools/use_std',
   'dep:pin-project',
   'dep:serde',
+  'dep:serde_json',
   'serde?/std',
   'dep:scale-info',
   'dep:scale-json',

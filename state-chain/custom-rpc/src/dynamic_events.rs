@@ -5,13 +5,13 @@ use std::{
 
 use crate::{to_rpc_error, CustomRpc};
 
-use cf_utilities::dynamic_events::{DynamicEventRecord, EventDecoder};
+use cf_utilities::dynamic_events::{DynamicEventRecord, EventDecoder, ResolvedDispatchError};
 use codec::Decode;
 use frame_metadata::{v15, RuntimeMetadataPrefixed};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use sc_client_api::HeaderBackend;
 use sp_api::{CallApiAt, Core, Metadata};
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::{traits::Block as BlockT, DispatchError, ModuleError};
 
 /// This valid across all Substrate chains that use the System pallet.
 const SYSTEM_EVENTS_STORAGE_KEY: [u8; 32] =
@@ -27,6 +27,14 @@ pub trait DynamicApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<DynamicEventRecord>>;
+
+	/// Decode a module error using metadata at a specific block hash or latest block.
+	#[method(name = "decode_error")]
+	fn cf_dynamic_decode_error(
+		&self,
+		error: DispatchError,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<ResolvedDispatchError<DispatchError>>;
 }
 
 pub type EventDecoderCache = Mutex<BTreeMap<u32, Arc<EventDecoder>>>;
@@ -116,5 +124,21 @@ where
 			.map_err(to_rpc_error)?
 			.decode_events(events_data)
 			.map_err(to_rpc_error)
+	}
+
+	fn cf_dynamic_decode_error(
+		&self,
+		dispatch_error: DispatchError,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<ResolvedDispatchError<DispatchError>> {
+		Ok(match dispatch_error {
+			DispatchError::Module(ModuleError { error, index, .. }) => self
+				.event_decoder_at_hash(self.unwrap_or_best(at))
+				.map_err(to_rpc_error)?
+				.errors
+				.lookup(index, u8::decode(&mut &error[..]).map_err(to_rpc_error)?)
+				.map_or(ResolvedDispatchError::DispatchError(dispatch_error), Into::into),
+			e => ResolvedDispatchError::DispatchError(e),
+		})
 	}
 }

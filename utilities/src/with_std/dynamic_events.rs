@@ -22,12 +22,42 @@ use thiserror::Error;
 /// The fully-scoped type name of the events that are stored in the System pallet.
 const SYSTEM_EVENTS_TYPE_NAME: &str = "frame_system::EventRecord";
 
-#[derive(Error, Debug, Clone)]
-pub enum DispatchError {
-	#[error("Dispatch error: {0}")]
-	DispatchError(JsonValue),
+pub type DynamicDispatchError = ResolvedDispatchError<JsonValue>;
+
+/// A dispatch error whose inner ModuleError indices have been resolved to a human-readable error,
+/// if possible.
+///
+/// If the error did not contain a module error, or if the module error could not be resolved, this
+/// contains the original dispatch error.
+#[derive(Error, Debug, Clone, Serialize, Deserialize)]
+pub enum ResolvedDispatchError<E> {
+	#[error("Dispatch error: {0:?}")]
+	DispatchError(E),
 	#[error("Module error ‘{name}‘ from pallet ‘{pallet}‘: ‘{error}‘")]
 	KnownModuleError { pallet: String, name: String, error: String },
+}
+
+impl<E> From<ErrorInfo> for ResolvedDispatchError<E> {
+	fn from(info: ErrorInfo) -> Self {
+		ResolvedDispatchError::KnownModuleError {
+			pallet: info.pallet,
+			name: info.name,
+			error: info.error,
+		}
+	}
+}
+
+impl ResolvedDispatchError<JsonValue> {
+	pub fn from_error_json(dispatch_error_json: &JsonValue) -> Self {
+		(|| {
+			Some(ResolvedDispatchError::KnownModuleError {
+				pallet: dispatch_error_json["pallet"].as_str()?.to_string(),
+				name: dispatch_error_json["name"].as_str()?.to_string(),
+				error: dispatch_error_json["error"].as_str()?.to_string(),
+			})
+		})()
+		.unwrap_or_else(|| ResolvedDispatchError::DispatchError(dispatch_error_json.clone()))
+	}
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -101,21 +131,14 @@ impl DynamicEventRecord {
 
 impl DynamicEvent {
 	/// If this event represents the outcome of an extrinsic, return the result.
-	pub fn extrinsic_outcome(&self) -> Option<Result<(), DispatchError>> {
+	pub fn extrinsic_outcome(&self) -> Option<Result<(), ResolvedDispatchError<JsonValue>>> {
 		if self.0.pointer("/System/ExtrinsicSuccess/dispatch_info").is_some() {
 			Some(Ok(()))
 		} else {
 			self.0
 				.pointer("/System/ExtrinsicFailed/dispatch_error")
 				.map(|dispatch_error_json| {
-					Err((|| {
-						Some(DispatchError::KnownModuleError {
-							pallet: dispatch_error_json["pallet"].as_str()?.to_string(),
-							name: dispatch_error_json["name"].as_str()?.to_string(),
-							error: dispatch_error_json["error"].as_str()?.to_string(),
-						})
-					})()
-					.unwrap_or_else(|| DispatchError::DispatchError(dispatch_error_json.clone())))
+					Err(ResolvedDispatchError::from_error_json(dispatch_error_json))
 				})
 		}
 	}
@@ -126,7 +149,38 @@ impl DynamicEvent {
 }
 
 type NamedVariantLookup<T> = BTreeMap<u8, (String, T)>;
-type ErrorInfo = NamedVariantLookup<Vec<String>>;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ErrorLookup {
+	/// A lookup table for dispatch errors.
+	///
+	/// The outer lookup is by pallet index, the inner lookup is by error index.
+	errors: NamedVariantLookup<NamedVariantLookup<Vec<String>>>,
+}
+
+/// Structured information derived from a ModuleError.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ErrorInfo {
+	pub pallet: String,
+	pub name: String,
+	pub error: String,
+}
+
+impl ErrorLookup {
+	pub fn new(errors: NamedVariantLookup<NamedVariantLookup<Vec<String>>>) -> Self {
+		Self { errors }
+	}
+
+	pub fn lookup(&self, pallet_index: u8, error_index: u8) -> Option<ErrorInfo> {
+		self.errors.get(&pallet_index).and_then(|(pallet, pallet_errors)| {
+			pallet_errors.get(&error_index).map(|(name, doc)| ErrorInfo {
+				pallet: pallet.clone(),
+				name: name.clone(),
+				error: doc.join(" "),
+			})
+		})
+	}
+}
 
 /// A decoder for substrate events.
 ///
@@ -146,7 +200,7 @@ type ErrorInfo = NamedVariantLookup<Vec<String>>;
 pub struct EventDecoder {
 	events_type_id: u32,
 	types: PortableRegistry,
-	errors: NamedVariantLookup<ErrorInfo>,
+	pub errors: ErrorLookup,
 }
 
 impl EventDecoder {
@@ -154,35 +208,36 @@ impl EventDecoder {
 	///
 	/// The arguments to this constructor can be extracted from substrate metadata.
 	pub fn new(mut types: PortableRegistry, errors_type_id: u32) -> Self {
-		let errors = match types.resolve(errors_type_id).unwrap().type_def.clone() {
-			scale_info::TypeDef::Variant(runtime_error_type) => runtime_error_type
-				.variants
-				.into_iter()
-				.map(|pallet_error_type| {
-					(
-						pallet_error_type.index,
-						(pallet_error_type.name, {
-							let type_id =
-								pallet_error_type.fields.iter().exactly_one().unwrap().ty.id;
-							match types.resolve(type_id).unwrap().type_def.clone() {
-								scale_info::TypeDef::Variant(pallet_errors) => pallet_errors
-									.variants
-									.into_iter()
-									.map(|error_variant| {
-										(
-											error_variant.index,
-											(error_variant.name, error_variant.docs),
-										)
-									})
-									.collect::<ErrorInfo>(),
-								_ => panic!("Inner error type is not an Enum"),
-							}
-						}),
-					)
-				})
-				.collect::<NamedVariantLookup<_>>(),
-			_ => panic!("Expected the RuntimeError type, which should be an Enum."),
-		};
+		let errors =
+			ErrorLookup::new(match types.resolve(errors_type_id).unwrap().type_def.clone() {
+				scale_info::TypeDef::Variant(runtime_error_type) => runtime_error_type
+					.variants
+					.into_iter()
+					.map(|pallet_error_type| {
+						(
+							pallet_error_type.index,
+							(pallet_error_type.name, {
+								let type_id =
+									pallet_error_type.fields.iter().exactly_one().unwrap().ty.id;
+								match types.resolve(type_id).unwrap().type_def.clone() {
+									scale_info::TypeDef::Variant(pallet_errors) => pallet_errors
+										.variants
+										.into_iter()
+										.map(|error_variant| {
+											(
+												error_variant.index,
+												(error_variant.name, error_variant.docs),
+											)
+										})
+										.collect::<NamedVariantLookup<_>>(),
+									_ => panic!("Inner error type is not an Enum"),
+								}
+							}),
+						)
+					})
+					.collect::<NamedVariantLookup<_>>(),
+				_ => panic!("Expected the RuntimeError type, which should be an Enum."),
+			});
 
 		let events_type_id = types
 			.types
@@ -304,15 +359,9 @@ impl EventDecoder {
 
 		log::debug!("Pallet index: {}", pallet_index);
 
-		self.errors.get(&pallet_index).and_then(|(pallet, pallet_errors)| {
-			pallet_errors.get(&error_index).map(|(name, doc)| {
-				JsonValue::Object(
-					[("pallet", pallet.clone()), ("name", name.clone()), ("error", doc.join(" "))]
-						.into_iter()
-						.map(|(k, v)| (k.to_string(), JsonValue::String(v)))
-						.collect(),
-				)
-			})
+		self.errors.lookup(pallet_index, error_index).map(|e| {
+			serde_json::to_value(e)
+				.expect("ErrorInfo is serializable to JSON, so this should never fail")
 		})
 	}
 }
@@ -415,7 +464,7 @@ mod test {
 		}
 
 		#[track_caller]
-		fn outcome(json: JsonValue) -> Result<(), DispatchError> {
+		fn outcome(json: JsonValue) -> Result<(), ResolvedDispatchError<JsonValue>> {
 			DynamicEventRecord::new(json)
 				.expect("Valid json event record")
 				.event()
@@ -425,14 +474,14 @@ mod test {
 
 		assert!(outcome(success).is_ok());
 		assert!(
-			matches!(outcome(failed_1.clone()).unwrap_err(), DispatchError::DispatchError(e) if e == raw_error),
-			"Expected dispatch error to be DispatchError::DispatchError({:?}), got {:?}",
+			matches!(outcome(failed_1.clone()).unwrap_err(), ResolvedDispatchError::DispatchError(e) if e == raw_error),
+			"Expected dispatch error to be ResolvedDispatchError::DispatchError({:?}), got {:?}",
 			raw_error,
 			outcome(failed_1),
 		);
 		assert!(matches!(
 			outcome(failed_2).unwrap_err(),
-			DispatchError::KnownModuleError {
+			ResolvedDispatchError::KnownModuleError {
 				pallet,
 				name,
 				error

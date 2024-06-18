@@ -570,7 +570,7 @@ async fn order_fills<StateChainClient>(
 	block: BlockInfo,
 ) -> Result<BlockUpdate<OrderFills>, jsonrpsee::core::Error>
 where
-	StateChainClient: StorageApi,
+	StateChainClient: StorageApi + Send + Sync + 'static,
 {
 	let (previous_pools, pools, events) = try_join!(
 		state_chain_client
