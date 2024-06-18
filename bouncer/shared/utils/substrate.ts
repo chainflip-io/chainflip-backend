@@ -7,66 +7,92 @@ Symbol.asyncDispose ??= Symbol('asyncDispose');
 // @ts-expect-error polyfilling
 Symbol.dispose ??= Symbol('dispose');
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const getCachedDisposable = <T extends AsyncDisposable, F extends (...args: any[]) => Promise<T>>(
+  factory: F,
+) => {
+  let disposable: T | undefined;
+  let connections = 0;
+
+  return (async (...args) => {
+    if (!disposable) {
+      disposable = await factory(...args);
+    }
+
+    connections += 1;
+    console.log({ connections });
+
+    return new Proxy(disposable, {
+      get(target, prop, receiver) {
+        if (prop === Symbol.asyncDispose) {
+          console.log({ connections });
+          return () => {
+            setTimeout(() => {
+              if (connections === 0) {
+                console.log({ connections });
+
+                const dispose = Reflect.get(
+                  target,
+                  Symbol.asyncDispose,
+                  receiver,
+                ) as () => Promise<void>;
+
+                dispose.call(target).catch(() => null);
+                disposable = undefined;
+              }
+            }, 5_000).unref();
+          };
+        }
+
+        if (prop === 'disconnect') {
+          return async () => {
+            // noop
+          };
+        }
+
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+  }) as F;
+};
+
 type DisposableApiPromise = ApiPromise & { [Symbol.asyncDispose](): Promise<void> };
 
 // It is important to cache WS connections because nodes seem to have a
 // limit on how many can be opened at the same time (from the same IP presumably)
-function getCachedSubstrateApi(defaultEndpoint: string) {
-  let api: DisposableApiPromise | undefined;
-  let connections = 0;
-
-  return async (providedEndpoint?: string): Promise<DisposableApiPromise> => {
-    if (!api) {
-      const endpoint = providedEndpoint ?? defaultEndpoint;
-
-      const apiPromise = await ApiPromise.create({
-        provider: new WsProvider(endpoint),
-        noInitWarn: true,
-        types: {
-          EncodedAddress: {
-            _enum: {
-              Eth: '[u8; 20]',
-              Arb: '[u8; 20]',
-              Dot: '[u8; 32]',
-              Btc: 'Vec<u8>',
-            },
+const getCachedSubstrateApi = (endpoint: string) =>
+  getCachedDisposable(async (): Promise<DisposableApiPromise> => {
+    const apiPromise = await ApiPromise.create({
+      provider: new WsProvider(endpoint),
+      noInitWarn: true,
+      types: {
+        EncodedAddress: {
+          _enum: {
+            Eth: '[u8; 20]',
+            Arb: '[u8; 20]',
+            Dot: '[u8; 32]',
+            Btc: 'Vec<u8>',
           },
         },
-      });
+      },
+    });
 
-      api = new Proxy(apiPromise as unknown as DisposableApiPromise, {
-        get(target, prop, receiver) {
-          if (prop === Symbol.asyncDispose) {
-            return async () => {
-              connections -= 1;
-              if (connections === 0) {
-                setTimeout(() => {
-                  if (connections === 0) {
-                    api = undefined;
-                    Reflect.get(target, 'disconnect', receiver)
-                      .call(target)
-                      .catch(() => null);
-                  }
-                }, 5_000).unref();
-              }
-            };
-          }
-          if (prop === 'disconnect') {
-            return async () => {
-              // noop
-            };
-          }
+    return new Proxy(apiPromise as unknown as DisposableApiPromise, {
+      get(target, prop, receiver) {
+        if (prop === Symbol.asyncDispose) {
+          console.log('disposing');
+          return Reflect.get(target, 'disconnect', receiver);
+        }
+        if (prop === 'disconnect') {
+          return async () => {
+            // noop
+          };
+        }
 
-          return Reflect.get(target, prop, receiver);
-        },
-      });
-    }
-
-    connections += 1;
-
-    return api;
-  };
-}
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+  });
 
 export const getChainflipApi = getCachedSubstrateApi(
   process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944',
@@ -200,6 +226,8 @@ type AbortableObserver<T> = {
   event: Promise<Event<T> | null>;
 };
 
+let monitor = 0;
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export function observeEvent<T = any>(eventName: EventName): Observer<T>;
 export function observeEvent<T = any>(eventName: EventName, opts: Options<T>): Observer<T>;
@@ -228,17 +256,24 @@ export function observeEvent<T = any>(
   });
 
   const findEvent = async () => {
-    for await (const event of it) {
-      if (
-        event.name.section.includes(expectedSection) &&
-        event.name.method.includes(expectedMethod) &&
-        test(event)
-      ) {
-        return event as Event<T>;
+    monitor += 1;
+    console.log({ 'monitoring events': monitor });
+    try {
+      for await (const event of it) {
+        if (
+          event.name.section.includes(expectedSection) &&
+          event.name.method.includes(expectedMethod) &&
+          test(event)
+        ) {
+          return event as Event<T>;
+        }
       }
-    }
 
-    return null;
+      return null;
+    } finally {
+      monitor -= 1;
+      console.log({ 'monitoring events': monitor });
+    }
   };
 
   if (!controller) return { event: findEvent() } as Observer<T>;
