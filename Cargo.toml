@@ -59,6 +59,7 @@ members = [
 	"state-chain/runtime",
 	"state-chain/runtime-utilities",
 	"state-chain/runtime-utilities/macros",
+  'state-chain/runtime-tests',
 	"state-chain/test-utilities",
 	"state-chain/traits",
 	"utilities",
