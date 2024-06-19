@@ -33,6 +33,7 @@ impl AddressDerivationApi<Solana> for AddressDerivation {
 			.map_err(|_| AddressDerivationError::MissingSolanaVaultProgram)?;
 
 		derive_deposit_address(channel_id, vault_address)
+			.map(|derived_ata| (derived_ata.address, derived_ata.bump))
 			.map_err(AddressDerivationError::SolanaDerivationError)
 	}
 }
