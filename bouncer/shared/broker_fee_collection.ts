@@ -128,7 +128,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   console.log('depositAmount:', depositAmountAfterIngressFee);
   assert(
     depositAmountAfterIngressFee >= 0 &&
-      depositAmountAfterIngressFee <= rawDepositForSwapAmountBigInt,
+    depositAmountAfterIngressFee <= rawDepositForSwapAmountBigInt,
     `Unexpected ${asset} deposit amount ${depositAmountAfterIngressFee},
     }`,
   );
@@ -169,22 +169,28 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
       observeWithdrawalAddress.toLowerCase(),
   });
 
-  await submitBrokerWithdrawal(asset, {
-    [chain]: observeWithdrawalAddress,
-  });
-  console.log(`Submitted withdrawal for ${asset}`);
-  const withdrawalRequestedEvent = await observeWithdrawalRequested.event;
-  console.log(`Withdrawal requested, egressId: ${withdrawalRequestedEvent.data.egressId}`);
-  const BatchBroadcastRequestedEvent = await observeEvent(':BatchBroadcastRequested', {
+  const observebatchBroadcastRequested = observeEvent(':BatchBroadcastRequested', {
     test: (event) =>
       event.data.egressIds.some(
         (egressId: EgressId) =>
           egressId[0] === withdrawalRequestedEvent.data.egressId[0] &&
           egressId[1] === withdrawalRequestedEvent.data.egressId[1],
       ),
-  }).event;
+  });
+
+  await submitBrokerWithdrawal(asset, {
+    [chain]: observeWithdrawalAddress,
+  });
+  console.log(`Submitted withdrawal for ${asset}`);
+  const withdrawalRequestedEvent = await observeWithdrawalRequested.event;
+  console.log(`Withdrawal requested, egressId: ${withdrawalRequestedEvent.data.egressId}`);
+
+  const batchBroadcastRequestedEvent = await observebatchBroadcastRequested.event;
+
+
+  // never get to this
   console.log(
-    `Batch broadcast requested, broadcastId: ${BatchBroadcastRequestedEvent.data.broadcastId}`,
+    `Batch broadcast requested, broadcastId: ${batchBroadcastRequestedEvent.data.broadcastId}`,
   );
 
   await observeBalanceIncrease(asset, withdrawalAddress, balanceBeforeWithdrawal);

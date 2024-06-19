@@ -16,7 +16,7 @@
 // ./explorer.ts live | grep -F -e "Block" -e "ChainStateUpdated"
 
 import { ApiPromise } from '@polkadot/api';
-import { getChainflipApi } from '../shared/utils';
+import { getChainflipApi } from '../shared/utils/substrate';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function argsToString(args: any): string {
@@ -53,8 +53,7 @@ function printEventsForExtrinsicId(events: any, extrinsicId: number, blockNum: n
     ) {
       const tag = extrinsicId === -1 ? decodedEvent.phase : extrinsicId;
       console.log(
-        `    Event ${blockNum}-${tag}-${i}: ${decodedEvent.event.section}.${
-          decodedEvent.event.method
+        `    Event ${blockNum}-${tag}-${i}: ${decodedEvent.event.section}.${decodedEvent.event.method
         }(${argsToString(event.event.data)})`,
       );
     }
