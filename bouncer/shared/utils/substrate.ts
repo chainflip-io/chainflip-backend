@@ -1,5 +1,6 @@
 import 'disposablestack/auto';
 import { ApiPromise, WsProvider } from '@polkadot/api';
+import { Observable, Subject } from 'rxjs';
 import { deferredPromise } from '../utils';
 
 // @ts-expect-error polyfilling
@@ -11,12 +12,16 @@ Symbol.dispose ??= Symbol('dispose');
 const getCachedDisposable = <T extends AsyncDisposable, F extends (...args: any[]) => Promise<T>>(
   factory: F,
 ) => {
-  let disposable: T | undefined;
+  const cache = new Map<string, T>();
   let connections = 0;
 
   return (async (...args) => {
+    const cacheKey = JSON.stringify(args);
+    let disposable = cache.get(cacheKey);
+
     if (!disposable) {
       disposable = await factory(...args);
+      cache.set(cacheKey, disposable);
     }
 
     connections += 1;
@@ -35,7 +40,7 @@ const getCachedDisposable = <T extends AsyncDisposable, F extends (...args: any[
                   target,
                   Symbol.asyncDispose,
                   receiver,
-                ) as () => Promise<void>;
+                ) as unknown as () => Promise<void>;
 
                 dispose.call(target).catch(() => null);
                 disposable = undefined;
@@ -116,88 +121,108 @@ export type Event<T = any> = {
   eventIndex: number;
 };
 
-async function* subscribeHeads({
-  chain,
-  finalized = false,
-  signal,
-}: {
-  chain: SubstrateChain;
-  finalized?: boolean;
-  signal?: AbortSignal;
-}) {
-  // take the correct substrate API
-  await using api = await apiMap[chain]();
-  // prepare a stack for cleanup
-  using stack = new DisposableStack();
-
-  // subscribe to the correct head based on the finalized flag
-  const subscribe = finalized
-    ? api.rpc.chain.subscribeFinalizedHeads
-    : api.rpc.chain.subscribeNewHeads;
-
-  // async generator is pull-based, but the subscribe new heads is push-based
+async function* observableToIterable<T>(observer: Observable<T>, signal?: AbortSignal) {
+  // async generator is pull-based, but the observable is push-based
   // if the consumer takes too long, we need to buffer the events
-  const buffer: Event[][] = [];
+  const buffer: T[] = [];
 
   // yield the first batch of events via a promise because it is asynchronous
-  let promise: Promise<Event[]> | undefined;
-  let resolve: ((value: Event[]) => void) | undefined;
+  let promise: Promise<T | null> | undefined;
+  let resolve: ((value: T | null) => void) | undefined;
   let reject: ((error: Error) => void) | undefined;
+  ({ resolve, promise, reject } = deferredPromise<T | null>());
+  let done = false;
 
-  signal?.addEventListener('abort', () => {
-    reject?.(new Error('Aborted'));
+  const complete = () => {
+    done = true;
+    resolve?.(null);
+  };
+
+  signal?.addEventListener('abort', complete, { once: true });
+
+  const sub = observer.subscribe({
+    error: (error) => {
+      reject?.(error);
+    },
+    next: (value) => {
+      // if we haven't consumed the promise yet, resolve it and prepare the for
+      // the next batch, otherwise begin buffering the events
+      if (resolve) {
+        resolve(value);
+        promise = undefined;
+        resolve = undefined;
+        reject = undefined;
+      } else {
+        buffer.push(value);
+      }
+    },
+    complete,
   });
 
-  ({ resolve, promise, reject } = deferredPromise<Event[]>());
-
-  const unsubscribe = await subscribe(async (header) => {
-    const historicApi = await api.at(header.hash);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rawEvents = (await historicApi.query.system.events()) as unknown as any[];
-    const events: Event[] = [];
-
-    // iterate over all the events, reshaping them for the consumer
-    rawEvents.forEach(({ event }, index) => {
-      events.push({
-        name: { section: event.section, method: event.method },
-        data: event.toHuman().data,
-        block: header.number.toNumber(),
-        eventIndex: index,
-      });
-    });
-
-    // if we haven't consumed the promise yet, resolve it and prepare the for
-    // the next batch, otherwise begin buffering the events
-    if (resolve) {
-      resolve(events);
-      promise = undefined;
-      resolve = undefined;
-      reject = undefined;
-    } else {
-      buffer.push(events);
-    }
-  });
-
-  // automatic cleanup!
-  stack.defer(unsubscribe);
-
-  while (true) {
+  while (!done) {
     const next = await promise.catch(() => null);
 
     // yield the first batch
     if (next === null) break;
-    yield* next;
+    yield next;
 
     // if the consume took too long, yield the buffered events
     while (buffer.length !== 0) {
-      yield* buffer.shift()!;
+      yield buffer.shift()!;
     }
 
     // reset for the next batch
-    ({ resolve, promise, reject } = deferredPromise<Event[]>());
+    ({ resolve, promise, reject } = deferredPromise<T | null>());
   }
+
+  sub.unsubscribe();
 }
+
+const subscribeHeads = getCachedDisposable(
+  async ({ chain, finalized = false }: { chain: SubstrateChain; finalized?: boolean }) => {
+    // prepare a stack for cleanup
+    const stack = new AsyncDisposableStack();
+    const api = stack.use(await apiMap[chain]());
+    // take the correct substrate API
+
+    // subscribe to the correct head based on the finalized flag
+    const subscribe = finalized
+      ? api.rpc.chain.subscribeFinalizedHeads
+      : api.rpc.chain.subscribeNewHeads;
+    const subject = new Subject<Event[]>();
+
+    const unsubscribe = await subscribe(async (header) => {
+      const historicApi = await api.at(header.hash);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rawEvents = (await historicApi.query.system.events()) as unknown as any[];
+      const events: Event[] = [];
+
+      // iterate over all the events, reshaping them for the consumer
+      rawEvents.forEach(({ event }, index) => {
+        events.push({
+          name: { section: event.section, method: event.method },
+          data: event.toHuman().data,
+          block: header.number.toNumber(),
+          eventIndex: index,
+        });
+      });
+
+      subject.next(events);
+    });
+
+    // automatic cleanup!
+    stack.defer(unsubscribe);
+    stack.defer(() => subject.complete());
+
+    return {
+      observable: subject as Observable<Event[]>,
+      [Symbol.asyncDispose]() {
+        return stack.disposeAsync();
+      },
+    };
+  },
+);
 
 type EventTest<T> = (event: Event<T>) => boolean;
 
@@ -248,24 +273,21 @@ export function observeEvent<T = any>(
 
   const controller = abortable ? new AbortController() : undefined;
 
-  const it = subscribeHeads({ chain, finalized });
-
-  controller?.signal.addEventListener('abort', () => {
-    /* eslint-disable-next-line @typescript-eslint/no-floating-promises */
-    it.return();
-  });
-
   const findEvent = async () => {
+    await using subscription = await subscribeHeads({ chain, finalized });
+    const it = observableToIterable(subscription.observable, controller?.signal);
     monitor += 1;
     console.log({ 'monitoring events': monitor });
     try {
-      for await (const event of it) {
-        if (
-          event.name.section.includes(expectedSection) &&
-          event.name.method.includes(expectedMethod) &&
-          test(event)
-        ) {
-          return event as Event<T>;
+      for await (const events of it) {
+        for (const event of events) {
+          if (
+            event.name.section.includes(expectedSection) &&
+            event.name.method.includes(expectedMethod) &&
+            test(event)
+          ) {
+            return event as Event<T>;
+          }
         }
       }
 
