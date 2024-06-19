@@ -1,5 +1,6 @@
 import 'disposablestack/auto';
 import { ApiPromise, WsProvider } from '@polkadot/api';
+import { Observable, Subject } from 'rxjs';
 import { deferredPromise } from '../utils';
 
 // @ts-expect-error polyfilling
@@ -7,66 +8,87 @@ Symbol.asyncDispose ??= Symbol('asyncDispose');
 // @ts-expect-error polyfilling
 Symbol.dispose ??= Symbol('dispose');
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const getCachedDisposable = <T extends AsyncDisposable, F extends (...args: any[]) => Promise<T>>(
+  factory: F,
+) => {
+  const cache = new Map<string, Promise<T>>();
+  let connections = 0;
+
+  return (async (...args) => {
+    const cacheKey = JSON.stringify(args);
+    let disposablePromise = cache.get(cacheKey);
+
+    if (!disposablePromise) {
+      disposablePromise = factory(...args);
+      cache.set(cacheKey, disposablePromise);
+    }
+
+    const disposable = await disposablePromise;
+
+    connections += 1;
+
+    return new Proxy(disposable, {
+      get(target, prop, receiver) {
+        if (prop === Symbol.asyncDispose) {
+          return () => {
+            setTimeout(() => {
+              if (connections === 0) {
+                const dispose = Reflect.get(
+                  target,
+                  Symbol.asyncDispose,
+                  receiver,
+                ) as unknown as () => Promise<void>;
+
+                dispose.call(target).catch(() => null);
+                cache.delete(cacheKey);
+              }
+            }, 5_000).unref();
+          };
+        }
+
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+  }) as F;
+};
+
 type DisposableApiPromise = ApiPromise & { [Symbol.asyncDispose](): Promise<void> };
 
 // It is important to cache WS connections because nodes seem to have a
 // limit on how many can be opened at the same time (from the same IP presumably)
-function getCachedSubstrateApi(defaultEndpoint: string) {
-  let api: DisposableApiPromise | undefined;
-  let connections = 0;
-
-  return async (providedEndpoint?: string): Promise<DisposableApiPromise> => {
-    if (!api) {
-      const endpoint = providedEndpoint ?? defaultEndpoint;
-
-      const apiPromise = await ApiPromise.create({
-        provider: new WsProvider(endpoint),
-        noInitWarn: true,
-        types: {
-          EncodedAddress: {
-            _enum: {
-              Eth: '[u8; 20]',
-              Arb: '[u8; 20]',
-              Dot: '[u8; 32]',
-              Btc: 'Vec<u8>',
-            },
+const getCachedSubstrateApi = (endpoint: string) =>
+  getCachedDisposable(async (): Promise<DisposableApiPromise> => {
+    const apiPromise = await ApiPromise.create({
+      provider: new WsProvider(endpoint),
+      noInitWarn: true,
+      types: {
+        EncodedAddress: {
+          _enum: {
+            Eth: '[u8; 20]',
+            Arb: '[u8; 20]',
+            Dot: '[u8; 32]',
+            Btc: 'Vec<u8>',
           },
         },
-      });
+      },
+    });
 
-      api = new Proxy(apiPromise as unknown as DisposableApiPromise, {
-        get(target, prop, receiver) {
-          if (prop === Symbol.asyncDispose) {
-            return async () => {
-              connections -= 1;
-              if (connections === 0) {
-                setTimeout(() => {
-                  if (connections === 0) {
-                    api = undefined;
-                    Reflect.get(target, 'disconnect', receiver)
-                      .call(target)
-                      .catch(() => null);
-                  }
-                }, 5_000).unref();
-              }
-            };
-          }
-          if (prop === 'disconnect') {
-            return async () => {
-              // noop
-            };
-          }
+    return new Proxy(apiPromise as unknown as DisposableApiPromise, {
+      get(target, prop, receiver) {
+        if (prop === Symbol.asyncDispose) {
+          return Reflect.get(target, 'disconnect', receiver);
+        }
+        if (prop === 'disconnect') {
+          return async () => {
+            // noop
+          };
+        }
 
-          return Reflect.get(target, prop, receiver);
-        },
-      });
-    }
-
-    connections += 1;
-
-    return api;
-  };
-}
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+  });
 
 export const getChainflipApi = getCachedSubstrateApi(
   process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944',
@@ -90,88 +112,108 @@ export type Event<T = any> = {
   eventIndex: number;
 };
 
-async function* subscribeHeads({
-  chain,
-  finalized = false,
-  signal,
-}: {
-  chain: SubstrateChain;
-  finalized?: boolean;
-  signal?: AbortSignal;
-}) {
-  // take the correct substrate API
-  await using api = await apiMap[chain]();
-  // prepare a stack for cleanup
-  using stack = new DisposableStack();
-
-  // subscribe to the correct head based on the finalized flag
-  const subscribe = finalized
-    ? api.rpc.chain.subscribeFinalizedHeads
-    : api.rpc.chain.subscribeNewHeads;
-
-  // async generator is pull-based, but the subscribe new heads is push-based
+async function* observableToIterable<T>(observer: Observable<T>, signal?: AbortSignal) {
+  // async generator is pull-based, but the observable is push-based
   // if the consumer takes too long, we need to buffer the events
-  const buffer: Event[][] = [];
+  const buffer: T[] = [];
 
   // yield the first batch of events via a promise because it is asynchronous
-  let promise: Promise<Event[]> | undefined;
-  let resolve: ((value: Event[]) => void) | undefined;
+  let promise: Promise<T | null> | undefined;
+  let resolve: ((value: T | null) => void) | undefined;
   let reject: ((error: Error) => void) | undefined;
+  ({ resolve, promise, reject } = deferredPromise<T | null>());
+  let done = false;
 
-  signal?.addEventListener('abort', () => {
-    reject?.(new Error('Aborted'));
+  const complete = () => {
+    done = true;
+    resolve?.(null);
+  };
+
+  signal?.addEventListener('abort', complete, { once: true });
+
+  const sub = observer.subscribe({
+    error: (error) => {
+      reject?.(error);
+    },
+    next: (value) => {
+      // if we haven't consumed the promise yet, resolve it and prepare the for
+      // the next batch, otherwise begin buffering the events
+      if (resolve) {
+        resolve(value);
+        promise = undefined;
+        resolve = undefined;
+        reject = undefined;
+      } else {
+        buffer.push(value);
+      }
+    },
+    complete,
   });
 
-  ({ resolve, promise, reject } = deferredPromise<Event[]>());
-
-  const unsubscribe = await subscribe(async (header) => {
-    const historicApi = await api.at(header.hash);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rawEvents = (await historicApi.query.system.events()) as unknown as any[];
-    const events: Event[] = [];
-
-    // iterate over all the events, reshaping them for the consumer
-    rawEvents.forEach(({ event }, index) => {
-      events.push({
-        name: { section: event.section, method: event.method },
-        data: event.toHuman().data,
-        block: header.number.toNumber(),
-        eventIndex: index,
-      });
-    });
-
-    // if we haven't consumed the promise yet, resolve it and prepare the for
-    // the next batch, otherwise begin buffering the events
-    if (resolve) {
-      resolve(events);
-      promise = undefined;
-      resolve = undefined;
-      reject = undefined;
-    } else {
-      buffer.push(events);
-    }
-  });
-
-  // automatic cleanup!
-  stack.defer(unsubscribe);
-
-  while (true) {
+  while (!done) {
     const next = await promise.catch(() => null);
 
     // yield the first batch
     if (next === null) break;
-    yield* next;
+    yield next;
 
     // if the consume took too long, yield the buffered events
     while (buffer.length !== 0) {
-      yield* buffer.shift()!;
+      yield buffer.shift()!;
     }
 
     // reset for the next batch
-    ({ resolve, promise, reject } = deferredPromise<Event[]>());
+    ({ resolve, promise, reject } = deferredPromise<T | null>());
   }
+
+  sub.unsubscribe();
 }
+
+const subscribeHeads = getCachedDisposable(
+  async ({ chain, finalized = false }: { chain: SubstrateChain; finalized?: boolean }) => {
+    // prepare a stack for cleanup
+    const stack = new AsyncDisposableStack();
+    const api = stack.use(await apiMap[chain]());
+    // take the correct substrate API
+
+    // subscribe to the correct head based on the finalized flag
+    const subscribe = finalized
+      ? api.rpc.chain.subscribeFinalizedHeads
+      : api.rpc.chain.subscribeNewHeads;
+    const subject = new Subject<Event[]>();
+
+    const unsubscribe = await subscribe(async (header) => {
+      const historicApi = await api.at(header.hash);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rawEvents = (await historicApi.query.system.events()) as unknown as any[];
+      const events: Event[] = [];
+
+      // iterate over all the events, reshaping them for the consumer
+      rawEvents.forEach(({ event }, index) => {
+        events.push({
+          name: { section: event.section, method: event.method },
+          data: event.toHuman().data,
+          block: header.number.toNumber(),
+          eventIndex: index,
+        });
+      });
+
+      subject.next(events);
+    });
+
+    // automatic cleanup!
+    stack.defer(unsubscribe);
+    stack.defer(() => subject.complete());
+
+    return {
+      observable: subject as Observable<Event[]>,
+      [Symbol.asyncDispose]() {
+        return stack.disposeAsync();
+      },
+    };
+  },
+);
 
 type EventTest<T> = (event: Event<T>) => boolean;
 
@@ -220,21 +262,18 @@ export function observeEvent<T = any>(
 
   const controller = abortable ? new AbortController() : undefined;
 
-  const it = subscribeHeads({ chain, finalized });
-
-  controller?.signal.addEventListener('abort', () => {
-    /* eslint-disable-next-line @typescript-eslint/no-floating-promises */
-    it.return();
-  });
-
   const findEvent = async () => {
-    for await (const event of it) {
-      if (
-        event.name.section.includes(expectedSection) &&
-        event.name.method.includes(expectedMethod) &&
-        test(event)
-      ) {
-        return event as Event<T>;
+    await using subscription = await subscribeHeads({ chain, finalized });
+    const it = observableToIterable(subscription.observable, controller?.signal);
+    for await (const events of it) {
+      for (const event of events) {
+        if (
+          event.name.section.includes(expectedSection) &&
+          event.name.method.includes(expectedMethod) &&
+          test(event)
+        ) {
+          return event as Event<T>;
+        }
       }
     }
 
