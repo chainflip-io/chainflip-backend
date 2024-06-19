@@ -12,16 +12,6 @@ import { testBoostingSwap } from '../shared/boost';
 import { observeBadEvent } from '../shared/utils/substrate';
 
 const swapContext = new SwapContext();
-const outstandingTests = new Set([
-  'swapLessThanED',
-  'testAllSwaps',
-  'testEvmDeposits',
-  'testFundRedeem',
-  'testMultipleMembersGovernance',
-  'testLpApi',
-  'testBrokerFeeCollection',
-  'testBoostingSwap',
-]);
 
 async function runAllConcurrentTests() {
   // Specify the number of nodes via providing an argument to this script.
@@ -39,30 +29,14 @@ async function runAllConcurrentTests() {
 
   // Tests that work with any number of nodes and can be run concurrently
   const tests = [
-    swapLessThanED().then(() => {
-      outstandingTests.delete('swapLessThanED');
-    }),
-    testAllSwaps(swapContext).then(() => {
-      outstandingTests.delete('testAllSwaps');
-    }),
-    testEvmDeposits().then(() => {
-      outstandingTests.delete('testEvmDeposits');
-    }),
-    testFundRedeem('redeem').then(() => {
-      outstandingTests.delete('testFundRedeem');
-    }),
-    testMultipleMembersGovernance().then(() => {
-      outstandingTests.delete('testMultipleMembersGovernance');
-    }),
-    testLpApi().then(() => {
-      outstandingTests.delete('testLpApi');
-    }),
-    testBrokerFeeCollection().then(() => {
-      outstandingTests.delete('testBrokerFeeCollection');
-    }),
-    testBoostingSwap().then(() => {
-      outstandingTests.delete('testBoostingSwap');
-    }),
+    swapLessThanED(),
+    testAllSwaps(swapContext),
+    testEvmDeposits(),
+    testFundRedeem('redeem'),
+    testMultipleMembersGovernance(),
+    testLpApi(),
+    testBrokerFeeCollection(),
+    testBoostingSwap(),
   ];
 
   // Test that only work if there is more than one node
@@ -84,8 +58,6 @@ runWithTimeout(runAllConcurrentTests(), 2000000)
   })
   .catch((error) => {
     console.error('All concurrent tests timed out. Exiting.');
-    console.error('Outstanding tests: ');
-    console.error([...outstandingTests].join('\n'));
     swapContext.print_report();
     console.error(error);
     process.exit(-1);

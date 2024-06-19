@@ -10,7 +10,6 @@ Symbol.dispose ??= Symbol('dispose');
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getCachedDisposable = <T extends AsyncDisposable, F extends (...args: any[]) => Promise<T>>(
-  name: string,
   factory: F,
 ) => {
   const cache = new Map<string, Promise<T>>();
@@ -23,7 +22,6 @@ const getCachedDisposable = <T extends AsyncDisposable, F extends (...args: any[
     if (!disposablePromise) {
       disposablePromise = factory(...args);
       cache.set(cacheKey, disposablePromise);
-      console.log('creating disposable', name, cacheKey);
     }
 
     const disposable = await disposablePromise;
@@ -36,19 +34,14 @@ const getCachedDisposable = <T extends AsyncDisposable, F extends (...args: any[
           return () => {
             setTimeout(() => {
               if (connections === 0) {
-                console.log('disposing disposable', name, cacheKey);
-                try {
-                  const dispose = Reflect.get(
-                    target,
-                    Symbol.asyncDispose,
-                    receiver,
-                  ) as unknown as () => Promise<void>;
+                const dispose = Reflect.get(
+                  target,
+                  Symbol.asyncDispose,
+                  receiver,
+                ) as unknown as () => Promise<void>;
 
-                  dispose.call(target).catch(() => null);
-                  disposable = undefined;
-                } catch (error) {
-                  console.error('Failed to dispose', name, cacheKey, error);
-                }
+                dispose.call(target).catch(() => null);
+                cache.delete(cacheKey);
               }
             }, 5_000).unref();
           };
@@ -65,7 +58,7 @@ type DisposableApiPromise = ApiPromise & { [Symbol.asyncDispose](): Promise<void
 // It is important to cache WS connections because nodes seem to have a
 // limit on how many can be opened at the same time (from the same IP presumably)
 const getCachedSubstrateApi = (endpoint: string) =>
-  getCachedDisposable(endpoint, async (): Promise<DisposableApiPromise> => {
+  getCachedDisposable(async (): Promise<DisposableApiPromise> => {
     const apiPromise = await ApiPromise.create({
       provider: new WsProvider(endpoint),
       noInitWarn: true,
@@ -177,7 +170,6 @@ async function* observableToIterable<T>(observer: Observable<T>, signal?: AbortS
 }
 
 const subscribeHeads = getCachedDisposable(
-  'subscribeHeads',
   async ({ chain, finalized = false }: { chain: SubstrateChain; finalized?: boolean }) => {
     // prepare a stack for cleanup
     const stack = new AsyncDisposableStack();
