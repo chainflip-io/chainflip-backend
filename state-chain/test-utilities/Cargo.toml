@@ -17,6 +17,7 @@ frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag =
 sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
 sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
 sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+sp-state-machine = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
 
 [dev-dependencies]
 scale-info = { version = "2.11.1", features = ["derive"] }

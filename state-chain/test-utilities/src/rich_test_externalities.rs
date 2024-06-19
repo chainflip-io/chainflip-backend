@@ -9,7 +9,7 @@ use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::H256;
 use sp_runtime::{
 	traits::{CheckedSub, Dispatchable, UniqueSaturatedInto},
-	BuildStorage, DispatchError,
+	BuildStorage, DispatchError, StateVersion,
 };
 
 /// Convenience trait to link a runtime with its corresponding AllPalletsWithSystem struct.
@@ -35,11 +35,15 @@ pub trait HasAllPallets: frame_system::Config {
 	}
 }
 
-/// Basic [sp_io::TestExternalities] wrapper that provides a richer API for testing pallets.
-struct RichExternalities<Runtime>(sp_io::TestExternalities, std::marker::PhantomData<Runtime>);
+/// Basic [sp_state_machine::TestExternalities] wrapper that provides a richer API for testing
+/// pallets.
+struct RichExternalities<Runtime: frame_system::Config>(
+	sp_state_machine::TestExternalities<Runtime::Hashing>,
+	std::marker::PhantomData<Runtime>,
+);
 
-impl<Runtime: HasAllPallets> RichExternalities<Runtime> {
-	fn new(ext: sp_io::TestExternalities) -> Self {
+impl<Runtime: HasAllPallets + frame_system::Config> RichExternalities<Runtime> {
+	fn new(ext: sp_state_machine::TestExternalities<Runtime::Hashing>) -> Self {
 		Self(ext, Default::default())
 	}
 
@@ -90,21 +94,67 @@ impl<Runtime: HasAllPallets> RichExternalities<Runtime> {
 	}
 }
 
-/// A wrapper around [sp_io::TestExternalities] that provides a richer API for testing pallets.
-pub struct TestExternalities<Runtime: HasAllPallets, Ctx = ()> {
+/// A wrapper around [sp_state_machine::TestExternalities] that provides a richer API for testing
+/// pallets.
+pub struct TestExternalities<Runtime: HasAllPallets + frame_system::Config, Ctx = ()> {
 	ext: RichExternalities<Runtime>,
 	context: Ctx,
 }
 
+impl<Runtime, Ctx> AsRef<sp_state_machine::TestExternalities<Runtime::Hashing>>
+	for TestExternalities<Runtime, Ctx>
+where
+	Runtime: HasAllPallets + frame_system::Config,
+{
+	fn as_ref(&self) -> &sp_state_machine::TestExternalities<Runtime::Hashing> {
+		&self.ext.0
+	}
+}
+
 impl<Runtime> TestExternalities<Runtime>
 where
-	Runtime: HasAllPallets,
+	Runtime: HasAllPallets + frame_system::Config,
 {
+	/// Initialises new [TestExternalities] with the given genesis config at block number 1.
+	#[track_caller]
+	pub fn new<GenesisConfig: BuildStorage>(config: GenesisConfig) -> Self {
+		let mut ext: sp_state_machine::TestExternalities<Runtime::Hashing> =
+			config.build_storage().unwrap().into();
+		ext.execute_with(|| {
+			frame_system::Pallet::<Runtime>::set_block_number(1u32.into());
+			Runtime::integrity_test();
+		});
+		TestExternalities { ext: RichExternalities::new(ext), context: () }
+	}
+
+	pub fn from_raw_snapshot(
+		raw_storage: Vec<(Vec<u8>, (Vec<u8>, i32))>,
+		storage_root: Runtime::Hash,
+		state_version: StateVersion,
+	) -> Self {
+		sp_state_machine::TestExternalities::from_raw_snapshot(
+			raw_storage,
+			storage_root,
+			state_version,
+		)
+		.into()
+	}
+
 	/// Useful for backwards-compatibility. This is equivalent to the context-less execute_with from
-	/// [sp_io::TestExternalities].
+	/// [sp_state_machine::TestExternalities].
 	#[track_caller]
 	pub fn execute_with<Ctx>(self, f: impl FnOnce() -> Ctx) -> TestExternalities<Runtime, Ctx> {
 		self.ext.execute_with(f)
+	}
+}
+
+impl<Runtime> From<sp_state_machine::TestExternalities<Runtime::Hashing>>
+	for TestExternalities<Runtime>
+where
+	Runtime: HasAllPallets + frame_system::Config,
+{
+	fn from(ext: sp_state_machine::TestExternalities<Runtime::Hashing>) -> Self {
+		TestExternalities { ext: RichExternalities::new(ext), context: () }
 	}
 }
 
