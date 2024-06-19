@@ -1,0 +1,20 @@
+[package]
+name = "runtime-tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Local dependencies
+state-chain-runtime = { workspace = true }
+cf-test-utilities = { path = "../test-utilities" }
+
+# Polkadot SDK dependencies
+frame-remote-externalities = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.6+1' }
+
+tokio = { version = "1.38.0", features = ["full"] }
+anyhow = "1.0.86"
+tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
+log = "0.4.21"
+
+[lints]
+workspace = true

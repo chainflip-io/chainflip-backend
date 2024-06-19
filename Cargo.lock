@@ -9815,6 +9815,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "runtime-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cf-test-utilities",
+ "frame-remote-externalities",
+ "log",
+ "state-chain-runtime",
+ "tokio",
+ "tracing-subscriber 0.3.18",
+]
+
+[[package]]
 name = "rust-ini"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
