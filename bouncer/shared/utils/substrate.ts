@@ -25,17 +25,13 @@ const getCachedDisposable = <T extends AsyncDisposable, F extends (...args: any[
     }
 
     connections += 1;
-    console.log({ connections });
 
     return new Proxy(disposable, {
       get(target, prop, receiver) {
         if (prop === Symbol.asyncDispose) {
-          console.log({ connections });
           return () => {
             setTimeout(() => {
               if (connections === 0) {
-                console.log({ connections });
-
                 const dispose = Reflect.get(
                   target,
                   Symbol.asyncDispose,
@@ -85,7 +81,6 @@ const getCachedSubstrateApi = (endpoint: string) =>
     return new Proxy(apiPromise as unknown as DisposableApiPromise, {
       get(target, prop, receiver) {
         if (prop === Symbol.asyncDispose) {
-          console.log('disposing');
           return Reflect.get(target, 'disconnect', receiver);
         }
         if (prop === 'disconnect') {
@@ -251,8 +246,6 @@ type AbortableObserver<T> = {
   event: Promise<Event<T> | null>;
 };
 
-let monitor = 0;
-
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export function observeEvent<T = any>(eventName: EventName): Observer<T>;
 export function observeEvent<T = any>(eventName: EventName, opts: Options<T>): Observer<T>;
@@ -276,26 +269,19 @@ export function observeEvent<T = any>(
   const findEvent = async () => {
     await using subscription = await subscribeHeads({ chain, finalized });
     const it = observableToIterable(subscription.observable, controller?.signal);
-    monitor += 1;
-    console.log({ 'monitoring events': monitor });
-    try {
-      for await (const events of it) {
-        for (const event of events) {
-          if (
-            event.name.section.includes(expectedSection) &&
-            event.name.method.includes(expectedMethod) &&
-            test(event)
-          ) {
-            return event as Event<T>;
-          }
+    for await (const events of it) {
+      for (const event of events) {
+        if (
+          event.name.section.includes(expectedSection) &&
+          event.name.method.includes(expectedMethod) &&
+          test(event)
+        ) {
+          return event as Event<T>;
         }
       }
-
-      return null;
-    } finally {
-      monitor -= 1;
-      console.log({ 'monitoring events': monitor });
     }
+
+    return null;
   };
 
   if (!controller) return { event: findEvent() } as Observer<T>;
