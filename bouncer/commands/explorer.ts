@@ -53,7 +53,8 @@ function printEventsForExtrinsicId(events: any, extrinsicId: number, blockNum: n
     ) {
       const tag = extrinsicId === -1 ? decodedEvent.phase : extrinsicId;
       console.log(
-        `    Event ${blockNum}-${tag}-${i}: ${decodedEvent.event.section}.${decodedEvent.event.method
+        `    Event ${blockNum}-${tag}-${i}: ${decodedEvent.event.section}.${
+          decodedEvent.event.method
         }(${argsToString(event.event.data)})`,
       );
     }
