@@ -46,7 +46,7 @@ pallet-cf-swapping = { path = '../../state-chain/pallets/cf-swapping' }
 pallet-cf-pools = { path = '../../state-chain/pallets/cf-pools' }
 pallet-cf-threshold-signature = { path = "../../state-chain/pallets/cf-threshold-signature" }
 pallet-cf-validator = { path = "../../state-chain/pallets/cf-validator" }
-state-chain-runtime = { path = "../../state-chain/runtime" }
+state-chain-runtime = { workspace = true }
 
 
 # Substrate

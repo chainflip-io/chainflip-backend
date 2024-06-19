@@ -11,7 +11,7 @@ workspace = true
 codec = { package = "parity-scale-codec", version = "3.6.12" }
 
 # Chainflip Runtime
-state-chain-runtime = { path = '../runtime' }
+state-chain-runtime = { workspace = true }
 
 anyhow = "1.0"
 futures = "0.3.30"

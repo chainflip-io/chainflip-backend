@@ -37,7 +37,7 @@ cf-primitives = { path = "../../../state-chain/primitives" }
 pallet-cf-environment = { path = "../../../state-chain/pallets/cf-environment" }
 pallet-cf-ingress-egress = { path = "../../../state-chain/pallets/cf-ingress-egress" }
 pallet-cf-broadcast = { path = "../../../state-chain/pallets/cf-broadcast" }
-state-chain-runtime = { path = "../../../state-chain/runtime" }
+state-chain-runtime = { workspace = true }
 cf-chains = { path = "../../../state-chain/chains" }
 
 [build-dependencies]

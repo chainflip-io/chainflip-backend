@@ -22,7 +22,7 @@ workspace = true
 
 [dependencies]
 # Chainflip Runtime
-state-chain-runtime = { path = "../runtime" }
+state-chain-runtime = { workspace = true }
 
 # Local dependencies
 cf-chains = { path = "../chains" }

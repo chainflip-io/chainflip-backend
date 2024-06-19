@@ -53,7 +53,7 @@ blake2 = "0.10"
 # Local deps
 cf-chains = { path = "../../state-chain/chains" }
 cf-primitives = { path = "../../state-chain/primitives" }
-state-chain-runtime = { path = "../../state-chain/runtime" }
+state-chain-runtime = { workspace = true }
 utilities = { package = "utilities", path = "../../utilities" }
 
 # substrate deps

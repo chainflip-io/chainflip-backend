@@ -22,7 +22,7 @@ cf-primitives = { path = "../../state-chain/primitives" }
 chainflip-engine = { path = "../../engine" }
 chainflip-node = { path = "../../state-chain/node" }
 multisig = { path = "../../engine/multisig" }
-state-chain-runtime = { path = "../../state-chain/runtime" }
+state-chain-runtime = { workspace = true }
 
 [dependencies.rocksdb]
 version = "0.21.0"

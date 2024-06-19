@@ -54,6 +54,9 @@ members = [
   'engine/multisig',
 ]
 
+[workspace.dependencies]
+state-chain-runtime = { path = 'state-chain/runtime' }
+
 [workspace.lints.clippy]
 blocks_in_conditions = "allow"
 missing_const_for_thread_local = "allow"
