@@ -13,18 +13,20 @@ const getCachedDisposable = <T extends AsyncDisposable, F extends (...args: any[
   name: string,
   factory: F,
 ) => {
-  const cache = new Map<string, T>();
+  const cache = new Map<string, Promise<T>>();
   let connections = 0;
 
   return (async (...args) => {
     const cacheKey = JSON.stringify(args);
-    let disposable = cache.get(cacheKey);
+    let disposablePromise = cache.get(cacheKey);
 
-    if (!disposable) {
-      disposable = await factory(...args);
-      cache.set(cacheKey, disposable);
+    if (!disposablePromise) {
+      disposablePromise = factory(...args);
+      cache.set(cacheKey, disposablePromise);
       console.log('creating disposable', name, cacheKey);
     }
+
+    const disposable = await disposablePromise;
 
     connections += 1;
 
