@@ -1,4 +1,4 @@
-import { InternalAsset as Asset } from '@chainflip/cli';
+import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import Web3 from 'web3';
 import assert from 'assert';
 import { randomAsHex, randomAsNumber } from '../polkadot/util-crypto';
@@ -282,35 +282,31 @@ export async function testAllSwaps(swapContext: SwapContext) {
 
   console.log('=== Testing all swaps ===');
 
-  // Object.values(Assets).forEach((sourceAsset) => {
-  //   Object.values(Assets)
-  //     .filter((destAsset) => sourceAsset !== destAsset)
-  //     .forEach((destAsset) => {
-  //       // Regular swaps
-  //       appendSwap(sourceAsset, destAsset, testSwap);
+  Object.values(Assets).forEach((sourceAsset) => {
+    Object.values(Assets)
+      .filter((destAsset) => sourceAsset !== destAsset)
+      .forEach((destAsset) => {
+        // Regular swaps
+        appendSwap(sourceAsset, destAsset, testSwap);
 
-  //       const sourceChain = chainFromAsset(sourceAsset);
-  //       const destChain = chainFromAsset(destAsset);
+        const sourceChain = chainFromAsset(sourceAsset);
+        const destChain = chainFromAsset(destAsset);
 
-  //       if (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') {
-  //         // Contract Swaps
-  //         appendSwap(sourceAsset, destAsset, testSwapViaContract);
-  //         if (destChain === 'Ethereum' || destChain === 'Arbitrum') {
-  //           // CCM contract swaps
-  //           appendSwap(sourceAsset, destAsset, testSwapViaContract, newCcmMetadata(sourceAsset));
-  //         }
-  //       }
+        if (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') {
+          // Contract Swaps
+          appendSwap(sourceAsset, destAsset, testSwapViaContract);
+          if (destChain === 'Ethereum' || destChain === 'Arbitrum') {
+            // CCM contract swaps
+            appendSwap(sourceAsset, destAsset, testSwapViaContract, newCcmMetadata(sourceAsset));
+          }
+        }
 
-  //       if (ccmSupportedChains.includes(destChain)) {
-  //         // CCM swaps
-  //         appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
-  //       }
-  //     });
-  // });
-  // await Promise.all(allSwaps);
-
-  appendSwap('Sol', 'Eth', testSwap);
-  appendSwap('SolUsdc', 'Btc', testSwap);
+        if (ccmSupportedChains.includes(destChain)) {
+          // CCM swaps
+          appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
+        }
+      });
+  });
 
   await Promise.all(allSwaps);
 
