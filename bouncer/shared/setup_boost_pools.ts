@@ -4,11 +4,10 @@ import {
   chainFromAsset,
   Asset,
   decodeModuleError,
-  getChainflipApi,
   Event,
 } from '../shared/utils';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
-import { observeEvent } from './utils/substrate';
+import { getChainflipApi, observeEvent } from './utils/substrate';
 import { addBoostFunds } from './boost';
 import { provideLiquidity } from './provide_liquidity';
 

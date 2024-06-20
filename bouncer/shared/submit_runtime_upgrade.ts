@@ -1,9 +1,9 @@
 import { compactAddLength } from '@polkadot/util';
 import { promises as fs } from 'fs';
 import { submitGovernanceExtrinsic } from './cf_governance';
-import { decodeModuleError, getChainflipApi } from '../shared/utils';
+import { decodeModuleError } from '../shared/utils';
 import { tryRuntimeUpgrade } from './try_runtime_upgrade';
-import { observeEvent } from './utils/substrate';
+import { getChainflipApi, observeEvent } from './utils/substrate';
 
 async function readRuntimeWasmFromFile(filePath: string): Promise<Uint8Array> {
   return compactAddLength(new Uint8Array(await fs.readFile(filePath)));

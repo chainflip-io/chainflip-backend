@@ -1,6 +1,7 @@
 import { BN } from '@polkadot/util';
 import { aliceKeyringPair } from '../shared/polkadot_keyring';
-import { Event, getPolkadotApi, polkadotSigningMutex, sleep } from '../shared/utils';
+import { Event, polkadotSigningMutex, sleep } from '../shared/utils';
+import { getPolkadotApi } from './utils/substrate';
 
 // TODO: Move getPolkadotApi and other stuff from utils to here
 

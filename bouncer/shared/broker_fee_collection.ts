@@ -4,7 +4,6 @@ import { randomBytes } from 'crypto';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import Keyring from '../polkadot/keyring';
 import {
-  EgressId,
   brokerMutex,
   decodeDotAddressForContract,
   handleSubstrateError,
@@ -12,13 +11,12 @@ import {
   observeBalanceIncrease,
   shortChainFromAsset,
   hexStringToBytesArray,
-  getChainflipApi,
   calculateFeeWithBps,
   amountToFineAmountBigInt,
 } from '../shared/utils';
 import { getBalance } from '../shared/get_balance';
 import { doPerformSwap } from '../shared/perform_swap';
-import { observeEvent } from './utils/substrate';
+import { getChainflipApi, observeEvent } from './utils/substrate';
 
 const swapAssetAmount = {
   [Assets.Eth]: 1,
@@ -174,19 +172,10 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
     [chain]: observeWithdrawalAddress,
   });
   console.log(`Submitted withdrawal for ${asset}`);
+
   const withdrawalRequestedEvent = await observeWithdrawalRequested.event;
+
   console.log(`Withdrawal requested, egressId: ${withdrawalRequestedEvent.data.egressId}`);
-  const BatchBroadcastRequestedEvent = await observeEvent(':BatchBroadcastRequested', {
-    test: (event) =>
-      event.data.egressIds.some(
-        (egressId: EgressId) =>
-          egressId[0] === withdrawalRequestedEvent.data.egressId[0] &&
-          egressId[1] === withdrawalRequestedEvent.data.egressId[1],
-      ),
-  }).event;
-  console.log(
-    `Batch broadcast requested, broadcastId: ${BatchBroadcastRequestedEvent.data.broadcastId}`,
-  );
 
   await observeBalanceIncrease(asset, withdrawalAddress, balanceBeforeWithdrawal);
 
