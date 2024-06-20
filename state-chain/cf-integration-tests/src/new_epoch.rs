@@ -1,19 +1,29 @@
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, str::FromStr};
 
 use super::*;
 use crate::genesis::GENESIS_BALANCE;
-use cf_chains::btc::{
-	deposit_address::DepositAddress, utxo_selection::ConsolidationParameters, BitcoinFeeInfo,
-	BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
+use cf_chains::{
+	assets::any::Asset,
+	btc::{
+		deposit_address::DepositAddress, utxo_selection::ConsolidationParameters, BitcoinFeeInfo,
+		BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
+	},
+	dot::PolkadotAccountId,
+	Ethereum, ForeignChain,
 };
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
 use cf_traits::{EpochInfo, KeyProvider};
 use frame_support::traits::UnfilteredDispatchable;
 use pallet_cf_environment::BitcoinAvailableUtxos;
+use pallet_cf_refunding::{RecordedFees, WithheldTransactionFees};
 use pallet_cf_validator::RotationPhase;
 use state_chain_runtime::{
 	BitcoinInstance, BitcoinThresholdSigner, Environment, RuntimeEvent, Validator,
 };
+
+use state_chain_runtime::Refunding;
+
+use sp_core::H160;
 
 #[test]
 fn auction_repeats_after_failure_because_of_liveness() {
@@ -106,6 +116,7 @@ fn auction_repeats_after_failure_because_of_liveness() {
 fn epoch_rotates() {
 	const EPOCH_BLOCKS: BlockNumber = 1000;
 	const MAX_SET_SIZE: AuthorityCount = 5;
+	const DOT_AGG_KEY: [u8; 32] = [0x01; 32];
 	super::genesis::with_test_defaults()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.min_authorities(MAX_SET_SIZE)
@@ -124,12 +135,28 @@ fn epoch_rotates() {
 			// All nodes add funds to be included in the next epoch which are witnessed on the
 			// state chain
 			let funding_amount = genesis::GENESIS_BALANCE + 1;
+			let mut i = 0;
 			for node in &testnet.live_nodes() {
 				testnet.state_chain_gateway_contract.fund_account(
 					node.clone(),
 					funding_amount,
 					GENESIS_EPOCH,
 				);
+				Refunding::record_gas_fee(
+					cf_chains::ForeignChainAddress::Eth(H160::from([i; 20])),
+					ForeignChain::Ethereum,
+					100,
+				);
+				Refunding::withheld_transaction_fee(ForeignChain::Ethereum, 100);
+				Refunding::record_gas_fee(
+					cf_chains::ForeignChainAddress::Dot(PolkadotAccountId::from_aliased(
+						DOT_AGG_KEY,
+					)),
+					ForeignChain::Polkadot,
+					10,
+				);
+				Refunding::withheld_transaction_fee(ForeignChain::Polkadot, 10);
+				i += 1;
 			}
 
 			// Add two nodes which don't have session keys
@@ -171,6 +198,12 @@ fn epoch_rotates() {
 			));
 
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
+
+			assert_eq!(WithheldTransactionFees::<Runtime>::get(ForeignChain::Ethereum), 0);
+			assert_eq!(RecordedFees::<Runtime>::get(ForeignChain::Ethereum), None);
+
+			assert_eq!(WithheldTransactionFees::<Runtime>::get(ForeignChain::Polkadot), 0);
+			assert_eq!(RecordedFees::<Runtime>::get(ForeignChain::Polkadot), None);
 
 			assert!(matches!(Validator::current_rotation_phase(), RotationPhase::Idle));
 

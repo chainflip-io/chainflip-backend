@@ -2010,9 +2010,9 @@ impl_runtime_apis! {
 		}
 		fn cf_fee_imbalance() -> FeeImbalance {
 
-			let eth = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::get(Asset::Eth) - pallet_cf_refunding::RecordedFees::<Runtime>::get(Asset::Eth).values().sum::<AssetAmount>();
-			let dot = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::get(Asset::Dot) - pallet_cf_refunding::RecordedFees::<Runtime>::get(Asset::Dot).values().sum::<AssetAmount>();
-			let arb = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::get(Asset::ArbEth) - pallet_cf_refunding::RecordedFees::<Runtime>::get(Asset::ArbEth).values().sum::<AssetAmount>();
+			let eth = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::get(ForeignChain::Ethereum) - pallet_cf_refunding::RecordedFees::<Runtime>::get(ForeignChain::Ethereum).unwrap().values().sum::<AssetAmount>();
+			let dot = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::get(ForeignChain::Polkadot) - pallet_cf_refunding::RecordedFees::<Runtime>::get(ForeignChain::Polkadot).unwrap().values().sum::<AssetAmount>();
+			let arb = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::get(ForeignChain::Arbitrum) - pallet_cf_refunding::RecordedFees::<Runtime>::get(ForeignChain::Arbitrum).unwrap().values().sum::<AssetAmount>();
 
 			FeeImbalance {
 				ethereum: eth,

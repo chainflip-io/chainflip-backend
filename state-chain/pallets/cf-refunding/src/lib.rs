@@ -2,11 +2,13 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{AnyChain, ForeignChainAddress};
-use cf_primitives::{Asset, AssetAmount, EpochIndex};
+use cf_primitives::{AssetAmount, EpochIndex};
 use cf_traits::{impl_pallet_safe_mode, Chainflip, EgressApi};
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 use sp_std::vec;
+
+use cf_chains::ForeignChain;
 
 use frame_support::pallet_prelude::*;
 pub use pallet::*;
@@ -24,6 +26,8 @@ impl_pallet_safe_mode!(PalletSafeMode; do_refund);
 
 #[frame_support::pallet]
 pub mod pallet {
+	use cf_chains::ForeignChain;
+
 	use super::*;
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -35,7 +39,7 @@ pub mod pallet {
 		/// Handles egress for all chains.
 		type EgressHandler: EgressApi<AnyChain>;
 
-		///
+		/// Safe mode configuration.
 		type SafeMode: Get<PalletSafeMode>;
 	}
 
@@ -50,13 +54,13 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		RefundScheduled {
 			account_id: ForeignChainAddress,
-			asset: Asset,
+			chain: ForeignChain,
 			amount: AssetAmount,
 			epoch: EpochIndex,
 		},
 		RefundIntegrityCheckFailed {
 			epoch: EpochIndex,
-			asset: Asset,
+			chain: ForeignChain,
 		},
 	}
 
@@ -67,53 +71,69 @@ pub mod pallet {
 
 	/// Storage for recorded fees per validator and asset.
 	#[pallet::storage]
-	pub type RecordedFees<T: Config> =
-		StorageMap<_, Twox64Concat, Asset, BTreeMap<ForeignChainAddress, AssetAmount>, ValueQuery>;
+	pub type RecordedFees<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		ForeignChain,
+		BTreeMap<ForeignChainAddress, AssetAmount>,
+		OptionQuery,
+	>;
 
 	/// Storage for validator's withheld transaction fees.
 	#[pallet::storage]
 	pub type WithheldTransactionFees<T: Config> =
-		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
+		StorageMap<_, Twox64Concat, ForeignChain, AssetAmount, ValueQuery>;
 }
 
 impl<T: Config> Pallet<T> {
-	pub fn record_gas_fee(account_id: ForeignChainAddress, asset: Asset, gas_fee: AssetAmount) {
-		RecordedFees::<T>::mutate(asset, |recorded_fees| {
-			recorded_fees
-				.entry(account_id)
-				.and_modify(|fee| *fee += gas_fee)
-				.or_insert(gas_fee);
+	pub fn record_gas_fee(
+		account_id: ForeignChainAddress,
+		chain: ForeignChain,
+		gas_fee: AssetAmount,
+	) {
+		RecordedFees::<T>::mutate(chain, |maybe_fees| {
+			if let Some(fees) = maybe_fees {
+				fees.entry(account_id).and_modify(|fee| *fee += gas_fee).or_insert(gas_fee);
+			} else {
+				let mut recorded_fees = BTreeMap::new();
+				recorded_fees.insert(account_id, gas_fee);
+				*maybe_fees = Some(recorded_fees);
+			}
 		});
 	}
-	pub fn withheld_transaction_fee(asset: Asset, amount: AssetAmount) {
-		WithheldTransactionFees::<T>::mutate(asset, |fees| *fees += amount);
+	pub fn withheld_transaction_fee(chain: ForeignChain, amount: AssetAmount) {
+		WithheldTransactionFees::<T>::mutate(chain, |fees| *fees += amount);
 	}
 	pub fn on_distribute_withheld_fees(epoch: EpochIndex) {
 		if !T::SafeMode::get().do_refund {
 			log::info!("Refunding is disabled. Skipping refunding.");
 			return;
 		}
-		let assets = WithheldTransactionFees::<T>::iter_keys().collect::<Vec<_>>();
 
-		for asset in assets {
+		let chains = WithheldTransactionFees::<T>::iter_keys().collect::<Vec<_>>();
+
+		for chain in chains {
+			let mut available_funds = WithheldTransactionFees::<T>::get(chain);
 			// Integrity check before we start refunding
-			if WithheldTransactionFees::<T>::get(asset) <
-				RecordedFees::<T>::get(asset).values().sum()
-			{
+			if available_funds < RecordedFees::<T>::get(chain).unwrap().values().sum() {
 				log::warn!(
-                    "Integrity check for refunding failed for asset {:?}. Refunding will be skipped.", asset);
-				Self::deposit_event(Event::RefundIntegrityCheckFailed { asset, epoch });
+                    "Integrity check for refunding failed for asset {:?}. Refunding will be skipped.", chain);
+				Self::deposit_event(Event::RefundIntegrityCheckFailed { epoch, chain });
 				continue;
 			}
-			let mut available_funds = WithheldTransactionFees::<T>::take(asset);
-			let recorded_fees = RecordedFees::<T>::take(asset);
+			let recorded_fees = RecordedFees::<T>::take(chain).unwrap();
 			for (validator, fee) in recorded_fees {
 				if let Some(remaining_funds) = available_funds.checked_sub(fee) {
 					available_funds = remaining_funds;
-					let _ = T::EgressHandler::schedule_egress(asset, fee, validator.clone(), None);
+					let _ = T::EgressHandler::schedule_egress(
+						chain.gas_asset(),
+						fee,
+						validator.clone(),
+						None,
+					);
 					Self::deposit_event(Event::RefundScheduled {
 						account_id: validator,
-						asset,
+						chain,
 						amount: fee,
 						epoch,
 					});
@@ -123,10 +143,11 @@ impl<T: Config> Pallet<T> {
 					log::warn!(
                         "Insufficient funds to refund validator {:?} for asset {:?}. Refunding not possible!",
                         validator,
-                        asset,
+                        chain,
                     );
 				}
 			}
+			WithheldTransactionFees::<T>::insert(chain, available_funds);
 		}
 	}
 }

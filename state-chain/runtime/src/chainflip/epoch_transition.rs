@@ -9,7 +9,9 @@ pub struct ChainflipEpochTransitions;
 
 impl EpochTransitionHandler for ChainflipEpochTransitions {
 	fn on_expired_epoch(expired: EpochIndex) {
-		Refunding::on_distribute_withheld_fees(expired);
 		<Witnesser as EpochTransitionHandler>::on_expired_epoch(expired);
+	}
+	fn on_new_epoch(new: EpochIndex) {
+		Refunding::on_distribute_withheld_fees(new);
 	}
 }
