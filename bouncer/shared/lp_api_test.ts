@@ -68,7 +68,6 @@ async function provideLiquidityAndTestAssetBalances() {
 }
 
 async function testRegisterLiquidityRefundAddress() {
-  await using chainflip = await getChainflipApi();
   console.log('=== Starting testRegisterLiquidityRefundAddress ===');
   const observeRefundAddressRegisteredEvent = observeEvent(
     'liquidityProvider:LiquidityRefundAddressRegistered',
@@ -91,7 +90,6 @@ async function testRegisterLiquidityRefundAddress() {
 }
 
 async function testLiquidityDeposit() {
-  await using chainflip = await getChainflipApi();
   console.log('=== Starting testLiquidityDeposit ===');
   const observeLiquidityDepositAddressReadyEvent = observeEvent(
     'liquidityProvider:LiquidityDepositAddressReady',

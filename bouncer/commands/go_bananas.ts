@@ -13,13 +13,13 @@ import {
   assetDecimals,
   chainFromAsset,
   stateChainAssetFromAsset,
-  getChainflipApi,
 } from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
 import { testSwap } from '../shared/swapping';
 import { sendBtc } from '../shared/send_btc';
 import { createLpPool } from '../shared/create_lp_pool';
 import { depositLiquidity } from '../shared/deposit_liquidity';
+import { getChainflipApi } from '../shared/utils/substrate';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function call(method: string, params: any, id: string) {
