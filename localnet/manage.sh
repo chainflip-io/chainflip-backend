@@ -115,7 +115,7 @@ build-localnet() {
     cp ./old-engine-dylib/libchainflip_engine_v*.so $BINARY_ROOT_PATH
     export LD_LIBRARY_PATH=$PWD/$BINARY_ROOT_PATH
   else
-    echo "🕵🏻‍♂️  Detected OS: $OS_TYPE. Skipping .so file copy."
+    echo "🕵🏻‍♂️  Detected OS: $OS_TYPE. Skipping LD_LIBRARY_PATH configuration."
   fi
 
   echo "🪢 Pulling Docker Images"
