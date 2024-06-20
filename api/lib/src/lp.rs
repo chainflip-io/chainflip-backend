@@ -272,8 +272,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 			}))
 			.await
 			.until_in_block()
-			.await
-			.context("Unable to transfer asset.")?;
+			.await?;
 		Ok(tx_hash)
 	}
 
