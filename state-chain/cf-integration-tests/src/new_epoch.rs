@@ -1,15 +1,14 @@
-use std::{collections::BTreeSet, str::FromStr};
+use std::collections::BTreeSet;
 
 use super::*;
 use crate::genesis::GENESIS_BALANCE;
 use cf_chains::{
-	assets::any::Asset,
 	btc::{
 		deposit_address::DepositAddress, utxo_selection::ConsolidationParameters, BitcoinFeeInfo,
 		BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	dot::PolkadotAccountId,
-	Ethereum, ForeignChain,
+	ForeignChain,
 };
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
 use cf_traits::{EpochInfo, KeyProvider};
@@ -135,15 +134,14 @@ fn epoch_rotates() {
 			// All nodes add funds to be included in the next epoch which are witnessed on the
 			// state chain
 			let funding_amount = genesis::GENESIS_BALANCE + 1;
-			let mut i = 0;
-			for node in &testnet.live_nodes() {
+			for (i, node) in testnet.live_nodes().iter().enumerate() {
 				testnet.state_chain_gateway_contract.fund_account(
 					node.clone(),
 					funding_amount,
 					GENESIS_EPOCH,
 				);
 				Refunding::record_gas_fee(
-					cf_chains::ForeignChainAddress::Eth(H160::from([i; 20])),
+					cf_chains::ForeignChainAddress::Eth(H160::from([i as u8; 20])),
 					ForeignChain::Ethereum,
 					100,
 				);
@@ -156,7 +154,6 @@ fn epoch_rotates() {
 					10,
 				);
 				Refunding::withheld_transaction_fee(ForeignChain::Polkadot, 10);
-				i += 1;
 			}
 
 			// Add two nodes which don't have session keys
