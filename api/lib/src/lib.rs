@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 pub use sp_core::crypto::AccountId32;
-use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair, H256};
+use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair, H256, U256};
 pub use state_chain_runtime::chainflip::BlockUpdate;
 use state_chain_runtime::{opaque::SessionKeys, RuntimeCall};
 use zeroize::Zeroize;
@@ -294,15 +294,15 @@ pub struct SwapDepositAddress {
 	pub issued_block: state_chain_runtime::BlockNumber,
 	pub channel_id: ChannelId,
 	pub source_chain_expiry_block: <AnyChain as cf_chains::Chain>::ChainBlockNumber,
-	pub channel_opening_fee: u128,
+	pub channel_opening_fee: U256,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WithdrawFeesDetail {
 	pub tx_hash: H256,
 	pub egress_id: (ForeignChain, u64),
-	pub egress_amount: u128,
-	pub egress_fee: u128,
+	pub egress_amount: U256,
+	pub egress_fee: U256,
 	pub destination_address: String,
 }
 
@@ -384,7 +384,7 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 				issued_block: header.number,
 				channel_id: *channel_id,
 				source_chain_expiry_block: *source_chain_expiry_block,
-				channel_opening_fee: *channel_opening_fee,
+				channel_opening_fee: (*channel_opening_fee).into(),
 			})
 		} else {
 			bail!("No SwapDepositAddressReady event was found");
@@ -423,8 +423,8 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 			Ok(WithdrawFeesDetail {
 				tx_hash,
 				egress_id: *egress_id,
-				egress_amount: *egress_amount,
-				egress_fee: *egress_fee,
+				egress_amount: (*egress_amount).into(),
+				egress_fee: (*egress_fee).into(),
 				destination_address: destination_address.to_string(),
 			})
 		} else {
