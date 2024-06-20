@@ -1108,7 +1108,7 @@ where
 			.map_err(to_rpc_error)
 			.and_then(|result| {
 				result
-					.map(|free_balances| free_balances.map(Into::into))
+					.map(|total_balances| total_balances.map(Into::into))
 					.map_err(map_dispatch_error)
 			})
 	}

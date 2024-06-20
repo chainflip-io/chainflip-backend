@@ -10,7 +10,7 @@ use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_
 use cf_traits::{
 	impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwapQueueApi, SwappingApi,
 };
-use core::ops::{Index, IndexMut, Range};
+use core::ops::Range;
 use frame_support::{
 	dispatch::GetDispatchInfo,
 	pallet_prelude::*,
@@ -1005,14 +1005,12 @@ impl<T: Config> PoolApi for Pallet<T> {
 				Err(_) => continue,
 			};
 			for ask in pool_orders.limit_orders.asks {
-				*result.index_mut(base_asset) = result
-					.index(base_asset)
-					.saturating_add(ask.sell_amount.saturated_into::<u128>());
+				result[base_asset] = result[base_asset]
+					.saturating_add(ask.sell_amount.saturated_into::<AssetAmount>());
 			}
 			for bid in pool_orders.limit_orders.bids {
-				*result.index_mut(Asset::Usdc) = result
-					.index(Asset::Usdc)
-					.saturating_add(bid.sell_amount.saturated_into::<u128>());
+				result[Asset::Usdc] = result[Asset::Usdc]
+					.saturating_add(bid.sell_amount.saturated_into::<AssetAmount>());
 			}
 			for range_order in pool_orders.range_orders {
 				let pair = Self::pool_range_order_liquidity_value(
@@ -1022,10 +1020,10 @@ impl<T: Config> PoolApi for Pallet<T> {
 					range_order.liquidity,
 				)
 				.expect("Cannot fail we are sure the pool exists and the orders too");
-				*result.index_mut(base_asset) =
-					result.index(base_asset).saturating_add(pair.base.saturated_into::<u128>());
-				*result.index_mut(Asset::Usdc) =
-					result.index(Asset::Usdc).saturating_add(pair.quote.saturated_into::<u128>());
+				result[base_asset] =
+					result[base_asset].saturating_add(pair.base.saturated_into::<AssetAmount>());
+				result[Asset::Usdc] =
+					result[Asset::Usdc].saturating_add(pair.quote.saturated_into::<AssetAmount>());
 			}
 		}
 		result
