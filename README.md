@@ -127,10 +127,7 @@ From the repo root, run the following:
 cargo build
 ./localnet/manage.sh
 ```
-
-If this is your first Localnet, the script will ask you to authenticate to Docker and 1Password. The script might fail if you haven't done this yet.
-
-After set up completion, you will see the following:
+You'll be prompted with the following:
 
 ```shell
 ❓ Would you like to build, recreate or destroy your Localnet? (Type 1, 2, 3, 4 or 5)
@@ -142,7 +139,7 @@ After set up completion, you will see the following:
 6) bouncer
 ```
 
-> **Note:** All chain data and signing DBs will be under`/tmp/chainflip`
+> **Note:** All chain data and signing DBs as well as log files will be under`/tmp/chainflip`
 
 - **build** - Create a new testnet using a path to the binaries you provide.
 - **recreate** - This will simply run destroy, followed by build. You have the option to change the path to the binaries.
