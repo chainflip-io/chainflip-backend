@@ -84,6 +84,9 @@ jobs:
       - name: Install pnpm 💿
         run: npm install -g pnpm
 
+      - name: Install typescript compiler 📦
+        run: npm install -g typescript
+
       - name: Configure NodeJS 🛠️
         uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65
         with:
@@ -103,6 +106,10 @@ jobs:
       - name: Run eslint check 📝
         working-directory: bouncer
         run: pnpm eslint:check
+
+      - name: Run typescript check 📝
+        working-directory: bouncer
+        run: tsc --noEmit
 
   lint-ci-workflows:
     runs-on: ubuntu-22.04
