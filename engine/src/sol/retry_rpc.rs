@@ -207,7 +207,6 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 				),
 				Box::pin(move |client| {
 					let encoded_transaction = encoded_transaction.clone();
-					// let config = config;
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(
 						async move { client.send_transaction(encoded_transaction, config).await },

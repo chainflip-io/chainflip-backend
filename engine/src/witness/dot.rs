@@ -219,9 +219,7 @@ where
 					.await
 					.expect(STATE_CHAIN_CONNECTION)
 			},
-			|_state_chain_client: Arc<StateChainClient>, _epoch, _block_hash, historic_info| async move {
-				historic_info
-			},
+			|_state_chain_client, _epoch, _block_hash, historic_info| async move { historic_info },
 		)
 		.await;
 
