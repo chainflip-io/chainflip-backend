@@ -12,7 +12,6 @@ use utilities::task_scope::Scope;
 
 use anyhow::Result;
 use base64::Engine;
-use std::str::FromStr;
 
 use super::{
 	commitment_config::CommitmentConfig,
@@ -237,58 +236,13 @@ impl ChainClient for SolRetryRpcClient {
 		self.rpc_retry_client
 			.request(
 				RequestLog::new("header_at_index".to_string(), Some(format!("{index}"))),
-				Box::pin(move |client| {
+				Box::pin(move |_client| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
-						let witness_range =
-							witness_period::block_witness_range(witness_period, index);
-
-						async fn get_block_details<Rpc: SolRpcApi>(
-							client: &Rpc,
-							index: u64,
-						) -> anyhow::Result<(SolHash, Option<SolHash>)> {
-							let block = client
-								.get_block(
-									index,
-									RpcBlockConfig {
-										encoding: Some(UiTransactionEncoding::JsonParsed),
-										transaction_details: Some(TransactionDetails::None),
-										rewards: Some(false),
-										commitment: Some(CommitmentConfig::finalized()),
-										max_supported_transaction_version: None,
-									},
-								)
-								.await?;
-
-							let block_hash = block.blockhash;
-							Ok((
-								SolHash::from_str(&block_hash).expect("Invalid block hash"),
-								if index == 0 {
-									None
-								} else {
-									Some(
-										SolHash::from_str(&block.previous_blockhash)
-											.expect("Invalid parent block hash"),
-									)
-								},
-							))
-						}
-
-						let (block_hash, block_parent_hash) =
-							get_block_details(&client, *witness_range.end()).await?;
-
 						Ok(Header {
 							index: witness_period::block_witness_root(witness_period, index),
-							hash: block_hash,
-							parent_hash: {
-								if witness_range.end() == witness_range.start() {
-									block_parent_hash
-								} else {
-									let (_, parent_block_hash) =
-										get_block_details(&client, *witness_range.start()).await?;
-									parent_block_hash
-								}
-							},
+							hash: SolHash::default(),
+							parent_hash: None,
 							data: (),
 						})
 					})
@@ -343,6 +297,7 @@ pub mod mocks {
 mod tests {
 	use cf_chains::Chain;
 	use futures::FutureExt;
+	use std::str::FromStr;
 	use utilities::task_scope::task_scope;
 
 	use super::*;
