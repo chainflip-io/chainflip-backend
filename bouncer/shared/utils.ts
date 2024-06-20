@@ -226,7 +226,7 @@ export async function executeWithTimeout<T>(promise: Promise<T>, seconds: number
   const executionTime = (Date.now() - start) / 1000;
 
   if (executionTime > seconds * 0.9) {
-    console.log(
+    console.warn(
       `\x1b[33m%s\x1b[0m`,
       `Warning: Execution time was close to the timeout: ${executionTime}/${seconds}s`,
     );
