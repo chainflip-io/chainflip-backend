@@ -365,7 +365,7 @@ mod test {
 		sol::{
 			sol_tx_core::{
 				address_derivation::derive_deposit_address,
-				extra_types_for_testing::{Keypair, Signer},
+				extra_types_for_testing::{Signer, SigningKey},
 				sol_test_values::*,
 			},
 			SolHash, SolMessage, SolTransaction, SolanaDepositFetchId,
@@ -394,7 +394,7 @@ mod test {
 	}
 
 	fn agg_key() -> SolAddress {
-		Keypair::from_bytes(&RAW_KEYPAIR)
+		SigningKey::from_bytes(&RAW_KEYPAIR)
 			.expect("Key pair generation must succeed")
 			.pubkey()
 			.into()
@@ -462,7 +462,7 @@ mod test {
 	) {
 		// Obtain required info from Chain Environment
 		let durable_nonce = durable_nonce().into();
-		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
+		let agg_key_keypair = SigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 
 		// Construct the Transaction and sign it

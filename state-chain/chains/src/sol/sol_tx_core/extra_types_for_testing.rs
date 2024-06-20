@@ -1,73 +1,50 @@
 use crate::sol::{SolPubkey, SolSignature};
 use ed25519_dalek::Signer as DalekSigner;
+use rand::{rngs::OsRng, CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-/// A vanilla Ed25519 key pair
 #[derive(Debug)]
-pub struct Keypair(ed25519_dalek::SigningKey);
+pub struct SigningKey(ed25519_dalek::SigningKey);
 
-impl Keypair {
-	/// Can be used for generating a Keypair without a dependency on `rand` types
-	pub const SECRET_KEY_LENGTH: usize = 32;
-
+impl SigningKey {
 	/// Constructs a new, random `Keypair` using a caller-provided RNG
 	pub fn generate<R>(csprng: &mut R) -> Self
 	where
-		R: rand::CryptoRng + rand::RngCore,
+		R: CryptoRng + RngCore,
 	{
 		Self(ed25519_dalek::SigningKey::generate(csprng))
 	}
 
 	/// Constructs a new random `Keypair` using `OsRng`
 	pub fn new() -> Self {
-		let mut rng = rand::rngs::OsRng;
+		let mut rng = OsRng;
 		Self::generate(&mut rng)
 	}
 
-	/// Recovers a `Keypair` from a byte array
-	pub fn from_bytes(bytes: &[u8; 64]) -> Result<Self, ed25519_dalek::SignatureError> {
-		let (secret, bytes) = bytes.split_array_ref::<32>();
-		let secret = ed25519_dalek::SigningKey::from_bytes(secret);
-		if ed25519_dalek::VerifyingKey::from_bytes(TryFrom::try_from(bytes).unwrap())? ==
-			ed25519_dalek::VerifyingKey::from(&secret)
-		{
-			Ok(Self(secret))
-		} else {
-			Err(ed25519_dalek::SignatureError::from_source(String::from(
-				"keypair bytes do not specify same pubkey as derived from their secret key",
-			)))
-		}
+	/// Recovers a `SigningKey` from a byte array
+	pub fn from_bytes(bytes: &[u8]) -> Result<Self, ed25519_dalek::SignatureError> {
+		Ok(Self(ed25519_dalek::SigningKey::from_bytes(
+			<&[_; ed25519_dalek::SECRET_KEY_LENGTH]>::try_from(bytes).map_err(|_| {
+				ed25519_dalek::SignatureError::from_source(String::from(
+					"candidate keypair byte array is the wrong length",
+				))
+			})?,
+		)))
 	}
 
-	/// Returns this `Keypair` as a byte array
-	pub fn to_bytes(&self) -> [u8; 64] {
-		use cf_utilities::ArrayCollect;
-		self.0
-			.to_bytes()
-			.into_iter()
-			.chain(ed25519_dalek::VerifyingKey::from(&self.0).to_bytes())
-			.collect_array()
+	/// Returns this `SigningKey` as a byte array
+	pub fn to_bytes(&self) -> [u8; ed25519_dalek::SECRET_KEY_LENGTH] {
+		self.0.to_bytes()
 	}
 
-	/// Gets this `Keypair`'s SecretKey
+	/// Gets this `SigningKey`'s SecretKey
 	pub fn secret(&self) -> &ed25519_dalek::SigningKey {
 		&self.0
 	}
-
-	/// Allows Keypair cloning
-	///
-	/// Note that the `Clone` trait is intentionally unimplemented because making a
-	/// second copy of sensitive secret keys in memory is usually a bad idea.
-	///
-	/// Only use this in tests or when strictly required. Consider using [`std::sync::Arc<Keypair>`]
-	/// instead.
-	pub fn insecure_clone(&self) -> Self {
-		Self(self.0.clone())
-	}
 }
 
-impl Signer for Keypair {
+impl Signer for SigningKey {
 	#[inline]
 	fn pubkey(&self) -> SolPubkey {
 		SolPubkey::from(ed25519_dalek::VerifyingKey::from(&self.0).to_bytes())
