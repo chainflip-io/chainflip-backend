@@ -116,15 +116,6 @@ build-localnet() {
   mkdir -p $CHAINFLIP_BASE_PATH
   touch $DEBUG_OUTPUT_DESTINATION
 
-  if [ "$OS_TYPE" == "Linux" ]; then
-    echo "🕵🏻‍♂️  Detected OS: $OS_TYPE. configuring LD_LIBRARY_PATH"
-    echo "ℹ️ Note: The .so files in 'old-engine-dylib' are built for Ubuntu 22.04."
-    cp ./old-engine-dylib/libchainflip_engine_v*.so $BINARY_ROOT_PATH
-    export LD_LIBRARY_PATH=$PWD/$BINARY_ROOT_PATH
-  else
-    echo "🕵🏻‍♂️  Detected OS: $OS_TYPE. Skipping LD_LIBRARY_PATH configuration."
-  fi
-
   echo "🪢 Pulling Docker Images"
   $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" pull --quiet >>$DEBUG_OUTPUT_DESTINATION 2>&1
   echo "🔮 Initializing Network"
@@ -236,12 +227,6 @@ destroy() {
   rm -rf "/tmp/chainflip"
   rm -rf $SOLANA_BASE_PATH
 
-  if [ "$OS_TYPE" == "Linux" ]; then
-    echo "🧹  Detected OS: $OS_TYPE. removing chainflip .so files..."
-    sudo rm -rf /usr/lib/libchainflip_engine_v*.so
-  else
-    echo "🧹  Detected OS: $OS_TYPE. Skipping chainflip .so file deletion."
-  fi
   unset DOT_GENESIS_HASH
 
   echo "✅ Done"
