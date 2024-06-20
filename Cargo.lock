@@ -1432,7 +1432,6 @@ dependencies = [
  "libsecp256k1",
  "log",
  "parity-scale-codec",
- "rand 0.7.3",
  "rand 0.8.5",
  "rlp",
  "scale-info",
