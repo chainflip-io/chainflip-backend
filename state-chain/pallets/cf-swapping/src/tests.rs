@@ -5,6 +5,7 @@ use crate::{
 	EarnedBrokerFees, Error, Event, MaximumSwapAmount, Pallet, PendingCcms, Swap, SwapOrigin,
 	SwapQueue, SwapType,
 };
+use cf_amm::common::{price_to_sqrt_price, PRICE_FRACTIONAL_BITS};
 use cf_chains::{
 	address::{to_encoded_address, AddressConverter, EncodedAddress, ForeignChainAddress},
 	btc::{BitcoinNetwork, ScriptPubkey},
@@ -30,7 +31,7 @@ use frame_support::{
 };
 use itertools::Itertools;
 use sp_arithmetic::Permill;
-use sp_core::H160;
+use sp_core::{H160, U256};
 use sp_runtime::Percent;
 use sp_std::iter;
 
@@ -2249,7 +2250,7 @@ fn test_get_scheduled_swap_legs() {
 		assert_ne!(INIT_AMOUNT, INTERMEDIATE_AMOUNT);
 
 		assert_eq!(
-			Swapping::get_scheduled_swap_legs(swaps, Asset::Flip).unwrap(),
+			Swapping::get_scheduled_swap_legs(swaps, Asset::Flip, None),
 			vec![
 				SwapLegInfo {
 					swap_id: 1,
@@ -2287,6 +2288,53 @@ fn test_get_scheduled_swap_legs() {
 					source_asset: Some(Asset::Eth),
 					source_amount: Some(INIT_AMOUNT),
 				},
+			]
+		);
+	});
+}
+
+#[test]
+fn test_get_scheduled_swap_legs_fallback() {
+	new_test_ext().execute_with(|| {
+		const SWAP_TYPE: SwapType = SwapType::Swap(ForeignChainAddress::Eth(H160::zero()));
+		const INIT_AMOUNT: AssetAmount = 1000000000000000000000;
+		const PRICE: u128 = 2;
+
+		let swaps: Vec<_> = [(1, Asset::Flip, Asset::Eth), (2, Asset::Eth, Asset::Usdc)]
+			.into_iter()
+			.map(|(id, from, to)| Swap::new(id, from, to, INIT_AMOUNT, SWAP_TYPE.clone()))
+			.collect();
+
+		// Setting the swap rate to something different from the price so that if the fallback is
+		// not used, it will give a different result, avoiding a false positive.
+		SwapRate::set(1f64);
+
+		// The swap simulation must fail for it to use the fallback price estimation
+		MockSwappingApi::set_swaps_should_fail(true);
+
+		let sqrt_price = price_to_sqrt_price((U256::from(PRICE)) << PRICE_FRACTIONAL_BITS);
+
+		assert_eq!(
+			Swapping::get_scheduled_swap_legs(swaps, Asset::Eth, Some(sqrt_price)),
+			vec![
+				SwapLegInfo {
+					swap_id: 1,
+					base_asset: Asset::Eth,
+					quote_asset: Asset::Usdc,
+					side: Side::Buy,
+					amount: INIT_AMOUNT * PRICE,
+					source_asset: Some(Asset::Flip),
+					source_amount: Some(INIT_AMOUNT),
+				},
+				SwapLegInfo {
+					swap_id: 2,
+					base_asset: Asset::Eth,
+					quote_asset: Asset::Usdc,
+					side: Side::Sell,
+					amount: INIT_AMOUNT,
+					source_asset: None,
+					source_amount: None,
+				}
 			]
 		);
 	});

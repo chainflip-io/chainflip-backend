@@ -334,7 +334,7 @@ pub const PRICE_FRACTIONAL_BITS: u32 = 128;
 /// Converts from a [SqrtPriceQ64F96] to a [Price].
 ///
 /// Will panic for `sqrt_price`'s outside `MIN_SQRT_PRICE..=MAX_SQRT_PRICE`
-pub(super) fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
+pub fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
 	assert!(is_sqrt_price_valid(sqrt_price));
 
 	// Note the value here cannot ever be zero as MIN_SQRT_PRICE has its 33th bit set, so sqrt_price
@@ -347,10 +347,18 @@ pub(super) fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
 	)
 }
 
+// TODO JAMIE: remove this duplicate from max's PR
+pub fn output_amount_floor(input: Amount, price: Price) -> Amount {
+	mul_div_floor(input, price, U256::one() << PRICE_FRACTIONAL_BITS)
+}
+pub fn output_amount_ceil(input: Amount, price: Price) -> Amount {
+	mul_div_ceil(input, price, U256::one() << PRICE_FRACTIONAL_BITS)
+}
+
 /// Converts from a `price` to a `sqrt_price`
 ///
 /// This function never panics.
-pub(super) fn price_to_sqrt_price(price: Price) -> SqrtPriceQ64F96 {
+pub fn price_to_sqrt_price(price: Price) -> SqrtPriceQ64F96 {
 	((U512::from(price) << PRICE_FRACTIONAL_BITS).integer_sqrt() >>
 		(PRICE_FRACTIONAL_BITS - SQRT_PRICE_FRACTIONAL_BITS))
 		.try_into()

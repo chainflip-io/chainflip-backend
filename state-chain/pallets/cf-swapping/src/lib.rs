@@ -194,6 +194,7 @@ impl_pallet_safe_mode! {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use cf_amm::common::{output_amount_ceil, sqrt_price_to_price, SqrtPriceQ64F96};
 	use cf_chains::{address::EncodedAddress, AnyChain, Chain};
 	use cf_primitives::{Asset, AssetAmount, BasisPoints, EgressId, SwapId};
 	use cf_traits::{
@@ -765,11 +766,11 @@ pub mod pallet {
 		pub fn get_scheduled_swap_legs(
 			mut swaps: Vec<Swap>,
 			base_asset: Asset,
-		) -> Result<Vec<SwapLegInfo>, ()> {
-			Self::swap_into_stable_taking_network_fee(&mut swaps)
-				.map_err(|_| log::error!("Failed to simulate swaps"))?;
+			pool_sell_price: Option<SqrtPriceQ64F96>,
+		) -> Vec<SwapLegInfo> {
+			let _res = Self::swap_into_stable_taking_network_fee(&mut swaps);
 
-			Ok(swaps
+			swaps
 				.into_iter()
 				.filter_map(|swap| {
 					if swap.from == base_asset {
@@ -792,23 +793,35 @@ pub mod pallet {
 							(None, None)
 						};
 
-						Some(SwapLegInfo {
-							swap_id: swap.swap_id,
-							base_asset,
-							// All swaps to `base_asset` have to go through the stable asset:
-							quote_asset: STABLE_ASSET,
-							side: Side::Buy,
-							// Safe to unwrap as we have swapped everything into the stable asset at
-							// this point
-							amount: swap.stable_amount.unwrap(),
-							source_asset,
-							source_amount,
-						})
+						if swap.stable_amount.is_some() || pool_sell_price.is_some() {
+							// If the swap into stable asset failed, fallback to estimating the
+							// amount via pool price.
+							let amount = swap.stable_amount.unwrap_or_else(|| {
+								output_amount_ceil(
+									cf_amm::common::Amount::from(swap.input_amount),
+									sqrt_price_to_price(pool_sell_price.unwrap()),
+								)
+								.as_u128()
+							});
+
+							Some(SwapLegInfo {
+								swap_id: swap.swap_id,
+								base_asset,
+								// All swaps to `base_asset` have to go through the stable asset:
+								quote_asset: STABLE_ASSET,
+								side: Side::Buy,
+								amount,
+								source_asset,
+								source_amount,
+							})
+						} else {
+							None
+						}
 					} else {
 						None
 					}
 				})
-				.collect())
+				.collect()
 		}
 
 		fn swap_into_stable_taking_network_fee(
