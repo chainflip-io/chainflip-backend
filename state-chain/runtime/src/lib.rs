@@ -47,7 +47,7 @@ use cf_chains::{
 use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment};
 use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi};
 use codec::{alloc::string::ToString, Encode};
-use core::ops::{IndexMut, Range};
+use core::ops::Range;
 use frame_support::instances::*;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
@@ -1263,7 +1263,7 @@ impl_runtime_apis! {
 			LiquidityProvider::free_balances(&account_id).map_err(Into::into)
 		}
 		fn cf_lp_total_balances(account_id: AccountId) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage> {
-			let free_balances = LiquidityProvider::free_balances(&account_id).map_err(Into::<DispatchErrorWithMessage>::into)?;
+			let free_balances = LiquidityProvider::free_balances(&account_id)?;
 			let open_order_balances = LiquidityPools::open_order_balances(&account_id);
 			let boost_pools_balances = {
 				let mut result = EthereumIngressEgress::boost_pool_account_balances(&account_id);
@@ -1273,7 +1273,7 @@ impl_runtime_apis! {
 				result.append( &mut SolanaIngressEgress::boost_pool_account_balances(&account_id));
 				let mut map = AssetMap::from_fn(|_| 0);
 				for (asset, amount) in result {
-					*map.index_mut(asset) = amount;
+					map[asset] = amount;
 				}
 				map
 			};
