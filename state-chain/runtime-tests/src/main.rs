@@ -1,4 +1,4 @@
-use std::{path::Path, str::FromStr};
+use std::str::FromStr;
 
 use anyhow::anyhow;
 use frame_remote_externalities::{Mode, OfflineConfig, OnlineConfig, SnapshotConfig, Transport};
