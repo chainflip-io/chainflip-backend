@@ -127,6 +127,7 @@ where
 		TestExternalities { ext: RichExternalities::new(ext), context: () }
 	}
 
+	#[allow(clippy::type_complexity)]
 	pub fn from_raw_snapshot(
 		raw_storage: Vec<(Vec<u8>, (Vec<u8>, i32))>,
 		storage_root: Runtime::Hash,
