@@ -49,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
 		Network::Local => "http://localhost:9944".to_string(),
 		Network::Sisyphos => "https://archive.sisyphos.chainflip.io:443".to_string(),
 		Network::Perseverance => "https://archive.perseverance.chainflip.io:443".to_string(),
-		Network::Berghain => "https://archive.mainnet.chainflip.io:443".to_string(),
+		Network::Berghain => "https://mainnet-archive.chainflip.io:443".to_string(),
 		Network::Custom(url) => url,
 	});
 
