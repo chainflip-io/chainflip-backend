@@ -1,25 +1,26 @@
 use crate::{EgressApi, SwapDepositHandler};
-use cf_chains::Chain;
-use cf_primitives::{Beneficiaries, SwapId};
+use cf_chains::{Chain, ChannelRefundParameters, ForeignChainAddress};
+use cf_primitives::{Asset, AssetAmount, Beneficiaries, ChannelId, SwapId};
 
 /// Simple mock that applies 1:1 swap ratio to all pairs.
 pub struct MockSwapDepositHandler<T>(sp_std::marker::PhantomData<T>);
 
 impl<C: Chain, E: EgressApi<C>> SwapDepositHandler for MockSwapDepositHandler<(C, E)>
 where
-	cf_primitives::Asset: TryInto<C::ChainAsset>,
+	Asset: TryInto<C::ChainAsset>,
 {
 	type AccountId = u64;
 
 	fn schedule_swap_from_channel(
-		_deposit_address: cf_chains::ForeignChainAddress,
+		_deposit_address: ForeignChainAddress,
 		_deposit_block_height: u64,
-		_from: cf_primitives::Asset,
-		to: cf_primitives::Asset,
-		amount: cf_primitives::AssetAmount,
-		destination_address: cf_chains::ForeignChainAddress,
+		_from: Asset,
+		to: Asset,
+		amount: AssetAmount,
+		destination_address: ForeignChainAddress,
 		_broker_commission: Beneficiaries<Self::AccountId>,
-		_channel_id: cf_primitives::ChannelId,
+		_refund_params: Option<ChannelRefundParameters>,
+		_channel_id: ChannelId,
 	) -> SwapId {
 		let _ = E::schedule_egress(
 			to.try_into().unwrap_or_else(|_| panic!("Unable to convert")),

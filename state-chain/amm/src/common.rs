@@ -1,3 +1,4 @@
+pub use cf_primitives::Price;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -232,6 +233,14 @@ pub fn bounded_sqrt_price(quote: Amount, base: Amount) -> SqrtPriceQ64F96 {
 	}
 }
 
+pub fn output_amount_floor(input: Amount, price: Price) -> Amount {
+	mul_div_floor(input, price, U256::one() << PRICE_FRACTIONAL_BITS)
+}
+
+pub fn output_amount_ceil(input: Amount, price: Price) -> Amount {
+	mul_div_ceil(input, price, U256::one() << PRICE_FRACTIONAL_BITS)
+}
+
 /// A marker type to represent a swap that buys asset Quote, and sells asset Base
 pub(super) struct BaseToQuote {}
 /// A marker type to represent a swap that buys asset Base, and sells asset Quote
@@ -321,20 +330,12 @@ impl SwapDirection for QuoteToBase {
 	}
 }
 
-// TODO: Consider increasing Price to U512 or switch to a f64 (f64 would only be for the external
-// price representation), as at low ticks the precision in the price is VERY LOW, but this does not
-// cause any problems for the AMM code in terms of correctness
-/// This is the ratio of equivalently valued amounts of asset One and asset Zero. The price is
-/// always measured in amount of asset One per unit of asset Zero. Therefore as asset zero becomes
-/// more valuable relative to asset one the price's literal value goes up, and vice versa. This
-/// ratio is represented as a fixed point number with `PRICE_FRACTIONAL_BITS` fractional bits.
-pub type Price = U256;
 pub const PRICE_FRACTIONAL_BITS: u32 = 128;
 
 /// Converts from a [SqrtPriceQ64F96] to a [Price].
 ///
 /// Will panic for `sqrt_price`'s outside `MIN_SQRT_PRICE..=MAX_SQRT_PRICE`
-pub(super) fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
+pub fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
 	assert!(is_sqrt_price_valid(sqrt_price));
 
 	// Note the value here cannot ever be zero as MIN_SQRT_PRICE has its 33th bit set, so sqrt_price

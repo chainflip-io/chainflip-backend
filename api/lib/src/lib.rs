@@ -4,7 +4,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use cf_chains::{
 	address::EncodedAddress, dot::PolkadotAccountId, evm::to_evm_address, sol::SolAddress,
-	AnyChain, CcmChannelMetadata, ForeignChain,
+	AnyChain, CcmChannelMetadata, ChannelRefundParameters, ForeignChain,
 };
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 use futures::FutureExt;
@@ -25,7 +25,7 @@ pub mod primitives {
 	pub type RedemptionAmount = pallet_cf_funding::RedemptionAmount<FlipBalance>;
 	pub use cf_chains::{
 		address::{EncodedAddress, ForeignChainAddress},
-		CcmChannelMetadata, CcmDepositMetadata,
+		CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParameters,
 	};
 }
 pub use cf_chains::eth::Address as EthereumAddress;
@@ -353,6 +353,7 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Affiliates<AccountId32>,
+		refund_parameters: Option<ChannelRefundParameters>,
 	) -> Result<SwapDepositAddress> {
 		let (_tx_hash, events, header, ..) = self
 			.submit_signed_extrinsic_with_dry_run(if affiliate_fees.is_empty() {
@@ -373,6 +374,7 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 					channel_metadata,
 					boost_fee: boost_fee.unwrap_or_default(),
 					affiliate_fees,
+					refund_parameters,
 				}
 			})
 			.await?

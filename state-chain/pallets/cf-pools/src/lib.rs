@@ -333,6 +333,7 @@ pub mod pallet {
 							any::Asset::Usdc,
 							any::Asset::Flip,
 							*collected_fee,
+							None, /* refund parameters */
 							SwapType::NetworkFee,
 						);
 						collected_fee.set_zero();
