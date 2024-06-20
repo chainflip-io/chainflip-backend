@@ -13,7 +13,6 @@ use sp_std::{vec, vec::Vec};
 use crate::{
 	sol::{
 		api::SolanaTransactionBuildingError,
-		consts::SOL_USDC_DECIMAL,
 		sol_tx_core::{
 			bpf_loader_instructions::set_upgrade_authority,
 			compute_budget::ComputeBudgetInstruction,
@@ -27,15 +26,15 @@ use crate::{
 };
 
 use super::{
-	api::{SolanaEnvironment, TokenEnvironment},
+	api::{get_token_decimals, SolanaEnvironment, TokenEnvironment},
 	consts::TOKEN_PROGRAM_ID,
 };
 use sp_std::str::FromStr;
 
 /// Internal enum type that contains SolAsset with derived ATA
-pub enum AssetWithDerivedAddress {
-	Sol,
-	Usdc(DerivedAta),
+pub struct AssetWithDerivedAddress {
+	pub asset: SolAsset,
+	pub ata: Option<DerivedAta>,
 }
 
 impl AssetWithDerivedAddress {
@@ -44,16 +43,24 @@ impl AssetWithDerivedAddress {
 		token_environments: &mut HashMap<SolAsset, TokenEnvironment>,
 	) -> Result<(SolanaDepositFetchId, AssetWithDerivedAddress), SolanaTransactionBuildingError> {
 		match fetch_params.asset {
-			SolAsset::Sol => Ok((fetch_params.deposit_fetch_id, AssetWithDerivedAddress::Sol)),
-			SolAsset::SolUsdc => {
-				let sol_usdc_environment =
-					Environment::get_token_environment(token_environments, SolAsset::SolUsdc)?;
+			SolAsset::Sol => Ok((
+				fetch_params.deposit_fetch_id,
+				AssetWithDerivedAddress { asset: SolAsset::Sol, ata: None },
+			)),
+			token_asset => {
+				let sol_environment =
+					Environment::get_token_environment(token_environments, token_asset)?;
 				crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
 					fetch_params.deposit_fetch_id.address,
-					sol_usdc_environment.token_mint_pubkey,
+					sol_environment.token_mint_pubkey,
 				)
 				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)
-				.map(|ata| (fetch_params.deposit_fetch_id, AssetWithDerivedAddress::Usdc(ata)))
+				.map(|ata| {
+					(
+						fetch_params.deposit_fetch_id,
+						AssetWithDerivedAddress { asset: token_asset, ata: Some(ata) },
+					)
+				})
 			},
 		}
 	}
@@ -104,8 +111,8 @@ impl SolanaInstructionBuilder {
 	) -> Vec<SolInstruction> {
 		let instructions = decomposed_fetch_params
 			.into_iter()
-			.map(|(fetch_id, asset)| match asset {
-				AssetWithDerivedAddress::Sol => ProgramInstruction::get_instruction(
+			.map(|(fetch_id, asset_with_derived_address)| match asset_with_derived_address.asset {
+				SolAsset::Sol => ProgramInstruction::get_instruction(
 					&VaultProgram::FetchNative {
 						seed: fetch_id.channel_id.to_le_bytes().to_vec(),
 						bump: fetch_id.bump,
@@ -118,21 +125,27 @@ impl SolanaInstructionBuilder {
 						SolAccountMeta::new_readonly(system_program_id.into(), false),
 					],
 				),
-				AssetWithDerivedAddress::Usdc(ata) => ProgramInstruction::get_instruction(
+				token_asset => ProgramInstruction::get_instruction(
 					&VaultProgram::FetchTokens {
 						seed: fetch_id.channel_id.to_le_bytes().to_vec(),
 						bump: fetch_id.bump,
-						decimals: SOL_USDC_DECIMAL,
+						decimals: get_token_decimals(token_asset)
+							.expect("we should have token decimals for tokens"),
 					},
 					vault_program.into(),
 					vec![
 						SolAccountMeta::new_readonly(vault_program_data_account.into(), false),
 						SolAccountMeta::new_readonly(agg_key.into(), true),
 						SolAccountMeta::new_readonly(fetch_id.address.into(), false),
-						SolAccountMeta::new(ata.address.into(), false),
+						SolAccountMeta::new(
+							// we can unwrap here since we are in token_asset match arm and every
+							// token should have an ata
+							asset_with_derived_address.ata.unwrap().address.into(),
+							false,
+						),
 						SolAccountMeta::new(
 							token_environments
-								.get(&SolAsset::SolUsdc)
+								.get(&token_asset)
 								.expect("the function caller makes sure this exists")
 								.token_vault_ata
 								.into(),
@@ -140,7 +153,7 @@ impl SolanaInstructionBuilder {
 						),
 						SolAccountMeta::new_readonly(
 							token_environments
-								.get(&SolAsset::SolUsdc)
+								.get(&token_asset)
 								.expect("the function caller makes sure this exists")
 								.token_mint_pubkey
 								.into(),
@@ -696,7 +709,7 @@ mod test {
 			agg_key(),
 			nonce_account(),
 			compute_price(),
-			SOL_USDC_DECIMAL,
+			crate::sol::consts::SOL_USDC_DECIMAL,
 		);
 
 		// Serialized tx built in `create_transfer_native` test
@@ -787,7 +800,7 @@ mod test {
 			agg_key(),
 			nonce_account(),
 			compute_price(),
-			SOL_USDC_DECIMAL,
+			crate::sol::consts::SOL_USDC_DECIMAL,
 		);
 
 		// Serialized tx built in `create_ccm_native_transfer` test

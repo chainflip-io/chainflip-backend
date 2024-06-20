@@ -39,6 +39,14 @@ pub struct NonceAccount;
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct AllNonceAccounts;
 
+#[allow(clippy::result_unit_err)]
+pub fn get_token_decimals(asset: SolAsset) -> Result<u8, ()> {
+	match asset {
+		SolAsset::Sol => Err(()),
+		SolAsset::SolUsdc => Ok(SOL_USDC_DECIMAL),
+	}
+}
+
 /// Super trait combining all Environment lookups required for the Solana chain.
 /// Also contains some calls for easy data retrieval.
 pub trait SolanaEnvironment:
@@ -248,7 +256,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 						nonce_account,
 						compute_price,
 					),
-					SolAsset::SolUsdc => {
+					token_asset => {
 						let vault_program = Environment::lookup_account_retain(
 							SolanaEnvAccountLookupKey::VaultProgram,
 							&mut sol_environment,
@@ -257,9 +265,9 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 							SolanaEnvAccountLookupKey::VaultProgramDataAccount,
 							&mut sol_environment,
 						)?;
-						let sol_usdc_environment = Environment::get_token_environment(
+						let token_environment = Environment::get_token_environment(
 							&mut token_environments,
-							SolAsset::SolUsdc,
+							token_asset,
 						)?;
 						let token_program_id = SolAddress::from_str(TOKEN_PROGRAM_ID)
 							.expect("Preset Solana Token program ID must be valid.");
@@ -269,7 +277,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 						let ata =
 						crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
 							transfer_param.to,
-							sol_usdc_environment.token_mint_pubkey,
+							token_environment.token_mint_pubkey,
 						)
 						.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
 						SolanaInstructionBuilder::transfer_token(
@@ -278,15 +286,17 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 							transfer_param.to,
 							vault_program,
 							vault_program_data_account,
-							sol_usdc_environment.token_vault_pda_account,
-							sol_usdc_environment.token_vault_ata,
-							sol_usdc_environment.token_mint_pubkey,
+							token_environment.token_vault_pda_account,
+							token_environment.token_vault_ata,
+							token_environment.token_mint_pubkey,
 							token_program_id,
 							system_program_id,
 							agg_key,
 							nonce_account,
 							compute_price,
-							SOL_USDC_DECIMAL,
+							// we can unwrap here since we are in token_asset match arm and every
+							// token should have token_decimals value.
+							get_token_decimals(token_asset).unwrap(),
 						)
 					},
 				};
