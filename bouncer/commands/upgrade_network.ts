@@ -119,4 +119,4 @@ async function main(): Promise<void> {
 }
 
 // Quite a long timeout, as the sequence of try-runtime runs takes some time.
-await executeWithTimeout(main(), 30 * 60 * 1000);
+await executeWithTimeout(main(), 30 * 60);

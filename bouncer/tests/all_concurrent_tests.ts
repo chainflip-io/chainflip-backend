@@ -56,6 +56,8 @@ runWithTimeout(runAllConcurrentTests(), 2000000)
   })
   .catch((error) => {
     swapContext.print_report();
-    console.error(error);
+    const now = new Date();
+    const timestamp = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
+    console.error(`${timestamp} ${error}`);
     process.exit(-1);
   });
